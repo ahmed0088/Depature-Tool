@@ -1,0 +1,2069 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ibis Styles · Ops Platform</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#0a0c10;--bg2:#0f1218;--surface:#141920;--card:#181f2a;--card2:#1e2736;
+  --border:#232d3f;--border2:#2d3d56;
+  --gold:#e8b84b;--gold2:#c49a2f;--gold-glow:rgba(232,184,75,0.12);
+  --sky:#5ab4e8;--sky2:#3d9fd4;
+  --mint:#3ecf8e;--rose:#f06b7a;--amber:#f0a43a;--violet:#8b7cf8;
+  --text:#dde4f0;--text2:#8a99b3;--text3:#3d4f6b;
+  --r:10px;--r2:16px;--r3:22px;
+  --nav-w:220px;
+  --font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;--serif:'DM Serif Display',serif;
+}
+html,body{height:100%;overflow:hidden;}
+body{background:var(--bg);color:var(--text);font-family:var(--font);display:flex;flex-direction:column;}
+
+/* ── TOP BAR ── */
+.topbar{
+  height:52px;flex-shrink:0;
+  display:flex;align-items:center;gap:16px;
+  padding:0 20px;
+  background:var(--bg2);
+  border-bottom:1px solid var(--border);
+  position:relative;z-index:100;
+}
+.topbar::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent);opacity:0.3;}
+.logo{display:flex;align-items:center;gap:10px;}
+.logo-mark{
+  width:32px;height:32px;border-radius:9px;
+  background:linear-gradient(135deg,var(--gold2),var(--gold));
+  display:flex;align-items:center;justify-content:center;
+  font-size:0.95rem;box-shadow:0 0 16px rgba(232,184,75,0.3);flex-shrink:0;
+}
+.logo-name{font-family:var(--serif);font-size:1.1rem;color:var(--text);letter-spacing:0.3px;}
+.logo-name span{color:var(--gold);}
+.topbar-center{margin:0 auto;font-family:var(--mono);font-size:0.65rem;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;}
+.topbar-right{display:flex;align-items:center;gap:8px;}
+.tb-pill{font-family:var(--mono);font-size:0.6rem;padding:4px 10px;border-radius:20px;border:1px solid var(--border);color:var(--text3);background:var(--surface);letter-spacing:0.5px;}
+.tb-pill.live{color:var(--mint);border-color:rgba(62,207,142,0.3);background:rgba(62,207,142,0.06);}
+
+/* ── LAYOUT ── */
+.layout{display:flex;flex:1;overflow:hidden;}
+
+/* ── SIDEBAR NAV ── */
+.sidenav{
+  width:var(--nav-w);flex-shrink:0;
+  background:var(--bg2);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow-y:auto;
+  padding:16px 10px;gap:4px;
+}
+.nav-section-label{font-family:var(--mono);font-size:0.55rem;letter-spacing:2px;text-transform:uppercase;color:var(--text3);padding:10px 10px 6px;margin-top:8px;}
+.nav-section-label:first-child{margin-top:0;}
+.nav-item{
+  display:flex;align-items:center;gap:10px;
+  padding:9px 12px;border-radius:var(--r);
+  font-size:0.82rem;font-weight:500;color:var(--text2);
+  cursor:pointer;transition:all 0.15s;border:1px solid transparent;
+  position:relative;
+}
+.nav-item:hover{background:var(--surface);color:var(--text);}
+.nav-item.active{background:var(--gold-glow);color:var(--gold);border-color:rgba(232,184,75,0.2);}
+.nav-item.active::before{content:'';position:absolute;left:-10px;top:50%;transform:translateY(-50%);width:3px;height:60%;background:var(--gold);border-radius:0 3px 3px 0;}
+.nav-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:0.85rem;flex-shrink:0;background:var(--surface);transition:all 0.15s;}
+.nav-item.active .nav-icon{background:rgba(232,184,75,0.12);}
+.nav-badge{margin-left:auto;font-family:var(--mono);font-size:0.58rem;padding:2px 7px;border-radius:10px;background:var(--border);color:var(--text3);}
+.nav-item.active .nav-badge{background:rgba(232,184,75,0.15);color:var(--gold);}
+.nav-divider{height:1px;background:var(--border);margin:8px 0;}
+
+/* ── MAIN CONTENT ── */
+.main{flex:1;overflow-y:auto;background:var(--bg);}
+.panel{display:none;padding:28px 32px 60px;}
+.panel.active{display:block;}
+
+/* ── PAGE HEADER ── */
+.page-hd{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px;}
+.page-hd-left h1{font-family:var(--serif);font-size:1.8rem;color:var(--text);margin-bottom:4px;}
+.page-hd-left p{font-family:var(--mono);font-size:0.68rem;color:var(--text3);}
+.page-hd-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:7px;font-family:var(--font);font-size:0.8rem;font-weight:600;padding:9px 18px;border-radius:var(--r);border:1px solid var(--border2);background:var(--surface);color:var(--text2);cursor:pointer;transition:all 0.15s;white-space:nowrap;}
+.btn:hover{border-color:var(--border2);color:var(--text);background:var(--card);}
+.btn.gold{background:linear-gradient(135deg,var(--gold2),var(--gold));color:#0a0c10;border-color:var(--gold);font-weight:700;box-shadow:0 4px 16px rgba(232,184,75,0.2);}
+.btn.gold:hover{box-shadow:0 6px 24px rgba(232,184,75,0.35);transform:translateY(-1px);}
+.btn.mint{background:rgba(62,207,142,0.1);color:var(--mint);border-color:rgba(62,207,142,0.3);}
+.btn.rose{background:rgba(240,107,122,0.1);color:var(--rose);border-color:rgba(240,107,122,0.3);}
+.btn.sky{background:rgba(90,180,232,0.1);color:var(--sky);border-color:rgba(90,180,232,0.3);}
+.btn.ai{background:rgba(139,124,248,0.1);color:var(--violet);border-color:rgba(139,124,248,0.3);}
+.btn:disabled{opacity:0.4;cursor:not-allowed;transform:none!important;}
+
+/* ── CARDS ── */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r2);padding:20px;margin-bottom:16px;position:relative;overflow:hidden;}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.05),transparent);}
+
+/* ── KPI STRIP ── */
+.kpi-row{display:grid;gap:12px;margin-bottom:20px;}
+.kpi-row.c4{grid-template-columns:repeat(4,1fr);}
+.kpi-row.c3{grid-template-columns:repeat(3,1fr);}
+.kpi-row.c2{grid-template-columns:repeat(2,1fr);}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:var(--r2);padding:16px 18px;position:relative;overflow:hidden;transition:border-color 0.2s,transform 0.2s;}
+.kpi:hover{border-color:var(--border2);transform:translateY(-1px);}
+.kpi-label{font-family:var(--mono);font-size:0.58rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);margin-bottom:8px;}
+.kpi-val{font-family:var(--serif);font-size:2rem;line-height:1;margin-bottom:3px;}
+.kpi-sub{font-size:0.7rem;color:var(--text3);}
+.kpi.gold .kpi-val{color:var(--gold);}
+.kpi.sky .kpi-val{color:var(--sky);}
+.kpi.mint .kpi-val{color:var(--mint);}
+.kpi.rose .kpi-val{color:var(--rose);}
+.kpi.amber .kpi-val{color:var(--amber);}
+.kpi-accent{position:absolute;bottom:0;left:0;right:0;height:2px;}
+.kpi.gold .kpi-accent{background:linear-gradient(90deg,transparent,var(--gold),transparent);}
+.kpi.sky .kpi-accent{background:linear-gradient(90deg,transparent,var(--sky),transparent);}
+.kpi.mint .kpi-accent{background:linear-gradient(90deg,transparent,var(--mint),transparent);}
+.kpi.rose .kpi-accent{background:linear-gradient(90deg,transparent,var(--rose),transparent);}
+.kpi.amber .kpi-accent{background:linear-gradient(90deg,transparent,var(--amber),transparent);}
+
+/* ── UPLOAD ZONE ── */
+.upload-zone{border:1.5px dashed var(--border2);border-radius:var(--r2);background:var(--bg2);overflow:hidden;}
+.upload-zone:focus-within{border-color:var(--gold);background:var(--gold-glow);}
+.upload-label-bar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);}
+.upload-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.upload-dot.gold{background:var(--gold);box-shadow:0 0 8px var(--gold);}
+.upload-dot.sky{background:var(--sky);}
+.upload-dot.mint{background:var(--mint);}
+.upload-lbl{font-size:0.72rem;font-weight:600;color:var(--text2);letter-spacing:0.3px;}
+.upload-sub{font-family:var(--mono);font-size:0.6rem;color:var(--text3);margin-left:auto;}
+textarea{width:100%;background:transparent;border:none;color:var(--text);font-family:var(--mono);font-size:0.7rem;padding:12px 14px;resize:none;outline:none;line-height:1.8;height:130px;}
+textarea::placeholder{color:var(--text3);}
+
+/* ── ERROR BOX ── */
+.error-box{display:none;align-items:center;gap:10px;margin-top:12px;padding:10px 14px;background:rgba(240,107,122,0.08);border:1px solid rgba(240,107,122,0.25);border-radius:var(--r);font-size:0.78rem;color:var(--rose);}
+.error-box.show{display:flex;}
+
+/* ── DEPARTURE BOARD ── */
+.dep-filters{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;}
+.filter-chip{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:0.62rem;padding:5px 12px;border-radius:20px;border:1px solid var(--border2);background:var(--surface);color:var(--text3);cursor:pointer;transition:all 0.15s;}
+.filter-chip:hover{color:var(--text2);}
+.filter-chip.on{border-color:rgba(232,184,75,0.4);color:var(--gold);background:var(--gold-glow);}
+.filter-chip .fc-count{font-size:0.55rem;padding:1px 5px;border-radius:8px;background:var(--border2);color:var(--text3);}
+.search-box{margin-left:auto;display:flex;align-items:center;background:var(--surface);border:1px solid var(--border2);border-radius:var(--r);overflow:hidden;gap:0;}
+.search-box span{padding:0 10px;color:var(--text3);}
+.search-box input{background:transparent;border:none;color:var(--text);font-family:var(--mono);font-size:0.68rem;padding:7px 10px 7px 0;outline:none;width:160px;}
+.search-box input::placeholder{color:var(--text3);}
+
+/* ── ROOM CARDS GRID ── */
+.rooms-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;}
+.room-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r2);overflow:hidden;transition:border-color 0.2s,transform 0.2s;position:relative;}
+.room-card:hover{border-color:var(--border2);transform:translateY(-1px);}
+.room-card.status-checked-out{opacity:0.45;border-color:var(--border);}
+.room-card.status-extended{border-color:rgba(90,180,232,0.4);background:rgba(90,180,232,0.03);}
+.room-card.status-late{border-color:rgba(240,164,58,0.4);background:rgba(240,164,58,0.03);}
+.room-card.status-due-out{border-color:rgba(232,184,75,0.25);}
+.room-card.status-vip{border-color:rgba(139,124,248,0.4);}
+.rc-top{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 10px;border-bottom:1px solid var(--border);}
+.rc-room{font-family:var(--mono);font-size:1.1rem;font-weight:700;color:var(--gold);}
+.rc-status-pill{font-family:var(--mono);font-size:0.58rem;padding:3px 9px;border-radius:20px;border:1px solid;font-weight:600;letter-spacing:0.5px;}
+.pill-due{color:var(--gold);border-color:rgba(232,184,75,0.35);background:rgba(232,184,75,0.08);}
+.pill-extended{color:var(--sky);border-color:rgba(90,180,232,0.35);background:rgba(90,180,232,0.08);}
+.pill-late{color:var(--amber);border-color:rgba(240,164,58,0.35);background:rgba(240,164,58,0.08);}
+.pill-out{color:var(--mint);border-color:rgba(62,207,142,0.35);background:rgba(62,207,142,0.08);}
+.pill-vip{color:var(--violet);border-color:rgba(139,124,248,0.35);background:rgba(139,124,248,0.08);}
+.rc-body{padding:12px 14px;}
+.rc-name{font-size:0.88rem;font-weight:600;color:var(--text);margin-bottom:4px;}
+.rc-meta{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px;}
+.rc-meta-item{display:flex;align-items:center;gap:4px;font-family:var(--mono);font-size:0.62rem;color:var(--text3);}
+.rc-meta-item span{color:var(--text2);}
+.rc-source{font-family:var(--mono);font-size:0.6rem;color:var(--text3);margin-bottom:8px;padding:3px 8px;background:var(--surface);border-radius:6px;display:inline-block;}
+.rc-balance{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:var(--r);background:var(--bg2);border:1px solid var(--border);margin-bottom:8px;}
+.rc-balance-label{font-family:var(--mono);font-size:0.6rem;color:var(--text3);}
+.rc-balance-val{font-family:var(--mono);font-size:0.82rem;font-weight:600;}
+.rc-balance-val.pos{color:var(--rose);}
+.rc-balance-val.neg{color:var(--mint);}
+.rc-balance-val.zero{color:var(--text3);}
+.rc-actions{display:flex;gap:6px;flex-wrap:wrap;}
+.rc-btn{flex:1;min-width:80px;padding:7px 10px;border-radius:var(--r);border:1px solid var(--border2);background:var(--surface);color:var(--text3);font-size:0.72rem;font-weight:600;cursor:pointer;transition:all 0.15s;text-align:center;font-family:var(--font);}
+.rc-btn:hover{background:var(--card2);color:var(--text);}
+.rc-btn.checkout-btn{color:var(--mint);border-color:rgba(62,207,142,0.3);}
+.rc-btn.checkout-btn:hover{background:rgba(62,207,142,0.08);}
+.rc-btn.extend-btn{color:var(--sky);border-color:rgba(90,180,232,0.3);}
+.rc-btn.extend-btn:hover{background:rgba(90,180,232,0.08);}
+.rc-btn.late-btn{color:var(--amber);border-color:rgba(240,164,58,0.3);}
+.rc-btn.late-btn:hover{background:rgba(240,164,58,0.08);}
+.rc-btn.undo-btn{color:var(--text3);border-color:var(--border);}
+.rc-note{width:100%;margin-top:8px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:var(--mono);font-size:0.65rem;padding:7px 10px;resize:none;outline:none;min-height:50px;line-height:1.6;transition:border-color 0.2s;}
+.rc-note:focus{border-color:var(--gold);}
+.rc-note::placeholder{color:var(--text3);}
+.rc-late-select{width:100%;margin-top:6px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r);color:var(--text);font-family:var(--mono);font-size:0.7rem;padding:6px 10px;outline:none;cursor:pointer;}
+.rc-late-select:focus{border-color:var(--amber);}
+.rc-checkout-stamp{display:flex;align-items:center;gap:6px;margin-top:6px;padding:6px 10px;background:rgba(62,207,142,0.06);border:1px solid rgba(62,207,142,0.2);border-radius:var(--r);font-family:var(--mono);font-size:0.62rem;color:var(--mint);}
+
+/* ── ARRIVALS / PURPOSE TABLE ── */
+.tbl-wrap{background:var(--card);border:1px solid var(--border);border-radius:var(--r2);overflow:hidden;overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:0.75rem;min-width:900px;}
+thead th{background:rgba(232,184,75,0.08);color:var(--gold);font-weight:600;padding:10px 12px;text-align:left;font-size:0.62rem;letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid var(--border);font-family:var(--mono);white-space:nowrap;}
+tbody tr{border-bottom:1px solid rgba(255,255,255,0.03);transition:background 0.1s;}
+tbody tr:last-child{border-bottom:none;}
+tbody tr:hover{background:rgba(255,255,255,0.02);}
+tbody tr.leisure-row{background:rgba(62,207,142,0.03);}
+tbody tr.leisure-row:hover{background:rgba(62,207,142,0.06);}
+tbody td{padding:8px 12px;color:var(--text2);vertical-align:middle;}
+td input,td select{font-size:0.72rem;background:transparent;border:1px solid transparent;border-radius:5px;padding:3px 6px;color:var(--text);font-family:var(--font);width:100%;}
+td input:hover,td select:hover{border-color:var(--border2);}
+td input:focus,td select:focus{outline:none;border-color:var(--gold);background:var(--bg2);}
+.purpose-pill{display:inline-block;font-family:var(--mono);font-size:0.58rem;padding:2px 8px;border-radius:10px;font-weight:600;letter-spacing:0.5px;}
+.purpose-pill.Business{color:var(--sky);background:rgba(90,180,232,0.1);border:1px solid rgba(90,180,232,0.2);}
+.purpose-pill.Leisure{color:var(--mint);background:rgba(62,207,142,0.1);border:1px solid rgba(62,207,142,0.2);}
+.purpose-pill.Flight{color:var(--amber);background:rgba(240,164,58,0.1);border:1px solid rgba(240,164,58,0.2);}
+.icon-btn{width:28px;height:28px;border:none;background:transparent;cursor:pointer;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:13px;color:var(--text3);transition:all 0.15s;}
+.icon-btn:hover{background:rgba(240,107,122,0.1);color:var(--rose);}
+.icon-btn.ai-btn:hover{background:rgba(139,124,248,0.1);color:var(--violet);}
+.spinner{width:12px;height:12px;border:2px solid rgba(139,124,248,0.3);border-top-color:var(--violet);border-radius:50%;animation:spin 0.7s linear infinite;display:inline-block;vertical-align:middle;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ── MODAL ── */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+.modal-bg.open{display:flex;}
+.modal{background:var(--card);border:1px solid var(--border2);border-radius:var(--r3);padding:24px;width:440px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,0.5);}
+.modal h3{font-family:var(--serif);font-size:1.2rem;color:var(--gold);margin-bottom:16px;}
+.modal-fields{display:flex;flex-direction:column;gap:10px;}
+.mf{display:flex;flex-direction:column;gap:4px;}
+.mf label{font-family:var(--mono);font-size:0.58rem;letter-spacing:1px;text-transform:uppercase;color:var(--text3);}
+.mf input,.mf select,.mf textarea{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r);color:var(--text);font-family:var(--font);font-size:0.8rem;padding:8px 10px;outline:none;transition:border-color 0.2s;width:100%;height:auto;}
+.mf input:focus,.mf select:focus{border-color:var(--gold);}
+.mf textarea{resize:vertical;min-height:60px;font-family:var(--mono);font-size:0.7rem;}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.nat-row-f{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}
+
+/* ── EMPTY STATE ── */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:60px 24px;text-align:center;}
+.empty-icon{font-size:3rem;opacity:0.4;}
+.empty-title{font-family:var(--serif);font-size:1.4rem;color:var(--text2);}
+.empty-sub{font-family:var(--mono);font-size:0.7rem;color:var(--text3);line-height:1.8;}
+
+/* ── DIVIDER ── */
+.divider{display:flex;align-items:center;gap:14px;margin:24px 0 20px;}
+.divider-line{flex:1;height:1px;background:var(--border);}
+.divider-label{font-family:var(--mono);font-size:0.58rem;letter-spacing:2px;text-transform:uppercase;color:var(--text3);}
+
+/* ── COPY BANNER ── */
+.copy-banner{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(62,207,142,0.06);border:1px solid rgba(62,207,142,0.2);border-radius:var(--r);margin-bottom:16px;font-size:0.8rem;gap:12px;}
+.copy-banner .paste-steps{font-family:var(--mono);font-size:0.62rem;color:var(--text3);line-height:2;}
+.copy-banner .paste-steps strong{color:var(--text2);}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+
+/* ═══════════════ DEPARTURE BOARD ═══════════════ */
+.dep-kpi-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px;}
+.dep-kpi{background:var(--card);border:1px solid var(--border);border-radius:var(--r2);padding:14px 16px;position:relative;overflow:hidden;cursor:pointer;transition:all 0.2s;}
+.dep-kpi:hover{border-color:var(--border2);transform:translateY(-1px);}
+.dep-kpi.active-kpi{border-color:var(--gold);background:var(--gold-glow);}
+.dep-kpi-icon{font-size:1.4rem;margin-bottom:6px;}
+.dep-kpi-val{font-family:var(--serif);font-size:2rem;line-height:1;margin-bottom:3px;}
+.dep-kpi-label{font-family:var(--mono);font-size:0.58rem;letter-spacing:1px;text-transform:uppercase;color:var(--text3);}
+.dep-kpi-bar{position:absolute;bottom:0;left:0;right:0;height:2px;}
+.dep-kpi.k-total .dep-kpi-val{color:var(--gold);} .dep-kpi.k-total .dep-kpi-bar{background:linear-gradient(90deg,transparent,var(--gold),transparent);}
+.dep-kpi.k-due .dep-kpi-val{color:var(--amber);} .dep-kpi.k-due .dep-kpi-bar{background:linear-gradient(90deg,transparent,var(--amber),transparent);}
+.dep-kpi.k-ext .dep-kpi-val{color:var(--sky);} .dep-kpi.k-ext .dep-kpi-bar{background:linear-gradient(90deg,transparent,var(--sky),transparent);}
+.dep-kpi.k-late .dep-kpi-val{color:var(--violet);} .dep-kpi.k-late .dep-kpi-bar{background:linear-gradient(90deg,transparent,var(--violet),transparent);}
+.dep-kpi.k-out .dep-kpi-val{color:var(--mint);} .dep-kpi.k-out .dep-kpi-bar{background:linear-gradient(90deg,transparent,var(--mint),transparent);}
+
+.dep-progress-wrap{margin-bottom:16px;}
+.dep-progress-info{display:flex;justify-content:space-between;margin-bottom:6px;font-size:0.78rem;color:var(--text2);}
+.dep-progress-track{height:6px;background:var(--surface);border-radius:3px;border:1px solid var(--border);overflow:hidden;}
+.dep-progress-fill{height:100%;background:linear-gradient(90deg,var(--sky2),var(--mint));border-radius:3px;transition:width 0.6s cubic-bezier(0.4,0,0.2,1);}
+
+.dep-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
+.dep-filter-tabs{display:flex;gap:4px;flex-wrap:wrap;flex:1;}
+.dep-ftab{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:0.65rem;padding:7px 14px;border-radius:20px;border:1px solid var(--border2);background:var(--surface);color:var(--text3);cursor:pointer;transition:all 0.15s;white-space:nowrap;}
+.dep-ftab:hover{color:var(--text2);}
+.dep-ftab.active{background:var(--gold-glow);color:var(--gold);border-color:rgba(232,184,75,0.4);}
+.dep-ftab.due.active{background:rgba(240,164,58,0.08);color:var(--amber);border-color:rgba(240,164,58,0.4);}
+.dep-ftab.extended.active{background:rgba(90,180,232,0.08);color:var(--sky);border-color:rgba(90,180,232,0.4);}
+.dep-ftab.late.active{background:rgba(139,124,248,0.08);color:var(--violet);border-color:rgba(139,124,248,0.4);}
+.dep-ftab.balance.active{background:rgba(240,107,122,0.08);color:var(--rose);border-color:rgba(240,107,122,0.4);}
+.dep-ftab.out.active{background:rgba(62,207,142,0.08);color:var(--mint);border-color:rgba(62,207,142,0.4);}
+.dep-ftab-count{padding:1px 7px;border-radius:10px;background:var(--border2);font-size:0.6rem;}
+.dep-search-wrap{display:flex;align-items:center;background:var(--surface);border:1px solid var(--border2);border-radius:20px;overflow:hidden;}
+
+/* ── ROOM CARDS ── */
+.dep-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;}
+
+.dep-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r3);overflow:hidden;transition:all 0.2s;position:relative;}
+.dep-card:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,0.3);}
+.dep-card.s-due{border-color:rgba(232,184,75,0.3);}
+.dep-card.s-extended{border-color:rgba(90,180,232,0.4);background:linear-gradient(180deg,rgba(90,180,232,0.04) 0%,var(--card) 60%);}
+.dep-card.s-late{border-color:rgba(139,124,248,0.4);background:linear-gradient(180deg,rgba(139,124,248,0.04) 0%,var(--card) 60%);}
+.dep-card.s-out{border-color:rgba(62,207,142,0.25);opacity:0.6;}
+.dep-card.s-out:hover{opacity:0.8;}
+.dep-card.s-balance{border-color:rgba(240,107,122,0.4);}
+
+/* Card header band */
+.dc-band{height:4px;width:100%;}
+.s-due .dc-band{background:linear-gradient(90deg,var(--gold2),var(--gold));}
+.s-extended .dc-band{background:linear-gradient(90deg,var(--sky2),var(--sky));}
+.s-late .dc-band{background:linear-gradient(90deg,#6d5fce,var(--violet));}
+.s-out .dc-band{background:linear-gradient(90deg,var(--mint2,#10b981),var(--mint));}
+.s-balance .dc-band{background:linear-gradient(90deg,#c0394a,var(--rose));}
+
+/* Top row */
+.dc-top{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;}
+.dc-room-big{font-family:var(--serif);font-size:2.2rem;line-height:1;color:var(--text);}
+.s-due .dc-room-big{color:var(--gold);}
+.s-extended .dc-room-big{color:var(--sky);}
+.s-late .dc-room-big{color:var(--violet);}
+.s-out .dc-room-big{color:var(--mint);}
+.s-balance .dc-room-big{color:var(--rose);}
+.dc-top-right{display:flex;flex-direction:column;align-items:flex-end;gap:5px;}
+.dc-status-badge{font-family:var(--mono);font-size:0.62rem;font-weight:600;padding:4px 12px;border-radius:20px;border:1px solid;letter-spacing:0.5px;}
+.sb-due{color:var(--gold);border-color:rgba(232,184,75,0.35);background:rgba(232,184,75,0.08);}
+.sb-extended{color:var(--sky);border-color:rgba(90,180,232,0.35);background:rgba(90,180,232,0.08);}
+.sb-late{color:var(--violet);border-color:rgba(139,124,248,0.35);background:rgba(139,124,248,0.08);}
+.sb-out{color:var(--mint);border-color:rgba(62,207,142,0.35);background:rgba(62,207,142,0.08);}
+.dc-nights-badge{font-family:var(--mono);font-size:0.6rem;color:var(--text3);background:var(--surface);border:1px solid var(--border);padding:3px 8px;border-radius:8px;}
+
+/* Body */
+.dc-body{padding:0 16px 14px;}
+.dc-name{font-size:1rem;font-weight:700;color:var(--text);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.dc-meta-row{display:flex;gap:14px;margin-bottom:8px;flex-wrap:wrap;}
+.dc-meta-item{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:0.62rem;color:var(--text3);}
+.dc-meta-item strong{color:var(--text2);}
+.dc-source-tag{display:inline-block;font-family:var(--mono);font-size:0.58rem;padding:3px 8px;border-radius:6px;background:var(--surface);border:1px solid var(--border);color:var(--text3);margin-bottom:10px;}
+.dc-company{font-family:var(--mono);font-size:0.6rem;color:var(--violet);margin-bottom:4px;}
+
+/* Balance box */
+.dc-balance{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-radius:var(--r);margin-bottom:10px;border:1px solid;}
+.dc-balance.bal-zero{background:rgba(62,207,142,0.05);border-color:rgba(62,207,142,0.15);}
+.dc-balance.bal-owing{background:rgba(240,107,122,0.07);border-color:rgba(240,107,122,0.3);}
+.dc-balance.bal-credit{background:rgba(90,180,232,0.05);border-color:rgba(90,180,232,0.2);}
+.dc-balance-label{font-family:var(--mono);font-size:0.6rem;color:var(--text3);}
+.dc-balance-amount{font-family:var(--mono);font-size:0.9rem;font-weight:700;}
+.bal-zero .dc-balance-amount{color:var(--mint);}
+.bal-owing .dc-balance-amount{color:var(--rose);}
+.bal-credit .dc-balance-amount{color:var(--sky);}
+
+/* Late time selector */
+.dc-late-row{display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:center;margin-bottom:10px;}
+.dc-late-label{font-family:var(--mono);font-size:0.62rem;color:var(--violet);}
+.dc-late-select{background:rgba(139,124,248,0.08);border:1px solid rgba(139,124,248,0.3);border-radius:var(--r);color:var(--text);font-family:var(--mono);font-size:0.7rem;padding:6px 10px;outline:none;cursor:pointer;width:100%;}
+.dc-late-select:focus{border-color:var(--violet);}
+
+/* Extension row */
+.dc-extend-row{margin-bottom:10px;display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:center;}
+.dc-extend-label{font-family:var(--mono);font-size:0.62rem;color:var(--sky);}
+.dc-extend-select{background:rgba(90,180,232,0.08);border:1px solid rgba(90,180,232,0.3);border-radius:var(--r);color:var(--text);font-family:var(--mono);font-size:0.7rem;padding:6px 10px;outline:none;cursor:pointer;width:100%;}
+
+/* Checkout stamp */
+.dc-checkout-stamp{display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(62,207,142,0.07);border:1px solid rgba(62,207,142,0.2);border-radius:var(--r);margin-bottom:10px;font-family:var(--mono);font-size:0.65rem;color:var(--mint);}
+
+/* Action buttons - BIG */
+.dc-actions{display:grid;gap:6px;}
+.dc-actions.three{grid-template-columns:1fr 1fr 1fr;}
+.dc-actions.two{grid-template-columns:1fr 1fr;}
+.dc-actions.one{grid-template-columns:1fr;}
+.dc-action-btn{padding:11px 8px;border-radius:var(--r);border:1px solid;cursor:pointer;font-family:var(--font);font-size:0.78rem;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px;transition:all 0.18s;letter-spacing:0.2px;}
+.dc-action-btn:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,0.3);}
+.da-checkout{background:linear-gradient(135deg,rgba(62,207,142,0.15),rgba(62,207,142,0.08));color:var(--mint);border-color:rgba(62,207,142,0.4);}
+.da-checkout:hover{background:linear-gradient(135deg,rgba(62,207,142,0.25),rgba(62,207,142,0.15));box-shadow:0 4px 16px rgba(62,207,142,0.2);}
+.da-extend{background:linear-gradient(135deg,rgba(90,180,232,0.12),rgba(90,180,232,0.06));color:var(--sky);border-color:rgba(90,180,232,0.4);}
+.da-extend:hover{background:linear-gradient(135deg,rgba(90,180,232,0.2),rgba(90,180,232,0.12));box-shadow:0 4px 16px rgba(90,180,232,0.2);}
+.da-late{background:linear-gradient(135deg,rgba(139,124,248,0.12),rgba(139,124,248,0.06));color:var(--violet);border-color:rgba(139,124,248,0.4);}
+.da-late:hover{background:linear-gradient(135deg,rgba(139,124,248,0.2),rgba(139,124,248,0.12));box-shadow:0 4px 16px rgba(139,124,248,0.2);}
+.da-undo{background:var(--surface);color:var(--text3);border-color:var(--border2);}
+.da-undo:hover{color:var(--text2);}
+.da-vip{background:linear-gradient(135deg,rgba(240,164,58,0.12),rgba(240,164,58,0.06));color:var(--amber);border-color:rgba(240,164,58,0.4);}
+
+/* Notes */
+.dc-note-wrap{margin-top:8px;}
+.dc-note{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:var(--mono);font-size:0.65rem;padding:8px 10px;resize:none;outline:none;min-height:52px;line-height:1.7;transition:border-color 0.2s;}
+.dc-note:focus{border-color:var(--gold);}
+.dc-note::placeholder{color:var(--text3);}
+.dc-note-label{font-family:var(--mono);font-size:0.58rem;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:4px;}
+
+/* VIP flag */
+.dc-vip-flag{position:absolute;top:12px;right:12px;font-family:var(--mono);font-size:0.55rem;color:var(--amber);background:rgba(240,164,58,0.1);border:1px solid rgba(240,164,58,0.3);padding:2px 7px;border-radius:6px;letter-spacing:1px;}
+
+/* Quick bar */
+.dep-quick-bar{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:14px;padding:12px 20px;background:var(--card2);border:1px solid var(--border2);border-radius:40px;box-shadow:0 8px 32px rgba(0,0,0,0.5);z-index:200;}
+
+@media print {
+  .sidenav,.topbar,.dep-toolbar,.dep-kpi-strip,.dep-progress-wrap,.dc-actions,.dc-note-wrap,.page-hd-actions{display:none!important;}
+  .dep-grid{grid-template-columns:repeat(2,1fr)!important;}
+  .dep-card{break-inside:avoid;}
+  body,html{overflow:visible!important;height:auto!important;}
+  .main,.layout{overflow:visible!important;height:auto!important;}
+  .panel{padding:0!important;}
+}
+
+</style>
+
+</head>
+<body>
+
+<!-- TOP BAR -->
+<header class="topbar">
+  <div class="logo">
+    <div class="logo-mark">🏨</div>
+    <div class="logo-name">Ibis Styles <span>Dubai</span></div>
+  </div>
+  <div class="topbar-center" id="topbarDate">Loading…</div>
+  <div class="topbar-right">
+    <div class="tb-pill live" id="topbarStatus">● Live</div>
+    <div class="tb-pill" id="topbarTime">—</div>
+  </div>
+</header>
+
+<div class="layout">
+
+<!-- SIDE NAV -->
+<nav class="sidenav">
+  <div class="nav-section-label">Operations</div>
+  <div class="nav-item active" onclick="showPanel('departures')" id="nav-departures">
+    <div class="nav-icon">🚪</div>
+    Departures
+    <span class="nav-badge" id="badge-departures">0</span>
+  </div>
+  <div class="nav-item" onclick="showPanel('arrivals')" id="nav-arrivals">
+    <div class="nav-icon">🛎️</div>
+    Arrivals
+    <span class="nav-badge" id="badge-arrivals">0</span>
+  </div>
+  <div class="nav-item" onclick="showPanel('purpose')" id="nav-purpose">
+    <div class="nav-icon">📋</div>
+    Purpose of Stay
+    <span class="nav-badge" id="badge-purpose">0</span>
+  </div>
+  <div class="nav-divider"></div>
+  <div class="nav-section-label">Reports</div>
+  <div class="nav-item" onclick="showPanel('nationality')" id="nav-nationality">
+    <div class="nav-icon">🌍</div>
+    Nationality Report
+  </div>
+  <div class="nav-item" onclick="showPanel('rent')" id="nav-rent">
+    <div class="nav-icon">🛏️</div>
+    Rented Rooms &amp; Beds
+  </div>
+  <div class="nav-item" onclick="showPanel('audit')" id="nav-audit">
+    <div class="nav-icon">🌙</div>
+    Night Audit · PM Rooms
+    <span class="nav-badge" id="naTabCount">Compare</span>
+  </div>
+  <div class="nav-item" onclick="showPanel('immig')" id="nav-immig">
+    <div class="nav-icon">🛂</div>
+    Immigration Check
+    <span class="nav-badge" id="immigTabCount">Upload XML</span>
+  </div>
+  <div class="nav-item" onclick="showPanel('checklist')" id="nav-checklist">
+    <div class="nav-icon">✅</div>
+    Night Checklist
+    <span class="nav-badge" id="badge-checklist">17</span>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<main class="main">
+
+<!-- ═══════════════════════════════════════
+     DEPARTURES PANEL
+═══════════════════════════════════════ -->
+<div class="panel active" id="panel-departures">
+  <div class="page-hd">
+    <div class="page-hd-left">
+      <h1>Departure Follow-Up</h1>
+      <p id="depDateLabel">Today's departures · Load Opera report to begin</p>
+    </div>
+    <div class="page-hd-actions">
+      <button class="btn" id="depViewToggle" onclick="depToggleView()" style="display:none;">⊞ Grid</button>
+      <button class="btn mint" onclick="depPrintList()" style="display:none;" id="depPrintBtn">🖨 Print List</button>
+      <button class="btn gold" onclick="exportDepSummary()" style="display:none;" id="depExportBtn">⬇ Export</button>
+      <button class="btn rose" onclick="clearDep()">✕ Clear</button>
+    </div>
+  </div>
+
+  <!-- Upload -->
+  <div class="card" id="depUploadCard">
+    <div class="upload-zone">
+      <div class="upload-label-bar">
+        <div class="upload-dot gold"></div>
+        <span class="upload-lbl">Opera Departure Report · Delimited Data</span>
+        <span class="upload-sub">departure_all_….txt</span>
+      </div>
+      <textarea id="depInput" placeholder="Opera Cloud → Front Desk → Departures → Download as Delimited Data&#10;Open .txt → Ctrl+A → Ctrl+C → Paste here&#10;&#10;File must contain: ROOM, GUEST_NAME, ARRIVAL, DEPARTURE, BALANCE, NIGHTS …"></textarea>
+    </div>
+    <div class="error-box" id="depError"><span>⚠</span><span id="depErrorMsg"></span></div>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center;">
+      <button class="btn gold" onclick="processDep()">⚡ Load Report</button>
+      <span style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);">Paste → Load → manage rooms on the board</span>
+    </div>
+  </div>
+
+  <!-- Board -->
+  <div id="depBoard" style="display:none;">
+
+    <!-- KPI Strip -->
+    <div class="dep-kpi-strip" id="depKpis"></div>
+
+    <!-- Progress Bar -->
+    <div class="dep-progress-wrap" id="depProgressWrap">
+      <div class="dep-progress-info">
+        <span id="depProgLabel">0 checked out</span>
+        <span id="depProgPct" style="font-family:var(--mono);font-size:0.75rem;color:var(--mint);">0%</span>
+      </div>
+      <div class="dep-progress-track">
+        <div class="dep-progress-fill" id="depProgFill" style="width:0%"></div>
+      </div>
+    </div>
+
+    <!-- Filters & Search -->
+    <div class="dep-toolbar">
+      <div class="dep-filter-tabs" id="depFilterTabs">
+        <button class="dep-ftab active" data-f="all" onclick="depFilter('all',this)">
+          <span class="dep-ftab-label">All</span>
+          <span class="dep-ftab-count" id="dfc-all">0</span>
+        </button>
+        <button class="dep-ftab due" data-f="due" onclick="depFilter('due',this)">
+          <span class="dep-ftab-label">⏳ Due Out</span>
+          <span class="dep-ftab-count" id="dfc-due">0</span>
+        </button>
+        <button class="dep-ftab extended" data-f="extended" onclick="depFilter('extended',this)">
+          <span class="dep-ftab-label">↪ Extended</span>
+          <span class="dep-ftab-count" id="dfc-extended">0</span>
+        </button>
+        <button class="dep-ftab late" data-f="late" onclick="depFilter('late',this)">
+          <span class="dep-ftab-label">🕐 Late CO</span>
+          <span class="dep-ftab-count" id="dfc-late">0</span>
+        </button>
+        <button class="dep-ftab balance" data-f="balance" onclick="depFilter('balance',this)">
+          <span class="dep-ftab-label">💳 Has Balance</span>
+          <span class="dep-ftab-count" id="dfc-balance">0</span>
+        </button>
+        <button class="dep-ftab out" data-f="out" onclick="depFilter('out',this)">
+          <span class="dep-ftab-label">✓ Checked Out</span>
+          <span class="dep-ftab-count" id="dfc-out">0</span>
+        </button>
+      </div>
+      <div class="dep-search-wrap">
+        <span style="color:var(--text3);padding:0 8px;">⌕</span>
+        <input type="text" id="depSearch" placeholder="Room or guest name…" oninput="depRender()" style="background:transparent;border:none;color:var(--text);font-family:var(--mono);font-size:0.7rem;outline:none;width:160px;"/>
+      </div>
+    </div>
+
+    <!-- Cards Grid -->
+    <div class="dep-grid" id="depGrid"></div>
+
+    <!-- Quick action floating bar -->
+    <div class="dep-quick-bar" id="depQuickBar" style="display:none;">
+      <span id="depQuickLabel" style="font-family:var(--mono);font-size:0.7rem;color:var(--text2);"></span>
+      <button class="btn mint" onclick="depBulkCheckout()">✓ Check Out All Due</button>
+    </div>
+  </div>
+
+  <!-- Print view (hidden) -->
+  <div id="depPrintView" style="display:none;"></div>
+</div>
+
+
+<!-- ═══════════════════════════════════════
+     ARRIVALS PANEL
+═══════════════════════════════════════ -->
+<div class="panel" id="panel-arrivals">
+  <div class="page-hd">
+    <div class="page-hd-left">
+      <h1>Today's Arrivals</h1>
+      <p>Paste Opera arrival report or add guests manually</p>
+    </div>
+    <div class="page-hd-actions">
+      <button class="btn ai" onclick="runAINat_arr()"><span id="aiSpinArr"></span> AI Nationality</button>
+      <button class="btn gold" onclick="exportArrivals()">⬇ Export Excel</button>
+      <button class="btn mint" onclick="openAddGuest()">+ Add Guest</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="upload-zone">
+      <div class="upload-label-bar">
+        <div class="upload-dot sky"></div>
+        <span class="upload-lbl">Opera Arrivals File</span>
+        <span class="upload-sub">Paste raw data or use the table below</span>
+      </div>
+      <textarea id="arrInput" placeholder="Paste Opera arrivals here and click Load, OR use the + Add Guest button to enter manually…" style="height:80px;"></textarea>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+      <button class="btn gold" onclick="loadArrivals()">⚡ Load Report</button>
+      <button class="btn" onclick="clearArrivals()">✕ Clear</button>
+    </div>
+  </div>
+
+  <!-- Arrivals table -->
+  <div class="kpi-row c4" id="arrKpis">
+    <div class="kpi sky"><div class="kpi-accent"></div><div class="kpi-label">Total Arrivals</div><div class="kpi-val" id="ak-total">0</div><div class="kpi-sub">Guests today</div></div>
+    <div class="kpi mint"><div class="kpi-accent"></div><div class="kpi-label">Leisure</div><div class="kpi-val" id="ak-leisure">0</div></div>
+    <div class="kpi gold"><div class="kpi-accent"></div><div class="kpi-label">Business</div><div class="kpi-val" id="ak-business">0</div></div>
+    <div class="kpi amber"><div class="kpi-accent"></div><div class="kpi-label">Avg Nights</div><div class="kpi-val" id="ak-nights">0</div></div>
+  </div>
+
+  <div class="dep-filters">
+    <div class="filter-chip on" data-af="all" onclick="arrFilter('all',this)">All</div>
+    <div class="filter-chip" data-af="Business" onclick="arrFilter('Business',this)">Business</div>
+    <div class="filter-chip" data-af="Leisure" onclick="arrFilter('Leisure',this)">Leisure</div>
+    <div class="search-box">
+      <span>⌕</span>
+      <input type="text" placeholder="Search…" oninput="arrRender()" id="arrSearch"/>
+    </div>
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th>Room</th><th>Conf. No.</th><th>Name</th><th>Purpose</th><th>Nights</th><th>Nationality</th><th>Email</th><th>Source</th><th>Remarks</th><th></th>
+      </tr></thead>
+      <tbody id="arrTable"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     PURPOSE OF STAY PANEL
+═══════════════════════════════════════ -->
+<div class="panel" id="panel-purpose">
+  <div class="page-hd">
+    <div class="page-hd-left">
+      <h1>Purpose of Stay</h1>
+      <p>Night audit — <span id="purposeTitle" style="color:var(--gold);cursor:pointer;" onclick="editPurposeTitle()">Click to set report title</span></p>
+    </div>
+    <div class="page-hd-actions">
+      <button class="btn ai" onclick="runAINat_purpose()"><span id="aiSpinPurpose"></span> AI Nationality</button>
+      <button class="btn gold" onclick="exportPurpose()">⬇ Export Excel</button>
+      <button class="btn mint" onclick="syncFromArrivals()">↑ Sync from Arrivals</button>
+    </div>
+  </div>
+
+  <div class="card" id="purposeUploadCard">
+    <div class="upload-zone">
+      <div class="upload-label-bar">
+        <div class="upload-dot mint"></div>
+        <span class="upload-lbl">Paste Arrivals Data</span>
+        <span class="upload-sub">Or sync from Arrivals tab above</span>
+      </div>
+      <textarea id="purposeInput" placeholder="Paste room data here and click Load, or click 'Sync from Arrivals' to pull data automatically…" style="height:80px;"></textarea>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <button class="btn gold" onclick="loadPurpose()">⚡ Load</button>
+    </div>
+  </div>
+
+  <div class="kpi-row c3">
+    <div class="kpi mint"><div class="kpi-accent"></div><div class="kpi-label">Total Guests</div><div class="kpi-val" id="pk-total">0</div></div>
+    <div class="kpi sky"><div class="kpi-accent"></div><div class="kpi-label">Business</div><div class="kpi-val" id="pk-biz">0</div></div>
+    <div class="kpi gold"><div class="kpi-accent"></div><div class="kpi-label">Leisure</div><div class="kpi-val" id="pk-lei">0</div></div>
+  </div>
+
+  <div class="dep-filters">
+    <div class="filter-chip on" data-pf="all" onclick="purposeFilter('all',this)">All</div>
+    <div class="filter-chip" data-pf="Business" onclick="purposeFilter('Business',this)">Business</div>
+    <div class="filter-chip" data-pf="Leisure" onclick="purposeFilter('Leisure',this)">Leisure</div>
+    <div class="filter-chip" data-pf="Flight" onclick="purposeFilter('Flight',this)">Flight</div>
+    <div class="search-box">
+      <span>⌕</span>
+      <input type="text" placeholder="Search…" oninput="purposeRender()" id="purposeSearch"/>
+    </div>
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th>Room</th><th>Conf. No.</th><th>Name</th><th>Purpose</th><th>Nights</th><th>Nationality</th><th>Email</th><th>Source</th><th>Remarks</th><th></th>
+      </tr></thead>
+      <tbody id="purposeTable"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     NATIONALITY PANEL (placeholder)
+═══════════════════════════════════════ -->
+<!-- NATIONALITY -->
+<div class="panel" id="panel-nationality">
+<div style="padding:28px 32px 60px;max-width:1200px;">
+  <div class="page-hd">
+    <div class="page-hd-left"><h1>Nationality Report</h1><p>Opera stat_countrybyday · Delimited Data</p></div>
+    <div class="page-hd-actions"><button class="btn rose" onclick="clearNat()">✕ Clear</button></div>
+  </div>
+  <div class="card">
+    <div class="upload-zone">
+      <div class="upload-label-bar"><div class="upload-dot gold"></div><span class="upload-lbl">Nationality Report File</span><span class="upload-sub">stat_countrybyday_….txt</span></div>
+      <textarea id="natInput" placeholder="Opera Cloud → Reports → Nationality by Country&#10;Download as: Delimited Data&#10;Open .txt → Ctrl+A → Ctrl+C → Paste here&#10;&#10;File should start with: VALUE_ORDER  VALUE_CODE  CHAR_MONTH_YEAR ..."></textarea>
+    </div>
+    <div class="error-box" id="natError"><span>⚠</span><span id="natErrorMsg"></span></div>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+      <button class="btn gold" onclick="processNat()">⚡ Process Report</button>
+      <button class="btn" onclick="clearNat()">✕ Clear</button>
+    </div>
+  </div>
+  <div id="natResults" style="display:none;">
+    <div class="kpi-row c3" style="margin-top:20px;">
+      <div class="kpi sky"><div class="kpi-accent"></div><div class="kpi-label">New Guest Arrivals</div><div class="kpi-val" id="kpi-apr">—</div><div class="kpi-sub">Total guests checked in</div></div>
+      <div class="kpi gold"><div class="kpi-accent"></div><div class="kpi-label">Room Nights</div><div class="kpi-val" id="kpi-rms">—</div><div class="kpi-sub">Total room nights occupied</div></div>
+      <div class="kpi mint"><div class="kpi-accent"></div><div class="kpi-label">Guest Nights</div><div class="kpi-val" id="kpi-prs">—</div><div class="kpi-sub">Total person nights stayed</div></div>
+    </div>
+    <!-- Diagnostics -->
+    <div class="card" style="margin-top:16px;">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+        <span style="font-size:1rem;">🔍</span>
+        <div><div style="font-size:0.88rem;font-weight:600;">Data Quality &amp; Diagnostics</div><div style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);margin-top:2px;">Gaps, unknowns, unmatched countries</div></div>
+        <span class="tb-pill" id="natDiagBadge" style="margin-left:auto;">Checking…</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;" id="natTotalsGrid"></div>
+      <div style="font-family:var(--mono);font-size:0.6rem;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:8px;">Unknown &amp; Unassigned</div>
+      <div id="natUnknownList"></div>
+      <div style="font-family:var(--mono);font-size:0.6rem;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin:12px 0 8px;">Countries Not in Excel</div>
+      <div id="natUnmatchedList"></div>
+    </div>
+    <!-- Copy section -->
+    <div style="display:grid;grid-template-columns:1fr 260px;gap:16px;margin-top:16px;" id="natOutputLayout">
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--card2);">
+          <div style="font-size:0.82rem;font-weight:600;">Data Preview · 240 rows</div>
+          <span style="font-family:var(--mono);font-size:0.62rem;color:var(--gold);background:rgba(232,184,75,0.08);border:1px solid rgba(232,184,75,0.2);padding:3px 10px;border-radius:20px;">ROWS 8–247</span>
+        </div>
+        <div style="display:grid;grid-template-columns:38px 1fr 58px 58px 58px;padding:7px 14px;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--border);">
+          <span style="font-family:var(--mono);font-size:0.55rem;letter-spacing:1px;color:var(--text3);">ROW</span>
+          <span style="font-family:var(--mono);font-size:0.55rem;letter-spacing:1px;color:var(--text3);">NATIONALITY</span>
+          <span style="font-family:var(--mono);font-size:0.55rem;letter-spacing:1px;color:var(--sky);text-align:right;">ARR</span>
+          <span style="font-family:var(--mono);font-size:0.55rem;letter-spacing:1px;color:var(--gold);text-align:right;">RMS</span>
+          <span style="font-family:var(--mono);font-size:0.55rem;letter-spacing:1px;color:var(--mint);text-align:right;">GST</span>
+        </div>
+        <div style="height:440px;overflow-y:auto;" id="natPreview"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div class="card">
+          <div style="font-size:0.78rem;font-weight:600;margin-bottom:10px;">📋 Copy to Excel</div>
+          <button class="btn gold" id="natCopyBtn" onclick="copyNat()" style="width:100%;justify-content:center;margin-bottom:10px;">Copy All 240 Rows</button>
+          <div style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);line-height:2.2;">
+            1. Open Excel sheet<br>2. Click cell <strong style="color:var(--text2);">B8</strong><br>3. Press <strong style="color:var(--text2);">Ctrl + V</strong><br>4. All 3 columns fill ✓
+          </div>
+        </div>
+        <div class="card" style="background:rgba(240,164,58,0.04);border-color:rgba(240,164,58,0.2);">
+          <div style="font-size:0.78rem;font-weight:600;margin-bottom:10px;color:var(--amber);">⚠ Unallocated Gap</div>
+          <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:0.75rem;border-bottom:1px solid rgba(255,255,255,0.03);">
+            <span style="color:var(--text3);">New Arrivals</span><span style="font-family:var(--mono);color:var(--amber);" id="gap-apr">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:0.75rem;border-bottom:1px solid rgba(255,255,255,0.03);">
+            <span style="color:var(--text3);">Room Nights</span><span style="font-family:var(--mono);color:var(--amber);" id="gap-rms">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:0.75rem;">
+            <span style="color:var(--text3);">Guest Nights</span><span style="font-family:var(--mono);color:var(--amber);" id="gap-prs">—</span>
+          </div>
+        </div>
+        <div class="card">
+          <div style="font-size:0.78rem;font-weight:600;margin-bottom:10px;">📈 Summary</div>
+          <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:0.75rem;border-bottom:1px solid rgba(255,255,255,0.03);">
+            <span style="color:var(--text3);">Countries with data</span><span style="font-family:var(--mono);color:var(--mint);" id="s-active">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:0.75rem;border-bottom:1px solid rgba(255,255,255,0.03);">
+            <span style="color:var(--text3);">Countries with zero</span><span style="font-family:var(--mono);color:var(--text3);" id="s-zero">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:0.75rem;border-bottom:1px solid rgba(255,255,255,0.03);">
+            <span style="color:var(--text3);">Unmatched</span><span style="font-family:var(--mono);color:var(--rose);" id="s-unmat">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:0.75rem;">
+            <span style="color:var(--text3);">Unknown guests</span><span style="font-family:var(--mono);color:var(--amber);" id="s-unk">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- RENTED ROOMS & BEDS -->
+<div class="panel" id="panel-rent">
+<div style="padding:28px 32px 60px;max-width:1200px;">
+  <div class="page-hd">
+    <div class="page-hd-left"><h1>Rented Rooms &amp; Beds</h1><p>history_forecast + statroomtype · Delimited Data</p></div>
+    <div class="page-hd-actions"><button class="btn rose" onclick="clearRent()">✕ Clear</button></div>
+  </div>
+  <div class="card">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+      <div class="upload-zone">
+        <div class="upload-label-bar"><div class="upload-dot sky"></div><span class="upload-lbl">File 1 — History Forecast</span><span class="upload-sub">history_forecast_….txt</span></div>
+        <textarea id="rentInput1" placeholder="Contains: NO_ROOMS, CONSIDERED_DATE, INVENTORY_ROOMS ..."></textarea>
+      </div>
+      <div class="upload-zone">
+        <div class="upload-label-bar"><div class="upload-dot mint"></div><span class="upload-lbl">File 2 — Room Type Stats</span><span class="upload-sub">statroomtype_….txt</span></div>
+        <textarea id="rentInput2" placeholder="Contains: STAY_ROOMS, BUSINESS_DATE, ROOM_CATEGORY (TWC)"></textarea>
+      </div>
+    </div>
+    <div class="error-box" id="rentError"><span>⚠</span><span id="rentErrorMsg"></span></div>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button class="btn gold" onclick="processRent()">⚡ Process Files</button>
+      <button class="btn" onclick="clearRent()">✕ Clear</button>
+      <span style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);margin-left:auto;">App auto-detects which file is which</span>
+    </div>
+  </div>
+  <div id="rentResults" style="display:none;">
+    <div class="kpi-row c2" style="margin-top:20px;">
+      <div class="kpi sky"><div class="kpi-accent"></div><div class="kpi-label">Total Rented Rooms</div><div class="kpi-val" id="kpi-rooms">—</div><div class="kpi-sub">Sum of daily occupied rooms</div></div>
+      <div class="kpi mint"><div class="kpi-accent"></div><div class="kpi-label">Total Rented Beds</div><div class="kpi-val" id="kpi-beds">—</div><div class="kpi-sub">Rooms + twin bed add-on</div></div>
+    </div>
+    <div class="card" style="margin-top:16px;font-family:var(--mono);font-size:0.75rem;">
+      <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);">
+        <span style="color:var(--text3);">Rented Rooms formula</span><span style="color:var(--text2);">NO_ROOMS from History Forecast</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);">
+        <span style="color:var(--text3);">Rented Beds formula</span><span style="color:var(--text2);">NO_ROOMS + STAY_ROOMS (twin)</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);">
+        <span style="color:var(--text3);">Days found</span><span style="color:var(--sky);" id="daysFound">—</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;">
+        <span style="color:var(--text3);">Twin file status</span><span style="color:var(--mint);" id="twinStatus">—</span>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 220px;gap:14px;margin-top:16px;">
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--card2);">
+          <div style="font-size:0.82rem;font-weight:600;">Daily Preview</div>
+          <span style="font-family:var(--mono);font-size:0.62rem;color:var(--gold);background:rgba(232,184,75,0.08);border:1px solid rgba(232,184,75,0.2);padding:3px 10px;border-radius:20px;" id="rentRowCount">31 ROWS</span>
+        </div>
+        <div style="display:grid;grid-template-columns:60px 1fr 70px 70px;padding:7px 14px;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--border);">
+          <span style="font-family:var(--mono);font-size:0.55rem;color:var(--text3);">DAY</span>
+          <span style="font-family:var(--mono);font-size:0.55rem;color:var(--text3);">+TWIN</span>
+          <span style="font-family:var(--mono);font-size:0.55rem;color:var(--sky);text-align:right;">ROOMS</span>
+          <span style="font-family:var(--mono);font-size:0.55rem;color:var(--mint);text-align:right;">BEDS</span>
+        </div>
+        <div style="height:440px;overflow-y:auto;" id="rentPreview"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div class="card">
+          <div style="font-size:0.78rem;font-weight:600;margin-bottom:10px;">📋 Copy to Excel</div>
+          <button class="btn gold" id="rentCopyBtn" onclick="copyRent()" style="width:100%;justify-content:center;margin-bottom:10px;">Copy All Rows</button>
+          <div style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);line-height:2.2;">
+            1. Open Excel sheet<br>2. Click <strong style="color:var(--text2);">Day 1 Rooms cell</strong><br>3. Press <strong style="color:var(--text2);">Ctrl + V</strong><br>4. Both columns fill ✓
+          </div>
+        </div>
+        <div class="card">
+          <div style="font-size:0.78rem;font-weight:600;margin-bottom:10px;">📈 Month Summary</div>
+          <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:0.75rem;border-bottom:1px solid rgba(255,255,255,0.03);">
+            <span style="color:var(--text3);">Total Rooms</span><span style="font-family:var(--mono);color:var(--sky);" id="rs-rooms">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:0.75rem;border-bottom:1px solid rgba(255,255,255,0.03);">
+            <span style="color:var(--text3);">Total Beds</span><span style="font-family:var(--mono);color:var(--mint);" id="rs-beds">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:0.75rem;border-bottom:1px solid rgba(255,255,255,0.03);">
+            <span style="color:var(--text3);">Twin add-on</span><span style="font-family:var(--mono);color:var(--amber);" id="rs-twin">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:0.75rem;">
+            <span style="color:var(--text3);">Days in report</span><span style="font-family:var(--mono);color:var(--text2);" id="rs-days">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- NIGHT AUDIT PM ROOMS -->
+<div class="panel" id="panel-audit">
+<div style="padding:28px 32px 60px;max-width:1200px;">
+  <div class="page-hd">
+    <div class="page-hd-left"><h1>Night Audit · PM Rooms</h1><p>Compare Opera vs Management Excel · Find and fix differences</p></div>
+    <div class="page-hd-actions"><button class="btn rose" onclick="clearAudit()">✕ Clear</button></div>
+  </div>
+  <div class="card">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+      <div class="upload-zone">
+        <div class="upload-label-bar"><div class="upload-dot sky"></div><span class="upload-lbl">Opera Cloud — PM Rooms Report</span><span class="upload-sub">gipmbyroom_….txt</span></div>
+        <textarea id="naOperaInput" placeholder="Opera Cloud → Front Desk → In-House Guests by Room&#10;Download: Delimited Data → paste here&#10;&#10;Contains: ROOM, FULL_NAME, ARRIVAL, DEPARTURE, BALANCE ..."></textarea>
+      </div>
+      <div class="upload-zone">
+        <div class="upload-label-bar"><div class="upload-dot mint"></div><span class="upload-lbl">Management Report — Excel</span><span class="upload-sub">PM_Ibis_DD_….csv or paste from Excel</span></div>
+        <textarea id="naExcelInput" placeholder="Open your Excel management report&#10;Select all rows → Copy → Paste here&#10;&#10;Columns: PM, NAME, ARRIVAL, DEPARTURE, BALANCE, Department, REMARKS ..."></textarea>
+      </div>
+    </div>
+    <div class="error-box" id="naError"><span>⚠</span><span id="naErrorMsg"></span></div>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button class="btn gold" onclick="processAudit()">🔍 Compare &amp; Find Differences</button>
+      <button class="btn" onclick="clearAudit()">✕ Clear</button>
+      <span style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);margin-left:auto;">Opera is always source of truth</span>
+    </div>
+  </div>
+  <div id="naCompareSection" style="display:none;">
+    <div class="kpi-row c3" style="margin-top:20px;">
+      <div class="kpi sky"><div class="kpi-accent"></div><div class="kpi-label">Total PM Rooms</div><div class="kpi-val" id="na-kpi-total">—</div></div>
+      <div class="kpi amber"><div class="kpi-accent"></div><div class="kpi-label">Rooms with Differences</div><div class="kpi-val" id="na-kpi-diff">—</div></div>
+      <div class="kpi mint"><div class="kpi-accent"></div><div class="kpi-label">Rooms Match</div><div class="kpi-val" id="na-kpi-ok">—</div></div>
+    </div>
+    <div class="card" style="margin-top:16px;padding:0;overflow:hidden;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--card2);flex-wrap:wrap;gap:8px;">
+        <div><div style="font-size:0.88rem;font-weight:600;">Room-by-Room Comparison</div><div style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);margin-top:2px;">Green = Opera (correct) · Red = Excel (wrong)</div></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <span style="font-family:var(--mono);font-size:0.62rem;padding:3px 10px;border-radius:20px;background:rgba(90,180,232,0.1);color:var(--sky);border:1px solid rgba(90,180,232,0.2);" id="na-pill-total">—</span>
+          <span style="font-family:var(--mono);font-size:0.62rem;padding:3px 10px;border-radius:20px;background:rgba(240,164,58,0.1);color:var(--amber);border:1px solid rgba(240,164,58,0.2);" id="na-pill-diff">—</span>
+          <span style="font-family:var(--mono);font-size:0.62rem;padding:3px 10px;border-radius:20px;background:rgba(62,207,142,0.1);color:var(--mint);border:1px solid rgba(62,207,142,0.2);" id="na-pill-ok">—</span>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:60px 1fr 1fr 1fr 1fr 80px;padding:8px 14px;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--border);">
+        <span style="font-family:var(--mono);font-size:0.55rem;color:var(--text3);">ROOM</span>
+        <span style="font-family:var(--mono);font-size:0.55rem;color:var(--text3);">NAME</span>
+        <span style="font-family:var(--mono);font-size:0.55rem;color:var(--text3);">ARRIVAL</span>
+        <span style="font-family:var(--mono);font-size:0.55rem;color:var(--text3);">DEPARTURE</span>
+        <span style="font-family:var(--mono);font-size:0.55rem;color:var(--text3);">BALANCE</span>
+        <span style="font-family:var(--mono);font-size:0.55rem;color:var(--text3);text-align:right;">STATUS</span>
+      </div>
+      <div style="max-height:480px;overflow-y:auto;" id="naCompareTable"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 260px;gap:14px;margin-top:16px;">
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--card2);">
+          <div><div style="font-size:0.82rem;font-weight:600;">Corrected PM Rooms — Ready to Paste</div><div style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);">Paste into Excel starting row 2</div></div>
+          <span style="font-family:var(--mono);font-size:0.62rem;color:var(--mint);" id="naFixedCount">—</span>
+        </div>
+        <div style="display:grid;grid-template-columns:60px 1fr 100px 100px 100px;padding:8px 14px;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--border);">
+          <span style="font-family:var(--mono);font-size:0.55rem;color:var(--text3);">ROOM</span>
+          <span style="font-family:var(--mono);font-size:0.55rem;color:var(--text3);">NAME</span>
+          <span style="font-family:var(--mono);font-size:0.55rem;color:var(--text3);">ARRIVAL</span>
+          <span style="font-family:var(--mono);font-size:0.55rem;color:var(--text3);">DEPARTURE</span>
+          <span style="font-family:var(--mono);font-size:0.55rem;color:var(--text3);text-align:right;">BALANCE</span>
+        </div>
+        <div style="max-height:400px;overflow-y:auto;" id="naFixedTable"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div class="card">
+          <div style="font-size:0.78rem;font-weight:600;margin-bottom:10px;">📋 Copy Fixed Data</div>
+          <button class="btn gold" id="naCopyBtn" onclick="copyAudit()" style="width:100%;justify-content:center;margin-bottom:10px;">Copy All Fixed Rows</button>
+          <div style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);line-height:2.2;">
+            1. Open your Excel report<br>2. Click cell <strong style="color:var(--text2);">A2</strong><br>3. Press <strong style="color:var(--text2);">Ctrl + V</strong><br>4. All rows paste with Opera data ✓
+          </div>
+        </div>
+        <div class="card" id="naChangesCard">
+          <div style="font-size:0.78rem;font-weight:600;margin-bottom:10px;">⚠ Changes Made</div>
+          <div id="naChangesList"></div>
+        </div>
+        <div class="card" id="naMissingCard" style="display:none;background:rgba(240,107,122,0.04);border-color:rgba(240,107,122,0.2);">
+          <div style="font-size:0.78rem;font-weight:600;margin-bottom:10px;color:var(--rose);">🔴 Missing Rooms</div>
+          <div id="naMissingList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- IMMIGRATION CHECK -->
+<div class="panel" id="panel-immig">
+<div style="padding:28px 32px 60px;max-width:1100px;">
+  <div class="page-hd">
+    <div class="page-hd-left"><h1>Immigration Check</h1><p>Upload Opera XML · Flags missing nationality, gender, passport &amp; name</p></div>
+    <div class="page-hd-actions"><button class="btn rose" onclick="clearImmig()">✕ Clear</button></div>
+  </div>
+  <div class="card" id="immigUploadCard2">
+    <div class="upload-zone" id="immigDropZone2" style="cursor:pointer;" onclick="document.getElementById('immigFileInput2').click()">
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:28px 24px;text-align:center;">
+        <div style="font-size:2rem;">📋</div>
+        <div style="font-size:0.88rem;font-weight:600;">Drop XML file here or click to browse</div>
+        <div style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);line-height:1.8;">Opera Cloud → Front Desk → Immigration Report → Export as <strong style="color:var(--text2);">XML</strong></div>
+        <input type="file" id="immigFileInput2" accept=".xml,.XML" style="display:none;" onchange="immigLoadFile2(this)"/>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px;margin:12px 0;">
+      <div style="flex:1;height:1px;background:var(--border);"></div>
+      <span style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">OR PASTE XML</span>
+      <div style="flex:1;height:1px;background:var(--border);"></div>
+    </div>
+    <div class="upload-zone">
+      <div class="upload-label-bar"><div class="upload-dot sky"></div><span class="upload-lbl">Paste XML content</span><span class="upload-sub">immigration_report_….XML</span></div>
+      <textarea id="immigPasteInput2" style="height:100px;" placeholder="Open XML in Notepad → Ctrl+A → Ctrl+C → Paste here"></textarea>
+    </div>
+    <div class="error-box" id="immigError2"><span>⚠</span><span id="immigErrorMsg2"></span></div>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button class="btn gold" onclick="processImmig2()">🔍 Analyse Report</button>
+      <button class="btn" onclick="clearImmig()">✕ Clear</button>
+    </div>
+  </div>
+  <div id="immigResults2" style="display:none;">
+    <div class="kpi-row c4" style="margin-top:20px;" id="immigKpis2"></div>
+    <div style="font-family:var(--mono);font-size:0.72rem;color:var(--text2);margin-bottom:10px;padding:10px 14px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);" id="immigMeta2"></div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;" id="immigFilters2">
+      <button class="filter-chip on" data-if="all" onclick="immigFilter2('all',this)">All <span id="ifc-all">0</span></button>
+      <button class="filter-chip" data-if="nationality" onclick="immigFilter2('nationality',this)">🔴 Nationality <span id="ifc-nat">0</span></button>
+      <button class="filter-chip" data-if="gender" onclick="immigFilter2('gender',this)">🟡 Gender <span id="ifc-gen">0</span></button>
+      <button class="filter-chip" data-if="passport" onclick="immigFilter2('passport',this)">🔵 Passport <span id="ifc-pass">0</span></button>
+      <button class="filter-chip" data-if="first_name" onclick="immigFilter2('first_name',this)">🟢 First Name <span id="ifc-fname">0</span></button>
+      <div class="search-box" style="margin-left:auto;">
+        <span style="color:var(--text3);padding:0 8px;">⌕</span>
+        <input type="text" id="immigSearch2" placeholder="Room or name…" oninput="immigRender2(immigAllRows2)" style="background:transparent;border:none;color:var(--text);font-family:var(--mono);font-size:0.68rem;outline:none;width:140px;"/>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th>Room</th><th>Sex</th><th>Guest Name</th><th>Nationality</th><th>Passport</th><th>Arrival</th><th>Departure</th><th>Issues</th>
+        </tr></thead>
+        <tbody id="immigTable2"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</div>
+
+
+
+<!-- ═══════════════════════════════════════
+     NIGHT CHECKLIST PANEL
+═══════════════════════════════════════ -->
+<div class="panel" id="panel-checklist">
+  <div class="page-hd">
+    <div class="page-hd-left">
+      <h1>Night Run Checklist</h1>
+      <p id="cl-date-lbl">—</p>
+    </div>
+    <div class="page-hd-actions">
+      <button class="btn" onclick="clToggleEdit()">✏️ Edit Steps</button>
+      <button class="btn rose" onclick="clReset()">↺ New Night</button>
+    </div>
+  </div>
+  <!-- Progress -->
+  <div style="margin-bottom:20px;">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+      <span style="font-size:0.82rem;color:var(--text2);" id="clProgLabel">0 of 17 done</span>
+      <span style="font-family:var(--serif);font-size:1.6rem;color:var(--mint);" id="clProgPct">0%</span>
+    </div>
+    <div style="height:5px;background:var(--surface);border-radius:3px;border:1px solid var(--border);overflow:hidden;">
+      <div style="height:100%;background:linear-gradient(90deg,var(--sky2),var(--mint));border-radius:3px;transition:width 0.5s;" id="clProgFill"></div>
+    </div>
+  </div>
+  <div id="clStepList2"></div>
+  <div id="clComplete2" style="display:none;margin-top:20px;padding:28px;background:rgba(62,207,142,0.06);border:1px solid rgba(62,207,142,0.2);border-radius:var(--r2);text-align:center;">
+    <div style="font-family:var(--serif);font-size:1.6rem;color:var(--mint);margin-bottom:6px;">Night run complete ✓</div>
+    <div style="font-family:var(--mono);font-size:0.7rem;color:var(--text3);" id="clCompleteTime2">All steps done</div>
+  </div>
+</div>
+
+</main>
+</div><!-- /layout -->
+
+<!-- ADD GUEST MODAL -->
+<div class="modal-bg" id="guestModal">
+  <div class="modal">
+    <h3 id="guestModalTitle">Add Guest</h3>
+    <div class="modal-fields">
+      <div class="two-col">
+        <div class="mf"><label>Room</label><input id="mg-room" placeholder="e.g. 215"/></div>
+        <div class="mf"><label>Conf. No.</label><input id="mg-conf" placeholder="615…"/></div>
+      </div>
+      <div class="mf"><label>Name</label><input id="mg-name" placeholder="FULL NAME IN CAPS"/></div>
+      <div class="two-col">
+        <div class="mf"><label>Purpose</label>
+          <select id="mg-purpose"><option>Business</option><option>Leisure</option><option>Flight</option></select>
+        </div>
+        <div class="mf"><label>Nights</label><input id="mg-nights" type="number" value="1" min="1"/></div>
+      </div>
+      <div class="mf"><label>Nationality</label>
+        <div class="nat-row-f">
+          <input id="mg-nat" placeholder="e.g. India"/>
+          <button class="btn ai" style="height:36px;padding:0 12px;" onclick="aiGuessModal()">AI</button>
+        </div>
+      </div>
+      <div class="mf"><label>Email</label><input id="mg-email" placeholder="email@…"/></div>
+      <div class="mf"><label>Booking Source</label><input id="mg-source" placeholder="e.g. Booking.com, Walk in"/></div>
+      <div class="mf"><label>Remarks</label><input id="mg-remarks" placeholder="Optional"/></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn gold" onclick="saveGuest()">Save Guest</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// GLOBALS & HELPERS
+// ══════════════════════════════════════════════
+let depRooms = [];   // departure rooms
+let depFilter_ = 'all';
+let arrGuests = [];  // arrivals
+let arrFilter_ = 'all';
+let purposeGuests = []; // purpose of stay
+let purposeFilter_ = 'all';
+let guestModalTarget = 'arrivals'; // which list to add to
+let clEditMode = false;
+
+// Checklist steps
+const CL_STEPS = [
+  {id:1,phase:'pre',name:'Cancel non-guaranteed bookings',tag:'check',hint:'Filter reservations with no guarantee method and cancel per policy.'},
+  {id:2,phase:'pre',name:'CC recancellations',tag:'check',hint:'Run credit card recancellations for failed or declined cards in Opera.'},
+  {id:3,phase:'pre',name:'Cancel OTA rooms + mark card invalid',tag:'check',hint:'Cancel Booking.com/OTA rooms with invalid Virtual Credit Cards.'},
+  {id:4,phase:'pre',name:'Check immigration / nationality report',tag:'check',hint:'Verify all in-house guests have nationality assigned. Fix missing entries.'},
+  {id:5,phase:'pre',name:'Charge VCCs for tomorrow arrivals',tag:'charge',hint:'Charge any Virtual Credit Cards due tonight for tomorrow arrivals.'},
+  {id:6,phase:'pre',name:'Update no-show sheet (pre-run)',tag:'check',hint:'Flag expected no-shows before running the night audit.'},
+  {id:7,phase:'pre',name:'Save Inhouse Guest Complimentary report',tag:'save',hint:'Export and save complimentary in-house guest report before night run.'},
+  {id:8,phase:'pre',name:'Zero rate room report — remove pseudo rooms',tag:'check',hint:'Run zero-rate report. Pseudo/dummy rooms must be empty before night run.'},
+  {id:9,phase:'pre',name:'Paidout report + attach commission & FD docs',tag:'scan',hint:'Save paidout report and scan/attach commission and FD paidout receipts.'},
+  {id:10,phase:'pre',name:'Refund report + attach documents',tag:'scan',hint:'Save refund report and scan/attach any refund slips from today.'},
+  {id:11,phase:'pre',name:'Rate check — select check-in & search',tag:'check',hint:'Perform rate check using today check-in date filter before running the night.'},
+  {id:12,phase:'run',name:'Run the night audit',tag:'run',hint:'Execute the night audit in Opera. Do not interrupt once started.'},
+  {id:13,phase:'post',name:'Manager report',tag:'save',hint:'Generate and save the manager report after night audit completed.'},
+  {id:14,phase:'post',name:'No-show report + post charges',tag:'save',hint:'Finalise no-show list post-night and post charges where required.'},
+  {id:15,phase:'post',name:'Negative posting report',tag:'check',hint:'Review all negative postings and resolve or escalate discrepancies.'},
+  {id:16,phase:'post',name:'Room recancellations (post-night)',tag:'check',hint:'Process any room recancellations held until after the night audit.'},
+  {id:17,phase:'post',name:'Flash report',tag:'save',hint:'Prepare and distribute the flash report with tonight key figures.'},
+];
+const clState = {done:new Set(),skipped:new Set(),notes:{},names:{}};
+
+// NAT lookup
+const NAT_MAP={turkey:['yesilkaya','bugra','yalcin','uluturk','sahin','oner','furkan'],india:['kuriakose','ajay','rajasegar','ranjith','latheef','thengakoottil','ajmal','valiyapurayil','shah','prerak','nagvekar','kranti','hakim','lukman','sharifi','chandran','niyas','sultan','ibrahim','moradiya','sanjay','shanmuganathan','nagamani'],pakistan:['hasan','anis','zolfu','ullah','farhan','khalid','faheem','syed','muhammad','jabbar','memon','qassmani','khan','kamran','karim'],ethiopia:['demoz','rahwa','mahederkal','defersha','gebremeskel','nagash','getahun','tesfaye','abebe'],palestine:['muntasir','jehad','abumounshar'],somalia:['osman','fathia','istarlin','jama','abdulkadir','alibeto','saynab','sahra','doucoure','mariam','ali','muna','jimale','maryan'],yemen:['alawlaqi','qahtan','ezzi','mutahara','abdulqader','almaashari','adhban'],guinea:['hamadou','diallo','youba','magassa','bile','siby','oushamata','alhassane','fodie'],algeria:['gacem','hicham','aissani','kamel','seloubi','chetta','hossem','eddine'],uzbekistan:['sardor','azimov','saidazimkhon','mukhutdinov','arabov','navruz','kurbonov','umidjon','firdavs','ablayarov','mukhidov','umedzhon'],mozambique:['manhique','nilza','mahomed','saucate','fatima','uqueio','oriel'],russia:['magomadov','aiub','nabiev','ulugbek'],bangladesh:['morshed','chowdhury'],angola:['helena','jose','mulungo','tania'],oman:['alrashdi','alabri','saleh','almaashari'],iraq:['muwafaq','obaidi','sadoon','sairafi','husayn','hamid','mohsen'],ghana:['ruwaida','sumaila','abubakari','gomda','nadoua','afua','adwubi','balure','bashiru','nyamah','sylvester'],egypt:['dhiaa','ghasan','fathy','zohairy'],bahrain:['alawi','husain'],maldives:['shuhaib'],armenia:['zaven','hakobyan','ohanyan','vahagn','zareh','sunbulian'],mauritius:['ismael','joomun','bagvandjee','yashvita'],benin:['abdoul','ganiou'],mali:['amadou','diakite'],kuwait:['nawaf','alrashidi','alkhameesi','mokhalad'],china:['han','chen','yuxiao','wang','long'],morocco:['chouini','issam'],kazakhstan:['kydyrbekova'],'hong kong':['ting','kwan','shum'],qatar:['baabood','faisal'],brazil:['jones','luis'],turkmenistan:['akniyazova','bagyyev','akyniyazova'],'united states':['abukar','dhaqane','hoosh','abdinasir'],'united kingdom':['saaranan','perinpanathan'],tanzania:['sheikha','nassor'],lebanon:['makarem','fadi'],philippines:['sambas','jasmine','farah'],malaysia:['farhana','haril'],senegal:['coundoul','mbaye','thiam','bocar','seck','niang','moda'],uae:['alsaiari','khaled','alghanemi'],'sri lanka':['yogarajah'],'saudi arabia':['alqahtani','alharbi','abdalmajeed'],hungary:['csahoczi','attila'],portugal:['corte','jose','celia','rodrigues'],sudan:['elamin'],};
+
+function guessNat(name){
+  if(!name)return'';
+  const l=name.toLowerCase();
+  for(const[nat,keys]of Object.entries(NAT_MAP)){if(keys.some(k=>l.includes(k)))return nat.charAt(0).toUpperCase()+nat.slice(1);}
+  return'';
+}
+
+async function callClaudeNat(names){
+  const prompt=`You are a hotel nationality expert at a Dubai airport hotel. Given these guest names, return ONLY a valid JSON object where each key is the exact name and the value is the most likely nationality (country name only). Consider Dubai hotel guest demographics and naming conventions.\nNames:\n${names.map(n=>'- '+n).join('\n')}\nReturn ONLY valid JSON, no markdown. Example: {"JOHN SMITH":"United Kingdom","ALI HASSAN":"Somalia"}`;
+  try{
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})});
+    const data=await resp.json();
+    const text=data.content.filter(b=>b.type==='text').map(b=>b.text).join('');
+    return JSON.parse(text.replace(/```json|```/g,'').trim());
+  }catch(e){return{};}
+}
+
+// Clock
+function updateClock(){
+  const now=new Date();
+  document.getElementById('topbarTime').textContent=now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('topbarDate').textContent=now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).toUpperCase();
+  document.getElementById('cl-date-lbl').textContent=now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+}
+updateClock();setInterval(updateClock,30000);
+
+// Panel switching
+function showPanel(name){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('panel-'+name).classList.add('active');
+  document.getElementById('nav-'+name).classList.add('active');
+}
+
+// ══════════════════════════════════════════════
+// DEPARTURES
+// ══════════════════════════════════════════════
+function parseName(raw){
+  if(!raw)return'—';
+  // Handle "LASTNAME,FIRSTNAME,Title" and "Firstname Lastname"
+  if(raw.includes(',')){
+    const parts=raw.split(',').map(p=>p.trim()).filter(p=>p&&!/^(Mr\.?|Mrs\.?|Ms\.?|Miss|MR|MRS|MS|Dr\.?|MR\.|MISS)$/i.test(p));
+    return parts.slice(0,2).reverse().join(' ').trim()||raw.trim();
+  }
+  return raw.trim();
+}
+
+function processDep(){
+  const raw=document.getElementById('depInput').value.trim();
+  const errBox=document.getElementById('depError');errBox.classList.remove('show');
+  const showErr=msg=>{errBox.querySelector('span:last-child').textContent=msg;errBox.classList.add('show');};
+  if(!raw)return showErr('Please paste the departure report first.');
+  const lines=raw.split('\n').filter(l=>l.trim());
+  if(lines.length<2)return showErr('File appears empty.');
+  const headers=lines[0].split('\t').map(h=>h.trim());
+  const idx={};headers.forEach((h,i)=>idx[h]=i);
+  if(idx['ROOM']===undefined)return showErr('Could not detect ROOM column. Use Delimited Data format from Opera.');
+  depRooms=[];
+  for(let i=1;i<lines.length;i++){
+    const p=lines[i].split('\t');if(p.length<15)continue;
+    const room=(p[idx['ROOM']]||'').trim();if(!room||isNaN(parseInt(room)))continue;
+    const bal=parseFloat((p[idx['BALANCE']]||'0').replace(/,/g,''))||0;
+    const nights=parseInt(p[idx['NIGHTS']]||0)||0;
+    const agent=(p[idx['TRAVEL_AGENT_NAME']]||'').trim();
+    const source=(p[idx['SOURCE_NAME']]||'').trim();
+    const company=(p[idx['COMPANY_NAME']]||'').trim();
+    const src=agent||source||company||'—';
+    const rateCode=(p[idx['RATE_CODE']]||'').trim();
+    const isVip=!!(p[idx['VIP']]||'').trim();
+    const depTime=(p[idx['DEPARTURE_TIME']]||'').trim();
+    const rcat=(p[idx['ROOM_CATEGORY_LABEL']]||'').trim();
+    depRooms.push({
+      room:parseInt(room),roomStr:room,
+      name:parseName(p[idx['GUEST_NAME']]||''),
+      arrival:(p[idx['ARRIVAL']]||'').trim(),
+      departure:(p[idx['DEPARTURE']]||'').trim(),
+      nights,balance:bal,
+      source:src.replace(/\s*\(.*?\)\s*/g,'').trim().replace(/BOOKING\.COM BV \(.*?\)/,'Booking.com').replace(/AGODA COMPANY PTE LTD/,'Agoda'),
+      company,rateCode,depTime,rcat,isVip,
+      status:'due', lateTime:'', extensionNights:0, note:'', checkoutAt:'', priority:0,
+    });
+  }
+  if(!depRooms.length)return showErr('No departure rooms found. Check the file format.');
+  depRooms.sort((a,b)=>a.room-b.room);
+  // Set date label
+  const depDate=depRooms[0]?.departure||'';
+  document.getElementById('depDateLabel').textContent=`${depRooms.length} rooms departing · ${depDate}`;
+  document.getElementById('depBoard').style.display='block';
+  document.getElementById('depUploadCard').style.display='none';
+  ['depPrintBtn','depExportBtn','depViewToggle'].forEach(id=>document.getElementById(id).style.display='');
+  depRender();updateDepBadge();
+}
+
+let depViewMode='grid'; // grid | list
+function depToggleView(){
+  depViewMode=depViewMode==='grid'?'list':'grid';
+  document.getElementById('depViewToggle').textContent=depViewMode==='grid'?'☰ List':'⊞ Grid';
+  depRender();
+}
+
+function depStatusCounts(){
+  return{
+    all:depRooms.length,
+    due:depRooms.filter(r=>r.status==='due').length,
+    extended:depRooms.filter(r=>r.status==='extended').length,
+    late:depRooms.filter(r=>r.status==='late').length,
+    balance:depRooms.filter(r=>r.balance>0&&r.status!=='out').length,
+    out:depRooms.filter(r=>r.status==='out').length,
+  };
+}
+
+function depRender(){
+  const sc=depStatusCounts();
+  const total=sc.all;const out=sc.out;
+  const pct=total?Math.round(out/total*100):0;
+
+  // Update filter tab counts
+  Object.entries(sc).forEach(([k,v])=>{const el=document.getElementById('dfc-'+k);if(el)el.textContent=v;});
+
+  // Update KPIs
+  document.getElementById('depKpis').innerHTML=`
+    <div class="dep-kpi k-total" onclick="depFilter('all',document.querySelector('[data-f=all]'))">
+      <div class="dep-kpi-icon">🏨</div>
+      <div class="dep-kpi-val">${total}</div>
+      <div class="dep-kpi-label">Total Departures</div>
+      <div class="dep-kpi-bar"></div>
+    </div>
+    <div class="dep-kpi k-due" onclick="depFilter('due',document.querySelector('[data-f=due]'))">
+      <div class="dep-kpi-icon">⏳</div>
+      <div class="dep-kpi-val">${sc.due}</div>
+      <div class="dep-kpi-label">Still Due Out</div>
+      <div class="dep-kpi-bar"></div>
+    </div>
+    <div class="dep-kpi k-ext" onclick="depFilter('extended',document.querySelector('[data-f=extended]'))">
+      <div class="dep-kpi-icon">↪</div>
+      <div class="dep-kpi-val">${sc.extended}</div>
+      <div class="dep-kpi-label">Extended</div>
+      <div class="dep-kpi-bar"></div>
+    </div>
+    <div class="dep-kpi k-late" onclick="depFilter('late',document.querySelector('[data-f=late]'))">
+      <div class="dep-kpi-icon">🕐</div>
+      <div class="dep-kpi-val">${sc.late}</div>
+      <div class="dep-kpi-label">Late Checkout</div>
+      <div class="dep-kpi-bar"></div>
+    </div>
+    <div class="dep-kpi k-out" onclick="depFilter('out',document.querySelector('[data-f=out]'))">
+      <div class="dep-kpi-icon">✓</div>
+      <div class="dep-kpi-val">${out}</div>
+      <div class="dep-kpi-label">Checked Out</div>
+      <div class="dep-kpi-bar"></div>
+    </div>`;
+
+  // Progress
+  document.getElementById('depProgLabel').textContent=`${out} of ${total} checked out`;
+  document.getElementById('depProgPct').textContent=pct+'%';
+  document.getElementById('depProgFill').style.width=pct+'%';
+
+  // Filter + search
+  const search=(document.getElementById('depSearch')?.value||'').toLowerCase();
+  let filtered=depRooms.filter(r=>{
+    let matchF=depFilter_==='all'||(depFilter_==='balance'?r.balance>0&&r.status!=='out':r.status===depFilter_);
+    let matchS=!search||(r.roomStr.includes(search)||r.name.toLowerCase().includes(search)||r.source.toLowerCase().includes(search));
+    return matchF&&matchS;
+  });
+
+  // Render cards
+  document.getElementById('depGrid').className=depViewMode==='list'?'dep-grid' : 'dep-grid';
+  document.getElementById('depGrid').innerHTML=filtered.map(r=>depCardHTML(r)).join('');
+
+  // Quick bar
+  const dueCount=sc.due;
+  const qb=document.getElementById('depQuickBar');
+  if(dueCount>3){
+    qb.style.display='flex';
+    document.getElementById('depQuickLabel').textContent=`${dueCount} rooms still due out`;
+  } else qb.style.display='none';
+}
+
+function depCardHTML(r){
+  const i=depRooms.indexOf(r);
+  const bal=r.balance;
+  const balClass=bal>0?'bal-owing':bal<0?'bal-credit':'bal-zero';
+  const balIcon=bal>0?'⚠':'bal-credit'?'↩':'✓';
+  const balText=bal===0?'✓ Settled':bal>0?`AED ${Math.abs(bal).toLocaleString('en',{minimumFractionDigits:2})} OWING`:`AED ${Math.abs(bal).toLocaleString('en',{minimumFractionDigits:2})} CREDIT`;
+
+  // Status
+  const sClass='s-'+(r.balance>0&&r.status!=='out'?'balance':r.status);
+  const badgeCls=r.status==='due'?'sb-due':r.status==='extended'?'sb-extended':r.status==='late'?'sb-late':'sb-out';
+  const badgeText=r.status==='due'?'DUE OUT':r.status==='extended'?`EXTENDED +${r.extensionNights}N`:r.status==='late'?`LATE CO${r.lateTime?' · '+r.lateTime:''}` :'CHECKED OUT';
+
+  // Source cleanup
+  const srcClean=r.source.substring(0,28)+(r.source.length>28?'…':'');
+
+  // Actions
+  let actionsHTML='';
+  if(r.status!=='out'){
+    actionsHTML=`
+      <div class="dc-actions three">
+        <button class="dc-action-btn da-checkout" onclick="depSetStatus(${i},'out')">✓ Check Out</button>
+        <button class="dc-action-btn da-extend" onclick="depSetStatus(${i},'extended')">↪ Extend</button>
+        <button class="dc-action-btn da-late" onclick="depSetStatus(${i},'late')">🕐 Late CO</button>
+      </div>`;
+  } else {
+    actionsHTML=`<div class="dc-actions one"><button class="dc-action-btn da-undo" onclick="depSetStatus(${i},'due')">↺ Undo Checkout</button></div>`;
+  }
+
+  // Late time select
+  const lateHTML=r.status==='late'?`
+    <div class="dc-late-row">
+      <span class="dc-late-label">🕐 Late time:</span>
+      <select class="dc-late-select" onchange="depRooms[${i}].lateTime=this.value;depRender()">
+        <option value="">Select time…</option>
+        ${['10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM','6:00 PM'].map(t=>`<option ${r.lateTime===t?'selected':''}>${t}</option>`).join('')}
+      </select>
+    </div>`:r.status==='extended'?`
+    <div class="dc-extend-row">
+      <span class="dc-extend-label">↪ Extra nights:</span>
+      <select class="dc-extend-select" onchange="depRooms[${i}].extensionNights=parseInt(this.value)||0;depRender()">
+        ${[1,2,3,4,5,6,7].map(n=>`<option ${r.extensionNights===n?'selected':''}>${n} night${n>1?'s':''}</option>`).join('')}
+      </select>
+    </div>`:'';
+
+  const coStamp=r.checkoutAt?`<div class="dc-checkout-stamp">✓ Checked out at ${r.checkoutAt}</div>`:'';
+  const vipFlag=r.isVip?`<div class="dc-vip-flag">⭐ VIP</div>`:'';
+  const depTimeTag=r.depTime?`<div class="dc-meta-item">🕐 Scheduled: <strong>${r.depTime}</strong></div>`:'';
+  const companyTag=r.company?`<div class="dc-company">🏢 ${r.company.substring(0,40)}</div>`:'';
+
+  return`<div class="dep-card ${sClass}" id="dcard-${i}">
+    ${vipFlag}
+    <div class="dc-band"></div>
+    <div class="dc-top">
+      <div class="dc-room-big">${r.roomStr}</div>
+      <div class="dc-top-right">
+        <div class="dc-status-badge ${badgeCls}">${badgeText}</div>
+        <div class="dc-nights-badge">🌙 ${r.nights} night${r.nights!==1?'s':''}</div>
+      </div>
+    </div>
+    <div class="dc-body">
+      <div class="dc-name">${r.name}</div>
+      <div class="dc-meta-row">
+        <div class="dc-meta-item">📅 <strong>${r.arrival}</strong> → <strong>${r.departure}</strong></div>
+        ${depTimeTag}
+      </div>
+      ${companyTag}
+      <div class="dc-source-tag">${srcClean}</div>
+      <div class="dc-balance ${balClass}">
+        <span class="dc-balance-label">Balance</span>
+        <span class="dc-balance-amount">${balText}</span>
+      </div>
+      ${lateHTML}
+      ${coStamp}
+      ${actionsHTML}
+      <div class="dc-note-wrap">
+        <div class="dc-note-label">Notes</div>
+        <textarea class="dc-note" placeholder="Guest requests, luggage held, follow-up needed, complaints…" onchange="depRooms[${i}].note=this.value">${r.note}</textarea>
+      </div>
+    </div>
+  </div>`;
+}
+
+function depSetStatus(i,status){
+  depRooms[i].status=status;
+  if(status==='out'){depRooms[i].checkoutAt=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});}
+  else depRooms[i].checkoutAt='';
+  if(status!=='late')depRooms[i].lateTime='';
+  if(status!=='extended')depRooms[i].extensionNights=0;
+  depRender();updateDepBadge();
+}
+
+function depBulkCheckout(){
+  if(!confirm('Mark ALL due-out rooms as checked out?'))return;
+  depRooms.filter(r=>r.status==='due').forEach(r=>{r.status='out';r.checkoutAt=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});});
+  depRender();updateDepBadge();
+}
+
+function depFilter(f,el){
+  depFilter_=f;
+  document.querySelectorAll('.dep-ftab').forEach(c=>c.classList.remove('active'));
+  if(el)el.classList.add('active');
+  depRender();
+}
+
+function updateDepBadge(){
+  const due=depRooms.filter(r=>r.status==='due'||r.status==='late').length;
+  document.getElementById('badge-departures').textContent=due||depRooms.length||'0';
+}
+
+function clearDep(){
+  depRooms=[];depFilter_='all';
+  document.getElementById('depBoard').style.display='none';
+  document.getElementById('depUploadCard').style.display='block';
+  document.getElementById('depInput').value='';
+  document.getElementById('badge-departures').textContent='0';
+  ['depPrintBtn','depExportBtn','depViewToggle'].forEach(id=>document.getElementById(id).style.display='none');
+}
+
+function exportDepSummary(){
+  if(!depRooms.length)return;
+  const wb=XLSX.utils.book_new();
+  const data=[['Room','Guest Name','Arrival','Departure','Nights','Balance (AED)','Source','Company','Status','Late Time','Extension Nights','Checkout Time','Notes']];
+  depRooms.forEach(r=>data.push([r.roomStr,r.name,r.arrival,r.departure,r.nights,r.balance,r.source,r.company,r.status.toUpperCase(),r.lateTime,r.extensionNights||'',r.checkoutAt,r.note]));
+  const ws=XLSX.utils.aoa_to_sheet(data);
+  ws['!cols']=[8,24,12,12,8,12,20,24,12,10,8,12,30].map(w=>({wch:w}));
+  XLSX.utils.book_append_sheet(wb,ws,'Departure Follow-Up');
+  // Summary sheet
+  const sc=depStatusCounts();
+  const sum=[['Status','Count'],['Total Departures',sc.all],['Checked Out',sc.out],['Still Due Out',sc.due],['Extended',sc.extended],['Late Checkout',sc.late],['Has Balance',sc.balance]];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sum),'Summary');
+  XLSX.writeFile(wb,'Departures_'+new Date().toISOString().split('T')[0]+'.xlsx');
+}
+
+function depPrintList(){window.print();}
+
+
+// ══════════════════════════════════════════════
+// ARRIVALS
+// ══════════════════════════════════════════════
+function arrKpiUpdate(){
+  const t=arrGuests.length;
+  const l=arrGuests.filter(g=>g.purpose==='Leisure').length;
+  const b=arrGuests.filter(g=>g.purpose==='Business').length;
+  const avg=t?Math.round(arrGuests.reduce((s,g)=>s+Number(g.nights),0)/t):0;
+  document.getElementById('ak-total').textContent=t;
+  document.getElementById('ak-leisure').textContent=l;
+  document.getElementById('ak-business').textContent=b;
+  document.getElementById('ak-nights').textContent=avg;
+  document.getElementById('badge-arrivals').textContent=t||'0';
+}
+
+function arrRender(){
+  const search=(document.getElementById('arrSearch')?.value||'').toLowerCase();
+  const filtered=arrGuests.filter(g=>{
+    const mf=arrFilter_==='all'||g.purpose===arrFilter_;
+    const ms=!search||[g.room,g.conf,g.name,g.nat,g.source].join(' ').toLowerCase().includes(search);
+    return mf&&ms;
+  });
+  document.getElementById('arrTable').innerHTML=filtered.map(g=>{
+    const i=arrGuests.indexOf(g);
+    const isL=g.purpose==='Leisure';
+    return`<tr class="${isL?'leisure-row':''}">
+      <td><input value="${g.room}" onchange="arrGuests[${i}].room=this.value" style="width:48px;"/></td>
+      <td><input value="${g.conf}" onchange="arrGuests[${i}].conf=this.value" style="width:90px;"/></td>
+      <td><input value="${g.name}" onchange="arrGuests[${i}].name=this.value.toUpperCase();this.value=arrGuests[${i}].name" style="width:180px;"/></td>
+      <td><select onchange="arrGuests[${i}].purpose=this.value;arrKpiUpdate();arrRender()">${['Business','Leisure','Flight'].map(p=>`<option${g.purpose===p?' selected':''}>${p}</option>`).join('')}</select></td>
+      <td><input type="number" value="${g.nights}" onchange="arrGuests[${i}].nights=this.value;arrKpiUpdate()" style="width:44px;"/></td>
+      <td>
+        <div style="display:flex;gap:3px;align-items:center;">
+          <input value="${g.nat}" onchange="arrGuests[${i}].nat=this.value" style="width:90px;"/>
+          <button class="icon-btn ai-btn" onclick="aiOneGuest(${i},'arr')" title="AI guess">✦</button>
+        </div>
+      </td>
+      <td><input value="${g.email}" onchange="arrGuests[${i}].email=this.value" style="width:150px;"/></td>
+      <td><input value="${g.source}" onchange="arrGuests[${i}].source=this.value" style="width:110px;"/></td>
+      <td><input value="${g.remarks}" onchange="arrGuests[${i}].remarks=this.value" style="width:100px;"/></td>
+      <td><button class="icon-btn" onclick="arrGuests.splice(${i},1);arrKpiUpdate();arrRender()" title="Remove">✕</button></td>
+    </tr>`;
+  }).join('');
+  arrKpiUpdate();
+}
+
+function arrFilter(f,el){arrFilter_=f;document.querySelectorAll('.dep-filters .filter-chip[data-af]').forEach(c=>c.classList.remove('on'));el.classList.add('on');arrRender();}
+
+async function runAINat_arr(){
+  const wrap=document.getElementById('aiSpinArr');wrap.innerHTML='<div class="spinner"></div> ';
+  const BATCH=20;const names=arrGuests.map(g=>g.name);
+  for(let i=0;i<names.length;i+=BATCH){
+    const res=await callClaudeNat(names.slice(i,i+BATCH));
+    arrGuests.slice(i,i+BATCH).forEach(g=>{if(res[g.name])g.nat=res[g.name];else if(!g.nat){const gg=guessNat(g.name);if(gg)g.nat=gg;}});
+    arrRender();
+  }
+  wrap.innerHTML='';
+}
+
+async function aiOneGuest(i,list){
+  const guests=list==='arr'?arrGuests:purposeGuests;
+  const res=await callClaudeNat([guests[i].name]);
+  const nat=res[guests[i].name]||guessNat(guests[i].name);
+  if(nat){guests[i].nat=nat;arrRender();purposeRender();}
+}
+
+function exportArrivals(){
+  const wb=XLSX.utils.book_new();
+  const data=[['Room','Confirmation No.','Name','Purpose of Stay','Night of Stay','Nationality','Email','Booking Source','Remarks']];
+  arrGuests.forEach(g=>data.push([g.room,g.conf,g.name,g.purpose,g.nights,g.nat,g.email,g.source,g.remarks]));
+  const ws=XLSX.utils.aoa_to_sheet(data);
+  ws['!cols']=[8,16,28,14,10,14,26,20,18].map(w=>({wch:w}));
+  XLSX.utils.book_append_sheet(wb,ws,'Arrivals');
+  XLSX.writeFile(wb,'Arrivals_'+new Date().toISOString().split('T')[0]+'.xlsx');
+}
+
+function clearArrivals(){arrGuests=[];arrRender();}
+function loadArrivals(){/* manual paste handler if needed */}
+
+// ══════════════════════════════════════════════
+// PURPOSE OF STAY
+// ══════════════════════════════════════════════
+let _purposeTitle='Purpose of Stay Report';
+function editPurposeTitle(){const t=prompt('Report title:',_purposeTitle);if(t){_purposeTitle=t;document.getElementById('purposeTitle').textContent=t;}}
+
+function purposeKpiUpdate(){
+  const t=purposeGuests.length;
+  document.getElementById('pk-total').textContent=t;
+  document.getElementById('pk-biz').textContent=purposeGuests.filter(g=>g.purpose==='Business').length;
+  document.getElementById('pk-lei').textContent=purposeGuests.filter(g=>g.purpose==='Leisure').length;
+  document.getElementById('badge-purpose').textContent=t||'0';
+}
+
+function purposeRender(){
+  const search=(document.getElementById('purposeSearch')?.value||'').toLowerCase();
+  const filtered=purposeGuests.filter(g=>{
+    const mf=purposeFilter_==='all'||g.purpose===purposeFilter_;
+    const ms=!search||[g.room,g.conf,g.name,g.nat,g.source].join(' ').toLowerCase().includes(search);
+    return mf&&ms;
+  });
+  document.getElementById('purposeTable').innerHTML=filtered.map(g=>{
+    const i=purposeGuests.indexOf(g);
+    const isL=g.purpose==='Leisure';
+    return`<tr class="${isL?'leisure-row':''}">
+      <td><input value="${g.room}" onchange="purposeGuests[${i}].room=this.value" style="width:48px;"/></td>
+      <td><input value="${g.conf}" onchange="purposeGuests[${i}].conf=this.value" style="width:90px;"/></td>
+      <td><input value="${g.name}" onchange="purposeGuests[${i}].name=this.value.toUpperCase();this.value=purposeGuests[${i}].name" style="width:180px;"/></td>
+      <td><select onchange="purposeGuests[${i}].purpose=this.value;purposeKpiUpdate();purposeRender()">${['Business','Leisure','Flight'].map(p=>`<option${g.purpose===p?' selected':''}>${p}</option>`).join('')}</select></td>
+      <td><input type="number" value="${g.nights}" onchange="purposeGuests[${i}].nights=this.value" style="width:44px;"/></td>
+      <td>
+        <div style="display:flex;gap:3px;align-items:center;">
+          <input value="${g.nat}" onchange="purposeGuests[${i}].nat=this.value" style="width:90px;"/>
+          <button class="icon-btn ai-btn" onclick="aiOneGuest(${i},'purpose')" title="AI guess">✦</button>
+        </div>
+      </td>
+      <td><input value="${g.email}" onchange="purposeGuests[${i}].email=this.value" style="width:150px;"/></td>
+      <td><input value="${g.source}" onchange="purposeGuests[${i}].source=this.value" style="width:110px;"/></td>
+      <td><input value="${g.remarks}" onchange="purposeGuests[${i}].remarks=this.value" style="width:100px;"/></td>
+      <td><button class="icon-btn" onclick="purposeGuests.splice(${i},1);purposeKpiUpdate();purposeRender()" title="Remove">✕</button></td>
+    </tr>`;
+  }).join('');
+  purposeKpiUpdate();
+}
+
+function purposeFilter(f,el){purposeFilter_=f;document.querySelectorAll('.dep-filters .filter-chip[data-pf]').forEach(c=>c.classList.remove('on'));el.classList.add('on');purposeRender();}
+function syncFromArrivals(){purposeGuests=arrGuests.map(g=>({...g}));purposeRender();}
+function loadPurpose(){/* same as arrivals */}
+
+async function runAINat_purpose(){
+  const wrap=document.getElementById('aiSpinPurpose');wrap.innerHTML='<div class="spinner"></div> ';
+  const BATCH=20;const names=purposeGuests.map(g=>g.name);
+  for(let i=0;i<names.length;i+=BATCH){
+    const res=await callClaudeNat(names.slice(i,i+BATCH));
+    purposeGuests.slice(i,i+BATCH).forEach(g=>{if(res[g.name])g.nat=res[g.name];else if(!g.nat){const gg=guessNat(g.name);if(gg)g.nat=gg;}});
+    purposeRender();
+  }
+  wrap.innerHTML='';
+}
+
+function exportPurpose(){
+  const wb=XLSX.utils.book_new();
+  const data=[['Room','Confirmation No.','Name','Purpose of Stay','Night of Stay','Nationality','Email','Booking Source','Remarks']];
+  purposeGuests.forEach(g=>data.push([g.room,g.conf,g.name,g.purpose,g.nights,g.nat,g.email,g.source,g.remarks]));
+  const ws=XLSX.utils.aoa_to_sheet(data);
+  // Styling
+  const hStyle={font:{bold:true,color:{rgb:'FFFFFF'},name:'Arial',sz:10},fill:{fgColor:{rgb:'1F4E79'},patternType:'solid'},alignment:{horizontal:'center',vertical:'center'},border:{top:{style:'thin',color:{rgb:'CCCCCC'}},bottom:{style:'thin',color:{rgb:'CCCCCC'}},left:{style:'thin',color:{rgb:'CCCCCC'}},right:{style:'thin',color:{rgb:'CCCCCC'}}}};
+  const bStyle={font:{name:'Arial',sz:10},fill:{fgColor:{rgb:'FFFFFF'},patternType:'solid'},border:{top:{style:'thin',color:{rgb:'CCCCCC'}},bottom:{style:'thin',color:{rgb:'CCCCCC'}},left:{style:'thin',color:{rgb:'CCCCCC'}},right:{style:'thin',color:{rgb:'CCCCCC'}}}};
+  const lStyle={font:{name:'Arial',sz:10},fill:{fgColor:{rgb:'E2EFDA'},patternType:'solid'},border:{top:{style:'thin',color:{rgb:'CCCCCC'}},bottom:{style:'thin',color:{rgb:'CCCCCC'}},left:{style:'thin',color:{rgb:'CCCCCC'}},right:{style:'thin',color:{rgb:'CCCCCC'}}}};
+  const cols=['A','B','C','D','E','F','G','H','I'];
+  cols.forEach(c=>{if(ws[c+'1'])ws[c+'1'].s=hStyle;});
+  purposeGuests.forEach((g,ri)=>{
+    const rn=ri+2;const s=g.purpose==='Leisure'?lStyle:bStyle;
+    cols.forEach(c=>{const cell=ws[c+rn];if(cell)cell.s=s;});
+  });
+  ws['!cols']=[8,16,28,14,10,14,26,20,18].map(w=>({wch:w}));
+  XLSX.utils.book_append_sheet(wb,ws,'Purpose of Stay');
+  XLSX.writeFile(wb,(_purposeTitle||'Purpose_of_Stay').replace(/\s+/g,'_')+'.xlsx',{bookSST:false,type:'binary',cellStyles:true});
+}
+
+// ══════════════════════════════════════════════
+// ADD GUEST MODAL
+// ══════════════════════════════════════════════
+function openAddGuest(target='arrivals'){
+  guestModalTarget=target;
+  document.getElementById('guestModalTitle').textContent='Add Guest — '+(target==='arrivals'?'Arrivals':'Purpose of Stay');
+  ['mg-room','mg-conf','mg-name','mg-email','mg-source','mg-remarks','mg-nat'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('mg-nights').value=1;
+  document.getElementById('mg-purpose').value='Business';
+  document.getElementById('guestModal').classList.add('open');
+}
+function closeModal(){document.getElementById('guestModal').classList.remove('open');}
+
+async function aiGuessModal(){
+  const name=document.getElementById('mg-name').value.toUpperCase();
+  if(!name)return;
+  const btn=document.querySelector('.nat-row-f .btn');btn.textContent='…';btn.disabled=true;
+  const res=await callClaudeNat([name]);
+  const nat=res[name]||guessNat(name);
+  if(nat)document.getElementById('mg-nat').value=nat;
+  btn.textContent='AI';btn.disabled=false;
+}
+
+function saveGuest(){
+  const g={
+    room:document.getElementById('mg-room').value,
+    conf:document.getElementById('mg-conf').value,
+    name:document.getElementById('mg-name').value.toUpperCase(),
+    purpose:document.getElementById('mg-purpose').value,
+    nights:Number(document.getElementById('mg-nights').value)||1,
+    nat:document.getElementById('mg-nat').value,
+    email:document.getElementById('mg-email').value||'No@email.com',
+    source:document.getElementById('mg-source').value,
+    remarks:document.getElementById('mg-remarks').value,
+  };
+  if(!g.name)return;
+  if(guestModalTarget==='arrivals'){arrGuests.push(g);arrRender();}
+  else{purposeGuests.push(g);purposeRender();}
+  closeModal();
+}
+
+// Pre-load the 44 guests from the last CSV batch into arrivals
+arrGuests = [
+  {room:'510',conf:'615995877',name:'AJEESH CHANDRAN CHANDRAN',purpose:'Leisure',nights:1,nat:'India',email:'No@email.com',source:'Agoda',remarks:'Bookout IBIS DGD'},
+  {room:'515',conf:'615965013',name:'SUNBULIAN ZAREH',purpose:'Business',nights:1,nat:'Armenia',email:'No@email.com',source:'Walk in',remarks:''},
+  {room:'104',conf:'616000293',name:'CHETTA HOSSEM EDDINE',purpose:'Business',nights:2,nat:'Algeria',email:'No@email.com',source:'Booking.com VCC',remarks:'Bookout IBIS DGD'},
+  {room:'218',conf:'616000233',name:'ABDALMAJEED ALHARBI',purpose:'Leisure',nights:1,nat:'Saudi Arabia',email:'No@email.com',source:'Booking.com VCC',remarks:'Bookout IBIS DGD'},
+  {room:'312',conf:'615993939',name:'ABDUL KATHER SULTHAN IBRAHIM',purpose:'Business',nights:1,nat:'India',email:'No@email.com',source:'Walk in',remarks:''},
+  {room:'411',conf:'615995490',name:'FARAH DR JASMINE',purpose:'Leisure',nights:2,nat:'Philippines',email:'No@email.com',source:'Ctrip',remarks:'Bookout IBIS DGD'},
+  {room:'524',conf:'615998806',name:'KHAN AHMED ALI',purpose:'Business',nights:1,nat:'Pakistan',email:'No@email.com',source:'Walk in',remarks:''},
+  {room:'221',conf:'615998641',name:'PANCHILY IRSHAD',purpose:'Leisure',nights:1,nat:'India',email:'No@email.com',source:'Agoda',remarks:''},
+  {room:'501',conf:'615994133',name:'AJMAL ABDUL RAHMAN',purpose:'Business',nights:1,nat:'India',email:'No@email.com',source:'Agoda',remarks:''},
+  {room:'507',conf:'615997329',name:'ALGHANEMI ABDULLAH',purpose:'Business',nights:9,nat:'UAE',email:'No@email.com',source:'Booking.com',remarks:''},
+  {room:'618',conf:'615997223',name:'ELAMIN OSMAN',purpose:'Business',nights:1,nat:'Sudan',email:'No@email.com',source:'Booking.com',remarks:''},
+  {room:'201',conf:'615994014',name:'MODA NIANG',purpose:'Business',nights:5,nat:'Senegal',email:'No@email.com',source:'Walk in',remarks:''},
+  {room:'609',conf:'615988441',name:'FURKAN ONER',purpose:'Business',nights:1,nat:'Turkey',email:'No@email.com',source:'Walk in',remarks:''},
+  {room:'410',conf:'615993200',name:'YASHVITA MANOOJ BAGVANDJEE',purpose:'Leisure',nights:2,nat:'Mauritius',email:'No@email.com',source:'Booking.com VCC',remarks:'Bookout IBIS DGD'},
+  {room:'414',conf:'615996471',name:'MARIAM ALI',purpose:'Business',nights:1,nat:'Somalia',email:'No@email.com',source:'Walk in',remarks:''},
+  {room:'101',conf:'615996005',name:'KARIM KAMRAN',purpose:'Business',nights:1,nat:'Pakistan',email:'No@email.com',source:'Booking.com',remarks:''},
+  {room:'305',conf:'615995960',name:'MAT HARIL FARHANA',purpose:'Leisure',nights:1,nat:'Malaysia',email:'No@email.com',source:'Booking.com',remarks:''},
+  {room:'219',conf:'615994013',name:'MODA NIANG',purpose:'Business',nights:5,nat:'Senegal',email:'No@email.com',source:'Walk in',remarks:''},
+  {room:'208',conf:'615994007',name:'MODA NIANG',purpose:'Business',nights:5,nat:'Senegal',email:'No@email.com',source:'Walk in',remarks:''},
+  {room:'207',conf:'615993262',name:'MODA NIANG',purpose:'Business',nights:5,nat:'Senegal',email:'No@email.com',source:'Walk in',remarks:''},
+  {room:'304',conf:'615995841',name:'SAMET SAHIN',purpose:'Leisure',nights:1,nat:'Turkey',email:'No@email.com',source:'Booking.com',remarks:''},
+  {room:'415',conf:'615995395',name:'ORIEL MARCOS UQUEIO',purpose:'Leisure',nights:3,nat:'Mozambique',email:'No@email.com',source:'Booking.com VCC',remarks:''},
+  {room:'303',conf:'615995244',name:'MANHIQUE MANUEL RAMOS',purpose:'Business',nights:7,nat:'Mozambique',email:'No@email.com',source:'Walk in',remarks:''},
+  {room:'612',conf:'615994208',name:'RAHWA DEMOZ',purpose:'Leisure',nights:1,nat:'Ethiopia',email:'No@email.com',source:'Expedia',remarks:''},
+  {room:'110',conf:'615993598',name:'CSAHOCZI ATTILA',purpose:'Leisure',nights:1,nat:'Hungary',email:'No@email.com',source:'Booking.com',remarks:'Bookout IBIS DGD'},
+  {room:'514',conf:'615994890',name:'FATIMA SAUCATE',purpose:'Business',nights:7,nat:'Mozambique',email:'No@email.com',source:'Booking.com VCC',remarks:''},
+  {room:'526',conf:'615993799',name:'GETAHUN TESFAYE ABEBE',purpose:'Business',nights:1,nat:'Ethiopia',email:'No@email.com',source:'Ctrip',remarks:''},
+  {room:'405',conf:'615994454',name:'TANIA MULUNGO',purpose:'Leisure',nights:4,nat:'Angola',email:'No@email.com',source:'Booking.com VCC',remarks:''},
+  {room:'606',conf:'615990598',name:'ABDUL AZIZ ALMAKASHNI',purpose:'Business',nights:1,nat:'Yemen',email:'No@email.com',source:'Booking.com VCC',remarks:''},
+  {room:'601',conf:'615994067',name:'DA CORTE JOSE',purpose:'Leisure',nights:1,nat:'Portugal',email:'No@email.com',source:'Walk in',remarks:''},
+  {room:'504',conf:'615993081',name:'MOHAMMED NIYAS',purpose:'Business',nights:1,nat:'India',email:'No@email.com',source:'Booking.com VCC',remarks:''},
+  {room:'619',conf:'615990569',name:'BASHIRU BALURE',purpose:'Business',nights:2,nat:'Ghana',email:'No@email.com',source:'Booking.com VCC',remarks:'Bookout IBIS DGD'},
+  {room:'423',conf:'615993579',name:'HAMID HUSAYN',purpose:'Business',nights:1,nat:'Iraq',email:'No@email.com',source:'Walk in',remarks:''},
+  {room:'424',conf:'615993115',name:'SYLVESTER KWABENA NYAMAH',purpose:'Business',nights:3,nat:'Ghana',email:'No@email.com',source:'Booking.com',remarks:''},
+  {room:'222',conf:'615993312',name:'SHANMUGANATHAN NAGAMANI',purpose:'Business',nights:1,nat:'India',email:'No@email.com',source:'Booking.com VCC',remarks:'Bookout IBIS DGD'},
+  {room:'404',conf:'615993401',name:'OUSHAMATA ALHASSANE',purpose:'Leisure',nights:1,nat:'Guinea',email:'No@email.com',source:'Booking.com VCC',remarks:'Bookout IBIS DGD'},
+  {room:'216',conf:'615992705',name:'FATIMA MOHSEN',purpose:'Business',nights:2,nat:'Iraq',email:'No@email.com',source:'Bablion Tourism LLC',remarks:''},
+  {room:'314',conf:'615993328',name:'MUNA MOHAMED',purpose:'Business',nights:10,nat:'Somalia',email:'No@email.com',source:'Booking.com VCC',remarks:'Bookout IBIS DGD'},
+  {room:'306',conf:'615992891',name:'MUKHIDOV UMEDZHON',purpose:'Business',nights:1,nat:'Uzbekistan',email:'No@email.com',source:'Booking.com',remarks:''},
+  {room:'324',conf:'615993053',name:'JIMALE MARYAN',purpose:'Business',nights:4,nat:'Somalia',email:'No@email.com',source:'Booking.com VCC',remarks:''},
+  {room:'426',conf:'615992965',name:'AKYNIYAZOVA MAHRI',purpose:'Business',nights:1,nat:'Turkmenistan',email:'No@email.com',source:'Walk in',remarks:''},
+  {room:'615',conf:'615992636',name:'MORADIYA SANJAY',purpose:'Business',nights:2,nat:'India',email:'No@email.com',source:'Walk in',remarks:''},
+  {room:'509',conf:'615992470',name:'SIBY FODIE',purpose:'Business',nights:2,nat:'Guinea',email:'No@email.com',source:'Walk in',remarks:''},
+  {room:'503',conf:'615992170',name:'ADHBAN MOHAMMED',purpose:'Business',nights:1,nat:'Yemen',email:'No@email.com',source:'Booking.com',remarks:''},
+];
+purposeGuests = arrGuests.map(g=>({...g}));
+arrRender();
+purposeRender();
+
+// Auto-load departure data from the uploaded file
+const DEP_RAW=`DEPARTURE\tGRP_BY_COL\tGRP_BY_DESC\tSEC_RMNO\tCHAR_DEPDATE\tSUM_CHD\tSUM_ADTS\tSUM_NTS\tSUM_RMS\tSUM_BALANCE\tRESORT1\tIS_SHARED_YN\tROOM\tNIGHTS\tARRIVAL\tNO_OF_ROOMS\tBALANCE\tRESV_STATUS\tDEPARTURE_TIME\tCOMPUTED_RESV_STATUS\tGUEST_NAME\tADULTS\tCHILDREN\tBLOCK_CODE\tALLOTMENT_HEADER_ID\tROOM_CATEGORY_LABEL\tCOMPANY_NAME\tTRAVEL_AGENT_NAME\tSOURCE_NAME\tGROUP_NAME\tROOM_CATEGORY\tPAYMENT_DESC\tRESV_NAME_ID\tGUEST_NAME_ID\tCOMPUTED_RESV_STATUS_DISPLAY\tRATE_CODE\tSPECIAL_REQUESTS\tVIP\tSHARE_NAMES\tEXTERNAL_REFERENCE\tCHAR_DEPART\tCHAR_ARRIVAL\tPROF_ATTACHED\tPROF_COUNT\tRES_COUNT\tRESV_NAME_ID1\tRESORT\tMEMBERSHIP_TYPE\tMEMBERSHIP_CARD_NO\tMEMBERSHIP_LEVEL\tMEMBERSHIP_TYPE_DESC1\tMEMBERSHIP_LEVEL_DESC1
+02-MAY-26\t\t\t14\t02-05-26\t0\t23\t656\t14\t10430.81\tHA7N5\tN\t0101\t1\t01-05-26\t1\t0\tCHECKED IN\t\tDUE OUT\tKARIM,KAMRAN,Mr.\t2\t0\t\t\tSGC\t\tBOOKING.COM BV (EUR NL)\t\t\t142018\tCA\t32530350\t28217598\tDUOT\tFLRA1\t\t\t\t\t02-05-26\t01-05-26\tT- BOOKING.COM BV (EUR NL)\t0\t0
+02-MAY-26\t\t\t14\t02-05-26\t0\t23\t656\t14\t10430.81\tHA7N5\tN\t0105\t2\t30-04-26\t1\t0\tCHECKED IN\t\tDUE OUT\tLAFTA,MOHANAD\t2\t0\t\t\tTWC\t\t\tWalk-in\t\t142759\tCA\t32513778\t28252585\tDUOT\tRA1\t\t\t\t\t02-05-26\t30-04-26\tS- Walk-in\t0\t0
+02-MAY-26\t\t\t14\t02-05-26\t0\t23\t656\t14\t10430.81\tHA7N5\tN\t0113\t31\t01-04-26\t1\t-69.7\tCHECKED IN\t\tDUE OUT\tDILARA,ZEYNEP,Mr.\t1\t0\t\t\tSGC\tSembol Uluslararasi Yatirim Tarim\t\tBookout IBIS DGD\t\t142018\tVAM\t32138142\t27938822\tDUOT\tCORPBB\t\t\t\t\t02-05-26\t01-04-26\tC- Sembol Uluslararasi Yatirim Tarim\t0\t0
+02-MAY-26\t\t\t14\t02-05-26\t0\t23\t656\t14\t10430.81\tHA7N5\tN\t0220\t3\t29-04-26\t1\t0\tCHECKED IN\t19:01\tDUE OUT\tOLAYAN SALEH ALOAYAN,Mr.\t1\t0\t\t\tSGC\t\t\tWalk-in\t\t142018\tCA\t32491871\t28235694\tDUOT\tRA1\t\t\t\t\t02-05-26\t29-04-26\tS- Walk-in\t0\t0
+02-MAY-26\t\t\t14\t02-05-26\t0\t23\t656\t14\t10430.81\tHA7N5\tN\t0221\t1\t01-05-26\t1\t0\tCHECKED IN\t13:32\tDUE OUT\tPANCHILY,IRSHAD,MR\t2\t0\t\t\tSGC\t\tAGODA COMPANY PTE LTD\t\t\t142018\tCA\t32533191\t28269623\tDUOT\tFLRA1\t\t\t\t\t02-05-26\t01-05-26\tT- AGODA COMPANY PTE LTD\t0\t0
+02-MAY-26\t\t\t14\t02-05-26\t0\t23\t656\t14\t10430.81\tHA7N5\tN\t0304\t1\t01-05-26\t1\t0\tCHECKED IN\t\tDUE OUT\tSAMET ŞAHIN\t2\t0\t\t\tSGC\t\tBOOKING.COM BV (EUR NL)\t\t\t142018\tCA\t32529904\t28266568\tDUOT\tFLRB1\t\t\t\t\t02-05-26\t01-05-26\tT- BOOKING.COM BV (EUR NL)\t0\t0
+02-MAY-26\t\t\t14\t02-05-26\t0\t23\t656\t14\t10430.81\tHA7N5\tN\t0322\t0\t02-05-26\t1\t0\tCHECKED IN\t\tDUE OUT\tHASAN,SALEH\t1\t0\t\t\tSGC\t\t\tWalk-in\t\t142018\tCA\t32537845\t27916226\tDUOT\tRA1\t\t\t\t\t02-05-26\t02-05-26\tS- Walk-in\t0\t0
+02-MAY-26\t\t\t14\t02-05-26\t0\t23\t656\t14\t10430.81\tHA7N5\tN\t0501\t1\t01-05-26\t1\t176.13\tCHECKED IN\t\tDUE OUT\tAjmal Abdul Rahman,AJMAL\t2\t0\t\t\tSGC\t\tAGODA COMPANY PTE LTD\t\t\t142018\tCA\t32528039\t28264912\tDUOT\tFLRA1\t\t\t\t\t02-05-26\t01-05-26\tT- AGODA COMPANY PTE LTD\t0\t0
+02-MAY-26\t\t\t14\t02-05-26\t0\t23\t656\t14\t10430.81\tHA7N5\tN\t0504\t1\t01-05-26\t1\t0\tCHECKED IN\t14:32\tDUE OUT\tMohammed Niyas\t2\t0\t\t\tSGC\t\tBooking.com VCC\t\t\t142018\tCA\t32527087\t28263969\tDUOT\tFLRA1\t\t\t\t\t02-05-26\t01-05-26\tT- Booking.com VCC\t0\t0
+02-MAY-26\t\t\t14\t02-05-26\t0\t23\t656\t14\t10430.81\tHA7N5\tN\t0508\t90\t01-02-26\t1\t-37.75\tCHECKED IN\t\tDUE OUT\tMAGOMADOV,KHUSEIN,Mr.\t2\t0\t\t\tSGC\tEmerald Gold\t\t\t\t142018\tCA\t31337552\t27266325\tDUOT\tCORPRO\t\t\t\t\t02-05-26\t01-02-26\tC- Emerald Gold\t0\t0
+02-MAY-26\t\t\t14\t02-05-26\t0\t23\t656\t14\t10430.81\tHA7N5\tN\t0513\t408\t20-03-25\t1\t-1019.89\tCHECKED IN\t\tDUE OUT\tKerim,Abdul,Mr.\t2\t0\t\t\tSGC\tAlbaz Althahabi Gold Trading LLC\t\t\t\t142018\tVA\t26661826\t23479702\tDUOT\tCORPRO\t\t\t\t\t02-05-26\t20-03-25\tC- Albaz Althahabi Gold Trading LLC\t0\t0
+02-MAY-26\t\t\t14\t02-05-26\t0\t23\t656\t14\t10430.81\tHA7N5\tN\t0524\t1\t01-05-26\t1\t0\tCHECKED IN\t\tDUE OUT\tKHAN,AHMED ALI,Mr.\t1\t0\t\t\tSGC\t\t\tWalk-in\t\t142018\tCA\t32533667\t28269862\tDUOT\tRA1\t\t\t\t\t02-05-26\t01-05-26\tS- Walk-in\t0\t0
+02-MAY-26\t\t\t14\t02-05-26\t0\t23\t656\t14\t10430.81\tHA7N5\tN\t0604\t114\t08-01-26\t1\t11382.02\tCHECKED IN\t\tDUE OUT\tGORTER,ARIE,Mr.\t1\t0\t\t\tSGC\tMar Marine & Building Contracting LLC\t\t\t\t142018\tVAM\t30822569\t23565607\tDUOT\tCORPFB\t\t\t\t\t02-05-26\t08-01-26\tC- Mar Marine & Building Contracting LLC\t0\t0
+02-MAY-26\t\t\t14\t02-05-26\t0\t23\t656\t14\t10430.81\tHA7N5\tN\t0610\t2\t30-04-26\t1\t0\tCHECKED IN\t\tDUE OUT\tMUNIR,BILALAHMED\t2\t0\t\t\tSGC\t\tDarina Holidays\t\t\t142018\tCA\t32487871\t28231400\tDUOT\tLDRRO\t\t\t\t\t02-05-26\t30-04-26\tT- Darina Holidays\t0\t0`;
+
+document.getElementById('depInput').value=DEP_RAW;
+processDep();
+
+// ══════════════════════════════════════════════
+// NIGHT CHECKLIST (simplified)
+// ══════════════════════════════════════════════
+function clSave2(){try{localStorage.setItem('hrp_cl2',JSON.stringify({done:[...clState.done],skipped:[...clState.skipped],notes:clState.notes,names:clState.names}));}catch(e){}}
+function clLoad2(){try{const d=JSON.parse(localStorage.getItem('hrp_cl2')||'{}');if(d.done)d.done.forEach(i=>clState.done.add(i));if(d.skipped)d.skipped.forEach(i=>clState.skipped.add(i));if(d.notes)Object.assign(clState.notes,d.notes);if(d.names)Object.assign(clState.names,d.names);}catch(e){}}
+
+function clRender2(){
+  const phases=[{key:'pre',label:'Before Night Run'},{key:'run',label:'Night Run'},{key:'post',label:'After Night Run'}];
+  const tagColors={check:'var(--mint)',save:'var(--gold)',scan:'var(--sky)',charge:'var(--amber)',run:'var(--rose)'};
+  let html='';
+  phases.forEach(ph=>{
+    const steps=CL_STEPS.filter(s=>s.phase===ph.key);
+    html+=`<div style="margin-bottom:8px;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><div style="flex:1;height:1px;background:var(--border);"></div><div style="font-family:var(--mono);font-size:0.58rem;letter-spacing:2px;text-transform:uppercase;padding:3px 12px;border-radius:20px;border:1px solid var(--border2);color:var(--text3);background:var(--surface);white-space:nowrap;">${ph.label}</div><div style="flex:1;height:1px;background:var(--border);"></div></div>`;
+    steps.forEach(s=>{
+      const done=clState.done.has(s.id);const skip=clState.skipped.has(s.id);
+      const name=clState.names[s.id]||s.name;
+      const note=clState.notes[s.id]||'';
+      html+=`<div style="background:var(--card);border:1px solid ${done?'rgba(62,207,142,0.25)':'var(--border)'};border-radius:var(--r2);margin-bottom:6px;overflow:hidden;opacity:${skip?'0.35':'1'};">
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer;" onclick="clToggle2(${s.id})">
+          <div style="width:22px;height:22px;border-radius:50%;border:1.5px solid ${done?'var(--mint)':'var(--border2)'};background:${done?'rgba(62,207,142,0.12)':'var(--bg2)'};display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:${done?'var(--mint)':'transparent'};flex-shrink:0;">✓</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-family:var(--mono);font-size:0.56rem;color:var(--text3);margin-bottom:2px;">STEP ${s.id} · <span style="color:${tagColors[s.tag]||'var(--text3)'}">${s.tag.toUpperCase()}</span></div>
+            <div style="font-size:0.85rem;font-weight:600;color:${done?'var(--text3)':'var(--text)'};${done?'text-decoration:line-through;':''}">${name}</div>
+            <div style="font-size:0.7rem;color:var(--text3);margin-top:2px;">${s.hint}</div>
+          </div>
+          <button onclick="event.stopPropagation();clSkip2(${s.id})" style="font-size:0.7rem;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;">${skip?'↩':'Skip'}</button>
+        </div>
+        ${note?`<div style="padding:6px 14px 10px 48px;font-family:var(--mono);font-size:0.65rem;color:var(--text3);">${note}</div>`:''}
+      </div>`;
+    });
+    html+='</div>';
+  });
+  document.getElementById('clStepList2').innerHTML=html;
+  clUpdateProgress2();
+}
+
+function clToggle2(id){
+  if(clState.skipped.has(id))return;
+  if(clState.done.has(id))clState.done.delete(id);else clState.done.add(id);
+  clSave2();clRender2();
+}
+function clSkip2(id){if(clState.skipped.has(id))clState.skipped.delete(id);else{clState.skipped.add(id);clState.done.delete(id);}clSave2();clRender2();}
+function clUpdateProgress2(){
+  const active=CL_STEPS.filter(s=>!clState.skipped.has(s.id));
+  const done=active.filter(s=>clState.done.has(s.id)).length;
+  const total=active.length;
+  const pct=total?Math.round(done/total*100):0;
+  document.getElementById('clProgLabel').textContent=`${done} of ${total} steps done`;
+  document.getElementById('clProgPct').textContent=pct+'%';
+  document.getElementById('clProgFill').style.width=pct+'%';
+  document.getElementById('badge-checklist').textContent=pct===100?'✓':total;
+  const comp=document.getElementById('clComplete2');
+  if(pct===100&&total>0){comp.style.display='block';document.getElementById('clCompleteTime2').textContent='Completed at '+new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});}
+  else comp.style.display='none';
+}
+function clReset(){if(!confirm('Reset all checkboxes for a new night?'))return;clState.done.clear();clState.skipped.clear();clSave2();clRender2();}
+function clToggleEdit(){clEditMode=!clEditMode;}
+
+clLoad2();clRender2();
+
+
+// ══════════════════════════════════════════════
+// EXCEL COUNTRIES (Nationality Report)
+// ══════════════════════════════════════════════
+const EXCEL_COUNTRIES=["Afghanistan","Albania","Algeria","American Samoa","Andorra","Angola","Anguilla","Antarctica","Antigua & Barbuda","Argentina","Armenia","Aruba","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados","Belarus","Belgium","Belize","Benin","Bermuda","Bhutan","Bolivia","Bosnia-Herzegovina","Botswana","Brazil","British Indian Ocean Territory","British Virgin Islands","British West Indies","Brunei","Bulgaria","Burkina Faso","Burundi","Cambodia","Cameroon Republic","Canada","Cape Verde","Cayman Island","Central African Republic","Chad","Chile","China","Colombia","Comoros","Congo (Republic of the Congo)","Congo, Dem. Rep. of (Zaire)","Cook Islands","Costa Rica","Côte d'Ivoire","Croatia","Cuba","Cyprus","Czech Republic","Czechoslovakia","Denmark","Djibouti","Dominica","Dominican Republic","East Timor","Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia","Ethiopia","Falkland Islands (Malvinas)","Faroe Islands","Fiji","Finland","France","French Guiana","French Polynesia","Gabon","Gambia","Georgia","Germany","Ghana","Gibraltar","Greece","Greenland","Grenada","Guadeloupe","Guam","Guatemala","Guinea","Guinea-Bissau","Guyana","Haiti","Holy See (Vatican City State)","Honduras","Hong Kong","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Isle of Man","Israel","Italy","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kiribati","Korea, Democratic People's Republic of (North)","Korea, Republic of (South)","Kosovo","Kuwait","Kyrghyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia","Libya","Liechtenstein","Lithuania","Luxembourg","Macau","Macedonia, Republic of","Madagascar","Malagasy Republic","Malawi","Malaysia","Maldives","Mali","Malta","Marshal Islands","Martinique","Mauritania","Mauritius","Mayotte","Mexico","Micronesia, Federated States","Moldova","Monaco","Mongolia","Montenegro","Montserrat","Morocco","Mozambique","Myanmar (Burma)","Namibia","Nauru","Nepal","Netherlands","Netherlands, Antilles","New Caledonia","New Zealand","Nicaragua","Niger","Nigeria","Norfolk Island","Northern Mariana Isl.","Norway","Oman","Pakistan","Palau","Palestine","Panama","Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal","Puerto Rico","Qatar","Reunion","Romania","Russian Federation","Rwanda","Saba","Saint Barthelemy","Saint Helena","Saint Kitts and Nevis","Saint Lucia","Saint Pierre and Miquelon","Saint Vincent and the Grenadines","Samoa","San Marino (in Italy)","Sao Tomé","Saudi Arabia","Scotland","Senegal","Serbia","Seychelles","Sierra Leone","Singapore","Slovakia Republic","Slovenia","Solomon Island","Somalia","South Africa","South Georgia and the South Sandwich Islands","South Sudan","Spain","Sri Lanka","Sudan","Surinam","Swaziland","Sweden","Switzerland","Syria","Tadjikistan","Taiwan","Tanzania","Thailand","Togo","Tokelau","Tonga","Trinidad & Tobaggo","Tunisia","Turkey","Turkmenistan","Turks and Caicos Islands","Tuvalu","Uganda","Ukraine","United Arab Emirates","United Kingdom","United States of America","Uruguay","Uzbekistan","Vanuatu","Venezuela","Vietnam","Virgin Islands, British","Virgin Islands, U.S.","Yemen","Yugoslavia","Zambia","Zimbabwe"];
+const EXCEL_LOWER={};
+EXCEL_COUNTRIES.forEach(n=>{EXCEL_LOWER[n.toLowerCase()]=n;});
+const NAME_MAP={"United States":"United States of America","Cameroon":"Cameroon Republic","Congo (Kinshasa)":"Congo, Dem. Rep. of (Zaire)","Congo (Brazzaville)":"Congo (Republic of the Congo)","South Korea":"Korea, Republic of (South)","Korea, South":"Korea, Republic of (South)","North Korea":"Korea, Democratic People's Republic of (North)","Myanmar":"Myanmar (Burma)","Taiwan (Chinese Taipei)":"Taiwan","Tajikistan":"Tadjikistan","Kyrgyzstan":"Kyrghyzstan","Kyrgyz Republic":"Kyrghyzstan","Bosnia and Herzegovina":"Bosnia-Herzegovina","Macedonia":"Macedonia, Republic of","North Macedonia":"Macedonia, Republic of","Ivory Coast":"Côte d'Ivoire","Cote d'Ivoire":"Côte d'Ivoire","Palestine, State of":"Palestine","Palestinian Territory":"Palestine","Trinidad and Tobago":"Trinidad & Tobaggo","Trinidad & Tobago":"Trinidad & Tobaggo","Antigua and Barbuda":"Antigua & Barbuda","Timor-Leste":"East Timor","Sao Tome and Principe":"Sao Tomé","Sao Tome":"Sao Tomé","Unknown":null,"DO NOT USE":null};
+function resolveCountry(name){
+  if(!name)return{excel:null,isUnknown:true};
+  const t=name.trim();
+  if(NAME_MAP.hasOwnProperty(t)){const v=NAME_MAP[t];return{excel:v,isUnknown:v===null};}
+  const match=EXCEL_LOWER[t.toLowerCase()];
+  if(match)return{excel:match,isUnknown:false};
+  return{excel:null,isUnknown:false};
+}
+
+let natCopyText='',rentCopyText='',naCopyText='';
+
+// ── NATIONALITY REPORT ──
+function processNat(){
+  const raw=document.getElementById('natInput').value.trim();
+  const errBox=document.getElementById('natError');errBox.classList.remove('show');
+  const showErr=msg=>{document.getElementById('natErrorMsg').textContent=msg;errBox.classList.add('show');};
+  if(!raw)return showErr('Please paste your Opera nationality report first.');
+  const lines=raw.split('\n');if(lines.length<2)return showErr('File appears empty.');
+  const headers=lines[0].split('\t');const idx={};headers.forEach((h,i)=>{idx[h.trim()]=i;});
+  const needed=['VALUE_CODE','COUNTRY_CODE','COUNTRY_NAME','SUMVALUEPERCOUNTRY_CODE','SUMVALUEPERVALUE_CODE'];
+  const missing=needed.filter(k=>idx[k]===undefined);
+  if(missing.length)return showErr('Missing columns: '+missing.join(', ')+' — Use Delimited Data format.');
+  const seenKey=new Set();const operaRaw={};
+  let grandAPR=0,grandRMS=0,grandPRS=0,fA=false,fR=false,fP=false;
+  for(let i=1;i<lines.length;i++){
+    const parts=lines[i].split('\t');if(parts.length<22)continue;
+    const code=(parts[idx['VALUE_CODE']]||'').trim();if(!['RMS','APR','PRS'].includes(code))continue;
+    const gtot=parseInt(parts[idx['SUMVALUEPERVALUE_CODE']]||'0')||0;
+    if(code==='APR'&&!fA&&gtot>0){grandAPR=gtot;fA=true;}if(code==='RMS'&&!fR&&gtot>0){grandRMS=gtot;fR=true;}if(code==='PRS'&&!fP&&gtot>0){grandPRS=gtot;fP=true;}
+    const cc=(parts[idx['COUNTRY_CODE']]||'').trim();const name=(parts[idx['COUNTRY_NAME']]||'').trim();const sum=(parts[idx['SUMVALUEPERCOUNTRY_CODE']]||'').trim();
+    const key=cc+'|'+code;if(seenKey.has(key)||!name)continue;seenKey.add(key);
+    if(!operaRaw[name])operaRaw[name]={APR:0,RMS:0,PRS:0};operaRaw[name][code]=parseInt(sum)||0;
+  }
+  const excelData={},unknowns=[],unmatched=[];
+  for(const[opName,vals]of Object.entries(operaRaw)){
+    const{excel,isUnknown}=resolveCountry(opName);
+    if(isUnknown){unknowns.push({name:opName,...vals});continue;}
+    if(excel===null){if(vals.APR||vals.RMS||vals.PRS)unmatched.push({name:opName,...vals});continue;}
+    excelData[excel]=vals;
+  }
+  let mappedAPR=0,mappedRMS=0,mappedPRS=0,active=0;const rows=[];
+  EXCEL_COUNTRIES.forEach(c=>{const v=excelData[c]||{APR:0,RMS:0,PRS:0};rows.push(v);mappedAPR+=v.APR;mappedRMS+=v.RMS;mappedPRS+=v.PRS;if(v.APR||v.RMS||v.PRS)active++;});
+  const unkAPR=unknowns.reduce((s,x)=>s+x.APR,0)+unmatched.reduce((s,x)=>s+x.APR,0);
+  const unkRMS=unknowns.reduce((s,x)=>s+x.RMS,0)+unmatched.reduce((s,x)=>s+x.RMS,0);
+  const unkPRS=unknowns.reduce((s,x)=>s+x.PRS,0)+unmatched.reduce((s,x)=>s+x.PRS,0);
+  if(!grandAPR)grandAPR=mappedAPR+unkAPR;if(!grandRMS)grandRMS=mappedRMS+unkRMS;if(!grandPRS)grandPRS=mappedPRS+unkPRS;
+  const gapAPR=grandAPR-mappedAPR,gapRMS=grandRMS-mappedRMS,gapPRS=grandPRS-mappedPRS;
+  natCopyText=rows.map(v=>v.APR+'\t'+v.RMS+'\t'+v.PRS).join('\n');
+  document.getElementById('kpi-apr').textContent=grandAPR.toLocaleString();
+  document.getElementById('kpi-rms').textContent=grandRMS.toLocaleString();
+  document.getElementById('kpi-prs').textContent=grandPRS.toLocaleString();
+  const mkRow=(label,op,mp,gp)=>`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.75rem;border-bottom:1px solid rgba(255,255,255,0.03);"><span style="color:var(--text3);">${label}</span><span style="font-family:var(--mono);">${op.toLocaleString()}</span></div>`;
+  document.getElementById('natTotalsGrid').innerHTML=['apr','rms','prs'].map((k,ki)=>{
+    const op=ki===0?grandAPR:ki===1?grandRMS:grandPRS;
+    const mp=ki===0?mappedAPR:ki===1?mappedRMS:mappedPRS;
+    const gp=ki===0?gapAPR:ki===1?gapRMS:gapPRS;
+    const lbl=ki===0?'New Arrivals':ki===1?'Room Nights':'Guest Nights';
+    return`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;">
+      <div style="font-family:var(--mono);font-size:0.58rem;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border);">${lbl}</div>
+      ${mkRow('Opera Total',op,mp,gp)}
+      <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.75rem;border-bottom:1px solid rgba(255,255,255,0.03);"><span style="color:var(--text3);">Placed in rows</span><span style="font-family:var(--mono);color:var(--text2);">${mp.toLocaleString()}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.75rem;"><span style="color:var(--text3);">Gap</span><span style="font-family:var(--mono);color:${gp>0?'var(--amber)':'var(--mint)'};">${gp>0?'−'+gp:'✓ 0'}</span></div>
+    </div>`;
+  }).join('');
+  const alertStyle=(type,ico,title,sub)=>`<div style="display:flex;gap:10px;padding:10px 12px;border-radius:var(--r);margin-bottom:6px;background:${type==='warn'?'rgba(240,164,58,0.06)':type==='ok'?'rgba(62,207,142,0.05)':'rgba(240,107,122,0.05)'};border:1px solid ${type==='warn'?'rgba(240,164,58,0.2)':type==='ok'?'rgba(62,207,142,0.15)':'rgba(240,107,122,0.2)'};border-left:3px solid ${type==='warn'?'var(--amber)':type==='ok'?'var(--mint)':'var(--rose)'};">
+    <span>${ico}</span><div><strong style="font-size:0.78rem;color:var(--text);display:block;margin-bottom:2px;">${title}</strong><span style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">${sub}</span></div></div>`;
+  document.getElementById('natUnknownList').innerHTML=unknowns.length===0?alertStyle('ok','✅','No unknown guests','Perfect data quality.'):unknowns.map(u=>alertStyle('warn','⚠️','"'+u.name+'" — '+u.APR+' arrivals · '+u.RMS+' room nights · '+u.PRS+' guest nights','No nationality code. Fix in Opera Guest Profiles.')).join('');
+  document.getElementById('natUnmatchedList').innerHTML=unmatched.length===0?alertStyle('ok','✅','All countries matched to Excel rows','No data was lost.'):unmatched.map(u=>alertStyle('error','🔴','"'+u.name+'" — '+u.APR+' arr · '+u.RMS+' rms · '+u.PRS+' gsts — NOT PLACED','Country has no Excel row. Numbers lost.')).join('');
+  const badge=document.getElementById('natDiagBadge');
+  const hasIssues=unknowns.length>0||unmatched.length>0;
+  badge.className='tb-pill'+(hasIssues?' live':'');badge.style.color=hasIssues?'var(--amber)':'var(--mint)';
+  badge.textContent=hasIssues?(unknowns.length+' unknown · '+unmatched.length+' unmatched'):'✓ All Clean';
+  document.getElementById('gap-apr').textContent=gapAPR>0?'−'+gapAPR:'0';
+  document.getElementById('gap-rms').textContent=gapRMS>0?'−'+gapRMS:'0';
+  document.getElementById('gap-prs').textContent=gapPRS>0?'−'+gapPRS:'0';
+  document.getElementById('s-active').textContent=active;document.getElementById('s-zero').textContent=240-active;document.getElementById('s-unmat').textContent=unmatched.length;document.getElementById('s-unk').textContent=unknowns.length;
+  document.getElementById('natPreview').innerHTML=EXCEL_COUNTRIES.map((c,i)=>{
+    const v=rows[i];const rn=i+8;const has=v.APR||v.RMS||v.PRS;
+    const sn=c.length>22?c.substring(0,21)+'…':c;
+    return`<div style="display:grid;grid-template-columns:38px 1fr 58px 58px 58px;padding:3px 14px;border-bottom:1px solid rgba(255,255,255,0.02);transition:background 0.1s;${has?'background:rgba(90,180,232,0.03);':''}" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='${has?'rgba(90,180,232,0.03)':'transparent'}'">
+      <span style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">${rn}</span>
+      <span style="font-size:0.7rem;color:${has?'var(--text2)':'var(--text3)'};" title="${c}">${sn}</span>
+      <span style="font-family:var(--mono);font-size:0.72rem;text-align:right;color:${has?'var(--sky)':'var(--border2)'};">${v.APR}</span>
+      <span style="font-family:var(--mono);font-size:0.72rem;text-align:right;color:${has?'var(--gold)':'var(--border2)'};">${v.RMS}</span>
+      <span style="font-family:var(--mono);font-size:0.72rem;text-align:right;color:${has?'var(--mint)':'var(--border2)'};">${v.PRS}</span>
+    </div>`;
+  }).join('');
+  document.getElementById('natResults').style.display='block';
+}
+function copyNat(){if(!natCopyText)return;copyToClipboard(natCopyText,document.getElementById('natCopyBtn'),'Copy All 240 Rows');}
+function clearNat(){document.getElementById('natInput').value='';document.getElementById('natResults').style.display='none';document.getElementById('natError').classList.remove('show');natCopyText='';}
+function copyToClipboard(text,btn,label){
+  const done=()=>{btn.textContent='✅ Copied!';setTimeout(()=>{btn.textContent=label;},3000);};
+  if(navigator.clipboard){navigator.clipboard.writeText(text).then(done).catch(()=>fbCopy2(text,done));}else fbCopy2(text,done);
+}
+function fbCopy2(text,cb){const ta=document.createElement('textarea');ta.value=text;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);cb();}
+
+// ── RENTED ROOMS & BEDS ──
+function parseHF(raw){const lines=raw.trim().split('\n');if(lines.length<2)return null;const headers=lines[0].split('\t');const idx={};headers.forEach((h,i)=>{idx[h.trim()]=i;});if(idx['NO_ROOMS']===undefined||idx['CONSIDERED_DATE']===undefined)return null;const out={};for(let i=1;i<lines.length;i++){const p=lines[i].split('\t');if(p.length<30)continue;const ds=(p[idx['CONSIDERED_DATE']]||'').trim();if(!ds||!ds[0].match(/\d/))continue;const day=parseInt(ds.split('-')[0]);const rooms=parseInt(p[idx['NO_ROOMS']])||0;if(day>=1&&day<=31)out[day]=rooms;}return Object.keys(out).length>0?out:null;}
+function parseSRT(raw){const lines=raw.trim().split('\n');if(lines.length<2)return null;const headers=lines[0].split('\t');const idx={};headers.forEach((h,i)=>{idx[h.trim()]=i;});if(idx['STAY_ROOMS']===undefined||idx['BUSINESS_DATE']===undefined)return null;const out={};for(let i=1;i<lines.length;i++){const p=lines[i].split('\t');if(p.length<5)continue;const ds=(p[idx['BUSINESS_DATE']]||'').trim();if(!ds||!ds[0].match(/\d/))continue;const day=parseInt(ds.split('-')[0]);const rooms=parseInt(p[idx['STAY_ROOMS']])||0;if(day>=1&&day<=31)out[day]=rooms;}return Object.keys(out).length>0?out:null;}
+function processRent(){
+  const r1=document.getElementById('rentInput1').value.trim();const r2=document.getElementById('rentInput2').value.trim();
+  const errBox=document.getElementById('rentError');errBox.classList.remove('show');
+  const showErr=msg=>{document.getElementById('rentErrorMsg').textContent=msg;errBox.classList.add('show');};
+  if(!r1||!r2)return showErr('Please paste both files before processing.');
+  const isHF=t=>t.includes('NO_ROOMS')&&t.includes('CONSIDERED_DATE');const isSRT=t=>t.includes('STAY_ROOMS')&&t.includes('BUSINESS_DATE');
+  let hfRaw=null,stRaw=null;
+  if(isHF(r1)&&isSRT(r2)){hfRaw=r1;stRaw=r2;}else if(isHF(r2)&&isSRT(r1)){hfRaw=r2;stRaw=r1;}else if(isHF(r1)){hfRaw=r1;}else if(isHF(r2)){hfRaw=r2;}else return showErr('Could not detect the files. Check format.');
+  const hfData=parseHF(hfRaw);if(!hfData)return showErr('Could not read the History Forecast file.');
+  const stData=stRaw?parseSRT(stRaw):{};const days=Math.max(...Object.keys(hfData).map(Number));
+  let totalRooms=0,totalBeds=0,totalTwin=0;const rows=[];
+  for(let d=1;d<=days;d++){const rm=hfData[d]||0;const twin=stData?(stData[d]||0):0;const beds=rm+twin;rows.push({day:d,rooms:rm,beds,twin});totalRooms+=rm;totalBeds+=beds;totalTwin+=twin;}
+  rentCopyText=rows.map(r=>r.rooms+'\t'+r.beds).join('\n');
+  document.getElementById('kpi-rooms').textContent=totalRooms.toLocaleString();document.getElementById('kpi-beds').textContent=totalBeds.toLocaleString();
+  document.getElementById('daysFound').textContent=days+' days';document.getElementById('twinStatus').textContent=stRaw?'✓ Connected — twin beds included':'⚠ Not provided — beds = rooms only';
+  document.getElementById('rs-rooms').textContent=totalRooms.toLocaleString();document.getElementById('rs-beds').textContent=totalBeds.toLocaleString();document.getElementById('rs-twin').textContent=totalTwin.toLocaleString();document.getElementById('rs-days').textContent=days;document.getElementById('rentRowCount').textContent=days+' ROWS';
+  document.getElementById('rentPreview').innerHTML=rows.map(r=>{const has=r.rooms>0;return`<div style="display:grid;grid-template-columns:60px 1fr 70px 70px;padding:4px 14px;border-bottom:1px solid rgba(255,255,255,0.02);${has?'background:rgba(62,207,142,0.03);':''}">
+    <span style="font-family:var(--mono);font-size:0.62rem;color:${has?'var(--sky2)':'var(--text3)'};">Day ${r.day}</span>
+    <span style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">+${r.twin} twin</span>
+    <span style="font-family:var(--mono);font-size:0.72rem;text-align:right;color:${has?'var(--sky)':'var(--border2)'};">${r.rooms}</span>
+    <span style="font-family:var(--mono);font-size:0.72rem;text-align:right;color:${has?'var(--mint)':'var(--border2)'};">${r.beds}</span>
+  </div>`;}).join('');
+  document.getElementById('rentResults').style.display='block';
+}
+function copyRent(){if(!rentCopyText)return;copyToClipboard(rentCopyText,document.getElementById('rentCopyBtn'),'Copy All Rows');}
+function clearRent(){document.getElementById('rentInput1').value='';document.getElementById('rentInput2').value='';document.getElementById('rentResults').style.display='none';document.getElementById('rentError').classList.remove('show');rentCopyText='';}
+
+// ── NIGHT AUDIT PM ROOMS ──
+function parseOperaPM(raw){const lines=raw.trim().split('\n');if(lines.length<2)return null;const headers=lines[0].split('\t').map(h=>h.trim());const idx={};headers.forEach((h,i)=>{idx[h]=i;});if(idx['ROOM']===undefined)return null;const rooms=[];for(let i=1;i<lines.length;i++){const p=lines[i].split('\t');if(p.length<6)continue;const cat=(p[idx['ROOM_CATEGORY_LABEL']]||'').trim();if(cat!=='PM')continue;const room=(p[idx['ROOM']]||'').trim();if(!room||isNaN(parseInt(room)))continue;rooms.push({room:parseInt(room),name:(p[idx['FULL_NAME']]||'').trim(),arrival:parseOperaDate(p[idx['ARRIVAL']]||''),departure:parseOperaDate(p[idx['DEPARTURE']]||''),balance:parseBalance2(p[idx['BALANCE']]||'0')});}return rooms.length>0?rooms:null;}
+function parseExcelPM(raw){const lines=raw.trim().split('\n').filter(l=>l.trim());if(lines.length<2)return null;const sep=lines[0].includes('\t')?'\t':',';const parse=line=>{if(sep===','){const result=[];let cur='',inQ=false;for(let c of line){if(c==='"'){inQ=!inQ;}else if(c===','&&!inQ){result.push(cur.trim());cur='';}else cur+=c;}result.push(cur.trim());return result;}return line.split('\t').map(c=>c.trim());};const headers=parse(lines[0]).map(h=>h.replace(/"/g,'').trim().toUpperCase());const roomIdx=headers.findIndex(h=>h==='PM'||h==='ROOM');const nameIdx=headers.findIndex(h=>h==='NAME');const arrIdx=headers.findIndex(h=>h==='ARRIVAL');const depIdx=headers.findIndex(h=>h==='DEPARTURE');const balIdx=headers.findIndex(h=>h==='BALANCE');const deptIdx=headers.findIndex(h=>h.includes('DEPT')||h.includes('DEPARTMENT'));const remIdx=headers.findIndex(h=>h.includes('REMARK'));if(roomIdx===-1||nameIdx===-1)return null;const rows=[];for(let i=1;i<lines.length;i++){const p=parse(lines[i]);const roomRaw=(p[roomIdx]||'').replace(/"/g,'').trim();if(!roomRaw||isNaN(parseInt(roomRaw)))continue;rows.push({room:parseInt(roomRaw),name:(p[nameIdx]||'').replace(/"/g,'').trim(),arrival:parseExcelDate((p[arrIdx]||'').replace(/"/g,'').trim()),departure:parseExcelDate((p[depIdx]||'').replace(/"/g,'').trim()),balance:parseBalance2((p[balIdx]||'0').replace(/"/g,'').trim()),dept:deptIdx>=0?(p[deptIdx]||'').replace(/"/g,'').trim():'',remarks:remIdx>=0?(p[remIdx]||'').replace(/"/g,'').trim():''});}return rows.length>0?rows:null;}
+function parseOperaDate(s){if(!s)return null;const p=s.trim().split('-');if(p.length!==3)return null;const yr=parseInt(p[2])+(parseInt(p[2])<100?2000:0);return new Date(yr,parseInt(p[1])-1,parseInt(p[0]));}
+function parseExcelDate(s){if(!s)return null;const p=s.split('/');if(p.length===3)return new Date(parseInt(p[2]),parseInt(p[0])-1,parseInt(p[1]));const d=new Date(s);return isNaN(d)?null:d;}
+function fmtDate2(d){if(!d)return'—';return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});}
+function fmtDateExcel2(d){if(!d)return'';return(d.getMonth()+1)+'/'+d.getDate()+'/'+d.getFullYear();}
+function parseBalance2(s){if(!s)return 0;return parseFloat(String(s).replace(/,/g,''))||0;}
+function sameDate2(a,b){if(!a||!b)return!a&&!b;return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();}
+function fmtBal2(n){if(n===0)return'0.00';return n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function processAudit(){
+  const rawOpera=document.getElementById('naOperaInput').value.trim();const rawExcel=document.getElementById('naExcelInput').value.trim();
+  const errBox=document.getElementById('naError');errBox.classList.remove('show');
+  const showErr=msg=>{document.getElementById('naErrorMsg').textContent=msg;errBox.classList.add('show');};
+  if(!rawOpera)return showErr('Please paste the Opera PM rooms report.');
+  if(!rawExcel)return showErr('Please paste your management Excel report.');
+  const operaRooms=parseOperaPM(rawOpera);if(!operaRooms)return showErr('Could not read Opera file. Check it contains PM rooms.');
+  const excelRows=parseExcelPM(rawExcel);if(!excelRows)return showErr('Could not read Excel report. Check the format.');
+  const excelMap={};excelRows.forEach(r=>{excelMap[r.room]=r;});
+  const diffs=[],fixedRows=[],missing=[],changes=[];
+  operaRooms.forEach(op=>{
+    const ex=excelMap[op.room];
+    if(!ex){missing.push(op);fixedRows.push({...op,dept:'',remarks:'',wasFixed:false,wasMissing:true,fieldDiffs:[]});return;}
+    const fieldDiffs=[];
+    if(op.name.toLowerCase().replace(/[.,\s]/g,'')!==ex.name.toLowerCase().replace(/[.,\s]/g,''))fieldDiffs.push({field:'Name',opera:op.name,excel:ex.name});
+    if(!sameDate2(op.arrival,ex.arrival))fieldDiffs.push({field:'Arrival',opera:fmtDate2(op.arrival),excel:fmtDate2(ex.arrival)});
+    if(!sameDate2(op.departure,ex.departure))fieldDiffs.push({field:'Departure',opera:fmtDate2(op.departure),excel:fmtDate2(ex.departure)});
+    if(Math.abs(op.balance-ex.balance)>0.005)fieldDiffs.push({field:'Balance',opera:fmtBal2(op.balance),excel:fmtBal2(ex.balance)});
+    const hasDiff=fieldDiffs.length>0;
+    diffs.push({op,ex,fieldDiffs,hasDiff});
+    fixedRows.push({room:op.room,name:op.name,arrival:op.arrival,departure:op.departure,balance:op.balance,dept:ex.dept,remarks:ex.remarks,wasFixed:hasDiff,wasMissing:false,fieldDiffs});
+    if(hasDiff)changes.push({room:op.room,fieldDiffs});
+  });
+  const totalRooms=operaRooms.length;const diffCount=diffs.filter(d=>d.hasDiff).length+missing.length;const okCount=totalRooms-diffCount;
+  document.getElementById('na-kpi-total').textContent=totalRooms;document.getElementById('na-kpi-diff').textContent=diffCount;document.getElementById('na-kpi-ok').textContent=okCount;
+  document.getElementById('na-pill-total').textContent=totalRooms+' rooms';document.getElementById('na-pill-diff').textContent=diffCount+' difference'+(diffCount!==1?'s':'');document.getElementById('na-pill-ok').textContent=okCount+' match'+(okCount!==1?'es':'');
+  document.getElementById('naTabCount').textContent=diffCount>0?(diffCount+' fixes'):'✓ Clean';
+  const mkField=(label,opVal,exVal,hasDiff)=>{if(!hasDiff)return'<span style="font-size:0.74rem;color:var(--text2);">'+opVal+'</span>';return'<div><div style="font-size:0.74rem;color:var(--mint);font-weight:500;">'+opVal+'</div><div style="font-size:0.7rem;color:var(--rose);text-decoration:line-through;opacity:0.7;">'+exVal+'</div></div>';};
+  document.getElementById('naCompareTable').innerHTML=diffs.map(({op,ex,fieldDiffs,hasDiff})=>{
+    const fd={};fieldDiffs.forEach(f=>{fd[f.field]=f;});
+    const nameH=fd['Name']?mkField('Name',fd['Name'].opera,fd['Name'].excel,true):'<span style="font-size:0.74rem;color:var(--text2);">'+op.name+'</span>';
+    const arrH=fd['Arrival']?mkField('Arrival',fd['Arrival'].opera,fd['Arrival'].excel,true):'<span style="font-size:0.74rem;color:var(--text2);">'+fmtDate2(op.arrival)+'</span>';
+    const depH=fd['Departure']?mkField('Departure',fd['Departure'].opera,fd['Departure'].excel,true):'<span style="font-size:0.74rem;color:var(--text2);">'+fmtDate2(op.departure)+'</span>';
+    const balH=fd['Balance']?mkField('Balance',fd['Balance'].opera,fd['Balance'].excel,true):'<span style="font-size:0.74rem;color:var(--text2);">'+fmtBal2(op.balance)+'</span>';
+    return'<div style="display:grid;grid-template-columns:60px 1fr 1fr 1fr 1fr 80px;padding:9px 14px;border-bottom:1px solid rgba(255,255,255,0.025);'+(hasDiff?'background:rgba(240,164,58,0.04);border-left:3px solid var(--amber);':'')+' align-items:start;">'+
+      '<div style="font-family:var(--mono);font-size:0.78rem;color:var(--sky);font-weight:600;padding-top:2px;">'+op.room+'</div>'+
+      '<div style="padding-right:8px;">'+nameH+'</div>'+
+      '<div>'+arrH+'</div><div>'+depH+'</div><div>'+balH+'</div>'+
+      '<div style="text-align:right;"><div style="width:8px;height:8px;border-radius:50%;background:'+(hasDiff?'var(--amber)':'var(--mint)')+';box-shadow:0 0 6px '+(hasDiff?'var(--amber)':'var(--mint)')+';margin-left:auto;margin-top:4px;"></div></div>'+
+    '</div>';
+  }).join('')+missing.map(op=>'<div style="display:grid;grid-template-columns:60px 1fr 1fr 1fr 1fr 80px;padding:9px 14px;border-bottom:1px solid rgba(255,255,255,0.025);background:rgba(240,107,122,0.04);border-left:3px solid var(--rose);">'+
+    '<div style="font-family:var(--mono);font-size:0.78rem;color:var(--sky);font-weight:600;">'+op.room+'</div>'+
+    '<div style="font-size:0.74rem;color:var(--mint);">'+op.name+'</div>'+
+    '<div style="font-size:0.74rem;color:var(--mint);">'+fmtDate2(op.arrival)+'</div>'+
+    '<div style="font-size:0.74rem;color:var(--mint);">'+fmtDate2(op.departure)+'</div>'+
+    '<div style="font-size:0.74rem;color:var(--mint);">'+fmtBal2(op.balance)+'</div>'+
+    '<div style="font-family:var(--mono);font-size:0.58rem;color:var(--rose);text-align:right;padding-top:4px;">NOT IN EXCEL</div>'+
+  '</div>').join('');
+  document.getElementById('naFixedTable').innerHTML=fixedRows.map(r=>{const balClass=r.balance>0?'var(--rose)':r.balance<0?'var(--sky)':'var(--text3)';return'<div style="display:grid;grid-template-columns:60px 1fr 100px 100px 100px;padding:8px 14px;border-bottom:1px solid rgba(255,255,255,0.025);align-items:center;'+(r.wasFixed?'background:rgba(62,207,142,0.04);border-left:3px solid var(--mint);':'border-left:3px solid transparent;')+'">'+
+    '<span style="font-family:var(--mono);font-size:0.78rem;color:var(--sky);font-weight:600;">'+r.room+'</span>'+
+    '<span style="font-size:0.75rem;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px;">'+r.name+(r.wasFixed?'<span style="font-family:var(--mono);font-size:0.55rem;color:var(--mint);background:rgba(62,207,142,0.1);border:1px solid rgba(62,207,142,0.2);border-radius:4px;padding:1px 5px;margin-left:4px;">FIXED</span>':'')+'</span>'+
+    '<span style="font-family:var(--mono);font-size:0.7rem;color:var(--text2);">'+fmtDate2(r.arrival)+'</span>'+
+    '<span style="font-family:var(--mono);font-size:0.7rem;color:var(--text2);">'+fmtDate2(r.departure)+'</span>'+
+    '<span style="font-family:var(--mono);font-size:0.7rem;color:'+balClass+';text-align:right;">'+fmtBal2(r.balance)+'</span>'+
+  '</div>';}).join('');
+  document.getElementById('naFixedCount').textContent=fixedRows.length+' rows';
+  const cl=document.getElementById('naChangesList');
+  if(changes.length===0&&missing.length===0){cl.innerHTML='<div style="font-size:0.78rem;color:var(--mint);">✅ No changes needed — Opera and Excel are identical.</div>';}
+  else{cl.innerHTML=changes.map(c=>'<div style="margin-bottom:8px;padding:10px 12px;background:rgba(240,164,58,0.05);border:1px solid rgba(240,164,58,0.12);border-left:3px solid var(--amber);border-radius:var(--r);"><div style="font-family:var(--mono);font-size:0.7rem;color:var(--sky);font-weight:600;margin-bottom:4px;">Room '+c.room+'</div>'+c.fieldDiffs.map(f=>'<div style="font-size:0.72rem;color:var(--text2);">'+f.field+'</div><div style="font-family:var(--mono);font-size:0.65rem;color:var(--rose);">✗ '+f.excel+'</div><div style="font-family:var(--mono);font-size:0.65rem;color:var(--mint);">✓ '+f.opera+'</div>').join('')+'</div>').join('')+missing.map(op=>'<div style="margin-bottom:8px;padding:10px 12px;background:rgba(240,107,122,0.05);border:1px solid rgba(240,107,122,0.12);border-left:3px solid var(--rose);border-radius:var(--r);"><div style="font-family:var(--mono);font-size:0.7rem;color:var(--sky);margin-bottom:4px;">Room '+op.room+'</div><div style="font-size:0.72rem;color:var(--text2);">Not in Excel — added from Opera</div></div>').join('');}
+  const mc=document.getElementById('naMissingCard');if(missing.length>0){mc.style.display='block';document.getElementById('naMissingList').innerHTML=missing.map(op=>'<div style="margin-bottom:6px;padding:8px 10px;background:rgba(240,107,122,0.05);border:1px solid rgba(240,107,122,0.12);border-radius:var(--r);"><div style="font-family:var(--mono);font-size:0.7rem;color:var(--sky);">Room '+op.room+'</div><div style="font-size:0.72rem;color:var(--mint);">'+op.name+'</div></div>').join('');}else mc.style.display='none';
+  naCopyText=fixedRows.map(r=>[r.room,r.name,fmtDateExcel2(r.arrival),fmtDateExcel2(r.departure),r.balance,r.dept,r.remarks].join('\t')).join('\n');
+  document.getElementById('naCompareSection').style.display='block';
+}
+function copyAudit(){if(!naCopyText)return;copyToClipboard(naCopyText,document.getElementById('naCopyBtn'),'Copy All Fixed Rows');}
+function clearAudit(){document.getElementById('naOperaInput').value='';document.getElementById('naExcelInput').value='';document.getElementById('naCompareSection').style.display='none';document.getElementById('naError').classList.remove('show');document.getElementById('naTabCount').textContent='Compare';naCopyText='';}
+
+// ── IMMIGRATION CHECK ──
+let immigAllRows2=[];let immigFilter2_='all';
+
+function immigLoadFile2(input){if(input.files[0]){const reader=new FileReader();reader.onload=e=>{document.getElementById('immigPasteInput2').value=e.target.result;processImmig2();};reader.readAsText(input.files[0]);}}
+
+function processImmig2(){
+  const raw=document.getElementById('immigPasteInput2').value.trim();
+  const errBox=document.getElementById('immigError2');errBox.classList.remove('show');
+  const showErr=m=>{document.getElementById('immigErrorMsg2').textContent=m;errBox.classList.add('show');};
+  if(!raw)return showErr('Please upload or paste the immigration XML report.');
+  if(!raw.includes('<G_IMMIGRATION>'))return showErr('Does not look like an Opera immigration XML. Export as XML format.');
+  const parser=new DOMParser();const doc=parser.parseFromString(raw,'text/xml');
+  if(doc.querySelector('parsererror'))return showErr('XML parse error — try copying from Notepad instead of a browser.');
+  const hotel=doc.querySelector('P_RESORT1')?.textContent?.trim()||'Hotel';
+  const bizDateStr=doc.querySelector('P_BUSINESS_DATE')?.textContent?.trim()||'';
+  const reportDate=doc.querySelector('P_DATE')?.textContent?.trim()||'';
+  const reportTime=doc.querySelector('P_TIME')?.textContent?.trim()||'';
+  let bizDate=null;if(bizDateStr){const d=new Date(bizDateStr.split('T')[0]);if(!isNaN(d))bizDate=d;}
+  const get=(el,tag)=>(el.querySelector(tag)?.textContent||'').trim();
+  const guests=[...doc.querySelectorAll('G_IMMIGRATION')].map(el=>({fname:get(el,'FIRST_NAME'),lname:get(el,'LAST_NAME'),sex:get(el,'SEX'),nat:get(el,'NATIONALITY'),passport:get(el,'PASSPORT'),arrival:get(el,'ARRIVAL_DATE'),departure:get(el,'DEPARTURE_DATE'),room:get(el,'ROOM')}));
+  function parseDate2(s){if(!s)return null;const[m,d,y]=s.split('/');return m&&d&&y?new Date(parseInt(y),parseInt(m)-1,parseInt(d)):null;}
+  const rows=[];
+  guests.forEach(g=>{
+    const arr=parseDate2(g.arrival);const dep=parseDate2(g.departure);
+    const inhouse=bizDate&&arr&&dep?(arr<=bizDate&&dep>bizDate):true;if(!inhouse)return;
+    const fullName=g.fname?g.fname+' '+g.lname:g.lname;const issues=[];
+    const noNat=!g.nat||['u','unknown',''].includes(g.nat.toLowerCase());
+    const noSex=!g.sex||['u','unknown',''].includes(g.sex.toLowerCase());
+    const noPass=!g.passport;const noFname=!g.fname;
+    if(noNat)issues.push('nationality');if(noSex)issues.push('gender');if(noPass)issues.push('passport');if(noFname)issues.push('first_name');
+    if(issues.length===0)return;
+    rows.push({room:g.room||'',name:fullName.trim(),sex:g.sex,nat:g.nat,passport:g.passport,arrival:g.arrival,departure:g.departure,issues,noNat,noSex,noPass,noFname,critical:noNat||noSex});
+  });
+  rows.sort((a,b)=>{if(a.critical&&!b.critical)return-1;if(!a.critical&&b.critical)return 1;return(a.room||'ZZZ').localeCompare(b.room||'ZZZ');});
+  immigAllRows2=rows;immigFilter2_='all';
+  const noNatC=rows.filter(r=>r.noNat).length;const noSexC=rows.filter(r=>r.noSex).length;const noPassC=rows.filter(r=>r.noPass).length;const noFnameC=rows.filter(r=>r.noFname).length;const crit=rows.filter(r=>r.critical).length;
+  const inhouse_total=guests.filter(g=>{const a=parseDate2(g.arrival);const d=parseDate2(g.departure);return bizDate&&a&&d?a<=bizDate&&d>bizDate:true;}).length;
+  document.getElementById('immigKpis2').innerHTML=`
+    <div class="kpi rose"><div class="kpi-accent"></div><div class="kpi-label">Critical Issues</div><div class="kpi-val">${crit}</div><div class="kpi-sub">Missing nat or gender</div></div>
+    <div class="kpi amber"><div class="kpi-accent"></div><div class="kpi-label">Missing Nationality</div><div class="kpi-val">${noNatC}</div></div>
+    <div class="kpi sky"><div class="kpi-accent"></div><div class="kpi-label">Missing Passport</div><div class="kpi-val">${noPassC}</div></div>
+    <div class="kpi mint"><div class="kpi-accent"></div><div class="kpi-label">Missing Gender</div><div class="kpi-val">${noSexC}</div></div>`;
+  document.getElementById('immigMeta2').textContent=hotel+' · Report: '+reportDate+' '+reportTime+' · '+inhouse_total+' in-house guests · '+rows.length+' need attention';
+  document.getElementById('ifc-all').textContent=rows.length;document.getElementById('ifc-nat').textContent=noNatC;document.getElementById('ifc-gen').textContent=noSexC;document.getElementById('ifc-pass').textContent=noPassC;document.getElementById('ifc-fname').textContent=noFnameC;
+  document.getElementById('immigTabCount').textContent=crit>0?(crit+' critical'):(rows.length+' issues');
+  document.querySelectorAll('#immigFilters2 .filter-chip').forEach(b=>b.classList.remove('on'));document.querySelector('#immigFilters2 [data-if="all"]').classList.add('on');
+  immigRender2(rows);
+  document.getElementById('immigResults2').style.display='block';
+}
+
+function immigRender2(rows){
+  const search=(document.getElementById('immigSearch2')?.value||'').toLowerCase();
+  let filtered=rows;
+  if(immigFilter2_!=='all')filtered=filtered.filter(r=>r.issues.includes(immigFilter2_));
+  if(search)filtered=filtered.filter(r=>r.room.toLowerCase().includes(search)||r.name.toLowerCase().includes(search));
+  const tbody=document.getElementById('immigTable2');
+  if(!filtered.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:32px;font-family:var(--mono);font-size:0.72rem;color:var(--text3);">No guests match this filter.</td></tr>';return;}
+  const sexColor=s=>!s||s.toUpperCase()==='U'?'var(--amber)':s.toUpperCase()==='M'?'var(--sky)':'var(--rose)';
+  const tagMap={nationality:['var(--rose)','Nationality'],gender:['var(--amber)','Gender'],passport:['var(--sky)','Passport'],first_name:['var(--mint)','First Name']};
+  tbody.innerHTML=filtered.map(r=>{
+    const rowBg=r.noNat||r.noSex?'rgba(240,107,122,0.04)':r.noPass?'rgba(90,180,232,0.03)':'transparent';
+    const borderL=r.noNat||r.noSex?'3px solid var(--rose)':r.noPass?'3px solid var(--sky2)':'3px solid transparent';
+    const tags=r.issues.map(i=>{const[c,l]=tagMap[i]||['var(--text3)',i];return`<span style="font-family:var(--mono);font-size:0.55rem;padding:2px 7px;border-radius:8px;border:1px solid;color:${c};border-color:${c}22;background:${c}11;">${l}</span>`;}).join(' ');
+    return`<tr style="background:${rowBg};border-left:${borderL};">
+      <td style="font-family:var(--mono);font-size:0.82rem;font-weight:700;color:var(--sky);">${r.room||'—'}</td>
+      <td><span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:5px;background:${sexColor(r.sex)}11;border:1px solid ${sexColor(r.sex)}33;font-family:var(--mono);font-size:0.65rem;font-weight:700;color:${sexColor(r.sex)};">${r.sex||'?'}</span></td>
+      <td style="font-size:0.75rem;color:var(--text2);">${r.name}</td>
+      <td>${r.noNat?'<span style="font-family:var(--mono);font-size:0.6rem;color:var(--rose);background:rgba(240,107,122,0.08);border:1px dashed rgba(240,107,122,0.4);border-radius:5px;padding:2px 7px;">NOT SET</span>':'<span style="font-size:0.72rem;color:var(--text2);">'+r.nat+'</span>'}</td>
+      <td>${r.noPass?'<span style="font-family:var(--mono);font-size:0.6rem;color:var(--sky);background:rgba(90,180,232,0.06);border:1px dashed rgba(90,180,232,0.3);border-radius:5px;padding:2px 7px;">MISSING</span>':'<span style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">'+r.passport+'</span>'}</td>
+      <td style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);">${r.arrival}</td>
+      <td style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);">${r.departure}</td>
+      <td>${tags}</td>
+    </tr>`;
+  }).join('');
+}
+
+function immigFilter2(type,btn){
+  immigFilter2_=type;
+  document.querySelectorAll('#immigFilters2 .filter-chip').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  immigRender2(immigAllRows2);
+}
+
+function clearImmig(){
+  document.getElementById('immigPasteInput2').value='';
+  document.getElementById('immigResults2').style.display='none';
+  document.getElementById('immigError2').classList.remove('show');
+  document.getElementById('immigTabCount').textContent='Upload XML';
+  document.getElementById('immigFileInput2').value='';
+  immigAllRows2=[];
+}
+
+</script>
+</body>
+</html>
