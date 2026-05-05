@@ -1139,7 +1139,7 @@ function guessNat(name){
 async function callClaudeNat(names){
   const prompt=`You are a hotel nationality expert at a Dubai airport hotel. Given these guest names, return ONLY a valid JSON object where each key is the exact name and the value is the most likely nationality (country name only). Consider Dubai hotel guest demographics and naming conventions.\nNames:\n${names.map(n=>'- '+n).join('\n')}\nReturn ONLY valid JSON, no markdown. Example: {"JOHN SMITH":"United Kingdom","ALI HASSAN":"Somalia"}`;
   try{
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})});
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})});
     const data=await resp.json();
     const text=data.content.filter(b=>b.type==='text').map(b=>b.text).join('');
     return JSON.parse(text.replace(/```json|```/g,'').trim());
