@@ -397,6 +397,13 @@ td input:focus,td select:focus{outline:none;border-color:var(--gold);background:
   .panel{padding:0!important;}
 }
 
+
+[data-theme="light"]{
+  --bg:#f0f2f5 !important;--bg2:#e8ebef !important;--surface:#ffffff !important;--card:#ffffff !important;--card2:#f5f7fa !important;
+  --border:#d5dce8 !important;--border2:#c5cdd8 !important;--text:#0f1419 !important;--text2:#4a5c72 !important;--text3:#8a9ab0 !important;
+  --gold-glow:rgba(232,184,75,0.08) !important;
+}
+
 </style>
 
 </head>
@@ -406,12 +413,14 @@ td input:focus,td select:focus{outline:none;border-color:var(--gold);background:
 <header class="topbar">
   <div class="logo">
     <div class="logo-mark">🏨</div>
-    <div class="logo-name">Ibis Styles <span>Dubai</span></div>
+    <div class="logo-name" onclick="editHotel()" style="cursor:pointer" title="Click to rename hotel">Ibis Styles <span>Dubai</span></div>
   </div>
   <div class="topbar-center" id="topbarDate">Loading…</div>
   <div class="topbar-right">
     <div class="tb-pill live" id="topbarStatus">● Live</div>
     <div class="tb-pill" id="topbarTime">—</div>
+  
+    <button onclick="toggleTheme()" id="themeBtn" title="Toggle dark/light" style="width:32px;height:32px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text2);cursor:pointer;font-size:0.9rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.15s;">🌙</button>
   </div>
 </header>
 
@@ -644,6 +653,10 @@ td input:focus,td select:focus{outline:none;border-color:var(--gold);background:
     <div class="upload-zone">
       <div class="upload-label-bar">
         <div class="upload-dot mint"></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--border2);border-radius:var(--r);">
+        <span style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);">📂 Upload Excel from Opera:</span>
+        <input type="file" id="purposeExcelFile" accept=".xlsx,.xls,.csv" onchange="loadPurposeExcel(this)" style="font-size:0.7rem;color:var(--text2);flex:1;"/>
+      </div>
         <span class="upload-lbl">Paste Arrivals Data</span>
         <span class="upload-sub">Or sync from Arrivals tab above</span>
       </div>
@@ -1328,7 +1341,7 @@ function depCardHTML(r){
       <span class="dc-late-label">🕐 Late time:</span>
       <select class="dc-late-select" onchange="depRooms[${i}].lateTime=this.value;depRender()">
         <option value="">Select time…</option>
-        ${['10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM','6:00 PM'].map(t=>`<option ${r.lateTime===t?'selected':''}>${t}</option>`).join('')}
+        ${['10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM','6:00 PM','7:00 PM','8:00 PM','9:00 PM','10:00 PM','11:00 PM','12:00 AM'].map(t=>`<option ${r.lateTime===t?'selected':''}>${t}</option>`).join('')}
       </select>
     </div>`:r.status==='extended'?`
     <div class="dc-extend-row">
@@ -1768,7 +1781,36 @@ clLoad2();clRender2();
 const EXCEL_COUNTRIES=["Afghanistan","Albania","Algeria","American Samoa","Andorra","Angola","Anguilla","Antarctica","Antigua & Barbuda","Argentina","Armenia","Aruba","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados","Belarus","Belgium","Belize","Benin","Bermuda","Bhutan","Bolivia","Bosnia-Herzegovina","Botswana","Brazil","British Indian Ocean Territory","British Virgin Islands","British West Indies","Brunei","Bulgaria","Burkina Faso","Burundi","Cambodia","Cameroon Republic","Canada","Cape Verde","Cayman Island","Central African Republic","Chad","Chile","China","Colombia","Comoros","Congo (Republic of the Congo)","Congo, Dem. Rep. of (Zaire)","Cook Islands","Costa Rica","Côte d'Ivoire","Croatia","Cuba","Cyprus","Czech Republic","Czechoslovakia","Denmark","Djibouti","Dominica","Dominican Republic","East Timor","Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia","Ethiopia","Falkland Islands (Malvinas)","Faroe Islands","Fiji","Finland","France","French Guiana","French Polynesia","Gabon","Gambia","Georgia","Germany","Ghana","Gibraltar","Greece","Greenland","Grenada","Guadeloupe","Guam","Guatemala","Guinea","Guinea-Bissau","Guyana","Haiti","Holy See (Vatican City State)","Honduras","Hong Kong","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Isle of Man","Israel","Italy","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kiribati","Korea, Democratic People's Republic of (North)","Korea, Republic of (South)","Kosovo","Kuwait","Kyrghyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia","Libya","Liechtenstein","Lithuania","Luxembourg","Macau","Macedonia, Republic of","Madagascar","Malagasy Republic","Malawi","Malaysia","Maldives","Mali","Malta","Marshal Islands","Martinique","Mauritania","Mauritius","Mayotte","Mexico","Micronesia, Federated States","Moldova","Monaco","Mongolia","Montenegro","Montserrat","Morocco","Mozambique","Myanmar (Burma)","Namibia","Nauru","Nepal","Netherlands","Netherlands, Antilles","New Caledonia","New Zealand","Nicaragua","Niger","Nigeria","Norfolk Island","Northern Mariana Isl.","Norway","Oman","Pakistan","Palau","Palestine","Panama","Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal","Puerto Rico","Qatar","Reunion","Romania","Russian Federation","Rwanda","Saba","Saint Barthelemy","Saint Helena","Saint Kitts and Nevis","Saint Lucia","Saint Pierre and Miquelon","Saint Vincent and the Grenadines","Samoa","San Marino (in Italy)","Sao Tomé","Saudi Arabia","Scotland","Senegal","Serbia","Seychelles","Sierra Leone","Singapore","Slovakia Republic","Slovenia","Solomon Island","Somalia","South Africa","South Georgia and the South Sandwich Islands","South Sudan","Spain","Sri Lanka","Sudan","Surinam","Swaziland","Sweden","Switzerland","Syria","Tadjikistan","Taiwan","Tanzania","Thailand","Togo","Tokelau","Tonga","Trinidad & Tobaggo","Tunisia","Turkey","Turkmenistan","Turks and Caicos Islands","Tuvalu","Uganda","Ukraine","United Arab Emirates","United Kingdom","United States of America","Uruguay","Uzbekistan","Vanuatu","Venezuela","Vietnam","Virgin Islands, British","Virgin Islands, U.S.","Yemen","Yugoslavia","Zambia","Zimbabwe"];
 const EXCEL_LOWER={};
 EXCEL_COUNTRIES.forEach(n=>{EXCEL_LOWER[n.toLowerCase()]=n;});
-const NAME_MAP={"United States":"United States of America","Cameroon":"Cameroon Republic","Congo (Kinshasa)":"Congo, Dem. Rep. of (Zaire)","Congo (Brazzaville)":"Congo (Republic of the Congo)","South Korea":"Korea, Republic of (South)","Korea, South":"Korea, Republic of (South)","North Korea":"Korea, Democratic People's Republic of (North)","Myanmar":"Myanmar (Burma)","Taiwan (Chinese Taipei)":"Taiwan","Tajikistan":"Tadjikistan","Kyrgyzstan":"Kyrghyzstan","Kyrgyz Republic":"Kyrghyzstan","Bosnia and Herzegovina":"Bosnia-Herzegovina","Macedonia":"Macedonia, Republic of","North Macedonia":"Macedonia, Republic of","Ivory Coast":"Côte d'Ivoire","Cote d'Ivoire":"Côte d'Ivoire","Palestine, State of":"Palestine","Palestinian Territory":"Palestine","Trinidad and Tobago":"Trinidad & Tobaggo","Trinidad & Tobago":"Trinidad & Tobaggo","Antigua and Barbuda":"Antigua & Barbuda","Timor-Leste":"East Timor","Sao Tome and Principe":"Sao Tomé","Sao Tome":"Sao Tomé","Unknown":null,"DO NOT USE":null};
+const NAME_MAP={
+  "Cote D'Ivoire":"Cote d'Ivoire","Ivory Coast":"Cote d'Ivoire","COTE D'IVOIRE":"Cote d'Ivoire",
+  "Cote d Ivoire":"Cote d'Ivoire","COTE D IVOIRE":"Cote d'Ivoire",
+  "Great Britain":"United Kingdom","England":"United Kingdom","Scotland":"United Kingdom","Wales":"United Kingdom",
+  "Burkina Fasa":"Burkina Faso","BURKINA FASA":"Burkina Faso","Burkina fasa":"Burkina Faso",
+  "Libyan Arab Jamahiriya":"Libya","LIBYAN ARAB JAMAHIRIYA":"Libya","Libya (Libyan Arab Jamahiriya)":"Libya",
+  "Korea (South)":"Korea, Republic of (South)","South Korea":"Korea, Republic of (South)","Republic of Korea":"Korea, Republic of (South)","Korea, South":"Korea, Republic of (South)",
+  "Korea (North)":"Korea, Democratic People's Republic of (North)","North Korea":"Korea, Democratic People's Republic of (North)",
+  "Russia":"Russian Federation","RUSSIA":"Russian Federation",
+  "United States":"United States of America","USA":"United States of America","US":"United States of America","U.S.A.":"United States of America",
+  "Cameroon":"Cameroon Republic",
+  "Congo (Kinshasa)":"Congo, Dem. Rep. of (Zaire)","Democratic Republic of the Congo":"Congo, Dem. Rep. of (Zaire)","DR Congo":"Congo, Dem. Rep. of (Zaire)","DRC":"Congo, Dem. Rep. of (Zaire)",
+  "Congo (Brazzaville)":"Congo (Republic of the Congo)","Congo":"Congo (Republic of the Congo)",
+  "Myanmar":"Myanmar (Burma)","Burma":"Myanmar (Burma)",
+  "Taiwan (Chinese Taipei)":"Taiwan","Chinese Taipei":"Taiwan",
+  "Tajikistan":"Tadjikistan","Tadjikistan":"Tadjikistan",
+  "Kyrgyzstan":"Kyrghyzstan","Kyrgyz Republic":"Kyrghyzstan","Kirghizstan":"Kyrghyzstan",
+  "Bosnia and Herzegovina":"Bosnia-Herzegovina","Bosnia & Herzegovina":"Bosnia-Herzegovina",
+  "Macedonia":"Macedonia, Republic of","North Macedonia":"Macedonia, Republic of","Republic of North Macedonia":"Macedonia, Republic of",
+  "Palestine, State of":"Palestine","Palestinian Territory":"Palestine","Palestinian Authority":"Palestine",
+  "Trinidad and Tobago":"Trinidad & Tobaggo","Trinidad & Tobago":"Trinidad & Tobaggo",
+  "East Timor":"East Timor","Timor-Leste":"East Timor",
+  "UAE":"United Arab Emirates","Czechia":"Czech Republic",
+  "Slovakia":"Slovakia Republic","Slovak Republic":"Slovakia Republic",
+  "Viet Nam":"Vietnam","Syria, Arab Republic":"Syria","Iran, Islamic Republic of":"Iran",
+  "Tanzania, United Republic of":"Tanzania","Bolivia, Plurinational State of":"Bolivia",
+  "Venezuela, Bolivarian Republic of":"Venezuela","Lao People's Democratic Republic":"Laos",
+  "Brunei Darussalam":"Brunei","Cabo Verde":"Cape Verde",
+  "Moldova, Republic of":"Moldova","Republic of Moldova":"Moldova"
+};
 function resolveCountry(name){
   if(!name)return{excel:null,isUnknown:true};
   const t=name.trim();
@@ -2062,6 +2104,81 @@ function clearImmig(){
   document.getElementById('immigTabCount').textContent='Upload XML';
   document.getElementById('immigFileInput2').value='';
   immigAllRows2=[];
+}
+
+
+
+// ── THEME TOGGLE ──
+function toggleTheme(){
+  const t = document.documentElement.getAttribute('data-theme') || 'dark';
+  const newT = t === 'light' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', newT);
+  document.getElementById('themeBtn').textContent = newT === 'light' ? '☀️' : '🌙';
+  localStorage.setItem('ibis_theme', newT);
+}
+(function(){
+  const saved = localStorage.getItem('ibis_theme');
+  if(saved === 'light'){ document.documentElement.setAttribute('data-theme','light'); document.getElementById('themeBtn').textContent='☀️'; }
+})();
+
+// ── HOTEL NAME EDITOR ──
+function editHotel(){
+  const el = document.querySelector('.logo-name');
+  const cur = el.textContent;
+  const n = prompt('Hotel name:', cur);
+  if(n && n.trim()){ el.textContent = n.trim(); localStorage.setItem('ibis_hotel', n.trim()); }
+}
+(function(){
+  const saved = localStorage.getItem('ibis_hotel');
+  if(saved){ const el = document.querySelector('.logo-name'); if(el) el.textContent = saved; }
+})();
+
+// ── EXCEL UPLOAD FOR PURPOSE OF STAY ──
+function loadPurposeExcel(input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      const wb = XLSX.read(e.target.result, {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      if(rows.length < 2){ alert('File appears empty'); return; }
+      // Find header row
+      let hdrRow = 0;
+      for(let i=0;i<Math.min(5,rows.length);i++){
+        const r = rows[i].map(c=>String(c).toLowerCase());
+        if(r.some(c=>c.includes('room') || c.includes('name'))){ hdrRow=i; break; }
+      }
+      const hdrs = rows[hdrRow].map(c=>String(c).trim().toUpperCase());
+      const col = name => { const i = hdrs.findIndex(h=>h.includes(name)); return i; };
+      const rI=col('ROOM'), nI=col('NAME'), cI=col('CONF'), pI=col('PURPOSE'), niI=col('NIGHT'), natI=col('NAT'), eI=col('EMAIL'), sI=col('SOURCE'), rmI=col('REMARK');
+      if(rI<0 && nI<0){ alert('Cannot find Room or Name columns'); return; }
+      purposeGuests = [];
+      for(let i=hdrRow+1;i<rows.length;i++){
+        const r = rows[i];
+        const room = rI>=0 ? String(r[rI]||'').trim() : '';
+        const name = nI>=0 ? String(r[nI]||'').trim().toUpperCase() : '';
+        if(!room && !name) continue;
+        purposeGuests.push({
+          room: room,
+          conf: cI>=0 ? String(r[cI]||'').trim() : '',
+          name: name,
+          purpose: pI>=0 ? String(r[pI]||'Business').trim() : 'Business',
+          nights: niI>=0 ? Number(r[niI]||1)||1 : 1,
+          nat: natI>=0 ? String(r[natI]||'').trim() : '',
+          email: eI>=0 ? String(r[eI]||'No@email.com').trim() : 'No@email.com',
+          source: sI>=0 ? String(r[sI]||'').trim() : '',
+          remarks: rmI>=0 ? String(r[rmI]||'').trim() : ''
+        });
+      }
+      if(purposeGuests.length === 0){ alert('No data rows found'); return; }
+      renderPurpose();
+      document.getElementById('purposeUploadCard').style.display = 'none';
+      alert('Loaded ' + purposeGuests.length + ' guests from Excel');
+    } catch(err){ alert('Error reading file: ' + err.message); }
+  };
+  reader.readAsArrayBuffer(file);
 }
 
 </script>
