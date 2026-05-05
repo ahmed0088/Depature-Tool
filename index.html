@@ -2173,7 +2173,7 @@ function loadPurposeExcel(input){
         });
       }
       if(purposeGuests.length === 0){ alert('No data rows found'); return; }
-      renderPurpose();
+      purposeRender();
       document.getElementById('purposeUploadCard').style.display = 'none';
       alert('Loaded ' + purposeGuests.length + ' guests from Excel');
     } catch(err){ alert('Error reading file: ' + err.message); }
