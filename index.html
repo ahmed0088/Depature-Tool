@@ -2137,46 +2137,107 @@ function editHotel(){
 function loadPurposeExcel(input){
   const file = input.files[0];
   if(!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
   const reader = new FileReader();
   reader.onload = function(e){
     try{
-      const wb = XLSX.read(e.target.result, {type:'array'});
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
-      if(rows.length < 2){ alert('File appears empty'); return; }
-      // Find header row
-      let hdrRow = 0;
-      for(let i=0;i<Math.min(5,rows.length);i++){
-        const r = rows[i].map(c=>String(c).toLowerCase());
-        if(r.some(c=>c.includes('room') || c.includes('name'))){ hdrRow=i; break; }
+      let rows = [];
+      if(ext === 'csv'){
+        // Parse CSV
+        const text = new TextDecoder('utf-8').decode(new Uint8Array(e.target.result));
+        const lines = text.split('\n').filter(l=>l.trim());
+        rows = lines.map(line=>{
+          // Handle quoted CSV
+          const res=[]; let cur='',inQ=false;
+          for(let i=0;i<line.length;i++){
+            const c=line[i];
+            if(c==='"'){inQ=!inQ;}
+            else if(c===','&&!inQ){res.push(cur.trim());cur='';}
+            else cur+=c;
+          }
+          res.push(cur.trim());
+          return res;
+        });
+      } else {
+        // Parse XLS/XLSX
+        const wb = XLSX.read(e.target.result, {type:'array'});
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
       }
-      const hdrs = rows[hdrRow].map(c=>String(c).trim().toUpperCase());
-      const col = name => { const i = hdrs.findIndex(h=>h.includes(name)); return i; };
-      const rI=col('ROOM'), nI=col('NAME'), cI=col('CONF'), pI=col('PURPOSE'), niI=col('NIGHT'), natI=col('NAT'), eI=col('EMAIL'), sI=col('SOURCE'), rmI=col('REMARK');
-      if(rI<0 && nI<0){ alert('Cannot find Room or Name columns'); return; }
+      if(rows.length < 2){ alert('File appears empty'); return; }
+
+      // Find header row (first row with Room or Name)
+      let hdrRow = 0;
+      for(let i=0;i<Math.min(6,rows.length);i++){
+        const r = rows[i].map(c=>String(c).toLowerCase());
+        if(r.some(c=>c.includes('room')||c.includes('name'))){hdrRow=i;break;}
+      }
+      const hdrs = rows[hdrRow].map(c=>String(c).replace(/"/g,'').trim().toUpperCase());
+      console.log('Headers:', hdrs);
+
+      // Map Opera column names exactly
+      const ci = name => hdrs.findIndex(h=>h.includes(name));
+      const rI  = ci('ROOM');
+      const nI  = ci('NAME');
+      const cI  = hdrs.findIndex(h=>h.includes('CONFIRM'));
+      const niI = ci('NIGHT');
+      const taI = hdrs.findIndex(h=>h.includes('TRAVEL') || h.includes('AGENT'));
+      const coI = hdrs.findIndex(h=>h.includes('COMPANY'));
+      const sI  = ci('SOURCE');
+      const rtI = hdrs.findIndex(h=>h.includes('RATE CODE') || h==='RATE CODE');
+      const blI = ci('BALANC');
+
+      if(rI<0 || nI<0){ alert('Cannot find Room or Name columns.\nHeaders found: '+hdrs.slice(0,10).join(', ')); return; }
+
       purposeGuests = [];
+      const purposes = ['Business','Business','Business','Leisure','Leisure']; // 60/40 split
+      let pIdx = 0;
+
       for(let i=hdrRow+1;i<rows.length;i++){
         const r = rows[i];
-        const room = rI>=0 ? String(r[rI]||'').trim() : '';
-        const name = nI>=0 ? String(r[nI]||'').trim().toUpperCase() : '';
-        if(!room && !name) continue;
+        const room = String(r[rI]||'').replace(/"/g,'').trim();
+        const name = String(r[nI]||'').replace(/"/g,'').trim().toUpperCase();
+        if(!room || !name) continue;
+
+        // Skip PM rooms
+        const rt = rtI>=0 ? String(r[rtI]||'').trim() : '';
+        if(rt==='PM') continue;
+
+        // Build source: Travel Agent > Company > Source column > Walk-in
+        let src = '';
+        if(taI>=0) src = String(r[taI]||'').replace(/"/g,'').trim();
+        if(!src && coI>=0) src = String(r[coI]||'').replace(/"/g,'').trim();
+        if(!src && sI>=0) src = String(r[sI]||'').replace(/"/g,'').trim();
+        // Clean up long OTA names
+        src = src.replace(/BOOKING\.COM BV.*$/i,'Booking.com').replace(/AGODA COMPANY PTE LTD/i,'Agoda').replace(/\s*\(.*?\)/g,'').trim();
+        if(!src) src = 'Walk-in';
+
+        // Random purpose cycling
+        const pur = purposes[pIdx % purposes.length];
+        pIdx++;
+
         purposeGuests.push({
           room: room,
-          conf: cI>=0 ? String(r[cI]||'').trim() : '',
+          conf: cI>=0 ? String(r[cI]||'').replace(/"/g,'').trim() : '',
           name: name,
-          purpose: pI>=0 ? String(r[pI]||'Business').trim() : 'Business',
-          nights: niI>=0 ? Number(r[niI]||1)||1 : 1,
-          nat: natI>=0 ? String(r[natI]||'').trim() : '',
-          email: eI>=0 ? String(r[eI]||'No@email.com').trim() : 'No@email.com',
-          source: sI>=0 ? String(r[sI]||'').trim() : '',
-          remarks: rmI>=0 ? String(r[rmI]||'').trim() : ''
+          purpose: pur,
+          nights: niI>=0 ? parseInt(r[niI])||1 : 1,
+          nat: '',
+          email: 'No@email.com',
+          source: src,
+          remarks: ''
         });
       }
-      if(purposeGuests.length === 0){ alert('No data rows found'); return; }
+
+      if(purposeGuests.length === 0){ alert('No data rows found. Check the file format.'); return; }
+
       purposeRender();
       document.getElementById('purposeUploadCard').style.display = 'none';
-      alert('Loaded ' + purposeGuests.length + ' guests from Excel');
-    } catch(err){ alert('Error reading file: ' + err.message); }
+
+      // Auto-run AI nationality
+      setTimeout(()=>{ runAINat_purpose(); }, 300);
+
+    } catch(err){ console.error(err); alert('Error reading file: ' + err.message); }
   };
   reader.readAsArrayBuffer(file);
 }
