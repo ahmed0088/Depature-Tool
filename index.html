@@ -597,10 +597,11 @@ td input:focus,td select:focus{outline:none;border-color:var(--gold);background:
         <span class="upload-lbl">Opera Arrivals File</span>
         <span class="upload-sub">Paste raw data or use the table below</span>
       </div>
-      <textarea id="arrInput" placeholder="Paste Opera arrivals here and click Load, OR use the + Add Guest button to enter manually…" style="height:80px;"></textarea>
+      <textarea id="arrInput" placeholder="Paste Opera arrivals here and click Load, OR upload Excel/CSV file below…" style="height:60px;"></textarea>
     </div>
-    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
-      <button class="btn gold" onclick="loadArrivals()">⚡ Load Report</button>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
+      <button class="btn gold" onclick="loadArrivals()">⚡ Load Pasted</button>
+      <label class="btn mint" style="cursor:pointer;">📂 Upload Opera File <input type="file" accept=".xlsx,.xls,.csv" onchange="loadOperaFile(this,'arr')" style="display:none"/></label>
       <button class="btn" onclick="clearArrivals()">✕ Clear</button>
     </div>
   </div>
@@ -655,7 +656,7 @@ td input:focus,td select:focus{outline:none;border-color:var(--gold);background:
         <div class="upload-dot mint"></div>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--border2);border-radius:var(--r);">
         <span style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);">📂 Upload Excel from Opera:</span>
-        <input type="file" id="purposeExcelFile" accept=".xlsx,.xls,.csv" onchange="loadPurposeExcel(this)" style="font-size:0.7rem;color:var(--text2);flex:1;"/>
+        <input type="file" id="purposeExcelFile" accept=".xlsx,.xls,.csv" onchange="loadOperaFile(this,'pur')" style="font-size:0.7rem;color:var(--text2);flex:1;"/>
       </div>
         <span class="upload-lbl">Paste Arrivals Data</span>
         <span class="upload-sub">Or sync from Arrivals tab above</span>
@@ -2134,113 +2135,137 @@ function editHotel(){
 })();
 
 // ── EXCEL UPLOAD FOR PURPOSE OF STAY ──
-function loadPurposeExcel(input){
+
+// ── OPERA FILE LOADER (CSV or XLS) for Arrivals & Purpose ──
+function parseCSVLine(line){
+  const res=[]; let cur='',inQ=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(c==='"'){inQ=!inQ;}
+    else if(c===','&&!inQ){res.push(cur.trim());cur='';}
+    else cur+=c;
+  }
+  res.push(cur.trim());
+  return res;
+}
+
+function cleanName(raw){
+  // Opera format: "LASTNAME, FIRSTNAME, Mr." → "FIRSTNAME LASTNAME"
+  if(!raw) return '';
+  raw = raw.replace(/,?\s*(Mr\.|Mrs\.|Ms\.|Miss|MR|MRS|DR\.?)\s*$/i,'').trim();
+  const parts = raw.split(',').map(p=>p.trim()).filter(p=>p);
+  if(parts.length>=2) return (parts[1]+' '+parts[0]).trim().toUpperCase();
+  return raw.toUpperCase();
+}
+
+function cleanSource(agent, company, source){
+  let src = agent||company||source||'';
+  src = src.replace(/BOOKING\.COM BV.*$/i,'Booking.com')
+           .replace(/AGODA COMPANY PTE LTD/i,'Agoda')
+           .replace(/EXPEDIA\.COM.*/i,'Expedia')
+           .replace(/DARINA HOLIDAYS.*/i,'Darina Holidays')
+           .replace(/\s*\(.*?\)/g,'').trim();
+  return src || 'Walk-in';
+}
+
+function loadOperaFile(input, target){
   const file = input.files[0];
   if(!file) return;
   const ext = file.name.split('.').pop().toLowerCase();
   const reader = new FileReader();
   reader.onload = function(e){
     try{
-      let rows = [];
-      if(ext === 'csv'){
-        // Parse CSV
+      let rows=[];
+      if(ext==='csv'){
         const text = new TextDecoder('utf-8').decode(new Uint8Array(e.target.result));
-        const lines = text.split('\n').filter(l=>l.trim());
-        rows = lines.map(line=>{
-          // Handle quoted CSV
-          const res=[]; let cur='',inQ=false;
-          for(let i=0;i<line.length;i++){
-            const c=line[i];
-            if(c==='"'){inQ=!inQ;}
-            else if(c===','&&!inQ){res.push(cur.trim());cur='';}
-            else cur+=c;
-          }
-          res.push(cur.trim());
-          return res;
-        });
+        rows = text.split('\n').filter(l=>l.trim()).map(parseCSVLine);
       } else {
-        // Parse XLS/XLSX
-        const wb = XLSX.read(e.target.result, {type:'array'});
+        const wb = XLSX.read(e.target.result,{type:'array'});
         const ws = wb.Sheets[wb.SheetNames[0]];
-        rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+        rows = XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
       }
-      if(rows.length < 2){ alert('File appears empty'); return; }
+      if(rows.length<2){alert('File empty');return;}
 
-      // Find header row (first row with Room or Name)
-      let hdrRow = 0;
-      for(let i=0;i<Math.min(6,rows.length);i++){
-        const r = rows[i].map(c=>String(c).toLowerCase());
+      // Find header row
+      let hdrRow=0;
+      for(let i=0;i<Math.min(5,rows.length);i++){
+        const r=rows[i].map(c=>String(c).toLowerCase());
         if(r.some(c=>c.includes('room')||c.includes('name'))){hdrRow=i;break;}
       }
-      const hdrs = rows[hdrRow].map(c=>String(c).replace(/"/g,'').trim().toUpperCase());
-      console.log('Headers:', hdrs);
+      const hdrs=rows[hdrRow].map(c=>String(c).replace(/"/g,'').trim().toUpperCase());
 
-      // Map Opera column names exactly
-      const ci = name => hdrs.findIndex(h=>h.includes(name));
+      // Map Opera columns exactly
+      const ci=name=>hdrs.findIndex(h=>h===name||h.includes(name));
       const rI  = ci('ROOM');
       const nI  = ci('NAME');
       const cI  = hdrs.findIndex(h=>h.includes('CONFIRM'));
       const niI = ci('NIGHT');
-      const taI = hdrs.findIndex(h=>h.includes('TRAVEL') || h.includes('AGENT'));
-      const coI = hdrs.findIndex(h=>h.includes('COMPANY'));
-      const sI  = ci('SOURCE');
-      const rtI = hdrs.findIndex(h=>h.includes('RATE CODE') || h==='RATE CODE');
-      const blI = ci('BALANC');
+      const artI= ci('ARRIVAL');
+      const depI= ci('DEPARTURE');
+      const taI = hdrs.findIndex(h=>h.includes('TRAVEL')||h==='TRAVEL AGENT');
+      const coI = ci('COMPANY');
+      const srcI= ci('SOURCE');
+      const rcI = hdrs.findIndex(h=>h==='RATE CODE'||h.includes('RATE CODE'));
+      const balI= ci('BALANCE');
 
-      if(rI<0 || nI<0){ alert('Cannot find Room or Name columns.\nHeaders found: '+hdrs.slice(0,10).join(', ')); return; }
+      if(rI<0||nI<0){alert('Cannot find Room/Name columns.\nHeaders: '+hdrs.slice(0,12).join(', '));return;}
 
-      purposeGuests = [];
-      const purposes = ['Business','Business','Business','Leisure','Leisure']; // 60/40 split
-      let pIdx = 0;
+      const guests=[];
+      const purCycle=['Business','Business','Business','Leisure','Leisure'];
+      let pIdx=0;
 
       for(let i=hdrRow+1;i<rows.length;i++){
-        const r = rows[i];
-        const room = String(r[rI]||'').replace(/"/g,'').trim();
-        const name = String(r[nI]||'').replace(/"/g,'').trim().toUpperCase();
-        if(!room || !name) continue;
+        const r=rows[i];
+        const room=String(r[rI]||'').replace(/"/g,'').trim();
+        const rawName=String(r[nI]||'').replace(/"/g,'').trim();
+        if(!room||!rawName) continue;
 
         // Skip PM rooms
-        const rt = rtI>=0 ? String(r[rtI]||'').trim() : '';
-        if(rt==='PM') continue;
+        const rc=rcI>=0?String(r[rcI]||'').replace(/"/g,'').trim():'';
+        if(rc==='PM') continue;
 
-        // Build source: Travel Agent > Company > Source column > Walk-in
-        let src = '';
-        if(taI>=0) src = String(r[taI]||'').replace(/"/g,'').trim();
-        if(!src && coI>=0) src = String(r[coI]||'').replace(/"/g,'').trim();
-        if(!src && sI>=0) src = String(r[sI]||'').replace(/"/g,'').trim();
-        // Clean up long OTA names
-        src = src.replace(/BOOKING\.COM BV.*$/i,'Booking.com').replace(/AGODA COMPANY PTE LTD/i,'Agoda').replace(/\s*\(.*?\)/g,'').trim();
-        if(!src) src = 'Walk-in';
+        const name=cleanName(rawName);
+        const agent=taI>=0?String(r[taI]||'').replace(/"/g,'').trim():'';
+        const company=coI>=0?String(r[coI]||'').replace(/"/g,'').trim():'';
+        const src=srcI>=0?String(r[srcI]||'').replace(/"/g,'').trim():'';
+        const conf=cI>=0?String(r[cI]||'').replace(/"/g,'').trim():'';
+        const nights=niI>=0?parseInt(r[niI])||1:1;
 
-        // Random purpose cycling
-        const pur = purposes[pIdx % purposes.length];
-        pIdx++;
-
-        purposeGuests.push({
+        guests.push({
           room: room,
-          conf: cI>=0 ? String(r[cI]||'').replace(/"/g,'').trim() : '',
+          conf: conf,
           name: name,
-          purpose: pur,
-          nights: niI>=0 ? parseInt(r[niI])||1 : 1,
+          purpose: purCycle[pIdx%purCycle.length],
+          nights: nights,
           nat: '',
           email: 'No@email.com',
-          source: src,
+          source: cleanSource(agent,company,src),
           remarks: ''
         });
+        pIdx++;
       }
 
-      if(purposeGuests.length === 0){ alert('No data rows found. Check the file format.'); return; }
+      if(!guests.length){alert('No valid guest rows found. Check the file.');return;}
 
-      purposeRender();
-      document.getElementById('purposeUploadCard').style.display = 'none';
+      if(target==='arr'){
+        arrGuests=guests;
+        arrRender();
+        document.querySelector('#panel-arrivals .card').style.display='none';
+        // Auto-run AI nationality
+        setTimeout(()=>runAINat_arr(), 400);
+      } else {
+        purposeGuests=guests;
+        purposeRender();
+        document.getElementById('purposeUploadCard').style.display='none';
+        // Auto-run AI nationality
+        setTimeout(()=>runAINat_purpose(), 400);
+      }
 
-      // Auto-run AI nationality
-      setTimeout(()=>{ runAINat_purpose(); }, 300);
-
-    } catch(err){ console.error(err); alert('Error reading file: ' + err.message); }
+    }catch(err){console.error(err);alert('Error: '+err.message);}
   };
   reader.readAsArrayBuffer(file);
 }
+
 
 </script>
 </body>
