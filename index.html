@@ -1128,131 +1128,90 @@ const CL_STEPS = [
 const clState = {done:new Set(),skipped:new Set(),notes:{},names:{}};
 
 // NAT lookup
-const NAT_MAP={
+const NAT_MAP = {
   // Turkey
-  turkey:['yesilkaya','bugra','yalcin','uluturk','sahin','oner','furkan','karatas','demir','kaya','celik','aydin','ozturk','yilmaz','arslan','koc','aktas','polat','ozcan','erdogan','tekin','aslan','cakmak','gul','sari','yildiz','ciftci','guler','acar','simsek','bayrak','bulut','dogan','kurt','topcu','ozdemir','aksoy','aydogan','atay'],
+  turkey: ['yesilkaya','bugra','yalcin','uluturk','sahin','oner','furkan','karatas','demir','kaya','celik','aydin','ozturk','yilmaz','arslan','koc','aktas','polat','ozcan','erdogan','tekin','aslan','cakmak','gul','sari','yildiz','ciftci','guler','acar','simsek','bayrak','bulut','dogan','kurt','topcu','ozdemir','aksoy','aydogan','atay'],
+  
   // India
-  india:['kuriakose','ajay','rajasegar','ranjith','latheef','thengakoottil','ajmal','valiyapurayil','shah','prerak','nagvekar','kranti','hakim','lukman','sharifi','chandran','niyas','sulthan','moradiya','sanjay','shanmuganathan','nagamani','panchily','kumar','patel','singh','sharma','reddy','nair','menon','pillai','iyer','krishnan','venkat','suresh','ramesh','mahesh','rajesh','dinesh','ganesh','naresh','pradeep','sandeep','deepak','arun','vijay','anand','prakash','ravi','siva','bala','murugan','selvam','pandian','arumugam','karuppaiah','manickam','subramanian','venkatesan','natarajan','rajagopal','sundaram','govindasamy','chinnaswamy','periyasamy','thangavel','palaniswami','gopal','lal','rao','naidu','gowda','hegde','kamath','shetty','bhat','salian','jogesh','pradeesh','vishnu','anish','jithin','jishnudev','rahul','rohit','amit','sumit','sunil','anil','kapil','sahil','nikhil','akhil','vikas','gaurav','vishal','varun','tarun','karan','arjun','rohan','mohan','sohan','radha','lakshmi','priya','kavya','divya','meena','leena','reena','seema','geeta','neeta','sunita','anita','savita','mamta','usha','asha','rekha','sudha','vidya','maya','hema','prema'],
+  india: ['kuriakose','ajay','rajasegar','ranjith','latheef','thengakoottil','ajmal','valiyapurayil','shah','prerak','nagvekar','kranti','hakim','lukman','sharifi','chandran','niyas','sulthan','moradiya','sanjay','shanmuganathan','nagamani','panchily','kumar','patel','singh','sharma','reddy','nair','menon','pillai','iyer','krishnan','venkat','suresh','ramesh','mahesh','rajesh','dinesh','ganesh','naresh','pradeep','sandeep','deepak','arun','vijay','anand','prakash','ravi','siva','bala','murugan','selvam','pandian','arumugam','karuppaiah','manickam','subramanian','venkatesan','natarajan','rajagopal','sundaram','govindasamy','chinnaswamy','periyasamy','thangavel','palaniswami','gopal','lal','rao','naidu','gowda','hegde','kamath','shetty','bhat','salian','jogesh','pradeesh','vishnu','anish','jithin','jishnudev','rahul','rohit','amit','sumit','sunil','anil','kapil','sahil','nikhil','akhil','vikas','gaurav','vishal','varun','tarun','karan','arjun','rohan','mohan','sohan','radha','lakshmi','priya','kavya','divya','meena','leena','reena','seema','geeta','neeta','sunita','anita','savita','mamta','usha','asha','rekha','sudha','vidya','maya','hema','prema'],
+  
   // Pakistan
-  pakistan:['hasan','anis','zolfu','ullah','farhan','khalid','faheem','syed','muhammad','jabbar','memon','qassmani','khan','kamran','karim','malik','chaudhry','mirza','baig','qureshi','butt','rana','javed','tariq','asif','imran','usman','hassan','hussain','bilal','talha','zubair','waheed','rashid','nasir','zafar','tahir','waqar','naeem','saleem','nadeem','waseem','azeem','hakeem','raheem','kareem','kasim','basim','raza','iqbal','riaz','niaz','liaquat','mubarak','mushtaq','mukhtar'],
+  pakistan: ['hasan','anis','zolfu','ullah','farhan','khalid','faheem','syed','muhammad','jabbar','memon','qassmani','khan','kamran','karim','malik','chaudhry','mirza','baig','qureshi','butt','rana','javed','tariq','asif','imran','usman','hassan','hussain','bilal','talha','zubair','waheed','rashid','nasir','zafar','tahir','waqar','naeem','saleem','nadeem','waseem','azeem','hakeem','raheem','kareem','kasim','basim','raza','iqbal','riaz','niaz','liaquat','mubarak','mushtaq','mukhtar'],
+  
   // Ethiopia
-  ethiopia:['demoz','rahwa','mahederkal','defersha','gebremeskel','nagash','getahun','tesfaye','abebe','haile','tadesse','bekele','girma','wolde','gebre','desta','alemu','mesfin','tsegay','mulugeta','berhe','tekle','hadgu','hagos','girmay','abreha','yemane','kibrom','berhane','tewelde','goitom','araya','meles','seyoum','kahsay','tsehaye','fisseha','mezgebe','weldegiorgis','abraha'],
+  ethiopia: ['demoz','rahwa','mahederkal','defersha','gebremeskel','nagash','getahun','tesfaye','abebe','haile','tadesse','bekele','girma','wolde','gebre','desta','alemu','mesfin','tsegay','mulugeta','berhe','tekle','hadgu','hagos','girmay','abreha','yemane','kibrom','berhane','tewelde','goitom','araya','meles','seyoum','kahsay','tsehaye','fisseha','mezgebe','weldegiorgis','abraha'],
+  
   // Philippines
-  philippines:['dela','santos','reyes','garcia','cruz','ramos','aquino','bautista','dizon','castillo','francisco','flores','bernardo','pascual','morales','gonzales','torres','natividad','soriano','villanueva','panganiban','lim','tan','co','ang','sy','chua','go','uy','lee','yap','ong','tiu','dy'],
+  philippines: ['dela','santos','reyes','garcia','cruz','ramos','aquino','bautista','dizon','castillo','francisco','flores','bernardo','pascual','morales','gonzales','torres','natividad','soriano','villanueva','panganiban','lim','tan','co','ang','sy','chua','go','uy','lee','yap','ong','tiu','dy'],
+  
   // Somalia
-  somalia:['osman','fathia','istarlin','jama','abdulkadir','alibeto','saynab','sahra','doucoure','mariam','muna','jimale','maryan','hassan','ahmed','ali','abdi','farah','aden','warsame','hirsi','salah','yusuf','dahir','hersi','shire','guled','bile','elmi','ismail','duale','haddi','hawo','halima','hodan','ifrah','nimo','nasra','faadumo','caasha'],
+  somalia: ['osman','fathia','istarlin','jama','abdulkadir','alibeto','saynab','sahra','doucoure','mariam','muna','jimale','maryan','hassan','ahmed','ali','abdi','farah','aden','warsame','hirsi','salah','yusuf','dahir','hersi','shire','guled','bile','elmi','ismail','duale','haddi','hawo','halima','hodan','ifrah','nimo','nasra','faadumo','caasha'],
+  
   // Yemen
-  yemen:['alawlaqi','qahtan','ezzi','mutahara','abdulqader','almaashari','adhban','alhaddad','alqadhi','aleryani','alkohali','almakki','alnono','alrubaidi','alsanabani','althobhani','alwazeer','bamatraf','bazara','habtoor','hatem','salim','saeed','abdulrahman','abdulwahab'],
+  yemen: ['alawlaqi','qahtan','ezzi','mutahara','abdulqader','almaashari','adhban','alhaddad','alqadhi','aleryani','alkohali','almakki','alnono','alrubaidi','alsanabani','althobhani','alwazeer','bamatraf','bazara','habtoor','hatem','salim','saeed','abdulrahman','abdulwahab'],
+  
   // Guinea
-  guinea:['hamadou','diallo','youba','magassa','bile','siby','oushamata','alhassane','fodie','bah','barry','camara','conde','toure','keita','kouyate','traore','sylla','soumah','bangoura','koivogui','loua','guilavogui','zoumanigui','millimouno'],
+  guinea: ['hamadou','diallo','youba','magassa','bile','siby','oushamata','alhassane','fodie','bah','barry','camara','conde','toure','keita','kouyate','traore','sylla','soumah','bangoura','koivogui','loua','guilavogui','zoumanigui','millimouno'],
+  
   // Algeria
-  algeria:['gacem','hicham','aissani','kamel','seloubi','chetta','hossem','boumediene','benali','benaissa','benamara','benbrahim','bencheikh','bendali','bendjemaa','benghabrit','benhamouda','benkeltoum','benkhelifa','benlakehal','benmoussa'],
+  algeria: ['gacem','hicham','aissani','kamel','seloubi','chetta','hossem','boumediene','benali','benaissa','benamara','benbrahim','bencheikh','bendali','bendjemaa','benghabrit','benhamouda','benkeltoum','benkhelifa','benlakehal','benmoussa'],
+  
   // Uzbekistan
-  uzbekistan:['sardor','azimov','saidazimkhon','mukhutdinov','arabov','navruz','kurbonov','umidjon','firdavs','ablayarov','mukhidov','umedzhon','mirzayev','yusupov','karimov','rahimov','toshmatov','xasanov','ergashev','nazarov','rашidov','sobirov','sultonov','tursunov','umarov'],
+  uzbekistan: ['sardor','azimov','saidazimkhon','mukhutdinov','arabov','navruz','kurbonov','umidjon','firdavs','ablayarov','mukhidov','umedzhon','mirzayev','yusupov','karimov','rahimov','toshmatov','xasanov','ergashev','nazarov','rashidov','sobirov','sultonov','tursunov','umarov'],
+  
   // Russia
-  russia:['magomadov','aiub','nabiev','ulugbek','ivanov','petrov','sidorov','smirnov','kuznetsov','popov','sokolov','lebedev','kozlov','novikov','morozov','volkov','soloviev','vasiliev','zaitsev','pavlov','semyonov','golubev','vinogradov','bogdanov','vorobyov','fedorov','mikhailov','belyaev','tarasov','belov'],
+  russia: ['magomadov','aiub','nabiev','ulugbek','ivanov','petrov','sidorov','smirnov','kuznetsov','popov','sokolov','lebedev','kozlov','novikov','morozov','volkov','soloviev','vasiliev','zaitsev','pavlov','semyonov','golubev','vinogradov','bogdanov','vorobyov','fedorov','mikhailov','belyaev','tarasov','belov'],
+  
   // Bangladesh
-  bangladesh:['morshed','chowdhury','rahman','akter','begum','sultana','hossain','islam','uddin','miah','sarkar','howlader','talukder','mondol','biswas','dey','roy','das','paul','ghosh'],
-  // Angola / Mozambique
-  angola:['helena','jose','mulungo','tania','silva','sousa','ferreira','costa','santos','rodrigues','alves','carvalho','machado','matos','lopes','gomes','martins','pereira','nunes'],
-  mozambique:['manhique','nilza','mahomed','saucate','uqueio','mondlane','machel','chissano','dhlakama','renamo','frelimo','massinga','quelimane'],
+  bangladesh: ['morshed','chowdhury','rahman','akter','begum','sultana','hossain','islam','uddin','miah','sarkar','howlader','talukder','mondol','biswas','dey','roy','das','paul','ghosh'],
+  
+  // Angola
+  angola: ['helena','jose','mulungo','tania','silva','sousa','ferreira','costa','santos','rodrigues','alves','carvalho','machado','matos','lopes','gomes','martins','pereira','nunes'],
+  
+  // Mozambique
+  mozambique: ['manhique','nilza','mahomed','saucate','uqueio','mondlane','machel','chissano','dhlakama','renamo','frelimo','massinga','quelimane'],
+  
   // Senegal
-  senegal:['coundoul','mbaye','thiam','bocar','seck','niang','moda','diop','fall','gueye','faye','diouf','wade','toure','sy','ba','lo','sarr','diallo','ndoye','thiaw','ndiaye'],
+  senegal: ['coundoul','mbaye','thiam','bocar','seck','niang','moda','diop','fall','gueye','faye','diouf','wade','toure','sy','ba','lo','sarr','diallo','ndoye','thiaw','ndiaye'],
+  
   // Ghana
-  ghana:['ruwaida','sumaila','abubakari','gomda','nadoua','afua','adwubi','balure','bashiru','nyamah','sylvester','mensah','asante','boateng','acheampong','owusu','amoah','darko','opoku','appiah','ofori','asare','osei','frimpong','adjei','quaye','lartey','tetteh','ankrah','quaynor'],
+  ghana: ['ruwaida','sumaila','abubakari','gomda','nadoua','afua','adwubi','balure','bashiru','nyamah','sylvester','mensah','asante','boateng','acheampong','owusu','amoah','darko','opoku','appiah','ofori','asare','osei','frimpong','adjei','quaye','lartey','tetteh','ankrah','quaynor'],
+  
   // Egypt
-  egypt:['dhiaa','ghasan','fathy','zohairy','hassan','hussein','ibrahim','mahmoud','ali','omar','ahmed','mohamed','sayed','mostafa','khaled','walid','amr','tamer','sherif','ashraf','hossam','ayman','wael','emad','essam','kamal','adel','nasser','samir','magdi','maged','osama','hazem','hany','ramy','mena','peter','george','fady','nader','yasser','ramadan'],
+  egypt: ['dhiaa','ghasan','fathy','zohairy','hassan','hussein','ibrahim','mahmoud','ali','omar','ahmed','mohamed','sayed','mostafa','khaled','walid','amr','tamer','sherif','ashraf','hossam','ayman','wael','emad','essam','kamal','adel','nasser','samir','magdi','maged','osama','hazem','hany','ramy','mena','peter','george','fady','nader','yasser','ramadan'],
+  
   // Morocco
-  morocco:['chouini','issam','jaid','benali','benmoussa','benomar','benziane','chaoui','charaf','chraibi','elalami','elfassi','elghazi','elharti','elhilali','elkhalil','elmalki','elmoussaoui','elouardi','erraji','fassi','ghazali','lahlou','lahrizi','laroui','maarouf','mansouri','mernissi','miloudi','mouline','mrabet','ouazzani','sabri','skalli','tazi','tichouk','ziani'],
+  morocco: ['chouini','issam','jaid','benali','benmoussa','benomar','benziane','chaoui','charaf','chraibi','elalami','elfassi','elghazi','elharti','elhilali','elkhalil','elmalki','elmoussaoui','elouardi','erraji','fassi','ghazali','lahlou','lahrizi','laroui','maarouf','mansouri','mernissi','miloudi','mouline','mrabet','ouazzani','sabri','skalli','tazi','tichouk','ziani'],
+  
   // Nigeria
-  nigeria:['adeyemi','adewale','adebayo','adesola','adekola','adeyinka','adeola','adeoye','adekunle','adeniran','adeniyi','adetokunbo','adewumi','adegoke','adegboyega','adegbemiga','adegbenro','balogun','chukwu','emeka','okafor','okonkwo','eze','igwe','nwachukwu','nwosu','obiora','odumegwu','ogbonna','oguike','ohiri','ojukwu','okeke','okereke','okoro','okpara','obi','musa','sule','abdullahi','garba','ibrahim','lawal','usman','yusuf','shehu','bello','danjuma'],
+  nigeria: ['adeyemi','adewale','adebayo','adesola','adekola','adeyinka','adeola','adeoye','adekunle','adeniran','adeniyi','adetokunbo','adewumi','adegoke','adegboyega','adegbemiga','adegbenro','balogun','chukwu','emeka','okafor','okonkwo','eze','igwe','nwachukwu','nwosu','obiora','odumegwu','ogbonna','oguike','ohiri','ojukwu','okeke','okereke','okoro','okpara','obi','musa','sule','abdullahi','garba','ibrahim','lawal','usman','yusuf','shehu','bello','danjuma'],
+  
   // Kenya
-  kenya:['kamau','wanjiku','mwangi','njoroge','kariuki','gitau','ndungu','mugo','kinyua','karanja','waithaka','njenga','kimani','macharia','gacheru','gachoka','gathura','gathua','wambua','mutua','musyoka','muia','makau','muthiani','ngei','ndavi','nzioka','munyao','kyalo','kaloki','kivuva','kiilu','mutinda'],
-  // Uganda
-  uganda:['museveni','obote','amin','ssali','ssebagala','nkurunziza','kayira','kiggundu','kizza','lubwama','lutaaya','mayanja','mugisha','muhumuza','mukasa','mulondo','mulwana','muwonge','nabwire','nakirya','nalubowa','nalwoga','namara','nambooze','nampijja','namutebi','nanteza','naome','namugenyi'],
-  // Tanzania
-  tanzania:['mkapa','nyerere','magufuli','kikwete','karume','lowassa','mrema','lissu','nchemba','msigwa','selasini','slaa','lipumba','mwanri','rweyemamu','mwakyusa','mkuchika'],
-  // Sudan
-  sudan:['bashir','mahdi','mirghani','turabi','nimeiry','sidqi','nujumi','abubakar','khalid','hamdan','dagalo','hamedti','burkhan','numeiri'],
-  // Iraq
-  iraq:['muwafaq','obaidi','sadoon','sairafi','husayn','hamid','mohsen','jabouri','dulaimi','tamimi','azzawi','samarrai','tikriti','anbari','fallahi','mosuli','karbalaai','najafi','basrawi','baghdadi'],
-  // Syria
-  syria:['assaf','khalil','antaki','azmeh','baalbaki','barazi','barudi','bustani','dandashi','darwiche','doumani','fadel','farhat','gharzouzi','hafez','hakim','hamdan','haydar','hourani','husseini','jabri','jalloul','jarrah','jaza'],
-  // Lebanon
-  lebanon:['makarem','fadi','geagea','hariri','aoun','berri','nasrallah','jumblatt','frangieh','gemayel','murr','bassil','salam','mikati','siniora','hoss','lahoud','hrawi','helou'],
-  // Palestine
-  palestine:['muntasir','jehad','abumounshar','barghouti','erekat','dahlan','rajoub','jibril','habash','nashashibi','khalidi','husseini','masri','nabulsi','shaka'],
-  // Jordan
-  jordan:['masri','rawabdeh','maaitah','tarawneih','batayneh','majali','razzaz','nsour','mulqi','khasawneh','khassawneh','rifa'i','kabariti','badran','obeidat','hammarneh'],
+  kenya: ['kamau','wanjiku','mwangi','njoroge','kariuki','gitau','ndungu','mugo','kinyua','karanja','waithaka','njenga','kimani','macharia','gacheru','gachoka','gathura','gathua','wambua','mutua','musyoka','muia','makau','muthiani','ngei','ndavi','nzioka','munyao','kyalo','kaloki','kivuva','kiilu','mutinda'],
+  
   // Saudi Arabia
-  'saudi arabia':['alqahtani','alharbi','abdalmajeed','alghamdi','alshehri','alahmadi','alotaibi','albalawi','albishi','aldosari','alfaifi','alghamidi','alhamdan','alharthi','alhumaid','alissa','aljuaid','almalik','almutairi','alnasser','aloshan','alqadi','alrasheed','alsaedi','alsalman','alsayed','altamimi','alturki','alzahrani','binladin'],
-  // UAE / Gulf
-  uae:['alsaiari','alghanemi','alnuaimi','almazrouei','alkaabi','almansoori','almheiri','alketbi','alshehhi','alremeithi','alblooshi','aldhaheri','alfalahi','alhameli','alhamiri','alkhouri','almuhairi','alneyadi','alqubaisi','alqassimi','alrashidi','alshamsi','alsuwaidi'],
-  // Kuwait
-  kuwait:['nawaf','alrashidi','alkhameesi','mokhalad','alsabah','alhamad','alahmad','alduaij','alenezi','alfahad','alfailakawi','alharoun','alhasawi','alkandari','almutairi','alnefaie','alothman','alqallaf','alrasheed','alsalem'],
-  // Bahrain
-  bahrain:['alawi','alkhalifa','alzayani','alasfoor','albannaie','aldoseri','algaood','alhayki','aljalahma','alkhaja','almansoor','almatrook','almoayyed','alnasser','alnoaimi','alqassab','alrayes','alsadah','alsayegh','alsulaiti'],
-  // Oman
-  oman:['alrashdi','alabri','almaashari','alhajri','albusaidi','alghafri','alghailani','alhadhrami','alharthy','alhasani','alhosni','almaktoumi','almamari','almandhri','almaskari','almufargi','alnabhani','alqasmi','alrawahi','alruqaishi','alshibli'],
-  // Qatar
-  qatar:['baabood','faisal','althani','alattiyah','albuainain','albuarainain','aldosari','alfardhan','alferdan','alghafran','alghali','alhamad','alhodaifi','aljufairi','alkhulaifi','almansoori','almarri','almeer','almisnad','alnuaimi','alraisi','alrumaihi'],
-  // Iran
-  iran:['ahmadi','akbari','alavi','ansari','asadi','bahrami','ebrahimi','esfahani','ghasemi','hosseini','jafari','karimi','kazemi','khodaei','mahdavi','mahmoudi','mirza','mohammadi','mousavi','nazari','rahimi','rahmani','rezaei','saadat','sadeghi','safari','salimi','shirazi','sultani','taheri','zakeri'],
-  // Afghanistan
-  afghanistan:['ahmadzai','barakzai','durrani','ghilzai','hazara','karimi','karzai','khaksar','mahmood','malang','mansoor','massoud','mohammadi','mohmand','mujahid','musahiban','noorzai','nuristani','osmani','pakhtun','popalzai','qadri','rabbani','rahimi','rasool','safi','shinwari','tajik','uzbek','wardak','yusufzai','zadran','zia'],
-  // Kazakhstan / Central Asia
-  kazakhstan:['kydyrbekova','nazarbayev','tokayev','abenov','akhmetov','alibek','baisalov','bekova','dzhaksybekov','esimov','kaliyev','kozhakhmetov','makhanov','mamytbekov','massimov','mukhamejanov','musayev','myrzakhmetov','sagintayev','sultanov','tazhin','temirgaliev','utemuratov','zhaksybekov'],
-  // Malaysia
-  malaysia:['farhana','haril','rahman','ibrahim','ismail','ahmad','hamid','abdullah','hassan','mohd','aziz','salleh','ali','omar','hussein','ramli','rahim','zainudin','mansor','ghazali','yusof','jamaludin','kamarudin','zulkifli','sharifuddin'],
-  // Indonesia
-  indonesia:['susanto','hartono','wibowo','kusuma','santoso','prasetyo','kurniawan','setiawan','raharjo','purnomo','wijaya','gunawan','haryanto','budiman','hermawan','wahyudi','sugiarto','hadiyanto','nugroho','saputra','hidayat','utama','prabowo','sudirman','sukarno'],
-  // China
-  china:['han','chen','yuxiao','wang','long','zhang','liu','yang','huang','zhao','wu','zhou','xu','sun','ma','zhu','hu','guo','he','lin','gao','luo','zheng','xie','xiao','tang','cao','feng','deng','cheng','wei','jiang','dong','lu','shen','fu','peng','xu','ding','lu','tian','pan','bai','li','yi','yin'],
-  // Hong Kong / Taiwan
-  'hong kong':['ting','kwan','shum','chan','cheung','chow','hui','kwok','lam','lee','leung','lo','mak','ng','tam','tsang','tse','wong','wu','yau','yip','yuen'],
-  taiwan:['chen','lin','huang','chang','wu','li','tsai','hsieh','su','chou','cheng','lu','kao','liao','luo','chiang','hsu','shih','kuo','ko'],
-  // South Korea
-  'south korea':['kim','lee','park','choi','jung','kang','cho','yoon','jang','lim','han','oh','shin','seo','kwon','hwang','ahn','song','yoo','hong','jeon','moon','yang','son','baek'],
-  // Japan
-  japan:['tanaka','sato','suzuki','takahashi','watanabe','kobayashi','yamamoto','nakamura','kato','yoshida','yamada','sasaki','yamaguchi','matsumoto','inoue','kimura','hayashi','shimizu','yamazaki','mori'],
-  // Thailand
-  thailand:['thanakit','pornthep','supachai','somchai','jirawat','anuwat','natthawut','nutthapon','pratheep','ratchata','suthipong','teerasak','wanchai','weerasak','worawit','yothin','kiatisak','pairat','pongsakorn','rattanapong'],
-  // Vietnam
-  vietnam:['nguyen','tran','le','pham','hoang','huynh','phan','vu','dang','bui','do','ho','ngo','duong','ly','dinh','trinh','truong','mai','luu'],
-  // Sri Lanka
-  'sri lanka':['yogarajah','jayasuriya','jayawardene','senanayake','bandaranaike','kumaratunga','wickremesinghe','rajapaksa','sirisena','dissanayake','karunanayake','pieris','mendis','de silva','fernando','perera','silva','gunawardena','amarasinghe','weerasinghe'],
-  // Armenia
-  armenia:['zaven','hakobyan','ohanyan','vahagn','zareh','sunbulian','petrosyan','sargsyan','karapetyan','grigoryan','harutyunyan','mkrtchyan','gevorgyan','simonyan','avagyan','avetisyan','hovhannisyan','ghazaryan','baghdasaryan','mkhitaryan'],
-  // Mauritius
-  mauritius:['ismael','joomun','bagvandjee','ramgoolam','jugnauth','boolell','dulull','fakeemeeah','gokulsing','gujadhur','hawoldar','hurree','jeewan','jhurry','jugessur','koonjul','labat','lam','lam shang leen'],
-  // Brazil
-  brazil:['jones','luis','silva','santos','oliveira','pereira','alves','lima','gomes','ribeiro','martins','carvalho','almeida','lopes','sousa','fernandes','vieira','barbosa','rocha','dias','nascimento','rodrigues','melo','costa'],
-  // Nigeria / West Africa
-  'west africa':['kofi','kwame','kweku','kwesi','kojo','abena','akua','ama','adwoa','afia','akosua','abenaa','abiba','adjoa'],
-  // Maldives
-  maldives:['shuhaib','rasheed','waheed','nasheed','yameen','solih','ibrahim','hassan','ahmed','ali','moosa','hussein','ismail','abdulla','adam','umar','yusuf','khalid'],
-  // Hungary
-  hungary:['csahoczi','kovacs','nagy','horvath','toth','szabo','varga','kiss','molnar','nemeth','fekete','feher','simon','racz','farkas','papp','biro','orban','gulyas','karoly'],
-  // Portugal
-  portugal:['corte','rodrigues','silva','santos','ferreira','costa','pereira','lopes','gomes','martins','oliveira','sousa','carvalho','pinto','alves','moreira','ribeiro','nunes','marques','melo'],
-  // Turkmenistan
-  turkmenistan:['akniyazova','bagyyev','akyniyazova','berdimuhamedow','atayew','rejepow','gurbanguly','magtymguly','annayew','bayramow','durdyyew','hojayew','muhammedow','orazow','saparmuradow'],
+  'saudi arabia': ['alqahtani','alharbi','abdalmajeed','alghamdi','alshehri','alahmadi','alotaibi','albalawi','albishi','aldosari','alfaifi','alghamidi','alhamdan','alharthi','alhumaid','alissa','aljuaid','almalik','almutairi','alnasser','aloshan','alqadi','alrasheed','alsaedi','alsalman','alsayed','altamimi','alturki','alzahrani','binladin'],
+  
+  // UAE
+  uae: ['alsaiari','alghanemi','alnuaimi','almazrouei','alkaabi','almansoori','almheiri','alketbi','alshehhi','alremeithi','alblooshi','aldhaheri','alfalahi','alhameli','alhamiri','alkhouri','almuhairi','alneyadi','alqubaisi','alqassimi','alrashidi','alshamsi','alsuwaidi'],
+  
   // USA
-  usa:['abukar','dhaqane','hoosh','abdinasir','johnson','williams','brown','jones','davis','miller','wilson','moore','taylor','anderson','thomas','jackson','white','harris','martin','thompson','garcia','martinez','robinson','clark','rodriguez','lewis','lee','walker','hall','allen'],
+  usa: ['abukar','dhaqane','hoosh','abdinasir','johnson','williams','brown','jones','davis','miller','wilson','moore','taylor','anderson','thomas','jackson','white','harris','martin','thompson','garcia','martinez','robinson','clark','rodriguez','lewis','lee','walker','hall','allen'],
+  
   // France
-  france:['martin','bernard','thomas','petit','robert','richard','durand','dubois','moreau','laurent','simon','michel','lefevre','leroy','roux','david','bertrand','morin','fournier','girard','bonnet','dupont','lambert','fontaine','rousseau','vincent','muller','lefebvre','faure','andre'],
+  france: ['martin','bernard','thomas','petit','robert','richard','durand','dubois','moreau','laurent','simon','michel','lefevre','leroy','roux','david','bertrand','morin','fournier','girard','bonnet','dupont','lambert','fontaine','rousseau','vincent','muller','lefebvre','faure','andre'],
+  
   // Germany
-  germany:['muller','schmidt','schneider','fischer','meyer','weber','schulz','wagner','becker','hoffmann','schafer','koch','bauer','richter','klein','wolf','schroeder','neumann','schwarz','zimmermann','braun','kruger','hofmann','hartmann','lange','schubert'],
+  germany: ['muller','schmidt','schneider','fischer','meyer','weber','schulz','wagner','becker','hoffmann','schafer','koch','bauer','richter','klein','wolf','schroeder','neumann','schwarz','zimmermann','braun','kruger','hofmann','hartmann','lange','schubert'],
+  
   // Italy
-  italy:['rossi','russo','ferrari','esposito','bianchi','romano','colombo','ricci','marino','greco','bruno','gallo','conti','de luca','costa','giordano','mancini','leone','lombardi','barbieri','martinelli','villa','fontana','moretti','de angelis'],
+  italy: ['rossi','russo','ferrari','esposito','bianchi','romano','colombo','ricci','marino','greco','bruno','gallo','conti','de luca','costa','giordano','mancini','leone','lombardi','barbieri','martinelli','villa','fontana','moretti','de angelis'],
+  
   // Spain
-  spain:['garcia','martinez','lopez','sanchez','gonzalez','perez','rodriguez','fernandez','torres','ramirez','flores','diaz','hernandez','moreno','jimenez','ruiz','gutierrez','vargas','castillo','romero','navarro','medina','reyes','munoz','molina'],
+  spain: ['garcia','martinez','lopez','sanchez','gonzalez','perez','rodriguez','fernandez','torres','ramirez','flores','diaz','hernandez','moreno','jimenez','ruiz','gutierrez','vargas','castillo','romero','navarro','medina','reyes','munoz','molina'],
+  
   // Poland
-  poland:['kowalski','kowalczyk','wisniewski','wojcik','lewandowski','kaminski','kwiatkowski','zielinski','szymanski','wozniak','kozlowski','jankowski','mazur','krawczyk','piotrowsk','grabowski','nowakowski','pawlowski','michalski','nowak'],
-  // Romania
-  romania:['ionescu','popescu','popa','stoica','stan','gheorghe','dinca','marin','ion','dumitru','constantin','florea','serban','nica','moldovan','lungu','tudose','diaconu','matei','mihai'],
-  // Sweden / Norway / Finland / Denmark
-  scandinavia:['vuoksenturja','johansson','andersson','karlsson','nilsson','eriksson','larsson','olsson','persson','svensson','gustafsson','pettersson','jonsson','lindstrom','lindqvist','lindqvist','magnusson','hansson','jansson','berglund'],
+  poland: ['kowalski','kowalczyk','wisniewski','wojcik','lewandowski','kaminski','kwiatkowski','zielinski','szymanski','wozniak','kozlowski','jankowski','mazur','krawczyk','piotrowsk','grabowski','nowakowski','pawlowski','michalski','nowak']
 };
 
 
