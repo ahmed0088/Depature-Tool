@@ -1244,50 +1244,14 @@ function guessNat(name){
 }
 
 async function callClaudeNat(names) {
-    const prompt = `You are a hotel nationality expert at a Dubai airport hotel. 
-Given these guest names, return ONLY a valid JSON object where each key is the exact name and the value is the most likely nationality (country name only). 
-Consider Dubai hotel guest demographics and naming conventions.
-
-Names:
-${names.map(n => '- ' + n).join('\n')}
-
-Return ONLY valid JSON, no markdown, no extra text. 
-Example: {"JOHN SMITH":"United Kingdom","ALI HASSAN":"Somalia"}`;
-
-    try {
-        const resp = await fetch('https://api.x.ai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer YOUR_XAI_API_KEY_HERE'   // ← Put your xAI key here
-            },
-            body: JSON.stringify({
-                model: "grok-3",           // or "grok-2-1212" depending on your access
-                messages: [
-                    { role: "system", content: "You are a helpful nationality guessing assistant." },
-                    { role: "user", content: prompt }
-                ],
-                temperature: 0.1,
-                max_tokens: 800
-            })
-        });
-
-        if (!resp.ok) {
-            console.warn("Grok API error:", resp.status);
-            return {};
-        }
-
-        const data = await resp.json();
-        const text = data.choices?.[0]?.message?.content || '';
-
-        // Clean and parse JSON
-        const cleaned = text.replace(/```json|```/g, '').trim();
-        return JSON.parse(cleaned);
-
-    } catch (e) {
-        console.warn("Grok API call failed, falling back to local guess:", e);
-        return {};
-    }
+    console.log("🔍 Using local nationality guess for:", names);
+    const result = {};
+    
+    names.forEach(name => {
+        result[name] = guessNat(name) || "Unknown";
+    });
+    
+    return result;
 }
 
 // Clock
