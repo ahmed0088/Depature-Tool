@@ -1,0 +1,90 @@
+{
+  "_meta": {
+    "version": "2.0",
+    "hotel": "Ibis Styles Dubai",
+    "lastSaved": "",
+    "savedBy": ""
+  },
+  "checklist": {
+    "steps": [
+      {"id":1,"phase":"pre","name":"Cancel non-guaranteed bookings","tag":"check","hint":"Filter reservations with no guarantee method and cancel per policy."},
+      {"id":2,"phase":"pre","name":"CC recancellations","tag":"check","hint":"Run credit card recancellations for failed or declined cards in Opera."},
+      {"id":3,"phase":"pre","name":"Cancel OTA rooms + mark card invalid","tag":"check","hint":"Cancel Booking.com/OTA rooms with invalid Virtual Credit Cards."},
+      {"id":4,"phase":"pre","name":"Check immigration / nationality report","tag":"check","hint":"Verify all in-house guests have nationality assigned. Fix missing entries."},
+      {"id":5,"phase":"pre","name":"Charge VCCs for tomorrow arrivals","tag":"charge","hint":"Charge any Virtual Credit Cards due tonight for tomorrow arrivals."},
+      {"id":6,"phase":"pre","name":"Update no-show sheet (pre-run)","tag":"check","hint":"Flag expected no-shows before running the night audit."},
+      {"id":7,"phase":"pre","name":"Save Inhouse Guest Complimentary report","tag":"save","hint":"Export and save complimentary in-house guest report before night run."},
+      {"id":8,"phase":"pre","name":"Zero rate room report — remove pseudo rooms","tag":"check","hint":"Run zero-rate report. Pseudo/dummy rooms must be empty before night run."},
+      {"id":9,"phase":"pre","name":"Paidout report + attach commission & FD docs","tag":"scan","hint":"Save paidout report and scan/attach commission and FD paidout receipts."},
+      {"id":10,"phase":"pre","name":"Refund report + attach documents","tag":"scan","hint":"Save refund report and scan/attach any refund slips from today."},
+      {"id":11,"phase":"pre","name":"Rate check — select check-in & search","tag":"check","hint":"Perform rate check using today check-in date filter before running the night."},
+      {"id":12,"phase":"run","name":"Run the night audit","tag":"run","hint":"Execute the night audit in Opera. Do not interrupt once started."},
+      {"id":13,"phase":"post","name":"Manager report","tag":"save","hint":"Generate and save the manager report after night audit completed."},
+      {"id":14,"phase":"post","name":"No-show report + post charges","tag":"save","hint":"Finalise no-show list post-night and post charges where required."},
+      {"id":15,"phase":"post","name":"Negative posting report","tag":"check","hint":"Review all negative postings and resolve or escalate discrepancies."},
+      {"id":16,"phase":"post","name":"Room recancellations (post-night)","tag":"check","hint":"Process any room recancellations held until after the night audit."},
+      {"id":17,"phase":"post","name":"Flash report","tag":"save","hint":"Prepare and distribute the flash report with tonight key figures."}
+    ],
+    "done": [],
+    "skipped": []
+  },
+  "shiftTasks": {
+    "morning": {
+      "label": "Morning Shift",
+      "time": "07:00 – 15:00",
+      "color": "#f0a43a",
+      "tasks": [
+        {"id":"m1","name":"Check overnight log from night shift","done":false},
+        {"id":"m2","name":"Review arrivals for the day","done":false},
+        {"id":"m3","name":"Check VIP arrivals and prepare welcome","done":false},
+        {"id":"m4","name":"Follow up on pending checkouts","done":false},
+        {"id":"m5","name":"Reconcile front desk float","done":false}
+      ],
+      "done": [],
+      "resetAt": ""
+    },
+    "afternoon": {
+      "label": "Afternoon Shift",
+      "time": "15:00 – 23:00",
+      "color": "#5ab4e8",
+      "tasks": [
+        {"id":"a1","name":"Receive handover from morning shift","done":false},
+        {"id":"a2","name":"Process remaining check-ins","done":false},
+        {"id":"a3","name":"Handle guest requests and complaints","done":false},
+        {"id":"a4","name":"Prepare departure list for tomorrow","done":false},
+        {"id":"a5","name":"Update room status report","done":false}
+      ],
+      "done": [],
+      "resetAt": ""
+    },
+    "mid": {
+      "label": "Mid Shift",
+      "time": "12:00 – 20:00",
+      "color": "#8b7cf8",
+      "tasks": [
+        {"id":"md1","name":"Cover lunch breaks for morning shift","done":false},
+        {"id":"md2","name":"Process group check-ins if any","done":false},
+        {"id":"md3","name":"Coordinate with housekeeping on room status","done":false},
+        {"id":"md4","name":"Handle concierge requests","done":false}
+      ],
+      "done": [],
+      "resetAt": ""
+    },
+    "night": {
+      "label": "Night Shift",
+      "time": "23:00 – 07:00",
+      "color": "#3ecf8e",
+      "tasks": [
+        {"id":"n1","name":"Receive handover from afternoon shift","done":false},
+        {"id":"n2","name":"Run night audit checklist","done":false},
+        {"id":"n3","name":"Handle late arrivals","done":false},
+        {"id":"n4","name":"Prepare morning shift report","done":false},
+        {"id":"n5","name":"Security rounds log","done":false}
+      ],
+      "done": [],
+      "resetAt": ""
+    }
+  },
+  "feedbackLog": [],
+  "departureLog": []
+}
