@@ -1,108 +1,251 @@
-# Ibis Styles Ops Platform v2.0
+# 🏨 Ibis Styles Ops Platform
 
-A hotel operations management tool for daily front desk work.
+A hotel front-desk operations tool built for daily use at **Ibis Styles Dubai**.  
+Runs in any browser. Real-time sync across all colleagues via **Firebase**.  
+No installation. No server. Just open the link and work.
 
 ---
 
-## 📁 Files
+## ✨ What It Does
 
-| File | Purpose |
-|------|---------|
-| `ibis_ops.html` | **Main app** — open this in any browser |
-| `ibis_data.json` | **Local database** — share this with colleagues to sync data |
-| `README.md` | This guide |
+| Section | Purpose |
+|---|---|
+| 🚪 **Departure Follow-Up** | Load Opera departures, track checkouts, extensions, late checkouts. Live action log with undo. |
+| 🛎️ **Arrivals** | Paste or upload Opera arrivals. AI nationality guessing. Export styled Excel. |
+| 📋 **Purpose of Stay** | Night audit report. Sync from Arrivals. Export colour-coded Excel. |
+| ⏰ **Shift Tasks** | 4 shifts (Morning / Afternoon / Mid / Night). Add, edit, delete tasks. Check off as you go. |
+| 🌍 **Nationality Report** | Paste Opera stat file → maps 240 countries → copy to Excel in one click. |
+| 🛏️ **Rented Rooms & Beds** | Combine History Forecast + Room Type stats → daily room/bed counts. |
+| 🌙 **Night Audit · PM Rooms** | Compare Opera vs Excel PM rooms → highlights differences → corrected data ready to paste. |
+| 🛂 **Immigration Check** | Upload Opera XML → flags missing nationality, gender, passport, first name. |
+| ✅ **Night Run Checklist** | 17-step checklist (editable). Add, remove, edit steps. Progress saved to Firebase. |
 
 ---
 
 ## 🚀 Getting Started
 
-### Option A — Local use (single person)
-1. Download `ibis_ops.html`
-2. Open it in Chrome, Edge, or Firefox
-3. Your data auto-saves to your browser's local storage
+### You need
+- A free **Firebase** account → [console.firebase.google.com](https://console.firebase.google.com)
+- A free **GitHub** account → [github.com](https://github.com)
+- A browser (Chrome or Edge recommended)
 
-### Option B — GitHub Pages (share with team)
-1. Create a new GitHub repository (e.g. `ibis-ops`)
-2. Upload both `ibis_ops.html` and `ibis_data.json`
-3. Go to **Settings → Pages → Source → main branch → Save**
-4. GitHub gives you a URL like: `https://yourusername.github.io/ibis-ops/ibis_ops.html`
-5. Share that URL with your colleagues
+### Setup takes about 15 minutes total
 
 ---
 
-## 💾 Sharing Data With Colleagues
+## 🔥 Firebase Setup (Step by Step)
 
-Since GitHub Pages is static (no server), data sync works like this:
+### 1 — Create a Firebase Project
+1. Go to [console.firebase.google.com](https://console.firebase.google.com)
+2. Click **"Add project"**
+3. Name it: `ibis-ops-dubai`
+4. Disable Google Analytics → **Create project**
 
-### Exporting your data
-1. Click the 💾 button in the top bar
-2. This downloads `ibis_data_YYYY-MM-DD.json`
-3. Send this file to your colleague (WhatsApp, email, Teams, etc.)
+### 2 — Enable Realtime Database
+1. Left sidebar → **Build → Realtime Database**
+2. Click **"Create Database"**
+3. Location: **Europe-west1** (closest to Dubai)
+4. Choose **Test mode** → **Enable**
 
-### Importing a colleague's data
-1. Click the 📂 button in the top bar
-2. Select the `.json` file they sent you
-3. Page reloads with their data
+### 3 — Get Your Config Keys
+1. Click the **⚙️ gear icon** → **Project settings**
+2. Scroll to **"Your apps"** → click **"Add app"** → choose **Web `</>`**
+3. Nickname: `ibis-ops` → **Register app**
+4. Copy the `firebaseConfig` object shown on screen
 
-**Tip:** Do this at the start/end of each shift to sync up.
+### 4 — Paste Keys into the App
+Open `firebase-config.js` and replace the placeholder values:
 
----
+```javascript
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSy...",
+  authDomain:        "ibis-ops-dubai.firebaseapp.com",
+  databaseURL:       "https://ibis-ops-dubai-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId:         "ibis-ops-dubai",
+  storageBucket:     "ibis-ops-dubai.appspot.com",
+  messagingSenderId: "123456789",
+  appId:             "1:123456789:web:abc123"
+};
 
-## 🔧 Features
+// Change this if you have multiple properties
+const HOTEL_ID = "ibis_dubai";
+```
 
-### Departures
-- Paste Opera departure report → load board
-- Card sizes: S / M / L / List view
-- Double-click guest name to edit inline
-- Check Out / Extend / Late Checkout actions
-- Checked out & extended rooms move to **Action Log**
-- Undo any action from the log
-- Export to Excel
+### 5 — Set Database Security Rules
+In Firebase Console → Realtime Database → **Rules** tab → paste this → **Publish**:
 
-### Arrivals & Purpose of Stay
-- Paste or upload Opera Excel/CSV file
-- AI nationality guessing from names
-- Edit all fields inline
-- Export styled Excel
-
-### Shift Tasks ⏰
-- 4 shifts: Morning / Afternoon / Mid / Night
-- Add, edit, delete tasks per shift
-- Check off tasks as you go
-- Progress bar per shift
-- Reset at start of shift
-
-### Night Checklist ✅
-- 17 default steps (pre / run / post)
-- Edit mode: add steps, edit steps, delete steps
-- Skip steps you don't need
-- Progress saved automatically
-
-### Reports
-- **Nationality Report** — Opera XML → 240-row paste for Excel
-- **Rented Rooms & Beds** — History Forecast + Room Type stats
-- **Night Audit PM Rooms** — Compare Opera vs Excel, auto-fix differences
-- **Immigration Check** — Upload Opera XML, flags missing nationality/gender/passport
-
-### Feedback
-- Click 💬 to submit bug reports or feature requests
-- Saved locally, exported with your data
+```json
+{
+  "rules": {
+    "hotels": {
+      "$hotel_id": {
+        ".read": true,
+        ".write": true
+      }
+    }
+  }
+}
+```
 
 ---
 
-## ⚠️ Important Notes
+## 🌐 Hosting on GitHub Pages (Free)
 
-- **No server needed** — runs 100% in the browser
-- **No login** — data lives in your browser's localStorage
-- **Clearing browser data** will erase your checklist/shift task progress
-- To prevent data loss, export (💾) regularly and keep the JSON file safe
-- The app works offline after first load (no internet needed for the tool itself, only for Google Fonts)
+1. Create a new GitHub repository — e.g. `ibis-ops`
+2. Upload **all 13 files** (keep them in the same folder, no subfolders)
+3. Go to **Settings → Pages → Source → main branch → / (root) → Save**
+4. Your app is live at:
+
+```
+https://YOUR-USERNAME.github.io/ibis-ops/
+```
+
+Share this URL with your team. Everyone opens the same link.
 
 ---
 
-## 🛠️ Customisation
+## 📁 File Structure
 
-- Click the hotel name in the top bar to rename it
-- Dark/light theme toggle (🌙/☀️) in the top bar
-- All shift tasks and checklist steps are fully editable inside the app
+```
+ibis_firebase/
+│
+├── index.html              ← App shell — all HTML panels & modals
+├── styles.css              ← All styling — colours, fonts, layout
+│
+├── firebase-config.js      ← 🔴 YOUR FIREBASE KEYS GO HERE
+├── db.js                   ← All Firebase read/write logic
+│
+├── state.js                ← App data — default steps, shift tasks, constants
+├── utils.js                ← Shared helpers — clock, dates, clipboard, toast
+├── natguess.js             ← Nationality guessing from guest names
+│
+├── departures.js           ← Departure board feature
+├── arrivals-purpose.js     ← Arrivals + Purpose of Stay + Opera file loader
+├── shifts.js               ← Shift tasks (4 shifts)
+├── checklist.js            ← Night run checklist
+├── reports.js              ← Nationality · Rented Rooms · Night Audit · Immigration
+│
+├── README.md               ← This file
+└── SETUP.md                ← Detailed Firebase setup guide
+```
 
+---
+
+## ⚡ How Real-Time Sync Works
+
+When any colleague makes a change, **everyone sees it instantly** — no refresh needed.
+
+```
+Ahmed checks out Room 215
+       ↓
+Firebase updates instantly
+       ↓
+Sarah's screen shows Room 215 as "Checked Out" automatically
+```
+
+This works for:
+- Departure checkouts, extensions, late checkouts
+- Arrivals and purpose of stay data
+- Night checklist ticks
+- Shift task completions
+
+---
+
+## 💾 Backup & Restore
+
+| Button | What it does |
+|---|---|
+| 💾 (top bar) | Downloads full JSON backup of all data |
+| 📂 (top bar) | Upload a backup file to restore data |
+
+Firebase also keeps your data safe in the cloud automatically.
+
+---
+
+## 🛠 Customising the App
+
+| File to edit | When you want to... |
+|---|---|
+| `styles.css` | Change colours, card sizes, fonts, dark/light mode |
+| `state.js` | Change default checklist steps or default shift tasks |
+| `natguess.js` | Add more guest names to the nationality guesser |
+| `firebase-config.js` | Switch to a different Firebase project |
+| `db.js` | Change how/where data is stored in Firebase |
+| `departures.js` | Change departure board cards or actions |
+| `arrivals-purpose.js` | Change arrivals table or Excel export format |
+| `shifts.js` | Change shift task UI or behaviour |
+| `checklist.js` | Change checklist rendering or step editing |
+| `reports.js` | Change any of the 4 report sections |
+| `utils.js` | Change clock format, toast messages, date helpers |
+| `index.html` | Add new sections, change nav items, add modals |
+
+---
+
+## 🎨 Changing Colours
+
+All colours are CSS variables in `styles.css` at the top:
+
+```css
+:root {
+  --gold:   #e8b84b;   /* main brand colour */
+  --mint:   #3ecf8e;   /* success / checked out */
+  --rose:   #f06b7a;   /* warnings / balance due */
+  --sky:    #5ab4e8;   /* info / extended */
+  --violet: #8b7cf8;   /* late checkout */
+  --amber:  #f0a43a;   /* caution */
+}
+```
+
+Change any value and it updates everywhere instantly.
+
+---
+
+## 📱 Supported Browsers
+
+| Browser | Support |
+|---|---|
+| Chrome | ✅ Recommended |
+| Edge | ✅ Full support |
+| Firefox | ✅ Full support |
+| Safari | ✅ Works |
+| Mobile Chrome | ✅ Works (desktop layout) |
+
+---
+
+## 🔐 Security Notes
+
+- The Firebase **Test mode** rules allow anyone with the URL to read/write
+- For a hotel setting this is fine since you control who has the URL
+- For stronger security, add Firebase Authentication (contact your developer)
+- Never commit real API keys to a **public** GitHub repo — make the repo **private**
+
+---
+
+## 🐛 Troubleshooting
+
+**App shows "Firebase · Offline"**
+→ Check `firebase-config.js` — make sure all values are filled in correctly
+→ Check your internet connection
+→ Make sure the Realtime Database is enabled in Firebase console
+
+**Data not syncing between colleagues**
+→ Both must be on the same `HOTEL_ID` in `firebase-config.js`
+→ Check Firebase Database Rules are published
+
+**Nationality not guessing correctly**
+→ Open `natguess.js` → add the surname to the correct nationality array
+
+**Export to Excel not working**
+→ Make sure `xlsx.full.min.js` CDN is loading (requires internet)
+
+---
+
+## 📞 Support
+
+Built for the Front Desk team at **Ibis Styles Dubai**.  
+For bugs or feature requests, use the **💬 button** inside the app.  
+All feedback is saved to Firebase and can be exported.
+
+---
+
+*Last updated: May 2026 · v2.0*
