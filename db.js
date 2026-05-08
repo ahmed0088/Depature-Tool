@@ -1,29 +1,30 @@
 // ═══════════════════════════════════════════════════════════
-// db.js — Firebase Realtime Database (v9 Modular)
+// db.js — Firebase Realtime Database (Compat version)
 // ═══════════════════════════════════════════════════════════
 
-import { getDatabase, ref, set, get, push, remove, onValue, child } from "firebase/database";
-import { FIREBASE_CONFIG, HOTEL_ID } from "./firebase-config.js";
+let _db = null;
+let _ref = null;        // hotels/{HOTEL_ID}
+let _online = false;
 
-let db = null;
-let rootRef = null;
+const HOTEL_ID = "ibis_dubai";
 
-// Initialize Database
-export function dbInit(firebaseApp) {
-  if (!firebaseApp) {
-    console.error("❌ Firebase App not passed to dbInit");
+// Called after Firebase scripts are loaded
+function dbInit() {
+  if (!firebase || !firebase.apps.length) {
+    console.error("❌ Firebase not loaded");
     return;
   }
-  
-  db = getDatabase(firebaseApp);
-  rootRef = ref(db, `hotels/${HOTEL_ID}`);
-  
+
+  _db = firebase.database();
+  _ref = _db.ref(`hotels/${HOTEL_ID}`);
+
   // Connection status
-  const connectedRef = ref(db, '.info/connected');
-  onValue(connectedRef, (snap) => {
-    const online = snap.val();
-    updateConnectionUI(online);
+  _db.ref('.info/connected').on('value', (snap) => {
+    _online = !!snap.val();
+    updateConnectionUI(_online);
   });
+
+  console.log("✅ Firebase Realtime Database initialized for", HOTEL_ID);
 }
 
 // Connection UI
@@ -44,11 +45,13 @@ function updateConnectionUI(online) {
 }
 
 // Generic helpers
-export async function fbSet(path, data) {
-  if (!rootRef) return lsSave(path, data);
-  
+async function fbSet(path, data) {
+  if (!_ref) {
+    lsSave(path, data);
+    return;
+  }
   try {
-    await set(child(rootRef, path), data);
+    await _ref.child(path).set(data);
     lsSave(path, data);
   } catch (e) {
     console.warn('[DB] fbSet failed:', e);
@@ -56,41 +59,38 @@ export async function fbSet(path, data) {
   }
 }
 
-export async function fbGet(path) {
-  if (!rootRef) return lsLoad(path);
-  
+async function fbGet(path) {
+  if (!_ref) return lsLoad(path);
   try {
-    const snapshot = await get(child(rootRef, path));
-    return snapshot.val();
+    const snap = await _ref.child(path).once('value');
+    return snap.val();
   } catch (e) {
     console.warn('[DB] fbGet failed:', e);
     return lsLoad(path);
   }
 }
 
-export async function fbPush(path, data) {
-  if (!rootRef) return;
+async function fbPush(path, data) {
+  if (!_ref) return;
   try {
-    await push(child(rootRef, path), { ...data, _ts: Date.now() });
+    await _ref.child(path).push({ ...data, _ts: Date.now() });
   } catch (e) {
     console.warn('[DB] fbPush failed:', e);
   }
 }
 
-export async function fbRemove(path) {
-  if (!rootRef) return;
+async function fbRemove(path) {
+  if (!_ref) return;
   try {
-    await remove(child(rootRef, path));
+    await _ref.child(path).remove();
   } catch (e) {
     console.warn('[DB] fbRemove failed:', e);
   }
 }
 
-export function fbListen(path, callback) {
-  if (!rootRef) return;
-  onValue(child(rootRef, path), (snapshot) => {
-    callback(snapshot.val());
-  });
+function fbListen(path, cb) {
+  if (!_ref) return;
+  _ref.child(path).on('value', (snap) => cb(snap.val()));
 }
 
 // LocalStorage fallback
@@ -104,13 +104,11 @@ function lsLoad(path) {
   try {
     const v = localStorage.getItem(`ibis_${path}`);
     return v ? JSON.parse(v) : null;
-  } catch (e) {
-    return null;
-  }
+  } catch (e) { return null; }
 }
 
 // Save functions
-export async function saveChecklist(steps, done, skipped) {
+async function saveChecklist(steps, done, skipped) {
   await fbSet('checklist', {
     steps,
     done: [...done],
@@ -119,20 +117,26 @@ export async function saveChecklist(steps, done, skipped) {
   });
 }
 
-// ... (keep your other save functions the same)
+// Add the rest of your save functions here (saveShifts, saveDepartures, etc.)
+// ... copy them from your previous code
 
-export async function saveShifts(shiftsObj) { ... }
-export async function saveDepartures(rooms, log) { ... }
-// etc.
+// Load & Listen
+async function loadAll() {
+  const [checklist, shifts, departures, arrivals, purpose, feedback, settings] = 
+    await Promise.all([
+      fbGet('checklist'), fbGet('shifts'), fbGet('departures'),
+      fbGet('arrivals'), fbGet('purpose'), fbGet('feedback'), fbGet('settings')
+    ]);
+  return { checklist, shifts, departures, arrivals, purpose, feedback, settings };
+}
 
-// Load & Listen functions remain almost the same
-export async function loadAll() { ... }
+function listenDepartures(cb) { fbListen('departures', cb); }
+function listenArrivals(cb) { fbListen('arrivals', cb); }
+function listenChecklist(cb) { fbListen('checklist', cb); }
+function listenShifts(cb) { fbListen('shifts', cb); }
 
-export function listenDepartures(cb) { fbListen('departures', cb); }
-export function listenArrivals(cb) { fbListen('arrivals', cb); }
-export function listenChecklist(cb) { fbListen('checklist', cb); }
-export function listenShifts(cb) { fbListen('shifts', cb); }
+// Export & Import (keep your existing ones)
 
-// Export / Import
-export async function exportAllData() { ... }
-export async function importAllData(file) { ... }
+window.dbInit = dbInit;                    // Make it globally available
+window.saveChecklist = saveChecklist;
+// ... expose all functions you need in other scripts
