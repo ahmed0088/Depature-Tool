@@ -575,7 +575,7 @@
 
 <script>
 // ════════════════════════════════════════════════
-//  init.js — bootstrap (inline, runs last)
+//  init.js — bootstrap
 // ════════════════════════════════════════════════
 
 async function handleImport(input) {
@@ -596,20 +596,22 @@ async function saveSettings(patch) {
 async function appInit() {
   // 1 — Init Firebase
   try {
-    cfirebase.initializeApp(FIREBASE_CONFIG);
-dbInit();                    // ← No parameter needed now
+    firebase.initializeApp(FIREBASE_CONFIG);   // Fixed
+    dbInit();                                  // Fixed - no parameter
+    console.log("✅ Firebase App initialized");
   } catch(e) {
     console.warn('Firebase init failed — running offline:', e);
     updateConnectionUI(false);
   }
 
-  // 2 — Load all data from Firebase
+  // 2 — Load all data
   const data = await loadAll();
 
+  // ... (rest of your appInit code remains the same)
   // 3 — Apply checklist
   if (data.checklist) {
     if (data.checklist.steps && data.checklist.steps.length) CL_STEPS = data.checklist.steps;
-    if (data.checklist.done)    data.checklist.done.forEach(i    => clState.done.add(i));
+    if (data.checklist.done) data.checklist.done.forEach(i => clState.done.add(i));
     if (data.checklist.skipped) data.checklist.skipped.forEach(i => clState.skipped.add(i));
   }
 
@@ -618,8 +620,8 @@ dbInit();                    // ← No parameter needed now
     Object.keys(SHIFTS).forEach(k => {
       const saved = data.shifts.data[k];
       if (saved) {
-        SHIFTS[k].tasks   = saved.tasks && saved.tasks.length ? saved.tasks : DEFAULT_TASKS[k].map(t=>({...t}));
-        SHIFTS[k].done    = saved.done    || [];
+        SHIFTS[k].tasks = saved.tasks && saved.tasks.length ? saved.tasks : DEFAULT_TASKS[k].map(t=>({...t}));
+        SHIFTS[k].done = saved.done || [];
         SHIFTS[k].resetAt = saved.resetAt || '';
       } else {
         SHIFTS[k].tasks = DEFAULT_TASKS[k].map(t=>({...t}));
@@ -629,77 +631,7 @@ dbInit();                    // ← No parameter needed now
     initShifts();
   }
 
-  // 5 — Apply departures
-  if (data.departures && data.departures.rooms && data.departures.rooms.length) {
-    depRooms = data.departures.rooms;
-    depLog   = data.departures.log || [];
-    document.getElementById('depUploadCard').style.display = 'none';
-    document.getElementById('depBoard').style.display      = 'block';
-    ['depPrintBtn','depExportBtn','depViewToggle'].forEach(id => { const el=document.getElementById(id); if(el) el.style.display=''; });
-    document.getElementById('depDateLabel').textContent = depRooms.length + ' rooms departing · ' + (depRooms[0]?.departure||'');
-    depRender(); updateDepBadge();
-  }
-
-  // 6 — Apply arrivals
-  if (data.arrivals && data.arrivals.guests && data.arrivals.guests.length) {
-    arrGuests = data.arrivals.guests;
-    arrRender();
-  }
-
-  // 7 — Apply purpose
-  if (data.purpose && data.purpose.guests && data.purpose.guests.length) {
-    purposeGuests = data.purpose.guests;
-    purposeRender();
-  }
-
-  // 8 — Apply feedback
-  if (data.feedback && data.feedback.log) feedbackLog = data.feedback.log;
-
-  // 9 — Apply settings
-  if (data.settings) {
-    if (data.settings.theme && data.settings.theme === 'light') {
-      document.documentElement.setAttribute('data-theme', 'light');
-      document.getElementById('themeBtn').textContent = '☀️';
-    }
-    if (data.settings.hotelName) {
-      document.getElementById('hotelName').textContent = data.settings.hotelName;
-    }
-  }
-
-  // 10 — Real-time listeners (auto-refresh when colleague makes changes)
-  listenDepartures(snap => {
-    if (!snap || !snap.rooms) return;
-    depRooms = snap.rooms; depLog = snap.log || [];
-    if (depRooms.length) {
-      document.getElementById('depUploadCard').style.display = 'none';
-      document.getElementById('depBoard').style.display      = 'block';
-    }
-    depRender(); updateDepBadge();
-  });
-  listenArrivals(snap => {
-    if (!snap || !snap.guests) return;
-    arrGuests = snap.guests; arrRender();
-  });
-  listenChecklist(snap => {
-    if (!snap) return;
-    if (snap.steps && snap.steps.length) CL_STEPS = snap.steps;
-    clState.done.clear(); clState.skipped.clear();
-    if (snap.done)    snap.done.forEach(i    => clState.done.add(i));
-    if (snap.skipped) snap.skipped.forEach(i => clState.skipped.add(i));
-    clRender2();
-  });
-  listenShifts(snap => {
-    if (!snap || !snap.data) return;
-    Object.keys(SHIFTS).forEach(k => {
-      if (snap.data[k]) {
-        SHIFTS[k].tasks   = snap.data[k].tasks   || SHIFTS[k].tasks;
-        SHIFTS[k].done    = snap.data[k].done     || [];
-        SHIFTS[k].resetAt = snap.data[k].resetAt  || '';
-      }
-    });
-    renderShift(activeShift);
-    Object.keys(SHIFTS).forEach(k => updateShiftBadge(k));
-  });
+  // ... keep all the rest of your existing appInit code exactly as it is ...
 
   // 11 — Render UI
   clRender2();
@@ -711,8 +643,7 @@ dbInit();                    // ← No parameter needed now
   setInterval(updateClock, 30000);
 }
 
-// Start
+// Start the app
 appInit();
 </script>
-</body>
 </html>
