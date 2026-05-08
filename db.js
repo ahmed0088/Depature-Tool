@@ -6,7 +6,6 @@ let _db = null;
 let _ref = null;
 let _online = false;
 
-const HOTEL_ID = "ibis_dubai";
 
 // Initialize Firebase Database
 function dbInit(firebaseApp) {
