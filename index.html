@@ -596,8 +596,8 @@ async function saveSettings(patch) {
 async function appInit() {
   // 1 — Init Firebase
   try {
-    const app = firebase.initializeApp(FIREBASE_CONFIG);
-    dbInit(app);
+    cfirebase.initializeApp(FIREBASE_CONFIG);
+dbInit();                    // ← No parameter needed now
   } catch(e) {
     console.warn('Firebase init failed — running offline:', e);
     updateConnectionUI(false);
