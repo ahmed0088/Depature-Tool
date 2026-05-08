@@ -16,7 +16,7 @@ function dbInit(firebaseApp) {
       _db = firebase.database();   // fallback
     }
 
-    _ref = _db.ref(`hotels/${HOTEL_ID}`);
+  _ref = _db.ref(`hotels/${HOTEL_ID}`);
 
     console.log(`✅ Firebase connected → hotels/${HOTEL_ID}`);
 
