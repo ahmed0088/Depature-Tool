@@ -575,7 +575,7 @@
 
 <script>
 // ════════════════════════════════════════════════
-//  init.js — bootstrap
+// FIXED init with REAL-TIME Firebase listeners
 // ════════════════════════════════════════════════
 
 async function handleImport(input) {
@@ -584,38 +584,34 @@ async function handleImport(input) {
     await importAllData(file);
     showToast('Data imported! Reloading…', 'ok');
     setTimeout(() => location.reload(), 1500);
-  } catch(e) { showToast('Import failed: ' + e.message, 'err'); }
+  } catch(e) { 
+    showToast('Import failed: ' + e.message, 'err'); 
+  }
   input.value = '';
 }
 
-async function saveSettings(patch) {
-  const current = await fbGet('settings') || {};
-  await fbSet('settings', { ...current, ...patch, updatedAt: new Date().toISOString() });
-}
-
 async function appInit() {
-  // 1 — Init Firebase
+  // 1. Initialize Firebase
   try {
-    firebase.initializeApp(FIREBASE_CONFIG);   // Fixed
-    dbInit();                                  // Fixed - no parameter
+    firebase.initializeApp(FIREBASE_CONFIG);
+    dbInit();
     console.log("✅ Firebase App initialized");
   } catch(e) {
     console.warn('Firebase init failed — running offline:', e);
     updateConnectionUI(false);
   }
 
-  // 2 — Load all data
+  // 2. Load initial data
   const data = await loadAll();
 
-  // ... (rest of your appInit code remains the same)
-  // 3 — Apply checklist
+  // 3. Apply Checklist
   if (data.checklist) {
     if (data.checklist.steps && data.checklist.steps.length) CL_STEPS = data.checklist.steps;
     if (data.checklist.done) data.checklist.done.forEach(i => clState.done.add(i));
     if (data.checklist.skipped) data.checklist.skipped.forEach(i => clState.skipped.add(i));
   }
 
-  // 4 — Apply shifts
+  // 4. Apply Shifts
   if (data.shifts && data.shifts.data) {
     Object.keys(SHIFTS).forEach(k => {
       const saved = data.shifts.data[k];
@@ -631,16 +627,56 @@ async function appInit() {
     initShifts();
   }
 
-  // ... keep all the rest of your existing appInit code exactly as it is ...
+  // ===================== REAL-TIME LISTENERS =====================
+  listenDepartures(val => {
+    if (val) {
+      window.departuresData = val.rooms || [];
+      window.depLog = val.log || [];
+      if (typeof depRender === 'function') depRender();
+    }
+  });
 
-  // 11 — Render UI
+  listenArrivals(val => {
+    if (val && val.guests) {
+      window.arrivalsData = val.guests;
+      if (typeof arrRender === 'function') arrRender();
+    }
+  });
+
+  listenChecklist(val => {
+    if (val) {
+      if (val.steps) CL_STEPS = val.steps;
+      if (val.done) clState.done = new Set(val.done);
+      if (val.skipped) clState.skipped = new Set(val.skipped);
+      if (typeof clRender2 === 'function') clRender2();
+    }
+  });
+
+  listenShifts(val => {
+    if (val && val.data) {
+      Object.keys(SHIFTS).forEach(k => {
+        const saved = val.data[k];
+        if (saved) {
+          SHIFTS[k].tasks = saved.tasks || [];
+          SHIFTS[k].done = saved.done || [];
+        }
+      });
+      if (typeof renderShift === 'function') renderShift(activeShift || 'morning');
+      Object.keys(SHIFTS).forEach(k => updateShiftBadge(k));
+    }
+  });
+
+  // Initial render
   clRender2();
   arrRender();
   purposeRender();
   renderShift('morning');
   Object.keys(SHIFTS).forEach(k => updateShiftBadge(k));
+
   updateClock();
   setInterval(updateClock, 30000);
+
+  console.log("🚀 Ibis Ops Platform with LIVE real-time sync");
 }
 
 // Start the app
