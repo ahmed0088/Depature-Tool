@@ -2,6 +2,10 @@
 //  departures.js  —  Departure follow-up board
 // ═══════════════════════════════════════════════════════════
 
+let depRooms = [];
+let depLog = [];
+let depFilter_ = 'all';
+
 function processDep() {
   const raw    = document.getElementById('depInput').value.trim();
   const errBox = document.getElementById('depError');
