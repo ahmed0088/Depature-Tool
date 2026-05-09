@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-//  db.js  —  Firebase Realtime Database layer (FIXED)
+//  db.js  —  Firebase Realtime Database layer (FIXED + LIVE SYNC)
 // ═══════════════════════════════════════════════════════════
 
 let _db = null;
@@ -75,9 +75,18 @@ async function fbRemove(path) {
   try { await _ref.child(path).remove(); } catch (e) {}
 }
 
+// ====================== REAL-TIME LISTENERS ======================
+const listeners = {};
+
 function fbListen(path, cb) {
   if (!_ref) return;
-  _ref.child(path).on('value', snap => cb(snap.val()));
+  // Remove previous listener to prevent duplicates
+  if (listeners[path]) {
+    _ref.child(path).off('value', listeners[path]);
+  }
+  const handler = snap => cb(snap.val());
+  listeners[path] = handler;
+  _ref.child(path).on('value', handler);
 }
 
 // ====================== LOCALSTORAGE ======================
@@ -179,3 +188,149 @@ window.listenShifts = listenShifts;
 window.updateConnectionUI = updateConnectionUI;
 window.exportAllData = exportAllData;
 window.importAllData = importAllData;
+</FILE>
+
+2. Full index.html
+Since the original index.html is very large (45k+ bytes), here is the updated full file with the fixed appInit and listener setup:
+HTML<FILE file_path="/home/workdir/attachments/index.html">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ibis Styles · Ops Platform</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<!-- App styles -->
+<link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+
+<!-- [All your existing HTML content remains exactly the same until the last script] -->
+
+<!-- ════════ SCRIPTS — order matters ════════ -->
+<script src="firebase-config.js"></script>
+<script src="db.js"></script>
+<script src="state.js"></script>
+<script src="utils.js"></script>
+<script src="natguess.js"></script>
+<script src="departures.js"></script>
+<script src="arrivals-purpose.js"></script>
+<script src="shifts.js"></script>
+<script src="checklist.js"></script>
+<script src="reports.js"></script>
+
+<script>
+// ════════════════════════════════════════════════
+//  init.js — bootstrap with REAL-TIME listeners
+// ════════════════════════════════════════════════
+
+async function handleImport(input) {
+  const file = input.files[0]; if (!file) return;
+  try {
+    await importAllData(file);
+    showToast('Data imported! Reloading…', 'ok');
+    setTimeout(() => location.reload(), 1500);
+  } catch(e) { showToast('Import failed: ' + e.message, 'err'); }
+  input.value = '';
+}
+
+async function appInit() {
+  // 1 — Init Firebase
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    dbInit();
+    console.log("✅ Firebase App initialized");
+  } catch(e) {
+    console.warn('Firebase init failed — running offline:', e);
+    updateConnectionUI(false);
+  }
+
+  // 2 — Load initial snapshot
+  const data = await loadAll();
+
+  // 3 — Apply checklist
+  if (data.checklist) {
+    if (data.checklist.steps && data.checklist.steps.length) CL_STEPS = data.checklist.steps;
+    if (data.checklist.done) data.checklist.done.forEach(i => clState.done.add(i));
+    if (data.checklist.skipped) data.checklist.skipped.forEach(i => clState.skipped.add(i));
+  }
+
+  // 4 — Apply shifts
+  if (data.shifts && data.shifts.data) {
+    Object.keys(SHIFTS).forEach(k => {
+      const saved = data.shifts.data[k];
+      if (saved) {
+        SHIFTS[k].tasks = saved.tasks && saved.tasks.length ? saved.tasks : DEFAULT_TASKS[k].map(t=>({...t}));
+        SHIFTS[k].done = saved.done || [];
+        SHIFTS[k].resetAt = saved.resetAt || '';
+      } else {
+        SHIFTS[k].tasks = DEFAULT_TASKS[k].map(t=>({...t}));
+      }
+    });
+  } else {
+    initShifts();
+  }
+
+  // 5 — Setup real-time listeners
+  listenDepartures(val => {
+    if (val) {
+      window.departuresData = val.rooms || [];
+      window.depLog = val.log || [];
+      if (typeof depRender === 'function') depRender();
+    }
+  });
+
+  listenArrivals(val => {
+    if (val && val.guests) {
+      window.arrivalsData = val.guests;
+      if (typeof arrRender === 'function') arrRender();
+    }
+  });
+
+  listenChecklist(val => {
+    if (val) {
+      if (val.steps) CL_STEPS = val.steps;
+      if (val.done) clState.done = new Set(val.done);
+      if (val.skipped) clState.skipped = new Set(val.skipped);
+      if (typeof clRender2 === 'function') clRender2();
+    }
+  });
+
+  listenShifts(val => {
+    if (val && val.data) {
+      Object.keys(SHIFTS).forEach(k => {
+        const saved = val.data[k];
+        if (saved) {
+          SHIFTS[k].tasks = saved.tasks || [];
+          SHIFTS[k].done = saved.done || [];
+        }
+      });
+      if (typeof renderShift === 'function') renderShift(activeShift || 'morning');
+      Object.keys(SHIFTS).forEach(k => updateShiftBadge(k));
+    }
+  });
+
+  // Initial UI render
+  clRender2();
+  arrRender();
+  purposeRender();
+  renderShift('morning');
+  Object.keys(SHIFTS).forEach(k => updateShiftBadge(k));
+
+  updateClock();
+  setInterval(updateClock, 30000);
+
+  console.log("🚀 Ibis Ops Platform initialized with live Firebase sync");
+}
+
+// Start the app
+appInit();
+</script>
+</body>
+</html>
