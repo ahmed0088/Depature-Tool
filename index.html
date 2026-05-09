@@ -575,7 +575,7 @@
 
 <script>
 // ════════════════════════════════════════════════
-// FIXED init with REAL-TIME Firebase listeners
+// FIXED init with REAL-TIME + DEPARTURES fix
 // ════════════════════════════════════════════════
 
 async function handleImport(input) {
@@ -591,40 +591,41 @@ async function handleImport(input) {
 }
 
 async function appInit() {
-  // 1. Initialize Firebase
   try {
     firebase.initializeApp(FIREBASE_CONFIG);
     dbInit();
     console.log("✅ Firebase App initialized");
   } catch(e) {
-    console.warn('Firebase init failed — running offline:', e);
+    console.warn('Firebase init failed:', e);
     updateConnectionUI(false);
   }
 
-  // 2. Load initial data
   const data = await loadAll();
 
-  // 3. Apply Checklist
+  // Apply Checklist
   if (data.checklist) {
-    if (data.checklist.steps && data.checklist.steps.length) CL_STEPS = data.checklist.steps;
-    if (data.checklist.done) data.checklist.done.forEach(i => clState.done.add(i));
-    if (data.checklist.skipped) data.checklist.skipped.forEach(i => clState.skipped.add(i));
+    if (data.checklist.steps) CL_STEPS = data.checklist.steps;
+    if (data.checklist.done) clState.done = new Set(data.checklist.done);
+    if (data.checklist.skipped) clState.skipped = new Set(data.checklist.skipped);
   }
 
-  // 4. Apply Shifts
+  // Apply Shifts
   if (data.shifts && data.shifts.data) {
     Object.keys(SHIFTS).forEach(k => {
       const saved = data.shifts.data[k];
       if (saved) {
-        SHIFTS[k].tasks = saved.tasks && saved.tasks.length ? saved.tasks : DEFAULT_TASKS[k].map(t=>({...t}));
+        SHIFTS[k].tasks = saved.tasks || [];
         SHIFTS[k].done = saved.done || [];
-        SHIFTS[k].resetAt = saved.resetAt || '';
-      } else {
-        SHIFTS[k].tasks = DEFAULT_TASKS[k].map(t=>({...t}));
       }
     });
   } else {
     initShifts();
+  }
+
+  // Apply Departures (IMPORTANT FIX)
+  if (data.departures) {
+    window.departuresData = data.departures.rooms || [];
+    window.depLog = data.departures.log || [];
   }
 
   // ===================== REAL-TIME LISTENERS =====================
@@ -632,7 +633,12 @@ async function appInit() {
     if (val) {
       window.departuresData = val.rooms || [];
       window.depLog = val.log || [];
-      if (typeof depRender === 'function') depRender();
+      if (typeof depRender === 'function') {
+        depRender();           // Main render
+      }
+      if (typeof updateDepBadges === 'function') {
+        updateDepBadges();
+      }
     }
   });
 
@@ -662,7 +668,6 @@ async function appInit() {
         }
       });
       if (typeof renderShift === 'function') renderShift(activeShift || 'morning');
-      Object.keys(SHIFTS).forEach(k => updateShiftBadge(k));
     }
   });
 
@@ -673,10 +678,13 @@ async function appInit() {
   renderShift('morning');
   Object.keys(SHIFTS).forEach(k => updateShiftBadge(k));
 
+  // Render departures after initial load
+  if (typeof depRender === 'function') depRender();
+
   updateClock();
   setInterval(updateClock, 30000);
 
-  console.log("🚀 Ibis Ops Platform with LIVE real-time sync");
+  console.log("🚀 Ibis Ops Platform with FIXED LIVE real-time sync");
 }
 
 // Start the app
