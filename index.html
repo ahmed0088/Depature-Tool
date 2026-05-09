@@ -567,7 +567,7 @@
 <script src="state.js"></script>
 <script src="utils.js"></script>
 <script src="natguess.js"></script>
-<script defer src="departures.js"></script>
+<script src="departures.js"></script>
 <script src="arrivals-purpose.js"></script>
 <script src="shifts.js"></script>
 <script src="checklist.js"></script>
@@ -575,7 +575,7 @@
 
 <script>
 // ════════════════════════════════════════════════
-// FINAL FIXED init — No duplicate declarations
+// FIXED init with REAL-TIME Firebase listeners
 // ════════════════════════════════════════════════
 
 async function handleImport(input) {
@@ -591,53 +591,48 @@ async function handleImport(input) {
 }
 
 async function appInit() {
+  // 1. Initialize Firebase
   try {
     firebase.initializeApp(FIREBASE_CONFIG);
     dbInit();
     console.log("✅ Firebase App initialized");
   } catch(e) {
-    console.warn('Firebase init failed:', e);
+    console.warn('Firebase init failed — running offline:', e);
     updateConnectionUI(false);
   }
 
+  // 2. Load initial data
   const data = await loadAll();
 
-  // Apply Checklist
+  // 3. Apply Checklist
   if (data.checklist) {
-    if (data.checklist.steps) CL_STEPS = data.checklist.steps;
-    if (data.checklist.done) clState.done = new Set(data.checklist.done);
-    if (data.checklist.skipped) clState.skipped = new Set(data.checklist.skipped);
+    if (data.checklist.steps && data.checklist.steps.length) CL_STEPS = data.checklist.steps;
+    if (data.checklist.done) data.checklist.done.forEach(i => clState.done.add(i));
+    if (data.checklist.skipped) data.checklist.skipped.forEach(i => clState.skipped.add(i));
   }
 
-  // Apply Shifts
+  // 4. Apply Shifts
   if (data.shifts && data.shifts.data) {
     Object.keys(SHIFTS).forEach(k => {
       const saved = data.shifts.data[k];
       if (saved) {
-        SHIFTS[k].tasks = saved.tasks || [];
+        SHIFTS[k].tasks = saved.tasks && saved.tasks.length ? saved.tasks : DEFAULT_TASKS[k].map(t=>({...t}));
         SHIFTS[k].done = saved.done || [];
+        SHIFTS[k].resetAt = saved.resetAt || '';
+      } else {
+        SHIFTS[k].tasks = DEFAULT_TASKS[k].map(t=>({...t}));
       }
     });
   } else {
     initShifts();
   }
 
-  // DEPARTURES LOAD (no re-declaration)
-  if (data.departures && data.departures.rooms) {
-    depRooms = data.departures.rooms;   // Direct assignment
-    depLog = data.departures.log || [];
-  } else {
-    depRooms = [];
-    depLog = [];
-  }
-
-  // REAL-TIME LISTENERS
+  // ===================== REAL-TIME LISTENERS =====================
   listenDepartures(val => {
-    if (val && val.rooms) {
-      depRooms = val.rooms;
-      depLog = val.log || [];
+    if (val) {
+      window.departuresData = val.rooms || [];
+      window.depLog = val.log || [];
       if (typeof depRender === 'function') depRender();
-      if (typeof updateDepBadge === 'function') updateDepBadge();
     }
   });
 
@@ -667,26 +662,24 @@ async function appInit() {
         }
       });
       if (typeof renderShift === 'function') renderShift(activeShift || 'morning');
+      Object.keys(SHIFTS).forEach(k => updateShiftBadge(k));
     }
   });
 
-  // Initial Render
+  // Initial render
   clRender2();
   arrRender();
   purposeRender();
   renderShift('morning');
   Object.keys(SHIFTS).forEach(k => updateShiftBadge(k));
-  
-  if (typeof depRender === 'function') depRender();
-  if (typeof updateDepBadge === 'function') updateDepBadge();
 
   updateClock();
   setInterval(updateClock, 30000);
 
-  console.log("🚀 Ibis Ops — Departures Real-time Fixed");
+  console.log("🚀 Ibis Ops Platform with LIVE real-time sync");
 }
 
-// Start
+// Start the app
 appInit();
 </script>
 </html>
