@@ -575,7 +575,7 @@
 
 <script>
 // ════════════════════════════════════════════════
-// FINAL FIXED init — Full Real-time Departures
+// FINAL FIXED init — with better loading
 // ════════════════════════════════════════════════
 
 async function handleImport(input) {
@@ -622,22 +622,20 @@ async function appInit() {
     initShifts();
   }
 
-  // === DEPARTURES — INITIAL LOAD ===
-  if (data.departures) {
-    window.depRooms = data.departures.rooms || [];
+  // DEPARTURES INITIAL LOAD
+  if (data.departures && data.departures.rooms) {
+    window.depRooms = data.departures.rooms;
     window.depLog = data.departures.log || [];
   } else {
     window.depRooms = [];
     window.depLog = [];
   }
 
-  // ===================== REAL-TIME LISTENERS =====================
+  // REAL-TIME LISTENERS
   listenDepartures(val => {
-    if (val) {
-      window.depRooms = val.rooms || [];
+    if (val && val.rooms) {
+      window.depRooms = val.rooms;
       window.depLog = val.log || [];
-
-      // Force re-render for everyone
       if (typeof depRender === 'function') depRender();
       if (typeof updateDepBadge === 'function') updateDepBadge();
     }
@@ -685,7 +683,7 @@ async function appInit() {
   updateClock();
   setInterval(updateClock, 30000);
 
-  console.log("🚀 Ibis Ops — FULL REAL-TIME DEPARTURES ENABLED");
+  console.log("🚀 Ibis Ops Platform Loaded Successfully");
 }
 
 // Start the app
