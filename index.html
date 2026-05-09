@@ -575,7 +575,7 @@
 
 <script>
 // ════════════════════════════════════════════════
-// FINAL FIXED init — with better loading
+// FINAL FIXED init — No duplicate declarations
 // ════════════════════════════════════════════════
 
 async function handleImport(input) {
@@ -622,20 +622,20 @@ async function appInit() {
     initShifts();
   }
 
-  // DEPARTURES INITIAL LOAD
+  // DEPARTURES LOAD (no re-declaration)
   if (data.departures && data.departures.rooms) {
-    window.depRooms = data.departures.rooms;
-    window.depLog = data.departures.log || [];
+    depRooms = data.departures.rooms;   // Direct assignment
+    depLog = data.departures.log || [];
   } else {
-    window.depRooms = [];
-    window.depLog = [];
+    depRooms = [];
+    depLog = [];
   }
 
   // REAL-TIME LISTENERS
   listenDepartures(val => {
     if (val && val.rooms) {
-      window.depRooms = val.rooms;
-      window.depLog = val.log || [];
+      depRooms = val.rooms;
+      depLog = val.log || [];
       if (typeof depRender === 'function') depRender();
       if (typeof updateDepBadge === 'function') updateDepBadge();
     }
@@ -683,10 +683,10 @@ async function appInit() {
   updateClock();
   setInterval(updateClock, 30000);
 
-  console.log("🚀 Ibis Ops Platform Loaded Successfully");
+  console.log("🚀 Ibis Ops — Departures Real-time Fixed");
 }
 
-// Start the app
+// Start
 appInit();
 </script>
 </html>
