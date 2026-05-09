@@ -575,7 +575,7 @@
 
 <script>
 // ════════════════════════════════════════════════
-// FIXED init with REAL-TIME + DEPARTURES full sync
+// FINAL FIXED init — Full Real-time Departures
 // ════════════════════════════════════════════════
 
 async function handleImport(input) {
@@ -622,9 +622,9 @@ async function appInit() {
     initShifts();
   }
 
-  // === DEPARTURES INITIAL LOAD (CRITICAL FIX) ===
-  if (data.departures && data.departures.rooms) {
-    window.depRooms = data.departures.rooms;
+  // === DEPARTURES — INITIAL LOAD ===
+  if (data.departures) {
+    window.depRooms = data.departures.rooms || [];
     window.depLog = data.departures.log || [];
   } else {
     window.depRooms = [];
@@ -636,7 +636,8 @@ async function appInit() {
     if (val) {
       window.depRooms = val.rooms || [];
       window.depLog = val.log || [];
-      
+
+      // Force re-render for everyone
       if (typeof depRender === 'function') depRender();
       if (typeof updateDepBadge === 'function') updateDepBadge();
     }
@@ -671,7 +672,7 @@ async function appInit() {
     }
   });
 
-  // Initial Render Everything
+  // Initial Render
   clRender2();
   arrRender();
   purposeRender();
@@ -684,7 +685,7 @@ async function appInit() {
   updateClock();
   setInterval(updateClock, 30000);
 
-  console.log("🚀 Ibis Ops Platform — FULL REAL-TIME SYNC ENABLED");
+  console.log("🚀 Ibis Ops — FULL REAL-TIME DEPARTURES ENABLED");
 }
 
 // Start the app
