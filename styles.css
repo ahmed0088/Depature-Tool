@@ -813,3 +813,33 @@ td input:focus, td select:focus { outline: none; border-color: var(--gold); back
   .main, .layout { overflow: visible !important; height: auto !important; }
   .panel { padding: 0 !important; }
 }
+
+/* Add to styles.css - Drag handle for shift tasks */
+.drag-handle {
+  cursor: grab;
+  color: var(--text3);
+  font-size: 0.7rem;
+  padding: 4px 2px;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.st-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 11px 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  margin-bottom: 6px;
+  transition: all 0.2s;
+}
+
+.st-item.dragging {
+  opacity: 0.3;
+}
