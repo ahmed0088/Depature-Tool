@@ -1018,6 +1018,88 @@ td input:focus, td select:focus { outline: none; border-color: var(--gold); back
   width: 520px;
 }
 /* ══════════════════════════════════════════════════
+   GUEST ADD/EDIT MODAL — PREMIUM DESIGN
+══════════════════════════════════════════════════ */
+#guestModal .modal {
+  width: 560px;
+  padding: 32px 40px;
+}
+
+#guestModal .modal h3 {
+  font-family: var(--serif);
+  color: var(--gold);
+  font-size: 1.6rem;
+  text-align: center;
+  margin-bottom: 26px;
+}
+
+#guestModal .modal-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+#guestModal .two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+#guestModal .mf {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#guestModal .mf label {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+
+#guestModal .mf input,
+#guestModal .mf select {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: var(--r2);
+  color: var(--text);
+  padding: 12px 14px;
+  font-size: 0.92rem;
+}
+
+#guestModal .mf input:focus,
+#guestModal .mf select:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(232,184,75,0.15);
+  outline: none;
+}
+
+#guestModal .nat-row-f {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: end;
+}
+
+#guestModal .modal-actions {
+  margin-top: 20px;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+#guestModal .btn {
+  padding: 12px 28px;
+  font-weight: 600;
+}
+
+#guestModal .btn.gold {
+  background: linear-gradient(135deg, var(--gold2), var(--gold));
+  color: #0a0c10;
+  border: none;
+}
+/* ══════════════════════════════════════════════════
    PROGRESS BAR
 ══════════════════════════════════════════════════ */
 .prog-wrap { margin-bottom: 14px; }
