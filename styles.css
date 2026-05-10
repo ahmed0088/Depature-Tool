@@ -937,3 +937,61 @@ td input:focus, td select:focus { outline: none; border-color: var(--gold); back
   background: rgba(90,180,232,0.08);
   border: 1px solid rgba(90,180,232,0.25);
 }
+/* Compact filter row */
+.filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.fchip {
+  font-size: 0.55rem;
+  padding: 4px 9px;
+}
+
+.search-wrap {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.search-wrap input {
+  width: 120px;
+  font-size: 0.62rem;
+  padding: 5px 10px;
+}
+
+/* Make KPI strip more compact on smaller screens */
+@media (max-width: 1200px) {
+  .dep-kpi-strip {
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 6px;
+  }
+  
+  .dep-kpi {
+    padding: 8px 10px;
+  }
+  
+  .dep-kpi-val {
+    font-size: 1.3rem;
+  }
+  
+  .dep-kpi-label {
+    font-size: 0.48rem;
+  }
+}
+
+/* For very small screens */
+@media (max-width: 800px) {
+  .filter-group {
+    width: 100%;
+  }
+  
+  .search-wrap {
+    margin-left: 0;
+    width: 100%;
+  }
+  
+  .search-wrap input {
+    width: 100%;
+  }
+}
