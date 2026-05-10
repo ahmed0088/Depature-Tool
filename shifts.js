@@ -12,9 +12,8 @@ function switchShift(key, el) {
 }
 
 function renderShift(key) {
-  // Make sure SHIFTS and tasks exist
   if (!SHIFTS[key]) {
-    console.error(`Shift ${key} not found`);
+    console.error('Shift not found:', key);
     return;
   }
   
@@ -65,8 +64,8 @@ function stItemHTML(key, t, isDone, idx) {
     <div class="drag-handle" style="cursor:grab; color:var(--text3); font-size:0.7rem;">⋮⋮</div>
     <div class="st-check" onclick="stToggle('${key}','${t.id}')"></div>
     <div class="st-text">
-      <div class="st-name">${escapeHtmlForShift(t.name)}</div>
-      ${t.hint ? `<div class="st-hint">${escapeHtmlForShift(t.hint)}</div>` : ''}
+      <div class="st-name">${escapeHtmlSimple(t.name)}</div>
+      ${t.hint ? `<div class="st-hint">${escapeHtmlSimple(t.hint)}</div>` : ''}
     </div>
     <div class="st-actions">
       <button class="cl-step-btn edit-btn" onclick="openEditTask('${key}','${t.id}')">✏️</button>
@@ -75,7 +74,7 @@ function stItemHTML(key, t, isDone, idx) {
   </div>`;
 }
 
-function escapeHtmlForShift(str) {
+function escapeHtmlSimple(str) {
   if (!str) return '';
   return str.replace(/[&<>]/g, function(m) {
     if (m === '&') return '&amp;';
@@ -85,12 +84,16 @@ function escapeHtmlForShift(str) {
   });
 }
 
+let draggedTask = null;
+let draggedTaskShift = null;
+
 function makeShiftTasksDraggable(key) {
   const container = document.getElementById(`stList-${key}`);
   if (!container) return;
   
   const items = container.querySelectorAll('.st-item');
   items.forEach(item => {
+    item.setAttribute('draggable', 'true');
     item.removeEventListener('dragstart', handleShiftDragStart);
     item.removeEventListener('dragend', handleShiftDragEnd);
     item.removeEventListener('dragover', handleShiftDragOver);
@@ -102,9 +105,6 @@ function makeShiftTasksDraggable(key) {
     item.addEventListener('drop', handleShiftDrop);
   });
 }
-
-let draggedTask = null;
-let draggedTaskShift = null;
 
 function handleShiftDragStart(e) {
   draggedTask = this;
@@ -225,7 +225,6 @@ function updateShiftBadge(key) {
 }
 
 function initShifts() {
-  // Make sure SHIFTS has tasks
   Object.keys(SHIFTS).forEach(k => {
     if (!SHIFTS[k].tasks || SHIFTS[k].tasks.length === 0) {
       if (DEFAULT_TASKS[k]) {
@@ -238,8 +237,6 @@ function initShifts() {
     if (!SHIFTS[k].resetAt) SHIFTS[k].resetAt = '';
     updateShiftBadge(k);
   });
-  
-  // Render the active shift
   if (activeShift && SHIFTS[activeShift]) {
     renderShift(activeShift);
   } else {
@@ -247,7 +244,9 @@ function initShifts() {
   }
 }
 
-// Make sure escapeHtml is available globally
-if (typeof window.escapeHtmlForShift === 'undefined') {
-  window.escapeHtmlForShift = escapeHtmlForShift;
-}
+// Call init when script loads
+setTimeout(() => {
+  if (document.getElementById('shiftContent')) {
+    initShifts();
+  }
+}, 100);
