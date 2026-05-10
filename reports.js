@@ -2,8 +2,8 @@
 // reports.js — Nationality · Rented Rooms · Night Audit · Immigration
 // ═══════════════════════════════════════════════════════════
 
-// NOTE: natCopyText, rentCopyText, naCopyText are already declared in state.js
-// Do NOT redeclare them here!
+// NOTE: natCopyText, rentCopyText, naCopyText, immigAllRows2, immigFilter2_ 
+// are already declared in state.js - DO NOT redeclare them here!
 
 // ── COUNTRY MAPPINGS ──────────────────────────────────────
 const EXCEL_COUNTRIES = ["Afghanistan","Albania","Algeria","American Samoa","Andorra","Angola","Anguilla","Antarctica","Antigua & Barbuda","Argentina","Armenia","Aruba","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados","Belarus","Belgium","Belize","Benin","Bermuda","Bhutan","Bolivia","Bosnia-Herzegovina","Botswana","Brazil","British Indian Ocean Territory","British Virgin Islands","British West Indies","Brunei","Bulgaria","Burkina Faso","Burundi","Cambodia","Cameroon Republic","Canada","Cape Verde","Cayman Island","Central African Republic","Chad","Chile","China","Colombia","Comoros","Congo (Republic of the Congo)","Congo, Dem. Rep. of (Zaire)","Cook Islands","Costa Rica","Côte d'Ivoire","Croatia","Cuba","Cyprus","Czech Republic","Czechoslovakia","Denmark","Djibouti","Dominica","Dominican Republic","East Timor","Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia","Ethiopia","Falkland Islands (Malvinas)","Faroe Islands","Fiji","Finland","France","French Guiana","French Polynesia","Gabon","Gambia","Georgia","Germany","Ghana","Gibraltar","Greece","Greenland","Grenada","Guadeloupe","Guam","Guatemala","Guinea","Guinea-Bissau","Guyana","Haiti","Holy See (Vatican City State)","Honduras","Hong Kong","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Isle of Man","Israel","Italy","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kiribati","Korea, Democratic People's Republic of (North)","Korea, Republic of (South)","Kosovo","Kuwait","Kyrghyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia","Libya","Liechtenstein","Lithuania","Luxembourg","Macau","Macedonia, Republic of","Madagascar","Malagasy Republic","Malawi","Malaysia","Maldives","Mali","Malta","Marshal Islands","Martinique","Mauritania","Mauritius","Mayotte","Mexico","Micronesia, Federated States","Moldova","Monaco","Mongolia","Montenegro","Montserrat","Morocco","Mozambique","Myanmar (Burma)","Namibia","Nauru","Nepal","Netherlands","Netherlands, Antilles","New Caledonia","New Zealand","Nicaragua","Niger","Nigeria","Norfolk Island","Northern Mariana Isl.","Norway","Oman","Pakistan","Palau","Palestine","Panama","Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal","Puerto Rico","Qatar","Reunion","Romania","Russian Federation","Rwanda","Saba","Saint Barthelemy","Saint Helena","Saint Kitts and Nevis","Saint Lucia","Saint Pierre and Miquelon","Saint Vincent and the Grenadines","Samoa","San Marino (in Italy)","Sao Tomé","Saudi Arabia","Scotland","Senegal","Serbia","Seychelles","Sierra Leone","Singapore","Slovakia Republic","Slovenia","Solomon Island","Somalia","South Africa","South Georgia and the South Sandwich Islands","South Sudan","Spain","Sri Lanka","Sudan","Surinam","Swaziland","Sweden","Switzerland","Syria","Tadjikistan","Taiwan","Tanzania","Thailand","Togo","Tokelau","Tonga","Trinidad & Tobaggo","Tunisia","Turkey","Turkmenistan","Turks and Caicos Islands","Tuvalu","Uganda","Ukraine","United Arab Emirates","United Kingdom","United States of America","Uruguay","Uzbekistan","Vanuatu","Venezuela","Vietnam","Virgin Islands, British","Virgin Islands, U.S.","Yemen","Yugoslavia","Zambia","Zimbabwe"];
@@ -37,8 +37,6 @@ function resolveCountry(name) {
 }
 
 // ── NATIONALITY REPORT ────────────────────────────────────
-// natCopyText is already declared in state.js
-
 function processNat() {
   const raw = document.getElementById('natInput').value.trim();
   const errBox = document.getElementById('natError');
@@ -50,7 +48,6 @@ function processNat() {
   const lines = raw.split('\n').filter(l => l.trim());
   if (lines.length < 3) { showErr('Not enough data rows.'); return; }
   
-  // Parse headers
   const hdrs = lines[0].split('\t').map(h => h.trim().toUpperCase());
   const natIdx = hdrs.findIndex(h => h.includes('NATIONALITY') || h === 'COUNTRY');
   const arrIdx = hdrs.findIndex(h => h.includes('ARRIVAL') || h === 'ARR');
@@ -99,12 +96,10 @@ function processNat() {
     totalGst += gst;
   }
   
-  // Update KPIs
   document.getElementById('kpi-apr').textContent = totalArr.toLocaleString();
   document.getElementById('kpi-rms').textContent = totalRms.toLocaleString();
   document.getElementById('kpi-prs').textContent = totalGst.toLocaleString();
   
-  // Data quality
   const withData = rows.filter(r => r.arr > 0 || r.rms > 0 || r.gst > 0).length;
   const zeroRows = rows.filter(r => r.arr === 0 && r.rms === 0 && r.gst === 0).length;
   document.getElementById('s-active').textContent = withData;
@@ -112,36 +107,31 @@ function processNat() {
   document.getElementById('s-unmat').textContent = unmatchedCount;
   document.getElementById('s-unk').textContent = unknownCount;
   
-  // Unknown list
   const unknownDiv = document.getElementById('natUnknownList');
   unknownDiv.innerHTML = unknownList.slice(0, 10).map(u => `<div style="font-size:0.68rem;color:var(--amber);margin-bottom:3px;">⚠ ${u}</div>`).join('');
   if (unknownList.length > 10) unknownDiv.innerHTML += `<div style="font-size:0.6rem;color:var(--text3);">+${unknownList.length - 10} more</div>`;
   
-  // Unmatched list
   const unmatchedDiv = document.getElementById('natUnmatchedList');
   unmatchedDiv.innerHTML = unmatchedList.slice(0, 15).map(u => `<div style="font-size:0.68rem;color:var(--rose);margin-bottom:3px;">🔴 ${u}</div>`).join('');
   if (unmatchedList.length > 15) unmatchedDiv.innerHTML += `<div style="font-size:0.6rem;color:var(--text3);">+${unmatchedList.length - 15} more</div>`;
   
-  // Preview (rows 8-247 as requested)
   const previewRows = rows.slice(7, 247);
   const previewDiv = document.getElementById('natPreview');
   previewDiv.innerHTML = previewRows.map((r, idx) => `
     <div style="display:grid;grid-template-columns:36px 1fr 54px 54px 54px;padding:5px 12px;border-bottom:1px solid rgba(255,255,255,0.03);font-size:0.68rem;">
       <span style="color:var(--text3);">${idx + 8}</span>
-      <span style="${r.isUnmatched ? 'color:var(--rose);' : r.isUnknown ? 'color:var(--amber);' : 'color:var(--mint);'}">${r.mapped}</span>
+      <span style="${r.isUnmatched ? 'color:var(--rose);' : r.isUnknown ? 'color:var(--amber);' : 'color:var(--mint);'}">${escapeHtmlSimple(r.mapped)}</span>
       <span style="text-align:right;color:var(--sky);">${r.arr || '-'}</span>
       <span style="text-align:right;color:var(--gold);">${r.rms || '-'}</span>
       <span style="text-align:right;color:var(--mint);">${r.gst || '-'}</span>
     </div>
   `).join('');
   
-  // Build copy text
   natCopyText = previewRows.map(r => `${r.mapped}\t${r.arr}\t${r.rms}\t${r.gst}`).join('\n');
   
   document.getElementById('natResults').style.display = 'block';
   document.getElementById('natDiagBadge').textContent = `${rows.length} countries processed`;
   
-  // Totals grid
   const totalsGrid = document.getElementById('natTotalsGrid');
   totalsGrid.innerHTML = `
     <div><div style="font-size:0.6rem;color:var(--text3);">Arrivals</div><div style="font-size:1.1rem;font-weight:700;color:var(--sky);">${totalArr.toLocaleString()}</div></div>
@@ -166,8 +156,6 @@ function clearNat() {
 }
 
 // ── RENTED ROOMS & BEDS ───────────────────────────────────
-// rentCopyText is already declared in state.js
-
 function processRent() {
   const raw1 = document.getElementById('rentInput1').value.trim();
   const raw2 = document.getElementById('rentInput2').value.trim();
@@ -177,7 +165,6 @@ function processRent() {
   
   if (!raw1 && !raw2) { showErr('Please paste at least one file.'); return; }
   
-  // Parse History Forecast
   let roomData = {};
   let daysFound = 0;
   
@@ -203,41 +190,34 @@ function processRent() {
     }
   }
   
-  // Parse Room Type Stats for TWC (Twin) beds
   let twinRooms = 0;
-  let twinDate = null;
   
   if (raw2) {
     const lines = raw2.split('\n').filter(l => l.trim());
     if (lines.length > 1) {
       const hdrs = lines[0].split('\t').map(h => h.trim().toUpperCase());
-      const dateIdx = hdrs.findIndex(h => h.includes('BUSINESS_DATE') || h.includes('DATE'));
       const categoryIdx = hdrs.findIndex(h => h.includes('ROOM_CATEGORY') || h.includes('CATEGORY'));
       const roomsIdx = hdrs.findIndex(h => h.includes('STAY_ROOMS') || h.includes('ROOMS'));
       
-      if (dateIdx >= 0 && categoryIdx >= 0 && roomsIdx >= 0) {
+      if (categoryIdx >= 0 && roomsIdx >= 0) {
         for (let i = 1; i < lines.length; i++) {
           const cols = lines[i].split('\t');
           const category = (cols[categoryIdx] || '').toUpperCase();
           if (category.includes('TWC') || category === 'TWIN') {
-            const date = cols[dateIdx]?.trim().substring(0, 10);
             const rooms = parseInt(cols[roomsIdx]) || 0;
             twinRooms += rooms;
-            if (!twinDate) twinDate = date;
           }
         }
       }
     }
   }
   
-  // Calculate beds (assuming 2 beds per twin room, 1 per other)
   let totalBeds = 0;
   let totalRooms = 0;
   const dailyData = [];
   
   for (const [date, data] of Object.entries(roomData)) {
     const rooms = data.rooms;
-    // Estimate beds: assume twin rooms are ~30% of total if twin file provided
     let beds = rooms;
     if (twinRooms > 0 && rooms > 0) {
       const twinRatio = Math.min(1, twinRooms / rooms);
@@ -273,9 +253,7 @@ function processRent() {
     `).join('')}
   `;
   
-  // Build copy text
   rentCopyText = dailyData.map(d => `${d.date}\t${d.rooms}\t${d.beds}`).join('\n');
-  
   document.getElementById('rentResults').style.display = 'block';
 }
 
@@ -297,8 +275,6 @@ function clearRent() {
 }
 
 // ── NIGHT AUDIT PM ROOMS ──────────────────────────────────
-// naCopyText is already declared in state.js
-
 function processAudit() {
   const operaRaw = document.getElementById('naOperaInput').value.trim();
   const excelRaw = document.getElementById('naExcelInput').value.trim();
@@ -308,7 +284,6 @@ function processAudit() {
   
   if (!operaRaw && !excelRaw) { showErr('Please paste both Opera and Excel data.'); return; }
   
-  // Parse Opera PM Rooms
   const operaRooms = [];
   if (operaRaw) {
     const lines = operaRaw.split('\n').filter(l => l.trim());
@@ -335,13 +310,11 @@ function processAudit() {
     }
   }
   
-  // Parse Excel PM Rooms
   const excelRooms = [];
   if (excelRaw) {
     const lines = excelRaw.split('\n').filter(l => l.trim());
     const dataRows = lines.map(l => l.split(',').map(c => c.replace(/^"|"$/g, '').trim()));
     
-    // Find header row
     let headerIdx = 0;
     for (let i = 0; i < Math.min(5, dataRows.length); i++) {
       const row = dataRows[i];
@@ -372,25 +345,20 @@ function processAudit() {
     }
   }
   
-  // Compare
   const operaMap = new Map();
   operaRooms.forEach(r => { operaMap.set(r.room, r); });
   
   const differences = [];
-  const matches = [];
   
   excelRooms.forEach(excelRoom => {
     const operaRoom = operaMap.get(excelRoom.room);
     if (operaRoom) {
-      let status = '✅ Match';
       let changes = [];
       if (operaRoom.name !== excelRoom.name) changes.push('Name');
       if (operaRoom.balance !== excelRoom.balance) changes.push('Balance');
-      if (changes.length) status = `⚠️ ${changes.join(', ')}`;
-      matches.push({ ...excelRoom, status, isMatch: changes.length === 0 });
       differences.push({ ...excelRoom, opera: operaRoom, hasChanges: changes.length > 0 });
     } else {
-      differences.push({ ...excelRoom, opera: null, hasChanges: true, status: '❌ Not in Opera' });
+      differences.push({ ...excelRoom, opera: null, hasChanges: true });
     }
   });
   
@@ -405,7 +373,6 @@ function processAudit() {
   document.getElementById('na-pill-diff').textContent = `${diffCount} diff`;
   document.getElementById('na-pill-ok').textContent = `${matchCount} ok`;
   
-  // Comparison table
   const compareDiv = document.getElementById('naCompareTable');
   compareDiv.innerHTML = differences.map(d => `
     <div style="display:grid;grid-template-columns:60px 1fr 1fr 1fr 1fr 80px;padding:7px 14px;border-bottom:1px solid rgba(255,255,255,0.03);font-size:0.7rem;">
@@ -418,7 +385,6 @@ function processAudit() {
     </div>
   `).join('');
   
-  // Fixed rows (corrected Excel data)
   const fixedRows = differences.filter(d => d.hasChanges).map(d => ({
     room: d.room,
     name: d.opera?.name || d.name,
@@ -437,7 +403,7 @@ function processAudit() {
     ${fixedRows.map(r => `
       <div style="display:grid;grid-template-columns:60px 1fr 100px 100px 80px;padding:6px 14px;border-bottom:1px solid rgba(255,255,255,0.03);font-size:0.68rem;">
         <span style="color:var(--mint);font-weight:700;">${r.room}</span>
-        <span>${r.name}</span>
+        <span>${escapeHtmlSimple(r.name)}</span>
         <span>${r.arrival}</span>
         <span>${r.departure}</span>
         <span>${r.balance}</span>
@@ -445,10 +411,8 @@ function processAudit() {
     `).join('')}
   `;
   
-  // Build copy text
   naCopyText = fixedRows.map(r => `${r.room},${r.name},${r.arrival},${r.departure},${r.balance}`).join('\n');
   
-  // Changes list
   const changesDiv = document.getElementById('naChangesList');
   const changesList = differences.filter(d => d.hasChanges && d.opera);
   changesDiv.innerHTML = changesList.map(d => `
@@ -462,7 +426,6 @@ function processAudit() {
   `).join('');
   if (!changesList.length) changesDiv.innerHTML = '<div style="font-size:0.68rem;color:var(--mint);">✓ No changes needed</div>';
   
-  // Missing card
   const missingCard = document.getElementById('naMissingCard');
   const missingList = differences.filter(d => !d.opera);
   if (missingList.length) {
@@ -495,8 +458,6 @@ function clearAudit() {
 }
 
 // ── IMMIGRATION CHECK ─────────────────────────────────────
-// immigAllRows2 and immigFilter2_ are already declared in state.js
-
 function immigLoadFile2(input) {
   if(!input.files[0]) return;
   const reader = new FileReader();
@@ -516,7 +477,6 @@ function processImmig2() {
   
   if (!xmlText) { showErr('Please paste XML data or upload a file.'); return; }
   
-  // Simple XML parsing for guest data
   const guests = [];
   const guestRegex = /<Guest[^>]*>([\s\S]*?)<\/Guest>/gi;
   let match;
@@ -565,7 +525,6 @@ function processImmig2() {
   
   immigAllRows2 = guests;
   
-  // KPIs
   const total = guests.length;
   const natIssues = guests.filter(g => g.issues.includes('nationality')).length;
   const genderIssues = guests.filter(g => g.issues.includes('gender')).length;
@@ -612,12 +571,12 @@ function immigRender2(rows) {
     <tr style="${g.issues.length ? 'background:rgba(240,107,122,0.05);' : ''}">
       <td><strong>${g.room}</strong></td>
       <td>${g.sex}</td>
-      <td>${g.name}</td>
-      <td style="${g.issues.includes('nationality') ? 'color:var(--rose);font-weight:700;' : ''}">${g.nationality}</td>
-      <td style="${g.issues.includes('passport') ? 'color:var(--rose);font-weight:700;' : ''}">${g.passport}</td>
+      <td>${escapeHtmlSimple(g.name)}</div></td>
+      <td style="${g.issues.includes('nationality') ? 'color:var(--rose);font-weight:700;' : ''}">${escapeHtmlSimple(g.nationality)}</div></td>
+      <td style="${g.issues.includes('passport') ? 'color:var(--rose);font-weight:700;' : ''}">${escapeHtmlSimple(g.passport)}</div></td>
       <td>${g.arrival}</td>
       <td>${g.departure}</td>
-      <td>${g.issues.map(i => ({ nationality:'🔴', gender:'🟡', passport:'🔵', first_name:'🟢' }[i] || '⚠')).join(' ')}</td>
+      <td>${g.issues.map(i => ({ nationality:'🔴', gender:'🟡', passport:'🔵', first_name:'🟢' }[i] || '⚠')).join(' ')}</div></td>
     </tr>
   `).join('');
 }
@@ -641,6 +600,17 @@ function clearImmig() {
   const fileInput = document.getElementById('immigFileInput2');
   if (fileInput) fileInput.value = '';
   immigAllRows2 = [];
+}
+
+// Helper function
+function escapeHtmlSimple(str) {
+  if (!str) return '';
+  return String(str).replace(/[&<>]/g, function(m) {
+    if (m === '&') return '&amp;';
+    if (m === '<') return '&lt;';
+    if (m === '>') return '&gt;';
+    return m;
+  });
 }
 
 // ── FEEDBACK ──────────────────────────────────────────────
