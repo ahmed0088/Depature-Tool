@@ -236,6 +236,196 @@ body {
 .panel { display: none; padding: 24px 28px 80px; }
 .panel.active { display: block; }
 
+
+/* ══════════════════════════════════════════════════
+   FILTER CHIPS (Compact, elegant)
+══════════════════════════════════════════════════ */
+.filter-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.fchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 40px;
+  border: 1px solid var(--border2);
+  background: var(--surface);
+  color: var(--text3);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: 0.3px;
+}
+
+.fchip:hover {
+  background: var(--card);
+  color: var(--text2);
+  border-color: var(--gold);
+  transform: translateY(-1px);
+}
+
+.fchip.on {
+  border-color: rgba(232,184,75,0.5);
+  color: var(--gold);
+  background: rgba(232,184,75,0.08);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.fchip.on.due {
+  color: var(--gold);
+  border-color: rgba(232,184,75,0.5);
+  background: rgba(232,184,75,0.08);
+}
+
+.fchip.on.pending {
+  color: var(--violet);
+  border-color: rgba(139,124,248,0.5);
+  background: rgba(139,124,248,0.08);
+}
+
+.fchip.on.noanswer {
+  color: var(--amber);
+  border-color: rgba(240,164,58,0.5);
+  background: rgba(240,164,58,0.08);
+}
+
+.fchip.on.ext {
+  color: var(--sky);
+  border-color: rgba(90,180,232,0.5);
+  background: rgba(90,180,232,0.08);
+}
+
+.fchip.on.late {
+  color: var(--violet);
+  border-color: rgba(139,124,248,0.5);
+  background: rgba(139,124,248,0.08);
+}
+
+.fchip.on.bal {
+  color: var(--rose);
+  border-color: rgba(240,107,122,0.5);
+  background: rgba(240,107,122,0.08);
+}
+
+.fchip.on.out {
+  color: var(--mint);
+  border-color: rgba(62,207,142,0.5);
+  background: rgba(62,207,142,0.08);
+}
+
+.fchip span {
+  font-family: var(--mono);
+  font-size: 0.55rem;
+  background: var(--bg2);
+  padding: 1px 6px;
+  border-radius: 20px;
+  margin-left: 2px;
+}
+
+.fchip.on span {
+  background: rgba(255,255,255,0.05);
+}
+
+/* ══════════════════════════════════════════════════
+   SEARCH WRAP (Elegant, positioned top-right)
+══════════════════════════════════════════════════ */
+.search-wrap {
+  display: flex;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 40px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.search-wrap:focus-within {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(232,184,75,0.1);
+}
+
+.search-icon {
+  padding: 0 0 0 14px;
+  color: var(--text3);
+  font-size: 0.8rem;
+  opacity: 0.6;
+}
+
+.search-wrap input {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 0.7rem;
+  padding: 8px 12px;
+  outline: none;
+  width: 180px;
+  transition: width 0.2s;
+}
+
+.search-wrap input:focus {
+  width: 220px;
+}
+
+.search-wrap input::placeholder {
+  color: var(--text3);
+  font-family: var(--font);
+  font-size: 0.65rem;
+}
+
+.search-clear {
+  padding: 0 12px;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 0.7rem;
+  transition: color 0.2s;
+}
+
+.search-clear:hover {
+  color: var(--rose);
+}
+
+/* Header bar for departures */
+.dep-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .dep-header-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .filter-row {
+    order: 2;
+  }
+  
+  .search-wrap {
+    order: 1;
+    width: 100%;
+  }
+  
+  .search-wrap input {
+    width: 100%;
+  }
+  
+  .search-wrap input:focus {
+    width: 100%;
+  }
+}
 /* ══════════════════════════════════════════════════
    PAGE HEADER
 ══════════════════════════════════════════════════ */
