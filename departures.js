@@ -16,7 +16,6 @@ function processDep(isReload = false) {
   const idx  = {}; hdrs.forEach((h, i) => idx[h] = i);
   if (idx['ROOM'] === undefined) return showErr('ROOM column not found. Use Delimited Data format.');
 
-  // Parse incoming report
   const incomingRooms = [];
   for (let i = 1; i < lines.length; i++) {
     const p    = lines[i].split('\t'); if (p.length < 15) continue;
@@ -40,7 +39,6 @@ function processDep(isReload = false) {
   }
   if (!incomingRooms.length) return showErr('No departure rooms found.');
 
-  // If this is a reload and we have existing rooms, MERGE intelligently
   let mergedRooms = [];
   let removedRooms = [];
   const logTime = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
@@ -189,12 +187,40 @@ function reloadDepReport() {
 }
 
 function depCounts() {
+  // Due = status is 'due' AND no other flags are active
+  const dueRooms = depRooms.filter(r => 
+    r.status === 'due' && 
+    !r.noAnswer && 
+    !r.pendingExtension && 
+    !r.comingToExtend
+  );
+  
+  // Pending Extension = pendingExtension flag is true, status not out/extended
+  const pendingExt = depRooms.filter(r => 
+    r.pendingExtension === true && 
+    r.status !== 'out' && 
+    r.status !== 'extended'
+  );
+  
+  // Coming to Extend = comingToExtend flag is true, status not out/extended
+  const comingExt = depRooms.filter(r => 
+    r.comingToExtend === true && 
+    r.status !== 'out' && 
+    r.status !== 'extended'
+  );
+  
+  // No Answer = noAnswer flag is true, status not out
+  const noAnswer = depRooms.filter(r => 
+    r.noAnswer === true && 
+    r.status !== 'out'
+  );
+  
   return {
     all:        depRooms.length,
-    due:        depRooms.filter(r => r.status === 'due' && !r.noAnswer && !r.pendingExtension && !r.comingToExtend).length,
-    pendingExt: depRooms.filter(r => r.pendingExtension === true && r.status !== 'out' && r.status !== 'extended').length,
-    comingExt:  depRooms.filter(r => r.comingToExtend === true && r.status !== 'out' && r.status !== 'extended').length,
-    noAnswer:   depRooms.filter(r => r.noAnswer === true && r.status !== 'out').length,
+    due:        dueRooms.length,
+    pendingExt: pendingExt.length,
+    comingExt:  comingExt.length,
+    noAnswer:   noAnswer.length,
     extended:   depRooms.filter(r => r.status === 'extended').length,
     late:       depRooms.filter(r => r.status === 'late').length,
     balance:    depRooms.filter(r => r.balance > 0 && r.status !== 'out').length,
@@ -207,8 +233,12 @@ function depRender() {
   const total = sc.all, out = sc.out;
   const pct   = total ? Math.round(out / total * 100) : 0;
 
-  // Update filter badge counts
-  const updateBadge = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  // Update all filter badge counts
+  const updateBadge = (id, val) => { 
+    const el = document.getElementById(id); 
+    if (el) el.textContent = val; 
+  };
+  
   updateBadge('dfc-all', sc.all);
   updateBadge('dfc-due', sc.due);
   updateBadge('dfc-pendingExt', sc.pendingExt);
@@ -222,9 +252,9 @@ function depRender() {
   document.getElementById('depKpis').innerHTML = `
     <div class="dep-kpi k-total"><div class="dep-kpi-icon">🏨</div><div class="dep-kpi-val">${total}</div><div class="dep-kpi-label">Total</div><div class="dep-kpi-bar"></div></div>
     <div class="dep-kpi k-due"><div class="dep-kpi-icon">⏳</div><div class="dep-kpi-val">${sc.due}</div><div class="dep-kpi-label">Due Out</div><div class="dep-kpi-bar"></div></div>
-    <div class="dep-kpi k-pending" style="border-color:rgba(139,124,248,0.4);"><div class="dep-kpi-icon">⏰❓</div><div class="dep-kpi-val" style="color:var(--violet);">${sc.pendingExt}</div><div class="dep-kpi-label">Pending</div><div class="dep-kpi-bar" style="background:linear-gradient(90deg, transparent, var(--violet), transparent);"></div></div>
-    <div class="dep-kpi k-coming" style="border-color:rgba(90,180,232,0.4);"><div class="dep-kpi-icon">🚪➡️</div><div class="dep-kpi-val" style="color:var(--sky);">${sc.comingExt}</div><div class="dep-kpi-label">Coming to Extend</div><div class="dep-kpi-bar" style="background:linear-gradient(90deg, transparent, var(--sky), transparent);"></div></div>
-    <div class="dep-kpi k-noanswer" style="border-color:rgba(240,164,58,0.4);"><div class="dep-kpi-icon">📞❌</div><div class="dep-kpi-val" style="color:var(--amber);">${sc.noAnswer}</div><div class="dep-kpi-label">No Answer</div><div class="dep-kpi-bar" style="background:linear-gradient(90deg, transparent, var(--amber), transparent);"></div></div>
+    <div class="dep-kpi k-pending"><div class="dep-kpi-icon">⏰❓</div><div class="dep-kpi-val">${sc.pendingExt}</div><div class="dep-kpi-label">Pending</div><div class="dep-kpi-bar"></div></div>
+    <div class="dep-kpi k-coming"><div class="dep-kpi-icon">🚪➡️</div><div class="dep-kpi-val">${sc.comingExt}</div><div class="dep-kpi-label">Coming</div><div class="dep-kpi-bar"></div></div>
+    <div class="dep-kpi k-noanswer"><div class="dep-kpi-icon">📞❌</div><div class="dep-kpi-val">${sc.noAnswer}</div><div class="dep-kpi-label">No Answer</div><div class="dep-kpi-bar"></div></div>
     <div class="dep-kpi k-ext"><div class="dep-kpi-icon">↪</div><div class="dep-kpi-val">${sc.extended}</div><div class="dep-kpi-label">Extended</div><div class="dep-kpi-bar"></div></div>
     <div class="dep-kpi k-out"><div class="dep-kpi-icon">✓</div><div class="dep-kpi-val">${out}</div><div class="dep-kpi-label">Checked Out</div><div class="dep-kpi-bar"></div></div>`;
 
@@ -301,32 +331,32 @@ function depCardHTML(r) {
   else if (r.pendingExtension) currentExtNights = r.pendingExtensionNights;
   else if (r.comingToExtend) currentExtNights = r.pendingExtensionNights;
   
- const extensionHTML = `
-  <div class="dc-sel-row">
-    <span class="dc-sel-lbl ext">📅 Nights:</span>
-    <select class="dc-select ext" onchange="depUpdateExtensionNights(${i}, this.value)">
-      <option value="0">-- Select --</option>
-      ${extensionOptions.map(n => `<option value="${n}"${currentExtNights === n ? ' selected' : ''}>+${n}</option>`).join('')}
-    </select>
-  </div>
-`;
+  const extensionHTML = `
+    <div class="dc-sel-row">
+      <span class="dc-sel-lbl ext">📅 Nights:</span>
+      <select class="dc-select ext" onchange="depUpdateExtensionNights(${i}, this.value)">
+        <option value="0">-- Select --</option>
+        ${extensionOptions.map(n => `<option value="${n}"${currentExtNights === n ? ' selected' : ''}>+${n}</option>`).join('')}
+      </select>
+    </div>
+  `;
 
-  // Guest action buttons - cleaner text
-const guestActionsHTML = (r.status === 'due' && r.status !== 'out' && r.status !== 'extended' && r.status !== 'late') ? `
-  <div class="dc-guest-actions">
-    <button class="dca dca-pending" onclick="depMarkPending(${i})" title="Guest said 'might extend'">
-      ⏰ Pending
-    </button>
-    <button class="dca dca-coming" onclick="depMarkComingToExtend(${i})" title="Guest said 'I'm coming to extend'">
-      🚪 Coming
-    </button>
-    <button class="dca dca-confirm" onclick="depConfirmExtensionNow(${i})" title="Guest confirmed extension">
-      ✅ Confirm
-    </button>
-    <button class="dca dca-noanswer" onclick="depMarkNoAnswer(${i})" title="Guest not answering">
-      📞 No Answer
-    </button>
-  </div>
+  // Guest action buttons
+  const guestActionsHTML = (r.status === 'due' && r.status !== 'out' && r.status !== 'extended' && r.status !== 'late') ? `
+    <div class="dc-guest-actions">
+      <button class="dca dca-pending" onclick="depMarkPending(${i})" title="Guest said 'might extend'">
+        ⏰ Pending
+      </button>
+      <button class="dca dca-coming" onclick="depMarkComingToExtend(${i})" title="Guest said 'I'm coming to extend'">
+        🚪 Coming
+      </button>
+      <button class="dca dca-confirm" onclick="depConfirmExtensionNow(${i})" title="Guest confirmed extension">
+        ✅ Confirm
+      </button>
+      <button class="dca dca-noanswer" onclick="depMarkNoAnswer(${i})" title="Guest not answering">
+        📞 No Ans
+      </button>
+    </div>
   ` : '';
 
   // Clear status button for flagged rooms
@@ -339,14 +369,12 @@ const guestActionsHTML = (r.status === 'due' && r.status !== 'out' && r.status !
   ` : '';
 
   const actHTML = r.status !== 'out'
-  ? `<div class="dc-actions g3">
-       <button class="dca dca-co" onclick="depAction(${i},'out')">✓ Check Out</button>
-       <button class="dca dca-late" onclick="depAction(${i},'late')">🕐 Late</button>
-       <button class="dca dca-ext" onclick="depAction(${i},'extended')">↪ Extend</button>
-     </div>`
-  : `<div class="dc-actions g1">
-       <button class="dca dca-undo" onclick="depAction(${i},'due')">↺ Undo</button>
-     </div>`;
+    ? `<div class="dc-actions g3">
+         <button class="dca dca-co"   onclick="depAction(${i},'out')">✓ Check Out</button>
+         <button class="dca dca-late" onclick="depAction(${i},'late')">🕐 Late</button>
+         <button class="dca dca-ext"  onclick="depAction(${i},'extended')">↪ Extend</button>
+       </div>`
+    : `<div class="dc-actions g1"><button class="dca dca-undo" onclick="depAction(${i},'due')">↺ Undo</button></div>`;
 
   return `<div class="dep-card ${sClass}" draggable="true">
     ${vipHTML}
@@ -411,10 +439,6 @@ function depMarkPending(i) {
   const r = depRooms[i];
   const t = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
   
-  // Clear other flags
-  r.comingToExtend = false;
-  r.noAnswer = false;
-  
   if (r.pendingExtension) {
     r.pendingExtension = false;
     r.pendingExtensionNights = 0;
@@ -428,6 +452,8 @@ function depMarkPending(i) {
     });
   } else {
     r.pendingExtension = true;
+    r.comingToExtend = false;
+    r.noAnswer = false;
     r.status = 'due';
     showToast(`${r.roomStr} - Marked as pending extension (guest might extend)`, 'info');
     depLog.unshift({ 
@@ -449,10 +475,6 @@ function depMarkComingToExtend(i) {
   const r = depRooms[i];
   const t = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
   
-  // Clear other flags
-  r.pendingExtension = false;
-  r.noAnswer = false;
-  
   if (r.comingToExtend) {
     r.comingToExtend = false;
     r.pendingExtensionNights = 0;
@@ -466,6 +488,8 @@ function depMarkComingToExtend(i) {
     });
   } else {
     r.comingToExtend = true;
+    r.pendingExtension = false;
+    r.noAnswer = false;
     r.status = 'due';
     showToast(`${r.roomStr} - Guest is coming to extend!`, 'ok');
     depLog.unshift({ 
