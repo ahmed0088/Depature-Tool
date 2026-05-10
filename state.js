@@ -1,6 +1,5 @@
 // ═══════════════════════════════════════════════════════════
 //  state.js  —  Single source of truth for all app data
-//  Import this file before any feature module.
 // ═══════════════════════════════════════════════════════════
 
 // ── Departure board ───────────────────────────────────────
@@ -52,7 +51,6 @@ let CL_STEPS = [
 // ── Shifts ────────────────────────────────────────────────
 let activeShift = 'morning';
 
-// Define shift structures
 const SHIFTS = {
   morning:   { label:'Morning Shift',   time:'07:00 – 15:00', color:'#f0a43a', tasks:[], done:[], resetAt:'' },
   afternoon: { label:'Afternoon Shift', time:'15:00 – 23:00', color:'#5ab4e8', tasks:[], done:[], resetAt:'' },
@@ -60,7 +58,6 @@ const SHIFTS = {
   night:     { label:'Night Shift',     time:'23:00 – 07:00', color:'#3ecf8e', tasks:[], done:[], resetAt:'' },
 };
 
-// Default tasks for each shift
 const DEFAULT_TASKS = {
   morning: [
     { id:'m1', name:'Check overnight log from night shift',   hint:'Review all notes and handover items.' },
@@ -101,8 +98,6 @@ function initShiftsDefault() {
     }
   });
 }
-
-// Call initialization
 initShiftsDefault();
 
 // ── Feedback ──────────────────────────────────────────────
