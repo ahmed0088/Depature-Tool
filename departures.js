@@ -728,6 +728,14 @@ function toggleLog() {
   if (icon) icon.textContent = open ? '▸ expand' : '▾ collapse';
 }
 
+function clearDepSearch() {
+  const searchInput = document.getElementById('depSearch');
+  if (searchInput) {
+    searchInput.value = '';
+    depRender();
+  }
+}
+
 function depFilter(f, el) {
   depFilter_ = f;
   document.querySelectorAll('[data-f]').forEach(c => c.classList.remove('on','due','ext','late','bal','out','noanswer','pending'));
