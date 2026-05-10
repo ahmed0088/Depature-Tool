@@ -1007,6 +1007,16 @@ td input:focus, td select:focus { outline: none; border-color: var(--gold); back
   color: #0a0c10;
   border: none;
 }
+
+/* Guest Modal */
+#guestModal .modal { width: 560px; }
+
+/* Feedback & Edit Modals */
+#feedbackModal .modal,
+#editStepModal .modal,
+#editTaskModal .modal {
+  width: 520px;
+}
 /* ══════════════════════════════════════════════════
    PROGRESS BAR
 ══════════════════════════════════════════════════ */
