@@ -595,6 +595,7 @@ async function saveSettings(patch) {
 }
 
 async function appInit() {
+           ['depPrintBtn','depExportBtn','depViewToggle','depReloadBtn'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = ''; });
   // 1 — Init Firebase
   try {
     const app = firebase.initializeApp(FIREBASE_CONFIG);
