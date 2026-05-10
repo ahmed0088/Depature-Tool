@@ -840,6 +840,87 @@ td input:focus, td select:focus { outline: none; border-color: var(--gold); back
   margin-top: 20px;
 }
 /* ══════════════════════════════════════════════════
+   FEEDBACK MODAL — PRO / PREMIUM DESIGN
+══════════════════════════════════════════════════ */
+#feedbackModal .modal {
+  width: 520px;
+  padding: 32px 36px;
+  background: var(--card);
+  border: 1px solid var(--border2);
+  box-shadow: 0 30px 90px rgba(0,0,0,0.85);
+}
+
+#feedbackModal .modal h3 {
+  font-family: var(--serif);
+  color: var(--gold);
+  font-size: 1.55rem;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+#feedbackModal .modal-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+#feedbackModal .mf {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#feedbackModal .mf label {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+
+#feedbackModal .mf input,
+#feedbackModal .mf select,
+#feedbackModal .mf textarea {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: var(--r2);
+  color: var(--text);
+  padding: 12px 14px;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+#feedbackModal .mf input:focus,
+#feedbackModal .mf select:focus,
+#feedbackModal .mf textarea:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(232,184,75,0.15);
+  outline: none;
+}
+
+#feedbackModal .mf textarea {
+  min-height: 110px;
+  resize: vertical;
+  font-family: var(--mono);
+}
+
+#feedbackModal .modal-actions {
+  margin-top: 12px;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+#feedbackModal .btn {
+  padding: 11px 26px;
+  font-weight: 600;
+}
+
+#feedbackModal .btn.gold {
+  background: linear-gradient(135deg, var(--gold2), var(--gold));
+  color: #0a0c10;
+  border: none;
+}
+/* ══════════════════════════════════════════════════
    PROGRESS BAR
 ══════════════════════════════════════════════════ */
 .prog-wrap { margin-bottom: 14px; }
