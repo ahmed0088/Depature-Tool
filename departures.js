@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-//  departures.js  —  Departure follow-up board (with smart merge & reload)
+//  departures.js  —  Departure follow-up board (with "No Answer" feature)
 // ═══════════════════════════════════════════════════════════
 
 function processDep(isReload = false) {
@@ -45,7 +45,6 @@ function processDep(isReload = false) {
   const logTime = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
 
   if (isReload && depRooms.length > 0) {
-    // MERGE logic: preserve existing status for rooms that are still in the report
     const existingMap = new Map();
     depRooms.forEach(r => { existingMap.set(r.roomStr, r); });
 
@@ -53,23 +52,25 @@ function processDep(isReload = false) {
       const existing = existingMap.get(incoming.roomStr);
       
       if (existing) {
-        // Room still in report — preserve its status, notes, etc.
         if (existing.status === 'out') {
-          // Guest checked out via app but still appears in Opera report
-          // Could be a different guest in same room — reset status
           mergedRooms.push({
             ...incoming,
             status: 'due',
+            noAnswer: false,
+            noAnswerCount: 0,
+            lastAttemptAt: '',
             lateTime: '',
             extensionNights: 0,
             note: existing.note || '',
             checkoutAt: '',
           });
         } else {
-          // Preserve all custom data
           mergedRooms.push({
             ...incoming,
             status: existing.status,
+            noAnswer: existing.noAnswer || false,
+            noAnswerCount: existing.noAnswerCount || 0,
+            lastAttemptAt: existing.lastAttemptAt || '',
             lateTime: existing.lateTime || '',
             extensionNights: existing.extensionNights || 0,
             note: existing.note || '',
@@ -77,10 +78,12 @@ function processDep(isReload = false) {
           });
         }
       } else {
-        // New room — add as due
         mergedRooms.push({
           ...incoming,
           status: 'due',
+          noAnswer: false,
+          noAnswerCount: 0,
+          lastAttemptAt: '',
           lateTime: '',
           extensionNights: 0,
           note: '',
@@ -89,13 +92,11 @@ function processDep(isReload = false) {
       }
     });
 
-    // Find rooms that are NO LONGER in the report — they've checked out
     removedRooms = depRooms.filter(r => 
       !incomingRooms.some(incoming => incoming.roomStr === r.roomStr) && 
       r.status !== 'out'
     );
 
-    // Auto-checkout removed rooms
     removedRooms.forEach(r => {
       const rIdx = depRooms.indexOf(r);
       if (rIdx >= 0 && r.status !== 'out') {
@@ -112,10 +113,12 @@ function processDep(isReload = false) {
 
     depRooms = mergedRooms;
   } else {
-    // First time loading or manual clear - just use incoming rooms
     depRooms = incomingRooms.map(r => ({
       ...r,
       status: 'due',
+      noAnswer: false,
+      noAnswerCount: 0,
+      lastAttemptAt: '',
       lateTime: '',
       extensionNights: 0,
       note: '',
@@ -125,14 +128,12 @@ function processDep(isReload = false) {
   }
 
   depRooms.sort((a, b) => a.room - b.room);
-
-  // Clean up log entries for rooms that no longer exist
   depLog = depLog.filter(log => depRooms.some(r => r.roomStr === log.room));
 
   document.getElementById('depDateLabel').textContent = `${depRooms.length} rooms departing · ${depRooms[0]?.departure || ''}`;
   document.getElementById('depBoard').style.display    = 'block';
   document.getElementById('depUploadCard').style.display = 'none';
-  ['depPrintBtn','depExportBtn','depViewToggle'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = ''; });
+  ['depPrintBtn','depExportBtn','depViewToggle','depReloadBtn'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = ''; });
 
   depRender();
   updateDepBadge();
@@ -143,38 +144,28 @@ function processDep(isReload = false) {
   });
 }
 
-// Add this function to reload reports while preserving existing data
 function reloadDepReport() {
-  // Temporarily show the upload card to paste new data
   const uploadCard = document.getElementById('depUploadCard');
-  const board = document.getElementById('depBoard');
   
   if (uploadCard.style.display === 'none') {
-    // Card is hidden - show it and scroll to it
     uploadCard.style.display = 'block';
     uploadCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    
-    // Clear the textarea for fresh paste
     document.getElementById('depInput').value = '';
     
-    // Change the button text temporarily to indicate reload mode
     const loadBtn = uploadCard.querySelector('.btn.gold');
     if (loadBtn) {
       const originalText = loadBtn.textContent;
       loadBtn.textContent = '🔄 Reload with New Report';
       loadBtn.style.background = 'linear-gradient(135deg, var(--violet), var(--sky))';
       
-      // Store original button behavior
       loadBtn._originalClick = loadBtn.onclick;
       loadBtn.onclick = () => {
-        // Process the new report
         const raw = document.getElementById('depInput').value.trim();
         if (raw) {
-          processDep(true); // Pass true for reload mode
+          processDep(true);
         } else {
           showToast('Please paste new report data first', 'err');
         }
-        // Reset button
         loadBtn.textContent = originalText;
         loadBtn.style.background = '';
         loadBtn.onclick = loadBtn._originalClick;
@@ -187,7 +178,8 @@ function reloadDepReport() {
 function depCounts() {
   return {
     all:      depRooms.length,
-    due:      depRooms.filter(r => r.status === 'due').length,
+    due:      depRooms.filter(r => r.status === 'due' && !r.noAnswer).length,
+    noAnswer: depRooms.filter(r => r.noAnswer === true && r.status !== 'out').length,
     extended: depRooms.filter(r => r.status === 'extended').length,
     late:     depRooms.filter(r => r.status === 'late').length,
     balance:  depRooms.filter(r => r.balance > 0 && r.status !== 'out').length,
@@ -205,6 +197,7 @@ function depRender() {
   document.getElementById('depKpis').innerHTML = `
     <div class="dep-kpi k-total"><div class="dep-kpi-icon">🏨</div><div class="dep-kpi-val">${total}</div><div class="dep-kpi-label">Total</div><div class="dep-kpi-bar"></div></div>
     <div class="dep-kpi k-due"><div class="dep-kpi-icon">⏳</div><div class="dep-kpi-val">${sc.due}</div><div class="dep-kpi-label">Due Out</div><div class="dep-kpi-bar"></div></div>
+    <div class="dep-kpi k-noanswer" style="border-color:rgba(240,164,58,0.4);"><div class="dep-kpi-icon">📞❌</div><div class="dep-kpi-val" style="color:var(--amber);">${sc.noAnswer}</div><div class="dep-kpi-label">No Answer</div><div class="dep-kpi-bar" style="background:linear-gradient(90deg, transparent, var(--amber), transparent);"></div></div>
     <div class="dep-kpi k-ext"><div class="dep-kpi-icon">↪</div><div class="dep-kpi-val">${sc.extended}</div><div class="dep-kpi-label">Extended</div><div class="dep-kpi-bar"></div></div>
     <div class="dep-kpi k-late"><div class="dep-kpi-icon">🕐</div><div class="dep-kpi-val">${sc.late}</div><div class="dep-kpi-label">Late CO</div><div class="dep-kpi-bar"></div></div>
     <div class="dep-kpi k-out"><div class="dep-kpi-icon">✓</div><div class="dep-kpi-val">${out}</div><div class="dep-kpi-label">Checked Out</div><div class="dep-kpi-bar"></div></div>`;
@@ -218,6 +211,7 @@ function depRender() {
     let mf = true;
     if      (depFilter_ === 'all')     mf = r.status !== 'out' && r.status !== 'extended';
     else if (depFilter_ === 'balance') mf = r.balance > 0 && r.status !== 'out';
+    else if (depFilter_ === 'noanswer') mf = r.noAnswer === true && r.status !== 'out';
     else                               mf = r.status === depFilter_;
     const ms = !search || r.roomStr.includes(search) || r.name.toLowerCase().includes(search) || r.source.toLowerCase().includes(search);
     return mf && ms;
@@ -231,6 +225,170 @@ function depRender() {
   const qb = document.getElementById('depQuickBar');
   if (sc.due > 3) { qb.style.display = 'flex'; document.getElementById('depQuickLabel').textContent = `${sc.due} rooms still due out`; }
   else qb.style.display = 'none';
+}
+
+function depCardHTML(r) {
+  const i        = depRooms.indexOf(r);
+  const bal      = r.balance;
+  const balClass = bal > 0 ? 'bal-owing' : bal < 0 ? 'bal-credit' : 'bal-zero';
+  const balText  = bal === 0 ? '✓ Settled'
+    : bal > 0 ? `AED ${Math.abs(bal).toLocaleString('en',{minimumFractionDigits:2})} OWING`
+    :           `AED ${Math.abs(bal).toLocaleString('en',{minimumFractionDigits:2})} CREDIT`;
+  
+  let sClass = 's-' + (r.balance > 0 && r.status !== 'out' ? 'balance' : r.status);
+  if (r.noAnswer && r.status !== 'out') sClass += ' s-noanswer';
+  
+  let badgeCls = r.status==='due'?'sb-due':r.status==='extended'?'sb-extended':r.status==='late'?'sb-late':'sb-out';
+  let badgeText = r.status==='due'?'DUE OUT':r.status==='extended'?`EXT +${r.extensionNights}N`:r.status==='late'?`LATE${r.lateTime?' · '+r.lateTime:''}`:'CHECKED OUT';
+  
+  if (r.noAnswer && r.status !== 'out') {
+    badgeCls = 'sb-noanswer';
+    badgeText = `NO ANSWER${r.noAnswerCount > 0 ? ` (${r.noAnswerCount}x)` : ''}`;
+  }
+  
+  const srcClean  = r.source.substring(0, 26) + (r.source.length > 26 ? '…' : '');
+  const vipHTML   = r.isVip ? '<div class="dc-vip">⭐ VIP</div>' : '';
+  const depTag    = r.depTime ? `<div class="dc-mi">🕐 Sched: <strong>${r.depTime}</strong></div>` : '';
+  const compTag   = r.company ? `<div class="dc-company">🏢 ${r.company.substring(0, 36)}</div>` : '';
+  const noAnswerTag = r.lastAttemptAt ? `<div class="dc-mi">📞 Last attempt: <strong>${r.lastAttemptAt}</strong></div>` : '';
+
+  const lateHTML = r.status === 'late' ? `
+    <div class="dc-sel-row">
+      <span class="dc-sel-lbl late">🕐 Late time:</span>
+      <select class="dc-select late" onchange="depRooms[${i}].lateTime=this.value;depRooms[${i}].noAnswer=false;depRender();saveDeps()">
+        <option value="">Select…</option>
+        ${['10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM','6:00 PM','7:00 PM','8:00 PM','9:00 PM','10:00 PM','11:00 PM','12:00 AM']
+          .map(t => `<option${r.lateTime===t?' selected':''}>${t}</option>`).join('')}
+      </select>
+    </div>` : r.status === 'extended' ? `
+    <div class="dc-sel-row">
+      <span class="dc-sel-lbl ext">↪ Extra nights:</span>
+      <select class="dc-select ext" onchange="depRooms[${i}].extensionNights=parseInt(this.value)||0;depRender();saveDeps()">
+        ${[1,2,3,4,5,6,7].map(n => `<option${r.extensionNights===n?' selected':''}>${n} night${n>1?'s':''}</option>`).join('')}
+      </select>
+    </div>` : '';
+
+  const noAnswerHTML = (r.status === 'due' || r.noAnswer) && r.status !== 'out' && r.status !== 'extended' && r.status !== 'late' ? `
+    <div class="dc-actions" style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px;">
+      <button class="dca dca-noanswer" onclick="depMarkNoAnswer(${i})">
+        📞❌ ${r.noAnswer ? 'Mark as Answered' : 'No Answer'}
+      </button>
+      <button class="dca dca-callback" onclick="depScheduleCallback(${i})">
+        ⏰ Schedule Callback
+      </button>
+    </div>
+  ` : '';
+
+  const actHTML = r.status !== 'out'
+    ? `<div class="dc-actions g3">
+         <button class="dca dca-co"   onclick="depAction(${i},'out')">✓ Check Out</button>
+         <button class="dca dca-ext"  onclick="depAction(${i},'extended')">↪ Extend</button>
+         <button class="dca dca-late" onclick="depAction(${i},'late')">🕐 Late CO</button>
+       </div>`
+    : `<div class="dc-actions g1"><button class="dca dca-undo" onclick="depAction(${i},'due')">↺ Undo</button></div>`;
+
+  return `<div class="dep-card ${sClass}" draggable="true">
+    ${vipHTML}
+    <div class="dc-band"></div>
+    <div class="dc-head">
+      <div class="dc-room">${r.roomStr}</div>
+      <div class="dc-badges">
+        <div class="dc-sbadge ${badgeCls}">${badgeText}</div>
+        <div class="dc-nights">🌙 ${r.nights}n</div>
+      </div>
+    </div>
+    <div class="dc-body">
+      <div class="dc-name-row">
+        <div class="dc-name" ondblclick="depEditName(${i})" title="Double-click to edit">${escapeHtml(r.name)}</div>
+      </div>
+      <div class="dc-meta">
+        <div class="dc-mi">📅 <strong>${r.arrival}</strong> → <strong>${r.departure}</strong></div>
+        ${depTag}
+        ${noAnswerTag}
+      </div>
+      ${compTag}
+      <div class="dc-src">${escapeHtml(srcClean)}</div>
+      <div class="dc-bal ${balClass}">
+        <span class="dc-bal-lbl">Balance</span>
+        <span class="dc-bal-amt">${balText}</span>
+      </div>
+      ${lateHTML}
+      ${noAnswerHTML}
+      ${actHTML}
+      <div style="margin-top:7px;">
+        <div class="dc-note-lbl">Notes</div>
+        <textarea class="dc-note" placeholder="Guest requests, no answer notes, callback schedule…"
+          onchange="depRooms[${i}].note=this.value;saveDeps()">${escapeHtml(r.note)}</textarea>
+      </div>
+    </div>
+  </div>`;
+}
+
+// New function: Mark No Answer
+function depMarkNoAnswer(i) {
+  const r = depRooms[i];
+  const t = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  
+  if (r.noAnswer) {
+    // Mark as answered - clear the no answer flag
+    r.noAnswer = false;
+    r.status = 'due';
+    showToast(`${r.roomStr} - Guest marked as answered`, 'ok');
+    depLog.unshift({ 
+      room: r.roomStr, 
+      name: r.name, 
+      action: 'answered', 
+      time: t, 
+      roomIdx: i, 
+      prevStatus: 'noanswer' 
+    });
+  } else {
+    // Mark as no answer
+    r.noAnswer = true;
+    r.noAnswerCount = (r.noAnswerCount || 0) + 1;
+    r.lastAttemptAt = t;
+    r.status = 'due'; // Keep as due but with no answer flag
+    
+    showToast(`${r.roomStr} - ${r.name} · No answer (attempt ${r.noAnswerCount})`, 'info');
+    depLog.unshift({ 
+      room: r.roomStr, 
+      name: r.name, 
+      action: 'noanswer', 
+      time: t, 
+      roomIdx: i, 
+      prevStatus: 'due',
+      attemptCount: r.noAnswerCount 
+    });
+  }
+  
+  depRender();
+  updateDepBadge();
+  saveDeps();
+}
+
+// New function: Schedule Callback
+function depScheduleCallback(i) {
+  const r = depRooms[i];
+  const callbackTime = prompt(`Schedule callback for room ${r.roomStr} - ${r.name}:\nEnter time (e.g., 14:30 or 2:30 PM)`, "30 min");
+  
+  if (callbackTime && callbackTime.trim()) {
+    const scheduled = callbackTime.trim();
+    r.callbackScheduled = scheduled;
+    r.note = (r.note ? r.note + '\n' : '') + `📞 Callback scheduled: ${scheduled}`;
+    
+    showToast(`${r.roomStr} - Callback scheduled for ${scheduled}`, 'ok');
+    depLog.unshift({ 
+      room: r.roomStr, 
+      name: r.name, 
+      action: 'callback_scheduled', 
+      time: new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' }),
+      roomIdx: i,
+      scheduled: scheduled
+    });
+    
+    depRender();
+    saveDeps();
+  }
 }
 
 // Drag and drop for departure cards
@@ -281,12 +439,12 @@ function handleDrop(e) {
   
   if (fromIdx < 0 || toIdx < 0) return;
   
-  // Get the actual room indices based on current filtered view
   const search = (document.getElementById('depSearch')?.value || '').toLowerCase();
   let filtered = depRooms.filter(r => {
     let mf = true;
     if      (depFilter_ === 'all')     mf = r.status !== 'out' && r.status !== 'extended';
     else if (depFilter_ === 'balance') mf = r.balance > 0 && r.status !== 'out';
+    else if (depFilter_ === 'noanswer') mf = r.noAnswer === true && r.status !== 'out';
     else                               mf = r.status === depFilter_;
     const ms = !search || r.roomStr.includes(search) || r.name.toLowerCase().includes(search) || r.source.toLowerCase().includes(search);
     return mf && ms;
@@ -299,7 +457,6 @@ function handleDrop(e) {
     const fromGlobalIdx = depRooms.indexOf(fromRoom);
     const toGlobalIdx = depRooms.indexOf(toRoom);
     if (fromGlobalIdx >= 0 && toGlobalIdx >= 0) {
-      // Swap positions in the global array
       [depRooms[fromGlobalIdx], depRooms[toGlobalIdx]] = [depRooms[toGlobalIdx], depRooms[fromGlobalIdx]];
       saveDeps();
     }
@@ -308,80 +465,6 @@ function handleDrop(e) {
   draggedCard.style.opacity = '';
   draggedCard = null;
   depRender();
-}
-
-function depCardHTML(r) {
-  const i        = depRooms.indexOf(r);
-  const bal      = r.balance;
-  const balClass = bal > 0 ? 'bal-owing' : bal < 0 ? 'bal-credit' : 'bal-zero';
-  const balText  = bal === 0 ? '✓ Settled'
-    : bal > 0 ? `AED ${Math.abs(bal).toLocaleString('en',{minimumFractionDigits:2})} OWING`
-    :           `AED ${Math.abs(bal).toLocaleString('en',{minimumFractionDigits:2})} CREDIT`;
-  const sClass    = 's-' + (r.balance > 0 && r.status !== 'out' ? 'balance' : r.status);
-  const badgeCls  = r.status==='due'?'sb-due':r.status==='extended'?'sb-extended':r.status==='late'?'sb-late':'sb-out';
-  const badgeText = r.status==='due'?'DUE OUT':r.status==='extended'?`EXT +${r.extensionNights}N`:r.status==='late'?`LATE${r.lateTime?' · '+r.lateTime:''}`:'CHECKED OUT';
-  const srcClean  = r.source.substring(0, 26) + (r.source.length > 26 ? '…' : '');
-  const vipHTML   = r.isVip ? '<div class="dc-vip">⭐ VIP</div>' : '';
-  const depTag    = r.depTime ? `<div class="dc-mi">🕐 Sched: <strong>${r.depTime}</strong></div>` : '';
-  const compTag   = r.company ? `<div class="dc-company">🏢 ${r.company.substring(0, 36)}</div>` : '';
-
-  const lateHTML = r.status === 'late' ? `
-    <div class="dc-sel-row">
-      <span class="dc-sel-lbl late">🕐 Late time:</span>
-      <select class="dc-select late" onchange="depRooms[${i}].lateTime=this.value;depRender();saveDeps()">
-        <option value="">Select…</option>
-        ${['10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM','6:00 PM','7:00 PM','8:00 PM','9:00 PM','10:00 PM','11:00 PM','12:00 AM']
-          .map(t => `<option${r.lateTime===t?' selected':''}>${t}</option>`).join('')}
-      </select>
-    </div>` : r.status === 'extended' ? `
-    <div class="dc-sel-row">
-      <span class="dc-sel-lbl ext">↪ Extra nights:</span>
-      <select class="dc-select ext" onchange="depRooms[${i}].extensionNights=parseInt(this.value)||0;depRender();saveDeps()">
-        ${[1,2,3,4,5,6,7].map(n => `<option${r.extensionNights===n?' selected':''}>${n} night${n>1?'s':''}</option>`).join('')}
-      </select>
-    </div>` : '';
-
-  const actHTML = r.status !== 'out'
-    ? `<div class="dc-actions g3">
-         <button class="dca dca-co"   onclick="depAction(${i},'out')">✓ Check Out</button>
-         <button class="dca dca-ext"  onclick="depAction(${i},'extended')">↪ Extend</button>
-         <button class="dca dca-late" onclick="depAction(${i},'late')">🕐 Late CO</button>
-       </div>`
-    : `<div class="dc-actions g1"><button class="dca dca-undo" onclick="depAction(${i},'due')">↺ Undo</button></div>`;
-
-  return `<div class="dep-card ${sClass}" draggable="true">
-    ${vipHTML}
-    <div class="dc-band"></div>
-    <div class="dc-head">
-      <div class="dc-room">${r.roomStr}</div>
-      <div class="dc-badges">
-        <div class="dc-sbadge ${badgeCls}">${badgeText}</div>
-        <div class="dc-nights">🌙 ${r.nights}n</div>
-      </div>
-    </div>
-    <div class="dc-body">
-      <div class="dc-name-row">
-        <div class="dc-name" ondblclick="depEditName(${i})" title="Double-click to edit">${escapeHtml(r.name)}</div>
-      </div>
-      <div class="dc-meta">
-        <div class="dc-mi">📅 <strong>${r.arrival}</strong> → <strong>${r.departure}</strong></div>
-        ${depTag}
-      </div>
-      ${compTag}
-      <div class="dc-src">${escapeHtml(srcClean)}</div>
-      <div class="dc-bal ${balClass}">
-        <span class="dc-bal-lbl">Balance</span>
-        <span class="dc-bal-amt">${balText}</span>
-      </div>
-      ${lateHTML}
-      ${actHTML}
-      <div style="margin-top:7px;">
-        <div class="dc-note-lbl">Notes</div>
-        <textarea class="dc-note" placeholder="Guest requests, luggage, complaints…"
-          onchange="depRooms[${i}].note=this.value;saveDeps()">${escapeHtml(r.note)}</textarea>
-      </div>
-    </div>
-  </div>`;
 }
 
 function escapeHtml(str) {
@@ -399,6 +482,7 @@ function depEditName(i) {
   const visibleRooms = depRooms.filter(r => {
     if (depFilter_ === 'all')     return r.status !== 'out' && r.status !== 'extended';
     if (depFilter_ === 'balance') return r.balance > 0 && r.status !== 'out';
+    if (depFilter_ === 'noanswer') return r.noAnswer === true && r.status !== 'out';
     return r.status === depFilter_;
   });
   const vi = visibleRooms.indexOf(depRooms[i]);
@@ -422,6 +506,12 @@ function depAction(i, status) {
   const prev = r.status;
   r.status = status;
   const t = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  
+  // Clear no-answer flag when taking action
+  if (status !== 'due') {
+    r.noAnswer = false;
+  }
+  
   if (status === 'out') r.checkoutAt = t; else r.checkoutAt = '';
   if (status !== 'late') r.lateTime = '';
   if (status !== 'extended') r.extensionNights = 0;
@@ -446,22 +536,48 @@ function renderDepLog() {
   if (!entries.length) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
   if (badge) badge.textContent = entries.length;
-  const aLabel = { out:'✓ Checked Out', auto_out:'✓ Auto Checked Out', extended:'↪ Extended', late:'🕐 Late CO' };
-  const aCls   = { out:'log-act-co', auto_out:'log-act-co', extended:'log-act-ext', late:'log-act-late' };
+  const aLabel = { 
+    out:'✓ Checked Out', 
+    auto_out:'✓ Auto Checked Out', 
+    extended:'↪ Extended', 
+    late:'🕐 Late CO',
+    noanswer:'📞❌ No Answer',
+    answered:'📞✓ Answered',
+    callback_scheduled:'⏰ Callback Scheduled'
+  };
+  const aCls   = { 
+    out:'log-act-co', 
+    auto_out:'log-act-co', 
+    extended:'log-act-ext', 
+    late:'log-act-late',
+    noanswer:'log-act-noanswer',
+    answered:'log-act-answered',
+    callback_scheduled:'log-act-callback'
+  };
   body.innerHTML = entries.map((l, li) => `
     <div class="log-row">
       <span class="log-room">${l.room}</span>
       <span class="log-name">${escapeHtml(l.name)}</span>
-      <span class="log-action ${aCls[l.action]||''}">${aLabel[l.action]||l.action}</span>
+      <span class="log-action ${aCls[l.action]||''}">${aLabel[l.action]||l.action}${l.attemptCount ? ` (x${l.attemptCount})` : ''}${l.scheduled ? ` at ${l.scheduled}` : ''}</span>
       <span class="log-time">${l.time}</span>
       <button class="log-undo" onclick="depUndoLog(${li})">↺ Undo</button>
-    </div>`).join('');
+    </div>
+  `).join('');
 }
 
 function depUndoLog(li) {
   const entry = depLog[li]; if (!entry) return;
   const r = depRooms[entry.roomIdx];
-  if (r) { r.status = entry.prevStatus || 'due'; r.checkoutAt = ''; r.lateTime = ''; r.extensionNights = 0; }
+  if (r) { 
+    r.status = entry.prevStatus || 'due'; 
+    r.checkoutAt = ''; 
+    r.lateTime = ''; 
+    r.extensionNights = 0;
+    if (entry.action === 'noanswer') {
+      r.noAnswer = false;
+      r.noAnswerCount = (r.noAnswerCount || 1) - 1;
+    }
+  }
   depLog.splice(li, 1);
   depRender(); updateDepBadge(); saveDeps();
 }
@@ -476,11 +592,11 @@ function toggleLog() {
 
 function depFilter(f, el) {
   depFilter_ = f;
-  document.querySelectorAll('[data-f]').forEach(c => c.classList.remove('on','due','ext','late','bal','out'));
+  document.querySelectorAll('[data-f]').forEach(c => c.classList.remove('on','due','ext','late','bal','out','noanswer'));
   const btn = el || document.querySelector(`[data-f="${f}"]`);
   if (btn) {
     btn.classList.add('on');
-    const map = { due:'due', extended:'ext', late:'late', balance:'bal', out:'out' };
+    const map = { due:'due', extended:'ext', late:'late', balance:'bal', out:'out', noanswer:'noanswer' };
     if (map[f]) btn.classList.add(map[f]);
   }
   depRender();
@@ -495,7 +611,7 @@ function setDepSize(size, el) {
 }
 
 function updateDepBadge() {
-  const due = depRooms.filter(r => r.status === 'due' || r.status === 'late').length;
+  const due = depRooms.filter(r => (r.status === 'due' || r.status === 'late') && !r.noAnswer).length;
   const el  = document.getElementById('badge-departures');
   if (el) el.textContent = due || depRooms.length || '0';
 }
@@ -503,9 +619,10 @@ function updateDepBadge() {
 function depBulkCheckout() {
   if (!confirm('Mark ALL due-out rooms as checked out?')) return;
   const t = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
-  depRooms.filter(r => r.status === 'due').forEach(r => {
+  depRooms.filter(r => r.status === 'due' && !r.noAnswer).forEach(r => {
     const i = depRooms.indexOf(r);
     r.status = 'out'; r.checkoutAt = t;
+    r.noAnswer = false;
     depLog.unshift({ room:r.roomStr, name:r.name, action:'out', time:t, roomIdx:i, prevStatus:'due' });
   });
   depRender(); updateDepBadge(); saveDeps();
@@ -518,17 +635,21 @@ function clearDep() {
   document.getElementById('depInput').value              = '';
   document.getElementById('depDateLabel').textContent    = "Today's departures · Load Opera report to begin";
   const b = document.getElementById('badge-departures'); if (b) b.textContent = '0';
-  ['depPrintBtn','depExportBtn','depViewToggle'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+  ['depPrintBtn','depExportBtn','depViewToggle','depReloadBtn'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
   saveDeps();
 }
 
 function exportDepSummary() {
   if (!depRooms.length) return;
   const wb   = XLSX.utils.book_new();
-  const data = [['Room','Guest','Arrival','Departure','Nights','Balance AED','Source','Company','Status','Late Time','Ext Nights','Checkout','Notes']];
-  depRooms.forEach(r => data.push([r.roomStr,r.name,r.arrival,r.departure,r.nights,r.balance,r.source,r.company,r.status.toUpperCase(),r.lateTime,r.extensionNights||'',r.checkoutAt,r.note]));
+  const data = [['Room','Guest','Arrival','Departure','Nights','Balance AED','Source','Company','Status','No Answer','Attempts','Last Attempt','Late Time','Ext Nights','Checkout','Notes']];
+  depRooms.forEach(r => data.push([
+    r.roomStr, r.name, r.arrival, r.departure, r.nights, r.balance, r.source, r.company, 
+    r.status.toUpperCase(), r.noAnswer ? 'YES' : 'NO', r.noAnswerCount || 0, r.lastAttemptAt || '',
+    r.lateTime, r.extensionNights||'', r.checkoutAt, r.note
+  ]));
   const ws = XLSX.utils.aoa_to_sheet(data);
-  ws['!cols'] = [8,24,12,12,7,12,20,22,12,10,8,10,30].map(w => ({wch:w}));
+  ws['!cols'] = [8,24,12,12,7,12,20,22,12,8,8,12,10,8,10,30].map(w => ({wch:w}));
   XLSX.utils.book_append_sheet(wb, ws, 'Departures');
   XLSX.writeFile(wb, 'Departures_' + new Date().toISOString().split('T')[0] + '.xlsx');
 }
