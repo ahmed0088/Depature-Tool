@@ -311,22 +311,22 @@ function depCardHTML(r) {
     </div>
   `;
 
-  // Guest action buttons
-  const guestActionsHTML = (r.status === 'due' && r.status !== 'out' && r.status !== 'extended' && r.status !== 'late') ? `
-    <div class="dc-guest-actions" style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:8px;">
-      <button class="dca dca-pending" onclick="depMarkPending(${i})" title="Guest said 'might extend'">
-        ⏰❓ Might Extend
-      </button>
-      <button class="dca dca-coming" onclick="depMarkComingToExtend(${i})" title="Guest said 'I'm coming to extend'">
-        🚪➡️ Coming to Extend
-      </button>
-      <button class="dca dca-confirm" onclick="depConfirmExtensionNow(${i})" title="Guest confirmed extension">
-        ✅ Confirm Extend
-      </button>
-      <button class="dca dca-noanswer" onclick="depMarkNoAnswer(${i})" title="Guest not answering">
-        📞❌ No Answer
-      </button>
-    </div>
+  // Guest action buttons - cleaner text
+const guestActionsHTML = (r.status === 'due' && r.status !== 'out' && r.status !== 'extended' && r.status !== 'late') ? `
+  <div class="dc-guest-actions">
+    <button class="dca dca-pending" onclick="depMarkPending(${i})" title="Guest said 'might extend'">
+      ⏰ Pending
+    </button>
+    <button class="dca dca-coming" onclick="depMarkComingToExtend(${i})" title="Guest said 'I'm coming to extend'">
+      🚪 Coming
+    </button>
+    <button class="dca dca-confirm" onclick="depConfirmExtensionNow(${i})" title="Guest confirmed extension">
+      ✅ Confirm
+    </button>
+    <button class="dca dca-noanswer" onclick="depMarkNoAnswer(${i})" title="Guest not answering">
+      📞 No Answer
+    </button>
+  </div>
   ` : '';
 
   // Clear status button for flagged rooms
