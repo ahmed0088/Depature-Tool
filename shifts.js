@@ -1,6 +1,9 @@
 // ═══════════════════════════════════════════════════════════
-//  shifts.js  —  Shift Tasks (Morning / Afternoon / Mid / Night)
+//  shifts.js  —  Shift Tasks (Morning / Afternoon / Mid / Night) with drag & drop
 // ═══════════════════════════════════════════════════════════
+
+let draggedTask = null;
+let draggedTaskShift = null;
 
 function switchShift(key, el) {
   activeShift = key;
@@ -35,8 +38,8 @@ function renderShift(key) {
         <div class="prog-fill" style="background:${shift.color};width:${pct}%"></div>
       </div>
     </div>
-    <div id="stList-${key}">
-      ${shift.tasks.map(t => stItemHTML(key, t, done.has(t.id))).join('')}
+    <div id="stList-${key}" class="st-list-container">
+      ${shift.tasks.map((t, idx) => stItemHTML(key, t, done.has(t.id), idx)).join('')}
     </div>
     <div class="st-add-wrap">
       <input class="st-add-in"   id="stIn-${key}"   placeholder="Add new task…"       onkeydown="if(event.key==='Enter')stAddTask('${key}')"/>
@@ -46,21 +49,93 @@ function renderShift(key) {
     ${shift.resetAt ? `<div style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);margin-top:6px;">Last reset: ${shift.resetAt}</div>` : ''}`;
 
   document.getElementById('shiftContent').innerHTML = '<div class="shift-panel active">' + html + '</div>';
+  makeShiftTasksDraggable(key);
   updateShiftBadge(key);
 }
 
-function stItemHTML(key, t, isDone) {
-  return `<div class="st-item${isDone ? ' done' : ''}">
+function stItemHTML(key, t, isDone, idx) {
+  return `<div class="st-item${isDone ? ' done' : ''}" draggable="true" data-shift="${key}" data-task-id="${t.id}" data-task-idx="${idx}">
+    <div class="drag-handle" style="cursor:grab; color:var(--text3); font-size:0.7rem;">⋮⋮</div>
     <div class="st-check" onclick="stToggle('${key}','${t.id}')"></div>
     <div class="st-text">
-      <div class="st-name">${t.name}</div>
-      ${t.hint ? `<div class="st-hint">${t.hint}</div>` : ''}
+      <div class="st-name">${escapeHtmlForShift(t.name)}</div>
+      ${t.hint ? `<div class="st-hint">${escapeHtmlForShift(t.hint)}</div>` : ''}
     </div>
     <div class="st-actions">
       <button class="cl-step-btn edit-btn" onclick="openEditTask('${key}','${t.id}')">✏️</button>
       <button class="cl-step-btn del"      onclick="stDelete('${key}','${t.id}')">✕</button>
     </div>
   </div>`;
+}
+
+function escapeHtmlForShift(str) {
+  if (!str) return '';
+  return str.replace(/[&<>]/g, function(m) {
+    if (m === '&') return '&amp;';
+    if (m === '<') return '&lt;';
+    if (m === '>') return '&gt;';
+    return m;
+  });
+}
+
+function makeShiftTasksDraggable(key) {
+  const container = document.getElementById(`stList-${key}`);
+  if (!container) return;
+  
+  const items = container.querySelectorAll('.st-item');
+  items.forEach(item => {
+    item.removeEventListener('dragstart', handleShiftDragStart);
+    item.removeEventListener('dragend', handleShiftDragEnd);
+    item.removeEventListener('dragover', handleShiftDragOver);
+    item.removeEventListener('drop', handleShiftDrop);
+    
+    item.addEventListener('dragstart', handleShiftDragStart);
+    item.addEventListener('dragend', handleShiftDragEnd);
+    item.addEventListener('dragover', handleShiftDragOver);
+    item.addEventListener('drop', handleShiftDrop);
+  });
+}
+
+function handleShiftDragStart(e) {
+  draggedTask = this;
+  draggedTaskShift = this.getAttribute('data-shift');
+  e.dataTransfer.effectAllowed = 'move';
+  this.style.opacity = '0.5';
+}
+
+function handleShiftDragEnd(e) {
+  if (draggedTask) draggedTask.style.opacity = '';
+  draggedTask = null;
+  draggedTaskShift = null;
+}
+
+function handleShiftDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+}
+
+function handleShiftDrop(e) {
+  e.preventDefault();
+  if (!draggedTask || draggedTask === this) return;
+  
+  const fromShift = draggedTaskShift;
+  const toShift = this.getAttribute('data-shift');
+  const fromIdx = parseInt(draggedTask.getAttribute('data-task-idx'));
+  const toIdx = parseInt(this.getAttribute('data-task-idx'));
+  
+  if (fromShift === toShift && fromIdx !== toIdx && !isNaN(fromIdx) && !isNaN(toIdx)) {
+    // Reorder within same shift
+    const tasks = SHIFTS[fromShift].tasks;
+    const [movedTask] = tasks.splice(fromIdx, 1);
+    tasks.splice(toIdx, 0, movedTask);
+    renderShift(fromShift);
+    saveShifts(SHIFTS);
+    showToast('Task reordered ✓');
+  }
+  
+  draggedTask.style.opacity = '';
+  draggedTask = null;
+  draggedTaskShift = null;
 }
 
 function stToggle(key, id) {
@@ -136,7 +211,7 @@ function updateShiftBadge(key) {
 function initShifts() {
   Object.keys(SHIFTS).forEach(k => {
     if (!SHIFTS[k].tasks || !SHIFTS[k].tasks.length) {
-      SHIFTS[k].tasks = DEFAULT_TASKS[k].map(t => ({...t}));
+      SHIFTS[k].tasks = DEFAULT_TASKS[k] ? DEFAULT_TASKS[k].map(t => ({...t})) : [];
       SHIFTS[k].done  = [];
     }
     updateShiftBadge(k);
