@@ -1,11 +1,12 @@
 // ═══════════════════════════════════════════════════════════
 //  state.js  —  Single source of truth for all app data
+//  Import this file before any feature module.
 // ═══════════════════════════════════════════════════════════
 
 // ── Departure board ───────────────────────────────────────
 let depRooms   = [];
 let depFilter_ = 'all';
-let depSize    = 'md';
+let depSize    = 'md';     // ← ADD THIS LINE
 let depLog     = [];
 
 // ── Arrivals ──────────────────────────────────────────────
@@ -95,17 +96,3 @@ let feedbackLog = [];
 let natCopyText  = '';
 let rentCopyText = '';
 let naCopyText   = '';
-
-// Initialize shifts with default tasks
-function initShiftsDefault() {
-  Object.keys(SHIFTS).forEach(k => {
-    if (!SHIFTS[k].tasks || SHIFTS[k].tasks.length === 0) {
-      SHIFTS[k].tasks = DEFAULT_TASKS[k] ? DEFAULT_TASKS[k].map(t => ({...t})) : [];
-      SHIFTS[k].done = [];
-      SHIFTS[k].resetAt = '';
-    }
-  });
-}
-
-// Call initialization
-initShiftsDefault();

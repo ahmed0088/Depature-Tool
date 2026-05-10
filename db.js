@@ -1,27 +1,24 @@
 // ═══════════════════════════════════════════════════════════
-//  db.js  —  Firebase Realtime Database layer (FIXED + LIVE SYNC)
+//  db.js  —  Firebase Realtime Database layer
+//  Real-time sync: all colleagues see changes instantly,
+//  no page refresh needed.
 // ═══════════════════════════════════════════════════════════
 
-let _db = null;
-let _ref = null;
+let _db     = null;
+let _ref    = null;
 let _online = false;
 
-// HOTEL_ID comes from firebase-config.js — do NOT declare again here
-
-function dbInit(firebaseApp) {
+function dbInit() {
   try {
-    _db = firebase.database(firebaseApp || firebase.apps[0]);
+    _db  = firebase.database();
     _ref = _db.ref(`hotels/${HOTEL_ID}`);
-
-    console.log(`✅ Firebase initialized for hotel: ${HOTEL_ID}`);
-
-    // Connection status
+    console.log('✅ Firebase DB ready — hotel:', HOTEL_ID);
     _db.ref('.info/connected').on('value', snap => {
       _online = !!snap.val();
       updateConnectionUI(_online);
     });
   } catch (e) {
-    console.error("❌ Firebase init failed", e);
+    console.error('❌ dbInit failed:', e);
     updateConnectionUI(false);
   }
 }
@@ -30,227 +27,143 @@ function updateConnectionUI(online) {
   const dot = document.getElementById('fbDot');
   const lbl = document.getElementById('fbLabel');
   if (!dot || !lbl) return;
-
   if (online) {
     dot.style.background = 'var(--mint)';
-    dot.style.boxShadow = '0 0 6px var(--mint)';
-    lbl.textContent = 'Firebase · Live';
+    dot.style.boxShadow  = '0 0 6px var(--mint)';
+    lbl.textContent      = 'Firebase · Live';
   } else {
     dot.style.background = 'var(--amber)';
-    dot.style.boxShadow = 'none';
-    lbl.textContent = 'Firebase · Offline';
+    dot.style.boxShadow  = 'none';
+    lbl.textContent      = 'Firebase · Offline';
   }
 }
 
-// ====================== GENERIC HELPERS ======================
+// ── Helpers ───────────────────────────────────────────────
 async function fbSet(path, data) {
-  if (!_ref) { 
-    lsSave(path, data); 
-    return; 
-  }
-  try {
-    await _ref.child(path).set(data);
-    lsSave(path, data);
-  } catch (e) {
-    console.warn('[DB] fbSet failed:', e);
-    lsSave(path, data);
-  }
+  lsSave(path, data);
+  if (!_ref) return;
+  try { await _ref.child(path).set(data); }
+  catch (e) { console.warn('[DB] fbSet failed (saved locally):', e); }
 }
 
 async function fbGet(path) {
   if (!_ref) return lsLoad(path);
   try {
     const snap = await _ref.child(path).once('value');
-    return snap.val();
-  } catch (e) {
-    console.warn('[DB] fbGet failed:', e);
-    return lsLoad(path);
-  }
+    const val  = snap.val();
+    if (val !== null) lsSave(path, val);
+    return val;
+  } catch (e) { return lsLoad(path); }
 }
 
-async function fbPush(path, data) {
-  if (!_ref) return;
-  try { 
-    await _ref.child(path).push({ ...data, _ts: Date.now() }); 
-  } catch (e) {
-    console.warn('[DB] fbPush failed:', e);
-  }
-}
-
-async function fbRemove(path) {
-  if (!_ref) return;
-  try { 
-    await _ref.child(path).remove(); 
-  } catch (e) {
-    console.warn('[DB] fbRemove failed:', e);
-  }
-}
-
-// ====================== REAL-TIME LISTENERS (FIXED) ======================
-const listeners = {};
-
+// KEY FUNCTION: .on('value') fires immediately AND on every future change.
+// This is what makes real-time sync work without refresh.
 function fbListen(path, cb) {
-  if (!_ref) return;
-  
-  // Remove existing listener to prevent duplicates
-  if (listeners[path]) {
-    _ref.child(path).off('value', listeners[path]);
-  }
-
-  const handler = snap => {
-    try {
-      cb(snap.val());
-    } catch (err) {
-      console.error(`[DB] Listener error on ${path}:`, err);
-    }
-  };
-
-  listeners[path] = handler;
-  _ref.child(path).on('value', handler);
+  if (!_ref) { cb(lsLoad(path)); return; }
+  _ref.child(path).on('value', snap => {
+    const val = snap.val();
+    if (val !== null) lsSave(path, val);
+    cb(val);
+  }, err => {
+    console.warn('[DB] listener error:', path, err);
+    cb(lsLoad(path));
+  });
 }
 
-// ====================== LOCALSTORAGE ======================
 function lsSave(path, data) {
-  try { 
-    localStorage.setItem(`ibis_${path}`, JSON.stringify(data)); 
-  } catch(e) {
-    console.warn('[LS] Save failed:', e);
-  }
+  try { localStorage.setItem('ibis_' + path.replace(/\//g,'_'), JSON.stringify(data)); } catch(e) {}
 }
-
 function lsLoad(path) {
-  try {
-    const v = localStorage.getItem(`ibis_${path}`);
-    return v ? JSON.parse(v) : null;
-  } catch(e) { 
-    console.warn('[LS] Load failed:', e);
-    return null; 
-  }
+  try { const v = localStorage.getItem('ibis_' + path.replace(/\//g,'_')); return v ? JSON.parse(v) : null; } catch(e) { return null; }
 }
 
-// ====================== SAVE FUNCTIONS ======================
-async function saveChecklist(steps, done, skipped) {
-  await fbSet('checklist', { 
-    steps, 
-    done: [...done], 
-    skipped: [...skipped], 
-    updatedAt: new Date().toISOString() 
-  });
-}
-
-async function saveShifts(shiftsObj) {
-  await fbSet('shifts', { 
-    data: shiftsObj, 
-    updatedAt: new Date().toISOString() 
-  });
-}
-
+// ── Save functions ────────────────────────────────────────
+// In db.js - verify these functions exist
 async function saveDepartures(rooms, log) {
-  await fbSet('departures', { 
-    rooms, 
-    log, 
-    date: new Date().toISOString().split('T')[0], 
-    updatedAt: new Date().toISOString() 
-  });
+  await fbSet('departures', { rooms, log, date: new Date().toISOString().split('T')[0], updatedAt: new Date().toISOString() });
 }
 
 async function saveArrivals(guests) {
-  await fbSet('arrivals', { 
-    guests, 
-    date: new Date().toISOString().split('T')[0], 
-    updatedAt: new Date().toISOString() 
-  });
+  await fbSet('arrivals', { guests, date: new Date().toISOString().split('T')[0], updatedAt: new Date().toISOString() });
 }
 
 async function savePurpose(guests) {
-  await fbSet('purpose', { 
-    guests, 
-    date: new Date().toISOString().split('T')[0], 
-    updatedAt: new Date().toISOString() 
-  });
+  await fbSet('purpose', { guests, date: new Date().toISOString().split('T')[0], updatedAt: new Date().toISOString() });
+}
+
+async function saveShifts(shiftsObj) {
+  await fbSet('shifts', { data: shiftsObj, updatedAt: new Date().toISOString() });
 }
 
 async function saveFeedback(log) {
-  await fbSet('feedback', { 
-    log, 
-    updatedAt: new Date().toISOString() 
-  });
+  await fbSet('feedback', { log, updatedAt: new Date().toISOString() });
 }
 
 async function saveSettings(settings) {
-  await fbSet('settings', { 
-    ...settings, 
-    updatedAt: new Date().toISOString() 
-  });
+  const current = await fbGet('settings') || {};
+  await fbSet('settings', { ...current, ...settings, updatedAt: new Date().toISOString() });
 }
 
-// ====================== LOAD & LISTEN ======================
+// Add to db.js - loads all data from Firebase in one call
 async function loadAll() {
-  const [checklist, shifts, departures, arrivals, purpose, feedback, settings] = await Promise.all([
-    fbGet('checklist'), 
-    fbGet('shifts'), 
-    fbGet('departures'),
-    fbGet('arrivals'), 
-    fbGet('purpose'), 
-    fbGet('feedback'), 
-    fbGet('settings')
-  ]);
-  return { checklist, shifts, departures, arrivals, purpose, feedback, settings };
-}
-
-function listenDepartures(cb) { fbListen('departures', cb); }
-function listenArrivals(cb)   { fbListen('arrivals', cb); }
-function listenChecklist(cb)  { fbListen('checklist', cb); }
-function listenShifts(cb)     { fbListen('shifts', cb); }
-
-// Export / Import
-async function exportAllData() {
   try {
-    const snap = await fbGet('');
-    const blob = new Blob([JSON.stringify(snap, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `ibis_backup_${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    const [departures, arrivals, purpose, checklist, shifts, feedback, settings] = await Promise.all([
+      fbGet('departures'),
+      fbGet('arrivals'),
+      fbGet('purpose'),
+      fbGet('checklist'),
+      fbGet('shifts'),
+      fbGet('feedback'),
+      fbGet('settings')
+    ]);
+    
+    return {
+      departures: departures || { rooms: [], log: [] },
+      arrivals: arrivals || { guests: [] },
+      purpose: purpose || { guests: [] },
+      checklist: checklist || { steps: [], done: [], skipped: [] },
+      shifts: shifts || { data: null },
+      feedback: feedback || { log: [] },
+      settings: settings || {}
+    };
   } catch (e) {
-    console.error("Export failed", e);
+    console.warn('loadAll error:', e);
+    return {
+      departures: { rooms: [], log: [] },
+      arrivals: { guests: [] },
+      purpose: { guests: [] },
+      checklist: { steps: [], done: [], skipped: [] },
+      shifts: { data: null },
+      feedback: { log: [] },
+      settings: {}
+    };
   }
 }
 
+// ── Real-time listeners ───────────────────────────────────
+// Each one fires immediately with current data, then again on every change.
+function listenDepartures(cb) { fbListen('departures', cb); }
+function listenArrivals(cb)   { fbListen('arrivals',   cb); }
+function listenPurpose(cb)    { fbListen('purpose',    cb); }
+function listenChecklist(cb)  { fbListen('checklist',  cb); }
+function listenShifts(cb)     { fbListen('shifts',     cb); }
+function listenSettings(cb)   { fbListen('settings',   cb); }
+
+// ── Export / Import ───────────────────────────────────────
+async function exportAllData() {
+  const snap = await fbGet('');
+  const blob = new Blob([JSON.stringify(snap, null, 2)], {type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'ibis_backup_' + new Date().toISOString().split('T')[0] + '.json';
+  a.click(); URL.revokeObjectURL(a.href);
+}
 async function importAllData(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = async e => {
-      try {
-        const data = JSON.parse(e.target.result);
-        await fbSet('', data);
-        resolve(data);
-      } catch (err) { 
-        reject(err); 
-      }
+      try { const data = JSON.parse(e.target.result); await fbSet('', data); resolve(data); }
+      catch (err) { reject(err); }
     };
     reader.readAsText(file);
   });
 }
-
-// Make everything globally available
-window.dbInit = dbInit;
-window.fbSet = fbSet;
-window.fbGet = fbGet;
-window.fbListen = fbListen;
-window.loadAll = loadAll;
-window.saveChecklist = saveChecklist;
-window.saveShifts = saveShifts;
-window.saveDepartures = saveDepartures;
-window.saveArrivals = saveArrivals;
-window.savePurpose = savePurpose;
-window.saveFeedback = saveFeedback;
-window.saveSettings = saveSettings;
-window.listenDepartures = listenDepartures;
-window.listenArrivals = listenArrivals;
-window.listenChecklist = listenChecklist;
-window.listenShifts = listenShifts;
-window.updateConnectionUI = updateConnectionUI;
-window.exportAllData = exportAllData;
-window.importAllData = importAllData;

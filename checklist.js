@@ -16,7 +16,7 @@ function clAddStep() {
   const hint = (document.getElementById('clNewHint').value  || '').trim();
   const phase = document.getElementById('clNewPhase').value;
   const tag   = document.getElementById('clNewTag').value;
-  const id    = Math.max(0, ...CL_STEPS.map(s => s.id), 0) + 1;
+  const id    = Math.max(0, ...CL_STEPS.map(s => s.id)) + 1;
   CL_STEPS.push({ id, phase, name, tag, hint });
   document.getElementById('clNewName').value = '';
   document.getElementById('clNewHint').value = '';
@@ -42,10 +42,7 @@ function openEditStep(id) {
   document.getElementById('es-tag').value   = s.tag;
   document.getElementById('editStepModal').classList.add('open');
 }
-
-function closeEditStep() { 
-  document.getElementById('editStepModal').classList.remove('open'); 
-}
+function closeEditStep() { document.getElementById('editStepModal').classList.remove('open'); }
 
 function saveEditStep() {
   const id = parseInt(document.getElementById('es-id').value);
@@ -86,8 +83,8 @@ function clRender2() {
               <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${tagColors[s.tag]||'var(--text3)'};margin-right:3px;vertical-align:middle;"></span>
               <span style="font-size:0.54rem;color:${tagColors[s.tag]||'var(--text3)'};">${s.tag.toUpperCase()}</span>
             </div>
-            <div class="cl-name">${escapeHtmlSimple(s.name)}</div>
-            ${s.hint ? `<div class="cl-hint">${escapeHtmlSimple(s.hint)}</div>` : ''}
+            <div class="cl-name">${s.name}</div>
+            ${s.hint ? `<div class="cl-hint">${s.hint}</div>` : ''}
           </div>
           <div class="cl-step-btns" onclick="event.stopPropagation()">
             ${clEditMode
@@ -102,16 +99,6 @@ function clRender2() {
   const el = document.getElementById('clStepList2');
   if (el) el.innerHTML = html;
   clUpdateProgress();
-}
-
-function escapeHtmlSimple(str) {
-  if (!str) return '';
-  return str.replace(/[&<>]/g, function(m) {
-    if (m === '&') return '&amp;';
-    if (m === '<') return '&lt;';
-    if (m === '>') return '&gt;';
-    return m;
-  });
 }
 
 function clToggle2(id) {
