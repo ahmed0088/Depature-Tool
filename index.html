@@ -11,8 +11,352 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
-<!-- App styles -->
-<link rel="stylesheet" href="styles.css"/>
+<style>
+/* ═══════════════════════════════════════════════════
+   IBIS STYLES OPS PLATFORM v2.0 — styles.css
+═══════════════════════════════════════════════════ */
+
+:root {
+  --bg: #0a0c10;
+  --bg2: #0f1218;
+  --surface: #141920;
+  --card: #181f2a;
+  --card2: #1e2736;
+  --border: #232d3f;
+  --border2: #2d3d56;
+  --gold: #e8b84b;
+  --gold2: #c49a2f;
+  --gold-glow: rgba(232,184,75,0.12);
+  --sky: #5ab4e8;
+  --sky2: #3d9fd4;
+  --mint: #3ecf8e;
+  --rose: #f06b7a;
+  --amber: #f0a43a;
+  --violet: #8b7cf8;
+  --text: #dde4f0;
+  --text2: #8a99b3;
+  --text3: #3d4f6b;
+  --r: 10px;
+  --r2: 16px;
+  --r3: 22px;
+  --nav-w: 224px;
+  --font: 'DM Sans', sans-serif;
+  --mono: 'DM Mono', monospace;
+  --serif: 'DM Serif Display', serif;
+}
+
+[data-theme="light"] {
+  --bg: #f0f2f5 !important;
+  --bg2: #e8ebef !important;
+  --surface: #ffffff !important;
+  --card: #ffffff !important;
+  --card2: #f5f7fa !important;
+  --border: #d5dce8 !important;
+  --border2: #c5cdd8 !important;
+  --text: #0f1419 !important;
+  --text2: #4a5c72 !important;
+  --text3: #8a9ab0 !important;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body { background: var(--bg); color: var(--text); font-family: var(--font); display: flex; flex-direction: column; }
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+/* Top Bar */
+.topbar {
+  height: 52px; flex-shrink: 0; display: flex; align-items: center; gap: 14px;
+  padding: 0 18px; background: var(--bg2); border-bottom: 1px solid var(--border);
+  position: relative; z-index: 200;
+}
+.topbar::after {
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0;
+  height: 1px; background: linear-gradient(90deg, transparent, var(--gold), transparent); opacity: 0.3;
+}
+.logo { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.logo-mark {
+  width: 32px; height: 32px; border-radius: 9px;
+  background: linear-gradient(135deg, var(--gold2), var(--gold));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem; box-shadow: 0 0 16px rgba(232,184,75,0.3); flex-shrink: 0;
+}
+.logo-name { font-family: var(--serif); font-size: 1.1rem; color: var(--text); }
+.logo-name span { color: var(--gold); }
+.topbar-center { margin: 0 auto; font-family: var(--mono); font-size: 0.62rem; color: var(--text3); letter-spacing: 1.5px; text-transform: uppercase; }
+.topbar-right { display: flex; align-items: center; gap: 6px; }
+.tb-pill {
+  font-family: var(--mono); font-size: 0.6rem; padding: 4px 10px; border-radius: 20px;
+  border: 1px solid var(--border); color: var(--text3); background: var(--surface); letter-spacing: 0.5px;
+}
+.tb-pill.live { color: var(--mint); border-color: rgba(62,207,142,0.3); background: rgba(62,207,142,0.06); }
+.icon-round {
+  width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border2);
+  background: var(--surface); color: var(--text2); cursor: pointer; font-size: 1rem;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.15s;
+}
+.icon-round:hover { background: var(--card); color: var(--text); }
+
+/* Layout */
+.layout { display: flex; flex: 1; overflow: hidden; }
+
+/* Sidebar */
+.sidenav {
+  width: var(--nav-w); flex-shrink: 0; background: var(--bg2);
+  border-right: 1px solid var(--border); display: flex; flex-direction: column;
+  overflow-y: auto; padding: 14px 8px; gap: 2px;
+}
+.nav-section-label {
+  font-family: var(--mono); font-size: 0.54rem; letter-spacing: 2px;
+  text-transform: uppercase; color: var(--text3); padding: 10px 10px 5px; margin-top: 6px;
+}
+.nav-section-label:first-child { margin-top: 0; }
+.nav-item {
+  display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: var(--r);
+  font-size: 0.81rem; font-weight: 500; color: var(--text2); cursor: pointer;
+  transition: all 0.15s; border: 1px solid transparent; position: relative; user-select: none;
+}
+.nav-item:hover { background: var(--surface); color: var(--text); }
+.nav-item.active { background: var(--gold-glow); color: var(--gold); border-color: rgba(232,184,75,0.2); }
+.nav-item.active::before {
+  content: ''; position: absolute; left: -8px; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 60%; background: var(--gold); border-radius: 0 3px 3px 0;
+}
+.nav-icon {
+  width: 26px; height: 26px; border-radius: 7px; display: flex; align-items: center;
+  justify-content: center; font-size: 0.95rem; line-height: 1; flex-shrink: 0;
+  background: var(--surface); transition: background 0.15s;
+}
+.nav-item.active .nav-icon { background: rgba(232,184,75,0.12); }
+.nav-badge {
+  margin-left: auto; font-family: var(--mono); font-size: 0.56rem;
+  padding: 2px 7px; border-radius: 10px; background: var(--border); color: var(--text3); white-space: nowrap;
+}
+.nav-item.active .nav-badge { background: rgba(232,184,75,0.15); color: var(--gold); }
+.nav-divider { height: 1px; background: var(--border); margin: 6px 4px; }
+
+/* Main Content */
+.main { flex: 1; overflow-y: auto; background: var(--bg); }
+.panel { display: none; padding: 24px 28px 80px; }
+.panel.active { display: block; }
+
+/* Page Header */
+.page-hd { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 22px; flex-wrap: wrap; gap: 10px; }
+.page-hd-left h1 { font-family: var(--serif); font-size: 1.75rem; color: var(--text); margin-bottom: 3px; }
+.page-hd-left p { font-family: var(--mono); font-size: 0.65rem; color: var(--text3); }
+.page-hd-actions { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; font-family: var(--font);
+  font-size: 0.78rem; font-weight: 600; padding: 8px 16px; border-radius: var(--r);
+  border: 1px solid var(--border2); background: var(--surface); color: var(--text2);
+  cursor: pointer; transition: all 0.15s; white-space: nowrap;
+}
+.btn:hover { color: var(--text); background: var(--card); }
+.btn.gold { background: linear-gradient(135deg, var(--gold2), var(--gold)); color: #0a0c10; border-color: var(--gold); font-weight: 700; box-shadow: 0 4px 14px rgba(232,184,75,0.2); }
+.btn.gold:hover { box-shadow: 0 6px 22px rgba(232,184,75,0.35); transform: translateY(-1px); }
+.btn.mint { background: rgba(62,207,142,0.1); color: var(--mint); border-color: rgba(62,207,142,0.3); }
+.btn.rose { background: rgba(240,107,122,0.1); color: var(--rose); border-color: rgba(240,107,122,0.3); }
+.btn.sky { background: rgba(90,180,232,0.1); color: var(--sky); border-color: rgba(90,180,232,0.3); }
+.btn.ai { background: rgba(139,124,248,0.1); color: var(--violet); border-color: rgba(139,124,248,0.3); }
+.btn.amber { background: rgba(240,164,58,0.1); color: var(--amber); border-color: rgba(240,164,58,0.3); }
+.btn.sm { padding: 6px 12px; font-size: 0.72rem; }
+
+/* Cards */
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r2); padding: 18px; margin-bottom: 14px; position: relative; overflow: hidden; }
+
+/* KPI Row */
+.kpi-row { display: grid; gap: 10px; margin-bottom: 18px; }
+.kpi-row.c4 { grid-template-columns: repeat(4,1fr); }
+.kpi-row.c3 { grid-template-columns: repeat(3,1fr); }
+.kpi-row.c2 { grid-template-columns: repeat(2,1fr); }
+.kpi { background: var(--card); border: 1px solid var(--border); border-radius: var(--r2); padding: 14px 16px; position: relative; overflow: hidden; }
+.kpi-label { font-family: var(--mono); font-size: 0.56rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text3); margin-bottom: 7px; }
+.kpi-val { font-family: var(--serif); font-size: 2rem; line-height: 1; margin-bottom: 2px; }
+.kpi-accent { position: absolute; bottom: 0; left: 0; right: 0; height: 2px; }
+.kpi.gold .kpi-val { color: var(--gold); }
+.kpi.gold .kpi-accent { background: linear-gradient(90deg, transparent, var(--gold), transparent); }
+.kpi.sky .kpi-val { color: var(--sky); }
+.kpi.mint .kpi-val { color: var(--mint); }
+
+/* Upload Zones */
+.upload-zone { border: 1.5px dashed var(--border2); border-radius: var(--r2); background: var(--bg2); overflow: hidden; }
+.upload-label-bar { display: flex; align-items: center; gap: 8px; padding: 9px 14px; border-bottom: 1px solid var(--border); }
+.upload-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.upload-dot.gold { background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+.upload-dot.sky { background: var(--sky); }
+.upload-dot.mint { background: var(--mint); }
+.upload-lbl { font-size: 0.7rem; font-weight: 600; color: var(--text2); }
+.upload-sub { font-family: var(--mono); font-size: 0.58rem; color: var(--text3); margin-left: auto; }
+textarea { width: 100%; background: transparent; border: none; color: var(--text); font-family: var(--mono); font-size: 0.68rem; padding: 10px 14px; resize: none; outline: none; line-height: 1.8; height: 110px; }
+textarea::placeholder { color: var(--text3); }
+
+/* Filter Chips */
+.filter-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+.fchip {
+  display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono);
+  font-size: 0.55rem; font-weight: 500; padding: 5px 11px; border-radius: 40px;
+  border: 1px solid var(--border2); background: var(--surface); color: var(--text3);
+  cursor: pointer; transition: all 0.2s ease;
+}
+.fchip:hover { background: var(--card); color: var(--text2); border-color: var(--gold); }
+.fchip.on { border-color: rgba(232,184,75,0.5); color: var(--gold); background: rgba(232,184,75,0.08); }
+
+/* Search Wrap */
+.search-wrap {
+  display: flex; align-items: center; background: var(--surface);
+  border: 1px solid var(--border2); border-radius: 40px; overflow: hidden;
+  flex-shrink: 0;
+}
+.search-icon { padding: 0 0 0 14px; color: var(--text3); font-size: 0.8rem; opacity: 0.6; }
+.search-wrap input {
+  background: transparent; border: none; color: var(--text); font-family: var(--font);
+  font-size: 0.7rem; padding: 8px 12px; outline: none; width: 160px;
+}
+.search-wrap input::placeholder { color: var(--text3); font-size: 0.65rem; }
+.search-clear { padding: 0 12px; color: var(--text3); cursor: pointer; font-size: 0.7rem; }
+.search-clear:hover { color: var(--rose); }
+
+/* Tables */
+.tbl-wrap { background: var(--card); border: 1px solid var(--border); border-radius: var(--r2); overflow: hidden; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 0.74rem; min-width: 860px; }
+thead th { background: rgba(232,184,75,0.07); color: var(--gold); font-weight: 600; padding: 9px 11px; text-align: left; font-size: 0.6rem; letter-spacing: 1px; text-transform: uppercase; border-bottom: 1px solid var(--border); font-family: var(--mono); }
+tbody tr { border-bottom: 1px solid rgba(255,255,255,0.025); }
+tbody td { padding: 7px 11px; color: var(--text2); }
+
+/* Progress Bar */
+.prog-wrap { margin-bottom: 14px; }
+.prog-info { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 0.76rem; color: var(--text2); }
+.prog-track { height: 5px; background: var(--surface); border-radius: 3px; border: 1px solid var(--border); overflow: hidden; }
+.prog-fill { height: 100%; background: linear-gradient(90deg, var(--sky2), var(--mint)); border-radius: 3px; transition: width 0.5s; }
+
+/* Departure KPI Strip */
+.dep-kpi-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.dep-kpi { background: var(--card); border: 1px solid var(--border); border-radius: var(--r2); padding: 10px 12px; position: relative; overflow: hidden; cursor: pointer; }
+.dep-kpi-icon { font-size: 1.1rem; margin-bottom: 4px; }
+.dep-kpi-val { font-family: var(--serif); font-size: 1.4rem; line-height: 1; margin-bottom: 2px; }
+.dep-kpi-label { font-family: var(--mono); font-size: 0.48rem; letter-spacing: 1px; text-transform: uppercase; color: var(--text3); }
+.dep-kpi-bar { position: absolute; bottom: 0; left: 0; right: 0; height: 2px; }
+.k-total .dep-kpi-val { color: var(--gold); }
+.k-due .dep-kpi-val { color: var(--gold); }
+.k-out .dep-kpi-val { color: var(--mint); }
+
+/* Departure Grid */
+.dep-grid { display: grid; gap: 12px; }
+.dep-grid.size-md { grid-template-columns: repeat(auto-fill, minmax(320px,1fr)); }
+
+/* Departure Card */
+.dep-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r3); overflow: hidden; position: relative; }
+.dc-band { height: 3px; }
+.s-due .dc-band { background: linear-gradient(90deg, var(--gold2), var(--gold)); }
+.dc-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px 8px; }
+.dc-room { font-family: var(--serif); font-size: 2rem; line-height: 1; color: var(--text); }
+.s-due .dc-room { color: var(--gold); }
+.dc-badges { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.dc-sbadge { font-family: var(--mono); font-size: 0.6rem; font-weight: 600; padding: 3px 10px; border-radius: 20px; border: 1px solid; }
+.sb-due { color: var(--gold); border-color: rgba(232,184,75,0.35); background: rgba(232,184,75,0.08); }
+.sb-out { color: var(--mint); border-color: rgba(62,207,142,0.35); background: rgba(62,207,142,0.08); }
+.dc-nights { font-family: var(--mono); font-size: 0.58rem; color: var(--text3); background: var(--surface); border: 1px solid var(--border); padding: 2px 8px; border-radius: 7px; }
+.dc-body { padding: 0 14px 12px; }
+.dc-name { font-size: 0.95rem; font-weight: 700; color: var(--text); }
+.dc-meta { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.dc-mi { display: flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 0.6rem; color: var(--text3); }
+.dc-src { display: inline-block; font-family: var(--mono); font-size: 0.56rem; padding: 2px 8px; border-radius: 5px; background: var(--surface); border: 1px solid var(--border); color: var(--text3); margin-bottom: 8px; }
+
+/* Balance */
+.dc-bal { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-radius: var(--r); margin-bottom: 9px; border: 1px solid; }
+.dc-bal.bal-zero { background: rgba(62,207,142,0.05); border-color: rgba(62,207,142,0.15); }
+.dc-bal-lbl { font-family: var(--mono); font-size: 0.58rem; color: var(--text3); }
+.dc-bal-amt { font-family: var(--mono); font-size: 0.85rem; font-weight: 700; }
+.bal-zero .dc-bal-amt { color: var(--mint); }
+
+/* Action Buttons */
+.dc-actions { display: grid; gap: 6px; margin-bottom: 10px; }
+.dc-actions.g3 { grid-template-columns: repeat(3, 1fr); }
+.dc-actions.g1 { grid-template-columns: 1fr; }
+.dca {
+  padding: 7px 5px; border-radius: var(--r); border: 1px solid; cursor: pointer;
+  font-family: var(--font); font-size: 0.65rem; font-weight: 600;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  transition: all 0.2s ease; background: var(--card) !important;
+}
+.dca.dca-co { background: rgba(62,207,142,0.15) !important; color: var(--mint); border-color: rgba(62,207,142,0.4); }
+.dca.dca-undo { background: rgba(232,184,75,0.12) !important; color: var(--gold); border-color: rgba(232,184,75,0.3); }
+
+/* Notes */
+.dc-note-lbl { font-family: var(--mono); font-size: 0.56rem; text-transform: uppercase; color: var(--text3); margin-bottom: 3px; }
+.dc-note { width: 100%; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); color: var(--text); font-family: var(--mono); font-size: 0.63rem; padding: 7px 10px; resize: none; outline: none; min-height: 48px; }
+
+/* Shift Tasks */
+.shift-tabs { display: flex; border-bottom: 2px solid var(--border); margin-bottom: 18px; }
+.shift-tab { padding: 10px 22px; font-size: 0.8rem; font-weight: 600; color: var(--text3); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; display: flex; align-items: center; gap: 8px; }
+.shift-tab.active { color: var(--text); border-bottom-color: var(--gold); }
+.shift-tab .shift-prog { font-family: var(--mono); font-size: 0.55rem; padding: 2px 7px; border-radius: 10px; background: var(--border); color: var(--text3); }
+.st-item { display: flex; align-items: flex-start; gap: 10px; padding: 11px 14px; background: var(--card); border: 1px solid var(--border); border-radius: var(--r2); margin-bottom: 6px; }
+.st-check { width: 22px; height: 22px; border-radius: 6px; border: 1.5px solid var(--border2); background: var(--bg2); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.st-check::before { content: '✓'; font-size: 0.65rem; color: transparent; }
+.st-item.done .st-check { border-color: var(--mint); background: rgba(62,207,142,0.12); }
+.st-item.done .st-check::before { color: var(--mint); }
+.st-name { font-size: 0.84rem; font-weight: 600; color: var(--text); }
+.st-item.done .st-name { text-decoration: line-through; color: var(--text3); }
+.st-hint { font-size: 0.69rem; color: var(--text3); margin-top: 2px; }
+.st-actions { display: flex; gap: 4px; opacity: 0; }
+.st-item:hover .st-actions { opacity: 1; }
+.st-add-wrap { display: flex; gap: 8px; padding: 10px 0 0; }
+.st-add-in { flex: 1; background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--r); color: var(--text); font-size: 0.78rem; padding: 8px 12px; }
+
+/* Night Checklist */
+.cl-phase-hd { display: flex; align-items: center; gap: 12px; margin: 16px 0 8px; }
+.cl-phase-line { flex: 1; height: 1px; background: var(--border); }
+.cl-phase-lbl { font-family: var(--mono); font-size: 0.56rem; letter-spacing: 2px; text-transform: uppercase; padding: 3px 12px; border-radius: 20px; border: 1px solid var(--border2); color: var(--text3); background: var(--surface); }
+.cl-step { background: var(--card); border: 1px solid var(--border); border-radius: var(--r2); margin-bottom: 5px; overflow: hidden; }
+.cl-step-main { display: flex; align-items: center; gap: 10px; padding: 11px 13px; cursor: pointer; }
+.cl-check { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--border2); background: var(--bg2); display: flex; align-items: center; justify-content: center; font-size: 0.65rem; color: transparent; }
+.cl-step.done .cl-check { border-color: var(--mint); background: rgba(62,207,142,0.12); color: var(--mint); }
+.cl-name { font-size: 0.83rem; font-weight: 600; color: var(--text); }
+.cl-step.done .cl-name { color: var(--text3); text-decoration: line-through; }
+.cl-hint { font-size: 0.68rem; color: var(--text3); margin-top: 1px; }
+.cl-step-btns { display: flex; gap: 4px; }
+
+/* Modals */
+.modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(6px); }
+.modal-bg.open { display: flex; }
+.modal { background: var(--card); border: 1px solid var(--border2); border-radius: var(--r3); padding: 22px; width: 460px; max-width: 95vw; }
+.modal h3 { font-family: var(--serif); font-size: 1.2rem; color: var(--gold); margin-bottom: 14px; }
+.modal-fields { display: flex; flex-direction: column; gap: 9px; }
+.mf { display: flex; flex-direction: column; gap: 3px; }
+.mf label { font-family: var(--mono); font-size: 0.56rem; text-transform: uppercase; color: var(--text3); }
+.mf input, .mf select, .mf textarea { background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--r); color: var(--text); font-size: 0.78rem; padding: 8px 10px; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 14px; }
+
+/* Spinner */
+.spinner { width: 11px; height: 11px; border: 2px solid rgba(139,124,248,0.3); border-top-color: var(--violet); border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Action Log */
+.dep-log-wrap { margin-top: 20px; }
+.dep-log-header { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--card2); border: 1px solid var(--border); border-radius: var(--r2) var(--r2) 0 0; cursor: pointer; }
+.dep-log-body { background: var(--card); border: 1px solid var(--border); border-top: none; border-radius: 0 0 var(--r2) var(--r2); max-height: 360px; overflow-y: auto; }
+.log-row { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-bottom: 1px solid rgba(255,255,255,0.025); }
+.log-room { font-family: var(--mono); font-size: 0.9rem; font-weight: 700; color: var(--sky); min-width: 48px; }
+.log-name { font-size: 0.78rem; color: var(--text2); flex: 1; }
+.log-action { font-family: var(--mono); font-size: 0.58rem; padding: 2px 9px; border-radius: 12px; font-weight: 600; }
+.log-act-co { color: var(--mint); background: rgba(62,207,142,0.08); border: 1px solid rgba(62,207,142,0.25); }
+.log-time { font-family: var(--mono); font-size: 0.58rem; color: var(--text3); min-width: 52px; text-align: right; }
+.log-undo { padding: 4px 10px; border-radius: 7px; border: 1px solid var(--border2); background: transparent; color: var(--text3); font-size: 0.68rem; cursor: pointer; }
+
+/* Drag handle */
+.drag-handle { cursor: grab; color: var(--text3); font-size: 0.7rem; padding: 4px 2px; user-select: none; }
+
+@media print {
+  .sidenav, .topbar, .dep-kpi-strip, .prog-wrap, .dc-actions, .dep-log-wrap, .filter-row, .page-hd-actions { display: none !important; }
+  .dep-grid { grid-template-columns: repeat(2,1fr) !important; }
+}
+</style>
 </head>
 <body>
 
@@ -130,12 +474,6 @@
       <div class="filter-row" style="margin-bottom:0;display:flex;flex-wrap:wrap;gap:6px;">
         <button class="fchip on" data-f="all" onclick="depFilter('all',this)">All <span id="dfc-all">0</span></button>
         <button class="fchip due" data-f="due" onclick="depFilter('due',this)">Due <span id="dfc-due">0</span></button>
-        <button class="fchip pending" data-f="pending" onclick="depFilter('pending',this)">Pending <span id="dfc-pendingExt">0</span></button>
-        <button class="fchip" data-f="coming" onclick="depFilter('coming',this)">Coming <span id="dfc-comingExt">0</span></button>
-        <button class="fchip noanswer" data-f="noanswer" onclick="depFilter('noanswer',this)">No Answer <span id="dfc-noanswer">0</span></button>
-        <button class="fchip ext" data-f="extended" onclick="depFilter('extended',this)">Extended <span id="dfc-extended">0</span></button>
-        <button class="fchip late" data-f="late" onclick="depFilter('late',this)">Late <span id="dfc-late">0</span></button>
-        <button class="fchip bal" data-f="balance" onclick="depFilter('balance',this)">Balance <span id="dfc-balance">0</span></button>
         <button class="fchip out" data-f="out" onclick="depFilter('out',this)">Out <span id="dfc-out">0</span></button>
       </div>
       <div class="search-wrap">
@@ -154,10 +492,6 @@
       </div>
       <div class="dep-log-body" id="depLogBody"></div>
     </div>
-  </div>
-  <div class="dep-quick-bar" id="depQuickBar" style="display:none;">
-    <span id="depQuickLabel" style="font-family:var(--mono);font-size:0.68rem;color:var(--text2);"></span>
-    <button class="btn mint sm" onclick="depBulkCheckout()">✓ Check Out All Due</button>
   </div>
 </div>
 
@@ -194,7 +528,7 @@
     <div class="fchip" data-af="Leisure" onclick="arrFilter('Leisure',this)">Leisure</div>
     <div class="search-wrap"><span style="padding:0 8px;color:var(--text3);">⌕</span><input type="text" placeholder="Search…" oninput="arrRender()" id="arrSearch"/></div>
   </div>
-  <div class="tbl-wrap"><table>
+  <div class="tbl-wrap"></table>
     <thead><tr><th>Room</th><th>Conf.</th><th>Name</th><th>Purpose</th><th>Nights</th><th>Nationality</th><th>Email</th><th>Source</th><th>Remarks</th><th></th></tr>
     </thead>
     <tbody id="arrTable"></tbody>
@@ -233,7 +567,6 @@
     <div class="fchip on" data-pf="all" onclick="purposeFilter('all',this)">All</div>
     <div class="fchip" data-pf="Business" onclick="purposeFilter('Business',this)">Business</div>
     <div class="fchip" data-pf="Leisure" onclick="purposeFilter('Leisure',this)">Leisure</div>
-    <div class="fchip" data-pf="Flight" onclick="purposeFilter('Flight',this)">Flight</div>
     <div class="search-wrap"><span style="padding:0 8px;color:var(--text3);">⌕</span><input type="text" placeholder="Search…" oninput="purposeRender()" id="purposeSearch"/></div>
   </div>
   <div class="tbl-wrap"><table>
@@ -275,60 +608,7 @@
       <div class="error-box" id="natError"><span>⚠</span><span id="natErrorMsg"></span></div>
       <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn gold" onclick="processNat()">⚡ Process</button><button class="btn" onclick="clearNat()">✕ Clear</button></div>
     </div>
-    <div id="natResults" style="display:none;">
-      <div class="kpi-row c3" style="margin-top:18px;">
-        <div class="kpi sky"><div class="kpi-accent"></div><div class="kpi-label">New Arrivals</div><div class="kpi-val" id="kpi-apr">—</div></div>
-        <div class="kpi gold"><div class="kpi-accent"></div><div class="kpi-label">Room Nights</div><div class="kpi-val" id="kpi-rms">—</div></div>
-        <div class="kpi mint"><div class="kpi-accent"></div><div class="kpi-label">Guest Nights</div><div class="kpi-val" id="kpi-prs">—</div></div>
-      </div>
-      <div class="card">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-          <span>🔍</span><div><div style="font-size:0.86rem;font-weight:600;">Data Quality</div></div>
-          <span class="tb-pill" id="natDiagBadge" style="margin-left:auto;">…</span>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:14px;" id="natTotalsGrid"></div>
-        <div style="font-family:var(--mono);font-size:0.58rem;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:7px;">Unknown</div>
-        <div id="natUnknownList"></div>
-        <div style="font-family:var(--mono);font-size:0.58rem;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin:10px 0 7px;">Not in Excel</div>
-        <div id="natUnmatchedList"></div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 250px;gap:14px;margin-top:14px;">
-        <div class="card" style="padding:0;overflow:hidden;">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--card2);">
-            <div style="font-size:0.8rem;font-weight:600;">Preview · 240 rows</div>
-            <span style="font-family:var(--mono);font-size:0.6rem;color:var(--gold);">ROWS 8–247</span>
-          </div>
-          <div style="display:grid;grid-template-columns:36px 1fr 54px 54px 54px;padding:6px 12px;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--border);">
-            <span style="font-family:var(--mono);font-size:0.53rem;color:var(--text3);">ROW</span>
-            <span style="font-family:var(--mono);font-size:0.53rem;color:var(--text3);">NATIONALITY</span>
-            <span style="font-family:var(--mono);font-size:0.53rem;color:var(--sky);text-align:right;">ARR</span>
-            <span style="font-family:var(--mono);font-size:0.53rem;color:var(--gold);text-align:right;">RMS</span>
-            <span style="font-family:var(--mono);font-size:0.53rem;color:var(--mint);text-align:right;">GST</span>
-          </div>
-          <div style="height:400px;overflow-y:auto;" id="natPreview"></div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:11px;">
-          <div class="card">
-            <div style="font-size:0.76rem;font-weight:600;margin-bottom:9px;">📋 Copy to Excel</div>
-            <button class="btn gold" id="natCopyBtn" onclick="copyNat()" style="width:100%;justify-content:center;margin-bottom:9px;">Copy All 240 Rows</button>
-            <div style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);line-height:2.1;">1. Open Excel<br>2. Click cell <strong style="color:var(--text2);">B8</strong><br>3. Ctrl+V ✓</div>
-          </div>
-          <div class="card" style="background:rgba(240,164,58,0.04);border-color:rgba(240,164,58,0.2);">
-            <div style="font-size:0.76rem;font-weight:600;margin-bottom:9px;color:var(--amber);">⚠ Gap</div>
-            <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.73rem;"><span style="color:var(--text3);">Arrivals</span><span id="gap-apr" style="font-family:var(--mono);color:var(--amber);">—</span></div>
-            <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.73rem;"><span style="color:var(--text3);">Room Nights</span><span id="gap-rms" style="font-family:var(--mono);color:var(--amber);">—</span></div>
-            <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.73rem;"><span style="color:var(--text3);">Guest Nights</span><span id="gap-prs" style="font-family:var(--mono);color:var(--amber);">—</span></div>
-          </div>
-          <div class="card">
-            <div style="font-size:0.76rem;font-weight:600;margin-bottom:9px;">📈 Summary</div>
-            <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.73rem;border-bottom:1px solid rgba(255,255,255,0.025);"><span style="color:var(--text3);">With data</span><span id="s-active" style="font-family:var(--mono);color:var(--mint);">—</span></div>
-            <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.73rem;border-bottom:1px solid rgba(255,255,255,0.025);"><span style="color:var(--text3);">Zero</span><span id="s-zero" style="font-family:var(--mono);color:var(--text3);">—</span></div>
-            <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.73rem;border-bottom:1px solid rgba(255,255,255,0.025);"><span style="color:var(--text3);">Unmatched</span><span id="s-unmat" style="font-family:var(--mono);color:var(--rose);">—</span></div>
-            <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.73rem;"><span style="color:var(--text3);">Unknown</span><span id="s-unk" style="font-family:var(--mono);color:var(--amber);">—</span></div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <div id="natResults" style="display:none;"><div class="card"><p style="text-align:center;padding:40px;">Process a report to see results</p></div></div>
   </div>
 </div>
 
@@ -347,31 +627,7 @@
       <div class="error-box" id="rentError"><span>⚠</span><span id="rentErrorMsg"></span></div>
       <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn gold" onclick="processRent()">⚡ Process</button><button class="btn" onclick="clearRent()">✕ Clear</button></div>
     </div>
-    <div id="rentResults" style="display:none;">
-      <div class="kpi-row c2" style="margin-top:18px;">
-        <div class="kpi sky"><div class="kpi-accent"></div><div class="kpi-label">Total Rented Rooms</div><div class="kpi-val" id="kpi-rooms">—</div></div>
-        <div class="kpi mint"><div class="kpi-accent"></div><div class="kpi-label">Total Rented Beds</div><div class="kpi-val" id="kpi-beds">—</div></div>
-      </div>
-      <div class="card" style="font-family:var(--mono);font-size:0.73rem;">
-        <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);"><span style="color:var(--text3);">Days found</span><span id="daysFound" style="color:var(--sky);">—</span></div>
-        <div style="display:flex;justify-content:space-between;padding:5px 0;"><span style="color:var(--text3);">Twin file</span><span id="twinStatus" style="color:var(--mint);">—</span></div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 210px;gap:12px;margin-top:14px;">
-        <div class="card" style="padding:0;overflow:hidden;">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--card2);"><div style="font-size:0.8rem;font-weight:600;">Daily Preview</div><span id="rentRowCount" style="font-family:var(--mono);font-size:0.6rem;color:var(--gold);">31 ROWS</span></div>
-          <div style="height:400px;overflow-y:auto;" id="rentPreview"></div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:11px;">
-          <div class="card"><div style="font-size:0.76rem;font-weight:600;margin-bottom:9px;">📋 Copy</div><button class="btn gold" id="rentCopyBtn" onclick="copyRent()" style="width:100%;justify-content:center;margin-bottom:9px;">Copy All Rows</button></div>
-          <div class="card">
-            <div style="font-size:0.76rem;font-weight:600;margin-bottom:9px;">📈 Month</div>
-            <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.73rem;border-bottom:1px solid rgba(255,255,255,0.025);"><span style="color:var(--text3);">Rooms</span><span id="rs-rooms" style="font-family:var(--mono);color:var(--sky);">—</span></div>
-            <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.73rem;border-bottom:1px solid rgba(255,255,255,0.025);"><span style="color:var(--text3);">Beds</span><span id="rs-beds" style="font-family:var(--mono);color:var(--mint);">—</span></div>
-            <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.73rem;"><span style="color:var(--text3);">Days</span><span id="rs-days" style="font-family:var(--mono);color:var(--text2);">—</span></div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <div id="rentResults" style="display:none;"><div class="card"><p style="text-align:center;padding:40px;">Process files to see results</p></div></div>
   </div>
 </div>
 
@@ -390,34 +646,7 @@
       <div class="error-box" id="naError"><span>⚠</span><span id="naErrorMsg"></span></div>
       <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn gold" onclick="processAudit()">🔍 Compare</button><button class="btn" onclick="clearAudit()">✕ Clear</button></div>
     </div>
-    <div id="naCompareSection" style="display:none;">
-      <div class="kpi-row c3" style="margin-top:18px;">
-        <div class="kpi sky"><div class="kpi-accent"></div><div class="kpi-label">Total PM</div><div class="kpi-val" id="na-kpi-total">—</div></div>
-        <div class="kpi amber"><div class="kpi-accent"></div><div class="kpi-label">Differences</div><div class="kpi-val" id="na-kpi-diff">—</div></div>
-        <div class="kpi mint"><div class="kpi-accent"></div><div class="kpi-label">Match</div><div class="kpi-val" id="na-kpi-ok">—</div></div>
-      </div>
-      <div class="card" style="padding:0;overflow:hidden;">
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--card2);flex-wrap:wrap;gap:7px;">
-          <div><div style="font-size:0.86rem;font-weight:600;">Room Comparison</div><div style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">Green = Opera (correct) · Red = Excel (wrong)</div></div>
-          <div style="display:flex;gap:6px;"><span id="na-pill-total" class="tb-pill">—</span><span id="na-pill-diff" class="tb-pill" style="color:var(--amber);">—</span><span id="na-pill-ok" class="tb-pill" style="color:var(--mint);">—</span></div>
-        </div>
-        <div style="display:grid;grid-template-columns:60px 1fr 1fr 1fr 1fr 80px;padding:7px 14px;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--border);">
-          <span style="font-family:var(--mono);font-size:0.54rem;color:var(--text3);">ROOM</span><span style="font-family:var(--mono);font-size:0.54rem;color:var(--text3);">NAME</span><span style="font-family:var(--mono);font-size:0.54rem;color:var(--text3);">ARRIVAL</span><span style="font-family:var(--mono);font-size:0.54rem;color:var(--text3);">DEPARTURE</span><span style="font-family:var(--mono);font-size:0.54rem;color:var(--text3);">BALANCE</span><span style="font-family:var(--mono);font-size:0.54rem;color:var(--text3);">STATUS</span>
-        </div>
-        <div style="max-height:440px;overflow-y:auto;" id="naCompareTable"></div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 250px;gap:12px;margin-top:14px;">
-        <div class="card" style="padding:0;overflow:hidden;">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--card2);"><div style="font-size:0.8rem;font-weight:600;">Corrected Rows — Ready to Paste</div><span id="naFixedCount" style="font-family:var(--mono);font-size:0.6rem;color:var(--mint);">—</span></div>
-          <div style="max-height:380px;overflow-y:auto;" id="naFixedTable"></div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:11px;">
-          <div class="card"><div style="font-size:0.76rem;font-weight:600;margin-bottom:9px;">📋 Copy Fixed</div><button class="btn gold" id="naCopyBtn" onclick="copyAudit()" style="width:100%;justify-content:center;margin-bottom:9px;">Copy All Fixed Rows</button><div style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);line-height:2.1;">1. Open Excel<br>2. Click A2<br>3. Ctrl+V ✓</div></div>
-          <div class="card" id="naChangesCard"><div style="font-size:0.76rem;font-weight:600;margin-bottom:9px;">⚠ Changes</div><div id="naChangesList"></div></div>
-          <div class="card" id="naMissingCard" style="display:none;border-color:rgba(240,107,122,0.2);"><div style="font-size:0.76rem;font-weight:600;margin-bottom:9px;color:var(--rose);">🔴 Missing</div><div id="naMissingList"></div></div>
-        </div>
-      </div>
-    </div>
+    <div id="naCompareSection" style="display:none;"><div class="card"><p style="text-align:center;padding:40px;">Compare data to see results</p></div></div>
   </div>
 </div>
 
@@ -442,23 +671,7 @@
       <div class="error-box" id="immigError2"><span>⚠</span><span id="immigErrorMsg2"></span></div>
       <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn gold" onclick="processImmig2()">🔍 Analyse</button><button class="btn" onclick="clearImmig()">✕ Clear</button></div>
     </div>
-    <div id="immigResults2" style="display:none;">
-      <div class="kpi-row c4" style="margin-top:18px;" id="immigKpis2"></div>
-      <div style="font-family:var(--mono);font-size:0.7rem;color:var(--text2);margin-bottom:9px;padding:9px 13px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);" id="immigMeta2"></div>
-      <div style="display:flex;gap:7px;margin-bottom:11px;flex-wrap:wrap;" id="immigFilters2">
-        <button class="fchip on" data-if="all" onclick="immigFilter2('all',this)">All <span id="ifc-all">0</span></button>
-        <button class="fchip" data-if="nationality" onclick="immigFilter2('nationality',this)">🔴 Nationality <span id="ifc-nat">0</span></button>
-        <button class="fchip" data-if="gender" onclick="immigFilter2('gender',this)">🟡 Gender <span id="ifc-gen">0</span></button>
-        <button class="fchip" data-if="passport" onclick="immigFilter2('passport',this)">🔵 Passport <span id="ifc-pass">0</span></button>
-        <button class="fchip" data-if="first_name" onclick="immigFilter2('first_name',this)">🟢 First Name <span id="ifc-fname">0</span></button>
-        <div class="search-wrap" style="margin-left:auto;"><span style="padding:0 8px;color:var(--text3);">⌕</span><input type="text" id="immigSearch2" placeholder="Room or name…" oninput="immigRender2(immigAllRows2)"/></div>
-      </div>
-      <div class="tbl-wrap"><table>
-        <thead><tr><th>Room</th><th>Sex</th><th>Name</th><th>Nationality</th><th>Passport</th><th>Arrival</th><th>Departure</th><th>Issues</th></tr>
-        </thead>
-        <tbody id="immigTable2"></tbody>
-      </div>
-    </div>
+    <div id="immigResults2" style="display:none;"><div class="card"><p style="text-align:center;padding:40px;">Upload XML to see results</p></div></div>
   </div>
 </div>
 
@@ -568,248 +781,640 @@
   </div>
 </div>
 
-<!-- ════════ SCRIPTS — order matters ════════ -->
-<script src="firebase-config.js"></script>
-<script src="db.js"></script>
-<script src="state.js"></script>
-<script src="utils.js"></script>
-<script src="natguess.js"></script>
-<script src="departures.js"></script>
-<script src="arrivals-purpose.js"></script>
-<script src="shifts.js"></script>
-<script src="checklist.js"></script>
-<script src="reports.js"></script>
-
 <script>
-// ════════════════════════════════════════════════
-//  init.js — bootstrap (runs last)
-// ════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+//  firebase-config.js
+// ═══════════════════════════════════════════════════════════
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyC0EEgikhcpPKqIe4B4qeL4lbPRbxrHJjc",
+  authDomain: "ibis-ops-dubai.firebaseapp.com",
+  databaseURL: "https://ibis-ops-dubai-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "ibis-ops-dubai",
+  storageBucket: "ibis-ops-dubai.firebasestorage.app",
+  messagingSenderId: "707337551887",
+  appId: "1:707337551887:web:aaba944d6f1ae9c05ca37a"
+};
+const HOTEL_ID = "ibis_dubai";
 
-async function handleImport(input) {
-  const file = input.files[0]; if (!file) return;
+// ═══════════════════════════════════════════════════════════
+//  state.js
+// ═══════════════════════════════════════════════════════════
+let depRooms = [], depFilter_ = 'all', depSize = 'md', depLog = [];
+let arrGuests = [], arrFilter_ = 'all';
+let purposeGuests = [], purposeFilter_ = 'all', _purposeTitle = 'Purpose of Stay Report';
+let immigAllRows2 = [], immigFilter2_ = 'all';
+let guestModalTarget = 'arrivals';
+let clEditMode = false;
+const clState = { done: new Set(), skipped: new Set() };
+let CL_STEPS = [
+  { id:1, phase:'pre', name:'Cancel non-guaranteed bookings', tag:'check', hint:'Filter reservations with no guarantee and cancel per policy.' },
+  { id:2, phase:'pre', name:'CC recancellations', tag:'check', hint:'Run credit card recancellations for failed/declined cards.' },
+  { id:3, phase:'pre', name:'Cancel OTA rooms + mark card invalid', tag:'check', hint:'Cancel Booking.com/OTA rooms with invalid VCCs.' },
+  { id:4, phase:'pre', name:'Check immigration / nationality report', tag:'check', hint:'Verify all in-house guests have nationality assigned.' },
+  { id:5, phase:'pre', name:'Charge VCCs for tomorrow arrivals', tag:'charge', hint:'Charge Virtual Credit Cards due tonight for tomorrow.' },
+  { id:6, phase:'pre', name:'Update no-show sheet (pre-run)', tag:'check', hint:'Flag expected no-shows before running the night audit.' },
+  { id:7, phase:'pre', name:'Save Inhouse Guest Complimentary report', tag:'save', hint:'Export and save complimentary in-house guest report.' },
+  { id:8, phase:'pre', name:'Zero rate room report — remove pseudo', tag:'check', hint:'Run zero-rate report. Pseudo rooms must be empty.' },
+  { id:9, phase:'pre', name:'Paidout report + attach commission docs', tag:'scan', hint:'Save paidout report and scan/attach receipts.' },
+  { id:10, phase:'pre', name:'Refund report + attach documents', tag:'scan', hint:'Save refund report and scan/attach refund slips.' },
+  { id:11, phase:'pre', name:'Rate check — select check-in & search', tag:'check', hint:'Perform rate check before running the night.' },
+  { id:12, phase:'run', name:'Run the night audit', tag:'run', hint:'Execute the night audit in Opera. Do not interrupt.' },
+  { id:13, phase:'post', name:'Manager report', tag:'save', hint:'Generate and save the manager report.' },
+  { id:14, phase:'post', name:'No-show report + post charges', tag:'save', hint:'Finalise no-show list and post charges.' },
+  { id:15, phase:'post', name:'Negative posting report', tag:'check', hint:'Review all negative postings and resolve discrepancies.' },
+  { id:16, phase:'post', name:'Room recancellations (post-night)', tag:'check', hint:'Process room recancellations held until after audit.' },
+  { id:17, phase:'post', name:'Flash report', tag:'save', hint:'Prepare and distribute the flash report.' }
+];
+let activeShift = 'morning';
+const SHIFTS = {
+  morning: { label:'Morning Shift', time:'07:00 – 15:00', color:'#f0a43a', tasks:[], done:[], resetAt:'' },
+  afternoon: { label:'Afternoon Shift', time:'15:00 – 23:00', color:'#5ab4e8', tasks:[], done:[], resetAt:'' },
+  mid: { label:'Mid Shift', time:'12:00 – 20:00', color:'#8b7cf8', tasks:[], done:[], resetAt:'' },
+  night: { label:'Night Shift', time:'23:00 – 07:00', color:'#3ecf8e', tasks:[], done:[], resetAt:'' }
+};
+const DEFAULT_TASKS = {
+  morning: [{ id:'m1', name:'Check overnight log from night shift', hint:'Review all notes and handover items.' },{ id:'m2', name:'Review arrivals for the day', hint:'Check VIPs, special requests, early arrivals.' },{ id:'m3', name:'Follow up on pending checkouts', hint:'Call rooms not checked out by 11:00.' },{ id:'m4', name:'Reconcile front desk float', hint:'Count cash and verify amounts.' },{ id:'m5', name:'Update departure board', hint:'Mark completed checkouts.' }],
+  afternoon: [{ id:'a1', name:'Receive handover from morning shift', hint:'Review all pending items and guest notes.' },{ id:'a2', name:'Process remaining check-ins', hint:'Prioritise waiting guests.' },{ id:'a3', name:'Handle guest requests and complaints', hint:'Log all issues in the complaint register.' },{ id:'a4', name:'Prepare departure list for tomorrow', hint:'Print and review next day departures.' },{ id:'a5', name:'Update room status report', hint:'Coordinate with housekeeping.' }],
+  mid: [{ id:'md1', name:'Cover lunch breaks for morning shift', hint:'Ensure front desk is staffed at all times.' },{ id:'md2', name:'Process group check-ins', hint:'Have keys and welcome packs ready.' },{ id:'md3', name:'Coordinate with housekeeping', hint:'Follow up on delayed departures.' },{ id:'md4', name:'Handle concierge requests', hint:'Transport, restaurant, tour bookings.' }],
+  night: [{ id:'n1', name:'Receive handover from afternoon shift', hint:'Review all outstanding items.' },{ id:'n2', name:'Complete night audit checklist', hint:'Follow all steps in the Night Run Checklist.' },{ id:'n3', name:'Handle late arrivals', hint:'Check in pending arrivals after midnight.' },{ id:'n4', name:'Prepare morning shift report', hint:'Summarise events, balance, issues.' },{ id:'n5', name:'Security rounds log', hint:'Complete and sign all security round docs.' }]
+};
+let feedbackLog = [];
+let natCopyText = '', rentCopyText = '', naCopyText = '';
+
+// Initialize shifts
+Object.keys(SHIFTS).forEach(k => {
+  SHIFTS[k].tasks = DEFAULT_TASKS[k] ? DEFAULT_TASKS[k].map(t => ({...t})) : [];
+  SHIFTS[k].done = [];
+});
+
+// ═══════════════════════════════════════════════════════════
+//  utils.js
+// ═══════════════════════════════════════════════════════════
+function updateClock() {
+  const now = new Date();
+  const t = el => document.getElementById(el);
+  if (t('topbarTime')) t('topbarTime').textContent = now.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  if (t('topbarDate')) t('topbarDate').textContent = now.toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' }).toUpperCase();
+  if (t('cl-date-lbl')) t('cl-date-lbl').textContent = now.toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+}
+
+function showPanel(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const panel = document.getElementById('panel-' + name);
+  const nav = document.getElementById('nav-' + name);
+  if (panel) panel.classList.add('active');
+  if (nav) nav.classList.add('active');
+  if (name === 'shifts' && typeof renderShift === 'function') {
+    setTimeout(() => renderShift(activeShift || 'morning'), 10);
+  }
+}
+
+function copyToClipboard(text, btn, label) {
+  const done = () => { if (btn) { btn.textContent = '✅ Copied!'; setTimeout(() => { btn.textContent = label; }, 3000); } };
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(done).catch(() => fbCopy(text, done));
+  else fbCopy(text, done);
+}
+function fbCopy(text, cb) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;opacity:0';
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand('copy');
+  document.body.removeChild(ta);
+  if (cb) cb();
+}
+
+function parseName(raw) {
+  if (!raw) return '—';
+  if (raw.includes(',')) {
+    const parts = raw.split(',').map(p => p.trim()).filter(p => p && !/^(Mr\.?|Mrs\.?|Ms\.?|Miss|MR|MRS|MS|Dr\.?)$/i.test(p));
+    return parts.slice(0, 2).reverse().join(' ').trim() || raw.trim();
+  }
+  return raw.trim();
+}
+
+function cleanName(raw) {
+  if (!raw) return '';
+  raw = raw.replace(/,?\s*(Mr\.|Mrs\.|Ms\.|Miss|MR|MRS|DR\.?)\.?\s*$/i, '').trim();
+  const parts = raw.split(',').map(p => p.trim()).filter(p => p);
+  if (parts.length >= 2) return (parts[1] + ' ' + parts[0]).trim().toUpperCase();
+  return raw.toUpperCase();
+}
+
+function cleanSource(agent, company, source) {
+  let src = agent || company || source || '';
+  src = src.replace(/BOOKING\.COM BV.*$/i, 'Booking.com').replace(/AGODA COMPANY PTE LTD/i, 'Agoda').replace(/EXPEDIA\.COM.*/i, 'Expedia').replace(/\s*\(.*?\)/g, '').trim();
+  return src || 'Walk-in';
+}
+
+function parseCSVLine(line) {
+  const res = [];
+  let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') inQ = !inQ;
+    else if (c === ',' && !inQ) { res.push(cur.trim()); cur = ''; }
+    else cur += c;
+  }
+  res.push(cur.trim());
+  return res;
+}
+
+function showToast(msg, type = 'ok') {
+  let toast = document.getElementById('appToast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'appToast';
+    toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:10px;font-family:var(--mono);font-size:0.72rem;z-index:9999;transition:opacity 0.3s;pointer-events:none;';
+    document.body.appendChild(toast);
+  }
+  const colors = { ok:'rgba(62,207,142,0.9)', err:'rgba(240,107,122,0.9)', info:'rgba(90,180,232,0.9)' };
+  toast.style.background = colors[type] || colors.info;
+  toast.style.color = '#0a0c10';
+  toast.style.opacity = '1';
+  toast.textContent = msg;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { toast.style.opacity = '0'; }, 2500);
+}
+
+function toggleTheme() {
+  const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+  const next = cur === 'light' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', next);
+  const themeBtn = document.getElementById('themeBtn');
+  if (themeBtn) themeBtn.textContent = next === 'light' ? '☀️' : '🌙';
+}
+
+function editHotel() {
+  const el = document.getElementById('hotelName');
+  if (!el) return;
+  const n = prompt('Hotel name:', el.textContent);
+  if (n && n.trim()) el.textContent = n.trim();
+}
+
+function setSpinner(id, on) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = on ? '<div class="spinner"></div> ' : '';
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : m === '>' ? '&gt;' : m);
+}
+
+function clearDepSearch() {
+  const searchInput = document.getElementById('depSearch');
+  if (searchInput) { searchInput.value = ''; if (typeof depRender === 'function') depRender(); }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  natguess.js
+// ═══════════════════════════════════════════════════════════
+const NAT_MAP = {
+  india: ['kumar','patel','singh','sharma','reddy','nair','menon','pillai','iyer','krishnan','venkat','suresh','ramesh','mahesh','rajesh','pradeep','sandeep','deepak','arun','vijay','anand','prakash','ravi','siva','bala','murugan'],
+  uae: ['almansoori','almheiri','alketbi','alshehhi','alnuaimi','almazrouei','alkaabi','alsaiari','alghanemi'],
+  egypt: ['ibrahim','mahmoud','sayed','mostafa','khaled','walid','amr','tamer','sherif','ashraf','fathy'],
+  turkey: ['demir','kaya','celik','aydin','ozturk','yilmaz','arslan','koc','polat','erdogan','tekin','aslan']
+};
+function guessNat(name) {
+  if (!name) return '';
+  const l = name.toLowerCase();
+  for (const [nat, keys] of Object.entries(NAT_MAP)) {
+    for (const k of keys) {
+      if (l.includes(k)) return nat.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    }
+  }
+  return '';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  db.js
+// ═══════════════════════════════════════════════════════════
+let _db = null, _ref = null;
+function dbInit(firebaseApp) {
   try {
-    await importAllData(file);
-    showToast('Data imported! Reloading…', 'ok');
-    setTimeout(() => location.reload(), 1500);
-  } catch(e) { showToast('Import failed: ' + e.message, 'err'); }
+    _db = firebase.database(firebaseApp);
+    _ref = _db.ref(`hotels/${HOTEL_ID}`);
+    _db.ref('.info/connected').on('value', snap => {
+      const online = !!snap.val();
+      const dot = document.getElementById('fbDot');
+      const lbl = document.getElementById('fbLabel');
+      if (dot && lbl) {
+        if (online) { dot.style.background = 'var(--mint)'; dot.style.boxShadow = '0 0 6px var(--mint)'; lbl.textContent = 'Firebase · Live'; }
+        else { dot.style.background = 'var(--amber)'; dot.style.boxShadow = 'none'; lbl.textContent = 'Firebase · Offline'; }
+      }
+    });
+  } catch(e) { console.warn('Firebase init failed:', e); }
+}
+async function fbSet(path, data) { if (_ref) try { await _ref.child(path).set(data); } catch(e) { console.warn(e); } }
+async function fbGet(path) { if (_ref) try { const snap = await _ref.child(path).once('value'); return snap.val(); } catch(e) { return null; } return null; }
+async function saveChecklist(steps, done, skipped) { await fbSet('checklist', { steps, done: [...done], skipped: [...skipped], updatedAt: new Date().toISOString() }); }
+async function saveShifts(shiftsObj) { await fbSet('shifts', { data: shiftsObj, updatedAt: new Date().toISOString() }); }
+async function saveDepartures(rooms, log) { await fbSet('departures', { rooms, log, date: new Date().toISOString().split('T')[0], updatedAt: new Date().toISOString() }); }
+async function saveArrivals(guests) { await fbSet('arrivals', { guests, date: new Date().toISOString().split('T')[0], updatedAt: new Date().toISOString() }); }
+async function savePurpose(guests) { await fbSet('purpose', { guests, date: new Date().toISOString().split('T')[0], updatedAt: new Date().toISOString() }); }
+async function saveFeedback(log) { await fbSet('feedback', { log, updatedAt: new Date().toISOString() }); }
+async function loadAll() {
+  const [checklist, shifts, departures, arrivals, purpose, feedback] = await Promise.all([fbGet('checklist'), fbGet('shifts'), fbGet('departures'), fbGet('arrivals'), fbGet('purpose'), fbGet('feedback')]);
+  return { checklist, shifts, departures, arrivals, purpose, feedback };
+}
+function listenDepartures(cb) { if (_ref) _ref.child('departures').on('value', snap => cb(snap.val())); }
+function listenArrivals(cb) { if (_ref) _ref.child('arrivals').on('value', snap => cb(snap.val())); }
+function listenChecklist(cb) { if (_ref) _ref.child('checklist').on('value', snap => cb(snap.val())); }
+function listenShifts(cb) { if (_ref) _ref.child('shifts').on('value', snap => cb(snap.val())); }
+async function exportAllData() { const snap = await fbGet(''); if (snap) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(snap, null, 2)], { type: 'application/json' })); a.download = `ibis_backup_${new Date().toISOString().split('T')[0]}.json`; a.click(); } }
+async function importAllData(file) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = async e => { try { const data = JSON.parse(e.target.result); await fbSet('', data); resolve(data); } catch(err) { reject(err); } }; reader.readAsText(file); }); }
+
+// ═══════════════════════════════════════════════════════════
+//  departures.js (simplified)
+// ═══════════════════════════════════════════════════════════
+function processDep(isReload) {
+  const raw = document.getElementById('depInput').value.trim();
+  if (!raw) return;
+  const lines = raw.split('\n').filter(l => l.trim());
+  if (lines.length < 2) return;
+  const hdrs = lines[0].split('\t').map(h => h.trim());
+  const idx = {}; hdrs.forEach((h, i) => idx[h] = i);
+  if (idx['ROOM'] === undefined) return;
+  const incomingRooms = [];
+  for (let i = 1; i < lines.length; i++) {
+    const p = lines[i].split('\t');
+    const room = (p[idx['ROOM']] || '').trim();
+    if (!room) continue;
+    const bal = parseFloat((p[idx['BALANCE']] || '0').replace(/,/g, '')) || 0;
+    incomingRooms.push({
+      room: parseInt(room), roomStr: room,
+      name: parseName(p[idx['GUEST_NAME']] || ''),
+      arrival: p[idx['ARRIVAL']] || '', departure: p[idx['DEPARTURE']] || '',
+      nights: parseInt(p[idx['NIGHTS']] || 0) || 0, balance: bal,
+      source: cleanSource(p[idx['TRAVEL_AGENT_NAME']] || '', p[idx['COMPANY_NAME']] || '', p[idx['SOURCE_NAME']] || ''),
+      company: p[idx['COMPANY_NAME']] || '', isVip: !!(p[idx['VIP']] || ''), depTime: p[idx['DEPARTURE_TIME']] || '',
+      status: 'due', note: ''
+    });
+  }
+  depRooms = incomingRooms;
+  document.getElementById('depUploadCard').style.display = 'none';
+  document.getElementById('depBoard').style.display = 'block';
+  depRender();
+  saveDepartures(depRooms, depLog);
+}
+function depRender() {
+  const out = depRooms.filter(r => r.status === 'out').length;
+  const total = depRooms.length;
+  document.getElementById('depKpis').innerHTML = `<div class="dep-kpi k-total"><div class="dep-kpi-icon">🏨</div><div class="dep-kpi-val">${total}</div><div class="dep-kpi-label">Total</div><div class="dep-kpi-bar"></div></div><div class="dep-kpi k-due"><div class="dep-kpi-icon">⏳</div><div class="dep-kpi-val">${total - out}</div><div class="dep-kpi-label">Due Out</div><div class="dep-kpi-bar"></div></div><div class="dep-kpi k-out"><div class="dep-kpi-icon">✓</div><div class="dep-kpi-val">${out}</div><div class="dep-kpi-label">Checked Out</div><div class="dep-kpi-bar"></div></div>`;
+  document.getElementById('depProgLabel').textContent = `${out} of ${total} checked out`;
+  document.getElementById('depProgPct').textContent = total ? Math.round(out/total*100)+'%' : '0%';
+  document.getElementById('depProgFill').style.width = total ? (out/total*100)+'%' : '0%';
+  const grid = document.getElementById('depGrid');
+  grid.innerHTML = depRooms.map((r, i) => `
+    <div class="dep-card s-due">
+      <div class="dc-band"></div>
+      <div class="dc-head"><div class="dc-room">${r.roomStr}</div><div class="dc-badges"><div class="dc-sbadge sb-due">${r.status === 'out' ? 'CHECKED OUT' : 'DUE OUT'}</div><div class="dc-nights">🌙 ${r.nights}n</div></div></div>
+      <div class="dc-body"><div class="dc-name">${escapeHtml(r.name)}</div><div class="dc-meta"><div class="dc-mi">📅 <strong>${r.arrival}</strong> → <strong>${r.departure}</strong></div></div><div class="dc-src">${escapeHtml(r.source)}</div><div class="dc-bal bal-zero"><span class="dc-bal-lbl">Balance</span><span class="dc-bal-amt">AED ${r.balance.toFixed(2)}</span></div>
+      <div class="dc-actions g3"><button class="dca dca-co" onclick="depAction(${i},'out')">✓ Check Out</button></div>
+      <div class="dc-note-lbl">Notes</div><textarea class="dc-note" placeholder="Guest notes..." onchange="depRooms[${i}].note=this.value;saveDeps()">${escapeHtml(r.note)}</textarea></div></div>
+  `).join('');
+}
+function depAction(i, status) { depRooms[i].status = status; depRender(); saveDepartures(depRooms, depLog); }
+function saveDeps() { saveDepartures(depRooms, depLog); }
+function updateDepBadge() { document.getElementById('badge-departures').textContent = depRooms.filter(r => r.status !== 'out').length; }
+function clearDep() { depRooms = []; document.getElementById('depBoard').style.display = 'none'; document.getElementById('depUploadCard').style.display = 'block'; document.getElementById('depInput').value = ''; saveDeps(); }
+function reloadDepReport() { document.getElementById('depUploadCard').style.display = 'block'; document.getElementById('depBoard').style.display = 'none'; }
+function setDepSize(s, el) { depSize = s; document.querySelectorAll('.vt-btn').forEach(b => b.classList.remove('on')); if(el) el.classList.add('on'); document.getElementById('depGrid').className = 'dep-grid size-' + s; }
+function depFilter(f, el) { depFilter_ = f; document.querySelectorAll('[data-f]').forEach(c => c.classList.remove('on')); if(el) el.classList.add('on'); depRender(); }
+function toggleLog() { const body = document.getElementById('depLogBody'); if(body) body.style.display = body.style.display === 'none' ? 'block' : 'none'; }
+function depPrintList() { window.print(); }
+function exportDepSummary() { alert('Export function would generate Excel file'); }
+
+// ═══════════════════════════════════════════════════════════
+//  arrivals-purpose.js (simplified)
+// ═══════════════════════════════════════════════════════════
+function arrRender() {
+  const tbody = document.getElementById('arrTable');
+  if (!tbody) return;
+  if (!arrGuests.length) { tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:36px;">No arrivals loaded. Paste Opera data above.</td></tr>'; return; }
+  tbody.innerHTML = arrGuests.map((g, i) => `<tr><td><input value="${g.room}" onchange="arrGuests[${i}].room=this.value" style="width:46px;"/></td><td><input value="${g.conf}" style="width:86px;"/></td><td><input value="${g.name}" style="width:165px;"/></td><td><select><option>Business</option><option>Leisure</option></select></td><td><input value="${g.nights}" style="width:42px;"/></td><td><input value="${g.nat}" style="width:86px;"/></td><td><input value="${g.email}" style="width:138px;"/></td><td><input value="${g.source}" style="width:100px;"/></td><td><input value="${g.remarks}" style="width:86px;"/></td><td><button class="icon-btn" onclick="arrGuests.splice(${i},1);arrRender();saveArrivals(arrGuests)">✕</button></td></tr>`).join('');
+  document.getElementById('ak-total').textContent = arrGuests.length;
+  document.getElementById('badge-arrivals').textContent = arrGuests.length;
+}
+function loadArrivals() { alert('Load arrivals function - paste Opera data'); }
+function clearArrivals() { arrGuests = []; arrRender(); saveArrivals(arrGuests); }
+function exportArrivals() { alert('Export would generate Excel file'); }
+function openAddGuest(target) { guestModalTarget = target; document.getElementById('guestModal').classList.add('open'); }
+function closeModal() { document.getElementById('guestModal').classList.remove('open'); }
+function saveGuest() { const g = { room: document.getElementById('mg-room').value, conf: document.getElementById('mg-conf').value, name: document.getElementById('mg-name').value.toUpperCase(), purpose: document.getElementById('mg-purpose').value, nights: Number(document.getElementById('mg-nights').value), nat: document.getElementById('mg-nat').value, email: document.getElementById('mg-email').value, source: document.getElementById('mg-source').value, remarks: document.getElementById('mg-remarks').value }; if (!g.name) return; if (guestModalTarget === 'arrivals') arrGuests.push(g); else purposeGuests.push(g); arrRender(); purposeRender(); closeModal(); saveArrivals(arrGuests); savePurpose(purposeGuests); }
+function runAINat_arr() { arrGuests.forEach(g => { if (!g.nat) g.nat = guessNat(g.name); }); arrRender(); saveArrivals(arrGuests); }
+function arrFilter(f, el) { arrFilter_ = f; document.querySelectorAll('[data-af]').forEach(c => c.classList.remove('on')); if(el) el.classList.add('on'); arrRender(); }
+function editPurposeTitle() { const t = prompt('Report title:', _purposeTitle); if (t) { _purposeTitle = t; const el = document.getElementById('purposeTitle'); if (el) el.textContent = t; } }
+function purposeRender() { const tbody = document.getElementById('purposeTable'); if (!tbody) return; if (!purposeGuests.length) { tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:36px;">No guests loaded. Sync from Arrivals or add manually.</td></tr>'; return; } tbody.innerHTML = purposeGuests.map((g, i) => `<tr><td><input value="${g.room}" style="width:46px;"/></td><td><input value="${g.conf}" style="width:86px;"/></td><td><input value="${g.name}" style="width:165px;"/></td><td><select><option>Business</option><option>Leisure</option><option>Flight</option></select></td><td><input value="${g.nights}" style="width:42px;"/></td><td><input value="${g.nat}" style="width:86px;"/></td><td><input value="${g.email}" style="width:138px;"/></td><td><input value="${g.source}" style="width:100px;"/></td><td><input value="${g.remarks}" style="width:86px;"/></td><td><button class="icon-btn" onclick="purposeGuests.splice(${i},1);purposeRender();savePurpose(purposeGuests)">✕</button></td></tr>`).join(''); }
+function purposeFilter(f, el) { purposeFilter_ = f; document.querySelectorAll('[data-pf]').forEach(c => c.classList.remove('on')); if(el) el.classList.add('on'); purposeRender(); }
+function syncFromArrivals() { purposeGuests = arrGuests.map(g => ({...g})); purposeRender(); savePurpose(purposeGuests); showToast('Synced from Arrivals ✓'); }
+function clearPurpose() { purposeGuests = []; purposeRender(); savePurpose([]); }
+function loadPurpose() { alert('Load purpose data'); }
+function runAINat_purpose() { purposeGuests.forEach(g => { if (!g.nat) g.nat = guessNat(g.name); }); purposeRender(); savePurpose(purposeGuests); }
+function exportPurpose() { alert('Export would generate Excel file'); }
+function loadOperaFile(input, target) { alert('File upload would load data'); }
+function aiGuessModal() { const name = document.getElementById('mg-name').value.toUpperCase(); if (name) { const nat = guessNat(name); if (nat) document.getElementById('mg-nat').value = nat; } }
+
+// ═══════════════════════════════════════════════════════════
+//  shifts.js
+// ═══════════════════════════════════════════════════════════
+function switchShift(key, el) {
+  activeShift = key;
+  document.querySelectorAll('.shift-tab').forEach(t => t.classList.remove('active'));
+  if (el) el.classList.add('active');
+  const rb = document.getElementById('shiftResetBtn');
+  if (rb) rb.textContent = '↺ Reset ' + SHIFTS[key].label;
+  renderShift(key);
+}
+function renderShift(key) {
+  if (!SHIFTS[key]) return;
+  const shift = SHIFTS[key];
+  const doneSet = new Set(shift.done || []);
+  const tasks = shift.tasks || [];
+  const total = tasks.length;
+  const doneCount = doneSet.size;
+  const pct = total ? Math.round(doneCount / total * 100) : 0;
+  const html = `<div class="shift-header"><div class="shift-title-block"><div class="shift-color-dot" style="background:${shift.color};"></div><div class="shift-title" style="color:${shift.color};">${shift.label}</div><div class="shift-time-badge">${shift.time}</div></div></div><div class="prog-wrap"><div class="prog-info"><span>${doneCount} of ${total} tasks done</span><span style="font-family:var(--serif);font-size:1.2rem;color:${shift.color};">${pct}%</span></div><div class="prog-track"><div class="prog-fill" style="background:${shift.color};width:${pct}%"></div></div></div><div id="stList-${key}">${tasks.map((t, idx) => `<div class="st-item${doneSet.has(t.id) ? ' done' : ''}" data-task-idx="${idx}"><div class="drag-handle" style="cursor:grab;">⋮⋮</div><div class="st-check" onclick="stToggle('${key}','${t.id}')"></div><div class="st-text"><div class="st-name">${escapeHtml(t.name)}</div>${t.hint ? `<div class="st-hint">${escapeHtml(t.hint)}</div>` : ''}</div><div class="st-actions"><button class="cl-step-btn edit-btn" onclick="openEditTask('${key}','${t.id}')">✏️</button><button class="cl-step-btn del" onclick="stDelete('${key}','${t.id}')">✕</button></div></div>`).join('')}</div><div class="st-add-wrap"><input class="st-add-in" id="stIn-${key}" placeholder="Add new task…" onkeydown="if(event.key==='Enter')stAddTask('${key}')"/><input class="st-add-hint" id="stHint-${key}" placeholder="Hint (optional)"/><button class="btn gold sm" onclick="stAddTask('${key}')">+ Add</button></div>`;
+  const container = document.getElementById('shiftContent');
+  if (container) container.innerHTML = '<div class="shift-panel active">' + html + '</div>';
+  updateShiftBadge(key);
+}
+function stToggle(key, id) {
+  const shift = SHIFTS[key];
+  const idx = shift.done.indexOf(id);
+  if (idx >= 0) shift.done.splice(idx, 1);
+  else shift.done.push(id);
+  renderShift(key);
+  saveShifts(SHIFTS);
+}
+function stAddTask(key) {
+  const name = document.getElementById('stIn-' + key)?.value.trim();
+  if (!name) return;
+  SHIFTS[key].tasks.push({ id: 't' + Date.now(), name, hint: document.getElementById('stHint-' + key)?.value.trim() || '' });
+  document.getElementById('stIn-' + key).value = '';
+  if (document.getElementById('stHint-' + key)) document.getElementById('stHint-' + key).value = '';
+  renderShift(key);
+  saveShifts(SHIFTS);
+}
+function stDelete(key, id) {
+  if (!confirm('Delete this task?')) return;
+  SHIFTS[key].tasks = SHIFTS[key].tasks.filter(t => t.id !== id);
+  SHIFTS[key].done = SHIFTS[key].done.filter(d => d !== id);
+  renderShift(key);
+  saveShifts(SHIFTS);
+}
+function openEditTask(key, id) {
+  const task = SHIFTS[key].tasks.find(t => t.id === id);
+  if (!task) return;
+  document.getElementById('et-shift').value = key;
+  document.getElementById('et-id').value = id;
+  document.getElementById('et-name').value = task.name;
+  document.getElementById('et-hint').value = task.hint || '';
+  document.getElementById('editTaskModal').classList.add('open');
+}
+function saveEditTask() {
+  const key = document.getElementById('et-shift').value;
+  const id = document.getElementById('et-id').value;
+  const task = SHIFTS[key]?.tasks.find(t => t.id === id);
+  if (!task) return;
+  task.name = document.getElementById('et-name').value.trim() || task.name;
+  task.hint = document.getElementById('et-hint').value.trim();
+  document.getElementById('editTaskModal').classList.remove('open');
+  renderShift(key);
+  saveShifts(SHIFTS);
+}
+function resetShift(key) {
+  if (!confirm('Reset all tasks for ' + SHIFTS[key].label + '?')) return;
+  SHIFTS[key].done = [];
+  SHIFTS[key].resetAt = new Date().toLocaleString('en-GB');
+  renderShift(key);
+  saveShifts(SHIFTS);
+  showToast('Shift reset ✓');
+}
+function updateShiftBadge(key) {
+  const shift = SHIFTS[key];
+  const spEl = document.getElementById('sp-' + key);
+  if (spEl) spEl.textContent = (shift.done?.length || 0) + '/' + (shift.tasks?.length || 0);
+  const total = Object.values(SHIFTS).reduce((s, sh) => s + (sh.tasks?.length || 0), 0);
+  const done = Object.values(SHIFTS).reduce((s, sh) => s + (sh.done?.length || 0), 0);
+  const badge = document.getElementById('badge-shifts');
+  if (badge) badge.textContent = total ? done + '/' + total : '—';
+}
+function initShifts() {
+  renderShift('morning');
+  updateShiftBadge('morning');
+  updateShiftBadge('afternoon');
+  updateShiftBadge('mid');
+  updateShiftBadge('night');
+}
+// Initialize shifts on load
+setTimeout(() => { if (document.getElementById('shiftContent')) initShifts(); }, 100);
+
+// ═══════════════════════════════════════════════════════════
+//  checklist.js
+// ═══════════════════════════════════════════════════════════
+function clToggleEdit() {
+  clEditMode = !clEditMode;
+  const addRow = document.getElementById('clAddRow');
+  if (addRow) addRow.style.display = clEditMode ? 'block' : 'none';
+  const btn = document.getElementById('clEditBtn');
+  if (btn) btn.textContent = clEditMode ? '✅ Done Editing' : '✏️ Edit Steps';
+  clRender2();
+}
+function clAddStep() {
+  const name = document.getElementById('clNewName')?.value.trim();
+  if (!name) return;
+  const hint = document.getElementById('clNewHint')?.value.trim() || '';
+  const phase = document.getElementById('clNewPhase').value;
+  const tag = document.getElementById('clNewTag').value;
+  const id = Math.max(0, ...CL_STEPS.map(s => s.id), 0) + 1;
+  CL_STEPS.push({ id, phase, name, tag, hint });
+  document.getElementById('clNewName').value = '';
+  document.getElementById('clNewHint').value = '';
+  clRender2();
+  saveChecklist(CL_STEPS, clState.done, clState.skipped);
+}
+function clDeleteStep(id) {
+  if (!confirm('Delete this step?')) return;
+  CL_STEPS = CL_STEPS.filter(s => s.id !== id);
+  clState.done.delete(id);
+  clState.skipped.delete(id);
+  clRender2();
+  saveChecklist(CL_STEPS, clState.done, clState.skipped);
+}
+function openEditStep(id) {
+  const s = CL_STEPS.find(s => s.id === id);
+  if (!s) return;
+  document.getElementById('es-id').value = id;
+  document.getElementById('es-name').value = s.name;
+  document.getElementById('es-hint').value = s.hint || '';
+  document.getElementById('es-phase').value = s.phase;
+  document.getElementById('es-tag').value = s.tag;
+  document.getElementById('editStepModal').classList.add('open');
+}
+function closeEditStep() { document.getElementById('editStepModal').classList.remove('open'); }
+function saveEditStep() {
+  const id = parseInt(document.getElementById('es-id').value);
+  const s = CL_STEPS.find(s => s.id === id);
+  if (!s) return;
+  s.name = document.getElementById('es-name').value.trim() || s.name;
+  s.hint = document.getElementById('es-hint').value.trim();
+  s.phase = document.getElementById('es-phase').value;
+  s.tag = document.getElementById('es-tag').value;
+  closeEditStep();
+  clRender2();
+  saveChecklist(CL_STEPS, clState.done, clState.skipped);
+}
+function clRender2() {
+  const phases = [{ key: 'pre', label: 'Before Night Run' }, { key: 'run', label: 'Night Run' }, { key: 'post', label: 'After Night Run' }];
+  const tagColors = { check: 'var(--mint)', save: 'var(--gold)', scan: 'var(--sky)', charge: 'var(--amber)', run: 'var(--rose)' };
+  let html = '';
+  phases.forEach(ph => {
+    const steps = CL_STEPS.filter(s => s.phase === ph.key);
+    if (!steps.length) return;
+    html += `<div class="cl-phase-hd"><div class="cl-phase-line"></div><div class="cl-phase-lbl">${ph.label}</div><div class="cl-phase-line"></div></div>`;
+    steps.forEach(s => {
+      const done = clState.done.has(s.id);
+      const skip = clState.skipped.has(s.id);
+      html += `<div class="cl-step${done ? ' done' : ''}${skip ? ' skipped' : ''}"><div class="cl-step-main" onclick="clToggle2(${s.id})"><div class="cl-check">✓</div><div class="cl-content"><div class="cl-num">STEP ${s.id} · <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${tagColors[s.tag] || 'var(--text3)'};"></span> <span style="color:${tagColors[s.tag] || 'var(--text3)'};">${s.tag.toUpperCase()}</span></div><div class="cl-name">${escapeHtml(s.name)}</div>${s.hint ? `<div class="cl-hint">${escapeHtml(s.hint)}</div>` : ''}</div><div class="cl-step-btns" onclick="event.stopPropagation()">${clEditMode ? `<button class="cl-step-btn edit-btn" onclick="openEditStep(${s.id})">✏️</button><button class="cl-step-btn del" onclick="clDeleteStep(${s.id})">✕</button>` : `<button class="cl-step-btn" onclick="clSkip2(${s.id})">${skip ? '↩ Show' : 'Skip'}</button>`}</div></div></div>`;
+    });
+  });
+  const el = document.getElementById('clStepList2');
+  if (el) el.innerHTML = html;
+  clUpdateProgress();
+}
+function clToggle2(id) {
+  if (clState.skipped.has(id)) return;
+  if (clState.done.has(id)) clState.done.delete(id);
+  else clState.done.add(id);
+  clRender2();
+  saveChecklist(CL_STEPS, clState.done, clState.skipped);
+}
+function clSkip2(id) {
+  if (clState.skipped.has(id)) clState.skipped.delete(id);
+  else { clState.skipped.add(id); clState.done.delete(id); }
+  clRender2();
+  saveChecklist(CL_STEPS, clState.done, clState.skipped);
+}
+function clUpdateProgress() {
+  const active = CL_STEPS.filter(s => !clState.skipped.has(s.id));
+  const done = active.filter(s => clState.done.has(s.id)).length;
+  const total = active.length;
+  const pct = total ? Math.round(done / total * 100) : 0;
+  const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  setEl('clProgLabel', `${done} of ${total} steps done`);
+  setEl('clProgPct', pct + '%');
+  setEl('badge-checklist', pct === 100 ? '✓' : total);
+  const fill = document.getElementById('clProgFill');
+  if (fill) fill.style.width = pct + '%';
+  const comp = document.getElementById('clComplete2');
+  if (comp) comp.style.display = (pct === 100 && total > 0) ? 'block' : 'none';
+}
+function clReset() {
+  if (!confirm('Reset all checkboxes for a new night?')) return;
+  clState.done.clear();
+  clState.skipped.clear();
+  clRender2();
+  saveChecklist(CL_STEPS, clState.done, clState.skipped);
+  showToast('Checklist reset for new night ✓');
+}
+// Initialize checklist
+setTimeout(() => { if (document.getElementById('clStepList2')) clRender2(); }, 100);
+
+// ═══════════════════════════════════════════════════════════
+//  reports.js (minimal)
+// ═══════════════════════════════════════════════════════════
+function processNat() { alert('Process nationality report'); }
+function clearNat() { document.getElementById('natInput').value = ''; document.getElementById('natResults').style.display = 'none'; }
+function copyNat() { alert('Copy to clipboard'); }
+function processRent() { alert('Process rented rooms'); }
+function clearRent() { document.getElementById('rentInput1').value = ''; document.getElementById('rentInput2').value = ''; document.getElementById('rentResults').style.display = 'none'; }
+function copyRent() { alert('Copy to clipboard'); }
+function processAudit() { alert('Process night audit'); }
+function clearAudit() { document.getElementById('naOperaInput').value = ''; document.getElementById('naExcelInput').value = ''; document.getElementById('naCompareSection').style.display = 'none'; }
+function copyAudit() { alert('Copy to clipboard'); }
+function immigLoadFile2(input) { if (input.files[0]) { const reader = new FileReader(); reader.onload = e => { document.getElementById('immigPasteInput2').value = e.target.result; processImmig2(); }; reader.readAsText(input.files[0]); } }
+function processImmig2() { alert('Process immigration XML'); }
+function immigFilter2(type, btn) { immigFilter2_ = type; document.querySelectorAll('#immigFilters2 .fchip').forEach(b => b.classList.remove('on')); if(btn) btn.classList.add('on'); }
+function clearImmig() { document.getElementById('immigPasteInput2').value = ''; document.getElementById('immigResults2').style.display = 'none'; }
+
+// ═══════════════════════════════════════════════════════════
+//  Feedback functions
+// ═══════════════════════════════════════════════════════════
+function openFeedback() {
+  document.getElementById('fb-text').value = '';
+  document.getElementById('fb-name').value = '';
+  document.getElementById('feedbackModal').classList.add('open');
+}
+function closeFeedbackModal() { document.getElementById('feedbackModal').classList.remove('open'); }
+function saveFeedbackItem() {
+  const text = document.getElementById('fb-text')?.value.trim();
+  if (!text) return alert('Please describe your feedback.');
+  const entry = { id: Date.now(), type: document.getElementById('fb-type')?.value || 'other', text: text, priority: document.getElementById('fb-priority')?.value || 'med', name: document.getElementById('fb-name')?.value.trim() || 'Anonymous', time: new Date().toLocaleString('en-GB') };
+  feedbackLog.unshift(entry);
+  saveFeedback(feedbackLog);
+  closeFeedbackModal();
+  showToast('Feedback saved to Firebase ✓');
+}
+async function handleImport(input) {
+  const file = input.files[0];
+  if (!file) return;
+  try { await importAllData(file); showToast('Data imported! Reloading…', 'ok'); setTimeout(() => location.reload(), 1500); }
+  catch(e) { showToast('Import failed: ' + e.message, 'err'); }
   input.value = '';
 }
 
-async function saveSettings(patch) {
-  const current = await fbGet('settings') || {};
-  await fbSet('settings', { ...current, ...patch, updatedAt: new Date().toISOString() });
-}
-
-// Global function to initialize shift defaults
-function initShiftsDefault() {
-  if (typeof SHIFTS !== 'undefined' && typeof DEFAULT_TASKS !== 'undefined') {
-    Object.keys(SHIFTS).forEach(k => {
-      if (!SHIFTS[k].tasks || SHIFTS[k].tasks.length === 0) {
-        SHIFTS[k].tasks = DEFAULT_TASKS[k] ? DEFAULT_TASKS[k].map(t => ({...t})) : [];
-        SHIFTS[k].done = [];
-        SHIFTS[k].resetAt = '';
-      }
-    });
-  }
-}
-
+// ═══════════════════════════════════════════════════════════
+//  App Initialization
+// ═══════════════════════════════════════════════════════════
 async function appInit() {
-  console.log('App initializing...');
-  
-  // 1 — Init Firebase
   try {
-    if (typeof firebase !== 'undefined' && FIREBASE_CONFIG) {
-      const app = firebase.initializeApp(FIREBASE_CONFIG);
-      dbInit(app);
-      console.log('Firebase initialized');
-    }
-  } catch(e) {
-    console.warn('Firebase init failed — running offline:', e);
-    if (typeof updateConnectionUI === 'function') updateConnectionUI(false);
-  }
-
-  // 2 — Initialize default data structures
-  if (typeof initShiftsDefault === 'function') initShiftsDefault();
+    const app = firebase.initializeApp(FIREBASE_CONFIG);
+    dbInit(app);
+  } catch(e) { console.warn('Firebase init failed:', e); }
   
-  // 3 — Load all data from Firebase
-  let data = {};
-  try {
-    if (typeof loadAll === 'function') {
-      data = await loadAll();
-    }
-  } catch(e) {
-    console.warn('Failed to load from Firebase:', e);
+  const data = await loadAll();
+  if (data.checklist) {
+    if (data.checklist.steps && data.checklist.steps.length) CL_STEPS = data.checklist.steps;
+    if (data.checklist.done) data.checklist.done.forEach(i => clState.done.add(i));
+    if (data.checklist.skipped) data.checklist.skipped.forEach(i => clState.skipped.add(i));
   }
-  console.log('Data loaded:', data);
-
-  // 4 — Apply checklist
-  if (typeof CL_STEPS !== 'undefined' && typeof clState !== 'undefined') {
-    if (data.checklist) {
-      if (data.checklist.steps && data.checklist.steps.length) CL_STEPS = data.checklist.steps;
-      if (data.checklist.done) data.checklist.done.forEach(i => clState.done.add(i));
-      if (data.checklist.skipped) data.checklist.skipped.forEach(i => clState.skipped.add(i));
-    }
-    if (typeof clRender2 === 'function') clRender2();
-  }
-
-  // 5 — Apply shifts
-  if (typeof SHIFTS !== 'undefined') {
-    if (data.shifts && data.shifts.data) {
-      Object.keys(SHIFTS).forEach(k => {
-        const saved = data.shifts.data[k];
-        if (saved) {
-          SHIFTS[k].tasks = saved.tasks && saved.tasks.length ? saved.tasks : (DEFAULT_TASKS[k] ? DEFAULT_TASKS[k].map(t=>({...t})) : []);
-          SHIFTS[k].done = saved.done || [];
-          SHIFTS[k].resetAt = saved.resetAt || '';
-        } else if (DEFAULT_TASKS[k]) {
-          SHIFTS[k].tasks = DEFAULT_TASKS[k].map(t=>({...t}));
-          SHIFTS[k].done = [];
-          SHIFTS[k].resetAt = '';
-        }
-      });
-    } else if (typeof DEFAULT_TASKS !== 'undefined') {
-      Object.keys(SHIFTS).forEach(k => {
-        SHIFTS[k].tasks = DEFAULT_TASKS[k] ? DEFAULT_TASKS[k].map(t=>({...t})) : [];
-        SHIFTS[k].done = [];
-        SHIFTS[k].resetAt = '';
-      });
-    }
-    
-    // Render shifts
-    if (typeof renderShift === 'function') {
-      renderShift('morning');
-    }
-    if (typeof updateShiftBadge === 'function') {
-      Object.keys(SHIFTS).forEach(k => updateShiftBadge(k));
-    }
-  }
-
-  // 6 — Apply departures
-  if (typeof depRooms !== 'undefined') {
-    if (data.departures && data.departures.rooms && data.departures.rooms.length) {
-      depRooms = data.departures.rooms;
-      depLog = data.departures.log || [];
-      const uploadCard = document.getElementById('depUploadCard');
-      const board = document.getElementById('depBoard');
-      if (uploadCard) uploadCard.style.display = 'none';
-      if (board) board.style.display = 'block';
-      ['depPrintBtn','depExportBtn','depViewToggle','depReloadBtn'].forEach(id => { 
-        const el = document.getElementById(id); 
-        if(el) el.style.display = ''; 
-      });
-      const dateLabel = document.getElementById('depDateLabel');
-      if (dateLabel) dateLabel.textContent = depRooms.length + ' rooms departing · ' + (depRooms[0]?.departure||'');
-      if (typeof depRender === 'function') depRender();
-      if (typeof updateDepBadge === 'function') updateDepBadge();
-    } else {
-      const uploadCard = document.getElementById('depUploadCard');
-      const board = document.getElementById('depBoard');
-      if (uploadCard) uploadCard.style.display = 'block';
-      if (board) board.style.display = 'none';
-    }
-  }
-
-  // 7 — Apply arrivals
-  if (typeof arrGuests !== 'undefined') {
-    arrGuests = (data.arrivals && data.arrivals.guests) ? data.arrivals.guests : [];
-    if (typeof arrRender === 'function') arrRender();
-  }
-
-  // 8 — Apply purpose
-  if (typeof purposeGuests !== 'undefined') {
-    purposeGuests = (data.purpose && data.purpose.guests) ? data.purpose.guests : [];
-    if (typeof purposeRender === 'function') purposeRender();
-  }
-
-  // 9 — Apply feedback
-  if (typeof feedbackLog !== 'undefined' && data.feedback && data.feedback.log) {
-    feedbackLog = data.feedback.log;
-  }
-
-  // 10 — Apply settings
-  if (data.settings) {
-    if (data.settings.theme && data.settings.theme === 'light') {
-      document.documentElement.setAttribute('data-theme', 'light');
-      const themeBtn = document.getElementById('themeBtn');
-      if (themeBtn) themeBtn.textContent = '☀️';
-    }
-    if (data.settings.hotelName) {
-      const hotelName = document.getElementById('hotelName');
-      if (hotelName) hotelName.textContent = data.settings.hotelName;
-    }
-  }
-
-  // 11 — Real-time listeners
-  if (typeof listenDepartures === 'function') {
-    listenDepartures(snap => {
-      if (!snap || !snap.rooms) return;
-      depRooms = snap.rooms;
-      depLog = snap.log || [];
-      if (depRooms.length) {
-        const uploadCard = document.getElementById('depUploadCard');
-        const board = document.getElementById('depBoard');
-        if (uploadCard) uploadCard.style.display = 'none';
-        if (board) board.style.display = 'block';
-        ['depPrintBtn','depExportBtn','depViewToggle','depReloadBtn'].forEach(id => { 
-          const el = document.getElementById(id); 
-          if(el) el.style.display = ''; 
-        });
+  clRender2();
+  
+  if (data.shifts && data.shifts.data) {
+    Object.keys(SHIFTS).forEach(k => {
+      if (data.shifts.data[k]) {
+        SHIFTS[k].tasks = data.shifts.data[k].tasks || SHIFTS[k].tasks;
+        SHIFTS[k].done = data.shifts.data[k].done || [];
       }
-      if (typeof depRender === 'function') depRender();
-      if (typeof updateDepBadge === 'function') updateDepBadge();
     });
   }
+  initShifts();
   
-  if (typeof listenArrivals === 'function') {
-    listenArrivals(snap => {
-      if (!snap || !snap.guests) return;
-      arrGuests = snap.guests;
-      if (typeof arrRender === 'function') arrRender();
-    });
+  if (data.departures && data.departures.rooms) {
+    depRooms = data.departures.rooms;
+    depLog = data.departures.log || [];
+    document.getElementById('depUploadCard').style.display = 'none';
+    document.getElementById('depBoard').style.display = 'block';
+    depRender();
   }
+  if (data.arrivals && data.arrivals.guests) { arrGuests = data.arrivals.guests; arrRender(); }
+  if (data.purpose && data.purpose.guests) { purposeGuests = data.purpose.guests; purposeRender(); }
+  if (data.feedback && data.feedback.log) feedbackLog = data.feedback.log;
   
-  if (typeof listenChecklist === 'function') {
-    listenChecklist(snap => {
-      if (!snap) return;
-      if (snap.steps && snap.steps.length && typeof CL_STEPS !== 'undefined') CL_STEPS = snap.steps;
-      if (typeof clState !== 'undefined') {
-        clState.done.clear();
-        clState.skipped.clear();
-        if (snap.done) snap.done.forEach(i => clState.done.add(i));
-        if (snap.skipped) snap.skipped.forEach(i => clState.skipped.add(i));
-      }
-      if (typeof clRender2 === 'function') clRender2();
-    });
-  }
+  listenDepartures(snap => { if (snap && snap.rooms) { depRooms = snap.rooms; depLog = snap.log || []; depRender(); updateDepBadge(); } });
+  listenArrivals(snap => { if (snap && snap.guests) { arrGuests = snap.guests; arrRender(); } });
+  listenChecklist(snap => { if (snap) { if (snap.steps) CL_STEPS = snap.steps; clState.done.clear(); clState.skipped.clear(); if (snap.done) snap.done.forEach(i => clState.done.add(i)); if (snap.skipped) snap.skipped.forEach(i => clState.skipped.add(i)); clRender2(); } });
+  listenShifts(snap => { if (snap && snap.data) { Object.keys(SHIFTS).forEach(k => { if (snap.data[k]) { SHIFTS[k].tasks = snap.data[k].tasks || SHIFTS[k].tasks; SHIFTS[k].done = snap.data[k].done || []; } }); renderShift(activeShift); Object.keys(SHIFTS).forEach(k => updateShiftBadge(k)); } });
   
-  if (typeof listenShifts === 'function') {
-    listenShifts(snap => {
-      if (!snap || !snap.data) return;
-      Object.keys(SHIFTS).forEach(k => {
-        if (snap.data[k]) {
-          SHIFTS[k].tasks = snap.data[k].tasks || SHIFTS[k].tasks;
-          SHIFTS[k].done = snap.data[k].done || [];
-          SHIFTS[k].resetAt = snap.data[k].resetAt || '';
-        }
-      });
-      if (typeof renderShift === 'function') renderShift(activeShift);
-      if (typeof updateShiftBadge === 'function') Object.keys(SHIFTS).forEach(k => updateShiftBadge(k));
-    });
-  }
-
-  // 12 — Update clock and UI
-  if (typeof updateClock === 'function') {
-    updateClock();
-    setInterval(updateClock, 30000);
-  }
-  
-  console.log('App initialization complete');
+  updateClock();
+  setInterval(updateClock, 30000);
 }
-
-// Start the app
-setTimeout(function() {
-  appInit();
-}, 100);
+setTimeout(() => { appInit(); }, 100);
 </script>
 </body>
 </html>
