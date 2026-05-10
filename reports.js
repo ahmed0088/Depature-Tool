@@ -34,56 +34,94 @@ function resolveCountry(name) {
 }
 
 // ── NATIONALITY REPORT ────────────────────────────────────
-function processNat() { ... }   // (your existing function - unchanged)
+let natCopyText = '';
+
+function processNat() {
+  // ... (keep your existing processNat function unchanged)
+}
+
 function copyNat() { 
   if (!natCopyText) return; 
   copyToClipboard(natCopyText, document.getElementById('natCopyBtn'), 'Copy All 240 Rows'); 
 }
+
 function clearNat() {
-  document.getElementById('natInput').value = '';
-  document.getElementById('natResults').style.display = 'none';
-  document.getElementById('natError').classList.remove('show');
+  const input = document.getElementById('natInput');
+  if (input) input.value = '';
+  const results = document.getElementById('natResults');
+  if (results) results.style.display = 'none';
+  const error = document.getElementById('natError');
+  if (error) error.classList.remove('show');
   natCopyText = '';
 }
 
 // ── RENTED ROOMS & BEDS ───────────────────────────────────
-function parseHF(raw) { ... }   // (your existing function - unchanged)
-function parseSRT(raw) { ... }  // (your existing function - unchanged)
+let rentCopyText = '';
 
-function processRent() { ... }  // (your existing function - unchanged)
+function processRent() {
+  // ... (keep your existing processRent function unchanged)
+}
 
 function copyRent() { 
   if(!rentCopyText) return; 
   copyToClipboard(rentCopyText, document.getElementById('rentCopyBtn'), 'Copy All Rows'); 
 }
-function clearRent() { ... }    // (your existing function - unchanged)
+
+function clearRent() {
+  const input1 = document.getElementById('rentInput1');
+  const input2 = document.getElementById('rentInput2');
+  if (input1) input1.value = '';
+  if (input2) input2.value = '';
+  const results = document.getElementById('rentResults');
+  if (results) results.style.display = 'none';
+  const error = document.getElementById('rentError');
+  if (error) error.classList.remove('show');
+  rentCopyText = '';
+}
 
 // ── NIGHT AUDIT PM ROOMS ──────────────────────────────────
-function parseOperaPM(raw) { ... }   // unchanged
-function parseExcelPM(raw) { ... }   // unchanged
-function processAudit() { ... }      // unchanged
+let naCopyText = '';
+
+function processAudit() {
+  // ... (keep your existing processAudit function unchanged)
+}
 
 function copyAudit() { 
   if(!naCopyText) return; 
   copyToClipboard(naCopyText, document.getElementById('naCopyBtn'), 'Copy All Fixed Rows'); 
 }
-function clearAudit() { ... }        // unchanged
+
+function clearAudit() {
+  const operaInput = document.getElementById('naOperaInput');
+  const excelInput = document.getElementById('naExcelInput');
+  if (operaInput) operaInput.value = '';
+  if (excelInput) excelInput.value = '';
+  const compareSection = document.getElementById('naCompareSection');
+  if (compareSection) compareSection.style.display = 'none';
+  const error = document.getElementById('naError');
+  if (error) error.classList.remove('show');
+  naCopyText = '';
+}
 
 // ── IMMIGRATION CHECK ─────────────────────────────────────
-// Removed duplicate declarations (already in state.js)
 function immigLoadFile2(input) {
   if(!input.files[0]) return;
   const reader = new FileReader();
   reader.onload = e => {
-    document.getElementById('immigPasteInput2').value = e.target.result;
+    const pasteInput = document.getElementById('immigPasteInput2');
+    if (pasteInput) pasteInput.value = e.target.result;
     processImmig2();
   };
   reader.readAsText(input.files[0]);
 }
 
-function processImmig2() { ... }     // your existing function - unchanged
+function processImmig2() {
+  // ... (your existing processImmig2 function - keep unchanged)
+}
 
-function immigRender2(rows) { ... }  // your existing function - unchanged
+function immigRender2(rows) {
+  // ... (your existing immigRender2 function - keep unchanged)
+}
 
 function immigFilter2(type, btn) {
   immigFilter2_ = type;
@@ -93,37 +131,45 @@ function immigFilter2(type, btn) {
 }
 
 function clearImmig() {
-  document.getElementById('immigPasteInput2').value = '';
-  document.getElementById('immigResults2').style.display = 'none';
-  document.getElementById('immigError2').classList.remove('show');
-  document.getElementById('immigTabCount').textContent = 'Upload';
-  document.getElementById('immigFileInput2').value = '';
+  const pasteInput = document.getElementById('immigPasteInput2');
+  if (pasteInput) pasteInput.value = '';
+  const results = document.getElementById('immigResults2');
+  if (results) results.style.display = 'none';
+  const error = document.getElementById('immigError2');
+  if (error) error.classList.remove('show');
+  const badge = document.getElementById('immigTabCount');
+  if (badge) badge.textContent = 'Upload';
+  const fileInput = document.getElementById('immigFileInput2');
+  if (fileInput) fileInput.value = '';
   immigAllRows2 = [];
 }
 
 // ── FEEDBACK ──────────────────────────────────────────────
 function openFeedback() {
-  ['fb-text','fb-name'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.value = '';
-  });
-  document.getElementById('feedbackModal').classList.add('open');
+  const textArea = document.getElementById('fb-text');
+  const nameInput = document.getElementById('fb-name');
+  if (textArea) textArea.value = '';
+  if (nameInput) nameInput.value = '';
+  const modal = document.getElementById('feedbackModal');
+  if (modal) modal.classList.add('open');
 }
 
 function closeFeedbackModal() {
-  document.getElementById('feedbackModal').classList.remove('open');
+  const modal = document.getElementById('feedbackModal');
+  if (modal) modal.classList.remove('open');
 }
 
 function saveFeedbackItem() {
-  const text = (document.getElementById('fb-text').value || '').trim();
+  const textArea = document.getElementById('fb-text');
+  const text = (textArea?.value || '').trim();
   if (!text) return alert('Please describe your feedback.');
 
   const entry = {
     id: Date.now(),
-    type: document.getElementById('fb-type').value,
-    text,
-    priority: document.getElementById('fb-priority').value,
-    name: (document.getElementById('fb-name').value || '').trim() || 'Anonymous',
+    type: document.getElementById('fb-type')?.value || 'other',
+    text: text,
+    priority: document.getElementById('fb-priority')?.value || 'med',
+    name: (document.getElementById('fb-name')?.value || '').trim() || 'Anonymous',
     time: new Date().toLocaleString('en-GB')
   };
 
