@@ -301,15 +301,15 @@ function depCardHTML(r) {
   else if (r.pendingExtension) currentExtNights = r.pendingExtensionNights;
   else if (r.comingToExtend) currentExtNights = r.pendingExtensionNights;
   
-  const extensionHTML = `
-    <div class="dc-sel-row">
-      <span class="dc-sel-lbl ext">📅 Extension nights:</span>
-      <select class="dc-select ext" onchange="depUpdateExtensionNights(${i}, this.value)">
-        <option value="0">-- Select nights --</option>
-        ${extensionOptions.map(n => `<option value="${n}"${currentExtNights === n ? ' selected' : ''}>+${n} night${n>1?'s':''}</option>`).join('')}
-      </select>
-    </div>
-  `;
+ const extensionHTML = `
+  <div class="dc-sel-row">
+    <span class="dc-sel-lbl ext">📅 Nights:</span>
+    <select class="dc-select ext" onchange="depUpdateExtensionNights(${i}, this.value)">
+      <option value="0">-- Select --</option>
+      ${extensionOptions.map(n => `<option value="${n}"${currentExtNights === n ? ' selected' : ''}>+${n}</option>`).join('')}
+    </select>
+  </div>
+`;
 
   // Guest action buttons - cleaner text
 const guestActionsHTML = (r.status === 'due' && r.status !== 'out' && r.status !== 'extended' && r.status !== 'late') ? `
