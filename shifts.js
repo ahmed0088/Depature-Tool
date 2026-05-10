@@ -250,3 +250,21 @@ setTimeout(() => {
     initShifts();
   }
 }, 100);
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function() {
+    if (typeof initShifts === 'function') {
+      initShifts();
+    } else if (typeof renderShift === 'function') {
+      renderShift('morning');
+    }
+  });
+} else {
+  setTimeout(function() {
+    if (typeof initShifts === 'function') {
+      initShifts();
+    } else if (typeof renderShift === 'function') {
+      renderShift('morning');
+    }
+  }, 100);
+}
