@@ -339,12 +339,14 @@ const guestActionsHTML = (r.status === 'due' && r.status !== 'out' && r.status !
   ` : '';
 
   const actHTML = r.status !== 'out'
-    ? `<div class="dc-actions g3">
-         <button class="dca dca-co"   onclick="depAction(${i},'out')">✓ Check Out</button>
-         <button class="dca dca-late" onclick="depAction(${i},'late')">🕐 Late Checkout</button>
-         <button class="dca dca-undo" onclick="depClearStatus(${i})">↺ Clear</button>
-       </div>`
-    : `<div class="dc-actions g1"><button class="dca dca-undo" onclick="depAction(${i},'due')">↺ Undo Checkout</button></div>`;
+  ? `<div class="dc-actions g3">
+       <button class="dca dca-co" onclick="depAction(${i},'out')">✓ Check Out</button>
+       <button class="dca dca-late" onclick="depAction(${i},'late')">🕐 Late</button>
+       <button class="dca dca-ext" onclick="depAction(${i},'extended')">↪ Extend</button>
+     </div>`
+  : `<div class="dc-actions g1">
+       <button class="dca dca-undo" onclick="depAction(${i},'due')">↺ Undo</button>
+     </div>`;
 
   return `<div class="dep-card ${sClass}" draggable="true">
     ${vipHTML}
