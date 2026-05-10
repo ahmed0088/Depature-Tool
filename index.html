@@ -127,15 +127,15 @@
       </div>
       <div class="prog-track"><div class="prog-fill" id="depProgFill" style="width:0%"></div></div>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
-      <div class="filter-row" style="margin-bottom:0;flex:1;">
-        <button class="fchip on" data-f="all"      onclick="depFilter('all',this)">All <span id="dfc-all">0</span></button>
-        <button class="fchip due"  data-f="due"      onclick="depFilter('due',this)">⏳ Due <span id="dfc-due">0</span></button>
-        <button class="fchip ext"  data-f="extended" onclick="depFilter('extended',this)">↪ Extended <span id="dfc-extended">0</span></button>
-        <button class="fchip late" data-f="late"     onclick="depFilter('late',this)">🕐 Late CO <span id="dfc-late">0</span></button>
-        <button class="fchip bal"  data-f="balance"  onclick="depFilter('balance',this)">💳 Balance <span id="dfc-balance">0</span></button>
-        <button class="fchip out"  data-f="out"      onclick="depFilter('out',this)">✓ Out <span id="dfc-out">0</span></button>
-      </div>
+    <div class="filter-row" style="margin-bottom:0;flex:1;">
+  <button class="fchip on" data-f="all"      onclick="depFilter('all',this)">All <span id="dfc-all">0</span></button>
+  <button class="fchip due"  data-f="due"      onclick="depFilter('due',this)">⏳ Due <span id="dfc-due">0</span></button>
+  <button class="fchip"      data-f="noanswer" onclick="depFilter('noanswer',this)">📞❌ No Answer <span id="dfc-noanswer">0</span></button>
+  <button class="fchip ext"  data-f="extended" onclick="depFilter('extended',this)">↪ Extended <span id="dfc-extended">0</span></button>
+  <button class="fchip late" data-f="late"     onclick="depFilter('late',this)">🕐 Late CO <span id="dfc-late">0</span></button>
+  <button class="fchip bal"  data-f="balance"  onclick="depFilter('balance',this)">💳 Balance <span id="dfc-balance">0</span></button>
+  <button class="fchip out"  data-f="out"      onclick="depFilter('out',this)">✓ Out <span id="dfc-out">0</span></button>
+</div>
       <div class="search-wrap">
         <span style="padding:0 8px;color:var(--text3);">⌕</span>
         <input type="text" id="depSearch" placeholder="Room / guest…" oninput="depRender()"/>
