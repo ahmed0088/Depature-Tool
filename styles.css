@@ -868,6 +868,74 @@ td input:focus, td select:focus { outline: none; border-color: var(--gold); back
 .dc-note:focus       { border-color: var(--gold); }
 .dc-note::placeholder { color: var(--text3); }
 
+/* Coming to Extend styles */
+.dep-kpi.k-coming .dep-kpi-val {
+  color: var(--sky);
+}
+
+.dep-card.s-coming {
+  border-color: rgba(90,180,232,0.5);
+  background: linear-gradient(135deg, var(--card), rgba(90,180,232,0.05));
+}
+
+.sb-coming {
+  color: var(--sky);
+  border-color: rgba(90,180,232,0.5);
+  background: rgba(90,180,232,0.12);
+}
+
+.fchip.coming {
+  border-color: rgba(90,180,232,0.4);
+}
+
+.fchip.on.coming {
+  color: var(--sky);
+  border-color: rgba(90,180,232,0.6);
+  background: rgba(90,180,232,0.12);
+}
+
+.dca.dca-coming {
+  background: linear-gradient(135deg, rgba(90,180,232,0.12), rgba(90,180,232,0.06));
+  color: var(--sky);
+  border-color: rgba(90,180,232,0.4);
+}
+
+.dca.dca-coming:hover {
+  background: rgba(90,180,232,0.2);
+}
+
+.dca.dca-confirm {
+  background: linear-gradient(135deg, rgba(62,207,142,0.12), rgba(62,207,142,0.06));
+  color: var(--mint);
+  border-color: rgba(62,207,142,0.4);
+}
+
+.dca.dca-confirm:hover {
+  background: rgba(62,207,142,0.2);
+}
+
+.dca.dca-clear {
+  background: linear-gradient(135deg, rgba(232,184,75,0.12), rgba(232,184,75,0.06));
+  color: var(--gold);
+  border-color: rgba(232,184,75,0.4);
+}
+
+.dca.dca-clear:hover {
+  background: rgba(232,184,75,0.2);
+}
+
+.log-act-coming {
+  color: var(--sky);
+  background: rgba(90,180,232,0.08);
+  border: 1px solid rgba(90,180,232,0.25);
+}
+
+.log-act-clear {
+  color: var(--gold);
+  background: rgba(232,184,75,0.08);
+  border: 1px solid rgba(232,184,75,0.25);
+}
+
 /* Action log */
 .dep-log-wrap { margin-top: 20px; }
 .dep-log-header {
