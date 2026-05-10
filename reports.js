@@ -602,7 +602,6 @@ function clearImmig() {
   immigAllRows2 = [];
 }
 
-// Helper function
 function escapeHtmlSimple(str) {
   if (!str) return '';
   return String(str).replace(/[&<>]/g, function(m) {
