@@ -91,17 +91,17 @@
       <p id="depDateLabel">Today's departures · Load Opera report to begin</p>
     </div>
     <div class="page-hd-actions">
-  <button class="btn sky" onclick="reloadDepReport()" style="display:none;" id="depReloadBtn">🔄 Reload Report</button>
-  <div class="view-toggle" id="depViewToggle" style="display:none;">
-    <button class="vt-btn"     onclick="setDepSize('sm',this)">S</button>
-    <button class="vt-btn on"  onclick="setDepSize('md',this)">M</button>
-    <button class="vt-btn"     onclick="setDepSize('lg',this)">L</button>
-    <button class="vt-btn"     onclick="setDepSize('list',this)">≡</button>
-  </div>
-  <button class="btn mint" onclick="depPrintList()"    style="display:none;" id="depPrintBtn">🖨 Print</button>
-  <button class="btn gold" onclick="exportDepSummary()" style="display:none;" id="depExportBtn">⬇ Export</button>
-  <button class="btn rose" onclick="clearDep()">✕ Clear</button>
-</div>
+      <button class="btn sky" onclick="reloadDepReport()" style="display:none;" id="depReloadBtn">🔄 Reload Report</button>
+      <div class="view-toggle" id="depViewToggle" style="display:none;">
+        <button class="vt-btn"     onclick="setDepSize('sm',this)">S</button>
+        <button class="vt-btn on"  onclick="setDepSize('md',this)">M</button>
+        <button class="vt-btn"     onclick="setDepSize('lg',this)">L</button>
+        <button class="vt-btn"     onclick="setDepSize('list',this)">≡</button>
+      </div>
+      <button class="btn mint" onclick="depPrintList()"    style="display:none;" id="depPrintBtn">🖨 Print</button>
+      <button class="btn gold" onclick="exportDepSummary()" style="display:none;" id="depExportBtn">⬇ Export</button>
+      <button class="btn rose" onclick="clearDep()">✕ Clear</button>
+    </div>
   </div>
   <div class="card" id="depUploadCard">
     <div class="upload-zone">
@@ -114,7 +114,7 @@
     </div>
     <div class="error-box" id="depError"><span>⚠</span><span id="depErrorMsg"></span></div>
     <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
-      <button class="btn gold" onclick="processDep()">⚡ Load Report</button>
+      <button class="btn gold" onclick="processDep(false)">⚡ Load Report</button>
       <span style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">Paste → Load → manage on the board → auto-saves to Firebase</span>
     </div>
   </div>
@@ -192,9 +192,10 @@
     <div class="search-wrap"><span style="padding:0 8px;color:var(--text3);">⌕</span><input type="text" placeholder="Search…" oninput="arrRender()" id="arrSearch"/></div>
   </div>
   <div class="tbl-wrap"><table>
-    <thead><tr><th>Room</th><th>Conf.</th><th>Name</th><th>Purpose</th><th>Nights</th><th>Nationality</th><th>Email</th><th>Source</th><th>Remarks</th><th></th></tr></thead>
+    <thead><tr><th>Room</th><th>Conf.</th><th>Name</th><th>Purpose</th><th>Nights</th><th>Nationality</th><th>Email</th><th>Source</th><th>Remarks</th><th></th></tr>
+    </thead>
     <tbody id="arrTable"></tbody>
-  </table></div>
+   </table>
 </div>
 
 <!-- ════════════════ PURPOSE OF STAY ════════════════ -->
@@ -233,15 +234,16 @@
     <div class="search-wrap"><span style="padding:0 8px;color:var(--text3);">⌕</span><input type="text" placeholder="Search…" oninput="purposeRender()" id="purposeSearch"/></div>
   </div>
   <div class="tbl-wrap"><table>
-    <thead><tr><th>Room</th><th>Conf.</th><th>Name</th><th>Purpose</th><th>Nights</th><th>Nationality</th><th>Email</th><th>Source</th><th>Remarks</th><th></th></tr></thead>
+    <thead><tr><th>Room</th><th>Conf.</th><th>Name</th><th>Purpose</th><th>Nights</th><th>Nationality</th><th>Email</th><th>Source</th><th>Remarks</th><th></th></tr>
+    </thead>
     <tbody id="purposeTable"></tbody>
-  </table></div>
+   </table>
 </div>
 
 <!-- ════════════════ SHIFT TASKS ════════════════ -->
 <div class="panel" id="panel-shifts">
   <div class="page-hd">
-    <div class="page-hd-left"><h1>Shift Tasks</h1><p>Check off tasks as you go · Saves to Firebase automatically</p></div>
+    <div class="page-hd-left"><h1>Shift Tasks</h1><p>Check off tasks as you go · Drag ⋮⋮ to reorder · Saves to Firebase automatically</p></div>
     <div class="page-hd-actions">
       <button class="btn rose" onclick="resetShift(activeShift)" id="shiftResetBtn">↺ Reset Shift</button>
     </div>
@@ -448,10 +450,11 @@
         <button class="fchip"    data-if="first_name"  onclick="immigFilter2('first_name',this)">🟢 First Name <span id="ifc-fname">0</span></button>
         <div class="search-wrap" style="margin-left:auto;"><span style="padding:0 8px;color:var(--text3);">⌕</span><input type="text" id="immigSearch2" placeholder="Room or name…" oninput="immigRender2(immigAllRows2)"/></div>
       </div>
-      <div class="tbl-wrap"><table>
-        <thead><tr><th>Room</th><th>Sex</th><th>Name</th><th>Nationality</th><th>Passport</th><th>Arrival</th><th>Departure</th><th>Issues</th></tr></thead>
+      <div class="tbl-wrap"></table>
+        <thead><tr><th>Room</th><th>Sex</th><th>Name</th><th>Nationality</th><th>Passport</th><th>Arrival</th><th>Departure</th><th>Issues</th></tr>
+        </thead>
         <tbody id="immigTable2"></tbody>
-      </table></div>
+      </table>
     </div>
   </div>
 </div>
@@ -595,7 +598,6 @@ async function saveSettings(patch) {
 }
 
 async function appInit() {
-           ['depPrintBtn','depExportBtn','depViewToggle','depReloadBtn'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = ''; });
   // 1 — Init Firebase
   try {
     const app = firebase.initializeApp(FIREBASE_CONFIG);
@@ -637,7 +639,7 @@ async function appInit() {
     depLog   = data.departures.log || [];
     document.getElementById('depUploadCard').style.display = 'none';
     document.getElementById('depBoard').style.display      = 'block';
-    ['depPrintBtn','depExportBtn','depViewToggle'].forEach(id => { const el=document.getElementById(id); if(el) el.style.display=''; });
+    ['depPrintBtn','depExportBtn','depViewToggle','depReloadBtn'].forEach(id => { const el=document.getElementById(id); if(el) el.style.display = ''; });
     document.getElementById('depDateLabel').textContent = depRooms.length + ' rooms departing · ' + (depRooms[0]?.departure||'');
     depRender(); updateDepBadge();
   }
@@ -675,6 +677,7 @@ async function appInit() {
     if (depRooms.length) {
       document.getElementById('depUploadCard').style.display = 'none';
       document.getElementById('depBoard').style.display      = 'block';
+      ['depPrintBtn','depExportBtn','depViewToggle','depReloadBtn'].forEach(id => { const el = document.getElementById(id); if(el) el.style.display = ''; });
     }
     depRender(); updateDepBadge();
   });
