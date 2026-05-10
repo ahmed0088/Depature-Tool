@@ -921,6 +921,93 @@ td input:focus, td select:focus { outline: none; border-color: var(--gold); back
   border: none;
 }
 /* ══════════════════════════════════════════════════
+   EDIT CHECKLIST STEP MODAL — PRO DESIGN
+══════════════════════════════════════════════════ */
+#editStepModal .modal {
+  width: 520px;
+  padding: 32px 36px;
+  background: var(--card);
+  border: 1px solid var(--border2);
+  box-shadow: 0 30px 90px rgba(0,0,0,0.85);
+}
+
+#editStepModal .modal h3 {
+  font-family: var(--serif);
+  color: var(--gold);
+  font-size: 1.55rem;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+#editStepModal .modal-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+#editStepModal .mf {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#editStepModal .mf label {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+
+#editStepModal .mf input,
+#editStepModal .mf select,
+#editStepModal .mf textarea {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: var(--r2);
+  color: var(--text);
+  padding: 12px 14px;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+#editStepModal .mf input:focus,
+#editStepModal .mf select:focus,
+#editStepModal .mf textarea:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(232,184,75,0.15);
+  outline: none;
+}
+
+#editStepModal .mf textarea {
+  min-height: 90px;
+  resize: vertical;
+  font-family: var(--mono);
+}
+
+#editStepModal .two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+#editStepModal .modal-actions {
+  margin-top: 12px;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+#editStepModal .btn {
+  padding: 11px 26px;
+  font-weight: 600;
+}
+
+#editStepModal .btn.gold {
+  background: linear-gradient(135deg, var(--gold2), var(--gold));
+  color: #0a0c10;
+  border: none;
+}
+/* ══════════════════════════════════════════════════
    PROGRESS BAR
 ══════════════════════════════════════════════════ */
 .prog-wrap { margin-bottom: 14px; }
