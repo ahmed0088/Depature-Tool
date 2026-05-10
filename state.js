@@ -88,6 +88,14 @@ const DEFAULT_TASKS = {
   ],
 };
 
+// ── Feedback ──────────────────────────────────────────────
+let feedbackLog = [];
+
+// ── Copy buffers ──────────────────────────────────────────
+let natCopyText  = '';
+let rentCopyText = '';
+let naCopyText   = '';
+
 // Initialize shifts with default tasks
 function initShiftsDefault() {
   Object.keys(SHIFTS).forEach(k => {
@@ -98,12 +106,6 @@ function initShiftsDefault() {
     }
   });
 }
+
+// Call initialization
 initShiftsDefault();
-
-// ── Feedback ──────────────────────────────────────────────
-let feedbackLog = [];
-
-// ── Copy buffers ──────────────────────────────────────────
-let natCopyText  = '';
-let rentCopyText = '';
-let naCopyText   = '';
