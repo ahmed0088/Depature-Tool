@@ -16,7 +16,7 @@ function clAddStep() {
   const hint = (document.getElementById('clNewHint').value  || '').trim();
   const phase = document.getElementById('clNewPhase').value;
   const tag   = document.getElementById('clNewTag').value;
-  const id    = Math.max(0, ...CL_STEPS.map(s => s.id)) + 1;
+  const id    = Math.max(0, ...CL_STEPS.map(s => s.id), 0) + 1;
   CL_STEPS.push({ id, phase, name, tag, hint });
   document.getElementById('clNewName').value = '';
   document.getElementById('clNewHint').value = '';
