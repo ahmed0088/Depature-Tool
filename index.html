@@ -24,15 +24,14 @@
   </div>
   <div class="topbar-center" id="topbarDate">Loading…</div>
   <div class="topbar-right">
-    <!-- Firebase status -->
     <div style="display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:var(--surface);">
       <div id="fbDot" style="width:7px;height:7px;border-radius:50%;background:var(--amber);transition:all 0.3s;"></div>
       <span id="fbLabel" style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);">Firebase · Connecting…</span>
     </div>
     <div class="tb-pill live">● Live</div>
     <div class="tb-pill" id="topbarTime">—</div>
-    <div class="icon-round" onclick="openFeedback()"    title="Submit feedback / request">💬</div>
-    <div class="icon-round" onclick="exportAllData()"   title="Export full backup">💾</div>
+    <div class="icon-round" onclick="openFeedback()" title="Submit feedback / request">💬</div>
+    <div class="icon-round" onclick="exportAllData()" title="Export full backup">💾</div>
     <label class="icon-round" title="Import backup JSON" style="cursor:pointer;">📂<input type="file" accept=".json" onchange="handleImport(this)" style="display:none"/></label>
     <div class="icon-round" onclick="toggleTheme()" id="themeBtn" title="Toggle theme">🌙</div>
   </div>
@@ -93,12 +92,12 @@
     <div class="page-hd-actions">
       <button class="btn sky" onclick="reloadDepReport()" style="display:none;" id="depReloadBtn">🔄 Reload Report</button>
       <div class="view-toggle" id="depViewToggle" style="display:none;">
-        <button class="vt-btn"     onclick="setDepSize('sm',this)">S</button>
-        <button class="vt-btn on"  onclick="setDepSize('md',this)">M</button>
-        <button class="vt-btn"     onclick="setDepSize('lg',this)">L</button>
-        <button class="vt-btn"     onclick="setDepSize('list',this)">≡</button>
+        <button class="vt-btn" onclick="setDepSize('sm',this)">S</button>
+        <button class="vt-btn on" onclick="setDepSize('md',this)">M</button>
+        <button class="vt-btn" onclick="setDepSize('lg',this)">L</button>
+        <button class="vt-btn" onclick="setDepSize('list',this)">≡</button>
       </div>
-      <button class="btn mint" onclick="depPrintList()"    style="display:none;" id="depPrintBtn">🖨 Print</button>
+      <button class="btn mint" onclick="depPrintList()" style="display:none;" id="depPrintBtn">🖨 Print</button>
       <button class="btn gold" onclick="exportDepSummary()" style="display:none;" id="depExportBtn">⬇ Export</button>
       <button class="btn rose" onclick="clearDep()">✕ Clear</button>
     </div>
@@ -128,23 +127,23 @@
       <div class="prog-track"><div class="prog-fill" id="depProgFill" style="width:0%"></div></div>
     </div>
     <div class="dep-header-bar" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
-  <div class="filter-row" style="margin-bottom:0;display:flex;flex-wrap:wrap;gap:6px;">
-    <button class="fchip on" data-f="all"      onclick="depFilter('all',this)">All <span id="dfc-all">0</span></button>
-    <button class="fchip due"  data-f="due"      onclick="depFilter('due',this)">Due <span id="dfc-due">0</span></button>
-    <button class="fchip pending" data-f="pending"  onclick="depFilter('pending',this)">Pending <span id="dfc-pendingExt">0</span></button>
-    <button class="fchip noanswer" data-f="noanswer" onclick="depFilter('noanswer',this)">No Answer <span id="dfc-noanswer">0</span></button>
-    <button class="fchip ext"  data-f="extended" onclick="depFilter('extended',this)">Extended <span id="dfc-extended">0</span></button>
-    <button class="fchip late" data-f="late"     onclick="depFilter('late',this)">Late CO <span id="dfc-late">0</span></button>
-    <button class="fchip bal"  data-f="balance"  onclick="depFilter('balance',this)">Balance <span id="dfc-balance">0</span></button>
-    <button class="fchip out"  data-f="out"      onclick="depFilter('out',this)">Out <span id="dfc-out">0</span></button>
-    <button class="fchip" data-f="coming" onclick="depFilter('coming',this)">🚪➡️ Coming <span id="dfc-comingExt">0</span></button>
-  </div>
-  <div class="search-wrap">
-    <span class="search-icon">⌕</span>
-    <input type="text" id="depSearch" placeholder="Search room or guest..." oninput="depRender()"/>
-    <span class="search-clear" onclick="clearDepSearch()" style="display:none;">✕</span>
-  </div>
-</div>
+      <div class="filter-row" style="margin-bottom:0;display:flex;flex-wrap:wrap;gap:6px;">
+        <button class="fchip on" data-f="all" onclick="depFilter('all',this)">All <span id="dfc-all">0</span></button>
+        <button class="fchip due" data-f="due" onclick="depFilter('due',this)">Due <span id="dfc-due">0</span></button>
+        <button class="fchip pending" data-f="pending" onclick="depFilter('pending',this)">Pending <span id="dfc-pendingExt">0</span></button>
+        <button class="fchip" data-f="coming" onclick="depFilter('coming',this)">Coming <span id="dfc-comingExt">0</span></button>
+        <button class="fchip noanswer" data-f="noanswer" onclick="depFilter('noanswer',this)">No Answer <span id="dfc-noanswer">0</span></button>
+        <button class="fchip ext" data-f="extended" onclick="depFilter('extended',this)">Extended <span id="dfc-extended">0</span></button>
+        <button class="fchip late" data-f="late" onclick="depFilter('late',this)">Late <span id="dfc-late">0</span></button>
+        <button class="fchip bal" data-f="balance" onclick="depFilter('balance',this)">Balance <span id="dfc-balance">0</span></button>
+        <button class="fchip out" data-f="out" onclick="depFilter('out',this)">Out <span id="dfc-out">0</span></button>
+      </div>
+      <div class="search-wrap">
+        <span class="search-icon">⌕</span>
+        <input type="text" id="depSearch" placeholder="Search room or guest..." oninput="depRender()"/>
+        <span class="search-clear" onclick="clearDepSearch()" style="display:none;">✕</span>
+      </div>
+    </div>
     <div class="dep-grid size-md" id="depGrid"></div>
     <div class="dep-log-wrap" id="depLogWrap" style="display:none;">
       <div class="dep-log-header" onclick="toggleLog()">
@@ -167,7 +166,7 @@
   <div class="page-hd">
     <div class="page-hd-left"><h1>Today's Arrivals</h1><p>Paste Opera report or upload file · Auto-saves to Firebase</p></div>
     <div class="page-hd-actions">
-      <button class="btn ai"   onclick="runAINat_arr()"><span id="aiSpinArr"></span>✦ Nationality</button>
+      <button class="btn ai" onclick="runAINat_arr()"><span id="aiSpinArr"></span>✦ Nationality</button>
       <button class="btn gold" onclick="exportArrivals()">⬇ Export</button>
       <button class="btn mint" onclick="openAddGuest('arrivals')">+ Add Guest</button>
       <button class="btn rose" onclick="clearArrivals()">✕ Clear</button>
@@ -190,16 +189,16 @@
     <div class="kpi amber"><div class="kpi-accent"></div><div class="kpi-label">Avg Nights</div><div class="kpi-val" id="ak-nights">0</div></div>
   </div>
   <div class="filter-row">
-    <div class="fchip on" data-af="all"      onclick="arrFilter('all',this)">All</div>
-    <div class="fchip"    data-af="Business" onclick="arrFilter('Business',this)">Business</div>
-    <div class="fchip"    data-af="Leisure"  onclick="arrFilter('Leisure',this)">Leisure</div>
+    <div class="fchip on" data-af="all" onclick="arrFilter('all',this)">All</div>
+    <div class="fchip" data-af="Business" onclick="arrFilter('Business',this)">Business</div>
+    <div class="fchip" data-af="Leisure" onclick="arrFilter('Leisure',this)">Leisure</div>
     <div class="search-wrap"><span style="padding:0 8px;color:var(--text3);">⌕</span><input type="text" placeholder="Search…" oninput="arrRender()" id="arrSearch"/></div>
   </div>
   <div class="tbl-wrap"><table>
     <thead><tr><th>Room</th><th>Conf.</th><th>Name</th><th>Purpose</th><th>Nights</th><th>Nationality</th><th>Email</th><th>Source</th><th>Remarks</th><th></th></tr>
     </thead>
     <tbody id="arrTable"></tbody>
-   </table>
+   </div>
 </div>
 
 <!-- ════════════════ PURPOSE OF STAY ════════════════ -->
@@ -207,7 +206,7 @@
   <div class="page-hd">
     <div class="page-hd-left"><h1>Purpose of Stay</h1><p>Night audit — <span id="purposeTitle" style="color:var(--gold);cursor:pointer;" onclick="editPurposeTitle()">Click to set title</span></p></div>
     <div class="page-hd-actions">
-      <button class="btn ai"   onclick="runAINat_purpose()"><span id="aiSpinPurpose"></span>✦ Nationality</button>
+      <button class="btn ai" onclick="runAINat_purpose()"><span id="aiSpinPurpose"></span>✦ Nationality</button>
       <button class="btn gold" onclick="exportPurpose()">⬇ Export</button>
       <button class="btn mint" onclick="syncFromArrivals()">↑ Sync Arrivals</button>
       <button class="btn mint" onclick="openAddGuest('purpose')">+ Add</button>
@@ -231,17 +230,17 @@
     <div class="kpi gold"><div class="kpi-accent"></div><div class="kpi-label">Leisure</div><div class="kpi-val" id="pk-lei">0</div></div>
   </div>
   <div class="filter-row">
-    <div class="fchip on" data-pf="all"      onclick="purposeFilter('all',this)">All</div>
-    <div class="fchip"    data-pf="Business" onclick="purposeFilter('Business',this)">Business</div>
-    <div class="fchip"    data-pf="Leisure"  onclick="purposeFilter('Leisure',this)">Leisure</div>
-    <div class="fchip"    data-pf="Flight"   onclick="purposeFilter('Flight',this)">Flight</div>
+    <div class="fchip on" data-pf="all" onclick="purposeFilter('all',this)">All</div>
+    <div class="fchip" data-pf="Business" onclick="purposeFilter('Business',this)">Business</div>
+    <div class="fchip" data-pf="Leisure" onclick="purposeFilter('Leisure',this)">Leisure</div>
+    <div class="fchip" data-pf="Flight" onclick="purposeFilter('Flight',this)">Flight</div>
     <div class="search-wrap"><span style="padding:0 8px;color:var(--text3);">⌕</span><input type="text" placeholder="Search…" oninput="purposeRender()" id="purposeSearch"/></div>
   </div>
   <div class="tbl-wrap"><table>
     <thead><tr><th>Room</th><th>Conf.</th><th>Name</th><th>Purpose</th><th>Nights</th><th>Nationality</th><th>Email</th><th>Source</th><th>Remarks</th><th></th></tr>
     </thead>
     <tbody id="purposeTable"></tbody>
-   </table>
+   </div>
 </div>
 
 <!-- ════════════════ SHIFT TASKS ════════════════ -->
@@ -253,10 +252,10 @@
     </div>
   </div>
   <div class="shift-tabs" id="shiftTabs">
-    <div class="shift-tab active" data-shift="morning"   onclick="switchShift('morning',this)">🌅 Morning<span class="shift-prog" id="sp-morning">0/0</span></div>
-    <div class="shift-tab"        data-shift="afternoon" onclick="switchShift('afternoon',this)">🌤️ Afternoon<span class="shift-prog" id="sp-afternoon">0/0</span></div>
-    <div class="shift-tab"        data-shift="mid"       onclick="switchShift('mid',this)">🔆 Mid<span class="shift-prog" id="sp-mid">0/0</span></div>
-    <div class="shift-tab"        data-shift="night"     onclick="switchShift('night',this)">🌙 Night<span class="shift-prog" id="sp-night">0/0</span></div>
+    <div class="shift-tab active" data-shift="morning" onclick="switchShift('morning',this)">🌅 Morning<span class="shift-prog" id="sp-morning">0/0</span></div>
+    <div class="shift-tab" data-shift="afternoon" onclick="switchShift('afternoon',this)">🌤️ Afternoon<span class="shift-prog" id="sp-afternoon">0/0</span></div>
+    <div class="shift-tab" data-shift="mid" onclick="switchShift('mid',this)">🔆 Mid<span class="shift-prog" id="sp-mid">0/0</span></div>
+    <div class="shift-tab" data-shift="night" onclick="switchShift('night',this)">🌙 Night<span class="shift-prog" id="sp-night">0/0</span></div>
   </div>
   <div id="shiftContent"></div>
 </div>
@@ -447,18 +446,18 @@
       <div class="kpi-row c4" style="margin-top:18px;" id="immigKpis2"></div>
       <div style="font-family:var(--mono);font-size:0.7rem;color:var(--text2);margin-bottom:9px;padding:9px 13px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);" id="immigMeta2"></div>
       <div style="display:flex;gap:7px;margin-bottom:11px;flex-wrap:wrap;" id="immigFilters2">
-        <button class="fchip on" data-if="all"         onclick="immigFilter2('all',this)">All <span id="ifc-all">0</span></button>
-        <button class="fchip"    data-if="nationality" onclick="immigFilter2('nationality',this)">🔴 Nationality <span id="ifc-nat">0</span></button>
-        <button class="fchip"    data-if="gender"      onclick="immigFilter2('gender',this)">🟡 Gender <span id="ifc-gen">0</span></button>
-        <button class="fchip"    data-if="passport"    onclick="immigFilter2('passport',this)">🔵 Passport <span id="ifc-pass">0</span></button>
-        <button class="fchip"    data-if="first_name"  onclick="immigFilter2('first_name',this)">🟢 First Name <span id="ifc-fname">0</span></button>
+        <button class="fchip on" data-if="all" onclick="immigFilter2('all',this)">All <span id="ifc-all">0</span></button>
+        <button class="fchip" data-if="nationality" onclick="immigFilter2('nationality',this)">🔴 Nationality <span id="ifc-nat">0</span></button>
+        <button class="fchip" data-if="gender" onclick="immigFilter2('gender',this)">🟡 Gender <span id="ifc-gen">0</span></button>
+        <button class="fchip" data-if="passport" onclick="immigFilter2('passport',this)">🔵 Passport <span id="ifc-pass">0</span></button>
+        <button class="fchip" data-if="first_name" onclick="immigFilter2('first_name',this)">🟢 First Name <span id="ifc-fname">0</span></button>
         <div class="search-wrap" style="margin-left:auto;"><span style="padding:0 8px;color:var(--text3);">⌕</span><input type="text" id="immigSearch2" placeholder="Room or name…" oninput="immigRender2(immigAllRows2)"/></div>
       </div>
-      <div class="tbl-wrap"></table>
+      <div class="tbl-wrap"><table>
         <thead><tr><th>Room</th><th>Sex</th><th>Name</th><th>Nationality</th><th>Passport</th><th>Arrival</th><th>Departure</th><th>Issues</th></tr>
         </thead>
         <tbody id="immigTable2"></tbody>
-      </table>
+      </div>
     </div>
   </div>
 </div>
@@ -469,7 +468,7 @@
     <div class="page-hd-left"><h1>Night Run Checklist</h1><p id="cl-date-lbl">—</p></div>
     <div class="page-hd-actions">
       <button class="btn amber" onclick="clToggleEdit()" id="clEditBtn">✏️ Edit Steps</button>
-      <button class="btn rose"  onclick="clReset()">↺ New Night</button>
+      <button class="btn rose" onclick="clReset()">↺ New Night</button>
     </div>
   </div>
   <div class="prog-wrap">
@@ -478,8 +477,8 @@
   </div>
   <div id="clAddRow" style="display:none;margin-bottom:12px;">
     <div class="cl-add-row">
-      <input class="cl-add-input" id="clNewName"  placeholder="New step name…" onkeydown="if(event.key==='Enter')clAddStep()"/>
-      <input class="cl-add-input" id="clNewHint"  placeholder="Hint / description (optional)" style="flex:1.5;"/>
+      <input class="cl-add-input" id="clNewName" placeholder="New step name…" onkeydown="if(event.key==='Enter')clAddStep()"/>
+      <input class="cl-add-input" id="clNewHint" placeholder="Hint / description (optional)" style="flex:1.5;"/>
       <select class="cl-phase-select" id="clNewPhase">
         <option value="pre">Before Run</option><option value="run">Night Run</option><option value="post">After Run</option>
       </select>
@@ -497,7 +496,7 @@
 </div>
 
 </main>
-</div><!-- /layout -->
+</div>
 
 <!-- ════════ MODALS ════════ -->
 <div class="modal-bg" id="guestModal">
@@ -583,7 +582,7 @@
 
 <script>
 // ════════════════════════════════════════════════
-//  init.js — bootstrap (inline, runs last)
+//  init.js — bootstrap (runs last)
 // ════════════════════════════════════════════════
 
 async function handleImport(input) {
@@ -601,176 +600,214 @@ async function saveSettings(patch) {
   await fbSet('settings', { ...current, ...patch, updatedAt: new Date().toISOString() });
 }
 
+// Global function to initialize shift defaults
+function initShiftsDefault() {
+  if (typeof SHIFTS !== 'undefined' && typeof DEFAULT_TASKS !== 'undefined') {
+    Object.keys(SHIFTS).forEach(k => {
+      if (!SHIFTS[k].tasks || SHIFTS[k].tasks.length === 0) {
+        SHIFTS[k].tasks = DEFAULT_TASKS[k] ? DEFAULT_TASKS[k].map(t => ({...t})) : [];
+        SHIFTS[k].done = [];
+        SHIFTS[k].resetAt = '';
+      }
+    });
+  }
+}
+
 async function appInit() {
   console.log('App initializing...');
   
   // 1 — Init Firebase
   try {
-    const app = firebase.initializeApp(FIREBASE_CONFIG);
-    dbInit(app);
-    console.log('Firebase initialized');
+    if (typeof firebase !== 'undefined' && FIREBASE_CONFIG) {
+      const app = firebase.initializeApp(FIREBASE_CONFIG);
+      dbInit(app);
+      console.log('Firebase initialized');
+    }
   } catch(e) {
     console.warn('Firebase init failed — running offline:', e);
-    updateConnectionUI(false);
+    if (typeof updateConnectionUI === 'function') updateConnectionUI(false);
   }
 
   // 2 — Initialize default data structures
-  initShiftsDefault();
+  if (typeof initShiftsDefault === 'function') initShiftsDefault();
   
   // 3 — Load all data from Firebase
-  const data = await loadAll();
+  let data = {};
+  try {
+    if (typeof loadAll === 'function') {
+      data = await loadAll();
+    }
+  } catch(e) {
+    console.warn('Failed to load from Firebase:', e);
+  }
   console.log('Data loaded:', data);
 
   // 4 — Apply checklist
-  if (data.checklist) {
-    if (data.checklist.steps && data.checklist.steps.length) CL_STEPS = data.checklist.steps;
-    if (data.checklist.done)    data.checklist.done.forEach(i    => clState.done.add(i));
-    if (data.checklist.skipped) data.checklist.skipped.forEach(i => clState.skipped.add(i));
+  if (typeof CL_STEPS !== 'undefined' && typeof clState !== 'undefined') {
+    if (data.checklist) {
+      if (data.checklist.steps && data.checklist.steps.length) CL_STEPS = data.checklist.steps;
+      if (data.checklist.done) data.checklist.done.forEach(i => clState.done.add(i));
+      if (data.checklist.skipped) data.checklist.skipped.forEach(i => clState.skipped.add(i));
+    }
+    if (typeof clRender2 === 'function') clRender2();
   }
-  clRender2();
 
   // 5 — Apply shifts
-  if (data.shifts && data.shifts.data) {
-    Object.keys(SHIFTS).forEach(k => {
-      const saved = data.shifts.data[k];
-      if (saved) {
-        SHIFTS[k].tasks   = saved.tasks && saved.tasks.length ? saved.tasks : DEFAULT_TASKS[k]?.map(t=>({...t})) || [];
-        SHIFTS[k].done    = saved.done    || [];
-        SHIFTS[k].resetAt = saved.resetAt || '';
-      } else {
-        SHIFTS[k].tasks = DEFAULT_TASKS[k]?.map(t=>({...t})) || [];
+  if (typeof SHIFTS !== 'undefined') {
+    if (data.shifts && data.shifts.data) {
+      Object.keys(SHIFTS).forEach(k => {
+        const saved = data.shifts.data[k];
+        if (saved) {
+          SHIFTS[k].tasks = saved.tasks && saved.tasks.length ? saved.tasks : (DEFAULT_TASKS[k] ? DEFAULT_TASKS[k].map(t=>({...t})) : []);
+          SHIFTS[k].done = saved.done || [];
+          SHIFTS[k].resetAt = saved.resetAt || '';
+        } else if (DEFAULT_TASKS[k]) {
+          SHIFTS[k].tasks = DEFAULT_TASKS[k].map(t=>({...t}));
+          SHIFTS[k].done = [];
+          SHIFTS[k].resetAt = '';
+        }
+      });
+    } else if (typeof DEFAULT_TASKS !== 'undefined') {
+      Object.keys(SHIFTS).forEach(k => {
+        SHIFTS[k].tasks = DEFAULT_TASKS[k] ? DEFAULT_TASKS[k].map(t=>({...t})) : [];
         SHIFTS[k].done = [];
         SHIFTS[k].resetAt = '';
-      }
-    });
-  } else {
-    // Initialize with default tasks
-    Object.keys(SHIFTS).forEach(k => {
-      SHIFTS[k].tasks = DEFAULT_TASKS[k]?.map(t=>({...t})) || [];
-      SHIFTS[k].done = [];
-      SHIFTS[k].resetAt = '';
-    });
+      });
+    }
+    
+    // Render shifts
+    if (typeof renderShift === 'function') {
+      renderShift('morning');
+    }
+    if (typeof updateShiftBadge === 'function') {
+      Object.keys(SHIFTS).forEach(k => updateShiftBadge(k));
+    }
   }
-  
-  // Render shifts
-  renderShift('morning');
-  Object.keys(SHIFTS).forEach(k => updateShiftBadge(k));
 
   // 6 — Apply departures
-  if (data.departures && data.departures.rooms && data.departures.rooms.length) {
-    depRooms = data.departures.rooms;
-    depLog   = data.departures.log || [];
-    document.getElementById('depUploadCard').style.display = 'none';
-    document.getElementById('depBoard').style.display      = 'block';
-    ['depPrintBtn','depExportBtn','depViewToggle','depReloadBtn'].forEach(id => { 
-      const el = document.getElementById(id); 
-      if(el) el.style.display = ''; 
-    });
-    document.getElementById('depDateLabel').textContent = depRooms.length + ' rooms departing · ' + (depRooms[0]?.departure||'');
-    depRender(); 
-    updateDepBadge();
-  } else {
-    // Show upload card if no departures
-    document.getElementById('depUploadCard').style.display = 'block';
-    document.getElementById('depBoard').style.display = 'none';
+  if (typeof depRooms !== 'undefined') {
+    if (data.departures && data.departures.rooms && data.departures.rooms.length) {
+      depRooms = data.departures.rooms;
+      depLog = data.departures.log || [];
+      const uploadCard = document.getElementById('depUploadCard');
+      const board = document.getElementById('depBoard');
+      if (uploadCard) uploadCard.style.display = 'none';
+      if (board) board.style.display = 'block';
+      ['depPrintBtn','depExportBtn','depViewToggle','depReloadBtn'].forEach(id => { 
+        const el = document.getElementById(id); 
+        if(el) el.style.display = ''; 
+      });
+      const dateLabel = document.getElementById('depDateLabel');
+      if (dateLabel) dateLabel.textContent = depRooms.length + ' rooms departing · ' + (depRooms[0]?.departure||'');
+      if (typeof depRender === 'function') depRender();
+      if (typeof updateDepBadge === 'function') updateDepBadge();
+    } else {
+      const uploadCard = document.getElementById('depUploadCard');
+      const board = document.getElementById('depBoard');
+      if (uploadCard) uploadCard.style.display = 'block';
+      if (board) board.style.display = 'none';
+    }
   }
 
   // 7 — Apply arrivals
-  if (data.arrivals && data.arrivals.guests && data.arrivals.guests.length) {
-    arrGuests = data.arrivals.guests;
-  } else {
-    arrGuests = [];
+  if (typeof arrGuests !== 'undefined') {
+    arrGuests = (data.arrivals && data.arrivals.guests) ? data.arrivals.guests : [];
+    if (typeof arrRender === 'function') arrRender();
   }
-  arrRender();
 
   // 8 — Apply purpose
-  if (data.purpose && data.purpose.guests && data.purpose.guests.length) {
-    purposeGuests = data.purpose.guests;
-  } else {
-    purposeGuests = [];
+  if (typeof purposeGuests !== 'undefined') {
+    purposeGuests = (data.purpose && data.purpose.guests) ? data.purpose.guests : [];
+    if (typeof purposeRender === 'function') purposeRender();
   }
-  purposeRender();
 
   // 9 — Apply feedback
-  if (data.feedback && data.feedback.log) feedbackLog = data.feedback.log;
+  if (typeof feedbackLog !== 'undefined' && data.feedback && data.feedback.log) {
+    feedbackLog = data.feedback.log;
+  }
 
   // 10 — Apply settings
   if (data.settings) {
     if (data.settings.theme && data.settings.theme === 'light') {
       document.documentElement.setAttribute('data-theme', 'light');
-      document.getElementById('themeBtn').textContent = '☀️';
+      const themeBtn = document.getElementById('themeBtn');
+      if (themeBtn) themeBtn.textContent = '☀️';
     }
     if (data.settings.hotelName) {
-      document.getElementById('hotelName').textContent = data.settings.hotelName;
+      const hotelName = document.getElementById('hotelName');
+      if (hotelName) hotelName.textContent = data.settings.hotelName;
     }
   }
 
-  // 11 — Real-time listeners (auto-refresh when colleague makes changes)
-  listenDepartures(snap => {
-    if (!snap || !snap.rooms) return;
-    depRooms = snap.rooms; 
-    depLog = snap.log || [];
-    if (depRooms.length) {
-      document.getElementById('depUploadCard').style.display = 'none';
-      document.getElementById('depBoard').style.display      = 'block';
-      ['depPrintBtn','depExportBtn','depViewToggle','depReloadBtn'].forEach(id => { 
-        const el = document.getElementById(id); 
-        if(el) el.style.display = ''; 
-      });
-    }
-    depRender(); 
-    updateDepBadge();
-  });
-  
-  listenArrivals(snap => {
-    if (!snap || !snap.guests) return;
-    arrGuests = snap.guests; 
-    arrRender();
-  });
-  
-  listenChecklist(snap => {
-    if (!snap) return;
-    if (snap.steps && snap.steps.length) CL_STEPS = snap.steps;
-    clState.done.clear(); 
-    clState.skipped.clear();
-    if (snap.done)    snap.done.forEach(i    => clState.done.add(i));
-    if (snap.skipped) snap.skipped.forEach(i => clState.skipped.add(i));
-    clRender2();
-  });
-  
-  listenShifts(snap => {
-    if (!snap || !snap.data) return;
-    Object.keys(SHIFTS).forEach(k => {
-      if (snap.data[k]) {
-        SHIFTS[k].tasks   = snap.data[k].tasks   || SHIFTS[k].tasks;
-        SHIFTS[k].done    = snap.data[k].done     || [];
-        SHIFTS[k].resetAt = snap.data[k].resetAt  || '';
+  // 11 — Real-time listeners
+  if (typeof listenDepartures === 'function') {
+    listenDepartures(snap => {
+      if (!snap || !snap.rooms) return;
+      depRooms = snap.rooms;
+      depLog = snap.log || [];
+      if (depRooms.length) {
+        const uploadCard = document.getElementById('depUploadCard');
+        const board = document.getElementById('depBoard');
+        if (uploadCard) uploadCard.style.display = 'none';
+        if (board) board.style.display = 'block';
+        ['depPrintBtn','depExportBtn','depViewToggle','depReloadBtn'].forEach(id => { 
+          const el = document.getElementById(id); 
+          if(el) el.style.display = ''; 
+        });
       }
+      if (typeof depRender === 'function') depRender();
+      if (typeof updateDepBadge === 'function') updateDepBadge();
     });
-    renderShift(activeShift);
-    Object.keys(SHIFTS).forEach(k => updateShiftBadge(k));
-  });
+  }
+  
+  if (typeof listenArrivals === 'function') {
+    listenArrivals(snap => {
+      if (!snap || !snap.guests) return;
+      arrGuests = snap.guests;
+      if (typeof arrRender === 'function') arrRender();
+    });
+  }
+  
+  if (typeof listenChecklist === 'function') {
+    listenChecklist(snap => {
+      if (!snap) return;
+      if (snap.steps && snap.steps.length && typeof CL_STEPS !== 'undefined') CL_STEPS = snap.steps;
+      if (typeof clState !== 'undefined') {
+        clState.done.clear();
+        clState.skipped.clear();
+        if (snap.done) snap.done.forEach(i => clState.done.add(i));
+        if (snap.skipped) snap.skipped.forEach(i => clState.skipped.add(i));
+      }
+      if (typeof clRender2 === 'function') clRender2();
+    });
+  }
+  
+  if (typeof listenShifts === 'function') {
+    listenShifts(snap => {
+      if (!snap || !snap.data) return;
+      Object.keys(SHIFTS).forEach(k => {
+        if (snap.data[k]) {
+          SHIFTS[k].tasks = snap.data[k].tasks || SHIFTS[k].tasks;
+          SHIFTS[k].done = snap.data[k].done || [];
+          SHIFTS[k].resetAt = snap.data[k].resetAt || '';
+        }
+      });
+      if (typeof renderShift === 'function') renderShift(activeShift);
+      if (typeof updateShiftBadge === 'function') Object.keys(SHIFTS).forEach(k => updateShiftBadge(k));
+    });
+  }
 
   // 12 — Update clock and UI
-  updateClock();
-  setInterval(updateClock, 30000);
+  if (typeof updateClock === 'function') {
+    updateClock();
+    setInterval(updateClock, 30000);
+  }
   
   console.log('App initialization complete');
 }
 
-// Make sure helper functions are available
-function initShiftsDefault() {
-  Object.keys(SHIFTS).forEach(k => {
-    if (!SHIFTS[k].tasks || SHIFTS[k].tasks.length === 0) {
-      SHIFTS[k].tasks = DEFAULT_TASKS[k] ? DEFAULT_TASKS[k].map(t => ({...t})) : [];
-      SHIFTS[k].done = [];
-      SHIFTS[k].resetAt = '';
-    }
-  });
-}
-
 // Start the app
-setTimeout(() => {
+setTimeout(function() {
   appInit();
 }, 100);
 </script>
