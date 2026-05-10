@@ -19,7 +19,17 @@ function showPanel(name) {
   const nav   = document.getElementById('nav-'   + name);
   if (panel) panel.classList.add('active');
   if (nav)   nav.classList.add('active');
-  if (name === 'shifts' && typeof renderShift === 'function') renderShift(activeShift);
+  
+  // Special handling for shifts panel
+  if (name === 'shifts') {
+    if (typeof renderShift === 'function') {
+      // Make sure activeShift is defined
+      if (typeof activeShift === 'undefined') {
+        window.activeShift = 'morning';
+      }
+      renderShift(activeShift || 'morning');
+    }
+  }
 }
 
 // ── Clipboard ─────────────────────────────────────────────
