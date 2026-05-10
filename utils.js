@@ -20,14 +20,12 @@ function showPanel(name) {
   if (panel) panel.classList.add('active');
   if (nav)   nav.classList.add('active');
   
-  // Special handling for shifts panel
   if (name === 'shifts') {
     if (typeof renderShift === 'function') {
-      // Make sure activeShift is defined
       if (typeof activeShift === 'undefined') {
         window.activeShift = 'morning';
       }
-      renderShift(activeShift || 'morning');
+      setTimeout(function() { renderShift(activeShift || 'morning'); }, 10);
     }
   }
 }
