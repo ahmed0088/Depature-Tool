@@ -46,6 +46,189 @@
   --serif: 'DM Serif Display', serif;
 }
 
+/* ═══════════════════════════════════════════════════════════
+   DEPARTURE CARD BUTTONS - Clean Dark Theme
+═══════════════════════════════════════════════════════════ */
+
+/* Guest action buttons container */
+.dc-guest-actions {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+/* Base button style for all action buttons */
+.dca {
+  padding: 8px 6px;
+  border-radius: var(--r);
+  border: 1px solid;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 0.68rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  transition: all 0.2s ease;
+  background: var(--surface);
+}
+
+.dca:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+/* Check Out button */
+.dca.dca-co {
+  background: rgba(62, 207, 142, 0.12);
+  color: var(--mint);
+  border-color: rgba(62, 207, 142, 0.3);
+}
+
+.dca.dca-co:hover {
+  background: rgba(62, 207, 142, 0.25);
+  border-color: var(--mint);
+  box-shadow: 0 2px 8px rgba(62, 207, 142, 0.2);
+}
+
+/* Late Checkout button */
+.dca.dca-late {
+  background: rgba(139, 124, 248, 0.12);
+  color: var(--violet);
+  border-color: rgba(139, 124, 248, 0.3);
+}
+
+.dca.dca-late:hover {
+  background: rgba(139, 124, 248, 0.25);
+  border-color: var(--violet);
+}
+
+/* Pending Extension button */
+.dca.dca-pending {
+  background: rgba(139, 124, 248, 0.1);
+  color: var(--violet);
+  border-color: rgba(139, 124, 248, 0.25);
+}
+
+.dca.dca-pending:hover {
+  background: rgba(139, 124, 248, 0.2);
+  border-color: var(--violet);
+}
+
+/* Coming to Extend button */
+.dca.dca-coming {
+  background: rgba(90, 180, 232, 0.1);
+  color: var(--sky);
+  border-color: rgba(90, 180, 232, 0.25);
+}
+
+.dca.dca-coming:hover {
+  background: rgba(90, 180, 232, 0.2);
+  border-color: var(--sky);
+}
+
+/* Confirm Extension button */
+.dca.dca-confirm {
+  background: rgba(62, 207, 142, 0.1);
+  color: var(--mint);
+  border-color: rgba(62, 207, 142, 0.25);
+}
+
+.dca.dca-confirm:hover {
+  background: rgba(62, 207, 142, 0.2);
+  border-color: var(--mint);
+}
+
+/* No Answer button */
+.dca.dca-noanswer {
+  background: rgba(240, 164, 58, 0.1);
+  color: var(--amber);
+  border-color: rgba(240, 164, 58, 0.25);
+}
+
+.dca.dca-noanswer:hover {
+  background: rgba(240, 164, 58, 0.2);
+  border-color: var(--amber);
+}
+
+/* Clear/Cancel button */
+.dca.dca-clear, .dca.dca-undo {
+  background: rgba(232, 184, 75, 0.08);
+  color: var(--gold);
+  border-color: rgba(232, 184, 75, 0.2);
+}
+
+.dca.dca-clear:hover, .dca.dca-undo:hover {
+  background: rgba(232, 184, 75, 0.15);
+  border-color: var(--gold);
+}
+
+/* Extend button */
+.dca.dca-ext {
+  background: rgba(90, 180, 232, 0.1);
+  color: var(--sky);
+  border-color: rgba(90, 180, 232, 0.25);
+}
+
+.dca.dca-ext:hover {
+  background: rgba(90, 180, 232, 0.2);
+  border-color: var(--sky);
+}
+
+/* Action buttons container (3 buttons) */
+.dc-actions {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.dc-actions.g3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.dc-actions.g2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.dc-actions.g1 {
+  grid-template-columns: 1fr;
+}
+
+/* Select dropdowns */
+.dc-select {
+  border-radius: var(--r);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  padding: 7px 10px;
+  outline: none;
+  cursor: pointer;
+  width: 100%;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+}
+
+.dc-select.ext {
+  background: rgba(90, 180, 232, 0.06);
+  border-color: rgba(90, 180, 232, 0.25);
+}
+
+.dc-select.late {
+  background: rgba(139, 124, 248, 0.06);
+  border-color: rgba(139, 124, 248, 0.25);
+}
+
+.dc-select:hover {
+  border-color: var(--gold);
+}
+
+.dc-select:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(232, 184, 75, 0.1);
+}
+
 /* ── LIGHT THEME OVERRIDE ───────────────────────── */
 [data-theme="light"] {
   --bg:      #f0f2f5 !important;
