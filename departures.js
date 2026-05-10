@@ -1,8 +1,8 @@
 // ═══════════════════════════════════════════════════════════
-//  departures.js  —  Departure follow-up board (with smart merge)
+//  departures.js  —  Departure follow-up board (with smart merge & reload)
 // ═══════════════════════════════════════════════════════════
 
-function processDep() {
+function processDep(isReload = false) {
   const raw    = document.getElementById('depInput').value.trim();
   const errBox = document.getElementById('depError');
   errBox.classList.remove('show');
@@ -39,77 +39,91 @@ function processDep() {
   }
   if (!incomingRooms.length) return showErr('No departure rooms found.');
 
-  // MERGE logic: preserve existing status for rooms that are still in the report
-  const existingMap = new Map();
-  depRooms.forEach(r => { existingMap.set(r.roomStr, r); });
+  // If this is a reload and we have existing rooms, MERGE intelligently
+  let mergedRooms = [];
+  let removedRooms = [];
+  const logTime = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
 
-  const mergedRooms = [];
-  const now = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  if (isReload && depRooms.length > 0) {
+    // MERGE logic: preserve existing status for rooms that are still in the report
+    const existingMap = new Map();
+    depRooms.forEach(r => { existingMap.set(r.roomStr, r); });
 
-  incomingRooms.forEach(incoming => {
-    const existing = existingMap.get(incoming.roomStr);
-    
-    if (existing) {
-      // Room still in report — preserve its status, notes, etc.
-      // But if it was checked out, check if it's still in report (shouldn't happen)
-      if (existing.status === 'out') {
-        // Guest checked out via app but still appears in Opera report?
-        // Could be a different guest in same room — reset status
+    incomingRooms.forEach(incoming => {
+      const existing = existingMap.get(incoming.roomStr);
+      
+      if (existing) {
+        // Room still in report — preserve its status, notes, etc.
+        if (existing.status === 'out') {
+          // Guest checked out via app but still appears in Opera report
+          // Could be a different guest in same room — reset status
+          mergedRooms.push({
+            ...incoming,
+            status: 'due',
+            lateTime: '',
+            extensionNights: 0,
+            note: existing.note || '',
+            checkoutAt: '',
+          });
+        } else {
+          // Preserve all custom data
+          mergedRooms.push({
+            ...incoming,
+            status: existing.status,
+            lateTime: existing.lateTime || '',
+            extensionNights: existing.extensionNights || 0,
+            note: existing.note || '',
+            checkoutAt: existing.checkoutAt || '',
+          });
+        }
+      } else {
+        // New room — add as due
         mergedRooms.push({
           ...incoming,
           status: 'due',
           lateTime: '',
           extensionNights: 0,
-          note: existing.note || '',
+          note: '',
           checkoutAt: '',
         });
-      } else {
-        // Preserve all custom data
-        mergedRooms.push({
-          ...incoming,
-          status: existing.status,
-          lateTime: existing.lateTime || '',
-          extensionNights: existing.extensionNights || 0,
-          note: existing.note || '',
-          checkoutAt: existing.checkoutAt || '',
+      }
+    });
+
+    // Find rooms that are NO LONGER in the report — they've checked out
+    removedRooms = depRooms.filter(r => 
+      !incomingRooms.some(incoming => incoming.roomStr === r.roomStr) && 
+      r.status !== 'out'
+    );
+
+    // Auto-checkout removed rooms
+    removedRooms.forEach(r => {
+      const rIdx = depRooms.indexOf(r);
+      if (rIdx >= 0 && r.status !== 'out') {
+        depLog.unshift({ 
+          room: r.roomStr, 
+          name: r.name, 
+          action: 'auto_out', 
+          time: logTime, 
+          roomIdx: rIdx, 
+          prevStatus: r.status 
         });
       }
-    } else {
-      // New room — add as due
-      mergedRooms.push({
-        ...incoming,
-        status: 'due',
-        lateTime: '',
-        extensionNights: 0,
-        note: '',
-        checkoutAt: '',
-      });
-    }
-  });
+    });
 
-  // Find rooms that are NO LONGER in the report — they've checked out or been moved
-  const removedRooms = depRooms.filter(r => 
-    !incomingRooms.some(incoming => incoming.roomStr === r.roomStr) && 
-    r.status !== 'out'  // Already checked out via app
-  );
+    depRooms = mergedRooms;
+  } else {
+    // First time loading or manual clear - just use incoming rooms
+    depRooms = incomingRooms.map(r => ({
+      ...r,
+      status: 'due',
+      lateTime: '',
+      extensionNights: 0,
+      note: '',
+      checkoutAt: '',
+    }));
+    removedRooms = [];
+  }
 
-  // Auto-checkout removed rooms (they left the hotel)
-  const logTime = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
-  removedRooms.forEach(r => {
-    const rIdx = depRooms.indexOf(r);
-    if (rIdx >= 0 && r.status !== 'out') {
-      depLog.unshift({ 
-        room: r.roomStr, 
-        name: r.name, 
-        action: 'auto_out', 
-        time: logTime, 
-        roomIdx: rIdx, 
-        prevStatus: r.status 
-      });
-    }
-  });
-
-  depRooms = mergedRooms;
   depRooms.sort((a, b) => a.room - b.room);
 
   // Clean up log entries for rooms that no longer exist
@@ -124,9 +138,50 @@ function processDep() {
   updateDepBadge();
   saveDepartures(depRooms, depLog).then(() => {
     const removedCount = removedRooms.length;
-    if (removedCount > 0) showToast(`Report loaded: ${mergedRooms.length} rooms, ${removedCount} auto-checked out ✓`);
-    else showToast(`Report loaded: ${mergedRooms.length} rooms saved to Firebase ✓`);
+    if (removedCount > 0) showToast(`Report loaded: ${depRooms.length} rooms, ${removedCount} auto-checked out ✓`);
+    else showToast(`Report loaded: ${depRooms.length} rooms saved to Firebase ✓`);
   });
+}
+
+// Add this function to reload reports while preserving existing data
+function reloadDepReport() {
+  // Temporarily show the upload card to paste new data
+  const uploadCard = document.getElementById('depUploadCard');
+  const board = document.getElementById('depBoard');
+  
+  if (uploadCard.style.display === 'none') {
+    // Card is hidden - show it and scroll to it
+    uploadCard.style.display = 'block';
+    uploadCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    
+    // Clear the textarea for fresh paste
+    document.getElementById('depInput').value = '';
+    
+    // Change the button text temporarily to indicate reload mode
+    const loadBtn = uploadCard.querySelector('.btn.gold');
+    if (loadBtn) {
+      const originalText = loadBtn.textContent;
+      loadBtn.textContent = '🔄 Reload with New Report';
+      loadBtn.style.background = 'linear-gradient(135deg, var(--violet), var(--sky))';
+      
+      // Store original button behavior
+      loadBtn._originalClick = loadBtn.onclick;
+      loadBtn.onclick = () => {
+        // Process the new report
+        const raw = document.getElementById('depInput').value.trim();
+        if (raw) {
+          processDep(true); // Pass true for reload mode
+        } else {
+          showToast('Please paste new report data first', 'err');
+        }
+        // Reset button
+        loadBtn.textContent = originalText;
+        loadBtn.style.background = '';
+        loadBtn.onclick = loadBtn._originalClick;
+        uploadCard.style.display = 'none';
+      };
+    }
+  }
 }
 
 function depCounts() {
