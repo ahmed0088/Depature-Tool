@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-//  departures.js  —  Departure follow-up board
+//  departures.js  —  Departure follow-up board (with smart merge)
 // ═══════════════════════════════════════════════════════════
 
 function processDep() {
@@ -15,14 +15,15 @@ function processDep() {
   const idx  = {}; hdrs.forEach((h, i) => idx[h] = i);
   if (idx['ROOM'] === undefined) return showErr('ROOM column not found. Use Delimited Data format.');
 
-  depRooms = [];
+  // Parse incoming report
+  const incomingRooms = [];
   for (let i = 1; i < lines.length; i++) {
     const p    = lines[i].split('\t'); if (p.length < 15) continue;
     const room = (p[idx['ROOM']] || '').trim(); if (!room || isNaN(parseInt(room))) continue;
     const bal  = parseFloat((p[idx['BALANCE']] || '0').replace(/,/g, '')) || 0;
     const agent = (p[idx['TRAVEL_AGENT_NAME']] || '').trim();
     const src   = cleanSource(agent, (p[idx['COMPANY_NAME']] || '').trim(), (p[idx['SOURCE_NAME']] || '').trim());
-    depRooms.push({
+    incomingRooms.push({
       room: parseInt(room), roomStr: room,
       name:      parseName(p[idx['GUEST_NAME']] || ''),
       arrival:   (p[idx['ARRIVAL']]   || '').trim(),
@@ -34,11 +35,85 @@ function processDep() {
       rateCode:  (p[idx['RATE_CODE']]    || '').trim(),
       isVip:     !!(p[idx['VIP']]        || '').trim(),
       depTime:   (p[idx['DEPARTURE_TIME']] || '').trim(),
-      status: 'due', lateTime: '', extensionNights: 0, note: '', checkoutAt: '',
     });
   }
-  if (!depRooms.length) return showErr('No departure rooms found.');
+  if (!incomingRooms.length) return showErr('No departure rooms found.');
+
+  // MERGE logic: preserve existing status for rooms that are still in the report
+  const existingMap = new Map();
+  depRooms.forEach(r => { existingMap.set(r.roomStr, r); });
+
+  const mergedRooms = [];
+  const now = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+
+  incomingRooms.forEach(incoming => {
+    const existing = existingMap.get(incoming.roomStr);
+    
+    if (existing) {
+      // Room still in report — preserve its status, notes, etc.
+      // But if it was checked out, check if it's still in report (shouldn't happen)
+      if (existing.status === 'out') {
+        // Guest checked out via app but still appears in Opera report?
+        // Could be a different guest in same room — reset status
+        mergedRooms.push({
+          ...incoming,
+          status: 'due',
+          lateTime: '',
+          extensionNights: 0,
+          note: existing.note || '',
+          checkoutAt: '',
+        });
+      } else {
+        // Preserve all custom data
+        mergedRooms.push({
+          ...incoming,
+          status: existing.status,
+          lateTime: existing.lateTime || '',
+          extensionNights: existing.extensionNights || 0,
+          note: existing.note || '',
+          checkoutAt: existing.checkoutAt || '',
+        });
+      }
+    } else {
+      // New room — add as due
+      mergedRooms.push({
+        ...incoming,
+        status: 'due',
+        lateTime: '',
+        extensionNights: 0,
+        note: '',
+        checkoutAt: '',
+      });
+    }
+  });
+
+  // Find rooms that are NO LONGER in the report — they've checked out or been moved
+  const removedRooms = depRooms.filter(r => 
+    !incomingRooms.some(incoming => incoming.roomStr === r.roomStr) && 
+    r.status !== 'out'  // Already checked out via app
+  );
+
+  // Auto-checkout removed rooms (they left the hotel)
+  const logTime = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  removedRooms.forEach(r => {
+    const rIdx = depRooms.indexOf(r);
+    if (rIdx >= 0 && r.status !== 'out') {
+      depLog.unshift({ 
+        room: r.roomStr, 
+        name: r.name, 
+        action: 'auto_out', 
+        time: logTime, 
+        roomIdx: rIdx, 
+        prevStatus: r.status 
+      });
+    }
+  });
+
+  depRooms = mergedRooms;
   depRooms.sort((a, b) => a.room - b.room);
+
+  // Clean up log entries for rooms that no longer exist
+  depLog = depLog.filter(log => depRooms.some(r => r.roomStr === log.room));
 
   document.getElementById('depDateLabel').textContent = `${depRooms.length} rooms departing · ${depRooms[0]?.departure || ''}`;
   document.getElementById('depBoard').style.display    = 'block';
@@ -47,7 +122,11 @@ function processDep() {
 
   depRender();
   updateDepBadge();
-  saveDepartures(depRooms, depLog).then(() => showToast('Departure board saved to Firebase ✓'));
+  saveDepartures(depRooms, depLog).then(() => {
+    const removedCount = removedRooms.length;
+    if (removedCount > 0) showToast(`Report loaded: ${mergedRooms.length} rooms, ${removedCount} auto-checked out ✓`);
+    else showToast(`Report loaded: ${mergedRooms.length} rooms saved to Firebase ✓`);
+  });
 }
 
 function depCounts() {
@@ -89,12 +168,91 @@ function depRender() {
     return mf && ms;
   });
 
-  document.getElementById('depGrid').innerHTML = filtered.map(r => depCardHTML(r)).join('');
+  const grid = document.getElementById('depGrid');
+  grid.innerHTML = filtered.map(r => depCardHTML(r)).join('');
+  makeDepCardsDraggable();
   renderDepLog();
 
   const qb = document.getElementById('depQuickBar');
   if (sc.due > 3) { qb.style.display = 'flex'; document.getElementById('depQuickLabel').textContent = `${sc.due} rooms still due out`; }
   else qb.style.display = 'none';
+}
+
+// Drag and drop for departure cards
+let draggedCard = null;
+
+function makeDepCardsDraggable() {
+  const cards = document.querySelectorAll('.dep-card');
+  cards.forEach((card, idx) => {
+    card.setAttribute('draggable', 'true');
+    card.setAttribute('data-card-idx', idx);
+    
+    card.removeEventListener('dragstart', handleDragStart);
+    card.removeEventListener('dragend', handleDragEnd);
+    card.removeEventListener('dragover', handleDragOver);
+    card.removeEventListener('drop', handleDrop);
+    
+    card.addEventListener('dragstart', handleDragStart);
+    card.addEventListener('dragend', handleDragEnd);
+    card.addEventListener('dragover', handleDragOver);
+    card.addEventListener('drop', handleDrop);
+  });
+}
+
+function handleDragStart(e) {
+  draggedCard = this;
+  e.dataTransfer.effectAllowed = 'move';
+  this.style.opacity = '0.5';
+}
+
+function handleDragEnd(e) {
+  if (draggedCard) draggedCard.style.opacity = '';
+  draggedCard = null;
+}
+
+function handleDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  if (!draggedCard || draggedCard === this) return;
+  
+  const grid = document.getElementById('depGrid');
+  const cards = Array.from(grid.children);
+  const fromIdx = cards.indexOf(draggedCard);
+  const toIdx = cards.indexOf(this);
+  
+  if (fromIdx < 0 || toIdx < 0) return;
+  
+  // Get the actual room indices based on current filtered view
+  const search = (document.getElementById('depSearch')?.value || '').toLowerCase();
+  let filtered = depRooms.filter(r => {
+    let mf = true;
+    if      (depFilter_ === 'all')     mf = r.status !== 'out' && r.status !== 'extended';
+    else if (depFilter_ === 'balance') mf = r.balance > 0 && r.status !== 'out';
+    else                               mf = r.status === depFilter_;
+    const ms = !search || r.roomStr.includes(search) || r.name.toLowerCase().includes(search) || r.source.toLowerCase().includes(search);
+    return mf && ms;
+  });
+  
+  const fromRoom = filtered[fromIdx];
+  const toRoom = filtered[toIdx];
+  
+  if (fromRoom && toRoom) {
+    const fromGlobalIdx = depRooms.indexOf(fromRoom);
+    const toGlobalIdx = depRooms.indexOf(toRoom);
+    if (fromGlobalIdx >= 0 && toGlobalIdx >= 0) {
+      // Swap positions in the global array
+      [depRooms[fromGlobalIdx], depRooms[toGlobalIdx]] = [depRooms[toGlobalIdx], depRooms[fromGlobalIdx]];
+      saveDeps();
+    }
+  }
+  
+  draggedCard.style.opacity = '';
+  draggedCard = null;
+  depRender();
 }
 
 function depCardHTML(r) {
@@ -136,7 +294,7 @@ function depCardHTML(r) {
        </div>`
     : `<div class="dc-actions g1"><button class="dca dca-undo" onclick="depAction(${i},'due')">↺ Undo</button></div>`;
 
-  return `<div class="dep-card ${sClass}">
+  return `<div class="dep-card ${sClass}" draggable="true">
     ${vipHTML}
     <div class="dc-band"></div>
     <div class="dc-head">
@@ -148,14 +306,14 @@ function depCardHTML(r) {
     </div>
     <div class="dc-body">
       <div class="dc-name-row">
-        <div class="dc-name" ondblclick="depEditName(${i})" title="Double-click to edit">${r.name}</div>
+        <div class="dc-name" ondblclick="depEditName(${i})" title="Double-click to edit">${escapeHtml(r.name)}</div>
       </div>
       <div class="dc-meta">
         <div class="dc-mi">📅 <strong>${r.arrival}</strong> → <strong>${r.departure}</strong></div>
         ${depTag}
       </div>
       ${compTag}
-      <div class="dc-src">${srcClean}</div>
+      <div class="dc-src">${escapeHtml(srcClean)}</div>
       <div class="dc-bal ${balClass}">
         <span class="dc-bal-lbl">Balance</span>
         <span class="dc-bal-amt">${balText}</span>
@@ -165,10 +323,20 @@ function depCardHTML(r) {
       <div style="margin-top:7px;">
         <div class="dc-note-lbl">Notes</div>
         <textarea class="dc-note" placeholder="Guest requests, luggage, complaints…"
-          onchange="depRooms[${i}].note=this.value;saveDeps()">${r.note}</textarea>
+          onchange="depRooms[${i}].note=this.value;saveDeps()">${escapeHtml(r.note)}</textarea>
       </div>
     </div>
   </div>`;
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/[&<>]/g, function(m) {
+    if (m === '&') return '&amp;';
+    if (m === '<') return '&lt;';
+    if (m === '>') return '&gt;';
+    return m;
+  });
 }
 
 function depEditName(i) {
@@ -182,12 +350,13 @@ function depEditName(i) {
   const el = allNames[vi];
   if (!el) return;
   const cur = depRooms[i].name;
-  el.outerHTML = `<input class="dc-edit-name" id="en-${i}" value="${cur}"
+  el.outerHTML = `<input class="dc-edit-name" id="en-${i}" value="${escapeHtml(cur)}"
     onblur="depSaveName(${i},this.value)"
     onkeydown="if(event.key==='Enter')this.blur()"/>`;
   const inp = document.getElementById('en-' + i);
   if (inp) inp.focus();
 }
+
 function depSaveName(i, val) {
   depRooms[i].name = (val || '').trim() || depRooms[i].name;
   depRender(); saveDeps();
@@ -218,16 +387,16 @@ function renderDepLog() {
   const wrap  = document.getElementById('depLogWrap');
   const body  = document.getElementById('depLogBody');
   const badge = document.getElementById('depLogCount');
-  const entries = depLog.filter(l => l.action !== 'due');
+  const entries = depLog.filter(l => l.action !== 'due' && l.action !== 'auto_out');
   if (!entries.length) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
   if (badge) badge.textContent = entries.length;
-  const aLabel = { out:'✓ Checked Out', extended:'↪ Extended', late:'🕐 Late CO' };
-  const aCls   = { out:'log-act-co',    extended:'log-act-ext', late:'log-act-late' };
+  const aLabel = { out:'✓ Checked Out', auto_out:'✓ Auto Checked Out', extended:'↪ Extended', late:'🕐 Late CO' };
+  const aCls   = { out:'log-act-co', auto_out:'log-act-co', extended:'log-act-ext', late:'log-act-late' };
   body.innerHTML = entries.map((l, li) => `
     <div class="log-row">
       <span class="log-room">${l.room}</span>
-      <span class="log-name">${l.name}</span>
+      <span class="log-name">${escapeHtml(l.name)}</span>
       <span class="log-action ${aCls[l.action]||''}">${aLabel[l.action]||l.action}</span>
       <span class="log-time">${l.time}</span>
       <button class="log-undo" onclick="depUndoLog(${li})">↺ Undo</button>
