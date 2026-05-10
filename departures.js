@@ -1,8 +1,58 @@
 // ═══════════════════════════════════════════════════════════
-//  departures.js  —  Departure follow-up board
-//  FIXED VERSION with proper card design, inline edit, action log
+//  departures.js  —  Departure follow-up board  v5
+//  · Smart Reload / Merge
+//  · Extended + Out hidden from All view (undo on card)
+//  · Late CO: undo directly on card
+//  · Guest intent flags (May Extend / Coming Back / Returning)
+//    → auto-stamps a note when intent is set
+//  · Balance warning on checkout attempt
+//  · Overdue highlight (past 12:00 and still due)
+//  · Time-stamped notes
+//  · Departure time countdown badge
 // ═══════════════════════════════════════════════════════════
 
+// ── Parse raw Opera text ───────────────────────────────────
+function parseDepReport(raw) {
+  const lines = raw.split('\n').filter(l => l.trim());
+  if (lines.length < 2) return null;
+  const hdrs = lines[0].split('\t').map(h => h.trim());
+  const idx  = {}; hdrs.forEach((h, i) => idx[h] = i);
+  if (idx['ROOM'] === undefined) return null;
+
+  const rooms = [];
+  for (let i = 1; i < lines.length; i++) {
+    const p    = lines[i].split('\t'); if (p.length < 15) continue;
+    const room = (p[idx['ROOM']] || '').trim(); if (!room || isNaN(parseInt(room))) continue;
+    const bal  = parseFloat((p[idx['BALANCE']] || '0').replace(/,/g, '')) || 0;
+    const agent = (p[idx['TRAVEL_AGENT_NAME']] || '').trim();
+    const src   = cleanSource(agent, (p[idx['COMPANY_NAME']] || '').trim(), (p[idx['SOURCE_NAME']] || '').trim());
+    rooms.push({
+      room:            parseInt(room),
+      roomStr:         room,
+      name:            parseName(p[idx['GUEST_NAME']] || ''),
+      arrival:         (p[idx['ARRIVAL']]         || '').trim(),
+      departure:       (p[idx['DEPARTURE']]       || '').trim(),
+      nights:          parseInt(p[idx['NIGHTS']]  || 0) || 0,
+      balance:         bal,
+      source:          src,
+      company:         (p[idx['COMPANY_NAME']]    || '').trim(),
+      rateCode:        (p[idx['RATE_CODE']]       || '').trim(),
+      isVip:           !!(p[idx['VIP']]           || '').trim(),
+      depTime:         (p[idx['DEPARTURE_TIME']]  || '').trim(),
+      // Live tracking
+      status:          'due',
+      lateTime:        '',
+      extensionNights: 0,
+      intent:          '',   // '' | 'maybe_extend' | 'coming_back' | 'returning'
+      note:            '',
+      checkoutAt:      '',
+    });
+  }
+  rooms.sort((a, b) => a.room - b.room);
+  return rooms.length ? rooms : null;
+}
+
+// ── First load ─────────────────────────────────────────────
 function processDep() {
   const raw    = document.getElementById('depInput').value.trim();
   const errBox = document.getElementById('depError');
@@ -10,118 +60,262 @@ function processDep() {
   const showErr = msg => { document.getElementById('depErrorMsg').textContent = msg; errBox.classList.add('show'); };
 
   if (!raw) return showErr('Please paste the departure report first.');
-  const lines = raw.split('\n').filter(l => l.trim());
-  if (lines.length < 2) return showErr('File appears empty.');
-  const hdrs = lines[0].split('\t').map(h => h.trim());
-  const idx  = {}; hdrs.forEach((h, i) => idx[h] = i);
-  if (idx['ROOM'] === undefined) return showErr('ROOM column not found. Use Delimited Data format.');
+  const rooms = parseDepReport(raw);
+  if (!rooms) return showErr('No departure rooms found. Check ROOM column exists and use Delimited Data format.');
 
-  depRooms = [];
-  for (let i = 1; i < lines.length; i++) {
-    const p    = lines[i].split('\t'); if (p.length < 15) continue;
-    const room = (p[idx['ROOM']] || '').trim(); if (!room || isNaN(parseInt(room))) continue;
-    const bal  = parseFloat((p[idx['BALANCE']] || '0').replace(/,/g, '')) || 0;
-    const agent = (p[idx['TRAVEL_AGENT_NAME']] || '').trim();
-    const src   = cleanSource(agent, (p[idx['COMPANY_NAME']] || '').trim(), (p[idx['SOURCE_NAME']] || '').trim());
-    depRooms.push({
-      room: parseInt(room), roomStr: room,
-      name:      parseName(p[idx['GUEST_NAME']] || ''),
-      arrival:   (p[idx['ARRIVAL']]   || '').trim(),
-      departure: (p[idx['DEPARTURE']] || '').trim(),
-      nights:    parseInt(p[idx['NIGHTS']] || 0) || 0,
-      balance:   bal,
-      source:    src,
-      company:   (p[idx['COMPANY_NAME']] || '').trim(),
-      rateCode:  (p[idx['RATE_CODE']]    || '').trim(),
-      isVip:     !!(p[idx['VIP']]        || '').trim(),
-      depTime:   (p[idx['DEPARTURE_TIME']] || '').trim(),
-      status: 'due', lateTime: '', extensionNights: 0, note: '', checkoutAt: '',
-    });
-  }
-  if (!depRooms.length) return showErr('No departure rooms found.');
-  depRooms.sort((a, b) => a.room - b.room);
+  depRooms = rooms;
+  depLog   = [];
 
+  document.getElementById('depInput').value = '';
   document.getElementById('depDateLabel').textContent = `${depRooms.length} rooms departing · ${depRooms[0]?.departure || ''}`;
-  document.getElementById('depBoard').style.display    = 'block';
+  document.getElementById('depBoard').style.display      = 'block';
   document.getElementById('depUploadCard').style.display = 'none';
-  ['depPrintBtn','depExportBtn','depViewToggle'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = ''; });
+  ['depPrintBtn','depExportBtn','depViewToggle','depReloadBtn'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.style.display = '';
+  });
 
   depRender();
   updateDepBadge();
-  saveDepartures(depRooms, depLog).then(() => showToast('Departure board saved to Firebase ✓'));
+  saveDepartures(depRooms, depLog).then(() => showToast('Departure board loaded ✓'));
 }
 
+// ── Smart Reload / Merge ───────────────────────────────────
+// New report from Opera:
+//   Rooms that already exist  → keep status, notes, intent, times
+//   New rooms in new report   → add as 'due'
+//   Rooms gone from Opera     → remove (colleague checked out in system)
+function processDepReload() {
+  const raw    = document.getElementById('depReloadInput').value.trim();
+  const errBox = document.getElementById('depReloadError');
+  errBox.classList.remove('show');
+  const showErr = msg => { document.getElementById('depReloadErrorMsg').textContent = msg; errBox.classList.add('show'); };
+
+  if (!raw) return showErr('Paste the fresh Opera report first.');
+  const freshRooms = parseDepReport(raw);
+  if (!freshRooms) return showErr('No rooms found — check the report format.');
+
+  const existing = {};
+  depRooms.forEach(r => { existing[r.room] = r; });
+
+  let added = 0, kept = 0, removed = 0;
+  const merged = [];
+
+  freshRooms.forEach(fresh => {
+    const old = existing[fresh.room];
+    if (old) {
+      merged.push({
+        ...fresh,                          // fresh Opera data: name, balance, dates
+        status:          old.status,       // keep all live tracking
+        lateTime:        old.lateTime,
+        extensionNights: old.extensionNights,
+        intent:          old.intent || '',
+        note:            old.note,
+        checkoutAt:      old.checkoutAt,
+      });
+      kept++;
+    } else {
+      merged.push(fresh);
+      added++;
+    }
+  });
+
+  depRooms.forEach(r => { if (!freshRooms.find(f => f.room === r.room)) removed++; });
+
+  depRooms = merged;
+  document.getElementById('depReloadInput').value = '';
+  closeReloadModal();
+  document.getElementById('depDateLabel').textContent = `${depRooms.length} rooms departing · ${depRooms[0]?.departure || ''}`;
+
+  depRender();
+  updateDepBadge();
+  saveDepartures(depRooms, depLog).then(() =>
+    showToast(`Reloaded ✓  ${kept} kept · ${added} new · ${removed} removed`, 'info')
+  );
+}
+
+function openReloadModal() {
+  document.getElementById('depReloadModal').classList.add('open');
+  document.getElementById('depReloadInput').value = '';
+  const err = document.getElementById('depReloadError');
+  if (err) err.classList.remove('show');
+  setTimeout(() => {
+    document.getElementById('depReloadInput').focus();
+  }, 100);
+}
+
+function closeReloadModal() {
+  document.getElementById('depReloadModal').classList.remove('open');
+}
+
+// ── Counts ─────────────────────────────────────────────────
 function depCounts() {
   return {
     all:      depRooms.length,
     due:      depRooms.filter(r => r.status === 'due').length,
-    extended: depRooms.filter(r => r.status === 'extended').length,
     late:     depRooms.filter(r => r.status === 'late').length,
-    balance:  depRooms.filter(r => r.balance > 0 && r.status !== 'out').length,
+    extended: depRooms.filter(r => r.status === 'extended').length,
+    balance:  depRooms.filter(r => r.balance > 0 && r.status !== 'out' && r.status !== 'extended').length,
     out:      depRooms.filter(r => r.status === 'out').length,
+    pending:  depRooms.filter(r => r.intent && r.status !== 'out' && r.status !== 'extended').length,
   };
 }
 
-function depRender() {
-  const sc    = depCounts();
-  const total = sc.all, out = sc.out;
-  const pct   = total ? Math.round(out / total * 100) : 0;
+// ── Is this room overdue? (past 12:00 and still due/late) ─
+function isOverdue(r) {
+  if (r.status !== 'due' && r.status !== 'late') return false;
+  const now = new Date();
+  return now.getHours() >= 12;
+}
 
-  Object.entries(sc).forEach(([k, v]) => { const el = document.getElementById('dfc-' + k); if (el) el.textContent = v; });
+// ── How long until / since checkout time ──────────────────
+function depTimeTag(r) {
+  if (!r.depTime || r.status === 'out' || r.status === 'extended') return '';
+  // depTime comes as e.g. "12:00" or "12:00 PM"
+  const match = r.depTime.match(/(\d+):(\d+)/);
+  if (!match) return '';
+  let h = parseInt(match[1]), m = parseInt(match[2]);
+  if (r.depTime.toLowerCase().includes('pm') && h < 12) h += 12;
+  if (r.depTime.toLowerCase().includes('am') && h === 12) h = 0;
+  const now     = new Date();
+  const target  = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m);
+  const diff    = target - now; // ms
+  const absMins = Math.abs(Math.round(diff / 60000));
+  const hrs     = Math.floor(absMins / 60);
+  const mins    = absMins % 60;
+  const label   = hrs ? `${hrs}h ${mins}m` : `${mins}m`;
+  if (diff < 0)  return `<span class="dc-time-tag overdue">⏰ ${label} overdue</span>`;
+  if (diff < 30 * 60000) return `<span class="dc-time-tag soon">⏰ ${label} left</span>`;
+  return `<span class="dc-time-tag ok">🕐 ${label}</span>`;
+}
+
+// ── Render ─────────────────────────────────────────────────
+function depRender() {
+  const sc  = depCounts();
+  const pct = sc.all ? Math.round(sc.out / sc.all * 100) : 0;
+
+  Object.entries(sc).forEach(([k, v]) => {
+    const el = document.getElementById('dfc-' + k); if (el) el.textContent = v;
+  });
 
   document.getElementById('depKpis').innerHTML = `
-    <div class="dep-kpi k-total"><div class="dep-kpi-icon">🏨</div><div class="dep-kpi-val">${total}</div><div class="dep-kpi-label">Total</div><div class="dep-kpi-bar"></div></div>
-    <div class="dep-kpi k-due"><div class="dep-kpi-icon">⏳</div><div class="dep-kpi-val">${sc.due}</div><div class="dep-kpi-label">Due Out</div><div class="dep-kpi-bar"></div></div>
-    <div class="dep-kpi k-ext"><div class="dep-kpi-icon">↪</div><div class="dep-kpi-val">${sc.extended}</div><div class="dep-kpi-label">Extended</div><div class="dep-kpi-bar"></div></div>
-    <div class="dep-kpi k-late"><div class="dep-kpi-icon">🕐</div><div class="dep-kpi-val">${sc.late}</div><div class="dep-kpi-label">Late CO</div><div class="dep-kpi-bar"></div></div>
-    <div class="dep-kpi k-out"><div class="dep-kpi-icon">✓</div><div class="dep-kpi-val">${out}</div><div class="dep-kpi-label">Checked Out</div><div class="dep-kpi-bar"></div></div>`;
+    <div class="dep-kpi k-total"><div class="dep-kpi-icon">🏨</div><div class="dep-kpi-val">${sc.all}</div><div class="dep-kpi-label">Total</div></div>
+    <div class="dep-kpi k-due"><div class="dep-kpi-icon">⏳</div><div class="dep-kpi-val">${sc.due}</div><div class="dep-kpi-label">Due Out</div></div>
+    <div class="dep-kpi k-ext"><div class="dep-kpi-icon">↪</div><div class="dep-kpi-val">${sc.extended}</div><div class="dep-kpi-label">Extended</div></div>
+    <div class="dep-kpi k-late"><div class="dep-kpi-icon">🕐</div><div class="dep-kpi-val">${sc.late}</div><div class="dep-kpi-label">Late CO</div></div>
+    <div class="dep-kpi k-out"><div class="dep-kpi-icon">✓</div><div class="dep-kpi-val">${sc.out}</div><div class="dep-kpi-label">Checked Out</div></div>`;
 
-  document.getElementById('depProgLabel').textContent = `${out} of ${total} checked out`;
+  document.getElementById('depProgLabel').textContent = `${sc.out} of ${sc.all} checked out`;
   document.getElementById('depProgPct').textContent   = pct + '%';
   document.getElementById('depProgFill').style.width  = pct + '%';
 
   const search = (document.getElementById('depSearch')?.value || '').toLowerCase();
+
+  // Filter rules:
+  // 'all'     → active: due + late only  (extended + out are hidden — they're done)
+  // 'balance' → active rooms with owing balance
+  // 'pending' → rooms with a guest intent flag
+  // everything else → match r.status exactly
   let filtered = depRooms.filter(r => {
-    let mf = true;
-    if      (depFilter_ === 'all')     mf = r.status !== 'out' && r.status !== 'extended';
-    else if (depFilter_ === 'balance') mf = r.balance > 0 && r.status !== 'out';
-    else                               mf = r.status === depFilter_;
-    const ms = !search || r.roomStr.includes(search) || r.name.toLowerCase().includes(search) || r.source.toLowerCase().includes(search);
+    let mf;
+    switch (depFilter_) {
+      case 'all':     mf = r.status !== 'out' && r.status !== 'extended'; break;
+      case 'balance': mf = r.balance > 0 && r.status !== 'out' && r.status !== 'extended'; break;
+      case 'pending': mf = !!r.intent && r.status !== 'out' && r.status !== 'extended'; break;
+      default:        mf = r.status === depFilter_; break;
+    }
+    const ms = !search ||
+      r.roomStr.includes(search) ||
+      r.name.toLowerCase().includes(search) ||
+      r.source.toLowerCase().includes(search) ||
+      (r.note && r.note.toLowerCase().includes(search));
     return mf && ms;
+  });
+
+  // Sort: overdue rooms bubble to top within their filter
+  filtered.sort((a, b) => {
+    const ao = isOverdue(a) ? 0 : 1;
+    const bo = isOverdue(b) ? 0 : 1;
+    if (ao !== bo) return ao - bo;
+    return a.room - b.room;
   });
 
   document.getElementById('depGrid').innerHTML = filtered.map(r => depCardHTML(r)).join('');
   renderDepLog();
 
   const qb = document.getElementById('depQuickBar');
-  if (sc.due > 3) { qb.style.display = 'flex'; document.getElementById('depQuickLabel').textContent = `${sc.due} rooms still due out`; }
-  else qb.style.display = 'none';
+  if (sc.due > 3) {
+    qb.style.display = 'flex';
+    document.getElementById('depQuickLabel').textContent = `${sc.due} rooms still due out`;
+  } else {
+    qb.style.display = 'none';
+  }
 }
 
+// ── Intent config ──────────────────────────────────────────
+const INTENT_CONFIG = {
+  maybe_extend: { icon:'🤔', label:'May Extend Stay',   color:'var(--violet)', autoNote:'Guest may extend — confirm with Opera before releasing room.' },
+  coming_back:  { icon:'↩️', label:'Coming Back Later', color:'var(--amber)',  autoNote:'Guest coming back later today — hold key and luggage if needed.' },
+  returning:    { icon:'🔁', label:'Returning Guest',    color:'var(--sky)',    autoNote:'Returning guest — check if new reservation is linked.' },
+};
+
+// ── Card HTML ──────────────────────────────────────────────
 function depCardHTML(r) {
-  const i        = depRooms.indexOf(r);
-  const bal      = r.balance;
+  const i   = depRooms.indexOf(r);
+  const bal = r.balance;
+  const overdue = isOverdue(r);
+
   const balClass = bal > 0 ? 'bal-owing' : bal < 0 ? 'bal-credit' : 'bal-zero';
   const balText  = bal === 0 ? '✓ Settled'
     : bal > 0 ? `AED ${Math.abs(bal).toLocaleString('en',{minimumFractionDigits:2})} OWING`
     :           `AED ${Math.abs(bal).toLocaleString('en',{minimumFractionDigits:2})} CREDIT`;
-  const sClass    = 's-' + (r.balance > 0 && r.status !== 'out' ? 'balance' : r.status);
-  const badgeCls  = r.status==='due'?'sb-due':r.status==='extended'?'sb-extended':r.status==='late'?'sb-late':'sb-out';
-  const badgeText = r.status==='due'?'DUE OUT':r.status==='extended'?`EXT +${r.extensionNights}N`:r.status==='late'?`LATE${r.lateTime?' · '+r.lateTime:''}`:'CHECKED OUT';
-  const srcClean  = r.source.substring(0, 26) + (r.source.length > 26 ? '…' : '');
-  const vipHTML   = r.isVip ? '<div class="dc-vip">⭐ VIP</div>' : '';
-  const depTag    = r.depTime ? `<div class="dc-mi">🕐 Sched: <strong>${r.depTime}</strong></div>` : '';
-  const compTag   = r.company ? `<div class="dc-company">🏢 ${r.company.substring(0, 36)}</div>` : '';
 
-  const lateHTML = r.status === 'late' ? `
+  // Card colour
+  let sClass = 's-' + (bal > 0 && r.status !== 'out' && r.status !== 'extended' ? 'balance' : r.status);
+  if (r.intent && r.status !== 'out' && r.status !== 'extended') sClass += ' s-intent';
+  if (overdue) sClass += ' s-overdue';
+
+  // Status badge
+  const badgeMap = {
+    due:      ['sb-due',      overdue ? 'OVERDUE' : 'DUE OUT'],
+    late:     ['sb-late',     `LATE CO${r.lateTime ? ' · ' + r.lateTime : ''}`],
+    extended: ['sb-extended', `EXT +${r.extensionNights}N`],
+    out:      ['sb-out',      `OUT${r.checkoutAt ? ' · ' + r.checkoutAt : ''}`],
+  };
+  const [badgeCls, badgeText] = badgeMap[r.status] || ['sb-due','DUE OUT'];
+
+  const srcClean  = r.source.substring(0,26) + (r.source.length > 26 ? '…' : '');
+  const vipHTML   = r.isVip ? '<div class="dc-vip">⭐ VIP</div>' : '';
+  const compTag   = r.company ? `<div class="dc-mi">🏢 ${r.company.substring(0,36)}</div>` : '';
+  const timeTag   = depTimeTag(r);
+
+  // Intent banner
+  const ic = INTENT_CONFIG[r.intent];
+  const intentBanner = ic && r.status !== 'out' && r.status !== 'extended'
+    ? `<div class="dc-intent-banner" style="border-color:${ic.color};color:${ic.color};">
+         <span>${ic.icon} ${ic.label}</span>
+         <button class="dc-intent-clear" onclick="depSetIntent(${i},'');event.stopPropagation()">✕ clear</button>
+       </div>`
+    : '';
+
+  // Overdue warning strip
+  const overdueStrip = overdue && r.status === 'due'
+    ? `<div class="dc-overdue-strip">⚠ Past checkout time — follow up required</div>`
+    : '';
+
+  // Late time dropdown
+  const lateRow = r.status === 'late' ? `
     <div class="dc-sel-row">
-      <span class="dc-sel-lbl late">🕐 Late time:</span>
+      <span class="dc-sel-lbl late">🕐 Agreed time:</span>
       <select class="dc-select late" onchange="depRooms[${i}].lateTime=this.value;depRender();saveDeps()">
         <option value="">Select…</option>
-        ${['10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM','6:00 PM','7:00 PM','8:00 PM','9:00 PM','10:00 PM','11:00 PM','12:00 AM']
+        ${['10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM',
+           '5:00 PM','6:00 PM','7:00 PM','8:00 PM','9:00 PM','10:00 PM','11:00 PM','12:00 AM']
           .map(t => `<option${r.lateTime===t?' selected':''}>${t}</option>`).join('')}
       </select>
-    </div>` : r.status === 'extended' ? `
+    </div>` : '';
+
+  // Extension nights dropdown
+  const extRow = r.status === 'extended' ? `
     <div class="dc-sel-row">
       <span class="dc-sel-lbl ext">↪ Extra nights:</span>
       <select class="dc-select ext" onchange="depRooms[${i}].extensionNights=parseInt(this.value)||0;depRender();saveDeps()">
@@ -129,13 +323,42 @@ function depCardHTML(r) {
       </select>
     </div>` : '';
 
-  const actHTML = r.status !== 'out'
-    ? `<div class="dc-actions g3">
-         <button class="dca dca-co"   onclick="depAction(${i},'out')">✓ Check Out</button>
-         <button class="dca dca-ext"  onclick="depAction(${i},'extended')">↪ Extend</button>
-         <button class="dca dca-late" onclick="depAction(${i},'late')">🕐 Late CO</button>
-       </div>`
-    : `<div class="dc-actions g1"><button class="dca dca-undo" onclick="depAction(${i},'due')">↺ Undo</button></div>`;
+  // Action buttons
+  // out / extended → Undo only
+  // late           → Check Out + Undo Late
+  // due            → full row + intent buttons
+  let actHTML = '';
+
+  if (r.status === 'out' || r.status === 'extended') {
+    actHTML = `<div class="dc-actions g1">
+      <button class="dca dca-undo" onclick="depAction(${i},'due')">↺ Undo</button>
+    </div>`;
+
+  } else if (r.status === 'late') {
+    actHTML = `<div class="dc-actions g2">
+      <button class="dca dca-co"   onclick="depAction(${i},'out')">✓ Check Out</button>
+      <button class="dca dca-undo" onclick="depAction(${i},'due')">↺ Undo Late</button>
+    </div>`;
+
+  } else {
+    // Due — intent buttons below main actions
+    const intentRow = `
+      <div class="dc-intent-row">
+        <span class="dc-intent-lbl">Guest said:</span>
+        <button class="dc-intent-btn${r.intent==='maybe_extend'?' active':''}"
+          onclick="depSetIntent(${i},'maybe_extend')">🤔 May Extend</button>
+        <button class="dc-intent-btn${r.intent==='coming_back' ?' active':''}"
+          onclick="depSetIntent(${i},'coming_back')">↩️ Coming Back</button>
+        <button class="dc-intent-btn${r.intent==='returning'   ?' active':''}"
+          onclick="depSetIntent(${i},'returning')">🔁 Returning</button>
+      </div>`;
+
+    actHTML = `<div class="dc-actions g3">
+      <button class="dca dca-co"   onclick="depCheckOut(${i})">✓ Check Out</button>
+      <button class="dca dca-ext"  onclick="depAction(${i},'extended')">↪ Extend</button>
+      <button class="dca dca-late" onclick="depAction(${i},'late')">🕐 Late CO</button>
+    </div>${intentRow}`;
+  }
 
   return `<div class="dep-card ${sClass}">
     ${vipHTML}
@@ -148,12 +371,12 @@ function depCardHTML(r) {
       </div>
     </div>
     <div class="dc-body">
-      <div class="dc-name-row">
-        <div class="dc-name" ondblclick="depEditName(${i})" title="Double-click to edit">${escapeHtml(r.name)}</div>
-      </div>
+      ${overdueStrip}
+      ${intentBanner}
+      <div class="dc-name" ondblclick="depEditName(${i})" title="Double-click to edit">${escapeHtml(r.name)}</div>
       <div class="dc-meta">
         <div class="dc-mi">📅 <strong>${r.arrival}</strong> → <strong>${r.departure}</strong></div>
-        ${depTag}
+        ${r.depTime ? `<div class="dc-mi">${timeTag}</div>` : ''}
       </div>
       ${compTag}
       <div class="dc-src">${srcClean}</div>
@@ -161,11 +384,15 @@ function depCardHTML(r) {
         <span class="dc-bal-lbl">Balance</span>
         <span class="dc-bal-amt">${balText}</span>
       </div>
-      ${lateHTML}
+      ${lateRow}
+      ${extRow}
       ${actHTML}
-      <div style="margin-top:7px;">
-        <div class="dc-note-lbl">Notes</div>
-        <textarea class="dc-note" placeholder="Guest requests, luggage, complaints…"
+      <div style="margin-top:8px;">
+        <div class="dc-note-lbl" style="display:flex;justify-content:space-between;align-items:center;">
+          Notes
+          <button class="dc-stamp-btn" onclick="depStampNote(${i})" title="Add timestamp">🕐 Stamp</button>
+        </div>
+        <textarea class="dc-note" placeholder="Luggage stored, guest requests, complaints…"
           onchange="depRooms[${i}].note=this.value;saveDeps()">${escapeHtml(r.note)}</textarea>
       </div>
     </div>
@@ -174,31 +401,73 @@ function depCardHTML(r) {
 
 function escapeHtml(str) {
   if (!str) return '';
-  return str.replace(/[&<>]/g, function(m) {
-    if (m === '&') return '&amp;';
-    if (m === '<') return '&lt;';
-    if (m === '>') return '&gt;';
-    return m;
-  });
+  return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]||m));
 }
 
-function depEditName(i) {
-  const nameDivs = document.querySelectorAll('.dc-name');
-  let visibleIndex = 0;
-  for (let j = 0; j < depRooms.length; j++) {
-    let include = true;
-    if (depFilter_ === 'all') include = depRooms[j].status !== 'out' && depRooms[j].status !== 'extended';
-    else if (depFilter_ === 'balance') include = depRooms[j].balance > 0 && depRooms[j].status !== 'out';
-    else include = depRooms[j].status === depFilter_;
-    if (include) {
-      if (j === i) break;
-      visibleIndex++;
-    }
+// ── Check Out with balance warning ─────────────────────────
+function depCheckOut(i) {
+  const r = depRooms[i];
+  if (r.balance > 0) {
+    if (!confirm(`⚠ Room ${r.roomStr} has AED ${r.balance.toLocaleString('en',{minimumFractionDigits:2})} owing.\n\nAre you sure you want to check them out?`)) return;
   }
-  const el = nameDivs[visibleIndex];
+  depAction(i, 'out');
+}
+
+// ── Timestamp stamp button ─────────────────────────────────
+function depStampNote(i) {
+  const t    = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  const sep  = depRooms[i].note ? '\n' : '';
+  depRooms[i].note += sep + `[${t}] `;
+  // Update the textarea in DOM immediately
+  const textareas = document.querySelectorAll('.dc-note');
+  // find the right one by re-rendering
+  depRender();
+  // focus the right textarea after render — find by room
+  setTimeout(() => {
+    const cards = document.querySelectorAll('.dep-card');
+    const filtered = [...document.querySelectorAll('.dep-card')];
+    // just save — user will type after
+    saveDeps();
+  }, 50);
+}
+
+// ── Guest intent ───────────────────────────────────────────
+// Toggle: tap same intent again to clear it.
+// Auto-stamps the note with context when set.
+function depSetIntent(i, intent) {
+  const r       = depRooms[i];
+  const isToggle = r.intent === intent;
+
+  r.intent = isToggle ? '' : intent;
+
+  // Auto-stamp note when intent is SET (not when cleared)
+  if (!isToggle && intent) {
+    const cfg  = INTENT_CONFIG[intent];
+    const t    = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+    const line = `[${t}] ${cfg.autoNote}`;
+    r.note = r.note ? r.note + '\n' + line : line;
+  }
+
+  depRender();
+  saveDeps();
+}
+
+// ── Name inline edit ───────────────────────────────────────
+function depEditName(i) {
+  const allFiltered = depRooms.filter(r => {
+    switch (depFilter_) {
+      case 'all':     return r.status !== 'out' && r.status !== 'extended';
+      case 'balance': return r.balance > 0 && r.status !== 'out' && r.status !== 'extended';
+      case 'pending': return !!r.intent && r.status !== 'out' && r.status !== 'extended';
+      default:        return r.status === depFilter_;
+    }
+  });
+  const visIdx = allFiltered.indexOf(depRooms[i]);
+  const el     = document.querySelectorAll('.dc-name')[visIdx];
   if (!el) return;
   const cur = depRooms[i].name;
-  el.outerHTML = `<input class="dc-edit-name" id="en-${i}" value="${cur.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}"
+  el.outerHTML = `<input class="dc-edit-name" id="en-${i}"
+    value="${cur.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}"
     onblur="depSaveName(${i},this.value)"
     onkeydown="if(event.key==='Enter')this.blur()"/>`;
   const inp = document.getElementById('en-' + i);
@@ -211,20 +480,25 @@ function depSaveName(i, val) {
   saveDeps();
 }
 
+// ── Actions ────────────────────────────────────────────────
 function depAction(i, status) {
-  const r = depRooms[i];
+  const r    = depRooms[i];
   const prev = r.status;
-  r.status = status;
-  const t = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  r.status   = status;
+  const t    = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+
   if (status === 'out') r.checkoutAt = t; else r.checkoutAt = '';
-  if (status !== 'late') r.lateTime = '';
+  if (status !== 'late')     r.lateTime = '';
   if (status !== 'extended') r.extensionNights = 0;
+  if (status === 'due')      r.intent = '';  // undo clears intent
+
   if (status !== 'due') {
     depLog.unshift({ room: r.roomStr, name: r.name, action: status, time: t, roomIdx: i, prevStatus: prev });
   } else {
     const li = depLog.findIndex(l => l.room === r.roomStr);
     if (li >= 0) depLog.splice(li, 1);
   }
+
   depRender();
   updateDepBadge();
   saveDeps();
@@ -234,17 +508,18 @@ function saveDeps() {
   saveDepartures(depRooms, depLog);
 }
 
+// ── Action log ─────────────────────────────────────────────
 function renderDepLog() {
   const wrap  = document.getElementById('depLogWrap');
   const body  = document.getElementById('depLogBody');
   const badge = document.getElementById('depLogCount');
   const entries = depLog.filter(l => l.action !== 'due');
-  if (!entries.length) { if(wrap) wrap.style.display = 'none'; return; }
-  if(wrap) wrap.style.display = 'block';
+  if (!entries.length) { if (wrap) wrap.style.display = 'none'; return; }
+  if (wrap)  wrap.style.display = 'block';
   if (badge) badge.textContent = entries.length;
   const aLabel = { out:'✓ Checked Out', extended:'↪ Extended', late:'🕐 Late CO' };
   const aCls   = { out:'log-act-co',    extended:'log-act-ext', late:'log-act-late' };
-  if(body) body.innerHTML = entries.map((l, li) => `
+  if (body) body.innerHTML = entries.map((l, li) => `
     <div class="log-row">
       <span class="log-room">${escapeHtml(l.room)}</span>
       <span class="log-name">${escapeHtml(l.name)}</span>
@@ -257,7 +532,10 @@ function renderDepLog() {
 function depUndoLog(li) {
   const entry = depLog[li]; if (!entry) return;
   const r = depRooms[entry.roomIdx];
-  if (r) { r.status = entry.prevStatus || 'due'; r.checkoutAt = ''; r.lateTime = ''; r.extensionNights = 0; }
+  if (r) {
+    r.status = entry.prevStatus || 'due';
+    r.checkoutAt = ''; r.lateTime = ''; r.extensionNights = 0; r.intent = '';
+  }
   depLog.splice(li, 1);
   depRender();
   updateDepBadge();
@@ -273,13 +551,14 @@ function toggleLog() {
   if (icon) icon.textContent = open ? '▸ expand' : '▾ collapse';
 }
 
+// ── Filters ────────────────────────────────────────────────
 function depFilter(f, el) {
   depFilter_ = f;
-  document.querySelectorAll('[data-f]').forEach(c => c.classList.remove('on','due','ext','late','bal','out'));
+  document.querySelectorAll('[data-f]').forEach(c => c.classList.remove('on','due','ext','late','bal','out','pending'));
   const btn = el || document.querySelector(`[data-f="${f}"]`);
   if (btn) {
     btn.classList.add('on');
-    const map = { due:'due', extended:'ext', late:'late', balance:'bal', out:'out' };
+    const map = { due:'due', extended:'ext', late:'late', balance:'bal', out:'out', pending:'pending' };
     if (map[f]) btn.classList.add(map[f]);
   }
   depRender();
@@ -299,8 +578,14 @@ function updateDepBadge() {
   if (el) el.textContent = due || depRooms.length || '0';
 }
 
+// ── Bulk checkout ──────────────────────────────────────────
 function depBulkCheckout() {
-  if (!confirm('Mark ALL due-out rooms as checked out?')) return;
+  const withBalance = depRooms.filter(r => r.status === 'due' && r.balance > 0);
+  if (withBalance.length) {
+    if (!confirm(`${withBalance.length} due-out room(s) have an outstanding balance.\n\nCheck out ALL due-out rooms anyway?`)) return;
+  } else {
+    if (!confirm('Mark ALL due-out rooms as checked out?')) return;
+  }
   const t = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
   depRooms.filter(r => r.status === 'due').forEach(r => {
     const i = depRooms.indexOf(r);
@@ -312,31 +597,36 @@ function depBulkCheckout() {
   saveDeps();
 }
 
+// ── Clear ──────────────────────────────────────────────────
 function clearDep() {
+  if (!confirm('Clear the departure board and start fresh?')) return;
   depRooms = []; depFilter_ = 'all'; depLog = [];
   document.getElementById('depBoard').style.display      = 'none';
   document.getElementById('depUploadCard').style.display = 'block';
   document.getElementById('depInput').value              = '';
   document.getElementById('depDateLabel').textContent    = "Today's departures · Load Opera report to begin";
   const b = document.getElementById('badge-departures'); if (b) b.textContent = '0';
-  ['depPrintBtn','depExportBtn','depViewToggle'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+  ['depPrintBtn','depExportBtn','depViewToggle','depReloadBtn'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.style.display = 'none';
+  });
   saveDeps();
 }
 
+// ── Export ─────────────────────────────────────────────────
 function exportDepSummary() {
   if (!depRooms.length) return;
   const wb   = XLSX.utils.book_new();
-  const data = [['Room','Guest','Arrival','Departure','Nights','Balance AED','Source','Company','Status','Late Time','Ext Nights','Checkout','Notes']];
-  depRooms.forEach(r => data.push([r.roomStr, r.name, r.arrival, r.departure, r.nights, r.balance, r.source, r.company, r.status.toUpperCase(), r.lateTime, r.extensionNights||'', r.checkoutAt, r.note]));
+  const data = [['Room','Guest','Arrival','Departure','Nights','Balance AED','Source','Company','Status','Intent','Late Time','Ext Nights','Checkout At','Notes']];
+  depRooms.forEach(r => data.push([
+    r.roomStr, r.name, r.arrival, r.departure, r.nights, r.balance,
+    r.source, r.company, r.status.toUpperCase(),
+    r.intent ? INTENT_CONFIG[r.intent]?.label || r.intent : '',
+    r.lateTime, r.extensionNights || '', r.checkoutAt, r.note,
+  ]));
   const ws = XLSX.utils.aoa_to_sheet(data);
-  ws['!cols'] = [8,24,12,12,7,12,20,22,12,10,8,10,30].map(w => ({wch:w}));
+  ws['!cols'] = [8,24,12,12,7,12,20,22,12,16,10,8,10,40].map(w => ({wch:w}));
   XLSX.utils.book_append_sheet(wb, ws, 'Departures');
   XLSX.writeFile(wb, 'Departures_' + new Date().toISOString().split('T')[0] + '.xlsx');
-}
-
-// Replace saveDeps() function with:
-function saveDeps() {
-  saveDepartures(depRooms, depLog);
 }
 
 function depPrintList() { window.print(); }

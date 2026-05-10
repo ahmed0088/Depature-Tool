@@ -91,16 +91,21 @@
       <p id="depDateLabel">Today's departures · Load Opera report to begin</p>
     </div>
     <div class="page-hd-actions">
-      <div class="view-toggle" id="depViewToggle" style="display:none;">
-        <button class="vt-btn"     onclick="setDepSize('sm',this)">S</button>
-        <button class="vt-btn on"  onclick="setDepSize('md',this)">M</button>
-        <button class="vt-btn"     onclick="setDepSize('lg',this)">L</button>
-        <button class="vt-btn"     onclick="setDepSize('list',this)">≡</button>
-      </div>
-      <button class="btn mint" onclick="depPrintList()"    style="display:none;" id="depPrintBtn">🖨 Print</button>
-      <button class="btn gold" onclick="exportDepSummary()" style="display:none;" id="depExportBtn">⬇ Export</button>
-      <button class="btn rose" onclick="clearDep()">✕ Clear</button>
-    </div>
+  <div class="view-toggle" id="depViewToggle" style="display:none;">
+    <button class="vt-btn" onclick="setDepSize('sm',this)">S</button>
+    <button class="vt-btn on" onclick="setDepSize('md',this)">M</button>
+    <button class="vt-btn" onclick="setDepSize('lg',this)">L</button>
+    <button class="vt-btn" onclick="setDepSize('list',this)">≡</button>
+  </div>
+   
+  <button class="btn sky" id="depReloadBtn" onclick="openReloadModal()" style="display:none;">
+    🔄 Reload Report
+  </button>
+  
+  <button class="btn mint" onclick="depPrintList()" style="display:none;" id="depPrintBtn">🖨 Print</button>
+  <button class="btn gold" onclick="exportDepSummary()" style="display:none;" id="depExportBtn">⬇ Export</button>
+  <button class="btn rose" onclick="clearDep()">✕ Clear</button>
+</div>
   </div>
   <div class="card" id="depUploadCard">
     <div class="upload-zone">
@@ -639,9 +644,9 @@ async function appInit() {
     const board = document.getElementById('depBoard');
     if (uploadCard) uploadCard.style.display = 'none';
     if (board) board.style.display = 'block';
-    ['depPrintBtn','depExportBtn','depViewToggle'].forEach(id => { 
-      const el = document.getElementById(id); 
-      if (el) el.style.display = ''; 
+    ['depPrintBtn','depExportBtn','depViewToggle','depReloadBtn'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = '';
     });
     const dateLabel = document.getElementById('depDateLabel');
     if (dateLabel) dateLabel.textContent = depRooms.length + ' rooms departing · ' + (depRooms[0]?.departure||'');
@@ -739,5 +744,25 @@ async function appInit() {
 // Start the app
 appInit();
 </script>
+<!-- RELOAD MODAL -->
+<div class="modal-bg" id="depReloadModal">
+  <div class="modal">
+    <h3>🔄 Reload from Opera</h3>
+    <p style="color:var(--text2); margin-bottom:12px;">Paste the latest Opera Departures report (Delimited Data):</p>
+    
+    <textarea id="depReloadInput" rows="12" 
+      style="width:100%; font-family:var(--mono); font-size:0.75rem; padding:12px;"
+      placeholder="Paste full report here..."></textarea>
+    
+    <div class="error-box" id="depReloadError">
+      <span id="depReloadErrorMsg"></span>
+    </div>
+
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn" onclick="closeReloadModal()">Cancel</button>
+      <button class="btn gold" onclick="processDepReload()">Reload & Merge</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
