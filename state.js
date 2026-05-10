@@ -52,6 +52,7 @@ let CL_STEPS = [
 // ── Shifts ────────────────────────────────────────────────
 let activeShift = 'morning';
 
+// Define shift structures
 const SHIFTS = {
   morning:   { label:'Morning Shift',   time:'07:00 – 15:00', color:'#f0a43a', tasks:[], done:[], resetAt:'' },
   afternoon: { label:'Afternoon Shift', time:'15:00 – 23:00', color:'#5ab4e8', tasks:[], done:[], resetAt:'' },
@@ -59,6 +60,7 @@ const SHIFTS = {
   night:     { label:'Night Shift',     time:'23:00 – 07:00', color:'#3ecf8e', tasks:[], done:[], resetAt:'' },
 };
 
+// Default tasks for each shift
 const DEFAULT_TASKS = {
   morning: [
     { id:'m1', name:'Check overnight log from night shift',   hint:'Review all notes and handover items.' },
@@ -88,6 +90,20 @@ const DEFAULT_TASKS = {
     { id:'n5', name:'Security rounds log',                    hint:'Complete and sign all security round docs.' },
   ],
 };
+
+// Initialize shifts with default tasks
+function initShiftsDefault() {
+  Object.keys(SHIFTS).forEach(k => {
+    if (!SHIFTS[k].tasks || SHIFTS[k].tasks.length === 0) {
+      SHIFTS[k].tasks = DEFAULT_TASKS[k] ? DEFAULT_TASKS[k].map(t => ({...t})) : [];
+      SHIFTS[k].done = [];
+      SHIFTS[k].resetAt = '';
+    }
+  });
+}
+
+// Call initialization
+initShiftsDefault();
 
 // ── Feedback ──────────────────────────────────────────────
 let feedbackLog = [];
