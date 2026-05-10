@@ -60,12 +60,13 @@ function renderShift(key) {
 }
 
 function stItemHTML(key, t, isDone, idx) {
+  const hintHtml = t.hint ? `<div class="st-hint">${escapeHtmlSimple(t.hint)}</div>` : '';
   return `<div class="st-item${isDone ? ' done' : ''}" draggable="true" data-shift="${key}" data-task-id="${t.id}" data-task-idx="${idx}">
     <div class="drag-handle" style="cursor:grab; color:var(--text3); font-size:0.7rem;">⋮⋮</div>
     <div class="st-check" onclick="stToggle('${key}','${t.id}')"></div>
     <div class="st-text">
       <div class="st-name">${escapeHtmlSimple(t.name)}</div>
-      ${t.hint ? `<div class="st-hint">${escapeHtmlSimple(t.hint)}</div>` : ''}
+      ${hintHtml}
     </div>
     <div class="st-actions">
       <button class="cl-step-btn edit-btn" onclick="openEditTask('${key}','${t.id}')">✏️</button>
@@ -244,27 +245,17 @@ function initShifts() {
   }
 }
 
-// Call init when script loads
-setTimeout(() => {
-  if (document.getElementById('shiftContent')) {
-    initShifts();
-  }
-}, 100);
-
+// Auto-initialize when the DOM is ready
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', function() {
-    if (typeof initShifts === 'function') {
-      initShifts();
-    } else if (typeof renderShift === 'function') {
-      renderShift('morning');
+    if (document.getElementById('shiftContent')) {
+      setTimeout(function() { initShifts(); }, 50);
     }
   });
 } else {
   setTimeout(function() {
-    if (typeof initShifts === 'function') {
+    if (document.getElementById('shiftContent')) {
       initShifts();
-    } else if (typeof renderShift === 'function') {
-      renderShift('morning');
     }
-  }, 100);
+  }, 50);
 }
