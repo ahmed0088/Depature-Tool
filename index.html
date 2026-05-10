@@ -602,68 +602,99 @@ async function saveSettings(patch) {
 }
 
 async function appInit() {
+  console.log('App initializing...');
+  
   // 1 — Init Firebase
   try {
     const app = firebase.initializeApp(FIREBASE_CONFIG);
     dbInit(app);
+    console.log('Firebase initialized');
   } catch(e) {
     console.warn('Firebase init failed — running offline:', e);
     updateConnectionUI(false);
   }
 
-  // 2 — Load all data from Firebase
+  // 2 — Initialize default data structures
+  initShiftsDefault();
+  
+  // 3 — Load all data from Firebase
   const data = await loadAll();
+  console.log('Data loaded:', data);
 
-  // 3 — Apply checklist
+  // 4 — Apply checklist
   if (data.checklist) {
     if (data.checklist.steps && data.checklist.steps.length) CL_STEPS = data.checklist.steps;
     if (data.checklist.done)    data.checklist.done.forEach(i    => clState.done.add(i));
     if (data.checklist.skipped) data.checklist.skipped.forEach(i => clState.skipped.add(i));
   }
+  clRender2();
 
-  // 4 — Apply shifts
+  // 5 — Apply shifts
   if (data.shifts && data.shifts.data) {
     Object.keys(SHIFTS).forEach(k => {
       const saved = data.shifts.data[k];
       if (saved) {
-        SHIFTS[k].tasks   = saved.tasks && saved.tasks.length ? saved.tasks : DEFAULT_TASKS[k].map(t=>({...t}));
+        SHIFTS[k].tasks   = saved.tasks && saved.tasks.length ? saved.tasks : DEFAULT_TASKS[k]?.map(t=>({...t})) || [];
         SHIFTS[k].done    = saved.done    || [];
         SHIFTS[k].resetAt = saved.resetAt || '';
       } else {
-        SHIFTS[k].tasks = DEFAULT_TASKS[k].map(t=>({...t}));
+        SHIFTS[k].tasks = DEFAULT_TASKS[k]?.map(t=>({...t})) || [];
+        SHIFTS[k].done = [];
+        SHIFTS[k].resetAt = '';
       }
     });
   } else {
-    initShifts();
+    // Initialize with default tasks
+    Object.keys(SHIFTS).forEach(k => {
+      SHIFTS[k].tasks = DEFAULT_TASKS[k]?.map(t=>({...t})) || [];
+      SHIFTS[k].done = [];
+      SHIFTS[k].resetAt = '';
+    });
   }
+  
+  // Render shifts
+  renderShift('morning');
+  Object.keys(SHIFTS).forEach(k => updateShiftBadge(k));
 
-  // 5 — Apply departures
+  // 6 — Apply departures
   if (data.departures && data.departures.rooms && data.departures.rooms.length) {
     depRooms = data.departures.rooms;
     depLog   = data.departures.log || [];
     document.getElementById('depUploadCard').style.display = 'none';
     document.getElementById('depBoard').style.display      = 'block';
-    ['depPrintBtn','depExportBtn','depViewToggle','depReloadBtn'].forEach(id => { const el=document.getElementById(id); if(el) el.style.display = ''; });
+    ['depPrintBtn','depExportBtn','depViewToggle','depReloadBtn'].forEach(id => { 
+      const el = document.getElementById(id); 
+      if(el) el.style.display = ''; 
+    });
     document.getElementById('depDateLabel').textContent = depRooms.length + ' rooms departing · ' + (depRooms[0]?.departure||'');
-    depRender(); updateDepBadge();
+    depRender(); 
+    updateDepBadge();
+  } else {
+    // Show upload card if no departures
+    document.getElementById('depUploadCard').style.display = 'block';
+    document.getElementById('depBoard').style.display = 'none';
   }
 
-  // 6 — Apply arrivals
+  // 7 — Apply arrivals
   if (data.arrivals && data.arrivals.guests && data.arrivals.guests.length) {
     arrGuests = data.arrivals.guests;
-    arrRender();
+  } else {
+    arrGuests = [];
   }
+  arrRender();
 
-  // 7 — Apply purpose
+  // 8 — Apply purpose
   if (data.purpose && data.purpose.guests && data.purpose.guests.length) {
     purposeGuests = data.purpose.guests;
-    purposeRender();
+  } else {
+    purposeGuests = [];
   }
+  purposeRender();
 
-  // 8 — Apply feedback
+  // 9 — Apply feedback
   if (data.feedback && data.feedback.log) feedbackLog = data.feedback.log;
 
-  // 9 — Apply settings
+  // 10 — Apply settings
   if (data.settings) {
     if (data.settings.theme && data.settings.theme === 'light') {
       document.documentElement.setAttribute('data-theme', 'light');
@@ -674,29 +705,39 @@ async function appInit() {
     }
   }
 
-  // 10 — Real-time listeners (auto-refresh when colleague makes changes)
+  // 11 — Real-time listeners (auto-refresh when colleague makes changes)
   listenDepartures(snap => {
     if (!snap || !snap.rooms) return;
-    depRooms = snap.rooms; depLog = snap.log || [];
+    depRooms = snap.rooms; 
+    depLog = snap.log || [];
     if (depRooms.length) {
       document.getElementById('depUploadCard').style.display = 'none';
       document.getElementById('depBoard').style.display      = 'block';
-      ['depPrintBtn','depExportBtn','depViewToggle','depReloadBtn'].forEach(id => { const el = document.getElementById(id); if(el) el.style.display = ''; });
+      ['depPrintBtn','depExportBtn','depViewToggle','depReloadBtn'].forEach(id => { 
+        const el = document.getElementById(id); 
+        if(el) el.style.display = ''; 
+      });
     }
-    depRender(); updateDepBadge();
+    depRender(); 
+    updateDepBadge();
   });
+  
   listenArrivals(snap => {
     if (!snap || !snap.guests) return;
-    arrGuests = snap.guests; arrRender();
+    arrGuests = snap.guests; 
+    arrRender();
   });
+  
   listenChecklist(snap => {
     if (!snap) return;
     if (snap.steps && snap.steps.length) CL_STEPS = snap.steps;
-    clState.done.clear(); clState.skipped.clear();
+    clState.done.clear(); 
+    clState.skipped.clear();
     if (snap.done)    snap.done.forEach(i    => clState.done.add(i));
     if (snap.skipped) snap.skipped.forEach(i => clState.skipped.add(i));
     clRender2();
   });
+  
   listenShifts(snap => {
     if (!snap || !snap.data) return;
     Object.keys(SHIFTS).forEach(k => {
@@ -710,18 +751,28 @@ async function appInit() {
     Object.keys(SHIFTS).forEach(k => updateShiftBadge(k));
   });
 
-  // 11 — Render UI
-  clRender2();
-  arrRender();
-  purposeRender();
-  renderShift('morning');
-  Object.keys(SHIFTS).forEach(k => updateShiftBadge(k));
+  // 12 — Update clock and UI
   updateClock();
   setInterval(updateClock, 30000);
+  
+  console.log('App initialization complete');
 }
 
-// Start
-appInit();
+// Make sure helper functions are available
+function initShiftsDefault() {
+  Object.keys(SHIFTS).forEach(k => {
+    if (!SHIFTS[k].tasks || SHIFTS[k].tasks.length === 0) {
+      SHIFTS[k].tasks = DEFAULT_TASKS[k] ? DEFAULT_TASKS[k].map(t => ({...t})) : [];
+      SHIFTS[k].done = [];
+      SHIFTS[k].resetAt = '';
+    }
+  });
+}
+
+// Start the app
+setTimeout(() => {
+  appInit();
+}, 100);
 </script>
 </body>
 </html>
