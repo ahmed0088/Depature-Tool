@@ -11,6 +11,50 @@ function updateClock() {
   if (t('cl-date-lbl')) t('cl-date-lbl').textContent = now.toLocaleDateString('en-GB',  { weekday:'long', day:'numeric', month:'long', year:'numeric' });
 }
 
+// Add this to the end of utils.js if not already there
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/[&<>]/g, function(m) {
+    if (m === '&') return '&amp;';
+    if (m === '<') return '&lt;';
+    if (m === '>') return '&gt;';
+    return m;
+  });
+}
+
+// Make sure cleanSource is defined
+function cleanSource(agent, company, source) {
+  let src = agent || company || source || '';
+  src = src
+    .replace(/BOOKING\.COM BV.*$/i, 'Booking.com')
+    .replace(/AGODA COMPANY PTE LTD/i, 'Agoda')
+    .replace(/EXPEDIA\.COM.*/i, 'Expedia')
+    .replace(/\s*\(.*?\)/g, '')
+    .trim();
+  return src || 'Walk-in';
+}
+
+// Make sure parseName is defined
+function parseName(raw) {
+  if (!raw) return '—';
+  if (raw.includes(',')) {
+    const parts = raw.split(',').map(p => p.trim())
+      .filter(p => p && !/^(Mr\.?|Mrs\.?|Ms\.?|Miss|MR|MRS|MS|Dr\.?)$/i.test(p));
+    return parts.slice(0, 2).reverse().join(' ').trim() || raw.trim();
+  }
+  return raw.trim();
+}
+
+// Make sure cleanName is defined
+function cleanName(raw) {
+  if (!raw) return '';
+  raw = raw.replace(/,?\s*(Mr\.|Mrs\.|Ms\.|Miss|MR|MRS|DR\.?)\.?\s*$/i, '').trim();
+  const parts = raw.split(',').map(p => p.trim()).filter(p => p);
+  if (parts.length >= 2) return (parts[1] + ' ' + parts[0]).trim().toUpperCase();
+  return raw.toUpperCase();
+}
+
 // ── Panel switcher ────────────────────────────────────────
 function showPanel(name) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
