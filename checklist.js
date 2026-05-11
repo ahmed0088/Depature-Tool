@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════════════════
 //  checklist.js  —  Night Run Checklist (editable steps)
+//  + ↑↓ reorder buttons in edit mode
 // ═══════════════════════════════════════════════════════════
 
 function clToggleEdit() {
@@ -29,6 +30,24 @@ function clDeleteStep(id) {
   CL_STEPS = CL_STEPS.filter(s => s.id !== id);
   clState.done.delete(id);
   clState.skipped.delete(id);
+  clRender2();
+  saveChecklist(CL_STEPS, clState.done, clState.skipped);
+}
+
+// ── Move a checklist step up or down within its phase ─────
+function clMoveStep(id, dir) {
+  const step  = CL_STEPS.find(s => s.id === id);
+  if (!step) return;
+  // Work within same phase only
+  const phaseSteps = CL_STEPS.filter(s => s.phase === step.phase);
+  const allIdx     = phaseSteps.map(s => CL_STEPS.indexOf(s));
+  const localIdx   = phaseSteps.findIndex(s => s.id === id);
+  const toLocal    = localIdx + dir;
+  if (toLocal < 0 || toLocal >= phaseSteps.length) return;
+  // Swap in the master array
+  const aIdx = allIdx[localIdx];
+  const bIdx = allIdx[toLocal];
+  [CL_STEPS[aIdx], CL_STEPS[bIdx]] = [CL_STEPS[bIdx], CL_STEPS[aIdx]];
   clRender2();
   saveChecklist(CL_STEPS, clState.done, clState.skipped);
 }
@@ -72,11 +91,17 @@ function clRender2() {
       <div class="cl-phase-lbl">${ph.label}</div>
       <div class="cl-phase-line"></div>
     </div>`;
-    steps.forEach(s => {
-      const done = clState.done.has(s.id);
-      const skip = clState.skipped.has(s.id);
-      html += `<div class="cl-step${done?' done':''}${skip?' skipped':''}">
-        <div class="cl-step-main" onclick="clToggle2(${s.id})">
+    steps.forEach((s, i) => {
+      const done    = clState.done.has(s.id);
+      const skip    = clState.skipped.has(s.id);
+      const isFirst = i === 0;
+      const isLast  = i === steps.length - 1;
+      html += `<div class="cl-step${done?' done':''}${skip?' skipped':''}"
+                    draggable="${clEditMode}"
+                    data-cl-id="${s.id}"
+                    data-cl-phase="${s.phase}">
+        <div class="cl-step-main" onclick="${clEditMode ? '' : `clToggle2(${s.id})`}">
+          ${clEditMode ? `<div class="st-drag-handle" title="Drag to reorder">⠿</div>` : ''}
           <div class="cl-check">✓</div>
           <div class="cl-content">
             <div class="cl-num">STEP ${s.id} ·
@@ -88,7 +113,11 @@ function clRender2() {
           </div>
           <div class="cl-step-btns" onclick="event.stopPropagation()">
             ${clEditMode
-              ? `<button class="cl-step-btn edit-btn" onclick="openEditStep(${s.id})">✏️</button>
+              ? `<div class="st-move-btns">
+                   <button class="cl-step-btn move-btn" onclick="clMoveStep(${s.id},-1)" ${isFirst?'disabled':''} title="Move up">↑</button>
+                   <button class="cl-step-btn move-btn" onclick="clMoveStep(${s.id}, 1)" ${isLast ?'disabled':''} title="Move down">↓</button>
+                 </div>
+                 <button class="cl-step-btn edit-btn" onclick="openEditStep(${s.id})">✏️</button>
                  <button class="cl-step-btn del"      onclick="clDeleteStep(${s.id})">✕</button>`
               : `<button class="cl-step-btn"          onclick="clSkip2(${s.id})">${skip ? '↩ Show' : 'Skip'}</button>`}
           </div>
@@ -99,6 +128,51 @@ function clRender2() {
   const el = document.getElementById('clStepList2');
   if (el) el.innerHTML = html;
   clUpdateProgress();
+  if (clEditMode) clInitDragSort();
+}
+
+// ── Drag-and-drop for checklist steps (within same phase) ─
+let _clDragSrc = null;
+
+function clInitDragSort() {
+  const list = document.getElementById('clStepList2');
+  if (!list) return;
+  list.querySelectorAll('.cl-step[draggable="true"]').forEach(item => {
+    item.addEventListener('dragstart', e => {
+      _clDragSrc = item;
+      item.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    item.addEventListener('dragend', () => {
+      item.classList.remove('dragging');
+      list.querySelectorAll('.cl-step').forEach(i => i.classList.remove('drag-over'));
+      _clDragSrc = null;
+    });
+    item.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (_clDragSrc && _clDragSrc !== item) {
+        list.querySelectorAll('.cl-step').forEach(i => i.classList.remove('drag-over'));
+        item.classList.add('drag-over');
+      }
+    });
+    item.addEventListener('drop', e => {
+      e.preventDefault();
+      if (!_clDragSrc || _clDragSrc === item) return;
+      const srcId    = parseInt(_clDragSrc.dataset.clId);
+      const dstId    = parseInt(item.dataset.clId);
+      const srcStep  = CL_STEPS.find(s => s.id === srcId);
+      const dstStep  = CL_STEPS.find(s => s.id === dstId);
+      // Only allow drop within same phase
+      if (!srcStep || !dstStep || srcStep.phase !== dstStep.phase) return;
+      const srcIdx = CL_STEPS.indexOf(srcStep);
+      const dstIdx = CL_STEPS.indexOf(dstStep);
+      const [moved] = CL_STEPS.splice(srcIdx, 1);
+      CL_STEPS.splice(dstIdx, 0, moved);
+      clRender2();
+      saveChecklist(CL_STEPS, clState.done, clState.skipped);
+    });
+  });
 }
 
 function clToggle2(id) {

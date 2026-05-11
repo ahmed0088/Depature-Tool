@@ -167,3 +167,13 @@ async function importAllData(file) {
     reader.readAsText(file);
   });
 }
+
+// ── Checklist ─────────────────────────────────────────────
+async function saveChecklist(steps, done, skipped) {
+  await fbSet('checklist', {
+    steps,
+    done:    [...done],
+    skipped: [...skipped],
+    updatedAt: new Date().toISOString()
+  });
+}

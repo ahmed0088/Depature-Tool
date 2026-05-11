@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════════════════
 //  shifts.js  —  Shift Tasks (Morning / Afternoon / Mid / Night)
+//  + drag-to-reorder & ↑↓ buttons
 // ═══════════════════════════════════════════════════════════
 
 function switchShift(key, el) {
@@ -35,8 +36,8 @@ function renderShift(key) {
         <div class="prog-fill" style="background:${shift.color};width:${pct}%"></div>
       </div>
     </div>
-    <div id="stList-${key}">
-      ${shift.tasks.map(t => stItemHTML(key, t, done.has(t.id))).join('')}
+    <div id="stList-${key}" class="st-sortable">
+      ${shift.tasks.map((t, i) => stItemHTML(key, t, done.has(t.id), i, total)).join('')}
     </div>
     <div class="st-add-wrap">
       <input class="st-add-in"   id="stIn-${key}"   placeholder="Add new task…"       onkeydown="if(event.key==='Enter')stAddTask('${key}')"/>
@@ -47,20 +48,82 @@ function renderShift(key) {
 
   document.getElementById('shiftContent').innerHTML = '<div class="shift-panel active">' + html + '</div>';
   updateShiftBadge(key);
+  initDragSort(key);
 }
 
-function stItemHTML(key, t, isDone) {
-  return `<div class="st-item${isDone ? ' done' : ''}">
+function stItemHTML(key, t, isDone, index, total) {
+  const isFirst = index === 0;
+  const isLast  = index === total - 1;
+  return `<div class="st-item${isDone ? ' done' : ''}" draggable="true" data-id="${t.id}" data-key="${key}">
+    <div class="st-drag-handle" title="Drag to reorder">⠿</div>
     <div class="st-check" onclick="stToggle('${key}','${t.id}')"></div>
     <div class="st-text">
       <div class="st-name">${t.name}</div>
       ${t.hint ? `<div class="st-hint">${t.hint}</div>` : ''}
     </div>
     <div class="st-actions">
+      <div class="st-move-btns">
+        <button class="cl-step-btn move-btn" onclick="stMove('${key}','${t.id}',-1)" ${isFirst ? 'disabled' : ''} title="Move up">↑</button>
+        <button class="cl-step-btn move-btn" onclick="stMove('${key}','${t.id}', 1)" ${isLast  ? 'disabled' : ''} title="Move down">↓</button>
+      </div>
       <button class="cl-step-btn edit-btn" onclick="openEditTask('${key}','${t.id}')">✏️</button>
       <button class="cl-step-btn del"      onclick="stDelete('${key}','${t.id}')">✕</button>
     </div>
   </div>`;
+}
+
+// ── Move task up or down by index ─────────────────────────
+function stMove(key, id, dir) {
+  const tasks = SHIFTS[key].tasks;
+  const idx   = tasks.findIndex(t => t.id === id);
+  const to    = idx + dir;
+  if (to < 0 || to >= tasks.length) return;
+  [tasks[idx], tasks[to]] = [tasks[to], tasks[idx]];
+  renderShift(key);
+  saveShifts(SHIFTS);
+}
+
+// ── Drag-and-drop sort ────────────────────────────────────
+let _dragSrc = null;
+
+function initDragSort(key) {
+  const list = document.getElementById('stList-' + key);
+  if (!list) return;
+
+  list.querySelectorAll('.st-item[draggable]').forEach(item => {
+    item.addEventListener('dragstart', e => {
+      _dragSrc = item;
+      item.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    item.addEventListener('dragend', () => {
+      item.classList.remove('dragging');
+      list.querySelectorAll('.st-item').forEach(i => i.classList.remove('drag-over'));
+      _dragSrc = null;
+    });
+    item.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (_dragSrc && _dragSrc !== item) {
+        list.querySelectorAll('.st-item').forEach(i => i.classList.remove('drag-over'));
+        item.classList.add('drag-over');
+      }
+    });
+    item.addEventListener('drop', e => {
+      e.preventDefault();
+      if (!_dragSrc || _dragSrc === item) return;
+      const srcId  = _dragSrc.dataset.id;
+      const dstId  = item.dataset.id;
+      const tasks  = SHIFTS[key].tasks;
+      const srcIdx = tasks.findIndex(t => t.id === srcId);
+      const dstIdx = tasks.findIndex(t => t.id === dstId);
+      if (srcIdx < 0 || dstIdx < 0) return;
+      const [moved] = tasks.splice(srcIdx, 1);
+      tasks.splice(dstIdx, 0, moved);
+      renderShift(key);
+      saveShifts(SHIFTS);
+    });
+  });
 }
 
 function stToggle(key, id) {

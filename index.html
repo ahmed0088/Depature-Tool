@@ -598,6 +598,92 @@ async function saveSettings(patch) {
   await fbSet('settings', { ...current, ...patch, updatedAt: new Date().toISOString() });
 }
 
+// ── Feedback modal ────────────────────────────────────────
+function openFeedback() {
+  document.getElementById('feedbackModal').classList.add('open');
+}
+function closeFeedbackModal() {
+  document.getElementById('feedbackModal').classList.remove('open');
+}
+async function saveFeedbackItem() {
+  const type     = document.getElementById('fb-type').value;
+  const text     = document.getElementById('fb-text').value.trim();
+  const priority = document.getElementById('fb-priority').value;
+  const name     = document.getElementById('fb-name').value.trim();
+  if (!text) { showToast('Please describe the issue or request.', 'err'); return; }
+  const item = { type, text, priority, name, at: new Date().toISOString() };
+  feedbackLog.unshift(item);
+  await saveFeedback(feedbackLog);
+  document.getElementById('fb-text').value = '';
+  document.getElementById('fb-name').value = '';
+  closeFeedbackModal();
+  showToast('Feedback submitted ✓ Thank you!', 'ok');
+}
+
+// ── Clear arrivals / purpose ─────────────────────────────
+function clearArrivals() {
+  if (!confirm('Clear all arrivals data?')) return;
+  arrGuests = []; arrRender();
+  saveArrivals(arrGuests);
+  showToast('Arrivals cleared', 'info');
+}
+function clearPurpose() {
+  if (!confirm('Clear purpose of stay data?')) return;
+  purposeGuests = []; purposeRender();
+  savePurpose(purposeGuests);
+  showToast('Purpose of Stay cleared', 'info');
+}
+
+// ── Sync arrivals → purpose of stay ─────────────────────
+function syncFromArrivals() {
+  if (!arrGuests.length) { showToast('No arrivals loaded yet.', 'err'); return; }
+  if (purposeGuests.length && !confirm('This will replace current Purpose of Stay data. Continue?')) return;
+  purposeGuests = arrGuests.map(g => ({...g}));
+  purposeRender();
+  savePurpose(purposeGuests);
+  showToast('Synced ' + purposeGuests.length + ' guests from Arrivals ✓', 'ok');
+}
+
+// ── Edit purpose title ───────────────────────────────────
+function editPurposeTitle() {
+  const el  = document.getElementById('purposeTitle');
+  const cur = el.textContent;
+  const n   = prompt('Report title:', cur);
+  if (n && n.trim()) {
+    _purposeTitle = n.trim();
+    el.textContent = _purposeTitle;
+  }
+}
+
+// ── Departure log toggle ─────────────────────────────────
+let _logOpen = true;
+function toggleLog() {
+  _logOpen = !_logOpen;
+  const body = document.getElementById('depLogBody');
+  const icon = document.getElementById('depLogToggleIcon');
+  if (body) body.style.display = _logOpen ? 'block' : 'none';
+  if (icon) icon.textContent   = _logOpen ? '▾ collapse' : '▸ expand';
+}
+
+// ── Nationality / Rent / Audit / Immigration clear ───────
+function clearNat()   { document.getElementById('natInput').value=''; document.getElementById('natResults').style.display='none'; document.getElementById('natError').classList.remove('show'); }
+function clearRent()  { ['rentInput1','rentInput2'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';}); const r=document.getElementById('rentResults');if(r)r.style.display='none'; }
+function clearAudit() { ['naOperaInput','naExcelInput'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';}); const s=document.getElementById('naCompareSection');if(s)s.style.display='none'; }
+function clearImmig() { const p=document.getElementById('immigPasteInput2');if(p)p.value=''; const r=document.getElementById('immigResults2');if(r)r.style.display='none'; const e2=document.getElementById('immigError2');if(e2)e2.classList.remove('show'); }
+
+// ── ESC key closes any open modal ───────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  document.querySelectorAll('.modal-bg.open').forEach(m => m.classList.remove('open'));
+});
+
+// ── Click backdrop to close modal ───────────────────────
+document.querySelectorAll('.modal-bg').forEach(bg => {
+  bg.addEventListener('click', e => {
+    if (e.target === bg) bg.classList.remove('open');
+  });
+});
+
 async function appInit() {
   // 1 — Init Firebase
   try {
