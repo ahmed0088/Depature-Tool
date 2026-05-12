@@ -539,15 +539,28 @@
 </div>
 
 <div class="modal-bg" id="editStepModal">
-  <div class="modal">
+  <div class="modal" style="max-width:540px;">
     <h3>✏️ Edit Checklist Step</h3>
     <div class="modal-fields">
       <input type="hidden" id="es-id"/>
       <div class="mf"><label>Step Name</label><input id="es-name"/></div>
-      <div class="mf"><label>Hint</label><textarea id="es-hint" style="min-height:56px;"></textarea></div>
+      <div class="mf"><label>Hint / Description</label><textarea id="es-hint" style="min-height:56px;"></textarea></div>
       <div class="two-col">
         <div class="mf"><label>Phase</label><select id="es-phase"><option value="pre">Before Run</option><option value="run">Night Run</option><option value="post">After Run</option></select></div>
         <div class="mf"><label>Tag</label><select id="es-tag"><option value="check">Check</option><option value="save">Save</option><option value="scan">Scan</option><option value="charge">Charge</option><option value="run">Run</option></select></div>
+      </div>
+      <div class="mf">
+        <label>📷 Reference Photos</label>
+        <div class="cl-photo-grid" id="es-photos">
+          <div style="font-family:var(--mono);font-size:0.63rem;color:var(--text3);padding:6px 0;">No photos attached yet.</div>
+        </div>
+        <label class="btn sky sm" style="cursor:pointer;margin-top:8px;display:inline-flex;align-items:center;gap:5px;">
+          📷 Add Photo(s)
+          <input type="file" accept="image/*" multiple style="display:none"
+            onchange="clHandlePhotoUpload(event, parseInt(document.getElementById('es-id').value))"/>
+        </label>
+        <span style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);margin-left:8px;">PNG, JPG, WEBP · auto-compressed</span>
+      </div>
       </div>
     </div>
     <div class="modal-actions"><button class="btn" onclick="closeEditStep()">Cancel</button><button class="btn gold" onclick="saveEditStep()">Save</button></div>
@@ -675,6 +688,7 @@ function clearImmig() { const p=document.getElementById('immigPasteInput2');if(p
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
   document.querySelectorAll('.modal-bg.open').forEach(m => m.classList.remove('open'));
+  clCloseLightbox();
 });
 
 // ── Click backdrop to close modal ───────────────────────
@@ -706,8 +720,11 @@ async function appInit() {
       CL_STEPS.length = 0;
       data.checklist.steps.forEach(s => CL_STEPS.push(s));
     }
-    if (data.checklist.done)    data.checklist.done.forEach(i    => clState.done.add(i));
-    if (data.checklist.skipped) data.checklist.skipped.forEach(i => clState.skipped.add(i));
+    if (data.checklist.done)      data.checklist.done.forEach(i    => clState.done.add(i));
+    if (data.checklist.skipped)   data.checklist.skipped.forEach(i => clState.skipped.add(i));
+    if (data.checklist.photos)    clPhotos    = data.checklist.photos;
+    if (data.checklist.notes)     clNotes     = data.checklist.notes;
+    if (data.checklist.doneTimes) clDoneTimes = data.checklist.doneTimes;
   }
 
   // 4 — Apply shifts
@@ -797,8 +814,11 @@ async function appInit() {
     }
     clState.done.clear(); 
     clState.skipped.clear();
-    if (snap.done)    snap.done.forEach(i    => clState.done.add(i));
-    if (snap.skipped) snap.skipped.forEach(i => clState.skipped.add(i));
+    if (snap.done)      snap.done.forEach(i    => clState.done.add(i));
+    if (snap.skipped)   snap.skipped.forEach(i => clState.skipped.add(i));
+    if (snap.photos)    clPhotos    = snap.photos;
+    if (snap.notes)     clNotes     = snap.notes;
+    if (snap.doneTimes) clDoneTimes = snap.doneTimes;
     clRender2();
   });
   
@@ -849,6 +869,19 @@ appInit();
       <button class="btn gold" onclick="processDepReload()">Reload & Merge</button>
     </div>
   </div>
+</div>
+<!-- ════════ PHOTO LIGHTBOX ════════ -->
+<div id="clLightbox" class="cl-lightbox">
+  <div class="cl-lightbox-bg" onclick="clCloseLightbox()"></div>
+  <div class="cl-lightbox-box">
+    <button class="cl-lb-close" onclick="clCloseLightbox()">✕</button>
+    <button class="cl-lb-nav" id="clLbPrev">‹</button>
+    <div class="cl-lightbox-img-wrap">
+      <img id="clLightboxImg" src="" alt="Step reference photo"/>
+    </div>
+    <button class="cl-lb-nav" id="clLbNext">›</button>
+  </div>
+  <div class="cl-lightbox-caption" id="clLightboxCaption"></div>
 </div>
 </body>
 </html>

@@ -169,11 +169,14 @@ async function importAllData(file) {
 }
 
 // ── Checklist ─────────────────────────────────────────────
-async function saveChecklist(steps, done, skipped) {
+async function saveChecklist(steps, done, skipped, photos, notes, doneTimes) {
   await fbSet('checklist', {
     steps,
-    done:    [...done],
-    skipped: [...skipped],
+    done:      [...done],
+    skipped:   [...skipped],
+    photos:    photos    || {},
+    notes:     notes     || {},
+    doneTimes: doneTimes || {},
     updatedAt: new Date().toISOString()
   });
 }

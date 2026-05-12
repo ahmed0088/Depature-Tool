@@ -1,7 +1,19 @@
 // ═══════════════════════════════════════════════════════════
 //  checklist.js  —  Night Run Checklist (editable steps)
 //  + ↑↓ reorder buttons in edit mode
+//  + 📷 photo attachments per step (base64, synced to Firebase)
+//  + 📝 per-step notes
+//  + ⏱ completion timestamps
 // ═══════════════════════════════════════════════════════════
+
+// ── Photo store: { stepId: [ { data: base64, name: string, ts: iso } ] }
+let clPhotos = {};
+
+// ── Per-step notes: { stepId: string }
+let clNotes = {};
+
+// ── Completion timestamps: { stepId: iso }
+let clDoneTimes = {};
 
 function clToggleEdit() {
   clEditMode = !clEditMode;
@@ -22,7 +34,7 @@ function clAddStep() {
   document.getElementById('clNewName').value = '';
   document.getElementById('clNewHint').value = '';
   clRender2();
-  saveChecklist(CL_STEPS, clState.done, clState.skipped);
+  clSaveAll();
 }
 
 function clDeleteStep(id) {
@@ -30,26 +42,27 @@ function clDeleteStep(id) {
   CL_STEPS = CL_STEPS.filter(s => s.id !== id);
   clState.done.delete(id);
   clState.skipped.delete(id);
+  delete clPhotos[id];
+  delete clNotes[id];
+  delete clDoneTimes[id];
   clRender2();
-  saveChecklist(CL_STEPS, clState.done, clState.skipped);
+  clSaveAll();
 }
 
 // ── Move a checklist step up or down within its phase ─────
 function clMoveStep(id, dir) {
   const step  = CL_STEPS.find(s => s.id === id);
   if (!step) return;
-  // Work within same phase only
   const phaseSteps = CL_STEPS.filter(s => s.phase === step.phase);
   const allIdx     = phaseSteps.map(s => CL_STEPS.indexOf(s));
   const localIdx   = phaseSteps.findIndex(s => s.id === id);
   const toLocal    = localIdx + dir;
   if (toLocal < 0 || toLocal >= phaseSteps.length) return;
-  // Swap in the master array
   const aIdx = allIdx[localIdx];
   const bIdx = allIdx[toLocal];
   [CL_STEPS[aIdx], CL_STEPS[bIdx]] = [CL_STEPS[bIdx], CL_STEPS[aIdx]];
   clRender2();
-  saveChecklist(CL_STEPS, clState.done, clState.skipped);
+  clSaveAll();
 }
 
 function openEditStep(id) {
@@ -59,6 +72,7 @@ function openEditStep(id) {
   document.getElementById('es-hint').value  = s.hint  || '';
   document.getElementById('es-phase').value = s.phase;
   document.getElementById('es-tag').value   = s.tag;
+  _renderModalPhotos(id);
   document.getElementById('editStepModal').classList.add('open');
 }
 function closeEditStep() { document.getElementById('editStepModal').classList.remove('open'); }
@@ -72,8 +86,127 @@ function saveEditStep() {
   s.tag   = document.getElementById('es-tag').value;
   closeEditStep();
   clRender2();
-  saveChecklist(CL_STEPS, clState.done, clState.skipped);
+  clSaveAll();
 }
+
+// ── Unified save (steps + done + skipped + photos + notes + timestamps)
+function clSaveAll() {
+  saveChecklist(CL_STEPS, clState.done, clState.skipped, clPhotos, clNotes, clDoneTimes);
+}
+
+// ════════════════════════════════════════════════════════════
+//  PHOTO ATTACHMENT FEATURE
+// ════════════════════════════════════════════════════════════
+
+function clHandlePhotoUpload(evt, stepId) {
+  const files = Array.from(evt.target.files);
+  if (!files.length) return;
+  if (!clPhotos[stepId]) clPhotos[stepId] = [];
+  let loaded = 0;
+  files.forEach(file => {
+    if (!file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      _compressImage(e.target.result, 1200, 0.82, compressed => {
+        clPhotos[stepId].push({ data: compressed, name: file.name, ts: new Date().toISOString() });
+        loaded++;
+        if (loaded === files.length) {
+          _renderModalPhotos(stepId);
+          clRender2();
+          clSaveAll();
+          showToast('Photo added ✓', 'ok');
+        }
+      });
+    };
+    reader.readAsDataURL(file);
+  });
+  evt.target.value = '';
+}
+
+function _compressImage(dataUrl, maxW, quality, cb) {
+  const img = new Image();
+  img.onload = () => {
+    let w = img.width, h = img.height;
+    if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+    cb(canvas.toDataURL('image/jpeg', quality));
+  };
+  img.src = dataUrl;
+}
+
+function clDeletePhoto(stepId, idx) {
+  if (!clPhotos[stepId]) return;
+  clPhotos[stepId].splice(idx, 1);
+  if (!clPhotos[stepId].length) delete clPhotos[stepId];
+  _renderModalPhotos(stepId);
+  clRender2();
+  clSaveAll();
+  showToast('Photo removed', 'info');
+}
+
+function _renderModalPhotos(stepId) {
+  const wrap = document.getElementById('es-photos');
+  if (!wrap) return;
+  const photos = clPhotos[stepId] || [];
+  if (!photos.length) {
+    wrap.innerHTML = '<div style="font-family:var(--mono);font-size:0.63rem;color:var(--text3);padding:6px 0;">No photos attached yet.</div>';
+    return;
+  }
+  wrap.innerHTML = photos.map((p, i) => `
+    <div class="cl-photo-thumb">
+      <img src="${p.data}" alt="${p.name}" onclick="clOpenLightbox(${stepId},${i})" title="Click to expand"/>
+      <button class="cl-photo-del" onclick="clDeletePhoto(${stepId},${i})" title="Remove photo">✕</button>
+      <div class="cl-photo-name">${p.name.length > 18 ? p.name.slice(0,16)+'...' : p.name}</div>
+    </div>
+  `).join('');
+}
+
+function clOpenLightbox(stepId, idx) {
+  const photos = clPhotos[stepId] || [];
+  if (!photos[idx]) return;
+  let current = idx;
+  const lb  = document.getElementById('clLightbox');
+  const img = document.getElementById('clLightboxImg');
+  const cap = document.getElementById('clLightboxCaption');
+  const step = CL_STEPS.find(s => s.id === stepId);
+
+  function show(i) {
+    current = (i + photos.length) % photos.length;
+    img.src = photos[current].data;
+    const ts = photos[current].ts ? ' · ' + new Date(photos[current].ts).toLocaleDateString('en-GB') : '';
+    cap.innerHTML = `<strong>${step ? step.name : 'Step'}</strong><br>${(current+1)} / ${photos.length} · ${photos[current].name}${ts}`;
+    document.getElementById('clLbPrev').style.display = photos.length > 1 ? '' : 'none';
+    document.getElementById('clLbNext').style.display = photos.length > 1 ? '' : 'none';
+  }
+
+  document.getElementById('clLbPrev').onclick = () => show(current - 1);
+  document.getElementById('clLbNext').onclick = () => show(current + 1);
+  show(current);
+  lb.classList.add('open');
+}
+
+function clCloseLightbox() {
+  document.getElementById('clLightbox').classList.remove('open');
+}
+
+// ════════════════════════════════════════════════════════════
+//  PER-STEP NOTES
+// ════════════════════════════════════════════════════════════
+
+function clSaveNote(stepId) {
+  const el = document.getElementById('cl-note-' + stepId);
+  if (!el) return;
+  const val = el.value.trim();
+  if (val) clNotes[stepId] = val;
+  else delete clNotes[stepId];
+  clSaveAll();
+}
+
+// ════════════════════════════════════════════════════════════
+//  RENDER
+// ════════════════════════════════════════════════════════════
 
 function clRender2() {
   const phases = [
@@ -96,6 +229,26 @@ function clRender2() {
       const skip    = clState.skipped.has(s.id);
       const isFirst = i === 0;
       const isLast  = i === steps.length - 1;
+      const photos  = clPhotos[s.id] || [];
+      const note    = clNotes[s.id]  || '';
+      const ts      = clDoneTimes[s.id] || '';
+
+      const photoStrip = photos.length > 0 && !clEditMode ? `
+        <div class="cl-photo-strip" onclick="event.stopPropagation()">
+          ${photos.map((p,idx) => `<img src="${p.data}" class="cl-strip-thumb" onclick="clOpenLightbox(${s.id},${idx})" title="${p.name}"/>`).join('')}
+          <span class="cl-photo-count">📷 ${photos.length} photo${photos.length>1?'s':''}</span>
+        </div>` : '';
+
+      const tsHtml = done && ts ? `<div class="cl-done-ts">✓ done at ${new Date(ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</div>` : '';
+
+      const noteArea = !clEditMode ? `
+        <div class="cl-note-wrap" onclick="event.stopPropagation()">
+          <textarea class="cl-note-input" id="cl-note-${s.id}" placeholder="Add a note for this step…"
+            oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
+            onblur="clSaveNote(${s.id})"
+          >${note}</textarea>
+        </div>` : '';
+
       html += `<div class="cl-step${done?' done':''}${skip?' skipped':''}"
                     draggable="${clEditMode}"
                     data-cl-id="${s.id}"
@@ -107,9 +260,13 @@ function clRender2() {
             <div class="cl-num">STEP ${s.id} ·
               <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${tagColors[s.tag]||'var(--text3)'};margin-right:3px;vertical-align:middle;"></span>
               <span style="font-size:0.54rem;color:${tagColors[s.tag]||'var(--text3)'};">${s.tag.toUpperCase()}</span>
+              ${photos.length > 0 ? `<span class="cl-has-photo" title="${photos.length} photo(s) attached" style="margin-left:4px;">📷</span>` : ''}
             </div>
             <div class="cl-name">${s.name}</div>
             ${s.hint ? `<div class="cl-hint">${s.hint}</div>` : ''}
+            ${tsHtml}
+            ${photoStrip}
+            ${noteArea}
           </div>
           <div class="cl-step-btns" onclick="event.stopPropagation()">
             ${clEditMode
@@ -117,6 +274,8 @@ function clRender2() {
                    <button class="cl-step-btn move-btn" onclick="clMoveStep(${s.id},-1)" ${isFirst?'disabled':''} title="Move up">↑</button>
                    <button class="cl-step-btn move-btn" onclick="clMoveStep(${s.id}, 1)" ${isLast ?'disabled':''} title="Move down">↓</button>
                  </div>
+                 <button class="cl-step-btn photo-btn" onclick="document.getElementById('cl-upload-${s.id}').click()" title="Attach photo">📷</button>
+                 <input type="file" id="cl-upload-${s.id}" accept="image/*" multiple style="display:none" onchange="clHandlePhotoUpload(event,${s.id})"/>
                  <button class="cl-step-btn edit-btn" onclick="openEditStep(${s.id})">✏️</button>
                  <button class="cl-step-btn del"      onclick="clDeleteStep(${s.id})">✕</button>`
               : `<button class="cl-step-btn"          onclick="clSkip2(${s.id})">${skip ? '↩ Show' : 'Skip'}</button>`}
@@ -163,31 +322,35 @@ function clInitDragSort() {
       const dstId    = parseInt(item.dataset.clId);
       const srcStep  = CL_STEPS.find(s => s.id === srcId);
       const dstStep  = CL_STEPS.find(s => s.id === dstId);
-      // Only allow drop within same phase
       if (!srcStep || !dstStep || srcStep.phase !== dstStep.phase) return;
       const srcIdx = CL_STEPS.indexOf(srcStep);
       const dstIdx = CL_STEPS.indexOf(dstStep);
       const [moved] = CL_STEPS.splice(srcIdx, 1);
       CL_STEPS.splice(dstIdx, 0, moved);
       clRender2();
-      saveChecklist(CL_STEPS, clState.done, clState.skipped);
+      clSaveAll();
     });
   });
 }
 
 function clToggle2(id) {
   if (clState.skipped.has(id)) return;
-  if (clState.done.has(id)) clState.done.delete(id);
-  else                      clState.done.add(id);
+  if (clState.done.has(id)) {
+    clState.done.delete(id);
+    delete clDoneTimes[id];
+  } else {
+    clState.done.add(id);
+    clDoneTimes[id] = new Date().toISOString();
+  }
   clRender2();
-  saveChecklist(CL_STEPS, clState.done, clState.skipped);
+  clSaveAll();
 }
 
 function clSkip2(id) {
   if (clState.skipped.has(id)) clState.skipped.delete(id);
-  else { clState.skipped.add(id); clState.done.delete(id); }
+  else { clState.skipped.add(id); clState.done.delete(id); delete clDoneTimes[id]; }
   clRender2();
-  saveChecklist(CL_STEPS, clState.done, clState.skipped);
+  clSaveAll();
 }
 
 function clUpdateProgress() {
@@ -219,7 +382,10 @@ function clReset() {
   if (!confirm('Reset all checkboxes for a new night?')) return;
   clState.done.clear();
   clState.skipped.clear();
+  clDoneTimes = {};
+  clNotes = {};
+  // Keep photos (they are step-level reference, not per-night)
   clRender2();
-  saveChecklist(CL_STEPS, clState.done, clState.skipped);
+  clSaveAll();
   showToast('Checklist reset for new night ✓');
 }
