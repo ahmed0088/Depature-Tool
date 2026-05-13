@@ -1037,19 +1037,19 @@ td input:focus, td select:focus { outline: none; border-color: var(--gold); back
 .vt-btn.on { background: var(--card2); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
 
 /* Card grid — 3 sizes + list */
-.dep-grid { display: grid; gap: 12px; }
-.dep-grid.size-sm   { grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); }
-.dep-grid.size-md   { grid-template-columns: repeat(auto-fill, minmax(320px,1fr)); }
-.dep-grid.size-lg   { grid-template-columns: repeat(auto-fill, minmax(460px,1fr)); }
+.dep-grid { display: grid; gap: 14px; }
+.dep-grid.size-sm   { grid-template-columns: repeat(auto-fill, minmax(280px,1fr)); }
+.dep-grid.size-md   { grid-template-columns: repeat(auto-fill, minmax(340px,1fr)); }
+.dep-grid.size-lg   { grid-template-columns: repeat(auto-fill, minmax(500px,1fr)); }
 .dep-grid.size-list { grid-template-columns: 1fr; }
 
 /* Departure card */
 .dep-card {
   background: var(--card); border: 1px solid var(--border);
   border-radius: var(--r3); overflow: hidden;
-  transition: all 0.2s; position: relative;
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s; position: relative;
 }
-.dep-card:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(0,0,0,0.3); }
+.dep-card:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.28); }
 .dep-card.s-due      { border-color: rgba(232,184,75,0.3); }
 .dep-card.s-extended { border-color: rgba(90,180,232,0.4); }
 .dep-card.s-late     { border-color: rgba(139,124,248,0.4); }
@@ -1682,3 +1682,187 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 [data-theme="light"] .cl-note-input  { background: var(--card2); }
 [data-theme="light"] .cl-strip-thumb { border-color: var(--border); }
 [data-theme="light"] .cl-photo-thumb img { border-color: var(--border); }
+
+/* ══════════════════════════════════════════════════
+   DEPARTURE CARD — LIST VIEW (size-list)
+══════════════════════════════════════════════════ */
+.dep-grid.size-list .dep-card {
+  display: grid;
+  grid-template-columns: 4px 1fr;
+  border-radius: var(--r2);
+}
+.dep-grid.size-list .dep-card .dc-band {
+  height: auto;
+  width: 4px;
+  min-height: 60px;
+}
+.dep-grid.size-list .dep-card .dc-head {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  gap: 12px;
+  border-bottom: none;
+}
+.dep-grid.size-list .dep-card .dc-room {
+  font-size: 1.5rem;
+  min-width: 52px;
+}
+.dep-grid.size-list .dep-card .dc-body {
+  padding: 0 14px 10px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 14px;
+  align-items: start;
+}
+/* In list view, photo zone is hidden for compactness */
+.dep-grid.size-list .dc-photo-zone { display: none; }
+/* In list view, make actions horizontal */
+.dep-grid.size-list .dc-actions {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px;
+  grid-column: 1 / -1;
+}
+.dep-grid.size-list .dc-actions.g3,
+.dep-grid.size-list .dc-actions.g2,
+.dep-grid.size-list .dc-actions.g1 {
+  display: flex;
+  flex-direction: row;
+}
+.dep-grid.size-list .dc-actions .dca {
+  flex: 1;
+  padding: 7px 10px;
+  font-size: 0.7rem;
+}
+.dep-grid.size-list .dc-intent-row {
+  grid-column: 1 / -1;
+  margin-top: 6px;
+}
+.dep-grid.size-list .dc-note-lbl,
+.dep-grid.size-list .dc-note {
+  font-size: 0.6rem;
+}
+.dep-grid.size-list .dc-note { min-height: 36px; }
+
+/* ── SM view: photo zone smaller ── */
+.dep-grid.size-sm .dc-photo-zone {
+  height: 90px;
+}
+.dep-grid.size-sm .dc-photo-placeholder .dc-photo-hint {
+  font-size: 0.55rem;
+}
+
+/* ══════════════════════════════════════════════════
+   GUEST PHOTO ZONE — paste / drag-drop on dep cards
+══════════════════════════════════════════════════ */
+.dc-photo-zone {
+  position: relative;
+  width: 100%;
+  height: 110px;
+  background: var(--bg2);
+  border: 1.5px dashed var(--border2);
+  border-radius: var(--r2) var(--r2) 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.2s, background 0.2s;
+  margin-bottom: 0;
+}
+.dc-photo-zone:hover {
+  border-color: var(--gold);
+  background: rgba(232,184,75,0.04);
+}
+.dc-photo-zone.drag-over {
+  border-color: var(--sky);
+  background: rgba(90,180,232,0.08);
+}
+/* When a photo is present — full bleed */
+.dc-photo-zone .dc-photo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 0;
+  transition: transform 0.3s;
+}
+.dc-photo-zone:hover .dc-photo-img {
+  transform: scale(1.03);
+}
+/* Remove button overlay */
+.dc-photo-del {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(240,107,122,0.88);
+  color: #fff;
+  border: none;
+  font-size: 0.62rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.15s;
+  backdrop-filter: blur(4px);
+}
+.dc-photo-zone:hover .dc-photo-del { opacity: 1; }
+
+/* Placeholder state */
+.dc-photo-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  pointer-events: none;
+  user-select: none;
+}
+.dc-photo-icon {
+  font-size: 1.4rem;
+  opacity: 0.4;
+}
+.dc-photo-hint {
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  color: var(--text3);
+  text-align: center;
+  line-height: 1.6;
+}
+
+/* ── View toggle button polish ── */
+.view-toggle {
+  display: flex;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  padding: 2px;
+  gap: 2px;
+}
+.vt-btn {
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-family: var(--mono);
+  cursor: pointer;
+  color: var(--text3);
+  border: none;
+  background: transparent;
+  transition: all 0.15s;
+  min-width: 32px;
+}
+.vt-btn.on {
+  background: var(--card2);
+  color: var(--text);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+.vt-btn:hover:not(.on) { color: var(--text2); }
+
+/* ── Light theme ── */
+[data-theme="light"] .dc-photo-zone { background: var(--card2); }
+[data-theme="light"] .dc-photo-del { background: rgba(220,60,70,0.88); }

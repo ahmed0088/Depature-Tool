@@ -46,6 +46,7 @@ function parseDepReport(raw) {
       intent:          '',   // '' | 'maybe_extend' | 'coming_back' | 'returning'
       note:            '',
       checkoutAt:      '',
+      photo:           '',   // base64 data URL — paste from clipboard
     });
   }
   rooms.sort((a, b) => a.room - b.room);
@@ -111,6 +112,7 @@ function processDepReload() {
         intent:          old.intent || '',
         note:            old.note,
         checkoutAt:      old.checkoutAt,
+        photo:           old.photo || '',
       });
       kept++;
     } else {
@@ -360,7 +362,7 @@ function depCardHTML(r) {
     </div>${intentRow}`;
   }
 
-  return `<div class="dep-card ${sClass}">
+  return `<div class="dep-card ${sClass}" id="dc-${r.roomStr}">
     ${vipHTML}
     <div class="dc-band"></div>
     <div class="dc-head">
@@ -373,6 +375,20 @@ function depCardHTML(r) {
     <div class="dc-body">
       ${overdueStrip}
       ${intentBanner}
+      <div class="dc-photo-zone" id="dpz-${r.roomStr}"
+        onclick="depPhotoClick(${i})"
+        ondragover="event.preventDefault();this.classList.add('drag-over')"
+        ondragleave="this.classList.remove('drag-over')"
+        ondrop="depPhotoDrop(event,${i})">
+        ${r.photo
+          ? `<img class="dc-photo-img" src="${r.photo}" onclick="event.stopPropagation();depPhotoZoom('${r.photo}')" title="Click to zoom · Click zone to replace"/>
+             <button class="dc-photo-del" onclick="event.stopPropagation();depPhotoRemove(${i})" title="Remove photo">✕</button>`
+          : `<div class="dc-photo-placeholder">
+               <span class="dc-photo-icon">📷</span>
+               <span class="dc-photo-hint">Paste screenshot or<br>drag & drop photo</span>
+             </div>`
+        }
+      </div>
       <div class="dc-name" ondblclick="depEditName(${i})" title="Double-click to edit">${escapeHtml(r.name)}</div>
       <div class="dc-meta">
         <div class="dc-mi">📅 <strong>${r.arrival}</strong> → <strong>${r.departure}</strong></div>
@@ -397,6 +413,95 @@ function depCardHTML(r) {
       </div>
     </div>
   </div>`;
+}
+
+// ── Guest photo: paste, drag-drop, zoom, remove ───────────
+
+// Called when the photo zone is clicked — focus it so paste event hits it
+// then listen for a clipboard paste
+function depPhotoClick(i) {
+  // Use a hidden file input as fallback + support clipboard paste via window
+  const handler = async (e) => {
+    e.preventDefault();
+    const items = (e.clipboardData || e.originalEvent?.clipboardData)?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        const blob = item.getAsFile();
+        const url  = await depPhotoReadBlob(blob);
+        depPhotoSet(i, url);
+        window.removeEventListener('paste', handler);
+        showToast('Photo attached ✓', 'ok');
+        return;
+      }
+    }
+    showToast('No image found in clipboard — copy a screenshot first.', 'err');
+    window.removeEventListener('paste', handler);
+  };
+  window.addEventListener('paste', handler);
+  showToast('Ready — press Ctrl+V to paste screenshot', 'info');
+  // Auto-remove listener after 15 s
+  setTimeout(() => window.removeEventListener('paste', handler), 15000);
+}
+
+function depPhotoDrop(e, i) {
+  e.preventDefault();
+  const zone = document.getElementById('dpz-' + depRooms[i].roomStr);
+  if (zone) zone.classList.remove('drag-over');
+  const file = e.dataTransfer?.files?.[0];
+  if (!file || !file.type.startsWith('image/')) { showToast('Drop an image file.', 'err'); return; }
+  depPhotoReadBlob(file).then(url => { depPhotoSet(i, url); showToast('Photo attached ✓', 'ok'); });
+}
+
+function depPhotoReadBlob(blob) {
+  return new Promise(res => {
+    const fr = new FileReader();
+    fr.onload = () => {
+      // Compress via canvas — keep max 320×320
+      const img = new Image();
+      img.onload = () => {
+        const maxW = 360, maxH = 360;
+        let w = img.width, h = img.height;
+        if (w > maxW || h > maxH) {
+          const ratio = Math.min(maxW / w, maxH / h);
+          w = Math.round(w * ratio); h = Math.round(h * ratio);
+        }
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(img, 0, 0, w, h);
+        res(cv.toDataURL('image/jpeg', 0.82));
+      };
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(blob);
+  });
+}
+
+function depPhotoSet(i, url) {
+  depRooms[i].photo = url;
+  depRender();
+  saveDeps();
+}
+
+function depPhotoRemove(i) {
+  depRooms[i].photo = '';
+  depRender();
+  saveDeps();
+}
+
+// Lightbox zoom for departure card photos
+function depPhotoZoom(src) {
+  let lb = document.getElementById('depPhotoLightbox');
+  if (!lb) {
+    lb = document.createElement('div');
+    lb.id = 'depPhotoLightbox';
+    lb.style.cssText = 'display:flex;align-items:center;justify-content:center;position:fixed;inset:0;z-index:9900;background:rgba(0,0,0,0.88);backdrop-filter:blur(6px);cursor:zoom-out;';
+    lb.innerHTML = '<img style="max-width:90vw;max-height:85vh;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,0.7);object-fit:contain;"/>';
+    lb.addEventListener('click', () => lb.style.display = 'none');
+    document.body.appendChild(lb);
+  }
+  lb.querySelector('img').src = src;
+  lb.style.display = 'flex';
 }
 
 function escapeHtml(str) {
