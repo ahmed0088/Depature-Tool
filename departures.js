@@ -495,10 +495,16 @@ function depPhotoZoom(src) {
   if (!lb) {
     lb = document.createElement('div');
     lb.id = 'depPhotoLightbox';
-    lb.style.cssText = 'display:flex;align-items:center;justify-content:center;position:fixed;inset:0;z-index:9900;background:rgba(0,0,0,0.88);backdrop-filter:blur(6px);cursor:zoom-out;';
+    lb.style.cssText = 'display:none;align-items:center;justify-content:center;position:fixed;inset:0;z-index:9900;background:rgba(0,0,0,0.88);backdrop-filter:blur(6px);cursor:zoom-out;';
     lb.innerHTML = '<img style="max-width:90vw;max-height:85vh;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,0.7);object-fit:contain;"/>';
-    lb.addEventListener('click', () => lb.style.display = 'none');
+    lb.addEventListener('click', () => { lb.style.display = 'none'; });
     document.body.appendChild(lb);
+    // ESC key to close
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && lb.style.display !== 'none') {
+        lb.style.display = 'none';
+      }
+    });
   }
   lb.querySelector('img').src = src;
   lb.style.display = 'flex';
