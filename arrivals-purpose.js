@@ -50,6 +50,8 @@ function toggleArrLog() {
 function escapeLogText(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+
+function arrKpiUpdate() {
   const t   = arrGuests.length;
   const l   = arrGuests.filter(g => g.purpose === 'Leisure').length;
   const b   = arrGuests.filter(g => g.purpose === 'Business').length;
