@@ -139,22 +139,10 @@
         <button class="fchip late" data-f="late"     onclick="depFilter('late',this)">🕐 Late CO <span id="dfc-late">0</span></button>
         <button class="fchip bal"  data-f="balance"  onclick="depFilter('balance',this)">💳 Balance <span id="dfc-balance">0</span></button>
         <button class="fchip out"  data-f="out"      onclick="depFilter('out',this)">✓ Out <span id="dfc-out">0</span></button>
-        <button class="fchip na"   data-f="na"       onclick="depFilter('na',this)">📵 No Answer <span id="dfc-na">0</span></button>
       </div>
       <div class="search-wrap">
         <span style="padding:0 8px;color:var(--text3);">⌕</span>
         <input type="text" id="depSearch" placeholder="Room / guest…" oninput="depRender()"/>
-      </div>
-    </div>
-    <!-- ── NA Action Bar (appears when any rooms are marked NA) ── -->
-    <div id="depNaBar" class="dep-na-bar" style="display:none;">
-      <div class="dep-na-bar-left">
-        <span class="dep-na-bar-icon">📵</span>
-        <span class="dep-na-bar-text"><span id="depNaCount">0 rooms</span> marked No Answer</span>
-      </div>
-      <div class="dep-na-bar-right">
-        <button id="depNaCopyBtn" class="dep-na-copy-btn" onclick="depCopyNAList()">📋 Copy for HK</button>
-        <button class="dep-na-filter-btn" onclick="depFilter('na', document.querySelector('[data-f=na]'))">View All →</button>
       </div>
     </div>
     <div class="dep-grid size-md" id="depGrid"></div>
@@ -211,6 +199,16 @@
     <thead><tr><th>Room</th><th>Conf.</th><th>Name</th><th>Purpose</th><th>Nights</th><th>Nationality</th><th>Email</th><th>Source</th><th>Remarks</th><th></th></tr></thead>
     <tbody id="arrTable"></tbody>
   </table></div>
+
+  <!-- Arrivals Activity Log -->
+  <div class="dep-log-wrap arr-log-wrap" id="arrLogWrap" style="display:none;">
+    <div class="dep-log-header" onclick="toggleArrLog()">
+      <h3>📋 Arrivals Log</h3>
+      <span id="arrLogCount" class="nav-badge">0</span>
+      <span id="arrLogToggleIcon" style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">▾</span>
+    </div>
+    <div class="dep-log-body" id="arrLogBody"></div>
+  </div>
 </div>
 
 <!-- ════════════════ PURPOSE OF STAY ════════════════ -->
@@ -252,6 +250,16 @@
     <thead><tr><th>Room</th><th>Conf.</th><th>Name</th><th>Purpose</th><th>Nights</th><th>Nationality</th><th>Email</th><th>Source</th><th>Remarks</th><th></th></tr></thead>
     <tbody id="purposeTable"></tbody>
   </table></div>
+
+  <!-- Purpose Activity Log -->
+  <div class="dep-log-wrap purpose-log-wrap" id="purposeLogWrap" style="display:none;">
+    <div class="dep-log-header" onclick="togglePurposeLog()">
+      <h3>📋 Purpose Log</h3>
+      <span id="purposeLogCount" class="nav-badge">0</span>
+      <span id="purposeLogToggleIcon" style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">▾</span>
+    </div>
+    <div class="dep-log-body" id="purposeLogBody"></div>
+  </div>
 </div>
 
 <!-- ════════════════ SHIFT TASKS ════════════════ -->
@@ -269,6 +277,16 @@
     <div class="shift-tab"        data-shift="night"     onclick="switchShift('night',this)">🌙 Night<span class="shift-prog" id="sp-night">0/0</span></div>
   </div>
   <div id="shiftContent"></div>
+
+  <!-- Shift Tasks Activity Log -->
+  <div class="dep-log-wrap shift-log-wrap" id="shiftLogWrap" style="display:none;">
+    <div class="dep-log-header" onclick="toggleShiftLog()">
+      <h3>📋 Shift Log</h3>
+      <span id="shiftLogCount" class="nav-badge">0</span>
+      <span id="shiftLogToggleIcon" style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">▾</span>
+    </div>
+    <div class="dep-log-body" id="shiftLogBody"></div>
+  </div>
 </div>
 
 <!-- ════════════════ NATIONALITY ════════════════ -->
@@ -503,6 +521,16 @@
     <div style="font-family:var(--serif);font-size:1.5rem;color:var(--mint);margin-bottom:5px;">Night run complete ✓</div>
     <div style="font-family:var(--mono);font-size:0.68rem;color:var(--text3);" id="clCompleteTime2">All steps done</div>
   </div>
+
+  <!-- Night Checklist Activity Log -->
+  <div class="dep-log-wrap check-log-wrap" id="checkLogWrap" style="display:none;">
+    <div class="dep-log-header" onclick="toggleCheckLog()">
+      <h3>📋 Night Audit Log</h3>
+      <span id="checkLogCount" class="nav-badge">0</span>
+      <span id="checkLogToggleIcon" style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">▾</span>
+    </div>
+    <div class="dep-log-body" id="checkLogBody"></div>
+  </div>
 </div>
 
 </main>
@@ -580,29 +608,14 @@
 </div>
 
 <div class="modal-bg" id="editTaskModal">
-  <div class="modal modal-task">
-    <div class="modal-task-header">
-      <div class="modal-task-icon">✏️</div>
-      <div>
-        <div class="modal-task-title">Edit Task</div>
-        <div class="modal-task-sub" id="et-shift-label">Shift task</div>
-      </div>
-    </div>
+  <div class="modal">
+    <h3>✏️ Edit Task</h3>
     <div class="modal-fields">
       <input type="hidden" id="et-shift"/><input type="hidden" id="et-id"/>
-      <div class="mf mf-task">
-        <label class="mf-label-task">Task Name</label>
-        <input id="et-name" class="mf-input-task" placeholder="What needs to be done?"/>
-      </div>
-      <div class="mf mf-task">
-        <label class="mf-label-task">Hint <span style="opacity:0.45;font-weight:400;">(optional)</span></label>
-        <textarea id="et-hint" class="mf-textarea-task" placeholder="Brief description or guidance for this task…" rows="3"></textarea>
-      </div>
+      <div class="mf"><label>Task Name</label><input id="et-name"/></div>
+      <div class="mf"><label>Hint (optional)</label><input id="et-hint" placeholder="Brief description…"/></div>
     </div>
-    <div class="modal-task-actions">
-      <button class="btn-task-cancel" onclick="document.getElementById('editTaskModal').classList.remove('open')">Cancel</button>
-      <button class="btn-task-save" onclick="saveEditTask()">Save Task</button>
-    </div>
+    <div class="modal-actions"><button class="btn" onclick="document.getElementById('editTaskModal').classList.remove('open')">Cancel</button><button class="btn gold" onclick="saveEditTask()">Save</button></div>
   </div>
 </div>
 
@@ -799,6 +812,12 @@ async function appInit() {
   // 8 — Apply feedback
   if (data.feedback && data.feedback.log) feedbackLog = data.feedback.log;
 
+  // 8b — Apply activity logs
+  if (data.arrLog     && data.arrLog.log)     { arrLog     = data.arrLog.log;     renderArrLog(); }
+  if (data.purposeLog && data.purposeLog.log) { purposeLog = data.purposeLog.log; renderPurposeLog(); }
+  if (data.shiftLog   && data.shiftLog.log)   { shiftLog   = data.shiftLog.log;   renderShiftLog(); }
+  if (data.checkLog   && data.checkLog.log)   { checkLog   = data.checkLog.log;   renderCheckLog(); }
+
   // 9 — Apply settings
   if (data.settings) {
     if (data.settings.theme && data.settings.theme === 'light') {
@@ -861,6 +880,12 @@ async function appInit() {
     if (typeof renderShift !== 'undefined') renderShift(activeShift);
     Object.keys(SHIFTS).forEach(k => updateShiftBadge(k));
   });
+
+  // Log real-time listeners
+  fbListen('arrLog',     snap => { if (snap && snap.log) { arrLog     = snap.log; renderArrLog();     } });
+  fbListen('purposeLog', snap => { if (snap && snap.log) { purposeLog = snap.log; renderPurposeLog(); } });
+  fbListen('shiftLog',   snap => { if (snap && snap.log) { shiftLog   = snap.log; renderShiftLog();   } });
+  fbListen('checkLog',   snap => { if (snap && snap.log) { checkLog   = snap.log; renderCheckLog();   } });
 
   // 11 — Render UI
   if (typeof clRender2 !== 'undefined') clRender2();

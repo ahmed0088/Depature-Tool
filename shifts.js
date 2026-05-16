@@ -3,8 +3,48 @@
 //  + drag-to-reorder & ↑↓ buttons
 // ═══════════════════════════════════════════════════════════
 
+// ── Shift log ─────────────────────────────────────────────
+function addShiftLog(action, detail, shiftKey) {
+  const t = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  shiftLog.unshift({ action, detail, shift: SHIFTS[shiftKey]?.label || shiftKey, time: t, ts: Date.now() });
+  if (shiftLog.length > 200) shiftLog.pop();
+  saveShiftLog(shiftLog);
+  renderShiftLog();
+}
+
+function renderShiftLog() {
+  const wrap  = document.getElementById('shiftLogWrap');
+  const body  = document.getElementById('shiftLogBody');
+  const badge = document.getElementById('shiftLogCount');
+  if (!wrap) return;
+  if (!shiftLog.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  if (badge) badge.textContent = shiftLog.length;
+  const icons = { 'Done':'✓', 'Undone':'↩', 'Added':'➕', 'Deleted':'✕', 'Reset':'↺', 'Edited':'✏️' };
+  const cls   = { 'Done':'log-act-co', 'Undone':'log-act-late', 'Added':'log-act-ext', 'Deleted':'log-act-late', 'Reset':'log-act-late', 'Edited':'log-act-ext' };
+  if (body) body.innerHTML = shiftLog.map(l => `
+    <div class="log-row">
+      <span class="log-room" style="font-size:0.62rem;min-width:100px;color:var(--text3);">${escapeLogText(l.shift)}</span>
+      <span class="log-action ${cls[l.action] || ''}">${icons[l.action] || '·'} ${l.action}</span>
+      <span class="log-name">${escapeLogText(l.detail)}</span>
+      <span class="log-time">${l.time}</span>
+    </div>`).join('');
+}
+
+function toggleShiftLog() {
+  const body = document.getElementById('shiftLogBody');
+  const icon = document.getElementById('shiftLogToggleIcon');
+  if (!body) return;
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  if (icon) icon.textContent = open ? '▸' : '▾';
+}
+
+function escapeLogText(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
 function switchShift(key, el) {
-  activeShift = key;
   document.querySelectorAll('.shift-tab').forEach(t => t.classList.remove('active'));
   if (el) el.classList.add('active');
   const rb = document.getElementById('shiftResetBtn');
@@ -129,8 +169,14 @@ function initDragSort(key) {
 function stToggle(key, id) {
   const shift = SHIFTS[key];
   const idx   = shift.done.indexOf(id);
-  if (idx >= 0) shift.done.splice(idx, 1);
-  else          shift.done.push(id);
+  const task  = shift.tasks.find(t => t.id === id);
+  if (idx >= 0) {
+    shift.done.splice(idx, 1);
+    addShiftLog('Undone', task?.name || id, key);
+  } else {
+    shift.done.push(id);
+    addShiftLog('Done', task?.name || id, key);
+  }
   renderShift(key);
   saveShifts(SHIFTS);
 }
@@ -143,14 +189,17 @@ function stAddTask(key) {
   SHIFTS[key].tasks.push({ id: 't' + Date.now(), name, hint: (hEl?.value || '').trim() });
   if (nEl) nEl.value = '';
   if (hEl) hEl.value = '';
+  addShiftLog('Added', name, key);
   renderShift(key);
   saveShifts(SHIFTS);
 }
 
 function stDelete(key, id) {
   if (!confirm('Delete this task?')) return;
+  const task = SHIFTS[key].tasks.find(t => t.id === id);
   SHIFTS[key].tasks = SHIFTS[key].tasks.filter(t => t.id !== id);
   SHIFTS[key].done  = SHIFTS[key].done.filter(d => d !== id);
+  addShiftLog('Deleted', task?.name || id, key);
   renderShift(key);
   saveShifts(SHIFTS);
 }
@@ -162,15 +211,7 @@ function openEditTask(key, id) {
   document.getElementById('et-id').value    = id;
   document.getElementById('et-name').value  = task.name;
   document.getElementById('et-hint').value  = task.hint || '';
-  // Update shift label in modal header
-  const sub = document.getElementById('et-shift-label');
-  const shiftColors = { morning:'var(--gold)', afternoon:'var(--sky)', mid:'var(--violet)', night:'var(--mint)' };
-  if (sub) {
-    sub.textContent = SHIFTS[key]?.label || 'Shift task';
-    sub.style.color = shiftColors[key] || 'var(--text3)';
-  }
   document.getElementById('editTaskModal').classList.add('open');
-  setTimeout(() => { const n = document.getElementById('et-name'); if(n){ n.focus(); n.select(); } }, 80);
 }
 
 function saveEditTask() {
@@ -181,6 +222,7 @@ function saveEditTask() {
   task.name = document.getElementById('et-name').value.trim() || task.name;
   task.hint = document.getElementById('et-hint').value.trim();
   document.getElementById('editTaskModal').classList.remove('open');
+  addShiftLog('Edited', task.name, key);
   renderShift(key);
   saveShifts(SHIFTS);
 }
@@ -189,6 +231,7 @@ function resetShift(key) {
   if (!confirm('Reset all tasks for ' + SHIFTS[key].label + '?')) return;
   SHIFTS[key].done    = [];
   SHIFTS[key].resetAt = new Date().toLocaleString('en-GB');
+  addShiftLog('Reset', `All ${SHIFTS[key].tasks.length} tasks reset`, key);
   renderShift(key);
   saveShifts(SHIFTS);
   showToast('Shift reset ✓');

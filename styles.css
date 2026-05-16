@@ -1037,19 +1037,19 @@ td input:focus, td select:focus { outline: none; border-color: var(--gold); back
 .vt-btn.on { background: var(--card2); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
 
 /* Card grid — 3 sizes + list */
-.dep-grid { display: grid; gap: 12px; }
-.dep-grid.size-sm   { grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); }
-.dep-grid.size-md   { grid-template-columns: repeat(auto-fill, minmax(320px,1fr)); }
-.dep-grid.size-lg   { grid-template-columns: repeat(auto-fill, minmax(460px,1fr)); }
+.dep-grid { display: grid; gap: 14px; }
+.dep-grid.size-sm   { grid-template-columns: repeat(auto-fill, minmax(280px,1fr)); }
+.dep-grid.size-md   { grid-template-columns: repeat(auto-fill, minmax(340px,1fr)); }
+.dep-grid.size-lg   { grid-template-columns: repeat(auto-fill, minmax(500px,1fr)); }
 .dep-grid.size-list { grid-template-columns: 1fr; }
 
 /* Departure card */
 .dep-card {
   background: var(--card); border: 1px solid var(--border);
   border-radius: var(--r3); overflow: hidden;
-  transition: all 0.2s; position: relative;
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s; position: relative;
 }
-.dep-card:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(0,0,0,0.3); }
+.dep-card:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.28); }
 .dep-card.s-due      { border-color: rgba(232,184,75,0.3); }
 .dep-card.s-extended { border-color: rgba(90,180,232,0.4); }
 .dep-card.s-late     { border-color: rgba(139,124,248,0.4); }
@@ -1200,38 +1200,208 @@ td input:focus, td select:focus { outline: none; border-color: var(--gold); back
 /* ══════════════════════════════════════════════════
    NIGHT CHECKLIST
 ══════════════════════════════════════════════════ */
-.cl-phase-hd { display: flex; align-items: center; gap: 12px; margin: 16px 0 8px; }
-.cl-phase-line { flex: 1; height: 1px; background: var(--border); }
-.cl-phase-lbl {
-  font-family: var(--mono); font-size: 0.56rem; letter-spacing: 2px; text-transform: uppercase;
-  padding: 3px 12px; border-radius: 20px;
-  border: 1px solid var(--border2); color: var(--text3); background: var(--surface); white-space: nowrap;
+/* ══════════════════════════════════════════════════
+   NIGHT CHECKLIST — Premium redesign
+══════════════════════════════════════════════════ */
+
+/* Phase block wrapper */
+.cl-phase-block { margin-bottom: 28px; }
+
+/* Phase header */
+.cl-phase-hd2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
 }
-.cl-step { background: var(--card); border: 1px solid var(--border); border-radius: var(--r2); margin-bottom: 5px; overflow: hidden; transition: border-color 0.2s; }
-.cl-step.done    { border-color: rgba(62,207,142,0.2); }
-.cl-step.skipped { opacity: 0.3; }
-.cl-step-main { display: flex; align-items: center; gap: 10px; padding: 11px 13px; cursor: pointer; }
-.cl-check {
-  width: 20px; height: 20px; border-radius: 50%;
-  border: 1.5px solid var(--border2); background: var(--bg2);
+.cl-phase-icon  { font-size: 1rem; }
+.cl-phase-title {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text2);
+  flex: 1;
+}
+.cl-phase-count {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  color: var(--text3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 2px 9px;
+  border-radius: 20px;
+}
+
+/* Steps container */
+.cl-phase-steps { display: flex; flex-direction: column; gap: 4px; }
+
+/* Individual step */
+.cl-step2 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.18s, opacity 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.cl-step2::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--border2);
+  border-radius: 14px 0 0 14px;
+  transition: background 0.2s;
+}
+.cl-step2:hover { background: var(--card2); border-color: var(--border2); }
+.cl-step2:hover::before { background: var(--gold); }
+
+.cl-step2.done {
+  background: rgba(62,207,142,0.04);
+  border-color: rgba(62,207,142,0.18);
+  cursor: default;
+}
+.cl-step2.done::before { background: var(--mint); }
+.cl-step2.done:hover   { background: rgba(62,207,142,0.06); }
+
+.cl-step2.skipped {
+  opacity: 0.28;
+  cursor: default;
+}
+
+/* Checkbox */
+.cl2-check {
+  width: 24px; height: 24px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border2);
+  background: var(--bg2);
   display: flex; align-items: center; justify-content: center;
-  font-size: 0.65rem; color: transparent; flex-shrink: 0; transition: all 0.2s;
+  font-size: 0.75rem;
+  color: transparent;
+  flex-shrink: 0;
+  transition: all 0.18s;
 }
-.cl-step.done .cl-check { border-color: var(--mint); background: rgba(62,207,142,0.12); color: var(--mint); }
-.cl-content { flex: 1; min-width: 0; }
-.cl-num  { font-family: var(--mono); font-size: 0.54rem; color: var(--text3); margin-bottom: 1px; }
-.cl-name { font-size: 0.83rem; font-weight: 600; color: var(--text); transition: all 0.2s; }
-.cl-step.done .cl-name { color: var(--text3); text-decoration: line-through; }
-.cl-hint { font-size: 0.68rem; color: var(--text3); margin-top: 1px; line-height: 1.5; }
-.cl-step-btns { display: flex; gap: 4px; flex-shrink: 0; }
-.cl-step-btn { padding: 3px 9px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--text3); font-size: 0.66rem; font-family: var(--font); cursor: pointer; transition: all 0.15s; }
-.cl-step-btn:hover      { color: var(--text2); }
-.cl-step-btn.del:hover  { color: var(--rose); border-color: rgba(240,107,122,0.3); }
-.cl-step-btn.edit-btn:hover { color: var(--gold); border-color: rgba(232,184,75,0.3); }
+.cl2-checked {
+  background: rgba(62,207,142,0.15);
+  border-color: var(--mint);
+  color: var(--mint);
+}
+
+/* Step number */
+.cl2-num {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  width: 22px;
+  text-align: center;
+  opacity: 0.7;
+}
+
+/* Body */
+.cl2-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* Top row: name + tag + timestamp */
+.cl2-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cl2-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+  transition: color 0.15s;
+}
+.cl2-done-name {
+  color: var(--text3);
+  text-decoration: line-through;
+  text-decoration-color: rgba(62,207,142,0.5);
+}
+
+/* Tag pill */
+.cl2-tag {
+  font-family: var(--mono);
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+/* Photo badge */
+.cl2-photo-badge {
+  font-family: var(--mono);
+  font-size: 0.55rem;
+  color: var(--sky);
+  background: rgba(90,180,232,0.1);
+  border: 1px solid rgba(90,180,232,0.2);
+  padding: 1px 6px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+/* Done timestamp */
+.cl-done-ts {
+  font-family: var(--mono);
+  font-size: 0.55rem;
+  color: var(--mint);
+  opacity: 0.8;
+}
+
+/* Hint */
+.cl2-hint {
+  font-size: 0.69rem;
+  color: var(--text3);
+  line-height: 1.55;
+  margin-top: 1px;
+}
+
+/* Skip / edit action buttons */
+.cl-run-actions  { flex-shrink: 0; }
+.cl-edit-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.cl-skip-btn {
+  padding: 4px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text3);
+  font-size: 0.62rem;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.cl-skip-btn:hover { color: var(--amber); border-color: rgba(240,164,58,0.35); }
+
+/* Keep old cl-step-btn rules for edit mode buttons */
 .cl-add-row { display: flex; gap: 8px; align-items: center; padding: 8px 0; }
 .cl-add-input { flex: 1; background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--r); color: var(--text); font-family: var(--font); font-size: 0.78rem; padding: 7px 10px; outline: none; transition: border-color 0.2s; }
 .cl-add-input:focus { border-color: var(--gold); }
 .cl-phase-select { background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--r); color: var(--text); font-family: var(--mono); font-size: 0.68rem; padding: 7px 10px; outline: none; cursor: pointer; }
+
+/* Light theme */
+[data-theme="light"] .cl-step2 { background: var(--surface); }
+[data-theme="light"] .cl-step2.done { background: rgba(62,207,142,0.04); }
 
 /* ══════════════════════════════════════════════════
    SHIFT TASKS
@@ -1382,10 +1552,10 @@ td input:focus, td select:focus { outline: none; border-color: var(--gold); back
 }
 .st-drag-handle:hover  { color: var(--text2); }
 .st-drag-handle:active { cursor: grabbing; }
-.st-item.dragging, .cl-step.dragging {
+.st-item.dragging, .cl-step.dragging, .cl-step2.dragging {
   opacity: 0.4; background: var(--card2); outline: 1px dashed var(--border2);
 }
-.st-item.drag-over, .cl-step.drag-over {
+.st-item.drag-over, .cl-step.drag-over, .cl-step2.drag-over {
   outline: 2px solid var(--gold); background: var(--gold-glow); border-radius: var(--r);
 }
 .st-move-btns { display: flex; flex-direction: column; gap: 2px; }
@@ -1684,263 +1854,284 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 [data-theme="light"] .cl-photo-thumb img { border-color: var(--border); }
 
 /* ══════════════════════════════════════════════════
-   NA (NO ANSWER) — DEPARTURE BOARD
+   DEPARTURE CARD — LIST VIEW
+   Single tight row: band | room | status | name | source | balance | actions
 ══════════════════════════════════════════════════ */
 
-/* Filter chip */
-.fchip.na        { color: var(--rose); border-color: rgba(240,107,122,0.3); }
-.fchip.na.on     { background: rgba(240,107,122,0.15); border-color: var(--rose); color: var(--rose); }
+.dep-grid.size-list { gap: 5px; }
 
-/* Card accent when room has NA */
-.dep-card.s-na   { border-color: rgba(240,107,122,0.45) !important; }
-.dep-card.s-na .dc-band { background: var(--rose) !important; }
-
-/* NA badge shown on each card */
-.dc-na-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  background: rgba(240,107,122,0.12);
-  border: 1px solid rgba(240,107,122,0.4);
-  color: var(--rose);
-  font-family: var(--mono);
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.4px;
-  padding: 3px 9px;
-  border-radius: 20px;
-  margin-bottom: 7px;
-}
-
-/* NA button in action row */
-.dca.dca-na {
-  background: rgba(240,107,122,0.07);
-  border: 1px solid rgba(240,107,122,0.25);
-  color: var(--rose);
-  font-size: 0.7rem;
-  padding: 5px 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-family: var(--mono);
-  font-weight: 600;
-  transition: all 0.15s;
-}
-.dca.dca-na:hover  { background: rgba(240,107,122,0.18); border-color: var(--rose); transform: translateY(-1px); }
-.dca.dca-na.active { background: rgba(240,107,122,0.22); border-color: var(--rose); color: var(--rose); }
-
-/* 4-button action row */
-.dc-actions.g4 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-.dc-actions.g4 .dca:first-child { grid-column: 1 / -1; } /* Check Out spans full width */
-
-/* NA Action Bar — sticky strip above the grid */
-.dep-na-bar {
+.dep-grid.size-list .dep-card {
   display: flex;
+  flex-direction: row;
   align-items: center;
-  justify-content: space-between;
-  background: rgba(240,107,122,0.08);
-  border: 1px solid rgba(240,107,122,0.3);
-  border-radius: 10px;
-  padding: 9px 16px;
-  margin-bottom: 12px;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.dep-na-bar-left  { display: flex; align-items: center; gap: 8px; }
-.dep-na-bar-icon  { font-size: 1.1rem; }
-.dep-na-bar-text  { font-family: var(--mono); font-size: 0.72rem; color: var(--rose); font-weight: 600; }
-.dep-na-bar-right { display: flex; align-items: center; gap: 8px; }
-
-.dep-na-copy-btn {
-  background: var(--rose);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-family: var(--mono);
-  font-size: 0.68rem;
-  font-weight: 700;
-  padding: 6px 14px;
-  cursor: pointer;
-  transition: opacity 0.15s, transform 0.15s;
-}
-.dep-na-copy-btn:hover { opacity: 0.85; transform: translateY(-1px); }
-
-.dep-na-filter-btn {
-  background: transparent;
-  border: 1px solid rgba(240,107,122,0.4);
-  color: var(--rose);
-  border-radius: 8px;
-  font-family: var(--mono);
-  font-size: 0.66rem;
-  padding: 5px 12px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.dep-na-filter-btn:hover { background: rgba(240,107,122,0.1); }
-
-/* Log row NA */
-.log-act-na { color: var(--rose); }
-
-/* ══════════════════════════════════════════════════
-   EDIT TASK MODAL — REDESIGN
-══════════════════════════════════════════════════ */
-
-.modal.modal-task {
-  max-width: 440px;
-  padding: 0;
-  overflow: hidden;
-  background: var(--card);
-  border: 1px solid var(--border2);
-  border-radius: 18px;
-  box-shadow: 0 24px 80px rgba(0,0,0,0.5);
-}
-
-.modal-task-header {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 22px 24px 18px;
-  background: linear-gradient(135deg, rgba(255,255,255,0.03), transparent);
-  border-bottom: 1px solid var(--border);
-}
-
-.modal-task-icon {
-  width: 42px; height: 42px;
-  background: rgba(232,184,75,0.12);
-  border: 1px solid rgba(232,184,75,0.25);
   border-radius: 12px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.2rem;
+  min-height: 0;
+  height: 52px;
+  overflow: hidden;
+  transition: background 0.15s;
+}
+.dep-grid.size-list .dep-card:hover { transform: none; box-shadow: none; background: var(--card2); }
+
+/* Thin left colour band */
+.dep-grid.size-list .dc-band {
+  width: 3px;
+  height: 100%;
   flex-shrink: 0;
 }
 
-.modal-task-title {
-  font-family: var(--serif);
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: var(--text);
-  letter-spacing: 0.2px;
-}
-
-.modal-task-sub {
-  font-family: var(--mono);
-  font-size: 0.62rem;
-  color: var(--text3);
-  margin-top: 2px;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  transition: color 0.2s;
-}
-
-.modal.modal-task .modal-fields {
-  padding: 20px 24px 8px;
+/* Room col */
+.dep-grid.size-list .dc-head {
   display: flex;
-  flex-direction: column;
-  gap: 14px;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px 0 12px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  height: 100%;
+}
+.dep-grid.size-list .dc-room {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1;
+  min-width: 38px;
+}
+.dep-grid.size-list .dc-badges { display: flex; flex-direction: row; gap: 5px; align-items: center; }
+.dep-grid.size-list .dc-sbadge { font-size: 0.52rem; padding: 2px 7px; }
+.dep-grid.size-list .dc-nights { font-size: 0.52rem; padding: 2px 6px; }
+
+/* Body row */
+.dep-grid.size-list .dc-body {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
+  padding: 0 12px;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
-.mf.mf-task { display: flex; flex-direction: column; gap: 6px; }
+/* Hide everything except name, source, balance, actions */
+.dep-grid.size-list .dc-photo-zone,
+.dep-grid.size-list .dc-overdue-strip,
+.dep-grid.size-list .dc-intent-banner,
+.dep-grid.size-list .dc-intent-row,
+.dep-grid.size-list .dc-meta,
+.dep-grid.size-list .dc-mi,
+.dep-grid.size-list .dc-sel-row,
+.dep-grid.size-list .dc-note-lbl,
+.dep-grid.size-list .dc-note,
+.dep-grid.size-list .dc-stamp-btn,
+.dep-grid.size-list .dc-vip,
+.dep-grid.size-list .dc-company { display: none !important; }
 
-.mf-label-task {
-  font-family: var(--mono);
-  font-size: 0.63rem;
-  color: var(--text3);
-  text-transform: uppercase;
-  letter-spacing: 0.7px;
+/* Name */
+.dep-grid.size-list .dc-name {
+  font-size: 0.82rem;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 120px;
+  max-width: 200px;
+  flex-shrink: 1;
+  margin-right: 14px;
+  cursor: default;
+}
+.dep-grid.size-list .dc-name:hover { color: var(--text); }
+
+/* Source */
+.dep-grid.size-list .dc-src {
+  font-size: 0.55rem;
+  padding: 2px 7px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-right: 12px;
 }
 
-.mf-input-task {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid var(--border2);
-  border-radius: 10px;
-  color: var(--text);
-  font-family: var(--sans);
-  font-size: 0.9rem;
-  padding: 10px 14px;
-  outline: none;
-  transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
-  width: 100%;
-  box-sizing: border-box;
-}
-.mf-input-task:focus {
-  border-color: var(--gold);
-  background: rgba(232,184,75,0.04);
-  box-shadow: 0 0 0 3px rgba(232,184,75,0.1);
-}
-
-.mf-textarea-task {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid var(--border2);
-  border-radius: 10px;
-  color: var(--text2);
-  font-family: var(--mono);
-  font-size: 0.77rem;
-  line-height: 1.65;
-  padding: 10px 14px;
-  outline: none;
-  resize: vertical;
-  transition: border-color 0.18s, background 0.18s;
-  width: 100%;
-  box-sizing: border-box;
-  min-height: 72px;
-}
-.mf-textarea-task:focus {
-  border-color: var(--gold);
-  background: rgba(232,184,75,0.04);
-  box-shadow: 0 0 0 3px rgba(232,184,75,0.1);
-  color: var(--text);
-}
-.mf-textarea-task::placeholder,
-.mf-input-task::placeholder { color: var(--text3); }
-
-.modal-task-actions {
+/* Balance — minimal inline pill */
+.dep-grid.size-list .dc-bal {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 16px 24px 22px;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 8px;
+  margin-bottom: 0;
+  flex-shrink: 0;
+  margin-right: 10px;
+  border-width: 1px;
+}
+.dep-grid.size-list .dc-bal-lbl { display: none; }
+.dep-grid.size-list .dc-bal-amt { font-size: 0.68rem; font-weight: 700; }
+
+/* Actions — right side, small buttons */
+.dep-grid.size-list .dc-actions {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  flex-shrink: 0;
+  padding-right: 4px;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+.dep-grid.size-list .dc-actions.g1,
+.dep-grid.size-list .dc-actions.g2,
+.dep-grid.size-list .dc-actions.g3 { display: flex; flex-direction: row; }
+.dep-grid.size-list .dca {
+  padding: 5px 10px;
+  font-size: 0.62rem;
+  border-radius: 7px;
+  white-space: nowrap;
 }
 
-.btn-task-cancel {
-  background: transparent;
-  border: 1px solid var(--border2);
-  color: var(--text3);
-  font-family: var(--mono);
-  font-size: 0.72rem;
-  padding: 9px 18px;
-  border-radius: 9px;
+/* ── SM view: photo zone smaller ── */
+.dep-grid.size-sm .dc-photo-zone { height: 90px; }
+.dep-grid.size-sm .dc-photo-placeholder .dc-photo-hint {
+  font-size: 0.55rem;
+}
+
+/* ══════════════════════════════════════════════════
+   GUEST PHOTO ZONE — paste / drag-drop on dep cards
+══════════════════════════════════════════════════ */
+.dc-photo-zone {
+  position: relative;
+  width: 100%;
+  height: 110px;
+  background: var(--bg2);
+  border: 1.5px dashed var(--border2);
+  border-radius: var(--r2) var(--r2) 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  transition: all 0.15s;
+  overflow: hidden;
+  transition: border-color 0.2s, background 0.2s;
+  margin-bottom: 0;
 }
-.btn-task-cancel:hover { border-color: var(--text2); color: var(--text2); }
-
-.btn-task-save {
-  background: var(--gold);
+.dc-photo-zone:hover {
+  border-color: var(--gold);
+  background: rgba(232,184,75,0.04);
+}
+.dc-photo-zone.drag-over {
+  border-color: var(--sky);
+  background: rgba(90,180,232,0.08);
+}
+/* When a photo is present — letterboxed, never stretched */
+.dc-photo-zone .dc-photo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  display: block;
+  border-radius: 0;
+  background: #000;
+  transition: transform 0.25s;
+}
+.dc-photo-zone:hover .dc-photo-img {
+  transform: scale(1.02);
+}
+/* Remove button overlay */
+.dc-photo-del {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(240,107,122,0.88);
+  color: #fff;
   border: none;
-  color: #0a0c10;
-  font-family: var(--mono);
-  font-size: 0.78rem;
-  font-weight: 700;
-  padding: 9px 24px;
-  border-radius: 9px;
+  font-size: 0.62rem;
   cursor: pointer;
-  letter-spacing: 0.3px;
-  transition: opacity 0.15s, transform 0.15s, box-shadow 0.15s;
-  box-shadow: 0 4px 14px rgba(232,184,75,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.15s;
+  backdrop-filter: blur(4px);
 }
-.btn-task-save:hover {
-  opacity: 0.9;
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(232,184,75,0.4);
-}
-.btn-task-save:active { transform: translateY(0); }
+.dc-photo-zone:hover .dc-photo-del { opacity: 1; }
 
-/* Light theme adjustments */
-[data-theme="light"] .mf-input-task,
-[data-theme="light"] .mf-textarea-task  { background: var(--card2); }
-[data-theme="light"] .modal-task-header { background: rgba(0,0,0,0.02); }
+/* Placeholder state */
+.dc-photo-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  pointer-events: none;
+  user-select: none;
+}
+.dc-photo-icon {
+  font-size: 1.4rem;
+  opacity: 0.4;
+}
+.dc-photo-hint {
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  color: var(--text3);
+  text-align: center;
+  line-height: 1.6;
+}
+
+/* ── View toggle button polish ── */
+.view-toggle {
+  display: flex;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  padding: 2px;
+  gap: 2px;
+}
+.vt-btn {
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-family: var(--mono);
+  cursor: pointer;
+  color: var(--text3);
+  border: none;
+  background: transparent;
+  transition: all 0.15s;
+  min-width: 32px;
+}
+.vt-btn.on {
+  background: var(--card2);
+  color: var(--text);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+.vt-btn:hover:not(.on) { color: var(--text2); }
+
+/* ── Light theme ── */
+[data-theme="light"] .dc-photo-zone { background: var(--card2); }
+[data-theme="light"] .dc-photo-del { background: rgba(220,60,70,0.88); }
+
+
+/* ══════════════════════════════════════════════════
+   MODULE ACTIVITY LOGS
+   Arrivals · Purpose · Shifts · Checklist
+   Reuse dep-log-wrap visual style, scoped to each module
+══════════════════════════════════════════════════ */
+.arr-log-wrap,
+.purpose-log-wrap,
+.shift-log-wrap,
+.check-log-wrap {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  overflow: hidden;
+  margin-top: 16px;
+  display: none;
+}
+.arr-log-wrap .dep-log-header,
+.purpose-log-wrap .dep-log-header,
+.shift-log-wrap .dep-log-header,
+.check-log-wrap .dep-log-header {
+  border-radius: var(--r2) var(--r2) 0 0;
+}
