@@ -46,7 +46,8 @@ function parseDepReport(raw) {
       intent:          '',   // '' | 'maybe_extend' | 'coming_back' | 'returning'
       note:            '',
       checkoutAt:      '',
-      photo:           '',   // base64 data URL — paste from clipboard
+      naAttempts:      0,    // No Answer call attempts
+      naLastAt:        '',   // timestamp of last NA attempt
     });
   }
   rooms.sort((a, b) => a.room - b.room);
@@ -112,7 +113,8 @@ function processDepReload() {
         intent:          old.intent || '',
         note:            old.note,
         checkoutAt:      old.checkoutAt,
-        photo:           old.photo || '',
+        naAttempts:      old.naAttempts  || 0,
+        naLastAt:        old.naLastAt    || '',
       });
       kept++;
     } else {
@@ -159,6 +161,7 @@ function depCounts() {
     balance:  depRooms.filter(r => r.balance > 0 && r.status !== 'out' && r.status !== 'extended').length,
     out:      depRooms.filter(r => r.status === 'out').length,
     pending:  depRooms.filter(r => r.intent && r.status !== 'out' && r.status !== 'extended').length,
+    na:       depRooms.filter(r => r.naAttempts > 0 && r.status !== 'out' && r.status !== 'extended').length,
   };
 }
 
@@ -198,6 +201,17 @@ function depRender() {
   Object.entries(sc).forEach(([k, v]) => {
     const el = document.getElementById('dfc-' + k); if (el) el.textContent = v;
   });
+  // NA rooms: render copy button when any exist
+  const naBar = document.getElementById('depNaBar');
+  if (naBar) {
+    const naRooms = depRooms.filter(r => r.naAttempts > 0 && r.status !== 'out' && r.status !== 'extended');
+    if (naRooms.length) {
+      naBar.style.display = 'flex';
+      document.getElementById('depNaCount').textContent = naRooms.length + ' room' + (naRooms.length > 1 ? 's' : '');
+    } else {
+      naBar.style.display = 'none';
+    }
+  }
 
   document.getElementById('depKpis').innerHTML = `
     <div class="dep-kpi k-total"><div class="dep-kpi-icon">🏨</div><div class="dep-kpi-val">${sc.all}</div><div class="dep-kpi-label">Total</div></div>
@@ -223,13 +237,15 @@ function depRender() {
       case 'all':     mf = r.status !== 'out' && r.status !== 'extended'; break;
       case 'balance': mf = r.balance > 0 && r.status !== 'out' && r.status !== 'extended'; break;
       case 'pending': mf = !!r.intent && r.status !== 'out' && r.status !== 'extended'; break;
+      case 'na':      mf = r.naAttempts > 0 && r.status !== 'out' && r.status !== 'extended'; break;
       default:        mf = r.status === depFilter_; break;
     }
     const ms = !search ||
       r.roomStr.includes(search) ||
       r.name.toLowerCase().includes(search) ||
       r.source.toLowerCase().includes(search) ||
-      (r.note && r.note.toLowerCase().includes(search));
+      (r.note && r.note.toLowerCase().includes(search)) ||
+      (r.naAttempts > 0 && 'no answer na'.includes(search));
     return mf && ms;
   });
 
@@ -275,6 +291,7 @@ function depCardHTML(r) {
   let sClass = 's-' + (bal > 0 && r.status !== 'out' && r.status !== 'extended' ? 'balance' : r.status);
   if (r.intent && r.status !== 'out' && r.status !== 'extended') sClass += ' s-intent';
   if (overdue) sClass += ' s-overdue';
+  if (r.naAttempts > 0 && r.status !== 'out' && r.status !== 'extended') sClass += ' s-na';
 
   // Status badge
   const badgeMap = {
@@ -284,6 +301,13 @@ function depCardHTML(r) {
     out:      ['sb-out',      `OUT${r.checkoutAt ? ' · ' + r.checkoutAt : ''}`],
   };
   const [badgeCls, badgeText] = badgeMap[r.status] || ['sb-due','DUE OUT'];
+
+  // NA attempt badge — shown on card regardless of status
+  const naA = r.naAttempts || 0;
+  const naLastTime = r.naLastAt ? ` · last ${r.naLastAt}` : '';
+  const naBadgeHTML = naA > 0
+    ? `<div class="dc-na-badge">📵 No Answer ×${naA}${naLastTime}</div>`
+    : '';
 
   const srcClean  = r.source.substring(0,26) + (r.source.length > 26 ? '…' : '');
   const vipHTML   = r.isVip ? '<div class="dc-vip">⭐ VIP</div>' : '';
@@ -355,14 +379,16 @@ function depCardHTML(r) {
           onclick="depSetIntent(${i},'returning')">🔁 Returning</button>
       </div>`;
 
-    actHTML = `<div class="dc-actions g3">
+    const naCountLabel = r.naAttempts > 0 ? ` (${r.naAttempts})` : '';
+    actHTML = `<div class="dc-actions g4">
       <button class="dca dca-co"   onclick="depCheckOut(${i})">✓ Check Out</button>
       <button class="dca dca-ext"  onclick="depAction(${i},'extended')">↪ Extend</button>
       <button class="dca dca-late" onclick="depAction(${i},'late')">🕐 Late CO</button>
+      <button class="dca dca-na${r.naAttempts>0?' active':''}" onclick="depMarkNA(${i})" title="Mark as No Answer">📵 NA${naCountLabel}</button>
     </div>${intentRow}`;
   }
 
-  return `<div class="dep-card ${sClass}" id="dc-${r.roomStr}">
+  return `<div class="dep-card ${sClass}">
     ${vipHTML}
     <div class="dc-band"></div>
     <div class="dc-head">
@@ -374,21 +400,8 @@ function depCardHTML(r) {
     </div>
     <div class="dc-body">
       ${overdueStrip}
+      ${naBadgeHTML}
       ${intentBanner}
-      <div class="dc-photo-zone" id="dpz-${r.roomStr}"
-        onclick="depPhotoClick(${i})"
-        ondragover="event.preventDefault();this.classList.add('drag-over')"
-        ondragleave="this.classList.remove('drag-over')"
-        ondrop="depPhotoDrop(event,${i})">
-        ${r.photo
-          ? `<img class="dc-photo-img" src="${r.photo}" onclick="event.stopPropagation();depPhotoZoom('${r.photo}')" title="Click to zoom · Click zone to replace"/>
-             <button class="dc-photo-del" onclick="event.stopPropagation();depPhotoRemove(${i})" title="Remove photo">✕</button>`
-          : `<div class="dc-photo-placeholder">
-               <span class="dc-photo-icon">📷</span>
-               <span class="dc-photo-hint">Paste screenshot or<br>drag & drop photo</span>
-             </div>`
-        }
-      </div>
       <div class="dc-name" ondblclick="depEditName(${i})" title="Double-click to edit">${escapeHtml(r.name)}</div>
       <div class="dc-meta">
         <div class="dc-mi">📅 <strong>${r.arrival}</strong> → <strong>${r.departure}</strong></div>
@@ -413,101 +426,6 @@ function depCardHTML(r) {
       </div>
     </div>
   </div>`;
-}
-
-// ── Guest photo: paste, drag-drop, zoom, remove ───────────
-
-// Called when the photo zone is clicked — focus it so paste event hits it
-// then listen for a clipboard paste
-function depPhotoClick(i) {
-  // Use a hidden file input as fallback + support clipboard paste via window
-  const handler = async (e) => {
-    e.preventDefault();
-    const items = (e.clipboardData || e.originalEvent?.clipboardData)?.items;
-    if (!items) return;
-    for (const item of items) {
-      if (item.type.startsWith('image/')) {
-        const blob = item.getAsFile();
-        const url  = await depPhotoReadBlob(blob);
-        depPhotoSet(i, url);
-        window.removeEventListener('paste', handler);
-        showToast('Photo attached ✓', 'ok');
-        return;
-      }
-    }
-    showToast('No image found in clipboard — copy a screenshot first.', 'err');
-    window.removeEventListener('paste', handler);
-  };
-  window.addEventListener('paste', handler);
-  showToast('Ready — press Ctrl+V to paste screenshot', 'info');
-  // Auto-remove listener after 15 s
-  setTimeout(() => window.removeEventListener('paste', handler), 15000);
-}
-
-function depPhotoDrop(e, i) {
-  e.preventDefault();
-  const zone = document.getElementById('dpz-' + depRooms[i].roomStr);
-  if (zone) zone.classList.remove('drag-over');
-  const file = e.dataTransfer?.files?.[0];
-  if (!file || !file.type.startsWith('image/')) { showToast('Drop an image file.', 'err'); return; }
-  depPhotoReadBlob(file).then(url => { depPhotoSet(i, url); showToast('Photo attached ✓', 'ok'); });
-}
-
-function depPhotoReadBlob(blob) {
-  return new Promise(res => {
-    const fr = new FileReader();
-    fr.onload = () => {
-      // Compress via canvas — keep max 320×320
-      const img = new Image();
-      img.onload = () => {
-        const maxW = 360, maxH = 360;
-        let w = img.width, h = img.height;
-        if (w > maxW || h > maxH) {
-          const ratio = Math.min(maxW / w, maxH / h);
-          w = Math.round(w * ratio); h = Math.round(h * ratio);
-        }
-        const cv = document.createElement('canvas');
-        cv.width = w; cv.height = h;
-        cv.getContext('2d').drawImage(img, 0, 0, w, h);
-        res(cv.toDataURL('image/jpeg', 0.82));
-      };
-      img.src = fr.result;
-    };
-    fr.readAsDataURL(blob);
-  });
-}
-
-function depPhotoSet(i, url) {
-  depRooms[i].photo = url;
-  depRender();
-  saveDeps();
-}
-
-function depPhotoRemove(i) {
-  depRooms[i].photo = '';
-  depRender();
-  saveDeps();
-}
-
-// Lightbox zoom for departure card photos
-function depPhotoZoom(src) {
-  let lb = document.getElementById('depPhotoLightbox');
-  if (!lb) {
-    lb = document.createElement('div');
-    lb.id = 'depPhotoLightbox';
-    lb.style.cssText = 'display:none;align-items:center;justify-content:center;position:fixed;inset:0;z-index:9900;background:rgba(0,0,0,0.88);backdrop-filter:blur(6px);cursor:zoom-out;';
-    lb.innerHTML = '<img style="max-width:90vw;max-height:85vh;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,0.7);object-fit:contain;"/>';
-    lb.addEventListener('click', () => { lb.style.display = 'none'; });
-    document.body.appendChild(lb);
-    // ESC key to close
-    document.addEventListener('keydown', e => {
-      if (e.key === 'Escape' && lb.style.display !== 'none') {
-        lb.style.display = 'none';
-      }
-    });
-  }
-  lb.querySelector('img').src = src;
-  lb.style.display = 'flex';
 }
 
 function escapeHtml(str) {
@@ -619,6 +537,51 @@ function saveDeps() {
   saveDepartures(depRooms, depLog);
 }
 
+// ── No Answer (NA) tracking ────────────────────────────────
+// Each tap adds 1 attempt + timestamps it. Second tap on same room
+// adds another attempt. Long-press (hold 600ms) resets to 0.
+let _naHoldTimer = null;
+
+function depMarkNA(i) {
+  const r = depRooms[i];
+  const t = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  r.naAttempts = (r.naAttempts || 0) + 1;
+  r.naLastAt   = t;
+  // Auto-append to note
+  const line = `[${t}] 📵 No Answer — attempt #${r.naAttempts}`;
+  r.note = r.note ? r.note + '\n' + line : line;
+  depRender();
+  saveDeps();
+  showToast(`Room ${r.roomStr} — NA attempt #${r.naAttempts} recorded`, 'info');
+}
+
+function depResetNA(i) {
+  const r = depRooms[i];
+  r.naAttempts = 0;
+  r.naLastAt   = '';
+  depRender();
+  saveDeps();
+  showToast(`Room ${r.roomStr} — NA cleared`, 'info');
+}
+
+// Copy a clean HK-ready list of NA rooms to clipboard
+function depCopyNAList() {
+  const naRooms = depRooms.filter(r => r.naAttempts > 0 && r.status !== 'out' && r.status !== 'extended');
+  if (!naRooms.length) { showToast('No NA rooms to copy', 'err'); return; }
+  const t = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  const lines = [
+    `📵 NO ANSWER ROOMS — ${new Date().toLocaleDateString('en-GB', {day:'2-digit',month:'short'})} · ${t}`,
+    '─'.repeat(40),
+    ...naRooms.map(r =>
+      `Room ${r.roomStr.padEnd(5)} · ${r.name.substring(0,22).padEnd(22)} · ${r.naAttempts} attempt${r.naAttempts>1?'s':''} · Last: ${r.naLastAt}`
+    ),
+    '─'.repeat(40),
+    `Total: ${naRooms.length} room${naRooms.length>1?'s':''} — Please check and update status`,
+  ];
+  const btn = document.getElementById('depNaCopyBtn');
+  copyToClipboard(lines.join('\n'), btn, '📋 Copy for HK');
+}
+
 // ── Action log ─────────────────────────────────────────────
 function renderDepLog() {
   const wrap  = document.getElementById('depLogWrap');
@@ -628,8 +591,8 @@ function renderDepLog() {
   if (!entries.length) { if (wrap) wrap.style.display = 'none'; return; }
   if (wrap)  wrap.style.display = 'block';
   if (badge) badge.textContent = entries.length;
-  const aLabel = { out:'✓ Checked Out', extended:'↪ Extended', late:'🕐 Late CO' };
-  const aCls   = { out:'log-act-co',    extended:'log-act-ext', late:'log-act-late' };
+  const aLabel = { out:'✓ Checked Out', extended:'↪ Extended', late:'🕐 Late CO', na:'📵 No Answer' };
+  const aCls   = { out:'log-act-co',    extended:'log-act-ext', late:'log-act-late', na:'log-act-na' };
   if (body) body.innerHTML = entries.map((l, li) => `
     <div class="log-row">
       <span class="log-room">${escapeHtml(l.room)}</span>
@@ -669,7 +632,7 @@ function depFilter(f, el) {
   const btn = el || document.querySelector(`[data-f="${f}"]`);
   if (btn) {
     btn.classList.add('on');
-    const map = { due:'due', extended:'ext', late:'late', balance:'bal', out:'out', pending:'pending' };
+    const map = { due:'due', extended:'ext', late:'late', balance:'bal', out:'out', pending:'pending', na:'na' };
     if (map[f]) btn.classList.add(map[f]);
   }
   depRender();
@@ -727,12 +690,14 @@ function clearDep() {
 function exportDepSummary() {
   if (!depRooms.length) return;
   const wb   = XLSX.utils.book_new();
-  const data = [['Room','Guest','Arrival','Departure','Nights','Balance AED','Source','Company','Status','Intent','Late Time','Ext Nights','Checkout At','Notes']];
+  const data = [['Room','Guest','Arrival','Departure','Nights','Balance AED','Source','Company','Status','Intent','Late Time','Ext Nights','Checkout At','NA Attempts','NA Last At','Notes']];
   depRooms.forEach(r => data.push([
     r.roomStr, r.name, r.arrival, r.departure, r.nights, r.balance,
     r.source, r.company, r.status.toUpperCase(),
     r.intent ? INTENT_CONFIG[r.intent]?.label || r.intent : '',
-    r.lateTime, r.extensionNights || '', r.checkoutAt, r.note,
+    r.lateTime, r.extensionNights || '', r.checkoutAt,
+    r.naAttempts || 0, r.naLastAt || '',
+    r.note,
   ]));
   const ws = XLSX.utils.aoa_to_sheet(data);
   ws['!cols'] = [8,24,12,12,7,12,20,22,12,16,10,8,10,40].map(w => ({wch:w}));
