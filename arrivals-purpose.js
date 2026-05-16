@@ -3,7 +3,53 @@
 // ═══════════════════════════════════════════════════════════
 
 // ── ARRIVALS ──────────────────────────────────────────────
-function arrKpiUpdate() {
+
+// ── Shared log helper ─────────────────────────────────────
+function addArrLog(action, detail) {
+  const t = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  arrLog.unshift({ action, detail, time: t, ts: Date.now() });
+  if (arrLog.length > 100) arrLog.pop();
+  saveArrLog(arrLog);
+  renderArrLog();
+}
+
+function renderArrLog() {
+  const wrap  = document.getElementById('arrLogWrap');
+  const body  = document.getElementById('arrLogBody');
+  const badge = document.getElementById('arrLogCount');
+  if (!wrap) return;
+  if (!arrLog.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  if (badge) badge.textContent = arrLog.length;
+  const icons = {
+    'Loaded':'📥', 'Added':'➕', 'Removed':'✕', 'Purpose':'🔄',
+    'Cleared':'🗑️', 'AI Nat':'✦', 'Exported':'📤', 'Synced':'🔁',
+  };
+  const cls = {
+    'Loaded':'log-act-ext', 'Added':'log-act-co', 'Removed':'log-act-late',
+    'Purpose':'log-act-ext', 'Cleared':'log-act-late', 'AI Nat':'log-act-co',
+    'Exported':'log-act-ext', 'Synced':'log-act-co',
+  };
+  if (body) body.innerHTML = arrLog.map((l, li) => `
+    <div class="log-row">
+      <span class="log-action ${cls[l.action] || ''}">${icons[l.action] || '·'} ${l.action}</span>
+      <span class="log-name">${escapeLogText(l.detail)}</span>
+      <span class="log-time">${l.time}</span>
+    </div>`).join('');
+}
+
+function toggleArrLog() {
+  const body = document.getElementById('arrLogBody');
+  const icon = document.getElementById('arrLogToggleIcon');
+  if (!body) return;
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  if (icon) icon.textContent = open ? '▸' : '▾';
+}
+
+function escapeLogText(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
   const t   = arrGuests.length;
   const l   = arrGuests.filter(g => g.purpose === 'Leisure').length;
   const b   = arrGuests.filter(g => g.purpose === 'Business').length;
@@ -12,6 +58,20 @@ function arrKpiUpdate() {
     const el = document.getElementById(id); if (el) el.textContent = [t,l,b,avg][i];
   });
   const badge = document.getElementById('badge-arrivals'); if (badge) badge.textContent = t || '0';
+}
+
+function arrRemoveGuest(i) {
+  const g = arrGuests[i];
+  arrGuests.splice(i, 1);
+  arrRender(); saveArrivals(arrGuests);
+  addArrLog('Removed', `${g.name} — Room ${g.room}`);
+}
+
+function arrChangePurpose(i, val) {
+  const prev = arrGuests[i].purpose;
+  arrGuests[i].purpose = val;
+  arrRender(); saveArrivals(arrGuests);
+  addArrLog('Purpose', `${arrGuests[i]?.name || 'Guest'}: ${prev} → ${val}`);
 }
 
 function arrRender() {
@@ -32,7 +92,7 @@ function arrRender() {
       <td><input value="${g.room}"    onchange="arrGuests[${i}].room=this.value;saveArrivals(arrGuests)" style="width:46px;"/></td>
       <td><input value="${g.conf}"    onchange="arrGuests[${i}].conf=this.value" style="width:86px;"/></td>
       <td><input value="${g.name}"    onchange="arrGuests[${i}].name=this.value.toUpperCase();this.value=arrGuests[${i}].name;saveArrivals(arrGuests)" style="width:165px;"/></td>
-      <td><select onchange="arrGuests[${i}].purpose=this.value;arrKpiUpdate();arrRender();saveArrivals(arrGuests)">
+      <td><select onchange="arrChangePurpose(${i},this.value)">
         ${['Business','Leisure','Flight'].map(p=>`<option${g.purpose===p?' selected':''}>${p}</option>`).join('')}
       </select></td>
       <td><input type="number" value="${g.nights}" onchange="arrGuests[${i}].nights=this.value;arrKpiUpdate()" style="width:42px;"/></td>
@@ -43,7 +103,7 @@ function arrRender() {
       <td><input value="${g.email}"   onchange="arrGuests[${i}].email=this.value" style="width:138px;"/></td>
       <td><input value="${g.source}"  onchange="arrGuests[${i}].source=this.value" style="width:100px;"/></td>
       <td><input value="${g.remarks}" onchange="arrGuests[${i}].remarks=this.value" style="width:86px;"/></td>
-      <td><button class="icon-btn" onclick="arrGuests.splice(${i},1);arrKpiUpdate();arrRender();saveArrivals(arrGuests)">✕</button></td>
+      <td><button class="icon-btn" onclick="arrRemoveGuest(${i})">✕</button></td>
     </tr>`;
   }).join('');
   arrKpiUpdate();
@@ -62,6 +122,7 @@ async function runAINat_arr() {
   arrRender();
   setSpinner('aiSpinArr', false);
   saveArrivals(arrGuests);
+  addArrLog('AI Nat', `Nationality guessed for ${arrGuests.filter(g=>g.nat).length} guests`);
 }
 
 async function aiOneGuest(i, list) {
@@ -93,9 +154,10 @@ function loadArrivals() {
   }
   if (!guests.length) { alert('No guests found.'); return; }
   arrGuests = guests; arrRender(); setTimeout(() => runAINat_arr(), 300);
+  addArrLog('Loaded', `${guests.length} guests loaded from paste`);
 }
 
-function clearArrivals() { arrGuests = []; arrRender(); saveArrivals([]); }
+function clearArrivals() { arrGuests = []; arrRender(); saveArrivals([]); addArrLog('Cleared', 'All arrivals cleared'); }
 
 function exportArrivals() {
   const wb   = XLSX.utils.book_new();
@@ -105,9 +167,60 @@ function exportArrivals() {
   ws['!cols'] = [8,16,28,14,8,14,26,20,18].map(w => ({wch:w}));
   XLSX.utils.book_append_sheet(wb, ws, 'Arrivals');
   XLSX.writeFile(wb, 'Arrivals_' + new Date().toISOString().split('T')[0] + '.xlsx');
+  addArrLog('Exported', `${arrGuests.length} guests exported to Excel`);
 }
 
 // ── PURPOSE OF STAY ───────────────────────────────────────
+
+function addPurposeLog(action, detail) {
+  const t = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  purposeLog.unshift({ action, detail, time: t, ts: Date.now() });
+  if (purposeLog.length > 100) purposeLog.pop();
+  savePurposeLog(purposeLog);
+  renderPurposeLog();
+}
+
+function renderPurposeLog() {
+  const wrap  = document.getElementById('purposeLogWrap');
+  const body  = document.getElementById('purposeLogBody');
+  const badge = document.getElementById('purposeLogCount');
+  if (!wrap) return;
+  if (!purposeLog.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  if (badge) badge.textContent = purposeLog.length;
+  const icons = { 'Loaded':'📥','Added':'➕','Removed':'✕','Purpose':'🔄','Cleared':'🗑️','AI Nat':'✦','Exported':'📤','Synced':'🔁' };
+  const cls   = { 'Loaded':'log-act-ext','Added':'log-act-co','Removed':'log-act-late','Purpose':'log-act-ext','Cleared':'log-act-late','AI Nat':'log-act-co','Exported':'log-act-ext','Synced':'log-act-co' };
+  if (body) body.innerHTML = purposeLog.map(l => `
+    <div class="log-row">
+      <span class="log-action ${cls[l.action] || ''}">${icons[l.action] || '·'} ${l.action}</span>
+      <span class="log-name">${escapeLogText(l.detail)}</span>
+      <span class="log-time">${l.time}</span>
+    </div>`).join('');
+}
+
+function togglePurposeLog() {
+  const body = document.getElementById('purposeLogBody');
+  const icon = document.getElementById('purposeLogToggleIcon');
+  if (!body) return;
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  if (icon) icon.textContent = open ? '▸' : '▾';
+}
+
+function purposeRemoveGuest(i) {
+  const g = purposeGuests[i];
+  purposeGuests.splice(i, 1);
+  purposeRender(); savePurpose(purposeGuests);
+  addPurposeLog('Removed', `${g.name} — Room ${g.room}`);
+}
+
+function purposeChangePurpose(i, val) {
+  const prev = purposeGuests[i].purpose;
+  purposeGuests[i].purpose = val;
+  purposeKpiUpdate(); purposeRender(); savePurpose(purposeGuests);
+  addPurposeLog('Purpose', `${purposeGuests[i]?.name || 'Guest'}: ${prev} → ${val}`);
+}
+
 function editPurposeTitle() {
   const t = prompt('Report title:', _purposeTitle);
   if (t) { _purposeTitle = t; const el = document.getElementById('purposeTitle'); if (el) el.textContent = t; }
@@ -140,7 +253,7 @@ function purposeRender() {
       <td><input value="${g.room}"    onchange="purposeGuests[${i}].room=this.value" style="width:46px;"/></td>
       <td><input value="${g.conf}"    onchange="purposeGuests[${i}].conf=this.value" style="width:86px;"/></td>
       <td><input value="${g.name}"    onchange="purposeGuests[${i}].name=this.value.toUpperCase();this.value=purposeGuests[${i}].name;savePurpose(purposeGuests)" style="width:165px;"/></td>
-      <td><select onchange="purposeGuests[${i}].purpose=this.value;purposeKpiUpdate();purposeRender();savePurpose(purposeGuests)">
+      <td><select onchange="purposeChangePurpose(${i},this.value)">
         ${['Business','Leisure','Flight'].map(p=>`<option${g.purpose===p?' selected':''}>${p}</option>`).join('')}
       </select></td>
       <td><input type="number" value="${g.nights}" onchange="purposeGuests[${i}].nights=this.value" style="width:42px;"/></td>
@@ -151,7 +264,7 @@ function purposeRender() {
       <td><input value="${g.email}"   onchange="purposeGuests[${i}].email=this.value" style="width:138px;"/></td>
       <td><input value="${g.source}"  onchange="purposeGuests[${i}].source=this.value" style="width:100px;"/></td>
       <td><input value="${g.remarks}" onchange="purposeGuests[${i}].remarks=this.value" style="width:86px;"/></td>
-      <td><button class="icon-btn" onclick="purposeGuests.splice(${i},1);purposeKpiUpdate();purposeRender();savePurpose(purposeGuests)">✕</button></td>
+      <td><button class="icon-btn" onclick="purposeRemoveGuest(${i})">✕</button></td>
     </tr>`;
   }).join('');
   purposeKpiUpdate();
@@ -167,12 +280,15 @@ function purposeFilter(f, el) {
 function syncFromArrivals() {
   if (!arrGuests.length) { alert('No arrivals loaded. Go to Arrivals tab first.'); return; }
   purposeGuests = arrGuests.map(g => ({...g}));
-  purposeRender();
-  savePurpose(purposeGuests);
+  purposeRender(); savePurpose(purposeGuests);
   showToast('Synced from Arrivals ✓');
+  addPurposeLog('Synced', `${purposeGuests.length} guests synced from Arrivals`);
 }
 
-function clearPurpose() { purposeGuests = []; purposeRender(); savePurpose([]); }
+function clearPurpose() {
+  purposeGuests = []; purposeRender(); savePurpose([]);
+  addPurposeLog('Cleared', 'All guests cleared');
+}
 
 function loadPurpose() {
   const raw = document.getElementById('purposeInput').value.trim();
@@ -194,6 +310,7 @@ function loadPurpose() {
       remarks:'' });
   }
   purposeGuests = guests; purposeRender(); setTimeout(() => runAINat_purpose(), 300);
+  addPurposeLog('Loaded', `${guests.length} guests loaded from paste`);
 }
 
 async function runAINat_purpose() {
@@ -202,6 +319,7 @@ async function runAINat_purpose() {
   purposeRender();
   setSpinner('aiSpinPurpose', false);
   savePurpose(purposeGuests);
+  addPurposeLog('AI Nat', `Nationality guessed for ${purposeGuests.filter(g=>g.nat).length} guests`);
 }
 
 function exportPurpose() {
@@ -220,6 +338,7 @@ function exportPurpose() {
   ws['!cols'] = [8,16,28,14,8,14,26,20,18].map(w => ({wch:w}));
   XLSX.utils.book_append_sheet(wb, ws, 'Purpose of Stay');
   XLSX.writeFile(wb, (_purposeTitle||'Purpose').replace(/\s+/g,'_')+'.xlsx', {bookSST:false,type:'binary',cellStyles:true});
+  addPurposeLog('Exported', `${purposeGuests.length} guests exported`);
 }
 
 // ── ADD GUEST MODAL ───────────────────────────────────────
@@ -251,8 +370,13 @@ function saveGuest() {
     remarks: document.getElementById('mg-remarks').value,
   };
   if (!g.name) return;
-  if (guestModalTarget === 'arrivals') { arrGuests.push(g); arrRender(); saveArrivals(arrGuests); }
-  else { purposeGuests.push(g); purposeRender(); savePurpose(purposeGuests); }
+  if (guestModalTarget === 'arrivals') {
+    arrGuests.push(g); arrRender(); saveArrivals(arrGuests);
+    addArrLog('Added', `${g.name} — Room ${g.room}`);
+  } else {
+    purposeGuests.push(g); purposeRender(); savePurpose(purposeGuests);
+    addPurposeLog('Added', `${g.name} — Room ${g.room}`);
+  }
   closeModal();
 }
 

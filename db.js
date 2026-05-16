@@ -99,6 +99,22 @@ async function saveFeedback(log) {
   await fbSet('feedback', { log, updatedAt: new Date().toISOString() });
 }
 
+async function saveArrLog(log) {
+  await fbSet('arrLog', { log, updatedAt: new Date().toISOString() });
+}
+
+async function savePurposeLog(log) {
+  await fbSet('purposeLog', { log, updatedAt: new Date().toISOString() });
+}
+
+async function saveShiftLog(log) {
+  await fbSet('shiftLog', { log, updatedAt: new Date().toISOString() });
+}
+
+async function saveCheckLog(log) {
+  await fbSet('checkLog', { log, updatedAt: new Date().toISOString() });
+}
+
 async function saveSettings(settings) {
   const current = await fbGet('settings') || {};
   await fbSet('settings', { ...current, ...settings, updatedAt: new Date().toISOString() });
@@ -107,35 +123,48 @@ async function saveSettings(settings) {
 // Add to db.js - loads all data from Firebase in one call
 async function loadAll() {
   try {
-    const [departures, arrivals, purpose, checklist, shifts, feedback, settings] = await Promise.all([
+    const [departures, arrivals, purpose, checklist, shifts, feedback, settings,
+           arrLogData, purposeLogData, shiftLogData, checkLogData] = await Promise.all([
       fbGet('departures'),
       fbGet('arrivals'),
       fbGet('purpose'),
       fbGet('checklist'),
       fbGet('shifts'),
       fbGet('feedback'),
-      fbGet('settings')
+      fbGet('settings'),
+      fbGet('arrLog'),
+      fbGet('purposeLog'),
+      fbGet('shiftLog'),
+      fbGet('checkLog'),
     ]);
-    
+
     return {
-      departures: departures || { rooms: [], log: [] },
-      arrivals: arrivals || { guests: [] },
-      purpose: purpose || { guests: [] },
-      checklist: checklist || { steps: [], done: [], skipped: [] },
-      shifts: shifts || { data: null },
-      feedback: feedback || { log: [] },
-      settings: settings || {}
+      departures:  departures  || { rooms: [], log: [] },
+      arrivals:    arrivals    || { guests: [] },
+      purpose:     purpose     || { guests: [] },
+      checklist:   checklist   || { steps: [], done: [], skipped: [] },
+      shifts:      shifts      || { data: null },
+      feedback:    feedback    || { log: [] },
+      settings:    settings    || {},
+      arrLog:      arrLogData  || { log: [] },
+      purposeLog:  purposeLogData || { log: [] },
+      shiftLog:    shiftLogData   || { log: [] },
+      checkLog:    checkLogData   || { log: [] },
     };
   } catch (e) {
     console.warn('loadAll error:', e);
     return {
       departures: { rooms: [], log: [] },
-      arrivals: { guests: [] },
-      purpose: { guests: [] },
-      checklist: { steps: [], done: [], skipped: [] },
-      shifts: { data: null },
-      feedback: { log: [] },
-      settings: {}
+      arrivals:   { guests: [] },
+      purpose:    { guests: [] },
+      checklist:  { steps: [], done: [], skipped: [] },
+      shifts:     { data: null },
+      feedback:   { log: [] },
+      settings:   {},
+      arrLog:     { log: [] },
+      purposeLog: { log: [] },
+      shiftLog:   { log: [] },
+      checkLog:   { log: [] },
     };
   }
 }

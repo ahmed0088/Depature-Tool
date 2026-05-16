@@ -2112,3 +2112,26 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 [data-theme="light"] .dc-photo-zone { background: var(--card2); }
 [data-theme="light"] .dc-photo-del { background: rgba(220,60,70,0.88); }
 
+
+/* ══════════════════════════════════════════════════
+   MODULE ACTIVITY LOGS
+   Arrivals · Purpose · Shifts · Checklist
+   Reuse dep-log-wrap visual style, scoped to each module
+══════════════════════════════════════════════════ */
+.arr-log-wrap,
+.purpose-log-wrap,
+.shift-log-wrap,
+.check-log-wrap {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  overflow: hidden;
+  margin-top: 16px;
+  display: none;
+}
+.arr-log-wrap .dep-log-header,
+.purpose-log-wrap .dep-log-header,
+.shift-log-wrap .dep-log-header,
+.check-log-wrap .dep-log-header {
+  border-radius: var(--r2) var(--r2) 0 0;
+}

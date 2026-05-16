@@ -92,6 +92,12 @@ const DEFAULT_TASKS = {
 // ── Feedback ──────────────────────────────────────────────
 let feedbackLog = [];
 
+// ── Activity logs ─────────────────────────────────────────
+let arrLog     = [];   // arrivals activity log
+let purposeLog = [];   // purpose of stay activity log
+let shiftLog   = [];   // shift tasks activity log
+let checkLog   = [];   // night checklist activity log
+
 // ── Copy buffers ──────────────────────────────────────────
 let natCopyText  = '';
 let rentCopyText = '';
