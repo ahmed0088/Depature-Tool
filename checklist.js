@@ -215,20 +215,36 @@ function clSaveNote(stepId) {
 
 function clRender2() {
   const phases = [
-    { key:'pre',  label:'Before Night Run' },
-    { key:'run',  label:'Night Run' },
-    { key:'post', label:'After Night Run' },
+    { key:'pre',  label:'Before Night Run', icon:'🌆' },
+    { key:'run',  label:'Night Run',        icon:'🌙' },
+    { key:'post', label:'After Night Run',  icon:'🌅' },
   ];
-  const tagColors = { check:'var(--mint)', save:'var(--gold)', scan:'var(--sky)', charge:'var(--amber)', run:'var(--rose)' };
+
+  const TAG_CFG = {
+    check:  { color:'var(--mint)',  bg:'rgba(62,207,142,0.1)',  label:'CHECK'  },
+    save:   { color:'var(--gold)',  bg:'rgba(232,184,75,0.1)',  label:'SAVE'   },
+    scan:   { color:'var(--sky)',   bg:'rgba(90,180,232,0.1)',  label:'SCAN'   },
+    charge: { color:'var(--amber)', bg:'rgba(240,164,58,0.1)',  label:'CHARGE' },
+    run:    { color:'var(--rose)',  bg:'rgba(240,107,122,0.1)', label:'RUN'    },
+  };
+
   let html = '';
+
   phases.forEach(ph => {
     const steps = CL_STEPS.filter(s => s.phase === ph.key);
     if (!steps.length) return;
-    html += `<div class="cl-phase-hd">
-      <div class="cl-phase-line"></div>
-      <div class="cl-phase-lbl">${ph.label}</div>
-      <div class="cl-phase-line"></div>
-    </div>`;
+
+    const phDone  = steps.filter(s => clState.done.has(s.id) && !clState.skipped.has(s.id)).length;
+    const phTotal = steps.filter(s => !clState.skipped.has(s.id)).length;
+
+    html += `<div class="cl-phase-block">
+      <div class="cl-phase-hd2">
+        <span class="cl-phase-icon">${ph.icon}</span>
+        <span class="cl-phase-title">${ph.label}</span>
+        <span class="cl-phase-count">${phDone}/${phTotal}</span>
+      </div>
+      <div class="cl-phase-steps">`;
+
     steps.forEach((s, i) => {
       const done    = clState.done.has(s.id);
       const skip    = clState.skipped.has(s.id);
@@ -237,71 +253,86 @@ function clRender2() {
       const photos  = clPhotos[s.id] || [];
       const note    = clNotes[s.id]  || '';
       const ts      = clDoneTimes[s.id] || '';
+      const tag     = TAG_CFG[s.tag] || TAG_CFG.check;
+      const stepNum = String(s.id).padStart(2, '0');
 
-      const photoStrip = photos.length > 0 && !clEditMode ? `
-        <div class="cl-photo-strip" onclick="event.stopPropagation()">
-          ${photos.map((p,idx) => `<img src="${p.data}" class="cl-strip-thumb" onclick="clOpenLightbox(${s.id},${idx})" title="${p.name}"/>`).join('')}
-          <span class="cl-photo-count">📷 ${photos.length} photo${photos.length>1?'s':''}</span>
-        </div>` : '';
+      const tsHtml = done && ts
+        ? `<div class="cl-done-ts">✓ ${new Date(ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</div>`
+        : '';
 
-      const tsHtml = done && ts ? `<div class="cl-done-ts">✓ done at ${new Date(ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</div>` : '';
+      const photoStrip = photos.length > 0 && !clEditMode
+        ? `<div class="cl-photo-strip" onclick="event.stopPropagation()">
+            ${photos.map((p,idx) => `<img src="${p.data}" class="cl-strip-thumb" onclick="clOpenLightbox(${s.id},${idx})" title="${p.name}"/>`).join('')}
+           </div>` : '';
 
-      const noteArea = !clEditMode ? `
-        <div class="cl-note-wrap" onclick="event.stopPropagation()">
-          <textarea class="cl-note-input" id="cl-note-${s.id}" placeholder="Add a note for this step…"
-            oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
-            onblur="clSaveNote(${s.id})"
-          >${note}</textarea>
-        </div>` : '';
+      const noteArea = !clEditMode
+        ? `<div class="cl-note-wrap" onclick="event.stopPropagation()">
+             <textarea class="cl-note-input" id="cl-note-${s.id}" placeholder="Add a note…"
+               oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
+               onblur="clSaveNote(${s.id})">${note}</textarea>
+           </div>` : '';
 
-      html += `<div class="cl-step${done?' done':''}${skip?' skipped':''}"
-                    draggable="${clEditMode}"
-                    data-cl-id="${s.id}"
-                    data-cl-phase="${s.phase}">
-        <div class="cl-step-main" onclick="${clEditMode ? '' : `clToggle2(${s.id})`}">
-          ${clEditMode ? `<div class="st-drag-handle" title="Drag to reorder">⠿</div>` : ''}
-          <div class="cl-check">✓</div>
-          <div class="cl-content">
-            <div class="cl-num">STEP ${s.id} ·
-              <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${tagColors[s.tag]||'var(--text3)'};margin-right:3px;vertical-align:middle;"></span>
-              <span style="font-size:0.54rem;color:${tagColors[s.tag]||'var(--text3)'};">${s.tag.toUpperCase()}</span>
-              ${photos.length > 0 ? `<span class="cl-has-photo" title="${photos.length} photo(s) attached" style="margin-left:4px;">📷</span>` : ''}
+      const editBtns = clEditMode
+        ? `<div class="cl-edit-actions" onclick="event.stopPropagation()">
+             <div class="st-move-btns">
+               <button class="cl-step-btn move-btn" onclick="clMoveStep(${s.id},-1)" ${isFirst?'disabled':''}>↑</button>
+               <button class="cl-step-btn move-btn" onclick="clMoveStep(${s.id}, 1)" ${isLast?'disabled':''}>↓</button>
+             </div>
+             <button class="cl-step-btn photo-btn" onclick="document.getElementById('cl-upload-${s.id}').click()" title="Attach photo">📷</button>
+             <input type="file" id="cl-upload-${s.id}" accept="image/*" multiple style="display:none" onchange="clHandlePhotoUpload(event,${s.id})"/>
+             <button class="cl-step-btn edit-btn" onclick="openEditStep(${s.id})">✏️</button>
+             <button class="cl-step-btn del" onclick="clDeleteStep(${s.id})">✕</button>
+           </div>`
+        : `<div class="cl-run-actions" onclick="event.stopPropagation()">
+             <button class="cl-skip-btn" onclick="clSkip2(${s.id})">${skip ? '↩' : 'Skip'}</button>
+           </div>`;
+
+      html += `
+        <div class="cl-step2${done?' done':''}${skip?' skipped':''}"
+             draggable="${clEditMode}"
+             data-cl-id="${s.id}"
+             data-cl-phase="${s.phase}"
+             onclick="${clEditMode ? '' : `clToggle2(${s.id})`}">
+
+          ${clEditMode ? `<div class="st-drag-handle">⠿</div>` : ''}
+
+          <div class="cl2-check${done?' cl2-checked':''}">
+            ${done ? '✓' : ''}
+          </div>
+
+          <div class="cl2-num" style="color:${tag.color};">${stepNum}</div>
+
+          <div class="cl2-body">
+            <div class="cl2-top">
+              <span class="cl2-name${done?' cl2-done-name':''}">${s.name}</span>
+              <span class="cl2-tag" style="color:${tag.color};background:${tag.bg};">${tag.label}</span>
+              ${photos.length > 0 ? `<span class="cl2-photo-badge">📷${photos.length}</span>` : ''}
+              ${tsHtml}
             </div>
-            <div class="cl-name">${s.name}</div>
-            ${s.hint ? `<div class="cl-hint">${s.hint}</div>` : ''}
-            ${tsHtml}
+            ${s.hint && !done ? `<div class="cl2-hint">${s.hint}</div>` : ''}
             ${photoStrip}
             ${noteArea}
           </div>
-          <div class="cl-step-btns" onclick="event.stopPropagation()">
-            ${clEditMode
-              ? `<div class="st-move-btns">
-                   <button class="cl-step-btn move-btn" onclick="clMoveStep(${s.id},-1)" ${isFirst?'disabled':''} title="Move up">↑</button>
-                   <button class="cl-step-btn move-btn" onclick="clMoveStep(${s.id}, 1)" ${isLast ?'disabled':''} title="Move down">↓</button>
-                 </div>
-                 <button class="cl-step-btn photo-btn" onclick="document.getElementById('cl-upload-${s.id}').click()" title="Attach photo">📷</button>
-                 <input type="file" id="cl-upload-${s.id}" accept="image/*" multiple style="display:none" onchange="clHandlePhotoUpload(event,${s.id})"/>
-                 <button class="cl-step-btn edit-btn" onclick="openEditStep(${s.id})">✏️</button>
-                 <button class="cl-step-btn del"      onclick="clDeleteStep(${s.id})">✕</button>`
-              : `<button class="cl-step-btn"          onclick="clSkip2(${s.id})">${skip ? '↩ Show' : 'Skip'}</button>`}
-          </div>
-        </div>
-      </div>`;
+
+          ${editBtns}
+        </div>`;
     });
+
+    html += `</div></div>`;
   });
+
   const el = document.getElementById('clStepList2');
   if (el) el.innerHTML = html;
   clUpdateProgress();
   if (clEditMode) clInitDragSort();
 }
 
-// ── Drag-and-drop for checklist steps (within same phase) ─
 let _clDragSrc = null;
 
 function clInitDragSort() {
   const list = document.getElementById('clStepList2');
   if (!list) return;
-  list.querySelectorAll('.cl-step[draggable="true"]').forEach(item => {
+  list.querySelectorAll('.cl-step2[draggable="true"]').forEach(item => {
     item.addEventListener('dragstart', e => {
       _clDragSrc = item;
       item.classList.add('dragging');
@@ -309,14 +340,14 @@ function clInitDragSort() {
     });
     item.addEventListener('dragend', () => {
       item.classList.remove('dragging');
-      list.querySelectorAll('.cl-step').forEach(i => i.classList.remove('drag-over'));
+      list.querySelectorAll('.cl-step2').forEach(i => i.classList.remove('drag-over'));
       _clDragSrc = null;
     });
     item.addEventListener('dragover', e => {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
       if (_clDragSrc && _clDragSrc !== item) {
-        list.querySelectorAll('.cl-step').forEach(i => i.classList.remove('drag-over'));
+        list.querySelectorAll('.cl-step2').forEach(i => i.classList.remove('drag-over'));
         item.classList.add('drag-over');
       }
     });
