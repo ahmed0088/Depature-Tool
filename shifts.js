@@ -3,56 +3,28 @@
 //  + drag-to-reorder & ↑↓ buttons
 // ═══════════════════════════════════════════════════════════
 
-// ── Shift log ─────────────────────────────────────────────
-function addShiftLog(action, detail, shiftKey) {
-  const t = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
-  shiftLog.unshift({ action, detail, shift: SHIFTS[shiftKey]?.label || shiftKey, time: t, ts: Date.now() });
-  if (shiftLog.length > 200) shiftLog.pop();
-  saveShiftLog(shiftLog);
-  renderShiftLog();
-}
-
-function renderShiftLog() {
-  const wrap  = document.getElementById('shiftLogWrap');
-  const body  = document.getElementById('shiftLogBody');
-  const badge = document.getElementById('shiftLogCount');
-  if (!wrap) return;
-  if (!shiftLog.length) { wrap.style.display = 'none'; return; }
-  wrap.style.display = 'block';
-  if (badge) badge.textContent = shiftLog.length;
-  const icons = { 'Done':'✓', 'Undone':'↩', 'Added':'➕', 'Deleted':'✕', 'Reset':'↺', 'Edited':'✏️' };
-  const cls   = { 'Done':'log-act-co', 'Undone':'log-act-late', 'Added':'log-act-ext', 'Deleted':'log-act-late', 'Reset':'log-act-late', 'Edited':'log-act-ext' };
-  if (body) body.innerHTML = shiftLog.map(l => `
-    <div class="log-row">
-      <span class="log-room" style="font-size:0.62rem;min-width:100px;color:var(--text3);">${escapeLogText(l.shift)}</span>
-      <span class="log-action ${cls[l.action] || ''}">${icons[l.action] || '·'} ${l.action}</span>
-      <span class="log-name">${escapeLogText(l.detail)}</span>
-      <span class="log-time">${l.time}</span>
-    </div>`).join('');
-}
-
-function toggleShiftLog() {
-  const body = document.getElementById('shiftLogBody');
-  const icon = document.getElementById('shiftLogToggleIcon');
-  if (!body) return;
-  const open = body.style.display !== 'none';
-  body.style.display = open ? 'none' : 'block';
-  if (icon) icon.textContent = open ? '▸' : '▾';
-}
-
-function escapeLogText(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
 function switchShift(key, el) {
+  activeShift = key;
   document.querySelectorAll('.shift-tab').forEach(t => t.classList.remove('active'));
   if (el) el.classList.add('active');
+  // Also sync tab highlight by data-shift attribute
+  document.querySelectorAll('[data-shift]').forEach(t => {
+    if (t.dataset.shift === key) t.classList.add('active');
+  });
   const rb = document.getElementById('shiftResetBtn');
   if (rb) rb.textContent = '↺ Reset ' + SHIFTS[key].label;
-  renderShift(key);
+  _renderShiftContent(key);
 }
 
+// Full render — call this only on initial load or tab switch
 function renderShift(key) {
+  activeShift = key;
+  _renderShiftContent(key);
+  updateShiftBadge(key);
+}
+
+// Content-only render — safe to call anytime without resetting active tab
+function _renderShiftContent(key) {
   const shift     = SHIFTS[key];
   const done      = new Set(shift.done);
   const total     = shift.tasks.length;
@@ -80,11 +52,21 @@ function renderShift(key) {
       ${shift.tasks.map((t, i) => stItemHTML(key, t, done.has(t.id), i, total)).join('')}
     </div>
     <div class="st-add-wrap">
-      <input class="st-add-in"   id="stIn-${key}"   placeholder="Add new task…"       onkeydown="if(event.key==='Enter')stAddTask('${key}')"/>
+      <input class="st-add-in"   id="stIn-${key}"   placeholder="Add new task…" onkeydown="if(event.key==='Enter')stAddTask('${key}')"/>
       <input class="st-add-hint" id="stHint-${key}" placeholder="Hint (optional)"/>
       <button class="btn gold sm" onclick="stAddTask('${key}')">+ Add</button>
     </div>
-    ${shift.resetAt ? `<div style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);margin-top:6px;">Last reset: ${shift.resetAt}</div>` : ''}`;
+    ${shift.resetAt ? `<div style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);margin-top:6px;">Last reset: ${shift.resetAt}</div>` : ''}
+    <div class="st-log-card">
+      <div class="st-log-head">
+        <span>📋 Shift Log</span>
+        <div style="display:flex;gap:6px;">
+          <button class="btn sm" style="font-size:0.58rem;padding:2px 7px;" onclick="stCopyLog('${key}')">📋 Copy</button>
+          <button class="btn sm" style="font-size:0.58rem;padding:2px 7px;" onclick="stClearLog('${key}')">✕ Clear</button>
+        </div>
+      </div>
+      <div class="st-log-body" id="stLog-${key}">${_buildShiftLog(key)}</div>
+    </div>`;
 
   document.getElementById('shiftContent').innerHTML = '<div class="shift-panel active">' + html + '</div>';
   updateShiftBadge(key);
@@ -160,7 +142,7 @@ function initDragSort(key) {
       if (srcIdx < 0 || dstIdx < 0) return;
       const [moved] = tasks.splice(srcIdx, 1);
       tasks.splice(dstIdx, 0, moved);
-      renderShift(key);
+      _renderShiftContent(key);
       saveShifts(SHIFTS);
     });
   });
@@ -168,17 +150,48 @@ function initDragSort(key) {
 
 function stToggle(key, id) {
   const shift = SHIFTS[key];
-  const idx   = shift.done.indexOf(id);
   const task  = shift.tasks.find(t => t.id === id);
-  if (idx >= 0) {
-    shift.done.splice(idx, 1);
-    addShiftLog('Undone', task?.name || id, key);
-  } else {
-    shift.done.push(id);
-    addShiftLog('Done', task?.name || id, key);
-  }
-  renderShift(key);
+  const idx   = shift.done.indexOf(id);
+  if (idx >= 0) { shift.done.splice(idx, 1); stLog(key, 'undone', task?.name || id); }
+  else          { shift.done.push(id);        stLog(key, 'done',   task?.name || id); }
+  _renderShiftContent(key);
+  updateShiftBadge(key);
   saveShifts(SHIFTS);
+}
+
+// ── Shift activity log ────────────────────────────────────
+const SHIFT_LOGS = { morning:[], afternoon:[], mid:[], night:[] };
+
+function stLog(key, type, taskName) {
+  const t = new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  SHIFT_LOGS[key].unshift({ t, type, taskName });
+  if (SHIFT_LOGS[key].length > 50) SHIFT_LOGS[key].pop();
+}
+
+function _buildShiftLog(key) {
+  const entries = SHIFT_LOGS[key] || [];
+  if (!entries.length) return '<div class="st-log-empty">No activity yet</div>';
+  const dot = { done:'var(--mint)', undone:'var(--text3)', added:'var(--sky)', deleted:'var(--rose)', reset:'var(--amber)' };
+  return entries.map(e => `
+    <div class="st-log-entry">
+      <span class="st-log-dot" style="background:${dot[e.type]||'var(--text3)'}"></span>
+      <span class="st-log-text"><strong>${e.taskName}</strong> — ${e.type}</span>
+      <span class="st-log-time">${e.t}</span>
+    </div>`).join('');
+}
+
+function stCopyLog(key) {
+  const entries = SHIFT_LOGS[key] || [];
+  if (!entries.length) { showToast('Log is empty','info'); return; }
+  const label = SHIFTS[key].label;
+  const lines  = entries.map(e => `${e.t}  ${e.type.padEnd(8)}  ${e.taskName}`);
+  copyToClipboard(`${label} Log\n${'─'.repeat(40)}\n${lines.join('\n')}`, null, '');
+  showToast('Log copied ✓','ok');
+}
+
+function stClearLog(key) {
+  SHIFT_LOGS[key] = [];
+  _renderShiftContent(key);
 }
 
 function stAddTask(key) {
@@ -189,22 +202,40 @@ function stAddTask(key) {
   SHIFTS[key].tasks.push({ id: 't' + Date.now(), name, hint: (hEl?.value || '').trim() });
   if (nEl) nEl.value = '';
   if (hEl) hEl.value = '';
-  addShiftLog('Added', name, key);
-  renderShift(key);
+  stLog(key, 'added', name);
+  _renderShiftContent(key);
   saveShifts(SHIFTS);
 }
 
 function stDelete(key, id) {
   if (!confirm('Delete this task?')) return;
   const task = SHIFTS[key].tasks.find(t => t.id === id);
+  stLog(key, 'deleted', task?.name || id);
   SHIFTS[key].tasks = SHIFTS[key].tasks.filter(t => t.id !== id);
   SHIFTS[key].done  = SHIFTS[key].done.filter(d => d !== id);
-  addShiftLog('Deleted', task?.name || id, key);
-  renderShift(key);
+  _renderShiftContent(key);
   saveShifts(SHIFTS);
 }
 
-function openEditTask(key, id) {
+function stMove(key, id, dir) {
+  const tasks = SHIFTS[key].tasks;
+  const idx   = tasks.findIndex(t => t.id === id);
+  const to    = idx + dir;
+  if (to < 0 || to >= tasks.length) return;
+  [tasks[idx], tasks[to]] = [tasks[to], tasks[idx]];
+  _renderShiftContent(key);
+  saveShifts(SHIFTS);
+}
+
+function resetShift(key) {
+  if (!confirm('Reset all tasks for ' + SHIFTS[key].label + '?')) return;
+  SHIFTS[key].done    = [];
+  SHIFTS[key].resetAt = new Date().toLocaleString('en-GB');
+  stLog(key, 'reset', 'All tasks');
+  _renderShiftContent(key);
+  saveShifts(SHIFTS);
+  showToast('Shift reset ✓');
+}
   const task = SHIFTS[key].tasks.find(t => t.id === id);
   if (!task) return;
   document.getElementById('et-shift').value = key;
@@ -222,8 +253,7 @@ function saveEditTask() {
   task.name = document.getElementById('et-name').value.trim() || task.name;
   task.hint = document.getElementById('et-hint').value.trim();
   document.getElementById('editTaskModal').classList.remove('open');
-  addShiftLog('Edited', task.name, key);
-  renderShift(key);
+  _renderShiftContent(key);
   saveShifts(SHIFTS);
 }
 
@@ -231,7 +261,6 @@ function resetShift(key) {
   if (!confirm('Reset all tasks for ' + SHIFTS[key].label + '?')) return;
   SHIFTS[key].done    = [];
   SHIFTS[key].resetAt = new Date().toLocaleString('en-GB');
-  addShiftLog('Reset', `All ${SHIFTS[key].tasks.length} tasks reset`, key);
   renderShift(key);
   saveShifts(SHIFTS);
   showToast('Shift reset ✓');

@@ -89,9 +89,73 @@ function saveEditStep() {
   clSaveAll();
 }
 
-// ── Unified save (steps + done + skipped + photos + notes + timestamps)
-function clSaveAll() {
-  saveChecklist(CL_STEPS, clState.done, clState.skipped, clPhotos, clNotes, clDoneTimes);
+// ── Activity log ─────────────────────────────────────────
+let clLog = []; // { ts, type, stepId, stepName, note }
+
+function clAddLog(type, stepId, stepName, extra) {
+  const entry = {
+    ts: new Date().toISOString(),
+    type,        // 'done' | 'undone' | 'skipped' | 'unskipped' | 'note' | 'reset'
+    stepId,
+    stepName: stepName || '',
+    extra: extra || ''
+  };
+  clLog.unshift(entry); // newest first
+  if (clLog.length > 100) clLog.pop(); // cap at 100
+  clRenderLog();
+}
+
+function clRenderLog() {
+  const body  = document.getElementById('clLogBody');
+  const count = document.getElementById('clLogCount');
+  if (!body) return;
+  if (count) count.textContent = clLog.length;
+
+  if (!clLog.length) {
+    body.innerHTML = '<div class="cl-log-empty">No activity yet.<br>Tick steps to log them.</div>';
+    return;
+  }
+
+  const labels = {
+    done:      { dot: 'done',    text: 'Completed' },
+    undone:    { dot: 'undone',  text: 'Unchecked' },
+    skipped:   { dot: 'skipped', text: 'Skipped'   },
+    unskipped: { dot: 'done',    text: 'Restored'  },
+    note:      { dot: 'note',    text: 'Note saved' },
+    reset:     { dot: 'reset',   text: 'Night reset' },
+  };
+
+  body.innerHTML = clLog.map(e => {
+    const l  = labels[e.type] || { dot: 'done', text: e.type };
+    const t  = new Date(e.ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const nm = e.stepName ? `<strong>${e.stepName}</strong>` : '<strong>—</strong>';
+    const ex = e.extra    ? `<span style="color:var(--text3);"> · ${e.extra}</span>` : '';
+    return `<div class="cl-log-entry">
+      <div class="cl-log-dot ${l.dot}"></div>
+      <div class="cl-log-text">${l.text} ${nm}${ex}</div>
+      <div class="cl-log-time">${t}</div>
+    </div>`;
+  }).join('');
+}
+
+function clClearLog() {
+  if (!clLog.length) return;
+  if (!confirm('Clear activity log?')) return;
+  clLog = [];
+  clRenderLog();
+  showToast('Log cleared', 'info');
+}
+
+function clCopyLog() {
+  if (!clLog.length) { showToast('Log is empty', 'info'); return; }
+  const lines = clLog.map(e => {
+    const t  = new Date(e.ts).toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+    const lbl = { done:'✓ Done', undone:'↩ Undone', skipped:'— Skipped', unskipped:'↩ Restored', note:'📝 Note', reset:'↺ Reset' };
+    return `${t}  ${lbl[e.type]||e.type}  ${e.stepName}${e.extra ? ' · '+e.extra : ''}`;
+  });
+  const header = `Night Run Log · ${new Date().toLocaleDateString('en-GB', {day:'numeric',month:'long',year:'numeric'})}\n${'─'.repeat(52)}\n`;
+  copyToClipboard(header + lines.join('\n'), null, '');
+  showToast('Log copied ✓', 'ok');
 }
 
 // ════════════════════════════════════════════════════════════
@@ -199,13 +263,8 @@ function clSaveNote(stepId) {
   const el = document.getElementById('cl-note-' + stepId);
   if (!el) return;
   const val = el.value.trim();
-  if (val) {
-    clNotes[stepId] = val;
-    const step = CL_STEPS.find(s => s.id === stepId);
-    addCheckLog('Note', `${step?.name || 'Step ' + stepId}`);
-  } else {
-    delete clNotes[stepId];
-  }
+  if (val) clNotes[stepId] = val;
+  else delete clNotes[stepId];
   clSaveAll();
 }
 
@@ -215,36 +274,20 @@ function clSaveNote(stepId) {
 
 function clRender2() {
   const phases = [
-    { key:'pre',  label:'Before Night Run', icon:'🌆' },
-    { key:'run',  label:'Night Run',        icon:'🌙' },
-    { key:'post', label:'After Night Run',  icon:'🌅' },
+    { key:'pre',  label:'Before Night Run' },
+    { key:'run',  label:'Night Run' },
+    { key:'post', label:'After Night Run' },
   ];
-
-  const TAG_CFG = {
-    check:  { color:'var(--mint)',  bg:'rgba(62,207,142,0.1)',  label:'CHECK'  },
-    save:   { color:'var(--gold)',  bg:'rgba(232,184,75,0.1)',  label:'SAVE'   },
-    scan:   { color:'var(--sky)',   bg:'rgba(90,180,232,0.1)',  label:'SCAN'   },
-    charge: { color:'var(--amber)', bg:'rgba(240,164,58,0.1)',  label:'CHARGE' },
-    run:    { color:'var(--rose)',  bg:'rgba(240,107,122,0.1)', label:'RUN'    },
-  };
-
+  const tagColors = { check:'var(--mint)', save:'var(--gold)', scan:'var(--sky)', charge:'var(--amber)', run:'var(--rose)' };
   let html = '';
-
   phases.forEach(ph => {
     const steps = CL_STEPS.filter(s => s.phase === ph.key);
     if (!steps.length) return;
-
-    const phDone  = steps.filter(s => clState.done.has(s.id) && !clState.skipped.has(s.id)).length;
-    const phTotal = steps.filter(s => !clState.skipped.has(s.id)).length;
-
-    html += `<div class="cl-phase-block">
-      <div class="cl-phase-hd2">
-        <span class="cl-phase-icon">${ph.icon}</span>
-        <span class="cl-phase-title">${ph.label}</span>
-        <span class="cl-phase-count">${phDone}/${phTotal}</span>
-      </div>
-      <div class="cl-phase-steps">`;
-
+    html += `<div class="cl-phase-hd">
+      <div class="cl-phase-line"></div>
+      <div class="cl-phase-lbl">${ph.label}</div>
+      <div class="cl-phase-line"></div>
+    </div>`;
     steps.forEach((s, i) => {
       const done    = clState.done.has(s.id);
       const skip    = clState.skipped.has(s.id);
@@ -253,86 +296,70 @@ function clRender2() {
       const photos  = clPhotos[s.id] || [];
       const note    = clNotes[s.id]  || '';
       const ts      = clDoneTimes[s.id] || '';
-      const tag     = TAG_CFG[s.tag] || TAG_CFG.check;
-      const stepNum = String(s.id).padStart(2, '0');
 
-      const tsHtml = done && ts
-        ? `<div class="cl-done-ts">✓ ${new Date(ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</div>`
-        : '';
+      const photoStrip = photos.length > 0 && !clEditMode ? `
+        <div class="cl-photo-strip" onclick="event.stopPropagation()">
+          ${photos.map((p,idx) => `<img src="${p.data}" class="cl-strip-thumb" onclick="clOpenLightbox(${s.id},${idx})" title="${p.name}"/>`).join('')}
+          <span class="cl-photo-count">📷 ${photos.length} photo${photos.length>1?'s':''}</span>
+        </div>` : '';
 
-      const photoStrip = photos.length > 0 && !clEditMode
-        ? `<div class="cl-photo-strip" onclick="event.stopPropagation()">
-            ${photos.map((p,idx) => `<img src="${p.data}" class="cl-strip-thumb" onclick="clOpenLightbox(${s.id},${idx})" title="${p.name}"/>`).join('')}
-           </div>` : '';
+      const tsHtml = done && ts ? `<div class="cl-done-ts">✓ done at ${new Date(ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</div>` : '';
 
-      const noteArea = !clEditMode
-        ? `<div class="cl-note-wrap" onclick="event.stopPropagation()">
-             <textarea class="cl-note-input" id="cl-note-${s.id}" placeholder="Add a note…"
-               oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
-               onblur="clSaveNote(${s.id})">${note}</textarea>
-           </div>` : '';
+      const noteArea = !clEditMode ? `
+        <div class="cl-note-wrap" onclick="event.stopPropagation()">
+          <textarea class="cl-note-input" id="cl-note-${s.id}" rows="1" placeholder="Add a note…"
+            onblur="clSaveNote(${s.id})"
+          >${note}</textarea>
+        </div>` : '';
 
-      const editBtns = clEditMode
-        ? `<div class="cl-edit-actions" onclick="event.stopPropagation()">
-             <div class="st-move-btns">
-               <button class="cl-step-btn move-btn" onclick="clMoveStep(${s.id},-1)" ${isFirst?'disabled':''}>↑</button>
-               <button class="cl-step-btn move-btn" onclick="clMoveStep(${s.id}, 1)" ${isLast?'disabled':''}>↓</button>
-             </div>
-             <button class="cl-step-btn photo-btn" onclick="document.getElementById('cl-upload-${s.id}').click()" title="Attach photo">📷</button>
-             <input type="file" id="cl-upload-${s.id}" accept="image/*" multiple style="display:none" onchange="clHandlePhotoUpload(event,${s.id})"/>
-             <button class="cl-step-btn edit-btn" onclick="openEditStep(${s.id})">✏️</button>
-             <button class="cl-step-btn del" onclick="clDeleteStep(${s.id})">✕</button>
-           </div>`
-        : `<div class="cl-run-actions" onclick="event.stopPropagation()">
-             <button class="cl-skip-btn" onclick="clSkip2(${s.id})">${skip ? '↩' : 'Skip'}</button>
-           </div>`;
-
-      html += `
-        <div class="cl-step2${done?' done':''}${skip?' skipped':''}"
-             draggable="${clEditMode}"
-             data-cl-id="${s.id}"
-             data-cl-phase="${s.phase}"
-             onclick="${clEditMode ? '' : `clToggle2(${s.id})`}">
-
-          ${clEditMode ? `<div class="st-drag-handle">⠿</div>` : ''}
-
-          <div class="cl2-check${done?' cl2-checked':''}">
-            ${done ? '✓' : ''}
-          </div>
-
-          <div class="cl2-num" style="color:${tag.color};">${stepNum}</div>
-
-          <div class="cl2-body">
-            <div class="cl2-top">
-              <span class="cl2-name${done?' cl2-done-name':''}">${s.name}</span>
-              <span class="cl2-tag" style="color:${tag.color};background:${tag.bg};">${tag.label}</span>
-              ${photos.length > 0 ? `<span class="cl2-photo-badge">📷${photos.length}</span>` : ''}
-              ${tsHtml}
+      html += `<div class="cl-step${done?' done':''}${skip?' skipped':''}"
+                    draggable="${clEditMode}"
+                    data-cl-id="${s.id}"
+                    data-cl-phase="${s.phase}">
+        <div class="cl-step-main" onclick="${clEditMode ? '' : `clToggle2(${s.id})`}">
+          ${clEditMode ? `<div class="st-drag-handle" title="Drag to reorder">⠿</div>` : ''}
+          <div class="cl-check">✓</div>
+          <div class="cl-content">
+            <div class="cl-num">STEP ${s.id} ·
+              <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${tagColors[s.tag]||'var(--text3)'};margin-right:3px;vertical-align:middle;"></span>
+              <span style="font-size:0.54rem;color:${tagColors[s.tag]||'var(--text3)'};">${s.tag.toUpperCase()}</span>
+              ${photos.length > 0 ? `<span class="cl-has-photo" title="${photos.length} photo(s) attached" style="margin-left:4px;">📷</span>` : ''}
             </div>
-            ${s.hint && !done ? `<div class="cl2-hint">${s.hint}</div>` : ''}
+            <div class="cl-name">${s.name}</div>
+            ${s.hint ? `<div class="cl-hint">${s.hint}</div>` : ''}
+            ${tsHtml}
             ${photoStrip}
             ${noteArea}
           </div>
-
-          ${editBtns}
-        </div>`;
+          <div class="cl-step-btns" onclick="event.stopPropagation()">
+            ${clEditMode
+              ? `<div class="st-move-btns">
+                   <button class="cl-step-btn move-btn" onclick="clMoveStep(${s.id},-1)" ${isFirst?'disabled':''} title="Move up">↑</button>
+                   <button class="cl-step-btn move-btn" onclick="clMoveStep(${s.id}, 1)" ${isLast ?'disabled':''} title="Move down">↓</button>
+                 </div>
+                 <button class="cl-step-btn photo-btn" onclick="document.getElementById('cl-upload-${s.id}').click()" title="Attach photo">📷</button>
+                 <input type="file" id="cl-upload-${s.id}" accept="image/*" multiple style="display:none" onchange="clHandlePhotoUpload(event,${s.id})"/>
+                 <button class="cl-step-btn edit-btn" onclick="openEditStep(${s.id})">✏️</button>
+                 <button class="cl-step-btn del"      onclick="clDeleteStep(${s.id})">✕</button>`
+              : `<button class="cl-step-btn"          onclick="clSkip2(${s.id})">${skip ? '↩ Show' : 'Skip'}</button>`}
+          </div>
+        </div>
+      </div>`;
     });
-
-    html += `</div></div>`;
   });
-
   const el = document.getElementById('clStepList2');
   if (el) el.innerHTML = html;
   clUpdateProgress();
   if (clEditMode) clInitDragSort();
 }
 
+// ── Drag-and-drop for checklist steps (within same phase) ─
 let _clDragSrc = null;
 
 function clInitDragSort() {
   const list = document.getElementById('clStepList2');
   if (!list) return;
-  list.querySelectorAll('.cl-step2[draggable="true"]').forEach(item => {
+  list.querySelectorAll('.cl-step[draggable="true"]').forEach(item => {
     item.addEventListener('dragstart', e => {
       _clDragSrc = item;
       item.classList.add('dragging');
@@ -340,14 +367,14 @@ function clInitDragSort() {
     });
     item.addEventListener('dragend', () => {
       item.classList.remove('dragging');
-      list.querySelectorAll('.cl-step2').forEach(i => i.classList.remove('drag-over'));
+      list.querySelectorAll('.cl-step').forEach(i => i.classList.remove('drag-over'));
       _clDragSrc = null;
     });
     item.addEventListener('dragover', e => {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
       if (_clDragSrc && _clDragSrc !== item) {
-        list.querySelectorAll('.cl-step2').forEach(i => i.classList.remove('drag-over'));
+        list.querySelectorAll('.cl-step').forEach(i => i.classList.remove('drag-over'));
         item.classList.add('drag-over');
       }
     });
@@ -369,57 +396,17 @@ function clInitDragSort() {
   });
 }
 
-// ── Checklist log ─────────────────────────────────────────
-function addCheckLog(action, detail) {
-  const t = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
-  checkLog.unshift({ action, detail, time: t, ts: Date.now() });
-  if (checkLog.length > 200) checkLog.pop();
-  saveCheckLog(checkLog);
-  renderCheckLog();
-}
-
-function renderCheckLog() {
-  const wrap  = document.getElementById('checkLogWrap');
-  const body  = document.getElementById('checkLogBody');
-  const badge = document.getElementById('checkLogCount');
-  if (!wrap) return;
-  if (!checkLog.length) { wrap.style.display = 'none'; return; }
-  wrap.style.display = 'block';
-  if (badge) badge.textContent = checkLog.length;
-  const icons = { 'Done':'✓','Undone':'↩','Skipped':'⊘','Unskipped':'↩','Note':'📝','Reset':'↺','Added':'➕','Deleted':'✕' };
-  const cls   = { 'Done':'log-act-co','Undone':'log-act-late','Skipped':'log-act-late','Unskipped':'log-act-ext','Note':'log-act-ext','Reset':'log-act-late','Added':'log-act-ext','Deleted':'log-act-late' };
-  if (body) body.innerHTML = checkLog.map(l => `
-    <div class="log-row">
-      <span class="log-action ${cls[l.action] || ''}">${icons[l.action] || '·'} ${l.action}</span>
-      <span class="log-name">${escapeLogText(l.detail)}</span>
-      <span class="log-time">${l.time}</span>
-    </div>`).join('');
-}
-
-function toggleCheckLog() {
-  const body = document.getElementById('checkLogBody');
-  const icon = document.getElementById('checkLogToggleIcon');
-  if (!body) return;
-  const open = body.style.display !== 'none';
-  body.style.display = open ? 'none' : 'block';
-  if (icon) icon.textContent = open ? '▸' : '▾';
-}
-
-function escapeLogText(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
 function clToggle2(id) {
   if (clState.skipped.has(id)) return;
   const step = CL_STEPS.find(s => s.id === id);
   if (clState.done.has(id)) {
     clState.done.delete(id);
     delete clDoneTimes[id];
-    addCheckLog('Undone', step?.name || `Step ${id}`);
+    clAddLog('undone', id, step?.name);
   } else {
     clState.done.add(id);
     clDoneTimes[id] = new Date().toISOString();
-    addCheckLog('Done', step?.name || `Step ${id}`);
+    clAddLog('done', id, step?.name);
   }
   clRender2();
   clSaveAll();
@@ -429,27 +416,15 @@ function clSkip2(id) {
   const step = CL_STEPS.find(s => s.id === id);
   if (clState.skipped.has(id)) {
     clState.skipped.delete(id);
-    addCheckLog('Unskipped', step?.name || `Step ${id}`);
+    clAddLog('unskipped', id, step?.name);
   } else {
     clState.skipped.add(id);
     clState.done.delete(id);
     delete clDoneTimes[id];
-    addCheckLog('Skipped', step?.name || `Step ${id}`);
+    clAddLog('skipped', id, step?.name);
   }
   clRender2();
   clSaveAll();
-}
-
-function clReset() {
-  if (!confirm('Reset all checkboxes for a new night?')) return;
-  clState.done.clear();
-  clState.skipped.clear();
-  clDoneTimes = {};
-  clNotes = {};
-  addCheckLog('Reset', 'New night — all steps reset');
-  clRender2();
-  clSaveAll();
-  showToast('Checklist reset for new night ✓');
 }
 
 function clUpdateProgress() {
@@ -477,3 +452,14 @@ function clUpdateProgress() {
   }
 }
 
+function clReset() {
+  if (!confirm('Reset all checkboxes for a new night?')) return;
+  clState.done.clear();
+  clState.skipped.clear();
+  clDoneTimes = {};
+  clNotes = {};
+  // Keep photos (they are step-level reference, not per-night)
+  clRender2();
+  clSaveAll();
+  showToast('Checklist reset for new night ✓');
+}

@@ -4,6 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Ibis Styles · Ops Platform</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌙</text></svg>"/>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
@@ -1117,16 +1118,17 @@ async function appInit() {
         SHIFTS[k].done    = snap.data[k].done    || [];
         SHIFTS[k].resetAt = snap.data[k].resetAt || '';
       }
+      updateShiftBadge(k);
     });
-    if (typeof renderShift !== 'undefined') renderShift(activeShift);
-    Object.keys(SHIFTS).forEach(k => updateShiftBadge(k));
+    // Render only the currently active tab — never jump to morning
+    if (typeof _renderShiftContent !== 'undefined') _renderShiftContent(activeShift);
   });
 
   // 11 — Render UI
   if (typeof clRender2 !== 'undefined') clRender2();
   if (typeof arrRender !== 'undefined') arrRender();
   if (typeof purposeRender !== 'undefined') purposeRender();
-  if (typeof renderShift !== 'undefined') renderShift('morning');
+  if (typeof renderShift !== 'undefined') renderShift(activeShift);
   Object.keys(SHIFTS).forEach(k => updateShiftBadge(k));
   updateClock();
   setInterval(updateClock, 30000);
