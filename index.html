@@ -30,6 +30,7 @@
       <span id="fbLabel" style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);">Firebase · Connecting…</span>
     </div>
     <div class="tb-pill live">● Live</div>
+    <div class="tb-pill occ-pill" id="topbarOcc" title="Rooms occupied today" style="display:none;">🏨 <span id="occLabel">—</span></div>
     <div class="tb-pill" id="topbarTime">—</div>
     <div class="icon-round" onclick="openFeedback()"    title="Submit feedback / request">💬</div>
     <div class="icon-round" onclick="exportAllData()"   title="Export full backup">💾</div>
@@ -139,10 +140,22 @@
         <button class="fchip late" data-f="late"     onclick="depFilter('late',this)">🕐 Late CO <span id="dfc-late">0</span></button>
         <button class="fchip bal"  data-f="balance"  onclick="depFilter('balance',this)">💳 Balance <span id="dfc-balance">0</span></button>
         <button class="fchip out"  data-f="out"      onclick="depFilter('out',this)">✓ Out <span id="dfc-out">0</span></button>
+        <button class="fchip na"   data-f="na"       onclick="depFilter('na',this)">📵 No Answer <span id="dfc-na">0</span></button>
       </div>
       <div class="search-wrap">
         <span style="padding:0 8px;color:var(--text3);">⌕</span>
         <input type="text" id="depSearch" placeholder="Room / guest…" oninput="depRender()"/>
+      </div>
+    </div>
+    <!-- ── NA Action Bar (appears when any rooms are marked NA) ── -->
+    <div id="depNaBar" class="dep-na-bar" style="display:none;">
+      <div class="dep-na-bar-left">
+        <span class="dep-na-bar-icon">📵</span>
+        <span class="dep-na-bar-text"><span id="depNaCount">0 rooms</span> marked No Answer</span>
+      </div>
+      <div class="dep-na-bar-right">
+        <button id="depNaCopyBtn" class="dep-na-copy-btn" onclick="depCopyNAList()">📋 Copy for HK</button>
+        <button class="dep-na-filter-btn" onclick="depFilter('na', document.querySelector('[data-f=na]'))">View All →</button>
       </div>
     </div>
     <div class="dep-grid size-md" id="depGrid"></div>
@@ -199,16 +212,6 @@
     <thead><tr><th>Room</th><th>Conf.</th><th>Name</th><th>Purpose</th><th>Nights</th><th>Nationality</th><th>Email</th><th>Source</th><th>Remarks</th><th></th></tr></thead>
     <tbody id="arrTable"></tbody>
   </table></div>
-
-  <!-- Arrivals Activity Log -->
-  <div class="dep-log-wrap arr-log-wrap" id="arrLogWrap" style="display:none;">
-    <div class="dep-log-header" onclick="toggleArrLog()">
-      <h3>📋 Arrivals Log</h3>
-      <span id="arrLogCount" class="nav-badge">0</span>
-      <span id="arrLogToggleIcon" style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">▾</span>
-    </div>
-    <div class="dep-log-body" id="arrLogBody"></div>
-  </div>
 </div>
 
 <!-- ════════════════ PURPOSE OF STAY ════════════════ -->
@@ -250,16 +253,6 @@
     <thead><tr><th>Room</th><th>Conf.</th><th>Name</th><th>Purpose</th><th>Nights</th><th>Nationality</th><th>Email</th><th>Source</th><th>Remarks</th><th></th></tr></thead>
     <tbody id="purposeTable"></tbody>
   </table></div>
-
-  <!-- Purpose Activity Log -->
-  <div class="dep-log-wrap purpose-log-wrap" id="purposeLogWrap" style="display:none;">
-    <div class="dep-log-header" onclick="togglePurposeLog()">
-      <h3>📋 Purpose Log</h3>
-      <span id="purposeLogCount" class="nav-badge">0</span>
-      <span id="purposeLogToggleIcon" style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">▾</span>
-    </div>
-    <div class="dep-log-body" id="purposeLogBody"></div>
-  </div>
 </div>
 
 <!-- ════════════════ SHIFT TASKS ════════════════ -->
@@ -277,16 +270,6 @@
     <div class="shift-tab"        data-shift="night"     onclick="switchShift('night',this)">🌙 Night<span class="shift-prog" id="sp-night">0/0</span></div>
   </div>
   <div id="shiftContent"></div>
-
-  <!-- Shift Tasks Activity Log -->
-  <div class="dep-log-wrap shift-log-wrap" id="shiftLogWrap" style="display:none;">
-    <div class="dep-log-header" onclick="toggleShiftLog()">
-      <h3>📋 Shift Log</h3>
-      <span id="shiftLogCount" class="nav-badge">0</span>
-      <span id="shiftLogToggleIcon" style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">▾</span>
-    </div>
-    <div class="dep-log-body" id="shiftLogBody"></div>
-  </div>
 </div>
 
 <!-- ════════════════ NATIONALITY ════════════════ -->
@@ -495,14 +478,22 @@
   <div class="page-hd">
     <div class="page-hd-left"><h1>Night Run Checklist</h1><p id="cl-date-lbl">—</p></div>
     <div class="page-hd-actions">
+      <button class="btn sky"   onclick="openNightSummary()">📊 Night Summary</button>
       <button class="btn amber" onclick="clToggleEdit()" id="clEditBtn">✏️ Edit Steps</button>
       <button class="btn rose"  onclick="clReset()">↺ New Night</button>
     </div>
   </div>
-  <div class="prog-wrap">
-    <div class="prog-info"><span id="clProgLabel">0 of 17 done</span><span id="clProgPct" style="font-family:var(--serif);font-size:1.4rem;color:var(--mint);">0%</span></div>
+
+  <!-- Progress bar -->
+  <div class="prog-wrap" style="margin-bottom:16px;">
+    <div class="prog-info">
+      <span id="clProgLabel">0 of 17 done</span>
+      <span id="clProgPct" style="font-family:var(--serif);font-size:1.4rem;color:var(--mint);">0%</span>
+    </div>
     <div class="prog-track"><div class="prog-fill" id="clProgFill"></div></div>
   </div>
+
+  <!-- Add step row (edit mode only) -->
   <div id="clAddRow" style="display:none;margin-bottom:12px;">
     <div class="cl-add-row">
       <input class="cl-add-input" id="clNewName"  placeholder="New step name…" onkeydown="if(event.key==='Enter')clAddStep()"/>
@@ -516,20 +507,61 @@
       <button class="btn gold sm" onclick="clAddStep()">+ Add</button>
     </div>
   </div>
-  <div id="clStepList2"></div>
-  <div id="clComplete2" style="display:none;margin-top:18px;padding:24px;background:rgba(62,207,142,0.06);border:1px solid rgba(62,207,142,0.2);border-radius:var(--r2);text-align:center;">
-    <div style="font-family:var(--serif);font-size:1.5rem;color:var(--mint);margin-bottom:5px;">Night run complete ✓</div>
-    <div style="font-family:var(--mono);font-size:0.68rem;color:var(--text3);" id="clCompleteTime2">All steps done</div>
-  </div>
 
-  <!-- Night Checklist Activity Log -->
-  <div class="dep-log-wrap check-log-wrap" id="checkLogWrap" style="display:none;">
-    <div class="dep-log-header" onclick="toggleCheckLog()">
-      <h3>📋 Night Audit Log</h3>
-      <span id="checkLogCount" class="nav-badge">0</span>
-      <span id="checkLogToggleIcon" style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">▾</span>
+  <!-- Two-column layout: steps + log + handover -->
+  <div class="cl-layout">
+    <!-- LEFT: step list -->
+    <div class="cl-steps-col">
+      <div id="clStepList2"></div>
+      <div id="clComplete2" style="display:none;margin-top:18px;padding:24px;background:rgba(62,207,142,0.06);border:1px solid rgba(62,207,142,0.2);border-radius:var(--r2);text-align:center;">
+        <div style="font-family:var(--serif);font-size:1.5rem;color:var(--mint);margin-bottom:5px;">Night run complete ✓</div>
+        <div style="font-family:var(--mono);font-size:0.68rem;color:var(--text3);" id="clCompleteTime2">All steps done</div>
+      </div>
     </div>
-    <div class="dep-log-body" id="checkLogBody"></div>
+
+    <!-- RIGHT: activity log + handover notes -->
+    <div class="cl-log-col">
+
+      <!-- Handover Notes -->
+      <div class="cl-log-card" style="margin-bottom:12px;">
+        <div class="cl-log-head">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span>📝</span>
+            <span style="font-size:0.84rem;font-weight:600;">Handover Notes</span>
+          </div>
+          <button class="btn sky sm" style="font-size:0.6rem;padding:3px 8px;" onclick="copyHandover()">📋 Copy</button>
+        </div>
+        <div style="padding:10px 12px;">
+          <textarea id="handoverNotes" class="cl-note-input"
+            style="width:100%;min-height:110px;height:110px;resize:vertical;box-sizing:border-box;"
+            placeholder="Write handover for morning shift…&#10;e.g. Room 312 complaint logged, VIP in 508 needs early breakfast, safe balance AED 4,200…"
+            onblur="saveHandover()"></textarea>
+        </div>
+        <div style="padding:0 12px 10px;display:flex;gap:6px;align-items:center;">
+          <span style="font-family:var(--mono);font-size:0.56rem;color:var(--text3);flex:1;" id="handoverSavedAt"></span>
+          <button class="btn rose sm" style="font-size:0.6rem;padding:3px 8px;" onclick="clearHandover()">✕ Clear</button>
+        </div>
+      </div>
+
+      <!-- Activity Log -->
+      <div class="cl-log-card">
+        <div class="cl-log-head">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span>📋</span>
+            <span style="font-size:0.84rem;font-weight:600;">Activity Log</span>
+            <span class="nav-badge" id="clLogCount">0</span>
+          </div>
+          <button class="btn sm" style="font-size:0.6rem;padding:3px 8px;" onclick="clClearLog()">✕ Clear</button>
+        </div>
+        <div class="cl-log-body" id="clLogBody">
+          <div class="cl-log-empty">No activity yet.<br>Tick steps to log them.</div>
+        </div>
+        <div class="cl-log-footer">
+          <button class="btn sky sm" style="width:100%;justify-content:center;" onclick="clCopyLog()">📋 Copy Log</button>
+        </div>
+      </div>
+
+    </div>
   </div>
 </div>
 
@@ -608,14 +640,29 @@
 </div>
 
 <div class="modal-bg" id="editTaskModal">
-  <div class="modal">
-    <h3>✏️ Edit Task</h3>
+  <div class="modal modal-task">
+    <div class="modal-task-header">
+      <div class="modal-task-icon">✏️</div>
+      <div>
+        <div class="modal-task-title">Edit Task</div>
+        <div class="modal-task-sub" id="et-shift-label">Shift task</div>
+      </div>
+    </div>
     <div class="modal-fields">
       <input type="hidden" id="et-shift"/><input type="hidden" id="et-id"/>
-      <div class="mf"><label>Task Name</label><input id="et-name"/></div>
-      <div class="mf"><label>Hint (optional)</label><input id="et-hint" placeholder="Brief description…"/></div>
+      <div class="mf mf-task">
+        <label class="mf-label-task">Task Name</label>
+        <input id="et-name" class="mf-input-task" placeholder="What needs to be done?"/>
+      </div>
+      <div class="mf mf-task">
+        <label class="mf-label-task">Hint <span style="opacity:0.45;font-weight:400;">(optional)</span></label>
+        <textarea id="et-hint" class="mf-textarea-task" placeholder="Brief description or guidance for this task…" rows="3"></textarea>
+      </div>
     </div>
-    <div class="modal-actions"><button class="btn" onclick="document.getElementById('editTaskModal').classList.remove('open')">Cancel</button><button class="btn gold" onclick="saveEditTask()">Save</button></div>
+    <div class="modal-task-actions">
+      <button class="btn-task-cancel" onclick="document.getElementById('editTaskModal').classList.remove('open')">Cancel</button>
+      <button class="btn-task-save" onclick="saveEditTask()">Save Task</button>
+    </div>
   </div>
 </div>
 
@@ -708,8 +755,208 @@ function editPurposeTitle() {
   }
 }
 
-// ── Departure log toggle ─────────────────────────────────
-let _logOpen = true;
+// ── Handover notes ───────────────────────────────────────
+function saveHandover() {
+  const val = document.getElementById('handoverNotes')?.value || '';
+  const ts  = new Date().toISOString();
+  lsSave('handover', { text: val, savedAt: ts });
+  const lbl = document.getElementById('handoverSavedAt');
+  if (lbl) lbl.textContent = 'Saved at ' + new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+}
+function copyHandover() {
+  const val = document.getElementById('handoverNotes')?.value || '';
+  if (!val.trim()) { showToast('Handover notes are empty', 'info'); return; }
+  const date = new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+  const time = new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  const text = `HANDOVER NOTES — ${date} · ${time}\n${'═'.repeat(48)}\n${val.trim()}`;
+  copyToClipboard(text, null, '');
+  showToast('Handover copied ✓', 'ok');
+}
+function clearHandover() {
+  if (!confirm('Clear handover notes?')) return;
+  const el = document.getElementById('handoverNotes');
+  if (el) el.value = '';
+  lsSave('handover', { text: '', savedAt: '' });
+  const lbl = document.getElementById('handoverSavedAt');
+  if (lbl) lbl.textContent = '';
+  showToast('Handover cleared', 'info');
+}
+function loadHandover() {
+  const saved = lsLoad('handover');
+  if (!saved) return;
+  const el = document.getElementById('handoverNotes');
+  if (el && saved.text) el.value = saved.text;
+  const lbl = document.getElementById('handoverSavedAt');
+  if (lbl && saved.savedAt) {
+    lbl.textContent = 'Saved at ' + new Date(saved.savedAt).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  }
+}
+
+// ── Night Summary ─────────────────────────────────────────
+function openNightSummary() {
+  const modal = document.getElementById('nightSummaryModal');
+  const body  = document.getElementById('nightSummaryBody');
+  if (!modal || !body) return;
+
+  const date = new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const time = new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+
+  // Checklist stats
+  const active  = CL_STEPS.filter(s => !clState.skipped.has(s.id));
+  const clDone  = active.filter(s => clState.done.has(s.id)).length;
+  const clTotal = active.length;
+  const clPct   = clTotal ? Math.round(clDone / clTotal * 100) : 0;
+  const skipCnt = clState.skipped.size;
+
+  // Departures stats
+  const depTotal  = depRooms.length;
+  const depOut    = depRooms.filter(r => r.status === 'out').length;
+  const depDue    = depRooms.filter(r => r.status === 'due').length;
+  const depLate   = depRooms.filter(r => r.status === 'late').length;
+  const depNA     = depRooms.filter(r => r.status === 'na').length;
+  const depExt    = depRooms.filter(r => r.status === 'extended').length;
+  const depBal    = depRooms.filter(r => r.balance > 0 && r.status !== 'out').reduce((s,r) => s+r.balance, 0);
+  const naRooms   = depRooms.filter(r => r.status === 'na').map(r => `${r.roomStr} · ${r.name}`);
+
+  // Arrivals
+  const arrTotal = arrGuests.length;
+  const arrBiz   = arrGuests.filter(g => g.purpose === 'Business').length;
+  const arrLeis  = arrGuests.filter(g => g.purpose === 'Leisure').length;
+
+  // Handover text
+  const handover = document.getElementById('handoverNotes')?.value?.trim() || '';
+
+  const row = (icon, label, val, cls='') =>
+    `<div class="ns-row ${cls}"><span class="ns-icon">${icon}</span><span class="ns-label">${label}</span><span class="ns-val">${val}</span></div>`;
+
+  const sect = (title) => `<div class="ns-section-title">${title}</div>`;
+
+  body.innerHTML = `
+    <div class="ns-date">${date} · Generated at ${time}</div>
+
+    ${sect('🌙 Night Run Checklist')}
+    ${row('✅', 'Completion', `${clDone} / ${clTotal} steps (${clPct}%)`, clPct===100?'ns-good':clPct>=50?'ns-warn':'ns-bad')}
+    ${skipCnt ? row('—', 'Skipped', skipCnt + ' step' + (skipCnt>1?'s':''), 'ns-muted') : ''}
+
+    ${depTotal ? `
+    ${sect('🚪 Departures')}
+    ${row('🏨', 'Total departures', depTotal)}
+    ${row('✓', 'Checked out', depOut, depOut===depTotal?'ns-good':'')}
+    ${depDue    ? row('⏳', 'Still due out', depDue,  'ns-bad')  : ''}
+    ${depLate   ? row('🕐', 'Late checkout', depLate, 'ns-warn') : ''}
+    ${depNA     ? row('📵', 'No answer', depNA + (naRooms.length ? ' — ' + naRooms.join(', ') : ''), 'ns-bad') : ''}
+    ${depExt    ? row('↪', 'Extended stay', depExt) : ''}
+    ${depBal > 0 ? row('💳', 'Balance outstanding', 'AED ' + depBal.toLocaleString('en',{minimumFractionDigits:2}), 'ns-bad') : row('💳', 'Balance outstanding', '✓ All clear', 'ns-good')}
+    ` : `${sect('🚪 Departures')}<div class="ns-empty">No departure data loaded</div>`}
+
+    ${arrTotal ? `
+    ${sect('🛎️ Arrivals')}
+    ${row('🛎️', 'Total arrivals', arrTotal)}
+    ${row('💼', 'Business', arrBiz)}
+    ${row('🌴', 'Leisure', arrLeis)}
+    ` : ''}
+
+    ${handover ? `
+    ${sect('📝 Handover Notes')}
+    <div class="ns-handover">${handover.replace(/\n/g,'<br>')}</div>
+    ` : ''}
+  `;
+
+  modal.classList.add('open');
+}
+
+function copyNightSummary() {
+  const date = new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const time = new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+
+  const active  = CL_STEPS.filter(s => !clState.skipped.has(s.id));
+  const clDone  = active.filter(s => clState.done.has(s.id)).length;
+  const clTotal = active.length;
+  const clPct   = clTotal ? Math.round(clDone / clTotal * 100) : 0;
+
+  const depTotal = depRooms.length;
+  const depOut   = depRooms.filter(r => r.status === 'out').length;
+  const depDue   = depRooms.filter(r => r.status === 'due').length;
+  const depLate  = depRooms.filter(r => r.status === 'late').length;
+  const depNA    = depRooms.filter(r => r.status === 'na').length;
+  const depExt   = depRooms.filter(r => r.status === 'extended').length;
+  const depBal   = depRooms.filter(r => r.balance > 0 && r.status !== 'out').reduce((s,r) => s+r.balance, 0);
+  const naRooms  = depRooms.filter(r => r.status === 'na').map(r => `  • ${r.roomStr} · ${r.name}`);
+  const arrTotal = arrGuests.length;
+  const handover = document.getElementById('handoverNotes')?.value?.trim() || '';
+
+  const lines = [
+    `NIGHT SUMMARY — ${date}`,
+    `Generated at ${time}`,
+    '═'.repeat(50),
+    '',
+    '🌙 NIGHT RUN CHECKLIST',
+    `  Completion: ${clDone}/${clTotal} steps (${clPct}%)`,
+    clState.skipped.size ? `  Skipped: ${clState.skipped.size} step(s)` : '',
+    '',
+  ];
+
+  if (depTotal) {
+    lines.push('🚪 DEPARTURES');
+    lines.push(`  Total: ${depTotal}`);
+    lines.push(`  Checked out: ${depOut}`);
+    if (depDue)  lines.push(`  ⚠ Still due: ${depDue}`);
+    if (depLate) lines.push(`  🕐 Late CO: ${depLate}`);
+    if (depNA)   { lines.push(`  📵 No answer: ${depNA}`); lines.push(...naRooms); }
+    if (depExt)  lines.push(`  ↪ Extended: ${depExt}`);
+    lines.push(depBal > 0 ? `  💳 Balance owing: AED ${depBal.toLocaleString('en',{minimumFractionDigits:2})}` : '  💳 Balance: All clear');
+    lines.push('');
+  }
+  if (arrTotal) {
+    lines.push('🛎️ ARRIVALS');
+    lines.push(`  Total: ${arrTotal}`);
+    lines.push(`  Business: ${arrGuests.filter(g=>g.purpose==='Business').length}`);
+    lines.push(`  Leisure: ${arrGuests.filter(g=>g.purpose==='Leisure').length}`);
+    lines.push('');
+  }
+  if (handover) {
+    lines.push('📝 HANDOVER NOTES');
+    lines.push(handover);
+    lines.push('');
+  }
+
+  copyToClipboard(lines.filter(l => l !== null).join('\n'), null, '');
+  showToast('Night summary copied ✓', 'ok');
+}
+
+// ── Date auto-reset detection ─────────────────────────────
+function checkNewNight(checklistData) {
+  // Only prompt if there's actual progress (done steps > 0)
+  if (!clState.done.size) return;
+
+  // Find the most recent done timestamp
+  const times = Object.values(clDoneTimes).filter(Boolean);
+  if (!times.length) return;
+
+  const lastUsed = new Date(times.reduce((a, b) => a > b ? a : b));
+  const today    = new Date();
+  const lastDate = lastUsed.toDateString();
+  const todayStr = today.toDateString();
+
+  if (lastDate === todayStr) return; // same day — no prompt
+
+  const el = document.getElementById('lastNightDate');
+  if (el) el.textContent = lastUsed.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+  document.getElementById('newNightModal').classList.add('open');
+}
+
+function clResetSilent() {
+  document.getElementById('newNightModal').classList.remove('open');
+  clState.done.clear();
+  clState.skipped.clear();
+  clDoneTimes = {};
+  clNotes = {};
+  clLog   = [];
+  clRender2();
+  clSaveAll();
+  clearHandover();
+  showToast('Checklist reset for new night ✓', 'ok');
+}
 function toggleLog() {
   _logOpen = !_logOpen;
   const body = document.getElementById('depLogBody');
@@ -812,12 +1059,6 @@ async function appInit() {
   // 8 — Apply feedback
   if (data.feedback && data.feedback.log) feedbackLog = data.feedback.log;
 
-  // 8b — Apply activity logs
-  if (data.arrLog     && data.arrLog.log)     { arrLog     = data.arrLog.log;     renderArrLog(); }
-  if (data.purposeLog && data.purposeLog.log) { purposeLog = data.purposeLog.log; renderPurposeLog(); }
-  if (data.shiftLog   && data.shiftLog.log)   { shiftLog   = data.shiftLog.log;   renderShiftLog(); }
-  if (data.checkLog   && data.checkLog.log)   { checkLog   = data.checkLog.log;   renderCheckLog(); }
-
   // 9 — Apply settings
   if (data.settings) {
     if (data.settings.theme && data.settings.theme === 'light') {
@@ -881,12 +1122,6 @@ async function appInit() {
     Object.keys(SHIFTS).forEach(k => updateShiftBadge(k));
   });
 
-  // Log real-time listeners
-  fbListen('arrLog',     snap => { if (snap && snap.log) { arrLog     = snap.log; renderArrLog();     } });
-  fbListen('purposeLog', snap => { if (snap && snap.log) { purposeLog = snap.log; renderPurposeLog(); } });
-  fbListen('shiftLog',   snap => { if (snap && snap.log) { shiftLog   = snap.log; renderShiftLog();   } });
-  fbListen('checkLog',   snap => { if (snap && snap.log) { checkLog   = snap.log; renderCheckLog();   } });
-
   // 11 — Render UI
   if (typeof clRender2 !== 'undefined') clRender2();
   if (typeof arrRender !== 'undefined') arrRender();
@@ -895,7 +1130,16 @@ async function appInit() {
   Object.keys(SHIFTS).forEach(k => updateShiftBadge(k));
   updateClock();
   setInterval(updateClock, 30000);
-  
+
+  // Load handover notes from localStorage
+  loadHandover();
+
+  // Check if this is a new night (after checklist data is applied)
+  setTimeout(() => checkNewNight(), 800);
+
+  // Refresh departure board every 60s so NA warnings update automatically
+  setInterval(() => { if (depRooms.length) depRender(); }, 60000);
+
   showToast('App ready — connected to Firebase', 'ok');
 }
 
@@ -922,6 +1166,34 @@ appInit();
     </div>
   </div>
 </div>
+<!-- ════════ NIGHT SUMMARY MODAL ════════ -->
+<div class="modal-bg" id="nightSummaryModal">
+  <div class="modal" style="max-width:560px;">
+    <h3>📊 Night Summary</h3>
+    <div id="nightSummaryBody" style="margin:14px 0;"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="document.getElementById('nightSummaryModal').classList.remove('open')">Close</button>
+      <button class="btn gold" onclick="copyNightSummary()">📋 Copy Summary</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ NEW NIGHT DETECTION MODAL ════════ -->
+<div class="modal-bg" id="newNightModal">
+  <div class="modal" style="max-width:420px;text-align:center;">
+    <div style="font-size:2rem;margin-bottom:10px;">🌙</div>
+    <h3 style="margin-bottom:8px;">New Night Detected</h3>
+    <p style="color:var(--text2);font-size:0.82rem;margin-bottom:20px;">
+      The checklist was last used on <strong id="lastNightDate">—</strong>.<br>
+      Reset it for tonight's night run?
+    </p>
+    <div class="modal-actions" style="justify-content:center;">
+      <button class="btn" onclick="document.getElementById('newNightModal').classList.remove('open')">Keep As-Is</button>
+      <button class="btn gold" onclick="clResetSilent()">↺ Reset for Tonight</button>
+    </div>
+  </div>
+</div>
+
 <!-- ════════ PHOTO LIGHTBOX ════════ -->
 <div id="clLightbox" class="cl-lightbox">
   <div class="cl-lightbox-bg" onclick="clCloseLightbox()"></div>
@@ -935,5 +1207,6 @@ appInit();
   </div>
   <div class="cl-lightbox-caption" id="clLightboxCaption"></div>
 </div>
+
 </body>
 </html>

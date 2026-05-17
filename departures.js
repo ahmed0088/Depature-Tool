@@ -46,8 +46,6 @@ function parseDepReport(raw) {
       intent:          '',   // '' | 'maybe_extend' | 'coming_back' | 'returning'
       note:            '',
       checkoutAt:      '',
-      naAttempts:      0,    // No Answer call attempts
-      naLastAt:        '',   // timestamp of last NA attempt
     });
   }
   rooms.sort((a, b) => a.room - b.room);
@@ -113,8 +111,6 @@ function processDepReload() {
         intent:          old.intent || '',
         note:            old.note,
         checkoutAt:      old.checkoutAt,
-        naAttempts:      old.naAttempts  || 0,
-        naLastAt:        old.naLastAt    || '',
       });
       kept++;
     } else {
@@ -160,8 +156,8 @@ function depCounts() {
     extended: depRooms.filter(r => r.status === 'extended').length,
     balance:  depRooms.filter(r => r.balance > 0 && r.status !== 'out' && r.status !== 'extended').length,
     out:      depRooms.filter(r => r.status === 'out').length,
+    na:       depRooms.filter(r => r.status === 'na').length,
     pending:  depRooms.filter(r => r.intent && r.status !== 'out' && r.status !== 'extended').length,
-    na:       depRooms.filter(r => r.naAttempts > 0 && r.status !== 'out' && r.status !== 'extended').length,
   };
 }
 
@@ -201,24 +197,37 @@ function depRender() {
   Object.entries(sc).forEach(([k, v]) => {
     const el = document.getElementById('dfc-' + k); if (el) el.textContent = v;
   });
-  // NA rooms: render copy button when any exist
-  const naBar = document.getElementById('depNaBar');
-  if (naBar) {
-    const naRooms = depRooms.filter(r => r.naAttempts > 0 && r.status !== 'out' && r.status !== 'extended');
-    if (naRooms.length) {
-      naBar.style.display = 'flex';
-      document.getElementById('depNaCount').textContent = naRooms.length + ' room' + (naRooms.length > 1 ? 's' : '');
-    } else {
-      naBar.style.display = 'none';
-    }
-  }
+
+  // Balance outstanding total
+  const totalOwing = depRooms
+    .filter(r => r.balance > 0 && r.status !== 'out' && r.status !== 'extended')
+    .reduce((s, r) => s + r.balance, 0);
+  const balKpiVal = totalOwing > 0
+    ? `AED ${totalOwing.toLocaleString('en',{minimumFractionDigits:0,maximumFractionDigits:0})}`
+    : '✓ Clear';
 
   document.getElementById('depKpis').innerHTML = `
     <div class="dep-kpi k-total"><div class="dep-kpi-icon">🏨</div><div class="dep-kpi-val">${sc.all}</div><div class="dep-kpi-label">Total</div></div>
     <div class="dep-kpi k-due"><div class="dep-kpi-icon">⏳</div><div class="dep-kpi-val">${sc.due}</div><div class="dep-kpi-label">Due Out</div></div>
     <div class="dep-kpi k-ext"><div class="dep-kpi-icon">↪</div><div class="dep-kpi-val">${sc.extended}</div><div class="dep-kpi-label">Extended</div></div>
     <div class="dep-kpi k-late"><div class="dep-kpi-icon">🕐</div><div class="dep-kpi-val">${sc.late}</div><div class="dep-kpi-label">Late CO</div></div>
-    <div class="dep-kpi k-out"><div class="dep-kpi-icon">✓</div><div class="dep-kpi-val">${sc.out}</div><div class="dep-kpi-label">Checked Out</div></div>`;
+    <div class="dep-kpi k-na"><div class="dep-kpi-icon">📵</div><div class="dep-kpi-val">${sc.na}</div><div class="dep-kpi-label">No Answer</div></div>
+    <div class="dep-kpi k-out"><div class="dep-kpi-icon">✓</div><div class="dep-kpi-val">${sc.out}</div><div class="dep-kpi-label">Checked Out</div></div>
+    <div class="dep-kpi k-bal ${totalOwing>0?'has-balance':''}"><div class="dep-kpi-icon">💳</div><div class="dep-kpi-val" style="font-size:${totalOwing>0?'0.82rem':'1.1rem'}">${balKpiVal}</div><div class="dep-kpi-label">Balance Owing</div></div>`;
+
+  // Update occupancy pill in topbar
+  const occEl  = document.getElementById('topbarOcc');
+  const occLbl = document.getElementById('occLabel');
+  if (occEl && occLbl && sc.all > 0) {
+    occEl.style.display = '';
+    occLbl.textContent  = `${sc.out} / ${sc.all} departed`;
+  }
+
+  // NA Action Bar
+  const naBar = document.getElementById('depNaBar');
+  const naCnt = document.getElementById('depNaCount');
+  if (naBar) naBar.style.display = sc.na > 0 ? 'flex' : 'none';
+  if (naCnt) naCnt.textContent = sc.na + ' room' + (sc.na !== 1 ? 's' : '');
 
   document.getElementById('depProgLabel').textContent = `${sc.out} of ${sc.all} checked out`;
   document.getElementById('depProgPct').textContent   = pct + '%';
@@ -234,18 +243,16 @@ function depRender() {
   let filtered = depRooms.filter(r => {
     let mf;
     switch (depFilter_) {
-      case 'all':     mf = r.status !== 'out' && r.status !== 'extended'; break;
+      case 'all':     mf = r.status !== 'out' && r.status !== 'extended' && r.status !== 'na'; break;
       case 'balance': mf = r.balance > 0 && r.status !== 'out' && r.status !== 'extended'; break;
       case 'pending': mf = !!r.intent && r.status !== 'out' && r.status !== 'extended'; break;
-      case 'na':      mf = r.naAttempts > 0 && r.status !== 'out' && r.status !== 'extended'; break;
       default:        mf = r.status === depFilter_; break;
     }
     const ms = !search ||
       r.roomStr.includes(search) ||
       r.name.toLowerCase().includes(search) ||
       r.source.toLowerCase().includes(search) ||
-      (r.note && r.note.toLowerCase().includes(search)) ||
-      (r.naAttempts > 0 && 'no answer na'.includes(search));
+      (r.note && r.note.toLowerCase().includes(search));
     return mf && ms;
   });
 
@@ -288,10 +295,9 @@ function depCardHTML(r) {
     :           `AED ${Math.abs(bal).toLocaleString('en',{minimumFractionDigits:2})} CREDIT`;
 
   // Card colour
-  let sClass = 's-' + (bal > 0 && r.status !== 'out' && r.status !== 'extended' ? 'balance' : r.status);
-  if (r.intent && r.status !== 'out' && r.status !== 'extended') sClass += ' s-intent';
-  if (overdue) sClass += ' s-overdue';
-  if (r.naAttempts > 0 && r.status !== 'out' && r.status !== 'extended') sClass += ' s-na';
+  let sClass = 's-' + (bal > 0 && r.status !== 'out' && r.status !== 'extended' && r.status !== 'na' ? 'balance' : r.status);
+  if (r.intent && r.status !== 'out' && r.status !== 'extended' && r.status !== 'na') sClass += ' s-intent';
+  if (overdue && r.status !== 'na') sClass += ' s-overdue';
 
   // Status badge
   const badgeMap = {
@@ -299,15 +305,9 @@ function depCardHTML(r) {
     late:     ['sb-late',     `LATE CO${r.lateTime ? ' · ' + r.lateTime : ''}`],
     extended: ['sb-extended', `EXT +${r.extensionNights}N`],
     out:      ['sb-out',      `OUT${r.checkoutAt ? ' · ' + r.checkoutAt : ''}`],
+    na:       ['sb-na',       `NO ANSWER${r.naTime ? ' · ' + r.naTime : ''}`],
   };
   const [badgeCls, badgeText] = badgeMap[r.status] || ['sb-due','DUE OUT'];
-
-  // NA attempt badge — shown on card regardless of status
-  const naA = r.naAttempts || 0;
-  const naLastTime = r.naLastAt ? ` · last ${r.naLastAt}` : '';
-  const naBadgeHTML = naA > 0
-    ? `<div class="dc-na-badge">📵 No Answer ×${naA}${naLastTime}</div>`
-    : '';
 
   const srcClean  = r.source.substring(0,26) + (r.source.length > 26 ? '…' : '');
   const vipHTML   = r.isVip ? '<div class="dc-vip">⭐ VIP</div>' : '';
@@ -360,6 +360,22 @@ function depCardHTML(r) {
       <button class="dca dca-undo" onclick="depAction(${i},'due')">↺ Undo</button>
     </div>`;
 
+  } else if (r.status === 'na') {
+    // How long since NA was marked
+    let naWarnStrip = '';
+    if (r.naTime) {
+      const [h, m]  = r.naTime.split(':').map(Number);
+      const naDate  = new Date(); naDate.setHours(h, m, 0, 0);
+      const minsSince = Math.floor((Date.now() - naDate.getTime()) / 60000);
+      if (minsSince >= 30) {
+        naWarnStrip = `<div class="dc-na-warn">⚠ No answer for ${minsSince} min — follow up now</div>`;
+      }
+    }
+    actHTML = `${naWarnStrip}<div class="dc-actions g2">
+      <button class="dca dca-co"   onclick="depAction(${i},'out')">✓ Check Out</button>
+      <button class="dca dca-undo" onclick="depAction(${i},'due')">↺ Undo NA</button>
+    </div>`;
+
   } else if (r.status === 'late') {
     actHTML = `<div class="dc-actions g2">
       <button class="dca dca-co"   onclick="depAction(${i},'out')">✓ Check Out</button>
@@ -379,12 +395,11 @@ function depCardHTML(r) {
           onclick="depSetIntent(${i},'returning')">🔁 Returning</button>
       </div>`;
 
-    const naCountLabel = r.naAttempts > 0 ? ` (${r.naAttempts})` : '';
     actHTML = `<div class="dc-actions g4">
       <button class="dca dca-co"   onclick="depCheckOut(${i})">✓ Check Out</button>
       <button class="dca dca-ext"  onclick="depAction(${i},'extended')">↪ Extend</button>
       <button class="dca dca-late" onclick="depAction(${i},'late')">🕐 Late CO</button>
-      <button class="dca dca-na${r.naAttempts>0?' active':''}" onclick="depMarkNA(${i})" title="Mark as No Answer">📵 NA${naCountLabel}</button>
+      <button class="dca dca-na"   onclick="depAction(${i},'na')">📵 No Answer</button>
     </div>${intentRow}`;
   }
 
@@ -400,7 +415,6 @@ function depCardHTML(r) {
     </div>
     <div class="dc-body">
       ${overdueStrip}
-      ${naBadgeHTML}
       ${intentBanner}
       <div class="dc-name" ondblclick="depEditName(${i})" title="Double-click to edit">${escapeHtml(r.name)}</div>
       <div class="dc-meta">
@@ -485,7 +499,7 @@ function depSetIntent(i, intent) {
 function depEditName(i) {
   const allFiltered = depRooms.filter(r => {
     switch (depFilter_) {
-      case 'all':     return r.status !== 'out' && r.status !== 'extended';
+      case 'all':     return r.status !== 'out' && r.status !== 'extended' && r.status !== 'na';
       case 'balance': return r.balance > 0 && r.status !== 'out' && r.status !== 'extended';
       case 'pending': return !!r.intent && r.status !== 'out' && r.status !== 'extended';
       default:        return r.status === depFilter_;
@@ -517,6 +531,7 @@ function depAction(i, status) {
   const t    = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
 
   if (status === 'out') r.checkoutAt = t; else r.checkoutAt = '';
+  if (status === 'na')  r.naTime = t;     else r.naTime = '';
   if (status !== 'late')     r.lateTime = '';
   if (status !== 'extended') r.extensionNights = 0;
   if (status === 'due')      r.intent = '';  // undo clears intent
@@ -535,51 +550,6 @@ function depAction(i, status) {
 
 function saveDeps() {
   saveDepartures(depRooms, depLog);
-}
-
-// ── No Answer (NA) tracking ────────────────────────────────
-// Each tap adds 1 attempt + timestamps it. Second tap on same room
-// adds another attempt. Long-press (hold 600ms) resets to 0.
-let _naHoldTimer = null;
-
-function depMarkNA(i) {
-  const r = depRooms[i];
-  const t = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
-  r.naAttempts = (r.naAttempts || 0) + 1;
-  r.naLastAt   = t;
-  // Auto-append to note
-  const line = `[${t}] 📵 No Answer — attempt #${r.naAttempts}`;
-  r.note = r.note ? r.note + '\n' + line : line;
-  depRender();
-  saveDeps();
-  showToast(`Room ${r.roomStr} — NA attempt #${r.naAttempts} recorded`, 'info');
-}
-
-function depResetNA(i) {
-  const r = depRooms[i];
-  r.naAttempts = 0;
-  r.naLastAt   = '';
-  depRender();
-  saveDeps();
-  showToast(`Room ${r.roomStr} — NA cleared`, 'info');
-}
-
-// Copy a clean HK-ready list of NA rooms to clipboard
-function depCopyNAList() {
-  const naRooms = depRooms.filter(r => r.naAttempts > 0 && r.status !== 'out' && r.status !== 'extended');
-  if (!naRooms.length) { showToast('No NA rooms to copy', 'err'); return; }
-  const t = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
-  const lines = [
-    `📵 NO ANSWER ROOMS — ${new Date().toLocaleDateString('en-GB', {day:'2-digit',month:'short'})} · ${t}`,
-    '─'.repeat(40),
-    ...naRooms.map(r =>
-      `Room ${r.roomStr.padEnd(5)} · ${r.name.substring(0,22).padEnd(22)} · ${r.naAttempts} attempt${r.naAttempts>1?'s':''} · Last: ${r.naLastAt}`
-    ),
-    '─'.repeat(40),
-    `Total: ${naRooms.length} room${naRooms.length>1?'s':''} — Please check and update status`,
-  ];
-  const btn = document.getElementById('depNaCopyBtn');
-  copyToClipboard(lines.join('\n'), btn, '📋 Copy for HK');
 }
 
 // ── Action log ─────────────────────────────────────────────
@@ -626,9 +596,23 @@ function toggleLog() {
 }
 
 // ── Filters ────────────────────────────────────────────────
+function depCopyNAList() {
+  const naRooms = depRooms.filter(r => r.status === 'na');
+  if (!naRooms.length) { showToast('No rooms marked No Answer', 'info'); return; }
+  const date = new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+  const time = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  const lines = naRooms.map(r =>
+    `Room ${r.roomStr} · ${r.name}${r.naTime ? ' · No Answer at ' + r.naTime : ''}`
+  );
+  const text = `📵 No Answer Rooms — ${date} ${time}\n${'─'.repeat(40)}\n${lines.join('\n')}\n\nPlease follow up with Housekeeping.`;
+  const btn = document.getElementById('depNaCopyBtn');
+  copyToClipboard(text, btn, '📋 Copy for HK');
+  showToast('NA list copied ✓', 'ok');
+}
+
 function depFilter(f, el) {
   depFilter_ = f;
-  document.querySelectorAll('[data-f]').forEach(c => c.classList.remove('on','due','ext','late','bal','out','pending'));
+  document.querySelectorAll('[data-f]').forEach(c => c.classList.remove('on','due','ext','late','bal','out','pending','na'));
   const btn = el || document.querySelector(`[data-f="${f}"]`);
   if (btn) {
     btn.classList.add('on');
@@ -690,14 +674,12 @@ function clearDep() {
 function exportDepSummary() {
   if (!depRooms.length) return;
   const wb   = XLSX.utils.book_new();
-  const data = [['Room','Guest','Arrival','Departure','Nights','Balance AED','Source','Company','Status','Intent','Late Time','Ext Nights','Checkout At','NA Attempts','NA Last At','Notes']];
+  const data = [['Room','Guest','Arrival','Departure','Nights','Balance AED','Source','Company','Status','Intent','Late Time','Ext Nights','Checkout At','Notes']];
   depRooms.forEach(r => data.push([
     r.roomStr, r.name, r.arrival, r.departure, r.nights, r.balance,
     r.source, r.company, r.status.toUpperCase(),
     r.intent ? INTENT_CONFIG[r.intent]?.label || r.intent : '',
-    r.lateTime, r.extensionNights || '', r.checkoutAt,
-    r.naAttempts || 0, r.naLastAt || '',
-    r.note,
+    r.lateTime, r.extensionNights || '', r.checkoutAt, r.note,
   ]));
   const ws = XLSX.utils.aoa_to_sheet(data);
   ws['!cols'] = [8,24,12,12,7,12,20,22,12,16,10,8,10,40].map(w => ({wch:w}));
