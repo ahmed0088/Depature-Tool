@@ -89,6 +89,11 @@ function saveEditStep() {
   clSaveAll();
 }
 
+// ── Unified save ─────────────────────────────────────────
+function clSaveAll() {
+  saveChecklist(CL_STEPS, clState.done, clState.skipped, clPhotos, clNotes, clDoneTimes);
+}
+
 // ── Activity log ─────────────────────────────────────────
 let clLog = []; // { ts, type, stepId, stepName, note }
 
