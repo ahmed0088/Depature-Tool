@@ -25,18 +25,29 @@
   </div>
   <div class="topbar-center" id="topbarDate">Loading…</div>
   <div class="topbar-right">
+    <!-- Theme Switcher -->
+    <div class="theme-switcher">
+      <button class="theme-btn active" data-t="night-ops" onclick="setTheme('night-ops',this)" title="Night Ops — dark gold">
+        <span class="theme-dot"></span><span>Night Ops</span>
+      </button>
+      <button class="theme-btn" data-t="opera" onclick="setTheme('opera',this)" title="Opera Cloud — light red">
+        <span class="theme-dot"></span><span>Opera</span>
+      </button>
+      <button class="theme-btn" data-t="midnight" onclick="setTheme('midnight',this)" title="Midnight — deep blue">
+        <span class="theme-dot"></span><span>Midnight</span>
+      </button>
+    </div>
     <!-- Firebase status -->
-    <div style="display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:var(--surface);">
-      <div id="fbDot" style="width:7px;height:7px;border-radius:50%;background:var(--amber);transition:all 0.3s;"></div>
-      <span id="fbLabel" style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);">Firebase · Connecting…</span>
+    <div class="fb-status">
+      <div id="fbDot" style="width:7px;height:7px;border-radius:50%;background:var(--amber);transition:all 0.3s;flex-shrink:0;"></div>
+      <span id="fbLabel" style="font-family:var(--mono);font-size:0.6rem;">Connecting…</span>
     </div>
     <div class="tb-pill live">● Live</div>
-    <div class="tb-pill occ-pill" id="topbarOcc" title="Rooms occupied today" style="display:none;">🏨 <span id="occLabel">—</span></div>
+    <div class="tb-pill occ-pill" id="topbarOcc" style="display:none;">🏨 <span id="occLabel">—</span></div>
     <div class="tb-pill" id="topbarTime">—</div>
-    <div class="icon-round" onclick="openFeedback()"    title="Submit feedback / request">💬</div>
-    <div class="icon-round" onclick="exportAllData()"   title="Export full backup">💾</div>
-    <label class="icon-round" title="Import backup JSON" style="cursor:pointer;">📂<input type="file" accept=".json" onchange="handleImport(this)" style="display:none"/></label>
-    <div class="icon-round" onclick="toggleTheme()" id="themeBtn" title="Toggle theme">🌙</div>
+    <div class="icon-round" onclick="openFeedback()"  title="Feedback">💬</div>
+    <div class="icon-round" onclick="exportAllData()" title="Export backup">💾</div>
+    <label class="icon-round" title="Import backup" style="cursor:pointer;">📂<input type="file" accept=".json" onchange="handleImport(this)" style="display:none"/></label>
   </div>
 </header>
 
@@ -1062,11 +1073,8 @@ async function appInit() {
 
   // 9 — Apply settings
   if (data.settings) {
-    if (data.settings.theme && data.settings.theme === 'light') {
-      document.documentElement.setAttribute('data-theme', 'light');
-      const themeBtn = document.getElementById('themeBtn');
-      if (themeBtn) themeBtn.textContent = '☀️';
-    }
+    const savedTheme = data.settings.theme || 'night-ops';
+    setTheme(savedTheme);
     if (data.settings.hotelName) {
       const hotelEl = document.getElementById('hotelName');
       if (hotelEl) hotelEl.textContent = data.settings.hotelName;

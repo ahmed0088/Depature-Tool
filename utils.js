@@ -143,12 +143,18 @@ function showToast(msg, type = 'ok') {
 }
 
 // ── Theme ─────────────────────────────────────────────────
+function setTheme(name, btn) {
+  document.documentElement.setAttribute('data-theme', name);
+  document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+  const target = btn || document.querySelector(`.theme-btn[data-t="${name}"]`);
+  if (target) target.classList.add('active');
+  saveSettings({ theme: name });
+}
+
 function toggleTheme() {
-  const cur  = document.documentElement.getAttribute('data-theme') || 'dark';
-  const next = cur === 'light' ? 'dark' : 'light';
-  document.documentElement.setAttribute('data-theme', next);
-  document.getElementById('themeBtn').textContent = next === 'light' ? '☀️' : '🌙';
-  saveSettings({ theme: next });
+  const cur    = document.documentElement.getAttribute('data-theme') || 'night-ops';
+  const themes = ['night-ops', 'opera', 'midnight'];
+  setTheme(themes[(themes.indexOf(cur) + 1) % themes.length]);
 }
 
 // ── Hotel name ────────────────────────────────────────────
