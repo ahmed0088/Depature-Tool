@@ -170,6 +170,17 @@
         <button class="dep-na-filter-btn" onclick="depFilter('na', document.querySelector('[data-f=na]'))">View All →</button>
       </div>
     </div>
+    <!-- ── Extension Action Bar (appears when any rooms are extended) ── -->
+    <div id="depExtBar" class="dep-na-bar" style="display:none;background:linear-gradient(90deg,rgba(90,180,232,0.08),transparent);border-color:rgba(90,180,232,0.25);">
+      <div class="dep-na-bar-left">
+        <span class="dep-na-bar-icon">↪</span>
+        <span class="dep-na-bar-text"><span id="depExtCount">0 rooms</span> extended today</span>
+      </div>
+      <div class="dep-na-bar-right">
+        <button id="depExtCopyBtn" class="dep-na-copy-btn" style="background:rgba(90,180,232,0.15);border-color:rgba(90,180,232,0.4);color:var(--sky);" onclick="depCopyExtList()">📋 Copy for HK</button>
+        <button class="dep-na-filter-btn" onclick="depFilter('extended', document.querySelector('[data-f=extended]'))">View All →</button>
+      </div>
+    </div>
     <div class="dep-grid size-md" id="depGrid"></div>
     <div class="dep-log-wrap" id="depLogWrap" style="display:none;">
       <div class="dep-log-header" onclick="toggleLog()">

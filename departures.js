@@ -229,6 +229,12 @@ function depRender() {
   if (naBar) naBar.style.display = sc.na > 0 ? 'flex' : 'none';
   if (naCnt) naCnt.textContent = sc.na + ' room' + (sc.na !== 1 ? 's' : '');
 
+  // Extension Action Bar
+  const extBar = document.getElementById('depExtBar');
+  const extCnt = document.getElementById('depExtCount');
+  if (extBar) extBar.style.display = sc.extended > 0 ? 'flex' : 'none';
+  if (extCnt) extCnt.textContent = sc.extended + ' room' + (sc.extended !== 1 ? 's' : '');
+
   document.getElementById('depProgLabel').textContent = `${sc.out} of ${sc.all} checked out`;
   document.getElementById('depProgPct').textContent   = pct + '%';
   document.getElementById('depProgFill').style.width  = pct + '%';
@@ -599,15 +605,29 @@ function toggleLog() {
 function depCopyNAList() {
   const naRooms = depRooms.filter(r => r.status === 'na');
   if (!naRooms.length) { showToast('No rooms marked No Answer', 'info'); return; }
-  const date = new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
   const time = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
-  const lines = naRooms.map(r =>
-    `Room ${r.roomStr} · ${r.name}${r.naTime ? ' · No Answer at ' + r.naTime : ''}`
-  );
-  const text = `📵 No Answer Rooms — ${date} ${time}\n${'─'.repeat(40)}\n${lines.join('\n')}\n\nPlease follow up with Housekeeping.`;
+  const lines = naRooms.map(r => {
+    const t = r.naTime || time;
+    return `📵 ${r.roomStr} · ${r.name} · ${t}`;
+  });
+  const text = `📵 *NA Rooms — ${time}*\n${lines.join('\n')}`;
   const btn = document.getElementById('depNaCopyBtn');
   copyToClipboard(text, btn, '📋 Copy for HK');
   showToast('NA list copied ✓', 'ok');
+}
+
+function depCopyExtList() {
+  const extRooms = depRooms.filter(r => r.status === 'extended');
+  if (!extRooms.length) { showToast('No extended rooms', 'info'); return; }
+  const time = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  const lines = extRooms.map(r => {
+    const n = r.extensionNights || 1;
+    return `↪ ${r.roomStr} · ${r.name} · +${n}N`;
+  });
+  const text = `↪ *Extensions — ${time}*\n${lines.join('\n')}`;
+  const btn = document.getElementById('depExtCopyBtn');
+  copyToClipboard(text, btn, '📋 Copy for HK');
+  showToast('Extensions copied ✓', 'ok');
 }
 
 function depFilter(f, el) {
