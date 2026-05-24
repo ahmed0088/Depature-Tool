@@ -88,6 +88,10 @@
     <div class="nav-icon">🛂</div>Immigration Check
     <span class="nav-badge" id="immigTabCount">Upload</span>
   </div>
+  <div class="nav-item" onclick="showPanel('tourism')" id="nav-tourism">
+    <div class="nav-icon">🏛️</div>Tourism Tax
+    <span class="nav-badge" id="badge-tourism">0</span>
+  </div>
   <div class="nav-item" onclick="showPanel('checklist')" id="nav-checklist">
     <div class="nav-icon">✅</div>Night Checklist
     <span class="nav-badge" id="badge-checklist">17</span>
@@ -588,6 +592,76 @@
   </div>
 </div>
 
+
+<!-- ════════════════ TOURISM TAX ════════════════ -->
+<div class="panel" id="panel-tourism">
+
+  <div class="page-hd">
+    <div class="page-hd-left">
+      <h1>Tourism Tax · TD Portal</h1>
+      <p id="ttDateLabel">Load the Opera arrivals report to find rooms needing date correction</p>
+    </div>
+    <div class="page-hd-actions" id="ttHeaderActions" style="display:none;">
+      <button class="btn sky sm" onclick="ttCopyLate()">📋 Copy List</button>
+      <button class="btn rose sm" onclick="ttClear()">✕ New Report</button>
+    </div>
+  </div>
+
+  <!-- ── UPLOAD STATE ── -->
+  <div id="ttPasteCard">
+    <div class="tt-upload-card">
+      <div class="tt-upload-icon">🏛️</div>
+      <div class="tt-upload-title">Opera Arrivals Report</div>
+      <div class="tt-upload-sub">
+        Opera Cloud → Front Desk → Arrivals → Download as <strong>Delimited Data (.txt)</strong><br>
+        Open the file, select all, copy, then paste below — or upload directly.<br><br>
+        <strong>Rooms with a ✱ in Opera (checked in on the next calendar day) will be shown here so you can correct the date in the TD portal.</strong>
+      </div>
+      <textarea id="ttInput" class="tt-textarea"
+        placeholder="Paste Opera tab-delimited arrivals data here…"></textarea>
+      <div class="tt-upload-actions">
+        <button class="btn gold" onclick="ttLoad()">⚡ Parse Report</button>
+        <label class="btn sky" style="cursor:pointer;">
+          📁 Upload .txt File
+          <input type="file" accept=".txt,.csv" onchange="ttLoadFile(this)" style="display:none"/>
+        </label>
+      </div>
+    </div>
+  </div><!-- /ttPasteCard -->
+
+  <!-- ── RESULTS STATE ── -->
+  <div id="ttResultCard" style="display:none;">
+
+    <!-- Count + search -->
+    <div class="filter-row" style="margin-bottom:16px;">
+      <span id="tt-kpi-after12" style="font-family:var(--mono);font-size:1.1rem;font-weight:700;color:var(--rose);margin-right:8px;">—</span>
+      <span style="color:var(--text2);font-size:0.8rem;">rooms need TD portal date correction</span>
+      <div class="search-wrap" style="margin-left:auto;">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px;margin-left:8px;flex-shrink:0;color:var(--text3)"><circle cx="6.5" cy="6.5" r="4"/><path d="M10.5 10.5l3 3"/></svg>
+        <input id="ttSearch" placeholder="Room or name…" oninput="ttRender()"/>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width:64px;">Room</th>
+            <th>Guest Name</th>
+            <th style="width:116px;">Confirmation</th>
+            <th style="width:80px;">Arr. Time</th>
+            <th style="width:110px;">Opera Date</th>
+            <th style="width:130px;">TD Portal Date</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="ttTable"></tbody>
+      </table>
+    </div>
+
+  </div><!-- /ttResultCard -->
+</div><!-- /panel-tourism -->
 </main>
 </div><!-- /layout -->
 
@@ -700,6 +774,7 @@
 <script src="shifts.js"></script>
 <script src="checklist.js"></script>
 <script src="reports.js"></script>
+<script src="tourism-tax.js"></script>
 
 <script>
 // ════════════════════════════════════════════════

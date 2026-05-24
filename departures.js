@@ -610,7 +610,7 @@ function depCopyNAList() {
     const t = r.naTime || time;
     return `📵 ${r.roomStr} · ${r.name} · ${t}`;
   });
-  const text = `📵 *NA Rooms — ${time}*\n${lines.join('\n')}\nPlease check these rooms 🙏`;
+  const text = `📵 *NA Rooms — ${time}*\n${lines.join('\n')}`;
   const btn = document.getElementById('depNaCopyBtn');
   copyToClipboard(text, btn, '📋 Copy for HK');
   showToast('NA list copied ✓', 'ok');

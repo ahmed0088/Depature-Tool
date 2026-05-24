@@ -1030,3 +1030,201 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
 .modal    { cursor: default; }
 #appToast { transition: opacity 0.25s; }
 .view-toggle { align-self: center; }
+
+/* ══════════════════════════════════════════════════════
+   TOURISM TAX
+══════════════════════════════════════════════════════ */
+
+/* ── Cutoff card (paste state) ── */
+.tt-cutoff-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  padding: 18px 20px;
+  margin-bottom: 14px;
+}
+.tt-cutoff-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.tt-cutoff-icon {
+  width: 36px; height: 36px;
+  border-radius: var(--r);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem; flex-shrink: 0;
+}
+.tt-cutoff-title {
+  font-weight: 700; font-size: 0.88rem; color: var(--text);
+}
+.tt-cutoff-sub {
+  font-family: var(--mono); font-size: 0.65rem; color: var(--text3);
+  margin-top: 2px; line-height: 1.5;
+}
+.tt-cutoff-current {
+  margin-left: auto; font-family: var(--mono); font-size: 1rem;
+  font-weight: 700; color: var(--accent); flex-shrink: 0;
+  background: var(--accent-bg); border: 1px solid var(--accent-border);
+  border-radius: var(--r); padding: 4px 12px;
+}
+
+/* Preset buttons */
+.tt-cutoff-presets {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+}
+.tt-pre-btn {
+  font-family: var(--mono); font-size: 0.68rem; font-weight: 500;
+  padding: 5px 12px; border-radius: var(--r);
+  border: 1px solid var(--border2);
+  background: var(--bg); color: var(--text2);
+  cursor: pointer; transition: all .12s; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.tt-pre-btn:hover {
+  border-color: var(--accent); color: var(--accent);
+  background: var(--accent-bg);
+}
+.tt-pre-btn.on {
+  background: var(--accent); border-color: var(--accent);
+  color: #08090d; font-weight: 700;
+}
+[data-theme="opera"] .tt-pre-btn.on { color: #fff; }
+.tt-pre-custom input[type="time"] {
+  background: transparent; border: none; outline: none;
+  color: inherit; font-family: var(--mono); font-size: 0.68rem;
+  cursor: pointer; width: 86px;
+}
+
+/* ── Upload card ── */
+.tt-upload-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  padding: 28px 24px;
+  text-align: center;
+}
+.tt-upload-icon { font-size: 2rem; margin-bottom: 8px; }
+.tt-upload-title {
+  font-family: var(--serif); font-size: 1.15rem; color: var(--text);
+  margin-bottom: 6px;
+}
+.tt-upload-sub {
+  font-family: var(--mono); font-size: 0.67rem; color: var(--text3);
+  line-height: 1.7; margin-bottom: 16px;
+}
+.tt-textarea {
+  width: 100%; min-height: 140px;
+  font-family: var(--mono); font-size: 0.72rem;
+  padding: 12px; resize: vertical;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--border2); border-radius: var(--r);
+  outline: none; transition: border-color .12s;
+  box-sizing: border-box; text-align: left;
+}
+.tt-textarea:focus { border-color: var(--accent); }
+.tt-upload-actions {
+  display: flex; gap: 10px; justify-content: center; margin-top: 14px;
+}
+
+/* ── KPI row ── */
+.tt-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px; margin-bottom: 16px;
+}
+@media (max-width: 780px) { .tt-kpi-row { grid-template-columns: repeat(2,1fr); } }
+.tt-kpi-tile {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r2); padding: 16px 18px;
+}
+.tt-kpi-danger { border-color: var(--red-border);    background: var(--red-bg); }
+.tt-kpi-ok     { border-color: var(--green-border);  background: var(--green-bg); }
+.tt-kpi-muted  { border-color: var(--border); }
+.tt-kpi-num {
+  font-family: var(--serif); font-size: 2rem; line-height: 1;
+  color: var(--text);
+}
+.tt-kpi-danger .tt-kpi-num { color: var(--red); }
+.tt-kpi-ok     .tt-kpi-num { color: var(--green); }
+.tt-kpi-lbl {
+  font-family: var(--mono); font-size: 0.6rem; color: var(--text3);
+  text-transform: uppercase; letter-spacing: .04em; margin-top: 4px;
+}
+.tt-kpi-danger .tt-kpi-lbl { color: var(--red); }
+.tt-kpi-ok     .tt-kpi-lbl { color: var(--green); }
+
+/* ── Inline cutoff adjuster (results state) ── */
+.tt-inline-cutoff {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 10px 14px; margin-bottom: 14px;
+}
+.tt-inline-label {
+  font-family: var(--mono); font-size: 0.65rem;
+  color: var(--text3); white-space: nowrap; text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+/* ── Warning banner ── */
+.tt-warning-banner {
+  display: flex; align-items: flex-start; gap: 10px;
+  background: var(--amber-bg); border: 1px solid var(--amber-border);
+  border-radius: var(--r); padding: 10px 14px;
+  font-family: var(--mono); font-size: 0.7rem; color: var(--amber);
+  margin-bottom: 16px; line-height: 1.5;
+}
+.tt-warn-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--amber); flex-shrink: 0; margin-top: 3px;
+}
+
+/* ── Table rows ── */
+.tt-row-late td  { background: var(--red-bg) !important; }
+.tt-row-late:hover td { background: rgba(220,38,38,0.12) !important; }
+.tt-row-midnight td { background: var(--purple-bg) !important; }
+
+/* Room pill */
+.tt-room-pill {
+  display: inline-block; font-family: var(--mono); font-weight: 700;
+  font-size: 0.82rem; color: var(--accent);
+  background: var(--accent-bg); border: 1px solid var(--accent-border);
+  border-radius: var(--r); padding: 2px 9px;
+}
+
+/* Time badge */
+.tt-time {
+  display: inline-flex; align-items: center;
+  font-family: var(--mono); font-size: 0.77rem; font-weight: 600;
+  border-radius: var(--r); padding: 3px 9px;
+}
+.tt-time-late     { background: var(--red-bg);    color: var(--red);    border: 1px solid var(--red-border); }
+.tt-time-ok       { background: var(--green-bg);  color: var(--green);  border: 1px solid var(--green-border); }
+.tt-time-midnight { background: var(--purple-bg); color: var(--purple); border: 1px solid var(--purple-border); }
+.tt-time-none     { background: var(--surface);   color: var(--text3);  border: 1px solid var(--border); }
+
+/* Action pill */
+.tt-action-fix {
+  display: inline-block; font-family: var(--mono); font-size: 0.63rem;
+  font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--red); background: var(--red-bg);
+  border: 1px solid var(--red-border); border-radius: var(--r);
+  padding: 3px 8px;
+}
+.tt-action-ok {
+  font-family: var(--mono); font-size: 0.7rem;
+  color: var(--green);
+}
+.tt-action-midnight {
+  display: inline-block; font-family: var(--mono); font-size: 0.63rem;
+  font-weight: 700; text-transform: uppercase;
+  color: var(--purple); background: var(--purple-bg);
+  border: 1px solid var(--purple-border); border-radius: var(--r);
+  padding: 3px 8px;
+}
+
+/* fchip overrides for tt filters */
+.fchip[data-ttf="after12"].on  { background: var(--red-bg);   color: var(--red);   border-color: var(--red-border); }
+.fchip[data-ttf="before12"].on { background: var(--green-bg); color: var(--green); border-color: var(--green-border); }
