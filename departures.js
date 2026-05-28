@@ -150,14 +150,15 @@ function closeReloadModal() {
 // ── Counts ─────────────────────────────────────────────────
 function depCounts() {
   return {
-    all:      depRooms.length,
-    due:      depRooms.filter(r => r.status === 'due').length,
-    late:     depRooms.filter(r => r.status === 'late').length,
-    extended: depRooms.filter(r => r.status === 'extended').length,
-    balance:  depRooms.filter(r => r.balance > 0 && r.status !== 'out' && r.status !== 'extended').length,
-    out:      depRooms.filter(r => r.status === 'out').length,
-    na:       depRooms.filter(r => r.status === 'na').length,
-    pending:  depRooms.filter(r => r.intent && r.status !== 'out' && r.status !== 'extended').length,
+    all:          depRooms.length,
+    due:          depRooms.filter(r => r.status === 'due').length,
+    late:         depRooms.filter(r => r.status === 'late').length,
+    extended:     depRooms.filter(r => r.status === 'extended').length,
+    balance:      depRooms.filter(r => r.balance > 0 && r.status !== 'out' && r.status !== 'extended').length,
+    out:          depRooms.filter(r => r.status === 'out').length,
+    na:           depRooms.filter(r => r.status === 'na').length,
+    maybe_extend: depRooms.filter(r => r.intent === 'maybe_extend').length,
+    pending:      depRooms.filter(r => r.intent && r.status !== 'out' && r.status !== 'extended').length,
   };
 }
 
@@ -192,11 +193,16 @@ function depTimeTag(r) {
 // ── Render ─────────────────────────────────────────────────
 function depRender() {
   const sc  = depCounts();
+  const activeCount = sc.due + sc.late + sc.na;
   const pct = sc.all ? Math.round(sc.out / sc.all * 100) : 0;
 
+  // Push counts to filter chips
   Object.entries(sc).forEach(([k, v]) => {
     const el = document.getElementById('dfc-' + k); if (el) el.textContent = v;
   });
+  // 'All' chip shows active (not checked-out/extended) count
+  const allChipCount = document.getElementById('dfc-all');
+  if (allChipCount) allChipCount.textContent = activeCount;
 
   // Balance outstanding total
   const totalOwing = depRooms
@@ -255,10 +261,11 @@ function depRender() {
   let filtered = depRooms.filter(r => {
     let mf;
     switch (depFilter_) {
-      case 'all':     mf = r.status !== 'out' && r.status !== 'extended' && r.status !== 'na'; break;
-      case 'balance': mf = r.balance > 0 && r.status !== 'out' && r.status !== 'extended'; break;
-      case 'pending': mf = !!r.intent && r.status !== 'out' && r.status !== 'extended'; break;
-      default:        mf = r.status === depFilter_; break;
+      case 'all':          mf = r.status !== 'out' && r.status !== 'extended'; break;
+      case 'balance':      mf = r.balance > 0 && r.status !== 'out' && r.status !== 'extended'; break;
+      case 'pending':      mf = !!r.intent && r.status !== 'out' && r.status !== 'extended'; break;
+      case 'maybe_extend': mf = r.intent === 'maybe_extend'; break;
+      default:             mf = r.status === depFilter_; break;
     }
     const ms = !search ||
       r.roomStr.includes(search) ||
@@ -511,10 +518,11 @@ function depSetIntent(i, intent) {
 function depEditName(i) {
   const allFiltered = depRooms.filter(r => {
     switch (depFilter_) {
-      case 'all':     return r.status !== 'out' && r.status !== 'extended' && r.status !== 'na';
-      case 'balance': return r.balance > 0 && r.status !== 'out' && r.status !== 'extended';
-      case 'pending': return !!r.intent && r.status !== 'out' && r.status !== 'extended';
-      default:        return r.status === depFilter_;
+      case 'all':          return r.status !== 'out' && r.status !== 'extended';
+      case 'balance':      return r.balance > 0 && r.status !== 'out' && r.status !== 'extended';
+      case 'pending':      return !!r.intent && r.status !== 'out' && r.status !== 'extended';
+      case 'maybe_extend': return r.intent === 'maybe_extend';
+      default:             return r.status === depFilter_;
     }
   });
   const visIdx = allFiltered.indexOf(depRooms[i]);
@@ -656,7 +664,7 @@ function depFilter(f, el) {
   const btn = el || document.querySelector(`[data-f="${f}"]`);
   if (btn) {
     btn.classList.add('on');
-    const map = { due:'due', extended:'ext', late:'late', balance:'bal', out:'out', pending:'pending', na:'na' };
+    const map = { due:'due', extended:'ext', late:'late', balance:'bal', out:'out', pending:'pending', na:'na', maybe_extend:'ext' };
     if (map[f]) btn.classList.add(map[f]);
   }
   depRender();
