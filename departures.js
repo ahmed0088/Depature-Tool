@@ -100,6 +100,14 @@ function processDepReload() {
   let added = 0, kept = 0, removed = 0;
   const merged = [];
 
+  // Build a lookup from the log so we can restore rooms Opera drops after reload
+  // (extended rooms vanish from Opera after the night — log is the only record)
+  const logByRoom = {};
+  depLog.forEach(l => {
+    // Keep only the most recent log entry per room
+    if (!logByRoom[l.room]) logByRoom[l.room] = l;
+  });
+
   freshRooms.forEach(fresh => {
     const old = existing[fresh.room];
     if (old) {
@@ -111,10 +119,29 @@ function processDepReload() {
         intent:          old.intent || '',
         note:            old.note,
         checkoutAt:      old.checkoutAt,
+        naTime:          old.naTime || '',
+        photo:           old.photo  || '',
       });
       kept++;
     } else {
-      merged.push(fresh);
+      // New room from Opera — check if it was previously extended/out/late
+      // and got dropped from the report. Restore its tracked state from the log.
+      const logged = logByRoom[fresh.roomStr || fresh.room];
+      if (logged && (logged.action === 'extended' || logged.action === 'out' || logged.action === 'late' || logged.action === 'na')) {
+        merged.push({
+          ...fresh,
+          status:          logged.action,
+          extensionNights: logged.extensionNights || 0,
+          lateTime:        logged.lateTime        || '',
+          checkoutAt:      logged.action === 'out' ? logged.time : '',
+          naTime:          logged.action === 'na'  ? logged.time : '',
+          intent:          '',
+          note:            '',
+          photo:           '',
+        });
+      } else {
+        merged.push(fresh);
+      }
       added++;
     }
   });
@@ -394,7 +421,7 @@ function depCardHTML(r) {
   const extRow = r.status === 'extended' ? `
     <div class="dc-sel-row">
       <span class="dc-sel-lbl ext">↪ Extra nights:</span>
-      <select class="dc-select ext" onchange="depRooms[${i}].extensionNights=parseInt(this.value)||0;depRender();saveDeps()">
+      <select class="dc-select ext" onchange="depRooms[${i}].extensionNights=parseInt(this.value)||0;depSyncExtToLog(${i});depRender();saveDeps()">
         ${[1,2,3,4,5,6,7].map(n => `<option${r.extensionNights===n?' selected':''}>${n} night${n>1?'s':''}</option>`).join('')}
       </select>
     </div>` : '';
@@ -589,7 +616,16 @@ function depAction(i, status) {
   if (status === 'due')      r.intent = '';  // undo clears intent
 
   if (status !== 'due') {
-    depLog.unshift({ room: r.roomStr, name: r.name, action: status, time: t, roomIdx: i, prevStatus: prev });
+    depLog.unshift({
+      room:            r.roomStr,
+      name:            r.name,
+      action:          status,
+      time:            t,
+      roomIdx:         i,
+      prevStatus:      prev,
+      extensionNights: status === 'extended' ? (r.extensionNights || 1) : 0,
+      lateTime:        status === 'late'     ? (r.lateTime || '')        : '',
+    });
   } else {
     const li = depLog.findIndex(l => l.room === r.roomStr);
     if (li >= 0) depLog.splice(li, 1);
@@ -602,6 +638,13 @@ function depAction(i, status) {
 
 function saveDeps() {
   saveDepartures(depRooms, depLog);
+}
+
+// Keep log in sync when nights dropdown changes on an already-extended card
+function depSyncExtToLog(i) {
+  const r   = depRooms[i];
+  const li  = depLog.findIndex(l => l.room === r.roomStr && l.action === 'extended');
+  if (li >= 0) depLog[li].extensionNights = r.extensionNights || 1;
 }
 
 // ── Action log ─────────────────────────────────────────────
