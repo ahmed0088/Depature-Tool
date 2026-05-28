@@ -235,6 +235,12 @@ function depRender() {
   if (extBar) extBar.style.display = sc.extended > 0 ? 'flex' : 'none';
   if (extCnt) extCnt.textContent = sc.extended + ' room' + (sc.extended !== 1 ? 's' : '');
 
+  // Checked-Out Action Bar
+  const outBar = document.getElementById('depOutBar');
+  const outCnt = document.getElementById('depOutCount');
+  if (outBar) outBar.style.display = sc.out > 0 ? 'flex' : 'none';
+  if (outCnt) outCnt.textContent = sc.out + ' room' + (sc.out !== 1 ? 's' : '');
+
   document.getElementById('depProgLabel').textContent = `${sc.out} of ${sc.all} checked out`;
   document.getElementById('depProgPct').textContent   = pct + '%';
   document.getElementById('depProgFill').style.width  = pct + '%';
@@ -610,10 +616,24 @@ function depCopyNAList() {
     const t = r.naTime || time;
     return `📵 ${r.roomStr} · ${r.name} · ${t}`;
   });
-  const text = `📵 *NA Rooms — ${time}*\n${lines.join('\n')}`;
+  const text = `📵 *NA Rooms — ${time}*\n${lines.join('\n')}\n\n*Please do* 🙏`;
   const btn = document.getElementById('depNaCopyBtn');
   copyToClipboard(text, btn, '📋 Copy for HK');
   showToast('NA list copied ✓', 'ok');
+}
+
+function depCopyOutList() {
+  const outRooms = depRooms.filter(r => r.status === 'out');
+  if (!outRooms.length) { showToast('No checked-out rooms yet', 'info'); return; }
+  const time = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  const lines = outRooms.map(r => {
+    const t = r.checkoutAt || time;
+    return `✓ ${r.roomStr} · ${r.name} · ${t}`;
+  });
+  const text = `✅ *Checked Out Rooms — ${time}*\n${lines.join('\n')}\n\n*Please do* 🙏`;
+  const btn = document.getElementById('depOutCopyBtn');
+  copyToClipboard(text, btn, '📋 Copy for HK');
+  showToast('Checkout list copied ✓', 'ok');
 }
 
 function depCopyExtList() {

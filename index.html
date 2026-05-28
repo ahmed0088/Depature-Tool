@@ -185,6 +185,17 @@
         <button class="dep-na-filter-btn" onclick="depFilter('extended', document.querySelector('[data-f=extended]'))">View All →</button>
       </div>
     </div>
+    <!-- ── Checked-Out Action Bar (appears when any rooms are checked out) ── -->
+    <div id="depOutBar" class="dep-na-bar" style="display:none;background:linear-gradient(90deg,rgba(62,207,142,0.08),transparent);border-color:rgba(62,207,142,0.25);">
+      <div class="dep-na-bar-left">
+        <span class="dep-na-bar-icon">✅</span>
+        <span class="dep-na-bar-text"><span id="depOutCount">0 rooms</span> checked out</span>
+      </div>
+      <div class="dep-na-bar-right">
+        <button id="depOutCopyBtn" class="dep-na-copy-btn" style="background:rgba(62,207,142,0.15);border-color:rgba(62,207,142,0.4);color:var(--mint);" onclick="depCopyOutList()">📋 Copy for HK</button>
+        <button class="dep-na-filter-btn" onclick="depFilter('out', document.querySelector('[data-f=out]'))">View All →</button>
+      </div>
+    </div>
     <div class="dep-grid size-md" id="depGrid"></div>
     <div class="dep-log-wrap" id="depLogWrap" style="display:none;">
       <div class="dep-log-header" onclick="toggleLog()">
