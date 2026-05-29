@@ -216,22 +216,9 @@ function _parseLcoTime(t) {
 }
 
 // ── Is a late-CO room past its agreed LCO time? ───────────
-// ── Does Opera's departure time fall at or after 12:00? ──────────────
-// That makes it a Late CO — nothing to do with what time it is now.
-function isDepTimeAfterNoon(r) {
-  if (!r.depTime) return false;
-  const m = r.depTime.match(/(\d+):(\d+)/);
-  if (!m) return false;
-  let h = parseInt(m[1]);
-  if (r.depTime.toLowerCase().includes('pm') && h < 12) h += 12;
-  if (r.depTime.toLowerCase().includes('am') && h === 12) h = 0;
-  return h >= 12;
-}
-
-// ── Effective status ──────────────────────────────────────────
-// Opera depTime >= 12:00 → LATE CO. Simple as that.
+// ── Effective status ─────────────────────────────────────
+// LCO is set manually by staff only — no auto-promotion.
 function effectiveStatus(r) {
-  if (r.status === 'due' && isDepTimeAfterNoon(r)) return 'late';
   return r.status;
 }
 
