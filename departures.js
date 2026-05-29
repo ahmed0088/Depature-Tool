@@ -146,17 +146,30 @@ function processDepReload() {
     }
   });
 
-  depRooms.forEach(r => { if (!freshRooms.find(f => f.room === r.room)) removed++; });
+  // Rooms no longer in Opera report — keep if they're checked out / extended / NA
+  // so the log and board stay accurate across reloads
+  let preserved = 0;
+  depRooms.forEach(r => {
+    if (!freshRooms.find(f => f.room === r.room)) {
+      removed++;
+      if (r.status === 'out' || r.status === 'extended' || r.status === 'na') {
+        merged.push(r); // preserve — has real tracked checkout/extension data
+        preserved++;
+      }
+    }
+  });
 
   depRooms = merged;
   document.getElementById('depReloadInput').value = '';
   closeReloadModal();
-  document.getElementById('depDateLabel').textContent = `${depRooms.length} rooms departing · ${depRooms[0]?.departure || ''}`;
+  const activeCount = depRooms.filter(r => r.status !== 'out' && r.status !== 'extended').length;
+  document.getElementById('depDateLabel').textContent = `${activeCount} active · ${depRooms.length} total · ${depRooms.find(r=>r.departure)?.departure || ''}`;
 
   depRender();
   updateDepBadge();
+  const preservedNote = preserved ? ` · ${preserved} CO/ext kept` : '';
   saveDepartures(depRooms, depLog).then(() =>
-    showToast(`Reloaded ✓  ${kept} kept · ${added} new · ${removed} removed`, 'info')
+    showToast(`Reloaded ✓  ${kept} kept · ${added} new · ${removed} dropped${preservedNote}`, 'info')
   );
 }
 
@@ -486,8 +499,10 @@ function depCardHTML(r) {
     <div class="dc-head">
       <div class="dc-room">${r.roomStr}</div>
       <div class="dc-badges">
-        <div class="dc-sbadge ${badgeCls}">${badgeText}</div>
+        <div class="dc-sbadge ${finalBadgeCls}">${badgeText}</div>
         <div class="dc-nights">🌙 ${r.nights}n</div>
+        ${r.rateCode ? `<div class="dc-rate-code">${r.rateCode}</div>` : ''}
+        <button class="dc-copy-card-btn" title="Copy room summary" onclick="depCopyCard(${i})">📋</button>
       </div>
     </div>
     <div class="dc-body">
@@ -617,11 +632,11 @@ function depAction(i, status) {
 
   if (status !== 'due') {
     depLog.unshift({
-      room:            r.roomStr,
+      room:            r.roomStr,   // ← always match by this on undo
       name:            r.name,
       action:          status,
       time:            t,
-      roomIdx:         i,
+      roomIdx:         depRooms.indexOf(r), // best-effort snapshot; undo uses roomStr
       prevStatus:      prev,
       extensionNights: status === 'extended' ? (r.extensionNights || 1) : 0,
       lateTime:        status === 'late'     ? (r.lateTime || '')        : '',
@@ -670,10 +685,15 @@ function renderDepLog() {
 
 function depUndoLog(li) {
   const entry = depLog[li]; if (!entry) return;
-  const r = depRooms[entry.roomIdx];
+  // Find by room string — roomIdx can be stale after reloads
+  const r = depRooms.find(rm => rm.roomStr === entry.room) || depRooms[entry.roomIdx];
   if (r) {
-    r.status = entry.prevStatus || 'due';
-    r.checkoutAt = ''; r.lateTime = ''; r.extensionNights = 0; r.intent = '';
+    r.status         = entry.prevStatus || 'due';
+    r.checkoutAt     = '';
+    r.lateTime       = '';
+    r.extensionNights = 0;
+    r.intent         = '';
+    r.naTime         = '';
   }
   depLog.splice(li, 1);
   depRender();
@@ -691,6 +711,23 @@ function toggleLog() {
 }
 
 // ── Filters ────────────────────────────────────────────────
+// ── Copy single card for handover (WhatsApp / Teams) ─────
+function depCopyCard(i) {
+  const r = depRooms[i];
+  const statusLabel = { due:'Due Out', out:'Checked Out', extended:'Extended', late:'Late CO', na:'No Answer' };
+  const lines = [
+    `🏨 Room ${r.roomStr} — ${r.name}`,
+    `Status: ${statusLabel[r.status] || r.status.toUpperCase()}${r.lateTime ? ' · ' + r.lateTime : ''}${r.extensionNights ? ' +' + r.extensionNights + 'N' : ''}`,
+    `Dates: ${r.arrival} → ${r.departure} (${r.nights}n)`,
+    r.balance > 0 ? `⚠ Balance: AED ${r.balance.toLocaleString('en', {minimumFractionDigits:2})} OWING` : `Balance: Settled`,
+    r.source ? `Source: ${r.source}` : '',
+    r.rateCode ? `Rate: ${r.rateCode}` : '',
+    r.note ? `Notes: ${r.note}` : '',
+  ].filter(Boolean);
+  copyToClipboard(lines.join('\n'), null, '');
+  showToast(`Room ${r.roomStr} copied ✓`, 'ok');
+}
+
 function depCopyNAList() {
   const naRooms = depRooms.filter(r => r.status === 'na');
   if (!naRooms.length) { showToast('No rooms marked No Answer', 'info'); return; }
