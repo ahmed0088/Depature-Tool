@@ -1199,9 +1199,6 @@ async function appInit() {
   listenDepartures(snap => {
     if (!snap || !snap.rooms) return;
     depRooms = snap.rooms;
-    // Fix any rooms incorrectly saved as 'late' by the old auto-LCO code
-    // (late with no lateTime = was auto-set, not manually set by staff)
-    depRooms.forEach(r => { if (r.status === 'late' && !r.lateTime) r.status = 'due'; });
     depLog = snap.log || [];
     if (depRooms.length) {
       const uploadCard = document.getElementById('depUploadCard');
