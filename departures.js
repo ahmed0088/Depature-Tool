@@ -67,7 +67,8 @@ function processDep() {
   depLog   = [];
 
   document.getElementById('depInput').value = '';
-  document.getElementById('depDateLabel').textContent = `${depRooms.length} rooms departing · ${depRooms[0]?.departure || ''}`;
+  const totalToday = depRooms.length;
+  document.getElementById('depDateLabel').textContent = `${totalToday} rooms departing · ${depRooms[0]?.departure || ''}`;
   document.getElementById('depBoard').style.display      = 'block';
   document.getElementById('depUploadCard').style.display = 'none';
   ['depPrintBtn','depExportBtn','depViewToggle','depReloadBtn'].forEach(id => {
@@ -162,8 +163,9 @@ function processDepReload() {
   depRooms = merged;
   document.getElementById('depReloadInput').value = '';
   closeReloadModal();
-  const activeCount = depRooms.filter(r => r.status !== 'out' && r.status !== 'extended').length;
-  document.getElementById('depDateLabel').textContent = `${activeCount} active · ${depRooms.length} total · ${depRooms.find(r=>r.departure)?.departure || ''}`;
+  const sc2 = depCounts();
+  const active2 = sc2.due + sc2.late + sc2.na;
+  document.getElementById('depDateLabel').textContent = `${active2} active · ${sc2.all} total · ${depRooms.find(r=>r.departure)?.departure || ''}`;
 
   depRender();
   updateDepBadge();
@@ -189,14 +191,19 @@ function closeReloadModal() {
 
 // ── Counts ─────────────────────────────────────────────────
 function depCounts() {
+  const due      = depRooms.filter(r => effectiveStatus(r) === 'due').length;
+  const late     = depRooms.filter(r => effectiveStatus(r) === 'late').length;
+  const extended = depRooms.filter(r => r.status === 'extended').length;
+  const out      = depRooms.filter(r => r.status === 'out').length;
+  const na       = depRooms.filter(r => r.status === 'na').length;
   return {
-    all:          depRooms.length,
-    due:          depRooms.filter(r => effectiveStatus(r) === 'due').length,
-    late:         depRooms.filter(r => effectiveStatus(r) === 'late').length,
-    extended:     depRooms.filter(r => r.status === 'extended').length,
+    all:          due + late + na + extended + out,   // today's rooms only (no preserved ghosts)
+    due,
+    late,
+    extended,
+    out,
+    na,
     balance:      depRooms.filter(r => r.balance > 0 && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended').length,
-    out:          depRooms.filter(r => r.status === 'out').length,
-    na:           depRooms.filter(r => r.status === 'na').length,
     maybe_extend: depRooms.filter(r => r.intent === 'maybe_extend').length,
     pending:      depRooms.filter(r => r.intent && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended').length,
   };
@@ -273,14 +280,14 @@ function depTimeTag(r) {
 // ── Render ─────────────────────────────────────────────────
 function depRender() {
   const sc  = depCounts();
-  const activeCount = sc.due + sc.late + sc.na;
   const pct = sc.all ? Math.round(sc.out / sc.all * 100) : 0;
 
   // Push counts to filter chips
   Object.entries(sc).forEach(([k, v]) => {
     const el = document.getElementById('dfc-' + k); if (el) el.textContent = v;
   });
-  // 'All' chip shows active (not checked-out/extended) count
+  // 'All' chip shows active rooms (due + late + na — what staff still needs to action)
+  const activeCount = sc.due + sc.late + sc.na;
   const allChipCount = document.getElementById('dfc-all');
   if (allChipCount) allChipCount.textContent = activeCount;
 
@@ -334,20 +341,24 @@ function depRender() {
   const search = (document.getElementById('depSearch')?.value || '').toLowerCase();
 
   // Filter rules:
-  // 'all'     → active: due + late only  (extended + out are hidden — they're done)
+  // 'all'     → active only: due + late + na  (out + extended are done/hidden)
   // 'balance' → active rooms with owing balance
-  // 'pending' → rooms with a guest intent flag
-  // everything else → match r.status exactly
+  // 'pending' → rooms with a guest intent flag still active
+  // everything else → match effectiveStatus exactly
   let filtered = depRooms.filter(r => {
+    const es = effectiveStatus(r);
     let mf;
     switch (depFilter_) {
-      case 'all':          mf = effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended'; break;
-      case 'balance':      mf = r.balance > 0 && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended'; break;
-      case 'pending':      mf = !!r.intent && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended'; break;
+      case 'all':          mf = es === 'due' || es === 'late' || es === 'na'; break;
+      case 'balance':      mf = r.balance > 0 && es !== 'out' && es !== 'extended'; break;
+      case 'pending':      mf = !!r.intent && es !== 'out' && es !== 'extended'; break;
       case 'maybe_extend': mf = r.intent === 'maybe_extend'; break;
-      case 'due':          mf = effectiveStatus(r) === 'due'; break;
-      case 'late':         mf = effectiveStatus(r) === 'late'; break;
-      default:             mf = r.status === depFilter_; break;
+      case 'due':          mf = es === 'due'; break;
+      case 'late':         mf = es === 'late'; break;
+      case 'na':           mf = es === 'na'; break;
+      case 'extended':     mf = es === 'extended'; break;
+      case 'out':          mf = es === 'out'; break;
+      default:             mf = es === depFilter_; break;
     }
     const ms = !search ||
       r.roomStr.includes(search) ||
@@ -618,14 +629,18 @@ function depSetIntent(i, intent) {
 // ── Name inline edit ───────────────────────────────────────
 function depEditName(i) {
   const allFiltered = depRooms.filter(r => {
+    const es = effectiveStatus(r);
     switch (depFilter_) {
-      case 'all':          return effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended';
-      case 'balance':      return r.balance > 0 && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended';
-      case 'pending':      return !!r.intent && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended';
+      case 'all':          return es === 'due' || es === 'late' || es === 'na';
+      case 'balance':      return r.balance > 0 && es !== 'out' && es !== 'extended';
+      case 'pending':      return !!r.intent && es !== 'out' && es !== 'extended';
       case 'maybe_extend': return r.intent === 'maybe_extend';
-      case 'due':          return effectiveStatus(r) === 'due';
-      case 'late':         return effectiveStatus(r) === 'late';
-      default:             return r.status === depFilter_;
+      case 'due':          return es === 'due';
+      case 'late':         return es === 'late';
+      case 'na':           return es === 'na';
+      case 'extended':     return es === 'extended';
+      case 'out':          return es === 'out';
+      default:             return es === depFilter_;
     }
   });
   const visIdx = allFiltered.indexOf(depRooms[i]);
@@ -827,9 +842,10 @@ function setDepSize(size, el) {
 }
 
 function updateDepBadge() {
-  const due = depRooms.filter(r => effectiveStatus(r) === 'due' || effectiveStatus(r) === 'late').length;
+  const sc  = depCounts();
+  const active = sc.due + sc.late + sc.na;
   const el  = document.getElementById('badge-departures');
-  if (el) el.textContent = due || depRooms.length || '0';
+  if (el) el.textContent = active || '0';
 }
 
 // ── Bulk checkout ──────────────────────────────────────────
