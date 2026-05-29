@@ -191,8 +191,8 @@ function closeReloadModal() {
 function depCounts() {
   return {
     all:          depRooms.length,
-    due:          depRooms.filter(r => r.status === 'due' || isLcoOverdue(r)).length,
-    late:         depRooms.filter(r => r.status === 'late').length,
+    due:          depRooms.filter(r => effectiveStatus(r) === 'due').length,
+    late:         depRooms.filter(r => effectiveStatus(r) === 'late').length,
     extended:     depRooms.filter(r => r.status === 'extended').length,
     balance:      depRooms.filter(r => r.balance > 0 && r.status !== 'out' && r.status !== 'extended').length,
     out:          depRooms.filter(r => r.status === 'out').length,
@@ -216,9 +216,19 @@ function _parseLcoTime(t) {
 }
 
 // ── Is a late-CO room past its agreed LCO time? ───────────
+// ── Effective status ─────────────────────────────────────
+// A due room past 12:00 is treated as Late CO everywhere:
+// filters, badge, card style, sorting — without mutating Firebase data.
+function effectiveStatus(r) {
+  if (r.status === 'due' && new Date().getHours() >= 12) return 'late';
+  return r.status;
+}
+
+// ── Is this LCO room past its agreed (or implied) checkout time? ─────────
 function isLcoOverdue(r) {
-  if (r.status !== 'late') return false;
-  if (!r.lateTime) return false;
+  if (effectiveStatus(r) !== 'late') return false;
+  // Auto-LCO (due room past 12:00, no specific time set) = already overdue
+  if (!r.lateTime) return true;
   const now     = new Date();
   const nowMins = now.getHours() * 60 + now.getMinutes();
   const lcoMins = _parseLcoTime(r.lateTime);
@@ -226,12 +236,8 @@ function isLcoOverdue(r) {
 }
 
 // ── Is this room overdue? ─────────────────────────────────
-// · due rooms  → overdue after 12:00
-// · late rooms → overdue after their agreed LCO time (if set)
 function isOverdue(r) {
-  if (r.status === 'due')  return new Date().getHours() >= 12;
-  if (r.status === 'late') return isLcoOverdue(r);
-  return false;
+  return isLcoOverdue(r);
 }
 
 // ── How long until / since checkout time ──────────────────
@@ -326,11 +332,12 @@ function depRender() {
   let filtered = depRooms.filter(r => {
     let mf;
     switch (depFilter_) {
-      case 'all':          mf = r.status !== 'out' && r.status !== 'extended'; break;
-      case 'balance':      mf = r.balance > 0 && r.status !== 'out' && r.status !== 'extended'; break;
-      case 'pending':      mf = !!r.intent && r.status !== 'out' && r.status !== 'extended'; break;
+      case 'all':          mf = effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended'; break;
+      case 'balance':      mf = r.balance > 0 && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended'; break;
+      case 'pending':      mf = !!r.intent && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended'; break;
       case 'maybe_extend': mf = r.intent === 'maybe_extend'; break;
-      case 'due':          mf = r.status === 'due' || isLcoOverdue(r); break;
+      case 'due':          mf = effectiveStatus(r) === 'due'; break;
+      case 'late':         mf = effectiveStatus(r) === 'late'; break;
       default:             mf = r.status === depFilter_; break;
     }
     const ms = !search ||
@@ -343,8 +350,8 @@ function depRender() {
 
   // Sort: overdue rooms bubble to top within their filter
   filtered.sort((a, b) => {
-    const ao = isOverdue(a) ? 0 : 1;
-    const bo = isOverdue(b) ? 0 : 1;
+    const ao = isLcoOverdue(a) ? 0 : 1;
+    const bo = isLcoOverdue(b) ? 0 : 1;
     if (ao !== bo) return ao - bo;
     return a.room - b.room;
   });
@@ -372,28 +379,30 @@ const INTENT_CONFIG = {
 function depCardHTML(r) {
   const i   = depRooms.indexOf(r);
   const bal = r.balance;
-  const overdue    = isOverdue(r);
-  const lcoOverdue = isLcoOverdue(r);
+  const es         = effectiveStatus(r);
+  const lcoOverdue  = isLcoOverdue(r);
+  const autoLco     = r.status === 'due' && es === 'late'; // due room past 12 — no manual LCO set
 
   const balClass = bal > 0 ? 'bal-owing' : bal < 0 ? 'bal-credit' : 'bal-zero';
   const balText  = bal === 0 ? '✓ Settled'
     : bal > 0 ? `AED ${Math.abs(bal).toLocaleString('en',{minimumFractionDigits:2})} OWING`
     :           `AED ${Math.abs(bal).toLocaleString('en',{minimumFractionDigits:2})} CREDIT`;
 
-  // Card colour
-  let sClass = 's-' + (bal > 0 && r.status !== 'out' && r.status !== 'extended' && r.status !== 'na' ? 'balance' : r.status);
-  if (r.intent && r.status !== 'out' && r.status !== 'extended' && r.status !== 'na') sClass += ' s-intent';
-  if (overdue && r.status !== 'na') sClass += ' s-overdue';
+  // Card colour — use effective status so auto-LCO rooms look like late rooms
+  let sClass = 's-' + (bal > 0 && es !== 'out' && es !== 'extended' && es !== 'na' ? 'balance' : es);
+  if (r.intent && es !== 'out' && es !== 'extended' && es !== 'na') sClass += ' s-intent';
   if (lcoOverdue) sClass += ' s-lco-overdue';
 
-  // Status badge
+  // Status badge — auto-LCO shows LATE CO badge; explicit LCO-overdue pulses red
+  const lcoLabel = r.lateTime ? `LATE CO · ${r.lateTime}` : 'LATE CO';
   const badgeMap = {
-    due:      ['sb-due',      overdue ? 'OVERDUE' : 'DUE OUT'],
+    due:      ['sb-late',     lcoOverdue ? `⚠ OVERDUE · ${r.lateTime || '12:00 PM'}` : lcoLabel],
     late:     ['sb-late',     lcoOverdue ? `⚠ LCO OVERDUE · ${r.lateTime}` : `LATE CO${r.lateTime ? ' · ' + r.lateTime : ''}`],
     extended: ['sb-extended', `EXT +${r.extensionNights}N`],
     out:      ['sb-out',      `OUT${r.checkoutAt ? ' · ' + r.checkoutAt : ''}`],
     na:       ['sb-na',       `NO ANSWER${r.naTime ? ' · ' + r.naTime : ''}`],
   };
+  // For auto-LCO rooms use the due row of badgeMap (they're still r.status==='due')
   const [badgeCls, badgeText] = badgeMap[r.status] || ['sb-due','DUE OUT'];
   const finalBadgeCls = lcoOverdue ? badgeCls + ' sb-lco-overdue' : badgeCls;
 
@@ -413,9 +422,9 @@ function depCardHTML(r) {
 
   // Overdue warning strip
   const overdueStrip = lcoOverdue
-    ? `<div class="dc-overdue-strip dc-lco-overdue-strip">⚠ Past agreed LCO time (${r.lateTime}) — check out required now</div>`
-    : overdue && r.status === 'due'
-    ? `<div class="dc-overdue-strip">⚠ Past checkout time — follow up required</div>`
+    ? autoLco
+      ? `<div class="dc-overdue-strip dc-lco-overdue-strip">⚠ Past 12:00 — room is now Late CO, follow up required</div>`
+      : `<div class="dc-overdue-strip dc-lco-overdue-strip">⚠ Past agreed LCO time (${r.lateTime}) — check out required now</div>`
     : '';
 
   // Late time dropdown
@@ -591,11 +600,12 @@ function depSetIntent(i, intent) {
 function depEditName(i) {
   const allFiltered = depRooms.filter(r => {
     switch (depFilter_) {
-      case 'all':          return r.status !== 'out' && r.status !== 'extended';
-      case 'balance':      return r.balance > 0 && r.status !== 'out' && r.status !== 'extended';
-      case 'pending':      return !!r.intent && r.status !== 'out' && r.status !== 'extended';
+      case 'all':          return effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended';
+      case 'balance':      return r.balance > 0 && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended';
+      case 'pending':      return !!r.intent && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended';
       case 'maybe_extend': return r.intent === 'maybe_extend';
-      case 'due':          return r.status === 'due' || isLcoOverdue(r);
+      case 'due':          return effectiveStatus(r) === 'due';
+      case 'late':         return effectiveStatus(r) === 'late';
       default:             return r.status === depFilter_;
     }
   });
