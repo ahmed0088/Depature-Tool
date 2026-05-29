@@ -536,7 +536,7 @@ function depCardHTML(r) {
     <div class="dc-body">
       ${overdueStrip}
       ${intentBanner}
-      <div class="dc-name" ondblclick="depEditName(${i})" title="Double-click to edit">${escapeHtml(r.name)}</div>
+      <div class="dc-name-row"><div class="dc-name" ondblclick="depEditName(${i})" title="Double-click to edit">${escapeHtml(r.name)}</div></div>
       <div class="dc-meta">
         <div class="dc-mi">📅 <strong>${r.arrival}</strong> → <strong>${r.departure}</strong></div>
         ${r.depTime ? `<div class="dc-mi">${timeTag}</div>` : ''}
