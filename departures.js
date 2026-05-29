@@ -194,11 +194,11 @@ function depCounts() {
     due:          depRooms.filter(r => effectiveStatus(r) === 'due').length,
     late:         depRooms.filter(r => effectiveStatus(r) === 'late').length,
     extended:     depRooms.filter(r => r.status === 'extended').length,
-    balance:      depRooms.filter(r => r.balance > 0 && r.status !== 'out' && r.status !== 'extended').length,
+    balance:      depRooms.filter(r => r.balance > 0 && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended').length,
     out:          depRooms.filter(r => r.status === 'out').length,
     na:           depRooms.filter(r => r.status === 'na').length,
     maybe_extend: depRooms.filter(r => r.intent === 'maybe_extend').length,
-    pending:      depRooms.filter(r => r.intent && r.status !== 'out' && r.status !== 'extended').length,
+    pending:      depRooms.filter(r => r.intent && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended').length,
   };
 }
 
@@ -215,24 +215,42 @@ function _parseLcoTime(t) {
   return h * 60 + min;
 }
 
-// ── Is a late-CO room past its agreed LCO time? ───────────
-// ── Effective status ─────────────────────────────────────
-// LCO is set manually by staff only — no auto-promotion.
+// ── Effective status ──────────────────────────────────────
+// A due room whose Opera departure time has already passed is
+// treated as Late CO automatically — no staff action needed.
+// r.status stays 'due' so undo still works; everything else
+// (filter, count, badge, sort) reads effectiveStatus instead.
 function effectiveStatus(r) {
+  if (r.status === 'due' && r.depTime) {
+    const match = r.depTime.match(/(\d+):(\d+)/);
+    if (match) {
+      let h = parseInt(match[1]), m = parseInt(match[2]);
+      if (r.depTime.toLowerCase().includes('pm') && h < 12) h += 12;
+      if (r.depTime.toLowerCase().includes('am') && h === 12) h = 0;
+      const now    = new Date();
+      const nowMin = now.getHours() * 60 + now.getMinutes();
+      if (nowMin > h * 60 + m) return 'late';
+    }
+  }
   return r.status;
 }
 
-// ── Is this LCO room past its agreed (or implied) checkout time? ─────────
+// ── Is this room past its checkout time? ─────────────────
+// Fires for both manually-set Late CO (r.status==='late') and
+// auto-promoted rooms (r.status==='due' but depTime passed).
 function isLcoOverdue(r) {
-  if (effectiveStatus(r) !== 'late') return false;
-  // Auto-LCO (due room past 12:00 with no agreed time) → shows LATE CO badge
-  // but does NOT pulse red — only rooms with a specific agreed time that has
-  // now passed are considered overdue and get the red alert treatment
-  if (!r.lateTime) return false;
-  const now     = new Date();
-  const nowMins = now.getHours() * 60 + now.getMinutes();
-  const lcoMins = _parseLcoTime(r.lateTime);
-  return lcoMins !== null && nowMins > lcoMins;
+  const es = effectiveStatus(r);
+  if (es !== 'late') return false;
+  // Manually-set LCO with an agreed time — check against that time
+  if (r.status === 'late' && r.lateTime) {
+    const now     = new Date();
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+    const lcoMins = _parseLcoTime(r.lateTime);
+    return lcoMins !== null && nowMins > lcoMins;
+  }
+  // Auto-promoted (depTime passed) — already overdue by definition
+  if (r.status === 'due') return true;
+  return false;
 }
 
 // ── Is this room overdue? ─────────────────────────────────
@@ -393,6 +411,7 @@ function depCardHTML(r) {
   if (lcoOverdue) sClass += ' s-lco-overdue';
 
   // Status badge
+  const autoPromoted = r.status === 'due' && es === 'late'; // depTime passed, not manually set
   const badgeMap = {
     due:      ['sb-due',      'DUE OUT'],
     late:     ['sb-late',     lcoOverdue ? `⚠ LCO OVERDUE · ${r.lateTime}` : `LATE CO${r.lateTime ? ' · ' + r.lateTime : ''}`],
@@ -400,8 +419,11 @@ function depCardHTML(r) {
     out:      ['sb-out',      `OUT${r.checkoutAt ? ' · ' + r.checkoutAt : ''}`],
     na:       ['sb-na',       `NO ANSWER${r.naTime ? ' · ' + r.naTime : ''}`],
   };
-  const [badgeCls, badgeText] = badgeMap[r.status] || ['sb-due','DUE OUT'];
-  const finalBadgeCls = lcoOverdue ? badgeCls + ' sb-lco-overdue' : badgeCls;
+  // Auto-promoted rooms: show as LATE CO even though r.status is still 'due'
+  let [badgeCls, badgeText] = autoPromoted
+    ? ['sb-late sb-lco-overdue', `⚠ OVERDUE · ${r.depTime}`]
+    : (badgeMap[r.status] || ['sb-due', 'DUE OUT']);
+  const finalBadgeCls = lcoOverdue && !autoPromoted ? badgeCls + ' sb-lco-overdue' : badgeCls;
 
   const srcClean  = r.source.substring(0,26) + (r.source.length > 26 ? '…' : '');
   const vipHTML   = r.isVip ? '<div class="dc-vip">⭐ VIP</div>' : '';
@@ -419,7 +441,9 @@ function depCardHTML(r) {
 
   // Overdue warning strip
   const overdueStrip = lcoOverdue
-    ? `<div class="dc-overdue-strip dc-lco-overdue-strip">⚠ Past agreed LCO time (${r.lateTime}) — check out required now</div>`
+    ? autoPromoted
+      ? `<div class="dc-overdue-strip dc-lco-overdue-strip">⚠ Past checkout time (${r.depTime}) — follow up required</div>`
+      : `<div class="dc-overdue-strip dc-lco-overdue-strip">⚠ Past agreed LCO time (${r.lateTime}) — check out required now</div>`
     : '';
 
   // Late time dropdown
@@ -796,7 +820,7 @@ function setDepSize(size, el) {
 }
 
 function updateDepBadge() {
-  const due = depRooms.filter(r => r.status === 'due' || r.status === 'late').length;
+  const due = depRooms.filter(r => effectiveStatus(r) === 'due' || effectiveStatus(r) === 'late').length;
   const el  = document.getElementById('badge-departures');
   if (el) el.textContent = due || depRooms.length || '0';
 }
