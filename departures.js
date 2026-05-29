@@ -381,7 +381,6 @@ function depCardHTML(r) {
   const bal = r.balance;
   const es         = effectiveStatus(r);
   const lcoOverdue  = isLcoOverdue(r);
-  const autoLco     = r.status === 'due' && es === 'late'; // due room past 12 — no manual LCO set
 
   const balClass = bal > 0 ? 'bal-owing' : bal < 0 ? 'bal-credit' : 'bal-zero';
   const balText  = bal === 0 ? '✓ Settled'
@@ -393,16 +392,14 @@ function depCardHTML(r) {
   if (r.intent && es !== 'out' && es !== 'extended' && es !== 'na') sClass += ' s-intent';
   if (lcoOverdue) sClass += ' s-lco-overdue';
 
-  // Status badge — auto-LCO shows LATE CO badge; explicit LCO-overdue pulses red
-  const lcoLabel = r.lateTime ? `LATE CO · ${r.lateTime}` : 'LATE CO';
+  // Status badge
   const badgeMap = {
-    due:      ['sb-late',     lcoOverdue ? `⚠ OVERDUE · ${r.lateTime || '12:00 PM'}` : lcoLabel],
+    due:      ['sb-due',      'DUE OUT'],
     late:     ['sb-late',     lcoOverdue ? `⚠ LCO OVERDUE · ${r.lateTime}` : `LATE CO${r.lateTime ? ' · ' + r.lateTime : ''}`],
     extended: ['sb-extended', `EXT +${r.extensionNights}N`],
     out:      ['sb-out',      `OUT${r.checkoutAt ? ' · ' + r.checkoutAt : ''}`],
     na:       ['sb-na',       `NO ANSWER${r.naTime ? ' · ' + r.naTime : ''}`],
   };
-  // For auto-LCO rooms use the due row of badgeMap (they're still r.status==='due')
   const [badgeCls, badgeText] = badgeMap[r.status] || ['sb-due','DUE OUT'];
   const finalBadgeCls = lcoOverdue ? badgeCls + ' sb-lco-overdue' : badgeCls;
 
@@ -422,9 +419,7 @@ function depCardHTML(r) {
 
   // Overdue warning strip
   const overdueStrip = lcoOverdue
-    ? autoLco
-      ? `<div class="dc-overdue-strip dc-lco-overdue-strip">⚠ Past 12:00 — room is now Late CO, follow up required</div>`
-      : `<div class="dc-overdue-strip dc-lco-overdue-strip">⚠ Past agreed LCO time (${r.lateTime}) — check out required now</div>`
+    ? `<div class="dc-overdue-strip dc-lco-overdue-strip">⚠ Past agreed LCO time (${r.lateTime}) — check out required now</div>`
     : '';
 
   // Late time dropdown
