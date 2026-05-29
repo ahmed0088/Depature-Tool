@@ -227,8 +227,10 @@ function effectiveStatus(r) {
 // ── Is this LCO room past its agreed (or implied) checkout time? ─────────
 function isLcoOverdue(r) {
   if (effectiveStatus(r) !== 'late') return false;
-  // Auto-LCO (due room past 12:00, no specific time set) = already overdue
-  if (!r.lateTime) return true;
+  // Auto-LCO (due room past 12:00 with no agreed time) → shows LATE CO badge
+  // but does NOT pulse red — only rooms with a specific agreed time that has
+  // now passed are considered overdue and get the red alert treatment
+  if (!r.lateTime) return false;
   const now     = new Date();
   const nowMins = now.getHours() * 60 + now.getMinutes();
   const lcoMins = _parseLcoTime(r.lateTime);
