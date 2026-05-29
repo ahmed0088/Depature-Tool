@@ -202,8 +202,7 @@ function depCounts() {
   };
 }
 
-// ── Is this room overdue? (past 12:00 and still due/late) ─
-// ── Parse a time string like "2:00 PM" into minutes since midnight ──
+// ── Parse a time string like "12:00" or "2:00 PM" → minutes since midnight ──
 function _parseLcoTime(t) {
   if (!t) return null;
   const m = t.match(/(\d+):(\d+)\s*(AM|PM)?/i);
@@ -215,67 +214,59 @@ function _parseLcoTime(t) {
   return h * 60 + min;
 }
 
+// ── depTimeMins: parse r.depTime → minutes since midnight, or null ────────
+function _depTimeMins(r) {
+  return _parseLcoTime(r.depTime);
+}
+
 // ── Effective status ──────────────────────────────────────
-// A due room whose Opera departure time has already passed is
-// treated as Late CO automatically — no staff action needed.
-// r.status stays 'due' so undo still works; everything else
-// (filter, count, badge, sort) reads effectiveStatus instead.
+// A due room whose Opera departure time has already passed
+// is treated as Late CO automatically everywhere — counts,
+// filters, badges, actions. r.status stays 'due' so Undo works.
 function effectiveStatus(r) {
-  if (r.status === 'due' && r.depTime) {
-    const match = r.depTime.match(/(\d+):(\d+)/);
-    if (match) {
-      let h = parseInt(match[1]), m = parseInt(match[2]);
-      if (r.depTime.toLowerCase().includes('pm') && h < 12) h += 12;
-      if (r.depTime.toLowerCase().includes('am') && h === 12) h = 0;
-      const now    = new Date();
-      const nowMin = now.getHours() * 60 + now.getMinutes();
-      if (nowMin > h * 60 + m) return 'late';
+  if (r.status === 'due' && r.depTime && !r.lcoAcknowledged) {
+    const depMins = _depTimeMins(r);
+    if (depMins !== null) {
+      const now = new Date();
+      if (now.getHours() * 60 + now.getMinutes() > depMins) return 'late';
     }
   }
   return r.status;
 }
 
-// ── Is this room past its checkout time? ─────────────────
-// Fires for both manually-set Late CO (r.status==='late') and
-// auto-promoted rooms (r.status==='due' but depTime passed).
+// ── Is this room past its agreed/implied checkout time? ───
+// Used for red-pulse overdue treatment and sort bubbling.
+// · Auto-promoted (depTime passed)        → always overdue
+// · Manually-set LCO with agreed lateTime → overdue when past that time
+// · Manually-set LCO with no lateTime     → not considered overdue yet
 function isLcoOverdue(r) {
-  const es = effectiveStatus(r);
-  if (es !== 'late') return false;
-  // Manually-set LCO with an agreed time — check against that time
+  if (effectiveStatus(r) !== 'late') return false;
+  if (r.status === 'due') return true;                       // auto-promoted
   if (r.status === 'late' && r.lateTime) {
     const now     = new Date();
     const nowMins = now.getHours() * 60 + now.getMinutes();
     const lcoMins = _parseLcoTime(r.lateTime);
     return lcoMins !== null && nowMins > lcoMins;
   }
-  // Auto-promoted (depTime passed) — already overdue by definition
-  if (r.status === 'due') return true;
   return false;
 }
 
-// ── Is this room overdue? ─────────────────────────────────
-function isOverdue(r) {
-  return isLcoOverdue(r);
-}
-
-// ── How long until / since checkout time ──────────────────
+// ── Countdown tag — only shown while time hasn't passed yet ──────────────
 function depTimeTag(r) {
-  if (!r.depTime || r.status === 'out' || r.status === 'extended') return '';
-  // depTime comes as e.g. "12:00" or "12:00 PM"
-  const match = r.depTime.match(/(\d+):(\d+)/);
-  if (!match) return '';
-  let h = parseInt(match[1]), m = parseInt(match[2]);
-  if (r.depTime.toLowerCase().includes('pm') && h < 12) h += 12;
-  if (r.depTime.toLowerCase().includes('am') && h === 12) h = 0;
-  const now     = new Date();
-  const target  = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m);
-  const diff    = target - now; // ms
-  const absMins = Math.abs(Math.round(diff / 60000));
-  const hrs     = Math.floor(absMins / 60);
-  const mins    = absMins % 60;
-  const label   = hrs ? `${hrs}h ${mins}m` : `${mins}m`;
-  if (diff < 0)  return `<span class="dc-time-tag overdue">⏰ ${label} overdue</span>`;
-  if (diff < 30 * 60000) return `<span class="dc-time-tag soon">⏰ ${label} left</span>`;
+  if (!r.depTime) return '';
+  const es = effectiveStatus(r);
+  // Hide on completed / auto-promoted-to-late rooms (overdue strip handles those)
+  if (es === 'out' || es === 'extended' || es === 'late') return '';
+  const depMins = _depTimeMins(r);
+  if (depMins === null) return '';
+  const now    = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const diff   = depMins - nowMin; // minutes remaining (negative = overdue)
+  if (diff <= 0) return ''; // overdue — effectiveStatus already handles this
+  const hrs   = Math.floor(diff / 60);
+  const mins  = diff % 60;
+  const label = hrs ? `${hrs}h ${mins}m` : `${mins}m`;
+  if (diff <= 30) return `<span class="dc-time-tag soon">⏰ ${label} left</span>`;
   return `<span class="dc-time-tag ok">🕐 ${label}</span>`;
 }
 
@@ -366,11 +357,15 @@ function depRender() {
     return mf && ms;
   });
 
-  // Sort: overdue rooms bubble to top within their filter
+  // Sort: overdue first → then by time remaining (soonest deadline first) → then room number
   filtered.sort((a, b) => {
-    const ao = isLcoOverdue(a) ? 0 : 1;
-    const bo = isLcoOverdue(b) ? 0 : 1;
-    if (ao !== bo) return ao - bo;
+    const ao = isLcoOverdue(a), bo = isLcoOverdue(b);
+    if (ao !== bo) return ao ? -1 : 1;
+    // Both overdue or both not — sort by depTime if available, then room number
+    const at = _depTimeMins(a), bt = _depTimeMins(b);
+    if (at !== null && bt !== null) return at - bt;
+    if (at !== null) return -1;
+    if (bt !== null) return 1;
     return a.room - b.room;
   });
 
@@ -405,25 +400,35 @@ function depCardHTML(r) {
     : bal > 0 ? `AED ${Math.abs(bal).toLocaleString('en',{minimumFractionDigits:2})} OWING`
     :           `AED ${Math.abs(bal).toLocaleString('en',{minimumFractionDigits:2})} CREDIT`;
 
-  // Card colour — use effective status so auto-LCO rooms look like late rooms
+  // Card colour — driven by effective status
   let sClass = 's-' + (bal > 0 && es !== 'out' && es !== 'extended' && es !== 'na' ? 'balance' : es);
   if (r.intent && es !== 'out' && es !== 'extended' && es !== 'na') sClass += ' s-intent';
   if (lcoOverdue) sClass += ' s-lco-overdue';
 
-  // Status badge
-  const autoPromoted = r.status === 'due' && es === 'late'; // depTime passed, not manually set
-  const badgeMap = {
-    due:      ['sb-due',      'DUE OUT'],
-    late:     ['sb-late',     lcoOverdue ? `⚠ LCO OVERDUE · ${r.lateTime}` : `LATE CO${r.lateTime ? ' · ' + r.lateTime : ''}`],
-    extended: ['sb-extended', `EXT +${r.extensionNights}N`],
-    out:      ['sb-out',      `OUT${r.checkoutAt ? ' · ' + r.checkoutAt : ''}`],
-    na:       ['sb-na',       `NO ANSWER${r.naTime ? ' · ' + r.naTime : ''}`],
-  };
-  // Auto-promoted rooms: show as LATE CO even though r.status is still 'due'
-  let [badgeCls, badgeText] = autoPromoted
-    ? ['sb-late sb-lco-overdue', `⚠ OVERDUE · ${r.depTime}`]
-    : (badgeMap[r.status] || ['sb-due', 'DUE OUT']);
-  const finalBadgeCls = lcoOverdue && !autoPromoted ? badgeCls + ' sb-lco-overdue' : badgeCls;
+  // Status badge — driven by effective status
+  const autoPromoted = r.status === 'due' && es === 'late';
+  let badgeCls, badgeText;
+  if (es === 'due') {
+    badgeCls  = 'sb-due';
+    badgeText = 'DUE OUT';
+  } else if (es === 'late') {
+    badgeCls  = lcoOverdue ? 'sb-late sb-lco-overdue' : 'sb-late';
+    badgeText = autoPromoted
+      ? (lcoOverdue ? `⚠ OVERDUE · ${r.depTime}` : `LATE CO · ${r.depTime}`)
+      : (lcoOverdue ? `⚠ LCO OVERDUE · ${r.lateTime}` : `LATE CO${r.lateTime ? ' · ' + r.lateTime : ''}`);
+  } else if (es === 'extended') {
+    badgeCls  = 'sb-extended';
+    badgeText = `EXT +${r.extensionNights}N`;
+  } else if (es === 'out') {
+    badgeCls  = 'sb-out';
+    badgeText = `OUT${r.checkoutAt ? ' · ' + r.checkoutAt : ''}`;
+  } else if (es === 'na') {
+    badgeCls  = 'sb-na';
+    badgeText = `NO ANSWER${r.naTime ? ' · ' + r.naTime : ''}`;
+  } else {
+    badgeCls  = 'sb-due';
+    badgeText = 'DUE OUT';
+  }
 
   const srcClean  = r.source.substring(0,26) + (r.source.length > 26 ? '…' : '');
   const vipHTML   = r.isVip ? '<div class="dc-vip">⭐ VIP</div>' : '';
@@ -442,12 +447,12 @@ function depCardHTML(r) {
   // Overdue warning strip
   const overdueStrip = lcoOverdue
     ? autoPromoted
-      ? `<div class="dc-overdue-strip dc-lco-overdue-strip">⚠ Past checkout time (${r.depTime}) — follow up required</div>`
+      ? `<div class="dc-overdue-strip dc-lco-overdue-strip">⚠ Past checkout time (${r.depTime}) — Late CO, follow up required</div>`
       : `<div class="dc-overdue-strip dc-lco-overdue-strip">⚠ Past agreed LCO time (${r.lateTime}) — check out required now</div>`
     : '';
 
-  // Late time dropdown
-  const lateRow = r.status === 'late' ? `
+  // Late time dropdown — show for any LCO room (manual or auto-promoted)
+  const lateRow = es === 'late' ? `
     <div class="dc-sel-row">
       <span class="dc-sel-lbl late">🕐 Agreed time:</span>
       <select class="dc-select late" onchange="depRooms[${i}].lateTime=this.value;depRender();saveDeps()">
@@ -459,7 +464,7 @@ function depCardHTML(r) {
     </div>` : '';
 
   // Extension nights dropdown
-  const extRow = r.status === 'extended' ? `
+  const extRow = es === 'extended' ? `
     <div class="dc-sel-row">
       <span class="dc-sel-lbl ext">↪ Extra nights:</span>
       <select class="dc-select ext" onchange="depRooms[${i}].extensionNights=parseInt(this.value)||0;depSyncExtToLog(${i});depRender();saveDeps()">
@@ -467,19 +472,14 @@ function depCardHTML(r) {
       </select>
     </div>` : '';
 
-  // Action buttons
-  // out / extended → Undo only
-  // late           → Check Out + Undo Late
-  // due            → full row + intent buttons
+  // Action buttons — driven by effective status
   let actHTML = '';
-
-  if (r.status === 'out' || r.status === 'extended') {
+  if (es === 'out' || es === 'extended') {
     actHTML = `<div class="dc-actions g1">
       <button class="dca dca-undo" onclick="depAction(${i},'due')">↺ Undo</button>
     </div>`;
 
-  } else if (r.status === 'na') {
-    // How long since NA was marked
+  } else if (es === 'na') {
     let naWarnStrip = '';
     if (r.naTime) {
       const [h, m]  = r.naTime.split(':').map(Number);
@@ -494,14 +494,15 @@ function depCardHTML(r) {
       <button class="dca dca-undo" onclick="depAction(${i},'due')">↺ Undo NA</button>
     </div>`;
 
-  } else if (r.status === 'late') {
+  } else if (es === 'late') {
+    // LCO room (manual or auto-promoted) — Check Out or Undo back to due
     actHTML = `<div class="dc-actions g2">
       <button class="dca dca-co"   onclick="depAction(${i},'out')">✓ Check Out</button>
-      <button class="dca dca-undo" onclick="depAction(${i},'due')">↺ Undo Late</button>
+      <button class="dca dca-undo" onclick="depAction(${i},'due')">↺ Undo LCO</button>
     </div>`;
 
   } else {
-    // Due — intent buttons below main actions
+    // Due — full action row + intent buttons
     const intentRow = `
       <div class="dc-intent-row">
         <span class="dc-intent-lbl">Guest said:</span>
@@ -512,7 +513,6 @@ function depCardHTML(r) {
         <button class="dc-intent-btn${r.intent==='returning'   ?' active':''}"
           onclick="depSetIntent(${i},'returning')">🔁 Returning</button>
       </div>`;
-
     actHTML = `<div class="dc-actions g4">
       <button class="dca dca-co"   onclick="depCheckOut(${i})">✓ Check Out</button>
       <button class="dca dca-ext"  onclick="depAction(${i},'extended')">↪ Extend</button>
@@ -527,7 +527,7 @@ function depCardHTML(r) {
     <div class="dc-head">
       <div class="dc-room">${r.roomStr}</div>
       <div class="dc-badges">
-        <div class="dc-sbadge ${finalBadgeCls}">${badgeText}</div>
+        <div class="dc-sbadge ${badgeCls}">${badgeText}</div>
         <div class="dc-nights">🌙 ${r.nights}n</div>
         ${r.rateCode ? `<div class="dc-rate-code">${r.rateCode}</div>` : ''}
         <button class="dc-copy-card-btn" title="Copy room summary" onclick="depCopyCard(${i})">📋</button>
@@ -657,15 +657,22 @@ function depAction(i, status) {
   if (status === 'na')  r.naTime = t;     else r.naTime = '';
   if (status !== 'late')     r.lateTime = '';
   if (status !== 'extended') r.extensionNights = 0;
-  if (status === 'due')      r.intent = '';  // undo clears intent
+  if (status === 'due') {
+    r.intent = '';  // undo clears intent
+    // If this was an auto-promoted room (depTime passed), staff is explicitly
+    // acknowledging it — suppress auto-promotion so it stays in Due Out
+    if (prev === 'due') r.lcoAcknowledged = true;
+  } else {
+    r.lcoAcknowledged = false;
+  }
 
   if (status !== 'due') {
     depLog.unshift({
-      room:            r.roomStr,   // ← always match by this on undo
+      room:            r.roomStr,
       name:            r.name,
       action:          status,
       time:            t,
-      roomIdx:         depRooms.indexOf(r), // best-effort snapshot; undo uses roomStr
+      roomIdx:         depRooms.indexOf(r),
       prevStatus:      prev,
       extensionNights: status === 'extended' ? (r.extensionNights || 1) : 0,
       lateTime:        status === 'late'     ? (r.lateTime || '')        : '',
@@ -827,14 +834,15 @@ function updateDepBadge() {
 
 // ── Bulk checkout ──────────────────────────────────────────
 function depBulkCheckout() {
-  const withBalance = depRooms.filter(r => r.status === 'due' && r.balance > 0);
+  const dueRooms   = depRooms.filter(r => effectiveStatus(r) === 'due');
+  const withBalance = dueRooms.filter(r => r.balance > 0);
   if (withBalance.length) {
     if (!confirm(`${withBalance.length} due-out room(s) have an outstanding balance.\n\nCheck out ALL due-out rooms anyway?`)) return;
   } else {
     if (!confirm('Mark ALL due-out rooms as checked out?')) return;
   }
   const t = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
-  depRooms.filter(r => r.status === 'due').forEach(r => {
+  dueRooms.forEach(r => {
     const i = depRooms.indexOf(r);
     r.status = 'out'; r.checkoutAt = t;
     depLog.unshift({ room: r.roomStr, name: r.name, action:'out', time:t, roomIdx:i, prevStatus:'due' });
