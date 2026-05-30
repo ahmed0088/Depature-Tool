@@ -1345,16 +1345,16 @@ function depAskLCO(i) {
     #lcoPicker .lco-name { font-size:0.75rem;color:var(--text2,#8b90a0);margin-bottom:22px; }
     #lcoPicker .lco-lbl { font-size:0.65rem;color:var(--text2,#8b90a0);margin-bottom:10px;font-family:var(--mono,monospace);letter-spacing:0.1em; }
     #lcoQuickBtns { display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px; }
-    #lcoQuickBtns button { padding:9px 4px;background:var(--bg3,#1a1d27);border:1px solid var(--border,rgba(255,255,255,0.1));border-radius:7px;color:var(--text,#e8eaf0);font-family:var(--mono,monospace);font-size:0.67rem;cursor:pointer;transition:all 0.15s; }
-    #lcoQuickBtns button:hover { border-color:rgba(240,164,58,0.3);color:var(--amber,#f0a43a); }
-    #lcoQuickBtns button.lco-active { background:rgba(240,164,58,0.15);border-color:rgba(240,164,58,0.45);color:var(--amber,#f0a43a); }
+    #lcoQuickBtns button { padding:9px 4px !important;background:var(--bg3,#1a1d27) !important;border:1px solid var(--border,rgba(255,255,255,0.1)) !important;border-radius:7px !important;color:var(--text,#e8eaf0) !important;font-family:var(--mono,monospace) !important;font-size:0.67rem !important;cursor:pointer !important;transition:all 0.15s !important; }
+    #lcoQuickBtns button:hover { border-color:rgba(240,164,58,0.3) !important;color:var(--amber,#f0a43a) !important; }
+    #lcoQuickBtns button.lco-active { background:rgba(240,164,58,0.15) !important;border-color:rgba(240,164,58,0.45) !important;color:var(--amber,#f0a43a) !important; }
     #lcoCustomInput { width:100%;background:var(--bg3,#1a1d27);border:1px solid var(--border,rgba(255,255,255,0.12));border-radius:8px;padding:10px 14px;color:var(--text,#e8eaf0);font-size:0.85rem;font-family:var(--mono,monospace);box-sizing:border-box;outline:none;margin-bottom:18px; }
     #lcoCustomInput:focus { border-color:rgba(240,164,58,0.4); }
     #lcoCustomInput::placeholder { color:var(--text3,#555a6a); }
-    #lcoConfirmBtn { flex:1;padding:11px;background:rgba(240,164,58,0.13);border:1px solid rgba(240,164,58,0.35);color:var(--amber,#f0a43a);border-radius:8px;font-size:0.82rem;font-weight:500;cursor:pointer; }
-    #lcoConfirmBtn:hover { background:rgba(240,164,58,0.22); }
-    #lcoCancelBtn { padding:11px 18px;background:transparent;border:1px solid var(--border,rgba(255,255,255,0.1));color:var(--text2,#8b90a0);border-radius:8px;font-size:0.82rem;cursor:pointer; }
-    #lcoCancelBtn:hover { color:var(--text,#e8eaf0); }
+    #lcoConfirmBtn { flex:1 !important;padding:11px !important;background:rgba(240,164,58,0.13) !important;border:1px solid rgba(240,164,58,0.35) !important;color:var(--amber,#f0a43a) !important;border-radius:8px !important;font-size:0.82rem !important;font-weight:500 !important;cursor:pointer !important; }
+    #lcoConfirmBtn:hover { background:rgba(240,164,58,0.22) !important; }
+    #lcoCancelBtn { padding:11px 18px !important;background:transparent !important;border:1px solid var(--border,rgba(255,255,255,0.1)) !important;color:var(--text2,#8b90a0) !important;border-radius:8px !important;font-size:0.82rem !important;cursor:pointer !important; }
+    #lcoCancelBtn:hover { color:var(--text,#e8eaf0) !important; }
   `;
   document.head.appendChild(style);
 
