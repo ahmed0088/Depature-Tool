@@ -629,8 +629,7 @@ function depCardHTML(r) {
       <span class="dc-sel-lbl late">🕐 Agreed time:</span>
       <select class="dc-select late" onchange="depRooms[${i}].lateTime=this.value;depRender();saveDeps()">
         <option value="">Select…</option>
-        ${['10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM',
-           '5:00 PM','6:00 PM','7:00 PM','8:00 PM','9:00 PM','10:00 PM','11:00 PM','12:00 AM']
+        ${(() => { const t=[]; for(let h=10;h<=23;h++){t.push(String(h).padStart(2,'0')+':00');t.push(String(h).padStart(2,'0')+':30');} return t; })()
           .map(t => `<option${r.lateTime===t?' selected':''}>${t}</option>`).join('')}
       </select>
     </div>` : '';
@@ -755,7 +754,7 @@ function depCardHTML(r) {
     actHTML = `<div class="dc-actions g4">
       <button class="dca dca-co"   onclick="depCheckOut(${i})">✓ Check Out</button>
       <button class="dca dca-ext"  onclick="depAskExtend(${i})">↪ Extend</button>
-      <button class="dca dca-late" onclick="depAction(${i},'late')">🕐 Late CO</button>
+      <button class="dca dca-late" onclick="depAskLCO(${i})">🕐 Late CO</button>
       <button class="dca dca-na"   onclick="depAction(${i},'na')">📵 No Answer</button>
     </div>${intentRow}`;
   }
@@ -769,7 +768,7 @@ function depCardHTML(r) {
        </label>`
     : '';
 
-  return `<div class="dep-card ${sClass}${isSelected ? ' dep-sel-active' : ''}" ${isSelectable ? `onclick="event.target.closest('.dep-sel-cb-wrap') || depToggleSelect('${r.roomStr}')"` : ''}>
+  return `<div class="dep-card ${sClass}${isSelected ? ' dep-sel-active' : ''}" ${isSelectable ? `onclick="depToggleSelect('${r.roomStr}')"` : ''}>
     ${selCb}
     ${vipHTML}
     <div class="dc-band"></div>
@@ -1324,3 +1323,126 @@ function exportDepSummary() {
 }
 
 function depPrintList() { window.print(); }
+// ── LCO Time Picker ────────────────────────────────────────
+function depAskLCO(i) {
+  const r = depRooms[i];
+
+  // Remove any existing picker
+  const existing = document.getElementById('lcoPickerOverlay');
+  if (existing) existing.remove();
+
+  const times = [];
+  for (let h = 10; h <= 23; h++) {
+    times.push(`${String(h).padStart(2,'0')}:00`);
+    times.push(`${String(h).padStart(2,'0')}:30`);
+  }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'lcoPickerOverlay';
+  overlay.style.cssText = `
+    position:fixed;inset:0;z-index:9999;
+    background:rgba(0,0,0,0.6);
+    display:flex;align-items:center;justify-content:center;
+  `;
+
+  overlay.innerHTML = `
+    <div style="
+      background:var(--card,#13151c);
+      border:1px solid rgba(255,255,255,0.1);
+      border-radius:14px;
+      padding:24px 28px;
+      width:320px;
+      font-family:var(--sans,'DM Sans',sans-serif);
+      box-shadow:0 24px 60px rgba(0,0,0,0.5);
+    ">
+      <div style="font-family:var(--mono,'IBM Plex Mono',monospace);font-size:0.6rem;letter-spacing:0.15em;color:var(--text3,#555a6a);text-transform:uppercase;margin-bottom:6px;">Late Checkout</div>
+      <div style="font-size:0.95rem;font-weight:500;color:var(--text,#e8eaf0);margin-bottom:2px;">Room ${r.roomStr}</div>
+      <div style="font-size:0.75rem;color:var(--text2,#8b90a0);margin-bottom:20px;">${r.name}</div>
+
+      <div style="font-size:0.72rem;color:var(--text2,#8b90a0);margin-bottom:8px;">Agreed checkout time</div>
+
+      <div style="display:flex;gap:8px;margin-bottom:14px;">
+        <select id="lcoTimeSelect" style="
+          flex:1;background:var(--bg3,#1a1d27);
+          border:1px solid rgba(255,255,255,0.1);
+          border-radius:8px;padding:9px 12px;
+          color:var(--text,#e8eaf0);font-size:0.82rem;
+          font-family:var(--mono,'IBM Plex Mono',monospace);
+        ">
+          <option value="">Select time…</option>
+          ${times.map(t => `<option value="${t}"${r.lateTime===t?' selected':''}>${t}</option>`).join('')}
+        </select>
+        <div style="display:flex;align-items:center;color:var(--text3,#555);font-size:0.7rem;font-family:var(--mono);padding:0 4px;">or</div>
+        <input id="lcoTimeInput" type="text" placeholder="e.g. 13:45"
+          maxlength="5"
+          style="
+            width:90px;background:var(--bg3,#1a1d27);
+            border:1px solid rgba(255,255,255,0.1);
+            border-radius:8px;padding:9px 12px;
+            color:var(--text,#e8eaf0);font-size:0.82rem;
+            font-family:var(--mono,'IBM Plex Mono',monospace);
+            text-align:center;
+          "
+          value="${r.lateTime || ''}"
+        />
+      </div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;">
+        ${['11:00','11:30','12:00','12:30','13:00','13:30','14:00'].map(t => `
+          <button onclick="
+            document.getElementById('lcoTimeSelect').value='${t}';
+            document.getElementById('lcoTimeInput').value='${t}';
+          " style="
+            font-family:var(--mono,'IBM Plex Mono',monospace);
+            font-size:0.62rem;padding:5px 10px;
+            background:${r.lateTime===t ? 'rgba(240,164,58,0.15)' : 'var(--bg3,#1a1d27)'};
+            border:1px solid ${r.lateTime===t ? 'rgba(240,164,58,0.4)' : 'rgba(255,255,255,0.1)'};
+            color:${r.lateTime===t ? 'var(--amber,#f0a43a)' : 'var(--text2,#8b90a0)'};
+            border-radius:6px;cursor:pointer;
+          ">${t}</button>
+        `).join('')}
+      </div>
+
+      <div style="display:flex;gap:8px;">
+        <button onclick="
+          const sel = document.getElementById('lcoTimeSelect').value;
+          const inp = document.getElementById('lcoTimeInput').value.trim();
+          const time = inp || sel;
+          if (!time) { showToast('Pick or type a time first','err'); return; }
+          document.getElementById('lcoPickerOverlay').remove();
+          depRooms[${i}].lateTime = time;
+          depAction(${i}, 'late');
+        " style="
+          flex:1;padding:10px;
+          background:rgba(240,164,58,0.12);
+          border:1px solid rgba(240,164,58,0.3);
+          color:var(--amber,#f0a43a);
+          border-radius:8px;font-size:0.8rem;
+          font-weight:500;cursor:pointer;
+        ">🕐 Set Late CO</button>
+        <button onclick="document.getElementById('lcoPickerOverlay').remove();" style="
+          padding:10px 16px;
+          background:transparent;
+          border:1px solid rgba(255,255,255,0.08);
+          color:var(--text2,#8b90a0);
+          border-radius:8px;font-size:0.8rem;cursor:pointer;
+        ">Cancel</button>
+      </div>
+    </div>
+  `;
+
+  // sync select → input
+  overlay.querySelector('#lcoTimeSelect').addEventListener('change', function() {
+    overlay.querySelector('#lcoTimeInput').value = this.value;
+  });
+  // sync input → select (best effort)
+  overlay.querySelector('#lcoTimeInput').addEventListener('input', function() {
+    const sel = overlay.querySelector('#lcoTimeSelect');
+    const match = [...sel.options].find(o => o.value === this.value.trim());
+    if (match) sel.value = match.value;
+  });
+
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+  setTimeout(() => overlay.querySelector('#lcoTimeInput').focus(), 50);
+}
