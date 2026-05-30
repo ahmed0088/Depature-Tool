@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Ibis Styles · Ops Platform</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&family=Playfair+Display:wght@700&display=swap');
+
+  :root {
+    --bg:        #0b0d12;
+    --bg2:       #13151c;
+    --bg3:       #1a1d27;
+    --border:    rgba(255,255,255,0.07);
+    --border2:   rgba(255,255,255,0.13);
+    --text:      #e8eaf0;
+    --text2:     #8b90a0;
+    --text3:     #555a6a;
+    --mint:      #3ecf8e;
+    --sky:       #5ab4e8;
+    --amber:     #f0a43a;
+    --rose:      #f06b7a;
+    --purple:    #8b7cf8;
+    --red:       #e05a5a;
+    --mono:      'IBM Plex Mono', monospace;
+    --sans:      'DM Sans', sans-serif;
+    --serif:     'Playfair Display', serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.7;
+    padding: 0;
+  }
+
+  /* ── Hero ── */
+  .hero {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 64px 48px 48px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -80px; right: -80px;
+    width: 360px; height: 360px;
+    background: radial-gradient(circle, rgba(62,207,142,0.06) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .hero-tag {
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.18em;
+    color: var(--mint);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .hero h1 {
+    font-family: var(--serif);
+    font-size: 2.6rem;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1.15;
+    margin-bottom: 14px;
+  }
+  .hero h1 span { color: var(--mint); }
+  .hero-sub {
+    font-size: 1rem;
+    color: var(--text2);
+    max-width: 560px;
+    line-height: 1.6;
+    margin-bottom: 28px;
+  }
+  .hero-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .pill {
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border2);
+    color: var(--text2);
+  }
+  .pill.green  { border-color: rgba(62,207,142,0.3);  color: var(--mint);   background: rgba(62,207,142,0.06);  }
+  .pill.blue   { border-color: rgba(90,180,232,0.3);  color: var(--sky);    background: rgba(90,180,232,0.06);  }
+  .pill.amber  { border-color: rgba(240,164,58,0.3);  color: var(--amber);  background: rgba(240,164,58,0.06);  }
+
+  /* ── Layout ── */
+  .wrap {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 48px 80px;
+  }
+
+  /* ── Section ── */
+  .section {
+    margin-top: 56px;
+  }
+  .section-label {
+    font-family: var(--mono);
+    font-size: 0.58rem;
+    letter-spacing: 0.2em;
+    color: var(--text3);
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* ── Module cards ── */
+  .module-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+  }
+  .module-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    transition: border-color 0.2s;
+  }
+  .module-card:hover { border-color: var(--border2); }
+  .module-icon {
+    font-size: 1.2rem;
+    margin-bottom: 10px;
+  }
+  .module-name {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: #fff;
+    margin-bottom: 6px;
+  }
+  .module-desc {
+    font-size: 0.75rem;
+    color: var(--text2);
+    line-height: 1.55;
+  }
+  .module-tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.55rem;
+    letter-spacing: 0.08em;
+    padding: 2px 7px;
+    border-radius: 3px;
+    margin-top: 10px;
+  }
+  .tag-live    { background: rgba(62,207,142,0.12);  color: var(--mint);   border: 1px solid rgba(62,207,142,0.25);  }
+  .tag-report  { background: rgba(90,180,232,0.12);  color: var(--sky);    border: 1px solid rgba(90,180,232,0.25);  }
+  .tag-audit   { background: rgba(139,124,248,0.12); color: var(--purple); border: 1px solid rgba(139,124,248,0.25); }
+  .tag-export  { background: rgba(240,164,58,0.12);  color: var(--amber);  border: 1px solid rgba(240,164,58,0.25);  }
+  .tag-check   { background: rgba(240,107,122,0.12); color: var(--rose);   border: 1px solid rgba(240,107,122,0.25); }
+
+  /* ── Opera table ── */
+  .opera-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+  }
+  .opera-table th {
+    font-family: var(--mono);
+    font-size: 0.58rem;
+    letter-spacing: 0.12em;
+    color: var(--text3);
+    text-transform: uppercase;
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .opera-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text2);
+    vertical-align: top;
+  }
+  .opera-table td:first-child { color: var(--text); font-weight: 500; }
+  .opera-table tr:last-child td { border-bottom: none; }
+  .opera-table code {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    color: var(--sky);
+    background: rgba(90,180,232,0.08);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  .opera-table .fmt {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--amber);
+  }
+
+  /* ── File tree ── */
+  .file-tree {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    line-height: 2;
+  }
+  .ft-row { display: flex; align-items: baseline; gap: 12px; }
+  .ft-file { color: var(--sky); }
+  .ft-core { color: var(--mint); }
+  .ft-desc { color: var(--text3); font-size: 0.64rem; }
+  .ft-sep  { color: var(--border2); margin: 4px 0; }
+
+  /* ── Setup steps ── */
+  .steps { display: flex; flex-direction: column; gap: 12px; }
+  .step {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .step-num {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--mint);
+    background: rgba(62,207,142,0.1);
+    border: 1px solid rgba(62,207,142,0.2);
+    border-radius: 5px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .step-title {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: #fff;
+    margin-bottom: 4px;
+  }
+  .step-body {
+    font-size: 0.75rem;
+    color: var(--text2);
+    line-height: 1.6;
+  }
+  .step-body code {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    color: var(--sky);
+    background: rgba(90,180,232,0.08);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  /* ── Sync table ── */
+  .sync-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .sync-cell {
+    background: var(--bg2);
+    padding: 14px 18px;
+    font-size: 0.77rem;
+  }
+  .sync-cell.head {
+    font-family: var(--mono);
+    font-size: 0.58rem;
+    letter-spacing: 0.12em;
+    color: var(--text3);
+    text-transform: uppercase;
+    background: var(--bg3);
+  }
+  .sync-action { color: var(--text); font-weight: 500; }
+  .sync-result { color: var(--mint); }
+
+  /* ── Shortcut table ── */
+  .shortcut-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.8rem;
+  }
+  .shortcut-row:last-child { border-bottom: none; }
+  .key {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: 5px;
+    padding: 3px 9px;
+    color: var(--amber);
+    min-width: 80px;
+    text-align: center;
+  }
+  .shortcut-desc { color: var(--text2); }
+
+  /* ── Info box ── */
+  .info-box {
+    background: rgba(62,207,142,0.05);
+    border: 1px solid rgba(62,207,142,0.18);
+    border-radius: 10px;
+    padding: 16px 20px;
+    font-size: 0.8rem;
+    color: var(--text2);
+    line-height: 1.6;
+  }
+  .info-box strong { color: var(--mint); }
+
+  /* ── Footer ── */
+  .footer {
+    border-top: 1px solid var(--border);
+    padding: 28px 48px;
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    color: var(--text3);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .footer span { color: var(--text2); }
+</style>
+</head>
+<body>
+
+<!-- ── Hero ─────────────────────────────────────────── -->
+<div class="hero">
+  <div class="hero-tag">Front Desk Operations · Ibis Styles Dubai</div>
+  <h1>Ibis <span>Ops</span> Platform</h1>
+  <p class="hero-sub">A live operations dashboard for hotel front desk teams. Every module syncs in real time across all terminals via Firebase — no refresh, no WhatsApp, no paper checklists.</p>
+  <div class="hero-pills">
+    <span class="pill green">Firebase · Live Sync</span>
+    <span class="pill blue">Opera Cloud · Compatible</span>
+    <span class="pill amber">No Build Step · Plain JS</span>
+    <span class="pill">Accor · Ibis Styles Dubai</span>
+    <span class="pill">2026</span>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- ── Modules ─────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-label">Modules</div>
+    <div class="module-grid">
+
+      <div class="module-card">
+        <div class="module-icon">🚪</div>
+        <div class="module-name">Departure Follow-Up</div>
+        <div class="module-desc">Paste the Opera departure report and every due-out room becomes a live trackable card. Check out, extend, flag late CO — all with undo. Guest photos, balance warnings, overdue highlights, and timestamped notes included.</div>
+        <span class="module-tag tag-live">Live · Core Board</span>
+      </div>
+
+      <div class="module-card">
+        <div class="module-icon">🛎️</div>
+        <div class="module-name">Arrivals</div>
+        <div class="module-desc">Paste or upload the Opera arrivals report. Tracks room, name, nationality, nights, booking source. One-click AI nationality guess from guest names. Manual add for walk-ins.</div>
+        <span class="module-tag tag-live">Live Sync</span>
+      </div>
+
+      <div class="module-card">
+        <div class="module-icon">📋</div>
+        <div class="module-name">Purpose of Stay</div>
+        <div class="module-desc">Night audit categorisation — Business / Leisure / Flight Crew. Sync directly from Arrivals or load separately. Export to Excel for Opera upload. Editable report title.</div>
+        <span class="module-tag tag-export">Excel Export</span>
+      </div>
+
+      <div class="module-card">
+        <div class="module-icon">✅</div>
+        <div class="module-name">Night Run Checklist</div>
+        <div class="module-desc">17-step checklist covering the full night audit — Before Run, Night Run, After Run. Completion timestamps, skip, per-step notes, photo attachments, drag-to-reorder. New Night resets without losing step config.</div>
+        <span class="module-tag tag-audit">Night Audit</span>
+      </div>
+
+      <div class="module-card">
+        <div class="module-icon">⏰</div>
+        <div class="module-name">Shift Tasks</div>
+        <div class="module-desc">Four shifts — Morning, Afternoon, Mid, Night — each with a task list, progress bar, and activity log. Add, edit, reorder, reset. All four sync live across every terminal.</div>
+        <span class="module-tag tag-live">Live Sync</span>
+      </div>
+
+      <div class="module-card">
+        <div class="module-icon">🌍</div>
+        <div class="module-name">Nationality Report</div>
+        <div class="module-desc">Paste the Opera stat_countrybyday report. Validates totals, flags unknowns, generates 240 copy-ready rows to paste straight into Excel cell B8 for DET submission.</div>
+        <span class="module-tag tag-report">DET · Tourism Report</span>
+      </div>
+
+      <div class="module-card">
+        <div class="module-icon">🛏️</div>
+        <div class="module-name">Rented Rooms & Beds</div>
+        <div class="module-desc">Combines the Opera history_forecast and statroomtype reports to calculate total rented rooms and beds — including twin beds from TWC room types.</div>
+        <span class="module-tag tag-report">DET · Tourism Report</span>
+      </div>
+
+      <div class="module-card">
+        <div class="module-icon">🌙</div>
+        <div class="module-name">PM Rooms Audit</div>
+        <div class="module-desc">Compare Opera in-house data against the Management Excel PM sheet. Highlights every room where name, dates, or balance differ. Generates corrected rows ready to paste back.</div>
+        <span class="module-tag tag-audit">Night Audit</span>
+      </div>
+
+      <div class="module-card">
+        <div class="module-icon">🛂</div>
+        <div class="module-name">Immigration Check</div>
+        <div class="module-desc">Upload the Opera Immigration XML. Flags every in-house guest missing nationality, gender, passport number, or first name — sorted by severity.</div>
+        <span class="module-tag tag-check">Compliance</span>
+      </div>
+
+      <div class="module-card">
+        <div class="module-icon">🧾</div>
+        <div class="module-name">Tourism Tax · TD Portal</div>
+        <div class="module-desc">Finds guests where Opera marks arrival time with * — meaning they physically checked in the next calendar day. Shows the corrected TD portal date for each room.</div>
+        <span class="module-tag tag-check">TD Portal Fix</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Opera Report Sources ─────────────────────────── -->
+  <div class="section">
+    <div class="section-label">Opera Cloud · Report Sources</div>
+    <table class="opera-table">
+      <thead>
+        <tr>
+          <th>Module</th>
+          <th>Opera Path</th>
+          <th>Format</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Departures</td>
+          <td>Front Desk → Departures → Download</td>
+          <td class="fmt">Delimited Data (.txt)</td>
+        </tr>
+        <tr>
+          <td>Arrivals</td>
+          <td>Front Desk → Arrivals → Export</td>
+          <td class="fmt">Excel / CSV</td>
+        </tr>
+        <tr>
+          <td>Purpose of Stay</td>
+          <td>Front Desk → Arrivals (same file)</td>
+          <td class="fmt">Excel / CSV</td>
+        </tr>
+        <tr>
+          <td>Tourism Tax</td>
+          <td>Front Desk → Arrivals → Export</td>
+          <td class="fmt">Delimited Data (.txt)</td>
+        </tr>
+        <tr>
+          <td>Nationality Report</td>
+          <td>Reports → <code>stat_countrybyday</code></td>
+          <td class="fmt">Delimited Data (.txt)</td>
+        </tr>
+        <tr>
+          <td>Rented Rooms (1)</td>
+          <td>Reports → <code>history_forecast</code></td>
+          <td class="fmt">Delimited Data (.txt)</td>
+        </tr>
+        <tr>
+          <td>Rented Rooms (2)</td>
+          <td>Reports → <code>statroomtype</code></td>
+          <td class="fmt">Delimited Data (.txt)</td>
+        </tr>
+        <tr>
+          <td>PM Rooms Audit</td>
+          <td>Front Desk → In-House by Room</td>
+          <td class="fmt">Delimited Data (.txt)</td>
+        </tr>
+        <tr>
+          <td>Immigration Check</td>
+          <td>Front Desk → Immigration Report → Export</td>
+          <td class="fmt">XML</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── File Structure ──────────────────────────────── -->
+  <div class="section">
+    <div class="section-label">File Structure</div>
+    <div class="file-tree">
+      <div class="ft-row"><span class="ft-core">index.html</span>          <span class="ft-desc">— App shell, layout, all modals and panels</span></div>
+      <div class="ft-row"><span class="ft-core">styles.css</span>           <span class="ft-desc">— All styling, theming, three colour schemes</span></div>
+      <div class="ft-row"><span class="ft-file">firebase-config.js</span>  <span class="ft-desc">— Firebase credentials and HOTEL_ID</span></div>
+      <div class="ft-row"><span class="ft-file">db.js</span>                <span class="ft-desc">— Firebase Realtime Database read / write / listen</span></div>
+      <div class="ft-row"><span class="ft-file">state.js</span>             <span class="ft-desc">— Shared app state (rooms, guests, shifts, etc.)</span></div>
+      <div class="ft-row"><span class="ft-file">utils.js</span>             <span class="ft-desc">— Clock, clipboard, date parsers, toast notifications</span></div>
+      <div class="ft-row"><span class="ft-file">natguess.js</span>          <span class="ft-desc">— Name → nationality lookup map</span></div>
+      <div class="ft-row"><span class="ft-file">departures.js</span>        <span class="ft-desc">— Departure board logic and card rendering</span></div>
+      <div class="ft-row"><span class="ft-file">arrivals-purpose.js</span> <span class="ft-desc">— Arrivals and Purpose of Stay logic</span></div>
+      <div class="ft-row"><span class="ft-file">shifts.js</span>            <span class="ft-desc">— Shift task rendering and persistence</span></div>
+      <div class="ft-row"><span class="ft-file">checklist.js</span>         <span class="ft-desc">— Night audit checklist and photo handling</span></div>
+      <div class="ft-row"><span class="ft-file">reports.js</span>           <span class="ft-desc">— Nationality, Rented Rooms, PM Audit, Immigration</span></div>
+      <div class="ft-row"><span class="ft-file">tourism-tax.js</span>       <span class="ft-desc">— TD Portal date correction tool</span></div>
+      <div class="ft-row"><span class="ft-file">ibis_data.json</span>       <span class="ft-desc">— Default data structure for fresh installs</span></div>
+    </div>
+  </div>
+
+  <!-- ── Setup ───────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-label">Setup</div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">01</div>
+        <div>
+          <div class="step-title">Firebase — Create Project</div>
+          <div class="step-body">Go to <code>console.firebase.google.com</code> → Add project → Name it → Enable Realtime Database (Europe-west1, test mode). Credentials already configured in <code>firebase-config.js</code> for Ibis Dubai.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">02</div>
+        <div>
+          <div class="step-title">Set the Hotel ID</div>
+          <div class="step-body">Open <code>firebase-config.js</code> and set <code>HOTEL_ID</code> to any unique string. All colleagues sharing the same ID share one live dataset. For a second property, just use a different ID.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">03</div>
+        <div>
+          <div class="step-title">Host the Files</div>
+          <div class="step-body">Drop all files into GitHub Pages, Netlify, Vercel, or any static host. No build step. Share the URL with your team — everyone uses the same link, no login required.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">04</div>
+        <div>
+          <div class="step-title">Firebase Security Rules</div>
+          <div class="step-body">In Firebase Console → Realtime Database → Rules, set read/write to true under <code>hotels/$hotel_id</code>. This keeps each property's data isolated if you ever add more properties.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Real-Time Sync ──────────────────────────────── -->
+  <div class="section">
+    <div class="section-label">Real-Time Sync · How It Works</div>
+    <div class="sync-grid">
+      <div class="sync-cell head">Action</div>
+      <div class="sync-cell head">What Happens</div>
+      <div class="sync-cell"><span class="sync-action">Check out a room</span></div>
+      <div class="sync-cell"><span class="sync-result">All colleagues see it update within ~1 second</span></div>
+      <div class="sync-cell"><span class="sync-action">Tick a checklist step</span></div>
+      <div class="sync-cell"><span class="sync-result">Syncs instantly, completion time stamped</span></div>
+      <div class="sync-cell"><span class="sync-action">Add a shift task</span></div>
+      <div class="sync-cell"><span class="sync-result">Saved to Firebase, visible on every terminal</span></div>
+      <div class="sync-cell"><span class="sync-action">Firebase goes offline</span></div>
+      <div class="sync-cell"><span class="sync-result">App uses localStorage fallback, syncs on reconnect</span></div>
+      <div class="sync-cell"><span class="sync-action">Colleague opens the app</span></div>
+      <div class="sync-cell"><span class="sync-result">Loads latest live data automatically, no refresh</span></div>
+    </div>
+    <div style="margin-top:12px;">
+      <div class="info-box">
+        <strong>Firebase · Live</strong> indicator in the top bar confirms the connection. If it shows <strong style="color:var(--amber)">Offline</strong>, the app continues working locally and pushes all changes once reconnected — nothing is lost.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Guest Photos ─────────────────────────────────── -->
+  <div class="section">
+    <div class="section-label">Guest Photos on Departure Cards</div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div>
+          <div class="step-title">Take a screenshot of the guest photo</div>
+          <div class="step-body">Open Outlook or any window with the guest photo. Use <code>Win+Shift+S</code> or Print Screen to capture.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div>
+          <div class="step-title">Click the photo zone on the card</div>
+          <div class="step-body">The app will display "Ready — press Ctrl+V to paste". Click the zone first, then paste.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div>
+          <div class="step-title">Press Ctrl+V</div>
+          <div class="step-body">Image is compressed and saved to Firebase automatically. You can also drag and drop an image file directly onto the photo zone. Click to zoom, hover for the ✕ remove button.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Keyboard Shortcuts ──────────────────────────── -->
+  <div class="section">
+    <div class="section-label">Keyboard Shortcuts</div>
+    <div class="shortcut-row">
+      <span class="key">Escape</span>
+      <span class="shortcut-desc">Close any open modal, drawer, or photo zoom</span>
+    </div>
+    <div class="shortcut-row">
+      <span class="key">Ctrl+V</span>
+      <span class="shortcut-desc">Paste screenshot onto a departure card photo zone (click zone first)</span>
+    </div>
+    <div class="shortcut-row">
+      <span class="key">Ctrl+A → C</span>
+      <span class="shortcut-desc">Select all text in Opera report, copy, then paste into the app</span>
+    </div>
+  </div>
+
+  <!-- ── Backup ───────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-label">Backup & Restore</div>
+    <div class="info-box">
+      Use the <strong>💾 Export</strong> button in the top bar to download a full JSON snapshot of all live data. Use <strong>📂 Import</strong> to restore from any backup file — the page reloads after import and all data is live immediately.
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Footer ───────────────────────────────────────── -->
+<div class="footer">
+  <span>Ibis Styles Dubai · Front Desk Ops Platform · 2026</span>
+  <span>Firebase · Realtime · Opera Cloud Compatible</span>
+</div>
+
+</body>
+</html>
