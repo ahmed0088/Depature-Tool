@@ -1369,3 +1369,106 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* ═══════════════════════════════════════════════
+   EXTENSION PANEL
+   ═══════════════════════════════════════════════ */
+.dc-ext-panel {
+  background: linear-gradient(135deg, rgba(90,180,232,0.06), rgba(62,207,142,0.04));
+  border: 1px solid rgba(90,180,232,0.25);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 10px 0 8px;
+}
+.dc-ext-header {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--sky);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.dc-ext-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+}
+.dc-ext-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dc-ext-field-full { grid-column: 1 / -1; }
+.dc-ext-lbl {
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.dc-ext-val {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--text2);
+  padding: 4px 0;
+}
+.ext-val-highlight {
+  color: var(--mint);
+  font-weight: 700;
+}
+.dc-ext-sel {
+  font-size: 0.68rem !important;
+  padding: 4px 6px !important;
+}
+.dc-ext-input {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  padding: 4px 8px;
+  background: var(--card3);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  color: var(--text);
+  width: 100%;
+  box-sizing: border-box;
+}
+.dc-ext-input:focus { outline: none; border-color: var(--sky); }
+.dc-ext-confirm-btn {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid;
+  cursor: pointer;
+  font-weight: 600;
+  width: 100%;
+  transition: all 0.15s;
+}
+.ext-confirmed-no {
+  background: rgba(240,164,58,0.1);
+  border-color: rgba(240,164,58,0.4);
+  color: var(--amber);
+}
+.ext-confirmed-no:hover { background: rgba(240,164,58,0.2); }
+.ext-confirmed-yes {
+  background: rgba(62,207,142,0.1);
+  border-color: rgba(62,207,142,0.4);
+  color: var(--mint);
+}
+.ext-confirmed-yes:hover { background: rgba(62,207,142,0.2); }
+.dc-ext-summary {
+  margin-top: 10px;
+  padding: 7px 10px;
+  background: rgba(90,180,232,0.07);
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  color: var(--text2);
+  line-height: 1.5;
+}
+.dc-ext-summary strong { color: var(--sky); }
+
+/* Jump pill for extended rooms */
+.jump-ext { color: var(--sky); }
+.jump-pill.jump-ext { border-color: rgba(90,180,232,0.3); }
+.jump-pill:hover.jump-ext { background: rgba(90,180,232,0.1); color: var(--sky); }

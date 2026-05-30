@@ -489,6 +489,13 @@ function renderDepQuickJump() {
       cls:   'jump-bal',
       rooms: depRooms.filter(r => r.balance > 0 && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended'),
     },
+    {
+      key:   'extended',
+      icon:  '↪',
+      label: 'Extended',
+      cls:   'jump-ext',
+      rooms: depRooms.filter(r => r.status === 'extended'),
+    },
   ].filter(g => g.rooms.length > 0);
 
   if (!groups.length) {
@@ -501,7 +508,12 @@ function renderDepQuickJump() {
       <div class="jump-group-label ${g.cls}">${g.icon} ${g.label} <span class="jump-group-count">${g.rooms.length}</span></div>
       <div class="jump-pills">
         ${g.rooms.map(r => `
-          <button class="jump-pill ${g.cls}" onclick="depJumpTo('${r.roomStr}','${g.key === 'after12' || g.key === 'lco' ? 'late' : g.key === 'due' ? 'due' : g.key === 'na' ? 'na' : 'all'}','${r.roomStr}')">
+          <button class="jump-pill ${g.cls}" onclick="depJumpTo('${r.roomStr}','${
+            g.key === 'after12' || g.key === 'lco' ? 'late'
+            : g.key === 'due'      ? 'due'
+            : g.key === 'na'       ? 'na'
+            : g.key === 'extended' ? 'extended'
+            : 'all'}','${r.roomStr}')">
             ${r.roomStr}<span class="jump-pill-name">${r.name.split(' ')[0]}</span>
           </button>`).join('')}
       </div>
@@ -568,7 +580,17 @@ function depCardHTML(r) {
       : (lcoOverdue ? `⚠ LCO OVERDUE · ${r.lateTime}` : `LATE CO${r.lateTime ? ' · ' + r.lateTime : ''}`);
   } else if (es === 'extended') {
     badgeCls  = 'sb-extended';
-    badgeText = `EXT +${r.extensionNights}N`;
+    // Show new departure date in badge if calculable
+    const origDep2 = parseOperaDate(r.departure);
+    let extBadgeDate = '';
+    if (origDep2 && r.extensionNights) {
+      const nd2 = new Date(origDep2);
+      nd2.setDate(nd2.getDate() + r.extensionNights);
+      const months2 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      extBadgeDate = ` → ${String(nd2.getDate()).padStart(2,'0')} ${months2[nd2.getMonth()]}`;
+    }
+    badgeText = `↪ EXT +${r.extensionNights}N${extBadgeDate}`;
+    if (!r.extConfirmed) badgeText += ' ⚠';
   } else if (es === 'out') {
     badgeCls  = 'sb-out';
     badgeText = `OUT${r.checkoutAt ? ' · ' + r.checkoutAt : ''}`;
@@ -613,20 +635,78 @@ function depCardHTML(r) {
       </select>
     </div>` : '';
 
-  // Extension nights dropdown
-  const extRow = es === 'extended' ? `
-    <div class="dc-sel-row">
-      <span class="dc-sel-lbl ext">↪ Extra nights:</span>
-      <select class="dc-select ext" onchange="depRooms[${i}].extensionNights=parseInt(this.value)||0;depSyncExtToLog(${i});depRender();saveDeps()">
-        ${[1,2,3,4,5,6,7].map(n => `<option${r.extensionNights===n?' selected':''}>${n} night${n>1?'s':''}</option>`).join('')}
-      </select>
-    </div>` : '';
+
+  // Extension details panel — full block shown when room is extended
+  const extRow = es === 'extended' ? (() => {
+    const origDep = parseOperaDate(r.departure);
+    let newDepStr = '';
+    if (origDep && r.extensionNights) {
+      const nd = new Date(origDep);
+      nd.setDate(nd.getDate() + r.extensionNights);
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      newDepStr = `${String(nd.getDate()).padStart(2,'0')} ${months[nd.getMonth()]} ${nd.getFullYear()}`;
+    }
+    const confirmedCls = r.extConfirmed ? 'ext-confirmed-yes' : 'ext-confirmed-no';
+    const confirmedLbl = r.extConfirmed ? '✓ Opera updated' : '⚠ Needs Opera update';
+    return `
+    <div class="dc-ext-panel">
+      <div class="dc-ext-header">↪ Extension Details</div>
+      <div class="dc-ext-grid">
+        <div class="dc-ext-field">
+          <label class="dc-ext-lbl">Extra nights</label>
+          <select class="dc-select ext dc-ext-sel" onchange="depExtUpdate(${i},'nights',parseInt(this.value)||1)">
+            ${[1,2,3,4,5,6,7,14,21,28].map(n => `<option value="${n}"${r.extensionNights===n?' selected':''}>${n} night${n>1?'s':''}</option>`).join('')}
+          </select>
+        </div>
+        <div class="dc-ext-field">
+          <label class="dc-ext-lbl">New departure</label>
+          <div class="dc-ext-val ${newDepStr ? 'ext-val-highlight' : ''}">${newDepStr || '—'}</div>
+        </div>
+        <div class="dc-ext-field">
+          <label class="dc-ext-lbl">Checkout time</label>
+          <select class="dc-select ext dc-ext-sel" onchange="depExtUpdate(${i},'checkoutTime',this.value)">
+            <option value="">Standard (12:00 PM)</option>
+            ${['10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM','6:00 PM','7:00 PM','8:00 PM','9:00 PM','10:00 PM','11:00 PM']
+              .map(t => `<option value="${t}"${r.extCheckoutTime===t?' selected':''}>${t}</option>`).join('')}
+          </select>
+        </div>
+        <div class="dc-ext-field">
+          <label class="dc-ext-lbl">Rate / night (AED)</label>
+          <input class="dc-ext-input" type="number" min="0" placeholder="Same rate"
+            value="${r.extRate || ''}"
+            onchange="depExtUpdate(${i},'rate',this.value)"/>
+        </div>
+        <div class="dc-ext-field dc-ext-field-full">
+          <label class="dc-ext-lbl">Reason</label>
+          <select class="dc-select ext dc-ext-sel" onchange="depExtUpdate(${i},'reason',this.value)">
+            <option value="">Select reason…</option>
+            ${['Guest request','VIP / loyalty','Flight cancelled / delayed','Visa issue','Medical','Business extension','Late arrival on next booking','Room upgrade','Overbooking move','Other']
+              .map(v => `<option value="${v}"${r.extReason===v?' selected':''}>${v}</option>`).join('')}
+          </select>
+        </div>
+        <div class="dc-ext-field dc-ext-field-full">
+          <label class="dc-ext-lbl">Opera</label>
+          <button class="dc-ext-confirm-btn ${confirmedCls}" onclick="depExtUpdate(${i},'confirmed',${!r.extConfirmed})">
+            ${confirmedLbl}
+          </button>
+        </div>
+      </div>
+      ${newDepStr ? `<div class="dc-ext-summary">
+        <strong>${r.roomStr}</strong> · +${r.extensionNights}N · Departs <strong>${newDepStr}</strong>${r.extCheckoutTime ? ` · CO ${r.extCheckoutTime}` : ''}${r.extRate ? ` · AED ${r.extRate}/night` : ''}${r.extReason ? ` · ${r.extReason}` : ''}
+      </div>` : ''}
+    </div>`;
+  })() : '';
 
   // Action buttons — driven by effective status
   let actHTML = '';
-  if (es === 'out' || es === 'extended') {
+  if (es === 'extended') {
     actHTML = `<div class="dc-actions g1">
-      <button class="dca dca-undo" onclick="depAction(${i},'due')">↺ Undo</button>
+      <button class="dca dca-undo" onclick="depAction(${i},'due')">↺ Undo Extension</button>
+    </div>`;
+
+  } else if (es === 'out') {
+    actHTML = `<div class="dc-actions g1">
+      <button class="dca dca-undo" onclick="depAction(${i},'due')">↺ Undo Check Out</button>
     </div>`;
 
   } else if (es === 'na') {
@@ -809,8 +889,20 @@ function depAction(i, status) {
 
   if (status === 'out') r.checkoutAt = t; else r.checkoutAt = '';
   if (status === 'na')  r.naTime = t;     else r.naTime = '';
-  if (status !== 'late')     r.lateTime = '';
-  if (status !== 'extended') r.extensionNights = 0;
+  if (status !== 'late') r.lateTime = '';
+  if (status !== 'extended') {
+    r.extensionNights = 0;
+    r.extCheckoutTime = '';
+    r.extRate         = 0;
+    r.extReason       = '';
+    r.extConfirmed    = false;
+  }
+  if (status === 'extended' && prev !== 'extended') {
+    // Default 1 night on first set; auto-stamp note
+    if (!r.extensionNights) r.extensionNights = 1;
+    const line = `[${t}] Extension marked — please update Opera and confirm.`;
+    r.note = r.note ? r.note + '\n' + line : line;
+  }
   if (status === 'due') {
     r.intent = '';  // undo clears intent
     // If this was an auto-promoted room (depTime passed), staff is explicitly
@@ -845,8 +937,45 @@ function saveDeps() {
   saveDepartures(depRooms, depLog);
 }
 
-// Keep log in sync when nights dropdown changes on an already-extended card
-function depSyncExtToLog(i) {
+// ── Extension field updater ────────────────────────────────
+function depExtUpdate(i, field, value) {
+  const r = depRooms[i];
+  const t = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+
+  if (field === 'nights') {
+    r.extensionNights = value;
+    depSyncExtToLog(i);
+  } else if (field === 'checkoutTime') {
+    r.extCheckoutTime = value;
+  } else if (field === 'rate') {
+    r.extRate = value ? parseFloat(value) : 0;
+  } else if (field === 'reason') {
+    r.extReason = value;
+  } else if (field === 'confirmed') {
+    r.extConfirmed = value;
+    if (value) {
+      // Auto-stamp note when Opera is confirmed
+      const origDep = parseOperaDate(r.departure);
+      let newDepStr = '';
+      if (origDep && r.extensionNights) {
+        const nd = new Date(origDep); nd.setDate(nd.getDate() + r.extensionNights);
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        newDepStr = `${String(nd.getDate()).padStart(2,'0')} ${months[nd.getMonth()]} ${nd.getFullYear()}`;
+      }
+      const line = `[${t}] Opera updated — Extended ${r.extensionNights}N` +
+        (newDepStr ? `, new departure ${newDepStr}` : '') +
+        (r.extCheckoutTime ? `, CO ${r.extCheckoutTime}` : '') +
+        (r.extRate ? `, AED ${r.extRate}/night` : '') +
+        (r.extReason ? ` (${r.extReason})` : '');
+      r.note = r.note ? r.note + '\n' + line : line;
+    }
+  }
+
+  depRender();
+  saveDeps();
+}
+
+
   const r   = depRooms[i];
   const li  = depLog.findIndex(l => l.room === r.roomStr && l.action === 'extended');
   if (li >= 0) depLog[li].extensionNights = r.extensionNights || 1;
@@ -951,8 +1080,19 @@ function depCopyExtList() {
   if (!extRooms.length) { showToast('No extended rooms', 'info'); return; }
   const time = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
   const lines = extRooms.map(r => {
-    const n = r.extensionNights || 1;
-    return `↪ ${r.roomStr} · ${r.name} · +${n}N`;
+    const n       = r.extensionNights || 1;
+    const origDep = parseOperaDate(r.departure);
+    let newDep = '';
+    if (origDep) {
+      const nd = new Date(origDep); nd.setDate(nd.getDate() + n);
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      newDep = ` → ${String(nd.getDate()).padStart(2,'0')} ${months[nd.getMonth()]}`;
+    }
+    const co      = r.extCheckoutTime ? ` · CO ${r.extCheckoutTime}` : '';
+    const rate    = r.extRate ? ` · AED ${r.extRate}/night` : '';
+    const reason  = r.extReason ? ` · ${r.extReason}` : '';
+    const opera   = r.extConfirmed ? ' ✓' : ' ⚠ Opera pending';
+    return `↪ ${r.roomStr} · ${r.name} · +${n}N${newDep}${co}${rate}${reason}${opera}`;
   });
   const text = `↪ *Extensions — ${time}*\n${lines.join('\n')}`;
   const btn = document.getElementById('depExtCopyBtn');
