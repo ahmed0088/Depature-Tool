@@ -648,6 +648,17 @@ function depCardHTML(r) {
     }
     const confirmedCls = r.extConfirmed ? 'ext-confirmed-yes' : 'ext-confirmed-no';
     const confirmedLbl = r.extConfirmed ? '✓ Opera updated' : '⚠ Needs Opera update';
+    const summaryParts = [
+      `+${r.extensionNights}N`,
+      newDepStr ? `Departs ${newDepStr}` : '',
+      r.extCheckoutTime ? `CO ${r.extCheckoutTime}` : '',
+      r.extRate         ? `AED ${r.extRate}/night`   : '',
+      r.extReason       ? r.extReason                : '',
+      r.extConfirmed    ? '✓ Opera updated'          : '⚠ Opera pending',
+    ].filter(Boolean).join(' · ');
+    const summaryHTML = newDepStr
+      ? `<div class="dc-ext-summary"><strong>${r.roomStr}</strong> · ${summaryParts}</div>`
+      : '';
     return `
     <div class="dc-ext-panel">
       <div class="dc-ext-header">↪ Extension Details</div>
@@ -691,9 +702,7 @@ function depCardHTML(r) {
           </button>
         </div>
       </div>
-      ${newDepStr ? `<div class="dc-ext-summary">
-        <strong>${r.roomStr}</strong> · +${r.extensionNights}N · Departs <strong>${newDepStr}</strong>${r.extCheckoutTime ? ` · CO ${r.extCheckoutTime}` : ''}${r.extRate ? ` · AED ${r.extRate}/night` : ''}${r.extReason ? ` · ${r.extReason}` : ''}
-      </div>` : ''}
+      ${summaryHTML}
     </div>`;
   })() : '';
 
@@ -990,6 +999,8 @@ function depExtUpdate(i, field, value) {
 }
 
 
+// Keep log in sync when nights dropdown changes on an already-extended card
+function depSyncExtToLog(i) {
   const r   = depRooms[i];
   const li  = depLog.findIndex(l => l.room === r.roomStr && l.action === 'extended');
   if (li >= 0) depLog[li].extensionNights = r.extensionNights || 1;
