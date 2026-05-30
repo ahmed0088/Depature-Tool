@@ -1215,8 +1215,16 @@ function depCopyOutList(mode) {
 
 // ── Ext copy ───────────────────────────────────────────────
 function _extLine(r) {
-  const n = r.extensionNights || 1;
-  return `↪ ${r.roomStr} · +${n}N`;
+  const n      = r.extensionNights || 1;
+  const origDep = parseOperaDate(r.departure);
+  let newDep = '';
+  if (origDep) {
+    const nd = new Date(origDep);
+    nd.setDate(nd.getDate() + n);
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    newDep = ` → ${String(nd.getDate()).padStart(2,'0')} ${months[nd.getMonth()]}`;
+  }
+  return `↪ ${r.roomStr} · +${n}N${newDep}`;
 }
 
 function depCopyExtList(mode) {
