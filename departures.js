@@ -1326,123 +1326,79 @@ function depPrintList() { window.print(); }
 // ── LCO Time Picker ────────────────────────────────────────
 function depAskLCO(i) {
   const r = depRooms[i];
-
-  // Remove any existing picker
   const existing = document.getElementById('lcoPickerOverlay');
   if (existing) existing.remove();
 
-  const times = [];
-  for (let h = 10; h <= 23; h++) {
-    times.push(`${String(h).padStart(2,'0')}:00`);
-    times.push(`${String(h).padStart(2,'0')}:30`);
-  }
+  const QUICK = ['10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','15:00','16:00','18:00'];
 
   const overlay = document.createElement('div');
   overlay.id = 'lcoPickerOverlay';
-  overlay.style.cssText = `
-    position:fixed;inset:0;z-index:9999;
-    background:rgba(0,0,0,0.6);
-    display:flex;align-items:center;justify-content:center;
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;';
+
+  // inject a style block so we can use proper theming
+  const style = document.createElement('style');
+  style.id = 'lcoStyle';
+  style.textContent = `
+    #lcoPicker { background:var(--surface,var(--bg2,#1e2130));border:1px solid var(--border,rgba(255,255,255,0.12));border-radius:14px;padding:28px;width:300px;box-shadow:0 32px 80px rgba(0,0,0,0.5); }
+    #lcoPicker .lco-tag { font-size:0.58rem;font-family:var(--mono,monospace);letter-spacing:0.18em;color:var(--amber,#f0a43a);text-transform:uppercase;margin-bottom:10px; }
+    #lcoPicker .lco-room { font-size:1rem;font-weight:600;color:var(--text,#e8eaf0);margin-bottom:2px; }
+    #lcoPicker .lco-name { font-size:0.75rem;color:var(--text2,#8b90a0);margin-bottom:22px; }
+    #lcoPicker .lco-lbl { font-size:0.65rem;color:var(--text2,#8b90a0);margin-bottom:10px;font-family:var(--mono,monospace);letter-spacing:0.1em; }
+    #lcoQuickBtns { display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px; }
+    #lcoQuickBtns button { padding:9px 4px;background:var(--bg3,#1a1d27);border:1px solid var(--border,rgba(255,255,255,0.1));border-radius:7px;color:var(--text,#e8eaf0);font-family:var(--mono,monospace);font-size:0.67rem;cursor:pointer;transition:all 0.15s; }
+    #lcoQuickBtns button:hover { border-color:rgba(240,164,58,0.3);color:var(--amber,#f0a43a); }
+    #lcoQuickBtns button.lco-active { background:rgba(240,164,58,0.15);border-color:rgba(240,164,58,0.45);color:var(--amber,#f0a43a); }
+    #lcoCustomInput { width:100%;background:var(--bg3,#1a1d27);border:1px solid var(--border,rgba(255,255,255,0.12));border-radius:8px;padding:10px 14px;color:var(--text,#e8eaf0);font-size:0.85rem;font-family:var(--mono,monospace);box-sizing:border-box;outline:none;margin-bottom:18px; }
+    #lcoCustomInput:focus { border-color:rgba(240,164,58,0.4); }
+    #lcoCustomInput::placeholder { color:var(--text3,#555a6a); }
+    #lcoConfirmBtn { flex:1;padding:11px;background:rgba(240,164,58,0.13);border:1px solid rgba(240,164,58,0.35);color:var(--amber,#f0a43a);border-radius:8px;font-size:0.82rem;font-weight:500;cursor:pointer; }
+    #lcoConfirmBtn:hover { background:rgba(240,164,58,0.22); }
+    #lcoCancelBtn { padding:11px 18px;background:transparent;border:1px solid var(--border,rgba(255,255,255,0.1));color:var(--text2,#8b90a0);border-radius:8px;font-size:0.82rem;cursor:pointer; }
+    #lcoCancelBtn:hover { color:var(--text,#e8eaf0); }
   `;
+  document.head.appendChild(style);
 
   overlay.innerHTML = `
-    <div style="
-      background:var(--card,#13151c);
-      border:1px solid rgba(255,255,255,0.1);
-      border-radius:14px;
-      padding:24px 28px;
-      width:320px;
-      font-family:var(--sans,'DM Sans',sans-serif);
-      box-shadow:0 24px 60px rgba(0,0,0,0.5);
-    ">
-      <div style="font-family:var(--mono,'IBM Plex Mono',monospace);font-size:0.6rem;letter-spacing:0.15em;color:var(--text3,#555a6a);text-transform:uppercase;margin-bottom:6px;">Late Checkout</div>
-      <div style="font-size:0.95rem;font-weight:500;color:var(--text,#e8eaf0);margin-bottom:2px;">Room ${r.roomStr}</div>
-      <div style="font-size:0.75rem;color:var(--text2,#8b90a0);margin-bottom:20px;">${r.name}</div>
-
-      <div style="font-size:0.72rem;color:var(--text2,#8b90a0);margin-bottom:8px;">Agreed checkout time</div>
-
-      <div style="display:flex;gap:8px;margin-bottom:14px;">
-        <select id="lcoTimeSelect" style="
-          flex:1;background:var(--bg3,#1a1d27);
-          border:1px solid rgba(255,255,255,0.1);
-          border-radius:8px;padding:9px 12px;
-          color:var(--text,#e8eaf0);font-size:0.82rem;
-          font-family:var(--mono,'IBM Plex Mono',monospace);
-        ">
-          <option value="">Select time…</option>
-          ${times.map(t => `<option value="${t}"${r.lateTime===t?' selected':''}>${t}</option>`).join('')}
-        </select>
-        <div style="display:flex;align-items:center;color:var(--text3,#555);font-size:0.7rem;font-family:var(--mono);padding:0 4px;">or</div>
-        <input id="lcoTimeInput" type="text" placeholder="e.g. 13:45"
-          maxlength="5"
-          style="
-            width:90px;background:var(--bg3,#1a1d27);
-            border:1px solid rgba(255,255,255,0.1);
-            border-radius:8px;padding:9px 12px;
-            color:var(--text,#e8eaf0);font-size:0.82rem;
-            font-family:var(--mono,'IBM Plex Mono',monospace);
-            text-align:center;
-          "
-          value="${r.lateTime || ''}"
-        />
+    <div id="lcoPicker">
+      <div class="lco-tag">🕐 Late Checkout</div>
+      <div class="lco-room">Room ${r.roomStr}</div>
+      <div class="lco-name">${r.name}</div>
+      <div class="lco-lbl">AGREED TIME</div>
+      <div id="lcoQuickBtns">
+        ${QUICK.map(t => `<button data-t="${t}" onclick="lcoQuickPick('${t}')">${t}</button>`).join('')}
       </div>
-
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;">
-        ${['11:00','11:30','12:00','12:30','13:00','13:30','14:00'].map(t => `
-          <button onclick="
-            document.getElementById('lcoTimeSelect').value='${t}';
-            document.getElementById('lcoTimeInput').value='${t}';
-          " style="
-            font-family:var(--mono,'IBM Plex Mono',monospace);
-            font-size:0.62rem;padding:5px 10px;
-            background:${r.lateTime===t ? 'rgba(240,164,58,0.15)' : 'var(--bg3,#1a1d27)'};
-            border:1px solid ${r.lateTime===t ? 'rgba(240,164,58,0.4)' : 'rgba(255,255,255,0.1)'};
-            color:${r.lateTime===t ? 'var(--amber,#f0a43a)' : 'var(--text2,#8b90a0)'};
-            border-radius:6px;cursor:pointer;
-          ">${t}</button>
-        `).join('')}
-      </div>
-
+      <input id="lcoCustomInput" type="text" placeholder="or type e.g. 12:45" maxlength="5" value="${r.lateTime || ''}" />
       <div style="display:flex;gap:8px;">
-        <button onclick="
-          const sel = document.getElementById('lcoTimeSelect').value;
-          const inp = document.getElementById('lcoTimeInput').value.trim();
-          const time = inp || sel;
-          if (!time) { showToast('Pick or type a time first','err'); return; }
-          document.getElementById('lcoPickerOverlay').remove();
-          depRooms[${i}].lateTime = time;
-          depAction(${i}, 'late');
-        " style="
-          flex:1;padding:10px;
-          background:rgba(240,164,58,0.12);
-          border:1px solid rgba(240,164,58,0.3);
-          color:var(--amber,#f0a43a);
-          border-radius:8px;font-size:0.8rem;
-          font-weight:500;cursor:pointer;
-        ">🕐 Set Late CO</button>
-        <button onclick="document.getElementById('lcoPickerOverlay').remove();" style="
-          padding:10px 16px;
-          background:transparent;
-          border:1px solid rgba(255,255,255,0.08);
-          color:var(--text2,#8b90a0);
-          border-radius:8px;font-size:0.8rem;cursor:pointer;
-        ">Cancel</button>
+        <button id="lcoConfirmBtn" onclick="lcoConfirm(${i})">Set Late CO</button>
+        <button id="lcoCancelBtn" onclick="document.getElementById('lcoPickerOverlay').remove();">Cancel</button>
       </div>
     </div>
   `;
 
-  // sync select → input
-  overlay.querySelector('#lcoTimeSelect').addEventListener('change', function() {
-    overlay.querySelector('#lcoTimeInput').value = this.value;
-  });
-  // sync input → select (best effort)
-  overlay.querySelector('#lcoTimeInput').addEventListener('input', function() {
-    const sel = overlay.querySelector('#lcoTimeSelect');
-    const match = [...sel.options].find(o => o.value === this.value.trim());
-    if (match) sel.value = match.value;
+  window.lcoQuickPick = function(t) {
+    document.getElementById('lcoCustomInput').value = t;
+    document.querySelectorAll('#lcoQuickBtns button').forEach(b => {
+      b.classList.toggle('lco-active', b.dataset.t === t);
+    });
+  };
+
+  window.lcoConfirm = function(idx) {
+    const time = (document.getElementById('lcoCustomInput').value || '').trim();
+    if (!time) { showToast('Pick or type a time first', 'err'); return; }
+    document.getElementById('lcoPickerOverlay').remove();
+    document.getElementById('lcoStyle')?.remove();
+    depRooms[idx].lateTime = time;
+    depAction(idx, 'late');
+  };
+
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) {
+      overlay.remove();
+      document.getElementById('lcoStyle')?.remove();
+    }
   });
 
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
   document.body.appendChild(overlay);
-  setTimeout(() => overlay.querySelector('#lcoTimeInput').focus(), 50);
+  if (r.lateTime) lcoQuickPick(r.lateTime);
+  setTimeout(() => document.getElementById('lcoCustomInput')?.focus(), 50);
 }
