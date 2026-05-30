@@ -1215,19 +1215,8 @@ function depCopyOutList(mode) {
 
 // ── Ext copy ───────────────────────────────────────────────
 function _extLine(r) {
-  const n       = r.extensionNights || 1;
-  const origDep = parseOperaDate(r.departure);
-  let newDep = '';
-  if (origDep) {
-    const nd = new Date(origDep); nd.setDate(nd.getDate() + n);
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    newDep = ` → ${String(nd.getDate()).padStart(2,'0')} ${months[nd.getMonth()]}`;
-  }
-  const co    = r.extCheckoutTime ? ` · CO ${r.extCheckoutTime}` : '';
-  const rate  = r.extRate ? ` · AED ${r.extRate}/night` : '';
-  const rsn   = r.extReason ? ` · ${r.extReason}` : '';
-  const opera = r.extConfirmed ? ' ✓' : ' ⚠ Opera pending';
-  return `↪ ${r.roomStr} · ${r.name} · +${n}N${newDep}${co}${rate}${rsn}${opera}`;
+  const n = r.extensionNights || 1;
+  return `↪ ${r.roomStr} · +${n}N`;
 }
 
 function depCopyExtList(mode) {
@@ -1238,7 +1227,7 @@ function depCopyExtList(mode) {
   if (mode === 'summary') {
     text = `↪ *Extensions — ${time}*\nRooms: ${rooms.map(r => r.roomStr + ' +' + (r.extensionNights||1) + 'N').join(', ')}`;
   } else {
-    text = `↪ *Extensions — ${time}*\n${rooms.map(_extLine).join('\n')}`;
+    text = `🛏 *HK — Extensions · ${time}*\n${rooms.map(_extLine).join('\n')}`;
   }
   copyToClipboard(text, null, '');
   showToast('Extensions copied ✓', 'ok');
