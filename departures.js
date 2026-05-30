@@ -760,7 +760,17 @@ function depCardHTML(r) {
     </div>${intentRow}`;
   }
 
-  return `<div class="dep-card ${sClass}">
+  // Selection mode checkbox
+  const isSelectable = _selGroup && r.status === _selGroup;
+  const isSelected   = isSelectable && _selRooms.has(r.roomStr);
+  const selCb = isSelectable
+    ? `<label class="dep-sel-cb-wrap ${isSelected ? 'checked' : ''}" onclick="event.stopPropagation();depToggleSelect('${r.roomStr}')">
+         <input type="checkbox" class="dep-sel-cb" ${isSelected ? 'checked' : ''}/>
+       </label>`
+    : '';
+
+  return `<div class="dep-card ${sClass}${isSelected ? ' dep-sel-active' : ''}" ${isSelectable ? `onclick="depToggleSelect('${r.roomStr}')"` : ''}>
+    ${selCb}
     ${vipHTML}
     <div class="dc-band"></div>
     <div class="dc-head">
@@ -1072,56 +1082,165 @@ function depCopyCard(i) {
   showToast(`Room ${r.roomStr} copied ✓`, 'ok');
 }
 
-function depCopyNAList() {
-  const naRooms = depRooms.filter(r => r.status === 'na');
-  if (!naRooms.length) { showToast('No rooms marked No Answer', 'info'); return; }
-  const time = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
-  const lines = naRooms.map(r => {
-    const t = r.naTime || time;
-    return `📵 ${r.roomStr} · ${r.name} · ${t}`;
+// ── Copy menu toggle ───────────────────────────────────────
+function depToggleCopyMenu(group) {
+  const menu = document.getElementById('depCopyMenu-' + group);
+  if (!menu) return;
+  const isOpen = menu.classList.contains('open');
+  // close all menus first
+  document.querySelectorAll('.dep-copy-menu').forEach(m => m.classList.remove('open'));
+  if (!isOpen) {
+    menu.classList.add('open');
+    // close on outside click
+    setTimeout(() => {
+      const close = e => { menu.classList.remove('open'); document.removeEventListener('click', close); };
+      document.addEventListener('click', close);
+    }, 0);
+  }
+}
+
+// ── Selection mode ─────────────────────────────────────────
+let _selGroup   = null;   // 'na' | 'out' | 'extended'
+let _selRooms   = new Set(); // selected roomStr keys
+
+function depStartSelect(group) {
+  _selGroup = group;
+  _selRooms = new Set();
+  // switch filter to that group
+  const filterKey = group;
+  const chip = document.querySelector(`[data-f="${filterKey}"]`);
+  if (chip) depFilter(filterKey, chip);
+  depRender();
+  const bar = document.getElementById('depSelectBar');
+  if (bar) bar.style.display = 'flex';
+  _updateSelLabel();
+}
+
+function depCancelSelect() {
+  _selGroup = null;
+  _selRooms = new Set();
+  depRender();
+  const bar = document.getElementById('depSelectBar');
+  if (bar) bar.style.display = 'none';
+}
+
+function depToggleSelect(roomStr) {
+  if (_selRooms.has(roomStr)) _selRooms.delete(roomStr);
+  else _selRooms.add(roomStr);
+  _updateSelLabel();
+  // just update checkbox + card highlight without full re-render
+  const cards = document.querySelectorAll('.dep-card');
+  cards.forEach(card => {
+    const rEl = card.querySelector('.dc-room');
+    if (!rEl) return;
+    const rs = rEl.textContent.trim();
+    const cb = card.querySelector('.dep-sel-cb');
+    if (cb) cb.checked = _selRooms.has(rs);
+    card.classList.toggle('dep-sel-active', _selRooms.has(rs));
   });
-  const text = `📵 *NA Rooms — ${time}*\n${lines.join('\n')}\n\n*Please do* 🙏`;
-  const btn = document.getElementById('depNaCopyBtn');
-  copyToClipboard(text, btn, '📋 Copy for HK');
+}
+
+function depSelectAll() {
+  const rooms = depRooms.filter(r => r.status === _selGroup);
+  rooms.forEach(r => _selRooms.add(r.roomStr));
+  depRender();
+  _updateSelLabel();
+}
+
+function depSelectNone() {
+  _selRooms = new Set();
+  depRender();
+  _updateSelLabel();
+}
+
+function _updateSelLabel() {
+  const lbl   = document.getElementById('depSelectLabel');
+  const cnt   = document.getElementById('depSelCount');
+  const total = depRooms.filter(r => r.status === _selGroup).length;
+  if (lbl) lbl.textContent = `Select rooms to copy — ${_selRooms.size} of ${total} selected`;
+  if (cnt) cnt.textContent = `(${_selRooms.size})`;
+}
+
+function depCopySelected() {
+  if (!_selRooms.size) { showToast('No rooms selected', 'info'); return; }
+  const rooms = depRooms.filter(r => _selRooms.has(r.roomStr));
+  const time  = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  let text = '';
+  if (_selGroup === 'na') {
+    const lines = rooms.map(r => `📵 ${r.roomStr} · ${r.name} · ${r.naTime || time}`);
+    text = `📵 *NA Rooms — ${time}*\n${lines.join('\n')}\n\n*Please do* 🙏`;
+  } else if (_selGroup === 'out') {
+    const lines = rooms.map(r => `✓ ${r.roomStr} · ${r.name} · ${r.checkoutAt || time}`);
+    text = `✅ *Checked Out — ${time}*\n${lines.join('\n')}\n\n*Please do* 🙏`;
+  } else if (_selGroup === 'extended') {
+    const lines = rooms.map(r => _extLine(r));
+    text = `↪ *Extensions — ${time}*\n${lines.join('\n')}`;
+  }
+  copyToClipboard(text, null, '');
+  showToast(`${_selRooms.size} room${_selRooms.size > 1 ? 's' : ''} copied ✓`, 'ok');
+  depCancelSelect();
+}
+
+// ── NA copy ────────────────────────────────────────────────
+function depCopyNAList(mode) {
+  const rooms = depRooms.filter(r => r.status === 'na');
+  if (!rooms.length) { showToast('No rooms marked No Answer', 'info'); return; }
+  const time = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  let text = '';
+  if (mode === 'summary') {
+    text = `📵 *NA — ${time}*\nRooms: ${rooms.map(r => r.roomStr).join(', ')}\n*Please do* 🙏`;
+  } else {
+    const lines = rooms.map(r => `📵 ${r.roomStr} · ${r.name} · ${r.naTime || time}`);
+    text = `📵 *NA Rooms — ${time}*\n${lines.join('\n')}\n\n*Please do* 🙏`;
+  }
+  copyToClipboard(text, null, '');
   showToast('NA list copied ✓', 'ok');
 }
 
-function depCopyOutList() {
-  const outRooms = depRooms.filter(r => r.status === 'out');
-  if (!outRooms.length) { showToast('No checked-out rooms yet', 'info'); return; }
+// ── Out copy ───────────────────────────────────────────────
+function depCopyOutList(mode) {
+  const rooms = depRooms.filter(r => r.status === 'out');
+  if (!rooms.length) { showToast('No checked-out rooms yet', 'info'); return; }
   const time = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
-  const lines = outRooms.map(r => {
-    const t = r.checkoutAt || time;
-    return `✓ ${r.roomStr} · ${r.name} · ${t}`;
-  });
-  const text = `✅ *Checked Out Rooms — ${time}*\n${lines.join('\n')}\n\n*Please do* 🙏`;
-  const btn = document.getElementById('depOutCopyBtn');
-  copyToClipboard(text, btn, '📋 Copy for HK');
+  let text = '';
+  if (mode === 'summary') {
+    text = `✅ *Checked Out — ${time}*\nRooms: ${rooms.map(r => r.roomStr).join(', ')}\n*Please do* 🙏`;
+  } else {
+    const lines = rooms.map(r => `✓ ${r.roomStr} · ${r.name} · ${r.checkoutAt || time}`);
+    text = `✅ *Checked Out Rooms — ${time}*\n${lines.join('\n')}\n\n*Please do* 🙏`;
+  }
+  copyToClipboard(text, null, '');
   showToast('Checkout list copied ✓', 'ok');
 }
 
-function depCopyExtList() {
-  const extRooms = depRooms.filter(r => r.status === 'extended');
-  if (!extRooms.length) { showToast('No extended rooms', 'info'); return; }
+// ── Ext copy ───────────────────────────────────────────────
+function _extLine(r) {
+  const n       = r.extensionNights || 1;
+  const origDep = parseOperaDate(r.departure);
+  let newDep = '';
+  if (origDep) {
+    const nd = new Date(origDep); nd.setDate(nd.getDate() + n);
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    newDep = ` → ${String(nd.getDate()).padStart(2,'0')} ${months[nd.getMonth()]}`;
+  }
+  const co    = r.extCheckoutTime ? ` · CO ${r.extCheckoutTime}` : '';
+  const rate  = r.extRate ? ` · AED ${r.extRate}/night` : '';
+  const rsn   = r.extReason ? ` · ${r.extReason}` : '';
+  const opera = r.extConfirmed ? ' ✓' : ' ⚠ Opera pending';
+  return `↪ ${r.roomStr} · ${r.name} · +${n}N${newDep}${co}${rate}${rsn}${opera}`;
+}
+
+function depCopyExtList(mode) {
+  const rooms = depRooms.filter(r => r.status === 'extended');
+  if (!rooms.length) { showToast('No extended rooms', 'info'); return; }
   const time = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
-  const lines = extRooms.map(r => {
-    const n       = r.extensionNights || 1;
-    const origDep = parseOperaDate(r.departure);
-    let newDep = '';
-    if (origDep) {
-      const nd = new Date(origDep); nd.setDate(nd.getDate() + n);
-      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      newDep = ` → ${String(nd.getDate()).padStart(2,'0')} ${months[nd.getMonth()]}`;
-    }
-    const co      = r.extCheckoutTime ? ` · CO ${r.extCheckoutTime}` : '';
-    const rate    = r.extRate ? ` · AED ${r.extRate}/night` : '';
-    const reason  = r.extReason ? ` · ${r.extReason}` : '';
-    const opera   = r.extConfirmed ? ' ✓' : ' ⚠ Opera pending';
-    return `↪ ${r.roomStr} · ${r.name} · +${n}N${newDep}${co}${rate}${reason}${opera}`;
-  });
-  const text = `↪ *Extensions — ${time}*\n${lines.join('\n')}`;
-  const btn = document.getElementById('depExtCopyBtn');
-  copyToClipboard(text, btn, '📋 Copy for HK');
+  let text = '';
+  if (mode === 'summary') {
+    text = `↪ *Extensions — ${time}*\nRooms: ${rooms.map(r => r.roomStr + ' +' + (r.extensionNights||1) + 'N').join(', ')}`;
+  } else {
+    text = `↪ *Extensions — ${time}*\n${rooms.map(_extLine).join('\n')}`;
+  }
+  copyToClipboard(text, null, '');
   showToast('Extensions copied ✓', 'ok');
 }
 
