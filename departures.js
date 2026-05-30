@@ -1328,35 +1328,116 @@ function depAskLCO(i) {
   const r = depRooms[i];
   const existing = document.getElementById('lcoPickerOverlay');
   if (existing) existing.remove();
+  document.getElementById('lcoStyle')?.remove();
+
+  // Read the current theme so colours always match
+  const theme = document.documentElement.getAttribute('data-theme') || 'night-ops';
+  const isOpera = theme === 'opera';
+
+  const C = isOpera ? {
+    bg:       '#FFFFFF',
+    surface:  '#F5F5F5',
+    border:   '#E0E0E0',
+    text:     '#1D1D1B',
+    text2:    '#4A4A4A',
+    text3:    '#888888',
+  } : {
+    bg:       theme === 'midnight' ? '#192038' : '#161d28',
+    surface:  theme === 'midnight' ? '#141b30' : '#111620',
+    border:   theme === 'midnight' ? '#253050' : '#1f2d42',
+    text:     theme === 'midnight' ? '#e2e8f4' : '#dce4f0',
+    text2:    theme === 'midnight' ? '#7b8db0' : '#7f92aa',
+    text3:    theme === 'midnight' ? '#4a5570' : '#3d5268',
+  };
+  const amber = '#f0a43a';
+
+  const style = document.createElement('style');
+  style.id = 'lcoStyle';
+  style.textContent = `
+    #lcoPicker {
+      background:${C.bg};
+      border:1px solid ${C.border};
+      border-radius:14px;
+      padding:28px;
+      width:300px;
+      box-shadow:0 32px 80px rgba(0,0,0,0.45);
+    }
+    #lcoPicker .lco-tag  { font-size:0.58rem;font-family:var(--mono,monospace);letter-spacing:0.18em;color:${amber};text-transform:uppercase;margin-bottom:10px; }
+    #lcoPicker .lco-room { font-size:1rem;font-weight:600;color:${C.text};margin-bottom:2px; }
+    #lcoPicker .lco-name { font-size:0.75rem;color:${C.text2};margin-bottom:22px; }
+    #lcoPicker .lco-lbl  { font-size:0.65rem;color:${C.text2};margin-bottom:10px;font-family:var(--mono,monospace);letter-spacing:0.1em; }
+    #lcoQuickBtns { display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px; }
+    #lcoQuickBtns button {
+      all:unset;
+      display:block;
+      box-sizing:border-box;
+      padding:9px 4px;
+      text-align:center;
+      background:${C.surface};
+      border:1px solid ${C.border};
+      border-radius:7px;
+      color:${C.text};
+      font-family:var(--mono,monospace);
+      font-size:0.67rem;
+      cursor:pointer;
+      transition:all 0.15s;
+    }
+    #lcoQuickBtns button:hover { border-color:rgba(240,164,58,0.4);color:${amber}; }
+    #lcoQuickBtns button.lco-active { background:rgba(240,164,58,0.15);border-color:rgba(240,164,58,0.5);color:${amber}; }
+    #lcoCustomInput {
+      all:unset;
+      display:block;
+      box-sizing:border-box;
+      width:100%;
+      background:${C.surface};
+      border:1px solid ${C.border};
+      border-radius:8px;
+      padding:10px 14px;
+      color:${C.text};
+      font-size:0.85rem;
+      font-family:var(--mono,monospace);
+      margin-bottom:18px;
+    }
+    #lcoCustomInput:focus { border-color:rgba(240,164,58,0.5);outline:none; }
+    #lcoCustomInput::placeholder { color:${C.text3}; }
+    #lcoConfirmBtn {
+      all:unset;
+      display:block;
+      box-sizing:border-box;
+      flex:1;
+      padding:11px;
+      text-align:center;
+      background:rgba(240,164,58,0.13);
+      border:1px solid rgba(240,164,58,0.4);
+      color:${amber};
+      border-radius:8px;
+      font-size:0.82rem;
+      font-weight:500;
+      cursor:pointer;
+    }
+    #lcoConfirmBtn:hover { background:rgba(240,164,58,0.22); }
+    #lcoCancelBtn {
+      all:unset;
+      display:block;
+      box-sizing:border-box;
+      padding:11px 18px;
+      text-align:center;
+      background:transparent;
+      border:1px solid ${C.border};
+      color:${C.text2};
+      border-radius:8px;
+      font-size:0.82rem;
+      cursor:pointer;
+    }
+    #lcoCancelBtn:hover { color:${C.text}; }
+  `;
+  document.head.appendChild(style);
 
   const QUICK = ['10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','15:00','16:00','18:00'];
 
   const overlay = document.createElement('div');
   overlay.id = 'lcoPickerOverlay';
   overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;';
-
-  // inject a style block so we can use proper theming
-  const style = document.createElement('style');
-  style.id = 'lcoStyle';
-  style.textContent = `
-    #lcoPicker { background:var(--surface,var(--bg2,#1e2130));border:1px solid var(--border,rgba(255,255,255,0.12));border-radius:14px;padding:28px;width:300px;box-shadow:0 32px 80px rgba(0,0,0,0.5); }
-    #lcoPicker .lco-tag { font-size:0.58rem;font-family:var(--mono,monospace);letter-spacing:0.18em;color:var(--amber,#f0a43a);text-transform:uppercase;margin-bottom:10px; }
-    #lcoPicker .lco-room { font-size:1rem;font-weight:600;color:var(--text,#e8eaf0);margin-bottom:2px; }
-    #lcoPicker .lco-name { font-size:0.75rem;color:var(--text2,#8b90a0);margin-bottom:22px; }
-    #lcoPicker .lco-lbl { font-size:0.65rem;color:var(--text2,#8b90a0);margin-bottom:10px;font-family:var(--mono,monospace);letter-spacing:0.1em; }
-    #lcoQuickBtns { display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px; }
-    #lcoQuickBtns button { padding:9px 4px !important;background:var(--bg3,#1a1d27) !important;border:1px solid var(--border,rgba(255,255,255,0.1)) !important;border-radius:7px !important;color:var(--text,#e8eaf0) !important;font-family:var(--mono,monospace) !important;font-size:0.67rem !important;cursor:pointer !important;transition:all 0.15s !important; }
-    #lcoQuickBtns button:hover { border-color:rgba(240,164,58,0.3) !important;color:var(--amber,#f0a43a) !important; }
-    #lcoQuickBtns button.lco-active { background:rgba(240,164,58,0.15) !important;border-color:rgba(240,164,58,0.45) !important;color:var(--amber,#f0a43a) !important; }
-    #lcoCustomInput { width:100%;background:var(--bg3,#1a1d27);border:1px solid var(--border,rgba(255,255,255,0.12));border-radius:8px;padding:10px 14px;color:var(--text,#e8eaf0);font-size:0.85rem;font-family:var(--mono,monospace);box-sizing:border-box;outline:none;margin-bottom:18px; }
-    #lcoCustomInput:focus { border-color:rgba(240,164,58,0.4); }
-    #lcoCustomInput::placeholder { color:var(--text3,#555a6a); }
-    #lcoConfirmBtn { flex:1 !important;padding:11px !important;background:rgba(240,164,58,0.13) !important;border:1px solid rgba(240,164,58,0.35) !important;color:var(--amber,#f0a43a) !important;border-radius:8px !important;font-size:0.82rem !important;font-weight:500 !important;cursor:pointer !important; }
-    #lcoConfirmBtn:hover { background:rgba(240,164,58,0.22) !important; }
-    #lcoCancelBtn { padding:11px 18px !important;background:transparent !important;border:1px solid var(--border,rgba(255,255,255,0.1)) !important;color:var(--text2,#8b90a0) !important;border-radius:8px !important;font-size:0.82rem !important;cursor:pointer !important; }
-    #lcoCancelBtn:hover { color:var(--text,#e8eaf0) !important; }
-  `;
-  document.head.appendChild(style);
 
   overlay.innerHTML = `
     <div id="lcoPicker">
@@ -1370,7 +1451,7 @@ function depAskLCO(i) {
       <input id="lcoCustomInput" type="text" placeholder="or type e.g. 12:45" maxlength="5" value="${r.lateTime || ''}" />
       <div style="display:flex;gap:8px;">
         <button id="lcoConfirmBtn" onclick="lcoConfirm(${i})">Set Late CO</button>
-        <button id="lcoCancelBtn" onclick="document.getElementById('lcoPickerOverlay').remove();">Cancel</button>
+        <button id="lcoCancelBtn" onclick="document.getElementById('lcoPickerOverlay').remove();document.getElementById('lcoStyle')?.remove();">Cancel</button>
       </div>
     </div>
   `;
@@ -1391,13 +1472,8 @@ function depAskLCO(i) {
     depAction(idx, 'late');
   };
 
-  overlay.addEventListener('click', e => {
-    if (e.target === overlay) {
-      overlay.remove();
-      document.getElementById('lcoStyle')?.remove();
-    }
-  });
-
+  const cleanup = () => { document.getElementById('lcoStyle')?.remove(); };
+  overlay.addEventListener('click', e => { if (e.target === overlay) { overlay.remove(); cleanup(); } });
   document.body.appendChild(overlay);
   if (r.lateTime) lcoQuickPick(r.lateTime);
   setTimeout(() => document.getElementById('lcoCustomInput')?.focus(), 50);
