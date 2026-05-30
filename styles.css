@@ -1228,3 +1228,144 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
 /* fchip overrides for tt filters */
 .fchip[data-ttf="after12"].on  { background: var(--red-bg);   color: var(--red);   border-color: var(--red-border); }
 .fchip[data-ttf="before12"].on { background: var(--green-bg); color: var(--green); border-color: var(--green-border); }
+
+/* ═══════════════════════════════════════════════
+   SORT BAR + QUICK JUMP
+   ═══════════════════════════════════════════════ */
+.dep-sort-jump-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.dep-sort-lbl {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  color: var(--text3);
+  white-space: nowrap;
+}
+.dep-sort-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+.dep-sort-btn {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  padding: 3px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--border2);
+  background: var(--card2);
+  color: var(--text3);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.dep-sort-btn:hover { color: var(--text); border-color: var(--border3); background: var(--card3); }
+.dep-sort-btn.on { background: var(--accent-bg); color: var(--accent); border-color: var(--accent-border); }
+.sort-arrow { font-size: 0.7rem; }
+
+.dep-jump-btn {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  padding: 4px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border2);
+  background: var(--card2);
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.dep-jump-btn:hover { border-color: var(--accent-border); color: var(--accent); }
+.dep-jump-btn.on { background: var(--accent-bg); color: var(--accent); border-color: var(--accent-border); }
+
+/* ── Quick Jump panel ── */
+.dep-jump-bar {
+  background: var(--card2);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.jump-empty {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  color: var(--text3);
+  text-align: center;
+  padding: 8px 0;
+}
+.jump-group { display: flex; flex-direction: column; gap: 6px; }
+.jump-group-label {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.jump-group-count {
+  background: var(--card3);
+  border-radius: 20px;
+  padding: 0 6px;
+  font-size: 0.58rem;
+  color: var(--text3);
+}
+.jump-due   { color: var(--amber); }
+.jump-late  { color: var(--rose); }
+.jump-lco   { color: var(--purple); }
+.jump-na    { color: var(--red); }
+.jump-bal   { color: var(--red); }
+
+.jump-pills { display: flex; gap: 5px; flex-wrap: wrap; }
+.jump-pill {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  padding: 3px 8px;
+  border-radius: 7px;
+  border: 1px solid var(--border2);
+  background: var(--card3);
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.jump-pill:hover { transform: translateY(-1px); box-shadow: 0 3px 8px rgba(0,0,0,0.3); }
+.jump-pill.jump-due  { border-color: rgba(240,164,58,0.3);  }
+.jump-pill.jump-late { border-color: rgba(240,107,122,0.3); }
+.jump-pill.jump-lco  { border-color: rgba(139,124,248,0.3); }
+.jump-pill.jump-na   { border-color: rgba(240,107,122,0.3); }
+.jump-pill.jump-bal  { border-color: rgba(240,107,122,0.3); }
+.jump-pill:hover.jump-due  { background: rgba(240,164,58,0.1);  color: var(--amber); }
+.jump-pill:hover.jump-late { background: rgba(240,107,122,0.1); color: var(--rose);  }
+.jump-pill:hover.jump-lco  { background: rgba(139,124,248,0.1); color: var(--purple);}
+.jump-pill:hover.jump-na   { background: rgba(240,107,122,0.1); color: var(--red);   }
+.jump-pill-name {
+  color: var(--text3);
+  font-size: 0.58rem;
+  max-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Jump highlight flash ── */
+@keyframes jumpFlash {
+  0%   { box-shadow: 0 0 0 0 rgba(var(--accent-rgb, 90,180,232), 0.7); }
+  50%  { box-shadow: 0 0 0 8px rgba(var(--accent-rgb, 90,180,232), 0); }
+  100% { box-shadow: none; }
+}
+.dep-jump-highlight {
+  animation: jumpFlash 0.6s ease 2;
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

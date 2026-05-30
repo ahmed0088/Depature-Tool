@@ -180,6 +180,21 @@
         <input type="text" id="depSearch" placeholder="Room / guest…" oninput="depRender()"/>
       </div>
     </div>
+    <!-- ── Sort + Jump toolbar ── -->
+    <div class="dep-sort-jump-bar">
+      <div class="dep-sort-wrap">
+        <span class="dep-sort-lbl">Sort:</span>
+        <button class="dep-sort-btn on" data-s="smart"   onclick="depSetSort('smart')">⚡ Smart<span class="sort-arrow"></span></button>
+        <button class="dep-sort-btn"    data-s="room"    onclick="depSetSort('room')">🔢 Room<span class="sort-arrow"></span></button>
+        <button class="dep-sort-btn"    data-s="name"    onclick="depSetSort('name')">🔤 Name<span class="sort-arrow"></span></button>
+        <button class="dep-sort-btn"    data-s="time"    onclick="depSetSort('time')">🕐 Time<span class="sort-arrow"></span></button>
+        <button class="dep-sort-btn"    data-s="balance" onclick="depSetSort('balance')">💳 Balance<span class="sort-arrow"></span></button>
+        <button class="dep-sort-btn"    data-s="status"  onclick="depSetSort('status')">📊 Status<span class="sort-arrow"></span></button>
+      </div>
+      <button class="dep-jump-btn" id="depJumpBtn" onclick="toggleDepJump()">🎯 Quick Jump</button>
+    </div>
+    <!-- ── Quick Jump panel ── -->
+    <div id="depJumpBar" class="dep-jump-bar" style="display:none;"></div>
     <!-- ── NA Action Bar (appears when any rooms are marked NA) ── -->
     <div id="depNaBar" class="dep-na-bar" style="display:none;">
       <div class="dep-na-bar-left">

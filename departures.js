@@ -277,7 +277,23 @@ function depTimeTag(r) {
   return `<span class="dc-time-tag ok">🕐 ${label}</span>`;
 }
 
-// ── Render ─────────────────────────────────────────────────
+// ── Sort state ─────────────────────────────────────────────
+// key: 'smart' | 'room' | 'name' | 'time' | 'balance' | 'status'
+// dir: 1 = asc, -1 = desc
+let depSort = { key: 'smart', dir: 1 };
+
+function depSetSort(key) {
+  if (depSort.key === key) depSort.dir *= -1;
+  else { depSort.key = key; depSort.dir = 1; }
+  // update UI
+  document.querySelectorAll('.dep-sort-btn').forEach(b => {
+    const active = b.dataset.s === key;
+    b.classList.toggle('on', active);
+    const arrow = b.querySelector('.sort-arrow');
+    if (arrow) arrow.textContent = active ? (depSort.dir === 1 ? ' ↑' : ' ↓') : '';
+  });
+  depRender();
+}
 function depRender() {
   const sc  = depCounts();
   const pct = sc.all ? Math.round(sc.out / sc.all * 100) : 0;
@@ -368,20 +384,47 @@ function depRender() {
     return mf && ms;
   });
 
-  // Sort: overdue first → then by time remaining (soonest deadline first) → then room number
+  // ── Sort ────────────────────────────────────────────────
+  const STATUS_ORDER = { late: 0, due: 1, na: 2, extended: 3, out: 4 };
   filtered.sort((a, b) => {
-    const ao = isLcoOverdue(a), bo = isLcoOverdue(b);
-    if (ao !== bo) return ao ? -1 : 1;
-    // Both overdue or both not — sort by depTime if available, then room number
-    const at = _depTimeMins(a), bt = _depTimeMins(b);
-    if (at !== null && bt !== null) return at - bt;
-    if (at !== null) return -1;
-    if (bt !== null) return 1;
-    return a.room - b.room;
+    const es_a = effectiveStatus(a), es_b = effectiveStatus(b);
+    const d = depSort.dir;
+    switch (depSort.key) {
+      case 'room':
+        return d * (parseInt(a.room) - parseInt(b.room) || a.roomStr.localeCompare(b.roomStr));
+      case 'name':
+        return d * a.name.localeCompare(b.name);
+      case 'time': {
+        const at = _depTimeMins(a) ?? (a.lateTime ? _parseLcoTime(a.lateTime) : null);
+        const bt = _depTimeMins(b) ?? (b.lateTime ? _parseLcoTime(b.lateTime) : null);
+        if (at !== null && bt !== null) return d * (at - bt);
+        if (at !== null) return -1;
+        if (bt !== null) return  1;
+        return d * (parseInt(a.room) - parseInt(b.room));
+      }
+      case 'balance':
+        return d * ((b.balance || 0) - (a.balance || 0));
+      case 'status': {
+        const sa = STATUS_ORDER[es_a] ?? 9;
+        const sb = STATUS_ORDER[es_b] ?? 9;
+        return d * (sa - sb) || parseInt(a.room) - parseInt(b.room);
+      }
+      default: // 'smart' — overdue first, then soonest checkout time, then room number
+      {
+        const ao = isLcoOverdue(a), bo = isLcoOverdue(b);
+        if (ao !== bo) return ao ? -1 : 1;
+        const at2 = _depTimeMins(a), bt2 = _depTimeMins(b);
+        if (at2 !== null && bt2 !== null) return at2 - bt2;
+        if (at2 !== null) return -1;
+        if (bt2 !== null) return  1;
+        return parseInt(a.room) - parseInt(b.room);
+      }
+    }
   });
 
   document.getElementById('depGrid').innerHTML = filtered.map(r => depCardHTML(r)).join('');
   renderDepLog();
+  if (_jumpOpen) renderDepQuickJump();
 
   const qb = document.getElementById('depQuickBar');
   if (sc.due > 3) {
@@ -392,7 +435,103 @@ function depRender() {
   }
 }
 
-// ── Intent config ──────────────────────────────────────────
+// ── Quick Jump bar ─────────────────────────────────────────
+// Shows live room-number pills grouped by status category.
+// Click any pill → filter switches to that group + card highlighted.
+let _jumpOpen = false;
+
+function toggleDepJump() {
+  _jumpOpen = !_jumpOpen;
+  const bar = document.getElementById('depJumpBar');
+  const btn = document.getElementById('depJumpBtn');
+  if (bar) bar.style.display = _jumpOpen ? 'block' : 'none';
+  if (btn) btn.classList.toggle('on', _jumpOpen);
+  if (_jumpOpen) renderDepQuickJump();
+}
+
+function renderDepQuickJump() {
+  const bar = document.getElementById('depJumpBar');
+  if (!bar) return;
+
+  const groups = [
+    {
+      key:   'due',
+      icon:  '⏳',
+      label: 'Due Out',
+      cls:   'jump-due',
+      rooms: depRooms.filter(r => effectiveStatus(r) === 'due'),
+    },
+    {
+      key:   'after12',
+      icon:  '🕛',
+      label: 'Auto LCO (past time)',
+      cls:   'jump-late',
+      rooms: depRooms.filter(r => r.status === 'due' && effectiveStatus(r) === 'late'),
+    },
+    {
+      key:   'lco',
+      icon:  '🕐',
+      label: 'Manual LCO',
+      cls:   'jump-lco',
+      rooms: depRooms.filter(r => r.status === 'late'),
+    },
+    {
+      key:   'na',
+      icon:  '📵',
+      label: 'No Answer',
+      cls:   'jump-na',
+      rooms: depRooms.filter(r => r.status === 'na'),
+    },
+    {
+      key:   'balance',
+      icon:  '💳',
+      label: 'Balance Owing',
+      cls:   'jump-bal',
+      rooms: depRooms.filter(r => r.balance > 0 && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended'),
+    },
+  ].filter(g => g.rooms.length > 0);
+
+  if (!groups.length) {
+    bar.innerHTML = `<div class="jump-empty">All rooms actioned — nothing to jump to 🎉</div>`;
+    return;
+  }
+
+  bar.innerHTML = groups.map(g => `
+    <div class="jump-group">
+      <div class="jump-group-label ${g.cls}">${g.icon} ${g.label} <span class="jump-group-count">${g.rooms.length}</span></div>
+      <div class="jump-pills">
+        ${g.rooms.map(r => `
+          <button class="jump-pill ${g.cls}" onclick="depJumpTo('${r.roomStr}','${g.key === 'after12' || g.key === 'lco' ? 'late' : g.key === 'due' ? 'due' : g.key === 'na' ? 'na' : 'all'}','${r.roomStr}')">
+            ${r.roomStr}<span class="jump-pill-name">${r.name.split(' ')[0]}</span>
+          </button>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function depJumpTo(roomStr, filterKey, targetRoom) {
+  // Switch to the right filter
+  const chipSel = filterKey === 'all' ? '[data-f="all"]'
+    : filterKey === 'due'  ? '[data-f="due"]'
+    : filterKey === 'late' ? '[data-f="late"]'
+    : filterKey === 'na'   ? '[data-f="na"]'
+    : '[data-f="all"]';
+  const chip = document.querySelector(chipSel);
+  if (chip) depFilter(filterKey, chip);
+
+  // After render, find and highlight the card
+  requestAnimationFrame(() => {
+    const cards = document.querySelectorAll('.dep-card');
+    for (const card of cards) {
+      const roomEl = card.querySelector('.dc-room');
+      if (roomEl && roomEl.textContent.trim() === targetRoom) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.classList.add('dep-jump-highlight');
+        setTimeout(() => card.classList.remove('dep-jump-highlight'), 2000);
+        break;
+      }
+    }
+  });
+}
 const INTENT_CONFIG = {
   maybe_extend: { icon:'🤔', label:'May Extend Stay',   color:'var(--violet)', autoNote:'Guest may extend — confirm with Opera before releasing room.' },
   coming_back:  { icon:'↩️', label:'Coming Back Later', color:'var(--amber)',  autoNote:'Guest coming back later today — hold key and luggage if needed.' },
