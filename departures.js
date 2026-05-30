@@ -1069,12 +1069,8 @@ function depCopyCard(i) {
   const r = depRooms[i];
   const statusLabel = { due:'Due Out', out:'Checked Out', extended:'Extended', late:'Late CO', na:'No Answer' };
   const lines = [
-    `🏨 Room ${r.roomStr} — ${r.name}`,
+    `🏨 Room ${r.roomStr}`,
     `Status: ${statusLabel[r.status] || r.status.toUpperCase()}${r.lateTime ? ' · ' + r.lateTime : ''}${r.extensionNights ? ' +' + r.extensionNights + 'N' : ''}`,
-    `Dates: ${r.arrival} → ${r.departure} (${r.nights}n)`,
-    r.balance > 0 ? `⚠ Balance: AED ${r.balance.toLocaleString('en', {minimumFractionDigits:2})} OWING` : `Balance: Settled`,
-    r.source ? `Source: ${r.source}` : '',
-    r.rateCode ? `Rate: ${r.rateCode}` : '',
     r.note ? `Notes: ${r.note}` : '',
   ].filter(Boolean);
   copyToClipboard(lines.join('\n'), null, '');
@@ -1166,10 +1162,10 @@ function depCopySelected() {
   const time  = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
   let text = '';
   if (_selGroup === 'na') {
-    const lines = rooms.map(r => `📵 ${r.roomStr} · ${r.name} · ${r.naTime || time}`);
+    const lines = rooms.map(r => `📵 ${r.roomStr} · ${r.naTime || time}`);
     text = `📵 *NA Rooms — ${time}*\n${lines.join('\n')}\n\n*Please do* 🙏`;
   } else if (_selGroup === 'out') {
-    const lines = rooms.map(r => `✓ ${r.roomStr} · ${r.name} · ${r.checkoutAt || time}`);
+    const lines = rooms.map(r => `✓ ${r.roomStr} · ${r.checkoutAt || time}`);
     text = `✅ *Checked Out — ${time}*\n${lines.join('\n')}\n\n*Please do* 🙏`;
   } else if (_selGroup === 'extended') {
     const lines = rooms.map(r => _extLine(r));
@@ -1189,7 +1185,7 @@ function depCopyNAList(mode) {
   if (mode === 'summary') {
     text = `📵 *NA — ${time}*\nRooms: ${rooms.map(r => r.roomStr).join(', ')}\n*Please do* 🙏`;
   } else {
-    const lines = rooms.map(r => `📵 ${r.roomStr} · ${r.name} · ${r.naTime || time}`);
+    const lines = rooms.map(r => `📵 ${r.roomStr} · ${r.naTime || time}`);
     text = `📵 *NA Rooms — ${time}*\n${lines.join('\n')}\n\n*Please do* 🙏`;
   }
   copyToClipboard(text, null, '');
@@ -1205,7 +1201,7 @@ function depCopyOutList(mode) {
   if (mode === 'summary') {
     text = `✅ *Checked Out — ${time}*\nRooms: ${rooms.map(r => r.roomStr).join(', ')}\n*Please do* 🙏`;
   } else {
-    const lines = rooms.map(r => `✓ ${r.roomStr} · ${r.name} · ${r.checkoutAt || time}`);
+    const lines = rooms.map(r => `✓ ${r.roomStr} · ${r.checkoutAt || time}`);
     text = `✅ *Checked Out Rooms — ${time}*\n${lines.join('\n')}\n\n*Please do* 🙏`;
   }
   copyToClipboard(text, null, '');
@@ -1223,10 +1219,8 @@ function _extLine(r) {
     newDep = ` → ${String(nd.getDate()).padStart(2,'0')} ${months[nd.getMonth()]}`;
   }
   const co    = r.extCheckoutTime ? ` · CO ${r.extCheckoutTime}` : '';
-  const rate  = r.extRate ? ` · AED ${r.extRate}/night` : '';
-  const rsn   = r.extReason ? ` · ${r.extReason}` : '';
   const opera = r.extConfirmed ? ' ✓' : ' ⚠ Opera pending';
-  return `↪ ${r.roomStr} · ${r.name} · +${n}N${newDep}${co}${rate}${rsn}${opera}`;
+  return `↪ ${r.roomStr} · +${n}N${newDep}${co}${opera}`;
 }
 
 function depCopyExtList(mode) {
