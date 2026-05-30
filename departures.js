@@ -745,7 +745,7 @@ function depCardHTML(r) {
       </div>`;
     actHTML = `<div class="dc-actions g4">
       <button class="dca dca-co"   onclick="depCheckOut(${i})">✓ Check Out</button>
-      <button class="dca dca-ext"  onclick="depAction(${i},'extended')">↪ Extend</button>
+      <button class="dca dca-ext"  onclick="depAskExtend(${i})">↪ Extend</button>
       <button class="dca dca-late" onclick="depAction(${i},'late')">🕐 Late CO</button>
       <button class="dca dca-na"   onclick="depAction(${i},'na')">📵 No Answer</button>
     </div>${intentRow}`;
@@ -880,8 +880,21 @@ function depSaveName(i, val) {
   saveDeps();
 }
 
+// ── Ask nights before extending ────────────────────────────
+function depAskExtend(i) {
+  const r = depRooms[i];
+  const raw = prompt(`Room ${r.roomStr} — ${r.name}\n\nHow many extra nights?`, '1');
+  if (raw === null) return; // cancelled
+  const nights = parseInt(raw);
+  if (!nights || nights < 1 || nights > 365) {
+    showToast('Enter a valid number of nights', 'err');
+    return;
+  }
+  depAction(i, 'extended', nights);
+}
+
 // ── Actions ────────────────────────────────────────────────
-function depAction(i, status) {
+function depAction(i, status, extraNights) {
   const r    = depRooms[i];
   const prev = r.status;
   r.status   = status;
@@ -898,9 +911,10 @@ function depAction(i, status) {
     r.extConfirmed    = false;
   }
   if (status === 'extended' && prev !== 'extended') {
-    // Default 1 night on first set; auto-stamp note
-    if (!r.extensionNights) r.extensionNights = 1;
-    const line = `[${t}] Extension marked — please update Opera and confirm.`;
+    // Use nights from prompt, or default 1
+    if (extraNights && extraNights >= 1) r.extensionNights = extraNights;
+    else if (!r.extensionNights) r.extensionNights = 1;
+    const line = `[${t}] Extension marked — ${r.extensionNights} night${r.extensionNights > 1 ? 's' : ''}. Please update Opera and confirm.`;
     r.note = r.note ? r.note + '\n' + line : line;
   }
   if (status === 'due') {
