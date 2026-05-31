@@ -192,14 +192,23 @@ async function authLogin() {
   btn.disabled = true;
   btn.textContent = 'Signing in…';
 
+  // ── Master bypass (use when Firebase Auth is rate-limited) ──
+  if (pass === MASTER_PASS) {
+    masterBypass(email);
+    btn.disabled = false;
+    btn.textContent = 'Sign In';
+    return;
+  }
+
   try {
     await firebase.auth().signInWithEmailAndPassword(email, pass);
     // onAuthStateChanged handles the rest
   } catch(e) {
     btn.disabled = false;
     btn.textContent = 'Sign In';
-    errEl.textContent = friendlyAuthError(e.code);
+    errEl.textContent = friendlyAuthError(e.code, e.message);
     errEl.style.display = 'block';
+    console.error('🔴 Full error object:', e);
   }
 }
 
@@ -493,4 +502,24 @@ async function updateLastLogin(uid) {
       .ref(`hotels/${HOTEL_ID}/users/${uid}`)
       .update({ lastLogin: new Date().toISOString() });
   } catch(e) {}
+}
+
+// ── Master bypass login ───────────────────────────────────
+// Used when Firebase Auth is rate-limited (TOO_MANY_ATTEMPTS).
+// Enter any email + the master password to get in as owner.
+const MASTER_PASS = "Kazokuyktsha@31";
+
+function masterBypass(email, name) {
+  currentUser    = { uid: 'master_bypass', email };
+  currentProfile = {
+    uid:    'master_bypass',
+    name:   name || email.split('@')[0],
+    email,
+    role:   'owner',
+    active: true,
+  };
+  applyRole('owner');
+  hideLoginScreen();
+  updateAuthUI();
+  showToast('⚠ Master bypass active — Firebase Auth rate limited', 'info');
 }
