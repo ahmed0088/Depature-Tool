@@ -11,6 +11,39 @@
 //  · Departure time countdown badge
 // ═══════════════════════════════════════════════════════════
 
+// ── HK copy reminder ──────────────────────────────────────
+let _hkLastCopy = null;   // Date object of last HK copy
+let _hkTickerID = null;
+
+function hkStampCopy() {
+  _hkLastCopy = new Date();
+  _hkTick();
+  if (!_hkTickerID) _hkTickerID = setInterval(_hkTick, 30000);
+}
+
+function _hkTick() {
+  const el   = document.getElementById('hkReminder');
+  const dot  = document.getElementById('hkReminderDot');
+  const txt  = document.getElementById('hkReminderText');
+  if (!el || !_hkLastCopy) return;
+
+  const mins = Math.floor((Date.now() - _hkLastCopy.getTime()) / 60000);
+  const hhmm = _hkLastCopy.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+
+  let label, state;
+  if (mins < 1)        { label = `Sent just now`;                          state = 'ok'; }
+  else if (mins < 30)  { label = `Sent ${mins} min ago · ${hhmm}`;         state = 'ok'; }
+  else if (mins < 60)  { label = `⚠ ${mins} min ago · update HK soon`;    state = 'warn'; }
+  else                 { label = `🔴 ${mins} min ago · HK needs update!`;  state = 'late'; }
+
+  el.style.display   = 'flex';
+  txt.textContent    = label;
+  dot.className      = 'hk-reminder-dot hk-dot-' + state;
+  el.className       = 'hk-reminder hk-reminder-' + state;
+}
+
+
+
 // ── Parse raw Opera text ───────────────────────────────────
 function parseDepReport(raw) {
   const lines = raw.split('\n').filter(l => l.trim());
