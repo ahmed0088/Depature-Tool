@@ -1567,20 +1567,19 @@ function depCopyHKUpdate() {
 
   // Only include rooms that still need action — exclude checked-out
   const sorted = [...depRooms]
-    .filter(r => effectiveStatus(r) !== 'out')
+    .filter(r => effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended')
     .sort((a, b) => parseInt(a.room) - parseInt(b.room));
 
   const sc = depCounts();
   const summary = [
-    sc.late     ? `🕐 ${sc.late} LCO`      : '',
-    sc.na       ? `📵 ${sc.na} NA`          : '',
-    sc.extended ? `↪ ${sc.extended} EXT`   : '',
-    sc.due      ? `⏳ ${sc.due} still due`  : '',
-    sc.out      ? `✅ ${sc.out} CO done`    : '',
+    sc.late     ? `🕐 ${sc.late} LCO`                                   : '',
+    sc.na       ? `📵 ${sc.na} NA`                                       : '',
+    sc.due      ? `⏳ ${sc.due} still due`                               : '',
+    (sc.out || sc.extended) ? `✅ ${sc.out + sc.extended} done (${sc.out} CO · ${sc.extended} EXT)` : '',
   ].filter(Boolean).join('  ·  ');
 
   if (!sorted.length) {
-    const text = `🏨 *HK Status — ${time}*\n✅ All ${sc.out} rooms checked out — floor clear!`;
+    const text = `🏨 *HK Status — ${time}*\n✅ All rooms resolved — floor clear! (${sc.out} CO · ${sc.extended} EXT)`;
     copyToClipboard(text, null, '');
     hkStampCopy();
     showToast('HK update copied ✓', 'ok');
