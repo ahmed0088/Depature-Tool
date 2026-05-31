@@ -444,8 +444,10 @@ body {
    PROGRESS BAR
 ══════════════════════════════════════════════════════ */
 .prog-wrap { margin-bottom: 14px; }
-.prog-info { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 0.75rem; color: var(--text2); }
-.prog-track { height: 5px; background: var(--surface); border-radius: 99px; overflow: hidden; border: 1px solid var(--border); }
+.prog-info { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.prog-info #depProgLabel { font-size: 0.78rem; font-weight: 600; color: var(--text); font-family: var(--mono); }
+.prog-info #depProgPct   { font-size: 0.88rem; font-weight: 700; color: var(--accent); font-family: var(--mono); }
+.prog-track { height: 6px; background: var(--surface); border-radius: 99px; overflow: hidden; border: 1px solid var(--border); }
 .prog-fill  { height: 100%; background: var(--accent); border-radius: 99px; transition: width 0.4s cubic-bezier(0.4,0,0.2,1); }
 #clProgFill { background: var(--green); }
 [data-theme="night-ops"] .prog-fill  { background: linear-gradient(90deg, var(--accent2), var(--accent)); }
