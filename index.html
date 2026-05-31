@@ -205,7 +205,7 @@
         <span class="dep-na-bar-text">Send status to housekeeping</span>
       </div>
       <div class="dep-na-bar-right">
-        <button class="dep-copy-main" style="color:var(--accent);border-color:var(--accent-border);background:var(--accent-bg);" onclick="depCopyHKUpdate()">📋 HK Status Update</button>
+        <button class="dep-copy-main" style="color:var(--accent);border-color:var(--accent-border);background:var(--accent-bg);" onclick="depCopyHKUpdate()">🏨 Remaining Rooms</button>
       </div>
     </div>
     <!-- ── NA Action Bar ── -->
@@ -260,15 +260,16 @@
       </div>
       <div class="dep-na-bar-right">
         <div class="dep-copy-split">
-          <button class="dep-copy-main" style="color:var(--mint);border-color:rgba(62,207,142,0.4);background:rgba(62,207,142,0.12);" onclick="depCopyOutList('all')">📋 Copy for HK</button>
+          <button class="dep-copy-main" style="color:var(--mint);border-color:rgba(62,207,142,0.4);background:rgba(62,207,142,0.12);" onclick="depCopyOutRecent(30)">✅ Copy New (30 min)</button>
           <button class="dep-copy-arrow" style="color:var(--mint);border-color:rgba(62,207,142,0.4);background:rgba(62,207,142,0.12);" onclick="depToggleCopyMenu('out')">▾</button>
           <div class="dep-copy-menu" id="depCopyMenu-out">
-            <button onclick="depSmartSelect('out',30);depToggleCopyMenu('out')">⚡ Smart 30 min <span class="dcm-hint">auto-select recent COs</span></button>
-            <button onclick="depSmartSelect('out',60);depToggleCopyMenu('out')">⚡ Smart 1 hour <span class="dcm-hint">auto-select recent COs</span></button>
+            <button onclick="depCopyOutRecent(30);depToggleCopyMenu('out')">✅ New — Last 30 min <span class="dcm-hint">recent checkouts only</span></button>
+            <button onclick="depCopyOutRecent(60);depToggleCopyMenu('out')">✅ New — Last 1 hour <span class="dcm-hint">recent checkouts only</span></button>
+            <button onclick="depSmartSelect('out',30);depToggleCopyMenu('out')">⚡ Smart Select 30 min <span class="dcm-hint">pick then copy</span></button>
             <button onclick="depStartSelect('out');depToggleCopyMenu('out')">☑ Pick Rooms <span class="dcm-hint">tap to choose</span></button>
-            <button onclick="depCopyOutList('summary');depToggleCopyMenu('out')">📋 Copy All Rooms <span class="dcm-hint">all room numbers</span></button>
-            <button onclick="depCopyOutList('all');depToggleCopyMenu('out')">📋 Copy Full List <span class="dcm-hint">every checkout today</span></button>
-            <button onclick="depCopyHKUpdate();depToggleCopyMenu('out')" style="border-top:1px solid var(--border);margin-top:4px;padding-top:10px;">🏨 Full HK Status Update <span class="dcm-hint">all rooms · one word each</span></button>
+            <button onclick="depCopyOutList('summary');depToggleCopyMenu('out')">📋 All Rooms (numbers) <span class="dcm-hint">all checkouts today</span></button>
+            <button onclick="depCopyOutList('all');depToggleCopyMenu('out')">📋 Full List Today <span class="dcm-hint">every checkout with time</span></button>
+            <button onclick="depCopyHKUpdate();depToggleCopyMenu('out')" style="border-top:1px solid var(--border);margin-top:4px;padding-top:10px;">🏨 Remaining Rooms <span class="dcm-hint">still on floor · pending only</span></button>
           </div>
         </div>
         <button class="dep-na-filter-btn" onclick="depFilter('out', document.querySelector('[data-f=out]'))">View All →</button>

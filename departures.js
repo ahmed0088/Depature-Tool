@@ -1550,44 +1550,62 @@ function depCopyExtList(mode) {
   showToast('Extensions copied ✓', 'ok');
 }
 
-// ── HK Full Status Update ──────────────────────────────────
-// One line per room: room number + 1-word status.
-// Extended rooms show +Xn. LCO rooms show agreed time.
+// ── HK Full Status Update ─────────────────────────────────
+// Shows only rooms that still need action (due, late, NA, extended).
+// Checked-out rooms are NOT included — HK already has those from the
+// individual checkout copies. This is the "what's left" message.
 function depCopyHKUpdate() {
   if (!depRooms.length) { showToast('No rooms loaded', 'info'); return; }
   const time = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
 
   const HK_LABEL = {
-    out:      '✅ CO',
     extended: '↪ EXT',
     late:     '🕐 LCO',
     na:       '📵 NA',
     due:      '⏳ DUE',
   };
 
-  const sorted = [...depRooms].sort((a, b) => parseInt(a.room) - parseInt(b.room));
+  // Only include rooms that still need action — exclude checked-out
+  const sorted = [...depRooms]
+    .filter(r => effectiveStatus(r) !== 'out')
+    .sort((a, b) => parseInt(a.room) - parseInt(b.room));
+
+  const sc = depCounts();
+  const summary = [
+    sc.late     ? `🕐 ${sc.late} LCO`      : '',
+    sc.na       ? `📵 ${sc.na} NA`          : '',
+    sc.extended ? `↪ ${sc.extended} EXT`   : '',
+    sc.due      ? `⏳ ${sc.due} still due`  : '',
+    sc.out      ? `✅ ${sc.out} CO done`    : '',
+  ].filter(Boolean).join('  ·  ');
+
+  if (!sorted.length) {
+    const text = `🏨 *HK Status — ${time}*\n✅ All ${sc.out} rooms checked out — floor clear!`;
+    copyToClipboard(text, null, '');
+    hkStampCopy();
+    showToast('HK update copied ✓', 'ok');
+    return;
+  }
 
   const lines = sorted.map(r => {
     const es = effectiveStatus(r);
     let label = HK_LABEL[es] || '⏳ DUE';
     if (r.status === 'extended' && r.extensionNights) label += ` +${r.extensionNights}n`;
     if (es === 'late' && r.lateTime)                  label += ` ${r.lateTime}`;
+    if (r.balance > 0 && es !== 'extended')           label += ` 💳`;
     return `${r.roomStr.padEnd(5)} ${label}`;
   });
 
-  const sc = depCounts();
-  const summary = [
-    sc.out      ? `✅ ${sc.out} CO`         : '',
-    sc.extended ? `↪ ${sc.extended} EXT`   : '',
-    sc.late     ? `🕐 ${sc.late} LCO`      : '',
-    sc.na       ? `📵 ${sc.na} NA`          : '',
-    sc.due      ? `⏳ ${sc.due} still due`  : '',
-  ].filter(Boolean).join('  ·  ');
-
-  const text = `🏨 *HK Status — ${time}*\n${summary}\n\n${lines.join('\n')}`;
+  const text = `🏨 *HK Update — ${time}*\n${summary}\n\n${lines.join('\n')}`;
   copyToClipboard(text, null, '');
   hkStampCopy();
-  showToast(`HK update copied (${sorted.length} rooms) ✓`, 'ok');
+  showToast(`HK update copied (${sorted.length} pending) ✓`, 'ok');
+}
+
+// ── HK Remaining — what's still on the floor ─────────────
+// Same as above but exported for the "Remaining" button
+function depCopyHKRemaining() {
+  depCopyHKUpdate();
 }
 
 function depFilter(f, el) {
