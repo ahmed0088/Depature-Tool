@@ -140,7 +140,7 @@ body {
   font-family: var(--font); font-size: 13px; line-height: 1.5;
   -webkit-font-smoothing: antialiased; display: flex; flex-direction: column;
 }
-#appWrapper { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+#appWrapper { display: flex; flex-direction: column; height: 100vh; max-height: 100vh; overflow: hidden; position: fixed; inset: 0; }
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: var(--bg2); }
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
