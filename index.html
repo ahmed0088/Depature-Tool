@@ -1415,15 +1415,6 @@ document.querySelectorAll('.modal-bg').forEach(bg => {
 });
 
 async function appInit() {
-  // 1 — Init Firebase
-  try {
-    const app = firebase.initializeApp(FIREBASE_CONFIG);
-    dbInit(app);
-  } catch(e) {
-    console.warn('Firebase init failed — running offline:', e);
-    updateConnectionUI(false);
-  }
-
   // Wait a moment for DB to initialize
   await new Promise(r => setTimeout(r, 500));
 
