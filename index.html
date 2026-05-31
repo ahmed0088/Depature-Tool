@@ -199,10 +199,10 @@
     <!-- ── Quick Jump panel ── -->
     <div id="depJumpBar" class="dep-jump-bar" style="display:none;"></div>
     <!-- ── HK Status Bar ── -->
-    <div id="depHKBar" class="dep-na-bar" style="background:linear-gradient(90deg,rgba(232,184,75,0.08),transparent);border-color:rgba(232,184,75,0.2);">
+    <div id="depHKBar" class="dep-na-bar" style="display:none;background:linear-gradient(90deg,rgba(232,184,75,0.08),transparent);border-color:rgba(232,184,75,0.22);">
       <div class="dep-na-bar-left">
         <span class="dep-na-bar-icon">🏨</span>
-        <span class="dep-na-bar-text">Housekeeping update</span>
+        <span class="dep-na-bar-text">Send status to housekeeping</span>
       </div>
       <div class="dep-na-bar-right">
         <button class="dep-copy-main" style="color:var(--accent);border-color:var(--accent-border);background:var(--accent-bg);" onclick="depCopyHKUpdate()">📋 HK Status Update</button>
@@ -268,7 +268,7 @@
             <button onclick="depStartSelect('out');depToggleCopyMenu('out')">☑ Pick Rooms <span class="dcm-hint">tap to choose</span></button>
             <button onclick="depCopyOutList('summary');depToggleCopyMenu('out')">📋 Copy All Rooms <span class="dcm-hint">all room numbers</span></button>
             <button onclick="depCopyOutList('all');depToggleCopyMenu('out')">📋 Copy Full List <span class="dcm-hint">every checkout today</span></button>
-            <button onclick="depCopyHKUpdate();depToggleCopyMenu('out')" style="border-top:1px solid var(--border);margin-top:4px;padding-top:8px;">🏨 Full HK Status Update <span class="dcm-hint">all rooms · one word each</span></button>
+            <button onclick="depCopyHKUpdate();depToggleCopyMenu('out')" style="border-top:1px solid var(--border);margin-top:4px;padding-top:10px;">🏨 Full HK Status Update <span class="dcm-hint">all rooms · one word each</span></button>
           </div>
         </div>
         <button class="dep-na-filter-btn" onclick="depFilter('out', document.querySelector('[data-f=out]'))">View All →</button>
@@ -900,6 +900,7 @@ async function saveSettings(patch) {
 
 // ── Feedback modal ────────────────────────────────────────
 function openFeedback() {
+  ['fb-text','fb-name'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('feedbackModal').classList.add('open');
 }
 function closeFeedbackModal() {
@@ -1157,6 +1158,54 @@ function clResetSilent() {
   clearHandover();
   showToast('Checklist reset for new night ✓', 'ok');
 }
+// ── Mobile nav ────────────────────────────────────────────
+function mobNavSwitch(btn) {
+  document.querySelectorAll('.mob-nav-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+}
+
+function toggleMobMore() {
+  const drawer  = document.getElementById('mobMoreDrawer');
+  const overlay = document.getElementById('mobMoreOverlay');
+  const isOpen  = drawer.style.display !== 'none';
+  drawer.style.display  = isOpen ? 'none' : 'block';
+  overlay.style.display = isOpen ? 'none' : 'block';
+  document.getElementById('mobMoreBtn')?.classList.toggle('active', !isOpen);
+}
+
+// Sync sidebar badges → mobile nav badges
+function syncMobBadges() {
+  [['departures','badge-departures'], ['arrivals','badge-arrivals'],
+   ['checklist','badge-checklist'], ['shifts','badge-shifts']].forEach(([panel, srcId]) => {
+    const src  = document.getElementById(srcId);
+    const dest = document.getElementById('mob-badge-' + panel);
+    if (src && dest) {
+      const v = src.textContent;
+      dest.textContent = (v && v !== '0' && v !== '—') ? v : '';
+      dest.style.display = (v && v !== '0' && v !== '—') ? 'flex' : 'none';
+    }
+  });
+}
+
+// Override showPanel to also update mobile nav
+const _origShowPanel = showPanel;
+window.showPanel = function(name) {
+  _origShowPanel(name);
+  // Update mobile nav active state
+  document.querySelectorAll('.mob-nav-btn[data-panel]').forEach(b => {
+    b.classList.toggle('active', b.dataset.panel === name);
+  });
+  // Close more drawer if open
+  const drawer = document.getElementById('mobMoreDrawer');
+  if (drawer && drawer.style.display !== 'none') toggleMobMore();
+};
+
+// Sync badges every 5 seconds
+setInterval(syncMobBadges, 5000);
+
+// ── Action log toggle state ───────────────────────────────
+let _logOpen = true; // dep action log starts open
+
 function toggleLog() {
   _logOpen = !_logOpen;
   const body = document.getElementById('depLogBody');
@@ -1169,7 +1218,14 @@ function toggleLog() {
 function clearNat()   { document.getElementById('natInput').value=''; document.getElementById('natResults').style.display='none'; document.getElementById('natError').classList.remove('show'); }
 function clearRent()  { ['rentInput1','rentInput2'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';}); const r=document.getElementById('rentResults');if(r)r.style.display='none'; }
 function clearAudit() { ['naOperaInput','naExcelInput'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';}); const s=document.getElementById('naCompareSection');if(s)s.style.display='none'; }
-function clearImmig() { const p=document.getElementById('immigPasteInput2');if(p)p.value=''; const r=document.getElementById('immigResults2');if(r)r.style.display='none'; const e2=document.getElementById('immigError2');if(e2)e2.classList.remove('show'); }
+function clearImmig() {
+  const p = document.getElementById('immigPasteInput2'); if (p) p.value = '';
+  const r = document.getElementById('immigResults2');    if (r) r.style.display = 'none';
+  const e2 = document.getElementById('immigError2');     if (e2) e2.classList.remove('show');
+  const badge = document.getElementById('immigTabCount'); if (badge) badge.textContent = 'Upload';
+  const fi = document.getElementById('immigFileInput2'); if (fi) fi.value = '';
+  immigAllRows2 = [];
+}
 
 // ── Keyboard shortcuts ───────────────────────────────────
 // Skips if focus is inside any input, textarea, or select.
@@ -1414,6 +1470,12 @@ async function appInit() {
     arrGuests = snap.guests; 
     arrRender();
   });
+
+  listenPurpose(snap => {
+    if (!snap || !snap.guests) return;
+    purposeGuests = snap.guests;
+    purposeRender();
+  });
   
   listenChecklist(snap => {
     if (!snap) return;
@@ -1578,6 +1640,47 @@ appInit();
       </div>
     </div>
     <div class="kb-footer">Shortcuts are disabled while typing in any input field.</div>
+  </div>
+</div>
+
+<!-- ── MOBILE BOTTOM NAV ── -->
+<nav class="mob-nav" id="mobNav">
+  <button class="mob-nav-btn active" onclick="showPanel('departures');mobNavSwitch(this)" data-panel="departures">
+    <span class="mob-nav-icon">🚪</span>
+    <span class="mob-nav-lbl">Depart</span>
+    <span class="mob-nav-badge" id="mob-badge-departures"></span>
+  </button>
+  <button class="mob-nav-btn" onclick="showPanel('arrivals');mobNavSwitch(this)" data-panel="arrivals">
+    <span class="mob-nav-icon">🛎️</span>
+    <span class="mob-nav-lbl">Arrivals</span>
+    <span class="mob-nav-badge" id="mob-badge-arrivals"></span>
+  </button>
+  <button class="mob-nav-btn" onclick="showPanel('checklist');mobNavSwitch(this)" data-panel="checklist">
+    <span class="mob-nav-icon">✅</span>
+    <span class="mob-nav-lbl">Checklist</span>
+    <span class="mob-nav-badge" id="mob-badge-checklist"></span>
+  </button>
+  <button class="mob-nav-btn" onclick="showPanel('shifts');mobNavSwitch(this)" data-panel="shifts">
+    <span class="mob-nav-icon">⏰</span>
+    <span class="mob-nav-lbl">Shifts</span>
+    <span class="mob-nav-badge" id="mob-badge-shifts"></span>
+  </button>
+  <button class="mob-nav-btn" onclick="toggleMobMore()" id="mobMoreBtn">
+    <span class="mob-nav-icon">⋯</span>
+    <span class="mob-nav-lbl">More</span>
+  </button>
+</nav>
+
+<!-- Mobile "More" drawer -->
+<div class="mob-more-overlay" id="mobMoreOverlay" onclick="toggleMobMore()" style="display:none;"></div>
+<div class="mob-more-drawer" id="mobMoreDrawer" style="display:none;">
+  <div class="mob-more-grid">
+    <button class="mob-more-item" onclick="showPanel('purpose');toggleMobMore()"><span>📋</span>Purpose</button>
+    <button class="mob-more-item" onclick="showPanel('nationality');toggleMobMore()"><span>🌍</span>Nationality</button>
+    <button class="mob-more-item" onclick="showPanel('rent');toggleMobMore()"><span>🛏️</span>Rented Rooms</button>
+    <button class="mob-more-item" onclick="showPanel('audit');toggleMobMore()"><span>🌙</span>PM Rooms</button>
+    <button class="mob-more-item" onclick="showPanel('immig');toggleMobMore()"><span>🛂</span>Immigration</button>
+    <button class="mob-more-item" onclick="showPanel('tourism');toggleMobMore()"><span>🏛️</span>Tourism Tax</button>
   </div>
 </div>
 

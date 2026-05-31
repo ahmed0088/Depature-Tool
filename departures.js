@@ -475,6 +475,10 @@ function depRender() {
     occLbl.textContent  = `${sc.out} / ${sc.all} departed`;
   }
 
+  // HK Status bar — always visible when board is loaded
+  const hkBar = document.getElementById('depHKBar');
+  if (hkBar) hkBar.style.display = depRooms.length ? 'flex' : 'none';
+
   // NA Action Bar
   const naBar = document.getElementById('depNaBar');
   const naCnt = document.getElementById('depNaCount');
@@ -1250,15 +1254,6 @@ function depUndoLog(li) {
   showToast('Undone — ' + entry.room + ' back to Due Out', 'ok');
 }
 
-function toggleLog() {
-  const body = document.getElementById('depLogBody');
-  const icon = document.getElementById('depLogToggleIcon');
-  if (!body) return;
-  const open = body.style.display !== 'none';
-  body.style.display = open ? 'none' : 'block';
-  if (icon) icon.textContent = open ? '▸ expand' : '▾ collapse';
-}
-
 // ── Filters ────────────────────────────────────────────────
 // ── Copy single card for handover (WhatsApp / Teams) ─────
 function depCopyCard(i) {
@@ -1547,9 +1542,7 @@ function depCopyExtList(mode) {
   const time = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
   let text = '';
   if (mode === 'summary') {
-    // Simple: room + nights only — for HK WhatsApp
-    const lines = rooms.map(r => `↪ ${r.roomStr} +${r.extensionNights||1}n`);
-    text = `↪ *Extensions — ${time}*\n${lines.join('\n')}`;
+    text = `↪ *Extensions — ${time}*\nRooms: ${rooms.map(r => r.roomStr + ' +' + (r.extensionNights||1) + 'N').join(', ')}`;
   } else {
     text = `↪ *Extensions — ${time}*\n${rooms.map(_extLine).join('\n')}`;
   }
@@ -1558,15 +1551,12 @@ function depCopyExtList(mode) {
 }
 
 // ── HK Full Status Update ──────────────────────────────────
-// Generates a clean room-by-room update for housekeeping:
-// each room on one line with room number + 1-word status.
-// Extended rooms show "+Xn" so HK knows not to reassign.
+// One line per room: room number + 1-word status.
+// Extended rooms show +Xn. LCO rooms show agreed time.
 function depCopyHKUpdate() {
   if (!depRooms.length) { showToast('No rooms loaded', 'info'); return; }
-
   const time = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
 
-  // Status label map → single word for HK
   const HK_LABEL = {
     out:      '✅ CO',
     extended: '↪ EXT',
@@ -1575,39 +1565,26 @@ function depCopyHKUpdate() {
     due:      '⏳ DUE',
   };
 
-  // Sort by room number
   const sorted = [...depRooms].sort((a, b) => parseInt(a.room) - parseInt(b.room));
 
   const lines = sorted.map(r => {
     const es = effectiveStatus(r);
     let label = HK_LABEL[es] || '⏳ DUE';
-    // For extensions: append nights so HK knows the new departure
-    if (r.status === 'extended' && r.extensionNights) {
-      label += ` +${r.extensionNights}n`;
-    }
-    // For LCO: append agreed time
-    if (es === 'late' && r.lateTime) {
-      label += ` ${r.lateTime}`;
-    }
+    if (r.status === 'extended' && r.extensionNights) label += ` +${r.extensionNights}n`;
+    if (es === 'late' && r.lateTime)                  label += ` ${r.lateTime}`;
     return `${r.roomStr.padEnd(5)} ${label}`;
   });
 
-  const dueCount  = sorted.filter(r => effectiveStatus(r) === 'due').length;
-  const outCount  = sorted.filter(r => r.status === 'out').length;
-  const extCount  = sorted.filter(r => r.status === 'extended').length;
-  const lcoCount  = sorted.filter(r => effectiveStatus(r) === 'late').length;
-  const naCount   = sorted.filter(r => r.status === 'na').length;
-
+  const sc = depCounts();
   const summary = [
-    outCount  ? `✅ ${outCount} CO`       : '',
-    extCount  ? `↪ ${extCount} EXT`      : '',
-    lcoCount  ? `🕐 ${lcoCount} LCO`     : '',
-    naCount   ? `📵 ${naCount} NA`        : '',
-    dueCount  ? `⏳ ${dueCount} still due` : '',
+    sc.out      ? `✅ ${sc.out} CO`         : '',
+    sc.extended ? `↪ ${sc.extended} EXT`   : '',
+    sc.late     ? `🕐 ${sc.late} LCO`      : '',
+    sc.na       ? `📵 ${sc.na} NA`          : '',
+    sc.due      ? `⏳ ${sc.due} still due`  : '',
   ].filter(Boolean).join('  ·  ');
 
-  const text = `🏨 *Room Status — ${time}*\n${summary}\n\n${lines.join('\n')}`;
-
+  const text = `🏨 *HK Status — ${time}*\n${summary}\n\n${lines.join('\n')}`;
   copyToClipboard(text, null, '');
   hkStampCopy();
   showToast(`HK update copied (${sorted.length} rooms) ✓`, 'ok');
@@ -1669,6 +1646,7 @@ function clearDep() {
   document.getElementById('depInput').value              = '';
   document.getElementById('depDateLabel').textContent    = "Today's departures · Load Opera report to begin";
   const b = document.getElementById('badge-departures'); if (b) b.textContent = '0';
+  const hkBar = document.getElementById('depHKBar'); if (hkBar) hkBar.style.display = 'none';
   ['depPrintBtn','depExportBtn','depViewToggle','depReloadBtn'].forEach(id => {
     const el = document.getElementById(id); if (el) el.style.display = 'none';
   });
