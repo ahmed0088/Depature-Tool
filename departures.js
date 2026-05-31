@@ -1547,12 +1547,70 @@ function depCopyExtList(mode) {
   const time = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
   let text = '';
   if (mode === 'summary') {
-    text = `↪ *Extensions — ${time}*\nRooms: ${rooms.map(r => r.roomStr + ' +' + (r.extensionNights||1) + 'N').join(', ')}`;
+    // Simple: room + nights only — for HK WhatsApp
+    const lines = rooms.map(r => `↪ ${r.roomStr} +${r.extensionNights||1}n`);
+    text = `↪ *Extensions — ${time}*\n${lines.join('\n')}`;
   } else {
     text = `↪ *Extensions — ${time}*\n${rooms.map(_extLine).join('\n')}`;
   }
   copyToClipboard(text, null, '');
   showToast('Extensions copied ✓', 'ok');
+}
+
+// ── HK Full Status Update ──────────────────────────────────
+// Generates a clean room-by-room update for housekeeping:
+// each room on one line with room number + 1-word status.
+// Extended rooms show "+Xn" so HK knows not to reassign.
+function depCopyHKUpdate() {
+  if (!depRooms.length) { showToast('No rooms loaded', 'info'); return; }
+
+  const time = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+
+  // Status label map → single word for HK
+  const HK_LABEL = {
+    out:      '✅ CO',
+    extended: '↪ EXT',
+    late:     '🕐 LCO',
+    na:       '📵 NA',
+    due:      '⏳ DUE',
+  };
+
+  // Sort by room number
+  const sorted = [...depRooms].sort((a, b) => parseInt(a.room) - parseInt(b.room));
+
+  const lines = sorted.map(r => {
+    const es = effectiveStatus(r);
+    let label = HK_LABEL[es] || '⏳ DUE';
+    // For extensions: append nights so HK knows the new departure
+    if (r.status === 'extended' && r.extensionNights) {
+      label += ` +${r.extensionNights}n`;
+    }
+    // For LCO: append agreed time
+    if (es === 'late' && r.lateTime) {
+      label += ` ${r.lateTime}`;
+    }
+    return `${r.roomStr.padEnd(5)} ${label}`;
+  });
+
+  const dueCount  = sorted.filter(r => effectiveStatus(r) === 'due').length;
+  const outCount  = sorted.filter(r => r.status === 'out').length;
+  const extCount  = sorted.filter(r => r.status === 'extended').length;
+  const lcoCount  = sorted.filter(r => effectiveStatus(r) === 'late').length;
+  const naCount   = sorted.filter(r => r.status === 'na').length;
+
+  const summary = [
+    outCount  ? `✅ ${outCount} CO`       : '',
+    extCount  ? `↪ ${extCount} EXT`      : '',
+    lcoCount  ? `🕐 ${lcoCount} LCO`     : '',
+    naCount   ? `📵 ${naCount} NA`        : '',
+    dueCount  ? `⏳ ${dueCount} still due` : '',
+  ].filter(Boolean).join('  ·  ');
+
+  const text = `🏨 *Room Status — ${time}*\n${summary}\n\n${lines.join('\n')}`;
+
+  copyToClipboard(text, null, '');
+  hkStampCopy();
+  showToast(`HK update copied (${sorted.length} rooms) ✓`, 'ok');
 }
 
 function depFilter(f, el) {

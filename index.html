@@ -198,6 +198,16 @@
     </div>
     <!-- ── Quick Jump panel ── -->
     <div id="depJumpBar" class="dep-jump-bar" style="display:none;"></div>
+    <!-- ── HK Status Bar ── -->
+    <div id="depHKBar" class="dep-na-bar" style="background:linear-gradient(90deg,rgba(232,184,75,0.08),transparent);border-color:rgba(232,184,75,0.2);">
+      <div class="dep-na-bar-left">
+        <span class="dep-na-bar-icon">🏨</span>
+        <span class="dep-na-bar-text">Housekeeping update</span>
+      </div>
+      <div class="dep-na-bar-right">
+        <button class="dep-copy-main" style="color:var(--accent);border-color:var(--accent-border);background:var(--accent-bg);" onclick="depCopyHKUpdate()">📋 HK Status Update</button>
+      </div>
+    </div>
     <!-- ── NA Action Bar ── -->
     <div id="depNaBar" class="dep-na-bar" style="display:none;">
       <div class="dep-na-bar-left">
@@ -232,7 +242,7 @@
           <div class="dep-copy-menu" id="depCopyMenu-ext">
             <button onclick="depStartSelect('extended');depToggleCopyMenu('ext')">☑ Pick Rooms <span class="dcm-hint">tap to choose</span></button>
             <button onclick="depCopyExtList('all');depToggleCopyMenu('ext')">📋 Copy All <span class="dcm-hint">full details</span></button>
-            <button onclick="depCopyExtList('summary');depToggleCopyMenu('ext')">⚡ Copy Summary <span class="dcm-hint">room numbers only</span></button>
+            <button onclick="depCopyExtList('summary');depToggleCopyMenu('ext')">⚡ Copy Simple <span class="dcm-hint">room + nights only</span></button>
           </div>
         </div>
         <button class="dep-na-filter-btn" onclick="depFilter('extended', document.querySelector('[data-f=extended]'))">View All →</button>
@@ -258,6 +268,7 @@
             <button onclick="depStartSelect('out');depToggleCopyMenu('out')">☑ Pick Rooms <span class="dcm-hint">tap to choose</span></button>
             <button onclick="depCopyOutList('summary');depToggleCopyMenu('out')">📋 Copy All Rooms <span class="dcm-hint">all room numbers</span></button>
             <button onclick="depCopyOutList('all');depToggleCopyMenu('out')">📋 Copy Full List <span class="dcm-hint">every checkout today</span></button>
+            <button onclick="depCopyHKUpdate();depToggleCopyMenu('out')" style="border-top:1px solid var(--border);margin-top:4px;padding-top:8px;">🏨 Full HK Status Update <span class="dcm-hint">all rooms · one word each</span></button>
           </div>
         </div>
         <button class="dep-na-filter-btn" onclick="depFilter('out', document.querySelector('[data-f=out]'))">View All →</button>

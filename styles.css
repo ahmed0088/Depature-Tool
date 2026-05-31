@@ -1088,6 +1088,76 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
   .page-hd { flex-direction: column; align-items: flex-start; gap: 8px; }
   .page-hd-actions { flex-wrap: wrap; gap: 5px; }
   .tbl-wrap { overflow-x: auto; }
+
+  /* ── Prevent card hover-jump on touch ── */
+  .dep-card:hover {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+  .dep-card {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: pan-y;
+  }
+
+  /* ── Action buttons: 2-column on mobile ── */
+  .dc-actions.g4 { grid-template-columns: 1fr 1fr; }
+
+  /* ── Extension grid: 1 col on mobile ── */
+  .dc-ext-grid { grid-template-columns: 1fr !important; }
+
+  /* ── KPI strip: 4-up on mobile ── */
+  .dep-kpi-strip { grid-template-columns: repeat(4,1fr); gap: 6px; }
+  .dep-kpi { padding: 8px 6px; }
+  .dep-kpi-val { font-size: 1.25rem; }
+  .dep-kpi-label { font-size: 0.5rem; }
+
+  /* ── Filter chips: scrollable row ── */
+  .dep-filters {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 5px !important;
+    padding-bottom: 4px;
+  }
+  .dep-filters::-webkit-scrollbar { display: none; }
+  .dep-filter-chip { flex-shrink: 0; white-space: nowrap; }
+
+  /* ── Selection tray: full width at bottom ── */
+  #depSelTray {
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    transform: translateY(100%) !important;
+    border-radius: 14px 14px 0 0 !important;
+    padding: 14px 16px 28px !important;
+  }
+  #depSelTray.visible { transform: translateY(0) !important; }
+
+  /* ── Dep card head: prevent badges overflow ── */
+  .dc-head { flex-wrap: nowrap; min-width: 0; }
+  .dc-badges { flex-wrap: wrap; max-width: 60vw; }
+  .dc-sbadge { font-size: 0.55rem; padding: 2px 6px; }
+  .dc-room { font-size: 1.3rem; }
+
+  /* ── Toolbar row: wrap on mobile ── */
+  .dep-toolbar { flex-wrap: wrap; gap: 6px; }
+  .dep-sort-bar { flex-wrap: wrap; gap: 4px; }
+
+  /* ── NA and action bars: stack vertically ── */
+  .dep-na-bar, .dep-ext-bar, .dep-out-bar {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    padding: 8px 12px !important;
+  }
+  .dep-na-bar .btn, .dep-ext-bar .btn, .dep-out-bar .btn {
+    font-size: 0.65rem !important;
+    padding: 5px 10px !important;
+  }
+
+  /* ── HK reminder: full width ── */
+  .hk-reminder { flex-wrap: wrap; }
 }
 
 /* Misc */
