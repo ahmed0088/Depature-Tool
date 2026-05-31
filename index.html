@@ -40,33 +40,38 @@
 <div id="loginScreen" style="display:none;">
   <div class="login-bg">
     <div class="login-card">
+
       <div class="login-logo">🏨</div>
       <div class="login-title">Ibis Styles <span>Dubai</span></div>
-      <div class="login-sub">Front Desk Operations</div>
+      <div class="login-sub">Front Desk Operations · 2026</div>
+
+      <div class="login-divider"><span>Sign in to continue</span></div>
 
       <div class="login-field">
-        <label class="login-label">Email</label>
-        <input id="loginEmail" type="email" class="login-input" placeholder="your@email.com"
+        <label class="login-label">Email Address</label>
+        <input id="loginEmail" type="email" class="login-input"
+          placeholder="you@ibis-dubai.com"
           onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()"/>
       </div>
+
       <div class="login-field">
         <label class="login-label">Password</label>
-        <input id="loginPass" type="password" class="login-input" placeholder="••••••••"
+        <input id="loginPass" type="password" class="login-input"
+          placeholder="••••••••"
           onkeydown="if(event.key==='Enter')authLogin()"/>
       </div>
 
       <div id="loginError" class="login-error" style="display:none;"></div>
 
-      <button id="loginBtn" class="login-btn" onclick="authLogin()">Sign In</button>
+      <button id="loginBtn" class="login-btn" onclick="authLogin()">Sign In →</button>
 
-      <div class="login-footer">Ibis Styles Dubai · 2026 · Secured by Firebase Auth</div>
+      <div class="login-footer">Secured by Firebase Authentication</div>
+
     </div>
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════
-     APP WRAPPER (hidden until logged in)
-══════════════════════════════════════════════════════ -->
+<!-- App wrapper — hidden until authenticated -->
 <div id="appWrapper" style="display:none;">
 
 <!-- ── TOP BAR ── -->
@@ -77,9 +82,7 @@
   </div>
   <div class="topbar-center" id="topbarDate">Loading…</div>
   <div class="topbar-right">
-    <!-- Auth user pill -->
     <div id="authUserPill" class="auth-user-pill" style="display:none;"></div>
-    <!-- Admin panel button (owners/managers only) -->
     <div class="icon-round" id="adminPanelBtn" onclick="openAdminPanel()" title="Team Management" style="display:none;">👥</div>
     <!-- Theme Switcher -->
     <div class="theme-switcher">
@@ -922,7 +925,6 @@
 <script src="checklist.js"></script>
 <script src="reports.js"></script>
 <script src="tourism-tax.js"></script>
-<script src="auth.js"></script>
 
 <script>
 // ════════════════════════════════════════════════
@@ -1413,6 +1415,15 @@ document.querySelectorAll('.modal-bg').forEach(bg => {
 });
 
 async function appInit() {
+  // 1 — Init Firebase
+  try {
+    const app = firebase.initializeApp(FIREBASE_CONFIG);
+    dbInit(app);
+  } catch(e) {
+    console.warn('Firebase init failed — running offline:', e);
+    updateConnectionUI(false);
+  }
+
   // Wait a moment for DB to initialize
   await new Promise(r => setTimeout(r, 500));
 
@@ -1565,27 +1576,7 @@ async function appInit() {
   showToast('App ready — connected to Firebase', 'ok');
 }
 
-// Start the app
-// ── Boot: Firebase init → auth → app ─────────────────────
-(function boot() {
-  try {
-    firebase.initializeApp(FIREBASE_CONFIG);
-    dbInit();
-  } catch(e) {
-    console.warn('Firebase init failed — running offline:', e);
-    updateConnectionUI(false);
-  }
-  // Show login screen immediately, authInit handles sign-in → appInit
-  showLoginScreen();
-  authInit();
-})();
-
-// authInit calls appInit after successful sign-in
-const _origAuthHide = hideLoginScreen;
-window.hideLoginScreen = function() {
-  _origAuthHide();
-  appInit();
-};
+// appInit is called by hideLoginScreen after auth succeeds
 </script>
 <!-- RELOAD MODAL -->
 <div class="modal-bg" id="depReloadModal">
@@ -1731,12 +1722,12 @@ window.hideLoginScreen = function() {
 <div class="mob-more-overlay" id="mobMoreOverlay" onclick="toggleMobMore()" style="display:none;"></div>
 <div class="mob-more-drawer" id="mobMoreDrawer" style="display:none;">
   <div class="mob-more-grid">
-    <button class="mob-more-item" data-panel="purpose"      onclick="showPanel('purpose');toggleMobMore()"><span>📋</span>Purpose</button>
-    <button class="mob-more-item" data-panel="nationality"  onclick="showPanel('nationality');toggleMobMore()"><span>🌍</span>Nationality</button>
-    <button class="mob-more-item" data-panel="rent"         onclick="showPanel('rent');toggleMobMore()"><span>🛏️</span>Rented Rooms</button>
-    <button class="mob-more-item" data-panel="audit"        onclick="showPanel('audit');toggleMobMore()"><span>🌙</span>PM Rooms</button>
-    <button class="mob-more-item" data-panel="immig"        onclick="showPanel('immig');toggleMobMore()"><span>🛂</span>Immigration</button>
-    <button class="mob-more-item" data-panel="tourism"      onclick="showPanel('tourism');toggleMobMore()"><span>🏛️</span>Tourism Tax</button>
+    <button class="mob-more-item" data-panel="purpose"     onclick="showPanel('purpose');toggleMobMore()"><span>📋</span>Purpose</button>
+    <button class="mob-more-item" data-panel="nationality" onclick="showPanel('nationality');toggleMobMore()"><span>🌍</span>Nationality</button>
+    <button class="mob-more-item" data-panel="rent"        onclick="showPanel('rent');toggleMobMore()"><span>🛏️</span>Rented Rooms</button>
+    <button class="mob-more-item" data-panel="audit"       onclick="showPanel('audit');toggleMobMore()"><span>🌙</span>PM Rooms</button>
+    <button class="mob-more-item" data-panel="immig"       onclick="showPanel('immig');toggleMobMore()"><span>🛂</span>Immigration</button>
+    <button class="mob-more-item" data-panel="tourism"     onclick="showPanel('tourism');toggleMobMore()"><span>🏛️</span>Tourism Tax</button>
   </div>
 </div>
 
@@ -1755,37 +1746,24 @@ window.hideLoginScreen = function() {
       <button class="kb-close" onclick="closeAdminPanel()">✕</button>
     </div>
 
-    <!-- Tabs -->
     <div class="admin-tabs">
       <button class="admin-tab-btn active" data-tab="users" onclick="adminTab('users')">👥 Users</button>
       <button class="admin-tab-btn" data-tab="activity" onclick="adminTab('activity');adminLoadActivity()">📋 Activity Log</button>
     </div>
 
-    <!-- Users tab -->
     <div id="adminTab-users" class="admin-tab-pane">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <span style="font-size:0.72rem;color:var(--text3);font-family:var(--mono);">All accounts for this property</span>
         <button class="btn gold sm" onclick="openCreateUser()">+ New Account</button>
       </div>
 
-      <!-- Create user form -->
       <div id="adminCreateForm" style="display:none;" class="admin-form-card">
         <div class="admin-form-title">➕ Create New Account</div>
         <div class="admin-form-grid">
-          <div class="login-field">
-            <label class="login-label">Full Name</label>
-            <input id="newUserName" class="login-input" placeholder="Ahmed Al Mansouri" type="text"/>
-          </div>
-          <div class="login-field">
-            <label class="login-label">Email</label>
-            <input id="newUserEmail" class="login-input" placeholder="ahmed@ibis-dubai.com" type="email"/>
-          </div>
-          <div class="login-field">
-            <label class="login-label">Password</label>
-            <input id="newUserPass" class="login-input" placeholder="Min 6 characters" type="password"/>
-          </div>
-          <div class="login-field">
-            <label class="login-label">Role</label>
+          <div class="login-field"><label class="login-label">Full Name</label><input id="newUserName" class="login-input" placeholder="Ahmed Al Mansouri" type="text"/></div>
+          <div class="login-field"><label class="login-label">Email</label><input id="newUserEmail" class="login-input" placeholder="ahmed@ibis-dubai.com" type="email"/></div>
+          <div class="login-field"><label class="login-label">Password</label><input id="newUserPass" class="login-input" placeholder="Min 6 characters" type="password"/></div>
+          <div class="login-field"><label class="login-label">Role</label>
             <select id="newUserRole" class="login-input">
               <option value="agent">🛎️ Agent — Ops only</option>
               <option value="supervisor">⭐ Supervisor — All modules</option>
@@ -1802,17 +1780,12 @@ window.hideLoginScreen = function() {
         </div>
       </div>
 
-      <!-- Edit user form -->
       <div id="adminEditForm" style="display:none;" class="admin-form-card">
         <input type="hidden" id="editUserId"/>
         <div class="admin-form-title">✏️ Edit Account</div>
         <div class="admin-form-grid">
-          <div class="login-field">
-            <label class="login-label">Full Name</label>
-            <input id="editUserName" class="login-input" type="text"/>
-          </div>
-          <div class="login-field">
-            <label class="login-label">Role</label>
+          <div class="login-field"><label class="login-label">Full Name</label><input id="editUserName" class="login-input" type="text"/></div>
+          <div class="login-field"><label class="login-label">Role</label>
             <select id="editUserRole" class="login-input">
               <option value="agent">🛎️ Agent</option>
               <option value="supervisor">⭐ Supervisor</option>
@@ -1821,10 +1794,7 @@ window.hideLoginScreen = function() {
               <option value="readonly">👁️ Read Only</option>
             </select>
           </div>
-          <div class="login-field">
-            <label class="login-label">New Password <span style="color:var(--text3);font-size:0.65rem;">(leave blank to keep)</span></label>
-            <input id="editUserPass" class="login-input" type="password" placeholder="Leave blank to keep current"/>
-          </div>
+          <div class="login-field"><label class="login-label">New Password <span style="color:var(--text3);font-size:0.65rem;">(leave blank to keep)</span></label><input id="editUserPass" class="login-input" type="password" placeholder="Leave blank to keep current"/></div>
         </div>
         <div id="adminEditErr" class="login-error" style="display:none;"></div>
         <div style="display:flex;gap:8px;margin-top:10px;">
@@ -1833,33 +1803,20 @@ window.hideLoginScreen = function() {
         </div>
       </div>
 
-      <!-- User table -->
       <div class="admin-table-wrap">
         <table class="admin-table">
-          <thead>
-            <tr>
-              <th>Name / Email</th>
-              <th>Role</th>
-              <th>Status</th>
-              <th>Last Login</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="adminUserTable">
-            <tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text3);">Loading…</td></tr>
-          </tbody>
+          <thead><tr><th>Name / Email</th><th>Role</th><th>Status</th><th>Last Login</th><th>Actions</th></tr></thead>
+          <tbody id="adminUserTable"><tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text3);">Loading…</td></tr></tbody>
         </table>
       </div>
     </div>
 
-    <!-- Activity log tab -->
     <div id="adminTab-activity" class="admin-tab-pane" style="display:none;">
       <div id="adminActivityLog" style="max-height:420px;overflow-y:auto;">
         <div style="text-align:center;padding:24px;color:var(--text3);">Loading…</div>
       </div>
     </div>
 
-    <!-- Role legend -->
     <div class="admin-role-legend">
       <div class="admin-legend-title">Role Permissions</div>
       <div class="admin-legend-grid">
@@ -1867,11 +1824,33 @@ window.hideLoginScreen = function() {
         <div class="admin-legend-row"><span style="color:#8b7cf8;">🏅 Manager</span><span>All modules · manage agents · export</span></div>
         <div class="admin-legend-row"><span style="color:#5ab4e8;">⭐ Supervisor</span><span>All modules · no user management</span></div>
         <div class="admin-legend-row"><span style="color:#3ecf8e;">🛎️ Agent</span><span>Departures · Arrivals · Shifts · Checklist only</span></div>
-        <div class="admin-legend-row"><span style="color:#888;">👁️ Read Only</span><span>View departures and arrivals — no actions</span></div>
+        <div class="admin-legend-row"><span style="color:#888;">👁️ Read Only</span><span>View only — no actions</span></div>
       </div>
     </div>
   </div>
 </div>
+
+<script src="auth.js"></script>
+<script>
+// ── Auth-gated boot ───────────────────────────────────────
+(function boot() {
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    dbInit();
+  } catch(e) {
+    console.warn('Firebase init failed:', e);
+    updateConnectionUI(false);
+  }
+  showLoginScreen();
+  authInit();
+})();
+
+const _origHide = hideLoginScreen;
+window.hideLoginScreen = function() {
+  _origHide();
+  appInit();
+};
+</script>
 
 </body>
 </html>
