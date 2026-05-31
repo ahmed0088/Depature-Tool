@@ -386,6 +386,12 @@ function depRender() {
 
   // ── Sort ────────────────────────────────────────────────
   const STATUS_ORDER = { late: 0, due: 1, na: 2, extended: 3, out: 4 };
+
+  // When viewing the checked-out list, always show newest checkout first
+  // (unless user has explicitly chosen a different sort key)
+  if (depFilter_ === 'out' && depSort.key === 'smart') {
+    filtered.sort((a, b) => _coTimeSort(b, a)); // newest first
+  } else
   filtered.sort((a, b) => {
     const es_a = effectiveStatus(a), es_b = effectiveStatus(b);
     const d = depSort.dir;
@@ -759,17 +765,17 @@ function depCardHTML(r) {
     </div>${intentRow}`;
   }
 
-  // Selection mode checkbox
+  // Selection mode tick overlay — no label/input, just a div
   const isSelectable = _selGroup && r.status === _selGroup;
   const isSelected   = isSelectable && _selRooms.has(r.roomStr);
-  const selCb = isSelectable
-    ? `<label class="dep-sel-cb-wrap ${isSelected ? 'checked' : ''}" onclick="event.stopPropagation();depToggleSelect('${r.roomStr}')">
-         <input type="checkbox" class="dep-sel-cb" ${isSelected ? 'checked' : ''}/>
-       </label>`
+  const selTick = isSelectable
+    ? `<div class="dep-sel-tick${isSelected ? ' checked' : ''}"></div>`
     : '';
 
-  return `<div class="dep-card ${sClass}${isSelected ? ' dep-sel-active' : ''}" ${isSelectable ? `onclick="depToggleSelect('${r.roomStr}')"` : ''}>
-    ${selCb}
+  return `<div class="dep-card ${sClass}${isSelected ? ' dep-sel-active' : ''}"
+    data-room="${r.roomStr}"
+    ${isSelectable ? `onclick="depToggleSelect('${r.roomStr}')"` : ''}>
+    ${selTick}
     ${vipHTML}
     <div class="dc-band"></div>
     <div class="dc-head">
@@ -1094,66 +1100,141 @@ function depToggleCopyMenu(group) {
   }
 }
 
-// ── Selection mode ─────────────────────────────────────────
-let _selGroup   = null;   // 'na' | 'out' | 'extended'
-let _selRooms   = new Set(); // selected roomStr keys
+// ══════════════════════════════════════════════════════════════
+//  SELECTION MODE  —  v2
+//  · Card click = toggle (no double-fire bug)
+//  · Smart select: auto-picks rooms by time window
+//  · Multi-type: can select out + na in one go
+//  · Floating tray stays visible while scrolling
+// ══════════════════════════════════════════════════════════════
 
+let _selGroup = null;   // 'na' | 'out' | 'extended' | 'mixed'
+let _selRooms = new Set();
+
+// ── Enter selection mode ──────────────────────────────────
 function depStartSelect(group) {
   _selGroup = group;
   _selRooms = new Set();
-  // switch filter to that group
-  const filterKey = group;
-  const chip = document.querySelector(`[data-f="${filterKey}"]`);
-  if (chip) depFilter(filterKey, chip);
+  const chip = document.querySelector(`[data-f="${group}"]`);
+  if (chip) depFilter(group, chip);
   depRender();
-  const bar = document.getElementById('depSelectBar');
-  if (bar) bar.style.display = 'flex';
-  _updateSelLabel();
+  _showSelTray();
+  _updateSelTray();
 }
 
-function depCancelSelect() {
-  _selGroup = null;
+// ── Smart select: auto-pick by time window ────────────────
+function depSmartSelect(group, mins) {
+  _selGroup = group;
   _selRooms = new Set();
+
+  const now    = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const cutoff = nowMin - mins;
+
+  if (group === 'out') {
+    depRooms.filter(r => {
+      if (r.status !== 'out') return false;
+      if (!r.checkoutAt) return false;
+      const t = _parseLcoTime(r.checkoutAt);
+      if (t === null) return false;
+      return cutoff < 0 ? (t >= cutoff + 1440 || t >= 0) : t >= cutoff;
+    }).forEach(r => _selRooms.add(r.roomStr));
+  } else if (group === 'na') {
+    depRooms.filter(r => {
+      if (r.status !== 'na') return false;
+      if (!r.naTime) return false;
+      const t = _parseLcoTime(r.naTime);
+      if (t === null) return false;
+      return cutoff < 0 ? (t >= cutoff + 1440 || t >= 0) : t >= cutoff;
+    }).forEach(r => _selRooms.add(r.roomStr));
+  }
+
+  const chip = document.querySelector(`[data-f="${group}"]`);
+  if (chip) depFilter(group, chip);
   depRender();
-  const bar = document.getElementById('depSelectBar');
-  if (bar) bar.style.display = 'none';
+  _showSelTray();
+  _updateSelTray();
+
+  if (_selRooms.size === 0) {
+    const label = mins < 60 ? `${mins} min` : `${mins / 60}h`;
+    showToast(`No rooms in the last ${label} — showing all`, 'info');
+    depRooms.filter(r => r.status === group).forEach(r => _selRooms.add(r.roomStr));
+    depRender();
+    _updateSelTray();
+  }
 }
 
+// ── Toggle one card ───────────────────────────────────────
 function depToggleSelect(roomStr) {
   if (_selRooms.has(roomStr)) _selRooms.delete(roomStr);
   else _selRooms.add(roomStr);
-  _updateSelLabel();
-  // just update checkbox + card highlight without full re-render
-  const cards = document.querySelectorAll('.dep-card');
-  cards.forEach(card => {
-    const rEl = card.querySelector('.dc-room');
-    if (!rEl) return;
-    const rs = rEl.textContent.trim();
-    const cb = card.querySelector('.dep-sel-cb');
-    if (cb) cb.checked = _selRooms.has(rs);
-    card.classList.toggle('dep-sel-active', _selRooms.has(rs));
+  // Lightweight DOM update — no full re-render needed
+  document.querySelectorAll('.dep-card').forEach(card => {
+    const rs = card.dataset.room;
+    if (rs !== roomStr) return;
+    const selected = _selRooms.has(rs);
+    card.classList.toggle('dep-sel-active', selected);
+    const tick = card.querySelector('.dep-sel-tick');
+    if (tick) tick.classList.toggle('checked', selected);
   });
+  _updateSelTray();
 }
 
+// ── Select all / none ─────────────────────────────────────
 function depSelectAll() {
-  const rooms = depRooms.filter(r => r.status === _selGroup);
-  rooms.forEach(r => _selRooms.add(r.roomStr));
+  depRooms.filter(r => r.status === _selGroup).forEach(r => _selRooms.add(r.roomStr));
   depRender();
-  _updateSelLabel();
+  _updateSelTray();
 }
 
 function depSelectNone() {
   _selRooms = new Set();
   depRender();
-  _updateSelLabel();
+  _updateSelTray();
 }
 
-function _updateSelLabel() {
-  const lbl   = document.getElementById('depSelectLabel');
-  const cnt   = document.getElementById('depSelCount');
+// ── Cancel ────────────────────────────────────────────────
+function depCancelSelect() {
+  _selGroup = null;
+  _selRooms = new Set();
+  depRender();
+  _hideSelTray();
+}
+
+// ── Floating tray ─────────────────────────────────────────
+function _showSelTray() {
+  const tray = document.getElementById('depSelTray');
+  if (tray) tray.classList.add('visible');
+}
+function _hideSelTray() {
+  const tray = document.getElementById('depSelTray');
+  if (tray) tray.classList.remove('visible');
+}
+
+function _updateSelTray() {
   const total = depRooms.filter(r => r.status === _selGroup).length;
-  if (lbl) lbl.textContent = `Select rooms to copy — ${_selRooms.size} of ${total} selected`;
-  if (cnt) cnt.textContent = `(${_selRooms.size})`;
+  const n     = _selRooms.size;
+
+  const lbl = document.getElementById('selTrayLabel');
+  if (lbl) {
+    lbl.textContent = n === 0
+      ? `Tap rooms to select · ${total} available`
+      : `${n} room${n > 1 ? 's' : ''} selected`;
+  }
+
+  const copyBtn = document.getElementById('selTrayCopy');
+  if (copyBtn) {
+    copyBtn.textContent = n ? `📋 Copy ${n} Room${n > 1 ? 's' : ''}` : '📋 Copy';
+    copyBtn.disabled = n === 0;
+    copyBtn.style.opacity = n ? '1' : '0.4';
+  }
+
+  // Flash the count pill
+  const pill = document.getElementById('selTrayCount');
+  if (pill) {
+    pill.textContent = n || '';
+    pill.style.display = n ? 'flex' : 'none';
+  }
 }
 
 function depCopySelected() {
@@ -1161,16 +1242,21 @@ function depCopySelected() {
   const rooms = depRooms.filter(r => _selRooms.has(r.roomStr));
   const time  = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
   let text = '';
+
   if (_selGroup === 'na') {
     const lines = rooms.map(r => `📵 ${r.roomStr} · ${r.naTime || time}`);
     text = `📵 *NA Rooms — ${time}*\n${lines.join('\n')}\n\n*Please do* 🙏`;
+
   } else if (_selGroup === 'out') {
-    const lines = rooms.map(r => `✓ ${r.roomStr} · ${r.checkoutAt || time}`);
+    const sorted = [...rooms].sort((a, b) => _coTimeSort(b, a));
+    const lines  = sorted.map(r => `✓ ${r.roomStr} · ${r.checkoutAt || time}`);
     text = `✅ *Checked Out — ${time}*\n${lines.join('\n')}\n\n*Please do* 🙏`;
+
   } else if (_selGroup === 'extended') {
     const lines = rooms.map(r => _extLine(r));
     text = `↪ *Extensions — ${time}*\n${lines.join('\n')}`;
   }
+
   copyToClipboard(text, null, '');
   showToast(`${_selRooms.size} room${_selRooms.size > 1 ? 's' : ''} copied ✓`, 'ok');
   depCancelSelect();
@@ -1201,11 +1287,53 @@ function depCopyOutList(mode) {
   if (mode === 'summary') {
     text = `✅ *Checked Out — ${time}*\nRooms: ${rooms.map(r => r.roomStr).join(', ')}\n*Please do* 🙏`;
   } else {
-    const lines = rooms.map(r => `✓ ${r.roomStr} · ${r.checkoutAt || time}`);
+    const sorted = [...rooms].sort((a, b) => _coTimeSort(b, a)); // newest first
+    const lines = sorted.map(r => `✓ ${r.roomStr} · ${r.checkoutAt || time}`);
     text = `✅ *Checked Out Rooms — ${time}*\n${lines.join('\n')}\n\n*Please do* 🙏`;
   }
   copyToClipboard(text, null, '');
   showToast('Checkout list copied ✓', 'ok');
+}
+
+// ── Recent checkout copy (for HK — last N minutes only) ───
+function depCopyOutRecent(mins) {
+  const now    = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const cutoff = nowMin - mins;
+
+  const rooms = depRooms.filter(r => {
+    if (r.status !== 'out') return false;
+    if (!r.checkoutAt) return false; // no timestamp — skip
+    const t = _parseLcoTime(r.checkoutAt);
+    if (t === null) return false;
+    // handle midnight wrap: if cutoff goes negative, anything after 00:00 also qualifies
+    return cutoff < 0 ? (t >= cutoff + 1440 || t >= 0) : t >= cutoff;
+  });
+
+  const time = now.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+
+  if (!rooms.length) {
+    showToast(`No checkouts in the last ${mins} min`, 'info');
+    return;
+  }
+
+  const sorted = [...rooms].sort((a, b) => _coTimeSort(b, a)); // newest first
+  const lines  = sorted.map(r => `✓ ${r.roomStr} · ${r.checkoutAt}`);
+  const label  = mins < 60 ? `last ${mins} min` : `last ${mins / 60}h`;
+  const text   = `✅ *Checked Out (${label}) — ${time}*\n${lines.join('\n')}\n\n*Please do* 🙏`;
+
+  copyToClipboard(text, null, '');
+  showToast(`${rooms.length} room${rooms.length > 1 ? 's' : ''} copied (${label}) ✓`, 'ok');
+}
+
+// ── Sort helper: compare two rooms by checkoutAt time (asc) ─
+function _coTimeSort(a, b) {
+  const ta = _parseLcoTime(a.checkoutAt);
+  const tb = _parseLcoTime(b.checkoutAt);
+  if (ta === null && tb === null) return 0;
+  if (ta === null) return 1;
+  if (tb === null) return -1;
+  return ta - tb;
 }
 
 // ── Ext copy ───────────────────────────────────────────────

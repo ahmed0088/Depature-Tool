@@ -206,9 +206,11 @@
           <button class="dep-copy-main" onclick="depCopyNAList('all')">📋 Copy for HK</button>
           <button class="dep-copy-arrow" onclick="depToggleCopyMenu('na')">▾</button>
           <div class="dep-copy-menu" id="depCopyMenu-na">
-            <button onclick="depCopyNAList('all');depToggleCopyMenu('na')">📋 Copy All <span class="dcm-hint">full details</span></button>
+            <button onclick="depSmartSelect('na',30);depToggleCopyMenu('na')">⚡ Smart 30 min <span class="dcm-hint">auto-select recent NAs</span></button>
+            <button onclick="depSmartSelect('na',60);depToggleCopyMenu('na')">⚡ Smart 1 hour <span class="dcm-hint">auto-select recent NAs</span></button>
+            <button onclick="depStartSelect('na');depToggleCopyMenu('na')">☑ Pick Rooms <span class="dcm-hint">tap to choose</span></button>
+            <button onclick="depCopyNAList('all');depToggleCopyMenu('na')">📋 Copy All <span class="dcm-hint">all NA rooms</span></button>
             <button onclick="depCopyNAList('summary');depToggleCopyMenu('na')">⚡ Copy Summary <span class="dcm-hint">room numbers only</span></button>
-            <button onclick="depStartSelect('na');depToggleCopyMenu('na')">☑ Select Rooms <span class="dcm-hint">pick which to copy</span></button>
           </div>
         </div>
         <button class="dep-na-filter-btn" onclick="depFilter('na', document.querySelector('[data-f=na]'))">View All →</button>
@@ -225,9 +227,9 @@
           <button class="dep-copy-main" style="color:var(--sky);border-color:rgba(90,180,232,0.4);background:rgba(90,180,232,0.12);" onclick="depCopyExtList('all')">📋 Copy for HK</button>
           <button class="dep-copy-arrow" style="color:var(--sky);border-color:rgba(90,180,232,0.4);background:rgba(90,180,232,0.12);" onclick="depToggleCopyMenu('ext')">▾</button>
           <div class="dep-copy-menu" id="depCopyMenu-ext">
+            <button onclick="depStartSelect('extended');depToggleCopyMenu('ext')">☑ Pick Rooms <span class="dcm-hint">tap to choose</span></button>
             <button onclick="depCopyExtList('all');depToggleCopyMenu('ext')">📋 Copy All <span class="dcm-hint">full details</span></button>
             <button onclick="depCopyExtList('summary');depToggleCopyMenu('ext')">⚡ Copy Summary <span class="dcm-hint">room numbers only</span></button>
-            <button onclick="depStartSelect('extended');depToggleCopyMenu('ext')">☑ Select Rooms <span class="dcm-hint">pick which to copy</span></button>
           </div>
         </div>
         <button class="dep-na-filter-btn" onclick="depFilter('extended', document.querySelector('[data-f=extended]'))">View All →</button>
@@ -244,22 +246,27 @@
           <button class="dep-copy-main" style="color:var(--mint);border-color:rgba(62,207,142,0.4);background:rgba(62,207,142,0.12);" onclick="depCopyOutList('all')">📋 Copy for HK</button>
           <button class="dep-copy-arrow" style="color:var(--mint);border-color:rgba(62,207,142,0.4);background:rgba(62,207,142,0.12);" onclick="depToggleCopyMenu('out')">▾</button>
           <div class="dep-copy-menu" id="depCopyMenu-out">
-            <button onclick="depCopyOutList('all');depToggleCopyMenu('out')">📋 Copy All <span class="dcm-hint">full details</span></button>
-            <button onclick="depCopyOutList('summary');depToggleCopyMenu('out')">⚡ Copy Summary <span class="dcm-hint">room numbers only</span></button>
-            <button onclick="depStartSelect('out');depToggleCopyMenu('out')">☑ Select Rooms <span class="dcm-hint">pick which to copy</span></button>
+            <button onclick="depSmartSelect('out',30);depToggleCopyMenu('out')">⚡ Smart 30 min <span class="dcm-hint">auto-select recent COs</span></button>
+            <button onclick="depSmartSelect('out',60);depToggleCopyMenu('out')">⚡ Smart 1 hour <span class="dcm-hint">auto-select recent COs</span></button>
+            <button onclick="depStartSelect('out');depToggleCopyMenu('out')">☑ Pick Rooms <span class="dcm-hint">tap to choose</span></button>
+            <button onclick="depCopyOutList('summary');depToggleCopyMenu('out')">📋 Copy All Rooms <span class="dcm-hint">all room numbers</span></button>
+            <button onclick="depCopyOutList('all');depToggleCopyMenu('out')">📋 Copy Full List <span class="dcm-hint">every checkout today</span></button>
           </div>
         </div>
         <button class="dep-na-filter-btn" onclick="depFilter('out', document.querySelector('[data-f=out]'))">View All →</button>
       </div>
     </div>
-    <!-- ── Select mode toolbar (appears when selection active) ── -->
-    <div id="depSelectBar" class="dep-select-bar" style="display:none;">
-      <span id="depSelectLabel" class="dep-select-lbl">Select rooms to copy</span>
-      <div style="display:flex;gap:6px;align-items:center;">
-        <button class="dep-sel-all-btn"  onclick="depSelectAll()">Select All</button>
-        <button class="dep-sel-none-btn" onclick="depSelectNone()">Clear</button>
-        <button class="dep-sel-copy-btn" id="depSelCopyBtn" onclick="depCopySelected()">📋 Copy Selected <span id="depSelCount">(0)</span></button>
-        <button class="dep-sel-cancel"   onclick="depCancelSelect()">✕ Cancel</button>
+    <!-- ── Select mode floating tray (fixed bottom, appears on selection) ── -->
+    <div id="depSelTray" class="dep-sel-tray">
+      <div class="dep-sel-tray-left">
+        <div class="dep-sel-tray-count" id="selTrayCount" style="display:none;"></div>
+        <span class="dep-sel-tray-label" id="selTrayLabel">Tap rooms to select</span>
+      </div>
+      <div class="dep-sel-tray-right">
+        <button class="dep-sel-tray-btn secondary" onclick="depSelectAll()">All</button>
+        <button class="dep-sel-tray-btn secondary" onclick="depSelectNone()">None</button>
+        <button class="dep-sel-tray-btn primary" id="selTrayCopy" onclick="depCopySelected()" disabled>📋 Copy</button>
+        <button class="dep-sel-tray-btn cancel"  onclick="depCancelSelect()">✕</button>
       </div>
     </div>
     <div class="dep-grid size-md" id="depGrid"></div>
