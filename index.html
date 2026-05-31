@@ -11,6 +11,7 @@
 <!-- Firebase SDKs -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
 <!-- App styles -->
 <link rel="stylesheet" href="styles.css"/>
@@ -33,6 +34,41 @@
 </head>
 <body>
 
+<!-- ══════════════════════════════════════════════════════
+     LOGIN SCREEN
+══════════════════════════════════════════════════════ -->
+<div id="loginScreen" style="display:none;">
+  <div class="login-bg">
+    <div class="login-card">
+      <div class="login-logo">🏨</div>
+      <div class="login-title">Ibis Styles <span>Dubai</span></div>
+      <div class="login-sub">Front Desk Operations</div>
+
+      <div class="login-field">
+        <label class="login-label">Email</label>
+        <input id="loginEmail" type="email" class="login-input" placeholder="your@email.com"
+          onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()"/>
+      </div>
+      <div class="login-field">
+        <label class="login-label">Password</label>
+        <input id="loginPass" type="password" class="login-input" placeholder="••••••••"
+          onkeydown="if(event.key==='Enter')authLogin()"/>
+      </div>
+
+      <div id="loginError" class="login-error" style="display:none;"></div>
+
+      <button id="loginBtn" class="login-btn" onclick="authLogin()">Sign In</button>
+
+      <div class="login-footer">Ibis Styles Dubai · 2026 · Secured by Firebase Auth</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     APP WRAPPER (hidden until logged in)
+══════════════════════════════════════════════════════ -->
+<div id="appWrapper" style="display:none;">
+
 <!-- ── TOP BAR ── -->
 <header class="topbar">
   <div class="logo" onclick="editHotel()" title="Click to rename hotel">
@@ -41,6 +77,10 @@
   </div>
   <div class="topbar-center" id="topbarDate">Loading…</div>
   <div class="topbar-right">
+    <!-- Auth user pill -->
+    <div id="authUserPill" class="auth-user-pill" style="display:none;"></div>
+    <!-- Admin panel button (owners/managers only) -->
+    <div class="icon-round" id="adminPanelBtn" onclick="openAdminPanel()" title="Team Management" style="display:none;">👥</div>
     <!-- Theme Switcher -->
     <div class="theme-switcher">
       <button class="theme-btn active" data-t="night-ops" onclick="setTheme('night-ops',this)" title="Night Ops — dark gold">
@@ -73,43 +113,43 @@
 <!-- ── SIDEBAR ── -->
 <nav class="sidenav">
   <div class="nav-section-label">Operations</div>
-  <div class="nav-item active" onclick="showPanel('departures')" id="nav-departures">
+  <div class="nav-item active" onclick="showPanel('departures')" id="nav-departures" data-panel="departures">
     <div class="nav-icon">🚪</div>Departures
     <span class="nav-badge" id="badge-departures">0</span>
   </div>
-  <div class="nav-item" onclick="showPanel('arrivals')" id="nav-arrivals">
+  <div class="nav-item" onclick="showPanel('arrivals')" id="nav-arrivals" data-panel="arrivals">
     <div class="nav-icon">🛎️</div>Arrivals
     <span class="nav-badge" id="badge-arrivals">0</span>
   </div>
-  <div class="nav-item" onclick="showPanel('purpose')" id="nav-purpose">
+  <div class="nav-item" onclick="showPanel('purpose')" id="nav-purpose" data-panel="purpose">
     <div class="nav-icon">📋</div>Purpose of Stay
     <span class="nav-badge" id="badge-purpose">0</span>
   </div>
-  <div class="nav-item" onclick="showPanel('shifts')" id="nav-shifts">
+  <div class="nav-item" onclick="showPanel('shifts')" id="nav-shifts" data-panel="shifts">
     <div class="nav-icon">⏰</div>Shift Tasks
     <span class="nav-badge" id="badge-shifts">—</span>
   </div>
   <div class="nav-divider"></div>
   <div class="nav-section-label">Reports</div>
-  <div class="nav-item" onclick="showPanel('nationality')" id="nav-nationality">
+  <div class="nav-item" onclick="showPanel('nationality')" id="nav-nationality" data-panel="nationality">
     <div class="nav-icon">🌍</div>Nationality Report
   </div>
-  <div class="nav-item" onclick="showPanel('rent')" id="nav-rent">
+  <div class="nav-item" onclick="showPanel('rent')" id="nav-rent" data-panel="rent">
     <div class="nav-icon">🛏️</div>Rented Rooms & Beds
   </div>
-  <div class="nav-item" onclick="showPanel('audit')" id="nav-audit">
+  <div class="nav-item" onclick="showPanel('audit')" id="nav-audit" data-panel="audit">
     <div class="nav-icon">🌙</div>Night Audit · PM Rooms
     <span class="nav-badge" id="naTabCount">Compare</span>
   </div>
-  <div class="nav-item" onclick="showPanel('immig')" id="nav-immig">
+  <div class="nav-item" onclick="showPanel('immig')" id="nav-immig" data-panel="immig">
     <div class="nav-icon">🛂</div>Immigration Check
     <span class="nav-badge" id="immigTabCount">Upload</span>
   </div>
-  <div class="nav-item" onclick="showPanel('tourism')" id="nav-tourism">
+  <div class="nav-item" onclick="showPanel('tourism')" id="nav-tourism" data-panel="tourism">
     <div class="nav-icon">🏛️</div>Tourism Tax
     <span class="nav-badge" id="badge-tourism">0</span>
   </div>
-  <div class="nav-item" onclick="showPanel('checklist')" id="nav-checklist">
+  <div class="nav-item" onclick="showPanel('checklist')" id="nav-checklist" data-panel="checklist">
     <div class="nav-icon">✅</div>Night Checklist
     <span class="nav-badge" id="badge-checklist">17</span>
   </div>
@@ -882,6 +922,7 @@
 <script src="checklist.js"></script>
 <script src="reports.js"></script>
 <script src="tourism-tax.js"></script>
+<script src="auth.js"></script>
 
 <script>
 // ════════════════════════════════════════════════
@@ -1372,15 +1413,6 @@ document.querySelectorAll('.modal-bg').forEach(bg => {
 });
 
 async function appInit() {
-  // 1 — Init Firebase
-  try {
-    const app = firebase.initializeApp(FIREBASE_CONFIG);
-    dbInit(app);
-  } catch(e) {
-    console.warn('Firebase init failed — running offline:', e);
-    updateConnectionUI(false);
-  }
-
   // Wait a moment for DB to initialize
   await new Promise(r => setTimeout(r, 500));
 
@@ -1534,7 +1566,26 @@ async function appInit() {
 }
 
 // Start the app
-appInit();
+// ── Boot: Firebase init → auth → app ─────────────────────
+(function boot() {
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    dbInit();
+  } catch(e) {
+    console.warn('Firebase init failed — running offline:', e);
+    updateConnectionUI(false);
+  }
+  // Show login screen immediately, authInit handles sign-in → appInit
+  showLoginScreen();
+  authInit();
+})();
+
+// authInit calls appInit after successful sign-in
+const _origAuthHide = hideLoginScreen;
+window.hideLoginScreen = function() {
+  _origAuthHide();
+  appInit();
+};
 </script>
 <!-- RELOAD MODAL -->
 <div class="modal-bg" id="depReloadModal">
@@ -1680,12 +1731,145 @@ appInit();
 <div class="mob-more-overlay" id="mobMoreOverlay" onclick="toggleMobMore()" style="display:none;"></div>
 <div class="mob-more-drawer" id="mobMoreDrawer" style="display:none;">
   <div class="mob-more-grid">
-    <button class="mob-more-item" onclick="showPanel('purpose');toggleMobMore()"><span>📋</span>Purpose</button>
-    <button class="mob-more-item" onclick="showPanel('nationality');toggleMobMore()"><span>🌍</span>Nationality</button>
-    <button class="mob-more-item" onclick="showPanel('rent');toggleMobMore()"><span>🛏️</span>Rented Rooms</button>
-    <button class="mob-more-item" onclick="showPanel('audit');toggleMobMore()"><span>🌙</span>PM Rooms</button>
-    <button class="mob-more-item" onclick="showPanel('immig');toggleMobMore()"><span>🛂</span>Immigration</button>
-    <button class="mob-more-item" onclick="showPanel('tourism');toggleMobMore()"><span>🏛️</span>Tourism Tax</button>
+    <button class="mob-more-item" data-panel="purpose"      onclick="showPanel('purpose');toggleMobMore()"><span>📋</span>Purpose</button>
+    <button class="mob-more-item" data-panel="nationality"  onclick="showPanel('nationality');toggleMobMore()"><span>🌍</span>Nationality</button>
+    <button class="mob-more-item" data-panel="rent"         onclick="showPanel('rent');toggleMobMore()"><span>🛏️</span>Rented Rooms</button>
+    <button class="mob-more-item" data-panel="audit"        onclick="showPanel('audit');toggleMobMore()"><span>🌙</span>PM Rooms</button>
+    <button class="mob-more-item" data-panel="immig"        onclick="showPanel('immig');toggleMobMore()"><span>🛂</span>Immigration</button>
+    <button class="mob-more-item" data-panel="tourism"      onclick="showPanel('tourism');toggleMobMore()"><span>🏛️</span>Tourism Tax</button>
+  </div>
+</div>
+
+</div><!-- /appWrapper -->
+
+<!-- ══════════════════════════════════════════════════════
+     ADMIN PANEL MODAL
+══════════════════════════════════════════════════════ -->
+<div class="modal-bg" id="adminModal">
+  <div class="modal admin-modal">
+    <div class="admin-modal-head">
+      <div>
+        <div style="font-size:1.1rem;font-weight:700;color:var(--text);">👥 Team Management</div>
+        <div style="font-size:0.65rem;color:var(--text3);font-family:var(--mono);">Ibis Styles Dubai · User Accounts</div>
+      </div>
+      <button class="kb-close" onclick="closeAdminPanel()">✕</button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="admin-tabs">
+      <button class="admin-tab-btn active" data-tab="users" onclick="adminTab('users')">👥 Users</button>
+      <button class="admin-tab-btn" data-tab="activity" onclick="adminTab('activity');adminLoadActivity()">📋 Activity Log</button>
+    </div>
+
+    <!-- Users tab -->
+    <div id="adminTab-users" class="admin-tab-pane">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <span style="font-size:0.72rem;color:var(--text3);font-family:var(--mono);">All accounts for this property</span>
+        <button class="btn gold sm" onclick="openCreateUser()">+ New Account</button>
+      </div>
+
+      <!-- Create user form -->
+      <div id="adminCreateForm" style="display:none;" class="admin-form-card">
+        <div class="admin-form-title">➕ Create New Account</div>
+        <div class="admin-form-grid">
+          <div class="login-field">
+            <label class="login-label">Full Name</label>
+            <input id="newUserName" class="login-input" placeholder="Ahmed Al Mansouri" type="text"/>
+          </div>
+          <div class="login-field">
+            <label class="login-label">Email</label>
+            <input id="newUserEmail" class="login-input" placeholder="ahmed@ibis-dubai.com" type="email"/>
+          </div>
+          <div class="login-field">
+            <label class="login-label">Password</label>
+            <input id="newUserPass" class="login-input" placeholder="Min 6 characters" type="password"/>
+          </div>
+          <div class="login-field">
+            <label class="login-label">Role</label>
+            <select id="newUserRole" class="login-input">
+              <option value="agent">🛎️ Agent — Ops only</option>
+              <option value="supervisor">⭐ Supervisor — All modules</option>
+              <option value="manager">🏅 Manager — All + manage agents</option>
+              <option value="owner">👑 Owner — Full control</option>
+              <option value="readonly">👁️ Read Only</option>
+            </select>
+          </div>
+        </div>
+        <div id="adminCreateErr" class="login-error" style="display:none;"></div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button id="adminCreateBtn" class="btn gold" onclick="adminCreateUser()">Create Account</button>
+          <button class="btn" onclick="closeCreateUser()">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Edit user form -->
+      <div id="adminEditForm" style="display:none;" class="admin-form-card">
+        <input type="hidden" id="editUserId"/>
+        <div class="admin-form-title">✏️ Edit Account</div>
+        <div class="admin-form-grid">
+          <div class="login-field">
+            <label class="login-label">Full Name</label>
+            <input id="editUserName" class="login-input" type="text"/>
+          </div>
+          <div class="login-field">
+            <label class="login-label">Role</label>
+            <select id="editUserRole" class="login-input">
+              <option value="agent">🛎️ Agent</option>
+              <option value="supervisor">⭐ Supervisor</option>
+              <option value="manager">🏅 Manager</option>
+              <option value="owner">👑 Owner</option>
+              <option value="readonly">👁️ Read Only</option>
+            </select>
+          </div>
+          <div class="login-field">
+            <label class="login-label">New Password <span style="color:var(--text3);font-size:0.65rem;">(leave blank to keep)</span></label>
+            <input id="editUserPass" class="login-input" type="password" placeholder="Leave blank to keep current"/>
+          </div>
+        </div>
+        <div id="adminEditErr" class="login-error" style="display:none;"></div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button id="adminSaveEditBtn" class="btn gold" onclick="adminSaveEdit()">Save Changes</button>
+          <button class="btn" onclick="closeEditUser()">Cancel</button>
+        </div>
+      </div>
+
+      <!-- User table -->
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Name / Email</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th>Last Login</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="adminUserTable">
+            <tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text3);">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Activity log tab -->
+    <div id="adminTab-activity" class="admin-tab-pane" style="display:none;">
+      <div id="adminActivityLog" style="max-height:420px;overflow-y:auto;">
+        <div style="text-align:center;padding:24px;color:var(--text3);">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Role legend -->
+    <div class="admin-role-legend">
+      <div class="admin-legend-title">Role Permissions</div>
+      <div class="admin-legend-grid">
+        <div class="admin-legend-row"><span style="color:#f0a43a;">👑 Owner</span><span>Full access · manage all users · import/export</span></div>
+        <div class="admin-legend-row"><span style="color:#8b7cf8;">🏅 Manager</span><span>All modules · manage agents · export</span></div>
+        <div class="admin-legend-row"><span style="color:#5ab4e8;">⭐ Supervisor</span><span>All modules · no user management</span></div>
+        <div class="admin-legend-row"><span style="color:#3ecf8e;">🛎️ Agent</span><span>Departures · Arrivals · Shifts · Checklist only</span></div>
+        <div class="admin-legend-row"><span style="color:#888;">👁️ Read Only</span><span>View departures and arrivals — no actions</span></div>
+      </div>
+    </div>
   </div>
 </div>
 
