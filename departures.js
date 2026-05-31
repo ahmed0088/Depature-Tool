@@ -1069,8 +1069,19 @@ function depAction(i, status, extraNights) {
       lateTime:        status === 'late'     ? (r.lateTime || '')        : '',
     });
   } else {
-    const li = depLog.findIndex(l => l.room === r.roomStr);
+    // Undo — find what we're undoing and write an undo log entry
+    const li = depLog.findIndex(l => l.room === r.roomStr && l.action !== 'undo');
+    const undoneAction = li >= 0 ? depLog[li].action : prev;
     if (li >= 0) depLog.splice(li, 1);
+    depLog.unshift({
+      room:       r.roomStr,
+      name:       r.name,
+      action:     'undo',
+      undone:     undoneAction,
+      time:       t,
+      roomIdx:    depRooms.indexOf(r),
+      prevStatus: prev,
+    });
   }
 
   depRender();
@@ -1137,34 +1148,69 @@ function renderDepLog() {
   if (!entries.length) { if (wrap) wrap.style.display = 'none'; return; }
   if (wrap)  wrap.style.display = 'block';
   if (badge) badge.textContent = entries.length;
-  const aLabel = { out:'✓ Checked Out', extended:'↪ Extended', late:'🕐 Late CO', na:'📵 No Answer' };
-  const aCls   = { out:'log-act-co',    extended:'log-act-ext', late:'log-act-late', na:'log-act-na' };
-  if (body) body.innerHTML = entries.map((l, li) => `
-    <div class="log-row">
+
+  const aLabel = {
+    out:      '✓ Checked Out',
+    extended: '↪ Extended',
+    late:     '🕐 Late CO',
+    na:       '📵 No Answer',
+    undo:     '↺ Undone',
+  };
+  const aCls = {
+    out:      'log-act-co',
+    extended: 'log-act-ext',
+    late:     'log-act-late',
+    na:       'log-act-na',
+    undo:     'log-act-undo',
+  };
+
+  if (body) body.innerHTML = entries.map((l, li) => {
+    const isUndo = l.action === 'undo';
+    const undoneLabel = isUndo
+      ? ` <span class="log-undo-detail">${aLabel[l.undone] || l.undone || 'action'}</span>`
+      : '';
+    const undoBtn = isUndo
+      ? '' // can't undo an undo
+      : `<button class="log-undo-btn" onclick="depUndoLog(${li})">↺ Undo</button>`;
+    return `
+    <div class="log-row${isUndo ? ' log-row-undo' : ''}">
       <span class="log-room">${escapeHtml(l.room)}</span>
-      <span class="log-name">${escapeHtml(l.name)}</span>
-      <span class="log-action ${aCls[l.action]||''}">${aLabel[l.action]||l.action}</span>
+      <span class="log-action ${aCls[l.action]||''}">${aLabel[l.action]||l.action}${undoneLabel}</span>
       <span class="log-time">${l.time}</span>
-      <button class="log-undo" onclick="depUndoLog(${li})">↺ Undo</button>
-    </div>`).join('');
+      ${undoBtn}
+    </div>`;
+  }).join('');
 }
 
 function depUndoLog(li) {
   const entry = depLog[li]; if (!entry) return;
-  // Find by room string — roomIdx can be stale after reloads
+  // Can't undo an undo — only forward actions
+  if (entry.action === 'undo') { showToast('Cannot undo an undo entry', 'info'); return; }
+  const t = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  // Find room by string — roomIdx can be stale after reloads
   const r = depRooms.find(rm => rm.roomStr === entry.room) || depRooms[entry.roomIdx];
   if (r) {
-    r.status         = entry.prevStatus || 'due';
-    r.checkoutAt     = '';
-    r.lateTime       = '';
+    r.status          = entry.prevStatus || 'due';
+    r.checkoutAt      = '';
+    r.lateTime        = '';
     r.extensionNights = 0;
-    r.intent         = '';
-    r.naTime         = '';
+    r.intent          = '';
+    r.naTime          = '';
   }
-  depLog.splice(li, 1);
+  // Replace the forward action with an undo entry — keep it in the log
+  depLog.splice(li, 1, {
+    room:       entry.room,
+    name:       entry.name,
+    action:     'undo',
+    undone:     entry.action,
+    time:       t,
+    roomIdx:    entry.roomIdx,
+    prevStatus: entry.action,
+  });
   depRender();
   updateDepBadge();
   saveDeps();
+  showToast('Undone — ' + entry.room + ' back to Due Out', 'ok');
 }
 
 function toggleLog() {

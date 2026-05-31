@@ -845,15 +845,22 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
 .log-row { display: flex; align-items: center; gap: 9px; padding: 8px 13px; border-bottom: 1px solid var(--border); transition: background 0.08s; }
 .log-row:last-child { border-bottom: none; }
 .log-row:hover { background: var(--accent-bg); }
+.log-row-undo { opacity: 0.72; }
+.log-row-undo .log-room { color: var(--text3); }
 .log-room   { font-family: var(--mono); font-size: 0.9rem; font-weight: 700; color: var(--blue); min-width: 44px; }
 .log-name   { font-size: 0.8rem; color: var(--text2); flex: 1; }
-.log-action { font-family: var(--mono); font-size: 0.62rem; padding: 2px 8px; border-radius: 99px; font-weight: 700; border: 1px solid; }
+.log-action { font-family: var(--mono); font-size: 0.62rem; padding: 2px 8px; border-radius: 99px; font-weight: 700; border: 1px solid; flex-shrink: 0; }
 .log-act-co   { color: var(--green);  background: var(--green-bg);  border-color: var(--green-border); }
 .log-act-ext  { color: var(--teal);   background: var(--teal-bg);   border-color: var(--teal-border); }
 .log-act-late { color: var(--purple); background: var(--purple-bg); border-color: var(--purple-border); }
 .log-act-na   { color: var(--red);    background: var(--red-bg);    border-color: var(--red-border); }
-.log-time   { font-family: var(--mono); font-size: 0.62rem; color: var(--text3); min-width: 50px; text-align: right; }
-.log-undo   { padding: 3px 9px; border-radius: var(--r); border: 1px solid var(--border2); background: transparent; color: var(--text3); font-size: 0.66rem; cursor: pointer; transition: all 0.1s; }
+.log-act-undo { color: var(--amber);  background: var(--amber-bg);  border-color: var(--amber-border); }
+.log-undo-detail { font-weight: 400; opacity: 0.7; margin-left: 4px; }
+.log-time   { font-family: var(--mono); font-size: 0.62rem; color: var(--text3); min-width: 50px; text-align: right; margin-left: auto; }
+.log-undo-btn { padding: 3px 9px; border-radius: var(--r); border: 1px solid var(--border2); background: transparent; color: var(--text3); font-size: 0.66rem; cursor: pointer; transition: all 0.1s; flex-shrink: 0; }
+.log-undo-btn:hover { color: var(--amber); border-color: var(--amber-border); background: var(--amber-bg); }
+/* keep .log-undo alias for any legacy references */
+.log-undo { padding: 3px 9px; border-radius: var(--r); border: 1px solid var(--border2); background: transparent; color: var(--text3); font-size: 0.66rem; cursor: pointer; transition: all 0.1s; }
 .log-undo:hover { color: var(--amber); border-color: var(--amber-border); background: var(--amber-bg); }
 
 .dep-quick-bar {
