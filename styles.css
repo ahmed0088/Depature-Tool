@@ -133,12 +133,14 @@
    RESET
 ══════════════════════════════════════════════════════ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { height: 100%; overflow: hidden; }
+html { height: 100%; overflow: hidden; }
 body {
+  height: 100%; max-height: 100%; overflow: hidden;
   background: var(--bg); color: var(--text);
   font-family: var(--font); font-size: 13px; line-height: 1.5;
   -webkit-font-smoothing: antialiased; display: flex; flex-direction: column;
 }
+#appWrapper { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: var(--bg2); }
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
@@ -236,7 +238,7 @@ body {
 /* ══════════════════════════════════════════════════════
    LAYOUT
 ══════════════════════════════════════════════════════ */
-.layout { display: flex; flex: 1; overflow: hidden; }
+.layout { display: flex; flex: 1; min-height: 0; overflow: hidden; }
 
 /* ══════════════════════════════════════════════════════
    SIDEBAR
@@ -291,7 +293,7 @@ body {
 /* ══════════════════════════════════════════════════════
    MAIN & PANELS
 ══════════════════════════════════════════════════════ */
-.main { flex: 1; overflow-y: auto; background: var(--bg); }
+.main { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; background: var(--bg); }
 .panel { display: none; padding: 22px 26px 80px; }
 .panel.active { display: block; animation: panelIn 0.14s ease; }
 @keyframes panelIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
