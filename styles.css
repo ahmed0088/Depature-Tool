@@ -380,9 +380,65 @@ body {
 .search-wrap input {
   background: transparent; border: none; color: var(--text);
   font-family: var(--mono); font-size: 0.7rem;
-  padding: 5px 11px; outline: none; width: 160px;
+  padding: 5px 4px 5px 0; outline: none; width: 190px;
 }
 .search-wrap input::placeholder { color: var(--text3); }
+.search-clear-btn {
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; border: none;
+  color: var(--text3); font-size: 0.62rem;
+  padding: 0 8px; cursor: pointer; height: 100%;
+  transition: color 0.12s;
+}
+.search-clear-btn:hover { color: var(--rose); }
+
+/* ── Multi-room search pills ── */
+.dep-search-pills {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 5px 2px 2px;
+  margin-top: 2px;
+  width: 100%;
+}
+.srch-pill-lbl {
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  color: var(--text3);
+  margin-right: 2px;
+}
+.srch-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.1s, opacity 0.1s;
+  user-select: none;
+}
+.srch-pill:hover { background: var(--accent); color: var(--bg); }
+.srch-pill-x { opacity: 0.55; font-size: 0.52rem; }
+.srch-pill-clear {
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  color: var(--text3);
+  background: transparent;
+  border: 1px solid var(--border2);
+  border-radius: 5px;
+  padding: 2px 7px;
+  cursor: pointer;
+  margin-left: 2px;
+}
+.srch-pill-clear:hover { color: var(--rose); border-color: var(--rose); }
+
 
 /* ══════════════════════════════════════════════════════
    PROGRESS BAR

@@ -277,7 +277,117 @@ function depTimeTag(r) {
   return `<span class="dc-time-tag ok">🕐 ${label}</span>`;
 }
 
-// ── Sort state ─────────────────────────────────────────────
+// ── Smart multi-room search ────────────────────────────────
+// Detects:
+//   "610,613,615"   → exact room list
+//   "610 613 615"   → exact room list (spaces as separators)
+//   "610-615"       → room range
+//   "601, 603-606"  → mixed list + range
+//   anything else   → normal text search (name, source, note)
+
+function _parseSearchQuery(raw) {
+  if (!raw) return { type: 'empty' };
+  const trimmed = raw.trim();
+
+  // Looks like a room query if it contains only digits, commas, dashes, spaces
+  const isRoomQuery = /^[\d,\s\-]+$/.test(trimmed) && /\d/.test(trimmed);
+  if (!isRoomQuery) return { type: 'text', q: trimmed.toLowerCase() };
+
+  const rooms = new Set();
+  // Split on commas or spaces, then handle each token
+  const tokens = trimmed.split(/[\s,]+/).filter(Boolean);
+  for (const tok of tokens) {
+    if (tok.includes('-')) {
+      // range: "610-615"
+      const [a, b] = tok.split('-').map(Number);
+      if (!isNaN(a) && !isNaN(b) && b >= a && b - a < 200) {
+        for (let n = a; n <= b; n++) rooms.add(String(n));
+      }
+    } else if (!isNaN(Number(tok))) {
+      rooms.add(tok);
+    }
+  }
+
+  if (rooms.size === 1 && tokens.length === 1 && !tokens[0].includes('-')) {
+    // Single room number — could still be partial match, keep as text so "6" shows all 6xx
+    return { type: 'text', q: trimmed.toLowerCase() };
+  }
+
+  return rooms.size > 0
+    ? { type: 'rooms', rooms }
+    : { type: 'text', q: trimmed.toLowerCase() };
+}
+
+function _matchSearch(r, parsed) {
+  if (parsed.type === 'empty') return true;
+  if (parsed.type === 'rooms') return parsed.rooms.has(r.roomStr);
+  // text — match room, name, source, note
+  const q = parsed.q;
+  return r.roomStr.toLowerCase().includes(q) ||
+    r.name.toLowerCase().includes(q) ||
+    r.source.toLowerCase().includes(q) ||
+    (r.note && r.note.toLowerCase().includes(q));
+}
+
+// ── Search input handlers ──────────────────────────────────
+function depSearchInput() {
+  const val = (document.getElementById('depSearch')?.value || '').trim();
+  const clearBtn = document.getElementById('depSearchClear');
+  if (clearBtn) clearBtn.style.display = val ? 'flex' : 'none';
+  _renderSearchPills(val);
+  depRender();
+}
+
+function depSearchKey(e) {
+  if (e.key === 'Escape') depSearchClear();
+}
+
+function depSearchClear() {
+  const inp = document.getElementById('depSearch');
+  if (inp) inp.value = '';
+  depSearchInput();
+}
+
+function _renderSearchPills(raw) {
+  const pillBox = document.getElementById('depSearchPills');
+  if (!pillBox) return;
+  if (!raw) { pillBox.style.display = 'none'; pillBox.innerHTML = ''; return; }
+
+  const parsed = _parseSearchQuery(raw);
+  if (parsed.type !== 'rooms' || parsed.rooms.size < 2) {
+    pillBox.style.display = 'none'; pillBox.innerHTML = ''; return;
+  }
+
+  // Show room pills — each tappable to remove
+  const roomArr = [...parsed.rooms].sort((a, b) => parseInt(a) - parseInt(b));
+  pillBox.style.display = 'flex';
+  pillBox.innerHTML = `
+    <span class="srch-pill-lbl">${roomArr.length} rooms:</span>
+    ${roomArr.map(r => `<span class="srch-pill" onclick="depRemoveRoomFromSearch('${r}')">${r} <span class="srch-pill-x">✕</span></span>`).join('')}
+    <button class="srch-pill-clear" onclick="depSearchClear()">Clear all</button>`;
+}
+
+function depRemoveRoomFromSearch(room) {
+  const inp = document.getElementById('depSearch');
+  if (!inp) return;
+  // Remove this room number from the raw input text
+  const newVal = inp.value
+    .split(/[\s,]+/)
+    .filter(tok => {
+      if (tok === room) return false;
+      // Remove from range if it matches exactly
+      if (tok.includes('-')) {
+        const [a, b] = tok.split('-').map(Number);
+        if (!isNaN(a) && !isNaN(b) && Number(room) >= a && Number(room) <= b) return false;
+      }
+      return true;
+    })
+    .join(', ');
+  inp.value = newVal.trim().replace(/,\s*$/, '');
+  depSearchInput();
+}
+
+
 // key: 'smart' | 'room' | 'name' | 'time' | 'balance' | 'status'
 // dir: 1 = asc, -1 = desc
 let depSort = { key: 'smart', dir: 1 };
@@ -354,7 +464,8 @@ function depRender() {
   document.getElementById('depProgPct').textContent   = pct + '%';
   document.getElementById('depProgFill').style.width  = pct + '%';
 
-  const search = (document.getElementById('depSearch')?.value || '').toLowerCase();
+  const rawSearch = (document.getElementById('depSearch')?.value || '').trim();
+  const parsed    = _parseSearchQuery(rawSearch);
 
   // Filter rules:
   // 'all'     → active only: due + late + na  (out + extended are done/hidden)
@@ -376,11 +487,7 @@ function depRender() {
       case 'out':          mf = es === 'out'; break;
       default:             mf = es === depFilter_; break;
     }
-    const ms = !search ||
-      r.roomStr.includes(search) ||
-      r.name.toLowerCase().includes(search) ||
-      r.source.toLowerCase().includes(search) ||
-      (r.note && r.note.toLowerCase().includes(search));
+    const ms = _matchSearch(r, parsed);
     return mf && ms;
   });
 
