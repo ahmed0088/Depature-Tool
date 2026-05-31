@@ -1155,12 +1155,137 @@ function clearRent()  { ['rentInput1','rentInput2'].forEach(id=>{const e=documen
 function clearAudit() { ['naOperaInput','naExcelInput'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';}); const s=document.getElementById('naCompareSection');if(s)s.style.display='none'; }
 function clearImmig() { const p=document.getElementById('immigPasteInput2');if(p)p.value=''; const r=document.getElementById('immigResults2');if(r)r.style.display='none'; const e2=document.getElementById('immigError2');if(e2)e2.classList.remove('show'); }
 
-// ── ESC key closes any open modal ───────────────────────
-document.addEventListener('keydown', e => {
-  if (e.key !== 'Escape') return;
-  document.querySelectorAll('.modal-bg.open').forEach(m => m.classList.remove('open'));
-  clCloseLightbox();
-});
+// ── Keyboard shortcuts ───────────────────────────────────
+// Skips if focus is inside any input, textarea, or select.
+(function () {
+  const PANEL_KEYS = {
+    '1': 'departures',
+    '2': 'arrivals',
+    '3': 'purpose',
+    '4': 'checklist',
+    '5': 'shifts',
+    '6': 'nationality',
+    '7': 'rent',
+    '8': 'immig',
+    '9': 'tourism',
+  };
+  const DEP_FILTER_KEYS = {
+    'a': 'all',
+    'd': 'due',
+    'l': 'late',
+    'n': 'na',
+    'o': 'out',
+    'e': 'extended',
+    'b': 'balance',
+  };
+
+  function inInput() {
+    const t = document.activeElement?.tagName;
+    return t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT';
+  }
+  function activePanel() {
+    return document.querySelector('.panel.active')?.id?.replace('panel-', '') || '';
+  }
+
+  document.addEventListener('keydown', e => {
+    // ── Always: Escape ──────────────────────────────────
+    if (e.key === 'Escape') {
+      // Cancel selection mode first
+      if (typeof _selGroup !== 'undefined' && _selGroup) { depCancelSelect(); return; }
+      // Close any open copy menu
+      document.querySelectorAll('.dep-copy-menu.open').forEach(m => m.classList.remove('open'));
+      // Close jump bar
+      const jb = document.getElementById('depJumpBar');
+      if (jb && jb.style.display !== 'none') { toggleDepJump(); return; }
+      // Close modals
+      document.querySelectorAll('.modal-bg.open').forEach(m => m.classList.remove('open'));
+      clCloseLightbox?.();
+      // Close cheat sheet
+      document.getElementById('kbModal')?.classList.remove('open');
+      return;
+    }
+
+    // ── ? — cheat sheet (always, even in input) ─────────
+    if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault();
+      document.getElementById('kbModal').classList.toggle('open');
+      return;
+    }
+
+    // Below here: skip if typing in an input
+    if (inInput()) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+    const k = e.key.toLowerCase();
+    const panel = activePanel();
+
+    // ── Panel navigation 1-9 ────────────────────────────
+    if (PANEL_KEYS[e.key]) {
+      e.preventDefault();
+      showPanel(PANEL_KEYS[e.key]);
+      return;
+    }
+
+    // ── Global shortcuts ────────────────────────────────
+    if (k === 't') { toggleTheme(); showKbToast('Theme toggled'); return; }
+
+    // ── Departure board shortcuts ────────────────────────
+    if (panel === 'departures') {
+      // Filter chips
+      if (DEP_FILTER_KEYS[k]) {
+        e.preventDefault();
+        const f = DEP_FILTER_KEYS[k];
+        depFilter(f, document.querySelector(`[data-f="${f}"]`));
+        showKbToast('Filter: ' + f);
+        return;
+      }
+      // / — focus search
+      if (k === '/') {
+        e.preventDefault();
+        const s = document.getElementById('depSearch');
+        if (s) { s.focus(); s.select(); }
+        return;
+      }
+      // J — quick jump panel
+      if (k === 'j') { toggleDepJump(); showKbToast('Quick Jump'); return; }
+      // G — action log
+      if (k === 'g') { toggleLog(); showKbToast('Action Log'); return; }
+      // R — sort by room
+      if (k === 'r') { depSetSort('room'); showKbToast('Sort: Room'); return; }
+      // S — sort smart
+      if (k === 's') { depSetSort('smart'); showKbToast('Sort: Smart'); return; }
+    }
+
+    // ── Checklist shortcuts ──────────────────────────────
+    if (panel === 'checklist') {
+      // Space — tick the first unticked step
+      if (e.key === ' ') {
+        e.preventDefault();
+        const firstUndone = CL_STEPS.find(s => !clState.done.has(s.id) && !clState.skipped.has(s.id));
+        if (firstUndone) { clToggle(firstUndone.id); showKbToast('Step ticked ✓'); }
+        return;
+      }
+    }
+  });
+
+  // Small non-intrusive toast for key feedback
+  window.showKbToast = function(msg) {
+    let el = document.getElementById('kbToast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'kbToast';
+      el.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%);' +
+        'background:var(--card3);border:1px solid var(--border3);color:var(--text2);' +
+        'font-family:var(--mono);font-size:0.62rem;padding:5px 14px;border-radius:8px;' +
+        'z-index:9999;pointer-events:none;opacity:0;transition:opacity 0.15s;white-space:nowrap;';
+      document.body.appendChild(el);
+    }
+    el.textContent = msg;
+    el.style.opacity = '1';
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { el.style.opacity = '0'; }, 900);
+  };
+})();
 
 // ── Click backdrop to close modal ───────────────────────
 document.querySelectorAll('.modal-bg').forEach(bg => {
@@ -1388,6 +1513,56 @@ appInit();
     <button class="cl-lb-nav" id="clLbNext">›</button>
   </div>
   <div class="cl-lightbox-caption" id="clLightboxCaption"></div>
+</div>
+
+<!-- ── Keyboard shortcut cheat sheet ── -->
+<div class="modal-bg" id="kbModal">
+  <div class="modal kb-modal">
+    <div class="kb-modal-head">
+      <h3>⌨ Keyboard Shortcuts</h3>
+      <button class="kb-close" onclick="document.getElementById('kbModal').classList.remove('open')">✕</button>
+    </div>
+    <div class="kb-sections">
+      <div class="kb-section">
+        <div class="kb-section-title">Navigation</div>
+        <div class="kb-row"><kbd>1</kbd><span>Departure Board</span></div>
+        <div class="kb-row"><kbd>2</kbd><span>Arrivals</span></div>
+        <div class="kb-row"><kbd>3</kbd><span>Purpose of Stay</span></div>
+        <div class="kb-row"><kbd>4</kbd><span>Night Checklist</span></div>
+        <div class="kb-row"><kbd>5</kbd><span>Shift Tasks</span></div>
+        <div class="kb-row"><kbd>6</kbd><span>Nationality Report</span></div>
+        <div class="kb-row"><kbd>7</kbd><span>Rented Rooms</span></div>
+        <div class="kb-row"><kbd>8</kbd><span>Immigration Check</span></div>
+        <div class="kb-row"><kbd>9</kbd><span>Tourism Tax</span></div>
+      </div>
+      <div class="kb-section">
+        <div class="kb-section-title">Departure Board</div>
+        <div class="kb-row"><kbd>A</kbd><span>Filter: All active</span></div>
+        <div class="kb-row"><kbd>D</kbd><span>Filter: Due Out</span></div>
+        <div class="kb-row"><kbd>L</kbd><span>Filter: Late CO</span></div>
+        <div class="kb-row"><kbd>N</kbd><span>Filter: No Answer</span></div>
+        <div class="kb-row"><kbd>O</kbd><span>Filter: Checked Out</span></div>
+        <div class="kb-row"><kbd>E</kbd><span>Filter: Extended</span></div>
+        <div class="kb-row"><kbd>B</kbd><span>Filter: Balance</span></div>
+        <div class="kb-row"><kbd>/</kbd><span>Focus room search</span></div>
+        <div class="kb-row"><kbd>J</kbd><span>Quick Jump panel</span></div>
+        <div class="kb-row"><kbd>G</kbd><span>Toggle action log</span></div>
+        <div class="kb-row"><kbd>S</kbd><span>Sort: Smart</span></div>
+        <div class="kb-row"><kbd>R</kbd><span>Sort: Room number</span></div>
+      </div>
+      <div class="kb-section">
+        <div class="kb-section-title">Checklist</div>
+        <div class="kb-row"><kbd>Space</kbd><span>Tick next step</span></div>
+      </div>
+      <div class="kb-section">
+        <div class="kb-section-title">Global</div>
+        <div class="kb-row"><kbd>T</kbd><span>Toggle theme</span></div>
+        <div class="kb-row"><kbd>?</kbd><span>Show / hide this panel</span></div>
+        <div class="kb-row"><kbd>Esc</kbd><span>Close / cancel / back</span></div>
+      </div>
+    </div>
+    <div class="kb-footer">Shortcuts are disabled while typing in any input field.</div>
+  </div>
 </div>
 
 </body>
