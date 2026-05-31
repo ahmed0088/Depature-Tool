@@ -1081,7 +1081,7 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
   .sidenav { display: none; }
   .topbar-center { display: none; }
   .theme-btn span { display: none; }
-  .panel { padding: 14px 14px 80px; }
+  .panel { padding: 14px 14px 80px; }  /* 80px = 60px nav + 20px breathing room */
   .dep-grid.size-md, .dep-grid.size-lg { grid-template-columns: 1fr; }
   .kpi-row.c4 { grid-template-columns: repeat(2,1fr); }
   .dep-kpi-strip { grid-template-columns: repeat(3,1fr); }
@@ -1128,10 +1128,10 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
   #depSelTray {
     left: 0 !important;
     right: 0 !important;
-    bottom: 0 !important;
-    transform: translateY(100%) !important;
+    bottom: 60px !important;
+    transform: translateY(calc(100% + 60px)) !important;
     border-radius: 14px 14px 0 0 !important;
-    padding: 14px 16px 28px !important;
+    padding: 14px 16px 22px !important;
   }
   #depSelTray.visible { transform: translateY(0) !important; }
 
@@ -1145,18 +1145,49 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
   .dep-toolbar { flex-wrap: wrap; gap: 6px; }
   .dep-sort-bar { flex-wrap: wrap; gap: 4px; }
 
-  /* ── NA and action bars: stack vertically ── */
-  .dep-na-bar, .dep-ext-bar, .dep-out-bar {
+  /* ── Action bars: stack label above buttons ── */
+  .dep-na-bar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+    padding: 10px 12px !important;
+  }
+  .dep-na-bar-left  { flex-wrap: wrap; }
+  .dep-na-bar-right {
+    display: flex !important;
     flex-wrap: wrap !important;
     gap: 6px !important;
-    padding: 8px 12px !important;
+    width: 100%;
   }
-  .dep-na-bar .btn, .dep-ext-bar .btn, .dep-out-bar .btn {
-    font-size: 0.65rem !important;
-    padding: 5px 10px !important;
+  /* Copy split button: main button takes all remaining space */
+  .dep-copy-split { flex: 1; min-width: 0; }
+  .dep-copy-main  { flex: 1; min-width: 0; font-size: 0.62rem !important; padding: 7px 8px !important; }
+  .dep-copy-arrow { padding: 7px 10px !important; }
+  .dep-na-filter-btn { font-size: 0.62rem !important; padding: 6px 12px !important; }
+
+  /* Copy dropdown: open upward and full-width on mobile */
+  .dep-copy-menu {
+    bottom: calc(100% + 4px) !important;
+    top: auto !important;
+    left: 0 !important;
+    right: 0 !important;
+    min-width: 0 !important;
+    width: 100% !important;
   }
 
-  /* ── HK reminder: full width ── */
+  /* Quick bar (Check Out All Due): above the mobile bottom nav */
+  .dep-quick-bar {
+    bottom: 68px !important;
+    width: calc(100% - 28px) !important;
+    left: 14px !important;
+    transform: none !important;
+    border-radius: 12px !important;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .dep-quick-bar .btn { width: 100%; justify-content: center; }
+
+  /* HK reminder: full width */
   .hk-reminder { flex-wrap: wrap; }
 }
 
@@ -1907,9 +1938,12 @@ kbd {
 /* ══════════════════════════════════════════════════════
    MOBILE BOTTOM NAV  (hidden on desktop)
 ══════════════════════════════════════════════════════ */
-.mob-nav { display: none; }
+.mob-nav        { display: none; }
+.mob-more-overlay { display: none; }
+.mob-more-drawer  { display: none; }
 
 @media (max-width: 768px) {
+  /* ── Bottom nav bar ── */
   .mob-nav {
     display: flex;
     position: fixed;
@@ -1922,13 +1956,10 @@ kbd {
   }
   .mob-nav-btn {
     flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
     gap: 2px;
-    background: transparent;
-    border: none;
+    background: transparent; border: none;
     color: var(--text3);
     cursor: pointer;
     padding: 6px 0 8px;
@@ -1939,21 +1970,11 @@ kbd {
   .mob-nav-btn.active { color: var(--accent); }
   .mob-nav-btn:active { opacity: 0.7; }
   .mob-nav-icon { font-size: 1.2rem; line-height: 1; }
-  .mob-nav-lbl {
-    font-size: 0.55rem;
-    font-family: var(--mono);
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
-  }
+  .mob-nav-lbl  { font-size: 0.55rem; font-family: var(--mono); font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; }
   .mob-nav-badge {
-    position: absolute;
-    top: 5px;
-    right: calc(50% - 18px);
-    min-width: 16px; height: 16px;
-    padding: 0 4px;
-    background: var(--rose);
-    color: #fff;
+    position: absolute; top: 5px; right: calc(50% - 18px);
+    min-width: 16px; height: 16px; padding: 0 4px;
+    background: var(--rose); color: #fff;
     font-family: var(--mono); font-size: 0.5rem; font-weight: 700;
     border-radius: 99px;
     display: flex; align-items: center; justify-content: center;
@@ -1961,7 +1982,7 @@ kbd {
   }
   .mob-nav-badge:empty { display: none; }
 
-  /* More drawer */
+  /* ── More drawer (shown via JS) ── */
   .mob-more-overlay {
     position: fixed; inset: 0;
     background: rgba(0,0,0,0.5);
@@ -1985,26 +2006,18 @@ kbd {
     display: flex; flex-direction: column;
     align-items: center; gap: 6px;
     padding: 12px 8px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--r2);
-    color: var(--text2);
-    font-size: 0.72rem; font-weight: 600;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-    transition: all 0.12s;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r2);
+    color: var(--text2); font-size: 0.72rem; font-weight: 600;
+    cursor: pointer; -webkit-tap-highlight-color: transparent; transition: all 0.12s;
   }
   .mob-more-item span:first-child { font-size: 1.3rem; }
   .mob-more-item:active { background: var(--card2); color: var(--accent); }
 
-  /* Hide non-essential topbar items on mobile */
-  .theme-switcher { display: none !important; }
-  .fb-status       { display: none !important; }
-  .tb-pill.live    { display: none !important; }
-  .icon-round      { width: 26px; height: 26px; font-size: 0.78rem; }
-  .topbar { padding: 0 10px; gap: 6px; }
-  .topbar-right { gap: 4px; }
-
-  /* Extra padding for fixed nav */
-  .panel { padding-bottom: 72px !important; }
+  /* ── Clean up topbar for small screens ── */
+  .theme-switcher  { display: none !important; }
+  .fb-status        { display: none !important; }
+  .tb-pill.live     { display: none !important; }
+  .icon-round       { width: 26px; height: 26px; font-size: 0.78rem; }
+  .topbar           { padding: 0 10px; gap: 6px; }
+  .topbar-right     { gap: 4px; }
 }
