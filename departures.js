@@ -865,7 +865,9 @@ function depCardHTML(r) {
   // Action buttons — driven by effective status
   let actHTML = '';
   if (es === 'extended') {
-    actHTML = ``;
+    actHTML = `<div class="dc-actions g1">
+      <button class="dca dca-undo" onclick="depAction(${i},'due')">↺ Undo Extension</button>
+    </div>`;
 
   } else if (es === 'out') {
     actHTML = `<div class="dc-actions g1">
@@ -906,18 +908,12 @@ function depCardHTML(r) {
         <button class="dc-intent-btn${r.intent==='returning'   ?' active':''}"
           onclick="depSetIntent(${i},'returning')">🔁 Returning</button>
       </div>`;
-    if (r.intent === 'maybe_extend') {
-      actHTML = `<div class="dc-actions g1">
-        <button class="dca dca-ext" onclick="depAskExtend(${i})">↪ Extend</button>
-      </div>${intentRow}`;
-    } else {
-      actHTML = `<div class="dc-actions g4">
-        <button class="dca dca-co"   onclick="depCheckOut(${i})">✓ Check Out</button>
-        <button class="dca dca-ext"  onclick="depAskExtend(${i})">↪ Extend</button>
-        <button class="dca dca-late" onclick="depAskLCO(${i})">🕐 Late CO</button>
-        <button class="dca dca-na"   onclick="depAction(${i},'na')">📵 No Answer</button>
-      </div>${intentRow}`;
-    }
+    actHTML = `<div class="dc-actions g4">
+      <button class="dca dca-co"   onclick="depCheckOut(${i})">✓ Check Out</button>
+      <button class="dca dca-ext"  onclick="depAskExtend(${i})">↪ Extend</button>
+      <button class="dca dca-late" onclick="depAskLCO(${i})">🕐 Late CO</button>
+      <button class="dca dca-na"   onclick="depAction(${i},'na')">📵 No Answer</button>
+    </div>${intentRow}`;
   }
 
   // Selection mode tick overlay — no label/input, just a div
@@ -1598,7 +1594,7 @@ function depCopyHKUpdate() {
     let label = HK_LABEL[es] || '⏳ DUE';
     if (r.status === 'extended' && r.extensionNights) label += ` +${r.extensionNights}n`;
     if (es === 'late' && r.lateTime)                  label += ` ${r.lateTime}`;
-    if (r.intent === 'maybe_extend' && es !== 'extended') label += ` 🤔 MAY EXT`;
+    if (r.intent === 'maybe_extend' && es !== 'extended') label = `⏳ Extending`;
     if (r.balance > 0 && es !== 'extended')           label += ` 💳`;
     return `${r.roomStr.padEnd(5)} ${label}`;
   });
