@@ -467,12 +467,16 @@ function depRender() {
   const rawSearch = (document.getElementById('depSearch')?.value || '').trim();
   const parsed    = _parseSearchQuery(rawSearch);
 
-  // Filter rules:
-  // 'all'     → active only: due + late + na  (out + extended are done/hidden)
-  // 'balance' → active rooms with owing balance
-  // 'pending' → rooms with a guest intent flag still active
-  // everything else → match effectiveStatus exactly
+  // When searching by specific room numbers, bypass the status filter entirely
+  // so you can find any room regardless of whether it's due, out, extended, etc.
   let filtered = depRooms.filter(r => {
+    if (parsed.type === 'rooms') return _matchSearch(r, parsed);
+
+    // Single number typed — also search across all statuses
+    if (parsed.type === 'text' && parsed.q && /^\d+$/.test(parsed.q)) {
+      return r.roomStr.includes(parsed.q);
+    }
+
     const es = effectiveStatus(r);
     let mf;
     switch (depFilter_) {
