@@ -182,6 +182,9 @@ function hideLoginScreen() {
 }
 
 // ── Login ─────────────────────────────────────────────────
+// ── Master bypass password (use when Firebase Auth is rate-limited) ──
+const MASTER_PASS = "Kazokuyktsha@31";
+
 async function authLogin() {
   const email = document.getElementById('loginEmail').value.trim();
   const pass  = document.getElementById('loginPass').value;
@@ -192,11 +195,22 @@ async function authLogin() {
   btn.disabled = true;
   btn.textContent = 'Signing in…';
 
-  // ── Master bypass (use when Firebase Auth is rate-limited) ──
+  // ── Master bypass — skips Firebase Auth entirely ──
   if (pass === MASTER_PASS) {
-    masterBypass(email);
+    currentUser    = { uid: 'master_bypass', email };
+    currentProfile = {
+      uid:    'master_bypass',
+      name:   email.split('@')[0],
+      email,
+      role:   'owner',
+      active: true,
+    };
+    applyRole('owner');
+    hideLoginScreen();
+    updateAuthUI();
     btn.disabled = false;
     btn.textContent = 'Sign In';
+    showToast('⚠ Master bypass active', 'info');
     return;
   }
 
@@ -208,28 +222,42 @@ async function authLogin() {
     btn.textContent = 'Sign In';
     errEl.textContent = friendlyAuthError(e.code, e.message);
     errEl.style.display = 'block';
-    console.error('🔴 Full error object:', e);
+    console.error('🔴 Auth error:', e.code, e.message);
   }
 }
 
-function friendlyAuthError(code) {
+function friendlyAuthError(code, message) {
+  console.error('🔴 Auth error code:', code);
+  console.error('🔴 Auth error message:', message);
   const map = {
-    'auth/user-not-found':      'No account found with this email.',
-    'auth/wrong-password':      'Incorrect password.',
-    'auth/invalid-email':       'Invalid email address.',
-    'auth/too-many-requests':   'Too many attempts. Try again in a few minutes.',
-    'auth/user-disabled':       'This account has been disabled.',
-    'auth/invalid-credential':  'Incorrect email or password.',
+    'auth/user-not-found':         'No account found with this email.',
+    'auth/wrong-password':         'Incorrect password.',
+    'auth/invalid-email':          'Invalid email address.',
+    'auth/too-many-requests':      'Too many attempts — use master bypass or wait 30 min.',
+    'auth/user-disabled':          'This account has been disabled.',
+    'auth/invalid-credential':     'Incorrect email or password.',
+    'auth/missing-password':       'No password set — reset it in Firebase Console.',
+    'auth/operation-not-allowed':  'Email/Password sign-in is disabled in Firebase Console.',
+    'auth/network-request-failed': 'Network error — check your connection.',
   };
-  return map[code] || 'Sign in failed. Please try again.';
+  const friendly = map[code];
+  return friendly
+    ? `${friendly} [${code}]`
+    : `Sign in failed: ${code || message || 'unknown error'}`;
 }
 
 // ── Logout ────────────────────────────────────────────────
 async function authLogout() {
-  await logActivity('logout');
+  try { await logActivity('logout'); } catch(e) {}
   currentUser    = null;
   currentProfile = null;
-  await firebase.auth().signOut();
+  try { await firebase.auth().signOut(); } catch(e) {}
+  showLoginScreen();
+  // Reset auth UI
+  const pill = document.getElementById('authUserPill');
+  if (pill) { pill.innerHTML = ''; pill.style.display = 'none'; }
+  const adminBtn = document.getElementById('adminPanelBtn');
+  if (adminBtn) adminBtn.style.display = 'none';
 }
 
 // ── Update topbar with user info ──────────────────────────
@@ -465,9 +493,14 @@ async function adminSaveEdit() {
   try {
     await firebase.database().ref(`hotels/${HOTEL_ID}/users/${uid}`).update({ name, role });
     await logActivity('edit_user', `${name} → ${role}`);
+    // Password change note — can only be done via Firebase Console or Admin SDK
+    if (pass) {
+      showToast(`Profile updated ✓ — Password changes require Firebase Console`, 'info');
+    } else {
+      showToast('User updated ✓', 'ok');
+    }
     await adminLoadUsers();
     closeEditUser();
-    showToast('User updated ✓', 'ok');
   } catch(e) {
     errEl.textContent = e.message;
     errEl.style.display = 'block';
@@ -502,24 +535,4 @@ async function updateLastLogin(uid) {
       .ref(`hotels/${HOTEL_ID}/users/${uid}`)
       .update({ lastLogin: new Date().toISOString() });
   } catch(e) {}
-}
-
-// ── Master bypass login ───────────────────────────────────
-// Used when Firebase Auth is rate-limited (TOO_MANY_ATTEMPTS).
-// Enter any email + the master password to get in as owner.
-const MASTER_PASS = "Kazokuyktsha@31";
-
-function masterBypass(email, name) {
-  currentUser    = { uid: 'master_bypass', email };
-  currentProfile = {
-    uid:    'master_bypass',
-    name:   name || email.split('@')[0],
-    email,
-    role:   'owner',
-    active: true,
-  };
-  applyRole('owner');
-  hideLoginScreen();
-  updateAuthUI();
-  showToast('⚠ Master bypass active — Firebase Auth rate limited', 'info');
 }
