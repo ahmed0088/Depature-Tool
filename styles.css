@@ -872,6 +872,14 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
   border-radius: 99px; box-shadow: 0 6px 22px rgba(0,0,0,0.25);
   z-index: 300; animation: fadeUp 0.22s ease;
 }
+/* Inline version shown only on mobile */
+.dep-quick-bar-inline {
+  display: none;
+  align-items: center; justify-content: center; gap: 10px;
+  padding: 10px 14px; margin-top: 12px;
+  background: var(--card2); border: 1px solid var(--border2);
+  border-radius: var(--r2);
+}
 @keyframes fadeUp { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
 #depReloadBtn { background: var(--accent); color: #fff; border-color: var(--accent); }
 [data-theme="night-ops"] #depReloadBtn { color: #08090d; }
@@ -1175,17 +1183,9 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
     width: 100% !important;
   }
 
-  /* Quick bar (Check Out All Due): above the mobile bottom nav */
-  .dep-quick-bar {
-    bottom: 68px !important;
-    width: calc(100% - 28px) !important;
-    left: 14px !important;
-    transform: none !important;
-    border-radius: 12px !important;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-  .dep-quick-bar .btn { width: 100%; justify-content: center; }
+  /* Quick bar: hide the floating pill on mobile — shown inline instead */
+  .dep-quick-bar { display: none !important; }
+  .dep-quick-bar-inline { display: flex !important; }
 
   /* HK reminder: full width */
   .hk-reminder { flex-wrap: wrap; }

@@ -580,12 +580,15 @@ function depRender() {
   renderDepLog();
   if (_jumpOpen) renderDepQuickJump();
 
-  const qb = document.getElementById('depQuickBar');
+  const qb   = document.getElementById('depQuickBar');
+  const qbIn = document.getElementById('depQuickBarInline');
   if (sc.due > 3) {
     qb.style.display = 'flex';
+    if (qbIn) qbIn.style.display = 'flex';
     document.getElementById('depQuickLabel').textContent = `${sc.due} rooms still due out`;
   } else {
     qb.style.display = 'none';
+    if (qbIn) qbIn.style.display = 'none';
   }
 }
 
