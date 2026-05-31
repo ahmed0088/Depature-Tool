@@ -1093,13 +1093,7 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
   .dep-grid.size-md, .dep-grid.size-lg { grid-template-columns: 1fr; }
   .kpi-row.c4 { grid-template-columns: repeat(2,1fr); }
   .dep-kpi-strip { grid-template-columns: repeat(3,1fr); }
-  .page-hd { flex-direction: row; align-items: center; gap: 8px; flex-wrap: nowrap; }
-  .page-hd-left { flex: 1; min-width: 0; }
-  .page-hd-left h1 { font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .page-hd-left p { display: none; }
-  .page-hd-actions { flex-wrap: nowrap; gap: 4px; flex-shrink: 0; }
-  .page-hd-actions .btn { font-size: 0.68rem; padding: 5px 9px; }
-  .page-hd-actions .view-toggle { display: none; }
+  .page-hd { flex-direction: column; align-items: flex-start; gap: 8px; }
   .page-hd-actions { flex-wrap: wrap; gap: 5px; }
   .tbl-wrap { overflow-x: auto; }
 
@@ -1119,30 +1113,24 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
   /* ── Extension grid: 1 col on mobile ── */
   .dc-ext-grid { grid-template-columns: 1fr !important; }
 
-  /* ── KPI strip: 4-up on mobile, compact ── */
-  .dep-kpi-strip { grid-template-columns: repeat(4,1fr); gap: 5px; }
-  .dep-kpi { padding: 7px 5px; }
-  .dep-kpi-icon { display: none; }
-  .dep-kpi-val { font-size: 1.35rem; margin-bottom: 1px; }
-  .dep-kpi-label { font-size: 0.48rem; letter-spacing: 0.2px; }
+  /* ── KPI strip: 4-up on mobile ── */
+  .dep-kpi-strip { grid-template-columns: repeat(4,1fr); gap: 6px; }
+  .dep-kpi { padding: 8px 6px; }
+  .dep-kpi-val { font-size: 1.25rem; }
+  .dep-kpi-label { font-size: 0.5rem; }
 
-  /* ── Filter chips: single scrollable row ── */
-  .filter-row {
+  /* ── Filter chips: scrollable row ── */
+  .dep-filters {
     display: flex !important;
     flex-wrap: nowrap !important;
     overflow-x: auto !important;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     gap: 5px !important;
-    margin-bottom: 8px !important;
-    padding-bottom: 2px;
+    padding-bottom: 4px;
   }
-  .filter-row::-webkit-scrollbar { display: none; }
-  .fchip { flex-shrink: 0; }
-
-  /* ── Search: full width below chips ── */
-  #depBoard > div[style*="flex"] { flex-wrap: wrap; }
-  .search-wrap { width: 100%; }
+  .dep-filters::-webkit-scrollbar { display: none; }
+  .dep-filter-chip { flex-shrink: 0; white-space: nowrap; }
 
   /* ── Selection tray: full width at bottom ── */
   #depSelTray {
@@ -1201,6 +1189,9 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
 
   /* HK reminder: full width */
   .hk-reminder { flex-wrap: wrap; }
+
+  /* ── iOS zoom fix: 16px is the threshold below which iOS zooms on focus ── */
+  input, textarea, select { font-size: 16px !important; }
 }
 
 /* Misc */
