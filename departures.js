@@ -1592,11 +1592,22 @@ function depCopyHKUpdate() {
     let label = HK_LABEL[es] || '⏳ DUE';
     if (r.status === 'extended' && r.extensionNights) label += ` +${r.extensionNights}n`;
     if (es === 'late' && r.lateTime)                  label += ` ${r.lateTime}`;
+    if (r.intent === 'maybe_extend' && es !== 'extended') label += ` 🤔 MAY EXT`;
     if (r.balance > 0 && es !== 'extended')           label += ` 💳`;
     return `${r.roomStr.padEnd(5)} ${label}`;
   });
 
-  const text = `🏨 *HK Update — ${time}*\n${summary}\n\n${lines.join('\n')}`;
+  const mayExtCount = sorted.filter(r => r.intent === 'maybe_extend' && effectiveStatus(r) !== 'extended').length;
+  const finalSummary = [
+    sc.late     ? `🕐 ${sc.late} LCO`           : '',
+    sc.na       ? `📵 ${sc.na} NA`               : '',
+    sc.extended ? `↪ ${sc.extended} EXT`         : '',
+    mayExtCount ? `🤔 ${mayExtCount} may extend`  : '',
+    sc.due      ? `⏳ ${sc.due} still due`        : '',
+    sc.out      ? `✅ ${sc.out} CO done`          : '',
+  ].filter(Boolean).join('  ·  ');
+
+  const text = `🏨 *HK Update — ${time}*\n${finalSummary}\n\n${lines.join('\n')}`;
   copyToClipboard(text, null, '');
   hkStampCopy();
   showToast(`HK update copied (${sorted.length} pending) ✓`, 'ok');
