@@ -865,9 +865,7 @@ function depCardHTML(r) {
   // Action buttons — driven by effective status
   let actHTML = '';
   if (es === 'extended') {
-    actHTML = `<div class="dc-actions g1">
-      <button class="dca dca-undo" onclick="depAction(${i},'due')">↺ Undo Extension</button>
-    </div>`;
+    actHTML = ``;
 
   } else if (es === 'out') {
     actHTML = `<div class="dc-actions g1">
@@ -908,12 +906,18 @@ function depCardHTML(r) {
         <button class="dc-intent-btn${r.intent==='returning'   ?' active':''}"
           onclick="depSetIntent(${i},'returning')">🔁 Returning</button>
       </div>`;
-    actHTML = `<div class="dc-actions g4">
-      <button class="dca dca-co"   onclick="depCheckOut(${i})">✓ Check Out</button>
-      <button class="dca dca-ext"  onclick="depAskExtend(${i})">↪ Extend</button>
-      <button class="dca dca-late" onclick="depAskLCO(${i})">🕐 Late CO</button>
-      <button class="dca dca-na"   onclick="depAction(${i},'na')">📵 No Answer</button>
-    </div>${intentRow}`;
+    if (r.intent === 'maybe_extend') {
+      actHTML = `<div class="dc-actions g1">
+        <button class="dca dca-ext" onclick="depAskExtend(${i})">↪ Extend</button>
+      </div>${intentRow}`;
+    } else {
+      actHTML = `<div class="dc-actions g4">
+        <button class="dca dca-co"   onclick="depCheckOut(${i})">✓ Check Out</button>
+        <button class="dca dca-ext"  onclick="depAskExtend(${i})">↪ Extend</button>
+        <button class="dca dca-late" onclick="depAskLCO(${i})">🕐 Late CO</button>
+        <button class="dca dca-na"   onclick="depAction(${i},'na')">📵 No Answer</button>
+      </div>${intentRow}`;
+    }
   }
 
   // Selection mode tick overlay — no label/input, just a div
