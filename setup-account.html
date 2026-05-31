@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ibis Ops · Account Setup</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Serif+Display:ital@0;1&display=swap');
+
+  :root {
+    --bg:     #080a0f;
+    --card:   #0e1118;
+    --border: #1a1f2e;
+    --border2:#242938;
+    --text:   #dde2f0;
+    --text2:  #7a84a0;
+    --text3:  #3a4055;
+    --mint:   #3ecf8e;
+    --rose:   #f06b7a;
+    --amber:  #f0a43a;
+    --sky:    #5ab4e8;
+    --purple: #8b7cf8;
+    --mono:   'JetBrains Mono', monospace;
+    --serif:  'DM Serif Display', serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    overflow: hidden;
+  }
+
+  /* animated background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(62,207,142,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(62,207,142,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    top: -200px; left: -200px;
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(62,207,142,0.06) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+    animation: drift 12s ease-in-out infinite alternate;
+  }
+
+  @keyframes drift {
+    from { transform: translate(0,0); }
+    to   { transform: translate(120px, 80px); }
+  }
+
+  .wrap {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 440px;
+  }
+
+  /* ── Gate screen ── */
+  #gateScreen, #setupScreen {
+    transition: opacity 0.4s, transform 0.4s;
+  }
+  #setupScreen {
+    display: none;
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  #setupScreen.visible {
+    display: block;
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .header {
+    margin-bottom: 32px;
+    text-align: center;
+  }
+  .header-eyebrow {
+    font-size: 0.6rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 10px;
+  }
+  .header-eyebrow span {
+    color: var(--mint);
+    margin-right: 6px;
+  }
+  .header h1 {
+    font-family: var(--serif);
+    font-size: 2rem;
+    font-weight: 400;
+    color: var(--text);
+    line-height: 1.1;
+  }
+  .header h1 em {
+    color: var(--mint);
+    font-style: italic;
+  }
+  .header p {
+    margin-top: 8px;
+    font-size: 0.65rem;
+    color: var(--text2);
+    line-height: 1.6;
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--mint), transparent);
+    opacity: 0.4;
+  }
+
+  .field {
+    margin-bottom: 18px;
+  }
+  label {
+    display: block;
+    font-size: 0.58rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text2);
+    margin-bottom: 7px;
+  }
+  input, select {
+    width: 100%;
+    background: #080a0f;
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 11px 14px;
+    color: var(--text);
+    font-size: 0.82rem;
+    font-family: var(--mono);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  input:focus, select:focus {
+    border-color: var(--mint);
+    box-shadow: 0 0 0 3px rgba(62,207,142,0.08);
+  }
+  input::placeholder { color: var(--text3); }
+  select option { background: #0e1118; }
+
+  .role-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .role-opt {
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    background: #080a0f;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .role-opt:hover { border-color: var(--border2); background: #0d1018; }
+  .role-opt.selected { border-color: var(--mint); background: rgba(62,207,142,0.06); }
+  .role-opt input[type=radio] { display: none; }
+  .role-icon { font-size: 1rem; }
+  .role-info { flex: 1; }
+  .role-name { font-size: 0.7rem; font-weight: 600; color: var(--text); }
+  .role-desc { font-size: 0.55rem; color: var(--text3); margin-top: 1px; }
+
+  .btn {
+    width: 100%;
+    padding: 13px;
+    border-radius: 8px;
+    border: none;
+    background: var(--mint);
+    color: #060810;
+    font-weight: 700;
+    font-size: 0.8rem;
+    font-family: var(--mono);
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+    margin-top: 6px;
+    position: relative;
+    overflow: hidden;
+  }
+  .btn:hover { opacity: 0.88; }
+  .btn:active { transform: scale(0.99); }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .btn-gate {
+    background: transparent;
+    border: 1px solid var(--mint);
+    color: var(--mint);
+  }
+  .btn-gate:hover { background: rgba(62,207,142,0.08); opacity: 1; }
+
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 22px 0;
+  }
+
+  .msg {
+    margin-top: 14px;
+    padding: 11px 14px;
+    border-radius: 8px;
+    font-size: 0.68rem;
+    line-height: 1.5;
+    display: none;
+  }
+  .msg.ok   { background: rgba(62,207,142,0.1);  border: 1px solid rgba(62,207,142,0.25); color: var(--mint); }
+  .msg.err  { background: rgba(240,107,122,0.1); border: 1px solid rgba(240,107,122,0.25); color: var(--rose); }
+  .msg.info { background: rgba(90,180,232,0.1);  border: 1px solid rgba(90,180,232,0.25);  color: var(--sky); }
+
+  .gate-lock {
+    text-align: center;
+    font-size: 2.5rem;
+    margin-bottom: 20px;
+    filter: drop-shadow(0 0 12px rgba(62,207,142,0.3));
+  }
+
+  .debug-box {
+    background: #080a0f;
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 0.62rem;
+    color: var(--text2);
+    line-height: 1.8;
+    margin-top: 14px;
+    display: none;
+  }
+  .debug-box.show { display: block; }
+  .debug-row { display: flex; gap: 8px; }
+  .debug-label { color: var(--text3); min-width: 80px; }
+  .debug-val   { color: var(--mint); word-break: break-all; }
+  .debug-val.err { color: var(--rose); }
+
+  .step-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.58rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin-bottom: 16px;
+  }
+  .step-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--amber);
+    box-shadow: 0 0 6px var(--amber);
+  }
+
+  .success-banner {
+    text-align: center;
+    padding: 24px 0 8px;
+  }
+  .success-icon { font-size: 2.5rem; margin-bottom: 12px; }
+  .success-title { font-family: var(--serif); font-size: 1.4rem; color: var(--mint); }
+  .success-sub { font-size: 0.65rem; color: var(--text2); margin-top: 8px; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ── GATE SCREEN ── -->
+  <div id="gateScreen">
+    <div class="header">
+      <div class="header-eyebrow"><span>🔐</span> Ibis Ops · Restricted</div>
+      <h1>Setup <em>Access</em></h1>
+      <p>Enter the setup password to continue</p>
+    </div>
+    <div class="card">
+      <div class="gate-lock">🔒</div>
+      <div class="field">
+        <label>Setup Password</label>
+        <input id="gatePass" type="password" placeholder="Enter setup password…"
+          onkeydown="if(event.key==='Enter')checkGate()"/>
+      </div>
+      <button class="btn btn-gate" onclick="checkGate()">Unlock →</button>
+      <div id="gateErr" class="msg err"></div>
+    </div>
+  </div>
+
+  <!-- ── SETUP SCREEN ── -->
+  <div id="setupScreen">
+    <div class="header">
+      <div class="header-eyebrow"><span>⚙️</span> Ibis Ops · Account Setup</div>
+      <h1>Create <em>Account</em></h1>
+      <p>Creates the Firebase Auth account + DB profile in one step</p>
+    </div>
+    <div class="card">
+
+      <div class="step-pill"><div class="step-dot"></div> Account Details</div>
+
+      <div class="field">
+        <label>Full Name</label>
+        <input id="uName" type="text" placeholder="Ahmed Elsafty"/>
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input id="uEmail" type="email" placeholder="ahmedhassan.elsafty@accor.com"/>
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input id="uPass" type="password" placeholder="Min 6 characters"/>
+      </div>
+      <div class="field">
+        <label>Confirm Password</label>
+        <input id="uPass2" type="password" placeholder="Repeat password"
+          onkeydown="if(event.key==='Enter')createAccount()"/>
+      </div>
+
+      <hr class="divider">
+      <div class="step-pill"><div class="step-dot"></div> Role</div>
+
+      <div class="field">
+        <div class="role-grid" id="roleGrid">
+          <label class="role-opt selected" onclick="selectRole('owner',this)">
+            <input type="radio" name="role" value="owner" checked>
+            <span class="role-icon">👑</span>
+            <div class="role-info">
+              <div class="role-name">Owner</div>
+              <div class="role-desc">Full access</div>
+            </div>
+          </label>
+          <label class="role-opt" onclick="selectRole('manager',this)">
+            <input type="radio" name="role" value="manager">
+            <span class="role-icon">🏅</span>
+            <div class="role-info">
+              <div class="role-name">Manager</div>
+              <div class="role-desc">All modules</div>
+            </div>
+          </label>
+          <label class="role-opt" onclick="selectRole('supervisor',this)">
+            <input type="radio" name="role" value="supervisor">
+            <span class="role-icon">⭐</span>
+            <div class="role-info">
+              <div class="role-name">Supervisor</div>
+              <div class="role-desc">Ops + reports</div>
+            </div>
+          </label>
+          <label class="role-opt" onclick="selectRole('agent',this)">
+            <input type="radio" name="role" value="agent">
+            <span class="role-icon">🛎️</span>
+            <div class="role-info">
+              <div class="role-name">Agent</div>
+              <div class="role-desc">Ops only</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <button class="btn" id="createBtn" onclick="createAccount()">Create Account →</button>
+      <div id="createMsg" class="msg"></div>
+
+      <!-- Debug box — always visible after attempt -->
+      <div id="debugBox" class="debug-box">
+        <div class="debug-row"><span class="debug-label">Status</span>   <span class="debug-val" id="dbgStatus">—</span></div>
+        <div class="debug-row"><span class="debug-label">Auth UID</span>  <span class="debug-val" id="dbgUid">—</span></div>
+        <div class="debug-row"><span class="debug-label">DB Write</span>  <span class="debug-val" id="dbgDb">—</span></div>
+        <div class="debug-row"><span class="debug-label">Error Code</span><span class="debug-val" id="dbgCode">—</span></div>
+        <div class="debug-row"><span class="debug-label">Error Msg</span> <span class="debug-val" id="dbgMsg">—</span></div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── Firebase config ───────────────────────────────────────
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyC0EEgikhcpPKqIe4B4qeL4lbPRbxrHJjc",
+  authDomain:        "ibis-ops-dubai.firebaseapp.com",
+  databaseURL:       "https://ibis-ops-dubai-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId:         "ibis-ops-dubai",
+  storageBucket:     "ibis-ops-dubai.firebasestorage.app",
+  messagingSenderId: "707337551887",
+  appId:             "1:707337551887:web:aaba944d6f1ae9c05ca37a"
+};
+const HOTEL_ID   = "ibis_dubai";
+const GATE_PASS  = "Kazokuyktsha@31";
+
+let _app = null;
+let _selectedRole = 'owner';
+
+// ── Gate ─────────────────────────────────────────────────
+function checkGate() {
+  const val  = document.getElementById('gatePass').value;
+  const errEl = document.getElementById('gateErr');
+  if (val === GATE_PASS) {
+    document.getElementById('gateScreen').style.opacity = '0';
+    document.getElementById('gateScreen').style.transform = 'translateY(-10px)';
+    setTimeout(() => {
+      document.getElementById('gateScreen').style.display = 'none';
+      const s = document.getElementById('setupScreen');
+      s.style.display = 'block';
+      requestAnimationFrame(() => s.classList.add('visible'));
+      initFirebase();
+    }, 300);
+  } else {
+    errEl.textContent = 'Incorrect password.';
+    errEl.style.display = 'block';
+    document.getElementById('gatePass').value = '';
+    document.getElementById('gatePass').focus();
+  }
+}
+
+// ── Role select ───────────────────────────────────────────
+function selectRole(role, el) {
+  _selectedRole = role;
+  document.querySelectorAll('.role-opt').forEach(r => r.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+// ── Init Firebase ─────────────────────────────────────────
+function initFirebase() {
+  try {
+    if (!firebase.apps.length) {
+      _app = firebase.initializeApp(FIREBASE_CONFIG);
+    } else {
+      _app = firebase.app();
+    }
+    dbg('Status', 'Firebase ready ✓', false);
+  } catch(e) {
+    dbg('Status', 'Firebase init failed: ' + e.message, true);
+  }
+}
+
+// ── Debug helper ──────────────────────────────────────────
+function dbg(field, val, isErr) {
+  const map = {
+    'Status':    'dbgStatus',
+    'Auth UID':  'dbgUid',
+    'DB Write':  'dbgDb',
+    'Error Code':'dbgCode',
+    'Error Msg': 'dbgMsg',
+  };
+  const el = document.getElementById(map[field]);
+  if (!el) return;
+  el.textContent = val;
+  el.className = 'debug-val' + (isErr ? ' err' : '');
+  document.getElementById('debugBox').classList.add('show');
+}
+
+// ── Create account ────────────────────────────────────────
+async function createAccount() {
+  const name  = document.getElementById('uName').value.trim();
+  const email = document.getElementById('uEmail').value.trim();
+  const pass  = document.getElementById('uPass').value;
+  const pass2 = document.getElementById('uPass2').value;
+  const msgEl = document.getElementById('createMsg');
+  const btn   = document.getElementById('createBtn');
+
+  // Reset debug
+  ['dbgStatus','dbgUid','dbgDb','dbgCode','dbgMsg'].forEach(id => {
+    const el = document.getElementById(id);
+    el.textContent = '—'; el.className = 'debug-val';
+  });
+  msgEl.style.display = 'none';
+
+  // Validate
+  if (!name || !email || !pass || !pass2) {
+    show(msgEl, 'All fields are required.', 'err'); return;
+  }
+  if (pass.length < 6) {
+    show(msgEl, 'Password must be at least 6 characters.', 'err'); return;
+  }
+  if (pass !== pass2) {
+    show(msgEl, 'Passwords do not match.', 'err'); return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Creating…';
+  show(msgEl, 'Connecting to Firebase Auth…', 'info');
+  dbg('Status', 'Creating Auth account…', false);
+
+  try {
+    // Step 1 — create Firebase Auth account
+    let cred;
+    try {
+      cred = await firebase.auth().createUserWithEmailAndPassword(email, pass);
+      dbg('Auth UID', cred.user.uid, false);
+      dbg('Status', 'Auth account created ✓', false);
+    } catch(authErr) {
+      dbg('Error Code', authErr.code || 'none', true);
+      dbg('Error Msg',  authErr.message || 'unknown', true);
+      dbg('Status', 'Auth FAILED', true);
+      console.error('Auth error:', authErr);
+
+      const map = {
+        'auth/email-already-in-use':   'This email already has a Firebase Auth account. Use a different email, or reset the password via Firebase Console.',
+        'auth/invalid-email':          'Invalid email address.',
+        'auth/weak-password':          'Password too weak — use at least 6 characters.',
+        'auth/operation-not-allowed':  'Email/Password sign-in is DISABLED in Firebase Console → Authentication → Sign-in method. Enable it first.',
+        'auth/network-request-failed': 'Network error — check your internet connection.',
+      };
+      show(msgEl, map[authErr.code] || `Auth failed: ${authErr.code} — ${authErr.message}`, 'err');
+      btn.disabled = false; btn.textContent = 'Create Account →';
+      return;
+    }
+
+    const uid = cred.user.uid;
+
+    // Step 2 — write profile to Realtime DB
+    show(msgEl, 'Writing profile to database…', 'info');
+    dbg('DB Write', 'Writing…', false);
+
+    try {
+      const profile = {
+        uid,
+        name,
+        email,
+        role:      _selectedRole,
+        active:    true,
+        createdAt: new Date().toISOString(),
+        createdBy: 'setup-page',
+        lastLogin: null,
+      };
+      await firebase.database()
+        .ref(`hotels/${HOTEL_ID}/users/${uid}`)
+        .set(profile);
+      dbg('DB Write', 'Written ✓', false);
+    } catch(dbErr) {
+      dbg('DB Write', 'FAILED: ' + dbErr.message, true);
+      dbg('Error Code', dbErr.code || 'none', true);
+      dbg('Error Msg',  dbErr.message, true);
+      console.error('DB error:', dbErr);
+      // Auth account was created but DB write failed
+      show(msgEl, `Auth account created (UID: ${uid.slice(0,12)}…) but DB write failed: ${dbErr.message} — you can manually add the profile in Firebase Console.`, 'err');
+      btn.disabled = false; btn.textContent = 'Try Again →';
+      return;
+    }
+
+    // Sign out — user should log in via the main app
+    await firebase.auth().signOut();
+
+    // Success
+    dbg('Status', '✓ Complete', false);
+    show(msgEl, '', 'ok');
+    msgEl.innerHTML = `
+      <div class="success-banner">
+        <div class="success-icon">✅</div>
+        <div class="success-title">Account Created</div>
+        <div class="success-sub">
+          <strong>${name}</strong> · ${_selectedRole}<br>
+          ${email}<br><br>
+          You can now log in to the main app with these credentials.<br>
+          Close this page — it's no longer needed.
+        </div>
+      </div>`;
+    msgEl.style.display = 'block';
+    btn.textContent = '✓ Done';
+
+  } catch(e) {
+    dbg('Error Code', e.code || 'none', true);
+    dbg('Error Msg',  e.message || 'unknown', true);
+    dbg('Status', 'Unexpected error', true);
+    console.error('Unexpected error:', e);
+    show(msgEl, `Unexpected error: ${e.message}`, 'err');
+    btn.disabled = false; btn.textContent = 'Try Again →';
+  }
+}
+
+function show(el, msg, type) {
+  el.className = 'msg ' + type;
+  el.textContent = msg;
+  el.style.display = msg ? 'block' : 'none';
+}
+</script>
+</body>
+</html>
