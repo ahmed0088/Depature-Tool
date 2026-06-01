@@ -351,7 +351,7 @@ function adminRenderUsers() {
 }
 
 async function adminLoadActivity() {
-  const snap = await firebase.database().ref(`hotels/${HOTEL_ID}/activityLog`).limitToLast(100).once('value');
+  const snap = await firebase.database().ref(`hotels/${HOTEL_ID}/activityLog`).limitToLast(200).once('value');
   _adminActivity = Object.values(snap.val() || {}).reverse();
   adminRenderActivity();
 }
@@ -363,17 +363,27 @@ function adminRenderActivity() {
     el.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text3);">No activity yet</div>`;
     return;
   }
-  const icons = { login:'🔓', logout:'🔒', create_user:'➕', edit_user:'✏️', disable_user:'🔒', enable_user:'✓' };
-  el.innerHTML = _adminActivity.map(e => `
+  const icons = {
+    login:'🔓', logout:'🔒',
+    create_user:'➕', edit_user:'✏️', disable_user:'🔒', enable_user:'✓',
+    shift_task_done:'✅', shift_task_undone:'↩', shift_task_added:'➕', shift_task_deleted:'🗑️', shift_reset:'↺',
+    checklist_done:'✅', checklist_undone:'↩', checklist_skipped:'⏭', checklist_unskipped:'↩',
+    departure_out:'🚪', departure_na:'—', departure_late:'🕐', departure_extended:'📅', departure_due:'↩',
+    arrivals_loaded:'📥', arrivals_cleared:'🗑️',
+  };
+  el.innerHTML = _adminActivity.map(e => {
+    const roleColor = (ROLES[e.role] || ROLES.readonly).color;
+    return `
     <div class="admin-log-row">
       <span class="admin-log-icon">${icons[e.action] || '•'}</span>
       <div class="admin-log-body">
         <span class="admin-log-name">${e.name}</span>
+        <span class="admin-log-role" style="color:${roleColor};font-size:0.58rem;font-family:var(--mono);background:${roleColor}18;padding:1px 5px;border-radius:4px;margin:0 4px;">${(ROLES[e.role]||ROLES.readonly).label}</span>
         <span class="admin-log-action">${e.action.replace(/_/g,' ')}</span>
         ${e.detail ? `<span class="admin-log-detail">${e.detail}</span>` : ''}
       </div>
       <span class="admin-log-time">${new Date(e.ts).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</span>
-    </div>`).join('');
+    </div>`}).join('');
 }
 
 function openCreateUser() {
@@ -480,12 +490,15 @@ function adminTab(tab) {
 }
 
 // ── Show / hide password ──────────────────────────────────
+const _EYE_OPEN = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+const _EYE_SHUT = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+
 function togglePassVis() {
   const input = document.getElementById('loginPass');
   const icon  = document.getElementById('eyeIcon');
-  if (!input) return;
+  if (!input || !icon) return;
   const isHidden = input.type === 'password';
-  input.type  = isHidden ? 'text' : 'password';
-  icon.textContent = isHidden ? '🙈' : '👁';
+  input.type   = isHidden ? 'text' : 'password';
+  icon.innerHTML = isHidden ? _EYE_OPEN : _EYE_SHUT;
   input.focus();
 }

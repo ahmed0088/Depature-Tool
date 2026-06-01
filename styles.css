@@ -2588,20 +2588,37 @@ kbd {
   align-items: center;
 }
 .login-pass-wrap .login-input {
-  padding-right: 44px;
+  padding-right: 52px;
 }
 .login-eye {
   position: absolute;
-  right: 12px;
+  right: 8px;
   background: none;
   border: none;
   cursor: pointer;
-  padding: 4px;
-  font-size: 1rem;
-  line-height: 1;
-  opacity: 0.45;
-  transition: opacity 0.15s;
-  color: inherit;
+  /* Large tap target — minimum 44×44 px on mobile */
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  opacity: 0.55;
+  transition: opacity 0.15s, background 0.15s;
+  color: #7f92aa;
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  flex-shrink: 0;
 }
-.login-eye:hover { opacity: 0.85; }
+.login-eye svg {
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+  flex-shrink: 0;
+}
+.login-eye:hover  { opacity: 1; background: rgba(255,255,255,0.06); }
+.login-eye:active { opacity: 1; background: rgba(255,255,255,0.1); }
+@media (max-width: 768px) {
+  .login-eye { width: 48px; height: 48px; right: 4px; }
+  .login-eye svg { width: 20px; height: 20px; }
+}

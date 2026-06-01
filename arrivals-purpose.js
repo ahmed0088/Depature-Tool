@@ -157,9 +157,10 @@ function loadArrivals() {
   if (!guests.length) { alert('No guests found.'); return; }
   arrGuests = guests; arrRender(); setTimeout(() => runAINat_arr(), 300);
   addArrLog('Loaded', `${guests.length} guests loaded from paste`);
+  logActivity('arrivals_loaded', `${guests.length} guests`);
 }
 
-function clearArrivals() { arrGuests = []; arrRender(); saveArrivals([]); addArrLog('Cleared', 'All arrivals cleared'); }
+function clearArrivals() { arrGuests = []; arrRender(); saveArrivals([]); addArrLog('Cleared', 'All arrivals cleared'); logActivity('arrivals_cleared', ''); }
 
 function exportArrivals() {
   const wb   = XLSX.utils.book_new();

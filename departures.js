@@ -1131,6 +1131,10 @@ function depAction(i, status, extraNights) {
   depRender();
   updateDepBadge();
   saveDeps();
+
+  // ── Per-user activity log ─────────────────────────────────
+  const _actionLabels = { out:'Checked out', na:'Marked N/A', late:'Late checkout', extended:'Extended stay', due:'Undid action' };
+  logActivity('departure_' + status, `Room ${r.roomStr} — ${r.name} (${_actionLabels[status] || status})`);
 }
 
 function saveDeps() {
