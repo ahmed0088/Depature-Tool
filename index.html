@@ -235,16 +235,19 @@
       </div>
       <div class="prog-track"><div class="prog-fill" id="depProgFill" style="width:0%"></div></div>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
-      <div class="filter-row" style="margin-bottom:0;flex:1;">
-        <button class="fchip on"   data-f="all"          onclick="depFilter('all',this)">All <span id="dfc-all">0</span></button>
-        <button class="fchip due"  data-f="due"          onclick="depFilter('due',this)">⏳ Due <span id="dfc-due">0</span></button>
-        <button class="fchip late" data-f="late"         onclick="depFilter('late',this)">🕐 Late CO <span id="dfc-late">0</span></button>
-        <button class="fchip na"   data-f="na"           onclick="depFilter('na',this)">📵 NA <span id="dfc-na">0</span></button>
-        <button class="fchip ext"  data-f="maybe_extend" onclick="depFilter('maybe_extend',this)">🤔 May Extend <span id="dfc-maybe_extend">0</span></button>
-        <button class="fchip bal"  data-f="balance"      onclick="depFilter('balance',this)">💳 Balance <span id="dfc-balance">0</span></button>
-        <button class="fchip ext"  data-f="extended"     onclick="depFilter('extended',this)">↪ Extended <span id="dfc-extended">0</span></button>
-        <button class="fchip out"  data-f="out"          onclick="depFilter('out',this)">✓ Out <span id="dfc-out">0</span></button>
+    <!-- Filter + search row -->
+    <div class="dep-filter-search-row">
+      <div class="dep-filter-scroll">
+        <div class="filter-row dep-filter-chips" style="margin-bottom:0;flex-wrap:nowrap;">
+          <button class="fchip on"   data-f="all"          onclick="depFilter('all',this)">All <span id="dfc-all">0</span></button>
+          <button class="fchip due"  data-f="due"          onclick="depFilter('due',this)">⏳ Due <span id="dfc-due">0</span></button>
+          <button class="fchip late" data-f="late"         onclick="depFilter('late',this)">🕐 Late CO <span id="dfc-late">0</span></button>
+          <button class="fchip na"   data-f="na"           onclick="depFilter('na',this)">📵 NA <span id="dfc-na">0</span></button>
+          <button class="fchip ext"  data-f="maybe_extend" onclick="depFilter('maybe_extend',this)">🤔 May Extend <span id="dfc-maybe_extend">0</span></button>
+          <button class="fchip bal"  data-f="balance"      onclick="depFilter('balance',this)">💳 Balance <span id="dfc-balance">0</span></button>
+          <button class="fchip ext"  data-f="extended"     onclick="depFilter('extended',this)">↪ Extended <span id="dfc-extended">0</span></button>
+          <button class="fchip out"  data-f="out"          onclick="depFilter('out',this)">✓ Out <span id="dfc-out">0</span></button>
+        </div>
       </div>
       <div class="search-wrap" id="depSearchWrap">
         <span style="padding:0 8px;color:var(--text3);">⌕</span>
@@ -263,6 +266,7 @@
         <button class="dep-sort-btn"    data-s="time"    onclick="depSetSort('time')">🕐 Time<span class="sort-arrow"></span></button>
         <button class="dep-sort-btn"    data-s="balance" onclick="depSetSort('balance')">💳 Balance<span class="sort-arrow"></span></button>
         <button class="dep-sort-btn"    data-s="status"  onclick="depSetSort('status')">📊 Status<span class="sort-arrow"></span></button>
+        <span id="depSortLbl" style="font-family:var(--mono);font-size:0.6rem;color:var(--green);margin-left:4px;white-space:nowrap;"></span>
       </div>
       <button class="dep-jump-btn" id="depJumpBtn" onclick="toggleDepJump()">🎯 Quick Jump</button>
     </div>
