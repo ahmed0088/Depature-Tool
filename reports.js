@@ -38,8 +38,19 @@ function resolveCountry(name) {
 }
 
 // ── NATIONALITY REPORT ────────────────────────────────────
+function natRestoreSaved() {
+  try {
+    const saved = localStorage.getItem('ibis_nat_paste');
+    if (saved) { const el = document.getElementById('natInput'); if(el && !el.value.trim()) { el.value = saved; showToast('Last session data restored ↩'); } }
+  } catch(e) {}
+}
+// Restore saved paste on page load
+if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', natRestoreSaved); } else { setTimeout(natRestoreSaved, 400); }
+
 function processNat() {
   const raw    = document.getElementById('natInput').value.trim();
+  window._natReportMonth = null;
+  if (raw) { try { localStorage.setItem('ibis_nat_paste', raw); } catch(e){} }
   const errBox = document.getElementById('natError'); errBox.classList.remove('show');
   const showErr = msg => { document.getElementById('natErrorMsg').textContent = msg; errBox.classList.add('show'); };
   if (!raw) return showErr('Paste the Opera nationality report first.');
@@ -70,12 +81,26 @@ function processNat() {
       const arrP  = parseInt(p[idx['ARR_PERSONS']] ||'0')||0;
       const stayR = parseInt(p[idx['STAY_ROOMS']]  ||'0')||0;
       const stayP = parseInt(p[idx['STAY_PERSONS']]||'0')||0;
+      const arrPly  = parseInt(p[idx['ARR_PERSONS_LY']]  ||'0')||0;
+      const stayRly = parseInt(p[idx['STAY_ROOMS_LY']]   ||'0')||0;
+      const stayPly = parseInt(p[idx['STAY_PERSONS_LY']] ||'0')||0;
+      // Auto-detect report month from BUSINESS_DATE or MONTH column
+      if (!window._natReportMonth && idx['BUSINESS_DATE'] !== undefined) {
+        const ds = (p[idx['BUSINESS_DATE']]||'').trim();
+        if (ds) { const d = new Date(ds); if (!isNaN(d)) window._natReportMonth = d.toLocaleString('en-GB',{month:'long',year:'numeric'}); }
+      }
+      if (!window._natReportMonth && idx['MONTH'] !== undefined) {
+        const ms = (p[idx['MONTH']]||'').trim(); if (ms) window._natReportMonth = ms;
+      }
       const key = (p[idx['COUNTRY_CODE']]||'').trim() + '|NAT';
       if (seenKey.has(key) || !name) continue; seenKey.add(key);
-      if (!operaRaw[name]) operaRaw[name] = {APR:0,RMS:0,PRS:0};
+      if (!operaRaw[name]) operaRaw[name] = {APR:0,RMS:0,PRS:0,APRLY:0,RMSLY:0,PRSLY:0};
       operaRaw[name].APR = arrP;   // Arrival Persons
       operaRaw[name].RMS = stayR;  // Stay Rooms
       operaRaw[name].PRS = stayP;  // Stay Persons
+      operaRaw[name].APRLY = arrPly;
+      operaRaw[name].RMSLY = stayRly;
+      operaRaw[name].PRSLY = stayPly;
       grandAPR += arrP;
       grandRMS += stayR;
       grandPRS += stayP;
@@ -93,7 +118,7 @@ function processNat() {
       const name = (p[idx['COUNTRY_NAME']]||'').trim();
       const key  = (p[idx['COUNTRY_CODE']]||'').trim() + '|' + code;
       if (seenKey.has(key) || !name) continue; seenKey.add(key);
-      if (!operaRaw[name]) operaRaw[name] = {APR:0,RMS:0,PRS:0};
+      if (!operaRaw[name]) operaRaw[name] = {APR:0,RMS:0,PRS:0,APRLY:0,RMSLY:0,PRSLY:0};
       operaRaw[name][code] = parseInt(p[idx['SUMVALUEPERCOUNTRY_CODE']])||0;
     }
   }
@@ -107,7 +132,7 @@ function processNat() {
   let mappedAPR=0,mappedRMS=0,mappedPRS=0,active=0;
   const rows = [];
   EXCEL_COUNTRIES.forEach(c => {
-    const v = excelData[c] || {APR:0,RMS:0,PRS:0};
+    const v = excelData[c] || {APR:0,RMS:0,PRS:0,APRLY:0,RMSLY:0,PRSLY:0};
     rows.push(v); mappedAPR+=v.APR; mappedRMS+=v.RMS; mappedPRS+=v.PRS;
     if (v.APR||v.RMS||v.PRS) active++;
   });
@@ -130,6 +155,22 @@ function processNat() {
   window._buildNatCopy = buildNatCopy;
   natCopyText = buildNatCopy();
 
+  // F1: Show auto-detected report month
+  const monthLabel = window._natReportMonth || '';
+  const mlEl = document.getElementById('natMonthLabel');
+  if (mlEl) { mlEl.textContent = monthLabel ? '📅 ' + monthLabel : ''; mlEl.style.display = monthLabel ? 'block' : 'none'; }
+
+  // F4: Sync nationality totals to handover app via localStorage
+  try {
+    localStorage.setItem('ibis_nat_sync', JSON.stringify({
+      month: monthLabel,
+      grandAPR, grandRMS, grandPRS,
+      mappedAPR, mappedRMS, mappedPRS,
+      active,
+      ts: new Date().toISOString()
+    }));
+  } catch(e) {}
+
   ['kpi-apr','kpi-rms','kpi-prs'].forEach((id,i) => { const el=document.getElementById(id); if(el) el.textContent=[grandAPR,grandRMS,grandPRS][i].toLocaleString(); });
 
   const aS = (type,ico,title,sub) => `<div style="display:flex;gap:9px;padding:9px 12px;border-radius:var(--r);margin-bottom:5px;background:${type==='ok'?'rgba(62,207,142,0.04)':type==='warn'?'rgba(240,164,58,0.05)':'rgba(240,107,122,0.05)'};border:1px solid ${type==='ok'?'rgba(62,207,142,0.12)':type==='warn'?'rgba(240,164,58,0.18)':'rgba(240,107,122,0.18)'};border-left:3px solid ${type==='ok'?'var(--mint)':type==='warn'?'var(--amber)':'var(--rose)'}"><span>${ico}</span><div><strong style="font-size:0.76rem;color:var(--text);display:block;">${title}</strong><span style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);">${sub}</span></div></div>`;
@@ -147,14 +188,28 @@ function processNat() {
   if (badge) { badge.style.color = hasIssues?'var(--amber)':'var(--mint)'; badge.textContent = hasIssues?`${unknowns.length} unk · ${unmatched.length} unmatched`:'✓ Clean'; }
   ['gap-apr','gap-rms','gap-prs'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.textContent=[gapAPR,gapRMS,gapPRS][i]>0?'−'+[gapAPR,gapRMS,gapPRS][i]:'0';});
   ['s-active','s-zero','s-unmat','s-unk'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.textContent=[active,240-active,unmatched.length,unknowns.length][i];});
+  const hasLY = rows.some(v => v.APRLY || v.RMSLY || v.PRSLY);
+  const pctStr = (cur, ly) => {
+    if (!ly) return '';
+    const d = ((cur - ly) / ly * 100);
+    const clr = d >= 0 ? 'var(--mint)' : 'var(--rose)';
+    return `<span style="font-family:var(--mono);font-size:0.54rem;color:${clr};margin-left:3px;">${d>=0?'+':''}${d.toFixed(0)}%</span>`;
+  };
+  // Update preview header to show LY columns if available
+  const prevHdr = document.getElementById('natPreviewHeader');
+  if (prevHdr) prevHdr.innerHTML = hasLY
+    ? '<span style="grid-column:1"></span><span style="font-size:0.6rem;color:var(--text3);">Country</span><span style="font-family:var(--mono);font-size:0.58rem;color:var(--sky);text-align:right;">ARR</span><span style="font-family:var(--mono);font-size:0.58rem;color:var(--gold);text-align:right;">RMS</span><span style="font-family:var(--mono);font-size:0.58rem;color:var(--mint);text-align:right;">PRS</span><span style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);text-align:right;">vs LY</span>'
+    : '';
   document.getElementById('natPreview').innerHTML = EXCEL_COUNTRIES.map((c,i) => {
     const v=rows[i]; const rn=i+8; const has=v.APR||v.RMS||v.PRS; const sn=c.length>22?c.substring(0,21)+'…':c;
-    return `<div style="display:grid;grid-template-columns:36px 1fr 54px 54px 54px;padding:3px 12px;border-bottom:1px solid rgba(255,255,255,0.02);${has?'background:rgba(90,180,232,0.03);':''}"><span style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);">${rn}</span><span style="font-size:0.68rem;color:${has?'var(--text2)':'var(--text3)'};" title="${c}">${sn}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--sky)':'var(--border2)'};">${v.APR}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--gold)':'var(--border2)'};">${v.RMS}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--mint)':'var(--border2)'};">${v.PRS}</span></div>`;
+    const lyBadge = hasLY && has ? pctStr(v.APR, v.APRLY) : '';
+    const cols = hasLY ? '36px 1fr 54px 54px 54px 54px' : '36px 1fr 54px 54px 54px';
+    return `<div style="display:grid;grid-template-columns:${cols};padding:3px 12px;border-bottom:1px solid rgba(255,255,255,0.02);${has?'background:rgba(90,180,232,0.03);':''}"><span style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);">${rn}</span><span style="font-size:0.68rem;color:${has?'var(--text2)':'var(--text3)'};" title="${c}">${sn}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--sky)':'var(--border2)'};">${v.APR||''}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--gold)':'var(--border2)'};">${v.RMS||''}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--mint)':'var(--border2)'};">${v.PRS||''}</span>${hasLY?`<span style="text-align:right;">${lyBadge}</span>`:''}</div>`;
   }).join('');
   document.getElementById('natResults').style.display = 'block';
 }
 function copyNat()  { if (window._buildNatCopy) natCopyText = window._buildNatCopy(); if (!natCopyText) return; copyToClipboard(natCopyText, document.getElementById('natCopyBtn'), 'Copy All 240 Rows'); }
-function clearNat() { document.getElementById('natInput').value=''; document.getElementById('natResults').style.display='none'; document.getElementById('natError').classList.remove('show'); natCopyText=''; }
+function clearNat() { document.getElementById('natInput').value=''; document.getElementById('natResults').style.display='none'; document.getElementById('natError').classList.remove('show'); natCopyText=''; try { localStorage.removeItem('ibis_nat_paste'); } catch(e){} }
 
 // ── RENTED ROOMS & BEDS ───────────────────────────────────
 function parseHF(raw) {
