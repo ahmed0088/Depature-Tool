@@ -22,6 +22,10 @@ const NAME_MAP = {
   "Burkina Fasa":"Burkina Faso",
   "Korea (South)":"Korea, Republic of (South)",
   "Libyan Arab Jamahiriya":"Libya",
+  "Bosnia Herzegovina":"Bosnia-Herzegovina",
+  "Congo":"Congo (Republic of the Congo)",
+  "Congo, The Democratic Republic of the":"Congo, Dem. Rep. of (Zaire)",
+  "Kyrgzstan":"Kyrghyzstan",
 };
 function resolveCountry(name) {
   if (!name) return { excel: null, isUnknown: true };
