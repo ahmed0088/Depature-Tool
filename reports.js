@@ -113,7 +113,22 @@ function processNat() {
   });
   if (!grandAPR) grandAPR=mappedAPR; if (!grandRMS) grandRMS=mappedRMS; if (!grandPRS) grandPRS=mappedPRS;
   const gapAPR=grandAPR-mappedAPR, gapRMS=grandRMS-mappedRMS, gapPRS=grandPRS-mappedPRS;
-  natCopyText = rows.map(v => v.APR+'\t'+v.RMS+'\t'+v.PRS).join('\n');
+  const z = n => n === 0 ? '' : n;
+
+  // Store rows + unknown totals for optional UAE merge (toggled by checkbox)
+  const unkTotals = unknowns.reduce((a,u)=>({APR:a.APR+u.APR,RMS:a.RMS+u.RMS,PRS:a.PRS+u.PRS}),{APR:0,RMS:0,PRS:0});
+  window._natRows = rows; window._natUnkTotals = unkTotals;
+  const uaeIdx = EXCEL_COUNTRIES.indexOf('United Arab Emirates');
+  function buildNatCopy() {
+    const mergeUnk = document.getElementById('mergeUnkChk') && document.getElementById('mergeUnkChk').checked;
+    return window._natRows.map((v,i) => {
+      let apr=v.APR, rms=v.RMS, prs=v.PRS;
+      if (mergeUnk && i === uaeIdx) { apr+=window._natUnkTotals.APR; rms+=window._natUnkTotals.RMS; prs+=window._natUnkTotals.PRS; }
+      return z(apr)+'\t'+z(rms)+'\t'+z(prs);
+    }).join('\n');
+  }
+  window._buildNatCopy = buildNatCopy;
+  natCopyText = buildNatCopy();
 
   ['kpi-apr','kpi-rms','kpi-prs'].forEach((id,i) => { const el=document.getElementById(id); if(el) el.textContent=[grandAPR,grandRMS,grandPRS][i].toLocaleString(); });
 
@@ -124,7 +139,9 @@ function processNat() {
     const lbl=['New Arrivals','Room Nights','Guest Nights'][ki];
     return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:11px 13px;"><div style="font-family:var(--mono);font-size:0.56rem;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid var(--border);">${lbl}</div><div style="display:flex;justify-content:space-between;padding:3px 0;font-size:0.72rem;"><span style="color:var(--text3);">Opera</span><span style="font-family:var(--mono);">${op.toLocaleString()}</span></div><div style="display:flex;justify-content:space-between;padding:3px 0;font-size:0.72rem;"><span style="color:var(--text3);">Placed</span><span style="font-family:var(--mono);color:var(--text2);">${mp.toLocaleString()}</span></div><div style="display:flex;justify-content:space-between;padding:3px 0;font-size:0.72rem;"><span style="color:var(--text3);">Gap</span><span style="font-family:var(--mono);color:${gp>0?'var(--amber)':'var(--mint)'};">${gp>0?'−'+gp:'✓ 0'}</span></div></div>`;
   }).join('');
-  document.getElementById('natUnknownList').innerHTML  = unknowns.length===0 ? aS('ok','✅','No unknown guests','Perfect.') : unknowns.map(u=>aS('warn','⚠️',`"${u.name}" — ${u.APR} arrivals`,'No nationality code.')).join('');
+  const unkListHTML = unknowns.length===0 ? aS('ok','✅','No unknown guests','Perfect.') : unknowns.map(u=>aS('warn','⚠️',`"${u.name}" — ${u.APR} arrivals`,'No nationality code.')).join('');
+  const mergeChkHTML = unknowns.length > 0 ? `<label style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:9px 12px;border-radius:var(--r);background:rgba(90,180,232,0.05);border:1px solid rgba(90,180,232,0.15);cursor:pointer;font-size:0.72rem;color:var(--text2);user-select:none;"><input type="checkbox" id="mergeUnkChk" style="accent-color:var(--sky);width:14px;height:14px;cursor:pointer;" onchange="natCopyText=window._buildNatCopy&&window._buildNatCopy();"> Merge unknown nationality into <strong style="color:var(--sky);margin-left:3px;">United Arab Emirates</strong></label>` : '';
+  document.getElementById('natUnknownList').innerHTML = unkListHTML + mergeChkHTML;
   document.getElementById('natUnmatchedList').innerHTML = unmatched.length===0 ? aS('ok','✅','All countries matched','No data lost.') : unmatched.map(u=>aS('error','🔴',`"${u.name}" — NOT PLACED`,'Country has no Excel row.')).join('');
   const badge = document.getElementById('natDiagBadge'); const hasIssues = unknowns.length>0||unmatched.length>0;
   if (badge) { badge.style.color = hasIssues?'var(--amber)':'var(--mint)'; badge.textContent = hasIssues?`${unknowns.length} unk · ${unmatched.length} unmatched`:'✓ Clean'; }
@@ -136,7 +153,7 @@ function processNat() {
   }).join('');
   document.getElementById('natResults').style.display = 'block';
 }
-function copyNat()  { if (!natCopyText) return; copyToClipboard(natCopyText, document.getElementById('natCopyBtn'), 'Copy All 240 Rows'); }
+function copyNat()  { if (window._buildNatCopy) natCopyText = window._buildNatCopy(); if (!natCopyText) return; copyToClipboard(natCopyText, document.getElementById('natCopyBtn'), 'Copy All 240 Rows'); }
 function clearNat() { document.getElementById('natInput').value=''; document.getElementById('natResults').style.display='none'; document.getElementById('natError').classList.remove('show'); natCopyText=''; }
 
 // ── RENTED ROOMS & BEDS ───────────────────────────────────
