@@ -230,7 +230,7 @@ function depCounts() {
   const out      = depRooms.filter(r => r.status === 'out').length;
   const na       = depRooms.filter(r => r.status === 'na').length;
   return {
-    all:          due + late + na + extended + out,   // today's rooms only (no preserved ghosts)
+    all:          due + late + na + out + extended,   // total rooms today
     due,
     late,
     extended,
@@ -439,7 +439,7 @@ function depSetSort(key) {
 }
 function depRender() {
   const sc  = depCounts();
-  const pct = sc.all ? Math.round(sc.out / sc.all * 100) : 0;
+  const pct = sc.all ? Math.round((sc.out + sc.extended) / sc.all * 100) : 0;
 
   // Push counts to filter chips
   Object.entries(sc).forEach(([k, v]) => {
@@ -461,10 +461,10 @@ function depRender() {
   document.getElementById('depKpis').innerHTML = `
     <div class="dep-kpi k-total"><div class="dep-kpi-icon">🏨</div><div class="dep-kpi-val">${sc.all}</div><div class="dep-kpi-label">Total</div></div>
     <div class="dep-kpi k-due"><div class="dep-kpi-icon">⏳</div><div class="dep-kpi-val">${sc.due}</div><div class="dep-kpi-label">Due Out</div></div>
-    <div class="dep-kpi k-ext"><div class="dep-kpi-icon">↪</div><div class="dep-kpi-val">${sc.extended}</div><div class="dep-kpi-label">Extended</div></div>
     <div class="dep-kpi k-late"><div class="dep-kpi-icon">🕐</div><div class="dep-kpi-val">${sc.late}</div><div class="dep-kpi-label">Late CO</div></div>
     <div class="dep-kpi k-na"><div class="dep-kpi-icon">📵</div><div class="dep-kpi-val">${sc.na}</div><div class="dep-kpi-label">No Answer</div></div>
     <div class="dep-kpi k-out"><div class="dep-kpi-icon">✓</div><div class="dep-kpi-val">${sc.out}</div><div class="dep-kpi-label">Checked Out</div></div>
+    <div class="dep-kpi k-ext"><div class="dep-kpi-icon">↪✓</div><div class="dep-kpi-val">${sc.extended}</div><div class="dep-kpi-label">Extended</div></div>
     <div class="dep-kpi k-bal ${totalOwing>0?'has-balance':''}"><div class="dep-kpi-icon">💳</div><div class="dep-kpi-val" style="font-size:${totalOwing>0?'0.82rem':'1.1rem'}">${balKpiVal}</div><div class="dep-kpi-label">Balance Owing</div></div>`;
 
   // Update occupancy pill in topbar
@@ -472,7 +472,7 @@ function depRender() {
   const occLbl = document.getElementById('occLabel');
   if (occEl && occLbl && sc.all > 0) {
     occEl.style.display = '';
-    occLbl.textContent  = `${sc.out} / ${sc.all} departed`;
+    occLbl.textContent  = `${sc.out + sc.extended} / ${sc.all} done`;
   }
 
   // HK Status bar — always visible when board is loaded
@@ -497,7 +497,7 @@ function depRender() {
   if (outBar) outBar.style.display = sc.out > 0 ? 'flex' : 'none';
   if (outCnt) outCnt.textContent = sc.out + ' room' + (sc.out !== 1 ? 's' : '');
 
-  document.getElementById('depProgLabel').textContent = `${sc.out} of ${sc.all} checked out`;
+  document.getElementById('depProgLabel').textContent = `${sc.out + sc.extended} of ${sc.all} done (${sc.out} CO · ${sc.extended} EXT)`;
   document.getElementById('depProgPct').textContent   = pct + '%';
   document.getElementById('depProgFill').style.width  = pct + '%';
 
@@ -517,7 +517,7 @@ function depRender() {
     const es = effectiveStatus(r);
     let mf;
     switch (depFilter_) {
-      case 'all':          mf = es === 'due' || es === 'late' || es === 'na'; break;
+      case 'all':          mf = es === 'due' || es === 'late' || es === 'na'; break; // extended excluded — done
       case 'balance':      mf = r.balance > 0 && es !== 'out' && es !== 'extended'; break;
       case 'pending':      mf = !!r.intent && es !== 'out' && es !== 'extended'; break;
       case 'maybe_extend': mf = r.intent === 'maybe_extend'; break;
@@ -533,7 +533,7 @@ function depRender() {
   });
 
   // ── Sort ────────────────────────────────────────────────
-  const STATUS_ORDER = { late: 0, due: 1, na: 2, extended: 3, out: 4 };
+  const STATUS_ORDER = { late: 0, due: 1, na: 2, out: 3, extended: 3 };
 
   // When viewing the checked-out list, always show newest checkout first
   // (unless user has explicitly chosen a different sort key)
@@ -1608,7 +1608,7 @@ function depCopyExtList(mode) {
 }
 
 // ── HK Full Status Update ─────────────────────────────────
-// Shows only rooms that still need action (due, late, NA, extended).
+// Shows only rooms that still need action (due, late, NA). Extended = done.
 // Checked-out rooms are NOT included — HK already has those from the
 // individual checkout copies. This is the "what's left" message.
 function depCopyHKUpdate() {
@@ -1624,7 +1624,7 @@ function depCopyHKUpdate() {
 
   // Only include rooms that still need action — exclude checked-out
   const sorted = [...depRooms]
-    .filter(r => effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended')
+    .filter(r => effectiveStatus(r) !== 'out' && r.status !== 'extended')
     .sort((a, b) => parseInt(a.room) - parseInt(b.room));
 
   const sc = depCounts();
