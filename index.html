@@ -1746,7 +1746,12 @@ async function appInit() {
     <button class="mob-more-item" data-panel="audit"       onclick="showPanel('audit');toggleMobMore()"><span>🌙</span>PM Rooms</button>
     <button class="mob-more-item" data-panel="immig"       onclick="showPanel('immig');toggleMobMore()"><span>🛂</span>Immigration</button>
     <button class="mob-more-item" data-panel="tourism"     onclick="showPanel('tourism');toggleMobMore()"><span>🏛️</span>Tourism Tax</button>
+    <button class="mob-more-item" id="mobAdminBtn"          onclick="openAdminPanel();toggleMobMore()" style="display:none;"><span>👥</span>Team</button>
+    <button class="mob-more-item"                           onclick="exportAllData();toggleMobMore()"><span>💾</span>Export</button>
+    <button class="mob-more-item"                           onclick="toggleMobMore();setTimeout(()=>document.querySelector('.mob-import-input').click(),100)"><span>📂</span>Import</button>
+    <button class="mob-more-item"                           onclick="authLogout();toggleMobMore()"><span>⏻</span>Sign Out</button>
   </div>
+  <input type="file" accept=".json" class="mob-import-input" onchange="handleImport(this)" style="display:none"/>
 </div>
 
 </div><!-- /appWrapper -->

@@ -220,26 +220,47 @@ async function authLogout() {
   // Reset UI
   const pill = document.getElementById('authUserPill');
   if (pill) { pill.innerHTML = ''; pill.style.display = 'none'; }
-  const adminBtn = document.getElementById('adminPanelBtn');
-  if (adminBtn) adminBtn.style.display = 'none';
+  document.getElementById('adminPanelBtn')  ?.style && (document.getElementById('adminPanelBtn').style.display  = 'none');
+  document.getElementById('mobAdminBtn')    ?.style && (document.getElementById('mobAdminBtn').style.display    = 'none');
   showLoginScreen();
 }
 
 // ── Update topbar ─────────────────────────────────────────
 function updateAuthUI() {
-  const p   = currentProfile;
-  const def = ROLES[p.role] || ROLES.readonly;
-  const el  = document.getElementById('authUserPill');
+  const p      = currentProfile;
+  const def    = ROLES[p.role] || ROLES.readonly;
+  const isMob  = window.innerWidth <= 768;
+  const el     = document.getElementById('authUserPill');
   if (el) {
-    el.innerHTML = `
-      <span style="color:${def.color};font-size:0.85rem;flex-shrink:0;">${def.icon}</span>
-      <span class="pill-name" style="font-weight:600;overflow:hidden;text-overflow:ellipsis;">${p.name}</span>
-      <span class="pill-role" style="color:var(--text3);font-size:0.6rem;flex-shrink:0;">${def.label}</span>
-      <button onclick="authLogout()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:0.8rem;padding:2px 0 0 2px;line-height:1;flex-shrink:0;" title="Sign out">⏻</button>
-    `;
+    // On mobile: show only icon + first name, no logout button (it's in More drawer)
+    const firstName = p.name.split(' ')[0];
+    if (isMob) {
+      el.innerHTML = `
+        <span style="color:${def.color};font-size:0.9rem;flex-shrink:0;">${def.icon}</span>
+        <span class="pill-name" style="font-weight:600;font-size:0.65rem;overflow:hidden;text-overflow:ellipsis;max-width:90px;">${firstName}</span>
+      `;
+    } else {
+      el.innerHTML = `
+        <span style="color:${def.color};font-size:0.85rem;flex-shrink:0;">${def.icon}</span>
+        <span class="pill-name" style="font-weight:600;overflow:hidden;text-overflow:ellipsis;">${p.name}</span>
+        <span class="pill-role" style="color:var(--text3);font-size:0.6rem;flex-shrink:0;">${def.label}</span>
+        <button onclick="authLogout()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:0.8rem;padding:2px 0 0 2px;line-height:1;flex-shrink:0;" title="Sign out">⏻</button>
+      `;
+    }
     el.style.display = 'flex';
   }
+  // Show admin button in topbar (desktop) and more drawer (mobile)
+  const adminBtn    = document.getElementById('adminPanelBtn');
+  const mobAdminBtn = document.getElementById('mobAdminBtn');
+  const canAdmin    = def.canManageUsers;
+  if (adminBtn)    adminBtn.style.display    = (!isMob && canAdmin) ? '' : 'none';
+  if (mobAdminBtn) mobAdminBtn.style.display = (isMob  && canAdmin) ? '' : 'none';
 }
+
+// Re-render pill on resize
+window.addEventListener('resize', () => {
+  if (currentProfile) updateAuthUI();
+});
 
 // ── Theme save to profile ─────────────────────────────────
 async function saveThemeToProfile(name) {
