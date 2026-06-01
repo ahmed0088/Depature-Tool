@@ -49,7 +49,7 @@ if (document.readyState === 'loading') { document.addEventListener('DOMContentLo
 
 function processNat() {
   const raw    = document.getElementById('natInput').value.trim();
-  window._natReportMonth = null;
+  window._natReportMonth = null; window._natDates = null;
   if (raw) { try { localStorage.setItem('ibis_nat_paste', raw); } catch(e){} }
   const errBox = document.getElementById('natError'); errBox.classList.remove('show');
   const showErr = msg => { document.getElementById('natErrorMsg').textContent = msg; errBox.classList.add('show'); };
@@ -84,10 +84,10 @@ function processNat() {
       const arrPly  = parseInt(p[idx['ARR_PERSONS_LY']]  ||'0')||0;
       const stayRly = parseInt(p[idx['STAY_ROOMS_LY']]   ||'0')||0;
       const stayPly = parseInt(p[idx['STAY_PERSONS_LY']] ||'0')||0;
-      // Auto-detect report month from BUSINESS_DATE or MONTH column
-      if (!window._natReportMonth && idx['BUSINESS_DATE'] !== undefined) {
+      // Auto-detect report month — collect all dates, derive month from range
+      if (idx['BUSINESS_DATE'] !== undefined) {
         const ds = (p[idx['BUSINESS_DATE']]||'').trim();
-        if (ds) { const d = new Date(ds); if (!isNaN(d)) window._natReportMonth = d.toLocaleString('en-GB',{month:'long',year:'numeric'}); }
+        if (ds) { const d = new Date(ds); if (!isNaN(d)) { if (!window._natDates) window._natDates=[]; window._natDates.push(d); } }
       }
       if (!window._natReportMonth && idx['MONTH'] !== undefined) {
         const ms = (p[idx['MONTH']]||'').trim(); if (ms) window._natReportMonth = ms;
@@ -106,6 +106,19 @@ function processNat() {
       grandPRS += stayP;
     }
     fA=true; fR=true; fP=true;
+    // Derive month label from date range collected across all rows
+    if (!window._natReportMonth && window._natDates && window._natDates.length > 0) {
+      const minD = new Date(Math.min(...window._natDates));
+      const maxD = new Date(Math.max(...window._natDates));
+      if (minD.getMonth() === maxD.getMonth() && minD.getFullYear() === maxD.getFullYear()) {
+        // All dates in same month — show that month
+        window._natReportMonth = minD.toLocaleString('en-GB',{month:'long',year:'numeric'});
+      } else {
+        // Spans multiple months — show range
+        window._natReportMonth = minD.toLocaleString('en-GB',{month:'short',year:'numeric'}) + ' – ' + maxD.toLocaleString('en-GB',{month:'short',year:'numeric'});
+      }
+    }
+    window._natDates = null;
   } else {
     // ── Old format: separate rows per VALUE_CODE (APR / RMS / PRS) ──
     for (let i = 1; i < lines.length; i++) {
@@ -206,6 +219,20 @@ function processNat() {
     const cols = hasLY ? '36px 1fr 54px 54px 54px 54px' : '36px 1fr 54px 54px 54px';
     return `<div style="display:grid;grid-template-columns:${cols};padding:3px 12px;border-bottom:1px solid rgba(255,255,255,0.02);${has?'background:rgba(90,180,232,0.03);':''}"><span style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);">${rn}</span><span style="font-size:0.68rem;color:${has?'var(--text2)':'var(--text3)'};" title="${c}">${sn}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--sky)':'var(--border2)'};">${v.APR||''}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--gold)':'var(--border2)'};">${v.RMS||''}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--mint)':'var(--border2)'};">${v.PRS||''}</span>${hasLY?`<span style="text-align:right;">${lyBadge}</span>`:''}</div>`;
   }).join('');
+  // Inject Opera how-to instructions if element exists
+  const howToEl = document.getElementById('natHowTo');
+  if (howToEl) howToEl.innerHTML = `<div style="margin-bottom:12px;padding:11px 14px;background:rgba(90,180,232,0.05);border:1px solid rgba(90,180,232,0.15);border-left:3px solid var(--sky);border-radius:var(--r);font-size:0.7rem;color:var(--text2);line-height:1.7;">
+    <div style="font-family:var(--mono);font-size:0.6rem;letter-spacing:1px;color:var(--sky);margin-bottom:6px;">HOW TO GET THIS REPORT FROM OPERA</div>
+    <ol style="margin:0;padding-left:16px;color:var(--text3);">
+      <li>In Opera, go to <strong style="color:var(--text2);">Reports</strong> and search for <strong style="color:var(--mint);">Nationality by Month</strong></li>
+      <li>Set your <strong style="color:var(--text2);">date range</strong> to the full month you need</li>
+      <li>Under the statistics options, select the <strong style="color:var(--sky);">Nationality</strong> radio button</li>
+      <li>Tick <strong style="color:var(--sky);">Room Nights</strong> and <strong style="color:var(--sky);">Person Nights</strong></li>
+      <li>Download the report — choose <strong style="color:var(--mint);">Delimited</strong> format with <strong style="color:var(--mint);">Tab</strong> as the delimiter</li>
+      <li>Open the downloaded file <strong style="color:var(--text2);">(stat_countrybymon...)</strong>, Select All, Copy, and paste it here</li>
+    </ol>
+    <div style="margin-top:7px;padding-top:7px;border-top:1px solid rgba(90,180,232,0.1);font-family:var(--mono);font-size:0.58rem;color:var(--amber);">⚠ Make sure you select the <strong>Nationality</strong> radio button — not Country — otherwise the data will not match correctly</div>
+  </div>`;
   document.getElementById('natResults').style.display = 'block';
 }
 function copyNat()  { if (window._buildNatCopy) natCopyText = window._buildNatCopy(); if (!natCopyText) return; copyToClipboard(natCopyText, document.getElementById('natCopyBtn'), 'Copy All 240 Rows'); }
