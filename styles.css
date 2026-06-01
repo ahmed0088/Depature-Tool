@@ -23,6 +23,10 @@
   --teal:         #0d9488;
   --teal-bg:      rgba(13,148,136,0.1);
   --teal-border:  rgba(13,148,136,0.3);
+  /* Semantic badge/UI colors */
+  --rose:         #f06b7a;
+  --mint:         #3ecf8e;
+  --sky:          #5ab4e8;
   --nav-w: 220px;
   --font:  'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --mono:  'DM Mono', 'Courier New', monospace;
@@ -1096,19 +1100,13 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
   .kpi-row.c4 { grid-template-columns: repeat(2,1fr); }
   .dep-kpi-strip { grid-template-columns: repeat(3,1fr); }
 
-  /* Page header: stack title above actions */
+  /* Page header: stack, no overflow */
   .page-hd { flex-direction: column; align-items: flex-start; gap: 8px; }
   .page-hd-actions {
-    display: flex;
-    flex-wrap: nowrap !important;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+    flex-wrap: wrap;
     gap: 5px;
     width: 100%;
-    padding-bottom: 2px;
   }
-  .page-hd-actions::-webkit-scrollbar { display: none; }
   .page-hd-actions .btn { flex-shrink: 0; }
 
   /* Tables: horizontal scroll */
@@ -1226,15 +1224,11 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
     gap: 6px !important;
     width: 100%;
     align-items: stretch;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
   }
-  .dep-na-bar-right::-webkit-scrollbar { display: none; }
   /* Copy split: takes remaining space, arrow always visible */
   .dep-copy-split   { flex: 1; min-width: 0; display: flex; }
-  .dep-copy-main    { flex: 1; min-width: 0; font-size: 0.66rem !important; padding: 9px 10px !important; white-space: nowrap; overflow: visible; }
-  .dep-copy-arrow   { padding: 9px 12px !important; flex-shrink: 0; min-width: 38px; display: flex !important; align-items: center; justify-content: center; font-size: 1rem !important; }
+  .dep-copy-main    { flex: 1; min-width: 0; font-size: 0.68rem !important; padding: 9px 10px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dep-copy-arrow   { padding: 9px 12px !important; flex-shrink: 0; min-width: 38px; display: flex !important; align-items: center; justify-content: center; }
   .dep-na-filter-btn { font-size: 0.65rem !important; padding: 8px 12px !important; flex-shrink: 0; white-space: nowrap; }
 
   /* ── Copy dropdown: fixed to viewport bottom on mobile ── */
@@ -1249,9 +1243,9 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
     max-width: calc(100vw - 20px) !important;
     border-radius: 14px !important;
     padding: 8px !important;
-    z-index: 99999 !important; /* on body now — above everything including nav (300) */
+    z-index: 10000 !important;  /* well above overlay (9997) AND above nav (300) */
     box-shadow: 0 -4px 32px rgba(0,0,0,0.5) !important;
-    pointer-events: auto !important;
+    pointer-events: auto !important;  /* ensure taps reach buttons */
   }
   .dep-copy-menu button {
     padding: 13px 14px !important;
@@ -1261,7 +1255,6 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
     pointer-events: auto !important;
     -webkit-tap-highlight-color: rgba(255,255,255,0.1);
     width: 100%;
-    touch-action: manipulation;
   }
   .dep-copy-menu button + button {
     border-top: 1px solid var(--border) !important;
@@ -1286,18 +1279,6 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
 
   /* HK reminder: full width */
   .hk-reminder { flex-wrap: wrap; }
-
-  /* ── Arrivals/Purpose filter row: horizontal scroll on mobile ── */
-  .filter-row:not(.dep-filter-chips) {
-    flex-wrap: nowrap !important;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    padding-bottom: 4px;
-  }
-  .filter-row:not(.dep-filter-chips)::-webkit-scrollbar { display: none; }
-  .filter-row .fchip { flex-shrink: 0; }
-  .filter-row .search-wrap { flex-shrink: 0; min-width: 140px; }
 }
 
 /* Misc */
@@ -2188,6 +2169,8 @@ kbd {
   [data-theme="opera"] .mob-nav-btn { color: #999 !important; }
   [data-theme="opera"] .mob-nav-btn.active { color: #C74634 !important; }
   [data-theme="opera"] .mob-nav-lbl { color: inherit !important; }
+  /* Opera badge: use brand red so white numbers are readable against white nav */
+  [data-theme="opera"] .mob-nav-badge { background: #C74634 !important; color: #fff !important; border-color: #fff !important; }
   /* Hide non-essential topbar icons on mobile */
   .mob-hide { display: none !important; }
   /* Shrink hotel name on mobile */

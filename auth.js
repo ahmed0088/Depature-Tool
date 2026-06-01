@@ -150,8 +150,10 @@ function applyRole(role) {
     document.querySelectorAll(`[data-require="${cap}"]`).forEach(el =>
       el.style.display = def[cap] ? '' : 'none');
   });
-  const adminBtn = document.getElementById('adminPanelBtn');
-  if (adminBtn) adminBtn.style.display = def.canManageUsers ? '' : 'none';
+  const adminBtn    = document.getElementById('adminPanelBtn');
+  const mobAdminBtn = document.getElementById('mobAdminBtn');
+  if (adminBtn)    adminBtn.style.display    = def.canManageUsers ? '' : 'none';
+  if (mobAdminBtn) mobAdminBtn.style.display = def.canManageUsers ? '' : 'none';
   document.body.classList.toggle('role-readonly', role === 'readonly');
 }
 
@@ -314,7 +316,7 @@ function updateAuthUI() {
   const mobAdminBtn = document.getElementById('mobAdminBtn');
   const canAdmin    = def.canManageUsers;
   if (adminBtn)    adminBtn.style.display    = (!isMob && canAdmin) ? '' : 'none';
-  if (mobAdminBtn) mobAdminBtn.style.display = (isMob  && canAdmin) ? '' : 'none';
+  if (mobAdminBtn) mobAdminBtn.style.display = canAdmin ? '' : 'none';
 }
 
 // Re-render pill on resize
