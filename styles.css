@@ -1175,15 +1175,63 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
   .dep-copy-arrow { padding: 7px 10px !important; }
   .dep-na-filter-btn { font-size: 0.62rem !important; padding: 6px 12px !important; }
 
-  /* Copy dropdown: open upward and full-width on mobile */
+  /* ── Copy dropdown: fixed to viewport bottom-left on mobile ── */
   .dep-copy-menu {
-    bottom: calc(100% + 4px) !important;
+    position: fixed !important;
+    bottom: 70px !important;
+    left: 10px !important;
+    right: 10px !important;
     top: auto !important;
-    left: 0 !important;
-    right: 0 !important;
+    width: auto !important;
     min-width: 0 !important;
-    width: 100% !important;
+    max-width: calc(100vw - 20px) !important;
+    border-radius: 14px !important;
+    padding: 8px !important;
+    z-index: 9999 !important;
+    box-shadow: 0 -4px 32px rgba(0,0,0,0.5) !important;
   }
+  .dep-copy-menu button {
+    padding: 11px 12px !important;
+    font-size: 0.72rem !important;
+    border-radius: 10px !important;
+  }
+  .dep-copy-menu button + button {
+    border-top: 1px solid var(--border) !important;
+  }
+  .dcm-hint { display: none !important; }
+
+  /* ── Extension panel: single column on mobile ── */
+  .dc-ext-grid {
+    grid-template-columns: 1fr !important;
+    gap: 6px !important;
+  }
+  .dc-ext-field-full { grid-column: auto !important; }
+
+  /* ── NA bar: stack vertically on mobile ── */
+  .dep-na-bar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+    padding: 10px 12px !important;
+  }
+  .dep-na-bar-left  { flex-wrap: wrap; }
+  .dep-na-bar-right {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    width: 100%;
+  }
+  /* Copy split button stretches full width */
+  .dep-copy-split   { flex: 1; min-width: 0; width: 100%; }
+  .dep-copy-main    { flex: 1; min-width: 0; font-size: 0.68rem !important; padding: 9px 10px !important; }
+  .dep-copy-arrow   { padding: 9px 12px !important; }
+  .dep-na-filter-btn { font-size: 0.65rem !important; padding: 8px 12px !important; flex: 1; }
+  .dep-na-copy-btn  { flex: 1; text-align: center; }
+
+  /* ── Card body: prevent any overflow ── */
+  .dep-card { overflow: hidden; }
+  .dc-body   { padding: 0 10px 10px; overflow: hidden; }
+  .dc-actions { overflow: hidden; }
 
   /* Quick bar: hide the floating pill on mobile — shown inline instead */
   .dep-quick-bar { display: none !important; }
@@ -2518,3 +2566,28 @@ kbd {
   cursor: pointer;
   user-select: none;
 }
+
+/* ── Password show/hide toggle ── */
+.login-pass-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.login-pass-wrap .login-input {
+  padding-right: 44px;
+}
+.login-eye {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  font-size: 1rem;
+  line-height: 1;
+  opacity: 0.45;
+  transition: opacity 0.15s;
+  color: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.login-eye:hover { opacity: 0.85; }

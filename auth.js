@@ -457,3 +457,14 @@ function adminTab(tab) {
   document.querySelector(`.admin-tab-btn[data-tab="${tab}"]`).classList.add('active');
   document.getElementById('adminTab-' + tab).style.display = 'block';
 }
+
+// ── Show / hide password ──────────────────────────────────
+function togglePassVis() {
+  const input = document.getElementById('loginPass');
+  const icon  = document.getElementById('eyeIcon');
+  if (!input) return;
+  const isHidden = input.type === 'password';
+  input.type  = isHidden ? 'text' : 'password';
+  icon.textContent = isHidden ? '🙈' : '👁';
+  input.focus();
+}

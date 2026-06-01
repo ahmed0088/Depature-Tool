@@ -1278,14 +1278,35 @@ function depToggleCopyMenu(group) {
   const isOpen = menu.classList.contains('open');
   // close all menus first
   document.querySelectorAll('.dep-copy-menu').forEach(m => m.classList.remove('open'));
+  _depRemoveCopyOverlay();
+
   if (!isOpen) {
     menu.classList.add('open');
-    // close on outside click
-    setTimeout(() => {
-      const close = e => { menu.classList.remove('open'); document.removeEventListener('click', close); };
-      document.addEventListener('click', close);
-    }, 0);
+
+    // On mobile: add a tap backdrop so tapping outside closes the menu
+    const isMobile = window.innerWidth <= 768;
+    if (isMobile) {
+      const overlay = document.createElement('div');
+      overlay.id = 'depCopyOverlay';
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.35);';
+      overlay.addEventListener('click', () => {
+        menu.classList.remove('open');
+        _depRemoveCopyOverlay();
+      });
+      document.body.appendChild(overlay);
+    } else {
+      // Desktop: close on outside click
+      setTimeout(() => {
+        const close = e => { menu.classList.remove('open'); document.removeEventListener('click', close); };
+        document.addEventListener('click', close);
+      }, 0);
+    }
   }
+}
+
+function _depRemoveCopyOverlay() {
+  const el = document.getElementById('depCopyOverlay');
+  if (el) el.remove();
 }
 
 // ══════════════════════════════════════════════════════════════
