@@ -1280,48 +1280,62 @@ function depToggleCopyMenu(group) {
   const menu = document.getElementById('depCopyMenu-' + group);
   if (!menu) return;
   const isOpen = menu.classList.contains('open');
-  // close all menus first
-  document.querySelectorAll('.dep-copy-menu').forEach(m => m.classList.remove('open'));
-  _depRemoveCopyOverlay();
+
+  // Close all open menus and return any teleported menu to its original parent
+  _depCloseAllCopyMenus();
 
   if (!isOpen) {
     menu.classList.add('open');
 
-    // Both mobile and desktop: close on outside click/tap
-    // Use a micro-delay so the current click doesn't immediately close the menu
-    setTimeout(() => {
-      const close = e => {
-        // Don't close if the click is INSIDE the menu itself
-        if (menu.contains(e.target)) return;
-        menu.classList.remove('open');
-        _depRemoveCopyOverlay();
-        document.removeEventListener('click', close);
-        document.removeEventListener('touchend', close);
-      };
-      document.addEventListener('click', close);
-      document.addEventListener('touchend', close);
-    }, 10);
-
-    // On mobile: also add a semi-transparent backdrop BEHIND the menu (z-index lower than menu)
     const isMobile = window.innerWidth <= 768;
     if (isMobile) {
+      // CRITICAL FIX: .main has overflow:hidden which creates a stacking context,
+      // trapping position:fixed children. We move the menu to <body> to escape it.
+      const originalParent = menu.parentElement;
+      const placeholder = document.createElement('span');
+      placeholder.id = 'depMenuPlaceholder-' + group;
+      placeholder.style.display = 'none';
+      originalParent.insertBefore(placeholder, menu);
+      document.body.appendChild(menu);
+      menu._originalParent = originalParent;
+      menu._placeholder = placeholder;
+
+      // Backdrop overlay — same z-index level; menu is now on body so it will be truly above
       const overlay = document.createElement('div');
       overlay.id = 'depCopyOverlay';
-      // z-index 9997 = behind menu (10000) but above everything else
-      // pointer-events only on the overlay itself, NOT on menu children
-      overlay.style.cssText = 'position:fixed;inset:0;z-index:9997;background:rgba(0,0,0,0.45);';
-      overlay.addEventListener('click', () => {
-        menu.classList.remove('open');
-        _depRemoveCopyOverlay();
-      });
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.5);';
+      overlay.addEventListener('click', () => _depCloseAllCopyMenus());
       overlay.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        menu.classList.remove('open');
-        _depRemoveCopyOverlay();
+        // Only close if tap is directly on overlay, not on the menu
+        if (e.target === overlay) { e.preventDefault(); _depCloseAllCopyMenus(); }
       });
       document.body.appendChild(overlay);
+    } else {
+      // Desktop: simple outside-click close
+      setTimeout(() => {
+        const close = e => {
+          if (menu.contains(e.target)) return;
+          menu.classList.remove('open');
+          document.removeEventListener('click', close);
+        };
+        document.addEventListener('click', close);
+      }, 10);
     }
   }
+}
+
+function _depCloseAllCopyMenus() {
+  document.querySelectorAll('.dep-copy-menu.open').forEach(m => {
+    m.classList.remove('open');
+    // Return teleported menus to their original parent
+    if (m._placeholder && m._originalParent) {
+      m._originalParent.insertBefore(m, m._placeholder);
+      m._placeholder.remove();
+      m._placeholder = null;
+      m._originalParent = null;
+    }
+  });
+  _depRemoveCopyOverlay();
 }
 
 function _depRemoveCopyOverlay() {

@@ -279,7 +279,14 @@
         <span class="dep-na-bar-text">Send status to housekeeping</span>
       </div>
       <div class="dep-na-bar-right">
-        <button class="dep-copy-main" style="color:var(--accent);border-color:var(--accent-border);background:var(--accent-bg);" onclick="depCopyHKUpdate()">🏨 Remaining Rooms</button>
+        <div class="dep-copy-split">
+          <button class="dep-copy-main" style="color:var(--accent);border-color:var(--accent-border);background:var(--accent-bg);" onclick="depCopyHKUpdate()">🏨 Remaining Rooms</button>
+          <button class="dep-copy-arrow" style="color:var(--accent);border-color:var(--accent-border);background:var(--accent-bg);" onclick="depToggleCopyMenu('hk')">▾</button>
+          <div class="dep-copy-menu" id="depCopyMenu-hk">
+            <button onclick="depCopyHKUpdate();depToggleCopyMenu('hk')">🏨 Remaining Rooms <span class="dcm-hint">pending checkout rooms</span></button>
+            <button onclick="depCopyHKRemaining();depToggleCopyMenu('hk')">📋 Full HK List <span class="dcm-hint">all rooms still on floor</span></button>
+          </div>
+        </div>
       </div>
     </div>
     <!-- ── NA Action Bar ── -->
