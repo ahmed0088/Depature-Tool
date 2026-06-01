@@ -43,6 +43,9 @@ let currentProfile = null;
 const MASTER_PASS = "Kazokuyktsha@31";
 
 // ── Init ──────────────────────────────────────────────────
+let _selfListener    = null; // real-time listener on own user record
+let _selfListenerRef = null; // the DB ref, so we can .off() cleanly
+
 function authInit() {
   // Restore saved email
   const savedEmail = localStorage.getItem('ibis_saved_email');
@@ -62,14 +65,66 @@ function authInit() {
     }
     currentUser    = user;
     currentProfile = profile;
+
+    // Clear any stale forceLogout flag left from a previous disconnect
+    if (profile.forceLogout) {
+      try { await firebase.database().ref(`hotels/${HOTEL_ID}/users/${user.uid}`).update({ forceLogout: false }); } catch(e) {}
+    }
+
     await updateLastLogin(user.uid);
     await logActivity('login');
-    // Restore saved theme from profile
     if (profile.theme) setTheme(profile.theme);
     applyRole(profile.role);
     hideLoginScreen();
     updateAuthUI();
+
+    // Start watching own record live — catches disable, delete, force-disconnect
+    _startSelfListener(user.uid);
   });
+}
+
+// ── Real-time self-watcher ────────────────────────────────
+// Fires immediately on login, then on every change to this user's DB record.
+// Three triggers: record deleted, active=false, forceLogout=true.
+function _startSelfListener(uid) {
+  // Detach any stale listener from a previous session
+  if (_selfListenerRef && _selfListener) {
+    _selfListenerRef.off('value', _selfListener);
+  }
+  _selfListenerRef = firebase.database().ref(`hotels/${HOTEL_ID}/users/${uid}`);
+  _selfListener = _selfListenerRef.on('value', async snap => {
+    if (!currentUser) return; // already signed out, ignore
+    if (!snap.exists()) {
+      // Record deleted by owner
+      _forceSignOut('Your account has been deleted. Please contact your manager.');
+      return;
+    }
+    const data = snap.val();
+    if (data.active === false) {
+      // Account disabled
+      _forceSignOut('Your account has been disabled. Please contact your manager.');
+      return;
+    }
+    if (data.forceLogout === true) {
+      // Admin used the Disconnect button
+      _forceSignOut('You have been disconnected by an administrator.');
+      return;
+    }
+  }, err => console.warn('[Auth] self-listener error:', err));
+}
+
+// ── Force sign-out with message ───────────────────────────
+async function _forceSignOut(message) {
+  // Detach listener first to prevent re-triggering
+  if (_selfListenerRef && _selfListener) {
+    _selfListenerRef.off('value', _selfListener);
+    _selfListener    = null;
+    _selfListenerRef = null;
+  }
+  currentUser    = null;
+  currentProfile = null;
+  try { await firebase.auth().signOut(); } catch(e) {}
+  showLoginScreen(message);
 }
 
 async function loadUserProfile(uid) {
@@ -214,10 +269,15 @@ function friendlyAuthError(code, message) {
 async function authLogout() {
   if (!confirm('Sign out?')) return;
   try { await logActivity('logout'); } catch(e) {}
+  // Detach self-listener before signing out
+  if (_selfListenerRef && _selfListener) {
+    _selfListenerRef.off('value', _selfListener);
+    _selfListener    = null;
+    _selfListenerRef = null;
+  }
   currentUser    = null;
   currentProfile = null;
   try { await firebase.auth().signOut(); } catch(e) {}
-  // Reset UI
   const pill = document.getElementById('authUserPill');
   if (pill) { pill.innerHTML = ''; pill.style.display = 'none'; }
   document.getElementById('adminPanelBtn')  ?.style && (document.getElementById('adminPanelBtn').style.display  = 'none');
@@ -343,6 +403,7 @@ function adminRenderUsers() {
         ${canEdit && !isMe ? `
           <div style="display:flex;gap:4px;flex-wrap:wrap;">
             <button class="btn sm" onclick="adminEditUser('${uid}')">✏️ Edit</button>
+            <button class="btn sm admin-disconnect-btn" onclick="adminDisconnectUser('${uid}')" title="Kick from current session (can sign back in)">⏏ Kick</button>
             <button class="btn sm" style="color:var(--rose);" onclick="adminToggleActive('${uid}',${!u.active})">${u.active ? '🔒 Disable' : '✓ Enable'}</button>
             ${currentProfile.role === 'owner' && u.role !== 'owner' ? `<button class="btn sm admin-delete-btn" onclick="adminDeleteUser('${uid}')" title="Permanently delete account">🗑️ Delete</button>` : ''}
           </div>` : isMe ? '<span style="font-size:0.65rem;color:var(--text3);">You</span>' : '—'}
@@ -366,7 +427,7 @@ function adminRenderActivity() {
   }
   const icons = {
     login:'🔓', logout:'🔒',
-    create_user:'➕', edit_user:'✏️', disable_user:'🔒', enable_user:'✓', delete_user:'🗑️',
+    create_user:'➕', edit_user:'✏️', disable_user:'🔒', enable_user:'✓', delete_user:'🗑️', disconnect_user:'⏏',
     shift_task_done:'✅', shift_task_undone:'↩', shift_task_added:'➕', shift_task_deleted:'🗑️', shift_reset:'↺',
     checklist_done:'✅', checklist_undone:'↩', checklist_skipped:'⏭', checklist_unskipped:'↩',
     departure_out:'🚪', departure_na:'—', departure_late:'🕐', departure_extended:'📅', departure_due:'↩',
@@ -477,10 +538,33 @@ async function adminToggleActive(uid, active) {
   if (!u) return;
   const action = active ? 'enable' : 'disable';
   if (!confirm(`${action.charAt(0).toUpperCase()+action.slice(1)} ${u.name}?`)) return;
-  await firebase.database().ref(`hotels/${HOTEL_ID}/users/${uid}`).update({ active });
+  // When disabling: set both active:false AND forceLogout:true so any live session
+  // is kicked immediately via the real-time self-watcher.
+  // When enabling: clear forceLogout so they can sign back in cleanly.
+  const update = active
+    ? { active: true,  forceLogout: false }
+    : { active: false, forceLogout: true  };
+  await firebase.database().ref(`hotels/${HOTEL_ID}/users/${uid}`).update(update);
   await logActivity(action + '_user', u.name);
   await adminLoadUsers();
   showToast(`${u.name} ${action}d ✓`, 'ok');
+}
+
+// ── Force-disconnect (kick session without disabling account) ─
+async function adminDisconnectUser(uid) {
+  const u = _adminUsers[uid];
+  if (!u) return;
+  if (uid === currentUser?.uid) { showToast("You can't disconnect yourself", 'err'); return; }
+  if (!confirm(`Disconnect ${u.name} from their current session?
+
+They will be signed out immediately but can sign back in.`)) return;
+  try {
+    await firebase.database().ref(`hotels/${HOTEL_ID}/users/${uid}`).update({ forceLogout: true });
+    await logActivity('disconnect_user', u.name);
+    showToast(`${u.name} disconnected ✓`, 'ok');
+  } catch(e) {
+    showToast('Disconnect failed: ' + (e.message || e.code), 'err');
+  }
 }
 
 // ── Delete account (Owner only) ───────────────────────────
@@ -508,18 +592,14 @@ async function adminDeleteUser(uid) {
   if (!confirmed) return;
 
   try {
-    // 1 — Remove DB profile (this is the gate — no profile = no login)
+    // 1 — Remove DB profile. This triggers the real-time self-watcher on the
+    //     target's browser (!snap.exists()), kicking them out immediately if online.
     await firebase.database().ref(`hotels/${HOTEL_ID}/users/${uid}`).remove();
 
-    // 2 — Attempt to delete from Firebase Auth via secondary app.
-    //     This only works if we have their password; since we don't,
-    //     we skip silently — the orphaned Auth entry is harmless
-    //     (no DB profile = blocked at authInit).
-
-    // 3 — Log the deletion
+    // 2 — Log before the local record disappears
     await logActivity('delete_user', `${u.name} (${u.role}) — ${u.email}`);
 
-    // 4 — Refresh
+    // 3 — Refresh table
     delete _adminUsers[uid];
     adminRenderUsers();
     showToast(`${u.name} deleted ✓`, 'ok');
