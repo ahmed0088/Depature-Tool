@@ -28,6 +28,11 @@ const NAME_MAP = {
   "Kyrgzstan":"Kyrghyzstan",
   "Congo (Brazzaville)":"Congo (Republic of the Congo)",
   "Saint Barthélemy":"Saint Barthelemy",
+  "Unknown":null,
+  "UNKNOWN":null,
+  "unknown":null,
+  "No Nationality":null,
+  "Not Specified":null,
 };
 function resolveCountry(name) {
   if (!name) return { excel: null, isUnknown: true };
@@ -165,6 +170,24 @@ function processNat() {
       return z(apr)+'\t'+z(rms)+'\t'+z(prs);
     }).join('\n');
   }
+  function renderNatPreview() {
+    const merge = document.getElementById('mergeUnkChk') && document.getElementById('mergeUnkChk').checked;
+    const uaeRow = merge ? {
+      APR: rows[uaeIdx].APR + window._natUnkTotals.APR,
+      RMS: rows[uaeIdx].RMS + window._natUnkTotals.RMS,
+      PRS: rows[uaeIdx].PRS + window._natUnkTotals.PRS,
+      APRLY: rows[uaeIdx].APRLY, RMSLY: rows[uaeIdx].RMSLY, PRSLY: rows[uaeIdx].PRSLY
+    } : null;
+    document.getElementById('natPreview').innerHTML = EXCEL_COUNTRIES.map((c,i) => {
+      const v = (merge && i === uaeIdx) ? uaeRow : rows[i];
+      const rn=i+8; const has=v.APR||v.RMS||v.PRS; const sn=c.length>22?c.substring(0,21)+'…':c;
+      const lyBadge = window._natHasLY && has ? window._natPctStr(v.APR, v.APRLY) : '';
+      const cols = window._natHasLY ? '36px 1fr 54px 54px 54px 54px' : '36px 1fr 54px 54px 54px';
+      const uaeHighlight = (merge && i === uaeIdx) ? 'background:rgba(90,180,232,0.08);' : (has ? 'background:rgba(90,180,232,0.03);' : '');
+      return `<div style="display:grid;grid-template-columns:${cols};padding:3px 12px;border-bottom:1px solid rgba(255,255,255,0.02);${uaeHighlight}"><span style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);">${rn}</span><span style="font-size:0.68rem;color:${has?'var(--text2)':'var(--text3)'};" title="${c}">${sn}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--sky)':'var(--border2)'};">${v.APR||''}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--gold)':'var(--border2)'};">${v.RMS||''}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--mint)':'var(--border2)'};">${v.PRS||''}</span>${window._natHasLY?`<span style="text-align:right;">${lyBadge}</span>`:''}</div>`;
+    }).join('');
+  }
+  window._renderNatPreview = renderNatPreview;
   window._buildNatCopy = buildNatCopy;
   natCopyText = buildNatCopy();
 
@@ -194,7 +217,7 @@ function processNat() {
     return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:11px 13px;"><div style="font-family:var(--mono);font-size:0.56rem;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid var(--border);">${lbl}</div><div style="display:flex;justify-content:space-between;padding:3px 0;font-size:0.72rem;"><span style="color:var(--text3);">Opera</span><span style="font-family:var(--mono);">${op.toLocaleString()}</span></div><div style="display:flex;justify-content:space-between;padding:3px 0;font-size:0.72rem;"><span style="color:var(--text3);">Placed</span><span style="font-family:var(--mono);color:var(--text2);">${mp.toLocaleString()}</span></div><div style="display:flex;justify-content:space-between;padding:3px 0;font-size:0.72rem;"><span style="color:var(--text3);">Gap</span><span style="font-family:var(--mono);color:${gp>0?'var(--amber)':'var(--mint)'};">${gp>0?'−'+gp:'✓ 0'}</span></div></div>`;
   }).join('');
   const unkListHTML = unknowns.length===0 ? aS('ok','✅','No unknown guests','Perfect.') : unknowns.map(u=>aS('warn','⚠️',`"${u.name}" — ${u.APR} arrivals`,'No nationality code.')).join('');
-  const mergeChkHTML = unknowns.length > 0 ? `<label style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:9px 12px;border-radius:var(--r);background:rgba(90,180,232,0.05);border:1px solid rgba(90,180,232,0.15);cursor:pointer;font-size:0.72rem;color:var(--text2);user-select:none;"><input type="checkbox" id="mergeUnkChk" style="accent-color:var(--sky);width:14px;height:14px;cursor:pointer;" onchange="natCopyText=window._buildNatCopy&&window._buildNatCopy();"> Merge unknown nationality into <strong style="color:var(--sky);margin-left:3px;">United Arab Emirates</strong></label>` : '';
+  const mergeChkHTML = unknowns.length > 0 ? `<label style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:9px 12px;border-radius:var(--r);background:rgba(90,180,232,0.05);border:1px solid rgba(90,180,232,0.15);cursor:pointer;font-size:0.72rem;color:var(--text2);user-select:none;"><input type="checkbox" id="mergeUnkChk" style="accent-color:var(--sky);width:14px;height:14px;cursor:pointer;" onchange="natCopyText=window._buildNatCopy&&window._buildNatCopy();window._renderNatPreview&&window._renderNatPreview();"> Merge unknown nationality into <strong style="color:var(--sky);margin-left:3px;">United Arab Emirates</strong></label>` : '';
   document.getElementById('natUnknownList').innerHTML = unkListHTML + mergeChkHTML;
   document.getElementById('natUnmatchedList').innerHTML = unmatched.length===0 ? aS('ok','✅','All countries matched','No data lost.') : unmatched.map(u=>aS('error','🔴',`"${u.name}" — NOT PLACED`,'Country has no Excel row.')).join('');
   const badge = document.getElementById('natDiagBadge'); const hasIssues = unknowns.length>0||unmatched.length>0;
@@ -202,23 +225,23 @@ function processNat() {
   ['gap-apr','gap-rms','gap-prs'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.textContent=[gapAPR,gapRMS,gapPRS][i]>0?'−'+[gapAPR,gapRMS,gapPRS][i]:'0';});
   ['s-active','s-zero','s-unmat','s-unk'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.textContent=[active,240-active,unmatched.length,unknowns.length][i];});
   const hasLY = rows.some(v => v.APRLY || v.RMSLY || v.PRSLY);
+  window._natHasLY = hasLY;
   const pctStr = (cur, ly) => {
     if (!ly) return '';
     const d = ((cur - ly) / ly * 100);
     const clr = d >= 0 ? 'var(--mint)' : 'var(--rose)';
     return `<span style="font-family:var(--mono);font-size:0.54rem;color:${clr};margin-left:3px;">${d>=0?'+':''}${d.toFixed(0)}%</span>`;
   };
-  // Update preview header to show LY columns if available
+  window._natPctStr = pctStr;
+  // Sync preview header columns with row columns
   const prevHdr = document.getElementById('natPreviewHeader');
-  if (prevHdr) prevHdr.innerHTML = hasLY
-    ? '<span style="grid-column:1"></span><span style="font-size:0.6rem;color:var(--text3);">Country</span><span style="font-family:var(--mono);font-size:0.58rem;color:var(--sky);text-align:right;">ARR</span><span style="font-family:var(--mono);font-size:0.58rem;color:var(--gold);text-align:right;">RMS</span><span style="font-family:var(--mono);font-size:0.58rem;color:var(--mint);text-align:right;">PRS</span><span style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);text-align:right;">vs LY</span>'
-    : '';
-  document.getElementById('natPreview').innerHTML = EXCEL_COUNTRIES.map((c,i) => {
-    const v=rows[i]; const rn=i+8; const has=v.APR||v.RMS||v.PRS; const sn=c.length>22?c.substring(0,21)+'…':c;
-    const lyBadge = hasLY && has ? pctStr(v.APR, v.APRLY) : '';
-    const cols = hasLY ? '36px 1fr 54px 54px 54px 54px' : '36px 1fr 54px 54px 54px';
-    return `<div style="display:grid;grid-template-columns:${cols};padding:3px 12px;border-bottom:1px solid rgba(255,255,255,0.02);${has?'background:rgba(90,180,232,0.03);':''}"><span style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);">${rn}</span><span style="font-size:0.68rem;color:${has?'var(--text2)':'var(--text3)'};" title="${c}">${sn}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--sky)':'var(--border2)'};">${v.APR||''}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--gold)':'var(--border2)'};">${v.RMS||''}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--mint)':'var(--border2)'};">${v.PRS||''}</span>${hasLY?`<span style="text-align:right;">${lyBadge}</span>`:''}</div>`;
-  }).join('');
+  if (prevHdr) {
+    prevHdr.style.gridTemplateColumns = hasLY ? '36px 1fr 54px 54px 54px 54px' : '36px 1fr 54px 54px 54px';
+    if (hasLY) {
+      prevHdr.innerHTML = '<span style="font-family:var(--mono);font-size:0.53rem;color:var(--text3);">ROW</span><span style="font-family:var(--mono);font-size:0.53rem;color:var(--text3);">NATIONALITY</span><span style="font-family:var(--mono);font-size:0.53rem;color:var(--sky);text-align:right;">ARR</span><span style="font-family:var(--mono);font-size:0.53rem;color:var(--gold);text-align:right;">RMS</span><span style="font-family:var(--mono);font-size:0.53rem;color:var(--mint);text-align:right;">GST</span><span style="font-family:var(--mono);font-size:0.53rem;color:var(--text3);text-align:right;">vs LY</span>';
+    }
+  }
+  renderNatPreview();
   // Inject Opera how-to instructions if element exists
   const howToEl = document.getElementById('natHowTo');
   if (howToEl) howToEl.innerHTML = `<div style="margin-bottom:12px;padding:11px 14px;background:rgba(90,180,232,0.05);border:1px solid rgba(90,180,232,0.15);border-left:3px solid var(--sky);border-radius:var(--r);font-size:0.7rem;color:var(--text2);line-height:1.7;">
