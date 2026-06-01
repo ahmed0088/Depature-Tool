@@ -810,7 +810,7 @@ function depCardHTML(r) {
       r.extCheckoutTime ? `CO ${r.extCheckoutTime}` : '',
       r.extRate         ? `AED ${r.extRate}/night`   : '',
       r.extReason       ? r.extReason                : '',
-      r.extConfirmed    ? '✓ Opera updated'          : '⚠ Pending',
+      r.extConfirmed ? '✓ Updated' : '⚠ Pending',
     ].filter(Boolean).join(' · ');
     const summaryHTML = newDepStr
       ? `<div class="dc-ext-summary"><strong>${r.roomStr}</strong> · ${summaryParts}</div>`
@@ -1589,9 +1589,9 @@ function _extLine(r) {
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     newDep = ` → ${String(nd.getDate()).padStart(2,'0')} ${months[nd.getMonth()]}`;
   }
-  const co    = r.extCheckoutTime ? ` · CO ${r.extCheckoutTime}` : '';
-  const opera = r.extConfirmed ? ' ✓' : ' ⚠ Pending';
-  return `↪ ${r.roomStr} · +${n}N${newDep}${co}${opera}`;
+  
+  const opera = 
+  return `↪ ${r.roomStr} · +${n}N`;
 }
 
 function depCopyExtList(mode) {
