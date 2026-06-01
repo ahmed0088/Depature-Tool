@@ -2459,6 +2459,18 @@ kbd {
   vertical-align: middle;
 }
 
+/* Delete account button — owner only, rose tint */
+.admin-delete-btn {
+  color: var(--rose) !important;
+  border-color: rgba(240,107,122,0.25) !important;
+  background: rgba(240,107,122,0.06) !important;
+  transition: background 0.15s, border-color 0.15s;
+}
+.admin-delete-btn:hover {
+  background: rgba(240,107,122,0.16) !important;
+  border-color: rgba(240,107,122,0.5) !important;
+}
+
 .admin-form-card {
   background: var(--card2);
   border: 1px solid var(--border);

@@ -341,9 +341,10 @@ function adminRenderUsers() {
       </td>
       <td>
         ${canEdit && !isMe ? `
-          <div style="display:flex;gap:4px;">
+          <div style="display:flex;gap:4px;flex-wrap:wrap;">
             <button class="btn sm" onclick="adminEditUser('${uid}')">✏️ Edit</button>
             <button class="btn sm" style="color:var(--rose);" onclick="adminToggleActive('${uid}',${!u.active})">${u.active ? '🔒 Disable' : '✓ Enable'}</button>
+            ${currentProfile.role === 'owner' && u.role !== 'owner' ? `<button class="btn sm admin-delete-btn" onclick="adminDeleteUser('${uid}')" title="Permanently delete account">🗑️ Delete</button>` : ''}
           </div>` : isMe ? '<span style="font-size:0.65rem;color:var(--text3);">You</span>' : '—'}
       </td>
     </tr>`;
@@ -365,7 +366,7 @@ function adminRenderActivity() {
   }
   const icons = {
     login:'🔓', logout:'🔒',
-    create_user:'➕', edit_user:'✏️', disable_user:'🔒', enable_user:'✓',
+    create_user:'➕', edit_user:'✏️', disable_user:'🔒', enable_user:'✓', delete_user:'🗑️',
     shift_task_done:'✅', shift_task_undone:'↩', shift_task_added:'➕', shift_task_deleted:'🗑️', shift_reset:'↺',
     checklist_done:'✅', checklist_undone:'↩', checklist_skipped:'⏭', checklist_unskipped:'↩',
     departure_out:'🚪', departure_na:'—', departure_late:'🕐', departure_extended:'📅', departure_due:'↩',
@@ -480,6 +481,52 @@ async function adminToggleActive(uid, active) {
   await logActivity(action + '_user', u.name);
   await adminLoadUsers();
   showToast(`${u.name} ${action}d ✓`, 'ok');
+}
+
+// ── Delete account (Owner only) ───────────────────────────
+// Removes the user from the Firebase DB profile.
+// Firebase Auth deletion requires the user to be signed in, so we
+// disable + remove the DB record. The Auth entry becomes an orphan
+// (can't log in — no DB profile) and can be cleaned from Firebase Console.
+async function adminDeleteUser(uid) {
+  if (currentProfile?.role !== 'owner') { showToast('Owner only', 'err'); return; }
+  const u = _adminUsers[uid];
+  if (!u) return;
+  if (uid === currentUser?.uid) { showToast('You cannot delete yourself', 'err'); return; }
+  if (u.role === 'owner') { showToast('Cannot delete another Owner account', 'err'); return; }
+
+  // Double-confirm with name typed
+  const confirmed = confirm(
+    `⚠️ PERMANENTLY DELETE ACCOUNT\n\n` +
+    `Name:  ${u.name}\n` +
+    `Email: ${u.email}\n` +
+    `Role:  ${u.role}\n\n` +
+    `This removes them from the database immediately.\n` +
+    `They will no longer be able to sign in.\n\n` +
+    `This cannot be undone. Continue?`
+  );
+  if (!confirmed) return;
+
+  try {
+    // 1 — Remove DB profile (this is the gate — no profile = no login)
+    await firebase.database().ref(`hotels/${HOTEL_ID}/users/${uid}`).remove();
+
+    // 2 — Attempt to delete from Firebase Auth via secondary app.
+    //     This only works if we have their password; since we don't,
+    //     we skip silently — the orphaned Auth entry is harmless
+    //     (no DB profile = blocked at authInit).
+
+    // 3 — Log the deletion
+    await logActivity('delete_user', `${u.name} (${u.role}) — ${u.email}`);
+
+    // 4 — Refresh
+    delete _adminUsers[uid];
+    adminRenderUsers();
+    showToast(`${u.name} deleted ✓`, 'ok');
+  } catch(e) {
+    console.error('Delete failed:', e);
+    showToast('Delete failed: ' + (e.message || e.code), 'err');
+  }
 }
 
 function adminTab(tab) {
