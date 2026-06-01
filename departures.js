@@ -1488,12 +1488,12 @@ function depCopySelected() {
 
   if (_selGroup === 'na') {
     const lines = rooms.map(r => `📵 ${r.roomStr} · ${r.naTime || time}`);
-    text = `📵 *NA Rooms — ${time}*\n${lines.join('\n')}\n\n*Please do* 🙏`;
+    text = `📵 *NA Rooms — ${time}*\n${lines.join('\n')}`;
 
   } else if (_selGroup === 'out') {
     const sorted = [...rooms].sort((a, b) => _coTimeSort(b, a));
     const lines  = sorted.map(r => `✓ ${r.roomStr} · ${r.checkoutAt || time}`);
-    text = `✅ *Checked Out — ${time}*\n${lines.join('\n')}\n\n*Please do* 🙏`;
+    text = `✅ *Checked Out — ${time}*\n${lines.join('\n')}`;
 
   } else if (_selGroup === 'extended') {
     const lines = rooms.map(r => _extLine(r));
@@ -1512,10 +1512,10 @@ function depCopyNAList(mode) {
   const time = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
   let text = '';
   if (mode === 'summary') {
-    text = `📵 *NA — ${time}*\nRooms: ${rooms.map(r => r.roomStr).join(', ')}\n*Please do* 🙏`;
+    text = `📵 *NA — ${time}*\nRooms: ${rooms.map(r => r.roomStr).join(', ')}`;
   } else {
     const lines = rooms.map(r => `📵 ${r.roomStr} · ${r.naTime || time}`);
-    text = `📵 *NA Rooms — ${time}*\n${lines.join('\n')}\n\n*Please do* 🙏`;
+    text = `📵 *NA Rooms — ${time}*\n${lines.join('\n')}`;
   }
   copyToClipboard(text, null, '');
   showToast('NA list copied ✓', 'ok');
@@ -1528,11 +1528,11 @@ function depCopyOutList(mode) {
   const time = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
   let text = '';
   if (mode === 'summary') {
-    text = `✅ *Checked Out — ${time}*\nRooms: ${rooms.map(r => r.roomStr).join(', ')}\n*Please do* 🙏`;
+    text = `✅ *Checked Out — ${time}*\nRooms: ${rooms.map(r => r.roomStr).join(', ')}`;
   } else {
     const sorted = [...rooms].sort((a, b) => _coTimeSort(b, a)); // newest first
     const lines = sorted.map(r => `✓ ${r.roomStr} · ${r.checkoutAt || time}`);
-    text = `✅ *Checked Out Rooms — ${time}*\n${lines.join('\n')}\n\n*Please do* 🙏`;
+    text = `✅ *Checked Out Rooms — ${time}*\n${lines.join('\n')}`;
   }
   copyToClipboard(text, null, '');
   showToast('Checkout list copied ✓', 'ok');
@@ -1563,7 +1563,7 @@ function depCopyOutRecent(mins) {
   const sorted = [...rooms].sort((a, b) => _coTimeSort(b, a)); // newest first
   const lines  = sorted.map(r => `✓ ${r.roomStr} · ${r.checkoutAt}`);
   const label  = mins < 60 ? `last ${mins} min` : `last ${mins / 60}h`;
-  const text   = `✅ *Checked Out (${label}) — ${time}*\n${lines.join('\n')}\n\n*Please do* 🙏`;
+  const text   = `✅ *Checked Out (${label}) — ${time}*\n${lines.join('\n')}`;
 
   copyToClipboard(text, null, '');
   showToast(`${rooms.length} room${rooms.length > 1 ? 's' : ''} copied (${label}) ✓`, 'ok');

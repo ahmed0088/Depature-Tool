@@ -24,26 +24,34 @@ function showPanel(name) {
 
 // ── Clipboard ─────────────────────────────────────────────
 function copyToClipboard(text, btn, label) {
-  const done = () => {
+  const done = (ok) => {
     if (!btn) return;
-    btn.textContent = '✅ Copied!';
+    btn.textContent = ok ? '✅ Copied!' : '⚠️ Copy failed';
     setTimeout(() => { btn.textContent = label; }, 3000);
   };
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(text).then(done).catch(() => fbCopy(text, done));
+  // Modern async clipboard API (works on desktop + mobile HTTPS)
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => done(true)).catch(() => fbCopy(text, done));
   } else {
     fbCopy(text, done);
   }
 }
 function fbCopy(text, cb) {
-  const ta = document.createElement('textarea');
-  ta.value = text;
-  ta.style.cssText = 'position:fixed;opacity:0';
-  document.body.appendChild(ta);
-  ta.select();
-  document.execCommand('copy');
-  document.body.removeChild(ta);
-  if (cb) cb();
+  // Fallback: create off-screen textarea, force select, then copy
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    // Must be visible & in viewport for iOS to allow selection
+    ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0.01;font-size:16px;border:none;outline:none;';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.setSelectionRange(0, ta.value.length); // explicit range — more reliable than ta.select() on iOS
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    if (cb) cb(ok);
+  } catch (e) {
+    if (cb) cb(false);
+  }
 }
 
 // ── Name / source cleaners ────────────────────────────────
