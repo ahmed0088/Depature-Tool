@@ -810,7 +810,7 @@ function depCardHTML(r) {
       r.extCheckoutTime ? `CO ${r.extCheckoutTime}` : '',
       r.extRate         ? `AED ${r.extRate}/night`   : '',
       r.extReason       ? r.extReason                : '',
-      r.extConfirmed    ? '✓ Opera updated'          : '⚠ Opera pending',
+      r.extConfirmed    ? '✓ Opera updated'          : '⚠ Pending',
     ].filter(Boolean).join(' · ');
     const summaryHTML = newDepStr
       ? `<div class="dc-ext-summary"><strong>${r.roomStr}</strong> · ${summaryParts}</div>`
@@ -1590,7 +1590,7 @@ function _extLine(r) {
     newDep = ` → ${String(nd.getDate()).padStart(2,'0')} ${months[nd.getMonth()]}`;
   }
   const co    = r.extCheckoutTime ? ` · CO ${r.extCheckoutTime}` : '';
-  const opera = r.extConfirmed ? ' ✓' : ' ⚠ Opera pending';
+  const opera = r.extConfirmed ? ' ✓' : ' ⚠ Pending';
   return `↪ ${r.roomStr} · +${n}N${newDep}${co}${opera}`;
 }
 
