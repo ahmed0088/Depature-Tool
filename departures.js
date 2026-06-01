@@ -1590,8 +1590,7 @@ function _extLine(r) {
     newDep = ` → ${String(nd.getDate()).padStart(2,'0')} ${months[nd.getMonth()]}`;
   }
   
-  const opera = 
-  return `↪ ${r.roomStr} · +${n}N`;
+  return `↪ ${r.roomStr} · +${n}N${newDep}`;
 }
 
 function depCopyExtList(mode) {
