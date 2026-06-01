@@ -1976,11 +1976,12 @@ kbd {
   .mob-nav-badge {
     position: absolute; top: 5px; right: calc(50% - 18px);
     min-width: 16px; height: 16px; padding: 0 4px;
-    background: var(--rose); color: #fff;
+    background: var(--rose); color: #fff !important;
     font-family: var(--mono); font-size: 0.5rem; font-weight: 700;
     border-radius: 99px;
     display: flex; align-items: center; justify-content: center;
     pointer-events: none;
+    border: 1.5px solid var(--bg2);
   }
   .mob-nav-badge:empty { display: none; }
 
@@ -2016,12 +2017,35 @@ kbd {
   .mob-more-item:active { background: var(--card2); color: var(--accent); }
 
   /* ── Clean up topbar for small screens ── */
-  .theme-switcher  { display: none !important; }
-  .fb-status        { display: none !important; }
-  .tb-pill.live     { display: none !important; }
-  .icon-round       { width: 26px; height: 26px; font-size: 0.78rem; }
-  .topbar           { padding: 0 10px; gap: 6px; }
-  .topbar-right     { gap: 4px; }
+  .theme-switcher        { display: none !important; }
+  .fb-status             { display: none !important; }
+  .tb-pill.live          { display: none !important; }
+  .tb-pill.occ-pill      { display: none !important; }
+  .topbar-time           { display: none !important; }
+  .icon-round            { width: 30px; height: 30px; font-size: 0.85rem; }
+  /* Hide export/import/feedback/keyboard on mobile — in more drawer */
+  #appToast              { bottom: 72px; }
+  .topbar                { padding: 0 10px; gap: 4px; height: 52px; min-height: 52px; }
+  .topbar-right          { gap: 3px; }
+  /* Collapse auth pill on mobile — just icon + name, no role label */
+  .auth-user-pill        { padding: 3px 8px 3px 6px; gap: 4px; max-width: 140px; overflow: hidden; }
+  .auth-user-pill .pill-role { display: none; }
+  .auth-user-pill .pill-name { font-size: 0.62rem; overflow: hidden; text-overflow: ellipsis; }
+  /* Opera theme: force white on topbar icons */
+  [data-theme="opera"] .icon-round          { color: #fff !important; }
+  [data-theme="opera"] .auth-user-pill      { background: rgba(255,255,255,0.15) !important; border-color: rgba(255,255,255,0.2) !important; color: #fff !important; }
+  [data-theme="opera"] .auth-user-pill span { color: #fff !important; }
+  [data-theme="opera"] .auth-user-pill button { color: rgba(255,255,255,0.7) !important; }
+  [data-theme="opera"] #topbarTime          { color: #fff !important; }
+  /* Bottom nav: fix badge text visibility */
+  .mob-nav-badge { color: #fff !important; }
+  /* Bottom nav: Opera theme background fix */
+  [data-theme="opera"] .mob-nav     { background: #fff !important; border-color: #e0e0e0 !important; }
+  [data-theme="opera"] .mob-nav-btn { color: #999 !important; }
+  [data-theme="opera"] .mob-nav-btn.active { color: #C74634 !important; }
+  [data-theme="opera"] .mob-nav-lbl { color: inherit !important; }
+  /* Hide non-essential topbar icons on mobile */
+  .mob-hide { display: none !important; }
 }
 
 /* ══════════════════════════════════════════════════════
@@ -2264,6 +2288,10 @@ kbd {
   font-size: 0.68rem;
   color: var(--text2);
   white-space: nowrap;
+  max-width: 260px;
+  overflow: hidden;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 /* ══════════════════════════════════════════════════════

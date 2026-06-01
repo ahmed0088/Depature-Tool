@@ -232,10 +232,10 @@ function updateAuthUI() {
   const el  = document.getElementById('authUserPill');
   if (el) {
     el.innerHTML = `
-      <span style="color:${def.color};font-size:0.85rem;">${def.icon}</span>
-      <span style="font-weight:600;">${p.name}</span>
-      <span style="color:var(--text3);font-size:0.62rem;">${def.label}</span>
-      <button onclick="authLogout()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:0.75rem;padding:2px 0 0 4px;line-height:1;" title="Sign out">⏻</button>
+      <span style="color:${def.color};font-size:0.85rem;flex-shrink:0;">${def.icon}</span>
+      <span class="pill-name" style="font-weight:600;overflow:hidden;text-overflow:ellipsis;">${p.name}</span>
+      <span class="pill-role" style="color:var(--text3);font-size:0.6rem;flex-shrink:0;">${def.label}</span>
+      <button onclick="authLogout()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:0.8rem;padding:2px 0 0 2px;line-height:1;flex-shrink:0;" title="Sign out">⏻</button>
     `;
     el.style.display = 'flex';
   }
