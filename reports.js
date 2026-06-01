@@ -26,6 +26,8 @@ const NAME_MAP = {
   "Congo":"Congo (Republic of the Congo)",
   "Congo, The Democratic Republic of the":"Congo, Dem. Rep. of (Zaire)",
   "Kyrgzstan":"Kyrghyzstan",
+  "Congo (Brazzaville)":"Congo (Republic of the Congo)",
+  "Saint Barthélemy":"Saint Barthelemy",
 };
 function resolveCountry(name) {
   if (!name) return { excel: null, isUnknown: true };
@@ -44,24 +46,56 @@ function processNat() {
   const lines = raw.split('\n'); if (lines.length < 2) return showErr('File empty.');
   const headers = lines[0].split('\t'); const idx = {};
   headers.forEach((h, i) => { idx[h.trim()] = i; });
-  const needed = ['VALUE_CODE','COUNTRY_CODE','COUNTRY_NAME','SUMVALUEPERCOUNTRY_CODE','SUMVALUEPERVALUE_CODE'];
+  // Detect format early for column validation
+  const isNewFormatCheck = idx['ARR_ROOMS'] !== undefined && idx['ARR_PERSONS'] !== undefined;
+  const needed = isNewFormatCheck
+    ? ['COUNTRY_CODE','COUNTRY_NAME','ARR_PERSONS','STAY_ROOMS','STAY_PERSONS']
+    : ['VALUE_CODE','COUNTRY_CODE','COUNTRY_NAME','SUMVALUEPERCOUNTRY_CODE','SUMVALUEPERVALUE_CODE'];
   const miss   = needed.filter(k => idx[k] === undefined);
   if (miss.length) return showErr('Missing columns: ' + miss.join(', '));
 
+  // Detect format: new single-row format has ARR_ROOMS/ARR_PERSONS columns; old format uses separate APR/RMS/PRS rows
+  const isNewFormat = idx['ARR_ROOMS'] !== undefined && idx['ARR_PERSONS'] !== undefined;
+
   const seenKey = new Set(), operaRaw = {};
   let grandAPR=0,grandRMS=0,grandPRS=0,fA=false,fR=false,fP=false;
-  for (let i = 1; i < lines.length; i++) {
-    const p    = lines[i].split('\t'); if (p.length < 22) continue;
-    const code = (p[idx['VALUE_CODE']]||'').trim(); if (!['RMS','APR','PRS'].includes(code)) continue;
-    const gtot = parseInt(p[idx['SUMVALUEPERVALUE_CODE']]||'0')||0;
-    if (code==='APR'&&!fA&&gtot>0){grandAPR=gtot;fA=true;}
-    if (code==='RMS'&&!fR&&gtot>0){grandRMS=gtot;fR=true;}
-    if (code==='PRS'&&!fP&&gtot>0){grandPRS=gtot;fP=true;}
-    const name = (p[idx['COUNTRY_NAME']]||'').trim();
-    const key  = (p[idx['COUNTRY_CODE']]||'').trim() + '|' + code;
-    if (seenKey.has(key) || !name) continue; seenKey.add(key);
-    if (!operaRaw[name]) operaRaw[name] = {APR:0,RMS:0,PRS:0};
-    operaRaw[name][code] = parseInt(p[idx['SUMVALUEPERCOUNTRY_CODE']])||0;
+
+  if (isNewFormat) {
+    // ── New format: one row per country, arrivals in ARR_* columns ──
+    // Grand totals: grab from the first data row (all rows share the same totals)
+    for (let i = 1; i < lines.length; i++) {
+      const p = lines[i].split('\t'); if (p.length < 22) continue;
+      const name = (p[idx['COUNTRY_NAME']]||'').trim(); if (!name) continue;
+      const arrR  = parseInt(p[idx['ARR_ROOMS']]   ||'0')||0;
+      const arrP  = parseInt(p[idx['ARR_PERSONS']] ||'0')||0;
+      const stayR = parseInt(p[idx['STAY_ROOMS']]  ||'0')||0;
+      const stayP = parseInt(p[idx['STAY_PERSONS']]||'0')||0;
+      const key = (p[idx['COUNTRY_CODE']]||'').trim() + '|NAT';
+      if (seenKey.has(key) || !name) continue; seenKey.add(key);
+      if (!operaRaw[name]) operaRaw[name] = {APR:0,RMS:0,PRS:0};
+      operaRaw[name].APR = arrP;   // Arrival Persons
+      operaRaw[name].RMS = stayR;  // Stay Rooms
+      operaRaw[name].PRS = stayP;  // Stay Persons
+      grandAPR += arrP;
+      grandRMS += stayR;
+      grandPRS += stayP;
+    }
+    fA=true; fR=true; fP=true;
+  } else {
+    // ── Old format: separate rows per VALUE_CODE (APR / RMS / PRS) ──
+    for (let i = 1; i < lines.length; i++) {
+      const p    = lines[i].split('\t'); if (p.length < 22) continue;
+      const code = (p[idx['VALUE_CODE']]||'').trim(); if (!['RMS','APR','PRS'].includes(code)) continue;
+      const gtot = parseInt(p[idx['SUMVALUEPERVALUE_CODE']]||'0')||0;
+      if (code==='APR'&&!fA&&gtot>0){grandAPR=gtot;fA=true;}
+      if (code==='RMS'&&!fR&&gtot>0){grandRMS=gtot;fR=true;}
+      if (code==='PRS'&&!fP&&gtot>0){grandPRS=gtot;fP=true;}
+      const name = (p[idx['COUNTRY_NAME']]||'').trim();
+      const key  = (p[idx['COUNTRY_CODE']]||'').trim() + '|' + code;
+      if (seenKey.has(key) || !name) continue; seenKey.add(key);
+      if (!operaRaw[name]) operaRaw[name] = {APR:0,RMS:0,PRS:0};
+      operaRaw[name][code] = parseInt(p[idx['SUMVALUEPERCOUNTRY_CODE']])||0;
+    }
   }
   const excelData={}, unknowns=[], unmatched=[];
   for (const [opName, vals] of Object.entries(operaRaw)) {
