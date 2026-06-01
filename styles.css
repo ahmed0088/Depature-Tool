@@ -1091,13 +1091,22 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
   .sidenav { display: none; }
   .topbar-center { display: none; }
   .theme-btn span { display: none; }
-  .panel { padding: 14px 14px 80px; }  /* 80px = 60px nav + 20px breathing room */
+  .panel { padding: 12px 12px 80px; }  /* 80px = 60px nav + 20px breathing room */
   .dep-grid.size-md, .dep-grid.size-lg { grid-template-columns: 1fr; }
   .kpi-row.c4 { grid-template-columns: repeat(2,1fr); }
   .dep-kpi-strip { grid-template-columns: repeat(3,1fr); }
+
+  /* Page header: stack, no overflow */
   .page-hd { flex-direction: column; align-items: flex-start; gap: 8px; }
-  .page-hd-actions { flex-wrap: wrap; gap: 5px; }
-  .tbl-wrap { overflow-x: auto; }
+  .page-hd-actions {
+    flex-wrap: wrap;
+    gap: 5px;
+    width: 100%;
+  }
+  .page-hd-actions .btn { flex-shrink: 0; }
+
+  /* Tables: horizontal scroll */
+  .tbl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
   /* ── Prevent card hover-jump on touch ── */
   .dep-card:hover {
@@ -1121,7 +1130,21 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
   .dep-kpi-val { font-size: 1.25rem; }
   .dep-kpi-label { font-size: 0.5rem; }
 
-  /* ── Filter chips: scrollable row ── */
+  /* ── Filter tabs: horizontally scrollable row ── */
+  .dep-filter-tabs {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 4px !important;
+    padding-bottom: 4px;
+    max-width: 100%;
+  }
+  .dep-filter-tabs::-webkit-scrollbar { display: none; }
+  .dep-ftab { flex-shrink: 0; white-space: nowrap; font-size: 0.62rem !important; padding: 5px 10px !important; }
+
+  /* Dep filters row (arrivals/purpose style) */
   .dep-filters {
     display: flex !important;
     flex-wrap: nowrap !important;
@@ -1132,7 +1155,34 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
     padding-bottom: 4px;
   }
   .dep-filters::-webkit-scrollbar { display: none; }
-  .dep-filter-chip { flex-shrink: 0; white-space: nowrap; }
+  .dep-filter-chip, .filter-chip { flex-shrink: 0; white-space: nowrap; }
+
+  /* ── Filter+search row: stack vertically on mobile ── */
+  .dep-filter-search-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .dep-filter-scroll { width: 100%; }
+  .search-wrap#depSearchWrap { width: 100%; }
+  .search-wrap#depSearchWrap input { width: 100% !important; min-width: 0; }
+
+  /* Dep toolbar: wrap, search below filters */
+  .dep-toolbar { flex-wrap: wrap; gap: 6px; }
+  .dep-search-wrap { width: 100%; }
+  .dep-search-wrap input { width: 100% !important; }
+
+  /* Sort+jump bar: horizontally scrollable */
+  .dep-sort-jump-bar { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; gap: 4px; }
+  .dep-sort-jump-bar::-webkit-scrollbar { display: none; }
+  .dep-sort-wrap { flex-wrap: nowrap; overflow-x: visible; flex-shrink: 0; }
+  .dep-sort-btn { flex-shrink: 0; font-size: 0.62rem !important; padding: 5px 8px !important; }
+  .dep-jump-btn { flex-shrink: 0; }
+
+  /* View toggle: smaller on mobile */
+  .view-toggle { flex-shrink: 0; }
+  .vt-btn { padding: 4px 8px; font-size: 0.65rem; }
 
   /* ── Selection tray: full width at bottom ── */
   #depSelTray {
@@ -1146,10 +1196,11 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
   #depSelTray.visible { transform: translateY(0) !important; }
 
   /* ── Dep card head: prevent badges overflow ── */
-  .dc-head { flex-wrap: nowrap; min-width: 0; }
-  .dc-badges { flex-wrap: wrap; max-width: 60vw; }
+  .dc-head { flex-wrap: nowrap; min-width: 0; overflow: hidden; }
+  .dc-badges { flex-wrap: wrap; max-width: 58vw; gap: 3px; }
   .dc-sbadge { font-size: 0.55rem; padding: 2px 6px; }
-  .dc-room { font-size: 1.3rem; }
+  .dc-room { font-size: 1.3rem; flex-shrink: 0; }
+  .dc-copy-card-btn { flex-shrink: 0; }
 
   /* ── Toolbar row: wrap on mobile ── */
   .dep-toolbar { flex-wrap: wrap; gap: 6px; }
@@ -1162,18 +1213,19 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
     gap: 8px !important;
     padding: 10px 12px !important;
   }
-  .dep-na-bar-left  { flex-wrap: wrap; }
+  .dep-na-bar-left  { flex-wrap: wrap; gap: 6px; }
   .dep-na-bar-right {
     display: flex !important;
-    flex-wrap: wrap !important;
+    flex-wrap: nowrap !important;   /* keep copy+arrow on same row */
     gap: 6px !important;
     width: 100%;
+    align-items: stretch;
   }
-  /* Copy split button: main button takes all remaining space */
-  .dep-copy-split { flex: 1; min-width: 0; }
-  .dep-copy-main  { flex: 1; min-width: 0; font-size: 0.62rem !important; padding: 7px 8px !important; }
-  .dep-copy-arrow { padding: 7px 10px !important; }
-  .dep-na-filter-btn { font-size: 0.62rem !important; padding: 6px 12px !important; }
+  /* Copy split: takes remaining space, arrow always visible */
+  .dep-copy-split   { flex: 1; min-width: 0; display: flex; }
+  .dep-copy-main    { flex: 1; min-width: 0; font-size: 0.68rem !important; padding: 9px 10px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dep-copy-arrow   { padding: 9px 12px !important; flex-shrink: 0; min-width: 38px; display: flex !important; align-items: center; justify-content: center; }
+  .dep-na-filter-btn { font-size: 0.65rem !important; padding: 8px 12px !important; flex-shrink: 0; white-space: nowrap; }
 
   /* ── Copy dropdown: fixed to viewport bottom on mobile ── */
   .dep-copy-menu {
@@ -1187,14 +1239,18 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
     max-width: calc(100vw - 20px) !important;
     border-radius: 14px !important;
     padding: 8px !important;
-    z-index: 10000 !important;  /* above overlay (9998) AND above nav (200) */
+    z-index: 10000 !important;  /* well above overlay (9997) AND above nav (300) */
     box-shadow: 0 -4px 32px rgba(0,0,0,0.5) !important;
+    pointer-events: auto !important;  /* ensure taps reach buttons */
   }
   .dep-copy-menu button {
     padding: 13px 14px !important;
     font-size: 0.75rem !important;
     border-radius: 10px !important;
-    min-height: 44px;           /* proper touch target */
+    min-height: 48px;           /* proper touch target */
+    pointer-events: auto !important;
+    -webkit-tap-highlight-color: rgba(255,255,255,0.1);
+    width: 100%;
   }
   .dep-copy-menu button + button {
     border-top: 1px solid var(--border) !important;
@@ -1207,27 +1263,6 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
     gap: 6px !important;
   }
   .dc-ext-field-full { grid-column: auto !important; }
-
-  /* ── NA bar: stack vertically on mobile ── */
-  .dep-na-bar {
-    flex-direction: column !important;
-    align-items: stretch !important;
-    gap: 8px !important;
-    padding: 10px 12px !important;
-  }
-  .dep-na-bar-left  { flex-wrap: wrap; }
-  .dep-na-bar-right {
-    display: flex !important;
-    flex-wrap: wrap !important;
-    gap: 6px !important;
-    width: 100%;
-  }
-  /* Copy split button stretches full width */
-  .dep-copy-split   { flex: 1; min-width: 0; width: 100%; }
-  .dep-copy-main    { flex: 1; min-width: 0; font-size: 0.68rem !important; padding: 9px 10px !important; }
-  .dep-copy-arrow   { padding: 9px 12px !important; }
-  .dep-na-filter-btn { font-size: 0.65rem !important; padding: 8px 12px !important; flex: 1; }
-  .dep-na-copy-btn  { flex: 1; text-align: center; }
 
   /* ── Card body: prevent any overflow ── */
   .dep-card { overflow: hidden; }
@@ -1449,6 +1484,30 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
 /* ═══════════════════════════════════════════════
    SORT BAR + QUICK JUMP
    ═══════════════════════════════════════════════ */
+/* ── Departure filter + search row ── */
+.dep-filter-search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.dep-filter-scroll {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.dep-filter-scroll::-webkit-scrollbar { display: none; }
+.dep-filter-chips {
+  display: flex;
+  gap: 5px;
+  flex-wrap: nowrap !important;
+  width: max-content;
+}
+/* ─────────────────────────────────────────────── */
+
 .dep-sort-jump-bar {
   display: flex;
   align-items: center;
