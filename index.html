@@ -1498,7 +1498,7 @@ async function appInit() {
     });
     const dateLabel = document.getElementById('depDateLabel');
     if (dateLabel) dateLabel.textContent = depRooms.length + ' rooms departing · ' + (depRooms[0]?.departure||'');
-    if (typeof depRender === "function") depRender();
+    depRender(); 
     updateDepBadge();
   }
 
@@ -1538,7 +1538,7 @@ async function appInit() {
       if (uploadCard) uploadCard.style.display = 'none';
       if (board) board.style.display = 'block';
     }
-    if (typeof depRender === "function") depRender();
+    depRender(); 
     updateDepBadge();
   });
   
@@ -1600,7 +1600,7 @@ async function appInit() {
   setTimeout(() => checkNewNight(), 800);
 
   // Refresh departure board every 60s so NA warnings update automatically
-  setInterval(() => { if (depRooms.length && typeof depRender === "function") depRender(); }, 60000);
+  setInterval(() => { if (depRooms.length) depRender(); }, 60000);
 
   showToast('App ready — connected to Firebase', 'ok');
 }
