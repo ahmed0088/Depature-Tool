@@ -1287,23 +1287,39 @@ function depToggleCopyMenu(group) {
   if (!isOpen) {
     menu.classList.add('open');
 
-    // On mobile: add a tap backdrop so tapping outside closes the menu
+    // Both mobile and desktop: close on outside click/tap
+    // Use a micro-delay so the current click doesn't immediately close the menu
+    setTimeout(() => {
+      const close = e => {
+        // Don't close if the click is INSIDE the menu itself
+        if (menu.contains(e.target)) return;
+        menu.classList.remove('open');
+        _depRemoveCopyOverlay();
+        document.removeEventListener('click', close);
+        document.removeEventListener('touchend', close);
+      };
+      document.addEventListener('click', close);
+      document.addEventListener('touchend', close);
+    }, 10);
+
+    // On mobile: also add a semi-transparent backdrop BEHIND the menu (z-index lower than menu)
     const isMobile = window.innerWidth <= 768;
     if (isMobile) {
       const overlay = document.createElement('div');
       overlay.id = 'depCopyOverlay';
-      overlay.style.cssText = 'position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.35);';
+      // z-index 9997 = behind menu (10000) but above everything else
+      // pointer-events only on the overlay itself, NOT on menu children
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:9997;background:rgba(0,0,0,0.45);';
       overlay.addEventListener('click', () => {
         menu.classList.remove('open');
         _depRemoveCopyOverlay();
       });
+      overlay.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        menu.classList.remove('open');
+        _depRemoveCopyOverlay();
+      });
       document.body.appendChild(overlay);
-    } else {
-      // Desktop: close on outside click
-      setTimeout(() => {
-        const close = e => { menu.classList.remove('open'); document.removeEventListener('click', close); };
-        document.addEventListener('click', close);
-      }, 0);
     }
   }
 }
@@ -1655,6 +1671,19 @@ function depFilter(f, el) {
     const map = { due:'due', extended:'ext', late:'late', balance:'bal', out:'out', pending:'pending', na:'na', maybe_extend:'ext' };
     if (map[f]) btn.classList.add(map[f]);
   }
+  // When switching to 'out' view, reset to smart sort (which auto-sorts newest-first)
+  if (f === 'out' && depSort.key !== 'smart') {
+    depSort = { key: 'smart', dir: 1 };
+    document.querySelectorAll('.dep-sort-btn').forEach(b => {
+      const active = b.dataset.s === 'smart';
+      b.classList.toggle('on', active);
+      const arrow = b.querySelector('.sort-arrow');
+      if (arrow) arrow.textContent = '';
+    });
+  }
+  // Update sort label hint for checked-out view
+  const sortLbl = document.getElementById('depSortLbl');
+  if (sortLbl) sortLbl.textContent = f === 'out' ? '↓ Latest checkout first' : '';
   depRender();
 }
 
