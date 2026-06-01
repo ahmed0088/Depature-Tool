@@ -19,6 +19,9 @@ const NAME_MAP = {
   "Viet Nam":"Vietnam","South Korea":"Korea, Republic of (South)",
   "North Korea":"Korea, Democratic People's Republic of (North)",
   "Cabo Verde":"Cape Verde","Brunei Darussalam":"Brunei",
+  "Burkina Fasa":"Burkina Faso",
+  "Korea (South)":"Korea, Republic of (South)",
+  "Libyan Arab Jamahiriya":"Libya",
 };
 function resolveCountry(name) {
   if (!name) return { excel: null, isUnknown: true };
