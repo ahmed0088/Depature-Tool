@@ -150,9 +150,17 @@ function showToast(msg, type = 'ok') {
 function setTheme(name, btn) {
   document.documentElement.setAttribute('data-theme', name);
   document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+  // sync login theme buttons too
+  document.querySelectorAll('.login-theme-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.t === name);
+  });
   const target = btn || document.querySelector(`.theme-btn[data-t="${name}"]`);
   if (target) target.classList.add('active');
   saveSettings({ theme: name });
+  // save to user profile so it persists across devices
+  if (typeof saveThemeToProfile === 'function') saveThemeToProfile(name);
+  // sync login screen colors if visible
+  if (typeof _applyLoginTheme === 'function') _applyLoginTheme(name);
 }
 
 function toggleTheme() {

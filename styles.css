@@ -2447,3 +2447,46 @@ kbd {
   .admin-table th:nth-child(4),
   .admin-table td:nth-child(4) { display: none; }
 }
+
+/* ── Login theme switcher row ── */
+.login-theme-row {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+.login-theme-btn {
+  flex: 1;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid #1f2d42;
+  background: transparent;
+  color: #374d68;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.58rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.04em;
+}
+.login-theme-btn:hover { opacity: 0.8; }
+.login-theme-btn.active {
+  border-color: #e8b84b;
+  color: #e8b84b;
+  background: rgba(232,184,75,0.1);
+}
+
+/* ── Remember me row ── */
+.login-remember {
+  display: flex;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.login-check-label {
+  display: flex;
+  align-items: center;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.62rem;
+  color: #7f92aa;
+  cursor: pointer;
+  user-select: none;
+}

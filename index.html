@@ -31,6 +31,7 @@
     } catch(e) {}
   })();
 </script>
+  <style id="loginThemeStyle"></style>
 </head>
 <body>
 
@@ -40,6 +41,13 @@
 <div id="loginScreen" style="display:none;">
   <div class="login-bg">
     <div class="login-card">
+
+      <!-- Theme switcher -->
+      <div class="login-theme-row">
+        <button class="login-theme-btn active" data-t="night-ops" onclick="setTheme('night-ops',this)" title="Night Ops">🌙 Night</button>
+        <button class="login-theme-btn" data-t="opera" onclick="setTheme('opera',this)" title="Opera">🔴 Opera</button>
+        <button class="login-theme-btn" data-t="midnight" onclick="setTheme('midnight',this)" title="Midnight">🌌 Midnight</button>
+      </div>
 
       <div class="login-logo">🏨</div>
       <div class="login-title">Ibis Styles <span>Dubai</span></div>
@@ -63,10 +71,19 @@
 
       <div id="loginError" class="login-error" style="display:none;"></div>
 
+      <div class="login-remember">
+        <label class="login-check-label">
+          <input type="checkbox" id="rememberMe" style="accent-color:#e8b84b;margin-right:6px;"/>
+          Stay signed in
+        </label>
+      </div>
+
       <button id="loginBtn" class="login-btn" onclick="authLogin()">Sign In →</button>
 
       <div class="login-footer">Secured by Firebase Authentication</div>
-      <div style="margin-top:14px;text-align:center;"><a href="setup-account.html" style="font-family:'Courier New',monospace;font-size:0.6rem;color:#3a4055;text-decoration:none;letter-spacing:0.08em;" onmouseover="this.style.color='#3ecf8e'" onmouseout="this.style.color='#3a4055'">⚙ First time setup</a></div>
+      <div style="margin-top:10px;text-align:center;">
+        <a href="setup-account.html" style="font-family:'DM Mono',monospace;font-size:0.58rem;color:#374d68;text-decoration:none;letter-spacing:0.08em;" onmouseover="this.style.color='#e8b84b'" onmouseout="this.style.color='#374d68'">⚙ First time setup</a>
+      </div>
 
     </div>
   </div>

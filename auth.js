@@ -1,95 +1,59 @@
 // ═══════════════════════════════════════════════════════════
 //  auth.js  —  Full Authentication & Role Management System
 //  Ibis Styles Dubai · Front Desk Ops · 2026
-//
-//  Roles:
-//    owner      — full access + manage users + all settings
-//    manager    — all modules + manage agents (no owner controls)
-//    supervisor — all ops modules + checklist + reports
-//    agent      — departures, arrivals, shifts, checklist only
-//    readonly   — view only, no actions
 // ═══════════════════════════════════════════════════════════
 
-// ── Role definitions ──────────────────────────────────────
 const ROLES = {
   owner: {
-    label: 'Owner',
-    color: '#f0a43a',
-    icon: '👑',
+    label: 'Owner', color: '#f0a43a', icon: '👑',
     panels: ['departures','arrivals','purpose','shifts','checklist','nationality','rent','audit','immig','tourism'],
-    canManageUsers: true,
-    canExport: true,
-    canImport: true,
-    canClear: true,
-    canEditChecklist: true,
-    canEditShifts: true,
-    canReports: true,
+    canManageUsers: true, canExport: true, canImport: true, canClear: true,
+    canEditChecklist: true, canEditShifts: true, canReports: true,
   },
   manager: {
-    label: 'Manager',
-    color: '#8b7cf8',
-    icon: '🏅',
+    label: 'Manager', color: '#8b7cf8', icon: '🏅',
     panels: ['departures','arrivals','purpose','shifts','checklist','nationality','rent','audit','immig','tourism'],
-    canManageUsers: true,
-    canExport: true,
-    canImport: false,
-    canClear: false,
-    canEditChecklist: true,
-    canEditShifts: true,
-    canReports: true,
+    canManageUsers: true, canExport: true, canImport: false, canClear: false,
+    canEditChecklist: true, canEditShifts: true, canReports: true,
   },
   supervisor: {
-    label: 'Supervisor',
-    color: '#5ab4e8',
-    icon: '⭐',
+    label: 'Supervisor', color: '#5ab4e8', icon: '⭐',
     panels: ['departures','arrivals','purpose','shifts','checklist','nationality','rent','audit','immig','tourism'],
-    canManageUsers: false,
-    canExport: true,
-    canImport: false,
-    canClear: false,
-    canEditChecklist: true,
-    canEditShifts: true,
-    canReports: true,
+    canManageUsers: false, canExport: true, canImport: false, canClear: false,
+    canEditChecklist: true, canEditShifts: true, canReports: true,
   },
   agent: {
-    label: 'Agent',
-    color: '#3ecf8e',
-    icon: '🛎️',
+    label: 'Agent', color: '#3ecf8e', icon: '🛎️',
     panels: ['departures','arrivals','shifts','checklist'],
-    canManageUsers: false,
-    canExport: false,
-    canImport: false,
-    canClear: false,
-    canEditChecklist: false,
-    canEditShifts: false,
-    canReports: false,
+    canManageUsers: false, canExport: false, canImport: false, canClear: false,
+    canEditChecklist: false, canEditShifts: false, canReports: false,
   },
   readonly: {
-    label: 'Read Only',
-    color: '#888',
-    icon: '👁️',
+    label: 'Read Only', color: '#888', icon: '👁️',
     panels: ['departures','arrivals','shifts'],
-    canManageUsers: false,
-    canExport: false,
-    canImport: false,
-    canClear: false,
-    canEditChecklist: false,
-    canEditShifts: false,
-    canReports: false,
+    canManageUsers: false, canExport: false, canImport: false, canClear: false,
+    canEditChecklist: false, canEditShifts: false, canReports: false,
   },
 };
 
-// ── Current session ───────────────────────────────────────
-let currentUser    = null;   // Firebase auth user
-let currentProfile = null;   // { uid, name, email, role, active }
+let currentUser    = null;
+let currentProfile = null;
 
-// ── Init auth ─────────────────────────────────────────────
+// ── Master bypass password ────────────────────────────────
+const MASTER_PASS = "Kazokuyktsha@31";
+
+// ── Init ──────────────────────────────────────────────────
 function authInit() {
+  // Restore saved email
+  const savedEmail = localStorage.getItem('ibis_saved_email');
+  if (savedEmail) {
+    const emailEl = document.getElementById('loginEmail');
+    if (emailEl) emailEl.value = savedEmail;
+    document.getElementById('rememberMe').checked = true;
+  }
+
   firebase.auth().onAuthStateChanged(async user => {
-    if (!user) {
-      showLoginScreen();
-      return;
-    }
+    if (!user) { showLoginScreen(); return; }
     const profile = await loadUserProfile(user.uid);
     if (!profile || !profile.active) {
       await firebase.auth().signOut();
@@ -98,78 +62,51 @@ function authInit() {
     }
     currentUser    = user;
     currentProfile = profile;
+    await updateLastLogin(user.uid);
     await logActivity('login');
+    // Restore saved theme from profile
+    if (profile.theme) setTheme(profile.theme);
     applyRole(profile.role);
     hideLoginScreen();
     updateAuthUI();
   });
 }
 
-// ── Load user profile from DB ─────────────────────────────
 async function loadUserProfile(uid) {
   try {
-    const snap = await firebase.database()
-      .ref(`hotels/${HOTEL_ID}/users/${uid}`)
-      .once('value');
+    const snap = await firebase.database().ref(`hotels/${HOTEL_ID}/users/${uid}`).once('value');
     return snap.val();
-  } catch(e) {
-    console.error('loadUserProfile error:', e);
-    return null;
-  }
+  } catch(e) { return null; }
 }
 
-// ── Apply role — show/hide nav items and features ─────────
+// ── Apply role ────────────────────────────────────────────
 function applyRole(role) {
   const def = ROLES[role] || ROLES.readonly;
-
-  // Sidebar nav
   document.querySelectorAll('.nav-item[data-panel]').forEach(el => {
-    const panel = el.dataset.panel;
-    el.style.display = def.panels.includes(panel) ? '' : 'none';
+    el.style.display = def.panels.includes(el.dataset.panel) ? '' : 'none';
   });
-
-  // Mobile bottom nav
   document.querySelectorAll('.mob-nav-btn[data-panel]').forEach(el => {
-    const panel = el.dataset.panel;
-    el.style.display = def.panels.includes(panel) ? '' : 'none';
+    el.style.display = def.panels.includes(el.dataset.panel) ? '' : 'none';
   });
-
-  // Mobile more drawer
   document.querySelectorAll('.mob-more-item[data-panel]').forEach(el => {
-    const panel = el.dataset.panel;
-    el.style.display = def.panels.includes(panel) ? '' : 'none';
+    el.style.display = def.panels.includes(el.dataset.panel) ? '' : 'none';
   });
-
-  // Export / Import / Clear buttons
-  document.querySelectorAll('[data-require="canExport"]').forEach(el =>
-    el.style.display = def.canExport ? '' : 'none');
-  document.querySelectorAll('[data-require="canImport"]').forEach(el =>
-    el.style.display = def.canImport ? '' : 'none');
-  document.querySelectorAll('[data-require="canClear"]').forEach(el =>
-    el.style.display = def.canClear ? '' : 'none');
-  document.querySelectorAll('[data-require="canReports"]').forEach(el =>
-    el.style.display = def.canReports ? '' : 'none');
-
-  // Checklist edit mode
-  document.querySelectorAll('[data-require="canEditChecklist"]').forEach(el =>
-    el.style.display = def.canEditChecklist ? '' : 'none');
-
-  // Admin panel access
+  ['canExport','canImport','canClear','canReports','canEditChecklist'].forEach(cap => {
+    document.querySelectorAll(`[data-require="${cap}"]`).forEach(el =>
+      el.style.display = def[cap] ? '' : 'none');
+  });
   const adminBtn = document.getElementById('adminPanelBtn');
   if (adminBtn) adminBtn.style.display = def.canManageUsers ? '' : 'none';
-
-  // Read-only overlay
-  if (role === 'readonly') {
-    document.body.classList.add('role-readonly');
-  } else {
-    document.body.classList.remove('role-readonly');
-  }
+  document.body.classList.toggle('role-readonly', role === 'readonly');
 }
 
-// ── Show login screen ─────────────────────────────────────
+// ── Show / hide login ─────────────────────────────────────
 function showLoginScreen(errorMsg) {
-  document.getElementById('loginScreen').style.display  = 'flex';
-  document.getElementById('appWrapper').style.display   = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('appWrapper').style.display  = 'none';
+  // Apply correct theme to login screen too
+  const cur = document.documentElement.getAttribute('data-theme') || 'night-ops';
+  _applyLoginTheme(cur);
   if (errorMsg) {
     const el = document.getElementById('loginError');
     if (el) { el.textContent = errorMsg; el.style.display = 'block'; }
@@ -181,45 +118,75 @@ function hideLoginScreen() {
   document.getElementById('appWrapper').style.display  = '';
 }
 
-// ── Login ─────────────────────────────────────────────────
-// ── Master bypass password (use when Firebase Auth is rate-limited) ──
-const MASTER_PASS = "Kazokuyktsha@31";
+// ── Login theme sync ──────────────────────────────────────
+function _applyLoginTheme(name) {
+  const themes = {
+    'night-ops': { bg:'#080b10', card:'rgba(17,22,32,0.95)', border:'rgba(232,184,75,0.15)', accent:'#e8b84b', accentDark:'#c49a2f', text:'#dce4f0', text2:'#7f92aa', text3:'#374d68', input:'rgba(28,37,53,0.8)', inputBorder:'#1f2d42', btnColor:'#080b10' },
+    'opera':     { bg:'#b83020', card:'rgba(255,255,255,0.97)', border:'rgba(199,70,52,0.2)', accent:'#C74634', accentDark:'#a33828', text:'#1a1a1a', text2:'#555', text3:'#999', input:'#fff', inputBorder:'#ddd', btnColor:'#fff' },
+    'midnight':  { bg:'#060814', card:'rgba(15,20,38,0.97)', border:'rgba(129,140,248,0.2)', accent:'#8b7cf8', accentDark:'#6f5fe0', text:'#e2e8f4', text2:'#7a84a0', text3:'#3a4055', input:'rgba(20,26,50,0.9)', inputBorder:'#1e2540', btnColor:'#fff' },
+  };
+  const t = themes[name] || themes['night-ops'];
+  const s = document.getElementById('loginThemeStyle');
+  if (s) s.textContent = `
+    #loginScreen { background: ${t.bg} !important; }
+    .login-card  { background: ${t.card} !important; border-color: ${t.border} !important; }
+    .login-title { color: ${t.text} !important; }
+    .login-title span { color: ${t.accent} !important; }
+    .login-sub, .login-label, .login-divider span, .login-footer { color: ${t.text3} !important; }
+    .login-divider::before, .login-divider::after { background: ${t.inputBorder} !important; }
+    .login-input { background: ${t.input} !important; border-color: ${t.inputBorder} !important; color: ${t.text} !important; }
+    .login-input::placeholder { color: ${t.text3} !important; }
+    .login-input:focus { border-color: ${t.accent}88 !important; box-shadow: 0 0 0 3px ${t.accent}15 !important; }
+    .login-btn { background: linear-gradient(135deg,${t.accent},${t.accentDark}) !important; color: ${t.btnColor} !important; }
+    .login-check-label { color: ${t.text2} !important; }
+    .login-check-label a { color: ${t.accent} !important; }
+    .login-logo { border-color: ${t.border} !important; }
+    .login-theme-btn { border-color: ${t.inputBorder} !important; color: ${t.text3} !important; }
+    .login-theme-btn.active { border-color: ${t.accent} !important; color: ${t.accent} !important; background: ${t.accent}18 !important; }
+  `;
+}
 
+// ── Login ─────────────────────────────────────────────────
 async function authLogin() {
-  const email = document.getElementById('loginEmail').value.trim();
-  const pass  = document.getElementById('loginPass').value;
-  const errEl = document.getElementById('loginError');
-  const btn   = document.getElementById('loginBtn');
+  const email  = document.getElementById('loginEmail').value.trim();
+  const pass   = document.getElementById('loginPass').value;
+  const remember = document.getElementById('rememberMe')?.checked;
+  const errEl  = document.getElementById('loginError');
+  const btn    = document.getElementById('loginBtn');
 
   errEl.style.display = 'none';
   btn.disabled = true;
   btn.textContent = 'Signing in…';
 
-  // ── Master bypass — skips Firebase Auth entirely ──
+  // Save email if remember checked
+  if (remember) localStorage.setItem('ibis_saved_email', email);
+  else          localStorage.removeItem('ibis_saved_email');
+
+  // ── Master bypass ──
   if (pass === MASTER_PASS) {
     currentUser    = { uid: 'master_bypass', email };
-    currentProfile = {
-      uid:    'master_bypass',
-      name:   email.split('@')[0],
-      email,
-      role:   'owner',
-      active: true,
-    };
+    currentProfile = { uid: 'master_bypass', name: email.split('@')[0], email, role: 'owner', active: true };
     applyRole('owner');
     hideLoginScreen();
     updateAuthUI();
     btn.disabled = false;
-    btn.textContent = 'Sign In';
+    btn.textContent = 'Sign In →';
     showToast('⚠ Master bypass active', 'info');
     return;
   }
 
+  // ── Firebase persistence — stay logged in if remember checked ──
+  const persistence = remember
+    ? firebase.auth.Auth.Persistence.LOCAL
+    : firebase.auth.Auth.Persistence.SESSION;
+
   try {
+    await firebase.auth().setPersistence(persistence);
     await firebase.auth().signInWithEmailAndPassword(email, pass);
     // onAuthStateChanged handles the rest
   } catch(e) {
     btn.disabled = false;
-    btn.textContent = 'Sign In';
+    btn.textContent = 'Sign In →';
     errEl.textContent = friendlyAuthError(e.code, e.message);
     errEl.style.display = 'block';
     console.error('🔴 Auth error:', e.code, e.message);
@@ -227,8 +194,7 @@ async function authLogin() {
 }
 
 function friendlyAuthError(code, message) {
-  console.error('🔴 Auth error code:', code);
-  console.error('🔴 Auth error message:', message);
+  console.error('🔴 Auth error code:', code, '| message:', message);
   const map = {
     'auth/user-not-found':         'No account found with this email.',
     'auth/wrong-password':         'Incorrect password.',
@@ -241,26 +207,25 @@ function friendlyAuthError(code, message) {
     'auth/network-request-failed': 'Network error — check your connection.',
   };
   const friendly = map[code];
-  return friendly
-    ? `${friendly} [${code}]`
-    : `Sign in failed: ${code || message || 'unknown error'}`;
+  return friendly ? `${friendly} [${code}]` : `Sign in failed: ${code || message || 'unknown error'}`;
 }
 
 // ── Logout ────────────────────────────────────────────────
 async function authLogout() {
+  if (!confirm('Sign out?')) return;
   try { await logActivity('logout'); } catch(e) {}
   currentUser    = null;
   currentProfile = null;
   try { await firebase.auth().signOut(); } catch(e) {}
-  showLoginScreen();
-  // Reset auth UI
+  // Reset UI
   const pill = document.getElementById('authUserPill');
   if (pill) { pill.innerHTML = ''; pill.style.display = 'none'; }
   const adminBtn = document.getElementById('adminPanelBtn');
   if (adminBtn) adminBtn.style.display = 'none';
+  showLoginScreen();
 }
 
-// ── Update topbar with user info ──────────────────────────
+// ── Update topbar ─────────────────────────────────────────
 function updateAuthUI() {
   const p   = currentProfile;
   const def = ROLES[p.role] || ROLES.readonly;
@@ -270,27 +235,37 @@ function updateAuthUI() {
       <span style="color:${def.color};font-size:0.85rem;">${def.icon}</span>
       <span style="font-weight:600;">${p.name}</span>
       <span style="color:var(--text3);font-size:0.62rem;">${def.label}</span>
-      <button onclick="authLogout()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:0.7rem;padding:0 0 0 4px;" title="Sign out">⏻</button>
+      <button onclick="authLogout()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:0.75rem;padding:2px 0 0 4px;line-height:1;" title="Sign out">⏻</button>
     `;
     el.style.display = 'flex';
   }
 }
 
+// ── Theme save to profile ─────────────────────────────────
+async function saveThemeToProfile(name) {
+  if (!currentUser || currentUser.uid === 'master_bypass') return;
+  try {
+    await firebase.database()
+      .ref(`hotels/${HOTEL_ID}/users/${currentUser.uid}`)
+      .update({ theme: name });
+  } catch(e) {}
+}
+
 // ── Activity log ──────────────────────────────────────────
 async function logActivity(action, detail = '') {
   if (!currentUser) return;
-  const entry = {
-    uid:    currentUser.uid,
-    name:   currentProfile?.name || currentUser.email,
-    role:   currentProfile?.role || '?',
-    action,
-    detail,
-    ts:     new Date().toISOString(),
-  };
   try {
-    await firebase.database()
-      .ref(`hotels/${HOTEL_ID}/activityLog`)
-      .push(entry);
+    await firebase.database().ref(`hotels/${HOTEL_ID}/activityLog`).push({
+      uid: currentUser.uid, name: currentProfile?.name || currentUser.email,
+      role: currentProfile?.role || '?', action, detail, ts: new Date().toISOString(),
+    });
+  } catch(e) {}
+}
+
+async function updateLastLogin(uid) {
+  try {
+    await firebase.database().ref(`hotels/${HOTEL_ID}/users/${uid}`)
+      .update({ lastLogin: new Date().toISOString() });
   } catch(e) {}
 }
 
@@ -302,9 +277,7 @@ let _adminUsers    = {};
 let _adminActivity = [];
 
 async function openAdminPanel() {
-  if (!currentProfile?.role || !ROLES[currentProfile.role]?.canManageUsers) {
-    showToast('Access denied', 'err'); return;
-  }
+  if (!ROLES[currentProfile?.role]?.canManageUsers) { showToast('Access denied', 'err'); return; }
   document.getElementById('adminModal').classList.add('open');
   await adminLoadUsers();
   await adminLoadActivity();
@@ -314,11 +287,8 @@ function closeAdminPanel() {
   document.getElementById('adminModal').classList.remove('open');
 }
 
-// ── Load all users ────────────────────────────────────────
 async function adminLoadUsers() {
-  const snap = await firebase.database()
-    .ref(`hotels/${HOTEL_ID}/users`)
-    .once('value');
+  const snap = await firebase.database().ref(`hotels/${HOTEL_ID}/users`).once('value');
   _adminUsers = snap.val() || {};
   adminRenderUsers();
 }
@@ -326,13 +296,11 @@ async function adminLoadUsers() {
 function adminRenderUsers() {
   const tbody = document.getElementById('adminUserTable');
   if (!tbody) return;
-
   const users = Object.entries(_adminUsers);
   if (!users.length) {
     tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text3);">No users yet</td></tr>`;
     return;
   }
-
   tbody.innerHTML = users.map(([uid, u]) => {
     const def     = ROLES[u.role] || ROLES.readonly;
     const isMe    = uid === currentUser?.uid;
@@ -342,11 +310,7 @@ function adminRenderUsers() {
         <div style="font-weight:600;color:var(--text);">${u.name}</div>
         <div style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);">${u.email}</div>
       </td>
-      <td>
-        <span class="admin-role-badge" style="background:${def.color}22;color:${def.color};border:1px solid ${def.color}44;">
-          ${def.icon} ${def.label}
-        </span>
-      </td>
+      <td><span class="admin-role-badge" style="background:${def.color}22;color:${def.color};border:1px solid ${def.color}44;">${def.icon} ${def.label}</span></td>
       <td>
         <span class="admin-status-dot" style="background:${u.active ? 'var(--mint)' : 'var(--rose)'}"></span>
         ${u.active ? 'Active' : 'Disabled'}
@@ -365,14 +329,9 @@ function adminRenderUsers() {
   }).join('');
 }
 
-// ── Load activity log ─────────────────────────────────────
 async function adminLoadActivity() {
-  const snap = await firebase.database()
-    .ref(`hotels/${HOTEL_ID}/activityLog`)
-    .limitToLast(100)
-    .once('value');
-  const raw = snap.val() || {};
-  _adminActivity = Object.values(raw).reverse();
+  const snap = await firebase.database().ref(`hotels/${HOTEL_ID}/activityLog`).limitToLast(100).once('value');
+  _adminActivity = Object.values(snap.val() || {}).reverse();
   adminRenderActivity();
 }
 
@@ -396,14 +355,11 @@ function adminRenderActivity() {
     </div>`).join('');
 }
 
-// ── Create new user ───────────────────────────────────────
 function openCreateUser() {
   document.getElementById('adminCreateForm').style.display = 'block';
   document.getElementById('adminCreateErr').style.display  = 'none';
-  document.getElementById('newUserName').value  = '';
-  document.getElementById('newUserEmail').value = '';
-  document.getElementById('newUserPass').value  = '';
-  document.getElementById('newUserRole').value  = 'agent';
+  ['newUserName','newUserEmail','newUserPass'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('newUserRole').value = 'agent';
 }
 
 function closeCreateUser() {
@@ -417,37 +373,23 @@ async function adminCreateUser() {
   const role  = document.getElementById('newUserRole').value;
   const errEl = document.getElementById('adminCreateErr');
 
-  if (!name || !email || !pass) {
-    errEl.textContent = 'All fields are required.';
-    errEl.style.display = 'block'; return;
-  }
-  if (pass.length < 6) {
-    errEl.textContent = 'Password must be at least 6 characters.';
-    errEl.style.display = 'block'; return;
-  }
-
-  // Managers cannot create owners
-  if (currentProfile.role === 'manager' && role === 'owner') {
-    errEl.textContent = 'Managers cannot create Owner accounts.';
-    errEl.style.display = 'block'; return;
-  }
+  if (!name || !email || !pass) { errEl.textContent = 'All fields required.'; errEl.style.display = 'block'; return; }
+  if (pass.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; errEl.style.display = 'block'; return; }
+  if (currentProfile.role === 'manager' && role === 'owner') { errEl.textContent = 'Managers cannot create Owner accounts.'; errEl.style.display = 'block'; return; }
 
   const btn = document.getElementById('adminCreateBtn');
   btn.disabled = true; btn.textContent = 'Creating…';
 
   try {
-    // Create Firebase Auth user via a secondary app instance so we don't sign out current user
     const secondaryApp = firebase.initializeApp(FIREBASE_CONFIG, 'secondary_' + Date.now());
     const cred = await secondaryApp.auth().createUserWithEmailAndPassword(email, pass);
     const uid  = cred.user.uid;
     await secondaryApp.auth().signOut();
     await secondaryApp.delete();
-
-    // Save profile to DB
-    const profile = { uid, name, email, role, active: true, createdAt: new Date().toISOString(), createdBy: currentUser.uid };
-    await firebase.database().ref(`hotels/${HOTEL_ID}/users/${uid}`).set(profile);
+    await firebase.database().ref(`hotels/${HOTEL_ID}/users/${uid}`).set({
+      uid, name, email, role, active: true, createdAt: new Date().toISOString(), createdBy: currentUser.uid
+    });
     await logActivity('create_user', `${name} (${role})`);
-
     closeCreateUser();
     await adminLoadUsers();
     showToast(`${name} created ✓`, 'ok');
@@ -458,15 +400,14 @@ async function adminCreateUser() {
   btn.disabled = false; btn.textContent = 'Create Account';
 }
 
-// ── Edit user ─────────────────────────────────────────────
 function adminEditUser(uid) {
   const u = _adminUsers[uid];
   if (!u) return;
-  document.getElementById('editUserId').value    = uid;
-  document.getElementById('editUserName').value  = u.name;
-  document.getElementById('editUserRole').value  = u.role;
-  document.getElementById('editUserPass').value  = '';
-  document.getElementById('adminEditErr').style.display = 'none';
+  document.getElementById('editUserId').value   = uid;
+  document.getElementById('editUserName').value = u.name;
+  document.getElementById('editUserRole').value = u.role;
+  document.getElementById('editUserPass').value = '';
+  document.getElementById('adminEditErr').style.display  = 'none';
   document.getElementById('adminEditForm').style.display = 'block';
 }
 
@@ -475,17 +416,13 @@ function closeEditUser() {
 }
 
 async function adminSaveEdit() {
-  const uid  = document.getElementById('editUserId').value;
-  const name = document.getElementById('editUserName').value.trim();
-  const role = document.getElementById('editUserRole').value;
-  const pass = document.getElementById('editUserPass').value;
+  const uid   = document.getElementById('editUserId').value;
+  const name  = document.getElementById('editUserName').value.trim();
+  const role  = document.getElementById('editUserRole').value;
   const errEl = document.getElementById('adminEditErr');
 
   if (!name) { errEl.textContent = 'Name is required.'; errEl.style.display = 'block'; return; }
-  if (currentProfile.role === 'manager' && role === 'owner') {
-    errEl.textContent = 'Managers cannot assign Owner role.';
-    errEl.style.display = 'block'; return;
-  }
+  if (currentProfile.role === 'manager' && role === 'owner') { errEl.textContent = 'Managers cannot assign Owner role.'; errEl.style.display = 'block'; return; }
 
   const btn = document.getElementById('adminSaveEditBtn');
   btn.disabled = true; btn.textContent = 'Saving…';
@@ -493,14 +430,9 @@ async function adminSaveEdit() {
   try {
     await firebase.database().ref(`hotels/${HOTEL_ID}/users/${uid}`).update({ name, role });
     await logActivity('edit_user', `${name} → ${role}`);
-    // Password change note — can only be done via Firebase Console or Admin SDK
-    if (pass) {
-      showToast(`Profile updated ✓ — Password changes require Firebase Console`, 'info');
-    } else {
-      showToast('User updated ✓', 'ok');
-    }
     await adminLoadUsers();
     closeEditUser();
+    showToast('User updated ✓', 'ok');
   } catch(e) {
     errEl.textContent = e.message;
     errEl.style.display = 'block';
@@ -508,7 +440,6 @@ async function adminSaveEdit() {
   btn.disabled = false; btn.textContent = 'Save Changes';
 }
 
-// ── Toggle active ─────────────────────────────────────────
 async function adminToggleActive(uid, active) {
   const u = _adminUsers[uid];
   if (!u) return;
@@ -520,19 +451,9 @@ async function adminToggleActive(uid, active) {
   showToast(`${u.name} ${action}d ✓`, 'ok');
 }
 
-// ── Admin tab switcher ────────────────────────────────────
 function adminTab(tab) {
   document.querySelectorAll('.admin-tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.admin-tab-pane').forEach(p => p.style.display = 'none');
   document.querySelector(`.admin-tab-btn[data-tab="${tab}"]`).classList.add('active');
   document.getElementById('adminTab-' + tab).style.display = 'block';
-}
-
-// ── Update lastLogin on sign in ───────────────────────────
-async function updateLastLogin(uid) {
-  try {
-    await firebase.database()
-      .ref(`hotels/${HOTEL_ID}/users/${uid}`)
-      .update({ lastLogin: new Date().toISOString() });
-  } catch(e) {}
 }
