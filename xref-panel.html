@@ -1,0 +1,127 @@
+<!-- ═══════════════════════════════════════════════════════
+     PANEL: Arrivals ↔ Departures Cross-Reference
+     Insert inside <div class="main"> alongside other panels.
+     Add nav item and load arr-dep-xref.js before </body>
+     ═══════════════════════════════════════════════════════ -->
+
+<!-- NAV ITEM — paste inside your nav list -->
+<!--
+<div class="nav-item" id="nav-xref" onclick="showPanel('xref')">
+  <span class="nav-icon">🔗</span>
+  <span class="nav-label">Arr vs Dep</span>
+  <span class="nav-badge" id="badge-xref">0</span>
+</div>
+-->
+
+<!-- PANEL — paste inside .main div with other panels -->
+<div class="panel" id="panel-xref">
+
+  <!-- Header -->
+  <div class="panel-header">
+    <div class="panel-title-row">
+      <div class="panel-title">
+        <span class="panel-title-icon">🔗</span>
+        Arrivals ↔ Departures
+      </div>
+      <div class="panel-subtitle">
+        Cross-reference today's arrivals with departing rooms — flags rooms that cannot be extended
+      </div>
+    </div>
+  </div>
+
+  <!-- Paste card -->
+  <div id="xrefPasteCard" class="card" style="margin-bottom:16px;">
+    <div style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:10px;">
+      📋 Load Today's Arrivals Report
+    </div>
+    <div style="font-size:0.72rem;color:var(--text2);margin-bottom:12px;">
+      From Opera: Reservations → Arrivals → Export Delimited Data. Paste below or upload the file.
+      Works alongside the Departure board — conflicts are flagged instantly on both panels.
+    </div>
+    <textarea
+      id="xrefInput"
+      class="upload-textarea"
+      placeholder="Paste Opera Arrivals Delimited Data here…"
+      style="min-height:120px;width:100%;box-sizing:border-box;resize:vertical;"></textarea>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+      <button class="btn gold" onclick="xrefLoad()">🔗 Load &amp; Cross-Reference</button>
+      <label class="btn" style="cursor:pointer;">
+        📂 Upload File
+        <input type="file" accept=".txt,.tsv,.csv" style="display:none;" onchange="xrefLoadFile(this)"/>
+      </label>
+    </div>
+  </div>
+
+  <!-- Result card -->
+  <div id="xrefResultCard" style="display:none;">
+
+    <!-- KPI row -->
+    <div class="xref-kpi-row">
+      <div class="xref-kpi">
+        <div class="xref-kpi-val red" id="xref-kpi-conflict">0</div>
+        <div class="xref-kpi-label">🔴 Conflicts</div>
+      </div>
+      <div class="xref-kpi">
+        <div class="xref-kpi-val" id="xref-kpi-total">0</div>
+        <div class="xref-kpi-label">Total Arrivals</div>
+      </div>
+      <div class="xref-kpi">
+        <div class="xref-kpi-val green" id="xref-kpi-assigned">0</div>
+        <div class="xref-kpi-label">Room Assigned</div>
+      </div>
+      <div class="xref-kpi">
+        <div class="xref-kpi-val amber" id="xref-kpi-unassigned">0</div>
+        <div class="xref-kpi-label">No Room Yet</div>
+      </div>
+    </div>
+
+    <!-- Action bar -->
+    <div class="xref-action-bar">
+      <button class="btn sm" onclick="xrefCopyConflicts()">📋 Copy Conflicts</button>
+      <button class="btn sm gold" onclick="xrefCopyHKPriority()">🏨 Copy HK Priority</button>
+      <button class="btn sm" onclick="xrefClear()" style="margin-left:auto;">↺ Clear</button>
+    </div>
+
+    <!-- Note when no departure board loaded -->
+    <div id="xrefNoteNoDep" style="display:none;background:rgba(240,164,58,0.08);border:1px solid rgba(240,164,58,0.25);border-radius:8px;padding:10px 14px;font-family:var(--mono);font-size:0.65rem;color:var(--amber);margin-bottom:14px;">
+      ⚠ Load the Departure board first to see conflicts. Arrivals are stored — conflicts will appear automatically once departures are loaded.
+    </div>
+
+    <!-- Table -->
+    <div class="card" style="overflow-x:auto;padding:0;">
+      <table class="xref-table">
+        <thead>
+          <tr style="background:var(--bg2);">
+            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.58rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">ROOM</th>
+            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.58rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">ARRIVING GUEST</th>
+            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.58rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">STATUS</th>
+            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.58rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">DEPARTING GUEST</th>
+            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.58rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">STAY</th>
+            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.58rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">SOURCE</th>
+            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.58rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">FLAG</th>
+          </tr>
+        </thead>
+        <tbody id="xrefTable">
+          <tr><td colspan="7" style="text-align:center;padding:36px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div><!-- /xrefResultCard -->
+
+</div><!-- /panel-xref -->
+
+<!-- ── HOW TO WIRE THIS IN ──────────────────────────────────
+  1. Copy the panel div above into your index.html main section
+  2. Add the nav-item comment above to your nav
+  3. Add this script tag before </body>:
+       <script src="arr-dep-xref.js"></script>
+  4. Done — xref auto-hooks into depRooms when loaded.
+  5. The xrefInjectDepWarnings() call is also triggered any time
+     depRender() runs (add it to the end of depRender in departures.js):
+       if (typeof xrefInjectDepWarnings === 'function') xrefInjectDepWarnings();
+
+  OPTIONAL — to re-inject after dep re-renders automatically, add
+  one line at the bottom of depRender() in departures.js:
+    if (typeof xrefInjectDepWarnings === 'function') xrefInjectDepWarnings();
+──────────────────────────────────────────────────────────── -->
