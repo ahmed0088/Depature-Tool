@@ -6,31 +6,31 @@
 const ROLES = {
   owner: {
     label: 'Owner', color: '#f0a43a', icon: '👑',
-    panels: ['departures','arrivals','purpose','shifts','checklist','nationality','rent','audit','immig','tourism'],
+    panels: ['departures','arrivals','xref','purpose','shifts','checklist','nationality','rent','audit','immig','tourism'],
     canManageUsers: true, canExport: true, canImport: true, canClear: true,
     canEditChecklist: true, canEditShifts: true, canReports: true,
   },
   manager: {
     label: 'Manager', color: '#8b7cf8', icon: '🏅',
-    panels: ['departures','arrivals','purpose','shifts','checklist','nationality','rent','audit','immig','tourism'],
+    panels: ['departures','arrivals','xref','purpose','shifts','checklist','nationality','rent','audit','immig','tourism'],
     canManageUsers: true, canExport: true, canImport: false, canClear: false,
     canEditChecklist: true, canEditShifts: true, canReports: true,
   },
   supervisor: {
     label: 'Supervisor', color: '#5ab4e8', icon: '⭐',
-    panels: ['departures','arrivals','purpose','shifts','checklist','nationality','rent','audit','immig','tourism'],
+    panels: ['departures','arrivals','xref','purpose','shifts','checklist','nationality','rent','audit','immig','tourism'],
     canManageUsers: false, canExport: true, canImport: false, canClear: false,
     canEditChecklist: true, canEditShifts: true, canReports: true,
   },
   agent: {
     label: 'Agent', color: '#3ecf8e', icon: '🛎️',
-    panels: ['departures','arrivals','shifts','checklist'],
+    panels: ['departures','arrivals','xref','shifts','checklist'],
     canManageUsers: false, canExport: false, canImport: false, canClear: false,
     canEditChecklist: false, canEditShifts: false, canReports: false,
   },
   readonly: {
     label: 'Read Only', color: '#888', icon: '👁️',
-    panels: ['departures','arrivals','shifts'],
+    panels: ['departures','arrivals','xref','shifts'],
     canManageUsers: false, canExport: false, canImport: false, canClear: false,
     canEditChecklist: false, canEditShifts: false, canReports: false,
   },

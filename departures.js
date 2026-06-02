@@ -590,6 +590,9 @@ function depRender() {
     qb.style.display = 'none';
     if (qbIn) qbIn.style.display = 'none';
   }
+
+  // Inject arrival warnings into dep cards (arr-dep-xref.js)
+  if (typeof xrefInjectDepWarnings === 'function') xrefInjectDepWarnings();
 }
 
 // ── Quick Jump bar ─────────────────────────────────────────

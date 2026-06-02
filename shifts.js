@@ -134,6 +134,7 @@ function stToggle(key, id) {
   _renderShiftContent(key);
   updateShiftBadge(key);
   saveShifts(SHIFTS);
+  if (typeof isOnline === 'function' && !isOnline()) showToast('Saved locally — offline', 'info');
 }
 
 // ── Move up/down ──────────────────────────────────────────
@@ -244,7 +245,8 @@ function resetShift(key) {
   logActivity('shift_reset', SHIFTS[key].label);
   _renderShiftContent(key);
   saveShifts(SHIFTS);
-  showToast('Shift reset ✓');
+  const isOffline = typeof isOnline === 'function' && !isOnline();
+  showToast(isOffline ? 'Shift reset ✓ (offline — will sync when reconnected)' : 'Shift reset ✓', isOffline ? 'info' : 'ok');
 }
 
 // ── Badge update ──────────────────────────────────────────

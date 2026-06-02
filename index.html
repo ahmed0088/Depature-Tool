@@ -151,6 +151,10 @@
     <div class="nav-icon">🛎️</div>Arrivals
     <span class="nav-badge" id="badge-arrivals">0</span>
   </div>
+  <div class="nav-item" onclick="showPanel('xref')" id="nav-xref" data-panel="xref">
+    <div class="nav-icon">🔗</div>Arr vs Dep
+    <span class="nav-badge" id="badge-xref">0</span>
+  </div>
   <div class="nav-item" onclick="showPanel('purpose')" id="nav-purpose" data-panel="purpose">
     <div class="nav-icon">📋</div>Purpose of Stay
     <span class="nav-badge" id="badge-purpose">0</span>
@@ -427,6 +431,90 @@
     <thead><tr><th>Room</th><th>Conf.</th><th>Name</th><th>Purpose</th><th>Nights</th><th>Nationality</th><th>Email</th><th>Source</th><th>Remarks</th><th></th></tr></thead>
     <tbody id="arrTable"></tbody>
   </table></div>
+</div>
+
+<!-- ════════════════ ARR vs DEP (XREF) ════════════════ -->
+<div class="panel" id="panel-xref">
+  <div class="page-hd">
+    <div class="page-hd-left">
+      <h1>Arrivals ↔ Departures</h1>
+      <p id="xrefDateLabel">Same guest on arrivals + departures = extension booked · Load dep board first</p>
+    </div>
+    <div class="page-hd-actions">
+      <button class="btn sky" id="xrefReloadBtn" onclick="openXrefReloadModal()" style="display:none;">🔄 Reload Report</button>
+      <button class="btn rose" onclick="xrefClear()">✕ Clear</button>
+    </div>
+  </div>
+
+  <div id="xrefPasteCard" class="card" style="margin-bottom:16px;">
+    <div class="upload-zone">
+      <div class="upload-label-bar">
+        <div class="upload-dot gold"></div>
+        <span class="upload-lbl">Opera Arrivals Report · Delimited Data</span>
+        <span class="upload-sub">From Reservations → Arrivals → Export Delimited Data</span>
+      </div>
+      <textarea id="xrefInput" placeholder="Opera Cloud → Reservations → Arrivals → Export Delimited Data&#10;Open .txt → Ctrl+A → Ctrl+C → Paste here"></textarea>
+    </div>
+    <div class="error-box" id="xrefError" style="display:none;"><span>⚠</span><span id="xrefErrorMsg"></span></div>
+    <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
+      <button class="btn gold" onclick="xrefLoad()">🔗 Load &amp; Check Extensions</button>
+      <label class="btn" style="cursor:pointer;">📂 Upload File<input type="file" accept=".txt,.tsv,.csv" style="display:none;" onchange="xrefLoadFile(this)"/></label>
+      <span style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);"><strong style="color:var(--text);">Load Dep board first</strong> for full extension verdicts</span>
+    </div>
+  </div>
+
+  <div id="xrefResultCard" style="display:none;">
+    <div class="xref-kpi-row">
+      <div class="xref-kpi"><div class="xref-kpi-val" id="xref-kpi-total">0</div><div class="xref-kpi-label">Total Arrivals</div></div>
+      <div class="xref-kpi"><div class="xref-kpi-val red" id="xref-kpi-conflict">0</div><div class="xref-kpi-label" id="xref-lbl-conflict">↪ Extensions</div></div>
+      <div class="xref-kpi"><div class="xref-kpi-val green" id="xref-kpi-can-extend">0</div><div class="xref-kpi-label" id="xref-lbl-can-extend">🛎 New Arrivals</div></div>
+      <div class="xref-kpi"><div class="xref-kpi-val sky" id="xref-kpi-assigned">0</div><div class="xref-kpi-label">Room Assigned</div></div>
+      <div class="xref-kpi"><div class="xref-kpi-val amber" id="xref-kpi-unassigned">0</div><div class="xref-kpi-label">No Room Yet</div></div>
+    </div>
+
+    <div class="xref-filters">
+      <button class="xref-filter-btn on" data-xf="all" onclick="xrefSetFilter('all',this)">All <span class="xref-filter-count" id="xref-fc-all">0</span></button>
+      <button class="xref-filter-btn" data-xf="conflicts" onclick="xrefSetFilter('conflicts',this)">↪ Extensions <span class="xref-filter-count" id="xref-fc-conflicts">0</span></button>
+      <button class="xref-filter-btn" data-xf="can_extend" onclick="xrefSetFilter('can_extend',this)">🛎 New Arrivals <span class="xref-filter-count" id="xref-fc-can-extend">0</span></button>
+      <button class="xref-filter-btn" data-xf="unassigned" onclick="xrefSetFilter('unassigned',this)">🏷 No Room <span class="xref-filter-count" id="xref-fc-unassigned">0</span></button>
+    </div>
+
+    <div class="xref-search-wrap">
+      <span class="xref-search-icon">🔍</span>
+      <input id="xrefSearch" type="text" placeholder="Search room, guest name, confirmation, source…" oninput="xrefSetSearch(this.value)"/>
+    </div>
+
+    <div class="xref-action-bar">
+      <button class="btn sm" onclick="xrefCopyConflicts()">↪ Copy Extensions</button>
+      <button class="btn sm" onclick="xrefCopyCanExtend()">🛎 Copy New Arrivals</button>
+      <button class="btn sm gold" onclick="xrefCopyHKPriority()">🏨 Copy HK Priority</button>
+
+    </div>
+
+    <div id="xrefNoteNoDep" style="display:none;background:rgba(240,164,58,0.08);border:1px solid rgba(240,164,58,0.25);border-radius:8px;padding:10px 14px;font-family:var(--mono);font-size:0.65rem;color:var(--amber);margin-bottom:14px;">
+      ⚠ Load the <strong>Departure board</strong> first — extensions are detected by matching the same guest name on both boards.
+    </div>
+
+    <div class="card" style="overflow-x:auto;padding:0;">
+      <table class="xref-table">
+        <thead>
+          <tr style="background:var(--bg2);">
+            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.56rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">ROOM</th>
+            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.56rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">ARRIVING GUEST</th>
+            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.56rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">SOURCE / PLATFORM</th>
+            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.56rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">STAY DATES</th>
+            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.56rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">CURRENT GUEST STATUS</th>
+            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.56rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">EXTENSION?</th>
+            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.56rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">REASON</th>
+            <th style="padding:10px 12px;"></th>
+          </tr>
+        </thead>
+        <tbody id="xrefTable">
+          <tr><td colspan="8" style="text-align:center;padding:36px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">Load arrivals above to begin.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 <!-- ════════════════ PURPOSE OF STAY ════════════════ -->
@@ -975,6 +1063,7 @@
 <script src="shifts.js"></script>
 <script src="checklist.js"></script>
 <script src="reports.js"></script>
+<script src="arr-dep-xref.js"></script>
 <script src="tourism-tax.js"></script>
 
 <script>
@@ -1621,6 +1710,23 @@ async function appInit() {
 // appInit is called by hideLoginScreen after auth succeeds
 </script>
 <!-- RELOAD MODAL -->
+<!-- ════════ XREF RELOAD MODAL ════════ -->
+<div class="modal-bg" id="xrefReloadModal">
+  <div class="modal">
+    <h3>🔄 Reload Arrivals Report</h3>
+    <p style="color:var(--text2); margin-bottom:12px;">Paste the latest Opera Arrivals report (Delimited Data). Existing data will be replaced.</p>
+    <textarea id="xrefReloadInput" rows="12"
+      style="width:100%; font-family:var(--mono); font-size:0.75rem; padding:12px;"
+      placeholder="Paste full arrivals report here..."></textarea>
+    <div class="error-box" id="xrefReloadError" style="display:none;">
+      <span id="xrefReloadErrorMsg"></span>
+    </div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn" onclick="closeXrefReloadModal()">Cancel</button>
+      <button class="btn gold" onclick="processXrefReload()">🔗 Reload &amp; Re-check</button>
+    </div>
+  </div>
+</div>
 <div class="modal-bg" id="depReloadModal">
   <div class="modal">
     <h3>🔄 Reload from Opera</h3>
