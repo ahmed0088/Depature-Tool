@@ -28,6 +28,11 @@ const NAME_MAP = {
   "Kyrgzstan":"Kyrghyzstan",
   "Congo (Brazzaville)":"Congo (Republic of the Congo)",
   "Saint Barthélemy":"Saint Barthelemy",
+  "Unknown":null,
+  "UNKNOWN":null,
+  "unknown":null,
+  "No Nationality":null,
+  "Not Specified":null,
 };
 function resolveCountry(name) {
   if (!name) return { excel: null, isUnknown: true };
