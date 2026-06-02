@@ -28,11 +28,6 @@ const NAME_MAP = {
   "Kyrgzstan":"Kyrghyzstan",
   "Congo (Brazzaville)":"Congo (Republic of the Congo)",
   "Saint Barthélemy":"Saint Barthelemy",
-  "Unknown":null,
-  "UNKNOWN":null,
-  "unknown":null,
-  "No Nationality":null,
-  "Not Specified":null,
 };
 function resolveCountry(name) {
   if (!name) return { excel: null, isUnknown: true };
@@ -170,24 +165,6 @@ function processNat() {
       return z(apr)+'\t'+z(rms)+'\t'+z(prs);
     }).join('\n');
   }
-  function renderNatPreview() {
-    const merge = document.getElementById('mergeUnkChk') && document.getElementById('mergeUnkChk').checked;
-    const uaeRow = merge ? {
-      APR: rows[uaeIdx].APR + window._natUnkTotals.APR,
-      RMS: rows[uaeIdx].RMS + window._natUnkTotals.RMS,
-      PRS: rows[uaeIdx].PRS + window._natUnkTotals.PRS,
-      APRLY: rows[uaeIdx].APRLY, RMSLY: rows[uaeIdx].RMSLY, PRSLY: rows[uaeIdx].PRSLY
-    } : null;
-    document.getElementById('natPreview').innerHTML = EXCEL_COUNTRIES.map((c,i) => {
-      const v = (merge && i === uaeIdx) ? uaeRow : rows[i];
-      const rn=i+8; const has=v.APR||v.RMS||v.PRS; const sn=c.length>22?c.substring(0,21)+'…':c;
-      const lyBadge = window._natHasLY && has ? window._natPctStr(v.APR, v.APRLY) : '';
-      const cols = window._natHasLY ? '36px 1fr 54px 54px 54px 54px' : '36px 1fr 54px 54px 54px';
-      const uaeHighlight = (merge && i === uaeIdx) ? 'background:rgba(90,180,232,0.08);' : (has ? 'background:rgba(90,180,232,0.03);' : '');
-      return `<div style="display:grid;grid-template-columns:${cols};padding:3px 12px;border-bottom:1px solid rgba(255,255,255,0.02);${uaeHighlight}"><span style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);">${rn}</span><span style="font-size:0.68rem;color:${has?'var(--text2)':'var(--text3)'};" title="${c}">${sn}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--sky)':'var(--border2)'};">${v.APR||''}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--gold)':'var(--border2)'};">${v.RMS||''}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--mint)':'var(--border2)'};">${v.PRS||''}</span>${window._natHasLY?`<span style="text-align:right;">${lyBadge}</span>`:''}</div>`;
-    }).join('');
-  }
-  window._renderNatPreview = renderNatPreview;
   window._buildNatCopy = buildNatCopy;
   natCopyText = buildNatCopy();
 
@@ -225,22 +202,44 @@ function processNat() {
   ['gap-apr','gap-rms','gap-prs'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.textContent=[gapAPR,gapRMS,gapPRS][i]>0?'−'+[gapAPR,gapRMS,gapPRS][i]:'0';});
   ['s-active','s-zero','s-unmat','s-unk'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.textContent=[active,240-active,unmatched.length,unknowns.length][i];});
   const hasLY = rows.some(v => v.APRLY || v.RMSLY || v.PRSLY);
-  window._natHasLY = hasLY;
   const pctStr = (cur, ly) => {
     if (!ly) return '';
     const d = ((cur - ly) / ly * 100);
     const clr = d >= 0 ? 'var(--mint)' : 'var(--rose)';
     return `<span style="font-family:var(--mono);font-size:0.54rem;color:${clr};margin-left:3px;">${d>=0?'+':''}${d.toFixed(0)}%</span>`;
   };
+  // Store on window so renderNatPreview can access after processNat finishes
+  window._natHasLY = hasLY;
   window._natPctStr = pctStr;
-  // Sync preview header columns with row columns
-  const prevHdr = document.getElementById('natPreviewHeader');
-  if (prevHdr) {
-    prevHdr.style.gridTemplateColumns = hasLY ? '36px 1fr 54px 54px 54px 54px' : '36px 1fr 54px 54px 54px';
-    if (hasLY) {
-      prevHdr.innerHTML = '<span style="font-family:var(--mono);font-size:0.53rem;color:var(--text3);">ROW</span><span style="font-family:var(--mono);font-size:0.53rem;color:var(--text3);">NATIONALITY</span><span style="font-family:var(--mono);font-size:0.53rem;color:var(--sky);text-align:right;">ARR</span><span style="font-family:var(--mono);font-size:0.53rem;color:var(--gold);text-align:right;">RMS</span><span style="font-family:var(--mono);font-size:0.53rem;color:var(--mint);text-align:right;">GST</span><span style="font-family:var(--mono);font-size:0.53rem;color:var(--text3);text-align:right;">vs LY</span>';
+  window._natRows = rows;
+  window._natUnkTotals = unkTotals;
+
+  function renderNatPreview() {
+    const merge = document.getElementById('mergeUnkChk') && document.getElementById('mergeUnkChk').checked;
+    const q = (window._natSearchQ || '').toLowerCase().trim();
+    const uaeRow = merge ? {
+      APR:   rows[uaeIdx].APR   + window._natUnkTotals.APR,
+      RMS:   rows[uaeIdx].RMS   + window._natUnkTotals.RMS,
+      PRS:   rows[uaeIdx].PRS   + window._natUnkTotals.PRS,
+      APRLY: rows[uaeIdx].APRLY, RMSLY: rows[uaeIdx].RMSLY, PRSLY: rows[uaeIdx].PRSLY
+    } : null;
+    // Sync header columns
+    const prevHdr = document.getElementById('natPreviewHeader');
+    if (prevHdr) {
+      prevHdr.style.gridTemplateColumns = hasLY ? '36px 1fr 54px 54px 54px 54px' : '36px 1fr 54px 54px 54px';
+      if (hasLY) prevHdr.innerHTML = '<span style="font-family:var(--mono);font-size:0.53rem;color:var(--text3);">ROW</span><span style="font-family:var(--mono);font-size:0.53rem;color:var(--text3);">NATIONALITY</span><span style="font-family:var(--mono);font-size:0.53rem;color:var(--sky);text-align:right;">ARR</span><span style="font-family:var(--mono);font-size:0.53rem;color:var(--gold);text-align:right;">RMS</span><span style="font-family:var(--mono);font-size:0.53rem;color:var(--mint);text-align:right;">GST</span><span style="font-family:var(--mono);font-size:0.53rem;color:var(--text3);text-align:right;">vs LY</span>';
     }
+    const cols = hasLY ? '36px 1fr 54px 54px 54px 54px' : '36px 1fr 54px 54px 54px';
+    document.getElementById('natPreview').innerHTML = EXCEL_COUNTRIES.map((c,i) => {
+      if (q && !c.toLowerCase().includes(q)) return '';
+      const v = (merge && i === uaeIdx) ? uaeRow : rows[i];
+      const rn=i+8; const has=v.APR||v.RMS||v.PRS; const sn=c.length>22?c.substring(0,21)+'…':c;
+      const lyBadge = hasLY && has ? pctStr(v.APR, v.APRLY) : '';
+      const uaeHL = (merge && i === uaeIdx) ? 'background:rgba(90,180,232,0.08);' : (has ? 'background:rgba(90,180,232,0.03);' : '');
+      return `<div style="display:grid;grid-template-columns:${cols};padding:3px 12px;border-bottom:1px solid rgba(255,255,255,0.02);${uaeHL}"><span style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);">${rn}</span><span style="font-size:0.68rem;color:${has?'var(--text2)':'var(--text3)'};" title="${c}">${sn}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--sky)':'var(--border2)'};">${v.APR||''}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--gold)':'var(--border2)'};">${v.RMS||''}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--mint)':'var(--border2)'};">${v.PRS||''}</span>${hasLY?`<span style="text-align:right;">${lyBadge}</span>`:''}</div>`;
+    }).join('');
   }
+  window._renderNatPreview = renderNatPreview;
   renderNatPreview();
   // Inject Opera how-to instructions if element exists
   const howToEl = document.getElementById('natHowTo');
@@ -258,6 +257,12 @@ function processNat() {
   </div>`;
   document.getElementById('natResults').style.display = 'block';
 }
+function natFilterPreview(q) {
+  if (!window._renderNatPreview) return;
+  window._natSearchQ = q.toLowerCase().trim();
+  window._renderNatPreview();
+}
+
 function copyNat()  { if (window._buildNatCopy) natCopyText = window._buildNatCopy(); if (!natCopyText) return; copyToClipboard(natCopyText, document.getElementById('natCopyBtn'), 'Copy All 240 Rows'); }
 function clearNat() { document.getElementById('natInput').value=''; document.getElementById('natResults').style.display='none'; document.getElementById('natError').classList.remove('show'); natCopyText=''; try { localStorage.removeItem('ibis_nat_paste'); } catch(e){} }
 

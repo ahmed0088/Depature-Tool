@@ -491,13 +491,25 @@
 <div class="panel" id="panel-nationality">
   <div style="max-width:1200px;">
     <div class="page-hd">
-      <div class="page-hd-left"><h1>Nationality Report</h1><p>Opera stat_countrybyday · Delimited Data</p></div>
+      <div class="page-hd-left"><h1>Nationality Report</h1><p>Opera stat_countrybymon · Delimited Data</p></div>
       <div class="page-hd-actions"><button class="btn rose" onclick="clearNat()">✕ Clear</button></div>
     </div>
     <div class="card">
       <div class="upload-zone">
-        <div class="upload-label-bar"><div class="upload-dot gold"></div><span class="upload-lbl">Nationality Report</span><span class="upload-sub">stat_countrybyday_….txt</span></div>
-        <textarea id="natInput" placeholder="Opera Cloud → Reports → Nationality by Country → Download as Delimited Data → Paste here"></textarea>
+        <div class="upload-label-bar"><div class="upload-dot gold"></div><span class="upload-lbl">Nationality Report</span><span class="upload-sub">stat_countrybymon_….txt</span></div>
+        <div style="margin-bottom:8px;padding:10px 13px;background:rgba(90,180,232,0.05);border:1px solid rgba(90,180,232,0.15);border-left:3px solid var(--sky);border-radius:var(--r);font-size:0.7rem;color:var(--text2);line-height:1.8;">
+          <div style="font-family:var(--mono);font-size:0.58rem;letter-spacing:1px;color:var(--sky);margin-bottom:5px;">HOW TO GET THIS REPORT FROM OPERA</div>
+          <ol style="margin:0;padding-left:16px;color:var(--text3);">
+            <li>In Opera go to <strong style="color:var(--text2);">Reports</strong> and search <strong style="color:var(--mint);">Nationality by Month</strong></li>
+            <li>Set your <strong style="color:var(--text2);">date range</strong> to the full month</li>
+            <li>Select the <strong style="color:var(--sky);">Nationality</strong> radio button <em style="color:var(--text3);">(not Country)</em></li>
+            <li>Tick <strong style="color:var(--sky);">Room Nights</strong> and <strong style="color:var(--sky);">Person Nights</strong></li>
+            <li>Download → <strong style="color:var(--mint);">Delimited</strong> with <strong style="color:var(--mint);">Tab</strong> separator</li>
+            <li>Open file <strong style="color:var(--text2);">(stat_countrybymon...)</strong> → Select All → Copy → Paste below</li>
+          </ol>
+          <div style="margin-top:6px;font-family:var(--mono);font-size:0.57rem;color:var(--amber);">⚠ Select <strong>Nationality</strong> radio — not Country — or data will not match</div>
+        </div>
+        <textarea id="natInput" placeholder="Paste stat_countrybymon_….txt here…"></textarea>
       </div>
       <div class="error-box" id="natError"><span>⚠</span><span id="natErrorMsg"></span></div>
       <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn gold" onclick="processNat()">⚡ Process</button><button class="btn" onclick="clearNat()">✕ Clear</button></div>
@@ -521,11 +533,12 @@
       </div>
       <div style="display:grid;grid-template-columns:1fr 250px;gap:14px;margin-top:14px;">
         <div class="card" style="padding:0;overflow:hidden;">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--card2);">
-            <div style="font-size:0.8rem;font-weight:600;">Preview · 240 rows</div>
-            <span style="font-family:var(--mono);font-size:0.6rem;color:var(--gold);">ROWS 8–247</span>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--card2);gap:10px;">
+            <div style="font-size:0.8rem;font-weight:600;white-space:nowrap;">Preview · 240 rows</div>
+            <input id="natSearch" type="text" placeholder="Search nationality…" oninput="natFilterPreview(this.value)" style="flex:1;max-width:180px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:4px 9px;font-family:var(--mono);font-size:0.68rem;color:var(--text2);outline:none;" />
+            <span style="font-family:var(--mono);font-size:0.6rem;color:var(--gold);white-space:nowrap;">ROWS 8–247</span>
           </div>
-          <div id="natPreviewHeader" style="display:grid;grid-template-columns:36px 1fr 54px 54px 54px;padding:6px 12px;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--border);">
+          <div style="display:grid;grid-template-columns:36px 1fr 54px 54px 54px;padding:6px 12px;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--border);">
             <span style="font-family:var(--mono);font-size:0.53rem;color:var(--text3);">ROW</span>
             <span style="font-family:var(--mono);font-size:0.53rem;color:var(--text3);">NATIONALITY</span>
             <span style="font-family:var(--mono);font-size:0.53rem;color:var(--sky);text-align:right;">ARR</span>
