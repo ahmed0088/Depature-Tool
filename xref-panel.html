@@ -1,7 +1,13 @@
 <!-- ═══════════════════════════════════════════════════════
-     PANEL: Arrivals ↔ Departures Cross-Reference
-     Insert inside <div class="main"> alongside other panels.
-     Add nav item and load arr-dep-xref.js before </body>
+     PANEL: Arrivals ↔ Departures Cross-Reference  v2
+     Drop-in replacement for xref-panel.html
+
+     Changes in v2:
+     · NEW KPI: Can Extend count
+     · Filter tabs: All / Conflicts / Can Extend / Unassigned
+     · Search bar: room, name, conf, source
+     · Copy "Can Extend" button
+     · Updated table headers (8 columns now)
      ═══════════════════════════════════════════════════════ -->
 
 <!-- NAV ITEM — paste inside your nav list -->
@@ -13,7 +19,6 @@
 </div>
 -->
 
-<!-- PANEL — paste inside .main div with other panels -->
 <div class="panel" id="panel-xref">
 
   <!-- Header -->
@@ -24,7 +29,7 @@
         Arrivals ↔ Departures
       </div>
       <div class="panel-subtitle">
-        Cross-reference today's arrivals with departing rooms — flags rooms that cannot be extended
+        Can this guest extend? Cross-reference arrivals with the dep board — instant extension verdict per room
       </div>
     </div>
   </div>
@@ -35,8 +40,8 @@
       📋 Load Today's Arrivals Report
     </div>
     <div style="font-size:0.72rem;color:var(--text2);margin-bottom:12px;">
-      From Opera: Reservations → Arrivals → Export Delimited Data. Paste below or upload the file.
-      Works alongside the Departure board — conflicts are flagged instantly on both panels.
+      From Opera: Reservations → Arrivals → Export Delimited Data. Paste or upload below.<br>
+      <strong style="color:var(--text);">Load the Departure board first</strong> for full extension verdicts — the tool tells you instantly if a room can be extended or not.
     </div>
     <textarea
       id="xrefInput"
@@ -44,7 +49,7 @@
       placeholder="Paste Opera Arrivals Delimited Data here…"
       style="min-height:120px;width:100%;box-sizing:border-box;resize:vertical;"></textarea>
     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
-      <button class="btn gold" onclick="xrefLoad()">🔗 Load &amp; Cross-Reference</button>
+      <button class="btn gold" onclick="xrefLoad()">🔗 Load &amp; Check Extensions</button>
       <label class="btn" style="cursor:pointer;">
         📂 Upload File
         <input type="file" accept=".txt,.tsv,.csv" style="display:none;" onchange="xrefLoadFile(this)"/>
@@ -55,18 +60,22 @@
   <!-- Result card -->
   <div id="xrefResultCard" style="display:none;">
 
-    <!-- KPI row -->
+    <!-- KPI row (5 pills) -->
     <div class="xref-kpi-row">
-      <div class="xref-kpi">
-        <div class="xref-kpi-val red" id="xref-kpi-conflict">0</div>
-        <div class="xref-kpi-label">🔴 Conflicts</div>
-      </div>
       <div class="xref-kpi">
         <div class="xref-kpi-val" id="xref-kpi-total">0</div>
         <div class="xref-kpi-label">Total Arrivals</div>
       </div>
       <div class="xref-kpi">
-        <div class="xref-kpi-val green" id="xref-kpi-assigned">0</div>
+        <div class="xref-kpi-val red" id="xref-kpi-conflict">0</div>
+        <div class="xref-kpi-label">⛔ Conflicts</div>
+      </div>
+      <div class="xref-kpi">
+        <div class="xref-kpi-val green" id="xref-kpi-can-extend">0</div>
+        <div class="xref-kpi-label">✅ Can Extend</div>
+      </div>
+      <div class="xref-kpi">
+        <div class="xref-kpi-val sky" id="xref-kpi-assigned">0</div>
         <div class="xref-kpi-label">Room Assigned</div>
       </div>
       <div class="xref-kpi">
@@ -75,16 +84,44 @@
       </div>
     </div>
 
+    <!-- Filter tabs -->
+    <div class="xref-filters">
+      <button class="xref-filter-btn on" data-xf="all"        onclick="xrefSetFilter('all',this)">
+        All <span class="xref-filter-count" id="xref-fc-all">0</span>
+      </button>
+      <button class="xref-filter-btn red" data-xf="conflicts" onclick="xrefSetFilter('conflicts',this);this.classList.add('red')">
+        ⛔ Conflicts <span class="xref-filter-count" id="xref-fc-conflicts">0</span>
+      </button>
+      <button class="xref-filter-btn green" data-xf="can_extend" onclick="xrefSetFilter('can_extend',this);this.classList.add('green')">
+        ✅ Can Extend <span class="xref-filter-count" id="xref-fc-can-extend">0</span>
+      </button>
+      <button class="xref-filter-btn" data-xf="unassigned" onclick="xrefSetFilter('unassigned',this)">
+        🏷 No Room <span class="xref-filter-count" id="xref-fc-unassigned">0</span>
+      </button>
+    </div>
+
+    <!-- Search bar -->
+    <div class="xref-search-wrap">
+      <span class="xref-search-icon">🔍</span>
+      <input
+        id="xrefSearch"
+        type="text"
+        placeholder="Search room, guest name, confirmation, source…"
+        oninput="xrefSetSearch(this.value)"
+      />
+    </div>
+
     <!-- Action bar -->
     <div class="xref-action-bar">
-      <button class="btn sm" onclick="xrefCopyConflicts()">📋 Copy Conflicts</button>
+      <button class="btn sm" onclick="xrefCopyConflicts()">⛔ Copy Conflicts</button>
+      <button class="btn sm" onclick="xrefCopyCanExtend()">✅ Copy Can Extend</button>
       <button class="btn sm gold" onclick="xrefCopyHKPriority()">🏨 Copy HK Priority</button>
       <button class="btn sm" onclick="xrefClear()" style="margin-left:auto;">↺ Clear</button>
     </div>
 
-    <!-- Note when no departure board loaded -->
+    <!-- No departure board warning -->
     <div id="xrefNoteNoDep" style="display:none;background:rgba(240,164,58,0.08);border:1px solid rgba(240,164,58,0.25);border-radius:8px;padding:10px 14px;font-family:var(--mono);font-size:0.65rem;color:var(--amber);margin-bottom:14px;">
-      ⚠ Load the Departure board first to see conflicts. Arrivals are stored — conflicts will appear automatically once departures are loaded.
+      ⚠ Load the <strong>Departure board</strong> first to see extension verdicts. Arrivals are stored — verdicts appear automatically once departures are loaded.
     </div>
 
     <!-- Table -->
@@ -92,17 +129,18 @@
       <table class="xref-table">
         <thead>
           <tr style="background:var(--bg2);">
-            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.58rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">ROOM</th>
-            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.58rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">ARRIVING GUEST</th>
-            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.58rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">STATUS</th>
-            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.58rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">DEPARTING GUEST</th>
-            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.58rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">STAY</th>
-            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.58rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">SOURCE</th>
-            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.58rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">FLAG</th>
+            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.56rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">ROOM</th>
+            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.56rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">ARRIVING GUEST</th>
+            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.56rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">SOURCE / PLATFORM</th>
+            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.56rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">STAY DATES</th>
+            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.56rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">CURRENT GUEST STATUS</th>
+            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.56rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">EXTENSION?</th>
+            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.56rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">REASON</th>
+            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.56rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;"></th>
           </tr>
         </thead>
         <tbody id="xrefTable">
-          <tr><td colspan="7" style="text-align:center;padding:36px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">Loading…</td></tr>
+          <tr><td colspan="8" style="text-align:center;padding:36px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">Loading…</td></tr>
         </tbody>
       </table>
     </div>
@@ -112,16 +150,20 @@
 </div><!-- /panel-xref -->
 
 <!-- ── HOW TO WIRE THIS IN ──────────────────────────────────
-  1. Copy the panel div above into your index.html main section
-  2. Add the nav-item comment above to your nav
-  3. Add this script tag before </body>:
-       <script src="arr-dep-xref.js"></script>
-  4. Done — xref auto-hooks into depRooms when loaded.
-  5. The xrefInjectDepWarnings() call is also triggered any time
-     depRender() runs (add it to the end of depRender in departures.js):
+  1. Replace your existing xref-panel.html content with this file
+  2. Replace arr-dep-xref.js with the new v2 version
+  3. Make sure depRender() calls xrefInjectDepWarnings() at the end:
        if (typeof xrefInjectDepWarnings === 'function') xrefInjectDepWarnings();
+  4. Script tag in index.html (before </body>):
+       <script src="arr-dep-xref.js"></script>
 
-  OPTIONAL — to re-inject after dep re-renders automatically, add
-  one line at the bottom of depRender() in departures.js:
-    if (typeof xrefInjectDepWarnings === 'function') xrefInjectDepWarnings();
+  HOW EXTENSION VERDICTS WORK:
+  ✅ CAN EXTEND  — Room not on dep board, OR current guest already checked out
+  ⛔ NO EXTENSION — Room occupied (status: due/late/extended/na) or intent: maybe_extend/coming_back
+  ❓ VERIFY       — Room not linked to dep board yet (load dep board first)
+
+  INTENT FLAGS (from dep board) that block extension:
+  · "May Extend"   → flagged by you on dep board = cannot assign extension
+  · "Coming Back"  → room reserved for returning guest
+  · "Returning"    → coordinate before extending
 ──────────────────────────────────────────────────────────── -->
