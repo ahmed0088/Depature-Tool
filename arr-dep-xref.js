@@ -43,18 +43,19 @@ function _lastName(raw) {
 }
 
 // ── Check if two names belong to the same guest ───────────
-// Rule: last names must match (≥4 chars to avoid false positives like "Lee")
-// ALSO accepts: any word ≥6 chars shared between both names (unique surname anywhere)
+// Both inputs can be Opera raw format (LAST,FIRST,Mr.) or parsed (First Last).
+// Rule 1: last names match AND are ≥4 chars (avoid "Lee", "Ali" false positives)
+// Rule 2: any word ≥6 chars shared between both names (unique surname anywhere)
 function _namesMatch(a, b) {
   if (!a || !b) return false;
 
   const lastA = _lastName(a);
   const lastB = _lastName(b);
 
-  // Primary check: last names match and are meaningful (≥4 chars)
+  // Primary — last name match, case-insensitive, minimum 4 chars
   if (lastA.length >= 4 && lastA === lastB) return true;
 
-  // Secondary: any word ≥6 chars shared between both names
+  // Secondary — any long word (≥6 chars) shared between both names
   const wa = _normName(a).split(' ').filter(w => w.length >= 6);
   const wb = _normName(b).split(' ').filter(w => w.length >= 6);
   if (wa.length && wb.length && wa.some(w => wb.includes(w))) return true;
@@ -162,8 +163,15 @@ function xrefParseArrivals(raw) {
     const cols = lines[i].split('\t');
     if (cols.length < 5) continue;
 
+    // SHORT_RESV_STATUS values to SKIP (cancelled / no-show / waitlist only):
+    //   C / NC = Cancelled / No-show Cancelled
+    //   NS     = No-show
+    //   WL     = Waitlist
+    // DO NOT skip GCC — "Guaranteed by Credit Card" = active reservation
+    // DO NOT skip NON — "Non-guaranteed" = active, just no deposit
     const status = (cols[iStatus] || '').trim().toUpperCase();
-    if (status === 'GCC' || status === 'C') continue;
+    const SKIP_STATUSES = new Set(['C','NC','NS','WL','X','CXL']);
+    if (SKIP_STATUSES.has(status)) continue;
 
     const rawName  = (cols[iName]    || '').trim();
     const rawDispRoom = (cols[iDispRoom]|| '').trim();
@@ -188,10 +196,6 @@ function xrefParseArrivals(raw) {
       : rawName;
     if (!effectiveName || effectiveName.length <= 2) continue;
 
-    const dedupeKey = conf || effectiveName;
-    if (seen.has(dedupeKey)) continue;
-    seen.add(dedupeKey);
-
     const source = _xrefSource(rawSrc);
     // Only treat as a real room number if the value contains digits.
     // Opera puts literal text like "Assign Room" when no room is pre-assigned —
@@ -202,6 +206,15 @@ function xrefParseArrivals(raw) {
 
     // Final guard — parseName result must be a real name
     if (!name || name === '—' || name.length <= 2) continue;
+
+    // Dedupe key: confirmation number is the cleanest — Opera emits one row per
+    // membership type attached to the reservation (A1, ID, etc.) for the same conf.
+    // Fall back to room+name when conf is missing.
+    const dedupeKey = conf
+      ? conf
+      : (room ? `${room}|${effectiveName}` : effectiveName);
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
 
     const record = {
       room, name, rawName: effectiveName,
@@ -217,6 +230,15 @@ function xrefParseArrivals(raw) {
   }
 
   return { withRoom, withoutRoom };
+}
+
+// ── Normalise room number for comparison ──────────────────
+// Opera stores rooms as '0102', '0522' etc. Strip leading zeros
+// but keep at least 1 digit so '0' doesn't become ''.
+function _normRoom(r) {
+  if (!r) return '';
+  const s = String(r).trim().replace(/^0+/, '');
+  return s || '0';
 }
 
 // ── Core logic: is this arrival an extension? ─────────────
@@ -246,58 +268,57 @@ function _xrefCheckExtension(arrRecord) {
     return;
   }
 
-  const arrRoom = (arrRecord.room || '').replace(/^0+/, '');
+  // Use _normRoom so '0102' and '102' compare equal
+  const arrRoom = _normRoom(arrRecord.room);
 
   // ── A) ROOM NUMBER MATCH ──────────────────────────────────
+  // Same room on dep board + arrivals = guest re-booked the same room → extension
+  // (Primary signal — most reliable. Name match confirms it but is not required.)
   if (arrRoom) {
     const depByRoom = depRooms.find(r =>
-      r.roomStr.replace(/^0+/, '') === arrRoom ||
-      String(r.room).replace(/^0+/, '') === arrRoom
+      _normRoom(r.roomStr) === arrRoom ||
+      _normRoom(String(r.room)) === arrRoom
     );
 
     if (depByRoom) {
-      arrRecord.depGuest = depByRoom;
-
-      // Same room → extension (guest re-booked the same room)
+      arrRecord.depGuest    = depByRoom;
       arrRecord.isExtension = true;
       arrRecord.matchType   = 'room';
 
-      // If names also match, say so; if different name, flag it clearly
-      if (_namesMatch(arrRecord.name, depByRoom.name)) {
-        arrRecord.extReason = `Same room + same guest (${_lastName(depByRoom.name)}) → extension`;
+      // Use rawName (Opera format) for name matching — more reliable than parsed name
+      const nameForMatch = arrRecord.rawName || arrRecord.name;
+      if (_namesMatch(nameForMatch, depByRoom.name)) {
+        arrRecord.extReason = `Room ${arrRoom} · same guest (${parseName(depByRoom.name)}) · ↪ Extension`;
       } else {
-        // Different name but same room — could be a coincidence OR the guest
-        // booked under a different name. Flag for manual check.
-        arrRecord.extReason = `Same room · departing: ${depByRoom.name} · arriving: ${arrRecord.name} — verify`;
+        // Different name, same room — could be companion/spouse booking under diff name
+        arrRecord.extReason = `Room ${arrRoom} · departing: ${parseName(depByRoom.name)} · incoming: ${arrRecord.name} — verify`;
       }
       return;
     }
   }
 
-  // ── B) LAST NAME MATCH anywhere on dep board ──────────────
-  // Check both with-room and all dep board entries
-  const depByName = depRooms.find(r => _namesMatch(arrRecord.name, r.name));
+  // ── B) NAME MATCH anywhere on dep board ──────────────────
+  // Guest booked a new reservation (possibly different room) — same last name found
+  const nameForMatch = arrRecord.rawName || arrRecord.name;
+  const depByName = depRooms.find(r => _namesMatch(nameForMatch, r.name));
   if (depByName) {
     arrRecord.isExtension = true;
     arrRecord.matchType   = 'name';
     arrRecord.depGuest    = depByName;
-    if (arrRoom) {
-      arrRecord.extReason = `Last name match: ${_lastName(arrRecord.name)} in room ${depByName.roomStr} → extension (new room ${arrRoom})`;
-    } else {
-      arrRecord.extReason = `Last name match: ${_lastName(arrRecord.name)} in room ${depByName.roomStr} → extension (room TBD)`;
-    }
+    const depRoom = _normRoom(depByName.roomStr || String(depByName.room || ''));
+    arrRecord.extReason = arrRoom
+      ? `Name match · in room ${depRoom} → new booking room ${arrRoom} · ↪ Extension`
+      : `Name match · in room ${depRoom} → ↪ Extension (room TBD)`;
     return;
   }
 
-  // ── C/D) No match → new arrival ───────────────────────────
+  // ── C/D) No match → brand new guest ──────────────────────
   arrRecord.isExtension = false;
   arrRecord.matchType   = null;
   arrRecord.depGuest    = null;
-  if (arrRoom) {
-    arrRecord.extReason = 'No match on dep board — new guest';
-  } else {
-    arrRecord.extReason = 'New guest — no room assigned yet';
-  }
+  arrRecord.extReason   = arrRoom
+    ? `Room ${arrRoom} becomes free · new guest checking in`
+    : 'New guest · room not assigned yet';
 }
 
 function _xrefEnrichAll() {
@@ -426,17 +447,19 @@ function xrefRender() {
 
   // Extensions can now come from BOTH withRoom and withoutRoom lists
   const allRecords   = [..._xrefArrRooms, ..._xrefArrNoRoom];
-  const extensions   = allRecords.filter(a => a.isExtension).length;
-  const newArrivals  = allRecords.filter(a => !a.isExtension).length;
-  const unassigned   = _xrefArrNoRoom.length;
-  const total        = allRecords.length;
+  const extensions      = allRecords.filter(a => a.isExtension).length;
+  // New arrivals = assigned rooms where the incoming guest is NOT an extension
+  const newArrivals     = _xrefArrRooms.filter(a => !a.isExtension).length;
+  const unassigned      = _xrefArrNoRoom.filter(a => !a.isExtension).length;
+  const unassignedExt   = _xrefArrNoRoom.filter(a =>  a.isExtension).length;
+  const total           = allRecords.length;
 
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   set('xref-kpi-total',      total);
-  set('xref-kpi-conflict',   extensions);
-  set('xref-kpi-can-extend', newArrivals);
-  set('xref-kpi-assigned',   _xrefArrRooms.length);
-  set('xref-kpi-unassigned', unassigned);
+  set('xref-kpi-conflict',   extensions);          // ↪ Extensions
+  set('xref-kpi-can-extend', newArrivals);          // 🛎 New Arrivals (with room)
+  set('xref-kpi-assigned',   _xrefArrRooms.length); // Total with room assigned
+  set('xref-kpi-unassigned', unassigned);           // No room yet (new guests)
 
   const badge = document.getElementById('badge-xref');
   if (badge) badge.textContent = extensions || total || '0';
