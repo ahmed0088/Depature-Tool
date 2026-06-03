@@ -687,6 +687,8 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
 .dep-card.s-late     { border-color: var(--purple-border); }
 .dep-card.s-balance  { border-color: var(--red-border); }
 .dep-card.s-na       { border-color: var(--red-border); }
+.dep-card.s-dnd { border-color: rgba(240,107,122,0.35); }
+[data-theme="opera"] .dep-card.s-dnd { border-top: 3px solid var(--rose); }
 .dep-card.s-out      { border-color: var(--green-border); opacity: 0.68; }
 .dep-card.s-overdue  { border-color: var(--red-border); }
 
@@ -790,9 +792,13 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
 .dca-late { color: var(--purple); border-color: var(--purple-border); background: var(--purple-bg); }
 .dca-na   { color: var(--red);    border-color: var(--red-border);    background: var(--red-bg); }
 .dca-undo { background: var(--surface); color: var(--text3); border-color: var(--border2); }
-
+.dca-dnd  { color: var(--rose);   border-color: rgba(240,107,122,0.35); background: rgba(240,107,122,0.09); }
+.dc-actions.g5 { grid-template-columns: 1fr 1fr 1fr; }
+/* g5 = 3 columns, wraps the 4th+5th onto a 2nd row nicely */
 .dc-note-wrap { margin-top: 7px; }
 .dc-note-lbl  { font-family: var(--mono); font-size: 0.58rem; font-weight: 700; color: var(--text3); margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+.dc-note-arrow { font-size: 0.65rem; color: var(--text3); }
+.dc-note-toggle:hover .dc-note-arrow { color: var(--text2); }
 .dc-note {
   width: 100%; min-height: 44px; background: var(--bg2); border: 1px solid var(--border);
   border-radius: var(--r); color: var(--text); font-family: var(--mono);
@@ -1486,7 +1492,8 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
 /* fchip overrides for tt filters */
 .fchip[data-ttf="after12"].on  { background: var(--red-bg);   color: var(--red);   border-color: var(--red-border); }
 .fchip[data-ttf="before12"].on { background: var(--green-bg); color: var(--green); border-color: var(--green-border); }
-
+.fchip.dnd { color: var(--rose); border-color: rgba(240,107,122,0.3); }
+.fchip.dnd.on, .fchip.dnd:hover { background: rgba(240,107,122,0.12); color: var(--rose); border-color: rgba(240,107,122,0.5); }
 /* ═══════════════════════════════════════════════
    SORT BAR + QUICK JUMP
    ═══════════════════════════════════════════════ */

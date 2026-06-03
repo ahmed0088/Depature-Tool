@@ -229,13 +229,15 @@ function depCounts() {
   const extended = depRooms.filter(r => r.status === 'extended').length;
   const out      = depRooms.filter(r => r.status === 'out').length;
   const na       = depRooms.filter(r => r.status === 'na').length;
+  const dnd      = depRooms.filter(r => r.status === 'dnd').length;
   return {
-    all:          due + late + na + out + extended,   // total rooms today
+    all:          due + late + na + dnd + out + extended,
     due,
     late,
     extended,
     out,
     na,
+    dnd,
     balance:      depRooms.filter(r => r.balance > 0 && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended').length,
     maybe_extend: depRooms.filter(r => r.intent === 'maybe_extend').length,
     pending:      depRooms.filter(r => r.intent && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended').length,
@@ -463,6 +465,7 @@ function depRender() {
     <div class="dep-kpi k-due"><div class="dep-kpi-icon">⏳</div><div class="dep-kpi-val">${sc.due}</div><div class="dep-kpi-label">Due Out</div></div>
     <div class="dep-kpi k-late"><div class="dep-kpi-icon">🕐</div><div class="dep-kpi-val">${sc.late}</div><div class="dep-kpi-label">Late CO</div></div>
     <div class="dep-kpi k-na"><div class="dep-kpi-icon">📵</div><div class="dep-kpi-val">${sc.na}</div><div class="dep-kpi-label">No Answer</div></div>
+    <div class="dep-kpi k-dnd"><div class="dep-kpi-icon">🚫</div><div class="dep-kpi-val">${sc.dnd}</div><div class="dep-kpi-label">DND</div></div>
     <div class="dep-kpi k-out"><div class="dep-kpi-icon">✓</div><div class="dep-kpi-val">${sc.out}</div><div class="dep-kpi-label">Checked Out</div></div>
     <div class="dep-kpi k-ext"><div class="dep-kpi-icon">↪✓</div><div class="dep-kpi-val">${sc.extended}</div><div class="dep-kpi-label">Extended</div></div>
     <div class="dep-kpi k-bal ${totalOwing>0?'has-balance':''}"><div class="dep-kpi-icon">💳</div><div class="dep-kpi-val" style="font-size:${totalOwing>0?'0.82rem':'1.1rem'}">${balKpiVal}</div><div class="dep-kpi-label">Balance Owing</div></div>`;
@@ -484,6 +487,11 @@ function depRender() {
   const naCnt = document.getElementById('depNaCount');
   if (naBar) naBar.style.display = sc.na > 0 ? 'flex' : 'none';
   if (naCnt) naCnt.textContent = sc.na + ' room' + (sc.na !== 1 ? 's' : '');
+
+  const dndBar = document.getElementById('depDndBar');
+  const dndCnt = document.getElementById('depDndCount');
+  if (dndBar) dndBar.style.display = sc.dnd > 0 ? 'flex' : 'none';
+  if (dndCnt) dndCnt.textContent = sc.dnd + ' room' + (sc.dnd !== 1 ? 's' : '');
 
   // Extension Action Bar
   const extBar = document.getElementById('depExtBar');
@@ -517,13 +525,14 @@ function depRender() {
     const es = effectiveStatus(r);
     let mf;
     switch (depFilter_) {
-      case 'all':          mf = es === 'due' || es === 'late' || es === 'na'; break; // extended excluded — done
+      case 'all':          mf = es === 'due' || es === 'late' || es === 'na' || es === 'dnd'; break; // extended excluded — done
       case 'balance':      mf = r.balance > 0 && es !== 'out' && es !== 'extended'; break;
       case 'pending':      mf = !!r.intent && es !== 'out' && es !== 'extended'; break;
       case 'maybe_extend': mf = r.intent === 'maybe_extend'; break;
       case 'due':          mf = es === 'due'; break;
       case 'late':         mf = es === 'late'; break;
       case 'na':           mf = es === 'na'; break;
+      case 'dnd':          mf = es === 'dnd'; break;
       case 'extended':     mf = es === 'extended'; break;
       case 'out':          mf = es === 'out'; break;
       default:             mf = es === depFilter_; break;
@@ -643,6 +652,13 @@ function renderDepQuickJump() {
       rooms: depRooms.filter(r => r.status === 'na'),
     },
     {
+      key:   'dnd',
+      icon:  '🚫',
+      label: 'DND',
+      cls:   'jump-dnd',
+      rooms: depRooms.filter(r => r.status === 'dnd'),
+    },
+    {
       key:   'balance',
       icon:  '💳',
       label: 'Balance Owing',
@@ -672,6 +688,7 @@ function renderDepQuickJump() {
             g.key === 'after12' || g.key === 'lco' ? 'late'
             : g.key === 'due'      ? 'due'
             : g.key === 'na'       ? 'na'
+            : g.key === 'dnd'      ? 'dnd'
             : g.key === 'extended' ? 'extended'
             : 'all'}','${r.roomStr}')">
             ${r.roomStr}<span class="jump-pill-name">${r.name.split(' ')[0]}</span>
@@ -686,6 +703,7 @@ function depJumpTo(roomStr, filterKey, targetRoom) {
     : filterKey === 'due'  ? '[data-f="due"]'
     : filterKey === 'late' ? '[data-f="late"]'
     : filterKey === 'na'   ? '[data-f="na"]'
+    : filterKey === 'dnd'  ? '[data-f="dnd"]'
     : '[data-f="all"]';
   const chip = document.querySelector(chipSel);
   if (chip) depFilter(filterKey, chip);
@@ -723,7 +741,7 @@ function depCardHTML(r) {
     :           `AED ${Math.abs(bal).toLocaleString('en',{minimumFractionDigits:2})} CREDIT`;
 
   // Card colour — driven by effective status
-  let sClass = 's-' + (bal > 0 && es !== 'out' && es !== 'extended' && es !== 'na' ? 'balance' : es);
+  let sClass = 's-' + (bal > 0 && es !== 'out' && es !== 'extended' && es !== 'na' && es !== 'dnd' ? 'balance' : es);
   if (r.intent && es !== 'out' && es !== 'extended' && es !== 'na') sClass += ' s-intent';
   if (lcoOverdue) sClass += ' s-lco-overdue';
 
@@ -757,6 +775,9 @@ function depCardHTML(r) {
   } else if (es === 'na') {
     badgeCls  = 'sb-na';
     badgeText = `NO ANSWER${r.naTime ? ' · ' + r.naTime : ''}`;
+  } else if (es === 'dnd') {
+    badgeCls  = 'sb-dnd';
+    badgeText = `🚫 DND${r.dndTime ? ' · ' + r.dndTime : ''}`;
   } else {
     badgeCls  = 'sb-due';
     badgeText = 'DUE OUT';
@@ -892,6 +913,21 @@ function depCardHTML(r) {
       <button class="dca dca-undo" onclick="depAction(${i},'due')">↺ Undo NA</button>
     </div>`;
 
+  } else if (es === 'dnd') {
+    let dndWarnStrip = '';
+    if (r.dndTime) {
+      const [h, m]  = r.dndTime.split(':').map(Number);
+      const dndDate = new Date(); dndDate.setHours(h, m, 0, 0);
+      const minsSince = Math.floor((Date.now() - dndDate.getTime()) / 60000);
+      if (minsSince >= 60) {
+        dndWarnStrip = `<div class="dc-na-warn" style="border-color:rgba(233,94,94,0.3);background:rgba(233,94,94,0.07);color:var(--rose);">🚫 DND for ${minsSince} min — consider calling again</div>`;
+      }
+    }
+    actHTML = `${dndWarnStrip}<div class="dc-actions g2">
+      <button class="dca dca-co"   onclick="depAction(${i},'out')">✓ Check Out</button>
+      <button class="dca dca-undo" onclick="depAction(${i},'due')">↺ Undo DND</button>
+    </div>`;
+
   } else if (es === 'late') {
     // LCO room (manual or auto-promoted) — Check Out or Undo back to due
     actHTML = `<div class="dc-actions g2">
@@ -911,11 +947,12 @@ function depCardHTML(r) {
         <button class="dc-intent-btn${r.intent==='returning'   ?' active':''}"
           onclick="depSetIntent(${i},'returning')">🔁 Returning</button>
       </div>`;
-    actHTML = `<div class="dc-actions g4">
+    actHTML = `<div class="dc-actions g5">
       <button class="dca dca-co"   onclick="depCheckOut(${i})">✓ Check Out</button>
       <button class="dca dca-ext"  onclick="depAskExtend(${i})">↪ Extend</button>
       <button class="dca dca-late" onclick="depAskLCO(${i})">🕐 Late CO</button>
       <button class="dca dca-na"   onclick="depAction(${i},'na')">📵 No Answer</button>
+      <button class="dca dca-dnd"  onclick="depAction(${i},'dnd')">🚫 DND</button>
     </div>${intentRow}`;
   }
 
@@ -959,12 +996,19 @@ function depCardHTML(r) {
       ${extRow}
       ${actHTML}
       <div style="margin-top:8px;">
-        <div class="dc-note-lbl" style="display:flex;justify-content:space-between;align-items:center;">
-          Notes
-          <button class="dc-stamp-btn" onclick="depStampNote(${i})" title="Add timestamp">🕐 Stamp</button>
+        <div class="dc-note-lbl dc-note-toggle" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;"
+          onclick="depToggleNote(this)">
+          <span>${r.note ? '📝 Notes' : '+ Notes'}</span>
+          <span style="display:flex;align-items:center;gap:6px;">
+            ${r.note ? `<span style="font-size:0.58rem;color:var(--text3);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(r.note.split('\n')[0].substring(0,30))}${r.note.length>30?'…':''}</span>` : ''}
+            <button class="dc-stamp-btn" onclick="event.stopPropagation();depStampNote(${i})" title="Add timestamp">🕐</button>
+            <span class="dc-note-arrow">${r.note ? '▾' : '▸'}</span>
+          </span>
         </div>
-        <textarea class="dc-note" placeholder="Luggage stored, guest requests, complaints…"
-          onchange="depRooms[${i}].note=this.value;saveDeps()">${escapeHtml(r.note)}</textarea>
+        <div class="dc-note-body" style="${r.note ? '' : 'display:none;'}">
+          <textarea class="dc-note" placeholder="Luggage stored, guest requests, complaints…"
+            onchange="depRooms[${i}].note=this.value;saveDeps()">${escapeHtml(r.note)}</textarea>
+        </div>
       </div>
     </div>
   </div>`;
@@ -973,6 +1017,18 @@ function depCardHTML(r) {
 function escapeHtml(str) {
   if (!str) return '';
   return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]||m));
+}
+// ── Note toggle ────────────────────────────────────────────
+function depToggleNote(headerEl) {
+  const body  = headerEl.nextElementSibling;
+  const arrow = headerEl.querySelector('.dc-note-arrow');
+  const open  = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  if (arrow) arrow.textContent = open ? '▸' : '▾';
+  if (!open) {
+    const ta = body.querySelector('textarea');
+    if (ta) ta.focus();
+  }
 }
 
 // ── Check Out with balance warning ─────────────────────────
@@ -1079,7 +1135,8 @@ function depAction(i, status, extraNights) {
   const t    = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
 
   if (status === 'out') r.checkoutAt = t; else r.checkoutAt = '';
-  if (status === 'na')  r.naTime = t;     else r.naTime = '';
+  if (status === 'na')  r.naTime  = t;    else r.naTime  = '';
+  if (status === 'dnd') r.dndTime = t;    else r.dndTime = '';
   if (status !== 'late') r.lateTime = '';
   if (status !== 'extended') {
     r.extensionNights = 0;
@@ -1136,7 +1193,7 @@ function depAction(i, status, extraNights) {
   saveDeps();
 
   // ── Per-user activity log ─────────────────────────────────
-  const _actionLabels = { out:'Checked out', na:'Marked N/A', late:'Late checkout', extended:'Extended stay', due:'Undid action' };
+  const _actionLabels = { out:'Checked out', na:'Marked N/A', dnd:'Marked DND', late:'Late checkout', extended:'Extended stay', due:'Undid action' };
   logActivity('departure_' + status, `Room ${r.roomStr} — ${r.name} (${_actionLabels[status] || status})`);
 }
 
@@ -1205,6 +1262,7 @@ function renderDepLog() {
     extended: '↪ Extended',
     late:     '🕐 Late CO',
     na:       '📵 No Answer',
+    dnd:      '🚫 DND',
     undo:     '↺ Undone',
   };
   const aCls = {
@@ -1212,6 +1270,7 @@ function renderDepLog() {
     extended: 'log-act-ext',
     late:     'log-act-late',
     na:       'log-act-na',
+    dnd:      'log-act-na',
     undo:     'log-act-undo',
   };
 
@@ -1523,7 +1582,25 @@ function depCopyNAList(mode) {
   copyToClipboard(text, null, '');
   showToast('NA list copied ✓', 'ok');
 }
+// ── Copy DND rooms list ────────────────────────────────────
+function depCopyDNDList(mode) {
+  const rooms = depRooms.filter(r => r.status === 'dnd');
+  if (!rooms.length) { showToast('No DND rooms', 'info'); return; }
 
+  let text;
+  if (mode === 'summary') {
+    text = '🚫 DND Rooms\n' + rooms.map(r => r.roomStr).join(', ');
+  } else {
+    const t = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+    text = `🚫 DND Rooms — ${t}\n${'─'.repeat(30)}\n` +
+      rooms.map(r => {
+        const since = r.dndTime ? ` · DND since ${r.dndTime}` : '';
+        return `Rm ${r.roomStr}  ${r.name}${since}`;
+      }).join('\n');
+  }
+  copyToClipboard(text, null, '');
+  showToast('DND list copied ✓', 'ok');
+}
 // ── Out copy ───────────────────────────────────────────────
 function depCopyOutList(mode) {
   const rooms = depRooms.filter(r => r.status === 'out');
@@ -1622,12 +1699,13 @@ function depCopyHKUpdate() {
     extended: '↪ EXT',
     late:     '🕐 LCO',
     na:       '📵 NA',
+    dnd:      '🚫 DND',
     due:      '⏳ DUE',
   };
 
   // Only include rooms that still need action — exclude checked-out
   const sorted = [...depRooms]
-    .filter(r => effectiveStatus(r) !== 'out' && r.status !== 'extended')
+    .filter(r => effectiveStatus(r) !== 'out' && r.status !== 'extended' && r.status !== 'dnd')
     .sort((a, b) => parseInt(a.room) - parseInt(b.room));
 
   const sc = depCounts();
@@ -1660,6 +1738,7 @@ function depCopyHKUpdate() {
   const finalSummary = [
     sc.late     ? `🕐 ${sc.late} LCO`           : '',
     sc.na       ? `📵 ${sc.na} NA`               : '',
+    sc.dnd      ? `🚫 ${sc.dnd} DND`             : '',
     sc.extended ? `↪ ${sc.extended} EXT`         : '',
     mayExtCount ? `🤔 ${mayExtCount} may extend`  : '',
     sc.due      ? `⏳ ${sc.due} still due`        : '',

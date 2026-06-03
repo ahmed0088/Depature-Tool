@@ -257,6 +257,7 @@
           <button class="fchip due"  data-f="due"          onclick="depFilter('due',this)">⏳ Due <span id="dfc-due">0</span></button>
           <button class="fchip late" data-f="late"         onclick="depFilter('late',this)">🕐 Late CO <span id="dfc-late">0</span></button>
           <button class="fchip na"   data-f="na"           onclick="depFilter('na',this)">📵 NA <span id="dfc-na">0</span></button>
+          <button class="fchip dnd"  data-f="dnd"          onclick="depFilter('dnd',this)">🚫 DND <span id="dfc-dnd">0</span></button>
           <button class="fchip ext"  data-f="maybe_extend" onclick="depFilter('maybe_extend',this)">🤔 May Extend <span id="dfc-maybe_extend">0</span></button>
           <button class="fchip bal"  data-f="balance"      onclick="depFilter('balance',this)">💳 Balance <span id="dfc-balance">0</span></button>
           <button class="fchip ext"  data-f="extended"     onclick="depFilter('extended',this)">↪ Extended <span id="dfc-extended">0</span></button>
@@ -325,6 +326,25 @@
       </div>
     </div>
     <!-- ── Extension Action Bar ── -->
+    <!-- ── DND Action Bar ── -->
+    <div id="depDndBar" class="dep-na-bar" style="display:none;background:linear-gradient(90deg,rgba(233,94,94,0.07),transparent);border-color:rgba(233,94,94,0.25);">
+      <div class="dep-na-bar-left">
+        <span class="dep-na-bar-icon">🚫</span>
+        <span class="dep-na-bar-text" style="color:var(--rose);"><span id="depDndCount">0 rooms</span> marked DND</span>
+      </div>
+      <div class="dep-na-bar-right">
+        <div class="dep-copy-split">
+          <button class="dep-copy-main" style="color:var(--rose);border-color:rgba(233,94,94,0.4);background:rgba(233,94,94,0.10);" onclick="depCopyDNDList('all')">📋 Copy for HK</button>
+          <button class="dep-copy-arrow" style="color:var(--rose);border-color:rgba(233,94,94,0.4);background:rgba(233,94,94,0.10);" onclick="depToggleCopyMenu('dnd')">▾</button>
+          <div class="dep-copy-menu" id="depCopyMenu-dnd">
+            <button onclick="depStartSelect('dnd');depToggleCopyMenu('dnd')">☑ Pick Rooms <span class="dcm-hint">tap to choose</span></button>
+            <button onclick="depCopyDNDList('all');depToggleCopyMenu('dnd')">📋 Copy All <span class="dcm-hint">all DND rooms</span></button>
+            <button onclick="depCopyDNDList('summary');depToggleCopyMenu('dnd')">⚡ Copy Summary <span class="dcm-hint">room numbers only</span></button>
+          </div>
+        </div>
+        <button class="dep-na-filter-btn" onclick="depFilter('dnd', document.querySelector('[data-f=dnd]'))">View All →</button>
+      </div>
+    </div>
     <div id="depExtBar" class="dep-na-bar" style="display:none;background:linear-gradient(90deg,rgba(90,180,232,0.08),transparent);border-color:rgba(90,180,232,0.25);">
       <div class="dep-na-bar-left">
         <span class="dep-na-bar-icon">↪</span>
