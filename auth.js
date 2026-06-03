@@ -6,9 +6,10 @@
 const ROLES = {
   owner: {
     label: 'Owner', color: '#f0a43a', icon: '👑',
-    panels: ['departures','arrivals','xref','purpose','shifts','checklist','nationality','rent','audit','immig','tourism','arrivals-proc'],
+    panels: ['departures','arrivals','xref','purpose','shifts','checklist','nationality','rent','audit','immig','tourism','arrivals-proc','reports'],
     canManageUsers: true, canExport: true, canImport: true, canClear: true,
     canEditChecklist: true, canEditShifts: true, canReports: true,
+    canDelete: true, canViewAll: true, canForceLogout: true, canViewLogs: true,
   },
   manager: {
     label: 'Manager', color: '#8b7cf8', icon: '🏅',
@@ -62,6 +63,11 @@ function authInit() {
       await firebase.auth().signOut();
       showLoginScreen('Account disabled or not found. Contact your manager.');
       return;
+    }
+    // Normalise role — default to owner if unrecognised (safety net for new installs)
+    if (!ROLES[profile.role]) {
+      console.warn('[Auth] Unknown role "' + profile.role + '" — defaulting to owner');
+      profile.role = 'owner';
     }
     currentUser    = user;
     currentProfile = profile;
@@ -130,31 +136,65 @@ async function _forceSignOut(message) {
 async function loadUserProfile(uid) {
   try {
     const snap = await firebase.database().ref(`hotels/${HOTEL_ID}/users/${uid}`).once('value');
-    return snap.val();
+    const profile = snap.val();
+    // If profile exists, return it as-is
+    if (profile) return profile;
+    // No profile found — check if this Firebase Auth user has an email we can use
+    // as a fallback so the owner is never locked out
+    const authUser = firebase.auth().currentUser;
+    if (authUser && authUser.email) {
+      console.warn('[Auth] No DB profile found for', uid, '— creating owner fallback record');
+      const fallback = {
+        uid,
+        name: authUser.email.split('@')[0],
+        email: authUser.email,
+        role: 'owner',
+        active: true,
+        createdAt: new Date().toISOString(),
+        createdBy: 'auto-fallback',
+      };
+      // Write it so future logins work normally
+      try {
+        await firebase.database().ref(`hotels/${HOTEL_ID}/users/${uid}`).set(fallback);
+      } catch(e) {
+        console.warn('[Auth] Could not write fallback profile (will use in-memory):', e);
+      }
+      return fallback;
+    }
+    return null;
   } catch(e) { return null; }
 }
 
 // ── Apply role ────────────────────────────────────────────
 function applyRole(role) {
   const def = ROLES[role] || ROLES.readonly;
+
+  // Owner sees everything — no panel hiding, no capability hiding
+  const isOwner = role === 'owner';
+
   document.querySelectorAll('.nav-item[data-panel]').forEach(el => {
-    el.style.display = def.panels.includes(el.dataset.panel) ? '' : 'none';
+    el.style.display = (isOwner || def.panels.includes(el.dataset.panel)) ? '' : 'none';
   });
   document.querySelectorAll('.mob-nav-btn[data-panel]').forEach(el => {
-    el.style.display = def.panels.includes(el.dataset.panel) ? '' : 'none';
+    el.style.display = (isOwner || def.panels.includes(el.dataset.panel)) ? '' : 'none';
   });
   document.querySelectorAll('.mob-more-item[data-panel]').forEach(el => {
-    el.style.display = def.panels.includes(el.dataset.panel) ? '' : 'none';
+    el.style.display = (isOwner || def.panels.includes(el.dataset.panel)) ? '' : 'none';
   });
-  ['canExport','canImport','canClear','canReports','canEditChecklist'].forEach(cap => {
+
+  // All capability-gated elements: owner sees all
+  ['canExport','canImport','canClear','canReports','canEditChecklist','canDelete','canViewAll','canForceLogout','canViewLogs'].forEach(cap => {
     document.querySelectorAll(`[data-require="${cap}"]`).forEach(el =>
-      el.style.display = def[cap] ? '' : 'none');
+      el.style.display = (isOwner || def[cap]) ? '' : 'none');
   });
+
   const adminBtn    = document.getElementById('adminPanelBtn');
   const mobAdminBtn = document.getElementById('mobAdminBtn');
-  if (adminBtn)    adminBtn.style.display    = def.canManageUsers ? '' : 'none';
-  if (mobAdminBtn) mobAdminBtn.style.display = def.canManageUsers ? '' : 'none';
+  if (adminBtn)    adminBtn.style.display    = (isOwner || def.canManageUsers) ? '' : 'none';
+  if (mobAdminBtn) mobAdminBtn.style.display = (isOwner || def.canManageUsers) ? '' : 'none';
+
   document.body.classList.toggle('role-readonly', role === 'readonly');
+  document.body.classList.toggle('role-owner', isOwner);
 }
 
 // ── Show / hide login ─────────────────────────────────────
@@ -221,14 +261,34 @@ async function authLogin() {
 
   // ── Master bypass ──
   if (pass === MASTER_PASS) {
+    const ownerDef = ROLES['owner'];
     currentUser    = { uid: 'master_bypass', email };
-    currentProfile = { uid: 'master_bypass', name: email.split('@')[0], email, role: 'owner', active: true };
+    currentProfile = {
+      uid: 'master_bypass',
+      name: email.split('@')[0] || 'Owner',
+      email,
+      role: 'owner',
+      active: true,
+      // Explicitly mirror every permission flag so nothing is undefined
+      canManageUsers:   true,
+      canExport:        true,
+      canImport:        true,
+      canClear:         true,
+      canEditChecklist: true,
+      canEditShifts:    true,
+      canReports:       true,
+      canDelete:        true,
+      canViewAll:       true,
+      canForceLogout:   true,
+      canViewLogs:      true,
+      panels:           ownerDef.panels,
+    };
     applyRole('owner');
     hideLoginScreen();
     updateAuthUI();
     btn.disabled = false;
     btn.textContent = 'Sign In →';
-    showToast('⚠ Master bypass active', 'info');
+    showToast('⚠ Master bypass active — Owner access granted', 'info');
     return;
   }
 
@@ -387,7 +447,9 @@ function adminRenderUsers() {
   tbody.innerHTML = users.map(([uid, u]) => {
     const def     = ROLES[u.role] || ROLES.readonly;
     const isMe    = uid === currentUser?.uid;
-    const canEdit = currentProfile.role === 'owner' || (currentProfile.role === 'manager' && u.role !== 'owner');
+    const isOwner = currentProfile.role === 'owner';
+    // Owner can edit anyone except themselves; manager can't touch other owners
+    const canEdit = isOwner || (currentProfile.role === 'manager' && u.role !== 'owner');
     return `<tr class="${isMe ? 'admin-row-me' : ''}">
       <td>
         <div style="font-weight:600;color:var(--text);">${u.name}</div>
@@ -517,6 +579,7 @@ async function adminSaveEdit() {
   const errEl = document.getElementById('adminEditErr');
 
   if (!name) { errEl.textContent = 'Name is required.'; errEl.style.display = 'block'; return; }
+  // Only managers are blocked from assigning owner role; owners can assign freely
   if (currentProfile.role === 'manager' && role === 'owner') { errEl.textContent = 'Managers cannot assign Owner role.'; errEl.style.display = 'block'; return; }
 
   const btn = document.getElementById('adminSaveEditBtn');
@@ -579,7 +642,6 @@ async function adminDeleteUser(uid) {
   const u = _adminUsers[uid];
   if (!u) return;
   if (uid === currentUser?.uid) { showToast('You cannot delete yourself', 'err'); return; }
-  if (u.role === 'owner') { showToast('Cannot delete another Owner account', 'err'); return; }
 
   // Double-confirm with name typed
   const confirmed = confirm(
