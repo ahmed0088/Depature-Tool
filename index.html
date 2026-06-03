@@ -187,6 +187,12 @@
     <div class="nav-icon">✅</div>Night Checklist
     <span class="nav-badge" id="badge-checklist">17</span>
   </div>
+  <div class="nav-divider"></div>
+  <div class="nav-section-label">Tools</div>
+  <div class="nav-item" onclick="showPanel('arrivals-proc')" id="nav-arrivals-proc" data-panel="arrivals-proc">
+    <div class="nav-icon">📊</div>Arrivals Processor
+    <span class="nav-badge" id="badge-arrivals-proc">—</span>
+  </div>
 </nav>
 
 <main class="main">
@@ -951,6 +957,196 @@
 
   </div><!-- /ttResultCard -->
 </div><!-- /panel-tourism -->
+
+<!-- ════════════════ ARRIVALS PROCESSOR ════════════════ -->
+<div class="panel" id="panel-arrivals-proc">
+  <div class="page-hd">
+    <div class="page-hd-left">
+      <h1>Arrivals Report Processor</h1>
+      <p>Opera Cloud · Import report → scan → assign package codes → process day-by-day breakdown</p>
+    </div>
+    <div class="page-hd-actions">
+      <button class="btn gold"  onclick="apRun()">⚡ Process</button>
+      <button class="btn mint"  onclick="apExportExcel()">⬇ Export Excel</button>
+      <button class="btn sky"   onclick="apSaveProfile()">💾 Save Profile</button>
+      <button class="btn"       onclick="apLoadProfile()">📂 Load Profile</button>
+      <button class="btn rose"  onclick="apResetAll()">✕ Clear</button>
+    </div>
+  </div>
+
+  <!-- STEP 1: IMPORT -->
+  <div class="card" style="margin-bottom:14px;">
+    <div class="ap-section-label">
+      <span style="font-size:0.6rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;display:flex;align-items:center;gap:7px;">
+        📁 Step 1 — Import Report
+      </span>
+    </div>
+
+    <div class="ap-drop-zone" id="ap-drop-zone">
+      <input type="file" id="ap-file-input" accept=".html,.htm,.txt,.tsv,.csv" onchange="apHandleFile(this.files[0])">
+      <div style="font-size:2rem;margin-bottom:6px;" id="ap-drop-icon-emoji">📄</div>
+      <div class="ap-drop-zone-txt" id="ap-drop-txt">Drop your Opera export here, or click to browse</div>
+      <div class="ap-drop-zone-sub">.html · .txt · .tsv · .csv accepted</div>
+    </div>
+
+    <div style="text-align:center;margin-top:8px;">
+      <span style="font-size:10px;color:var(--text3);cursor:pointer;display:inline-flex;align-items:center;gap:5px;border-bottom:1px dashed var(--text3);" onclick="apTogglePaste()">
+        📋 or paste raw text instead
+      </span>
+    </div>
+    <div id="ap-paste-area" style="display:none;">
+      <textarea id="ap-raw"
+        placeholder="Paste Opera tab-separated export here (must include the header row)…"
+        oninput="apOnRawChange()"
+        style="width:100%;min-height:80px;margin-top:10px;"></textarea>
+    </div>
+
+    <div class="ap-progress-bar" id="ap-progress-bar">
+      <div class="ap-progress-fill" id="ap-progress-fill"></div>
+    </div>
+
+    <!-- Scan summary -->
+    <div class="ap-scan-summary" id="ap-scan-summary">
+      <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">🔍 Report Scan</div>
+      <div class="ap-scan-grid" id="ap-scan-grid"></div>
+    </div>
+
+    <!-- Status breakdown -->
+    <div class="ap-status-breakdown" id="ap-status-breakdown">
+      <div class="ap-sb-title">⚙ Reservation Statuses Found — click to exclude</div>
+      <div class="ap-sb-tags" id="ap-sb-tags"></div>
+      <div class="ap-sb-hint">Red = excluded · Click to toggle</div>
+    </div>
+
+    <!-- Column mapper -->
+    <div class="ap-col-mapper" id="ap-col-mapper">
+      <div class="ap-col-mapper-title">
+        🗂 Column Mapping
+        <span style="font-size:9px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;margin-left:6px;">auto-detected · override if needed</span>
+      </div>
+      <div class="ap-col-mapper-grid" id="ap-col-mapper-grid"></div>
+    </div>
+
+    <!-- Detect banner -->
+    <div class="ap-detect-banner" id="ap-detect-banner">
+      <div class="ap-detect-banner-hdr">✨ <span>Package codes detected — click to assign:</span></div>
+      <div class="ap-detect-codes" id="ap-detect-codes"></div>
+    </div>
+  </div>
+
+  <!-- STEP 2: PACKAGE MAPPING -->
+  <div class="card" style="margin-bottom:14px;">
+    <div style="font-size:0.6rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+      ⚙ Step 2 — Package Code Mapping
+      <span style="font-weight:300;text-transform:none;letter-spacing:0;font-size:10px;color:var(--text3);">drag to reorder · × to remove</span>
+    </div>
+
+    <div class="ap-pkg-cols">
+      <!-- Upsell Rooms -->
+      <div class="ap-pkg-col">
+        <div class="ap-col-label">⬆ Upsell Rooms</div>
+        <div class="ap-col-desc">Package codes that count as an upsell room</div>
+        <div class="ap-tag-list" id="ap-tags-upsell" ondragover="apOnDragOver(event)" ondrop="apOnDrop(event,'upsell')" ondragleave="apOnDragLeave(event)"></div>
+        <div class="ap-add-row">
+          <input id="ap-inp-upsell" placeholder="e.g. UPS" onkeydown="apKd(event,'upsell')">
+          <button class="ap-add-btn" onclick="apAddPkg('upsell')">+ Add</button>
+        </div>
+        <div class="ap-opts-row">
+          <label>Match:</label>
+          <select id="ap-mode-upsell"><option value="contains">contains</option><option value="exact">exact</option><option value="starts">starts with</option></select>
+          <label>Count:</label>
+          <select id="ap-count-upsell"><option value="room">rooms</option><option value="pax">pax</option></select>
+        </div>
+      </div>
+
+      <!-- Without F&B — auto -->
+      <div class="ap-pkg-col auto-col">
+        <div class="ap-col-label">🔒 Without F&amp;B Pkg <span style="font-size:9px;background:var(--card2);color:var(--text3);padding:2px 6px;border-radius:var(--r);border:1px solid var(--border);margin-left:4px;">auto</span></div>
+        <div class="ap-col-desc">Calculated automatically</div>
+        <div class="ap-auto-formula">Arrival Pax − With F&amp;B Pkg</div>
+      </div>
+
+      <!-- FO F&B Upsell -->
+      <div class="ap-pkg-col">
+        <div class="ap-col-label">💰 FO F&amp;B Upsell</div>
+        <div class="ap-col-desc">Package codes that count as FO F&amp;B upsells</div>
+        <div class="ap-tag-list" id="ap-tags-fo" ondragover="apOnDragOver(event)" ondrop="apOnDrop(event,'fo')" ondragleave="apOnDragLeave(event)"></div>
+        <div class="ap-add-row">
+          <input id="ap-inp-fo" placeholder="e.g. BBWIN" onkeydown="apKd(event,'fo')">
+          <button class="ap-add-btn" onclick="apAddPkg('fo')">+ Add</button>
+        </div>
+        <div class="ap-opts-row">
+          <label>Match:</label>
+          <select id="ap-mode-fo"><option value="contains">contains</option><option value="exact">exact</option><option value="starts">starts with</option></select>
+          <label>Count:</label>
+          <select id="ap-count-fo"><option value="room">rooms</option><option value="pax" selected>pax</option></select>
+        </div>
+      </div>
+    </div>
+
+    <!-- F&B row -->
+    <div class="ap-fb-row">
+      <div class="ap-col-label">🍽 With F&amp;B Package — product codes</div>
+      <div class="ap-col-desc">Matched against the PRODUCTS field in the report</div>
+      <div class="ap-tag-list" id="ap-tags-fb" ondragover="apOnDragOver(event)" ondrop="apOnDrop(event,'fb')" ondragleave="apOnDragLeave(event)"></div>
+      <div class="ap-add-row">
+        <input id="ap-inp-fb" placeholder="e.g. BB, HB, FB" onkeydown="apKd(event,'fb')">
+        <button class="ap-add-btn" onclick="apAddPkg('fb')">+ Add</button>
+      </div>
+      <div class="ap-opts-row">
+        <label>F&amp;B match:</label>
+        <select id="ap-mode-fb"><option value="contains">contains</option><option value="exact">exact word</option></select>
+        <label style="margin-left:12px;">Exclude statuses:</label>
+        <input class="ap-excl-inp" id="ap-excl-status" placeholder="e.g. CKOUT,NOSHOW" value="">
+      </div>
+    </div>
+  </div>
+
+  <!-- PROCESS BUTTONS -->
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px;">
+    <button class="btn gold" onclick="apRun()">⚡ Process Report</button>
+    <button class="btn" onclick="apResetAll()">✕ Clear</button>
+    <button class="btn" onclick="apSaveProfile()">💾 Save Profile</button>
+    <button class="btn" onclick="apLoadProfile()">📂 Load Profile</button>
+    <span class="ap-st" id="ap-st"></span>
+  </div>
+
+  <!-- OUTPUT -->
+  <div id="ap-out" style="display:none;">
+    <div class="ap-stat-cards" id="ap-cards"></div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
+      <span style="font-size:13px;font-weight:500;color:var(--text);">Day-by-day breakdown</span>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn sm" onclick="apExportExcel()">⬇ Export Excel</button>
+        <button class="btn sm" onclick="apCopyAll()">📋 Copy all rows</button>
+        <button class="btn sm" onclick="apCopySel()">📅 Copy selected row</button>
+      </div>
+    </div>
+
+    <div class="ap-tw">
+      <table>
+        <thead>
+          <tr id="ap-thead-row">
+            <th style="width:75px;text-align:left;padding-left:14px;cursor:pointer;" onclick="apSortBy('date')">Date<span class="sort-arrow"></span></th>
+            <th style="cursor:pointer;" onclick="apSortBy('rms')">Arrival<br>Rooms<span class="sort-arrow"></span></th>
+            <th style="cursor:pointer;" onclick="apSortBy('upsell')">Upsell<br>Rooms<span class="sort-arrow"></span></th>
+            <th style="cursor:pointer;" onclick="apSortBy('adl')">Arrival<br>Pax<span class="sort-arrow"></span></th>
+            <th style="cursor:pointer;" onclick="apSortBy('fbWith')">With<br>F&amp;B Pkg<span class="sort-arrow"></span></th>
+            <th style="cursor:pointer;" onclick="apSortBy('fbWithout')">Without<br>F&amp;B Pkg<span class="sort-arrow"></span></th>
+            <th style="cursor:pointer;" onclick="apSortBy('fo')">FO F&amp;B<br>Upsell<span class="sort-arrow"></span></th>
+          </tr>
+        </thead>
+        <tbody id="ap-tbody"></tbody>
+        <tfoot id="ap-tfoot"></tfoot>
+      </table>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:8px;display:flex;align-items:center;gap:5px;">
+      ℹ Click a row to select · Click column headers to sort · Export Excel = full report download
+    </div>
+  </div>
+
+</div><!-- /panel-arrivals-proc -->
 </main>
 </div><!-- /layout -->
 
@@ -1065,6 +1261,7 @@
 <script src="reports.js"></script>
 <script src="arr-dep-xref.js"></script>
 <script src="tourism-tax.js"></script>
+<script src="arrivals-proc.js"></script>
 
 <script>
 // ════════════════════════════════════════════════
@@ -1691,6 +1888,7 @@ async function appInit() {
   if (typeof arrRender !== 'undefined') arrRender();
   if (typeof purposeRender !== 'undefined') purposeRender();
   if (typeof renderShift !== 'undefined') renderShift(activeShift);
+  if (typeof initArrivalsProc !== 'undefined') initArrivalsProc();
   Object.keys(SHIFTS).forEach(k => updateShiftBadge(k));
   updateClock();
   setInterval(updateClock, 30000);
