@@ -25,17 +25,41 @@ function _normName(raw) {
     .toLowerCase();
 }
 
-// ── Check if two names are the same guest ─────────────────
-// Requires at least TWO significant words to match, OR one word ≥7 chars.
-// This avoids false positives like "Ali" matching "Walid Ali Hassan".
+// ── Extract last name from a full name ────────────────────
+// Opera names come as "LASTNAME, FIRSTNAME" or "FIRSTNAME LASTNAME"
+// We extract what we believe is the last name / family name.
+function _lastName(raw) {
+  if (!raw) return '';
+  const clean = _normName(raw);
+  // Opera format: "lastname, firstname" — comma separated
+  if (raw.includes(',')) {
+    const parts = clean.split(' ').filter(w => w.length > 1);
+    // After normName, comma becomes space. First word = last name in Opera format.
+    return parts[0] || '';
+  }
+  // Plain format: "firstname lastname" — last word is family name
+  const parts = clean.split(' ').filter(w => w.length > 1);
+  return parts[parts.length - 1] || '';
+}
+
+// ── Check if two names belong to the same guest ───────────
+// Rule: last names must match (≥4 chars to avoid false positives like "Lee")
+// ALSO accepts: any word ≥6 chars shared between both names (unique surname anywhere)
 function _namesMatch(a, b) {
   if (!a || !b) return false;
-  const wa = _normName(a).split(' ').filter(w => w.length > 3);
-  const wb = _normName(b).split(' ').filter(w => w.length > 3);
-  if (!wa.length || !wb.length) return false;
-  const shared = wa.filter(w => wb.includes(w));
-  // Must share ≥2 words OR one long word (≥7 chars = likely unique surname)
-  return shared.length >= 2 || shared.some(w => w.length >= 7);
+
+  const lastA = _lastName(a);
+  const lastB = _lastName(b);
+
+  // Primary check: last names match and are meaningful (≥4 chars)
+  if (lastA.length >= 4 && lastA === lastB) return true;
+
+  // Secondary: any word ≥6 chars shared between both names
+  const wa = _normName(a).split(' ').filter(w => w.length >= 6);
+  const wb = _normName(b).split(' ').filter(w => w.length >= 6);
+  if (wa.length && wb.length && wa.some(w => wb.includes(w))) return true;
+
+  return false;
 }
 
 // ── Source normaliser ─────────────────────────────────────
@@ -90,18 +114,44 @@ function xrefParseArrivals(raw) {
     return -1;
   };
 
+  // ── Column indexes — verified against real Opera export formats ──
+  //
+  // res_detail report  (Arrivals — Delimited Data):
+  //   DISP_ROOM_NO (15), ROOM_NO (56), FULL_NAME_NO_SHR_IND (26),
+  //   CONFIRMATION_NO (21), TRUNC_BEGIN (19), TRUNC_END (20),
+  //   NO_OF_NIGHTS (72), ADULTS (49), SHORT_RESV_STATUS (24),
+  //   COMPANY_NAME (54), ARRIVAL_TIME1 (27)
+  //
+  // Opera UI copy-paste (Queue/Arrivals screen):
+  //   ROOM (col name), NAME, CONFIRMATION NUMBER (with space), NIGHTS, ARRIVAL
+  //
+  // departure_all report (Departures — Delimited Data):
+  //   ROOM (12), GUEST_NAME (20), COMPUTED_RESV_STATUS_DISPLAY (34)
+
   const iDispRoom = col('DISP_ROOM_NO');
-  const iRoomNo   = col('ROOM_NO');
+  // ROOM_NO = res_detail export; ROOM = Opera UI copy-paste
+  // Exact match only — includes() would also hit ROOM_TYPE / ROOM_CLASS
+  const iRoomNo   = (() => {
+    for (const n of ['ROOM_NO', 'ROOM']) { const i = hdrs.indexOf(n); if (i >= 0) return i; }
+    return -1;
+  })();
   const iName     = col('FULL_NAME_NO_SHR_IND', 'FULL_NAME', 'GUEST_NAME', 'NAME');
-  const iNameFb   = col('GUEST_NAME', 'FULL_NAME'); // fallback if primary col has SHR indicator
-  const iConf     = col('CONFIRMATION_NO', 'CONFIRM');
+  const iNameFb   = col('GUEST_NAME', 'FULL_NAME');
+  // CONFIRMATION_NO = res_detail; 'CONFIRMATION NUMBER' (space) = Opera UI paste
+  const iConf     = col('CONFIRMATION_NO', 'CONFIRMATION_NUMBER', 'CONFIRM');
+  const iConfAlt  = hdrs.findIndex(h => h === 'CONFIRMATION NUMBER');
+  // TRUNC_BEGIN = res_detail; ARRIVAL = Opera UI paste / other exports
   const iArr      = col('TRUNC_BEGIN', 'ARRIVAL', 'BEGIN_DATE');
+  // TRUNC_END = res_detail; DEPARTURE = other exports
   const iDep      = col('TRUNC_END', 'DEPARTURE');
+  // NO_OF_NIGHTS = res_detail (col 72); NIGHTS = Opera UI paste
   const iNights   = col('NO_OF_NIGHTS', 'NIGHTS');
   const iAdults   = col('ADULTS');
   const iStatus   = col('SHORT_RESV_STATUS');
+  // res_detail has COMPANY_NAME (col 54) for travel agent / OTA
   const iSource   = col('COMPANY_NAME', 'TRAVEL_AGENT_NAME', 'SOURCE_NAME');
-  const iArrTime  = col('ARRIVAL_TIME', 'ARRIVAL_TIME1');
+  // ARRIVAL_TIME1 = res_detail (col 27); ARRIVAL_TIME = other exports
+  const iArrTime  = col('ARRIVAL_TIME1', 'ARRIVAL_TIME');
 
   if (iName < 0) return null;
 
@@ -116,9 +166,12 @@ function xrefParseArrivals(raw) {
     if (status === 'GCC' || status === 'C') continue;
 
     const rawName  = (cols[iName]    || '').trim();
-    const dispRoom = (cols[iDispRoom]|| '').trim().replace(/^0+/, '');
-    const roomNo   = iRoomNo >= 0 ? (cols[iRoomNo] || '').trim().replace(/^0+/, '') : '';
-    const conf     = (cols[iConf]    || '').trim();
+    const rawDispRoom = (cols[iDispRoom]|| '').trim();
+    const rawRoomNo   = iRoomNo >= 0 ? (cols[iRoomNo] || '').trim() : '';
+    // Strip leading zeros; if the result is empty (e.g. Opera stores '0' or '0000' for unassigned), treat as no room
+    const dispRoom    = rawDispRoom.replace(/^0+/, '');
+    const roomNo      = rawRoomNo.replace(/^0+/, '');
+    const conf     = ((cols[iConf] || '') || (iConfAlt >= 0 ? cols[iConfAlt] : '') || '').trim();
     const arrDate  = (cols[iArr]     || '').trim();
     const depDate  = (cols[iDep]     || '').trim();
     const nights   = parseInt(cols[iNights] || '1') || 1;
@@ -140,7 +193,11 @@ function xrefParseArrivals(raw) {
     seen.add(dedupeKey);
 
     const source = _xrefSource(rawSrc);
-    const room   = dispRoom || roomNo;
+    // Only treat as a real room number if the value contains digits.
+    // Opera puts literal text like "Assign Room" when no room is pre-assigned —
+    // that must go to withoutRoom, not withRoom with a bogus room string.
+    const isRealRoom = (r) => !!r && /\d/.test(r);
+    const room   = isRealRoom(dispRoom) ? dispRoom : isRealRoom(roomNo) ? roomNo : '';
     const name   = parseName(effectiveName);
 
     // Final guard — parseName result must be a real name
@@ -165,71 +222,82 @@ function xrefParseArrivals(raw) {
 // ── Core logic: is this arrival an extension? ─────────────
 //
 //  EXTENSION when ANY of:
-//   A) Arrival has a room AND same room exists on dep board AND same guest name
-//   B) Arrival has no room yet BUT same guest name found anywhere on dep board
-//      (guest made a new booking before checking out — room TBD at desk)
+//   A) Same ROOM NUMBER on both dep board and arrivals list
+//      → guest booked same room again (regardless of name match)
+//   B) Same LAST NAME found anywhere on dep board
+//      → guest made new booking, possibly different room
+//      (both conditions checked for all arrivals, with or without room)
 //
 //  NEW ARRIVAL when:
-//   C) Arrival has a room on dep board but DIFFERENT guest name → room freed, new guest
-//   D) Arrival has no room match on dep board at all → brand new guest
+//   C) Room on dep board but no name match → different guest, room being freed
+//   D) No room match and no name match → brand new guest
 //
 //  result sets on arrRecord:
 //   isExtension  — true/false
+//   matchType    — 'room' | 'name' | null  (what triggered the match)
 //   depGuest     — matching depRooms entry (or null)
 //   extReason    — short reason string for UI
 function _xrefCheckExtension(arrRecord) {
   if (!depRooms || !depRooms.length) {
     arrRecord.isExtension = false;
+    arrRecord.matchType   = null;
     arrRecord.depGuest    = null;
     arrRecord.extReason   = 'Load dep board for verdict';
     return;
   }
 
-  // Normalise arrival room (strip leading zeros)
   const arrRoom = (arrRecord.room || '').replace(/^0+/, '');
 
-  // A) Room match — same room number on dep board
+  // ── A) ROOM NUMBER MATCH ──────────────────────────────────
   if (arrRoom) {
-    const depRoom = depRooms.find(r =>
+    const depByRoom = depRooms.find(r =>
       r.roomStr.replace(/^0+/, '') === arrRoom ||
-      String(r.room) === arrRoom
+      String(r.room).replace(/^0+/, '') === arrRoom
     );
 
-    if (depRoom) {
-      arrRecord.depGuest = depRoom;
+    if (depByRoom) {
+      arrRecord.depGuest = depByRoom;
 
-      if (_namesMatch(arrRecord.name, depRoom.name)) {
-        // Same room, same guest → EXTENSION
-        arrRecord.isExtension = true;
-        arrRecord.extReason   = 'Same room · same guest · new booking = extension';
+      // Same room → extension (guest re-booked the same room)
+      arrRecord.isExtension = true;
+      arrRecord.matchType   = 'room';
+
+      // If names also match, say so; if different name, flag it clearly
+      if (_namesMatch(arrRecord.name, depByRoom.name)) {
+        arrRecord.extReason = `Same room + same guest (${_lastName(depByRoom.name)}) → extension`;
       } else {
-        // Same room, different guest → new arrival, previous guest departing
-        arrRecord.isExtension = false;
-        arrRecord.extReason   = `Room occupied by ${depRoom.name} (due out today)`;
+        // Different name but same room — could be a coincidence OR the guest
+        // booked under a different name. Flag for manual check.
+        arrRecord.extReason = `Same room · departing: ${depByRoom.name} · arriving: ${arrRecord.name} — verify`;
       }
       return;
     }
-
-    // Room not on dep board at all → room is already clear / freshly freed
-    arrRecord.isExtension = false;
-    arrRecord.depGuest    = null;
-    arrRecord.extReason   = 'Room not on dep board — clear for new arrival';
-    return;
   }
 
-  // B) No room assigned yet — search dep board by name only
-  const nameMatch = depRooms.find(r => _namesMatch(arrRecord.name, r.name));
-  if (nameMatch) {
+  // ── B) LAST NAME MATCH anywhere on dep board ──────────────
+  // Check both with-room and all dep board entries
+  const depByName = depRooms.find(r => _namesMatch(arrRecord.name, r.name));
+  if (depByName) {
     arrRecord.isExtension = true;
-    arrRecord.depGuest    = nameMatch;
-    arrRecord.extReason   = `Same guest in room ${nameMatch.roomStr} — extension (room TBD)`;
+    arrRecord.matchType   = 'name';
+    arrRecord.depGuest    = depByName;
+    if (arrRoom) {
+      arrRecord.extReason = `Last name match: ${_lastName(arrRecord.name)} in room ${depByName.roomStr} → extension (new room ${arrRoom})`;
+    } else {
+      arrRecord.extReason = `Last name match: ${_lastName(arrRecord.name)} in room ${depByName.roomStr} → extension (room TBD)`;
+    }
     return;
   }
 
-  // D) No room, no name match → brand new guest
+  // ── C/D) No match → new arrival ───────────────────────────
   arrRecord.isExtension = false;
+  arrRecord.matchType   = null;
   arrRecord.depGuest    = null;
-  arrRecord.extReason   = 'New guest — no match on dep board';
+  if (arrRoom) {
+    arrRecord.extReason = 'No match on dep board — new guest';
+  } else {
+    arrRecord.extReason = 'New guest — no room assigned yet';
+  }
 }
 
 function _xrefEnrichAll() {
@@ -465,9 +533,13 @@ function _xrefRow(a, rowType) {
     depInfo = `<span style="font-family:var(--mono);font-size:0.65rem;color:var(--mint);">Room clear — no departing guest</span>`;
   }
 
-  const badge = isExt
-    ? `<span class="xref-badge-ext">↪ EXTENSION</span>`
-    : `<span class="xref-badge-new">🛎 NEW ARRIVAL</span>`;
+  let badge;
+  if (isExt) {
+    const matchLabel = a.matchType === 'room' ? '↪ SAME ROOM' : '↪ SAME GUEST';
+    badge = `<span class="xref-badge-ext">${matchLabel}</span>`;
+  } else {
+    badge = `<span class="xref-badge-new">🛎 NEW ARRIVAL</span>`;
+  }
 
   const reason = escapeHtml(a.extReason || (isExt ? 'Same guest · new booking' : 'Different guest · new reservation'));
 
