@@ -99,10 +99,10 @@ function arrRender() {
       </select></td>
       <td><input type="number" value="${g.nights}" onchange="arrGuests[${i}].nights=this.value;arrKpiUpdate()" style="width:42px;"/></td>
       <td><div style="display:flex;gap:3px;align-items:center;">
-        <input value="${g.nat}" onchange="arrGuests[${i}].nat=this.value" style="width:86px;"/>
+        <input value="${g.nat}" onchange="arrGuests[${i}].nat=this.value;gmOnEdit(arrGuests[${i}].name,'nat',this.value);saveArrivals(arrGuests)" style="width:86px;${g._fromMemory?'border-color:var(--sky);':''}"/>
         <button class="icon-btn ai-btn" onclick="aiOneGuest(${i},'arr')" title="AI guess">✦</button>
       </div></td>
-      <td><input value="${g.email}"   onchange="arrGuests[${i}].email=this.value" style="width:138px;"/></td>
+      <td><input value="${g.email}"   onchange="arrGuests[${i}].email=this.value;gmOnEdit(arrGuests[${i}].name,'email',this.value);saveArrivals(arrGuests)" style="width:138px;${g._fromMemory?'border-color:var(--sky);':''}"/></td>
       <td><input value="${g.source}"  onchange="arrGuests[${i}].source=this.value" style="width:100px;"/></td>
       <td><input value="${g.remarks}" onchange="arrGuests[${i}].remarks=this.value" style="width:86px;"/></td>
       <td><button class="icon-btn" onclick="arrRemoveGuest(${i})">✕</button></td>
@@ -155,7 +155,10 @@ function loadArrivals() {
       remarks:'' });
   }
   if (!guests.length) { alert('No guests found.'); return; }
-  arrGuests = guests; arrRender(); setTimeout(() => runAINat_arr(), 300);
+  arrGuests = guests;
+  if (typeof gmAutoFill === 'function') gmAutoFill(arrGuests);
+  arrRender();
+  setTimeout(() => runAINat_arr(), 300);
   addArrLog('Loaded', `${guests.length} guests loaded from paste`);
   logActivity('arrivals_loaded', `${guests.length} guests`);
 }
@@ -261,10 +264,10 @@ function purposeRender() {
       </select></td>
       <td><input type="number" value="${g.nights}" onchange="purposeGuests[${i}].nights=this.value" style="width:42px;"/></td>
       <td><div style="display:flex;gap:3px;align-items:center;">
-        <input value="${g.nat}" onchange="purposeGuests[${i}].nat=this.value" style="width:86px;"/>
+        <input value="${g.nat}" onchange="purposeGuests[${i}].nat=this.value;gmOnEdit(purposeGuests[${i}].name,'nat',this.value);savePurpose(purposeGuests)" style="width:86px;${g._fromMemory?'border-color:var(--sky);':''}"/>
         <button class="icon-btn ai-btn" onclick="aiOneGuest(${i},'purpose')" title="AI">✦</button>
       </div></td>
-      <td><input value="${g.email}"   onchange="purposeGuests[${i}].email=this.value" style="width:138px;"/></td>
+      <td><input value="${g.email}"   onchange="purposeGuests[${i}].email=this.value;gmOnEdit(purposeGuests[${i}].name,'email',this.value);savePurpose(purposeGuests)" style="width:138px;${g._fromMemory?'border-color:var(--sky);':''}"/></td>
       <td><input value="${g.source}"  onchange="purposeGuests[${i}].source=this.value" style="width:100px;"/></td>
       <td><input value="${g.remarks}" onchange="purposeGuests[${i}].remarks=this.value" style="width:86px;"/></td>
       <td><button class="icon-btn" onclick="purposeRemoveGuest(${i})">✕</button></td>
@@ -312,7 +315,10 @@ function loadPurpose() {
       source:cleanSource(taI>=0?(p[taI]||'').trim():'', coI>=0?(p[coI]||'').trim():'', srcI>=0?(p[srcI]||'').trim():''),
       remarks:'' });
   }
-  purposeGuests = guests; purposeRender(); setTimeout(() => runAINat_purpose(), 300);
+  purposeGuests = guests;
+  if (typeof gmAutoFill === 'function') gmAutoFill(purposeGuests);
+  purposeRender();
+  setTimeout(() => runAINat_purpose(), 300);
   addPurposeLog('Loaded', `${guests.length} guests loaded from paste`);
 }
 

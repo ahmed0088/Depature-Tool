@@ -193,6 +193,10 @@
     <div class="nav-icon">📊</div>Arrivals Processor
     <span class="nav-badge" id="badge-arrivals-proc">—</span>
   </div>
+  <div class="nav-item" onclick="showPanel('guestmem')" id="nav-guestmem" data-panel="guestmem">
+    <div class="nav-icon">🧠</div>Guest Memory
+    <span class="nav-badge" id="badge-guestmem">0</span>
+  </div>
 </nav>
 
 <main class="main">
@@ -2085,6 +2089,76 @@ async function appInit() {
 </div><!-- /appWrapper -->
 
 <!-- ══════════════════════════════════════════════════════
+     GUEST MEMORY PANEL
+══════════════════════════════════════════════════════ -->
+<style>
+.gm-inline-inp{background:var(--card2,#181c24);border:1px solid var(--border,#2a2f3d);border-radius:5px;color:var(--text);font-family:var(--mono);font-size:0.68rem;padding:3px 7px;outline:none;transition:border-color .15s;}
+.gm-inline-inp:focus{border-color:var(--accent,#5ab4e8);}
+.gm-hit-badge{background:rgba(62,207,142,0.12);color:var(--mint,#3ecf8e);border:1px solid rgba(62,207,142,0.25);border-radius:4px;font-family:var(--mono);font-size:0.58rem;padding:1px 5px;}
+.gm-stat-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px;}
+.gm-stat{background:var(--card,#111520);border:1px solid var(--border,#2a2f3d);border-radius:8px;padding:12px 18px;min-width:110px;text-align:center;}
+.gm-stat-val{font-family:var(--serif,Georgia,serif);font-size:1.4rem;color:var(--mint,#3ecf8e);}
+.gm-stat-lbl{font-family:var(--mono);font-size:0.58rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin-top:3px;}
+</style>
+
+<div class="panel" id="panel-guestmem" style="display:none;">
+  <div class="panel-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:18px;">
+    <div>
+      <div style="font-size:1.15rem;font-weight:700;color:var(--text);">🧠 Guest Memory</div>
+      <div style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);margin-top:3px;">Stores nationality &amp; email for returning guests — auto-fills on every load</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <button class="btn sm gold" onclick="gmExport()">📥 Export CSV</button>
+      <label class="btn sm" style="cursor:pointer;">📂 Import CSV<input type="file" accept=".csv" style="display:none;" onchange="gmImportFile(this)"/></label>
+      <button class="btn sm" style="color:var(--rose);" onclick="gmClearAll()">🗑 Clear All</button>
+    </div>
+  </div>
+
+  <div style="background:rgba(90,180,232,0.07);border:1px solid rgba(90,180,232,0.2);border-radius:10px;padding:13px 16px;margin-bottom:18px;font-family:var(--mono);font-size:0.65rem;color:var(--text2);line-height:1.7;">
+    <strong style="color:var(--sky);">✦ How it works</strong><br>
+    Every time you type or correct a guest's <strong>nationality</strong> or <strong>email</strong> in the Arrivals or Purpose panels, it's saved here automatically.<br>
+    Next time that guest appears, their data is filled in instantly — no retyping. Shared with all colleagues via Firebase.
+  </div>
+
+  <div class="gm-stat-row">
+    <div class="gm-stat"><div class="gm-stat-val" id="gm-count">—</div><div class="gm-stat-lbl">Profiles Stored</div></div>
+    <div class="gm-stat"><div class="gm-stat-val" id="gm-with-nat">—</div><div class="gm-stat-lbl">With Nationality</div></div>
+    <div class="gm-stat"><div class="gm-stat-val" id="gm-with-email">—</div><div class="gm-stat-lbl">With Email</div></div>
+    <div class="gm-stat"><div class="gm-stat-val" id="gm-total-hits">—</div><div class="gm-stat-lbl">Total Auto-fills</div></div>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+    <div style="position:relative;flex:1;">
+      <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:0.8rem;">🔍</span>
+      <input id="gmSearch" type="text" placeholder="Search guest name…" oninput="_gmRenderTable()" style="width:100%;box-sizing:border-box;padding:8px 12px 8px 32px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:0.68rem;outline:none;"/>
+    </div>
+    <span id="gmProfileCount" style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);white-space:nowrap;">0 profiles</span>
+  </div>
+
+  <div class="card" style="overflow-x:auto;padding:0;">
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="background:var(--bg2,#0d1017);">
+          <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.55rem;color:var(--text3);letter-spacing:.1em;font-weight:600;">GUEST NAME</th>
+          <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.55rem;color:var(--text3);letter-spacing:.1em;font-weight:600;">NATIONALITY</th>
+          <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.55rem;color:var(--text3);letter-spacing:.1em;font-weight:600;">EMAIL</th>
+          <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.55rem;color:var(--text3);letter-spacing:.1em;font-weight:600;">PURPOSE</th>
+          <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.55rem;color:var(--text3);letter-spacing:.1em;font-weight:600;">SEEN</th>
+          <th style="padding:10px 12px;"></th>
+        </tr>
+      </thead>
+      <tbody id="gmTable">
+        <tr><td colspan="6" style="text-align:center;padding:48px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">Loading guest memory…</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);margin-top:10px;line-height:1.6;">
+    ✦ Profiles are saved automatically when you edit nationality or email in Arrivals / Purpose panels.<br>
+    🔵 Blue border on a field = auto-filled from memory this session.
+  </div>
+</div><!-- /panel-guestmem -->
+
+<!-- ══════════════════════════════════════════════════════
      ADMIN PANEL MODAL
 ══════════════════════════════════════════════════════ -->
 <div class="modal-bg" id="adminModal">
@@ -2181,6 +2255,7 @@ async function appInit() {
   </div>
 </div>
 
+<script src="guest-memory.js"></script>
 <script src="auth.js"></script>
 <script>
 // ── Auth-gated boot ───────────────────────────────────────
@@ -2188,6 +2263,7 @@ async function appInit() {
   try {
     firebase.initializeApp(FIREBASE_CONFIG);
     dbInit();
+    gmInit();
   } catch(e) {
     console.warn('Firebase init failed:', e);
     updateConnectionUI(false);
