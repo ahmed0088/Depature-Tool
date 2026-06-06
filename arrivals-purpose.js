@@ -107,30 +107,33 @@ function arrRender() {
     const i = arrGuests.indexOf(g);
     return `<tr class="${g.purpose==='Leisure'?'leisure-row':''}">
       <td><input value="${g.room}"
-        oninput="arrGuests[${i}].room=this.value;debounceSaveArrivals()"
+        oninput="arrGuests[${i}].room=this.value"
+        onblur="debounceSaveArrivals()"
         style="width:46px;"/></td>
       <td><input value="${g.conf}"
         oninput="arrGuests[${i}].conf=this.value"
         style="width:86px;"/></td>
       <td><input value="${g.name}"
-        oninput="arrGuests[${i}].name=this.value.toUpperCase();this.value=arrGuests[${i}].name;debounceSaveArrivals()"
+        oninput="arrGuests[${i}].name=this.value"
+        onblur="arrGuests[${i}].name=this.value.toUpperCase();this.value=arrGuests[${i}].name;debounceSaveArrivals()"
         style="width:165px;"/></td>
       <td><select onchange="arrChangePurpose(${i},this.value)">
         ${['Business','Leisure','Flight'].map(p=>`<option${g.purpose===p?' selected':''}>${p}</option>`).join('')}
       </select></td>
       <td><input type="number" value="${g.nights}"
-        oninput="arrGuests[${i}].nights=this.value;arrKpiUpdate()"
+        oninput="arrGuests[${i}].nights=this.value"
+        onblur="arrKpiUpdate();debounceSaveArrivals()"
         style="width:42px;"/></td>
       <td><div style="display:flex;gap:3px;align-items:center;">
         <input value="${g.nat}"
-          oninput="arrGuests[${i}].nat=this.value;debounceSaveArrivals()"
-          onblur="gmOnEdit(arrGuests[${i}].name,'nat',arrGuests[${i}].nat)"
+          oninput="arrGuests[${i}].nat=this.value"
+          onblur="gmOnEdit(arrGuests[${i}].name,'nat',this.value);debounceSaveArrivals()"
           style="width:86px;${g._fromMemory?'border-color:var(--sky);':''}"/>
         <button class="icon-btn ai-btn" onclick="aiOneGuest(${i},'arr')" title="AI guess">✦</button>
       </div></td>
       <td><input value="${g.email}"
-        oninput="arrGuests[${i}].email=this.value;debounceSaveArrivals()"
-        onblur="gmOnEdit(arrGuests[${i}].name,'email',arrGuests[${i}].email)"
+        oninput="arrGuests[${i}].email=this.value"
+        onblur="gmOnEdit(arrGuests[${i}].name,'email',this.value);debounceSaveArrivals()"
         style="width:138px;${g._fromMemory?'border-color:var(--sky);':''}"/></td>
       <td><input value="${g.source}"
         oninput="arrGuests[${i}].source=this.value"
@@ -303,30 +306,33 @@ function purposeRender() {
     const i = purposeGuests.indexOf(g);
     return `<tr class="${g.purpose==='Leisure'?'leisure-row':''}">
       <td><input value="${g.room}"
-        oninput="purposeGuests[${i}].room=this.value;debounceSavePurpose()"
+        oninput="purposeGuests[${i}].room=this.value"
+        onblur="debounceSavePurpose()"
         style="width:46px;"/></td>
       <td><input value="${g.conf}"
         oninput="purposeGuests[${i}].conf=this.value"
         style="width:86px;"/></td>
       <td><input value="${g.name}"
-        oninput="purposeGuests[${i}].name=this.value.toUpperCase();this.value=purposeGuests[${i}].name;debounceSavePurpose()"
+        oninput="purposeGuests[${i}].name=this.value"
+        onblur="purposeGuests[${i}].name=this.value.toUpperCase();this.value=purposeGuests[${i}].name;debounceSavePurpose()"
         style="width:165px;"/></td>
       <td><select onchange="purposeChangePurpose(${i},this.value)">
         ${['Business','Leisure','Flight'].map(p=>`<option${g.purpose===p?' selected':''}>${p}</option>`).join('')}
       </select></td>
       <td><input type="number" value="${g.nights}"
         oninput="purposeGuests[${i}].nights=this.value"
+        onblur="purposeKpiUpdate();debounceSavePurpose()"
         style="width:42px;"/></td>
       <td><div style="display:flex;gap:3px;align-items:center;">
         <input value="${g.nat}"
-          oninput="purposeGuests[${i}].nat=this.value;debounceSavePurpose()"
-          onblur="gmOnEdit(purposeGuests[${i}].name,'nat',purposeGuests[${i}].nat)"
+          oninput="purposeGuests[${i}].nat=this.value"
+          onblur="gmOnEdit(purposeGuests[${i}].name,'nat',this.value);debounceSavePurpose()"
           style="width:86px;${g._fromMemory?'border-color:var(--sky);':''}"/>
         <button class="icon-btn ai-btn" onclick="aiOneGuest(${i},'purpose')" title="AI">✦</button>
       </div></td>
       <td><input value="${g.email}"
-        oninput="purposeGuests[${i}].email=this.value;debounceSavePurpose()"
-        onblur="gmOnEdit(purposeGuests[${i}].name,'email',purposeGuests[${i}].email)"
+        oninput="purposeGuests[${i}].email=this.value"
+        onblur="gmOnEdit(purposeGuests[${i}].name,'email',this.value);debounceSavePurpose()"
         style="width:138px;${g._fromMemory?'border-color:var(--sky);':''}"/></td>
       <td><input value="${g.source}"
         oninput="purposeGuests[${i}].source=this.value"
