@@ -3140,130 +3140,159 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
 }
 
 /* ══════════════════════════════════════════════════════════
-   Departures — Compact Row Layout
+   List view (size-list only) — compact single-line rows
+   Cards in sm / md / lg are completely unchanged.
 ══════════════════════════════════════════════════════════ */
 
-/* Single-line compact row */
-.dc-row {
+/* Tighten the grid gap in list mode */
+.dep-grid.size-list { gap: 3px; }
+
+/* Flatten the card — head and body side-by-side in one row */
+.dep-grid.size-list .dep-card {
   display: flex;
+  align-items: stretch;
+}
+
+/* Color band becomes a left stripe */
+.dep-grid.size-list .dc-band {
+  width: 3px;
+  height: auto;
+  flex-shrink: 0;
+}
+
+/* Head: shrink room number, remove stacking */
+.dep-grid.size-list .dc-head {
+  flex-shrink: 0;
+  flex-direction: row;
   align-items: center;
   gap: 8px;
-  padding: 7px 11px;
-  cursor: pointer;
-  min-height: 38px;
-  user-select: none;
+  padding: 6px 10px 6px 10px;
+  border-right: 1px solid var(--border);
 }
-.dc-row:hover { background: rgba(255,255,255,0.025); }
-
-/* Room number — smaller in row mode */
-.dc-row .dc-room {
+.dep-grid.size-list .dc-room {
   font-size: 1rem;
-  font-weight: 800;
-  min-width: 34px;
-  flex-shrink: 0;
-  line-height: 1;
+  letter-spacing: 0;
+  min-width: 28px;
 }
-
-/* Badge stays compact */
-.dc-row .dc-sbadge {
-  flex-shrink: 0;
+.dep-grid.size-list .dc-head-right {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
 }
+.dep-grid.size-list .dc-timetag-wrap { display: flex; }
 
-/* Name — takes most space, truncates */
-.dc-row-name {
+/* Body: horizontal flex row, everything on one line */
+.dep-grid.size-list .dc-body {
   flex: 1;
-  min-width: 0;
-  font-size: 0.78rem;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  cursor: pointer;
-}
-
-/* Meta — hidden on very small screens, shown when space allows */
-.dc-row-meta {
-  font-size: 0.62rem;
-  color: var(--text3);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 200px;
-  flex-shrink: 1;
-}
-
-/* Balance pill in row */
-.dc-row-bal {
-  flex-shrink: 0;
-  padding: 2px 7px;
-  font-size: 0.65rem;
-  margin: 0;
-  border-radius: 6px;
-}
-
-/* Time tag in row */
-.dc-row-time { flex-shrink: 0; }
-
-/* Note dot indicator */
-.dc-row-note-dot {
-  flex-shrink: 0;
-  font-size: 0.7rem;
-  opacity: 0.75;
-  cursor: default;
-}
-
-/* Copy button in row */
-.dc-row-copy {
-  flex-shrink: 0;
-  opacity: 0.5;
-  padding: 1px 5px;
-  font-size: 0.7rem;
-}
-.dc-row:hover .dc-row-copy { opacity: 1; }
-
-/* Expand arrow */
-.dc-expand-arrow {
-  font-size: 0.6rem;
-  color: var(--text3);
-  flex-shrink: 0;
-  transition: transform 0.15s;
-}
-
-/* Collapsed body — hidden */
-.dc-body-collapsed {
-  display: none !important;
-}
-
-/* When expanded, body gets normal padding */
-.dc-body:not(.dc-body-collapsed) {
-  padding: 0 11px 10px;
-  border-top: 1px solid var(--border);
-}
-
-/* Stack cards tighter in row mode */
-#depBoard {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  padding: 5px 10px;
+  min-width: 0;
 }
 
-/* Dep-card in row mode — no min-height, just border */
-.dep-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+/* Name — shrinks but keeps truncation */
+.dep-grid.size-list .dc-name {
+  font-size: 0.76rem;
+  flex: 1;
+  min-width: 80px;
+  margin-bottom: 0;
+  white-space: nowrap;
   overflow: hidden;
-  transition: box-shadow 0.12s, border-color 0.12s;
-  position: relative;
+  text-overflow: ellipsis;
 }
 
-@media (max-width: 600px) {
-  .dc-row-meta { display: none; }
+/* Meta — truncates, takes spare space */
+.dep-grid.size-list .dc-meta-line {
+  font-size: 0.58rem;
+  flex: 1.5;
+  min-width: 0;
+  margin-bottom: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Override dep-grid to always be a single-column list for row layout */
-.dep-grid {
-  display: flex !important;
-  flex-direction: column;
-  gap: 3px !important;
+/* Balance pill — compact, no grow */
+.dep-grid.size-list .dc-bal-inline {
+  flex-shrink: 0;
+  margin-bottom: 0;
+  padding: 2px 7px;
+}
+
+/* Actions row — horizontal, compact */
+.dep-grid.size-list .dc-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 3px;
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+.dep-grid.size-list .dca {
+  padding: 3px 7px;
+  font-size: 0.6rem;
+  white-space: nowrap;
+}
+
+/* Intent row — hide label, compact */
+.dep-grid.size-list .dc-intent-row {
+  flex-wrap: nowrap;
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+.dep-grid.size-list .dc-intent-lbl { display: none; }
+.dep-grid.size-list .dc-intent-btn { font-size: 0.52rem; padding: 2px 5px; }
+
+/* Overdue / intent banners — inline pill */
+.dep-grid.size-list .dc-overdue-strip,
+.dep-grid.size-list .dc-lco-overdue-strip {
+  font-size: 0.55rem;
+  padding: 2px 6px;
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+.dep-grid.size-list .dc-intent-banner {
+  font-size: 0.55rem;
+  padding: 2px 6px;
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+
+/* LCO select row — compact inline */
+.dep-grid.size-list .dc-sel-row {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 0;
+  flex-shrink: 0;
+  align-items: center;
+}
+.dep-grid.size-list .dc-select { width: auto; font-size: 0.58rem; padding: 2px 5px; }
+
+/* Notes — always collapsed in list view, just show the toggle line */
+.dep-grid.size-list .dc-note-section {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 0;
+  flex-shrink: 0;
+}
+.dep-grid.size-list .dc-note-body { display: none !important; }
+.dep-grid.size-list .dc-note-toggle { padding: 0; }
+.dep-grid.size-list .dc-note-lbl { font-size: 0.56rem; }
+
+/* Extension panel — stays visible but compact */
+.dep-grid.size-list .dc-ext-panel {
+  flex-shrink: 0;
+  max-width: 320px;
+}
+
+/* VIP tag — keep position */
+.dep-grid.size-list .dc-vip { top: 0; }
+
+/* NA warn strip — inline */
+.dep-grid.size-list .dc-na-warn {
+  font-size: 0.55rem;
+  padding: 2px 6px;
+  margin-bottom: 0;
+  flex-shrink: 0;
 }
