@@ -105,9 +105,6 @@ function gmOnEdit(name, field, value) {
 }
 
 // ── Bulk scan: save all loaded guests to memory ───────────
-// Call this once to seed memory from your existing arrivals/purpose lists.
-// Only saves guests that have at least a name. Won't overwrite a profile
-// that already has richer data — it merges, keeping the best value.
 function gmScanAndSaveAll() {
   const lists = [];
   if (typeof arrGuests     !== 'undefined' && arrGuests.length)     lists.push(...arrGuests);
@@ -124,28 +121,20 @@ function gmScanAndSaveAll() {
     const key      = gmKey(g.name);
     const existing = _gmStore[key] || {};
     const isNew    = !_gmStore[key];
-
-    // Merge: prefer non-empty, non-placeholder values
-    const nat   = (g.nat   && g.nat   !== '')            ? g.nat   : existing.nat   || '';
-    const email = (g.email && g.email !== 'No@email.com') ? g.email : existing.email || '';
-    const purpose = g.purpose || existing.purpose || 'Business';
-
     _gmStore[key] = {
-      nat,
-      email,
-      purpose,
-      conf:     g.conf    || existing.conf    || '',
-      hits:     (existing.hits || 0),   // don't inflate hits — this is a scan, not a real visit
+      nat:      (g.nat   && g.nat   !== '')             ? g.nat   : (existing.nat   || ''),
+      email:    (g.email && g.email !== 'No@email.com') ? g.email : (existing.email || ''),
+      purpose:  g.purpose  || existing.purpose  || 'Business',
+      conf:     g.conf     || existing.conf     || '',
+      hits:     existing.hits || 0,
       lastSeen: existing.lastSeen || new Date().toISOString().split('T')[0],
     };
-
-    if (isNew) saved++;
-    else updated++;
+    if (isNew) saved++; else updated++;
   });
 
   _gmPersist();
   _gmUpdateUI();
-  showToast(`Memory scan done — ${saved} new · ${updated} updated`, 'ok');
+  showToast(`✦ Scan done — ${saved} new · ${updated} updated`, 'ok');
 }
 
 // ── Save a full guest profile at once ─────────────────────
@@ -190,8 +179,21 @@ function gmClearAll() {
 
 // ── Update panel UI ───────────────────────────────────────
 function _gmUpdateUI() {
+  const entries = Object.entries(_gmStore);
+  const total     = entries.length;
+  const withNat   = entries.filter(([,p]) => p.nat   && p.nat   !== '').length;
+  const withEmail = entries.filter(([,p]) => p.email && p.email !== '' && p.email !== 'No@email.com').length;
+  const totalHits = entries.reduce((s, [,p]) => s + (p.hits || 0), 0);
+
   const badge = document.getElementById('badge-guestmem');
-  if (badge) badge.textContent = Object.keys(_gmStore).length || '0';
+  if (badge) badge.textContent = total || '0';
+
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('gm-count',      total);
+  set('gm-with-nat',   withNat);
+  set('gm-with-email', withEmail);
+  set('gm-total-hits', totalHits);
+
   _gmRenderTable();
 }
 

@@ -2128,6 +2128,7 @@ async function appInit() {
       <div style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);margin-top:3px;">Stores nationality &amp; email for returning guests — auto-fills on every load</div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <button class="btn sm gold" onclick="gmScanAndSaveAll()">⚡ Scan &amp; Save All</button>
       <button class="btn sm gold" onclick="gmExport()">📥 Export CSV</button>
       <label class="btn sm" style="cursor:pointer;">📂 Import CSV<input type="file" accept=".csv" style="display:none;" onchange="gmImportFile(this)"/></label>
       <button class="btn sm" style="color:var(--rose);" onclick="gmClearAll()">🗑 Clear All</button>
