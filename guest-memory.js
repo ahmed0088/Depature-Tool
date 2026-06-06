@@ -1,12 +1,16 @@
 // ═══════════════════════════════════════════════════════════
 //  guest-memory.js  —  Guest Profile Memory Store
 //
-//  BEHAVIOUR (simplified):
-//  · gmInit()        — loads profiles from Firebase once, renders table
-//  · gmAutoFill()    — REMOVED from automatic calls; now manual only
-//  · "Save to Memory" button → gmScanAndSaveAll() saves current guests
-//  · Editing a cell  → updates _gmStore locally, saves to Firebase on blur
-//  · Firebase listener → NEVER re-renders while user is in the table
+//  FLOW:
+//  1. gmInit()         — loads profiles from Firebase once
+//  2. On import        — gmAutoFill() runs once, silently fills
+//                        blank nat/email from stored profiles.
+//                        Zero writes to Firebase. Zero side effects.
+//  3. User edits cell  — gmOnEdit() updates _gmStore locally,
+//                        queues a debounced Firebase save.
+//                        Never re-renders the table.
+//  4. "Save to Memory" — gmScanAndSaveAll() saves everything
+//                        currently loaded into memory.
 // ═══════════════════════════════════════════════════════════
 
 let _gmStore     = {};
@@ -17,9 +21,7 @@ function gmKey(name) {
   return String(name || '').toUpperCase().replace(/\s+/g, ' ').trim();
 }
 
-// ── Init: load once from Firebase, render, then stop ──────
-// The listener stays open for colleague sync but NEVER
-// re-renders the table while the user has focus in it.
+// ── Init: load from Firebase once, stay in sync with colleagues ──
 function gmInit() {
   if (typeof fbListen !== 'function') {
     console.warn('[GuestMemory] fbListen not available');
@@ -28,15 +30,15 @@ function gmInit() {
   fbListen('guestMemory', snap => {
     _gmStore = snap || {};
     _gmReady = true;
-    // Only re-render if the user is NOT currently editing a cell
-    const tbl = document.getElementById('gmTable');
+    // Only re-render if user isn't actively editing a cell in the table
+    const tbl     = document.getElementById('gmTable');
     const editing = tbl && tbl.contains(document.activeElement);
     if (!editing) _gmUpdateUI();
     else          _gmUpdateStatsOnly();
   });
 }
 
-// ── Debounced Firebase save (3 s after last change) ───────
+// ── Debounced Firebase save ───────────────────────────────
 function _gmPersist() {
   clearTimeout(_gmSaveTimer);
   _gmSaveTimer = setTimeout(async () => {
@@ -45,8 +47,10 @@ function _gmPersist() {
   }, 3000);
 }
 
-// ── Auto-fill: MANUAL ONLY — called by button, not on load ─
-// Returns number of guests filled.
+// ── Auto-fill: called once after import ───────────────────
+// Reads from _gmStore and fills blank fields on the guest list.
+// ZERO writes to Firebase. ZERO hit counting. ZERO re-renders.
+// Just a plain read-and-fill, nothing more.
 function gmAutoFill(guests, silent) {
   if (!_gmReady || !guests || !guests.length) return 0;
   let filled = 0;
@@ -54,18 +58,19 @@ function gmAutoFill(guests, silent) {
     const profile = _gmStore[gmKey(g.name)];
     if (!profile) return;
     let hit = false;
-    if (!g.nat    || g.nat    === '')             { g.nat     = profile.nat     || g.nat;     hit = true; }
-    if (!g.email  || g.email  === 'No@email.com') { g.email   = profile.email   || g.email;   hit = true; }
-    if (!g.purpose|| g.purpose=== 'Business')     { g.purpose = profile.purpose || g.purpose; hit = true; }
+    if (!g.nat    || g.nat    === '')             { if (profile.nat)     { g.nat     = profile.nat;     hit = true; } }
+    if (!g.email  || g.email  === 'No@email.com') { if (profile.email)   { g.email   = profile.email;   hit = true; } }
+    if (!g.purpose|| g.purpose=== 'Business')     { if (profile.purpose) { g.purpose = profile.purpose; hit = true; } }
     if (hit) { filled++; g._fromMemory = true; }
   });
+  // No _gmPersist() here — reading only, never writes back
   if (filled && !silent) showToast(`✦ ${filled} guest${filled !== 1 ? 's' : ''} filled from memory`, 'info');
   return filled;
 }
 
 // ── Called by onchange on a table input/select ────────────
-// Only patches _gmStore + queues a Firebase save.
-// NEVER rebuilds the table DOM.
+// Patches _gmStore in memory and queues a Firebase save.
+// NEVER rebuilds the table DOM — user keeps focus.
 function gmOnEdit(name, field, value) {
   const key = gmKey(name);
   if (!_gmStore[key]) _gmStore[key] = { nat:'', email:'', purpose:'Business', hits:0, lastSeen:'' };
@@ -76,8 +81,6 @@ function gmOnEdit(name, field, value) {
 }
 
 // ── "Save to Memory" button ───────────────────────────────
-// Takes whatever is currently in arrGuests / purposeGuests
-// and writes it all into _gmStore then Firebase.
 function gmScanAndSaveAll() {
   const lists = [];
   if (typeof arrGuests     !== 'undefined' && arrGuests.length)     lists.push(...arrGuests);
@@ -142,12 +145,13 @@ function _gmUpdateStatsOnly() {
   const total     = entries.length;
   const withNat   = entries.filter(([,p]) => p.nat   && p.nat   !== '').length;
   const withEmail = entries.filter(([,p]) => p.email && p.email !== '' && p.email !== 'No@email.com').length;
-  const totalHits = entries.reduce((s,[,p]) => s + (p.hits || 0), 0);
   const badge = document.getElementById('badge-guestmem');
   if (badge) badge.textContent = total || '0';
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-  set('gm-count', total); set('gm-with-nat', withNat);
-  set('gm-with-email', withEmail); set('gm-total-hits', totalHits);
+  set('gm-count', total);
+  set('gm-with-nat', withNat);
+  set('gm-with-email', withEmail);
+  set('gm-total-hits', '—');   // no longer tracked
 }
 
 function _gmUpdateUI() {
@@ -156,15 +160,13 @@ function _gmUpdateUI() {
 }
 
 // ── Render table ──────────────────────────────────────────
-// onchange fires only when you leave the field (blur/Enter/Tab).
-// No _gmRenderTable() call inside gmOnEdit — ever.
 function _gmRenderTable() {
   const tbody = document.getElementById('gmTable');
   if (!tbody) return;
   const search  = (document.getElementById('gmSearch')?.value || '').toLowerCase();
   const entries = Object.entries(_gmStore)
     .filter(([k]) => !search || k.toLowerCase().includes(search))
-    .sort((a, b) => (b[1].hits || 0) - (a[1].hits || 0));
+    .sort((a, b) => a[0].localeCompare(b[0]));
 
   const cnt = document.getElementById('gmProfileCount');
   if (cnt) cnt.textContent = entries.length + ' profiles';
@@ -200,8 +202,7 @@ function _gmRenderTable() {
         </select>
       </td>
       <td style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);">
-        ${p.hits ? `<span class="gm-hit-badge">${p.hits}×</span>` : '—'}
-        <span style="margin-left:4px;">${p.lastSeen||''}</span>
+        ${p.lastSeen || '—'}
       </td>
       <td>
         <button class="icon-btn" onclick="gmDeleteProfile('${ek}')"
@@ -213,9 +214,9 @@ function _gmRenderTable() {
 
 // ── Export CSV ────────────────────────────────────────────
 function gmExport() {
-  const rows = [['Name','Nationality','Email','Purpose','Seen','Last Seen']];
+  const rows = [['Name','Nationality','Email','Purpose','Last Seen']];
   Object.entries(_gmStore).forEach(([k,p]) =>
-    rows.push([k, p.nat||'', p.email||'', p.purpose||'', p.hits||0, p.lastSeen||'']));
+    rows.push([k, p.nat||'', p.email||'', p.purpose||'', p.lastSeen||'']));
   const csv  = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], {type:'text/csv'});
   const a    = document.createElement('a');
@@ -239,7 +240,7 @@ function gmImportFile(input) {
       if (!parts[0]) return;
       _gmStore[gmKey(parts[0])] = {
         nat:parts[1]||'', email:parts[2]||'', purpose:parts[3]||'Business',
-        hits:parseInt(parts[4])||0, lastSeen:parts[5]||'',
+        hits:0, lastSeen:parts[4]||'',
       };
       count++;
     });
