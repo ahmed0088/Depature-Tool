@@ -982,9 +982,10 @@ function depCardHTML(r) {
     <div class="dc-row" onclick="depToggleExpand(this)">
       <div class="dc-room">${r.roomStr}</div>
       <div class="dc-sbadge ${badgeCls}">${badgeText}</div>
-      <div class="dc-name dc-row-name" ondblclick="event.stopPropagation();depEditName(${i})" title="Double-click to edit">${escapeHtml(r.name)}</div>
-      <div class="dc-meta-line dc-row-meta">${escapeHtml(metaLine)}</div>
-      <div class="dc-bal-inline ${balClass} dc-row-bal">
+      <div class="dc-row-spacer-sm" style="display:none"></div>
+      <div class="dc-row-name" ondblclick="event.stopPropagation();depEditName(${i})" title="Double-click to edit">${escapeHtml(r.name)}</div>
+      <div class="dc-row-meta dc-meta-line">${escapeHtml(metaLine)}</div>
+      <div class="dc-row-bal dc-bal-inline ${balClass}">
         <span class="dc-bal-dot"></span>
         <span class="dc-bal-amt-sm">${balText}</span>
       </div>
@@ -1639,7 +1640,7 @@ function depCopyDNDList(mode) {
     text = `🚫 DND Rooms — ${t}\n${'─'.repeat(30)}\n` +
       rooms.map(r => {
         const since = r.dndTime ? ` · DND since ${r.dndTime}` : '';
-        return `Rm ${r.roomStr}  ${r.name}${since}`;
+        return `Rm ${r.roomStr}${since}`;
       }).join('\n');
   }
   copyToClipboard(text, null, '');
