@@ -44,7 +44,19 @@ function gmInit() {
   fbListen('guestMemory', snap => {
     _gmStore = snap || {};
     _gmReady = true;
-    _gmUpdateUI();
+
+    // Don't re-render the table if the user is actively typing inside it —
+    // that would destroy their focused input element.
+    const activeEl = document.activeElement;
+    const tableEl  = document.getElementById('gmTable');
+    const userEditing = tableEl && tableEl.contains(activeEl);
+
+    if (userEditing) {
+      _gmUpdateStatsOnly();
+    } else {
+      _gmUpdateUI();
+    }
+
     console.log(`[GuestMemory] loaded — ${Object.keys(_gmStore).length} profiles`);
 
     // ── Self-healing fill ─────────────────────────────────
@@ -91,15 +103,15 @@ function gmAutoFill(guests, silent) {
     if (!g.purpose || g.purpose === 'Business') { g.purpose = profile.purpose || g.purpose; changed = true; }
     if (changed) {
       filled++;
-      // Bump hit counter and last seen
-      profile.hits     = (profile.hits || 0) + 1;
-      profile.lastSeen = new Date().toISOString().split('T')[0];
-      g._fromMemory    = true;   // flag for visual indicator (blue border)
+      // NOTE: Do NOT touch profile.hits or call _gmPersist here.
+      // Writing back to Firebase from inside the fbListen callback
+      // re-triggers the listener → infinite loop + hit counter runaway.
+      // Hits are only incremented by intentional edits (gmOnEdit/gmSaveProfile).
+      g._fromMemory = true;   // flag for visual indicator (blue border)
     }
   });
-  if (filled) {
-    _gmPersist();
-    if (!silent) showToast(`✦ ${filled} guest${filled !== 1 ? 's' : ''} auto-filled from memory`, 'info');
+  if (filled && !silent) {
+    showToast(`✦ ${filled} guest${filled !== 1 ? 's' : ''} auto-filled from memory`, 'info');
   }
   return filled;
 }
@@ -114,6 +126,14 @@ function gmOnEdit(name, field, value) {
   }
   _gmStore[key][field]   = value;
   _gmStore[key].lastSeen = new Date().toISOString().split('T')[0];
+  // Increment hits only on intentional user edits (nat/email changes)
+  if (field === 'nat' || field === 'email') {
+    _gmStore[key].hits = (_gmStore[key].hits || 0) + 1;
+  }
+  // Update just the stats bar — do NOT call _gmRenderTable() here.
+  // Re-rendering the table destroys the input element the user is typing in.
+  // The Firebase listener will re-render when the save completes.
+  _gmUpdateStatsOnly();
   _gmPersist();
 }
 
@@ -189,6 +209,25 @@ function gmClearAll() {
   _gmPersist();
   _gmRenderTable();
   showToast('Guest memory cleared', 'info');
+}
+
+// ── Update only the KPI stats bar (no table re-render) ────
+// Used by gmOnEdit to avoid destroying active inputs.
+function _gmUpdateStatsOnly() {
+  const entries   = Object.entries(_gmStore);
+  const total     = entries.length;
+  const withNat   = entries.filter(([,p]) => p.nat   && p.nat   !== '').length;
+  const withEmail = entries.filter(([,p]) => p.email && p.email !== '' && p.email !== 'No@email.com').length;
+  const totalHits = entries.reduce((s,[,p]) => s + (p.hits || 0), 0);
+
+  const badge = document.getElementById('badge-guestmem');
+  if (badge) badge.textContent = total || '0';
+
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('gm-count',      total);
+  set('gm-with-nat',   withNat);
+  set('gm-with-email', withEmail);
+  set('gm-total-hits', totalHits);
 }
 
 // ── Update panel UI ───────────────────────────────────────
