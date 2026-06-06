@@ -403,7 +403,7 @@
         <button class="dep-sel-tray-btn cancel"  onclick="depCancelSelect()">✕</button>
       </div>
     </div>
-    <div class="dep-grid size-sm" id="depGrid"></div>
+    <div class="dep-grid size-md" id="depGrid"></div>
     <!-- Inline bulk checkout — visible only on mobile -->
     <div class="dep-quick-bar-inline" id="depQuickBarInline" style="display:none;">
       <button class="btn mint" style="width:100%;justify-content:center;padding:12px;" onclick="depBulkCheckout()">✓ Check Out All Due</button>
@@ -1853,6 +1853,10 @@ async function appInit() {
   // 10 — Set up real-time listeners
   listenDepartures(snap => {
     if (!snap || !snap.rooms) return;
+    // Don't re-render while someone is actively typing in a note —
+    // it would destroy their textarea focus mid-keystroke.
+    const activeEl = document.activeElement;
+    const typingNote = activeEl && activeEl.classList.contains('dc-note');
     depRooms = snap.rooms;
     depLog = snap.log || [];
     if (depRooms.length) {
@@ -1861,8 +1865,10 @@ async function appInit() {
       if (uploadCard) uploadCard.style.display = 'none';
       if (board) board.style.display = 'block';
     }
-    depRender(); 
-    updateDepBadge();
+    if (!typingNote) {
+      depRender();
+      updateDepBadge();
+    }
   });
   
   listenArrivals(snap => {

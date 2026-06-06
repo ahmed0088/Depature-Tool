@@ -1007,7 +1007,7 @@ function depCardHTML(r) {
         </div>
         <div class="dc-note-body" style="${r.note ? '' : 'display:none;'}">
           <textarea class="dc-note" placeholder="Luggage stored, guest requests, complaints…"
-            oninput="depRooms[${i}].note=this.value;saveDeps()">${escapeHtml(r.note)}</textarea>
+            oninput="depNoteInput(${i},this.value)">${escapeHtml(r.note)}</textarea>
         </div>
       </div>
     </div>
@@ -1214,6 +1214,14 @@ function depAction(i, status, extraNights) {
 
 function saveDeps() {
   saveDepartures(depRooms, depLog);
+}
+
+// ── Note input — debounced, never re-renders the board ─────
+let _noteDebounceTimer = null;
+function depNoteInput(i, value) {
+  depRooms[i].note = value;
+  clearTimeout(_noteDebounceTimer);
+  _noteDebounceTimer = setTimeout(() => saveDeps(), 800);
 }
 
 // ── Extension field updater ────────────────────────────────
