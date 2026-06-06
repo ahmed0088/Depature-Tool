@@ -1007,7 +1007,7 @@ function depCardHTML(r) {
         </div>
         <div class="dc-note-body" style="${r.note ? '' : 'display:none;'}">
           <textarea class="dc-note" placeholder="Luggage stored, guest requests, complaints…"
-            onchange="depRooms[${i}].note=this.value;saveDeps()">${escapeHtml(r.note)}</textarea>
+            oninput="depRooms[${i}].note=this.value;saveDeps()">${escapeHtml(r.note)}</textarea>
         </div>
       </div>
     </div>
@@ -1042,20 +1042,35 @@ function depCheckOut(i) {
 
 // ── Timestamp stamp button ─────────────────────────────────
 function depStampNote(i) {
-  const t    = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
-  const sep  = depRooms[i].note ? '\n' : '';
+  const t   = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  const sep = depRooms[i].note ? '\n' : '';
   depRooms[i].note += sep + `[${t}] `;
-  // Update the textarea in DOM immediately
-  const textareas = document.querySelectorAll('.dc-note');
-  // find the right one by re-rendering
-  depRender();
-  // focus the right textarea after render — find by room
-  setTimeout(() => {
-    const cards = document.querySelectorAll('.dep-card');
-    const filtered = [...document.querySelectorAll('.dep-card')];
-    // just save — user will type after
-    saveDeps();
-  }, 50);
+
+  // Find the card and update textarea directly — no full re-render
+  const card = [...document.querySelectorAll('.dep-card')]
+    .find(c => c.dataset.room === depRooms[i].roomStr);
+  if (card) {
+    const ta = card.querySelector('.dc-note');
+    const body = card.querySelector('.dc-note-body');
+    const arrow = card.querySelector('.dc-note-arrow');
+    const lbl = card.querySelector('.dc-note-lbl');
+    if (ta) {
+      ta.value = depRooms[i].note;
+      // Make sure the note section is open
+      if (body) body.style.display = 'block';
+      if (arrow) arrow.textContent = '▾';
+      // Update preview snippet in header
+      const preview = card.querySelector('.dc-note-preview');
+      if (preview) {
+        const first = depRooms[i].note.split('\n')[0].substring(0, 30);
+        preview.textContent = first + (depRooms[i].note.length > 30 ? '…' : '');
+      }
+      // Focus at end
+      ta.focus();
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+    }
+  }
+  saveDeps();
 }
 
 // ── Guest intent ───────────────────────────────────────────

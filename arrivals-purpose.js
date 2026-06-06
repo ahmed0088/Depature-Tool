@@ -250,7 +250,15 @@ function purposeRender() {
   });
   const tbody = document.getElementById('purposeTable'); if (!tbody) return;
   if (!purposeGuests.length) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:36px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">No guests loaded. Sync from Arrivals, upload, or add manually.</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:28px 36px;">
+      <div style="font-family:var(--mono);font-size:0.7rem;color:var(--text3);margin-bottom:14px;">
+        No guests loaded. Sync from Arrivals, upload a file, or add manually.
+      </div>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+        <button class="btn mint" onclick="syncFromArrivals()" style="font-size:0.72rem;">↑ Sync from Arrivals</button>
+        <button class="btn gold" onclick="openAddGuest('purpose')" style="font-size:0.72rem;">+ Add Guest Manually</button>
+      </div>
+    </td></tr>`;
     purposeKpiUpdate(); return;
   }
   tbody.innerHTML = filtered.map(g => {
@@ -389,7 +397,9 @@ function saveGuest() {
   closeModal();
 }
 
-// ── OPERA FILE LOADER ─────────────────────────────────────
+function purposeAddManual() {
+  openAddGuest('purpose');
+}
 function loadOperaFile(input, target) {
   const file = input.files[0]; if (!file) return;
   const ext  = file.name.split('.').pop().toLowerCase();
