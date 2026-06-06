@@ -15,12 +15,11 @@
 //  · Data lives in Firebase at: hotels/ibis_dubai/guestMemory
 //    (shared across all colleagues on same shift)
 //
-//  INTEGRATION — 4 steps:
-//  1. <script src="guest-memory.js"></script>  (before </body>)
-//  2. Call gmInit() inside your app init (after dbInit())
-//  3. Call gmAutoFill(arrGuests)  after loadArrivals() / loadPurpose()
-//  4. Attach gmOnEdit(name, field, value) to nat/email onchange handlers
-//     (replace existing inline handlers — see patch below)
+//  FIX NOTES:
+//  · fbListen callback now retroactively fills any guests
+//    already loaded before Firebase responded (_gmReady race)
+//  · gmAutoFill is called AFTER runAINat in arrivals-purpose.js
+//    so memory values always beat AI-guessed values
 // ═══════════════════════════════════════════════════════════
 
 // ── In-memory cache ───────────────────────────────────────
@@ -47,6 +46,19 @@ function gmInit() {
     _gmReady = true;
     _gmUpdateUI();
     console.log(`[GuestMemory] loaded — ${Object.keys(_gmStore).length} profiles`);
+
+    // ── FIX: self-healing fill ────────────────────────────
+    // If Firebase was slow and guests were already loaded before
+    // _gmReady became true, retroactively fill them now.
+    let didFill = false;
+    if (typeof arrGuests !== 'undefined' && arrGuests.length) {
+      const n = gmAutoFill(arrGuests);
+      if (n > 0) { didFill = true; if (typeof arrRender === 'function') arrRender(); }
+    }
+    if (typeof purposeGuests !== 'undefined' && purposeGuests.length) {
+      const n = gmAutoFill(purposeGuests);
+      if (n > 0) { didFill = true; if (typeof purposeRender === 'function') purposeRender(); }
+    }
   });
 }
 
@@ -81,7 +93,7 @@ function gmAutoFill(guests) {
       // Bump hit counter and last seen
       profile.hits     = (profile.hits || 0) + 1;
       profile.lastSeen = new Date().toISOString().split('T')[0];
-      g._fromMemory    = true;   // flag for visual indicator
+      g._fromMemory    = true;   // flag for visual indicator (blue border)
     }
   });
   if (filled) {

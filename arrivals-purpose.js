@@ -99,10 +99,10 @@ function arrRender() {
       </select></td>
       <td><input type="number" value="${g.nights}" onchange="arrGuests[${i}].nights=this.value;arrKpiUpdate()" style="width:42px;"/></td>
       <td><div style="display:flex;gap:3px;align-items:center;">
-        <input value="${g.nat}" onchange="arrGuests[${i}].nat=this.value" style="width:86px;"/>
+        <input value="${g.nat}" onchange="arrGuests[${i}].nat=this.value;gmOnEdit(arrGuests[${i}].name,'nat',this.value);saveArrivals(arrGuests)" style="width:86px;${g._fromMemory?'border-color:var(--sky);':''}"/>
         <button class="icon-btn ai-btn" onclick="aiOneGuest(${i},'arr')" title="AI guess">✦</button>
       </div></td>
-      <td><input value="${g.email}"   onchange="arrGuests[${i}].email=this.value" style="width:138px;"/></td>
+      <td><input value="${g.email}"   onchange="arrGuests[${i}].email=this.value;gmOnEdit(arrGuests[${i}].name,'email',this.value);saveArrivals(arrGuests)" style="width:138px;${g._fromMemory?'border-color:var(--sky);':''}"/></td>
       <td><input value="${g.source}"  onchange="arrGuests[${i}].source=this.value" style="width:100px;"/></td>
       <td><input value="${g.remarks}" onchange="arrGuests[${i}].remarks=this.value" style="width:86px;"/></td>
       <td><button class="icon-btn" onclick="arrRemoveGuest(${i})">✕</button></td>
@@ -134,6 +134,8 @@ async function aiOneGuest(i, list) {
   arrRender(); purposeRender();
 }
 
+// ── FIX: gmAutoFill now runs AFTER the AI guesser so memory
+//         always wins over guessed nationalities.
 function loadArrivals() {
   const raw = document.getElementById('arrInput').value.trim();
   if (!raw) { alert('Please paste data first.'); return; }
@@ -155,11 +157,20 @@ function loadArrivals() {
       remarks:'' });
   }
   if (!guests.length) { alert('No guests found.'); return; }
-  arrGuests = guests; arrRender(); setTimeout(() => runAINat_arr(), 300);
+  arrGuests = guests;
+  arrRender();
+  // Run AI guesser first, then apply memory on top so saved data always wins
+  setTimeout(() => {
+    runAINat_arr().then(() => {
+      if (typeof gmAutoFill === 'function') gmAutoFill(arrGuests);
+      arrRender();
+    });
+  }, 300);
   addArrLog('Loaded', `${guests.length} guests loaded from paste`);
+  logActivity('arrivals_loaded', `${guests.length} guests`);
 }
 
-function clearArrivals() { arrGuests = []; arrRender(); saveArrivals([]); addArrLog('Cleared', 'All arrivals cleared'); }
+function clearArrivals() { arrGuests = []; arrRender(); saveArrivals([]); addArrLog('Cleared', 'All arrivals cleared'); logActivity('arrivals_cleared', ''); }
 
 function exportArrivals() {
   const wb   = XLSX.utils.book_new();
@@ -246,7 +257,15 @@ function purposeRender() {
   });
   const tbody = document.getElementById('purposeTable'); if (!tbody) return;
   if (!purposeGuests.length) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:36px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">No guests loaded. Sync from Arrivals, upload, or add manually.</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:28px 36px;">
+      <div style="font-family:var(--mono);font-size:0.7rem;color:var(--text3);margin-bottom:14px;">
+        No guests loaded. Sync from Arrivals, upload a file, or add manually.
+      </div>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+        <button class="btn mint" onclick="syncFromArrivals()" style="font-size:0.72rem;">↑ Sync from Arrivals</button>
+        <button class="btn gold" onclick="openAddGuest('purpose')" style="font-size:0.72rem;">+ Add Guest Manually</button>
+      </div>
+    </td></tr>`;
     purposeKpiUpdate(); return;
   }
   tbody.innerHTML = filtered.map(g => {
@@ -260,10 +279,10 @@ function purposeRender() {
       </select></td>
       <td><input type="number" value="${g.nights}" onchange="purposeGuests[${i}].nights=this.value" style="width:42px;"/></td>
       <td><div style="display:flex;gap:3px;align-items:center;">
-        <input value="${g.nat}" onchange="purposeGuests[${i}].nat=this.value" style="width:86px;"/>
+        <input value="${g.nat}" onchange="purposeGuests[${i}].nat=this.value;gmOnEdit(purposeGuests[${i}].name,'nat',this.value);savePurpose(purposeGuests)" style="width:86px;${g._fromMemory?'border-color:var(--sky);':''}"/>
         <button class="icon-btn ai-btn" onclick="aiOneGuest(${i},'purpose')" title="AI">✦</button>
       </div></td>
-      <td><input value="${g.email}"   onchange="purposeGuests[${i}].email=this.value" style="width:138px;"/></td>
+      <td><input value="${g.email}"   onchange="purposeGuests[${i}].email=this.value;gmOnEdit(purposeGuests[${i}].name,'email',this.value);savePurpose(purposeGuests)" style="width:138px;${g._fromMemory?'border-color:var(--sky);':''}"/></td>
       <td><input value="${g.source}"  onchange="purposeGuests[${i}].source=this.value" style="width:100px;"/></td>
       <td><input value="${g.remarks}" onchange="purposeGuests[${i}].remarks=this.value" style="width:86px;"/></td>
       <td><button class="icon-btn" onclick="purposeRemoveGuest(${i})">✕</button></td>
@@ -292,6 +311,8 @@ function clearPurpose() {
   addPurposeLog('Cleared', 'All guests cleared');
 }
 
+// ── FIX: gmAutoFill now runs AFTER the AI guesser so memory
+//         always wins over guessed nationalities.
 function loadPurpose() {
   const raw = document.getElementById('purposeInput').value.trim();
   if (!raw) { alert('Please paste data first.'); return; }
@@ -311,7 +332,15 @@ function loadPurpose() {
       source:cleanSource(taI>=0?(p[taI]||'').trim():'', coI>=0?(p[coI]||'').trim():'', srcI>=0?(p[srcI]||'').trim():''),
       remarks:'' });
   }
-  purposeGuests = guests; purposeRender(); setTimeout(() => runAINat_purpose(), 300);
+  purposeGuests = guests;
+  purposeRender();
+  // Run AI guesser first, then apply memory on top so saved data always wins
+  setTimeout(() => {
+    runAINat_purpose().then(() => {
+      if (typeof gmAutoFill === 'function') gmAutoFill(purposeGuests);
+      purposeRender();
+    });
+  }, 300);
   addPurposeLog('Loaded', `${guests.length} guests loaded from paste`);
 }
 
@@ -382,7 +411,12 @@ function saveGuest() {
   closeModal();
 }
 
-// ── OPERA FILE LOADER ─────────────────────────────────────
+function purposeAddManual() {
+  openAddGuest('purpose');
+}
+
+// ── FIX: gmAutoFill now runs AFTER the AI guesser so memory
+//         always wins over guessed nationalities (file upload path).
 function loadOperaFile(input, target) {
   const file = input.files[0]; if (!file) return;
   const ext  = file.name.split('.').pop().toLowerCase();
@@ -426,8 +460,26 @@ function loadOperaFile(input, target) {
         });
       }
       if (!guests.length) { alert('No valid guest rows found.'); return; }
-      if (target === 'arr') { arrGuests = guests; arrRender(); setTimeout(() => runAINat_arr(), 400); }
-      else { purposeGuests = guests; purposeRender(); setTimeout(() => runAINat_purpose(), 400); }
+      // Run AI guesser first, then apply memory on top so saved data always wins
+      if (target === 'arr') {
+        arrGuests = guests;
+        arrRender();
+        setTimeout(() => {
+          runAINat_arr().then(() => {
+            if (typeof gmAutoFill === 'function') gmAutoFill(arrGuests);
+            arrRender();
+          });
+        }, 400);
+      } else {
+        purposeGuests = guests;
+        purposeRender();
+        setTimeout(() => {
+          runAINat_purpose().then(() => {
+            if (typeof gmAutoFill === 'function') gmAutoFill(purposeGuests);
+            purposeRender();
+          });
+        }, 400);
+      }
     } catch (err) { console.error(err); alert('Error: ' + err.message); }
   };
   reader.readAsArrayBuffer(file);

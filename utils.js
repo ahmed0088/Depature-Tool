@@ -24,26 +24,34 @@ function showPanel(name) {
 
 // ── Clipboard ─────────────────────────────────────────────
 function copyToClipboard(text, btn, label) {
-  const done = () => {
+  const done = (ok) => {
     if (!btn) return;
-    btn.textContent = '✅ Copied!';
+    btn.textContent = ok ? '✅ Copied!' : '⚠️ Copy failed';
     setTimeout(() => { btn.textContent = label; }, 3000);
   };
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(text).then(done).catch(() => fbCopy(text, done));
+  // Modern async clipboard API (works on desktop + mobile HTTPS)
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => done(true)).catch(() => fbCopy(text, done));
   } else {
     fbCopy(text, done);
   }
 }
 function fbCopy(text, cb) {
-  const ta = document.createElement('textarea');
-  ta.value = text;
-  ta.style.cssText = 'position:fixed;opacity:0';
-  document.body.appendChild(ta);
-  ta.select();
-  document.execCommand('copy');
-  document.body.removeChild(ta);
-  if (cb) cb();
+  // Fallback: create off-screen textarea, force select, then copy
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    // Must be visible & in viewport for iOS to allow selection
+    ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0.01;font-size:16px;border:none;outline:none;';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.setSelectionRange(0, ta.value.length); // explicit range — more reliable than ta.select() on iOS
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    if (cb) cb(ok);
+  } catch (e) {
+    if (cb) cb(false);
+  }
 }
 
 // ── Name / source cleaners ────────────────────────────────
@@ -99,10 +107,14 @@ function fmtDateExcel(d) {
 }
 function parseOperaDate(s) {
   if (!s) return null;
-  const p = s.trim().split('-');
+  const p = s.trim().split(/[-\/]/);
   if (p.length !== 3) return null;
-  const yr = parseInt(p[2]) + (parseInt(p[2]) < 100 ? 2000 : 0);
-  return new Date(yr, parseInt(p[1]) - 1, parseInt(p[0]));
+  const months = { JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11 };
+  const day    = parseInt(p[0]);
+  const yr     = parseInt(p[2]) + (parseInt(p[2]) < 100 ? 2000 : 0);
+  const monIdx = months[p[1].toUpperCase()];
+  if (monIdx !== undefined) return new Date(yr, monIdx, day);
+  return new Date(yr, parseInt(p[1]) - 1, day);
 }
 function parseExcelDate(s) {
   if (!s) return null;
@@ -146,9 +158,17 @@ function showToast(msg, type = 'ok') {
 function setTheme(name, btn) {
   document.documentElement.setAttribute('data-theme', name);
   document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+  // sync login theme buttons too
+  document.querySelectorAll('.login-theme-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.t === name);
+  });
   const target = btn || document.querySelector(`.theme-btn[data-t="${name}"]`);
   if (target) target.classList.add('active');
   saveSettings({ theme: name });
+  // save to user profile so it persists across devices
+  if (typeof saveThemeToProfile === 'function') saveThemeToProfile(name);
+  // sync login screen colors if visible
+  if (typeof _applyLoginTheme === 'function') _applyLoginTheme(name);
 }
 
 function toggleTheme() {

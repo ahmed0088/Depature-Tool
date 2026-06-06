@@ -129,11 +129,12 @@ function stToggle(key, id) {
   const shift = SHIFTS[key];
   const task  = shift.tasks.find(t => t.id === id);
   const idx   = shift.done.indexOf(id);
-  if (idx >= 0) { shift.done.splice(idx, 1); stLog(key, 'undone', task?.name || id); }
-  else          { shift.done.push(id);        stLog(key, 'done',   task?.name || id); }
+  if (idx >= 0) { shift.done.splice(idx, 1); stLog(key, 'undone', task?.name || id); logActivity('shift_task_undone', `[${SHIFTS[key].label}] ${task?.name || id}`); }
+  else          { shift.done.push(id);        stLog(key, 'done',   task?.name || id); logActivity('shift_task_done',  `[${SHIFTS[key].label}] ${task?.name || id}`); }
   _renderShiftContent(key);
   updateShiftBadge(key);
   saveShifts(SHIFTS);
+  if (typeof isOnline === 'function' && !isOnline()) showToast('Saved locally — offline', 'info');
 }
 
 // ── Move up/down ──────────────────────────────────────────
@@ -197,6 +198,7 @@ function stAddTask(key) {
   if (nEl) nEl.value = '';
   if (hEl) hEl.value = '';
   stLog(key, 'added', name);
+  logActivity('shift_task_added', `[${SHIFTS[key].label}] ${name}`);
   _renderShiftContent(key);
   saveShifts(SHIFTS);
 }
@@ -205,6 +207,7 @@ function stDelete(key, id) {
   if (!confirm('Delete this task?')) return;
   const task = SHIFTS[key].tasks.find(t => t.id === id);
   stLog(key, 'deleted', task?.name || id);
+  logActivity('shift_task_deleted', `[${SHIFTS[key].label}] ${task?.name || id}`);
   SHIFTS[key].tasks = SHIFTS[key].tasks.filter(t => t.id !== id);
   SHIFTS[key].done  = SHIFTS[key].done.filter(d => d !== id);
   _renderShiftContent(key);
@@ -239,9 +242,11 @@ function resetShift(key) {
   SHIFTS[key].done    = [];
   SHIFTS[key].resetAt = new Date().toLocaleString('en-GB');
   stLog(key, 'reset', 'All tasks');
+  logActivity('shift_reset', SHIFTS[key].label);
   _renderShiftContent(key);
   saveShifts(SHIFTS);
-  showToast('Shift reset ✓');
+  const isOffline = typeof isOnline === 'function' && !isOnline();
+  showToast(isOffline ? 'Shift reset ✓ (offline — will sync when reconnected)' : 'Shift reset ✓', isOffline ? 'info' : 'ok');
 }
 
 // ── Badge update ──────────────────────────────────────────

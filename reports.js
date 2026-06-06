@@ -19,6 +19,20 @@ const NAME_MAP = {
   "Viet Nam":"Vietnam","South Korea":"Korea, Republic of (South)",
   "North Korea":"Korea, Democratic People's Republic of (North)",
   "Cabo Verde":"Cape Verde","Brunei Darussalam":"Brunei",
+  "Burkina Fasa":"Burkina Faso",
+  "Korea (South)":"Korea, Republic of (South)",
+  "Libyan Arab Jamahiriya":"Libya",
+  "Bosnia Herzegovina":"Bosnia-Herzegovina",
+  "Congo":"Congo (Republic of the Congo)",
+  "Congo, The Democratic Republic of the":"Congo, Dem. Rep. of (Zaire)",
+  "Kyrgzstan":"Kyrghyzstan",
+  "Congo (Brazzaville)":"Congo (Republic of the Congo)",
+  "Saint Barthélemy":"Saint Barthelemy",
+  "Unknown":null,
+  "UNKNOWN":null,
+  "unknown":null,
+  "No Nationality":null,
+  "Not Specified":null,
 };
 function resolveCountry(name) {
   if (!name) return { excel: null, isUnknown: true };
@@ -29,32 +43,102 @@ function resolveCountry(name) {
 }
 
 // ── NATIONALITY REPORT ────────────────────────────────────
+function natRestoreSaved() {
+  try {
+    const saved = localStorage.getItem('ibis_nat_paste');
+    if (saved) { const el = document.getElementById('natInput'); if(el && !el.value.trim()) { el.value = saved; showToast('Last session data restored ↩'); } }
+  } catch(e) {}
+}
+// Restore saved paste on page load
+if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', natRestoreSaved); } else { setTimeout(natRestoreSaved, 400); }
+
 function processNat() {
   const raw    = document.getElementById('natInput').value.trim();
+  window._natReportMonth = null; window._natDates = null;
+  if (raw) { try { localStorage.setItem('ibis_nat_paste', raw); } catch(e){} }
   const errBox = document.getElementById('natError'); errBox.classList.remove('show');
   const showErr = msg => { document.getElementById('natErrorMsg').textContent = msg; errBox.classList.add('show'); };
   if (!raw) return showErr('Paste the Opera nationality report first.');
   const lines = raw.split('\n'); if (lines.length < 2) return showErr('File empty.');
   const headers = lines[0].split('\t'); const idx = {};
   headers.forEach((h, i) => { idx[h.trim()] = i; });
-  const needed = ['VALUE_CODE','COUNTRY_CODE','COUNTRY_NAME','SUMVALUEPERCOUNTRY_CODE','SUMVALUEPERVALUE_CODE'];
+  // Detect format early for column validation
+  const isNewFormatCheck = idx['ARR_ROOMS'] !== undefined && idx['ARR_PERSONS'] !== undefined;
+  const needed = isNewFormatCheck
+    ? ['COUNTRY_CODE','COUNTRY_NAME','ARR_PERSONS','STAY_ROOMS','STAY_PERSONS']
+    : ['VALUE_CODE','COUNTRY_CODE','COUNTRY_NAME','SUMVALUEPERCOUNTRY_CODE','SUMVALUEPERVALUE_CODE'];
   const miss   = needed.filter(k => idx[k] === undefined);
   if (miss.length) return showErr('Missing columns: ' + miss.join(', '));
 
+  // Detect format: new single-row format has ARR_ROOMS/ARR_PERSONS columns; old format uses separate APR/RMS/PRS rows
+  const isNewFormat = idx['ARR_ROOMS'] !== undefined && idx['ARR_PERSONS'] !== undefined;
+
   const seenKey = new Set(), operaRaw = {};
   let grandAPR=0,grandRMS=0,grandPRS=0,fA=false,fR=false,fP=false;
-  for (let i = 1; i < lines.length; i++) {
-    const p    = lines[i].split('\t'); if (p.length < 22) continue;
-    const code = (p[idx['VALUE_CODE']]||'').trim(); if (!['RMS','APR','PRS'].includes(code)) continue;
-    const gtot = parseInt(p[idx['SUMVALUEPERVALUE_CODE']]||'0')||0;
-    if (code==='APR'&&!fA&&gtot>0){grandAPR=gtot;fA=true;}
-    if (code==='RMS'&&!fR&&gtot>0){grandRMS=gtot;fR=true;}
-    if (code==='PRS'&&!fP&&gtot>0){grandPRS=gtot;fP=true;}
-    const name = (p[idx['COUNTRY_NAME']]||'').trim();
-    const key  = (p[idx['COUNTRY_CODE']]||'').trim() + '|' + code;
-    if (seenKey.has(key) || !name) continue; seenKey.add(key);
-    if (!operaRaw[name]) operaRaw[name] = {APR:0,RMS:0,PRS:0};
-    operaRaw[name][code] = parseInt(p[idx['SUMVALUEPERCOUNTRY_CODE']])||0;
+
+  if (isNewFormat) {
+    // ── New format: one row per country, arrivals in ARR_* columns ──
+    // Grand totals: grab from the first data row (all rows share the same totals)
+    for (let i = 1; i < lines.length; i++) {
+      const p = lines[i].split('\t'); if (p.length < 22) continue;
+      const name = (p[idx['COUNTRY_NAME']]||'').trim(); if (!name) continue;
+      const arrR  = parseInt(p[idx['ARR_ROOMS']]   ||'0')||0;
+      const arrP  = parseInt(p[idx['ARR_PERSONS']] ||'0')||0;
+      const stayR = parseInt(p[idx['STAY_ROOMS']]  ||'0')||0;
+      const stayP = parseInt(p[idx['STAY_PERSONS']]||'0')||0;
+      const arrPly  = parseInt(p[idx['ARR_PERSONS_LY']]  ||'0')||0;
+      const stayRly = parseInt(p[idx['STAY_ROOMS_LY']]   ||'0')||0;
+      const stayPly = parseInt(p[idx['STAY_PERSONS_LY']] ||'0')||0;
+      // Auto-detect report month — collect all dates, derive month from range
+      if (idx['BUSINESS_DATE'] !== undefined) {
+        const ds = (p[idx['BUSINESS_DATE']]||'').trim();
+        if (ds) { const d = new Date(ds); if (!isNaN(d)) { if (!window._natDates) window._natDates=[]; window._natDates.push(d); } }
+      }
+      if (!window._natReportMonth && idx['MONTH'] !== undefined) {
+        const ms = (p[idx['MONTH']]||'').trim(); if (ms) window._natReportMonth = ms;
+      }
+      const key = (p[idx['COUNTRY_CODE']]||'').trim() + '|NAT';
+      if (seenKey.has(key) || !name) continue; seenKey.add(key);
+      if (!operaRaw[name]) operaRaw[name] = {APR:0,RMS:0,PRS:0,APRLY:0,RMSLY:0,PRSLY:0};
+      operaRaw[name].APR = arrP;   // Arrival Persons
+      operaRaw[name].RMS = stayR;  // Stay Rooms
+      operaRaw[name].PRS = stayP;  // Stay Persons
+      operaRaw[name].APRLY = arrPly;
+      operaRaw[name].RMSLY = stayRly;
+      operaRaw[name].PRSLY = stayPly;
+      grandAPR += arrP;
+      grandRMS += stayR;
+      grandPRS += stayP;
+    }
+    fA=true; fR=true; fP=true;
+    // Derive month label from date range collected across all rows
+    if (!window._natReportMonth && window._natDates && window._natDates.length > 0) {
+      const minD = new Date(Math.min(...window._natDates));
+      const maxD = new Date(Math.max(...window._natDates));
+      if (minD.getMonth() === maxD.getMonth() && minD.getFullYear() === maxD.getFullYear()) {
+        // All dates in same month — show that month
+        window._natReportMonth = minD.toLocaleString('en-GB',{month:'long',year:'numeric'});
+      } else {
+        // Spans multiple months — show range
+        window._natReportMonth = minD.toLocaleString('en-GB',{month:'short',year:'numeric'}) + ' – ' + maxD.toLocaleString('en-GB',{month:'short',year:'numeric'});
+      }
+    }
+    window._natDates = null;
+  } else {
+    // ── Old format: separate rows per VALUE_CODE (APR / RMS / PRS) ──
+    for (let i = 1; i < lines.length; i++) {
+      const p    = lines[i].split('\t'); if (p.length < 22) continue;
+      const code = (p[idx['VALUE_CODE']]||'').trim(); if (!['RMS','APR','PRS'].includes(code)) continue;
+      const gtot = parseInt(p[idx['SUMVALUEPERVALUE_CODE']]||'0')||0;
+      if (code==='APR'&&!fA&&gtot>0){grandAPR=gtot;fA=true;}
+      if (code==='RMS'&&!fR&&gtot>0){grandRMS=gtot;fR=true;}
+      if (code==='PRS'&&!fP&&gtot>0){grandPRS=gtot;fP=true;}
+      const name = (p[idx['COUNTRY_NAME']]||'').trim();
+      const key  = (p[idx['COUNTRY_CODE']]||'').trim() + '|' + code;
+      if (seenKey.has(key) || !name) continue; seenKey.add(key);
+      if (!operaRaw[name]) operaRaw[name] = {APR:0,RMS:0,PRS:0,APRLY:0,RMSLY:0,PRSLY:0};
+      operaRaw[name][code] = parseInt(p[idx['SUMVALUEPERCOUNTRY_CODE']])||0;
+    }
   }
   const excelData={}, unknowns=[], unmatched=[];
   for (const [opName, vals] of Object.entries(operaRaw)) {
@@ -66,13 +150,44 @@ function processNat() {
   let mappedAPR=0,mappedRMS=0,mappedPRS=0,active=0;
   const rows = [];
   EXCEL_COUNTRIES.forEach(c => {
-    const v = excelData[c] || {APR:0,RMS:0,PRS:0};
+    const v = excelData[c] || {APR:0,RMS:0,PRS:0,APRLY:0,RMSLY:0,PRSLY:0};
     rows.push(v); mappedAPR+=v.APR; mappedRMS+=v.RMS; mappedPRS+=v.PRS;
     if (v.APR||v.RMS||v.PRS) active++;
   });
   if (!grandAPR) grandAPR=mappedAPR; if (!grandRMS) grandRMS=mappedRMS; if (!grandPRS) grandPRS=mappedPRS;
   const gapAPR=grandAPR-mappedAPR, gapRMS=grandRMS-mappedRMS, gapPRS=grandPRS-mappedPRS;
-  natCopyText = rows.map(v => v.APR+'\t'+v.RMS+'\t'+v.PRS).join('\n');
+  const z = n => n === 0 ? '' : n;
+
+  // Store rows + unknown totals for optional UAE merge (toggled by checkbox)
+  const unkTotals = unknowns.reduce((a,u)=>({APR:a.APR+u.APR,RMS:a.RMS+u.RMS,PRS:a.PRS+u.PRS}),{APR:0,RMS:0,PRS:0});
+  window._natRows = rows; window._natUnkTotals = unkTotals;
+  const uaeIdx = EXCEL_COUNTRIES.indexOf('United Arab Emirates');
+  function buildNatCopy() {
+    const mergeUnk = document.getElementById('mergeUnkChk') && document.getElementById('mergeUnkChk').checked;
+    return window._natRows.map((v,i) => {
+      let apr=v.APR, rms=v.RMS, prs=v.PRS;
+      if (mergeUnk && i === uaeIdx) { apr+=window._natUnkTotals.APR; rms+=window._natUnkTotals.RMS; prs+=window._natUnkTotals.PRS; }
+      return z(apr)+'\t'+z(rms)+'\t'+z(prs);
+    }).join('\n');
+  }
+  window._buildNatCopy = buildNatCopy;
+  natCopyText = buildNatCopy();
+
+  // F1: Show auto-detected report month
+  const monthLabel = window._natReportMonth || '';
+  const mlEl = document.getElementById('natMonthLabel');
+  if (mlEl) { mlEl.textContent = monthLabel ? '📅 ' + monthLabel : ''; mlEl.style.display = monthLabel ? 'block' : 'none'; }
+
+  // F4: Sync nationality totals to handover app via localStorage
+  try {
+    localStorage.setItem('ibis_nat_sync', JSON.stringify({
+      month: monthLabel,
+      grandAPR, grandRMS, grandPRS,
+      mappedAPR, mappedRMS, mappedPRS,
+      active,
+      ts: new Date().toISOString()
+    }));
+  } catch(e) {}
 
   ['kpi-apr','kpi-rms','kpi-prs'].forEach((id,i) => { const el=document.getElementById(id); if(el) el.textContent=[grandAPR,grandRMS,grandPRS][i].toLocaleString(); });
 
@@ -83,20 +198,78 @@ function processNat() {
     const lbl=['New Arrivals','Room Nights','Guest Nights'][ki];
     return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:11px 13px;"><div style="font-family:var(--mono);font-size:0.56rem;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid var(--border);">${lbl}</div><div style="display:flex;justify-content:space-between;padding:3px 0;font-size:0.72rem;"><span style="color:var(--text3);">Opera</span><span style="font-family:var(--mono);">${op.toLocaleString()}</span></div><div style="display:flex;justify-content:space-between;padding:3px 0;font-size:0.72rem;"><span style="color:var(--text3);">Placed</span><span style="font-family:var(--mono);color:var(--text2);">${mp.toLocaleString()}</span></div><div style="display:flex;justify-content:space-between;padding:3px 0;font-size:0.72rem;"><span style="color:var(--text3);">Gap</span><span style="font-family:var(--mono);color:${gp>0?'var(--amber)':'var(--mint)'};">${gp>0?'−'+gp:'✓ 0'}</span></div></div>`;
   }).join('');
-  document.getElementById('natUnknownList').innerHTML  = unknowns.length===0 ? aS('ok','✅','No unknown guests','Perfect.') : unknowns.map(u=>aS('warn','⚠️',`"${u.name}" — ${u.APR} arrivals`,'No nationality code.')).join('');
+  const unkListHTML = unknowns.length===0 ? aS('ok','✅','No unknown guests','Perfect.') : unknowns.map(u=>aS('warn','⚠️',`"${u.name}" — ${u.APR} arrivals`,'No nationality code.')).join('');
+  const mergeChkHTML = unknowns.length > 0 ? `<label style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:9px 12px;border-radius:var(--r);background:rgba(90,180,232,0.05);border:1px solid rgba(90,180,232,0.15);cursor:pointer;font-size:0.72rem;color:var(--text2);user-select:none;"><input type="checkbox" id="mergeUnkChk" style="accent-color:var(--sky);width:14px;height:14px;cursor:pointer;" onchange="natCopyText=window._buildNatCopy&&window._buildNatCopy();window._renderNatPreview&&window._renderNatPreview();"> Merge unknown nationality into <strong style="color:var(--sky);margin-left:3px;">United Arab Emirates</strong></label>` : '';
+  document.getElementById('natUnknownList').innerHTML = unkListHTML + mergeChkHTML;
   document.getElementById('natUnmatchedList').innerHTML = unmatched.length===0 ? aS('ok','✅','All countries matched','No data lost.') : unmatched.map(u=>aS('error','🔴',`"${u.name}" — NOT PLACED`,'Country has no Excel row.')).join('');
   const badge = document.getElementById('natDiagBadge'); const hasIssues = unknowns.length>0||unmatched.length>0;
   if (badge) { badge.style.color = hasIssues?'var(--amber)':'var(--mint)'; badge.textContent = hasIssues?`${unknowns.length} unk · ${unmatched.length} unmatched`:'✓ Clean'; }
   ['gap-apr','gap-rms','gap-prs'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.textContent=[gapAPR,gapRMS,gapPRS][i]>0?'−'+[gapAPR,gapRMS,gapPRS][i]:'0';});
   ['s-active','s-zero','s-unmat','s-unk'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.textContent=[active,240-active,unmatched.length,unknowns.length][i];});
-  document.getElementById('natPreview').innerHTML = EXCEL_COUNTRIES.map((c,i) => {
-    const v=rows[i]; const rn=i+8; const has=v.APR||v.RMS||v.PRS; const sn=c.length>22?c.substring(0,21)+'…':c;
-    return `<div style="display:grid;grid-template-columns:36px 1fr 54px 54px 54px;padding:3px 12px;border-bottom:1px solid rgba(255,255,255,0.02);${has?'background:rgba(90,180,232,0.03);':''}"><span style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);">${rn}</span><span style="font-size:0.68rem;color:${has?'var(--text2)':'var(--text3)'};" title="${c}">${sn}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--sky)':'var(--border2)'};">${v.APR}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--gold)':'var(--border2)'};">${v.RMS}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--mint)':'var(--border2)'};">${v.PRS}</span></div>`;
-  }).join('');
+  const hasLY = rows.some(v => v.APRLY || v.RMSLY || v.PRSLY);
+  const pctStr = (cur, ly) => {
+    if (!ly) return '';
+    const d = ((cur - ly) / ly * 100);
+    const clr = d >= 0 ? 'var(--mint)' : 'var(--rose)';
+    return `<span style="font-family:var(--mono);font-size:0.54rem;color:${clr};margin-left:3px;">${d>=0?'+':''}${d.toFixed(0)}%</span>`;
+  };
+  // Store on window so renderNatPreview can access after processNat finishes
+  window._natHasLY = hasLY;
+  window._natPctStr = pctStr;
+  window._natRows = rows;
+  window._natUnkTotals = unkTotals;
+
+  function renderNatPreview() {
+    const merge = document.getElementById('mergeUnkChk') && document.getElementById('mergeUnkChk').checked;
+    const q = (window._natSearchQ || '').toLowerCase().trim();
+    const uaeRow = merge ? {
+      APR:   rows[uaeIdx].APR   + window._natUnkTotals.APR,
+      RMS:   rows[uaeIdx].RMS   + window._natUnkTotals.RMS,
+      PRS:   rows[uaeIdx].PRS   + window._natUnkTotals.PRS,
+      APRLY: rows[uaeIdx].APRLY, RMSLY: rows[uaeIdx].RMSLY, PRSLY: rows[uaeIdx].PRSLY
+    } : null;
+    // Sync header columns
+    const prevHdr = document.getElementById('natPreviewHeader');
+    if (prevHdr) {
+      prevHdr.style.gridTemplateColumns = hasLY ? '36px 1fr 54px 54px 54px 54px' : '36px 1fr 54px 54px 54px';
+      if (hasLY) prevHdr.innerHTML = '<span style="font-family:var(--mono);font-size:0.53rem;color:var(--text3);">ROW</span><span style="font-family:var(--mono);font-size:0.53rem;color:var(--text3);">NATIONALITY</span><span style="font-family:var(--mono);font-size:0.53rem;color:var(--sky);text-align:right;">ARR</span><span style="font-family:var(--mono);font-size:0.53rem;color:var(--gold);text-align:right;">RMS</span><span style="font-family:var(--mono);font-size:0.53rem;color:var(--mint);text-align:right;">GST</span><span style="font-family:var(--mono);font-size:0.53rem;color:var(--text3);text-align:right;">vs LY</span>';
+    }
+    const cols = hasLY ? '36px 1fr 54px 54px 54px 54px' : '36px 1fr 54px 54px 54px';
+    document.getElementById('natPreview').innerHTML = EXCEL_COUNTRIES.map((c,i) => {
+      if (q && !c.toLowerCase().includes(q)) return '';
+      const v = (merge && i === uaeIdx) ? uaeRow : rows[i];
+      const rn=i+8; const has=v.APR||v.RMS||v.PRS; const sn=c.length>22?c.substring(0,21)+'…':c;
+      const lyBadge = hasLY && has ? pctStr(v.APR, v.APRLY) : '';
+      const uaeHL = (merge && i === uaeIdx) ? 'background:rgba(90,180,232,0.08);' : (has ? 'background:rgba(90,180,232,0.03);' : '');
+      return `<div style="display:grid;grid-template-columns:${cols};padding:3px 12px;border-bottom:1px solid rgba(255,255,255,0.02);${uaeHL}"><span style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);">${rn}</span><span style="font-size:0.68rem;color:${has?'var(--text2)':'var(--text3)'};" title="${c}">${sn}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--sky)':'var(--border2)'};">${v.APR||''}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--gold)':'var(--border2)'};">${v.RMS||''}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--mint)':'var(--border2)'};">${v.PRS||''}</span>${hasLY?`<span style="text-align:right;">${lyBadge}</span>`:''}</div>`;
+    }).join('');
+  }
+  window._renderNatPreview = renderNatPreview;
+  renderNatPreview();
+  // Inject Opera how-to instructions if element exists
+  const howToEl = document.getElementById('natHowTo');
+  if (howToEl) howToEl.innerHTML = `<div style="margin-bottom:12px;padding:11px 14px;background:rgba(90,180,232,0.05);border:1px solid rgba(90,180,232,0.15);border-left:3px solid var(--sky);border-radius:var(--r);font-size:0.7rem;color:var(--text2);line-height:1.7;">
+    <div style="font-family:var(--mono);font-size:0.6rem;letter-spacing:1px;color:var(--sky);margin-bottom:6px;">HOW TO GET THIS REPORT FROM OPERA</div>
+    <ol style="margin:0;padding-left:16px;color:var(--text3);">
+      <li>In Opera, go to <strong style="color:var(--text2);">Reports</strong> and search for <strong style="color:var(--mint);">Nationality by Month</strong></li>
+      <li>Set your <strong style="color:var(--text2);">date range</strong> to the full month you need</li>
+      <li>Under the statistics options, select the <strong style="color:var(--sky);">Nationality</strong> radio button</li>
+      <li>Tick <strong style="color:var(--sky);">Room Nights</strong> and <strong style="color:var(--sky);">Person Nights</strong></li>
+      <li>Download the report — choose <strong style="color:var(--mint);">Delimited</strong> format with <strong style="color:var(--mint);">Tab</strong> as the delimiter</li>
+      <li>Open the downloaded file <strong style="color:var(--text2);">(stat_countrybymon...)</strong>, Select All, Copy, and paste it here</li>
+    </ol>
+    <div style="margin-top:7px;padding-top:7px;border-top:1px solid rgba(90,180,232,0.1);font-family:var(--mono);font-size:0.58rem;color:var(--amber);">⚠ Make sure you select the <strong>Nationality</strong> radio button — not Country — otherwise the data will not match correctly</div>
+  </div>`;
   document.getElementById('natResults').style.display = 'block';
 }
-function copyNat()  { if (!natCopyText) return; copyToClipboard(natCopyText, document.getElementById('natCopyBtn'), 'Copy All 240 Rows'); }
-function clearNat() { document.getElementById('natInput').value=''; document.getElementById('natResults').style.display='none'; document.getElementById('natError').classList.remove('show'); natCopyText=''; }
+function natFilterPreview(q) {
+  if (!window._renderNatPreview) return;
+  window._natSearchQ = q.toLowerCase().trim();
+  window._renderNatPreview();
+}
+
+function copyNat()  { if (window._buildNatCopy) natCopyText = window._buildNatCopy(); if (!natCopyText) return; copyToClipboard(natCopyText, document.getElementById('natCopyBtn'), 'Copy All 240 Rows'); }
+function clearNat() { document.getElementById('natInput').value=''; document.getElementById('natResults').style.display='none'; document.getElementById('natError').classList.remove('show'); natCopyText=''; try { localStorage.removeItem('ibis_nat_paste'); } catch(e){} }
 
 // ── RENTED ROOMS & BEDS ───────────────────────────────────
 function parseHF(raw) {
