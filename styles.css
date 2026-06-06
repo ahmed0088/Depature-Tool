@@ -3149,11 +3149,15 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
 .gm-hit-badge { background:rgba(62,207,142,0.12); color:var(--mint); border:1px solid rgba(62,207,142,0.25); border-radius:4px; font-family:var(--mono); font-size:0.58rem; padding:1px 5px; }
 .gm-memory-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--sky); box-shadow:0 0 5px var(--sky); margin-left:4px; vertical-align:middle; }
 
+/* ── Opera theme: restore card inner padding ─────────────── */
+[data-theme="opera"] .dc-head { padding: 10px 14px 6px; }
+[data-theme="opera"] .dc-body { padding: 0 14px 12px; }
+
 /* ── Departures list view — compact rows (size-list ONLY) ─── */
 .dep-grid.size-list { gap:3px; }
 .dep-grid.size-list .dep-card { display:flex; align-items:stretch; }
 .dep-grid.size-list .dc-band { width:3px; height:auto; flex-shrink:0; }
-.dep-grid.size-list .dc-head { flex-shrink:0; flex-direction:row; align-items:center; gap:8px; padding:6px 10px; border-right:1px solid var(--border); border-top:none !important; }
+.dep-grid.size-list .dc-head { flex-shrink:0; flex-direction:row; align-items:center; gap:8px; padding:6px 10px; border-right:1px solid var(--border); }
 .dep-grid.size-list .dc-room { font-size:1rem; letter-spacing:0; min-width:28px; }
 .dep-grid.size-list .dc-head-right { flex-direction:row; align-items:center; gap:6px; }
 .dep-grid.size-list .dc-body { flex:1; display:flex; align-items:center; flex-wrap:nowrap; gap:8px; padding:5px 10px; min-width:0; }
