@@ -963,50 +963,52 @@ function depCardHTML(r) {
     ? `<div class="dep-sel-tick${isSelected ? ' checked' : ''}"></div>`
     : '';
 
+  // Compact meta line: dates · source · company
+  const metaLine = [
+    `${r.arrival}→${r.departure}`,
+    r.nights + 'n',
+    srcClean,
+    r.company ? r.company.substring(0,22) : '',
+  ].filter(Boolean).join(' · ');
+
   return `<div class="dep-card ${sClass}${isSelected ? ' dep-sel-active' : ''}"
     data-room="${r.roomStr}"
     ${isSelectable ? `onclick="depToggleSelect('${r.roomStr}')"` : ''}>
     ${selTick}
     ${vipHTML}
     <div class="dc-band"></div>
+
     <div class="dc-head">
       <div class="dc-room">${r.roomStr}</div>
-      <div class="dc-badges">
+      <div class="dc-head-right">
         <div class="dc-sbadge ${badgeCls}">${badgeText}</div>
-        <div class="dc-nights">🌙 ${r.nights}n</div>
-        ${r.rateCode ? `<div class="dc-rate-code">${r.rateCode}</div>` : ''}
-        <button class="dc-copy-card-btn" title="Copy room summary" onclick="depCopyCard(${i})">📋</button>
+        ${timeTag ? `<div class="dc-timetag-wrap">${timeTag}</div>` : ''}
       </div>
     </div>
+
     <div class="dc-body">
       ${overdueStrip}
       ${intentBanner}
-      <div class="dc-name-row"><div class="dc-name" ondblclick="depEditName(${i})" title="Double-click to edit">${escapeHtml(r.name)}</div></div>
-      <div class="dc-meta">
-        <div class="dc-mi">📅 <strong>${r.arrival}</strong> → <strong>${r.departure}</strong></div>
-        ${r.depTime ? `<div class="dc-mi">${timeTag}</div>` : ''}
-      </div>
-      ${compTag}
-      <div class="dc-src">${srcClean}</div>
-      <div class="dc-bal ${balClass}">
-        <span class="dc-bal-lbl">Balance</span>
-        <span class="dc-bal-amt">${balText}</span>
+      <div class="dc-name" ondblclick="depEditName(${i})" title="Double-click to edit">${escapeHtml(r.name)}</div>
+      <div class="dc-meta-line">${escapeHtml(metaLine)}</div>
+      <div class="dc-bal-inline ${balClass}">
+        <span class="dc-bal-dot"></span>
+        <span class="dc-bal-amt-sm">${balText}</span>
+        <button class="dc-copy-card-btn" title="Copy summary" onclick="depCopyCard(${i})">📋</button>
       </div>
       ${lateRow}
       ${extRow}
       ${actHTML}
-      <div style="margin-top:8px;">
-        <div class="dc-note-lbl dc-note-toggle" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;"
-          onclick="depToggleNote(this)">
-          <span>${r.note ? '📝 Notes' : '+ Notes'}</span>
-          <span style="display:flex;align-items:center;gap:6px;">
-            ${r.note ? `<span style="font-size:0.58rem;color:var(--text3);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(r.note.split('\n')[0].substring(0,30))}${r.note.length>30?'…':''}</span>` : ''}
-            <button class="dc-stamp-btn" onclick="event.stopPropagation();depStampNote(${i})" title="Add timestamp">🕐</button>
+      <div class="dc-note-section">
+        <div class="dc-note-toggle" onclick="depToggleNote(this)">
+          <span class="dc-note-lbl">${r.note ? '📝 ' + escapeHtml(r.note.split('\n')[0].substring(0,35)) + (r.note.length > 35 ? '…' : '') : '+ add note'}</span>
+          <span class="dc-note-row-right">
+            <button class="dc-stamp-btn" onclick="event.stopPropagation();depStampNote(${i})" title="Timestamp">🕐</button>
             <span class="dc-note-arrow">${r.note ? '▾' : '▸'}</span>
           </span>
         </div>
         <div class="dc-note-body" style="${r.note ? '' : 'display:none;'}">
-          <textarea class="dc-note" placeholder="Luggage stored, guest requests, complaints…"
+          <textarea class="dc-note" placeholder="Notes, luggage, requests…"
             oninput="depNoteInput(${i},this.value)">${escapeHtml(r.note)}</textarea>
         </div>
       </div>
