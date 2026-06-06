@@ -3139,29 +3139,23 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
   .ap-pkg-cols { grid-template-columns: 1fr; }
 }
 
-/* ══════════════════════════════════════════════════════════
-   Guest Memory Panel
-══════════════════════════════════════════════════════════ */
+/* ── Guest Memory stats ───────────────────────────────────── */
 .gm-stat-row { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:16px; }
 .gm-stat { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:12px 18px; min-width:110px; text-align:center; flex:1; }
 .gm-stat-val { font-family:var(--serif,Georgia,serif); font-size:1.4rem; color:var(--mint); }
 .gm-stat-lbl { font-family:var(--mono); font-size:0.58rem; color:var(--text3); text-transform:uppercase; letter-spacing:0.1em; margin-top:3px; }
-.gm-inline-inp { background:var(--card2,#181c24); border:1px solid var(--border,#2a2f3d); border-radius:5px; color:var(--text); font-family:var(--mono); font-size:0.68rem; padding:3px 7px; outline:none; transition:border-color 0.15s; }
-.gm-inline-inp:focus { border-color:var(--accent,#5ab4e8); }
-.gm-hit-badge { background:rgba(62,207,142,0.12); color:var(--mint,#3ecf8e); border:1px solid rgba(62,207,142,0.25); border-radius:4px; font-family:var(--mono); font-size:0.58rem; padding:1px 5px; }
-.gm-memory-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--sky,#5ab4e8); box-shadow:0 0 5px var(--sky,#5ab4e8); margin-left:4px; vertical-align:middle; }
+.gm-inline-inp { background:var(--card2,#181c24); border:1px solid var(--border); border-radius:5px; color:var(--text); font-family:var(--mono); font-size:0.68rem; padding:3px 7px; outline:none; transition:border-color 0.15s; }
+.gm-inline-inp:focus { border-color:var(--accent); }
+.gm-hit-badge { background:rgba(62,207,142,0.12); color:var(--mint); border:1px solid rgba(62,207,142,0.25); border-radius:4px; font-family:var(--mono); font-size:0.58rem; padding:1px 5px; }
+.gm-memory-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--sky); box-shadow:0 0 5px var(--sky); margin-left:4px; vertical-align:middle; }
 
-/* ══════════════════════════════════════════════════════════
-   Departures — List view compact rows (size-list only)
-   sm / md / lg cards completely unchanged.
-══════════════════════════════════════════════════════════ */
+/* ── Departures list view — compact rows (size-list ONLY) ─── */
 .dep-grid.size-list { gap:3px; }
 .dep-grid.size-list .dep-card { display:flex; align-items:stretch; }
 .dep-grid.size-list .dc-band { width:3px; height:auto; flex-shrink:0; }
-.dep-grid.size-list .dc-head { flex-shrink:0; flex-direction:row; align-items:center; gap:8px; padding:6px 10px; border-right:1px solid var(--border); }
+.dep-grid.size-list .dc-head { flex-shrink:0; flex-direction:row; align-items:center; gap:8px; padding:6px 10px; border-right:1px solid var(--border); border-top:none !important; }
 .dep-grid.size-list .dc-room { font-size:1rem; letter-spacing:0; min-width:28px; }
 .dep-grid.size-list .dc-head-right { flex-direction:row; align-items:center; gap:6px; }
-.dep-grid.size-list .dc-timetag-wrap { display:flex; }
 .dep-grid.size-list .dc-body { flex:1; display:flex; align-items:center; flex-wrap:nowrap; gap:8px; padding:5px 10px; min-width:0; }
 .dep-grid.size-list .dc-name { font-size:0.76rem; flex:1; min-width:80px; margin-bottom:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .dep-grid.size-list .dc-meta-line { font-size:0.58rem; flex:1.5; min-width:0; margin-bottom:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -3171,8 +3165,7 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
 .dep-grid.size-list .dc-intent-row { flex-wrap:nowrap; margin-bottom:0; flex-shrink:0; }
 .dep-grid.size-list .dc-intent-lbl { display:none; }
 .dep-grid.size-list .dc-intent-btn { font-size:0.52rem; padding:2px 5px; }
-.dep-grid.size-list .dc-overdue-strip,
-.dep-grid.size-list .dc-lco-overdue-strip { font-size:0.55rem; padding:2px 6px; margin-bottom:0; flex-shrink:0; }
+.dep-grid.size-list .dc-overdue-strip,.dep-grid.size-list .dc-lco-overdue-strip { font-size:0.55rem; padding:2px 6px; margin-bottom:0; flex-shrink:0; }
 .dep-grid.size-list .dc-intent-banner { font-size:0.55rem; padding:2px 6px; margin-bottom:0; flex-shrink:0; }
 .dep-grid.size-list .dc-sel-row { display:flex; gap:4px; margin-bottom:0; flex-shrink:0; align-items:center; }
 .dep-grid.size-list .dc-select { width:auto; font-size:0.58rem; padding:2px 5px; }
