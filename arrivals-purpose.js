@@ -10,11 +10,11 @@ let _savePurposeTimer = null;
 
 function debounceSaveArrivals() {
   clearTimeout(_saveArrTimer);
-  _saveArrTimer = setTimeout(() => saveArrivals(arrGuests), 800);
+  _saveArrTimer = setTimeout(() => saveArrivals(arrGuests), 5000);
 }
 function debounceSavePurpose() {
   clearTimeout(_savePurposeTimer);
-  _savePurposeTimer = setTimeout(() => savePurpose(purposeGuests), 800);
+  _savePurposeTimer = setTimeout(() => savePurpose(purposeGuests), 5000);
 }
 
 // ── ARRIVALS ──────────────────────────────────────────────
@@ -196,7 +196,7 @@ function loadArrivals() {
   // AI guesser first, memory on top — memory always wins
   setTimeout(() => {
     runAINat_arr().then(() => {
-      
+      if (typeof gmAutoFill === 'function') gmAutoFill(arrGuests);
       arrRender();
     });
   }, 300);
@@ -390,7 +390,7 @@ function loadPurpose() {
   // AI guesser first, memory on top — memory always wins
   setTimeout(() => {
     runAINat_purpose().then(() => {
-      
+      if (typeof gmAutoFill === 'function') gmAutoFill(purposeGuests);
       purposeRender();
     });
   }, 300);
@@ -517,7 +517,7 @@ function loadOperaFile(input, target) {
         arrRender();
         setTimeout(() => {
           runAINat_arr().then(() => {
-            
+            if (typeof gmAutoFill === 'function') gmAutoFill(arrGuests);
             arrRender();
           });
         }, 400);
@@ -526,7 +526,7 @@ function loadOperaFile(input, target) {
         purposeRender();
         setTimeout(() => {
           runAINat_purpose().then(() => {
-            
+            if (typeof gmAutoFill === 'function') gmAutoFill(purposeGuests);
             purposeRender();
           });
         }, 400);

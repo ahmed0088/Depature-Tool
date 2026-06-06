@@ -1927,12 +1927,22 @@ async function appInit() {
   
   listenArrivals(snap => {
     if (!snap || !snap.guests) return;
-    arrGuests = snap.guests; 
+    // Never re-render while the user is actively editing a cell in the arrivals table.
+    // Their own save (debounceSaveArrivals) triggers this listener — re-rendering
+    // would destroy the focused input and kick them out of the cell.
+    const arrTable = document.getElementById('arrTable');
+    const editingArr = arrTable && arrTable.contains(document.activeElement);
+    if (editingArr) return;
+    arrGuests = snap.guests;
     arrRender();
   });
 
   listenPurpose(snap => {
     if (!snap || !snap.guests) return;
+    // Same guard for the purpose table.
+    const purTable = document.getElementById('purposeTable');
+    const editingPur = purTable && purTable.contains(document.activeElement);
+    if (editingPur) return;
     purposeGuests = snap.guests;
     purposeRender();
   });
