@@ -105,13 +105,14 @@ function gmOnEdit(name, field, value) {
 }
 
 // ── Bulk scan: save all loaded guests to memory ───────────
+// Call from Arrivals or Purpose panel to seed memory instantly.
 function gmScanAndSaveAll() {
   const lists = [];
   if (typeof arrGuests     !== 'undefined' && arrGuests.length)     lists.push(...arrGuests);
   if (typeof purposeGuests !== 'undefined' && purposeGuests.length) lists.push(...purposeGuests);
 
   if (!lists.length) {
-    showToast('No guests loaded in Arrivals or Purpose panels', 'err');
+    showToast('No guests loaded — load Arrivals or Purpose first', 'err');
     return;
   }
 
@@ -134,7 +135,7 @@ function gmScanAndSaveAll() {
 
   _gmPersist();
   _gmUpdateUI();
-  showToast(`✦ Scan done — ${saved} new · ${updated} updated`, 'ok');
+  showToast(`🧠 ${saved} new · ${updated} updated in memory`, 'ok');
 }
 
 // ── Save a full guest profile at once ─────────────────────
@@ -179,16 +180,16 @@ function gmClearAll() {
 
 // ── Update panel UI ───────────────────────────────────────
 function _gmUpdateUI() {
-  const entries = Object.entries(_gmStore);
+  const entries   = Object.entries(_gmStore);
   const total     = entries.length;
   const withNat   = entries.filter(([,p]) => p.nat   && p.nat   !== '').length;
   const withEmail = entries.filter(([,p]) => p.email && p.email !== '' && p.email !== 'No@email.com').length;
-  const totalHits = entries.reduce((s, [,p]) => s + (p.hits || 0), 0);
+  const totalHits = entries.reduce((s,[,p]) => s + (p.hits || 0), 0);
 
   const badge = document.getElementById('badge-guestmem');
   if (badge) badge.textContent = total || '0';
 
-  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   set('gm-count',      total);
   set('gm-with-nat',   withNat);
   set('gm-with-email', withEmail);
