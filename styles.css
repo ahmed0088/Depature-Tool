@@ -674,7 +674,7 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
 .dep-grid.size-sm   { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 .dep-grid.size-md   { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 .dep-grid.size-lg   { grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); }
-.dep-grid.size-list { grid-template-columns: 1fr; max-width: 680px; }
+.dep-grid.size-list { grid-template-columns: 1fr; }
 #depBoard { padding-bottom: 20px; }
 
 .dep-card {
