@@ -31,33 +31,20 @@ const NAT_MAP = {
 function guessNat(name) {
   if (!name) return '';
   const l     = name.toLowerCase().replace(/[^a-z\s]/g, '');
-  const words = l.split(/\s+/).filter(w => w.length >= 4);
-
-  // Pass 1 — exact whole-word match on keys ≥5 chars
-  // A key like 'ali' or 'khan' is too common; require ≥5 to avoid cross-matches
+  const words = l.split(/\s+/);
+  // Exact word match first
   for (const [nat, keys] of Object.entries(NAT_MAP)) {
     for (const k of keys) {
-      if (k.length < 5) continue;
-      if (words.includes(k)) {
+      if (k.length < 4) continue;
+      if (words.some(w => w === k || (w.startsWith(k) && k.length > 5) || (k.startsWith(w) && w.length > 4))) {
         return nat.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
       }
     }
   }
-
-  // Pass 2 — prefix match: key is the start of a word, both must be ≥6 chars
+  // Substring match fallback
   for (const [nat, keys] of Object.entries(NAT_MAP)) {
     for (const k of keys) {
-      if (k.length < 6) continue;
-      if (words.some(w => w.length >= 6 && w.startsWith(k))) {
-        return nat.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-      }
-    }
-  }
-
-  // Pass 3 — substring fallback only for long keys (≥7) to avoid common-word collisions
-  for (const [nat, keys] of Object.entries(NAT_MAP)) {
-    for (const k of keys) {
-      if (k.length >= 7 && l.includes(k)) {
+      if (k.length >= 6 && l.includes(k)) {
         return nat.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
       }
     }

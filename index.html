@@ -11,95 +11,11 @@
 <!-- Firebase SDKs -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
 <!-- App styles -->
 <link rel="stylesheet" href="styles.css"/>
-
-<!-- ⚡ Instant theme — reads localStorage before Firebase responds, kills the flash -->
-<script>
-  (function() {
-    try {
-      // localStorage key matches what db.js uses: 'ibis_' + path
-      var raw = localStorage.getItem('ibis_settings');
-      if (raw) {
-        var s = JSON.parse(raw);
-        if (s && s.theme) {
-          document.documentElement.setAttribute('data-theme', s.theme);
-        }
-      }
-    } catch(e) {}
-  })();
-</script>
-  <style id="loginThemeStyle"></style>
 </head>
 <body>
-
-<!-- ══════════════════════════════════════════════════════
-     LOGIN SCREEN
-══════════════════════════════════════════════════════ -->
-<div id="loginScreen" style="display:none;">
-  <div class="login-bg">
-    <div class="login-card">
-
-      <!-- Theme switcher -->
-      <div class="login-theme-row">
-        <button class="login-theme-btn active" data-t="night-ops" onclick="setTheme('night-ops',this)" title="Night Ops">🌙 Night</button>
-        <button class="login-theme-btn" data-t="opera" onclick="setTheme('opera',this)" title="Opera">🔴 Opera</button>
-        <button class="login-theme-btn" data-t="midnight" onclick="setTheme('midnight',this)" title="Midnight">🌌 Midnight</button>
-      </div>
-
-      <div class="login-logo">🏨</div>
-      <div class="login-title">Ibis Styles <span>Dubai</span></div>
-      <div class="login-sub">Front Desk Operations · 2026</div>
-
-      <div class="login-divider"><span>Sign in to continue</span></div>
-
-      <form id="loginForm" onsubmit="event.preventDefault();authLogin();" style="width:100%;">
-        <div class="login-field">
-          <label class="login-label" for="loginEmail">Email Address</label>
-          <input id="loginEmail" name="email" type="email" class="login-input"
-            placeholder="you@ibis-dubai.com"
-            autocomplete="username email"
-            onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()"/>
-        </div>
-
-        <div class="login-field">
-          <label class="login-label" for="loginPass">Password</label>
-          <div class="login-pass-wrap">
-            <input id="loginPass" name="password" type="password" class="login-input"
-              placeholder="••••••••"
-              autocomplete="current-password"
-              onkeydown="if(event.key==='Enter')authLogin()"/>
-            <button type="button" class="login-eye" onclick="togglePassVis()" title="Show/hide password" tabindex="-1">
-              <span id="eyeIcon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>
-            </button>
-          </div>
-        </div>
-
-        <div id="loginError" class="login-error" style="display:none;"></div>
-
-        <div class="login-remember">
-          <label class="login-check-label">
-            <input type="checkbox" id="rememberMe" style="accent-color:#e8b84b;margin-right:6px;"/>
-            Stay signed in
-          </label>
-        </div>
-
-        <button id="loginBtn" type="submit" class="login-btn">Sign In →</button>
-      </form>
-
-      <div class="login-footer">Secured by Firebase Authentication</div>
-      <div style="margin-top:10px;text-align:center;">
-        <a href="setup-account.html" style="font-family:'DM Mono',monospace;font-size:0.58rem;color:#374d68;text-decoration:none;letter-spacing:0.08em;" onmouseover="this.style.color='#e8b84b'" onmouseout="this.style.color='#374d68'">⚙ First time setup</a>
-      </div>
-
-    </div>
-  </div>
-</div>
-
-<!-- App wrapper — hidden until authenticated -->
-<div id="appWrapper" style="display:none;">
 
 <!-- ── TOP BAR ── -->
 <header class="topbar">
@@ -109,8 +25,6 @@
   </div>
   <div class="topbar-center" id="topbarDate">Loading…</div>
   <div class="topbar-right">
-    <div id="authUserPill" class="auth-user-pill" style="display:none;"></div>
-    <div class="icon-round" id="adminPanelBtn" onclick="openAdminPanel()" title="Team Management" style="display:none;">👥</div>
     <!-- Theme Switcher -->
     <div class="theme-switcher">
       <button class="theme-btn active" data-t="night-ops" onclick="setTheme('night-ops',this)" title="Night Ops — dark gold">
@@ -131,10 +45,9 @@
     <div class="tb-pill live">● Live</div>
     <div class="tb-pill occ-pill" id="topbarOcc" style="display:none;">🏨 <span id="occLabel">—</span></div>
     <div class="tb-pill" id="topbarTime">—</div>
-    <div class="icon-round mob-hide" onclick="openFeedback()"  title="Feedback">💬</div>
-    <div class="icon-round mob-hide" onclick="document.getElementById('kbModal').classList.toggle('open')" title="Keyboard shortcuts (?)">⌨</div>
-    <div class="icon-round mob-hide" onclick="exportAllData()" title="Export backup">💾</div>
-    <label class="icon-round mob-hide" title="Import backup" style="cursor:pointer;">📂<input type="file" accept=".json" onchange="handleImport(this)" style="display:none"/></label>
+    <div class="icon-round" onclick="openFeedback()"  title="Feedback">💬</div>
+    <div class="icon-round" onclick="exportAllData()" title="Export backup">💾</div>
+    <label class="icon-round" title="Import backup" style="cursor:pointer;">📂<input type="file" accept=".json" onchange="handleImport(this)" style="display:none"/></label>
   </div>
 </header>
 
@@ -143,59 +56,45 @@
 <!-- ── SIDEBAR ── -->
 <nav class="sidenav">
   <div class="nav-section-label">Operations</div>
-  <div class="nav-item active" onclick="showPanel('departures')" id="nav-departures" data-panel="departures">
+  <div class="nav-item active" onclick="showPanel('departures')" id="nav-departures">
     <div class="nav-icon">🚪</div>Departures
     <span class="nav-badge" id="badge-departures">0</span>
   </div>
-  <div class="nav-item" onclick="showPanel('arrivals')" id="nav-arrivals" data-panel="arrivals">
+  <div class="nav-item" onclick="showPanel('arrivals')" id="nav-arrivals">
     <div class="nav-icon">🛎️</div>Arrivals
     <span class="nav-badge" id="badge-arrivals">0</span>
   </div>
-  <div class="nav-item" onclick="showPanel('xref')" id="nav-xref" data-panel="xref">
-    <div class="nav-icon">🔗</div>Arr vs Dep
-    <span class="nav-badge" id="badge-xref">0</span>
-  </div>
-  <div class="nav-item" onclick="showPanel('purpose')" id="nav-purpose" data-panel="purpose">
+  <div class="nav-item" onclick="showPanel('purpose')" id="nav-purpose">
     <div class="nav-icon">📋</div>Purpose of Stay
     <span class="nav-badge" id="badge-purpose">0</span>
   </div>
-  <div class="nav-item" onclick="showPanel('shifts')" id="nav-shifts" data-panel="shifts">
+  <div class="nav-item" onclick="showPanel('shifts')" id="nav-shifts">
     <div class="nav-icon">⏰</div>Shift Tasks
     <span class="nav-badge" id="badge-shifts">—</span>
   </div>
   <div class="nav-divider"></div>
   <div class="nav-section-label">Reports</div>
-  <div class="nav-item" onclick="showPanel('nationality')" id="nav-nationality" data-panel="nationality">
+  <div class="nav-item" onclick="showPanel('nationality')" id="nav-nationality">
     <div class="nav-icon">🌍</div>Nationality Report
   </div>
-  <div class="nav-item" onclick="showPanel('rent')" id="nav-rent" data-panel="rent">
+  <div class="nav-item" onclick="showPanel('rent')" id="nav-rent">
     <div class="nav-icon">🛏️</div>Rented Rooms & Beds
   </div>
-  <div class="nav-item" onclick="showPanel('audit')" id="nav-audit" data-panel="audit">
+  <div class="nav-item" onclick="showPanel('audit')" id="nav-audit">
     <div class="nav-icon">🌙</div>Night Audit · PM Rooms
     <span class="nav-badge" id="naTabCount">Compare</span>
   </div>
-  <div class="nav-item" onclick="showPanel('immig')" id="nav-immig" data-panel="immig">
+  <div class="nav-item" onclick="showPanel('immig')" id="nav-immig">
     <div class="nav-icon">🛂</div>Immigration Check
     <span class="nav-badge" id="immigTabCount">Upload</span>
   </div>
-  <div class="nav-item" onclick="showPanel('tourism')" id="nav-tourism" data-panel="tourism">
+  <div class="nav-item" onclick="showPanel('tourism')" id="nav-tourism">
     <div class="nav-icon">🏛️</div>Tourism Tax
     <span class="nav-badge" id="badge-tourism">0</span>
   </div>
-  <div class="nav-item" onclick="showPanel('checklist')" id="nav-checklist" data-panel="checklist">
+  <div class="nav-item" onclick="showPanel('checklist')" id="nav-checklist">
     <div class="nav-icon">✅</div>Night Checklist
     <span class="nav-badge" id="badge-checklist">17</span>
-  </div>
-  <div class="nav-divider"></div>
-  <div class="nav-section-label">Tools</div>
-  <div class="nav-item" onclick="showPanel('arrivals-proc')" id="nav-arrivals-proc" data-panel="arrivals-proc">
-    <div class="nav-icon">📊</div>Arrivals Processor
-    <span class="nav-badge" id="badge-arrivals-proc">—</span>
-  </div>
-  <div class="nav-item" onclick="showPanel('guestmem')" id="nav-guestmem" data-panel="guestmem">
-    <div class="nav-icon">🧠</div>Guest Memory
-    <span class="nav-badge" id="badge-guestmem">0</span>
   </div>
 </nav>
 
@@ -249,165 +148,44 @@
       </div>
       <div class="prog-track"><div class="prog-fill" id="depProgFill" style="width:0%"></div></div>
     </div>
-    <!-- Filter + search row -->
-    <div class="dep-filter-search-row">
-      <div class="dep-filter-scroll">
-        <div class="filter-row dep-filter-chips" style="margin-bottom:0;flex-wrap:nowrap;">
-          <button class="fchip on"   data-f="all"          onclick="depFilter('all',this)">All <span id="dfc-all">0</span></button>
-          <button class="fchip due"  data-f="due"          onclick="depFilter('due',this)">⏳ Due <span id="dfc-due">0</span></button>
-          <button class="fchip late" data-f="late"         onclick="depFilter('late',this)">🕐 Late CO <span id="dfc-late">0</span></button>
-          <button class="fchip na"   data-f="na"           onclick="depFilter('na',this)">📵 NA <span id="dfc-na">0</span></button>
-          <button class="fchip dnd"  data-f="dnd"          onclick="depFilter('dnd',this)">🚫 DND <span id="dfc-dnd">0</span></button>
-          <button class="fchip ext"  data-f="maybe_extend" onclick="depFilter('maybe_extend',this)">🤔 May Extend <span id="dfc-maybe_extend">0</span></button>
-          <button class="fchip bal"  data-f="balance"      onclick="depFilter('balance',this)">💳 Balance <span id="dfc-balance">0</span></button>
-          <button class="fchip ext"  data-f="extended"     onclick="depFilter('extended',this)">↪ Extended <span id="dfc-extended">0</span></button>
-          <button class="fchip out"  data-f="out"          onclick="depFilter('out',this)">✓ Out <span id="dfc-out">0</span></button>
-        </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+      <div class="filter-row" style="margin-bottom:0;flex:1;">
+        <button class="fchip on" data-f="all"      onclick="depFilter('all',this)">All <span id="dfc-all">0</span></button>
+        <button class="fchip due"  data-f="due"      onclick="depFilter('due',this)">⏳ Due <span id="dfc-due">0</span></button>
+        <button class="fchip ext"  data-f="extended" onclick="depFilter('extended',this)">↪ Extended <span id="dfc-extended">0</span></button>
+        <button class="fchip late" data-f="late"     onclick="depFilter('late',this)">🕐 Late CO <span id="dfc-late">0</span></button>
+        <button class="fchip bal"  data-f="balance"  onclick="depFilter('balance',this)">💳 Balance <span id="dfc-balance">0</span></button>
+        <button class="fchip out"  data-f="out"      onclick="depFilter('out',this)">✓ Out <span id="dfc-out">0</span></button>
+        <button class="fchip na"   data-f="na"       onclick="depFilter('na',this)">📵 No Answer <span id="dfc-na">0</span></button>
       </div>
-      <div class="search-wrap" id="depSearchWrap">
+      <div class="search-wrap">
         <span style="padding:0 8px;color:var(--text3);">⌕</span>
-        <input type="text" id="depSearch" placeholder="Room, name… or 610,613,615" oninput="depSearchInput()" onkeydown="depSearchKey(event)"/>
-        <button class="search-clear-btn" id="depSearchClear" onclick="depSearchClear()" style="display:none;" title="Clear search">✕</button>
-      </div>
-      <div class="dep-search-pills" id="depSearchPills" style="display:none;"></div>
-    </div>
-    <!-- ── Sort + Jump toolbar ── -->
-    <div class="dep-sort-jump-bar">
-      <div class="dep-sort-wrap">
-        <span class="dep-sort-lbl">Sort:</span>
-        <button class="dep-sort-btn on" data-s="smart"   onclick="depSetSort('smart')">⚡ Smart<span class="sort-arrow"></span></button>
-        <button class="dep-sort-btn"    data-s="room"    onclick="depSetSort('room')">🔢 Room<span class="sort-arrow"></span></button>
-        <button class="dep-sort-btn"    data-s="name"    onclick="depSetSort('name')">🔤 Name<span class="sort-arrow"></span></button>
-        <button class="dep-sort-btn"    data-s="time"    onclick="depSetSort('time')">🕐 Time<span class="sort-arrow"></span></button>
-        <button class="dep-sort-btn"    data-s="balance" onclick="depSetSort('balance')">💳 Balance<span class="sort-arrow"></span></button>
-        <button class="dep-sort-btn"    data-s="status"  onclick="depSetSort('status')">📊 Status<span class="sort-arrow"></span></button>
-        <span id="depSortLbl" style="font-family:var(--mono);font-size:0.6rem;color:var(--green);margin-left:4px;white-space:nowrap;"></span>
-      </div>
-      <button class="dep-jump-btn" id="depJumpBtn" onclick="toggleDepJump()">🎯 Quick Jump</button>
-    </div>
-    <!-- ── Quick Jump panel ── -->
-    <div id="depJumpBar" class="dep-jump-bar" style="display:none;"></div>
-    <!-- ── HK Status Bar ── -->
-    <div id="depHKBar" class="dep-na-bar" style="display:none;background:linear-gradient(90deg,rgba(232,184,75,0.08),transparent);border-color:rgba(232,184,75,0.22);">
-      <div class="dep-na-bar-left">
-        <span class="dep-na-bar-icon">🏨</span>
-        <span class="dep-na-bar-text">Send status to housekeeping</span>
-      </div>
-      <div class="dep-na-bar-right">
-        <div class="dep-copy-split">
-          <button class="dep-copy-main" style="color:var(--accent);border-color:var(--accent-border);background:var(--accent-bg);" onclick="depCopyHKUpdate()">🏨 Remaining Rooms</button>
-          <button class="dep-copy-arrow" style="color:var(--accent);border-color:var(--accent-border);background:var(--accent-bg);" onclick="depToggleCopyMenu('hk')">▾</button>
-          <div class="dep-copy-menu" id="depCopyMenu-hk">
-            <button onclick="depCopyHKUpdate();depToggleCopyMenu('hk')">🏨 Remaining Rooms <span class="dcm-hint">pending checkout rooms</span></button>
-            <button onclick="depCopyHKRemaining();depToggleCopyMenu('hk')">📋 Full HK List <span class="dcm-hint">all rooms still on floor</span></button>
-          </div>
-        </div>
+        <input type="text" id="depSearch" placeholder="Room / guest…" oninput="depRender()"/>
       </div>
     </div>
-    <!-- ── NA Action Bar ── -->
+    <!-- ── NA Action Bar (appears when any rooms are marked NA) ── -->
     <div id="depNaBar" class="dep-na-bar" style="display:none;">
       <div class="dep-na-bar-left">
         <span class="dep-na-bar-icon">📵</span>
         <span class="dep-na-bar-text"><span id="depNaCount">0 rooms</span> marked No Answer</span>
       </div>
       <div class="dep-na-bar-right">
-        <div class="dep-copy-split">
-          <button class="dep-copy-main" onclick="depCopyNAList('all')">📋 Copy for HK</button>
-          <button class="dep-copy-arrow" onclick="depToggleCopyMenu('na')">▾</button>
-          <div class="dep-copy-menu" id="depCopyMenu-na">
-            <button onclick="depSmartSelect('na',30);depToggleCopyMenu('na')">⚡ Smart 30 min <span class="dcm-hint">auto-select recent NAs</span></button>
-            <button onclick="depSmartSelect('na',60);depToggleCopyMenu('na')">⚡ Smart 1 hour <span class="dcm-hint">auto-select recent NAs</span></button>
-            <button onclick="depStartSelect('na');depToggleCopyMenu('na')">☑ Pick Rooms <span class="dcm-hint">tap to choose</span></button>
-            <button onclick="depCopyNAList('all');depToggleCopyMenu('na')">📋 Copy All <span class="dcm-hint">all NA rooms</span></button>
-            <button onclick="depCopyNAList('summary');depToggleCopyMenu('na')">⚡ Copy Summary <span class="dcm-hint">room numbers only</span></button>
-          </div>
-        </div>
+        <button id="depNaCopyBtn" class="dep-na-copy-btn" onclick="depCopyNAList()">📋 Copy for HK</button>
         <button class="dep-na-filter-btn" onclick="depFilter('na', document.querySelector('[data-f=na]'))">View All →</button>
       </div>
     </div>
-    <!-- ── Extension Action Bar ── -->
-    <!-- ── DND Action Bar ── -->
-    <div id="depDndBar" class="dep-na-bar" style="display:none;background:linear-gradient(90deg,rgba(233,94,94,0.07),transparent);border-color:rgba(233,94,94,0.25);">
-      <div class="dep-na-bar-left">
-        <span class="dep-na-bar-icon">🚫</span>
-        <span class="dep-na-bar-text" style="color:var(--rose);"><span id="depDndCount">0 rooms</span> marked DND</span>
-      </div>
-      <div class="dep-na-bar-right">
-        <div class="dep-copy-split">
-          <button class="dep-copy-main" style="color:var(--rose);border-color:rgba(233,94,94,0.4);background:rgba(233,94,94,0.10);" onclick="depCopyDNDList('all')">📋 Copy for HK</button>
-          <button class="dep-copy-arrow" style="color:var(--rose);border-color:rgba(233,94,94,0.4);background:rgba(233,94,94,0.10);" onclick="depToggleCopyMenu('dnd')">▾</button>
-          <div class="dep-copy-menu" id="depCopyMenu-dnd">
-            <button onclick="depStartSelect('dnd');depToggleCopyMenu('dnd')">☑ Pick Rooms <span class="dcm-hint">tap to choose</span></button>
-            <button onclick="depCopyDNDList('all');depToggleCopyMenu('dnd')">📋 Copy All <span class="dcm-hint">all DND rooms</span></button>
-            <button onclick="depCopyDNDList('summary');depToggleCopyMenu('dnd')">⚡ Copy Summary <span class="dcm-hint">room numbers only</span></button>
-          </div>
-        </div>
-        <button class="dep-na-filter-btn" onclick="depFilter('dnd', document.querySelector('[data-f=dnd]'))">View All →</button>
-      </div>
-    </div>
+    <!-- ── Extension Action Bar (appears when any rooms are extended) ── -->
     <div id="depExtBar" class="dep-na-bar" style="display:none;background:linear-gradient(90deg,rgba(90,180,232,0.08),transparent);border-color:rgba(90,180,232,0.25);">
       <div class="dep-na-bar-left">
         <span class="dep-na-bar-icon">↪</span>
         <span class="dep-na-bar-text"><span id="depExtCount">0 rooms</span> extended today</span>
       </div>
       <div class="dep-na-bar-right">
-        <div class="dep-copy-split">
-          <button class="dep-copy-main" style="color:var(--sky);border-color:rgba(90,180,232,0.4);background:rgba(90,180,232,0.12);" onclick="depCopyExtList('all')">📋 Copy for HK</button>
-          <button class="dep-copy-arrow" style="color:var(--sky);border-color:rgba(90,180,232,0.4);background:rgba(90,180,232,0.12);" onclick="depToggleCopyMenu('ext')">▾</button>
-          <div class="dep-copy-menu" id="depCopyMenu-ext">
-            <button onclick="depStartSelect('extended');depToggleCopyMenu('ext')">☑ Pick Rooms <span class="dcm-hint">tap to choose</span></button>
-            <button onclick="depCopyExtList('all');depToggleCopyMenu('ext')">📋 Copy All <span class="dcm-hint">full details</span></button>
-            <button onclick="depCopyExtList('summary');depToggleCopyMenu('ext')">⚡ Copy Simple <span class="dcm-hint">room + nights only</span></button>
-          </div>
-        </div>
+        <button id="depExtCopyBtn" class="dep-na-copy-btn" style="background:rgba(90,180,232,0.15);border-color:rgba(90,180,232,0.4);color:var(--sky);" onclick="depCopyExtList()">📋 Copy for HK</button>
         <button class="dep-na-filter-btn" onclick="depFilter('extended', document.querySelector('[data-f=extended]'))">View All →</button>
       </div>
     </div>
-    <!-- ── Checked-Out Action Bar ── -->
-    <div id="depOutBar" class="dep-na-bar" style="display:none;background:linear-gradient(90deg,rgba(62,207,142,0.08),transparent);border-color:rgba(62,207,142,0.25);">
-      <div class="dep-na-bar-left">
-        <span class="dep-na-bar-icon">✅</span>
-        <span class="dep-na-bar-text"><span id="depOutCount">0 rooms</span> checked out</span>
-        <div class="hk-reminder" id="hkReminder" style="display:none;">
-          <span class="hk-reminder-dot" id="hkReminderDot"></span>
-          <span class="hk-reminder-text" id="hkReminderText"></span>
-        </div>
-      </div>
-      <div class="dep-na-bar-right">
-        <div class="dep-copy-split">
-          <button class="dep-copy-main" style="color:var(--mint);border-color:rgba(62,207,142,0.4);background:rgba(62,207,142,0.12);" onclick="depCopyOutRecent(30)">✅ Copy New (30 min)</button>
-          <button class="dep-copy-arrow" style="color:var(--mint);border-color:rgba(62,207,142,0.4);background:rgba(62,207,142,0.12);" onclick="depToggleCopyMenu('out')">▾</button>
-          <div class="dep-copy-menu" id="depCopyMenu-out">
-            <button onclick="depCopyOutRecent(30);depToggleCopyMenu('out')">✅ New — Last 30 min <span class="dcm-hint">recent checkouts only</span></button>
-            <button onclick="depCopyOutRecent(60);depToggleCopyMenu('out')">✅ New — Last 1 hour <span class="dcm-hint">recent checkouts only</span></button>
-            <button onclick="depSmartSelect('out',30);depToggleCopyMenu('out')">⚡ Smart Select 30 min <span class="dcm-hint">pick then copy</span></button>
-            <button onclick="depStartSelect('out');depToggleCopyMenu('out')">☑ Pick Rooms <span class="dcm-hint">tap to choose</span></button>
-            <button onclick="depCopyOutList('summary');depToggleCopyMenu('out')">📋 All Rooms (numbers) <span class="dcm-hint">all checkouts today</span></button>
-            <button onclick="depCopyOutList('all');depToggleCopyMenu('out')">📋 Full List Today <span class="dcm-hint">every checkout with time</span></button>
-            <button onclick="depCopyHKUpdate();depToggleCopyMenu('out')" style="border-top:1px solid var(--border);margin-top:4px;padding-top:10px;">🏨 Remaining Rooms <span class="dcm-hint">still on floor · pending only</span></button>
-          </div>
-        </div>
-        <button class="dep-na-filter-btn" onclick="depFilter('out', document.querySelector('[data-f=out]'))">View All →</button>
-      </div>
-    </div>
-    <!-- ── Select mode floating tray (fixed bottom, appears on selection) ── -->
-    <div id="depSelTray" class="dep-sel-tray">
-      <div class="dep-sel-tray-left">
-        <div class="dep-sel-tray-count" id="selTrayCount" style="display:none;"></div>
-        <span class="dep-sel-tray-label" id="selTrayLabel">Tap rooms to select</span>
-      </div>
-      <div class="dep-sel-tray-right">
-        <button class="dep-sel-tray-btn secondary" onclick="depSelectAll()">All</button>
-        <button class="dep-sel-tray-btn secondary" onclick="depSelectNone()">None</button>
-        <button class="dep-sel-tray-btn primary" id="selTrayCopy" onclick="depCopySelected()" disabled>📋 Copy</button>
-        <button class="dep-sel-tray-btn cancel"  onclick="depCancelSelect()">✕</button>
-      </div>
-    </div>
     <div class="dep-grid size-md" id="depGrid"></div>
-    <!-- Inline bulk checkout — visible only on mobile -->
-    <div class="dep-quick-bar-inline" id="depQuickBarInline" style="display:none;">
-      <button class="btn mint" style="width:100%;justify-content:center;padding:12px;" onclick="depBulkCheckout()">✓ Check Out All Due</button>
-    </div>
     <div class="dep-log-wrap" id="depLogWrap" style="display:none;">
       <div class="dep-log-header" onclick="toggleLog()">
         <span>📋</span>
@@ -432,7 +210,6 @@
       <button class="btn ai"   onclick="runAINat_arr()"><span id="aiSpinArr"></span>✦ Nationality</button>
       <button class="btn gold" onclick="exportArrivals()">⬇ Export</button>
       <button class="btn mint" onclick="openAddGuest('arrivals')">+ Add Guest</button>
-      <button class="btn sky"  onclick="gmScanAndSaveAll()" title="Save all loaded guests to Guest Memory">🧠 Save to Memory</button>
       <button class="btn rose" onclick="clearArrivals()">✕ Clear</button>
     </div>
   </div>
@@ -464,90 +241,6 @@
   </table></div>
 </div>
 
-<!-- ════════════════ ARR vs DEP (XREF) ════════════════ -->
-<div class="panel" id="panel-xref">
-  <div class="page-hd">
-    <div class="page-hd-left">
-      <h1>Arrivals ↔ Departures</h1>
-      <p id="xrefDateLabel">Same guest on arrivals + departures = extension booked · Load dep board first</p>
-    </div>
-    <div class="page-hd-actions">
-      <button class="btn sky" id="xrefReloadBtn" onclick="openXrefReloadModal()" style="display:none;">🔄 Reload Report</button>
-      <button class="btn rose" onclick="xrefClear()">✕ Clear</button>
-    </div>
-  </div>
-
-  <div id="xrefPasteCard" class="card" style="margin-bottom:16px;">
-    <div class="upload-zone">
-      <div class="upload-label-bar">
-        <div class="upload-dot gold"></div>
-        <span class="upload-lbl">Opera Arrivals Report · Delimited Data</span>
-        <span class="upload-sub">From Reservations → Arrivals → Export Delimited Data</span>
-      </div>
-      <textarea id="xrefInput" placeholder="Opera Cloud → Reservations → Arrivals → Export Delimited Data&#10;Open .txt → Ctrl+A → Ctrl+C → Paste here"></textarea>
-    </div>
-    <div class="error-box" id="xrefError" style="display:none;"><span>⚠</span><span id="xrefErrorMsg"></span></div>
-    <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
-      <button class="btn gold" onclick="xrefLoad()">🔗 Load &amp; Check Extensions</button>
-      <label class="btn" style="cursor:pointer;">📂 Upload File<input type="file" accept=".txt,.tsv,.csv" style="display:none;" onchange="xrefLoadFile(this)"/></label>
-      <span style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);"><strong style="color:var(--text);">Load Dep board first</strong> for full extension verdicts</span>
-    </div>
-  </div>
-
-  <div id="xrefResultCard" style="display:none;">
-    <div class="xref-kpi-row">
-      <div class="xref-kpi"><div class="xref-kpi-val" id="xref-kpi-total">0</div><div class="xref-kpi-label">Total Arrivals</div></div>
-      <div class="xref-kpi"><div class="xref-kpi-val red" id="xref-kpi-conflict">0</div><div class="xref-kpi-label" id="xref-lbl-conflict">↪ Extensions</div></div>
-      <div class="xref-kpi"><div class="xref-kpi-val green" id="xref-kpi-can-extend">0</div><div class="xref-kpi-label" id="xref-lbl-can-extend">🛎 New Arrivals</div></div>
-      <div class="xref-kpi"><div class="xref-kpi-val sky" id="xref-kpi-assigned">0</div><div class="xref-kpi-label">Room Assigned</div></div>
-      <div class="xref-kpi"><div class="xref-kpi-val amber" id="xref-kpi-unassigned">0</div><div class="xref-kpi-label">No Room Yet</div></div>
-    </div>
-
-    <div class="xref-filters">
-      <button class="xref-filter-btn on" data-xf="all" onclick="xrefSetFilter('all',this)">All <span class="xref-filter-count" id="xref-fc-all">0</span></button>
-      <button class="xref-filter-btn" data-xf="conflicts" onclick="xrefSetFilter('conflicts',this)">↪ Extensions <span class="xref-filter-count" id="xref-fc-conflicts">0</span></button>
-      <button class="xref-filter-btn" data-xf="can_extend" onclick="xrefSetFilter('can_extend',this)">🛎 New Arrivals <span class="xref-filter-count" id="xref-fc-can-extend">0</span></button>
-      <button class="xref-filter-btn" data-xf="unassigned" onclick="xrefSetFilter('unassigned',this)">🏷 No Room <span class="xref-filter-count" id="xref-fc-unassigned">0</span></button>
-    </div>
-
-    <div class="xref-search-wrap">
-      <span class="xref-search-icon">🔍</span>
-      <input id="xrefSearch" type="text" placeholder="Search room, guest name, confirmation, source…" oninput="xrefSetSearch(this.value)"/>
-    </div>
-
-    <div class="xref-action-bar">
-      <button class="btn sm" onclick="xrefCopyConflicts()">↪ Copy Extensions</button>
-      <button class="btn sm" onclick="xrefCopyCanExtend()">🛎 Copy New Arrivals</button>
-      <button class="btn sm gold" onclick="xrefCopyHKPriority()">🏨 Copy HK Priority</button>
-
-    </div>
-
-    <div id="xrefNoteNoDep" style="display:none;background:rgba(240,164,58,0.08);border:1px solid rgba(240,164,58,0.25);border-radius:8px;padding:10px 14px;font-family:var(--mono);font-size:0.65rem;color:var(--amber);margin-bottom:14px;">
-      ⚠ Load the <strong>Departure board</strong> first — extensions are detected by matching the same guest name on both boards.
-    </div>
-
-    <div class="card" style="overflow-x:auto;padding:0;">
-      <table class="xref-table">
-        <thead>
-          <tr style="background:var(--bg2);">
-            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.56rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">ROOM</th>
-            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.56rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">ARRIVING GUEST</th>
-            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.56rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">SOURCE / PLATFORM</th>
-            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.56rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">STAY DATES</th>
-            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.56rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">CURRENT GUEST STATUS</th>
-            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.56rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">EXTENSION?</th>
-            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.56rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">REASON</th>
-            <th style="padding:10px 12px;"></th>
-          </tr>
-        </thead>
-        <tbody id="xrefTable">
-          <tr><td colspan="8" style="text-align:center;padding:36px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">Load arrivals above to begin.</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
 <!-- ════════════════ PURPOSE OF STAY ════════════════ -->
 <div class="panel" id="panel-purpose">
   <div class="page-hd">
@@ -557,7 +250,6 @@
       <button class="btn gold" onclick="exportPurpose()">⬇ Export</button>
       <button class="btn mint" onclick="syncFromArrivals()">↑ Sync Arrivals</button>
       <button class="btn mint" onclick="openAddGuest('purpose')">+ Add</button>
-      <button class="btn sky"  onclick="gmScanAndSaveAll()" title="Save all loaded guests to Guest Memory">🧠 Save to Memory</button>
       <button class="btn rose" onclick="clearPurpose()">✕ Clear</button>
     </div>
   </div>
@@ -611,25 +303,13 @@
 <div class="panel" id="panel-nationality">
   <div style="max-width:1200px;">
     <div class="page-hd">
-      <div class="page-hd-left"><h1>Nationality Report</h1><p>Opera stat_countrybymon · Delimited Data</p></div>
+      <div class="page-hd-left"><h1>Nationality Report</h1><p>Opera stat_countrybyday · Delimited Data</p></div>
       <div class="page-hd-actions"><button class="btn rose" onclick="clearNat()">✕ Clear</button></div>
     </div>
     <div class="card">
       <div class="upload-zone">
-        <div class="upload-label-bar"><div class="upload-dot gold"></div><span class="upload-lbl">Nationality Report</span><span class="upload-sub">stat_countrybymon_….txt</span></div>
-        <div style="margin-bottom:8px;padding:10px 13px;background:rgba(90,180,232,0.05);border:1px solid rgba(90,180,232,0.15);border-left:3px solid var(--sky);border-radius:var(--r);font-size:0.7rem;color:var(--text2);line-height:1.8;">
-          <div style="font-family:var(--mono);font-size:0.58rem;letter-spacing:1px;color:var(--sky);margin-bottom:5px;">HOW TO GET THIS REPORT FROM OPERA</div>
-          <ol style="margin:0;padding-left:16px;color:var(--text3);">
-            <li>In Opera go to <strong style="color:var(--text2);">Reports</strong> and search <strong style="color:var(--mint);">Nationality by Month</strong></li>
-            <li>Set your <strong style="color:var(--text2);">date range</strong> to the full month</li>
-            <li>Select the <strong style="color:var(--sky);">Nationality</strong> radio button <em style="color:var(--text3);">(not Country)</em></li>
-            <li>Tick <strong style="color:var(--sky);">Room Nights</strong> and <strong style="color:var(--sky);">Person Nights</strong></li>
-            <li>Download → <strong style="color:var(--mint);">Delimited</strong> with <strong style="color:var(--mint);">Tab</strong> separator</li>
-            <li>Open file <strong style="color:var(--text2);">(stat_countrybymon...)</strong> → Select All → Copy → Paste below</li>
-          </ol>
-          <div style="margin-top:6px;font-family:var(--mono);font-size:0.57rem;color:var(--amber);">⚠ Select <strong>Nationality</strong> radio — not Country — or data will not match</div>
-        </div>
-        <textarea id="natInput" placeholder="Paste stat_countrybymon_….txt here…"></textarea>
+        <div class="upload-label-bar"><div class="upload-dot gold"></div><span class="upload-lbl">Nationality Report</span><span class="upload-sub">stat_countrybyday_….txt</span></div>
+        <textarea id="natInput" placeholder="Opera Cloud → Reports → Nationality by Country → Download as Delimited Data → Paste here"></textarea>
       </div>
       <div class="error-box" id="natError"><span>⚠</span><span id="natErrorMsg"></span></div>
       <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn gold" onclick="processNat()">⚡ Process</button><button class="btn" onclick="clearNat()">✕ Clear</button></div>
@@ -653,10 +333,9 @@
       </div>
       <div style="display:grid;grid-template-columns:1fr 250px;gap:14px;margin-top:14px;">
         <div class="card" style="padding:0;overflow:hidden;">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--card2);gap:10px;">
-            <div style="font-size:0.8rem;font-weight:600;white-space:nowrap;">Preview · 240 rows</div>
-            <input id="natSearch" type="text" placeholder="Search nationality…" oninput="natFilterPreview(this.value)" style="flex:1;max-width:180px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:4px 9px;font-family:var(--mono);font-size:0.68rem;color:var(--text2);outline:none;" />
-            <span style="font-family:var(--mono);font-size:0.6rem;color:var(--gold);white-space:nowrap;">ROWS 8–247</span>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--card2);">
+            <div style="font-size:0.8rem;font-weight:600;">Preview · 240 rows</div>
+            <span style="font-family:var(--mono);font-size:0.6rem;color:var(--gold);">ROWS 8–247</span>
           </div>
           <div style="display:grid;grid-template-columns:36px 1fr 54px 54px 54px;padding:6px 12px;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--border);">
             <span style="font-family:var(--mono);font-size:0.53rem;color:var(--text3);">ROW</span>
@@ -983,254 +662,6 @@
 
   </div><!-- /ttResultCard -->
 </div><!-- /panel-tourism -->
-
-<!-- ════════════════ ARRIVALS PROCESSOR ════════════════ -->
-<div class="panel" id="panel-arrivals-proc">
-  <div class="page-hd">
-    <div class="page-hd-left">
-      <h1>Arrivals Report Processor</h1>
-      <p>Opera Cloud · Import report → scan → assign package codes → process day-by-day breakdown</p>
-    </div>
-    <div class="page-hd-actions">
-      <button class="btn gold"  onclick="apRun()">⚡ Process</button>
-      <button class="btn mint"  onclick="apExportExcel()">⬇ Export Excel</button>
-      <button class="btn sky"   onclick="apSaveProfile()">💾 Save Profile</button>
-      <button class="btn"       onclick="apLoadProfile()">📂 Load Profile</button>
-      <button class="btn rose"  onclick="apResetAll()">✕ Clear</button>
-    </div>
-  </div>
-
-  <!-- STEP 1: IMPORT -->
-  <div class="card" style="margin-bottom:14px;">
-    <div class="ap-section-label">
-      <span style="font-size:0.6rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;display:flex;align-items:center;gap:7px;">
-        📁 Step 1 — Import Report
-      </span>
-    </div>
-
-    <div class="ap-drop-zone" id="ap-drop-zone">
-      <input type="file" id="ap-file-input" accept=".html,.htm,.txt,.tsv,.csv" onchange="apHandleFile(this.files[0])">
-      <div style="font-size:2rem;margin-bottom:6px;" id="ap-drop-icon-emoji">📄</div>
-      <div class="ap-drop-zone-txt" id="ap-drop-txt">Drop your Opera export here, or click to browse</div>
-      <div class="ap-drop-zone-sub">.html · .txt · .tsv · .csv accepted</div>
-    </div>
-
-    <div style="text-align:center;margin-top:8px;">
-      <span style="font-size:10px;color:var(--text3);cursor:pointer;display:inline-flex;align-items:center;gap:5px;border-bottom:1px dashed var(--text3);" onclick="apTogglePaste()">
-        📋 or paste raw text instead
-      </span>
-    </div>
-    <div id="ap-paste-area" style="display:none;">
-      <textarea id="ap-raw"
-        placeholder="Paste Opera tab-separated export here (must include the header row)…"
-        oninput="apOnRawChange()"
-        style="width:100%;min-height:80px;margin-top:10px;"></textarea>
-    </div>
-
-    <div class="ap-progress-bar" id="ap-progress-bar">
-      <div class="ap-progress-fill" id="ap-progress-fill"></div>
-    </div>
-
-    <!-- Scan summary -->
-    <div class="ap-scan-summary" id="ap-scan-summary">
-      <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">🔍 Report Scan</div>
-      <div class="ap-scan-grid" id="ap-scan-grid"></div>
-    </div>
-
-    <!-- Status breakdown -->
-    <div class="ap-status-breakdown" id="ap-status-breakdown">
-      <div class="ap-sb-title">⚙ Reservation Statuses Found — click to exclude</div>
-      <div class="ap-sb-tags" id="ap-sb-tags"></div>
-      <div class="ap-sb-hint">Red = excluded · Click to toggle</div>
-    </div>
-
-    <!-- Column mapper -->
-    <div class="ap-col-mapper" id="ap-col-mapper">
-      <div class="ap-col-mapper-title">
-        🗂 Column Mapping
-        <span style="font-size:9px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;margin-left:6px;">auto-detected · override if needed</span>
-      </div>
-      <div class="ap-col-mapper-grid" id="ap-col-mapper-grid"></div>
-    </div>
-
-    <!-- Detect banner -->
-    <div class="ap-detect-banner" id="ap-detect-banner">
-      <div class="ap-detect-banner-hdr">✨ <span>Package codes detected — click to assign:</span></div>
-      <div class="ap-detect-codes" id="ap-detect-codes"></div>
-    </div>
-  </div>
-
-  <!-- STEP 2: PACKAGE MAPPING -->
-  <div class="card" style="margin-bottom:14px;">
-    <div style="font-size:0.6rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
-      ⚙ Step 2 — Package Code Mapping
-      <span style="font-weight:300;text-transform:none;letter-spacing:0;font-size:10px;color:var(--text3);">drag to reorder · × to remove</span>
-    </div>
-
-    <div class="ap-pkg-cols">
-      <!-- Upsell Rooms -->
-      <div class="ap-pkg-col">
-        <div class="ap-col-label">⬆ Upsell Rooms</div>
-        <div class="ap-col-desc">Package codes that count as an upsell room</div>
-        <div class="ap-tag-list" id="ap-tags-upsell" ondragover="apOnDragOver(event)" ondrop="apOnDrop(event,'upsell')" ondragleave="apOnDragLeave(event)"></div>
-        <div class="ap-add-row">
-          <input id="ap-inp-upsell" placeholder="e.g. UPS" onkeydown="apKd(event,'upsell')">
-          <button class="ap-add-btn" onclick="apAddPkg('upsell')">+ Add</button>
-        </div>
-        <div class="ap-opts-row">
-          <label>Match:</label>
-          <select id="ap-mode-upsell"><option value="contains">contains</option><option value="exact">exact</option><option value="starts">starts with</option></select>
-          <label>Count:</label>
-          <select id="ap-count-upsell"><option value="room">rooms</option><option value="pax">pax</option></select>
-        </div>
-      </div>
-
-      <!-- Without F&B — auto -->
-      <div class="ap-pkg-col auto-col">
-        <div class="ap-col-label">🔒 Without F&amp;B Pkg <span style="font-size:9px;background:var(--card2);color:var(--text3);padding:2px 6px;border-radius:var(--r);border:1px solid var(--border);margin-left:4px;">auto</span></div>
-        <div class="ap-col-desc">Calculated automatically</div>
-        <div class="ap-auto-formula">Arrival Pax − With F&amp;B Pkg</div>
-      </div>
-
-      <!-- FO F&B Upsell -->
-      <div class="ap-pkg-col">
-        <div class="ap-col-label">💰 FO F&amp;B Upsell</div>
-        <div class="ap-col-desc">Package codes that count as FO F&amp;B upsells</div>
-        <div class="ap-tag-list" id="ap-tags-fo" ondragover="apOnDragOver(event)" ondrop="apOnDrop(event,'fo')" ondragleave="apOnDragLeave(event)"></div>
-        <div class="ap-add-row">
-          <input id="ap-inp-fo" placeholder="e.g. BBWIN" onkeydown="apKd(event,'fo')">
-          <button class="ap-add-btn" onclick="apAddPkg('fo')">+ Add</button>
-        </div>
-        <div class="ap-opts-row">
-          <label>Match:</label>
-          <select id="ap-mode-fo"><option value="contains">contains</option><option value="exact">exact</option><option value="starts">starts with</option></select>
-          <label>Count:</label>
-          <select id="ap-count-fo"><option value="room">rooms</option><option value="pax" selected>pax</option></select>
-        </div>
-      </div>
-    </div>
-
-    <!-- F&B row -->
-    <div class="ap-fb-row">
-      <div class="ap-col-label">🍽 With F&amp;B Package — product codes</div>
-      <div class="ap-col-desc">Matched against the PRODUCTS field in the report</div>
-      <div class="ap-tag-list" id="ap-tags-fb" ondragover="apOnDragOver(event)" ondrop="apOnDrop(event,'fb')" ondragleave="apOnDragLeave(event)"></div>
-      <div class="ap-add-row">
-        <input id="ap-inp-fb" placeholder="e.g. BB, HB, FB" onkeydown="apKd(event,'fb')">
-        <button class="ap-add-btn" onclick="apAddPkg('fb')">+ Add</button>
-      </div>
-      <div class="ap-opts-row">
-        <label>F&amp;B match:</label>
-        <select id="ap-mode-fb"><option value="contains">contains</option><option value="exact">exact word</option></select>
-        <label style="margin-left:12px;">Exclude statuses:</label>
-        <input class="ap-excl-inp" id="ap-excl-status" placeholder="e.g. CKOUT,NOSHOW" value="">
-      </div>
-    </div>
-  </div>
-
-  <!-- PROCESS BUTTONS -->
-  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px;">
-    <button class="btn gold" onclick="apRun()">⚡ Process Report</button>
-    <button class="btn" onclick="apResetAll()">✕ Clear</button>
-    <button class="btn" onclick="apSaveProfile()">💾 Save Profile</button>
-    <button class="btn" onclick="apLoadProfile()">📂 Load Profile</button>
-    <span class="ap-st" id="ap-st"></span>
-  </div>
-
-  <!-- OUTPUT -->
-  <div id="ap-out" style="display:none;">
-    <div class="ap-stat-cards" id="ap-cards"></div>
-
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
-      <span style="font-size:13px;font-weight:500;color:var(--text);">Day-by-day breakdown</span>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">
-        <button class="btn sm" onclick="apExportExcel()">⬇ Export Excel</button>
-        <button class="btn sm" onclick="apCopyAll()">📋 Copy all rows</button>
-        <button class="btn sm" onclick="apCopySel()">📅 Copy selected row</button>
-      </div>
-    </div>
-
-    <div class="ap-tw">
-      <table>
-        <thead>
-          <tr id="ap-thead-row">
-            <th style="width:75px;text-align:left;padding-left:14px;cursor:pointer;" onclick="apSortBy('date')">Date<span class="sort-arrow"></span></th>
-            <th style="cursor:pointer;" onclick="apSortBy('rms')">Arrival<br>Rooms<span class="sort-arrow"></span></th>
-            <th style="cursor:pointer;" onclick="apSortBy('upsell')">Upsell<br>Rooms<span class="sort-arrow"></span></th>
-            <th style="cursor:pointer;" onclick="apSortBy('adl')">Arrival<br>Pax<span class="sort-arrow"></span></th>
-            <th style="cursor:pointer;" onclick="apSortBy('fbWith')">With<br>F&amp;B Pkg<span class="sort-arrow"></span></th>
-            <th style="cursor:pointer;" onclick="apSortBy('fbWithout')">Without<br>F&amp;B Pkg<span class="sort-arrow"></span></th>
-            <th style="cursor:pointer;" onclick="apSortBy('fo')">FO F&amp;B<br>Upsell<span class="sort-arrow"></span></th>
-          </tr>
-        </thead>
-        <tbody id="ap-tbody"></tbody>
-        <tfoot id="ap-tfoot"></tfoot>
-      </table>
-    </div>
-    <div style="font-size:11px;color:var(--text3);margin-top:8px;display:flex;align-items:center;gap:5px;">
-      ℹ Click a row to select · Click column headers to sort · Export Excel = full report download
-    </div>
-  </div>
-
-</div><!-- /panel-arrivals-proc -->
-
-<div class="panel" id="panel-guestmem">
-  <div class="panel-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:18px;">
-    <div>
-      <div style="font-size:1.15rem;font-weight:700;color:var(--text);">🧠 Guest Memory</div>
-      <div style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);margin-top:3px;">Stores nationality &amp; email for returning guests — auto-fills on every load</div>
-    </div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-      <button class="btn sm gold" onclick="gmScanAndSaveAll()">⚡ Scan &amp; Save All</button>
-      <button class="btn sm gold" onclick="gmExport()">📥 Export CSV</button>
-      <label class="btn sm" style="cursor:pointer;">📂 Import CSV<input type="file" accept=".csv" style="display:none;" onchange="gmImportFile(this)"/></label>
-      <button class="btn sm" style="color:var(--rose);" onclick="gmClearAll()">🗑 Clear All</button>
-    </div>
-  </div>
-
-  <div style="background:rgba(90,180,232,0.07);border:1px solid rgba(90,180,232,0.2);border-radius:10px;padding:13px 16px;margin-bottom:18px;font-family:var(--mono);font-size:0.65rem;color:var(--text2);line-height:1.7;">
-    <strong style="color:var(--sky);">✦ How it works</strong><br>
-    Every time you type or correct a guest's <strong>nationality</strong> or <strong>email</strong> in the Arrivals or Purpose panels, it's saved here automatically.<br>
-    Next time that guest appears, their data is filled in instantly — no retyping. Shared with all colleagues via Firebase.
-  </div>
-
-  <div class="gm-stat-row">
-    <div class="gm-stat"><div class="gm-stat-val" id="gm-count">—</div><div class="gm-stat-lbl">Profiles Stored</div></div>
-    <div class="gm-stat"><div class="gm-stat-val" id="gm-with-nat">—</div><div class="gm-stat-lbl">With Nationality</div></div>
-    <div class="gm-stat"><div class="gm-stat-val" id="gm-with-email">—</div><div class="gm-stat-lbl">With Email</div></div>
-    <div class="gm-stat"><div class="gm-stat-val" id="gm-total-hits">—</div><div class="gm-stat-lbl">Total Auto-fills</div></div>
-  </div>
-
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-    <div style="position:relative;flex:1;">
-      <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:0.8rem;">🔍</span>
-      <input id="gmSearch" type="text" placeholder="Search guest name…" oninput="_gmRenderTable()" style="width:100%;box-sizing:border-box;padding:8px 12px 8px 32px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:0.68rem;outline:none;"/>
-    </div>
-    <span id="gmProfileCount" style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);white-space:nowrap;">0 profiles</span>
-  </div>
-
-  <div class="card" style="overflow-x:auto;padding:0;">
-    <table style="width:100%;border-collapse:collapse;">
-      <thead>
-        <tr style="background:var(--bg2,#0d1017);">
-          <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.55rem;color:var(--text3);letter-spacing:.1em;font-weight:600;">GUEST NAME</th>
-          <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.55rem;color:var(--text3);letter-spacing:.1em;font-weight:600;">NATIONALITY</th>
-          <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.55rem;color:var(--text3);letter-spacing:.1em;font-weight:600;">EMAIL</th>
-          <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.55rem;color:var(--text3);letter-spacing:.1em;font-weight:600;">PURPOSE</th>
-          <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.55rem;color:var(--text3);letter-spacing:.1em;font-weight:600;">SEEN</th>
-          <th style="padding:10px 12px;"></th>
-        </tr>
-      </thead>
-      <tbody id="gmTable">
-        <tr><td colspan="6" style="text-align:center;padding:48px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">Loading guest memory…</td></tr>
-      </tbody>
-    </table>
-  </div>
-  <div style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);margin-top:10px;line-height:1.6;">
-    ✦ Profiles are saved automatically when you edit nationality or email in Arrivals / Purpose panels.<br>
-    🔵 Blue border on a field = auto-filled from memory this session.
-  </div>
-</div><!-- /panel-guestmem -->
 </main>
 </div><!-- /layout -->
 
@@ -1343,9 +774,7 @@
 <script src="shifts.js"></script>
 <script src="checklist.js"></script>
 <script src="reports.js"></script>
-<script src="arr-dep-xref.js"></script>
 <script src="tourism-tax.js"></script>
-<script src="arrivals-proc.js"></script>
 
 <script>
 // ════════════════════════════════════════════════
@@ -1369,7 +798,6 @@ async function saveSettings(patch) {
 
 // ── Feedback modal ────────────────────────────────────────
 function openFeedback() {
-  ['fb-text','fb-name'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('feedbackModal').classList.add('open');
 }
 function closeFeedbackModal() {
@@ -1627,54 +1055,6 @@ function clResetSilent() {
   clearHandover();
   showToast('Checklist reset for new night ✓', 'ok');
 }
-// ── Mobile nav ────────────────────────────────────────────
-function mobNavSwitch(btn) {
-  document.querySelectorAll('.mob-nav-btn').forEach(b => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-}
-
-function toggleMobMore() {
-  const drawer  = document.getElementById('mobMoreDrawer');
-  const overlay = document.getElementById('mobMoreOverlay');
-  const isOpen  = drawer.style.display !== 'none';
-  drawer.style.display  = isOpen ? 'none' : 'block';
-  overlay.style.display = isOpen ? 'none' : 'block';
-  document.getElementById('mobMoreBtn')?.classList.toggle('active', !isOpen);
-}
-
-// Sync sidebar badges → mobile nav badges
-function syncMobBadges() {
-  [['departures','badge-departures'], ['arrivals','badge-arrivals'],
-   ['checklist','badge-checklist'], ['shifts','badge-shifts']].forEach(([panel, srcId]) => {
-    const src  = document.getElementById(srcId);
-    const dest = document.getElementById('mob-badge-' + panel);
-    if (src && dest) {
-      const v = src.textContent;
-      dest.textContent = (v && v !== '0' && v !== '—') ? v : '';
-      dest.style.display = (v && v !== '0' && v !== '—') ? 'flex' : 'none';
-    }
-  });
-}
-
-// Override showPanel to also update mobile nav
-const _origShowPanel = showPanel;
-window.showPanel = function(name) {
-  _origShowPanel(name);
-  // Update mobile nav active state
-  document.querySelectorAll('.mob-nav-btn[data-panel]').forEach(b => {
-    b.classList.toggle('active', b.dataset.panel === name);
-  });
-  // Close more drawer if open
-  const drawer = document.getElementById('mobMoreDrawer');
-  if (drawer && drawer.style.display !== 'none') toggleMobMore();
-};
-
-// Sync badges every 5 seconds
-setInterval(syncMobBadges, 5000);
-
-// ── Action log toggle state ───────────────────────────────
-let _logOpen = true; // dep action log starts open
-
 function toggleLog() {
   _logOpen = !_logOpen;
   const body = document.getElementById('depLogBody');
@@ -1687,146 +1067,14 @@ function toggleLog() {
 function clearNat()   { document.getElementById('natInput').value=''; document.getElementById('natResults').style.display='none'; document.getElementById('natError').classList.remove('show'); }
 function clearRent()  { ['rentInput1','rentInput2'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';}); const r=document.getElementById('rentResults');if(r)r.style.display='none'; }
 function clearAudit() { ['naOperaInput','naExcelInput'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';}); const s=document.getElementById('naCompareSection');if(s)s.style.display='none'; }
-function clearImmig() {
-  const p = document.getElementById('immigPasteInput2'); if (p) p.value = '';
-  const r = document.getElementById('immigResults2');    if (r) r.style.display = 'none';
-  const e2 = document.getElementById('immigError2');     if (e2) e2.classList.remove('show');
-  const badge = document.getElementById('immigTabCount'); if (badge) badge.textContent = 'Upload';
-  const fi = document.getElementById('immigFileInput2'); if (fi) fi.value = '';
-  immigAllRows2 = [];
-}
+function clearImmig() { const p=document.getElementById('immigPasteInput2');if(p)p.value=''; const r=document.getElementById('immigResults2');if(r)r.style.display='none'; const e2=document.getElementById('immigError2');if(e2)e2.classList.remove('show'); }
 
-// ── Keyboard shortcuts ───────────────────────────────────
-// Skips if focus is inside any input, textarea, or select.
-(function () {
-  const PANEL_KEYS = {
-    '1': 'departures',
-    '2': 'arrivals',
-    '3': 'purpose',
-    '4': 'checklist',
-    '5': 'shifts',
-    '6': 'nationality',
-    '7': 'rent',
-    '8': 'immig',
-    '9': 'tourism',
-  };
-  const DEP_FILTER_KEYS = {
-    'a': 'all',
-    'd': 'due',
-    'l': 'late',
-    'n': 'na',
-    'o': 'out',
-    'e': 'extended',
-    'b': 'balance',
-  };
-
-  function inInput() {
-    const t = document.activeElement?.tagName;
-    return t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT';
-  }
-  function activePanel() {
-    return document.querySelector('.panel.active')?.id?.replace('panel-', '') || '';
-  }
-
-  document.addEventListener('keydown', e => {
-    // ── Always: Escape ──────────────────────────────────
-    if (e.key === 'Escape') {
-      // Cancel selection mode first
-      if (typeof _selGroup !== 'undefined' && _selGroup) { depCancelSelect(); return; }
-      // Close any open copy menu
-      document.querySelectorAll('.dep-copy-menu.open').forEach(m => m.classList.remove('open'));
-      // Close jump bar
-      const jb = document.getElementById('depJumpBar');
-      if (jb && jb.style.display !== 'none') { toggleDepJump(); return; }
-      // Close modals
-      document.querySelectorAll('.modal-bg.open').forEach(m => m.classList.remove('open'));
-      clCloseLightbox?.();
-      // Close cheat sheet
-      document.getElementById('kbModal')?.classList.remove('open');
-      return;
-    }
-
-    // ── ? — cheat sheet (always, even in input) ─────────
-    if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
-      e.preventDefault();
-      document.getElementById('kbModal').classList.toggle('open');
-      return;
-    }
-
-    // Below here: skip if typing in an input
-    if (inInput()) return;
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
-
-    const k = (e.key || '').toLowerCase();
-    const panel = activePanel();
-
-    // ── Panel navigation 1-9 ────────────────────────────
-    if (PANEL_KEYS[e.key]) {
-      e.preventDefault();
-      showPanel(PANEL_KEYS[e.key]);
-      return;
-    }
-
-    // ── Global shortcuts ────────────────────────────────
-    if (k === 't') { toggleTheme(); showKbToast('Theme toggled'); return; }
-
-    // ── Departure board shortcuts ────────────────────────
-    if (panel === 'departures') {
-      // Filter chips
-      if (DEP_FILTER_KEYS[k]) {
-        e.preventDefault();
-        const f = DEP_FILTER_KEYS[k];
-        depFilter(f, document.querySelector(`[data-f="${f}"]`));
-        showKbToast('Filter: ' + f);
-        return;
-      }
-      // / — focus search
-      if (k === '/') {
-        e.preventDefault();
-        const s = document.getElementById('depSearch');
-        if (s) { s.focus(); s.select(); }
-        return;
-      }
-      // J — quick jump panel
-      if (k === 'j') { toggleDepJump(); showKbToast('Quick Jump'); return; }
-      // G — action log
-      if (k === 'g') { toggleLog(); showKbToast('Action Log'); return; }
-      // R — sort by room
-      if (k === 'r') { depSetSort('room'); showKbToast('Sort: Room'); return; }
-      // S — sort smart
-      if (k === 's') { depSetSort('smart'); showKbToast('Sort: Smart'); return; }
-    }
-
-    // ── Checklist shortcuts ──────────────────────────────
-    if (panel === 'checklist') {
-      // Space — tick the first unticked step
-      if (e.key === ' ') {
-        e.preventDefault();
-        const firstUndone = CL_STEPS.find(s => !clState.done.has(s.id) && !clState.skipped.has(s.id));
-        if (firstUndone) { clToggle(firstUndone.id); showKbToast('Step ticked ✓'); }
-        return;
-      }
-    }
-  });
-
-  // Small non-intrusive toast for key feedback
-  window.showKbToast = function(msg) {
-    let el = document.getElementById('kbToast');
-    if (!el) {
-      el = document.createElement('div');
-      el.id = 'kbToast';
-      el.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%);' +
-        'background:var(--card3);border:1px solid var(--border3);color:var(--text2);' +
-        'font-family:var(--mono);font-size:0.62rem;padding:5px 14px;border-radius:8px;' +
-        'z-index:9999;pointer-events:none;opacity:0;transition:opacity 0.15s;white-space:nowrap;';
-      document.body.appendChild(el);
-    }
-    el.textContent = msg;
-    el.style.opacity = '1';
-    clearTimeout(el._t);
-    el._t = setTimeout(() => { el.style.opacity = '0'; }, 900);
-  };
-})();
+// ── ESC key closes any open modal ───────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  document.querySelectorAll('.modal-bg.open').forEach(m => m.classList.remove('open'));
+  clCloseLightbox();
+});
 
 // ── Click backdrop to close modal ───────────────────────
 document.querySelectorAll('.modal-bg').forEach(bg => {
@@ -1836,6 +1084,15 @@ document.querySelectorAll('.modal-bg').forEach(bg => {
 });
 
 async function appInit() {
+  // 1 — Init Firebase
+  try {
+    const app = firebase.initializeApp(FIREBASE_CONFIG);
+    dbInit(app);
+  } catch(e) {
+    console.warn('Firebase init failed — running offline:', e);
+    updateConnectionUI(false);
+  }
+
   // Wait a moment for DB to initialize
   await new Promise(r => setTimeout(r, 500));
 
@@ -1913,7 +1170,7 @@ async function appInit() {
   // 10 — Set up real-time listeners
   listenDepartures(snap => {
     if (!snap || !snap.rooms) return;
-    depRooms = snap.rooms;
+    depRooms = snap.rooms; 
     depLog = snap.log || [];
     if (depRooms.length) {
       const uploadCard = document.getElementById('depUploadCard');
@@ -1929,12 +1186,6 @@ async function appInit() {
     if (!snap || !snap.guests) return;
     arrGuests = snap.guests; 
     arrRender();
-  });
-
-  listenPurpose(snap => {
-    if (!snap || !snap.guests) return;
-    purposeGuests = snap.guests;
-    purposeRender();
   });
   
   listenChecklist(snap => {
@@ -1972,7 +1223,6 @@ async function appInit() {
   if (typeof arrRender !== 'undefined') arrRender();
   if (typeof purposeRender !== 'undefined') purposeRender();
   if (typeof renderShift !== 'undefined') renderShift(activeShift);
-  if (typeof initArrivalsProc !== 'undefined') initArrivalsProc();
   Object.keys(SHIFTS).forEach(k => updateShiftBadge(k));
   updateClock();
   setInterval(updateClock, 30000);
@@ -1989,26 +1239,10 @@ async function appInit() {
   showToast('App ready — connected to Firebase', 'ok');
 }
 
-// appInit is called by hideLoginScreen after auth succeeds
+// Start the app
+appInit();
 </script>
 <!-- RELOAD MODAL -->
-<!-- ════════ XREF RELOAD MODAL ════════ -->
-<div class="modal-bg" id="xrefReloadModal">
-  <div class="modal">
-    <h3>🔄 Reload Arrivals Report</h3>
-    <p style="color:var(--text2); margin-bottom:12px;">Paste the latest Opera Arrivals report (Delimited Data). Existing data will be replaced.</p>
-    <textarea id="xrefReloadInput" rows="12"
-      style="width:100%; font-family:var(--mono); font-size:0.75rem; padding:12px;"
-      placeholder="Paste full arrivals report here..."></textarea>
-    <div class="error-box" id="xrefReloadError" style="display:none;">
-      <span id="xrefReloadErrorMsg"></span>
-    </div>
-    <div class="modal-actions" style="margin-top:16px;">
-      <button class="btn" onclick="closeXrefReloadModal()">Cancel</button>
-      <button class="btn gold" onclick="processXrefReload()">🔗 Reload &amp; Re-check</button>
-    </div>
-  </div>
-</div>
 <div class="modal-bg" id="depReloadModal">
   <div class="modal">
     <h3>🔄 Reload from Opera</h3>
@@ -2069,226 +1303,6 @@ async function appInit() {
   </div>
   <div class="cl-lightbox-caption" id="clLightboxCaption"></div>
 </div>
-
-<!-- ── Keyboard shortcut cheat sheet ── -->
-<div class="modal-bg" id="kbModal">
-  <div class="modal kb-modal">
-    <div class="kb-modal-head">
-      <h3>⌨ Keyboard Shortcuts</h3>
-      <button class="kb-close" onclick="document.getElementById('kbModal').classList.remove('open')">✕</button>
-    </div>
-    <div class="kb-sections">
-      <div class="kb-section">
-        <div class="kb-section-title">Navigation</div>
-        <div class="kb-row"><kbd>1</kbd><span>Departure Board</span></div>
-        <div class="kb-row"><kbd>2</kbd><span>Arrivals</span></div>
-        <div class="kb-row"><kbd>3</kbd><span>Purpose of Stay</span></div>
-        <div class="kb-row"><kbd>4</kbd><span>Night Checklist</span></div>
-        <div class="kb-row"><kbd>5</kbd><span>Shift Tasks</span></div>
-        <div class="kb-row"><kbd>6</kbd><span>Nationality Report</span></div>
-        <div class="kb-row"><kbd>7</kbd><span>Rented Rooms</span></div>
-        <div class="kb-row"><kbd>8</kbd><span>Immigration Check</span></div>
-        <div class="kb-row"><kbd>9</kbd><span>Tourism Tax</span></div>
-      </div>
-      <div class="kb-section">
-        <div class="kb-section-title">Departure Board</div>
-        <div class="kb-row"><kbd>A</kbd><span>Filter: All active</span></div>
-        <div class="kb-row"><kbd>D</kbd><span>Filter: Due Out</span></div>
-        <div class="kb-row"><kbd>L</kbd><span>Filter: Late CO</span></div>
-        <div class="kb-row"><kbd>N</kbd><span>Filter: No Answer</span></div>
-        <div class="kb-row"><kbd>O</kbd><span>Filter: Checked Out</span></div>
-        <div class="kb-row"><kbd>E</kbd><span>Filter: Extended</span></div>
-        <div class="kb-row"><kbd>B</kbd><span>Filter: Balance</span></div>
-        <div class="kb-row"><kbd>/</kbd><span>Focus room search</span></div>
-        <div class="kb-row"><kbd>J</kbd><span>Quick Jump panel</span></div>
-        <div class="kb-row"><kbd>G</kbd><span>Toggle action log</span></div>
-        <div class="kb-row"><kbd>S</kbd><span>Sort: Smart</span></div>
-        <div class="kb-row"><kbd>R</kbd><span>Sort: Room number</span></div>
-      </div>
-      <div class="kb-section">
-        <div class="kb-section-title">Checklist</div>
-        <div class="kb-row"><kbd>Space</kbd><span>Tick next step</span></div>
-      </div>
-      <div class="kb-section">
-        <div class="kb-section-title">Global</div>
-        <div class="kb-row"><kbd>T</kbd><span>Toggle theme</span></div>
-        <div class="kb-row"><kbd>?</kbd><span>Show / hide this panel</span></div>
-        <div class="kb-row"><kbd>Esc</kbd><span>Close / cancel / back</span></div>
-      </div>
-    </div>
-    <div class="kb-footer">Shortcuts are disabled while typing in any input field.</div>
-  </div>
-</div>
-
-<!-- ── MOBILE BOTTOM NAV ── -->
-<nav class="mob-nav" id="mobNav">
-  <button class="mob-nav-btn active" onclick="showPanel('departures');mobNavSwitch(this)" data-panel="departures">
-    <span class="mob-nav-icon">🚪</span>
-    <span class="mob-nav-lbl">Depart</span>
-    <span class="mob-nav-badge" id="mob-badge-departures"></span>
-  </button>
-  <button class="mob-nav-btn" onclick="showPanel('arrivals');mobNavSwitch(this)" data-panel="arrivals">
-    <span class="mob-nav-icon">🛎️</span>
-    <span class="mob-nav-lbl">Arrivals</span>
-    <span class="mob-nav-badge" id="mob-badge-arrivals"></span>
-  </button>
-  <button class="mob-nav-btn" onclick="showPanel('checklist');mobNavSwitch(this)" data-panel="checklist">
-    <span class="mob-nav-icon">✅</span>
-    <span class="mob-nav-lbl">Checklist</span>
-    <span class="mob-nav-badge" id="mob-badge-checklist"></span>
-  </button>
-  <button class="mob-nav-btn" onclick="showPanel('shifts');mobNavSwitch(this)" data-panel="shifts">
-    <span class="mob-nav-icon">⏰</span>
-    <span class="mob-nav-lbl">Shifts</span>
-    <span class="mob-nav-badge" id="mob-badge-shifts"></span>
-  </button>
-  <button class="mob-nav-btn" onclick="toggleMobMore()" id="mobMoreBtn">
-    <span class="mob-nav-icon">⋯</span>
-    <span class="mob-nav-lbl">More</span>
-  </button>
-</nav>
-
-<!-- Mobile "More" drawer -->
-<div class="mob-more-overlay" id="mobMoreOverlay" onclick="toggleMobMore()" style="display:none;"></div>
-<div class="mob-more-drawer" id="mobMoreDrawer" style="display:none;">
-  <div class="mob-more-grid">
-    <button class="mob-more-item" data-panel="purpose"     onclick="showPanel('purpose');toggleMobMore()"><span>📋</span>Purpose</button>
-    <button class="mob-more-item" data-panel="nationality" onclick="showPanel('nationality');toggleMobMore()"><span>🌍</span>Nationality</button>
-    <button class="mob-more-item" data-panel="rent"        onclick="showPanel('rent');toggleMobMore()"><span>🛏️</span>Rented Rooms</button>
-    <button class="mob-more-item" data-panel="audit"       onclick="showPanel('audit');toggleMobMore()"><span>🌙</span>PM Rooms</button>
-    <button class="mob-more-item" data-panel="immig"       onclick="showPanel('immig');toggleMobMore()"><span>🛂</span>Immigration</button>
-    <button class="mob-more-item" data-panel="tourism"     onclick="showPanel('tourism');toggleMobMore()"><span>🏛️</span>Tourism Tax</button>
-    <button class="mob-more-item" id="mobAdminBtn"          onclick="openAdminPanel();toggleMobMore()" style="display:none;"><span>👥</span>Team</button>
-    <button class="mob-more-item"                           onclick="exportAllData();toggleMobMore()"><span>💾</span>Export</button>
-    <button class="mob-more-item"                           onclick="toggleMobMore();setTimeout(()=>document.querySelector('.mob-import-input').click(),100)"><span>📂</span>Import</button>
-    <button class="mob-more-item"                           onclick="authLogout();toggleMobMore()"><span>⏻</span>Sign Out</button>
-  </div>
-  <input type="file" accept=".json" class="mob-import-input" onchange="handleImport(this)" style="display:none"/>
-</div>
-
-</div><!-- /appWrapper -->
-
-
-<!-- ══════════════════════════════════════════════════════
-     ADMIN PANEL MODAL
-══════════════════════════════════════════════════════ -->
-<div class="modal-bg" id="adminModal">
-  <div class="modal admin-modal">
-    <div class="admin-modal-head">
-      <div>
-        <div style="font-size:1.1rem;font-weight:700;color:var(--text);">👥 Team Management</div>
-        <div style="font-size:0.65rem;color:var(--text3);font-family:var(--mono);">Ibis Styles Dubai · User Accounts</div>
-      </div>
-      <button class="kb-close" onclick="closeAdminPanel()">✕</button>
-    </div>
-
-    <div class="admin-tabs">
-      <button class="admin-tab-btn active" data-tab="users" onclick="adminTab('users')">👥 Users</button>
-      <button class="admin-tab-btn" data-tab="activity" onclick="adminTab('activity');adminLoadActivity()">📋 Activity Log</button>
-    </div>
-
-    <div id="adminTab-users" class="admin-tab-pane">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <span style="font-size:0.72rem;color:var(--text3);font-family:var(--mono);">All accounts for this property</span>
-        <button class="btn gold sm" onclick="openCreateUser()">+ New Account</button>
-      </div>
-
-      <div id="adminCreateForm" style="display:none;" class="admin-form-card">
-        <div class="admin-form-title">➕ Create New Account</div>
-        <div class="admin-form-grid">
-          <div class="login-field"><label class="login-label">Full Name</label><input id="newUserName" class="login-input" placeholder="Ahmed Al Mansouri" type="text"/></div>
-          <div class="login-field"><label class="login-label">Email</label><input id="newUserEmail" class="login-input" placeholder="ahmed@ibis-dubai.com" type="email"/></div>
-          <div class="login-field"><label class="login-label">Password</label><input id="newUserPass" class="login-input" placeholder="Min 6 characters" type="password"/></div>
-          <div class="login-field"><label class="login-label">Role</label>
-            <select id="newUserRole" class="login-input">
-              <option value="agent">🛎️ Agent — Ops only</option>
-              <option value="supervisor">⭐ Supervisor — All modules</option>
-              <option value="manager">🏅 Manager — All + manage agents</option>
-              <option value="owner">👑 Owner — Full control</option>
-              <option value="readonly">👁️ Read Only</option>
-            </select>
-          </div>
-        </div>
-        <div id="adminCreateErr" class="login-error" style="display:none;"></div>
-        <div style="display:flex;gap:8px;margin-top:10px;">
-          <button id="adminCreateBtn" class="btn gold" onclick="adminCreateUser()">Create Account</button>
-          <button class="btn" onclick="closeCreateUser()">Cancel</button>
-        </div>
-      </div>
-
-      <div id="adminEditForm" style="display:none;" class="admin-form-card">
-        <input type="hidden" id="editUserId"/>
-        <div class="admin-form-title">✏️ Edit Account</div>
-        <div class="admin-form-grid">
-          <div class="login-field"><label class="login-label">Full Name</label><input id="editUserName" class="login-input" type="text"/></div>
-          <div class="login-field"><label class="login-label">Role</label>
-            <select id="editUserRole" class="login-input">
-              <option value="agent">🛎️ Agent</option>
-              <option value="supervisor">⭐ Supervisor</option>
-              <option value="manager">🏅 Manager</option>
-              <option value="owner">👑 Owner</option>
-              <option value="readonly">👁️ Read Only</option>
-            </select>
-          </div>
-          <div class="login-field"><label class="login-label">New Password <span style="color:var(--text3);font-size:0.65rem;">(leave blank to keep)</span></label><input id="editUserPass" class="login-input" type="password" placeholder="Leave blank to keep current"/></div>
-        </div>
-        <div id="adminEditErr" class="login-error" style="display:none;"></div>
-        <div style="display:flex;gap:8px;margin-top:10px;">
-          <button id="adminSaveEditBtn" class="btn gold" onclick="adminSaveEdit()">Save Changes</button>
-          <button class="btn" onclick="closeEditUser()">Cancel</button>
-        </div>
-      </div>
-
-      <div class="admin-table-wrap">
-        <table class="admin-table">
-          <thead><tr><th>Name / Email</th><th>Role</th><th>Status</th><th>Last Login</th><th>Actions</th></tr></thead>
-          <tbody id="adminUserTable"><tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text3);">Loading…</td></tr></tbody>
-        </table>
-      </div>
-    </div>
-
-    <div id="adminTab-activity" class="admin-tab-pane" style="display:none;">
-      <div id="adminActivityLog" style="max-height:420px;overflow-y:auto;">
-        <div style="text-align:center;padding:24px;color:var(--text3);">Loading…</div>
-      </div>
-    </div>
-
-    <div class="admin-role-legend">
-      <div class="admin-legend-title">Role Permissions</div>
-      <div class="admin-legend-grid">
-        <div class="admin-legend-row"><span style="color:#f0a43a;">👑 Owner</span><span>Full access · manage all users · import/export</span></div>
-        <div class="admin-legend-row"><span style="color:#8b7cf8;">🏅 Manager</span><span>All modules · manage agents · export</span></div>
-        <div class="admin-legend-row"><span style="color:#5ab4e8;">⭐ Supervisor</span><span>All modules · no user management</span></div>
-        <div class="admin-legend-row"><span style="color:#3ecf8e;">🛎️ Agent</span><span>Departures · Arrivals · Shifts · Checklist only</span></div>
-        <div class="admin-legend-row"><span style="color:#888;">👁️ Read Only</span><span>View only — no actions</span></div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<script src="guest-memory.js"></script>
-<script src="auth.js"></script>
-<script>
-// ── Auth-gated boot ───────────────────────────────────────
-(function boot() {
-  try {
-    firebase.initializeApp(FIREBASE_CONFIG);
-    dbInit();
-    gmInit();
-  } catch(e) {
-    console.warn('Firebase init failed:', e);
-    updateConnectionUI(false);
-  }
-  showLoginScreen();
-  authInit();
-})();
-
-const _origHide = hideLoginScreen;
-window.hideLoginScreen = function() {
-  _origHide();
-  appInit();
-};
-</script>
 
 </body>
 </html>

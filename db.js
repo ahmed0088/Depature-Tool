@@ -8,9 +8,6 @@ let _db     = null;
 let _ref    = null;
 let _online = false;
 
-// Read-only accessor used by other modules (shifts.js, etc.)
-function isOnline() { return _online; }
-
 function dbInit() {
   try {
     _db  = firebase.database();

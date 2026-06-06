@@ -408,12 +408,10 @@ function clToggle2(id) {
     clState.done.delete(id);
     delete clDoneTimes[id];
     clAddLog('undone', id, step?.name);
-    logActivity('checklist_undone', step?.name || id);
   } else {
     clState.done.add(id);
     clDoneTimes[id] = new Date().toISOString();
     clAddLog('done', id, step?.name);
-    logActivity('checklist_done', step?.name || id);
   }
   clRender2();
   clSaveAll();
@@ -424,13 +422,11 @@ function clSkip2(id) {
   if (clState.skipped.has(id)) {
     clState.skipped.delete(id);
     clAddLog('unskipped', id, step?.name);
-    logActivity('checklist_unskipped', step?.name || id);
   } else {
     clState.skipped.add(id);
     clState.done.delete(id);
     delete clDoneTimes[id];
     clAddLog('skipped', id, step?.name);
-    logActivity('checklist_skipped', step?.name || id);
   }
   clRender2();
   clSaveAll();

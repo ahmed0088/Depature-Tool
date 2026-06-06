@@ -122,17 +122,8 @@ function ttLoad() {
 
   ttGuests = result;
 
-  // Extract report date from the data itself (first guest's arrival date) rather than
-  // a fragile regex on raw text — Opera date formats: DD-MMM-YYYY or DD/MM/YYYY
-  let ttDateStr = '';
-  if (ttGuests.length && ttGuests[0].arrDate) {
-    ttDateStr = ttGuests[0].arrDate;
-  } else {
-    // Fallback: scan raw text for a recognisable Opera date (DD-Mon-YYYY preferred)
-    const m = ttRawText.match(/\d{2}-(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{4}/i)
-           || ttRawText.match(/\d{2}[-\/]\d{2}[-\/]\d{4}/);
-    ttDateStr = m ? m[0] : new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
-  }
+  const firstDate = ttRawText.match(/\d{2}-\d{2}-\d{4}|\d{2}\/\d{2}\/\d{4}/)?.[0] || '';
+  ttDateStr = firstDate || new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
 
   document.getElementById('ttPasteCard').style.display     = 'none';
   document.getElementById('ttResultCard').style.display    = 'block';
