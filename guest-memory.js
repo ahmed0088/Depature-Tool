@@ -47,17 +47,17 @@ function gmInit() {
     _gmUpdateUI();
     console.log(`[GuestMemory] loaded — ${Object.keys(_gmStore).length} profiles`);
 
-    // ── FIX: self-healing fill ────────────────────────────
+    // ── Self-healing fill ─────────────────────────────────
     // If Firebase was slow and guests were already loaded before
     // _gmReady became true, retroactively fill them now.
-    let didFill = false;
+    // silent=true suppresses the toast to avoid interrupting edits.
     if (typeof arrGuests !== 'undefined' && arrGuests.length) {
-      const n = gmAutoFill(arrGuests);
-      if (n > 0) { didFill = true; if (typeof arrRender === 'function') arrRender(); }
+      const n = gmAutoFill(arrGuests, true);
+      if (n > 0 && typeof arrRender === 'function') arrRender();
     }
     if (typeof purposeGuests !== 'undefined' && purposeGuests.length) {
-      const n = gmAutoFill(purposeGuests);
-      if (n > 0) { didFill = true; if (typeof purposeRender === 'function') purposeRender(); }
+      const n = gmAutoFill(purposeGuests, true);
+      if (n > 0 && typeof purposeRender === 'function') purposeRender();
     }
   });
 }
@@ -75,8 +75,9 @@ function _gmPersist() {
 }
 
 // ── Auto-fill: call after loading any guest list ──────────
-// Returns count of guests that were auto-filled
-function gmAutoFill(guests) {
+// Returns count of guests that were auto-filled.
+// Pass silent=true to skip the toast (used for self-healing fills).
+function gmAutoFill(guests, silent) {
   if (!_gmReady || !guests || !guests.length) return 0;
   let filled = 0;
   guests.forEach(g => {
@@ -98,7 +99,7 @@ function gmAutoFill(guests) {
   });
   if (filled) {
     _gmPersist();
-    showToast(`✦ ${filled} guest${filled !== 1 ? 's' : ''} auto-filled from memory`, 'info');
+    if (!silent) showToast(`✦ ${filled} guest${filled !== 1 ? 's' : ''} auto-filled from memory`, 'info');
   }
   return filled;
 }

@@ -2,6 +2,21 @@
 //  arrivals-purpose.js  —  Arrivals + Purpose of Stay + Guest modal + File loader
 // ═══════════════════════════════════════════════════════════
 
+// ── Debounced save helpers ────────────────────────────────
+// Saves fire 800ms after the last keystroke — table never
+// re-renders while the user is mid-edit.
+let _saveArrTimer     = null;
+let _savePurposeTimer = null;
+
+function debounceSaveArrivals() {
+  clearTimeout(_saveArrTimer);
+  _saveArrTimer = setTimeout(() => saveArrivals(arrGuests), 800);
+}
+function debounceSavePurpose() {
+  clearTimeout(_savePurposeTimer);
+  _savePurposeTimer = setTimeout(() => savePurpose(purposeGuests), 800);
+}
+
 // ── ARRIVALS ──────────────────────────────────────────────
 
 // ── Shared log helper ─────────────────────────────────────
@@ -91,20 +106,38 @@ function arrRender() {
   tbody.innerHTML = filtered.map(g => {
     const i = arrGuests.indexOf(g);
     return `<tr class="${g.purpose==='Leisure'?'leisure-row':''}">
-      <td><input value="${g.room}"    onchange="arrGuests[${i}].room=this.value;saveArrivals(arrGuests)" style="width:46px;"/></td>
-      <td><input value="${g.conf}"    onchange="arrGuests[${i}].conf=this.value" style="width:86px;"/></td>
-      <td><input value="${g.name}"    onchange="arrGuests[${i}].name=this.value.toUpperCase();this.value=arrGuests[${i}].name;saveArrivals(arrGuests)" style="width:165px;"/></td>
+      <td><input value="${g.room}"
+        oninput="arrGuests[${i}].room=this.value;debounceSaveArrivals()"
+        style="width:46px;"/></td>
+      <td><input value="${g.conf}"
+        oninput="arrGuests[${i}].conf=this.value"
+        style="width:86px;"/></td>
+      <td><input value="${g.name}"
+        oninput="arrGuests[${i}].name=this.value.toUpperCase();this.value=arrGuests[${i}].name;debounceSaveArrivals()"
+        style="width:165px;"/></td>
       <td><select onchange="arrChangePurpose(${i},this.value)">
         ${['Business','Leisure','Flight'].map(p=>`<option${g.purpose===p?' selected':''}>${p}</option>`).join('')}
       </select></td>
-      <td><input type="number" value="${g.nights}" onchange="arrGuests[${i}].nights=this.value;arrKpiUpdate()" style="width:42px;"/></td>
+      <td><input type="number" value="${g.nights}"
+        oninput="arrGuests[${i}].nights=this.value;arrKpiUpdate()"
+        style="width:42px;"/></td>
       <td><div style="display:flex;gap:3px;align-items:center;">
-        <input value="${g.nat}" onchange="arrGuests[${i}].nat=this.value;gmOnEdit(arrGuests[${i}].name,'nat',this.value);saveArrivals(arrGuests)" style="width:86px;${g._fromMemory?'border-color:var(--sky);':''}"/>
+        <input value="${g.nat}"
+          oninput="arrGuests[${i}].nat=this.value;debounceSaveArrivals()"
+          onblur="gmOnEdit(arrGuests[${i}].name,'nat',arrGuests[${i}].nat)"
+          style="width:86px;${g._fromMemory?'border-color:var(--sky);':''}"/>
         <button class="icon-btn ai-btn" onclick="aiOneGuest(${i},'arr')" title="AI guess">✦</button>
       </div></td>
-      <td><input value="${g.email}"   onchange="arrGuests[${i}].email=this.value;gmOnEdit(arrGuests[${i}].name,'email',this.value);saveArrivals(arrGuests)" style="width:138px;${g._fromMemory?'border-color:var(--sky);':''}"/></td>
-      <td><input value="${g.source}"  onchange="arrGuests[${i}].source=this.value" style="width:100px;"/></td>
-      <td><input value="${g.remarks}" onchange="arrGuests[${i}].remarks=this.value" style="width:86px;"/></td>
+      <td><input value="${g.email}"
+        oninput="arrGuests[${i}].email=this.value;debounceSaveArrivals()"
+        onblur="gmOnEdit(arrGuests[${i}].name,'email',arrGuests[${i}].email)"
+        style="width:138px;${g._fromMemory?'border-color:var(--sky);':''}"/></td>
+      <td><input value="${g.source}"
+        oninput="arrGuests[${i}].source=this.value"
+        style="width:100px;"/></td>
+      <td><input value="${g.remarks}"
+        oninput="arrGuests[${i}].remarks=this.value"
+        style="width:86px;"/></td>
       <td><button class="icon-btn" onclick="arrRemoveGuest(${i})">✕</button></td>
     </tr>`;
   }).join('');
@@ -134,8 +167,6 @@ async function aiOneGuest(i, list) {
   arrRender(); purposeRender();
 }
 
-// ── FIX: gmAutoFill now runs AFTER the AI guesser so memory
-//         always wins over guessed nationalities.
 function loadArrivals() {
   const raw = document.getElementById('arrInput').value.trim();
   if (!raw) { alert('Please paste data first.'); return; }
@@ -159,7 +190,7 @@ function loadArrivals() {
   if (!guests.length) { alert('No guests found.'); return; }
   arrGuests = guests;
   arrRender();
-  // Run AI guesser first, then apply memory on top so saved data always wins
+  // AI guesser first, memory on top — memory always wins
   setTimeout(() => {
     runAINat_arr().then(() => {
       if (typeof gmAutoFill === 'function') gmAutoFill(arrGuests);
@@ -271,20 +302,38 @@ function purposeRender() {
   tbody.innerHTML = filtered.map(g => {
     const i = purposeGuests.indexOf(g);
     return `<tr class="${g.purpose==='Leisure'?'leisure-row':''}">
-      <td><input value="${g.room}"    onchange="purposeGuests[${i}].room=this.value" style="width:46px;"/></td>
-      <td><input value="${g.conf}"    onchange="purposeGuests[${i}].conf=this.value" style="width:86px;"/></td>
-      <td><input value="${g.name}"    onchange="purposeGuests[${i}].name=this.value.toUpperCase();this.value=purposeGuests[${i}].name;savePurpose(purposeGuests)" style="width:165px;"/></td>
+      <td><input value="${g.room}"
+        oninput="purposeGuests[${i}].room=this.value;debounceSavePurpose()"
+        style="width:46px;"/></td>
+      <td><input value="${g.conf}"
+        oninput="purposeGuests[${i}].conf=this.value"
+        style="width:86px;"/></td>
+      <td><input value="${g.name}"
+        oninput="purposeGuests[${i}].name=this.value.toUpperCase();this.value=purposeGuests[${i}].name;debounceSavePurpose()"
+        style="width:165px;"/></td>
       <td><select onchange="purposeChangePurpose(${i},this.value)">
         ${['Business','Leisure','Flight'].map(p=>`<option${g.purpose===p?' selected':''}>${p}</option>`).join('')}
       </select></td>
-      <td><input type="number" value="${g.nights}" onchange="purposeGuests[${i}].nights=this.value" style="width:42px;"/></td>
+      <td><input type="number" value="${g.nights}"
+        oninput="purposeGuests[${i}].nights=this.value"
+        style="width:42px;"/></td>
       <td><div style="display:flex;gap:3px;align-items:center;">
-        <input value="${g.nat}" onchange="purposeGuests[${i}].nat=this.value;gmOnEdit(purposeGuests[${i}].name,'nat',this.value);savePurpose(purposeGuests)" style="width:86px;${g._fromMemory?'border-color:var(--sky);':''}"/>
+        <input value="${g.nat}"
+          oninput="purposeGuests[${i}].nat=this.value;debounceSavePurpose()"
+          onblur="gmOnEdit(purposeGuests[${i}].name,'nat',purposeGuests[${i}].nat)"
+          style="width:86px;${g._fromMemory?'border-color:var(--sky);':''}"/>
         <button class="icon-btn ai-btn" onclick="aiOneGuest(${i},'purpose')" title="AI">✦</button>
       </div></td>
-      <td><input value="${g.email}"   onchange="purposeGuests[${i}].email=this.value;gmOnEdit(purposeGuests[${i}].name,'email',this.value);savePurpose(purposeGuests)" style="width:138px;${g._fromMemory?'border-color:var(--sky);':''}"/></td>
-      <td><input value="${g.source}"  onchange="purposeGuests[${i}].source=this.value" style="width:100px;"/></td>
-      <td><input value="${g.remarks}" onchange="purposeGuests[${i}].remarks=this.value" style="width:86px;"/></td>
+      <td><input value="${g.email}"
+        oninput="purposeGuests[${i}].email=this.value;debounceSavePurpose()"
+        onblur="gmOnEdit(purposeGuests[${i}].name,'email',purposeGuests[${i}].email)"
+        style="width:138px;${g._fromMemory?'border-color:var(--sky);':''}"/></td>
+      <td><input value="${g.source}"
+        oninput="purposeGuests[${i}].source=this.value"
+        style="width:100px;"/></td>
+      <td><input value="${g.remarks}"
+        oninput="purposeGuests[${i}].remarks=this.value"
+        style="width:86px;"/></td>
       <td><button class="icon-btn" onclick="purposeRemoveGuest(${i})">✕</button></td>
     </tr>`;
   }).join('');
@@ -311,8 +360,6 @@ function clearPurpose() {
   addPurposeLog('Cleared', 'All guests cleared');
 }
 
-// ── FIX: gmAutoFill now runs AFTER the AI guesser so memory
-//         always wins over guessed nationalities.
 function loadPurpose() {
   const raw = document.getElementById('purposeInput').value.trim();
   if (!raw) { alert('Please paste data first.'); return; }
@@ -334,7 +381,7 @@ function loadPurpose() {
   }
   purposeGuests = guests;
   purposeRender();
-  // Run AI guesser first, then apply memory on top so saved data always wins
+  // AI guesser first, memory on top — memory always wins
   setTimeout(() => {
     runAINat_purpose().then(() => {
       if (typeof gmAutoFill === 'function') gmAutoFill(purposeGuests);
@@ -415,8 +462,6 @@ function purposeAddManual() {
   openAddGuest('purpose');
 }
 
-// ── FIX: gmAutoFill now runs AFTER the AI guesser so memory
-//         always wins over guessed nationalities (file upload path).
 function loadOperaFile(input, target) {
   const file = input.files[0]; if (!file) return;
   const ext  = file.name.split('.').pop().toLowerCase();
@@ -460,7 +505,7 @@ function loadOperaFile(input, target) {
         });
       }
       if (!guests.length) { alert('No valid guest rows found.'); return; }
-      // Run AI guesser first, then apply memory on top so saved data always wins
+      // AI guesser first, memory on top — memory always wins
       if (target === 'arr') {
         arrGuests = guests;
         arrRender();
