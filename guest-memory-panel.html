@@ -123,6 +123,7 @@
       </div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <button class="btn sm gold" onclick="gmScanAndSaveAll()">⚡ Scan &amp; Save All</button>
       <button class="btn sm gold" onclick="gmExport()">📥 Export CSV</button>
       <label class="btn sm" style="cursor:pointer;">
         📂 Import CSV
@@ -132,12 +133,15 @@
     </div>
   </div>
 
-  <!-- How it works banner -->
   <div style="background:rgba(90,180,232,0.07);border:1px solid rgba(90,180,232,0.2);border-radius:10px;padding:13px 16px;margin-bottom:18px;font-family:var(--mono);font-size:0.65rem;color:var(--text2);line-height:1.7;">
     <strong style="color:var(--sky);">✦ How it works</strong><br>
     Every time you type or correct a guest's <strong>nationality</strong> or <strong>email</strong> in the Arrivals or Purpose panels, it's saved here automatically.<br>
     Next time that guest appears, their data is filled in instantly — no retyping.<br>
     All colleagues on the same hotel see the same memory (shared via Firebase).
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(90,180,232,0.15);display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <span style="color:var(--text3);">Already have guests loaded in Arrivals / Purpose?</span>
+      <button class="btn sm gold" onclick="gmScanAndSaveAll()" style="font-size:0.65rem;">⚡ Scan &amp; Save All to Memory</button>
+    </div>
   </div>
 
   <!-- Stats row -->

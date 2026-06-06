@@ -104,6 +104,50 @@ function gmOnEdit(name, field, value) {
   _gmPersist();
 }
 
+// ── Bulk scan: save all loaded guests to memory ───────────
+// Call this once to seed memory from your existing arrivals/purpose lists.
+// Only saves guests that have at least a name. Won't overwrite a profile
+// that already has richer data — it merges, keeping the best value.
+function gmScanAndSaveAll() {
+  const lists = [];
+  if (typeof arrGuests     !== 'undefined' && arrGuests.length)     lists.push(...arrGuests);
+  if (typeof purposeGuests !== 'undefined' && purposeGuests.length) lists.push(...purposeGuests);
+
+  if (!lists.length) {
+    showToast('No guests loaded in Arrivals or Purpose panels', 'err');
+    return;
+  }
+
+  let saved = 0, updated = 0;
+  lists.forEach(g => {
+    if (!g.name || g.name === '—') return;
+    const key      = gmKey(g.name);
+    const existing = _gmStore[key] || {};
+    const isNew    = !_gmStore[key];
+
+    // Merge: prefer non-empty, non-placeholder values
+    const nat   = (g.nat   && g.nat   !== '')            ? g.nat   : existing.nat   || '';
+    const email = (g.email && g.email !== 'No@email.com') ? g.email : existing.email || '';
+    const purpose = g.purpose || existing.purpose || 'Business';
+
+    _gmStore[key] = {
+      nat,
+      email,
+      purpose,
+      conf:     g.conf    || existing.conf    || '',
+      hits:     (existing.hits || 0),   // don't inflate hits — this is a scan, not a real visit
+      lastSeen: existing.lastSeen || new Date().toISOString().split('T')[0],
+    };
+
+    if (isNew) saved++;
+    else updated++;
+  });
+
+  _gmPersist();
+  _gmUpdateUI();
+  showToast(`Memory scan done — ${saved} new · ${updated} updated`, 'ok');
+}
+
 // ── Save a full guest profile at once ─────────────────────
 function gmSaveProfile(g) {
   if (!g || !g.name) return;
