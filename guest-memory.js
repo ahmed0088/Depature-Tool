@@ -1,116 +1,83 @@
 // ═══════════════════════════════════════════════════════════
 //  guest-memory.js  —  Guest Profile Memory Store
+//
+//  BEHAVIOUR (simplified):
+//  · gmInit()        — loads profiles from Firebase once, renders table
+//  · gmAutoFill()    — REMOVED from automatic calls; now manual only
+//  · "Save to Memory" button → gmScanAndSaveAll() saves current guests
+//  · Editing a cell  → updates _gmStore locally, saves to Firebase on blur
+//  · Firebase listener → NEVER re-renders while user is in the table
 // ═══════════════════════════════════════════════════════════
 
-// ── In-memory cache ───────────────────────────────────────
 let _gmStore     = {};
 let _gmReady     = false;
 let _gmSaveTimer = null;
-// Tracks whether ANY input/select inside the memory table is focused.
-// While true, the Firebase listener must not touch the DOM.
-let _gmUserEditing = false;
 
-// ── Key normaliser ────────────────────────────────────────
 function gmKey(name) {
   return String(name || '').toUpperCase().replace(/\s+/g, ' ').trim();
 }
 
-// ── Init ──────────────────────────────────────────────────
+// ── Init: load once from Firebase, render, then stop ──────
+// The listener stays open for colleague sync but NEVER
+// re-renders the table while the user has focus in it.
 function gmInit() {
   if (typeof fbListen !== 'function') {
-    console.warn('[GuestMemory] fbListen not available — memory disabled');
+    console.warn('[GuestMemory] fbListen not available');
     return;
   }
-
-  // Track focus anywhere inside the memory table
-  document.addEventListener('focusin', e => {
-    const tbl = document.getElementById('gmTable');
-    if (tbl && tbl.contains(e.target)) _gmUserEditing = true;
-  });
-  document.addEventListener('focusout', e => {
-    const tbl = document.getElementById('gmTable');
-    // Small delay so focusout → focusin inside same table doesn't flicker
-    setTimeout(() => {
-      if (!tbl || !tbl.contains(document.activeElement)) _gmUserEditing = false;
-    }, 100);
-  });
-
   fbListen('guestMemory', snap => {
     _gmStore = snap || {};
     _gmReady = true;
-
-    if (_gmUserEditing) {
-      // User is typing — only update the stats numbers, never touch the table DOM
-      _gmUpdateStatsOnly();
-    } else {
-      _gmUpdateUI();
-    }
-
-    console.log(`[GuestMemory] ${Object.keys(_gmStore).length} profiles`);
-
-    // Self-healing: fill guests that loaded before Firebase responded
-    if (typeof arrGuests !== 'undefined' && arrGuests.length) {
-      const n = gmAutoFill(arrGuests, true);
-      if (n > 0 && typeof arrRender === 'function') arrRender();
-    }
-    if (typeof purposeGuests !== 'undefined' && purposeGuests.length) {
-      const n = gmAutoFill(purposeGuests, true);
-      if (n > 0 && typeof purposeRender === 'function') purposeRender();
-    }
+    // Only re-render if the user is NOT currently editing a cell
+    const tbl = document.getElementById('gmTable');
+    const editing = tbl && tbl.contains(document.activeElement);
+    if (!editing) _gmUpdateUI();
+    else          _gmUpdateStatsOnly();
   });
 }
 
-// ── Debounced Firebase save ───────────────────────────────
-// Longer debounce (2 s) so rapid typing doesn't spam Firebase.
+// ── Debounced Firebase save (3 s after last change) ───────
 function _gmPersist() {
   clearTimeout(_gmSaveTimer);
   _gmSaveTimer = setTimeout(async () => {
     try { await fbSet('guestMemory', _gmStore); }
     catch (e) { console.warn('[GuestMemory] save failed:', e); }
-  }, 2000);
+  }, 3000);
 }
 
-// ── Auto-fill (read-only — never writes to Firebase) ──────
+// ── Auto-fill: MANUAL ONLY — called by button, not on load ─
+// Returns number of guests filled.
 function gmAutoFill(guests, silent) {
   if (!_gmReady || !guests || !guests.length) return 0;
   let filled = 0;
   guests.forEach(g => {
     const profile = _gmStore[gmKey(g.name)];
     if (!profile) return;
-    let changed = false;
-    if (!g.nat    || g.nat   === '')             { g.nat     = profile.nat     || g.nat;     changed = true; }
-    if (!g.email  || g.email === 'No@email.com') { g.email   = profile.email   || g.email;   changed = true; }
-    if (!g.purpose|| g.purpose=== 'Business')    { g.purpose = profile.purpose || g.purpose; changed = true; }
-    if (changed) { filled++; g._fromMemory = true; }
+    let hit = false;
+    if (!g.nat    || g.nat    === '')             { g.nat     = profile.nat     || g.nat;     hit = true; }
+    if (!g.email  || g.email  === 'No@email.com') { g.email   = profile.email   || g.email;   hit = true; }
+    if (!g.purpose|| g.purpose=== 'Business')     { g.purpose = profile.purpose || g.purpose; hit = true; }
+    if (hit) { filled++; g._fromMemory = true; }
   });
-  if (filled && !silent) showToast(`✦ ${filled} guest${filled !== 1 ? 's' : ''} auto-filled from memory`, 'info');
+  if (filled && !silent) showToast(`✦ ${filled} guest${filled !== 1 ? 's' : ''} filled from memory`, 'info');
   return filled;
 }
 
-// ── Edit handler — called by onchange on table inputs ─────
-// NEVER re-renders the table. Patches _gmStore and updates
-// only the stats bar. Firebase save is debounced 2 s.
+// ── Called by onchange on a table input/select ────────────
+// Only patches _gmStore + queues a Firebase save.
+// NEVER rebuilds the table DOM.
 function gmOnEdit(name, field, value) {
   const key = gmKey(name);
   if (!_gmStore[key]) _gmStore[key] = { nat:'', email:'', purpose:'Business', hits:0, lastSeen:'' };
   _gmStore[key][field]   = value;
   _gmStore[key].lastSeen = new Date().toISOString().split('T')[0];
-  // Count hits only for nat/email — intentional user edits
-  if (field === 'nat' || field === 'email') {
-    _gmStore[key].hits = (_gmStore[key].hits || 0) + 1;
-    // Patch the hits badge in-place so the number updates without re-render
-    const row = document.querySelector(`[data-gmkey="${CSS.escape(key)}"]`);
-    if (row) {
-      const badge = row.querySelector('.gm-hit-badge');
-      if (badge) badge.textContent = _gmStore[key].hits + '×';
-    }
-  }
   _gmUpdateStatsOnly();
   _gmPersist();
-  // No _gmRenderTable() call here — ever.
 }
 
-// ── Bulk scan ─────────────────────────────────────────────
+// ── "Save to Memory" button ───────────────────────────────
+// Takes whatever is currently in arrGuests / purposeGuests
+// and writes it all into _gmStore then Firebase.
 function gmScanAndSaveAll() {
   const lists = [];
   if (typeof arrGuests     !== 'undefined' && arrGuests.length)     lists.push(...arrGuests);
@@ -136,7 +103,6 @@ function gmScanAndSaveAll() {
   showToast(`🧠 ${saved} new · ${updated} updated in memory`, 'ok');
 }
 
-// ── Save full profile ─────────────────────────────────────
 function gmSaveProfile(g) {
   if (!g || !g.name) return;
   const key = gmKey(g.name), ex = _gmStore[key] || {};
@@ -145,16 +111,14 @@ function gmSaveProfile(g) {
     email:    g.email   || ex.email   || '',
     purpose:  g.purpose || ex.purpose || 'Business',
     conf:     g.conf    || ex.conf    || '',
-    hits:     (ex.hits  || 0) + 1,
+    hits:     ex.hits   || 0,
     lastSeen: new Date().toISOString().split('T')[0],
   };
   _gmPersist();
 }
 
-// ── Lookup ────────────────────────────────────────────────
 function gmLookup(name) { return _gmStore[gmKey(name)] || null; }
 
-// ── Delete ────────────────────────────────────────────────
 function gmDeleteProfile(name) {
   const key = gmKey(name);
   if (!_gmStore[key]) return;
@@ -164,7 +128,6 @@ function gmDeleteProfile(name) {
   showToast('Profile deleted', 'info');
 }
 
-// ── Clear all ─────────────────────────────────────────────
 function gmClearAll() {
   if (!confirm('Clear ALL guest memory profiles? This cannot be undone.')) return;
   _gmStore = {};
@@ -173,7 +136,7 @@ function gmClearAll() {
   showToast('Guest memory cleared', 'info');
 }
 
-// ── Stats bar only (no DOM table changes) ─────────────────
+// ── Stats bar only — no table DOM changes ─────────────────
 function _gmUpdateStatsOnly() {
   const entries   = Object.entries(_gmStore);
   const total     = entries.length;
@@ -187,18 +150,14 @@ function _gmUpdateStatsOnly() {
   set('gm-with-email', withEmail); set('gm-total-hits', totalHits);
 }
 
-// ── Full UI update (stats + table) ───────────────────────
 function _gmUpdateUI() {
   _gmUpdateStatsOnly();
   _gmRenderTable();
 }
 
 // ── Render table ──────────────────────────────────────────
-// Uses onchange (fires on blur/Enter) NOT oninput (fires on every keystroke).
-// Each row gets data-gmkey so gmOnEdit can patch the badge in-place.
-// _gmRenderTable() is NEVER called from gmOnEdit — only from:
-//   · Initial load / Firebase listener (when user is NOT editing)
-//   · Delete / Clear / Import / Search
+// onchange fires only when you leave the field (blur/Enter/Tab).
+// No _gmRenderTable() call inside gmOnEdit — ever.
 function _gmRenderTable() {
   const tbody = document.getElementById('gmTable');
   if (!tbody) return;
@@ -207,31 +166,34 @@ function _gmRenderTable() {
     .filter(([k]) => !search || k.toLowerCase().includes(search))
     .sort((a, b) => (b[1].hits || 0) - (a[1].hits || 0));
 
-  const count = document.getElementById('gmProfileCount');
-  if (count) count.textContent = entries.length + ' profiles';
+  const cnt = document.getElementById('gmProfileCount');
+  if (cnt) cnt.textContent = entries.length + ' profiles';
 
   if (!entries.length) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:36px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">
-      No profiles yet. Nationality and email are saved automatically as you enter them.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:36px;
+      font-family:var(--mono);font-size:0.7rem;color:var(--text3);">
+      No profiles yet. Load guests then click "Save to Memory".</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = entries.map(([key, p]) => `
-    <tr data-gmkey="${key.replace(/"/g,'&quot;')}">
+  tbody.innerHTML = entries.map(([key, p]) => {
+    const ek = key.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    return `
+    <tr>
       <td style="font-weight:500;color:var(--text);font-size:0.72rem;">${key}</td>
       <td>
         <input class="gm-inline-inp" value="${(p.nat||'').replace(/"/g,'&quot;')}"
-          onchange="gmOnEdit('${key.replace(/'/g,"\\'")}','nat',this.value)"
+          onchange="gmOnEdit('${ek}','nat',this.value)"
           placeholder="—" style="width:90px;"/>
       </td>
       <td>
         <input class="gm-inline-inp" value="${(p.email||'').replace(/"/g,'&quot;')}"
-          onchange="gmOnEdit('${key.replace(/'/g,"\\'")}','email',this.value)"
+          onchange="gmOnEdit('${ek}','email',this.value)"
           placeholder="—" style="width:160px;"/>
       </td>
       <td>
         <select class="gm-inline-inp"
-          onchange="gmOnEdit('${key.replace(/'/g,"\\'")}','purpose',this.value)"
+          onchange="gmOnEdit('${ek}','purpose',this.value)"
           style="width:90px;">
           ${['Business','Leisure','Flight'].map(v =>
             `<option${(p.purpose||'Business')===v?' selected':''}>${v}</option>`).join('')}
@@ -242,10 +204,11 @@ function _gmRenderTable() {
         <span style="margin-left:4px;">${p.lastSeen||''}</span>
       </td>
       <td>
-        <button class="icon-btn" onclick="gmDeleteProfile('${key.replace(/'/g,"\\'")}'')"
+        <button class="icon-btn" onclick="gmDeleteProfile('${ek}')"
           title="Delete" style="color:var(--rose);">✕</button>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 }
 
 // ── Export CSV ────────────────────────────────────────────
@@ -254,7 +217,7 @@ function gmExport() {
   Object.entries(_gmStore).forEach(([k,p]) =>
     rows.push([k, p.nat||'', p.email||'', p.purpose||'', p.hits||0, p.lastSeen||'']));
   const csv  = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob = new Blob([csv], { type:'text/csv' });
+  const blob = new Blob([csv], {type:'text/csv'});
   const a    = document.createElement('a');
   a.href     = URL.createObjectURL(blob);
   a.download = 'guest_memory_' + new Date().toISOString().split('T')[0] + '.csv';
@@ -276,11 +239,12 @@ function gmImportFile(input) {
       if (!parts[0]) return;
       _gmStore[gmKey(parts[0])] = {
         nat:parts[1]||'', email:parts[2]||'', purpose:parts[3]||'Business',
-        hits:parseInt(parts[4])||1, lastSeen:parts[5]||'',
+        hits:parseInt(parts[4])||0, lastSeen:parts[5]||'',
       };
       count++;
     });
-    _gmPersist(); _gmRenderTable();
+    _gmPersist();
+    _gmRenderTable();
     showToast(`${count} profiles imported ✓`, 'ok');
   };
   reader.readAsText(file);
