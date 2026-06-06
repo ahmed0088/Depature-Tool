@@ -16,9 +16,40 @@
 let _gmStore     = {};
 let _gmReady     = false;
 let _gmSaveTimer = null;
+// Auto-fill toggle — persisted in localStorage so it survives page refresh
+let _gmAutoFillOn = localStorage.getItem('gm_autofill') !== 'off';
 
 function gmKey(name) {
   return String(name || '').toUpperCase().replace(/\s+/g, ' ').trim();
+}
+
+// ── Auto-fill toggle ──────────────────────────────────────
+function gmToggleAutoFill() {
+  _gmAutoFillOn = !_gmAutoFillOn;
+  localStorage.setItem('gm_autofill', _gmAutoFillOn ? 'on' : 'off');
+  _gmRenderToggle();
+  showToast(_gmAutoFillOn ? '✦ Auto-fill ON — guests will be filled on import' : '✦ Auto-fill OFF — import won\'t touch guest fields', 'info');
+}
+
+function _gmRenderToggle() {
+  const track  = document.getElementById('gmAutoFillTrack');
+  const thumb  = document.getElementById('gmAutoFillThumb');
+  const label  = document.getElementById('gmAutoFillLabel');
+  const wrap   = document.getElementById('gmAutoFillToggleWrap');
+  if (!track) return;
+  if (_gmAutoFillOn) {
+    track.style.background      = 'var(--mint, #3ecf8e)';
+    thumb.style.left            = '18px';
+    label.textContent           = 'Auto-fill: ON';
+    label.style.color           = 'var(--mint, #3ecf8e)';
+    wrap.style.borderColor      = 'rgba(62,207,142,0.4)';
+  } else {
+    track.style.background      = 'var(--border, #2a2f3d)';
+    thumb.style.left            = '2px';
+    label.textContent           = 'Auto-fill: OFF';
+    label.style.color           = 'var(--text3)';
+    wrap.style.borderColor      = 'var(--border, #2a2f3d)';
+  }
 }
 
 // ── Init: load from Firebase once, stay in sync with colleagues ──
@@ -27,14 +58,17 @@ function gmInit() {
     console.warn('[GuestMemory] fbListen not available');
     return;
   }
+  // Render toggle to correct state as soon as DOM is ready
+  setTimeout(_gmRenderToggle, 0);
+
   fbListen('guestMemory', snap => {
     _gmStore = snap || {};
     _gmReady = true;
-    // Only re-render if user isn't actively editing a cell in the table
     const tbl     = document.getElementById('gmTable');
     const editing = tbl && tbl.contains(document.activeElement);
     if (!editing) _gmUpdateUI();
     else          _gmUpdateStatsOnly();
+    _gmRenderToggle();
   });
 }
 
@@ -48,10 +82,10 @@ function _gmPersist() {
 }
 
 // ── Auto-fill: called once after import ───────────────────
-// Reads from _gmStore and fills blank fields on the guest list.
-// ZERO writes to Firebase. ZERO hit counting. ZERO re-renders.
-// Just a plain read-and-fill, nothing more.
+// Respects the _gmAutoFillOn toggle — if OFF, does nothing.
+// Read-only: zero Firebase writes, zero hit counting.
 function gmAutoFill(guests, silent) {
+  if (!_gmAutoFillOn) return 0;   // toggle is OFF — skip entirely
   if (!_gmReady || !guests || !guests.length) return 0;
   let filled = 0;
   guests.forEach(g => {

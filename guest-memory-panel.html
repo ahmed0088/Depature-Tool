@@ -119,10 +119,32 @@
         Guest Memory
       </div>
       <div class="panel-subtitle">
-        Stores nationality, email &amp; purpose for returning guests — auto-fills on every load
+        Stores nationality, email &amp; purpose for returning guests
       </div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+
+      <!-- ── Auto-fill toggle ── -->
+      <div id="gmAutoFillToggleWrap" onclick="gmToggleAutoFill()"
+        style="display:flex;align-items:center;gap:8px;cursor:pointer;
+               background:var(--card2,#181c24);border:1px solid var(--border,#2a2f3d);
+               border-radius:20px;padding:5px 12px 5px 8px;user-select:none;
+               transition:border-color .2s;">
+        <!-- track -->
+        <div id="gmAutoFillTrack"
+          style="width:34px;height:18px;border-radius:9px;position:relative;
+                 transition:background .2s;flex-shrink:0;">
+          <!-- thumb -->
+          <div id="gmAutoFillThumb"
+            style="width:14px;height:14px;border-radius:50%;background:#fff;
+                   position:absolute;top:2px;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.4);"></div>
+        </div>
+        <span id="gmAutoFillLabel"
+          style="font-family:var(--mono);font-size:0.65rem;color:var(--text2);white-space:nowrap;">
+          Auto-fill: ON
+        </span>
+      </div>
+
       <button class="btn sm gold" onclick="gmScanAndSaveAll()">⚡ Scan &amp; Save All</button>
       <button class="btn sm gold" onclick="gmExport()">📥 Export CSV</button>
       <label class="btn sm" style="cursor:pointer;">
