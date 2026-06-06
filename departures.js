@@ -978,24 +978,26 @@ function depCardHTML(r) {
     ${vipHTML}
     <div class="dc-band"></div>
 
-    <div class="dc-head">
+    <!-- Compact single-line row — click anywhere to expand -->
+    <div class="dc-row" onclick="depToggleExpand(this)">
       <div class="dc-room">${r.roomStr}</div>
-      <div class="dc-head-right">
-        <div class="dc-sbadge ${badgeCls}">${badgeText}</div>
-        ${timeTag ? `<div class="dc-timetag-wrap">${timeTag}</div>` : ''}
-      </div>
-    </div>
-
-    <div class="dc-body">
-      ${overdueStrip}
-      ${intentBanner}
-      <div class="dc-name" ondblclick="depEditName(${i})" title="Double-click to edit">${escapeHtml(r.name)}</div>
-      <div class="dc-meta-line">${escapeHtml(metaLine)}</div>
-      <div class="dc-bal-inline ${balClass}">
+      <div class="dc-sbadge ${badgeCls}">${badgeText}</div>
+      <div class="dc-name dc-row-name" ondblclick="event.stopPropagation();depEditName(${i})" title="Double-click to edit">${escapeHtml(r.name)}</div>
+      <div class="dc-meta-line dc-row-meta">${escapeHtml(metaLine)}</div>
+      <div class="dc-bal-inline ${balClass} dc-row-bal">
         <span class="dc-bal-dot"></span>
         <span class="dc-bal-amt-sm">${balText}</span>
-        <button class="dc-copy-card-btn" title="Copy summary" onclick="depCopyCard(${i})">📋</button>
       </div>
+      ${timeTag ? `<div class="dc-timetag-wrap dc-row-time">${timeTag}</div>` : ''}
+      ${r.note ? `<span class="dc-row-note-dot" title="${escapeHtml(r.note.split('\n')[0].substring(0,60))}">📝</span>` : ''}
+      <button class="dc-copy-card-btn dc-row-copy" title="Copy summary" onclick="event.stopPropagation();depCopyCard(${i})">📋</button>
+      <span class="dc-expand-arrow">▸</span>
+    </div>
+
+    <!-- Expanded body — collapsed by default, click row to open -->
+    <div class="dc-body dc-body-collapsed">
+      ${overdueStrip}
+      ${intentBanner}
       ${lateRow}
       ${extRow}
       ${actHTML}
@@ -1004,10 +1006,10 @@ function depCardHTML(r) {
           <span class="dc-note-lbl">${r.note ? '📝 ' + escapeHtml(r.note.split('\n')[0].substring(0,35)) + (r.note.length > 35 ? '…' : '') : '+ add note'}</span>
           <span class="dc-note-row-right">
             <button class="dc-stamp-btn" onclick="event.stopPropagation();depStampNote(${i})" title="Timestamp">🕐</button>
-            <span class="dc-note-arrow">${r.note ? '▾' : '▸'}</span>
+            <span class="dc-note-arrow">▸</span>
           </span>
         </div>
-        <div class="dc-note-body" style="${r.note ? '' : 'display:none;'}">
+        <div class="dc-note-body" style="display:none;">
           <textarea class="dc-note" placeholder="Notes, luggage, requests…"
             oninput="depNoteInput(${i},this.value)">${escapeHtml(r.note)}</textarea>
         </div>
@@ -1020,6 +1022,16 @@ function escapeHtml(str) {
   if (!str) return '';
   return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]||m));
 }
+// ── Row expand / collapse ──────────────────────────────────
+function depToggleExpand(rowEl) {
+  const card  = rowEl.closest('.dep-card');
+  const body  = card.querySelector('.dc-body');
+  const arrow = rowEl.querySelector('.dc-expand-arrow');
+  const open  = !body.classList.contains('dc-body-collapsed');
+  body.classList.toggle('dc-body-collapsed', open);
+  if (arrow) arrow.textContent = open ? '▸' : '▾';
+}
+
 // ── Note toggle ────────────────────────────────────────────
 function depToggleNote(headerEl) {
   const body  = headerEl.nextElementSibling;
@@ -1058,6 +1070,13 @@ function depStampNote(i) {
     const lbl = card.querySelector('.dc-note-lbl');
     if (ta) {
       ta.value = depRooms[i].note;
+      // Expand the card body first if collapsed
+      const dcBody = card.querySelector('.dc-body');
+      const expandArrow = card.querySelector('.dc-expand-arrow');
+      if (dcBody && dcBody.classList.contains('dc-body-collapsed')) {
+        dcBody.classList.remove('dc-body-collapsed');
+        if (expandArrow) expandArrow.textContent = '▾';
+      }
       // Make sure the note section is open
       if (body) body.style.display = 'block';
       if (arrow) arrow.textContent = '▾';

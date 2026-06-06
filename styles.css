@@ -3140,67 +3140,130 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
 }
 
 /* ══════════════════════════════════════════════════════════
-   Guest Memory Panel
+   Departures — Compact Row Layout
 ══════════════════════════════════════════════════════════ */
 
-.gm-stat-row {
+/* Single-line compact row */
+.dc-row {
   display: flex;
-  gap: 14px;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  cursor: pointer;
+  min-height: 38px;
+  user-select: none;
 }
-.gm-stat {
+.dc-row:hover { background: rgba(255,255,255,0.025); }
+
+/* Room number — smaller in row mode */
+.dc-row .dc-room {
+  font-size: 1rem;
+  font-weight: 800;
+  min-width: 34px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+/* Badge stays compact */
+.dc-row .dc-sbadge {
+  flex-shrink: 0;
+}
+
+/* Name — takes most space, truncates */
+.dc-row-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+/* Meta — hidden on very small screens, shown when space allows */
+.dc-row-meta {
+  font-size: 0.62rem;
+  color: var(--text3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+  flex-shrink: 1;
+}
+
+/* Balance pill in row */
+.dc-row-bal {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  font-size: 0.65rem;
+  margin: 0;
+  border-radius: 6px;
+}
+
+/* Time tag in row */
+.dc-row-time { flex-shrink: 0; }
+
+/* Note dot indicator */
+.dc-row-note-dot {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  opacity: 0.75;
+  cursor: default;
+}
+
+/* Copy button in row */
+.dc-row-copy {
+  flex-shrink: 0;
+  opacity: 0.5;
+  padding: 1px 5px;
+  font-size: 0.7rem;
+}
+.dc-row:hover .dc-row-copy { opacity: 1; }
+
+/* Expand arrow */
+.dc-expand-arrow {
+  font-size: 0.6rem;
+  color: var(--text3);
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+
+/* Collapsed body — hidden */
+.dc-body-collapsed {
+  display: none !important;
+}
+
+/* When expanded, body gets normal padding */
+.dc-body:not(.dc-body-collapsed) {
+  padding: 0 11px 10px;
+  border-top: 1px solid var(--border);
+}
+
+/* Stack cards tighter in row mode */
+#depBoard {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* Dep-card in row mode — no min-height, just border */
+.dep-card {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 12px 18px;
-  min-width: 110px;
-  text-align: center;
-  flex: 1;
+  overflow: hidden;
+  transition: box-shadow 0.12s, border-color 0.12s;
+  position: relative;
 }
-.gm-stat-val {
-  font-family: var(--serif, Georgia, serif);
-  font-size: 1.4rem;
-  color: var(--mint);
+
+@media (max-width: 600px) {
+  .dc-row-meta { display: none; }
 }
-.gm-stat-lbl {
-  font-family: var(--mono);
-  font-size: 0.58rem;
-  color: var(--text3);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin-top: 3px;
-}
-.gm-inline-inp {
-  background: var(--card2, #181c24);
-  border: 1px solid var(--border, #2a2f3d);
-  border-radius: 5px;
-  color: var(--text);
-  font-family: var(--mono);
-  font-size: 0.68rem;
-  padding: 3px 7px;
-  outline: none;
-  transition: border-color 0.15s;
-}
-.gm-inline-inp:focus {
-  border-color: var(--accent, #5ab4e8);
-}
-.gm-hit-badge {
-  background: rgba(62, 207, 142, 0.12);
-  color: var(--mint, #3ecf8e);
-  border: 1px solid rgba(62, 207, 142, 0.25);
-  border-radius: 4px;
-  font-family: var(--mono);
-  font-size: 0.58rem;
-  padding: 1px 5px;
-}
-.gm-memory-dot {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--sky, #5ab4e8);
-  box-shadow: 0 0 5px var(--sky, #5ab4e8);
-  margin-left: 4px;
-  vertical-align: middle;
+
+/* Override dep-grid to always be a single-column list for row layout */
+.dep-grid {
+  display: flex !important;
+  flex-direction: column;
+  gap: 3px !important;
 }
