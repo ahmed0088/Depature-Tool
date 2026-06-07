@@ -808,7 +808,7 @@ function depCardHTML(r) {
   const lateRow = es === 'late' ? `
     <div class="dc-sel-row">
       <span class="dc-sel-lbl late">🕐 Agreed time:</span>
-      <select class="dc-select late" onchange="depRooms[${i}].lateTime=this.value;depRender();saveDeps()">
+      <select class="dc-select late" onchange="depSetLateTime(${i},this.value)">
         <option value="">Select…</option>
         ${(() => { const t=[]; for(let h=10;h<=23;h++){t.push(String(h).padStart(2,'0')+':00');t.push(String(h).padStart(2,'0')+':30');} return t; })()
           .map(t => `<option${r.lateTime===t?' selected':''}>${t}</option>`).join('')}
@@ -1238,6 +1238,19 @@ function saveDeps() {
   saveDepartures(depRooms, depLog);
 }
 
+// ── Late time setter — no re-render, patches badge directly ─
+function depSetLateTime(i, time) {
+  depRooms[i].lateTime = time;
+  // Update the badge text in-place
+  const r    = depRooms[i];
+  const card = [...document.querySelectorAll('.dep-card')].find(c => c.dataset.room === r.roomStr);
+  if (card) {
+    const badge = card.querySelector('.dc-sbadge');
+    if (badge) badge.textContent = `LATE CO${time ? ' · ' + time : ''}`;
+  }
+  saveDeps();
+}
+
 // ── Note input — debounced, never re-renders the board ─────
 let _noteDebounceTimer = null;
 function depNoteInput(i, value) {
@@ -1254,6 +1267,24 @@ function depExtUpdate(i, field, value) {
   if (field === 'nights') {
     r.extensionNights = value;
     depSyncExtToLog(i);
+    // Update the new departure date label in the card without full re-render
+    const card = [...document.querySelectorAll('.dep-card')].find(c => c.dataset.room === r.roomStr);
+    if (card) {
+      const origDep = parseOperaDate(r.departure);
+      if (origDep) {
+        const nd = new Date(origDep); nd.setDate(nd.getDate() + value);
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const newDepStr = `${String(nd.getDate()).padStart(2,'0')} ${months[nd.getMonth()]} ${nd.getFullYear()}`;
+        const valEl = card.querySelector('.dc-ext-val');
+        if (valEl) { valEl.textContent = newDepStr; valEl.className = 'dc-ext-val ext-val-highlight'; }
+        // Update badge
+        const badge = card.querySelector('.dc-sbadge');
+        if (badge) {
+          badge.textContent = `↪ EXT +${value}N → ${String(nd.getDate()).padStart(2,'0')} ${months[nd.getMonth()]}`;
+          if (!r.extConfirmed) badge.textContent += ' ⚠';
+        }
+      }
+    }
   } else if (field === 'checkoutTime') {
     r.extCheckoutTime = value;
   } else if (field === 'rate') {
@@ -1277,10 +1308,34 @@ function depExtUpdate(i, field, value) {
         (r.extRate ? `, AED ${r.extRate}/night` : '') +
         (r.extReason ? ` (${r.extReason})` : '');
       r.note = r.note ? r.note + '\n' + line : line;
+      // Patch textarea directly — no re-render
+      const card = [...document.querySelectorAll('.dep-card')].find(c => c.dataset.room === r.roomStr);
+      if (card) {
+        const ta = card.querySelector('.dc-note');
+        if (ta) ta.value = r.note;
+        const confirmBtn = card.querySelector('.dc-ext-confirm-btn');
+        if (confirmBtn) {
+          confirmBtn.textContent = '✓ Opera updated';
+          confirmBtn.className   = 'dc-ext-confirm-btn ext-confirmed-yes';
+          confirmBtn.setAttribute('onclick', `depExtUpdate(${i},'confirmed',false)`);
+        }
+      }
+    } else {
+      // Toggled off — just update the button, no note
+      const card = [...document.querySelectorAll('.dep-card')].find(c => c.dataset.room === r.roomStr);
+      if (card) {
+        const confirmBtn = card.querySelector('.dc-ext-confirm-btn');
+        if (confirmBtn) {
+          confirmBtn.textContent = '⚠ Needs Opera update';
+          confirmBtn.className   = 'dc-ext-confirm-btn ext-confirmed-no';
+          confirmBtn.setAttribute('onclick', `depExtUpdate(${i},'confirmed',true)`);
+        }
+      }
     }
   }
 
-  depRender();
+  // Only re-render for nights change (badge/date update already done inline above)
+  // All other fields are simple data changes — save only, no DOM rebuild
   saveDeps();
 }
 
