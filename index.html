@@ -1913,6 +1913,18 @@ async function appInit() {
   // 10 — Set up real-time listeners
   listenDepartures(snap => {
     if (!snap || !snap.rooms) return;
+    // If the user is actively focused inside a departure card (typing a note,
+    // picking a time, editing a field) — skip the re-render entirely.
+    // Their own debounced save triggered this listener; re-rendering would
+    // collapse their card and kick them out of the input.
+    const depGrid = document.getElementById('depGrid');
+    const userIsTyping = depGrid && depGrid.contains(document.activeElement);
+    if (userIsTyping) {
+      // Still update the data model silently so it stays in sync
+      depRooms = snap.rooms;
+      depLog   = snap.log || [];
+      return;
+    }
     depRooms = snap.rooms;
     depLog = snap.log || [];
     if (depRooms.length) {
@@ -1921,7 +1933,7 @@ async function appInit() {
       if (uploadCard) uploadCard.style.display = 'none';
       if (board) board.style.display = 'block';
     }
-    depRender(); 
+    depRender();
     updateDepBadge();
   });
   
