@@ -439,6 +439,52 @@ function depSetSort(key) {
   });
   depRender();
 }
+// ── Save & restore expanded card + open note state ─────────
+function _depSaveOpenState() {
+  const expanded = new Set();
+  const noteOpen = new Set();
+  const noteValues = {};
+  document.querySelectorAll('.dep-card').forEach(card => {
+    const room = card.dataset.room;
+    const body = card.querySelector('.dc-body');
+    if (body && !body.classList.contains('dc-body-collapsed')) expanded.add(room);
+    const nb = card.querySelector('.dc-note-body');
+    if (nb && nb.style.display !== 'none') {
+      noteOpen.add(room);
+      const ta = nb.querySelector('textarea');
+      if (ta) noteValues[room] = ta.value;
+    }
+  });
+  return { expanded, noteOpen, noteValues };
+}
+
+function _depRestoreOpenState({ expanded, noteOpen, noteValues }) {
+  document.querySelectorAll('.dep-card').forEach(card => {
+    const room = card.dataset.room;
+    if (expanded.has(room)) {
+      const body  = card.querySelector('.dc-body');
+      const arrow = card.querySelector('.dc-expand-arrow');
+      if (body)  body.classList.remove('dc-body-collapsed');
+      if (arrow) arrow.textContent = '▾';
+    }
+    if (noteOpen.has(room)) {
+      const nb    = card.querySelector('.dc-note-body');
+      const arrow = card.querySelector('.dc-note-arrow');
+      if (nb)    nb.style.display = 'block';
+      if (arrow) arrow.textContent = '▾';
+      // Restore any in-progress typed value
+      if (noteValues[room] !== undefined) {
+        const ta = nb?.querySelector('textarea');
+        if (ta) {
+          ta.value = noteValues[room];
+          // Restore cursor to end
+          ta.setSelectionRange(ta.value.length, ta.value.length);
+        }
+      }
+    }
+  });
+}
+
 function depRender() {
   const sc  = depCounts();
   const pct = sc.all ? Math.round((sc.out + sc.extended) / sc.all * 100) : 0;
@@ -585,7 +631,9 @@ function depRender() {
     }
   });
 
+  const _openState = _depSaveOpenState();
   document.getElementById('depGrid').innerHTML = filtered.map(r => depCardHTML(r)).join('');
+  _depRestoreOpenState(_openState);
   renderDepLog();
   if (_jumpOpen) renderDepQuickJump();
 
