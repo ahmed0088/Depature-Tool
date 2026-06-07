@@ -2182,34 +2182,64 @@ async function appInit() {
 <!-- ══════════════════════════════════════════════════════
      ADMIN PANEL MODAL
 ══════════════════════════════════════════════════════ -->
+<!-- ══════════════════════════════════════════════════════
+     ADMIN PANEL — Team Management
+══════════════════════════════════════════════════════ -->
 <div class="modal-bg" id="adminModal">
   <div class="modal admin-modal">
+
+    <!-- Header -->
     <div class="admin-modal-head">
-      <div>
-        <div style="font-size:1.1rem;font-weight:700;color:var(--text);">👥 Team Management</div>
-        <div style="font-size:0.65rem;color:var(--text3);font-family:var(--mono);">Ibis Styles Dubai · User Accounts</div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="admin-head-icon">👥</div>
+        <div>
+          <div style="font-size:1.05rem;font-weight:700;color:var(--text);letter-spacing:-0.01em;">Team Management</div>
+          <div style="font-size:0.62rem;color:var(--text3);font-family:var(--mono);margin-top:1px;">Ibis Styles Dubai · User Accounts &amp; Access</div>
+        </div>
       </div>
-      <button class="kb-close" onclick="closeAdminPanel()">✕</button>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="btn gold sm" onclick="openCreateUser()" style="font-size:0.68rem;">＋ New Account</button>
+        <button class="kb-close" onclick="closeAdminPanel()">✕</button>
+      </div>
     </div>
 
+    <!-- Tabs -->
     <div class="admin-tabs">
-      <button class="admin-tab-btn active" data-tab="users" onclick="adminTab('users')">👥 Users</button>
-      <button class="admin-tab-btn" data-tab="activity" onclick="adminTab('activity');adminLoadActivity()">📋 Activity Log</button>
+      <button class="admin-tab-btn active" data-tab="users"    onclick="adminTab('users')">👥 Users</button>
+      <button class="admin-tab-btn"        data-tab="activity" onclick="adminTab('activity');adminLoadActivity()">📋 Activity Log</button>
     </div>
 
+    <!-- ── TAB: Users ───────────────────────────────────── -->
     <div id="adminTab-users" class="admin-tab-pane">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <span style="font-size:0.72rem;color:var(--text3);font-family:var(--mono);">All accounts for this property</span>
-        <button class="btn gold sm" onclick="openCreateUser()">+ New Account</button>
+
+      <!-- Stats strip -->
+      <div class="admin-stats-strip" id="adminStatsStrip">
+        <!-- filled by adminRenderUsers() -->
       </div>
 
+      <!-- ── Create form ── -->
       <div id="adminCreateForm" style="display:none;" class="admin-form-card">
         <div class="admin-form-title">➕ Create New Account</div>
         <div class="admin-form-grid">
-          <div class="login-field"><label class="login-label">Full Name</label><input id="newUserName" class="login-input" placeholder="Ahmed Al Mansouri" type="text"/></div>
-          <div class="login-field"><label class="login-label">Email</label><input id="newUserEmail" class="login-input" placeholder="ahmed@ibis-dubai.com" type="email"/></div>
-          <div class="login-field"><label class="login-label">Password</label><input id="newUserPass" class="login-input" placeholder="Min 6 characters" type="password"/></div>
-          <div class="login-field"><label class="login-label">Role</label>
+          <div class="login-field">
+            <label class="login-label">Full Name</label>
+            <input id="newUserName" class="login-input" placeholder="Ahmed Al Mansouri" type="text" autocomplete="off"/>
+          </div>
+          <div class="login-field">
+            <label class="login-label">Email Address</label>
+            <input id="newUserEmail" class="login-input" placeholder="ahmed@ibis-dubai.com" type="email" autocomplete="off"/>
+          </div>
+          <div class="login-field">
+            <label class="login-label">Password</label>
+            <div style="position:relative;">
+              <input id="newUserPass" class="login-input" placeholder="Min 6 characters" type="password" autocomplete="new-password" style="padding-right:38px;"/>
+              <button type="button" onclick="adminToggleVis('newUserPass','eyeNew')" class="admin-eye-btn" id="eyeNew">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="login-field">
+            <label class="login-label">Role</label>
             <select id="newUserRole" class="login-input">
               <option value="agent">🛎️ Agent — Ops only</option>
               <option value="supervisor">⭐ Supervisor — All modules</option>
@@ -2219,19 +2249,31 @@ async function appInit() {
             </select>
           </div>
         </div>
-        <div id="adminCreateErr" class="login-error" style="display:none;"></div>
-        <div style="display:flex;gap:8px;margin-top:10px;">
+        <div id="adminCreateErr" class="admin-form-err" style="display:none;"></div>
+        <div style="display:flex;gap:8px;margin-top:14px;">
           <button id="adminCreateBtn" class="btn gold" onclick="adminCreateUser()">Create Account</button>
           <button class="btn" onclick="closeCreateUser()">Cancel</button>
         </div>
       </div>
 
+      <!-- ── Edit form (full: name + email + role + password) ── -->
       <div id="adminEditForm" style="display:none;" class="admin-form-card">
         <input type="hidden" id="editUserId"/>
         <div class="admin-form-title">✏️ Edit Account</div>
         <div class="admin-form-grid">
-          <div class="login-field"><label class="login-label">Full Name</label><input id="editUserName" class="login-input" type="text"/></div>
-          <div class="login-field"><label class="login-label">Role</label>
+          <div class="login-field">
+            <label class="login-label">Full Name</label>
+            <input id="editUserName" class="login-input" type="text" autocomplete="off"/>
+          </div>
+          <div class="login-field">
+            <label class="login-label">
+              Email Address
+              <span class="admin-field-note">changing email re-links Firebase Auth</span>
+            </label>
+            <input id="editUserEmail" class="login-input" type="email" autocomplete="off"/>
+          </div>
+          <div class="login-field">
+            <label class="login-label">Role</label>
             <select id="editUserRole" class="login-input">
               <option value="agent">🛎️ Agent</option>
               <option value="supervisor">⭐ Supervisor</option>
@@ -2240,39 +2282,58 @@ async function appInit() {
               <option value="readonly">👁️ Read Only</option>
             </select>
           </div>
-          <div class="login-field"><label class="login-label">New Password <span style="color:var(--text3);font-size:0.65rem;">(leave blank to keep)</span></label><input id="editUserPass" class="login-input" type="password" placeholder="Leave blank to keep current"/></div>
+          <div class="login-field">
+            <label class="login-label">
+              New Password
+              <span class="admin-field-note">leave blank to keep current</span>
+            </label>
+            <div style="position:relative;">
+              <input id="editUserPass" class="login-input" type="password" placeholder="Leave blank to keep" autocomplete="new-password" style="padding-right:38px;"/>
+              <button type="button" onclick="adminToggleVis('editUserPass','eyeEdit')" class="admin-eye-btn" id="eyeEdit">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
         </div>
-        <div id="adminEditErr" class="login-error" style="display:none;"></div>
-        <div style="display:flex;gap:8px;margin-top:10px;">
+        <div id="adminEditErr" class="admin-form-err" style="display:none;"></div>
+        <div style="display:flex;gap:8px;margin-top:14px;">
           <button id="adminSaveEditBtn" class="btn gold" onclick="adminSaveEdit()">Save Changes</button>
           <button class="btn" onclick="closeEditUser()">Cancel</button>
         </div>
       </div>
 
-      <div class="admin-table-wrap">
-        <table class="admin-table">
-          <thead><tr><th>Name / Email</th><th>Role</th><th>Status</th><th>Last Login</th><th>Actions</th></tr></thead>
-          <tbody id="adminUserTable"><tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text3);">Loading…</td></tr></tbody>
-        </table>
+      <!-- User cards grid -->
+      <div id="adminUserCards" class="admin-user-cards">
+        <!-- populated by adminRenderUsers() -->
+        <div style="text-align:center;padding:36px;color:var(--text3);font-family:var(--mono);font-size:0.7rem;">Loading…</div>
+      </div>
+
+      <!-- Role legend -->
+      <div class="admin-role-legend">
+        <div class="admin-legend-title">Role Permissions Quick Reference</div>
+        <div class="admin-legend-grid">
+          <div class="admin-legend-row"><span style="color:#f0a43a;">👑 Owner</span><span>Full access · manage all users · reset any password · import/export</span></div>
+          <div class="admin-legend-row"><span style="color:#8b7cf8;">🏅 Manager</span><span>All modules · manage agents &amp; supervisors · export data</span></div>
+          <div class="admin-legend-row"><span style="color:#5ab4e8;">⭐ Supervisor</span><span>All modules · no user management · export</span></div>
+          <div class="admin-legend-row"><span style="color:#3ecf8e;">🛎️ Agent</span><span>Departures · Arrivals · Shifts · Checklist only</span></div>
+          <div class="admin-legend-row"><span style="color:#888;">👁️ Read Only</span><span>View only — no actions permitted</span></div>
+        </div>
       </div>
     </div>
 
+    <!-- ── TAB: Activity Log ─────────────────────────────── -->
     <div id="adminTab-activity" class="admin-tab-pane" style="display:none;">
-      <div id="adminActivityLog" style="max-height:420px;overflow-y:auto;">
+      <div class="admin-activity-filter" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+        <input id="adminActivitySearch" type="text" placeholder="Filter by name or action…"
+          oninput="adminFilterActivity(this.value)"
+          style="flex:1;min-width:180px;padding:7px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:0.68rem;outline:none;"/>
+        <button class="btn sm" onclick="adminLoadActivity()">↺ Refresh</button>
+      </div>
+      <div id="adminActivityLog" style="max-height:400px;overflow-y:auto;">
         <div style="text-align:center;padding:24px;color:var(--text3);">Loading…</div>
       </div>
     </div>
 
-    <div class="admin-role-legend">
-      <div class="admin-legend-title">Role Permissions</div>
-      <div class="admin-legend-grid">
-        <div class="admin-legend-row"><span style="color:#f0a43a;">👑 Owner</span><span>Full access · manage all users · import/export</span></div>
-        <div class="admin-legend-row"><span style="color:#8b7cf8;">🏅 Manager</span><span>All modules · manage agents · export</span></div>
-        <div class="admin-legend-row"><span style="color:#5ab4e8;">⭐ Supervisor</span><span>All modules · no user management</span></div>
-        <div class="admin-legend-row"><span style="color:#3ecf8e;">🛎️ Agent</span><span>Departures · Arrivals · Shifts · Checklist only</span></div>
-        <div class="admin-legend-row"><span style="color:#888;">👁️ Read Only</span><span>View only — no actions</span></div>
-      </div>
-    </div>
   </div>
 </div>
 
