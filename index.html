@@ -32,6 +32,193 @@
   })();
 </script>
   <style id="loginThemeStyle"></style>
+
+<!-- ══ Adagio Pro — scoped styles (prefixed .ap-) ══ -->
+<style>
+#panel-adagio {
+  --adg-navy:        #0d1b2a;
+  --adg-navy-2:      #152438;
+  --adg-navy-3:      #1e3050;
+  --adg-navy-card:   #182e45;
+  --adg-gold:        #c9a84c;
+  --adg-gold-light:  #e8c97a;
+  --adg-gold-dim:    rgba(201,168,76,.15);
+  --adg-gold-border: rgba(201,168,76,.35);
+  --adg-red:         #e05c5c;
+  --adg-red-bg:      rgba(224,92,92,.12);
+  --adg-orange:      #e0944a;
+  --adg-orange-bg:   rgba(224,148,74,.12);
+  --adg-blue:        #4a90d9;
+  --adg-blue-bg:     rgba(74,144,217,.12);
+  --adg-green:       #4caf7d;
+  --adg-green-bg:    rgba(76,175,125,.12);
+  --adg-purple:      #9b72cf;
+  --adg-pink:        #e05c9b;
+  --adg-pink-bg:     rgba(224,92,155,.12);
+  --adg-text-1:      #f0ede8;
+  --adg-text-2:      #a8b4c2;
+  --adg-text-3:      #637180;
+  --adg-border:      rgba(255,255,255,.07);
+  --adg-border-2:    rgba(255,255,255,.12);
+  --adg-radius:      10px;
+  --adg-radius-lg:   16px;
+}
+#panel-adagio { font-family: 'DM Sans', var(--sans, sans-serif); }
+
+/* Upload */
+.adg-upload-section{display:flex;flex-direction:column;align-items:center;gap:1.25rem;padding:3rem 1rem}
+.adg-upload-card{display:flex;flex-direction:column;align-items:center;gap:1.1rem;background:var(--adg-navy-card);border:2px dashed var(--adg-border-2);border-radius:var(--adg-radius-lg);padding:2.5rem 3rem;width:100%;max-width:580px;text-align:center;transition:border-color .2s,box-shadow .2s;cursor:pointer}
+.adg-upload-card.adg-drag-over{border-color:var(--adg-gold);box-shadow:0 0 0 4px var(--adg-gold-dim)}
+.adg-upload-icon{font-size:2.5rem;line-height:1}
+.adg-upload-title{font-family:'DM Serif Display',var(--serif,serif);font-size:1.4rem;color:var(--adg-text-1)}
+.adg-upload-hint{font-size:.85rem;color:var(--adg-text-2);line-height:1.6}
+.adg-upload-settings{width:100%;background:var(--adg-navy-3);border:1px solid var(--adg-border-2);border-radius:var(--adg-radius);padding:.9rem 1.1rem;display:flex;flex-direction:column;gap:.65rem}
+.adg-settings-title{font-size:.68rem;font-weight:600;color:var(--adg-text-3);text-transform:uppercase;letter-spacing:.07em}
+.adg-setting-row{display:flex;align-items:center;justify-content:space-between;gap:1rem;font-size:.82rem;color:var(--adg-text-2)}
+.adg-date-input,.adg-num-input{background:var(--adg-navy-2);border:1px solid var(--adg-border-2);border-radius:6px;color:var(--adg-text-1);padding:.3rem .65rem;font-family:'DM Sans',sans-serif;font-size:.82rem;transition:border-color .15s}
+.adg-date-input:focus,.adg-num-input:focus{outline:none;border-color:var(--adg-gold)}
+.adg-num-input{width:110px;text-align:right}
+.adg-upload-error{background:var(--adg-red-bg);border:1px solid var(--adg-red);color:var(--adg-red);border-radius:var(--adg-radius);padding:.7rem 1.1rem;font-size:.83rem;width:100%;max-width:580px;white-space:pre-line}
+
+/* Buttons */
+.adg-btn{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem 1rem;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:.82rem;font-weight:500;cursor:pointer;transition:all .18s;border:none;white-space:nowrap}
+.adg-btn-primary{background:var(--adg-gold);color:var(--adg-navy);font-weight:700}
+.adg-btn-primary:hover{background:var(--adg-gold-light);transform:translateY(-1px)}
+.adg-btn-ghost{background:transparent;color:var(--adg-text-2);border:1px solid var(--adg-border-2)}
+.adg-btn-ghost:hover{border-color:var(--adg-gold);color:var(--adg-gold)}
+.adg-btn-sm{padding:.32rem .75rem;font-size:.77rem}
+
+/* Loading */
+.adg-loading{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.5rem;height:30vh;color:var(--adg-text-2)}
+.adg-spinner{width:38px;height:38px;border:3px solid var(--adg-border-2);border-top-color:var(--adg-gold);border-radius:50%;animation:adgSpin .7s linear infinite}
+@keyframes adgSpin{to{transform:rotate(360deg)}}
+
+/* Topbar */
+.adg-topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:.75rem}
+.adg-file-info{display:flex;align-items:center;gap:.5rem;font-size:.82rem;color:var(--adg-text-2);flex-wrap:wrap}
+.adg-file-pill{background:var(--card2,#181c24);border:1px solid var(--border,#2a2f3d);border-radius:20px;padding:.18rem .7rem;font-size:.76rem;color:var(--adg-gold-light)}
+.adg-topbar-actions{display:flex;gap:.5rem;flex-wrap:wrap}
+
+/* KPI */
+.adg-kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:.8rem;margin-bottom:1.25rem}
+.adg-kpi{background:var(--adg-navy-card);border:1px solid var(--adg-border);border-radius:var(--adg-radius-lg);padding:.9rem 1rem;position:relative;overflow:hidden;transition:transform .15s,box-shadow .15s,border-color .15s;cursor:pointer}
+.adg-kpi:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.35);border-color:var(--adg-border-2)}
+.adg-kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.adg-kpi-danger::before{background:var(--adg-red)} .adg-kpi-cheque::before{background:var(--adg-pink)} .adg-kpi-due::before{background:var(--adg-orange)}
+.adg-kpi-ok::before{background:var(--adg-blue)} .adg-kpi-paid::before{background:var(--adg-green)} .adg-kpi-out::before{background:var(--adg-gold)}
+.adg-kpi-contracts::before{background:var(--adg-purple)} .adg-kpi-deposits::before{background:#e8c97a}
+.adg-kpi-val{font-family:'DM Serif Display',var(--serif,serif);font-size:1.75rem;line-height:1;margin-bottom:.3rem}
+.adg-kpi-danger .adg-kpi-val{color:var(--adg-red)} .adg-kpi-cheque .adg-kpi-val{color:var(--adg-pink)} .adg-kpi-due .adg-kpi-val{color:var(--adg-orange)}
+.adg-kpi-ok .adg-kpi-val{color:var(--adg-blue)} .adg-kpi-paid .adg-kpi-val{color:var(--adg-green)} .adg-kpi-out .adg-kpi-val{color:var(--adg-gold-light)}
+.adg-kpi-contracts .adg-kpi-val{color:var(--adg-purple)} .adg-kpi-deposits .adg-kpi-val{color:#e8c97a}
+.adg-kpi-amount{font-size:1.1rem}
+.adg-kpi-label{font-size:.74rem;font-weight:600;margin-bottom:.12rem;color:var(--adg-text-2)}
+.adg-kpi-sub{font-size:.66rem;color:var(--adg-text-3)}
+
+/* Summary */
+.adg-summary{background:var(--adg-navy-card);border:1px solid var(--adg-border);border-radius:var(--adg-radius);padding:.7rem 1.1rem;margin-bottom:1.1rem;display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap;font-size:.79rem}
+.adg-sum-item{display:flex;align-items:center;gap:.4rem;color:var(--adg-text-2)}
+.adg-sum-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+
+/* Alerts */
+.adg-alert{background:rgba(224,92,92,.07);border:1px solid rgba(224,92,92,.25);border-radius:var(--adg-radius);padding:.8rem 1.1rem;margin-bottom:1.1rem;font-size:.81rem;color:var(--adg-red)}
+.adg-alert-title{font-weight:700;margin-bottom:.35rem}
+.adg-alert ul{list-style:none;padding-left:.75rem;display:flex;flex-direction:column;gap:.2rem}
+.adg-alert li::before{content:"• "}
+.adg-warn{background:rgba(201,168,76,.06);border:1px solid rgba(201,168,76,.2);border-radius:var(--adg-radius);padding:.65rem 1.1rem;font-size:.78rem;color:var(--adg-gold-light);margin-bottom:.9rem}
+
+/* Charts */
+.adg-charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:.9rem;margin-bottom:1.25rem}
+.adg-chart-panel{background:var(--adg-navy-card);border:1px solid var(--adg-border);border-radius:var(--adg-radius-lg);padding:1rem 1.1rem}
+.adg-chart-title{font-size:.74rem;font-weight:600;color:var(--adg-text-3);margin-bottom:.8rem;text-transform:uppercase;letter-spacing:.06em}
+.adg-chart-panel canvas{width:100%!important;height:175px!important}
+
+/* Controls */
+.adg-controls{display:flex;align-items:center;justify-content:space-between;gap:.9rem;margin-bottom:.75rem;flex-wrap:wrap}
+.adg-filter-tabs{display:flex;gap:.3rem;flex-wrap:wrap}
+.adg-tab{background:var(--card,#111520);border:1px solid var(--border,#2a2f3d);color:var(--adg-text-2);padding:.34rem .8rem;border-radius:20px;font-size:.76rem;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:.25rem}
+.adg-tab:hover{border-color:var(--adg-border-2);color:var(--adg-text-1)}
+.adg-tab.active{background:var(--adg-gold-dim);border-color:var(--adg-gold);color:var(--adg-gold-light);font-weight:600}
+.adg-tab.tab-danger.active{background:var(--adg-red-bg);border-color:var(--adg-red);color:var(--adg-red)}
+.adg-tab.tab-cheque.active{background:var(--adg-pink-bg);border-color:var(--adg-pink);color:var(--adg-pink)}
+.adg-tab-count{font-size:.66rem;background:rgba(255,255,255,.08);border-radius:10px;padding:.04rem .32rem}
+.adg-controls-row2{display:flex;align-items:center;gap:.6rem;margin-bottom:.75rem;flex-wrap:wrap}
+.adg-select{background:var(--card,#111520);border:1px solid var(--border,#2a2f3d);color:var(--text,#e0e0e0);font-family:'DM Sans',sans-serif;font-size:.78rem;padding:.35rem .6rem;border-radius:8px;outline:none;transition:border-color .15s;cursor:pointer;height:32px}
+.adg-select:focus{border-color:var(--adg-gold)}
+.adg-search-wrap{position:relative;display:flex;align-items:center}
+.adg-search-icon{position:absolute;left:.65rem;font-size:.8rem;pointer-events:none;color:var(--adg-text-3)}
+.adg-search-input{width:240px;background:var(--card,#111520);border:1px solid var(--border,#2a2f3d);color:var(--text,#e0e0e0);font-family:'DM Sans',sans-serif;font-size:.81rem;padding:.37rem .65rem .37rem 1.9rem;border-radius:8px;outline:none;transition:border-color .15s;height:32px}
+.adg-search-input:focus{border-color:var(--adg-gold)}
+.adg-search-clear{position:absolute;right:.4rem;background:none;border:none;color:var(--adg-text-3);cursor:pointer;font-size:.8rem;padding:.15rem;line-height:1}
+.adg-results-count{font-size:.76rem;color:var(--adg-text-3);margin-bottom:.6rem}
+.adg-divider-lbl{font-size:.74rem;color:var(--adg-text-3);white-space:nowrap}
+
+/* Table */
+.adg-table-wrap{overflow-x:auto;border-radius:var(--adg-radius-lg);border:1px solid var(--adg-border);background:var(--adg-navy-card)}
+.adg-table{width:100%;border-collapse:collapse;font-size:.78rem;min-width:1050px}
+.adg-table thead{position:sticky;top:0;z-index:2}
+.adg-table th{background:var(--adg-navy-3);color:var(--adg-text-3);font-weight:600;font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;padding:.6rem .9rem;text-align:left;border-bottom:1px solid var(--adg-border-2);white-space:nowrap}
+.adg-table th.adg-sortable{cursor:pointer;user-select:none;transition:color .15s}
+.adg-table th.adg-sortable:hover,.adg-table th.adg-sort-active{color:var(--adg-gold-light)}
+.adg-table td{padding:.55rem .9rem;border-bottom:1px solid var(--adg-border);vertical-align:middle;color:var(--adg-text-1)}
+.adg-table tbody tr{transition:background .1s;cursor:pointer}
+.adg-table tbody tr:hover{background:rgba(255,255,255,.04)}
+.adg-table tbody tr:last-child td{border-bottom:none}
+.adg-row-departed,.adg-row-overdue{background:rgba(224,92,92,.08)!important}
+.adg-row-departing{background:rgba(224,148,74,.06)!important}
+.adg-row-cheque{background:rgba(224,92,155,.05)!important}
+.adg-row-due{background:rgba(224,148,74,.03)!important}
+.adg-row-paid{opacity:.55}
+
+/* Badges */
+.adg-badge{display:inline-flex;align-items:center;gap:.25rem;padding:.22rem .55rem;border-radius:20px;font-size:.67rem;font-weight:700;white-space:nowrap}
+.adg-badge-danger{background:var(--adg-red-bg);color:var(--adg-red);border:1px solid rgba(224,92,92,.3)}
+.adg-badge-due{background:var(--adg-orange-bg);color:var(--adg-orange);border:1px solid rgba(224,148,74,.3)}
+.adg-badge-cheque{background:var(--adg-pink-bg);color:var(--adg-pink);border:1px solid rgba(224,92,155,.3)}
+.adg-badge-ok{background:var(--adg-blue-bg);color:var(--adg-blue);border:1px solid rgba(74,144,217,.3)}
+.adg-badge-paid{background:var(--adg-green-bg);color:var(--adg-green);border:1px solid rgba(76,175,125,.3)}
+.adg-badge-high{background:rgba(232,201,122,.1);color:var(--adg-gold-light);border:1px solid var(--adg-gold-border);font-size:.62rem;padding:.15rem .42rem}
+.adg-room-badge{display:inline-block;background:var(--card2,#181c24);border:1px solid var(--border,#2a2f3d);border-radius:6px;padding:.13rem .48rem;font-weight:700;font-size:.74rem;color:var(--adg-gold-light);min-width:38px;text-align:center}
+.adg-amt-due{color:var(--adg-red);font-weight:700} .adg-amt-ok{color:var(--adg-text-1)} .adg-amt-paid{color:var(--adg-green);font-weight:600} .adg-amt-zero{color:var(--adg-text-3)}
+.adg-days-pill{display:inline-flex;align-items:center;justify-content:center;min-width:48px;padding:.14rem .38rem;border-radius:12px;font-size:.68rem;font-weight:700}
+.adg-days-danger{background:var(--adg-red-bg);color:var(--adg-red)} .adg-days-warn{background:var(--adg-orange-bg);color:var(--adg-orange)}
+.adg-days-ok{background:var(--adg-blue-bg);color:var(--adg-blue)} .adg-days-past{background:var(--adg-red-bg);color:var(--adg-red)} .adg-days-far{background:var(--adg-green-bg);color:var(--adg-green)}
+.adg-date-txt{font-size:.72rem;color:var(--adg-text-2);white-space:nowrap}
+.adg-doc-ok{color:var(--adg-green);font-weight:700;font-size:.86rem} .adg-doc-miss{color:var(--adg-red);font-weight:700;font-size:.86rem}
+.adg-conf-num{font-size:.66rem;color:var(--adg-text-3);display:block;margin-top:.08rem}
+.adg-table-empty{padding:3rem;text-align:center;color:var(--adg-text-3);font-size:.88rem}
+.adg-warn-icon{cursor:help;font-size:.75rem}
+
+/* Modal */
+.adg-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:500;display:flex;align-items:center;justify-content:center;padding:1.25rem;backdrop-filter:blur(4px)}
+.adg-modal-box{background:var(--adg-navy-card);border:1px solid var(--adg-border-2);border-radius:var(--adg-radius-lg);width:100%;max-width:660px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+.adg-modal-hdr{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.4rem;border-bottom:1px solid var(--adg-border);position:sticky;top:0;background:var(--adg-navy-card);z-index:1}
+.adg-modal-title{font-family:'DM Serif Display',var(--serif,serif);font-size:1.05rem;color:var(--adg-gold-light)}
+.adg-modal-close{background:none;border:none;color:var(--adg-text-3);cursor:pointer;font-size:1.1rem;padding:.2rem .35rem;border-radius:4px;line-height:1}
+.adg-modal-close:hover{color:var(--adg-text-1)}
+.adg-modal-body{padding:1.1rem 1.4rem 1.4rem}
+.adg-modal-label{font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--adg-text-3);margin-bottom:.35rem}
+.adg-modal-value{font-size:.86rem;color:var(--adg-text-1);line-height:1.6}
+.adg-modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:.8rem}
+.adg-modal-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.8rem;margin-bottom:.8rem}
+.adg-modal-field{background:var(--adg-navy-3);border-radius:var(--adg-radius);padding:.6rem .85rem}
+.adg-modal-section{margin-bottom:1rem}
+.adg-amt-row{display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:.7rem}
+.adg-amt-card{flex:1;min-width:100px;background:var(--adg-navy-3);border-radius:var(--adg-radius);padding:.65rem .85rem;text-align:center}
+.adg-amt-card-val{font-family:'DM Serif Display',var(--serif,serif);font-size:1.25rem;margin-bottom:.18rem}
+.adg-amt-card-lbl{font-size:.66rem;color:var(--adg-text-3);text-transform:uppercase;letter-spacing:.05em}
+.adg-prog-wrap{height:5px;background:var(--adg-navy-2);border-radius:3px;overflow:hidden;margin-top:.5rem}
+.adg-prog-fill{height:100%;border-radius:3px;transition:width .4s ease}
+.adg-install-past{color:var(--adg-text-3)} .adg-install-next{color:var(--adg-gold-light);font-weight:700} .adg-install-future{color:var(--adg-text-2)}
+.adg-docs-row{display:flex;gap:.6rem;flex-wrap:wrap}
+.adg-doc-badge{display:flex;align-items:center;gap:.35rem;background:var(--adg-navy-3);border-radius:var(--adg-radius);padding:.45rem .8rem;font-size:.77rem;flex:1;min-width:160px}
+@media(max-width:768px){
+  .adg-kpi-grid{grid-template-columns:1fr 1fr}
+  .adg-search-input{width:100%}
+  .adg-modal-grid,.adg-modal-grid-3{grid-template-columns:1fr}
+  .adg-charts{grid-template-columns:1fr}
+}
+</style>
 </head>
 <body>
 
@@ -196,6 +383,10 @@
   <div class="nav-item" onclick="showPanel('guestmem')" id="nav-guestmem" data-panel="guestmem">
     <div class="nav-icon">🧠</div>Guest Memory
     <span class="nav-badge" id="badge-guestmem">0</span>
+  </div>
+  <div class="nav-item" onclick="showPanel('adagio')" id="nav-adagio" data-panel="adagio">
+    <div class="nav-icon">⬡</div>Adagio Pro
+    <span class="nav-badge" id="badge-adagio">—</span>
   </div>
 </nav>
 
@@ -1231,6 +1422,715 @@
     🔵 Blue border on a field = auto-filled from memory this session.
   </div>
 </div><!-- /panel-guestmem -->
+
+<!-- ══════════════════════════════════════════════════════
+     PANEL: Adagio Pro · Long Stay Collections
+══════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-adagio">
+
+  <div class="panel-header">
+    <div class="panel-title-row">
+      <div class="panel-title">
+        <span class="panel-title-icon">⬡</span>
+        Adagio Pro
+      </div>
+      <div class="panel-subtitle">Long Stay Collections · Upload your tracking sheet to analyse balances, cheques &amp; departure risk</div>
+    </div>
+  </div>
+
+  <!-- Upload Section -->
+  <div class="adg-upload-section" id="adg-upload">
+    <div class="adg-upload-card" id="adg-drop-zone">
+      <div class="adg-upload-icon">📊</div>
+      <h2 class="adg-upload-title">Upload Tracking Sheet</h2>
+      <p class="adg-upload-hint">Drop your <strong>.xlsx / .xls</strong> or <strong>.csv</strong> file here, or click to browse</p>
+      <input type="file" id="adg-file-input" accept=".xlsx,.xls,.csv" hidden onchange="if(this.files[0])adgHandleFile(this.files[0])"/>
+      <button class="adg-btn adg-btn-primary" onclick="document.getElementById('adg-file-input').click()">Choose File</button>
+      <div class="adg-upload-settings">
+        <div class="adg-settings-title">⚙ Analysis Settings</div>
+        <div class="adg-setting-row"><label for="adgDate">Analysis date</label><input type="date" id="adgDate" class="adg-date-input"/></div>
+        <div class="adg-setting-row"><label for="adgHighBal">High balance threshold (AED)</label><input type="number" id="adgHighBal" class="adg-num-input" value="30000"/></div>
+        <div class="adg-setting-row"><label for="adgChequeDays">Cheque reminder window (days)</label><input type="number" id="adgChequeDays" class="adg-num-input" value="7"/></div>
+        <div class="adg-setting-row"><label for="adgDangerDays">Departure danger window (days)</label><input type="number" id="adgDangerDays" class="adg-num-input" value="30"/></div>
+      </div>
+    </div>
+    <div id="adg-upload-err" class="adg-upload-error" style="display:none;"></div>
+  </div>
+
+  <!-- Loading -->
+  <div class="adg-loading" id="adg-loading" style="display:none;">
+    <div class="adg-spinner"></div><p style="font-family:var(--mono);font-size:.8rem;color:var(--text2)">Parsing file…</p>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="adg-dash" style="display:none;">
+
+    <div class="adg-topbar">
+      <div class="adg-file-info">
+        <span class="adg-file-pill">📄 <span id="adg-filename"></span></span>
+        <span style="color:var(--text3)">·</span>
+        <span id="adg-analysis-date" style="color:var(--text2);font-family:var(--mono);font-size:.76rem;"></span>
+        <span style="color:var(--text3)">·</span>
+        <span id="adg-guest-count" style="color:var(--adg-gold-light);font-weight:600;font-family:var(--mono);font-size:.76rem;"></span>
+      </div>
+      <div class="adg-topbar-actions">
+        <button class="adg-btn adg-btn-ghost adg-btn-sm" onclick="adgExportCSV()">⬇ CSV</button>
+        <button class="adg-btn adg-btn-ghost adg-btn-sm" onclick="adgExportExcel()">⬇ Excel</button>
+        <button class="adg-btn adg-btn-ghost adg-btn-sm" onclick="adgReset()">↩ New File</button>
+      </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="adg-kpi-grid">
+      <div class="adg-kpi adg-kpi-danger" onclick="adgSetFilter('DANGER')">
+        <div class="adg-kpi-val" id="adg-kpi-danger">0</div><div class="adg-kpi-label">🔴 Danger</div><div class="adg-kpi-sub">Immediate action</div>
+      </div>
+      <div class="adg-kpi adg-kpi-cheque" onclick="adgSetFilter('CHEQUE')">
+        <div class="adg-kpi-val" id="adg-kpi-cheque">0</div><div class="adg-kpi-label">💳 Cheque Reminder</div><div class="adg-kpi-sub" id="adg-kpi-cheque-sub">Due in 7 days</div>
+      </div>
+      <div class="adg-kpi adg-kpi-due" onclick="adgSetFilter('DUE_SOON')">
+        <div class="adg-kpi-val" id="adg-kpi-due">0</div><div class="adg-kpi-label">🟠 Due Soon</div><div class="adg-kpi-sub">Payment within 14 days</div>
+      </div>
+      <div class="adg-kpi adg-kpi-ok" onclick="adgSetFilter('OK')">
+        <div class="adg-kpi-val" id="adg-kpi-ok">0</div><div class="adg-kpi-label">🔵 On Track</div><div class="adg-kpi-sub">Balance, not urgent</div>
+      </div>
+      <div class="adg-kpi adg-kpi-paid" onclick="adgSetFilter('PAID')">
+        <div class="adg-kpi-val" id="adg-kpi-paid">0</div><div class="adg-kpi-label">🟢 Paid</div><div class="adg-kpi-sub">Fully settled</div>
+      </div>
+      <div class="adg-kpi adg-kpi-out" style="cursor:default">
+        <div class="adg-kpi-val adg-kpi-amount" id="adg-kpi-out">AED 0</div><div class="adg-kpi-label">💰 Total Outstanding</div><div class="adg-kpi-sub" id="adg-kpi-out-sub">across 0 guests</div>
+      </div>
+      <div class="adg-kpi adg-kpi-contracts" onclick="adgSetFilter('CONTRACT_MISSING')">
+        <div class="adg-kpi-val" id="adg-kpi-contracts">0</div><div class="adg-kpi-label">📋 No Contract</div><div class="adg-kpi-sub">Not received</div>
+      </div>
+      <div class="adg-kpi adg-kpi-deposits" onclick="adgSetFilter('DEPOSIT_MISSING')">
+        <div class="adg-kpi-val" id="adg-kpi-deposits">0</div><div class="adg-kpi-label">🔒 No Deposit</div><div class="adg-kpi-sub">Security deposit absent</div>
+      </div>
+    </div>
+
+    <!-- Alerts -->
+    <div id="adg-alerts" class="adg-alert" style="display:none;">
+      <div class="adg-alert-title">⚠ Immediate Action Required</div>
+      <ul id="adg-alerts-list"></ul>
+    </div>
+    <div id="adg-warnings" class="adg-warn" style="display:none;"></div>
+
+    <!-- Summary -->
+    <div class="adg-summary">
+      <div class="adg-sum-item"><span class="adg-sum-dot" style="background:var(--adg-gold)"></span><span>Contract: <strong id="adg-sum-contract">AED 0</strong></span></div>
+      <div class="adg-sum-item"><span class="adg-sum-dot" style="background:var(--adg-green)"></span><span>Received: <strong id="adg-sum-received">AED 0</strong></span></div>
+      <div class="adg-sum-item"><span class="adg-sum-dot" style="background:var(--adg-red)"></span><span>Outstanding: <strong id="adg-sum-due">AED 0</strong></span></div>
+      <div class="adg-sum-item" style="margin-left:auto">Collection rate: <strong id="adg-sum-rate" style="color:var(--adg-gold-light)">0%</strong></div>
+    </div>
+
+    <!-- Charts -->
+    <div class="adg-charts">
+      <div class="adg-chart-panel"><div class="adg-chart-title">Payment Status</div><canvas id="adg-chart-due"></canvas></div>
+      <div class="adg-chart-panel"><div class="adg-chart-title">Outstanding by Company (Top 6)</div><canvas id="adg-chart-co"></canvas></div>
+      <div class="adg-chart-panel"><div class="adg-chart-title">Departures — Next 90 Days</div><canvas id="adg-chart-dep"></canvas></div>
+    </div>
+
+    <!-- Filter Tabs -->
+    <div class="adg-controls">
+      <div class="adg-filter-tabs" id="adg-tabs">
+        <button class="adg-tab active" data-f="ALL">All <span class="adg-tab-count" id="adg-tc-all">0</span></button>
+        <button class="adg-tab tab-danger" data-f="DANGER">🔴 Danger <span class="adg-tab-count" id="adg-tc-danger">0</span></button>
+        <button class="adg-tab tab-cheque" data-f="CHEQUE">💳 Cheque <span class="adg-tab-count" id="adg-tc-cheque">0</span></button>
+        <button class="adg-tab" data-f="HIGH_BALANCE">💛 High Bal <span class="adg-tab-count" id="adg-tc-high">0</span></button>
+        <button class="adg-tab" data-f="DUE_SOON">🟠 Due Soon <span class="adg-tab-count" id="adg-tc-due">0</span></button>
+        <button class="adg-tab" data-f="OK">🔵 On Track <span class="adg-tab-count" id="adg-tc-ok">0</span></button>
+        <button class="adg-tab" data-f="PAID">🟢 Paid <span class="adg-tab-count" id="adg-tc-paid">0</span></button>
+        <button class="adg-tab" data-f="CONTRACT_MISSING">📋 No Contract <span class="adg-tab-count" id="adg-tc-contract">0</span></button>
+        <button class="adg-tab" data-f="DEPOSIT_MISSING">🔒 No Deposit <span class="adg-tab-count" id="adg-tc-deposit">0</span></button>
+      </div>
+    </div>
+
+    <!-- Search & Filter Row -->
+    <div class="adg-controls-row2">
+      <div class="adg-search-wrap">
+        <span class="adg-search-icon">🔍</span>
+        <input type="text" id="adg-search" class="adg-search-input" placeholder="Name, room, confirmation…"/>
+        <button class="adg-search-clear" id="adg-search-clear" style="display:none;" onclick="adgClearSearch()">✕</button>
+      </div>
+      <span class="adg-divider-lbl">Filter:</span>
+      <select id="adg-co-filter" class="adg-select"><option value="">All Companies</option></select>
+      <select id="adg-room-filter" class="adg-select"><option value="">All Rooms</option></select>
+      <select id="adg-rate-filter" class="adg-select"><option value="">All Rate Codes</option></select>
+      <span class="adg-divider-lbl">High bal ≥</span>
+      <input type="number" id="adg-high-live" class="adg-num-input" value="30000" style="width:90px;height:32px"/>
+      <span style="font-size:.76rem;color:var(--text3)">AED</span>
+      <button class="adg-btn adg-btn-ghost adg-btn-sm" id="adg-clear-filters-btn" style="margin-left:auto;display:none" onclick="adgClearAllFilters()">✕ Clear</button>
+    </div>
+
+    <div class="adg-results-count" id="adg-results-count"></div>
+
+    <!-- Table -->
+    <div class="adg-table-wrap">
+      <table class="adg-table" id="adg-table">
+        <thead><tr>
+          <th>Status</th>
+          <th class="adg-sortable" data-col="room">Room ⇅</th>
+          <th class="adg-sortable" data-col="name">Guest Name ⇅</th>
+          <th class="adg-sortable" data-col="company">Company ⇅</th>
+          <th class="adg-sortable" data-col="arrival">Dates ⇅</th>
+          <th class="adg-sortable" data-col="nights">Nts ⇅</th>
+          <th class="adg-sortable" data-col="totalDue">Due (AED) ⇅</th>
+          <th class="adg-sortable" data-col="totalContract">Contract (AED) ⇅</th>
+          <th class="adg-sortable" data-col="daysToNextPayment">Next Payment ⇅</th>
+          <th class="adg-sortable" data-col="daysToDeparture">Departs ⇅</th>
+          <th title="Contract · Cheques · Security">C·Q·S</th>
+          <th>Row</th>
+        </tr></thead>
+        <tbody id="adg-tbody"></tbody>
+      </table>
+      <div class="adg-table-empty" id="adg-empty" style="display:none;">No guests match the current filter.</div>
+    </div>
+  </div><!-- /adg-dash -->
+
+</div><!-- /panel-adagio -->
+
+<!-- Adagio Pro Guest Modal -->
+<div class="adg-modal-overlay" id="adg-modal" style="display:none;" onclick="adgCloseModalOverlay(event)">
+  <div class="adg-modal-box">
+    <div class="adg-modal-hdr">
+      <span class="adg-modal-title" id="adg-modal-title">Guest Details</span>
+      <button class="adg-modal-close" onclick="adgCloseModal()">✕</button>
+    </div>
+    <div class="adg-modal-body" id="adg-modal-body"></div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════
+//  ADAGIO PRO — Self-contained logic (adg_ namespace)
+// ════════════════════════════════════════════════
+(function(){
+  // ── State ──
+  let adgGuests=[], adgFilter='ALL', adgSortCol=null, adgSortAsc=true;
+  let adgFileName='', adgAnalysisDate='';
+  let adgHighBal=30000, adgChequeDays=7, adgDangerDays=30;
+  let adgToday=new Date();
+  const ADG_DUE_DAYS=14;
+  const ADG_MONTHS={january:1,jan:1,february:2,feb:2,march:3,mar:3,april:4,apr:4,may:5,june:6,jun:6,july:7,jul:7,august:8,aug:8,september:9,sep:9,sept:9,october:10,oct:10,november:11,nov:11,december:12,dec:12};
+
+  // ── Init ──
+  function adgInit(){
+    const d=new Date();
+    document.getElementById('adgDate').value=adgTodayStr();
+    const fi=document.getElementById('adg-file-input');
+    fi.addEventListener('change',e=>{if(e.target.files[0])adgHandleFile(e.target.files[0]);});
+    const zone=document.getElementById('adg-drop-zone');
+    zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('adg-drag-over');});
+    zone.addEventListener('dragleave',()=>zone.classList.remove('adg-drag-over'));
+    zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('adg-drag-over');const f=e.dataTransfer.files[0];if(f)adgHandleFile(f);});
+    zone.addEventListener('click',e=>{if(e.target.tagName!=='BUTTON'&&e.target.tagName!=='INPUT')fi.click();});
+    document.getElementById('adg-tabs').addEventListener('click',e=>{const t=e.target.closest('.adg-tab');if(t)adgSetFilter(t.dataset.f);});
+    document.getElementById('adg-table').addEventListener('click',e=>{
+      const th=e.target.closest('th.adg-sortable');
+      if(th){const c=th.dataset.col;if(adgSortCol===c)adgSortAsc=!adgSortAsc;else{adgSortCol=c;adgSortAsc=true;}adgRenderTable();return;}
+      const tr=e.target.closest('tr[data-adg-idx]');if(tr)adgOpenModal(parseInt(tr.dataset.adgIdx));
+    });
+    const si=document.getElementById('adg-search');
+    si.addEventListener('input',()=>{document.getElementById('adg-search-clear').style.display=si.value?'':'none';adgRenderTable();});
+    document.getElementById('adg-co-filter').addEventListener('change',adgRenderTable);
+    document.getElementById('adg-room-filter').addEventListener('change',adgRenderTable);
+    document.getElementById('adg-rate-filter').addEventListener('change',adgRenderTable);
+    document.getElementById('adg-high-live').addEventListener('input',e=>{
+      adgHighBal=parseFloat(e.target.value)||0;
+      adgGuests.forEach(g=>{g.isHighBalance=g.totalDue!=null&&g.totalDue>=adgHighBal;});
+      adgUpdateTabCounts();adgRenderTable();
+    });
+  }
+  window.adgInit=adgInit;
+
+  // ── File handling ──
+  window.adgHandleFile=function(file){
+    adgFileName=file.name;
+    adgHighBal=parseFloat(document.getElementById('adgHighBal').value)||30000;
+    adgChequeDays=parseInt(document.getElementById('adgChequeDays').value)||7;
+    adgDangerDays=parseInt(document.getElementById('adgDangerDays').value)||30;
+    document.getElementById('adg-high-live').value=adgHighBal;
+    adgHideErr();
+    document.getElementById('adg-upload').style.display='none';
+    document.getElementById('adg-loading').style.display='flex';
+    const dateStr=document.getElementById('adgDate').value||adgTodayStr();
+    adgAnalysisDate=dateStr; adgToday=adgParseISO(dateStr);
+    if(file.name.toLowerCase().endsWith('.csv')){
+      const r=new FileReader();
+      r.onload=e=>{try{adgFinish(adgParseRows(adgReadCSV(e.target.result)));}catch(err){adgShowErr('Failed to read CSV: '+err.message);}};
+      r.readAsText(file);
+    } else {
+      const r=new FileReader();
+      r.onload=e=>{try{const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellNF:true});const ws=wb.Sheets[wb.SheetNames[0]];adgFinish(adgParseRows(XLSX.utils.sheet_to_json(ws,{header:1,defval:''})));}catch(err){adgShowErr('Failed to read file: '+err.message);}};
+      r.readAsArrayBuffer(file);
+    }
+  };
+
+  function adgShowErr(msg){
+    document.getElementById('adg-loading').style.display='none';
+    document.getElementById('adg-upload').style.display='flex';
+    const el=document.getElementById('adg-upload-err');
+    el.textContent=msg;el.style.display='block';
+  }
+  function adgHideErr(){document.getElementById('adg-upload-err').style.display='none';}
+
+  function adgFinish(result){
+    document.getElementById('adg-loading').style.display='none';
+    if(!result.success){adgShowErr(result.errors.join('\n'));return;}
+    adgGuests=result.guests;
+    adgPopulateFilters();adgRenderDash(result);
+    document.getElementById('adg-dash').style.display='block';
+    document.getElementById('badge-adagio').textContent=result.totalGuests;
+  }
+
+  function adgReadCSV(text){
+    return text.split(/\r?\n/).map(line=>{
+      const cells=[];let cur='',inQ=false;
+      for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'){inQ=!inQ;}else if(c===','&&!inQ){cells.push(cur.trim());cur='';}else cur+=c;}
+      cells.push(cur.trim());return cells;
+    });
+  }
+
+  // ── Sheet parser ──
+  function adgParseRows(rows){
+    const res={success:false,guests:[],errors:[]};
+    if(!rows||!rows.length){res.errors.push('No data found.');return res;}
+    let hIdx=-1,col={};
+    for(let r=0;r<Math.min(10,rows.length);r++){
+      const row=rows[r],tmp={};
+      row.forEach((cell,ci)=>{
+        const v=String(cell).toLowerCase().trim().replace(/\s+/g,' ');
+        if(!v)return;
+        if(v.includes('name')&&!v.includes('company'))tmp.name=ci;
+        if(/^(room|room no|room number|rm)$/.test(v))tmp.room=ci;
+        if(!tmp.room&&v.includes('room')&&!v.includes('type')&&!v.includes('rate'))tmp.room=ci;
+        if(v.includes('room type')||v==='type')tmp.roomType=ci;
+        if(v.includes('arrival')||v==='check in'||v==='checkin')tmp.arrival=ci;
+        if(v.includes('departure')||v==='check out'||v==='checkout')tmp.departure=ci;
+        if(v.includes('nights')||v==='nts'||v==='los')tmp.nights=ci;
+        if(v.includes('company')||v.includes('account'))tmp.company=ci;
+        if(v.includes('rate code')||v==='rate')tmp.rateCode=ci;
+        if(v.includes('installment')||v.includes('instalment'))tmp.installment=ci;
+        if(v.includes('cheque'))tmp.cheques=ci;
+        if(v.includes('total contract')||v==='contract amount'||v==='total amount')tmp.totalContract=ci;
+        if(v.includes('contract')&&!v.includes('total')&&!v.includes('amount'))tmp.contract=ci;
+        if(v.includes('security'))tmp.security=ci;
+        if(v.includes('payment received')||v.includes('pyament received'))tmp.paymentReceived=ci;
+        if(!tmp.paymentReceived&&v==='paid')tmp.paymentReceived=ci;
+        if(v.includes('due payment')||v.includes('total due')||v.includes('balance')||v.includes('outstanding'))tmp.totalDue=ci;
+        if(v.includes('confirmation')||v.includes('booking ref')||v==='res no')tmp.confirmation=ci;
+      });
+      if(tmp.name!==undefined||tmp.room!==undefined){col=tmp;hIdx=r;break;}
+    }
+    if(hIdx===-1){res.errors.push('Could not find header row. Expected columns like: Name, Room, Arrival, Departure.');return res;}
+    const guests=[];
+    for(let r=hIdx+1;r<rows.length;r++){
+      const row=rows[r];
+      if(!row||row.every(c=>String(c).trim()===''))continue;
+      const g={rowNumber:r+1},warn=[];
+      g.name=adgColStr(row,col.name);g.room=adgColStr(row,col.room);g.roomType=adgColStr(row,col.roomType);
+      g.company=adgColStr(row,col.company);g.rateCode=adgColStr(row,col.rateCode);
+      g.installmentDates=adgColStr(row,col.installment);g.chequesStatus=adgColStr(row,col.cheques);
+      g.contractStatus=adgColStr(row,col.contract);g.securityDeposit=adgColStr(row,col.security);
+      g.confirmationNumber=adgColStr(row,col.confirmation);
+      if(!g.name&&!g.room)continue;
+      g.totalContract=adgColNum(row,col.totalContract,warn,'totalContract');
+      g.paymentReceived=adgColNum(row,col.paymentReceived,warn,'paymentReceived');
+      g.totalDue=adgColNum(row,col.totalDue,warn,'totalDue');
+      if(g.totalDue==null&&g.totalContract!=null&&g.paymentReceived!=null)
+        g.totalDue=Math.round((g.totalContract-g.paymentReceived)*100)/100;
+      g.arrival=adgColDate(row,col.arrival,warn,'arrival');
+      g.departure=adgColDate(row,col.departure,warn,'departure');
+      const nStr=adgColStr(row,col.nights).replace(/[^0-9]/g,'');
+      if(nStr)g.nights=parseInt(nStr);
+      if(g.nights==null&&g.arrival&&g.departure)g.nights=adgDaysDiff(g.arrival,g.departure);
+      if(g.departure)g.daysToDeparture=adgDaysDiff(adgToday,g.departure);
+      const allInst=adgExtractInstallments(g.installmentDates);
+      g.allInstallments=allInst;
+      const nextDue=allInst.find(d=>d.date>=adgToday);
+      g.nextDueDate=nextDue?nextDue.date:null;
+      if(g.nextDueDate)g.daysToNextPayment=adgDaysDiff(adgToday,g.nextDueDate);
+      g.contractReceived=adgDocIsYes(g.contractStatus);
+      g.depositAvailable=adgDocIsPositive(g.securityDeposit);
+      g.chequesPresent=adgDocIsYes(g.chequesStatus);
+      g.chequeSoon=g.nextDueDate&&g.daysToNextPayment!=null&&g.daysToNextPayment>=0&&g.daysToNextPayment<=adgChequeDays;
+      g.isHighBalance=g.totalDue!=null&&g.totalDue>=adgHighBal;
+      adgClassify(g);
+      if(warn.length)g.parseWarning=warn.join(' ');
+      guests.push(g);
+    }
+    if(!guests.length){res.errors.push('No guest records found after header row.');return res;}
+    guests.sort((a,b)=>{const pa=adgPriority(a.status),pb=adgPriority(b.status);if(pa!==pb)return pa-pb;return(a.daysToDeparture??9999)-(b.daysToDeparture??9999);});
+    res.success=true;res.guests=guests;res.totalGuests=guests.length;
+    res.dangerCount=guests.filter(g=>g.status&&g.status.startsWith('DANGER')).length;
+    res.chequeCount=guests.filter(g=>g.chequeSoon).length;
+    res.dueCount=guests.filter(g=>g.status==='DUE_SOON').length;
+    res.okCount=guests.filter(g=>g.status==='OK').length;
+    res.paidCount=guests.filter(g=>g.status==='PAID').length;
+    res.totalOutstanding=guests.filter(g=>g.totalDue>0).reduce((s,g)=>s+g.totalDue,0);
+    res.totalContract=guests.filter(g=>g.totalContract>0).reduce((s,g)=>s+g.totalContract,0);
+    res.totalReceived=guests.filter(g=>g.paymentReceived>0).reduce((s,g)=>s+g.paymentReceived,0);
+    res.contractMissing=guests.filter(g=>!g.contractReceived).length;
+    res.depositMissing=guests.filter(g=>!g.depositAvailable).length;
+    return res;
+  }
+
+  function adgDocIsYes(v){if(!v||v.trim()===''||v==='—')return false;const s=v.toLowerCase();return s.includes('yes')||s.includes('✓')||s.includes('signed')||s.includes('received')||s.includes('paid')||s.includes('available');}
+  function adgDocIsPositive(v){if(!v||v.trim()===''||v==='—'||v.toLowerCase()==='no')return false;const n=parseFloat(String(v).replace(/[^0-9.]/g,''));if(!isNaN(n)&&n>0)return true;return adgDocIsYes(v);}
+  function adgClassify(g){
+    const due=g.totalDue??0;
+    if(due<=0){g.status='PAID';g.statusLabel='Paid';return;}
+    const dD=g.daysToDeparture,dP=g.daysToNextPayment;
+    if(dD!=null&&dD<0){g.status='DANGER_DEPARTED';g.statusLabel='Departed w/ Balance';}
+    else if(dD!=null&&dD<=adgDangerDays){g.status='DANGER_DEPARTING';g.statusLabel='Departing Soon';}
+    else if(dP!=null&&dP<0){g.status='DANGER_OVERDUE';g.statusLabel='Payment Overdue';}
+    else if(dP!=null&&dP<=ADG_DUE_DAYS){g.status='DUE_SOON';g.statusLabel='Due Soon';}
+    else{g.status='OK';g.statusLabel='On Track';}
+  }
+  function adgPriority(s){return{DANGER_DEPARTED:0,DANGER_OVERDUE:1,DANGER_DEPARTING:2,DUE_SOON:3,OK:4,PAID:5}[s]??99;}
+
+  // ── Filters ──
+  function adgPopulateFilters(){
+    const co=[...new Set(adgGuests.map(g=>g.company).filter(Boolean))].sort();
+    const rm=[...new Set(adgGuests.map(g=>g.room).filter(Boolean))].sort();
+    const rt=[...new Set(adgGuests.map(g=>g.rateCode).filter(Boolean))].sort();
+    document.getElementById('adg-co-filter').innerHTML='<option value="">All Companies</option>'+co.map(c=>`<option value="${adgE(c)}">${adgE(c)}</option>`).join('');
+    document.getElementById('adg-room-filter').innerHTML='<option value="">All Rooms</option>'+rm.map(r=>`<option value="${adgE(r)}">${adgE(r)}</option>`).join('');
+    document.getElementById('adg-rate-filter').innerHTML='<option value="">All Rate Codes</option>'+rt.map(r=>`<option value="${adgE(r)}">${adgE(r)}</option>`).join('');
+  }
+  function adgGetFiltered(){
+    const q=document.getElementById('adg-search').value.toLowerCase().trim();
+    const co=document.getElementById('adg-co-filter').value;
+    const rm=document.getElementById('adg-room-filter').value;
+    const rt=document.getElementById('adg-rate-filter').value;
+    return adgGuests.filter(g=>{
+      if(adgFilter==='DANGER'){if(!g.status||!g.status.startsWith('DANGER'))return false;}
+      else if(adgFilter==='CHEQUE'){if(!g.chequeSoon)return false;}
+      else if(adgFilter==='HIGH_BALANCE'){if(!g.isHighBalance)return false;}
+      else if(adgFilter==='CONTRACT_MISSING'){if(g.contractReceived)return false;}
+      else if(adgFilter==='DEPOSIT_MISSING'){if(g.depositAvailable)return false;}
+      else if(adgFilter!=='ALL'){if(g.status!==adgFilter)return false;}
+      if(co&&g.company!==co)return false;
+      if(rm&&g.room!==rm)return false;
+      if(rt&&g.rateCode!==rt)return false;
+      if(q){const h=[g.name,g.room,g.company,g.confirmationNumber,g.rateCode].filter(Boolean).join(' ').toLowerCase();if(!h.includes(q))return false;}
+      return true;
+    });
+  }
+  window.adgSetFilter=function(f){
+    adgFilter=f;
+    document.querySelectorAll('.adg-tab').forEach(t=>t.classList.toggle('active',t.dataset.f===f));
+    adgRenderTable();
+  };
+  window.adgClearSearch=function(){document.getElementById('adg-search').value='';document.getElementById('adg-search-clear').style.display='none';adgRenderTable();};
+  window.adgClearAllFilters=function(){
+    document.getElementById('adg-search').value='';document.getElementById('adg-search-clear').style.display='none';
+    document.getElementById('adg-co-filter').value='';document.getElementById('adg-room-filter').value='';document.getElementById('adg-rate-filter').value='';
+    document.getElementById('adg-clear-filters-btn').style.display='none';adgRenderTable();
+  };
+  function adgUpdateTabCounts(){
+    document.getElementById('adg-tc-all').textContent=adgGuests.length;
+    document.getElementById('adg-tc-danger').textContent=adgGuests.filter(g=>g.status&&g.status.startsWith('DANGER')).length;
+    document.getElementById('adg-tc-cheque').textContent=adgGuests.filter(g=>g.chequeSoon).length;
+    document.getElementById('adg-tc-high').textContent=adgGuests.filter(g=>g.isHighBalance).length;
+    document.getElementById('adg-tc-due').textContent=adgGuests.filter(g=>g.status==='DUE_SOON').length;
+    document.getElementById('adg-tc-ok').textContent=adgGuests.filter(g=>g.status==='OK').length;
+    document.getElementById('adg-tc-paid').textContent=adgGuests.filter(g=>g.status==='PAID').length;
+    document.getElementById('adg-tc-contract').textContent=adgGuests.filter(g=>!g.contractReceived).length;
+    document.getElementById('adg-tc-deposit').textContent=adgGuests.filter(g=>!g.depositAvailable).length;
+  }
+
+  // ── Dashboard render ──
+  function adgRenderDash(data){
+    document.getElementById('adg-filename').textContent=adgFileName;
+    document.getElementById('adg-analysis-date').textContent='Analysis: '+adgFmtDate(data.analysisDate||adgToday);
+    document.getElementById('adg-guest-count').textContent=data.totalGuests+' guests';
+    document.getElementById('adg-kpi-danger').textContent=data.dangerCount;
+    document.getElementById('adg-kpi-cheque').textContent=data.chequeCount;
+    document.getElementById('adg-kpi-cheque-sub').textContent='Due in '+adgChequeDays+' days';
+    document.getElementById('adg-kpi-due').textContent=data.dueCount;
+    document.getElementById('adg-kpi-ok').textContent=data.okCount;
+    document.getElementById('adg-kpi-paid').textContent=data.paidCount;
+    document.getElementById('adg-kpi-out').textContent='AED '+adgFmtMoney(data.totalOutstanding);
+    document.getElementById('adg-kpi-out-sub').textContent='across '+data.totalGuests+' guests';
+    document.getElementById('adg-kpi-contracts').textContent=data.contractMissing;
+    document.getElementById('adg-kpi-deposits').textContent=data.depositMissing;
+    document.getElementById('adg-sum-contract').textContent='AED '+adgFmtMoney(data.totalContract||0);
+    document.getElementById('adg-sum-received').textContent='AED '+adgFmtMoney(data.totalReceived||0);
+    document.getElementById('adg-sum-due').textContent='AED '+adgFmtMoney(data.totalOutstanding||0);
+    const rate=data.totalContract>0?Math.round((data.totalReceived/data.totalContract)*100):0;
+    document.getElementById('adg-sum-rate').textContent=rate+'%';
+    // Alerts
+    const dangers=data.guests.filter(g=>g.status&&g.status.startsWith('DANGER'));
+    const alertEl=document.getElementById('adg-alerts');
+    if(dangers.length){
+      document.getElementById('adg-alerts-list').innerHTML=dangers.slice(0,8).map(g=>{
+        if(g.status==='DANGER_DEPARTED')return`<li>Room ${adgE(g.room)} · ${adgE(g.name)} — departed with AED ${adgFmtMoney(g.totalDue)} outstanding</li>`;
+        if(g.status==='DANGER_DEPARTING')return`<li>Room ${adgE(g.room)} · ${adgE(g.name)} — departing in ${g.daysToDeparture}d, AED ${adgFmtMoney(g.totalDue)} due</li>`;
+        return`<li>Room ${adgE(g.room)} · ${adgE(g.name)} — payment overdue by ${Math.abs(g.daysToNextPayment)}d</li>`;
+      }).join('')+(dangers.length>8?`<li style="color:var(--adg-text-3)">…and ${dangers.length-8} more</li>`:'');
+      alertEl.style.display='block';
+    } else alertEl.style.display='none';
+    // Parse warnings
+    const warns=data.guests.filter(g=>g.parseWarning).map(g=>`Row ${g.rowNumber}: ${g.parseWarning}`);
+    const warnEl=document.getElementById('adg-warnings');
+    if(warns.length){warnEl.textContent='⚠ Parse warnings: '+warns.join(' · ');warnEl.style.display='block';}else warnEl.style.display='none';
+    adgFilter='ALL';adgSortCol=null;adgSortAsc=true;
+    document.querySelectorAll('.adg-tab').forEach(t=>t.classList.toggle('active',t.dataset.f==='ALL'));
+    adgUpdateTabCounts();adgDrawDueChart(data);adgDrawCoChart(data.guests);adgDrawDepChart(data.guests);adgRenderTable();
+  }
+
+  // ── Table ──
+  function adgRenderTable(){
+    let guests=adgGetFiltered();
+    if(adgSortCol){
+      guests=[...guests].sort((a,b)=>{
+        let va=a[adgSortCol],vb=b[adgSortCol];
+        if(va instanceof Date)va=va.getTime();if(vb instanceof Date)vb=vb.getTime();
+        if(va==null)va=adgSortAsc?'\uFFFF':-Infinity;if(vb==null)vb=adgSortAsc?'\uFFFF':-Infinity;
+        if(typeof va==='string')return adgSortAsc?va.localeCompare(vb):vb.localeCompare(va);
+        return adgSortAsc?va-vb:vb-va;
+      });
+    }
+    const tbody=document.getElementById('adg-tbody'),empty=document.getElementById('adg-empty');
+    if(!guests.length){tbody.innerHTML='';empty.style.display='block';}
+    else{empty.style.display='none';tbody.innerHTML=guests.map((g,i)=>adgRow(g,adgGuests.indexOf(g))).join('');}
+    document.getElementById('adg-results-count').textContent=`Showing ${guests.length} of ${adgGuests.length} guest${adgGuests.length!==1?'s':''}${guests.length<adgGuests.length?' (filtered)':''}`;
+  }
+  function adgRow(g,idx){
+    const rowCls={DANGER_DEPARTED:'adg-row-departed',DANGER_OVERDUE:'adg-row-overdue',DANGER_DEPARTING:'adg-row-departing',DUE_SOON:'adg-row-due',PAID:'adg-row-paid'}[g.status]||(g.chequeSoon?'adg-row-cheque':'');
+    const badgeCls={DANGER_DEPARTED:'adg-badge-danger',DANGER_OVERDUE:'adg-badge-danger',DANGER_DEPARTING:'adg-badge-due',DUE_SOON:'adg-badge-due',OK:'adg-badge-ok',PAID:'adg-badge-paid'}[g.status]||'adg-badge-ok';
+    const icon={DANGER_DEPARTED:'🔴',DANGER_OVERDUE:'🔴',DANGER_DEPARTING:'🟠',DUE_SOON:'🟠',OK:'🔵',PAID:'🟢'}[g.status]||'⚪';
+    let amtCell;
+    if(g.totalDue==null)amtCell='<span class="adg-amt-zero">—</span>';
+    else if(g.totalDue<=0)amtCell='<span class="adg-amt-paid">✓ Paid</span>';
+    else{
+      const c=(g.status&&g.status.startsWith('DANGER'))||g.isHighBalance?'adg-amt-due':'adg-amt-ok';
+      amtCell=`<span class="${c}">${adgFmtMoney(g.totalDue)}</span>`;
+      if(g.isHighBalance)amtCell+='<br><span class="adg-badge adg-badge-high">⚠ HIGH</span>';
+    }
+    const contCell=g.totalContract!=null?`<span class="adg-amt-ok">${adgFmtMoney(g.totalContract)}</span>`+(g.paymentReceived!=null?`<br><span style="font-size:.66rem;color:var(--adg-green)">rcvd ${adgFmtMoney(g.paymentReceived)}</span>`:''):'<span class="adg-amt-zero">—</span>';
+    let nextCell='<span class="adg-date-txt">—</span>';
+    if(g.nextDueDate){const d=g.daysToNextPayment;const pc=d<0?'adg-days-past':d<=3?'adg-days-danger':d<=14?'adg-days-warn':d<=60?'adg-days-ok':'adg-days-far';const lbl=d<0?`${Math.abs(d)}d overdue`:d===0?'today':`in ${d}d`;nextCell=`<span class="adg-date-txt">${adgFmtDate(g.nextDueDate)}</span><br><span class="adg-days-pill ${pc}">${lbl}</span>`+(g.chequeSoon?' 💳':'');}
+    let depCell='<span class="adg-date-txt">—</span>';
+    if(g.departure){const d=g.daysToDeparture;const pc=d<0?'adg-days-past':d<=7?'adg-days-danger':d<=30?'adg-days-warn':'adg-days-ok';const lbl=d<0?`${Math.abs(d)}d ago`:d===0?'today':`${d}d`;depCell=`<span class="adg-date-txt">${adgFmtDate(g.departure)}</span><br><span class="adg-days-pill ${pc}">${lbl}</span>`;}
+    const docs=`<span title="Contract" class="${g.contractReceived?'adg-doc-ok':'adg-doc-miss'}">${g.contractReceived?'✓':'✗'}</span> <span title="Cheques" class="${g.chequesPresent?'adg-doc-ok':'adg-doc-miss'}">${g.chequesPresent?'✓':'✗'}</span> <span title="Security" class="${g.depositAvailable?'adg-doc-ok':'adg-doc-miss'}">${g.depositAvailable?'✓':'✗'}</span>`;
+    const warn=g.parseWarning?` <span class="adg-warn-icon" title="${adgE(g.parseWarning)}">⚠️</span>`:'';
+    let sbadge=`<span class="adg-badge ${badgeCls}">${icon} ${adgE(g.statusLabel||g.status||'—')}</span>`;
+    if(g.chequeSoon)sbadge+=`<br><span class="adg-badge adg-badge-cheque" style="margin-top:.2rem">💳 Cheque</span>`;
+    return `<tr class="${rowCls}" data-adg-idx="${idx}">
+      <td>${sbadge}</td>
+      <td><span class="adg-room-badge">${adgE(g.room||'—')}</span><br><span style="font-size:.63rem;color:var(--adg-text-3)">${adgE(g.roomType||'')}</span></td>
+      <td>${adgE(g.name||'—')}${warn}${g.confirmationNumber?`<span class="adg-conf-num">#${adgE(g.confirmationNumber)}</span>`:''}</td>
+      <td class="adg-date-txt">${adgE(g.company||'—')}</td>
+      <td class="adg-date-txt" style="line-height:1.8">${adgFmtDate(g.arrival)}<br>${adgFmtDate(g.departure)}</td>
+      <td class="adg-date-txt">${g.nights!=null?g.nights:'—'}</td>
+      <td>${amtCell}</td>
+      <td>${contCell}</td>
+      <td>${nextCell}</td>
+      <td>${depCell}</td>
+      <td>${docs}</td>
+      <td class="adg-date-txt" style="color:var(--adg-text-3)">${g.rowNumber}</td>
+    </tr>`;
+  }
+
+  // ── Modal ──
+  window.adgOpenModal=function(idx){
+    const g=adgGuests[idx];if(!g)return;
+    document.getElementById('adg-modal-title').textContent=g.name||'Guest Details';
+    const pct=g.totalContract>0?Math.min(100,Math.round((g.paymentReceived||0)/g.totalContract*100)):0;
+    const pctColor=pct>=90?'var(--adg-green)':pct>=50?'var(--adg-orange)':'var(--adg-red)';
+    let installHTML='<span style="color:var(--adg-text-3);font-size:.78rem">No payment schedule found.</span>';
+    if(g.allInstallments&&g.allInstallments.length>0){
+      installHTML=g.allInstallments.map(inst=>{
+        const isPast=inst.date<adgToday,isNext=g.nextDueDate&&inst.date.getTime()===g.nextDueDate.getTime();
+        const cls=isPast?'adg-install-past':isNext?'adg-install-next':'adg-install-future';
+        const mk=isPast?'✓':isNext?'▶':'○';
+        return `<div class="${cls}" style="display:flex;align-items:center;gap:.4rem;padding:.25rem 0;border-bottom:1px solid var(--adg-border)"><span style="min-width:1rem;text-align:center">${mk}</span><span>${adgE(inst.label)}</span></div>`;
+      }).join('');
+    }
+    const badgeCls={DANGER_DEPARTED:'adg-badge-danger',DANGER_OVERDUE:'adg-badge-danger',DANGER_DEPARTING:'adg-badge-due',DUE_SOON:'adg-badge-due',OK:'adg-badge-ok',PAID:'adg-badge-paid'}[g.status]||'adg-badge-ok';
+    const icon={DANGER_DEPARTED:'🔴',DANGER_OVERDUE:'🔴',DANGER_DEPARTING:'🟠',DUE_SOON:'🟠',OK:'🔵',PAID:'🟢'}[g.status]||'⚪';
+    document.getElementById('adg-modal-body').innerHTML=`
+      <div class="adg-modal-grid">
+        <div class="adg-modal-field"><div class="adg-modal-label">Status</div><div class="adg-modal-value"><span class="adg-badge ${badgeCls}">${icon} ${adgE(g.statusLabel||g.status||'—')}</span></div></div>
+        <div class="adg-modal-field"><div class="adg-modal-label">Confirmation #</div><div class="adg-modal-value" style="font-weight:600">${adgE(g.confirmationNumber||'—')}</div></div>
+      </div>
+      <div class="adg-modal-grid-3">
+        <div class="adg-modal-field"><div class="adg-modal-label">Room</div><div class="adg-modal-value"><span class="adg-room-badge">${adgE(g.room||'—')}</span></div></div>
+        <div class="adg-modal-field"><div class="adg-modal-label">Room Type</div><div class="adg-modal-value">${adgE(g.roomType||'—')}</div></div>
+        <div class="adg-modal-field"><div class="adg-modal-label">Rate Code</div><div class="adg-modal-value">${adgE(g.rateCode||'—')}</div></div>
+      </div>
+      <div class="adg-modal-field" style="margin-bottom:.85rem"><div class="adg-modal-label">Company</div><div class="adg-modal-value" style="font-weight:500">${adgE(g.company||'—')}</div></div>
+      <div class="adg-modal-grid">
+        <div class="adg-modal-field"><div class="adg-modal-label">Stay Dates</div><div class="adg-modal-value" style="font-weight:600">${adgFmtDate(g.arrival)} → ${adgFmtDate(g.departure)}</div><div style="font-size:.72rem;color:var(--adg-text-3);margin-top:.18rem">${g.nights!=null?g.nights+' nights':'—'}</div></div>
+        <div class="adg-modal-field"><div class="adg-modal-label">Days to Departure</div><div class="adg-modal-value">${g.daysToDeparture!=null?`<span class="adg-days-pill ${g.daysToDeparture<0?'adg-days-past':g.daysToDeparture<=7?'adg-days-danger':g.daysToDeparture<=30?'adg-days-warn':'adg-days-ok'}" style="font-size:.8rem;padding:.28rem .65rem">${g.daysToDeparture<0?Math.abs(g.daysToDeparture)+'d ago':g.daysToDeparture===0?'Today':g.daysToDeparture+'d left'}</span>`:'—'}</div></div>
+      </div>
+      <div class="adg-modal-section">
+        <div class="adg-modal-label" style="margin-bottom:.5rem">Financials</div>
+        <div class="adg-amt-row">
+          <div class="adg-amt-card"><div class="adg-amt-card-val" style="color:var(--adg-gold-light)">AED ${adgFmtMoney(g.totalContract)}</div><div class="adg-amt-card-lbl">Total Contract</div></div>
+          <div class="adg-amt-card"><div class="adg-amt-card-val" style="color:var(--adg-green)">AED ${adgFmtMoney(g.paymentReceived)}</div><div class="adg-amt-card-lbl">Received</div></div>
+          <div class="adg-amt-card"><div class="adg-amt-card-val" style="color:${(g.totalDue||0)>0?'var(--adg-red)':'var(--adg-green)'}">AED ${adgFmtMoney(g.totalDue)}</div><div class="adg-amt-card-lbl">Outstanding</div></div>
+        </div>
+        <div style="font-size:.7rem;color:var(--adg-text-3);margin-bottom:.28rem">Collection — ${pct}%</div>
+        <div class="adg-prog-wrap"><div class="adg-prog-fill" style="width:${pct}%;background:${pctColor}"></div></div>
+      </div>
+      <div class="adg-modal-section">
+        <div class="adg-modal-label" style="margin-bottom:.45rem">Payment Schedule</div>
+        <div style="background:var(--adg-navy-3);border-radius:var(--adg-radius);padding:.75rem .9rem;font-size:.8rem;line-height:1">${installHTML}</div>
+        ${g.nextDueDate?`<div style="margin-top:.5rem;font-size:.77rem;color:var(--adg-text-2)">Next: <strong style="color:var(--adg-gold-light)">${adgFmtDate(g.nextDueDate)}</strong> ${g.daysToNextPayment<0?`<span style="color:var(--adg-red)">(${Math.abs(g.daysToNextPayment)}d overdue)</span>`:`<span style="color:var(--adg-text-3)">in ${g.daysToNextPayment}d</span>`}</div>`:''}
+      </div>
+      <div class="adg-modal-section">
+        <div class="adg-modal-label" style="margin-bottom:.45rem">Documents</div>
+        <div class="adg-docs-row">
+          <div class="adg-doc-badge"><span class="${g.contractReceived?'adg-doc-ok':'adg-doc-miss'}">${g.contractReceived?'✓':'✗'}</span><span>Contract — <em style="color:var(--adg-text-2);font-size:.74rem">${adgE(g.contractStatus||'Not recorded')}</em></span></div>
+          <div class="adg-doc-badge"><span class="${g.chequesPresent?'adg-doc-ok':'adg-doc-miss'}">${g.chequesPresent?'✓':'✗'}</span><span>Cheques — <em style="color:var(--adg-text-2);font-size:.74rem">${adgE(g.chequesStatus||'Not recorded')}</em></span></div>
+          <div class="adg-doc-badge"><span class="${g.depositAvailable?'adg-doc-ok':'adg-doc-miss'}">${g.depositAvailable?'✓':'✗'}</span><span>Security — <em style="color:var(--adg-text-2);font-size:.74rem">${adgE(g.securityDeposit||'Not recorded')}</em></span></div>
+        </div>
+      </div>
+      ${g.chequeSoon?`<div style="background:var(--adg-pink-bg);border:1px solid rgba(224,92,155,.3);border-radius:var(--adg-radius);padding:.65rem .9rem;font-size:.8rem;color:var(--adg-pink)">💳 Cheque reminder: payment due <strong>${adgFmtDate(g.nextDueDate)}</strong> — in ${g.daysToNextPayment} day${g.daysToNextPayment!==1?'s':''}</div>`:''}
+    `;
+    document.getElementById('adg-modal').style.display='flex';
+    document.body.style.overflow='hidden';
+  };
+  window.adgCloseModal=function(){document.getElementById('adg-modal').style.display='none';document.body.style.overflow='';};
+  window.adgCloseModalOverlay=function(e){if(e.target===document.getElementById('adg-modal'))adgCloseModal();};
+
+  // ── Charts ──
+  function adgDrawDueChart(data){
+    const canvas=document.getElementById('adg-chart-due');
+    canvas.width=canvas.offsetWidth||360;canvas.height=175;
+    const ctx=canvas.getContext('2d');ctx.clearRect(0,0,canvas.width,canvas.height);
+    const segs=[{label:'Danger',count:data.dangerCount,color:'#e05c5c'},{label:'Due Soon',count:data.dueCount,color:'#e0944a'},{label:'On Track',count:data.okCount,color:'#4a90d9'},{label:'Paid',count:data.paidCount,color:'#4caf7d'}].filter(s=>s.count>0);
+    const total=segs.reduce((s,x)=>s+x.count,0);
+    if(!total){ctx.fillStyle='#637180';ctx.font='12px DM Sans,sans-serif';ctx.fillText('No data',20,90);return;}
+    const cx=82,cy=88,r=64;let angle=-Math.PI/2;
+    segs.forEach(seg=>{const sw=(seg.count/total)*Math.PI*2;ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,angle,angle+sw);ctx.closePath();ctx.fillStyle=seg.color;ctx.fill();angle+=sw;});
+    ctx.beginPath();ctx.arc(cx,cy,30,0,Math.PI*2);ctx.fillStyle='#182e45';ctx.fill();
+    ctx.font='700 13px DM Serif Display,serif';ctx.fillStyle='#e8c97a';ctx.textAlign='center';ctx.fillText(total,cx,cy+5);
+    ctx.font='11px DM Sans,sans-serif';ctx.textAlign='left';
+    segs.forEach((seg,i)=>{const y=24+i*36;ctx.fillStyle=seg.color;ctx.beginPath();ctx.arc(cx+r+16,y,5,0,Math.PI*2);ctx.fill();ctx.fillStyle='#a8b4c2';ctx.fillText(`${seg.label}: ${seg.count}`,cx+r+26,y+4);});
+  }
+  function adgDrawCoChart(guests){
+    const canvas=document.getElementById('adg-chart-co');
+    canvas.width=canvas.offsetWidth||360;canvas.height=175;
+    const ctx=canvas.getContext('2d');ctx.clearRect(0,0,canvas.width,canvas.height);
+    const map={};guests.forEach(g=>{if(g.totalDue>0){const c=g.company||'No Company';map[c]=(map[c]||0)+g.totalDue;}});
+    const top=Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,6);
+    if(!top.length){ctx.fillStyle='#637180';ctx.font='12px DM Sans,sans-serif';ctx.fillText('No outstanding balances',20,90);return;}
+    const maxV=top[0][1],bH=18,gap=9,sX=148;
+    const colors=['#e05c5c','#c9a84c','#4a90d9','#4caf7d','#9b72cf','#e0944a'];
+    ctx.font='11px DM Sans,sans-serif';
+    top.forEach((item,i)=>{
+      const y=6+i*(bH+gap),lbl=item[0].length>17?item[0].substring(0,17)+'…':item[0];
+      const w=Math.max(3,(item[1]/maxV)*(canvas.width-sX-85));
+      ctx.fillStyle='#a8b4c2';ctx.textAlign='right';ctx.fillText(lbl,sX-5,y+13);
+      ctx.fillStyle=colors[i%colors.length];
+      const br=4,bx=sX,by=y,bw=w,bhh=bH;
+      ctx.beginPath();ctx.moveTo(bx+br,by);ctx.lineTo(bx+bw-br,by);ctx.quadraticCurveTo(bx+bw,by,bx+bw,by+br);ctx.lineTo(bx+bw,by+bhh-br);ctx.quadraticCurveTo(bx+bw,by+bhh,bx+bw-br,by+bhh);ctx.lineTo(bx+br,by+bhh);ctx.quadraticCurveTo(bx,by+bhh,bx,by+bhh-br);ctx.lineTo(bx,by+br);ctx.quadraticCurveTo(bx,by,bx+br,by);ctx.closePath();ctx.fill();
+      ctx.fillStyle='#a8b4c2';ctx.textAlign='left';ctx.fillText(adgFmtMoney(item[1]),sX+w+5,y+13);
+    });
+  }
+  function adgDrawDepChart(guests){
+    const canvas=document.getElementById('adg-chart-dep');
+    canvas.width=canvas.offsetWidth||360;canvas.height=175;
+    const ctx=canvas.getContext('2d');ctx.clearRect(0,0,canvas.width,canvas.height);
+    const buckets={};
+    for(let i=0;i<3;i++){const d=new Date(adgToday.getFullYear(),adgToday.getMonth()+i,1);buckets[`${d.getFullYear()}-${d.getMonth()}`]={label:d.toLocaleDateString('en-GB',{month:'short',year:'2-digit'}),count:0,due:0};}
+    guests.forEach(g=>{if(!g.departure)return;const k=`${g.departure.getFullYear()}-${g.departure.getMonth()}`;if(buckets[k]){buckets[k].count++;if(g.totalDue>0)buckets[k].due+=g.totalDue;}});
+    const bkts=Object.values(buckets);
+    if(!bkts.some(b=>b.count>0)){ctx.fillStyle='#637180';ctx.font='12px DM Sans,sans-serif';ctx.fillText('No departures in next 90 days',20,90);return;}
+    const maxC=Math.max(...bkts.map(b=>b.count),1);
+    const bw=Math.floor((canvas.width-40)/bkts.length)-14;
+    ctx.font='11px DM Sans,sans-serif';
+    bkts.forEach((b,i)=>{
+      const x=20+i*((canvas.width-40)/bkts.length)+7;
+      const barH=b.count>0?Math.max(10,Math.round((b.count/maxC)*(canvas.height-60))):0;
+      const y=canvas.height-34-barH;
+      ctx.fillStyle=i===0?'#e05c5c':'#4a90d9';
+      if(barH>0){const br=3;ctx.beginPath();ctx.moveTo(x+br,y);ctx.lineTo(x+bw-br,y);ctx.quadraticCurveTo(x+bw,y,x+bw,y+br);ctx.lineTo(x+bw,y+barH);ctx.lineTo(x,y+barH);ctx.lineTo(x,y+br);ctx.quadraticCurveTo(x,y,x+br,y);ctx.closePath();ctx.fill();}
+      if(b.count>0){ctx.fillStyle='#f0ede8';ctx.textAlign='center';ctx.fillText(b.count,x+bw/2,y-4);}
+      ctx.fillStyle='#637180';ctx.textAlign='center';ctx.fillText(b.label,x+bw/2,canvas.height-16);
+      if(b.due>0){ctx.fillStyle='#e05c5c';ctx.font='9px DM Sans,sans-serif';ctx.fillText('AED '+adgFmtMoney(b.due),x+bw/2,canvas.height-3);ctx.font='11px DM Sans,sans-serif';}
+    });
+    ctx.fillStyle='#637180';ctx.textAlign='left';ctx.font='9px DM Sans,sans-serif';ctx.fillText('Red = current month  Blue = upcoming',8,11);
+  }
+
+  // ── Export ──
+  window.adgExportCSV=function(){
+    const guests=adgGetFiltered();if(!guests.length){if(typeof showToast==='function')showToast('No records to export.');return;}
+    const hdr=['Row','Status','Room','Room Type','Guest Name','Company','Rate Code','Confirmation','Arrival','Departure','Nights','Total Contract','Payment Received','Total Due','Next Due Date','Days to Next Pay','Days to Departure','Contract','Cheques','Security Deposit','High Balance','Cheque Reminder'];
+    const rows=guests.map(g=>[g.rowNumber,g.statusLabel,g.room,g.roomType,g.name,g.company,g.rateCode,g.confirmationNumber,adgFmtDate(g.arrival),adgFmtDate(g.departure),g.nights,g.totalContract,g.paymentReceived,g.totalDue,adgFmtDate(g.nextDueDate),g.daysToNextPayment,g.daysToDeparture,g.contractStatus,g.chequesStatus,g.securityDeposit,g.isHighBalance?'YES':'NO',g.chequeSoon?'YES':'NO'].map(v=>v==null?'':'"'+String(v).replace(/"/g,'""')+'"'));
+    const csv=[hdr.map(h=>`"${h}"`).join(','),...rows.map(r=>r.join(','))].join('\n');
+    const blob=new Blob([csv],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`adagio-pro-${adgAnalysisDate||adgTodayStr()}.csv`;a.click();URL.revokeObjectURL(a.href);
+    if(typeof showToast==='function')showToast('✓ Exported '+guests.length+' records');
+  };
+  window.adgExportExcel=function(){
+    if(typeof XLSX==='undefined'){if(typeof showToast==='function')showToast('XLSX not available — use CSV.');return;}
+    const guests=adgGetFiltered();if(!guests.length){if(typeof showToast==='function')showToast('No records to export.');return;}
+    const wsData=[['Row','Status','Room','Room Type','Guest Name','Company','Rate Code','Confirmation','Arrival','Departure','Nights','Total Contract','Payment Received','Total Due','Next Due Date','Days to Next Pay','Days to Departure','Contract','Cheques','Security Deposit','High Balance','Cheque Reminder'],...guests.map(g=>[g.rowNumber,g.statusLabel,g.room,g.roomType,g.name,g.company,g.rateCode,g.confirmationNumber,adgFmtDate(g.arrival),adgFmtDate(g.departure),g.nights,g.totalContract,g.paymentReceived,g.totalDue,adgFmtDate(g.nextDueDate),g.daysToNextPayment,g.daysToDeparture,g.contractStatus,g.chequesStatus,g.securityDeposit,g.isHighBalance?'YES':'NO',g.chequeSoon?'YES':'NO'])];
+    const ws=XLSX.utils.aoa_to_sheet(wsData);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Adagio Pro');XLSX.writeFile(wb,`adagio-pro-${adgAnalysisDate||adgTodayStr()}.xlsx`);
+    if(typeof showToast==='function')showToast('✓ Exported '+guests.length+' records');
+  };
+  window.adgReset=function(){
+    adgGuests=[];adgFilter='ALL';adgSortCol=null;adgSortAsc=true;
+    document.getElementById('adg-file-input').value='';
+    document.getElementById('adg-dash').style.display='none';
+    document.getElementById('adg-upload').style.display='flex';
+    adgHideErr();
+    document.getElementById('badge-adagio').textContent='—';
+  };
+
+  // ── Date / number helpers ──
+  function adgColDate(row,ci,warn,key){
+    if(ci===undefined)return null;const raw=row[ci];if(raw==null||raw==='')return null;
+    if(raw instanceof Date&&!isNaN(raw))return new Date(raw.getUTCFullYear(),raw.getUTCMonth(),raw.getUTCDate());
+    if(typeof raw==='number'&&typeof XLSX!=='undefined'){const d=XLSX.SSF.parse_date_code(raw);if(d)return new Date(d.y,d.m-1,d.d);return null;}
+    const s=String(raw).trim();if(!s)return null;
+    const fmts=[
+      s=>{const p=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);return p?new Date(+p[3],+p[2]-1,+p[1]):null;},
+      s=>{const p=s.match(/^(\d{4})[\/\-](\d{2})[\/\-](\d{2})$/);return p?new Date(+p[1],+p[2]-1,+p[3]):null;},
+      s=>{const p=s.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);if(!p)return null;const mo=ADG_MONTHS[p[2].toLowerCase()];return mo?new Date(+p[3],mo-1,+p[1]):null;},
+      s=>{const p=s.match(/^(\d{1,2})[\/\-]([A-Za-z]+)[\/\-](\d{4})$/);if(!p)return null;const mo=ADG_MONTHS[p[2].toLowerCase()];return mo?new Date(+p[3],mo-1,+p[1]):null;},
+      s=>{const d=new Date(s);if(isNaN(d))return null;return new Date(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate());}
+    ];
+    for(const fn of fmts){const d=fn(s);if(d&&!isNaN(d))return d;}
+    warn.push(`Could not parse date '${s}' for '${key}'.`);return null;
+  }
+  function adgColNum(row,ci,warn,key){
+    if(ci===undefined)return null;const raw=row[ci];if(raw==null||raw==='')return null;
+    if(typeof raw==='number')return raw;
+    const s=String(raw).replace(/[^0-9.\-]/g,'');if(!s)return null;
+    const n=parseFloat(s);if(isNaN(n)){warn.push(`Non-numeric in '${key}'.`);return null;}return n;
+  }
+  function adgColStr(row,ci){if(ci===undefined)return'';const v=row[ci];return v==null?'':String(v).trim();}
+  function adgExtractInstallments(text){
+    if(!text)return[];
+    const re=/([^\n]*?(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)\s+(\d{4}))/g;
+    const results=[];let m;
+    while((m=re.exec(text))!==null){const mo=ADG_MONTHS[m[3].toLowerCase()];if(!mo)continue;try{const d=new Date(+m[4],mo-1,+m[2]);if(!isNaN(d))results.push({date:d,label:m[1].trim().replace(/^[•·\-\s]+/,'')});}catch(e){}}
+    results.sort((a,b)=>a.date-b.date);return results;
+  }
+  function adgDaysDiff(from,to){const a=from instanceof Date?from:new Date(from);const b=to instanceof Date?to:new Date(to);return Math.round((b-a)/86400000);}
+  function adgParseISO(s){const p=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);return p?new Date(+p[1],+p[2]-1,+p[3]):new Date();}
+  function adgTodayStr(){const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+  function adgFmtDate(d){if(!d)return'—';const dt=d instanceof Date?d:new Date(d);if(isNaN(dt))return String(d);const mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return`${dt.getDate()} ${mo[dt.getMonth()]} ${dt.getFullYear()}`;}
+  function adgFmtMoney(n){return n==null?'—':Number(n).toLocaleString('en-AE',{minimumFractionDigits:0,maximumFractionDigits:0});}
+  function adgE(s){return s?String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'):''}
+
+  // ── Boot: init when this panel is first shown ──
+  let _adgInited=false;
+  const _origShowPanel=window.showPanel;
+  window.showPanel=function(name){
+    if(typeof _origShowPanel==='function')_origShowPanel(name);
+    if(name==='adagio'&&!_adgInited){_adgInited=true;adgInit();}
+  };
+  document.addEventListener('DOMContentLoaded',function(){
+    setTimeout(function(){if(!_adgInited){_adgInited=true;adgInit();}},500);
+  });
+})();
+</script>
 </main>
 </div><!-- /layout -->
 
