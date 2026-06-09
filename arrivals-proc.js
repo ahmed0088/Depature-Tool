@@ -46,6 +46,21 @@ function apLoadPkgData() {
 
 const apPkgData = apLoadPkgData();
 
+// Per-code count mode for F&B — 'pax' or 'room', defaults to 'pax'
+let apFbCountMode = {};
+
+function apLoadFbCountMode() {
+  try {
+    const saved = localStorage.getItem('ibis_arrivals_proc_profile');
+    if (saved) {
+      const p = JSON.parse(saved);
+      if (p.fbCountMode) return p.fbCountMode;
+    }
+  } catch(e) {}
+  return {};
+}
+apFbCountMode = apLoadFbCountMode();
+
 function apAutoSaveProfile() {
   try {
     const p = {
@@ -54,7 +69,9 @@ function apAutoSaveProfile() {
       foMode:      document.getElementById('ap-mode-fo')?.value      || 'contains',
       fbMode:      document.getElementById('ap-mode-fb')?.value      || 'contains',
       upsellCount: document.getElementById('ap-count-upsell')?.value || 'room',
-      foCount:     document.getElementById('ap-count-fo')?.value     || 'room',
+      foCount:     document.getElementById('ap-count-fo')?.value     || 'pax',
+      fbCount:     document.getElementById('ap-count-fb')?.value     || 'pax',
+      fbCountMode: apFbCountMode,
       exclStatus:  document.getElementById('ap-excl-status')?.value  || '',
     };
     localStorage.setItem('ibis_arrivals_proc_profile', JSON.stringify(p));
@@ -67,10 +84,14 @@ const AP_COL_DEFS = [
   { key: 'dateSort',  label: 'Date Sort Column',     required: false, aliases: ['GROUPBY1_SORT_COL','DATE_SORT'] },
   { key: 'status',    label: 'Reservation Status',   required: true,  aliases: ['SHORT_RESV_STATUS','RESV_STATUS','STATUS'] },
   { key: 'products',  label: 'Products/Packages',    required: false, aliases: ['PRODUCTS','PACKAGES','PACKAGE','PKG'] },
-  { key: 'adults',    label: 'Adults/Pax',           required: true,  aliases: ['ADULTS','ADL','ADU','PERSONS','PAX'] },
+  { key: 'adults',    label: 'Adults/Pax',           required: true,  aliases: ['ADULTS','ADL','ADU','PAX'] },
+  { key: 'persons',   label: 'Persons (fallback)',    required: false, aliases: ['PERSONS','CF_ADULTS'] },
+  { key: 'chl',       label: 'Total Pax (Chl.)',      required: false, aliases: ['CHL','CHD','CHILD','CHILDREN'] },
   { key: 'confNo',    label: 'Confirmation No.',     required: true,  aliases: ['CONFIRMATION_NO','CONF_NO','CONFNO','RESERVATION_NO'] },
+  { key: 'rownum',    label: 'Row No. (Opera dedup)',required: false, aliases: ['ROWNUM','ROW_NUM','ROW_NO'] },
   { key: 'adlArr',    label: 'ADL Arrivals (Opera)', required: false, aliases: ['ADL_ARRIVAL','ADL_ARR'] },
   { key: 'rmsArr',    label: 'Rooms Arrivals (Opera)',required: false, aliases: ['RMS_ARRIVAL','RMS_ARR'] },
+  { key: 'roomCat',  label: 'Room Category',        required: false, aliases: ['ROOM_CATEGORY_LABEL','ROOM_CATEGORY','ROOM_TYPE','ROOM_CAT'] },
 ];
 
 // ── INIT ──────────────────────────────────────────────────
@@ -85,6 +106,7 @@ function initArrivalsProc() {
       if (p.fbMode      && document.getElementById('ap-mode-fb'))        document.getElementById('ap-mode-fb').value        = p.fbMode;
       if (p.upsellCount && document.getElementById('ap-count-upsell'))   document.getElementById('ap-count-upsell').value   = p.upsellCount;
       if (p.foCount     && document.getElementById('ap-count-fo'))       document.getElementById('ap-count-fo').value       = p.foCount;
+      if (p.fbCount     && document.getElementById('ap-count-fb'))       document.getElementById('ap-count-fb').value       = p.fbCount;
       if (p.exclStatus  !== undefined && document.getElementById('ap-excl-status')) {
         document.getElementById('ap-excl-status').value = p.exclStatus;
         apExcludedStatuses = new Set(p.exclStatus.split(',').map(s => s.trim()).filter(Boolean));
@@ -94,7 +116,7 @@ function initArrivalsProc() {
   ['upsell','fo','fb'].forEach(apRenderTags);
 
   // Auto-save whenever any setting dropdown changes
-  ['ap-mode-upsell','ap-mode-fo','ap-mode-fb','ap-count-upsell','ap-count-fo','ap-excl-status'].forEach(id => {
+  ['ap-mode-upsell','ap-mode-fo','ap-mode-fb','ap-count-upsell','ap-count-fo','ap-count-fb','ap-excl-status'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', apAutoSaveProfile);
   });
@@ -179,11 +201,82 @@ function apHideProgress() {
 function apOnRawChange(fileName) {
   const raw = (document.getElementById('ap-raw')?.value || '').trim();
   if (!raw) { apHideScan(); return; }
-  const lines = raw.split('\n').map(l => l.trimEnd());
+  const lines = apJoinSplitRows(raw.split('\n').map(l => l.trimEnd()));
   if (lines.length < 2) { apHideScan(); return; }
   apRawLines   = lines;
   apRawHeaders = lines[0].split('\t').map(h => h.trim());
   apScanReport(fileName);
+}
+
+// ── Join rows split by newlines inside address fields ─────
+// Opera sometimes exports BILL_TO_ADDRESS (and other free-text fields)
+// with embedded newlines, which breaks the tab-delimited format by
+// splitting one logical row across 2 or 3 physical lines.
+//
+// Example: room 0511 LARI — BILL_TO_ADDRESS = "30 08 Prudential Tow\nbangkok\n-049712"
+// causes the single reservation row to appear as 3 physical lines in the file.
+//
+// Detection strategy:
+//   • A real data row has ≥ 55% of the header's tab count  (was 40% — raised to reduce false starts)
+//   • OR it starts with a date-like value (DD-MON-YY, YYYYMMDD, DD/MM/YY)
+//   • OR it starts with a digit that could be a reservation/conf number
+//   • A continuation line has very few tabs AND does not look like a new record
+//
+// After joining, a second pass validates column count and re-merges any rows
+// that are still short (handles 3+ line splits).
+function apJoinSplitRows(rawLines) {
+  if (!rawLines.length) return rawLines;
+  const headerTabCount = (rawLines[0].match(/\t/g) || []).length;
+  // 55% threshold — a real Opera row will always have most of its columns populated.
+  // Address continuation lines typically have 0-3 tabs; tail fragments have ~15.
+  // With 55 header tabs, minTabs = 30. A 15-tab tail is below that → correctly
+  // identified as continuation and merged into the address cell.
+  const minTabs    = Math.ceil(headerTabCount * 0.55);
+  const datePattern = /^(\d{1,2}[-\/]\w{2,3}[-\/]\d{2,4}|\d{8}|\d{2}-\d{2}-\d{2})/;
+  // Opera row identifiers: reservation numbers, dates, or numeric IDs in first field
+  const newRowStart = /^(\d{6,}|\d{1,2}[-\/])/;
+
+  const joined = [rawLines[0]]; // keep header as-is
+  for (let i = 1; i < rawLines.length; i++) {
+    const line     = rawLines[i];
+    if (!line.trim()) continue;                           // skip blank lines
+    const tabCount = (line.match(/\t/g) || []).length;
+    const firstField = line.split('\t')[0].trim();
+    const isNewRow = tabCount >= minTabs
+                  || datePattern.test(firstField)
+                  || newRowStart.test(firstField);
+    if (isNewRow) {
+      joined.push(line);
+    } else {
+      // Continuation of previous row — append with a space.
+      // The address tail's tabs re-create the correct column boundaries because
+      // the text before the first tab merges into the address cell, and the
+      // tab-delimited fields that follow land on the correct column indices.
+      if (joined.length > 1) {
+        joined[joined.length - 1] += ' ' + line.trim();
+      }
+    }
+  }
+
+  // ── Second pass: validate column counts ──────────────────
+  // If a joined row still has fewer columns than the header, it means
+  // the address had 3+ embedded newlines. Keep merging forward until
+  // the column count is correct or we hit the next valid row.
+  const result = [joined[0]];
+  for (let i = 1; i < joined.length; i++) {
+    const tabCount = (joined[i].match(/\t/g) || []).length;
+    if (tabCount < headerTabCount && i + 1 < joined.length) {
+      const nextTabs = (joined[i + 1].match(/\t/g) || []).length;
+      // If next row would bring us closer to the header count, merge it
+      if (tabCount + nextTabs <= headerTabCount + 2) {
+        joined[i + 1] = joined[i] + ' ' + joined[i + 1].trim();
+        continue; // skip adding current row — it'll come through with next
+      }
+    }
+    result.push(joined[i]);
+  }
+
+  return result;
 }
 
 function apHideScan() {
@@ -454,11 +547,27 @@ function apRenderTags(col) {
     d.className = 'ap-pkg-tag';
     d.draggable = true;
     d.dataset.idx = i;
-    d.innerHTML = `<i class="ti ti-grip-vertical ap-drag-handle"></i><span class="ap-tag-name">${p}</span><button class="ap-tag-rm" onclick="apRemovePkg('${col}',${i})" title="Remove">×</button>`;
+    if (col === 'fb') {
+      d.innerHTML = `
+        <i class="ti ti-grip-vertical ap-drag-handle"></i>
+        <span class="ap-tag-name">${p}</span>
+        <button class="ap-tag-rm" onclick="apRemovePkg('${col}',${i})" title="Remove">×</button>`;
+    } else {
+      d.innerHTML = `<i class="ti ti-grip-vertical ap-drag-handle"></i><span class="ap-tag-name">${p}</span><button class="ap-tag-rm" onclick="apRemovePkg('${col}',${i})" title="Remove">×</button>`;
+    }
     d.addEventListener('dragstart', e => { apDragSrcCol = col; apDragSrcIdx = i; d.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
     d.addEventListener('dragend',   () => d.classList.remove('dragging'));
     el.appendChild(d);
   });
+}
+
+function apToggleFbCount(code, btn) {
+  const current = apFbCountMode[code] || 'pax';
+  const next    = current === 'pax' ? 'room' : 'pax';
+  apFbCountMode[code] = next;
+  btn.className   = 'ap-tag-count-toggle ' + next;
+  btn.textContent = next === 'pax' ? '👤 pax' : '🛏 room';
+  apAutoSaveProfile();
 }
 function apOnDragOver(e)  { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; e.currentTarget.classList.add('ap-drag-over'); }
 function apOnDragLeave(e) { e.currentTarget.classList.remove('ap-drag-over'); }
@@ -553,7 +662,18 @@ function apRun() {
   const foMode      = document.getElementById('ap-mode-fo')?.value      || 'contains';
   const fbMode      = document.getElementById('ap-mode-fb')?.value      || 'contains';
   const upsellCount = document.getElementById('ap-count-upsell')?.value || 'room';
-  const foCount     = document.getElementById('ap-count-fo')?.value     || 'room';
+  const foCount     = document.getElementById('ap-count-fo')?.value     || 'pax';
+  const fbCount     = document.getElementById('ap-count-fb')?.value     || 'pax';
+
+  // Determine best pax column: if Adl. is all zeros and Chl. is mapped, use Chl. for pax
+  let paxCol = C.adults;
+  if (C.chl !== undefined && C.chl !== -1 && C.adults !== -1) {
+    let adlSum = 0;
+    for (let i = 1; i < Math.min(lines.length, 20); i++) {
+      adlSum += parseFloat((lines[i].split('\t')[C.adults] || '')) || 0;
+    }
+    if (adlSum === 0) paxCol = C.chl;
+  }
 
   const manualExcl = (document.getElementById('ap-excl-status')?.value || '').toUpperCase().split(',').map(s => s.trim()).filter(Boolean);
   const exclStatus = new Set([...apExcludedStatuses, ...manualExcl]);
@@ -570,7 +690,37 @@ function apRun() {
     const status   = (c[C.status]   || '').trim().toUpperCase();
     const confNo   = (c[C.confNo]   || '').trim();
     const products = C.products !== -1 ? (c[C.products] || '').trim() : '';
-    const adults   = parseFloat(c[C.adults]) || 0;
+
+    // ── Pax resolution: ADULTS → PERSONS → CF_ADULTS → RoomCategory → 1 ──────
+    // Opera sometimes leaves ADULTS blank when a row is truncated due to embedded
+    // newlines in address fields (e.g. LARI room 0511 — TWC category, FLRB1 rate).
+    // apJoinSplitRows() re-assembles split rows so ADULTS is usually recovered,
+    // but as a belt-and-braces fallback we also infer pax from the room category:
+    //   TWC / DBL / TWN / DLX / STD2 / SUP / KING = 2 pax
+    //   SNG / SGL / STD1 / ECO = 1 pax
+    const adultRaw   = parseFloat(c[paxCol]);
+    const personsRaw = C.persons  !== -1 ? parseFloat(c[C.persons])  : NaN;
+    const chlRaw     = C.chl      !== -1 ? parseFloat(c[C.chl])      : NaN;
+    // Room-category fallback: infer pax from category label
+    let catPax = NaN;
+    if (C.roomCat !== undefined && C.roomCat !== -1) {
+      const cat = (c[C.roomCat] || '').trim().toUpperCase();
+      if (/^(TWC|DBL|TWN|DLX|SUITE|STD2|SUP|KING|QUEEN|DOUBLE|TWIN)/.test(cat)) catPax = 2;
+      else if (/^(SNG|SGL|STD1|ECO|SINGLE|SOLO)/.test(cat))                       catPax = 1;
+    }
+    const adults     = (adultRaw   > 0) ? adultRaw
+                     : (personsRaw > 0) ? personsRaw
+                     : (chlRaw     > 0) ? chlRaw
+                     : (catPax     > 0) ? catPax   // room-category inference
+                     : 1; // last resort: at least 1 pax per booking
+
+    // ── Dedup key: ROWNUM is Opera's unique row identifier per reservation ──
+    // Each booking appears multiple times (one row per membership programme).
+    // ROWNUM is identical across these duplicates → perfect dedup key.
+    // Fall back to confNo when ROWNUM column is absent.
+    const rownum     = (C.rownum !== undefined && C.rownum !== -1) ? (c[C.rownum] || '').trim() : '';
+    const dedupId    = rownum || confNo;   // prefer ROWNUM, fall back to confNo
+
     const sortVal  = C.dateSort !== -1 ? (c[C.dateSort] || dateVal).trim() : dateVal;
 
     if (!(dateVal in dayMap)) {
@@ -580,39 +730,48 @@ function apRun() {
       sortMap[dateVal] = sortVal;
     }
 
-    if (!useOperaTotals && !exclStatus.has(status) && confNo && !seen.has('rms|' + dateVal + '|' + confNo)) {
-      seen.add('rms|' + dateVal + '|' + confNo);
+    if (!useOperaTotals && !exclStatus.has(status) && dedupId && !seen.has('rms|' + dateVal + '|' + dedupId)) {
+      seen.add('rms|' + dateVal + '|' + dedupId);
       dayMap[dateVal].rmsSum += 1;
       dayMap[dateVal].adlSum += adults;
     }
 
-    if (!confNo) continue;
+    if (!dedupId) continue;
     const d = dayMap[dateVal];
 
+    // ── F&B package counting ──────────────────────────────────────────────
+    // Dedup by ROWNUM+token so each physical room is counted once.
+    // Count mode: global fbCount dropdown is the single source of truth —
+    //   'pax'  → add the actual number of adults in this room (correct for "With F&B Pkg" pax column)
+    //   'room' → add 1 per room regardless of occupancy
     if (apPkgData.fb.length) {
       const tokens = products.toUpperCase().split(/[,;\s\/|]+/).map(t => t.trim()).filter(Boolean);
       tokens.forEach(token => {
-        const tokenKey = 'fb|' + dateVal + '|' + confNo + '|' + token;
+        const tokenKey = 'fb|' + dateVal + '|' + dedupId + '|' + token;
         if (seen.has(tokenKey)) return;
         const hit = apPkgData.fb.some(p => {
           const pat = p.toUpperCase();
-          if (fbMode === 'exact')  return token === pat;
-          if (fbMode === 'starts') return token.startsWith(pat);
+          if (fbMode === 'exact')       return token === pat;
+          if (fbMode === 'starts')      return token.startsWith(pat);
           return token === pat || token.startsWith(pat);
         });
-        if (hit) { seen.add(tokenKey); d.fbWith += adults; }
+        if (hit) {
+          seen.add(tokenKey);
+          // Use global fbCount dropdown — 'pax' counts actual adults, 'room' counts 1 per room
+          d.fbWith += (fbCount === 'room' ? 1 : adults);
+        }
       });
     }
 
     if (exclStatus.has(status)) continue;
 
-    const upsellPkgKey = 'upsell|' + dateVal + '|' + confNo;
+    const upsellPkgKey = 'upsell|' + dateVal + '|' + dedupId;
     if (apPkgData.upsell.length && apMatchPkg(products, apPkgData.upsell, upsellMode) && !seen.has(upsellPkgKey)) {
       seen.add(upsellPkgKey);
       d.upsell += (upsellCount === 'pax' ? adults : 1);
     }
 
-    const foPkgKey = 'fo|' + dateVal + '|' + confNo;
+    const foPkgKey = 'fo|' + dateVal + '|' + dedupId;
     if (apPkgData.fo.length && apMatchPkg(products, apPkgData.fo, foMode) && !seen.has(foPkgKey)) {
       seen.add(foPkgKey);
       d.fo += (foCount === 'pax' ? adults : 1);
@@ -765,6 +924,8 @@ function apSaveProfile() {
     fbMode:       document.getElementById('ap-mode-fb')?.value,
     upsellCount:  document.getElementById('ap-count-upsell')?.value,
     foCount:      document.getElementById('ap-count-fo')?.value,
+    fbCount:      document.getElementById('ap-count-fb')?.value,
+    fbCountMode:  apFbCountMode,
     exclStatus:   document.getElementById('ap-excl-status')?.value,
   };
   try { localStorage.setItem('ibis_arrivals_proc_profile', JSON.stringify(p)); } catch(e) {}
@@ -791,6 +952,8 @@ function apLoadProfile() {
         if (p.fbMode)     document.getElementById('ap-mode-fb').value     = p.fbMode;
         if (p.upsellCount) document.getElementById('ap-count-upsell').value = p.upsellCount;
         if (p.foCount)     document.getElementById('ap-count-fo').value     = p.foCount;
+        if (p.fbCount)     document.getElementById('ap-count-fb').value     = p.fbCount;
+        if (p.fbCountMode) { apFbCountMode = p.fbCountMode; apRenderTags('fb'); }
         if (p.exclStatus !== undefined) {
           document.getElementById('ap-excl-status').value = p.exclStatus;
           apExcludedStatuses = new Set(p.exclStatus.split(',').map(s => s.trim()).filter(Boolean));
