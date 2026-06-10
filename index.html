@@ -100,8 +100,8 @@
 [data-theme="opera"] .adg-table th         { background: #F0F0F0; color: #767676; border-color: #D0D0D0; }
 [data-theme="opera"] .adg-table td         { border-color: #EEEEEE; color: #1D1D1B; }
 [data-theme="opera"] .adg-table tbody tr:hover { background: rgba(199,70,52,.04); }
-[data-theme="opera"] .adg-modal-box,
-[data-theme="opera"] .adg-modal-hdr        { background: #FFFFFF; border-color: #E0E0E0; }
+[data-theme="opera"] .adg-modal-box         { background: #FFFFFF; border-color: #E0E0E0; }
+[data-theme="opera"] .adg-modal-hdr         { background: #FFFFFF; border-color: #E0E0E0; }
 [data-theme="opera"] .adg-chart-panel      { background: #FFFFFF; border-color: #E0E0E0; }
 [data-theme="opera"] .adg-summary          { background: #FFFFFF; border-color: #E0E0E0; }
 [data-theme="opera"] .adg-kpi              { background: #FFFFFF; border-color: #E0E0E0; }
@@ -250,6 +250,7 @@
 .adg-modal-box{background:var(--adg-navy-card);border-left:1px solid var(--adg-border-2);border-radius:0;width:100%;max-width:440px;height:100%;overflow-y:auto;box-shadow:-8px 0 40px rgba(0,0,0,.45);display:flex;flex-direction:column;animation:adgSlideIn .22s cubic-bezier(.22,.61,.36,1)}
 @keyframes adgSlideIn{from{transform:translateX(100%);opacity:.6}to{transform:translateX(0);opacity:1}}
 .adg-modal-hdr{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.4rem;border-bottom:1px solid var(--adg-border);position:sticky;top:0;background:var(--adg-navy-card);z-index:1;flex-shrink:0}
+.adg-modal-title{display:flex;align-items:center;flex-wrap:wrap;gap:.35rem;font-family:'DM Serif Display',var(--serif,serif);font-size:1.05rem;color:var(--adg-gold-light)}
 .adg-modal-title{font-family:'DM Serif Display',var(--serif,serif);font-size:1.05rem;color:var(--adg-gold-light)}
 .adg-modal-close{background:none;border:none;color:var(--adg-text-3);cursor:pointer;font-size:1.1rem;padding:.2rem .35rem;border-radius:4px;line-height:1}
 .adg-modal-close:hover{color:var(--adg-text-1)}
@@ -1994,7 +1995,10 @@
   // ── Modal ──
   window.adgOpenModal=function(idx){
     const g=adgGuests[idx];if(!g)return;
-    document.getElementById('adg-modal-title').textContent=g.name||'Guest Details';
+    const titleEl=document.getElementById('adg-modal-title');
+    titleEl.innerHTML=g.room
+      ?`<span style="display:inline-block;background:var(--adg-gold-dim);border:1px solid var(--adg-gold-border);border-radius:6px;padding:.12rem .55rem;font-family:var(--mono,monospace);font-size:.82rem;font-weight:700;color:var(--adg-gold-light);margin-right:.6rem;letter-spacing:.04em">${adgE(g.room)}</span>${adgE(g.name||'Guest Details')}`
+      :adgE(g.name||'Guest Details');
     const pct=g.totalContract>0?Math.min(100,Math.round((g.paymentReceived||0)/g.totalContract*100)):0;
     const pctColor=pct>=90?'var(--adg-green)':pct>=50?'var(--adg-orange)':'var(--adg-red)';
     let installHTML='<span style="color:var(--adg-text-3);font-size:.78rem">No payment schedule found.</span>';
