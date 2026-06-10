@@ -65,6 +65,62 @@
 }
 #panel-adagio { font-family: 'DM Sans', var(--sans, sans-serif); }
 
+/* ── Opera theme overrides for Adagio panel ── */
+[data-theme="opera"] #panel-adagio {
+  --adg-navy:        #F5F5F5;
+  --adg-navy-2:      #EFEFEF;
+  --adg-navy-3:      #E8E8E8;
+  --adg-navy-card:   #FFFFFF;
+  --adg-gold:        #8B5E00;
+  --adg-gold-light:  #7A5200;
+  --adg-gold-dim:    rgba(139,94,0,.10);
+  --adg-gold-border: rgba(139,94,0,.30);
+  --adg-red:         #C74634;
+  --adg-red-bg:      rgba(199,70,52,.09);
+  --adg-orange:      #995C00;
+  --adg-orange-bg:   rgba(153,92,0,.09);
+  --adg-blue:        #1B6EC2;
+  --adg-blue-bg:     rgba(27,110,194,.09);
+  --adg-green:       #118C4F;
+  --adg-green-bg:    rgba(17,140,79,.09);
+  --adg-purple:      #5C2D8C;
+  --adg-pink:        #C2185B;
+  --adg-pink-bg:     rgba(194,24,91,.09);
+  --adg-text-1:      #1D1D1B;
+  --adg-text-2:      #4A4A4A;
+  --adg-text-3:      #767676;
+  --adg-border:      rgba(0,0,0,.09);
+  --adg-border-2:    rgba(0,0,0,.14);
+}
+[data-theme="opera"] .adg-upload-card      { background: #FFFFFF; border-color: #C8C8C8; }
+[data-theme="opera"] .adg-upload-settings  { background: #F0F0F0; border-color: #CCCCCC; }
+[data-theme="opera"] .adg-date-input,
+[data-theme="opera"] .adg-num-input        { background: #FFFFFF; border-color: #C8C8C8; color: #1D1D1B; }
+[data-theme="opera"] .adg-table-wrap       { background: #FFFFFF; border-color: #E0E0E0; }
+[data-theme="opera"] .adg-table th         { background: #F0F0F0; color: #767676; border-color: #D0D0D0; }
+[data-theme="opera"] .adg-table td         { border-color: #EEEEEE; color: #1D1D1B; }
+[data-theme="opera"] .adg-table tbody tr:hover { background: rgba(199,70,52,.04); }
+[data-theme="opera"] .adg-modal-box,
+[data-theme="opera"] .adg-modal-hdr        { background: #FFFFFF; }
+[data-theme="opera"] .adg-chart-panel      { background: #FFFFFF; border-color: #E0E0E0; }
+[data-theme="opera"] .adg-summary          { background: #FFFFFF; border-color: #E0E0E0; }
+[data-theme="opera"] .adg-kpi              { background: #FFFFFF; border-color: #E0E0E0; }
+[data-theme="opera"] .adg-kpi:hover        { box-shadow: 0 4px 16px rgba(0,0,0,.12); }
+[data-theme="opera"] .adg-select,
+[data-theme="opera"] .adg-search-input     { background: #FFFFFF; border-color: #C8C8C8; color: #1D1D1B; }
+[data-theme="opera"] .adg-tab              { background: #FFFFFF; border-color: #C8C8C8; color: #4A4A4A; }
+[data-theme="opera"] .adg-tab:hover        { border-color: #8B5E00; color: #8B5E00; }
+[data-theme="opera"] .adg-tab.active       { background: rgba(139,94,0,.08); border-color: #8B5E00; color: #7A5200; }
+[data-theme="opera"] .adg-room-badge       { background: #F0F0F0; border-color: #C8C8C8; color: #7A5200; }
+[data-theme="opera"] .adg-file-pill        { background: #F0F0F0; border-color: #C8C8C8; color: #7A5200; }
+[data-theme="opera"] .adg-tab-count        { background: rgba(0,0,0,.06); }
+[data-theme="opera"] .adg-row-departed,
+[data-theme="opera"] .adg-row-overdue      { background: rgba(199,70,52,.05) !important; }
+[data-theme="opera"] .adg-row-departing    { background: rgba(153,92,0,.04) !important; }
+[data-theme="opera"] .adg-row-cheque       { background: rgba(194,24,91,.04) !important; }
+[data-theme="opera"] .adg-row-paid         { opacity: .6; }
+[data-theme="opera"] .adg-modal-field      { background: #F0F0F0; }
+
 /* Upload */
 .adg-upload-section{display:flex;flex-direction:column;align-items:center;gap:1.25rem;padding:3rem 1rem}
 .adg-upload-card{display:flex;flex-direction:column;align-items:center;gap:1.1rem;background:var(--adg-navy-card);border:2px dashed var(--adg-border-2);border-radius:var(--adg-radius-lg);padding:2.5rem 3rem;width:100%;max-width:580px;text-align:center;transition:border-color .2s,box-shadow .2s;cursor:pointer}
@@ -2119,19 +2175,6 @@
   function adgFmtMoney(n){return n==null?'—':Number(n).toLocaleString('en-AE',{minimumFractionDigits:0,maximumFractionDigits:0});}
   function adgE(s){return s?String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'):''}
 
-  // ── Expose guest getter for the slide-over ──
-  window._adgGetGuest = function(idx) { return adgGuests[idx] || null; };
-
-  // ── Row click → slide-over (replaces full modal on row click) ──
-  // Full modal still accessible via "Full Details" button in slide footer
-  document.getElementById('adg-table').addEventListener('click', function(e2) {
-    const tr = e2.target.closest('tr[data-adg-idx]');
-    if (tr && !e2.target.closest('th')) {
-      e2.stopImmediatePropagation();
-      window.adgOpenSlide(parseInt(tr.dataset.adgIdx));
-    }
-  }, true); // capture phase so it runs before the existing delegated listener
-
   // ── Boot: init when this panel is first shown ──
   let _adgInited=false;
   const _origShowPanel=window.showPanel;
@@ -3261,270 +3304,6 @@ async function appInit() {
 
   </div>
 </div>
-
-<!-- ══════════════════════════════════════════════════════
-     ADAGIO ROOM DETAIL SLIDE-OVER
-══════════════════════════════════════════════════════ -->
-<div class="adg-slide-backdrop" id="adgSlideBackdrop" onclick="adgCloseSlide()"></div>
-<div class="adg-slide-panel" id="adgSlidePanel">
-
-  <!-- Header -->
-  <div class="adg-slide-hdr">
-    <div class="adg-slide-hdr-left">
-      <span class="adg-slide-room-pill" id="asl-room">—</span>
-      <div>
-        <div class="adg-slide-name" id="asl-name">—</div>
-        <div class="adg-slide-co" id="asl-co"></div>
-      </div>
-    </div>
-    <button class="adg-slide-close" onclick="adgCloseSlide()" title="Close">✕</button>
-  </div>
-
-  <!-- Status bar -->
-  <div class="adg-slide-status-bar" id="asl-status-bar"></div>
-
-  <!-- Scrollable body -->
-  <div class="adg-slide-body" id="asl-body">
-    <div style="text-align:center;padding:2rem;color:var(--adg-text-3);font-family:var(--mono);font-size:.75rem;">
-      Loading…
-    </div>
-  </div>
-
-  <!-- Footer actions -->
-  <div class="adg-slide-footer" id="asl-footer"></div>
-
-</div>
-
-<script>
-// ══════════════════════════════════════════════════════
-//  Adagio Room Detail Slide-Over
-// ══════════════════════════════════════════════════════
-(function(){
-
-  function openSlide(g) {
-    if (!g) return;
-
-    // ── Header ──────────────────────────────────────
-    _s('asl-room', g.room || '—');
-    _s('asl-name', g.name || '—');
-    _s('asl-co',   g.company || '');
-
-    // ── Status bar ──────────────────────────────────
-    const badgeCls = {
-      DANGER_DEPARTED: 'adg-badge-danger', DANGER_OVERDUE: 'adg-badge-danger',
-      DANGER_DEPARTING: 'adg-badge-due',   DUE_SOON: 'adg-badge-due',
-      OK: 'adg-badge-ok', PAID: 'adg-badge-paid'
-    }[g.status] || 'adg-badge-ok';
-    const icon = {
-      DANGER_DEPARTED: '🔴', DANGER_OVERDUE: '🔴',
-      DANGER_DEPARTING: '🟠', DUE_SOON: '🟠',
-      OK: '🔵', PAID: '🟢'
-    }[g.status] || '⚪';
-
-    let statusBar = `<span class="adg-badge ${badgeCls}">${icon} ${xe(g.statusLabel||g.status||'—')}</span>`;
-    if (g.chequeSoon) statusBar += `<span class="adg-badge adg-badge-cheque">💳 Cheque Due</span>`;
-    if (g.isHighBalance) statusBar += `<span class="adg-badge adg-badge-high">⚠ High Balance</span>`;
-    if (g.rateCode) statusBar += `<span style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--adg-text-3);margin-left:auto;">${xe(g.rateCode)}</span>`;
-    document.getElementById('asl-status-bar').innerHTML = statusBar;
-
-    // ── Body ─────────────────────────────────────────
-    const today = new Date();
-
-    // Amounts
-    const pct = g.totalContract > 0
-      ? Math.min(100, Math.round((g.paymentReceived || 0) / g.totalContract * 100)) : 0;
-    const pctColor = pct >= 90 ? 'var(--adg-green)' : pct >= 50 ? 'var(--adg-orange)' : 'var(--adg-red)';
-
-    // Payment schedule
-    let schedHTML = '';
-    if (g.allInstallments && g.allInstallments.length) {
-      schedHTML = g.allInstallments.map(inst => {
-        const isPast = inst.date < today;
-        const isNext = g.nextDueDate && inst.date.getTime() === g.nextDueDate.getTime();
-        const isOverdue = isNext && g.daysToNextPayment < 0;
-        let rowCls = isPast ? 'pay-done' : isOverdue ? 'pay-overdue' : isNext ? 'pay-next' : '';
-        const icon = isPast ? '✓' : isOverdue ? '⚠' : isNext ? '▶' : '○';
-        return `<div class="adg-slide-pay-row ${rowCls}">
-          <span class="adg-slide-pay-icon">${icon}</span>
-          <span class="adg-slide-pay-label">${xe(inst.label)}</span>
-          ${isNext ? `<span style="font-size:.68rem;color:${isOverdue?'var(--adg-red)':'var(--adg-gold-light)'};">${isOverdue ? Math.abs(g.daysToNextPayment)+'d overdue' : 'in '+g.daysToNextPayment+'d'}</span>` : ''}
-        </div>`;
-      }).join('');
-    } else {
-      schedHTML = `<div style="font-size:.76rem;color:var(--adg-text-3);padding:.5rem 0;">No payment schedule detected.</div>`;
-    }
-
-    // Departure pill
-    let depPill = '—';
-    if (g.departure) {
-      const d = g.daysToDeparture;
-      const pc = d < 0 ? 'adg-days-past' : d <= 7 ? 'adg-days-danger' : d <= 30 ? 'adg-days-warn' : 'adg-days-ok';
-      const lbl = d < 0 ? Math.abs(d)+'d ago' : d === 0 ? 'Today' : d+'d';
-      depPill = `${adgFmtDate(g.departure)} <span class="adg-days-pill ${pc}">${lbl}</span>`;
-    }
-
-    // Days to next payment pill
-    let nextPayPill = '—';
-    if (g.nextDueDate) {
-      const d = g.daysToNextPayment;
-      const pc = d < 0 ? 'adg-days-past' : d <= 3 ? 'adg-days-danger' : d <= 14 ? 'adg-days-warn' : 'adg-days-ok';
-      const lbl = d < 0 ? Math.abs(d)+'d overdue' : d === 0 ? 'Today' : 'in '+d+'d';
-      nextPayPill = `${adgFmtDate(g.nextDueDate)} <span class="adg-days-pill ${pc}">${lbl}</span>`;
-    }
-
-    document.getElementById('asl-body').innerHTML = `
-
-      <!-- Key info grid -->
-      <div class="adg-slide-section">
-        <div class="adg-slide-section-lbl">Booking Details</div>
-        <div class="adg-slide-grid-3">
-          <div class="adg-slide-field">
-            <div class="adg-slide-field-lbl">Room Type</div>
-            <div class="adg-slide-field-val">${xe(g.roomType||'—')}</div>
-          </div>
-          <div class="adg-slide-field">
-            <div class="adg-slide-field-lbl">Nights</div>
-            <div class="adg-slide-field-val">${g.nights != null ? g.nights : '—'}</div>
-          </div>
-          <div class="adg-slide-field">
-            <div class="adg-slide-field-lbl">Conf #</div>
-            <div class="adg-slide-field-val" style="font-family:'DM Mono',monospace;font-size:.72rem;">${xe(g.confirmationNumber||'—')}</div>
-          </div>
-        </div>
-        <div class="adg-slide-grid">
-          <div class="adg-slide-field">
-            <div class="adg-slide-field-lbl">Arrival</div>
-            <div class="adg-slide-field-val">${adgFmtDate(g.arrival)}</div>
-          </div>
-          <div class="adg-slide-field">
-            <div class="adg-slide-field-lbl">Departure</div>
-            <div class="adg-slide-field-val">${depPill}</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Financials -->
-      <div class="adg-slide-section">
-        <div class="adg-slide-section-lbl">Financials</div>
-        <div class="adg-slide-amounts">
-          <div class="adg-slide-amt">
-            <div class="adg-slide-amt-val" style="color:var(--adg-gold-light);">AED ${adgFmtMoney(g.totalContract)}</div>
-            <div class="adg-slide-amt-lbl">Total Contract</div>
-          </div>
-          <div class="adg-slide-amt">
-            <div class="adg-slide-amt-val" style="color:var(--adg-green);">AED ${adgFmtMoney(g.paymentReceived)}</div>
-            <div class="adg-slide-amt-lbl">Received</div>
-          </div>
-          <div class="adg-slide-amt">
-            <div class="adg-slide-amt-val" style="color:${(g.totalDue||0)>0?'var(--adg-red)':'var(--adg-green)'};">AED ${adgFmtMoney(g.totalDue)}</div>
-            <div class="adg-slide-amt-lbl">Outstanding</div>
-          </div>
-        </div>
-        <div style="font-size:.68rem;color:var(--adg-text-3);margin-top:.1rem;">Collection — ${pct}%</div>
-        <div class="adg-slide-prog-wrap">
-          <div class="adg-slide-prog-fill" style="width:${pct}%;background:${pctColor};"></div>
-        </div>
-      </div>
-
-      <!-- Next payment -->
-      ${g.nextDueDate ? `
-      <div class="adg-slide-section">
-        <div class="adg-slide-section-lbl">Next Payment</div>
-        <div class="adg-slide-field" style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;">
-          <div class="adg-slide-field-val">${nextPayPill}</div>
-          ${g.chequeSoon ? '<span class="adg-badge adg-badge-cheque" style="font-size:.62rem;">💳 Cheque reminder</span>' : ''}
-        </div>
-      </div>` : ''}
-
-      <!-- Payment schedule -->
-      <div class="adg-slide-section">
-        <div class="adg-slide-section-lbl">Payment Schedule</div>
-        <div class="adg-slide-schedule">${schedHTML}</div>
-      </div>
-
-      <!-- Documents -->
-      <div class="adg-slide-section">
-        <div class="adg-slide-section-lbl">Documents</div>
-        <div class="adg-slide-docs">
-          <div class="adg-slide-doc">
-            <span class="${g.contractReceived ? 'adg-slide-doc-ok' : 'adg-slide-doc-bad'}">${g.contractReceived ? '✓' : '✗'}</span>
-            <span>Contract — <em style="color:var(--adg-text-2);font-size:.72rem;">${xe(g.contractStatus||'Not recorded')}</em></span>
-          </div>
-          <div class="adg-slide-doc">
-            <span class="${g.chequesPresent ? 'adg-slide-doc-ok' : 'adg-slide-doc-bad'}">${g.chequesPresent ? '✓' : '✗'}</span>
-            <span>Cheques — <em style="color:var(--adg-text-2);font-size:.72rem;">${xe(g.chequesStatus||'Not recorded')}</em></span>
-          </div>
-          <div class="adg-slide-doc">
-            <span class="${g.depositAvailable ? 'adg-slide-doc-ok' : 'adg-slide-doc-bad'}">${g.depositAvailable ? '✓' : '✗'}</span>
-            <span>Security — <em style="color:var(--adg-text-2);font-size:.72rem;">${xe(g.securityDeposit||'Not recorded')}</em></span>
-          </div>
-        </div>
-      </div>
-
-      ${g.parseWarning ? `
-      <div style="background:rgba(224,148,74,.08);border:1px solid rgba(224,148,74,.2);border-radius:8px;padding:.65rem .85rem;font-size:.72rem;color:var(--adg-orange);">
-        ⚠ ${xe(g.parseWarning)}
-      </div>` : ''}
-
-    `;
-
-    // ── Footer ───────────────────────────────────────
-    document.getElementById('asl-footer').innerHTML = `
-      <button class="adg-btn adg-btn-ghost adg-btn-sm" onclick="adgCloseSlide()">Close</button>
-      <button class="adg-btn adg-btn-primary adg-btn-sm" style="margin-left:auto;"
-        onclick="adgOpenModal(${window._adgSlideIdx});adgCloseSlide();">
-        ↗ Full Details
-      </button>
-    `;
-
-    // ── Show ──────────────────────────────────────────
-    document.getElementById('adgSlideBackdrop').classList.add('open');
-    document.getElementById('adgSlidePanel').classList.add('open');
-    document.body.style.overflow = 'hidden';
-  }
-
-  // ── Helpers ──────────────────────────────────────────
-  function _s(id, v) { const el = document.getElementById(id); if (el) el.textContent = v; }
-  function xe(s) { return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : ''; }
-
-  // borrow adgFmtMoney / adgFmtDate from the Adagio IIFE
-  // They are declared inside the IIFE so we expose them on window from within — see patch below
-  function adgFmtDate(d) {
-    if (!d) return '—';
-    const dt = d instanceof Date ? d : new Date(d);
-    if (isNaN(dt)) return String(d);
-    const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return `${dt.getDate()} ${mo[dt.getMonth()]} ${dt.getFullYear()}`;
-  }
-  function adgFmtMoney(n) {
-    return n == null ? '—' : Number(n).toLocaleString('en-AE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-  }
-
-  // ── Close ─────────────────────────────────────────────
-  window.adgCloseSlide = function() {
-    document.getElementById('adgSlideBackdrop').classList.remove('open');
-    document.getElementById('adgSlidePanel').classList.remove('open');
-    document.body.style.overflow = '';
-  };
-
-  // ── Public open ───────────────────────────────────────
-  window.adgOpenSlide = function(idx) {
-    // adgGuests is scoped inside the Adagio IIFE — access via the row click
-    // We store it via a bridge function set up after the IIFE loads
-    window._adgSlideIdx = idx;
-    if (window._adgGetGuest) openSlide(window._adgGetGuest(idx));
-  };
-
-  // Keyboard close
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-      const panel = document.getElementById('adgSlidePanel');
-      if (panel && panel.classList.contains('open')) { adgCloseSlide(); e.stopPropagation(); }
-    }
-  }, true);
-
-})();
-</script>
 
 <script src="guest-memory.js"></script>
 <script src="auth.js"></script>
