@@ -812,9 +812,15 @@
   <div class="card" id="purposeUploadCard">
     <div class="upload-zone">
       <div class="upload-label-bar"><div class="upload-dot mint"></div><span class="upload-lbl">Upload or Paste</span><span class="upload-sub">Or sync from Arrivals ↑</span></div>
-      <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--surface);border-bottom:1px solid var(--border);">
+      <div style="display:flex;align-items:center;gap:12px;padding:8px 14px;background:var(--surface);border-bottom:1px solid var(--border);flex-wrap:wrap;">
         <span style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">📂 Upload Excel:</span>
-        <input type="file" accept=".xlsx,.xls,.csv" onchange="loadOperaFile(this,'pur')" style="font-size:0.68rem;color:var(--text2);flex:1;"/>
+        <input type="file" accept=".xlsx,.xls,.csv" onchange="loadOperaFile(this,'pur')" style="font-size:0.68rem;color:var(--text2);"/>
+        <span style="width:1px;height:18px;background:var(--border);flex-shrink:0;"></span>
+        <span style="font-family:var(--mono);font-size:0.6rem;color:var(--mint);">🌍 Origin XML:</span>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+          <input type="file" accept=".xml" onchange="loadOriginXML(this)" style="font-size:0.68rem;color:var(--text2);"/>
+        </label>
+        <span id="originXmlLabel" style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);white-space:nowrap;"></span>
       </div>
       <textarea id="purposeInput" placeholder="Paste data here and click Load…" style="height:60px;"></textarea>
     </div>
@@ -833,7 +839,7 @@
     <div class="search-wrap"><span style="padding:0 8px;color:var(--text3);">⌕</span><input type="text" placeholder="Search…" oninput="purposeRender()" id="purposeSearch"/></div>
   </div>
   <div class="tbl-wrap"><table>
-    <thead><tr><th>Room</th><th>Conf.</th><th>Name</th><th>Purpose</th><th>Nights</th><th>Nationality</th><th>Email</th><th>Source</th><th>Remarks</th><th></th></tr></thead>
+    <thead><tr><th>Room</th><th>Conf.</th><th>Name</th><th>Purpose</th><th>Nights</th><th>Nationality</th><th>Email</th><th>Source</th><th>Origin of Travel</th><th>Remarks</th><th></th></tr></thead>
     <tbody id="purposeTable"></tbody>
   </table></div>
 </div>

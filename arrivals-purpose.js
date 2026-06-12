@@ -17,6 +17,131 @@ function debounceSavePurpose() {
   _savePurposeTimer = setTimeout(() => savePurpose(purposeGuests), 5000);
 }
 
+// ── Origin of Travel — XML lookup maps ───────────────────
+// _originNameMap : normalised "GIVEN FAMILY" guest name → nationality (PRIMARY match)
+// _originMap     : normalised room number (no leading zeros, uppercase) → nationality (fallback)
+// Both populated by parseOriginXML()
+let _originMap     = {};
+let _originNameMap = {};
+
+function _normRoom(r) {
+  // Strip leading zeros so "0621" matches "621", keep as string
+  return String(r || '').replace(/^0+/, '').trim().toUpperCase();
+}
+
+// Normalise a guest name for matching: collapse whitespace, uppercase, trim.
+function _normName(s) {
+  return String(s || '').replace(/\s+/g, ' ').trim().toUpperCase();
+}
+
+// Parse the Crystal Reports Inhouse XML and build lookup maps:
+//   nameMap: "GIVEN FAMILY" → Nationality   (primary — works for guests not yet room-assigned)
+//   roomMap: room number    → Nationality   (fallback — used only if a real room number is set)
+// "Main Contact" records take priority when there's a collision.
+function parseOriginXML(xmlText) {
+  const roomMap = {};
+  const nameMap = {};
+  try {
+    const parser = new DOMParser();
+    const doc    = parser.parseFromString(xmlText, 'text/xml');
+    // Crystal Reports XML uses a default namespace, so querySelector('Details')
+    // returns nothing in browsers. Use getElementsByTagNameNS with wildcard instead.
+    const ns       = 'urn:crystal-reports:schemas:report-detail';
+    const sections = doc.getElementsByTagNameNS(ns, 'Section');
+
+    const getField = (sec, fieldName) => {
+      // Find <Field Name="fieldName"> then its <FormattedValue>
+      const fields = sec.getElementsByTagNameNS(ns, 'Field');
+      for (let i = 0; i < fields.length; i++) {
+        if (fields[i].getAttribute('Name') === fieldName) {
+          const fv = fields[i].getElementsByTagNameNS(ns, 'FormattedValue')[0];
+          return fv ? (fv.textContent || '').trim() : '';
+        }
+      }
+      return '';
+    };
+
+    for (let i = 0; i < sections.length; i++) {
+      const sec   = sections[i];
+      // Only process sections that are direct children of <Details>
+      if (!sec.parentNode || sec.parentNode.localName !== 'Details') continue;
+      const room   = getField(sec, 'RoomNumber1');
+      const nat    = getField(sec, 'Nationality1');
+      const gtype  = getField(sec, 'GuestType1');
+      const given  = getField(sec, 'GivenName1');
+      const family = getField(sec, 'FamilyName1');
+      if (!nat) continue;
+
+      // Room-based map (fallback only — kept for compatibility)
+      if (room) {
+        const rKey = _normRoom(room);
+        if (gtype === 'Main Contact' || !roomMap[rKey]) roomMap[rKey] = nat;
+      }
+
+      // Name-based map (primary) — same word order as parseName(): GIVEN then FAMILY
+      if (given && family) {
+        const nKey = _normName(`${given} ${family}`);
+        if (gtype === 'Main Contact' || !nameMap[nKey]) nameMap[nKey] = nat;
+      }
+    }
+  } catch (e) {
+    console.warn('[OriginXML] parse error:', e);
+  }
+  return { roomMap, nameMap };
+}
+
+// Load XML from file input (called by HTML button)
+function loadOriginXML(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const { roomMap, nameMap } = parseOriginXML(e.target.result);
+    _originMap     = roomMap;
+    _originNameMap = nameMap;
+    const count = Math.max(Object.keys(nameMap).length, Object.keys(roomMap).length);
+    if (!count) { showToast('No guest data found in XML — check file format', 'err'); return; }
+    showToast(`✦ Origin map loaded — ${count} guests`, 'ok');
+    // Apply to any already-loaded purpose guests
+    _applyOriginToPurpose();
+    purposeRender();
+    // Update the badge/label
+    const lbl = document.getElementById('originXmlLabel');
+    if (lbl) lbl.textContent = `${count} guests loaded from XML`;
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+// Fill originOfTravel field on purposeGuests from the XML lookup maps.
+// Matches primarily by guest name (works even when no room is assigned yet);
+// falls back to room number only if the guest has a real (numeric) room.
+// Any value filled this way is also saved into shared Guest Memory so it's
+// available next time, even without re-loading the Inhouse XML.
+function _applyOriginToPurpose() {
+  if (!purposeGuests.length) return;
+  if (!Object.keys(_originNameMap).length && !Object.keys(_originMap).length) return;
+  let filled = 0;
+  purposeGuests.forEach(g => {
+    if (g.originOfTravel) return;
+
+    let nat = _originNameMap[_normName(g.name)];
+
+    if (!nat) {
+      const roomKey = _normRoom(g.room);
+      // Ignore placeholder room text like "ASSIGN ROOM" — only use real room numbers
+      if (roomKey && /\d/.test(roomKey)) nat = _originMap[roomKey];
+    }
+
+    if (nat) {
+      g.originOfTravel = nat;
+      filled++;
+      // Persist to Guest Memory so future stays auto-fill even without the XML
+      if (typeof gmOnEdit === 'function') gmOnEdit(g.name, 'originOfTravel', nat);
+    }
+  });
+  if (filled) showToast(`✦ Origin of Travel filled for ${filled} guest${filled !== 1 ? 's' : ''}`, 'ok');
+}
+
 // ── ARRIVALS ──────────────────────────────────────────────
 
 // ── Shared log helper ─────────────────────────────────────
@@ -303,7 +428,12 @@ function purposeRender() {
     purposeKpiUpdate(); return;
   }
   tbody.innerHTML = filtered.map(g => {
-    const i = purposeGuests.indexOf(g);
+    const i      = purposeGuests.indexOf(g);
+    const origin = g.originOfTravel || '';
+    // Visual cue: green border if filled from XML, orange if blank
+    const originStyle = origin
+      ? 'border-color:var(--mint);'
+      : (Object.keys(_originMap).length ? 'border-color:var(--amber);' : '');
     return `<tr class="${g.purpose==='Leisure'?'leisure-row':''}">
       <td><input value="${g.room}"
         oninput="purposeGuests[${i}].room=this.value"
@@ -337,6 +467,14 @@ function purposeRender() {
       <td><input value="${g.source}"
         oninput="purposeGuests[${i}].source=this.value"
         style="width:100px;"/></td>
+      <td>
+        <input value="${origin}"
+          oninput="purposeGuests[${i}].originOfTravel=this.value"
+          onblur="gmOnEdit(purposeGuests[${i}].name,'originOfTravel',this.value);debounceSavePurpose()"
+          placeholder="—"
+          title="Origin of Travel — loaded from Inhouse XML"
+          style="width:96px;${originStyle}"/>
+      </td>
       <td><input value="${g.remarks}"
         oninput="purposeGuests[${i}].remarks=this.value"
         style="width:86px;"/></td>
@@ -356,6 +494,7 @@ function purposeFilter(f, el) {
 function syncFromArrivals() {
   if (!arrGuests.length) { alert('No arrivals loaded. Go to Arrivals tab first.'); return; }
   purposeGuests = arrGuests.map(g => ({...g}));
+  _applyOriginToPurpose();
   purposeRender(); savePurpose(purposeGuests);
   showToast('Synced from Arrivals ✓');
   addPurposeLog('Synced', `${purposeGuests.length} guests synced from Arrivals`);
@@ -383,6 +522,7 @@ function loadPurpose() {
     guests.push({ room, conf:cI>=0?(p[cI]||'').trim():'', name:cleanName(rn), purpose:'Business',
       nights:niI>=0?parseInt(p[niI])||1:1, nat:'', email:'No@email.com',
       source:cleanSource(taI>=0?(p[taI]||'').trim():'', coI>=0?(p[coI]||'').trim():'', srcI>=0?(p[srcI]||'').trim():''),
+      originOfTravel: _originMap[_normRoom(room)] || '',
       remarks:'' });
   }
   purposeGuests = guests;
@@ -391,6 +531,7 @@ function loadPurpose() {
   setTimeout(() => {
     runAINat_purpose().then(() => {
       if (typeof gmAutoFill === 'function') gmAutoFill(purposeGuests);
+      _applyOriginToPurpose();
       purposeRender();
     });
   }, 300);
@@ -408,18 +549,18 @@ async function runAINat_purpose() {
 
 function exportPurpose() {
   const wb   = XLSX.utils.book_new();
-  const data = [['Room','Conf.','Name','Purpose','Nights','Nationality','Email','Source','Remarks']];
-  purposeGuests.forEach(g => data.push([g.room,g.conf,g.name,g.purpose,g.nights,g.nat,g.email,g.source,g.remarks]));
+  const data = [['Room','Conf.','Name','Purpose','Nights','Nationality','Email','Source','Origin of Travel','Remarks']];
+  purposeGuests.forEach(g => data.push([g.room,g.conf,g.name,g.purpose,g.nights,g.nat,g.email,g.source,g.originOfTravel||'',g.remarks]));
   const ws = XLSX.utils.aoa_to_sheet(data);
   const hS = {font:{bold:true,color:{rgb:'FFFFFF'},name:'Arial',sz:10},fill:{fgColor:{rgb:'1F4E79'},patternType:'solid'},alignment:{horizontal:'center'},border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}}};
   const bS = {font:{name:'Arial',sz:10},fill:{fgColor:{rgb:'FFFFFF'},patternType:'solid'},border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}}};
   const lS = {font:{name:'Arial',sz:10},fill:{fgColor:{rgb:'E2EFDA'},patternType:'solid'},border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}}};
-  ['A','B','C','D','E','F','G','H','I'].forEach(c => { if (ws[c+'1']) ws[c+'1'].s = hS; });
+  ['A','B','C','D','E','F','G','H','I','J'].forEach(c => { if (ws[c+'1']) ws[c+'1'].s = hS; });
   purposeGuests.forEach((g, ri) => {
     const rn = ri + 2; const s = g.purpose === 'Leisure' ? lS : bS;
-    ['A','B','C','D','E','F','G','H','I'].forEach(c => { const cell = ws[c+rn]; if (cell) cell.s = s; });
+    ['A','B','C','D','E','F','G','H','I','J'].forEach(c => { const cell = ws[c+rn]; if (cell) cell.s = s; });
   });
-  ws['!cols'] = [8,16,28,14,8,14,26,20,18].map(w => ({wch:w}));
+  ws['!cols'] = [8,16,28,14,8,14,26,20,18,18].map(w => ({wch:w}));
   XLSX.utils.book_append_sheet(wb, ws, 'Purpose of Stay');
   XLSX.writeFile(wb, (_purposeTitle||'Purpose').replace(/\s+/g,'_')+'.xlsx', {bookSST:false,type:'binary',cellStyles:true});
   addPurposeLog('Exported', `${purposeGuests.length} guests exported`);
@@ -507,6 +648,7 @@ function loadOperaFile(input, target) {
           nights: niI>=0?parseInt(r[niI])||1:1,
           nat:    '', email:'No@email.com',
           source: cleanSource(taI>=0?String(r[taI]||'').trim():'', coI>=0?String(r[coI]||'').trim():'', srcI>=0?String(r[srcI]||'').trim():''),
+          originOfTravel: _originMap[_normRoom(room)] || '',
           remarks:'',
         });
       }
@@ -527,6 +669,7 @@ function loadOperaFile(input, target) {
         setTimeout(() => {
           runAINat_purpose().then(() => {
             if (typeof gmAutoFill === 'function') gmAutoFill(purposeGuests);
+            _applyOriginToPurpose();
             purposeRender();
           });
         }, 400);

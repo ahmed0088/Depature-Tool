@@ -92,9 +92,10 @@ function gmAutoFill(guests, silent) {
     const profile = _gmStore[gmKey(g.name)];
     if (!profile) return;
     let hit = false;
-    if (!g.nat    || g.nat    === '')             { if (profile.nat)     { g.nat     = profile.nat;     hit = true; } }
-    if (!g.email  || g.email  === 'No@email.com') { if (profile.email)   { g.email   = profile.email;   hit = true; } }
-    if (!g.purpose|| g.purpose=== 'Business')     { if (profile.purpose) { g.purpose = profile.purpose; hit = true; } }
+    if (!g.nat    || g.nat    === '')             { if (profile.nat)           { g.nat           = profile.nat;           hit = true; } }
+    if (!g.email  || g.email  === 'No@email.com') { if (profile.email)         { g.email         = profile.email;         hit = true; } }
+    if (!g.purpose|| g.purpose=== 'Business')     { if (profile.purpose)       { g.purpose       = profile.purpose;       hit = true; } }
+    if (!g.originOfTravel || g.originOfTravel === '') { if (profile.originOfTravel) { g.originOfTravel = profile.originOfTravel; hit = true; } }
     if (hit) { filled++; g._fromMemory = true; }
   });
   // No _gmPersist() here — reading only, never writes back
@@ -126,12 +127,13 @@ function gmScanAndSaveAll() {
     if (!g.name || g.name === '—') return;
     const key = gmKey(g.name), ex = _gmStore[key] || {}, isNew = !_gmStore[key];
     _gmStore[key] = {
-      nat:      (g.nat   && g.nat   !== '')             ? g.nat   : (ex.nat   || ''),
-      email:    (g.email && g.email !== 'No@email.com') ? g.email : (ex.email || ''),
-      purpose:  g.purpose  || ex.purpose  || 'Business',
-      conf:     g.conf     || ex.conf     || '',
-      hits:     ex.hits    || 0,
-      lastSeen: ex.lastSeen|| new Date().toISOString().split('T')[0],
+      nat:            (g.nat   && g.nat   !== '')             ? g.nat   : (ex.nat   || ''),
+      email:          (g.email && g.email !== 'No@email.com') ? g.email : (ex.email || ''),
+      purpose:        g.purpose        || ex.purpose        || 'Business',
+      conf:           g.conf           || ex.conf           || '',
+      originOfTravel: g.originOfTravel || ex.originOfTravel || '',
+      hits:           ex.hits    || 0,
+      lastSeen:       ex.lastSeen|| new Date().toISOString().split('T')[0],
     };
     if (isNew) saved++; else updated++;
   });
@@ -144,12 +146,13 @@ function gmSaveProfile(g) {
   if (!g || !g.name) return;
   const key = gmKey(g.name), ex = _gmStore[key] || {};
   _gmStore[key] = {
-    nat:      g.nat     || ex.nat     || '',
-    email:    g.email   || ex.email   || '',
-    purpose:  g.purpose || ex.purpose || 'Business',
-    conf:     g.conf    || ex.conf    || '',
-    hits:     ex.hits   || 0,
-    lastSeen: new Date().toISOString().split('T')[0],
+    nat:            g.nat            || ex.nat            || '',
+    email:          g.email          || ex.email          || '',
+    purpose:        g.purpose        || ex.purpose        || 'Business',
+    conf:           g.conf           || ex.conf           || '',
+    originOfTravel: g.originOfTravel || ex.originOfTravel || '',
+    hits:           ex.hits          || 0,
+    lastSeen:       new Date().toISOString().split('T')[0],
   };
   _gmPersist();
 }
@@ -206,7 +209,7 @@ function _gmRenderTable() {
   if (cnt) cnt.textContent = entries.length + ' profiles';
 
   if (!entries.length) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:36px;
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:36px;
       font-family:var(--mono);font-size:0.7rem;color:var(--text3);">
       No profiles yet. Load guests then click "Save to Memory".</td></tr>`;
     return;
@@ -235,6 +238,11 @@ function _gmRenderTable() {
             `<option${(p.purpose||'Business')===v?' selected':''}>${v}</option>`).join('')}
         </select>
       </td>
+      <td>
+        <input class="gm-inline-inp" value="${(p.originOfTravel||'').replace(/"/g,'&quot;')}"
+          onchange="gmOnEdit('${ek}','originOfTravel',this.value)"
+          placeholder="—" style="width:100px;"/>
+      </td>
       <td style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);">
         ${p.lastSeen || '—'}
       </td>
@@ -248,9 +256,9 @@ function _gmRenderTable() {
 
 // ── Export CSV ────────────────────────────────────────────
 function gmExport() {
-  const rows = [['Name','Nationality','Email','Purpose','Last Seen']];
+  const rows = [['Name','Nationality','Email','Purpose','Origin of Travel','Last Seen']];
   Object.entries(_gmStore).forEach(([k,p]) =>
-    rows.push([k, p.nat||'', p.email||'', p.purpose||'', p.lastSeen||'']));
+    rows.push([k, p.nat||'', p.email||'', p.purpose||'', p.originOfTravel||'', p.lastSeen||'']));
   const csv  = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], {type:'text/csv'});
   const a    = document.createElement('a');
@@ -273,8 +281,12 @@ function gmImportFile(input) {
       const parts = line.split(',').map(p => p.replace(/^"|"$/g,'').trim());
       if (!parts[0]) return;
       _gmStore[gmKey(parts[0])] = {
-        nat:parts[1]||'', email:parts[2]||'', purpose:parts[3]||'Business',
-        hits:0, lastSeen:parts[4]||'',
+        nat:            parts[1] || '',
+        email:          parts[2] || '',
+        purpose:        parts[3] || 'Business',
+        originOfTravel: parts[4] || '',
+        hits:           0,
+        lastSeen:       parts[5] || '',
       };
       count++;
     });
