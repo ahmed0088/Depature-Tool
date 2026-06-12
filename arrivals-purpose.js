@@ -34,9 +34,19 @@ function _normName(s) {
   return String(s || '').replace(/\s+/g, ' ').trim().toUpperCase();
 }
 
+// A valid UAE Emirates ID is a 15-digit number starting with "784"
+// (format 784-YYYY-XXXXXXX-X). Guests with one on file are UAE residents,
+// regardless of their passport nationality.
+function _isEmiratesId(doc) {
+  const d = String(doc || '').replace(/[\s-]/g, '');
+  return /^784\d{12}$/.test(d);
+}
+
 // Parse the Crystal Reports Inhouse XML and build lookup maps:
-//   nameMap: "GIVEN FAMILY" → Nationality   (primary — works for guests not yet room-assigned)
-//   roomMap: room number    → Nationality   (fallback — used only if a real room number is set)
+//   nameMap: "GIVEN FAMILY" → Origin value   (primary — works for guests not yet room-assigned)
+//   roomMap: room number    → Origin value   (fallback — used only if a real room number is set)
+// Origin value = "UAE" if the guest has an Emirates ID on file (DocumentNumber1
+// starts with 784), otherwise their passport Nationality1 — see _isEmiratesId().
 // "Main Contact" records take priority when there's a collision.
 function parseOriginXML(xmlText) {
   const roomMap = {};
@@ -65,23 +75,27 @@ function parseOriginXML(xmlText) {
       const sec   = sections[i];
       // Only process sections that are direct children of <Details>
       if (!sec.parentNode || sec.parentNode.localName !== 'Details') continue;
-      const room   = getField(sec, 'RoomNumber1');
-      const nat    = getField(sec, 'Nationality1');
-      const gtype  = getField(sec, 'GuestType1');
-      const given  = getField(sec, 'GivenName1');
-      const family = getField(sec, 'FamilyName1');
+      const room    = getField(sec, 'RoomNumber1');
+      const nat     = getField(sec, 'Nationality1');
+      const docNum  = getField(sec, 'DocumentNumber1');
+      const gtype   = getField(sec, 'GuestType1');
+      const given   = getField(sec, 'GivenName1');
+      const family  = getField(sec, 'FamilyName1');
       if (!nat) continue;
+
+      // Emirates ID on file → guest is a UAE resident, regardless of passport nationality
+      const origin = _isEmiratesId(docNum) ? 'UAE' : nat;
 
       // Room-based map (fallback only — kept for compatibility)
       if (room) {
         const rKey = _normRoom(room);
-        if (gtype === 'Main Contact' || !roomMap[rKey]) roomMap[rKey] = nat;
+        if (gtype === 'Main Contact' || !roomMap[rKey]) roomMap[rKey] = origin;
       }
 
       // Name-based map (primary) — same word order as parseName(): GIVEN then FAMILY
       if (given && family) {
         const nKey = _normName(`${given} ${family}`);
-        if (gtype === 'Main Contact' || !nameMap[nKey]) nameMap[nKey] = nat;
+        if (gtype === 'Main Contact' || !nameMap[nKey]) nameMap[nKey] = origin;
       }
     }
   } catch (e) {
@@ -117,6 +131,17 @@ function loadOriginXML(input) {
 // falls back to room number only if the guest has a real (numeric) room.
 // Any value filled this way is also saved into shared Guest Memory so it's
 // available next time, even without re-loading the Inhouse XML.
+// If the Inhouse XML's Nationality field is "United Arab Emirates", it almost
+// always means Opera read this from the guest's Emirates ID (residency doc),
+// NOT their actual passport nationality. For Origin of Travel purposes that
+// just means "UAE resident" — normalise it to the short form "UAE".
+// Every other nationality is passed through unchanged.
+function _normOrigin(nat) {
+  const n = String(nat || '').trim();
+  if (/^united arab emirates$/i.test(n)) return 'UAE';
+  return n;
+}
+
 function _applyOriginToPurpose() {
   if (!purposeGuests.length) return;
   if (!Object.keys(_originNameMap).length && !Object.keys(_originMap).length) return;
@@ -133,10 +158,11 @@ function _applyOriginToPurpose() {
     }
 
     if (nat) {
-      g.originOfTravel = nat;
+      const origin = _normOrigin(nat);
+      g.originOfTravel = origin;
       filled++;
       // Persist to Guest Memory so future stays auto-fill even without the XML
-      if (typeof gmOnEdit === 'function') gmOnEdit(g.name, 'originOfTravel', nat);
+      if (typeof gmOnEdit === 'function') gmOnEdit(g.name, 'originOfTravel', origin);
     }
   });
   if (filled) showToast(`✦ Origin of Travel filled for ${filled} guest${filled !== 1 ? 's' : ''}`, 'ok');
