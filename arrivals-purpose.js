@@ -575,8 +575,8 @@ async function runAINat_purpose() {
 
 function exportPurpose() {
   const wb   = XLSX.utils.book_new();
-  const data = [['Room','Conf.','Name','Purpose','Nights','Nationality','Email','Source','Origin of Travel','Remarks']];
-  purposeGuests.forEach(g => data.push([g.room,g.conf,g.name,g.purpose,g.nights,g.nat,g.email,g.source,g.originOfTravel||'',g.remarks]));
+  const data = [['Room','Confirmation No.','Name','Purpose of Stay','Night of Stay','Nationality','Origin of Travel','Email','Booking Source','Remarks']];
+  purposeGuests.forEach(g => data.push([g.room,g.conf,g.name,g.purpose,g.nights,g.nat,g.originOfTravel||'',g.email,g.source,g.remarks]));
   const ws = XLSX.utils.aoa_to_sheet(data);
   const hS = {font:{bold:true,color:{rgb:'FFFFFF'},name:'Arial',sz:10},fill:{fgColor:{rgb:'1F4E79'},patternType:'solid'},alignment:{horizontal:'center'},border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}}};
   const bS = {font:{name:'Arial',sz:10},fill:{fgColor:{rgb:'FFFFFF'},patternType:'solid'},border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}}};
@@ -586,7 +586,7 @@ function exportPurpose() {
     const rn = ri + 2; const s = g.purpose === 'Leisure' ? lS : bS;
     ['A','B','C','D','E','F','G','H','I','J'].forEach(c => { const cell = ws[c+rn]; if (cell) cell.s = s; });
   });
-  ws['!cols'] = [8,16,28,14,8,14,26,20,18,18].map(w => ({wch:w}));
+  ws['!cols'] = [8,16,28,14,8,14,18,26,20,18].map(w => ({wch:w}));
   XLSX.utils.book_append_sheet(wb, ws, 'Purpose of Stay');
   XLSX.writeFile(wb, (_purposeTitle||'Purpose').replace(/\s+/g,'_')+'.xlsx', {bookSST:false,type:'binary',cellStyles:true});
   addPurposeLog('Exported', `${purposeGuests.length} guests exported`);
