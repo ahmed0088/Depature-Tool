@@ -1042,6 +1042,30 @@
       <div class="page-hd-left"><h1>Immigration Check</h1><p>Opera XML · Flags missing nationality, gender, passport, first name</p></div>
       <div class="page-hd-actions"><button class="btn rose" onclick="clearImmig()">✕ Clear</button></div>
     </div>
+    <div class="card" style="border-color:rgba(90,180,232,0.25);">
+      <div style="font-size:0.8rem;font-weight:600;margin-bottom:4px;">📂 Optional — Import for Auto-Recovery</div>
+      <div style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);margin-bottom:12px;">
+        Load these before clicking Analyse to auto-fill missing Nationality &amp; Gender below.
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <div class="upload-zone" style="flex:1;min-width:220px;cursor:pointer;" onclick="document.getElementById('immigInhouseXmlInput').click()">
+          <div style="display:flex;flex-direction:column;align-items:center;padding:14px;text-align:center;gap:4px;">
+            <div style="font-size:1.4rem;">🛏️</div>
+            <div style="font-size:0.74rem;font-weight:600;">Inhouse XML <span style="color:var(--text3);font-weight:400;">— for Nationality</span></div>
+            <div id="immigInhouseXmlLabel" style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">Not loaded</div>
+            <input type="file" id="immigInhouseXmlInput" accept=".xml,.XML" style="display:none;" onchange="immigLoadInhouseXml(this)"/>
+          </div>
+        </div>
+        <div class="upload-zone" style="flex:1;min-width:220px;cursor:pointer;" onclick="document.getElementById('immigArrivalsInput').click()">
+          <div style="display:flex;flex-direction:column;align-items:center;padding:14px;text-align:center;gap:4px;">
+            <div style="font-size:1.4rem;">📥</div>
+            <div style="font-size:0.74rem;font-weight:600;">Arrivals Export <span style="color:var(--text3);font-weight:400;">— for Gender</span></div>
+            <div id="immigArrivalsLabel" style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">Not loaded</div>
+            <input type="file" id="immigArrivalsInput" accept=".xls,.xlsx,.html,.htm,.csv,.txt" style="display:none;" onchange="immigLoadArrivals(this)"/>
+          </div>
+        </div>
+      </div>
+    </div>
     <div class="card">
       <div class="upload-zone" style="cursor:pointer;" onclick="document.getElementById('immigFileInput2').click()">
         <div style="display:flex;flex-direction:column;align-items:center;padding:24px;text-align:center;gap:8px;">
@@ -2668,6 +2692,13 @@ function clearImmig() {
   const badge = document.getElementById('immigTabCount'); if (badge) badge.textContent = 'Upload';
   const fi = document.getElementById('immigFileInput2'); if (fi) fi.value = '';
   immigAllRows2 = [];
+  // Reset recovery sources too
+  if (typeof _immigNatMap !== 'undefined')    _immigNatMap = {};
+  if (typeof _immigGenderMap !== 'undefined') _immigGenderMap = {};
+  const ihl = document.getElementById('immigInhouseXmlLabel'); if (ihl) ihl.textContent = 'Not loaded';
+  const ihi = document.getElementById('immigInhouseXmlInput'); if (ihi) ihi.value = '';
+  const arl = document.getElementById('immigArrivalsLabel');   if (arl) arl.textContent = 'Not loaded';
+  const ari = document.getElementById('immigArrivalsInput');   if (ari) ari.value = '';
 }
 
 // ── Keyboard shortcuts ───────────────────────────────────

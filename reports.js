@@ -377,6 +377,105 @@ function copyAudit()  { if(!naCopyText)return; copyToClipboard(naCopyText,docume
 function clearAudit() { document.getElementById('naOperaInput').value=''; document.getElementById('naExcelInput').value=''; document.getElementById('naCompareSection').style.display='none'; document.getElementById('naError').classList.remove('show'); document.getElementById('naTabCount').textContent='Compare'; naCopyText=''; }
 
 
+// ── IMMIGRATION RECOVERY SOURCES ──────────────────────────
+// Optional uploads that let processImmig2() auto-fill rows flagged
+// "No Nationality" / "No Gender" before they're shown to the user.
+//   _immigNatMap    : normalised "GIVEN FAMILY" → raw passport Nationality (from Inhouse XML)
+//   _immigGenderMap : normalised "GIVEN FAMILY" → 'M' | 'F' (derived from title in arrivals export)
+let _immigNatMap    = {};
+let _immigGenderMap = {};
+
+// Title prefix → gender, as seen in Opera's "LASTNAME, FIRSTNAME, Title" name format.
+const _IMMIG_TITLE_GENDER = {
+  'MR': 'M', 'MR.': 'M',
+  'MRS': 'F', 'MRS.': 'F',
+  'MS': 'F', 'MS.': 'F',
+  'MISS': 'F',
+};
+
+// Load Inhouse.xml — provides Nationality for guests missing it on the immigration report.
+function immigLoadInhouseXml(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const { natMap } = parseOriginXML(e.target.result);
+    _immigNatMap = natMap || {};
+    const count = Object.keys(_immigNatMap).length;
+    const lbl = document.getElementById('immigInhouseXmlLabel');
+    if (lbl) lbl.textContent = count ? `✓ ${count} guests loaded` : 'No guest data found';
+    showToast(count ? `✦ Inhouse XML loaded — ${count} guests` : 'No guest data found in XML', count ? 'ok' : 'err');
+    if (immigAllRows2.length) processImmig2(true); // re-run with raw XML already in the textarea
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+// Load an Opera arrivals export (.xls/.html/.csv/.txt) — provides Gender via the
+// Mr./Mrs./Ms./Miss title prefix in the guest name column.
+function immigLoadArrivals(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    let content = e.target.result;
+    if (/<table/i.test(content) && typeof apExtractFromHtml === 'function') {
+      content = apExtractFromHtml(content);
+    }
+    const lines = content.split('\n').map(l => l.replace(/\r$/, '')).filter(l => l.trim());
+    if (lines.length < 2) { showToast('Could not read arrivals export', 'err'); return; }
+
+    const delim = lines[0].includes('\t') ? '\t' : ',';
+    const hdrs  = lines[0].split(delim).map(h => h.trim().toUpperCase());
+    let nameIdx = hdrs.indexOf('NAME');
+    if (nameIdx < 0) nameIdx = hdrs.findIndex(h => h.includes('FULL_NAME') || h.includes('GUEST NAME'));
+    if (nameIdx < 0) { showToast('Could not find a Name column in arrivals export', 'err'); return; }
+
+    const map = {};
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(delim);
+      const raw  = (cols[nameIdx] || '').trim();
+      if (!raw) continue;
+      const parts = raw.split(',').map(p => p.trim()).filter(Boolean);
+      if (parts.length < 2) continue;
+      const titlePart = parts[parts.length - 1].toUpperCase();
+      const gender = _IMMIG_TITLE_GENDER[titlePart];
+      if (!gender) continue; // Dr., no title, etc. — can't determine
+      const nameForKey = parseName(raw); // "GIVEN FAMILY", title stripped
+      map[_normName(nameForKey)] = gender;
+    }
+
+    _immigGenderMap = map;
+    const count = Object.keys(map).length;
+    const lbl = document.getElementById('immigArrivalsLabel');
+    if (lbl) lbl.textContent = count ? `✓ ${count} guests loaded` : 'No titles found';
+    showToast(count ? `✦ Arrivals export loaded — ${count} guests` : 'No usable Mr./Mrs./Ms. titles found', count ? 'ok' : 'err');
+    if (immigAllRows2.length) processImmig2(true);
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+// Fill in Nationality / Gender on flagged rows from the recovery maps above.
+// Mutates each row in place; returns nothing.
+function _immigApplyRecovery(rows) {
+  rows.forEach(r => {
+    const key = _normName(r.name);
+
+    if (r.noNat && _immigNatMap[key]) {
+      r.nat          = _immigNatMap[key];
+      r.natRecovered = true;
+      r.noNat        = false;
+      r.issues       = r.issues.filter(i => i !== 'nationality');
+    }
+    if (r.noSex && _immigGenderMap[key]) {
+      r.sex          = _immigGenderMap[key];
+      r.sexRecovered = true;
+      r.noSex        = false;
+      r.issues       = r.issues.filter(i => i !== 'gender');
+    }
+    r.critical = r.noNat || r.noSex;
+  });
+}
+
 function immigLoadFile2(input) {
   if(!input.files[0])return;
   const reader=new FileReader();
@@ -384,7 +483,7 @@ function immigLoadFile2(input) {
   reader.readAsText(input.files[0]);
 }
 
-function processImmig2() {
+function processImmig2(silent) {
   const raw=document.getElementById('immigPasteInput2').value.trim();
   const errBox=document.getElementById('immigError2'); errBox.classList.remove('show');
   const showErr=m=>{document.getElementById('immigErrorMsg2').textContent=m;errBox.classList.add('show');};
@@ -413,18 +512,23 @@ function processImmig2() {
     if(!issues.length)return;
     rows.push({room:g.room||'',name:fullName.trim(),sex:g.sex,nat:g.nat,passport:g.passport,arrival:g.arrival,departure:g.departure,issues,noNat,noSex,noPass,noFname,critical:noNat||noSex});
   });
+  // Auto-fill Nationality / Gender from optional recovery sources (Inhouse XML / arrivals export)
+  _immigApplyRecovery(rows);
   rows.sort((a,b)=>{if(a.critical&&!b.critical)return-1;if(!a.critical&&b.critical)return 1;return(a.room||'ZZZ').localeCompare(b.room||'ZZZ');});
   immigAllRows2=rows; immigFilter2_='all';
   const noNatC=rows.filter(r=>r.noNat).length,noSexC=rows.filter(r=>r.noSex).length,noPassC=rows.filter(r=>r.noPass).length,noFnameC=rows.filter(r=>r.noFname).length,crit=rows.filter(r=>r.critical).length;
+  const recNatC=rows.filter(r=>r.natRecovered).length, recSexC=rows.filter(r=>r.sexRecovered).length;
   const ihTotal=guests.filter(g=>{const a=pd(g.arrival),d=pd(g.departure);return bizDate&&a&&d?a<=bizDate&&d>bizDate:true;}).length;
   document.getElementById('immigKpis2').innerHTML=`<div class="kpi rose"><div class="kpi-accent"></div><div class="kpi-label">Critical</div><div class="kpi-val">${crit}</div><div class="kpi-sub">nat or gender</div></div><div class="kpi amber"><div class="kpi-accent"></div><div class="kpi-label">No Nationality</div><div class="kpi-val">${noNatC}</div></div><div class="kpi sky"><div class="kpi-accent"></div><div class="kpi-label">No Passport</div><div class="kpi-val">${noPassC}</div></div><div class="kpi mint"><div class="kpi-accent"></div><div class="kpi-label">No Gender</div><div class="kpi-val">${noSexC}</div></div>`;
-  const metaEl=document.getElementById('immigMeta2'); if(metaEl)metaEl.textContent=hotel+' · '+rDate+' '+rTime+' · '+ihTotal+' in-house · '+rows.length+' issues';
+  const recoveredNote = (recNatC||recSexC) ? ` · ✦ recovered: ${recNatC} nationality, ${recSexC} gender` : '';
+  const metaEl=document.getElementById('immigMeta2'); if(metaEl)metaEl.textContent=hotel+' · '+rDate+' '+rTime+' · '+ihTotal+' in-house · '+rows.length+' issues'+recoveredNote;
   [['ifc-all',rows.length],['ifc-nat',noNatC],['ifc-gen',noSexC],['ifc-pass',noPassC],['ifc-fname',noFnameC]].forEach(([id,v])=>{const el=document.getElementById(id);if(el)el.textContent=v;});
   document.getElementById('immigTabCount').textContent=crit>0?(crit+' critical'):(rows.length+' issues');
   document.querySelectorAll('#immigFilters2 .fchip').forEach(b=>b.classList.remove('on'));
   const allBtn=document.querySelector('#immigFilters2 [data-if="all"]'); if(allBtn)allBtn.classList.add('on');
   immigRender2(rows);
   document.getElementById('immigResults2').style.display='block';
+  if(!silent && (recNatC||recSexC)) showToast(`✦ Auto-recovered ${recNatC} nationality, ${recSexC} gender from imported reports`, 'ok');
 }
 
 function immigRender2(rows) {
@@ -436,10 +540,20 @@ function immigRender2(rows) {
   if(!filtered.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:28px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">No matches.</td></tr>';return;}
   const sC=s=>!s||s.toUpperCase()==='U'?'var(--amber)':s.toUpperCase()==='M'?'var(--sky)':'var(--rose)';
   const tM={nationality:['var(--rose)','Nationality'],gender:['var(--amber)','Gender'],passport:['var(--sky)','Passport'],first_name:['var(--mint)','First Name']};
-  tbody.innerHTML=filtered.map(r=>{const tags=r.issues.map(i=>{const[c,l]=tM[i]||['var(--text3)',i];return`<span style="font-family:var(--mono);font-size:0.54rem;padding:2px 7px;border-radius:8px;border:1px solid;color:${c};border-color:${c}22;background:${c}11;">${l}</span>`;}).join(' ');return`<tr style="background:${r.noNat||r.noSex?'rgba(240,107,122,0.04)':r.noPass?'rgba(90,180,232,0.03)':'transparent'};border-left:${r.noNat||r.noSex?'3px solid var(--rose)':r.noPass?'3px solid var(--sky2)':'3px solid transparent'};"><td style="font-family:var(--mono);font-size:0.8rem;font-weight:700;color:var(--sky);">${r.room||'—'}</td><td><span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:5px;background:${sC(r.sex)}11;border:1px solid ${sC(r.sex)}33;font-family:var(--mono);font-size:0.63rem;font-weight:700;color:${sC(r.sex)};">${r.sex||'?'}</span></td><td style="font-size:0.73rem;color:var(--text2);">${r.name}</td><td>${r.noNat?'<span style="font-family:var(--mono);font-size:0.58rem;color:var(--rose);background:rgba(240,107,122,0.08);border:1px dashed rgba(240,107,122,0.4);border-radius:5px;padding:2px 7px;">NOT SET</span>':'<span style="font-size:0.7rem;color:var(--text2);">'+r.nat+'</span>'}</td><td>${r.noPass?'<span style="font-family:var(--mono);font-size:0.58rem;color:var(--sky);background:rgba(90,180,232,0.06);border:1px dashed rgba(90,180,232,0.3);border-radius:5px;padding:2px 7px;">MISSING</span>':'<span style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);">'+r.passport+'</span>'}</td><td style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">${r.arrival}</td><td style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">${r.departure}</td><td>${tags}</td></tr>`;}).join('');
+  const recBadge=`<span style="font-family:var(--mono);font-size:0.52rem;color:var(--mint);background:rgba(62,207,142,0.08);border:1px dashed rgba(62,207,142,0.4);border-radius:5px;padding:1px 5px;margin-left:5px;">✦ recovered</span>`;
+  tbody.innerHTML=filtered.map(r=>{
+    const tags=r.issues.map(i=>{const[c,l]=tM[i]||['var(--text3)',i];return`<span style="font-family:var(--mono);font-size:0.54rem;padding:2px 7px;border-radius:8px;border:1px solid;color:${c};border-color:${c}22;background:${c}11;">${l}</span>`;}).join(' ');
+    const sexCell = r.noSex
+      ? '<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:5px;background:var(--amber)11;border:1px solid var(--amber)33;font-family:var(--mono);font-size:0.63rem;font-weight:700;color:var(--amber);">?</span>'
+      : `<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:5px;background:${sC(r.sex)}11;border:1px solid ${sC(r.sex)}33;font-family:var(--mono);font-size:0.63rem;font-weight:700;color:${sC(r.sex)};">${r.sex}</span>${r.sexRecovered?recBadge:''}`;
+    const natCell = r.noNat
+      ? '<span style="font-family:var(--mono);font-size:0.58rem;color:var(--rose);background:rgba(240,107,122,0.08);border:1px dashed rgba(240,107,122,0.4);border-radius:5px;padding:2px 7px;">NOT SET</span>'
+      : `<span style="font-size:0.7rem;color:var(--text2);">${r.nat}</span>${r.natRecovered?recBadge:''}`;
+    return`<tr style="background:${r.noNat||r.noSex?'rgba(240,107,122,0.04)':r.noPass?'rgba(90,180,232,0.03)':'transparent'};border-left:${r.noNat||r.noSex?'3px solid var(--rose)':r.noPass?'3px solid var(--sky2)':'3px solid transparent'};"><td style="font-family:var(--mono);font-size:0.8rem;font-weight:700;color:var(--sky);">${r.room||'—'}</td><td>${sexCell}</td><td style="font-size:0.73rem;color:var(--text2);">${r.name}</td><td>${natCell}</td><td>${r.noPass?'<span style="font-family:var(--mono);font-size:0.58rem;color:var(--sky);background:rgba(90,180,232,0.06);border:1px dashed rgba(90,180,232,0.3);border-radius:5px;padding:2px 7px;">MISSING</span>':'<span style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);">'+r.passport+'</span>'}</td><td style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">${r.arrival}</td><td style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">${r.departure}</td><td>${tags}</td></tr>`;
+  }).join('');
 }
 function immigFilter2(type,btn){immigFilter2_=type;document.querySelectorAll('#immigFilters2 .fchip').forEach(b=>b.classList.remove('on'));btn.classList.add('on');immigRender2(immigAllRows2);}
-function clearImmig(){document.getElementById('immigPasteInput2').value='';document.getElementById('immigResults2').style.display='none';document.getElementById('immigError2').classList.remove('show');document.getElementById('immigTabCount').textContent='Upload';document.getElementById('immigFileInput2').value='';immigAllRows2=[];}
+function clearImmig(){document.getElementById('immigPasteInput2').value='';document.getElementById('immigResults2').style.display='none';document.getElementById('immigError2').classList.remove('show');document.getElementById('immigTabCount').textContent='Upload';document.getElementById('immigFileInput2').value='';immigAllRows2=[];_immigNatMap={};_immigGenderMap={};const ihl=document.getElementById('immigInhouseXmlLabel');if(ihl)ihl.textContent='Not loaded';const ihi=document.getElementById('immigInhouseXmlInput');if(ihi)ihi.value='';const arl=document.getElementById('immigArrivalsLabel');if(arl)arl.textContent='Not loaded';const ari=document.getElementById('immigArrivalsInput');if(ari)ari.value='';}
 
 // ── FEEDBACK ──────────────────────────────────────────────
 function openFeedback(){['fb-text','fb-name'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});document.getElementById('feedbackModal').classList.add('open');}

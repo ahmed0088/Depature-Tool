@@ -43,14 +43,16 @@ function _isEmiratesId(doc) {
 }
 
 // Parse the Crystal Reports Inhouse XML and build lookup maps:
-//   nameMap: "GIVEN FAMILY" → Origin value   (primary — works for guests not yet room-assigned)
-//   roomMap: room number    → Origin value   (fallback — used only if a real room number is set)
+//   nameMap: "GIVEN FAMILY" → Origin value          (primary — works for guests not yet room-assigned)
+//   roomMap: room number    → Origin value          (fallback — used only if a real room number is set)
+//   natMap:  "GIVEN FAMILY" → raw passport Nationality1 (NOT Emirates-ID adjusted — used by Immigration recovery)
 // Origin value = "UAE" if the guest has an Emirates ID on file (DocumentNumber1
 // starts with 784), otherwise their passport Nationality1 — see _isEmiratesId().
 // "Main Contact" records take priority when there's a collision.
 function parseOriginXML(xmlText) {
   const roomMap = {};
   const nameMap = {};
+  const natMap  = {};
   try {
     const parser = new DOMParser();
     const doc    = parser.parseFromString(xmlText, 'text/xml');
@@ -96,12 +98,14 @@ function parseOriginXML(xmlText) {
       if (given && family) {
         const nKey = _normName(`${given} ${family}`);
         if (gtype === 'Main Contact' || !nameMap[nKey]) nameMap[nKey] = origin;
+        // Raw passport nationality (no UAE override) — for Immigration recovery
+        if (gtype === 'Main Contact' || !natMap[nKey]) natMap[nKey] = nat;
       }
     }
   } catch (e) {
     console.warn('[OriginXML] parse error:', e);
   }
-  return { roomMap, nameMap };
+  return { roomMap, nameMap, natMap };
 }
 
 // Load XML from file input (called by HTML button)
