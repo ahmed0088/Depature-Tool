@@ -11,6 +11,15 @@
 //                        Never re-renders the table.
 //  4. "Save to Memory" — gmScanAndSaveAll() saves everything
 //                        currently loaded into memory.
+//
+//  PASSWORD PROTECTION:
+//  · A panel-level password is stored in Firebase under
+//    hotels/{HOTEL_ID}/settings/gmPassword (hashed with SHA-256).
+//  · Owner / Manager can set or change it via the lock button.
+//  · Once unlocked, the session stays open for 30 minutes,
+//    then the panel re-locks automatically.
+//  · gmAutoFill() always works regardless of lock state —
+//    it only fills blanks on import and never exposes the table.
 // ═══════════════════════════════════════════════════════════
 
 let _gmStore     = {};
@@ -18,6 +27,198 @@ let _gmReady     = false;
 let _gmSaveTimer = null;
 // Auto-fill toggle — persisted in localStorage so it survives page refresh
 let _gmAutoFillOn = localStorage.getItem('gm_autofill') !== 'off';
+
+// ── Password / lock state ─────────────────────────────────
+let _gmUnlocked      = false;   // true = panel is currently accessible
+let _gmLockTimer     = null;    // auto-lock timeout handle
+const GM_LOCK_MINS   = 30;      // session duration before auto-relock
+
+// ── SHA-256 helper (Web Crypto API) ──────────────────────
+async function _gmHash(str) {
+  const buf  = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+// ── Load stored password hash from Firebase ───────────────
+async function _gmGetStoredHash() {
+  try {
+    const snap = await firebase.database().ref(`hotels/${HOTEL_ID}/settings/gmPassword`).once('value');
+    return snap.val() || null;
+  } catch(e) { return null; }
+}
+
+// ── Save password hash to Firebase ───────────────────────
+async function _gmSetPassword(hash) {
+  try {
+    await firebase.database().ref(`hotels/${HOTEL_ID}/settings/gmPassword`).set(hash);
+  } catch(e) { showToast('Failed to save password', 'err'); }
+}
+
+// ── Render the lock / unlock overlay ─────────────────────
+function _gmRenderLockState() {
+  const overlay  = document.getElementById('gmLockOverlay');
+  const content  = document.getElementById('gmPanelContent');
+  const lockBtn  = document.getElementById('gmLockBtn');
+  if (!overlay || !content) return;
+
+  if (_gmUnlocked) {
+    overlay.style.display  = 'none';
+    content.style.display  = '';
+    if (lockBtn) {
+      lockBtn.textContent = '🔒 Lock';
+      lockBtn.title       = 'Lock Guest Memory panel';
+    }
+  } else {
+    overlay.style.display  = 'flex';
+    content.style.display  = 'none';
+    if (lockBtn) {
+      lockBtn.textContent = '🔑 Unlock';
+      lockBtn.title       = 'Unlock Guest Memory panel';
+    }
+  }
+}
+
+// ── Try unlocking: prompt for password, verify, open ─────
+async function gmUnlock() {
+  const storedHash = await _gmGetStoredHash();
+  if (!storedHash) {
+    // No password set yet — only owner/manager can create one
+    const role = (typeof currentProfile !== 'undefined' && currentProfile?.role) || '';
+    if (role === 'owner' || role === 'manager') {
+      gmSetPassword();
+    } else {
+      showToast('No password set. Ask an owner or manager to set one.', 'err');
+    }
+    return;
+  }
+
+  const input = document.getElementById('gmPwInput');
+  const val   = (input?.value || '').trim();
+  if (!val) { showToast('Enter the password first', 'err'); return; }
+
+  const hash = await _gmHash(val);
+  if (hash !== storedHash) {
+    showToast('Incorrect password', 'err');
+    if (input) { input.value = ''; input.focus(); }
+    // Shake the input to signal wrong password
+    const card = document.getElementById('gmLockCard');
+    if (card) {
+      card.style.animation = 'none';
+      card.offsetHeight;   // reflow
+      card.style.animation = 'gmShake 0.35s ease';
+    }
+    return;
+  }
+
+  // Correct — unlock session
+  _gmUnlocked = true;
+  clearTimeout(_gmLockTimer);
+  _gmLockTimer = setTimeout(() => {
+    _gmUnlocked = false;
+    _gmRenderLockState();
+    showToast('Guest Memory locked (session expired)', 'info');
+  }, GM_LOCK_MINS * 60 * 1000);
+
+  if (input) input.value = '';
+  _gmRenderLockState();
+  _gmUpdateUI();
+  showToast(`✓ Guest Memory unlocked · auto-locks in ${GM_LOCK_MINS} min`, 'ok');
+  if (typeof logActivity === 'function') logActivity('guestmem_unlock', '');
+}
+
+// ── Manual lock ───────────────────────────────────────────
+function gmLock() {
+  if (!_gmUnlocked) return;
+  _gmUnlocked = false;
+  clearTimeout(_gmLockTimer);
+  _gmRenderLockState();
+  showToast('Guest Memory locked', 'info');
+}
+
+// ── Toggle lock / unlock from header button ───────────────
+function gmToggleLock() {
+  if (_gmUnlocked) gmLock();
+  else {
+    // Just show the overlay — user types password there
+    _gmRenderLockState();
+  }
+}
+
+// ── Set / change password (owner + manager only) ──────────
+async function gmSetPassword() {
+  const role = (typeof currentProfile !== 'undefined' && currentProfile?.role) || '';
+  if (role !== 'owner' && role !== 'manager') {
+    showToast('Only owners and managers can set the Guest Memory password', 'err');
+    return;
+  }
+
+  const storedHash = await _gmGetStoredHash();
+  const overlay    = document.getElementById('gmChangePwOverlay');
+  if (overlay) {
+    // Show the change-password UI inside the panel
+    overlay.style.display = 'flex';
+    document.getElementById('gmCpOldWrap').style.display = storedHash ? '' : 'none';
+    const firstInput = storedHash
+      ? document.getElementById('gmCpOld')
+      : document.getElementById('gmCpNew');
+    if (firstInput) { firstInput.value = ''; firstInput.focus(); }
+    if (document.getElementById('gmCpNew'))    document.getElementById('gmCpNew').value    = '';
+    if (document.getElementById('gmCpNewConf'))document.getElementById('gmCpNewConf').value = '';
+    return;
+  }
+
+  // Fallback: prompt-based flow (if HTML overlay not present)
+  if (storedHash) {
+    const old = prompt('Enter current password to confirm:');
+    if (old === null) return;
+    const oldHash = await _gmHash(old.trim());
+    if (oldHash !== storedHash) { showToast('Current password incorrect', 'err'); return; }
+  }
+  const np  = prompt(storedHash ? 'Enter new password:' : 'Set Guest Memory password:');
+  if (!np || !np.trim()) return;
+  const np2 = prompt('Confirm new password:');
+  if (np.trim() !== np2?.trim()) { showToast('Passwords do not match', 'err'); return; }
+  const hash = await _gmHash(np.trim());
+  await _gmSetPassword(hash);
+  showToast(storedHash ? 'Password changed ✓' : 'Password set ✓', 'ok');
+  if (typeof logActivity === 'function') logActivity('guestmem_password_change', '');
+}
+
+// ── Confirm password change (from the inline UI) ──────────
+async function gmConfirmChangePw() {
+  const storedHash = await _gmGetStoredHash();
+  const oldEl      = document.getElementById('gmCpOld');
+  const newEl      = document.getElementById('gmCpNew');
+  const confEl     = document.getElementById('gmCpNewConf');
+
+  if (storedHash) {
+    const oldVal = (oldEl?.value || '').trim();
+    if (!oldVal) { showToast('Enter current password', 'err'); return; }
+    const oldHash = await _gmHash(oldVal);
+    if (oldHash !== storedHash) {
+      showToast('Current password is incorrect', 'err');
+      if (oldEl) { oldEl.value = ''; oldEl.focus(); }
+      return;
+    }
+  }
+
+  const np  = (newEl?.value  || '').trim();
+  const np2 = (confEl?.value || '').trim();
+  if (!np)       { showToast('Enter a new password', 'err'); return; }
+  if (np.length < 4) { showToast('Password must be at least 4 characters', 'err'); return; }
+  if (np !== np2) { showToast('Passwords do not match', 'err'); return; }
+
+  const hash = await _gmHash(np);
+  await _gmSetPassword(hash);
+  gmClosePwOverlay();
+  showToast(storedHash ? '🔑 Password changed ✓' : '🔑 Password set ✓', 'ok');
+  if (typeof logActivity === 'function') logActivity('guestmem_password_change', '');
+}
+
+function gmClosePwOverlay() {
+  const overlay = document.getElementById('gmChangePwOverlay');
+  if (overlay) overlay.style.display = 'none';
+}
 
 function gmKey(name) {
   return String(name || '').toUpperCase().replace(/\s+/g, ' ').trim();
@@ -60,10 +261,21 @@ function gmInit() {
   }
   // Render toggle to correct state as soon as DOM is ready
   setTimeout(_gmRenderToggle, 0);
+  // Render lock state — panel starts locked on every page load
+  setTimeout(async () => {
+    _gmRenderLockState();
+    // If no password is set yet, auto-unlock so first-time use isn't confusing
+    const hash = await _gmGetStoredHash();
+    if (!hash) {
+      _gmUnlocked = true;
+      _gmRenderLockState();
+    }
+  }, 0);
 
   fbListen('guestMemory', snap => {
     _gmStore = snap || {};
     _gmReady = true;
+    if (!_gmUnlocked) return;  // don't touch DOM if locked
     const tbl     = document.getElementById('gmTable');
     const editing = tbl && tbl.contains(document.activeElement);
     if (!editing) _gmUpdateUI();
@@ -117,6 +329,7 @@ function gmOnEdit(name, field, value) {
 
 // ── "Save to Memory" button ───────────────────────────────
 function gmScanAndSaveAll() {
+  if (!_gmUnlocked) { showToast('Unlock Guest Memory first 🔒', 'err'); return; }
   const lists = [];
   if (typeof arrGuests     !== 'undefined' && arrGuests.length)     lists.push(...arrGuests);
   if (typeof purposeGuests !== 'undefined' && purposeGuests.length) lists.push(...purposeGuests);
@@ -160,6 +373,7 @@ function gmSaveProfile(g) {
 function gmLookup(name) { return _gmStore[gmKey(name)] || null; }
 
 function gmDeleteProfile(name) {
+  if (!_gmUnlocked) { showToast('Unlock Guest Memory first 🔒', 'err'); return; }
   const key = gmKey(name);
   if (!_gmStore[key]) return;
   delete _gmStore[key];
@@ -169,6 +383,7 @@ function gmDeleteProfile(name) {
 }
 
 function gmClearAll() {
+  if (!_gmUnlocked) { showToast('Unlock Guest Memory first 🔒', 'err'); return; }
   if (!confirm('Clear ALL guest memory profiles? This cannot be undone.')) return;
   _gmStore = {};
   _gmPersist();
@@ -256,6 +471,7 @@ function _gmRenderTable() {
 
 // ── Export CSV ────────────────────────────────────────────
 function gmExport() {
+  if (!_gmUnlocked) { showToast('Unlock Guest Memory first 🔒', 'err'); return; }
   const rows = [['Name','Nationality','Email','Purpose','Origin of Travel','Last Seen']];
   Object.entries(_gmStore).forEach(([k,p]) =>
     rows.push([k, p.nat||'', p.email||'', p.purpose||'', p.originOfTravel||'', p.lastSeen||'']));
