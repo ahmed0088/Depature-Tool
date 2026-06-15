@@ -691,16 +691,21 @@ function apRun() {
     const confNo   = (c[C.confNo]   || '').trim();
     const products = C.products !== -1 ? (c[C.products] || '').trim() : '';
 
-    // ── Pax resolution: ADULTS → PERSONS → CF_ADULTS → RoomCategory → 1 ──────
+    // ── Pax resolution: (ADULTS + CHL) → PERSONS → CF_ADULTS → RoomCategory → 1 ──────
     // Opera sometimes leaves ADULTS blank when a row is truncated due to embedded
     // newlines in address fields (e.g. LARI room 0511 — TWC category, FLRB1 rate).
     // apJoinSplitRows() re-assembles split rows so ADULTS is usually recovered,
     // but as a belt-and-braces fallback we also infer pax from the room category:
     //   TWC / DBL / TWN / DLX / STD2 / SUP / KING = 2 pax
     //   SNG / SGL / STD1 / ECO = 1 pax
+    //
+    // CHILDREN: when CHL column is present and adults are also present, children are
+    // ADDED to adults for total pax (2 adults + 1 child = 3 pax). This is the correct
+    // behaviour — e.g. 1 package for 3 pax should be 3, not 2.
     const adultRaw   = parseFloat(c[paxCol]);
     const personsRaw = C.persons  !== -1 ? parseFloat(c[C.persons])  : NaN;
     const chlRaw     = C.chl      !== -1 ? parseFloat(c[C.chl])      : NaN;
+    const childCount = (chlRaw > 0) ? chlRaw : 0;   // children to add on top of adults
     // Room-category fallback: infer pax from category label
     let catPax = NaN;
     if (C.roomCat !== undefined && C.roomCat !== -1) {
@@ -708,11 +713,13 @@ function apRun() {
       if (/^(TWC|DBL|TWN|DLX|SUITE|STD2|SUP|KING|QUEEN|DOUBLE|TWIN)/.test(cat)) catPax = 2;
       else if (/^(SNG|SGL|STD1|ECO|SINGLE|SOLO)/.test(cat))                       catPax = 1;
     }
-    const adults     = (adultRaw   > 0) ? adultRaw
+    // Base adults (without children)
+    const baseAdults = (adultRaw   > 0) ? adultRaw
                      : (personsRaw > 0) ? personsRaw
-                     : (chlRaw     > 0) ? chlRaw
                      : (catPax     > 0) ? catPax   // room-category inference
                      : 1; // last resort: at least 1 pax per booking
+    // Total pax = adults + children (children only added when adults are also known)
+    const adults = baseAdults + (adultRaw > 0 || personsRaw > 0 ? childCount : 0);
 
     // ── Dedup key: ROWNUM is Opera's unique row identifier per reservation ──
     // Each booking appears multiple times (one row per membership programme).
