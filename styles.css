@@ -3746,3 +3746,116 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
   background: var(--adg-navy-2, #152438);
   display: flex; gap: .5rem; flex-shrink: 0; flex-wrap: wrap;
 }
+
+
+/* ═══════════════════════════════════════════════════
+   Guest Memory — Lock / Password overlay (added fix)
+═══════════════════════════════════════════════════ */
+/* ── Lock overlay ── */
+#gmLockOverlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+}
+#gmLockCard {
+  background: var(--card, #111520);
+  border: 1px solid var(--border, #2a2f3d);
+  border-radius: 14px;
+  padding: 36px 40px;
+  text-align: center;
+  max-width: 360px;
+  width: 100%;
+}
+@keyframes gmShake {
+  0%,100% { transform: translateX(0); }
+  20%      { transform: translateX(-8px); }
+  40%      { transform: translateX(8px); }
+  60%      { transform: translateX(-6px); }
+  80%      { transform: translateX(6px); }
+}
+.gm-lock-icon  { font-size: 2.4rem; margin-bottom: 12px; }
+.gm-lock-title { font-family: var(--mono); font-size: 0.9rem; color: var(--text); font-weight: 600; margin-bottom: 6px; }
+.gm-lock-sub   { font-family: var(--mono); font-size: 0.62rem; color: var(--text3); margin-bottom: 22px; line-height: 1.5; }
+.gm-pw-row     { display: flex; gap: 8px; align-items: center; }
+.gm-pw-inp {
+  flex: 1;
+  background: var(--card2, #181c24);
+  border: 1px solid var(--border, #2a2f3d);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  padding: 9px 13px;
+  outline: none;
+  transition: border-color 0.15s;
+  text-align: center;
+  letter-spacing: 0.1em;
+}
+.gm-pw-inp:focus { border-color: var(--accent, #5ab4e8); }
+.gm-pw-eye {
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text3);
+  cursor: pointer;
+  padding: 8px 10px;
+  font-size: 0.8rem;
+  line-height: 1;
+  transition: color 0.15s;
+}
+.gm-pw-eye:hover { color: var(--text); }
+
+/* ── Change-password overlay ── */
+#gmChangePwOverlay {
+  display: none;
+  position: absolute;
+  inset: 0;
+  background: rgba(10,12,16,0.85);
+  z-index: 50;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+}
+#gmChangePwCard {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 30px 34px;
+  min-width: 300px;
+  max-width: 400px;
+  width: 100%;
+}
+.gm-cp-title {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--text);
+  font-weight: 600;
+  margin-bottom: 18px;
+}
+.gm-cp-field { margin-bottom: 12px; }
+.gm-cp-label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 5px;
+}
+.gm-cp-inp {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  padding: 8px 11px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.gm-cp-inp:focus { border-color: var(--accent); }
+.gm-cp-btns { display: flex; gap: 8px; margin-top: 18px; }
