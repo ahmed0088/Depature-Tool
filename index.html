@@ -1490,57 +1490,58 @@
   </div>
 
   <!-- ── Panel header ── -->
-  <div class="panel-header">
-    <div class="panel-title-row">
-      <div class="panel-title">
-        <span class="panel-title-icon">🧠</span>
-        Guest Memory
-      </div>
-      <div class="panel-subtitle">
-        Stores nationality, email &amp; purpose for returning guests · 🔒 Password protected
+  <div class="gm-head">
+    <div class="gm-head-main">
+      <div class="gm-head-icon">🧠</div>
+      <div>
+        <div class="gm-head-title">Guest Memory</div>
+        <div class="gm-head-sub">
+          Stores nationality, email &amp; purpose for returning guests
+          <span class="gm-lock-pill">🔒 Password protected</span>
+        </div>
       </div>
     </div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+  </div>
 
+  <!-- ── Toolbar ── -->
+  <div class="gm-toolbar">
+    <div class="gm-toolbar-group">
       <!-- Lock / Unlock toggle -->
-      <button id="gmLockBtn" class="btn sm" onclick="gmToggleLock()"
-              style="border-color:rgba(240,164,58,0.4);color:var(--amber);">
+      <button id="gmLockBtn" class="btn sm amber" onclick="gmToggleLock()">
         🔑 Unlock
       </button>
 
       <!-- Set / Change password (owner + manager only) -->
       <button class="btn sm" onclick="gmSetPassword()"
-              style="font-size:0.62rem;"
               title="Set or change Guest Memory password">
         ⚙ Set Password
       </button>
+    </div>
 
+    <div class="gm-toolbar-sep"></div>
+
+    <div class="gm-toolbar-group">
       <!-- ── Auto-fill toggle ── -->
-      <div id="gmAutoFillToggleWrap" onclick="gmToggleAutoFill()"
-        style="display:flex;align-items:center;gap:8px;cursor:pointer;
-               background:var(--card2,#181c24);border:1px solid var(--border,#2a2f3d);
-               border-radius:20px;padding:5px 12px 5px 8px;user-select:none;
-               transition:border-color .2s;">
-        <div id="gmAutoFillTrack"
-          style="width:34px;height:18px;border-radius:9px;position:relative;
-                 transition:background .2s;flex-shrink:0;">
-          <div id="gmAutoFillThumb"
-            style="width:14px;height:14px;border-radius:50%;background:#fff;
-                   position:absolute;top:2px;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.4);"></div>
+      <div id="gmAutoFillToggleWrap" class="gm-autofill" onclick="gmToggleAutoFill()">
+        <div id="gmAutoFillTrack" class="gm-af-track">
+          <div id="gmAutoFillThumb" class="gm-af-thumb"></div>
         </div>
-        <span id="gmAutoFillLabel"
-          style="font-family:var(--mono);font-size:0.65rem;color:var(--text2);white-space:nowrap;">
+        <span id="gmAutoFillLabel" class="gm-af-label">
           Auto-fill: ON
         </span>
       </div>
+    </div>
 
+    <div class="gm-toolbar-sep"></div>
+
+    <div class="gm-toolbar-group">
       <button class="btn sm gold" onclick="gmScanAndSaveAll()">⚡ Scan &amp; Save All</button>
-      <button class="btn sm gold" onclick="gmExport()">📥 Export CSV</button>
+      <button class="btn sm" onclick="gmExport()">📥 Export CSV</button>
       <label class="btn sm" style="cursor:pointer;">
         📂 Import CSV
         <input type="file" accept=".csv" style="display:none;" onchange="gmImportFile(this)"/>
       </label>
-      <button class="btn sm" style="color:var(--rose);" onclick="gmClearAll()">🗑 Clear All</button>
+      <button class="btn sm rose" onclick="gmClearAll()">🗑 Clear All</button>
     </div>
   </div>
 
@@ -1584,75 +1585,78 @@
   ════════════════════════════════════════════════ -->
   <div id="gmPanelContent">
 
-    <div style="background:rgba(90,180,232,0.07);border:1px solid rgba(90,180,232,0.2);border-radius:10px;padding:13px 16px;margin-bottom:18px;font-family:var(--mono);font-size:0.65rem;color:var(--text2);line-height:1.7;">
-      <strong style="color:var(--sky);">✦ How it works</strong><br>
-      Every time you type or correct a guest's <strong>nationality</strong> or <strong>email</strong> in the Arrivals or Purpose panels, it's saved here automatically.<br>
-      Next time that guest appears, their data is filled in instantly — no retyping.<br>
-      All colleagues on the same hotel see the same memory (shared via Firebase).
-      <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(90,180,232,0.15);display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <span style="color:var(--text3);">Already have guests loaded in Arrivals / Purpose?</span>
-        <button class="btn sm gold" onclick="gmScanAndSaveAll()" style="font-size:0.65rem;">⚡ Scan &amp; Save All to Memory</button>
+    <div class="gm-info">
+      <div class="gm-info-icon">✦</div>
+      <div class="gm-info-body">
+        <strong>How it works</strong> — every time you type or correct a guest's <strong>nationality</strong>, <strong>email</strong> or <strong>purpose</strong> in the Arrivals or Purpose panels, it's saved here automatically.
+        Next time that guest appears, their data is filled in instantly — no retyping. All colleagues on the same hotel see the same memory, shared live via Firebase.
+        <div class="gm-info-cta">
+          <span style="color:var(--text3);">Already have guests loaded in Arrivals / Purpose?</span>
+          <button class="btn sm gold" onclick="gmScanAndSaveAll()">⚡ Scan &amp; Save All to Memory</button>
+        </div>
       </div>
     </div>
 
     <!-- Stats row -->
-    <div class="gm-stat-row">
-      <div class="gm-stat">
-        <div class="gm-stat-val" id="gm-count">—</div>
-        <div class="gm-stat-lbl">Profiles Stored</div>
+    <div class="gm-kpi-grid">
+      <div class="gm-kpi gm-kpi-total">
+        <div class="gm-kpi-val" id="gm-count">—</div>
+        <div class="gm-kpi-lbl">Profiles Stored</div>
       </div>
-      <div class="gm-stat">
-        <div class="gm-stat-val" id="gm-with-nat">—</div>
-        <div class="gm-stat-lbl">With Nationality</div>
+      <div class="gm-kpi gm-kpi-nat">
+        <div class="gm-kpi-val" id="gm-with-nat">—</div>
+        <div class="gm-kpi-lbl">With Nationality</div>
       </div>
-      <div class="gm-stat">
-        <div class="gm-stat-val" id="gm-with-email">—</div>
-        <div class="gm-stat-lbl">With Email</div>
+      <div class="gm-kpi gm-kpi-email">
+        <div class="gm-kpi-val" id="gm-with-email">—</div>
+        <div class="gm-kpi-lbl">With Email</div>
       </div>
-      <div class="gm-stat">
-        <div class="gm-stat-val" id="gm-total-hits">—</div>
-        <div class="gm-stat-lbl">Total Auto-fills</div>
+      <div class="gm-kpi gm-kpi-fills">
+        <div class="gm-kpi-val" id="gm-total-hits">—</div>
+        <div class="gm-kpi-lbl">Total Auto-fills</div>
       </div>
     </div>
 
     <!-- Search -->
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-      <div style="position:relative;flex:1;">
-        <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:0.8rem;">🔍</span>
+    <div class="gm-search-row">
+      <div class="gm-search-wrap">
+        <span class="gm-search-icon">🔍</span>
         <input
           id="gmSearch"
           type="text"
+          class="gm-search-inp"
           placeholder="Search guest name…"
           oninput="_gmRenderTable()"
-          style="width:100%;box-sizing:border-box;padding:8px 12px 8px 32px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:0.68rem;outline:none;"
         />
       </div>
-      <span id="gmProfileCount" style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);white-space:nowrap;">0 profiles</span>
+      <span id="gmProfileCount" class="gm-count-pill">0 profiles</span>
     </div>
 
     <!-- Table -->
-    <div class="card" style="overflow-x:auto;padding:0;">
-      <table style="width:100%;border-collapse:collapse;">
-        <thead>
-          <tr style="background:var(--bg2,#0d1017);">
-            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.55rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">GUEST NAME</th>
-            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.55rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">NATIONALITY</th>
-            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.55rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">EMAIL</th>
-            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.55rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">PURPOSE</th>
-            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.55rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">ORIGIN OF TRAVEL</th>
-            <th style="padding:10px 12px;text-align:left;font-family:var(--mono);font-size:0.55rem;color:var(--text3);letter-spacing:0.1em;font-weight:600;">SEEN</th>
-            <th style="padding:10px 12px;"></th>
-          </tr>
-        </thead>
-        <tbody id="gmTable">
-          <tr><td colspan="7" style="text-align:center;padding:48px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">
-            Loading guest memory…
-          </td></tr>
-        </tbody>
-      </table>
+    <div class="gm-table-wrap">
+      <div class="gm-table-scroll">
+        <table class="gm-table">
+          <thead>
+            <tr>
+              <th>Guest Name</th>
+              <th>Nationality</th>
+              <th>Email</th>
+              <th>Purpose</th>
+              <th>Origin of Travel</th>
+              <th>Seen</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="gmTable">
+            <tr><td colspan="7" style="text-align:center;padding:48px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">
+              Loading guest memory…
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
-    <div style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);margin-top:10px;line-height:1.6;">
+    <div class="gm-footnote">
       ✦ Profiles are saved automatically when you edit nationality or email in Arrivals / Purpose panels.<br>
       🔵 Blue dot next to a guest name = auto-filled from memory this session.
     </div>
