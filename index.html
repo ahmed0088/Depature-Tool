@@ -7,6 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌙</text></svg>"/>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
 <!-- Firebase SDKs -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -436,6 +437,10 @@
   <div class="nav-item" onclick="showPanel('arrivals-proc')" id="nav-arrivals-proc" data-panel="arrivals-proc">
     <div class="nav-icon">📊</div>Arrivals Processor
     <span class="nav-badge" id="badge-arrivals-proc">—</span>
+  </div>
+  <div class="nav-item" onclick="showPanel('noshow')" id="nav-noshow" data-panel="noshow">
+    <div class="nav-icon">🚫</div>No-Show Tracker
+    <span class="nav-badge" id="badge-noshow">—</span>
   </div>
   <div class="nav-item" onclick="showPanel('guestmem')" id="nav-guestmem" data-panel="guestmem">
     <div class="nav-icon">🧠</div>Guest Memory
@@ -1666,6 +1671,114 @@
 </div><!-- /panel-guestmem -->
 
 <!-- ══════════════════════════════════════════════════════
+     PANEL: No-Show Tracker
+══════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-noshow">
+
+  <div class="page-hd">
+    <div class="page-hd-left">
+      <h1>No-Show Tracker</h1>
+      <p id="nsDateLabel">Upload the Opera NA40 No-Show PDF to extract and copy guest data</p>
+    </div>
+    <div class="page-hd-actions" id="nsHeaderActions" style="display:none;">
+      <button class="btn gold sm" onclick="nsCopyForExcel()">&#128203; Copy for Excel</button>
+      <button class="btn rose sm" onclick="nsClear()">&#x2715; New Report</button>
+    </div>
+  </div>
+
+  <!-- Upload state -->
+  <div id="nsUploadCard">
+    <div class="ns-upload-card"
+         ondragover="nsOnDragOver(event)"
+         ondragleave="nsOnDragLeave(event)"
+         ondrop="nsOnDrop(event)">
+      <div id="nsDropZone">
+        <div class="ns-upload-icon">&#128683;</div>
+        <div class="ns-upload-title">NA40 No-Show Report</div>
+        <div class="ns-upload-sub">
+          From Opera: <strong>Night Audit &rarr; Reports &rarr; NA40 No Shows &rarr; Export as PDF</strong><br>
+          Drop the PDF below or click to upload. All no-show guests will be extracted and shown<br>
+          in a table you can copy with one click &mdash; ready to paste straight into your Excel sheet.
+        </div>
+        <div class="ns-upload-actions">
+          <label class="btn gold" style="cursor:pointer;">
+            &#128196; Upload NA40 PDF
+            <input id="nsPdfInput" type="file" accept=".pdf,application/pdf"
+                   onchange="nsHandleFile(this)" style="display:none"/>
+          </label>
+        </div>
+        <div class="ns-drop-hint">or drag &amp; drop the PDF anywhere in this box</div>
+      </div>
+      <div id="nsLoadWrap" style="display:none;align-items:center;justify-content:center;gap:10px;padding:20px;font-family:var(--mono);font-size:0.72rem;color:var(--text3);">
+        <div class="spinner"></div> Parsing PDF&hellip;
+      </div>
+    </div>
+  </div>
+
+  <!-- Results state -->
+  <div id="nsResultCard" style="display:none;">
+
+    <div class="kpi-row c3" style="margin-bottom:16px;">
+      <div class="kpi rose">
+        <div class="kpi-accent"></div>
+        <div class="kpi-label">No-Shows</div>
+        <div class="kpi-val" id="ns-kpi-count">0</div>
+      </div>
+      <div class="kpi amber">
+        <div class="kpi-accent"></div>
+        <div class="kpi-label">Potential Revenue Lost</div>
+        <div class="kpi-val" style="font-size:1.2rem;" id="ns-kpi-rev">AED 0.00</div>
+      </div>
+      <div class="kpi sky">
+        <div class="kpi-accent"></div>
+        <div class="kpi-label">Report Date</div>
+        <div class="kpi-val" style="font-size:1.2rem;letter-spacing:0;" id="ns-kpi-date">&mdash;</div>
+      </div>
+    </div>
+
+    <div class="filter-row" style="margin-bottom:14px;">
+      <span style="font-family:var(--mono);font-size:0.7rem;color:var(--text3);">
+        Fill <strong style="color:var(--text);">New Conf. No.</strong> for rehoused guests before copying
+      </span>
+      <div class="search-wrap" style="margin-left:auto;">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
+             style="width:13px;height:13px;margin-left:8px;flex-shrink:0;color:var(--text3)">
+          <circle cx="6.5" cy="6.5" r="4"/><path d="M10.5 10.5l3 3"/>
+        </svg>
+        <input id="nsSearch" placeholder="Name, conf, channel&hellip;" oninput="nsSetSearch(this.value)"/>
+      </div>
+    </div>
+
+    <div class="tbl-wrap">
+      <table style="min-width:900px;">
+        <thead>
+          <tr>
+            <th style="width:90px;">Date</th>
+            <th style="width:90px;">Status</th>
+            <th>Guest Name</th>
+            <th style="width:110px;">Conf. No.</th>
+            <th>Channel / Source</th>
+            <th style="width:72px;text-align:center;">Nights</th>
+            <th style="width:160px;">New Conf. No. (FO)</th>
+            <th style="width:105px;text-align:right;">Rate / Night</th>
+            <th style="width:110px;text-align:right;">Total Stay</th>
+          </tr>
+        </thead>
+        <tbody id="nsTable"></tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:12px;font-family:var(--mono);font-size:0.62rem;color:var(--text3);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span>&#128161; Fill <strong style="color:var(--text);">New Conf. No.</strong> above for rehoused guests, then</span>
+      <button class="btn gold sm" onclick="nsCopyForExcel()">&#128203; Copy for Excel</button>
+      <span>and paste into your sheet.</span>
+    </div>
+
+  </div><!-- /nsResultCard -->
+
+</div><!-- /panel-noshow -->
+
+<!-- ══════════════════════════════════════════════════════
      PANEL: Adagio Pro · Long Stay Collections
 ══════════════════════════════════════════════════════ -->
 <div class="panel" id="panel-adagio">
@@ -2499,6 +2612,7 @@
 <script src="arr-dep-xref.js"></script>
 <script src="tourism-tax.js"></script>
 <script src="arrivals-proc.js"></script>
+<script src="noshow.js"></script>
 
 <script>
 // ════════════════════════════════════════════════
@@ -3155,6 +3269,7 @@ async function appInit() {
   if (typeof purposeRender !== 'undefined') purposeRender();
   if (typeof renderShift !== 'undefined') renderShift(activeShift);
   if (typeof initArrivalsProc !== 'undefined') initArrivalsProc();
+  if (typeof initNoShow !== 'undefined') initNoShow();
   Object.keys(SHIFTS).forEach(k => updateShiftBadge(k));
   updateClock();
   setInterval(updateClock, 30000);

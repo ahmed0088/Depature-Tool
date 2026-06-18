@@ -4178,3 +4178,84 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
   font-weight: 400;
   color: var(--text);
 }
+
+
+/* ══════════════════════════════════════════════════════
+   NO-SHOW TRACKER
+══════════════════════════════════════════════════════ */
+.ns-upload-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  padding: 36px 24px 28px;
+  text-align: center;
+  max-width: 680px;
+  margin: 40px auto;
+  transition: border-color 0.2s;
+}
+.ns-upload-card.ns-drag-active,
+.ns-upload-card:has(#nsDropZone.ns-drag-active) {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+.ns-upload-icon {
+  font-size: 2.6rem;
+  margin-bottom: 12px;
+  line-height: 1;
+}
+.ns-upload-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 10px;
+  letter-spacing: -0.2px;
+}
+[data-theme="night-ops"] .ns-upload-title { font-family: var(--serif); font-size: 1.3rem; color: var(--accent); }
+.ns-upload-sub {
+  font-size: 0.78rem;
+  color: var(--text3);
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+.ns-upload-sub strong { color: var(--text2); }
+.ns-upload-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.ns-drop-hint {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  color: var(--text3);
+  letter-spacing: 0.05em;
+}
+.ns-status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  background: var(--red-bg);
+  color: var(--red);
+  border: 1px solid var(--red-border);
+}
+.ns-new-conf-input {
+  width: 100%;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: var(--r);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  padding: 4px 8px;
+  outline: none;
+  transition: border-color 0.1s;
+  box-sizing: border-box;
+}
+.ns-new-conf-input:focus { border-color: var(--accent); background: var(--card); }
+.ns-new-conf-input::placeholder { color: var(--text3); }
