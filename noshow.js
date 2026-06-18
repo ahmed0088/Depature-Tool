@@ -321,21 +321,7 @@ function nsCopyForExcel() {
     return hay.includes(search);
   });
 
-  const HEADERS = [
-    'Date',
-    'Status',
-    'Guest Name',
-    'Conf. No.',
-    'Channel / Source',
-    'No. of Nights',
-    'New Conf. No. if new booking is made by FO',
-    'Room Rate (per night)',
-    'Total Amount / Full Stay',
-  ];
-
-  const lines = [
-    HEADERS.join('\t'),
-    ...rows.map(g => [
+  const lines = rows.map(g => [
       g.arrDate,
       'No Show',
       nsCleanName(g.nameRaw),
@@ -345,8 +331,7 @@ function nsCopyForExcel() {
       g.newConf || '',
       g.rateAmount.toFixed(2),
       g.potRev.toFixed(2),
-    ].join('\t')),
-  ];
+    ].join('\t'));
 
   copyToClipboard(lines.join('\n'), null, '');
   showToast(`${rows.length} rows copied — paste into Excel ✓`, 'ok');
