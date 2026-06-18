@@ -311,6 +311,17 @@ function nsRender() {
 }
 
 // ── Copy as TSV for Excel paste ───────────────────────────
+// ── Convert Opera DD-MM-YY to M/D/YYYY for Excel ────────
+function nsExcelDate(operaDate) {
+  if (!operaDate) return '';
+  const p = operaDate.split('-');
+  if (p.length !== 3) return operaDate;
+  const day = parseInt(p[0], 10);
+  const mon = parseInt(p[1], 10);
+  const yr  = parseInt(p[2], 10) + (parseInt(p[2], 10) < 100 ? 2000 : 0);
+  return mon + '/' + day + '/' + yr;
+}
+
 function nsCopyForExcel() {
   if (!nsGuests.length) { showToast('No data to copy', 'info'); return; }
 
@@ -322,7 +333,7 @@ function nsCopyForExcel() {
   });
 
   const lines = rows.map(g => [
-      g.arrDate,
+      nsExcelDate(g.arrDate),
       'No Show',
       nsCleanName(g.nameRaw),
       g.confNo,
