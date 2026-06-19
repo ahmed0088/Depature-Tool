@@ -2983,6 +2983,7 @@ function clearImmig() {
     '7': 'rent',
     '8': 'immig',
     '9': 'tourism',
+    '0': 'noshow',
   };
   const DEP_FILTER_KEYS = {
     'a': 'all',
@@ -3078,6 +3079,29 @@ function clearImmig() {
         e.preventDefault();
         const firstUndone = CL_STEPS.find(s => !clState.done.has(s.id) && !clState.skipped.has(s.id));
         if (firstUndone) { clToggle(firstUndone.id); showKbToast('Step ticked ✓'); }
+        return;
+      }
+    }
+
+    // ── No-Show Tracker shortcuts ────────────────────────
+    if (panel === 'noshow') {
+      // / — focus search (only once a report is loaded)
+      if (k === '/') {
+        e.preventDefault();
+        const s = document.getElementById('nsSearch');
+        if (s) { s.focus(); s.select(); }
+        return;
+      }
+      // C — copy for Excel
+      if (k === 'c') {
+        e.preventDefault();
+        if (typeof nsCopyForExcel === 'function') nsCopyForExcel();
+        return;
+      }
+      // N — new report (clear)
+      if (k === 'n') {
+        e.preventDefault();
+        if (typeof nsClear === 'function') { nsClear(); showKbToast('No-show report cleared'); }
         return;
       }
     }
@@ -3393,6 +3417,7 @@ async function appInit() {
         <div class="kb-row"><kbd>7</kbd><span>Rented Rooms</span></div>
         <div class="kb-row"><kbd>8</kbd><span>Immigration Check</span></div>
         <div class="kb-row"><kbd>9</kbd><span>Tourism Tax</span></div>
+        <div class="kb-row"><kbd>0</kbd><span>No-Show Tracker</span></div>
       </div>
       <div class="kb-section">
         <div class="kb-section-title">Departure Board</div>
@@ -3412,6 +3437,12 @@ async function appInit() {
       <div class="kb-section">
         <div class="kb-section-title">Checklist</div>
         <div class="kb-row"><kbd>Space</kbd><span>Tick next step</span></div>
+      </div>
+      <div class="kb-section">
+        <div class="kb-section-title">No-Show Tracker</div>
+        <div class="kb-row"><kbd>/</kbd><span>Focus search</span></div>
+        <div class="kb-row"><kbd>C</kbd><span>Copy for Excel</span></div>
+        <div class="kb-row"><kbd>N</kbd><span>New report (clear)</span></div>
       </div>
       <div class="kb-section">
         <div class="kb-section-title">Global</div>
