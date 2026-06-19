@@ -8,12 +8,32 @@
 //  Columns exported:
 //    Date | Status | Guest Name | Conf. No. | Channel/Source
 //    | No. of Nights | New Conf. No. (FO) | Room Rate | Total
+//
+//  CONNECTED MODULES:
+//   · db.js          — saveNoShow()/listenNoShow() sync this
+//                       data live to every colleague, like
+//                       Departures/Arrivals/Purpose already do.
+//   · natguess.js     — guessNat() flags a likely nationality.
+//   · guest-memory.js — gmAutoFill() silently overlays a known
+//                       nationality from past stays; gmLookup()
+//                       flags returning guests.
+//   · state.js        — arrGuests (Arrivals) is cross-checked:
+//                       if a no-show guest's name appears in
+//                       today's arrivals under a different
+//                       confirmation number, we suggest it as
+//                       the "New Conf. No." (likely rebooked).
+//   · auth.js         — logActivity() records loads/copies in
+//                       the shared admin activity log.
+//   · shifts.js       — stLog() drops a line in the active
+//                       shift's log when a report is copied.
 // ═══════════════════════════════════════════════════════════
 
 // ── State ─────────────────────────────────────────────────
-let nsGuests   = [];
+let nsGuests     = [];
 let nsReportDate = '';
-let nsSearch_  = '';
+let nsSearch_    = '';
+let _nsSaveTimer = null;
+let _nsBooted    = false;   // true once initial Firebase load has been applied
 
 // ── PDF.js worker URL ─────────────────────────────────────
 const PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -25,6 +45,28 @@ function initNoShow() {
   }
   const badge = document.getElementById('badge-noshow');
   if (badge) badge.textContent = '—';
+}
+
+// ── Apply data loaded from Firebase (boot + real-time sync) ──
+// Called once on app boot with the saved snapshot, and again
+// every time a colleague's change comes in over listenNoShow().
+function nsApplyLoad(snap) {
+  if (!snap || !snap.guests || !snap.guests.length) { _nsBooted = true; return; }
+
+  // Don't yank the table out from under someone mid-edit
+  // (typing a New Conf. No.) — same guard pattern used for
+  // Arrivals/Purpose in appInit().
+  const tbl = document.getElementById('nsTable');
+  const editing = tbl && tbl.contains(document.activeElement);
+  if (editing) { nsGuests = snap.guests; _nsBooted = true; return; }
+
+  nsGuests     = snap.guests;
+  nsReportDate = nsGuests[0]?.arrDate || '';
+  _nsBooted    = true;
+
+  nsShowResults();
+  nsRender();
+  nsUpdateBadge();
 }
 
 // ── File pick handler ─────────────────────────────────────
@@ -91,15 +133,29 @@ async function nsParsePDF(arrayBuffer) {
       return;
     }
 
+    // ── Nationality guess (natguess.js), then overlay anything
+    //    remembered from past stays (guest-memory.js) — same two-step
+    //    pattern Arrivals/Purpose already use, kept silent here.
+    guests.forEach(g => { g.nat = (typeof guessNat === 'function') ? guessNat(g.nameRaw) : ''; });
+    if (typeof gmAutoFill === 'function') gmAutoFill(guests, true);
+
     // Extract report date from first guest's arrival date
     nsReportDate = guests[0].arrDate || '';
     nsGuests = guests;
+
+    // Cross-check against today's Arrivals — if a no-show guest's name
+    // already appears under a different confirmation number, they were
+    // very likely rebooked by FO already.
+    nsCheckArrivals();
 
     nsSetLoading(false);
     nsShowResults();
     nsRender();
     nsUpdateBadge();
     showToast(`${guests.length} no-show${guests.length !== 1 ? 's' : ''} loaded ✓`, 'ok');
+
+    debounceSaveNoShow(true);
+    if (typeof logActivity === 'function') logActivity('noshow_loaded', `${guests.length} guest${guests.length !== 1 ? 's' : ''} · ${nsReportDate}`);
 
   } catch (err) {
     console.error('[noshow] PDF parse error:', err);
@@ -195,7 +251,8 @@ function nsExtractGuests(rows) {
       rateAmount: parseFloat(rateAmount.replace(/,/g, '')) || 0,
       potRev:     parseFloat(potRev.replace(/,/g, '')) || 0,
       confNo,
-      newConf:    '',   // filled by FO after rebooking
+      newConf:    '',   // filled by FO after rebooking (or auto-suggested from Arrivals)
+      nat:        '',   // filled by guessNat() / gmAutoFill() after parsing
     });
   }
 
@@ -227,6 +284,43 @@ function nsCleanSource(raw) {
     .replace(/EXPEDIA\.COM.*/i, 'Expedia')
     .replace(/\s*\(.*?\)/g, '')
     .trim() || 'Direct';
+}
+
+// ── Cross-reference against today's Arrivals ──────────────
+// If this no-show guest's name now appears in arrGuests (loaded
+// in the Arrivals panel) under a different confirmation number,
+// they were almost certainly rebooked by Front Office already.
+// We attach g.suggestedConf so the table can offer a one-click fill.
+function nsCheckArrivals() {
+  if (typeof arrGuests === 'undefined' || !arrGuests || !arrGuests.length) return;
+  if (typeof cleanName !== 'function') return;
+
+  nsGuests.forEach(g => {
+    g.suggestedConf = '';
+    const key = cleanName(g.nameRaw);
+    if (!key) return;
+    const hit = arrGuests.find(a => (a.name || '').trim() === key);
+    if (hit && hit.conf && hit.conf !== g.confNo && hit.conf !== g.newConf) {
+      g.suggestedConf = hit.conf;
+    }
+  });
+}
+
+// ── Apply a suggested conf number from the Arrivals match ──
+function nsUseSuggestedConf(idx) {
+  const g = nsGuests[idx];
+  if (!g || !g.suggestedConf) return;
+  g.newConf = g.suggestedConf;
+  nsRender();
+  debounceSaveNoShow();
+  showToast('New Conf. No. filled from Arrivals ✓', 'ok');
+}
+
+// ── New Conf. No. edit handler ─────────────────────────────
+function nsSetNewConf(idx, val) {
+  if (!nsGuests[idx]) return;
+  nsGuests[idx].newConf = val;
+  debounceSaveNoShow();
 }
 
 // ── UI helpers ─────────────────────────────────────────────
@@ -280,13 +374,31 @@ function nsRender() {
     return;
   }
 
-  tbody.innerHTML = rows.map((g, idx) => {
+  tbody.innerHTML = rows.map((g) => {
+    const idx    = nsGuests.indexOf(g);
     const name   = nsCleanName(g.nameRaw);
     const source = nsCleanSource(g.company);
+
+    // Guest Memory: known-returning-guest badge (read-only lookup, no writes)
+    const profile = (typeof gmLookup === 'function') ? gmLookup(cleanName ? cleanName(g.nameRaw) : name) : null;
+    const memBadge = (g._fromMemory || profile)
+      ? `<div class="ns-mem-badge" title="${profile?.lastSeen ? 'Stayed with us before · last seen ' + profile.lastSeen : 'Returning guest'}">✦ Known guest${profile?.lastSeen ? ' · ' + profile.lastSeen : ''}</div>`
+      : '';
+    const natTag = g.nat ? `<span class="ns-nat-tag"${g._fromMemory ? ' style="border-color:var(--sky);color:var(--sky);"' : ''}>${g.nat}</span>` : '';
+
+    const suggestHint = (g.suggestedConf && !g.newConf)
+      ? `<div class="ns-suggest-hint">🔗 Found in Arrivals: <strong>${g.suggestedConf}</strong>
+           <button class="ns-suggest-btn" onclick="nsUseSuggestedConf(${idx})">Use</button>
+         </div>`
+      : '';
+
     return `<tr>
       <td style="font-family:var(--mono);font-size:0.7rem;color:var(--text3);">${g.arrDate}</td>
       <td><span class="ns-status-pill">No Show</span></td>
-      <td style="font-weight:600;color:var(--text);">${name}</td>
+      <td>
+        <div style="font-weight:600;color:var(--text);">${name} ${natTag}</div>
+        ${memBadge}
+      </td>
       <td style="font-family:var(--mono);font-size:0.72rem;color:var(--text2);">${g.confNo || '—'}</td>
       <td style="font-size:0.75rem;color:var(--text2);">${source}</td>
       <td style="font-family:var(--mono);text-align:center;">${g.nights}</td>
@@ -297,8 +409,9 @@ function nsRender() {
           placeholder="Enter new conf…"
           value="${g.newConf || ''}"
           data-idx="${idx}"
-          oninput="nsGuests[${idx}].newConf=this.value"
+          oninput="nsSetNewConf(${idx}, this.value)"
         />
+        ${suggestHint}
       </td>
       <td style="font-family:var(--mono);font-size:0.75rem;color:var(--text2);text-align:right;">
         ${g.rateAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -310,7 +423,6 @@ function nsRender() {
   }).join('');
 }
 
-// ── Copy as TSV for Excel paste ───────────────────────────
 // ── Convert Opera DD-MM-YY to D-MMM for Excel (e.g. 16-Jun) ──
 const _MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function nsExcelDate(operaDate) {
@@ -323,6 +435,7 @@ function nsExcelDate(operaDate) {
   return day + '-' + _MONTH_ABBR[mon - 1];
 }
 
+// ── Copy as TSV for Excel paste ───────────────────────────
 function nsCopyForExcel() {
   if (!nsGuests.length) { showToast('No data to copy', 'info'); return; }
 
@@ -347,6 +460,24 @@ function nsCopyForExcel() {
 
   copyToClipboard(lines.join('\n'), null, '');
   showToast(`${rows.length} rows copied — paste into Excel ✓`, 'ok');
+
+  // Leave a trace in the active shift's log and the global activity log,
+  // exactly like every other report-copy action in the app.
+  if (typeof stLog === 'function' && typeof activeShift !== 'undefined') {
+    stLog(activeShift, 'done', `🚫 No-show report copied (${rows.length} guest${rows.length !== 1 ? 's' : ''})`);
+    if (typeof _renderShiftContent === 'function' && document.getElementById('shiftContent')?.contains(document.getElementById('stLog-' + activeShift))) {
+      _renderShiftContent(activeShift);
+    }
+    if (typeof saveShifts === 'function') saveShifts(SHIFTS);
+  }
+  if (typeof logActivity === 'function') logActivity('noshow_copied', `${rows.length} guest${rows.length !== 1 ? 's' : ''} · ${nsReportDate}`);
+}
+
+// ── Debounced Firebase save (mirrors debounceSaveArrivals) ──
+function debounceSaveNoShow(immediate) {
+  clearTimeout(_nsSaveTimer);
+  if (immediate) { saveNoShow(nsGuests); return; }
+  _nsSaveTimer = setTimeout(() => saveNoShow(nsGuests), 4000);
 }
 
 // ── Clear / new report ────────────────────────────────────
@@ -364,6 +495,9 @@ function nsClear() {
   const srch = document.getElementById('nsSearch');
   if (srch) srch.value = '';
   nsUpdateBadge();
+
+  if (typeof saveNoShow === 'function') saveNoShow([]);
+  if (typeof logActivity === 'function') logActivity('noshow_cleared', '');
 }
 
 // ── Search ────────────────────────────────────────────────

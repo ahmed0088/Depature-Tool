@@ -346,7 +346,7 @@ function clRender2() {
                  <input type="file" id="cl-upload-${s.id}" accept="image/*" multiple style="display:none" onchange="clHandlePhotoUpload(event,${s.id})"/>
                  <button class="cl-step-btn edit-btn" onclick="openEditStep(${s.id})">✏️</button>
                  <button class="cl-step-btn del"      onclick="clDeleteStep(${s.id})">✕</button>`
-              : `<button class="cl-step-btn"          onclick="clSkip2(${s.id})">${skip ? '↩ Show' : 'Skip'}</button>`}
+              : `${s.panel ? `<button class="cl-step-btn" style="color:var(--sky);border-color:rgba(90,180,232,0.35);" onclick="showPanel('${s.panel}')" title="Open ${s.panel} panel">↗ Open</button>` : ''}<button class="cl-step-btn"          onclick="clSkip2(${s.id})">${skip ? '↩ Show' : 'Skip'}</button>`}
           </div>
         </div>
       </div>`;

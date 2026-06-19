@@ -118,6 +118,10 @@ async function saveCheckLog(log) {
   await fbSet('checkLog', { log, updatedAt: new Date().toISOString() });
 }
 
+async function saveNoShow(guests) {
+  await fbSet('noshow', { guests, date: new Date().toISOString().split('T')[0], updatedAt: new Date().toISOString() });
+}
+
 async function saveSettings(settings) {
   const current = await fbGet('settings') || {};
   await fbSet('settings', { ...current, ...settings, updatedAt: new Date().toISOString() });
@@ -127,7 +131,7 @@ async function saveSettings(settings) {
 async function loadAll() {
   try {
     const [departures, arrivals, purpose, checklist, shifts, feedback, settings,
-           arrLogData, purposeLogData, shiftLogData, checkLogData] = await Promise.all([
+           arrLogData, purposeLogData, shiftLogData, checkLogData, noshowData] = await Promise.all([
       fbGet('departures'),
       fbGet('arrivals'),
       fbGet('purpose'),
@@ -139,6 +143,7 @@ async function loadAll() {
       fbGet('purposeLog'),
       fbGet('shiftLog'),
       fbGet('checkLog'),
+      fbGet('noshow'),
     ]);
 
     return {
@@ -153,6 +158,7 @@ async function loadAll() {
       purposeLog:  purposeLogData || { log: [] },
       shiftLog:    shiftLogData   || { log: [] },
       checkLog:    checkLogData   || { log: [] },
+      noshow:      noshowData     || { guests: [] },
     };
   } catch (e) {
     console.warn('loadAll error:', e);
@@ -168,6 +174,7 @@ async function loadAll() {
       purposeLog: { log: [] },
       shiftLog:   { log: [] },
       checkLog:   { log: [] },
+      noshow:     { guests: [] },
     };
   }
 }
@@ -180,6 +187,7 @@ function listenPurpose(cb)    { fbListen('purpose',    cb); }
 function listenChecklist(cb)  { fbListen('checklist',  cb); }
 function listenShifts(cb)     { fbListen('shifts',     cb); }
 function listenSettings(cb)   { fbListen('settings',   cb); }
+function listenNoShow(cb)     { fbListen('noshow',     cb); }
 
 // ── Export / Import ───────────────────────────────────────
 async function exportAllData() {

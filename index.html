@@ -3171,6 +3171,9 @@ async function appInit() {
     purposeRender();
   }
 
+  // 7b — Apply no-shows
+  if (typeof nsApplyLoad === 'function') nsApplyLoad(data.noshow);
+
   // 8 — Apply feedback
   if (data.feedback && data.feedback.log) feedbackLog = data.feedback.log;
 
@@ -3231,6 +3234,10 @@ async function appInit() {
     if (editingPur) return;
     purposeGuests = snap.guests;
     purposeRender();
+  });
+
+  listenNoShow(snap => {
+    if (typeof nsApplyLoad === 'function') nsApplyLoad(snap);
   });
   
   listenChecklist(snap => {

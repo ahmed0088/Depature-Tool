@@ -4259,3 +4259,51 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
 }
 .ns-new-conf-input:focus { border-color: var(--accent); background: var(--card); }
 .ns-new-conf-input::placeholder { color: var(--text3); }
+
+/* ── Cross-module additions: nationality tag, memory badge, arrivals hint ── */
+.ns-nat-tag {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: var(--text3);
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 5px;
+  padding: 1px 6px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.ns-mem-badge {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  color: var(--sky);
+  margin-top: 2px;
+}
+.ns-suggest-hint {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  color: var(--mint);
+  background: rgba(62,207,142,0.08);
+  border: 1px solid rgba(62,207,142,0.25);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+.ns-suggest-btn {
+  margin-left: auto;
+  background: var(--mint);
+  color: #0a0c10;
+  border: none;
+  border-radius: 5px;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.ns-suggest-btn:hover { opacity: 0.85; }
