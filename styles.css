@@ -4307,3 +4307,286 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
   flex-shrink: 0;
 }
 .ns-suggest-btn:hover { opacity: 0.85; }
+
+/* ══════════════════════════════════════════════════════
+   GENERIC CARD — base container used across Departures,
+   Arrivals, Xref, Purpose, Nationality, Rent, Audit,
+   Immigration, Arrivals Processor. Was previously undefined.
+══════════════════════════════════════════════════════ */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  padding: 16px 18px;
+}
+
+/* ══════════════════════════════════════════════════════
+   ARRIVALS ↔ DEPARTURES CROSS-REFERENCE (xref-*)
+   Was previously 100% unstyled — 0 of 47 classes defined.
+══════════════════════════════════════════════════════ */
+
+/* KPI strip */
+.xref-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.xref-kpi {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  padding: 14px 16px;
+  transition: all 0.12s;
+}
+.xref-kpi:hover { border-color: var(--border2); transform: translateY(-1px); }
+.xref-kpi-val {
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 4px;
+  color: var(--text);
+  letter-spacing: -0.4px;
+}
+.xref-kpi-val.red   { color: var(--red); }
+.xref-kpi-val.green { color: var(--green); }
+.xref-kpi-val.sky   { color: var(--blue); }
+.xref-kpi-val.amber { color: var(--amber); }
+.xref-kpi-label {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+
+/* Filter tabs */
+.xref-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.xref-filter-btn {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.12s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.xref-filter-btn:hover { border-color: var(--border2); color: var(--text); }
+.xref-filter-btn.on { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
+.xref-filter-count {
+  background: var(--bg2);
+  border-radius: 10px;
+  padding: 1px 7px;
+  font-size: 0.6rem;
+  font-weight: 700;
+}
+.xref-filter-btn.on .xref-filter-count { background: var(--accent); color: #0a0c10; }
+
+/* Search bar */
+.xref-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  transition: border-color 0.12s;
+}
+.xref-search-wrap:focus-within { border-color: var(--accent); }
+.xref-search-icon { font-size: 0.8rem; opacity: 0.6; flex-shrink: 0; }
+.xref-search-wrap input {
+  flex: 1; background: none; border: none; outline: none;
+  color: var(--text); font-size: 0.78rem; font-family: inherit;
+}
+.xref-search-wrap input::placeholder { color: var(--text3); }
+
+/* Action bar */
+.xref-action-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+
+/* Table */
+.xref-table { width: 100%; border-collapse: collapse; min-width: 880px; }
+.xref-row td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.xref-row:hover td { background: var(--bg2); }
+.xref-row:last-child td { border-bottom: none; }
+.xref-row.xref-unassigned td { opacity: 0.95; }
+
+.xref-section-header td {
+  padding: 7px 12px;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+}
+.xref-section-header.ext-header td    { color: var(--sky); }
+.xref-section-header.new-header td    { color: var(--mint); }
+.xref-section-header.noroom-header td { color: var(--amber); }
+
+/* Room pill */
+.xref-room-pill {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  color: var(--text);
+}
+.xref-room-pill.ext { background: rgba(90,180,232,0.1); border-color: var(--blue-border); color: var(--sky); }
+.xref-room-pill.new { background: rgba(62,207,142,0.1); border-color: var(--green-border); color: var(--mint); }
+.xref-room-pill.unassigned { background: rgba(217,119,6,0.1); border-color: var(--amber-border); color: var(--amber); }
+
+/* Guest name / subtext / platform */
+.xref-arr-name { font-weight: 600; color: var(--text); font-size: 0.8rem; margin-bottom: 2px; }
+.xref-subtext  { font-family: var(--mono); font-size: 0.64rem; color: var(--text3); }
+.xref-platform { font-size: 0.74rem; color: var(--text2); white-space: nowrap; }
+
+/* Currently-in-room status (inside the table) */
+.xref-dep-status {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 5px;
+}
+.xref-dep-status.dep-due { background: rgba(217,119,6,0.12); color: var(--amber); border: 1px solid var(--amber-border); }
+.xref-dep-status.dep-out { background: rgba(22,163,74,0.12); color: var(--green); border: 1px solid var(--green-border); }
+
+/* Verdict badges */
+.xref-badge-ext, .xref-badge-new, .xref-badge-pending {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.xref-badge-ext     { background: rgba(90,180,232,0.12); color: var(--sky);   border: 1px solid var(--blue-border); }
+.xref-badge-new     { background: rgba(62,207,142,0.12); color: var(--mint); border: 1px solid var(--green-border); }
+.xref-badge-pending { background: rgba(217,119,6,0.12);  color: var(--amber);border: 1px solid var(--amber-border); }
+
+/* Row action buttons */
+.xref-copy-btn {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  width: 26px; height: 26px;
+  font-size: 0.74rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s;
+  color: var(--text2);
+}
+.xref-copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+.xref-assign-btn {
+  background: var(--accent-bg);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.xref-assign-btn:hover { background: var(--accent); color: #0a0c10; }
+
+/* Strip injected directly into Departure-board cards
+   (xrefInjectDepStrips() in arr-dep-xref.js) */
+.xref-dep-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  font-size: 0.7rem;
+}
+.xref-dep-strip-ext { background: rgba(90,180,232,0.08); border: 1px solid var(--blue-border); }
+.xref-dep-strip-new { background: rgba(62,207,142,0.08); border: 1px solid var(--green-border); }
+.xref-strip-icon { font-size: 0.9rem; flex-shrink: 0; }
+.xref-strip-text { flex: 1; color: var(--text2); line-height: 1.4; }
+.xref-strip-text strong { color: var(--text); }
+.xref-strip-badge {
+  font-family: var(--mono);
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 5px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.xref-strip-badge-ext { background: var(--sky);  color: #0a0c10; }
+.xref-strip-badge-new { background: var(--mint); color: #0a0c10; }
+
+@media (max-width: 860px) {
+  .xref-kpi-row { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ══════════════════════════════════════════════════════
+   SMALL GAPS FOUND IN FULL AUDIT
+══════════════════════════════════════════════════════ */
+
+/* Departure board KPI strip — 7 of 8 tiles had color modifiers,
+   k-dnd (the DND counter) was the one missing. */
+.k-dnd .dep-kpi-val { color: var(--rose); }
+.k-dnd .dep-kpi-bar { background: var(--rose); }
+
+/* Small inline company tag on a departure card row */
+.dc-mi { font-size: 0.66rem; color: var(--text3); margin-top: 2px; }
+.dc-row-meta { display: block; margin-top: 3px; }
+
+/* Adagio Pro panel header — every other panel uses .page-hd,
+   Adagio's header markup used an older, never-styled naming. */
+.panel-header { margin-bottom: 18px; }
+.panel-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.panel-title {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 1.2rem; font-weight: 700; color: var(--text); letter-spacing: -0.3px;
+}
+[data-theme="night-ops"] .panel-title { font-family: var(--serif); font-size: 1.5rem; }
+.panel-title-icon { font-size: 1.3rem; line-height: 1; }
+.panel-subtitle { font-family: var(--mono); font-size: 0.66rem; color: var(--text3); margin-top: 3px; }
+
+/* Housekeeping update reminder (Departures · Checked-Out bar) —
+   built dynamically in _hkTick(), states ok/warn/late never had CSS. */
+.hk-reminder {
+  display: flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: 0.66rem; font-weight: 600;
+  padding: 2px 8px; border-radius: 10px; margin-left: 8px;
+}
+.hk-reminder-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.hk-reminder-ok   { color: var(--green); background: rgba(22,163,74,0.1); }
+.hk-reminder-ok   .hk-reminder-dot { background: var(--green); }
+.hk-reminder-warn { color: var(--amber); background: rgba(217,119,6,0.1); }
+.hk-reminder-warn .hk-reminder-dot { background: var(--amber); }
+.hk-reminder-late { color: var(--red); background: rgba(220,38,38,0.12); }
+.hk-reminder-late .hk-reminder-dot { background: var(--red); animation: hkPulse 1.4s infinite; }
+@keyframes hkPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }

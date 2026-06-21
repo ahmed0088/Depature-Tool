@@ -1247,8 +1247,8 @@
     </div>
 
     <!-- Table -->
-    <div class="table-wrap">
-      <table class="data-table">
+    <div class="tbl-wrap">
+      <table>
         <thead>
           <tr>
             <th style="width:64px;">Room</th>
@@ -3488,6 +3488,11 @@ async function appInit() {
 <div class="mob-more-drawer" id="mobMoreDrawer" style="display:none;">
   <div class="mob-more-grid">
     <button class="mob-more-item" data-panel="purpose"     onclick="showPanel('purpose');toggleMobMore()"><span>📋</span>Purpose</button>
+    <button class="mob-more-item" data-panel="xref"         onclick="showPanel('xref');toggleMobMore()"><span>🔗</span>Arr ↔ Dep</button>
+    <button class="mob-more-item" data-panel="noshow"       onclick="showPanel('noshow');toggleMobMore()"><span>🚫</span>No-Shows</button>
+    <button class="mob-more-item" data-panel="arrivals-proc" onclick="showPanel('arrivals-proc');toggleMobMore()"><span>📊</span>Arr Processor</button>
+    <button class="mob-more-item" data-panel="guestmem"     onclick="showPanel('guestmem');toggleMobMore()"><span>🧠</span>Guest Memory</button>
+    <button class="mob-more-item" data-panel="adagio"       onclick="showPanel('adagio');toggleMobMore()"><span>⬡</span>Adagio Pro</button>
     <button class="mob-more-item" data-panel="nationality" onclick="showPanel('nationality');toggleMobMore()"><span>🌍</span>Nationality</button>
     <button class="mob-more-item" data-panel="rent"        onclick="showPanel('rent');toggleMobMore()"><span>🛏️</span>Rented Rooms</button>
     <button class="mob-more-item" data-panel="audit"       onclick="showPanel('audit');toggleMobMore()"><span>🌙</span>PM Rooms</button>
