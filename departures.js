@@ -1019,31 +1019,61 @@ function depCardHTML(r) {
     r.company ? r.company.substring(0,22) : '',
   ].filter(Boolean).join(' · ');
 
+  // ── Status accent color (used in left-border stripe) ─────
+  const accentColor = {
+    due:'var(--amber)', late:'var(--purple)', extended:'var(--teal)',
+    balance:'var(--red)', na:'var(--red)', out:'var(--green)', dnd:'var(--rose)'
+  }[es] || 'var(--amber)';
+
   return `<div class="dep-card ${sClass}${isSelected ? ' dep-sel-active' : ''}"
     data-room="${r.roomStr}"
     ${isSelectable ? `onclick="depToggleSelect('${r.roomStr}')"` : ''}>
     ${selTick}
-    ${vipHTML}
-    <div class="dc-band"></div>
 
-    <!-- Compact single-line row — click anywhere to expand -->
-    <div class="dc-row" onclick="depToggleExpand(this)">
-      <div class="dc-room">${r.roomStr}</div>
-      <div class="dc-sbadge ${badgeCls}">${badgeText}</div>
-      <div class="dc-row-spacer-sm" style="display:none"></div>
-      <div class="dc-row-name" ondblclick="event.stopPropagation();depEditName(${i})" title="Double-click to edit">${escapeHtml(r.name)}</div>
-      <div class="dc-row-meta dc-meta-line">${escapeHtml(metaLine)}</div>
-      <div class="dc-row-bal dc-bal-inline ${balClass}">
-        <span class="dc-bal-dot"></span>
-        <span class="dc-bal-amt-sm">${balText}</span>
+    <!-- ══ HEADER ROW ══ -->
+    <div class="dc-head" onclick="depToggleExpand(this.nextElementSibling)">
+
+      <!-- Left accent stripe -->
+      <div class="dc-stripe" style="background:${accentColor};"></div>
+
+      <!-- Room number block -->
+      <div class="dc-room-block">
+        <div class="dc-room">${r.roomStr}</div>
+        ${r.nights ? `<div class="dc-nights">${r.nights}n</div>` : ''}
       </div>
-      ${timeTag ? `<div class="dc-timetag-wrap dc-row-time">${timeTag}</div>` : ''}
-      ${r.note ? `<span class="dc-row-note-dot" title="${escapeHtml(r.note.split('\n')[0].substring(0,60))}">📝</span>` : ''}
-      <button class="dc-copy-card-btn dc-row-copy" title="Copy summary" onclick="event.stopPropagation();depCopyCard(${i})">📋</button>
-      <span class="dc-expand-arrow">▸</span>
+
+      <!-- Middle: guest name + meta -->
+      <div class="dc-main">
+        <div class="dc-name-row">
+          <span class="dc-name" ondblclick="event.stopPropagation();depEditName(${i})" title="Double-click to edit">${escapeHtml(r.name)}</span>
+          ${r.isVip ? '<span class="dc-vip-pip">★ VIP</span>' : ''}
+          ${r.note ? `<span class="dc-note-pip" title="${escapeHtml(r.note.split('\n')[0].substring(0,60))}">📝</span>` : ''}
+        </div>
+        <div class="dc-meta">
+          <span class="dc-source">${escapeHtml(srcClean)}</span>
+          ${r.company ? `<span class="dc-dot-sep">·</span><span class="dc-company">${escapeHtml(r.company.substring(0,28))}</span>` : ''}
+          <span class="dc-dot-sep">·</span>
+          <span class="dc-dates">${r.arrival}→${r.departure}</span>
+        </div>
+      </div>
+
+      <!-- Right: status badge + balance + actions -->
+      <div class="dc-right">
+        <div class="dc-top-right">
+          <div class="dc-sbadge ${badgeCls}">${badgeText}</div>
+          ${timeTag ? `<div class="dc-timetag-wrap">${timeTag}</div>` : ''}
+          <button class="dc-icon-btn" title="Copy summary" onclick="event.stopPropagation();depCopyCard(${i})">⧉</button>
+        </div>
+        <div class="dc-bal-pill ${balClass}">
+          <span class="dc-bal-dot"></span>
+          <span>${balText}</span>
+        </div>
+      </div>
+
+      <span class="dc-chevron">›</span>
     </div>
 
-    <!-- Expanded body — collapsed by default, click row to open -->
+    <!-- ══ EXPANDED BODY ══ -->
     <div class="dc-body dc-body-collapsed">
       ${overdueStrip}
       ${intentBanner}
@@ -1051,19 +1081,15 @@ function depCardHTML(r) {
       ${extRow}
       ${actHTML}
       <div class="dc-note-section">
-        <div class="dc-note-toggle" onclick="depToggleNote(this)">
-          <span class="dc-note-lbl">${r.note ? '📝 ' + escapeHtml(r.note.split('\n')[0].substring(0,35)) + (r.note.length > 35 ? '…' : '') : '+ add note'}</span>
-          <span class="dc-note-row-right">
-            <button class="dc-stamp-btn" onclick="event.stopPropagation();depStampNote(${i})" title="Timestamp">🕐</button>
-            <span class="dc-note-arrow">▸</span>
-          </span>
+        <div class="dc-note-header">
+          <span class="dc-note-lbl">📝 Notes</span>
+          <button class="dc-stamp-btn" onclick="event.stopPropagation();depStampNote(${i})" title="Add timestamp">🕐 Stamp</button>
         </div>
-        <div class="dc-note-body" style="display:none;">
-          <textarea class="dc-note" placeholder="Notes, luggage, requests…"
-            oninput="depNoteInput(${i},this.value)">${escapeHtml(r.note)}</textarea>
-        </div>
+        <textarea class="dc-note" placeholder="Notes, luggage, special requests…"
+          oninput="depNoteInput(${i},this.value)">${escapeHtml(r.note)}</textarea>
       </div>
     </div>
+
   </div>`;
 }
 
@@ -1072,13 +1098,22 @@ function escapeHtml(str) {
   return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]||m));
 }
 // ── Row expand / collapse ──────────────────────────────────
-function depToggleExpand(rowEl) {
-  const card  = rowEl.closest('.dep-card');
-  const body  = card.querySelector('.dc-body');
-  const arrow = rowEl.querySelector('.dc-expand-arrow');
-  const open  = !body.classList.contains('dc-body-collapsed');
+function depToggleExpand(bodyOrRow) {
+  // New card: called with body element directly (dc-head onclick passes nextElementSibling)
+  // Old fallback: called with row element, find body via closest card
+  let body, card;
+  if (bodyOrRow && bodyOrRow.classList.contains('dc-body')) {
+    body = bodyOrRow;
+    card = body.closest('.dep-card');
+  } else {
+    card = bodyOrRow ? bodyOrRow.closest('.dep-card') : null;
+    body = card ? card.querySelector('.dc-body') : null;
+  }
+  if (!body) return;
+  const chevron = card ? card.querySelector('.dc-chevron') : null;
+  const open = !body.classList.contains('dc-body-collapsed');
   body.classList.toggle('dc-body-collapsed', open);
-  if (arrow) arrow.textContent = open ? '▸' : '▾';
+  if (chevron) chevron.classList.toggle('dc-chevron-open', !open);
 }
 
 // ── Note toggle ────────────────────────────────────────────
@@ -1109,33 +1144,13 @@ function depStampNote(i) {
   const sep = depRooms[i].note ? '\n' : '';
   depRooms[i].note += sep + `[${t}] `;
 
-  // Find the card and update textarea directly — no full re-render
+  // Update textarea directly — no full re-render needed
   const card = [...document.querySelectorAll('.dep-card')]
     .find(c => c.dataset.room === depRooms[i].roomStr);
   if (card) {
     const ta = card.querySelector('.dc-note');
-    const body = card.querySelector('.dc-note-body');
-    const arrow = card.querySelector('.dc-note-arrow');
-    const lbl = card.querySelector('.dc-note-lbl');
     if (ta) {
       ta.value = depRooms[i].note;
-      // Expand the card body first if collapsed
-      const dcBody = card.querySelector('.dc-body');
-      const expandArrow = card.querySelector('.dc-expand-arrow');
-      if (dcBody && dcBody.classList.contains('dc-body-collapsed')) {
-        dcBody.classList.remove('dc-body-collapsed');
-        if (expandArrow) expandArrow.textContent = '▾';
-      }
-      // Make sure the note section is open
-      if (body) body.style.display = 'block';
-      if (arrow) arrow.textContent = '▾';
-      // Update preview snippet in header
-      const preview = card.querySelector('.dc-note-preview');
-      if (preview) {
-        const first = depRooms[i].note.split('\n')[0].substring(0, 30);
-        preview.textContent = first + (depRooms[i].note.length > 30 ? '…' : '');
-      }
-      // Focus at end
       ta.focus();
       ta.setSelectionRange(ta.value.length, ta.value.length);
     }
