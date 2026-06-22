@@ -2911,8 +2911,9 @@ function toggleMobMore() {
 
 // Sync sidebar badges → mobile nav badges
 function syncMobBadges() {
-  [['departures','badge-departures'], ['arrivals','badge-arrivals'],
-   ['checklist','badge-checklist'], ['shifts','badge-shifts']].forEach(([panel, srcId]) => {
+  // Bottom nav (4 fixed items)
+  [['departures','badge-departures'],['arrivals','badge-arrivals'],
+   ['checklist','badge-checklist'],['shifts','badge-shifts']].forEach(([panel, srcId]) => {
     const src  = document.getElementById(srcId);
     const dest = document.getElementById('mob-badge-' + panel);
     if (src && dest) {
@@ -2920,6 +2921,32 @@ function syncMobBadges() {
       dest.textContent = (v && v !== '0' && v !== '—') ? v : '';
       dest.style.display = (v && v !== '0' && v !== '—') ? 'flex' : 'none';
     }
+  });
+  // More drawer items — sync badge text from desktop sidebar badges
+  ['purpose','xref','noshow','arrivals-proc','guestmem','adagio',
+   'nationality','rent','audit','immig','tourism'].forEach(panel => {
+    const src  = document.getElementById('badge-' + panel);
+    const dest = document.getElementById('mob-badge-' + panel);
+    if (!src || !dest) return;
+    const v = src.textContent;
+    const show = v && v !== '0' && v !== '—';
+    dest.textContent = show ? v : '';
+    dest.style.display = show ? 'inline-flex' : 'none';
+  });
+  // Firebase dot in the drawer header
+  const mainDot = document.getElementById('fbDot');
+  const mobDot  = document.getElementById('mobFbDot');
+  const mobLbl  = document.getElementById('mobFbLabel');
+  if (mainDot && mobDot) {
+    mobDot.style.background  = mainDot.style.background;
+    mobDot.style.boxShadow   = mainDot.style.boxShadow;
+  }
+  const mainLbl = document.getElementById('fbLabel');
+  if (mainLbl && mobLbl) mobLbl.textContent = mainLbl.textContent;
+  // Active state on More-drawer items
+  const curPanel = document.querySelector('.panel.active')?.id?.replace('panel-','');
+  document.querySelectorAll('.mob-more-item[data-panel]').forEach(btn => {
+    btn.classList.toggle('mob-more-item-active', btn.dataset.panel === curPanel);
   });
 }
 
@@ -2938,6 +2965,12 @@ window.showPanel = function(name) {
 
 // Sync badges every 5 seconds
 setInterval(syncMobBadges, 5000);
+// Also sync mob theme button state whenever the theme changes
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.mob-theme-btn,.theme-btn,.login-theme-btn');
+  if (!btn || !btn.dataset.t) return;
+  document.querySelectorAll('.mob-theme-btn').forEach(b => b.classList.toggle('active', b.dataset.t === btn.dataset.t));
+});
 
 // ── Action log toggle state ───────────────────────────────
 let _logOpen = true; // dep action log starts open
@@ -3486,24 +3519,83 @@ async function appInit() {
 <!-- Mobile "More" drawer -->
 <div class="mob-more-overlay" id="mobMoreOverlay" onclick="toggleMobMore()" style="display:none;"></div>
 <div class="mob-more-drawer" id="mobMoreDrawer" style="display:none;">
-  <div class="mob-more-grid">
-    <button class="mob-more-item" data-panel="purpose"     onclick="showPanel('purpose');toggleMobMore()"><span>📋</span>Purpose</button>
-    <button class="mob-more-item" data-panel="xref"         onclick="showPanel('xref');toggleMobMore()"><span>🔗</span>Arr ↔ Dep</button>
-    <button class="mob-more-item" data-panel="noshow"       onclick="showPanel('noshow');toggleMobMore()"><span>🚫</span>No-Shows</button>
-    <button class="mob-more-item" data-panel="arrivals-proc" onclick="showPanel('arrivals-proc');toggleMobMore()"><span>📊</span>Arr Processor</button>
-    <button class="mob-more-item" data-panel="guestmem"     onclick="showPanel('guestmem');toggleMobMore()"><span>🧠</span>Guest Memory</button>
-    <button class="mob-more-item" data-panel="adagio"       onclick="showPanel('adagio');toggleMobMore()"><span>⬡</span>Adagio Pro</button>
-    <button class="mob-more-item" data-panel="nationality" onclick="showPanel('nationality');toggleMobMore()"><span>🌍</span>Nationality</button>
-    <button class="mob-more-item" data-panel="rent"        onclick="showPanel('rent');toggleMobMore()"><span>🛏️</span>Rented Rooms</button>
-    <button class="mob-more-item" data-panel="audit"       onclick="showPanel('audit');toggleMobMore()"><span>🌙</span>PM Rooms</button>
-    <button class="mob-more-item" data-panel="immig"       onclick="showPanel('immig');toggleMobMore()"><span>🛂</span>Immigration</button>
-    <button class="mob-more-item" data-panel="tourism"     onclick="showPanel('tourism');toggleMobMore()"><span>🏛️</span>Tourism Tax</button>
-    <button class="mob-more-item" id="mobAdminBtn"          onclick="openAdminPanel();toggleMobMore()" style="display:none;"><span>👥</span>Team</button>
-    <button class="mob-more-item"                           onclick="exportAllData();toggleMobMore()"><span>💾</span>Export</button>
-    <button class="mob-more-item"                           onclick="toggleMobMore();setTimeout(()=>document.querySelector('.mob-import-input').click(),100)"><span>📂</span>Import</button>
-    <button class="mob-more-item"                           onclick="authLogout();toggleMobMore()"><span>⏻</span>Sign Out</button>
+
+  <!-- Header: title + Firebase dot + theme switcher -->
+  <div class="mob-drawer-header">
+    <span class="mob-drawer-title">All Features</span>
+    <div class="mob-drawer-status">
+      <div id="mobFbDot" class="mob-fb-dot"></div>
+      <span id="mobFbLabel" class="mob-fb-label">Connecting…</span>
+    </div>
+    <div class="mob-drawer-themes">
+      <button class="mob-theme-btn" data-t="night-ops" onclick="setTheme('night-ops',this)" title="Night Ops">🌙</button>
+      <button class="mob-theme-btn" data-t="opera"     onclick="setTheme('opera',this)"     title="Opera">🔴</button>
+      <button class="mob-theme-btn" data-t="midnight"  onclick="setTheme('midnight',this)"  title="Midnight">🌌</button>
+    </div>
   </div>
-  <input type="file" accept=".json" class="mob-import-input" onchange="handleImport(this)" style="display:none"/>
+
+  <!-- Scrollable panel grid -->
+  <div class="mob-more-grid">
+    <button class="mob-more-item" data-panel="purpose"       onclick="showPanel('purpose');toggleMobMore()">
+      <span class="mob-item-icon">📋</span>
+      <span class="mob-more-badge" id="mob-badge-purpose"></span>Purpose
+    </button>
+    <button class="mob-more-item" data-panel="xref"           onclick="showPanel('xref');toggleMobMore()">
+      <span class="mob-item-icon">🔗</span>
+      <span class="mob-more-badge" id="mob-badge-xref"></span>Arr ↔ Dep
+    </button>
+    <button class="mob-more-item" data-panel="noshow"         onclick="showPanel('noshow');toggleMobMore()">
+      <span class="mob-item-icon">🚫</span>
+      <span class="mob-more-badge" id="mob-badge-noshow"></span>No-Shows
+    </button>
+    <button class="mob-more-item" data-panel="arrivals-proc"   onclick="showPanel('arrivals-proc');toggleMobMore()">
+      <span class="mob-item-icon">📊</span>
+      <span class="mob-more-badge" id="mob-badge-arrivals-proc"></span>Arr Processor
+    </button>
+    <button class="mob-more-item" data-panel="guestmem"       onclick="showPanel('guestmem');toggleMobMore()">
+      <span class="mob-item-icon">🧠</span>
+      <span class="mob-more-badge" id="mob-badge-guestmem"></span>Guest Memory
+    </button>
+    <button class="mob-more-item" data-panel="adagio"         onclick="showPanel('adagio');toggleMobMore()">
+      <span class="mob-item-icon">⬡</span>
+      <span class="mob-more-badge" id="mob-badge-adagio"></span>Adagio Pro
+    </button>
+    <button class="mob-more-item" data-panel="nationality"    onclick="showPanel('nationality');toggleMobMore()">
+      <span class="mob-item-icon">🌍</span>
+      <span class="mob-more-badge" id="mob-badge-nationality"></span>Nationality
+    </button>
+    <button class="mob-more-item" data-panel="rent"           onclick="showPanel('rent');toggleMobMore()">
+      <span class="mob-item-icon">🛏️</span>
+      <span class="mob-more-badge" id="mob-badge-rent"></span>Rented Rooms
+    </button>
+    <button class="mob-more-item" data-panel="audit"          onclick="showPanel('audit');toggleMobMore()">
+      <span class="mob-item-icon">🌙</span>
+      <span class="mob-more-badge" id="mob-badge-audit"></span>PM Rooms
+    </button>
+    <button class="mob-more-item" data-panel="immig"          onclick="showPanel('immig');toggleMobMore()">
+      <span class="mob-item-icon">🛂</span>
+      <span class="mob-more-badge" id="mob-badge-immig"></span>Immigration
+    </button>
+    <button class="mob-more-item" data-panel="tourism"        onclick="showPanel('tourism');toggleMobMore()">
+      <span class="mob-item-icon">🏛️</span>
+      <span class="mob-more-badge" id="mob-badge-tourism"></span>Tourism Tax
+    </button>
+    <button class="mob-more-item" id="mobAdminBtn"             onclick="openAdminPanel();toggleMobMore()" style="display:none;">
+      <span class="mob-item-icon">👥</span>Team
+    </button>
+  </div>
+
+  <!-- Utility strip: feedback · export · import · sign out -->
+  <div class="mob-util-strip">
+    <button class="mob-util-btn" onclick="openFeedback();toggleMobMore()">💬 Feedback</button>
+    <button class="mob-util-btn" onclick="exportAllData();toggleMobMore()">💾 Export</button>
+    <label  class="mob-util-btn" style="cursor:pointer;">
+      📂 Import
+      <input type="file" accept=".json" style="display:none;" onchange="handleImport(this);toggleMobMore()"/>
+    </label>
+    <button class="mob-util-btn" onclick="authLogout();toggleMobMore()">⏻ Sign Out</button>
+  </div>
+
 </div>
 
 </div><!-- /appWrapper -->

@@ -4590,3 +4590,141 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
 .hk-reminder-late { color: var(--red); background: rgba(220,38,38,0.12); }
 .hk-reminder-late .hk-reminder-dot { background: var(--red); animation: hkPulse 1.4s infinite; }
 @keyframes hkPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+/* ══════════════════════════════════════════════════════
+   MOBILE MORE DRAWER — UPGRADED
+   Drawer header · scrollable grid · utility strip
+   Badges on every item · Firebase dot · theme switcher
+══════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* Make drawer scrollable now it has 13+ items */
+  .mob-more-drawer {
+    max-height: 82vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 20px;
+  }
+
+  /* Drawer header row */
+  .mob-drawer-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-wrap: nowrap;
+  }
+  .mob-drawer-title {
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--text);
+    flex: 1;
+    white-space: nowrap;
+  }
+
+  /* Firebase status in drawer */
+  .mob-drawer-status {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 3px 8px;
+    flex-shrink: 0;
+  }
+  .mob-fb-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--amber);
+    flex-shrink: 0;
+    transition: background 0.3s;
+  }
+  .mob-fb-label {
+    font-family: var(--mono);
+    font-size: 0.55rem;
+    color: var(--text3);
+    white-space: nowrap;
+  }
+
+  /* Theme switcher pills in drawer */
+  .mob-drawer-themes {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .mob-theme-btn {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    border: 2px solid var(--border2);
+    background: var(--bg2);
+    font-size: 0.85rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.12s;
+    -webkit-tap-highlight-color: transparent;
+    flex-shrink: 0;
+  }
+  .mob-theme-btn.active { border-color: var(--accent); background: var(--accent-bg); }
+  .mob-theme-btn:active { transform: scale(0.9); }
+
+  /* Badge inside each drawer item */
+  .mob-item-icon {
+    font-size: 1.3rem;
+    line-height: 1;
+    display: block;
+    position: relative;
+  }
+  .mob-more-badge {
+    display: none;
+    position: absolute;
+    top: -4px; right: -6px;
+    min-width: 14px; height: 14px;
+    padding: 0 3px;
+    background: var(--rose);
+    color: #fff;
+    font-family: var(--mono);
+    font-size: 0.45rem;
+    font-weight: 700;
+    border-radius: 99px;
+    align-items: center; justify-content: center;
+    border: 1.5px solid var(--card);
+  }
+  .mob-more-item { position: relative; }
+  .mob-more-item .mob-item-icon { position: relative; display: inline-block; }
+  .mob-more-item-active {
+    background: var(--accent-bg) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+  }
+
+  /* Utility strip (Feedback · Export · Import · Sign Out) */
+  .mob-util-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .mob-util-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 9px 4px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    color: var(--text2);
+    font-size: 0.62rem;
+    font-weight: 600;
+    font-family: var(--mono);
+    cursor: pointer;
+    text-align: center;
+    -webkit-tap-highlight-color: transparent;
+    transition: all 0.12s;
+    white-space: nowrap;
+  }
+  .mob-util-btn:active { background: var(--card2); color: var(--accent); }
+}
