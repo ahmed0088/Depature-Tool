@@ -3247,14 +3247,10 @@ async function appInit() {
   // 10 — Set up real-time listeners
   listenDepartures(snap => {
     if (!snap || !snap.rooms) return;
-    // If the user is actively focused inside a departure card (typing a note,
-    // picking a time, editing a field) — skip the re-render entirely.
-    // Their own debounced save triggered this listener; re-rendering would
-    // collapse their card and kick them out of the input.
-    const depGrid = document.getElementById('depGrid');
-    const userIsTyping = depGrid && depGrid.contains(document.activeElement);
-    if (userIsTyping) {
-      // Still update the data model silently so it stays in sync
+    // Block re-render if the user is actively typing a note OR typed within
+    // the last 3 seconds — prevents Firebase echo from interrupting mid-sentence.
+    // depIsTyping() is defined in departures.js and covers both cases.
+    if (typeof depIsTyping === 'function' && depIsTyping()) {
       depRooms = snap.rooms;
       depLog   = snap.log || [];
       return;
