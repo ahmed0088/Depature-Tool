@@ -1027,7 +1027,7 @@ function depCardHTML(r) {
     <div class="dc-band"></div>
 
     <!-- Compact single-line row — click anywhere to expand -->
-    <div class="dc-row" onclick="depToggleExpand(this)">
+    <div class="dc-row">
       <div class="dc-room">${r.roomStr}</div>
       <div class="dc-sbadge ${badgeCls}">${badgeText}</div>
       <div class="dc-row-spacer-sm" style="display:none"></div>
@@ -1040,28 +1040,22 @@ function depCardHTML(r) {
       ${timeTag ? `<div class="dc-timetag-wrap dc-row-time">${timeTag}</div>` : ''}
       ${r.note ? `<span class="dc-row-note-dot" title="${escapeHtml(r.note.split('\n')[0].substring(0,60))}">📝</span>` : ''}
       <button class="dc-copy-card-btn dc-row-copy" title="Copy summary" onclick="event.stopPropagation();depCopyCard(${i})">📋</button>
-      <span class="dc-expand-arrow">▸</span>
     </div>
 
     <!-- Expanded body — collapsed by default, click row to open -->
-    <div class="dc-body dc-body-collapsed">
+    <div class="dc-body">
       ${overdueStrip}
       ${intentBanner}
       ${lateRow}
       ${extRow}
       ${actHTML}
       <div class="dc-note-section">
-        <div class="dc-note-toggle" onclick="depToggleNote(this)">
-          <span class="dc-note-lbl">${r.note ? '📝 ' + escapeHtml(r.note.split('\n')[0].substring(0,35)) + (r.note.length > 35 ? '…' : '') : '+ add note'}</span>
-          <span class="dc-note-row-right">
-            <button class="dc-stamp-btn" onclick="event.stopPropagation();depStampNote(${i})" title="Timestamp">🕐</button>
-            <span class="dc-note-arrow">▸</span>
-          </span>
+        <div class="dc-note-header">
+          <span class="dc-note-lbl">📝 Notes</span>
+          <button class="dc-stamp-btn" onclick="event.stopPropagation();depStampNote(${i})" title="Add timestamp">🕐 Stamp</button>
         </div>
-        <div class="dc-note-body" style="display:none;">
-          <textarea class="dc-note" placeholder="Notes, luggage, requests…"
-            oninput="depNoteInput(${i},this.value)">${escapeHtml(r.note)}</textarea>
-        </div>
+        <textarea class="dc-note" placeholder="Notes, luggage, special requests…"
+          oninput="depNoteInput(${i},this.value)">${escapeHtml(r.note)}</textarea>
       </div>
     </div>
   </div>`;

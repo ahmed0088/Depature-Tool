@@ -4563,3 +4563,116 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
   .dc-main { padding: 8px 6px 8px 8px; }
   .dc-name { font-size: 0.8rem; }
 }
+
+/* ══════════════════════════════════════════════════════
+   DEPARTURE CARDS — ALWAYS EXPANDED (no toggle)
+══════════════════════════════════════════════════════ */
+
+/* Body always visible — override any collapsed state */
+.dc-body                { display: block !important; }
+.dc-body-collapsed      { display: block !important; }
+
+/* Remove the clickable cursor from the header row
+   since it no longer expands anything */
+.dc-row { cursor: default; }
+
+/* Hide the expand arrow since it's no longer needed */
+.dc-expand-arrow { display: none !important; }
+
+/* Note section — always open, clean header */
+.dc-note-section {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.dc-note-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 7px;
+}
+.dc-note-lbl {
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  font-weight: 700;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.dc-note-body { display: block !important; }
+.dc-note-toggle { display: none !important; }
+.dc-note {
+  width: 100%;
+  min-height: 60px;
+  max-height: 150px;
+  box-sizing: border-box;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: var(--r);
+  color: var(--text);
+  font-size: 0.74rem;
+  font-family: var(--mono);
+  padding: 8px 10px;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.1s;
+  line-height: 1.55;
+  display: block;
+}
+.dc-note:focus { border-color: var(--accent); background: var(--card); }
+
+/* ── Mobile card fix ──────────────────────────────────
+   Cards were broken on mobile because the dep-grid
+   forced a min-width that overflowed the viewport.
+   On mobile: single column, full width, no min-width. */
+@media (max-width: 768px) {
+  .dep-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+  .dep-card {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  .dc-row {
+    flex-wrap: nowrap;
+    min-height: 56px;
+    gap: 6px;
+    padding: 0 8px 0 0;
+  }
+  .dc-room {
+    font-size: 1.05rem;
+    min-width: 44px;
+    padding: 8px 8px;
+  }
+  .dc-row-name {
+    font-size: 0.78rem;
+    flex: 1;
+    min-width: 0;
+  }
+  .dc-row-bal, .dc-bal-inline {
+    flex-shrink: 0;
+  }
+  .dc-body {
+    padding: 0 10px 12px;
+  }
+  .dc-actions {
+    gap: 5px;
+  }
+  .dca {
+    padding: 9px 6px;
+    font-size: 0.66rem;
+  }
+  /* Stack the 5-button grid into 2+3 on mobile */
+  .dc-actions.g5 {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .dc-actions.g5 .dca:last-child {
+    grid-column: 1 / -1;
+  }
+  .dc-note { min-height: 52px; }
+  /* Hide meta line on very small screens to avoid overflow */
+  .dc-meta-line { display: none; }
+  .dc-timetag-wrap { font-size: 0.6rem; }
+}
