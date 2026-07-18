@@ -1,159 +1,141 @@
-# Ibis Ops Platform
-### Ibis Styles Dubai · Front Desk Operations · 2026
+# 🏨 Ibis Ops Platform
 
-A live operations dashboard built for hotel front desk teams. Every module syncs in real time across all terminals via Firebase — no refresh, no paper checklists, no WhatsApp coordination.
+A front-office operations web app built for daily hotel shift work — departures, arrivals, night audit, shift tasks, and guest tracking, all synced in real time across every device on the team via Firebase.
 
----
-
-## Modules
-
-### 🚪 Departure Follow-Up
-Paste the Opera departure report and every due-out room becomes a live trackable card. Mark rooms as checked out, extended, or late checkout — all with undo. Includes guest photos, balance warnings, overdue highlights, timestamped notes, and a full action log. Smart Reload preserves all statuses and notes when you paste a fresh report mid-shift.
-
-### 🛎️ Arrivals
-Paste or upload the Opera arrivals report. Tracks room, name, nationality, nights, and booking source. One-click AI nationality guess from guest names. Manual add for walk-ins not in the report.
-
-### 📋 Purpose of Stay
-Night audit categorisation — Business / Leisure / Flight Crew. Sync directly from Arrivals with one button, or load separately. Export to Excel for Opera upload. Report title is editable.
-
-### ✅ Night Run Checklist
-17-step checklist covering the full night audit workflow — Before Run, Night Run, and After Run phases. Each step has a tag (CHECK / SAVE / SCAN / CHARGE / RUN), per-step notes, photo attachments, and an automatic completion timestamp. Edit mode lets you rename, reorder, add, or delete steps. New Night resets ticks without touching step configuration.
-
-### ⏰ Shift Tasks
-Four shifts — Morning, Afternoon, Mid, Night — each with a task list, progress bar, and activity log. Add tasks with optional hint text, drag to reorder, reset per shift. All four shifts sync live across every terminal.
-
-### 🌍 Nationality Report
-Paste the Opera `stat_countrybyday` report. Validates totals, flags unknown nationalities, and generates 240 copy-ready rows to paste straight into Excel cell B8 for DET submission.
-
-### 🛏️ Rented Rooms & Beds
-Combines the Opera `history_forecast` and `statroomtype` reports to calculate total rented rooms and beds, including twin beds from TWC room types.
-
-### 🌙 PM Rooms Audit
-Compare Opera in-house guest data against the Management Excel PM sheet. Highlights every room where name, dates, or balance differ. Generates corrected rows ready to paste back into Excel.
-
-### 🛂 Immigration Check
-Upload the Opera Immigration XML export. Flags every in-house guest missing nationality, gender, passport number, or first name — sorted by severity.
-
-### 🧾 Tourism Tax · TD Portal
-Finds guests where Opera marks the arrival time with an asterisk (*) — meaning they physically checked in the next calendar day after their booking date. Shows the corrected TD portal arrival date for each room so you can fix it manually.
+No build step, no framework. Plain HTML/CSS/JS, deployable by dropping the files on any static host.
 
 ---
 
-## Opera Cloud · Report Sources
+## What it does
 
-| Module | Opera Path | Format |
+| Module | File(s) | What it's for |
 |---|---|---|
-| Departures | Front Desk → Departures → Download | Delimited Data (.txt) |
-| Arrivals | Front Desk → Arrivals → Export | Excel or CSV |
-| Tourism Tax | Front Desk → Arrivals → Export | Delimited Data (.txt) |
-| Nationality | Reports → stat_countrybyday | Delimited Data (.txt) |
-| Rented Rooms (1) | Reports → history_forecast | Delimited Data (.txt) |
-| Rented Rooms (2) | Reports → statroomtype | Delimited Data (.txt) |
-| PM Rooms Audit | Front Desk → In-House by Room | Delimited Data (.txt) |
-| Immigration | Front Desk → Immigration Report → Export | XML |
+| 🚪 **Departures** | `departures.js` | Follow-up board for today's checkouts — status tracking (due/late/extended/DND/no-answer), balance flags, VIP badges, guest intent, HK copy formats, overdue alerts, swipe actions, trend history |
+| 🛎️ **Arrivals** | `arrivals-purpose.js` | Purpose-of-stay report, nationality/origin tracking |
+| 🔗 **Arr vs Dep** | `arr-dep-xref.js` | Cross-references arrivals against the departure board to instantly verdict "can this guest extend?" |
+| 📊 **Arrivals Processor** | `arrivals-proc.js` | Opera export → package-code mapping → day-by-day F&B/upsell breakdown → Excel export |
+| ✅ **Night Checklist** | `checklist.js` | Night audit steps with photos, notes, timestamps, phase grouping |
+| 🕐 **Shift Tasks** | `shifts.js` | Per-shift (Morning/Afternoon/Mid/Night) task lists with drag-reorder and activity log |
+| 🚫 **No-Show Tracker** | `noshow.js` | No-show guest list with rebooking/confirmation tracking |
+| 🏛️ **Tourism Tax** | `tourism-tax.js` | Flags guests needing a TD Portal date correction |
+| 🧠 **Guest Memory** | `guest-memory.js` | Password-locked profile store — remembers nationality, email, purpose, origin per guest name for auto-fill on future stays |
+| 👥 **Auth & Roles** | `auth.js` | Firebase Authentication, role-based panel access, admin user management, activity log |
+| 💾 **Data layer** | `db.js` | Firebase Realtime Database read/write with automatic localStorage fallback when offline |
 
-For departures: Opera Cloud → Front Desk → Departures → Download as Delimited Data → open the .txt file → Ctrl+A → Ctrl+C → paste into the app.
+Shared utilities live in `utils.js`, `state.js`, and `natguess.js` (name-based nationality guesser).
 
 ---
 
-## File Structure
+## Cross-cutting features
 
-```
-index.html           — App shell, layout, all modals and panels
-styles.css           — All styling and theming (three colour schemes)
-firebase-config.js   — Firebase credentials and HOTEL_ID
-db.js                — Firebase Realtime Database read / write / listen
-state.js             — Shared app state (rooms, guests, shifts, etc.)
-utils.js             — Clock, clipboard, date parsers, toast notifications
-natguess.js          — Name → nationality lookup map
-departures.js        — Departure board logic and card rendering
-arrivals-purpose.js  — Arrivals and Purpose of Stay logic
-shifts.js            — Shift task rendering and persistence
-checklist.js         — Night audit checklist and photo handling
-reports.js           — Nationality, Rented Rooms, PM Audit, Immigration
-tourism-tax.js       — TD Portal date correction tool
-ibis_data.json       — Default data structure for fresh installs
-```
+These aren't tied to one panel — they work across the whole app:
+
+- **🔍 Global Search** (`global-search.js`) — press `Ctrl+K` or tap the search icon to jump straight to a room, guest, checklist step, or shift task from anywhere.
+- **📋 Shift Handover Digest** (`handover.js`) — one tap builds a copy/print-ready handover note combining a live status snapshot with the shared activity log.
+- **↺ Undo toasts** (`utils.js`) — destructive actions (deleting a task, resetting the checklist) happen instantly but leave a 6–8 second window to undo instead of a blocking confirm popup.
+- **📱 PWA / offline install** (`manifest.json`, `sw.js`, `icons/`) — installable to a phone/tablet home screen; the app shell loads even with no signal (live data still needs a connection).
+- **⌨️ Keyboard shortcuts** — `1`–`0` to jump between panels, `?` for the full cheat sheet, `/` to focus search, `T` to cycle themes. See the in-app shortcut sheet for the complete list.
+- **🎨 Three themes** — Night Ops (dark gold), Opera Cloud (light red), Midnight (deep blue) — synced per user profile.
+
+### Departures — the deep end
+
+Because it's the highest-traffic panel, Departures got extra investment:
+
+- Status auto-promotion (due → late past checkout time), LCO time picker, extension workflow with Opera-sync confirmation tracking
+- Balance-owing and VIP flags, guest intent banners (may extend / coming back / returning)
+- Bulk select with smart time-window selection, multiple copy formats for housekeeping handoff
+- **🔁 Returning-guest badge** — pulls from Guest Memory automatically, no extra lookup needed
+- **🔔 Overdue alerts** — a background check every 60s beeps (Web Audio, works offline) and fires a browser notification the moment a room crosses into overdue, so you don't have to be staring at the screen
+- **👆 Swipe gestures** — on mobile, swipe a card right to check out, left to mark DND
+- **📈 7-day trend chart** — average late checkouts, extensions, and balance-owing rooms per day, tracked automatically in the background
+- Full Excel export, undo log, print view
+
+---
+
+## Roles & permissions
+
+Defined in `auth.js` (`ROLES` object):
+
+| Role | Panels | Manage users | Export | Import | Clear data |
+|---|---|:---:|:---:|:---:|:---:|
+| 👑 Owner | All | ✓ | ✓ | ✓ | ✓ |
+| 🏅 Manager | All except Reports | ✓ | ✓ | — | — |
+| ⭐ Supervisor | All except Reports | — | ✓ | — | — |
+| 🛎️ Agent | Departures, Arrivals, Arr vs Dep, Shifts, Checklist | — | — | — | — |
+| 👁️ Read Only | Departures, Arrivals, Arr vs Dep, Shifts | — | — | — | — |
+
+Every action (checkouts, checklist ticks, shift task changes, user management) writes to a shared `activityLog` in Firebase — this is what powers the admin activity panel and the Shift Handover Digest.
+
+---
+
+## Tech stack
+
+- **Frontend:** Vanilla JavaScript, HTML, CSS — no build tools, no bundler
+- **Backend:** Firebase Realtime Database (data sync) + Firebase Authentication (login/roles)
+- **Offline:** `localStorage` fallback baked into every read/write in `db.js`; service worker caches the app shell for full offline install
+- **Libraries (via CDN):** SheetJS/XLSX (Excel export), PDF.js (PDF parsing)
 
 ---
 
 ## Setup
 
-### 1. Firebase
-Go to console.firebase.google.com → Add project → Enable Realtime Database (Europe-west1, test mode). Credentials are already configured in `firebase-config.js` for Ibis Dubai.
+1. **Firebase project** — create one at [console.firebase.google.com](https://console.firebase.google.com), enable **Realtime Database** and **Authentication** (Email/Password).
+2. **`firebase-config.js`** — not included in this repo (keeps credentials out of version control). Create it yourself:
+   ```js
+   const firebaseConfig = {
+     apiKey: "...",
+     authDomain: "...",
+     databaseURL: "...",
+     projectId: "...",
+     // ...
+   };
+   firebase.initializeApp(firebaseConfig);
+   const HOTEL_ID = "your-hotel-id"; // scopes all data under hotels/{HOTEL_ID}
+   ```
+3. **Host it** — any static host works (Firebase Hosting, GitHub Pages, Netlify). Just make sure the whole folder — including `icons/`, `manifest.json`, and `sw.js` — sits together at the same level as `index.html`.
+4. **First login** creates an Owner account automatically (see `auth.js` master-bypass logic) — from there, use the admin panel (👥 icon, Owner/Manager only) to add your team.
 
-All colleagues sharing the same `HOTEL_ID` share one live dataset. No login required — just open the URL.
+### Updating after a deploy
 
-```js
-const HOTEL_ID = "ibis_dubai";
+The service worker caches app files aggressively for offline use. After pushing changes, bump `CACHE_NAME` in `sw.js` (e.g. `ibis-ops-shell-v2`) so returning devices pick up the new version instead of a stale cache.
+
+---
+
+## File map
+
+```
+index.html              Shell — nav, panels, modals, keyboard shortcuts
+styles.css               All styling, 3 themes
+manifest.json / sw.js     PWA install + offline app-shell caching
+icons/                    App icons for home-screen install
+
+db.js                     Firebase read/write + localStorage fallback
+state.js                  Shared global state (arrays, checklist steps, shift defaults)
+utils.js                  Clipboard, toasts, undo-toast, date/name parsing, theme switching
+auth.js                   Login, roles, admin panel, activity log
+global-search.js          Ctrl+K command palette
+handover.js               Shift handover digest
+
+departures.js             Departure board (see "deep end" above)
+arrivals-purpose.js       Arrivals / purpose of stay
+arr-dep-xref.js           Arrivals ↔ Departures extension cross-reference
+arrivals-proc.js          Opera arrivals report processor
+noshow.js                 No-show tracker
+tourism-tax.js            TD Portal date-correction flagging
+checklist.js              Night audit checklist
+shifts.js                 Per-shift task lists
+guest-memory.js           Returning-guest profile store
+natguess.js               Nationality guesser from guest names
+reports.js                Misc reporting
+
+*-panel.html               Drop-in HTML snippets for panels shipped separately
+                            from index.html (xref, arrivals-proc, guest-memory)
 ```
 
-To run for a different property, change `HOTEL_ID` to any unique string.
-
-### 2. Hosting
-Drop all files into GitHub Pages, Netlify, Vercel, or any static host. No build step needed — plain HTML, CSS, and JS.
-
-```bash
-# Quick local test
-npx serve .
-# or
-python3 -m http.server 8080
-```
-
-### 3. Security Rules
-In Firebase Console → Realtime Database → Rules, paste:
-
-```json
-{
-  "rules": {
-    "hotels": {
-      "$hotel_id": {
-        ".read": true,
-        ".write": true
-      }
-    }
-  }
-}
-```
-
-This keeps each property's data isolated if you ever add more properties.
-
 ---
 
-## Real-Time Sync
+## Known limitations
 
-The app uses Firebase `.on('value')` listeners — any change made by one colleague appears on everyone else's screen within about one second, without any page refresh.
-
-The Firebase status indicator in the top bar shows **Firebase · Live** when connected and **Firebase · Offline** when not. If the connection drops, the app continues working from localStorage and pushes all changes back to Firebase once reconnected — nothing is lost.
-
----
-
-## Guest Photos on Departure Cards
-
-1. Open Outlook or any window with the guest photo
-2. Take a screenshot — Windows: **Win+Shift+S** or Print Screen
-3. Click the photo zone on the departure card
-4. The app will say "Ready — press Ctrl+V to paste"
-5. Press **Ctrl+V**
-
-The image is compressed and saved to Firebase automatically. You can also drag and drop an image file directly onto the photo zone. Click a photo to zoom, hover for the ✕ remove button.
-
----
-
-## Backup & Restore
-
-- **💾 Export** — downloads a full JSON snapshot of all live data
-- **📂 Import** — restores from a JSON backup (page reloads after import)
-
----
-
-## Keyboard Shortcuts
-
-| Key | Action |
-|---|---|
-| `Escape` | Close any open modal, drawer, or photo zoom |
-| `Ctrl+V` | Paste screenshot onto a departure card photo zone (click zone first) |
-
----
-
-*Ibis Styles Dubai · Front Desk Operations · 2026*
+- Live data (Firebase) still needs a connection — the offline install covers the app shell only, not real-time sync.
+- Trend history (`depTrends`) starts accumulating from first use; there's no way to backfill past days.
+- `firebase-config.js` must be supplied separately — it's intentionally excluded from this bundle to avoid leaking credentials.
