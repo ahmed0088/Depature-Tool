@@ -38,7 +38,13 @@ function clAddStep() {
 }
 
 function clDeleteStep(id) {
-  if (!confirm('Delete this step?')) return;
+  const idx  = CL_STEPS.findIndex(s => s.id === id);
+  if (idx < 0) return;
+  const step = CL_STEPS[idx];
+  const wasDone    = clState.done.has(id);
+  const wasSkipped = clState.skipped.has(id);
+  const photo = clPhotos[id], note = clNotes[id], doneTime = clDoneTimes[id];
+
   CL_STEPS = CL_STEPS.filter(s => s.id !== id);
   clState.done.delete(id);
   clState.skipped.delete(id);
@@ -47,6 +53,19 @@ function clDeleteStep(id) {
   delete clDoneTimes[id];
   clRender2();
   clSaveAll();
+
+  if (typeof showUndoToast === 'function') {
+    showUndoToast(`Deleted step "${step.name}"`, () => {
+      CL_STEPS.splice(idx, 0, step);
+      if (wasDone) clState.done.add(id);
+      if (wasSkipped) clState.skipped.add(id);
+      if (photo !== undefined) clPhotos[id] = photo;
+      if (note !== undefined) clNotes[id] = note;
+      if (doneTime !== undefined) clDoneTimes[id] = doneTime;
+      clRender2();
+      clSaveAll();
+    });
+  }
 }
 
 // ── Move a checklist step up or down within its phase ─────
@@ -463,6 +482,11 @@ function clUpdateProgress() {
 
 function clReset() {
   if (!confirm('Reset all checkboxes for a new night?')) return;
+  const prevDone    = new Set(clState.done);
+  const prevSkipped = new Set(clState.skipped);
+  const prevDoneTimes = { ...clDoneTimes };
+  const prevNotes      = { ...clNotes };
+
   clState.done.clear();
   clState.skipped.clear();
   clDoneTimes = {};
@@ -470,5 +494,17 @@ function clReset() {
   // Keep photos (they are step-level reference, not per-night)
   clRender2();
   clSaveAll();
-  showToast('Checklist reset for new night ✓');
+
+  if (typeof showUndoToast === 'function') {
+    showUndoToast('Checklist reset for new night', () => {
+      clState.done    = prevDone;
+      clState.skipped = prevSkipped;
+      clDoneTimes = prevDoneTimes;
+      clNotes     = prevNotes;
+      clRender2();
+      clSaveAll();
+    }, 8000);
+  } else {
+    showToast('Checklist reset for new night ✓');
+  }
 }

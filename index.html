@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Ibis Styles · Ops Platform</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌙</text></svg>"/>
+<!-- PWA — installable, works offline for the app shell -->
+<link rel="manifest" href="manifest.json"/>
+<meta name="theme-color" content="#080b10"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Ibis Ops"/>
+<link rel="apple-touch-icon" href="icons/icon-192.png"/>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -376,6 +383,8 @@
     <div class="tb-pill live">● Live</div>
     <div class="tb-pill occ-pill" id="topbarOcc" style="display:none;">🏨 <span id="occLabel">—</span></div>
     <div class="tb-pill" id="topbarTime">—</div>
+    <div class="icon-round mob-hide" onclick="gsOpen()" title="Search — room / guest / task (Ctrl+K)">🔍</div>
+    <div class="icon-round mob-hide" onclick="hoOpen()" title="Shift Handover">📋</div>
     <div class="icon-round mob-hide" onclick="openFeedback()"  title="Feedback">💬</div>
     <div class="icon-round mob-hide" onclick="document.getElementById('kbModal').classList.toggle('open')" title="Keyboard shortcuts (?)">⌨</div>
     <div class="icon-round mob-hide" onclick="exportAllData()" title="Export backup">💾</div>
@@ -3054,6 +3063,13 @@ function clearImmig() {
       return;
     }
 
+    // ── Ctrl/Cmd+K — global search (works even while typing) ──
+    if ((e.key || '').toLowerCase() === 'k' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      gsOpen();
+      return;
+    }
+
     // ── ? — cheat sheet (always, even in input) ─────────
     if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
       e.preventDefault();
@@ -3427,6 +3443,40 @@ async function appInit() {
   <div class="cl-lightbox-caption" id="clLightboxCaption"></div>
 </div>
 
+<!-- ── Global Search / Command Palette ── -->
+<div class="modal-bg" id="gsModal">
+  <div class="modal gs-modal">
+    <input id="gsInput" class="gs-input" placeholder="Search room number, guest name, checklist step, task…"
+           oninput="gsSearch(this.value)" onkeydown="gsKeyNav(event)" autocomplete="off"/>
+    <div class="gs-results" id="gsResults"></div>
+    <div class="gs-footer">↑↓ navigate · ↵ select · Esc close</div>
+  </div>
+</div>
+
+<!-- ── Shift Handover Digest ── -->
+<div class="modal-bg" id="hoModal">
+  <div class="modal ho-modal">
+    <div class="kb-modal-head">
+      <h3>📋 Shift Handover</h3>
+      <button class="kb-close" onclick="hoClose()">✕</button>
+    </div>
+    <div class="ho-controls">
+      <label for="hoRange">Cover the last</label>
+      <select id="hoRange" onchange="hoGenerate()">
+        <option value="8">8 hours</option>
+        <option value="12">12 hours</option>
+        <option value="24">24 hours</option>
+        <option value="168">7 days</option>
+      </select>
+      <div style="flex:1"></div>
+      <button class="btn sm" onclick="hoGenerate()">↺ Refresh</button>
+      <button class="btn sm gold" onclick="hoCopy()">📋 Copy</button>
+      <button class="btn sm" onclick="hoPrint()">🖨 Print</button>
+    </div>
+    <div class="ho-body" id="hoBody"></div>
+  </div>
+</div>
+
 <!-- ── Keyboard shortcut cheat sheet ── -->
 <div class="modal-bg" id="kbModal">
   <div class="modal kb-modal">
@@ -3475,7 +3525,8 @@ async function appInit() {
       </div>
       <div class="kb-section">
         <div class="kb-section-title">Global</div>
-        <div class="kb-row"><kbd>T</kbd><span>Toggle theme</span></div>
+        <div class="kb-row"><kbd>Ctrl</kbd>+<kbd>K</kbd><span>Global search — jump to room/guest/task</span></div>
+      <div class="kb-row"><kbd>T</kbd><span>Toggle theme</span></div>
         <div class="kb-row"><kbd>?</kbd><span>Show / hide this panel</span></div>
         <div class="kb-row"><kbd>Esc</kbd><span>Close / cancel / back</span></div>
       </div>
@@ -3757,6 +3808,16 @@ async function appInit() {
 
 <script src="guest-memory.js"></script>
 <script src="auth.js"></script>
+<script src="global-search.js"></script>
+<script src="handover.js"></script>
+<script>
+  // ── PWA: register service worker for offline app-shell ──
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(err => console.warn('[SW] registration failed:', err));
+    });
+  }
+</script>
 <script>
 // ── Auth-gated boot ───────────────────────────────────────
 (function boot() {

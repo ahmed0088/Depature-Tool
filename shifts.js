@@ -204,14 +204,27 @@ function stAddTask(key) {
 }
 
 function stDelete(key, id) {
-  if (!confirm('Delete this task?')) return;
-  const task = SHIFTS[key].tasks.find(t => t.id === id);
+  const idx  = SHIFTS[key].tasks.findIndex(t => t.id === id);
+  if (idx < 0) return;
+  const task = SHIFTS[key].tasks[idx];
+  const wasDone = SHIFTS[key].done.includes(id);
+
   stLog(key, 'deleted', task?.name || id);
   logActivity('shift_task_deleted', `[${SHIFTS[key].label}] ${task?.name || id}`);
   SHIFTS[key].tasks = SHIFTS[key].tasks.filter(t => t.id !== id);
   SHIFTS[key].done  = SHIFTS[key].done.filter(d => d !== id);
   _renderShiftContent(key);
   saveShifts(SHIFTS);
+
+  if (typeof showUndoToast === 'function') {
+    showUndoToast(`Deleted "${task.name}"`, () => {
+      SHIFTS[key].tasks.splice(idx, 0, task);
+      if (wasDone) SHIFTS[key].done.push(id);
+      stLog(key, 'added', task.name + ' (restored)');
+      _renderShiftContent(key);
+      saveShifts(SHIFTS);
+    });
+  }
 }
 
 function openEditTask(key, id) {

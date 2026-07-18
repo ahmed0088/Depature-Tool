@@ -154,6 +154,47 @@ function showToast(msg, type = 'ok') {
   toast._t = setTimeout(() => { toast.style.opacity = '0'; }, 2500);
 }
 
+// ── Undo toast ────────────────────────────────────────────
+// Generic "soft delete" pattern: perform the action immediately,
+// but show a toast with an Undo button for a few seconds.
+// Usage:
+//   showUndoToast('Task deleted', () => { restore the item });
+let _undoTimer = null;
+function showUndoToast(msg, undoFn, timeoutMs = 6000) {
+  let toast = document.getElementById('undoToast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'undoToast';
+    toast.className = 'undo-toast';
+    document.body.appendChild(toast);
+  }
+  clearTimeout(_undoTimer);
+  let remaining = Math.round(timeoutMs / 1000);
+  const render = () => {
+    toast.innerHTML = `
+      <span class="undo-toast-msg">${msg}</span>
+      <button class="undo-toast-btn" id="undoToastBtn">↺ Undo</button>
+      <span class="undo-toast-timer">${remaining}s</span>`;
+    document.getElementById('undoToastBtn').onclick = () => {
+      clearTimeout(_undoTimer);
+      toast.classList.remove('show');
+      if (typeof undoFn === 'function') undoFn();
+    };
+  };
+  render();
+  toast.classList.add('show');
+  const tick = setInterval(() => {
+    remaining -= 1;
+    const t = toast.querySelector('.undo-toast-timer');
+    if (t) t.textContent = remaining + 's';
+    if (remaining <= 0) clearInterval(tick);
+  }, 1000);
+  _undoTimer = setTimeout(() => {
+    clearInterval(tick);
+    toast.classList.remove('show');
+  }, timeoutMs);
+}
+
 // ── Theme ─────────────────────────────────────────────────
 function setTheme(name, btn) {
   document.documentElement.setAttribute('data-theme', name);
