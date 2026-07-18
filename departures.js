@@ -42,7 +42,216 @@ function _hkTick() {
   el.className       = 'hk-reminder hk-reminder-' + state;
 }
 
+// ── Overdue LCO Alerts — sound + browser notification ──────
+let _alertedRooms      = new Set();
+let _depAlertTickerID  = null;
+let depAlertsOn        = localStorage.getItem('dep_alerts') !== 'off';
 
+function depToggleAlerts() {
+  depAlertsOn = !depAlertsOn;
+  localStorage.setItem('dep_alerts', depAlertsOn ? 'on' : 'off');
+  if (depAlertsOn && 'Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+  _renderAlertToggle();
+  showToast(depAlertsOn ? '🔔 Overdue alerts ON' : '🔕 Overdue alerts OFF', 'info');
+  if (depAlertsOn) _depCheckOverdueAlerts();
+}
+
+function _renderAlertToggle() {
+  const btn = document.getElementById('depAlertToggle');
+  if (!btn) return;
+  btn.textContent = depAlertsOn ? '🔔' : '🔕';
+  btn.classList.toggle('on', depAlertsOn);
+}
+
+// Two-tone beep synthesised with Web Audio — no external file,
+// works fully offline (important for the PWA install).
+function _depBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ping = (freq, delay, dur) => setTimeout(() => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.type = 'sine'; o.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+      o.start(); o.stop(ctx.currentTime + dur);
+    }, delay);
+    ping(880, 0, 0.45);
+    ping(660, 220, 0.35);
+  } catch (e) { /* Web Audio unavailable/blocked — fail silently */ }
+}
+
+function _depCheckOverdueAlerts() {
+  if (!depAlertsOn || typeof depRooms === 'undefined' || !depRooms.length) return;
+  _renderAlertToggle();
+
+  const overdueNow = depRooms.filter(r => {
+    const es = effectiveStatus(r);
+    return isLcoOverdue(r) && es !== 'out' && es !== 'extended' && es !== 'na' && es !== 'dnd';
+  });
+  // Rooms that resolved since the last check can re-alert if they somehow
+  // become overdue again later (e.g. LCO time re-set).
+  const stillOverdueSet = new Set(overdueNow.map(r => r.roomStr));
+  _alertedRooms.forEach(rm => { if (!stillOverdueSet.has(rm)) _alertedRooms.delete(rm); });
+
+  const newlyOverdue = overdueNow.filter(r => !_alertedRooms.has(r.roomStr));
+  if (!newlyOverdue.length) return;
+  newlyOverdue.forEach(r => _alertedRooms.add(r.roomStr));
+
+  _depBeep();
+  if ('Notification' in window && Notification.permission === 'granted') {
+    const names = newlyOverdue.slice(0, 3).map(r => `${r.roomStr} (${r.name})`).join(', ');
+    try {
+      new Notification('⚠ Late checkout overdue', {
+        body: newlyOverdue.length > 3 ? `${names} +${newlyOverdue.length - 3} more` : names,
+        tag:  'dep-overdue',
+      });
+    } catch (e) {}
+  }
+  showToast(`⚠ ${newlyOverdue.length} room${newlyOverdue.length > 1 ? 's' : ''} overdue for checkout`, 'err');
+}
+
+function _depStartAlertTicker() {
+  if (_depAlertTickerID) return;
+  _depAlertTickerID = setInterval(_depCheckOverdueAlerts, 60000);
+}
+_depStartAlertTicker();
+
+// ── Swipe gestures (mobile) ─────────────────────────────────
+// Swipe a card right → quick checkout · swipe left → mark DND.
+// Attached once, delegated on the grid container so re-renders
+// (which replace innerHTML) don't need to re-bind anything.
+let _swipeCard = null, _swipeStartX = 0, _swipeStartY = 0, _swiping = false;
+const DEP_SWIPE_THRESHOLD = 90;
+
+function _depInitSwipe() {
+  const grid = document.getElementById('depGrid');
+  if (!grid || grid._swipeBound) return;
+  grid._swipeBound = true;
+
+  grid.addEventListener('touchstart', e => {
+    const card = e.target.closest('.dep-card');
+    if (!card || card.classList.contains('dep-sel-active')) return;
+    if (typeof _selGroup !== 'undefined' && _selGroup) return; // don't fight bulk-select mode
+    _swipeCard   = card;
+    _swipeStartX = e.touches[0].clientX;
+    _swipeStartY = e.touches[0].clientY;
+    _swiping     = false;
+  }, { passive: true });
+
+  grid.addEventListener('touchmove', e => {
+    if (!_swipeCard) return;
+    const dx = e.touches[0].clientX - _swipeStartX;
+    const dy = e.touches[0].clientY - _swipeStartY;
+    if (!_swiping && Math.abs(dx) > 16 && Math.abs(dx) > Math.abs(dy) * 1.5) _swiping = true;
+    if (_swiping) {
+      _swipeCard.style.transform = `translateX(${dx}px)`;
+      _swipeCard.classList.toggle('dc-swipe-right', dx > 30);
+      _swipeCard.classList.toggle('dc-swipe-left',  dx < -30);
+    }
+  }, { passive: true });
+
+  grid.addEventListener('touchend', e => {
+    if (!_swipeCard) return;
+    const card = _swipeCard;
+    const dx   = e.changedTouches[0].clientX - _swipeStartX;
+    card.style.transform = '';
+    card.classList.remove('dc-swipe-right', 'dc-swipe-left');
+
+    if (_swiping && Math.abs(dx) > DEP_SWIPE_THRESHOLD) {
+      const room = card.dataset.room;
+      const idx  = depRooms.findIndex(r => r.roomStr === room);
+      if (idx >= 0) {
+        const r  = depRooms[idx];
+        const es = effectiveStatus(r);
+        if (navigator.vibrate) navigator.vibrate(15);
+        if (dx > 0 && es !== 'out' && es !== 'extended') {
+          depCheckOut(idx);
+          showToast(`✓ Room ${room} checked out (swipe)`, 'ok');
+        } else if (dx < 0 && es !== 'out' && es !== 'extended' && es !== 'dnd') {
+          depAction(idx, 'dnd');
+          showToast(`🚫 Room ${room} marked DND (swipe)`, 'info');
+        }
+      }
+    }
+    _swipeCard = null; _swiping = false;
+  });
+}
+
+// ── Weekly trend tracking ────────────────────────────────────
+// Snapshots today's counts to hotels/{HOTEL_ID}/depTrends/{date}
+// (debounced — depRender fires on every keystroke, we don't need
+// a write that often). Old days accumulate automatically.
+let _depTrendTimer = null;
+
+function _depQueueTrendSnapshot() {
+  clearTimeout(_depTrendTimer);
+  _depTrendTimer = setTimeout(_depSaveTrendSnapshot, 5000);
+}
+
+async function _depSaveTrendSnapshot() {
+  if (typeof depRooms === 'undefined' || !depRooms.length) return;
+  if (typeof fbSet !== 'function') return;
+  const today = new Date().toISOString().split('T')[0];
+  const c = depCounts();
+  try {
+    await fbSet('depTrends/' + today, {
+      date: today, total: c.all, due: c.due, late: c.late,
+      extended: c.extended, out: c.out, na: c.na, dnd: c.dnd, balance: c.balance,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (e) { /* offline — fbSet already falls back to localStorage */ }
+}
+
+async function depShowTrends() {
+  const modal = document.getElementById('depTrendsModal');
+  const body  = document.getElementById('depTrendsBody');
+  if (!modal || !body) return;
+  modal.classList.add('open');
+  body.innerHTML = `<div class="gs-empty">Loading trend history…</div>`;
+
+  let days = [];
+  try {
+    const snap = await fbGet('depTrends');
+    days = Object.values(snap || {}).sort((a, b) => a.date < b.date ? -1 : 1).slice(-7);
+  } catch (e) {}
+
+  if (!days.length) {
+    body.innerHTML = `<div class="gs-empty">No trend history yet — check back after a few days of use.</div>`;
+    return;
+  }
+
+  const maxLate = Math.max(1, ...days.map(d => d.late || 0));
+  const maxExt  = Math.max(1, ...days.map(d => d.extended || 0));
+  const avgLate = (days.reduce((s, d) => s + (d.late || 0), 0) / days.length).toFixed(1);
+  const avgExt  = (days.reduce((s, d) => s + (d.extended || 0), 0) / days.length).toFixed(1);
+  const avgBal  = (days.reduce((s, d) => s + (d.balance || 0), 0) / days.length).toFixed(1);
+
+  const bars = (label, key, max, color) => `
+    <div class="ho-section">
+      <div class="ho-section-title">${label}</div>
+      <div class="dep-trend-chart">
+        ${days.map(d => `
+          <div class="dep-trend-col">
+            <div class="dep-trend-bar" style="height:${Math.max(4, (d[key] || 0) / max * 60)}px;background:${color};" title="${d[key] || 0}"></div>
+            <div class="dep-trend-val">${d[key] || 0}</div>
+            <div class="dep-trend-day">${d.date.slice(5)}</div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+
+  body.innerHTML = `
+    <div class="ho-section">
+      <div class="ho-snap-row">Avg late checkouts/day: <strong>${avgLate}</strong></div>
+      <div class="ho-snap-row">Avg extensions/day: <strong>${avgExt}</strong></div>
+      <div class="ho-snap-row">Avg rooms w/ balance owing: <strong>${avgBal}</strong></div>
+    </div>
+    ${bars('🕐 Late Checkouts', 'late', maxLate, 'var(--amber)')}
+    ${bars('↪ Extensions', 'extended', maxExt, 'var(--sky)')}`;
+}
 
 // ── Parse raw Opera text ───────────────────────────────────
 function parseDepReport(raw) {
@@ -104,7 +313,7 @@ function processDep() {
   document.getElementById('depDateLabel').textContent = `${totalToday} rooms departing · ${depRooms[0]?.departure || ''}`;
   document.getElementById('depBoard').style.display      = 'block';
   document.getElementById('depUploadCard').style.display = 'none';
-  ['depPrintBtn','depExportBtn','depViewToggle','depReloadBtn'].forEach(id => {
+  ['depPrintBtn','depExportBtn','depViewToggle','depReloadBtn','depAlertToggle','depTrendsBtn'].forEach(id => {
     const el = document.getElementById(id); if (el) el.style.display = '';
   });
 
@@ -650,6 +859,10 @@ function depRender() {
 
   // Inject arrival warnings into dep cards (arr-dep-xref.js)
   if (typeof xrefInjectDepWarnings === 'function') xrefInjectDepWarnings();
+
+  _depInitSwipe();
+  _depCheckOverdueAlerts();
+  _depQueueTrendSnapshot();
 }
 
 // ── Quick Jump bar ─────────────────────────────────────────
@@ -833,6 +1046,10 @@ function depCardHTML(r) {
 
   const srcClean  = r.source.substring(0,26) + (r.source.length > 26 ? '…' : '');
   const vipHTML   = r.isVip ? '<div class="dc-vip">⭐ VIP</div>' : '';
+  const gmProfile = typeof gmLookup === 'function' ? gmLookup(r.name) : null;
+  const gmHTML    = gmProfile
+    ? `<div class="dc-gm-badge" title="Stayed before${gmProfile.lastSeen ? ' · last seen ' + gmProfile.lastSeen : ''}${gmProfile.nat ? ' · ' + gmProfile.nat : ''}">🔁 Returning guest</div>`
+    : '';
   const compTag   = r.company ? `<div class="dc-mi">🏢 ${r.company.substring(0,36)}</div>` : '';
   const timeTag   = depTimeTag(r);
 
@@ -1024,6 +1241,7 @@ function depCardHTML(r) {
     ${isSelectable ? `onclick="depToggleSelect('${r.roomStr}')"` : ''}>
     ${selTick}
     ${vipHTML}
+    ${gmHTML}
     <div class="dc-band"></div>
 
     <!-- Compact single-line row — click anywhere to expand -->
@@ -1991,7 +2209,7 @@ function clearDep() {
   document.getElementById('depDateLabel').textContent    = "Today's departures · Load Opera report to begin";
   const b = document.getElementById('badge-departures'); if (b) b.textContent = '0';
   const hkBar = document.getElementById('depHKBar'); if (hkBar) hkBar.style.display = 'none';
-  ['depPrintBtn','depExportBtn','depViewToggle','depReloadBtn'].forEach(id => {
+  ['depPrintBtn','depExportBtn','depViewToggle','depReloadBtn','depAlertToggle','depTrendsBtn'].forEach(id => {
     const el = document.getElementById(id); if (el) el.style.display = 'none';
   });
   saveDeps();

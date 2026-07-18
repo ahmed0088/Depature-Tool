@@ -4777,3 +4777,33 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
 }
 .undo-toast-btn:hover { background: var(--accent); color: var(--bg); }
 .undo-toast-timer { font-family: var(--mono); font-size: 0.62rem; color: var(--text3); }
+
+/* ═══════════════════════════════════════════════════════════
+   Departures — Guest Memory badge, swipe, alerts, trend chart
+   ═══════════════════════════════════════════════════════════ */
+.dc-gm-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: var(--mono); font-size: 0.6rem; font-weight: 600;
+  color: var(--sky); background: rgba(90,180,232,0.1);
+  border: 1px solid rgba(90,180,232,0.28); border-radius: 6px;
+  padding: 2px 7px; margin: 0 0 6px 0; width: fit-content;
+}
+
+/* Swipe visuals */
+.dep-card { touch-action: pan-y; }
+.dep-card.dc-swipe-right { background: linear-gradient(90deg, rgba(62,207,142,0.16), var(--card) 60%); }
+.dep-card.dc-swipe-left  { background: linear-gradient(270deg, rgba(240,107,122,0.16), var(--card) 60%); }
+
+/* Overdue alert bell toggle */
+#depAlertToggle { opacity: 0.55; }
+#depAlertToggle.on { opacity: 1; background: var(--accent-bg); border-color: var(--accent-border); }
+
+/* Trend chart */
+.dep-trend-chart {
+  display: flex; align-items: flex-end; gap: 10px; height: 90px;
+  padding: 10px 4px 0;
+}
+.dep-trend-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.dep-trend-bar { width: 60%; border-radius: 4px 4px 0 0; min-height: 4px; transition: height 0.2s; }
+.dep-trend-val { font-family: var(--mono); font-size: 0.62rem; color: var(--text2); margin-top: 4px; }
+.dep-trend-day { font-family: var(--mono); font-size: 0.56rem; color: var(--text3); margin-top: 1px; }
