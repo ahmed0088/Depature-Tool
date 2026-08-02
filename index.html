@@ -437,6 +437,10 @@
     <div class="nav-icon">🏛️</div>Tourism Tax
     <span class="nav-badge" id="badge-tourism">0</span>
   </div>
+  <div class="nav-item" onclick="showPanel('inhouse-tally')" id="nav-inhouse-tally" data-panel="inhouse-tally">
+    <div class="nav-icon">🧮</div>Inhouse Tally
+    <span class="nav-badge" id="badge-inhouse-tally">—</span>
+  </div>
   <div class="nav-item" onclick="showPanel('checklist')" id="nav-checklist" data-panel="checklist">
     <div class="nav-icon">✅</div>Night Checklist
     <span class="nav-badge" id="badge-checklist">17</span>
@@ -1113,6 +1117,100 @@
         <tbody id="immigTable2"></tbody>
       </table></div>
     </div>
+  </div>
+</div>
+
+<!-- ════════════════ INHOUSE TALLY ════════════════ -->
+<div class="panel" id="panel-inhouse-tally">
+  <div style="max-width:1200px;">
+    <div class="page-hd">
+      <div class="page-hd-left">
+        <h1>Inhouse Tally</h1>
+        <p>Opera Guest In-House By Room vs Immigration/Guest Count XML · reconciles occupancy room-by-room</p>
+      </div>
+      <div class="page-hd-actions">
+        <button class="btn gold" onclick="itRun()">🔍 Reconcile</button>
+        <button class="btn rose" onclick="itClear()">✕ Clear</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+
+        <!-- Guest In-House By Room -->
+        <div class="upload-zone" style="cursor:pointer;" onclick="document.getElementById('itGibyFileInput').click()">
+          <div class="upload-label-bar">
+            <div class="upload-dot sky"></div>
+            <span class="upload-lbl">Guest In-House By Room</span>
+            <span class="upload-sub">tab-delimited · gibyroom</span>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;padding:16px;text-align:center;gap:4px;">
+            <div style="font-size:1.6rem;">🛏️</div>
+            <div id="itGibyLabel" style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">Click to upload, or paste below</div>
+            <input type="file" id="itGibyFileInput" accept=".txt,.tsv,.csv" style="display:none;" onchange="itLoadGibyFile(this)"/>
+          </div>
+          <textarea id="itGibyInput" onclick="event.stopPropagation()" placeholder="Paste Guest In-House By Room export here (must include ROOM, ADULTS columns)…" style="width:100%;min-height:90px;"></textarea>
+        </div>
+
+        <!-- Inhouse / Guest Count XML -->
+        <div class="upload-zone" style="cursor:pointer;" onclick="document.getElementById('itXmlFileInput').click()">
+          <div class="upload-label-bar">
+            <div class="upload-dot mint"></div>
+            <span class="upload-lbl">Inhouse / Guest Count XML</span>
+            <span class="upload-sub">Crystal Report export</span>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;padding:16px;text-align:center;gap:4px;">
+            <div style="font-size:1.6rem;">🛂</div>
+            <div id="itXmlLabel" style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">Click to upload, or paste below</div>
+            <input type="file" id="itXmlFileInput" accept=".xml,.XML" style="display:none;" onchange="itLoadXmlFile(this)"/>
+          </div>
+          <textarea id="itXmlInput" onclick="event.stopPropagation()" placeholder="Paste Inhouse/Guest Count XML here…" style="width:100%;min-height:90px;"></textarea>
+        </div>
+
+      </div>
+
+      <div class="error-box" id="itError"><span>⚠</span><span id="itErrorMsg"></span></div>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button class="btn gold" onclick="itRun()">🔍 Reconcile</button>
+        <button class="btn" onclick="itClear()">✕ Clear</button>
+      </div>
+    </div>
+
+    <div id="itResultsWrap" style="display:none;">
+      <div class="kpi-row c4" style="margin-top:18px;" id="itKpis"></div>
+
+      <div class="filter-row" id="itFilters" style="margin-bottom:14px;">
+        <div class="fchip on" data-itf="all"      onclick="itSetFilter('all',this)">All <span id="itfc-all">0</span></div>
+        <div class="fchip"    data-itf="mismatch" onclick="itSetFilter('mismatch',this)">⚠ Mismatch <span id="itfc-mismatch">0</span></div>
+        <div class="fchip"    data-itf="missing"  onclick="itSetFilter('missing',this)">🔴 Missing <span id="itfc-missing">0</span></div>
+        <div class="fchip"    data-itf="ok"       onclick="itSetFilter('ok',this)">✅ Match <span id="itfc-ok">0</span></div>
+        <div class="search-wrap" style="margin-left:auto;">
+          <span style="padding:0 8px;color:var(--text3);">⌕</span>
+          <input type="text" id="itSearch" placeholder="Room or guest name…" oninput="itSetSearch(this.value)"/>
+        </div>
+      </div>
+
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:70px;">Room</th>
+              <th>Opera (In-House By Room)</th>
+              <th>XML (Guest Count)</th>
+              <th style="width:90px;">Visitors</th>
+              <th style="width:170px;">Verdict</th>
+            </tr>
+          </thead>
+          <tbody id="itTable"></tbody>
+        </table>
+      </div>
+
+      <div style="margin-top:12px;font-family:var(--mono);font-size:0.62rem;color:var(--text3);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span>💡 Fix flagged rooms in Opera / the immigration system, then</span>
+        <button class="btn gold sm" onclick="itCopyFlagged()">📋 Copy Flagged Rooms</button>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -2625,6 +2723,7 @@
 <script src="tourism-tax.js"></script>
 <script src="arrivals-proc.js"></script>
 <script src="noshow.js"></script>
+<script src="inhouse-tally.js"></script>
 
 <script>
 // ════════════════════════════════════════════════
