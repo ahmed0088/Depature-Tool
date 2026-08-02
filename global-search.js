@@ -22,6 +22,7 @@ const GS_PANEL_LABEL = {
   purpose:    'Purpose of Stay',
   xref:       'Arr vs Dep',
   tourism:    'Tourism Tax',
+  'inhouse-tally': 'Inhouse Tally',
   noshow:     'No-Show',
   guestmem:   'Guest Memory',
   checklist:  'Night Checklist',

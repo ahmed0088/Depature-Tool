@@ -433,6 +433,10 @@
     <div class="nav-icon">🛂</div>Immigration Check
     <span class="nav-badge" id="immigTabCount">Upload</span>
   </div>
+  <div class="nav-item" onclick="showPanel('inhouse-tally')" id="nav-inhouse-tally" data-panel="inhouse-tally">
+    <div class="nav-icon">🧮</div>Inhouse Tally
+    <span class="nav-badge" id="badge-inhouse-tally">—</span>
+  </div>
   <div class="nav-item" onclick="showPanel('tourism')" id="nav-tourism" data-panel="tourism">
     <div class="nav-icon">🏛️</div>Tourism Tax
     <span class="nav-badge" id="badge-tourism">0</span>
@@ -1110,6 +1114,67 @@
       <div class="tbl-wrap"><table>
         <thead><tr><th>Room</th><th>Sex</th><th>Name</th><th>Nationality</th><th>Passport</th><th>Arrival</th><th>Departure</th><th>Issues</th></tr></thead>
         <tbody id="immigTable2"></tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ INHOUSE TALLY ════════════════ -->
+<div class="panel" id="panel-inhouse-tally">
+  <div style="max-width:1100px;">
+    <div class="page-hd">
+      <div class="page-hd-left"><h1>Inhouse Tally</h1><p>Reconcile Opera's Guest In-House By Room export against the Inhouse / Guest Count XML — catches headcount gaps and unregistered guests</p></div>
+      <div class="page-hd-actions"><button class="btn rose" onclick="itClear()">✕ Clear</button></div>
+    </div>
+
+    <div style="display:flex;gap:14px;flex-wrap:wrap;">
+      <div class="card" style="flex:1;min-width:320px;">
+        <div style="font-size:0.8rem;font-weight:600;margin-bottom:4px;">🛏️ Guest In-House By Room</div>
+        <div style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);margin-bottom:10px;">Opera → Reports → Guest In-House By Room → Export Delimited</div>
+        <div class="upload-zone" style="cursor:pointer;" onclick="document.getElementById('itGibyFileInput').click()">
+          <div style="display:flex;flex-direction:column;align-items:center;padding:16px;text-align:center;gap:6px;">
+            <div style="font-size:1.6rem;">📂</div>
+            <div id="itGibyLabel" style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">Click to upload, or paste below</div>
+            <input type="file" id="itGibyFileInput" accept=".txt,.tsv,.csv" style="display:none;" onchange="itLoadGibyFile(this)"/>
+          </div>
+        </div>
+        <textarea id="itGibyInput" style="height:80px;margin-top:8px;" placeholder="Or paste the tab-delimited export here…"></textarea>
+      </div>
+      <div class="card" style="flex:1;min-width:320px;">
+        <div style="font-size:0.8rem;font-weight:600;margin-bottom:4px;">🛂 Inhouse / Guest Count XML</div>
+        <div style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);margin-bottom:10px;">Opera → Front Desk → Guest Count / Inhouse Report → Export XML</div>
+        <div class="upload-zone" style="cursor:pointer;" onclick="document.getElementById('itXmlFileInput').click()">
+          <div style="display:flex;flex-direction:column;align-items:center;padding:16px;text-align:center;gap:6px;">
+            <div style="font-size:1.6rem;">📂</div>
+            <div id="itXmlLabel" style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">Click to upload, or paste below</div>
+            <input type="file" id="itXmlFileInput" accept=".xml,.XML" style="display:none;" onchange="itLoadXmlFile(this)"/>
+          </div>
+        </div>
+        <textarea id="itXmlInput" style="height:80px;margin-top:8px;" placeholder="Or paste the XML here…"></textarea>
+      </div>
+    </div>
+
+    <div class="error-box" id="itError"><span>⚠</span><span id="itErrorMsg"></span></div>
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <button class="btn gold" onclick="itRun()">🧮 Reconcile</button>
+      <button class="btn" onclick="itClear()">✕ Clear</button>
+    </div>
+
+    <div id="itResultsWrap" style="display:none;">
+      <div class="kpi-row c4" style="margin-top:18px;" id="itKpis"></div>
+      <div style="display:flex;gap:7px;margin:11px 0;flex-wrap:wrap;" id="itFilters">
+        <button class="fchip on" data-itf="all"      onclick="itSetFilter('all',this)">All <span id="itfc-all">0</span></button>
+        <button class="fchip"    data-itf="mismatch" onclick="itSetFilter('mismatch',this)">⚠ Mismatch <span id="itfc-mismatch">0</span></button>
+        <button class="fchip"    data-itf="missing"  onclick="itSetFilter('missing',this)">🔴 Missing <span id="itfc-missing">0</span></button>
+        <button class="fchip"    data-itf="ok"       onclick="itSetFilter('ok',this)">✅ Match <span id="itfc-ok">0</span></button>
+        <div class="search-wrap" style="margin-left:auto;"><span style="padding:0 8px;color:var(--text3);">⌕</span><input type="text" id="itSearch" placeholder="Room or name…" oninput="itSetSearch(this.value)"/></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:11px;">
+        <button class="btn sm" onclick="itCopyFlagged()">📋 Copy Flagged Rooms</button>
+      </div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Room</th><th>Opera (In-House)</th><th>Immigration (XML)</th><th>Visitors excl.</th><th>Verdict</th></tr></thead>
+        <tbody id="itTable"></tbody>
       </table></div>
     </div>
   </div>
@@ -2624,6 +2689,7 @@
 <script src="tourism-tax.js"></script>
 <script src="arrivals-proc.js"></script>
 <script src="noshow.js"></script>
+<script src="inhouse-tally.js"></script>
 
 <script>
 // ════════════════════════════════════════════════
@@ -2935,7 +3001,7 @@ function syncMobBadges() {
   });
   // More drawer items — sync badge text from desktop sidebar badges
   ['purpose','xref','noshow','arrivals-proc','guestmem','adagio',
-   'nationality','rent','audit','immig','tourism'].forEach(panel => {
+   'nationality','rent','audit','immig','tourism','inhouse-tally'].forEach(panel => {
     const src  = document.getElementById('badge-' + panel);
     const dest = document.getElementById('mob-badge-' + panel);
     if (!src || !dest) return;
@@ -3635,6 +3701,10 @@ async function appInit() {
     <button class="mob-more-item" data-panel="immig"          onclick="showPanel('immig');toggleMobMore()">
       <span class="mob-item-icon">🛂</span>
       <span class="mob-more-badge" id="mob-badge-immig"></span>Immigration
+    </button>
+    <button class="mob-more-item" data-panel="inhouse-tally"  onclick="showPanel('inhouse-tally');toggleMobMore()">
+      <span class="mob-item-icon">🧮</span>
+      <span class="mob-more-badge" id="mob-badge-inhouse-tally"></span>Inhouse Tally
     </button>
     <button class="mob-more-item" data-panel="tourism"        onclick="showPanel('tourism');toggleMobMore()">
       <span class="mob-item-icon">🏛️</span>
