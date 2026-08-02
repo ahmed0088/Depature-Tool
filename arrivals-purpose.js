@@ -200,12 +200,14 @@ function _applyOriginToPurpose() {
     }
 
     // Real passport nationality straight from the XML (Vicas/Inhouse) beats an AI guess —
-    // only fills an empty field, never overwrites something already there.
-    if (!g.nat) {
+    // fills an empty field, or overwrites a provisional AI guess (_natFromAI), but never
+    // touches something a human typed or that came from Guest Memory.
+    if (!g.nat || g._natFromAI) {
       const rawNat = _originNatMap[nameKey];
       if (rawNat) {
         g.nat = rawNat;
         g._natFromXML = true;
+        g._natFromAI  = false;
         filledNat++;
         if (typeof gmOnEdit === 'function') gmOnEdit(g.name, 'nat', rawNat);
       }
@@ -356,7 +358,12 @@ function arrFilter(f, el) {
 
 async function runAINat_arr() {
   setSpinner('aiSpinArr', true);
-  arrGuests.forEach(g => { if (!g.nat) g.nat = guessNat(g.name); });
+  arrGuests.forEach(g => {
+    if (!g.nat) {
+      const guessed = guessNat(g.name);
+      if (guessed) { g.nat = guessed; g._natFromAI = true; }
+    }
+  });
   arrRender();
   setSpinner('aiSpinArr', false);
   saveArrivals(arrGuests);
@@ -366,7 +373,7 @@ async function runAINat_arr() {
 async function aiOneGuest(i, list) {
   const guests = list === 'arr' ? arrGuests : purposeGuests;
   const nat    = guessNat(guests[i].name);
-  if (nat) { guests[i].nat = nat; guests[i]._natFromXML = false; }
+  if (nat) { guests[i].nat = nat; guests[i]._natFromXML = false; guests[i]._natFromAI = true; }
   arrRender(); purposeRender();
 }
 
@@ -530,7 +537,7 @@ function purposeRender() {
         style="width:42px;"/></td>
       <td><div style="display:flex;gap:3px;align-items:center;">
         <input value="${g.nat}"
-          oninput="purposeGuests[${i}].nat=this.value;purposeGuests[${i}]._natFromXML=false;"
+          oninput="purposeGuests[${i}].nat=this.value;purposeGuests[${i}]._natFromXML=false;purposeGuests[${i}]._natFromAI=false;"
           onblur="gmOnEdit(purposeGuests[${i}].name,'nat',this.value);debounceSavePurpose()"
           title="${g._natFromXML ? 'Nationality — loaded from Vicas/Inhouse XML' : 'Nationality'}"
           style="width:86px;${g._natFromXML ? 'border-color:var(--mint);' : (g._fromMemory?'border-color:var(--sky);':'')}"/>
@@ -617,7 +624,12 @@ function loadPurpose() {
 
 async function runAINat_purpose() {
   setSpinner('aiSpinPurpose', true);
-  purposeGuests.forEach(g => { if (!g.nat) g.nat = guessNat(g.name); });
+  purposeGuests.forEach(g => {
+    if (!g.nat) {
+      const guessed = guessNat(g.name);
+      if (guessed) { g.nat = guessed; g._natFromAI = true; }
+    }
+  });
   purposeRender();
   setSpinner('aiSpinPurpose', false);
   savePurpose(purposeGuests);
