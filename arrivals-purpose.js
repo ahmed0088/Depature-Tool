@@ -589,6 +589,34 @@ function purposeFilter(f, el) {
   purposeRender();
 }
 
+// ── Randomize Purpose — one click, exact split (not a coin-flip average) ──
+// Ask for a % Leisure, then shuffle the guest list and assign exactly that
+// share to Leisure and the rest to Business — e.g. 80 → 80% Leisure guests,
+// 20% Business, no matter how small the list is.
+function purposeRandomizeSplit() {
+  if (!purposeGuests.length) { showToast('No guests loaded', 'err'); return; }
+  const input = prompt('Percent Leisure (0-100) — the rest becomes Business:', '80');
+  if (input === null) return;
+  const pct = Math.max(0, Math.min(100, parseInt(input, 10) || 0));
+
+  // Fisher-Yates shuffle a list of indices, then assign the first N to Leisure
+  const idx = purposeGuests.map((_, i) => i);
+  for (let i = idx.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [idx[i], idx[j]] = [idx[j], idx[i]];
+  }
+  const leisureCount = Math.round(purposeGuests.length * pct / 100);
+  idx.forEach((guestIdx, pos) => {
+    purposeGuests[guestIdx].purpose = pos < leisureCount ? 'Leisure' : 'Business';
+  });
+
+  purposeKpiUpdate();
+  purposeRender();
+  savePurpose(purposeGuests);
+  addPurposeLog('Purpose', `Randomized — ${pct}% Leisure / ${100 - pct}% Business across ${purposeGuests.length} guests`);
+  showToast(`🎲 ${leisureCount} Leisure · ${purposeGuests.length - leisureCount} Business`, 'ok');
+}
+
 function syncFromArrivals() {
   if (!arrGuests.length) { alert('No arrivals loaded. Go to Arrivals tab first.'); return; }
   purposeGuests = arrGuests.map(g => ({...g}));
