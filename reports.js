@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════════════
 
 // ── COUNTRY MAPPINGS ──────────────────────────────────────
-const EXCEL_COUNTRIES = ["Afghanistan","Albania","Algeria","American Samoa","Andorra","Angola","Anguilla","Antarctica","Antigua & Barbuda","Argentina","Armenia","Aruba","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados","Belarus","Belgium","Belize","Benin","Bermuda","Bhutan","Bolivia","Bosnia-Herzegovina","Botswana","Brazil","British Indian Ocean Territory","British Virgin Islands","British West Indies","Brunei","Bulgaria","Burkina Faso","Burundi","Cambodia","Cameroon Republic","Canada","Cape Verde","Cayman Island","Central African Republic","Chad","Chile","China","Colombia","Comoros","Congo (Republic of the Congo)","Congo, Dem. Rep. of (Zaire)","Cook Islands","Costa Rica","Côte d'Ivoire","Croatia","Cuba","Cyprus","Czech Republic","Czechoslovakia","Denmark","Djibouti","Dominica","Dominican Republic","East Timor","Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia","Ethiopia","Falkland Islands (Malvinas)","Faroe Islands","Fiji","Finland","France","French Guiana","French Polynesia","Gabon","Gambia","Georgia","Germany","Ghana","Gibraltar","Greece","Greenland","Grenada","Guadeloupe","Guam","Guatemala","Guinea","Guinea-Bissau","Guyana","Haiti","Holy See (Vatican City State)","Honduras","Hong Kong","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Isle of Man","Israel","Italy","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kiribati","Korea, Democratic People's Republic of (North)","Korea, Republic of (South)","Kosovo","Kuwait","Kyrghyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia","Libya","Liechtenstein","Lithuania","Luxembourg","Macau","Macedonia, Republic of","Madagascar","Malagasy Republic","Malawi","Malaysia","Maldives","Mali","Malta","Marshal Islands","Martinique","Mauritania","Mauritius","Mayotte","Mexico","Micronesia, Federated States of","Moldova","Monaco","Mongolia","Montenegro","Montserrat","Morocco","Mozambique","Myanmar (Burma)","Namibia","Nauru","Nepal","Netherlands","Netherlands, Antilles","New Caledonia","New Zealand","Nicaragua","Niger","Nigeria","Norfolk Island","Northern Mariana Isl.","Norway","Oman","Pakistan","Palau","Palestine","Panama","Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal","Puerto Rico","Qatar","Reunion","Romania","Russian Federation","Rwanda","Saba","Saint Barthelemy","Saint Helena","Saint Kitts and Nevis","Saint Lucia","Saint Pierre and Miquelon","Saint Vincent and the Grenadines","Samoa","San Marino (in Italy)","Sao Tomé","Saudi Arabia","Scotland","Senegal","Serbia","Seychelles","Sierra Leone","Singapore","Slovakia Republic","Slovenia","Solomon Island","Somalia","South Africa","South Georgia and the South Sandwich Islands","South Sudan","Spain","Sri Lanka","Sudan","Surinam","Swaziland","Sweden","Switzerland","Syria","Tadjikistan","Taiwan","Tanzania","Thailand","Togo","Tokelau","Tonga","Trinidad & Tobaggo","Tunisia","Turkey","Turkmenistan","Turks and Caicos Islands","Tuvalu","Uganda","Ukraine","United Arab Emirates","United Kingdom","United States of America","Uruguay","Uzbekistan","Vanuatu","Venezuela","Vietnam","Virgin Islands, British","Virgin Islands, U.S.","Yemen","Yugoslavia","Zambia","Zimbabwe"];
+const EXCEL_COUNTRIES = ["Afghanistan","Albania","Algeria","American Samoa","Andorra","Angola","Anguilla","Antarctica","Antigua & Barbuda","Argentina","Armenia","Aruba","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados","Belarus","Belgium","Belize","Benin","Bermuda","Bhutan","Bolivia","Bosnia-Herzegovina","Botswana","Brazil","British Indian Ocean Territory","British Virgin Islands","British West Indies","Brunei","Bulgaria","Burkina Faso","Burundi","Cambodia","Cameroon Republic","Canada","Cape Verde","Cayman Island","Central African Republic","Chad","Chile","China","Colombia","Comoros","Congo (Republic of the Congo)","Congo, Dem. Rep. of (Zaire)","Cook Islands","Costa Rica","Côte d'Ivoire","Croatia","Cuba","Cyprus","Czech Republic","Czechoslovakia","Denmark","Djibouti","Dominica","Dominican Republic","East Timor","Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia","Ethiopia","Falkland Islands (Malvinas)","Faroe Islands","Fiji","Finland","France","French Guiana","French Polynesia","Gabon","Gambia","Georgia","Germany","Ghana","Gibraltar","Greece","Greenland","Grenada","Guadeloupe","Guam","Guatemala","Guinea","Guinea-Bissau","Guyana","Haiti","Holy See (Vatican City State)","Honduras","Hong Kong","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Isle of Man","Israel","Italy","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kiribati","Korea, Democratic People's Republic of (North)","Korea, Republic of (South)","Kosovo","Kuwait","Kyrghyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia","Libya","Liechtenstein","Lithuania","Luxembourg","Macau","Macedonia, Republic of","Madagascar","Malagasy Republic","Malawi","Malaysia","Maldives","Mali","Malta","Marshal Islands","Martinique","Mauritania","Mauritius","Mayotte","Mexico","Micronesia, Federated States","Moldova","Monaco","Mongolia","Montenegro","Montserrat","Morocco","Mozambique","Myanmar (Burma)","Namibia","Nauru","Nepal","Netherlands","Netherlands, Antilles","New Caledonia","New Zealand","Nicaragua","Niger","Nigeria","Norfolk Island","Northern Mariana Isl.","Norway","Oman","Pakistan","Palau","Palestine","Panama","Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal","Puerto Rico","Qatar","Reunion","Romania","Russian Federation","Rwanda","Saba","Saint Barthelemy","Saint Helena","Saint Kitts and Nevis","Saint Lucia","Saint Pierre and Miquelon","Saint Vincent and the Grenadines","Samoa","San Marino (in Italy)","Sao Tomé","Saudi Arabia","Scotland","Senegal","Serbia","Seychelles","Sierra Leone","Singapore","Slovakia Republic","Slovenia","Solomon Island","Somalia","South Africa","South Georgia and the South Sandwich Islands","South Sudan","Spain","Sri Lanka","Sudan","Surinam","Swaziland","Sweden","Switzerland","Syria","Tadjikistan","Taiwan","Tanzania","Thailand","Togo","Tokelau","Tonga","Trinidad & Tobaggo","Tunisia","Turkey","Turkmenistan","Turks and Caicos Islands","Tuvalu","Uganda","Ukraine","United Arab Emirates","United Kingdom","United States of America","Uruguay","Uzbekistan","Vanuatu","Venezuela","Vietnam","Virgin Islands, British","Virgin Islands, U.S.","Yemen","Yugoslavia","Zambia","Zimbabwe"];
 const EXCEL_LOWER = {};
 EXCEL_COUNTRIES.forEach(n => { EXCEL_LOWER[n.toLowerCase()] = n; });
 const NAME_MAP = {
@@ -28,8 +28,6 @@ const NAME_MAP = {
   "Kyrgzstan":"Kyrghyzstan",
   "Congo (Brazzaville)":"Congo (Republic of the Congo)",
   "Saint Barthélemy":"Saint Barthelemy",
-  "San Marino":"San Marino (in Italy)",
-  "Suriname":"Surinam",
   "Unknown":null,
   "UNKNOWN":null,
   "unknown":null,
@@ -381,11 +379,13 @@ function clearAudit() { document.getElementById('naOperaInput').value=''; docume
 
 // ── IMMIGRATION RECOVERY SOURCES ──────────────────────────
 // Optional uploads that let processImmig2() auto-fill rows flagged
-// "No Nationality" / "No Gender" before they're shown to the user.
-//   _immigNatMap    : normalised "GIVEN FAMILY" → raw passport Nationality (from Inhouse XML)
-//   _immigGenderMap : normalised "GIVEN FAMILY" → 'M' | 'F' (derived from title in arrivals export)
-let _immigNatMap    = {};
-let _immigGenderMap = {};
+// "No Nationality" / "No Gender" / "No Passport" before they're shown to the user.
+//   _immigNatMap      : normalised name → raw passport Nationality (from Inhouse XML)
+//   _immigPassportMap : normalised name → DocumentNumber (from Inhouse XML — Emirates ID/passport #)
+//   _immigGenderMap   : normalised name → 'M' | 'F' (derived from title in arrivals export)
+let _immigNatMap      = {};
+let _immigPassportMap = {};
+let _immigGenderMap   = {};
 
 // Title prefix → gender, as seen in Opera's "LASTNAME, FIRSTNAME, Title" name format.
 const _IMMIG_TITLE_GENDER = {
@@ -395,18 +395,63 @@ const _IMMIG_TITLE_GENDER = {
   'MISS': 'F',
 };
 
-// Load Inhouse.xml — provides Nationality for guests missing it on the immigration report.
+// Normalise a guest name into a stable lookup key: lowercase, letters only,
+// spaces stripped. Both Inhouse.xml (GivenName+FamilyName) and the immigration
+// report (FIRST_NAME+LAST_NAME) preserve "given name(s) then family name(s)"
+// order, so a straight concatenation matches far more guests than sorting the
+// words does — sorting only helps when word order is reversed, but breaks
+// matches whenever one source has extra/missing middle names (common here).
+function _normName(name) {
+  if (!name) return '';
+  return name.toLowerCase().replace(/[^a-z]/g, '');
+}
+
+// Parse an Inhouse.xml (Crystal Reports export) and return per-guest
+// Nationality + DocumentNumber (passport/Emirates ID), keyed by normalised name.
+function parseOriginXML(xmlText) {
+  const natMap = {};
+  const docMap = {};
+  try {
+    const doc = (new DOMParser()).parseFromString(xmlText, 'text/xml');
+    if (doc.querySelector('parsererror')) return { natMap, docMap };
+
+    const blocks = doc.querySelectorAll('Details[Level="2"]');
+    blocks.forEach(b => {
+      const field = fieldName => {
+        const el = b.querySelector(`Field[Name="${fieldName}"] FormattedValue`);
+        return (el?.textContent || '').trim();
+      };
+      const given  = field('GivenName1');
+      const family = field('FamilyName1');
+      const nat    = field('Nationality1');
+      const doc_   = field('DocumentNumber1');
+      if (!given && !family) return;
+
+      const key = _normName(given + ' ' + family);
+      if (!key) return;
+      if (nat)  natMap[key] = nat;
+      if (doc_) docMap[key] = doc_;
+    });
+  } catch (e) {
+    console.warn('[Immigration] parseOriginXML failed:', e);
+  }
+  return { natMap, docMap };
+}
+
+// Load Inhouse.xml — provides Nationality + Passport/Doc Number for guests missing them on the immigration report.
 function immigLoadInhouseXml(input) {
   const file = input?.files?.[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    const { natMap } = parseOriginXML(e.target.result);
-    _immigNatMap = natMap || {};
-    const count = Object.keys(_immigNatMap).length;
+    const { natMap, docMap } = parseOriginXML(e.target.result);
+    _immigNatMap      = natMap || {};
+    _immigPassportMap = docMap || {};
+    const natCount = Object.keys(_immigNatMap).length;
+    const docCount = Object.keys(_immigPassportMap).length;
     const lbl = document.getElementById('immigInhouseXmlLabel');
-    if (lbl) lbl.textContent = count ? `✓ ${count} guests loaded` : 'No guest data found';
-    showToast(count ? `✦ Inhouse XML loaded — ${count} guests` : 'No guest data found in XML', count ? 'ok' : 'err');
+    if (lbl) lbl.textContent = natCount ? `✓ ${natCount} guests loaded (${docCount} with doc #)` : 'No guest data found';
+    showToast(natCount ? `✦ Inhouse XML loaded — ${natCount} guests` : 'No guest data found in XML', natCount ? 'ok' : 'err');
     if (immigAllRows2.length) processImmig2(true); // re-run with raw XML already in the textarea
   };
   reader.readAsText(file, 'utf-8');
@@ -456,10 +501,10 @@ function immigLoadArrivals(input) {
   reader.readAsText(file, 'utf-8');
 }
 
-// Attach a *suggested* Nationality / Gender value (to type into Opera) on flagged
-// rows, based on the recovery maps above. This does NOT clear the issue —
-// Opera itself still has the field blank, so the row stays flagged until a
-// colleague actually updates the guest profile in Opera.
+// Attach a *suggested* Nationality / Gender / Passport value (to type into Opera)
+// on flagged rows, based on the recovery maps above. This does NOT clear the
+// issue — Opera itself still has the field blank, so the row stays flagged
+// until a colleague actually updates the guest profile in Opera.
 function _immigApplyRecovery(rows) {
   rows.forEach(r => {
     const key = _normName(r.name);
@@ -469,6 +514,9 @@ function _immigApplyRecovery(rows) {
     }
     if (r.noSex && _immigGenderMap[key]) {
       r.suggestedSex = _immigGenderMap[key];
+    }
+    if (r.noPass && _immigPassportMap[key]) {
+      r.suggestedPassport = _immigPassportMap[key];
     }
   });
 }
@@ -503,7 +551,11 @@ function processImmig2(silent) {
     const fullName=g.fname?g.fname+' '+g.lname:g.lname;
     const noNat=!g.nat||['u','unknown',''].includes(g.nat.toLowerCase());
     const noSex=!g.sex||['u','unknown',''].includes(g.sex.toLowerCase());
-    const noPass=!g.passport; const noFname=!g.fname;
+    // Missing if blank, OR if the value has no digits at all — Opera masks real
+    // passport numbers like "XXXXXXXXXXXXX08" (partial real number still visible),
+    // but a value like "XXXXXXXFS" has zero digits, meaning no real number was
+    // ever captured — that guest still needs a passport/doc number on file.
+    const noPass=!g.passport||!/[0-9]/.test(g.passport); const noFname=!g.fname;
     const issues=[];
     if(noNat)issues.push('nationality');if(noSex)issues.push('gender');if(noPass)issues.push('passport');if(noFname)issues.push('first_name');
     if(!issues.length)return;
@@ -514,10 +566,11 @@ function processImmig2(silent) {
   rows.sort((a,b)=>{if(a.critical&&!b.critical)return-1;if(!a.critical&&b.critical)return 1;return(a.room||'ZZZ').localeCompare(b.room||'ZZZ');});
   immigAllRows2=rows; immigFilter2_='all';
   const noNatC=rows.filter(r=>r.noNat).length,noSexC=rows.filter(r=>r.noSex).length,noPassC=rows.filter(r=>r.noPass).length,noFnameC=rows.filter(r=>r.noFname).length,crit=rows.filter(r=>r.critical).length;
-  const sugNatC=rows.filter(r=>r.suggestedNat).length, sugSexC=rows.filter(r=>r.suggestedSex).length;
+  const sugNatC=rows.filter(r=>r.suggestedNat).length, sugSexC=rows.filter(r=>r.suggestedSex).length, sugPassC=rows.filter(r=>r.suggestedPassport).length;
   const ihTotal=guests.filter(g=>{const a=pd(g.arrival),d=pd(g.departure);return bizDate&&a&&d?a<=bizDate&&d>bizDate:true;}).length;
   document.getElementById('immigKpis2').innerHTML=`<div class="kpi rose"><div class="kpi-accent"></div><div class="kpi-label">Critical</div><div class="kpi-val">${crit}</div><div class="kpi-sub">nat or gender</div></div><div class="kpi amber"><div class="kpi-accent"></div><div class="kpi-label">No Nationality</div><div class="kpi-val">${noNatC}</div></div><div class="kpi sky"><div class="kpi-accent"></div><div class="kpi-label">No Passport</div><div class="kpi-val">${noPassC}</div></div><div class="kpi mint"><div class="kpi-accent"></div><div class="kpi-label">No Gender</div><div class="kpi-val">${noSexC}</div></div>`;
-  const suggestNote = (sugNatC||sugSexC) ? ` · ✦ ${sugNatC+sugSexC} suggested value${(sugNatC+sugSexC)!==1?'s':''} to enter in Opera (${sugNatC} nationality, ${sugSexC} gender)` : '';
+  const sugTotal = sugNatC+sugSexC+sugPassC;
+  const suggestNote = sugTotal ? ` · ✦ ${sugTotal} suggested value${sugTotal!==1?'s':''} to enter in Opera (${sugNatC} nationality, ${sugSexC} gender, ${sugPassC} passport)` : '';
   const metaEl=document.getElementById('immigMeta2'); if(metaEl)metaEl.textContent=hotel+' · '+rDate+' '+rTime+' · '+ihTotal+' in-house · '+rows.length+' issues'+suggestNote;
   [['ifc-all',rows.length],['ifc-nat',noNatC],['ifc-gen',noSexC],['ifc-pass',noPassC],['ifc-fname',noFnameC]].forEach(([id,v])=>{const el=document.getElementById(id);if(el)el.textContent=v;});
   document.getElementById('immigTabCount').textContent=crit>0?(crit+' critical'):(rows.length+' issues');
@@ -525,7 +578,7 @@ function processImmig2(silent) {
   const allBtn=document.querySelector('#immigFilters2 [data-if="all"]'); if(allBtn)allBtn.classList.add('on');
   immigRender2(rows);
   document.getElementById('immigResults2').style.display='block';
-  if(!silent && (sugNatC||sugSexC)) showToast(`✦ Found ${sugNatC+sugSexC} suggested value(s) to enter in Opera (${sugNatC} nationality, ${sugSexC} gender)`, 'ok');
+  if(!silent && sugTotal) showToast(`✦ Found ${sugTotal} suggested value(s) to enter in Opera (${sugNatC} nationality, ${sugSexC} gender, ${sugPassC} passport)`, 'ok');
 }
 
 function immigRender2(rows) {
@@ -546,11 +599,14 @@ function immigRender2(rows) {
     const natCell = r.noNat
       ? '<span style="font-family:var(--mono);font-size:0.58rem;color:var(--rose);background:rgba(240,107,122,0.08);border:1px dashed rgba(240,107,122,0.4);border-radius:5px;padding:2px 7px;">NOT SET</span>'+(r.suggestedNat?sugChip(r.suggestedNat):'')
       : `<span style="font-size:0.7rem;color:var(--text2);">${r.nat}</span>`;
-    return`<tr style="background:${r.noNat||r.noSex?'rgba(240,107,122,0.04)':r.noPass?'rgba(90,180,232,0.03)':'transparent'};border-left:${r.noNat||r.noSex?'3px solid var(--rose)':r.noPass?'3px solid var(--sky2)':'3px solid transparent'};"><td style="font-family:var(--mono);font-size:0.8rem;font-weight:700;color:var(--sky);">${r.room||'—'}</td><td>${sexCell}</td><td style="font-size:0.73rem;color:var(--text2);">${r.name}</td><td>${natCell}</td><td>${r.noPass?'<span style="font-family:var(--mono);font-size:0.58rem;color:var(--sky);background:rgba(90,180,232,0.06);border:1px dashed rgba(90,180,232,0.3);border-radius:5px;padding:2px 7px;">MISSING</span>':'<span style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);">'+r.passport+'</span>'}</td><td style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">${r.arrival}</td><td style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">${r.departure}</td><td>${tags}</td></tr>`;
+    const passCell = r.noPass
+      ? '<span style="font-family:var(--mono);font-size:0.58rem;color:var(--sky);background:rgba(90,180,232,0.06);border:1px dashed rgba(90,180,232,0.3);border-radius:5px;padding:2px 7px;">MISSING</span>'+(r.suggestedPassport?sugChip(r.suggestedPassport):'')
+      : '<span style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);">'+r.passport+'</span>';
+    return`<tr style="background:${r.noNat||r.noSex?'rgba(240,107,122,0.04)':r.noPass?'rgba(90,180,232,0.03)':'transparent'};border-left:${r.noNat||r.noSex?'3px solid var(--rose)':r.noPass?'3px solid var(--sky2)':'3px solid transparent'};"><td style="font-family:var(--mono);font-size:0.8rem;font-weight:700;color:var(--sky);">${r.room||'—'}</td><td>${sexCell}</td><td style="font-size:0.73rem;color:var(--text2);">${r.name}</td><td>${natCell}</td><td>${passCell}</td><td style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">${r.arrival}</td><td style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">${r.departure}</td><td>${tags}</td></tr>`;
   }).join('');
 }
 function immigFilter2(type,btn){immigFilter2_=type;document.querySelectorAll('#immigFilters2 .fchip').forEach(b=>b.classList.remove('on'));btn.classList.add('on');immigRender2(immigAllRows2);}
-function clearImmig(){document.getElementById('immigPasteInput2').value='';document.getElementById('immigResults2').style.display='none';document.getElementById('immigError2').classList.remove('show');document.getElementById('immigTabCount').textContent='Upload';document.getElementById('immigFileInput2').value='';immigAllRows2=[];_immigNatMap={};_immigGenderMap={};const ihl=document.getElementById('immigInhouseXmlLabel');if(ihl)ihl.textContent='Not loaded';const ihi=document.getElementById('immigInhouseXmlInput');if(ihi)ihi.value='';const arl=document.getElementById('immigArrivalsLabel');if(arl)arl.textContent='Not loaded';const ari=document.getElementById('immigArrivalsInput');if(ari)ari.value='';}
+function clearImmig(){document.getElementById('immigPasteInput2').value='';document.getElementById('immigResults2').style.display='none';document.getElementById('immigError2').classList.remove('show');document.getElementById('immigTabCount').textContent='Upload';document.getElementById('immigFileInput2').value='';immigAllRows2=[];_immigNatMap={};_immigPassportMap={};_immigGenderMap={};const ihl=document.getElementById('immigInhouseXmlLabel');if(ihl)ihl.textContent='Not loaded';const ihi=document.getElementById('immigInhouseXmlInput');if(ihi)ihi.value='';const arl=document.getElementById('immigArrivalsLabel');if(arl)arl.textContent='Not loaded';const ari=document.getElementById('immigArrivalsInput');if(ari)ari.value='';}
 
 // ── FEEDBACK ──────────────────────────────────────────────
 function openFeedback(){['fb-text','fb-name'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});document.getElementById('feedbackModal').classList.add('open');}
