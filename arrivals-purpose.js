@@ -25,9 +25,10 @@ function debounceSavePurpose() {
 //   · "Inhouse" Crystal Reports XML  — GivenName1 + FamilyName1 + GuestType1 ("Main Contact")
 //   · "Vicas" Transaction Report XML — FullName1 + Process1 ("Check-in" vs "Add-Escort")
 // Same output shape either way, so downstream code never needs to care which one was loaded.
-let _originMap     = {};
-let _originNameMap = {};
-let _originNatMap  = {};
+let _originMap       = {};
+let _originNameMap   = {};
+let _originNatMap    = {};
+let _originNatRoomMap = {}; // room number (no leading zeros) → raw passport Nationality1 — fallback when the guest's name doesn't match exactly between reports (e.g. Opera CSV shows a shortened name)
 
 function _normRoom(r) {
   // Strip leading zeros so "0621" matches "621", keep as string
@@ -61,9 +62,10 @@ function _isEmiratesId(doc) {
 // Both formats share RoomNumber1, Nationality1 and DocumentNumber1, so the rest of the
 // logic (Emirates-ID detection, room fallback) is identical either way.
 function parseOriginXML(xmlText) {
-  const roomMap = {};
-  const nameMap = {};
-  const natMap  = {};
+  const roomMap    = {};
+  const nameMap    = {};
+  const natMap     = {};
+  const natRoomMap = {}; // room → raw Nationality1 (no Emirates-ID override) — same last-checkin-wins rule as roomMap
   let   source  = null; // 'inhouse' | 'vicas' — for the toast/label only
   try {
     const parser = new DOMParser();
@@ -116,9 +118,15 @@ function parseOriginXML(xmlText) {
       const origin = _isEmiratesId(docNum) ? 'UAE' : nat;
 
       // Room-based map (fallback only — kept for compatibility)
+      // A room can have more than one "Check-in" record on the same report if it
+      // turned over that day (guest A checked out, guest B checked into the same
+      // room). Every primary Check-in row overwrites the previous value here, so
+      // whichever Check-in appears LAST in the report (i.e. most recent) wins —
+      // that's always the guest currently occupying the room.
       if (room) {
         const rKey = _normRoom(room);
         if (isPrimary || !roomMap[rKey]) roomMap[rKey] = origin;
+        if (isPrimary || !natRoomMap[rKey]) natRoomMap[rKey] = nat;
       }
 
       // Name-based map (primary)
@@ -130,7 +138,7 @@ function parseOriginXML(xmlText) {
   } catch (e) {
     console.warn('[OriginXML] parse error:', e);
   }
-  return { roomMap, nameMap, natMap, source };
+  return { roomMap, nameMap, natMap, natRoomMap, source };
 }
 
 // Load XML from file input (called by HTML button).
@@ -141,10 +149,11 @@ function loadOriginXML(input) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    const { roomMap, nameMap, natMap, source } = parseOriginXML(e.target.result);
-    _originMap     = roomMap;
-    _originNameMap = nameMap;
-    _originNatMap  = natMap;
+    const { roomMap, nameMap, natMap, natRoomMap, source } = parseOriginXML(e.target.result);
+    _originMap        = roomMap;
+    _originNameMap    = nameMap;
+    _originNatMap     = natMap;
+    _originNatRoomMap = natRoomMap;
     const count = Math.max(Object.keys(nameMap).length, Object.keys(roomMap).length);
     if (!count) { showToast('No guest data found in XML — check file format', 'err'); return; }
     const sourceLabel = source === 'vicas' ? 'Vicas' : 'Inhouse';
@@ -199,15 +208,21 @@ function _applyOriginToPurpose() {
       }
     }
 
-    // Real passport nationality straight from the XML (Vicas/Inhouse) beats an AI guess —
-    // fills an empty field, or overwrites a provisional AI guess (_natFromAI), but never
-    // touches something a human typed or that came from Guest Memory.
-    if (!g.nat || g._natFromAI) {
-      const rawNat = _originNatMap[nameKey];
-      if (rawNat) {
+    // Real passport nationality straight from the XML (Vicas/Inhouse) is ground truth —
+    // it wins over an AI guess AND over a Guest Memory value (a guest's nationality on
+    // this specific stay is what the front-desk scan says, not what memory has from a
+    // past stay). The ONLY thing that outranks it is a human typing directly into the
+    // field on this screen (_natUserEdited, set by the input's oninput handler below).
+    // Name match is primary; if the Opera export shows a shortened/different name than
+    // the XML's full name, fall back to the room number — same as Origin of Travel does.
+    if (!g._natUserEdited) {
+      let rawNat = _originNatMap[nameKey];
+      if (!rawNat && hasRealRoom) rawNat = _originNatRoomMap[roomKey];
+      if (rawNat && rawNat !== g.nat) {
         g.nat = rawNat;
         g._natFromXML = true;
         g._natFromAI  = false;
+        g._fromMemory = false;
         filledNat++;
         if (typeof gmOnEdit === 'function') gmOnEdit(g.name, 'nat', rawNat);
       }
@@ -537,7 +552,7 @@ function purposeRender() {
         style="width:42px;"/></td>
       <td><div style="display:flex;gap:3px;align-items:center;">
         <input value="${g.nat}"
-          oninput="purposeGuests[${i}].nat=this.value;purposeGuests[${i}]._natFromXML=false;purposeGuests[${i}]._natFromAI=false;"
+          oninput="purposeGuests[${i}].nat=this.value;purposeGuests[${i}]._natFromXML=false;purposeGuests[${i}]._natFromAI=false;purposeGuests[${i}]._natUserEdited=true;"
           onblur="gmOnEdit(purposeGuests[${i}].name,'nat',this.value);debounceSavePurpose()"
           title="${g._natFromXML ? 'Nationality — loaded from Vicas/Inhouse XML' : 'Nationality'}"
           style="width:86px;${g._natFromXML ? 'border-color:var(--mint);' : (g._fromMemory?'border-color:var(--sky);':'')}"/>
