@@ -17,12 +17,17 @@ function debounceSavePurpose() {
   _savePurposeTimer = setTimeout(() => savePurpose(purposeGuests), 5000);
 }
 
-// ── Origin of Travel — XML lookup maps ───────────────────
-// _originNameMap : normalised "GIVEN FAMILY" guest name → nationality (PRIMARY match)
-// _originMap     : normalised room number (no leading zeros, uppercase) → nationality (fallback)
-// Both populated by parseOriginXML()
+// ── Origin of Travel + Nationality — XML lookup maps ─────
+// _originNameMap : normalised "GIVEN FAMILY" guest name → nationality (PRIMARY match, UAE-adjusted)
+// _originMap     : normalised room number (no leading zeros, uppercase) → nationality (fallback, UAE-adjusted)
+// _originNatMap  : normalised guest name → RAW passport nationality (no UAE override)
+// All three populated by parseOriginXML(), which auto-detects the report format:
+//   · "Inhouse" Crystal Reports XML  — GivenName1 + FamilyName1 + GuestType1 ("Main Contact")
+//   · "Vicas" Transaction Report XML — FullName1 + Process1 ("Check-in" vs "Add-Escort")
+// Same output shape either way, so downstream code never needs to care which one was loaded.
 let _originMap     = {};
 let _originNameMap = {};
+let _originNatMap  = {};
 
 function _normRoom(r) {
   // Strip leading zeros so "0621" matches "621", keep as string
@@ -42,17 +47,24 @@ function _isEmiratesId(doc) {
   return /^784\d{12}$/.test(d);
 }
 
-// Parse the Crystal Reports Inhouse XML and build lookup maps:
+// Parse an Inhouse OR Vicas Crystal Reports XML export and build lookup maps:
 //   nameMap: "GIVEN FAMILY" → Origin value          (primary — works for guests not yet room-assigned)
 //   roomMap: room number    → Origin value          (fallback — used only if a real room number is set)
-//   natMap:  "GIVEN FAMILY" → raw passport Nationality1 (NOT Emirates-ID adjusted — used by Immigration recovery)
+//   natMap:  "GIVEN FAMILY" → raw passport Nationality1 (NOT Emirates-ID adjusted — used for the Nationality column)
 // Origin value = "UAE" if the guest has an Emirates ID on file (DocumentNumber1
 // starts with 784), otherwise their passport Nationality1 — see _isEmiratesId().
-// "Main Contact" records take priority when there's a collision.
+//
+// Two report formats are supported, auto-detected per row:
+//   · Inhouse XML — fields GivenName1 + FamilyName1 + GuestType1. "Main Contact" wins on collision.
+//   · Vicas XML   — fields FullName1 + Process1. "Check-in" (the actual guest) wins over
+//                   "Add-Escort" (a companion added under the same room) on collision.
+// Both formats share RoomNumber1, Nationality1 and DocumentNumber1, so the rest of the
+// logic (Emirates-ID detection, room fallback) is identical either way.
 function parseOriginXML(xmlText) {
   const roomMap = {};
   const nameMap = {};
   const natMap  = {};
+  let   source  = null; // 'inhouse' | 'vicas' — for the toast/label only
   try {
     const parser = new DOMParser();
     const doc    = parser.parseFromString(xmlText, 'text/xml');
@@ -80,10 +92,25 @@ function parseOriginXML(xmlText) {
       const room    = getField(sec, 'RoomNumber1');
       const nat     = getField(sec, 'Nationality1');
       const docNum  = getField(sec, 'DocumentNumber1');
-      const gtype   = getField(sec, 'GuestType1');
-      const given   = getField(sec, 'GivenName1');
-      const family  = getField(sec, 'FamilyName1');
       if (!nat) continue;
+
+      // Try the Inhouse schema first (GivenName1 + FamilyName1)…
+      const given  = getField(sec, 'GivenName1');
+      const family = getField(sec, 'FamilyName1');
+
+      let fullName, isPrimary;
+      if (given && family) {
+        source    = source || 'inhouse';
+        fullName  = `${given} ${family}`; // same word order as parseName(): GIVEN then FAMILY
+        isPrimary = getField(sec, 'GuestType1') === 'Main Contact';
+      } else {
+        // …fall back to the Vicas Transaction Report schema (FullName1 + Process1)
+        const vFull = getField(sec, 'FullName1');
+        if (!vFull) continue; // neither schema matched this row — skip it
+        source    = source || 'vicas';
+        fullName  = vFull; // Vicas already reports "Given Family" order
+        isPrimary = getField(sec, 'Process1') !== 'Add-Escort';
+      }
 
       // Emirates ID on file → guest is a UAE resident, regardless of passport nationality
       const origin = _isEmiratesId(docNum) ? 'UAE' : nat;
@@ -91,41 +118,43 @@ function parseOriginXML(xmlText) {
       // Room-based map (fallback only — kept for compatibility)
       if (room) {
         const rKey = _normRoom(room);
-        if (gtype === 'Main Contact' || !roomMap[rKey]) roomMap[rKey] = origin;
+        if (isPrimary || !roomMap[rKey]) roomMap[rKey] = origin;
       }
 
-      // Name-based map (primary) — same word order as parseName(): GIVEN then FAMILY
-      if (given && family) {
-        const nKey = _normName(`${given} ${family}`);
-        if (gtype === 'Main Contact' || !nameMap[nKey]) nameMap[nKey] = origin;
-        // Raw passport nationality (no UAE override) — for Immigration recovery
-        if (gtype === 'Main Contact' || !natMap[nKey]) natMap[nKey] = nat;
-      }
+      // Name-based map (primary)
+      const nKey = _normName(fullName);
+      if (isPrimary || !nameMap[nKey]) nameMap[nKey] = origin;
+      // Raw passport nationality (no UAE override) — used to fill the Nationality column directly
+      if (isPrimary || !natMap[nKey]) natMap[nKey] = nat;
     }
   } catch (e) {
     console.warn('[OriginXML] parse error:', e);
   }
-  return { roomMap, nameMap, natMap };
+  return { roomMap, nameMap, natMap, source };
 }
 
-// Load XML from file input (called by HTML button)
+// Load XML from file input (called by HTML button).
+// Accepts either the Inhouse Guest XML or the Vicas "Transaction Report — Check In" XML —
+// format is auto-detected in parseOriginXML(), so this one button/one input handles both.
 function loadOriginXML(input) {
   const file = input?.files?.[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    const { roomMap, nameMap } = parseOriginXML(e.target.result);
+    const { roomMap, nameMap, natMap, source } = parseOriginXML(e.target.result);
     _originMap     = roomMap;
     _originNameMap = nameMap;
+    _originNatMap  = natMap;
     const count = Math.max(Object.keys(nameMap).length, Object.keys(roomMap).length);
     if (!count) { showToast('No guest data found in XML — check file format', 'err'); return; }
-    showToast(`✦ Origin map loaded — ${count} guests`, 'ok');
+    const sourceLabel = source === 'vicas' ? 'Vicas' : 'Inhouse';
+    showToast(`✦ ${sourceLabel} data loaded — ${count} guests`, 'ok');
     // Apply to any already-loaded purpose guests
     _applyOriginToPurpose();
     purposeRender();
     // Update the badge/label
     const lbl = document.getElementById('originXmlLabel');
-    if (lbl) lbl.textContent = `${count} guests loaded from XML`;
+    if (lbl) lbl.textContent = `${count} guests loaded (${sourceLabel})`;
   };
   reader.readAsText(file, 'utf-8');
 }
@@ -149,27 +178,43 @@ function _normOrigin(nat) {
 function _applyOriginToPurpose() {
   if (!purposeGuests.length) return;
   if (!Object.keys(_originNameMap).length && !Object.keys(_originMap).length) return;
-  let filled = 0;
+  let filledOrigin = 0;
+  let filledNat    = 0;
   purposeGuests.forEach(g => {
-    if (g.originOfTravel) return;
+    const nameKey     = _normName(g.name);
+    const roomKey     = _normRoom(g.room);
+    // Ignore placeholder room text like "ASSIGN ROOM" — only use real room numbers
+    const hasRealRoom = roomKey && /\d/.test(roomKey);
 
-    let nat = _originNameMap[_normName(g.name)];
+    if (!g.originOfTravel) {
+      let nat = _originNameMap[nameKey];
+      if (!nat && hasRealRoom) nat = _originMap[roomKey];
 
-    if (!nat) {
-      const roomKey = _normRoom(g.room);
-      // Ignore placeholder room text like "ASSIGN ROOM" — only use real room numbers
-      if (roomKey && /\d/.test(roomKey)) nat = _originMap[roomKey];
+      if (nat) {
+        const origin = _normOrigin(nat);
+        g.originOfTravel = origin;
+        filledOrigin++;
+        // Persist to Guest Memory so future stays auto-fill even without the XML
+        if (typeof gmOnEdit === 'function') gmOnEdit(g.name, 'originOfTravel', origin);
+      }
     }
 
-    if (nat) {
-      const origin = _normOrigin(nat);
-      g.originOfTravel = origin;
-      filled++;
-      // Persist to Guest Memory so future stays auto-fill even without the XML
-      if (typeof gmOnEdit === 'function') gmOnEdit(g.name, 'originOfTravel', origin);
+    // Real passport nationality straight from the XML (Vicas/Inhouse) beats an AI guess —
+    // only fills an empty field, never overwrites something already there.
+    if (!g.nat) {
+      const rawNat = _originNatMap[nameKey];
+      if (rawNat) {
+        g.nat = rawNat;
+        g._natFromXML = true;
+        filledNat++;
+        if (typeof gmOnEdit === 'function') gmOnEdit(g.name, 'nat', rawNat);
+      }
     }
   });
-  if (filled) showToast(`✦ Origin of Travel filled for ${filled} guest${filled !== 1 ? 's' : ''}`, 'ok');
+  const parts = [];
+  if (filledNat)    parts.push(`Nationality filled for ${filledNat}`);
+  if (filledOrigin) parts.push(`Origin of Travel filled for ${filledOrigin}`);
+  if (parts.length) showToast(`✦ ${parts.join(' · ')}`, 'ok');
 }
 
 // ── ARRIVALS ──────────────────────────────────────────────
@@ -321,7 +366,7 @@ async function runAINat_arr() {
 async function aiOneGuest(i, list) {
   const guests = list === 'arr' ? arrGuests : purposeGuests;
   const nat    = guessNat(guests[i].name);
-  if (nat) guests[i].nat = nat;
+  if (nat) { guests[i].nat = nat; guests[i]._natFromXML = false; }
   arrRender(); purposeRender();
 }
 
@@ -485,9 +530,10 @@ function purposeRender() {
         style="width:42px;"/></td>
       <td><div style="display:flex;gap:3px;align-items:center;">
         <input value="${g.nat}"
-          oninput="purposeGuests[${i}].nat=this.value"
+          oninput="purposeGuests[${i}].nat=this.value;purposeGuests[${i}]._natFromXML=false;"
           onblur="gmOnEdit(purposeGuests[${i}].name,'nat',this.value);debounceSavePurpose()"
-          style="width:86px;${g._fromMemory?'border-color:var(--sky);':''}"/>
+          title="${g._natFromXML ? 'Nationality — loaded from Vicas/Inhouse XML' : 'Nationality'}"
+          style="width:86px;${g._natFromXML ? 'border-color:var(--mint);' : (g._fromMemory?'border-color:var(--sky);':'')}"/>
         <button class="icon-btn ai-btn" onclick="aiOneGuest(${i},'purpose')" title="AI">✦</button>
       </div></td>
       <td><input value="${g.email}"
@@ -502,7 +548,7 @@ function purposeRender() {
           oninput="purposeGuests[${i}].originOfTravel=this.value"
           onblur="gmOnEdit(purposeGuests[${i}].name,'originOfTravel',this.value);debounceSavePurpose()"
           placeholder="—"
-          title="Origin of Travel — loaded from Inhouse XML"
+          title="Origin of Travel — loaded from Vicas/Inhouse XML"
           style="width:96px;${originStyle}"/>
       </td>
       <td><input value="${g.remarks}"
@@ -557,11 +603,12 @@ function loadPurpose() {
   }
   purposeGuests = guests;
   purposeRender();
-  // AI guesser first, memory on top — memory always wins
+  // Real XML data (Vicas/Inhouse) first — it's ground truth, not a guess.
+  // AI guesser only fills whoever wasn't matched; memory tops that off.
   setTimeout(() => {
+    _applyOriginToPurpose();
     runAINat_purpose().then(() => {
       if (typeof gmAutoFill === 'function') gmAutoFill(purposeGuests);
-      _applyOriginToPurpose();
       purposeRender();
     });
   }, 300);
@@ -696,10 +743,12 @@ function loadOperaFile(input, target) {
       } else {
         purposeGuests = guests;
         purposeRender();
+        // Real XML data (Vicas/Inhouse) first — it's ground truth, not a guess.
+        // AI guesser only fills whoever wasn't matched; memory tops that off.
         setTimeout(() => {
+          _applyOriginToPurpose();
           runAINat_purpose().then(() => {
             if (typeof gmAutoFill === 'function') gmAutoFill(purposeGuests);
-            _applyOriginToPurpose();
             purposeRender();
           });
         }, 400);
