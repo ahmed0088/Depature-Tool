@@ -505,6 +505,16 @@ function immigLoadArrivals(input) {
 // on flagged rows, based on the recovery maps above. This does NOT clear the
 // issue — Opera itself still has the field blank, so the row stays flagged
 // until a colleague actually updates the guest profile in Opera.
+//
+// Gender has two tiers of confidence:
+//   r.suggestedSex — from an actual Mr./Mrs./Ms. title in the arrivals export.
+//                     Reliable (a human wrote that title on the booking).
+//   r.guessedSex   — from guessGender() matching the guest's first name against
+//                     a name dictionary. This is a heuristic ONLY — no title,
+//                     no ID, nothing authoritative behind it. Inhouse.xml has
+//                     no gender/title field of any kind, so this is the best
+//                     available fallback, but it must always be shown to staff
+//                     as "guess, verify manually" — never as a resolved fact.
 function _immigApplyRecovery(rows) {
   rows.forEach(r => {
     const key = _normName(r.name);
@@ -512,8 +522,14 @@ function _immigApplyRecovery(rows) {
     if (r.noNat && _immigNatMap[key]) {
       r.suggestedNat = _immigNatMap[key];
     }
-    if (r.noSex && _immigGenderMap[key]) {
-      r.suggestedSex = _immigGenderMap[key];
+    if (r.noSex) {
+      if (_immigGenderMap[key]) {
+        r.suggestedSex = _immigGenderMap[key];
+      } else if (typeof guessGender === 'function') {
+        const firstName = (r.name || '').trim().split(/\s+/)[0];
+        const g = guessGender(firstName);
+        if (g) r.guessedSex = g;
+      }
     }
     if (r.noPass && _immigPassportMap[key]) {
       r.suggestedPassport = _immigPassportMap[key];
@@ -567,11 +583,13 @@ function processImmig2(silent) {
   immigAllRows2=rows; immigFilter2_='all';
   const noNatC=rows.filter(r=>r.noNat).length,noSexC=rows.filter(r=>r.noSex).length,noPassC=rows.filter(r=>r.noPass).length,noFnameC=rows.filter(r=>r.noFname).length,crit=rows.filter(r=>r.critical).length;
   const sugNatC=rows.filter(r=>r.suggestedNat).length, sugSexC=rows.filter(r=>r.suggestedSex).length, sugPassC=rows.filter(r=>r.suggestedPassport).length;
+  const guessSexC=rows.filter(r=>r.guessedSex).length;
   const ihTotal=guests.filter(g=>{const a=pd(g.arrival),d=pd(g.departure);return bizDate&&a&&d?a<=bizDate&&d>bizDate:true;}).length;
   document.getElementById('immigKpis2').innerHTML=`<div class="kpi rose"><div class="kpi-accent"></div><div class="kpi-label">Critical</div><div class="kpi-val">${crit}</div><div class="kpi-sub">nat or gender</div></div><div class="kpi amber"><div class="kpi-accent"></div><div class="kpi-label">No Nationality</div><div class="kpi-val">${noNatC}</div></div><div class="kpi sky"><div class="kpi-accent"></div><div class="kpi-label">No Passport</div><div class="kpi-val">${noPassC}</div></div><div class="kpi mint"><div class="kpi-accent"></div><div class="kpi-label">No Gender</div><div class="kpi-val">${noSexC}</div></div>`;
   const sugTotal = sugNatC+sugSexC+sugPassC;
   const suggestNote = sugTotal ? ` · ✦ ${sugTotal} suggested value${sugTotal!==1?'s':''} to enter in Opera (${sugNatC} nationality, ${sugSexC} gender, ${sugPassC} passport)` : '';
-  const metaEl=document.getElementById('immigMeta2'); if(metaEl)metaEl.textContent=hotel+' · '+rDate+' '+rTime+' · '+ihTotal+' in-house · '+rows.length+' issues'+suggestNote;
+  const guessNote = guessSexC ? ` · ❓ ${guessSexC} gender guess${guessSexC!==1?'es':''} from name — verify against ID before entering` : '';
+  const metaEl=document.getElementById('immigMeta2'); if(metaEl)metaEl.textContent=hotel+' · '+rDate+' '+rTime+' · '+ihTotal+' in-house · '+rows.length+' issues'+suggestNote+guessNote;
   [['ifc-all',rows.length],['ifc-nat',noNatC],['ifc-gen',noSexC],['ifc-pass',noPassC],['ifc-fname',noFnameC]].forEach(([id,v])=>{const el=document.getElementById(id);if(el)el.textContent=v;});
   document.getElementById('immigTabCount').textContent=crit>0?(crit+' critical'):(rows.length+' issues');
   document.querySelectorAll('#immigFilters2 .fchip').forEach(b=>b.classList.remove('on'));
@@ -591,10 +609,11 @@ function immigRender2(rows) {
   const sC=s=>!s||s.toUpperCase()==='U'?'var(--amber)':s.toUpperCase()==='M'?'var(--sky)':'var(--rose)';
   const tM={nationality:['var(--rose)','Nationality'],gender:['var(--amber)','Gender'],passport:['var(--sky)','Passport'],first_name:['var(--mint)','First Name']};
   const sugChip=(label)=>`<div style="font-family:var(--mono);font-size:0.56rem;color:var(--mint);margin-top:3px;white-space:nowrap;">→ suggest: <strong>${label}</strong><br>update in Opera</div>`;
+  const guessChip=(label)=>`<div style="font-family:var(--mono);font-size:0.56rem;color:var(--amber);margin-top:3px;white-space:nowrap;">❓ guess: <strong>${label}</strong><br>(name-based — verify ID)</div>`;
   tbody.innerHTML=filtered.map(r=>{
     const tags=r.issues.map(i=>{const[c,l]=tM[i]||['var(--text3)',i];return`<span style="font-family:var(--mono);font-size:0.54rem;padding:2px 7px;border-radius:8px;border:1px solid;color:${c};border-color:${c}22;background:${c}11;">${l}</span>`;}).join(' ');
     const sexCell = r.noSex
-      ? '<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:5px;background:var(--amber)11;border:1px solid var(--amber)33;font-family:var(--mono);font-size:0.63rem;font-weight:700;color:var(--amber);">?</span>'+(r.suggestedSex?sugChip(r.suggestedSex):'')
+      ? '<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:5px;background:var(--amber)11;border:1px solid var(--amber)33;font-family:var(--mono);font-size:0.63rem;font-weight:700;color:var(--amber);">?</span>'+(r.suggestedSex?sugChip(r.suggestedSex):(r.guessedSex?guessChip(r.guessedSex):''))
       : `<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:5px;background:${sC(r.sex)}11;border:1px solid ${sC(r.sex)}33;font-family:var(--mono);font-size:0.63rem;font-weight:700;color:${sC(r.sex)};">${r.sex}</span>`;
     const natCell = r.noNat
       ? '<span style="font-family:var(--mono);font-size:0.58rem;color:var(--rose);background:rgba(240,107,122,0.08);border:1px dashed rgba(240,107,122,0.4);border-radius:5px;padding:2px 7px;">NOT SET</span>'+(r.suggestedNat?sugChip(r.suggestedNat):'')

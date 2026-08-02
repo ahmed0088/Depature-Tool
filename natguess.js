@@ -64,3 +64,118 @@ function guessNat(name) {
   }
   return '';
 }
+
+// ═══════════════════════════════════════════════════════════
+//  Gender guessing from a guest's GIVEN name
+//  Used only as a fallback when no title (Mr./Mrs./Ms.) is available
+//  (e.g. Inhouse.xml has no gender/title field at all — only names).
+//  This is inherently a guess, never treated as confirmed — the UI
+//  must always mark it lower-confidence than a title-based match and
+//  tell the desk to verify against the passport/ID in hand.
+//  Add more names to either set to improve coverage.
+// ═══════════════════════════════════════════════════════════
+
+const GENDER_MALE_NAMES = new Set([
+  // seen directly in this property's guest data
+  'gert','jamoliddin','bashar','abdulaziz','alaaeldin','muaz','ahmad','ahmed','noah','mattia',
+  'suhajb','suhayb','shresth','tarun','daler','mohamed','mohammed','esam','isam','shiju','ramesh',
+  'parshotam','ruslan','sonny','abdulkadir','abdishakur','abubakar','abdurrahman','ibrahim',
+  'nabeel','danial','osvaldo','khalfan','anwar','hisham','younas','yunus','rahul','maulik',
+  'khadim','dmitrii','abdul','mukhammad','hashim','troy','florin','arie','dahir','haissam',
+  'haitham','michael','ismail','vincent','alain','huseyin','hussein',
+  // Turkish
+  'mehmet','mustafa','ahmet','ali','hasan','omer','emre','burak','kaan','furkan','yusuf','emin',
+  'serkan','volkan','tolga','murat','can','baris','ozan',
+  // Indian
+  'raj','rajesh','suresh','vijay','anand','prakash','ravi','amit','sanjay','deepak','arun','sunil',
+  'manoj','sandeep','ashok','ajay','vikram','rohit','nikhil','karan','aditya','sanjeev','naveen',
+  'pradeep','kumar','siva','bala','murugan','venkatesan','natarajan','krishnan','venkat','mahesh',
+  // Pakistani
+  'farhan','khalid','faheem','kamran','karim','tariq','asif','imran','usman','bilal','talha',
+  'zubair','waheed','rashid','nasir','zafar','tahir','waqar','junaid','adeel','syed','muhammad',
+  // Ethiopian
+  'tesfaye','abebe','haile','tadesse','bekele','girma','wolde','desta','alemu','mesfin','mulugeta',
+  'berhe','tekle','hagos','yohannes','dawit','solomon','kidane',
+  // Filipino
+  'jose','juan','mark','john','ramon','rodel','ferdinand','ricardo','danilo','rogelio','renato',
+  // Somali
+  'jama','jimale','farah','aden','warsame','hirsi','dahir','hersi','shire','guled','bile','elmi','duale',
+  // Arabic / Gulf broader
+  'hussein','omar','abdullah','abdulrahman','yousef','suleiman','sulaiman','hamza','zaid','fahad',
+  'nasser','saeed','majed','tarek','sami','nabil','jamal','kamal','adel','adnan','anas','yasir',
+  'yaser','marwan','emad','fadi','ziad','salem','hatem','rami','sultan','talal','turki','zayed',
+  'mahmoud','mostafa','amr','sherif','ashraf','tamer','walid','faisal','waleed','yasser','khaled',
+  'hossam','said','rachid','hicham','issam','youssef',
+  // Senegalese / Guinean
+  'mamadou','ibrahima','alpha','oumar','cheikh','modou','ousmane','moussa','abdou','souleymane',
+  'boubacar','amadou',
+  // Central Asian / Russian
+  'sardor','umidjon','firdavs','bekzod','jasur','sherzod','otabek','bakhtiyor','ivan','dmitri',
+  'alexei','sergei','andrei','nikolai','vladimir','pavel','anton','maxim',
+  // Bangladeshi
+  'rakib','rafiq','shakib','arif','jahangir',
+  // Portuguese (Angola/Mozambique)
+  'joao','manuel','antonio','carlos','paulo','pedro','miguel','fernando',
+  // Ghanaian
+  'kwame','kofi','kwabena','yaw','kwesi','kojo',
+  // Nigerian
+  'chinedu','emeka','ikechukwu','uche','chibuike','olumide','adewale','tunde','segun','femi',
+  // Kenyan
+  'kamau','mwangi','njoroge','kariuki','kimani','otieno','omondi',
+]);
+
+const GENDER_FEMALE_NAMES = new Set([
+  // seen directly in this property's guest data
+  'nazik','sahra','nadia','intisar','nimo','nouha','nuha','ruqaiya','alwiyah','alawiya','sandrine',
+  'catherine','nurten','lucineide','xiaoyan','gertrudes','fathiya','fathia','mulki','amina','yusur',
+  'sundus','saarah','sarah','elaf',
+  // Turkish
+  'ayse','fatma','emine','hatice','zeynep','elif','merve','esra','busra','ozge','sibel','derya',
+  'sevgi','sevil','gulsah','aylin',
+  // Indian
+  'priya','anita','sunita','kavita','pooja','neha','meera','radha','sita','geeta','rekha','shanti',
+  'lakshmi','divya','swati','anjali','sneha','kiran','deepa','nisha',
+  // Pakistani
+  'ayesha','sana','sadia','fariha','rabia','sadaf','shazia','uzma','farah','bushra',
+  // Ethiopian
+  'selam','meron','hirut','aster','tigist','bethlehem','rahel','genet','almaz','marta','konjit','wubit',
+  // Filipino
+  'maria','ana','rosa','marites','josephine','angelica','cristina','grace','joy','melody','precious',
+  // Somali
+  'fathia','istarlin','saynab','mariam','muna','maryan','hawo','halima','hodan','ifrah','nasra',
+  'amran','deqa','ubax',
+  // Arabic broader
+  'fatima','aisha','zainab','layla','laila','noor','nour','huda','amal','rania','dalia','rana',
+  'lina','maha','reem','samira','yasmin','yasmine','salma','hana','iman','hind','ghada','nada',
+  'wafa','suha','sawsan','amira','dina','rasha','randa','hadeel','alaa','buthaina','manal','khadija',
+  'imane','heba','nourhan','maryam','sara',
+  // Senegalese / Guinean
+  'aminata','fatoumata','mariama','coumba','awa','khady','ndeye','ramatoulaye',
+  // Central Asian / Russian
+  'nilufar','gulnora','dilnoza','sevara','zarina','elena','olga','natalia','irina','tatiana',
+  'svetlana','anna','ekaterina','yulia',
+  // Bangladeshi
+  'sultana','nasrin','shirin','farzana',
+  // Portuguese (Angola/Mozambique)
+  'isabel','teresa','luisa',
+  // Ghanaian
+  'ama','akosua','abena','efua','adjoa',
+  // Egyptian / Moroccan
+  'mona','rana','yasmin',
+  // Nigerian
+  'ngozi','chioma','amaka','ifeoma','blessing','chidinma',
+  // Kenyan
+  'wanjiku','njeri','achieng','wangari','akinyi',
+]);
+
+// Returns 'M' | 'F' | '' — only ever a heuristic guess from the given name.
+// Always surface this to staff as "guess — verify against ID", never as fact.
+function guessGender(givenName) {
+  if (!givenName) return '';
+  const first = givenName.toLowerCase().replace(/[^a-z\s]/g, '').trim().split(/\s+/)[0];
+  if (!first) return '';
+  if (GENDER_MALE_NAMES.has(first)) return 'M';
+  if (GENDER_FEMALE_NAMES.has(first)) return 'F';
+  return '';
+}
+
