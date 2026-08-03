@@ -1,17 +1,27 @@
 // ═══════════════════════════════════════════════════════════
 //  inhouse-tally.js  —  Inhouse Tally (Opera vs Immigration XML)
 //
-//  Reconciles two same-night Opera exports:
-//   1) "Guest In-House By Room" — tab-delimited, one row per room
-//      reservation, with ADULTS/CHILDREN giving the true occupancy.
-//   2) Inhouse / Guest Count XML — Crystal Report export, one
-//      <Details Level="2"> block per registered person. Newer
-//      exports tag each person with PrimaryEscortFlag:
-//        P = Primary guest, E = Escort (sharing/accompanying),
-//        V = Visitor — NOT an overnight guest, must be excluded
-//            from the in-house headcount or totals won't match.
-//      Older exports don't have this flag at all — in that case
-//      every record is treated as a guest.
+//  Reconciles two same-night reports:
+//   1) A room-by-room occupancy list from Opera. Two formats accepted,
+//      auto-detected:
+//        · "Guest In-House By Room" (gibyroom) — tab-delimited,
+//          ROOM + ADULTS/CHILDREN + FULL_NAME columns.
+//        · "wa21" reservations export — comma-delimited quoted CSV,
+//          Room + Adults/Children + Name columns.
+//   2) A guest registration XML. Two formats accepted, auto-detected:
+//        · Inhouse / Guest Count XML — Crystal Report export, one
+//          <Details Level="2"> block per registered person, tagged
+//          with PrimaryEscortFlag: P = Primary guest, E = Escort
+//          (sharing/accompanying), V = Visitor — NOT an overnight
+//          guest, excluded from the headcount. Older exports have no
+//          flag at all — every record is then treated as a guest.
+//        · VICAS "Transaction Report — Check In" XML — <Details
+//          Level="1"> blocks, one row per check-in/escort EVENT
+//          (FullName1 + Process1: "Check-in" = primary guest,
+//          "Add-Escort" = companion). A room can rack up more than
+//          one event for the same person (reprints, room turnover),
+//          so each person's LAST event per room wins — that's always
+//          whoever is currently occupying the room.
 //
 //  Room numbers are normalised (leading zeros stripped) since
 //  gibyroom pads to 4 digits ("0601") while the XML doesn't ("601").
@@ -30,32 +40,63 @@ function _itNormRoom(room) {
   return stripped || '0';
 }
 
-// ── Parse "Guest In-House By Room" (tab-delimited) ────────
+function _itNormName(s) {
+  return String(s || '').replace(/\s+/g, ' ').trim().toUpperCase();
+}
+
+// Find a header column by exact match first, then substring — mirrors the
+// same flexible lookup used elsewhere in the app (tourism-tax.js etc.) so
+// both the classic Opera export and a re-saved CSV like wa21 resolve to
+// the same columns even though their header text differs slightly.
+function _itFindCol(hdrs, ...names) {
+  for (const n of names) {
+    const exact = hdrs.findIndex(h => h === n);
+    if (exact >= 0) return exact;
+  }
+  for (const n of names) {
+    const idx = hdrs.findIndex(h => h.includes(n));
+    if (idx >= 0) return idx;
+  }
+  return -1;
+}
+
+// ── Parse "Guest In-House By Room" — tab-delimited OR comma CSV ──
 function itParseGiby(raw) {
   const lines = raw.split('\n').map(l => l.replace(/\r$/, '')).filter(l => l.trim());
   if (lines.length < 2) return null;
-  const hdrs = lines[0].split('\t').map(h => h.trim().toUpperCase());
-  const idx  = {};
-  hdrs.forEach((h, i) => { idx[h] = i; });
-  if (idx['ROOM'] === undefined) return null;
+
+  // Auto-detect delimiter: classic gibyroom export is tab-delimited;
+  // a report saved/re-copied as CSV (e.g. wa21) is comma+quoted.
+  const delim     = lines[0].includes('\t') ? '\t' : ',';
+  const splitLine = delim === '\t' ? (l => l.split('\t')) : parseCSVLine;
+
+  const hdrs = splitLine(lines[0]).map(h => h.replace(/"/g, '').trim().toUpperCase());
+  const iRoom   = _itFindCol(hdrs, 'ROOM');
+  const iAdults = _itFindCol(hdrs, 'ADULTS');
+  const iChild  = _itFindCol(hdrs, 'CHILDREN');
+  const iName   = _itFindCol(hdrs, 'FULL_NAME', 'NAME');
+  if (iRoom < 0) return null;
 
   const rooms = {};
   for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split('\t');
-    const room = (cols[idx['ROOM']] || '').trim();
+    const cols = splitLine(lines[i]);
+    const room = (cols[iRoom] || '').replace(/"/g, '').trim();
     if (!room) continue;
-    const adults   = parseInt(cols[idx['ADULTS']])   || 0;
-    const children = idx['CHILDREN'] !== undefined ? (parseInt(cols[idx['CHILDREN']]) || 0) : 0;
-    const nameRaw  = idx['FULL_NAME'] !== undefined ? (cols[idx['FULL_NAME']] || '').trim() : '';
+    const adults   = iAdults >= 0 ? (parseInt(cols[iAdults]) || 0) : 0;
+    const children = iChild  >= 0 ? (parseInt(cols[iChild])  || 0) : 0;
+    const nameRaw  = iName   >= 0 ? (cols[iName] || '').replace(/"/g, '').trim() : '';
     const rn = _itNormRoom(room);
     if (!rooms[rn]) rooms[rn] = { pax: 0, names: [] };
-    rooms[rn].pax += adults + children;
+    // If neither Adults nor Children columns were found at all, fall back
+    // to counting 1 pax per reservation row rather than silently zeroing
+    // the whole report out.
+    rooms[rn].pax += (iAdults >= 0 || iChild >= 0) ? (adults + children) : 1;
     if (nameRaw) rooms[rn].names.push(typeof parseName === 'function' ? parseName(nameRaw) : nameRaw);
   }
   return rooms;
 }
 
-// ── Parse Inhouse / Guest Count XML (Crystal Report export) ──
+// ── Parse Inhouse / Guest Count XML OR VICAS Check-In XML ────
 function _itXmlField(block, fieldName) {
   const re = new RegExp('Name="' + fieldName + '"[^>]*><FormattedValue>([^<]*)</FormattedValue>');
   const m = block.match(re);
@@ -63,27 +104,61 @@ function _itXmlField(block, fieldName) {
 }
 
 function itParseXml(raw) {
-  const details = raw.match(/<Details Level="2">[\s\S]*?<\/Details>/g);
+  // Inhouse/Guest Count XML uses <Details Level="2">, one block per
+  // registered person. The VICAS Transaction Report uses <Details
+  // Level="1"> instead, one block per check-in/escort event.
+  let details = raw.match(/<Details Level="2">[\s\S]*?<\/Details>/g);
+  let level = 2;
+  if (!details || !details.length) {
+    details = raw.match(/<Details Level="1">[\s\S]*?<\/Details>/g);
+    level = 1;
+  }
   if (!details || !details.length) return null;
 
   const rooms = {};
+
+  if (level === 2) {
+    details.forEach(block => {
+      const room = _itXmlField(block, 'RoomNumber1');
+      if (!room) return;
+      const given   = _itXmlField(block, 'GivenName1');
+      const family  = _itXmlField(block, 'FamilyName1');
+      const flagRaw = _itXmlField(block, 'PrimaryEscortFlag1');
+      // No flag field at all (older report format) → treat as a guest.
+      const flag = flagRaw || 'P';
+      const rn = _itNormRoom(room);
+      if (!rooms[rn]) rooms[rn] = { guestCount: 0, visitorCount: 0, guests: [] };
+      const name = (given + ' ' + family).trim();
+      if (flag === 'V') rooms[rn].visitorCount++;
+      else              rooms[rn].guestCount++;
+      rooms[rn].guests.push({ name, flag });
+    });
+    return rooms;
+  }
+
+  // VICAS Transaction Report (Level 1) — one row per check-in EVENT, not
+  // per current occupant. The same person can appear more than once, and
+  // not always for the same room: a reprinted registration card logs an
+  // identical duplicate event, but a genuine room change/reassignment logs
+  // the guest under a DIFFERENT room later in the report. Either way, the
+  // fix is the same — track only each guest's most recent (room, flag) in
+  // document order, so they're counted against wherever they ended up, not
+  // every room they've ever briefly touched.
+  const lastByGuest = {}; // normalised name -> { room, name, flag }
   details.forEach(block => {
-    const room = _itXmlField(block, 'RoomNumber1');
-    if (!room) return;
-    const given  = _itXmlField(block, 'GivenName1');
-    const family = _itXmlField(block, 'FamilyName1');
-    const flagRaw = _itXmlField(block, 'PrimaryEscortFlag1');
-    // No flag field at all (older report format) → treat as a guest.
-    const flag = flagRaw || 'P';
-    const rn = _itNormRoom(room);
-    if (!rooms[rn]) rooms[rn] = { guestCount: 0, visitorCount: 0, guests: [] };
-    const name = (given + ' ' + family).trim();
-    if (flag === 'V') {
-      rooms[rn].visitorCount++;
-    } else {
-      rooms[rn].guestCount++;
-    }
-    rooms[rn].guests.push({ name, flag });
+    const room     = _itXmlField(block, 'RoomNumber1');
+    const fullName = _itXmlField(block, 'FullName1');
+    if (!room || !fullName) return;
+    const process = _itXmlField(block, 'Process1');
+    const flag = process === 'Add-Escort' ? 'E' : 'P';
+    lastByGuest[_itNormName(fullName)] = { room: _itNormRoom(room), name: fullName, flag };
+  });
+  Object.values(lastByGuest).forEach(g => {
+    if (!rooms[g.room]) rooms[g.room] = { guestCount: 0, visitorCount: 0, guests: [] };
+    // VICAS has no "Visitor" concept — every distinct person logged
+    // against a room is an actual overnight occupant.
+    rooms[g.room].guestCount++;
+    rooms[g.room].guests.push({ name: g.name, flag: g.flag });
   });
   return rooms;
 }
@@ -121,13 +196,13 @@ function itRun() {
 
   const gibyRaw = (document.getElementById('itGibyInput').value || '').trim();
   const xmlRaw  = (document.getElementById('itXmlInput').value  || '').trim();
-  if (!gibyRaw) return showErr('Upload or paste the Guest In-House By Room export first.');
-  if (!xmlRaw)  return showErr('Upload or paste the Inhouse / Guest Count XML first.');
+  if (!gibyRaw) return showErr('Upload or paste the Guest In-House By Room (or wa21) export first.');
+  if (!xmlRaw)  return showErr('Upload or paste the Inhouse / Guest Count XML (or Vicas Check-In XML) first.');
 
   const giby = itParseGiby(gibyRaw);
-  if (!giby) return showErr('Could not find a ROOM column — check this is the Guest In-House By Room export.');
+  if (!giby) return showErr('Could not find a Room column — check this is the Guest In-House By Room or wa21 export.');
   const xml = itParseXml(xmlRaw);
-  if (!xml) return showErr('Could not find any guest records — check this is the Inhouse/Guest Count XML.');
+  if (!xml) return showErr('Could not find any guest records — check this is the Inhouse/Guest Count XML or the Vicas Check-In XML.');
 
   itGibyRooms = giby;
   itXmlRooms  = xml;

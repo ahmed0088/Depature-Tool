@@ -184,6 +184,34 @@ function _normOrigin(nat) {
   return n;
 }
 
+// Wipe the XML lookup maps. Called whenever a FRESH Opera report is loaded
+// into Purpose of Stay (new night = new guests). Without this, nationality
+// data from a previously-loaded XML can silently "stick" and get stamped
+// onto a completely different guest who now happens to be in the same room
+// (e.g. room 610 held guest A last night, guest B tonight — if the XML isn't
+// reloaded, guest B would incorrectly inherit guest A's nationality via the
+// room-number fallback). Clearing here forces a clean slate every time.
+function _clearOriginMaps() {
+  _originMap = {}; _originNameMap = {}; _originNatMap = {}; _originNatRoomMap = {};
+  const lbl = document.getElementById('originXmlLabel');
+  if (lbl) lbl.textContent = '';
+}
+
+// After a fresh Opera guest list loads, nudge the user to load the
+// Nationality/VICAS XML next if they haven't already this session —
+// this is report #2 in the "load report 1, then report 2" workflow.
+function _promptForOriginXml() {
+  if (Object.keys(_originNatMap).length || Object.keys(_originMap).length) return; // already loaded
+  showToast('📥 Guest list loaded — now load the Nationality/Vicas XML to fill nationalities', 'info');
+  const xmlInput = document.querySelector('#purposeUploadCard input[accept=".xml"]');
+  if (xmlInput) {
+    xmlInput.style.outline = '2px solid var(--gold, #f0a43a)';
+    xmlInput.style.borderRadius = '4px';
+    if (xmlInput.scrollIntoView) xmlInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => { xmlInput.style.outline = ''; }, 4000);
+  }
+}
+
 function _applyOriginToPurpose() {
   if (!purposeGuests.length) return;
   if (!Object.keys(_originNameMap).length && !Object.keys(_originMap).length) return;
@@ -635,31 +663,38 @@ function loadPurpose() {
   const raw = document.getElementById('purposeInput').value.trim();
   if (!raw) { alert('Please paste data first.'); return; }
   const lines = raw.split('\n').filter(l => l.trim()); if (lines.length < 2) return;
-  const hdrs  = lines[0].split('\t').map(h => h.trim().toUpperCase());
+  // Auto-detect delimiter — Opera's own paste export is tab-delimited, but a
+  // report saved/re-copied as CSV (e.g. wa21) comes through comma+quoted —
+  // handle both instead of assuming tabs and silently mis-parsing everything
+  // into one giant column.
+  const delim     = lines[0].includes('\t') ? '\t' : ',';
+  const splitLine = delim === '\t' ? (l => l.split('\t')) : parseCSVLine;
+  const hdrs  = splitLine(lines[0]).map(h => h.replace(/"/g,'').trim().toUpperCase());
   const ci    = n => hdrs.findIndex(h => h.includes(n));
   const rI=ci('ROOM'),nI=ci('NAME'),niI=ci('NIGHT'),cI=hdrs.findIndex(h=>h.includes('CONFIRM')),taI=ci('TRAVEL'),coI=ci('COMPANY'),srcI=ci('SOURCE');
   if (rI < 0 || nI < 0) { alert('Could not find Room/Name.'); return; }
   const guests = [];
   for (let i = 1; i < lines.length; i++) {
-    const p    = lines[i].split('\t');
-    const room = (p[rI]||'').trim();
-    const rn   = (p[nI]||'').trim();
+    const p    = splitLine(lines[i]);
+    const room = (p[rI]||'').replace(/"/g,'').trim();
+    const rn   = (p[nI]||'').replace(/"/g,'').trim();
     if (!room || !rn) continue;
-    guests.push({ room, conf:cI>=0?(p[cI]||'').trim():'', name:cleanName(rn), purpose:'Business',
+    guests.push({ room, conf:cI>=0?(p[cI]||'').replace(/"/g,'').trim():'', name:cleanName(rn), purpose:'Business',
       nights:niI>=0?parseInt(p[niI])||1:1, nat:'', email:'No@email.com',
-      source:cleanSource(taI>=0?(p[taI]||'').trim():'', coI>=0?(p[coI]||'').trim():'', srcI>=0?(p[srcI]||'').trim():''),
-      originOfTravel: _originMap[_normRoom(room)] || '',
+      source:cleanSource(taI>=0?(p[taI]||'').replace(/"/g,'').trim():'', coI>=0?(p[coI]||'').replace(/"/g,'').trim():'', srcI>=0?(p[srcI]||'').replace(/"/g,'').trim():''),
+      originOfTravel: '',
       remarks:'' });
   }
+  _clearOriginMaps();      // fresh report = fresh night — old XML data doesn't carry over
   purposeGuests = guests;
   purposeRender();
   // Real XML data (Vicas/Inhouse) first — it's ground truth, not a guess.
   // AI guesser only fills whoever wasn't matched; memory tops that off.
   setTimeout(() => {
-    _applyOriginToPurpose();
     runAINat_purpose().then(() => {
       if (typeof gmAutoFill === 'function') gmAutoFill(purposeGuests);
       purposeRender();
+      _promptForOriginXml();   // ask for report #2 (the nationality XML) if not loaded yet
     });
   }, 300);
   addPurposeLog('Loaded', `${guests.length} guests loaded from paste`);
@@ -780,7 +815,7 @@ function loadOperaFile(input, target) {
           nights: niI>=0?parseInt(r[niI])||1:1,
           nat:    '', email:'No@email.com',
           source: cleanSource(taI>=0?String(r[taI]||'').trim():'', coI>=0?String(r[coI]||'').trim():'', srcI>=0?String(r[srcI]||'').trim():''),
-          originOfTravel: _originMap[_normRoom(room)] || '',
+          originOfTravel: '',
           remarks:'',
         });
       }
@@ -796,15 +831,16 @@ function loadOperaFile(input, target) {
           });
         }, 400);
       } else {
+        _clearOriginMaps();   // fresh report = fresh night — old XML data doesn't carry over
         purposeGuests = guests;
         purposeRender();
         // Real XML data (Vicas/Inhouse) first — it's ground truth, not a guess.
         // AI guesser only fills whoever wasn't matched; memory tops that off.
         setTimeout(() => {
-          _applyOriginToPurpose();
           runAINat_purpose().then(() => {
             if (typeof gmAutoFill === 'function') gmAutoFill(purposeGuests);
             purposeRender();
+            _promptForOriginXml();   // ask for report #2 (the nationality XML) if not loaded yet
           });
         }, 400);
       }
