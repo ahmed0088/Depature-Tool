@@ -227,8 +227,12 @@ function _applyOriginToGuestList(list) {
     const hasRealRoom = roomKey && /\d/.test(roomKey);
 
     if (!g.originOfTravel) {
-      let nat = _originNameMap[nameKey];
-      if (!nat && hasRealRoom) nat = _originMap[roomKey];
+      // Room number is primary — it's the one key both reports agree on even when
+      // Opera's name is a shortened/reordered version of the XML's full legal name
+      // (e.g. XML "Ahmed Ali Khan Nawab Ali Khan" vs Opera "Ahmed Khan Nawab").
+      // Name match is only a fallback for guests with no real room yet.
+      let nat = hasRealRoom ? _originMap[roomKey] : undefined;
+      if (!nat) nat = _originNameMap[nameKey];
 
       if (nat) {
         const origin = _normOrigin(nat);
@@ -244,11 +248,11 @@ function _applyOriginToGuestList(list) {
     // this specific stay is what the front-desk scan says, not what memory has from a
     // past stay). The ONLY thing that outranks it is a human typing directly into the
     // field on this screen (_natUserEdited, set by the input's oninput handler below).
-    // Name match is primary; if the Opera export shows a shortened/different name than
-    // the XML's full name, fall back to the room number — same as Origin of Travel does.
+    // Room number is primary — same reasoning as Origin of Travel above. Name is only
+    // a fallback for guests with no real room yet.
     if (!g._natUserEdited) {
-      let rawNat = _originNatMap[nameKey];
-      if (!rawNat && hasRealRoom) rawNat = _originNatRoomMap[roomKey];
+      let rawNat = hasRealRoom ? _originNatRoomMap[roomKey] : undefined;
+      if (!rawNat) rawNat = _originNatMap[nameKey];
       if (rawNat && rawNat !== g.nat) {
         g.nat = rawNat;
         g._natFromXML = true;
