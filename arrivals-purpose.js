@@ -460,8 +460,8 @@ function loadArrivals() {
       remarks:'' });
   }
   if (!guests.length) { alert('No guests found.'); return; }
-  _clearOriginMaps();     // fresh report = fresh night — old XML data doesn't carry over
   arrGuests = guests;
+  _applyOriginToPurpose();   // re-apply any already-loaded XML instantly — don't discard it
   arrRender();
   // Real XML data (Vicas/Inhouse) first — it's ground truth, not a guess.
   // AI guesser only fills whoever wasn't matched; memory tops that off.
@@ -707,8 +707,8 @@ function loadPurpose() {
       originOfTravel: '',
       remarks:'' });
   }
-  _clearOriginMaps();      // fresh report = fresh night — old XML data doesn't carry over
   purposeGuests = guests;
+  _applyOriginToPurpose();   // re-apply any already-loaded XML instantly — don't discard it
   purposeRender();
   // Real XML data (Vicas/Inhouse) first — it's ground truth, not a guess.
   // AI guesser only fills whoever wasn't matched; memory tops that off.
@@ -845,6 +845,7 @@ function loadOperaFile(input, target) {
       // AI guesser first, memory on top — memory always wins
       if (target === 'arr') {
         arrGuests = guests;
+        _applyOriginToPurpose();   // re-apply any already-loaded XML instantly — don't discard it
         arrRender();
         setTimeout(() => {
           runAINat_arr().then(() => {
@@ -853,8 +854,8 @@ function loadOperaFile(input, target) {
           });
         }, 400);
       } else {
-        _clearOriginMaps();   // fresh report = fresh night — old XML data doesn't carry over
         purposeGuests = guests;
+        _applyOriginToPurpose();   // re-apply any already-loaded XML instantly — don't discard it
         purposeRender();
         // Real XML data (Vicas/Inhouse) first — it's ground truth, not a guess.
         // AI guesser only fills whoever wasn't matched; memory tops that off.
