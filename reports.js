@@ -435,7 +435,7 @@ function _immigParseInhouseXML(xmlText) {
       if (doc_) docMap[key] = doc_;
     });
   } catch (e) {
-    console.warn('[Immigration] parseOriginXML failed:', e);
+    console.warn('[Immigration] _immigParseInhouseXML failed:', e);
   }
   return { natMap, docMap };
 }
