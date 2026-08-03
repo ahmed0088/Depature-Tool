@@ -212,12 +212,15 @@ function _promptForOriginXml() {
   }
 }
 
-function _applyOriginToPurpose() {
-  if (!purposeGuests.length) return;
-  if (!Object.keys(_originNameMap).length && !Object.keys(_originMap).length) return;
+// Applies the loaded Vicas/Inhouse XML data to one guest array (either
+// arrGuests or purposeGuests) — same matching rules for both: name match
+// first, room-number fallback second, and a human-typed edit always wins.
+function _applyOriginToGuestList(list) {
+  if (!list || !list.length) return { filledOrigin: 0, filledNat: 0 };
+  if (!Object.keys(_originNameMap).length && !Object.keys(_originMap).length) return { filledOrigin: 0, filledNat: 0 };
   let filledOrigin = 0;
   let filledNat    = 0;
-  purposeGuests.forEach(g => {
+  list.forEach(g => {
     const nameKey     = _normName(g.name);
     const roomKey     = _normRoom(g.room);
     // Ignore placeholder room text like "ASSIGN ROOM" — only use real room numbers
@@ -256,10 +259,22 @@ function _applyOriginToPurpose() {
       }
     }
   });
+  return { filledOrigin, filledNat };
+}
+
+// Applies the XML data to whichever guest lists are currently loaded —
+// Arrivals and/or Purpose of Stay — and re-renders whichever one changed.
+function _applyOriginToPurpose() {
+  const purposeResult  = _applyOriginToGuestList(purposeGuests);
+  const arrivalsResult = _applyOriginToGuestList(arrGuests);
+  const filledNat    = purposeResult.filledNat    + arrivalsResult.filledNat;
+  const filledOrigin = purposeResult.filledOrigin + arrivalsResult.filledOrigin;
   const parts = [];
   if (filledNat)    parts.push(`Nationality filled for ${filledNat}`);
   if (filledOrigin) parts.push(`Origin of Travel filled for ${filledOrigin}`);
   if (parts.length) showToast(`✦ ${parts.join(' · ')}`, 'ok');
+  if (purposeResult.filledNat  || purposeResult.filledOrigin)  purposeRender();
+  if (arrivalsResult.filledNat || arrivalsResult.filledOrigin) arrRender();
 }
 
 // ── ARRIVALS ──────────────────────────────────────────────
@@ -425,29 +440,36 @@ function loadArrivals() {
   if (!raw) { alert('Please paste data first.'); return; }
   const lines = raw.split('\n').filter(l => l.trim());
   if (lines.length < 2) { alert('Not enough data.'); return; }
-  const hdrs = lines[0].split('\t').map(h => h.trim().toUpperCase());
+  // Auto-detect delimiter — tab-delimited Opera paste, or a quoted comma CSV
+  // (e.g. Arrivals_Opera.csv) — handle both instead of assuming tabs.
+  const delim     = lines[0].includes('\t') ? '\t' : ',';
+  const splitLine = delim === '\t' ? (l => l.split('\t')) : parseCSVLine;
+  const hdrs = splitLine(lines[0]).map(h => h.replace(/"/g,'').trim().toUpperCase());
   const ci   = n => hdrs.findIndex(h => h.includes(n));
   const rI=ci('ROOM'),nI=ci('NAME'),niI=ci('NIGHT'),cI=hdrs.findIndex(h=>h.includes('CONFIRM')),taI=ci('TRAVEL'),coI=ci('COMPANY'),srcI=ci('SOURCE');
   if (rI < 0 || nI < 0) { alert('Could not find Room/Name columns.'); return; }
   const guests = [];
   for (let i = 1; i < lines.length; i++) {
-    const p    = lines[i].split('\t');
-    const room = (p[rI]||'').trim();
-    const rn   = (p[nI]||'').trim();
+    const p    = splitLine(lines[i]);
+    const room = (p[rI]||'').replace(/"/g,'').trim();
+    const rn   = (p[nI]||'').replace(/"/g,'').trim();
     if (!room || !rn) continue;
-    guests.push({ room, conf:cI>=0?(p[cI]||'').trim():'', name:cleanName(rn), purpose:'Business',
+    guests.push({ room, conf:cI>=0?(p[cI]||'').replace(/"/g,'').trim():'', name:cleanName(rn), purpose:'Business',
       nights:niI>=0?parseInt(p[niI])||1:1, nat:'', email:'No@email.com',
-      source:cleanSource(taI>=0?(p[taI]||'').trim():'', coI>=0?(p[coI]||'').trim():'', srcI>=0?(p[srcI]||'').trim():''),
+      source:cleanSource(taI>=0?(p[taI]||'').replace(/"/g,'').trim():'', coI>=0?(p[coI]||'').replace(/"/g,'').trim():'', srcI>=0?(p[srcI]||'').replace(/"/g,'').trim():''),
       remarks:'' });
   }
   if (!guests.length) { alert('No guests found.'); return; }
+  _clearOriginMaps();     // fresh report = fresh night — old XML data doesn't carry over
   arrGuests = guests;
   arrRender();
-  // AI guesser first, memory on top — memory always wins
+  // Real XML data (Vicas/Inhouse) first — it's ground truth, not a guess.
+  // AI guesser only fills whoever wasn't matched; memory tops that off.
   setTimeout(() => {
     runAINat_arr().then(() => {
       if (typeof gmAutoFill === 'function') gmAutoFill(arrGuests);
       arrRender();
+      _promptForOriginXml();   // ask for report #2 (the nationality XML) if not loaded yet
     });
   }, 300);
   addArrLog('Loaded', `${guests.length} guests loaded from paste`);
