@@ -410,7 +410,7 @@ function _normName(name) {
 
 // Parse an Inhouse.xml (Crystal Reports export) and return per-guest
 // Nationality + DocumentNumber (passport/Emirates ID), keyed by normalised name.
-function parseOriginXML(xmlText) {
+function _immigParseInhouseXML(xmlText) {
   const natMap = {};
   const docMap = {};
   try {
@@ -446,7 +446,7 @@ function immigLoadInhouseXml(input) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    const { natMap, docMap } = parseOriginXML(e.target.result);
+    const { natMap, docMap } = _immigParseInhouseXML(e.target.result);
     _immigNatMap      = natMap || {};
     _immigPassportMap = docMap || {};
     const natCount = Object.keys(_immigNatMap).length;
