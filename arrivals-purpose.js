@@ -67,30 +67,65 @@ function parseOriginXML(xmlText) {
   const natMap     = {};
   const natRoomMap = {}; // room → raw Nationality1 (no Emirates-ID override) — same last-checkin-wins rule as roomMap
   let   source  = null; // 'inhouse' | 'vicas' — for the toast/label only
+  let   parseErrorMsg   = null; // set if the browser's XML parser itself chokes on the file
+  let   sectionsFound   = 0;    // total <Section> elements matched, before the <Details>-parent filter
+  let   detailRowsSeen  = 0;    // rows that passed the <Details>-parent filter (regardless of having a Nationality1)
   try {
     const parser = new DOMParser();
     const doc    = parser.parseFromString(xmlText, 'text/xml');
+
+    // DOMParser NEVER throws on bad XML — on failure it silently returns a document
+    // whose root is a <parsererror> node. Without this check, a garbled/mis-encoded
+    // file (BOM, stray byte, truncated download, etc.) looks identical to "empty
+    // report": both end up with 0 rows and no exception, so the real cause never
+    // surfaces. Catch it explicitly and report it as a parse failure instead.
+    const perr = doc.getElementsByTagName('parsererror')[0];
+    if (perr) {
+      parseErrorMsg = (perr.textContent || 'Unknown XML parser error').trim();
+      console.warn('[OriginXML] DOMParser reported parsererror:', parseErrorMsg);
+      return { roomMap, nameMap, natMap, natRoomMap, source: null, parseErrorMsg, sectionsFound: 0, detailRowsFound: 0 };
+    }
+
     // Crystal Reports XML uses a default namespace, so querySelector('Details')
-    // returns nothing in browsers. Use getElementsByTagNameNS with wildcard instead.
-    const ns       = 'urn:crystal-reports:schemas:report-detail';
-    const sections = doc.getElementsByTagNameNS(ns, 'Section');
+    // returns nothing in browsers. Use getElementsByTagNameNS instead — but don't
+    // hardcode the schema year/URI: read the ACTUAL namespace off the root element,
+    // since different Vicas/Crystal exports have been seen with slightly different
+    // schemaLocation strings. Fall back to the known URI, then to a no-namespace
+    // lookup, so a future export with a tweaked namespace still parses instead of
+    // silently returning nothing.
+    const rootNs = doc.documentElement ? doc.documentElement.namespaceURI : null;
+    const knownNs = 'urn:crystal-reports:schemas:report-detail';
+    let ns = rootNs || knownNs;
+    let sections = doc.getElementsByTagNameNS(ns, 'Section');
+    if (!sections.length && ns !== knownNs) {
+      ns = knownNs;
+      sections = doc.getElementsByTagNameNS(ns, 'Section');
+    }
+    if (!sections.length) {
+      // Last resort: no-namespace lookup (covers a report exported without xmlns).
+      sections = doc.getElementsByTagName('Section');
+    }
 
     const getField = (sec, fieldName) => {
       // Find <Field Name="fieldName"> then its <FormattedValue>
-      const fields = sec.getElementsByTagNameNS(ns, 'Field');
+      let fields = sec.getElementsByTagNameNS(ns, 'Field');
+      if (!fields.length) fields = sec.getElementsByTagName('Field');
       for (let i = 0; i < fields.length; i++) {
         if (fields[i].getAttribute('Name') === fieldName) {
-          const fv = fields[i].getElementsByTagNameNS(ns, 'FormattedValue')[0];
+          let fv = fields[i].getElementsByTagNameNS(ns, 'FormattedValue')[0];
+          if (!fv) fv = fields[i].getElementsByTagName('FormattedValue')[0];
           return fv ? (fv.textContent || '').trim() : '';
         }
       }
       return '';
     };
 
+    sectionsFound = sections.length;
     for (let i = 0; i < sections.length; i++) {
       const sec   = sections[i];
       // Only process sections that are direct children of <Details>
       if (!sec.parentNode || sec.parentNode.localName !== 'Details') continue;
+      detailRowsSeen++;
       const room    = getField(sec, 'RoomNumber1');
       const nat     = getField(sec, 'Nationality1');
       const docNum  = getField(sec, 'DocumentNumber1');
@@ -137,8 +172,24 @@ function parseOriginXML(xmlText) {
     }
   } catch (e) {
     console.warn('[OriginXML] parse error:', e);
+    parseErrorMsg = e && e.message ? e.message : String(e);
   }
-  return { roomMap, nameMap, natMap, natRoomMap, source };
+  // Diagnostics on every run (not just on failure) — this is what tells you WHERE
+  // it broke next time, instead of just "empty maps": did the browser even find
+  // <Section> elements, did they have a <Details> parent, did any have a
+  // Nationality1 field. Compare against the counts you'd expect from the report.
+  console.log(`[OriginXML] sectionsFound=${sectionsFound} detailRowsSeen=${detailRowsSeen} rowsWithNationality=${Object.keys(natMap).length ? '~' + Object.keys(natMap).length + '+' : 0} source=${source}`);
+  // Always return valid objects so Object.keys never crashes
+  return {
+    roomMap:    roomMap    || {},
+    nameMap:    nameMap    || {},
+    natMap:     natMap     || {},
+    natRoomMap: natRoomMap || {},
+    source:     source     || null,
+    parseErrorMsg,
+    sectionsFound,
+    detailRowsSeen
+  };
 }
 
 // Load XML from file input (called by HTML button).
@@ -149,21 +200,51 @@ function loadOriginXML(input) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    const { roomMap, nameMap, natMap, natRoomMap, source } = parseOriginXML(e.target.result);
-    _originMap        = roomMap;
-    _originNameMap    = nameMap;
-    _originNatMap     = natMap;
-    _originNatRoomMap = natRoomMap;
-    const count = Math.max(Object.keys(nameMap).length, Object.keys(roomMap).length);
-    if (!count) { showToast('No guest data found in XML — check file format', 'err'); return; }
-    const sourceLabel = source === 'vicas' ? 'Vicas' : 'Inhouse';
-    showToast(`✦ ${sourceLabel} data loaded — ${count} guests`, 'ok');
-    // Apply to any already-loaded purpose guests
-    _applyOriginToPurpose();
-    purposeRender();
-    // Update the badge/label
-    const lbl = document.getElementById('originXmlLabel');
-    if (lbl) lbl.textContent = `${count} guests loaded (${sourceLabel})`;
+    try {
+      const result = parseOriginXML(e.target.result) || {};
+      const roomMap    = result.roomMap    || {};
+      const nameMap    = result.nameMap    || {};
+      const natMap     = result.natMap     || {};
+      const natRoomMap = result.natRoomMap || {};
+      const source     = result.source     || null;
+
+      _originMap        = roomMap;
+      _originNameMap    = nameMap;
+      _originNatMap     = natMap;
+      _originNatRoomMap = natRoomMap;
+
+      const count = Math.max(Object.keys(nameMap).length, Object.keys(roomMap).length);
+      if (!count) {
+        // Give a toast that actually says WHY, instead of one generic message —
+        // these three cases have completely different fixes.
+        if (result.parseErrorMsg) {
+          showToast('XML file is not valid — the browser could not parse it (bad encoding/export?)', 'err');
+        } else if (!result.sectionsFound) {
+          showToast('No <Section> elements found — is this really a Crystal Reports XML export?', 'err');
+        } else if (!result.detailRowsSeen) {
+          showToast('XML parsed but had no data rows under <Details> — is the report empty?', 'err');
+        } else {
+          showToast('Rows found but none had a Nationality — check the report includes Nationality1', 'err');
+        }
+        console.warn('[OriginXML] empty maps — diagnostics:', {
+          parseErrorMsg:   result.parseErrorMsg,
+          sectionsFound:   result.sectionsFound,
+          detailRowsSeen:  result.detailRowsSeen
+        });
+        return;
+      }
+      const sourceLabel = source === 'vicas' ? 'Vicas' : 'Inhouse';
+      showToast(`✦ ${sourceLabel} data loaded — ${count} guests`, 'ok');
+      // Apply to any already-loaded purpose guests
+      _applyOriginToPurpose();
+      purposeRender();
+      // Update the badge/label
+      const lbl = document.getElementById('originXmlLabel');
+      if (lbl) lbl.textContent = `${count} guests loaded (${sourceLabel})`;
+    } catch (err) {
+      console.error('[OriginXML] load failed:', err);
+      showToast('Failed to parse Origin XML — see console', 'err');
+    }
   };
   reader.readAsText(file, 'utf-8');
 }

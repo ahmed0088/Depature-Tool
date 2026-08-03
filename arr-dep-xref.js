@@ -15,7 +15,7 @@ let _xrefFilter     = 'all';  // 'all' | 'extensions' | 'new' | 'unassigned'
 let _xrefSearch     = '';
 
 // ── Name normaliser — strips titles, extra spaces, commas ─
-function _normName(raw) {
+function _xrefNormName(raw) {
   if (!raw) return '';
   return raw
     .replace(/,?\s*(Mr\.?|Mrs\.?|Ms\.?|Miss|Dr\.?)\s*/gi, ' ')
@@ -30,7 +30,7 @@ function _normName(raw) {
 // We extract what we believe is the last name / family name.
 function _lastName(raw) {
   if (!raw) return '';
-  const clean = _normName(raw);
+  const clean = _xrefNormName(raw);
   // Opera format: "lastname, firstname" — comma separated
   if (raw.includes(',')) {
     const parts = clean.split(' ').filter(w => w.length > 1);
@@ -56,8 +56,8 @@ function _namesMatch(a, b) {
   if (lastA.length >= 4 && lastA === lastB) return true;
 
   // Secondary — any long word (≥6 chars) shared between both names
-  const wa = _normName(a).split(' ').filter(w => w.length >= 6);
-  const wb = _normName(b).split(' ').filter(w => w.length >= 6);
+  const wa = _xrefNormName(a).split(' ').filter(w => w.length >= 6);
+  const wb = _xrefNormName(b).split(' ').filter(w => w.length >= 6);
   if (wa.length && wb.length && wa.some(w => wb.includes(w))) return true;
 
   return false;
@@ -235,7 +235,7 @@ function xrefParseArrivals(raw) {
 // ── Normalise room number for comparison ──────────────────
 // Opera stores rooms as '0102', '0522' etc. Strip leading zeros
 // but keep at least 1 digit so '0' doesn't become ''.
-function _normRoom(r) {
+function _xrefNormRoom(r) {
   if (!r) return '';
   const s = String(r).trim().replace(/^0+/, '');
   return s || '0';
@@ -268,16 +268,16 @@ function _xrefCheckExtension(arrRecord) {
     return;
   }
 
-  // Use _normRoom so '0102' and '102' compare equal
-  const arrRoom = _normRoom(arrRecord.room);
+  // Use _xrefNormRoom so '0102' and '102' compare equal
+  const arrRoom = _xrefNormRoom(arrRecord.room);
 
   // ── A) ROOM NUMBER MATCH ──────────────────────────────────
   // Same room on dep board + arrivals = guest re-booked the same room → extension
   // (Primary signal — most reliable. Name match confirms it but is not required.)
   if (arrRoom) {
     const depByRoom = depRooms.find(r =>
-      _normRoom(r.roomStr) === arrRoom ||
-      _normRoom(String(r.room)) === arrRoom
+      _xrefNormRoom(r.roomStr) === arrRoom ||
+      _xrefNormRoom(String(r.room)) === arrRoom
     );
 
     if (depByRoom) {
@@ -305,7 +305,7 @@ function _xrefCheckExtension(arrRecord) {
     arrRecord.isExtension = true;
     arrRecord.matchType   = 'name';
     arrRecord.depGuest    = depByName;
-    const depRoom = _normRoom(depByName.roomStr || String(depByName.room || ''));
+    const depRoom = _xrefNormRoom(depByName.roomStr || String(depByName.room || ''));
     arrRecord.extReason = arrRoom
       ? `Name match · in room ${depRoom} → new booking room ${arrRoom} · ↪ Extension`
       : `Name match · in room ${depRoom} → ↪ Extension (room TBD)`;
