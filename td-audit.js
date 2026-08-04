@@ -65,30 +65,64 @@ function tdaNameOverlap(a, b) {
 }
 
 // ───────────────────────── parsers ─────────────────────────
+// Two Opera exports are accepted, auto-detected by header shape:
+//   A) "Financial Transactions by Tax Type"  (finjrnlbytax)
+//      columns: TAX_TRX_CODE, NAME_ID, ROOM, DISPLAY_NAME, CHAR_TRX_DATE, TAX_AMOUNT
+//   B) "Financial Journal by Transaction"    (finjrnlbytrans)
+//      columns: TRX_CODE, ROOM, GUEST_FULL_NAME, BUSINESS_FORMAT_DATE, CASHIER_DEBIT, CASHIER_CREDIT
+//      amount = CASHIER_DEBIT − CASHIER_CREDIT (this correctly captures negative
+//      "EXCEEDS 30 NIGHTS" reversal rows, e.g. CASHIER_DEBIT=-10, CASHIER_CREDIT=0)
 function tdaParseOperaTSV(raw) {
   const lines = raw.split(/\r?\n/).filter(l => l.trim().length);
   if (!lines.length) return [];
   const headers = lines[0].split('\t').map(h => h.trim());
   const idx = {};
   headers.forEach((h, i) => idx[h] = i);
-  const need = ['TAX_TRX_CODE', 'NAME_ID', 'ROOM', 'DISPLAY_NAME', 'CHAR_TRX_DATE', 'TAX_AMOUNT'];
-  const missing = need.filter(n => !(n in idx));
-  if (missing.length) throw new Error('Opera file is missing expected columns: ' + missing.join(', ') + '. Make sure you exported "Financial Transactions by Tax Type" (finjrnlbytax).');
+  const colCount = headers.length;
+
+  const isTaxSchema   = 'TAX_TRX_CODE' in idx && 'TAX_AMOUNT' in idx;
+  const isTransSchema = 'TRX_CODE' in idx && 'CASHIER_DEBIT' in idx && 'CASHIER_CREDIT' in idx;
+
+  if (!isTaxSchema && !isTransSchema) {
+    throw new Error('Opera file columns not recognized. Export either "Financial Transactions by Tax Type" (finjrnlbytax) or "Financial Journal by Transaction" (finjrnlbytrans) from Opera.');
+  }
+
+  const dateCol = isTaxSchema
+    ? idx['CHAR_TRX_DATE']
+    : (('BUSINESS_FORMAT_DATE' in idx) ? idx['BUSINESS_FORMAT_DATE'] : idx['BUSINESS_DATE']);
 
   const out = [];
   for (let i = 1; i < lines.length; i++) {
     const cols = lines[i].split('\t');
-    if (!cols.length) continue;
-    if ((cols[idx['TAX_TRX_CODE']] || '').trim() !== '7510') continue; // Tourism Dirham only
-    const dt = tdaParseOperaDate(cols[idx['CHAR_TRX_DATE']]);
-    if (!dt) continue;
-    out.push({
-      nameId: (cols[idx['NAME_ID']] || '').trim(),
-      room: tdaNormRoom(cols[idx['ROOM']]),
-      name: (cols[idx['DISPLAY_NAME']] || '').trim(),
-      date: dt,
-      amount: parseFloat(cols[idx['TAX_AMOUNT']]) || 0,
-    });
+    // Skip footer/summary/title rows (e.g. trailing "R_DEBIT R_CREDIT LOGO" or
+    // grand-total lines) that don't carry the full column set.
+    if (cols.length < colCount) continue;
+
+    if (isTaxSchema) {
+      if ((cols[idx['TAX_TRX_CODE']] || '').trim() !== '7510') continue; // Tourism Dirham only
+      const dt = tdaParseOperaDate(cols[dateCol]);
+      if (!dt) continue;
+      out.push({
+        nameId: (cols[idx['NAME_ID']] || '').trim(),
+        room: tdaNormRoom(cols[idx['ROOM']]),
+        name: (cols[idx['DISPLAY_NAME']] || '').trim(),
+        date: dt,
+        amount: parseFloat(cols[idx['TAX_AMOUNT']]) || 0,
+      });
+    } else {
+      if ((cols[idx['TRX_CODE']] || '').trim() !== '7510') continue; // Tourism Dirham only
+      const dt = tdaParseOperaDate(cols[dateCol]);
+      if (!dt) continue;
+      const debit  = parseFloat(cols[idx['CASHIER_DEBIT']])  || 0;
+      const credit = parseFloat(cols[idx['CASHIER_CREDIT']]) || 0;
+      out.push({
+        nameId: '',
+        room: tdaNormRoom(cols[idx['ROOM']]),
+        name: (cols[idx['GUEST_FULL_NAME']] || '').trim(),
+        date: dt,
+        amount: debit - credit,
+      });
+    }
   }
   return out;
 }
