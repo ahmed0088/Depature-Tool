@@ -6,20 +6,20 @@
 const ROLES = {
   owner: {
     label: 'Owner', color: '#f0a43a', icon: '👑',
-    panels: ['departures','arrivals','xref','purpose','shifts','checklist','nationality','rent','audit','immig','tourism','arrivals-proc','inhouse-tally','noshow','guestmem','reports'],
+    panels: ['departures','arrivals','xref','purpose','shifts','checklist','nationality','rent','audit','immig','tourism','longstay','arrivals-proc','inhouse-tally','noshow','guestmem','reports'],
     canManageUsers: true, canExport: true, canImport: true, canClear: true,
     canEditChecklist: true, canEditShifts: true, canReports: true,
     canDelete: true, canViewAll: true, canForceLogout: true, canViewLogs: true,
   },
   manager: {
     label: 'Manager', color: '#8b7cf8', icon: '🏅',
-    panels: ['departures','arrivals','xref','purpose','shifts','checklist','nationality','rent','audit','immig','tourism','arrivals-proc','inhouse-tally','noshow','guestmem'],
+    panels: ['departures','arrivals','xref','purpose','shifts','checklist','nationality','rent','audit','immig','tourism','longstay','arrivals-proc','inhouse-tally','noshow','guestmem'],
     canManageUsers: true, canExport: true, canImport: false, canClear: false,
     canEditChecklist: true, canEditShifts: true, canReports: true,
   },
   supervisor: {
     label: 'Supervisor', color: '#5ab4e8', icon: '⭐',
-    panels: ['departures','arrivals','xref','purpose','shifts','checklist','nationality','rent','audit','immig','tourism','arrivals-proc','inhouse-tally','noshow','guestmem'],
+    panels: ['departures','arrivals','xref','purpose','shifts','checklist','nationality','rent','audit','immig','tourism','longstay','arrivals-proc','inhouse-tally','noshow','guestmem'],
     canManageUsers: false, canExport: true, canImport: false, canClear: false,
     canEditChecklist: true, canEditShifts: true, canReports: true,
   },

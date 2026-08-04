@@ -441,6 +441,10 @@
     <div class="nav-icon">🧮</div>Inhouse Tally
     <span class="nav-badge" id="badge-inhouse-tally">—</span>
   </div>
+  <div class="nav-item" onclick="showPanel('longstay')" id="nav-longstay" data-panel="longstay">
+    <div class="nav-icon">🕒</div>Long Stay TD Check
+    <span class="nav-badge" id="badge-longstay">0</span>
+  </div>
   <div class="nav-item" onclick="showPanel('checklist')" id="nav-checklist" data-panel="checklist">
     <div class="nav-icon">✅</div>Night Checklist
     <span class="nav-badge" id="badge-checklist">17</span>
@@ -1376,6 +1380,100 @@
 
   </div><!-- /ttResultCard -->
 </div><!-- /panel-tourism -->
+
+<!-- ════════════════ LONG STAY TD CHECK ════════════════ -->
+<div class="panel" id="panel-longstay">
+  <div style="max-width:1200px;">
+
+    <div class="page-hd">
+      <div class="page-hd-left">
+        <h1>Long Stay TD Check</h1>
+        <p>Groups a guest's back-to-back reservations/extensions and flags every night past the DTCM long-stay threshold where Opera keeps charging Tourism Dirham (TD) that DTCM no longer counts.</p>
+      </div>
+      <div class="page-hd-actions" id="lsHeaderActions" style="display:none;">
+        <button class="btn sky sm" id="lsCopyBtn" onclick="lsCopyFlagged()">📋 Copy List</button>
+        <button class="btn rose sm" onclick="lsClear()">✕ New Report</button>
+      </div>
+    </div>
+
+    <!-- ── UPLOAD STATE ── -->
+    <div id="lsPasteCard">
+      <div class="card">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px;">
+          <div class="mf"><label>Long-Stay Threshold (nights)</label><input id="lsThreshold" type="number" value="30" min="1"/></div>
+          <div class="mf"><label>Gap Tolerance (days)</label><input id="lsTolerance" type="number" value="1" min="0"/></div>
+          <div class="mf"><label>TD Rate (AED / night)</label><input id="lsRate" type="number" value="15" min="0" step="0.01"/></div>
+        </div>
+
+        <div class="upload-zone" style="cursor:pointer;" onclick="document.getElementById('lsFileInput').click()">
+          <div class="upload-label-bar">
+            <div class="upload-dot sky"></div>
+            <span class="upload-lbl">Opera Reservation / Stay History</span>
+            <span class="upload-sub">tab-delimited · every reservation &amp; extension for the period</span>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;padding:16px;text-align:center;gap:4px;">
+            <div style="font-size:1.6rem;">🏛️</div>
+            <div style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">
+              Needs columns: Guest Name, Room, Confirmation No, Arrival Date, Departure Date<br>Click to upload, or paste below
+            </div>
+            <input type="file" id="lsFileInput" accept=".txt,.tsv,.csv" style="display:none;" onchange="lsLoadFile(this)"/>
+          </div>
+          <textarea id="lsInput" onclick="event.stopPropagation()" class="tt-textarea" placeholder="Paste Opera reservation/stay history export here (include every extension for the guest, not just the current one)…"></textarea>
+        </div>
+
+        <div class="error-box" id="lsError"><span>⚠</span><span id="lsErrorMsg"></span></div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="btn gold" onclick="lsLoad()">⚡ Check Long Stays</button>
+          <button class="btn" onclick="lsClear()">✕ Clear</button>
+        </div>
+
+        <div style="margin-top:14px;padding:12px 14px;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:var(--r);font-family:var(--mono);font-size:0.68rem;color:var(--amber);line-height:1.5;">
+          💡 <strong>How it works:</strong> reservations for the same guest are grouped by name, sorted by date, and chained together when one departure lines up with the next arrival (within the gap tolerance). Any night past the threshold on that chain is flagged as an excess TD night — take those guests/rooms to Opera or the TD portal for a manual adjustment from night {threshold}+1 onward.
+        </div>
+      </div>
+    </div><!-- /lsPasteCard -->
+
+    <!-- ── RESULTS STATE ── -->
+    <div id="lsResultCard" style="display:none;">
+
+      <div class="kpi-row c4" id="lsKpis"></div>
+
+      <div class="filter-row" id="lsFilters" style="margin-bottom:14px;">
+        <div class="fchip on" data-lsf="all"    onclick="lsSetFilter('all',this)">All <span id="lsfc-all">0</span></div>
+        <div class="fchip"    data-lsf="excess" onclick="lsSetFilter('excess',this)">⚠ Long Stay <span id="lsfc-excess">0</span></div>
+        <div class="fchip"    data-lsf="ok"     onclick="lsSetFilter('ok',this)">✅ Under Threshold <span id="lsfc-ok">0</span></div>
+        <div class="search-wrap" style="margin-left:auto;">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px;margin-left:8px;flex-shrink:0;color:var(--text3)"><circle cx="6.5" cy="6.5" r="4"/><path d="M10.5 10.5l3 3"/></svg>
+          <input id="lsSearch" placeholder="Guest or room…" oninput="lsSetSearch(this.value)"/>
+        </div>
+      </div>
+
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Guest Name</th>
+              <th style="width:90px;">Room(s)</th>
+              <th>Reservations</th>
+              <th style="width:190px;">Chain (Start → End)</th>
+              <th style="width:80px;">Total Nights</th>
+              <th style="width:80px;">Excess Nights</th>
+              <th style="width:220px;">Status</th>
+            </tr>
+          </thead>
+          <tbody id="lsTable"></tbody>
+        </table>
+      </div>
+
+      <div style="margin-top:12px;font-family:var(--mono);font-size:0.62rem;color:var(--text3);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span>💡 Adjust flagged guests in Opera / the TD portal, then</span>
+        <button class="btn gold sm" onclick="lsCopyFlagged()">📋 Copy Flagged Guests</button>
+      </div>
+
+    </div><!-- /lsResultCard -->
+
+  </div>
+</div><!-- /panel-longstay -->
 
 <!-- ════════════════ ARRIVALS PROCESSOR ════════════════ -->
 <div class="panel" id="panel-arrivals-proc">
@@ -2724,6 +2822,7 @@
 <script src="arrivals-proc.js"></script>
 <script src="noshow.js"></script>
 <script src="inhouse-tally.js"></script>
+<script src="longstay.js"></script>
 
 <script>
 // ════════════════════════════════════════════════
@@ -3035,7 +3134,7 @@ function syncMobBadges() {
   });
   // More drawer items — sync badge text from desktop sidebar badges
   ['purpose','xref','noshow','arrivals-proc','guestmem','adagio',
-   'nationality','rent','audit','immig','tourism'].forEach(panel => {
+   'nationality','rent','audit','immig','tourism','longstay'].forEach(panel => {
     const src  = document.getElementById('badge-' + panel);
     const dest = document.getElementById('mob-badge-' + panel);
     if (!src || !dest) return;
@@ -3739,6 +3838,10 @@ async function appInit() {
     <button class="mob-more-item" data-panel="tourism"        onclick="showPanel('tourism');toggleMobMore()">
       <span class="mob-item-icon">🏛️</span>
       <span class="mob-more-badge" id="mob-badge-tourism"></span>Tourism Tax
+    </button>
+    <button class="mob-more-item" data-panel="longstay"       onclick="showPanel('longstay');toggleMobMore()">
+      <span class="mob-item-icon">🕒</span>
+      <span class="mob-more-badge" id="mob-badge-longstay"></span>Long Stay TD
     </button>
     <button class="mob-more-item" id="mobAdminBtn"             onclick="openAdminPanel();toggleMobMore()" style="display:none;">
       <span class="mob-item-icon">👥</span>Team
