@@ -437,13 +437,13 @@
     <div class="nav-icon">🏛️</div>Tourism Tax
     <span class="nav-badge" id="badge-tourism">0</span>
   </div>
+  <div class="nav-item" onclick="showPanel('td-audit')" id="nav-td-audit" data-panel="td-audit">
+    <div class="nav-icon">⏳</div>TD 30-Day Audit
+    <span class="nav-badge" id="badge-td-audit">—</span>
+  </div>
   <div class="nav-item" onclick="showPanel('inhouse-tally')" id="nav-inhouse-tally" data-panel="inhouse-tally">
     <div class="nav-icon">🧮</div>Inhouse Tally
     <span class="nav-badge" id="badge-inhouse-tally">—</span>
-  </div>
-  <div class="nav-item" onclick="showPanel('longstay')" id="nav-longstay" data-panel="longstay">
-    <div class="nav-icon">🕒</div>Long Stay TD Check
-    <span class="nav-badge" id="badge-longstay">0</span>
   </div>
   <div class="nav-item" onclick="showPanel('checklist')" id="nav-checklist" data-panel="checklist">
     <div class="nav-icon">✅</div>Night Checklist
@@ -1381,70 +1381,83 @@
   </div><!-- /ttResultCard -->
 </div><!-- /panel-tourism -->
 
-<!-- ════════════════ LONG STAY TD CHECK ════════════════ -->
-<div class="panel" id="panel-longstay">
+<!-- ════════════════ TD 30-DAY CAP AUDIT ════════════════ -->
+<div class="panel" id="panel-td-audit">
   <div style="max-width:1200px;">
-
     <div class="page-hd">
       <div class="page-hd-left">
-        <h1>Long Stay TD Check</h1>
-        <p>Groups a guest's back-to-back reservations/extensions and flags every night past the DTCM long-stay threshold where Opera keeps charging Tourism Dirham (TD) that DTCM no longer counts.</p>
+        <h1>TD 30-Day Audit</h1>
+        <p>Opera Tourism Dirham (7510) vs DTCM · finds rooms Opera keeps charging after DTCM's 30-night cap</p>
       </div>
-      <div class="page-hd-actions" id="lsHeaderActions" style="display:none;">
-        <button class="btn sky sm" id="lsCopyBtn" onclick="lsCopyFlagged()">📋 Copy List</button>
-        <button class="btn rose sm" onclick="lsClear()">✕ New Report</button>
+      <div class="page-hd-actions">
+        <button class="btn gold" onclick="tdaRun()">🔍 Run Audit</button>
+        <button class="btn rose" onclick="tdaClear()">✕ Clear</button>
       </div>
     </div>
 
-    <!-- ── UPLOAD STATE ── -->
-    <div id="lsPasteCard">
-      <div class="card">
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px;">
-          <div class="mf"><label>Long-Stay Threshold (nights)</label><input id="lsThreshold" type="number" value="30" min="1"/></div>
-          <div class="mf"><label>Gap Tolerance (days)</label><input id="lsTolerance" type="number" value="1" min="0"/></div>
-          <div class="mf"><label>TD Rate (AED / night)</label><input id="lsRate" type="number" value="15" min="0" step="0.01"/></div>
-        </div>
+    <div class="card">
+      <div style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);margin-bottom:12px;line-height:1.6;">
+        DTCM only counts Tourism Dirham for a guest's first <strong style="color:var(--text2);">30 consecutive nights</strong>.
+        Opera keeps charging every night regardless. This tool flags every room where Opera posted a 7510 charge
+        <strong style="color:var(--text2);">after</strong> the guest's 30-night cap date — DTCM is treated as the source of truth.
+      </div>
 
-        <div class="upload-zone" style="cursor:pointer;" onclick="document.getElementById('lsFileInput').click()">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+
+        <!-- Opera Tourism Dirham export -->
+        <div class="upload-zone" style="cursor:pointer;" onclick="document.getElementById('tdaOperaFileInput').click()">
           <div class="upload-label-bar">
             <div class="upload-dot sky"></div>
-            <span class="upload-lbl">Opera Reservation / Stay History</span>
-            <span class="upload-sub">tab-delimited · every reservation &amp; extension for the period</span>
+            <span class="upload-lbl">Opera Tax Report</span>
+            <span class="upload-sub">finjrnlbytax · tab-delimited</span>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;padding:16px;text-align:center;gap:4px;">
+            <div style="font-size:1.6rem;">🧾</div>
+            <div id="tdaOperaLabel" style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">Click to upload, or paste below</div>
+            <input type="file" id="tdaOperaFileInput" accept=".txt,.tsv,.csv" style="display:none;" onchange="tdaLoadOperaFile(this)"/>
+          </div>
+          <textarea id="tdaOperaInput" onclick="event.stopPropagation()" placeholder="Paste Financial Transactions by Tax Type export here (needs TAX_TRX_CODE, NAME_ID, ROOM, CHAR_TRX_DATE, TAX_AMOUNT columns)…" style="width:100%;min-height:90px;"></textarea>
+        </div>
+
+        <!-- DTCM export -->
+        <div class="upload-zone" style="cursor:pointer;" onclick="document.getElementById('tdaDtcmFileInput').click()">
+          <div class="upload-label-bar">
+            <div class="upload-dot mint"></div>
+            <span class="upload-lbl">DTCM Report</span>
+            <span class="upload-sub">HotelTransactionReport XML</span>
           </div>
           <div style="display:flex;flex-direction:column;align-items:center;padding:16px;text-align:center;gap:4px;">
             <div style="font-size:1.6rem;">🏛️</div>
-            <div style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">
-              Needs columns: Guest Name, Room, Confirmation No, Arrival Date, Departure Date<br>Click to upload, or paste below
-            </div>
-            <input type="file" id="lsFileInput" accept=".txt,.tsv,.csv" style="display:none;" onchange="lsLoadFile(this)"/>
+            <div id="tdaDtcmLabel" style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">Click to upload, or paste below</div>
+            <input type="file" id="tdaDtcmFileInput" accept=".xml,.XML" style="display:none;" onchange="tdaLoadDtcmFile(this)"/>
           </div>
-          <textarea id="lsInput" onclick="event.stopPropagation()" class="tt-textarea" placeholder="Paste Opera reservation/stay history export here (include every extension for the guest, not just the current one)…"></textarea>
+          <textarea id="tdaDtcmInput" onclick="event.stopPropagation()" placeholder="Paste DTCM Hotel Transaction Report XML here…" style="width:100%;min-height:90px;"></textarea>
         </div>
 
-        <div class="error-box" id="lsError"><span>⚠</span><span id="lsErrorMsg"></span></div>
-        <div style="display:flex;gap:8px;margin-top:10px;">
-          <button class="btn gold" onclick="lsLoad()">⚡ Check Long Stays</button>
-          <button class="btn" onclick="lsClear()">✕ Clear</button>
-        </div>
-
-        <div style="margin-top:14px;padding:12px 14px;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:var(--r);font-family:var(--mono);font-size:0.68rem;color:var(--amber);line-height:1.5;">
-          💡 <strong>How it works:</strong> reservations for the same guest are grouped by name, sorted by date, and chained together when one departure lines up with the next arrival (within the gap tolerance). Any night past the threshold on that chain is flagged as an excess TD night — take those guests/rooms to Opera or the TD portal for a manual adjustment from night {threshold}+1 onward.
-        </div>
       </div>
-    </div><!-- /lsPasteCard -->
 
-    <!-- ── RESULTS STATE ── -->
-    <div id="lsResultCard" style="display:none;">
+      <div class="error-box" id="tdaError"><span>⚠</span><span id="tdaErrorMsg"></span></div>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button class="btn gold" onclick="tdaRun()">🔍 Run Audit</button>
+        <button class="btn" onclick="tdaClear()">✕ Clear</button>
+      </div>
+    </div>
 
-      <div class="kpi-row c4" id="lsKpis"></div>
+    <div id="tdaNoLongStay" style="display:none;font-family:var(--mono);font-size:0.72rem;color:var(--text3);text-align:center;padding:24px;">
+      No guests in the DTCM file have crossed 30 nights yet — nothing to audit.
+    </div>
 
-      <div class="filter-row" id="lsFilters" style="margin-bottom:14px;">
-        <div class="fchip on" data-lsf="all"    onclick="lsSetFilter('all',this)">All <span id="lsfc-all">0</span></div>
-        <div class="fchip"    data-lsf="excess" onclick="lsSetFilter('excess',this)">⚠ Long Stay <span id="lsfc-excess">0</span></div>
-        <div class="fchip"    data-lsf="ok"     onclick="lsSetFilter('ok',this)">✅ Under Threshold <span id="lsfc-ok">0</span></div>
+    <div id="tdaResultsWrap" style="display:none;">
+      <div class="kpi-row c4" style="margin-top:18px;" id="tdaKpis"></div>
+
+      <div class="filter-row" id="tdaFilters" style="margin-bottom:14px;">
+        <div class="fchip on" data-tdf="all"    onclick="tdaSetFilter('all',this)">All <span id="tdfc-all">0</span></div>
+        <div class="fchip"    data-tdf="excess" onclick="tdaSetFilter('excess',this)">🔴 Over-Charged <span id="tdfc-excess">0</span></div>
+        <div class="fchip"    data-tdf="verify" onclick="tdaSetFilter('verify',this)">⚠ Verify Name <span id="tdfc-verify">0</span></div>
+        <div class="fchip"    data-tdf="clean"  onclick="tdaSetFilter('clean',this)">✅ Correctly Stopped <span id="tdfc-clean">0</span></div>
         <div class="search-wrap" style="margin-left:auto;">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px;margin-left:8px;flex-shrink:0;color:var(--text3)"><circle cx="6.5" cy="6.5" r="4"/><path d="M10.5 10.5l3 3"/></svg>
-          <input id="lsSearch" placeholder="Guest or room…" oninput="lsSetSearch(this.value)"/>
+          <span style="padding:0 8px;color:var(--text3);">⌕</span>
+          <input type="text" id="tdaSearch" placeholder="Room or guest name…" oninput="tdaSetSearch(this.value)"/>
         </div>
       </div>
 
@@ -1452,28 +1465,26 @@
         <table>
           <thead>
             <tr>
-              <th>Guest Name</th>
-              <th style="width:90px;">Room(s)</th>
-              <th>Reservations</th>
-              <th style="width:190px;">Chain (Start → End)</th>
-              <th style="width:80px;">Total Nights</th>
-              <th style="width:80px;">Excess Nights</th>
-              <th style="width:220px;">Status</th>
+              <th style="width:70px;">Room</th>
+              <th>DTCM Guest</th>
+              <th>Opera Guest</th>
+              <th style="width:100px;">Check-In</th>
+              <th style="width:110px;">Night 31 (Cap)</th>
+              <th style="width:200px;">Verdict</th>
             </tr>
           </thead>
-          <tbody id="lsTable"></tbody>
+          <tbody id="tdaTable"></tbody>
         </table>
       </div>
 
       <div style="margin-top:12px;font-family:var(--mono);font-size:0.62rem;color:var(--text3);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-        <span>💡 Adjust flagged guests in Opera / the TD portal, then</span>
-        <button class="btn gold sm" onclick="lsCopyFlagged()">📋 Copy Flagged Guests</button>
+        <span>💡 Credit/adjust flagged nights in Opera, then</span>
+        <button class="btn gold sm" id="tdaCopyBtn" onclick="tdaCopyFlagged()">📋 Copy Flagged Rooms</button>
       </div>
-
-    </div><!-- /lsResultCard -->
+    </div>
 
   </div>
-</div><!-- /panel-longstay -->
+</div><!-- /panel-td-audit -->
 
 <!-- ════════════════ ARRIVALS PROCESSOR ════════════════ -->
 <div class="panel" id="panel-arrivals-proc">
@@ -2822,7 +2833,7 @@
 <script src="arrivals-proc.js"></script>
 <script src="noshow.js"></script>
 <script src="inhouse-tally.js"></script>
-<script src="longstay.js"></script>
+<script src="td-audit.js"></script>
 
 <script>
 // ════════════════════════════════════════════════
@@ -3134,7 +3145,7 @@ function syncMobBadges() {
   });
   // More drawer items — sync badge text from desktop sidebar badges
   ['purpose','xref','noshow','arrivals-proc','guestmem','adagio',
-   'nationality','rent','audit','immig','tourism','longstay'].forEach(panel => {
+   'nationality','rent','audit','immig','tourism'].forEach(panel => {
     const src  = document.getElementById('badge-' + panel);
     const dest = document.getElementById('mob-badge-' + panel);
     if (!src || !dest) return;
@@ -3838,10 +3849,6 @@ async function appInit() {
     <button class="mob-more-item" data-panel="tourism"        onclick="showPanel('tourism');toggleMobMore()">
       <span class="mob-item-icon">🏛️</span>
       <span class="mob-more-badge" id="mob-badge-tourism"></span>Tourism Tax
-    </button>
-    <button class="mob-more-item" data-panel="longstay"       onclick="showPanel('longstay');toggleMobMore()">
-      <span class="mob-item-icon">🕒</span>
-      <span class="mob-more-badge" id="mob-badge-longstay"></span>Long Stay TD
     </button>
     <button class="mob-more-item" id="mobAdminBtn"             onclick="openAdminPanel();toggleMobMore()" style="display:none;">
       <span class="mob-item-icon">👥</span>Team
