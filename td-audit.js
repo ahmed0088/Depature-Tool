@@ -118,6 +118,14 @@ function tdaParseDtcmXML(raw) {
 }
 
 // ───────────────────────── file/paste loaders ─────────────────────────
+function tdaToggleHowTo() {
+  const body = document.getElementById('tdaHowToBody');
+  const chev = document.getElementById('tdaHowToChevron');
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  if (chev) chev.style.transform = open ? 'rotate(0deg)' : 'rotate(180deg)';
+}
+
 function tdaLoadOperaFile(input) {
   const f = input.files[0]; if (!f) return;
   const r = new FileReader();

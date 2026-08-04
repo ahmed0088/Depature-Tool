@@ -1395,6 +1395,49 @@
       </div>
     </div>
 
+    <!-- ── How to Use ── -->
+    <div class="card" id="tdaHowToCard" style="border-color:rgba(90,180,232,0.25);cursor:pointer;" onclick="tdaToggleHowTo()">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:1rem;">📘</span>
+          <span style="font-size:0.8rem;font-weight:600;">How to Use This Tool</span>
+        </div>
+        <span id="tdaHowToChevron" style="font-family:var(--mono);font-size:0.7rem;color:var(--text3);transition:transform .2s;">▼</span>
+      </div>
+      <div id="tdaHowToBody" style="margin-top:12px;display:none;" onclick="event.stopPropagation()">
+
+        <div style="font-family:var(--mono);font-size:0.66rem;color:var(--text2);line-height:1.7;">
+          <strong style="color:var(--sky);">Room number is all that matters.</strong> Names are shown only for reference — matching is done 100% by room number, so you don't need to check guest names to trust a flagged room.
+        </div>
+
+        <div style="height:1px;background:var(--border);margin:12px 0;"></div>
+
+        <div style="font-size:0.74rem;font-weight:600;margin-bottom:6px;color:var(--sky);">① Get the Opera Report</div>
+        <div style="font-family:var(--mono);font-size:0.64rem;color:var(--text3);line-height:1.8;margin-bottom:10px;">
+          Report name: <strong style="color:var(--text2);">"Financial Transactions by Tax Type"</strong> (internal name <code style="color:var(--gold);">finjrnlbytax</code>)<br>
+          1. Opera Cloud → <strong style="color:var(--text2);">Reports</strong> → <strong style="color:var(--text2);">Financial</strong> report group<br>
+          2. Open <strong style="color:var(--text2);">Financial Transactions by Tax Type</strong> — confirm internal name shows <code style="color:var(--gold);">finjrnlbytax</code><br>
+          3. Set a wide <strong style="color:var(--text2);">date range</strong> — 60–90 days back is ideal (wider = more accurate excess-night count)<br>
+          4. Leave tax type unfiltered — this tool filters to code <strong style="color:var(--text2);">7510</strong> (Tourism Dirham) automatically<br>
+          5. Export/Download as <strong style="color:var(--text2);">delimited / tab-separated .txt</strong>
+        </div>
+
+        <div style="font-size:0.74rem;font-weight:600;margin-bottom:6px;color:var(--mint);">② Get the DTCM Report</div>
+        <div style="font-family:var(--mono);font-size:0.64rem;color:var(--text3);line-height:1.8;margin-bottom:10px;">
+          Pull the <strong style="color:var(--text2);">Hotel Transaction Report</strong> XML from the DTCM portal as usual — no date filtering needed, just export current data.
+        </div>
+
+        <div style="font-size:0.74rem;font-weight:600;margin-bottom:6px;color:var(--gold);">③ Run the Audit</div>
+        <div style="font-family:var(--mono);font-size:0.64rem;color:var(--text3);line-height:1.8;">
+          1. Upload the Opera <code style="color:var(--gold);">.txt</code> in the left box, DTCM <code style="color:var(--gold);">.xml</code> in the right box (or paste contents directly)<br>
+          2. Click <strong style="color:var(--text2);">🔍 Run Audit</strong><br>
+          3. Click the <strong style="color:var(--rose);">🔴 Over-Charged</strong> filter chip — this shows only rooms with excess TD charges, worst-first by AED<br>
+          4. Read <strong style="color:var(--text2);">Room</strong> + <strong style="color:var(--text2);">Verdict</strong> only (e.g. <code style="color:var(--gold);">112 → 50 nights · AED 290</code>) and go fix those rooms in Opera<br>
+          5. Click <strong style="color:var(--text2);">📋 Copy Flagged Rooms</strong> to copy the list for a handover note
+        </div>
+      </div>
+    </div>
+
     <div class="card">
       <div style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);margin-bottom:12px;line-height:1.6;">
         DTCM only counts Tourism Dirham for a guest's first <strong style="color:var(--text2);">30 consecutive nights</strong>.
