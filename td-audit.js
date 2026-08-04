@@ -94,22 +94,35 @@ function tdaParseOperaTSV(raw) {
   const out = [];
   for (let i = 1; i < lines.length; i++) {
     const cols = lines[i].split('\t');
-    // Skip footer/summary/title rows (e.g. trailing "R_DEBIT R_CREDIT LOGO" or
-    // grand-total lines) that don't carry the full column set.
-    if (cols.length < colCount) continue;
 
     if (isTaxSchema) {
+      // Opera sometimes truncates rows tied to a REFERENCE/adjustment code (e.g. an
+      // "EXCEEDS 30 NIGHTS" credit reversal) to ~20 columns instead of the full 28,
+      // dropping TAX_AMOUNT. The TAX_TRX_CODE check below still filters correctly
+      // since it's an early column present on every row. Don't skip by row length —
+      // that would silently discard real credit/reversal rows.
       if ((cols[idx['TAX_TRX_CODE']] || '').trim() !== '7510') continue; // Tourism Dirham only
       const dt = tdaParseOperaDate(cols[dateCol]);
       if (!dt) continue;
+      let amount;
+      if (idx['TAX_AMOUNT'] < cols.length && (cols[idx['TAX_AMOUNT']] || '').trim() !== '') {
+        amount = parseFloat(cols[idx['TAX_AMOUNT']]) || 0;
+      } else if ('SUMTAX_AMOUNTPERTRX_CODE' in idx && idx['SUMTAX_AMOUNTPERTRX_CODE'] < cols.length && (cols[idx['SUMTAX_AMOUNTPERTRX_CODE']] || '').trim() !== '') {
+        amount = parseFloat(cols[idx['SUMTAX_AMOUNTPERTRX_CODE']]) || 0; // fallback for truncated rows
+      } else {
+        amount = 0;
+      }
       out.push({
         nameId: (cols[idx['NAME_ID']] || '').trim(),
         room: tdaNormRoom(cols[idx['ROOM']]),
         name: (cols[idx['DISPLAY_NAME']] || '').trim(),
         date: dt,
-        amount: parseFloat(cols[idx['TAX_AMOUNT']]) || 0,
+        amount,
       });
     } else {
+      // finjrnlbytrans rows are a fixed 43 columns; footer/title rows (e.g. trailing
+      // "R_DEBIT R_CREDIT LOGO" or grand-total lines) are shorter, so cols[idx['TRX_CODE']]
+      // is simply undefined on them and fails the '7510' check below — no length check needed.
       if ((cols[idx['TRX_CODE']] || '').trim() !== '7510') continue; // Tourism Dirham only
       const dt = tdaParseOperaDate(cols[dateCol]);
       if (!dt) continue;
