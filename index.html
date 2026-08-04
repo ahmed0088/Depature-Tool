@@ -1407,7 +1407,9 @@
       <div id="tdaHowToBody" style="margin-top:12px;display:none;" onclick="event.stopPropagation()">
 
         <div style="font-family:var(--mono);font-size:0.66rem;color:var(--text2);line-height:1.7;">
-          <strong style="color:var(--sky);">Room number is all that matters.</strong> Names are shown only for reference — matching is done 100% by room number, so you don't need to check guest names to trust a flagged room.
+          <strong style="color:var(--sky);">Room number is all that matters.</strong> Names are shown only for reference — matching is done 100% by room number, so you don't need to check guest names to trust a flagged room.<br><br>
+          <strong style="color:var(--rose);">🔴 Over-Charged</strong> = real AED was charged after the cap — these are your action items.<br>
+          <strong style="color:var(--text3);">⚪ Zero-Value Posting</strong> = Opera is still posting a TD line after the cap, but at AED 0 — nothing to credit, just a system-hygiene note.
         </div>
 
         <div style="height:1px;background:var(--border);margin:12px 0;"></div>
@@ -1497,6 +1499,7 @@
         <div class="fchip on" data-tdf="all"    onclick="tdaSetFilter('all',this)">All <span id="tdfc-all">0</span></div>
         <div class="fchip"    data-tdf="excess" onclick="tdaSetFilter('excess',this)">🔴 Over-Charged <span id="tdfc-excess">0</span></div>
         <div class="fchip"    data-tdf="verify" onclick="tdaSetFilter('verify',this)">⚠ Verify Name <span id="tdfc-verify">0</span></div>
+        <div class="fchip"    data-tdf="zero"   onclick="tdaSetFilter('zero',this)">⚪ Zero-Value Posting <span id="tdfc-zero">0</span></div>
         <div class="fchip"    data-tdf="clean"  onclick="tdaSetFilter('clean',this)">✅ Correctly Stopped <span id="tdfc-clean">0</span></div>
         <div class="search-wrap" style="margin-left:auto;">
           <span style="padding:0 8px;color:var(--text3);">⌕</span>

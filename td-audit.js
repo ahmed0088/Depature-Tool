@@ -189,9 +189,12 @@ function tdaRun() {
     const capDate = tdaAddDays(stay.checkIn, TDA_CAP_NIGHTS); // first night that should NOT be charged
     const roomCharges = (operaByRoom[stay.room] || []).filter(c => c.date >= stay.checkIn && c.date <= stayEnd);
     const excessCharges = roomCharges.filter(c => c.date >= capDate);
+    const excessPaid = excessCharges.filter(c => c.amount > 0);   // real over-charges — need a fix
+    const excessZero = excessCharges.filter(c => c.amount <= 0);  // posting still firing, but AED 0 — informational only
 
-    const excessNights = excessCharges.length;
-    const excessAmount = excessCharges.reduce((s, c) => s + c.amount, 0);
+    const excessNights = excessPaid.length;
+    const excessAmount = excessPaid.reduce((s, c) => s + c.amount, 0);
+    const zeroNights = excessZero.length;
     const operaName = (excessCharges[0] || roomCharges[roomCharges.length - 1] || {}).name || '';
 
     results.push({
@@ -206,6 +209,7 @@ function tdaRun() {
       dtcmFees: stay.tdFees,
       excessNights,
       excessAmount,
+      zeroNights,
       hasOperaData: roomCharges.length > 0,
       nameMatch: operaName ? tdaNameOverlap(stay.guestName, operaName) : true,
     });
@@ -253,7 +257,8 @@ function tdaRender() {
   let rows = tdaResults.slice();
   if (tdaFilter === 'excess') rows = rows.filter(r => r.excessNights > 0);
   if (tdaFilter === 'verify') rows = rows.filter(r => r.excessNights > 0 && !r.nameMatch);
-  if (tdaFilter === 'clean')  rows = rows.filter(r => r.excessNights === 0);
+  if (tdaFilter === 'zero')   rows = rows.filter(r => r.excessNights === 0 && r.zeroNights > 0);
+  if (tdaFilter === 'clean')  rows = rows.filter(r => r.excessNights === 0 && r.zeroNights === 0);
 
   if (tdaSearchQ) {
     rows = rows.filter(r =>
@@ -267,12 +272,15 @@ function tdaRender() {
   c('tdfc-all',    tdaResults.length);
   c('tdfc-excess', tdaResults.filter(r => r.excessNights > 0).length);
   c('tdfc-verify', tdaResults.filter(r => r.excessNights > 0 && !r.nameMatch).length);
-  c('tdfc-clean',  tdaResults.filter(r => r.excessNights === 0).length);
+  c('tdfc-zero',   tdaResults.filter(r => r.excessNights === 0 && r.zeroNights > 0).length);
+  c('tdfc-clean',  tdaResults.filter(r => r.excessNights === 0 && r.zeroNights === 0).length);
 
   document.getElementById('tdaTable').innerHTML = rows.map(r => {
     let verdict;
     if (r.excessNights > 0) {
       verdict = `<span style="font-family:var(--mono);font-size:0.62rem;font-weight:700;color:var(--rose);background:rgba(240,107,122,0.08);border:1px solid rgba(240,107,122,0.3);border-radius:6px;padding:3px 8px;white-space:nowrap;">🔴 ${r.excessNights} night${r.excessNights > 1 ? 's' : ''} · AED ${r.excessAmount.toFixed(0)}</span>`;
+    } else if (r.zeroNights > 0) {
+      verdict = `<span style="font-family:var(--mono);font-size:0.62rem;font-weight:700;color:var(--text3);background:rgba(255,255,255,0.04);border:1px dashed var(--border-2,rgba(255,255,255,0.15));border-radius:6px;padding:3px 8px;white-space:nowrap;">⚪ ${r.zeroNights} night${r.zeroNights > 1 ? 's' : ''} posted at AED 0 — no charge to fix</span>`;
     } else if (!r.hasOperaData) {
       verdict = `<span style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">— no Opera 7510 data for this room in range</span>`;
     } else {
