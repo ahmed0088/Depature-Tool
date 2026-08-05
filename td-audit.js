@@ -65,77 +65,50 @@ function tdaNameOverlap(a, b) {
 }
 
 // ───────────────────────── parsers ─────────────────────────
-// Two Opera exports are accepted, auto-detected by header shape:
-//   A) "Financial Transactions by Tax Type"  (finjrnlbytax)
-//      columns: TAX_TRX_CODE, NAME_ID, ROOM, DISPLAY_NAME, CHAR_TRX_DATE, TAX_AMOUNT
-//   B) "Financial Journal by Transaction"    (finjrnlbytrans)
-//      columns: TRX_CODE, ROOM, GUEST_FULL_NAME, BUSINESS_FORMAT_DATE, CASHIER_DEBIT, CASHIER_CREDIT
-//      amount = CASHIER_DEBIT − CASHIER_CREDIT (this correctly captures negative
-//      "EXCEEDS 30 NIGHTS" reversal rows, e.g. CASHIER_DEBIT=-10, CASHIER_CREDIT=0)
 function tdaParseOperaTSV(raw) {
   const lines = raw.split(/\r?\n/).filter(l => l.trim().length);
   if (!lines.length) return [];
   const headers = lines[0].split('\t').map(h => h.trim());
   const idx = {};
   headers.forEach((h, i) => idx[h] = i);
-  const colCount = headers.length;
-
-  const isTaxSchema   = 'TAX_TRX_CODE' in idx && 'TAX_AMOUNT' in idx;
-  const isTransSchema = 'TRX_CODE' in idx && 'CASHIER_DEBIT' in idx && 'CASHIER_CREDIT' in idx;
-
-  if (!isTaxSchema && !isTransSchema) {
-    throw new Error('Opera file columns not recognized. Export either "Financial Transactions by Tax Type" (finjrnlbytax) or "Financial Journal by Transaction" (finjrnlbytrans) from Opera.');
-  }
-
-  const dateCol = isTaxSchema
-    ? idx['CHAR_TRX_DATE']
-    : (('BUSINESS_FORMAT_DATE' in idx) ? idx['BUSINESS_FORMAT_DATE'] : idx['BUSINESS_DATE']);
+  const need = ['TAX_TRX_CODE', 'NAME_ID', 'ROOM', 'DISPLAY_NAME', 'CHAR_TRX_DATE', 'TAX_AMOUNT'];
+  const missing = need.filter(n => !(n in idx));
+  if (missing.length) throw new Error('Opera file is missing expected columns: ' + missing.join(', ') + '. Make sure you exported "Financial Transactions by Tax Type" (finjrnlbytax).');
+  const hasFallbackCol = 'SUMTAX_AMOUNTPERTRX_CODE' in idx;
+  const hasRefCol = 'REFERENCE' in idx;
 
   const out = [];
   for (let i = 1; i < lines.length; i++) {
     const cols = lines[i].split('\t');
+    if (!cols.length) continue;
+    if ((cols[idx['TAX_TRX_CODE']] || '').trim() !== '7510') continue; // Tourism Dirham only
+    const dt = tdaParseOperaDate(cols[idx['CHAR_TRX_DATE']]);
+    if (!dt) continue;
 
-    if (isTaxSchema) {
-      // Opera sometimes truncates rows tied to a REFERENCE/adjustment code (e.g. an
-      // "EXCEEDS 30 NIGHTS" credit reversal) to ~20 columns instead of the full 28,
-      // dropping TAX_AMOUNT. The TAX_TRX_CODE check below still filters correctly
-      // since it's an early column present on every row. Don't skip by row length —
-      // that would silently discard real credit/reversal rows.
-      if ((cols[idx['TAX_TRX_CODE']] || '').trim() !== '7510') continue; // Tourism Dirham only
-      const dt = tdaParseOperaDate(cols[dateCol]);
-      if (!dt) continue;
-      let amount;
-      if (idx['TAX_AMOUNT'] < cols.length && (cols[idx['TAX_AMOUNT']] || '').trim() !== '') {
-        amount = parseFloat(cols[idx['TAX_AMOUNT']]) || 0;
-      } else if ('SUMTAX_AMOUNTPERTRX_CODE' in idx && idx['SUMTAX_AMOUNTPERTRX_CODE'] < cols.length && (cols[idx['SUMTAX_AMOUNTPERTRX_CODE']] || '').trim() !== '') {
-        amount = parseFloat(cols[idx['SUMTAX_AMOUNTPERTRX_CODE']]) || 0; // fallback for truncated rows
-      } else {
-        amount = 0;
-      }
-      out.push({
-        nameId: (cols[idx['NAME_ID']] || '').trim(),
-        room: tdaNormRoom(cols[idx['ROOM']]),
-        name: (cols[idx['DISPLAY_NAME']] || '').trim(),
-        date: dt,
-        amount,
-      });
+    // Some rows — usually manual credits/reversals like "EXCEEDS 30 NIGHTS" —
+    // come through shorter, with TAX_AMOUNT blank/missing. Fall back to
+    // SUMTAX_AMOUNTPERTRX_CODE so these don't silently get dropped as AED 0.
+    const rawAmt = cols[idx['TAX_AMOUNT']];
+    let amount;
+    let isManualAdjustment = false;
+    if (rawAmt !== undefined && rawAmt.trim() !== '') {
+      amount = parseFloat(rawAmt) || 0;
+    } else if (hasFallbackCol && cols[idx['SUMTAX_AMOUNTPERTRX_CODE']] !== undefined && cols[idx['SUMTAX_AMOUNTPERTRX_CODE']].trim() !== '') {
+      amount = parseFloat(cols[idx['SUMTAX_AMOUNTPERTRX_CODE']]) || 0;
+      isManualAdjustment = true;
     } else {
-      // finjrnlbytrans rows are a fixed 43 columns; footer/title rows (e.g. trailing
-      // "R_DEBIT R_CREDIT LOGO" or grand-total lines) are shorter, so cols[idx['TRX_CODE']]
-      // is simply undefined on them and fails the '7510' check below — no length check needed.
-      if ((cols[idx['TRX_CODE']] || '').trim() !== '7510') continue; // Tourism Dirham only
-      const dt = tdaParseOperaDate(cols[dateCol]);
-      if (!dt) continue;
-      const debit  = parseFloat(cols[idx['CASHIER_DEBIT']])  || 0;
-      const credit = parseFloat(cols[idx['CASHIER_CREDIT']]) || 0;
-      out.push({
-        nameId: '',
-        room: tdaNormRoom(cols[idx['ROOM']]),
-        name: (cols[idx['GUEST_FULL_NAME']] || '').trim(),
-        date: dt,
-        amount: debit - credit,
-      });
+      amount = 0;
     }
+
+    out.push({
+      nameId: (cols[idx['NAME_ID']] || '').trim(),
+      room: tdaNormRoom(cols[idx['ROOM']]),
+      name: (cols[idx['DISPLAY_NAME']] || '').trim(),
+      date: dt,
+      amount: amount,
+      isManualAdjustment,
+      reference: hasRefCol ? (cols[idx['REFERENCE']] || '').trim() : '',
+    });
   }
   return out;
 }
@@ -175,37 +148,69 @@ function tdaToggleHowTo() {
 
 function tdaLoadOperaFile(input) {
   const f = input.files[0]; if (!f) return;
+  const lbl = document.getElementById('tdaOperaLabel');
+  lbl.textContent = '⏳ Reading ' + f.name + ' (' + (f.size / 1024 / 1024).toFixed(1) + ' MB)…';
   const r = new FileReader();
   r.onload = e => {
     document.getElementById('tdaOperaInput').value = e.target.result;
-    document.getElementById('tdaOperaLabel').textContent = '✓ ' + f.name;
+    lbl.textContent = '✓ ' + f.name;
   };
+  r.onerror = () => { lbl.textContent = '⚠ Could not read file — try again'; };
   r.readAsText(f);
 }
 function tdaLoadDtcmFile(input) {
   const f = input.files[0]; if (!f) return;
+  const lbl = document.getElementById('tdaDtcmLabel');
+  lbl.textContent = '⏳ Reading ' + f.name + ' (' + (f.size / 1024 / 1024).toFixed(1) + ' MB)…';
   const r = new FileReader();
   r.onload = e => {
     document.getElementById('tdaDtcmInput').value = e.target.result;
-    document.getElementById('tdaDtcmLabel').textContent = '✓ ' + f.name;
+    lbl.textContent = '✓ ' + f.name;
   };
+  r.onerror = () => { lbl.textContent = '⚠ Could not read file — try again'; };
   r.readAsText(f);
 }
 
 // ───────────────────────── core compute ─────────────────────────
+function tdaSetLoading(on, msg) {
+  const wrap = document.getElementById('tdaLoadWrap');
+  const runBtn = document.getElementById('tdaRunBtn');
+  const clearBtn = document.getElementById('tdaClearBtn');
+  if (wrap) wrap.style.display = on ? 'flex' : 'none';
+  if (msg) { const m = document.getElementById('tdaLoadMsg'); if (m) m.textContent = msg; }
+  if (runBtn) { runBtn.disabled = on; runBtn.style.opacity = on ? 0.5 : 1; runBtn.style.pointerEvents = on ? 'none' : 'auto'; }
+  if (clearBtn) { clearBtn.disabled = on; clearBtn.style.opacity = on ? 0.5 : 1; clearBtn.style.pointerEvents = on ? 'none' : 'auto'; }
+}
+
 function tdaRun() {
+  const operaRaw = document.getElementById('tdaOperaInput').value;
+  const dtcmRaw  = document.getElementById('tdaDtcmInput').value;
   const errBox = document.getElementById('tdaError');
   const errMsg = document.getElementById('tdaErrorMsg');
   errBox.classList.remove('show');
-
-  const operaRaw = document.getElementById('tdaOperaInput').value;
-  const dtcmRaw  = document.getElementById('tdaDtcmInput').value;
 
   if (!operaRaw.trim() || !dtcmRaw.trim()) {
     errMsg.textContent = 'Please load both the Opera Tax report and the DTCM report first.';
     errBox.classList.add('show');
     return;
   }
+
+  // Show the spinner and let the browser paint it BEFORE the heavy
+  // parse/compute work runs — large Opera exports (tens of MB) can take
+  // a second or two and would otherwise freeze the UI with no feedback.
+  tdaSetLoading(true, 'Parsing files… this can take a few seconds on large exports');
+  setTimeout(() => {
+    try {
+      tdaRunHeavy(operaRaw, dtcmRaw);
+    } finally {
+      tdaSetLoading(false);
+    }
+  }, 30);
+}
+
+function tdaRunHeavy(operaRaw, dtcmRaw) {
+  const errBox = document.getElementById('tdaError');
+  const errMsg = document.getElementById('tdaErrorMsg');
 
   let opera, dtcm;
   try {
@@ -236,12 +241,20 @@ function tdaRun() {
     const capDate = tdaAddDays(stay.checkIn, TDA_CAP_NIGHTS); // first night that should NOT be charged
     const roomCharges = (operaByRoom[stay.room] || []).filter(c => c.date >= stay.checkIn && c.date <= stayEnd);
     const excessCharges = roomCharges.filter(c => c.date >= capDate);
-    const excessPaid = excessCharges.filter(c => c.amount > 0);   // real over-charges — need a fix
-    const excessZero = excessCharges.filter(c => c.amount <= 0);  // posting still firing, but AED 0 — informational only
+    const excessPaidRows   = excessCharges.filter(c => c.amount > 0);                         // real charges after cap
+    const excessZeroRows   = excessCharges.filter(c => c.amount === 0 && !c.isManualAdjustment); // posting fires, AED 0 — informational only
+    const manualCreditRows = excessCharges.filter(c => c.amount < 0 && c.isManualAdjustment);    // e.g. "EXCEEDS 30 NIGHTS" reversal
 
-    const excessNights = excessPaid.length;
-    const excessAmount = excessPaid.reduce((s, c) => s + c.amount, 0);
-    const zeroNights = excessZero.length;
+    const chargedNights   = excessPaidRows.length;
+    const chargedAmount   = excessPaidRows.reduce((s, c) => s + c.amount, 0);
+    const creditedAmount  = manualCreditRows.reduce((s, c) => s + c.amount, 0); // negative
+    const netAmount       = chargedAmount + creditedAmount;
+    const zeroNights      = excessZeroRows.length;
+    const wasManuallyFixed = manualCreditRows.length > 0 && netAmount <= 0;
+
+    // excessNights/excessAmount = what's still actually owed after any manual credit is netted in
+    const excessNights = netAmount > 0 ? chargedNights : 0;
+    const excessAmount = netAmount > 0 ? netAmount : 0;
     const operaName = (excessCharges[0] || roomCharges[roomCharges.length - 1] || {}).name || '';
 
     results.push({
@@ -257,6 +270,7 @@ function tdaRun() {
       excessNights,
       excessAmount,
       zeroNights,
+      wasManuallyFixed,
       hasOperaData: roomCharges.length > 0,
       nameMatch: operaName ? tdaNameOverlap(stay.guestName, operaName) : true,
     });
@@ -326,6 +340,8 @@ function tdaRender() {
     let verdict;
     if (r.excessNights > 0) {
       verdict = `<span style="font-family:var(--mono);font-size:0.62rem;font-weight:700;color:var(--rose);background:rgba(240,107,122,0.08);border:1px solid rgba(240,107,122,0.3);border-radius:6px;padding:3px 8px;white-space:nowrap;">🔴 ${r.excessNights} night${r.excessNights > 1 ? 's' : ''} · AED ${r.excessAmount.toFixed(0)}</span>`;
+    } else if (r.wasManuallyFixed) {
+      verdict = `<span style="font-family:var(--mono);font-size:0.62rem;font-weight:700;color:var(--mint);background:rgba(80,200,150,0.08);border:1px solid rgba(80,200,150,0.3);border-radius:6px;padding:3px 8px;white-space:nowrap;">🟢 Already corrected in Opera</span>`;
     } else if (r.zeroNights > 0) {
       verdict = `<span style="font-family:var(--mono);font-size:0.62rem;font-weight:700;color:var(--text3);background:rgba(255,255,255,0.04);border:1px dashed var(--border-2,rgba(255,255,255,0.15));border-radius:6px;padding:3px 8px;white-space:nowrap;">⚪ ${r.zeroNights} night${r.zeroNights > 1 ? 's' : ''} posted at AED 0 — no charge to fix</span>`;
     } else if (!r.hasOperaData) {
@@ -343,12 +359,13 @@ function tdaRender() {
     return `<tr>
       <td style="font-family:var(--mono);font-weight:700;color:var(--sky);">${r.room}</td>
       <td><div style="font-size:0.73rem;color:var(--text2);">${r.dtcmName || '—'}</div>${statusTag}</td>
+      <td style="font-family:var(--mono);font-size:0.66rem;color:var(--text3);">${r.dtcmNights}n · AED ${r.dtcmFees.toFixed(0)}</td>
       <td><div style="font-size:0.73rem;color:var(--text2);">${r.operaName || '—'}</div>${nameFlag}</td>
       <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text3);">${tdaFmtDate(r.checkIn)}</td>
       <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text3);">${tdaFmtDate(r.capDate)}</td>
       <td>${verdict}</td>
     </tr>`;
-  }).join('') || `<tr><td colspan="6" style="text-align:center;padding:24px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">No rows match this filter</td></tr>`;
+  }).join('') || `<tr><td colspan="7" style="text-align:center;padding:24px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">No rows match this filter</td></tr>`;
 }
 
 function tdaCopyFlagged() {
@@ -361,6 +378,7 @@ function tdaCopyFlagged() {
 }
 
 function tdaClear() {
+  tdaSetLoading(false);
   document.getElementById('tdaOperaInput').value = '';
   document.getElementById('tdaDtcmInput').value = '';
   document.getElementById('tdaOperaLabel').textContent = 'Click to upload, or paste below';

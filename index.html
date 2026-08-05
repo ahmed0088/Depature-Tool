@@ -1416,11 +1416,9 @@
 
         <div style="font-size:0.74rem;font-weight:600;margin-bottom:6px;color:var(--sky);">① Get the Opera Report</div>
         <div style="font-family:var(--mono);font-size:0.64rem;color:var(--text3);line-height:1.8;margin-bottom:10px;">
-          Either of these two Opera exports works — the tool auto-detects which one you pasted:<br>
-          <strong style="color:var(--text2);">"Financial Transactions by Tax Type"</strong> (internal name <code style="color:var(--gold);">finjrnlbytax</code>), or<br>
-          <strong style="color:var(--text2);">"Financial Journal by Transaction"</strong> (internal name <code style="color:var(--gold);">finjrnlbytrans</code>)<br>
+          Report name: <strong style="color:var(--text2);">"Financial Transactions by Tax Type"</strong> (internal name <code style="color:var(--gold);">finjrnlbytax</code>)<br>
           1. Opera Cloud → <strong style="color:var(--text2);">Reports</strong> → <strong style="color:var(--text2);">Financial</strong> report group<br>
-          2. Open either report above — confirm internal name matches <code style="color:var(--gold);">finjrnlbytax</code> or <code style="color:var(--gold);">finjrnlbytrans</code><br>
+          2. Open <strong style="color:var(--text2);">Financial Transactions by Tax Type</strong> — confirm internal name shows <code style="color:var(--gold);">finjrnlbytax</code><br>
           3. Set a wide <strong style="color:var(--text2);">date range</strong> — 60–90 days back is ideal (wider = more accurate excess-night count)<br>
           4. Leave tax type unfiltered — this tool filters to code <strong style="color:var(--text2);">7510</strong> (Tourism Dirham) automatically<br>
           5. Export/Download as <strong style="color:var(--text2);">delimited / tab-separated .txt</strong>
@@ -1456,14 +1454,14 @@
           <div class="upload-label-bar">
             <div class="upload-dot sky"></div>
             <span class="upload-lbl">Opera Tax Report</span>
-            <span class="upload-sub">finjrnlbytax or finjrnlbytrans · tab-delimited</span>
+            <span class="upload-sub">finjrnlbytax · tab-delimited</span>
           </div>
           <div style="display:flex;flex-direction:column;align-items:center;padding:16px;text-align:center;gap:4px;">
             <div style="font-size:1.6rem;">🧾</div>
             <div id="tdaOperaLabel" style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">Click to upload, or paste below</div>
             <input type="file" id="tdaOperaFileInput" accept=".txt,.tsv,.csv" style="display:none;" onchange="tdaLoadOperaFile(this)"/>
           </div>
-          <textarea id="tdaOperaInput" onclick="event.stopPropagation()" placeholder="Paste either Financial Transactions by Tax Type (finjrnlbytax) or Financial Journal by Transaction (finjrnlbytrans) export here — format is auto-detected…" style="width:100%;min-height:90px;"></textarea>
+          <textarea id="tdaOperaInput" onclick="event.stopPropagation()" placeholder="Paste Financial Transactions by Tax Type export here (needs TAX_TRX_CODE, NAME_ID, ROOM, CHAR_TRX_DATE, TAX_AMOUNT columns)…" style="width:100%;min-height:90px;"></textarea>
         </div>
 
         <!-- DTCM export -->
@@ -1484,9 +1482,13 @@
       </div>
 
       <div class="error-box" id="tdaError"><span>⚠</span><span id="tdaErrorMsg"></span></div>
-      <div style="display:flex;gap:8px;margin-top:10px;">
-        <button class="btn gold" onclick="tdaRun()">🔍 Run Audit</button>
-        <button class="btn" onclick="tdaClear()">✕ Clear</button>
+      <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
+        <button class="btn gold" id="tdaRunBtn" onclick="tdaRun()">🔍 Run Audit</button>
+        <button class="btn" id="tdaClearBtn" onclick="tdaClear()">✕ Clear</button>
+        <div id="tdaLoadWrap" style="display:none;align-items:center;gap:10px;padding:4px 12px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">
+          <div class="adg-spinner" style="width:18px;height:18px;border-width:2px;"></div>
+          <span id="tdaLoadMsg">Parsing files…</span>
+        </div>
       </div>
     </div>
 
@@ -1515,9 +1517,10 @@
             <tr>
               <th style="width:70px;">Room</th>
               <th>DTCM Guest</th>
+              <th style="width:110px;">DTCM Shows</th>
               <th>Opera Guest</th>
               <th style="width:100px;">Check-In</th>
-              <th style="width:110px;">Night 31 (Cap)</th>
+              <th style="width:110px;">TD Stops From</th>
               <th style="width:200px;">Verdict</th>
             </tr>
           </thead>
