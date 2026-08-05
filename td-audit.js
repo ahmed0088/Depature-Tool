@@ -149,25 +149,39 @@ function tdaToggleHowTo() {
 function tdaLoadOperaFile(input) {
   const f = input.files[0]; if (!f) return;
   const lbl = document.getElementById('tdaOperaLabel');
+  const barWrap = document.getElementById('tdaOperaBarWrap');
+  const barFill = document.getElementById('tdaOperaBarFill');
   lbl.textContent = '⏳ Reading ' + f.name + ' (' + (f.size / 1024 / 1024).toFixed(1) + ' MB)…';
+  barWrap.style.display = 'block';
+  barFill.style.width = '0%';
   const r = new FileReader();
+  r.onprogress = e => { if (e.lengthComputable) barFill.style.width = Math.round((e.loaded / e.total) * 100) + '%'; };
   r.onload = e => {
+    barFill.style.width = '100%';
     document.getElementById('tdaOperaInput').value = e.target.result;
     lbl.textContent = '✓ ' + f.name;
+    setTimeout(() => { barWrap.style.display = 'none'; }, 400);
   };
-  r.onerror = () => { lbl.textContent = '⚠ Could not read file — try again'; };
+  r.onerror = () => { lbl.textContent = '⚠ Could not read file — try again'; barWrap.style.display = 'none'; };
   r.readAsText(f);
 }
 function tdaLoadDtcmFile(input) {
   const f = input.files[0]; if (!f) return;
   const lbl = document.getElementById('tdaDtcmLabel');
+  const barWrap = document.getElementById('tdaDtcmBarWrap');
+  const barFill = document.getElementById('tdaDtcmBarFill');
   lbl.textContent = '⏳ Reading ' + f.name + ' (' + (f.size / 1024 / 1024).toFixed(1) + ' MB)…';
+  barWrap.style.display = 'block';
+  barFill.style.width = '0%';
   const r = new FileReader();
+  r.onprogress = e => { if (e.lengthComputable) barFill.style.width = Math.round((e.loaded / e.total) * 100) + '%'; };
   r.onload = e => {
+    barFill.style.width = '100%';
     document.getElementById('tdaDtcmInput').value = e.target.result;
     lbl.textContent = '✓ ' + f.name;
+    setTimeout(() => { barWrap.style.display = 'none'; }, 400);
   };
-  r.onerror = () => { lbl.textContent = '⚠ Could not read file — try again'; };
+  r.onerror = () => { lbl.textContent = '⚠ Could not read file — try again'; barWrap.style.display = 'none'; };
   r.readAsText(f);
 }
 
@@ -198,7 +212,7 @@ function tdaRun() {
   // Show the spinner and let the browser paint it BEFORE the heavy
   // parse/compute work runs — large Opera exports (tens of MB) can take
   // a second or two and would otherwise freeze the UI with no feedback.
-  tdaSetLoading(true, 'Parsing files… this can take a few seconds on large exports');
+  tdaSetLoading(true, 'Crunching the numbers — this can take a few seconds on large exports');
   setTimeout(() => {
     try {
       tdaRunHeavy(operaRaw, dtcmRaw);
@@ -379,6 +393,8 @@ function tdaCopyFlagged() {
 
 function tdaClear() {
   tdaSetLoading(false);
+  const ob = document.getElementById('tdaOperaBarWrap'); if (ob) ob.style.display = 'none';
+  const db = document.getElementById('tdaDtcmBarWrap');  if (db) db.style.display = 'none';
   document.getElementById('tdaOperaInput').value = '';
   document.getElementById('tdaDtcmInput').value = '';
   document.getElementById('tdaOperaLabel').textContent = 'Click to upload, or paste below';
