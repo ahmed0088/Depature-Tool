@@ -1208,7 +1208,8 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
 .shift-time-badge { font-family: var(--mono); font-size: 0.66rem; color: var(--text3); background: var(--surface); border: 1px solid var(--border); padding: 3px 9px; border-radius: var(--r); }
 #shiftContent { max-width: 740px; }
 
-.st-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; background: var(--card); border: 1px solid var(--border); border-radius: var(--r2); margin-bottom: 4px; transition: all 0.1s; }
+.st-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; background: var(--card); border: 1px solid var(--border); border-radius: var(--r2); margin-bottom: 4px; transition: background 0.25s ease, border-color 0.25s ease, opacity 0.25s ease; animation: stItemIn 0.25s ease both; }
+@keyframes stItemIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 .st-item.done { opacity: 0.52; background: var(--green-bg); border-color: var(--green-border); }
 .st-item:hover { border-color: var(--border2); }
 .st-item.dragging  { opacity: 0.38; }
@@ -1216,9 +1217,10 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
 .st-drag-handle { cursor: grab; color: var(--text3); font-size: 0.9rem; padding: 0 3px 0 0; line-height: 1; user-select: none; flex-shrink: 0; transition: color 0.1s; }
 .st-drag-handle:hover { color: var(--text2); }
 .st-drag-handle:active { cursor: grabbing; }
-.st-check { width: 18px; height: 18px; border-radius: var(--r); border: 2px solid var(--border2); background: var(--bg2); display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: all 0.15s; margin-top: 2px; }
+.st-check { width: 18px; height: 18px; border-radius: var(--r); border: 2px solid var(--border2); background: var(--bg2); display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: border-color 0.15s, background 0.15s, transform 0.15s cubic-bezier(0.34,1.56,0.64,1); margin-top: 2px; }
+.st-check:hover { border-color: var(--text2); }
 .st-check::before { content: '✓'; font-size: 0.62rem; color: transparent; transition: color 0.15s; }
-.st-item.done .st-check { border-color: var(--green); background: var(--green); }
+.st-item.done .st-check { border-color: var(--green); background: var(--green); transform: scale(1.1); }
 .st-item.done .st-check::before { color: #fff; }
 .st-text { flex: 1; min-width: 0; }
 .st-name { font-size: 0.84rem; font-weight: 600; color: var(--text); line-height: 1.4; }
@@ -1230,16 +1232,27 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
 .st-add-in:focus { border-color: var(--accent); }
 .st-add-hint { font-size: 0.76rem; background: var(--surface); border: 1px solid var(--border2); border-radius: var(--r); color: var(--text2); padding: 6px 10px; outline: none; width: 190px; font-family: var(--font); }
 .st-move-btns { display: flex; gap: 3px; }
+.st-empty { font-family: var(--mono); font-size: 0.72rem; color: var(--text3); text-align: center; padding: 22px 12px; border: 1px dashed var(--border2); border-radius: var(--r2); }
+
+/* Completion banner — shown once every task on the shift is checked off */
+.shift-complete-banner {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.78rem; font-weight: 600;
+  padding: 9px 14px; border: 1px solid; border-radius: var(--r2);
+  margin-bottom: 10px; animation: stItemIn 0.3s ease both;
+}
+.prog-fill-complete { box-shadow: 0 0 10px currentColor; }
 
 .st-log-card { margin-top: 16px; background: var(--card2); border: 1px solid var(--border); border-radius: var(--r2); overflow: hidden; }
 .st-log-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 0.66rem; font-weight: 700; color: var(--text2); }
 .st-log-body { max-height: 180px; overflow-y: auto; padding: 3px 0; }
 .st-log-empty { font-family: var(--mono); font-size: 0.66rem; color: var(--text3); text-align: center; padding: 14px; }
-.st-log-entry { display: flex; align-items: center; gap: 8px; padding: 5px 12px; border-bottom: 1px solid var(--border); }
+.st-log-entry { display: flex; align-items: center; gap: 8px; padding: 5px 12px; border-bottom: 1px solid var(--border); animation: stItemIn 0.2s ease both; }
 .st-log-entry:last-child { border-bottom: none; }
 .st-log-dot  { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 .st-log-text { flex: 1; color: var(--text2); font-family: var(--mono); font-size: 0.64rem; }
 .st-log-text strong { color: var(--text); font-weight: 600; }
+.st-log-by   { color: var(--text3); }
 .st-log-time { font-family: var(--mono); font-size: 0.6rem; color: var(--text3); flex-shrink: 0; }
 
 /* ══════════════════════════════════════════════════════

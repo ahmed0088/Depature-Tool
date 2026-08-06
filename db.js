@@ -98,6 +98,10 @@ async function saveShifts(shiftsObj) {
   await fbSet('shifts', { data: shiftsObj, updatedAt: new Date().toISOString() });
 }
 
+async function saveShiftLog(shiftLogsObj) {
+  await fbSet('shiftLog', { data: shiftLogsObj, updatedAt: new Date().toISOString() });
+}
+
 async function saveFeedback(log) {
   await fbSet('feedback', { log, updatedAt: new Date().toISOString() });
 }
@@ -148,7 +152,7 @@ async function loadAll() {
       settings:    settings    || {},
       arrLog:      arrLogData  || { log: [] },
       purposeLog:  purposeLogData || { log: [] },
-      shiftLog:    shiftLogData   || { log: [] },
+      shiftLog:    shiftLogData   || { data: null },
       checkLog:    checkLogData   || { log: [] },
       noshow:      noshowData     || { guests: [] },
     };
@@ -164,7 +168,7 @@ async function loadAll() {
       settings:   {},
       arrLog:     { log: [] },
       purposeLog: { log: [] },
-      shiftLog:   { log: [] },
+      shiftLog:   { data: null },
       checkLog:   { log: [] },
       noshow:     { guests: [] },
     };

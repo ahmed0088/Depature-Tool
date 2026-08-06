@@ -3532,6 +3532,14 @@ async function appInit() {
     });
   }
 
+  // 4b — Apply shift activity log (who did what, per shift) — previously
+  // saved to Firebase but never read back, so it looked empty on every reload
+  if (data.shiftLog && data.shiftLog.data) {
+    Object.keys(SHIFT_LOGS).forEach(k => {
+      if (Array.isArray(data.shiftLog.data[k])) SHIFT_LOGS[k] = data.shiftLog.data[k];
+    });
+  }
+
   // 5 — Apply departures
   if (data.departures && data.departures.rooms && data.departures.rooms.length) {
     depRooms = data.departures.rooms;

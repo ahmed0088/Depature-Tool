@@ -6,9 +6,11 @@
 const SHIFT_LOGS = { morning:[], afternoon:[], mid:[], night:[] };
 
 function stLog(key, type, taskName) {
-  const t = new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-  SHIFT_LOGS[key].unshift({ t, type, taskName });
+  const t  = new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  const by = (typeof currentProfile !== 'undefined' && currentProfile?.name) || 'Front Desk';
+  SHIFT_LOGS[key].unshift({ t, type, taskName, by });
   if (SHIFT_LOGS[key].length > 50) SHIFT_LOGS[key].pop();
+  if (typeof saveShiftLog === 'function') saveShiftLog(SHIFT_LOGS);
 }
 
 function _buildShiftLog(key) {
@@ -18,22 +20,24 @@ function _buildShiftLog(key) {
   return entries.map(e => `
     <div class="st-log-entry">
       <span class="st-log-dot" style="background:${dot[e.type]||'var(--text3)'}"></span>
-      <span class="st-log-text"><strong>${e.taskName}</strong> — ${e.type}</span>
-      <span class="st-log-time">${e.t}</span>
+      <span class="st-log-text"><strong>${escapeHtml(e.taskName)}</strong> — ${escapeHtml(e.type)}${e.by ? ` <span class="st-log-by">· ${escapeHtml(e.by)}</span>` : ''}</span>
+      <span class="st-log-time">${escapeHtml(e.t)}</span>
     </div>`).join('');
 }
 
 function stCopyLog(key) {
   const entries = SHIFT_LOGS[key] || [];
   if (!entries.length) { showToast('Log is empty','info'); return; }
-  const lines = entries.map(e => `${e.t}  ${e.type.padEnd(8)}  ${e.taskName}`);
+  const lines = entries.map(e => `${e.t}  ${e.type.padEnd(8)}  ${e.taskName}${e.by ? `  (${e.by})` : ''}`);
   copyToClipboard(`${SHIFTS[key].label} Log\n${'─'.repeat(40)}\n${lines.join('\n')}`, null, '');
   showToast('Log copied ✓','ok');
 }
 
 function stClearLog(key) {
+  if (!confirm(`Clear the ${SHIFTS[key].label} activity log? This can't be undone.`)) return;
   SHIFT_LOGS[key] = [];
   _renderShiftContent(key);
+  if (typeof saveShiftLog === 'function') saveShiftLog(SHIFT_LOGS);
 }
 
 // ── Tab switch ────────────────────────────────────────────
@@ -70,19 +74,24 @@ function _renderShiftContent(key) {
     </div>
     <div class="prog-wrap">
       <div class="prog-info">
-        <span>${doneCount} of ${total} tasks done</span>
+        <span>${total ? (pct === 100 ? '✓ All tasks done' : `${doneCount} of ${total} tasks done`) : 'No tasks yet'}</span>
         <span style="font-family:var(--serif);font-size:1.2rem;color:${shift.color};">${pct}%</span>
       </div>
       <div class="prog-track">
-        <div class="prog-fill" style="background:${shift.color};width:${pct}%"></div>
+        <div class="prog-fill${pct === 100 ? ' prog-fill-complete' : ''}" style="background:${shift.color};width:${pct}%"></div>
       </div>
     </div>
+    ${total > 0 && pct === 100 ? `
+    <div class="shift-complete-banner" style="border-color:${shift.color}55;background:${shift.color}14;color:${shift.color};">
+      🎉 All caught up on the ${shift.label} — nice work.
+    </div>` : ''}
     <div id="stList-${key}" class="st-sortable">
-      ${shift.tasks.map((t, i) => stItemHTML(key, t, done.has(t.id), i, total)).join('')}
+      ${total ? shift.tasks.map((t, i) => stItemHTML(key, t, done.has(t.id), i, total)).join('')
+              : '<div class="st-empty">No tasks on this shift yet — add one below.</div>'}
     </div>
     <div class="st-add-wrap">
       <input class="st-add-in"   id="stIn-${key}"   placeholder="Add new task…" onkeydown="if(event.key==='Enter')stAddTask('${key}')"/>
-      <input class="st-add-hint" id="stHint-${key}" placeholder="Hint (optional)"/>
+      <input class="st-add-hint" id="stHint-${key}" placeholder="Hint (optional)" onkeydown="if(event.key==='Enter')stAddTask('${key}')"/>
       <button class="btn gold sm" onclick="stAddTask('${key}')">+ Add</button>
     </div>
     ${shift.resetAt ? `<div style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);margin-top:6px;">Last reset: ${shift.resetAt}</div>` : ''}
@@ -110,8 +119,8 @@ function stItemHTML(key, t, isDone, index, total) {
     <div class="st-drag-handle" title="Drag to reorder">⠿</div>
     <div class="st-check" onclick="stToggle('${key}','${t.id}')"></div>
     <div class="st-text">
-      <div class="st-name">${t.name}</div>
-      ${t.hint ? `<div class="st-hint">${t.hint}</div>` : ''}
+      <div class="st-name">${escapeHtml(t.name)}</div>
+      ${t.hint ? `<div class="st-hint">${escapeHtml(t.hint)}</div>` : ''}
     </div>
     <div class="st-actions">
       <div class="st-move-btns">
@@ -201,6 +210,9 @@ function stAddTask(key) {
   logActivity('shift_task_added', `[${SHIFTS[key].label}] ${name}`);
   _renderShiftContent(key);
   saveShifts(SHIFTS);
+  // Re-render swaps the DOM out from under the old input — refocus the new
+  // one so adding several tasks in a row doesn't need a re-click each time
+  document.getElementById('stIn-' + key)?.focus();
 }
 
 function stDelete(key, id) {
