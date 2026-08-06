@@ -379,6 +379,28 @@ body {
 .fchip.on.out      { background: var(--green-bg);  color: var(--green);  border-color: var(--green-border); }
 .fchip.on.na       { background: var(--red-bg);    color: var(--red);    border-color: var(--red-border); }
 .fchip.on.pending  { background: var(--purple-bg); color: var(--purple); border-color: var(--purple-border); }
+/* Source-category filter chips — Purpose of Stay / Arrivals */
+.fchip.on.walkin    { background: var(--amber-bg);  color: var(--amber);  border-color: var(--amber-border); }
+.fchip.on.allapp    { background: var(--green-bg);  color: var(--green);  border-color: var(--green-border); }
+.fchip.on.ota       { background: var(--blue-bg);   color: var(--blue);   border-color: var(--blue-border); }
+.fchip.on.corporate { background: var(--purple-bg); color: var(--purple); border-color: var(--purple-border); }
+.fchip.on.other     { background: var(--teal-bg);   color: var(--teal);   border-color: var(--teal-border); }
+
+/* Source-category badge — small pill shown next to the editable Source field
+   so the derived category (Walk-in / ALL App / OTA / Corporate / Other) is
+   visible at a glance even while the raw text stays freely editable. */
+.src-badge {
+  display: inline-block; flex-shrink: 0;
+  font-family: var(--mono); font-size: 0.54rem; font-weight: 600;
+  letter-spacing: 0.3px; text-transform: uppercase;
+  padding: 2px 6px; border-radius: 99px; border: 1px solid;
+  white-space: nowrap;
+}
+.src-badge.walkin    { background: var(--amber-bg);  color: var(--amber);  border-color: var(--amber-border); }
+.src-badge.allapp    { background: var(--green-bg);  color: var(--green);  border-color: var(--green-border); }
+.src-badge.ota       { background: var(--blue-bg);   color: var(--blue);   border-color: var(--blue-border); }
+.src-badge.corporate { background: var(--purple-bg); color: var(--purple); border-color: var(--purple-border); }
+.src-badge.other     { background: var(--teal-bg);   color: var(--teal);   border-color: var(--teal-border); }
 .search-wrap {
   margin-left: auto; display: flex; align-items: center;
   background: var(--surface); border: 1px solid var(--border2);

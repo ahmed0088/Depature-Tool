@@ -79,7 +79,42 @@ function cleanSource(agent, company, source) {
     .replace(/EXPEDIA\.COM.*/i, 'Expedia')
     .replace(/\s*\(.*?\)/g, '')
     .trim();
-  return src || 'Walk-in';
+  // No agent/company/source on the booking does NOT mean the guest walked in —
+  // it almost always means a direct/ALL App booking with no third-party agent.
+  // Only the literal "walk in" text (from Opera) should ever be labelled Walk-in.
+  if (!src) return 'ALL App';
+  if (/walk[\s-]?in/i.test(src)) return 'Walk-in';
+  return src;
+}
+
+// Buckets a raw source string into a filterable category. Shared by the
+// Arrivals and Purpose of Stay panels so "Walk-in" / "ALL App" / "OTA" mean
+// exactly the same thing everywhere in the app.
+const SOURCE_CATEGORIES = {
+  walkin:    { label: 'Walk-in',   color: 'amber'  },
+  allapp:    { label: 'ALL App',   color: 'green'  },
+  ota:       { label: 'OTA',       color: 'blue'   },
+  corporate: { label: 'Corporate', color: 'purple' },
+  other:     { label: 'Other',     color: 'teal'   },
+};
+function sourceCategory(src) {
+  const s = (src || '').trim();
+  if (!s) return 'allapp';
+  if (/walk[\s-]?in/i.test(s)) return 'walkin';
+  if (/\ball\b|accor/i.test(s)) return 'allapp';
+  if (/booking\.com|agoda|expedia|hotels\.com|trip\.com|traveloka|makemytrip/i.test(s)) return 'ota';
+  if (/\bcorp|company|corporate\b/i.test(s)) return 'corporate';
+  return 'other';
+}
+
+// Live-updates a row's source-category badge as the user types, without a
+// full table re-render (keeps their cursor/focus exactly where it is).
+function _updateSrcBadge(elId, value) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const cat = sourceCategory(value);
+  el.className   = 'src-badge ' + cat;
+  el.textContent = SOURCE_CATEGORIES[cat].label;
 }
 
 // ── CSV line parser ───────────────────────────────────────

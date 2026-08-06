@@ -730,6 +730,15 @@
     <div class="fchip"    data-af="Leisure"  onclick="arrFilter('Leisure',this)">Leisure</div>
     <div class="search-wrap"><span style="padding:0 8px;color:var(--text3);">⌕</span><input type="text" placeholder="Search…" oninput="arrRender()" id="arrSearch"/></div>
   </div>
+  <div class="filter-row">
+    <span style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);letter-spacing:0.5px;margin-right:2px;">SOURCE</span>
+    <div class="fchip on"      data-asf="all"        onclick="arrFilterSrc('all',this)">All</div>
+    <div class="fchip walkin"    data-asf="walkin"    onclick="arrFilterSrc('walkin',this)">🚶 Walk-in</div>
+    <div class="fchip allapp"    data-asf="allapp"    onclick="arrFilterSrc('allapp',this)">📱 ALL App</div>
+    <div class="fchip ota"       data-asf="ota"       onclick="arrFilterSrc('ota',this)">🌐 OTA</div>
+    <div class="fchip corporate" data-asf="corporate" onclick="arrFilterSrc('corporate',this)">🏢 Corporate</div>
+    <div class="fchip other"     data-asf="other"     onclick="arrFilterSrc('other',this)">Other</div>
+  </div>
   <div class="tbl-wrap"><table>
     <thead><tr><th>Room</th><th>Conf.</th><th>Name</th><th>Purpose</th><th>Nights</th><th>Nationality</th><th>Email</th><th>Source</th><th>Remarks</th><th></th></tr></thead>
     <tbody id="arrTable"></tbody>
@@ -861,7 +870,18 @@
     <div class="fchip"    data-pf="Business" onclick="purposeFilter('Business',this)">Business</div>
     <div class="fchip"    data-pf="Leisure"  onclick="purposeFilter('Leisure',this)">Leisure</div>
     <div class="fchip"    data-pf="Flight"   onclick="purposeFilter('Flight',this)">Flight</div>
-    <div class="search-wrap"><span style="padding:0 8px;color:var(--text3);">⌕</span><input type="text" placeholder="Search…" oninput="purposeRender()" id="purposeSearch"/></div>
+    <div class="search-wrap"><span style="padding:0 8px;color:var(--text3);">⌕</span><input type="text" placeholder="Search room, name, source, origin…" oninput="purposeRender()" id="purposeSearch"/></div>
+  </div>
+  <div class="filter-row">
+    <span style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);letter-spacing:0.5px;margin-right:2px;">SOURCE</span>
+    <div class="fchip on"      data-psf="all"        onclick="purposeFilterSrc('all',this)">All</div>
+    <div class="fchip walkin"    data-psf="walkin"    onclick="purposeFilterSrc('walkin',this)">🚶 Walk-in</div>
+    <div class="fchip allapp"    data-psf="allapp"    onclick="purposeFilterSrc('allapp',this)">📱 ALL App</div>
+    <div class="fchip ota"       data-psf="ota"       onclick="purposeFilterSrc('ota',this)">🌐 OTA</div>
+    <div class="fchip corporate" data-psf="corporate" onclick="purposeFilterSrc('corporate',this)">🏢 Corporate</div>
+    <div class="fchip other"     data-psf="other"     onclick="purposeFilterSrc('other',this)">Other</div>
+    <span style="width:1px;height:16px;background:var(--border2);margin:0 4px;"></span>
+    <div class="fchip" id="purposeMissingOriginChip" onclick="purposeToggleMissingOrigin(this)" title="Show only guests with no Origin of Travel filled in yet">🌍 Missing Origin</div>
   </div>
   <div class="tbl-wrap"><table>
     <thead><tr><th>Room</th><th>Conf.</th><th>Name</th><th>Purpose</th><th>Nights</th><th>Nationality</th><th>Email</th><th>Source</th><th>Origin of Travel</th><th>Remarks</th><th></th></tr></thead>
