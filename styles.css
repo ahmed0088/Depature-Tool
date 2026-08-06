@@ -2365,6 +2365,27 @@ kbd {
   .topbar { display: flex; align-items: center; }
   .logo   { flex-shrink: 0; }
   .topbar-right { flex-shrink: 0; min-width: 0; }
+
+  /* ── Data tables: sticky first column so you never lose track of
+     which room/guest row you're on while scrolling wide tables
+     sideways on a phone (Arrivals, Purpose, Nationality, Reports…) ── */
+  .tbl-wrap table { font-size: 0.74rem; }
+  .tbl-wrap thead th:first-child,
+  .tbl-wrap tbody td:first-child {
+    position: sticky; left: 0; z-index: 2;
+    box-shadow: 2px 0 4px rgba(0,0,0,0.15);
+  }
+  .tbl-wrap thead th:first-child   { background: var(--card2); }
+  .tbl-wrap tbody td:first-child   { background: var(--card); }
+  .tbl-wrap tbody tr.leisure-row td:first-child { background: var(--green-bg); }
+  .tbl-wrap td input, .tbl-wrap td select { font-size: 0.74rem; }
+
+  /* ── Filter rows: chips wrap already — just let search take its own
+     full-width line instead of clipping at the old fixed desktop width ── */
+  .filter-row   { gap: 4px; }
+  .fchip        { padding: 5px 9px; font-size: 0.66rem; }
+  .search-wrap  { margin-left: 0; width: 100%; }
+  .search-wrap input { width: 100%; }
 }
 
 /* ══════════════════════════════════════════════════════
