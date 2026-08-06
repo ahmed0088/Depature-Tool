@@ -11,18 +11,25 @@ No build step, no framework. Plain HTML/CSS/JS, deployable by dropping the files
 | Module | File(s) | What it's for |
 |---|---|---|
 | 🚪 **Departures** | `departures.js` | Follow-up board for today's checkouts — status tracking (due/late/extended/DND/no-answer), balance flags, VIP badges, guest intent, HK copy formats, overdue alerts, swipe actions, trend history |
-| 🛎️ **Arrivals** | `arrivals-purpose.js` | Purpose-of-stay report, nationality/origin tracking |
+| 🛎️ **Arrivals** | `arrivals-purpose.js` | Arrivals list and Purpose-of-Stay report, nationality/origin tracking. Every guest's booking source is auto-categorised (Walk-in / ALL App / OTA / Corporate / Other) with a filter row and a live color-coded badge — a blank source is treated as a direct ALL App booking, not a walk-in |
 | 🔗 **Arr vs Dep** | `arr-dep-xref.js` | Cross-references arrivals against the departure board to instantly verdict "can this guest extend?" |
 | 📊 **Arrivals Processor** | `arrivals-proc.js` | Opera export → package-code mapping → day-by-day F&B/upsell breakdown → Excel export |
 | ✅ **Night Checklist** | `checklist.js` | Night audit steps with photos, notes, timestamps, phase grouping |
-| 🕐 **Shift Tasks** | `shifts.js` | Per-shift (Morning/Afternoon/Mid/Night) task lists with drag-reorder and activity log |
+| 🕐 **Shift Tasks** | `shifts.js` | Per-shift (Morning/Afternoon/Mid/Night) task lists with drag-reorder (or ↑/↓ buttons on mobile) and an activity log that records who did what and syncs across devices |
 | 🚫 **No-Show Tracker** | `noshow.js` | No-show guest list with rebooking/confirmation tracking |
+| 🌍 **Nationality Report** | `reports.js` | Opera `stat_countrybymon` delimited export → normalised country names → arrivals/room-nights/guest-nights breakdown |
+| 🛏️ **Rented Rooms & Beds** | `reports.js` | Opera vs. Excel PM-room comparison for the night audit rented-room count |
+| 🌙 **Night Audit · PM Rooms** | `reports.js` | Compares Opera and Excel pseudo-room exports and flags mismatches before the audit runs |
+| 🛂 **Immigration Check** | `reports.js` | Cross-checks in-house guests against the Inhouse/Vicas XML and arrivals list to flag anyone missing from immigration reporting |
+| ⏳ **TD 30-Day Audit** | `td-audit.js` | Tracks Tourism Dirham posting compliance over a rolling 30-day window |
+| 🧮 **Inhouse Tally** | `inhouse-tally.js` | Reconciles Opera's in-house guest count/names against an XML export |
+| ⬡ **Adagio Pro** | inline in `index.html` | Long-stay collections — upload a tracking sheet to flag high balances, cheque due-dates, and departure risk |
 | 🏛️ **Tourism Tax** | `tourism-tax.js` | Flags guests needing a TD Portal date correction |
-| 🧠 **Guest Memory** | `guest-memory.js` | Password-locked profile store — remembers nationality, email, purpose, origin per guest name for auto-fill on future stays |
+| 🧠 **Guest Memory** | `guest-memory.js` | Password-locked profile store — remembers nationality, email, purpose, origin per guest name for auto-fill on future stays. Owners bypass the password entirely (their account login already proves who they are); everyone else unlocks it once per 30-minute session |
 | 👥 **Auth & Roles** | `auth.js` | Firebase Authentication, role-based panel access, admin user management, activity log |
 | 💾 **Data layer** | `db.js` | Firebase Realtime Database read/write with automatic localStorage fallback when offline |
 
-Shared utilities live in `utils.js`, `state.js`, and `natguess.js` (name-based nationality guesser).
+Shared utilities live in `utils.js`, `state.js`, and `natguess.js` (name-based nationality guesser). `escapeHtml()`/`escapeJsAttr()` in `utils.js` are the single canonical helpers for safely rendering guest-entered text — every panel that injects free text into the page routes through them.
 
 ---
 
@@ -33,9 +40,10 @@ These aren't tied to one panel — they work across the whole app:
 - **🔍 Global Search** (`global-search.js`) — press `Ctrl+K` or tap the search icon to jump straight to a room, guest, checklist step, or shift task from anywhere.
 - **📋 Shift Handover Digest** (`handover.js`) — one tap builds a copy/print-ready handover note combining a live status snapshot with the shared activity log.
 - **↺ Undo toasts** (`utils.js`) — destructive actions (deleting a task, resetting the checklist) happen instantly but leave a 6–8 second window to undo instead of a blocking confirm popup.
-- **📱 PWA / offline install** (`manifest.json`, `sw.js`, `icons/`) — installable to a phone/tablet home screen; the app shell loads even with no signal (live data still needs a connection).
+- **📱 PWA / offline install** (`manifest.json`, `sw.js`, `icons/`) — installable to a phone/tablet home screen; the app shell loads even with no signal (live data still needs a connection). See [Updating after a deploy](#updating-after-a-deploy) — this is the one file every code change needs to touch.
 - **⌨️ Keyboard shortcuts** — `1`–`0` to jump between panels, `?` for the full cheat sheet, `/` to focus search, `T` to cycle themes. See the in-app shortcut sheet for the complete list.
-- **🎨 Three themes** — Night Ops (dark gold), Opera Cloud (light red), Midnight (deep blue) — synced per user profile.
+- **🎨 Three themes** — Night Ops (dark gold), Opera Cloud (light red), Midnight (deep blue) — synced per user profile. The login screen keeps its own dark, glassy look in all three (a deliberate choice) and only re-tints its accent color to match, with a staggered entrance animation and a real loading spinner on sign-in.
+- **📊 Every data table is mobile-friendly** — tables in Arrivals, Purpose of Stay, Nationality, Reports, etc. share one component (`.tbl-wrap`) that keeps the first column (room/name) pinned while the rest of a wide row scrolls sideways, so you never lose track of which guest you're looking at on a phone.
 
 ### Departures — the deep end
 
@@ -58,11 +66,13 @@ Defined in `auth.js` (`ROLES` object):
 
 | Role | Panels | Manage users | Export | Import | Clear data |
 |---|---|:---:|:---:|:---:|:---:|
-| 👑 Owner | All | ✓ | ✓ | ✓ | ✓ |
-| 🏅 Manager | All except Reports | ✓ | ✓ | — | — |
-| ⭐ Supervisor | All except Reports | — | ✓ | — | — |
-| 🛎️ Agent | Departures, Arrivals, Arr vs Dep, Shifts, Checklist | — | — | — | — |
+| 👑 Owner | Everything, including Adagio Pro — owner bypasses panel gating entirely, so any panel added later is visible automatically | ✓ | ✓ | ✓ | ✓ |
+| 🏅 Manager | Same as Owner *except* Adagio Pro | ✓ | ✓ | — | — |
+| ⭐ Supervisor | Same as Manager | — | ✓ | — | — |
+| 🛎️ Agent | Departures, Arrivals, Arr vs Dep, Shifts, Checklist, No-Show | — | — | — | — |
 | 👁️ Read Only | Departures, Arrivals, Arr vs Dep, Shifts | — | — | — | — |
+
+Owner also skips Guest Memory's panel password automatically (see above) and every other per-capability check (`canExport`, `canDelete`, `canForceLogout`, etc.) in `applyRole()` — adding a new gated feature never needs an owner-specific carve-out.
 
 Every action (checkouts, checklist ticks, shift task changes, user management) writes to a shared `activityLog` in Firebase — this is what powers the admin activity panel and the Shift Handover Digest.
 
@@ -97,39 +107,41 @@ Every action (checkouts, checklist ticks, shift task changes, user management) w
 
 ### Updating after a deploy
 
-The service worker caches app files aggressively for offline use. After pushing changes, bump `CACHE_NAME` in `sw.js` (e.g. `ibis-ops-shell-v2`) so returning devices pick up the new version instead of a stale cache.
+The service worker caches app files **cache-first** for offline use — a returning browser gets the old cached copy instantly, with a network refresh only landing in the cache for *next* time. That means a code change with no version bump can sit invisible to existing users indefinitely. **Every time any cached file changes** (that's `index.html`, `styles.css`, and every `.js` file in `SHELL_FILES`), bump `CACHE_NAME` in `sw.js` (e.g. `ibis-ops-shell-v5` → `v6`) so returning devices pick up the new version instead of a stale one. After deploying, existing users need one full close-and-reopen (or hard refresh) for the new service worker to take over.
 
 ---
 
 ## File map
 
 ```
-index.html              Shell — nav, panels, modals, keyboard shortcuts
+index.html              Shell — nav, panels, modals, keyboard shortcuts, Adagio Pro
 styles.css               All styling, 3 themes
 manifest.json / sw.js     PWA install + offline app-shell caching
 icons/                    App icons for home-screen install
+setup-account.html        Standalone first-time owner account creation page
 
 db.js                     Firebase read/write + localStorage fallback
 state.js                  Shared global state (arrays, checklist steps, shift defaults)
-utils.js                  Clipboard, toasts, undo-toast, date/name parsing, theme switching
+utils.js                  Clipboard, toasts, undo-toast, date/name parsing, theme
+                          switching, escapeHtml()/escapeJsAttr() (safe HTML rendering)
 auth.js                   Login, roles, admin panel, activity log
 global-search.js          Ctrl+K command palette
 handover.js               Shift handover digest
 
 departures.js             Departure board (see "deep end" above)
-arrivals-purpose.js       Arrivals / purpose of stay
+arrivals-purpose.js       Arrivals / purpose of stay, booking-source categorisation
 arr-dep-xref.js           Arrivals ↔ Departures extension cross-reference
 arrivals-proc.js          Opera arrivals report processor
 noshow.js                 No-show tracker
 tourism-tax.js            TD Portal date-correction flagging
 checklist.js              Night audit checklist
-shifts.js                 Per-shift task lists
-guest-memory.js           Returning-guest profile store
+shifts.js                 Per-shift task lists + synced activity log
+guest-memory.js           Returning-guest profile store, owner password bypass
 natguess.js               Nationality guesser from guest names
-reports.js                Misc reporting
-
-*-panel.html               Drop-in HTML snippets for panels shipped separately
-                            from index.html (xref, arrivals-proc, guest-memory)
+reports.js                Nationality report, rented rooms, night audit PM-room
+                          compare, immigration check
+td-audit.js               TD 30-day compliance audit
+inhouse-tally.js          Opera vs. XML in-house guest count reconciliation
 ```
 
 ---
