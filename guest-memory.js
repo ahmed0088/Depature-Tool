@@ -78,8 +78,23 @@ function _gmRenderLockState() {
   }
 }
 
+// ── Owner override — the account login already proves who they are, so
+// an owner should never have to also type the panel password ───────────
+function _gmIsOwner() {
+  return typeof currentProfile !== 'undefined' && currentProfile?.role === 'owner';
+}
+function _gmApplyOwnerAutoUnlock() {
+  if (!_gmIsOwner() || _gmUnlocked) return;
+  _gmUnlocked = true;
+  clearTimeout(_gmLockTimer);   // owners don't auto-relock after 30 min either
+  _gmRenderLockState();
+  if (_gmReady) _gmUpdateUI();
+}
+
 // ── Try unlocking: prompt for password, verify, open ─────
 async function gmUnlock() {
+  if (_gmIsOwner()) { _gmApplyOwnerAutoUnlock(); return; }
+
   const storedHash = await _gmGetStoredHash();
   if (!storedHash) {
     // No password set yet — only owner/manager can create one
@@ -264,6 +279,10 @@ function gmInit() {
   // Render lock state — panel starts locked on every page load
   setTimeout(async () => {
     _gmRenderLockState();
+    // Owner is already authenticated at the account level — no separate
+    // panel password needed. (Also re-applied right after login in auth.js,
+    // since currentProfile usually isn't populated yet this early at boot.)
+    if (_gmIsOwner()) { _gmApplyOwnerAutoUnlock(); return; }
     // If no password is set yet, auto-unlock so first-time use isn't confusing
     const hash = await _gmGetStoredHash();
     if (!hash) {

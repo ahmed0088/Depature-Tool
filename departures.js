@@ -1278,11 +1278,6 @@ function depCardHTML(r) {
     </div>
   </div>`;
 }
-
-function escapeHtml(str) {
-  if (!str) return '';
-  return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]||m));
-}
 // ── Check Out with balance warning ─────────────────────────
 function depCheckOut(i) {
   const r = depRooms[i];

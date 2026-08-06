@@ -54,6 +54,31 @@ function fbCopy(text, cb) {
   }
 }
 
+// ── HTML escaping ─────────────────────────────────────────
+// Single canonical definition — every table/card renderer that interpolates
+// guest-entered text into an HTML attribute or text node must go through
+// this. Escapes quotes too (not just &<>), since most call sites insert
+// values into double-quoted attributes like value="${...}" where an
+// unescaped `"` breaks out of the attribute and injects arbitrary markup —
+// e.g. a guest name of `John" onmouseover="alert(1)` — and that injected
+// markup runs for every other connected user once the data syncs.
+function escapeHtml(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// For values embedded as a single-quoted JS string literal INSIDE an
+// onclick="..." (or similar) HTML attribute, e.g.
+// onclick="doThing('${escapeJsAttr(name)}')" — escapeHtml alone isn't
+// enough there: it stops a `"` breaking out of the *attribute*, but a raw
+// `'` in the data still breaks out of the *string literal* once the
+// browser decodes the attribute and runs it as JS on click. JS-escape
+// first (backslash/quote), then HTML-escape the result — order matters.
+function escapeJsAttr(s) {
+  const jsEscaped = String(s ?? '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  return escapeHtml(jsEscaped);
+}
+
 // ── Name / source cleaners ────────────────────────────────
 function parseName(raw) {
   if (!raw) return '—';

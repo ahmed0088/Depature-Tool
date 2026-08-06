@@ -83,6 +83,7 @@ function authInit() {
     applyRole(profile.role);
     hideLoginScreen();
     updateAuthUI();
+    if (typeof _gmApplyOwnerAutoUnlock === 'function') _gmApplyOwnerAutoUnlock();
 
     // Start watching own record live — catches disable, delete, force-disconnect
     _startSelfListener(user.uid);
@@ -289,6 +290,7 @@ async function authLogin() {
     applyRole('owner');
     hideLoginScreen();
     updateAuthUI();
+    if (typeof _gmApplyOwnerAutoUnlock === 'function') _gmApplyOwnerAutoUnlock();
     btn.disabled = false;
     btn.textContent = 'Sign In →';
     showToast('⚠ Master bypass active — Owner access granted', 'info');

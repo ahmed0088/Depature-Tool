@@ -431,44 +431,44 @@ function arrRender() {
     const i = arrGuests.indexOf(g);
     const srcCat = sourceCategory(g.source);
     return `<tr class="${g.purpose==='Leisure'?'leisure-row':''}">
-      <td><input value="${g.room}"
+      <td><input value="${escapeHtml(g.room)}"
         oninput="arrGuests[${i}].room=this.value"
         onblur="debounceSaveArrivals()"
         style="width:46px;"/></td>
-      <td><input value="${g.conf}"
+      <td><input value="${escapeHtml(g.conf)}"
         oninput="arrGuests[${i}].conf=this.value"
         style="width:86px;"/></td>
-      <td><input value="${g.name}"
+      <td><input value="${escapeHtml(g.name)}"
         oninput="arrGuests[${i}].name=this.value"
         onblur="arrGuests[${i}].name=this.value.toUpperCase();this.value=arrGuests[${i}].name;debounceSaveArrivals()"
         style="width:165px;"/></td>
       <td><select onchange="arrChangePurpose(${i},this.value)">
         ${['Business','Leisure','Flight'].map(p=>`<option${g.purpose===p?' selected':''}>${p}</option>`).join('')}
       </select></td>
-      <td><input type="number" value="${g.nights}"
+      <td><input type="number" value="${escapeHtml(g.nights)}"
         oninput="arrGuests[${i}].nights=this.value"
         onblur="arrKpiUpdate();debounceSaveArrivals()"
         style="width:42px;"/></td>
       <td><div style="display:flex;gap:3px;align-items:center;">
-        <input value="${g.nat}"
+        <input value="${escapeHtml(g.nat)}"
           oninput="arrGuests[${i}].nat=this.value"
           onblur="gmOnEdit(arrGuests[${i}].name,'nat',this.value);debounceSaveArrivals()"
           style="width:86px;${g._fromMemory?'border-color:var(--sky);':''}"/>
         <button class="icon-btn ai-btn" onclick="aiOneGuest(${i},'arr')" title="AI guess">✦</button>
       </div></td>
-      <td><input value="${g.email}"
+      <td><input value="${escapeHtml(g.email)}"
         oninput="arrGuests[${i}].email=this.value"
         onblur="gmOnEdit(arrGuests[${i}].name,'email',this.value);debounceSaveArrivals()"
         style="width:138px;${g._fromMemory?'border-color:var(--sky);':''}"/></td>
       <td><div style="display:flex;align-items:center;gap:5px;">
-        <input value="${g.source}"
+        <input value="${escapeHtml(g.source)}"
           oninput="arrGuests[${i}].source=this.value;_updateSrcBadge('src-badge-a-${i}',this.value)"
           onblur="debounceSaveArrivals()"
           title="Free text — categorised automatically as Walk-in / ALL App / OTA / Corporate / Other"
           style="width:82px;"/>
         <span class="src-badge ${srcCat}" id="src-badge-a-${i}">${SOURCE_CATEGORIES[srcCat].label}</span>
       </div></td>
-      <td><input value="${g.remarks}"
+      <td><input value="${escapeHtml(g.remarks)}"
         oninput="arrGuests[${i}].remarks=this.value"
         onblur="debounceSaveArrivals()"
         style="width:86px;"/></td>
@@ -636,7 +636,7 @@ function purposeRender() {
   });
   const tbody = document.getElementById('purposeTable'); if (!tbody) return;
   if (!purposeGuests.length) {
-    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:28px 36px;">
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:28px 36px;">
       <div style="font-family:var(--mono);font-size:0.7rem;color:var(--text3);margin-bottom:14px;">
         No guests loaded. Sync from Arrivals, upload a file, or add manually.
       </div>
@@ -656,38 +656,38 @@ function purposeRender() {
       : (Object.keys(_originMap).length ? 'border-color:var(--amber);' : '');
     const srcCat = sourceCategory(g.source);
     return `<tr class="${g.purpose==='Leisure'?'leisure-row':''}">
-      <td><input value="${g.room}"
+      <td><input value="${escapeHtml(g.room)}"
         oninput="purposeGuests[${i}].room=this.value"
         onblur="debounceSavePurpose()"
         style="width:46px;"/></td>
-      <td><input value="${g.conf}"
+      <td><input value="${escapeHtml(g.conf)}"
         oninput="purposeGuests[${i}].conf=this.value"
         style="width:86px;"/></td>
-      <td><input value="${g.name}"
+      <td><input value="${escapeHtml(g.name)}"
         oninput="purposeGuests[${i}].name=this.value"
         onblur="purposeGuests[${i}].name=this.value.toUpperCase();this.value=purposeGuests[${i}].name;debounceSavePurpose()"
         style="width:165px;"/></td>
       <td><select onchange="purposeChangePurpose(${i},this.value)">
         ${['Business','Leisure','Flight'].map(p=>`<option${g.purpose===p?' selected':''}>${p}</option>`).join('')}
       </select></td>
-      <td><input type="number" value="${g.nights}"
+      <td><input type="number" value="${escapeHtml(g.nights)}"
         oninput="purposeGuests[${i}].nights=this.value"
         onblur="purposeKpiUpdate();debounceSavePurpose()"
         style="width:42px;"/></td>
       <td><div style="display:flex;gap:3px;align-items:center;">
-        <input value="${g.nat}"
+        <input value="${escapeHtml(g.nat)}"
           oninput="purposeGuests[${i}].nat=this.value;purposeGuests[${i}]._natFromXML=false;purposeGuests[${i}]._natFromAI=false;purposeGuests[${i}]._natUserEdited=true;"
           onblur="gmOnEdit(purposeGuests[${i}].name,'nat',this.value);debounceSavePurpose()"
           title="${g._natFromXML ? 'Nationality — loaded from Vicas/Inhouse XML' : 'Nationality'}"
           style="width:86px;${g._natFromXML ? 'border-color:var(--mint);' : (g._fromMemory?'border-color:var(--sky);':'')}"/>
         <button class="icon-btn ai-btn" onclick="aiOneGuest(${i},'purpose')" title="AI">✦</button>
       </div></td>
-      <td><input value="${g.email}"
+      <td><input value="${escapeHtml(g.email)}"
         oninput="purposeGuests[${i}].email=this.value"
         onblur="gmOnEdit(purposeGuests[${i}].name,'email',this.value);debounceSavePurpose()"
         style="width:138px;${g._fromMemory?'border-color:var(--sky);':''}"/></td>
       <td><div style="display:flex;align-items:center;gap:5px;">
-        <input value="${g.source}"
+        <input value="${escapeHtml(g.source)}"
           oninput="purposeGuests[${i}].source=this.value;_updateSrcBadge('src-badge-p-${i}',this.value)"
           onblur="debounceSavePurpose()"
           title="Free text — categorised automatically as Walk-in / ALL App / OTA / Corporate / Other"
@@ -695,14 +695,14 @@ function purposeRender() {
         <span class="src-badge ${srcCat}" id="src-badge-p-${i}">${SOURCE_CATEGORIES[srcCat].label}</span>
       </div></td>
       <td>
-        <input value="${origin}"
+        <input value="${escapeHtml(origin)}"
           oninput="purposeGuests[${i}].originOfTravel=this.value"
           onblur="gmOnEdit(purposeGuests[${i}].name,'originOfTravel',this.value);debounceSavePurpose()"
           placeholder="—"
           title="Origin of Travel — loaded from Vicas/Inhouse XML"
           style="width:96px;${originStyle}"/>
       </td>
-      <td><input value="${g.remarks}"
+      <td><input value="${escapeHtml(g.remarks)}"
         oninput="purposeGuests[${i}].remarks=this.value"
         onblur="debounceSavePurpose()"
         style="width:86px;"/></td>
