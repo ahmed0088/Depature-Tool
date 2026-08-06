@@ -216,30 +216,32 @@ function hideLoginScreen() {
 }
 
 // ── Login theme sync ──────────────────────────────────────
+// The login screen always keeps its dark, glassy "ops console" background —
+// that's a deliberate design choice (#loginScreen locks --bg/--card/--text
+// etc. in styles.css). Flipping the whole card to each theme's real page
+// colors (e.g. Opera's flat white/red) looked like a completely different,
+// less premium product. Instead only the ACCENT flows through — the same
+// gold/red/indigo the user will see everywhere else once logged in — so the
+// theme choice is still visibly "real" without breaking the login mood.
 function _applyLoginTheme(name) {
-  const themes = {
-    'night-ops': { bg:'#080b10', card:'rgba(17,22,32,0.95)', border:'rgba(232,184,75,0.15)', accent:'#e8b84b', accentDark:'#c49a2f', text:'#dce4f0', text2:'#7f92aa', text3:'#374d68', input:'rgba(28,37,53,0.8)', inputBorder:'#1f2d42', btnColor:'#080b10' },
-    'opera':     { bg:'#b83020', card:'rgba(255,255,255,0.97)', border:'rgba(199,70,52,0.2)', accent:'#C74634', accentDark:'#a33828', text:'#1a1a1a', text2:'#555', text3:'#999', input:'#fff', inputBorder:'#ddd', btnColor:'#fff' },
-    'midnight':  { bg:'#060814', card:'rgba(15,20,38,0.97)', border:'rgba(129,140,248,0.2)', accent:'#8b7cf8', accentDark:'#6f5fe0', text:'#e2e8f4', text2:'#7a84a0', text3:'#3a4055', input:'rgba(20,26,50,0.9)', inputBorder:'#1e2540', btnColor:'#fff' },
+  const accents = {
+    // Same accent/accent2 pairs as the real app theme (styles.css :root overrides)
+    'night-ops': { accent:'#e8b84b', accentDark:'#c49a2f', btnColor:'#080b10' },
+    'opera':     { accent:'#C74634', accentDark:'#A3362A', btnColor:'#ffffff' },
+    'midnight':  { accent:'#818cf8', accentDark:'#6366f1', btnColor:'#ffffff' },
   };
-  const t = themes[name] || themes['night-ops'];
+  const t = accents[name] || accents['night-ops'];
   const s = document.getElementById('loginThemeStyle');
   if (s) s.textContent = `
-    #loginScreen { background: ${t.bg} !important; }
-    .login-card  { background: ${t.card} !important; border-color: ${t.border} !important; }
-    .login-title { color: ${t.text} !important; }
+    #loginScreen { --login-grid: ${t.accent}0d; --login-glow: ${t.accent}14; }
     .login-title span { color: ${t.accent} !important; }
-    .login-sub, .login-label, .login-divider span, .login-footer { color: ${t.text3} !important; }
-    .login-divider::before, .login-divider::after { background: ${t.inputBorder} !important; }
-    .login-input { background: ${t.input} !important; border-color: ${t.inputBorder} !important; color: ${t.text} !important; }
-    .login-input::placeholder { color: ${t.text3} !important; }
     .login-input:focus { border-color: ${t.accent}88 !important; box-shadow: 0 0 0 3px ${t.accent}15 !important; }
-    .login-btn { background: linear-gradient(135deg,${t.accent},${t.accentDark}) !important; color: ${t.btnColor} !important; }
-    .login-check-label { color: ${t.text2} !important; }
+    .login-btn { background: linear-gradient(135deg,${t.accent},${t.accentDark}) !important; color: ${t.btnColor} !important; box-shadow: 0 8px 24px ${t.accent}40 !important; }
+    .login-btn:hover { box-shadow: 0 12px 32px ${t.accent}59 !important; }
     .login-check-label a { color: ${t.accent} !important; }
-    .login-logo { border-color: ${t.border} !important; }
-    .login-theme-btn { border-color: ${t.inputBorder} !important; color: ${t.text3} !important; }
+    .login-logo { border-color: ${t.accent}33 !important; --login-accent-glow-lo: ${t.accent}1a; --login-accent-glow-hi: ${t.accent}38; }
     .login-theme-btn.active { border-color: ${t.accent} !important; color: ${t.accent} !important; background: ${t.accent}18 !important; }
+    #rememberMe { accent-color: ${t.accent} !important; }
   `;
 }
 
@@ -252,8 +254,9 @@ async function authLogin() {
   const btn    = document.getElementById('loginBtn');
 
   errEl.style.display = 'none';
+  errEl.classList.remove('shake');
   btn.disabled = true;
-  btn.textContent = 'Signing in…';
+  btn.innerHTML = '<span class="login-btn-spinner"></span>Signing in…';
 
   // Save email if remember checked
   if (remember) localStorage.setItem('ibis_saved_email', email);
@@ -306,6 +309,10 @@ async function authLogin() {
     btn.textContent = 'Sign In →';
     errEl.textContent = friendlyAuthError(e.code, e.message);
     errEl.style.display = 'block';
+    // Restart the shake even on back-to-back failed attempts
+    errEl.classList.remove('shake');
+    void errEl.offsetWidth;
+    errEl.classList.add('shake');
     console.error('🔴 Auth error:', e.code, e.message);
   }
 }

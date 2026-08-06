@@ -2399,7 +2399,9 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Always render in Night Ops dark — login is always dark regardless of saved theme */
+  /* Login always keeps this dark, glassy "ops console" atmosphere regardless
+     of the chosen theme — only the accent color (gold/red/indigo) flows
+     through via _applyLoginTheme(), see --login-* vars below. */
   --bg:       #080b10;
   --surface:  #111620;
   --card2:    #1c2535;
@@ -2410,19 +2412,23 @@ kbd {
   --gold:     #e8b84b;
   --rose:     #f06b7a;
   --mint:     #3ecf8e;
+  --login-grid: rgba(232,184,75,0.03);
+  --login-glow: rgba(232,184,75,0.07);
   background: var(--bg);
 }
 
-/* Atmospheric background grid + glow */
+/* Atmospheric background grid + glow — tinted to match the active theme's
+   accent so the "empty" screen never looks stuck on a different theme */
 #loginScreen::before {
   content: '';
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(232,184,75,0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(232,184,75,0.03) 1px, transparent 1px);
+    linear-gradient(var(--login-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--login-grid) 1px, transparent 1px);
   background-size: 40px 40px;
   pointer-events: none;
+  transition: background-image 0.4s ease;
 }
 
 #loginScreen::after {
@@ -2431,11 +2437,12 @@ kbd {
   width: 600px;
   height: 600px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(232,184,75,0.07) 0%, transparent 70%);
+  background: radial-gradient(circle, var(--login-glow) 0%, transparent 70%);
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
   pointer-events: none;
+  transition: background 0.4s ease;
 }
 
 .login-bg {
@@ -2468,6 +2475,27 @@ kbd {
   to   { opacity: 1; transform: translateY(0)    scale(1);    }
 }
 
+/* Staggered entrance for the card's contents — the card itself slides up,
+   then its contents settle in just behind it, top to bottom. */
+@keyframes loginItemIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.login-theme-row, .login-logo, .login-title, .login-sub, .login-divider,
+.login-field, .login-remember, .login-btn, .login-footer, .login-setup-link {
+  animation: loginItemIn 0.42s cubic-bezier(0.16,1,0.3,1) both;
+}
+.login-theme-row  { animation-delay: 0.08s; }
+.login-logo       { animation-delay: 0.12s; }
+.login-title      { animation-delay: 0.16s; }
+.login-sub        { animation-delay: 0.20s; }
+.login-divider    { animation-delay: 0.24s; }
+.login-field      { animation-delay: 0.28s; }
+.login-field + .login-field { animation-delay: 0.32s; }
+.login-remember   { animation-delay: 0.36s; }
+.login-btn        { animation-delay: 0.40s; }
+.login-footer, .login-setup-link { animation-delay: 0.44s; }
+
 /* Logo area */
 .login-logo {
   width: 52px;
@@ -2481,6 +2509,15 @@ kbd {
   font-size: 1.6rem;
   margin: 0 auto 18px;
   box-shadow: 0 8px 24px rgba(232,184,75,0.1);
+  transition: border-color 0.35s ease;
+  --login-accent-glow-lo: rgba(232,184,75,0.1);
+  --login-accent-glow-hi: rgba(232,184,75,0.22);
+}
+/* Subtle continuous "breathing" glow — starts once the entrance settles */
+.login-logo { animation: loginItemIn 0.42s cubic-bezier(0.16,1,0.3,1) both 0.12s, loginLogoGlow 3.4s ease-in-out infinite 1s; }
+@keyframes loginLogoGlow {
+  0%, 100% { box-shadow: 0 8px 24px var(--login-accent-glow-lo); }
+  50%      { box-shadow: 0 8px 30px var(--login-accent-glow-hi); }
 }
 
 .login-title {
@@ -2492,7 +2529,7 @@ kbd {
   letter-spacing: -0.3px;
 }
 
-.login-title span { color: #e8b84b; }
+.login-title span { color: #e8b84b; transition: color 0.35s ease; }
 
 .login-sub {
   font-family: 'DM Mono', monospace;
@@ -2573,6 +2610,15 @@ kbd {
   margin-bottom: 14px;
   line-height: 1.5;
 }
+/* Wrong-password nudge — retriggered by JS via classList.remove/add so it
+   replays on every failed attempt, not just the first */
+.login-error.shake { animation: loginErrorShake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+@keyframes loginErrorShake {
+  10%, 90%      { transform: translateX(-1px); }
+  20%, 80%      { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-4px); }
+  40%, 60%      { transform: translateX(4px); }
+}
 
 /* Sign in button */
 .login-btn {
@@ -2589,13 +2635,23 @@ kbd {
   cursor: pointer;
   margin-top: 6px;
   margin-bottom: 24px;
-  transition: opacity 0.15s, transform 0.1s, box-shadow 0.2s;
+  transition: opacity 0.15s, transform 0.1s, box-shadow 0.25s ease, background 0.35s ease, color 0.35s ease;
   box-shadow: 0 8px 24px rgba(232,184,75,0.25);
+  display: flex; align-items: center; justify-content: center;
 }
 
 .login-btn:hover  { opacity: 0.92; box-shadow: 0 12px 32px rgba(232,184,75,0.35); }
 .login-btn:active { transform: scale(0.98); }
-.login-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+.login-btn:disabled { opacity: 0.7; cursor: not-allowed; }
+
+/* Inline spinner shown on the button while signing in — currentColor keeps
+   it readable against gold/red/indigo automatically, no per-theme CSS needed */
+.login-btn-spinner {
+  width: 14px; height: 14px; margin-right: 8px;
+  border: 2px solid rgba(0,0,0,0.25); border-top-color: currentColor;
+  border-radius: 50%; display: inline-block; flex-shrink: 0;
+  animation: spin 0.65s linear infinite;
+}
 
 /* Footer */
 .login-footer {
@@ -2613,6 +2669,16 @@ kbd {
   content: '🔒';
   font-size: 0.65rem;
   opacity: 0.5;
+}
+
+/* Respect the OS-level "reduce motion" setting — content still appears,
+   it just doesn't animate in/pulse/shake */
+@media (prefers-reduced-motion: reduce) {
+  .login-card, .login-theme-row, .login-logo, .login-title, .login-sub,
+  .login-divider, .login-field, .login-remember, .login-btn, .login-footer,
+  .login-setup-link, .login-error.shake {
+    animation: none !important;
+  }
 }
 
 /* ── Auth user pill in topbar ── */
