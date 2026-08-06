@@ -348,7 +348,7 @@ function _xrefApplyLoad(result) {
 
   _xrefEnrichAll();
   xrefRender();
-  if (typeof depRender === 'function') depRender();
+  if (typeof depRender === 'function' && !(typeof depIsTyping === 'function' && depIsTyping())) depRender();
 
   const ext = [..._xrefArrRooms, ..._xrefArrNoRoom].filter(a => a.isExtension).length;
   let msg = `${total} arrivals loaded`;

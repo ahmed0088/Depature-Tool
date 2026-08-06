@@ -561,14 +561,6 @@ function apRenderTags(col) {
   });
 }
 
-function apToggleFbCount(code, btn) {
-  const current = apFbCountMode[code] || 'pax';
-  const next    = current === 'pax' ? 'room' : 'pax';
-  apFbCountMode[code] = next;
-  btn.className   = 'ap-tag-count-toggle ' + next;
-  btn.textContent = next === 'pax' ? '👤 pax' : '🛏 room';
-  apAutoSaveProfile();
-}
 function apOnDragOver(e)  { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; e.currentTarget.classList.add('ap-drag-over'); }
 function apOnDragLeave(e) { e.currentTarget.classList.remove('ap-drag-over'); }
 function apOnDrop(e, targetCol) {

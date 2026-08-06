@@ -110,14 +110,6 @@ async function savePurposeLog(log) {
   await fbSet('purposeLog', { log, updatedAt: new Date().toISOString() });
 }
 
-async function saveShiftLog(log) {
-  await fbSet('shiftLog', { log, updatedAt: new Date().toISOString() });
-}
-
-async function saveCheckLog(log) {
-  await fbSet('checkLog', { log, updatedAt: new Date().toISOString() });
-}
-
 async function saveNoShow(guests) {
   await fbSet('noshow', { guests, date: new Date().toISOString().split('T')[0], updatedAt: new Date().toISOString() });
 }
@@ -186,7 +178,6 @@ function listenArrivals(cb)   { fbListen('arrivals',   cb); }
 function listenPurpose(cb)    { fbListen('purpose',    cb); }
 function listenChecklist(cb)  { fbListen('checklist',  cb); }
 function listenShifts(cb)     { fbListen('shifts',     cb); }
-function listenSettings(cb)   { fbListen('settings',   cb); }
 function listenNoShow(cb)     { fbListen('noshow',     cb); }
 
 // ── Export / Import ───────────────────────────────────────

@@ -355,21 +355,6 @@ function gmScanAndSaveAll() {
   showToast(`🧠 ${saved} new · ${updated} updated in memory`, 'ok');
 }
 
-function gmSaveProfile(g) {
-  if (!g || !g.name) return;
-  const key = gmKey(g.name), ex = _gmStore[key] || {};
-  _gmStore[key] = {
-    nat:            g.nat            || ex.nat            || '',
-    email:          g.email          || ex.email          || '',
-    purpose:        g.purpose        || ex.purpose        || 'Business',
-    conf:           g.conf           || ex.conf           || '',
-    originOfTravel: g.originOfTravel || ex.originOfTravel || '',
-    hits:           ex.hits          || 0,
-    lastSeen:       new Date().toISOString().split('T')[0],
-  };
-  _gmPersist();
-}
-
 function gmLookup(name) { return _gmStore[gmKey(name)] || null; }
 
 function gmDeleteProfile(name) {

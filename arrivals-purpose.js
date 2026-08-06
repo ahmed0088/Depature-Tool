@@ -265,19 +265,6 @@ function _normOrigin(nat) {
   return n;
 }
 
-// Wipe the XML lookup maps. Called whenever a FRESH Opera report is loaded
-// into Purpose of Stay (new night = new guests). Without this, nationality
-// data from a previously-loaded XML can silently "stick" and get stamped
-// onto a completely different guest who now happens to be in the same room
-// (e.g. room 610 held guest A last night, guest B tonight — if the XML isn't
-// reloaded, guest B would incorrectly inherit guest A's nationality via the
-// room-number fallback). Clearing here forces a clean slate every time.
-function _clearOriginMaps() {
-  _originMap = {}; _originNameMap = {}; _originNatMap = {}; _originNatRoomMap = {};
-  const lbl = document.getElementById('originXmlLabel');
-  if (lbl) lbl.textContent = '';
-}
-
 // After a fresh Opera guest list loads, nudge the user to load the
 // Nationality/VICAS XML next if they haven't already this session —
 // this is report #2 in the "load report 1, then report 2" workflow.
@@ -396,15 +383,6 @@ function renderArrLog() {
       <span class="log-name">${escapeLogText(l.detail)}</span>
       <span class="log-time">${l.time}</span>
     </div>`).join('');
-}
-
-function toggleArrLog() {
-  const body = document.getElementById('arrLogBody');
-  const icon = document.getElementById('arrLogToggleIcon');
-  if (!body) return;
-  const open = body.style.display !== 'none';
-  body.style.display = open ? 'none' : 'block';
-  if (icon) icon.textContent = open ? '▸' : '▾';
 }
 
 function escapeLogText(s) {
@@ -600,15 +578,6 @@ function renderPurposeLog() {
       <span class="log-name">${escapeLogText(l.detail)}</span>
       <span class="log-time">${l.time}</span>
     </div>`).join('');
-}
-
-function togglePurposeLog() {
-  const body = document.getElementById('purposeLogBody');
-  const icon = document.getElementById('purposeLogToggleIcon');
-  if (!body) return;
-  const open = body.style.display !== 'none';
-  body.style.display = open ? 'none' : 'block';
-  if (icon) icon.textContent = open ? '▸' : '▾';
 }
 
 function purposeRemoveGuest(i) {
@@ -877,10 +846,6 @@ function saveGuest() {
     addPurposeLog('Added', `${g.name} — Room ${g.room}`);
   }
   closeModal();
-}
-
-function purposeAddManual() {
-  openAddGuest('purpose');
 }
 
 function loadOperaFile(input, target) {

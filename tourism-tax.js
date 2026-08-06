@@ -237,10 +237,3 @@ function ttClear() {
   if (ha) ha.style.display = 'none';
 }
 
-// stub — kept so any HTML buttons referencing it don't throw
-function ttSetCutoff() {}
-function ttFilter(f, el) {
-  document.querySelectorAll('[data-ttf]').forEach(b => b.classList.remove('on'));
-  if (el) el.classList.add('on');
-  ttRender();
-}

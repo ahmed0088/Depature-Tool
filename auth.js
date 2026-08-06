@@ -817,20 +817,6 @@ function adminToggleVis(inputId, btnId) {
   input.focus();
 }
 
-// ── Send password reset email (owner action) ──────────────
-async function adminSendPasswordReset(uid) {
-  const u = _adminUsers[uid];
-  if (!u || !u.email) return;
-  if (!confirm(`Send password reset email to ${u.name} (${u.email})?`)) return;
-  try {
-    await firebase.auth().sendPasswordResetEmail(u.email);
-    await logActivity('password_reset_sent', `${u.name} — ${u.email}`);
-    showToast(`Reset email sent to ${u.email} ✓`, 'ok');
-  } catch(e) {
-    showToast('Send failed: ' + (e.message || e.code), 'err');
-  }
-}
-
 // ── Activity log filter ───────────────────────────────────
 let _adminActivityAll = [];
 function adminFilterActivity(q) {

@@ -3654,8 +3654,12 @@ async function appInit() {
   // Check if this is a new night (after checklist data is applied)
   setTimeout(() => checkNewNight(), 800);
 
-  // Refresh departure board every 60s so NA warnings update automatically
-  setInterval(() => { if (depRooms.length) depRender(); }, 60000);
+  // Refresh departure board every 60s so NA warnings update automatically.
+  // Skipped while a note is being typed — a full re-render would blow away
+  // the focused textarea mid-sentence (see depIsTyping in departures.js).
+  setInterval(() => {
+    if (depRooms.length && !(typeof depIsTyping === 'function' && depIsTyping())) depRender();
+  }, 60000);
 
   showToast('App ready — connected to Firebase', 'ok');
 }
