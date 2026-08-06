@@ -348,7 +348,7 @@ function _xrefApplyLoad(result) {
 
   _xrefEnrichAll();
   xrefRender();
-  if (typeof depRender === 'function') depRender();
+  if (typeof depRender === 'function' && !(typeof depIsTyping === 'function' && depIsTyping())) depRender();
 
   const ext = [..._xrefArrRooms, ..._xrefArrNoRoom].filter(a => a.isExtension).length;
   let msg = `${total} arrivals loaded`;
@@ -583,8 +583,8 @@ function _xrefRow(a, rowType) {
     <td>${badge}</td>
     <td style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">${reason}</td>
     <td style="display:flex;gap:5px;align-items:center;">
-      <button class="xref-copy-btn" onclick="xrefCopyRow(this,'${escapeHtml(a.room||'TBA')}','${escapeHtml(a.name)}','${escapeHtml(a.source)}','${a.nights}N','${isExt ? 'Extension' : 'New arrival'}')">📋</button>
-      <button class="xref-copy-btn" style="color:var(--rose);border-color:rgba(240,107,122,0.3);" onclick="xrefDeleteRow('${escapeHtml(a.conf || a.name)}','room')" title="Remove from list">✕</button>
+      <button class="xref-copy-btn" onclick="xrefCopyRow(this,'${escapeJsAttr(a.room||'TBA')}','${escapeJsAttr(a.name)}','${escapeJsAttr(a.source)}','${escapeJsAttr(a.nights)}N','${isExt ? 'Extension' : 'New arrival'}')">📋</button>
+      <button class="xref-copy-btn" style="color:var(--rose);border-color:rgba(240,107,122,0.3);" onclick="xrefDeleteRow('${escapeJsAttr(a.conf || a.name)}','room')" title="Remove from list">✕</button>
     </td>
   </tr>`;
 }
@@ -596,7 +596,7 @@ function _xrefNoRoomRow(a) {
     <td>
       <div style="display:flex;align-items:center;gap:6px;">
         <span class="xref-room-pill unassigned">—</span>
-        <button class="xref-assign-btn" onclick="xrefQuickAssign(this,'${escapeHtml(a.conf || a.name)}')">✏ Assign</button>
+        <button class="xref-assign-btn" onclick="xrefQuickAssign(this,'${escapeJsAttr(a.conf || a.name)}')">✏ Assign</button>
       </div>
     </td>
     <td>
@@ -611,8 +611,8 @@ function _xrefNoRoomRow(a) {
     <td colspan="2"><span class="xref-badge-pending">⏳ Room TBA</span></td>
     <td style="font-family:var(--mono);font-size:0.6rem;color:var(--amber);">Pending room assignment at check-in</td>
     <td style="display:flex;gap:5px;align-items:center;">
-      <button class="xref-copy-btn" onclick="xrefCopyRow(this,'TBA','${escapeHtml(a.name)}','${escapeHtml(a.source)}','${a.nights}N','No room yet')">📋</button>
-      <button class="xref-copy-btn" style="color:var(--rose);border-color:rgba(240,107,122,0.3);" onclick="xrefDeleteRow('${escapeHtml(a.conf || a.name)}','noroom')" title="Remove from list">✕</button>
+      <button class="xref-copy-btn" onclick="xrefCopyRow(this,'TBA','${escapeJsAttr(a.name)}','${escapeJsAttr(a.source)}','${escapeJsAttr(a.nights)}N','No room yet')">📋</button>
+      <button class="xref-copy-btn" style="color:var(--rose);border-color:rgba(240,107,122,0.3);" onclick="xrefDeleteRow('${escapeJsAttr(a.conf || a.name)}','noroom')" title="Remove from list">✕</button>
     </td>
   </tr>`;
 }
@@ -760,12 +760,6 @@ function xrefClear() {
   if (badge) badge.textContent = '0';
   const search = document.getElementById('xrefSearch');
   if (search) search.value = '';
-}
-
-// ── escapeHtml ────────────────────────────────────────────
-function escapeHtml(s) {
-  if (!s) return '';
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 // ── CSS ───────────────────────────────────────────────────

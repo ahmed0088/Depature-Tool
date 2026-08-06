@@ -10,12 +10,15 @@ let depSize    = 'md';     // ← ADD THIS LINE
 let depLog     = [];
 
 // ── Arrivals ──────────────────────────────────────────────
-let arrGuests  = [];
-let arrFilter_ = 'all';
+let arrGuests    = [];
+let arrFilter_    = 'all';
+let arrSrcFilter_ = 'all';   // 'all' | walkin | allapp | ota | corporate | other
 
 // ── Purpose of stay ───────────────────────────────────────
-let purposeGuests  = [];
-let purposeFilter_ = 'all';
+let purposeGuests    = [];
+let purposeFilter_    = 'all';
+let purposeSrcFilter_ = 'all';   // 'all' | walkin | allapp | ota | corporate | other
+let purposeOriginFilter_ = 'all'; // 'all' | 'missing' — origin-of-travel quick filter
 let _purposeTitle  = 'Purpose of Stay Report';
 
 // ── Immigration ───────────────────────────────────────────

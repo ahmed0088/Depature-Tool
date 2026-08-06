@@ -1278,34 +1278,6 @@ function depCardHTML(r) {
     </div>
   </div>`;
 }
-
-function escapeHtml(str) {
-  if (!str) return '';
-  return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]||m));
-}
-// ── Row expand / collapse ──────────────────────────────────
-function depToggleExpand(rowEl) {
-  const card  = rowEl.closest('.dep-card');
-  const body  = card.querySelector('.dc-body');
-  const arrow = rowEl.querySelector('.dc-expand-arrow');
-  const open  = !body.classList.contains('dc-body-collapsed');
-  body.classList.toggle('dc-body-collapsed', open);
-  if (arrow) arrow.textContent = open ? '▸' : '▾';
-}
-
-// ── Note toggle ────────────────────────────────────────────
-function depToggleNote(headerEl) {
-  const body  = headerEl.nextElementSibling;
-  const arrow = headerEl.querySelector('.dc-note-arrow');
-  const open  = body.style.display !== 'none';
-  body.style.display = open ? 'none' : 'block';
-  if (arrow) arrow.textContent = open ? '▸' : '▾';
-  if (!open) {
-    const ta = body.querySelector('textarea');
-    if (ta) ta.focus();
-  }
-}
-
 // ── Check Out with balance warning ─────────────────────────
 function depCheckOut(i) {
   const r = depRooms[i];

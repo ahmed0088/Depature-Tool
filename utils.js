@@ -54,6 +54,31 @@ function fbCopy(text, cb) {
   }
 }
 
+// ── HTML escaping ─────────────────────────────────────────
+// Single canonical definition — every table/card renderer that interpolates
+// guest-entered text into an HTML attribute or text node must go through
+// this. Escapes quotes too (not just &<>), since most call sites insert
+// values into double-quoted attributes like value="${...}" where an
+// unescaped `"` breaks out of the attribute and injects arbitrary markup —
+// e.g. a guest name of `John" onmouseover="alert(1)` — and that injected
+// markup runs for every other connected user once the data syncs.
+function escapeHtml(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// For values embedded as a single-quoted JS string literal INSIDE an
+// onclick="..." (or similar) HTML attribute, e.g.
+// onclick="doThing('${escapeJsAttr(name)}')" — escapeHtml alone isn't
+// enough there: it stops a `"` breaking out of the *attribute*, but a raw
+// `'` in the data still breaks out of the *string literal* once the
+// browser decodes the attribute and runs it as JS on click. JS-escape
+// first (backslash/quote), then HTML-escape the result — order matters.
+function escapeJsAttr(s) {
+  const jsEscaped = String(s ?? '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  return escapeHtml(jsEscaped);
+}
+
 // ── Name / source cleaners ────────────────────────────────
 function parseName(raw) {
   if (!raw) return '—';
@@ -79,7 +104,42 @@ function cleanSource(agent, company, source) {
     .replace(/EXPEDIA\.COM.*/i, 'Expedia')
     .replace(/\s*\(.*?\)/g, '')
     .trim();
-  return src || 'Walk-in';
+  // No agent/company/source on the booking does NOT mean the guest walked in —
+  // it almost always means a direct/ALL App booking with no third-party agent.
+  // Only the literal "walk in" text (from Opera) should ever be labelled Walk-in.
+  if (!src) return 'ALL App';
+  if (/walk[\s-]?in/i.test(src)) return 'Walk-in';
+  return src;
+}
+
+// Buckets a raw source string into a filterable category. Shared by the
+// Arrivals and Purpose of Stay panels so "Walk-in" / "ALL App" / "OTA" mean
+// exactly the same thing everywhere in the app.
+const SOURCE_CATEGORIES = {
+  walkin:    { label: 'Walk-in',   color: 'amber'  },
+  allapp:    { label: 'ALL App',   color: 'green'  },
+  ota:       { label: 'OTA',       color: 'blue'   },
+  corporate: { label: 'Corporate', color: 'purple' },
+  other:     { label: 'Other',     color: 'teal'   },
+};
+function sourceCategory(src) {
+  const s = (src || '').trim();
+  if (!s) return 'allapp';
+  if (/walk[\s-]?in/i.test(s)) return 'walkin';
+  if (/\ball\b|accor/i.test(s)) return 'allapp';
+  if (/booking\.com|agoda|expedia|hotels\.com|trip\.com|traveloka|makemytrip/i.test(s)) return 'ota';
+  if (/\bcorp|company|corporate\b/i.test(s)) return 'corporate';
+  return 'other';
+}
+
+// Live-updates a row's source-category badge as the user types, without a
+// full table re-render (keeps their cursor/focus exactly where it is).
+function _updateSrcBadge(elId, value) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const cat = sourceCategory(value);
+  el.className   = 'src-badge ' + cat;
+  el.textContent = SOURCE_CATEGORIES[cat].label;
 }
 
 // ── CSV line parser ───────────────────────────────────────

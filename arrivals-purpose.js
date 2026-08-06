@@ -265,19 +265,6 @@ function _normOrigin(nat) {
   return n;
 }
 
-// Wipe the XML lookup maps. Called whenever a FRESH Opera report is loaded
-// into Purpose of Stay (new night = new guests). Without this, nationality
-// data from a previously-loaded XML can silently "stick" and get stamped
-// onto a completely different guest who now happens to be in the same room
-// (e.g. room 610 held guest A last night, guest B tonight — if the XML isn't
-// reloaded, guest B would incorrectly inherit guest A's nationality via the
-// room-number fallback). Clearing here forces a clean slate every time.
-function _clearOriginMaps() {
-  _originMap = {}; _originNameMap = {}; _originNatMap = {}; _originNatRoomMap = {};
-  const lbl = document.getElementById('originXmlLabel');
-  if (lbl) lbl.textContent = '';
-}
-
 // After a fresh Opera guest list loads, nudge the user to load the
 // Nationality/VICAS XML next if they haven't already this session —
 // this is report #2 in the "load report 1, then report 2" workflow.
@@ -398,15 +385,6 @@ function renderArrLog() {
     </div>`).join('');
 }
 
-function toggleArrLog() {
-  const body = document.getElementById('arrLogBody');
-  const icon = document.getElementById('arrLogToggleIcon');
-  if (!body) return;
-  const open = body.style.display !== 'none';
-  body.style.display = open ? 'none' : 'block';
-  if (icon) icon.textContent = open ? '▸' : '▾';
-}
-
 function escapeLogText(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
@@ -439,9 +417,10 @@ function arrChangePurpose(i, val) {
 function arrRender() {
   const search   = (document.getElementById('arrSearch')?.value || '').toLowerCase();
   const filtered = arrGuests.filter(g => {
-    const mf = arrFilter_ === 'all' || g.purpose === arrFilter_;
-    const ms = !search || [g.room,g.conf,g.name,g.nat,g.source].join(' ').toLowerCase().includes(search);
-    return mf && ms;
+    const mf  = arrFilter_ === 'all' || g.purpose === arrFilter_;
+    const msf = arrSrcFilter_ === 'all' || sourceCategory(g.source) === arrSrcFilter_;
+    const ms  = !search || [g.room,g.conf,g.name,g.nat,g.source].join(' ').toLowerCase().includes(search);
+    return mf && msf && ms;
   });
   const tbody = document.getElementById('arrTable'); if (!tbody) return;
   if (!arrGuests.length) {
@@ -450,41 +429,48 @@ function arrRender() {
   }
   tbody.innerHTML = filtered.map(g => {
     const i = arrGuests.indexOf(g);
+    const srcCat = sourceCategory(g.source);
     return `<tr class="${g.purpose==='Leisure'?'leisure-row':''}">
-      <td><input value="${g.room}"
+      <td><input value="${escapeHtml(g.room)}"
         oninput="arrGuests[${i}].room=this.value"
         onblur="debounceSaveArrivals()"
         style="width:46px;"/></td>
-      <td><input value="${g.conf}"
+      <td><input value="${escapeHtml(g.conf)}"
         oninput="arrGuests[${i}].conf=this.value"
         style="width:86px;"/></td>
-      <td><input value="${g.name}"
+      <td><input value="${escapeHtml(g.name)}"
         oninput="arrGuests[${i}].name=this.value"
         onblur="arrGuests[${i}].name=this.value.toUpperCase();this.value=arrGuests[${i}].name;debounceSaveArrivals()"
         style="width:165px;"/></td>
       <td><select onchange="arrChangePurpose(${i},this.value)">
         ${['Business','Leisure','Flight'].map(p=>`<option${g.purpose===p?' selected':''}>${p}</option>`).join('')}
       </select></td>
-      <td><input type="number" value="${g.nights}"
+      <td><input type="number" value="${escapeHtml(g.nights)}"
         oninput="arrGuests[${i}].nights=this.value"
         onblur="arrKpiUpdate();debounceSaveArrivals()"
         style="width:42px;"/></td>
       <td><div style="display:flex;gap:3px;align-items:center;">
-        <input value="${g.nat}"
+        <input value="${escapeHtml(g.nat)}"
           oninput="arrGuests[${i}].nat=this.value"
           onblur="gmOnEdit(arrGuests[${i}].name,'nat',this.value);debounceSaveArrivals()"
           style="width:86px;${g._fromMemory?'border-color:var(--sky);':''}"/>
         <button class="icon-btn ai-btn" onclick="aiOneGuest(${i},'arr')" title="AI guess">✦</button>
       </div></td>
-      <td><input value="${g.email}"
+      <td><input value="${escapeHtml(g.email)}"
         oninput="arrGuests[${i}].email=this.value"
         onblur="gmOnEdit(arrGuests[${i}].name,'email',this.value);debounceSaveArrivals()"
         style="width:138px;${g._fromMemory?'border-color:var(--sky);':''}"/></td>
-      <td><input value="${g.source}"
-        oninput="arrGuests[${i}].source=this.value"
-        style="width:100px;"/></td>
-      <td><input value="${g.remarks}"
+      <td><div style="display:flex;align-items:center;gap:5px;">
+        <input value="${escapeHtml(g.source)}"
+          oninput="arrGuests[${i}].source=this.value;_updateSrcBadge('src-badge-a-${i}',this.value)"
+          onblur="debounceSaveArrivals()"
+          title="Free text — categorised automatically as Walk-in / ALL App / OTA / Corporate / Other"
+          style="width:82px;"/>
+        <span class="src-badge ${srcCat}" id="src-badge-a-${i}">${SOURCE_CATEGORIES[srcCat].label}</span>
+      </div></td>
+      <td><input value="${escapeHtml(g.remarks)}"
         oninput="arrGuests[${i}].remarks=this.value"
+        onblur="debounceSaveArrivals()"
         style="width:86px;"/></td>
       <td><button class="icon-btn" onclick="arrRemoveGuest(${i})">✕</button></td>
     </tr>`;
@@ -495,6 +481,15 @@ function arrRender() {
 function arrFilter(f, el) {
   arrFilter_ = f;
   document.querySelectorAll('[data-af]').forEach(c => c.classList.remove('on'));
+  el.classList.add('on');
+  arrRender();
+}
+
+// ── Source-category filter (Walk-in / ALL App / OTA / Corporate / Other) —
+// mirrors purposeFilterSrc() so Arrivals and Purpose of Stay behave the same ──
+function arrFilterSrc(f, el) {
+  arrSrcFilter_ = f;
+  document.querySelectorAll('[data-asf]').forEach(c => c.classList.remove('on'));
   el.classList.add('on');
   arrRender();
 }
@@ -602,15 +597,6 @@ function renderPurposeLog() {
     </div>`).join('');
 }
 
-function togglePurposeLog() {
-  const body = document.getElementById('purposeLogBody');
-  const icon = document.getElementById('purposeLogToggleIcon');
-  if (!body) return;
-  const open = body.style.display !== 'none';
-  body.style.display = open ? 'none' : 'block';
-  if (icon) icon.textContent = open ? '▸' : '▾';
-}
-
 function purposeRemoveGuest(i) {
   const g = purposeGuests[i];
   purposeGuests.splice(i, 1);
@@ -642,13 +628,15 @@ function purposeKpiUpdate() {
 function purposeRender() {
   const search   = (document.getElementById('purposeSearch')?.value || '').toLowerCase();
   const filtered = purposeGuests.filter(g => {
-    const mf = purposeFilter_ === 'all' || g.purpose === purposeFilter_;
-    const ms = !search || [g.room,g.conf,g.name,g.nat,g.source].join(' ').toLowerCase().includes(search);
-    return mf && ms;
+    const mf  = purposeFilter_ === 'all' || g.purpose === purposeFilter_;
+    const msf = purposeSrcFilter_ === 'all' || sourceCategory(g.source) === purposeSrcFilter_;
+    const mo  = purposeOriginFilter_ !== 'missing' || !g.originOfTravel;
+    const ms  = !search || [g.room,g.conf,g.name,g.nat,g.source,g.originOfTravel].join(' ').toLowerCase().includes(search);
+    return mf && msf && mo && ms;
   });
   const tbody = document.getElementById('purposeTable'); if (!tbody) return;
   if (!purposeGuests.length) {
-    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:28px 36px;">
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:28px 36px;">
       <div style="font-family:var(--mono);font-size:0.7rem;color:var(--text3);margin-bottom:14px;">
         No guests loaded. Sync from Arrivals, upload a file, or add manually.
       </div>
@@ -666,50 +654,57 @@ function purposeRender() {
     const originStyle = origin
       ? 'border-color:var(--mint);'
       : (Object.keys(_originMap).length ? 'border-color:var(--amber);' : '');
+    const srcCat = sourceCategory(g.source);
     return `<tr class="${g.purpose==='Leisure'?'leisure-row':''}">
-      <td><input value="${g.room}"
+      <td><input value="${escapeHtml(g.room)}"
         oninput="purposeGuests[${i}].room=this.value"
         onblur="debounceSavePurpose()"
         style="width:46px;"/></td>
-      <td><input value="${g.conf}"
+      <td><input value="${escapeHtml(g.conf)}"
         oninput="purposeGuests[${i}].conf=this.value"
         style="width:86px;"/></td>
-      <td><input value="${g.name}"
+      <td><input value="${escapeHtml(g.name)}"
         oninput="purposeGuests[${i}].name=this.value"
         onblur="purposeGuests[${i}].name=this.value.toUpperCase();this.value=purposeGuests[${i}].name;debounceSavePurpose()"
         style="width:165px;"/></td>
       <td><select onchange="purposeChangePurpose(${i},this.value)">
         ${['Business','Leisure','Flight'].map(p=>`<option${g.purpose===p?' selected':''}>${p}</option>`).join('')}
       </select></td>
-      <td><input type="number" value="${g.nights}"
+      <td><input type="number" value="${escapeHtml(g.nights)}"
         oninput="purposeGuests[${i}].nights=this.value"
         onblur="purposeKpiUpdate();debounceSavePurpose()"
         style="width:42px;"/></td>
       <td><div style="display:flex;gap:3px;align-items:center;">
-        <input value="${g.nat}"
+        <input value="${escapeHtml(g.nat)}"
           oninput="purposeGuests[${i}].nat=this.value;purposeGuests[${i}]._natFromXML=false;purposeGuests[${i}]._natFromAI=false;purposeGuests[${i}]._natUserEdited=true;"
           onblur="gmOnEdit(purposeGuests[${i}].name,'nat',this.value);debounceSavePurpose()"
           title="${g._natFromXML ? 'Nationality — loaded from Vicas/Inhouse XML' : 'Nationality'}"
           style="width:86px;${g._natFromXML ? 'border-color:var(--mint);' : (g._fromMemory?'border-color:var(--sky);':'')}"/>
         <button class="icon-btn ai-btn" onclick="aiOneGuest(${i},'purpose')" title="AI">✦</button>
       </div></td>
-      <td><input value="${g.email}"
+      <td><input value="${escapeHtml(g.email)}"
         oninput="purposeGuests[${i}].email=this.value"
         onblur="gmOnEdit(purposeGuests[${i}].name,'email',this.value);debounceSavePurpose()"
         style="width:138px;${g._fromMemory?'border-color:var(--sky);':''}"/></td>
-      <td><input value="${g.source}"
-        oninput="purposeGuests[${i}].source=this.value"
-        style="width:100px;"/></td>
+      <td><div style="display:flex;align-items:center;gap:5px;">
+        <input value="${escapeHtml(g.source)}"
+          oninput="purposeGuests[${i}].source=this.value;_updateSrcBadge('src-badge-p-${i}',this.value)"
+          onblur="debounceSavePurpose()"
+          title="Free text — categorised automatically as Walk-in / ALL App / OTA / Corporate / Other"
+          style="width:82px;"/>
+        <span class="src-badge ${srcCat}" id="src-badge-p-${i}">${SOURCE_CATEGORIES[srcCat].label}</span>
+      </div></td>
       <td>
-        <input value="${origin}"
+        <input value="${escapeHtml(origin)}"
           oninput="purposeGuests[${i}].originOfTravel=this.value"
           onblur="gmOnEdit(purposeGuests[${i}].name,'originOfTravel',this.value);debounceSavePurpose()"
           placeholder="—"
           title="Origin of Travel — loaded from Vicas/Inhouse XML"
           style="width:96px;${originStyle}"/>
       </td>
-      <td><input value="${g.remarks}"
+      <td><input value="${escapeHtml(g.remarks)}"
         oninput="purposeGuests[${i}].remarks=this.value"
+        onblur="debounceSavePurpose()"
         style="width:86px;"/></td>
       <td><button class="icon-btn" onclick="purposeRemoveGuest(${i})">✕</button></td>
     </tr>`;
@@ -721,6 +716,24 @@ function purposeFilter(f, el) {
   purposeFilter_ = f;
   document.querySelectorAll('[data-pf]').forEach(c => c.classList.remove('on'));
   el.classList.add('on');
+  purposeRender();
+}
+
+// ── Source-category filter (Walk-in / ALL App / OTA / Corporate / Other) ──
+// Each chip already carries its category's color class in the HTML — this
+// only needs to toggle which one is "on", same pattern as purposeFilter().
+function purposeFilterSrc(f, el) {
+  purposeSrcFilter_ = f;
+  document.querySelectorAll('[data-psf]').forEach(c => c.classList.remove('on'));
+  el.classList.add('on');
+  purposeRender();
+}
+
+// ── Missing-origin quick filter — jump straight to guests still needing
+// an Origin of Travel entered manually, instead of scanning row by row ──
+function purposeToggleMissingOrigin(el) {
+  purposeOriginFilter_ = purposeOriginFilter_ === 'missing' ? 'all' : 'missing';
+  el.classList.toggle('on', purposeOriginFilter_ === 'missing');
   purposeRender();
 }
 
@@ -877,10 +890,6 @@ function saveGuest() {
     addPurposeLog('Added', `${g.name} — Room ${g.room}`);
   }
   closeModal();
-}
-
-function purposeAddManual() {
-  openAddGuest('purpose');
 }
 
 function loadOperaFile(input, target) {

@@ -98,6 +98,10 @@ async function saveShifts(shiftsObj) {
   await fbSet('shifts', { data: shiftsObj, updatedAt: new Date().toISOString() });
 }
 
+async function saveShiftLog(shiftLogsObj) {
+  await fbSet('shiftLog', { data: shiftLogsObj, updatedAt: new Date().toISOString() });
+}
+
 async function saveFeedback(log) {
   await fbSet('feedback', { log, updatedAt: new Date().toISOString() });
 }
@@ -108,14 +112,6 @@ async function saveArrLog(log) {
 
 async function savePurposeLog(log) {
   await fbSet('purposeLog', { log, updatedAt: new Date().toISOString() });
-}
-
-async function saveShiftLog(log) {
-  await fbSet('shiftLog', { log, updatedAt: new Date().toISOString() });
-}
-
-async function saveCheckLog(log) {
-  await fbSet('checkLog', { log, updatedAt: new Date().toISOString() });
 }
 
 async function saveNoShow(guests) {
@@ -156,7 +152,7 @@ async function loadAll() {
       settings:    settings    || {},
       arrLog:      arrLogData  || { log: [] },
       purposeLog:  purposeLogData || { log: [] },
-      shiftLog:    shiftLogData   || { log: [] },
+      shiftLog:    shiftLogData   || { data: null },
       checkLog:    checkLogData   || { log: [] },
       noshow:      noshowData     || { guests: [] },
     };
@@ -172,7 +168,7 @@ async function loadAll() {
       settings:   {},
       arrLog:     { log: [] },
       purposeLog: { log: [] },
-      shiftLog:   { log: [] },
+      shiftLog:   { data: null },
       checkLog:   { log: [] },
       noshow:     { guests: [] },
     };
@@ -186,7 +182,6 @@ function listenArrivals(cb)   { fbListen('arrivals',   cb); }
 function listenPurpose(cb)    { fbListen('purpose',    cb); }
 function listenChecklist(cb)  { fbListen('checklist',  cb); }
 function listenShifts(cb)     { fbListen('shifts',     cb); }
-function listenSettings(cb)   { fbListen('settings',   cb); }
 function listenNoShow(cb)     { fbListen('noshow',     cb); }
 
 // ── Export / Import ───────────────────────────────────────
