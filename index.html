@@ -490,11 +490,11 @@
     🔄 Reload Report
   </button>
   <button class="icon-round" id="depAlertToggle" onclick="depToggleAlerts()" title="Overdue alerts" style="display:none;">🔔</button>
-  <button class="btn" onclick="depShowTrends()" style="display:none;" id="depTrendsBtn">📈 Trends</button>
+  <button class="btn" onclick="depShowTrends()" style="display:none;" id="depTrendsBtn">📈 <span class="btn-lbl">Trends</span></button>
 
-  <button class="btn mint" onclick="depPrintList()" style="display:none;" id="depPrintBtn">🖨 Print</button>
-  <button class="btn gold" onclick="exportDepSummary()" style="display:none;" id="depExportBtn">⬇ Export</button>
-  <button class="btn rose" onclick="clearDep()">✕ Clear</button>
+  <button class="btn mint" onclick="depPrintList()" style="display:none;" id="depPrintBtn">🖨 <span class="btn-lbl">Print</span></button>
+  <button class="btn gold" onclick="exportDepSummary()" style="display:none;" id="depExportBtn">⬇ <span class="btn-lbl">Export</span></button>
+  <button class="btn rose" onclick="clearDep()" id="depClearBtn">✕ <span class="btn-lbl">Clear</span></button>
 </div>
   </div>
   <div class="card" id="depUploadCard">
@@ -555,6 +555,16 @@
         <button class="dep-sort-btn"    data-s="status"  onclick="depSetSort('status')">📊 Status<span class="sort-arrow"></span></button>
         <span id="depSortLbl" style="font-family:var(--mono);font-size:0.6rem;color:var(--green);margin-left:4px;white-space:nowrap;"></span>
       </div>
+      <!-- Mobile-only equivalent of the 6 sort buttons above — one dropdown
+           instead of a whole row. Hidden on desktop via CSS. -->
+      <select class="dep-sort-select" id="depSortSelect" onchange="depSetSort(this.value)">
+        <option value="smart">⚡ Sort: Smart</option>
+        <option value="room">🔢 Sort: Room</option>
+        <option value="name">🔤 Sort: Name</option>
+        <option value="time">🕐 Sort: Time</option>
+        <option value="balance">💳 Sort: Balance</option>
+        <option value="status">📊 Sort: Status</option>
+      </select>
       <button class="dep-jump-btn" id="depJumpBtn" onclick="toggleDepJump()">🎯 Quick Jump</button>
     </div>
     <!-- ── Quick Jump panel ── -->

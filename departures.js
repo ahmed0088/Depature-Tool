@@ -646,6 +646,8 @@ function depSetSort(key) {
     const arrow = b.querySelector('.sort-arrow');
     if (arrow) arrow.textContent = active ? (depSort.dir === 1 ? ' ↑' : ' ↓') : '';
   });
+  const select = document.getElementById('depSortSelect');
+  if (select) select.value = key;
   depRender();
 }
 // ── Save & restore expanded card + open note state ─────────

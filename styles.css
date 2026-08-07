@@ -1295,7 +1295,11 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
   .panel { padding: 12px 12px 80px; }  /* 80px = 60px nav + 20px breathing room */
   .dep-grid.size-md, .dep-grid.size-lg { grid-template-columns: 1fr; }
   .kpi-row.c4 { grid-template-columns: repeat(2,1fr); }
-  .dep-kpi-strip { grid-template-columns: repeat(3,1fr); }
+
+  /* KPI strip duplicates the progress bar + filter-chip counts right below
+     it — on a phone that's a whole screen of cards just to repeat numbers
+     you see again two seconds later. Hide it; nothing is lost. */
+  .dep-kpi-strip { display: none; }
 
   /* Page header: stack, no overflow */
   .page-hd { flex-direction: column; align-items: flex-start; gap: 8px; }
@@ -1305,6 +1309,20 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
     width: 100%;
   }
   .page-hd-actions .btn { flex-shrink: 0; }
+
+  /* Card-size toggle (S/M/L/list) is a desktop density preference — mobile
+     is already forced to one column above, so the choice does nothing */
+  .view-toggle { display: none; }
+
+  /* Reload Report stays the one prominent, fully-labelled action.
+     Trends/Print/Export/Clear are used far less often on a phone, so they
+     shrink to small icon-only buttons — still one tap away, just not
+     standing shoulder-to-shoulder in full text at equal visual weight. */
+  #depTrendsBtn, #depPrintBtn, #depExportBtn, #depClearBtn {
+    padding: 6px 9px;
+  }
+  #depTrendsBtn .btn-lbl, #depPrintBtn .btn-lbl,
+  #depExportBtn .btn-lbl, #depClearBtn .btn-lbl { display: none; }
 
   /* Tables: horizontal scroll */
   .tbl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -1374,9 +1392,22 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
   .dep-search-wrap { width: 100%; }
   .dep-search-wrap input { width: 100% !important; }
 
-  /* Sort+jump bar: horizontally scrollable */
-  .dep-sort-jump-bar { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; gap: 4px; }
-  .dep-sort-jump-bar::-webkit-scrollbar { display: none; }
+  /* Sort+jump bar: the 6-button row becomes one dropdown instead of a
+     horizontally-scrolling wall of buttons — same choices, a fifth of
+     the width, and nothing to accidentally scroll past unseen. */
+  .dep-sort-jump-bar { flex-wrap: nowrap; gap: 6px; }
+  .dep-sort-jump-bar .dep-sort-wrap { display: none; }
+  /* Two-class selector so this reliably wins over the unconditional
+     single-class .dep-sort-select{display:none} rule later in this file,
+     regardless of which one comes first in source order */
+  .dep-sort-jump-bar .dep-sort-select {
+    display: block;
+    flex: 1; min-width: 0;
+    background: var(--surface); border: 1px solid var(--border2);
+    color: var(--text); font-family: var(--mono); font-size: 0.68rem;
+    padding: 7px 8px; border-radius: var(--r); outline: none;
+  }
+  .dep-jump-btn { flex-shrink: 0; }
   .dep-sort-wrap { flex-wrap: nowrap; overflow-x: visible; flex-shrink: 0; }
   .dep-sort-btn { flex-shrink: 0; font-size: 0.62rem !important; padding: 5px 8px !important; }
   .dep-jump-btn { flex-shrink: 0; }
@@ -1717,6 +1748,9 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
   margin-bottom: 10px;
   flex-wrap: wrap;
 }
+/* Mobile-only sort dropdown — hidden on desktop, where the button row is
+   already compact enough to show every option at once */
+.dep-sort-select { display: none; }
 .dep-sort-lbl {
   font-family: var(--mono);
   font-size: 0.62rem;
