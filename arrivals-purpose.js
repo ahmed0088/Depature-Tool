@@ -588,8 +588,8 @@ function renderPurposeLog() {
   if (!purposeLog.length) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
   if (badge) badge.textContent = purposeLog.length;
-  const icons = { 'Loaded':'📥','Added':'➕','Removed':'✕','Purpose':'🔄','Cleared':'🗑️','AI Nat':'✦','Exported':'📤','Synced':'🔁' };
-  const cls   = { 'Loaded':'log-act-ext','Added':'log-act-co','Removed':'log-act-late','Purpose':'log-act-ext','Cleared':'log-act-late','AI Nat':'log-act-co','Exported':'log-act-ext','Synced':'log-act-co' };
+  const icons = { 'Loaded':'📥','Added':'➕','Removed':'✕','Purpose':'🔄','Cleared':'🗑️','AI Nat':'✦','Exported':'📤','Synced':'🔁','Emails':'📧' };
+  const cls   = { 'Loaded':'log-act-ext','Added':'log-act-co','Removed':'log-act-late','Purpose':'log-act-ext','Cleared':'log-act-late','AI Nat':'log-act-co','Exported':'log-act-ext','Synced':'log-act-co','Emails':'log-act-co' };
   if (body) body.innerHTML = purposeLog.map(l => `
     <div class="log-row">
       <span class="log-action ${cls[l.action] || ''}">${icons[l.action] || '·'} ${l.action}</span>
@@ -736,6 +736,80 @@ function purposeToggleMissingOrigin(el) {
   purposeOriginFilter_ = purposeOriginFilter_ === 'missing' ? 'all' : 'missing';
   el.classList.toggle('on', purposeOriginFilter_ === 'missing');
   purposeRender();
+}
+
+// ── Import Emails — paste the "Confirmation_Number / Name / Email" block
+// produced by the Neorcha email-scraper script and fill matching guests'
+// email field by Confirmation Number. Never overwrites an email already
+// present, so it's safe to paste the same list again after a re-run. ──
+function openImportEmailsModal() {
+  document.getElementById('importEmailsModal')?.classList.add('open');
+  const input = document.getElementById('importEmailsInput');
+  if (input) input.value = '';
+  const result = document.getElementById('importEmailsResult');
+  if (result) result.style.display = 'none';
+  setTimeout(() => input && input.focus(), 80);
+}
+
+function closeImportEmailsModal() {
+  document.getElementById('importEmailsModal')?.classList.remove('open');
+}
+
+function _normConf(s) {
+  return String(s || '').trim().replace(/[^a-z0-9]/gi, '').toUpperCase();
+}
+
+function processImportEmails() {
+  const raw = (document.getElementById('importEmailsInput')?.value || '').trim();
+  const resultBox = document.getElementById('importEmailsResult');
+  if (!raw) { showToast('Paste the list first.', 'err'); return; }
+
+  const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const emailByConf = {};
+  let parsedRows = 0;
+  for (const line of lines) {
+    const cells = line.includes('\t') ? line.split('\t') : line.split(',');
+    if (cells.length < 2) continue;
+    const conf  = (cells[0] || '').trim();
+    const email = (cells[cells.length - 1] || '').trim();
+    if (!conf || /^confirmation/i.test(conf)) continue; // skip header row
+    if (!email || !email.includes('@') || /no email on file/i.test(email)) continue;
+    emailByConf[_normConf(conf)] = email;
+    parsedRows++;
+  }
+
+  if (!parsedRows) {
+    if (resultBox) {
+      resultBox.style.display = 'block';
+      resultBox.textContent = "Couldn't find any Confirmation Number → Email rows in that paste. Make sure it's the TSV block the scraper script prints (or copies to your clipboard).";
+    }
+    return;
+  }
+
+  let filled = 0, alreadyHad = 0, notInList = 0;
+  purposeGuests.forEach(g => {
+    const key   = _normConf(g.conf);
+    const email = key ? emailByConf[key] : null;
+    if (!email) { notInList++; return; }
+    const isEmpty = !g.email || /^no@email\.com$/i.test(g.email.trim());
+    if (isEmpty) {
+      g.email = email;
+      gmOnEdit(g.name, 'email', email);
+      filled++;
+    } else {
+      alreadyHad++;
+    }
+  });
+
+  purposeRender();
+  savePurpose(purposeGuests);
+  addPurposeLog('Emails', `Imported ${parsedRows} pasted rows — filled ${filled}, ${alreadyHad} already had an email, ${notInList} no match`);
+  showToast(`Filled ${filled} email${filled === 1 ? '' : 's'} ✓`, filled ? 'ok' : 'info');
+
+  if (resultBox) {
+    resultBox.style.display = 'block';
+    resultBox.innerHTML = `✅ Filled <strong>${filled}</strong> email${filled === 1 ? '' : 's'} · ${alreadyHad} guest${alreadyHad === 1 ? '' : 's'} already had one · ${notInList} guest${notInList === 1 ? '' : 's'} with no match in the pasted list.`;
+  }
 }
 
 // ── Randomize Purpose — one click, exact split (not a coin-flip average) ──

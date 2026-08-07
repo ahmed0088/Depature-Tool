@@ -848,6 +848,7 @@
       <button class="btn"      onclick="purposeRandomizeSplit()" title="Randomly assign Business/Leisure to an exact percentage split">🎲 Randomize Purpose</button>
       <button class="btn gold" onclick="exportPurpose()">⬇ Export</button>
       <button class="btn mint" onclick="syncFromArrivals()">↑ Sync Arrivals</button>
+      <button class="btn sky"  onclick="openImportEmailsModal()" title="Paste the TSV output from the Neorcha email-scraper script to auto-fill emails by Confirmation Number">📧 Import Emails</button>
       <button class="btn mint" onclick="openAddGuest('purpose')">+ Add</button>
       <button class="btn sky"  onclick="gmScanAndSaveAll()" title="Save all loaded guests to Guest Memory">🧠 Save to Memory</button>
       <button class="btn rose" onclick="clearPurpose()">✕ Clear</button>
@@ -3704,6 +3705,21 @@ async function appInit() {
 
 // appInit is called by hideLoginScreen after auth succeeds
 </script>
+<!-- ════════ IMPORT EMAILS MODAL ════════ -->
+<div class="modal-bg" id="importEmailsModal">
+  <div class="modal">
+    <h3>📧 Import Emails</h3>
+    <p style="color:var(--text2); margin-bottom:12px;">Paste the TSV block from the Neorcha email-scraper script (Confirmation Number · Name · Email). Matches guests below by Confirmation Number and fills in only the ones that don't already have an email — nothing already filled gets overwritten.</p>
+    <textarea id="importEmailsInput" rows="10"
+      style="width:100%; font-family:var(--mono); font-size:0.75rem; padding:12px;"
+      placeholder="Confirmation_Number&#9;Name&#9;Email&#10;617224691&#9;Umair Ahmed&#9;uahmed.145626@guest.booking.com"></textarea>
+    <div id="importEmailsResult" style="display:none; margin-top:8px; padding:8px 12px; background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--mint); border-radius:var(--r); font-size:0.76rem; color:var(--text2);"></div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn" onclick="closeImportEmailsModal()">Cancel</button>
+      <button class="btn gold" onclick="processImportEmails()">📧 Fill Emails</button>
+    </div>
+  </div>
+</div>
 <!-- RELOAD MODAL -->
 <!-- ════════ XREF RELOAD MODAL ════════ -->
 <div class="modal-bg" id="xrefReloadModal">
