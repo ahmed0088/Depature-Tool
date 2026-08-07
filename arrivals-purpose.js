@@ -526,7 +526,8 @@ function loadArrivals() {
   const splitLine = delim === '\t' ? (l => l.split('\t')) : parseCSVLine;
   const hdrs = splitLine(lines[0]).map(h => h.replace(/"/g,'').trim().toUpperCase());
   const ci   = n => hdrs.findIndex(h => h.includes(n));
-  const rI=ci('ROOM'),nI=ci('NAME'),niI=ci('NIGHT'),cI=hdrs.findIndex(h=>h.includes('CONFIRM')),taI=ci('TRAVEL'),coI=ci('COMPANY'),srcI=ci('SOURCE');
+  const rI=ci('ROOM'),nI=ci('NAME'),niI=ci('NIGHT'),cI=hdrs.findIndex(h=>h.includes('CONFIRM')),taI=ci('TRAVEL'),coI=ci('COMPANY'),srcI=ci('SOURCE'),
+        eI=hdrs.findIndex(h=>h.includes('EMAIL') || h.includes('E-MAIL'));
   if (rI < 0 || nI < 0) { alert('Could not find Room/Name columns.'); return; }
   const guests = [];
   for (let i = 1; i < lines.length; i++) {
@@ -535,7 +536,7 @@ function loadArrivals() {
     const rn   = (p[nI]||'').replace(/"/g,'').trim();
     if (!room || !rn) continue;
     guests.push({ room, conf:cI>=0?(p[cI]||'').replace(/"/g,'').trim():'', name:cleanName(rn), purpose:'Business',
-      nights:niI>=0?parseInt(p[niI])||1:1, nat:'', email:'No@email.com',
+      nights:niI>=0?parseInt(p[niI])||1:1, nat:'', email: (eI>=0 && (p[eI]||'').trim()) ? (p[eI]||'').replace(/"/g,'').trim() : 'No@email.com',
       source:cleanSource(taI>=0?(p[taI]||'').replace(/"/g,'').trim():'', coI>=0?(p[coI]||'').replace(/"/g,'').trim():'', srcI>=0?(p[srcI]||'').replace(/"/g,'').trim():''),
       remarks:'' });
   }
@@ -791,7 +792,8 @@ function loadPurpose() {
   const splitLine = delim === '\t' ? (l => l.split('\t')) : parseCSVLine;
   const hdrs  = splitLine(lines[0]).map(h => h.replace(/"/g,'').trim().toUpperCase());
   const ci    = n => hdrs.findIndex(h => h.includes(n));
-  const rI=ci('ROOM'),nI=ci('NAME'),niI=ci('NIGHT'),cI=hdrs.findIndex(h=>h.includes('CONFIRM')),taI=ci('TRAVEL'),coI=ci('COMPANY'),srcI=ci('SOURCE');
+  const rI=ci('ROOM'),nI=ci('NAME'),niI=ci('NIGHT'),cI=hdrs.findIndex(h=>h.includes('CONFIRM')),taI=ci('TRAVEL'),coI=ci('COMPANY'),srcI=ci('SOURCE'),
+        eI=hdrs.findIndex(h=>h.includes('EMAIL') || h.includes('E-MAIL'));
   if (rI < 0 || nI < 0) { alert('Could not find Room/Name.'); return; }
   const guests = [];
   for (let i = 1; i < lines.length; i++) {
@@ -800,7 +802,7 @@ function loadPurpose() {
     const rn   = (p[nI]||'').replace(/"/g,'').trim();
     if (!room || !rn) continue;
     guests.push({ room, conf:cI>=0?(p[cI]||'').replace(/"/g,'').trim():'', name:cleanName(rn), purpose:'Business',
-      nights:niI>=0?parseInt(p[niI])||1:1, nat:'', email:'No@email.com',
+      nights:niI>=0?parseInt(p[niI])||1:1, nat:'', email: (eI>=0 && (p[eI]||'').trim()) ? (p[eI]||'').replace(/"/g,'').trim() : 'No@email.com',
       source:cleanSource(taI>=0?(p[taI]||'').replace(/"/g,'').trim():'', coI>=0?(p[coI]||'').replace(/"/g,'').trim():'', srcI>=0?(p[srcI]||'').replace(/"/g,'').trim():''),
       originOfTravel: '',
       remarks:'' });
@@ -916,7 +918,8 @@ function loadOperaFile(input, target) {
       const hdrs = rows[hdrRow].map(c => String(c).replace(/"/g,'').trim().toUpperCase());
       const ci   = name => hdrs.findIndex(h => h === name || h.includes(name));
       const rI=ci('ROOM'), nI=ci('NAME'), cI=hdrs.findIndex(h=>h.includes('CONFIRM')), niI=ci('NIGHT'),
-            taI=hdrs.findIndex(h=>h.includes('TRAVEL')), coI=ci('COMPANY'), srcI=ci('SOURCE');
+            taI=hdrs.findIndex(h=>h.includes('TRAVEL')), coI=ci('COMPANY'), srcI=ci('SOURCE'),
+            eI=hdrs.findIndex(h=>h.includes('EMAIL') || h.includes('E-MAIL'));
       if (rI < 0 || nI < 0) { alert('Cannot find Room/Name.\nHeaders: ' + hdrs.slice(0,10).join(', ')); return; }
       const guests = [];
       for (let i = hdrRow + 1; i < rows.length; i++) {
@@ -929,7 +932,7 @@ function loadOperaFile(input, target) {
           name:   cleanName(rn),
           purpose:'Business',
           nights: niI>=0?parseInt(r[niI])||1:1,
-          nat:    '', email:'No@email.com',
+          nat:    '', email: (eI>=0 && String(r[eI]||'').trim()) ? String(r[eI]).replace(/"/g,'').trim() : 'No@email.com',
           source: cleanSource(taI>=0?String(r[taI]||'').trim():'', coI>=0?String(r[coI]||'').trim():'', srcI>=0?String(r[srcI]||'').trim():''),
           originOfTravel: '',
           remarks:'',
