@@ -500,13 +500,15 @@ function gmImportFile(input) {
       if (!line.trim()) return;
       const parts = line.split(',').map(p => p.replace(/^"|"$/g,'').trim());
       if (!parts[0]) return;
-      _gmStore[gmKey(parts[0])] = {
-        nat:            parts[1] || '',
-        email:          parts[2] || '',
-        purpose:        parts[3] || 'Business',
-        originOfTravel: parts[4] || '',
-        hits:           0,
-        lastSeen:       parts[5] || '',
+      const key = gmKey(parts[0]);
+      const ex  = _gmStore[key] || {};
+      _gmStore[key] = {
+        nat:            parts[1] || ex.nat            || '',
+        email:          parts[2] || ex.email          || '',
+        purpose:        parts[3] || ex.purpose         || 'Business',
+        originOfTravel: parts[4] || ex.originOfTravel || '',
+        hits:           ex.hits  || 0,
+        lastSeen:       parts[5] || ex.lastSeen        || '',
       };
       count++;
     });
