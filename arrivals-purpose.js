@@ -779,7 +779,7 @@ function processImportEmails() {
     // (Conf / Email) pastes too.
     const name  = cells.length >= 3 ? cells.slice(1, -1).join(' ').trim() : '';
     if (!conf || /^confirmation/i.test(conf)) continue; // skip header row
-    if (!email || !email.includes('@') || /no email on file/i.test(email)) continue;
+    if (!email || !email.includes('@') || /no email on file/i.test(email) || /^no@email\.com$/i.test(email)) continue;
     emailByConf[_normConf(conf)] = email;
     if (name) nameByConf[_normConf(conf)] = name;
     parsedRows++;
