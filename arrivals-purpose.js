@@ -739,10 +739,11 @@ function purposeToggleMissingOrigin(el) {
 }
 
 // ── Import Emails — paste the "Confirmation_Number / Name / Email" block
-// produced by the Neorcha email-scraper script and fill matching guests'
-// email (and name, if currently blank) by Confirmation Number. Never
-// overwrites an email or name already present, so it's safe to paste the
-// same list again after a re-run. ──
+// produced by the Neorcha email-scraper script and update matching guests'
+// email + name by Confirmation Number. Neorcha is treated as the source of
+// truth for these two fields — this ALWAYS overwrites whatever's currently
+// there (including anything Guest Memory auto-filled), so re-pasting a
+// fresh scrape always wins. ──
 function openImportEmailsModal() {
   document.getElementById('importEmailsModal')?.classList.add('open');
   const input = document.getElementById('importEmailsInput');
@@ -793,38 +794,35 @@ function processImportEmails() {
     return;
   }
 
-  let filled = 0, alreadyHad = 0, notInList = 0, namesFilled = 0;
+  let updated = 0, notInList = 0, namesUpdated = 0, emailsUpdated = 0;
   purposeGuests.forEach(g => {
     const key   = _normConf(g.conf);
     const email = key ? emailByConf[key] : null;
     if (!email) { notInList++; return; }
 
-    // Fill name first if the guest doesn't have a usable one yet — never
-    // overwrites an existing name.
-    const nameIsEmpty = !g.name || g.name === '—' || !g.name.trim();
-    if (nameIsEmpty && nameByConf[key]) {
-      g.name = nameByConf[key];
-      namesFilled++;
+    // Neorcha is the source of truth for these two fields — always overwrite,
+    // even if Guest Memory (or anything else) already guessed a value in.
+    const name = nameByConf[key];
+    if (name && g.name !== name) {
+      g.name = name;
+      namesUpdated++;
     }
-
-    const isEmpty = !g.email || /^no@email\.com$/i.test(g.email.trim());
-    if (isEmpty) {
+    if (g.email !== email) {
       g.email = email;
       gmOnEdit(g.name, 'email', email);
-      filled++;
-    } else {
-      alreadyHad++;
+      emailsUpdated++;
     }
+    updated++;
   });
 
   purposeRender();
   savePurpose(purposeGuests);
-  addPurposeLog('Emails', `Imported ${parsedRows} pasted rows — filled ${filled} email(s), ${namesFilled} name(s), ${alreadyHad} already had an email, ${notInList} no match`);
-  showToast(`Filled ${filled} email${filled === 1 ? '' : 's'}${namesFilled ? ` · ${namesFilled} name${namesFilled === 1 ? '' : 's'}` : ''} ✓`, filled || namesFilled ? 'ok' : 'info');
+  addPurposeLog('Emails', `Imported ${parsedRows} pasted rows — ${updated} guests matched, ${emailsUpdated} email(s) updated, ${namesUpdated} name(s) updated, ${notInList} no match`);
+  showToast(`Updated ${emailsUpdated} email${emailsUpdated === 1 ? '' : 's'}${namesUpdated ? ` · ${namesUpdated} name${namesUpdated === 1 ? '' : 's'}` : ''} ✓`, updated ? 'ok' : 'info');
 
   if (resultBox) {
     resultBox.style.display = 'block';
-    resultBox.innerHTML = `✅ Filled <strong>${filled}</strong> email${filled === 1 ? '' : 's'}${namesFilled ? ` · <strong>${namesFilled}</strong> name${namesFilled === 1 ? '' : 's'}` : ''} · ${alreadyHad} guest${alreadyHad === 1 ? '' : 's'} already had one · ${notInList} guest${notInList === 1 ? '' : 's'} with no match in the pasted list.`;
+    resultBox.innerHTML = `✅ Updated <strong>${emailsUpdated}</strong> email${emailsUpdated === 1 ? '' : 's'}${namesUpdated ? ` · <strong>${namesUpdated}</strong> name${namesUpdated === 1 ? '' : 's'}` : ''} · ${updated} guest${updated === 1 ? '' : 's'} matched · ${notInList} guest${notInList === 1 ? '' : 's'} with no match in the pasted list.`;
   }
 }
 
