@@ -740,8 +740,9 @@ function purposeToggleMissingOrigin(el) {
 
 // ── Import Emails — paste the "Confirmation_Number / Name / Email" block
 // produced by the Neorcha email-scraper script and fill matching guests'
-// email field by Confirmation Number. Never overwrites an email already
-// present, so it's safe to paste the same list again after a re-run. ──
+// email (and name, if currently blank) by Confirmation Number. Never
+// overwrites an email or name already present, so it's safe to paste the
+// same list again after a re-run. ──
 function openImportEmailsModal() {
   document.getElementById('importEmailsModal')?.classList.add('open');
   const input = document.getElementById('importEmailsInput');
@@ -766,15 +767,21 @@ function processImportEmails() {
 
   const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const emailByConf = {};
+  const nameByConf  = {};
   let parsedRows = 0;
   for (const line of lines) {
     const cells = line.includes('\t') ? line.split('\t') : line.split(',');
     if (cells.length < 2) continue;
     const conf  = (cells[0] || '').trim();
     const email = (cells[cells.length - 1] || '').trim();
+    // 3-column rows (Conf / Name / Email) also carry a name in the middle —
+    // the scraper always emits this shape, but stay tolerant of 2-column
+    // (Conf / Email) pastes too.
+    const name  = cells.length >= 3 ? cells.slice(1, -1).join(' ').trim() : '';
     if (!conf || /^confirmation/i.test(conf)) continue; // skip header row
     if (!email || !email.includes('@') || /no email on file/i.test(email)) continue;
     emailByConf[_normConf(conf)] = email;
+    if (name) nameByConf[_normConf(conf)] = name;
     parsedRows++;
   }
 
@@ -786,11 +793,20 @@ function processImportEmails() {
     return;
   }
 
-  let filled = 0, alreadyHad = 0, notInList = 0;
+  let filled = 0, alreadyHad = 0, notInList = 0, namesFilled = 0;
   purposeGuests.forEach(g => {
     const key   = _normConf(g.conf);
     const email = key ? emailByConf[key] : null;
     if (!email) { notInList++; return; }
+
+    // Fill name first if the guest doesn't have a usable one yet — never
+    // overwrites an existing name.
+    const nameIsEmpty = !g.name || g.name === '—' || !g.name.trim();
+    if (nameIsEmpty && nameByConf[key]) {
+      g.name = nameByConf[key];
+      namesFilled++;
+    }
+
     const isEmpty = !g.email || /^no@email\.com$/i.test(g.email.trim());
     if (isEmpty) {
       g.email = email;
@@ -803,12 +819,12 @@ function processImportEmails() {
 
   purposeRender();
   savePurpose(purposeGuests);
-  addPurposeLog('Emails', `Imported ${parsedRows} pasted rows — filled ${filled}, ${alreadyHad} already had an email, ${notInList} no match`);
-  showToast(`Filled ${filled} email${filled === 1 ? '' : 's'} ✓`, filled ? 'ok' : 'info');
+  addPurposeLog('Emails', `Imported ${parsedRows} pasted rows — filled ${filled} email(s), ${namesFilled} name(s), ${alreadyHad} already had an email, ${notInList} no match`);
+  showToast(`Filled ${filled} email${filled === 1 ? '' : 's'}${namesFilled ? ` · ${namesFilled} name${namesFilled === 1 ? '' : 's'}` : ''} ✓`, filled || namesFilled ? 'ok' : 'info');
 
   if (resultBox) {
     resultBox.style.display = 'block';
-    resultBox.innerHTML = `✅ Filled <strong>${filled}</strong> email${filled === 1 ? '' : 's'} · ${alreadyHad} guest${alreadyHad === 1 ? '' : 's'} already had one · ${notInList} guest${notInList === 1 ? '' : 's'} with no match in the pasted list.`;
+    resultBox.innerHTML = `✅ Filled <strong>${filled}</strong> email${filled === 1 ? '' : 's'}${namesFilled ? ` · <strong>${namesFilled}</strong> name${namesFilled === 1 ? '' : 's'}` : ''} · ${alreadyHad} guest${alreadyHad === 1 ? '' : 's'} already had one · ${notInList} guest${notInList === 1 ? '' : 's'} with no match in the pasted list.`;
   }
 }
 
