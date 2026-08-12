@@ -663,6 +663,7 @@
           <button class="dep-copy-main" style="color:var(--mint);border-color:rgba(62,207,142,0.4);background:rgba(62,207,142,0.12);" onclick="depCopyOutRecent(30)">✅ Copy New (30 min)</button>
           <button class="dep-copy-arrow" style="color:var(--mint);border-color:rgba(62,207,142,0.4);background:rgba(62,207,142,0.12);" onclick="depToggleCopyMenu('out')">▾</button>
           <div class="dep-copy-menu" id="depCopyMenu-out">
+            <button onclick="depCopyLastOut();depToggleCopyMenu('out')">🕐 Last One Only <span class="dcm-hint">just the most recent checkout</span></button>
             <button onclick="depCopyOutRecent(30);depToggleCopyMenu('out')">✅ New — Last 30 min <span class="dcm-hint">recent checkouts only</span></button>
             <button onclick="depCopyOutRecent(60);depToggleCopyMenu('out')">✅ New — Last 1 hour <span class="dcm-hint">recent checkouts only</span></button>
             <button onclick="depSmartSelect('out',30);depToggleCopyMenu('out')">⚡ Smart Select 30 min <span class="dcm-hint">pick then copy</span></button>
@@ -852,7 +853,8 @@
       <button class="btn gold" onclick="exportPurpose()">⬇ Export</button>
       <button class="btn mint" onclick="syncFromArrivals()">↑ Sync Arrivals</button>
       <button class="btn sky"  onclick="openImportEmailsModal()" title="Paste the TSV output from the Neorcha email-scraper script to auto-fill emails by Confirmation Number">📧 Import Emails</button>
-      <button class="btn" onclick="window.open('https://claude.ai/code/artifact/cf5b2083-1c05-4d37-a513-743a86757512','_blank')" title="Opens the copy-paste console script for pulling guest emails out of Neorcha">🧲 Neorcha Scraper</button>
+      <button class="btn sky" onclick="copyNeorchaScraper()" title="Copies the Neorcha console script straight to your clipboard">📋 Copy Scraper</button>
+      <button class="btn" onclick="window.open('https://claude.ai/code/artifact/cf5b2083-1c05-4d37-a513-743a86757512','_blank')" title="Opens the full instructions + copy-paste console script page">🧲 Neorcha Scraper</button>
       <button class="btn mint" onclick="openAddGuest('purpose')">+ Add</button>
       <button class="btn sky"  onclick="gmScanAndSaveAll()" title="Save all loaded guests to Guest Memory">🧠 Save to Memory</button>
       <button class="btn rose" onclick="clearPurpose()">✕ Clear</button>
@@ -4187,6 +4189,7 @@ async function appInit() {
 </div>
 
 <script src="guest-memory.js"></script>
+<script src="neorcha-scraper.js"></script>
 <script src="auth.js"></script>
 <script src="global-search.js"></script>
 <script src="handover.js"></script>
