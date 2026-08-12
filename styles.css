@@ -927,14 +927,12 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
 
 /* Intent row */
 .dc-intent-row { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 8px; margin-bottom: 5px; align-items: center; }
-.dc-intent-lbl { font-family: var(--mono); font-size: 0.56rem; color: var(--text3); margin-right: 2px; white-space: nowrap; }
-.dc-intent-btn {
-  font-family: var(--mono); font-size: 0.56rem; padding: 2px 6px; border-radius: var(--r);
-  border: 1px solid var(--border2); background: var(--surface); color: var(--text3);
-  cursor: pointer; transition: all 0.1s; white-space: nowrap;
+.dc-intent-select {
+  font-family: var(--mono); font-size: 0.66rem; padding: 5px 8px; border-radius: var(--r);
+  border: 1px solid var(--border2); background: var(--surface); color: var(--text2);
+  cursor: pointer; width: 100%; outline: none;
 }
-.dc-intent-btn:hover { border-color: var(--border3); color: var(--text2); }
-.dc-intent-btn.active { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent); }
+.dc-intent-select:hover { border-color: var(--border3); color: var(--text); }
 
 /* Note section */
 .dc-note-section { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; }
@@ -1022,10 +1020,8 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
 .dc-intent-clear { background: none; border: none; cursor: pointer; font-size: 0.7rem; opacity: 0.5; color: inherit; }
 .dc-intent-clear:hover { opacity: 1; }
 .dc-intent-row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
-.dc-intent-lbl { font-family: var(--mono); font-size: 0.6rem; color: var(--text3); margin-right: 2px; white-space: nowrap; }
-.dc-intent-btn { font-family: var(--mono); font-size: 0.62rem; padding: 3px 8px; border-radius: var(--r); border: 1px solid var(--border2); background: var(--surface); color: var(--text3); cursor: pointer; transition: all 0.1s; }
-.dc-intent-btn:hover { color: var(--purple); border-color: var(--purple-border); background: var(--purple-bg); }
-.dc-intent-btn.active { color: var(--purple); border-color: var(--purple-border); background: var(--purple-bg); font-weight: 600; }
+.dc-intent-select { font-family: var(--mono); font-size: 0.68rem; padding: 5px 8px; border-radius: var(--r); border: 1px solid var(--border2); background: var(--surface); color: var(--text2); cursor: pointer; width: 100%; outline: none; transition: all 0.1s; }
+.dc-intent-select:hover { color: var(--purple); border-color: var(--purple-border); background: var(--purple-bg); }
 .dc-overdue-strip { background: var(--red-bg); color: var(--red); font-size: 0.78rem; font-weight: 700; padding: 6px 10px; border-radius: var(--r); margin-bottom: 9px; display: flex; align-items: center; gap: 5px; border: 1px solid var(--red-border); }
 .dc-stamp-btn { background: var(--surface); color: var(--text2); border: 1px solid var(--border2); padding: 4px 9px; border-radius: var(--r); font-size: 0.78rem; cursor: pointer; transition: all 0.1s; display: inline-flex; align-items: center; gap: 4px; }
 .dc-stamp-btn:hover { background: var(--card2); color: var(--text); border-color: var(--purple-border); }
@@ -3402,9 +3398,8 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
 .dep-grid.size-list .dc-body.dc-body-collapsed { display: flex !important; }
 .dep-grid.size-list .dc-actions { display:flex; flex-wrap:nowrap; gap:3px; margin:0; flex-shrink:0; }
 .dep-grid.size-list .dca { padding:3px 7px; font-size:0.6rem; white-space:nowrap; }
-.dep-grid.size-list .dc-intent-row { flex-wrap:nowrap; margin:0; flex-shrink:0; }
-.dep-grid.size-list .dc-intent-lbl { display:none; }
-.dep-grid.size-list .dc-intent-btn { font-size:0.52rem; padding:2px 5px; }
+.dep-grid.size-list .dc-intent-row { flex-wrap:nowrap; margin:0; flex-shrink:0; width:auto; }
+.dep-grid.size-list .dc-intent-select { width:auto; font-size:0.52rem; padding:2px 5px; }
 .dep-grid.size-list .dc-overdue-strip,.dep-grid.size-list .dc-lco-overdue-strip { font-size:0.55rem; padding:2px 6px; margin:0; flex-shrink:0; }
 .dep-grid.size-list .dc-intent-banner { font-size:0.55rem; padding:2px 6px; margin:0; flex-shrink:0; }
 .dep-grid.size-list .dc-sel-row { display:flex; gap:4px; margin:0; flex-shrink:0; align-items:center; }
@@ -4820,9 +4815,17 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
     padding: 9px 6px;
     font-size: 0.66rem;
   }
-  /* Stack the 5-button grid into 2+3 on mobile */
+  /* Stack the 5-button grid into 2+2+1 on mobile. The desktop layout
+     force-places button 4 into column 1 (grid-column:1/span 1) for its
+     3-column grid — left untouched here, that forces it into its own
+     empty row on the 2-column mobile grid, breaking every button after
+     it into a single column. Reset it so 1-4 auto-flow into two neat
+     rows and only the odd one out (5th/last) spans full width. */
   .dc-actions.g5 {
     grid-template-columns: 1fr 1fr !important;
+  }
+  .dc-actions.g5 .dca:nth-child(4) {
+    grid-column: auto !important;
   }
   .dc-actions.g5 .dca:last-child {
     grid-column: 1 / -1;

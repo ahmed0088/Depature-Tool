@@ -459,7 +459,10 @@
     <div class="nav-icon">🚫</div>No-Show Tracker
     <span class="nav-badge" id="badge-noshow">—</span>
   </div>
-  <div class="nav-item" onclick="showPanel('guestmem')" id="nav-guestmem" data-panel="guestmem">
+  <!-- Guest Memory — intentionally not listed in the visible nav. Reach it
+       with Ctrl/Cmd+Shift+M (see the keydown handler further down), or the
+       panel is still addressable directly via showPanel('guestmem'). -->
+  <div class="nav-item" onclick="showPanel('guestmem')" id="nav-guestmem" data-panel="guestmem" style="display:none;">
     <div class="nav-icon">🧠</div>Guest Memory
     <span class="nav-badge" id="badge-guestmem">0</span>
   </div>
@@ -849,6 +852,7 @@
       <button class="btn gold" onclick="exportPurpose()">⬇ Export</button>
       <button class="btn mint" onclick="syncFromArrivals()">↑ Sync Arrivals</button>
       <button class="btn sky"  onclick="openImportEmailsModal()" title="Paste the TSV output from the Neorcha email-scraper script to auto-fill emails by Confirmation Number">📧 Import Emails</button>
+      <button class="btn" onclick="window.open('https://claude.ai/code/artifact/cf5b2083-1c05-4d37-a513-743a86757512','_blank')" title="Opens the copy-paste console script for pulling guest emails out of Neorcha">🧲 Neorcha Scraper</button>
       <button class="btn mint" onclick="openAddGuest('purpose')">+ Add</button>
       <button class="btn sky"  onclick="gmScanAndSaveAll()" title="Save all loaded guests to Guest Memory">🧠 Save to Memory</button>
       <button class="btn rose" onclick="clearPurpose()">✕ Clear</button>
@@ -3399,6 +3403,14 @@ function clearImmig() {
       return;
     }
 
+    // ── Ctrl/Cmd+Shift+M — Guest Memory. Not in the nav on purpose;
+    // this shortcut (and its own password lock) is the only way in. ──
+    if ((e.key || '').toLowerCase() === 'm' && (e.ctrlKey || e.metaKey) && e.shiftKey) {
+      e.preventDefault();
+      showPanel('guestmem');
+      return;
+    }
+
     // ── ? — cheat sheet (always, even in input) ─────────
     if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
       e.preventDefault();
@@ -3966,7 +3978,8 @@ async function appInit() {
       <span class="mob-item-icon">📊</span>
       <span class="mob-more-badge" id="mob-badge-arrivals-proc"></span>Arr Processor
     </button>
-    <button class="mob-more-item" data-panel="guestmem"       onclick="showPanel('guestmem');toggleMobMore()">
+    <!-- Guest Memory — hidden from the mobile menu too, see the sidebar comment above -->
+    <button class="mob-more-item" data-panel="guestmem"       onclick="showPanel('guestmem');toggleMobMore()" style="display:none;">
       <span class="mob-item-icon">🧠</span>
       <span class="mob-more-badge" id="mob-badge-guestmem"></span>Guest Memory
     </button>

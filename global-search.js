@@ -13,7 +13,6 @@ const GS_SEARCH_INPUT = {
   xref:       'xrefSearch',
   tourism:    'ttSearch',
   noshow:     'nsSearch',
-  guestmem:   'gmSearch',
 };
 
 const GS_PANEL_LABEL = {
@@ -24,7 +23,6 @@ const GS_PANEL_LABEL = {
   tourism:    'Tourism Tax',
   'inhouse-tally': 'Inhouse Tally',
   noshow:     'No-Show',
-  guestmem:   'Guest Memory',
   checklist:  'Night Checklist',
   shifts:     'Shift Tasks',
 };
