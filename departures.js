@@ -986,9 +986,11 @@ function depJumpTo(roomStr, filterKey, targetRoom) {
   });
 }
 const INTENT_CONFIG = {
-  maybe_extend: { icon:'🤔', label:'May Extend Stay',   color:'var(--violet)', autoNote:'Guest may extend — confirm with Opera before releasing room.' },
-  coming_back:  { icon:'↩️', label:'Coming Back Later', color:'var(--amber)',  autoNote:'Guest coming back later today — hold key and luggage if needed.' },
-  returning:    { icon:'🔁', label:'Returning Guest',    color:'var(--sky)',    autoNote:'Returning guest — check if new reservation is linked.' },
+  maybe_extend:  { icon:'🤔', label:'May Extend Stay',   color:'var(--violet)', autoNote:'Guest may extend — confirm with Opera before releasing room.' },
+  coming_back:   { icon:'↩️', label:'Coming Back Later', color:'var(--amber)',  autoNote:'Guest coming back later today — hold key and luggage if needed.' },
+  returning:     { icon:'🔁', label:'Returning Guest',    color:'var(--sky)',    autoNote:'Returning guest — check if new reservation is linked.' },
+  pay_td:        { icon:'💵', label:'Coming to Pay TD',   color:'var(--gold)',   autoNote:'Guest coming down to pay Tourism Dirham (TD) before checkout.' },
+  checkout_soon: { icon:'⏱',  label:'Checking Out Soon',  color:'var(--mint)',   autoNote:'' }, // label/note built dynamically with the minutes value
 };
 
 // ── Card HTML ──────────────────────────────────────────────
@@ -1057,9 +1059,12 @@ function depCardHTML(r) {
 
   // Intent banner
   const ic = INTENT_CONFIG[r.intent];
+  const intentLabel = (r.intent === 'checkout_soon' && r.intentMinutes)
+    ? `Checking Out in ${r.intentMinutes} min`
+    : ic?.label;
   const intentBanner = ic && r.status !== 'out' && r.status !== 'extended'
     ? `<div class="dc-intent-banner" style="border-color:${ic.color};color:${ic.color};">
-         <span>${ic.icon} ${ic.label}</span>
+         <span>${ic.icon} ${intentLabel}</span>
          <button class="dc-intent-clear" onclick="depSetIntent(${i},'');event.stopPropagation()">✕ clear</button>
        </div>`
     : '';
@@ -1153,6 +1158,24 @@ function depCardHTML(r) {
     </div>`;
   })() : '';
 
+  // "Guest said:" quick-log — one compact dropdown instead of a row of
+  // buttons (the active intent is already shown up top by intentBanner,
+  // so this control only needs to offer "log something new", not display
+  // current state too). Shared across every status a guest might call
+  // back from (due, late, no-answer, DND) — hidden once out/extended.
+  const intentRowHTML = `
+    <div class="dc-intent-row">
+      <select class="dc-intent-select" onclick="event.stopPropagation()"
+        onchange="depIntentSelect(${i}, this.value, this); event.stopPropagation()">
+        <option value="">💬 Guest said…</option>
+        <option value="maybe_extend">🤔 May Extend</option>
+        <option value="coming_back">↩️ Coming Back</option>
+        <option value="returning">🔁 Returning</option>
+        <option value="pay_td">💵 Paying TD</option>
+        <option value="checkout_soon">⏱ Checking Out In…</option>
+      </select>
+    </div>`;
+
   // Action buttons — driven by effective status
   let actHTML = '';
   if (es === 'extended') {
@@ -1178,7 +1201,7 @@ function depCardHTML(r) {
     actHTML = `${naWarnStrip}<div class="dc-actions g2">
       <button class="dca dca-co"   onclick="depAction(${i},'out')">✓ Check Out</button>
       <button class="dca dca-undo" onclick="depAction(${i},'due')">↺ Undo NA</button>
-    </div>`;
+    </div>${intentRowHTML}`;
 
   } else if (es === 'dnd') {
     let dndWarnStrip = '';
@@ -1193,34 +1216,24 @@ function depCardHTML(r) {
     actHTML = `${dndWarnStrip}<div class="dc-actions g2">
       <button class="dca dca-co"   onclick="depAction(${i},'out')">✓ Check Out</button>
       <button class="dca dca-undo" onclick="depAction(${i},'due')">↺ Undo DND</button>
-    </div>`;
+    </div>${intentRowHTML}`;
 
   } else if (es === 'late') {
     // LCO room (manual or auto-promoted) — Check Out or Undo back to due
     actHTML = `<div class="dc-actions g2">
       <button class="dca dca-co"   onclick="depAction(${i},'out')">✓ Check Out</button>
       <button class="dca dca-undo" onclick="depAction(${i},'due')">↺ Undo LCO</button>
-    </div>`;
+    </div>${intentRowHTML}`;
 
   } else {
     // Due — full action row + intent buttons
-    const intentRow = `
-      <div class="dc-intent-row">
-        <span class="dc-intent-lbl">Guest said:</span>
-        <button class="dc-intent-btn${r.intent==='maybe_extend'?' active':''}"
-          onclick="depSetIntent(${i},'maybe_extend')">🤔 May Extend</button>
-        <button class="dc-intent-btn${r.intent==='coming_back' ?' active':''}"
-          onclick="depSetIntent(${i},'coming_back')">↩️ Coming Back</button>
-        <button class="dc-intent-btn${r.intent==='returning'   ?' active':''}"
-          onclick="depSetIntent(${i},'returning')">🔁 Returning</button>
-      </div>`;
     actHTML = `<div class="dc-actions g5">
       <button class="dca dca-co"   onclick="depCheckOut(${i})">✓ Check Out</button>
       <button class="dca dca-ext"  onclick="depAskExtend(${i})">↪ Extend</button>
       <button class="dca dca-late" onclick="depAskLCO(${i})">🕐 Late CO</button>
       <button class="dca dca-na"   onclick="depAction(${i},'na')">📵 No Answer</button>
       <button class="dca dca-dnd"  onclick="depAction(${i},'dnd')">🚫 DND</button>
-    </div>${intentRow}`;
+    </div>${intentRowHTML}`;
   }
 
   // Selection mode tick overlay — no label/input, just a div
@@ -1337,6 +1350,7 @@ function depSetIntent(i, intent) {
   const isToggle = r.intent === intent;
 
   r.intent = isToggle ? '' : intent;
+  if (r.intent !== 'checkout_soon') r.intentMinutes = null;
 
   // Auto-stamp note when intent is SET (not when cleared)
   if (!isToggle && intent) {
@@ -1345,6 +1359,40 @@ function depSetIntent(i, intent) {
     const line = `[${t}] ${cfg.autoNote}`;
     r.note = r.note ? r.note + '\n' + line : line;
   }
+
+  depRender();
+  saveDeps();
+}
+
+// ── Dispatcher for the "Guest said…" dropdown — resets the select back
+// to its placeholder after firing, since the intent banner up top (not
+// the select itself) is what shows the currently-active state. ──
+function depIntentSelect(i, val, selectEl) {
+  if (!val) return;
+  if (val === 'checkout_soon') depSetCheckoutSoon(i);
+  else depSetIntent(i, val);
+  if (selectEl) selectEl.value = '';
+}
+
+// ── "Checking out in X mins" — same as depSetIntent but asks for the
+// minutes value up front, since that's the whole point of this one. ──
+function depSetCheckoutSoon(i) {
+  const r = depRooms[i];
+  if (r.intent === 'checkout_soon') {
+    r.intent = ''; r.intentMinutes = null;
+    depRender(); saveDeps();
+    return;
+  }
+  const mins = prompt('Guest checking out in how many minutes?', '15');
+  if (mins === null) return; // cancelled
+  const n = parseInt(mins, 10);
+  if (!n || n <= 0) { showToast('Enter a valid number of minutes', 'err'); return; }
+
+  r.intent = 'checkout_soon';
+  r.intentMinutes = n;
+  const t    = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  const line = `[${t}] Guest checking out in ${n} min.`;
+  r.note = r.note ? r.note + '\n' + line : line;
 
   depRender();
   saveDeps();
