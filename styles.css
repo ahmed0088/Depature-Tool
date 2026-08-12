@@ -903,7 +903,7 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
 .dc-select.ext  { background: var(--teal-bg);   border: 1px solid var(--teal-border); }
 
 /* Action buttons */
-.dc-actions { display: grid; gap: 5px; margin-top: 10px; margin-bottom: 8px; }
+.dc-actions { display: grid; gap: 5px; margin-top: 6px; margin-bottom: 5px; }
 .dc-actions.g1 { grid-template-columns: 1fr; }
 .dc-actions.g2 { grid-template-columns: 1fr 1fr; }
 .dc-actions.g3 { grid-template-columns: 1fr 1fr 1fr; }
@@ -4660,15 +4660,15 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
 
 /* Note section — always open */
 .dc-note-section {
-  margin-top: 10px;
+  margin-top: 8px;
   border-top: 1px solid var(--border);
-  padding-top: 10px;
+  padding-top: 7px;
 }
 .dc-note-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 7px;
+  margin-bottom: 5px;
 }
 .dc-note-lbl {
   font-family: var(--mono);
@@ -4680,8 +4680,8 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
 }
 .dc-note {
   width: 100%;
-  min-height: 60px;
-  max-height: 160px;
+  min-height: 34px;
+  max-height: 120px;
   box-sizing: border-box;
   background: var(--bg2);
   border: 1px solid var(--border2);
@@ -4689,11 +4689,11 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
   color: var(--text);
   font-size: 0.75rem;
   font-family: var(--mono);
-  padding: 8px 10px;
+  padding: 6px 9px;
   resize: vertical;
   outline: none;
   transition: border-color 0.1s;
-  line-height: 1.55;
+  line-height: 1.5;
   display: block;
 }
 .dc-note:focus { border-color: var(--accent); background: var(--card); }
@@ -4732,15 +4732,15 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
 
 /* Note section — always open, clean header */
 .dc-note-section {
-  margin-top: 12px;
+  margin-top: 8px;
   border-top: 1px solid var(--border);
-  padding-top: 10px;
+  padding-top: 7px;
 }
 .dc-note-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 7px;
+  margin-bottom: 5px;
 }
 .dc-note-lbl {
   font-family: var(--mono);
@@ -4754,8 +4754,8 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
 .dc-note-toggle { display: none !important; }
 .dc-note {
   width: 100%;
-  min-height: 60px;
-  max-height: 150px;
+  min-height: 34px;
+  max-height: 120px;
   box-sizing: border-box;
   background: var(--bg2);
   border: 1px solid var(--border2);
@@ -4763,11 +4763,11 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
   color: var(--text);
   font-size: 0.74rem;
   font-family: var(--mono);
-  padding: 8px 10px;
+  padding: 6px 9px;
   resize: vertical;
   outline: none;
   transition: border-color 0.1s;
-  line-height: 1.55;
+  line-height: 1.5;
   display: block;
 }
 .dc-note:focus { border-color: var(--accent); background: var(--card); }

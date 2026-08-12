@@ -14,7 +14,7 @@
 //  clients pick up the new version instead of a stale cache.
 // ═══════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'ibis-ops-shell-v7';
+const CACHE_NAME = 'ibis-ops-shell-v8';
 
 const SHELL_FILES = [
   './',
@@ -38,6 +38,7 @@ const SHELL_FILES = [
   './inhouse-tally.js',
   './td-audit.js',
   './guest-memory.js',
+  './neorcha-scraper.js',
   './auth.js',
   './global-search.js',
   './handover.js',
