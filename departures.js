@@ -2022,6 +2022,20 @@ function depCopyOutList(mode) {
   showToast('Checkout list copied ✓', 'ok');
 }
 
+// ── Copy just the single most-recently checked-out room ───
+// The bulk copy options (30 min / 1 hour / all) all group multiple rooms;
+// this is the "just one room, whichever checked out last" case that
+// otherwise required hunting for it in Pick Rooms mode.
+function depCopyLastOut() {
+  const rooms = depRooms.filter(r => r.status === 'out' && r.checkoutAt);
+  if (!rooms.length) { showToast('No checked-out rooms with a time yet', 'info'); return; }
+  const r = [...rooms].sort((a, b) => _coTimeSort(b, a))[0]; // newest first
+  const time = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  const text = `✅ *Checked Out — ${time}*\n${r.roomStr} · ${r.checkoutAt}`;
+  copyToClipboard(text, null, '');
+  showToast(`Room ${r.roomStr} copied ✓`, 'ok');
+}
+
 // ── Recent checkout copy (for HK — last N minutes only) ───
 function depCopyOutRecent(mins) {
   const now    = new Date();

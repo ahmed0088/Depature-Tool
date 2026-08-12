@@ -4947,6 +4947,11 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
   border: 1px solid rgba(90,180,232,0.28); border-radius: 6px;
   padding: 2px 7px; margin: 0 0 6px 0; width: fit-content;
 }
+/* The selection checkbox is position:absolute top:10px/left:10px, but this
+   badge is normal in-flow content at the same top-left corner — without
+   this, checkbox and badge text sit right on top of each other whenever
+   Pick Rooms mode is active. */
+.dep-card:has(.dep-sel-tick) .dc-gm-badge { margin-left: 34px; }
 
 /* Swipe visuals */
 .dep-card { touch-action: pan-y; }
