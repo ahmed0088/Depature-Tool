@@ -738,10 +738,13 @@ function purposeToggleMissingOrigin(el) {
   purposeRender();
 }
 
-// ── Import Emails — paste the "Confirmation_Number / Name / Email" block
-// produced by the Neorcha email-scraper script and fill matching guests'
-// email field by Confirmation Number. Never overwrites an email already
-// present, so it's safe to paste the same list again after a re-run. ──
+// ── Import Emails — paste the "Confirmation_Number / Name / Email / Nationality"
+// block produced by the Neorcha scraper script and update matching guests' name,
+// email, and nationality by Confirmation Number. Neorcha is treated as the
+// source of truth for these fields — this ALWAYS overwrites whatever's
+// currently there (including anything Guest Memory / AI / XML filled in), so
+// re-pasting a fresh scrape always wins. A guest with no match in the pasted
+// list is left completely untouched. ──
 function openImportEmailsModal() {
   document.getElementById('importEmailsModal')?.classList.add('open');
   const input = document.getElementById('importEmailsInput');
@@ -766,49 +769,83 @@ function processImportEmails() {
 
   const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const emailByConf = {};
+  const nameByConf  = {};
+  const natByConf   = {};
   let parsedRows = 0;
   for (const line of lines) {
     const cells = line.includes('\t') ? line.split('\t') : line.split(',');
     if (cells.length < 2) continue;
-    const conf  = (cells[0] || '').trim();
-    const email = (cells[cells.length - 1] || '').trim();
+    const conf = (cells[0] || '').trim();
     if (!conf || /^confirmation/i.test(conf)) continue; // skip header row
-    if (!email || !email.includes('@') || /no email on file/i.test(email)) continue;
-    emailByConf[_normConf(conf)] = email;
+
+    // Scraper output columns, in order: Confirmation_Number, Name, Email, Nationality
+    // (Nationality is optional — older pastes without it still work fine.)
+    // A bare 2-column "Conf / Email" paste is also still supported for backward compat.
+    let name = '', email = '', nat = '';
+    if (cells.length === 2) {
+      email = (cells[1] || '').trim();
+    } else {
+      name  = (cells[1] || '').trim();
+      email = (cells[2] || '').trim();
+      nat   = cells.length >= 4 ? (cells[3] || '').trim() : '';
+    }
+
+    const key = _normConf(conf);
+    const emailValid = email && email.includes('@') &&
+      !/no email on file/i.test(email) && !/^no@email\.com$/i.test(email);
+    if (emailValid) emailByConf[key] = email;
+    if (name) nameByConf[key] = name;
+    if (nat)  natByConf[key]  = nat;
     parsedRows++;
   }
 
   if (!parsedRows) {
     if (resultBox) {
       resultBox.style.display = 'block';
-      resultBox.textContent = "Couldn't find any Confirmation Number → Email rows in that paste. Make sure it's the TSV block the scraper script prints (or copies to your clipboard).";
+      resultBox.textContent = "Couldn't find any Confirmation Number rows in that paste. Make sure it's the TSV block the scraper script prints (or copies to your clipboard).";
     }
     return;
   }
 
-  let filled = 0, alreadyHad = 0, notInList = 0;
+  let matched = 0, notInList = 0, namesUpdated = 0, emailsUpdated = 0, natsUpdated = 0;
   purposeGuests.forEach(g => {
-    const key   = _normConf(g.conf);
-    const email = key ? emailByConf[key] : null;
-    if (!email) { notInList++; return; }
-    const isEmpty = !g.email || /^no@email\.com$/i.test(g.email.trim());
-    if (isEmpty) {
-      g.email = email;
-      gmOnEdit(g.name, 'email', email);
-      filled++;
-    } else {
-      alreadyHad++;
+    const key = _normConf(g.conf);
+    const hasEmail = key && emailByConf[key];
+    const hasName  = key && nameByConf[key];
+    const hasNat   = key && natByConf[key];
+    if (!hasEmail && !hasName && !hasNat) { notInList++; return; }
+    matched++;
+
+    // Neorcha is the source of truth for these three fields — always
+    // overwrite, even if Guest Memory (or the AI guesser / XML) already
+    // put something in there.
+    if (hasName && g.name !== nameByConf[key]) {
+      g.name = nameByConf[key];
+      namesUpdated++;
+    }
+    if (hasEmail && g.email !== emailByConf[key]) {
+      g.email = emailByConf[key];
+      gmOnEdit(g.name, 'email', emailByConf[key]);
+      emailsUpdated++;
+    }
+    if (hasNat && g.nat !== natByConf[key]) {
+      g.nat = natByConf[key];
+      g._natFromXML = false;
+      g._natFromAI  = false;
+      g._natUserEdited = false;
+      gmOnEdit(g.name, 'nat', natByConf[key]);
+      natsUpdated++;
     }
   });
 
   purposeRender();
   savePurpose(purposeGuests);
-  addPurposeLog('Emails', `Imported ${parsedRows} pasted rows — filled ${filled}, ${alreadyHad} already had an email, ${notInList} no match`);
-  showToast(`Filled ${filled} email${filled === 1 ? '' : 's'} ✓`, filled ? 'ok' : 'info');
+  addPurposeLog('Emails', `Imported ${parsedRows} pasted rows — ${matched} guests matched, ${emailsUpdated} email(s), ${namesUpdated} name(s), ${natsUpdated} nationality(ies) updated, ${notInList} no match`);
+  showToast(`Updated ${emailsUpdated} email${emailsUpdated === 1 ? '' : 's'}${namesUpdated ? ` · ${namesUpdated} name${namesUpdated === 1 ? '' : 's'}` : ''}${natsUpdated ? ` · ${natsUpdated} nat${natsUpdated === 1 ? '' : 's'}` : ''} ✓`, matched ? 'ok' : 'info');
 
   if (resultBox) {
     resultBox.style.display = 'block';
-    resultBox.innerHTML = `✅ Filled <strong>${filled}</strong> email${filled === 1 ? '' : 's'} · ${alreadyHad} guest${alreadyHad === 1 ? '' : 's'} already had one · ${notInList} guest${notInList === 1 ? '' : 's'} with no match in the pasted list.`;
+    resultBox.innerHTML = `✅ Updated <strong>${emailsUpdated}</strong> email${emailsUpdated === 1 ? '' : 's'}${namesUpdated ? ` · <strong>${namesUpdated}</strong> name${namesUpdated === 1 ? '' : 's'}` : ''}${natsUpdated ? ` · <strong>${natsUpdated}</strong> nationality${natsUpdated === 1 ? '' : 's'}` : ''} · ${matched} guest${matched === 1 ? '' : 's'} matched · ${notInList} guest${notInList === 1 ? '' : 's'} with no match in the pasted list.`;
   }
 }
 
