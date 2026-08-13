@@ -4722,9 +4722,9 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
 }
 .dc-note {
   width: 100%;
-  height: 34px;
-  min-height: 34px;
-  max-height: 120px;
+  height: 70px;
+  min-height: 70px;
+  max-height: 200px;
   box-sizing: border-box;
   background: var(--bg2);
   border: 1px solid var(--border2);
@@ -4797,9 +4797,9 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
 .dc-note-toggle { display: none !important; }
 .dc-note {
   width: 100%;
-  height: 34px;
-  min-height: 34px;
-  max-height: 120px;
+  height: 70px;
+  min-height: 70px;
+  max-height: 200px;
   box-sizing: border-box;
   background: var(--bg2);
   border: 1px solid var(--border2);
