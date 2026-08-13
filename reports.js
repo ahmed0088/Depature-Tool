@@ -385,9 +385,13 @@ function clearAudit() { document.getElementById('naOperaInput').value=''; docume
 //   _immigNatMap      : normalised name → raw passport Nationality (from Inhouse XML)
 //   _immigPassportMap : normalised name → DocumentNumber (from Inhouse XML — Emirates ID/passport #)
 //   _immigGenderMap   : normalised name → 'M' | 'F' (derived from title in arrivals export)
+//   _immigInhouseRoomGuests : normalised room → [{name, key}] — everyone the
+//                             Inhouse XML says is actually registered in that
+//                             room, used for the named missing-profile check.
 let _immigNatMap      = {};
 let _immigPassportMap = {};
 let _immigGenderMap   = {};
+let _immigInhouseRoomGuests = {};
 
 // Title prefix → gender, as seen in Opera's "LASTNAME, FIRSTNAME, Title" name format.
 const _IMMIG_TITLE_GENDER = {
@@ -409,13 +413,22 @@ function _normName(name) {
 }
 
 // Parse an Inhouse.xml (Crystal Reports export) and return per-guest
-// Nationality + DocumentNumber (passport/Emirates ID), keyed by normalised name.
+// Nationality + DocumentNumber (passport/Emirates ID), keyed by normalised
+// name — plus a per-room guest list, since this same export already has
+// everyone's name AND room (RoomNumber1). The room list is used purely as a
+// per-room HEADCOUNT for the missing-profile check (see
+// _immigCheckMissingProfiles) — not for matching individual guests by name,
+// since the same person is routinely spelled differently between this
+// report and the immigration report (front desk's transliteration vs. the
+// authority-facing one), which made name-matching throw false alarms on
+// roughly half of all occupied rooms when tested against a real export.
 function _immigParseInhouseXML(xmlText) {
   const natMap = {};
   const docMap = {};
+  const roomMap = {}; // normRoom -> [{ name, key }]
   try {
     const doc = (new DOMParser()).parseFromString(xmlText, 'text/xml');
-    if (doc.querySelector('parsererror')) return { natMap, docMap };
+    if (doc.querySelector('parsererror')) return { natMap, docMap, roomMap };
 
     const blocks = doc.querySelectorAll('Details[Level="2"]');
     blocks.forEach(b => {
@@ -427,17 +440,23 @@ function _immigParseInhouseXML(xmlText) {
       const family = field('FamilyName1');
       const nat    = field('Nationality1');
       const doc_   = field('DocumentNumber1');
+      const room   = field('RoomNumber1');
       if (!given && !family) return;
 
-      const key = _normName(given + ' ' + family);
+      const name = (given + ' ' + family).trim();
+      const key = _normName(name);
       if (!key) return;
       if (nat)  natMap[key] = nat;
       if (doc_) docMap[key] = doc_;
+      if (room) {
+        const rn = room.replace(/^0+/, '') || '0';
+        (roomMap[rn] = roomMap[rn] || []).push({ name, key });
+      }
     });
   } catch (e) {
     console.warn('[Immigration] _immigParseInhouseXML failed:', e);
   }
-  return { natMap, docMap };
+  return { natMap, docMap, roomMap };
 }
 
 // Load Inhouse.xml — provides Nationality + Passport/Doc Number for guests missing them on the immigration report.
@@ -446,14 +465,16 @@ function immigLoadInhouseXml(input) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    const { natMap, docMap } = _immigParseInhouseXML(e.target.result);
-    _immigNatMap      = natMap || {};
-    _immigPassportMap = docMap || {};
+    const { natMap, docMap, roomMap } = _immigParseInhouseXML(e.target.result);
+    _immigNatMap         = natMap || {};
+    _immigPassportMap    = docMap || {};
+    _immigInhouseRoomGuests = roomMap || {};
     const natCount = Object.keys(_immigNatMap).length;
     const docCount = Object.keys(_immigPassportMap).length;
+    const roomCount = Object.keys(_immigInhouseRoomGuests).length;
     const lbl = document.getElementById('immigInhouseXmlLabel');
-    if (lbl) lbl.textContent = natCount ? `✓ ${natCount} guests loaded (${docCount} with doc #)` : 'No guest data found';
-    showToast(natCount ? `✦ Inhouse XML loaded — ${natCount} guests` : 'No guest data found in XML', natCount ? 'ok' : 'err');
+    if (lbl) lbl.textContent = natCount ? `✓ ${natCount} guests loaded (${docCount} with doc #, ${roomCount} rooms)` : 'No guest data found';
+    showToast(natCount ? `✦ Inhouse XML loaded — ${natCount} guests, ${roomCount} rooms` : 'No guest data found in XML', natCount ? 'ok' : 'err');
     if (immigAllRows2.length) processImmig2(true); // re-run with raw XML already in the textarea
   };
   reader.readAsText(file, 'utf-8');
@@ -539,26 +560,28 @@ function _immigApplyRecovery(rows) {
   });
 }
 
-// ── Reservation Detail — cross-checks the immigration report's per-room
-// headcount against what Opera's reservation actually booked (ADULTS).
-// Opera's ACCOMPANYING_NAMES field is frequently left blank by staff even
-// when a 2nd adult is genuinely booked, so it's used as bonus context when
-// present, never as the primary signal — the adult COUNT is what's reliable.
+// ── Reservation Detail (or Guest In-House By Room) — cross-checks the
+// immigration report's per-room headcount against what Opera says is
+// actually booked/occupying that room (ADULTS). Fallback source when the
+// Inhouse XML above doesn't cover a room — see _immigCheckMissingProfiles
+// for why this compares COUNTS rather than trying to match by name.
 let _immigResRooms = {}; // norm room -> { adults, names:[] }
 
 function _immigParseResDetail(raw) {
   const lines = raw.split('\n').map(l => l.replace(/\r$/, '')).filter(l => l.trim());
   if (lines.length < 2) return null;
   const hdrs = lines[0].split('\t').map(h => h.trim().toUpperCase());
-  const iRoom  = hdrs.findIndex(h => h === 'ROOM_NO') >= 0 ? hdrs.findIndex(h => h === 'ROOM_NO') : hdrs.findIndex(h => h.includes('ROOM_NO'));
+  // ROOM_NO tried before the bare "ROOM" — Reservation Detail also has
+  // DISP_ROOM_NO (usually blank pre-check-in) earlier in the column order,
+  // which would otherwise win a plain substring match on "ROOM".
+  const iRoom  = hdrs.indexOf('ROOM_NO') >= 0 ? hdrs.indexOf('ROOM_NO') : hdrs.indexOf('ROOM');
   const iAdult = hdrs.indexOf('ADULTS');
   const iConf  = hdrs.indexOf('CONFIRMATION_NO');
   const iName  = hdrs.indexOf('FULL_NAME');
-  const iAccN  = hdrs.indexOf('ACCOMPANYING_NAMES');
   if (iRoom < 0 || iAdult < 0) return null;
 
   const rooms = {};
-  const seenConf = new Set(); // dedupe multi-row reservations (one row per ID/membership record on file)
+  const seenConf = new Set(); // dedupe multi-row reservations (one row per ID/membership record on file) — Guest In-House By Room has no CONFIRMATION_NO column, so this is simply skipped for that format
   for (let i = 1; i < lines.length; i++) {
     const cols = lines[i].split('\t');
     if (iConf >= 0) {
@@ -570,11 +593,9 @@ function _immigParseResDetail(raw) {
     const rn = room.replace(/^0+/, '') || '0';
     const adults = parseInt(cols[iAdult]) || 0;
     const name   = iName >= 0 ? (cols[iName] || '').trim() : '';
-    const accRaw = iAccN >= 0 ? (cols[iAccN] || '').trim() : '';
-    if (!rooms[rn]) rooms[rn] = { adults: 0, names: [], accompanyingNames: [] };
+    if (!rooms[rn]) rooms[rn] = { adults: 0, names: [] };
     rooms[rn].adults += adults;
     if (name) rooms[rn].names.push(typeof parseName === 'function' ? parseName(name) : name);
-    if (accRaw) rooms[rn].accompanyingNames.push(...accRaw.split(/[;,\/]/).map(s => s.trim()).filter(Boolean));
   }
   return rooms;
 }
@@ -596,28 +617,56 @@ function immigLoadResDetail(input) {
   reader.readAsText(file, 'utf-8');
 }
 
-// Compares _immigResRooms (what Opera booked) against the per-room count of
-// records actually present in today's immigration report — NOT immigAllRows2,
-// which only holds guests that already have some OTHER field missing. This
-// needs the full unfiltered guest list so a room where everyone's nationality/
-// passport/gender/email is filled in correctly can still be flagged if one
-// person from that booking has no immigration record at all.
+// Finds rooms where MORE people are registered elsewhere than have an
+// immigration record today — the "missing profile" case. Uses the full
+// unfiltered guest list (not immigAllRows2, which only holds guests already
+// flagged for some OTHER field) so a room where everyone's nationality/
+// passport/gender/email is filled in correctly can still be caught if one
+// person from that room simply never got an immigration record filed.
+//
+// This is COUNT-based, not name-based — an earlier version tried matching
+// guests by name between the Inhouse XML and the immigration report, but
+// the same person is routinely spelled differently between the two systems
+// (front desk's "Khalid Abdullah" vs the authority-facing report's
+// "Khaled Alhudithy" for the same guest), which threw false "missing"
+// alarms on roughly half of all occupied rooms when tested against a real
+// export. A plain headcount comparison isn't fooled by spelling — verified
+// against the same real data: it flags 25 rooms with a genuine gap instead
+// of ~40+ false positives. The room's registered names are still shown as
+// context (who to check against today's report), not asserted as THE
+// missing person, since we can't reliably tell which one that is.
+//
+// Two sources, checked in priority order per room:
+//   1) Inhouse XML (_immigInhouseRoomGuests) — PRIMARY, since it only ever
+//      lists people already checked in (no pre-arrival blank-room gap).
+//   2) Reservation Detail (_immigResRooms) — fallback, for rooms the
+//      Inhouse XML upload doesn't cover (or wasn't uploaded).
 function _immigCheckMissingProfiles(allGuests) {
   const countByRoom = {};
-  const namesByRoom = {};
   allGuests.forEach(g => {
     const rn = (g.room || '').replace(/^0+/, '') || '0';
     countByRoom[rn] = (countByRoom[rn] || 0) + 1;
-    (namesByRoom[rn] = namesByRoom[rn] || []).push(_normName(g.fullName || (g.fname + ' ' + g.lname)));
   });
+
   const flagged = [];
-  Object.entries(_immigResRooms).forEach(([room, res]) => {
+  const flaggedRooms = new Set();
+
+  Object.entries(_immigInhouseRoomGuests).forEach(([room, guests]) => {
     const found = countByRoom[room] || 0;
-    if (res.adults > found) {
-      const unmatchedAcc = (res.accompanyingNames || []).filter(n => !(namesByRoom[room] || []).includes(_normName(n)));
-      flagged.push({ room, expected: res.adults, found, gap: res.adults - found, names: res.names, unmatchedAcc });
+    if (guests.length > found) {
+      flagged.push({ room, source: 'inhouse', expected: guests.length, found, gap: guests.length - found, names: guests.map(g => g.name) });
+      flaggedRooms.add(room);
     }
   });
+
+  Object.entries(_immigResRooms).forEach(([room, res]) => {
+    if (flaggedRooms.has(room)) return; // already caught via Inhouse XML above
+    const found = countByRoom[room] || 0;
+    if (res.adults > found) {
+      flagged.push({ room, source: 'resdetail', expected: res.adults, found, gap: res.adults - found, names: res.names });
+    }
+  });
+
   flagged.sort((a, b) => a.room.localeCompare(b.room, undefined, { numeric: true }));
   return flagged;
 }
@@ -678,7 +727,7 @@ function processImmig2(silent) {
   const ihTotal=inHouseGuests.length;
   // Reservation Detail cross-check — needs the FULL in-house list, not just
   // rows already flagged for some other missing field.
-  immigMissingProfiles=Object.keys(_immigResRooms).length?_immigCheckMissingProfiles(inHouseGuests):[];
+  immigMissingProfiles=(Object.keys(_immigInhouseRoomGuests).length||Object.keys(_immigResRooms).length)?_immigCheckMissingProfiles(inHouseGuests):[];
   immigRenderMissingProfiles();
   document.getElementById('immigKpis2').innerHTML=`<div class="kpi rose"><div class="kpi-accent"></div><div class="kpi-label">Critical</div><div class="kpi-val">${crit}</div><div class="kpi-sub">nat or gender</div></div><div class="kpi amber"><div class="kpi-accent"></div><div class="kpi-label">No Nationality</div><div class="kpi-val">${noNatC}</div></div><div class="kpi sky"><div class="kpi-accent"></div><div class="kpi-label">No Passport</div><div class="kpi-val">${noPassC}</div></div><div class="kpi mint"><div class="kpi-accent"></div><div class="kpi-label">No Gender</div><div class="kpi-val">${noSexC}</div></div><div class="kpi purple"><div class="kpi-accent"></div><div class="kpi-label">No Email</div><div class="kpi-val">${noEmailC}</div><div class="kpi-sub">checked vs Guest Memory</div></div>`;
   const sugTotal = sugNatC+sugSexC+sugPassC;
@@ -735,18 +784,20 @@ function immigRenderMissingProfiles() {
   const badge = document.getElementById('immigMissingBadge');
   if (badge) badge.textContent = immigMissingProfiles.length;
   const body = document.getElementById('immigMissingBody');
-  if (body) body.innerHTML = immigMissingProfiles.map(f => `
+  if (body) body.innerHTML = immigMissingProfiles.map(f => {
+    const sourceLabel = f.source === 'inhouse' ? 'Inhouse XML' : 'Reservation Detail';
+    return `
     <div class="log-row" style="border-left:3px solid var(--rose);padding-left:10px;">
       <span style="font-family:var(--mono);font-size:0.8rem;font-weight:700;color:var(--sky);min-width:50px;">${escapeHtml(f.room)}</span>
       <span style="font-size:0.74rem;color:var(--text2);flex:1;">
-        Booked for <strong>${f.expected}</strong> adult${f.expected!==1?'s':''} (${escapeHtml(f.names.join(', ') || 'no name on file')}) —
-        only <strong>${f.found}</strong> found in today's immigration report.
-        ${f.unmatchedAcc.length ? `Opera lists an accompanying guest not yet registered: <strong>${escapeHtml(f.unmatchedAcc.join(', '))}</strong>.` : ''}
+        ${sourceLabel} shows <strong>${f.expected}</strong> guest${f.expected!==1?'s':''} (${escapeHtml(f.names.join(', ') || 'no name on file')}) —
+        only <strong>${f.found}</strong> found in today's immigration report. Check which of these isn't registered yet.
       </span>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
-function clearImmig(){document.getElementById('immigPasteInput2').value='';document.getElementById('immigResults2').style.display='none';document.getElementById('immigError2').classList.remove('show');document.getElementById('immigTabCount').textContent='Upload';document.getElementById('immigFileInput2').value='';immigAllRows2=[];immigMissingProfiles=[];_immigResRooms={};_immigNatMap={};_immigPassportMap={};_immigGenderMap={};const ihl=document.getElementById('immigInhouseXmlLabel');if(ihl)ihl.textContent='Not loaded';const ihi=document.getElementById('immigInhouseXmlInput');if(ihi)ihi.value='';const arl=document.getElementById('immigArrivalsLabel');if(arl)arl.textContent='Not loaded';const ari=document.getElementById('immigArrivalsInput');if(ari)ari.value='';const rdl=document.getElementById('immigResDetailLabel');if(rdl)rdl.textContent='Not loaded';const rdi=document.getElementById('immigResDetailInput');if(rdi)rdi.value='';const mw=document.getElementById('immigMissingWrap');if(mw)mw.style.display='none';}
+function clearImmig(){document.getElementById('immigPasteInput2').value='';document.getElementById('immigResults2').style.display='none';document.getElementById('immigError2').classList.remove('show');document.getElementById('immigTabCount').textContent='Upload';document.getElementById('immigFileInput2').value='';immigAllRows2=[];immigMissingProfiles=[];_immigResRooms={};_immigNatMap={};_immigPassportMap={};_immigGenderMap={};_immigInhouseRoomGuests={};const ihl=document.getElementById('immigInhouseXmlLabel');if(ihl)ihl.textContent='Not loaded';const ihi=document.getElementById('immigInhouseXmlInput');if(ihi)ihi.value='';const arl=document.getElementById('immigArrivalsLabel');if(arl)arl.textContent='Not loaded';const ari=document.getElementById('immigArrivalsInput');if(ari)ari.value='';const rdl=document.getElementById('immigResDetailLabel');if(rdl)rdl.textContent='Not loaded';const rdi=document.getElementById('immigResDetailInput');if(rdi)rdi.value='';const mw=document.getElementById('immigMissingWrap');if(mw)mw.style.display='none';}
 
 // ── FEEDBACK ──────────────────────────────────────────────
 function openFeedback(){['fb-text','fb-name'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});document.getElementById('feedbackModal').classList.add('open');}

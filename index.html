@@ -1113,7 +1113,7 @@
         <div class="upload-zone" style="flex:1;min-width:220px;cursor:pointer;" onclick="document.getElementById('immigInhouseXmlInput').click()">
           <div style="display:flex;flex-direction:column;align-items:center;padding:14px;text-align:center;gap:4px;">
             <div style="font-size:1.4rem;">🛏️</div>
-            <div style="font-size:0.74rem;font-weight:600;">Inhouse XML <span style="color:var(--text3);font-weight:400;">— for Nationality &amp; Passport</span></div>
+            <div style="font-size:0.74rem;font-weight:600;">Inhouse XML <span style="color:var(--text3);font-weight:400;">— Nationality, Passport &amp; Missing Profiles (by name)</span></div>
             <div id="immigInhouseXmlLabel" style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">Not loaded</div>
             <input type="file" id="immigInhouseXmlInput" accept=".xml,.XML" style="display:none;" onchange="immigLoadInhouseXml(this)"/>
           </div>
@@ -1129,7 +1129,7 @@
         <div class="upload-zone" style="flex:1;min-width:220px;cursor:pointer;" onclick="document.getElementById('immigResDetailInput').click()">
           <div style="display:flex;flex-direction:column;align-items:center;padding:14px;text-align:center;gap:4px;">
             <div style="font-size:1.4rem;">🧾</div>
-            <div style="font-size:0.74rem;font-weight:600;">Reservation Detail <span style="color:var(--text3);font-weight:400;">— for Missing Profiles</span></div>
+            <div style="font-size:0.74rem;font-weight:600;">Res. Detail / Guest In-House <span style="color:var(--text3);font-weight:400;">— optional, headcount backup</span></div>
             <div id="immigResDetailLabel" style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">Not loaded</div>
             <input type="file" id="immigResDetailInput" accept=".txt,.tsv" style="display:none;" onchange="immigLoadResDetail(this)"/>
           </div>
