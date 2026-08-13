@@ -539,6 +539,89 @@ function _immigApplyRecovery(rows) {
   });
 }
 
+// ── Reservation Detail — cross-checks the immigration report's per-room
+// headcount against what Opera's reservation actually booked (ADULTS).
+// Opera's ACCOMPANYING_NAMES field is frequently left blank by staff even
+// when a 2nd adult is genuinely booked, so it's used as bonus context when
+// present, never as the primary signal — the adult COUNT is what's reliable.
+let _immigResRooms = {}; // norm room -> { adults, names:[] }
+
+function _immigParseResDetail(raw) {
+  const lines = raw.split('\n').map(l => l.replace(/\r$/, '')).filter(l => l.trim());
+  if (lines.length < 2) return null;
+  const hdrs = lines[0].split('\t').map(h => h.trim().toUpperCase());
+  const iRoom  = hdrs.findIndex(h => h === 'ROOM_NO') >= 0 ? hdrs.findIndex(h => h === 'ROOM_NO') : hdrs.findIndex(h => h.includes('ROOM_NO'));
+  const iAdult = hdrs.indexOf('ADULTS');
+  const iConf  = hdrs.indexOf('CONFIRMATION_NO');
+  const iName  = hdrs.indexOf('FULL_NAME');
+  const iAccN  = hdrs.indexOf('ACCOMPANYING_NAMES');
+  if (iRoom < 0 || iAdult < 0) return null;
+
+  const rooms = {};
+  const seenConf = new Set(); // dedupe multi-row reservations (one row per ID/membership record on file)
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split('\t');
+    if (iConf >= 0) {
+      const conf = (cols[iConf] || '').trim();
+      if (conf) { if (seenConf.has(conf)) continue; seenConf.add(conf); }
+    }
+    const room = (cols[iRoom] || '').trim();
+    if (!room) continue; // not checked in / no room assigned yet — nothing to cross-check
+    const rn = room.replace(/^0+/, '') || '0';
+    const adults = parseInt(cols[iAdult]) || 0;
+    const name   = iName >= 0 ? (cols[iName] || '').trim() : '';
+    const accRaw = iAccN >= 0 ? (cols[iAccN] || '').trim() : '';
+    if (!rooms[rn]) rooms[rn] = { adults: 0, names: [], accompanyingNames: [] };
+    rooms[rn].adults += adults;
+    if (name) rooms[rn].names.push(typeof parseName === 'function' ? parseName(name) : name);
+    if (accRaw) rooms[rn].accompanyingNames.push(...accRaw.split(/[;,\/]/).map(s => s.trim()).filter(Boolean));
+  }
+  return rooms;
+}
+
+function immigLoadResDetail(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const parsed = _immigParseResDetail(e.target.result);
+    if (!parsed) { showToast('Could not read Reservation Detail — check ROOM_NO and ADULTS columns are present', 'err'); return; }
+    _immigResRooms = parsed;
+    const roomCount = Object.keys(parsed).length;
+    const lbl = document.getElementById('immigResDetailLabel');
+    if (lbl) lbl.textContent = roomCount ? `✓ ${roomCount} rooms with an assigned room number` : 'No assigned rooms found';
+    showToast(roomCount ? `✦ Reservation Detail loaded — ${roomCount} rooms` : 'No rooms with ROOM_NO assigned in this export', roomCount ? 'ok' : 'err');
+    if (immigAllRows2.length) processImmig2(true);
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+// Compares _immigResRooms (what Opera booked) against the per-room count of
+// records actually present in today's immigration report — NOT immigAllRows2,
+// which only holds guests that already have some OTHER field missing. This
+// needs the full unfiltered guest list so a room where everyone's nationality/
+// passport/gender/email is filled in correctly can still be flagged if one
+// person from that booking has no immigration record at all.
+function _immigCheckMissingProfiles(allGuests) {
+  const countByRoom = {};
+  const namesByRoom = {};
+  allGuests.forEach(g => {
+    const rn = (g.room || '').replace(/^0+/, '') || '0';
+    countByRoom[rn] = (countByRoom[rn] || 0) + 1;
+    (namesByRoom[rn] = namesByRoom[rn] || []).push(_normName(g.fullName || (g.fname + ' ' + g.lname)));
+  });
+  const flagged = [];
+  Object.entries(_immigResRooms).forEach(([room, res]) => {
+    const found = countByRoom[room] || 0;
+    if (res.adults > found) {
+      const unmatchedAcc = (res.accompanyingNames || []).filter(n => !(namesByRoom[room] || []).includes(_normName(n)));
+      flagged.push({ room, expected: res.adults, found, gap: res.adults - found, names: res.names, unmatchedAcc });
+    }
+  });
+  flagged.sort((a, b) => a.room.localeCompare(b.room, undefined, { numeric: true }));
+  return flagged;
+}
+
 function immigLoadFile2(input) {
   if(!input.files[0])return;
   const reader=new FileReader();
@@ -561,12 +644,12 @@ function processImmig2(silent) {
   let bizDate=null; if(bizStr){const d=new Date(bizStr.split('T')[0]);if(!isNaN(d))bizDate=d;}
   const get=(el,tag)=>(el.querySelector(tag)?.textContent||'').trim();
   const guests=[...doc.querySelectorAll('G_IMMIGRATION')].map(el=>({fname:get(el,'FIRST_NAME'),lname:get(el,'LAST_NAME'),sex:get(el,'SEX'),nat:get(el,'NATIONALITY'),passport:get(el,'PASSPORT'),arrival:get(el,'ARRIVAL_DATE'),departure:get(el,'DEPARTURE_DATE'),room:get(el,'ROOM')}));
+  guests.forEach(g=>{ g.fullName=(g.fname?g.fname+' '+g.lname:g.lname).trim(); });
   const pd=s=>{if(!s)return null;const[m,d,y]=s.split('/');return m&&d&&y?new Date(parseInt(y),parseInt(m)-1,parseInt(d)):null;};
+  const inHouseNow=g=>{const a=pd(g.arrival),d=pd(g.departure);return bizDate&&a&&d?(a<=bizDate&&d>bizDate):true;};
   const rows=[];
   guests.forEach(g=>{
-    const arr=pd(g.arrival),dep=pd(g.departure);
-    const ih=bizDate&&arr&&dep?(arr<=bizDate&&dep>bizDate):true; if(!ih)return;
-    const fullName=g.fname?g.fname+' '+g.lname:g.lname;
+    if(!inHouseNow(g))return;
     const noNat=!g.nat||['u','unknown',''].includes(g.nat.toLowerCase());
     const noSex=!g.sex||['u','unknown',''].includes(g.sex.toLowerCase());
     // Missing if blank, OR if the value has no digits at all — Opera masks real
@@ -574,25 +657,35 @@ function processImmig2(silent) {
     // but a value like "XXXXXXXFS" has zero digits, meaning no real number was
     // ever captured — that guest still needs a passport/doc number on file.
     const noPass=!g.passport||!/[0-9]/.test(g.passport); const noFname=!g.fname;
+    // Email isn't a field the immigration report or any Opera export we've
+    // seen carries at all — cross-check against Guest Memory instead, which
+    // is already being filled in from Purpose of Stay / the Neorcha scraper.
+    const gmEntry=typeof _gmStore!=='undefined'?_gmStore[gmKey(g.fullName)]:null;
+    const noEmail=!gmEntry||!gmEntry.email;
     const issues=[];
-    if(noNat)issues.push('nationality');if(noSex)issues.push('gender');if(noPass)issues.push('passport');if(noFname)issues.push('first_name');
+    if(noNat)issues.push('nationality');if(noSex)issues.push('gender');if(noPass)issues.push('passport');if(noFname)issues.push('first_name');if(noEmail)issues.push('email');
     if(!issues.length)return;
-    rows.push({room:g.room||'',name:fullName.trim(),sex:g.sex,nat:g.nat,passport:g.passport,arrival:g.arrival,departure:g.departure,issues,noNat,noSex,noPass,noFname,critical:noNat||noSex});
+    rows.push({room:g.room||'',name:g.fullName,sex:g.sex,nat:g.nat,passport:g.passport,email:gmEntry?.email||'',arrival:g.arrival,departure:g.departure,issues,noNat,noSex,noPass,noFname,noEmail,critical:noNat||noSex});
   });
   // Auto-fill Nationality / Gender from optional recovery sources (Inhouse XML / arrivals export)
   _immigApplyRecovery(rows);
   rows.sort((a,b)=>{if(a.critical&&!b.critical)return-1;if(!a.critical&&b.critical)return 1;return(a.room||'ZZZ').localeCompare(b.room||'ZZZ');});
   immigAllRows2=rows; immigFilter2_='all';
-  const noNatC=rows.filter(r=>r.noNat).length,noSexC=rows.filter(r=>r.noSex).length,noPassC=rows.filter(r=>r.noPass).length,noFnameC=rows.filter(r=>r.noFname).length,crit=rows.filter(r=>r.critical).length;
+  const noNatC=rows.filter(r=>r.noNat).length,noSexC=rows.filter(r=>r.noSex).length,noPassC=rows.filter(r=>r.noPass).length,noFnameC=rows.filter(r=>r.noFname).length,noEmailC=rows.filter(r=>r.noEmail).length,crit=rows.filter(r=>r.critical).length;
   const sugNatC=rows.filter(r=>r.suggestedNat).length, sugSexC=rows.filter(r=>r.suggestedSex).length, sugPassC=rows.filter(r=>r.suggestedPassport).length;
   const guessSexC=rows.filter(r=>r.guessedSex).length;
-  const ihTotal=guests.filter(g=>{const a=pd(g.arrival),d=pd(g.departure);return bizDate&&a&&d?a<=bizDate&&d>bizDate:true;}).length;
-  document.getElementById('immigKpis2').innerHTML=`<div class="kpi rose"><div class="kpi-accent"></div><div class="kpi-label">Critical</div><div class="kpi-val">${crit}</div><div class="kpi-sub">nat or gender</div></div><div class="kpi amber"><div class="kpi-accent"></div><div class="kpi-label">No Nationality</div><div class="kpi-val">${noNatC}</div></div><div class="kpi sky"><div class="kpi-accent"></div><div class="kpi-label">No Passport</div><div class="kpi-val">${noPassC}</div></div><div class="kpi mint"><div class="kpi-accent"></div><div class="kpi-label">No Gender</div><div class="kpi-val">${noSexC}</div></div>`;
+  const inHouseGuests=guests.filter(inHouseNow);
+  const ihTotal=inHouseGuests.length;
+  // Reservation Detail cross-check — needs the FULL in-house list, not just
+  // rows already flagged for some other missing field.
+  immigMissingProfiles=Object.keys(_immigResRooms).length?_immigCheckMissingProfiles(inHouseGuests):[];
+  immigRenderMissingProfiles();
+  document.getElementById('immigKpis2').innerHTML=`<div class="kpi rose"><div class="kpi-accent"></div><div class="kpi-label">Critical</div><div class="kpi-val">${crit}</div><div class="kpi-sub">nat or gender</div></div><div class="kpi amber"><div class="kpi-accent"></div><div class="kpi-label">No Nationality</div><div class="kpi-val">${noNatC}</div></div><div class="kpi sky"><div class="kpi-accent"></div><div class="kpi-label">No Passport</div><div class="kpi-val">${noPassC}</div></div><div class="kpi mint"><div class="kpi-accent"></div><div class="kpi-label">No Gender</div><div class="kpi-val">${noSexC}</div></div><div class="kpi purple"><div class="kpi-accent"></div><div class="kpi-label">No Email</div><div class="kpi-val">${noEmailC}</div><div class="kpi-sub">checked vs Guest Memory</div></div>`;
   const sugTotal = sugNatC+sugSexC+sugPassC;
   const suggestNote = sugTotal ? ` · ✦ ${sugTotal} suggested value${sugTotal!==1?'s':''} to enter in Opera (${sugNatC} nationality, ${sugSexC} gender, ${sugPassC} passport)` : '';
   const guessNote = guessSexC ? ` · ❓ ${guessSexC} gender guess${guessSexC!==1?'es':''} from name — verify against ID before entering` : '';
   const metaEl=document.getElementById('immigMeta2'); if(metaEl)metaEl.textContent=hotel+' · '+rDate+' '+rTime+' · '+ihTotal+' in-house · '+rows.length+' issues'+suggestNote+guessNote;
-  [['ifc-all',rows.length],['ifc-nat',noNatC],['ifc-gen',noSexC],['ifc-pass',noPassC],['ifc-fname',noFnameC]].forEach(([id,v])=>{const el=document.getElementById(id);if(el)el.textContent=v;});
+  [['ifc-all',rows.length],['ifc-nat',noNatC],['ifc-gen',noSexC],['ifc-pass',noPassC],['ifc-fname',noFnameC],['ifc-email',noEmailC]].forEach(([id,v])=>{const el=document.getElementById(id);if(el)el.textContent=v;});
   document.getElementById('immigTabCount').textContent=crit>0?(crit+' critical'):(rows.length+' issues');
   document.querySelectorAll('#immigFilters2 .fchip').forEach(b=>b.classList.remove('on'));
   const allBtn=document.querySelector('#immigFilters2 [data-if="all"]'); if(allBtn)allBtn.classList.add('on');
@@ -607,9 +700,9 @@ function immigRender2(rows) {
   if(immigFilter2_!=='all')filtered=filtered.filter(r=>r.issues.includes(immigFilter2_));
   if(search)filtered=filtered.filter(r=>r.room.toLowerCase().includes(search)||r.name.toLowerCase().includes(search));
   const tbody=document.getElementById('immigTable2'); if(!tbody)return;
-  if(!filtered.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:28px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">No matches.</td></tr>';return;}
+  if(!filtered.length){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:28px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">No matches.</td></tr>';return;}
   const sC=s=>!s||s.toUpperCase()==='U'?'var(--amber)':s.toUpperCase()==='M'?'var(--sky)':'var(--rose)';
-  const tM={nationality:['var(--rose)','Nationality'],gender:['var(--amber)','Gender'],passport:['var(--sky)','Passport'],first_name:['var(--mint)','First Name']};
+  const tM={nationality:['var(--rose)','Nationality'],gender:['var(--amber)','Gender'],passport:['var(--sky)','Passport'],first_name:['var(--mint)','First Name'],email:['var(--purple)','Email']};
   const sugChip=(label)=>`<div style="font-family:var(--mono);font-size:0.56rem;color:var(--mint);margin-top:3px;white-space:nowrap;">→ suggest: <strong>${label}</strong><br>update in Opera</div>`;
   const guessChip=(label)=>`<div style="font-family:var(--mono);font-size:0.56rem;color:var(--amber);margin-top:3px;white-space:nowrap;">❓ guess: <strong>${label}</strong><br>(name-based — verify ID)</div>`;
   tbody.innerHTML=filtered.map(r=>{
@@ -623,11 +716,37 @@ function immigRender2(rows) {
     const passCell = r.noPass
       ? '<span style="font-family:var(--mono);font-size:0.58rem;color:var(--sky);background:rgba(90,180,232,0.06);border:1px dashed rgba(90,180,232,0.3);border-radius:5px;padding:2px 7px;">MISSING</span>'+(r.suggestedPassport?sugChip(r.suggestedPassport):'')
       : '<span style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);">'+r.passport+'</span>';
-    return`<tr style="background:${r.noNat||r.noSex?'rgba(240,107,122,0.04)':r.noPass?'rgba(90,180,232,0.03)':'transparent'};border-left:${r.noNat||r.noSex?'3px solid var(--rose)':r.noPass?'3px solid var(--sky2)':'3px solid transparent'};"><td style="font-family:var(--mono);font-size:0.8rem;font-weight:700;color:var(--sky);">${r.room||'—'}</td><td>${sexCell}</td><td style="font-size:0.73rem;color:var(--text2);">${r.name}</td><td>${natCell}</td><td>${passCell}</td><td style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">${r.arrival}</td><td style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">${r.departure}</td><td>${tags}</td></tr>`;
+    const emailCell = r.noEmail
+      ? '<span style="font-family:var(--mono);font-size:0.58rem;color:var(--purple);background:rgba(139,124,248,0.07);border:1px dashed rgba(139,124,248,0.35);border-radius:5px;padding:2px 7px;">NOT SET</span>'
+      : `<span style="font-size:0.68rem;color:var(--text2);">${escapeHtml(r.email)}</span>`;
+    return`<tr style="background:${r.noNat||r.noSex?'rgba(240,107,122,0.04)':r.noPass?'rgba(90,180,232,0.03)':'transparent'};border-left:${r.noNat||r.noSex?'3px solid var(--rose)':r.noPass?'3px solid var(--sky2)':'3px solid transparent'};"><td style="font-family:var(--mono);font-size:0.8rem;font-weight:700;color:var(--sky);">${r.room||'—'}</td><td>${sexCell}</td><td style="font-size:0.73rem;color:var(--text2);">${r.name}</td><td>${natCell}</td><td>${passCell}</td><td>${emailCell}</td><td style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">${r.arrival}</td><td style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">${r.departure}</td><td>${tags}</td></tr>`;
   }).join('');
 }
 function immigFilter2(type,btn){immigFilter2_=type;document.querySelectorAll('#immigFilters2 .fchip').forEach(b=>b.classList.remove('on'));btn.classList.add('on');immigRender2(immigAllRows2);}
-function clearImmig(){document.getElementById('immigPasteInput2').value='';document.getElementById('immigResults2').style.display='none';document.getElementById('immigError2').classList.remove('show');document.getElementById('immigTabCount').textContent='Upload';document.getElementById('immigFileInput2').value='';immigAllRows2=[];_immigNatMap={};_immigPassportMap={};_immigGenderMap={};const ihl=document.getElementById('immigInhouseXmlLabel');if(ihl)ihl.textContent='Not loaded';const ihi=document.getElementById('immigInhouseXmlInput');if(ihi)ihi.value='';const arl=document.getElementById('immigArrivalsLabel');if(arl)arl.textContent='Not loaded';const ari=document.getElementById('immigArrivalsInput');if(ari)ari.value='';}
+
+// ── Reservation Detail missing-profile section — separate from the main
+// per-guest table since a room-level headcount gap isn't tied to one
+// specific person the way a blank nationality/passport field is. ──
+function immigRenderMissingProfiles() {
+  const wrap = document.getElementById('immigMissingWrap');
+  if (!wrap) return;
+  if (!immigMissingProfiles.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  const badge = document.getElementById('immigMissingBadge');
+  if (badge) badge.textContent = immigMissingProfiles.length;
+  const body = document.getElementById('immigMissingBody');
+  if (body) body.innerHTML = immigMissingProfiles.map(f => `
+    <div class="log-row" style="border-left:3px solid var(--rose);padding-left:10px;">
+      <span style="font-family:var(--mono);font-size:0.8rem;font-weight:700;color:var(--sky);min-width:50px;">${escapeHtml(f.room)}</span>
+      <span style="font-size:0.74rem;color:var(--text2);flex:1;">
+        Booked for <strong>${f.expected}</strong> adult${f.expected!==1?'s':''} (${escapeHtml(f.names.join(', ') || 'no name on file')}) —
+        only <strong>${f.found}</strong> found in today's immigration report.
+        ${f.unmatchedAcc.length ? `Opera lists an accompanying guest not yet registered: <strong>${escapeHtml(f.unmatchedAcc.join(', '))}</strong>.` : ''}
+      </span>
+    </div>`).join('');
+}
+
+function clearImmig(){document.getElementById('immigPasteInput2').value='';document.getElementById('immigResults2').style.display='none';document.getElementById('immigError2').classList.remove('show');document.getElementById('immigTabCount').textContent='Upload';document.getElementById('immigFileInput2').value='';immigAllRows2=[];immigMissingProfiles=[];_immigResRooms={};_immigNatMap={};_immigPassportMap={};_immigGenderMap={};const ihl=document.getElementById('immigInhouseXmlLabel');if(ihl)ihl.textContent='Not loaded';const ihi=document.getElementById('immigInhouseXmlInput');if(ihi)ihi.value='';const arl=document.getElementById('immigArrivalsLabel');if(arl)arl.textContent='Not loaded';const ari=document.getElementById('immigArrivalsInput');if(ari)ari.value='';const rdl=document.getElementById('immigResDetailLabel');if(rdl)rdl.textContent='Not loaded';const rdi=document.getElementById('immigResDetailInput');if(rdi)rdi.value='';const mw=document.getElementById('immigMissingWrap');if(mw)mw.style.display='none';}
 
 // ── FEEDBACK ──────────────────────────────────────────────
 function openFeedback(){['fb-text','fb-name'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});document.getElementById('feedbackModal').classList.add('open');}

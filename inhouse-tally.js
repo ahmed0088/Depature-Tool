@@ -2,12 +2,20 @@
 //  inhouse-tally.js  —  Inhouse Tally (Opera vs Immigration XML)
 //
 //  Reconciles two same-night reports:
-//   1) A room-by-room occupancy list from Opera. Two formats accepted,
+//   1) A room-by-room occupancy list from Opera. Three formats accepted,
 //      auto-detected:
 //        · "Guest In-House By Room" (gibyroom) — tab-delimited,
 //          ROOM + ADULTS/CHILDREN + FULL_NAME columns.
 //        · "wa21" reservations export — comma-delimited quoted CSV,
 //          Room + Adults/Children + Name columns.
+//        · "Reservation Detail" (res_detail) export — tab-delimited,
+//          one row per reservation but sometimes MULTIPLE rows per
+//          reservation (one per ID/membership record on file) — those
+//          are deduped by CONFIRMATION_NO before summing pax, otherwise
+//          a guest with 2 ID records on file would silently double-count.
+//          Uses ROOM_NO (not DISP_ROOM_NO, which is usually blank pre
+//          check-in and would otherwise win the column match by being
+//          listed first in the export).
 //   2) A guest registration XML. Two formats accepted, auto-detected:
 //        · Inhouse / Guest Count XML — Crystal Report export, one
 //          <Details Level="2"> block per registered person, tagged
@@ -71,15 +79,27 @@ function itParseGiby(raw) {
   const splitLine = delim === '\t' ? (l => l.split('\t')) : parseCSVLine;
 
   const hdrs = splitLine(lines[0]).map(h => h.replace(/"/g, '').trim().toUpperCase());
-  const iRoom   = _itFindCol(hdrs, 'ROOM');
+  // ROOM_NO tried before the bare "ROOM" substring match — Reservation Detail
+  // exports also have DISP_ROOM_NO (usually blank pre-check-in) which comes
+  // earlier in the column order and would otherwise win the substring match.
+  const iRoom   = _itFindCol(hdrs, 'ROOM_NO', 'ROOM');
   const iAdults = _itFindCol(hdrs, 'ADULTS');
   const iChild  = _itFindCol(hdrs, 'CHILDREN');
   const iName   = _itFindCol(hdrs, 'FULL_NAME', 'NAME');
+  const iConf   = _itFindCol(hdrs, 'CONFIRMATION_NO');
   if (iRoom < 0) return null;
 
   const rooms = {};
+  const seenConf = new Set(); // Reservation Detail: dedupe multi-row reservations (one row per ID/membership record)
   for (let i = 1; i < lines.length; i++) {
     const cols = splitLine(lines[i]);
+    if (iConf >= 0) {
+      const conf = (cols[iConf] || '').replace(/"/g, '').trim();
+      if (conf) {
+        if (seenConf.has(conf)) continue;
+        seenConf.add(conf);
+      }
+    }
     const room = (cols[iRoom] || '').replace(/"/g, '').trim();
     if (!room) continue;
     const adults   = iAdults >= 0 ? (parseInt(cols[iAdults]) || 0) : 0;

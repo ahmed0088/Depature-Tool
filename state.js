@@ -24,6 +24,7 @@ let _purposeTitle  = 'Purpose of Stay Report';
 // ── Immigration ───────────────────────────────────────────
 let immigAllRows2  = [];
 let immigFilter2_  = 'all';
+let immigMissingProfiles = []; // rooms where Reservation Detail's adult count exceeds today's immigration record count
 
 // ── Modals ────────────────────────────────────────────────
 let guestModalTarget = 'arrivals';

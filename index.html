@@ -1101,13 +1101,13 @@
 <div class="panel" id="panel-immig">
   <div style="max-width:1100px;">
     <div class="page-hd">
-      <div class="page-hd-left"><h1>Immigration Check</h1><p>Opera XML · Flags missing nationality, gender, passport, first name</p></div>
+      <div class="page-hd-left"><h1>Immigration Check</h1><p>Opera XML · Flags missing nationality, gender, passport, first name, email &amp; missing guest profiles</p></div>
       <div class="page-hd-actions"><button class="btn rose" onclick="clearImmig()">✕ Clear</button></div>
     </div>
     <div class="card" style="border-color:rgba(90,180,232,0.25);">
       <div style="font-size:0.8rem;font-weight:600;margin-bottom:4px;">📂 Optional — Import for Auto-Recovery</div>
       <div style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);margin-bottom:12px;">
-        Load these before clicking Analyse to auto-fill missing Nationality, Passport &amp; Gender below.
+        Load these before clicking Analyse to auto-fill missing Nationality, Passport &amp; Gender below, and to check for guests booked but never registered. Email is checked automatically against Guest Memory — nothing to upload for that.
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <div class="upload-zone" style="flex:1;min-width:220px;cursor:pointer;" onclick="document.getElementById('immigInhouseXmlInput').click()">
@@ -1126,6 +1126,14 @@
             <input type="file" id="immigArrivalsInput" accept=".xls,.xlsx,.html,.htm,.csv,.txt" style="display:none;" onchange="immigLoadArrivals(this)"/>
           </div>
         </div>
+        <div class="upload-zone" style="flex:1;min-width:220px;cursor:pointer;" onclick="document.getElementById('immigResDetailInput').click()">
+          <div style="display:flex;flex-direction:column;align-items:center;padding:14px;text-align:center;gap:4px;">
+            <div style="font-size:1.4rem;">🧾</div>
+            <div style="font-size:0.74rem;font-weight:600;">Reservation Detail <span style="color:var(--text3);font-weight:400;">— for Missing Profiles</span></div>
+            <div id="immigResDetailLabel" style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">Not loaded</div>
+            <input type="file" id="immigResDetailInput" accept=".txt,.tsv" style="display:none;" onchange="immigLoadResDetail(this)"/>
+          </div>
+        </div>
       </div>
     </div>
     <div class="card">
@@ -1142,6 +1150,17 @@
       <div class="error-box" id="immigError2"><span>⚠</span><span id="immigErrorMsg2"></span></div>
       <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn gold" onclick="processImmig2()">🔍 Analyse</button><button class="btn" onclick="clearImmig()">✕ Clear</button></div>
     </div>
+    <div id="immigMissingWrap" style="display:none;margin-top:18px;">
+      <div class="card" style="border-color:rgba(240,107,122,0.3);">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="font-size:1.1rem;">🧾</span>
+          <span style="font-size:0.8rem;font-weight:700;color:var(--rose);">Missing Guest Profiles</span>
+          <span style="font-family:var(--mono);font-size:0.62rem;font-weight:700;color:var(--rose);background:rgba(240,107,122,0.1);border:1px solid rgba(240,107,122,0.3);border-radius:99px;padding:1px 8px;" id="immigMissingBadge">0</span>
+          <span style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">— rooms booked for more adults than are registered in today's immigration report</span>
+        </div>
+        <div id="immigMissingBody" style="display:flex;flex-direction:column;gap:6px;"></div>
+      </div>
+    </div>
     <div id="immigResults2" style="display:none;">
       <div class="kpi-row c4" style="margin-top:18px;" id="immigKpis2"></div>
       <div style="font-family:var(--mono);font-size:0.7rem;color:var(--text2);margin-bottom:9px;padding:9px 13px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);" id="immigMeta2"></div>
@@ -1151,10 +1170,11 @@
         <button class="fchip"    data-if="gender"      onclick="immigFilter2('gender',this)">🟡 Gender <span id="ifc-gen">0</span></button>
         <button class="fchip"    data-if="passport"    onclick="immigFilter2('passport',this)">🔵 Passport <span id="ifc-pass">0</span></button>
         <button class="fchip"    data-if="first_name"  onclick="immigFilter2('first_name',this)">🟢 First Name <span id="ifc-fname">0</span></button>
+        <button class="fchip"    data-if="email"       onclick="immigFilter2('email',this)">🟣 Email <span id="ifc-email">0</span></button>
         <div class="search-wrap" style="margin-left:auto;"><span style="padding:0 8px;color:var(--text3);">⌕</span><input type="text" id="immigSearch2" placeholder="Room or name…" oninput="immigRender2(immigAllRows2)"/></div>
       </div>
       <div class="tbl-wrap"><table>
-        <thead><tr><th>Room</th><th>Sex</th><th>Name</th><th>Nationality</th><th>Passport</th><th>Arrival</th><th>Departure</th><th>Issues</th></tr></thead>
+        <thead><tr><th>Room</th><th>Sex</th><th>Name</th><th>Nationality</th><th>Passport</th><th>Email</th><th>Arrival</th><th>Departure</th><th>Issues</th></tr></thead>
         <tbody id="immigTable2"></tbody>
       </table></div>
     </div>
