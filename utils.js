@@ -258,9 +258,13 @@ function showUndoToast(msg, undoFn, timeoutMs = 6000) {
 // ── Theme ─────────────────────────────────────────────────
 function setTheme(name, btn) {
   document.documentElement.setAttribute('data-theme', name);
-  document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.theme-btn, .mob-theme-btn').forEach(b => b.classList.remove('active'));
   // sync login theme buttons too
   document.querySelectorAll('.login-theme-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.t === name);
+  });
+  // sync the mobile drawer's theme buttons too — they share data-t
+  document.querySelectorAll('.mob-theme-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.t === name);
   });
   const target = btn || document.querySelector(`.theme-btn[data-t="${name}"]`);

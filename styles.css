@@ -2348,7 +2348,34 @@ kbd {
     border-radius: 16px 16px 0 0;
     z-index: 295;
     padding: 16px 12px 12px;
+    max-height: 80vh;
+    overflow-y: auto;
   }
+
+  /* Drawer header: title + Firebase status + theme switcher —
+     none of this had any CSS at all, so it rendered as unstyled
+     browser-default text/buttons. */
+  .mob-drawer-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding-bottom: 12px; margin-bottom: 14px; border-bottom: 1px solid var(--border);
+  }
+  .mob-drawer-title {
+    font-family: var(--mono); font-size: 0.72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em; color: var(--text2);
+  }
+  .mob-drawer-status { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+  .mob-fb-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); transition: all 0.3s; flex-shrink: 0; }
+  .mob-fb-label { font-family: var(--mono); font-size: 0.58rem; color: var(--text3); white-space: nowrap; }
+  .mob-drawer-themes { display: flex; gap: 4px; margin-left: 6px; }
+  .mob-theme-btn {
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 1px solid var(--border2); background: var(--surface);
+    font-size: 0.85rem; line-height: 1; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .mob-theme-btn.active { border-color: var(--accent); background: var(--accent-bg); }
+
   .mob-more-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -2364,6 +2391,21 @@ kbd {
   }
   .mob-more-item span:first-child { font-size: 1.3rem; }
   .mob-more-item:active { background: var(--card2); color: var(--accent); }
+
+  /* Utility row: feedback / export / import / sign out — also had
+     no CSS, rendering as plain default buttons. */
+  .mob-util-strip {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border);
+  }
+  .mob-util-btn {
+    flex: 1 1 auto; min-width: 0;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+    padding: 9px 10px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--r); color: var(--text2); font-family: var(--mono);
+    font-size: 0.64rem; font-weight: 600; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .mob-util-btn:active { background: var(--card2); color: var(--accent); }
 
   /* ── Clean up topbar for small screens ── */
   .theme-switcher        { display: none !important; }
@@ -4680,6 +4722,7 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
 }
 .dc-note {
   width: 100%;
+  height: 34px;
   min-height: 34px;
   max-height: 120px;
   box-sizing: border-box;
@@ -4754,6 +4797,7 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
 .dc-note-toggle { display: none !important; }
 .dc-note {
   width: 100%;
+  height: 34px;
   min-height: 34px;
   max-height: 120px;
   box-sizing: border-box;
@@ -4788,14 +4832,14 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
   }
   .dc-row {
     flex-wrap: nowrap;
-    min-height: 56px;
+    min-height: 44px;
     gap: 6px;
     padding: 0 8px 0 0;
   }
   .dc-room {
     font-size: 1.05rem;
     min-width: 44px;
-    padding: 8px 8px;
+    padding: 6px 8px;
   }
   .dc-row-name {
     font-size: 0.78rem;
@@ -4806,13 +4850,15 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
     flex-shrink: 0;
   }
   .dc-body {
-    padding: 0 10px 12px;
+    padding: 0 10px 9px;
   }
   .dc-actions {
     gap: 5px;
+    margin-top: 5px;
+    margin-bottom: 4px;
   }
   .dca {
-    padding: 9px 6px;
+    padding: 7px 6px;
     font-size: 0.66rem;
   }
   /* Stack the 5-button grid into 2+2+1 on mobile. The desktop layout
@@ -4830,7 +4876,10 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
   .dc-actions.g5 .dca:last-child {
     grid-column: 1 / -1;
   }
-  .dc-note { min-height: 52px; }
+  .dc-note { height: 30px; min-height: 30px; }
+  .dc-note-section { margin-top: 6px; padding-top: 6px; }
+  .dc-note-header { margin-bottom: 4px; }
+  .dc-intent-row { margin-top: 4px; }
   /* Hide meta line on very small screens to avoid overflow */
   .dc-meta-line { display: none; }
   .dc-timetag-wrap { font-size: 0.6rem; }
