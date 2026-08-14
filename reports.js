@@ -412,6 +412,14 @@ function _normName(name) {
   return name.toLowerCase().replace(/[^a-z]/g, '');
 }
 
+// A valid UAE Emirates ID is a 15-digit number starting with "784"
+// (format 784-YYYY-XXXXXXX-X). Anything else on DocumentNumber1 is a
+// passport number — same rule arrivals-purpose.js uses for Origin of Travel.
+function _immigIsEmiratesId(doc) {
+  const d = String(doc || '').replace(/[\s-]/g, '');
+  return /^784\d{12}$/.test(d);
+}
+
 // Parse an Inhouse.xml (Crystal Reports export) and return per-guest
 // Nationality + DocumentNumber (passport/Emirates ID), keyed by normalised
 // name — plus a per-room guest list, since this same export already has
@@ -665,7 +673,10 @@ function _immigCheckMissingProfiles(allGuests) {
       );
       const likelyMissing = guests
         .filter(g => !immigNamesInRoom.has(g.key))
-        .map(g => ({ name: g.name, nat: _immigNatMap[g.key] || '', doc: _immigPassportMap[g.key] || '' }));
+        .map(g => {
+          const doc = _immigPassportMap[g.key] || '';
+          return { name: g.name, nat: _immigNatMap[g.key] || '', doc, docType: doc ? (_immigIsEmiratesId(doc) ? 'Emirates ID' : 'Passport') : '' };
+        });
       flagged.push({ room, source: 'inhouse', expected: guests.length, found, gap: guests.length - found, names: guests.map(g => g.name), likelyMissing });
       flaggedRooms.add(room);
     }
@@ -805,7 +816,7 @@ function immigRenderMissingProfiles() {
     const pinpointed = f.likelyMissing && f.likelyMissing.length === f.gap ? f.likelyMissing : null;
     const detailLine = pinpointed
       ? `Likely missing: ${pinpointed.map(g => {
-          const bits = [g.nat ? escapeHtml(g.nat) : '', g.doc ? 'Doc: ' + escapeHtml(g.doc) : ''].filter(Boolean).join(' · ');
+          const bits = [g.nat ? escapeHtml(g.nat) : '', g.doc ? `${escapeHtml(g.docType)}: ${escapeHtml(g.doc)}` : ''].filter(Boolean).join(' · ');
           return `<strong>${escapeHtml(g.name)}</strong>${bits ? ` (${bits})` : ' — no nationality/doc # on file either, check Vicas'}`;
         }).join(', ')} — create their immigration profile in Opera with these details.`
       : `${sourceLabel} shows <strong>${f.expected}</strong> guest${f.expected!==1?'s':''} (${escapeHtml(f.names.join(', ') || 'no name on file')}) —
