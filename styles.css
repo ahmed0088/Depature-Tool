@@ -4919,7 +4919,13 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
   .dc-actions.g5 .dca:last-child {
     grid-column: 1 / -1;
   }
-  .dc-note { height: 30px; min-height: 30px; }
+  /* 16px is the iOS/Android threshold below which the browser auto-zooms
+     the page on focus (to make tiny text legible) and won't zoom back out
+     on blur — the "stuck zoomed in" annoyance on phone. Force both real
+     text-entry fields on the card up to exactly that threshold on mobile
+     only; desktop keeps its smaller, denser sizing untouched. */
+  .dc-note      { height: 38px; min-height: 38px; font-size: 16px; }
+  .dc-edit-name { font-size: 16px; }
   .dc-note-section { margin-top: 6px; padding-top: 6px; }
   .dc-note-header { margin-bottom: 4px; }
   .dc-intent-row { margin-top: 4px; }
