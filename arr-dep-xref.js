@@ -244,15 +244,18 @@ function _xrefNormRoom(r) {
 // ── Core logic: is this arrival an extension? ─────────────
 //
 //  EXTENSION when ANY of:
-//   A) Same ROOM NUMBER on both dep board and arrivals list
-//      → guest booked same room again (regardless of name match)
-//   B) Same LAST NAME found anywhere on dep board
-//      → guest made new booking, possibly different room
-//      (both conditions checked for all arrivals, with or without room)
+//   A) Same ROOM NUMBER on both dep board and arrivals list, AND the same
+//      guest — genuine same-room re-booking.
+//   B) Same LAST NAME found anywhere on dep board (any room) — guest made
+//      a new booking, possibly into a different room.
 //
-//  NEW ARRIVAL when:
-//   C) Room on dep board but no name match → different guest, room being freed
-//   D) No room match and no name match → brand new guest
+//  NEW ARRIVAL (routine turnover, not an extension) when:
+//   C) Room on dep board matches, but it's a DIFFERENT guest — the room is
+//      just being reused for someone unrelated, which is the NORMAL case
+//      for most departures (a room clears out and someone new checks in
+//      the same day) — not evidence of anything. Room reuse alone is not
+//      a meaningful signal on its own; only a name match is.
+//   D) No room match and no name match → brand new guest.
 //
 //  result sets on arrRecord:
 //   isExtension  — true/false
@@ -270,36 +273,35 @@ function _xrefCheckExtension(arrRecord) {
 
   // Use _xrefNormRoom so '0102' and '102' compare equal
   const arrRoom = _xrefNormRoom(arrRecord.room);
+  // Use rawName (Opera format) for name matching — more reliable than parsed name
+  const nameForMatch = arrRecord.rawName || arrRecord.name;
 
-  // ── A) ROOM NUMBER MATCH ──────────────────────────────────
-  // Same room on dep board + arrivals = guest re-booked the same room → extension
-  // (Primary signal — most reliable. Name match confirms it but is not required.)
+  // ── A) ROOM NUMBER MATCH — only counts as an extension if it's also
+  // the SAME GUEST. A bare room-number coincidence with a different name
+  // is routine same-day turnover (see case C below), not an extension —
+  // nearly every departing room gets reused by someone unrelated the same
+  // day, so treating that alone as "extension, verify" buried real ones
+  // under false positives.
   if (arrRoom) {
     const depByRoom = depRooms.find(r =>
       _xrefNormRoom(r.roomStr) === arrRoom ||
       _xrefNormRoom(String(r.room)) === arrRoom
     );
 
-    if (depByRoom) {
+    if (depByRoom && _namesMatch(nameForMatch, depByRoom.name)) {
       arrRecord.depGuest    = depByRoom;
       arrRecord.isExtension = true;
       arrRecord.matchType   = 'room';
-
-      // Use rawName (Opera format) for name matching — more reliable than parsed name
-      const nameForMatch = arrRecord.rawName || arrRecord.name;
-      if (_namesMatch(nameForMatch, depByRoom.name)) {
-        arrRecord.extReason = `Room ${arrRoom} · same guest (${parseName(depByRoom.name)}) · ↪ Extension`;
-      } else {
-        // Different name, same room — could be companion/spouse booking under diff name
-        arrRecord.extReason = `Room ${arrRoom} · departing: ${parseName(depByRoom.name)} · incoming: ${arrRecord.name} — verify`;
-      }
+      arrRecord.extReason   = `Room ${arrRoom} · same guest (${parseName(depByRoom.name)}) · ↪ Extension`;
       return;
     }
+    // Room matched but a different guest, or no room match at all — fall
+    // through to the name-match check below, since this guest might still
+    // be a genuine extension into a DIFFERENT room elsewhere on the board.
   }
 
   // ── B) NAME MATCH anywhere on dep board ──────────────────
   // Guest booked a new reservation (possibly different room) — same last name found
-  const nameForMatch = arrRecord.rawName || arrRecord.name;
   const depByName = depRooms.find(r => _namesMatch(nameForMatch, r.name));
   if (depByName) {
     arrRecord.isExtension = true;
@@ -312,7 +314,7 @@ function _xrefCheckExtension(arrRecord) {
     return;
   }
 
-  // ── C/D) No match → brand new guest ──────────────────────
+  // ── C/D) No match → brand new guest, or routine same-room turnover ──
   arrRecord.isExtension = false;
   arrRecord.matchType   = null;
   arrRecord.depGuest    = null;
