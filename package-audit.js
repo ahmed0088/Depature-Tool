@@ -244,11 +244,19 @@ function pkgRun() {
   pkgRender();
 }
 
+function _pkgGapBadge(r) {
+  if (r.needsProduct && r.needsEmployee) return `<span style="color:var(--rose);">Product + Seller</span>`;
+  if (r.needsProduct) return `<span style="color:var(--rose);">Product</span>`;
+  return `<span style="color:var(--amber);">Seller</span>`;
+}
+
 function pkgRender() {
   const q = pkgSearch_.toLowerCase().trim();
   const filtered = pkgResults.filter(r => {
-    if (pkgFilter_ === 'resolved' && !r.resolved) return false;
-    if (pkgFilter_ === 'review'   && r.resolved)  return false;
+    if (pkgFilter_ === 'resolved'  && !r.resolved) return false;
+    if (pkgFilter_ === 'review'    && r.resolved)  return false;
+    if (pkgFilter_ === 'noProduct' && !r.needsProduct) return false;
+    if (pkgFilter_ === 'noSeller'  && !r.needsEmployee) return false;
     if (q) {
       const hay = [r.conf, r.room, r.code, r.user].join(' ').toLowerCase();
       if (!hay.includes(q)) return false;
@@ -256,10 +264,14 @@ function pkgRender() {
     return true;
   });
 
-  const resolvedCount = pkgResults.filter(r => r.resolved).length;
+  const resolvedCount  = pkgResults.filter(r => r.resolved).length;
+  const noProductCount = pkgResults.filter(r => r.needsProduct).length;
+  const noSellerCount  = pkgResults.filter(r => r.needsEmployee).length;
   [['pkgfc-all', pkgResults.length],
    ['pkgfc-resolved', resolvedCount],
    ['pkgfc-review', pkgResults.length - resolvedCount],
+   ['pkgfc-noProduct', noProductCount],
+   ['pkgfc-noSeller', noSellerCount],
   ].forEach(([id, v]) => { const el = document.getElementById(id); if (el) el.textContent = v; });
 
   document.getElementById('pkgKpis').innerHTML = `
@@ -269,10 +281,11 @@ function pkgRender() {
 
   const tbody = document.getElementById('pkgTable');
   if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:36px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">No rows match.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:36px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">No rows match.</td></tr>`;
     return;
   }
   tbody.innerHTML = filtered.map(r => {
+    const gapCell = `<td style="font-family:var(--mono);font-size:0.66rem;">${_pkgGapBadge(r)}</td>`;
     if (r.resolved) {
       return `<tr>
         <td><span class="tt-room-pill">${escapeHtml(r.room)}</span></td>
@@ -281,6 +294,7 @@ function pkgRender() {
         <td style="font-family:var(--mono);font-size:0.72rem;">AED ${escapeHtml(r.price)}</td>
         <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text2);">${escapeHtml(r.from) || '—'} → ${escapeHtml(r.to) || '—'}</td>
         <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text2);">${escapeHtml(r.user)}</td>
+        ${gapCell}
         <td><span style="color:var(--mint);">✅ Resolved</span></td>
       </tr>`;
     }
@@ -290,14 +304,13 @@ function pkgRender() {
     const productCell = r.needsProduct
       ? `<span style="color:var(--text3);">? unresolved</span>`
       : escapeHtml(r.product);
-    const gapLabel = r.needsProduct && r.needsEmployee ? 'product + seller'
-      : r.needsProduct ? 'product' : 'seller';
     return `<tr>
       <td><span class="tt-room-pill">${escapeHtml(r.room)}</span></td>
       <td style="font-family:var(--mono);font-size:0.72rem;">${escapeHtml(r.conf)}</td>
       <td style="font-family:var(--mono);font-size:0.76rem;">${productCell}</td>
       <td style="font-family:var(--mono);font-size:0.72rem;color:var(--text3);">AED ${escapeHtml(String(r.charge))}</td>
-      <td colspan="2" style="font-size:0.68rem;color:var(--text3);" title="Missing: ${escapeHtml(gapLabel)}">${candText}</td>
+      <td colspan="2" style="font-size:0.68rem;color:var(--text3);">${candText}</td>
+      ${gapCell}
       <td><span style="color:var(--amber);">⚠ Review</span></td>
     </tr>`;
   }).join('');

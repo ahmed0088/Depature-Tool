@@ -1349,6 +1349,8 @@
         <div class="fchip on" data-pkgf="all"      onclick="pkgSetFilter('all',this)">All <span id="pkgfc-all">0</span></div>
         <div class="fchip"    data-pkgf="resolved" onclick="pkgSetFilter('resolved',this)">✅ Resolved <span id="pkgfc-resolved">0</span></div>
         <div class="fchip"    data-pkgf="review"   onclick="pkgSetFilter('review',this)">⚠ Needs Review <span id="pkgfc-review">0</span></div>
+        <div class="fchip"    data-pkgf="noProduct" onclick="pkgSetFilter('noProduct',this)">Missing Product <span id="pkgfc-noProduct">0</span></div>
+        <div class="fchip"    data-pkgf="noSeller"  onclick="pkgSetFilter('noSeller',this)">Missing Seller <span id="pkgfc-noSeller">0</span></div>
         <div class="search-wrap" style="margin-left:auto;">
           <span style="padding:0 8px;color:var(--text3);">⌕</span>
           <input type="text" id="pkgSearch" placeholder="Room, conf. no., product code, or staff…" oninput="pkgSetSearch(this.value)"/>
@@ -1365,6 +1367,7 @@
               <th>Price</th>
               <th>Dates</th>
               <th>Sold By</th>
+              <th style="width:110px;">Was Missing</th>
               <th style="width:120px;">Status</th>
             </tr>
           </thead>
