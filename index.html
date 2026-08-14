@@ -1349,6 +1349,7 @@
         <div class="fchip on" data-pkgf="all"      onclick="pkgSetFilter('all',this)">All <span id="pkgfc-all">0</span></div>
         <div class="fchip"    data-pkgf="complete" onclick="pkgSetFilter('complete',this)">✓ Already OK <span id="pkgfc-complete">0</span></div>
         <div class="fchip"    data-pkgf="resolved" onclick="pkgSetFilter('resolved',this)">✅ Fixed <span id="pkgfc-resolved">0</span></div>
+        <div class="fchip"    data-pkgf="deny"     onclick="pkgSetFilter('deny',this)">⛔ Deny <span id="pkgfc-deny">0</span></div>
         <div class="fchip"    data-pkgf="review"   onclick="pkgSetFilter('review',this)">⚠ Needs Review <span id="pkgfc-review">0</span></div>
         <div class="fchip"    data-pkgf="noProduct" onclick="pkgSetFilter('noProduct',this)">Missing Product <span id="pkgfc-noProduct">0</span></div>
         <div class="fchip"    data-pkgf="noSeller"  onclick="pkgSetFilter('noSeller',this)">Missing Seller <span id="pkgfc-noSeller">0</span></div>
@@ -1377,8 +1378,16 @@
       </div>
 
       <div style="margin-top:12px;font-family:var(--mono);font-size:0.62rem;color:var(--text3);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-        <span>💡 Update the resolved rows in IN-Gauge, then</span>
-        <button class="btn gold sm" id="pkgCopyBtn" onclick="pkgCopyResolved()">📋 Copy Resolved Rows</button>
+        <span>💡 Credit the valid rows in IN-Gauge, and remove the denied ones</span>
+        <button class="btn gold sm" id="pkgCopyBtn" onclick="pkgCopyResolved()">📋 Copy Rows to Credit</button>
+        <button class="btn rose sm" id="pkgDenyBtn" onclick="pkgCopyDeny()">⛔ Copy Deny List</button>
+      </div>
+      <div style="margin-top:8px;font-family:var(--mono);font-size:0.6rem;color:var(--text3);line-height:1.6;">
+        A charge is denied when a once-per-stay package (early check-in, late checkout) is billed more than once
+        for the same reservation, or when Opera logged that reservation's packages and none of them are this kind.
+        Breakfast and board packages bill per night, so one row per day is expected for those and never denied.
+        Charges with no Opera record at all in this report go to Needs Review, not Deny — the package may simply
+        have been sold before the date range you exported.
       </div>
     </div>
 

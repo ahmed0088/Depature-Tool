@@ -78,6 +78,7 @@ function _pkgParseExcelUnknowns(rows) {
   const iArr     = _pkgFindCol(hdrs, 'Arrival Date');
   const iDep     = _pkgFindCol(hdrs, 'Departure Date');
   const iEmp     = _pkgFindCol(hdrs, 'Employee');
+  const iDaily   = _pkgFindCol(hdrs, 'Daily Date');
   if (iProduct < 0 || iConf < 0) return [];
 
   const out = [];
@@ -101,6 +102,7 @@ function _pkgParseExcelUnknowns(rows) {
       days:   iDays   >= 0 ? String(r[iDays]   || '').trim() : '',
       arr:    iArr    >= 0 ? String(r[iArr]    || '').trim() : '',
       dep:    iDep    >= 0 ? String(r[iDep]    || '').trim() : '',
+      daily:  iDaily  >= 0 ? String(r[iDaily]  || '').trim() : '',
       product, employee, needsProduct, needsEmployee,
     });
   }
@@ -331,6 +333,110 @@ function _pkgPickOriginator(cands) {
   return cands.slice().sort((a, b) => a.ts - b.ts)[0];
 }
 
+// "13-Aug-2026" (IN-Gauge) and "13-AUG-26" (Opera) -> 20260813, so the two
+// systems' dates can be compared directly.
+const _PKG_MONTHS = { JAN:'01',FEB:'02',MAR:'03',APR:'04',MAY:'05',JUN:'06',JUL:'07',AUG:'08',SEP:'09',OCT:'10',NOV:'11',DEC:'12' };
+function _pkgDayNum(s) {
+  const m = String(s || '').match(/(\d{1,2})\s*-\s*([A-Za-z]{3})[A-Za-z]*\s*-\s*(\d{2,4})/);
+  if (!m) return 0;
+  const mm = _PKG_MONTHS[m[2].toUpperCase()];
+  if (!mm) return 0;
+  const yy = m[3].length === 2 ? `20${m[3]}` : m[3];
+  return Number(`${yy}${mm}${String(m[1]).padStart(2, '0')}`);
+}
+
+// The package a row represents, whether IN-Gauge named it or we had to read
+// the Opera code (USS100EC -> Early Check In).
+function _pkgFamilyName(r) {
+  const p = String(r.product || '');
+  if (/^(Early Check In|Late Check Out|Breakfast)$/i.test(p)) return p;
+  const c = String(r.code || '');
+  if (/EC$/i.test(c)) return 'Early Check In';
+  if (/LC$/i.test(c)) return 'Late Check Out';
+  if (/BB$/i.test(c)) return 'Breakfast';
+  return p || c;
+}
+
+// Early check-in and late checkout are charged ONCE per stay. Breakfast and
+// the board packages are per-night, so IN-Gauge listing one row per day is
+// expected for those and only for those.
+function _pkgIsOneTime(name) { return /^(Early Check In|Late Check Out)$/i.test(String(name || '')); }
+
+// Find the Opera event backing this charge. Price identifies the exact
+// package when a stay has several (e.g. breakfast switched tiers mid-stay);
+// otherwise fall back to whoever started that package family.
+function _pkgMatchEvent(u, cands) {
+  if (u.needsProduct) {
+    // Product unknown — only an ADDED entry (which carries a price) can
+    // identify which package this charge is; a date-only ATTACHED can't.
+    const added = cands.filter(c => c.action === 'ADDED');
+    return added.find(c => c.price && Math.abs(parseFloat(c.price) - u.charge) < 0.02)
+        || (added.length === 1 ? added[0] : null);
+  }
+  const family = _pkgCodeFamilyFor(u.product);
+  const pool = family ? cands.filter(c => family.test(c.code)) : cands;
+  return pool.find(c => c.price && Math.abs(parseFloat(c.price) - u.charge) < 0.02)
+      || _pkgPickOriginator(pool);
+}
+
+// Decide which rows may actually be credited as an upsell.
+//
+// Deliberately NOT a rule: comparing the charged day against the date range
+// on the matched Opera event. The Changes Log records changes over time, so
+// each event's "BETWEEN x AND y" is only a snapshot from the moment it was
+// written — a package added for one night and later extended across the stay
+// shows an early event still reading the original single night. Treating that
+// as the package's true span wrongly denies every legitimate later night.
+function _pkgApplyVerdicts(results) {
+  results.forEach(r => {
+    r.family = _pkgFamilyName(r);
+    r.verdict = 'credit';
+    r.denyReason = '';
+    if (r.matchedEvent) return;
+
+    if (!r.candidates || !r.candidates.length) {
+      // Opera logged no product activity at all for this reservation. That
+      // may just mean the package was sold before this report's date range,
+      // so it's a question for a human rather than an automatic reject.
+      r.verdict = 'review';
+      r.note = 'No Opera record in this report — widen the Changes Log dates to confirm';
+      return;
+    }
+    const family = _pkgCodeFamilyFor(r.family);
+    if (family && !r.candidates.some(c => family.test(c.code))) {
+      // Opera does have this reservation's package activity, and none of it
+      // is this kind of package.
+      r.verdict = 'deny';
+      r.denyReason = `Opera shows no ${r.family} on this reservation (logged: ${r.candidates.map(c => c.code).filter((v, i, a) => a.indexOf(v) === i).join(', ')})`;
+      return;
+    }
+    r.verdict = 'review';
+  });
+
+  // Early check-in and late checkout are charged once per stay, so any extra
+  // rows IN-Gauge spread across the other nights are duplicates. This needs
+  // no Opera data at all — IN-Gauge's own rows are enough to prove it.
+  const groups = {};
+  results.forEach(r => {
+    if (r.verdict !== 'credit' || !_pkgIsOneTime(r.family)) return;
+    const key = `${r.conf}|${r.family.toLowerCase()}`;
+    (groups[key] = groups[key] || []).push(r);
+  });
+  Object.values(groups).forEach(list => {
+    if (list.length < 2) return;
+    // Keep the day Opera actually logged the package, when that's one of
+    // them; otherwise keep the earliest and flag the rest.
+    const opera = new Set(list.flatMap(r => (r.candidates || []).map(c => _pkgDayNum(c.from))).filter(Boolean));
+    list.sort((a, b) => (_pkgDayNum(a.daily) || 0) - (_pkgDayNum(b.daily) || 0));
+    const keep = list.find(r => opera.has(_pkgDayNum(r.daily))) || list[0];
+    list.forEach(r => {
+      if (r === keep) return;
+      r.verdict = 'deny';
+      r.denyReason = `${r.family} is charged once per stay — already counted on ${keep.daily || 'another row'}`;
+    });
+  });
+}
+
 // ── Reconcile ────────────────────────────────────────────────
 function pkgRun() {
   const errBox = document.getElementById('pkgError');
@@ -341,49 +447,30 @@ function pkgRun() {
   if (!Object.keys(pkgEvents).length) return showErr('Upload the Opera Changes Log PDF first.');
 
   const results = pkgUnknowns.map(u => {
-    // Already has both a known product and a known seller — nothing to
-    // cross-reference, no PDF lookup needed.
-    if (!u.needsProduct && !u.needsEmployee) {
-      return { ...u, resolved: true, alreadyComplete: true, code: u.product, price: String(u.charge), from: u.arr, to: u.dep, user: u.employee, candidates: [] };
-    }
     const cands = pkgEvents[u.conf] || [];
-    let exact = null;
+    const ev = _pkgMatchEvent(u, cands);
+    const alreadyComplete = !u.needsProduct && !u.needsEmployee;
 
-    if (u.needsProduct) {
-      // Product itself is unknown — only an ADDED entry (which carries a
-      // price) can identify which package this charge actually is; an
-      // ATTACHED (date-only) entry can't, so it's excluded here.
-      const addedCands = cands.filter(c => c.action === 'ADDED');
-      exact = addedCands.find(c => c.price && Math.abs(parseFloat(c.price) - u.charge) < 0.02);
-      if (!exact && addedCands.length === 1) exact = addedCands[0];
-    } else {
-      // Product's already known (e.g. "Early Check In") — narrow to that
-      // product's Opera code family, then always credit whoever's entry is
-      // chronologically EARLIEST, whether that's the original ADDED or (if
-      // ADDED fell outside this report's date range) the earliest ATTACHED
-      // seen — a later date-change by someone else never steals credit
-      // from whoever actually started the package.
-      const family = _pkgCodeFamilyFor(u.product);
-      const familyCands = family ? cands.filter(c => family.test(c.code)) : cands;
-      exact = _pkgPickOriginator(familyCands);
+    if (!ev) {
+      return { ...u, resolved: alreadyComplete, alreadyComplete, matchedEvent: null, candidates: cands,
+               code: u.product, price: String(u.charge), from: u.arr, to: u.dep, user: u.employee };
     }
-
-    if (exact) {
-      // If IN-Gauge already knew the product (e.g. "Early Check In"), keep
-      // that name rather than overwrite it with Opera's raw internal code —
-      // only the seller needed resolving for that row. Fall back to the
-      // Excel's own price/dates when the matched event is an ATTACHED entry
-      // (no price/date of its own — it's a date-range change, not a sale).
-      const code = u.needsProduct  ? exact.code : u.product;
-      const user = u.needsEmployee ? exact.user : u.employee;
-      const price = exact.price ?? String(u.charge);
-      const from  = exact.from  ?? u.arr;
-      const to    = exact.to    ?? u.dep;
-      return { ...u, resolved: true, alreadyComplete: false, code, price, from, to, user, candidates: cands };
-    }
-    return { ...u, resolved: false, alreadyComplete: false, candidates: cands };
+    // Keep IN-Gauge's own product name when it already had one, rather than
+    // replacing it with Opera's raw internal code. Fall back to the Excel's
+    // price/dates when the matched event is an ATTACHED entry, which is a
+    // date-range change and carries no price of its own.
+    return {
+      ...u,
+      resolved: true, alreadyComplete, matchedEvent: ev, candidates: cands,
+      code:  u.needsProduct  ? ev.code : u.product,
+      user:  u.needsEmployee ? ev.user : u.employee,
+      price: ev.price ?? String(u.charge),
+      from:  ev.from  ?? u.arr,
+      to:    ev.to    ?? u.dep,
+    };
   });
 
+  _pkgApplyVerdicts(results);
   pkgResults = results;
   document.getElementById('pkgResultsWrap').style.display = 'block';
   pkgRender();
@@ -399,9 +486,10 @@ function _pkgGapBadge(r) {
 function pkgRender() {
   const q = pkgSearch_.toLowerCase().trim();
   const filtered = pkgResults.filter(r => {
-    if (pkgFilter_ === 'complete'  && !r.alreadyComplete) return false;
-    if (pkgFilter_ === 'resolved'  && (!r.resolved || r.alreadyComplete)) return false;
-    if (pkgFilter_ === 'review'    && r.resolved)  return false;
+    if (pkgFilter_ === 'complete'  && !(r.alreadyComplete && r.verdict === 'credit')) return false;
+    if (pkgFilter_ === 'resolved'  && !(r.verdict === 'credit' && !r.alreadyComplete)) return false;
+    if (pkgFilter_ === 'deny'      && r.verdict !== 'deny') return false;
+    if (pkgFilter_ === 'review'    && r.verdict !== 'review') return false;
     if (pkgFilter_ === 'noProduct' && !r.needsProduct) return false;
     if (pkgFilter_ === 'noSeller'  && !r.needsEmployee) return false;
     if (q) {
@@ -411,14 +499,17 @@ function pkgRender() {
     return true;
   });
 
-  const completeCount  = pkgResults.filter(r => r.alreadyComplete).length;
-  const fixedCount     = pkgResults.filter(r => r.resolved && !r.alreadyComplete).length;
-  const reviewCount    = pkgResults.filter(r => !r.resolved).length;
+  const creditCount    = pkgResults.filter(r => r.verdict === 'credit').length;
+  const completeCount  = pkgResults.filter(r => r.verdict === 'credit' && r.alreadyComplete).length;
+  const fixedCount     = pkgResults.filter(r => r.verdict === 'credit' && !r.alreadyComplete).length;
+  const denyCount      = pkgResults.filter(r => r.verdict === 'deny').length;
+  const reviewCount    = pkgResults.filter(r => r.verdict === 'review').length;
   const noProductCount = pkgResults.filter(r => r.needsProduct).length;
   const noSellerCount  = pkgResults.filter(r => r.needsEmployee).length;
   [['pkgfc-all', pkgResults.length],
    ['pkgfc-complete', completeCount],
    ['pkgfc-resolved', fixedCount],
+   ['pkgfc-deny', denyCount],
    ['pkgfc-review', reviewCount],
    ['pkgfc-noProduct', noProductCount],
    ['pkgfc-noSeller', noSellerCount],
@@ -426,8 +517,8 @@ function pkgRender() {
 
   document.getElementById('pkgKpis').innerHTML = `
     <div class="kpi sky"><div class="kpi-accent"></div><div class="kpi-label">Total Rows</div><div class="kpi-val">${pkgResults.length}</div></div>
-    <div class="kpi"><div class="kpi-accent"></div><div class="kpi-label">Already OK</div><div class="kpi-val">${completeCount}</div></div>
-    <div class="kpi mint"><div class="kpi-accent"></div><div class="kpi-label">Fixed</div><div class="kpi-val">${fixedCount}</div></div>
+    <div class="kpi mint"><div class="kpi-accent"></div><div class="kpi-label">Valid to Credit</div><div class="kpi-val">${creditCount}</div></div>
+    <div class="kpi ${denyCount ? 'rose' : ''}"><div class="kpi-accent"></div><div class="kpi-label">Should Deny</div><div class="kpi-val">${denyCount}</div></div>
     <div class="kpi ${reviewCount ? 'amber' : ''}"><div class="kpi-accent"></div><div class="kpi-label">Needs Review</div><div class="kpi-val">${reviewCount}</div></div>`;
 
   const tbody = document.getElementById('pkgTable');
@@ -437,7 +528,18 @@ function pkgRender() {
   }
   tbody.innerHTML = filtered.map(r => {
     const gapCell = `<td style="font-family:var(--mono);font-size:0.66rem;">${_pkgGapBadge(r)}</td>`;
-    if (r.resolved) {
+    if (r.verdict === 'deny') {
+      return `<tr style="opacity:0.8;">
+        <td><span class="tt-room-pill">${escapeHtml(r.room)}</span></td>
+        <td style="font-family:var(--mono);font-size:0.72rem;">${escapeHtml(r.conf)}</td>
+        <td style="font-family:var(--mono);font-size:0.76rem;color:var(--text2);text-decoration:line-through;">${escapeHtml(r.family || r.code)}</td>
+        <td style="font-family:var(--mono);font-size:0.72rem;color:var(--text3);">AED ${escapeHtml(String(r.charge))}</td>
+        <td colspan="2" style="font-size:0.68rem;color:var(--rose);">${escapeHtml(r.denyReason)}</td>
+        ${gapCell}
+        <td><span style="color:var(--rose);">⛔ Deny</span></td>
+      </tr>`;
+    }
+    if (r.verdict === 'credit') {
       const statusCell = r.alreadyComplete
         ? `<span style="color:var(--text3);">✓ OK</span>`
         : `<span style="color:var(--mint);">✅ Fixed</span>`;
@@ -452,7 +554,8 @@ function pkgRender() {
         <td>${statusCell}</td>
       </tr>`;
     }
-    const candText = r.candidates.length
+    const candText = r.note ? escapeHtml(r.note)
+      : r.candidates.length
       ? `${r.candidates.length} candidate${r.candidates.length !== 1 ? 's' : ''}, no exact price match — ${escapeHtml(r.candidates.map(c => `${c.code} (AED ${c.price ?? '?'})`).join(', '))}`
       : 'No product events found for this confirmation';
     const productCell = r.needsProduct
@@ -480,13 +583,24 @@ function pkgSetSearch(val) { pkgSearch_ = val; pkgRender(); }
 
 // ── Copy resolved rows as TSV — Room / Conf / Product / Price / From / To / Sold By ──
 function pkgCopyResolved() {
-  // Exclude already-complete rows — nothing to fix in IN-Gauge for those.
-  const resolved = pkgResults.filter(r => r.resolved && !r.alreadyComplete);
+  // Only rows that are valid to credit AND needed fixing — an already-correct
+  // row has nothing to update, and a denied row must never be credited.
+  const resolved = pkgResults.filter(r => r.verdict === 'credit' && !r.alreadyComplete);
   if (!resolved.length) { showToast('No fixed rows to copy', 'err'); return; }
   const tsv = ['Room\tConfirmation No.\tProduct Code\tPrice (AED)\tFrom\tTo\tSold By']
     .concat(resolved.map(r => [r.room, r.conf, r.code, r.price, r.from || '', r.to || '', r.user].join('\t')))
     .join('\n');
-  copyToClipboard(tsv, document.getElementById('pkgCopyBtn'), '📋 Copy Resolved Rows');
+  copyToClipboard(tsv, document.getElementById('pkgCopyBtn'), '📋 Copy Rows to Credit');
+}
+
+// ── Copy the deny list — the charges that should NOT be credited ──
+function pkgCopyDeny() {
+  const denied = pkgResults.filter(r => r.verdict === 'deny');
+  if (!denied.length) { showToast('Nothing to deny — every charge is backed by Opera', 'ok'); return; }
+  const tsv = ['Room\tConfirmation No.\tProduct\tCharge (AED)\tCharged Date\tWhy Deny']
+    .concat(denied.map(r => [r.room, r.conf, r.family || r.code, r.charge, r.daily || '', r.denyReason].join('\t')))
+    .join('\n');
+  copyToClipboard(tsv, document.getElementById('pkgDenyBtn'), '⛔ Copy Deny List');
 }
 
 function pkgClear() {
