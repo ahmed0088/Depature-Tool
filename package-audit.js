@@ -36,13 +36,14 @@ function pkgLoadExcel(input) {
       const ws  = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
       pkgUnknowns = _pkgParseExcelUnknowns(rows);
+      const needsCount = pkgUnknowns.filter(u => u.needsProduct || u.needsEmployee).length;
       const lbl = document.getElementById('pkgExcelLabel');
       if (lbl) lbl.textContent = pkgUnknowns.length
-        ? `✓ ${pkgUnknowns.length} row${pkgUnknowns.length !== 1 ? 's' : ''} need${pkgUnknowns.length === 1 ? 's' : ''} review`
-        : 'Loaded — every row already has a product and a seller';
+        ? `✓ ${pkgUnknowns.length} row${pkgUnknowns.length !== 1 ? 's' : ''} loaded, ${needsCount} need${needsCount === 1 ? 's' : ''} review`
+        : 'Loaded — no rows found';
       showToast(pkgUnknowns.length
-        ? `✦ ${pkgUnknowns.length} row${pkgUnknowns.length !== 1 ? 's' : ''} flagged (unknown product or missing seller)`
-        : 'No rows need review in this file', pkgUnknowns.length ? 'ok' : 'err');
+        ? `✦ ${pkgUnknowns.length} row${pkgUnknowns.length !== 1 ? 's' : ''} loaded (${needsCount} missing product or seller)`
+        : 'No rows found in this file', pkgUnknowns.length ? 'ok' : 'err');
     } catch (err) {
       showToast('Failed to read the IN-Gauge Excel file: ' + err.message, 'err');
     }
@@ -78,9 +79,8 @@ function _pkgParseExcelUnknowns(rows) {
     const employee = iEmp >= 0 ? String(r[iEmp] || '').trim() : '';
     const needsProduct  = /unknown/i.test(product);
     const needsEmployee = !employee || employee === '-';
-    // A row only needs auditing if something's actually missing — a row
-    // with a known product AND a known seller already has nothing to fix.
-    if (!needsProduct && !needsEmployee) continue;
+    // Every row is kept, complete or not — staff expect the row count here
+    // to match IN-Gauge's own total, not a pre-filtered "problems only" list.
 
     const conf = String(r[iConf] || '').trim().replace(/\.0+$/, '');
     if (!conf) continue;
@@ -222,10 +222,15 @@ function pkgRun() {
   errBox.classList.remove('show');
   const showErr = msg => { document.getElementById('pkgErrorMsg').textContent = msg; errBox.classList.add('show'); };
 
-  if (!pkgUnknowns.length) return showErr('Upload the IN-Gauge export first — no "Unknown Product" rows loaded.');
+  if (!pkgUnknowns.length) return showErr('Upload the IN-Gauge export first — no rows loaded.');
   if (!Object.keys(pkgEvents).length) return showErr('Upload the Opera Changes Log PDF first.');
 
   const results = pkgUnknowns.map(u => {
+    // Already has both a known product and a known seller — nothing to
+    // cross-reference, no PDF lookup needed.
+    if (!u.needsProduct && !u.needsEmployee) {
+      return { ...u, resolved: true, alreadyComplete: true, code: u.product, price: String(u.charge), from: u.arr, to: u.dep, user: u.employee, candidates: [] };
+    }
     const cands = pkgEvents[u.conf] || [];
     const exact = cands.find(c => c.price && Math.abs(parseFloat(c.price) - u.charge) < 0.02);
     if (exact) {
@@ -234,9 +239,9 @@ function pkgRun() {
       // only the seller needed resolving for that row.
       const code = u.needsProduct  ? exact.code : u.product;
       const user = u.needsEmployee ? exact.user : u.employee;
-      return { ...u, resolved: true, code, price: exact.price, from: exact.from, to: exact.to, user, candidates: cands };
+      return { ...u, resolved: true, alreadyComplete: false, code, price: exact.price, from: exact.from, to: exact.to, user, candidates: cands };
     }
-    return { ...u, resolved: false, candidates: cands };
+    return { ...u, resolved: false, alreadyComplete: false, candidates: cands };
   });
 
   pkgResults = results;
@@ -245,6 +250,7 @@ function pkgRun() {
 }
 
 function _pkgGapBadge(r) {
+  if (!r.needsProduct && !r.needsEmployee) return `<span style="color:var(--text3);">—</span>`;
   if (r.needsProduct && r.needsEmployee) return `<span style="color:var(--rose);">Product + Seller</span>`;
   if (r.needsProduct) return `<span style="color:var(--rose);">Product</span>`;
   return `<span style="color:var(--amber);">Seller</span>`;
@@ -253,7 +259,8 @@ function _pkgGapBadge(r) {
 function pkgRender() {
   const q = pkgSearch_.toLowerCase().trim();
   const filtered = pkgResults.filter(r => {
-    if (pkgFilter_ === 'resolved'  && !r.resolved) return false;
+    if (pkgFilter_ === 'complete'  && !r.alreadyComplete) return false;
+    if (pkgFilter_ === 'resolved'  && (!r.resolved || r.alreadyComplete)) return false;
     if (pkgFilter_ === 'review'    && r.resolved)  return false;
     if (pkgFilter_ === 'noProduct' && !r.needsProduct) return false;
     if (pkgFilter_ === 'noSeller'  && !r.needsEmployee) return false;
@@ -264,20 +271,24 @@ function pkgRender() {
     return true;
   });
 
-  const resolvedCount  = pkgResults.filter(r => r.resolved).length;
+  const completeCount  = pkgResults.filter(r => r.alreadyComplete).length;
+  const fixedCount     = pkgResults.filter(r => r.resolved && !r.alreadyComplete).length;
+  const reviewCount    = pkgResults.filter(r => !r.resolved).length;
   const noProductCount = pkgResults.filter(r => r.needsProduct).length;
   const noSellerCount  = pkgResults.filter(r => r.needsEmployee).length;
   [['pkgfc-all', pkgResults.length],
-   ['pkgfc-resolved', resolvedCount],
-   ['pkgfc-review', pkgResults.length - resolvedCount],
+   ['pkgfc-complete', completeCount],
+   ['pkgfc-resolved', fixedCount],
+   ['pkgfc-review', reviewCount],
    ['pkgfc-noProduct', noProductCount],
    ['pkgfc-noSeller', noSellerCount],
   ].forEach(([id, v]) => { const el = document.getElementById(id); if (el) el.textContent = v; });
 
   document.getElementById('pkgKpis').innerHTML = `
-    <div class="kpi sky"><div class="kpi-accent"></div><div class="kpi-label">Flagged Rows</div><div class="kpi-val">${pkgResults.length}</div></div>
-    <div class="kpi mint"><div class="kpi-accent"></div><div class="kpi-label">Resolved</div><div class="kpi-val">${resolvedCount}</div></div>
-    <div class="kpi ${pkgResults.length - resolvedCount ? 'amber' : ''}"><div class="kpi-accent"></div><div class="kpi-label">Needs Review</div><div class="kpi-val">${pkgResults.length - resolvedCount}</div></div>`;
+    <div class="kpi sky"><div class="kpi-accent"></div><div class="kpi-label">Total Rows</div><div class="kpi-val">${pkgResults.length}</div></div>
+    <div class="kpi"><div class="kpi-accent"></div><div class="kpi-label">Already OK</div><div class="kpi-val">${completeCount}</div></div>
+    <div class="kpi mint"><div class="kpi-accent"></div><div class="kpi-label">Fixed</div><div class="kpi-val">${fixedCount}</div></div>
+    <div class="kpi ${reviewCount ? 'amber' : ''}"><div class="kpi-accent"></div><div class="kpi-label">Needs Review</div><div class="kpi-val">${reviewCount}</div></div>`;
 
   const tbody = document.getElementById('pkgTable');
   if (!filtered.length) {
@@ -287,15 +298,18 @@ function pkgRender() {
   tbody.innerHTML = filtered.map(r => {
     const gapCell = `<td style="font-family:var(--mono);font-size:0.66rem;">${_pkgGapBadge(r)}</td>`;
     if (r.resolved) {
+      const statusCell = r.alreadyComplete
+        ? `<span style="color:var(--text3);">✓ OK</span>`
+        : `<span style="color:var(--mint);">✅ Fixed</span>`;
       return `<tr>
         <td><span class="tt-room-pill">${escapeHtml(r.room)}</span></td>
         <td style="font-family:var(--mono);font-size:0.72rem;">${escapeHtml(r.conf)}</td>
-        <td style="font-family:var(--mono);font-size:0.76rem;font-weight:700;color:var(--mint);">${escapeHtml(r.code)}</td>
+        <td style="font-family:var(--mono);font-size:0.76rem;font-weight:700;color:${r.alreadyComplete ? 'var(--text2)' : 'var(--mint)'};">${escapeHtml(r.code)}</td>
         <td style="font-family:var(--mono);font-size:0.72rem;">AED ${escapeHtml(r.price)}</td>
         <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text2);">${escapeHtml(r.from) || '—'} → ${escapeHtml(r.to) || '—'}</td>
         <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text2);">${escapeHtml(r.user)}</td>
         ${gapCell}
-        <td><span style="color:var(--mint);">✅ Resolved</span></td>
+        <td>${statusCell}</td>
       </tr>`;
     }
     const candText = r.candidates.length
@@ -326,8 +340,9 @@ function pkgSetSearch(val) { pkgSearch_ = val; pkgRender(); }
 
 // ── Copy resolved rows as TSV — Room / Conf / Product / Price / From / To / Sold By ──
 function pkgCopyResolved() {
-  const resolved = pkgResults.filter(r => r.resolved);
-  if (!resolved.length) { showToast('No resolved rows to copy', 'err'); return; }
+  // Exclude already-complete rows — nothing to fix in IN-Gauge for those.
+  const resolved = pkgResults.filter(r => r.resolved && !r.alreadyComplete);
+  if (!resolved.length) { showToast('No fixed rows to copy', 'err'); return; }
   const tsv = ['Room\tConfirmation No.\tProduct Code\tPrice (AED)\tFrom\tTo\tSold By']
     .concat(resolved.map(r => [r.room, r.conf, r.code, r.price, r.from || '', r.to || '', r.user].join('\t')))
     .join('\n');

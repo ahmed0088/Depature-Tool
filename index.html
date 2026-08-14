@@ -1294,7 +1294,7 @@
     <div class="page-hd">
       <div class="page-hd-left">
         <h1>Package Audit</h1>
-        <p>IN-Gauge charges with an unknown product or a missing seller vs Opera Changes Log · resolves who sold what package, for how much, and which dates</p>
+        <p>Every IN-Gauge charge vs Opera Changes Log · flags rows with an unknown product or missing seller, resolves who sold what package, for how much, and which dates</p>
       </div>
       <div class="page-hd-actions">
         <button class="btn gold" onclick="pkgRun()">🔍 Resolve</button>
@@ -1310,7 +1310,7 @@
           <div class="upload-label-bar">
             <div class="upload-dot sky"></div>
             <span class="upload-lbl">IN-Gauge Product Export</span>
-            <span class="upload-sub">.xlsx · rows missing a product or a seller</span>
+            <span class="upload-sub">.xlsx · every row, flagged if product or seller is missing</span>
           </div>
           <div style="display:flex;flex-direction:column;align-items:center;padding:16px;text-align:center;gap:4px;">
             <div style="font-size:1.6rem;">🎁</div>
@@ -1343,11 +1343,12 @@
     </div>
 
     <div id="pkgResultsWrap" style="display:none;">
-      <div class="kpi-row c3" style="margin-top:18px;" id="pkgKpis"></div>
+      <div class="kpi-row c4" style="margin-top:18px;" id="pkgKpis"></div>
 
       <div class="filter-row" id="pkgFilters" style="margin-bottom:14px;">
         <div class="fchip on" data-pkgf="all"      onclick="pkgSetFilter('all',this)">All <span id="pkgfc-all">0</span></div>
-        <div class="fchip"    data-pkgf="resolved" onclick="pkgSetFilter('resolved',this)">✅ Resolved <span id="pkgfc-resolved">0</span></div>
+        <div class="fchip"    data-pkgf="complete" onclick="pkgSetFilter('complete',this)">✓ Already OK <span id="pkgfc-complete">0</span></div>
+        <div class="fchip"    data-pkgf="resolved" onclick="pkgSetFilter('resolved',this)">✅ Fixed <span id="pkgfc-resolved">0</span></div>
         <div class="fchip"    data-pkgf="review"   onclick="pkgSetFilter('review',this)">⚠ Needs Review <span id="pkgfc-review">0</span></div>
         <div class="fchip"    data-pkgf="noProduct" onclick="pkgSetFilter('noProduct',this)">Missing Product <span id="pkgfc-noProduct">0</span></div>
         <div class="fchip"    data-pkgf="noSeller"  onclick="pkgSetFilter('noSeller',this)">Missing Seller <span id="pkgfc-noSeller">0</span></div>
