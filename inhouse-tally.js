@@ -89,10 +89,31 @@ function itParseGiby(raw) {
   const iConf   = _itFindCol(hdrs, 'CONFIRMATION_NO');
   if (iRoom < 0) return null;
 
+  // A genuine data row's column count is always at least enough to reach
+  // every field we actually read. Opera sometimes exports a reservation
+  // whose Company/Source field has a raw line break baked into its value
+  // (seen in a real export — one row silently split into two physical
+  // lines), which makes that ONE row parse as two badly-truncated
+  // fragments — neither has real ADULTS/CHILDREN data, so the room's
+  // headcount just quietly drops out of the total with no error. Rather
+  // than guess how to stitch the fragments back together (risky — could
+  // silently miscount a DIFFERENT way), flag any implausibly short row so
+  // it shows up as a warning instead of an invisible 1-person gap.
+  const minPlausibleCols = Math.max(iRoom, iAdults, iChild, iName, iConf) + 1;
+  const warnings = [];
+
   const rooms = {};
   const seenConf = new Set(); // Reservation Detail: dedupe multi-row reservations (one row per ID/membership record)
   for (let i = 1; i < lines.length; i++) {
     const cols = splitLine(lines[i]);
+    if (cols.length < minPlausibleCols) {
+      // Only worth flagging if it actually looks like a broken reservation
+      // row (has a room number) — a short trailing summary/footer row with
+      // no room value isn't a problem and shouldn't be reported as one.
+      const roomGuess = (cols[iRoom] || '').replace(/"/g, '').trim();
+      if (roomGuess && /\d/.test(roomGuess)) warnings.push({ line: i + 1, room: roomGuess, raw: lines[i].slice(0, 90) });
+      continue;
+    }
     if (iConf >= 0) {
       const conf = (cols[iConf] || '').replace(/"/g, '').trim();
       if (conf) {
@@ -113,7 +134,7 @@ function itParseGiby(raw) {
     rooms[rn].pax += (iAdults >= 0 || iChild >= 0) ? (adults + children) : 1;
     if (nameRaw) rooms[rn].names.push(typeof parseName === 'function' ? parseName(nameRaw) : nameRaw);
   }
-  return rooms;
+  return { rooms, warnings };
 }
 
 // ── Parse Inhouse / Guest Count XML OR VICAS Check-In XML ────
@@ -219,13 +240,25 @@ function itRun() {
   if (!gibyRaw) return showErr('Upload or paste the Guest In-House By Room (or wa21) export first.');
   if (!xmlRaw)  return showErr('Upload or paste the Inhouse / Guest Count XML (or Vicas Check-In XML) first.');
 
-  const giby = itParseGiby(gibyRaw);
-  if (!giby) return showErr('Could not find a Room column — check this is the Guest In-House By Room or wa21 export.');
+  const gibyResult = itParseGiby(gibyRaw);
+  if (!gibyResult) return showErr('Could not find a Room column — check this is the Guest In-House By Room or wa21 export.');
+  const { rooms: giby, warnings: gibyWarnings } = gibyResult;
   const xml = itParseXml(xmlRaw);
   if (!xml) return showErr('Could not find any guest records — check this is the Inhouse/Guest Count XML or the Vicas Check-In XML.');
 
   itGibyRooms = giby;
   itXmlRooms  = xml;
+
+  const warnBanner = document.getElementById('itParseWarnBanner');
+  if (warnBanner) {
+    if (gibyWarnings && gibyWarnings.length) {
+      warnBanner.style.display = 'block';
+      warnBanner.innerHTML = `⚠ ${gibyWarnings.length} row${gibyWarnings.length !== 1 ? 's' : ''} in the Opera export couldn't be read properly — likely a stray line break inside a field (e.g. Company Name) split a reservation across two lines, so that room's headcount is NOT included in the totals below. Check ${gibyWarnings.length === 1 ? 'this room' : 'these rooms'} by hand in Opera: ` +
+        gibyWarnings.map(w => `<strong>Room ${escapeHtml(w.room)}</strong> (line ${w.line})`).join(', ');
+    } else {
+      warnBanner.style.display = 'none';
+    }
+  }
 
   const allRooms = new Set([...Object.keys(giby), ...Object.keys(xml)]);
   const rows = [];
@@ -351,5 +384,6 @@ function itClear() {
   const search = document.getElementById('itSearch'); if (search) search.value = '';
   document.getElementById('itResultsWrap').style.display = 'none';
   document.getElementById('itError').classList.remove('show');
+  const warnBanner = document.getElementById('itParseWarnBanner'); if (warnBanner) warnBanner.style.display = 'none';
   const badge = document.getElementById('badge-inhouse-tally'); if (badge) badge.textContent = '—';
 }
