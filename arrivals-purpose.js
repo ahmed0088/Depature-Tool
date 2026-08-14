@@ -679,10 +679,10 @@ function purposeRender() {
         style="width:42px;"/></td>
       <td><div style="display:flex;gap:3px;align-items:center;">
         <input value="${escapeHtml(g.nat)}"
-          oninput="purposeGuests[${i}].nat=this.value;purposeGuests[${i}]._natFromXML=false;purposeGuests[${i}]._natFromAI=false;purposeGuests[${i}]._natUserEdited=true;"
+          oninput="purposeGuests[${i}].nat=this.value;purposeGuests[${i}]._natFromXML=false;purposeGuests[${i}]._natFromAI=false;purposeGuests[${i}]._natUserEdited=true;purposeGuests[${i}]._natSuspect=false;"
           onblur="gmOnEdit(purposeGuests[${i}].name,'nat',this.value);debounceSavePurpose()"
-          title="${g._natFromXML ? 'Nationality — loaded from Vicas/Inhouse XML' : 'Nationality'}"
-          style="width:86px;${g._natFromXML ? 'border-color:var(--mint);' : (g._fromMemory?'border-color:var(--sky);':'')}"/>
+          title="${g._natFromXML ? 'Nationality — loaded from Vicas/Inhouse XML' : (g._natSuspect ? '⚠ Scraper guessed UAE with no Vicas data to confirm it — verify against passport' : 'Nationality')}"
+          style="width:86px;${g._natFromXML ? 'border-color:var(--mint);' : (g._natSuspect ? 'border-color:var(--amber);' : (g._fromMemory?'border-color:var(--sky);':''))}"/>
         <button class="icon-btn ai-btn" onclick="aiOneGuest(${i},'purpose')" title="AI">✦</button>
       </div></td>
       <td><input value="${escapeHtml(g.email)}"
@@ -809,7 +809,17 @@ function processImportEmails() {
     return;
   }
 
-  let matched = 0, notInList = 0, namesUpdated = 0, emailsUpdated = 0, natsUpdated = 0;
+  // Neorcha's nationality field comes from the OTA/booking platform, not a
+  // passport — and it's been seen defaulting to "UAE" for guests who aren't
+  // actually Emirati (e.g. booked via a local number/agent). Vicas/Inhouse
+  // XML is real immigration-desk data (see _natFromXML elsewhere in this
+  // file — "ground truth, not a guess"), so it must never be overwritten by
+  // the scraper. Match that same skepticism for a bare UAE guess even when
+  // there's no XML value yet — apply it, since it's still better than
+  // nothing, but flag it for a manual check instead of trusting it silently.
+  const _isUaeGuess = s => /^u\.?a\.?e\.?$/i.test(s.trim()) || /united arab emirates/i.test(s);
+
+  let matched = 0, notInList = 0, namesUpdated = 0, emailsUpdated = 0, natsUpdated = 0, natsFlagged = 0, natsSkippedXML = 0;
   purposeGuests.forEach(g => {
     const key = _normConf(g.conf);
     const hasEmail = key && emailByConf[key];
@@ -818,9 +828,8 @@ function processImportEmails() {
     if (!hasEmail && !hasName && !hasNat) { notInList++; return; }
     matched++;
 
-    // Neorcha is the source of truth for these three fields — always
-    // overwrite, even if Guest Memory (or the AI guesser / XML) already
-    // put something in there.
+    // Neorcha is the source of truth for name/email — always overwrite,
+    // even if Guest Memory (or the AI guesser) already put something in.
     if (hasName && g.name !== nameByConf[key]) {
       g.name = nameByConf[key];
       namesUpdated++;
@@ -831,23 +840,33 @@ function processImportEmails() {
       emailsUpdated++;
     }
     if (hasNat && g.nat !== natByConf[key]) {
-      g.nat = natByConf[key];
-      g._natFromXML = false;
-      g._natFromAI  = false;
-      g._natUserEdited = false;
-      gmOnEdit(g.name, 'nat', natByConf[key]);
-      natsUpdated++;
+      if (g._natFromXML) {
+        // Vicas/Inhouse already gave us this guest's real nationality — don't
+        // let the scraper's guess clobber it.
+        natsSkippedXML++;
+      } else {
+        g.nat = natByConf[key];
+        g._natFromXML = false;
+        g._natFromAI  = false;
+        g._natUserEdited = false;
+        g._natSuspect = _isUaeGuess(natByConf[key]);
+        if (g._natSuspect) natsFlagged++;
+        gmOnEdit(g.name, 'nat', natByConf[key]);
+        natsUpdated++;
+      }
     }
   });
 
   purposeRender();
   savePurpose(purposeGuests);
-  addPurposeLog('Emails', `Imported ${parsedRows} pasted rows — ${matched} guests matched, ${emailsUpdated} email(s), ${namesUpdated} name(s), ${natsUpdated} nationality(ies) updated, ${notInList} no match`);
-  showToast(`Updated ${emailsUpdated} email${emailsUpdated === 1 ? '' : 's'}${namesUpdated ? ` · ${namesUpdated} name${namesUpdated === 1 ? '' : 's'}` : ''}${natsUpdated ? ` · ${natsUpdated} nat${natsUpdated === 1 ? '' : 's'}` : ''} ✓`, matched ? 'ok' : 'info');
+  const skipNote = natsSkippedXML ? `, ${natsSkippedXML} kept Vicas/XML value` : '';
+  const flagNote = natsFlagged ? `, ${natsFlagged} flagged "UAE" for review` : '';
+  addPurposeLog('Emails', `Imported ${parsedRows} pasted rows — ${matched} guests matched, ${emailsUpdated} email(s), ${namesUpdated} name(s), ${natsUpdated} nationality(ies) updated${skipNote}${flagNote}, ${notInList} no match`);
+  showToast(`Updated ${emailsUpdated} email${emailsUpdated === 1 ? '' : 's'}${namesUpdated ? ` · ${namesUpdated} name${namesUpdated === 1 ? '' : 's'}` : ''}${natsUpdated ? ` · ${natsUpdated} nat${natsUpdated === 1 ? '' : 's'}` : ''}${natsFlagged ? ` (⚠ ${natsFlagged} UAE — verify)` : ''} ✓`, matched ? 'ok' : 'info');
 
   if (resultBox) {
     resultBox.style.display = 'block';
-    resultBox.innerHTML = `✅ Updated <strong>${emailsUpdated}</strong> email${emailsUpdated === 1 ? '' : 's'}${namesUpdated ? ` · <strong>${namesUpdated}</strong> name${namesUpdated === 1 ? '' : 's'}` : ''}${natsUpdated ? ` · <strong>${natsUpdated}</strong> nationality${natsUpdated === 1 ? '' : 's'}` : ''} · ${matched} guest${matched === 1 ? '' : 's'} matched · ${notInList} guest${notInList === 1 ? '' : 's'} with no match in the pasted list.`;
+    resultBox.innerHTML = `✅ Updated <strong>${emailsUpdated}</strong> email${emailsUpdated === 1 ? '' : 's'}${namesUpdated ? ` · <strong>${namesUpdated}</strong> name${namesUpdated === 1 ? '' : 's'}` : ''}${natsUpdated ? ` · <strong>${natsUpdated}</strong> nationality${natsUpdated === 1 ? '' : 's'}` : ''} · ${matched} guest${matched === 1 ? '' : 's'} matched · ${notInList} guest${notInList === 1 ? '' : 's'} with no match in the pasted list.${natsSkippedXML ? `<br>🟢 Kept the Vicas/XML nationality for <strong>${natsSkippedXML}</strong> guest${natsSkippedXML === 1 ? '' : 's'} instead of the scraper's guess.` : ''}${natsFlagged ? `<br>⚠️ <strong>${natsFlagged}</strong> guest${natsFlagged === 1 ? '' : 's'} got "UAE" from the scraper with no Vicas data to confirm it — double-check ${natsFlagged === 1 ? 'that one' : 'those'}.` : ''}`;
   }
 }
 
