@@ -270,10 +270,14 @@ function _gmRenderToggle() {
 
 // ── Init: load from Firebase once, stay in sync with colleagues ──
 function gmInit() {
-  if (typeof fbListen !== 'function') {
-    console.warn('[GuestMemory] fbListen not available');
+  if (typeof firebase === 'undefined' || !firebase.database) {
+    console.warn('[GuestMemory] firebase not available');
     return;
   }
+  // One-time cleanup: older versions mirrored this into localStorage via
+  // fbListen()/lsSave() before every page load, regardless of lock state.
+  // Purge that leftover plaintext copy now that it's no longer written.
+  try { localStorage.removeItem('ibis_guestMemory'); } catch(e) {}
   // Render toggle to correct state as soon as DOM is ready
   setTimeout(_gmRenderToggle, 0);
   // Render lock state — panel starts locked on every page load
@@ -291,23 +295,32 @@ function gmInit() {
     }
   }, 0);
 
-  fbListen('guestMemory', snap => {
-    _gmStore = snap || {};
-    _gmReady = true;
-    if (!_gmUnlocked) return;  // don't touch DOM if locked
-    const tbl     = document.getElementById('gmTable');
-    const editing = tbl && tbl.contains(document.activeElement);
-    if (!editing) _gmUpdateUI();
-    else          _gmUpdateStatsOnly();
-    _gmRenderToggle();
-  });
+  // Deliberately NOT using db.js's fbListen() here — it mirrors every path
+  // into localStorage (for offline fallback) via lsSave(), which would leave
+  // the entire guest email/nationality store in plaintext on disk regardless
+  // of this panel's lock state, undoing the whole point of hiding/locking it.
+  // A raw listener keeps the same "always loaded, lock only gates the UI"
+  // behavior gmAutoFill() depends on, but keeps the data in memory only.
+  if (typeof firebase !== 'undefined' && firebase.database) {
+    firebase.database().ref(`hotels/${HOTEL_ID}/guestMemory`).on('value', snap => {
+      _gmStore = snap.val() || {};
+      _gmReady = true;
+      if (!_gmUnlocked) return;  // don't touch DOM if locked
+      const tbl     = document.getElementById('gmTable');
+      const editing = tbl && tbl.contains(document.activeElement);
+      if (!editing) _gmUpdateUI();
+      else          _gmUpdateStatsOnly();
+      _gmRenderToggle();
+    });
+  }
 }
 
 // ── Debounced Firebase save ───────────────────────────────
+// Also bypasses fbSet() / localStorage mirroring — see note above.
 function _gmPersist() {
   clearTimeout(_gmSaveTimer);
   _gmSaveTimer = setTimeout(async () => {
-    try { await fbSet('guestMemory', _gmStore); }
+    try { await firebase.database().ref(`hotels/${HOTEL_ID}/guestMemory`).set(_gmStore); }
     catch (e) { console.warn('[GuestMemory] save failed:', e); }
   }, 3000);
 }

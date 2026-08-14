@@ -1079,7 +1079,7 @@ function depCardHTML(r) {
   const vipHTML   = r.isVip ? '<div class="dc-vip">⭐ VIP</div>' : '';
   const gmProfile = typeof gmLookup === 'function' ? gmLookup(r.name) : null;
   const gmHTML    = gmProfile
-    ? `<div class="dc-gm-badge" title="Stayed before${gmProfile.lastSeen ? ' · last seen ' + gmProfile.lastSeen : ''}${gmProfile.nat ? ' · ' + gmProfile.nat : ''}">🔁 Returning guest</div>`
+    ? `<div class="dc-gm-badge" title="Stayed before${gmProfile.lastSeen ? ' · last seen ' + escapeHtml(gmProfile.lastSeen) : ''}${gmProfile.nat ? ' · ' + escapeHtml(gmProfile.nat) : ''}">🔁 Returning guest</div>`
     : '';
   const compTag   = r.company ? `<div class="dc-mi">🏢 ${r.company.substring(0,36)}</div>` : '';
   const timeTag   = depTimeTag(r);
@@ -1435,7 +1435,7 @@ function depEditName(i) {
   const allFiltered = depRooms.filter(r => {
     const es = effectiveStatus(r);
     switch (depFilter_) {
-      case 'all':          return es === 'due' || es === 'late' || es === 'na';
+      case 'all':          return es === 'due' || es === 'late' || es === 'na' || es === 'dnd';
       case 'balance':      return r.balance > 0 && es !== 'out' && es !== 'extended';
       case 'pending':      return !!r.intent && es !== 'out' && es !== 'extended';
       case 'maybe_extend': return r.intent === 'maybe_extend';

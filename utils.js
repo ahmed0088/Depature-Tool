@@ -64,7 +64,7 @@ function fbCopy(text, cb) {
 // markup runs for every other connected user once the data syncs.
 function escapeHtml(s) {
   if (s === null || s === undefined) return '';
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 // For values embedded as a single-quoted JS string literal INSIDE an

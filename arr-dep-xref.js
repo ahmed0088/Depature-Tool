@@ -569,10 +569,10 @@ function _xrefRow(a, rowType) {
   const reason = escapeHtml(a.extReason || (isExt ? 'Same guest · new booking' : 'Different guest · new reservation'));
 
   return `<tr class="xref-row ${rowCls}">
-    <td><span class="xref-room-pill ${pillCls}">${a.room || '—'}</span></td>
+    <td><span class="xref-room-pill ${pillCls}">${escapeHtml(a.room) || '—'}</span></td>
     <td>
       <div class="xref-arr-name">${escapeHtml(a.name)}</div>
-      <div class="xref-subtext">${a.conf || '—'}${a.adults > 1 ? ` · ${a.adults} pax` : ''}</div>
+      <div class="xref-subtext">${escapeHtml(a.conf) || '—'}${a.adults > 1 ? ` · ${a.adults} pax` : ''}</div>
     </td>
     <td>
       <div class="xref-platform">${icon} ${escapeHtml(a.source)}</div>
@@ -603,7 +603,7 @@ function _xrefNoRoomRow(a) {
     </td>
     <td>
       <div class="xref-arr-name">${escapeHtml(a.name)}</div>
-      <div class="xref-subtext">${a.conf || '—'}${a.adults > 1 ? ` · ${a.adults} pax` : ''}</div>
+      <div class="xref-subtext">${escapeHtml(a.conf) || '—'}${a.adults > 1 ? ` · ${a.adults} pax` : ''}</div>
     </td>
     <td><div class="xref-platform">${icon} ${escapeHtml(a.source)}</div></td>
     <td style="font-family:var(--mono);font-size:0.7rem;color:var(--text2);">

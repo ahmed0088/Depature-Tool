@@ -35,10 +35,12 @@ function _normRoom(r) {
   return String(r || '').replace(/^0+/, '').trim().toUpperCase();
 }
 
-// Normalise a guest name for matching: collapse whitespace, uppercase, trim.
-function _normName(s) {
-  return String(s || '').replace(/\s+/g, ' ').trim().toUpperCase();
-}
+// _normName(s) — guest-name normalizer used below for match keys.
+// Intentionally NOT defined here: reports.js declares the global `_normName`
+// (letters-only) and loads after this file, so it wins and is what actually
+// runs at call time. Do not redeclare it here — a same-named local copy
+// would silently shadow depending on <script> tag order and desync the two
+// features' matching behavior without either file's author noticing.
 
 // A valid UAE Emirates ID is a 15-digit number starting with "784"
 // (format 784-YYYY-XXXXXXX-X). Guests with one on file are UAE residents,

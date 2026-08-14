@@ -3634,14 +3634,12 @@ async function appInit() {
   // 10 — Set up real-time listeners
   listenDepartures(snap => {
     if (!snap || !snap.rooms) return;
-    // Block re-render if the user is actively typing a note OR typed within
-    // the last 3 seconds — prevents Firebase echo from interrupting mid-sentence.
+    // Block the update entirely if the user is actively typing a note OR typed
+    // within the last 3 seconds — prevents a colleague's Firebase update from
+    // swapping out depRooms mid-sentence, which would orphan the in-progress
+    // note object and cause the debounced save to silently drop it.
     // depIsTyping() is defined in departures.js and covers both cases.
-    if (typeof depIsTyping === 'function' && depIsTyping()) {
-      depRooms = snap.rooms;
-      depLog   = snap.log || [];
-      return;
-    }
+    if (typeof depIsTyping === 'function' && depIsTyping()) return;
     depRooms = snap.rooms;
     depLog = snap.log || [];
     if (depRooms.length) {

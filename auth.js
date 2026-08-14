@@ -131,6 +131,7 @@ async function _forceSignOut(message) {
   currentUser    = null;
   currentProfile = null;
   try { await firebase.auth().signOut(); } catch(e) {}
+  _clearLocalGuestDataCache();
   showLoginScreen(message);
 }
 
@@ -342,6 +343,20 @@ function friendlyAuthError(code, message) {
 }
 
 // ── Logout ────────────────────────────────────────────────
+// Front desk PCs are shared. db.js mirrors every Firebase path into
+// localStorage (offline fallback), which otherwise leaves guest names,
+// balances, notes, and pasted nationality/passport data sitting in
+// plaintext on the machine indefinitely after sign-out. Clear it on
+// logout — keep only small non-guest-data preferences.
+const _LOCAL_CACHE_KEEP = new Set(['ibis_saved_email', 'ibis_arrivals_proc_profile']);
+function _clearLocalGuestDataCache() {
+  try {
+    Object.keys(localStorage)
+      .filter(k => k.startsWith('ibis_') && !_LOCAL_CACHE_KEEP.has(k))
+      .forEach(k => localStorage.removeItem(k));
+  } catch(e) {}
+}
+
 async function authLogout() {
   if (!confirm('Sign out?')) return;
   try { await logActivity('logout'); } catch(e) {}
@@ -354,6 +369,7 @@ async function authLogout() {
   currentUser    = null;
   currentProfile = null;
   try { await firebase.auth().signOut(); } catch(e) {}
+  _clearLocalGuestDataCache();
   const pill = document.getElementById('authUserPill');
   if (pill) { pill.innerHTML = ''; pill.style.display = 'none'; }
   document.getElementById('adminPanelBtn')  ?.style && (document.getElementById('adminPanelBtn').style.display  = 'none');
