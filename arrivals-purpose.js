@@ -639,7 +639,7 @@ function purposeRender() {
   });
   const tbody = document.getElementById('purposeTable'); if (!tbody) return;
   if (!purposeGuests.length) {
-    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:28px 36px;">
+    tbody.innerHTML = `<tr><td colspan="13" style="text-align:center;padding:28px 36px;">
       <div style="font-family:var(--mono);font-size:0.7rem;color:var(--text3);margin-bottom:14px;">
         No guests loaded. Sync from Arrivals, upload a file, or add manually.
       </div>
@@ -650,6 +650,10 @@ function purposeRender() {
     </td></tr>`;
     purposeKpiUpdate(); return;
   }
+  // Day/Date — the whole report is one day's arrivals, so every row is
+  // stamped with today's day name + date (matches the paper template).
+  const _dayName = new Date().toLocaleDateString('en-GB', { weekday: 'long' });
+  const _dateStr = new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
   tbody.innerHTML = filtered.map(g => {
     const i      = purposeGuests.indexOf(g);
     const origin = g.originOfTravel || '';
@@ -659,6 +663,8 @@ function purposeRender() {
       : (Object.keys(_originMap).length ? 'border-color:var(--amber);' : '');
     const srcCat = sourceCategory(g.source);
     return `<tr class="${g.purpose==='Leisure'?'leisure-row':''}">
+      <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text2);white-space:nowrap;">${_dayName}</td>
+      <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text2);white-space:nowrap;">${_dateStr}</td>
       <td><input value="${escapeHtml(g.room)}"
         oninput="purposeGuests[${i}].room=this.value"
         onblur="debounceSavePurpose()"
@@ -970,18 +976,22 @@ async function runAINat_purpose() {
 
 function exportPurpose() {
   const wb   = XLSX.utils.book_new();
-  const data = [['Room','Confirmation No.','Name','Purpose of Stay','Night of Stay','Nationality','Origin of Travel','Email','Booking Source','Remarks']];
-  purposeGuests.forEach(g => data.push([g.room,g.conf,g.name,g.purpose,g.nights,g.nat,g.originOfTravel||'',g.email,g.source,g.remarks]));
+  // Day/Date — same convention as the on-screen table: the whole export is
+  // one day's arrivals, so every row is stamped with today's day + date.
+  const dayName = new Date().toLocaleDateString('en-GB', { weekday: 'long' });
+  const dateStr = new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+  const data = [['Day','Date','Room','Confirmation No.','Name','Purpose of Stay','Night of Stay','Nationality','Origin of Travel','Email','Booking Source','Remarks']];
+  purposeGuests.forEach(g => data.push([dayName,dateStr,g.room,g.conf,g.name,g.purpose,g.nights,g.nat,g.originOfTravel||'',g.email,g.source,g.remarks]));
   const ws = XLSX.utils.aoa_to_sheet(data);
   const hS = {font:{bold:true,color:{rgb:'FFFFFF'},name:'Arial',sz:10},fill:{fgColor:{rgb:'1F4E79'},patternType:'solid'},alignment:{horizontal:'center'},border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}}};
   const bS = {font:{name:'Arial',sz:10},fill:{fgColor:{rgb:'FFFFFF'},patternType:'solid'},border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}}};
   const lS = {font:{name:'Arial',sz:10},fill:{fgColor:{rgb:'E2EFDA'},patternType:'solid'},border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}}};
-  ['A','B','C','D','E','F','G','H','I','J'].forEach(c => { if (ws[c+'1']) ws[c+'1'].s = hS; });
+  ['A','B','C','D','E','F','G','H','I','J','K','L'].forEach(c => { if (ws[c+'1']) ws[c+'1'].s = hS; });
   purposeGuests.forEach((g, ri) => {
     const rn = ri + 2; const s = g.purpose === 'Leisure' ? lS : bS;
-    ['A','B','C','D','E','F','G','H','I','J'].forEach(c => { const cell = ws[c+rn]; if (cell) cell.s = s; });
+    ['A','B','C','D','E','F','G','H','I','J','K','L'].forEach(c => { const cell = ws[c+rn]; if (cell) cell.s = s; });
   });
-  ws['!cols'] = [8,16,28,14,8,14,18,26,20,18].map(w => ({wch:w}));
+  ws['!cols'] = [11,12,8,16,28,14,8,14,18,26,20,18].map(w => ({wch:w}));
   XLSX.utils.book_append_sheet(wb, ws, 'Purpose of Stay');
   XLSX.writeFile(wb, (_purposeTitle||'Purpose').replace(/\s+/g,'_')+'.xlsx', {bookSST:false,type:'binary',cellStyles:true});
   addPurposeLog('Exported', `${purposeGuests.length} guests exported`);
