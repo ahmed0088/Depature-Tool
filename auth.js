@@ -87,8 +87,36 @@ function authInit() {
 
     // Start watching own record live — catches disable, delete, force-disconnect
     _startSelfListener(user.uid);
+    _resetIdleTimer();
   });
 }
+
+// ── Idle auto-logout — shared front-desk PCs stay signed in forever
+// otherwise. Any click/key/touch/scroll resets the clock; same duration
+// as Guest Memory's own auto-relock (30 min) for a consistent convention.
+const IDLE_LOGOUT_MINS = 30;
+let _idleTimer = null;
+function _resetIdleTimer() {
+  clearTimeout(_idleTimer);
+  if (!currentUser) return;
+  _idleTimer = setTimeout(_idleLogout, IDLE_LOGOUT_MINS * 60000);
+}
+async function _idleLogout() {
+  if (!currentUser) return;
+  if (_selfListenerRef && _selfListener) {
+    _selfListenerRef.off('value', _selfListener);
+    _selfListener    = null;
+    _selfListenerRef = null;
+  }
+  currentUser    = null;
+  currentProfile = null;
+  try { await firebase.auth().signOut(); } catch(e) {}
+  _clearLocalGuestDataCache();
+  showLoginScreen(`Signed out after ${IDLE_LOGOUT_MINS} minutes of inactivity.`);
+}
+['mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt =>
+  document.addEventListener(evt, _resetIdleTimer, { passive: true })
+);
 
 // ── Real-time self-watcher ────────────────────────────────
 // Fires immediately on login, then on every change to this user's DB record.
@@ -122,6 +150,7 @@ function _startSelfListener(uid) {
 
 // ── Force sign-out with message ───────────────────────────
 async function _forceSignOut(message) {
+  clearTimeout(_idleTimer);
   // Detach listener first to prevent re-triggering
   if (_selfListenerRef && _selfListener) {
     _selfListenerRef.off('value', _selfListener);
@@ -297,6 +326,7 @@ async function authLogin() {
     hideLoginScreen();
     updateAuthUI();
     if (typeof _gmApplyOwnerAutoUnlock === 'function') _gmApplyOwnerAutoUnlock();
+    _resetIdleTimer();
     btn.disabled = false;
     btn.textContent = 'Sign In →';
     showToast('⚠ Master bypass active — Owner access granted', 'info');
@@ -359,6 +389,7 @@ function _clearLocalGuestDataCache() {
 
 async function authLogout() {
   if (!confirm('Sign out?')) return;
+  clearTimeout(_idleTimer);
   try { await logActivity('logout'); } catch(e) {}
   // Detach self-listener before signing out
   if (_selfListenerRef && _selfListener) {
