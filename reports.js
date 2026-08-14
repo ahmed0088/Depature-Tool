@@ -654,7 +654,19 @@ function _immigCheckMissingProfiles(allGuests) {
   Object.entries(_immigInhouseRoomGuests).forEach(([room, guests]) => {
     const found = countByRoom[room] || 0;
     if (guests.length > found) {
-      flagged.push({ room, source: 'inhouse', expected: guests.length, found, gap: guests.length - found, names: guests.map(g => g.name) });
+      // Best-effort: which of THIS ROOM's guests has no immigration profile?
+      // Safe to name-match here (unlike the global match this file avoids
+      // elsewhere) because the comparison set is just this one room's 1-4
+      // people, not the whole hotel — a spelling mismatch is easy for staff
+      // to spot and confirm at that scale, where matching across hundreds
+      // of guests produced ~50 false positives when it was tried.
+      const immigNamesInRoom = new Set(
+        allGuests.filter(g => (g.room || '').replace(/^0+/, '') === room).map(g => _normName(g.fullName))
+      );
+      const likelyMissing = guests
+        .filter(g => !immigNamesInRoom.has(g.key))
+        .map(g => ({ name: g.name, nat: _immigNatMap[g.key] || '', doc: _immigPassportMap[g.key] || '' }));
+      flagged.push({ room, source: 'inhouse', expected: guests.length, found, gap: guests.length - found, names: guests.map(g => g.name), likelyMissing });
       flaggedRooms.add(room);
     }
   });
@@ -786,13 +798,22 @@ function immigRenderMissingProfiles() {
   const body = document.getElementById('immigMissingBody');
   if (body) body.innerHTML = immigMissingProfiles.map(f => {
     const sourceLabel = f.source === 'inhouse' ? 'Inhouse XML' : 'Reservation Detail';
+    // Only trust the pinpointed guest(s) when the count lines up exactly with
+    // the headcount gap — if it doesn't, the diff caught something odd (e.g.
+    // a duplicate name in the room) and falling back to the full roster is
+    // safer than pointing at the wrong person.
+    const pinpointed = f.likelyMissing && f.likelyMissing.length === f.gap ? f.likelyMissing : null;
+    const detailLine = pinpointed
+      ? `Likely missing: ${pinpointed.map(g => {
+          const bits = [g.nat ? escapeHtml(g.nat) : '', g.doc ? 'Doc: ' + escapeHtml(g.doc) : ''].filter(Boolean).join(' · ');
+          return `<strong>${escapeHtml(g.name)}</strong>${bits ? ` (${bits})` : ' — no nationality/doc # on file either, check Vicas'}`;
+        }).join(', ')} — create their immigration profile in Opera with these details.`
+      : `${sourceLabel} shows <strong>${f.expected}</strong> guest${f.expected!==1?'s':''} (${escapeHtml(f.names.join(', ') || 'no name on file')}) —
+        only <strong>${f.found}</strong> found in today's immigration report. Check which of these isn't registered yet.`;
     return `
     <div class="log-row" style="border-left:3px solid var(--rose);padding-left:10px;">
       <span style="font-family:var(--mono);font-size:0.8rem;font-weight:700;color:var(--sky);min-width:50px;">${escapeHtml(f.room)}</span>
-      <span style="font-size:0.74rem;color:var(--text2);flex:1;">
-        ${sourceLabel} shows <strong>${f.expected}</strong> guest${f.expected!==1?'s':''} (${escapeHtml(f.names.join(', ') || 'no name on file')}) —
-        only <strong>${f.found}</strong> found in today's immigration report. Check which of these isn't registered yet.
-      </span>
+      <span style="font-size:0.74rem;color:var(--text2);flex:1;">${detailLine}</span>
     </div>`;
   }).join('');
 }
