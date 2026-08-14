@@ -362,6 +362,7 @@
 
 <!-- ── TOP BAR ── -->
 <header class="topbar">
+  <div class="icon-round mob-hide" id="sidenavToggleBtn" onclick="toggleSidenav()" title="Hide menu">☰</div>
   <div class="logo" onclick="editHotel()" title="Click to rename hotel">
     <div class="logo-mark">🏨</div>
     <div class="logo-name" id="hotelName">Ibis Styles <span>Dubai</span></div>
@@ -1293,7 +1294,7 @@
     <div class="page-hd">
       <div class="page-hd-left">
         <h1>Package Audit</h1>
-        <p>IN-Gauge "Unknown Product" charges vs Opera Changes Log · resolves who sold what package, for how much, and which dates</p>
+        <p>IN-Gauge charges with an unknown product or a missing seller vs Opera Changes Log · resolves who sold what package, for how much, and which dates</p>
       </div>
       <div class="page-hd-actions">
         <button class="btn gold" onclick="pkgRun()">🔍 Resolve</button>
@@ -1309,7 +1310,7 @@
           <div class="upload-label-bar">
             <div class="upload-dot sky"></div>
             <span class="upload-lbl">IN-Gauge Product Export</span>
-            <span class="upload-sub">.xlsx · rows with "Unknown Product"</span>
+            <span class="upload-sub">.xlsx · rows missing a product or a seller</span>
           </div>
           <div style="display:flex;flex-direction:column;align-items:center;padding:16px;text-align:center;gap:4px;">
             <div style="font-size:1.6rem;">🎁</div>

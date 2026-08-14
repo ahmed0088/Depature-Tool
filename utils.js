@@ -282,6 +282,23 @@ function toggleTheme() {
   setTheme(themes[(themes.indexOf(cur) + 1) % themes.length]);
 }
 
+// ── Sidebar collapse ──────────────────────────────────────
+function toggleSidenav() {
+  const nav = document.querySelector('.sidenav');
+  if (!nav) return;
+  const collapsed = nav.classList.toggle('collapsed');
+  localStorage.setItem('sidenavCollapsed', collapsed ? '1' : '0');
+  const btn = document.getElementById('sidenavToggleBtn');
+  if (btn) btn.title = collapsed ? 'Show menu' : 'Hide menu';
+}
+(function _restoreSidenavState() {
+  if (localStorage.getItem('sidenavCollapsed') !== '1') return;
+  const nav = document.querySelector('.sidenav');
+  if (nav) nav.classList.add('collapsed');
+  const btn = document.getElementById('sidenavToggleBtn');
+  if (btn) btn.title = 'Show menu';
+})();
+
 // ── Hotel name ────────────────────────────────────────────
 function editHotel() {
   const el = document.getElementById('hotelName');

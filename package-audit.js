@@ -2,12 +2,15 @@
 //  package-audit.js — Package/Upsell Audit
 //
 //  IN-Gauge (the upsell tracking system) sometimes can't recognise
-//  the Opera rate/product code behind a charge and logs it as
-//  "Unknown Product". This panel resolves those rows by cross-
-//  referencing Opera's own Changes Log — the report shows exactly
-//  which product code was added, its price, its date range, and
-//  which staff member added it (Opera → Dashboard → Miscellaneous →
-//  Changes Log, Group=Reservation, Action Type=Update Reservation,
+//  the Opera rate/product code behind a charge (logs it as "Unknown
+//  Product"), and separately often has no seller recorded (Employee
+//  column shows "-") even when the product itself is known — e.g. a
+//  correctly-labelled "Early Check In" row with nobody credited for
+//  the sale. This panel flags BOTH kinds of gaps and resolves them by
+//  cross-referencing Opera's own Changes Log — the report shows
+//  exactly which product code was added, its price, its date range,
+//  and which staff member added it (Opera → Dashboard → Miscellaneous
+//  → Changes Log, Group=Reservation, Action Type=Update Reservation,
 //  Description="product", exported to PDF).
 //
 //  Matching key: Confirmation No. (present in both reports), then
@@ -35,11 +38,11 @@ function pkgLoadExcel(input) {
       pkgUnknowns = _pkgParseExcelUnknowns(rows);
       const lbl = document.getElementById('pkgExcelLabel');
       if (lbl) lbl.textContent = pkgUnknowns.length
-        ? `✓ ${pkgUnknowns.length} "Unknown Product" row${pkgUnknowns.length !== 1 ? 's' : ''} found`
-        : 'Loaded — no "Unknown Product" rows found';
+        ? `✓ ${pkgUnknowns.length} row${pkgUnknowns.length !== 1 ? 's' : ''} need${pkgUnknowns.length === 1 ? 's' : ''} review`
+        : 'Loaded — every row already has a product and a seller';
       showToast(pkgUnknowns.length
-        ? `✦ ${pkgUnknowns.length} Unknown Product row${pkgUnknowns.length !== 1 ? 's' : ''} loaded`
-        : 'No "Unknown Product" rows found in this file', pkgUnknowns.length ? 'ok' : 'err');
+        ? `✦ ${pkgUnknowns.length} row${pkgUnknowns.length !== 1 ? 's' : ''} flagged (unknown product or missing seller)`
+        : 'No rows need review in this file', pkgUnknowns.length ? 'ok' : 'err');
     } catch (err) {
       showToast('Failed to read the IN-Gauge Excel file: ' + err.message, 'err');
     }
@@ -63,12 +66,22 @@ function _pkgParseExcelUnknowns(rows) {
   const iDays    = _pkgFindCol(hdrs, 'Charge Days');
   const iArr     = _pkgFindCol(hdrs, 'Arrival Date');
   const iDep     = _pkgFindCol(hdrs, 'Departure Date');
+  const iEmp     = _pkgFindCol(hdrs, 'Employee');
   if (iProduct < 0 || iConf < 0) return [];
 
   const out = [];
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
-    if (!r || !r[iProduct] || !/unknown/i.test(String(r[iProduct]))) continue;
+    if (!r) continue;
+    const product = String(r[iProduct] || '').trim();
+    if (!product) continue;
+    const employee = iEmp >= 0 ? String(r[iEmp] || '').trim() : '';
+    const needsProduct  = /unknown/i.test(product);
+    const needsEmployee = !employee || employee === '-';
+    // A row only needs auditing if something's actually missing — a row
+    // with a known product AND a known seller already has nothing to fix.
+    if (!needsProduct && !needsEmployee) continue;
+
     const conf = String(r[iConf] || '').trim().replace(/\.0+$/, '');
     if (!conf) continue;
     out.push({
@@ -78,6 +91,7 @@ function _pkgParseExcelUnknowns(rows) {
       days:   iDays   >= 0 ? String(r[iDays]   || '').trim() : '',
       arr:    iArr    >= 0 ? String(r[iArr]    || '').trim() : '',
       dep:    iDep    >= 0 ? String(r[iDep]    || '').trim() : '',
+      product, employee, needsProduct, needsEmployee,
     });
   }
   return out;
@@ -215,7 +229,12 @@ function pkgRun() {
     const cands = pkgEvents[u.conf] || [];
     const exact = cands.find(c => c.price && Math.abs(parseFloat(c.price) - u.charge) < 0.02);
     if (exact) {
-      return { ...u, resolved: true, code: exact.code, price: exact.price, from: exact.from, to: exact.to, user: exact.user, candidates: cands };
+      // If IN-Gauge already knew the product (e.g. "Early Check In"), keep
+      // that name rather than overwrite it with Opera's raw internal code —
+      // only the seller needed resolving for that row.
+      const code = u.needsProduct  ? exact.code : u.product;
+      const user = u.needsEmployee ? exact.user : u.employee;
+      return { ...u, resolved: true, code, price: exact.price, from: exact.from, to: exact.to, user, candidates: cands };
     }
     return { ...u, resolved: false, candidates: cands };
   });
@@ -244,7 +263,7 @@ function pkgRender() {
   ].forEach(([id, v]) => { const el = document.getElementById(id); if (el) el.textContent = v; });
 
   document.getElementById('pkgKpis').innerHTML = `
-    <div class="kpi sky"><div class="kpi-accent"></div><div class="kpi-label">Unknown Rows</div><div class="kpi-val">${pkgResults.length}</div></div>
+    <div class="kpi sky"><div class="kpi-accent"></div><div class="kpi-label">Flagged Rows</div><div class="kpi-val">${pkgResults.length}</div></div>
     <div class="kpi mint"><div class="kpi-accent"></div><div class="kpi-label">Resolved</div><div class="kpi-val">${resolvedCount}</div></div>
     <div class="kpi ${pkgResults.length - resolvedCount ? 'amber' : ''}"><div class="kpi-accent"></div><div class="kpi-label">Needs Review</div><div class="kpi-val">${pkgResults.length - resolvedCount}</div></div>`;
 
@@ -268,11 +287,17 @@ function pkgRender() {
     const candText = r.candidates.length
       ? `${r.candidates.length} candidate${r.candidates.length !== 1 ? 's' : ''}, no exact price match — ${escapeHtml(r.candidates.map(c => `${c.code} (AED ${c.price ?? '?'})`).join(', '))}`
       : 'No product events found for this confirmation';
+    const productCell = r.needsProduct
+      ? `<span style="color:var(--text3);">? unresolved</span>`
+      : escapeHtml(r.product);
+    const gapLabel = r.needsProduct && r.needsEmployee ? 'product + seller'
+      : r.needsProduct ? 'product' : 'seller';
     return `<tr>
       <td><span class="tt-room-pill">${escapeHtml(r.room)}</span></td>
       <td style="font-family:var(--mono);font-size:0.72rem;">${escapeHtml(r.conf)}</td>
-      <td colspan="2" style="font-family:var(--mono);font-size:0.68rem;color:var(--text3);">Charged AED ${escapeHtml(String(r.charge))}</td>
-      <td colspan="2" style="font-size:0.68rem;color:var(--text3);">${candText}</td>
+      <td style="font-family:var(--mono);font-size:0.76rem;">${productCell}</td>
+      <td style="font-family:var(--mono);font-size:0.72rem;color:var(--text3);">AED ${escapeHtml(String(r.charge))}</td>
+      <td colspan="2" style="font-size:0.68rem;color:var(--text3);" title="Missing: ${escapeHtml(gapLabel)}">${candText}</td>
       <td><span style="color:var(--amber);">⚠ Review</span></td>
     </tr>`;
   }).join('');
