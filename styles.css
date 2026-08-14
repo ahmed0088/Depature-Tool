@@ -4924,7 +4924,7 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
      on blur — the "stuck zoomed in" annoyance on phone. Force both real
      text-entry fields on the card up to exactly that threshold on mobile
      only; desktop keeps its smaller, denser sizing untouched. */
-  .dc-note      { height: 38px; min-height: 38px; font-size: 16px; }
+  .dc-note      { height: 60px; min-height: 60px; font-size: 16px; }
   .dc-edit-name { font-size: 16px; }
   .dc-note-section { margin-top: 6px; padding-top: 6px; }
   .dc-note-header { margin-bottom: 4px; }
