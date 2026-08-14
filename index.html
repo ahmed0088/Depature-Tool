@@ -1225,14 +1225,14 @@
           <div class="upload-label-bar">
             <div class="upload-dot mint"></div>
             <span class="upload-lbl">Inhouse / Guest Count XML</span>
-            <span class="upload-sub">Crystal Report export</span>
+            <span class="upload-sub">full roster, NOT "today's check-ins"</span>
           </div>
           <div style="display:flex;flex-direction:column;align-items:center;padding:16px;text-align:center;gap:4px;">
             <div style="font-size:1.6rem;">🛂</div>
             <div id="itXmlLabel" style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">Click to upload, or paste below</div>
             <input type="file" id="itXmlFileInput" accept=".xml,.XML" style="display:none;" onchange="itLoadXmlFile(this)"/>
           </div>
-          <textarea id="itXmlInput" onclick="event.stopPropagation()" placeholder="Paste Inhouse/Guest Count XML here…" style="width:100%;min-height:90px;"></textarea>
+          <textarea id="itXmlInput" onclick="event.stopPropagation()" placeholder="Needs the FULL current-guest roster (e.g. &quot;In-House Guest Count Report&quot;) — NOT a report scoped to today's check-ins only, that only covers new arrivals and will falsely flag every long-stay room as missing." style="width:100%;min-height:90px;"></textarea>
         </div>
 
       </div>
