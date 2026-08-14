@@ -51,6 +51,16 @@ function pkgLoadExcel(input) {
   reader.readAsArrayBuffer(file);
 }
 
+// Maps an IN-Gauge product label to the Opera internal code pattern for
+// that same package family (e.g. Opera logs Early Check In as USS100EC,
+// USS200EC, etc. — the trailing EC/LC/BB suffix is the reliable part).
+function _pkgCodeFamilyFor(product) {
+  if (product === 'Early Check In')  return /EC$/i;
+  if (product === 'Late Check Out')  return /LC$/i;
+  if (product === 'Breakfast')       return /BB$/i;
+  return null;
+}
+
 function _pkgFindCol(hdrs, ...names) {
   for (const n of names) { const i = hdrs.findIndex(h => h === n); if (i >= 0) return i; }
   for (const n of names) { const i = hdrs.findIndex(h => h.includes(n)); if (i >= 0) return i; }
@@ -232,7 +242,24 @@ function pkgRun() {
       return { ...u, resolved: true, alreadyComplete: true, code: u.product, price: String(u.charge), from: u.arr, to: u.dep, user: u.employee, candidates: [] };
     }
     const cands = pkgEvents[u.conf] || [];
-    const exact = cands.find(c => c.price && Math.abs(parseFloat(c.price) - u.charge) < 0.02);
+    let exact = cands.find(c => c.price && Math.abs(parseFloat(c.price) - u.charge) < 0.02);
+    if (!exact && cands.length === 1) {
+      // Only one product event was ever logged for this confirmation — no
+      // ambiguity to resolve, so a price mismatch (Opera logs net price,
+      // IN-Gauge shows tax-inclusive; rounding differences too) doesn't
+      // matter here. Price-matching only exists to disambiguate between
+      // MULTIPLE candidates, which isn't the case when there's just one.
+      exact = cands[0];
+    } else if (!exact && !u.needsProduct) {
+      // Multiple candidates, but the product is already known (only the
+      // seller needs resolving) — narrow to that product's code family
+      // (e.g. Early Check In -> codes ending "EC") instead of price.
+      const family = _pkgCodeFamilyFor(u.product);
+      if (family) {
+        const familyMatches = cands.filter(c => family.test(c.code));
+        if (familyMatches.length === 1) exact = familyMatches[0];
+      }
+    }
     if (exact) {
       // If IN-Gauge already knew the product (e.g. "Early Check In"), keep
       // that name rather than overwrite it with Opera's raw internal code —
