@@ -188,9 +188,9 @@ async function _pkgParsePdfEvents(pdf) {
     for (let i = 0; i < rowStarts.length; i++) {
       const yTop    = rowStarts[i];
       const yBottom = i + 1 < rowStarts.length ? rowStarts[i + 1] : -1e9;
-      const rowLines = { user: [], desc: [] };
+      const rowLines = { user: [], desc: [], time: [] };
       lines.forEach(l => {
-        if (l.y <= yTop + 0.5 && l.y > yBottom + 0.5 && (l.col === 'user' || l.col === 'desc')) {
+        if (l.y <= yTop + 0.5 && l.y > yBottom + 0.5 && (l.col === 'user' || l.col === 'desc' || l.col === 'time')) {
           rowLines[l.col].push(l);
         }
       });
@@ -201,11 +201,20 @@ async function _pkgParsePdfEvents(pdf) {
       // join with a space, then collapse any doubled whitespace.
       const user = rowLines.user.map(l => l.text).join('');
       const desc = rowLines.desc.map(l => l.text).join(' ').replace(/\s+/g, ' ').trim();
+      const dateText = dateLines.find(l => l.y === yTop)?.text || '';
+      const timeText = rowLines.time[0]?.text || '';
+      const ts = _pkgTimestamp(dateText, timeText);
 
       const confMatch = desc.match(/Confirmation No\.\s*(\d+)/);
       if (!confMatch) continue;
       const conf = confMatch[1];
 
+      // ADDED = the package was first sold — carries the price/dates we
+      // need. ATTACHED = a later change to an already-added package's
+      // dates — no reliable price of its own, but its user/timestamp
+      // still matters: a reservation whose ADDED entry falls outside this
+      // report's date range will only show up via its ATTACHED entries,
+      // and we still want the earliest one (closest to the true add).
       const addedRe = /PRODUCT\s+([A-Z0-9]+)\s+ADDED/g;
       let m;
       while ((m = addedRe.exec(desc))) {
@@ -214,16 +223,43 @@ async function _pkgParsePdfEvents(pdf) {
         const priceMatch = tail.match(/PRICE\s*[-\s]*>\s*([\d.]+)/);
         const dateMatch  = tail.match(/BETWEEN\s+([\d-]+-[A-Za-z]+-\d+)\s+AND\s+([\d-]+-[A-Za-z]+-\d+)/);
         (events[conf] = events[conf] || []).push({
-          code,
+          action: 'ADDED', code, ts,
           price: priceMatch ? priceMatch[1] : null,
           from:  dateMatch ? dateMatch[1] : null,
           to:    dateMatch ? dateMatch[2] : null,
           user,
         });
       }
+
+      const attachedRe = /PRODUCT\s+([A-Z0-9]+)\s+ATTACHED/g;
+      while ((m = attachedRe.exec(desc))) {
+        const code = m[1];
+        (events[conf] = events[conf] || []).push({
+          action: 'ATTACHED', code, ts, price: null, from: null, to: null, user,
+        });
+      }
     }
   }
   return events;
+}
+
+// "13-08-26" + "21:32" -> a sortable number. Falls back to 0 (oldest) if
+// either piece is unparseable, so a bad timestamp never wins "earliest".
+function _pkgTimestamp(dateText, timeText) {
+  const dm = String(dateText).match(/(\d{2})-(\d{2})-(\d{2})/);
+  const tm = String(timeText).match(/(\d{2}):(\d{2})/);
+  if (!dm) return 0;
+  const [, dd, mm, yy] = dm;
+  const [hh, mi] = tm ? [tm[1], tm[2]] : ['00', '00'];
+  return Number(`20${yy}${mm}${dd}${hh}${mi}`);
+}
+
+// Among candidate events for a confirmation, the originator is whoever's
+// event is chronologically earliest — later modifications by someone else
+// (e.g. a date-range ATTACHED change) never reassign credit for the sale.
+function _pkgPickOriginator(cands) {
+  if (!cands.length) return null;
+  return cands.slice().sort((a, b) => a.ts - b.ts)[0];
 }
 
 // ── Reconcile ────────────────────────────────────────────────
@@ -242,31 +278,39 @@ function pkgRun() {
       return { ...u, resolved: true, alreadyComplete: true, code: u.product, price: String(u.charge), from: u.arr, to: u.dep, user: u.employee, candidates: [] };
     }
     const cands = pkgEvents[u.conf] || [];
-    let exact = cands.find(c => c.price && Math.abs(parseFloat(c.price) - u.charge) < 0.02);
-    if (!exact && cands.length === 1) {
-      // Only one product event was ever logged for this confirmation — no
-      // ambiguity to resolve, so a price mismatch (Opera logs net price,
-      // IN-Gauge shows tax-inclusive; rounding differences too) doesn't
-      // matter here. Price-matching only exists to disambiguate between
-      // MULTIPLE candidates, which isn't the case when there's just one.
-      exact = cands[0];
-    } else if (!exact && !u.needsProduct) {
-      // Multiple candidates, but the product is already known (only the
-      // seller needs resolving) — narrow to that product's code family
-      // (e.g. Early Check In -> codes ending "EC") instead of price.
+    let exact = null;
+
+    if (u.needsProduct) {
+      // Product itself is unknown — only an ADDED entry (which carries a
+      // price) can identify which package this charge actually is; an
+      // ATTACHED (date-only) entry can't, so it's excluded here.
+      const addedCands = cands.filter(c => c.action === 'ADDED');
+      exact = addedCands.find(c => c.price && Math.abs(parseFloat(c.price) - u.charge) < 0.02);
+      if (!exact && addedCands.length === 1) exact = addedCands[0];
+    } else {
+      // Product's already known (e.g. "Early Check In") — narrow to that
+      // product's Opera code family, then always credit whoever's entry is
+      // chronologically EARLIEST, whether that's the original ADDED or (if
+      // ADDED fell outside this report's date range) the earliest ATTACHED
+      // seen — a later date-change by someone else never steals credit
+      // from whoever actually started the package.
       const family = _pkgCodeFamilyFor(u.product);
-      if (family) {
-        const familyMatches = cands.filter(c => family.test(c.code));
-        if (familyMatches.length === 1) exact = familyMatches[0];
-      }
+      const familyCands = family ? cands.filter(c => family.test(c.code)) : cands;
+      exact = _pkgPickOriginator(familyCands);
     }
+
     if (exact) {
       // If IN-Gauge already knew the product (e.g. "Early Check In"), keep
       // that name rather than overwrite it with Opera's raw internal code —
-      // only the seller needed resolving for that row.
+      // only the seller needed resolving for that row. Fall back to the
+      // Excel's own price/dates when the matched event is an ATTACHED entry
+      // (no price/date of its own — it's a date-range change, not a sale).
       const code = u.needsProduct  ? exact.code : u.product;
       const user = u.needsEmployee ? exact.user : u.employee;
-      return { ...u, resolved: true, alreadyComplete: false, code, price: exact.price, from: exact.from, to: exact.to, user, candidates: cands };
+      const price = exact.price ?? String(u.charge);
+      const from  = exact.from  ?? u.arr;
+      const to    = exact.to    ?? u.dep;
+      return { ...u, resolved: true, alreadyComplete: false, code, price, from, to, user, candidates: cands };
     }
     return { ...u, resolved: false, alreadyComplete: false, candidates: cands };
   });
