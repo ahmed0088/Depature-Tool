@@ -703,12 +703,13 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
 .dep-card {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r2);
   overflow: hidden;
   transition: box-shadow 0.15s, border-color 0.15s, transform 0.1s;
   position: relative;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
-.dep-card:hover { box-shadow: 0 6px 24px rgba(0,0,0,0.22); border-color: var(--border2); transform: translateY(-1px); }
+.dep-card:hover { box-shadow: 0 8px 26px rgba(0,0,0,0.24); border-color: var(--border2); transform: translateY(-2px); }
 
 /* Status border colors */
 .dep-card.s-due      { border-color: var(--amber-border); }
@@ -766,6 +767,11 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
 .dc-sbadge {
   font-family: var(--mono); font-size: 0.6rem; font-weight: 700;
   padding: 2px 7px; border-radius: 99px; border: 1px solid; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.dc-sbadge::before {
+  content: ''; width: 5px; height: 5px; border-radius: 50%;
+  background: currentColor; flex-shrink: 0;
 }
 .sb-due      { color: var(--amber);  border-color: var(--amber-border);  background: var(--amber-bg); }
 .sb-late     { color: var(--purple); border-color: var(--purple-border); background: var(--purple-bg); }

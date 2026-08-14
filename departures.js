@@ -1259,20 +1259,25 @@ function depCardHTML(r) {
     ${gmHTML}
     <div class="dc-band"></div>
 
-    <!-- Compact single-line row — click anywhere to expand -->
+    <!-- Compact two-line header — click anywhere to expand -->
     <div class="dc-row">
-      <div class="dc-room">${r.roomStr}</div>
-      <div class="dc-sbadge ${badgeCls}">${badgeText}</div>
-      <div class="dc-row-spacer-sm" style="display:none"></div>
-      <div class="dc-row-name" ondblclick="event.stopPropagation();depEditName(${i})" title="Double-click to edit">${escapeHtml(r.name)}</div>
-      <div class="dc-row-meta dc-meta-line">${escapeHtml(metaLine)}</div>
-      <div class="dc-row-bal dc-bal-inline ${balClass}">
-        <span class="dc-bal-dot"></span>
-        <span class="dc-bal-amt-sm">${balText}</span>
+      <div class="dc-row-line1">
+        <div class="dc-room">${r.roomStr}</div>
+        <div class="dc-sbadge ${badgeCls}">${badgeText}</div>
+        ${timeTag ? `<div class="dc-timetag-wrap dc-row-time">${timeTag}</div>` : ''}
+        <div class="dc-row-line1-right">
+          ${r.note ? `<span class="dc-row-note-dot" title="${escapeHtml(r.note.split('\n')[0].substring(0,60))}">📝</span>` : ''}
+          <button class="dc-copy-card-btn dc-row-copy" title="Copy summary" onclick="event.stopPropagation();depCopyCard(${i})">📋</button>
+        </div>
       </div>
-      ${timeTag ? `<div class="dc-timetag-wrap dc-row-time">${timeTag}</div>` : ''}
-      ${r.note ? `<span class="dc-row-note-dot" title="${escapeHtml(r.note.split('\n')[0].substring(0,60))}">📝</span>` : ''}
-      <button class="dc-copy-card-btn dc-row-copy" title="Copy summary" onclick="event.stopPropagation();depCopyCard(${i})">📋</button>
+      <div class="dc-row-line2">
+        <div class="dc-row-name" ondblclick="event.stopPropagation();depEditName(${i})" title="Double-click to edit">${escapeHtml(r.name)}</div>
+        <div class="dc-row-bal dc-bal-inline ${balClass}">
+          <span class="dc-bal-dot"></span>
+          <span class="dc-bal-amt-sm">${balText}</span>
+        </div>
+      </div>
+      <div class="dc-row-meta dc-meta-line">${escapeHtml(metaLine)}</div>
     </div>
 
     <!-- Expanded body — collapsed by default, click row to open -->
