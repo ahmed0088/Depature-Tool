@@ -476,11 +476,23 @@ function pkgRun() {
   pkgRender();
 }
 
-function _pkgGapBadge(r) {
-  if (!r.needsProduct && !r.needsEmployee) return `<span style="color:var(--text3);">—</span>`;
-  if (r.needsProduct && r.needsEmployee) return `<span style="color:var(--rose);">Product + Seller</span>`;
-  if (r.needsProduct) return `<span style="color:var(--rose);">Product</span>`;
-  return `<span style="color:var(--amber);">Seller</span>`;
+// Plain-language instruction for the row — what the person reading this
+// actually has to go and do, rather than which field happened to be blank.
+function _pkgActionText(r) {
+  if (r.verdict === 'deny')   return 'Remove this charge';
+  if (r.verdict === 'review') return 'Check in Opera';
+  if (r.needsProduct && r.needsEmployee) return 'Set package + seller';
+  if (r.needsProduct) return 'Set the package';
+  if (r.needsEmployee) return 'Set the seller';
+  return 'Nothing — already correct';
+}
+
+function _pkgActionCell(r) {
+  const txt = _pkgActionText(r);
+  const color = r.verdict === 'deny' ? 'var(--rose)'
+    : r.verdict === 'review' ? 'var(--amber)'
+    : (r.needsProduct || r.needsEmployee) ? 'var(--sky)' : 'var(--text3)';
+  return `<td style="font-size:0.68rem;color:${color};">${escapeHtml(txt)}</td>`;
 }
 
 function pkgRender() {
@@ -490,10 +502,8 @@ function pkgRender() {
     if (pkgFilter_ === 'resolved'  && !(r.verdict === 'credit' && !r.alreadyComplete)) return false;
     if (pkgFilter_ === 'deny'      && r.verdict !== 'deny') return false;
     if (pkgFilter_ === 'review'    && r.verdict !== 'review') return false;
-    if (pkgFilter_ === 'noProduct' && !r.needsProduct) return false;
-    if (pkgFilter_ === 'noSeller'  && !r.needsEmployee) return false;
     if (q) {
-      const hay = [r.conf, r.room, r.code, r.user].join(' ').toLowerCase();
+      const hay = [r.conf, r.room, r.code, r.family, r.user, _pkgActionText(r)].join(' ').toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -504,22 +514,18 @@ function pkgRender() {
   const fixedCount     = pkgResults.filter(r => r.verdict === 'credit' && !r.alreadyComplete).length;
   const denyCount      = pkgResults.filter(r => r.verdict === 'deny').length;
   const reviewCount    = pkgResults.filter(r => r.verdict === 'review').length;
-  const noProductCount = pkgResults.filter(r => r.needsProduct).length;
-  const noSellerCount  = pkgResults.filter(r => r.needsEmployee).length;
   [['pkgfc-all', pkgResults.length],
    ['pkgfc-complete', completeCount],
    ['pkgfc-resolved', fixedCount],
    ['pkgfc-deny', denyCount],
    ['pkgfc-review', reviewCount],
-   ['pkgfc-noProduct', noProductCount],
-   ['pkgfc-noSeller', noSellerCount],
   ].forEach(([id, v]) => { const el = document.getElementById(id); if (el) el.textContent = v; });
 
   document.getElementById('pkgKpis').innerHTML = `
-    <div class="kpi sky"><div class="kpi-accent"></div><div class="kpi-label">Total Rows</div><div class="kpi-val">${pkgResults.length}</div></div>
-    <div class="kpi mint"><div class="kpi-accent"></div><div class="kpi-label">Valid to Credit</div><div class="kpi-val">${creditCount}</div></div>
-    <div class="kpi ${denyCount ? 'rose' : ''}"><div class="kpi-accent"></div><div class="kpi-label">Should Deny</div><div class="kpi-val">${denyCount}</div></div>
-    <div class="kpi ${reviewCount ? 'amber' : ''}"><div class="kpi-accent"></div><div class="kpi-label">Needs Review</div><div class="kpi-val">${reviewCount}</div></div>`;
+    <div class="kpi sky"><div class="kpi-accent"></div><div class="kpi-label">Charges Checked</div><div class="kpi-val">${pkgResults.length}</div></div>
+    <div class="kpi mint"><div class="kpi-accent"></div><div class="kpi-label">Good to Credit</div><div class="kpi-val">${creditCount}</div></div>
+    <div class="kpi ${denyCount ? 'rose' : ''}"><div class="kpi-accent"></div><div class="kpi-label">Remove</div><div class="kpi-val">${denyCount}</div></div>
+    <div class="kpi ${reviewCount ? 'amber' : ''}"><div class="kpi-accent"></div><div class="kpi-label">Check by Hand</div><div class="kpi-val">${reviewCount}</div></div>`;
 
   const tbody = document.getElementById('pkgTable');
   if (!filtered.length) {
@@ -527,7 +533,7 @@ function pkgRender() {
     return;
   }
   tbody.innerHTML = filtered.map(r => {
-    const gapCell = `<td style="font-family:var(--mono);font-size:0.66rem;">${_pkgGapBadge(r)}</td>`;
+    const gapCell = _pkgActionCell(r);
     if (r.verdict === 'deny') {
       return `<tr style="opacity:0.8;">
         <td><span class="tt-room-pill">${escapeHtml(r.room)}</span></td>
@@ -536,13 +542,13 @@ function pkgRender() {
         <td style="font-family:var(--mono);font-size:0.72rem;color:var(--text3);">AED ${escapeHtml(String(r.charge))}</td>
         <td colspan="2" style="font-size:0.68rem;color:var(--rose);">${escapeHtml(r.denyReason)}</td>
         ${gapCell}
-        <td><span style="color:var(--rose);">⛔ Deny</span></td>
+        <td><span style="color:var(--rose);">⛔ Remove</span></td>
       </tr>`;
     }
     if (r.verdict === 'credit') {
       const statusCell = r.alreadyComplete
         ? `<span style="color:var(--text3);">✓ OK</span>`
-        : `<span style="color:var(--mint);">✅ Fixed</span>`;
+        : `<span style="color:var(--mint);">✏️ Update</span>`;
       return `<tr>
         <td><span class="tt-room-pill">${escapeHtml(r.room)}</span></td>
         <td style="font-family:var(--mono);font-size:0.72rem;">${escapeHtml(r.conf)}</td>
@@ -568,7 +574,7 @@ function pkgRender() {
       <td style="font-family:var(--mono);font-size:0.72rem;color:var(--text3);">AED ${escapeHtml(String(r.charge))}</td>
       <td colspan="2" style="font-size:0.68rem;color:var(--text3);">${candText}</td>
       ${gapCell}
-      <td><span style="color:var(--amber);">⚠ Review</span></td>
+      <td><span style="color:var(--amber);">⚠ Check</span></td>
     </tr>`;
   }).join('');
 }

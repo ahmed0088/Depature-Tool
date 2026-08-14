@@ -1294,10 +1294,9 @@
     <div class="page-hd">
       <div class="page-hd-left">
         <h1>Package Audit</h1>
-        <p>Every IN-Gauge charge vs Opera Changes Log · flags rows with an unknown product or missing seller, resolves who sold what package, for how much, and which dates</p>
+        <p>Checks every upsell charge in IN-Gauge against Opera · tells you which to credit, which to remove, and who sold it</p>
       </div>
       <div class="page-hd-actions">
-        <button class="btn gold" onclick="pkgRun()">🔍 Resolve</button>
         <button class="btn rose" onclick="pkgClear()">✕ Clear</button>
       </div>
     </div>
@@ -1309,12 +1308,13 @@
         <div class="upload-zone" style="cursor:pointer;" onclick="document.getElementById('pkgExcelFileInput').click()">
           <div class="upload-label-bar">
             <div class="upload-dot sky"></div>
-            <span class="upload-lbl">IN-Gauge Product Export</span>
-            <span class="upload-sub">.xlsx · every row, flagged if product or seller is missing</span>
+            <span class="upload-lbl">1 · IN-Gauge export</span>
+            <span class="upload-sub">.xlsx</span>
           </div>
           <div style="display:flex;flex-direction:column;align-items:center;padding:16px;text-align:center;gap:4px;">
             <div style="font-size:1.6rem;">🎁</div>
             <div id="pkgExcelLabel" style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">Click to upload</div>
+            <div style="font-size:0.62rem;color:var(--text3);">IN-Gauge → Reports → export the product list to Excel</div>
             <input type="file" id="pkgExcelFileInput" accept=".xlsx,.xls" style="display:none;" onchange="pkgLoadExcel(this)"/>
           </div>
         </div>
@@ -1323,12 +1323,13 @@
         <div class="upload-zone" style="cursor:pointer;" onclick="document.getElementById('pkgPdfFileInput').click()">
           <div class="upload-label-bar">
             <div class="upload-dot mint"></div>
-            <span class="upload-lbl">Opera Changes Log</span>
-            <span class="upload-sub">.pdf · Group=Reservation, Type=Update Reservation, Description="product"</span>
+            <span class="upload-lbl">2 · Opera Changes Log</span>
+            <span class="upload-sub">.pdf</span>
           </div>
           <div style="display:flex;flex-direction:column;align-items:center;padding:16px;text-align:center;gap:4px;">
             <div style="font-size:1.6rem;">🧾</div>
             <div id="pkgPdfLabel" style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">Click to upload</div>
+            <div style="font-size:0.62rem;color:var(--text3);">Opera → Miscellaneous → Changes Log · Group <b>Reservation</b>, Type <b>Update Reservation</b>, Search Text <b>product</b> → print to PDF</div>
             <input type="file" id="pkgPdfFileInput" accept=".pdf,.PDF" style="display:none;" onchange="pkgLoadPdf(this)"/>
           </div>
         </div>
@@ -1336,9 +1337,11 @@
       </div>
 
       <div class="error-box" id="pkgError"><span>⚠</span><span id="pkgErrorMsg"></span></div>
-      <div style="display:flex;gap:8px;margin-top:10px;">
-        <button class="btn gold" onclick="pkgRun()">🔍 Resolve</button>
-        <button class="btn" onclick="pkgClear()">✕ Clear</button>
+      <div style="margin-top:12px;">
+        <button class="btn gold" onclick="pkgRun()" style="width:100%;padding:11px;font-size:0.82rem;">3 · Check the charges →</button>
+      </div>
+      <div style="margin-top:8px;font-size:0.62rem;color:var(--text3);text-align:center;">
+        Both reports must cover the same dates, or charges sold outside the Opera range can't be matched.
       </div>
     </div>
 
@@ -1347,15 +1350,13 @@
 
       <div class="filter-row" id="pkgFilters" style="margin-bottom:14px;">
         <div class="fchip on" data-pkgf="all"      onclick="pkgSetFilter('all',this)">All <span id="pkgfc-all">0</span></div>
-        <div class="fchip"    data-pkgf="complete" onclick="pkgSetFilter('complete',this)">✓ Already OK <span id="pkgfc-complete">0</span></div>
-        <div class="fchip"    data-pkgf="resolved" onclick="pkgSetFilter('resolved',this)">✅ Fixed <span id="pkgfc-resolved">0</span></div>
-        <div class="fchip"    data-pkgf="deny"     onclick="pkgSetFilter('deny',this)">⛔ Deny <span id="pkgfc-deny">0</span></div>
-        <div class="fchip"    data-pkgf="review"   onclick="pkgSetFilter('review',this)">⚠ Needs Review <span id="pkgfc-review">0</span></div>
-        <div class="fchip"    data-pkgf="noProduct" onclick="pkgSetFilter('noProduct',this)">Missing Product <span id="pkgfc-noProduct">0</span></div>
-        <div class="fchip"    data-pkgf="noSeller"  onclick="pkgSetFilter('noSeller',this)">Missing Seller <span id="pkgfc-noSeller">0</span></div>
+        <div class="fchip"    data-pkgf="resolved" onclick="pkgSetFilter('resolved',this)">✏️ Update in IN-Gauge <span id="pkgfc-resolved">0</span></div>
+        <div class="fchip"    data-pkgf="deny"     onclick="pkgSetFilter('deny',this)">⛔ Remove <span id="pkgfc-deny">0</span></div>
+        <div class="fchip"    data-pkgf="review"   onclick="pkgSetFilter('review',this)">⚠ Check by hand <span id="pkgfc-review">0</span></div>
+        <div class="fchip"    data-pkgf="complete" onclick="pkgSetFilter('complete',this)">✓ Nothing to do <span id="pkgfc-complete">0</span></div>
         <div class="search-wrap" style="margin-left:auto;">
           <span style="padding:0 8px;color:var(--text3);">⌕</span>
-          <input type="text" id="pkgSearch" placeholder="Room, conf. no., product code, or staff…" oninput="pkgSetSearch(this.value)"/>
+          <input type="text" id="pkgSearch" placeholder="Room, conf. no., package, staff, or what to do…" oninput="pkgSetSearch(this.value)"/>
         </div>
       </div>
 
@@ -1365,29 +1366,39 @@
             <tr>
               <th style="width:70px;">Room</th>
               <th>Confirmation No.</th>
-              <th>Product Code</th>
+              <th>Package</th>
               <th>Price</th>
               <th>Dates</th>
               <th>Sold By</th>
-              <th style="width:110px;">Was Missing</th>
-              <th style="width:120px;">Status</th>
+              <th style="width:190px;">What to do</th>
+              <th style="width:110px;">Status</th>
             </tr>
           </thead>
           <tbody id="pkgTable"></tbody>
         </table>
       </div>
 
-      <div style="margin-top:12px;font-family:var(--mono);font-size:0.62rem;color:var(--text3);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-        <span>💡 Credit the valid rows in IN-Gauge, and remove the denied ones</span>
-        <button class="btn gold sm" id="pkgCopyBtn" onclick="pkgCopyResolved()">📋 Copy Rows to Credit</button>
-        <button class="btn rose sm" id="pkgDenyBtn" onclick="pkgCopyDeny()">⛔ Copy Deny List</button>
+      <div style="margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <button class="btn gold sm" id="pkgCopyBtn" onclick="pkgCopyResolved()">📋 Copy rows to update</button>
+        <button class="btn rose sm" id="pkgDenyBtn" onclick="pkgCopyDeny()">⛔ Copy rows to remove</button>
       </div>
-      <div style="margin-top:8px;font-family:var(--mono);font-size:0.6rem;color:var(--text3);line-height:1.6;">
-        A charge is denied when a once-per-stay package (early check-in, late checkout) is billed more than once
-        for the same reservation, or when Opera logged that reservation's packages and none of them are this kind.
-        Breakfast and board packages bill per night, so one row per day is expected for those and never denied.
-        Charges with no Opera record at all in this report go to Needs Review, not Deny — the package may simply
-        have been sold before the date range you exported.
+
+      <details style="margin-top:14px;">
+        <summary style="cursor:pointer;font-size:0.68rem;color:var(--text2);">How each row is decided</summary>
+        <div style="margin-top:8px;font-size:0.65rem;color:var(--text3);line-height:1.7;">
+          <b style="color:var(--mint);">✓ Nothing to do</b> — IN-Gauge already has the right package and seller.<br>
+          <b style="color:var(--mint);">✏️ Update in IN-Gauge</b> — the charge is genuine, but the package or the seller is blank.
+          Opera says who sold it, so set that in IN-Gauge. Credit always goes to whoever <i>started</i> the package,
+          never to someone who only changed its dates later.<br>
+          <b style="color:var(--rose);">⛔ Remove</b> — this charge shouldn't be counted at all. Either an early check-in
+          or late checkout was billed on more than one night (those are charged once per stay, so IN-Gauge spreading
+          them across the stay creates duplicates), or Opera logged this reservation's packages and none of them are
+          this kind. Breakfast and board bill per night, so one row per night is normal there and never removed.<br>
+          <b style="color:var(--amber);">⚠ Check by hand</b> — Opera has nothing on this reservation, or more than one
+          package could match the amount. Often it just means the package was sold before the dates you exported —
+          re-run the Opera report with a wider range and it usually resolves.
+        </div>
+      </details>
       </div>
     </div>
 
