@@ -120,6 +120,32 @@ function _depStartAlertTicker() {
 }
 _depStartAlertTicker();
 
+// ── Click ripple feedback ───────────────────────────────────
+// Delegated + capture-phase on the grid container so re-renders (which
+// replace innerHTML) never need rebinding, and buttons that call
+// event.stopPropagation() in their own onclick still trigger it — capture
+// fires on the way down, before that stopPropagation runs on the target.
+function _depInitRipple() {
+  const grid = document.getElementById('depGrid');
+  if (!grid || grid._rippleBound) return;
+  grid._rippleBound = true;
+
+  grid.addEventListener('click', e => {
+    const el = e.target.closest('.dca, .dc-copy-card-btn, .dc-stamp-btn');
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height) * 1.6;
+    const ripple = document.createElement('span');
+    ripple.className = 'dc-ripple';
+    ripple.style.width  = size + 'px';
+    ripple.style.height = size + 'px';
+    ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
+    ripple.style.top  = (e.clientY - rect.top  - size / 2) + 'px';
+    el.appendChild(ripple);
+    ripple.addEventListener('animationend', () => ripple.remove());
+  }, true);
+}
+
 // ── Swipe gestures (mobile) ─────────────────────────────────
 // Swipe a card right → quick checkout · swipe left → mark DND.
 // Attached once, delegated on the grid container so re-renders
@@ -863,6 +889,7 @@ function depRender() {
   if (typeof xrefInjectDepWarnings === 'function') xrefInjectDepWarnings();
 
   _depInitSwipe();
+  _depInitRipple();
   _depCheckOverdueAlerts();
   _depQueueTrendSnapshot();
 }

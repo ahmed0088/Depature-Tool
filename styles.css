@@ -890,9 +890,12 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
 .bal-credit .dc-bal-amt-sm { color: var(--blue); }
 .dc-copy-card-btn {
   background: none; border: none; cursor: pointer; font-size: 0.7rem;
-  opacity: 0.4; padding: 0; line-height: 1; transition: opacity 0.1s; margin-left: auto;
+  opacity: 0.4; padding: 3px; line-height: 1; margin-left: auto; border-radius: 6px;
+  transition: opacity 0.1s, transform 0.15s cubic-bezier(0.34,1.56,0.64,1);
+  position: relative; overflow: hidden;
 }
-.dc-copy-card-btn:hover { opacity: 1; }
+.dc-copy-card-btn:hover  { opacity: 1; }
+.dc-copy-card-btn:active { transform: scale(0.85); }
 
 /* Time tag */
 .dc-time-tag { display: inline-flex; align-items: center; gap: 3px; font-family: var(--mono); font-size: 0.58rem; font-weight: 600; padding: 1px 6px; border-radius: var(--r); }
@@ -922,7 +925,10 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
   padding: 7px 6px; border-radius: 8px; border: 1px solid var(--border2);
   cursor: pointer; font-family: var(--font); font-size: 0.68rem; font-weight: 600;
   display: flex; align-items: center; justify-content: center; gap: 3px;
-  transition: all 0.1s; background: var(--surface); color: var(--text2); white-space: nowrap;
+  transition: background 0.12s, color 0.12s, border-color 0.12s, box-shadow 0.12s,
+              transform 0.18s cubic-bezier(0.34,1.56,0.64,1);
+  background: var(--surface); color: var(--text2); white-space: nowrap;
+  position: relative; overflow: hidden;
 }
 .dca:hover { background: var(--card2); color: var(--text); border-color: var(--border3); }
 .dca-co   { color: var(--green);  border-color: var(--green-border);  background: var(--green-bg); }
@@ -957,9 +963,12 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
 .dc-note-arrow { font-size: 0.6rem; color: var(--text3); }
 .dc-stamp-btn {
   background: none; border: none; cursor: pointer; font-size: 0.68rem;
-  opacity: 0.5; padding: 0; line-height: 1; transition: opacity 0.1s;
+  opacity: 0.5; padding: 2px; line-height: 1; border-radius: 6px;
+  transition: opacity 0.1s, transform 0.15s cubic-bezier(0.34,1.56,0.64,1);
+  position: relative; overflow: hidden;
 }
-.dc-stamp-btn:hover { opacity: 1; }
+.dc-stamp-btn:hover  { opacity: 1; }
+.dc-stamp-btn:active { transform: scale(0.85); }
 .dc-note-body { margin-top: 4px; }
 .dc-note {
   width: 100%; min-height: 40px; box-sizing: border-box;
@@ -1030,8 +1039,9 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
 .dc-intent-select { font-family: var(--mono); font-size: 0.68rem; padding: 5px 8px; border-radius: var(--r); border: 1px solid var(--border2); background: var(--surface); color: var(--text2); cursor: pointer; width: 100%; outline: none; transition: all 0.1s; }
 .dc-intent-select:hover { color: var(--purple); border-color: var(--purple-border); background: var(--purple-bg); }
 .dc-overdue-strip { background: var(--red-bg); color: var(--red); font-size: 0.78rem; font-weight: 700; padding: 6px 10px; border-radius: var(--r); margin-bottom: 9px; display: flex; align-items: center; gap: 5px; border: 1px solid var(--red-border); }
-.dc-stamp-btn { background: var(--surface); color: var(--text2); border: 1px solid var(--border2); padding: 4px 9px; border-radius: var(--r); font-size: 0.78rem; cursor: pointer; transition: all 0.1s; display: inline-flex; align-items: center; gap: 4px; }
-.dc-stamp-btn:hover { background: var(--card2); color: var(--text); border-color: var(--purple-border); }
+.dc-stamp-btn { background: var(--surface); color: var(--text2); border: 1px solid var(--border2); padding: 4px 9px; border-radius: var(--r); font-size: 0.78rem; cursor: pointer; transition: background 0.1s, color 0.1s, border-color 0.1s, transform 0.15s cubic-bezier(0.34,1.56,0.64,1); display: inline-flex; align-items: center; gap: 4px; position: relative; overflow: hidden; }
+.dc-stamp-btn:hover  { background: var(--card2); color: var(--text); border-color: var(--purple-border); }
+.dc-stamp-btn:active { transform: scale(0.9); }
 
 .dep-log-wrap   { background: var(--card); border: 1px solid var(--border); border-radius: var(--r2); overflow: hidden; margin-top: 16px; }
 .dep-log-header { display: flex; align-items: center; gap: 8px; padding: 9px 13px; cursor: pointer; background: var(--card2); border-bottom: 1px solid var(--border); user-select: none; }
@@ -2082,13 +2092,13 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
   border-radius: 7px;
   border: 2px solid var(--border3);
   background: var(--card2);
-  transition: background 0.12s, border-color 0.12s, transform 0.12s;
+  transition: background 0.12s, border-color 0.12s, transform 0.2s cubic-bezier(0.34,1.56,0.64,1);
   pointer-events: none;
 }
 .dep-sel-tick.checked {
   background: var(--accent);
   border-color: var(--accent);
-  transform: scale(1.08);
+  transform: scale(1.15);
 }
 .dep-sel-tick.checked::after {
   content: '✓';
@@ -4750,7 +4760,33 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
 
 /* Action buttons */
 .dca-co:hover { background: var(--green); color: #fff !important; border-color: var(--green) !important; }
-.dca:active   { transform: scale(0.98); }
+.dca:active   { transform: scale(0.92); transition-duration: 0.05s; }
+
+/* Click ripple — delegated in departures.js onto .dca / .dc-copy-card-btn / .dc-stamp-btn */
+.dc-ripple {
+  position: absolute; border-radius: 50%; background: currentColor;
+  opacity: 0.32; transform: scale(0); pointer-events: none;
+  animation: dcRipple 0.5s ease-out forwards;
+}
+@keyframes dcRipple { to { transform: scale(1); opacity: 0; } }
+
+/* Staggered entrance whenever the board re-renders (checkout, extend, filter, etc.) */
+@keyframes dcCardIn { from { opacity: 0; transform: translateY(8px) scale(0.985); } to { opacity: 1; transform: none; } }
+.dep-grid > .dep-card { animation: dcCardIn 0.28s cubic-bezier(0.16,1,0.3,1) backwards; }
+.dep-grid > .dep-card:nth-child(1)  { animation-delay: 0ms; }
+.dep-grid > .dep-card:nth-child(2)  { animation-delay: 15ms; }
+.dep-grid > .dep-card:nth-child(3)  { animation-delay: 30ms; }
+.dep-grid > .dep-card:nth-child(4)  { animation-delay: 45ms; }
+.dep-grid > .dep-card:nth-child(5)  { animation-delay: 60ms; }
+.dep-grid > .dep-card:nth-child(6)  { animation-delay: 75ms; }
+.dep-grid > .dep-card:nth-child(7)  { animation-delay: 90ms; }
+.dep-grid > .dep-card:nth-child(8)  { animation-delay: 105ms; }
+.dep-grid > .dep-card:nth-child(9)  { animation-delay: 120ms; }
+.dep-grid > .dep-card:nth-child(n+10) { animation-delay: 135ms; }
+@media (prefers-reduced-motion: reduce) {
+  .dep-grid > .dep-card { animation: none; }
+  .dc-ripple { display: none; }
+}
 
 /* Overdue badge pulse */
 .sb-lco-overdue { animation: overduePulse 1.6s infinite; }
