@@ -146,14 +146,27 @@ function _pkgColOf(x) {
   return 'desc';
 }
 
+// Report chrome (page footer + the filter block Crystal repeats on every
+// page). These land in the same X band as the User column and below the
+// last data row, so without this they get swallowed into the last row of
+// each page — corrupting that row's "sold by" and its description.
+const _PKG_CHROME = /^(?:Page \d+ of \d+|user_activity_log|Filter|For Activity |Activity by |Search Text |Sort Order|From Time |To Time |User Activity Log|Ibis Styles)/i;
+
 // Crystal Reports draws each column as its own vertical band, so pdf.js's
 // extracted items come back grouped by COLUMN, not by row — a wrapped user
 // email or a multi-line product description shows up as several separate
 // text items at the same X but different Y. Row boundaries are anchored on
 // the Date column (one short value per row); everything else in that row's
 // Y-band (down to the next row's Date) belongs to the same activity entry.
+//
+// Within a row, Opera renders the product clauses first and closes with
+// "Confirmation No. N" — so the confirmation is the LAST thing in the band,
+// not the first. When a row runs past the bottom of a page, that closing
+// confirmation (and the tail of the user's name) continues at the top of
+// the next page, which is why rows are stitched across the page break
+// before any events are read out of them.
 async function _pkgParsePdfEvents(pdf) {
-  const events = {}; // conf -> [{code, price, from, to, user}]
+  const rows = []; // every data row, in reading order across all pages
 
   for (let p = 1; p <= pdf.numPages; p++) {
     const page    = await pdf.getPage(p);
@@ -181,15 +194,21 @@ async function _pkgParsePdfEvents(pdf) {
       l.text = text.trim();
     });
 
+    // Everything at or above the column-header row is the page header (report
+    // title, print timestamp, filter block) — never data. Anything matching
+    // the chrome pattern is the repeated footer. Drop both before banding.
+    const headerY = lines.find(l => l.col === 'desc' && l.text === 'Action Description')?.y ?? Infinity;
+    const body    = lines.filter(l => l.y < headerY - 0.5 && !_PKG_CHROME.test(l.text));
+
     // PDF y increases upward — top-to-bottom reading order is DESCENDING y.
-    const dateLines = lines.filter(l => l.col === 'date' && l.text !== 'Date');
+    const dateLines = body.filter(l => l.col === 'date');
     const rowStarts = [...new Set(dateLines.map(l => l.y))].sort((a, b) => b - a);
 
     for (let i = 0; i < rowStarts.length; i++) {
       const yTop    = rowStarts[i];
       const yBottom = i + 1 < rowStarts.length ? rowStarts[i + 1] : -1e9;
       const rowLines = { user: [], desc: [], time: [] };
-      lines.forEach(l => {
+      body.forEach(l => {
         if (l.y <= yTop + 0.5 && l.y > yBottom + 0.5 && (l.col === 'user' || l.col === 'desc' || l.col === 'time')) {
           rowLines[l.col].push(l);
         }
@@ -199,48 +218,98 @@ async function _pkgParsePdfEvents(pdf) {
       // User email wraps mid-word across lines ("ACCOREN-" / "AHELSAFTY@" /
       // "ACCOREN") — no separator. Description wraps at word boundaries —
       // join with a space, then collapse any doubled whitespace.
-      const user = rowLines.user.map(l => l.text).join('');
-      const desc = rowLines.desc.map(l => l.text).join(' ').replace(/\s+/g, ' ').trim();
-      const dateText = dateLines.find(l => l.y === yTop)?.text || '';
-      const timeText = rowLines.time[0]?.text || '';
-      const ts = _pkgTimestamp(dateText, timeText);
-
-      const confMatch = desc.match(/Confirmation No\.\s*(\d+)/);
-      if (!confMatch) continue;
-      const conf = confMatch[1];
-
-      // ADDED = the package was first sold — carries the price/dates we
-      // need. ATTACHED = a later change to an already-added package's
-      // dates — no reliable price of its own, but its user/timestamp
-      // still matters: a reservation whose ADDED entry falls outside this
-      // report's date range will only show up via its ATTACHED entries,
-      // and we still want the earliest one (closest to the true add).
-      const addedRe = /PRODUCT\s+([A-Z0-9]+)\s+ADDED/g;
-      let m;
-      while ((m = addedRe.exec(desc))) {
-        const code = m[1];
-        const tail = desc.slice(addedRe.lastIndex, addedRe.lastIndex + 300);
-        const priceMatch = tail.match(/PRICE\s*[-\s]*>\s*([\d.]+)/);
-        const dateMatch  = tail.match(/BETWEEN\s+([\d-]+-[A-Za-z]+-\d+)\s+AND\s+([\d-]+-[A-Za-z]+-\d+)/);
-        (events[conf] = events[conf] || []).push({
-          action: 'ADDED', code, ts,
-          price: priceMatch ? priceMatch[1] : null,
-          from:  dateMatch ? dateMatch[1] : null,
-          to:    dateMatch ? dateMatch[2] : null,
-          user,
-        });
-      }
-
-      const attachedRe = /PRODUCT\s+([A-Z0-9]+)\s+ATTACHED/g;
-      while ((m = attachedRe.exec(desc))) {
-        const code = m[1];
-        (events[conf] = events[conf] || []).push({
-          action: 'ATTACHED', code, ts, price: null, from: null, to: null, user,
-        });
-      }
+      rows.push({
+        user: rowLines.user.map(l => l.text).join(''),
+        desc: rowLines.desc.map(l => l.text).join(' ').replace(/\s+/g, ' ').trim(),
+        ts:   _pkgTimestamp(dateLines.find(l => l.y === yTop)?.text || '', rowLines.time[0]?.text || ''),
+        lastOfPage: i === rowStarts.length - 1,
+      });
     }
   }
+
+  // Stitch rows whose description ran past the bottom of a page, then read
+  // the events out of each completed row.
+  const events = {}; // conf -> [{action, code, price, from, to, user, ts}]
+  let carry = null;
+  for (const row of rows) {
+    let cur = row;
+    if (carry) {
+      // Crystal re-renders the row's User cell in full on the continuation
+      // page, so prefer that complete value; only glue the fragments
+      // together when the continuation doesn't repeat it.
+      cur = {
+        user: /@/.test(row.user) ? row.user : (carry.user || '') + (row.user || ''),
+        desc: `${carry.desc} ${row.desc}`.replace(/\s+/g, ' ').trim(),
+        ts:   carry.ts || row.ts,
+        lastOfPage: row.lastOfPage,
+      };
+      carry = null;
+    }
+    const confMatch = cur.desc.match(/Confirmation No\.\s*(\d+)/);
+    if (!confMatch) {
+      // No closing confirmation: if this is the last row on a page, the rest
+      // of it is at the top of the next page — hold it and merge. Otherwise
+      // there's genuinely nothing to attribute, so drop it.
+      if (cur.lastOfPage) carry = cur;
+      continue;
+    }
+    _pkgReadEvents(events, confMatch[1], cur);
+  }
   return events;
+}
+
+// Dates wrap mid-token across lines ("02- AUG-26"), so strip inner spaces.
+function _pkgNormDate(s) {
+  return String(s || '').replace(/\s+/g, '').replace(/[;:.]+$/, '') || null;
+}
+
+// A description is a ';'-separated list of clauses, e.g.
+//   ;PRODUCT UPS30BB ADDED
+//   ;PRODUCT UPS30BB BETWEEN 01-AUG-26 AND 02-AUG-26 :  PRICE  -> 24.48
+// A removal reads "PRICE 24.48 ->" (old price, nothing after the arrow), so
+// only a value AFTER the arrow counts as the new price. Reading the detail
+// clause per product code — rather than scanning a fixed window after the
+// ADDED marker — is what keeps prices and dates attached to the right
+// product when one entry both removes and adds a package.
+function _pkgReadEvents(events, conf, row) {
+  const details  = {}; // code -> {from, to, price}
+  const added    = [];
+  const attached = [];
+
+  row.desc.split(';').forEach(clause => {
+    const c = clause.trim();
+    let m;
+    if ((m = c.match(/^PRODUCT\s+([A-Z0-9]+)\s+ADDED\b/i))) { added.push(m[1]); return; }
+    if ((m = c.match(/^PRODUCT\s+([A-Z0-9]+)\s+ATTACHED\b/i))) {
+      // "ATTACHED FROM <old range> -> FROM <new range>" — the range after
+      // the last arrow is the one now in effect.
+      const arrow = c.lastIndexOf('->');
+      const dm = (arrow >= 0 ? c.slice(arrow + 2) : c).match(/FROM\s+(.+?)\s+TO\s+(.+?)\s*$/i);
+      attached.push({ code: m[1], from: dm ? _pkgNormDate(dm[1]) : null, to: dm ? _pkgNormDate(dm[2]) : null });
+      return;
+    }
+    if ((m = c.match(/^PRODUCT\s+([A-Z0-9]+)\s+BETWEEN\s+(.+?)\s+AND\s+(.+?)\s*:(.*)$/i))) {
+      // Opera sometimes logs the date range with no PRICE clause at all, so
+      // the price is optional here — the dates are still worth keeping.
+      const priceM = m[4].match(/PRICE\b[^>]*->\s*([\d.]+)/i);
+      details[m[1]] = { from: _pkgNormDate(m[2]), to: _pkgNormDate(m[3]), price: priceM ? priceM[1] : null };
+    }
+  });
+
+  const push = e => { (events[conf] = events[conf] || []).push(e); };
+  // ADDED = the package was first sold — carries the price and dates we need.
+  // ATTACHED = a later change to an already-added package's date range. It
+  // has no price of its own, but its user/timestamp still matter: a
+  // reservation whose ADDED entry predates this report's date range shows up
+  // only through its ATTACHED entries.
+  added.forEach(code => {
+    const d = details[code] || {};
+    push({ action: 'ADDED', code, ts: row.ts, user: row.user, price: d.price || null, from: d.from || null, to: d.to || null });
+  });
+  attached.forEach(a => {
+    const d = details[a.code] || {};
+    push({ action: 'ATTACHED', code: a.code, ts: row.ts, user: row.user, price: null, from: a.from || d.from || null, to: a.to || d.to || null });
+  });
 }
 
 // "13-08-26" + "21:32" -> a sortable number. Falls back to 0 (oldest) if
