@@ -452,6 +452,10 @@
     <div class="nav-icon">🧮</div>Inhouse Tally
     <span class="nav-badge" id="badge-inhouse-tally">—</span>
   </div>
+  <div class="nav-item" onclick="showPanel('package-audit')" id="nav-package-audit" data-panel="package-audit">
+    <div class="nav-icon">🎁</div>Package Audit
+    <span class="nav-badge" id="badge-package-audit">—</span>
+  </div>
   <div class="nav-item" onclick="showPanel('checklist')" id="nav-checklist" data-panel="checklist">
     <div class="nav-icon">✅</div>Night Checklist
     <span class="nav-badge" id="badge-checklist">17</span>
@@ -1277,6 +1281,99 @@
       <div style="margin-top:12px;font-family:var(--mono);font-size:0.62rem;color:var(--text3);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <span>💡 Fix flagged rooms in Opera / the immigration system, then</span>
         <button class="btn gold sm" onclick="itCopyFlagged()">📋 Copy Flagged Rooms</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════ PACKAGE AUDIT ════════════════ -->
+<div class="panel" id="panel-package-audit">
+  <div style="max-width:1200px;">
+    <div class="page-hd">
+      <div class="page-hd-left">
+        <h1>Package Audit</h1>
+        <p>IN-Gauge "Unknown Product" charges vs Opera Changes Log · resolves who sold what package, for how much, and which dates</p>
+      </div>
+      <div class="page-hd-actions">
+        <button class="btn gold" onclick="pkgRun()">🔍 Resolve</button>
+        <button class="btn rose" onclick="pkgClear()">✕ Clear</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+
+        <!-- IN-Gauge export -->
+        <div class="upload-zone" style="cursor:pointer;" onclick="document.getElementById('pkgExcelFileInput').click()">
+          <div class="upload-label-bar">
+            <div class="upload-dot sky"></div>
+            <span class="upload-lbl">IN-Gauge Product Export</span>
+            <span class="upload-sub">.xlsx · rows with "Unknown Product"</span>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;padding:16px;text-align:center;gap:4px;">
+            <div style="font-size:1.6rem;">🎁</div>
+            <div id="pkgExcelLabel" style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">Click to upload</div>
+            <input type="file" id="pkgExcelFileInput" accept=".xlsx,.xls" style="display:none;" onchange="pkgLoadExcel(this)"/>
+          </div>
+        </div>
+
+        <!-- Opera Changes Log -->
+        <div class="upload-zone" style="cursor:pointer;" onclick="document.getElementById('pkgPdfFileInput').click()">
+          <div class="upload-label-bar">
+            <div class="upload-dot mint"></div>
+            <span class="upload-lbl">Opera Changes Log</span>
+            <span class="upload-sub">.pdf · Group=Reservation, Type=Update Reservation, Description="product"</span>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;padding:16px;text-align:center;gap:4px;">
+            <div style="font-size:1.6rem;">🧾</div>
+            <div id="pkgPdfLabel" style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">Click to upload</div>
+            <input type="file" id="pkgPdfFileInput" accept=".pdf,.PDF" style="display:none;" onchange="pkgLoadPdf(this)"/>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="error-box" id="pkgError"><span>⚠</span><span id="pkgErrorMsg"></span></div>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button class="btn gold" onclick="pkgRun()">🔍 Resolve</button>
+        <button class="btn" onclick="pkgClear()">✕ Clear</button>
+      </div>
+    </div>
+
+    <div id="pkgResultsWrap" style="display:none;">
+      <div class="kpi-row c3" style="margin-top:18px;" id="pkgKpis"></div>
+
+      <div class="filter-row" id="pkgFilters" style="margin-bottom:14px;">
+        <div class="fchip on" data-pkgf="all"      onclick="pkgSetFilter('all',this)">All <span id="pkgfc-all">0</span></div>
+        <div class="fchip"    data-pkgf="resolved" onclick="pkgSetFilter('resolved',this)">✅ Resolved <span id="pkgfc-resolved">0</span></div>
+        <div class="fchip"    data-pkgf="review"   onclick="pkgSetFilter('review',this)">⚠ Needs Review <span id="pkgfc-review">0</span></div>
+        <div class="search-wrap" style="margin-left:auto;">
+          <span style="padding:0 8px;color:var(--text3);">⌕</span>
+          <input type="text" id="pkgSearch" placeholder="Room, conf. no., product code, or staff…" oninput="pkgSetSearch(this.value)"/>
+        </div>
+      </div>
+
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:70px;">Room</th>
+              <th>Confirmation No.</th>
+              <th>Product Code</th>
+              <th>Price</th>
+              <th>Dates</th>
+              <th>Sold By</th>
+              <th style="width:120px;">Status</th>
+            </tr>
+          </thead>
+          <tbody id="pkgTable"></tbody>
+        </table>
+      </div>
+
+      <div style="margin-top:12px;font-family:var(--mono);font-size:0.62rem;color:var(--text3);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span>💡 Update the resolved rows in IN-Gauge, then</span>
+        <button class="btn gold sm" id="pkgCopyBtn" onclick="pkgCopyResolved()">📋 Copy Resolved Rows</button>
       </div>
     </div>
 
@@ -2984,6 +3081,7 @@
 <script src="arrivals-proc.js"></script>
 <script src="noshow.js"></script>
 <script src="inhouse-tally.js"></script>
+<script src="package-audit.js"></script>
 <script src="td-audit.js"></script>
 
 <script>
