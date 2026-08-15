@@ -512,6 +512,7 @@
   <button class="btn rose" onclick="clearDep()" id="depClearBtn">✕ <span class="btn-lbl">Clear</span></button>
 </div>
   </div>
+    <details class="howto"><summary>❔ How to use this</summary><ol><li>In Opera, export the departure report as <b>Delimited Data</b></li><li>Upload the file here, or paste it into the box</li><li>Every departing room becomes a card — tap one to add a note, mark it followed up, or stamp it done</li></ol></details>
   <div class="card" id="depUploadCard">
     <div class="upload-zone">
       <div class="upload-label-bar">
@@ -734,6 +735,7 @@
       <button class="btn rose" onclick="clearArrivals()">✕ Clear</button>
     </div>
   </div>
+    <details class="howto"><summary>❔ How to use this</summary><ol><li>Paste today's Opera arrivals into the box, or upload the file</li><li>Press <b>⚡ Load Pasted</b></li><li><b>✦ Nationality</b> fills in missing nationalities · <b>⬇ Export</b> when you're done</li><li>Saves by itself and syncs to everyone else on shift</li></ol></details>
   <div class="card">
     <div class="upload-zone">
       <div class="upload-label-bar"><div class="upload-dot sky"></div><span class="upload-lbl">Opera Arrivals</span><span class="upload-sub">Paste or upload Excel/CSV</span></div>
@@ -783,6 +785,7 @@
       <button class="btn rose" onclick="xrefClear()">✕ Clear</button>
     </div>
   </div>
+    <details class="howto"><summary>❔ How to use this</summary><ol><li>Load the <b>Departures</b> board first — this checks against it</li><li>Upload today's Opera arrivals report here</li><li>Press <b>🔗 Load &amp; Check Extensions</b> — a guest on both lists has extended their stay</li></ol></details>
 
   <div id="xrefPasteCard" class="card" style="margin-bottom:16px;">
     <div class="upload-zone">
@@ -942,6 +945,7 @@
       <div class="page-hd-left"><h1>Nationality Report</h1><p>How many guests came from each country this month · needs the Opera report <b>stat_countrybymon</b> (Delimited Data)</p></div>
       <div class="page-hd-actions"><button class="btn rose" onclick="clearNat()">✕ Clear</button></div>
     </div>
+    <details class="howto"><summary>❔ How to use this</summary><ol><li>In Opera, run <code>stat_countrybymon</code> and export as <b>Delimited Data</b></li><li>Upload or paste the file</li><li>Press <b>⚡ Process</b>, then <b>Copy All Rows</b> to paste into your sheet</li></ol></details>
     <div class="card">
       <div class="upload-zone">
         <div class="upload-label-bar"><div class="upload-dot gold"></div><span class="upload-lbl">Nationality Report</span><span class="upload-sub">stat_countrybymon_….txt</span></div>
@@ -1027,6 +1031,7 @@
       <div class="page-hd-left"><h1>Rented Rooms & Beds</h1><p>Rooms and beds sold per day · needs two Opera reports: <b>history_forecast</b> and <b>statroomtype</b> (Delimited Data)</p></div>
       <div class="page-hd-actions"><button class="btn rose" onclick="clearRent()">✕ Clear</button></div>
     </div>
+    <details class="howto"><summary>❔ How to use this</summary><ol><li>In Opera, export <code>history_forecast</code> and <code>statroomtype</code> as <b>Delimited Data</b></li><li>Put one file in each box</li><li>Press <b>⚡ Process</b> to see rooms and beds sold per day</li></ol></details>
     <div class="card">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="upload-zone"><div class="upload-label-bar"><div class="upload-dot sky"></div><span class="upload-lbl">File 1 — History Forecast</span><span class="upload-sub">history_forecast_….txt</span></div><textarea id="rentInput1" placeholder="Contains: NO_ROOMS, CONSIDERED_DATE …"></textarea></div>
@@ -1070,6 +1075,7 @@
       <div class="page-hd-left"><h1>Night Audit · PM Rooms</h1><p>Compares the PM room list in Opera against the management Excel · shows every difference to fix</p></div>
       <div class="page-hd-actions"><button class="btn rose" onclick="clearAudit()">✕ Clear</button></div>
     </div>
+    <details class="howto"><summary>❔ How to use this</summary><ol><li>In Opera, export the PM rooms report <code>gipmbyroom</code> as <b>Delimited Data</b></li><li>Upload the management Excel in the second box</li><li>Press <b>🔍 Compare</b> — every room the two disagree on is listed</li></ol></details>
     <div class="card">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="upload-zone"><div class="upload-label-bar"><div class="upload-dot sky"></div><span class="upload-lbl">Opera — PM Rooms</span><span class="upload-sub">gipmbyroom_….txt</span></div><textarea id="naOperaInput" placeholder="Opera Cloud → Front Desk → In-House Guests by Room → Delimited Data"></textarea></div>
@@ -1116,6 +1122,7 @@
       <div class="page-hd-left"><h1>Immigration Check</h1><p>Finds guests whose details immigration needs but Opera is missing — nationality, gender, passport, first name, email — and rooms with an unregistered guest</p></div>
       <div class="page-hd-actions"><button class="btn rose" onclick="clearImmig()">✕ Clear</button></div>
     </div>
+    <details class="howto"><summary>❔ How to use this</summary><ol><li>Export today's guest XML from Vicas</li><li>Paste it in, or upload the file</li><li>Press <b>🔍 Analyse</b> — guests are grouped by what immigration is missing, and rooms with an unregistered guest are flagged</li></ol></details>
     <div class="card" style="border-color:rgba(90,180,232,0.25);">
       <div style="font-size:0.8rem;font-weight:600;margin-bottom:4px;">📂 Optional — Import for Auto-Recovery</div>
       <div style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);margin-bottom:12px;">
@@ -1206,6 +1213,7 @@
         <button class="btn rose" onclick="itClear()">✕ Clear</button>
       </div>
     </div>
+    <details class="howto"><summary>❔ How to use this</summary><ol><li>Opera: <b>Guest In-House By Room</b> (<code>gibyroom</code>), tab-delimited</li><li>Vicas: the <b>full in-house roster</b> XML — not the "today's check-ins" report</li><li>Press <b>🔍 Reconcile</b> — only the rooms where the two systems disagree are listed</li></ol></details>
 
     <div class="card">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
@@ -1511,6 +1519,7 @@
       <button class="btn rose sm" onclick="ttClear()">✕ New Report</button>
     </div>
   </div>
+    <details class="howto"><summary>❔ How to use this</summary><ol><li>Paste the Opera arrivals report into the box</li><li>Press <b>⚡ Parse Report</b></li><li>Rooms needing a date fixed in the TD portal are listed · <b>📋 Copy List</b> to take them with you</li></ol></details>
 
   <!-- ── UPLOAD STATE ── -->
   <div id="ttPasteCard">
@@ -1612,6 +1621,7 @@
         <button class="btn rose" onclick="tdaClear()">✕ Clear</button>
       </div>
     </div>
+    <details class="howto"><summary>❔ How to use this</summary><ol><li>Opera: the tax report <code>finjrnlbytax</code>, tab-delimited</li><li>DTCM: the <b>HotelTransactionReport</b> XML</li><li>Press <b>🔍 Run Audit</b> — rooms still charged past the 30-night cap are flagged</li></ol></details>
 
     <!-- ── How to Use ── -->
     <div class="card" id="tdaHowToCard" style="border-color:rgba(90,180,232,0.25);cursor:pointer;" onclick="tdaToggleHowTo()">
@@ -1774,6 +1784,7 @@
       <button class="btn rose"  onclick="apResetAll()">✕ Clear</button>
     </div>
   </div>
+    <details class="howto"><summary>❔ How to use this</summary><ol><li>Import the Opera Cloud arrivals report</li><li>Press <b>⚡ Process</b> — packages are scanned and codes assigned</li><li><b>⬇ Export Excel</b> when done · <b>💾 Save Profile</b> keeps your code settings for next time</li></ol></details>
 
   <!-- STEP 1: IMPORT -->
   <div class="card" style="margin-bottom:14px;">
@@ -2177,6 +2188,7 @@
       <button class="btn rose sm" onclick="nsClear()">&#x2715; New Report</button>
     </div>
   </div>
+    <details class="howto"><summary>❔ How to use this</summary><ol><li>In Opera, export the <b>NA40</b> no-show report as a PDF</li><li>Drop it on the box below, or click to pick the file</li><li>Press <b>📋 Copy for Excel</b> to paste straight into your sheet</li></ol></details>
 
   <!-- Upload state -->
   <div id="nsUploadCard">
