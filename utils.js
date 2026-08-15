@@ -315,3 +315,85 @@ function setSpinner(id, on) {
   if (!el) return;
   el.innerHTML = on ? '<div class="spinner"></div> ' : '';
 }
+
+// ── Busy / progress ───────────────────────────────────────
+//  Shared feedback for jobs slow enough to look frozen — parsing a
+//  15-page PDF, an XML roster, a large Excel export.
+//
+//  busyStart('Reading the Opera log');          // indeterminate
+//  busyStep(3, 15, 'page 3 of 15');             // determinate
+//  busyDone();
+//
+//  The markup is created on first use and reused, so panels don't
+//  need to carry their own spinner. Always pair a busyStart with a
+//  busyDone in a finally block — a stuck overlay blocks the whole UI.
+let _busyEls = null;
+
+function _busyEnsure() {
+  if (_busyEls) return _busyEls;
+  const top = document.createElement('div');
+  top.id = 'appTopProgress';
+  top.innerHTML = '<i></i>';
+
+  const ov = document.createElement('div');
+  ov.id = 'busyOverlay';
+  ov.innerHTML = `
+    <div class="busy-card">
+      <div class="busy-ring"></div>
+      <div class="busy-title"></div>
+      <div class="busy-detail"></div>
+      <div class="busy-bar"><i></i></div>
+      <div class="busy-rows"><span></span><span></span><span></span><span></span></div>
+    </div>`;
+
+  document.body.appendChild(top);
+  document.body.appendChild(ov);
+  _busyEls = {
+    top, topBar: top.querySelector('i'), ov,
+    title:  ov.querySelector('.busy-title'),
+    detail: ov.querySelector('.busy-detail'),
+    bar:    ov.querySelector('.busy-bar'),
+    barFill:ov.querySelector('.busy-bar > i'),
+  };
+  return _busyEls;
+}
+
+function busyStart(title, detail) {
+  const e = _busyEnsure();
+  e.title.textContent  = title || 'Working…';
+  e.detail.textContent = detail || '';
+  e.barFill.style.width = '0%';
+  e.bar.style.display = 'none';        // shown once we know a total
+  e.ov.classList.add('on');
+  e.top.classList.add('on', 'indet');
+  e.topBar.style.width = '';
+}
+
+// done/total drives both bars; omit total to just update the caption.
+function busyStep(done, total, detail) {
+  const e = _busyEnsure();
+  if (detail != null) e.detail.textContent = detail;
+  if (!total) return;
+  const pct = Math.max(0, Math.min(100, Math.round((done / total) * 100)));
+  e.top.classList.remove('indet');
+  e.bar.style.display = '';
+  e.barFill.style.width = pct + '%';
+  e.topBar.style.width  = pct + '%';
+}
+
+function busyDetail(text) { _busyEnsure().detail.textContent = text || ''; }
+
+function busyDone() {
+  if (!_busyEls) return;
+  const e = _busyEls;
+  e.topBar.style.width = '100%';
+  e.ov.classList.remove('on');
+  setTimeout(() => {
+    e.top.classList.remove('on', 'indet');
+    e.topBar.style.width = '0%';
+  }, 260);
+}
+
+// Lets the browser paint the overlay before a synchronous parse blocks
+// the main thread — without this the spinner never actually appears.
+function busyPaint() { return new Promise(r => requestAnimationFrame(() => setTimeout(r, 0))); }

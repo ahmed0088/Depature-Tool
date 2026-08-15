@@ -109,16 +109,19 @@ async function nsParsePDF(arrayBuffer) {
 
   if (typeof pdfjsLib === 'undefined') {
     showToast('PDF engine not loaded yet — please wait a moment and try again', 'err');
-    nsSetLoading(false);
+    busyDone(); nsSetLoading(false);
     return;
   }
 
   try {
+    busyStart('Reading the No-Show report', 'opening the PDF…');
+    await busyPaint();
     const data = new Uint8Array(arrayBuffer);
     const pdf  = await pdfjsLib.getDocument({ data }).promise;
     let allRows = [];
 
     for (let p = 1; p <= pdf.numPages; p++) {
+      busyStep(p, pdf.numPages, `reading page ${p} of ${pdf.numPages}`);
       const page    = await pdf.getPage(p);
       const content = await page.getTextContent();
       const rows    = nsGroupByY(content.items, 1.2);
@@ -129,7 +132,7 @@ async function nsParsePDF(arrayBuffer) {
 
     if (guests.length === 0) {
       showToast('No no-show guests found — check this is an NA40 report', 'err');
-      nsSetLoading(false);
+      busyDone(); nsSetLoading(false);
       return;
     }
 
@@ -148,7 +151,7 @@ async function nsParsePDF(arrayBuffer) {
     // very likely rebooked by FO already.
     nsCheckArrivals();
 
-    nsSetLoading(false);
+    busyDone(); nsSetLoading(false);
     nsShowResults();
     nsRender();
     nsUpdateBadge();
@@ -160,7 +163,7 @@ async function nsParsePDF(arrayBuffer) {
   } catch (err) {
     console.error('[noshow] PDF parse error:', err);
     showToast('Could not parse PDF — make sure it is an Opera NA40 report', 'err');
-    nsSetLoading(false);
+    busyDone(); nsSetLoading(false);
   }
 }
 

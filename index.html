@@ -939,7 +939,7 @@
 <div class="panel" id="panel-nationality">
   <div style="max-width:1200px;">
     <div class="page-hd">
-      <div class="page-hd-left"><h1>Nationality Report</h1><p>Opera stat_countrybymon · Delimited Data</p></div>
+      <div class="page-hd-left"><h1>Nationality Report</h1><p>How many guests came from each country this month · needs the Opera report <b>stat_countrybymon</b> (Delimited Data)</p></div>
       <div class="page-hd-actions"><button class="btn rose" onclick="clearNat()">✕ Clear</button></div>
     </div>
     <div class="card">
@@ -1024,7 +1024,7 @@
 <div class="panel" id="panel-rent">
   <div style="max-width:1200px;">
     <div class="page-hd">
-      <div class="page-hd-left"><h1>Rented Rooms & Beds</h1><p>history_forecast + statroomtype · Delimited Data</p></div>
+      <div class="page-hd-left"><h1>Rented Rooms & Beds</h1><p>Rooms and beds sold per day · needs two Opera reports: <b>history_forecast</b> and <b>statroomtype</b> (Delimited Data)</p></div>
       <div class="page-hd-actions"><button class="btn rose" onclick="clearRent()">✕ Clear</button></div>
     </div>
     <div class="card">
@@ -1067,7 +1067,7 @@
 <div class="panel" id="panel-audit">
   <div style="max-width:1200px;">
     <div class="page-hd">
-      <div class="page-hd-left"><h1>Night Audit · PM Rooms</h1><p>Compare Opera vs Management Excel · Find and fix differences</p></div>
+      <div class="page-hd-left"><h1>Night Audit · PM Rooms</h1><p>Compares the PM room list in Opera against the management Excel · shows every difference to fix</p></div>
       <div class="page-hd-actions"><button class="btn rose" onclick="clearAudit()">✕ Clear</button></div>
     </div>
     <div class="card">
@@ -1113,7 +1113,7 @@
 <div class="panel" id="panel-immig">
   <div style="max-width:1100px;">
     <div class="page-hd">
-      <div class="page-hd-left"><h1>Immigration Check</h1><p>Opera XML · Flags missing nationality, gender, passport, first name, email &amp; missing guest profiles</p></div>
+      <div class="page-hd-left"><h1>Immigration Check</h1><p>Finds guests whose details immigration needs but Opera is missing — nationality, gender, passport, first name, email — and rooms with an unregistered guest</p></div>
       <div class="page-hd-actions"><button class="btn rose" onclick="clearImmig()">✕ Clear</button></div>
     </div>
     <div class="card" style="border-color:rgba(90,180,232,0.25);">
@@ -1199,7 +1199,7 @@
     <div class="page-hd">
       <div class="page-hd-left">
         <h1>Inhouse Tally</h1>
-        <p>Opera Guest In-House By Room vs Immigration/Guest Count XML · reconciles occupancy room-by-room</p>
+        <p>Checks Opera and Vicas agree on who is in the hotel · lists every room where the two systems differ</p>
       </div>
       <div class="page-hd-actions">
         <button class="btn gold" onclick="itRun()">🔍 Reconcile</button>
@@ -1605,7 +1605,7 @@
     <div class="page-hd">
       <div class="page-hd-left">
         <h1>TD 30-Day Audit</h1>
-        <p>Opera Tourism Dirham (7510) vs DTCM · finds rooms Opera keeps charging after DTCM's 30-night cap</p>
+        <p>Finds guests still being charged tourism dirham after the 30-night limit · compares Opera's 7510 charges against DTCM</p>
       </div>
       <div class="page-hd-actions">
         <button class="btn gold" onclick="tdaRun()">🔍 Run Audit</button>

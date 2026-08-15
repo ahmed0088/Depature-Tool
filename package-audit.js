@@ -30,11 +30,15 @@ function pkgLoadExcel(input) {
   const file = input?.files?.[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = e => {
+  reader.onload = async e => {
     try {
+      busyStart('Reading the IN-Gauge export', 'opening the spreadsheet…');
+      await busyPaint();
       const wb  = XLSX.read(e.target.result, { type: 'array' });
       const ws  = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      busyDetail(`sorting ${Math.max(rows.length - 1, 0)} charges…`);
+      await busyPaint();
       pkgUnknowns = _pkgParseExcelUnknowns(rows);
       const needsCount = pkgUnknowns.filter(u => u.needsProduct || u.needsEmployee).length;
       const lbl = document.getElementById('pkgExcelLabel');
@@ -46,6 +50,8 @@ function pkgLoadExcel(input) {
         : 'No rows found in this file', pkgUnknowns.length ? 'ok' : 'err');
     } catch (err) {
       showToast('Failed to read the IN-Gauge Excel file: ' + err.message, 'err');
+    } finally {
+      busyDone();
     }
   };
   reader.readAsArrayBuffer(file);
@@ -120,9 +126,12 @@ function pkgLoadPdf(input) {
       return;
     }
     try {
+      busyStart('Reading the Opera Changes Log', 'opening the PDF…');
+      await busyPaint();
       const data = new Uint8Array(e.target.result);
       const pdf  = await pdfjsLib.getDocument({ data }).promise;
-      pkgEvents  = await _pkgParsePdfEvents(pdf);
+      pkgEvents  = await _pkgParsePdfEvents(pdf, (done, total) =>
+        busyStep(done, total, `reading page ${done} of ${total}`));
       const count = Object.keys(pkgEvents).length;
       const lbl = document.getElementById('pkgPdfLabel');
       if (lbl) lbl.textContent = count
@@ -133,6 +142,8 @@ function pkgLoadPdf(input) {
         : 'No product events found — check the Description filter was "product"', count ? 'ok' : 'err');
     } catch (err) {
       showToast('Failed to read the Opera Changes Log PDF: ' + err.message, 'err');
+    } finally {
+      busyDone();
     }
   };
   reader.readAsArrayBuffer(file);
@@ -167,10 +178,11 @@ const _PKG_CHROME = /^(?:Page \d+ of \d+|user_activity_log|Filter|For Activity |
 // confirmation (and the tail of the user's name) continues at the top of
 // the next page, which is why rows are stitched across the page break
 // before any events are read out of them.
-async function _pkgParsePdfEvents(pdf) {
+async function _pkgParsePdfEvents(pdf, onPage) {
   const rows = []; // every data row, in reading order across all pages
 
   for (let p = 1; p <= pdf.numPages; p++) {
+    if (onPage) onPage(p, pdf.numPages);
     const page    = await pdf.getPage(p);
     const content = await page.getTextContent();
 
@@ -438,13 +450,16 @@ function _pkgApplyVerdicts(results) {
 }
 
 // ── Reconcile ────────────────────────────────────────────────
-function pkgRun() {
+async function pkgRun() {
   const errBox = document.getElementById('pkgError');
   errBox.classList.remove('show');
   const showErr = msg => { document.getElementById('pkgErrorMsg').textContent = msg; errBox.classList.add('show'); };
 
   if (!pkgUnknowns.length) return showErr('Upload the IN-Gauge export first — no rows loaded.');
   if (!Object.keys(pkgEvents).length) return showErr('Upload the Opera Changes Log PDF first.');
+
+  busyStart('Checking the charges', `matching ${pkgUnknowns.length} against Opera…`);
+  await busyPaint();
 
   const results = pkgUnknowns.map(u => {
     const cands = pkgEvents[u.conf] || [];
@@ -474,6 +489,7 @@ function pkgRun() {
   pkgResults = results;
   document.getElementById('pkgResultsWrap').style.display = 'block';
   pkgRender();
+  busyDone();
 }
 
 // Plain-language instruction for the row — what the person reading this
