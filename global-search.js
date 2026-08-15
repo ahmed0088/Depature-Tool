@@ -99,7 +99,7 @@ function gsRenderResults(q) {
     return;
   }
   if (!_gsResults.length) {
-    box.innerHTML = `<div class="gs-empty">No matches for "${q}"</div>`;
+    box.innerHTML = `<div class="gs-empty">No matches for "${escapeHtml(q)}"</div>`;
     return;
   }
 

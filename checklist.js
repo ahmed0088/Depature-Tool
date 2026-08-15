@@ -264,7 +264,7 @@ function clOpenLightbox(stepId, idx) {
     current = (i + photos.length) % photos.length;
     img.src = photos[current].data;
     const ts = photos[current].ts ? ' · ' + new Date(photos[current].ts).toLocaleDateString('en-GB') : '';
-    cap.innerHTML = `<strong>${step ? step.name : 'Step'}</strong><br>${(current+1)} / ${photos.length} · ${photos[current].name}${ts}`;
+    cap.innerHTML = `<strong>${escapeHtml(step ? step.name : 'Step')}</strong><br>${(current+1)} / ${photos.length} · ${escapeHtml(photos[current].name)}${ts}`;
     document.getElementById('clLbPrev').style.display = photos.length > 1 ? '' : 'none';
     document.getElementById('clLbNext').style.display = photos.length > 1 ? '' : 'none';
   }

@@ -550,10 +550,10 @@ function apRenderTags(col) {
     if (col === 'fb') {
       d.innerHTML = `
         <i class="ti ti-grip-vertical ap-drag-handle"></i>
-        <span class="ap-tag-name">${p}</span>
+        <span class="ap-tag-name">${escapeHtml(p)}</span>
         <button class="ap-tag-rm" onclick="apRemovePkg('${col}',${i})" title="Remove">×</button>`;
     } else {
-      d.innerHTML = `<i class="ti ti-grip-vertical ap-drag-handle"></i><span class="ap-tag-name">${p}</span><button class="ap-tag-rm" onclick="apRemovePkg('${col}',${i})" title="Remove">×</button>`;
+      d.innerHTML = `<i class="ti ti-grip-vertical ap-drag-handle"></i><span class="ap-tag-name">${escapeHtml(p)}</span><button class="ap-tag-rm" onclick="apRemovePkg('${col}',${i})" title="Remove">×</button>`;
     }
     d.addEventListener('dragstart', e => { apDragSrcCol = col; apDragSrcIdx = i; d.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
     d.addEventListener('dragend',   () => d.classList.remove('dragging'));
