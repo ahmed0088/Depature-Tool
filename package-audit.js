@@ -112,6 +112,7 @@ function _pkgParseExcelUnknowns(rows) {
   const iDep     = _pkgFindCol(hdrs, 'Departure Date');
   const iEmp     = _pkgFindCol(hdrs, 'Employee');
   const iDaily   = _pkgFindCol(hdrs, 'Daily Date');
+  const iStatus  = _pkgFindCol(hdrs, 'Status');
   if (iProduct < 0 || iConf < 0) return [];
 
   const out = [];
@@ -136,6 +137,7 @@ function _pkgParseExcelUnknowns(rows) {
       arr:    iArr    >= 0 ? String(r[iArr]    || '').trim() : '',
       dep:    iDep    >= 0 ? String(r[iDep]    || '').trim() : '',
       daily:  iDaily  >= 0 ? String(r[iDaily]  || '').trim() : '',
+      status: iStatus >= 0 ? String(r[iStatus] || '').trim().toUpperCase() : '',
       product, employee, needsProduct, needsEmployee,
     });
   }
@@ -585,6 +587,13 @@ function _pkgApplyVerdicts(results) {
     r.family = _pkgFamilyName(r);
     r.verdict = 'credit';
     r.denyReason = '';
+
+    // Already rejected in IN-Gauge: it credits nobody and there is nothing
+    // left to act on, so it takes no further part in any of the checks
+    // below — including the duplicate rule, where counting a rejected
+    // charge would make a legitimate one look like the extra copy.
+    if (r.status === 'DENIED') { r.verdict = 'settled'; return; }
+
     if (r.matchedEvent) return;
 
     if (!r.candidates || !r.candidates.length) {
@@ -735,6 +744,7 @@ function _pkgRenderCoverage() {
 }
 
 function _pkgActionText(r) {
+  if (r.verdict === 'settled') return 'Nothing — already denied';
   if (r.verdict === 'deny')    return 'Remove this charge';
   if (r.verdict === 'outside') return 'Not in this log';
   if (r.verdict === 'review')  return 'Check in Opera';
@@ -750,7 +760,8 @@ function _pkgActionText(r) {
 
 function _pkgActionCell(r) {
   const txt = _pkgActionText(r);
-  const color = r.verdict === 'deny' ? 'var(--rose)'
+  const color = r.verdict === 'settled' ? 'var(--text3)'
+    : r.verdict === 'deny' ? 'var(--rose)'
     : r.verdict === 'outside' ? 'var(--text3)'
     : r.verdict === 'review' ? 'var(--amber)'
     : r.reassign ? 'var(--amber)'
@@ -771,7 +782,7 @@ function pkgRender() {
                         (r.verdict === 'credit' && !r.alreadyComplete) ||
                         r.verdict === 'review';
     if (pkgFilter_ === 'action'    && !needsAction) return false;
-    if (pkgFilter_ === 'complete'  && !(r.alreadyComplete && r.verdict === 'credit')) return false;
+    if (pkgFilter_ === 'complete'  && !((r.alreadyComplete && r.verdict === 'credit') || r.verdict === 'settled')) return false;
     if (pkgFilter_ === 'resolved'  && !(r.verdict === 'credit' && !r.alreadyComplete)) return false;
     if (pkgFilter_ === 'deny'      && r.verdict !== 'deny') return false;
     if (pkgFilter_ === 'review'    && r.verdict !== 'review') return false;
@@ -783,7 +794,8 @@ function pkgRender() {
     return true;
   });
 
-  const completeCount  = pkgResults.filter(r => r.verdict === 'credit' && r.alreadyComplete).length;
+  const settledCount   = pkgResults.filter(r => r.verdict === 'settled').length;
+  const completeCount  = pkgResults.filter(r => (r.verdict === 'credit' && r.alreadyComplete) || r.verdict === 'settled').length;
   const fixedCount     = pkgResults.filter(r => r.verdict === 'credit' && !r.alreadyComplete).length;
   const denyCount      = pkgResults.filter(r => r.verdict === 'deny').length;
   const reviewCount    = pkgResults.filter(r => r.verdict === 'review').length;
@@ -851,7 +863,9 @@ function pkgRender() {
     const claimed = r.employee && r.employee !== '-'
       ? `<span title="IN-Gauge credits this — not confirmed against Opera">${escapeHtml(_pkgUserLabel(r.employee))}</span>`
       : `<span style="color:var(--rose);">nobody</span>`;
-    const statusCell = r.verdict === 'outside'
+    const statusCell = r.verdict === 'settled'
+      ? `<span style="color:var(--text3);">⛔ Denied</span>`
+      : r.verdict === 'outside'
       ? `<span style="color:var(--text3);">⏳ Not in log</span>`
       : `<span style="color:var(--amber);">⚠ Check</span>`;
     return `<tr${r.verdict === 'outside' ? ' style="opacity:0.75;"' : ''}>
