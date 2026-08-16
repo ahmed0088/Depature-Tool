@@ -26,6 +26,7 @@ let pkgEvents   = {};   // conf No. -> [{code, price, from, to, user}], from the
 let pkgResults  = [];   // joined output after pkgRun()
 let pkgFilter_  = 'all';
 let pkgSearch_  = '';
+let pkgPdfFiles = [];   // names of the Changes Log exports merged so far
 
 // ── IN-Gauge export upload (.xlsx) ──────────────────────────
 function pkgLoadExcel(input) {
@@ -118,37 +119,63 @@ function _pkgParseExcelUnknowns(rows) {
 }
 
 // ── Opera Changes Log upload (.pdf) ─────────────────────────
-function pkgLoadPdf(input) {
-  const file = input?.files?.[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = async e => {
-    if (typeof pdfjsLib === 'undefined') {
-      showToast('PDF engine not loaded yet — please wait a moment and try again', 'err');
-      return;
-    }
-    try {
-      busyStart('Reading the Opera Changes Log', 'opening the PDF…');
-      await busyPaint();
-      const data = new Uint8Array(e.target.result);
+// Opera won't run the Changes Log without an Action Type, and a package
+// can be logged under either one: added at booking time it lands under New
+// Reservation, added later under Update Reservation. So the report has to be
+// run once for each, and both logs uploaded here — selected together or one
+// after the other. Loads merge rather than replace, so the second upload
+// doesn't wipe the first.
+async function pkgLoadPdf(input) {
+  const files = [...(input?.files || [])];
+  if (!files.length) return;
+  if (typeof pdfjsLib === 'undefined') {
+    showToast('PDF engine not loaded yet — please wait a moment and try again', 'err');
+    return;
+  }
+  try {
+    busyStart('Reading the Opera Changes Log', 'opening the PDF…');
+    await busyPaint();
+    let fresh = 0;
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const prefix = files.length > 1 ? `log ${i + 1} of ${files.length} · ` : '';
+      const data = new Uint8Array(await file.arrayBuffer());
       const pdf  = await pdfjsLib.getDocument({ data }).promise;
-      pkgEvents  = await _pkgParsePdfEvents(pdf, (done, total) =>
-        busyStep(done, total, `reading page ${done} of ${total}`));
-      const count = Object.keys(pkgEvents).length;
-      const lbl = document.getElementById('pkgPdfLabel');
-      if (lbl) lbl.textContent = count
-        ? `✓ ${count} confirmation${count !== 1 ? 's' : ''} with product activity`
-        : 'Loaded — no product ADD events found';
-      showToast(count
-        ? `✦ ${count} confirmations with product activity loaded`
-        : 'No product events found — check the Description filter was "product"', count ? 'ok' : 'err');
-    } catch (err) {
-      showToast('Failed to read the Opera Changes Log PDF: ' + err.message, 'err');
-    } finally {
-      busyDone();
+      const ev   = await _pkgParsePdfEvents(pdf, (done, total) =>
+        busyStep(done, total, `${prefix}reading page ${done} of ${total}`));
+      fresh += _pkgMergeEvents(pkgEvents, ev);
+      if (!pkgPdfFiles.includes(file.name)) pkgPdfFiles.push(file.name);
     }
-  };
-  reader.readAsArrayBuffer(file);
+    const count = Object.keys(pkgEvents).length;
+    const lbl = document.getElementById('pkgPdfLabel');
+    if (lbl) lbl.textContent = count
+      ? `✓ ${pkgPdfFiles.length} log${pkgPdfFiles.length !== 1 ? 's' : ''} · ${count} confirmation${count !== 1 ? 's' : ''} with product activity`
+      : 'Loaded — no product events found';
+    showToast(count
+      ? `✦ ${fresh} new event${fresh !== 1 ? 's' : ''} · ${count} confirmations loaded`
+      : 'No product events found — check the Search Text was "product"', count ? 'ok' : 'err');
+  } catch (err) {
+    showToast('Failed to read the Opera Changes Log PDF: ' + err.message, 'err');
+  } finally {
+    busyDone();
+    if (input) input.value = '';   // let the same file be re-picked after a Clear
+  }
+}
+
+// Merges a freshly parsed log into what's already loaded, skipping entries
+// already present — the two Action Type exports overlap on nothing, but the
+// same file being picked twice shouldn't double every event.
+function _pkgMergeEvents(target, incoming) {
+  let added = 0;
+  Object.entries(incoming).forEach(([conf, list]) => {
+    const dest = target[conf] = target[conf] || [];
+    list.forEach(e => {
+      const dup = dest.some(x => x.ts === e.ts && x.code === e.code &&
+                                 x.action === e.action && x.user === e.user && x.price === e.price);
+      if (!dup) { dest.push(e); added++; }
+    });
+  });
+  return added;
 }
 
 // Column x-thresholds tuned to Opera's Changes Log / User Activity Log PDF
@@ -754,7 +781,7 @@ function pkgCopyDeny() {
 }
 
 function pkgClear() {
-  pkgUnknowns = []; pkgEvents = {}; pkgResults = []; pkgFilter_ = 'all'; pkgSearch_ = '';
+  pkgUnknowns = []; pkgEvents = {}; pkgResults = []; pkgFilter_ = 'all'; pkgSearch_ = ''; pkgPdfFiles = [];
   const ei = document.getElementById('pkgExcelFileInput'); if (ei) ei.value = '';
   const pi = document.getElementById('pkgPdfFileInput');   if (pi) pi.value = '';
   const el = document.getElementById('pkgExcelLabel'); if (el) el.textContent = 'Click to upload';
