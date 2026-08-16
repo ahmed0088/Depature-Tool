@@ -440,3 +440,39 @@ document.addEventListener('DOMContentLoaded', () => {
     requestAnimationFrame(() => { queued = false; _a11yUpgradeIconButtons(); });
   }).observe(document.body, { childList: true, subtree: true });
 });
+
+// ── App version + forced update ───────────────────────────
+//  Phones keep the whole app in a service-worker cache, so a fix can be
+//  live on the server while a colleague is still running last week's
+//  copy — and the bug they report has usually already been fixed. This
+//  puts the running version on screen so it can be read out, and gives
+//  a one-tap way to drop the cache and reload.
+//
+//  Keep in step with CACHE_NAME in sw.js.
+const APP_VERSION = 'v39';
+
+async function appForceUpdate() {
+  if (!confirm('Reload the app and fetch the newest version?')) return;
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+    }
+    if (window.caches) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+  } catch (err) {
+    console.warn('[update] cache clear failed:', err);
+  }
+  // Cache-busting query so the HTML itself isn't served from the browser
+  // cache that we just stepped around.
+  location.replace(location.pathname + '?v=' + Date.now());
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  ['appVersionPill', 'mobVersionLabel'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = APP_VERSION;
+  });
+});

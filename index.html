@@ -391,6 +391,7 @@
     <div class="tb-pill live">● Live</div>
     <div class="tb-pill occ-pill" id="topbarOcc" style="display:none;">🏨 <span id="occLabel">—</span></div>
     <div class="tb-pill" id="topbarTime">—</div>
+    <div class="tb-pill" id="appVersionPill" onclick="appForceUpdate()" title="App version — tap to force an update if it looks out of date" style="cursor:pointer;">—</div>
     <div class="icon-round mob-hide" onclick="gsOpen()" title="Search — room / guest / task (Ctrl+K)">🔍</div>
     <div class="icon-round mob-hide" onclick="hoOpen()" title="Shift Handover">📋</div>
     <div class="icon-round mob-hide" onclick="openFeedback()"  title="Feedback">💬</div>
@@ -4113,6 +4114,7 @@ async function appInit() {
     <div class="mob-drawer-status">
       <div id="mobFbDot" class="mob-fb-dot"></div>
       <span id="mobFbLabel" class="mob-fb-label">Connecting…</span>
+      <span id="mobVersionLabel" class="mob-fb-label" onclick="appForceUpdate()" style="cursor:pointer;text-decoration:underline;">—</span>
     </div>
     <div class="mob-drawer-themes">
       <button class="mob-theme-btn" data-t="night-ops" onclick="setTheme('night-ops',this)" title="Night Ops">🌙</button>
