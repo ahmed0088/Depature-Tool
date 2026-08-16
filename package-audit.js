@@ -519,12 +519,31 @@ function _pkgFamilyOfCode(code) {
   return null;
 }
 
+// A booking that arrives through TARS or another interface writes its
+// packages under a system account, and nobody at the desk sold those — so
+// those entries are passed over when deciding who to credit. Machine
+// accounts appear as an opaque id (ACCOREN-70F54B3222) rather than a name,
+// which is what the hex test catches; a name made only of letters is
+// always treated as a real person, so an unfamiliar colleague is never
+// mistaken for a system.
+const _PKG_SYSTEM_USER = /(^|[-.])(TARS|PRODUCTION|INTERFACE|WEBSERVICE|SYSTEM|IFC|ONLINE|CHANNEL|BOOKING|PMS)([-.]|$)/i;
+
+function _pkgIsSystemUser(u) {
+  const key = _pkgUserKey(u);
+  if (!key) return true;
+  if (_PKG_SYSTEM_USER.test(key)) return true;
+  const login = key.split('-').pop() || key;
+  return /\d/.test(login) && /^[0-9A-F]{6,}$/i.test(login);
+}
+
+// Returns null when every entry for the package is a system account —
+// nobody sold it, so there is nobody to credit.
 function _pkgOriginatorFor(ev, cands) {
   if (!ev) return null;
   const family = _pkgFamilyOfCode(ev.code);
   const pool = family ? cands.filter(c => family.test(c.code))
                       : cands.filter(c => c.code === ev.code);
-  return _pkgPickOriginator(pool) || ev;
+  return pool.slice().sort((a, b) => a.ts - b.ts).find(c => !_pkgIsSystemUser(c.user)) || null;
 }
 
 // Decide which rows may actually be credited as an upsell.
@@ -609,13 +628,17 @@ async function pkgRun() {
     }
 
     // Credit goes to whoever started the package, which may be an earlier
-    // entry than the one whose price identified the charge.
-    const origin = _pkgOriginatorFor(ev, cands);
+    // entry than the one whose price identified the charge. Null means the
+    // package only ever appears under a system account — a TARS booking
+    // rather than something sold at the desk — so there is nobody to credit
+    // and IN-Gauge's own value is left alone.
+    const origin   = _pkgOriginatorFor(ev, cands);
+    const noSeller = !origin;
 
     // A seller already filled in isn't proof it's the right one. Opera says
     // who started the package, so a name that disagrees needs reassigning —
     // that row is not "already correct" just because the field isn't blank.
-    const reassign = !u.needsEmployee && !!origin.user && !_pkgSameUser(u.employee, origin.user);
+    const reassign = !noSeller && !u.needsEmployee && !!origin.user && !_pkgSameUser(u.employee, origin.user);
     const alreadyComplete = !u.needsProduct && !u.needsEmployee && !reassign;
 
     // Keep IN-Gauge's own product name when it already had one, rather than
@@ -624,9 +647,10 @@ async function pkgRun() {
     // date-range change and carries no price of its own.
     return {
       ...u,
-      resolved: true, alreadyComplete, reassign, matchedEvent: ev, originEvent: origin, candidates: cands,
+      resolved: true, alreadyComplete, reassign, noSeller,
+      matchedEvent: ev, originEvent: origin, candidates: cands,
       code:  u.needsProduct ? ev.code : u.product,
-      user:  (u.needsEmployee || reassign) ? origin.user : u.employee,
+      user:  (!noSeller && (u.needsEmployee || reassign)) ? origin.user : u.employee,
       wasUser: reassign ? u.employee : '',
       price: ev.price ?? String(u.charge),
       from:  ev.from  ?? u.arr,
@@ -646,6 +670,8 @@ async function pkgRun() {
 function _pkgActionText(r) {
   if (r.verdict === 'deny')   return 'Remove this charge';
   if (r.verdict === 'review') return 'Check in Opera';
+  // Came in through TARS or another interface — no one sold it.
+  if (r.noSeller) return r.needsEmployee ? 'No seller — booked by system' : 'Nothing — booked by system';
   if (r.needsProduct && r.needsEmployee) return 'Set package + seller';
   if (r.needsProduct && r.reassign) return 'Set package, reassign seller';
   if (r.needsProduct) return 'Set the package';
