@@ -844,14 +844,25 @@ function pkgRender() {
     const productCell = r.needsProduct
       ? `<span style="color:var(--text3);">? unresolved</span>`
       : escapeHtml(r.product);
-    return `<tr>
+    // Opera can't confirm these, but IN-Gauge still names a seller — and
+    // that name is the whole point of the row, so it keeps its own column
+    // instead of being swallowed by the explanation next to it. Shown in
+    // the muted colour to mark it as IN-Gauge's word rather than Opera's.
+    const claimed = r.employee && r.employee !== '-'
+      ? `<span title="IN-Gauge credits this — not confirmed against Opera">${escapeHtml(_pkgUserLabel(r.employee))}</span>`
+      : `<span style="color:var(--rose);">nobody</span>`;
+    const statusCell = r.verdict === 'outside'
+      ? `<span style="color:var(--text3);">⏳ Not in log</span>`
+      : `<span style="color:var(--amber);">⚠ Check</span>`;
+    return `<tr${r.verdict === 'outside' ? ' style="opacity:0.75;"' : ''}>
       <td><span class="tt-room-pill">${escapeHtml(r.room)}</span></td>
       <td style="font-family:var(--mono);font-size:0.72rem;">${escapeHtml(r.conf)}</td>
       <td style="font-family:var(--mono);font-size:0.76rem;">${productCell}</td>
       <td style="font-family:var(--mono);font-size:0.72rem;color:var(--text3);">AED ${escapeHtml(String(r.charge))}</td>
-      <td colspan="2" style="font-size:0.68rem;color:var(--text3);">${candText}</td>
+      <td style="font-size:0.66rem;color:var(--text3);">${candText}</td>
+      <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text3);">${claimed}</td>
       ${gapCell}
-      <td><span style="color:var(--amber);">⚠ Check</span></td>
+      <td>${statusCell}</td>
     </tr>`;
   }).join('');
 }
