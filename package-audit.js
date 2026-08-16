@@ -434,9 +434,25 @@ function _pkgSameUser(a, b) {
   return long.endsWith(short) && long.length - short.length <= 3;
 }
 
-// Opera's raw "ACCOREN-CNONIS@ACCOREN" is noise on screen — the tenant
-// suffix never varies and never helps identify anyone.
-function _pkgUserLabel(u) { return _pkgUserKey(u) || String(u || ''); }
+// IN-Gauge's screens name people the way the dropdown does; Opera's log
+// only ever carries the login. Showing "ACCOREN-CNONIS" next to a
+// dropdown that says "Chethmi NONIS" leaves the reader translating between
+// the two, so the login is resolved back to the name wherever it's known.
+//
+// Add a line when someone joins — an unrecognised login simply displays
+// as itself, so nothing breaks if this list falls behind.
+const PKG_STAFF = [
+  'AhmedHassan ELSAFTY', 'Bhadra SOUPTIK', 'Chethmi NONIS', 'Hassan NAVED',
+  'HninWut YEEOO', 'Irene RUNTU', 'Manisha DAS', 'Syed Turrab Bukhari',
+];
+
+function _pkgUserLabel(u) {
+  const key = _pkgUserKey(u);
+  if (!key) return String(u || '');
+  // Reuses the login/display-name matching, so CNONIS finds Chethmi NONIS
+  // without needing the exact login spelled out here.
+  return PKG_STAFF.find(name => _pkgSameUser(name, key)) || key;
+}
 
 // The matched event says WHICH package the charge is; it does not say who
 // sold it. A package added once and repriced later logs two entries under
