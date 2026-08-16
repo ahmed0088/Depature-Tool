@@ -27,6 +27,7 @@ let pkgResults  = [];   // joined output after pkgRun()
 let pkgFilter_  = 'all';
 let pkgSearch_  = '';
 let pkgPdfFiles = [];   // names of the Changes Log exports merged so far
+let pkgLogRange = { min: 0, max: 0 };  // YYYYMMDD span the loaded logs actually cover
 
 // ── IN-Gauge export upload (.xlsx) ──────────────────────────
 function pkgLoadExcel(input) {
@@ -58,6 +59,29 @@ function pkgLoadExcel(input) {
     }
   };
   reader.readAsArrayBuffer(file);
+}
+
+// The Changes Log states no date filter, so its coverage is taken from the
+// entries themselves. This matters because the log is exported for a fixed
+// span — run it on the 14th for 1–14 Aug and nothing sold on the 15th can
+// possibly be in it, which would otherwise look like a missing record
+// rather than a report that simply stops before the sale.
+function _pkgRecomputeLogRange() {
+  let min = Infinity, max = 0;
+  Object.values(pkgEvents).forEach(list => list.forEach(e => {
+    const day = Math.floor((e.ts || 0) / 10000);   // ts is YYYYMMDDHHMM
+    if (!day) return;
+    if (day < min) min = day;
+    if (day > max) max = day;
+  }));
+  pkgLogRange = { min: min === Infinity ? 0 : min, max };
+}
+
+const _PKG_MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function _pkgDayLabel(n) {
+  const s = String(n || '');
+  if (s.length !== 8) return '';
+  return s.slice(6, 8) + '-' + (_PKG_MON[+s.slice(4, 6) - 1] || '?');
 }
 
 // Maps an IN-Gauge product label to the Opera internal code pattern for
@@ -146,10 +170,12 @@ async function pkgLoadPdf(input) {
       fresh += _pkgMergeEvents(pkgEvents, ev);
       if (!pkgPdfFiles.includes(file.name)) pkgPdfFiles.push(file.name);
     }
+    _pkgRecomputeLogRange();
+    const span = pkgLogRange.max ? ` · covers ${_pkgDayLabel(pkgLogRange.min)} → ${_pkgDayLabel(pkgLogRange.max)}` : '';
     const count = Object.keys(pkgEvents).length;
     const lbl = document.getElementById('pkgPdfLabel');
     if (lbl) lbl.textContent = count
-      ? `✓ ${pkgPdfFiles.length} log${pkgPdfFiles.length !== 1 ? 's' : ''} · ${count} confirmation${count !== 1 ? 's' : ''} with product activity`
+      ? `✓ ${pkgPdfFiles.length} log${pkgPdfFiles.length !== 1 ? 's' : ''} · ${count} confirmation${count !== 1 ? 's' : ''}${span}`
       : 'Loaded — no product events found';
     showToast(count
       ? `✦ ${fresh} new event${fresh !== 1 ? 's' : ''} · ${count} confirmations loaded`
@@ -563,10 +589,13 @@ function _pkgApplyVerdicts(results) {
 
     if (!r.candidates || !r.candidates.length) {
       // Opera logged no product activity at all for this reservation. That
-      // may just mean the package was sold before this report's date range,
-      // so it's a question for a human rather than an automatic reject.
+      // may just mean the package was sold outside this report's span, so
+      // it's a question for a human rather than an automatic reject.
       r.verdict = 'review';
-      r.note = 'No Opera record in this report — widen the Changes Log dates to confirm';
+      const day = _pkgDayNum(r.daily);
+      r.note = (pkgLogRange.max && day > pkgLogRange.max)
+        ? `Charged ${r.daily}, after this log ends (${_pkgDayLabel(pkgLogRange.max)}) — re-run the Changes Log to cover it`
+        : 'No Opera record in this report — widen the Changes Log dates to confirm';
       return;
     }
     const family = _pkgCodeFamilyFor(r.family);
@@ -660,6 +689,7 @@ async function pkgRun() {
 
   _pkgApplyVerdicts(results);
   pkgResults = results;
+  _pkgRenderCoverage();
   document.getElementById('pkgResultsWrap').style.display = 'block';
   pkgRender();
   busyDone();
@@ -667,6 +697,24 @@ async function pkgRun() {
 
 // Plain-language instruction for the row — what the person reading this
 // actually has to go and do, rather than which field happened to be blank.
+// The log is exported for a fixed span, so a charge dated after it can
+// never match — that is a stale report, not a missing record, and saying so
+// stops the reader hunting in Opera for something that was never exported.
+function _pkgRenderCoverage() {
+  const box = document.getElementById('pkgCoverageWarn');
+  if (!box) return;
+  const charged = pkgUnknowns.map(u => _pkgDayNum(u.daily)).filter(Boolean);
+  const latest  = charged.length ? Math.max(...charged) : 0;
+  if (!pkgLogRange.max || !latest || latest <= pkgLogRange.max) { box.style.display = 'none'; return; }
+  const beyond = pkgResults.filter(r => r.verdict === 'review' && _pkgDayNum(r.daily) > pkgLogRange.max).length;
+  box.style.display = 'block';
+  box.innerHTML = `⏱ <b>The Opera log stops before your charges do.</b> It covers
+    <b>${escapeHtml(_pkgDayLabel(pkgLogRange.min))} → ${escapeHtml(_pkgDayLabel(pkgLogRange.max))}</b>,
+    but this export charges up to <b>${escapeHtml(_pkgDayLabel(latest))}</b>.
+    ${beyond ? `<b>${beyond}</b> row${beyond !== 1 ? 's' : ''} sitting in Check by hand ${beyond !== 1 ? 'are' : 'is'} dated after the log ends — ` : ''}re-run the Changes Log through
+    <b>${escapeHtml(_pkgDayLabel(latest))}</b> and upload it to resolve them.`;
+}
+
 function _pkgActionText(r) {
   if (r.verdict === 'deny')   return 'Remove this charge';
   if (r.verdict === 'review') return 'Check in Opera';
@@ -807,7 +855,7 @@ function pkgCopyDeny() {
 }
 
 function pkgClear() {
-  pkgUnknowns = []; pkgEvents = {}; pkgResults = []; pkgFilter_ = 'all'; pkgSearch_ = ''; pkgPdfFiles = [];
+  pkgUnknowns = []; pkgEvents = {}; pkgResults = []; pkgFilter_ = 'all'; pkgSearch_ = ''; pkgPdfFiles = []; pkgLogRange = { min: 0, max: 0 };
   const ei = document.getElementById('pkgExcelFileInput'); if (ei) ei.value = '';
   const pi = document.getElementById('pkgPdfFileInput');   if (pi) pi.value = '';
   const el = document.getElementById('pkgExcelLabel'); if (el) el.textContent = 'Click to upload';
