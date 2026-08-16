@@ -202,6 +202,10 @@ function showToast(msg, type = 'ok') {
   if (!toast) {
     toast = document.createElement('div');
     toast.id = 'appToast';
+    // Announced to a screen reader without stealing focus — "polite"
+    // waits for the user to finish what they're saying/doing.
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
     toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:10px;font-family:var(--mono);font-size:0.72rem;z-index:9999;transition:opacity 0.3s;pointer-events:none;';
     document.body.appendChild(toast);
   }
@@ -397,3 +401,42 @@ function busyDone() {
 // Lets the browser paint the overlay before a synchronous parse blocks
 // the main thread — without this the spinner never actually appears.
 function busyPaint() { return new Promise(r => requestAnimationFrame(() => setTimeout(r, 0))); }
+
+// ── Keyboard + screen-reader access for icon controls ─────
+//  The topbar and drawer icons are <div onclick> — clickable with a
+//  mouse but invisible to Tab and to a screen reader. Rather than
+//  rewrite every one as a <button>, mark them up as buttons at boot
+//  and let a single delegated handler fire them on Enter/Space, the
+//  keys a real button responds to.
+function _a11yUpgradeIconButtons(root) {
+  (root || document).querySelectorAll('.icon-round, .theme-btn, .fchip, .vt-btn').forEach(el => {
+    if (el.tagName === 'BUTTON' || el.dataset.a11y) return;
+    el.dataset.a11y = '1';
+    if (!el.hasAttribute('role'))     el.setAttribute('role', 'button');
+    if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
+    // Icon-only controls have no text for a screen reader to read out;
+    // the tooltip already says what they do, so reuse it.
+    if (!el.hasAttribute('aria-label') && el.title) el.setAttribute('aria-label', el.title);
+  });
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const el = e.target;
+  if (!el || el.getAttribute?.('role') !== 'button' || el.tagName === 'BUTTON') return;
+  e.preventDefault();
+  el.click();
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  _a11yUpgradeIconButtons();
+  // Filter chips and view toggles are re-rendered whenever a panel loads
+  // data, so upgrade whatever appears later as well. Batched on a frame
+  // to avoid doing this once per node during a big table render.
+  let queued = false;
+  new MutationObserver(() => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => { queued = false; _a11yUpgradeIconButtons(); });
+  }).observe(document.body, { childList: true, subtree: true });
+});
