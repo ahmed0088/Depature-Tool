@@ -10,8 +10,10 @@
 //  cross-referencing Opera's own Changes Log — the report shows
 //  exactly which product code was added, its price, its date range,
 //  and which staff member added it (Opera → Dashboard → Miscellaneous
-//  → Changes Log, Group=Reservation, Action Type=Update Reservation,
-//  Description="product", exported to PDF).
+//  → Changes Log, Group=Reservation, Description="product",
+//  exported to PDF). Leave Action Type unfiltered: a package sold at
+//  booking time is logged under New Reservation, not Update Reservation,
+//  and filtering to Update alone hides it from this panel entirely.
 //
 //  Matching key: Confirmation No. (present in both reports), then
 //  disambiguated by price when a reservation has more than one
@@ -259,7 +261,9 @@ async function _pkgParsePdfEvents(pdf, onPage) {
       };
       carry = null;
     }
-    const confMatch = cur.desc.match(/Confirmation No\.\s*(\d+)/);
+    // Update Reservation closes with "Confirmation No. 617307419";
+    // New Reservation opens with "CONFIRMATION NO = 617214992".
+    const confMatch = cur.desc.match(/Confirmation\s+No\.?\s*=?\s*(\d+)/i);
     if (!confMatch) {
       // No closing confirmation: if this is the last row on a page, the rest
       // of it is at the top of the next page — hold it and merge. Otherwise
@@ -290,25 +294,38 @@ function _pkgReadEvents(events, conf, row) {
   const added    = [];
   const attached = [];
 
-  row.desc.split(';').forEach(clause => {
-    const c = clause.trim();
-    let m;
-    if ((m = c.match(/^PRODUCT\s+([A-Z0-9]+)\s+ADDED\b/i))) { added.push(m[1]); return; }
-    if ((m = c.match(/^PRODUCT\s+([A-Z0-9]+)\s+ATTACHED\b/i))) {
-      // "ATTACHED FROM <old range> -> FROM <new range>" — the range after
-      // the last arrow is the one now in effect.
-      const arrow = c.lastIndexOf('->');
-      const dm = (arrow >= 0 ? c.slice(arrow + 2) : c).match(/FROM\s+(.+?)\s+TO\s+(.+?)\s*$/i);
-      attached.push({ code: m[1], from: dm ? _pkgNormDate(dm[1]) : null, to: dm ? _pkgNormDate(dm[2]) : null });
-      return;
-    }
-    if ((m = c.match(/^PRODUCT\s+([A-Z0-9]+)\s+BETWEEN\s+(.+?)\s+AND\s+(.+?)\s*:(.*)$/i))) {
-      // Opera sometimes logs the date range with no PRICE clause at all, so
-      // the price is optional here — the dates are still worth keeping.
-      const priceM = m[4].match(/PRICE\b[^>]*->\s*([\d.]+)/i);
-      details[m[1]] = { from: _pkgNormDate(m[2]), to: _pkgNormDate(m[3]), price: priceM ? priceM[1] : null };
-    }
-  });
+  // An Update Reservation entry separates its clauses with semicolons, but
+  // a New Reservation entry — a package sold at booking time — lays the
+  // same information out on its own lines with none. Splitting on ';' finds
+  // nothing in that second form, so each statement is instead read straight
+  // out of the description and bounded by whatever comes next: the following
+  // PRODUCT keyword, a semicolon, or the end. Every pattern names its own
+  // product code, so a price can't drift onto the wrong package.
+  const NEXT = String.raw`(?=;|PRODUCT\s+[A-Z0-9]+\s+(?:ADDED|DELETED|ATTACHED|BETWEEN)|$)`;
+
+  let m;
+  const addedRe = /PRODUCT\s+([A-Z0-9]+)\s+ADDED\b/gi;
+  while ((m = addedRe.exec(row.desc))) added.push(m[1]);
+
+  const attachedRe = new RegExp(String.raw`PRODUCT\s+([A-Z0-9]+)\s+ATTACHED\b([\s\S]*?)` + NEXT, 'gi');
+  while ((m = attachedRe.exec(row.desc))) {
+    // "ATTACHED FROM <old range> -> FROM <new range>" — the range after the
+    // last arrow is the one now in effect.
+    const seg   = m[2] || '';
+    const arrow = seg.lastIndexOf('->');
+    const dm = (arrow >= 0 ? seg.slice(arrow + 2) : seg).match(/FROM\s+(.+?)\s+TO\s+([\w\s-]+?)\s*$/i);
+    attached.push({ code: m[1], from: dm ? _pkgNormDate(dm[1]) : null, to: dm ? _pkgNormDate(dm[2]) : null });
+  }
+
+  const detailRe = new RegExp(String.raw`PRODUCT\s+([A-Z0-9]+)\s+BETWEEN\s+(.+?)\s+AND\s+(.+?)\s*:([\s\S]*?)` + NEXT, 'gi');
+  while ((m = detailRe.exec(row.desc))) {
+    // Opera sometimes logs the date range with no PRICE clause at all, so
+    // the price is optional here — the dates are still worth keeping. A
+    // removal reads "PRICE 24.48 ->" with nothing after the arrow, so only
+    // a value that follows the arrow counts as the new price.
+    const priceM = (m[4] || '').match(/PRICE\b[^>]*->\s*([\d.]+)/i);
+    details[m[1]] = { from: _pkgNormDate(m[2]), to: _pkgNormDate(m[3]), price: priceM ? priceM[1] : null };
+  }
 
   const push = e => { (events[conf] = events[conf] || []).push(e); };
   // ADDED = the package was first sold — carries the price and dates we need.
