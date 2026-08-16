@@ -593,17 +593,18 @@ function _pkgApplyVerdicts(results) {
       // moment the package was sold. Separating those out matters: a row
       // nobody can act on shouldn't sit in the same pile as one that needs
       // a decision.
-      const day = _pkgDayNum(r.daily), arr = _pkgDayNum(r.arr);
-      if (pkgLogRange.max && day > pkgLogRange.max) {
-        r.verdict = 'outside';
-        r.note = `Charged ${r.daily}, after this log ends (${_pkgDayLabel(pkgLogRange.max)}) — the night audit hasn't reached it yet`;
-      } else if (pkgLogRange.min && arr && arr < pkgLogRange.min) {
-        r.verdict = 'outside';
-        r.note = `Guest arrived ${r.arr}, before this log starts (${_pkgDayLabel(pkgLogRange.min)}) — the sale is in an earlier log`;
-      } else {
-        r.verdict = 'review';
-        r.note = 'No Opera record — likely sold on the booking itself, which only the New Reservation log carries';
-      }
+      // Nothing in the Excel says when a package was SOLD. IN-Gauge dates
+      // the night being charged; Opera dates the sale, and the two can be
+      // weeks apart — 617080953 is charged from 01-Aug for a package added
+      // on 25-Jul. So arrival can't stand in for the sale date: that
+      // reservation arrives on the log's first day yet its sale predates
+      // the log entirely. With no entry to point at, the only honest
+      // reading is that this log doesn't reach the sale.
+      r.verdict = 'outside';
+      const day = _pkgDayNum(r.daily);
+      r.note = (pkgLogRange.max && day > pkgLogRange.max)
+        ? `Charged ${r.daily}, after this log ends (${_pkgDayLabel(pkgLogRange.max)}) — the night audit hasn't reached it yet`
+        : `Sold before this log starts (${_pkgDayLabel(pkgLogRange.min)}) — packages are often added when the booking is made, weeks before the stay`;
       return;
     }
     const family = _pkgCodeFamilyFor(r.family);
@@ -711,16 +712,26 @@ async function pkgRun() {
 function _pkgRenderCoverage() {
   const box = document.getElementById('pkgCoverageWarn');
   if (!box) return;
-  const charged = pkgUnknowns.map(u => _pkgDayNum(u.daily)).filter(Boolean);
-  const latest  = charged.length ? Math.max(...charged) : 0;
-  if (!pkgLogRange.max || !latest || latest <= pkgLogRange.max) { box.style.display = 'none'; return; }
-  const beyond = pkgResults.filter(r => r.verdict === 'review' && _pkgDayNum(r.daily) > pkgLogRange.max).length;
+  const outside = pkgResults.filter(r => r.verdict === 'outside');
+  if (!outside.length || !pkgLogRange.max) { box.style.display = 'none'; return; }
+
+  const late   = outside.filter(r => _pkgDayNum(r.daily) > pkgLogRange.max).length;
+  const early  = outside.length - late;
+  // Packages are sold when the booking is made, so the log has to start
+  // before the earliest stay in the export — not on the 1st of the month.
+  const arrivals = pkgUnknowns.map(u => _pkgDayNum(u.arr)).filter(Boolean);
+  const firstArr = arrivals.length ? Math.min(...arrivals) : 0;
+
+  const bits = [];
+  if (early) bits.push(`<b>${early}</b> sold before it starts (${escapeHtml(_pkgDayLabel(pkgLogRange.min))})`);
+  if (late)  bits.push(`<b>${late}</b> charged after it ends (${escapeHtml(_pkgDayLabel(pkgLogRange.max))}) — the night audit hasn't reached those yet`);
+
   box.style.display = 'block';
-  box.innerHTML = `⏱ <b>The Opera log stops before your charges do.</b> It covers
-    <b>${escapeHtml(_pkgDayLabel(pkgLogRange.min))} → ${escapeHtml(_pkgDayLabel(pkgLogRange.max))}</b>,
-    but this export charges up to <b>${escapeHtml(_pkgDayLabel(latest))}</b>.
-    ${beyond ? `<b>${beyond}</b> row${beyond !== 1 ? 's' : ''} sitting in Check by hand ${beyond !== 1 ? 'are' : 'is'} dated after the log ends — ` : ''}re-run the Changes Log through
-    <b>${escapeHtml(_pkgDayLabel(latest))}</b> and upload it to resolve them.`;
+  box.innerHTML = `⏳ <b>${outside.length} charge${outside.length !== 1 ? 's' : ''} sit outside this log</b> — ${bits.join(', and ')}.
+    They're hidden from Needs action because no amount of checking resolves them here.
+    ${early ? `A package is usually added when the booking is made, which can be weeks before the stay: the earliest arrival in this export is
+    <b>${escapeHtml(_pkgDayLabel(firstArr))}</b>, so run the Changes Log from before that date — not from the 1st — and include
+    <b>New Reservation</b> as well as Update Reservation.` : ''}`;
 }
 
 function _pkgActionText(r) {
