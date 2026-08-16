@@ -24,7 +24,7 @@
 let pkgUnknowns = [];   // from the IN-Gauge export: rows with Product = "Unknown Product"
 let pkgEvents   = {};   // conf No. -> [{code, price, from, to, user}], from the Opera Changes Log
 let pkgResults  = [];   // joined output after pkgRun()
-let pkgFilter_  = 'all';
+let pkgFilter_  = 'action';
 let pkgSearch_  = '';
 let pkgPdfFiles = [];   // names of the Changes Log exports merged so far
 let pkgLogRange = { min: 0, max: 0 };  // YYYYMMDD span the loaded logs actually cover
@@ -588,14 +588,22 @@ function _pkgApplyVerdicts(results) {
     if (r.matchedEvent) return;
 
     if (!r.candidates || !r.candidates.length) {
-      // Opera logged no product activity at all for this reservation. That
-      // may just mean the package was sold outside this report's span, so
-      // it's a question for a human rather than an automatic reject.
-      r.verdict = 'review';
-      const day = _pkgDayNum(r.daily);
-      r.note = (pkgLogRange.max && day > pkgLogRange.max)
-        ? `Charged ${r.daily}, after this log ends (${_pkgDayLabel(pkgLogRange.max)}) — re-run the Changes Log to cover it`
-        : 'No Opera record in this report — widen the Changes Log dates to confirm';
+      // Opera logged nothing for this reservation. Usually that isn't a
+      // problem with the reservation at all — it's the log not reaching the
+      // moment the package was sold. Separating those out matters: a row
+      // nobody can act on shouldn't sit in the same pile as one that needs
+      // a decision.
+      const day = _pkgDayNum(r.daily), arr = _pkgDayNum(r.arr);
+      if (pkgLogRange.max && day > pkgLogRange.max) {
+        r.verdict = 'outside';
+        r.note = `Charged ${r.daily}, after this log ends (${_pkgDayLabel(pkgLogRange.max)}) — the night audit hasn't reached it yet`;
+      } else if (pkgLogRange.min && arr && arr < pkgLogRange.min) {
+        r.verdict = 'outside';
+        r.note = `Guest arrived ${r.arr}, before this log starts (${_pkgDayLabel(pkgLogRange.min)}) — the sale is in an earlier log`;
+      } else {
+        r.verdict = 'review';
+        r.note = 'No Opera record — likely sold on the booking itself, which only the New Reservation log carries';
+      }
       return;
     }
     const family = _pkgCodeFamilyFor(r.family);
@@ -716,8 +724,9 @@ function _pkgRenderCoverage() {
 }
 
 function _pkgActionText(r) {
-  if (r.verdict === 'deny')   return 'Remove this charge';
-  if (r.verdict === 'review') return 'Check in Opera';
+  if (r.verdict === 'deny')    return 'Remove this charge';
+  if (r.verdict === 'outside') return 'Not in this log';
+  if (r.verdict === 'review')  return 'Check in Opera';
   // Came in through TARS or another interface — no one sold it.
   if (r.noSeller) return r.needsEmployee ? 'No seller — booked by system' : 'Nothing — booked by system';
   if (r.needsProduct && r.needsEmployee) return 'Set package + seller';
@@ -731,6 +740,7 @@ function _pkgActionText(r) {
 function _pkgActionCell(r) {
   const txt = _pkgActionText(r);
   const color = r.verdict === 'deny' ? 'var(--rose)'
+    : r.verdict === 'outside' ? 'var(--text3)'
     : r.verdict === 'review' ? 'var(--amber)'
     : r.reassign ? 'var(--amber)'
     : (r.needsProduct || r.needsEmployee) ? 'var(--sky)' : 'var(--text3)';
@@ -743,10 +753,18 @@ function _pkgActionCell(r) {
 function pkgRender() {
   const q = pkgSearch_.toLowerCase().trim();
   const filtered = pkgResults.filter(r => {
+    // "Needs action" is the default: everything a person can actually do
+    // something about. Rows the log simply doesn't reach are excluded —
+    // they aren't decisions waiting to be made.
+    const needsAction = r.verdict === 'deny' ||
+                        (r.verdict === 'credit' && !r.alreadyComplete) ||
+                        r.verdict === 'review';
+    if (pkgFilter_ === 'action'    && !needsAction) return false;
     if (pkgFilter_ === 'complete'  && !(r.alreadyComplete && r.verdict === 'credit')) return false;
     if (pkgFilter_ === 'resolved'  && !(r.verdict === 'credit' && !r.alreadyComplete)) return false;
     if (pkgFilter_ === 'deny'      && r.verdict !== 'deny') return false;
     if (pkgFilter_ === 'review'    && r.verdict !== 'review') return false;
+    if (pkgFilter_ === 'outside'   && r.verdict !== 'outside') return false;
     if (q) {
       const hay = [r.conf, r.room, r.code, r.family, r.user, _pkgActionText(r)].join(' ').toLowerCase();
       if (!hay.includes(q)) return false;
@@ -754,12 +772,15 @@ function pkgRender() {
     return true;
   });
 
-  const creditCount    = pkgResults.filter(r => r.verdict === 'credit').length;
   const completeCount  = pkgResults.filter(r => r.verdict === 'credit' && r.alreadyComplete).length;
   const fixedCount     = pkgResults.filter(r => r.verdict === 'credit' && !r.alreadyComplete).length;
   const denyCount      = pkgResults.filter(r => r.verdict === 'deny').length;
   const reviewCount    = pkgResults.filter(r => r.verdict === 'review').length;
-  [['pkgfc-all', pkgResults.length],
+  const outsideCount   = pkgResults.filter(r => r.verdict === 'outside').length;
+  const actionCount    = fixedCount + denyCount + reviewCount;
+  [['pkgfc-action', actionCount],
+   ['pkgfc-outside', outsideCount],
+   ['pkgfc-all', pkgResults.length],
    ['pkgfc-complete', completeCount],
    ['pkgfc-resolved', fixedCount],
    ['pkgfc-deny', denyCount],
@@ -768,7 +789,7 @@ function pkgRender() {
 
   document.getElementById('pkgKpis').innerHTML = `
     <div class="kpi sky"><div class="kpi-accent"></div><div class="kpi-label">Charges Checked</div><div class="kpi-val">${pkgResults.length}</div></div>
-    <div class="kpi mint"><div class="kpi-accent"></div><div class="kpi-label">Good to Credit</div><div class="kpi-val">${creditCount}</div></div>
+    <div class="kpi ${actionCount ? 'gold' : 'mint'}"><div class="kpi-accent"></div><div class="kpi-label">Needs Action</div><div class="kpi-val">${actionCount}</div></div>
     <div class="kpi ${denyCount ? 'rose' : ''}"><div class="kpi-accent"></div><div class="kpi-label">Remove</div><div class="kpi-val">${denyCount}</div></div>
     <div class="kpi ${reviewCount ? 'amber' : ''}"><div class="kpi-accent"></div><div class="kpi-label">Check by Hand</div><div class="kpi-val">${reviewCount}</div></div>`;
 

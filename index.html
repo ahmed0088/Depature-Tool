@@ -1359,10 +1359,12 @@
       <div class="kpi-row c4" style="margin-top:18px;" id="pkgKpis"></div>
 
       <div class="filter-row" id="pkgFilters" style="margin-bottom:14px;">
-        <div class="fchip on" data-pkgf="all"      onclick="pkgSetFilter('all',this)">All <span id="pkgfc-all">0</span></div>
+        <div class="fchip on" data-pkgf="action" onclick="pkgSetFilter('action',this)">⚡ Needs action <span id="pkgfc-action">0</span></div>
+        <div class="fchip"    data-pkgf="all"    onclick="pkgSetFilter('all',this)">All <span id="pkgfc-all">0</span></div>
         <div class="fchip"    data-pkgf="resolved" onclick="pkgSetFilter('resolved',this)">✏️ Update in IN-Gauge <span id="pkgfc-resolved">0</span></div>
         <div class="fchip"    data-pkgf="deny"     onclick="pkgSetFilter('deny',this)">⛔ Remove <span id="pkgfc-deny">0</span></div>
         <div class="fchip"    data-pkgf="review"   onclick="pkgSetFilter('review',this)">⚠ Check by hand <span id="pkgfc-review">0</span></div>
+        <div class="fchip"    data-pkgf="outside"  onclick="pkgSetFilter('outside',this)">⏳ Not in this log <span id="pkgfc-outside">0</span></div>
         <div class="fchip"    data-pkgf="complete" onclick="pkgSetFilter('complete',this)">✓ Nothing to do <span id="pkgfc-complete">0</span></div>
         <div class="search-wrap" style="margin-left:auto;">
           <span style="padding:0 8px;color:var(--text3);">⌕</span>
