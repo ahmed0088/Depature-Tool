@@ -438,6 +438,18 @@ function _pkgSameUser(a, b) {
 // suffix never varies and never helps identify anyone.
 function _pkgUserLabel(u) { return _pkgUserKey(u) || String(u || ''); }
 
+// The matched event says WHICH package the charge is; it does not say who
+// sold it. A package added once and repriced later logs two entries under
+// the same code, and matching on the charged amount lands on the repricing
+// — conf 617204564 is UPS60BB added by AHELSAFTY at 32.66 on 11-Aug and
+// moved to 48.98 by CNONIS on 13-Aug, where the 48.98 charge would credit
+// CNONIS for a package Ahmed started. Same code is the same package, so
+// credit follows its earliest entry.
+function _pkgOriginatorFor(ev, cands) {
+  if (!ev) return null;
+  return _pkgPickOriginator(cands.filter(c => c.code === ev.code)) || ev;
+}
+
 // Decide which rows may actually be credited as an upsell.
 //
 // Deliberately NOT a rule: comparing the charged day against the date range
@@ -519,10 +531,14 @@ async function pkgRun() {
                code: u.product, price: String(u.charge), from: u.arr, to: u.dep, user: u.employee };
     }
 
+    // Credit goes to whoever started the package, which may be an earlier
+    // entry than the one whose price identified the charge.
+    const origin = _pkgOriginatorFor(ev, cands);
+
     // A seller already filled in isn't proof it's the right one. Opera says
     // who started the package, so a name that disagrees needs reassigning —
     // that row is not "already correct" just because the field isn't blank.
-    const reassign = !u.needsEmployee && !!ev.user && !_pkgSameUser(u.employee, ev.user);
+    const reassign = !u.needsEmployee && !!origin.user && !_pkgSameUser(u.employee, origin.user);
     const alreadyComplete = !u.needsProduct && !u.needsEmployee && !reassign;
 
     // Keep IN-Gauge's own product name when it already had one, rather than
@@ -531,9 +547,9 @@ async function pkgRun() {
     // date-range change and carries no price of its own.
     return {
       ...u,
-      resolved: true, alreadyComplete, reassign, matchedEvent: ev, candidates: cands,
+      resolved: true, alreadyComplete, reassign, matchedEvent: ev, originEvent: origin, candidates: cands,
       code:  u.needsProduct ? ev.code : u.product,
-      user:  (u.needsEmployee || reassign) ? ev.user : u.employee,
+      user:  (u.needsEmployee || reassign) ? origin.user : u.employee,
       wasUser: reassign ? u.employee : '',
       price: ev.price ?? String(u.charge),
       from:  ev.from  ?? u.arr,
