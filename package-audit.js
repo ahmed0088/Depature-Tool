@@ -445,9 +445,26 @@ function _pkgUserLabel(u) { return _pkgUserKey(u) || String(u || ''); }
 // moved to 48.98 by CNONIS on 13-Aug, where the 48.98 charge would credit
 // CNONIS for a package Ahmed started. Same code is the same package, so
 // credit follows its earliest entry.
+//
+// Matched on the package FAMILY rather than the exact code, because an
+// upgrade rewrites the code: breakfast for one guest is UPS30BB and for
+// two is UPS60BB, so a colleague adding the second guest would otherwise
+// take the whole sale off whoever booked the breakfast. Codes outside the
+// three known families (half board, dinner) have no upgrade ladder to
+// follow, so those stay matched on the exact code.
+function _pkgFamilyOfCode(code) {
+  if (/EC$/i.test(code)) return /EC$/i;
+  if (/LC$/i.test(code)) return /LC$/i;
+  if (/BB$/i.test(code)) return /BB$/i;
+  return null;
+}
+
 function _pkgOriginatorFor(ev, cands) {
   if (!ev) return null;
-  return _pkgPickOriginator(cands.filter(c => c.code === ev.code)) || ev;
+  const family = _pkgFamilyOfCode(ev.code);
+  const pool = family ? cands.filter(c => family.test(c.code))
+                      : cands.filter(c => c.code === ev.code);
+  return _pkgPickOriginator(pool) || ev;
 }
 
 // Decide which rows may actually be credited as an upsell.
