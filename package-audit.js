@@ -405,13 +405,38 @@ function _pkgMatchEvent(u, cands) {
   return _pkgPickOriginator(priced(pool)) || _pkgPickOriginator(pool);
 }
 
-// IN-Gauge stores the seller as "ACCOREN-CNONIS", Opera's log as
-// "ACCOREN-CNONIS@ACCOREN" — same person, different notation.
+// The same person is written several ways across the two systems:
+// Opera's log always has the login ("ACCOREN-CNONIS@ACCOREN"), while
+// IN-Gauge may carry the login ("ACCOREN-CNONIS") or the display name
+// ("Chethmi NONIS") depending on the column and the export.
 function _pkgUserKey(u) { return String(u || '').split('@')[0].trim().toUpperCase(); }
+
+// Last word of either form: "ACCOREN-CNONIS" -> CNONIS, "Chethmi NONIS"
+// -> NONIS. Digits and separators in a tenant prefix (HA7N5-HNAVED) are
+// treated as breaks, so the family part is what's left at the end.
+function _pkgFamilyPart(key) {
+  const w = String(key).replace(/[^A-Z]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+  return w.length ? w[w.length - 1] : '';
+}
+
 function _pkgSameUser(a, b) {
   const x = _pkgUserKey(a), y = _pkgUserKey(b);
-  return !!x && !!y && x === y;
+  if (!x || !y) return false;
+  if (x === y) return true;
+  // A login is the family name with the person's initials stuck on the
+  // front — CNONIS/NONIS, MADAS/DAS, AHELSAFTY/ELSAFTY, HNAVED/NAVED —
+  // so the longer form ends with the shorter one. Requiring at least
+  // three letters and no more than a couple of extra keeps that from
+  // matching two different people who happen to share an ending.
+  const fx = _pkgFamilyPart(x), fy = _pkgFamilyPart(y);
+  if (fx.length < 3 || fy.length < 3) return false;
+  const [long, short] = fx.length >= fy.length ? [fx, fy] : [fy, fx];
+  return long.endsWith(short) && long.length - short.length <= 3;
 }
+
+// Opera's raw "ACCOREN-CNONIS@ACCOREN" is noise on screen — the tenant
+// suffix never varies and never helps identify anyone.
+function _pkgUserLabel(u) { return _pkgUserKey(u) || String(u || ''); }
 
 // Decide which rows may actually be credited as an upsell.
 //
@@ -544,7 +569,7 @@ function _pkgActionCell(r) {
     : (r.needsProduct || r.needsEmployee) ? 'var(--sky)' : 'var(--text3)';
   // Spell out who it is currently credited to, so the change is checkable
   // rather than something the tool just asserts.
-  const why = r.reassign ? ` title="IN-Gauge credits ${escapeHtml(r.wasUser)} — Opera shows ${escapeHtml(r.user)} started this package"` : '';
+  const why = r.reassign ? ` title="IN-Gauge credits ${escapeHtml(_pkgUserLabel(r.wasUser))} — Opera shows ${escapeHtml(_pkgUserLabel(r.user))} started this package"` : '';
   return `<td style="font-size:0.68rem;color:${color};"${why}>${escapeHtml(txt)}</td>`;
 }
 
@@ -608,7 +633,7 @@ function pkgRender() {
         <td style="font-family:var(--mono);font-size:0.76rem;font-weight:700;color:${r.alreadyComplete ? 'var(--text2)' : 'var(--mint)'};">${escapeHtml(r.code)}</td>
         <td style="font-family:var(--mono);font-size:0.72rem;">AED ${escapeHtml(r.price)}</td>
         <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text2);">${escapeHtml(r.from) || '—'} → ${escapeHtml(r.to) || '—'}</td>
-        <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text2);">${escapeHtml(r.user)}</td>
+        <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text2);">${escapeHtml(_pkgUserLabel(r.user))}</td>
         ${gapCell}
         <td>${statusCell}</td>
       </tr>`;
