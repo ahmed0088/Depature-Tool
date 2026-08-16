@@ -378,17 +378,39 @@ function _pkgIsOneTime(name) { return /^(Early Check In|Late Check Out)$/i.test(
 // package when a stay has several (e.g. breakfast switched tiers mid-stay);
 // otherwise fall back to whoever started that package family.
 function _pkgMatchEvent(u, cands) {
+  // Whoever STARTED the package is the one credited, so every shortlist is
+  // resolved by earliest timestamp. Picking the first array entry instead
+  // would credit the wrong person: events are stored in the order the PDF
+  // reads them, and Opera prints the log newest-first, so the first entry
+  // is typically the person who touched the package LAST.
+  const priced = list => list.filter(c => c.price && Math.abs(parseFloat(c.price) - u.charge) < 0.02);
+
   if (u.needsProduct) {
     // Product unknown — only an ADDED entry (which carries a price) can
     // identify which package this charge is; a date-only ATTACHED can't.
-    const added = cands.filter(c => c.action === 'ADDED');
-    return added.find(c => c.price && Math.abs(parseFloat(c.price) - u.charge) < 0.02)
-        || (added.length === 1 ? added[0] : null);
+    const added   = cands.filter(c => c.action === 'ADDED');
+    const matches = priced(added);
+    // Earliest-wins settles WHO gets the credit; it must not settle WHICH
+    // package a charge is. A stay can log two different products at the
+    // same price — sometimes in the same minute — and picking by time then
+    // comes down to a coin flip, which is how a breakfast charge ends up
+    // labelled an early check-in. Different codes at the same price is a
+    // genuine ambiguity, so leave it for a human.
+    const codes = new Set(matches.map(c => c.code));
+    if (codes.size > 1) return null;
+    return _pkgPickOriginator(matches) || (added.length === 1 ? added[0] : null);
   }
   const family = _pkgCodeFamilyFor(u.product);
   const pool = family ? cands.filter(c => family.test(c.code)) : cands;
-  return pool.find(c => c.price && Math.abs(parseFloat(c.price) - u.charge) < 0.02)
-      || _pkgPickOriginator(pool);
+  return _pkgPickOriginator(priced(pool)) || _pkgPickOriginator(pool);
+}
+
+// IN-Gauge stores the seller as "ACCOREN-CNONIS", Opera's log as
+// "ACCOREN-CNONIS@ACCOREN" — same person, different notation.
+function _pkgUserKey(u) { return String(u || '').split('@')[0].trim().toUpperCase(); }
+function _pkgSameUser(a, b) {
+  const x = _pkgUserKey(a), y = _pkgUserKey(b);
+  return !!x && !!y && x === y;
 }
 
 // Decide which rows may actually be credited as an upsell.
@@ -464,21 +486,30 @@ async function pkgRun() {
   const results = pkgUnknowns.map(u => {
     const cands = pkgEvents[u.conf] || [];
     const ev = _pkgMatchEvent(u, cands);
-    const alreadyComplete = !u.needsProduct && !u.needsEmployee;
 
     if (!ev) {
-      return { ...u, resolved: alreadyComplete, alreadyComplete, matchedEvent: null, candidates: cands,
+      const complete = !u.needsProduct && !u.needsEmployee;
+      return { ...u, resolved: complete, alreadyComplete: complete, reassign: false,
+               matchedEvent: null, candidates: cands,
                code: u.product, price: String(u.charge), from: u.arr, to: u.dep, user: u.employee };
     }
+
+    // A seller already filled in isn't proof it's the right one. Opera says
+    // who started the package, so a name that disagrees needs reassigning —
+    // that row is not "already correct" just because the field isn't blank.
+    const reassign = !u.needsEmployee && !!ev.user && !_pkgSameUser(u.employee, ev.user);
+    const alreadyComplete = !u.needsProduct && !u.needsEmployee && !reassign;
+
     // Keep IN-Gauge's own product name when it already had one, rather than
     // replacing it with Opera's raw internal code. Fall back to the Excel's
     // price/dates when the matched event is an ATTACHED entry, which is a
     // date-range change and carries no price of its own.
     return {
       ...u,
-      resolved: true, alreadyComplete, matchedEvent: ev, candidates: cands,
-      code:  u.needsProduct  ? ev.code : u.product,
-      user:  u.needsEmployee ? ev.user : u.employee,
+      resolved: true, alreadyComplete, reassign, matchedEvent: ev, candidates: cands,
+      code:  u.needsProduct ? ev.code : u.product,
+      user:  (u.needsEmployee || reassign) ? ev.user : u.employee,
+      wasUser: reassign ? u.employee : '',
       price: ev.price ?? String(u.charge),
       from:  ev.from  ?? u.arr,
       to:    ev.to    ?? u.dep,
@@ -498,8 +529,10 @@ function _pkgActionText(r) {
   if (r.verdict === 'deny')   return 'Remove this charge';
   if (r.verdict === 'review') return 'Check in Opera';
   if (r.needsProduct && r.needsEmployee) return 'Set package + seller';
+  if (r.needsProduct && r.reassign) return 'Set package, reassign seller';
   if (r.needsProduct) return 'Set the package';
   if (r.needsEmployee) return 'Set the seller';
+  if (r.reassign) return 'Reassign the seller';
   return 'Nothing — already correct';
 }
 
@@ -507,8 +540,12 @@ function _pkgActionCell(r) {
   const txt = _pkgActionText(r);
   const color = r.verdict === 'deny' ? 'var(--rose)'
     : r.verdict === 'review' ? 'var(--amber)'
+    : r.reassign ? 'var(--amber)'
     : (r.needsProduct || r.needsEmployee) ? 'var(--sky)' : 'var(--text3)';
-  return `<td style="font-size:0.68rem;color:${color};">${escapeHtml(txt)}</td>`;
+  // Spell out who it is currently credited to, so the change is checkable
+  // rather than something the tool just asserts.
+  const why = r.reassign ? ` title="IN-Gauge credits ${escapeHtml(r.wasUser)} — Opera shows ${escapeHtml(r.user)} started this package"` : '';
+  return `<td style="font-size:0.68rem;color:${color};"${why}>${escapeHtml(txt)}</td>`;
 }
 
 function pkgRender() {
@@ -609,10 +646,10 @@ function pkgCopyResolved() {
   // row has nothing to update, and a denied row must never be credited.
   const resolved = pkgResults.filter(r => r.verdict === 'credit' && !r.alreadyComplete);
   if (!resolved.length) { showToast('No fixed rows to copy', 'err'); return; }
-  const tsv = ['Room\tConfirmation No.\tProduct Code\tPrice (AED)\tFrom\tTo\tSold By']
-    .concat(resolved.map(r => [r.room, r.conf, r.code, r.price, r.from || '', r.to || '', r.user].join('\t')))
+  const tsv = ['Room\tConfirmation No.\tProduct Code\tPrice (AED)\tFrom\tTo\tSold By\tCurrently Credited To']
+    .concat(resolved.map(r => [r.room, r.conf, r.code, r.price, r.from || '', r.to || '', r.user, r.wasUser || ''].join('\t')))
     .join('\n');
-  copyToClipboard(tsv, document.getElementById('pkgCopyBtn'), '📋 Copy Rows to Credit');
+  copyToClipboard(tsv, document.getElementById('pkgCopyBtn'), '📋 Copy rows to update');
 }
 
 // ── Copy the deny list — the charges that should NOT be credited ──
