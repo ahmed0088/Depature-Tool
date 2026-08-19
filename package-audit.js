@@ -28,6 +28,14 @@ let pkgFilter_  = 'action';
 let pkgSearch_  = '';
 let pkgPdfFiles = [];   // names of the Changes Log exports merged so far
 let pkgLogRange = { min: 0, max: 0 };  // YYYYMMDD span the loaded logs actually cover
+let pkgGuests   = {};   // confirmation no. -> { name, norm, room, arr, dep } from the guest list
+
+// A guest who extends gets a fresh confirmation number, so credit would
+// otherwise pass to whoever keyed the new booking — which is also the
+// opening for moving a colleague's sale onto yourself by rebooking it.
+// Reservations for the same guest inside this many days are treated as
+// one stay, and the sale stays with whoever made it first.
+const PKG_EXTENSION_DAYS = 31;
 
 // ── IN-Gauge export upload (.xlsx) ──────────────────────────
 function pkgLoadExcel(input) {
@@ -59,6 +67,74 @@ function pkgLoadExcel(input) {
     }
   };
   reader.readAsArrayBuffer(file);
+}
+
+// ── Guest list upload (optional, .xls/.xlsx/.csv) ───────────
+// Neither the IN-Gauge export nor the Changes Log names the guest, so on
+// their own there is no way to tell that two confirmation numbers are the
+// same person. An Opera arrivals/reservations export carries both the
+// confirmation number and the name, which is what links them.
+function pkgLoadGuests(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async e => {
+    try {
+      busyStart('Reading the guest list', 'matching names to confirmations…');
+      await busyPaint();
+      const wb   = XLSX.read(e.target.result, { type: 'array' });
+      const ws   = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      pkgGuests  = _pkgParseGuestList(rows);
+      const n = Object.keys(pkgGuests).length;
+      const lbl = document.getElementById('pkgGuestLabel');
+      if (lbl) lbl.textContent = n ? `✓ ${n} reservation${n !== 1 ? 's' : ''} with guest names` : 'Loaded — no Confirmation No. + Name columns found';
+      showToast(n ? `✦ ${n} guest names loaded` : 'Could not find Confirmation No. and Name columns in this file', n ? 'ok' : 'err');
+    } catch (err) {
+      showToast('Failed to read the guest list: ' + err.message, 'err');
+    } finally {
+      busyDone();
+      if (input) input.value = '';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function _pkgParseGuestList(rows) {
+  if (!rows.length) return {};
+  const hdrs = rows[0].map(h => String(h || '').trim());
+  const iConf = _pkgFindCol(hdrs, 'Confirmation Number', 'Confirmation No', 'Confirmation no');
+  const iName = _pkgFindCol(hdrs, 'Name', 'Guest Name');
+  const iRoom = _pkgFindCol(hdrs, 'Room');
+  const iArr  = _pkgFindCol(hdrs, 'Arrival');
+  const iDep  = _pkgFindCol(hdrs, 'Departure');
+  if (iConf < 0 || iName < 0) return {};
+
+  const out = {};
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r) continue;
+    const conf = String(r[iConf] || '').trim().replace(/\.0+$/, '');
+    const name = String(r[iName] || '').trim();
+    if (!conf || !name) continue;
+    out[conf] = {
+      name,
+      norm: _pkgNormGuestName(name),
+      room: iRoom >= 0 ? String(r[iRoom] || '').trim() : '',
+      arr:  iArr  >= 0 ? String(r[iArr]  || '').trim() : '',
+      dep:  iDep  >= 0 ? String(r[iDep]  || '').trim() : '',
+    };
+  }
+  return out;
+}
+
+// "Ali, Mohamed, Mr." and "Mohamed Ali" are one person written two ways,
+// so titles go and the remaining words are sorted — order stops mattering.
+function _pkgNormGuestName(s) {
+  return String(s || '')
+    .replace(/\b(MR|MRS|MS|MISS|DR|MSTR|MASTER|PROF)\b\.?/gi, ' ')
+    .replace(/[^A-Za-z ]/g, ' ')
+    .toUpperCase().split(/\s+/).filter(w => w.length > 1).sort().join(' ');
 }
 
 // The Changes Log states no date filter, so its coverage is taken from the
@@ -651,6 +727,82 @@ function _pkgApplyVerdicts(results) {
   });
 }
 
+// Groups a guest's reservations into one stay. Same name, and each
+// booking starting within PKG_EXTENSION_DAYS of the one before it, so a
+// guest returning months later is a separate sale rather than an
+// extension. Returns confirmation -> the stay's first confirmation.
+function _pkgBuildChains() {
+  const byGuest = {};
+  Object.entries(pkgGuests).forEach(([conf, g]) => {
+    if (!g.norm) return;
+    (byGuest[g.norm] = byGuest[g.norm] || []).push({ conf, ...g });
+  });
+
+  const head = {};
+  Object.values(byGuest).forEach(list => {
+    if (list.length < 2) return;
+    list.sort((a, b) => (_pkgDayNum(a.arr) || 0) - (_pkgDayNum(b.arr) || 0));
+    let chainHead = list[0].conf;
+    let prevEnd   = _pkgDayNum(list[0].dep) || _pkgDayNum(list[0].arr);
+    head[list[0].conf] = chainHead;
+    for (let i = 1; i < list.length; i++) {
+      const arr = _pkgDayNum(list[i].arr);
+      // Compared as plain calendar days — close enough over a month, and
+      // it avoids pretending YYYYMMDD arithmetic is exact across a month end.
+      const gap = (arr && prevEnd) ? _pkgDaysBetween(prevEnd, arr) : Infinity;
+      if (gap > PKG_EXTENSION_DAYS) chainHead = list[i].conf;   // too far apart: a new stay
+      head[list[i].conf] = chainHead;
+      prevEnd = _pkgDayNum(list[i].dep) || arr;
+    }
+  });
+  return head;
+}
+
+function _pkgDaysBetween(a, b) {
+  const toDate = n => { const s = String(n); return new Date(+s.slice(0,4), +s.slice(4,6) - 1, +s.slice(6,8)); };
+  return Math.round((toDate(b) - toDate(a)) / 86400000);
+}
+
+// The sale belongs to whoever made the first booking of the stay. Without
+// this, a guest extending onto a new confirmation number hands the credit
+// to whoever keyed that booking — which also means a colleague's sale can
+// be moved onto yourself simply by rebooking it.
+function _pkgApplyExtensionCredit(results) {
+  if (!Object.keys(pkgGuests).length) return;   // no guest list loaded: rule is inactive
+  const head = _pkgBuildChains();
+
+  // Who owns each stay: the seller on its first booking, preferring one
+  // Opera actually confirms over IN-Gauge's unverified word.
+  const owner = {};
+  results.forEach(r => {
+    if (head[r.conf] !== r.conf) return;
+    if (r.verdict === 'settled' || r.verdict === 'deny') return;
+    if (!owner[r.conf] || (r.matchedEvent && !owner[r.conf].confirmed)) {
+      owner[r.conf] = { user: r.user || r.employee, confirmed: !!r.matchedEvent };
+    }
+  });
+
+  results.forEach(r => {
+    const h = head[r.conf];
+    if (!h || h === r.conf) return;                                  // first booking of the stay
+    if (r.verdict === 'settled' || r.verdict === 'deny') return;     // already handled
+    const own = owner[h];
+    if (!own || !own.user) return;
+
+    r.extendedFrom = h;
+    r.extendedName = (pkgGuests[r.conf] || {}).name || '';
+    if (_pkgSameUser(r.user || r.employee, own.user)) return;        // already the right person
+
+    // Opera may show someone else adding the package on the new booking;
+    // the stay's original seller still keeps it.
+    r.wasUser  = r.employee;
+    r.user     = own.user;
+    r.reassign = true;
+    r.alreadyComplete = false;
+    r.verdict  = 'credit';
+  });
+}
+
 // ── Reconcile ────────────────────────────────────────────────
 async function pkgRun() {
   const errBox = document.getElementById('pkgError');
@@ -706,6 +858,7 @@ async function pkgRun() {
   });
 
   _pkgApplyVerdicts(results);
+  _pkgApplyExtensionCredit(results);
   pkgResults = results;
   _pkgRenderCoverage();
   document.getElementById('pkgResultsWrap').style.display = 'block';
@@ -754,7 +907,7 @@ function _pkgActionText(r) {
   if (r.needsProduct && r.reassign) return 'Set package, reassign seller';
   if (r.needsProduct) return 'Set the package';
   if (r.needsEmployee) return 'Set the seller';
-  if (r.reassign) return 'Reassign the seller';
+  if (r.reassign) return r.extendedFrom ? 'Extension — credit stays with first seller' : 'Reassign the seller';
   return 'Nothing — already correct';
 }
 

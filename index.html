@@ -1345,9 +1345,25 @@
 
       </div>
 
+      <!-- Optional: guest names, so an extension keeps its original seller -->
+      <div class="upload-zone" style="cursor:pointer;margin-top:12px;" onclick="document.getElementById('pkgGuestFileInput').click()">
+        <div class="upload-label-bar">
+          <div class="upload-dot amber"></div>
+          <span class="upload-lbl">3 · Guest list <span style="opacity:0.7;font-weight:400;">(optional)</span></span>
+          <span class="upload-sub">.xls / .xlsx · Confirmation No. + Name</span>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;padding:14px;text-align:center;gap:4px;">
+          <div style="font-size:1.4rem;">👤</div>
+          <div id="pkgGuestLabel" style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">Click to upload</div>
+          <div style="font-size:0.62rem;color:var(--text3);">Opera → Reservations → Arrivals → export the month.
+            A guest who extends gets a new confirmation number; this links them so the sale stays with whoever made it first.</div>
+          <input type="file" id="pkgGuestFileInput" accept=".xls,.xlsx,.csv" style="display:none;" onchange="pkgLoadGuests(this)"/>
+        </div>
+      </div>
+
       <div class="error-box" id="pkgError"><span>⚠</span><span id="pkgErrorMsg"></span></div>
       <div style="margin-top:12px;">
-        <button class="btn gold" onclick="pkgRun()" style="width:100%;padding:11px;font-size:0.82rem;">3 · Check the charges →</button>
+        <button class="btn gold" onclick="pkgRun()" style="width:100%;padding:11px;font-size:0.82rem;">4 · Check the charges →</button>
       </div>
       <div style="margin-top:8px;font-size:0.62rem;color:var(--text3);text-align:center;">
         Both reports must cover the same dates, or charges sold outside the Opera range can't be matched.
