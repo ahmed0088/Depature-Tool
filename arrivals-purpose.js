@@ -116,7 +116,11 @@ function parseOriginXML(xmlText) {
         if (fields[i].getAttribute('Name') === fieldName) {
           let fv = fields[i].getElementsByTagNameNS(ns, 'FormattedValue')[0];
           if (!fv) fv = fields[i].getElementsByTagName('FormattedValue')[0];
-          return fv ? (fv.textContent || '').trim() : '';
+          // Crystal Reports emits non-breaking spaces inside some values
+          // ("Syrian Arab Republic\u00A0(Syria)"). They look like ordinary
+          // spaces but never compare equal to one, which silently breaks
+          // grouping and lookups downstream.
+          return fv ? (fv.textContent || '').replace(/\u00A0/g, ' ').replace(/\s+/g, ' ').trim() : '';
         }
       }
       return '';
