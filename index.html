@@ -12,7 +12,7 @@
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="apple-mobile-web-app-title" content="Ibis Ops"/>
-<link rel="apple-touch-icon" href="icons/icon-192.png"/>
+<link rel="apple-touch-icon" href="icon-192.png"/>
 <!-- CSP: restricts script/connect origins to only what this app actually
      uses (Firebase, Google Fonts, cdnjs for xlsx/pdf.js). 'unsafe-inline'
      is required for script-src/style-src since the app relies on inline
@@ -773,6 +773,15 @@
     <thead><tr><th>Room</th><th>Conf.</th><th>Name</th><th>Purpose</th><th>Nights</th><th>Nationality</th><th>Email</th><th>Source</th><th>Remarks</th><th></th></tr></thead>
     <tbody id="arrTable"></tbody>
   </table></div>
+    <div class="dep-log-wrap" id="arrLogWrap" style="display:none;">
+      <div class="dep-log-header" onclick="toggleActivityLog('arrLogBody','arrLogToggleIcon')" role="button" tabindex="0" title="Show or hide the activity log">
+        <span>📋</span>
+        <h3>Activity Log</h3>
+        <span id="arrLogCount" class="nav-badge">0</span>
+        <span id="arrLogToggleIcon" style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">▾ collapse</span>
+      </div>
+      <div class="dep-log-body" id="arrLogBody"></div>
+    </div>
 </div>
 
 <!-- ════════════════ ARR vs DEP (XREF) ════════════════ -->
@@ -921,6 +930,15 @@
     <thead><tr><th>Day</th><th>Date</th><th>Room</th><th>Conf.</th><th>Name</th><th>Purpose</th><th>Nights</th><th>Nationality</th><th>Email</th><th>Source</th><th>Origin of Travel</th><th>Remarks</th><th></th></tr></thead>
     <tbody id="purposeTable"></tbody>
   </table></div>
+    <div class="dep-log-wrap" id="purposeLogWrap" style="display:none;">
+      <div class="dep-log-header" onclick="toggleActivityLog('purposeLogBody','purposeLogToggleIcon')" role="button" tabindex="0" title="Show or hide the activity log">
+        <span>📋</span>
+        <h3>Activity Log</h3>
+        <span id="purposeLogCount" class="nav-badge">0</span>
+        <span id="purposeLogToggleIcon" style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">▾ collapse</span>
+      </div>
+      <div class="dep-log-body" id="purposeLogBody"></div>
+    </div>
 </div>
 
 <!-- ════════════════ SHIFT TASKS ════════════════ -->
@@ -969,6 +987,7 @@
       <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn gold" onclick="processNat()">⚡ Process</button><button class="btn" onclick="clearNat()">✕ Clear</button></div>
     </div>
     <div id="natResults" style="display:none;">
+      <div id="natMonthLabel" style="display:none;margin-top:16px;font-family:var(--mono);font-size:0.68rem;color:var(--gold);"></div>
       <div class="kpi-row c3" style="margin-top:18px;">
         <div class="kpi sky"><div class="kpi-accent"></div><div class="kpi-label">New Arrivals</div><div class="kpi-val" id="kpi-apr">—</div></div>
         <div class="kpi gold"><div class="kpi-accent"></div><div class="kpi-label">Room Nights</div><div class="kpi-val" id="kpi-rms">—</div></div>
@@ -992,7 +1011,7 @@
             <input id="natSearch" type="text" placeholder="Search nationality…" oninput="natFilterPreview(this.value)" style="flex:1;max-width:180px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:4px 9px;font-family:var(--mono);font-size:0.68rem;color:var(--text2);outline:none;" />
             <span style="font-family:var(--mono);font-size:0.6rem;color:var(--gold);white-space:nowrap;">ROWS 8–247</span>
           </div>
-          <div style="display:grid;grid-template-columns:36px 1fr 54px 54px 54px;padding:6px 12px;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--border);">
+          <div id="natPreviewHeader" style="display:grid;grid-template-columns:36px 1fr 54px 54px 54px;padding:6px 12px;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--border);">
             <span style="font-family:var(--mono);font-size:0.53rem;color:var(--text3);">ROW</span>
             <span style="font-family:var(--mono);font-size:0.53rem;color:var(--text3);">NATIONALITY</span>
             <span style="font-family:var(--mono);font-size:0.53rem;color:var(--sky);text-align:right;">ARR</span>
@@ -3512,6 +3531,18 @@ document.addEventListener('click', e => {
 // ── Action log toggle state ───────────────────────────────
 let _logOpen = true; // dep action log starts open
 
+// Generic collapse for the Arrivals / Purpose activity logs. Departures has
+// its own toggleLog() with a single remembered state; these take the element
+// ids so one function serves both panels.
+const _actLogOpen = {};
+function toggleActivityLog(bodyId, iconId) {
+  _actLogOpen[bodyId] = _actLogOpen[bodyId] === false;
+  const body = document.getElementById(bodyId);
+  const icon = document.getElementById(iconId);
+  if (body) body.style.display = _actLogOpen[bodyId] ? 'block' : 'none';
+  if (icon) icon.textContent   = _actLogOpen[bodyId] ? '▾ collapse' : '▸ expand';
+}
+
 function toggleLog() {
   _logOpen = !_logOpen;
   const body = document.getElementById('depLogBody');
@@ -3881,6 +3912,11 @@ async function appInit() {
   if (typeof clRender2 !== 'undefined') clRender2();
   if (typeof arrRender !== 'undefined') arrRender();
   if (typeof purposeRender !== 'undefined') purposeRender();
+  // The activity logs were only ever drawn by the function that appends to
+  // them, so a log loaded from Firebase stayed invisible until someone did
+  // something new. Draw them once the data is in.
+  if (typeof renderArrLog !== 'undefined') renderArrLog();
+  if (typeof renderPurposeLog !== 'undefined') renderPurposeLog();
   if (typeof renderShift !== 'undefined') renderShift(activeShift);
   if (typeof initArrivalsProc !== 'undefined') initArrivalsProc();
   if (typeof initNoShow !== 'undefined') initNoShow();

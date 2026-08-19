@@ -14,13 +14,16 @@
 //  clients pick up the new version instead of a stale cache.
 // ═══════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'ibis-ops-shell-v56';
+const CACHE_NAME = 'ibis-ops-shell-v57';
 
 const SHELL_FILES = [
   './',
   './index.html',
   './styles.css',
   './manifest.json',
+  './icon-192.png',
+  './icon-512.png',
+  './icon-maskable-512.png',
   './firebase-config.js',
   './db.js',
   './state.js',

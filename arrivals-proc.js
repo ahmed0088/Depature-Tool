@@ -287,9 +287,9 @@ function apHideScan() {
   const dz = document.getElementById('ap-drop-zone');
   if (dz && dz.classList.contains('ap-loaded')) {
     dz.classList.remove('ap-loaded');
-    const icon = document.getElementById('ap-drop-icon');
+    const icon = document.getElementById('ap-drop-icon-emoji');
     const txt  = document.getElementById('ap-drop-txt');
-    if (icon) icon.className = 'ti ti-file-upload';
+    if (icon) icon.textContent = '📄';
     if (txt)  txt.textContent = 'Drop your Opera export here, or click to browse';
   }
 }
@@ -346,9 +346,9 @@ function apScanReport(fileName) {
   // Update drop zone
   const dz = document.getElementById('ap-drop-zone');
   if (dz) dz.classList.add('ap-loaded');
-  const icon = document.getElementById('ap-drop-icon');
+  const icon = document.getElementById('ap-drop-icon-emoji');
   const txt  = document.getElementById('ap-drop-txt');
-  if (icon) icon.className = 'ti ti-circle-check';
+  if (icon) icon.textContent = '✅';
   if (txt)  txt.textContent = (fileName || 'Report loaded') + ' — ' + (lines.length - 1) + ' rows';
 
   // Render scan summary

@@ -248,20 +248,10 @@ function processNat() {
   }
   window._renderNatPreview = renderNatPreview;
   renderNatPreview();
-  // Inject Opera how-to instructions if element exists
-  const howToEl = document.getElementById('natHowTo');
-  if (howToEl) howToEl.innerHTML = `<div style="margin-bottom:12px;padding:11px 14px;background:rgba(90,180,232,0.05);border:1px solid rgba(90,180,232,0.15);border-left:3px solid var(--sky);border-radius:var(--r);font-size:0.7rem;color:var(--text2);line-height:1.7;">
-    <div style="font-family:var(--mono);font-size:0.6rem;letter-spacing:1px;color:var(--sky);margin-bottom:6px;">HOW TO GET THIS REPORT FROM OPERA</div>
-    <ol style="margin:0;padding-left:16px;color:var(--text3);">
-      <li>In Opera, go to <strong style="color:var(--text2);">Reports</strong> and search for <strong style="color:var(--mint);">Nationality by Month</strong></li>
-      <li>Set your <strong style="color:var(--text2);">date range</strong> to the full month you need</li>
-      <li>Under the statistics options, select the <strong style="color:var(--sky);">Nationality</strong> radio button</li>
-      <li>Tick <strong style="color:var(--sky);">Room Nights</strong> and <strong style="color:var(--sky);">Person Nights</strong></li>
-      <li>Download the report — choose <strong style="color:var(--mint);">Delimited</strong> format with <strong style="color:var(--mint);">Tab</strong> as the delimiter</li>
-      <li>Open the downloaded file <strong style="color:var(--text2);">(stat_countrybymon...)</strong>, Select All, Copy, and paste it here</li>
-    </ol>
-    <div style="margin-top:7px;padding-top:7px;border-top:1px solid rgba(90,180,232,0.1);font-family:var(--mono);font-size:0.58rem;color:var(--amber);">⚠ Make sure you select the <strong>Nationality</strong> radio button — not Country — otherwise the data will not match correctly</div>
-  </div>`;
+  // The Opera how-to for this report is written directly into index.html,
+  // so the copy that used to be injected here was dead — it targeted an
+  // element that has never existed and would only have duplicated it.
+
   document.getElementById('natResults').style.display = 'block';
 }
 function natFilterPreview(q) {
