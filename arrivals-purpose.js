@@ -1031,17 +1031,19 @@ function processImportEmails() {
     return;
   }
 
-  // Neorcha's nationality field comes from the OTA/booking platform, not a
-  // passport — and it's been seen defaulting to "UAE" for guests who aren't
-  // actually Emirati (e.g. booked via a local number/agent). Vicas/Inhouse
-  // XML is real immigration-desk data (see _natFromXML elsewhere in this
-  // file — "ground truth, not a guess"), so it must never be overwritten by
-  // the scraper. Match that same skepticism for a bare UAE guess even when
-  // there's no XML value yet — apply it, since it's still better than
-  // nothing, but flag it for a manual check instead of trusting it silently.
-  const _isUaeGuess = s => /^u\.?a\.?e\.?$/i.test(s.trim()) || /united arab emirates/i.test(s);
+  // The scraper completes what is missing; it never corrects what is there.
+  //
+  // Its nationality is whatever was typed into a booking form, and picking
+  // the hotel's own country from a dropdown is the common mistake — room 421
+  // came through as UAE for a guest travelling on an Iraqi passport. Vicas is
+  // the immigration desk reading the passport itself, so it always wins, and
+  // a value already filled from anywhere is left alone. Only an empty
+  // nationality gets one from here. Emails and names still always apply:
+  // those are what the scraper is actually for.
+  const _isUaeGuess = s => /^u\.?a\.?e\.?$/i.test(String(s).trim()) || /united arab emirates/i.test(s);
 
-  let matched = 0, notInList = 0, namesUpdated = 0, emailsUpdated = 0, natsUpdated = 0, natsFlagged = 0, natsSkippedXML = 0, natsCorrected = 0;
+  let matched = 0, notInList = 0, namesUpdated = 0, emailsUpdated = 0, natsUpdated = 0,
+      natsFlagged = 0, natsSkippedXML = 0, natsCorrected = 0, natsSkippedExisting = 0;
   purposeGuests.forEach(g => {
     const key = _normConf(g.conf);
     const hasEmail = key && emailByConf[key];
@@ -1066,6 +1068,9 @@ function processImportEmails() {
         // Vicas/Inhouse already gave us this guest's real nationality — don't
         // let the scraper's guess clobber it.
         natsSkippedXML++;
+      } else if (String(g.nat || '').trim()) {
+        // Already filled from somewhere else. The scraper only completes.
+        natsSkippedExisting++;
       } else {
         // A bare "UAE" from Neorcha is the single least trustworthy value in
         // this whole screen: it is what the guest typed into a booking form,
@@ -1097,7 +1102,8 @@ function processImportEmails() {
 
   purposeRender();
   savePurpose(purposeGuests);
-  const skipNote = natsSkippedXML ? `, ${natsSkippedXML} kept Vicas/XML value` : '';
+  const skipNote = (natsSkippedXML + natsSkippedExisting)
+    ? `, ${natsSkippedXML + natsSkippedExisting} left alone (already filled)` : '';
   const fixNote  = natsCorrected ? `, ${natsCorrected} corrected from "UAE" using the guest's name` : '';
   const flagNote = natsFlagged ? `, ${natsFlagged} flagged "UAE" for review` : '';
   addPurposeLog('Emails', `Imported ${parsedRows} pasted rows — ${matched} guests matched, ${emailsUpdated} email(s), ${namesUpdated} name(s), ${natsUpdated} nationality(ies) updated${skipNote}${fixNote}${flagNote}, ${notInList} no match`);
@@ -1105,7 +1111,7 @@ function processImportEmails() {
 
   if (resultBox) {
     resultBox.style.display = 'block';
-    resultBox.innerHTML = `✅ Updated <strong>${emailsUpdated}</strong> email${emailsUpdated === 1 ? '' : 's'}${namesUpdated ? ` · <strong>${namesUpdated}</strong> name${namesUpdated === 1 ? '' : 's'}` : ''}${natsUpdated ? ` · <strong>${natsUpdated}</strong> nationality${natsUpdated === 1 ? '' : 's'}` : ''} · ${matched} guest${matched === 1 ? '' : 's'} matched · ${notInList} guest${notInList === 1 ? '' : 's'} with no match in the pasted list.${natsSkippedXML ? `<br>🟢 Kept the Vicas/XML nationality for <strong>${natsSkippedXML}</strong> guest${natsSkippedXML === 1 ? '' : 's'} instead of the scraper's guess.` : ''}${natsCorrected ? `<br>✎ <strong>${natsCorrected}</strong> guest${natsCorrected === 1 ? '' : 's'} said "UAE" on the booking but the name reads as another nationality — corrected, shown in blue. Confirm against the passport.` : ''}${natsFlagged ? `<br>⚠️ <strong>${natsFlagged}</strong> guest${natsFlagged === 1 ? '' : 's'} got "UAE" from the scraper with no Vicas data to confirm it — double-check ${natsFlagged === 1 ? 'that one' : 'those'}.` : ''}`;
+    resultBox.innerHTML = `✅ Updated <strong>${emailsUpdated}</strong> email${emailsUpdated === 1 ? '' : 's'}${namesUpdated ? ` · <strong>${namesUpdated}</strong> name${namesUpdated === 1 ? '' : 's'}` : ''}${natsUpdated ? ` · <strong>${natsUpdated}</strong> nationality${natsUpdated === 1 ? '' : 's'}` : ''} · ${matched} guest${matched === 1 ? '' : 's'} matched · ${notInList} guest${notInList === 1 ? '' : 's'} with no match in the pasted list.${natsSkippedXML ? `<br>🟢 Kept the Vicas/XML nationality for <strong>${natsSkippedXML}</strong> guest${natsSkippedXML === 1 ? '' : 's'} instead of the scraper's guess.` : ''}${natsSkippedExisting ? `<br>🟢 Left <strong>${natsSkippedExisting}</strong> nationality${natsSkippedExisting === 1 ? '' : 'ies'} as they were — the scraper only fills blanks.` : ''}${natsCorrected ? `<br>✎ <strong>${natsCorrected}</strong> guest${natsCorrected === 1 ? '' : 's'} said "UAE" on the booking but the name reads as another nationality — corrected, shown in blue. Confirm against the passport.` : ''}${natsFlagged ? `<br>⚠️ <strong>${natsFlagged}</strong> guest${natsFlagged === 1 ? '' : 's'} got "UAE" from the scraper with no Vicas data to confirm it — double-check ${natsFlagged === 1 ? 'that one' : 'those'}.` : ''}`;
   }
 }
 
