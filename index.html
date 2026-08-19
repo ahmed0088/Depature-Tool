@@ -2615,6 +2615,80 @@
   }
   function adgHideErr(){document.getElementById('adg-upload-err').style.display='none';}
 
+
+  // ── Firebase sync ─────────────────────────────────────────
+  // Same gate the shift board uses: nothing is written until Firebase has
+  // actually answered about this node. saveAdagio() replaces the whole
+  // record, so a write sent before the stored analysis arrives would wipe
+  // whatever a colleague uploaded.
+  let _adgLoaded=false;
+  const _adgDateKeys=['arrival','departure','nextDueDate'];
+
+  function adgSerialize(){
+    const d=v=>{ if(!v) return null; const t=v instanceof Date?v:new Date(v);
+                 return isNaN(t)?null:`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`; };
+    return {
+      guests: adgGuests.map(g=>{ const o={...g}; _adgDateKeys.forEach(k=>{o[k]=d(g[k]);}); return o; }),
+      fileName: adgFileName||'', analysisDate: adgAnalysisDate||'',
+      highBal: adgHighBal, chequeDays: adgChequeDays, dangerDays: adgDangerDays,
+    };
+  }
+
+  // JSON gives dates back as strings; the charts and the day-count maths need
+  // real Date objects, so they are rebuilt here rather than everywhere else.
+  function adgHydrate(rec){
+    if(!rec||!Array.isArray(rec.guests)) return null;
+    const p=s=>{ if(!s) return null; const t=new Date(s); return isNaN(t)?null:t; };
+    return rec.guests.map(g=>{ const o={...g}; _adgDateKeys.forEach(k=>{o[k]=p(g[k]);}); return o; });
+  }
+
+  function adgPersist(){
+    if(!_adgLoaded){ console.warn('[adagio] not saving — stored analysis has not loaded yet'); return false; }
+    if(typeof saveAdagio!=='function') return false;
+    saveAdagio(adgSerialize());
+    return true;
+  }
+
+  // Applies a record from Firebase, whether it arrived at startup or from a
+  // colleague uploading while this screen is open.
+  window.adgApplyStored=function(rec,heardFromDb){
+    if(heardFromDb!==false) _adgLoaded=true;
+    const guests=adgHydrate(rec);
+    if(!guests||!guests.length) return;
+    adgGuests=guests;
+    adgFileName=rec.fileName||''; adgAnalysisDate=rec.analysisDate||'';
+    if(rec.highBal!=null) adgHighBal=rec.highBal;
+    if(rec.chequeDays!=null) adgChequeDays=rec.chequeDays;
+    if(rec.dangerDays!=null) adgDangerDays=rec.dangerDays;
+    if(adgAnalysisDate) adgToday=adgParseISO(adgAnalysisDate);
+    if(!_adgInited){ _adgInited=true; adgInit(); }
+    const el=document.getElementById('adgDate'); if(el&&adgAnalysisDate) el.value=adgAnalysisDate;
+    const hl=document.getElementById('adg-high-live'); if(hl) hl.value=adgHighBal;
+    adgPopulateFilters();
+    adgRenderDash(adgSummarise(adgGuests));
+    document.getElementById('adg-upload').style.display='none';
+    document.getElementById('adg-dash').style.display='block';
+    document.getElementById('badge-adagio').textContent=adgGuests.length;
+  };
+
+  // The counts adgRenderDash() needs, recomputed from the guests themselves
+  // so a stored record renders identically to a freshly parsed file.
+  function adgSummarise(guests){
+    return {
+      success:true, guests, totalGuests:guests.length, errors:[],
+      dangerCount:guests.filter(g=>g.status&&g.status.startsWith('DANGER')).length,
+      chequeCount:guests.filter(g=>g.chequeSoon).length,
+      dueCount:guests.filter(g=>g.status==='DUE_SOON').length,
+      okCount:guests.filter(g=>g.status==='OK').length,
+      paidCount:guests.filter(g=>g.status==='PAID').length,
+      totalOutstanding:guests.filter(g=>g.totalDue>0).reduce((s,g)=>s+g.totalDue,0),
+      totalContract:guests.filter(g=>g.totalContract>0).reduce((s,g)=>s+g.totalContract,0),
+      totalReceived:guests.filter(g=>g.paymentReceived>0).reduce((s,g)=>s+g.paymentReceived,0),
+      contractMissing:guests.filter(g=>!g.contractReceived).length,
+      depositMissing:guests.filter(g=>!g.depositAvailable).length,
+    };
+  }
+
   function adgFinish(result){
     document.getElementById('adg-loading').style.display='none';
     if(!result.success){adgShowErr(result.errors.join('\n'));return;}
@@ -2622,6 +2696,8 @@
     adgPopulateFilters();adgRenderDash(result);
     document.getElementById('adg-dash').style.display='block';
     document.getElementById('badge-adagio').textContent=result.totalGuests;
+    // Share it — everyone on shift sees the same analysis without re-uploading.
+    if(adgPersist()&&typeof showToast==='function') showToast('✦ Shared with the team','ok');
   }
 
   function adgReadCSV(text){
@@ -3196,6 +3272,7 @@ ${actionList?`<div class="action"><h2>Act on these first</h2><ul>${actionList}</
   };
   window.adgReset=function(){
     adgGuests=[];adgFilter='ALL';adgSortCol=null;adgSortAsc=true;
+    adgFileName='';adgPersist();   // clears it for the team, not just this screen
     document.getElementById('adg-file-input').value='';
     document.getElementById('adg-dash').style.display='none';
     document.getElementById('adg-upload').style.display='flex';
@@ -3983,6 +4060,12 @@ async function appInit() {
   applyShiftData(data.shifts && data.shifts.data,
                  typeof dbError !== 'function' || !dbError());
 
+  // 4a — Apply Adagio Pro. Called even when nothing is stored, so the write
+  // gate opens once we know the node is genuinely empty rather than unread.
+  if (typeof adgApplyStored === 'function') {
+    adgApplyStored(data.adagio, typeof dbError !== 'function' || !dbError());
+  }
+
   // 4b — Apply shift activity log (who did what, per shift) — previously
   // saved to Firebase but never read back, so it looked empty on every reload
   if (data.shiftLog && data.shiftLog.data) {
@@ -4100,6 +4183,15 @@ async function appInit() {
     clRender2();
   });
   
+  if (typeof listenAdagio === 'function') {
+    listenAdagio(snap => {
+      // A colleague uploading a new sheet replaces what is on screen here.
+      if (typeof adgApplyStored === 'function') {
+        adgApplyStored(snap, typeof dbError !== 'function' || !dbError());
+      }
+    });
+  }
+
   listenShifts(snap => {
     // fbListen also calls back on error with the localStorage copy, and
     // that must not unlock writing either — dbError() is already set by then.

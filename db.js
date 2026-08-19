@@ -168,6 +168,14 @@ async function savePurposeLog(log) {
   await fbSet('purposeLog', { log, updatedAt: new Date().toISOString() });
 }
 
+// Adagio Pro. Dates are stored as YYYY-MM-DD strings rather than Date
+// objects: JSON turns a Date into an ISO string on the way out but not back
+// on the way in, and the charts call getFullYear() on these. Rehydrating on
+// load is the reader's job — see adgHydrate().
+async function saveAdagio(payload) {
+  await fbSet('adagio', { ...payload, updatedAt: new Date().toISOString() });
+}
+
 async function saveNoShow(guests) {
   await fbSet('noshow', { guests, date: new Date().toISOString().split('T')[0], updatedAt: new Date().toISOString() });
 }
@@ -181,7 +189,7 @@ async function saveSettings(settings) {
 async function loadAll() {
   try {
     const [departures, arrivals, purpose, checklist, shifts, feedback, settings,
-           arrLogData, purposeLogData, shiftLogData, checkLogData, noshowData] = await Promise.all([
+           arrLogData, purposeLogData, shiftLogData, checkLogData, noshowData, adagioData] = await Promise.all([
       fbGet('departures'),
       fbGet('arrivals'),
       fbGet('purpose'),
@@ -194,6 +202,7 @@ async function loadAll() {
       fbGet('shiftLog'),
       fbGet('checkLog'),
       fbGet('noshow'),
+      fbGet('adagio'),
     ]);
 
     return {
@@ -209,6 +218,7 @@ async function loadAll() {
       shiftLog:    shiftLogData   || { data: null },
       checkLog:    checkLogData   || { log: [] },
       noshow:      noshowData     || { guests: [] },
+      adagio:      adagioData     || null,
     };
   } catch (e) {
     console.warn('loadAll error:', e);
@@ -225,6 +235,7 @@ async function loadAll() {
       shiftLog:   { data: null },
       checkLog:   { log: [] },
       noshow:     { guests: [] },
+      adagio:     null,
     };
   }
 }
@@ -237,6 +248,7 @@ function listenPurpose(cb)    { fbListen('purpose',    cb); }
 function listenChecklist(cb)  { fbListen('checklist',  cb); }
 function listenShifts(cb)     { fbListen('shifts',     cb); }
 function listenNoShow(cb)     { fbListen('noshow',     cb); }
+function listenAdagio(cb)     { fbListen('adagio',     cb); }
 
 // ── Export / Import ───────────────────────────────────────
 async function exportAllData() {
