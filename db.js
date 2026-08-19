@@ -7,9 +7,57 @@
 let _db     = null;
 let _ref    = null;
 let _online = false;
+// Set when Firebase actively rejects us — as opposed to simply being
+// unreachable. Every call below falls back to localStorage on failure,
+// which is right for a dropped connection but dangerous in silence: the
+// app keeps showing yesterday's cache and keeps accepting edits that never
+// leave the device. This is what makes that state visible.
+let _dbError = '';
 
 // Read-only accessor used by other modules (shifts.js, etc.)
 function isOnline() { return _online; }
+function dbError()  { return _dbError; }
+
+// Firebase reports a rules rejection as PERMISSION_DENIED. That is a very
+// different problem from being offline — usually the Realtime Database
+// rules expired or were changed — so it is worth naming precisely.
+function _dbNoteError(where, err) {
+  const code = String(err && (err.code || err.message) || '').toUpperCase();
+  const msg  = /PERMISSION[_ ]DENIED/.test(code)
+    ? 'The database refused this device. Check the Realtime Database rules in the Firebase console — test-mode rules expire on a set date.'
+    : `Could not reach the database (${where}).`;
+  if (_dbError === msg) return;      // don't re-announce the same fault
+  _dbError = msg;
+  console.warn('[DB]', where, err);
+  updateConnectionUI(_online);
+  _dbShowBanner(msg);
+}
+
+function _dbClearError() {
+  if (!_dbError) return;
+  _dbError = '';
+  const b = document.getElementById('dbErrorBanner');
+  if (b) b.remove();
+  updateConnectionUI(_online);
+}
+
+// Deliberately its own banner rather than a toast: a toast disappears, and
+// a person needs to know their work is not being saved for as long as that
+// is true. The connection pill is hidden on mobile, so this is the only
+// signal a phone gets.
+function _dbShowBanner(msg) {
+  let b = document.getElementById('dbErrorBanner');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'dbErrorBanner';
+    b.className = 'db-error-banner';
+    document.body.appendChild(b);
+  }
+  b.innerHTML = `<span>⚠</span><span id="dbErrorText"></span>`
+              + `<button type="button" class="db-error-x" aria-label="Dismiss">✕</button>`;
+  b.querySelector('#dbErrorText').textContent = msg + ' Anything you change is being kept on this device only.';
+  b.querySelector('.db-error-x').onclick = () => b.remove();
+}
 
 function dbInit() {
   try {
@@ -30,7 +78,11 @@ function updateConnectionUI(online) {
   const dot = document.getElementById('fbDot');
   const lbl = document.getElementById('fbLabel');
   if (!dot || !lbl) return;
-  if (online) {
+  if (_dbError) {
+    dot.style.background = 'var(--rose)';
+    dot.style.boxShadow  = '0 0 6px var(--rose)';
+    lbl.textContent      = 'Firebase · Not saving';
+  } else if (online) {
     dot.style.background = 'var(--mint)';
     dot.style.boxShadow  = '0 0 6px var(--mint)';
     lbl.textContent      = 'Firebase · Live';
@@ -45,8 +97,8 @@ function updateConnectionUI(online) {
 async function fbSet(path, data) {
   lsSave(path, data);
   if (!_ref) return;
-  try { await _ref.child(path).set(data); }
-  catch (e) { console.warn('[DB] fbSet failed (saved locally):', e); }
+  try { await _ref.child(path).set(data); _dbClearError(); }
+  catch (e) { _dbNoteError('saving ' + path, e); }
 }
 
 async function fbGet(path) {
@@ -55,8 +107,9 @@ async function fbGet(path) {
     const snap = await _ref.child(path).once('value');
     const val  = snap.val();
     if (val !== null) lsSave(path, val);
+    _dbClearError();
     return val;
-  } catch (e) { return lsLoad(path); }
+  } catch (e) { _dbNoteError('reading ' + path, e); return lsLoad(path); }
 }
 
 // KEY FUNCTION: .on('value') fires immediately AND on every future change.
@@ -66,9 +119,10 @@ function fbListen(path, cb) {
   _ref.child(path).on('value', snap => {
     const val = snap.val();
     if (val !== null) lsSave(path, val);
+    _dbClearError();
     cb(val);
   }, err => {
-    console.warn('[DB] listener error:', path, err);
+    _dbNoteError('reading ' + path, err);
     cb(lsLoad(path));
   });
 }
