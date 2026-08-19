@@ -435,11 +435,70 @@ function _applyOriginToPurpose() {
   if (purposeResult.filledNat  || purposeResult.filledOrigin)  purposeRender();
   if (arrivalsResult.filledNat || arrivalsResult.filledOrigin) arrRender();
   _renderXmlCoverage();
+  _renderSourceWarning();
 }
 
 // A toast disappears before it can answer "why is this one still empty?".
 // This stays on the panel and names the guests the XML could not reach, so
 // the gap is visible as a fact about the reports rather than a mystery.
+// ── Booking Source repair ─────────────────────────────────
+// Guests loaded before the column-matching fix can be holding a country in
+// the Booking Source field, read from the wrong column. The value is wrong
+// either way, so it is cleared rather than left standing as a plausible
+// looking lie — but only where it is provably not a booking source, and
+// never silently: the panel says how many and offers the button.
+function _isCountryValue(v) {
+  const s = String(v || '').trim();
+  if (!s) return false;
+  // "UAE - Dubai" / "India - Mumbai" — a country-city address, never a source
+  const head = s.split(/\s*[-–—/,]\s*/)[0].trim();
+  const test = t => {
+    const k = String(t).trim().toLowerCase();
+    if (!k) return false;
+    if (typeof EXCEL_LOWER !== 'undefined' && EXCEL_LOWER[k]) return true;
+    if (/^(uae|u\.a\.e\.?|usa|u\.s\.a\.?|uk)$/i.test(k)) return true;
+    if (typeof _shortCountry === 'function' && typeof EXCEL_LOWER !== 'undefined') {
+      return !!EXCEL_LOWER[_shortCountry(t).toLowerCase()];
+    }
+    return false;
+  };
+  return test(s) || test(head);
+}
+
+function _purposeBadSources() {
+  return purposeGuests.filter(g => {
+    const s = String(g.source || '').trim();
+    if (!s) return false;
+    // A real booking source is never a country. Matching the guest's own
+    // nationality or origin is the same tell from the other direction.
+    if (_isCountryValue(s)) return true;
+    const same = x => x && String(x).trim().toLowerCase() === s.toLowerCase();
+    return same(g.nat) || same(g.originOfTravel);
+  });
+}
+
+function purposeFixSources() {
+  const bad = _purposeBadSources();
+  if (!bad.length) { showToast('No booking sources look wrong', 'info'); return; }
+  bad.forEach(g => { g._srcWas = g.source; g.source = ''; });
+  purposeRender();
+  savePurpose(purposeGuests);
+  addPurposeLog('Purpose', `Cleared ${bad.length} booking source${bad.length===1?'':'s'} that held a country, not a source`);
+  showToast(`✓ Cleared ${bad.length} wrong booking source${bad.length===1?'':'s'} — reload the report to fill them`, 'ok');
+}
+
+function _renderSourceWarning() {
+  const box = document.getElementById('purposeSrcWarn');
+  if (!box) return;
+  const bad = _purposeBadSources();
+  if (!bad.length) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  box.innerHTML = `<b>${bad.length}</b> guest${bad.length===1?' has':'s have'} a country in <b>Booking Source</b> `
+    + `(${escapeHtml(bad.slice(0,4).map(g => g.source).join(', '))}${bad.length>4?'…':''}) — read from the wrong report column. `
+    + `<button class="btn sm rose" onclick="purposeFixSources()" style="margin-left:6px;">Clear them</button>`
+    + `<div style="margin-top:5px;font-size:0.62rem;color:var(--text3);">Then re-load your Opera report — the column matching is fixed, so it will read the real Booking Source.</div>`;
+}
+
 function _renderXmlCoverage() {
   const box = document.getElementById('purposeXmlCoverage');
   if (!box) return;

@@ -5380,3 +5380,18 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
 }
 .colmap-item b { color: var(--text2); font-weight: 600; }
 .colmap-item i { color: var(--amber); font-style: normal; }
+
+/* ── Wrong-Booking-Source warning (Purpose of Stay) ────────
+   These values persist in Firebase, so they return on every
+   load until cleared — the warning has to be prominent. */
+.src-warn {
+  margin: 14px 0 0;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--rose);
+  border-radius: var(--r);
+  background: rgba(179,18,58,0.07);
+  font-size: 0.72rem;
+  line-height: 1.6;
+  color: var(--text2);
+}
