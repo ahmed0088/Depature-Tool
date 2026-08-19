@@ -167,14 +167,14 @@ function parseOriginXML(xmlText) {
       if (room) {
         const rKey = _normRoom(room);
         if (isPrimary || !roomMap[rKey]) roomMap[rKey] = origin;
-        if (isPrimary || !natRoomMap[rKey]) natRoomMap[rKey] = nat;
+        if (isPrimary || !natRoomMap[rKey]) natRoomMap[rKey] = _shortCountry(nat);
       }
 
       // Name-based map (primary)
       const nKey = _normName(fullName);
       if (isPrimary || !nameMap[nKey]) nameMap[nKey] = origin;
       // Raw passport nationality (no UAE override) — used to fill the Nationality column directly
-      if (isPrimary || !natMap[nKey]) natMap[nKey] = nat;
+      if (isPrimary || !natMap[nKey]) natMap[nKey] = _shortCountry(nat);
     }
   } catch (e) {
     console.warn('[OriginXML] parse error:', e);
@@ -265,9 +265,60 @@ function loadOriginXML(input) {
 // NOT their actual passport nationality. For Origin of Travel purposes that
 // just means "UAE resident" — normalise it to the short form "UAE".
 // Every other nationality is passed through unchanged.
+// Vicas writes official long-form country names, and not always the same
+// way twice — "United States Of America" and "United States of America"
+// both appear, and count as two different countries in any tally. Some
+// carry a stray "*" footnote marker from the source list. Reduce them to
+// one short, stable form so a nationality is one value everywhere.
+const _COUNTRY_SHORT = {
+  'russian federation': 'Russia',
+  'syrian arab republic': 'Syria',
+  'united states of america': 'USA',
+  'united states': 'USA',
+  'united kingdom': 'UK',
+  'united arab emirates': 'UAE',
+  'iran islamic republic of': 'Iran',
+  'korea republic of': 'South Korea',
+  'korea democratic peoples republic of': 'North Korea',
+  'viet nam': 'Vietnam',
+  'lao peoples democratic republic': 'Laos',
+  'moldova republic of': 'Moldova',
+  'macedonia the former yugoslav republic of': 'North Macedonia',
+  'congo the democratic republic of the': 'DR Congo',
+  'cote divoire': "Côte d'Ivoire",
+  'brunei darussalam': 'Brunei',
+  'cabo verde': 'Cape Verde',
+  'czechia': 'Czech Republic',
+  'myanmar burma': 'Myanmar',
+};
+
+function _shortCountry(v) {
+  let n = String(v || '').replace(/\u00A0/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!n) return '';
+  n = n.replace(/\s*\*+/g, '');                      // drop footnote markers
+  const keyOf = s => s.toLowerCase().replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim();
+  // Check the full name first: "Korea, Republic of" must reach South Korea
+  // before the generic ", Republic of" trim turns it into plain "Korea".
+  if (_COUNTRY_SHORT[keyOf(n)]) return _COUNTRY_SHORT[keyOf(n)];
+  n = n.replace(/,\s*(the\s+)?(united\s+)?republic\s+of\b.*$/i, '');
+  n = n.replace(/,\s*(plurinational|bolivarian|islamic)\s+state\s+of\b.*$/i, '');
+  n = n.replace(/,\s*province\s+of\b.*$/i, '');
+  // "Syrian Arab Republic (Syria)" — the bracket already holds the short name
+  const paren = n.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+  if (paren && paren[2].trim().length >= 3) n = paren[2].trim();
+  if (_COUNTRY_SHORT[keyOf(n)]) return _COUNTRY_SHORT[keyOf(n)];
+  // Title-case so "united states of america" and "United States Of America"
+  // can never survive as two separate values.
+  return n.replace(/\s+/g, ' ')
+          .split(' ')
+          .map(w => /^(of|the|and|de|di|el|al)$/i.test(w) ? w.toLowerCase()
+                  : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+          .join(' ');
+}
+
 function _normOrigin(nat) {
-  const n = String(nat || '').trim();
-  if (/^united arab emirates$/i.test(n)) return 'UAE';
+  const n = _shortCountry(nat);
+  if (/^(uae|united arab emirates)$/i.test(n)) return 'UAE';
   return n;
 }
 
