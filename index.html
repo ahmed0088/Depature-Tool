@@ -2352,6 +2352,25 @@
     </div>
   </div>
 
+  <details class="howto"><summary>❔ How to use this</summary>
+    <ol>
+      <li>Upload your <b>long-stay tracking sheet</b> (.xlsx / .xls / .csv). Column names are matched automatically — it needs a <b>Name</b> or <b>Room</b> column, and finds Arrival, Departure, Total Contract, Payment Received, Total Due, Next Due Date, Cheques, Contract and Security Deposit where they exist.</li>
+      <li>Set the <b>analysis date</b> before uploading — every "days remaining" figure counts from it, so back-date it to re-run an old sheet as it stood on the day.</li>
+      <li>Click any <b>coloured card</b> or <b>tab</b> to see just those guests. Search by name, room or confirmation.</li>
+      <li><b>🖨 PDF Report</b> prints whatever is on screen — filter first and you get a report of only those accounts.</li>
+    </ol>
+    <p style="margin:8px 0 0;"><b>What the statuses mean</b></p>
+    <ul style="margin:4px 0 0;">
+      <li><b>🔴 Danger</b> — needs action today. Either the guest <b>departed still owing</b>, an <b>instalment date has passed</b>, or they <b>leave within the departure window</b> (default 30 days) with a balance.</li>
+      <li><b>💳 Cheque Reminder</b> — a cheque falls due inside the cheque window (default 7 days).</li>
+      <li><b>🟠 Due Soon</b> — the next instalment is due within 14 days.</li>
+      <li><b>🔵 On Track</b> — money is owed, but nothing is imminent.</li>
+      <li><b>🟢 Paid</b> — settled in full.</li>
+      <li><b>💛 High Balance</b> — owes at or above your threshold. This one is adjustable live, under the search box.</li>
+    </ul>
+    <p style="margin:8px 0 0;color:var(--text3);">The three windows (high balance, cheque, departure) are set on the upload card and apply as the file is read — change one and upload again to re-analyse.</p>
+  </details>
+
   <!-- Upload Section -->
   <div class="adg-upload-section" id="adg-upload">
     <div class="adg-upload-card" id="adg-drop-zone">
@@ -3081,7 +3100,13 @@ tbody tr:nth-child(even) td { background:#f7f9fb; }
 .s-blue{background:#e4eef7;color:#1F4E79;} .s-green{background:#e2f2e8;color:#256b43;}
 .s-grey{background:#eceff2;color:#5b6673;}
 tfoot td { border-top:1.2pt solid #1F4E79; font-weight:700; padding-top:5pt; background:#fff !important; }
-.foot { margin-top:7pt; padding-top:4pt; border-top:0.6pt solid #d9dee4;
+.legend { margin-top:8pt; padding:5pt 7pt; border:0.6pt solid #e4e8ec; border-radius:3pt;
+          background:#f7f9fb; font-size:7.4pt; color:#5b6673; break-inside:avoid; }
+.legend b { display:block; margin-bottom:2.5pt; color:#1F4E79; font-size:7.6pt;
+            text-transform:uppercase; letter-spacing:0.6pt; }
+.legend span { display:inline-block; margin-right:11pt; white-space:nowrap; }
+.legend i { font-style:normal; margin-right:2.5pt; }
+.foot { margin-top:6pt; padding-top:4pt; border-top:0.6pt solid #d9dee4;
         font-size:7.4pt; color:#8a939d; display:flex; }
 </style></head><body>
 <div class="head">
@@ -3100,7 +3125,7 @@ tfoot td { border-top:1.2pt solid #1F4E79; font-weight:700; padding-top:5pt; bac
   <div class="kpi red"><div class="l">Total Outstanding</div><div class="v"><small>AED</small> ${adgFmtMoney(totalDue)}</div></div>
   <div class="kpi amber"><div class="l">Guests Owing</div><div class="v">${outstanding.length} <small>of ${guests.length}</small></div></div>
   <div class="kpi ${danger.length?'red':''}"><div class="l">Needs Attention</div><div class="v">${danger.length}</div></div>
-  <div class="kpi ${dueSoon.length?'amber':''}"><div class="l">Due Within 7 Days</div><div class="v">${dueSoon.length}</div></div>
+  <div class="kpi ${dueSoon.length?'amber':''}"><div class="l">Due Within ${ADG_DUE_DAYS} Days</div><div class="v">${dueSoon.length}</div></div>
   <div class="kpi green"><div class="l">Collected</div><div class="v"><small>AED</small> ${adgFmtMoney(totalPaid)}</div>
     <div class="bar"><i style="width:${pct}%"></i></div></div>
 </div>
@@ -3125,7 +3150,16 @@ ${actionList?`<div class="action"><h2>Act on these first</h2><ul>${actionList}</
   </tr></tfoot>
 </table>
 
-<div class="foot"><span>All amounts in AED. Cont. = contract on file · Dep. = security deposit held.</span>
+<div class="legend">
+  <b>What the statuses mean</b>
+  <span><i class="pill s-red">Departed w/ Balance</i> checked out still owing</span>
+  <span><i class="pill s-red">Payment Overdue</i> an instalment date has passed</span>
+  <span><i class="pill s-amber">Departing Soon</i> leaves within ${adgDangerDays} days with a balance</span>
+  <span><i class="pill s-amber">Due Soon</i> next instalment within ${ADG_DUE_DAYS} days</span>
+  <span><i class="pill s-blue">On Track</i> owes money, nothing imminent</span>
+  <span><i class="pill s-green">Paid</i> settled in full</span>
+</div>
+<div class="foot"><span>All amounts in AED. Cont. = contract on file · Dep. = security deposit held. Report date ${adgE(adgFmtDate(adgAnalysisDate||adgTodayStr()))} is what every "days" figure counts from.</span>
 <span style="margin-left:auto">Generated ${adgE(new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}))}</span></div>
 </body></html>`;
 
