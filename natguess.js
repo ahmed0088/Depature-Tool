@@ -4,21 +4,21 @@
 // ═══════════════════════════════════════════════════════════
 
 const NAT_MAP = {
-  turkey:       ['yesilkaya','bugra','yalcin','uluturk','sahin','oner','furkan','karatas','demir','kaya','celik','aydin','ozturk','yilmaz','arslan','koc','aktas','polat','ozcan','erdogan','tekin','aslan','cakmak','gul','sari','yildiz','ciftci','guler','acar','simsek','bayrak','bulut','dogan','kurt','topcu','ozdemir','aksoy'],
-  india:        ['kuriakose','ajay','rajasegar','ranjith','latheef','ajmal','chandran','niyas','sulthan','moradiya','sanjay','shanmuganathan','nagamani','panchily','kumar','patel','singh','sharma','reddy','nair','menon','pillai','iyer','krishnan','venkat','suresh','ramesh','mahesh','rajesh','pradeep','sandeep','deepak','arun','vijay','anand','prakash','ravi','siva','bala','murugan','selvam','subramanian','venkatesan','natarajan'],
-  pakistan:     ['hasan','anis','ullah','farhan','khalid','faheem','syed','muhammad','jabbar','memon','khan','kamran','karim','malik','chaudhry','mirza','baig','qureshi','butt','rana','javed','tariq','asif','imran','usman','bilal','talha','zubair','waheed','rashid','nasir','zafar','tahir','waqar'],
-  ethiopia:     ['demoz','rahwa','defersha','gebremeskel','nagash','getahun','tesfaye','abebe','haile','tadesse','bekele','girma','wolde','gebre','desta','alemu','mesfin','tsegay','mulugeta','berhe','tekle','hadgu','hagos','girmay','abreha','yemane','kibrom','berhane'],
+  turkey:       ['yesilkaya','bugra','yalcin','uluturk','sahin','oner','furkan','karatas','demir','kaya','celik','aydin','ozturk','yilmaz','arslan','koc','aktas','polat','ozcan','erdogan','tekin','aslan','cakmak','gul','sari','yildiz','ciftci','guler','acar','simsek','bayrak','bulut','dogan','kurt','topcu','ozdemir','aksoy','gumus','engin','samet','yesil','kilic','erdem','avci','koray','tunc','ozkan','sezer','duman'],
+  india:        ['kuriakose','ajay','rajasegar','ranjith','latheef','ajmal','chandran','niyas','sulthan','moradiya','sanjay','shanmuganathan','nagamani','panchily','kumar','patel','singh','sharma','reddy','nair','menon','pillai','iyer','krishnan','venkat','suresh','ramesh','mahesh','rajesh','pradeep','sandeep','deepak','arun','vijay','anand','prakash','ravi','siva','bala','murugan','selvam','subramanian','venkatesan','natarajan','lokhandwala','dhanak','jain','mehta','joshi','desai','trivedi','bhatt','gandhi','vidhate','agarwal','gupta','verma','yadav','mishra','tiwari','dubey','bansal','kapoor','malhotra','chopra'],
+  pakistan:     ['hasan','anis','ullah','farhan','khalid','faheem','syed','muhammad','jabbar','memon','khan','kamran','karim','malik','chaudhry','mirza','baig','qureshi','butt','rana','javed','tariq','asif','imran','usman','bilal','talha','zubair','waheed','rashid','nasir','zafar','tahir','waqar','akhtar','shahid','sajid','naveed','arshad','iftikhar','shabbir','ashfaq','riaz'],
+  ethiopia:     ['demoz','rahwa','defersha','gebremeskel','nagash','getahun','tesfaye','abebe','haile','tadesse','bekele','girma','wolde','gebre','desta','alemu','mesfin','tsegay','mulugeta','berhe','tekle','hadgu','hagos','girmay','abreha','yemane','kibrom','berhane','alemayehu','fisseha','tigist','yohannes','meseret','birhanu','teshome','solomon','getachew','asefa','worku','negash','kassa','ayele','fikru','melaku'],
   philippines:  ['dela','santos','reyes','garcia','cruz','ramos','aquino','bautista','dizon','castillo','francisco','flores','bernardo','pascual','morales','gonzales','torres','natividad','soriano','villanueva','lim','tan','co','ang','sy','chua','go','uy','lee','yap','ong'],
-  somalia:      ['osman','fathia','istarlin','jama','abdulkadir','saynab','sahra','mariam','muna','jimale','maryan','farah','aden','warsame','hirsi','salah','yusuf','dahir','hersi','shire','guled','bile','elmi','ismail','duale','hawo','halima','hodan','ifrah','nimo','nasra'],
+  somalia:      ['osman','fathia','istarlin','jama','abdulkadir','saynab','sahra','mariam','muna','jimale','maryan','farah','aden','warsame','hirsi','salah','yusuf','dahir','hersi','shire','guled','bile','elmi','ismail','duale','hawo','halima','hodan','ifrah','nimo','nasra','abdikadir','mohamud','abdullahi','abdirahman','abdulahi','abdiaziz','abdinasir','hawade'],
   yemen:        ['alawlaqi','qahtan','ezzi','mutahara','abdulqader','almaashari','adhban','alhaddad','alqadhi','aleryani','alkohali','almakki','alnono','alrubaidi','alsanabani','althobhani','alwazeer'],
   guinea:       ['hamadou','diallo','youba','magassa','siby','oushamata','alhassane','fodie','bah','barry','camara','conde','toure','keita','kouyate','traore','sylla','soumah','bangoura'],
   algeria:      ['gacem','hicham','aissani','kamel','seloubi','chetta','hossem','boumediene','benali','benaissa'],
-  uzbekistan:   ['sardor','azimov','saidazimkhon','mukhutdinov','arabov','navruz','kurbonov','umidjon','firdavs','mukhidov','umedzhon','mirzayev','yusupov'],
-  russia:       ['magomadov','aiub','nabiev','ulugbek','ivanov','petrov','sidorov','smirnov','kuznetsov','popov'],
+  uzbekistan:   ['sardor','azimov','saidazimkhon','mukhutdinov','arabov','navruz','kurbonov','umidjon','firdavs','mukhidov','umedzhon','mirzayev','yusupov','saidmakhmudov','akramov','qurbonjon','jasur','bekzod','shohruh','dilshod','otabek','jahongir','tursunov','rakhimov','ergashev','kholmatov'],
+  russia:       ['magomadov','aiub','nabiev','ulugbek','ivanov','petrov','sidorov','smirnov','kuznetsov','popov','beterbiev','shibilov','volkov','sokolov','lebedev','kozlov','novikov','morozov','egorov','pavlov','stepanov','nikolaev','orlov','makarov','andreev','kovalev'],
   bangladesh:   ['morshed','chowdhury','rahman','akter','begum','sultana','hossain','islam','uddin','miah'],
   angola:       ['mulungo','tania','silva','sousa','ferreira','costa','santos','rodrigues'],
-  mozambique:   ['manhique','nilza','mahomed','saucate','uqueio','mondlane','massinga'],
-  senegal:      ['coundoul','mbaye','thiam','bocar','seck','niang','moda','diop','fall','gueye','faye','diouf','toure','sy','ba','lo','sarr','ndoye','thiaw','ndiaye'],
+  mozambique:   ['manhique','nilza','mahomed','saucate','uqueio','mondlane','massinga','matsinhe','juliasse','machava','cossa','chissano','sitoe','nhantumbo','macuacua','langa','tembe'],
+  senegal:      ['coundoul','mbaye','thiam','bocar','seck','niang','moda','diop','fall','gueye','faye','diouf','toure','sy','ba','lo','sarr','ndoye','thiaw','ndiaye','mbacke','serigne','koita','cisse','sow','dieng','sane','badji','goudiaby'],
   ghana:        ['ruwaida','sumaila','abubakari','balure','bashiru','nyamah','sylvester','mensah','asante','boateng','acheampong','owusu','amoah','darko','opoku','appiah','ofori'],
   egypt:        ['dhiaa','ghasan','fathy','zohairy','ibrahim','mahmoud','sayed','mostafa','khaled','walid','amr','tamer','sherif','ashraf'],
   morocco:      ['chouini','issam','jaid','benali','benmoussa','benomar','benziane','chaoui','chraibi','elalami','elfassi'],
@@ -26,12 +26,38 @@ const NAT_MAP = {
   uae:          ['alsaiari','alghanemi','alnuaimi','almazrouei','alkaabi','almansoori','almheiri','alketbi','alshehhi'],
   nigeria:      ['adeyemi','adewale','adebayo','adesola','balogun','chukwu','emeka','okafor','okonkwo','eze','igwe','nwachukwu'],
   kenya:        ['kamau','wanjiku','mwangi','njoroge','kariuki','gitau','ndungu','mugo','kinyua'],
+  china:        ['zhang','huang','liang','zheng','jiang','xiao','feng','deng','zhong','tang','peng','cheng','wenjun','xiaoming'],
 };
+
+// Surnames too short for the ≥5 rule below but distinctive enough that an
+// exact whole-word match is safe on its own. Kept deliberately small: every
+// entry here bypasses the length guard that stops common words like 'ali'
+// or 'khan' matching half the guest list.
+const SHORT_NAT_MAP = {
+  china: ['wang','zhao','chen','yang','zhou','wu','xu','shen','song','cao','pan','wei','fang','yuan','lu','duan'],
+  japan: ['sato','suzuki','tanaka','ito','nakamura','kobayashi','yamada','sasaki'],
+  korea: ['kim','park','choi','jung','kang','yoon','jang','lim'],
+};
+
+// Names that look like a country hint but are the wrong length or too
+// ambiguous to trust are simply left unanswered — an honest blank beats a
+// confident wrong answer, because the desk checks a blank and accepts a
+// filled-in value.
+function _natLabel(nat) {
+  if (nat === 'uae') return 'UAE';
+  return nat.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
 
 function guessNat(name) {
   if (!name) return '';
   const l     = name.toLowerCase().replace(/[^a-z\s]/g, '');
   const words = l.split(/\s+/).filter(w => w.length >= 4);
+  // Pass 0 — the curated short list, exact whole-word only. Uses every word,
+  // not just those ≥4 chars, since these surnames are often 2–3 letters.
+  const allWords = l.split(/\s+/).filter(Boolean);
+  for (const [nat, keys] of Object.entries(SHORT_NAT_MAP)) {
+    if (keys.some(k => allWords.includes(k))) return _natLabel(nat);
+  }
 
   // Pass 1 — exact whole-word match on keys ≥5 chars
   // A key like 'ali' or 'khan' is too common; require ≥5 to avoid cross-matches
@@ -39,7 +65,7 @@ function guessNat(name) {
     for (const k of keys) {
       if (k.length < 5) continue;
       if (words.includes(k)) {
-        return nat.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        return _natLabel(nat);
       }
     }
   }
@@ -49,7 +75,7 @@ function guessNat(name) {
     for (const k of keys) {
       if (k.length < 6) continue;
       if (words.some(w => w.length >= 6 && w.startsWith(k))) {
-        return nat.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        return _natLabel(nat);
       }
     }
   }
@@ -58,7 +84,7 @@ function guessNat(name) {
   for (const [nat, keys] of Object.entries(NAT_MAP)) {
     for (const k of keys) {
       if (k.length >= 7 && l.includes(k)) {
-        return nat.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        return _natLabel(nat);
       }
     }
   }

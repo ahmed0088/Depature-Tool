@@ -685,10 +685,10 @@ function purposeRender() {
         style="width:42px;"/></td>
       <td><div style="display:flex;gap:3px;align-items:center;">
         <input value="${escapeHtml(g.nat)}"
-          oninput="purposeGuests[${i}].nat=this.value;purposeGuests[${i}]._natFromXML=false;purposeGuests[${i}]._natFromAI=false;purposeGuests[${i}]._natUserEdited=true;purposeGuests[${i}]._natSuspect=false;"
+          oninput="purposeGuests[${i}].nat=this.value;purposeGuests[${i}]._natFromXML=false;purposeGuests[${i}]._natFromAI=false;purposeGuests[${i}]._natUserEdited=true;purposeGuests[${i}]._natSuspect=false;purposeGuests[${i}]._natWasUae='';"
           onblur="gmOnEdit(purposeGuests[${i}].name,'nat',this.value);debounceSavePurpose()"
-          title="${g._natFromXML ? 'Nationality — loaded from Vicas/Inhouse XML' : (g._natSuspect ? '⚠ Scraper guessed UAE with no Vicas data to confirm it — verify against passport' : 'Nationality')}"
-          style="width:86px;${g._natFromXML ? 'border-color:var(--mint);' : (g._natSuspect ? 'border-color:var(--amber);' : (g._fromMemory?'border-color:var(--sky);':''))}"/>
+          title="${_purposeNatTitle(g)}"
+          style="width:86px;${_purposeNatBorder(g)}"/>
         <button class="icon-btn ai-btn" onclick="aiOneGuest(${i},'purpose')" title="AI">✦</button>
       </div></td>
       <td><input value="${escapeHtml(g.email)}"
@@ -825,7 +825,7 @@ function processImportEmails() {
   // nothing, but flag it for a manual check instead of trusting it silently.
   const _isUaeGuess = s => /^u\.?a\.?e\.?$/i.test(s.trim()) || /united arab emirates/i.test(s);
 
-  let matched = 0, notInList = 0, namesUpdated = 0, emailsUpdated = 0, natsUpdated = 0, natsFlagged = 0, natsSkippedXML = 0;
+  let matched = 0, notInList = 0, namesUpdated = 0, emailsUpdated = 0, natsUpdated = 0, natsFlagged = 0, natsSkippedXML = 0, natsCorrected = 0;
   purposeGuests.forEach(g => {
     const key = _normConf(g.conf);
     const hasEmail = key && emailByConf[key];
@@ -851,13 +851,29 @@ function processImportEmails() {
         // let the scraper's guess clobber it.
         natsSkippedXML++;
       } else {
-        g.nat = natByConf[key];
+        // A bare "UAE" from Neorcha is the single least trustworthy value in
+        // this whole screen: it is what the guest typed into a booking form,
+        // and picking the hotel's own country from a dropdown is the common
+        // mistake. So when it says UAE, ask the guest's name what it thinks.
+        // A name that clearly reads as another nationality beats the form
+        // entry; a genuinely Emirati name agrees with it and settles it.
+        let val = natByConf[key];
+        let corrected = '';
+        if (_isUaeGuess(val) && typeof guessNat === 'function') {
+          const byName = guessNat(g.name);
+          if (byName && !_isUaeGuess(byName)) { corrected = val; val = byName; }
+          else if (byName) { g._natConfirmed = true; }   // name agrees it's Emirati
+        }
+        g.nat = val;
         g._natFromXML = false;
-        g._natFromAI  = false;
+        g._natFromAI  = !!corrected;
         g._natUserEdited = false;
-        g._natSuspect = _isUaeGuess(natByConf[key]);
+        g._natWasUae  = corrected;
+        // Still worth a look unless the name positively agreed with UAE.
+        g._natSuspect = _isUaeGuess(val) && !g._natConfirmed;
         if (g._natSuspect) natsFlagged++;
-        gmOnEdit(g.name, 'nat', natByConf[key]);
+        if (corrected) natsCorrected++;
+        gmOnEdit(g.name, 'nat', val);
         natsUpdated++;
       }
     }
@@ -866,14 +882,35 @@ function processImportEmails() {
   purposeRender();
   savePurpose(purposeGuests);
   const skipNote = natsSkippedXML ? `, ${natsSkippedXML} kept Vicas/XML value` : '';
+  const fixNote  = natsCorrected ? `, ${natsCorrected} corrected from "UAE" using the guest's name` : '';
   const flagNote = natsFlagged ? `, ${natsFlagged} flagged "UAE" for review` : '';
-  addPurposeLog('Emails', `Imported ${parsedRows} pasted rows — ${matched} guests matched, ${emailsUpdated} email(s), ${namesUpdated} name(s), ${natsUpdated} nationality(ies) updated${skipNote}${flagNote}, ${notInList} no match`);
+  addPurposeLog('Emails', `Imported ${parsedRows} pasted rows — ${matched} guests matched, ${emailsUpdated} email(s), ${namesUpdated} name(s), ${natsUpdated} nationality(ies) updated${skipNote}${fixNote}${flagNote}, ${notInList} no match`);
   showToast(`Updated ${emailsUpdated} email${emailsUpdated === 1 ? '' : 's'}${namesUpdated ? ` · ${namesUpdated} name${namesUpdated === 1 ? '' : 's'}` : ''}${natsUpdated ? ` · ${natsUpdated} nat${natsUpdated === 1 ? '' : 's'}` : ''}${natsFlagged ? ` (⚠ ${natsFlagged} UAE — verify)` : ''} ✓`, matched ? 'ok' : 'info');
 
   if (resultBox) {
     resultBox.style.display = 'block';
-    resultBox.innerHTML = `✅ Updated <strong>${emailsUpdated}</strong> email${emailsUpdated === 1 ? '' : 's'}${namesUpdated ? ` · <strong>${namesUpdated}</strong> name${namesUpdated === 1 ? '' : 's'}` : ''}${natsUpdated ? ` · <strong>${natsUpdated}</strong> nationality${natsUpdated === 1 ? '' : 's'}` : ''} · ${matched} guest${matched === 1 ? '' : 's'} matched · ${notInList} guest${notInList === 1 ? '' : 's'} with no match in the pasted list.${natsSkippedXML ? `<br>🟢 Kept the Vicas/XML nationality for <strong>${natsSkippedXML}</strong> guest${natsSkippedXML === 1 ? '' : 's'} instead of the scraper's guess.` : ''}${natsFlagged ? `<br>⚠️ <strong>${natsFlagged}</strong> guest${natsFlagged === 1 ? '' : 's'} got "UAE" from the scraper with no Vicas data to confirm it — double-check ${natsFlagged === 1 ? 'that one' : 'those'}.` : ''}`;
+    resultBox.innerHTML = `✅ Updated <strong>${emailsUpdated}</strong> email${emailsUpdated === 1 ? '' : 's'}${namesUpdated ? ` · <strong>${namesUpdated}</strong> name${namesUpdated === 1 ? '' : 's'}` : ''}${natsUpdated ? ` · <strong>${natsUpdated}</strong> nationality${natsUpdated === 1 ? '' : 's'}` : ''} · ${matched} guest${matched === 1 ? '' : 's'} matched · ${notInList} guest${notInList === 1 ? '' : 's'} with no match in the pasted list.${natsSkippedXML ? `<br>🟢 Kept the Vicas/XML nationality for <strong>${natsSkippedXML}</strong> guest${natsSkippedXML === 1 ? '' : 's'} instead of the scraper's guess.` : ''}${natsCorrected ? `<br>✎ <strong>${natsCorrected}</strong> guest${natsCorrected === 1 ? '' : 's'} said "UAE" on the booking but the name reads as another nationality — corrected, shown in blue. Confirm against the passport.` : ''}${natsFlagged ? `<br>⚠️ <strong>${natsFlagged}</strong> guest${natsFlagged === 1 ? '' : 's'} got "UAE" from the scraper with no Vicas data to confirm it — double-check ${natsFlagged === 1 ? 'that one' : 'those'}.` : ''}`;
   }
+}
+
+// How a nationality got its value, spelled out on hover. Where it came from
+// decides how much it can be trusted, and the person checking the passport
+// needs that, not just the value.
+function _purposeNatTitle(g) {
+  if (g._natFromXML)  return 'Nationality — from the Vicas/Inhouse XML (immigration desk, passport-scanned)';
+  if (g._natWasUae)   return `The booking said "${g._natWasUae}", but the guest's name reads as ${g.nat} — corrected. Confirm against the passport.`;
+  if (g._natSuspect)  return '⚠ The booking said UAE and nothing else confirms it — the guest may have picked the wrong country. Verify against the passport.';
+  if (g._natConfirmed)return 'UAE from the booking, and the name agrees — looks genuine';
+  if (g._fromMemory)  return 'Nationality — remembered from a previous stay';
+  return 'Nationality';
+}
+
+function _purposeNatBorder(g) {
+  if (g._natFromXML) return 'border-color:var(--mint);';   // ground truth
+  if (g._natWasUae)  return 'border-color:var(--sky);';    // corrected, needs a look
+  if (g._natSuspect) return 'border-color:var(--amber);';  // unverified UAE
+  if (g._fromMemory) return 'border-color:var(--sky);';
+  return '';
 }
 
 // ── Randomize Purpose — one click, exact split (not a coin-flip average) ──
