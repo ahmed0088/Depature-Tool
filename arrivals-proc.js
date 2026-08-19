@@ -903,12 +903,17 @@ function apExportExcel() {
   apDays.forEach(([, d]) => { tR += d.rms; tA += d.adl; tU += d.upsell; tF += d.fo; tFBW += d.fbWith; tFBWO += d.fbWithout; });
   rows.push(['TOTAL', Math.round(tR), Math.round(tU), Math.round(tA), Math.round(tFBW), Math.round(tFBWO), Math.round(tF)]);
 
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Arrivals');
-  ws['!cols'] = [14, 14, 14, 12, 14, 16, 14].map(w => ({ wch: w }));
+  // 0 normal · 1 header · 2 total row
+  const styles = [
+    {},
+    { bold:true, color:'FFFFFF', fill:'1F4E79', align:'center' },
+    { bold:true, fill:'DDEBF7' },
+  ];
+  const last = rows.length;   // the TOTAL row, after the header
   const date = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, `arrivals_report_${date}.xlsx`);
+  writeStyledXlsx(`arrivals_report_${date}.xlsx`, 'Arrivals', [headers, ...rows],
+                  r => r === 0 ? 1 : (r === last ? 2 : 0),
+                  styles, [14, 14, 14, 12, 14, 16, 14]);
   apMsg('Excel file downloaded.', false);
   showToast('Excel exported ✓','ok');
   if (typeof logActivity === 'function') logActivity('arrivals_proc_export', 'Excel exported');

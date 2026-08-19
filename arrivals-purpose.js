@@ -434,6 +434,32 @@ function _applyOriginToPurpose() {
   if (parts.length) showToast(`✦ ${parts.join(' · ')}`, 'ok');
   if (purposeResult.filledNat  || purposeResult.filledOrigin)  purposeRender();
   if (arrivalsResult.filledNat || arrivalsResult.filledOrigin) arrRender();
+  _renderXmlCoverage();
+}
+
+// A toast disappears before it can answer "why is this one still empty?".
+// This stays on the panel and names the guests the XML could not reach, so
+// the gap is visible as a fact about the reports rather than a mystery.
+function _renderXmlCoverage() {
+  const box = document.getElementById('purposeXmlCoverage');
+  if (!box) return;
+  const loaded = Object.keys(_originNatMap).length || Object.keys(_originNatRoomMap).length
+              || Object.keys(_originNatBagMap).length;
+  if (!loaded || !purposeGuests.length) { box.style.display = 'none'; return; }
+
+  const missing = purposeGuests.filter(g => !g.nat);
+  const have    = purposeGuests.length - missing.length;
+  box.style.display = 'block';
+  if (!missing.length) {
+    box.className = 'xml-cov ok';
+    box.innerHTML = `✓ Every one of the ${purposeGuests.length} guests has a nationality from the Vicas XML.`;
+    return;
+  }
+  box.className = 'xml-cov warn';
+  const list = missing.map(g => `${escapeHtml(String(g.room || '?'))} ${escapeHtml(g.name || '')}`).join(' · ');
+  box.innerHTML = `<b>${have} of ${purposeGuests.length}</b> guests matched the Vicas XML. `
+    + `<b>${missing.length}</b> could not be found in it — those guests are not registered with immigration yet, `
+    + `so re-export the Vicas XML later and load it again.<div class="xml-cov-list">${list}</div>`;
 }
 
 // ── ARRIVALS ──────────────────────────────────────────────
@@ -647,25 +673,26 @@ function loadArrivals() {
 function clearArrivals() { arrGuests = []; arrRender(); saveArrivals([]); addArrLog('Cleared', 'All arrivals cleared'); logActivity('arrivals_cleared', ''); }
 
 function exportArrivals() {
-  const wb   = XLSX.utils.book_new();
-  const data = [['Room','Conf.','Name','Purpose','Nights','Nationality','Email','Source','Remarks']];
-  arrGuests.forEach(g => data.push([g.room,g.conf,g.name,g.purpose,g.nights,g.nat,g.email,g.source,g.remarks]));
-  const ws = XLSX.utils.aoa_to_sheet(data);
-  const COLS = ['A','B','C','D','E','F','G','H','I'];
-  const hS = {font:{bold:true,color:{rgb:'FFFFFF'},name:'Arial',sz:10},fill:{fgColor:{rgb:'1F4E79'},patternType:'solid'},alignment:{horizontal:'center'},border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}}};
-  const bS = {font:{name:'Arial',sz:10},border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}}};
-  const wS = {font:{name:'Arial',sz:10,bold:true},fill:{fgColor:{rgb:'FFFF00'},patternType:'solid'},border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}}};
-  COLS.forEach(c => { if (ws[c+'1']) ws[c+'1'].s = hS; });
-  arrGuests.forEach((g, ri) => {
-    const rn = ri + 2;
-    const isWalkIn = typeof sourceCategory === 'function' && sourceCategory(g.source) === 'walkin';
-    COLS.forEach(c => { const cell = ws[c+rn]; if (cell) cell.s = isWalkIn ? wS : bS; });
-  });
-  ws['!cols'] = [8,16,28,14,8,14,26,20,18].map(w => ({wch:w}));
-  XLSX.utils.book_append_sheet(wb, ws, 'Arrivals');
-  XLSX.writeFile(wb, 'Arrivals_' + new Date().toISOString().split('T')[0] + '.xlsx',
-                 {bookSST:false, type:'binary', cellStyles:true});
-  addArrLog('Exported', `${arrGuests.length} guests exported to Excel`);
+  const rows = [['Room','Conf.','Name','Purpose','Nights','Nationality','Email','Source','Remarks']];
+  arrGuests.forEach(g => rows.push([g.room,g.conf,g.name,g.purpose,g.nights,g.nat,g.email,g.source,g.remarks]));
+
+  const styles = [
+    {},
+    { bold:true, color:'FFFFFF', fill:'1F4E79', align:'center' },
+    { bold:true, fill:'FFFF00' },
+  ];
+  const walkIn = arrGuests.map(g =>
+    typeof sourceCategory === 'function' && sourceCategory(g.source) === 'walkin');
+
+  writeStyledXlsx(
+    'Arrivals_' + new Date().toISOString().split('T')[0] + '.xlsx',
+    'Arrivals', rows,
+    (r) => r === 0 ? 1 : (walkIn[r - 1] ? 2 : 0),
+    styles,
+    [8,16,28,14,8,14,26,20,18]);
+
+  const n = walkIn.filter(Boolean).length;
+  addArrLog('Exported', `${arrGuests.length} guests exported to Excel${n ? ` — ${n} walk-in${n===1?'':'s'} highlighted` : ''}`);
 }
 
 // ── PURPOSE OF STAY ───────────────────────────────────────
@@ -1108,32 +1135,37 @@ async function runAINat_purpose() {
 }
 
 function exportPurpose() {
-  const wb   = XLSX.utils.book_new();
   // Day/Date — same convention as the on-screen table: the whole export is
   // one day's arrivals, so every row is stamped with today's day + date.
   const dayName = new Date().toLocaleDateString('en-GB', { weekday: 'long' });
   const dateStr = new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
-  const data = [['Day','Date','Room','Confirmation No.','Name','Purpose of Stay','Night of Stay','Nationality','Origin of Travel','Email','Booking Source','Remarks']];
-  purposeGuests.forEach(g => data.push([dayName,dateStr,g.room,g.conf,g.name,g.purpose,g.nights,g.nat,g.originOfTravel||'',g.email,g.source,g.remarks]));
-  const ws = XLSX.utils.aoa_to_sheet(data);
-  const hS = {font:{bold:true,color:{rgb:'FFFFFF'},name:'Arial',sz:10},fill:{fgColor:{rgb:'1F4E79'},patternType:'solid'},alignment:{horizontal:'center'},border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}}};
-  const bS = {font:{name:'Arial',sz:10},fill:{fgColor:{rgb:'FFFFFF'},patternType:'solid'},border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}}};
-  const lS = {font:{name:'Arial',sz:10},fill:{fgColor:{rgb:'E2EFDA'},patternType:'solid'},border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}}};
-  // Walk-ins are highlighted across the whole row and take priority over the
-  // Leisure/Business shading — they are the rows someone has to act on.
-  const wS = {font:{name:'Arial',sz:10,bold:true},fill:{fgColor:{rgb:'FFFF00'},patternType:'solid'},border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}}};
-  const COLS = ['A','B','C','D','E','F','G','H','I','J','K','L'];
-  COLS.forEach(c => { if (ws[c+'1']) ws[c+'1'].s = hS; });
-  purposeGuests.forEach((g, ri) => {
-    const rn = ri + 2;
-    const isWalkIn = typeof sourceCategory === 'function' && sourceCategory(g.source) === 'walkin';
-    const s = isWalkIn ? wS : (g.purpose === 'Leisure' ? lS : bS);
-    COLS.forEach(c => { const cell = ws[c+rn]; if (cell) cell.s = s; });
-  });
-  ws['!cols'] = [11,12,8,16,28,14,8,14,18,26,20,18].map(w => ({wch:w}));
-  XLSX.utils.book_append_sheet(wb, ws, 'Purpose of Stay');
-  XLSX.writeFile(wb, (_purposeTitle||'Purpose').replace(/\s+/g,'_')+'.xlsx', {bookSST:false,type:'binary',cellStyles:true});
-  addPurposeLog('Exported', `${purposeGuests.length} guests exported`);
+  const rows = [['Day','Date','Room','Confirmation No.','Name','Purpose of Stay','Night of Stay','Nationality','Origin of Travel','Email','Booking Source','Remarks']];
+  purposeGuests.forEach(g => rows.push([dayName,dateStr,g.room,g.conf,g.name,g.purpose,g.nights,g.nat,g.originOfTravel||'',g.email,g.source,g.remarks]));
+
+  // 0 normal · 1 header · 2 walk-in · 3 leisure
+  const styles = [
+    {},
+    { bold:true, color:'FFFFFF', fill:'1F4E79', align:'center' },
+    { bold:true, fill:'FFFF00' },
+    { fill:'E2EFDA' },
+  ];
+  const walkIn = purposeGuests.map(g =>
+    typeof sourceCategory === 'function' && sourceCategory(g.source) === 'walkin');
+
+  writeStyledXlsx(
+    (_purposeTitle || 'Purpose').replace(/\s+/g, '_') + '.xlsx',
+    'Purpose of Stay', rows,
+    (r) => {
+      if (r === 0) return 1;
+      const g = purposeGuests[r - 1];
+      if (walkIn[r - 1]) return 2;                     // walk-in wins — it needs acting on
+      return g && g.purpose === 'Leisure' ? 3 : 0;
+    },
+    styles,
+    [11,12,8,16,28,14,8,14,18,26,20,18]);
+
+  const n = walkIn.filter(Boolean).length;
+  addPurposeLog('Exported', `${purposeGuests.length} guests exported${n ? ` — ${n} walk-in${n===1?'':'s'} highlighted` : ''}`);
 }
 
 // ── ADD GUEST MODAL ───────────────────────────────────────

@@ -449,7 +449,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v59';
+const APP_VERSION = 'v60';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;
@@ -476,3 +476,157 @@ document.addEventListener('DOMContentLoaded', () => {
     if (el) el.textContent = APP_VERSION;
   });
 });
+
+// ═══════════════════════════════════════════════════════════
+//  Styled .xlsx writer
+//
+//  SheetJS's community build parses cell styles but does not WRITE them —
+//  a `cell.s` assignment is accepted and silently dropped, producing a
+//  workbook whose styles.xml holds nothing but the two mandatory default
+//  fills. Every coloured export in this app was therefore plain white.
+//
+//  This builds the OOXML by hand instead: a stored (uncompressed) ZIP with
+//  a real styles.xml, so fills and fonts survive into Excel. Uncompressed
+//  keeps it dependency-free — these sheets are a few hundred rows, so the
+//  size difference does not matter.
+// ═══════════════════════════════════════════════════════════
+
+const _CRC32_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[i] = c >>> 0;
+  }
+  return t;
+})();
+
+function _crc32(bytes) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) c = _CRC32_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+function _xmlEsc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&apos;')
+    // Control characters are illegal in XML 1.0 and make Excel refuse the file.
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+}
+
+function _colName(n) {                    // 0 -> A, 26 -> AA
+  let s = '';
+  n += 1;
+  while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = (n - r - 1) / 26; }
+  return s;
+}
+
+// Builds a stored-ZIP archive from [{name, data:Uint8Array}] and returns a Blob.
+function _zipStore(files) {
+  const enc = [];
+  let offset = 0;
+  const central = [];
+  const u16 = n => [n & 0xFF, (n >>> 8) & 0xFF];
+  const u32 = n => [n & 0xFF, (n >>> 8) & 0xFF, (n >>> 16) & 0xFF, (n >>> 24) & 0xFF];
+
+  files.forEach(f => {
+    const nameBytes = new TextEncoder().encode(f.name);
+    const crc  = _crc32(f.data);
+    const size = f.data.length;
+    const local = [].concat(
+      u32(0x04034B50), u16(20), u16(0), u16(0), u16(0), u16(0),
+      u32(crc), u32(size), u32(size), u16(nameBytes.length), u16(0));
+    enc.push(new Uint8Array(local), nameBytes, f.data);
+    central.push([].concat(
+      u32(0x02014B50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0),
+      u32(crc), u32(size), u32(size), u16(nameBytes.length),
+      u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset)));
+    central[central.length - 1]._name = nameBytes;
+    offset += local.length + nameBytes.length + size;
+  });
+
+  const cdStart = offset;
+  central.forEach(c => { enc.push(new Uint8Array(c), c._name); offset += c.length + c._name.length; });
+  enc.push(new Uint8Array([].concat(
+    u32(0x06054B50), u16(0), u16(0), u16(files.length), u16(files.length),
+    u32(offset - cdStart), u32(cdStart), u16(0))));
+
+  let total = 0; enc.forEach(a => total += a.length);
+  const out = new Uint8Array(total);
+  let p = 0; enc.forEach(a => { out.set(a, p); p += a.length; });
+  return new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+
+// styles: array of { bold, color, fill, align } — index 0 is the default.
+function _stylesXml(styles) {
+  const fonts = styles.map(s =>
+    `<font><sz val="10"/><name val="Arial"/>${s.bold ? '<b/>' : ''}${s.color ? `<color rgb="FF${s.color}"/>` : ''}</font>`);
+  // fills 0 and 1 are reserved by the format and must be none/gray125
+  const fills = ['<fill><patternFill patternType="none"/></fill>',
+                 '<fill><patternFill patternType="gray125"/></fill>']
+    .concat(styles.map(s => s.fill
+      ? `<fill><patternFill patternType="solid"><fgColor rgb="FF${s.fill}"/><bgColor indexed="64"/></patternFill></fill>`
+      : '<fill><patternFill patternType="none"/></fill>'));
+  const xfs = styles.map((s, i) =>
+    `<xf numFmtId="0" fontId="${i}" fillId="${i + 2}" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"${
+      s.align ? ` applyAlignment="1"><alignment horizontal="${s.align}"/></xf>` : '/>'}`);
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<fonts count="${fonts.length}">${fonts.join('')}</fonts>
+<fills count="${fills.length}">${fills.join('')}</fills>
+<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>
+<border><left style="thin"><color rgb="FFBFBFBF"/></left><right style="thin"><color rgb="FFBFBFBF"/></right><top style="thin"><color rgb="FFBFBFBF"/></top><bottom style="thin"><color rgb="FFBFBFBF"/></bottom><diagonal/></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="${xfs.length}">${xfs.join('')}</cellXfs>
+<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>`;
+}
+
+/**
+ * Writes a genuinely styled .xlsx and hands it to the browser.
+ *   rows    — 2D array of cell values
+ *   styleAt — (rowIndex, colIndex) => style index into `styles`
+ *   styles  — [{bold,color,fill,align}], index 0 used when styleAt returns nothing
+ *   cols    — optional array of column widths (characters)
+ */
+function writeStyledXlsx(filename, sheetName, rows, styleAt, styles, cols) {
+  const enc = s => new TextEncoder().encode(s);
+  const sheetRows = rows.map((row, r) => {
+    const cells = row.map((v, c) => {
+      const ref = _colName(c) + (r + 1);
+      const si  = (styleAt ? (styleAt(r, c) || 0) : 0);
+      if (v === '' || v == null) return `<c r="${ref}" s="${si}"/>`;
+      if (typeof v === 'number' && isFinite(v)) return `<c r="${ref}" s="${si}"><v>${v}</v></c>`;
+      return `<c r="${ref}" s="${si}" t="inlineStr"><is><t xml:space="preserve">${_xmlEsc(v)}</t></is></c>`;
+    }).join('');
+    return `<row r="${r + 1}">${cells}</row>`;
+  }).join('');
+
+  const colsXml = cols && cols.length
+    ? `<cols>${cols.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('')}</cols>`
+    : '';
+
+  const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>${colsXml}<sheetData>${sheetRows}</sheetData></worksheet>`;
+
+  const files = [
+    { name: '[Content_Types].xml', data: enc(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`) },
+    { name: '_rels/.rels', data: enc(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`) },
+    { name: 'xl/workbook.xml', data: enc(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${_xmlEsc(sheetName).slice(0,31)}" sheetId="1" r:id="rId1"/></sheets></workbook>`) },
+    { name: 'xl/_rels/workbook.xml.rels', data: enc(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`) },
+    { name: 'xl/styles.xml', data: enc(_stylesXml(styles)) },
+    { name: 'xl/worksheets/sheet1.xml', data: enc(sheet) },
+  ];
+
+  const blob = _zipStore(files);
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
