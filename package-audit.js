@@ -848,6 +848,16 @@ function _pkgDaysBetween(a, b) {
 // this, a guest extending onto a new confirmation number hands the credit
 // to whoever keyed that booking — which also means a colleague's sale can
 // be moved onto yourself simply by rebooking it.
+// The seller of a booking that has no row in this IN-Gauge export, read
+// from the Opera log alone: the earliest package entry by a real person.
+// System accounts are skipped — a TARS booking sold nothing.
+function _pkgOwnerFromOpera(conf) {
+  const ev = pkgEvents[conf] || [];
+  if (!ev.length) return null;
+  const first = ev.slice().sort((a, b) => a.ts - b.ts).find(c => !_pkgIsSystemUser(c.user));
+  return first ? { user: first.user, confirmed: true, viaOpera: true } : null;
+}
+
 function _pkgApplyExtensionCredit(results) {
   if (!Object.keys(pkgGuests).length) return;   // no guest list loaded: rule is inactive
   const head = _pkgBuildChains();
@@ -867,11 +877,19 @@ function _pkgApplyExtensionCredit(results) {
     const h = head[r.conf];
     if (!h || h === r.conf) return;                                  // first booking of the stay
     if (r.verdict === 'settled' || r.verdict === 'deny') return;     // already handled
-    const own = owner[h];
+
+    // The first booking is very often not in this IN-Gauge export at all —
+    // auditing a day at a time, a stay that began last week has its opening
+    // charge in an earlier file. Opera still holds it, and the Changes Log
+    // reaches back further than the export does, so fall back to whoever
+    // Opera shows starting that booking's packages. Without this the whole
+    // rule goes quiet for anyone not auditing a full month in one go.
+    const own = owner[h] || _pkgOwnerFromOpera(h);
     if (!own || !own.user) return;
 
     r.extendedFrom = h;
     r.extendedName = (pkgGuests[r.conf] || {}).name || '';
+    r.extendedVia  = own.viaOpera ? 'opera' : '';
     if (_pkgSameUser(r.user || r.employee, own.user)) return;        // already the right person
 
     // Opera may show someone else adding the package on the new booking;
@@ -1004,7 +1022,8 @@ function _pkgActionCell(r) {
   let why = '';
   if (r.reassign && r.extendedFrom) {
     why = ` title="Booking ${escapeHtml(r.extendedFrom)} is the same stay — ${escapeHtml(r.extendedName || 'this guest')} carried on into ${escapeHtml(r.conf)}. `
-        + `IN-Gauge credits ${escapeHtml(_pkgUserLabel(r.wasUser))}; the stay was started by ${escapeHtml(_pkgUserLabel(r.user))}."`;
+        + `IN-Gauge credits ${escapeHtml(_pkgUserLabel(r.wasUser))}; the stay was started by ${escapeHtml(_pkgUserLabel(r.user))}`
+        + (r.extendedVia === 'opera' ? ', per the Opera log — that booking is not in this IN-Gauge export.' : '.') + `"`;
   } else if (r.reassign) {
     why = ` title="IN-Gauge credits ${escapeHtml(_pkgUserLabel(r.wasUser))} — Opera shows ${escapeHtml(_pkgUserLabel(r.user))} started this package"`;
   }
