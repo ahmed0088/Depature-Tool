@@ -3746,7 +3746,10 @@ async function appInit() {
   // 4 — Apply shifts. Called unconditionally: with nothing saved yet the
   // standard task list is what belongs on screen, and skipping this when
   // the node was missing is what left the board empty with no way back.
-  applyShiftData(data.shifts && data.shifts.data);
+  // A failed read returns the same "nothing saved" shape as an empty
+  // database, so writing stays locked unless the read genuinely succeeded.
+  applyShiftData(data.shifts && data.shifts.data,
+                 typeof dbError !== 'function' || !dbError());
 
   // 4b — Apply shift activity log (who did what, per shift) — previously
   // saved to Firebase but never read back, so it looked empty on every reload
@@ -3866,7 +3869,10 @@ async function appInit() {
   });
   
   listenShifts(snap => {
-    applyShiftData(snap && snap.data);
+    // fbListen also calls back on error with the localStorage copy, and
+    // that must not unlock writing either — dbError() is already set by then.
+    applyShiftData(snap && snap.data,
+                   typeof dbError !== 'function' || !dbError());
     // Render only the currently active tab — never jump to morning
     if (typeof _renderShiftContent !== 'undefined') _renderShiftContent(activeShift);
   });

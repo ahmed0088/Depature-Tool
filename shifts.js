@@ -142,7 +142,7 @@ function stToggle(key, id) {
   else          { shift.done.push(id);        stLog(key, 'done',   task?.name || id); logActivity('shift_task_done',  `[${SHIFTS[key].label}] ${task?.name || id}`); }
   _renderShiftContent(key);
   updateShiftBadge(key);
-  saveShifts(SHIFTS);
+  persistShifts();
   if (typeof isOnline === 'function' && !isOnline()) showToast('Saved locally — offline', 'info');
 }
 
@@ -154,7 +154,7 @@ function stMove(key, id, dir) {
   if (to < 0 || to >= tasks.length) return;
   [tasks[idx], tasks[to]] = [tasks[to], tasks[idx]];
   _renderShiftContent(key);
-  saveShifts(SHIFTS);
+  persistShifts();
 }
 
 // ── Drag-and-drop sort ────────────────────────────────────
@@ -192,7 +192,7 @@ function initDragSort(key) {
       const [moved] = tasks.splice(srcIdx, 1);
       tasks.splice(dstIdx, 0, moved);
       _renderShiftContent(key);
-      saveShifts(SHIFTS);
+      persistShifts();
     });
   });
 }
@@ -209,7 +209,7 @@ function stAddTask(key) {
   stLog(key, 'added', name);
   logActivity('shift_task_added', `[${SHIFTS[key].label}] ${name}`);
   _renderShiftContent(key);
-  saveShifts(SHIFTS);
+  persistShifts();
   // Re-render swaps the DOM out from under the old input — refocus the new
   // one so adding several tasks in a row doesn't need a re-click each time
   document.getElementById('stIn-' + key)?.focus();
@@ -226,7 +226,7 @@ function stDelete(key, id) {
   SHIFTS[key].tasks = SHIFTS[key].tasks.filter(t => t.id !== id);
   SHIFTS[key].done  = SHIFTS[key].done.filter(d => d !== id);
   _renderShiftContent(key);
-  saveShifts(SHIFTS);
+  persistShifts();
 
   if (typeof showUndoToast === 'function') {
     showUndoToast(`Deleted "${task.name}"`, () => {
@@ -234,7 +234,7 @@ function stDelete(key, id) {
       if (wasDone) SHIFTS[key].done.push(id);
       stLog(key, 'added', task.name + ' (restored)');
       _renderShiftContent(key);
-      saveShifts(SHIFTS);
+      persistShifts();
     });
   }
 }
@@ -258,7 +258,7 @@ function saveEditTask() {
   task.hint = document.getElementById('et-hint').value.trim();
   document.getElementById('editTaskModal').classList.remove('open');
   _renderShiftContent(key);
-  saveShifts(SHIFTS);
+  persistShifts();
 }
 
 // ── Reset shift ───────────────────────────────────────────
@@ -269,7 +269,7 @@ function resetShift(key) {
   stLog(key, 'reset', 'All tasks');
   logActivity('shift_reset', SHIFTS[key].label);
   _renderShiftContent(key);
-  saveShifts(SHIFTS);
+  persistShifts();
   const isOffline = typeof isOnline === 'function' && !isOnline();
   showToast(isOffline ? 'Shift reset ✓ (offline — will sync when reconnected)' : 'Shift reset ✓', isOffline ? 'info' : 'ok');
 }
@@ -300,12 +300,37 @@ function initShifts() {
   });
 }
 
+// True once Firebase has actually answered about the shifts node — either
+// with data or with a confirmed absence of it.
+//
+// This gates every write. saveShifts() replaces the whole node, so a save
+// fired before the real tasks have arrived overwrites them for the entire
+// team with whatever this device happens to be holding. That is not
+// hypothetical: saveShifts(SHIFTS) is called from places that have nothing
+// to do with shifts, such as copying a no-show report, so a single click in
+// the wrong moment was enough to wipe everyone's tasks.
+let _shiftsLoaded = false;
+function shiftsLoaded() { return _shiftsLoaded; }
+
+// Every write goes through here. Nothing is sent until the database has
+// been heard from, so the app can only ever overwrite data it has seen.
+function persistShifts() {
+  if (!_shiftsLoaded) {
+    console.warn('[shifts] not saving — the saved tasks have not loaded yet');
+    return false;
+  }
+  saveShifts(SHIFTS);
+  return true;
+}
+
 // The single place saved shift data is applied, used by both the initial
 // load and the live listener. They previously did this separately and
 // disagreed: an empty task list from Firebase fell back to the defaults on
 // load but overwrote them in the listener, so the board could end up blank
-// with no way back. Pass null/undefined when there is nothing saved.
-function applyShiftData(saved) {
+// with no way back. Pass null/undefined when there is nothing saved, and
+// heardFromDb=false when the read failed rather than came back empty — a
+// failed read must not unlock writing.
+function applyShiftData(saved, heardFromDb = true) {
   Object.keys(SHIFTS).forEach(k => {
     const s = saved && saved[k];
     if (s) {
@@ -315,4 +340,5 @@ function applyShiftData(saved) {
     }
   });
   initShifts();   // fills in any shift left with nothing, and repaints the badges
+  if (heardFromDb) _shiftsLoaded = true;
 }

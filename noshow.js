@@ -471,7 +471,7 @@ function nsCopyForExcel() {
     if (typeof _renderShiftContent === 'function' && document.getElementById('shiftContent')?.contains(document.getElementById('stLog-' + activeShift))) {
       _renderShiftContent(activeShift);
     }
-    if (typeof saveShifts === 'function') saveShifts(SHIFTS);
+    if (typeof persistShifts === 'function') persistShifts();
   }
   if (typeof logActivity === 'function') logActivity('noshow_copied', `${rows.length} guest${rows.length !== 1 ? 's' : ''} · ${nsReportDate}`);
 }
