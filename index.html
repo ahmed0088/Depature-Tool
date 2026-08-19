@@ -2355,7 +2355,7 @@
   <details class="howto"><summary>❔ How to use this</summary>
     <ol>
       <li>Upload your <b>long-stay tracking sheet</b> (.xlsx / .xls / .csv). Column names are matched automatically — it needs a <b>Name</b> or <b>Room</b> column, and finds Arrival, Departure, Total Contract, Payment Received, Total Due, Next Due Date, Cheques, Contract and Security Deposit where they exist.</li>
-      <li>Set the <b>analysis date</b> before uploading — every "days remaining" figure counts from it, so back-date it to re-run an old sheet as it stood on the day.</li>
+      <li>Every "days remaining" figure counts from the <b>as of</b> date. Change it any time to see the sheet as it stood on another day.</li>
       <li>Click any <b>coloured card</b> or <b>tab</b> to see just those guests. Search by name, room or confirmation.</li>
       <li><b>🖨 PDF Report</b> prints whatever is on screen — filter first and you get a report of only those accounts.</li>
     </ol>
@@ -2368,7 +2368,7 @@
       <li><b>🟢 Paid</b> — settled in full.</li>
       <li><b>💛 High Balance</b> — owes at or above your threshold. This one is adjustable live, under the search box.</li>
     </ul>
-    <p style="margin:8px 0 0;color:var(--text3);">The three windows (high balance, cheque, departure) are set on the upload card and apply as the file is read — change one and upload again to re-analyse.</p>
+    <p style="margin:8px 0 0;color:var(--text3);">The four controls under the search box — <b>high balance</b>, <b>cheque</b>, <b>departs</b> and <b>as of</b> — re-analyse everything as you change them, with no need to upload again. Ask "what if we chase at 14 days instead of 7?" and watch the counts move. The same values on the upload card are just the starting point.</p>
   </details>
 
   <!-- Upload Section -->
@@ -2490,9 +2490,17 @@
       <select id="adg-co-filter" class="adg-select"><option value="">All Companies</option></select>
       <select id="adg-room-filter" class="adg-select"><option value="">All Rooms</option></select>
       <select id="adg-rate-filter" class="adg-select"><option value="">All Rate Codes</option></select>
-      <span class="adg-divider-lbl">High bal ≥</span>
-      <input type="number" id="adg-high-live" class="adg-num-input" value="30000" style="width:90px;height:32px"/>
+      <span class="adg-divider-lbl" title="Owing at or above this counts as a high balance">High bal ≥</span>
+      <input type="number" id="adg-high-live" class="adg-num-input" value="30000" style="width:86px;height:32px"/>
       <span style="font-size:.76rem;color:var(--text3)">AED</span>
+      <span class="adg-divider-lbl" title="A cheque falling due within this many days is flagged for a reminder">Cheque ≤</span>
+      <input type="number" id="adg-cheque-live" class="adg-num-input" value="7" style="width:58px;height:32px"/>
+      <span style="font-size:.76rem;color:var(--text3)">d</span>
+      <span class="adg-divider-lbl" title="Leaving within this many days while still owing counts as Danger">Departs ≤</span>
+      <input type="number" id="adg-danger-live" class="adg-num-input" value="30" style="width:58px;height:32px"/>
+      <span style="font-size:.76rem;color:var(--text3)">d</span>
+      <span class="adg-divider-lbl" title="Every day-count is measured from this date">As of</span>
+      <input type="date" id="adg-date-live" class="adg-date-input" style="height:32px"/>
       <button class="adg-btn adg-btn-ghost adg-btn-sm" id="adg-clear-filters-btn" style="margin-left:auto;display:none" onclick="adgClearAllFilters()">✕ Clear</button>
     </div>
 
@@ -2576,10 +2584,28 @@
     document.getElementById('adg-co-filter').addEventListener('change',adgRenderTable);
     document.getElementById('adg-room-filter').addEventListener('change',adgRenderTable);
     document.getElementById('adg-rate-filter').addEventListener('change',adgRenderTable);
+    // All four recompute the analysis in place. Debounced so typing "14"
+    // doesn't re-run twice, and only the settled value is saved for the team.
+    let _adgLiveT=null;
+    const liveChange=()=>{
+      clearTimeout(_adgLiveT);
+      adgRecompute(false);
+      _adgLiveT=setTimeout(()=>adgRecompute(true),700);
+    };
+    const cl=document.getElementById('adg-cheque-live');
+    if(cl)cl.addEventListener('input',e=>{adgChequeDays=parseInt(e.target.value)||0;liveChange();});
+    const dl=document.getElementById('adg-danger-live');
+    if(dl)dl.addEventListener('input',e=>{adgDangerDays=parseInt(e.target.value)||0;liveChange();});
+    const dt=document.getElementById('adg-date-live');
+    if(dt)dt.addEventListener('change',e=>{
+      if(!e.target.value)return;
+      adgAnalysisDate=e.target.value; adgToday=adgParseISO(adgAnalysisDate);
+      document.getElementById('adg-analysis-date').textContent='As of '+adgFmtDate(adgToday);
+      liveChange();
+    });
     document.getElementById('adg-high-live').addEventListener('input',e=>{
       adgHighBal=parseFloat(e.target.value)||0;
-      adgGuests.forEach(g=>{g.isHighBalance=g.totalDue!=null&&g.totalDue>=adgHighBal;});
-      adgUpdateTabCounts();adgRenderTable();
+      liveChange();
     });
   }
   window.adgInit=adgInit;
@@ -2616,6 +2642,30 @@
   function adgHideErr(){document.getElementById('adg-upload-err').style.display='none';}
 
 
+  // ── Live re-analysis ──────────────────────────────────────
+  // The three windows used to be fixed at upload: changing one meant
+  // uploading the file again. Everything they affect is derived, not parsed,
+  // so it can be recomputed from the guests already in memory — which makes
+  // them answerable questions ("what if we chase at 14 days?") rather than
+  // settings you commit to before seeing the data.
+  function adgRecompute(persist){
+    adgGuests.forEach(g=>{
+      if(Array.isArray(g.allInstallments)&&g.allInstallments.length){
+        const next=g.allInstallments.find(d=>d.date>=adgToday);
+        g.nextDueDate=next?next.date:null;
+        g.daysToNextPayment=g.nextDueDate?adgDaysDiff(adgToday,g.nextDueDate):null;
+      }
+      if(g.departure)g.daysToDeparture=adgDaysDiff(adgToday,g.departure);
+      g.chequeSoon=!!(g.nextDueDate&&g.daysToNextPayment!=null&&g.daysToNextPayment>=0&&g.daysToNextPayment<=adgChequeDays);
+      g.isHighBalance=g.totalDue!=null&&g.totalDue>=adgHighBal;
+      adgClassify(g);
+    });
+    adgGuests.sort((a,b)=>{const pa=adgPriority(a.status),pb=adgPriority(b.status);
+      if(pa!==pb)return pa-pb;return(a.daysToDeparture??9999)-(b.daysToDeparture??9999);});
+    adgRenderDash(adgSummarise(adgGuests));
+    if(persist)adgPersist();
+  }
+
   // ── Firebase sync ─────────────────────────────────────────
   // Same gate the shift board uses: nothing is written until Firebase has
   // actually answered about this node. saveAdagio() replaces the whole
@@ -2628,7 +2678,13 @@
     const d=v=>{ if(!v) return null; const t=v instanceof Date?v:new Date(v);
                  return isNaN(t)?null:`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`; };
     return {
-      guests: adgGuests.map(g=>{ const o={...g}; _adgDateKeys.forEach(k=>{o[k]=d(g[k]);}); return o; }),
+      guests: adgGuests.map(g=>{
+        const o={...g}; _adgDateKeys.forEach(k=>{o[k]=d(g[k]);});
+        // The instalment list carries Dates as well, and the live windows
+        // recompute the next due date from it — so it has to survive too.
+        if(Array.isArray(g.allInstallments))
+          o.allInstallments=g.allInstallments.map(x=>({date:d(x.date),label:x.label}));
+        return o; }),
       fileName: adgFileName||'', analysisDate: adgAnalysisDate||'',
       highBal: adgHighBal, chequeDays: adgChequeDays, dangerDays: adgDangerDays,
     };
@@ -2639,7 +2695,11 @@
   function adgHydrate(rec){
     if(!rec||!Array.isArray(rec.guests)) return null;
     const p=s=>{ if(!s) return null; const t=new Date(s); return isNaN(t)?null:t; };
-    return rec.guests.map(g=>{ const o={...g}; _adgDateKeys.forEach(k=>{o[k]=p(g[k]);}); return o; });
+    return rec.guests.map(g=>{
+      const o={...g}; _adgDateKeys.forEach(k=>{o[k]=p(g[k]);});
+      if(Array.isArray(g.allInstallments))
+        o.allInstallments=g.allInstallments.map(x=>({date:p(x.date),label:x.label})).filter(x=>x.date);
+      return o; });
   }
 
   function adgPersist(){
@@ -2663,7 +2723,9 @@
     if(adgAnalysisDate) adgToday=adgParseISO(adgAnalysisDate);
     if(!_adgInited){ _adgInited=true; adgInit(); }
     const el=document.getElementById('adgDate'); if(el&&adgAnalysisDate) el.value=adgAnalysisDate;
-    const hl=document.getElementById('adg-high-live'); if(hl) hl.value=adgHighBal;
+    const set=(id,v)=>{const el=document.getElementById(id); if(el&&v!=null&&v!=='') el.value=v;};
+    set('adg-high-live',adgHighBal); set('adg-cheque-live',adgChequeDays);
+    set('adg-danger-live',adgDangerDays); set('adg-date-live',adgAnalysisDate);
     adgPopulateFilters();
     adgRenderDash(adgSummarise(adgGuests));
     document.getElementById('adg-upload').style.display='none';
@@ -2694,6 +2756,10 @@
     if(!result.success){adgShowErr(result.errors.join('\n'));return;}
     adgGuests=result.guests;
     adgPopulateFilters();adgRenderDash(result);
+    ['adg-high-live','adg-cheque-live','adg-danger-live','adg-date-live'].forEach((id,i)=>{
+      const el=document.getElementById(id);
+      if(el)el.value=[adgHighBal,adgChequeDays,adgDangerDays,adgAnalysisDate][i];
+    });
     document.getElementById('adg-dash').style.display='block';
     document.getElementById('badge-adagio').textContent=result.totalGuests;
     // Share it — everyone on shift sees the same analysis without re-uploading.
