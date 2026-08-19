@@ -723,6 +723,51 @@ function _pkgOriginatorFor(ev, cands) {
 // written — a package added for one night and later extended across the stay
 // shows an early event still reading the original single night. Treating that
 // as the package's true span wrongly denies every legitimate later night.
+// One package, one stay, two people paid for it. IN-Gauge bills a package
+// night by night, and each night carries its own seller — so a package can
+// end up credited to whoever happened to be on duty rather than whoever
+// sold it. Opera cannot settle this: the sale is a single event there, and
+// these rows all point back to it. Flagging is the honest response, since
+// deciding which of two colleagues earned it is not the tool's call.
+//
+// Denied rows take no part: a rejected charge is not a second credit.
+function _pkgFlagSplitSellers(results) {
+  const byPkg = {};
+  results.forEach(r => {
+    if (r.verdict === 'settled') return;
+    const fam = _pkgFamilyName(r);
+    // Only group rows that are the same known package. "Unknown Product" is
+    // the absence of a name, not a name — grouping on it would put a
+    // breakfast and a late checkout in the same bucket and call them split.
+    if (!/^(Breakfast|Early Check In|Late Check Out)$/i.test(fam)) return;
+    (byPkg[`${r.conf}|${fam}`] = byPkg[`${r.conf}|${fam}`] || []).push(r);
+  });
+
+  Object.values(byPkg).forEach(rows => {
+    if (rows.length < 2) return;
+    // Compare the seller each row will actually be credited to. A blank is a
+    // missing value, not a second person — those rows are already flagged as
+    // needing a seller and must not masquerade as a conflict.
+    const named = s => { const v = String(s || '').trim(); return (!v || v === '-' || v === '—') ? '' : v; };
+    const people = [];
+    rows.forEach(r => {
+      const who = named(r.user) || named(r.employee);
+      if (!who) return;
+      if (!people.some(p => _pkgSameUser(p, who))) people.push(who);
+    });
+    if (people.length < 2) return;
+    const names = people.map(_pkgUserLabel);
+    rows.forEach(r => {
+      r.splitSeller = names;
+      // Never downgrade a row that already needs a decision.
+      if (r.verdict === 'credit' && r.alreadyComplete) {
+        r.verdict = 'review';
+        r.note = `Split between ${names.join(' and ')} — one package, one stay, credited to more than one person`;
+      }
+    });
+  });
+}
+
 function _pkgApplyVerdicts(results) {
   results.forEach(r => {
     r.family = _pkgFamilyName(r);
@@ -958,6 +1003,7 @@ async function pkgRun() {
 
   _pkgApplyVerdicts(results);
   _pkgApplyExtensionCredit(results);
+  _pkgFlagSplitSellers(results);   // after credit is settled — it compares final sellers
   pkgResults = results;
   _pkgRenderCoverage();
   document.getElementById('pkgResultsWrap').style.display = 'block';
@@ -999,7 +1045,7 @@ function _pkgActionText(r) {
   if (r.verdict === 'settled') return 'Nothing — already denied';
   if (r.verdict === 'deny')    return 'Remove this charge';
   if (r.verdict === 'outside') return 'Not in this log';
-  if (r.verdict === 'review')  return 'Check in Opera';
+  if (r.verdict === 'review')  return r.splitSeller ? 'Split — pick one seller' : 'Check in Opera';
   // Came in through TARS or another interface — no one sold it.
   if (r.noSeller) return r.needsEmployee ? 'No seller — booked by system' : 'Nothing — booked by system';
   if (r.needsProduct && r.needsEmployee) return 'Set package + seller';
@@ -1148,13 +1194,37 @@ function pkgSetFilter(f, el) {
 function pkgSetSearch(val) { pkgSearch_ = val; pkgRender(); }
 
 // ── Copy resolved rows as TSV — Room / Conf / Product / Price / From / To / Sold By ──
+// Who ran the audit and when. A deny list is a decision about someone's
+// commission, and three weeks later "why was this removed?" needs an answer
+// that does not depend on anyone remembering.
+function _pkgAuditStamp() {
+  const who = (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name)
+    ? currentProfile.name
+    : (typeof currentUser !== 'undefined' && currentUser && currentUser.email) ? currentUser.email : '';
+  const when = new Date().toLocaleString('en-GB',
+    { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  return { who, when };
+}
+
+// What Opera actually holds for this reservation, so the reason can be
+// checked against the source rather than taken on trust.
+function _pkgEvidence(r) {
+  const c = r.candidates || [];
+  if (!c.length) return 'Nothing logged in Opera for this confirmation';
+  return c.map(e => `${e.code}${e.price ? ' @' + e.price : ''}${e.user ? ' by ' + _pkgUserLabel(e.user) : ''}`)
+          .filter((v, i, a) => a.indexOf(v) === i).join('; ');
+}
+
 function pkgCopyResolved() {
   // Only rows that are valid to credit AND needed fixing — an already-correct
   // row has nothing to update, and a denied row must never be credited.
   const resolved = pkgResults.filter(r => r.verdict === 'credit' && !r.alreadyComplete);
   if (!resolved.length) { showToast('No fixed rows to copy', 'err'); return; }
-  const tsv = ['Room\tConfirmation No.\tProduct Code\tPrice (AED)\tFrom\tTo\tSold By\tCurrently Credited To']
-    .concat(resolved.map(r => [r.room, r.conf, r.code, r.price, r.from || '', r.to || '', r.user, r.wasUser || ''].join('\t')))
+  const s = _pkgAuditStamp();
+  const tsv = ['Room\tConfirmation No.\tProduct Code\tPrice (AED)\tFrom\tTo\tSold By\tCurrently Credited To\tWhy Changed\tAudited On\tAudited By']
+    .concat(resolved.map(r => [r.room, r.conf, r.code, r.price, r.from || '', r.to || '', r.user, r.wasUser || '',
+                               _pkgActionText(r), s.when, s.who]
+      .map(v => String(v ?? '').replace(/[\t\r\n]+/g, ' ')).join('\t')))
     .join('\n');
   copyToClipboard(tsv, document.getElementById('pkgCopyBtn'), '📋 Copy rows to update');
 }
@@ -1163,8 +1233,12 @@ function pkgCopyResolved() {
 function pkgCopyDeny() {
   const denied = pkgResults.filter(r => r.verdict === 'deny');
   if (!denied.length) { showToast('Nothing to deny — every charge is backed by Opera', 'ok'); return; }
-  const tsv = ['Room\tConfirmation No.\tProduct\tCharge (AED)\tCharged Date\tWhy Deny']
-    .concat(denied.map(r => [r.room, r.conf, r.family || r.code, r.charge, r.daily || '', r.denyReason].join('\t')))
+  const s = _pkgAuditStamp();
+  const tsv = ['Room\tConfirmation No.\tProduct\tCharge (AED)\tCharged Date\tWhy Deny\tWhat Opera Shows\tAudited On\tAudited By']
+    .concat(denied.map(r => [r.room, r.conf, r.family || r.code, r.charge, r.daily || '',
+                             r.denyReason, _pkgEvidence(r), s.when, s.who]
+      // Tabs and newlines inside a reason would split the row into new columns.
+      .map(v => String(v ?? '').replace(/[\t\r\n]+/g, ' ')).join('\t')))
     .join('\n');
   copyToClipboard(tsv, document.getElementById('pkgDenyBtn'), '⛔ Copy Deny List');
 }
