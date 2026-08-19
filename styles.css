@@ -5377,6 +5377,10 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
   font-family: var(--mono);
   font-size: 0.6rem;
   color: var(--text3);
+  /* Margins as well as the flex gap, so the items stay readable even if the
+     container ends up laid out as a block. */
+  margin-right: 14px;
+  white-space: nowrap;
 }
 .colmap-item b { color: var(--text2); font-weight: 600; }
 .colmap-item i { color: var(--amber); font-style: normal; }

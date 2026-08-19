@@ -712,7 +712,10 @@ function _showColumnMap(hdrs, map) {
   const parts = Object.entries(map).map(([label, i]) =>
     `<span class="colmap-item"><b>${escapeHtml(label)}</b> ← ${i >= 0 ? escapeHtml(hdrs[i]) : '<i>not found</i>'}</span>`);
   box.innerHTML = `<div class="colmap-title">Columns read from your report</div>${parts.join('')}`;
-  box.style.display = 'block';
+  // 'flex', not 'block': the stylesheet lays this out with flex + gap, and an
+  // inline display would override it, collapsing every item onto one line
+  // with no spacing.
+  box.style.display = 'flex';
 }
 
 function loadArrivals() {
