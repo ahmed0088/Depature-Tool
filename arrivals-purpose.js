@@ -29,6 +29,20 @@ let _originMap       = {};
 let _originNameMap   = {};
 let _originNatMap    = {};
 let _originNatRoomMap = {}; // room number (no leading zeros) → raw passport Nationality1 — fallback when the guest's name doesn't match exactly between reports (e.g. Opera CSV shows a shortened name)
+// Opera writes "Family, Given, Mr." and Vicas writes "Given Family". Compared
+// letter-by-letter in order those never match — measured against a real day's
+// reports, the name fallback matched 0 of 40 guests. These maps key on the
+// words sorted with titles removed, so word order and honorifics stop
+// mattering and the fallback actually works.
+let _originBagMap    = {};
+let _originNatBagMap = {};
+
+function _natNameKey(s) {
+  return String(s || '')
+    .replace(/\b(MR|MRS|MS|MISS|DR|MSTR|MASTER|PROF|SHEIKH|SHEIKHA)\b\.?/gi, ' ')
+    .replace(/[^A-Za-z ]/g, ' ')
+    .toUpperCase().split(/\s+/).filter(w => w.length > 1).sort().join(' ');
+}
 
 function _normRoom(r) {
   // Strip leading zeros so "0621" matches "621", keep as string
@@ -68,6 +82,8 @@ function parseOriginXML(xmlText) {
   const nameMap    = {};
   const natMap     = {};
   const natRoomMap = {}; // room → raw Nationality1 (no Emirates-ID override) — same last-checkin-wins rule as roomMap
+  const bagMap     = {}; // sorted-words name → Origin  (order-independent match)
+  const natBagMap  = {}; // sorted-words name → raw Nationality1
   let   source  = null; // 'inhouse' | 'vicas' — for the toast/label only
   let   parseErrorMsg   = null; // set if the browser's XML parser itself chokes on the file
   let   sectionsFound   = 0;    // total <Section> elements matched, before the <Details>-parent filter
@@ -175,6 +191,13 @@ function parseOriginXML(xmlText) {
       if (isPrimary || !nameMap[nKey]) nameMap[nKey] = origin;
       // Raw passport nationality (no UAE override) — used to fill the Nationality column directly
       if (isPrimary || !natMap[nKey]) natMap[nKey] = _shortCountry(nat);
+
+      // Word-order-independent key, so "Clouting, Mark, Mr." finds "Mark Clouting"
+      const bKey = _natNameKey(fullName);
+      if (bKey) {
+        if (isPrimary || !bagMap[bKey])    bagMap[bKey]    = origin;
+        if (isPrimary || !natBagMap[bKey]) natBagMap[bKey] = _shortCountry(nat);
+      }
     }
   } catch (e) {
     console.warn('[OriginXML] parse error:', e);
@@ -191,6 +214,8 @@ function parseOriginXML(xmlText) {
     nameMap:    nameMap    || {},
     natMap:     natMap     || {},
     natRoomMap: natRoomMap || {},
+    bagMap:     bagMap     || {},
+    natBagMap:  natBagMap  || {},
     source:     source     || null,
     parseErrorMsg,
     sectionsFound,
@@ -218,6 +243,8 @@ function loadOriginXML(input) {
       _originNameMap    = nameMap;
       _originNatMap     = natMap;
       _originNatRoomMap = natRoomMap;
+      _originBagMap     = result.bagMap    || {};
+      _originNatBagMap  = result.natBagMap || {};
 
       const count = Math.max(Object.keys(nameMap).length, Object.keys(roomMap).length);
       if (!count) {
@@ -342,7 +369,8 @@ function _promptForOriginXml() {
 // first, room-number fallback second, and a human-typed edit always wins.
 function _applyOriginToGuestList(list) {
   if (!list || !list.length) return { filledOrigin: 0, filledNat: 0 };
-  if (!Object.keys(_originNameMap).length && !Object.keys(_originMap).length) return { filledOrigin: 0, filledNat: 0 };
+  if (!Object.keys(_originNameMap).length && !Object.keys(_originMap).length
+      && !Object.keys(_originBagMap).length) return { filledOrigin: 0, filledNat: 0 };
   let filledOrigin = 0;
   let filledNat    = 0;
   list.forEach(g => {
@@ -358,6 +386,7 @@ function _applyOriginToGuestList(list) {
       // Name match is only a fallback for guests with no real room yet.
       let nat = hasRealRoom ? _originMap[roomKey] : undefined;
       if (!nat) nat = _originNameMap[nameKey];
+      if (!nat) nat = _originBagMap[_natNameKey(g.name)];
 
       if (nat) {
         const origin = _normOrigin(nat);
@@ -378,6 +407,7 @@ function _applyOriginToGuestList(list) {
     if (!g._natUserEdited) {
       let rawNat = hasRealRoom ? _originNatRoomMap[roomKey] : undefined;
       if (!rawNat) rawNat = _originNatMap[nameKey];
+      if (!rawNat) rawNat = _originNatBagMap[_natNameKey(g.name)];
       if (rawNat && rawNat !== g.nat) {
         g.nat = rawNat;
         g._natFromXML = true;
@@ -621,9 +651,20 @@ function exportArrivals() {
   const data = [['Room','Conf.','Name','Purpose','Nights','Nationality','Email','Source','Remarks']];
   arrGuests.forEach(g => data.push([g.room,g.conf,g.name,g.purpose,g.nights,g.nat,g.email,g.source,g.remarks]));
   const ws = XLSX.utils.aoa_to_sheet(data);
+  const COLS = ['A','B','C','D','E','F','G','H','I'];
+  const hS = {font:{bold:true,color:{rgb:'FFFFFF'},name:'Arial',sz:10},fill:{fgColor:{rgb:'1F4E79'},patternType:'solid'},alignment:{horizontal:'center'},border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}}};
+  const bS = {font:{name:'Arial',sz:10},border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}}};
+  const wS = {font:{name:'Arial',sz:10,bold:true},fill:{fgColor:{rgb:'FFFF00'},patternType:'solid'},border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}}};
+  COLS.forEach(c => { if (ws[c+'1']) ws[c+'1'].s = hS; });
+  arrGuests.forEach((g, ri) => {
+    const rn = ri + 2;
+    const isWalkIn = typeof sourceCategory === 'function' && sourceCategory(g.source) === 'walkin';
+    COLS.forEach(c => { const cell = ws[c+rn]; if (cell) cell.s = isWalkIn ? wS : bS; });
+  });
   ws['!cols'] = [8,16,28,14,8,14,26,20,18].map(w => ({wch:w}));
   XLSX.utils.book_append_sheet(wb, ws, 'Arrivals');
-  XLSX.writeFile(wb, 'Arrivals_' + new Date().toISOString().split('T')[0] + '.xlsx');
+  XLSX.writeFile(wb, 'Arrivals_' + new Date().toISOString().split('T')[0] + '.xlsx',
+                 {bookSST:false, type:'binary', cellStyles:true});
   addArrLog('Exported', `${arrGuests.length} guests exported to Excel`);
 }
 
@@ -1078,10 +1119,16 @@ function exportPurpose() {
   const hS = {font:{bold:true,color:{rgb:'FFFFFF'},name:'Arial',sz:10},fill:{fgColor:{rgb:'1F4E79'},patternType:'solid'},alignment:{horizontal:'center'},border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}}};
   const bS = {font:{name:'Arial',sz:10},fill:{fgColor:{rgb:'FFFFFF'},patternType:'solid'},border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}}};
   const lS = {font:{name:'Arial',sz:10},fill:{fgColor:{rgb:'E2EFDA'},patternType:'solid'},border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}}};
-  ['A','B','C','D','E','F','G','H','I','J','K','L'].forEach(c => { if (ws[c+'1']) ws[c+'1'].s = hS; });
+  // Walk-ins are highlighted across the whole row and take priority over the
+  // Leisure/Business shading — they are the rows someone has to act on.
+  const wS = {font:{name:'Arial',sz:10,bold:true},fill:{fgColor:{rgb:'FFFF00'},patternType:'solid'},border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}}};
+  const COLS = ['A','B','C','D','E','F','G','H','I','J','K','L'];
+  COLS.forEach(c => { if (ws[c+'1']) ws[c+'1'].s = hS; });
   purposeGuests.forEach((g, ri) => {
-    const rn = ri + 2; const s = g.purpose === 'Leisure' ? lS : bS;
-    ['A','B','C','D','E','F','G','H','I','J','K','L'].forEach(c => { const cell = ws[c+rn]; if (cell) cell.s = s; });
+    const rn = ri + 2;
+    const isWalkIn = typeof sourceCategory === 'function' && sourceCategory(g.source) === 'walkin';
+    const s = isWalkIn ? wS : (g.purpose === 'Leisure' ? lS : bS);
+    COLS.forEach(c => { const cell = ws[c+rn]; if (cell) cell.s = s; });
   });
   ws['!cols'] = [11,12,8,16,28,14,8,14,18,26,20,18].map(w => ({wch:w}));
   XLSX.utils.book_append_sheet(wb, ws, 'Purpose of Stay');
