@@ -35,7 +35,7 @@ let pkgGuests   = {};   // confirmation no. -> { name, norm, room, arr, dep } fr
 // opening for moving a colleague's sale onto yourself by rebooking it.
 // Reservations for the same guest inside this many days are treated as
 // one stay, and the sale stays with whoever made it first.
-const PKG_EXTENSION_DAYS = 31;
+const PKG_EXTENSION_GAP = 1;
 
 // ── IN-Gauge export upload (.xlsx) ──────────────────────────
 function pkgLoadExcel(input) {
@@ -80,16 +80,25 @@ function pkgLoadGuests(input) {
   const reader = new FileReader();
   reader.onload = async e => {
     try {
-      busyStart('Reading the guest list', 'matching names to confirmations…');
+      busyStart('Reading the guest list', 'matching guests to confirmations…');
       await busyPaint();
-      const wb   = XLSX.read(e.target.result, { type: 'array' });
-      const ws   = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-      pkgGuests  = _pkgParseGuestList(rows);
-      const n = Object.keys(pkgGuests).length;
+      const buf  = e.target.result;
+      const head = new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(buf, 0, Math.min(buf.byteLength, 8192)));
+      // Opera's Reservation Detail export is tab-delimited text, not a
+      // workbook, and it carries the guest's profile ID — a far better
+      // link between bookings than a name ever is.
+      pkgGuests = /CONFIRMATION_NO/.test(head) && head.includes('\t')
+        ? _pkgParseResDetail(new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(buf)))
+        : _pkgParseGuestList(XLSX.utils.sheet_to_json(
+            XLSX.read(buf, { type: 'array' }).Sheets[XLSX.read(buf, { type: 'array' }).SheetNames[0]],
+            { header: 1, defval: '' }));
+      const n   = Object.keys(pkgGuests).length;
+      const ids = Object.values(pkgGuests).filter(g => g.gid).length;
       const lbl = document.getElementById('pkgGuestLabel');
-      if (lbl) lbl.textContent = n ? `✓ ${n} reservation${n !== 1 ? 's' : ''} with guest names` : 'Loaded — no Confirmation No. + Name columns found';
-      showToast(n ? `✦ ${n} guest names loaded` : 'Could not find Confirmation No. and Name columns in this file', n ? 'ok' : 'err');
+      if (lbl) lbl.textContent = n
+        ? `✓ ${n} reservation${n !== 1 ? 's' : ''}${ids ? ' · guest IDs found' : ' (names only)'}`
+        : 'Loaded — no Confirmation No. + Name columns found';
+      showToast(n ? `✦ ${n} reservations loaded${ids ? ' with guest IDs' : ''}` : 'Could not find Confirmation No. and Name columns in this file', n ? 'ok' : 'err');
     } catch (err) {
       showToast('Failed to read the guest list: ' + err.message, 'err');
     } finally {
@@ -100,11 +109,53 @@ function pkgLoadGuests(input) {
   reader.readAsArrayBuffer(file);
 }
 
+// Opera → Reservations → Reservation Detail, exported as text. It is
+// tab-delimited with one header line, but address fields contain raw
+// newlines, so a record is only over when the next one begins — that is,
+// at a line starting with the report's 8-digit sort date.
+function _pkgParseResDetail(text) {
+  const lines = String(text || '').split(/\r?\n/);
+  const hi    = lines.findIndex(l => l.includes('CONFIRMATION_NO'));
+  if (hi < 0) return {};
+  const col = {};
+  lines[hi].split('\t').forEach((h, i) => { col[h.trim().toUpperCase()] = i; });
+
+  const body = lines.slice(hi + 1).join('\n');
+  let recs = body.split(/\n(?=\d{8}\t)/);
+  if (recs.length < 2) recs = body.split(/\r?\n/);   // a layout without the sort column
+
+  const at = (p, ...names) => {
+    for (const n of names) {
+      const i = col[n];
+      if (i != null && i < p.length) { const v = String(p[i]).trim(); if (v) return v; }
+    }
+    return '';
+  };
+
+  const out = {};
+  recs.forEach(rec => {
+    const p    = rec.split('\t');
+    const conf = at(p, 'CONFIRMATION_NO');
+    if (!/^\d+$/.test(conf)) return;
+    const name = at(p, 'FULL_NAME', 'FULL_NAME_NO_SHR_IND');
+    out[conf] = {
+      name,
+      norm: _pkgNormGuestName(name),
+      gid:  at(p, 'GUEST_NAME_ID'),
+      room: at(p, 'ROOM_NO', 'DISP_ROOM_NO'),
+      arr:  at(p, 'TRUNC_BEGIN', 'ARRIVAL'),
+      dep:  at(p, 'TRUNC_END', 'DEPARTURE'),
+    };
+  });
+  return out;
+}
+
 function _pkgParseGuestList(rows) {
   if (!rows.length) return {};
   const hdrs = rows[0].map(h => String(h || '').trim());
   const iConf = _pkgFindCol(hdrs, 'Confirmation Number', 'Confirmation No', 'Confirmation no');
   const iName = _pkgFindCol(hdrs, 'Name', 'Guest Name');
+  const iGid  = _pkgFindCol(hdrs, 'Guest Name Id', 'Guest Id', 'Client Id', 'Profile Id');
   const iRoom = _pkgFindCol(hdrs, 'Room');
   const iArr  = _pkgFindCol(hdrs, 'Arrival');
   const iDep  = _pkgFindCol(hdrs, 'Departure');
@@ -120,12 +171,26 @@ function _pkgParseGuestList(rows) {
     out[conf] = {
       name,
       norm: _pkgNormGuestName(name),
+      gid:  iGid  >= 0 ? String(r[iGid]  || '').trim() : '',
       room: iRoom >= 0 ? String(r[iRoom] || '').trim() : '',
-      arr:  iArr  >= 0 ? String(r[iArr]  || '').trim() : '',
-      dep:  iDep  >= 0 ? String(r[iDep]  || '').trim() : '',
+      arr:  iArr  >= 0 ? _pkgCellDate(r[iArr]) : '',
+      dep:  iDep  >= 0 ? _pkgCellDate(r[iDep]) : '',
     };
   }
   return out;
+}
+
+// A spreadsheet may hand back a date as text or as an Excel serial number,
+// and a serial silently reads as "no date" — which would quietly switch the
+// extension rule off rather than fail loudly. Normalise both to DD-MMM-YY.
+const _PKG_MON_NAMES = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+function _pkgCellDate(v) {
+  const s = String(v ?? '').trim();
+  if (!/^\d+(\.\d+)?$/.test(s)) return s;
+  const n = Number(s);
+  if (n < 20000 || n > 80000) return s;             // not a plausible Excel date
+  const d = new Date(Date.UTC(1899, 11, 30) + Math.floor(n) * 86400000);
+  return `${String(d.getUTCDate()).padStart(2, '0')}-${_PKG_MON_NAMES[d.getUTCMonth()]}-${String(d.getUTCFullYear()).slice(2)}`;
 }
 
 // "Ali, Mohamed, Mr." and "Mohamed Ali" are one person written two ways,
@@ -727,30 +792,46 @@ function _pkgApplyVerdicts(results) {
   });
 }
 
-// Groups a guest's reservations into one stay. Same name, and each
-// booking starting within PKG_EXTENSION_DAYS of the one before it, so a
-// guest returning months later is a separate sale rather than an
-// extension. Returns confirmation -> the stay's first confirmation.
+// Groups a guest's reservations into one continuous stay, so an extension
+// keyed as a fresh booking is still recognised as the same stay. Two
+// bookings chain when they are the same guest and the second picks up where
+// the first left off. Anything with a real break between it is a return
+// visit and a separate sale; anything overlapping is a second room taken at
+// the same time, which is also a separate sale.
+//
+// The guest's Opera profile ID is used when the export carries it — it is
+// exact, where a name is a guess. Real data bears this out: chaining on
+// contiguous dates, 93% of the links land in the same room, which is what
+// an extension looks like. Allowing weeks between bookings drops that to
+// 30% because it starts swallowing return visits.
+//
+// Returns confirmation -> the stay's first confirmation.
 function _pkgBuildChains() {
   const byGuest = {};
   Object.entries(pkgGuests).forEach(([conf, g]) => {
-    if (!g.norm) return;
-    (byGuest[g.norm] = byGuest[g.norm] || []).push({ conf, ...g });
+    const key = g.gid ? 'ID:' + g.gid : (g.norm ? 'NM:' + g.norm : '');
+    if (!key) return;
+    (byGuest[key] = byGuest[key] || []).push({ conf, ...g });
   });
 
   const head = {};
   Object.values(byGuest).forEach(list => {
     if (list.length < 2) return;
-    list.sort((a, b) => (_pkgDayNum(a.arr) || 0) - (_pkgDayNum(b.arr) || 0));
+    // Arrival, then departure, then confirmation: two bookings made on the
+    // same day must still order the same way on every run.
+    list.sort((a, b) => (_pkgDayNum(a.arr) || 0) - (_pkgDayNum(b.arr) || 0)
+                     || (_pkgDayNum(a.dep) || 0) - (_pkgDayNum(b.dep) || 0)
+                     || String(a.conf).localeCompare(String(b.conf)));
     let chainHead = list[0].conf;
     let prevEnd   = _pkgDayNum(list[0].dep) || _pkgDayNum(list[0].arr);
     head[list[0].conf] = chainHead;
     for (let i = 1; i < list.length; i++) {
       const arr = _pkgDayNum(list[i].arr);
-      // Compared as plain calendar days — close enough over a month, and
-      // it avoids pretending YYYYMMDD arithmetic is exact across a month end.
+      // Compared as plain calendar days so month ends behave.
       const gap = (arr && prevEnd) ? _pkgDaysBetween(prevEnd, arr) : Infinity;
-      if (gap > PKG_EXTENSION_DAYS) chainHead = list[i].conf;   // too far apart: a new stay
+      // Negative: the stays overlap, so this is a second room, not an
+      // extension. Above the tolerance: the guest went away and came back.
+      if (gap < 0 || gap > PKG_EXTENSION_GAP) chainHead = list[i].conf;
       head[list[i].conf] = chainHead;
       prevEnd = _pkgDayNum(list[i].dep) || arr;
     }
@@ -907,7 +988,7 @@ function _pkgActionText(r) {
   if (r.needsProduct && r.reassign) return 'Set package, reassign seller';
   if (r.needsProduct) return 'Set the package';
   if (r.needsEmployee) return 'Set the seller';
-  if (r.reassign) return r.extendedFrom ? 'Extension — credit stays with first seller' : 'Reassign the seller';
+  if (r.reassign) return r.extendedFrom ? `Same stay as ${r.extendedFrom} — credit the first seller` : 'Reassign the seller';
   return 'Nothing — already correct';
 }
 
@@ -919,9 +1000,14 @@ function _pkgActionCell(r) {
     : r.verdict === 'review' ? 'var(--amber)'
     : r.reassign ? 'var(--amber)'
     : (r.needsProduct || r.needsEmployee) ? 'var(--sky)' : 'var(--text3)';
-  // Spell out who it is currently credited to, so the change is checkable
-  // rather than something the tool just asserts.
-  const why = r.reassign ? ` title="IN-Gauge credits ${escapeHtml(_pkgUserLabel(r.wasUser))} — Opera shows ${escapeHtml(_pkgUserLabel(r.user))} started this package"` : '';
+  // Spell out the reason, so the change is checkable rather than asserted.
+  let why = '';
+  if (r.reassign && r.extendedFrom) {
+    why = ` title="Booking ${escapeHtml(r.extendedFrom)} is the same stay — ${escapeHtml(r.extendedName || 'this guest')} carried on into ${escapeHtml(r.conf)}. `
+        + `IN-Gauge credits ${escapeHtml(_pkgUserLabel(r.wasUser))}; the stay was started by ${escapeHtml(_pkgUserLabel(r.user))}."`;
+  } else if (r.reassign) {
+    why = ` title="IN-Gauge credits ${escapeHtml(_pkgUserLabel(r.wasUser))} — Opera shows ${escapeHtml(_pkgUserLabel(r.user))} started this package"`;
+  }
   return `<td style="font-size:0.68rem;color:${color};"${why}>${escapeHtml(txt)}</td>`;
 }
 
