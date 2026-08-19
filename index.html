@@ -2388,6 +2388,7 @@
         <span id="adg-guest-count" style="color:var(--adg-gold-light);font-weight:600;font-family:var(--mono);font-size:.76rem;"></span>
       </div>
       <div class="adg-topbar-actions">
+        <button class="adg-btn adg-btn-sm" onclick="adgExportPDF()" title="Opens the print dialog — choose Save as PDF">🖨 PDF Report</button>
         <button class="adg-btn adg-btn-ghost adg-btn-sm" onclick="adgExportCSV()">⬇ CSV</button>
         <button class="adg-btn adg-btn-ghost adg-btn-sm" onclick="adgExportExcel()">⬇ Excel</button>
         <button class="adg-btn adg-btn-ghost adg-btn-sm" onclick="adgReset()">↩ New File</button>
@@ -2983,6 +2984,167 @@
   }
 
   // ── Export ──
+
+  // ── PDF report ────────────────────────────────────────────
+  // Rendered into a hidden iframe and printed, rather than drawn with a PDF
+  // library: the browser's own print engine gives real text (searchable,
+  // selectable), proper page breaks and repeated table headers, and it works
+  // offline with nothing extra to load. "Save as PDF" in the print dialog is
+  // the export.
+  window.adgExportPDF=function(){
+    const guests=adgGetFiltered();
+    if(!guests.length){if(typeof showToast==='function')showToast('No records to export.');return;}
+
+    const outstanding=guests.filter(g=>g.totalDue>0);
+    const totalDue=outstanding.reduce((s,g)=>s+g.totalDue,0);
+    const totalContract=guests.reduce((s,g)=>s+(g.totalContract||0),0);
+    const totalPaid=guests.reduce((s,g)=>s+(g.paymentReceived||0),0);
+    const danger=guests.filter(g=>g.status&&g.status.startsWith('DANGER'));
+    const dueSoon=guests.filter(g=>g.status==='DUE_SOON');
+    const pct=totalContract>0?Math.round(totalPaid/totalContract*100):0;
+
+    const filterLabel={ALL:'All guests',DANGER:'Needs attention',CHEQUE:'Cheque due soon',
+      HIGH_BALANCE:'High balance',CONTRACT_MISSING:'Contract missing',DEPOSIT_MISSING:'Deposit missing',
+      DUE_SOON:'Due soon',OK:'On track',PAID:'Paid'}[adgFilter]||adgFilter;
+
+    const statusClass=s=>({DANGER_DEPARTED:'s-red',DANGER_OVERDUE:'s-red',DANGER_DEPARTING:'s-amber',
+      DUE_SOON:'s-amber',OK:'s-blue',PAID:'s-green'})[s]||'s-grey';
+
+    // Most urgent first, then by the largest amount at risk.
+    const ordered=guests.slice().sort((a,b)=>{
+      const p=adgPriority(a.status)-adgPriority(b.status);
+      return p||((b.totalDue||0)-(a.totalDue||0));
+    });
+
+    const row=g=>`<tr>
+      <td class="rm">${adgE(g.room)}</td>
+      <td><div class="nm">${adgE(g.name)}</div>${g.company?`<div class="co">${adgE(g.company)}</div>`:''}</td>
+      <td><span class="pill ${statusClass(g.status)}">${adgE(g.statusLabel||'—')}</span></td>
+      <td class="num">${adgFmtMoney(g.totalContract)}</td>
+      <td class="num">${adgFmtMoney(g.paymentReceived)}</td>
+      <td class="num due${g.totalDue>0?' owing':''}">${adgFmtMoney(g.totalDue)}</td>
+      <td>${adgFmtDate(g.nextDueDate)}${g.daysToNextPayment!=null&&g.daysToNextPayment!==''?`<div class="co">${g.daysToNextPayment<0?Math.abs(g.daysToNextPayment)+'d overdue':'in '+g.daysToNextPayment+'d'}</div>`:''}</td>
+      <td>${adgFmtDate(g.departure)}${g.daysToDeparture!=null?`<div class="co">${g.daysToDeparture<0?Math.abs(g.daysToDeparture)+'d ago':g.daysToDeparture+'d'}</div>`:''}</td>
+      <td class="doc">${g.contractReceived?'<span class="ok">✓</span>':'<span class="no">✗</span>'}</td>
+      <td class="doc">${g.depositAvailable?'<span class="ok">✓</span>':'<span class="no">✗</span>'}</td>
+    </tr>`;
+
+    const actionList=danger.concat(dueSoon).slice(0,12).map(g=>`<li>
+      <b>Room ${adgE(g.room)}</b> · ${adgE(g.name)} — <b>AED ${adgFmtMoney(g.totalDue)}</b> ${adgE(g.statusLabel||'')}
+      ${g.chequesStatus?`<span class="note">${adgE(g.chequesStatus)}</span>`:''}</li>`).join('');
+
+    const html=`<!doctype html><html><head><meta charset="utf-8"><title>Adagio Pro — Collections</title><style>
+@page { size: A4 landscape; margin: 13mm 11mm 15mm; }
+* { box-sizing: border-box; }
+body { margin:0; font-family:"DM Sans",-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+       color:#1d242c; font-size:8.7pt; line-height:1.38; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+.head { display:flex; align-items:flex-start; border-bottom:2.5pt solid #1F4E79; padding-bottom:5pt; margin-bottom:8pt; }
+.head h1 { margin:0; font-size:17pt; letter-spacing:-0.3pt; color:#1F4E79; font-weight:700; }
+.head .sub { margin-top:2pt; font-size:8.6pt; color:#5b6673; }
+.head .meta { margin-left:auto; text-align:right; font-size:8.2pt; color:#5b6673; line-height:1.6; }
+.head .meta b { color:#1d242c; }
+.kpis { display:flex; gap:6pt; margin-bottom:8pt; }
+.kpi { flex:1; border:0.6pt solid #d9dee4; border-top:2.2pt solid #8a97a5; border-radius:3pt; padding:4.5pt 7pt; }
+.kpi.red   { border-top-color:#c0392b; } .kpi.amber { border-top-color:#d98324; }
+.kpi.green { border-top-color:#2e8b57; } .kpi.blue  { border-top-color:#1F4E79; }
+.kpi .l { font-size:7pt; text-transform:uppercase; letter-spacing:0.7pt; color:#6b7683; }
+.kpi .v { font-size:13pt; font-weight:700; margin-top:0.5pt; letter-spacing:-0.3pt; }
+.kpi .v small { font-size:8pt; font-weight:600; color:#6b7683; }
+.kpi.red .v { color:#c0392b; } .kpi.amber .v { color:#b8721f; } .kpi.green .v { color:#2e8b57; }
+.bar { height:5pt; border-radius:3pt; background:#e8ecf0; overflow:hidden; margin-top:4pt; }
+.bar i { display:block; height:100%; background:#2e8b57; }
+h2 { font-size:9pt; text-transform:uppercase; letter-spacing:1pt; color:#1F4E79;
+     margin:0 0 4pt; padding-bottom:2.5pt; border-bottom:0.6pt solid #d9dee4; }
+.action { border:0.6pt solid #f0c9c2; background:#fdf5f3; border-left:2.5pt solid #c0392b;
+          border-radius:3pt; padding:5.5pt 8pt; margin-bottom:8pt; break-inside:avoid; }
+.action h2 { border:0; color:#c0392b; margin-bottom:3pt; }
+.action ul { margin:0; padding-left:13pt; }
+.action li { margin-bottom:2.5pt; }
+.action .note { color:#6b7683; font-size:8pt; }
+table { width:100%; border-collapse:collapse; }
+thead { display:table-header-group; }
+th { background:#1F4E79; color:#fff; font-size:7.2pt; text-transform:uppercase; letter-spacing:0.5pt;
+     padding:3.5pt 5pt; text-align:left; font-weight:600; }
+th.num, td.num { text-align:right; }
+td { padding:3pt 5pt; border-bottom:0.5pt solid #e4e8ec; vertical-align:top; }
+tr { break-inside:avoid; }
+tbody tr:nth-child(even) td { background:#f7f9fb; }
+.rm { font-weight:700; font-family:ui-monospace,Menlo,Consolas,monospace; }
+.nm { font-weight:600; }
+.co { font-size:7.4pt; color:#6b7683; }
+.num { font-variant-numeric:tabular-nums; font-family:ui-monospace,Menlo,Consolas,monospace; }
+.due.owing { font-weight:700; color:#c0392b; }
+.doc { text-align:center; }
+.doc .ok { color:#2e8b57; font-weight:700; } .doc .no { color:#c0392b; font-weight:700; }
+.pill { display:inline-block; padding:1pt 5pt; border-radius:8pt; font-size:7.2pt; font-weight:600; white-space:nowrap; }
+.s-red{background:#fbe6e2;color:#a3301f;} .s-amber{background:#fdf0dc;color:#95601a;}
+.s-blue{background:#e4eef7;color:#1F4E79;} .s-green{background:#e2f2e8;color:#256b43;}
+.s-grey{background:#eceff2;color:#5b6673;}
+tfoot td { border-top:1.2pt solid #1F4E79; font-weight:700; padding-top:5pt; background:#fff !important; }
+.foot { margin-top:7pt; padding-top:4pt; border-top:0.6pt solid #d9dee4;
+        font-size:7.4pt; color:#8a939d; display:flex; }
+</style></head><body>
+<div class="head">
+  <div>
+    <h1>Long Stay Collections</h1>
+    <div class="sub">Adagio Pro · ibis Styles Dubai Deira</div>
+  </div>
+  <div class="meta">
+    <div>Report date <b>${adgE(adgFmtDate(adgAnalysisDate||adgTodayStr()))}</b></div>
+    <div>View <b>${adgE(filterLabel)}</b> · <b>${guests.length}</b> guest${guests.length===1?'':'s'}</div>
+    ${adgFileName?`<div>Source ${adgE(adgFileName)}</div>`:''}
+  </div>
+</div>
+
+<div class="kpis">
+  <div class="kpi red"><div class="l">Total Outstanding</div><div class="v"><small>AED</small> ${adgFmtMoney(totalDue)}</div></div>
+  <div class="kpi amber"><div class="l">Guests Owing</div><div class="v">${outstanding.length} <small>of ${guests.length}</small></div></div>
+  <div class="kpi ${danger.length?'red':''}"><div class="l">Needs Attention</div><div class="v">${danger.length}</div></div>
+  <div class="kpi ${dueSoon.length?'amber':''}"><div class="l">Due Within 7 Days</div><div class="v">${dueSoon.length}</div></div>
+  <div class="kpi green"><div class="l">Collected</div><div class="v"><small>AED</small> ${adgFmtMoney(totalPaid)}</div>
+    <div class="bar"><i style="width:${pct}%"></i></div></div>
+</div>
+
+${actionList?`<div class="action"><h2>Act on these first</h2><ul>${actionList}</ul></div>`:''}
+
+<h2>All accounts — most urgent first</h2>
+<table>
+  <thead><tr>
+    <th style="width:7%">Room</th><th style="width:22%">Guest / Company</th><th style="width:11%">Status</th>
+    <th class="num" style="width:9%">Contract</th><th class="num" style="width:9%">Received</th>
+    <th class="num" style="width:9%">Due</th><th style="width:11%">Next Payment</th>
+    <th style="width:11%">Departure</th><th style="width:5%">Cont.</th><th style="width:5%">Dep.</th>
+  </tr></thead>
+  <tbody>${ordered.map(row).join('')}</tbody>
+  <tfoot><tr>
+    <td colspan="3">Total · ${guests.length} guest${guests.length===1?'':'s'}</td>
+    <td class="num">${adgFmtMoney(totalContract)}</td>
+    <td class="num">${adgFmtMoney(totalPaid)}</td>
+    <td class="num due owing">${adgFmtMoney(totalDue)}</td>
+    <td colspan="4"></td>
+  </tr></tfoot>
+</table>
+
+<div class="foot"><span>All amounts in AED. Cont. = contract on file · Dep. = security deposit held.</span>
+<span style="margin-left:auto">Generated ${adgE(new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}))}</span></div>
+</body></html>`;
+
+    const old=document.getElementById('adg-print-frame');
+    if(old) old.remove();
+    const f=document.createElement('iframe');
+    f.id='adg-print-frame';
+    f.setAttribute('aria-hidden','true');
+    f.style.cssText='position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
+    f.srcdoc=html;
+    f.onload=()=>{
+      try{ f.contentWindow.focus(); f.contentWindow.print(); }
+      catch(e){ if(typeof showToast==='function')showToast('Could not open the print dialog','err'); }
+    };
+    document.body.appendChild(f);
+    if(typeof showToast==='function')showToast('Print dialog opening — choose "Save as PDF"','ok');
+    if(typeof logActivity==='function')logActivity('adagio_pdf',`${guests.length} records · AED ${adgFmtMoney(totalDue)} outstanding`);
+  };
+
   window.adgExportCSV=function(){
     const guests=adgGetFiltered();if(!guests.length){if(typeof showToast==='function')showToast('No records to export.');return;}
     const hdr=['Row','Status','Room','Room Type','Guest Name','Company','Rate Code','Confirmation','Arrival','Departure','Nights','Total Contract','Payment Received','Total Due','Next Due Date','Days to Next Pay','Days to Departure','Contract','Cheques','Security Deposit','High Balance','Cheque Reminder'];
