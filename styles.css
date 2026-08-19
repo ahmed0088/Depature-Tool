@@ -5347,3 +5347,36 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
   max-height: 88px;
   overflow-y: auto;
 }
+
+/* ── Column mapping readout (Purpose of Stay) ──────────────
+   Names the report column each field was read from. A wrong
+   pick — a country landing in Booking Source, say — is then
+   visible on load rather than discovered in the data later. */
+.colmap {
+  margin: 14px 0 0;
+  padding: 9px 13px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--sky);
+  border-radius: var(--r);
+  background: rgba(90,180,232,0.05);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 14px;
+  align-items: baseline;
+}
+.colmap-title {
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 0.57rem;
+  letter-spacing: 1px;
+  color: var(--sky);
+  margin-bottom: 2px;
+  text-transform: uppercase;
+}
+.colmap-item {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  color: var(--text3);
+}
+.colmap-item b { color: var(--text2); font-weight: 600; }
+.colmap-item i { color: var(--amber); font-style: normal; }

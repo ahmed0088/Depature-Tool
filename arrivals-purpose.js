@@ -628,6 +628,34 @@ async function aiOneGuest(i, list) {
   arrRender(); purposeRender();
 }
 
+// Header matching for Opera exports. Substring matching alone is dangerous:
+// "SOURCE" also matches "SOURCE COUNTRY", and whichever such column happens to
+// come first silently becomes the booking source. Exact matches are therefore
+// tried across every header before any substring match is considered.
+function _colIndex(hdrs, ...names) {
+  for (const n of names) {
+    const exact = hdrs.findIndex(h => h === n);
+    if (exact >= 0) return exact;
+  }
+  for (const n of names) {
+    const loose = hdrs.findIndex(h => h.includes(n));
+    if (loose >= 0) return loose;
+  }
+  return -1;
+}
+
+// Names the column each field was read from, so a wrong pick is visible at a
+// glance instead of showing up later as a country in the Booking Source
+// column with no way to tell where it came from.
+function _showColumnMap(hdrs, map) {
+  const box = document.getElementById('purposeColMap');
+  if (!box) return;
+  const parts = Object.entries(map).map(([label, i]) =>
+    `<span class="colmap-item"><b>${escapeHtml(label)}</b> ← ${i >= 0 ? escapeHtml(hdrs[i]) : '<i>not found</i>'}</span>`);
+  box.innerHTML = `<div class="colmap-title">Columns read from your report</div>${parts.join('')}`;
+  box.style.display = 'block';
+}
+
 function loadArrivals() {
   const raw = document.getElementById('arrInput').value.trim();
   if (!raw) { alert('Please paste data first.'); return; }
@@ -638,10 +666,13 @@ function loadArrivals() {
   const delim     = lines[0].includes('\t') ? '\t' : ',';
   const splitLine = delim === '\t' ? (l => l.split('\t')) : parseCSVLine;
   const hdrs = splitLine(lines[0]).map(h => h.replace(/"/g,'').trim().toUpperCase());
-  const ci   = n => hdrs.findIndex(h => h.includes(n));
-  const rI=ci('ROOM'),nI=ci('NAME'),niI=ci('NIGHT'),cI=hdrs.findIndex(h=>h.includes('CONFIRM')),taI=ci('TRAVEL'),coI=ci('COMPANY'),srcI=ci('SOURCE'),
-        eI=hdrs.findIndex(h=>h.includes('EMAIL') || h.includes('E-MAIL'));
+  const ci   = (...n) => _colIndex(hdrs, ...n);
+  const rI=ci('ROOM'),nI=ci('NAME'),niI=ci('NIGHT'),cI=ci('CONFIRMATION NUMBER','CONFIRMATION_NO','CONFIRM'),
+        taI=ci('TRAVEL AGENT','TRAVEL'),coI=ci('COMPANY'),srcI=ci('SOURCE'),
+        eI=ci('EMAIL','E-MAIL');
   if (rI < 0 || nI < 0) { alert('Could not find Room/Name columns.'); return; }
+  _showColumnMap(hdrs, { Room:rI, Name:nI, 'Conf.':cI, Nights:niI, Email:eI,
+                         'Travel Agent':taI, Company:coI, 'Booking Source':srcI });
   const guests = [];
   for (let i = 1; i < lines.length; i++) {
     const p    = splitLine(lines[i]);
@@ -1089,10 +1120,13 @@ function loadPurpose() {
   const delim     = lines[0].includes('\t') ? '\t' : ',';
   const splitLine = delim === '\t' ? (l => l.split('\t')) : parseCSVLine;
   const hdrs  = splitLine(lines[0]).map(h => h.replace(/"/g,'').trim().toUpperCase());
-  const ci    = n => hdrs.findIndex(h => h.includes(n));
-  const rI=ci('ROOM'),nI=ci('NAME'),niI=ci('NIGHT'),cI=hdrs.findIndex(h=>h.includes('CONFIRM')),taI=ci('TRAVEL'),coI=ci('COMPANY'),srcI=ci('SOURCE'),
-        eI=hdrs.findIndex(h=>h.includes('EMAIL') || h.includes('E-MAIL'));
+  const ci    = (...n) => _colIndex(hdrs, ...n);
+  const rI=ci('ROOM'),nI=ci('NAME'),niI=ci('NIGHT'),cI=ci('CONFIRMATION NUMBER','CONFIRMATION_NO','CONFIRM'),
+        taI=ci('TRAVEL AGENT','TRAVEL'),coI=ci('COMPANY'),srcI=ci('SOURCE'),
+        eI=ci('EMAIL','E-MAIL');
   if (rI < 0 || nI < 0) { alert('Could not find Room/Name.'); return; }
+  _showColumnMap(hdrs, { Room:rI, Name:nI, 'Conf.':cI, Nights:niI, Email:eI,
+                         'Travel Agent':taI, Company:coI, 'Booking Source':srcI });
   const guests = [];
   for (let i = 1; i < lines.length; i++) {
     const p    = splitLine(lines[i]);
@@ -1229,11 +1263,13 @@ function loadOperaFile(input, target) {
         if (r.some(c => c.includes('room') || c.includes('name'))) { hdrRow = i; break; }
       }
       const hdrs = rows[hdrRow].map(c => String(c).replace(/"/g,'').trim().toUpperCase());
-      const ci   = name => hdrs.findIndex(h => h === name || h.includes(name));
-      const rI=ci('ROOM'), nI=ci('NAME'), cI=hdrs.findIndex(h=>h.includes('CONFIRM')), niI=ci('NIGHT'),
-            taI=hdrs.findIndex(h=>h.includes('TRAVEL')), coI=ci('COMPANY'), srcI=ci('SOURCE'),
-            eI=hdrs.findIndex(h=>h.includes('EMAIL') || h.includes('E-MAIL'));
+      const ci   = (...n) => _colIndex(hdrs, ...n);
+      const rI=ci('ROOM'), nI=ci('NAME'), cI=ci('CONFIRMATION NUMBER','CONFIRMATION_NO','CONFIRM'), niI=ci('NIGHT'),
+            taI=ci('TRAVEL AGENT','TRAVEL'), coI=ci('COMPANY'), srcI=ci('SOURCE'),
+            eI=ci('EMAIL','E-MAIL');
       if (rI < 0 || nI < 0) { alert('Cannot find Room/Name.\nHeaders: ' + hdrs.slice(0,10).join(', ')); return; }
+      _showColumnMap(hdrs, { Room:rI, Name:nI, 'Conf.':cI, Nights:niI, Email:eI,
+                             'Travel Agent':taI, Company:coI, 'Booking Source':srcI });
       const guests = [];
       for (let i = hdrRow + 1; i < rows.length; i++) {
         const r    = rows[i];
