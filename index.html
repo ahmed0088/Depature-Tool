@@ -3718,6 +3718,11 @@ document.querySelectorAll('.modal-bg').forEach(bg => {
 });
 
 async function appInit() {
+  // Put the standard shift tasks up before anything is awaited, so a slow
+  // or failing database shows the normal board rather than a blank one.
+  // Saved data replaces this the moment it arrives.
+  if (typeof initShifts !== 'undefined') initShifts();
+
   // Wait a moment for DB to initialize
   await new Promise(r => setTimeout(r, 500));
 
@@ -3737,17 +3742,10 @@ async function appInit() {
     if (data.checklist.doneTimes) clDoneTimes = data.checklist.doneTimes;
   }
 
-  // 4 — Apply shifts
-  if (data.shifts && data.shifts.data) {
-    Object.keys(SHIFTS).forEach(k => {
-      const saved = data.shifts.data[k];
-      if (saved) {
-        SHIFTS[k].tasks   = saved.tasks && saved.tasks.length ? saved.tasks : DEFAULT_TASKS[k].map(t=>({...t}));
-        SHIFTS[k].done    = saved.done    || [];
-        SHIFTS[k].resetAt = saved.resetAt || '';
-      }
-    });
-  }
+  // 4 — Apply shifts. Called unconditionally: with nothing saved yet the
+  // standard task list is what belongs on screen, and skipping this when
+  // the node was missing is what left the board empty with no way back.
+  applyShiftData(data.shifts && data.shifts.data);
 
   // 4b — Apply shift activity log (who did what, per shift) — previously
   // saved to Firebase but never read back, so it looked empty on every reload
@@ -3867,15 +3865,7 @@ async function appInit() {
   });
   
   listenShifts(snap => {
-    if (!snap || !snap.data) return;
-    Object.keys(SHIFTS).forEach(k => {
-      if (snap.data[k]) {
-        SHIFTS[k].tasks   = snap.data[k].tasks   || SHIFTS[k].tasks;
-        SHIFTS[k].done    = snap.data[k].done    || [];
-        SHIFTS[k].resetAt = snap.data[k].resetAt || '';
-      }
-      updateShiftBadge(k);
-    });
+    applyShiftData(snap && snap.data);
     // Render only the currently active tab — never jump to morning
     if (typeof _renderShiftContent !== 'undefined') _renderShiftContent(activeShift);
   });

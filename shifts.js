@@ -286,6 +286,10 @@ function updateShiftBadge(key) {
 }
 
 // ── Init ──────────────────────────────────────────────────
+// A shift with no tasks at all is not a real state — it means nothing has
+// been saved yet, so the standard list is what should be on screen. A shift
+// keeps whatever it holds as long as it holds something, so a task deleted
+// on purpose stays deleted.
 function initShifts() {
   Object.keys(SHIFTS).forEach(k => {
     if (!SHIFTS[k].tasks || !SHIFTS[k].tasks.length) {
@@ -294,4 +298,21 @@ function initShifts() {
     }
     updateShiftBadge(k);
   });
+}
+
+// The single place saved shift data is applied, used by both the initial
+// load and the live listener. They previously did this separately and
+// disagreed: an empty task list from Firebase fell back to the defaults on
+// load but overwrote them in the listener, so the board could end up blank
+// with no way back. Pass null/undefined when there is nothing saved.
+function applyShiftData(saved) {
+  Object.keys(SHIFTS).forEach(k => {
+    const s = saved && saved[k];
+    if (s) {
+      SHIFTS[k].tasks   = Array.isArray(s.tasks) && s.tasks.length ? s.tasks : [];
+      SHIFTS[k].done    = Array.isArray(s.done) ? s.done : [];
+      SHIFTS[k].resetAt = s.resetAt || '';
+    }
+  });
+  initShifts();   // fills in any shift left with nothing, and repaints the badges
 }
