@@ -1012,6 +1012,23 @@ function _pkgArchive(results) {
 // on the list.
 function _pkgDropNoOpReassigns(results) {
   results.forEach(r => {
+    // A row someone has marked REVIEWED in IN-Gauge has already been decided
+    // by a person, whichever way they decided. Opera cannot know why — the
+    // seller may have been left alone on purpose, as on a booking that came
+    // in through TARS where the colleague who extended it added the package
+    // and has earned it. Re-raising it every run is how the same
+    // confirmations came round day after day, already fixed.
+    //
+    // Unlike DENIED this is not struck out: the charge stands, so it keeps
+    // its credit and still counts towards the totals and the leaderboard.
+    // It simply stops being work.
+    if (r.status === 'REVIEWED') {
+      r.reviewed = true;
+      r.reassign = false;
+      r.wasUser  = '';
+      r.alreadyComplete = true;
+      return;
+    }
     if (!r.reassign) return;
     if (!_pkgSameUser(r.employee, r.user)) return;   // a genuine change
     r.reassign = false;
@@ -1121,6 +1138,7 @@ function _pkgActionText(r) {
   if (r.verdict === 'settled') return 'Nothing — already denied';
   if (r.verdict === 'deny')    return 'Remove this charge';
   if (r.verdict === 'outside') return 'Not in this log';
+  if (r.reviewed)              return 'Nothing — you already reviewed it';
   if (r.verdict === 'review')  return r.splitSeller ? 'Split — pick one seller' : 'Check in Opera';
   // Came in through TARS or another interface — no one sold it.
   if (r.noSeller) return r.needsEmployee ? 'No seller — booked by system' : 'Nothing — booked by system';
