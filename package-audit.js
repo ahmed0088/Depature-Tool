@@ -957,7 +957,9 @@ function _pkgApplyExtensionCredit(results) {
     if (_pkgSameUser(r.employee, own.user)) {
       r.reassign = false;
       r.wasUser  = '';
-      if (!r.needsProduct && !r.needsEmployee) r.alreadyComplete = true;
+      // Stated both ways round on purpose: a blank product or seller must
+      // never end up hidden, whatever an earlier step concluded.
+      r.alreadyComplete = !r.needsProduct && !r.needsEmployee;
       return;
     }
 
@@ -1026,7 +1028,15 @@ function _pkgDropNoOpReassigns(results) {
       r.reviewed = true;
       r.reassign = false;
       r.wasUser  = '';
-      r.alreadyComplete = true;
+      // Reviewing settles who earned the sale — a judgement only a person can
+      // make. It does not settle whether the charge should exist or whether
+      // the record is complete: a duplicate is still a duplicate, a package
+      // Opera has no record of is still unsupported, and a blank product or
+      // seller is a gap rather than an opinion. Those stay on the list, and
+      // say that they were reviewed, so a decision made on bad information
+      // can be revisited rather than quietly standing. Assigned rather than
+      // only set true, so a blank field cannot be hidden by an earlier step.
+      r.alreadyComplete = !r.needsProduct && !r.needsEmployee;
       return;
     }
     if (!r.reassign) return;
@@ -1135,24 +1145,33 @@ function _pkgRenderCoverage() {
 }
 
 function _pkgActionText(r) {
+  // Reviewing settles who earned a sale, not whether the charge is sound.
+  // So the factual checks run first and the stamp is added to whatever they
+  // find — a decision made on bad information should be visible, not hidden.
+  const seen = r.reviewed;
   if (r.verdict === 'settled') return 'Nothing — already denied';
-  if (r.verdict === 'deny')    return 'Remove this charge';
+  if (r.verdict === 'deny')    return seen ? 'Reviewed, but still remove this charge' : 'Remove this charge';
   if (r.verdict === 'outside') return 'Not in this log';
-  if (r.reviewed)              return 'Nothing — you already reviewed it';
-  if (r.verdict === 'review')  return r.splitSeller ? 'Split — pick one seller' : 'Check in Opera';
+  if (r.verdict === 'review') {
+    if (r.splitSeller) return seen ? 'Reviewed, but still split between two sellers' : 'Split — pick one seller';
+    return seen ? 'Reviewed, but still needs checking in Opera' : 'Check in Opera';
+  }
   // Came in through TARS or another interface — no one sold it.
   if (r.noSeller) return r.needsEmployee ? 'No seller — booked by system' : 'Nothing — booked by system';
-  if (r.needsProduct && r.needsEmployee) return 'Set package + seller';
-  if (r.needsProduct && r.reassign) return 'Set package, reassign seller';
-  if (r.needsProduct) return 'Set the package';
-  if (r.needsEmployee) return 'Set the seller';
+  if (r.needsProduct && r.needsEmployee) return seen ? 'Reviewed, but package + seller still blank' : 'Set package + seller';
+  if (r.needsProduct) return seen ? 'Reviewed, but package still blank' : 'Set the package';
+  if (r.needsEmployee) return seen ? 'Reviewed, but seller still blank' : 'Set the seller';
+  if (seen) return 'Nothing — you already reviewed it';
   if (r.reassign) return r.extendedFrom ? `Same stay as ${r.extendedFrom} — credit the first seller` : 'Reassign the seller';
   return 'Nothing — already correct';
 }
 
 function _pkgActionCell(r) {
   const txt = _pkgActionText(r);
-  const color = r.verdict === 'settled' ? 'var(--text3)'
+  // Amber for anything still wrong after a review — it disagrees with a
+  // decision a person already made, so it should not look routine.
+  const color = (r.reviewed && txt.startsWith('Reviewed, but')) ? 'var(--amber)'
+    : r.verdict === 'settled' ? 'var(--text3)'
     : r.verdict === 'deny' ? 'var(--rose)'
     : r.verdict === 'outside' ? 'var(--text3)'
     : r.verdict === 'review' ? 'var(--amber)'
