@@ -35,7 +35,7 @@ let pkgGuests   = {};   // confirmation no. -> { name, norm, room, arr, dep } fr
 // opening for moving a colleague's sale onto yourself by rebooking it.
 // Reservations for the same guest inside this many days are treated as
 // one stay, and the sale stays with whoever made it first.
-const PKG_EXTENSION_GAP = 1;
+const PKG_EXTENSION_GAP = 0;
 
 // ── IN-Gauge export upload (.xlsx) ──────────────────────────
 function pkgLoadExcel(input) {
@@ -878,8 +878,15 @@ function _pkgBuildChains() {
       const arr = _pkgDayNum(list[i].arr);
       // Compared as plain calendar days so month ends behave.
       const gap = (arr && prevEnd) ? _pkgDaysBetween(prevEnd, arr) : Infinity;
-      // Negative: the stays overlap, so this is a second room, not an
-      // extension. Above the tolerance: the guest went away and came back.
+      // Only a booking that starts the day the last one ends continues the
+      // stay: the guest never left, so the sale is still the first seller's.
+      // Anything else is a fresh sale and belongs to whoever made it.
+      //
+      // Negative means the stays overlap — a second room taken at the same
+      // time, not an extension. Even a single day's gap is a return visit:
+      // across a real month, 232 of 252 contiguous pairs are the same room,
+      // against 1 of 6 at a one-day gap, where the guest checked out and came
+      // back into a different room.
       if (gap < 0 || gap > PKG_EXTENSION_GAP) chainHead = list[i].conf;
       head[list[i].conf] = chainHead;
       prevEnd = _pkgDayNum(list[i].dep) || arr;
