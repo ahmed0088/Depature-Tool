@@ -695,7 +695,11 @@ function _pkgFamilyOfCode(code) {
 // which is what the hex test catches; a name made only of letters is
 // always treated as a real person, so an unfamiliar colleague is never
 // mistaken for a system.
-const _PKG_SYSTEM_USER = /(^|[-.])(TARS|PRODUCTION|INTERFACE|WEBSERVICE|SYSTEM|IFC|ONLINE|CHANNEL|BOOKING|PMS)([-.]|$)/i;
+// Opera writes the interface account as literally "*TARS*", so the
+// delimiter here has to be anything non-alphanumeric rather than the "-" and
+// "." originally assumed — with the narrower pattern *TARS* was never
+// recognised as a system account at all, and could be credited with a sale.
+const _PKG_SYSTEM_USER = /(^|[^A-Z0-9])(TARS|PRODUCTION|INTERFACE|WEBSERVICE|SYSTEM|IFC|ONLINE|CHANNEL|BOOKING|PMS)([^A-Z0-9]|$)/i;
 
 function _pkgIsSystemUser(u) {
   const key = _pkgUserKey(u);
@@ -931,16 +935,35 @@ function _pkgApplyExtensionCredit(results) {
     // rule goes quiet for anyone not auditing a full month in one go.
     const own = owner[h] || _pkgOwnerFromOpera(h);
     if (!own || !own.user) return;
+    // A stay that started on a TARS or interface booking has no seller to
+    // hand the credit to, and moving a real person's sale onto a system
+    // account would be worse than leaving it alone.
+    if (_pkgIsSystemUser(own.user)) return;
 
     r.extendedFrom = h;
     r.extendedName = (pkgGuests[r.conf] || {}).name || '';
     r.extendedVia  = own.viaOpera ? 'opera' : '';
-    if (_pkgSameUser(r.user || r.employee, own.user)) return;        // already the right person
+    // The stay's owner is the final word, and it overrides whatever the
+    // per-booking originator concluded earlier. That step looks at one
+    // booking in isolation and sees whoever added the package to the
+    // extension — a different person by definition. Leaving its answer in
+    // place is what made the tool ask for the same fix every day: apply the
+    // correction, and next run the originator flags it straight back, now
+    // pointing the other way.
+    r.user = own.user;
+
+    // Compared against what IN-Gauge actually holds — that is what decides
+    // whether opening this confirmation would change anything.
+    if (_pkgSameUser(r.employee, own.user)) {
+      r.reassign = false;
+      r.wasUser  = '';
+      if (!r.needsProduct && !r.needsEmployee) r.alreadyComplete = true;
+      return;
+    }
 
     // Opera may show someone else adding the package on the new booking;
     // the stay's original seller still keeps it.
     r.wasUser  = r.employee;
-    r.user     = own.user;
     r.reassign = true;
     r.alreadyComplete = false;
     r.verdict  = 'credit';
@@ -978,6 +1001,23 @@ function _pkgArchive(results) {
     Object.values(d.sellers).forEach(s => { s.aed = Math.round(s.aed * 100) / 100; });
     Object.values(d.products).forEach(p => { p.aed = Math.round(p.aed * 100) / 100; });
     saveHistory('upsells', d, iso);
+  });
+}
+
+// Last word before anything is shown: a row is only work if the seller in
+// IN-Gauge differs from the one being credited. Every rule above can set
+// reassign, and each compares against a slightly different thing, so this is
+// the one place that asks the question the person actually faces — "will I
+// have to change anything when I open this confirmation?" If not, it isn't
+// on the list.
+function _pkgDropNoOpReassigns(results) {
+  results.forEach(r => {
+    if (!r.reassign) return;
+    if (!_pkgSameUser(r.employee, r.user)) return;   // a genuine change
+    r.reassign = false;
+    r.wasUser  = '';
+    r.noOpFixed = true;                              // already right, kept out of the action list
+    if (!r.needsProduct && !r.needsEmployee) r.alreadyComplete = true;
   });
 }
 
@@ -1038,6 +1078,7 @@ async function pkgRun() {
   _pkgApplyVerdicts(results);
   _pkgApplyExtensionCredit(results);
   _pkgFlagSplitSellers(results);   // after credit is settled — it compares final sellers
+  _pkgDropNoOpReassigns(results);  // last: nothing that needs no change stays on the list
   _pkgArchive(results);
   pkgResults = results;
   _pkgRenderCoverage();
