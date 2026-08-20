@@ -947,6 +947,40 @@ function _pkgApplyExtensionCredit(results) {
   });
 }
 
+// Records the day's upsell figures so the month can be looked at without
+// re-running every export. Keyed by the charge date in IN-Gauge rather than
+// today, so re-running an old file lands on the day it belongs to and
+// re-running the same file simply overwrites that day rather than doubling it.
+//
+// Denied charges are excluded: they were never earned. Credit goes to the
+// seller the audit settled on, not the one IN-Gauge had, so the archive
+// matches what should actually be paid.
+function _pkgArchive(results) {
+  if (typeof saveHistory !== 'function') return;
+  const byDay = {};
+  results.forEach(r => {
+    if (r.verdict === 'deny' || r.verdict === 'settled') return;
+    const day = _pkgDayNum(r.daily);
+    if (!day) return;
+    const iso = `${String(day).slice(0,4)}-${String(day).slice(4,6)}-${String(day).slice(6,8)}`;
+    const who = _pkgUserLabel(r.user || r.employee) || 'Unassigned';
+    const fam = _pkgFamilyName(r);
+    const d = byDay[iso] = byDay[iso] || { sellers:{}, products:{}, rows:0, aed:0 };
+    const amt = parseFloat(r.charge) || 0;
+    d.rows++; d.aed += amt;
+    const s = d.sellers[who] = d.sellers[who] || { rows:0, aed:0 };
+    s.rows++; s.aed += amt;
+    const p = d.products[fam] = d.products[fam] || { rows:0, aed:0 };
+    p.rows++; p.aed += amt;
+  });
+  Object.entries(byDay).forEach(([iso, d]) => {
+    d.aed = Math.round(d.aed * 100) / 100;
+    Object.values(d.sellers).forEach(s => { s.aed = Math.round(s.aed * 100) / 100; });
+    Object.values(d.products).forEach(p => { p.aed = Math.round(p.aed * 100) / 100; });
+    saveHistory('upsells', d, iso);
+  });
+}
+
 // ── Reconcile ────────────────────────────────────────────────
 async function pkgRun() {
   const errBox = document.getElementById('pkgError');
@@ -1004,6 +1038,7 @@ async function pkgRun() {
   _pkgApplyVerdicts(results);
   _pkgApplyExtensionCredit(results);
   _pkgFlagSplitSellers(results);   // after credit is settled — it compares final sellers
+  _pkgArchive(results);
   pkgResults = results;
   _pkgRenderCoverage();
   document.getElementById('pkgResultsWrap').style.display = 'block';

@@ -283,6 +283,7 @@ function loadOriginXML(input) {
         : `✦ ${sourceLabel} data loaded — ${count} guests`, 'ok');
       // Apply to any already-loaded purpose guests
       _applyOriginToPurpose();
+      _purposeArchive();   // nationalities have just improved — record the better mix
       purposeRender();
       // Update the badge/label
       const lbl = document.getElementById('originXmlLabel');
@@ -1253,6 +1254,27 @@ async function runAINat_purpose() {
   addPurposeLog('AI Nat', `Nationality guessed for ${purposeGuests.filter(g=>g.nat).length} guests`);
 }
 
+// Archives the day's guest mix. Counts only — no names, no confirmations —
+// so the history stays small and holds nothing personal.
+function _purposeArchive() {
+  if (typeof saveHistory !== 'function' || !purposeGuests.length) return;
+  const nat = {}, src = {}, purpose = {};
+  let withNat = 0;
+  purposeGuests.forEach(g => {
+    const n = String(g.nat || '').trim();
+    if (n) { nat[n] = (nat[n] || 0) + 1; withNat++; }
+    const s = (typeof sourceCategory === 'function') ? sourceCategory(g.source) : 'other';
+    src[s] = (src[s] || 0) + 1;
+    const p = String(g.purpose || 'Business').trim();
+    purpose[p] = (purpose[p] || 0) + 1;
+  });
+  saveHistory('guests', {
+    total: purposeGuests.length,
+    withNationality: withNat,
+    nationalities: nat, sources: src, purposes: purpose,
+  });
+}
+
 function exportPurpose() {
   // Day/Date — same convention as the on-screen table: the whole export is
   // one day's arrivals, so every row is stamped with today's day + date.
@@ -1285,6 +1307,7 @@ function exportPurpose() {
 
   const n = walkIn.filter(Boolean).length;
   addPurposeLog('Exported', `${purposeGuests.length} guests exported${n ? ` — ${n} walk-in${n===1?'':'s'} highlighted` : ''}`);
+  _purposeArchive();
 }
 
 // ── ADD GUEST MODAL ───────────────────────────────────────

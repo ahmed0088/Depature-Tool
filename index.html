@@ -476,6 +476,10 @@
   <!-- Guest Memory — intentionally not listed in the visible nav. Reach it
        with Ctrl/Cmd+Shift+M (see the keydown handler further down), or the
        panel is still addressable directly via showPanel('guestmem'). -->
+  <div class="nav-item" onclick="showPanel('trends')" id="nav-trends" data-panel="trends">
+    <div class="nav-icon">📈</div>Trends
+    <span class="nav-badge" id="badge-trends">—</span>
+  </div>
   <div class="nav-item" onclick="showPanel('guestmem')" id="nav-guestmem" data-panel="guestmem" style="display:none;">
     <div class="nav-icon">🧠</div>Guest Memory
     <span class="nav-badge" id="badge-guestmem">0</span>
@@ -1317,6 +1321,87 @@
       </div>
     </div>
 
+  </div>
+</div>
+
+<!-- ════════════════ TRENDS ════════════════ -->
+<div class="panel" id="panel-trends">
+  <div style="max-width:1200px;">
+    <div class="page-hd">
+      <div class="page-hd-left">
+        <h1>Trends</h1>
+        <p>How the month is going · built from the reports you already upload every day</p>
+      </div>
+      <div class="page-hd-actions">
+        <select id="trRange" class="adg-select" onchange="trRender()">
+          <option value="30">Last 30 days</option>
+          <option value="14">Last 14 days</option>
+          <option value="7">Last 7 days</option>
+          <option value="90">Last 90 days</option>
+          <option value="9999">Everything</option>
+        </select>
+        <button class="btn" onclick="trLoad()">↻ Refresh</button>
+      </div>
+    </div>
+
+    <details class="howto"><summary>❔ Where this comes from</summary><ol>
+      <li>Nothing to upload here. Each panel records a small daily summary as you use it — counts and totals only, never guest names.</li>
+      <li><b>Upsells</b> come from Package Audit, credited to the seller the audit settled on rather than the one IN-Gauge had, and dated by the night charged.</li>
+      <li><b>No-shows</b> come from the NA40 report, dated by the report itself.</li>
+      <li><b>Guest mix</b> comes from Purpose of Stay, recorded when you load the Vicas XML or export.</li>
+      <li><b>Collections</b> come from Adagio Pro, dated by its analysis date.</li>
+      <li>A day only appears once that panel has been run for it. Re-running a day overwrites it, so nothing double-counts.</li>
+    </ol></details>
+
+    <div id="trEmpty" class="card" style="display:none;text-align:center;padding:40px 20px;">
+      <div style="font-size:2rem;margin-bottom:8px;">📈</div>
+      <div style="font-weight:600;margin-bottom:4px;">Nothing recorded yet</div>
+      <div style="font-size:0.74rem;color:var(--text3);max-width:460px;margin:0 auto;line-height:1.7;">
+        Run Package Audit, load a no-show report, or upload an Adagio sheet, and the day is recorded automatically.
+        Come back here after a few days and the shape of the month appears.
+      </div>
+    </div>
+
+    <div id="trBody" style="display:none;">
+      <div class="kpi-row c4" style="margin-top:16px;">
+        <div class="kpi gold"><div class="kpi-accent"></div><div class="kpi-label">Upsell Revenue</div><div class="kpi-val" id="tr-k-aed">—</div><div class="kpi-sub" id="tr-k-aed-sub"></div></div>
+        <div class="kpi sky"><div class="kpi-accent"></div><div class="kpi-label">Guests Recorded</div><div class="kpi-val" id="tr-k-guests">—</div><div class="kpi-sub" id="tr-k-guests-sub"></div></div>
+        <div class="kpi rose"><div class="kpi-accent"></div><div class="kpi-label">No-Shows</div><div class="kpi-val" id="tr-k-ns">—</div><div class="kpi-sub" id="tr-k-ns-sub"></div></div>
+        <div class="kpi mint"><div class="kpi-accent"></div><div class="kpi-label">Outstanding Now</div><div class="kpi-val" id="tr-k-out">—</div><div class="kpi-sub" id="tr-k-out-sub"></div></div>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <span style="font-size:0.86rem;font-weight:600;">🏆 Upsell leaderboard</span>
+          <span style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);" id="tr-lb-note"></span>
+          <button class="btn sm" style="margin-left:auto;" onclick="trCopyLeaderboard()">📋 Copy</button>
+        </div>
+        <div id="trLeaderboard"></div>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <div style="font-size:0.86rem;font-weight:600;margin-bottom:10px;">📅 Day by day</div>
+        <div class="tbl-wrap"><table>
+          <thead><tr>
+            <th>Date</th><th style="text-align:right;">Upsell AED</th><th style="text-align:right;">Nights</th>
+            <th style="text-align:right;">Guests</th><th style="text-align:right;">No-shows</th>
+            <th style="text-align:right;">Outstanding</th>
+          </tr></thead>
+          <tbody id="trDayTable"></tbody>
+        </table></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;" id="trSplits">
+        <div class="card">
+          <div style="font-size:0.86rem;font-weight:600;margin-bottom:10px;">🎁 By product</div>
+          <div id="trProducts"></div>
+        </div>
+        <div class="card">
+          <div style="font-size:0.86rem;font-weight:600;margin-bottom:10px;">🌍 Top nationalities</div>
+          <div id="trNats"></div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2706,7 +2791,24 @@
     if(!_adgLoaded){ console.warn('[adagio] not saving — stored analysis has not loaded yet'); return false; }
     if(typeof saveAdagio!=='function') return false;
     saveAdagio(adgSerialize());
+    _adgArchive();
     return true;
+  }
+
+  // The collections position on the day it was analysed, so the outstanding
+  // balance can be tracked over the month rather than only seen as it is now.
+  function _adgArchive(){
+    if(typeof saveHistory!=='function'||!adgGuests.length)return;
+    const owing=adgGuests.filter(g=>g.totalDue>0);
+    saveHistory('collections',{
+      guests:adgGuests.length,
+      owingCount:owing.length,
+      outstanding:Math.round(owing.reduce((s,g)=>s+g.totalDue,0)*100)/100,
+      received:Math.round(adgGuests.reduce((s,g)=>s+(g.paymentReceived||0),0)*100)/100,
+      contract:Math.round(adgGuests.reduce((s,g)=>s+(g.totalContract||0),0)*100)/100,
+      danger:adgGuests.filter(g=>g.status&&g.status.startsWith('DANGER')).length,
+      dueSoon:adgGuests.filter(g=>g.status==='DUE_SOON').length,
+    }, adgAnalysisDate||undefined);
   }
 
   // Applies a record from Firebase, whether it arrived at startup or from a
@@ -3389,6 +3491,9 @@ ${actionList?`<div class="action"><h2>Act on these first</h2><ul>${actionList}</
   window.showPanel=function(name){
     if(typeof _origShowPanel==='function')_origShowPanel(name);
     if(name==='adagio'&&!_adgInited){_adgInited=true;adgInit();}
+    // Read history the first time Trends is opened, and refresh on return so
+    // a run in another panel shows up without a reload.
+    if(name==='trends'&&typeof trLoad==='function')trLoad();
   };
   document.addEventListener('DOMContentLoaded',function(){
     setTimeout(function(){if(!_adgInited){_adgInited=true;adgInit();}},500);
@@ -3512,6 +3617,7 @@ ${actionList?`<div class="action"><h2>Act on these first</h2><ul>${actionList}</
 <script src="noshow.js"></script>
 <script src="inhouse-tally.js"></script>
 <script src="package-audit.js"></script>
+<script src="trends.js"></script>
 <script src="td-audit.js"></script>
 
 <script>

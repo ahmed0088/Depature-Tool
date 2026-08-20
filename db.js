@@ -168,6 +168,27 @@ async function savePurposeLog(log) {
   await fbSet('purposeLog', { log, updatedAt: new Date().toISOString() });
 }
 
+// ── Daily history ─────────────────────────────────────────
+// Every other node in this file is a single record that gets overwritten,
+// so yesterday is destroyed the moment today is saved. These write a dated
+// snapshot instead, which is what makes any question about a trend
+// answerable — the files are already being uploaded daily, nothing extra is
+// asked of anyone.
+//
+// Each panel writes its own section under the day, so two panels saving on
+// the same day cannot overwrite each other. Only small aggregates are kept:
+// counts and totals, never guest lists, so the archive stays cheap and holds
+// nothing personal.
+async function saveHistory(section, data, dateStr) {
+  const d = dateStr || new Date().toISOString().split('T')[0];
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
+  await fbSet(`history/${d}/${section}`, { ...data, savedAt: new Date().toISOString() });
+}
+
+async function loadHistory() {
+  return (await fbGet('history')) || {};
+}
+
 // Adagio Pro. Dates are stored as YYYY-MM-DD strings rather than Date
 // objects: JSON turns a Date into an ISO string on the way out but not back
 // on the way in, and the charts call getFullYear() on these. Rehydrating on

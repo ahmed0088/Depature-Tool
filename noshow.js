@@ -159,6 +159,7 @@ async function nsParsePDF(arrayBuffer) {
 
     debounceSaveNoShow(true);
     if (typeof logActivity === 'function') logActivity('noshow_loaded', `${guests.length} guest${guests.length !== 1 ? 's' : ''} · ${nsReportDate}`);
+    _nsArchive();
 
   } catch (err) {
     console.error('[noshow] PDF parse error:', err);
@@ -339,6 +340,32 @@ function nsShowResults() {
   document.getElementById('nsResultCard').style.display = 'block';
   const hdr = document.getElementById('nsHeaderActions');
   if (hdr) hdr.style.display = '';
+}
+
+// One line a day: how many no-shows and what they were worth. The date comes
+// from the report itself, so re-loading an older NA40 lands on its own day.
+function _nsArchive() {
+  if (typeof saveHistory !== 'function' || !nsGuests.length) return;
+  const iso = _nsIsoDate(nsReportDate);
+  const sources = {};
+  nsGuests.forEach(g => { const s = g.source || 'Unknown'; sources[s] = (sources[s] || 0) + 1; });
+  saveHistory('noshows', {
+    count: nsGuests.length,
+    potentialRevenue: Math.round(nsGuests.reduce((s, g) => s + (g.potRev || 0), 0) * 100) / 100,
+    sources,
+  }, iso);
+}
+
+// NA40 prints dates like "13-AUG-26"; history is keyed YYYY-MM-DD.
+const _NS_MON = { JAN:'01',FEB:'02',MAR:'03',APR:'04',MAY:'05',JUN:'06',
+                  JUL:'07',AUG:'08',SEP:'09',OCT:'10',NOV:'11',DEC:'12' };
+function _nsIsoDate(s) {
+  const m = String(s || '').match(/(\d{1,2})\s*-\s*([A-Za-z]{3})[A-Za-z]*\s*-\s*(\d{2,4})/);
+  if (!m) return null;                       // unknown → saveHistory falls back to today
+  const mm = _NS_MON[m[2].toUpperCase()];
+  if (!mm) return null;
+  const yy = m[3].length === 2 ? `20${m[3]}` : m[3];
+  return `${yy}-${mm}-${String(m[1]).padStart(2, '0')}`;
 }
 
 function nsUpdateBadge() {
