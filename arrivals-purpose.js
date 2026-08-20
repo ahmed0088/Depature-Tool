@@ -239,12 +239,22 @@ function loadOriginXML(input) {
       const natRoomMap = result.natRoomMap || {};
       const source     = result.source     || null;
 
-      _originMap        = roomMap;
-      _originNameMap    = nameMap;
-      _originNatMap     = natMap;
-      _originNatRoomMap = natRoomMap;
-      _originBagMap     = result.bagMap    || {};
-      _originNatBagMap  = result.natBagMap || {};
+      // Merged, not replaced. Vicas is usually pulled before every arrival has
+      // been registered with immigration — a real export held 30 rooms against
+      // Opera's 40 — so the answer is to pull it again later and load that too.
+      // Replacing would throw away the guests the first file did cover.
+      // The newer file wins on any guest both contain, since it is the more
+      // recent reading.
+      // Counted on one map only — natMap and natBagMap hold the same guests
+      // under two different keys, so summing them reports double.
+      const before = Object.keys(_originNatMap).length;
+      _originMap        = { ..._originMap,        ...roomMap };
+      _originNameMap    = { ..._originNameMap,    ...nameMap };
+      _originNatMap     = { ..._originNatMap,     ...natMap };
+      _originNatRoomMap = { ..._originNatRoomMap, ...natRoomMap };
+      _originBagMap     = { ..._originBagMap,     ...(result.bagMap    || {}) };
+      _originNatBagMap  = { ..._originNatBagMap,  ...(result.natBagMap || {}) };
+      const added = Object.keys(_originNatMap).length - before;
 
       const count = Math.max(Object.keys(nameMap).length, Object.keys(roomMap).length);
       if (!count) {
@@ -267,13 +277,18 @@ function loadOriginXML(input) {
         return;
       }
       const sourceLabel = source === 'vicas' ? 'Vicas' : 'Inhouse';
-      showToast(`✦ ${sourceLabel} data loaded — ${count} guests`, 'ok');
+      const total = Object.keys(_originNatMap).length;
+      showToast(before
+        ? `✦ ${sourceLabel} merged — ${count} in this file, ${added > 0 ? added + ' new' : 'none new'} · ${total} guests known`
+        : `✦ ${sourceLabel} data loaded — ${count} guests`, 'ok');
       // Apply to any already-loaded purpose guests
       _applyOriginToPurpose();
       purposeRender();
       // Update the badge/label
       const lbl = document.getElementById('originXmlLabel');
-      if (lbl) lbl.textContent = `${count} guests loaded (${sourceLabel})`;
+      if (lbl) lbl.textContent = before
+        ? `${total} guests known (${sourceLabel}, ${added > 0 ? '+' + added : 'no new'} from this file)`
+        : `${count} guests loaded (${sourceLabel})`;
     } catch (err) {
       console.error('[OriginXML] load failed:', err);
       showToast('Failed to parse Origin XML — see console', 'err');
@@ -516,9 +531,11 @@ function _renderXmlCoverage() {
   }
   box.className = 'xml-cov warn';
   const list = missing.map(g => `${escapeHtml(String(g.room || '?'))} ${escapeHtml(g.name || '')}`).join(' · ');
-  box.innerHTML = `<b>${have} of ${purposeGuests.length}</b> guests matched the Vicas XML. `
-    + `<b>${missing.length}</b> could not be found in it — those guests are not registered with immigration yet, `
-    + `so re-export the Vicas XML later and load it again.<div class="xml-cov-list">${list}</div>`;
+  box.innerHTML = `<b>${have} of ${purposeGuests.length}</b> guests have a passport nationality from Vicas. `
+    + `<b>${missing.length}</b> are not in it — they had not been registered with immigration when you pulled the file.`
+    + `<div style="margin-top:5px;">Pull the Vicas XML again later and load it in the same box: it <b>adds to</b> what is already here `
+    + `rather than replacing it, so only the gaps get filled and nothing already matched is lost.</div>`
+    + `<div class="xml-cov-list">${list}</div>`;
 }
 
 // ── ARRIVALS ──────────────────────────────────────────────
