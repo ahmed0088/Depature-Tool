@@ -451,6 +451,10 @@
     <div class="nav-icon">⏳</div>TD 30-Day Audit
     <span class="nav-badge" id="badge-td-audit">—</span>
   </div>
+  <div class="nav-item" onclick="showPanel('dtcm')" id="nav-dtcm" data-panel="dtcm">
+    <div class="nav-icon">🏦</div>DTCM Reconciliation
+    <span class="nav-badge" id="badge-dtcm">—</span>
+  </div>
   <div class="nav-item" onclick="showPanel('inhouse-tally')" id="nav-inhouse-tally" data-panel="inhouse-tally">
     <div class="nav-icon">🧮</div>Inhouse Tally
     <span class="nav-badge" id="badge-inhouse-tally">—</span>
@@ -1921,6 +1925,120 @@
 
   </div>
 </div><!-- /panel-td-audit -->
+
+<!-- ════════════════ DTCM RECONCILIATION ════════════════ -->
+<div class="panel" id="panel-dtcm">
+  <div style="max-width:1200px;">
+    <div class="page-hd">
+      <div class="page-hd-left">
+        <h1>DTCM Reconciliation</h1>
+        <p>Compares the DTCM Hotel Transaction Report with the Opera TD journal · tells you what to add, reverse or verify</p>
+      </div>
+      <div class="page-hd-actions">
+        <button class="btn gold" id="dtcRunBtn" onclick="dtcAnalyze()" disabled>🔍 Analyze</button>
+        <button class="btn rose" onclick="dtcClear()">✕ Clear</button>
+      </div>
+    </div>
+    <details class="howto"><summary>❔ How to use this</summary><ol>
+      <li>Drop the files in the box below. File names are recognised automatically.</li>
+      <li>Press <b>🔍 Analyze</b>, then read the <b>Summary</b> tab. Green = Opera matches DTCM · Amber = check the listed items · Red = corrections needed.</li>
+      <li>Work through the <b>To Do</b> tab and tick each row. Ticks and results are shared with everyone on shift.</li>
+      <li>The Long Stay file is optional. It adds the 30-night cap check.</li>
+    </ol></details>
+
+    <div class="card" id="dtcDrop">
+      <div class="dtc-zones">
+        <div class="upload-zone dtc-zone" id="dtcZone-dtcm" onclick="document.getElementById('dtcFileInput').click()">
+          <div class="upload-label-bar"><div class="upload-dot mint"></div><span class="upload-lbl">DTCM report</span><span class="upload-sub">required</span></div>
+          <div class="dtc-zone-body">
+            <div style="font-size:1.5rem;">🏛️</div>
+            <div class="dtc-zone-file">HotelTransactionReport_Dynamic.xml</div>
+            <div class="dtc-zone-name" id="dtcName-dtcm">Click or drop here</div>
+          </div>
+        </div>
+        <div class="upload-zone dtc-zone" id="dtcZone-opera" onclick="document.getElementById('dtcFileInput').click()">
+          <div class="upload-label-bar"><div class="upload-dot sky"></div><span class="upload-lbl">Opera journal</span><span class="upload-sub">required</span></div>
+          <div class="dtc-zone-body">
+            <div style="font-size:1.5rem;">🧾</div>
+            <div class="dtc-zone-file">finjrnlbytrans_….txt</div>
+            <div class="dtc-zone-name" id="dtcName-opera">Click or drop here</div>
+          </div>
+        </div>
+        <div class="upload-zone dtc-zone" id="dtcZone-longstay" onclick="document.getElementById('dtcFileInput').click()">
+          <div class="upload-label-bar"><div class="upload-dot gold"></div><span class="upload-lbl">Long Stay</span><span class="upload-sub">optional</span></div>
+          <div class="dtc-zone-body">
+            <div style="font-size:1.5rem;">🛏️</div>
+            <div class="dtc-zone-file">finjrnlbytax_….txt</div>
+            <div class="dtc-zone-name" id="dtcName-longstay">Click or drop here</div>
+          </div>
+        </div>
+      </div>
+      <input type="file" id="dtcFileInput" multiple accept=".xml,.txt,.csv" style="display:none;"/>
+      <div class="error-box" id="dtcError"><span>⚠</span><span id="dtcErrorMsg"></span></div>
+      <div id="dtcLoadWrap" class="dtc-loading" style="display:none;">
+        <span class="dtc-spin">⏳</span><span id="dtcLoadMsg">Reading files</span>
+      </div>
+    </div>
+
+    <div id="dtcEmpty" class="dtc-empty-state">No reconciliation loaded yet. Drop today's files above and press Analyze.</div>
+
+    <div id="dtcResults" style="display:none;">
+      <div class="filter-row" style="margin-top:6px;">
+        <div class="view-toggle">
+          <button class="vt-btn on" data-dtct="summary" onclick="dtcSwitch('summary')">Summary <span id="dtcCnt-summary" class="dtc-cnt">0</span></button>
+          <button class="vt-btn" data-dtct="sheet" onclick="dtcSwitch('sheet')">To Do <span id="dtcCnt-sheet" class="dtc-cnt">0</span></button>
+          <button class="vt-btn" data-dtct="longstay" onclick="dtcSwitch('longstay')">Long Stay <span id="dtcCnt-longstay" class="dtc-cnt">0</span></button>
+        </div>
+      </div>
+
+      <!-- Summary -->
+      <div class="dtc-view active" id="dtcView-summary">
+        <div id="dtcStatus"></div>
+        <details class="dtc-coll dtc-b-todo" id="dtcActionSection" open>
+          <summary><span class="dtc-chev">▸</span><span class="dtc-sum-title">To do — corrections</span><span class="dtc-sum-meta" id="dtcActionMeta"></span></summary>
+          <div class="dtc-coll-body">
+            <div class="tbl-wrap"><table>
+              <thead><tr><th style="width:40px;">#</th><th>Action</th><th>Room</th><th>Date</th><th style="text-align:right;">Amount</th><th>Where</th><th>Why</th></tr></thead>
+              <tbody id="dtcActionBody"></tbody>
+            </table></div>
+            <p class="dtc-legend"><b>Add</b> = post it in Opera · <b>Reverse</b> = remove it in Opera · <b>Verify</b> = check the reservation first, then decide</p>
+          </div>
+        </details>
+        <div id="dtcChecks"></div>
+        <details class="dtc-coll">
+          <summary><span class="dtc-chev">▸</span><span class="dtc-sum-title">Full details <span class="dtc-sum-sub">— totals and every category</span></span></summary>
+          <div class="dtc-coll-body"><div class="dtc-headline" id="dtcHeadline"></div><div id="dtcBuckets"></div></div>
+        </details>
+        <details class="dtc-coll">
+          <summary><span class="dtc-chev">▸</span><span class="dtc-sum-title">How to prevent it next time</span><span class="dtc-sum-meta" id="dtcPreventionMeta"></span></summary>
+          <div class="dtc-coll-body"><ul class="dtc-prevent" id="dtcPrevention"></ul></div>
+        </details>
+        <div style="margin-top:14px;">
+          <button class="btn mint" id="dtcExportBtn" data-require="canExport" onclick="dtcExportFull()" style="display:none;">📥 Download full reconciliation (Excel)</button>
+        </div>
+      </div>
+
+      <!-- To Do -->
+      <div class="dtc-view" id="dtcView-sheet">
+        <div id="dtcSheetOut"></div>
+        <div class="dtc-sheet-actions" id="dtcSheetActions" style="display:none;">
+          <div class="dtc-progress"><span id="dtcProgText">0 / 0 done</span><div class="dtc-bar"><div class="dtc-bar-fill" id="dtcBarFill"></div></div></div>
+          <button class="btn sm" onclick="dtcPrint()">🖨️ Print</button>
+          <button class="btn sm" onclick="dtcClearTicks()">↺ Clear ticks</button>
+          <button class="btn sm mint" data-require="canExport" onclick="dtcExportSheet()">📥 Download sheet (Excel)</button>
+        </div>
+      </div>
+
+      <!-- Long Stay -->
+      <div class="dtc-view" id="dtcView-longstay">
+        <div id="dtcLongOut"></div>
+        <div style="margin-top:14px;">
+          <button class="btn mint" data-require="canExport" onclick="dtcExportLong()">📥 Download long stay (Excel)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div><!-- /panel-dtcm -->
 
 <!-- ════════════════ ARRIVALS PROCESSOR ════════════════ -->
 <div class="panel" id="panel-arrivals-proc">
@@ -3634,6 +3752,10 @@ ${actionList?`<div class="action"><h2>Act on these first</h2><ul>${actionList}</
 <script src="package-audit.js"></script>
 <script src="trends.js"></script>
 <script src="td-audit.js"></script>
+<script src="dtcm-core.js"></script>
+<script src="dtcm-recon.js"></script>
+<script src="dtcm-longstay.js"></script>
+<script src="dtcm.js"></script>
 
 <script>
 // ════════════════════════════════════════════════
@@ -4353,6 +4475,8 @@ async function appInit() {
   listenNoShow(snap => {
     if (typeof nsApplyLoad === 'function') nsApplyLoad(snap);
   });
+
+  if (typeof dtcListen === 'function') dtcListen();
   
   listenChecklist(snap => {
     if (!snap) return;
@@ -4712,6 +4836,10 @@ async function appInit() {
     <button class="mob-more-item" data-panel="tourism"        onclick="showPanel('tourism');toggleMobMore()">
       <span class="mob-item-icon">🏛️</span>
       <span class="mob-more-badge" id="mob-badge-tourism"></span>Tourism Tax
+    </button>
+    <button class="mob-more-item" data-panel="dtcm"           onclick="showPanel('dtcm');toggleMobMore()">
+      <span class="mob-item-icon">🏦</span>
+      <span class="mob-more-badge" id="mob-badge-dtcm"></span>DTCM Recon
     </button>
     <button class="mob-more-item" id="mobAdminBtn"             onclick="openAdminPanel();toggleMobMore()" style="display:none;">
       <span class="mob-item-icon">👥</span>Team

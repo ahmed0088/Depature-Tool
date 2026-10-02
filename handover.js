@@ -64,6 +64,10 @@ function _hoSnapshot() {
     const unresolved = nsGuests.filter(g => !g.newConf).length;
     lines.push(`🚫 No-Show — ${nsGuests.length} on list${unresolved ? ` · ${unresolved} still unresolved` : ''}`);
   }
+  if (typeof dtcSnapshotLine === 'function') {
+    const dl = dtcSnapshotLine();
+    if (dl) lines.push(dl);
+  }
   if (typeof ttGuests !== 'undefined' && ttGuests.length) {
     lines.push(`🏛️ Tourism Tax — ${ttGuests.length} room(s) still need TD portal date correction`);
   }

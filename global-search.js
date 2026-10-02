@@ -23,6 +23,7 @@ const GS_PANEL_LABEL = {
   tourism:    'Tourism Tax',
   'inhouse-tally': 'Inhouse Tally',
   noshow:     'No-Show',
+  dtcm:       'DTCM Recon',
   checklist:  'Night Checklist',
   shifts:     'Shift Tasks',
 };
@@ -65,6 +66,9 @@ function gsBuildIndex(q) {
   });
   (typeof ttGuests !== 'undefined' ? ttGuests : []).forEach(g => {
     if (hit(g.room, g.name)) add('tourism', g.room, g.name, 'TD portal fix', '🏛️', g.room || g.name);
+  });
+  (typeof dtcRecon !== 'undefined' && dtcRecon ? (dtcRecon.actions || []) : []).forEach(a => {
+    if (hit(a.room, a.why)) add('dtcm', a.room, a.action + ' ' + (a.date || ''), a.why, '🏦', '');
   });
   (typeof nsGuests !== 'undefined' ? nsGuests : []).forEach(g => {
     if (hit(g.nameRaw, g.confNo, g.company)) add('noshow', '', g.nameRaw, g.company, '🚫', g.nameRaw || g.confNo);
