@@ -225,6 +225,7 @@
       segments.push({
         room, roomRaw, guest, guestNorm: normName(guest),
         storedNights, storedTdFees, checkIn, checkOut, status, bedrooms, houseUse,
+        checkInTime: firstAttr(n, ['NewCheckin','CheckInTime','Check_In_Time']),
         checkInISO:  checkIn  ? toISO(checkIn)  : '',
         checkOutISO: checkOut ? toISO(checkOut) : '',
         transactionuid: firstAttr(n, ['transactionuid','TransactionUID','Transaction_UID','UID']),
@@ -420,9 +421,40 @@
   function buildExpected(segments, opts){
     const expected = [];
     const reportDate = opts && opts.reportDate;
+    const windowDates = (opts && opts.windowDates) || null;
     for (const s of segments){
       if (!s.room || !s.checkIn) continue;
       if (!Number.isFinite(s.storedTdFees) || s.storedTdFees < 0.01) continue;
+
+      /* WINDOW report: the DTCM file covers a run of business dates (e.g. 1-2 Oct) and
+         'Nights' is the number of nights INSIDE that window, not the stay length.
+         Anchor the nights to the window instead of expanding from the check-in date. */
+      if (windowDates && windowDates.length){
+        let n = s.storedNights;
+        if (!n || n <= 0) n = Math.round(s.storedTdFees / TD_RATE);
+        if (!n || n <= 0) continue;
+        const ci = s.checkInISO, co = s.checkOutISO || '';
+        const isDayUse = !!(ci && ci === co);
+        let set = isDayUse
+          ? windowDates.filter(d => d === ci)
+          : windowDates.filter(d => d >= ci && (!co || d < co));
+        if (set.length > n) set = set.slice(set.length - n);
+        if (set.length < n){
+          /* early-morning arrival / day use dated after the night it belongs to:
+             take the nights immediately before */
+          const limit = set.length ? set[0] : ci;
+          const earlier = windowDates.filter(d => d < limit && !set.includes(d)).reverse();
+          set = set.concat(earlier.slice(0, n - set.length)).sort();
+        }
+        const amt = round2(s.storedTdFees / n);
+        for (const d of set){
+          expected.push({
+            room: s.room, guest: s.guest, guestNorm: s.guestNorm,
+            businessDate: d, amount: amt, capped: false, dayUse: isDayUse
+          });
+        }
+        continue;
+      }
       if (reportDate){
         expected.push({
           room: s.room, guest: s.guest, guestNorm: s.guestNorm,

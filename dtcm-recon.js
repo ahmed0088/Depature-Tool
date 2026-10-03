@@ -62,6 +62,28 @@
                         dtcmSegments.every(s => (s.storedNights || 0) <= 1);
     const reportDate  = isDaily ? operaDate : '';
 
+    /* WINDOW report: DTCM file spans several business dates (same as the Opera file)
+       and its 'Nights' = nights inside that window. */
+    const addDays = (iso, n) => {
+      const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n);
+      return d.toISOString().slice(0, 10);
+    };
+    const winDates = [];
+    if (!isDaily && operaDates.length >= 2){
+      let d = operaDates[0];
+      while (d <= operaDates[operaDates.length - 1] && winDates.length < 15){ winDates.push(d); d = addDays(d, 1); }
+    }
+    const maxNights = dtcmSegments.reduce((m, s) => Math.max(m, s.storedNights || 0), 0);
+    const isWindow  = !isDaily && winDates.length >= 2 && winDates.length <= 7 && maxNights <= winDates.length;
+    const earlyHr = t => {
+      const m = String(t || '').match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+      if (!m) return false;
+      let h = +m[1]; const ap = (m[3] || '').toUpperCase();
+      if (ap === 'PM' && h < 12) h += 12;
+      if (ap === 'AM' && h === 12) h = 0;
+      return h < 5;
+    };
+
     if (isDaily){
       /* DTCM tells us its own date: guests with Nights=0 who checked out
          left on the report date. */
@@ -76,7 +98,7 @@
         warnings.push(`Opera file has postings on ${operaDates.length} business dates (${operaDates.join(', ')}) ` +
           `but the DTCM file is a one-day report. Only ${operaDate} is compared; postings on the other dates show as EXTRA.`);
       }
-    } else if (dtcmSegments.length){
+    } else if (!isWindow && dtcmSegments.length){
       warnings.push('DTCM file has rows with more than 1 night: expected charges are expanded night-by-night ' +
         'from check-in. Make sure the report covers the same period as the Opera file.');
     }
@@ -107,7 +129,8 @@
     });
 
     /* ---------- 4. EXPECTED ---------- */
-    const expected = buildExpected(dtcmSegments, reportDate ? { reportDate } : undefined);
+    const expected = buildExpected(dtcmSegments,
+      isWindow ? { windowDates: winDates } : (reportDate ? { reportDate } : undefined));
     const expectedIndex = new Map();
     for (const e of expected){
       const k = e.room + '|' + e.businessDate;
@@ -227,6 +250,18 @@
           cause: `Day use — ${dayUseSeg.guest} checked in and out on ${date}; TD posted for the day`,
           fix: 'No action — day-use TD is legitimate' };
       }
+      /* EARLY ARRIVAL: guest checked in after midnight but before night audit. Opera dates
+         that first night on the PREVIOUS business date, DTCM dates the stay from the calendar day. */
+      const earlySeg = (segsByRoom.get(room) || []).find(s =>
+        s.checkInISO === addDays(date, 1) && earlyHr(s.checkInTime) &&
+        (C.namesMatch(guest, s.guest) || C.nameOverlap(guest, s.guest) >= 2));
+      if (earlySeg){
+        return { kind: 'early_arrival', dtcmGuest: earlySeg.guest,
+          cause: `Early-morning arrival: ${earlySeg.guest} checked in ${earlySeg.checkInISO} at ${earlySeg.checkInTime}, before night audit. ` +
+                 `Opera charges that first night on ${date}; DTCM starts the stay on ${earlySeg.checkInISO}.`,
+          fix: `Verify. If he really arrived before audit, correct the DTCM check-in date to ${date} (DTCM then shows +${overTxt} AED). ` +
+               `If he arrived after audit, reverse ${overTxt} AED on ${date}.` };
+      }
       if (expectedList.length){
         return { kind: 'over_posting', cause: 'Over-posting',
                  fix: `Reverse ${overTxt} AED on ${date}` };
@@ -344,7 +379,8 @@
     operaRows.forEach((r, i) => {
       if (r.isReversal || cancelled.has(i) || r.isAdjustment) return;
       if (r.kind !== 'nightly' || Math.abs(r.amount) < 0.005) return;
-      const k = r.room + '|' + r.businessDate + '|' + round2(r.amount);
+      /* same guest only: two DIFFERENT guests in one room on one date (day use + next arrival) are not a duplicate */
+      const k = r.room + '|' + r.businessDate + '|' + round2(r.amount) + '|' + String(r.guest || '').toLowerCase().replace(/[^a-z]/g, '');
       if (!dupMap.has(k)) dupMap.set(k, []);
       dupMap.get(k).push(r);
     });
@@ -444,7 +480,9 @@
       if (!actuals.length) continue;
       const seg = list[0];
       const opGuest = actuals[0].guest;
-      if (!C.namesMatch(opGuest, seg.guest)){
+      /* flag only if NO folio matches NO expected guest (two guests can share a room on one date) */
+      const anyMatch = actuals.some(a => list.some(e => C.namesMatch(a.guest, e.guest) || C.nameOverlap(a.guest, e.guest) >= 2));
+      if (!anyMatch && !C.namesMatch(opGuest, seg.guest)){
         const [room, date] = k.split('|');
         checks.push({
           type: 'Guest name differs', severity: 'low', room, guest: opGuest, date,
@@ -498,7 +536,7 @@
       (a.action === 'Verify') - (b.action === 'Verify'));
 
     console.log('--- RECONCILE SUMMARY ---');
-    console.log('Mode / date         :', isDaily ? 'daily' : 'multi-night', reportDate);
+    console.log('Mode / date         :', isDaily ? 'daily' : (isWindow ? 'window' : 'multi-night'), reportDate || winDates.join(','));
     console.log('DTCM FinalFees (XML):', dtcmFinalFees);
     console.log('DTCM rebuilt total  :', expTotal);
     console.log('Opera file total    :', operaFileTotal);
@@ -508,7 +546,8 @@
     console.log('Warnings            :', warnings);
 
     return {
-      mode: isDaily ? 'daily' : 'multi', reportDate, rate, warnings,
+      mode: isDaily ? 'daily' : (isWindow ? 'window' : 'multi'), reportDate, rate, warnings,
+      windowStart: isWindow ? winDates[0] : '', windowEnd: isWindow ? winDates[winDates.length - 1] : '',
       segments: dtcmSegments.length,
       expectedCount: expected.length,
       operaCount: operaRows.length,

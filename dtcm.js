@@ -28,6 +28,8 @@ let dtcFixes   = [];
 
 const dtcNum = (n, dp = 2) => (typeof n === 'number' && isFinite(n) ? n : 0).toFixed(dp);
 const dtcR2  = n => Math.round((Number(n) || 0) * 100) / 100;
+const dtcPeriod = RC => RC.mode === 'daily' ? (RC.reportDate || '')
+  : RC.mode === 'window' ? `${RC.windowStart} → ${RC.windowEnd}` : '';
 
 // ── Setup ─────────────────────────────────────────────────
 function dtcInit() {
@@ -184,7 +186,7 @@ function dtcSlimState() {
       dayUseTotal: RC.dayUseTotal, dayUsePostedTotal: RC.dayUsePostedTotal,
       actTotal: RC.actTotal, netVariance: RC.netVariance, missingTotal: RC.missingTotal,
       extraTotal: RC.extraTotal, adjustTotal: RC.adjustTotal,
-      mode: RC.mode, reportDate: RC.reportDate, rate: RC.rate,
+      mode: RC.mode, reportDate: RC.reportDate, windowStart: RC.windowStart || '', windowEnd: RC.windowEnd || '', rate: RC.rate,
       warnings: RC.warnings || [], exemptAgree: RC.exemptAgree || 0
     },
     checks: RC.checks, dayUse: RC.dayUse, missing: RC.missing, extra: RC.extra,
@@ -330,7 +332,7 @@ function dtcSnapshotLine() {
   const c = dtcActionCounts(dtcRecon);
   const doneN = [...dtcDone].length;
   const todo = c.add + c.reverse + c.verify;
-  return `🏦 DTCM Reconciliation${dtcRecon.reportDate ? ' (' + dtcRecon.reportDate + ')' : ''} — ` +
+  return `🏦 DTCM Reconciliation${dtcPeriod(dtcRecon) ? ' (' + dtcPeriod(dtcRecon) + ')' : ''} — ` +
     (todo ? `${c.add} to add · ${c.reverse} to reverse · ${c.verify} to verify · ${doneN} ticked` : 'Opera matches DTCM');
 }
 
@@ -356,7 +358,7 @@ function dtcRenderSummary(RC) {
         <div>
           <div class="dtc-status-title">${escapeHtml(title)}</div>
           <div class="dtc-status-sub">
-            ${RC.mode === 'daily' ? 'Business date <b>' + escapeHtml(RC.reportDate) + '</b> · ' : ''}
+            ${RC.mode === 'daily' ? 'Business date <b>' + escapeHtml(RC.reportDate) + '</b> · ' : (RC.mode === 'window' ? 'Nights <b>' + escapeHtml(dtcPeriod(RC)) + '</b> · ' : '')}
             DTCM <b>${dtcNum(dtcmTotal)}</b> AED vs Opera <b>${dtcNum(RC.actTotal)}</b> AED ·
             difference <b>${sign}${dtcNum(RC.netVariance)}</b> AED${by}
           </div>
@@ -446,7 +448,7 @@ function dtcRenderHeadline(RC) {
     line('DTCM XML FinalFees_21', `${dtcNum(RC.dtcmFinalFees)} AED`) +
     line('Expected total (rebuilt)', `${dtcNum(RC.expTotal)} AED`) +
     line('Posted total (Opera, signed)', `${dtcNum(RC.actTotal)} AED`) +
-    line('Report mode', `${RC.mode === 'daily' ? 'Daily · ' + escapeHtml(RC.reportDate) : 'Multi-night (expanded from check-in)'} · ${dtcNum(RC.rate, 0)} AED / bedroom`) +
+    line('Report mode', `${RC.mode === 'daily' ? 'Daily · ' + escapeHtml(RC.reportDate) : (RC.mode === 'window' ? 'Window · ' + escapeHtml(dtcPeriod(RC)) : 'Multi-night (expanded from check-in)')} · ${dtcNum(RC.rate, 0)} AED / bedroom`) +
     `<div class="dtc-hbuckets">
       <span><b>Missing</b> ${n(RC.missing)} · +${dtcNum(RC.missingTotal, 0)} AED</span>
       <span><b>Extra</b> ${n(RC.extra)} · ${dtcNum(RC.extraTotal, 0)} AED</span>
@@ -556,9 +558,14 @@ function dtcRenderPrevention(RC) {
   if ((RC.adjustments || []).length) {
     bullets.push(`${RC.adjustments.length} adjustment line${RC.adjustments.length === 1 ? '' : 's'} (manual accommodation, 30-night credit, no-show) — legitimate and already netted.`);
   }
+  if ((RC.extra || []).some(e => e.kind === 'early_arrival')) {
+    bullets.push('Guests arriving after midnight but before night audit: Opera dates their first night on the previous business date, DTCM on the calendar day. Agree one rule at the desk and fix the DTCM check-in date the same morning.');
+  }
   bullets.push(RC.mode === 'daily'
     ? `Daily DTCM report: every row is one night on ${RC.reportDate}; TD stops after 30 consecutive nights.`
-    : 'Expected postings expanded night-by-night from check-in with the 30-night cap.');
+    : RC.mode === 'window'
+      ? `DTCM report covers ${dtcPeriod(RC)}: each row's Nights is the nights inside that window, matched to the same Opera dates.`
+      : 'Expected postings expanded night-by-night from check-in with the 30-night cap.');
   bullets.push('Keep both source files (XML + TXT) in the reconciliation folder for the audit trail.');
   const list = bullets.slice(0, 8);
   document.getElementById('dtcPrevention').innerHTML = list.map(b => `<li>${escapeHtml(b)}</li>`).join('');
@@ -568,7 +575,7 @@ function dtcRenderPrevention(RC) {
 async function dtcCopyNote(btn) {
   if (!dtcRecon) return;
   const RC = dtcRecon, c = dtcActionCounts(RC), L = [];
-  L.push(`TD reconciliation${RC.reportDate ? ' — ' + RC.reportDate : ''}`);
+  L.push(`TD reconciliation${dtcPeriod(RC) ? ' — ' + dtcPeriod(RC) : ''}`);
   L.push(`DTCM ${dtcNum(RC.expTotal)} AED · Opera ${dtcNum(RC.actTotal)} AED · difference ${dtcNum(RC.netVariance)} AED`);
   L.push(`To add ${c.add} · to reverse ${c.reverse} · to verify ${c.verify} · checks ${(RC.checks || []).length}`);
   (RC.warnings || []).forEach(w => L.push('WARNING: ' + w));
