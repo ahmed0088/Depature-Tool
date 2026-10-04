@@ -310,6 +310,18 @@
     console.log('Opera columns:', header);
     console.log('Column idx -> guest', iGuest, 'desc', iDesc, 'date', iDate, 'room', iRoom, 'trxCode', iCode, 'taxCode', iTax, 'taxAmt', iTaxAmt);
 
+    /* A FULL journal (all revenue, payments, taxes) carries codes such as 1000 Accommodation and
+       1029 Service charge that are NOT tourism dirham. If the file has real Tourism Dirham lines
+       (code 7510 / description 'Tourism Dirham'), read only those; the wider TD_CODES list is a
+       fallback for older TD-only exports that used other codes. */
+    let hasPureTD = false;
+    for (let i = headerIdx + 1; i < lines.length && !hasPureTD; i++){
+      const c = splitLine(lines[i], delim);
+      const cd = iCode !== -1 ? (c[iCode] || '').trim().replace(/\.0+$/, '') : '';
+      if (cd === '7510' || /tourism\s*dirham/i.test(c[iDesc] || '')) hasPureTD = true;
+    }
+    console.log('Opera journal mode:', hasPureTD ? 'TD lines only (7510)' : 'legacy TD code list');
+
     for (let i = headerIdx + 1; i < lines.length; i++){
       const c = splitLine(lines[i], delim);
       if (c.length < 5){ skip.shortRow++; continue; }
@@ -319,7 +331,7 @@
       const code    = codeRaw.replace(/\.0+$/,'');
       const taxCode = iTax !== -1 ? (c[iTax] || '').trim() : '';
 
-      const isTDCode  = code && TD_CODES.has(code);
+      const isTDCode  = hasPureTD ? (code === '7510' || /tourism\s*dirham/i.test(descRaw)) : (code && TD_CODES.has(code));
       const isTax7510 = taxCode === '7510';
       if (!isTDCode && !isTax7510){ noteSkip('notTD', c); continue; }
 
