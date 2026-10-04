@@ -136,7 +136,11 @@ function compute(ents,loyalty){
   });
   return {res,dups,entries:uniq.length};
 }
-const rawOf=(o,sel)=>sel==='ID'?(o.cards.ID||''):sel==='A1'?(o.cards.A1||''):(o.cards.ID||o.cards.A1||'');
+// Higher ALL tiers (A2 Silver, A3 Gold, A4 Platinum, A5 Diamond) are Accor members too. They normally
+// also hold an ID card, so this is only the fallback for the few who carry just the tier card.
+const TIERS=['A2','A3','A4','A5'];
+const tierCard=o=>{const t=TIERS.find(x=>o.cards[x]);return t?{type:t,no:o.cards[t]}:null};
+const rawOf=(o,sel)=>sel==='ID'?(o.cards.ID||''):sel==='A1'?(o.cards.A1||''):(o.cards.ID||o.cards.A1||(tierCard(o)||{}).no||'');
 // PMID = drop the final character, then keep the last 8 characters (00000009270152Z4 -> 9270152Z)
 const trimPM=s=>{s=(s||'').trim();return s.length>=9?s.slice(0,-1).slice(-8):s};
 const pmidOf=(o,sel)=>trimPM(rawOf(o,sel));
@@ -217,14 +221,16 @@ const ORDER=['Ready','Check first','No credit days','Long stay','No PMID','Credi
 function rows(){const sel=$('sel').value,p=+$('pts').value||0;
   const lim=+$('lim').value||0;
   return R.res.map(o=>{const raw=rawOf(o,sel),pm=trimPM(raw),short=!!raw&&raw.length<9;
+    const tier=(sel==='ANY'&&!o.cards.ID&&!o.cards.A1)?tierCard(o):null;
     const yes=o.detail.filter(d=>d.counts==='Yes').map(d=>d.date);
     const rec=credited[o.key],prior=new Set(rec?rec.dates:[]);
     const fresh=yes.filter(d=>!prior.has(d)),was=yes.filter(d=>prior.has(d));
     const n=fresh.length;
     const nights=o.win?diffD(o.win[0],o.win[1]):null,long=lim>0&&nights!=null&&nights>lim;
     const fully=yes.length>0&&n===0&&was.length>0;
-    const st=fully?'Credited':long?'Long stay':!pm?'No PMID':n===0?'No credit days':(o.status==='Matched'&&!short)?'Ready':'Check first';
+    const st=fully?'Credited':long?'Long stay':!pm?'No PMID':n===0?'No credit days':(o.status==='Matched'&&!short&&!tier)?'Ready':'Check first';
     const notes=[...(long?['Stay of '+nights+' nights is over the '+lim+'-night limit, so no credit']:[]),...o.notes,...(short?['Card number has fewer than 9 characters, so it was not trimmed']:[])];
+    if(tier)notes.unshift('Only a '+tier.type+' card on file (no ID or A1): PMID worked out the same way, check it before entering');
     if(was.length&&!fully)notes.unshift('Already credited earlier: '+fmtDates(was)+'. Only the new days are counted.');
     if(fully&&rec&&rec.history&&rec.history.length){const l=rec.history[rec.history.length-1];notes.unshift('Credited '+new Date(l.at).toLocaleDateString('en-GB')+(l.by?' by '+l.by:'')+' ('+(rec.pts||0).toLocaleString()+' pts)')}
     return{o,pm,n,pt:long?0:n*p,st,notes,fresh,yes}})
@@ -391,7 +397,7 @@ const PANEL_HTML = `
     <div class="stc-card stc-settings">
       <label>Points per skipped day<input id="stc-pts" type="number" min="0" value="100"></label>
       <label>Long stay limit (nights)<input id="stc-lim" type="number" min="0" value="15"></label>
-      <label>Card to use<select id="stc-sel"><option value="ANY">Any (ID first, else A1)</option><option value="ID">ID number</option><option value="A1">ALL card (A1)</option></select></label>
+      <label>Card to use<select id="stc-sel"><option value="ANY">Any (ID, else A1, else A2–A5)</option><option value="ID">ID number</option><option value="A1">ALL card (A1)</option></select></label>
       <p class="stc-hint">Stays over the limit are long stays and get no credit (0 = no limit). PMID = last 8 characters of the card number, after dropping its final character.</p>
     </div>
   </section>
