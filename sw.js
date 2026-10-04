@@ -42,15 +42,12 @@ const SHELL_FILES = [
   './package-audit.js',
   './trends.js',
   './td-audit.js',
-  './dtcm-core.js',
-  './dtcm-recon.js',
-  './dtcm-longstay.js',
-  './dtcm.js',
   './guest-memory.js',
   './neorcha-scraper.js',
   './auth.js',
   './global-search.js',
   './handover.js',
+  './skip-clean.js',
 ];
 
 self.addEventListener('install', event => {
