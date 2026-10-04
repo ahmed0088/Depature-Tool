@@ -144,7 +144,7 @@ const pmidOf=(o,sel)=>trimPM(rawOf(o,sel));
 
 // ───────────────────────── panel UI ─────────────────────────
 const $ = id => document.getElementById('stc-' + id);
-let X = [], T = [], R = null, tab = 'Ready', done = new Set();
+let X = [], T = [], R = null, tab = 'Ready', done = new Set(), autoTab = false;
 const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function fmtDates(ds){const g=[];ds.slice().sort().forEach(d=>{const[y,m,dd]=d.split('-'),k=y+'-'+m;let x=g[g.length-1];if(!x||x.k!==k){x={k,m:MON[+m-1],d:[]};g.push(x)}x.d.push(+dd)});return g.map(x=>x.d.join(', ')+' '+x.m).join('; ')}
 const h = (t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
@@ -166,7 +166,7 @@ async function load(fs,k){$('err').textContent='';
 function list(){for(const[k,a]of[[1,X],[2,T]]){const l=$('l'+k);l.innerHTML='';a.forEach((x,i)=>{const li=h('li',null,'✓ '+x.name);li.title='Click to remove';li.onclick=e=>{e.stopPropagation();a.splice(i,1);list();run()};l.appendChild(li)});$('d'+k).classList.toggle('has',a.length>0)}}
 function run(){R=null;done.clear();$('out').hidden=true;badge('—');if(!X.length||!T.length)return;
   try{R=compute(readEntries(XLSX,X),readLoyalty(T.map(t=>t.text)))}catch(e){$('err').textContent=e.message;return}
-  $('out').hidden=false;draw()}
+  $('out').hidden=false;autoTab=true;draw()}
 function badge(v){const b=document.getElementById('badge-skip-clean');if(b)b.textContent=v}
 const days=o=>o.detail.filter(d=>d.counts==='Yes').length;
 const ORDER=['Ready','Check first','No credit days','Long stay','No PMID'];
@@ -181,6 +181,18 @@ function rows(){const sel=$('sel').value,p=+$('pts').value||0;
 const ready=()=>rows().filter(r=>r.st==='Ready');
 function progress(){const a=ready();const d=a.filter(r=>done.has(r.o.key)).length;$('prog').textContent=a.length?'· '+d+' of '+a.length+' entered':''}
 function draw(){const all=rows(),q=$('q').value.toLowerCase().trim(),rd=all.filter(r=>r.st==='Ready');
+  if(autoTab){autoTab=false;const first=['Ready','Check first','No PMID','Long stay','No credit days'].find(t=>all.some(r=>r.st===t));if(first)tab=first}
+  const cnt=t=>all.filter(r=>r.st===t).length;
+  const note=$('note');
+  if(!rd.length){
+    const bits=[];
+    if(cnt('No PMID'))bits.push(cnt('No PMID')+' have no card number: not found in the Opera Loyalty export (they may not be members, or the export does not include them)');
+    if(cnt('Check first'))bits.push(cnt('Check first')+' need checking first');
+    if(cnt('No credit days'))bits.push(cnt('No credit days')+' have no creditable days (arrival or departure day only, or a mandatory clean)');
+    if(cnt('Long stay'))bits.push(cnt('Long stay')+' are over the long-stay limit');
+    note.textContent='No guest is ready to credit. Of '+all.length+' guest'+(all.length===1?'':'s')+' on the sheet: '+bits.join('; ')+'.';
+    note.hidden=false;
+  }else note.hidden=true;
   $('s1').textContent=rd.length;$('s2').textContent=rd.reduce((a,r)=>a+r.pt,0).toLocaleString();progress();badge(rd.length);
   ['cpA','cpB','cpC'].forEach(i=>$(i).disabled=!rd.length);
   $('meta').textContent=R.entries+' sheet entries read, '+R.dups+' duplicates removed.';
@@ -242,6 +254,8 @@ const CSS = `
 #panel-skip-clean .stc-err:empty{display:none}
 #panel-skip-clean .stc-sum{margin:20px 0 10px;font-size:1.1rem}
 #panel-skip-clean .stc-sum strong{font-size:1.9rem;font-variant-numeric:tabular-nums;margin-right:2px}
+#panel-skip-clean .stc-note{margin-top:14px;padding:10px 14px;border-radius:8px;background:var(--stc-warnbg);border:1px solid var(--stc-warn);color:var(--text);font-size:.85rem;line-height:1.5}
+#panel-skip-clean .stc-note[hidden]{display:none}
 #panel-skip-clean .stc-prog{font-size:.85rem;color:var(--text2);margin-left:6px}
 #panel-skip-clean .stc-copybar{display:flex;gap:10px 24px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:14px}
 #panel-skip-clean .stc-grp{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
@@ -313,6 +327,7 @@ const PANEL_HTML = `
   </section>
   <div id="stc-err" class="stc-err" role="alert"></div>
   <div id="stc-out" hidden>
+    <div class="stc-note" id="stc-note" hidden></div>
     <p class="stc-sum"><strong id="stc-s1">0</strong> guests ready, <strong id="stc-s2">0</strong> points<span class="stc-prog" id="stc-prog"></span></p>
     <div class="stc-card stc-copybar">
       <div class="stc-grp"><span class="stc-lbl">Copy all ready guests:</span><button class="btn gold" type="button" id="stc-cpC">PMID + points</button><button class="btn" type="button" id="stc-cpA">PMIDs only</button><button class="btn" type="button" id="stc-cpB">Points only</button></div>
