@@ -522,7 +522,12 @@
     const extraTotal   = round2(extra.reduce((s, x) => s + x.variance, 0));
     const adjustTotal  = round2(adjustments.reduce((s, x) => s + x.amount, 0));
 
-    if (Math.abs(dtcmFinalFees - expTotal) > 0.5){
+    /* Nights DTCM counts that fall outside the dates the Opera file covers (window mode only).
+       They are real DTCM money but cannot be compared with this journal, so they are shown as a
+       separate step in the headline instead of silently widening the difference. */
+    const outsideWindow = (isWindow && dtcmFinalFees > expTotal) ? round2(dtcmFinalFees - expTotal) : 0;
+    const outsideRooms  = isWindow ? [...new Set(outlierSegs.map(sg => sg.room))].sort() : [];
+    if (outsideWindow === 0 && Math.abs(dtcmFinalFees - expTotal) > 0.5){
       warnings.push(`DTCM FinalFees (${dtcmFinalFees}) differs from the rebuilt expected total (${expTotal}). ` +
         'The XML may contain rows the tool skipped (missing room / check-in date).');
     }
@@ -623,7 +628,7 @@
       operaCount: operaRows.length,
       dtcmFinalFees,
       operaFileTotal,
-      expTotal, expTotalAdj, dayUse, dayUseTotal, dayUsePostedTotal, actTotal, netVariance,
+      expTotal, expTotalAdj, dayUse, dayUseTotal, dayUsePostedTotal, outsideWindow, outsideRooms, actTotal, netVariance,
       missingTotal, extraTotal, adjustTotal,
       missing, extra, duplicates, phantom,
       checks, exemptAgree: exemptAgreeCount,

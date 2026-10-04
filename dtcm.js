@@ -184,6 +184,7 @@ function dtcSlimState() {
       dtcmFinalFees: RC.dtcmFinalFees, operaFileTotal: RC.operaFileTotal,
       expTotal: RC.expTotal, expTotalAdj: RC.expTotalAdj,
       dayUseTotal: RC.dayUseTotal, dayUsePostedTotal: RC.dayUsePostedTotal,
+      outsideWindow: RC.outsideWindow || 0, outsideRooms: RC.outsideRooms || [],
       actTotal: RC.actTotal, netVariance: RC.netVariance, missingTotal: RC.missingTotal,
       extraTotal: RC.extraTotal, adjustTotal: RC.adjustTotal,
       mode: RC.mode, reportDate: RC.reportDate, windowStart: RC.windowStart || '', windowEnd: RC.windowEnd || '', rate: RC.rate,
@@ -350,6 +351,16 @@ function dtcRenderSummary(RC) {
   const sign = RC.netVariance > 0 ? '+' : '';
   const chip = (label, n, cls) => `<span class="dtc-chip ${n ? cls : 'zero'}"><b>${n}</b> ${label}</span>`;
 
+  /* How the DTCM XML total turns into the figure compared with Opera */
+  const outside = RC.outsideWindow || 0, dayU = RC.dayUseTotal || 0;
+  const bridge = (RC.dtcmFinalFees && (outside || dayU)) ? `
+      <div class="dtc-warn" style="background:rgba(90,180,232,.1);border-color:rgba(90,180,232,.35);">
+        ℹ️ DTCM XML total <b>${dtcNum(RC.dtcmFinalFees)}</b>
+        ${outside ? ` − <b>${dtcNum(outside)}</b> for nights outside this Opera file${(RC.outsideRooms || []).length ? ' (rooms ' + escapeHtml(RC.outsideRooms.join(', ')) + ')' : ''}` : ''}
+        ${dayU ? ` − <b>${dtcNum(dayU)}</b> day use, not posted in Opera` : ''}
+        = <b>${dtcNum(dtcmTotal)}</b> compared with Opera <b>${dtcNum(RC.actTotal)}</b>.
+        Raw totals, XML vs Opera: <b>${dtcNum(RC.actTotal - RC.dtcmFinalFees)}</b> AED.
+      </div>` : '';
   const by = RC.savedBy ? ` · analysed by ${escapeHtml(RC.savedBy)}` : '';
   document.getElementById('dtcStatus').innerHTML = `
     <div class="dtc-status ${lvl}">
@@ -368,6 +379,7 @@ function dtcRenderSummary(RC) {
         ${chip('to add', c.add, 'bad')}${chip('to reverse', c.reverse, 'bad')}${chip('to verify', c.verify, 'warn')}
         ${chip('checks', (RC.checks || []).length, 'warn')}${chip('adjustments (fine)', (RC.adjustments || []).length, 'info')}
       </div>
+      ${bridge}
       ${(RC.warnings || []).map(w => `<div class="dtc-warn">⚠️ ${escapeHtml(w)}</div>`).join('')}
       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn sm" onclick="dtcCopyNote(this)">📋 Copy handover note</button>
