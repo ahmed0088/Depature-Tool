@@ -144,12 +144,56 @@ const pmidOf=(o,sel)=>trimPM(rawOf(o,sel));
 
 // ───────────────────────── panel UI ─────────────────────────
 const $ = id => document.getElementById('stc-' + id);
-let X = [], T = [], R = null, tab = 'Ready', done = new Set(), autoTab = false;
+let X = [], T = [], R = null, tab = 'Ready', autoTab = false;
+
+// ── Saved credit history ────────────────────────────────────────────────
+// credited[key] = { dates:[...], pts, pmid, name, room, conf, history:[{at,by,dates,pts}] }
+// key = confirmation # (or the sheet's fallback key), so a stay that runs across two
+// months is recognised: next month only the NEW days are offered.
+// Saved through the app's db layer (Firebase, shared live with the team, with a local
+// copy as fallback), under  hotels/<hotel>/skipClean/credited/<key>
+let credited = {};
+const STORE = 'skipClean/credited';
+const safeKey = k => String(k).replace(/[^A-Za-z0-9_-]/g, '_');
+const who = () => (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || 'Front Desk';
+function persist(key){
+  const rec = credited[key];
+  try { if (typeof lsSave === 'function') lsSave(STORE, credited); } catch (e) { /* local copy is best-effort */ }
+  try { if (typeof fbSet === 'function') fbSet(STORE + '/' + safeKey(key), rec || null); }
+  catch (e) { console.warn('[skip-clean] save failed:', e); toast('Could not save – check the connection'); }
+}
+function loadSaved(v){
+  credited = {};
+  Object.entries(v || {}).forEach(([k, r]) => {
+    if (!r) return;
+    const dates = Array.isArray(r.dates) ? r.dates : Object.values(r.dates || {});
+    const history = Array.isArray(r.history) ? r.history : Object.values(r.history || {});
+    credited[r.key || k] = Object.assign({}, r, { dates, history });
+  });
+  histNote(); if (R) draw();
+}
+function startSync(){
+  // Subscribe once the app's Firebase connection exists (it starts after this script loads).
+  let tries = 0;
+  const go = () => {
+    if (typeof fbListen !== 'function') return;
+    if (typeof _ref !== 'undefined' && _ref) { fbListen(STORE, loadSaved); return; }
+    if (++tries > 40) { loadSaved(typeof lsLoad === 'function' ? lsLoad(STORE) : null); return; }   // offline: local copy only
+    setTimeout(go, 500);
+  };
+  go();
+}
+function histNote(){
+  const el = $('hist'); if (!el) return;
+  const recs = Object.values(credited);
+  const pts = recs.reduce((a, r) => a + (r.pts || 0), 0);
+  el.textContent = recs.length ? ('Saved credit history: ' + recs.length + ' guest' + (recs.length === 1 ? '' : 's') + ', ' + pts.toLocaleString() + ' points already credited. Ticked guests are never offered twice.') : 'Nothing credited yet. Tick a guest once you have entered the points; it is saved for next month.';
+}
 const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function fmtDates(ds){const g=[];ds.slice().sort().forEach(d=>{const[y,m,dd]=d.split('-'),k=y+'-'+m;let x=g[g.length-1];if(!x||x.k!==k){x={k,m:MON[+m-1],d:[]};g.push(x)}x.d.push(+dd)});return g.map(x=>x.d.join(', ')+' '+x.m).join('; ')}
 const h = (t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
-const TABS = ['Ready','Check first','Long stay','No PMID','No credit days','All'];
-const CLS = {'Ready':'ok','Check first':'warn','No PMID':'bad','No credit days':'idle','Long stay':'idle'};
+const TABS = ['Ready','Check first','Credited','Long stay','No PMID','No credit days','All'];
+const CLS = {'Ready':'ok','Check first':'warn','Credited':'ok','No PMID':'bad','No credit days':'idle','Long stay':'idle'};
 let tt;
 function toast(m){const t=document.getElementById('stc-toast');if(!t)return;t.textContent=m;t.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),1600)}
 async function copy(text,label,el){
@@ -164,28 +208,36 @@ async function load(fs,k){$('err').textContent='';
   catch(e){$('err').textContent='Could not read '+e.message}
   list();run()}
 function list(){for(const[k,a]of[[1,X],[2,T]]){const l=$('l'+k);l.innerHTML='';a.forEach((x,i)=>{const li=h('li',null,'✓ '+x.name);li.title='Click to remove';li.onclick=e=>{e.stopPropagation();a.splice(i,1);list();run()};l.appendChild(li)});$('d'+k).classList.toggle('has',a.length>0)}}
-function run(){R=null;done.clear();$('out').hidden=true;badge('—');if(!X.length||!T.length)return;
+function run(){R=null;$('out').hidden=true;badge('—');if(!X.length||!T.length)return;
   try{R=compute(readEntries(XLSX,X),readLoyalty(T.map(t=>t.text)))}catch(e){$('err').textContent=e.message;return}
   $('out').hidden=false;autoTab=true;draw()}
 function badge(v){const b=document.getElementById('badge-skip-clean');if(b)b.textContent=v}
 const days=o=>o.detail.filter(d=>d.counts==='Yes').length;
-const ORDER=['Ready','Check first','No credit days','Long stay','No PMID'];
+const ORDER=['Ready','Check first','No credit days','Long stay','No PMID','Credited'];
 function rows(){const sel=$('sel').value,p=+$('pts').value||0;
   const lim=+$('lim').value||0;
-  return R.res.map(o=>{const raw=rawOf(o,sel),pm=trimPM(raw),n=days(o),short=!!raw&&raw.length<9;
+  return R.res.map(o=>{const raw=rawOf(o,sel),pm=trimPM(raw),short=!!raw&&raw.length<9;
+    const yes=o.detail.filter(d=>d.counts==='Yes').map(d=>d.date);
+    const rec=credited[o.key],prior=new Set(rec?rec.dates:[]);
+    const fresh=yes.filter(d=>!prior.has(d)),was=yes.filter(d=>prior.has(d));
+    const n=fresh.length;
     const nights=o.win?diffD(o.win[0],o.win[1]):null,long=lim>0&&nights!=null&&nights>lim;
-    const st=long?'Long stay':!pm?'No PMID':n===0?'No credit days':(o.status==='Matched'&&!short)?'Ready':'Check first';
+    const fully=yes.length>0&&n===0&&was.length>0;
+    const st=fully?'Credited':long?'Long stay':!pm?'No PMID':n===0?'No credit days':(o.status==='Matched'&&!short)?'Ready':'Check first';
     const notes=[...(long?['Stay of '+nights+' nights is over the '+lim+'-night limit, so no credit']:[]),...o.notes,...(short?['Card number has fewer than 9 characters, so it was not trimmed']:[])];
-    return{o,pm,n,pt:long?0:n*p,st,notes}})
+    if(was.length&&!fully)notes.unshift('Already credited earlier: '+fmtDates(was)+'. Only the new days are counted.');
+    if(fully&&rec&&rec.history&&rec.history.length){const l=rec.history[rec.history.length-1];notes.unshift('Credited '+new Date(l.at).toLocaleDateString('en-GB')+(l.by?' by '+l.by:'')+' ('+(rec.pts||0).toLocaleString()+' pts)')}
+    return{o,pm,n,pt:long?0:n*p,st,notes,fresh,yes}})
   .sort((a,b)=>ORDER.indexOf(a.st)-ORDER.indexOf(b.st)||(a.o.detail[0].date<b.o.detail[0].date?-1:1))}
 const ready=()=>rows().filter(r=>r.st==='Ready');
-function progress(){const a=ready();const d=a.filter(r=>done.has(r.o.key)).length;$('prog').textContent=a.length?'· '+d+' of '+a.length+' entered':''}
+function progress(){const c=Object.keys(credited).length;$('prog').textContent=c?'· '+c+' already credited (saved)':''}
 function draw(){const all=rows(),q=$('q').value.toLowerCase().trim(),rd=all.filter(r=>r.st==='Ready');
-  if(autoTab){autoTab=false;const first=['Ready','Check first','No PMID','Long stay','No credit days'].find(t=>all.some(r=>r.st===t));if(first)tab=first}
+  if(autoTab){autoTab=false;const first=['Ready','Check first','No PMID','Long stay','No credit days','Credited'].find(t=>all.some(r=>r.st===t));if(first)tab=first}
   const cnt=t=>all.filter(r=>r.st===t).length;
   const note=$('note');
   if(!rd.length){
     const bits=[];
+    if(cnt('Credited'))bits.push(cnt('Credited')+' already credited (saved earlier), nothing new to do');
     if(cnt('No PMID'))bits.push(cnt('No PMID')+' have no card number: not found in the Opera Loyalty export (they may not be members, or the export does not include them)');
     if(cnt('Check first'))bits.push(cnt('Check first')+' need checking first');
     if(cnt('No credit days'))bits.push(cnt('No credit days')+' have no creditable days (arrival or departure day only, or a mandatory clean)');
@@ -202,9 +254,27 @@ function draw(){const all=rows(),q=$('q').value.toLowerCase().trim(),rd=all.filt
   const vis=all.filter(r=>(tab==='All'||r.st===tab)&&(!q||[r.o.name,r.o.room,r.pm,r.o.conf].join(' ').toLowerCase().includes(q)));
   if(!vis.length){const tr=h('tr'),td=h('td','stc-empty','Nothing in this list.');td.colSpan=11;tr.append(td);tb.append(tr);return}
   vis.forEach(r=>{
-    const k=r.o.key,tr=h('tr','stc-r'+(done.has(k)?' done':'')),c=()=>h('td');
-    const t0=c(),cb=h('input');cb.type='checkbox';cb.checked=done.has(k);cb.title='Mark as entered';cb.setAttribute('aria-label','Entered: '+r.o.name);
-    cb.onclick=e=>e.stopPropagation();cb.onchange=()=>{cb.checked?done.add(k):done.delete(k);tr.classList.toggle('done',cb.checked);progress()};t0.append(cb);
+    const k=r.o.key,tr=h('tr','stc-r'+(r.st==='Credited'?' done':'')),c=()=>h('td');
+    const t0=c(),cb=h('input');cb.type='checkbox';cb.checked=r.st==='Credited';cb.title=r.st==='Credited'?'Untick to undo (removes it from the saved history)':'Tick when you have entered the points. It is saved so this guest is never credited twice.';cb.setAttribute('aria-label','Credited: '+r.o.name);
+    cb.disabled=!(r.st==='Credited'||r.n>0);
+    cb.onclick=e=>e.stopPropagation();
+    cb.onchange=()=>{
+      if(cb.checked){
+        if(!r.n){cb.checked=false;return}
+        const rec=credited[k]||{key:k,conf:r.o.conf||'',name:r.o.name,room:r.o.room,pmid:r.pm,dates:[],pts:0,history:[]};
+        rec.dates=[...new Set([...(rec.dates||[]),...r.fresh])].sort();
+        rec.pts=(rec.pts||0)+r.pt;rec.pmid=r.pm||rec.pmid;rec.name=r.o.name;rec.room=r.o.room;
+        rec.history=[...(rec.history||[]),{at:new Date().toISOString(),by:who(),dates:r.fresh,pts:r.pt}];
+        credited[k]=rec;persist(k);toast('Saved: '+r.o.name+' credited '+r.pt.toLocaleString()+' points');
+      }else{
+        const rec=credited[k];if(!rec)return;
+        const last=(rec.history||[]).pop();
+        if(last){rec.dates=(rec.dates||[]).filter(d=>!last.dates.includes(d));rec.pts=Math.max(0,(rec.pts||0)-(last.pts||0))}
+        if(!rec.history||!rec.history.length||!rec.dates.length)delete credited[k];
+        persist(k);toast('Undone: '+r.o.name+' is back on the list');
+      }
+      histNote();draw();
+    };t0.append(cb);
     const t1=c();if(r.pm){const b=h('button','stc-cp pm',r.pm);b.type='button';b.title='Click to copy PMID';b.onclick=e=>{e.stopPropagation();copy(r.pm,'PMID '+r.pm,b)};t1.append(b)}else t1.textContent='–';
     const t2=c();t2.className='stc-num';if(r.pt>0){const b=h('button','stc-cp',r.pt.toLocaleString());b.type='button';b.title='Click to copy points';b.onclick=e=>{e.stopPropagation();copy(String(r.pt),r.pt+' points',b)};t2.append(b)}
     const t3=c();t3.append(h('div','stc-name',r.o.name));if(r.notes.length)t3.append(h('div','stc-sub',r.notes.join('. ')));
@@ -230,7 +300,7 @@ function exportXlsx(){const all=rows(),wb=XLSX.utils.book_new();
   const s2=XLSX.utils.aoa_to_sheet(b);s2['!cols']=[14,30,7,11,9,40,16].map(w=>({wch:w}));XLSX.utils.book_append_sheet(wb,s2,'Day Detail');
   XLSX.writeFile(wb,'Skip_The_Clean_Credit_List.xlsx')}
 
-function clearAll(){X=[];T=[];R=null;done.clear();tab='Ready';$('err').textContent='';list();$('out').hidden=true;badge('—')}
+function clearAll(){X=[];T=[];R=null;tab='Ready';$('err').textContent='';list();$('out').hidden=true;badge('—')}
 
 // ───────────────────────── mounting into the app ─────────────────────────
 const CSS = `
@@ -328,6 +398,7 @@ const PANEL_HTML = `
   <div id="stc-err" class="stc-err" role="alert"></div>
   <div id="stc-out" hidden>
     <div class="stc-note" id="stc-note" hidden></div>
+    <p class="stc-hint" id="stc-hist" style="margin:14px 0 0"></p>
     <p class="stc-sum"><strong id="stc-s1">0</strong> guests ready, <strong id="stc-s2">0</strong> points<span class="stc-prog" id="stc-prog"></span></p>
     <div class="stc-card stc-copybar">
       <div class="stc-grp"><span class="stc-lbl">Copy all ready guests:</span><button class="btn gold" type="button" id="stc-cpC">PMID + points</button><button class="btn" type="button" id="stc-cpA">PMIDs only</button><button class="btn" type="button" id="stc-cpB">Points only</button></div>
@@ -379,7 +450,7 @@ function mount() {
     ['owner', 'manager', 'supervisor'].forEach(r => {
       if (typeof ROLES !== 'undefined' && ROLES[r] && !ROLES[r].panels.includes(PANEL)) ROLES[r].panels.push(PANEL);
     });
-    if (typeof currentUser !== 'undefined' && currentUser && typeof applyRole === 'function') applyRole(currentUser.role);
+    if (typeof currentProfile !== 'undefined' && currentProfile && typeof applyRole === 'function') applyRole(currentProfile.role);
   } catch (e) { console.warn('[skip-clean] role setup:', e); }
 
   setup($('d1'), $('f1'), 1); setup($('d2'), $('f2'), 2);
@@ -389,6 +460,7 @@ function mount() {
   $('cpB').onclick = () => { const a = ready(); copy(a.map(r => r.pt).join('\n'), a.length + ' point values', $('cpB')); };
   $('xl').onclick = exportXlsx;
   $('clear').onclick = clearAll;
+  histNote(); startSync();
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
