@@ -410,7 +410,7 @@ function dtcRenderActions(RC) {
     <tr>
       <td>${i + 1}</td>
       <td><span class="dtc-act ${escapeHtml(a.action.toLowerCase())}">${escapeHtml(a.action)}</span></td>
-      <td><b>${escapeHtml(a.room)}</b></td>
+      <td><b>${escapeHtml(a.room)}</b>${a.uid ? `<div style="font-size:.64rem;color:var(--text3);margin-top:3px;white-space:nowrap;">DTCM ID ${dtcChip(a.uid)}</div>` : ''}</td>
       <td style="font-family:var(--mono);">${escapeHtml(a.date)}</td>
       <td style="text-align:right;font-family:var(--mono);font-weight:700;color:${a.amount < 0 ? 'var(--red)' : 'var(--green)'};">${a.amount > 0 ? '+' : ''}${dtcNum(a.amount)} AED</td>
       <td>${escapeHtml(a.where)}</td>
@@ -444,8 +444,8 @@ function dtcRenderChecks(RC) {
     RC.exemptAgree ? `${RC.exemptAgree} long-stay exemptions OK` : '',
     list.map(c => dtcCard([
       ['Check', c.type], ['Severity', c.severity], ['Room', c.room], ['Guest', c.guest],
-      ['Date', c.date], ['Detail', c.detail]
-    ], c.fix)),
+      ['Date', c.date], c.uid ? ['DTCM ID', c.uid] : null, ['Detail', c.detail]
+    ].filter(Boolean), c.fix)),
     list.length > 0);
 }
 
@@ -593,7 +593,7 @@ async function dtcCopyNote(btn) {
   (RC.warnings || []).forEach(w => L.push('WARNING: ' + w));
   if ((RC.actions || []).length) {
     L.push('', 'TO DO:');
-    RC.actions.forEach((a, i) => L.push(`${i + 1}. ${a.action} room ${a.room} · ${a.date} · ${dtcNum(a.amount)} AED — ${a.why || ''}`));
+    RC.actions.forEach((a, i) => L.push(`${i + 1}. ${a.action} room ${a.room} · ${a.date} · ${dtcNum(a.amount)} AED${a.uid ? ' · DTCM ID ' + a.uid : ''} — ${a.why || ''}`));
   } else {
     L.push('', 'Nothing to correct.');
   }

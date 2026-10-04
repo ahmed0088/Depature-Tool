@@ -151,6 +151,17 @@
       segsByRoom.get(s.room).push(s);
     }
 
+    /* DTCM transaction ID of the stay a line belongs to, so it can be searched in the DTCM portal.
+       Prefer the segment whose guest name matches; otherwise the stay that covers the date. */
+    const uidFor = (room, date, guest) => {
+      const segs = segsByRoom.get(String(room)) || [];
+      const covers = s => s.checkInISO && s.checkInISO <= date && (!s.checkOutISO || s.checkOutISO >= date);
+      const nameOk = s => guest && (C.namesMatch(guest, s.guest) || C.nameOverlap(guest, s.guest) >= 2);
+      const pick = segs.find(s => nameOk(s) && covers(s)) || segs.find(nameOk) ||
+                   segs.find(s => covers(s) && s.storedNights > 0) || segs.find(covers);
+      return (pick && pick.transactionuid) || '';
+    };
+
     /* ---------- 5. ACTUAL ---------- */
     const actualIndex = new Map();
     const reversals   = [];
@@ -539,7 +550,8 @@
     const actions = [];
     missing.forEach(m => actions.push({
       action: 'Add', room: m.room, date: m.date,
-      amount: m.amount, where: 'Opera', abs: Math.abs(m.amount), why: m.cause
+      amount: m.amount, where: 'Opera', abs: Math.abs(m.amount), why: m.cause,
+      uid: m.transactionuid || uidFor(m.room, m.date, m.guest)
     }));
     const REVERSE_KINDS = new Set(['over_posting', 'over_cap', 'after_checkout']);
     /* A duplicate posting IS the over-posting for that room/date. Listing both would tell the
@@ -567,12 +579,14 @@
         amount: variance,
         where: REVERSE_KINDS.has(e.kind) ? 'Opera' : 'Opera + DTCM',
         abs: Math.abs(variance),
-        why: e.cause
+        why: e.cause,
+        uid: uidFor(e.room, e.date, e.dtcmGuest || e.guest)
       });
     });
     duplicates.forEach(d => actions.push({
       action: 'Reverse', room: d.room, date: d.businessDate,
-      amount: -d.excess, where: 'Opera', abs: Math.abs(d.excess), why: 'Duplicate posting'
+      amount: -d.excess, where: 'Opera', abs: Math.abs(d.excess), why: 'Duplicate posting',
+      uid: uidFor(d.room, d.businessDate, d.guest)
     }));
     /* ROOM MOVE WITHOUT A REMARK: the same guest's night is posted in room A in Opera but sits in
        room B in DTCM. That shows up as an over-posting in A and a missing posting in B, same
@@ -606,6 +620,12 @@
       }
       for (let i = actions.length - 1; i >= 0; i--) if (actions[i].paired) actions.splice(i, 1);
     })();
+
+    checks.forEach(c => {
+      if (c.uid) return;
+      const rm = (String(c.room || '').match(/\d+/) || [''])[0];
+      if (rm && c.date) c.uid = uidFor(rm, c.date, c.guest);
+    });
 
     actions.sort((a, b) => b.abs - a.abs ||
       (a.action === 'Verify') - (b.action === 'Verify'));
