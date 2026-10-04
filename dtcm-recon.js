@@ -74,7 +74,14 @@
       while (d <= operaDates[operaDates.length - 1] && winDates.length < 15){ winDates.push(d); d = addDays(d, 1); }
     }
     const maxNights = dtcmSegments.reduce((m, s) => Math.max(m, s.storedNights || 0), 0);
-    const isWindow  = !isDaily && winDates.length >= 2 && winDates.length <= 7 && maxNights <= winDates.length;
+    /* A few rooms can legitimately show MORE nights than the Opera file covers (a night before
+       the first date, or after the last). One or two of those must not throw the whole file
+       into night-by-night expansion, so accept window mode when ~all rows fit inside it. */
+    const nightsList = dtcmSegments.map(s => s.storedNights || 0).filter(n => n > 0);
+    const fitCount   = nightsList.filter(n => n <= winDates.length).length;
+    const outlierSegs = dtcmSegments.filter(s => (s.storedNights || 0) > winDates.length);
+    const isWindow  = !isDaily && winDates.length >= 2 && winDates.length <= 7 &&
+                      nightsList.length > 0 && (fitCount / nightsList.length) >= 0.9;
     const earlyHr = t => {
       const m = String(t || '').match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
       if (!m) return false;
@@ -420,6 +427,16 @@
 
     /* ---------- 11. EXTRA CHECKS ---------- */
     const checks = [];
+    if (isWindow){
+      outlierSegs.forEach(sg => checks.push({
+        type: 'More nights in DTCM than the file covers', severity: 'med',
+        room: sg.room, guest: sg.guest, date: sg.checkInISO || '',
+        detail: `DTCM counts ${sg.storedNights} nights (${sg.storedTdFees} AED) but the Opera file only covers ` +
+                `${winDates.length} dates (${winDates[0]} to ${winDates[winDates.length - 1]}). ` +
+                `Only the nights inside the file were compared.`,
+        fix: 'Check the night just before/after the file range: is it posted in another journal, or is DTCM counting an extra night?'
+      }));
+    }
     const extraRooms = new Set(extra.map(e => e.room + '|' + e.date));
     correctedList.forEach(x => checks.push({
       type: 'Already corrected', severity: 'low', room: x.room, guest: x.guest, date: x.date,
@@ -520,14 +537,34 @@
       amount: m.amount, where: 'Opera', abs: Math.abs(m.amount), why: m.cause
     }));
     const REVERSE_KINDS = new Set(['over_posting', 'over_cap', 'after_checkout']);
-    extra.filter(e => e.kind !== 'room_move').forEach(e => actions.push({
-      action: REVERSE_KINDS.has(e.kind) ? 'Reverse' : 'Verify',
-      room: e.room, date: e.date,
-      amount: e.variance,
-      where: REVERSE_KINDS.has(e.kind) ? 'Opera' : 'Opera + DTCM',
-      abs: Math.abs(e.variance),
-      why: e.cause
-    }));
+    /* A duplicate posting IS the over-posting for that room/date. Listing both would tell the
+       user to reverse the same 10 AED twice, so the duplicate covers the over-posting first. */
+    const dupLeft = new Map();
+    duplicates.forEach(d => {
+      const k = d.room + '|' + d.businessDate;
+      dupLeft.set(k, round2((dupLeft.get(k) || 0) + d.excess));
+    });
+    extra.filter(e => e.kind !== 'room_move').forEach(e => {
+      let variance = e.variance;
+      if (e.kind === 'over_posting'){
+        const k = e.room + '|' + e.date;
+        const left = dupLeft.get(k) || 0;
+        if (left > 0 && variance < 0){
+          const covered = Math.min(left, Math.abs(variance));
+          dupLeft.set(k, round2(left - covered));
+          variance = round2(variance + covered);
+          if (Math.abs(variance) < 0.005) return;      // fully explained by the duplicate line
+        }
+      }
+      actions.push({
+        action: REVERSE_KINDS.has(e.kind) ? 'Reverse' : 'Verify',
+        room: e.room, date: e.date,
+        amount: variance,
+        where: REVERSE_KINDS.has(e.kind) ? 'Opera' : 'Opera + DTCM',
+        abs: Math.abs(variance),
+        why: e.cause
+      });
+    });
     duplicates.forEach(d => actions.push({
       action: 'Reverse', room: d.room, date: d.businessDate,
       amount: -d.excess, where: 'Opera', abs: Math.abs(d.excess), why: 'Duplicate posting'
