@@ -569,6 +569,39 @@
       action: 'Reverse', room: d.room, date: d.businessDate,
       amount: -d.excess, where: 'Opera', abs: Math.abs(d.excess), why: 'Duplicate posting'
     }));
+    /* ROOM MOVE WITHOUT A REMARK: the same guest's night is posted in room A in Opera but sits in
+       room B in DTCM. That shows up as an over-posting in A and a missing posting in B, same
+       amount, same (or adjacent) date. Pair them one-to-one: net zero, nothing to post. */
+    (function pairMoves(){
+      const dayDiff = (a, b) => Math.abs(Math.round((new Date(a + 'T00:00:00Z') - new Date(b + 'T00:00:00Z')) / 86400000));
+      const cand = actions.filter(a => a.action === 'Verify' && a.amount < 0);
+      const adds = actions.filter(a => a.action === 'Add');
+      const extraBy = new Map(extra.map(e => [e.room + '|' + e.date, e]));
+      const missBy  = new Map(missing.map(m => [m.room + '|' + m.date, m]));
+      const used = new Set();
+      for (const v of cand){
+        const e = extraBy.get(v.room + '|' + v.date); if (!e) continue;
+        const opts = adds.filter(ad => !used.has(ad) && ad.room !== v.room &&
+          Math.abs(ad.abs - v.abs) < 0.01 && dayDiff(ad.date, v.date) <= 1 && (() => {
+            const m = missBy.get(ad.room + '|' + ad.date); if (!m) return false;
+            return (e.dtcmGuest && (C.namesMatch(e.dtcmGuest, m.guest) || C.nameOverlap(e.dtcmGuest, m.guest) >= 2)) ||
+                   C.nameOverlap(e.guest, m.guest) >= 2;
+          })());
+        if (opts.length !== 1) continue;                    // only pair when unambiguous
+        const ad = opts[0]; used.add(ad);
+        v.paired = ad.paired = true;
+        const m = missBy.get(ad.room + '|' + ad.date);
+        checks.push({
+          type: 'Room move (nets to zero)', severity: 'low', room: v.room + ' → ' + ad.room,
+          guest: m.guest, date: v.date,
+          detail: `Opera posted ${v.abs.toFixed(2)} AED in room ${v.room} on ${v.date}; DTCM has the same night for ${m.guest} in room ${ad.room} on ${ad.date}. ` +
+                  `Same guest, same amount, so the totals agree.`,
+          fix: 'No posting needed. Only transfer the charge in Opera if you want the folio to match DTCM\'s room.'
+        });
+      }
+      for (let i = actions.length - 1; i >= 0; i--) if (actions[i].paired) actions.splice(i, 1);
+    })();
+
     actions.sort((a, b) => b.abs - a.abs ||
       (a.action === 'Verify') - (b.action === 'Verify'));
 
