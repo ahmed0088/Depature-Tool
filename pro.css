@@ -550,3 +550,33 @@ tr.bg-cur > td { background-color: color-mix(in srgb, var(--accent) 18%, transpa
 .bs-li { cursor: pointer; }
 .bs-li:hover { background: var(--accent-bg) !important; }
 @media (max-width: 768px) { .bg-nav { bottom: 100px; } }
+
+/* ══ Tables: no see-through cells (pinned columns stay readable) ══
+   Row shading is painted as a layer over a solid background, so a column
+   pinned while you swipe sideways never shows the text scrolling under it. */
+.tbl-wrap tbody tr { --rt: transparent; }
+.tbl-wrap tbody tr:nth-child(even) { --rt: color-mix(in srgb, var(--bg2) 45%, transparent); }
+.tbl-wrap tbody tr.leisure-row { --rt: color-mix(in srgb, var(--mint) 7%, transparent); }
+.tbl-wrap tbody tr:hover { --rt: color-mix(in srgb, var(--accent) 6%, transparent); }
+.tbl-wrap tbody tr.bg-glow { --rt: color-mix(in srgb, var(--accent) 10%, transparent); }
+.tbl-wrap tbody tr.bg-cur { --rt: color-mix(in srgb, var(--accent) 18%, transparent); }
+.tbl-wrap tbody td, #panel-purpose tbody td, #panel-arrivals tbody td,
+#panel-purpose tbody tr:nth-child(even) td, #panel-arrivals tbody tr:nth-child(even) td,
+#panel-purpose tbody tr:hover td, #panel-arrivals tbody tr:hover td, tr.bg-glow > td, tr.bg-cur > td,
+.tbl-wrap tbody tr.leisure-row td:first-child {
+  background: linear-gradient(var(--rt), var(--rt)), var(--card) !important;
+}
+.tbl-wrap thead th { background: var(--bg2) !important; }
+@media (max-width: 768px) {
+  .tbl-wrap thead th:first-child, .tbl-wrap tbody td:first-child { box-shadow: 4px 0 6px -3px rgba(0,0,0,.45); }
+  /* Purpose of Stay: keep the Room column pinned, not the Day */
+  #panel-purpose .tbl-wrap thead th:first-child, #panel-purpose .tbl-wrap tbody td:first-child { position: static !important; box-shadow: none; }
+  #panel-purpose .tbl-wrap thead th:nth-child(3), #panel-purpose .tbl-wrap tbody td:nth-child(3) { position: sticky; left: 0; z-index: 2; box-shadow: 4px 0 6px -3px rgba(0,0,0,.45); }
+  #panel-purpose .tbl-wrap thead th:nth-child(3) { z-index: 3; }
+  .tbl-wrap thead th:first-child { z-index: 3; }
+}
+@media (max-width: 768px) {
+  .tbl-wrap thead th:first-child { left: 0 !important; z-index: 4 !important; }
+  #panel-purpose .tbl-wrap thead th:nth-child(3) { left: 0 !important; z-index: 4 !important; }
+  .tbl-wrap tbody td:first-child, #panel-purpose .tbl-wrap tbody td:nth-child(3) { z-index: 2 !important; }
+}

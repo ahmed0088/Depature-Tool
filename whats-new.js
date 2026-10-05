@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 136, items: [
+    '📱 Tables on the phone: when you swipe sideways, the pinned room column stays solid, so room numbers no longer float over the guest names. On Purpose of Stay the Room column is the one that stays pinned (not the day), and the header lines up too. Fixed on every table that pins a column.',
+  ] },
   { v: 135, items: [
     '🎯 Ops Brain takes you to the exact line: tapping a suggestion, a bubble\'s Show me, a search hit or a line in a data answer opens the page, clears filters that would hide it, scrolls to the row or card and highlights it (and puts the cursor in the empty box). When several lines have the problem, a bar at the bottom steps through them: 1 of 3 ▲ ▼.',
   ] },
