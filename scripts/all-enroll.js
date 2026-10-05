@@ -1,5 +1,11 @@
 /*
- * A.C.D.C / ALL enrollment helper – v18 (consent-safe)
+ * A.C.D.C / ALL enrollment helper – v19 (consent-safe)
+ *
+ * What's new in v19:
+ *   • A list WITHOUT a Consent column (e.g. straight from Neorcha) can be used:
+ *     tick "Every guest on this list agreed to join ALL" in the panel to confirm
+ *     the whole list in one go.
+ *   • "Civility when missing" (Skip / Mr / Ms) for guests without a Mr/Ms.
  *
  * What's new in v18:
  *   • CONSENT ONLY: the list must have a "Consent" column. Only guests marked
@@ -58,7 +64,7 @@
         display:flex; flex-direction:column; overflow:hidden;`;
       root.innerHTML = `
         <div style="background:linear-gradient(135deg,#2563eb,#1d4ed8);padding:12px 16px;font-weight:700;font-size:13px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
-          <span style="display:flex;align-items:center;gap:8px"><span id="__acdc_dot" style="width:8px;height:8px;background:#4ade80;border-radius:50%;display:inline-block"></span>ALL Enroll · v18</span>
+          <span style="display:flex;align-items:center;gap:8px"><span id="__acdc_dot" style="width:8px;height:8px;background:#4ade80;border-radius:50%;display:inline-block"></span>ALL Enroll · v19</span>
           <span id="__acdc_state" style="font-size:11px;background:rgba(0,0,0,.3);padding:3px 10px;border-radius:10px">idle</span>
         </div>
         <div id="__acdc_tabs" style="display:flex;background:#0a0d11;border-bottom:1px solid #1e2530;flex-shrink:0">
@@ -70,6 +76,16 @@
             <div style="font-size:11px;color:#8892a0;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Paste the enrollment list (from Ibis Ops → Guest Pipeline)</div>
             <textarea id="__acdc_input" placeholder="Confirmation_Number&#9;Name&#9;Email&#9;Nationality&#9;Civility&#9;Consent
 595963843717&#9;Mohammed Sameer&#9;mdsam@example.com&#9;UAE&#9;Mr&#9;Y" style="width:100%;box-sizing:border-box;height:150px;resize:vertical;background:#0a0d11;color:#e6e9ee;border:1px solid #1e2530;border-radius:8px;padding:10px 12px;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;outline:none;"></textarea>
+          </div>
+          <label style="display:flex;gap:8px;align-items:flex-start;font-size:12px;color:#cbd5e1;background:#0a0d11;border:1px solid #1e2530;border-radius:8px;padding:8px 10px;cursor:pointer">
+            <input type="checkbox" id="__acdc_allconsent" style="margin-top:2px">
+            <span><b>Every guest on this list agreed to join ALL</b> — I presented the programme and they asked for the invitation. <span style="color:#8892a0">Needed only when the list has no Consent column.</span></span>
+          </label>
+          <div style="display:flex;gap:8px;align-items:center;font-size:12px;color:#cbd5e1">
+            Civility when missing:
+            <select id="__acdc_defciv" style="background:#0a0d11;color:#e6e9ee;border:1px solid #1e2530;border-radius:6px;padding:4px 6px">
+              <option value="">Skip the guest</option><option>Mr</option><option>Ms</option>
+            </select>
           </div>
           <div style="display:flex;gap:8px">
             <button id="__acdc_parse" style="flex:1;padding:9px 14px;border:0;border-radius:8px;cursor:pointer;background:#2563eb;color:#fff;font-weight:600;font-size:12px;">Parse</button>
@@ -91,7 +107,7 @@
       this.els = {
         dot: q('__acdc_dot'), state: q('__acdc_state'), input: q('__acdc_input'), parse: q('__acdc_parse'),
         clear: q('__acdc_clear'), preview: q('__acdc_preview'), start: q('__acdc_start'), stop: q('__acdc_stop'),
-        copyres: q('__acdc_copyres'), log: q('__acdc_log'), bodyData: q('__acdc_body_data'), bodyLog: q('__acdc_body_log'),
+        copyres: q('__acdc_copyres'), allConsent: q('__acdc_allconsent'), defCiv: q('__acdc_defciv'), log: q('__acdc_log'), bodyData: q('__acdc_body_data'), bodyLog: q('__acdc_body_log'),
         tabs: [...root.querySelectorAll('#__acdc_tabs button[data-tab]')],
       };
       this.els.parse.onclick = () => this.parse();
@@ -119,8 +135,8 @@
       const raw = this.els.input.value.trim();
       if (!raw) { this.els.preview.innerHTML = `<span style="color:#f87171">No data pasted.</span>`; this.setStartEnabled(false); return; }
       try {
-        const { records, excluded } = parseGuestData(raw);
-        this.records = records; this.excluded = excluded;
+        const { records, excluded } = parseGuestData(raw, { allConsent: this.els.allConsent.checked, defCiv: this.els.defCiv.value });
+        this.records = records; this.excluded = excluded; this.results = [];
         const exc = excluded.length ? `<div style="color:#fbbf24;margin-top:6px">${excluded.length} not enrolled: ` +
           Object.entries(excluded.reduce((m, e) => (m[e.reason] = (m[e.reason] || 0) + 1, m), {})).map(([k, v]) => `${v} ${esc(k)}`).join(' · ') + '</div>' : '';
         if (!records.length) { this.els.preview.innerHTML = `<span style="color:#f87171">No guest with Consent = Y and a civility.</span>${exc}`; this.setStartEnabled(false); return; }
@@ -187,14 +203,14 @@
   };
   const CIVILITIES = { mr: 'Mr', mrs: 'Mrs', ms: 'Ms', miss: 'Miss', mme: 'Mrs', mlle: 'Miss' };
 
-  function parseGuestData(tsv) {
+  function parseGuestData(tsv, opts = {}) {
     const rows = tsv.trim().split(/\r?\n/).map(line => line.split('\t'));
     const header = rows.shift().map(x => norm(x));
     const col = (...names) => names.map(norm).map(n => header.findIndex(h => h === n || h.startsWith(n))).find(i => i >= 0);
     const nameCol = col('name'), emailCol = col('email'), countryCol = col('nationality', 'country');
     const civCol = col('civility', 'title'), consentCol = col('consent', 'agreed');
     if (emailCol == null || nameCol == null) throw new Error('Could not find Name and Email columns (the first line must be the header).');
-    if (consentCol == null) throw new Error('No "Consent" column. Build the list in Ibis Ops → Guest Pipeline and tick the guests who agreed to join ALL.');
+    if (consentCol == null && !opts.allConsent) throw new Error('This list has no Consent column. If every guest on it agreed to join ALL, tick "Every guest on this list agreed" above and press Parse again. Otherwise tick only the guests who agreed in Ibis Ops → Guest Pipeline.');
     const seen = new Set(), records = [], excluded = [];
     for (const row of rows) {
       let email = (row[emailCol] || '').trim().toLowerCase();
@@ -202,8 +218,8 @@
       email = fixEmailTypos(email);
       if (seen.has(email)) continue;
       seen.add(email);
-      if (!/^(y|yes|1|true|✓|x)$/i.test((row[consentCol] || '').trim())) { excluded.push({ email, reason: 'no consent' }); continue; }
-      const civility = CIVILITIES[norm(row[civCol] || '').replace(/\./g, '')] || '';
+      if (consentCol != null && !/^(y|yes|1|true|✓|x)$/i.test((row[consentCol] || '').trim())) { excluded.push({ email, reason: 'no consent' }); continue; }
+      const civility = CIVILITIES[norm(civCol != null ? row[civCol] || '' : '').replace(/\./g, '')] || opts.defCiv || '';
       if (!civility) { excluded.push({ email, reason: 'civility missing' }); continue; }
       const fullName = (row[nameCol] || '').trim().replace(/\s+/g, ' ');
       const parts = fullName.split(' ');
@@ -568,5 +584,5 @@
 
   panel.mount();
   panel.log('Panel ready. Paste the list from Ibis Ops → Guest Pipeline and click Parse.');
-  console.info('%c ALL Enroll v18 ready — use the panel on the right.', 'color:#3b82f6;font-weight:700');
+  console.info('%c ALL Enroll v19 ready — use the panel on the right.', 'color:#3b82f6;font-weight:700');
 })();

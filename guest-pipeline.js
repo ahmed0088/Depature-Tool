@@ -9,7 +9,7 @@
 
 const GP_SCRIPTS = {
   neorcha: { file: 'scripts/neorcha-extractor.js', name: 'Neorcha Extractor', version: 'v10.0' },
-  enroll:  { file: 'scripts/all-enroll.js',        name: 'ALL Enroll',        version: 'v18' }
+  enroll:  { file: 'scripts/all-enroll.js',        name: 'ALL Enroll',        version: 'v19' }
 };
 
 const GP_OTA_RE = /(^|@|\.)(guest\.)?(trip\.com|booking\.com|expedia(partnercentral)?\.com|airbnb\.com|hotels\.com|agoda\.com)$/i;
@@ -120,6 +120,18 @@ function gpSet(i, field, val) {
   gpRenderSummary();
 }
 
+// Bulk: tick / untick every usable guest, or set one civility for every usable guest without one.
+function gpCanEnroll(r) { const t = gpTracked(r); return gpEligible(r) && !(t && /submitted|already/.test(t.status)); }
+function gpSelectAll(on) {
+  gpRows.forEach(r => { if (gpCanEnroll(r)) r.consent = on; });
+  gpSaveDraft(); gpRender();
+}
+function gpSetAllCiv(v, overwrite) {
+  if (!v) return;
+  gpRows.forEach(r => { if (gpCanEnroll(r) && (overwrite || !r.civility)) r.civility = v; });
+  gpSaveDraft(); gpRender();
+}
+
 const GP_FLAG = {
   'no-email': ['No email', 'warn', 'Neorcha has no email for this guest.'],
   ota:        ['OTA relay', 'warn', 'Booking.com / Expedia / Agoda relay address — it is not the guest\'s own email, so it cannot be used.'],
@@ -144,6 +156,8 @@ function gpRenderSummary() {
     <span class="gp-stat warn"><b>${n(r => !r.email)}</b> no email / OTA</span>
     <span class="gp-stat info"><b>${n(r => gpTracked(r))}</b> already in the tracker</span>
     <span class="gp-stat ${ready ? 'ok' : ''}"><b>${ready}</b> ready to enroll (agreed + civility)</span>`;
+  const all = document.getElementById('gpAllConsent');
+  if (all) { const can = gpRows.filter(gpCanEnroll); all.checked = can.length > 0 && can.every(r => r.consent); }
   const btn = document.getElementById('gpCopyEnroll');
   if (btn) btn.disabled = !ready;
 }

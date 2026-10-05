@@ -1384,7 +1384,7 @@
       </div>
       <div id="gpSummary" class="gp-summary"></div>
       <div id="gpTableWrap" style="display:none;overflow-x:auto;margin-top:8px;">
-        <table class="gp-table"><thead><tr><th>Conf #</th><th>Name</th><th>Email</th><th>Phone</th><th>Nationality</th><th>Note</th><th>Mr/Ms</th><th>Agreed</th></tr></thead>
+        <table class="gp-table"><thead><tr><th>Conf #</th><th>Name</th><th>Email</th><th>Phone</th><th>Nationality</th><th>Note</th><th>Mr/Ms<br><select class="gp-civ" title="Set Mr/Ms for every guest that has none" onchange="gpSetAllCiv(this.value);this.value=''"><option value="">all…</option><option>Mr</option><option>Ms</option><option>Mrs</option><option>Miss</option></select></th><th style="text-align:center;">Agreed<br><input type="checkbox" id="gpAllConsent" class="gp-consent" title="Tick / untick every guest with a usable email" onchange="gpSelectAll(this.checked)"></th></tr></thead>
           <tbody id="gpTable"></tbody></table>
       </div>
     </div>
@@ -1403,7 +1403,7 @@
         </div>
         <div>
           <div class="gp-sub">💎 ALL enrollment</div>
-          <p class="gp-p">Tick <b>Agreed</b> only for guests who said <b>yes</b> to joining ALL, and pick <b>Mr/Ms</b>. Only those are copied — the enrollment form records that the guest asked for the invitation, so it must be true.</p>
+          <p class="gp-p">Tick <b>Agreed</b> for guests who said <b>yes</b> to joining ALL (the box in the column header ticks them all), and pick <b>Mr/Ms</b> (the "all…" menu in the header sets it for everyone without one; change single guests after). Only those are copied — the enrollment form records that the guest asked for the invitation, so it must be true.</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button class="btn gold" id="gpCopyEnroll" onclick="gpCopyEnroll()" disabled>📋 Copy enrollment list</button>
             <button class="btn" onclick="gpCopyScript('enroll', this)">📋 Copy ALL Enroll script</button>
