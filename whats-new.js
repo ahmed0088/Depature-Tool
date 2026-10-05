@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 121, items: [
+    '⚙️ Settings page (gear in the top bar, or More → Settings): theme, text size, compact mode, icons-only menu, animations; show or hide any page; choose the page HotelOps opens on; pick the Home tiles; switch Ops Brain, its bubbles and autopilot on or off; turn helpers off; hotel name and Tourism Dirham settings; backup, restore, health check and reset. Search settings by typing.',
+  ] },
   { v: 120, items: [
     '🏨 The name is written as one word: HotelOps.',
   ] },
@@ -112,6 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try { localStorage.setItem(WN_KEY, seen); } catch (_) {}
   }
   if (_wnNum(seen) >= _wnNum(APP_VERSION)) return;
+  if (typeof hoPref === 'function' && !hoPref('whatsNew')) { try { localStorage.setItem(WN_KEY, APP_VERSION); } catch (_) {} return; }
   // wait until the person is signed in and the app is on screen
   const t = setInterval(() => {
     const app = document.getElementById('appWrapper');

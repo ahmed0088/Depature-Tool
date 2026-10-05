@@ -45,6 +45,7 @@ const HOX_ICONS = {
   save: _hoI('<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>'),
   open: _hoI('<path d="M12 21V9"/><path d="m7 14 5-5 5 5"/><path d="M5 3h14"/>'),
   team: _hoI('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/><path d="M18.5 14.5A6.5 6.5 0 0 1 21.5 20"/>'),
+  settings: _hoI('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>'),
   menu: _hoI('<path d="M4 6h16M4 12h16M4 18h16"/>'),
 };
 const HOX_PANEL_ICON = { 'skip-clean': 'skipclean', skip: 'skipclean' };
@@ -65,7 +66,7 @@ function hoApplyIcons(root = document) {
     if (k) { el.dataset.hoIc = '1'; el.innerHTML = HOX_ICONS[k]; }
   });
   // top bar buttons, matched by their tooltip
-  const TB = [[/^search/i, 'search'], [/handover/i, 'handover'], [/what's new/i, 'sparkle'], [/feedback/i, 'feedback'], [/keyboard/i, 'keyboard'], [/export/i, 'save'], [/import/i, 'open'], [/team/i, 'team'], [/hide menu|menu/i, 'menu']];
+  const TB = [[/^search/i, 'search'], [/handover/i, 'handover'], [/what's new/i, 'sparkle'], [/feedback/i, 'feedback'], [/keyboard/i, 'keyboard'], [/export/i, 'save'], [/import/i, 'open'], [/team/i, 'team'], [/^settings/i, 'settings'], [/hide menu|menu/i, 'menu']];
   root.querySelectorAll('.topbar .icon-round').forEach(el => {
     if (el.dataset.hoIc) return;
     const hit = TB.find(([re]) => re.test(el.title || ''));

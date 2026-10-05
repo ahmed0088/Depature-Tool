@@ -133,7 +133,7 @@ const BA_COMMANDS = [
       const i = _baDepIdx(room);
       if (i < 0) { _baOut(_baList(`Room ${room} is not on today's departures.`, [])); return true; }
       const r = depRooms[i];
-      if (st === 'out' && r.balance > 0 && !confirm(`Room ${room} still owes AED ${r.balance}. Check out anyway?`)) return true;
+      if (st === 'out' && r.balance > 0 && (typeof hoPref !== 'function' || hoPref('confirmCheckout')) && !confirm(`Room ${room} still owes AED ${r.balance}. Check out anyway?`)) return true;
       depAction(i, st);
       _baOut(_baList(`Room ${room} (${escapeHtml(r.name)}) → ${{ out: 'checked out', late: 'late check-out', na: 'no answer', dnd: 'DND', due: 'back to due' }[st]}.`, []));
       return true; } },

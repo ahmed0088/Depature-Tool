@@ -117,7 +117,8 @@ function homeRender() {
   if (hiEl) hiEl.textContent = g.hi;
   const sub = document.getElementById('homeSub');
   if (sub) sub.textContent = `${g.shift} · ${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}`;
-  const tiles = homeTiles();
+  const hiddenT = typeof hoPref === 'function' ? new Set(hoPref('hiddenTiles') || []) : new Set();
+  const tiles = homeTiles().filter(t => !hiddenT.has(t.panel));
   box.innerHTML = tiles.map(t => `
     <button class="home-tile ${t.tone}" onclick="showPanel('${t.panel}')">
       <div class="home-tile-top"><span class="home-ico">${(typeof hoIcon === 'function' && hoIcon(t.panel)) || t.icon}</span><span class="home-t">${escapeHtml(t.title)}</span></div>

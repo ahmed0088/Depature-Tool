@@ -230,6 +230,7 @@ const _blRank = t => ({ bad: 30, warn: 20, idle: 10 }[t.tone] || 0) + Math.min(1
 function blSoon() { clearTimeout(blSoon._t); blSoon._t = setTimeout(blTick, 900); }
 
 function blTick() {
+  if (typeof hoPref === 'function' && !hoPref('brainOn')) return;
   if (document.getElementById('appWrapper')?.style.display === 'none') return;
   const snooze = _blLS.get(BL_SNOOZE_KEY, {});
   blThoughts = blThink().filter(_blWanted).sort((a, b) => _blRank(b) - _blRank(a));
@@ -257,6 +258,7 @@ function blTick() {
 
 // ── Speaking ──────────────────────────────────────────────
 function blSay(t, urgent) {
+  if (typeof hoPref === 'function' && (!hoPref('brainOn') || (!urgent && !hoPref('brainBubbles')))) return;
   if (!urgent && Date.now() - (blSay._last || 0) < 25000 && blShown) return;   // don't chatter
   blSay._last = Date.now();
   blShown = t;

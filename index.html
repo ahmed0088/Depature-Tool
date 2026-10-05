@@ -399,6 +399,7 @@
     <div class="tb-pill" id="appVersionPill" onclick="appForceUpdate()" title="App version — tap to force an update if it looks out of date" style="cursor:pointer;">—</div>
     <div class="icon-round mob-hide" onclick="gsOpen()" title="Search — room / guest / task (Ctrl+K)">🔍</div>
     <div class="icon-round mob-hide" onclick="hoOpen()" title="Shift Handover">📋</div>
+    <div class="icon-round" onclick="showPanel('settings')" title="Settings">⚙️</div>
     <div class="icon-round mob-hide" onclick="wnOpen(true)" title="What's new in this version">✨</div>
     <div class="icon-round mob-hide" onclick="openFeedback()"  title="Feedback">💬</div>
     <div class="icon-round mob-hide" onclick="document.getElementById('kbModal').classList.toggle('open')" title="Keyboard shortcuts (?)">⌨</div>
@@ -511,6 +512,10 @@
   <div class="nav-item" onclick="showPanel('adagio')" id="nav-adagio" data-panel="adagio">
     <div class="nav-icon">⬡</div>Adagio Pro
     <span class="nav-badge" id="badge-adagio">—</span>
+  </div>
+  <div class="nav-section-label">System</div>
+  <div class="nav-item" onclick="showPanel('settings')" id="nav-settings" data-panel="settings">
+    <div class="nav-icon">⚙️</div>Settings
   </div>
 </nav>
 
@@ -1457,6 +1462,22 @@
         <button class="btn" onclick="gpLoadLog()">↻ Refresh</button>
       </div>
       <div id="gpTracker" style="margin-top:12px;"></div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" id="panel-settings">
+  <div class="hs-wrap">
+    <div class="page-hd">
+      <div class="page-hd-left"><h1>Settings</h1><p>Show, hide and switch things on or off. Look, menu and helpers are saved on this device; hotel settings are shared with the team.</p></div>
+    </div>
+    <div class="hs-layout">
+      <aside class="hs-toc">
+        <input id="hsSearch" type="search" placeholder="Search settings…" oninput="hoSettingsFilter(this.value)"/>
+        <a href="#hs-look">Appearance</a><a href="#hs-menu">Menu &amp; pages</a><a href="#hs-home">Home</a><a href="#hs-brain">Ops Brain</a>
+        <a href="#hs-help">Helpers</a><a href="#hs-hotel">Hotel</a><a href="#hs-data">Data &amp; storage</a><a href="#hs-account">Account</a><a href="#hs-about">About</a>
+      </aside>
+      <div id="hsBody" class="hs-body"></div>
     </div>
   </div>
 </div>
@@ -4227,7 +4248,7 @@ function mobMoreFilter(q) {
     const KW = { dtcm: 'td tourism dirham recon reconcile dtcm xml', tourism: 'td tourism dirham portal date', 'td-audit': 'td 30 nights cap long stay',
       purpose: 'purpose stay email nationality origin', pipeline: 'neorcha email all enroll scraper loyalty', noshow: 'no show na40 pdf',
       immig: 'immigration passport police', 'inhouse-tally': 'vicas inhouse in-house', audit: 'pm rooms night audit excel',
-      standards: 'accor standards help guide all loyalty rules', history: 'history log audit who did what activity', rent: 'rented rooms beds', xref: 'extension arrivals departures',
+      standards: 'accor standards help guide all loyalty rules', history: 'history log audit who did what activity', settings: 'settings options preferences hide show theme text size menu', rent: 'rented rooms beds', xref: 'extension arrivals departures',
       nationality: 'country nationality report', adagio: 'long stay collections balance cheque', trends: 'month charts history',
       'package-audit': 'upsell in-gauge package', 'arrivals-proc': 'arrivals processor package codes' };
     const hit = !w || (b.textContent + ' ' + (b.dataset.panel || '') + ' ' + (KW[b.dataset.panel] || '')).toLowerCase().includes(w);
@@ -5063,6 +5084,9 @@ async function appInit() {
     <button class="mob-more-item" data-panel="standards"      onclick="showPanel('standards');closeMobMore()">
       <span class="mob-item-icon">📘</span>Standards
     </button>
+    <button class="mob-more-item" data-panel="settings"       onclick="showPanel('settings');closeMobMore()">
+      <span class="mob-item-icon">⚙️</span>Settings
+    </button>
     <button class="mob-more-item" data-panel="history"        onclick="showPanel('history');closeMobMore()">
       <span class="mob-item-icon">🕘</span>History
     </button>
@@ -5268,6 +5292,7 @@ async function appInit() {
 <script src="brain-live.js"></script>
 <script src="brain-agent.js"></script>
 <script src="brand.js"></script>
+<script src="settings.js"></script>
 <script>
   // ── PWA: register service worker for offline app-shell ──
   if ('serviceWorker' in navigator) {

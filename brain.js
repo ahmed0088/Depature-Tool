@@ -484,6 +484,7 @@ function brBuild() {
 function brHomeStrip() {
   const box = document.getElementById('homeBrain');
   if (!box) return;
+  if (typeof hoPref === 'function' && (!hoPref('brainOn') || !hoPref('brainHome'))) { box.innerHTML = ''; return; }
   const s = brSuggestions().slice(0, 3);
   box.innerHTML = s.length ? `<div class="home-brain-h">🧠 Ops Brain suggests</div>` + s.map(x => `<button class="br-sug ${x.tone}" onclick="${x.go.startsWith('tab:') ? `brOpen('${x.go.slice(4)}')` : `showPanel('${x.go}')`}"><span class="br-sug-i">${x.icon}</span><span class="br-sug-t"><b>${escapeHtml(x.text)}</b><small>${escapeHtml(x.why || '')}</small></span><span class="br-sug-go">›</span></button>`).join('') : '';
 }

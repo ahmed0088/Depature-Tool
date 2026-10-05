@@ -65,6 +65,7 @@ function ipOpen(force) {
 document.addEventListener('DOMContentLoaded', () => {
   _ipShowButton();
   if (_ipStandalone() || !_ipPhone()) return;
+  if (typeof hoPref === 'function' && !hoPref('installPrompt')) return;
   let later = 0;
   try { later = +localStorage.getItem(IP_KEY) || 0; } catch (_) {}
   if (later > Date.now()) return;

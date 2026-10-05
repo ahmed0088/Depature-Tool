@@ -164,13 +164,14 @@ function frAsk(file) {
   let depth = 0;
   const hasFiles = e => [...(e.dataTransfer?.types || [])].includes('Files');
   const hint = on => document.body.classList.toggle('fr-dragging', on);
-  document.addEventListener('dragenter', e => { if (!hasFiles(e)) return; depth++; hint(true); });
+  document.addEventListener('dragenter', e => { if (!hasFiles(e) || (typeof hoPref === 'function' && !hoPref('dropAnywhere'))) return; depth++; hint(true); });
   document.addEventListener('dragleave', e => { if (!hasFiles(e)) return; depth = Math.max(0, depth - 1); if (!depth) hint(false); });
   document.addEventListener('dragover', e => { if (hasFiles(e)) e.preventDefault(); });
   document.addEventListener('drop', e => {
     depth = 0; hint(false);
     if (!hasFiles(e)) return;
     if (e.defaultPrevented) return;   // a page's own drop box already took it
+    if (typeof hoPref === 'function' && !hoPref('dropAnywhere')) return;
     e.preventDefault();               // never let the browser open the file instead
     frRoute(e.dataTransfer.files);
   });
