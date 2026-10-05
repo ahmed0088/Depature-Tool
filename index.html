@@ -150,6 +150,9 @@
 .adg-date-input,.adg-num-input{background:var(--adg-navy-2);border:1px solid var(--adg-border-2);border-radius:6px;color:var(--adg-text-1);padding:.3rem .65rem;font-family:'DM Sans',sans-serif;font-size:.82rem;transition:border-color .15s}
 .adg-date-input:focus,.adg-num-input:focus{outline:none;border-color:var(--adg-gold)}
 .adg-num-input{width:110px;text-align:right}
+.adg-setting-row label{flex:1;min-width:0;text-align:left}
+.adg-setting-row input{flex:0 0 auto}
+@media (max-width:600px){.adg-upload-settings{padding:.8rem}.adg-setting-row{gap:.6rem}.adg-num-input{width:90px}.adg-date-input{width:140px}}
 .adg-upload-error{background:var(--adg-red-bg);border:1px solid var(--adg-red);color:var(--adg-red);border-radius:var(--adg-radius);padding:.7rem 1.1rem;font-size:.83rem;width:100%;max-width:580px;white-space:pre-line}
 
 /* Buttons */
@@ -816,7 +819,7 @@
       <textarea id="xrefInput" placeholder="Opera Cloud → Reservations → Arrivals → Export Delimited Data&#10;Open .txt → Ctrl+A → Ctrl+C → Paste here"></textarea>
     </div>
     <div class="error-box" id="xrefError" style="display:none;"><span>⚠</span><span id="xrefErrorMsg"></span></div>
-    <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
+    <div style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap;">
       <button class="btn gold" onclick="xrefLoad()">🔗 Load &amp; Check Extensions</button>
       <label class="btn" style="cursor:pointer;">📂 Upload File<input type="file" accept=".txt,.tsv,.csv" style="display:none;" onchange="xrefLoadFile(this)"/></label>
       <span style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);"><strong style="color:var(--text);">Load Dep board first</strong> for full extension verdicts</span>
@@ -2556,13 +2559,10 @@
 ══════════════════════════════════════════════════════ -->
 <div class="panel" id="panel-adagio">
 
-  <div class="panel-header">
-    <div class="panel-title-row">
-      <div class="panel-title">
-        <span class="panel-title-icon">⬡</span>
-        Adagio Pro
-      </div>
-      <div class="panel-subtitle">Long Stay Collections · Upload your tracking sheet to analyse balances, cheques &amp; departure risk</div>
+  <div class="page-hd">
+    <div class="page-hd-left">
+      <h1>Adagio Pro</h1>
+      <p>Long Stay Collections · Upload your tracking sheet to analyse balances, cheques &amp; departure risk</p>
     </div>
   </div>
 
@@ -3616,14 +3616,9 @@ ${actionList?`<div class="action"><h2>Act on these first</h2><ul>${actionList}</
 
   // ── Boot: init when this panel is first shown ──
   let _adgInited=false;
-  const _origShowPanel=window.showPanel;
-  window.showPanel=function(name){
-    if(typeof _origShowPanel==='function')_origShowPanel(name);
-    if(name==='adagio'&&!_adgInited){_adgInited=true;adgInit();}
-    // Read history the first time Trends is opened, and refresh on return so
-    // a run in another panel shows up without a reload.
-    if(name==='trends'&&typeof trLoad==='function')trLoad();
-  };
+  // Called by showPanel() in utils.js. (Wrapping window.showPanel here did not work: this
+  // script runs before utils.js, whose function declaration then replaced the wrapper.)
+  window._adgBoot=function(){if(!_adgInited){_adgInited=true;adgInit();}};
   document.addEventListener('DOMContentLoaded',function(){
     setTimeout(function(){if(!_adgInited){_adgInited=true;adgInit();}},500);
   });
