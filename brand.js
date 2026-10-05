@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-//  brand.js — Hotel Ops identity
+//  brand.js — HotelOps identity
 //  The logo, line icons for the menus and top bar, and the hotel name
 //  under the wordmark. Icons are drawn inline (no icon font, works
 //  offline) and take the colour of the text around them.

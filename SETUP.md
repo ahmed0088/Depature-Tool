@@ -1,4 +1,4 @@
-# Hotel Ops — Firebase Setup Guide
+# HotelOps — Firebase Setup Guide
 
 ## Your Files
 

@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════
 //  arrivals-proc.js  —  Arrivals Report Processor
-//  Integrated into Hotel Ops
+//  Integrated into HotelOps
 //  Uses showToast(), logActivity() from the main app
 // ═══════════════════════════════════════════════════════════
 

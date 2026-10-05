@@ -1,7 +1,7 @@
 {
-  "name": "Hotel Ops",
-  "short_name": "Hotel Ops",
-  "description": "Hotel Ops — front office operations: departures, arrivals, night audit, Tourism Dirham, packages, reports and the Ops Brain assistant",
+  "name": "HotelOps",
+  "short_name": "HotelOps",
+  "description": "HotelOps — front office operations: departures, arrivals, night audit, Tourism Dirham, packages, reports and the Ops Brain assistant",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

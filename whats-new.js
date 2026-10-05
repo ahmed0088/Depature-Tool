@@ -9,8 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 120, items: [
+    '🏨 The name is written as one word: HotelOps.',
+  ] },
   { v: 119, items: [
-    '🏨 The app is now called Hotel Ops, with its own logo and app icon. Your hotel\'s name shows under it; tap it to change.',
+    '🏨 The app is now called HotelOps, with its own logo and app icon. Your hotel\'s name shows under it; tap it to change.',
     '✨ New look: cleaner fonts, line icons in the menus, a search box in the top bar (Ctrl K), sharper cards, buttons and numbers, and a new sign-in screen. The three themes are still there.',
     '📲 On phones, add it to the home screen again to get the new icon.',
   ] },

@@ -8,7 +8,7 @@
 //     on and skips every guest already read.
 //   • Speed + elapsed time in the HUD
 //   • Output is unchanged (5 columns) so it pastes straight into the
-//     Hotel Ops "Guest Pipeline" workbench or Purpose of Stay → Import Emails:
+//     HotelOps "Guest Pipeline" workbench or Purpose of Stay → Import Emails:
 //       Confirmation_Number · Name · Email · Phone · Nationality
 //
 //  Kept from v9: fast last-page detection, live HUD, dedupe by confirmation
@@ -323,7 +323,7 @@
   log.header(`RESULTS · ${results.length} guests · ${elapsed}s`);
   console.log(tsv);
 
-  try { await navigator.clipboard.writeText(tsv); log.ok('Auto-copied to clipboard — paste it into Hotel Ops → Guest Pipeline.'); }
+  try { await navigator.clipboard.writeText(tsv); log.ok('Auto-copied to clipboard — paste it into HotelOps → Guest Pipeline.'); }
   catch (_) { log.warn('Auto-copy blocked — use the Copy button in the HUD.'); }
 
   if (!stopped) clearProgress();           // finished cleanly: nothing to resume
