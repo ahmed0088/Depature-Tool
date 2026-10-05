@@ -105,7 +105,7 @@ function homeGreeting() {
   const h = new Date().getHours();
   const shift = h >= 23 || h < 7 ? 'Night shift' : h < 15 ? 'Morning shift' : 'Afternoon shift';
   const hi = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
-  const name = (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) ? currentProfile.name.split(' ')[0] : '';
+  const name = (typeof hoPref === 'function' && !hoPref('greetName')) ? '' : (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) ? currentProfile.name.split(' ')[0] : '';
   return { hi: `${hi}${name ? ', ' + name : ''}`, shift };
 }
 

@@ -6,7 +6,8 @@
 function updateClock() {
   const now = new Date();
   const t = el => document.getElementById(el);
-  if (t('topbarTime'))  t('topbarTime').textContent  = now.toLocaleTimeString('en-GB',  { hour:'2-digit', minute:'2-digit' });
+  const h12 = typeof hoPref === 'function' && hoPref('clock12'), sec = typeof hoPref === 'function' && hoPref('clockSeconds');
+  if (t('topbarTime'))  t('topbarTime').textContent  = now.toLocaleTimeString(h12 ? 'en-US' : 'en-GB', { hour: h12 ? 'numeric' : '2-digit', minute:'2-digit', second: sec ? '2-digit' : undefined, hour12: !!h12 });
   if (t('topbarDate'))  t('topbarDate').textContent  = now.toLocaleDateString('en-GB',  { weekday:'long', day:'numeric', month:'long', year:'numeric' }).toUpperCase();
   if (t('cl-date-lbl')) t('cl-date-lbl').textContent = now.toLocaleDateString('en-GB',  { weekday:'long', day:'numeric', month:'long', year:'numeric' });
 }
@@ -457,7 +458,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v123';
+const APP_VERSION = 'v124';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;

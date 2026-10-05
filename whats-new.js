@@ -9,6 +9,14 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 124, items: [
+    '⚙️ Settings, now complete:',
+    '• Appearance: accent colour (gold, blue, green, teal, rose, purple), corners (rounded, soft, sharp), font, high contrast.',
+    '• Top bar: show or hide the clock, connection, version, theme dots and your name. Date & time: 24 or 12-hour clock, seconds, greeting by name.',
+    '• Alerts: late check-out alerts, a chime and desktop notifications for urgent things, phone vibration.',
+    '• Departures: default card size. Privacy: a privacy screen that blurs guest names and emails until you point at them, and sign out after 15 min to 4 h without activity.',
+    '• Sync: your settings follow you to every device you sign in on. Export or import settings as a file, storage meter, technical details and error log.',
+  ] },
   { v: 123, items: [
     '📋 Purpose of Stay and Arrivals are a table again on every screen, restyled: the header stays on top while you scroll, rows are shaded in turns, the room number stands out, and boxes only show a border when you touch them. On a phone, swipe the table sideways.',
   ] },

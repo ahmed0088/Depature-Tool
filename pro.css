@@ -363,3 +363,27 @@ body.ho-compact .page-hd-left h1 { font-size: 22px !important; }
   #panel-purpose .tbl-wrap, #panel-arrivals .tbl-wrap { max-height: 64vh; -webkit-overflow-scrolling: touch; }
   #panel-purpose tbody input, #panel-arrivals tbody input, #panel-purpose tbody select, #panel-arrivals tbody select { height: 34px; font-size: 13px; }
 }
+
+/* ══ Settings, part 2 ══ */
+.hs-swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+.hs-swatches button { width: 32px; height: 32px; padding: 3px; border-radius: 50%; border: 2px solid transparent; background: transparent; cursor: pointer; }
+.hs-swatches button.on { border-color: var(--text); }
+.hs-swatches i { display: block; width: 100%; height: 100%; border-radius: 50%; }
+.hs-meter { width: 160px; height: 8px; border-radius: 99px; background: var(--bg2); border: 1px solid var(--border2); overflow: hidden; flex-shrink: 0; }
+.hs-meter i { display: block; height: 100%; width: 0; background: var(--mint); transition: width .4s var(--ho-ease); }
+.hs-meter i.hi { background: var(--rose); }
+.hs-pre { margin-top: 10px; padding: 12px; border-radius: 10px; background: var(--bg2); border: 1px solid var(--border); font: 500 11.5px/1.7 var(--mono); color: var(--text2); white-space: pre-wrap; word-break: break-all; }
+.hs-toc { max-height: calc(100vh - 140px); overflow-y: auto; }
+/* what part 2 switches */
+body.ho-contrast { --text2: #c3cddb !important; --text3: #9aa7b9 !important; --border: rgba(255,255,255,.12) !important; --border2: rgba(255,255,255,.2) !important; }
+[data-theme="opera"] body.ho-contrast, body.ho-contrast[data-theme="opera"] { --text2: #2c313b !important; --text3: #4b5260 !important; }
+html[data-theme="opera"] body.ho-contrast { --text2: #2c313b !important; --text3: #4b5260 !important; --border: #c8ced8 !important; --border2: #aab2bf !important; }
+body.ho-no-clock #topbarTime, body.ho-no-ver #appVersionPill, body.ho-no-conn .fb-status, body.ho-no-themes .topbar .theme-switcher, body.ho-no-user #authUserPill { display: none !important; }
+body.ho-privacy :is(#panel-purpose, #panel-arrivals, #panel-noshow, #panel-pipeline, #panel-tourism) tbody td:is(:nth-child(4), :nth-child(5), :nth-child(6), :nth-child(7), :nth-child(8), :nth-child(9)),
+body.ho-privacy .dc-name, body.ho-privacy .pc-name, body.ho-privacy .br-hit, body.ho-privacy .gs-result-name, body.ho-privacy .hist-detail {
+  filter: blur(5px); transition: filter .15s; }
+body.ho-privacy :is(#panel-purpose, #panel-arrivals, #panel-noshow, #panel-pipeline, #panel-tourism) tbody tr:hover td,
+body.ho-privacy .dc-name:hover, body.ho-privacy .pc-name:hover, body.ho-privacy .br-hit:hover, body.ho-privacy .hist-detail:hover,
+body.ho-privacy :is(#panel-purpose, #panel-arrivals) tbody td:focus-within { filter: none; }
+@media (max-width: 860px) { .hs-toc { max-height: none; } .hs-meter { width: 100%; } }
+@media (max-width: 860px) { label.hs-row { flex-wrap: nowrap; } label.hs-row .hs-txt { flex: 1; } }

@@ -258,6 +258,7 @@ function blTick() {
 
 // ── Speaking ──────────────────────────────────────────────
 function blSay(t, urgent) {
+  if (t.tone === 'bad' && typeof hoAlert === 'function') { blSay._rung = blSay._rung || new Set(); if (!blSay._rung.has(t.id)) { blSay._rung.add(t.id); hoAlert(t.text); } }
   if (typeof hoPref === 'function' && (!hoPref('brainOn') || (!urgent && !hoPref('brainBubbles')))) return;
   if (!urgent && Date.now() - (blSay._last || 0) < 25000 && blShown) return;   // don't chatter
   blSay._last = Date.now();
