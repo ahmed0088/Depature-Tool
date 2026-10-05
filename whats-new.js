@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 135, items: [
+    '🎯 Ops Brain takes you to the exact line: tapping a suggestion, a bubble\'s Show me, a search hit or a line in a data answer opens the page, clears filters that would hide it, scrolls to the row or card and highlights it (and puts the cursor in the empty box). When several lines have the problem, a bar at the bottom steps through them: 1 of 3 ▲ ▼.',
+  ] },
   { v: 134, items: [
     '🌍 Nationality report: the sheet always keeps its 240 rows. A country Opera spells differently goes into one of those rows: the closest rows are offered first with their row number, or pick from all 240, or count it as unknown nationality. Your choice is remembered for the team. Adding new rows is gone, and any rows added before were removed.',
   ] },

@@ -536,3 +536,17 @@ body.ho-privacy :is(#panel-purpose, #panel-arrivals) tbody td:focus-within { fil
 .nx-place { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: .74rem; color: var(--text2); }
 .nx-rows > div { grid-template-columns: 62px 1fr minmax(90px, 150px) 26px !important; }
 .nx-rows span small { display: block; color: var(--text3); font-size: .68rem; }
+
+/* ══ Ops Brain: the line with the problem (brain-goto.js) ══ */
+.bg-glow { outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent) !important; outline-offset: -2px; background-color: color-mix(in srgb, var(--accent) 7%, transparent) !important; }
+tr.bg-glow > td { background-color: color-mix(in srgb, var(--accent) 9%, transparent) !important; }
+.bg-cur { outline: 3px solid var(--accent) !important; animation: bgPulse 1.4s ease-out 2; }
+tr.bg-cur > td { background-color: color-mix(in srgb, var(--accent) 18%, transparent) !important; }
+@keyframes bgPulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); } 100% { box-shadow: 0 0 0 14px transparent; } }
+.bg-nav { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 960; display: flex; align-items: center; gap: 4px; padding: 6px 6px 6px 14px; border-radius: 99px; background: var(--card); border: 1px solid var(--accent-border); box-shadow: 0 12px 34px rgba(0,0,0,.45); font: 600 12.5px var(--font); color: var(--text); animation: blPop .25s ease; }
+.bg-nav span { margin-right: 6px; }
+.bg-nav button { width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--bg2); color: var(--text); cursor: pointer; font-size: 12px; }
+.bg-nav button:hover { background: var(--accent); color: #111; }
+.bs-li { cursor: pointer; }
+.bs-li:hover { background: var(--accent-bg) !important; }
+@media (max-width: 768px) { .bg-nav { bottom: 100px; } }
