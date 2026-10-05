@@ -1464,7 +1464,7 @@ function pkgCopyResolved() {
 
 // ── Copy the deny list — the charges that should NOT be credited ──
 function pkgCopyDeny() {
-  const denied = pkgResults.filter(r => r.verdict === 'deny');
+  const denied = pkgResults.filter(r => r.verdict === 'deny' && !r.pinSkip);
   if (!denied.length) { showToast('Nothing to deny — every charge is backed by Opera', 'ok'); return; }
   const s = _pkgAuditStamp();
   const tsv = ['Room\tConfirmation No.\tProduct\tCharge (AED)\tCharged Date\tWhy Deny\tWhat Opera Shows\tAudited On\tAudited By']
