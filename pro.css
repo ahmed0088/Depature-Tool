@@ -340,3 +340,26 @@ body.ho-compact .page-hd-left h1 { font-size: 22px !important; }
   .pc-pill.flight { background: rgba(124,58,237,.12) !important; border-color: rgba(124,58,237,.3) !important; }
   .pc-chev { font-size: 14px !important; }
 }
+
+/* ══ Purpose of Stay & Arrivals: a clean table on every screen ══ */
+#panel-purpose .tbl-wrap, #panel-arrivals .tbl-wrap {
+  display: block !important; overflow: auto; max-height: 72vh; margin-top: 12px;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--r2); box-shadow: var(--ho-shadow); }
+#panel-purpose .tbl-wrap table, #panel-arrivals .tbl-wrap table { border-collapse: separate; border-spacing: 0; width: 100%; }
+#panel-purpose thead th, #panel-arrivals thead th { position: sticky; top: 0; z-index: 2; padding: 10px 10px !important; text-align: left; white-space: nowrap;
+  background: var(--bg2) !important; border-bottom: 1px solid var(--border2) !important; }
+#panel-purpose tbody td, #panel-arrivals tbody td { padding: 5px 8px !important; border-bottom: 1px solid var(--border) !important; vertical-align: middle; white-space: nowrap; }
+#panel-purpose tbody tr:nth-child(even) td, #panel-arrivals tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--bg2) 45%, transparent); }
+#panel-purpose tbody tr:hover td, #panel-arrivals tbody tr:hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+#panel-purpose tbody tr:last-child td, #panel-arrivals tbody tr:last-child td { border-bottom: 0 !important; }
+#panel-purpose tbody input, #panel-purpose tbody select, #panel-arrivals tbody input, #panel-arrivals tbody select {
+  height: 30px; padding: 0 8px; border-radius: 7px; border: 1px solid transparent !important; background: transparent; color: var(--text); font: 500 12.5px var(--font); }
+#panel-purpose tbody input:hover, #panel-purpose tbody select:hover, #panel-arrivals tbody input:hover, #panel-arrivals tbody select:hover { border-color: var(--border2) !important; background: var(--bg2); }
+#panel-purpose tbody input:focus, #panel-purpose tbody select:focus, #panel-arrivals tbody input:focus, #panel-arrivals tbody select:focus { border-color: var(--accent) !important; background: var(--bg2); }
+#panel-purpose tbody td:nth-child(3) input, #panel-arrivals tbody td:first-child input { font: 700 12.5px var(--mono); color: var(--accent); }
+#panel-purpose tr.leisure-row td:first-child, #panel-arrivals tr.leisure-row td:first-child { box-shadow: inset 3px 0 0 var(--amber); }
+#purposeCards, #arrCards { display: none !important; }
+@media (max-width: 768px) {
+  #panel-purpose .tbl-wrap, #panel-arrivals .tbl-wrap { max-height: 64vh; -webkit-overflow-scrolling: touch; }
+  #panel-purpose tbody input, #panel-arrivals tbody input, #panel-purpose tbody select, #panel-arrivals tbody select { height: 34px; font-size: 13px; }
+}

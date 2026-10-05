@@ -5609,8 +5609,7 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
   textarea { min-height: 120px; }
 
   /* Purpose of Stay: cards instead of the 13-column table */
-  #panel-purpose .tbl-wrap { display: none; }
-  #panel-arrivals .tbl-wrap { display: none; }
+  /* phones show the table (styled in pro.css) */
   .pc-list { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
   .pc-card { background: var(--bg2); border: 1px solid var(--border); border-left: 4px solid var(--blue); border-radius: 14px; padding: 12px; }
   .pc-card.leisure { border-left-color: var(--amber); }

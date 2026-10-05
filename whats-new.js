@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 123, items: [
+    '📋 Purpose of Stay and Arrivals are a table again on every screen, restyled: the header stays on top while you scroll, rows are shaded in turns, the room number stands out, and boxes only show a border when you touch them. On a phone, swipe the table sideways.',
+  ] },
   { v: 122, items: [
     '📋 Phone: Purpose of Stay and Arrivals are a plain list again. One thin line per guest under a Room · Guest · Missing · Purpose header, with small icons for a missing email, nationality or origin. Tap B / L / F to change purpose, or tap the line to edit.',
   ] },
