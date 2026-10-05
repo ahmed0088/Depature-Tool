@@ -597,3 +597,38 @@ tr.bg-cur > td { background-color: color-mix(in srgb, var(--accent) 18%, transpa
 .bx-step.ok > span { background: var(--mint); color: #111; border-color: var(--mint); }
 .bx-step.todo > span { background: var(--accent-bg); color: var(--accent); border-color: var(--accent-border); }
 .bx-pre { white-space: pre-wrap; font: 500 11.5px/1.6 var(--mono); background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin-top: 6px; max-height: 320px; overflow: auto; color: var(--text2); }
+
+/* ══ Design pass: pages that didn't match the rest ══ */
+/* Guest Memory header looks like every other page header */
+#panel-guestmem .gm-head-icon { display: none; }
+#panel-guestmem .gm-head-title { font: 700 26px/1.15 var(--font); letter-spacing: -0.028em; }
+#panel-guestmem .gm-head-sub { display: block; font: 400 13px/1.5 var(--font); color: var(--text2); margin-top: 6px; max-width: 760px; }
+#panel-guestmem .gm-lock-pill { margin-left: 6px; vertical-align: middle; }
+#panel-guestmem .gm-head-sub b { font-weight: 600; color: var(--text); }
+#panel-guestmem .gm-af-label { font-family: var(--font); font-size: 12px; font-weight: 600; }
+/* "Choose file" buttons styled like the app's buttons, not the browser's grey ones */
+input[type="file"] { font: 500 12.5px var(--font); color: var(--text3); max-width: 100%; }
+input[type="file"]::file-selector-button { height: 32px; padding: 0 12px; margin-right: 10px; border-radius: 9px; border: 1px solid var(--border2); background: var(--card2); color: var(--text); font: 600 12.5px var(--font); cursor: pointer; }
+input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
+/* paste boxes: the hint text is small; typed text stays 16px so iPhones don't zoom */
+textarea::placeholder { font-size: 13px; line-height: 1.55; }
+@media (max-width: 768px) {
+  #panel-guestmem .gm-head-title { font-size: 24px; }
+  /* header buttons scroll edge to edge instead of sticking out past the screen */
+  .page-hd-actions { margin: 0 -16px !important; padding: 2px 16px 4px !important; width: calc(100% + 32px) !important; max-width: none !important; flex: 0 0 auto !important; box-sizing: border-box; scroll-padding: 0 16px; }
+  .search-wrap input, .filter-row:has(input) .search-wrap input { flex: 1 1 0% !important; min-width: 0 !important; width: auto !important; }
+  label:has(> input[type="file"]) { max-width: 100%; min-width: 0; }
+  input[type="file"] { min-width: 0; width: 100%; }
+  .ap-pkg-cols > * { min-width: 0; }
+  .ap-tag-list, .ap-add-row { flex-wrap: wrap; min-width: 0; }
+  .ap-add-row input { min-width: 0; flex: 1 1 0%; }
+  /* History filters: each one readable, none cut to two letters */
+  .hist-filters select { flex: 1 1 calc(50% - 8px); min-width: 0; }
+  .hist-filters .hist-chk { flex: 1 1 auto; }
+  /* Shift Tasks: more room for the task name */
+  .st-drag-handle { display: none; }
+  .st-item { gap: 8px; padding: 10px; }
+  .st-actions { gap: 2px; }
+  .st-move-btns { gap: 2px; }
+  .st-actions .cl-step-btn { padding: 4px 6px; min-width: 26px; }
+}

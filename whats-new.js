@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 139, items: [
+    '🎨 Design check of every page on phone and desktop: Guest Memory now has the same header as the other pages; "Choose file" buttons match the app instead of the browser\'s grey ones; History filters are readable (no more "Ev" / "La"); Shift Tasks give the task name more room; the button row under each page title scrolls edge to edge instead of sticking out; search boxes and upload rows stay inside their cards, even with Extra large text.',
+  ] },
   { v: 138, items: [
     '📱 Settings on the phone: choice buttons such as "Sign out when idle" and "Text size" now fit inside the card and wrap to a second line when needed, even with large text.',
   ] },
