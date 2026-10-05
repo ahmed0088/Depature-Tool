@@ -1384,7 +1384,62 @@ function pkgRender() {
     tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:36px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">No rows match.</td></tr>`;
     return;
   }
-  tbody.innerHTML = filtered.map(r => {
+  const rowHtml = (r, sub) => _pkgSubMark(_pkgRowHtmlInner(r), sub);
+  // IN-Gauge bills a package night by night, so one 6-night breakfast is six
+  // lines. Group them per confirmation + package: one line with the nights
+  // and total, the single nights one tap away.
+  const groups = [], gmap = new Map();
+  filtered.forEach(r => {
+    const k = _pkgPinKey(r);
+    if (!gmap.has(k)) { const g = { key: k, rows: [] }; gmap.set(k, g); groups.push(g); }
+    gmap.get(k).rows.push(r);
+  });
+  tbody.innerHTML = groups.map(g => g.rows.length === 1 ? rowHtml(g.rows[0], '')
+    : _pkgGroupHtml(g) + g.rows.map(r => rowHtml(r, g.key)).join('')).join('');
+}
+
+const pkgOpenGroups = new Set();
+function pkgToggleGroup(key) {
+  if (pkgOpenGroups.has(key)) pkgOpenGroups.delete(key); else pkgOpenGroups.add(key);
+  pkgRender();
+}
+// Marks a single-night row as belonging to a group (hidden until the group is opened)
+function _pkgSubMark(html, key) {
+  if (!key) return html;
+  const hide = pkgOpenGroups.has(key) ? '' : 'display:none;';
+  return html.replace(/^\s*<tr([^>]*)>/, (m, attrs) => {
+    if (/style="/.test(attrs)) attrs = attrs.replace(/style="/, `style="${hide}`);
+    else attrs += ` style="${hide}"`;
+    return `<tr${attrs} class="pkg-sub">`;
+  });
+}
+
+function _pkgGroupHtml(g) {
+  const rows = g.rows, r0 = rows[0];
+  const open = pkgOpenGroups.has(g.key);
+  const total = rows.reduce((s, r) => s + (parseFloat(r.price ?? r.charge) || 0), 0);
+  const dates = rows.flatMap(r => [r.from, r.to, r.arr, r.dep]).filter(Boolean);
+  const uniq = a => [...new Set(a.filter(Boolean))];
+  const sellers = uniq(rows.map(r => _pkgUserLabel(r.user || r.employee)));
+  const acts = {}; rows.forEach(r => { const t = _pkgActionText(r); acts[t] = (acts[t] || 0) + 1; });
+  const actKeys = Object.keys(acts);
+  const actTxt = actKeys.length === 1 ? actKeys[0] : actKeys.map(k => `${acts[k]}× ${k}`).join(' · ');
+  const needs = rows.some(r => !r.pinSkip && (r.verdict === 'deny' || r.verdict === 'review' || (r.verdict === 'credit' && !r.alreadyComplete)));
+  const color = rows.some(r => r.verdict === 'deny') ? 'var(--rose)' : needs ? 'var(--amber)' : 'var(--text3)';
+  return `<tr class="pkg-group" onclick="if(!event.target.closest('select'))pkgToggleGroup('${escapeHtml(g.key)}')" style="cursor:pointer;">
+    <td><span class="tt-room-pill">${escapeHtml(r0.room)}</span></td>
+    <td style="font-family:var(--mono);font-size:0.72rem;">${escapeHtml(r0.conf)}</td>
+    <td style="font-family:var(--mono);font-size:0.76rem;font-weight:700;">${open ? '▾' : '▸'} ${escapeHtml(_pkgFamilyName(r0))} <span class="pkg-nights">× ${rows.length} nights</span></td>
+    <td style="font-family:var(--mono);font-size:0.72rem;">AED ${escapeHtml(String(Math.round(total * 100) / 100))}</td>
+    <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text2);">${dates.length ? escapeHtml(dates[0]) + ' → ' + escapeHtml(dates[dates.length - 1]) : '—'}</td>
+    <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text2);">${escapeHtml(sellers.join(' / ') || '—')}</td>
+    <td style="font-size:0.68rem;color:${color};">${escapeHtml(actTxt)}</td>
+    <td style="font-size:0.66rem;color:var(--text3);">${open ? 'Hide nights' : 'Show nights'}</td>
+    ${_pkgPinCell(r0)}
+  </tr>`;
+}
+
+function _pkgRowHtmlInner(r) {
     const gapCell = _pkgActionCell(r);
     if (r.verdict === 'deny') {
       return `<tr style="opacity:0.8;">
@@ -1444,7 +1499,6 @@ function pkgRender() {
       <td>${statusCell}</td>
       ${_pkgPinCell(r)}
     </tr>`;
-  }).join('');
 }
 
 function pkgSetFilter(f, el) {
