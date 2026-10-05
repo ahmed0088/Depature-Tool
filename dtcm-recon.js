@@ -169,6 +169,7 @@
        DTCM usually keeps both reservations as ONE check-in, so it charges one night less unless the
        day use is in DTCM too (its own check-in, or 'Charge Extra Night on Early Check-In'). */
     const sameName = (a, b) => C.namesMatch(a, b) || C.nameOverlap(a, b) >= 2;
+    const nf2 = v => round2(Math.abs(v || 0)).toFixed(2);
     const dayUseRepost = (room, date, guest) => {
       const at = auditTime.get(date);
       if (!at) return null;
@@ -630,10 +631,10 @@
     const actTotal     = round2(operaRows.reduce((s, x) => s + x.amount, 0));
     const dayUseTotal  = round2(dayUse.filter(x => !x.posted).reduce((s, x) => s + x.amount, 0));
     const dayUsePostedTotal = round2(dayUse.filter(x => x.posted).reduce((s, x) => s + x.amount, 0));
-    const expTotalAdj  = round2(expTotal - dayUseTotal + dayUsePostedTotal);     // DTCM total the Opera journal is expected to match
-    const netVariance  = round2(expTotalAdj - actTotal);
+    let expTotalAdj    = round2(expTotal - dayUseTotal + dayUsePostedTotal);     // DTCM total the Opera journal is expected to match
+    let netVariance    = round2(expTotalAdj - actTotal);
     const missingTotal = round2(missing.reduce((s, x) => s + x.amount, 0));
-    const extraTotal   = round2(extra.reduce((s, x) => s + x.variance, 0));
+    let extraTotal     = round2(extra.reduce((s, x) => s + x.variance, 0));
     const adjustTotal  = round2(adjustments.reduce((s, x) => s + x.amount, 0));
 
     /* Nights DTCM counts that fall outside the dates the Opera file covers (window mode only).
@@ -656,8 +657,35 @@
       if (sg.extraEarlyNight) dtcmExtra.push(Object.assign({ kind: 'early_tick', date: sg.checkInISO }, base));
       if (sg.extraLateNight)  dtcmExtra.push(Object.assign({ kind: 'late_tick', date: sg.checkOutISO || sg.checkInISO }, base));
     });
+    /* TWO DTCM ERRORS THAT CANCEL: the early-check-in tick adds a night nobody stayed, AND the check-out
+       date was set one day too early, so Opera's last night looks 'after check-out'. The stay's total then
+       matches Opera: the tick night stands in for that last night. Nothing to post for the tally; only
+       DTCM's dates are wrong, so it becomes a low check instead of two corrections. */
+    let pairedTick = 0;
+    for (let i = dtcmExtra.length - 1; i >= 0; i--){
+      const t = dtcmExtra[i];
+      if (t.kind !== 'early_tick') continue;
+      const j = extra.findIndex(e => e.kind === 'after_checkout' && e.room === t.room &&
+        Math.abs(Math.abs(e.variance) - t.amount) < 0.01 && (sameName(e.guest, t.guest) || sameName(e.dtcmGuest || '', t.guest)));
+      if (j === -1) continue;
+      const e = extra[j];
+      checks.push({
+        type: 'Total right, DTCM dates wrong', severity: 'low', room: t.room, guest: t.guest, date: e.date, uid: t.uid,
+        detail: `DTCM ${nf2(t.dtcmAmt)} AED = Opera ${nf2(t.operaAmt)} AED, so this stay tallies. But DTCM has check-out ${t.checkOutISO} ${t.checkOutTime} ` +
+                `while Opera charged the night of ${e.date}, and "Charge Extra Night on Early Check-In" is still ticked (arrival ${t.checkInTime}, before the audit). ` +
+                `The two errors cancel each other.`,
+        fix: 'Nothing to post for the month-end tally. For a correct DTCM record: check-out one day later and untick the early check-in (TD helpdesk if the stay is closed).'
+      });
+      pairedTick = round2(pairedTick + t.amount);
+      extra.splice(j, 1); dtcmExtra.splice(i, 1);
+      const ph = phantom.findIndex(x => x.room === e.room && x.businessDate === e.date);
+      if (ph !== -1) phantom.splice(ph, 1);
+    }
+    expTotalAdj = round2(expTotalAdj + pairedTick);
+    extraTotal  = round2(extra.reduce((a, x) => a + x.variance, 0));
+    netVariance = round2(expTotalAdj - actTotal);
     const dtcmExtraTotal = round2(dtcmExtra.reduce((a, x) => a + x.amount, 0));
-    const outsideWindow  = Math.max(0, round2(outsideRaw - dtcmExtraTotal));
+    const outsideWindow  = Math.max(0, round2(outsideRaw - dtcmExtraTotal - pairedTick));
     const outsideRooms   = isWindow ? [...new Set(dtcmSegments.filter(sg =>
       (sg.nightsOutsideFile || 0) - (sg.extraEarlyNight || 0) - (sg.extraLateNight || 0) > 0).map(sg => sg.room))].sort() : [];
     if (outsideRaw === 0 && Math.abs(dtcmFinalFees - expTotal) > 0.5){
@@ -731,10 +759,16 @@
       const what = prev
         ? `${x.guest} checked out at ${prev.checkOutTime} and was checked in again ${x.checkInTime} → ${x.checkOutTime} the same day`
         : `${x.guest} checked in and out on ${x.date} (${x.checkInTime} → ${x.checkOutTime})`;
-      x.detail = { mins, prevOut: prev ? prev.checkOutTime : '', what };
+      /* The same guest checked in again in the same room after checking out that day is a desk mistake
+         (re-check-in), not a day use: it is cancelled in DTCM, never posted in Opera. So is a check-in of a
+         few minutes. */
+      const mistake = !!prev || (mins != null && mins <= 15);
+      x.detail = { mins, prevOut: prev ? prev.checkOutTime : '', what, mistake };
       actions.push({
-        action: 'DTCM', room: x.room, date: x.date, amount: -x.amount, where: 'DTCM or Opera', abs: x.amount,
-        why: `Day use in DTCM only: ${what}${mins != null && mins <= 15 ? ` — only ${mins} min, looks like a mistake` : ''}. Opera has no TD for it.`,
+        action: 'DTCM', room: x.room, date: x.date, amount: -x.amount, where: mistake ? 'DTCM' : 'DTCM or Opera', abs: x.amount,
+        why: mistake
+          ? `Check-in made by mistake: ${what}${mins != null && mins <= 15 ? ` (only ${mins} min)` : ''}. Not a day use: cancel it in DTCM. Opera has no TD for it.`
+          : `Day use in DTCM only: ${what}. Opera has no TD for it.`,
         uid: x.transactionuid || uidFor(x.room, x.date, x.guest), kind: 'dtcm_day_use', guest: x.guest, dtcmGuest: x.guest, extra: x
       });
     });
@@ -900,6 +934,20 @@
         p.effect = 'DTCM −' + nf(x.amount) + ' or Opera +' + nf(x.amount);
       } else if (p.kind === 'dtcm_day_use'){
         const x = p.extra || {}, dt = x.detail || {};
+        if (dt.mistake){
+          p.title = `Room ${p.room} (${p.guest}): check-in made by mistake on ${d} — cancel it in DTCM`;
+          p.steps = [
+            `${dt.what || ''}${dt.mins != null && dt.mins <= 15 ? ` (only ${dt.mins} minute${dt.mins === 1 ? '' : 's'})` : ''}. ` +
+              (dt.prevOut ? 'Same guest, same room, same day, right after check-out: this is a re-check-in made by mistake, not a day use.' : 'Far too short to be a stay: a check-in made by mistake.') +
+              ` DTCM charges ${nf(x.amount)} AED for it; Opera correctly has nothing.`,
+            x.closed
+              ? `It is already checked out, so the portal will not let you edit it: ask DTCM / the TD helpdesk to cancel ${ref}. DTCM drops by ${nf(x.amount)} AED. Do NOT post it in Opera.`
+              : `In the TD portal open ${ref} → Cancel Check-In. DTCM drops by ${nf(x.amount)} AED. Do NOT post it in Opera.`,
+            `Desk rule: if a guest was checked out by mistake, re-open the original stay instead of making a new check-in; cancel a wrong check-in straight away, while it is still open.`
+          ];
+          p.effect = 'DTCM −' + nf(x.amount);
+          return;
+        }
         p.title = `Room ${p.room} (${p.guest}): day use on ${d} is in DTCM only`;
         p.steps = [
           `${dt.what || ''}. DTCM charges ${nf(x.amount)} AED for it; Opera has no TD.` +
@@ -931,7 +979,7 @@
        - Verify, DTCM is short (day use + night, room-move chain, early arrival) → fix DTCM (+)
        - other Verify                          → reverse in Opera
        - early tick, stay still open           → untick in DTCM (−)
-       - day use in DTCM only, 1-15 min        → TD helpdesk cancels it in DTCM (−)
+       - check-in made by mistake (re-check-in after check-out, or a few minutes) → cancel it in DTCM (−)
        - closed early tick, late tick, real day use → post the TD in Opera (+), since DTCM cannot be edited */
     const DTCM_SHORT = new Set(['day_use_repost', 'room_chain_short', 'early_arrival']);
     let endDtcm = round2(dtcmFinalFees - outsideWindow), endOpera = actTotal;
@@ -941,7 +989,7 @@
       if (p.action === 'Add' || p.action === 'Reverse'){ side = 'Opera'; delta = p.amount; }
       else if (p.action === 'Verify'){ if (DTCM_SHORT.has(p.kind)){ side = 'DTCM'; delta = a; } else { side = 'Opera'; delta = p.amount; } }
       else if (p.kind === 'early_tick' && !x.closed){ side = 'DTCM'; delta = -a; }
-      else if (p.kind === 'dtcm_day_use' && x.detail && x.detail.mins != null && x.detail.mins <= 15){ side = 'DTCM'; delta = -a; }
+      else if (p.kind === 'dtcm_day_use' && x.detail && x.detail.mistake){ side = 'DTCM'; delta = -a; }
       else { side = 'Opera'; delta = a; }
       p.monthEnd = { side, delta };
       if (side === 'DTCM') endDtcm = round2(endDtcm + delta); else endOpera = round2(endOpera + delta);

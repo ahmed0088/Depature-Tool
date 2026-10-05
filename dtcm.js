@@ -361,7 +361,7 @@ function dtcRenderSummary(RC) {
         ℹ️ DTCM XML total <b>${dtcNum(RC.dtcmFinalFees)}</b>
         ${xtra ? ` − <b>${dtcNum(xtra)}</b> extra nights DTCM charged (early / late check-out tick)` : ''}
         ${outside ? ` − <b>${dtcNum(outside)}</b> for nights outside this Opera file${(RC.outsideRooms || []).length ? ' (rooms ' + escapeHtml(RC.outsideRooms.join(', ')) + ')' : ''}` : ''}
-        ${dayU ? ` − <b>${dtcNum(dayU)}</b> day use in DTCM only` : ''}
+        ${dayU ? ` − <b>${dtcNum(dayU)}</b> day use / wrong check-ins in DTCM only` : ''}
         = <b>${dtcNum(dtcmTotal)}</b> compared with Opera <b>${dtcNum(RC.actTotal)}</b>.
         Raw totals, XML vs Opera: <b>${dtcNum(RC.actTotal - RC.dtcmFinalFees)}</b> AED.
       </div>` : '';
@@ -424,7 +424,7 @@ function dtcRenderFixPlan(RC) {
       ${row('DTCM XML total', n(G.rawDtcm) + ' AED', '')}
       ${G.outside ? row('− Nights after the Opera file ends', '−' + n(G.outside), 'Rooms ' + escapeHtml((G.outsideRooms || []).join(', ')) + '. <b>Nothing to fix.</b> These nights fall inside the NEXT Opera file. Do not post them now.') : ''}
       ${G.dtcmExtra ? row('− Extra nights DTCM charged (early / late check-out tick)', '−' + n(G.dtcmExtra), 'Rooms ' + escapeHtml((G.dtcmExtraRooms || []).join(', ')) + '. <b>Fix in DTCM</b> (blue items below). No Opera night will ever match these, not even in the next file.') : ''}
-      ${G.dayUse ? row('− Day use (DTCM only)', '−' + n(G.dayUse), (G.dayUseRooms || []).length ? 'Rooms ' + escapeHtml(G.dayUseRooms.join(', ')) + '. <b>Check each one</b> (blue items below): cancel it in DTCM if it was not a real stay, or post it in Opera if it was.' : '<b>Nothing to fix.</b>') : ''}
+      ${G.dayUse ? row('− Day use / wrong check-ins (DTCM only)', '−' + n(G.dayUse), (G.dayUseRooms || []).length ? 'Rooms ' + escapeHtml(G.dayUseRooms.join(', ')) + '. <b>Check each one</b> (blue items below): a check-in made by mistake is cancelled in DTCM; a real day use is posted in Opera.' : '<b>Nothing to fix.</b>') : ''}
       ${row('= DTCM to compare with Opera', n(G.adjDtcm) + ' AED', '', true)}
       ${row('Opera journal', n(G.rawOpera) + ' AED', '')}
       ${row('Difference between the two totals', sg(G.adjGap) + ' AED', G.adjGap === 0 ? 'The totals agree, but the room lines below are still wrong (the errors cancel each other).' : 'This is the gap the corrections below must close.', true)}
