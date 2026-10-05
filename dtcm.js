@@ -442,6 +442,7 @@ function dtcRenderFixPlan(RC) {
       <ol style="margin:8px 0 4px 18px;padding:0;font-size:.78rem;line-height:1.5;">
         ${(p.steps || []).map(t => `<li style="margin:3px 0;">${escapeHtml(t)}</li>`).join('')}
       </ol>
+      ${p.monthEnd ? `<div style="font-size:.72rem;margin:2px 0 6px;"><b>Month-end:</b> close this ${p.monthEnd.side === 'DTCM' ? 'in the TD portal' : 'in Opera'} (${p.monthEnd.side} ${p.monthEnd.delta > 0 ? '+' : '−'}${n(Math.abs(p.monthEnd.delta))}).</div>` : ''}
       ${p.uid ? `<div style="font-size:.64rem;color:var(--text3);">DTCM ID ${dtcChip(p.uid)}</div>` : ''}
     </details>`).join('');
 
@@ -453,6 +454,10 @@ function dtcRenderFixPlan(RC) {
     after = `<div style="font-size:.8rem;line-height:1.55;">
       ${sure ? `After step${sure.includes(',') ? 's' : ''} ${sure}: Opera is <b>${n(G.operaAfterKeep)}</b> AED.` : `Opera is <b>${n(G.rawOpera)}</b> AED.`}
       ${G.verT ? `The “check the reservation” item(s) then close in one of two ways: reverse in Opera (Opera becomes <b>${n(G.operaAfter)}</b>, DTCM stays <b>${n(G.adjDtcm)}</b>), or fix it in the TD portal (DTCM becomes <b>${n(G.dtcmAfterKeep)}</b>, Opera stays <b>${n(G.operaAfterKeep)}</b>). Either way the two sides end equal.` : `DTCM is <b>${n(G.adjDtcm)}</b> AED, so both sides agree.`}
+      ${G.monthEnd ? `<div style="margin-top:10px;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);">
+        <b>Month-end tally.</b> Close each item the recommended way (${G.monthEnd.operaChanges} in Opera, ${G.monthEnd.dtcmChanges} in the TD portal — each card says which) and both sides end at
+        DTCM XML <b>${n(G.monthEnd.dtcm)}</b> AED · Opera <b>${n(G.monthEnd.opera)}</b> AED${G.monthEnd.equal ? ' — <b>equal</b>.' : '. ⚠️ Still not equal: something is not explained yet.'}
+        Day use counts: DTCM always charges it, and the night audit never posts it, so post 10 AED TD (7510) by hand in Opera on the same day for every real day use.</div>` : ''}
       ${(G.dtcmExtra || G.dayUse) ? `<br>The blue DTCM items are separate: each one is fixed in the TD portal (or, for a real day use / charged late check-out, posted in Opera). Once all are fixed in DTCM, the DTCM XML total drops by <b>${n((G.dtcmExtra || 0) + (G.dayUse || 0))}</b> AED.` : ''}
     </div>`;
   } else {

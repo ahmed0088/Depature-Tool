@@ -925,6 +925,31 @@
         p.effect = 'Closes either way';
       }
     });
+    /* MONTH-END: the recommended way to close each item, and where BOTH totals end up. At month end
+       the DTCM XML total and the Opera journal must be equal, so every item is closed on one side:
+       - Add / Reverse                         → Opera
+       - Verify, DTCM is short (day use + night, room-move chain, early arrival) → fix DTCM (+)
+       - other Verify                          → reverse in Opera
+       - early tick, stay still open           → untick in DTCM (−)
+       - day use in DTCM only, 1-15 min        → TD helpdesk cancels it in DTCM (−)
+       - closed early tick, late tick, real day use → post the TD in Opera (+), since DTCM cannot be edited */
+    const DTCM_SHORT = new Set(['day_use_repost', 'room_chain_short', 'early_arrival']);
+    let endDtcm = round2(dtcmFinalFees - outsideWindow), endOpera = actTotal;
+    plan.forEach(p => {
+      const x = p.extra || {}, a = Math.abs(p.amount);
+      let side, delta;
+      if (p.action === 'Add' || p.action === 'Reverse'){ side = 'Opera'; delta = p.amount; }
+      else if (p.action === 'Verify'){ if (DTCM_SHORT.has(p.kind)){ side = 'DTCM'; delta = a; } else { side = 'Opera'; delta = p.amount; } }
+      else if (p.kind === 'early_tick' && !x.closed){ side = 'DTCM'; delta = -a; }
+      else if (p.kind === 'dtcm_day_use' && x.detail && x.detail.mins != null && x.detail.mins <= 15){ side = 'DTCM'; delta = -a; }
+      else { side = 'Opera'; delta = a; }
+      p.monthEnd = { side, delta };
+      if (side === 'DTCM') endDtcm = round2(endDtcm + delta); else endOpera = round2(endOpera + delta);
+    });
+    gap.monthEnd = { dtcm: endDtcm, opera: endOpera, equal: Math.abs(endDtcm - endOpera) < 0.005,
+      opera: endOpera, dtcmChanges: plan.filter(p => p.monthEnd.side === 'DTCM').length,
+      operaChanges: plan.filter(p => p.monthEnd.side === 'Opera').length };
+
     const order = { Add: 0, Reverse: 1, Verify: 2, DTCM: 3 };
     plan.sort((a, b) => (order[a.action] - order[b.action]) || (Math.abs(b.amount) - Math.abs(a.amount)));
 
