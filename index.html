@@ -4168,10 +4168,26 @@ function closeMobMore() {
   if (overlay) overlay.style.display = 'none';
   document.getElementById('mobMoreBtn')?.classList.remove('active');
 }
+function mobMoreFilter(q) {
+  const w = String(q || '').toLowerCase().trim();
+  document.querySelectorAll('#mobMoreDrawer .mob-more-item').forEach(b => {
+    if (b.id === 'mobAdminBtn' && b.dataset.hiddenByRole !== undefined) return;
+    const KW = { dtcm: 'td tourism dirham recon reconcile dtcm xml', tourism: 'td tourism dirham portal date', 'td-audit': 'td 30 nights cap long stay',
+      purpose: 'purpose stay email nationality origin', pipeline: 'neorcha email all enroll scraper loyalty', noshow: 'no show na40 pdf',
+      immig: 'immigration passport police', 'inhouse-tally': 'vicas inhouse in-house', audit: 'pm rooms night audit excel',
+      standards: 'accor standards help guide all loyalty rules', rent: 'rented rooms beds', xref: 'extension arrivals departures',
+      nationality: 'country nationality report', adagio: 'long stay collections balance cheque', trends: 'month charts history',
+      'package-audit': 'upsell in-gauge package', 'arrivals-proc': 'arrivals processor package codes' };
+    const hit = !w || (b.textContent + ' ' + (b.dataset.panel || '') + ' ' + (KW[b.dataset.panel] || '')).toLowerCase().includes(w);
+    b.classList.toggle('mob-hide', !hit);
+  });
+}
 function toggleMobMore() {
   const drawer  = document.getElementById('mobMoreDrawer');
   const overlay = document.getElementById('mobMoreOverlay');
   const isOpen  = drawer.style.display !== 'none';
+  if (!isOpen) { const q = document.getElementById('mobMoreSearch'); if (q) { q.value = ''; mobMoreFilter(''); } }
+  try { navigator.vibrate && navigator.vibrate(8); } catch (_) {}
   drawer.style.display  = isOpen ? 'none' : 'block';
   overlay.style.display = isOpen ? 'none' : 'block';
   document.getElementById('mobMoreBtn')?.classList.toggle('active', !isOpen);
@@ -4229,8 +4245,13 @@ window.showPanel = function(name) {
   // Close more drawer if open
   const drawer = document.getElementById('mobMoreDrawer');
   if (drawer && drawer.style.display !== 'none') closeMobMore();
-  // Start every page at the top on a phone
-  if (window.innerWidth <= 900) window.scrollTo({ top: 0 });
+  // Start every page at the top on a phone, with a short slide-in and a light tap feel
+  if (window.innerWidth <= 900) {
+    window.scrollTo({ top: 0 });
+    const pnl = document.getElementById('panel-' + name);
+    if (pnl) { pnl.classList.remove('mob-enter'); void pnl.offsetWidth; pnl.classList.add('mob-enter'); }
+    try { navigator.vibrate && navigator.vibrate(8); } catch (_) {}
+  }
 };
 
 // Sync badges every 5 seconds
@@ -4916,6 +4937,9 @@ async function appInit() {
       <button class="mob-theme-btn" data-t="midnight"  onclick="setTheme('midnight',this)"  title="Midnight">🌌</button>
     </div>
   </div>
+
+  <!-- Find a page fast -->
+  <div class="mob-more-search"><input id="mobMoreSearch" type="search" placeholder="🔍 Find a page… (e.g. dtcm, purpose, no-show)" oninput="mobMoreFilter(this.value)" autocomplete="off"></div>
 
   <!-- Scrollable panel grid -->
   <div class="mob-more-grid">

@@ -5649,3 +5649,41 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
 .hs-f input { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border2); background: var(--bg); color: var(--text); }
 .hs-f small { font-size: .66rem; color: var(--text3); line-height: 1.4; }
 .hs-f small a { color: var(--accent); }
+
+/* ══════════════════════════════════════════════════════
+   PHONE — polish: floating bottom bar, page slide-in, menu search
+══════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .mob-nav {
+    left: 10px !important; right: 10px !important; bottom: calc(10px + env(safe-area-inset-bottom)) !important;
+    border-radius: 22px !important; border: 1px solid var(--border2) !important;
+    background: color-mix(in srgb, var(--bg2) 82%, transparent) !important;
+    backdrop-filter: blur(14px) saturate(1.4); -webkit-backdrop-filter: blur(14px) saturate(1.4);
+    box-shadow: 0 10px 30px rgba(0,0,0,.35) !important; height: 62px !important; padding: 0 6px !important;
+  }
+  .mob-nav-btn { border-radius: 16px; transition: background .15s, transform .1s; position: relative; }
+  .mob-nav-btn:active { transform: scale(.92); }
+  .mob-nav-btn.active { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+  .mob-nav-btn.active .mob-nav-lbl { color: var(--accent); font-weight: 800; }
+  .mob-nav-btn.active .mob-nav-icon { transform: translateY(-1px) scale(1.12); }
+  .mob-nav-icon { transition: transform .15s; }
+  .panel { padding-bottom: 100px !important; }
+  #appToast { bottom: calc(84px + env(safe-area-inset-bottom)) !important; }
+
+  .panel.mob-enter { animation: mobEnter .22s ease-out; }
+  @keyframes mobEnter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+  .mob-more-drawer { border-radius: 24px 24px 0 0 !important; animation: mobSheet .22s ease-out; }
+  @keyframes mobSheet { from { transform: translateY(40px); opacity: .4; } to { transform: none; opacity: 1; } }
+  .mob-more-search { padding: 4px 14px 10px; }
+  .mob-more-search input { width: 100%; box-sizing: border-box; min-height: 44px; border-radius: 14px; border: 1px solid var(--border2);
+    background: var(--bg); color: var(--text); padding: 10px 14px; }
+  .mob-more-item.mob-hide { display: none !important; }
+  .mob-more-item { transition: transform .1s; }
+  .mob-more-item:active { transform: scale(.95); }
+  .card, .pc-card { transition: transform .1s; }
+  .btn:active { transform: scale(.97); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .panel.mob-enter, .mob-more-drawer { animation: none !important; }
+}
