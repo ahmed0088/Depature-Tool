@@ -127,6 +127,8 @@ function homeRender() {
       ${t.pct != null ? `<div class="home-bar"><div style="width:${t.pct}%"></div></div>` : ''}
     </button>`).join('');
   if (typeof brHomeStrip === 'function') brHomeStrip();
+  const ls = document.getElementById('homeLearnSub');
+  if (ls && typeof LEARN_LESSONS !== 'undefined') { const n = LEARN_LESSONS.filter(l => learnDone.has(l.id)).length; ls.textContent = n ? `${n} of ${LEARN_LESSONS.length} lessons learned · keep going` : 'Learn the app in short lessons, with "Show me" for every page'; document.querySelector('.home-learn')?.classList.toggle('ln-finished', n === LEARN_LESSONS.length); }
   const open = tiles.filter(t => t.tone === 'warn' || t.tone === 'bad').length;
   const b = document.getElementById('badge-home');
   if (b) b.textContent = open || '✓';

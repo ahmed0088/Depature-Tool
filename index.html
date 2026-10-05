@@ -514,6 +514,9 @@
     <span class="nav-badge" id="badge-adagio">—</span>
   </div>
   <div class="nav-section-label">System</div>
+  <div class="nav-item" onclick="showPanel('learn')" id="nav-learn" data-panel="learn">
+    <div class="nav-icon">🎓</div>Learn HotelOps
+  </div>
   <div class="nav-item" onclick="showPanel('settings')" id="nav-settings" data-panel="settings">
     <div class="nav-icon">⚙️</div>Settings
   </div>
@@ -536,6 +539,7 @@
     </div>
     <div id="homeTiles" class="home-grid"></div>
     <div id="homeBrain" class="home-brain"></div>
+    <button class="home-learn" onclick="showPanel('learn')"><span>🎓</span><span><b>New to HotelOps?</b><small id="homeLearnSub">Learn the app in short lessons, with "Show me" for every page</small></span><span>›</span></button>
     <div class="home-drop">📥 Tip: drag any Opera, DTCM or PDF report onto the app, on any page. It opens the right page and loads the file for you.</div>
     <p class="home-foot">Tap a tile to open the page. Numbers update as you and your colleagues work.</p>
   </div>
@@ -1463,6 +1467,21 @@
       </div>
       <div id="gpTracker" style="margin-top:12px;"></div>
     </div>
+  </div>
+</div>
+
+<div class="panel" id="panel-learn">
+  <div class="ln-wrap">
+    <div class="page-hd">
+      <div class="page-hd-left"><h1>Learn HotelOps</h1><p>Everything a new colleague needs: the basics, a shift step by step, and one short lesson per page. "Show me" points at the exact place.</p></div>
+      <div class="page-hd-actions"><button class="btn" onclick="learnPrint()">🖨 Print guide</button></div>
+    </div>
+    <div class="ln-top">
+      <div id="learnProgress" class="ln-progress"></div>
+      <input id="learnSearch" type="search" placeholder="Search the guide… e.g. DTCM, passport, late check-out" oninput="learnFilter(this.value)"/>
+    </div>
+    <div class="ln-jump"><a href="#ln-start">Start here</a><a href="#ln-shift">Your shift</a><a href="#ln-pages">Every page</a></div>
+    <div id="learnBody"></div>
   </div>
 </div>
 
@@ -4249,7 +4268,7 @@ function mobMoreFilter(q) {
     const KW = { dtcm: 'td tourism dirham recon reconcile dtcm xml', tourism: 'td tourism dirham portal date', 'td-audit': 'td 30 nights cap long stay',
       purpose: 'purpose stay email nationality origin', pipeline: 'neorcha email all enroll scraper loyalty', noshow: 'no show na40 pdf',
       immig: 'immigration passport police', 'inhouse-tally': 'vicas inhouse in-house', audit: 'pm rooms night audit excel',
-      standards: 'accor standards help guide all loyalty rules', history: 'history log audit who did what activity', settings: 'settings options preferences hide show theme text size menu', rent: 'rented rooms beds', xref: 'extension arrivals departures',
+      standards: 'accor standards help guide all loyalty rules', history: 'history log audit who did what activity', settings: 'settings options preferences hide show theme text size menu', learn: 'learn guide training help tutorial new staff how to', rent: 'rented rooms beds', xref: 'extension arrivals departures',
       nationality: 'country nationality report', adagio: 'long stay collections balance cheque', trends: 'month charts history',
       'package-audit': 'upsell in-gauge package', 'arrivals-proc': 'arrivals processor package codes' };
     const hit = !w || (b.textContent + ' ' + (b.dataset.panel || '') + ' ' + (KW[b.dataset.panel] || '')).toLowerCase().includes(w);
@@ -5085,6 +5104,9 @@ async function appInit() {
     <button class="mob-more-item" data-panel="standards"      onclick="showPanel('standards');closeMobMore()">
       <span class="mob-item-icon">📘</span>Standards
     </button>
+    <button class="mob-more-item" data-panel="learn"          onclick="showPanel('learn');closeMobMore()">
+      <span class="mob-item-icon">🎓</span>Learn
+    </button>
     <button class="mob-more-item" data-panel="settings"       onclick="showPanel('settings');closeMobMore()">
       <span class="mob-item-icon">⚙️</span>Settings
     </button>
@@ -5295,6 +5317,7 @@ async function appInit() {
 <script src="brain-agent.js"></script>
 <script src="brain-smart.js"></script>
 <script src="nat-extra.js"></script>
+<script src="learn.js"></script>
 <script src="brand.js"></script>
 <script src="settings.js"></script>
 <script>
