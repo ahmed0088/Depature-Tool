@@ -113,7 +113,7 @@ const LEARN_LESSONS = [
   { id: 'nationality', group: 'money', page: 'nationality', icon: 'nationality', title: 'Nationality Report', show: '#natInput',
     why: 'Fills your monthly Excel with guests per country.',
     need: 'Opera stat_countrybymon (Delimited Data, Nationality radio selected)',
-    steps: ['Paste or drop the file and press ⚡ Process.', 'If a country has no Excel row: ➕ Add as new row, or put it in an existing row. Both are remembered.', 'Copy All Rows and paste into your sheet.'] },
+    steps: ['Paste or drop the file and press ⚡ Process.', 'If a country has no Excel row: add it as a new row at its place in the sheet (alphabetical, like the government sheet: it tells you the row number to insert in your Excel once), or put it in an existing row. Both are remembered.', 'Copy All Rows and paste into your sheet.'] },
   { id: 'rent', group: 'money', page: 'rent', icon: 'rent', title: 'Rented Rooms & Beds', show: '#panel-rent .card',
     why: 'Rooms and beds sold per day.',
     need: 'Opera history_forecast and statroomtype (Delimited Data)',

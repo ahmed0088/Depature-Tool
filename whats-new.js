@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 133, items: [
+    '🌍 Nationality report: a country you add now goes to its place in the sheet, alphabetically like the government sheet, not at the bottom. It shows the exact Excel row to insert (e.g. "row 211, under South Sudan, above Spain"), and you can move it under another country if your sheet differs. Copy for Excel pastes straight in, and the row counts update to match.',
+  ] },
   { v: 132, items: [
     '🎓 Learn HotelOps: a guide for anyone new (menu → System → Learn HotelOps, or the card on Home). Start here (6 basics), your shift step by step (morning, afternoon, night), and a short lesson for every page: what it is for, which Opera report it needs, the steps and tips.',
     '👉 "Show me" opens the page and points at the exact place. Tick "I\'ve learned this" to track your progress; owners and managers see the whole team\'s progress. 🖨 Print guide makes a handout for a new colleague. Ops Brain answers from the guide too.',

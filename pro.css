@@ -533,3 +533,6 @@ body.ho-privacy :is(#panel-purpose, #panel-arrivals) tbody td:focus-within { fil
   .ln-body { padding: 0 14px 14px 14px; }
   .ln-team > div { grid-template-columns: 1fr 1fr 40px; }
 }
+.nx-place { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: .74rem; color: var(--text2); }
+.nx-rows > div { grid-template-columns: 62px 1fr minmax(90px, 150px) 26px !important; }
+.nx-rows span small { display: block; color: var(--text3); font-size: .68rem; }

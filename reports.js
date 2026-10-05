@@ -301,7 +301,7 @@ function natFilterPreview(q) {
   window._renderNatPreview();
 }
 
-function copyNat()  { if (window._buildNatCopy) natCopyText = window._buildNatCopy(); if (!natCopyText) return; copyToClipboard(natCopyText, document.getElementById('natCopyBtn'), 'Copy All 240 Rows'); }
+function copyNat()  { if (window._buildNatCopy) natCopyText = window._buildNatCopy(); if (!natCopyText) return; copyToClipboard(natCopyText, document.getElementById('natCopyBtn'), `Copy All ${EXCEL_COUNTRIES.length} Rows`); }
 function clearNat() { document.getElementById('natInput').value=''; document.getElementById('natResults').style.display='none'; document.getElementById('natError').classList.remove('show'); natCopyText=''; try { localStorage.removeItem('ibis_nat_paste'); } catch(e){} }
 
 // ── RENTED ROOMS & BEDS ───────────────────────────────────
