@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 134, items: [
+    '🌍 Nationality report: the sheet always keeps its 240 rows. A country Opera spells differently goes into one of those rows: the closest rows are offered first with their row number, or pick from all 240, or count it as unknown nationality. Your choice is remembered for the team. Adding new rows is gone, and any rows added before were removed.',
+  ] },
   { v: 133, items: [
     '🌍 Nationality report: a country you add now goes to its place in the sheet, alphabetically like the government sheet, not at the bottom. It shows the exact Excel row to insert (e.g. "row 211, under South Sudan, above Spain"), and you can move it under another country if your sheet differs. Copy for Excel pastes straight in, and the row counts update to match.',
   ] },
