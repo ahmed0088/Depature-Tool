@@ -30,18 +30,52 @@ const NAME_MAP = {
   "Saint Barthélemy":"Saint Barthelemy",
   "San Marino":"San Marino (in Italy)",
   "Suriname":"Surinam",
+  "Antigua and Barbuda":"Antigua & Barbuda",
+  "Cayman Islands":"Cayman Island",
+  "Korea (North)":"Korea, Democratic People's Republic of (North)",
+  "Korea, Democratic People's Republic of":"Korea, Democratic People's Republic of (North)",
+  "Korea, Republic of":"Korea, Republic of (South)",
+  "Iran, Islamic Republic of":"Iran","Syrian Arab Republic":"Syria",
+  "Lao People's Democratic Republic":"Laos","Lao PDR":"Laos",
+  "Tanzania, United Republic of":"Tanzania","Moldova, Republic of":"Moldova",
+  "North Macedonia":"Macedonia, Republic of","Macedonia":"Macedonia, Republic of",
+  "Macao":"Macau","Taiwan, Province of China":"Taiwan",
+  "Eswatini":"Swaziland","Marshall Islands":"Marshal Islands","Solomon Islands":"Solomon Island",
+  "Sao Tome and Principe":"Sao Tomé","Saint Kitts & Nevis":"Saint Kitts and Nevis",
+  "St Kitts and Nevis":"Saint Kitts and Nevis","St Lucia":"Saint Lucia",
+  "St Vincent and the Grenadines":"Saint Vincent and the Grenadines",
+  "Vatican":"Holy See (Vatican City State)","Vatican City":"Holy See (Vatican City State)",
+  "Micronesia":"Micronesia, Federated States of","Northern Mariana Islands":"Northern Mariana Isl.",
+  "Falkland Islands":"Falkland Islands (Malvinas)","Netherlands Antilles":"Netherlands, Antilles",
+  "US Virgin Islands":"Virgin Islands, U.S.","Kirgizstan":"Kyrghyzstan",
+  "Hong Kong SAR":"Hong Kong","Bolivia, Plurinational State of":"Bolivia",
+  "Venezuela, Bolivarian Republic of":"Venezuela","Palestinian Territory, Occupied":"Palestine",
+  "zzz":null,"ZZZ":null,"XXX":null,"xx":null,"-":null,"N/A":null,
   "Unknown":null,
   "UNKNOWN":null,
   "unknown":null,
   "No Nationality":null,
   "Not Specified":null,
 };
+function _natLoose(s) {
+  return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/&/g, ' and ').replace(/\bst\.?\s/g, 'saint ').replace(/\bislands\b/g, 'island')
+    .replace(/\brepublic of\b|\bthe\b/g, ' ').replace(/[^a-z]/g, '');
+}
+const EXCEL_LOOSE = {};
+EXCEL_COUNTRIES.forEach(n => { EXCEL_LOOSE[_natLoose(n)] = n; });
+
 function resolveCountry(name) {
   if (!name) return { excel: null, isUnknown: true };
   const t = name.trim();
   if (NAME_MAP.hasOwnProperty(t)) { const v = NAME_MAP[t]; return { excel: v, isUnknown: v === null }; }
   const match = EXCEL_LOWER[t.toLowerCase()];
-  return match ? { excel: match, isUnknown: false } : { excel: null, isUnknown: false };
+  if (match) return { excel: match, isUnknown: false };
+  // Placeholder codes Opera uses when no nationality was entered (zzz, xx, ---)
+  if (/^(z+|x+|-+|\?+|n\/?a)$/i.test(t)) return { excel: null, isUnknown: true };
+  // Loose match: "and" = "&", "Islands" = "Island", "St" = "Saint", punctuation ignored
+  const loose = EXCEL_LOOSE[_natLoose(t)];
+  return loose ? { excel: loose, isUnknown: false } : { excel: null, isUnknown: false };
 }
 
 // ── NATIONALITY REPORT ────────────────────────────────────
