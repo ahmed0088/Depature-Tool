@@ -5511,6 +5511,16 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
 .dtc-sheet-table .amt { text-align:right; font-weight:700; color:var(--red); font-family:var(--mono); white-space:nowrap; }
 .dtc-sheet-table tr.done td { background:var(--green-bg); text-decoration:line-through; color:var(--text3); }
 .dtc-sheet-table tr.done td .dtc-act { text-decoration:none; opacity:.6; }
+/* Phones: each row becomes a compact card (action · room · date · amount on one line, the reason below) */
+@media (max-width:600px){
+  .dtc-sheet-table { min-width:0; }
+  .dtc-sheet-table thead { display:none; }
+  .dtc-sheet-table tr { display:flex; flex-wrap:wrap; align-items:center; gap:4px 12px; padding:10px 6px; border-bottom:1px solid var(--border); }
+  .dtc-sheet-table td { border:none; padding:0; text-align:left !important; }
+  .dtc-sheet-table td:last-child:not(.amt) { flex-basis:100%; font-size:.74rem; line-height:1.45; }
+  .dtc-sheet-table td br { display:none; }
+  .dtc-fp-eff { float:none !important; display:block; text-align:right; margin-top:4px; }
+}
 .dtc-sheet-actions { position:sticky; bottom:0; background:var(--bg); padding:10px 0; border-top:1px solid var(--border); margin-top:16px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; z-index:2; }
 .dtc-progress { flex:1; display:flex; align-items:center; gap:10px; font-size:.76rem; color:var(--text3); min-width:200px; }
 .dtc-bar { flex:1; height:7px; background:var(--border); border-radius:4px; overflow:hidden; max-width:260px; }

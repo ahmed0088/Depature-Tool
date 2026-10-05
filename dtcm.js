@@ -437,7 +437,7 @@ function dtcRenderFixPlan(RC) {
         <span style="font-family:var(--mono);">${i + 1}.</span>
         <span class="dtc-act ${escapeHtml(p.action.toLowerCase())}">${escapeHtml(p.action)}</span>
         ${escapeHtml(p.title)}
-        <span style="float:right;font-family:var(--mono);font-size:.72rem;color:var(--text2);">${escapeHtml(p.effect || '')}</span>
+        <span class="dtc-fp-eff" style="float:right;font-family:var(--mono);font-size:.72rem;color:var(--text2);">${escapeHtml(p.effect || '')}</span>
       </summary>
       <ol style="margin:8px 0 4px 18px;padding:0;font-size:.78rem;line-height:1.5;">
         ${(p.steps || []).map(t => `<li style="margin:3px 0;">${escapeHtml(t)}</li>`).join('')}
