@@ -1451,7 +1451,7 @@ function _pkgEvidence(r) {
 function pkgCopyResolved() {
   // Only rows that are valid to credit AND needed fixing — an already-correct
   // row has nothing to update, and a denied row must never be credited.
-  const resolved = pkgResults.filter(r => r.verdict === 'credit' && !r.alreadyComplete);
+  const resolved = pkgResults.filter(r => r.verdict === 'credit' && !r.alreadyComplete && !r.pinSkip);
   if (!resolved.length) { showToast('No fixed rows to copy', 'err'); return; }
   const s = _pkgAuditStamp();
   const tsv = ['Room\tConfirmation No.\tProduct Code\tPrice (AED)\tFrom\tTo\tSold By\tCurrently Credited To\tWhy Changed\tAudited On\tAudited By']
