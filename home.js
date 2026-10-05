@@ -125,6 +125,7 @@ function homeRender() {
       <div class="home-sub">${escapeHtml(t.sub)}</div>
       ${t.pct != null ? `<div class="home-bar"><div style="width:${t.pct}%"></div></div>` : ''}
     </button>`).join('');
+  if (typeof brHomeStrip === 'function') brHomeStrip();
   const open = tiles.filter(t => t.tone === 'warn' || t.tone === 'bad').length;
   const b = document.getElementById('badge-home');
   if (b) b.textContent = open || '✓';

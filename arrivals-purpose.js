@@ -669,6 +669,32 @@ function arrRender() {
   arrKpiUpdate();
 }
 
+// Phones: a compact list — one line per guest (room, name, what is missing,
+// purpose). Tap the line to open the guest and edit everything.
+const _pcOpen = new Set();
+const _pcKey = (kind, g) => kind + ':' + (g.conf || '') + ':' + (g.room || '') + ':' + (g.name || '');
+const _PC_NEXT = { Business: 'Leisure', Leisure: 'Flight', Flight: 'Business' };
+function _pcRowHead(kind, i, g, flags, purposeFn) {
+  const key = _pcKey(kind, g);
+  const open = _pcOpen.has(key);
+  const p = g.purpose || 'Business';
+  return `<div class="pc-card pc-row ${p === 'Leisure' ? 'leisure' : p === 'Flight' ? 'flight' : ''} ${open ? 'open' : ''}" data-k="${escapeHtml(key)}">
+    <div class="pc-line" onclick="pcToggle(this)">
+      <span class="pc-room">${escapeHtml(g.room || '—')}</span>
+      <span class="pc-mid"><span class="pc-name">${escapeHtml(g.name || '')}</span>
+        <span class="pc-flags">${flags.length ? flags.map(x => `<i>${x}</i>`).join('') : '<i class="ok">✓ complete</i>'}</span></span>
+      <button class="pc-pill ${p.toLowerCase()}" title="Tap to change: Business → Leisure → Flight"
+        onclick="event.stopPropagation();${purposeFn}(${i},'${_PC_NEXT[p] || 'Business'}')">${p[0]}</button>
+      <span class="pc-chev">›</span>
+    </div>`;
+}
+function pcToggle(el) {
+  const card = el.closest('.pc-row');
+  const k = card.dataset.k;
+  if (_pcOpen.has(k)) _pcOpen.delete(k); else _pcOpen.add(k);
+  card.classList.toggle('open');
+}
+
 // Phones: one card per arriving guest instead of the 10-column table
 function arrRenderCards(list) {
   const box = document.getElementById('arrCards');
@@ -683,12 +709,9 @@ function arrRenderCards(list) {
     const i = arrGuests.indexOf(g);
     const srcCat = sourceCategory(g.source);
     const noEmail = !g.email || !String(g.email).includes('@');
-    return `<div class="pc-card ${g.purpose === 'Leisure' ? 'leisure' : ''}">
-      <div class="pc-hd">
-        <span class="pc-room">${escapeHtml(g.room || '—')}</span>
-        <span class="pc-name">${escapeHtml(g.name || '')}</span>
-        <button class="pc-del" onclick="arrRemoveGuest(${i})" title="Remove guest">✕</button>
-      </div>
+    const flags = [noEmail ? '✉️ email' : '', !g.nat ? '🌍 nationality' : ''].filter(Boolean);
+    return `${_pcRowHead('arr', i, g, flags, 'arrChangePurpose')}
+      <div class="pc-more">
       <div class="pc-seg">${['Business', 'Leisure', 'Flight'].map(p =>
         `<button class="${g.purpose === p ? 'on' : ''}" onclick="arrChangePurpose(${i},'${p}')">${p}</button>`).join('')}</div>
       <div class="pc-grid">
@@ -704,6 +727,8 @@ function arrRenderCards(list) {
           <input value="${escapeHtml(g.source || '')}" oninput="arrGuests[${i}].source=this.value" onblur="debounceSaveArrivals()"></label>
         ${f(i, 'conf', 'Confirmation #')}
         <div class="pc-wide">${f(i, 'remarks', 'Remarks')}</div>
+      </div>
+      <button class="pc-del-wide" onclick="arrRemoveGuest(${i})">✕ Remove guest</button>
       </div>
     </div>`;
   }).join('');
@@ -1011,12 +1036,9 @@ function purposeRenderCards(list) {
   box.innerHTML = list.map(g => {
     const i = purposeGuests.indexOf(g);
     const srcCat = sourceCategory(g.source);
-    return `<div class="pc-card ${g.purpose === 'Leisure' ? 'leisure' : ''}">
-      <div class="pc-hd">
-        <span class="pc-room">${escapeHtml(g.room || '—')}</span>
-        <span class="pc-name">${escapeHtml(g.name || '')}</span>
-        <button class="pc-del" onclick="purposeRemoveGuest(${i})" title="Remove guest">✕</button>
-      </div>
+    const flags = [!g.email || !String(g.email).includes('@') ? '✉️ email' : '', !g.nat ? '🌍 nationality' : '', !g.originOfTravel ? '🧭 origin' : ''].filter(Boolean);
+    return `${_pcRowHead('pur', i, g, flags, 'purposeChangePurpose')}
+      <div class="pc-more">
       <div class="pc-seg">${['Business', 'Leisure', 'Flight'].map(p =>
         `<button class="${g.purpose === p ? 'on' : ''}" onclick="purposeChangePurpose(${i},'${p}')">${p}</button>`).join('')}</div>
       <div class="pc-grid">
@@ -1037,6 +1059,8 @@ function purposeRenderCards(list) {
             onblur="gmOnEdit(purposeGuests[${i}].name,'originOfTravel',this.value);debounceSavePurpose()"></label>
         ${f(i, 'conf', 'Confirmation #')}
         ${f(i, 'remarks', 'Remarks')}
+      </div>
+      <button class="pc-del-wide" onclick="purposeRemoveGuest(${i})">✕ Remove guest</button>
       </div>
     </div>`;
   }).join('');
