@@ -483,6 +483,10 @@
   <!-- Guest Memory — intentionally not listed in the visible nav. Reach it
        with Ctrl/Cmd+Shift+M (see the keydown handler further down), or the
        panel is still addressable directly via showPanel('guestmem'). -->
+  <div class="nav-item" onclick="showPanel('standards')" id="nav-standards" data-panel="standards">
+    <div class="nav-icon">📘</div>Accor Standards
+    <span class="nav-badge" id="badge-standards">—</span>
+  </div>
   <div class="nav-item" onclick="showPanel('trends')" id="nav-trends" data-panel="trends">
     <div class="nav-icon">📈</div>Trends
     <span class="nav-badge" id="badge-trends">—</span>
@@ -1332,6 +1336,26 @@
 </div>
 
 <!-- ════════════════ TRENDS ════════════════ -->
+<div class="panel" id="panel-standards">
+  <div style="max-width:1100px;">
+    <div class="page-hd">
+      <div class="page-hd-left">
+        <h1>Accor Standards</h1>
+        <p>Look things up on shift · ALL loyalty, ibis Styles brand, service culture, Tourism Dirham and guest registration</p>
+      </div>
+    </div>
+    <div class="dtc-warn" style="margin-bottom:12px;background:rgba(90,180,232,.1);border-color:rgba(90,180,232,.35);font-size:.76rem;line-height:1.6;">
+      ℹ️ Built from <b>public</b> Accor and Dubai information plus <b>this hotel's own practice</b> (from real DTCM reconciliations). It is not Accor's internal brand-standard manual: every card shows its source — when your Accor manual or hotel SOP says something different, <b>the manual wins</b>.
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+      <input id="stdSearchBox" type="search" placeholder="Search… e.g. upgrade, day use, passport, gold" oninput="stdSearch(this.value)" style="flex:1;min-width:220px;padding:9px 12px;border-radius:8px;border:1px solid var(--border2);background:var(--bg2);color:var(--text);font-size:.85rem;"/>
+      <span id="stdCount" style="font-family:var(--mono);font-size:.7rem;color:var(--text3);"></span>
+    </div>
+    <div id="stdCats" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;"></div>
+    <div id="stdList"></div>
+  </div>
+</div>
+
 <div class="panel" id="panel-trends">
   <div style="max-width:1200px;">
     <div class="page-hd">
@@ -4831,6 +4855,9 @@ async function appInit() {
     <button class="mob-more-item" data-panel="package-audit"  onclick="showPanel('package-audit');toggleMobMore()">
       <span class="mob-item-icon">🎁</span>Package Audit
     </button>
+    <button class="mob-more-item" data-panel="standards"      onclick="showPanel('standards');toggleMobMore()">
+      <span class="mob-item-icon">📘</span>Standards
+    </button>
     <button class="mob-more-item" data-panel="trends"         onclick="showPanel('trends');toggleMobMore()">
       <span class="mob-item-icon">📈</span>Trends
     </button>
@@ -5019,6 +5046,7 @@ async function appInit() {
 <script src="skip-clean.js"></script>
 <script src="global-search.js"></script>
 <script src="handover.js"></script>
+<script src="accor-standards.js"></script>
 <script>
   // ── PWA: register service worker for offline app-shell ──
   if ('serviceWorker' in navigator) {

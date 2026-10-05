@@ -5525,3 +5525,21 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
 .dtc-progress { flex:1; display:flex; align-items:center; gap:10px; font-size:.76rem; color:var(--text3); min-width:200px; }
 .dtc-bar { flex:1; height:7px; background:var(--border); border-radius:4px; overflow:hidden; max-width:260px; }
 .dtc-bar-fill { height:100%; background:var(--green); width:0%; transition:width .25s; }
+
+/* ── Accor Standards library ── */
+.std-chip { padding:5px 11px; border-radius:999px; border:1px solid var(--border2); background:transparent; color:var(--text2); font-size:.74rem; cursor:pointer; }
+.std-chip.on { background:var(--accent); color:#111; border-color:var(--accent); font-weight:700; }
+.std-card { margin-bottom:10px; padding:14px 16px; }
+.std-card-hd { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap; }
+.std-title { font-weight:700; font-size:.92rem; }
+.std-kind { font-size:.64rem; font-weight:700; padding:2px 8px; border-radius:999px; border:1px solid; white-space:nowrap; }
+.std-k-public { color:var(--blue); background:var(--blue-bg); border-color:var(--blue-border); }
+.std-k-law    { color:var(--amber); background:var(--amber-bg); border-color:var(--amber-border); }
+.std-k-hotel  { color:var(--green); background:var(--green-bg); border-color:var(--green-border); }
+.std-k-manual { color:var(--red); background:var(--red-bg); border-color:var(--red-border); }
+.std-cat { font-size:.68rem; color:var(--text3); margin:2px 0 6px; }
+.std-points { margin:4px 0 6px 18px; padding:0; font-size:.8rem; line-height:1.6; }
+.std-points li { margin:3px 0; }
+.std-note { font-size:.72rem; color:var(--text3); font-style:italic; margin-bottom:6px; }
+.std-src { font-size:.66rem; color:var(--text3); border-top:1px dashed var(--border); padding-top:6px; }
+.std-src a { color:var(--text2); }
