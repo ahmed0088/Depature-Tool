@@ -1156,6 +1156,23 @@ function _pkgApplyPins(results) {
     r.pin = pin || null;
     if (!pin) return;
     if (pin.skip) { r.pinSkip = true; return; }
+    if (pin.manual) {
+      // Sold by hand in IN-Gauge (e.g. a 6 pm late checkout that cannot be
+      // added as an Opera package): there is nothing in Opera to match, so the
+      // person's word stands. Keep it credited, never flag it again.
+      if (r.verdict === 'settled') return;
+      r.verdict = 'credit';
+      r.manualSale = true;
+      r.denyReason = ''; r.splitSeller = false; r.needsProduct = false;
+      const seller = pin.seller || r.employee;
+      r.user = seller;
+      r.needsEmployee = !seller || seller === '-';
+      r.reassign = !!pin.seller && !!r.employee && r.employee !== '-' && !_pkgSameUser(r.employee, pin.seller);
+      r.wasUser = r.reassign ? r.employee : '';
+      r.alreadyComplete = !r.reassign && !r.needsEmployee;
+      if (!r.price) r.price = String(r.charge ?? '');
+      return;
+    }
     if (pin.seller && (r.verdict === 'credit' || r.verdict === 'review')) {
       r.verdict = 'credit';
       r.splitSeller = false;
@@ -1180,6 +1197,8 @@ function pkgPinChange(idx, val) {
   const by = (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '';
   if (val === '__clear') delete pkgPins[key];
   else if (val === '__skip') pkgPins[key] = { skip: true, by, at: new Date().toISOString() };
+  else if (val === '__manual') pkgPins[key] = { manual: true, by, at: new Date().toISOString() };
+  else if (val.startsWith('__manual:')) pkgPins[key] = { manual: true, seller: val.slice(9), by, at: new Date().toISOString() };
   else if (val === '__other') {
     const name = (prompt('Seller name (as in IN-Gauge):') || '').trim();
     if (!name) { pkgRender(); return; }
@@ -1196,14 +1215,19 @@ function pkgPinChange(idx, val) {
 
 function _pkgPinCell(r) {
   const i = pkgResults.indexOf(r);
-  const cur = r.pin ? (r.pin.skip ? '__skip' : r.pin.seller) : '';
+  const cur = r.pin ? (r.pin.skip ? '__skip' : r.pin.manual ? (r.pin.seller ? '__manual:' + r.pin.seller : '__manual') : r.pin.seller) : '';
   const staff = PKG_STAFF.slice();
-  if (cur && cur !== '__skip' && !staff.includes(cur)) staff.push(cur);
+  const curSeller = r.pin && r.pin.seller;
+  if (curSeller && !staff.includes(curSeller)) staff.push(curSeller);
   const title = r.pin ? `Pinned by ${r.pin.by || 'someone'}${r.pin.at ? ' · ' + r.pin.at.slice(0, 10) : ''}` : 'Pin the seller or skip this package — remembered on every load';
   return `<td><select class="pkg-pin${r.pin ? ' on' : ''}" title="${escapeHtml(title)}" onchange="pkgPinChange(${i}, this.value)">
-    <option value="">${r.pin ? '📌' : '📌 Pin…'}</option>
+    <option value="">${r.pin ? (r.pin.manual ? '✍️' : '📌') : '📌 Pin…'}</option>
     ${staff.map(n => `<option value="${escapeHtml(n)}"${cur === n ? ' selected' : ''}>Seller: ${escapeHtml(n)}</option>`).join('')}
     <option value="__other">Seller: someone else…</option>
+    <optgroup label="Sold by hand in IN-Gauge (not in Opera)">
+      <option value="__manual"${cur === '__manual' ? ' selected' : ''}>✍️ Manual sale — keep, IN-Gauge seller</option>
+      ${staff.map(n => `<option value="__manual:${escapeHtml(n)}"${cur === '__manual:' + n ? ' selected' : ''}>✍️ Manual sale — ${escapeHtml(n)}</option>`).join('')}
+    </optgroup>
     <option value="__skip"${cur === '__skip' ? ' selected' : ''}>Skip this package</option>
     ${r.pin ? '<option value="__clear">Remove pin</option>' : ''}
   </select></td>`;
@@ -1255,6 +1279,11 @@ function _pkgActionText(r) {
   // find — a decision made on bad information should be visible, not hidden.
   const seen = r.reviewed;
   if (r.pinSkip) return 'Skipped (pinned)';
+  if (r.manualSale) {
+    if (r.needsEmployee) return 'Manual sale — set the seller in IN-Gauge';
+    if (r.reassign) return `Manual sale — set the seller to ${_pkgUserLabel(r.user)}`;
+    return `Nothing — manual sale kept (${_pkgUserLabel(r.user)})`;
+  }
   if (r.pin && r.pin.seller && r.verdict === 'credit') {
     if (r.needsEmployee) return `Set the seller to ${_pkgUserLabel(r.pin.seller)} (pinned)`;
     if (r.reassign) return `Set the seller to ${_pkgUserLabel(r.pin.seller)} (pinned)`;
