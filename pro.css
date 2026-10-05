@@ -580,3 +580,15 @@ tr.bg-cur > td { background-color: color-mix(in srgb, var(--accent) 18%, transpa
   #panel-purpose .tbl-wrap thead th:nth-child(3) { left: 0 !important; z-index: 4 !important; }
   .tbl-wrap tbody td:first-child, #panel-purpose .tbl-wrap tbody td:nth-child(3) { z-index: 2 !important; }
 }
+
+/* ══ Ops Brain colleague (brain-expert.js) ══ */
+.bx-plan { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.bx-step { display: grid; grid-template-columns: 26px 1fr; gap: 2px 10px; align-items: center; text-align: left; padding: 9px 11px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg2); color: var(--text); cursor: pointer; }
+.bx-step:hover { border-color: var(--accent-border); }
+.bx-step > span { grid-row: span 2; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font: 700 11.5px var(--font); background: var(--card2); color: var(--text2); border: 1px solid var(--border2); }
+.bx-step b { font-size: .8rem; }
+.bx-step small { font-size: .7rem; color: var(--text3); }
+.bx-step.ok { opacity: .7; }
+.bx-step.ok > span { background: var(--mint); color: #111; border-color: var(--mint); }
+.bx-step.todo > span { background: var(--accent-bg); color: var(--accent); border-color: var(--accent-border); }
+.bx-pre { white-space: pre-wrap; font: 500 11.5px/1.6 var(--mono); background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin-top: 6px; max-height: 320px; overflow: auto; color: var(--text2); }

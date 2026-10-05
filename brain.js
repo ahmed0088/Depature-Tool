@@ -171,7 +171,7 @@ const BR_FAQ = [
 // Everything the brain can read, rebuilt on each question (data changes all the time)
 function brKnowledge() {
   const K = [];
-  BR_FAQ.forEach((f, i) => K.push({ id: 'faq:' + i, kind: '💡 How the app works', title: f.t, body: f.a, text: f.t + ' ' + f.q + ' ' + f.q, go: f.go, boost: 1 }));
+  BR_FAQ.forEach((f, i) => K.push({ id: 'faq:' + i, kind: f.kind || '💡 How the app works', title: f.t, body: f.a, text: f.t + ' ' + f.q + ' ' + f.q, go: f.go, boost: 1 }));
   Object.entries(brTaught).forEach(([id, t]) => K.push({ id: 'taught:' + id, kind: '👥 Team answer', title: t.q, body: escapeHtml(t.a) + `<div class="br-by">taught by ${escapeHtml(t.by || '?')}</div>`, text: t.q + ' ' + t.q + ' ' + t.a, boost: 3 }));
   document.querySelectorAll('.panel').forEach(p => {
     const id = p.id.slice(6), h1 = p.querySelector('h1')?.textContent || id, sub = p.querySelector('.page-hd p')?.textContent || '';

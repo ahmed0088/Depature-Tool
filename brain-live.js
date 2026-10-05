@@ -274,7 +274,7 @@ function blSay(t, urgent) {
   el.addEventListener('click', e => {
     const b = e.target.closest('button');
     if (!b) return;
-    if (b.dataset.a != null) { _blNote(t.type, 'used'); el.remove(); blShown = null; try { t.acts[+b.dataset.a][1](); } catch (err) { showToast('That did not work: ' + err.message, 'err'); } setTimeout(blTick, 800); return; }
+    if (b.dataset.a != null) { _blNote(t.type, 'used'); el.remove(); blShown = null; if (t.type !== 'did' && t.type !== 'heal') { const sn0 = _blLS.get(BL_SNOOZE_KEY, {}); sn0[t.id] = Date.now() + 30 * 60e3; _blLS.set(BL_SNOOZE_KEY, sn0); } try { t.acts[+b.dataset.a][1](); } catch (err) { showToast('That did not work: ' + err.message, 'err'); } setTimeout(blTick, 800); return; }
     const sn = _blLS.get(BL_SNOOZE_KEY, {});
     if (b.classList.contains('bl-b-never')) { _blNote(t.type, 'never'); blDid('🤐', 'OK, I won\'t suggest that again. (🧠 → Learned to undo.)'); }
     else { _blNote(t.type, 'no'); sn[t.id] = Date.now() + 2 * 3600e3; }

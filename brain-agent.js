@@ -219,7 +219,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const q = document.getElementById('brQ');
       if (q) q.placeholder = 'Tell me what to do… fix everything · check out 512 · brief me';
       const pane = document.querySelector('.br-pane[data-t="think"]');
-      if (pane) pane.insertAdjacentHTML('afterbegin', `<div class="ba-chips">${['brief me', 'fix everything', 'guess nationalities', 'late checkouts', 'who owes', 'what can you do'].map(x => `<button onclick="document.getElementById('brQ').value='${x}';brAsk('${x}')">${x}</button>`).join('')}</div>`);
+      if (pane) pane.insertAdjacentHTML('afterbegin', `<div class="ba-chips">${['plan my shift', 'brief me', 'fix everything', 'write the handover', 'late checkouts', 'who owes', 'what can you do'].map(x => `<button onclick="document.getElementById('brQ').value='${x}';brAsk('${x}')">${x}</button>`).join('')}</div>`);
     };
   }, 2000);
 });
