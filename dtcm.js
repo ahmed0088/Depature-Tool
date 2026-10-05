@@ -421,13 +421,14 @@ function dtcRenderFixPlan(RC) {
     <table style="width:100%;border-collapse:collapse;font-size:.8rem;">
       ${row('DTCM XML total', n(G.rawDtcm) + ' AED', '')}
       ${G.outside ? row('− Nights after the Opera file ends', '−' + n(G.outside), 'Rooms ' + escapeHtml((G.outsideRooms || []).join(', ')) + '. <b>Nothing to fix.</b> These nights fall inside the NEXT Opera file. Do not post them now.') : ''}
-      ${G.dayUse ? row('− Day use (DTCM only)', '−' + n(G.dayUse), (G.dayUseRooms || []).length ? 'Rooms ' + escapeHtml(G.dayUseRooms.join(', ')) + '. <b>Nothing to fix</b> unless your rule says day-use TD must also be posted in Opera.' : '<b>Nothing to fix.</b>') : ''}
+      ${G.dtcmExtra ? row('− Extra nights DTCM charged (early / late check-out tick)', '−' + n(G.dtcmExtra), 'Rooms ' + escapeHtml((G.dtcmExtraRooms || []).join(', ')) + '. <b>Fix in DTCM</b> (blue items below). No Opera night will ever match these, not even in the next file.') : ''}
+      ${G.dayUse ? row('− Day use (DTCM only)', '−' + n(G.dayUse), (G.dayUseRooms || []).length ? 'Rooms ' + escapeHtml(G.dayUseRooms.join(', ')) + '. <b>Check each one</b> (blue items below): cancel it in DTCM if it was not a real stay, or post it in Opera if it was.' : '<b>Nothing to fix.</b>') : ''}
       ${row('= DTCM to compare with Opera', n(G.adjDtcm) + ' AED', '', true)}
       ${row('Opera journal', n(G.rawOpera) + ' AED', '')}
       ${row('Difference between the two totals', sg(G.adjGap) + ' AED', G.adjGap === 0 ? 'The totals agree, but the room lines below are still wrong (the errors cancel each other).' : 'This is the gap the corrections below must close.', true)}
     </table>`;
 
-  const cardColor = a => a === 'Add' ? 'var(--green)' : (a === 'Reverse' ? 'var(--red)' : 'var(--amber, #f0a43a)');
+  const cardColor = a => a === 'Add' ? 'var(--green)' : (a === 'Reverse' ? 'var(--red)' : (a === 'DTCM' ? 'var(--blue)' : 'var(--amber, #f0a43a)'));
   const cards = plan.map((p, i) => `
     <details class="dtc-fp" ${i === 0 ? 'open' : ''} style="border:1px solid var(--border, rgba(128,128,128,.3));border-left:4px solid ${cardColor(p.action)};border-radius:8px;margin:8px 0;padding:8px 12px;">
       <summary style="cursor:pointer;font-weight:600;">
@@ -446,10 +447,11 @@ function dtcRenderFixPlan(RC) {
   if (!plan.length) {
     after = `<div style="font-size:.8rem;">Nothing to do for the room lines.</div>`;
   } else if (G.leftover === 0) {
-    const sure = plan.map((p, i) => p.action !== 'Verify' ? i + 1 : 0).filter(Boolean).join(', ');
+    const sure = plan.map((p, i) => (p.action === 'Add' || p.action === 'Reverse') ? i + 1 : 0).filter(Boolean).join(', ');
     after = `<div style="font-size:.8rem;line-height:1.55;">
       ${sure ? `After step${sure.includes(',') ? 's' : ''} ${sure}: Opera is <b>${n(G.operaAfterKeep)}</b> AED.` : `Opera is <b>${n(G.rawOpera)}</b> AED.`}
       ${G.verT ? `The “check the reservation” item(s) then close in one of two ways: reverse in Opera (Opera becomes <b>${n(G.operaAfter)}</b>, DTCM stays <b>${n(G.adjDtcm)}</b>), or fix it in the TD portal (DTCM becomes <b>${n(G.dtcmAfterKeep)}</b>, Opera stays <b>${n(G.operaAfterKeep)}</b>). Either way the two sides end equal.` : `DTCM is <b>${n(G.adjDtcm)}</b> AED, so both sides agree.`}
+      ${(G.dtcmExtra || G.dayUse) ? `<br>The blue DTCM items are separate: each one is fixed in the TD portal (or, for a real day use / charged late check-out, posted in Opera). Once all are fixed in DTCM, the DTCM XML total drops by <b>${n((G.dtcmExtra || 0) + (G.dayUse || 0))}</b> AED.` : ''}
     </div>`;
   } else {
     after = `<div class="dtc-warn" style="font-size:.8rem;">⚠️ Even after every step above, Opera and DTCM still differ by <b>${sg(G.leftover)}</b> AED. Look at the Checks and Phantom lists below: something is not explained yet.</div>`;

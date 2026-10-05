@@ -259,9 +259,10 @@
         if (unposted >= 0.01){
           const dseg = dtcmSegments.find(s => s.room === room && s.checkInISO === date && s.checkInISO === s.checkOutISO) || {};
           dayUse.push({
-            room, date, guest: list[0].guest, amount: unposted,
+            room, date, guest: dseg.guest || list[0].guest, amount: unposted,
             checkInISO: dseg.checkInISO || date, checkOutISO: dseg.checkOutISO || date,
             transactionuid: dseg.transactionuid || '',
+            checkInTime: dseg.checkInTime || '', checkOutTime: dseg.checkOutTime || '',
             note: 'Day use — charged in DTCM, no Opera posting expected'
           });
         }
@@ -628,9 +629,27 @@
     /* Nights DTCM counts that fall outside the dates the Opera file covers (window mode only).
        They are real DTCM money but cannot be compared with this journal, so they are shown as a
        separate step in the headline instead of silently widening the difference. */
-    const outsideWindow = (isWindow && dtcmFinalFees > expTotal) ? round2(dtcmFinalFees - expTotal) : 0;
-    const outsideRooms  = isWindow ? [...new Set(dtcmSegments.filter(sg => (sg.nightsOutsideFile || 0) > 0).map(sg => sg.room))].sort() : [];
-    if (outsideWindow === 0 && Math.abs(dtcmFinalFees - expTotal) > 0.5){
+    const outsideRaw    = (isWindow && dtcmFinalFees > expTotal) ? round2(dtcmFinalFees - expTotal) : 0;
+
+    /* Of those, the nights added by a DTCM early/late tick (see buildExpected) are NOT in a later
+       Opera file: no Opera night will ever match them. They are DTCM-side items to check. */
+    const operaFor = (room, guest) => round2(operaRows.reduce((a, r, i) =>
+      (r.isReversal || cancelled.has(i) || r.room !== room || !sameName(guest, r.guest)) ? a : a + r.amount, 0));
+    const dtcmExtra = [];
+    if (isWindow) dtcmSegments.forEach(sg => {
+      const n = sg.storedNights || Math.round((sg.storedTdFees || 0) / C.TD_RATE) || 1;
+      const per = round2((sg.storedTdFees || 0) / n);
+      const base = { room: sg.room, guest: sg.guest, uid: sg.transactionuid || '', amount: per,
+        nights: sg.storedNights || 0, dtcmAmt: round2(sg.storedTdFees || 0), operaAmt: operaFor(sg.room, sg.guest),
+        checkInISO: sg.checkInISO, checkInTime: sg.checkInTime || '', checkOutISO: sg.checkOutISO || '', checkOutTime: sg.checkOutTime || '' };
+      if (sg.extraEarlyNight) dtcmExtra.push(Object.assign({ kind: 'early_tick', date: sg.checkInISO }, base));
+      if (sg.extraLateNight)  dtcmExtra.push(Object.assign({ kind: 'late_tick', date: sg.checkOutISO || sg.checkInISO }, base));
+    });
+    const dtcmExtraTotal = round2(dtcmExtra.reduce((a, x) => a + x.amount, 0));
+    const outsideWindow  = Math.max(0, round2(outsideRaw - dtcmExtraTotal));
+    const outsideRooms   = isWindow ? [...new Set(dtcmSegments.filter(sg =>
+      (sg.nightsOutsideFile || 0) - (sg.extraEarlyNight || 0) - (sg.extraLateNight || 0) > 0).map(sg => sg.room))].sort() : [];
+    if (outsideRaw === 0 && Math.abs(dtcmFinalFees - expTotal) > 0.5){
       warnings.push(`DTCM FinalFees (${dtcmFinalFees}) differs from the rebuilt expected total (${expTotal}). ` +
         'The XML may contain rows the tool skipped (missing room / check-in date).');
     }
@@ -683,6 +702,31 @@
       uid: uidFor(d.room, d.businessDate, d.guest),
       kind: 'duplicate', guest: d.guest, trxNos: d.trxNos, copies: d.count, lines: d.lines
     }));
+    /* DTCM-side items: they change the DTCM total, not the Opera one, so they are kept out of the
+       Add/Reverse/Verify sums used for the Opera totals below. */
+    dtcmExtra.forEach(x => actions.push({
+      action: 'DTCM', room: x.room, date: x.date, amount: -x.amount, where: 'DTCM', abs: x.amount,
+      why: x.kind === 'early_tick'
+        ? `Early check-in ticked, but ${x.guest} arrived at ${x.checkInTime}, before the night audit. DTCM already counts the night before, so it charges one night too many (DTCM ${x.dtcmAmt.toFixed(2)}, Opera ${x.operaAmt.toFixed(2)}).`
+        : `Late check-out ticked for ${x.guest} (out ${x.checkOutISO} ${x.checkOutTime}). DTCM charges a night for it; Opera has no TD for it (DTCM ${x.dtcmAmt.toFixed(2)}, Opera ${x.operaAmt.toFixed(2)}).`,
+      uid: x.uid, kind: x.kind, guest: x.guest, dtcmGuest: x.guest, extra: x
+    }));
+    const minsOf = t => { const m = String(t || '').match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i); if (!m) return null;
+      let h = +m[1] % 12; if (/PM/i.test(m[3] || '')) h += 12; return h * 60 + +m[2]; };
+    dayUse.filter(x => !x.posted).forEach(x => {
+      const a = minsOf(x.checkInTime), b = minsOf(x.checkOutTime);
+      const mins = (a != null && b != null && b >= a) ? b - a : null;
+      const prev = (segsByRoom.get(x.room) || []).find(sg => sg.checkOutISO === x.date && sg.checkInISO < x.date && sameName(x.guest, sg.guest));
+      const what = prev
+        ? `${x.guest} checked out at ${prev.checkOutTime} and was checked in again ${x.checkInTime} → ${x.checkOutTime} the same day`
+        : `${x.guest} checked in and out on ${x.date} (${x.checkInTime} → ${x.checkOutTime})`;
+      x.detail = { mins, prevOut: prev ? prev.checkOutTime : '', what };
+      actions.push({
+        action: 'DTCM', room: x.room, date: x.date, amount: -x.amount, where: 'DTCM or Opera', abs: x.amount,
+        why: `Day use in DTCM only: ${what}${mins != null && mins <= 15 ? ` — only ${mins} min, looks like a mistake` : ''}. Opera has no TD for it.`,
+        uid: x.transactionuid || uidFor(x.room, x.date, x.guest), kind: 'dtcm_day_use', guest: x.guest, dtcmGuest: x.guest, extra: x
+      });
+    });
     /* ROOM MOVE WITHOUT A REMARK: the same guest's night is posted in room A in Opera but sits in
        room B in DTCM. That shows up as an over-posting in A and a missing posting in B, same
        amount, same (or adjacent) date. Pair them one-to-one: net zero, nothing to post. */
@@ -736,6 +780,7 @@
     const gap = {
       rawDtcm: dtcmFinalFees, rawOpera: actTotal, rawGap: round2(actTotal - dtcmFinalFees),
       outside: outsideWindow, outsideRooms, dayUse: dayUseTotal,
+      dtcmExtra: dtcmExtraTotal, dtcmExtraRooms: [...new Set(dtcmExtra.map(x => x.room))],
       dayUseRooms: dayUse.filter(x => !x.posted).map(x => x.room),
       adjDtcm: expTotalAdj, adjGap: netVariance,
       addT, revT, verT, operaAfter, operaAfterKeep,
@@ -757,7 +802,7 @@
       }
       plan.push({ action: a.action, kind: a.kind || '', room: a.room, dates: [a.date], amount: a.amount,
                   uid: a.uid, guest: a.guest || '', dtcmGuest: a.dtcmGuest || '', why: a.why,
-                  fixText: a.fixText || '', trxNos: a.trxNos || '', copies: a.copies || 0, lines: a.lines || null, chain: a.chain || null, dayUse: a.dayUse || null });
+                  fixText: a.fixText || '', trxNos: a.trxNos || '', copies: a.copies || 0, lines: a.lines || null, chain: a.chain || null, dayUse: a.dayUse || null, extra: a.extra || null });
     });
     plan.forEach(p => {
       const d = p.dates.join(', '), n = p.dates.length;
@@ -819,6 +864,36 @@
           `Day-use TD is charged (your rule): keep the Opera line and fix DTCM. Only if DTCM cannot carry it, reverse trx ${u.trxNo} in Opera.`
         ];
         p.effect = 'Closes either way';
+      } else if (p.kind === 'early_tick'){
+        const x = p.extra || {};
+        p.title = `Room ${p.room} (${p.guest}): DTCM charges one night too many (early check-in)`;
+        p.steps = [
+          `${p.guest} checked in on ${x.checkInISO} at ${x.checkInTime}, before the night audit. For that, DTCM already counts the night before (the same night Opera charged).`,
+          `"Charge Extra Night on Early Check-In" is ALSO ticked on this stay, so DTCM adds one more night that nobody stayed. DTCM: ${x.nights} nights = ${nf(x.dtcmAmt)} AED. Opera: ${nf(x.operaAmt)} AED.`,
+          `In the TD portal open ${ref} → Edit Check-In → untick "Charge Extra Night on Early Check-In" and save. DTCM drops by ${nf(x.amount)} AED. Nothing to do in Opera.`,
+          `Rule for the desk: arrival after midnight but before the audit (about 04:00) → do NOT tick it, DTCM counts that night by itself. Tick it only for a daytime early check-in that you charge as a day use (like 05:46).`
+        ];
+        p.effect = 'DTCM −' + nf(x.amount);
+      } else if (p.kind === 'late_tick'){
+        const x = p.extra || {};
+        p.title = `Room ${p.room} (${p.guest}): DTCM charges a night for the late check-out`;
+        p.steps = [
+          `${p.guest} checked out on ${x.checkOutISO} at ${x.checkOutTime} and "late check-out" is ticked in DTCM, so DTCM charges one extra night. DTCM: ${nf(x.dtcmAmt)} AED. Opera: ${nf(x.operaAmt)} AED.`,
+          `If the late check-out was charged to the guest and your rule says it pays TD: post ${nf(x.amount)} AED TD (7510) on the folio in Opera for ${x.checkOutISO}.`,
+          `If not (free late check-out): in the TD portal open ${ref} and untick the late check-out. DTCM drops by ${nf(x.amount)} AED.`
+        ];
+        p.effect = 'DTCM −' + nf(x.amount) + ' or Opera +' + nf(x.amount);
+      } else if (p.kind === 'dtcm_day_use'){
+        const x = p.extra || {}, dt = x.detail || {};
+        p.title = `Room ${p.room} (${p.guest}): day use on ${d} is in DTCM only`;
+        p.steps = [
+          `${dt.what || ''}. DTCM charges ${nf(x.amount)} AED for it; Opera has no TD.` +
+            (dt.mins != null && dt.mins <= 15 ? ` It lasted only ${dt.mins} minute${dt.mins === 1 ? '' : 's'}: almost certainly a check-in made by mistake.` : '') +
+            (dt.prevOut && !(dt.mins != null && dt.mins <= 15) ? ` Same guest, same room, same day: it looks like the stay was checked out and then checked in again, not a new day use.` : ''),
+          `Not a real day use → in the TD portal open ${ref} and cancel that check-in (or fold it into the main stay). DTCM drops by ${nf(x.amount)} AED.`,
+          `Real day use (your rule: day use pays TD) → post ${nf(x.amount)} AED TD (7510) in Opera on ${d}.`
+        ];
+        p.effect = 'DTCM −' + nf(x.amount) + ' or Opera +' + nf(x.amount);
       } else if (p.kind === 'room_chain_short'){
         const c = p.chain || {};
         p.title = `Room ${p.room} (${p.dtcmGuest || p.guest}): Opera has one more night than DTCM`;
@@ -835,7 +910,7 @@
         p.effect = 'Closes either way';
       }
     });
-    const order = { Add: 0, Reverse: 1, Verify: 2 };
+    const order = { Add: 0, Reverse: 1, Verify: 2, DTCM: 3 };
     plan.sort((a, b) => (order[a.action] - order[b.action]) || (Math.abs(b.amount) - Math.abs(a.amount)));
 
     console.log('--- RECONCILE SUMMARY ---');
@@ -856,7 +931,7 @@
       operaCount: operaRows.length,
       dtcmFinalFees,
       operaFileTotal,
-      expTotal, expTotalAdj, dayUse, dayUseTotal, dayUsePostedTotal, outsideWindow, outsideRooms, actTotal, netVariance,
+      expTotal, expTotalAdj, dayUse, dayUseTotal, dayUsePostedTotal, outsideWindow, outsideRooms, dtcmExtra, dtcmExtraTotal, actTotal, netVariance,
       missingTotal, extraTotal, adjustTotal,
       missing, extra, duplicates, phantom,
       checks, exemptAgree: exemptAgreeCount,

@@ -223,10 +223,11 @@
       const bedrooms = parseInt(firstAttr(n, ['Bedroom','Bedrooms','NoOfBedrooms']) || '1', 10) || 1;
       const houseUse = /^yes$/i.test(firstAttr(n, ['IsHouseUse']));
       const earlyCheckin = /^yes$/i.test(firstAttr(n, ['IsEarlyCheckin']));
+      const lateCheckout = /^yes$/i.test(firstAttr(n, ['IsLateCheckout']));
 
       segments.push({
         room, roomRaw, guest, guestNorm: normName(guest),
-        storedNights, storedTdFees, checkIn, checkOut, status, bedrooms, houseUse, earlyCheckin,
+        storedNights, storedTdFees, checkIn, checkOut, status, bedrooms, houseUse, earlyCheckin, lateCheckout,
         checkInTime: firstAttr(n, ['NewCheckin','CheckInTime','Check_In_Time']),
         checkOutTime: firstAttr(n, ['NewOut','CheckOutTime','Check_Out_Time']),
         checkInISO:  checkIn  ? toISO(checkIn)  : '',
@@ -481,6 +482,20 @@
            later), so they are NOT back-filled onto earlier dates: they are reported as nights
            outside the file instead. */
         if (set.length > n) set = set.slice(set.length - n);
+        /* DTCM 'Charge Extra Night on Early Check-In' / '... Late Check-Out' (IsEarlyCheckin /
+           IsLateCheckout = Yes) each add one night to the stay:
+           - early tick + check-in AFTER the audit (e.g. 05:46): the extra night is the day use on
+             the check-in date, which Opera posts by hand on that business date;
+           - early tick + check-in BEFORE the audit (e.g. 02:56): DTCM already counts the night
+             before for that, so the tick charges a second night nobody stayed;
+           - late tick: a night for the late check-out that the Opera night audit never posts.
+           The last two are flagged for the reconciler instead of being called 'next file'. */
+        s.extraEarlyNight = 0; s.extraLateNight = 0;
+        if (s.earlyCheckin && set.length < n){
+          if (!earlyArrival && !isDayUse && windowDates.includes(ci)) set = [ci].concat(set);
+          else if (earlyArrival) s.extraEarlyNight = 1;
+        }
+        if (s.lateCheckout && set.length + s.extraEarlyNight < n) s.extraLateNight = 1;
         const amt = round2(s.storedTdFees / n);
         s.nightsOutsideFile = Math.max(0, n - set.length);
         for (const d of set){

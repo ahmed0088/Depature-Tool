@@ -5463,6 +5463,7 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
 .dtc-act.add     { background:var(--green-bg); color:var(--green); border-color:var(--green-border); }
 .dtc-act.reverse { background:var(--red-bg);   color:var(--red);   border-color:var(--red-border); }
 .dtc-act.verify  { background:var(--amber-bg); color:var(--amber); border-color:var(--amber-border); }
+.dtc-act.dtcm    { background:var(--blue-bg);  color:var(--blue);  border-color:var(--blue-border); }
 
 .dtc-vcard { border:1px solid var(--border); border-radius:var(--r); padding:9px 12px; margin:6px 0; background:var(--bg2); }
 .dtc-vrow { display:grid; grid-template-columns:150px 1fr; gap:4px 12px; font-size:.76rem; line-height:1.5; }
