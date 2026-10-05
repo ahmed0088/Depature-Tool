@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 118, items: [
+    '🤖 Ops Brain is now your agent: tell it what to do in 🧠, e.g. "fix everything", "brief me", "check out 512", "512 late", "who owes", "late checkouts", "guess nationalities", "remove duplicates", "copy arrivals to purpose", "set TD rate to 15", "month end report", "history 512". Type "what can you do" for the full list.',
+    '🌍 The Nationality report fixes itself: a country spelling it doesn\'t know (Phillipines, Kazakstan…) is mapped to the right row and the report runs again. If it isn\'t sure, it asks with the 3 closest rows and remembers your answer for the team. Türkiye, KSA, Holland, UK and other modern names are known now.',
+    '🤖 Autopilot (switch at the top of 🧠): it fixes safe things by itself (duplicates, nationality guesses, country names, copying arrivals to Purpose) and tells you, with Undo.',
+  ] },
   { v: 117, items: [
     '🧠 Ops Brain is awake: it watches the app all the time and speaks up in a bubble next to 🧠, with a button that does the job (guess nationalities, remove duplicate arrivals, copy arrivals to Purpose, update the app…). Then it tells you what it did.',
     '📚 It learns from your corrections: type a nationality once and it guesses that surname right next time, for the whole team.',

@@ -29,6 +29,16 @@ let blNatLearn = {};          // surname word → { nationality: times }
 let blOfflineBeats = 0;
 let blLatestVersion = null;
 let blLastSig = '';
+const blAutoDone = new Set();
+let blAutoRunning = false;
+const BL_AUTO_KEY = 'brain_autopilot_v1';
+function blAutopilot() { return _blLS.get(BL_AUTO_KEY, false) === true; }
+function blSetAutopilot(on) {
+  _blLS.set(BL_AUTO_KEY, !!on);
+  document.querySelectorAll('.bl-auto-sw').forEach(x => { x.checked = !!on; });
+  blDid('🤖', on ? 'Autopilot on: I\'ll fix safe things myself (duplicates, nationality guesses, country names, syncing) and tell you, with Undo.' : 'Autopilot off: I\'ll ask before doing anything.');
+  if (on) blSoon();
+}
 
 const _blLS = {
   get(k, d) { try { return JSON.parse(localStorage.getItem(k) || 'null') ?? d; } catch (_) { return d; } },
@@ -137,14 +147,14 @@ function blThink() {
     const miss = arrGuests.filter(g => !g.nat);
     if (!miss.length) return;
     const can = miss.filter(g => guessNat(g.name)).length;
-    add({ id: 'arrNat:' + miss.length, type: 'arrNat', icon: '🌍', tone: 'warn',
+    add({ id: 'arrNat:' + miss.length, type: 'arrNat', icon: '🌍', tone: 'warn', safe: can ? 0 : undefined,
       text: `${miss.length} arrival${miss.length > 1 ? 's have' : ' has'} no nationality. I can guess ${can ? can : 'none'} of them from the names${can ? '' : ' yet'}.`,
       why: can ? 'Uses what the team corrected before, then the name lists. Check the passport at check-in.' : 'Fill one in and I\'ll learn the surname.',
-      acts: can ? [['Guess them now', () => { const before = arrGuests.filter(g => !g.nat).length; runAINat_arr(); setTimeout(() => { const after = arrGuests.filter(g => !g.nat).length; blDid('🌍', `Filled ${before - after} nationalit${before - after === 1 ? 'y' : 'ies'} on Arrivals${after ? `; ${after} I couldn't guess` : ''}.`); }, 300); }], ['Show me', () => showPanel('arrivals')]] : [['Show me', () => showPanel('arrivals')]] });
+      acts: can ? [['Guess them now', () => { const snap = arrGuests.map(g => g.nat); const before = arrGuests.filter(g => !g.nat).length; runAINat_arr(); setTimeout(() => { const after = arrGuests.filter(g => !g.nat).length; blDid('🌍', `Filled ${before - after} nationalit${before - after === 1 ? 'y' : 'ies'} on Arrivals${after ? `; ${after} I couldn't guess` : ''}. They're guesses: check the passport.`, () => { arrGuests.forEach((g, i) => { if (i < snap.length) g.nat = snap[i]; }); arrRender(); saveArrivals(arrGuests); }); }, 300); }], ['Show me', () => showPanel('arrivals')]] : [['Show me', () => showPanel('arrivals')]] });
   });
   safe(() => {   // purpose: empty while arrivals are loaded
     if (typeof arrGuests === 'undefined' || typeof purposeGuests === 'undefined') return;
-    if (arrGuests.length && !purposeGuests.length) add({ id: 'purSync:' + arrGuests.length, type: 'purSync', icon: '📋', tone: 'warn',
+    if (arrGuests.length && !purposeGuests.length) add({ id: 'purSync:' + arrGuests.length, type: 'purSync', icon: '📋', tone: 'warn', safe: 0,
       text: `Arrivals has ${arrGuests.length} guests but Purpose of Stay is empty.`, why: 'Copy them over to start the purpose report.',
       acts: [['Copy them over', () => { syncFromArrivals(); blDid('📋', `Copied ${arrGuests.length} guests to Purpose of Stay.`); showPanel('purpose'); }]] });
   });
@@ -152,7 +162,7 @@ function blThink() {
     if (typeof purposeGuests === 'undefined' || !purposeGuests.length) return;
     const miss = purposeGuests.filter(g => !g.nat);
     const can = miss.filter(g => guessNat(g.name)).length;
-    if (can) add({ id: 'purNat:' + miss.length, type: 'purNat', icon: '🌍', tone: 'warn',
+    if (can) add({ id: 'purNat:' + miss.length, type: 'purNat', icon: '🌍', tone: 'warn', safe: 0,
       text: `Purpose of Stay: ${miss.length} without nationality, I can guess ${can}.`, why: 'Based on names and the team\'s corrections.',
       acts: [['Guess them now', () => { runAINat_purpose(); blDid('🌍', `Guessed nationalities on Purpose of Stay.`); }]] });
   });
@@ -160,9 +170,9 @@ function blThink() {
     if (typeof arrGuests === 'undefined' || arrGuests.length < 2) return;
     const seen = new Set(), dups = [];
     arrGuests.forEach((g, i) => { const k = (g.conf || '').trim() ? 'c' + g.conf.trim() : 'n' + (g.room || '') + '|' + (g.name || '').trim().toUpperCase(); if (seen.has(k)) dups.push(i); else seen.add(k); });
-    if (dups.length) add({ id: 'arrDup:' + dups.length, type: 'arrDup', icon: '👯', tone: 'bad',
+    if (dups.length) add({ id: 'arrDup:' + dups.length, type: 'arrDup', icon: '👯', tone: 'bad', safe: 0,
       text: `${dups.length} guest${dups.length > 1 ? 's appear' : ' appears'} twice on Arrivals.`, why: 'Same confirmation number (or same room and name) loaded twice.',
-      acts: [['Remove duplicates', () => { const n = dups.length; dups.reverse().forEach(i => arrGuests.splice(i, 1)); arrRender(); saveArrivals(arrGuests); blDid('👯', `Removed ${n} duplicate${n > 1 ? 's' : ''} from Arrivals.`); }]] });
+      acts: [['Remove duplicates', () => { const snap = JSON.parse(JSON.stringify(arrGuests)); const n = dups.length; dups.reverse().forEach(i => arrGuests.splice(i, 1)); arrRender(); saveArrivals(arrGuests); blDid('👯', `Removed ${n} duplicate${n > 1 ? 's' : ''} from Arrivals.`, () => { arrGuests = snap; arrRender(); saveArrivals(arrGuests); }); }]] });
   });
   safe(() => {   // late check-outs past their time
     if (typeof depRooms === 'undefined' || !depRooms.length || typeof isLcoOverdue !== 'function') return;
@@ -201,6 +211,7 @@ function blThink() {
       text: 'Month end is here. Time for the DTCM month-end report and the package commission report.', why: 'Both print with signature lines.',
       acts: [['Open DTCM Recon', () => showPanel('dtcm')], ['Open Package Audit', () => showPanel('package-audit')]] });
   });
+  (window.BL_THINKERS || []).forEach(f => safe(() => f(add)));
   return T;
 }
 
@@ -222,6 +233,17 @@ function blTick() {
   if (document.getElementById('appWrapper')?.style.display === 'none') return;
   const snooze = _blLS.get(BL_SNOOZE_KEY, {});
   blThoughts = blThink().filter(_blWanted).sort((a, b) => _blRank(b) - _blRank(a));
+  if (blAutopilot()) {
+    const auto = blThoughts.filter(t => t.safe != null && t.acts && t.acts[t.safe] && !blAutoDone.has(t.id));
+    if (auto.length) {
+      const t = auto[0];
+      blAutoDone.add(t.id);
+      blAutoRunning = true;
+      try { t.acts[t.safe][1](); _blNote(t.type, 'used'); } catch (_) {}
+      setTimeout(() => { blAutoRunning = false; blSoon(); }, 600);
+      return;
+    }
+  }
   const sig = blThoughts.map(t => t.id).join('|');
   const fab = document.getElementById('brFab');
   if (fab) { fab.classList.toggle('thinking', blThoughts.length > 0); fab.dataset.n = blThoughts.length || ''; }
@@ -263,10 +285,11 @@ function blSay(t, urgent) {
 }
 
 /** Report something it did */
-function blDid(icon, text) {
+function blDid(icon, text, undo) {
   blFeed.unshift({ at: Date.now(), icon, text, kind: 'did' });
   blFeed = blFeed.slice(0, 25);
-  showToast(text, 'ok');
+  if (undo) blSay({ id: 'did:' + Date.now(), type: 'did', icon, tone: 'idle', text, why: blAutoRunning ? '🤖 Done by autopilot.' : '', acts: [['OK', () => {}], ['Undo', () => { undo(); blFeed.unshift({ at: Date.now(), icon: '↩', text: 'Undone: ' + text, kind: 'did' }); showToast('Undone', 'ok'); }]] }, true);
+  else showToast(text, 'ok');
   if (typeof logActivity === 'function') try { logActivity('brain_did', text); } catch (_) {}
 }
 

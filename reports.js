@@ -50,6 +50,12 @@ const NAME_MAP = {
   "US Virgin Islands":"Virgin Islands, U.S.","Kirgizstan":"Kyrghyzstan",
   "Hong Kong SAR":"Hong Kong","Bolivia, Plurinational State of":"Bolivia",
   "Venezuela, Bolivarian Republic of":"Venezuela","Palestinian Territory, Occupied":"Palestine",
+  "Türkiye":"Turkey","Turkiye":"Turkey","Republic of Korea":"Korea, Republic of (South)","Korea, South":"Korea, Republic of (South)",
+  "Korea, North":"Korea, Democratic People's Republic of (North)","Democratic People's Republic of Korea":"Korea, Democratic People's Republic of (North)",
+  "Democratic Republic of Congo":"Congo, Dem. Rep. of (Zaire)","DR Congo":"Congo, Dem. Rep. of (Zaire)","Republic of the Congo":"Congo (Republic of the Congo)",
+  "KSA":"Saudi Arabia","Kingdom of Saudi Arabia":"Saudi Arabia","Holland":"Netherlands","The Netherlands":"Netherlands",
+  "United Kingdom of Great Britain and Northern Ireland":"United Kingdom","Great Britain and Northern Ireland":"United Kingdom","UK":"United Kingdom",
+  "Hong Kong, China":"Hong Kong","Macao SAR":"Macau","Côte d’Ivoire":"Côte d'Ivoire","Republic of Moldova":"Moldova","Russian Federation (the)":"Russian Federation",
   "zzz":null,"ZZZ":null,"XXX":null,"xx":null,"-":null,"N/A":null,
   "Unknown":null,
   "UNKNOWN":null,
@@ -177,6 +183,7 @@ function processNat() {
     }
   }
   const excelData={}, unknowns=[], unmatched=[];
+  window._natUnmatched = unmatched;   // Ops Brain reads this to map new spellings
   for (const [opName, vals] of Object.entries(operaRaw)) {
     const { excel, isUnknown } = resolveCountry(opName);
     if (isUnknown) { unknowns.push({name:opName,...vals}); continue; }
