@@ -672,6 +672,7 @@ function arrRender() {
 // Phones: a compact list — one line per guest (room, name, what is missing,
 // purpose). Tap the line to open the guest and edit everything.
 const _pcOpen = new Set();
+const _PC_HEAD = '<div class="pc-head"><span>Room</span><span>Guest</span><span>Missing</span><span>Purpose</span></div>';
 const _pcKey = (kind, g) => kind + ':' + (g.conf || '') + ':' + (g.room || '') + ':' + (g.name || '');
 const _PC_NEXT = { Business: 'Leisure', Leisure: 'Flight', Flight: 'Business' };
 function _pcRowHead(kind, i, g, flags, purposeFn) {
@@ -682,7 +683,8 @@ function _pcRowHead(kind, i, g, flags, purposeFn) {
     <div class="pc-line" onclick="pcToggle(this)">
       <span class="pc-room">${escapeHtml(g.room || '—')}</span>
       <span class="pc-mid"><span class="pc-name">${escapeHtml(g.name || '')}</span>
-        <span class="pc-flags">${flags.length ? flags.map(x => `<i>${x}</i>`).join('') : '<i class="ok">✓ complete</i>'}</span></span>
+      </span>
+      <span class="pc-flags">${flags.length ? flags.map(x => `<i title="No ${x.split(' ')[1]}">${x.split(' ')[0]}</i>`).join('') : '<i class="ok" title="Complete">✓</i>'}</span>
       <button class="pc-pill ${p.toLowerCase()}" title="Tap to change: Business → Leisure → Flight"
         onclick="event.stopPropagation();${purposeFn}(${i},'${_PC_NEXT[p] || 'Business'}')">${p[0]}</button>
       <span class="pc-chev">›</span>
@@ -705,7 +707,7 @@ function arrRenderCards(list) {
     <label class="pc-f"><span>${label}</span>
       <input type="${type}" value="${escapeHtml(arrGuests[i][key] || '')}" ${extra}
         oninput="arrGuests[${i}].${key}=this.value" onblur="debounceSaveArrivals()"></label>`;
-  box.innerHTML = list.map(g => {
+  box.innerHTML = _PC_HEAD + list.map(g => {
     const i = arrGuests.indexOf(g);
     const srcCat = sourceCategory(g.source);
     const noEmail = !g.email || !String(g.email).includes('@');
@@ -1033,7 +1035,7 @@ function purposeRenderCards(list) {
     <label class="pc-f"><span>${label}</span>
       <input type="${type}" value="${escapeHtml(purposeGuests[i][key] || '')}" ${extra}
         oninput="purposeGuests[${i}].${key}=this.value" onblur="debounceSavePurpose()"></label>`;
-  box.innerHTML = list.map(g => {
+  box.innerHTML = _PC_HEAD + list.map(g => {
     const i = purposeGuests.indexOf(g);
     const srcCat = sourceCategory(g.source);
     const flags = [!g.email || !String(g.email).includes('@') ? '✉️ email' : '', !g.nat ? '🌍 nationality' : '', !g.originOfTravel ? '🧭 origin' : ''].filter(Boolean);

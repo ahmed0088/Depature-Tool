@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 122, items: [
+    '📋 Phone: Purpose of Stay and Arrivals are a plain list again. One thin line per guest under a Room · Guest · Missing · Purpose header, with small icons for a missing email, nationality or origin. Tap B / L / F to change purpose, or tap the line to edit.',
+  ] },
   { v: 121, items: [
     '⚙️ Settings page (gear in the top bar, or More → Settings): theme, text size, compact mode, icons-only menu, animations; show or hide any page; choose the page HotelOps opens on; pick the Home tiles; switch Ops Brain, its bubbles and autopilot on or off; turn helpers off; hotel name and Tourism Dirham settings; backup, restore, health check and reset. Search settings by typing.',
   ] },
