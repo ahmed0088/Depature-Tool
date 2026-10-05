@@ -952,7 +952,53 @@ function purposeRender() {
       <td><button class="icon-btn" onclick="purposeRemoveGuest(${i})">✕</button></td>
     </tr>`;
   }).join('');
+  purposeRenderCards(filtered);
   purposeKpiUpdate();
+}
+
+/* Phone view: one card per guest, big fields, one-tap purpose switch.
+   Same data and the same handlers as the table; CSS shows one or the other. */
+function purposeRenderCards(list) {
+  const box = document.getElementById('purposeCards');
+  if (!box) return;
+  if (!purposeGuests.length) { box.innerHTML = ''; return; }
+  if (!list.length) { box.innerHTML = '<div class="pc-empty">No guest matches this filter.</div>'; return; }
+  const f = (i, key, label, extra = '', type = 'text') => `
+    <label class="pc-f"><span>${label}</span>
+      <input type="${type}" value="${escapeHtml(purposeGuests[i][key] || '')}" ${extra}
+        oninput="purposeGuests[${i}].${key}=this.value" onblur="debounceSavePurpose()"></label>`;
+  box.innerHTML = list.map(g => {
+    const i = purposeGuests.indexOf(g);
+    const srcCat = sourceCategory(g.source);
+    return `<div class="pc-card ${g.purpose === 'Leisure' ? 'leisure' : ''}">
+      <div class="pc-hd">
+        <span class="pc-room">${escapeHtml(g.room || '—')}</span>
+        <span class="pc-name">${escapeHtml(g.name || '')}</span>
+        <button class="pc-del" onclick="purposeRemoveGuest(${i})" title="Remove guest">✕</button>
+      </div>
+      <div class="pc-seg">${['Business', 'Leisure', 'Flight'].map(p =>
+        `<button class="${g.purpose === p ? 'on' : ''}" onclick="purposeChangePurpose(${i},'${p}')">${p}</button>`).join('')}</div>
+      <div class="pc-grid">
+        <label class="pc-f"><span>Nationality ${g._natSuspect ? '⚠️' : ''}</span>
+          <div style="display:flex;gap:6px;"><input value="${escapeHtml(g.nat || '')}" style="flex:1;${_purposeNatBorder(g)}"
+            oninput="purposeGuests[${i}].nat=this.value;purposeGuests[${i}]._natFromXML=false;purposeGuests[${i}]._natFromAI=false;purposeGuests[${i}]._natUserEdited=true;purposeGuests[${i}]._natSuspect=false;purposeGuests[${i}]._natWasUae='';"
+            onblur="gmOnEdit(purposeGuests[${i}].name,'nat',this.value);debounceSavePurpose()">
+          <button class="pc-ai" onclick="aiOneGuest(${i},'purpose')" title="Guess with AI">✦</button></div></label>
+        ${f(i, 'nights', 'Nights', '', 'number')}
+        <label class="pc-f pc-wide"><span>Email</span>
+          <input type="email" value="${escapeHtml(g.email || '')}" oninput="purposeGuests[${i}].email=this.value"
+            onblur="gmOnEdit(purposeGuests[${i}].name,'email',this.value);debounceSavePurpose()"></label>
+        <label class="pc-f"><span>Source <span class="src-badge ${srcCat}">${SOURCE_CATEGORIES[srcCat].label}</span></span>
+          <input value="${escapeHtml(g.source || '')}" oninput="purposeGuests[${i}].source=this.value" onblur="debounceSavePurpose()"></label>
+        <label class="pc-f"><span>Origin of travel</span>
+          <input value="${escapeHtml(g.originOfTravel || '')}" placeholder="—" style="${g.originOfTravel ? '' : 'border-color:var(--amber);'}"
+            oninput="purposeGuests[${i}].originOfTravel=this.value"
+            onblur="gmOnEdit(purposeGuests[${i}].name,'originOfTravel',this.value);debounceSavePurpose()"></label>
+        ${f(i, 'conf', 'Confirmation #')}
+        ${f(i, 'remarks', 'Remarks')}
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function purposeFilter(f, el) {

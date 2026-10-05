@@ -5578,3 +5578,61 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
 .gp-kpi-l { font-size:.66rem; color:var(--text3); }
 @media (max-width:700px){ .gp-two { grid-template-columns:1fr; } .gp-kpis { grid-template-columns:1fr 1fr; } }
 .std-k-app { color:var(--accent); background:transparent; border-color:var(--accent); }
+
+/* ══════════════════════════════════════════════════════
+   PHONE — easy-tap layout (files.fm style: one clean toolbar row,
+   big targets, cards instead of wide tables). Applies to every page.
+══════════════════════════════════════════════════════ */
+.pc-list { display: none; }
+@media (max-width: 768px) {
+  /* One swipeable toolbar row instead of 3-4 rows of buttons */
+  .page-hd-actions { flex-wrap: nowrap !important; overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; padding-bottom: 4px; margin: 0 -12px; padding-left: 12px; padding-right: 12px; width: calc(100% + 24px) !important; }
+  .page-hd-actions::-webkit-scrollbar { display: none; }
+  .page-hd-actions .btn, .page-hd-actions label.btn { flex: 0 0 auto; white-space: nowrap; }
+
+  /* Bigger tap targets everywhere */
+  .btn { min-height: 40px; padding: 8px 14px; font-size: .8rem; border-radius: 10px; }
+  .fchip { padding: 8px 13px; font-size: .74rem; }
+  .icon-btn { min-width: 36px; min-height: 36px; }
+  /* 16px stops iPhone zooming into a field when you tap it */
+  input, select, textarea { font-size: 16px !important; }
+  input[type="checkbox"] { width: 22px; height: 22px; }
+
+  /* Filter chips: one swipeable row */
+  .filter-row { flex-wrap: nowrap !important; overflow-x: auto; scrollbar-width: none; padding-bottom: 4px; }
+  .filter-row::-webkit-scrollbar { display: none; }
+  .filter-row > * { flex: 0 0 auto; }
+
+  /* Upload / paste boxes: full width, comfortable */
+  .upload-zone, .input-section { border-radius: 14px; }
+  textarea { min-height: 120px; }
+
+  /* Purpose of Stay: cards instead of the 13-column table */
+  #panel-purpose .tbl-wrap { display: none; }
+  .pc-list { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+  .pc-card { background: var(--bg2); border: 1px solid var(--border); border-left: 4px solid var(--blue); border-radius: 14px; padding: 12px; }
+  .pc-card.leisure { border-left-color: var(--amber); }
+  .pc-hd { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .pc-room { font-family: var(--mono); font-weight: 800; font-size: 1.15rem; color: var(--accent); }
+  .pc-name { flex: 1; font-weight: 700; font-size: .92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pc-del { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--border2); background: transparent; color: var(--text3); font-size: 1rem; }
+  .pc-seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; background: var(--bg); padding: 4px; border-radius: 12px; margin-bottom: 10px; }
+  .pc-seg button { min-height: 40px; border: 0; border-radius: 9px; background: transparent; color: var(--text2); font-weight: 700; font-size: .85rem; }
+  .pc-seg button.on { background: var(--accent); color: #111; }
+  .pc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+  .pc-f { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .pc-f > span { font-size: .66rem; color: var(--text3); text-transform: uppercase; letter-spacing: .04em; display: flex; gap: 6px; align-items: center; }
+  .pc-f input { width: 100%; min-height: 42px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border2); background: var(--bg); color: var(--text); box-sizing: border-box; }
+  .pc-wide { grid-column: 1 / -1; }
+  .pc-ai { width: 42px; min-height: 42px; border-radius: 10px; border: 1px solid var(--border2); background: transparent; color: var(--purple, #8b7cf8); font-size: 1rem; }
+  .pc-empty { text-align: center; padding: 24px; color: var(--text3); font-size: .8rem; }
+
+  /* Toasts sit above the bottom bar, not over the content */
+  #appToast { bottom: 76px !important; }
+}
+@media (max-width: 768px) {
+  /* A filter row that holds a search box keeps the search on its own full-width line */
+  .filter-row:has(input) { flex-wrap: wrap !important; overflow: visible; }
+  .filter-row:has(input) input { flex: 1 0 100% !important; width: 100% !important; min-height: 42px; border-radius: 10px; order: 99; }
+}
