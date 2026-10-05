@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 125, items: [
+    '📱 Phone polish: the top bar fits the screen (your role icon only, version moved to Settings), header buttons show their names in one swipeable row, Clear is a quiet outline button instead of a red box, and cards have inner spacing so buttons no longer touch the edges.',
+  ] },
   { v: 124, items: [
     '⚙️ Settings, now complete:',
     '• Appearance: accent colour (gold, blue, green, teal, rose, purple), corners (rounded, soft, sharp), font, high contrast.',

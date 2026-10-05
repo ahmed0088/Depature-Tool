@@ -387,3 +387,45 @@ body.ho-privacy .dc-name:hover, body.ho-privacy .pc-name:hover, body.ho-privacy 
 body.ho-privacy :is(#panel-purpose, #panel-arrivals) tbody td:focus-within { filter: none; }
 @media (max-width: 860px) { .hs-toc { max-height: none; } .hs-meter { width: 100%; } }
 @media (max-width: 860px) { label.hs-row { flex-wrap: nowrap; } label.hs-row .hs-txt { flex: 1; } }
+
+/* ══ Phones: buttons and breathing room ══ */
+@media (max-width: 768px) {
+  /* top bar: logo · your icon · clock · settings — nothing runs off the edge */
+  .topbar { padding: 0 12px !important; gap: 8px !important; }
+  .topbar-right { gap: 6px !important; min-width: 0; flex-shrink: 1; }
+  .auth-user-pill { width: 36px; padding: 0 !important; justify-content: center; flex-shrink: 0; }
+  .auth-user-pill .pill-name, .auth-user-pill .pill-role { display: none !important; }
+  #appVersionPill { display: none !important; }
+  .topbar .tb-pill { height: 32px; padding: 0 10px; }
+
+  /* cards keep an inner margin so nothing touches their edges */
+  .card { padding: 14px !important; }
+  .card[style*="padding:0"], .card[style*="padding: 0"] { padding: 0 !important; }
+  .card > div[style*="display:flex"] { flex-wrap: wrap; }
+  .card .upload-zone + .error-box + div .btn, .card .btn.gold { min-height: 42px; }
+
+  /* page header buttons: real buttons with their names, one swipeable row */
+  .page-hd-actions { display: flex !important; flex-wrap: nowrap !important; overflow-x: auto; gap: 8px !important; padding: 2px 0 4px; scrollbar-width: none; margin: 0 -2px; }
+  .page-hd-actions::-webkit-scrollbar { display: none; }
+  .page-hd-actions .btn { height: 36px; padding: 0 13px; font-size: 12.5px; border-radius: 10px; }
+  .page-hd-actions .btn .btn-lbl, #depTrendsBtn .btn-lbl, #depPrintBtn .btn-lbl, #depExportBtn .btn-lbl, #depClearBtn .btn-lbl { display: inline !important; }
+  .page-hd-actions .icon-round { width: 36px; height: 36px; border: 1px solid var(--border2); }
+}
+/* "danger" buttons: quiet outline, not a red block */
+.btn.rose { background: transparent !important; color: var(--rose) !important; border-color: color-mix(in srgb, var(--rose) 45%, transparent) !important; box-shadow: none; }
+.btn.rose:hover { background: color-mix(in srgb, var(--rose) 10%, transparent) !important; }
+.btn.mint { background: color-mix(in srgb, var(--mint) 10%, transparent) !important; color: var(--mint) !important; border-color: color-mix(in srgb, var(--mint) 40%, transparent) !important; }
+.btn.sky { background: color-mix(in srgb, var(--sky) 10%, transparent) !important; color: var(--sky) !important; border-color: color-mix(in srgb, var(--sky) 40%, transparent) !important; }
+.btn.ai { background: color-mix(in srgb, #a78bfa 12%, transparent) !important; color: #b9a6ff !important; border-color: rgba(167,139,250,.4) !important; }
+[data-theme="opera"] .btn.ai { color: #5c2d8c !important; }
+[data-theme="opera"] .btn.mint { color: #118c4f !important; }
+[data-theme="opera"] .btn.sky { color: #1b6ec2 !important; }
+[data-theme="opera"] .btn.rose { color: #c74634 !important; border-color: #f0b8b0 !important; }
+.btn, label.btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; line-height: 1; white-space: nowrap; }
+.card + .kpi-row, .card + .kpi, .card + div > .kpi-row:first-child { margin-top: 14px !important; }
+@media (max-width: 768px) {
+  .page-hd-actions { align-items: center !important; }
+  .page-hd-actions > .btn, .page-hd-actions > label.btn { height: 36px !important; min-height: 36px; padding: 0 13px !important; }
+  .btn.gold, .btn.primary { box-shadow: 0 1px 0 rgba(255,255,255,.3) inset, 0 3px 10px -4px color-mix(in srgb, var(--accent) 55%, transparent); }
+  .kpi-row { gap: 10px !important; }
+}
