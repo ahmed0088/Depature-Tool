@@ -24,6 +24,7 @@ function showPanel(name) {
   if (name === 'trends' && typeof trLoad === 'function') trLoad();
   if (name === 'adagio' && typeof window._adgBoot === 'function') window._adgBoot();
   if (name === 'pipeline' && typeof gpLoadLog === 'function') gpLoadLog();
+  if (name === 'home' && typeof homeRender === 'function') homeRender();
 }
 
 // ── Clipboard ─────────────────────────────────────────────
@@ -453,7 +454,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v110';
+const APP_VERSION = 'v111';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;

@@ -410,7 +410,11 @@
 <!-- ── SIDEBAR ── -->
 <nav class="sidenav">
   <div class="nav-section-label">Operations</div>
-  <div class="nav-item active" onclick="showPanel('departures')" id="nav-departures" data-panel="departures">
+  <div class="nav-item active" onclick="showPanel('home')" id="nav-home" data-panel="home">
+    <div class="nav-icon">🏠</div>Home
+    <span class="nav-badge" id="badge-home">—</span>
+  </div>
+  <div class="nav-item" onclick="showPanel('departures')" id="nav-departures" data-panel="departures">
     <div class="nav-icon">🚪</div>Departures
     <span class="nav-badge" id="badge-departures">0</span>
   </div>
@@ -508,7 +512,24 @@
 <main class="main">
 
 <!-- ════════════════ DEPARTURES ════════════════ -->
-<div class="panel active" id="panel-departures">
+<div class="panel active" id="panel-home">
+  <div style="max-width:1100px;">
+    <div class="page-hd">
+      <div class="page-hd-left">
+        <h1 id="homeHi">Welcome</h1>
+        <p id="homeSub">Your shift at a glance</p>
+      </div>
+      <div class="page-hd-actions">
+        <button class="btn" onclick="homeRender()">↻ Refresh</button>
+        <button class="btn" onclick="showPanel('standards')">📘 Standards &amp; help</button>
+      </div>
+    </div>
+    <div id="homeTiles" class="home-grid"></div>
+    <p class="home-foot">Tap a tile to open the page. Numbers update as you and your colleagues work.</p>
+  </div>
+</div>
+
+<div class="panel" id="panel-departures">
   <div class="page-hd">
     <div class="page-hd-left">
       <h1>Departure Follow-Up</h1>
@@ -4199,7 +4220,7 @@ function toggleMobMore() {
 function syncMobBadges() {
   // Bottom nav (4 fixed items)
   [['departures','badge-departures'],['arrivals','badge-arrivals'],
-   ['checklist','badge-checklist'],['shifts','badge-shifts']].forEach(([panel, srcId]) => {
+   ['checklist','badge-checklist'],['shifts','badge-shifts'],['home','badge-home']].forEach(([panel, srcId]) => {
     const src  = document.getElementById(srcId);
     const dest = document.getElementById('mob-badge-' + panel);
     if (src && dest) {
@@ -4895,7 +4916,12 @@ async function appInit() {
 
 <!-- ── MOBILE BOTTOM NAV ── -->
 <nav class="mob-nav" id="mobNav">
-  <button class="mob-nav-btn active" onclick="showPanel('departures');mobNavSwitch(this)" data-panel="departures">
+  <button class="mob-nav-btn active" onclick="showPanel('home');mobNavSwitch(this)" data-panel="home">
+    <span class="mob-nav-icon">🏠</span>
+    <span class="mob-nav-lbl">Home</span>
+    <span class="mob-nav-badge" id="mob-badge-home"></span>
+  </button>
+  <button class="mob-nav-btn" onclick="showPanel('departures');mobNavSwitch(this)" data-panel="departures">
     <span class="mob-nav-icon">🚪</span>
     <span class="mob-nav-lbl">Depart</span>
     <span class="mob-nav-badge" id="mob-badge-departures"></span>
@@ -4909,11 +4935,6 @@ async function appInit() {
     <span class="mob-nav-icon">✅</span>
     <span class="mob-nav-lbl">Checklist</span>
     <span class="mob-nav-badge" id="mob-badge-checklist"></span>
-  </button>
-  <button class="mob-nav-btn" onclick="showPanel('shifts');mobNavSwitch(this)" data-panel="shifts">
-    <span class="mob-nav-icon">⏰</span>
-    <span class="mob-nav-lbl">Shifts</span>
-    <span class="mob-nav-badge" id="mob-badge-shifts"></span>
   </button>
   <button class="mob-nav-btn" onclick="toggleMobMore()" id="mobMoreBtn">
     <span class="mob-nav-icon">⋯</span>
@@ -4945,6 +4966,10 @@ async function appInit() {
 
   <!-- Scrollable panel grid -->
   <div class="mob-more-grid">
+    <button class="mob-more-item" data-panel="shifts" onclick="showPanel('shifts');closeMobMore()">
+      <span class="mob-item-icon">⏰</span>
+      <span class="mob-more-badge" id="mob-badge-shifts"></span>Shift Tasks
+    </button>
     <button class="mob-more-item" data-panel="dtcm" onclick="showPanel('dtcm');closeMobMore()">
       <span class="mob-item-icon">🏦</span>
       <span class="mob-more-badge" id="mob-badge-dtcm"></span>DTCM Recon
@@ -5199,6 +5224,7 @@ async function appInit() {
 <script src="handover.js"></script>
 <script src="accor-standards.js"></script>
 <script src="guest-pipeline.js"></script>
+<script src="home.js"></script>
 <script>
   // ── PWA: register service worker for offline app-shell ──
   if ('serviceWorker' in navigator) {
