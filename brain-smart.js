@@ -29,7 +29,8 @@ const BS_VOCAB = ['arrivals', 'arrival', 'departures', 'departure', 'nationality
   'duplicates', 'duplicate', 'breakdown', 'average', 'missing', 'without', 'package', 'packages', 'balance', 'tourism', 'dirham', 'reconciliation',
   'checklist', 'remove', 'guess', 'brief', 'report', 'history', 'leaving', 'staying', 'country', 'countries', 'commission', 'noshow', 'noshows', 'everything',
   // everyday words that must stay as they are
-  'night', 'audit', 'shift', 'check', 'card', 'cards', 'late', 'early', 'plan', 'note', 'notes', 'call', 'wake', 'work', 'does', 'what', 'when', 'where', 'there', 'their', 'with', 'this', 'that', 'have', 'need', 'help', 'guest', 'angry', 'upset', 'refund', 'charge', 'cancel', 'extend', 'move', 'lost', 'fire', 'alarm', 'taxi', 'luggage', 'phone', 'group', 'remind', 'handover', 'thanks', 'hello', 'should', 'would', 'could', 'about', 'after', 'before', 'today', 'tonight', 'tomorrow'];
+  'night', 'audit', 'shift', 'check', 'card', 'cards', 'late', 'early', 'plan', 'note', 'notes', 'call', 'wake', 'work', 'does', 'what', 'when', 'where', 'there', 'their', 'with', 'this', 'that', 'have', 'need', 'help', 'guest', 'angry', 'upset', 'refund', 'charge', 'cancel', 'extend', 'move', 'lost', 'fire', 'alarm', 'taxi', 'luggage', 'phone', 'group', 'remind', 'handover', 'thanks', 'hello', 'should', 'would', 'could', 'about', 'after', 'before', 'today', 'tonight', 'tomorrow',
+  'shifts', 'working', 'works', 'worked', 'roster', 'rosters', 'schedule', 'duty', 'week', 'weekend'];
 function _bsLev(a, b) {
   if (Math.abs(a.length - b.length) > 2) return 9;
   const d = Array.from({ length: a.length + 1 }, (_, i) => [i]);
@@ -86,6 +87,7 @@ function _bsPickSet(q, sets) {
 
 function bsQuery(raw) {
   const q = raw.toLowerCase();
+  if (typeof roIsQuestion === 'function' && roIsQuestion(q)) return null;   // a roster question, not about guests
   // a plain question, or a phrase like "french guests" / "arrivals without email"
   const asked = !!(/^(how many|how much|which|who|whom|list|show|find|count|what rooms|any |are there|give me|top |average|avg |breakdown|by |nationality breakdown|guests? (from|with|without|staying)|rooms? (that|with|without))/.test(q)
       || /\b(breakdown|how many|who has|who is|who are|by nationality|by source|by purpose|average nights)\b/.test(q));

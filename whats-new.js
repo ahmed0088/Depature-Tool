@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 140, items: [
+    '🗓️ New: Roster. Add the team\'s roster once (paste it from Excel or upload the .xlsx) and everyone sees it on any phone: My shifts (your next shift and the next 7 days), who is on today, and the full week. Weekly, two-week or monthly rosters all work; each paste only replaces its own days.',
+    '🗓️ Understands M, A, N, OFF, AL, SL, PH and hours like 07-15 by itself; add your hotel\'s own codes under Shift codes and times. Supervisors can edit any day, and Edit → Copy last week starts a new week.',
+    '🏠 Home shows your next shift. Ask Ops Brain "my shifts", "who is on tonight" or "who is working tomorrow".',
+  ] },
   { v: 139, items: [
     '🎨 Design check of every page on phone and desktop: Guest Memory now has the same header as the other pages; "Choose file" buttons match the app instead of the browser\'s grey ones; History filters are readable (no more "Ev" / "La"); Shift Tasks give the task name more room; the button row under each page title scrolls edge to edge instead of sticking out; search boxes and upload rows stay inside their cards, even with Extra large text.',
   ] },

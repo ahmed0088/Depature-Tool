@@ -437,6 +437,9 @@
     <div class="nav-icon">⏰</div>Shift Tasks
     <span class="nav-badge" id="badge-shifts">—</span>
   </div>
+  <div class="nav-item" onclick="showPanel('roster')" id="nav-roster" data-panel="roster">
+    <div class="nav-icon">🗓️</div>Roster
+  </div>
   <div class="nav-divider"></div>
   <div class="nav-section-label">Reports</div>
   <div class="nav-item" onclick="showPanel('nationality')" id="nav-nationality" data-panel="nationality">
@@ -1467,6 +1470,34 @@
       </div>
       <div id="gpTracker" style="margin-top:12px;"></div>
     </div>
+  </div>
+</div>
+
+<div class="panel" id="panel-roster">
+  <div class="ro-wrap">
+    <div class="page-hd">
+      <div class="page-hd-left"><h1>Roster</h1><p>The team's shifts. Add the roster once (paste it from Excel or upload the file) and everyone sees their own shifts on any phone.</p></div>
+      <div class="page-hd-actions"><button class="btn gold" id="roAddBtn" onclick="roImportOpen()" hidden>＋ Add roster</button><button class="btn" id="roEditBtn" onclick="roToggleEdit()" hidden>✏️ Edit</button></div>
+    </div>
+    <div class="card ro-import" id="roImport" hidden>
+      <div class="ro-card-hd"><b>Add the roster</b><span>From Excel: select the names and the days, copy, paste here. Or upload the .xlsx.</span></div>
+      <div class="ro-imp-row">
+        <label>Week starting <input type="date" id="roImpWeek"></label>
+        <small>Used when the roster only shows day names (Mon, Tue…). Dates in the roster are read by themselves.</small>
+      </div>
+      <textarea id="roPaste" placeholder="Paste the roster here: one person per row, their name, then a code for each day (M, A, N, OFF, AL or hours like 07-15)"></textarea>
+      <div class="ro-acts">
+        <button class="btn gold" onclick="roFromPaste()">Read the paste</button>
+        <label class="btn">📂 Upload Excel<input type="file" accept=".xlsx,.xls,.csv" hidden onchange="roFromFile(this)"></label>
+        <button class="btn" onclick="roImportOpen(false)">Close</button>
+      </div>
+      <div id="roPreview"></div>
+    </div>
+    <div class="ro-top">
+      <div class="card ro-mine" id="roMine"></div>
+      <div class="card ro-todayon" id="roTodayOn"></div>
+    </div>
+    <div class="card ro-week" id="roBody"></div>
   </div>
 </div>
 
@@ -4268,7 +4299,7 @@ function mobMoreFilter(q) {
     const KW = { dtcm: 'td tourism dirham recon reconcile dtcm xml', tourism: 'td tourism dirham portal date', 'td-audit': 'td 30 nights cap long stay',
       purpose: 'purpose stay email nationality origin', pipeline: 'neorcha email all enroll scraper loyalty', noshow: 'no show na40 pdf',
       immig: 'immigration passport police', 'inhouse-tally': 'vicas inhouse in-house', audit: 'pm rooms night audit excel',
-      standards: 'accor standards help guide all loyalty rules', history: 'history log audit who did what activity', settings: 'settings options preferences hide show theme text size menu', learn: 'learn guide training help tutorial new staff how to', rent: 'rented rooms beds', xref: 'extension arrivals departures',
+      standards: 'accor standards help guide all loyalty rules', history: 'history log audit who did what activity', roster: 'roster rota schedule my shifts day off who is working staff week', settings: 'settings options preferences hide show theme text size menu', learn: 'learn guide training help tutorial new staff how to', rent: 'rented rooms beds', xref: 'extension arrivals departures',
       nationality: 'country nationality report', adagio: 'long stay collections balance cheque', trends: 'month charts history',
       'package-audit': 'upsell in-gauge package', 'arrivals-proc': 'arrivals processor package codes' };
     const hit = !w || (b.textContent + ' ' + (b.dataset.panel || '') + ' ' + (KW[b.dataset.panel] || '')).toLowerCase().includes(w);
@@ -5040,6 +5071,9 @@ async function appInit() {
       <span class="mob-item-icon">⏰</span>
       <span class="mob-more-badge" id="mob-badge-shifts"></span>Shift Tasks
     </button>
+    <button class="mob-more-item" data-panel="roster" onclick="showPanel('roster');closeMobMore()">
+      <span class="mob-item-icon">🗓️</span>Roster
+    </button>
     <button class="mob-more-item" data-panel="dtcm" onclick="showPanel('dtcm');closeMobMore()">
       <span class="mob-item-icon">🏦</span>
       <span class="mob-more-badge" id="mob-badge-dtcm"></span>DTCM Recon
@@ -5319,6 +5353,7 @@ async function appInit() {
 <script src="nat-extra.js"></script>
 <script src="brain-goto.js"></script>
 <script src="learn.js"></script>
+<script src="roster.js"></script>
 <script src="brain-expert.js"></script>
 <script src="brand.js"></script>
 <script src="settings.js"></script>

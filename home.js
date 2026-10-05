@@ -98,6 +98,9 @@ function homeTiles() {
     add({ panel: 'pipeline', icon: '💎', title: 'ALL enrollment', big: sent, sub: 'invitations sent this month', tone: 'idle' });
   });
 
+  // Roster: your next shift
+  _homeSafe(() => { if (typeof roHomeTile === 'function') { const t = roHomeTile(); if (t) add(t); } });
+
   return tiles;
 }
 
