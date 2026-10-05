@@ -668,7 +668,8 @@ async function dtcCopyNote(btn) {
   if (!dtcRecon) return;
   const RC = dtcRecon, c = dtcActionCounts(RC), L = [];
   L.push(`TD reconciliation${dtcPeriod(RC) ? ' — ' + dtcPeriod(RC) : ''}`);
-  L.push(`DTCM ${dtcNum(RC.expTotal)} AED · Opera ${dtcNum(RC.actTotal)} AED · difference ${dtcNum(RC.netVariance)} AED`);
+  L.push(`DTCM ${dtcNum(RC.expTotalAdj != null ? RC.expTotalAdj : RC.expTotal)} AED · Opera ${dtcNum(RC.actTotal)} AED · difference ${dtcNum(RC.netVariance)} AED` +
+    (RC.dtcmFinalFees ? ` (DTCM XML total ${dtcNum(RC.dtcmFinalFees)} AED)` : ''));
   L.push(`To add ${c.add} · to reverse ${c.reverse} · to verify ${c.verify} · to fix in DTCM ${c.dtcm} · checks ${(RC.checks || []).length}`);
   (RC.warnings || []).forEach(w => L.push('WARNING: ' + w));
   if ((RC.actions || []).length) {

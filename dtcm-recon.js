@@ -264,7 +264,7 @@
             transactionuid: dseg.transactionuid || '',
             checkInTime: dseg.checkInTime || '', checkOutTime: dseg.checkOutTime || '',
             closed: /checked\s*out/i.test(dseg.status || ''),
-            note: 'Day use — charged in DTCM, no Opera posting expected'
+            note: 'Day use in DTCM only — cancel it in DTCM if it was not a real stay, or post it in Opera if it was'
           });
         }
       }
