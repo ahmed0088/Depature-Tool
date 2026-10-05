@@ -760,6 +760,9 @@
         const ad = opts[0]; used.add(ad);
         v.paired = ad.paired = true;
         const m = missBy.get(ad.room + '|' + ad.date);
+        m.pairedMove = true;
+        m.cause = `Room move: already posted in room ${v.room} on ${v.date} (nets to zero, do not post)`;
+        m.fix = 'No posting needed';
         checks.push({
           type: 'Room move (nets to zero)', severity: 'low', room: v.room + ' → ' + ad.room,
           guest: m.guest, date: v.date,

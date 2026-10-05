@@ -285,7 +285,7 @@ function dtcRenderAll() {
   const acts = RC.actions || [];
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   set('dtcCnt-summary', acts.length);
-  set('dtcCnt-sheet', (RC.missing || []).length + acts.filter(a => a.action !== 'Add').length);
+  set('dtcCnt-sheet', dtcPostings(RC).length + acts.filter(a => a.action !== 'Add').length);
   set('dtcCnt-longstay', dtcLS ? (dtcLS.longStays || []).length : 0);
   set('badge-dtcm', acts.length);
   const mob = document.getElementById('mob-badge-dtcm'); if (mob) mob.textContent = acts.length || '';
@@ -624,8 +624,9 @@ function dtcRenderPrevention(RC) {
   const bullets = [];
   const ex = RC.extra || [];
   const has = k => ex.some(e => e.kind === k);
-  if ((RC.missing || []).length) {
-    const rooms = [...new Set(RC.missing.map(m => m.room))].slice(0, 3).join(', ');
+  const toPost = dtcPostings(RC);
+  if (toPost.length) {
+    const rooms = [...new Set(toPost.map(m => m.room))].slice(0, 3).join(', ');
     bullets.push(`Missing postings (room ${rooms}…) — check the Opera routing / night-audit TD rules for these rooms.`);
   }
   if (has('over_cap') || has('over_cap_diff_guest')) {
@@ -726,12 +727,20 @@ function dtcChip(value) {
   return `<code>${escapeHtml(value)}</code><button class="dtc-copy" data-dtc-copy="${escapeHtml(value)}">copy</button>`;
 }
 
+/* Postings to add = the 'missing' nights that still have an Add action. A missing night that was
+   paired with an over-posting in another room (room move that nets to zero) has no Add action and
+   must NOT be posted, or the guest is charged twice. */
+function dtcPostings(RC) {
+  const adds = new Set((RC.actions || []).filter(a => a.action === 'Add').map(a => a.room + '|' + a.date));
+  return (RC.missing || []).filter(m => adds.has(m.room + '|' + m.date));
+}
+
 function dtcRenderSheet() {
   const RC = dtcRecon;
   const out = document.getElementById('dtcSheetOut');
   const bar = document.getElementById('dtcSheetActions');
   if (!RC || !out) return;
-  dtcWork  = RC.missing || [];
+  dtcWork  = dtcPostings(RC);
   dtcFixes = (RC.actions || []).filter(a => a.action !== 'Add');
 
   if (!dtcWork.length && !dtcFixes.length) {
@@ -745,7 +754,7 @@ function dtcRenderSheet() {
   const fixesHtml = !dtcFixes.length ? '' : `
     <div class="dtc-room">
       <div class="dtc-room-hd">
-        <span>Corrections to reverse / verify<span class="dtc-room-hint">Not postings to add — fix in Opera or confirm with the reservation</span></span>
+        <span>Corrections — reverse / verify / fix in DTCM<span class="dtc-room-hint">Not postings to add — fix in Opera, in the TD portal, or confirm with the reservation</span></span>
         <span class="dtc-room-tot">${dtcFixes.length} item${dtcFixes.length === 1 ? '' : 's'}</span>
       </div>
       <table class="dtc-sheet-table">
@@ -757,7 +766,7 @@ function dtcRenderSheet() {
             <td class="chk"><input type="checkbox" data-dtc-key="${escapeHtml(key)}"${on ? ' checked' : ''}></td>
             <td><span class="dtc-act ${escapeHtml(f.action.toLowerCase())}">${escapeHtml(f.action)}</span></td>
             <td><b>${escapeHtml(f.room)}</b></td>
-            <td style="font-family:var(--mono);">${escapeHtml(f.date)}</td>
+            <td style="font-family:var(--mono);white-space:nowrap;">${escapeHtml(f.date)}</td>
             <td class="amt">${dtcNum(f.amount)} AED</td>
             <td style="font-size:.72rem;">${escapeHtml(f.why || '')}</td></tr>`;
         }).join('')}</tbody>
