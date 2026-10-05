@@ -1891,18 +1891,7 @@
         <button class="btn rose" onclick="tdaClear()">✕ Clear</button>
       </div>
     </div>
-    <details class="howto"><summary>❔ How to use this</summary><ol><li>Opera: the tax report <code>finjrnlbytax</code>, tab-delimited</li><li>DTCM: the <b>HotelTransactionReport</b> XML</li><li>Press <b>🔍 Run Audit</b> — rooms still charged past the 30-night cap are flagged</li></ol></details>
-
-    <!-- ── How to Use ── -->
-    <div class="card" id="tdaHowToCard" style="border-color:rgba(90,180,232,0.25);cursor:pointer;" onclick="tdaToggleHowTo()">
-      <div style="display:flex;align-items:center;justify-content:space-between;">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-size:1rem;">📘</span>
-          <span style="font-size:0.8rem;font-weight:600;">How to Use This Tool</span>
-        </div>
-        <span id="tdaHowToChevron" style="font-family:var(--mono);font-size:0.7rem;color:var(--text3);transition:transform .2s;">▼</span>
-      </div>
-      <div id="tdaHowToBody" style="margin-top:12px;display:none;" onclick="event.stopPropagation()">
+    <details class="howto"><summary>❔ How to use this</summary>
 
         <div style="font-family:var(--mono);font-size:0.66rem;color:var(--text2);line-height:1.7;">
           <strong style="color:var(--sky);">Room number is all that matters.</strong> Names are shown only for reference — matching is done 100% by room number, so you don't need to check guest names to trust a flagged room.<br><br>
@@ -1935,8 +1924,9 @@
           4. Read <strong style="color:var(--text2);">Room</strong> + <strong style="color:var(--text2);">Verdict</strong> only (e.g. <code style="color:var(--gold);">112 → 50 nights · AED 290</code>) and go fix those rooms in Opera<br>
           5. Click <strong style="color:var(--text2);">📋 Copy Flagged Rooms</strong> to copy the list for a handover note
         </div>
-      </div>
-    </div>
+      </details>
+
+    <!-- ── How to Use ── -->
 
     <div class="card">
       <div style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);margin-bottom:12px;line-height:1.6;">

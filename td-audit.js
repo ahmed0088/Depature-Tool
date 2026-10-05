@@ -141,6 +141,7 @@ function tdaParseDtcmXML(raw) {
 function tdaToggleHowTo() {
   const body = document.getElementById('tdaHowToBody');
   const chev = document.getElementById('tdaHowToChevron');
+  if (!body) return;
   const open = body.style.display !== 'none';
   body.style.display = open ? 'none' : 'block';
   if (chev) chev.style.transform = open ? 'rotate(0deg)' : 'rotate(180deg)';
