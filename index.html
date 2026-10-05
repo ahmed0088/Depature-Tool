@@ -4143,6 +4143,13 @@ function mobNavSwitch(btn) {
   if (btn) btn.classList.add('active');
 }
 
+function closeMobMore() {
+  const drawer  = document.getElementById('mobMoreDrawer');
+  const overlay = document.getElementById('mobMoreOverlay');
+  if (drawer)  drawer.style.display  = 'none';
+  if (overlay) overlay.style.display = 'none';
+  document.getElementById('mobMoreBtn')?.classList.remove('active');
+}
 function toggleMobMore() {
   const drawer  = document.getElementById('mobMoreDrawer');
   const overlay = document.getElementById('mobMoreOverlay');
@@ -4203,7 +4210,9 @@ window.showPanel = function(name) {
   });
   // Close more drawer if open
   const drawer = document.getElementById('mobMoreDrawer');
-  if (drawer && drawer.style.display !== 'none') toggleMobMore();
+  if (drawer && drawer.style.display !== 'none') closeMobMore();
+  // Start every page at the top on a phone
+  if (window.innerWidth <= 900) window.scrollTo({ top: 0 });
 };
 
 // Sync badges every 5 seconds
@@ -4892,87 +4901,87 @@ async function appInit() {
 
   <!-- Scrollable panel grid -->
   <div class="mob-more-grid">
-    <button class="mob-more-item" data-panel="dtcm" onclick="showPanel('dtcm');toggleMobMore()">
+    <button class="mob-more-item" data-panel="dtcm" onclick="showPanel('dtcm');closeMobMore()">
       <span class="mob-item-icon">🏦</span>
       <span class="mob-more-badge" id="mob-badge-dtcm"></span>DTCM Recon
     </button>
-    <button class="mob-more-item" data-panel="purpose"       onclick="showPanel('purpose');toggleMobMore()">
+    <button class="mob-more-item" data-panel="purpose"       onclick="showPanel('purpose');closeMobMore()">
       <span class="mob-item-icon">📋</span>
       <span class="mob-more-badge" id="mob-badge-purpose"></span>Purpose
     </button>
-    <button class="mob-more-item" data-panel="xref"           onclick="showPanel('xref');toggleMobMore()">
+    <button class="mob-more-item" data-panel="xref"           onclick="showPanel('xref');closeMobMore()">
       <span class="mob-item-icon">🔗</span>
       <span class="mob-more-badge" id="mob-badge-xref"></span>Arr ↔ Dep
     </button>
-    <button class="mob-more-item" data-panel="noshow"         onclick="showPanel('noshow');toggleMobMore()">
+    <button class="mob-more-item" data-panel="noshow"         onclick="showPanel('noshow');closeMobMore()">
       <span class="mob-item-icon">🚫</span>
       <span class="mob-more-badge" id="mob-badge-noshow"></span>No-Shows
     </button>
-    <button class="mob-more-item" data-panel="arrivals-proc"   onclick="showPanel('arrivals-proc');toggleMobMore()">
+    <button class="mob-more-item" data-panel="arrivals-proc"   onclick="showPanel('arrivals-proc');closeMobMore()">
       <span class="mob-item-icon">📊</span>
       <span class="mob-more-badge" id="mob-badge-arrivals-proc"></span>Arr Processor
     </button>
     <!-- Guest Memory — hidden from the mobile menu too, see the sidebar comment above -->
-    <button class="mob-more-item" data-panel="guestmem"       onclick="showPanel('guestmem');toggleMobMore()" style="display:none;">
+    <button class="mob-more-item" data-panel="guestmem"       onclick="showPanel('guestmem');closeMobMore()" style="display:none;">
       <span class="mob-item-icon">🧠</span>
       <span class="mob-more-badge" id="mob-badge-guestmem"></span>Guest Memory
     </button>
-    <button class="mob-more-item" data-panel="adagio"         onclick="showPanel('adagio');toggleMobMore()">
+    <button class="mob-more-item" data-panel="adagio"         onclick="showPanel('adagio');closeMobMore()">
       <span class="mob-item-icon">⬡</span>
       <span class="mob-more-badge" id="mob-badge-adagio"></span>Adagio Pro
     </button>
-    <button class="mob-more-item" data-panel="nationality"    onclick="showPanel('nationality');toggleMobMore()">
+    <button class="mob-more-item" data-panel="nationality"    onclick="showPanel('nationality');closeMobMore()">
       <span class="mob-item-icon">🌍</span>
       <span class="mob-more-badge" id="mob-badge-nationality"></span>Nationality
     </button>
-    <button class="mob-more-item" data-panel="rent"           onclick="showPanel('rent');toggleMobMore()">
+    <button class="mob-more-item" data-panel="rent"           onclick="showPanel('rent');closeMobMore()">
       <span class="mob-item-icon">🛏️</span>
       <span class="mob-more-badge" id="mob-badge-rent"></span>Rented Rooms
     </button>
-    <button class="mob-more-item" data-panel="audit"          onclick="showPanel('audit');toggleMobMore()">
+    <button class="mob-more-item" data-panel="audit"          onclick="showPanel('audit');closeMobMore()">
       <span class="mob-item-icon">🌙</span>
       <span class="mob-more-badge" id="mob-badge-audit"></span>PM Rooms
     </button>
-    <button class="mob-more-item" data-panel="immig"          onclick="showPanel('immig');toggleMobMore()">
+    <button class="mob-more-item" data-panel="immig"          onclick="showPanel('immig');closeMobMore()">
       <span class="mob-item-icon">🛂</span>
       <span class="mob-more-badge" id="mob-badge-immig"></span>Immigration
     </button>
-    <button class="mob-more-item" data-panel="tourism"        onclick="showPanel('tourism');toggleMobMore()">
+    <button class="mob-more-item" data-panel="tourism"        onclick="showPanel('tourism');closeMobMore()">
       <span class="mob-item-icon">🏛️</span>
       <span class="mob-more-badge" id="mob-badge-tourism"></span>Tourism Tax
     </button>
-    <button class="mob-more-item" data-panel="td-audit"       onclick="showPanel('td-audit');toggleMobMore()">
+    <button class="mob-more-item" data-panel="td-audit"       onclick="showPanel('td-audit');closeMobMore()">
       <span class="mob-item-icon">⏳</span>TD 30-Day
     </button>
-    <button class="mob-more-item" data-panel="inhouse-tally"  onclick="showPanel('inhouse-tally');toggleMobMore()">
+    <button class="mob-more-item" data-panel="inhouse-tally"  onclick="showPanel('inhouse-tally');closeMobMore()">
       <span class="mob-item-icon">🧮</span>Inhouse Tally
     </button>
-    <button class="mob-more-item" data-panel="package-audit"  onclick="showPanel('package-audit');toggleMobMore()">
+    <button class="mob-more-item" data-panel="package-audit"  onclick="showPanel('package-audit');closeMobMore()">
       <span class="mob-item-icon">🎁</span>Package Audit
     </button>
-    <button class="mob-more-item" data-panel="pipeline"       onclick="showPanel('pipeline');toggleMobMore()">
+    <button class="mob-more-item" data-panel="pipeline"       onclick="showPanel('pipeline');closeMobMore()">
       <span class="mob-item-icon">🧲</span>Guest Pipeline
     </button>
-    <button class="mob-more-item" data-panel="standards"      onclick="showPanel('standards');toggleMobMore()">
+    <button class="mob-more-item" data-panel="standards"      onclick="showPanel('standards');closeMobMore()">
       <span class="mob-item-icon">📘</span>Standards
     </button>
-    <button class="mob-more-item" data-panel="trends"         onclick="showPanel('trends');toggleMobMore()">
+    <button class="mob-more-item" data-panel="trends"         onclick="showPanel('trends');closeMobMore()">
       <span class="mob-item-icon">📈</span>Trends
     </button>
-    <button class="mob-more-item" id="mobAdminBtn"             onclick="openAdminPanel();toggleMobMore()" style="display:none;">
+    <button class="mob-more-item" id="mobAdminBtn"             onclick="openAdminPanel();closeMobMore()" style="display:none;">
       <span class="mob-item-icon">👥</span>Team
     </button>
   </div>
 
   <!-- Utility strip: feedback · export · import · sign out -->
   <div class="mob-util-strip">
-    <button class="mob-util-btn" onclick="openFeedback();toggleMobMore()">💬 Feedback</button>
-    <button class="mob-util-btn" onclick="exportAllData();toggleMobMore()">💾 Export</button>
+    <button class="mob-util-btn" onclick="openFeedback();closeMobMore()">💬 Feedback</button>
+    <button class="mob-util-btn" onclick="exportAllData();closeMobMore()">💾 Export</button>
     <label  class="mob-util-btn" style="cursor:pointer;">
       📂 Import
-      <input type="file" accept=".json" style="display:none;" onchange="handleImport(this);toggleMobMore()"/>
+      <input type="file" accept=".json" style="display:none;" onchange="handleImport(this);closeMobMore()"/>
     </label>
-    <button class="mob-util-btn" onclick="authLogout();toggleMobMore()">⏻ Sign Out</button>
+    <button class="mob-util-btn" onclick="authLogout();closeMobMore()">⏻ Sign Out</button>
   </div>
 
 </div>
