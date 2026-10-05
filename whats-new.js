@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 138, items: [
+    '📱 Settings on the phone: choice buttons such as "Sign out when idle" and "Text size" now fit inside the card and wrap to a second line when needed, even with large text.',
+  ] },
   { v: 137, items: [
     '🧠 Ops Brain works with you like a colleague: "plan my shift" (your jobs in order with live status, and it greets each new shift once with the plan), "remind me at 03:00 to call 512" or "in 20 min", "wake up 512 at 6:30" (everyone on shift is alerted), "note 512 wants a late check-out at 2pm" (shared notes) and "write the handover" (drafted from the shift, notes and what is still open).',
     '🎓 It knows the front office: check-in and check-out, pre-authorisations, OTA virtual cards, declined cards, wrong charges, no-shows, walking a guest, complaints, VIPs, privacy, keys, lost and found, emergencies, Opera tips and night audit. Ask in plain words; your hotel\'s SOP always wins.',

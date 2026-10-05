@@ -294,6 +294,11 @@ label.hs-row { cursor: pointer; }
   .hs-row select, .hs-inline input { min-width: 0; width: 100%; }
   .hs-inline { width: 100%; justify-content: flex-start; }
   .hs-pages { grid-template-columns: 1fr 1fr; padding: 12px 14px; }
+  /* choice buttons take the full row and wrap inside the card, never past it */
+  .hs-row > .hs-txt { flex: 1 1 100%; }
+  .hs-seg { display: flex; width: 100%; max-width: 100%; box-sizing: border-box; flex-shrink: 1; }
+  .hs-seg button { flex: 1 1 auto; min-width: 0; padding: 0 8px; white-space: nowrap; min-height: 32px; height: auto; }
+  .hs-row > .btn { max-width: 100%; white-space: normal; }
 }
 
 /* ══ What the settings switch ══ */
