@@ -13,6 +13,7 @@ const GS_SEARCH_INPUT = {
   xref:       'xrefSearch',
   tourism:    'ttSearch',
   noshow:     'nsSearch',
+  standards:  'stdSearchBox',
 };
 
 const GS_PANEL_LABEL = {
@@ -26,6 +27,7 @@ const GS_PANEL_LABEL = {
   dtcm:       'DTCM Recon',
   checklist:  'Night Checklist',
   shifts:     'Shift Tasks',
+  standards:  'Accor Standards',
 };
 
 let _gsSelIdx = 0;
@@ -84,6 +86,13 @@ function gsBuildIndex(q) {
     });
   }
 
+  (typeof STD_ITEMS !== 'undefined' ? STD_ITEMS : []).forEach(it => {
+    if (hit(it.title, it.tags)) {
+      const c = (typeof STD_CATS !== 'undefined' ? STD_CATS : []).find(x => x.id === it.cat);
+      add('standards', '', it.title, c ? c.name : 'Accor Standards', '📘', it.title);
+    }
+  });
+
   return out.slice(0, 30);
 }
 
@@ -111,8 +120,8 @@ function gsRenderResults(q) {
     <div class="gs-result${i === _gsSelIdx ? ' sel' : ''}" onclick="gsJump(${i})" onmouseenter="_gsSelIdx=${i};gsRenderResults('${q.replace(/'/g, "\\'")}')">
       <span class="gs-result-icon">${r.icon}</span>
       <div class="gs-result-body">
-        <span class="gs-result-name">${r.room ? `<span class="gs-result-room">${r.room}</span> ` : ''}${r.name || '—'}</span>
-        <span class="gs-result-extra">${r.extra || ''}</span>
+        <span class="gs-result-name">${r.room ? `<span class="gs-result-room">${escapeHtml(r.room)}</span> ` : ''}${escapeHtml(r.name || '—')}</span>
+        <span class="gs-result-extra">${escapeHtml(r.extra || '')}</span>
       </div>
       <span class="gs-result-panel">${GS_PANEL_LABEL[r.panel] || r.panel}</span>
     </div>`).join('');
