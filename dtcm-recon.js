@@ -533,7 +533,8 @@
     /* ---------- 11. EXTRA CHECKS ---------- */
     const checks = [];
     if (isWindow){
-      outlierSegs.forEach(sg => checks.push({
+      /* rooms whose extra nights are an early / late tick already have their own DTCM to-do item */
+      outlierSegs.filter(sg => (sg.nightsOutsideFile || 0) > (sg.extraEarlyNight || 0) + (sg.extraLateNight || 0)).forEach(sg => checks.push({
         type: 'More nights in DTCM than the file covers', severity: 'med',
         room: sg.room, guest: sg.guest, date: sg.checkInISO || '',
         detail: `DTCM counts ${sg.storedNights} nights (${sg.storedTdFees} AED) but the Opera file only covers ` +
@@ -596,7 +597,8 @@
       checks.exemptAgree = exemptAgree;
     }
 
-    /* guest-name mismatch where amounts agree (wrong guest on the room?) */
+    /* guest-name mismatch where amounts agree (wrong guest on the room?) — one item per room + guest pair */
+    const nameDiff = new Map();
     for (const [k, list] of expectedIndex){
       const actuals = actualIndex.get(k) || [];
       if (!actuals.length) continue;
@@ -606,12 +608,19 @@
       const anyMatch = actuals.some(a => list.some(e => C.namesMatch(a.guest, e.guest) || C.nameOverlap(a.guest, e.guest) >= 2));
       if (!anyMatch && !C.namesMatch(opGuest, seg.guest)){
         const [room, date] = k.split('|');
-        checks.push({
-          type: 'Guest name differs', severity: 'low', room, guest: opGuest, date,
-          detail: `Opera folio: "${opGuest}" · DTCM: "${seg.guest}". Amounts agree.`,
-          fix: 'Check the room: guest swap / sharer / typo. Wrong DTCM guest data can fail a DTCM audit.'
-        });
+        const nk = room + '|' + opGuest + '|' + seg.guest;
+        if (!nameDiff.has(nk)) nameDiff.set(nk, { room, opGuest, dtcmGuest: seg.guest, dates: [] });
+        nameDiff.get(nk).dates.push(date);
       }
+    }
+    for (const n of nameDiff.values()){
+      n.dates.sort();
+      checks.push({
+        type: 'Guest name differs', severity: 'low', room: n.room, guest: n.opGuest, date: n.dates[0],
+        detail: `Opera folio: "${n.opGuest}" · DTCM: "${n.dtcmGuest}"` +
+                (n.dates.length > 1 ? ` (${n.dates.length} nights: ${n.dates.join(', ')})` : '') + '. Amounts agree.',
+        fix: 'Check the room: guest swap / sharer / typo. Wrong DTCM guest data can fail a DTCM audit.'
+      });
     }
     const exemptAgreeCount = checks.exemptAgree || 0;
     delete checks.exemptAgree;

@@ -146,7 +146,7 @@ async function dtcAnalyze() {
     try { document.getElementById('dtcResults').scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
     if (typeof logActivity === 'function') {
       const c = dtcActionCounts(RC);
-      logActivity('dtcm_analyzed', `${RC.reportDate || 'multi-night'} · ${c.add} add · ${c.reverse} reverse · ${c.verify} verify`);
+      logActivity('dtcm_analyzed', `${RC.reportDate || 'multi-night'} · ${c.add} add · ${c.reverse} reverse · ${c.verify} verify · ${c.dtcm} DTCM`);
     }
   } catch (err) {
     console.error('[DTCM]', err);
@@ -185,6 +185,7 @@ function dtcSlimState() {
       expTotal: RC.expTotal, expTotalAdj: RC.expTotalAdj,
       dayUseTotal: RC.dayUseTotal, dayUsePostedTotal: RC.dayUsePostedTotal,
       outsideWindow: RC.outsideWindow || 0, outsideRooms: RC.outsideRooms || [],
+      dtcmExtraTotal: RC.dtcmExtraTotal || 0,
       actTotal: RC.actTotal, netVariance: RC.netVariance, missingTotal: RC.missingTotal,
       extraTotal: RC.extraTotal, adjustTotal: RC.adjustTotal,
       mode: RC.mode, reportDate: RC.reportDate, windowStart: RC.windowStart || '', windowEnd: RC.windowEnd || '', rate: RC.rate,
@@ -318,7 +319,7 @@ function dtcClear() { dtcReset(true); }
 function dtcActionCounts(RC) {
   const acts = RC.actions || [];
   const n = k => acts.filter(a => a.action === k).length;
-  return { add: n('Add'), reverse: n('Reverse'), verify: n('Verify'),
+  return { add: n('Add'), reverse: n('Reverse'), verify: n('Verify'), dtcm: n('DTCM'),
            abs: acts.reduce((s, a) => s + (a.abs || 0), 0) };
 }
 
@@ -326,7 +327,7 @@ function dtcStatusLevel(RC) {
   const c = dtcActionCounts(RC);
   const dateBad = (RC.warnings || []).some(w => /^DATE MISMATCH/.test(w));
   if (dateBad || c.add || c.reverse || (RC.duplicates || []).length) return 'red';
-  if (c.verify || (RC.checks || []).length || (RC.warnings || []).length) return 'amber';
+  if (c.verify || c.dtcm || (RC.checks || []).length || (RC.warnings || []).length) return 'amber';
   return 'green';
 }
 
@@ -334,32 +335,33 @@ function dtcSnapshotLine() {
   if (!dtcRecon) return '';
   const c = dtcActionCounts(dtcRecon);
   const doneN = [...dtcDone].length;
-  const todo = c.add + c.reverse + c.verify;
+  const todo = c.add + c.reverse + c.verify + c.dtcm;
   return `🏦 DTCM Reconciliation${dtcPeriod(dtcRecon) ? ' (' + dtcPeriod(dtcRecon) + ')' : ''} — ` +
-    (todo ? `${c.add} to add · ${c.reverse} to reverse · ${c.verify} to verify · ${doneN} ticked` : 'Opera matches DTCM');
+    (todo ? `${c.add} to add · ${c.reverse} to reverse · ${c.verify} to verify · ${c.dtcm} to fix in DTCM · ${doneN} ticked` : 'Opera matches DTCM');
 }
 
 function dtcRenderSummary(RC) {
   const c = dtcActionCounts(RC);
   const lvl = dtcStatusLevel(RC);
-  const todo = c.add + c.reverse + c.verify;
+  const todo = c.add + c.reverse + c.verify + c.dtcm;
   const dateBad = (RC.warnings || []).some(w => /^DATE MISMATCH/.test(w));
   const title = dateBad ? 'Stop — the two files are for different dates'
     : lvl === 'green' ? 'All clear — Opera matches DTCM'
     : lvl === 'red'   ? `${todo || 'Some'} correction${todo === 1 ? '' : 's'} needed`
-    : (todo ? `${todo} item${todo === 1 ? '' : 's'} to verify` : 'Nothing to correct — a few things to double-check');
+    : (todo ? `${todo} item${todo === 1 ? '' : 's'} to check and fix` : 'Nothing to correct — a few things to double-check');
   const icon = lvl === 'green' ? '✅' : (lvl === 'red' ? '⛔' : '⚠️');
   const dtcmTotal = RC.expTotalAdj != null ? RC.expTotalAdj : RC.expTotal;
   const sign = RC.netVariance > 0 ? '+' : '';
   const chip = (label, n, cls) => `<span class="dtc-chip ${n ? cls : 'zero'}"><b>${n}</b> ${label}</span>`;
 
   /* How the DTCM XML total turns into the figure compared with Opera */
-  const outside = RC.outsideWindow || 0, dayU = RC.dayUseTotal || 0;
-  const bridge = (RC.dtcmFinalFees && (outside || dayU)) ? `
+  const outside = RC.outsideWindow || 0, dayU = RC.dayUseTotal || 0, xtra = (RC.gap && RC.gap.dtcmExtra) || 0;
+  const bridge = (RC.dtcmFinalFees && (outside || dayU || xtra)) ? `
       <div class="dtc-warn" style="background:rgba(90,180,232,.1);border-color:rgba(90,180,232,.35);">
         ℹ️ DTCM XML total <b>${dtcNum(RC.dtcmFinalFees)}</b>
+        ${xtra ? ` − <b>${dtcNum(xtra)}</b> extra nights DTCM charged (early / late check-out tick)` : ''}
         ${outside ? ` − <b>${dtcNum(outside)}</b> for nights outside this Opera file${(RC.outsideRooms || []).length ? ' (rooms ' + escapeHtml(RC.outsideRooms.join(', ')) + ')' : ''}` : ''}
-        ${dayU ? ` − <b>${dtcNum(dayU)}</b> day use, not posted in Opera` : ''}
+        ${dayU ? ` − <b>${dtcNum(dayU)}</b> day use in DTCM only` : ''}
         = <b>${dtcNum(dtcmTotal)}</b> compared with Opera <b>${dtcNum(RC.actTotal)}</b>.
         Raw totals, XML vs Opera: <b>${dtcNum(RC.actTotal - RC.dtcmFinalFees)}</b> AED.
       </div>` : '';
@@ -378,7 +380,7 @@ function dtcRenderSummary(RC) {
         </div>
       </div>
       <div class="dtc-chips">
-        ${chip('to add', c.add, 'bad')}${chip('to reverse', c.reverse, 'bad')}${chip('to verify', c.verify, 'warn')}
+        ${chip('to add', c.add, 'bad')}${chip('to reverse', c.reverse, 'bad')}${chip('to verify', c.verify, 'warn')}${chip('to fix in DTCM', c.dtcm, 'info')}
         ${chip('checks', (RC.checks || []).length, 'warn')}${chip('adjustments (fine)', (RC.adjustments || []).length, 'info')}
       </div>
       ${bridge}
@@ -485,7 +487,7 @@ function dtcRenderActions(RC) {
       <td>${i + 1}</td>
       <td><span class="dtc-act ${escapeHtml(a.action.toLowerCase())}">${escapeHtml(a.action)}</span></td>
       <td><b>${escapeHtml(a.room)}</b>${a.uid ? `<div style="font-size:.64rem;color:var(--text3);margin-top:3px;white-space:nowrap;">DTCM ID ${dtcChip(a.uid)}</div>` : ''}</td>
-      <td style="font-family:var(--mono);">${escapeHtml(a.date)}</td>
+      <td style="font-family:var(--mono);white-space:nowrap;">${escapeHtml(a.date)}</td>
       <td style="text-align:right;font-family:var(--mono);font-weight:700;color:${a.amount < 0 ? 'var(--red)' : 'var(--green)'};">${a.amount > 0 ? '+' : ''}${dtcNum(a.amount)} AED</td>
       <td>${escapeHtml(a.where)}</td>
       <td style="font-size:.72rem;color:var(--text2);">${escapeHtml(a.why || '')}</td>
@@ -666,7 +668,7 @@ async function dtcCopyNote(btn) {
   const RC = dtcRecon, c = dtcActionCounts(RC), L = [];
   L.push(`TD reconciliation${dtcPeriod(RC) ? ' — ' + dtcPeriod(RC) : ''}`);
   L.push(`DTCM ${dtcNum(RC.expTotal)} AED · Opera ${dtcNum(RC.actTotal)} AED · difference ${dtcNum(RC.netVariance)} AED`);
-  L.push(`To add ${c.add} · to reverse ${c.reverse} · to verify ${c.verify} · checks ${(RC.checks || []).length}`);
+  L.push(`To add ${c.add} · to reverse ${c.reverse} · to verify ${c.verify} · to fix in DTCM ${c.dtcm} · checks ${(RC.checks || []).length}`);
   (RC.warnings || []).forEach(w => L.push('WARNING: ' + w));
   if ((RC.actions || []).length) {
     L.push('', 'TO DO:');
