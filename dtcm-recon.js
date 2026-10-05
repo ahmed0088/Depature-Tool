@@ -196,6 +196,22 @@
     /* ---------- 6. MISSING (expected > posted) ----------
        Day use (check-in and check-out the same day) is charged in DTCM but is
        normal when Opera has no posting: it goes to dayUse, never to missing. */
+    /* GUEST CHANGED IN THE ROOM: Opera has this room under one name for the earlier nights and has
+       NOTHING at all under the DTCM guest's name (e.g. the guest left and a friend extended the stay in
+       the same room under his own name). The later nights are then missing on every folio. */
+    function detectGuestChange(room, date, dtcmGuest){
+      const rows = operaRows.filter((r, i) => !r.isReversal && !cancelled.has(i) && r.room === room);
+      if (!rows.length) return null;
+      const sameName = rows.some(r => C.namesMatch(r.guest, dtcmGuest) || C.nameOverlap(r.guest, dtcmGuest) >= 2);
+      if (sameName) return null;
+      const earlier = rows.filter(r => r.businessDate < date)
+        .sort((a, b) => a.businessDate < b.businessDate ? -1 : 1);
+      if (!earlier.length) return null;
+      return { operaGuest: earlier[earlier.length - 1].guest,
+               firstDate: earlier[0].businessDate,
+               lastDate: earlier[earlier.length - 1].businessDate };
+    }
+
     const missing = [];
     const dayUse = [];
     for (const [k, list] of expectedIndex){
@@ -249,6 +265,14 @@
         };
         const c = classifyMissing(v, dtcmSegments);
         v.cause = c.cause; v.fix = c.fix;
+        if (v.cause === 'Not posted' || v.cause === 'Interface gap'){
+          const gc = detectGuestChange(room, date, v.guest);
+          if (gc){
+            v.kind = 'guest_change'; v.gc = gc;
+            v.cause = `Guest changed in the room: Opera has "${gc.operaGuest}" until ${gc.lastDate}; DTCM has "${v.guest}" for the stay. These nights are not on any Opera folio.`;
+            v.fix = `Post ${v.shortfall.toFixed(2)} AED on the folio of "${v.guest}" (the extension), date ${date}.`;
+          }
+        }
         missing.push(v);
       }
     }
@@ -267,6 +291,27 @@
         return { kind: 'day_use_posted', dtcmGuest: dayUseSeg.guest,
           cause: `Day use — ${dayUseSeg.guest} checked in and out on ${date}; TD posted for the day`,
           fix: 'No action — day-use TD is legitimate' };
+      }
+      /* ROOM-MOVE CHAIN: DTCM keeps one transaction ID for the whole stay but one row per room. If the
+         guest changed rooms across midnight DTCM can lose a night. Compare the whole stay, not one room. */
+      const myDtcm = (segsByRoom.get(room) || []).find(s => s.transactionuid &&
+        (C.namesMatch(guest, s.guest) || C.nameOverlap(guest, s.guest) >= 2));
+      if (myDtcm){
+        const chain = dtcmSegments.filter(s => s.transactionuid === myDtcm.transactionuid);
+        const chainRooms = [...new Set(chain.map(s => s.room))];
+        if (chainRooms.length >= 2){
+          const dtcmAmt = round2(chain.reduce((a, s) => a + (s.storedTdFees || 0), 0));
+          const operaAmt = round2(operaRows.reduce((a, r, i) => (r.isReversal || cancelled.has(i) || !chainRooms.includes(r.room) ||
+            !(C.namesMatch(guest, r.guest) || C.nameOverlap(guest, r.guest) >= 2)) ? a : a + r.amount, 0));
+          if (operaAmt > dtcmAmt + 0.005){
+            const path = chain.slice().sort((a, b) => (a.checkInISO + a.checkInTime) < (b.checkInISO + b.checkInTime) ? -1 : 1)
+              .map(s => s.room).join(' → ');
+            return { kind: 'room_chain_short', dtcmGuest: myDtcm.guest,
+              chain: { path, rooms: chainRooms, dtcmAmt, operaAmt, uid: myDtcm.transactionuid },
+              cause: `Room-move stay of ${myDtcm.guest} (${path}): Opera charges ${operaAmt.toFixed(2)} AED in total, DTCM only ${dtcmAmt.toFixed(2)} AED. DTCM lost a night in the room moves.`,
+              fix: `Verify the stay. If he really slept those nights, the missing night is in DTCM, not in Opera.` };
+          }
+        }
       }
       /* EARLY ARRIVAL: guest checked in after midnight but before night audit. Opera dates
          that first night on the PREVIOUS business date, DTCM dates the stay from the calendar day. */
@@ -387,7 +432,7 @@
           note: c.kind === 'room_move' ? 'Room-move leg (linked)'
               : expectedList.length ? 'Partially over-posted' : 'No expected stay',
           kind: c.kind, cause: c.cause, fix: c.fix,
-          dtcmGuest: c.dtcmGuest || '', nightNo: c.nightNo || 0
+          dtcmGuest: c.dtcmGuest || '', nightNo: c.nightNo || 0, chain: c.chain || null
         });
       }
     }
@@ -413,6 +458,7 @@
           count: arr.length,
           excess: round2(extraCopies * arr[0].amount),
           trxNos: arr.map(x => x.trxNo || '—').join(', '),
+          lines: arr.map(x => ({ trxNo: x.trxNo || '', time: x.time || '', guest: x.guest || '' })),
           cause: 'Duplicate posting',
           fix: `Reverse ${round2(extraCopies * arr[0].amount).toFixed(2)} AED (${extraCopies} extra cop${extraCopies>1?'ies':'y'})`
         });
@@ -537,7 +583,7 @@
        They are real DTCM money but cannot be compared with this journal, so they are shown as a
        separate step in the headline instead of silently widening the difference. */
     const outsideWindow = (isWindow && dtcmFinalFees > expTotal) ? round2(dtcmFinalFees - expTotal) : 0;
-    const outsideRooms  = isWindow ? [...new Set(outlierSegs.map(sg => sg.room))].sort() : [];
+    const outsideRooms  = isWindow ? [...new Set(dtcmSegments.filter(sg => (sg.nightsOutsideFile || 0) > 0).map(sg => sg.room))].sort() : [];
     if (outsideWindow === 0 && Math.abs(dtcmFinalFees - expTotal) > 0.5){
       warnings.push(`DTCM FinalFees (${dtcmFinalFees}) differs from the rebuilt expected total (${expTotal}). ` +
         'The XML may contain rows the tool skipped (missing room / check-in date).');
@@ -551,7 +597,8 @@
     missing.forEach(m => actions.push({
       action: 'Add', room: m.room, date: m.date,
       amount: m.amount, where: 'Opera', abs: Math.abs(m.amount), why: m.cause,
-      uid: m.transactionuid || uidFor(m.room, m.date, m.guest)
+      uid: m.transactionuid || uidFor(m.room, m.date, m.guest),
+      kind: m.kind || 'add', guest: m.guest, gc: m.gc || null
     }));
     const REVERSE_KINDS = new Set(['over_posting', 'over_cap', 'after_checkout']);
     /* A duplicate posting IS the over-posting for that room/date. Listing both would tell the
@@ -580,13 +627,15 @@
         where: REVERSE_KINDS.has(e.kind) ? 'Opera' : 'Opera + DTCM',
         abs: Math.abs(variance),
         why: e.cause,
-        uid: uidFor(e.room, e.date, e.dtcmGuest || e.guest)
+        uid: uidFor(e.room, e.date, e.dtcmGuest || e.guest),
+        kind: e.kind, guest: e.guest, dtcmGuest: e.dtcmGuest || '', fixText: e.fix, chain: e.chain || null
       });
     });
     duplicates.forEach(d => actions.push({
       action: 'Reverse', room: d.room, date: d.businessDate,
       amount: -d.excess, where: 'Opera', abs: Math.abs(d.excess), why: 'Duplicate posting',
-      uid: uidFor(d.room, d.businessDate, d.guest)
+      uid: uidFor(d.room, d.businessDate, d.guest),
+      kind: 'duplicate', guest: d.guest, trxNos: d.trxNos, copies: d.count, lines: d.lines
     }));
     /* ROOM MOVE WITHOUT A REMARK: the same guest's night is posted in room A in Opera but sits in
        room B in DTCM. That shows up as an over-posting in A and a missing posting in B, same
@@ -630,6 +679,116 @@
     actions.sort((a, b) => b.abs - a.abs ||
       (a.action === 'Verify') - (b.action === 'Verify'));
 
+    /* ---------- 14. GAP BRIDGE + FIX PLAN ----------
+       Turns the two totals into: what explains the raw gap, what to do in what order, and what the
+       totals will be once it is done. */
+    const nf = n => round2(Math.abs(n)).toFixed(2);
+    const sumAct = k => round2(actions.filter(a => a.action === k).reduce((s, a) => s + a.amount, 0));
+    const addT = sumAct('Add'), revT = sumAct('Reverse'), verT = sumAct('Verify');
+    const operaAfter = round2(actTotal + addT + revT + verT);       // if every Verify turns out to be an Opera reversal
+    const operaAfterKeep = round2(actTotal + addT + revT);          // if every Verify is fixed on the DTCM side instead
+    const gap = {
+      rawDtcm: dtcmFinalFees, rawOpera: actTotal, rawGap: round2(actTotal - dtcmFinalFees),
+      outside: outsideWindow, outsideRooms, dayUse: dayUseTotal,
+      dayUseRooms: dayUse.filter(x => !x.posted).map(x => x.room),
+      adjDtcm: expTotalAdj, adjGap: netVariance,
+      addT, revT, verT, operaAfter, operaAfterKeep,
+      dtcmAfterKeep: round2(expTotalAdj - verT),
+      leftover: round2(expTotalAdj - operaAfter)
+    };
+
+    /* The night audit posts every room at almost the same minute. A line posted at a clearly
+       different time (e.g. right after a check-in) is the odd one out, and that is the line to reverse. */
+    const auditTime = new Map();
+    {
+      const cnt = new Map();
+      operaRows.forEach(r => { if (!r.time) return; const k = r.businessDate + '|' + r.time; cnt.set(k, (cnt.get(k) || 0) + 1); });
+      const best = new Map();
+      for (const [k, n] of cnt){ const [d, t] = k.split('|'); if (!best.has(d) || n > best.get(d).n) best.set(d, { t, n }); }
+      for (const [d, b] of best) auditTime.set(d, b.t);
+    }
+    const plan = [];
+    const gcByRoom = new Map();
+    actions.forEach(a => {
+      if (a.kind === 'guest_change'){
+        let g = gcByRoom.get(a.room);
+        if (!g){
+          g = { action: 'Add', kind: 'guest_change', room: a.room, dates: [], amount: 0, uid: a.uid, guest: a.guest, gc: a.gc };
+          gcByRoom.set(a.room, g); plan.push(g);
+        }
+        g.dates.push(a.date); g.amount = round2(g.amount + a.amount);
+        return;
+      }
+      plan.push({ action: a.action, kind: a.kind || '', room: a.room, dates: [a.date], amount: a.amount,
+                  uid: a.uid, guest: a.guest || '', dtcmGuest: a.dtcmGuest || '', why: a.why,
+                  fixText: a.fixText || '', trxNos: a.trxNos || '', copies: a.copies || 0, lines: a.lines || null, chain: a.chain || null });
+    });
+    plan.forEach(p => {
+      const d = p.dates.join(', '), n = p.dates.length;
+      const ref = p.uid ? `DTCM ID ${p.uid}` : 'DTCM report';
+      if (p.kind === 'guest_change'){
+        p.title = `Room ${p.room}: post ${nf(p.amount)} AED TD for ${n} night${n > 1 ? 's' : ''} on the extension folio`;
+        p.steps = [
+          `Room ${p.room} changed guest. Opera has "${p.gc.operaGuest}" until ${p.gc.lastDate}. DTCM has "${p.guest}" for the whole stay (${ref}).`,
+          `Open the reservation of "${p.guest}" in room ${p.room} (the extension). Find out why Tourism Dirham did not post there (rate code, tax or exempt setting on that reservation).`,
+          `Post ${nf(p.amount)} AED Tourism Dirham (code 7510) on that folio for: ${d}. Remark: "DTCM correction ${p.uid || ''}".`,
+          `If Opera does not accept those old dates, post it on the current business date with the same remark. It will land in a later journal, so tell the person doing the next reconciliation.`,
+          `Make sure TD keeps posting every night on that extension folio from now on.`,
+          `Do not change anything in DTCM. DTCM already has this stay.`
+        ];
+        p.effect = 'Opera +' + nf(p.amount);
+      } else if (p.action === 'Add'){
+        p.title = `Room ${p.room}: post ${nf(p.amount)} AED TD for ${d}`;
+        p.steps = [
+          `Open the folio of room ${p.room}${p.guest ? ' (' + p.guest + ')' : ''} in Opera.`,
+          `Post ${nf(p.amount)} AED Tourism Dirham (code 7510) for ${d}. Remark: "DTCM correction ${p.uid || ''}".`,
+          `Reason: ${p.why}. (${ref})`
+        ];
+        p.effect = 'Opera +' + nf(p.amount);
+      } else if (p.kind === 'duplicate'){
+        const nos = String(p.trxNos || '').split(',').map(x => x.trim()).filter(Boolean);
+        const at = auditTime.get(p.dates[0]) || '';
+        const odd = (p.lines || []).filter(l => l.time && at && l.time !== at);
+        const oddLine = odd.length === 1 && (p.lines || []).length === 2 ? odd[0] : null;
+        const later = oddLine ? oddLine.trxNo : nos.slice().sort((a, b) => (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0)).pop();
+        const whyLine = oddLine
+          ? `trx ${oddLine.trxNo} was posted at ${oddLine.time}, not by the night audit (the audit posted at ${at}). It is the odd one, so reverse that one and keep the night-audit line.`
+          : `Reverse the later one, trx ${later}.`;
+        p.title = `Room ${p.room}: reverse the duplicate TD of ${nf(p.amount)} AED on ${d}`;
+        p.steps = [
+          `Open the folio of room ${p.room}${p.guest ? ' (' + p.guest + ')' : ''} in Opera.`,
+          `There are ${p.copies || 2} identical TD (7510) postings on ${d}${nos.length ? ' (trx ' + nos.join(', ') + ')' : ''}. Only one should exist.`,
+          `Reverse ONE of them. ${whyLine} Remark: "Duplicate TD".`,
+          `Before you do: confirm this is the same guest and the same room. Two guests sharing one room, or one guest in two rooms, is NOT a duplicate (check the other room too).`
+        ];
+        p.effect = 'Opera −' + nf(p.amount);
+      } else if (p.action === 'Reverse'){
+        p.title = `Room ${p.room}: reverse ${nf(p.amount)} AED TD on ${d}`;
+        p.steps = [
+          `Open the folio of room ${p.room}${p.guest ? ' (' + p.guest + ')' : ''} in Opera.`,
+          `Reverse ${nf(p.amount)} AED Tourism Dirham dated ${d}. Remark: "DTCM correction ${p.uid || ''}".`,
+          `Reason: ${p.why}. (${ref})`
+        ];
+        p.effect = 'Opera −' + nf(p.amount);
+      } else if (p.kind === 'room_chain_short'){
+        const c = p.chain || {};
+        p.title = `Room ${p.room} (${p.dtcmGuest || p.guest}): Opera has one more night than DTCM`;
+        p.steps = [
+          `DTCM shows this stay across rooms ${c.path || ''}. Total in DTCM: ${nf(c.dtcmAmt || 0)} AED. Total in Opera: ${nf(c.operaAmt || 0)} AED. Difference ${nf(p.amount)} AED.`,
+          `Open the reservation in Opera and count the nights he really slept in the hotel (check the room moves and their times).`,
+          `If the Opera nights are right (most likely, because the room moves across midnight make DTCM lose a night): fix the stay in the TD portal so its nights match Opera (${ref}). Opera stays unchanged.`,
+          `If he really stayed one night less: reverse ${nf(p.amount)} AED in Opera on ${d}.`
+        ];
+        p.effect = 'Closes either way';
+      } else {
+        p.title = `Room ${p.room}: check the reservation (${nf(p.amount)} AED)`;
+        p.steps = [ p.fixText || p.why, `(${ref})` ];
+        p.effect = 'Closes either way';
+      }
+    });
+    const order = { Add: 0, Reverse: 1, Verify: 2 };
+    plan.sort((a, b) => (order[a.action] - order[b.action]) || (Math.abs(b.amount) - Math.abs(a.amount)));
+
     console.log('--- RECONCILE SUMMARY ---');
     console.log('Mode / date         :', isDaily ? 'daily' : (isWindow ? 'window' : 'multi-night'), reportDate || winDates.join(','));
     console.log('DTCM FinalFees (XML):', dtcmFinalFees);
@@ -653,7 +812,7 @@
       missing, extra, duplicates, phantom,
       checks, exemptAgree: exemptAgreeCount,
       reversals: reversalList,
-      adjustments,
+      adjustments, gap, fixPlan: plan,
       noShows: noShows.map(r => ({
         room: r.room, guest: r.guest, businessDate: r.businessDate,
         amount: r.amount, remark: r.remark || r.desc

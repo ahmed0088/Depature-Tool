@@ -11,7 +11,7 @@
   const TD_CAP_NIGHTS = 30;
 
   const round2 = n => Math.round(n * 100) / 100;
-  const toISO  = d => d ? d.toISOString().slice(0,10) : '';
+  const toISO  = (d => { if (!d) return ''; const p = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); });
   const MONTHS = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,
                   jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
 

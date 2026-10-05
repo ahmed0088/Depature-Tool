@@ -190,6 +190,7 @@ function dtcSlimState() {
       mode: RC.mode, reportDate: RC.reportDate, windowStart: RC.windowStart || '', windowEnd: RC.windowEnd || '', rate: RC.rate,
       warnings: RC.warnings || [], exemptAgree: RC.exemptAgree || 0
     },
+    gap: RC.gap || null, fixPlan: RC.fixPlan || [],
     checks: RC.checks, dayUse: RC.dayUse, missing: RC.missing, extra: RC.extra,
     duplicates: RC.duplicates, phantom: RC.phantom, adjustments: RC.adjustments,
     noShows: RC.noShows, upsells: RC.upsells, reversals: RC.reversals, actions: RC.actions,
@@ -245,7 +246,8 @@ function dtcApplyState(doc) {
     warnings: (doc.meta && doc.meta.warnings) || [],
     checks: A('checks'), dayUse: A('dayUse'), missing: A('missing'), extra: A('extra'),
     duplicates: A('duplicates'), phantom: A('phantom'), adjustments: A('adjustments'),
-    noShows: A('noShows'), upsells: A('upsells'), reversals: A('reversals'), actions: A('actions')
+    noShows: A('noShows'), upsells: A('upsells'), reversals: A('reversals'), actions: A('actions'),
+    gap: doc.gap || null, fixPlan: A('fixPlan')
   });
   const L = doc.longstay;
   dtcLS = L ? Object.assign({ longStays: [], segments: [], totals: [] }, L) : null;
@@ -386,6 +388,7 @@ function dtcRenderSummary(RC) {
       </div>
     </div>`;
 
+  dtcRenderFixPlan(RC);
   dtcRenderActions(RC);
   dtcRenderChecks(RC);
   dtcRenderHeadline(RC);
@@ -393,6 +396,75 @@ function dtcRenderSummary(RC) {
   dtcRenderPrevention(RC);
   const exp = document.getElementById('dtcExportBtn');
   if (exp) exp.style.display = '';
+}
+
+// ── Fix plan: how to close the gap between DTCM and Opera ──
+function dtcRenderFixPlan(RC) {
+  let box = document.getElementById('dtcFixPlan');
+  if (!box) {
+    const anchor = document.getElementById('dtcStatus');
+    if (!anchor) return;
+    box = document.createElement('div');
+    box.id = 'dtcFixPlan';
+    anchor.insertAdjacentElement('afterend', box);
+  }
+  const G = RC.gap, plan = RC.fixPlan || [];
+  if (!G) { box.innerHTML = ''; return; }          // result saved before this feature existed
+  const n = v => dtcNum(v), sg = v => (v > 0 ? '+' : (v < 0 ? '−' : '')) + dtcNum(Math.abs(v));
+  const row = (label, val, note, strong) => `
+    <tr${strong ? ' style="font-weight:700;"' : ''}>
+      <td style="padding:6px 8px;">${label}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:var(--mono);white-space:nowrap;">${val}</td>
+      <td style="padding:6px 8px;font-size:.72rem;color:var(--text2);">${note || ''}</td>
+    </tr>`;
+  const bridge = `
+    <table style="width:100%;border-collapse:collapse;font-size:.8rem;">
+      ${row('DTCM XML total', n(G.rawDtcm) + ' AED', '')}
+      ${G.outside ? row('− Nights after the Opera file ends', '−' + n(G.outside), 'Rooms ' + escapeHtml((G.outsideRooms || []).join(', ')) + '. <b>Nothing to fix.</b> These nights fall inside the NEXT Opera file. Do not post them now.') : ''}
+      ${G.dayUse ? row('− Day use (DTCM only)', '−' + n(G.dayUse), (G.dayUseRooms || []).length ? 'Rooms ' + escapeHtml(G.dayUseRooms.join(', ')) + '. <b>Nothing to fix</b> unless your rule says day-use TD must also be posted in Opera.' : '<b>Nothing to fix.</b>') : ''}
+      ${row('= DTCM to compare with Opera', n(G.adjDtcm) + ' AED', '', true)}
+      ${row('Opera journal', n(G.rawOpera) + ' AED', '')}
+      ${row('Difference between the two totals', sg(G.adjGap) + ' AED', G.adjGap === 0 ? 'The totals agree, but the room lines below are still wrong (the errors cancel each other).' : 'This is the gap the corrections below must close.', true)}
+    </table>`;
+
+  const cardColor = a => a === 'Add' ? 'var(--green)' : (a === 'Reverse' ? 'var(--red)' : 'var(--amber, #f0a43a)');
+  const cards = plan.map((p, i) => `
+    <details class="dtc-fp" ${i === 0 ? 'open' : ''} style="border:1px solid var(--border, rgba(128,128,128,.3));border-left:4px solid ${cardColor(p.action)};border-radius:8px;margin:8px 0;padding:8px 12px;">
+      <summary style="cursor:pointer;font-weight:600;">
+        <span style="font-family:var(--mono);">${i + 1}.</span>
+        <span class="dtc-act ${escapeHtml(p.action.toLowerCase())}">${escapeHtml(p.action)}</span>
+        ${escapeHtml(p.title)}
+        <span style="float:right;font-family:var(--mono);font-size:.72rem;color:var(--text2);">${escapeHtml(p.effect || '')}</span>
+      </summary>
+      <ol style="margin:8px 0 4px 18px;padding:0;font-size:.78rem;line-height:1.5;">
+        ${(p.steps || []).map(t => `<li style="margin:3px 0;">${escapeHtml(t)}</li>`).join('')}
+      </ol>
+      ${p.uid ? `<div style="font-size:.64rem;color:var(--text3);">DTCM ID ${dtcChip(p.uid)}</div>` : ''}
+    </details>`).join('');
+
+  let after;
+  if (!plan.length) {
+    after = `<div style="font-size:.8rem;">Nothing to do for the room lines.</div>`;
+  } else if (G.leftover === 0) {
+    const sure = plan.map((p, i) => p.action !== 'Verify' ? i + 1 : 0).filter(Boolean).join(', ');
+    after = `<div style="font-size:.8rem;line-height:1.55;">
+      ${sure ? `After step${sure.includes(',') ? 's' : ''} ${sure}: Opera is <b>${n(G.operaAfterKeep)}</b> AED.` : `Opera is <b>${n(G.rawOpera)}</b> AED.`}
+      ${G.verT ? `The “check the reservation” item(s) then close in one of two ways: reverse in Opera (Opera becomes <b>${n(G.operaAfter)}</b>, DTCM stays <b>${n(G.adjDtcm)}</b>), or fix it in the TD portal (DTCM becomes <b>${n(G.dtcmAfterKeep)}</b>, Opera stays <b>${n(G.operaAfterKeep)}</b>). Either way the two sides end equal.` : `DTCM is <b>${n(G.adjDtcm)}</b> AED, so both sides agree.`}
+    </div>`;
+  } else {
+    after = `<div class="dtc-warn" style="font-size:.8rem;">⚠️ Even after every step above, Opera and DTCM still differ by <b>${sg(G.leftover)}</b> AED. Look at the Checks and Phantom lists below: something is not explained yet.</div>`;
+  }
+
+  box.innerHTML = `
+    <div style="margin:14px 0;padding:14px;border:1px solid var(--border, rgba(128,128,128,.3));border-radius:10px;">
+      <div style="font-weight:700;font-size:.95rem;margin-bottom:4px;">🧭 How to close the gap between DTCM and Opera</div>
+      <div style="font-size:.72rem;color:var(--text2);margin-bottom:8px;">Step A: what explains the difference between the two totals</div>
+      ${bridge}
+      <div style="font-size:.72rem;color:var(--text2);margin:14px 0 2px;">Step B: what to do, in this order${plan.length ? '' : ' (nothing)'}</div>
+      ${cards}
+      <div style="font-size:.72rem;color:var(--text2);margin:12px 0 4px;">Step C: result</div>
+      ${after}
+    </div>`;
 }
 
 function dtcRenderActions(RC) {
@@ -596,6 +668,20 @@ async function dtcCopyNote(btn) {
     RC.actions.forEach((a, i) => L.push(`${i + 1}. ${a.action} room ${a.room} · ${a.date} · ${dtcNum(a.amount)} AED${a.uid ? ' · DTCM ID ' + a.uid : ''} — ${a.why || ''}`));
   } else {
     L.push('', 'Nothing to correct.');
+  }
+  if (RC.gap) {
+    const G = RC.gap;
+    L.push('', `WHY THE TOTALS DIFFER: DTCM XML ${dtcNum(G.rawDtcm)}` +
+      (G.outside ? ` − ${dtcNum(G.outside)} nights after the Opera file (rooms ${(G.outsideRooms || []).join(', ')}), nothing to fix` : '') +
+      (G.dayUse ? ` − ${dtcNum(G.dayUse)} day use, nothing to fix` : '') +
+      ` = ${dtcNum(G.adjDtcm)} vs Opera ${dtcNum(G.rawOpera)}.`);
+  }
+  if ((RC.fixPlan || []).length) {
+    L.push('', 'HOW TO FIX:');
+    RC.fixPlan.forEach((p, i) => {
+      L.push(`${i + 1}. ${p.action.toUpperCase()} — ${p.title}`);
+      (p.steps || []).forEach((t, j) => L.push(`   ${String.fromCharCode(97 + j)}) ${t}`));
+    });
   }
   if ((RC.checks || []).length) {
     L.push('', 'CHECKS:');

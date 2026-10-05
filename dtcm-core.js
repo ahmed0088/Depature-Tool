@@ -20,7 +20,8 @@
     '1000','1002','1004','1010','1014','1061','1062','1029','6002','7510'
   ]);
 
-  const toISO  = dt => dt ? dt.toISOString().slice(0,10) : '';
+  /* LOCAL calendar date. toISOString() converts to UTC, which in Dubai (UTC+4) turns local midnight into the PREVIOUS day. */
+  const toISO  = (dt => { if (!dt) return ''; const p = n => String(n).padStart(2, '0'); return dt.getFullYear() + '-' + p(dt.getMonth() + 1) + '-' + p(dt.getDate()); });
   const round2 = n => Math.round(n * 100) / 100;
 
   function firstAttr(node, names){
@@ -226,6 +227,7 @@
         room, roomRaw, guest, guestNorm: normName(guest),
         storedNights, storedTdFees, checkIn, checkOut, status, bedrooms, houseUse,
         checkInTime: firstAttr(n, ['NewCheckin','CheckInTime','Check_In_Time']),
+        checkOutTime: firstAttr(n, ['NewOut','CheckOutTime','Check_Out_Time']),
         checkInISO:  checkIn  ? toISO(checkIn)  : '',
         checkOutISO: checkOut ? toISO(checkOut) : '',
         transactionuid: firstAttr(n, ['transactionuid','TransactionUID','Transaction_UID','UID']),
@@ -296,6 +298,7 @@
     const iCode   = find('TRX_CODE','TRANSACTION_CODE');
     const iTax    = find('TAX_TRX_CODE');
     const iUser   = find('USER_NAME','CASHIER_ID','CF_CASHIER');
+    const iTime   = find('BUSINESS_TIME','CHAR_TRX_TIME');
 
     if (iRoom === -1 || iDate === -1){
       console.error('Opera file missing required columns (ROOM, BUSINESS_DATE / CHAR_TRX_DATE). Header seen:', header);
@@ -369,6 +372,7 @@
       const ref    = (c[iRef]    || '').trim();
       const trxNo  = (c[iTrx]    || '').trim();
       const user   = (c[iUser]   || '').trim();
+      const time   = iTime === -1 ? '' : (c[iTime] || '').trim();
 
       let kind = 'nightly';
       if (code === '1004')                                   kind = 'no_show';
@@ -399,7 +403,7 @@
         bizStr: (c[iDate] || '').trim(),
         amount, net: netRaw, gross: grossRaw,
         debit, credit,
-        remark, ref, trxNo, user,
+        remark, ref, trxNo, user, time,
         kind, taxCode,
         isRoomMove, fromRoom, toRoom, isPackage,
         isAdjustment, isReversal
@@ -447,18 +451,37 @@
         if (!n || n <= 0) continue;
         const ci = s.checkInISO, co = s.checkOutISO || '';
         const isDayUse = !!(ci && ci === co);
+        /* A check-in between 00:00 and 05:59 happens BEFORE that day's night audit, so Opera
+           charges the first night on the PREVIOUS business date (the one being closed). */
+        const beforeAudit = t => {                       // 'hh:mm AM|PM' earlier than ~04:20 (night audit starts 03:50-04:25)
+          const m = String(t || '').match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+          if (!m || !/AM/i.test(m[3])) return false;
+          return ((parseInt(m[1], 10) % 12) * 60 + parseInt(m[2], 10)) < 260;
+        };
+        const earlyArrival = beforeAudit(s.checkInTime);
+        /* A check-out before the audit means that date's night was not charged: the last
+           charged business date is one earlier than for a normal daytime check-out. */
+        const shiftDay = (iso, k) => { const x = new Date(iso + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + k); return x.toISOString().slice(0, 10); };
+        const coEff = (co && !isDayUse && beforeAudit(s.checkOutTime)) ? shiftDay(co, -1) : co;
         let set = isDayUse
           ? windowDates.filter(d => d === ci)
-          : windowDates.filter(d => d >= ci && (!co || d < co));
+          : windowDates.filter(d => d >= ci && (!coEff || d < coEff));
         if (set.length > n) set = set.slice(set.length - n);
-        if (set.length < n){
-          /* early-morning arrival / day use dated after the night it belongs to:
-             take the nights immediately before */
-          const limit = set.length ? set[0] : ci;
-          const earlier = windowDates.filter(d => d < limit && !set.includes(d)).reverse();
-          set = set.concat(earlier.slice(0, n - set.length)).sort();
+        if (earlyArrival && set.length && set.length <= n){
+          /* the early-arrival night: the one business date before the check-in date */
+          const first = set[0];
+          const prev  = windowDates.filter(d => d < first).pop();
+          if (prev && (set.length < n || isDayUse)) set = (isDayUse ? [prev] : [prev].concat(set));
+        } else if (!set.length && earlyArrival){
+          const prev = windowDates.filter(d => d < ci).pop();
+          if (prev) set = [prev];
         }
+        /* Any remaining nights DTCM counts lie beyond the last date of this file (tonight and
+           later), so they are NOT back-filled onto earlier dates: they are reported as nights
+           outside the file instead. */
+        if (set.length > n) set = set.slice(set.length - n);
         const amt = round2(s.storedTdFees / n);
+        s.nightsOutsideFile = Math.max(0, n - set.length);
         for (const d of set){
           expected.push({
             room: s.room, guest: s.guest, guestNorm: s.guestNorm,
