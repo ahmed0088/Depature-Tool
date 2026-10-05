@@ -5687,3 +5687,7 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
 @media (prefers-reduced-motion: reduce) {
   .panel.mob-enter, .mob-more-drawer { animation: none !important; }
 }
+
+/* Package Audit — pin menu */
+.pkg-pin { font-size: .7rem; padding: 3px 4px; max-width: 120px; border-radius: 6px; border: 1px solid var(--border2); background: var(--bg2); color: var(--text2); }
+.pkg-pin.on { border-color: var(--accent); color: var(--accent); font-weight: 700; }

@@ -1641,6 +1641,7 @@
         <div class="fchip"    data-pkgf="resolved" onclick="pkgSetFilter('resolved',this)">✏️ Update in IN-Gauge <span id="pkgfc-resolved">0</span></div>
         <div class="fchip"    data-pkgf="deny"     onclick="pkgSetFilter('deny',this)">⛔ Remove <span id="pkgfc-deny">0</span></div>
         <div class="fchip"    data-pkgf="review"   onclick="pkgSetFilter('review',this)">⚠ Check by hand <span id="pkgfc-review">0</span></div>
+        <div class="fchip"    data-pkgf="pinned"   onclick="pkgSetFilter('pinned',this)" title="Packages you pinned to a seller or skipped">📌 Pinned <span id="pkgfc-pinned">0</span></div>
         <div class="fchip"    data-pkgf="outside"  onclick="pkgSetFilter('outside',this)">⏳ Not in this log <span id="pkgfc-outside">0</span></div>
         <div class="fchip"    data-pkgf="complete" onclick="pkgSetFilter('complete',this)">✓ Nothing to do <span id="pkgfc-complete">0</span></div>
         <div class="search-wrap" style="margin-left:auto;">
@@ -1661,6 +1662,7 @@
               <th>Sold By</th>
               <th style="width:190px;">What to do</th>
               <th style="width:110px;">Status</th>
+              <th style="width:120px;" title="Pin the seller or skip a package — remembered on every load">📌 Pin</th>
             </tr>
           </thead>
           <tbody id="pkgTable"></tbody>

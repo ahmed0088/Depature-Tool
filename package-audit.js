@@ -636,6 +636,10 @@ function _pkgSameUser(a, b) {
   const x = _pkgUserKey(a), y = _pkgUserKey(b);
   if (!x || !y) return false;
   if (x === y) return true;
+  for (const [name, al] of Object.entries(typeof PKG_STAFF_ALIASES !== 'undefined' ? PKG_STAFF_ALIASES : {})) {
+    const is = k => _pkgUserKey(name) === k || al.some(t => k.split('-').pop() === t || k.split('-').pop().endsWith(t) || k.includes(t));
+    if (is(x) && is(y)) return true;
+  }
   // A login is the family name with the person's initials stuck on the
   // front — CNONIS/NONIS, MADAS/DAS, AHELSAFTY/ELSAFTY, HNAVED/NAVED —
   // so the longer form ends with the shorter one. Requiring at least
@@ -659,12 +663,27 @@ const PKG_STAFF = [
   'HninWut YEEOO', 'Irene RUNTU', 'Manisha DAS', 'Syed Turrab Bukhari',
 ];
 
+// Extra spellings a login can carry for someone, when it is not simply
+// initials + family name (e.g. Turrab's login may use TURAB or TURRAB).
+const PKG_STAFF_ALIASES = {
+  'Syed Turrab Bukhari': ['TURRAB', 'TURAB', 'BUKHARI', 'STBUKHARI', 'SBUKHARI', 'STURRAB', 'STURAB'],
+};
+
+function _pkgStaffFor(u) {
+  const key = _pkgUserKey(u);
+  if (!key) return null;
+  const login = key.split('-').pop();
+  return PKG_STAFF.find(name => _pkgSameUser(name, key)) ||
+    Object.keys(PKG_STAFF_ALIASES).find(name => PKG_STAFF_ALIASES[name].some(a => login === a || login.endsWith(a) || key.includes(a))) ||
+    null;
+}
+
 function _pkgUserLabel(u) {
   const key = _pkgUserKey(u);
   if (!key) return String(u || '');
   // Reuses the login/display-name matching, so CNONIS finds Chethmi NONIS
   // without needing the exact login spelled out here.
-  return PKG_STAFF.find(name => _pkgSameUser(name, key)) || key;
+  return _pkgStaffFor(u) || key;
 }
 
 // The matched event says WHICH package the charge is; it does not say who
@@ -1112,7 +1131,8 @@ async function pkgRun() {
   _pkgApplyVerdicts(results);
   _pkgApplyExtensionCredit(results);
   _pkgFlagSplitSellers(results);   // after credit is settled — it compares final sellers
-  _pkgDropNoOpReassigns(results);  // last: nothing that needs no change stays on the list
+  _pkgDropNoOpReassigns(results);  // nothing that needs no change stays on the list
+  _pkgApplyPins(results);          // last: a person's pinned decision beats the log
   _pkgArchive(results);
   pkgResults = results;
   _pkgRenderCoverage();
@@ -1120,6 +1140,84 @@ async function pkgRun() {
   pkgRender();
   busyDone();
 }
+
+// ── Pins: decisions a person made that the audit must remember ──────────
+// "This breakfast is Manisha's sale even though Hassan typed it into Opera",
+// or "stop showing me this one". Saved per package (confirmation + package
+// family), shared with the team, applied on every load.
+let pkgPins = {};
+const PKG_PIN_KEY = 'pkg_pins_v1';
+try { pkgPins = JSON.parse(localStorage.getItem(PKG_PIN_KEY) || '{}') || {}; } catch (_) { pkgPins = {}; }
+function _pkgPinKey(r) { return `${String(r.conf || '').trim()}|${_pkgFamilyName(r)}`.replace(/[.#$\[\]\/]/g, '_'); }
+
+function _pkgApplyPins(results) {
+  results.forEach(r => {
+    const pin = pkgPins[_pkgPinKey(r)];
+    r.pin = pin || null;
+    if (!pin) return;
+    if (pin.skip) { r.pinSkip = true; return; }
+    if (pin.seller && (r.verdict === 'credit' || r.verdict === 'review')) {
+      r.verdict = 'credit';
+      r.splitSeller = false;
+      r.user = pin.seller;
+      r.reassign = !!r.employee && r.employee !== '-' && !_pkgSameUser(r.employee, pin.seller);
+      r.needsEmployee = !r.employee || r.employee === '-';
+      r.alreadyComplete = !r.reassign && !r.needsEmployee && !r.needsProduct;
+      r.wasUser = r.reassign ? r.employee : '';
+    }
+  });
+}
+
+function _pkgSavePins() {
+  try { localStorage.setItem(PKG_PIN_KEY, JSON.stringify(pkgPins)); } catch (_) {}
+  if (typeof fbSet === 'function') fbSet('pkgPins', pkgPins);
+}
+
+function pkgPinChange(idx, val) {
+  const r = pkgResults[idx];
+  if (!r) return;
+  const key = _pkgPinKey(r);
+  const by = (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '';
+  if (val === '__clear') delete pkgPins[key];
+  else if (val === '__skip') pkgPins[key] = { skip: true, by, at: new Date().toISOString() };
+  else if (val === '__other') {
+    const name = (prompt('Seller name (as in IN-Gauge):') || '').trim();
+    if (!name) { pkgRender(); return; }
+    pkgPins[key] = { seller: name, by, at: new Date().toISOString() };
+  } else if (val) pkgPins[key] = { seller: val, by, at: new Date().toISOString() };
+  else { pkgRender(); return; }
+  _pkgSavePins();
+  // re-apply on the current results without reloading the files
+  pkgResults.forEach(x => { if (_pkgPinKey(x) === key) { delete x.pinSkip; } });
+  _pkgApplyPins(pkgResults.filter(x => _pkgPinKey(x) === key));
+  pkgRender();
+  showToast(val === '__clear' ? 'Pin removed — reload the files to see the log\'s view again' : 'Saved — this will be remembered on every load', 'ok');
+}
+
+function _pkgPinCell(r) {
+  const i = pkgResults.indexOf(r);
+  const cur = r.pin ? (r.pin.skip ? '__skip' : r.pin.seller) : '';
+  const staff = PKG_STAFF.slice();
+  if (cur && cur !== '__skip' && !staff.includes(cur)) staff.push(cur);
+  const title = r.pin ? `Pinned by ${r.pin.by || 'someone'}${r.pin.at ? ' · ' + r.pin.at.slice(0, 10) : ''}` : 'Pin the seller or skip this package — remembered on every load';
+  return `<td><select class="pkg-pin${r.pin ? ' on' : ''}" title="${escapeHtml(title)}" onchange="pkgPinChange(${i}, this.value)">
+    <option value="">${r.pin ? '📌' : '📌 Pin…'}</option>
+    ${staff.map(n => `<option value="${escapeHtml(n)}"${cur === n ? ' selected' : ''}>Seller: ${escapeHtml(n)}</option>`).join('')}
+    <option value="__other">Seller: someone else…</option>
+    <option value="__skip"${cur === '__skip' ? ' selected' : ''}>Skip this package</option>
+    ${r.pin ? '<option value="__clear">Remove pin</option>' : ''}
+  </select></td>`;
+}
+
+function pkgLoadPins() {
+  if (typeof fbListen !== 'function') return;
+  fbListen('pkgPins', v => {
+    if (!v || typeof v !== 'object') return;
+    pkgPins = v;
+    try { localStorage.setItem(PKG_PIN_KEY, JSON.stringify(pkgPins)); } catch (_) {}
+  });
+}
+document.addEventListener('DOMContentLoaded', () => setTimeout(pkgLoadPins, 1500));
 
 // Plain-language instruction for the row — what the person reading this
 // actually has to go and do, rather than which field happened to be blank.
@@ -1156,6 +1254,13 @@ function _pkgActionText(r) {
   // So the factual checks run first and the stamp is added to whatever they
   // find — a decision made on bad information should be visible, not hidden.
   const seen = r.reviewed;
+  if (r.pinSkip) return 'Skipped (pinned)';
+  if (r.pin && r.pin.seller && r.verdict === 'credit') {
+    if (r.needsEmployee) return `Set the seller to ${_pkgUserLabel(r.pin.seller)} (pinned)`;
+    if (r.reassign) return `Set the seller to ${_pkgUserLabel(r.pin.seller)} (pinned)`;
+    if (r.needsProduct) return 'Set the package (seller pinned)';
+    return `Nothing — pinned to ${_pkgUserLabel(r.pin.seller)}`;
+  }
   if (r.verdict === 'settled') return 'Nothing — already denied';
   if (r.verdict === 'deny')    return seen ? 'Reviewed, but still remove this charge' : 'Remove this charge';
   if (r.verdict === 'outside') return 'Not in this log';
@@ -1202,9 +1307,11 @@ function pkgRender() {
     // "Needs action" is the default: everything a person can actually do
     // something about. Rows the log simply doesn't reach are excluded —
     // they aren't decisions waiting to be made.
-    const needsAction = r.verdict === 'deny' ||
+    if (pkgFilter_ === 'pinned') { if (!r.pin) return false; }
+    else if (r.pinSkip && pkgFilter_ !== 'all') return false;
+    const needsAction = !r.pinSkip && (r.verdict === 'deny' ||
                         (r.verdict === 'credit' && !r.alreadyComplete) ||
-                        r.verdict === 'review';
+                        r.verdict === 'review');
     if (pkgFilter_ === 'action'    && !needsAction) return false;
     if (pkgFilter_ === 'complete'  && !((r.alreadyComplete && r.verdict === 'credit') || r.verdict === 'settled')) return false;
     if (pkgFilter_ === 'resolved'  && !(r.verdict === 'credit' && !r.alreadyComplete)) return false;
@@ -1220,9 +1327,11 @@ function pkgRender() {
 
   const settledCount   = pkgResults.filter(r => r.verdict === 'settled').length;
   const completeCount  = pkgResults.filter(r => (r.verdict === 'credit' && r.alreadyComplete) || r.verdict === 'settled').length;
-  const fixedCount     = pkgResults.filter(r => r.verdict === 'credit' && !r.alreadyComplete).length;
-  const denyCount      = pkgResults.filter(r => r.verdict === 'deny').length;
-  const reviewCount    = pkgResults.filter(r => r.verdict === 'review').length;
+  const live           = pkgResults.filter(r => !r.pinSkip);
+  const fixedCount     = live.filter(r => r.verdict === 'credit' && !r.alreadyComplete).length;
+  const denyCount      = live.filter(r => r.verdict === 'deny').length;
+  const reviewCount    = live.filter(r => r.verdict === 'review').length;
+  const pinnedCount    = pkgResults.filter(r => r.pin).length;
   const outsideCount   = pkgResults.filter(r => r.verdict === 'outside').length;
   const actionCount    = fixedCount + denyCount + reviewCount;
   [['pkgfc-action', actionCount],
@@ -1232,6 +1341,7 @@ function pkgRender() {
    ['pkgfc-resolved', fixedCount],
    ['pkgfc-deny', denyCount],
    ['pkgfc-review', reviewCount],
+   ['pkgfc-pinned', pinnedCount],
   ].forEach(([id, v]) => { const el = document.getElementById(id); if (el) el.textContent = v; });
 
   document.getElementById('pkgKpis').innerHTML = `
@@ -1242,7 +1352,7 @@ function pkgRender() {
 
   const tbody = document.getElementById('pkgTable');
   if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:36px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">No rows match.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:36px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">No rows match.</td></tr>`;
     return;
   }
   tbody.innerHTML = filtered.map(r => {
@@ -1256,6 +1366,7 @@ function pkgRender() {
         <td colspan="2" style="font-size:0.68rem;color:var(--rose);">${escapeHtml(r.denyReason)}</td>
         ${gapCell}
         <td><span style="color:var(--rose);">⛔ Remove</span></td>
+        ${_pkgPinCell(r)}
       </tr>`;
     }
     if (r.verdict === 'credit') {
@@ -1271,6 +1382,7 @@ function pkgRender() {
         <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text2);">${escapeHtml(_pkgUserLabel(r.user))}</td>
         ${gapCell}
         <td>${statusCell}</td>
+        ${_pkgPinCell(r)}
       </tr>`;
     }
     const candText = r.note ? escapeHtml(r.note)
@@ -1301,6 +1413,7 @@ function pkgRender() {
       <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text3);">${claimed}</td>
       ${gapCell}
       <td>${statusCell}</td>
+      ${_pkgPinCell(r)}
     </tr>`;
   }).join('');
 }
