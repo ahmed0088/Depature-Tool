@@ -9,8 +9,14 @@
 (function(global){
   'use strict';
 
-  const TD_RATE   = 10;
-  const TD_CAP    = 30;
+  /* Rate, night cap and TD code come from the hotel's settings (hotel-settings.js),
+     read each time a function runs, so a change applies on the next Analyze. */
+  const HC = () => global.HotelCfg;
+  const tdRate = () => HC() ? HC().rate() : 10;
+  const tdCap  = () => HC() ? HC().cap()  : 30;
+  const isTdCode = c => HC() ? HC().isTdCode(c) : c === '7510';
+  const tdDescRe = () => HC() ? HC().descRe() : /tourism\s*dirham/i;
+  const auditMin = () => HC() ? HC().auditMinutes() : 260;
   const USE_GROSS = false;
 
   const MONTHS = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,
@@ -323,9 +329,9 @@
     for (let i = headerIdx + 1; i < lines.length && !hasPureTD; i++){
       const c = splitLine(lines[i], delim);
       const cd = iCode !== -1 ? (c[iCode] || '').trim().replace(/\.0+$/, '') : '';
-      if (cd === '7510' || /tourism\s*dirham/i.test(c[iDesc] || '')) hasPureTD = true;
+      if (isTdCode(cd) || tdDescRe().test(c[iDesc] || '')) hasPureTD = true;
     }
-    console.log('Opera journal mode:', hasPureTD ? 'TD lines only (7510)' : 'legacy TD code list');
+    console.log('Opera journal mode:', hasPureTD ? 'TD lines only (' + (HC() ? HC().codeLabel() : '7510') + ')' : 'legacy TD code list');
 
     for (let i = headerIdx + 1; i < lines.length; i++){
       const c = splitLine(lines[i], delim);
@@ -336,8 +342,8 @@
       const code    = codeRaw.replace(/\.0+$/,'');
       const taxCode = iTax !== -1 ? (c[iTax] || '').trim() : '';
 
-      const isTDCode  = hasPureTD ? (code === '7510' || /tourism\s*dirham/i.test(descRaw)) : (code && TD_CODES.has(code));
-      const isTax7510 = taxCode === '7510';
+      const isTDCode  = hasPureTD ? (isTdCode(code) || tdDescRe().test(descRaw)) : (code && (TD_CODES.has(code) || isTdCode(code)));
+      const isTax7510 = isTdCode(taxCode);
       if (!isTDCode && !isTax7510){ noteSkip('notTD', c); continue; }
 
       const desc    = descRaw;
@@ -449,7 +455,7 @@
          Anchor the nights to the window instead of expanding from the check-in date. */
       if (windowDates && windowDates.length){
         let n = s.storedNights;
-        if (!n || n <= 0) n = Math.round(s.storedTdFees / TD_RATE);
+        if (!n || n <= 0) n = Math.round(s.storedTdFees / tdRate());
         if (!n || n <= 0) continue;
         const ci = s.checkInISO, co = s.checkOutISO || '';
         const isDayUse = !!(ci && ci === co);
@@ -458,7 +464,7 @@
         const beforeAudit = t => {                       // 'hh:mm AM|PM' earlier than ~04:20 (night audit starts 03:50-04:25)
           const m = String(t || '').match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
           if (!m || !/AM/i.test(m[3])) return false;
-          return ((parseInt(m[1], 10) % 12) * 60 + parseInt(m[2], 10)) < 260;
+          return ((parseInt(m[1], 10) % 12) * 60 + parseInt(m[2], 10)) < auditMin();
         };
         const earlyArrival = beforeAudit(s.checkInTime);
         /* A check-out before the audit means that date's night was not charged: the last
@@ -517,15 +523,15 @@
 
       let nights = s.storedNights;
       if ((!nights || nights <= 0) && s.storedTdFees > 0){
-        nights = Math.round(s.storedTdFees / TD_RATE);
+        nights = Math.round(s.storedTdFees / tdRate());
       }
       if (!nights || nights <= 0) continue;
 
-      const chargeable = Math.min(nights, TD_CAP);
+      const chargeable = Math.min(nights, tdCap());
 
-      const flatTotal = round2(TD_RATE * chargeable);
+      const flatTotal = round2(tdRate() * chargeable);
       const useFlat   = Math.abs(flatTotal - s.storedTdFees) < 0.5;
-      const rate      = useFlat ? TD_RATE : round2(s.storedTdFees / chargeable);
+      const rate      = useFlat ? tdRate() : round2(s.storedTdFees / chargeable);
       const remainder = round2(s.storedTdFees - rate * chargeable);
 
       for (let i = 0; i < nights; i++){
@@ -567,7 +573,8 @@
   }
 
   global.DtcmCore = {
-    TD_RATE, TD_CAP, USE_GROSS, TD_CODES,
+    get TD_RATE() { return tdRate(); }, get TD_CAP() { return tdCap(); }, isTdCode,
+    USE_GROSS, TD_CODES,
     MONTHS, toISO, round2, normName, parseFee, firstAttr,
     parseUKDate, parseJournalDate,
     parseDTCM, parseOpera, computeNights, buildExpected, indexPosted,

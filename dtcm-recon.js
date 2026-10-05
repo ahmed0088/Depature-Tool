@@ -22,8 +22,8 @@
 (function(global){
   'use strict';
   const C = global.DtcmCore;
+  const TDC = () => (global.HotelCfg ? global.HotelCfg.codeLabel() : '7510');
   const { toISO, round2 } = C;
-  const TD_CAP = C.TD_CAP;
 
   const parseDTCM     = C.parseDTCM;
   const parseOpera    = C.parseOpera;
@@ -88,7 +88,7 @@
       let h = +m[1]; const ap = (m[3] || '').toUpperCase();
       if (ap === 'PM' && h < 12) h += 12;
       if (ap === 'AM' && h === 12) h = 0;
-      return h < 5;
+      return h * 60 + (+m[2]) < (global.HotelCfg ? global.HotelCfg.auditMinutes() : 300);
     };
 
     if (isDaily){
@@ -392,11 +392,11 @@
         const sameGuest = C.namesMatch(guest, s.guest);
         const nameNote = sameGuest ? '' :
           ` Opera folio guest "${guest}" is NOT the DTCM guest "${s.guest}".`;
-        if (n > TD_CAP){
+        if (n > C.TD_CAP){
           if (sameGuest){
             return { kind: 'over_cap', dtcmGuest: s.guest, nightNo: n,
               cause: `Over 30-night cap — DTCM stay of ${s.guest} (in since ${s.checkInISO}) is on night ${n}`,
-              fix: `Reverse ${overTxt} AED on ${date}. TD stops after night ${TD_CAP}.` };
+              fix: `Reverse ${overTxt} AED on ${date}. TD stops after night ${C.TD_CAP}.` };
           }
           return { kind: 'over_cap_diff_guest', dtcmGuest: s.guest, nightNo: n,
             cause: `Room is past the 30-night cap in DTCM (night ${n}, ${s.guest}) but the folio belongs to a different guest.`,
@@ -566,7 +566,7 @@
         if (!inHouse) continue;
         const n = C.stayNightNo(s.checkInISO, reportDate);
 
-        if (s.storedTdFees > 0 && n > TD_CAP){
+        if (s.storedTdFees > 0 && n > C.TD_CAP){
           checks.push({
             type: 'DTCM over cap', severity: 'high', room: s.room, guest: s.guest, date: reportDate,
             detail: `DTCM charges ${s.storedTdFees} AED but this stay (in since ${s.checkInISO}) is on night ${n}.`,
@@ -575,7 +575,7 @@
         }
         if (s.storedTdFees < 0.01 && !s.houseUse){
           const posted = round2(operaByRoomDate(s.room, reportDate).reduce((a, x) => a + x.amount, 0));
-          if (n > TD_CAP){
+          if (n > C.TD_CAP){
             if (Math.abs(posted) < 0.005) exemptAgree++;
           } else if (!extraRooms.has(s.room + '|' + reportDate)){
             const note = operaNote(s.room);
@@ -860,7 +860,7 @@
         p.steps = [
           `Room ${p.room} changed guest. Opera has "${p.gc.operaGuest}" until ${p.gc.lastDate}. DTCM has "${p.guest}" for the whole stay (${ref}).`,
           `Open the reservation of "${p.guest}" in room ${p.room} (the extension). Find out why Tourism Dirham did not post there (rate code, tax or exempt setting on that reservation).`,
-          `Post ${nf(p.amount)} AED Tourism Dirham (code 7510) on that folio for: ${d}. Remark: "DTCM correction ${p.uid || ''}".`,
+          `Post ${nf(p.amount)} AED Tourism Dirham (code ${TDC()}) on that folio for: ${d}. Remark: "DTCM correction ${p.uid || ''}".`,
           `If Opera does not accept those old dates, post it on the current business date with the same remark. It will land in a later journal, so tell the person doing the next reconciliation.`,
           `Make sure TD keeps posting every night on that extension folio from now on.`,
           `Do not change anything in DTCM. DTCM already has this stay.`
@@ -870,7 +870,7 @@
         p.title = `Room ${p.room}: post ${nf(p.amount)} AED TD for ${d}`;
         p.steps = [
           `Open the folio of room ${p.room}${p.guest ? ' (' + p.guest + ')' : ''} in Opera.`,
-          `Post ${nf(p.amount)} AED Tourism Dirham (code 7510) for ${d}. Remark: "DTCM correction ${p.uid || ''}".`,
+          `Post ${nf(p.amount)} AED Tourism Dirham (code ${TDC()}) for ${d}. Remark: "DTCM correction ${p.uid || ''}".`,
           `Reason: ${p.why}. (${ref})`
         ];
         p.effect = 'Opera +' + nf(p.amount);
@@ -886,7 +886,7 @@
         p.title = `Room ${p.room}: reverse the duplicate TD of ${nf(p.amount)} AED on ${d}`;
         p.steps = [
           `Open the folio of room ${p.room}${p.guest ? ' (' + p.guest + ')' : ''} in Opera.`,
-          `There are ${p.copies || 2} identical TD (7510) postings on ${d}${nos.length ? ' (trx ' + nos.join(', ') + ')' : ''}. Only one should exist.`,
+          `There are ${p.copies || 2} identical TD (${TDC()}) postings on ${d}${nos.length ? ' (trx ' + nos.join(', ') + ')' : ''}. Only one should exist.`,
           `Reverse ONE of them. ${whyLine} Remark: "Duplicate TD".`,
           `Before you do: confirm this is the same guest and the same room. Two guests sharing one room, or one guest in two rooms, is NOT a duplicate (check the other room too).`
         ];
@@ -918,7 +918,7 @@
         p.steps = [
           `${p.guest} checked in on ${x.checkInISO} at ${x.checkInTime}, before the night audit. For that, DTCM already counts the night before (the same night Opera charged).`,
           `"Charge Extra Night on Early Check-In" is ALSO ticked on this stay, so DTCM adds one more night that nobody stayed. DTCM: ${x.nights} nights = ${nf(x.dtcmAmt)} AED. Opera: ${nf(x.operaAmt)} AED.`,
-          x.closed ? `This stay is already CHECKED OUT in DTCM, so the portal will not let you edit it. Either ask DTCM / the TD helpdesk to correct ${ref} (DTCM −${nf((p.extra || {}).amount || 0)}), or post ${nf((p.extra || {}).amount || 0)} AED TD (7510) in Opera on ${d} so the hotel's books match what DTCM will bill: on the guest folio if it is still open, otherwise on a house / PM account. Remark: "DTCM correction ${p.uid || ''}".` : `In the TD portal open ${ref} → Edit Check-In → untick "Charge Extra Night on Early Check-In" and save. DTCM drops by ${nf(x.amount)} AED. Nothing to do in Opera.`,
+          x.closed ? `This stay is already CHECKED OUT in DTCM, so the portal will not let you edit it. Either ask DTCM / the TD helpdesk to correct ${ref} (DTCM −${nf((p.extra || {}).amount || 0)}), or post ${nf((p.extra || {}).amount || 0)} AED TD (${TDC()}) in Opera on ${d} so the hotel's books match what DTCM will bill: on the guest folio if it is still open, otherwise on a house / PM account. Remark: "DTCM correction ${p.uid || ''}".` : `In the TD portal open ${ref} → Edit Check-In → untick "Charge Extra Night on Early Check-In" and save. DTCM drops by ${nf(x.amount)} AED. Nothing to do in Opera.`,
           `Rule for the desk: arrival after midnight but before the audit (about 04:00) → do NOT tick it, DTCM counts that night by itself. Tick it only for a daytime early check-in that you charge as a day use (like 05:46).`
         ];
         p.effect = 'DTCM −' + nf(x.amount);
@@ -927,7 +927,7 @@
         p.title = `Room ${p.room} (${p.guest}): DTCM charges a night for the late check-out`;
         p.steps = [
           `${p.guest} checked out on ${x.checkOutISO} at ${x.checkOutTime} and "late check-out" is ticked in DTCM, so DTCM charges one extra night. DTCM: ${nf(x.dtcmAmt)} AED. Opera: ${nf(x.operaAmt)} AED.`,
-          `If the late check-out was charged to the guest and your rule says it pays TD: post ${nf(x.amount)} AED TD (7510) on the folio in Opera for ${x.checkOutISO}.`,
+          `If the late check-out was charged to the guest and your rule says it pays TD: post ${nf(x.amount)} AED TD (${TDC()}) on the folio in Opera for ${x.checkOutISO}.`,
           x.closed ? `If not (free late check-out): the stay is already checked out in DTCM, so it cannot be edited there. Ask DTCM / the TD helpdesk to remove it, or post the TD in Opera anyway so the books match what DTCM will bill.`
                    : `If not (free late check-out): in the TD portal open ${ref} and untick the late check-out. DTCM drops by ${nf(x.amount)} AED.`
         ];
@@ -953,8 +953,8 @@
           `${dt.what || ''}. DTCM charges ${nf(x.amount)} AED for it; Opera has no TD.` +
             (dt.mins != null && dt.mins <= 15 ? ` It lasted only ${dt.mins} minute${dt.mins === 1 ? '' : 's'}: almost certainly a check-in made by mistake.` : '') +
             (dt.prevOut && !(dt.mins != null && dt.mins <= 15) ? ` Same guest, same room, same day: it looks like the stay was checked out and then checked in again, not a new day use.` : ''),
-          x.closed ? `This stay is already CHECKED OUT in DTCM, so the portal will not let you edit it. Either ask DTCM / the TD helpdesk to correct ${ref} (DTCM −${nf((p.extra || {}).amount || 0)}), or post ${nf((p.extra || {}).amount || 0)} AED TD (7510) in Opera on ${d} so the hotel's books match what DTCM will bill: on the guest folio if it is still open, otherwise on a house / PM account. Remark: "DTCM correction ${p.uid || ''}".` : `Not a real day use → in the TD portal open ${ref} and cancel that check-in (or fold it into the main stay). DTCM drops by ${nf(x.amount)} AED.`,
-          `Real day use (your rule: day use pays TD) → post ${nf(x.amount)} AED TD (7510) in Opera on ${d}.`
+          x.closed ? `This stay is already CHECKED OUT in DTCM, so the portal will not let you edit it. Either ask DTCM / the TD helpdesk to correct ${ref} (DTCM −${nf((p.extra || {}).amount || 0)}), or post ${nf((p.extra || {}).amount || 0)} AED TD (${TDC()}) in Opera on ${d} so the hotel's books match what DTCM will bill: on the guest folio if it is still open, otherwise on a house / PM account. Remark: "DTCM correction ${p.uid || ''}".` : `Not a real day use → in the TD portal open ${ref} and cancel that check-in (or fold it into the main stay). DTCM drops by ${nf(x.amount)} AED.`,
+          `Real day use (your rule: day use pays TD) → post ${nf(x.amount)} AED TD (${TDC()}) in Opera on ${d}.`
         ];
         p.effect = 'DTCM −' + nf(x.amount) + ' or Opera +' + nf(x.amount);
       } else if (p.kind === 'room_chain_short'){

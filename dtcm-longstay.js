@@ -7,8 +7,9 @@
 (function(global){
   'use strict';
 
-  const TD_TAX_CODE   = '7510';
-  const TD_CAP_NIGHTS = 30;
+  /* TD code and night cap come from the hotel's settings (hotel-settings.js) */
+  const isTdTax  = c => global.HotelCfg ? global.HotelCfg.isTdCode(c) : c === '7510';
+  const capNights = () => global.HotelCfg ? global.HotelCfg.cap() : 30;
 
   const round2 = n => Math.round(n * 100) / 100;
   const toISO  = (d => { if (!d) return ''; const p = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); });
@@ -103,7 +104,7 @@
       const gross = num(c[iGross]);
       const amount = net !== 0 ? net : (tax !== 0 ? tax : gross);
 
-      const isAccommodation = taxCode === TD_TAX_CODE;
+      const isAccommodation = isTdTax(taxCode);
       const isExcluded = false;
 
       total += amount;
@@ -217,7 +218,7 @@
 
   /* Flag long stays AND compute excess charge past the cap. */
   function findLongStays(segments, threshold){
-    const thr = threshold || TD_CAP_NIGHTS;
+    const thr = threshold || capNights();
     return segments
       .filter(s => s.nights > thr)
       .map(s => {
@@ -255,12 +256,13 @@
       total: parsed.total,
       byTaxCode: parsed.byTaxCode,
       spine, segments, longStays, totals,
-      threshold: threshold || TD_CAP_NIGHTS
+      threshold: threshold || capNights()
     };
   }
 
   global.LongStay = {
-    TD_TAX_CODE, DEFAULT_THRESHOLD: TD_CAP_NIGHTS,
+    get TD_TAX_CODE() { return global.HotelCfg ? global.HotelCfg.codeLabel() : '7510'; },
+    get DEFAULT_THRESHOLD() { return capNights(); },
     parseLongStayJournal, buildStayNights, buildStaySegments,
     findLongStays, groupTotals, analyze
   };

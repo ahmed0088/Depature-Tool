@@ -118,7 +118,7 @@ async function dtcAnalyze() {
     dtcLoading(true, 'Parsing Opera journal');
     const opera = R.parseOpera(operaText);
     if (!opera.rows.length) {
-      throw new Error('No Tourism Dirham rows were read from the Opera journal. Check that this is the finjrnlbytrans export (press F12 for the detected header).');
+      throw new Error(`No Tourism Dirham rows were read from the Opera journal (looking for code ${window.HotelCfg ? HotelCfg.codeLabel() : '7510'}). Check that this is the finjrnlbytrans export, or set your hotel's TD code under ⚙ Hotel TD settings.`);
     }
 
     dtcLoading(true, 'Reconciling');
@@ -457,7 +457,7 @@ function dtcRenderFixPlan(RC) {
       ${G.monthEnd ? `<div style="margin-top:10px;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);">
         <b>Month-end tally.</b> Close each item the recommended way (${G.monthEnd.operaChanges} in Opera, ${G.monthEnd.dtcmChanges} in the TD portal — each card says which) and both sides end at
         DTCM XML <b>${n(G.monthEnd.dtcm)}</b> AED · Opera <b>${n(G.monthEnd.opera)}</b> AED${G.monthEnd.equal ? ' — <b>equal</b>.' : '. ⚠️ Still not equal: something is not explained yet.'}
-        Day use counts: DTCM always charges it, and the night audit never posts it, so post 10 AED TD (7510) by hand in Opera on the same day for every real day use.</div>` : ''}
+        Day use counts: DTCM always charges it, and the night audit never posts it, so post ${window.HotelCfg ? HotelCfg.rate() : 10} AED TD (${window.HotelCfg ? HotelCfg.codeLabel() : '7510'}) by hand in Opera on the same day for every real day use.</div>` : ''}
       ${(G.dtcmExtra || G.dayUse) ? `<br>The blue DTCM items are separate: each one is fixed in the TD portal (or, for a real day use / charged late check-out, posted in Opera). Once all are fixed in DTCM, the DTCM XML total drops by <b>${n((G.dtcmExtra || 0) + (G.dayUse || 0))}</b> AED.` : ''}
     </div>`;
   } else {

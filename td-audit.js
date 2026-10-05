@@ -27,7 +27,9 @@ let tdaResults   = [];   // computed per-room exceptions
 let tdaFilter    = 'all';
 let tdaSearchQ   = '';
 
-const TDA_CAP_NIGHTS = 30;
+/* Night cap and TD code come from the hotel's settings (hotel-settings.js) */
+const tdaCap = () => (window.HotelCfg ? HotelCfg.cap() : 30);
+const tdaIsTd = c => (window.HotelCfg ? HotelCfg.isTdCode(c) : c === '7510');
 
 // ───────────────────────── date helpers ─────────────────────────
 function tdaParseOperaDate(s) {
@@ -81,7 +83,7 @@ function tdaParseOperaTSV(raw) {
   for (let i = 1; i < lines.length; i++) {
     const cols = lines[i].split('\t');
     if (!cols.length) continue;
-    if ((cols[idx['TAX_TRX_CODE']] || '').trim() !== '7510') continue; // Tourism Dirham only
+    if (!tdaIsTd((cols[idx['TAX_TRX_CODE']] || '').trim())) continue; // Tourism Dirham only (code from hotel settings)
     const dt = tdaParseOperaDate(cols[idx['CHAR_TRX_DATE']]);
     if (!dt) continue;
 
@@ -236,7 +238,7 @@ function tdaRunHeavy(operaRaw, dtcmRaw) {
     errBox.classList.add('show');
     return;
   }
-  if (!opera.length) { errMsg.textContent = 'No Tourism Dirham (tax code 7510) rows found in the Opera file.'; errBox.classList.add('show'); return; }
+  if (!opera.length) { errMsg.textContent = `No Tourism Dirham (tax code ${window.HotelCfg ? HotelCfg.codeLabel() : '7510'}) rows found in the Opera file. Wrong code? Change it in DTCM Recon → ⚙ Hotel TD settings.`; errBox.classList.add('show'); return; }
 
   tdaOperaRows = opera;
   tdaDtcmRows  = dtcm;
@@ -251,9 +253,9 @@ function tdaRunHeavy(operaRaw, dtcmRaw) {
     const stayEnd = stay.inHouse ? today : stay.checkOut;
     if (!stayEnd) return;
     const totalDays = Math.round((stayEnd - stay.checkIn) / 86400000);
-    if (totalDays < TDA_CAP_NIGHTS) return; // never crossed 30 nights — not relevant
+    if (totalDays < tdaCap()) return; // never crossed 30 nights — not relevant
 
-    const capDate = tdaAddDays(stay.checkIn, TDA_CAP_NIGHTS); // first night that should NOT be charged
+    const capDate = tdaAddDays(stay.checkIn, tdaCap()); // first night that should NOT be charged
     const roomCharges = (operaByRoom[stay.room] || []).filter(c => c.date >= stay.checkIn && c.date <= stayEnd);
     const excessCharges = roomCharges.filter(c => c.date >= capDate);
     const excessPaidRows   = excessCharges.filter(c => c.amount > 0);                         // real charges after cap
@@ -360,7 +362,7 @@ function tdaRender() {
     } else if (r.zeroNights > 0) {
       verdict = `<span style="font-family:var(--mono);font-size:0.62rem;font-weight:700;color:var(--text3);background:rgba(255,255,255,0.04);border:1px dashed var(--border-2,rgba(255,255,255,0.15));border-radius:6px;padding:3px 8px;white-space:nowrap;">⚪ ${r.zeroNights} night${r.zeroNights > 1 ? 's' : ''} posted at AED 0 — no charge to fix</span>`;
     } else if (!r.hasOperaData) {
-      verdict = `<span style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">— no Opera 7510 data for this room in range</span>`;
+      verdict = `<span style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">— no Opera TD data for this room in range</span>`;
     } else {
       verdict = `<span style="font-family:var(--mono);font-size:0.62rem;font-weight:700;color:var(--mint);background:rgba(80,200,150,0.08);border:1px solid rgba(80,200,150,0.3);border-radius:6px;padding:3px 8px;white-space:nowrap;">✅ Correctly stopped</span>`;
     }

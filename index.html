@@ -1908,6 +1908,22 @@
       <li><b>Add</b> = post it in Opera · <b>Reverse</b> = remove it in Opera · <b>Verify</b> = check the reservation first · <b>DTCM</b> = fix it in the TD portal. Use the <b>To Do</b> tab to tick rooms off; ticks are shared with your colleagues.</li>
     </ol></details>
 
+    <details class="card hs-card" id="hsCard">
+      <summary><b>⚙ Hotel TD settings</b> <span id="hsSummary" class="hs-sum"></span></summary>
+      <p class="hs-p">For another hotel, or if Opera uses a different code: set it here once. It is shared with your team and used by DTCM Recon, Long Stay and TD 30-Day Audit.</p>
+      <div class="hs-grid">
+        <label class="hs-f"><span>Opera TD code(s)</span><input id="hsCodes" placeholder="7510"><small>The Opera transaction / tax code for Tourism Dirham. Several? Separate with commas.</small></label>
+        <label class="hs-f"><span>Opera description</span><input id="hsDesc" placeholder="Tourism Dirham"><small>Used when the export has no code column.</small></label>
+        <label class="hs-f"><span>Rate per room per night (AED)</span><input id="hsRate" type="number" step="0.5" min="0">
+          <small>Hotel category: <a href="#" onclick="hsPreset(20);return false">5★ 20</a> · <a href="#" onclick="hsPreset(15);return false">4★ 15</a> · <a href="#" onclick="hsPreset(10);return false">3★ 10</a> · <a href="#" onclick="hsPreset(7);return false">1-2★ / apts 7</a></small></label>
+        <label class="hs-f"><span>Night cap</span><input id="hsCap" type="number" min="1"><small>TD stops after this many consecutive nights (Dubai: 30).</small></label>
+        <label class="hs-f"><span>Night audit finishes at</span><input id="hsAudit" placeholder="04:20"><small>A guest arriving after midnight but before this time belongs to the previous night.</small></label>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+        <button class="btn gold" onclick="hsSave()">💾 Save settings</button>
+        <button class="btn" onclick="HotelCfg.set(HotelCfg.DEFAULTS);hsRenderForm();showToast('Back to the default settings','ok')">↺ Defaults</button>
+      </div>
+    </details>
     <div class="card" id="dtcDrop" style="padding:14px;">
       <div class="dtc-zones">
         <div class="card dtc-zone" id="dtcZone-dtcm" onclick="document.getElementById('dtcFileInput').click()">
@@ -3836,6 +3852,7 @@ ${actionList?`<div class="action"><h2>Act on these first</h2><ul>${actionList}</
 
 <!-- ════════ SCRIPTS — order matters ════════ -->
 <script src="firebase-config.js"></script>
+<script src="hotel-settings.js"></script>
 <script src="db.js"></script>
 <script src="state.js"></script>
 <script src="utils.js"></script>
