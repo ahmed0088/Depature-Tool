@@ -4822,6 +4822,18 @@ async function appInit() {
       <span class="mob-item-icon">🏛️</span>
       <span class="mob-more-badge" id="mob-badge-tourism"></span>Tourism Tax
     </button>
+    <button class="mob-more-item" data-panel="td-audit"       onclick="showPanel('td-audit');toggleMobMore()">
+      <span class="mob-item-icon">⏳</span>TD 30-Day
+    </button>
+    <button class="mob-more-item" data-panel="inhouse-tally"  onclick="showPanel('inhouse-tally');toggleMobMore()">
+      <span class="mob-item-icon">🧮</span>Inhouse Tally
+    </button>
+    <button class="mob-more-item" data-panel="package-audit"  onclick="showPanel('package-audit');toggleMobMore()">
+      <span class="mob-item-icon">🎁</span>Package Audit
+    </button>
+    <button class="mob-more-item" data-panel="trends"         onclick="showPanel('trends');toggleMobMore()">
+      <span class="mob-item-icon">📈</span>Trends
+    </button>
     <button class="mob-more-item" id="mobAdminBtn"             onclick="openAdminPanel();toggleMobMore()" style="display:none;">
       <span class="mob-item-icon">👥</span>Team
     </button>
