@@ -248,7 +248,7 @@ function processNat() {
   const badge = document.getElementById('natDiagBadge'); const hasIssues = unknowns.length>0||unmatched.length>0;
   if (badge) { badge.style.color = hasIssues?'var(--amber)':'var(--mint)'; badge.textContent = hasIssues?`${unknowns.length} unk · ${unmatched.length} unmatched`:'✓ Clean'; }
   ['gap-apr','gap-rms','gap-prs'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.textContent=[gapAPR,gapRMS,gapPRS][i]>0?'−'+[gapAPR,gapRMS,gapPRS][i]:'0';});
-  ['s-active','s-zero','s-unmat','s-unk'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.textContent=[active,240-active,unmatched.length,unknowns.length][i];});
+  ['s-active','s-zero','s-unmat','s-unk'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.textContent=[active,EXCEL_COUNTRIES.length-active,unmatched.length,unknowns.length][i];});
   const hasLY = rows.some(v => v.APRLY || v.RMSLY || v.PRSLY);
   const pctStr = (cur, ly) => {
     if (!ly) return '';

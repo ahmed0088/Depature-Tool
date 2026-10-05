@@ -72,7 +72,7 @@ function baMapCountry(opName, excel, auto) {
     add({ id: 'natMap:' + u.name, type: 'natMap', icon: '🌍', tone: 'bad', safe: sure ? 0 : undefined,
       text: `The Nationality report has no row for "${u.name}"${n ? ` (${n} guest${n > 1 ? 's' : ''} would be lost)` : ''}.`,
       why: sure ? `It is "${cand[0].c}". I'll remember it for next month.` : 'Which row is it? I\'ll remember your answer.',
-      acts: (sure ? cand.slice(0, 1) : cand).map(c => [(sure ? 'Map to ' : '') + c.c, () => baMapCountry(u.name, c.c, sure)]).concat([['Open report', () => showPanel('nationality')]]) });
+      acts: (sure ? cand.slice(0, 1) : cand).map(c => [(sure ? 'Map to ' : '') + c.c, () => baMapCountry(u.name, c.c, sure)]).concat(typeof natAddRow === 'function' ? [['➕ New row', () => natAddRow(u.name)]] : []).concat([['Open report', () => showPanel('nationality')]]) });
   });
 });
 

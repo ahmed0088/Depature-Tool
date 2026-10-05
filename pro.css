@@ -455,3 +455,17 @@ body.ho-privacy :is(#panel-purpose, #panel-arrivals) tbody td:focus-within { fil
 .bs-li small { color: var(--text3); font-size: .7rem; }
 .bs-step { border-left: 2px solid var(--border2); padding-left: 10px; margin-bottom: 10px; }
 .bs-step > span { display: block; font-size: .72rem; font-weight: 600; color: var(--text2); margin-bottom: 4px; }
+
+/* ══ Nationality: countries the Excel doesn't have (nat-extra.js) ══ */
+.nx-item, .nx-extra { padding: 10px 12px; border-radius: 10px; margin-bottom: 8px; border: 1px solid color-mix(in srgb, var(--rose) 30%, transparent); border-left: 3px solid var(--rose); background: color-mix(in srgb, var(--rose) 5%, transparent); }
+.nx-extra { border-color: var(--accent-border); border-left-color: var(--accent); background: var(--accent-bg); }
+.nx-hd { display: flex; gap: 9px; align-items: flex-start; }
+.nx-hd b { font-size: .8rem; display: block; color: var(--text); }
+.nx-hd small { font-size: .7rem; color: var(--text2); line-height: 1.45; }
+.nx-acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 9px; align-items: center; }
+.nx-sel { height: 30px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border2); background: var(--bg2); color: var(--text); font-size: .74rem; max-width: 220px; }
+.nx-rows { display: flex; flex-direction: column; gap: 4px; margin: 9px 0; }
+.nx-rows > div { display: grid; grid-template-columns: 42px 1fr 26px; gap: 8px; align-items: center; font-size: .76rem; }
+.nx-rows code { font-family: var(--mono); color: var(--accent); }
+.nx-x { border: 0; background: transparent; color: var(--text3); cursor: pointer; }
+.nx-x:hover { color: var(--rose); }

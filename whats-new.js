@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 131, items: [
+    '🌍 Nationality report: a country Opera sends that your Excel has no row for is fixed in one tap. ➕ Add as new row puts it at the bottom of the report and tells you which Excel row to type it in (once). Or put it into an existing row: the closest matches are first, and there is a list of every row. Both are remembered for your hotel, so next month it is placed by itself.',
+  ] },
   { v: 130, items: [
     '🧠 Guest Memory saves by itself: whatever you load, import or edit on Arrivals and Purpose of Stay goes into Guest Memory 2 minutes after your last change. Clearing a page always saves its guests first, so the daily clear never loses anyone.',
     '⏰ Shift tasks start fresh by themselves: each new morning (07:00), afternoon (15:00) and night (23:00) shift begins with nothing ticked, once for the whole team. The shift that just ended keeps its ticks for handover. Turn it off in ⚙️ Settings → Helpers.',
