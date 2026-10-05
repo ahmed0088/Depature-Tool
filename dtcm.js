@@ -642,6 +642,9 @@ function dtcRenderPrevention(RC) {
   if ((RC.adjustments || []).length) {
     bullets.push(`${RC.adjustments.length} adjustment line${RC.adjustments.length === 1 ? '' : 's'} (manual accommodation, 30-night credit, no-show) — legitimate and already netted.`);
   }
+  if ((RC.extra || []).some(e => e.kind === 'day_use_repost')) {
+    bullets.push('Day use followed by a night for the same guest: Opera posts the day use by hand and the night by audit, but DTCM keeps both bookings as one check-in. Tick "Charge Extra Night on Early Check-In" in the TD portal the same morning, then confirm the stay shows the extra 10 AED in the next DTCM XML.');
+  }
   if ((RC.extra || []).some(e => e.kind === 'early_arrival')) {
     bullets.push('Guests arriving after midnight but before night audit: Opera dates their first night on the previous business date, DTCM on the calendar day. Agree one rule at the desk and fix the DTCM check-in date the same morning.');
   }

@@ -151,6 +151,38 @@
       segsByRoom.get(s.room).push(s);
     }
 
+    /* The night audit posts every room at almost the same minute. A line posted at a clearly
+       different time (e.g. right after a check-in) is the odd one out, and that is the line to reverse. */
+    const auditTime = new Map();
+    {
+      const cnt = new Map();
+      operaRows.forEach(r => { if (!r.time) return; const k = r.businessDate + '|' + r.time; cnt.set(k, (cnt.get(k) || 0) + 1); });
+      const best = new Map();
+      for (const [k, n] of cnt){ const [d, t] = k.split('|'); if (!best.has(d) || n > best.get(d).n) best.set(d, { t, n }); }
+      for (const [d, b] of best) auditTime.set(d, b.t);
+    }
+
+    /* DAY USE + NIGHT, SAME GUEST, SAME DATE: the guest had a day-use reservation (arrival = departure,
+       e.g. 05:46 → 15:04) and then an overnight one in the same room. Opera posts the day-use TD by hand
+       and the night audit posts the night: two identical lines on one business date. That is NOT a
+       duplicate when DTCM shows this guest checking in that day: the manual line is the day use.
+       DTCM usually keeps both reservations as ONE check-in, so it charges one night less unless the
+       day use is in DTCM too (its own check-in, or 'Charge Extra Night on Early Check-In'). */
+    const sameName = (a, b) => C.namesMatch(a, b) || C.nameOverlap(a, b) >= 2;
+    const dayUseRepost = (room, date, guest) => {
+      const at = auditTime.get(date);
+      if (!at) return null;
+      const lines = operaRows.filter((r, i) => !r.isReversal && !cancelled.has(i) && !r.isAdjustment &&
+        r.kind === 'nightly' && r.room === room && r.businessDate === date && sameName(guest, r.guest));
+      if (lines.length !== 2) return null;
+      const audit  = lines.filter(r => r.time === at);
+      const manual = lines.filter(r => r.time && r.time !== at);
+      if (audit.length !== 1 || manual.length !== 1) return null;
+      const seg = (segsByRoom.get(room) || []).find(s => s.checkInISO === date && sameName(guest, s.guest));
+      if (!seg) return null;
+      return { seg, manual: manual[0], audit: audit[0] };
+    }
+
     /* DTCM transaction ID of the stay a line belongs to, so it can be searched in the DTCM portal.
        Prefer the segment whose guest name matches; otherwise the stay that covers the date. */
     const uidFor = (room, date, guest) => {
@@ -292,6 +324,19 @@
           cause: `Day use — ${dayUseSeg.guest} checked in and out on ${date}; TD posted for the day`,
           fix: 'No action — day-use TD is legitimate' };
       }
+      const du = dayUseRepost(room, date, guest);
+      if (du){
+        const s = du.seg;
+        return { kind: 'day_use_repost', dtcmGuest: s.guest,
+          dayUse: { trxNo: du.manual.trxNo || '', time: du.manual.time, auditTrx: du.audit.trxNo || '', auditTime: du.audit.time,
+                    checkInTime: s.checkInTime, early: !!s.earlyCheckin, dtcmAmt: round2(s.storedTdFees || 0) },
+          cause: `Day use + night on ${date}: ${s.guest} checked in at ${s.checkInTime} on a day-use booking, then stayed the night. ` +
+                 `Opera charged the day use (trx ${du.manual.trxNo}, ${du.manual.time}) and the night (night audit). ` +
+                 `DTCM ${s.earlyCheckin ? 'has' : 'does NOT have'} the early check-in extra night for this stay.`,
+          fix: s.earlyCheckin
+            ? `DTCM already flags early check-in; re-check the nights in the TD portal.`
+            : `Not a duplicate. Make DTCM charge the day use (Charge Extra Night on Early Check-In), or reverse trx ${du.manual.trxNo} in Opera.` };
+      }
       /* ROOM-MOVE CHAIN: DTCM keeps one transaction ID for the whole stay but one row per room. If the
          guest changed rooms across midnight DTCM can lose a night. Compare the whole stay, not one room. */
       const myDtcm = (segsByRoom.get(room) || []).find(s => s.transactionuid &&
@@ -432,7 +477,7 @@
           note: c.kind === 'room_move' ? 'Room-move leg (linked)'
               : expectedList.length ? 'Partially over-posted' : 'No expected stay',
           kind: c.kind, cause: c.cause, fix: c.fix,
-          dtcmGuest: c.dtcmGuest || '', nightNo: c.nightNo || 0, chain: c.chain || null
+          dtcmGuest: c.dtcmGuest || '', nightNo: c.nightNo || 0, chain: c.chain || null, dayUse: c.dayUse || null
         });
       }
     }
@@ -442,6 +487,7 @@
     operaRows.forEach((r, i) => {
       if (r.isReversal || cancelled.has(i) || r.isAdjustment) return;
       if (r.kind !== 'nightly' || Math.abs(r.amount) < 0.005) return;
+      if (dayUseRepost(r.room, r.businessDate, r.guest)) return;   // day use + night, see dayUseRepost
       /* same guest only: two DIFFERENT guests in one room on one date (day use + next arrival) are not a duplicate */
       const k = r.room + '|' + r.businessDate + '|' + round2(r.amount) + '|' + String(r.guest || '').toLowerCase().replace(/[^a-z]/g, '');
       if (!dupMap.has(k)) dupMap.set(k, []);
@@ -628,7 +674,7 @@
         abs: Math.abs(variance),
         why: e.cause,
         uid: uidFor(e.room, e.date, e.dtcmGuest || e.guest),
-        kind: e.kind, guest: e.guest, dtcmGuest: e.dtcmGuest || '', fixText: e.fix, chain: e.chain || null
+        kind: e.kind, guest: e.guest, dtcmGuest: e.dtcmGuest || '', fixText: e.fix, chain: e.chain || null, dayUse: e.dayUse || null
       });
     });
     duplicates.forEach(d => actions.push({
@@ -697,16 +743,6 @@
       leftover: round2(expTotalAdj - operaAfter)
     };
 
-    /* The night audit posts every room at almost the same minute. A line posted at a clearly
-       different time (e.g. right after a check-in) is the odd one out, and that is the line to reverse. */
-    const auditTime = new Map();
-    {
-      const cnt = new Map();
-      operaRows.forEach(r => { if (!r.time) return; const k = r.businessDate + '|' + r.time; cnt.set(k, (cnt.get(k) || 0) + 1); });
-      const best = new Map();
-      for (const [k, n] of cnt){ const [d, t] = k.split('|'); if (!best.has(d) || n > best.get(d).n) best.set(d, { t, n }); }
-      for (const [d, b] of best) auditTime.set(d, b.t);
-    }
     const plan = [];
     const gcByRoom = new Map();
     actions.forEach(a => {
@@ -721,7 +757,7 @@
       }
       plan.push({ action: a.action, kind: a.kind || '', room: a.room, dates: [a.date], amount: a.amount,
                   uid: a.uid, guest: a.guest || '', dtcmGuest: a.dtcmGuest || '', why: a.why,
-                  fixText: a.fixText || '', trxNos: a.trxNos || '', copies: a.copies || 0, lines: a.lines || null, chain: a.chain || null });
+                  fixText: a.fixText || '', trxNos: a.trxNos || '', copies: a.copies || 0, lines: a.lines || null, chain: a.chain || null, dayUse: a.dayUse || null });
     });
     plan.forEach(p => {
       const d = p.dates.join(', '), n = p.dates.length;
@@ -770,6 +806,19 @@
           `Reason: ${p.why}. (${ref})`
         ];
         p.effect = 'Opera −' + nf(p.amount);
+      } else if (p.kind === 'day_use_repost'){
+        const u = p.dayUse || {};
+        p.title = `Room ${p.room} (${p.dtcmGuest || p.guest}): day use + night on ${d}. DTCM is ${nf(p.amount)} AED short`;
+        p.steps = [
+          `This is NOT a duplicate. ${p.dtcmGuest || p.guest} checked in at ${u.checkInTime || '?'} on a day-use booking (arrival = departure) and then stayed the night on a new reservation in the same room.`,
+          `Opera charged both: the day use by hand (trx ${u.trxNo}, ${u.time}) and the night (trx ${u.auditTrx}, night audit ${u.auditTime}).`,
+          `DTCM has the two bookings as ONE check-in (${ref}, ${nf(u.dtcmAmt || 0)} AED), so it does not charge the day use. ` +
+            (u.early
+              ? `The DTCM report already shows early check-in for this stay; count its nights in the TD portal.`
+              : `The DTCM report still shows "Early check-in: No" for this stay. If you ticked "Charge Extra Night on Early Check-In", download the DTCM XML again: this stay must show +${nf(p.amount)} AED. If it does not, the portal did not take it.`),
+          `Day-use TD is charged (your rule): keep the Opera line and fix DTCM. Only if DTCM cannot carry it, reverse trx ${u.trxNo} in Opera.`
+        ];
+        p.effect = 'Closes either way';
       } else if (p.kind === 'room_chain_short'){
         const c = p.chain || {};
         p.title = `Room ${p.room} (${p.dtcmGuest || p.guest}): Opera has one more night than DTCM`;

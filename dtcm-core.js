@@ -222,10 +222,11 @@
       const status   = firstAttr(n, ['NewAct','Status','Action']);
       const bedrooms = parseInt(firstAttr(n, ['Bedroom','Bedrooms','NoOfBedrooms']) || '1', 10) || 1;
       const houseUse = /^yes$/i.test(firstAttr(n, ['IsHouseUse']));
+      const earlyCheckin = /^yes$/i.test(firstAttr(n, ['IsEarlyCheckin']));
 
       segments.push({
         room, roomRaw, guest, guestNorm: normName(guest),
-        storedNights, storedTdFees, checkIn, checkOut, status, bedrooms, houseUse,
+        storedNights, storedTdFees, checkIn, checkOut, status, bedrooms, houseUse, earlyCheckin,
         checkInTime: firstAttr(n, ['NewCheckin','CheckInTime','Check_In_Time']),
         checkOutTime: firstAttr(n, ['NewOut','CheckOutTime','Check_Out_Time']),
         checkInISO:  checkIn  ? toISO(checkIn)  : '',
