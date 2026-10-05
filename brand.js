@@ -84,7 +84,7 @@ function hoBrand() {
   if (logo && !logo.dataset.ho) {
     logo.dataset.ho = '1';
     const saved = (() => { try { return (JSON.parse(localStorage.getItem('ibis_settings') || '{}') || {}).hotelName; } catch (_) { return ''; } })();
-    const hotel = saved || 'Ibis Styles Dubai';
+    const hotel = saved || (typeof HOTEL_ID !== 'undefined' && HOTEL_ID !== 'ibis_dubai' ? '' : 'Ibis Styles Dubai');
     logo.innerHTML = `<div class="logo-mark">${hoLogo()}</div><div class="ho-word"><div class="ho-name">Hotel<b>Ops</b></div><div class="logo-name" id="hotelName">${escapeHtml(hotel)}</div></div>`;
     logo.title = 'Tap to change the hotel name';
   }
@@ -99,7 +99,7 @@ function hoBrand() {
     ll.dataset.ho = '1';
     ll.innerHTML = hoLogo();
     const t = document.querySelector('.login-title'); if (t) t.innerHTML = 'Hotel<b>Ops</b>';
-    const s = document.querySelector('.login-sub'); if (s) s.textContent = 'Ibis Styles Dubai · Front office operations';
+    const s = document.querySelector('.login-sub'); if (s) s.textContent = 'Front office operations';
     const bg = document.querySelector('.login-bg');
     if (bg && !document.getElementById('hoHero')) bg.insertAdjacentHTML('afterbegin', `
       <div id="hoHero" class="ho-hero">

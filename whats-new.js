@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 126, items: [
+    '🏨 More than one hotel: each hotel has its own separate space. People you add in Team management work in your hotel, and the app opens their hotel when they sign in.',
+    '➕ Owners can add a new hotel in ⚙️ Settings → Hotel: its name, TD code and rate, and its owner\'s login. That owner then adds their own team. Nothing is shared between the hotels.',
+    '📱 Phone: upload boxes stack instead of squeezing side by side (Package Audit, TD Audit), checklist notes use the full width, and page descriptions no longer run off the screen.',
+  ] },
   { v: 125, items: [
     '📱 Phone polish: the top bar fits the screen (your role icon only, version moved to Settings), header buttons show their names in one swipeable row, Clear is a quiet outline button instead of a red box, and cards have inner spacing so buttons no longer touch the edges.',
   ] },

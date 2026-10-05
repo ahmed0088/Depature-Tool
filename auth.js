@@ -58,6 +58,8 @@ function authInit() {
 
   firebase.auth().onAuthStateChanged(async user => {
     if (!user) { showLoginScreen(); return; }
+    // open the hotel this person was assigned to (tenant.js)
+    if (typeof tnResolveHotel === 'function' && await tnResolveHotel(user.uid) === 'reloading') return;
     const profile = await loadUserProfile(user.uid);
     if (!profile || !profile.active) {
       await firebase.auth().signOut();
@@ -647,6 +649,7 @@ async function adminCreateUser() {
     await firebase.database().ref(`hotels/${HOTEL_ID}/users/${uid}`).set({
       uid, name, email, role, active: true, createdAt: new Date().toISOString(), createdBy: currentUser.uid
     });
+    if (typeof tnLinkUser === 'function') await tnLinkUser(uid);   // they work in this hotel
     await logActivity('create_user', `${name} (${role})`);
     closeCreateUser();
     await adminLoadUsers();
@@ -828,6 +831,7 @@ async function adminDeleteUser(uid) {
     // 1 — Remove DB profile. This triggers the real-time self-watcher on the
     //     target's browser (!snap.exists()), kicking them out immediately if online.
     await firebase.database().ref(`hotels/${HOTEL_ID}/users/${uid}`).remove();
+    if (typeof tnUnlinkUser === 'function') await tnUnlinkUser(uid);
 
     // 2 — Log before the local record disappears
     await logActivity('delete_user', `${u.name} (${u.role}) — ${u.email}`);

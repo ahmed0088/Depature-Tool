@@ -14,4 +14,9 @@ const FIREBASE_CONFIG = {
 };
 
 // All colleagues using the same HOTEL_ID share the same live data
-const HOTEL_ID = "ibis_dubai";
+// The hotel this device works in. After sign-in, tenant.js moves the device
+// to the hotel the person was assigned to. "ibis_dubai" is the first hotel.
+let HOTEL_ID = (function () {
+  try { const h = localStorage.getItem('hotelops_hotel'); if (h && /^[a-z0-9_]{1,40}$/.test(h)) return h; } catch (_) {}
+  return "ibis_dubai";
+})();

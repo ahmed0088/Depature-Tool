@@ -429,3 +429,12 @@ body.ho-privacy :is(#panel-purpose, #panel-arrivals) tbody td:focus-within { fil
   .btn.gold, .btn.primary { box-shadow: 0 1px 0 rgba(255,255,255,.3) inset, 0 3px 10px -4px color-mix(in srgb, var(--accent) 55%, transparent); }
   .kpi-row { gap: 10px !important; }
 }
+@media (max-width: 768px) {
+  /* side-by-side upload boxes stack on a phone */
+  .card [style*="grid-template-columns:1fr 1fr"], .card [style*="grid-template-columns: 1fr 1fr"],
+  .card [style*="grid-template-columns:repeat(2"], .card [style*="grid-template-columns:repeat(3"],
+  #panel-package-audit .card > div[style*="grid"], #panel-td-audit .card > div[style*="grid"] { grid-template-columns: 1fr !important; }
+  .cl-note-wrap, .cl-note-input { width: 100% !important; max-width: none !important; box-sizing: border-box; }
+  .cl-note-input { min-height: 40px; height: auto; }
+}
+@media (max-width: 768px) { .page-hd-left { min-width: 0 !important; width: 100% !important; max-width: 100% !important; flex: 0 0 auto !important; } .page-hd-left p { max-width: 100% !important; overflow-wrap: anywhere; } }

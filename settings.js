@@ -222,7 +222,7 @@ function hoSettingsRender() {
       + _hoSeg('autoLock', 'Sign out when idle', 'Signs out this device after no activity', [[0, 'Never'], [15, '15 min'], [30, '30 min'], [60, '1 hour'], [240, '4 hours']])),
 
     _hoSec('hotel', 'adagio', 'Hotel', 'Shared with the whole team',
-      `<div class="hs-row" data-s="hotel name property">
+      `<div id="tnBox"></div><div class="hs-row" data-s="hotel name property">
          <span class="hs-txt"><b>Hotel name</b><small>Shown under the HotelOps logo and on reports</small></span>
          <span class="hs-inline"><input id="hsHotel" value="${escapeHtml(hotel)}"><button class="btn sm" onclick="hoSaveHotel()">Save</button></span>
        </div>`
@@ -272,6 +272,7 @@ function hoSettingsRender() {
   ].join('');
   hoSettingsFilter(document.getElementById('hsSearch')?.value || '');
   hoFillTech();
+  if (typeof tnRenderSettings === 'function') tnRenderSettings();
 }
 
 async function hoFillTech() {
