@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 128, items: [
+    '🧠 Guest Memory is now shared by all hotels: a returning guest seen at any of your hotels has their nationality, email and purpose filled in at the others. Each hotel\'s existing memory was merged in, nothing lost. Everything else stays separate per hotel, and each hotel keeps its own Guest Memory password.',
+    '🔒 Clearing all of Guest Memory now empties it for every hotel, so only an owner can do it, after typing CLEAR.',
+  ] },
   { v: 127, items: [
     '🧠 Ops Brain reads your data: ask "how many arrivals from France", "who has no email", "french guests", "guests staying more than 5 nights", "nationality breakdown", "arrivals by source", "average nights", "rooms that owe money", "who checked out". Each answer has the list and a Copy for Excel button.',
     '🧠 It understands typos ("arivals without natonality"), remembers the room you just asked about ("room 513" then "check it out" or "what about 512?"), and does several jobs in one line ("guess nationalities then remove duplicates and brief me").',

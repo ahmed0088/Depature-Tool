@@ -302,8 +302,11 @@ function gmInit() {
   // A raw listener keeps the same "always loaded, lock only gates the UI"
   // behavior gmAutoFill() depends on, but keeps the data in memory only.
   if (typeof firebase !== 'undefined' && firebase.database) {
-    firebase.database().ref(`hotels/${HOTEL_ID}/guestMemory`).on('value', snap => {
+    // bring this hotel's old separate memory in, once someone is signed in
+    const _gmWaitLogin = setInterval(() => { if (typeof currentUser !== 'undefined' && currentUser) { clearInterval(_gmWaitLogin); _gmMigrateToShared(); } }, 1500);
+    firebase.database().ref(GM_SHARED_PATH).on('value', snap => {
       _gmStore = snap.val() || {};
+      _gmServer = JSON.parse(JSON.stringify(_gmStore));
       _gmReady = true;
       if (!_gmUnlocked) return;  // don't touch DOM if locked
       const tbl     = document.getElementById('gmTable');
@@ -315,12 +318,42 @@ function gmInit() {
   }
 }
 
+// ── One Guest Memory for every hotel ──────────────────────
+// A guest remembered at one hotel is recognised at all of them. Saves send
+// only the guests that changed, so two hotels saving at once never
+// overwrite each other's additions. (The panel password stays per hotel.)
+const GM_SHARED_PATH = 'guestMemoryShared';
+let _gmServer = {};   // last copy received from the database, to work out what changed
+
+// Bring this hotel's older, separate memory into the shared one (once per hotel).
+async function _gmMigrateToShared() {
+  try {
+    const db = firebase.database();
+    const flag = db.ref(`hotels/${HOTEL_ID}/settings/gmShared`);
+    if ((await flag.once('value')).val()) return;
+    const own = (await db.ref(`hotels/${HOTEL_ID}/guestMemory`).once('value')).val() || {};
+    const shared = (await db.ref(GM_SHARED_PATH).once('value')).val() || {};
+    const patch = {};
+    Object.entries(own).forEach(([k, v]) => {
+      const s = shared[k];
+      if (!s || String(v.lastSeen || '') > String(s.lastSeen || '')) patch[k] = Object.assign({}, s || {}, v, { hits: Math.max(+(s && s.hits) || 0, +v.hits || 0) });
+    });
+    if (Object.keys(patch).length) await db.ref(GM_SHARED_PATH).update(patch);
+    await flag.set(new Date().toISOString());
+    console.log('[GuestMemory] merged', Object.keys(patch).length, 'guests into the shared memory');
+  } catch (e) { console.warn('[GuestMemory] merge into shared memory failed:', e); }
+}
+
 // ── Debounced Firebase save ───────────────────────────────
 // Also bypasses fbSet() / localStorage mirroring — see note above.
 function _gmPersist() {
   clearTimeout(_gmSaveTimer);
   _gmSaveTimer = setTimeout(async () => {
-    try { await firebase.database().ref(`hotels/${HOTEL_ID}/guestMemory`).set(_gmStore); }
+    const patch = {};
+    Object.keys(_gmStore).forEach(k => { if (JSON.stringify(_gmStore[k]) !== JSON.stringify(_gmServer[k])) patch[k] = _gmStore[k]; });
+    Object.keys(_gmServer).forEach(k => { if (!(k in _gmStore)) patch[k] = null; });
+    if (!Object.keys(patch).length) return;
+    try { await firebase.database().ref(GM_SHARED_PATH).update(patch); }
     catch (e) { console.warn('[GuestMemory] save failed:', e); }
   }, 3000);
 }
@@ -401,7 +434,10 @@ function gmDeleteProfile(name) {
 
 function gmClearAll() {
   if (!_gmUnlocked) { showToast('Unlock Guest Memory first 🔒', 'err'); return; }
-  if (!confirm('Clear ALL guest memory profiles? This cannot be undone.')) return;
+  // Guest Memory is shared by every hotel: only an owner may empty it, and must say so twice
+  if (!(typeof currentProfile !== 'undefined' && currentProfile && currentProfile.role === 'owner')) { showToast('Only an owner can clear Guest Memory — it is shared by every hotel', 'err'); return; }
+  if (!confirm('Clear ALL guest memory profiles?\n\nGuest Memory is shared by EVERY hotel on HotelOps — this empties it for all of them. This cannot be undone.')) return;
+  if (prompt('Type CLEAR to empty Guest Memory for every hotel:') !== 'CLEAR') { showToast('Nothing was cleared', 'info'); return; }
   _gmStore = {};
   _gmPersist();
   _gmRenderTable();
