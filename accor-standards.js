@@ -206,9 +206,9 @@ const STD_ITEMS = [
   { cat: 'td', kind: 'hotel', title: 'Day use — always counted',
     tags: 'day use dayuse manual posting 7510 tally',
     points: [
-      'DTCM charges <b>10 AED for every real day use</b> (check-in and check-out the same day).',
+      'DTCM charges <b>one night of Tourism Dirham for every real day use</b> (check-in and check-out the same day) — your hotel\'s rate, see DTCM Recon → ⚙ Hotel TD settings.',
       'The Opera night audit <b>never</b> posts Tourism Dirham for a day use (there is no night).',
-      '→ Post <b>10 AED TD (code 7510) by hand</b> in Opera on the same business date for every real day use, or the month will not tally.'
+      '→ Post <b>one night of TD by hand</b> in Opera (your hotel\'s TD code and rate) on the same business date for every real day use, or the month will not tally.'
     ],
     src: [SRC.recon] },
 
@@ -217,14 +217,14 @@ const STD_ITEMS = [
     points: [
       'Guest arrives <b>between midnight and the night audit</b> (about 04:00-04:20): <b>do NOT tick</b>. DTCM already counts the night before by itself, exactly like Opera. Ticking it charges a night nobody stayed.',
       'Guest arrives <b>after the audit</b> (early morning) on a day-use booking you charge: <b>tick it</b>, so DTCM carries that day use.',
-      'Check the next DTCM XML: the stay must show the extra 10 AED.'
+      'Check the next DTCM XML: the stay must show one extra night of TD.'
     ],
     src: [SRC.recon] },
 
   { cat: 'td', kind: 'hotel', title: 'Late check-out tick',
     tags: 'late check out tick extra night',
     points: [
-      '"Late check-out" in DTCM adds a night. Tick it only if the late check-out was charged and your rule says it pays Tourism Dirham — and then post the 10 AED in Opera too.',
+      '"Late check-out" in DTCM adds a night. Tick it only if the late check-out was charged and your rule says it pays Tourism Dirham — and then post that night\'s TD in Opera too.',
       'A free late check-out: leave it unticked.'
     ],
     src: [SRC.recon] },
