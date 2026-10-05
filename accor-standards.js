@@ -13,10 +13,12 @@ const STD_KINDS = {
   public: { label: 'Accor public info', cls: 'std-k-public' },
   law:    { label: 'Dubai rule',        cls: 'std-k-law' },
   hotel:  { label: 'Hotel practice',    cls: 'std-k-hotel' },
-  manual: { label: 'Accor manual',      cls: 'std-k-manual' }
+  manual: { label: 'Accor manual',      cls: 'std-k-manual' },
+  app:    { label: 'How the app works', cls: 'std-k-app' }
 };
 
 const STD_CATS = [
+  { id: 'app',     icon: '📱', name: 'Using this app' },
   { id: 'all',     icon: '💎', name: 'ALL loyalty' },
   { id: 'brand',   icon: '🎨', name: 'ibis Styles brand' },
   { id: 'service', icon: '🤝', name: 'Service culture' },
@@ -40,6 +42,64 @@ const SRC = {
 };
 
 const STD_ITEMS = [
+  // ── Using this app ───────────────────────────────────────
+  { cat: 'app', kind: 'app', title: 'Getting started — the basics',
+    tags: 'start login help version update search sync theme offline how',
+    points: [
+      'Every page has a <b>❔ How to use this</b> button at the top — open it the first time you use a page.',
+      '<b>Everything is shared live</b> with your colleagues (Firebase): what you load, tick or save, they see too. A green <b>Live</b> pill in the top bar means you are connected.',
+      '<b>Ctrl+K</b> (or 🔍) searches every page at once: a room number, a guest name, a checklist step, or a standard like "passport".',
+      'The <b>version label</b> (e.g. v95) in the top bar: tap it to load the newest version if something looks out of date.',
+      'Three colour themes in the top bar (Night Ops, Opera, Midnight) — pick what is easiest on your eyes.',
+      'On a phone, the bottom bar has the main pages; <b>More</b> opens every other page.'
+    ],
+    src: [] },
+
+  { cat: 'app', kind: 'app', title: 'Daily front-desk pages',
+    tags: 'departures arrivals extension purpose of stay pipeline neorcha shift tasks',
+    points: [
+      '<b>Departures</b> — today\'s departures board. Load the Opera departures report (delimited data); follow up each room until it is checked out.',
+      '<b>Arrivals</b> — today\'s arrivals with purpose, nationality and email. Paste or upload the Opera arrivals report.',
+      '<b>Arr vs Dep</b> — finds guests who are on both lists = an extension was booked. Load the departures board first.',
+      '<b>Purpose of Stay</b> — the night-audit purpose-of-stay list (business / leisure, origin, email).',
+      '<b>Guest Pipeline</b> — the daily Neorcha routine: get guest emails, clean the list, fill Purpose of Stay, enroll guests who agreed to join ALL, and log the result.',
+      '<b>Shift Tasks</b> — the task list for each shift; tick as you go.'
+    ],
+    src: [] },
+
+  { cat: 'app', kind: 'app', title: 'Night audit pages',
+    tags: 'night audit checklist pm rooms immigration inhouse tally vicas package upsell no show',
+    points: [
+      '<b>Night Checklist</b> — the night run, step by step, with handover notes and an activity log.',
+      '<b>Night Audit · PM Rooms</b> — compares Opera\'s PM room list with the management Excel and shows every difference.',
+      '<b>Immigration Check</b> — finds guests missing what immigration needs (nationality, gender, passport, name, email) and rooms with an unregistered guest.',
+      '<b>Inhouse Tally</b> — checks Opera and Vicas agree on who is in the hotel.',
+      '<b>Package Audit</b> — checks every upsell in IN-Gauge against Opera: what to credit, what to remove, who sold it.',
+      '<b>No-Show Tracker</b> — upload the Opera NA40 no-show PDF to get the guest data ready to copy.'
+    ],
+    src: [] },
+
+  { cat: 'app', kind: 'app', title: 'Tourism Dirham pages — which one when',
+    tags: 'tourism tax dtcm recon td 30 day audit portal reconcile',
+    points: [
+      '<b>Tourism Tax</b> — from the Opera arrivals report: rooms whose date must be corrected in the TD portal (guests checked in after midnight).',
+      '<b>DTCM Recon</b> — the main reconciliation: DTCM XML vs the Opera TD journal. It explains every difference, says what to fix in Opera or in the TD portal, and shows the <b>month-end tally</b> (both totals must end equal).',
+      '<b>TD 30-Day Audit</b> — finds guests still charged after the 30-night limit (Opera finjrnlbytax report + DTCM XML).',
+      'Rules behind all three: see the <b>Tourism Dirham</b> topic on this page.'
+    ],
+    src: [] },
+
+  { cat: 'app', kind: 'app', title: 'Reports and management pages',
+    tags: 'nationality rented rooms beds trends adagio long stay collections reports',
+    points: [
+      '<b>Nationality Report</b> — guests per country this month (Opera stat_countrybymon).',
+      '<b>Rented Rooms & Beds</b> — rooms and beds sold per day (Opera history_forecast + statroomtype).',
+      '<b>Trends</b> — how the month is going, built automatically from the reports you already run every day.',
+      '<b>Adagio Pro</b> — long-stay collections: balances, cheques and departure risk from the tracking sheet.',
+      '<b>Arrivals Processor</b> — turns the Opera arrivals export into a day-by-day breakdown with package codes.'
+    ],
+    src: [] },
+
   // ── ALL loyalty ─────────────────────────────────────────
   { cat: 'all', kind: 'public', title: 'ALL status levels and how they are earned',
     tags: 'tier classic silver gold platinum diamond status nights points qualify',
@@ -248,7 +308,7 @@ function stdRender() {
         <div class="std-cat">${c.icon} ${escapeHtml(c.name)}</div>
         <ul class="std-points">${it.points.map(p => `<li>${p}</li>`).join('')}</ul>
         ${it.note ? `<div class="std-note">${escapeHtml(it.note)}</div>` : ''}
-        <div class="std-src">Source: ${srcs}${it.kind === 'public' || it.kind === 'law' ? ' · <i>check against your Accor manual / hotel SOP</i>' : ''}</div>
+        ${srcs ? `<div class="std-src">Source: ${srcs}${it.kind === 'public' || it.kind === 'law' ? ' · <i>check against your Accor manual / hotel SOP</i>' : ''}</div>` : ''}
       </div>`;
   }).join('');
 }
