@@ -1135,6 +1135,7 @@ async function pkgRun() {
   _pkgApplyPins(results);          // last: a person's pinned decision beats the log
   _pkgArchive(results);
   pkgResults = results;
+  if (typeof logActivity === 'function') logActivity('pkg_audit_run', `${results.length} package lines checked`);
   _pkgRenderCoverage();
   document.getElementById('pkgResultsWrap').style.display = 'block';
   pkgRender();
@@ -1206,6 +1207,11 @@ function pkgPinChange(idx, val) {
   } else if (val) pkgPins[key] = { seller: val, by, at: new Date().toISOString() };
   else { pkgRender(); return; }
   _pkgSavePins();
+  if (typeof logActivity === 'function') {
+    const p = pkgPins[key];
+    const what = !p ? 'pin removed' : p.skip ? 'skipped' : p.manual ? `manual sale${p.seller ? ' · ' + p.seller : ''}` : `given to ${p.seller}`;
+    logActivity('pkg_pin', `Conf ${r.conf} · room ${r.room || '?'} · ${r.family || r.code || ''} → ${what}`);
+  }
   // re-apply on the current results without reloading the files
   pkgResults.forEach(x => { if (_pkgPinKey(x) === key) { delete x.pinSkip; } });
   _pkgApplyPins(pkgResults.filter(x => _pkgPinKey(x) === key));

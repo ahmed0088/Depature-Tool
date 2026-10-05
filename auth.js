@@ -6,20 +6,20 @@
 const ROLES = {
   owner: {
     label: 'Owner', color: '#f0a43a', icon: '👑',
-    panels: ['home','departures','arrivals','xref','purpose','shifts','checklist','nationality','rent','audit','immig','tourism','td-audit','dtcm','arrivals-proc','inhouse-tally','package-audit','noshow','reports','standards','pipeline'],
+    panels: ['home','departures','arrivals','xref','purpose','shifts','checklist','nationality','rent','audit','immig','tourism','td-audit','dtcm','arrivals-proc','inhouse-tally','package-audit','noshow','reports','standards','pipeline','history'],
     canManageUsers: true, canExport: true, canImport: true, canClear: true,
     canEditChecklist: true, canEditShifts: true, canReports: true,
     canDelete: true, canViewAll: true, canForceLogout: true, canViewLogs: true,
   },
   manager: {
     label: 'Manager', color: '#8b7cf8', icon: '🏅',
-    panels: ['home','departures','arrivals','xref','purpose','shifts','checklist','nationality','rent','audit','immig','tourism','td-audit','dtcm','arrivals-proc','inhouse-tally','package-audit','noshow','standards','pipeline'],
+    panels: ['home','departures','arrivals','xref','purpose','shifts','checklist','nationality','rent','audit','immig','tourism','td-audit','dtcm','arrivals-proc','inhouse-tally','package-audit','noshow','standards','pipeline','history'],
     canManageUsers: true, canExport: true, canImport: false, canClear: false,
     canEditChecklist: true, canEditShifts: true, canReports: true,
   },
   supervisor: {
     label: 'Supervisor', color: '#5ab4e8', icon: '⭐',
-    panels: ['home','departures','arrivals','xref','purpose','shifts','checklist','nationality','rent','audit','immig','tourism','td-audit','dtcm','arrivals-proc','inhouse-tally','package-audit','noshow','standards','pipeline'],
+    panels: ['home','departures','arrivals','xref','purpose','shifts','checklist','nationality','rent','audit','immig','tourism','td-audit','dtcm','arrivals-proc','inhouse-tally','package-audit','noshow','standards','pipeline','history'],
     canManageUsers: false, canExport: true, canImport: false, canClear: false,
     canEditChecklist: true, canEditShifts: true, canReports: true,
   },
@@ -928,10 +928,10 @@ function _renderActivityEntries(el, entries) {
     <div class="admin-log-row">
       <span class="admin-log-icon">${icons[e.action] || '•'}</span>
       <div class="admin-log-body">
-        <span class="admin-log-name">${e.name}</span>
+        <span class="admin-log-name">${escapeHtml(e.name || '')}</span>
         <span class="admin-log-role" style="color:${roleColor};font-size:0.58rem;font-family:var(--mono);background:${roleColor}18;padding:1px 5px;border-radius:4px;margin:0 4px;">${(ROLES[e.role]||ROLES.readonly).label}</span>
-        <span class="admin-log-action">${e.action.replace(/_/g,' ')}</span>
-        ${e.detail ? `<span class="admin-log-detail">${e.detail}</span>` : ''}
+        <span class="admin-log-action">${escapeHtml(String(e.action || '').replace(/_/g,' '))}</span>
+        ${e.detail ? `<span class="admin-log-detail">${escapeHtml(e.detail)}</span>` : ''}
       </div>
       <span class="admin-log-time">${new Date(e.ts).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</span>
     </div>`;

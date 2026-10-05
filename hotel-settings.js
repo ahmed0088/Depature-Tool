@@ -80,6 +80,7 @@ function hsSave() {
   if (!/^\d{1,2}:\d{2}$/.test(audit)) { showToast('Night audit time looks like 04:20', 'err'); return; }
   HotelCfg.set({ tdCodes: codes, tdDesc: v('hsDesc') || 'Tourism Dirham', tdRate: rate, tdCap: cap, auditTime: audit });
   hsRenderForm();
+  if (typeof logActivity === 'function') logActivity('td_settings', `Code ${HotelCfg.codeLabel()} · AED ${HotelCfg.rate()} · cap ${HotelCfg.cap()} · audit ${audit}`);
   showToast('Hotel TD settings saved — run Analyze again to use them', 'ok');
 }
 

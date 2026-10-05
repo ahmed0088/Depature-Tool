@@ -43,6 +43,7 @@ function _mePrint(title, body) {
 function meDtcmReport() {
   const RC = typeof dtcRecon !== 'undefined' ? dtcRecon : null;
   if (!RC) { showToast('Run DTCM Recon first', 'err'); return; }
+  if (typeof logActivity === 'function') logActivity('dtcm_month_end_report', RC.reportDate || '');
   const G = RC.gap || {};
   const period = typeof dtcPeriod === 'function' ? dtcPeriod(RC) : (RC.reportDate || '');
   const done = typeof dtcDone !== 'undefined' ? dtcDone : new Set();
@@ -85,6 +86,7 @@ function meDtcmReport() {
 function mePkgCommission() {
   const res = typeof pkgResults !== 'undefined' ? pkgResults : [];
   if (!res.length) { showToast('Run Package Audit first', 'err'); return; }
+  if (typeof logActivity === 'function') logActivity('pkg_commission_report', `${res.length} lines`);
   const label = u => (typeof _pkgUserLabel === 'function' ? _pkgUserLabel(u) : u) || 'Unassigned';
   const credited = res.filter(r => r.verdict === 'credit' && !r.pinSkip && !r.noSeller);
   const by = {};

@@ -398,6 +398,7 @@
     <div class="tb-pill" id="appVersionPill" onclick="appForceUpdate()" title="App version — tap to force an update if it looks out of date" style="cursor:pointer;">—</div>
     <div class="icon-round mob-hide" onclick="gsOpen()" title="Search — room / guest / task (Ctrl+K)">🔍</div>
     <div class="icon-round mob-hide" onclick="hoOpen()" title="Shift Handover">📋</div>
+    <div class="icon-round mob-hide" onclick="wnOpen(true)" title="What's new in this version">✨</div>
     <div class="icon-round mob-hide" onclick="openFeedback()"  title="Feedback">💬</div>
     <div class="icon-round mob-hide" onclick="document.getElementById('kbModal').classList.toggle('open')" title="Keyboard shortcuts (?)">⌨</div>
     <div class="icon-round mob-hide" onclick="exportAllData()" title="Export backup">💾</div>
@@ -495,6 +496,9 @@
     <div class="nav-icon">📘</div>Accor Standards
     <span class="nav-badge" id="badge-standards">—</span>
   </div>
+  <div class="nav-item" onclick="showPanel('history')" id="nav-history" data-panel="history">
+    <div class="nav-icon">🕘</div>History
+  </div>
   <div class="nav-item" onclick="showPanel('trends')" id="nav-trends" data-panel="trends">
     <div class="nav-icon">📈</div>Trends
     <span class="nav-badge" id="badge-trends">—</span>
@@ -525,6 +529,7 @@
       </div>
     </div>
     <div id="homeTiles" class="home-grid"></div>
+    <div class="home-drop">📥 Tip: drag any Opera, DTCM or PDF report onto the app, on any page. It opens the right page and loads the file for you.</div>
     <p class="home-foot">Tap a tile to open the page. Numbers update as you and your colleagues work.</p>
   </div>
 </div>
@@ -1450,6 +1455,24 @@
       </div>
       <div id="gpTracker" style="margin-top:12px;"></div>
     </div>
+  </div>
+</div>
+
+<div class="panel" id="panel-history">
+  <div style="max-width:1000px;">
+    <div class="page-hd">
+      <div class="page-hd-left"><h1>History</h1><p>Who did what and when, for the whole team · pins, ticks, reports, check-outs, settings</p></div>
+      <div class="page-hd-actions"><button class="btn" onclick="histLoad()">↻ Refresh</button><button class="btn" onclick="histCopy(this)">📋 Copy for Excel</button></div>
+    </div>
+    <div class="hist-filters">
+      <input id="histSearch" type="search" placeholder="Search… a name, room, confirmation, page" oninput="histRender()"/>
+      <select id="histWho" onchange="histRender()"><option value="">Everyone</option></select>
+      <select id="histPage" onchange="histRender()"><option value="">All pages</option></select>
+      <select id="histWhen" onchange="histRender()"><option value="1">Today</option><option value="7" selected>Last 7 days</option><option value="31">Last 31 days</option><option value="0">Everything</option></select>
+      <label class="hist-chk"><input type="checkbox" id="histNoLogin" checked onchange="histRender()"/> Hide sign-ins</label>
+      <span id="histCount" class="tb-pill">—</span>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;"><div id="histList"><div class="hist-empty">Open this page to load the history.</div></div></div>
   </div>
 </div>
 
@@ -4201,7 +4224,7 @@ function mobMoreFilter(q) {
     const KW = { dtcm: 'td tourism dirham recon reconcile dtcm xml', tourism: 'td tourism dirham portal date', 'td-audit': 'td 30 nights cap long stay',
       purpose: 'purpose stay email nationality origin', pipeline: 'neorcha email all enroll scraper loyalty', noshow: 'no show na40 pdf',
       immig: 'immigration passport police', 'inhouse-tally': 'vicas inhouse in-house', audit: 'pm rooms night audit excel',
-      standards: 'accor standards help guide all loyalty rules', rent: 'rented rooms beds', xref: 'extension arrivals departures',
+      standards: 'accor standards help guide all loyalty rules', history: 'history log audit who did what activity', rent: 'rented rooms beds', xref: 'extension arrivals departures',
       nationality: 'country nationality report', adagio: 'long stay collections balance cheque', trends: 'month charts history',
       'package-audit': 'upsell in-gauge package', 'arrivals-proc': 'arrivals processor package codes' };
     const hit = !w || (b.textContent + ' ' + (b.dataset.panel || '') + ' ' + (KW[b.dataset.panel] || '')).toLowerCase().includes(w);
@@ -5037,6 +5060,9 @@ async function appInit() {
     <button class="mob-more-item" data-panel="standards"      onclick="showPanel('standards');closeMobMore()">
       <span class="mob-item-icon">📘</span>Standards
     </button>
+    <button class="mob-more-item" data-panel="history"        onclick="showPanel('history');closeMobMore()">
+      <span class="mob-item-icon">🕘</span>History
+    </button>
     <button class="mob-more-item" data-panel="trends"         onclick="showPanel('trends');closeMobMore()">
       <span class="mob-item-icon">📈</span>Trends
     </button>
@@ -5047,6 +5073,7 @@ async function appInit() {
 
   <!-- Utility strip: feedback · export · import · sign out -->
   <div class="mob-util-strip">
+    <button class="mob-util-btn" onclick="closeMobMore();wnOpen(true)">✨ What's new</button>
     <button class="mob-util-btn" onclick="openFeedback();closeMobMore()">💬 Feedback</button>
     <button class="mob-util-btn" onclick="exportAllData();closeMobMore()">💾 Export</button>
     <label  class="mob-util-btn" style="cursor:pointer;">
@@ -5230,6 +5257,8 @@ async function appInit() {
 <script src="home.js"></script>
 <script src="month-end.js"></script>
 <script src="file-router.js"></script>
+<script src="whats-new.js"></script>
+<script src="history.js"></script>
 <script>
   // ── PWA: register service worker for offline app-shell ──
   if ('serviceWorker' in navigator) {

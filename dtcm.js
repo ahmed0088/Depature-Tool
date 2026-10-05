@@ -825,6 +825,7 @@ function dtcToggleDone(cb) {
   const tr = cb.closest('tr');
   if (tr) tr.classList.toggle('done', cb.checked);
   if (cb.checked) dtcDone.add(key); else dtcDone.delete(key);
+  if (typeof logActivity === 'function') logActivity(cb.checked ? 'dtcm_item_done' : 'dtcm_item_undone', String(key).split('|').slice(1).join(' · '));
   dtcUpdateProgress();
   dtcPersistDone();
 }
