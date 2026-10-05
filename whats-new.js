@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 129, items: [
+    '📧 After Import Emails, the guests go into Guest Memory by themselves: HotelOps waits 2 minutes so you can fix a wrong email, then saves. Tap 🧠 Save to Memory to save right away. Leaving the page or the app before then saves straight away, so nothing is lost.',
+  ] },
   { v: 128, items: [
     '🧠 Guest Memory is now shared by all hotels: a returning guest seen at any of your hotels has their nationality, email and purpose filled in at the others. Each hotel\'s existing memory was merged in, nothing lost. Everything else stays separate per hotel, and each hotel keeps its own Guest Memory password.',
     '🔒 Clearing all of Guest Memory now empties it for every hotel, so only an owner can do it, after typing CLEAR.',

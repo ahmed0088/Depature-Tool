@@ -1548,3 +1548,21 @@ function loadOperaFile(input, target) {
   };
   reader.readAsArrayBuffer(file);
 }
+
+
+// After Import Emails, the guests go into Guest Memory by themselves (guest-memory.js)
+(function () {
+  const run = () => {
+    const orig = window.processImportEmails;
+    if (typeof orig !== 'function' || orig.__gm) return;
+    window.processImportEmails = function () {
+      const before = (typeof purposeGuests !== 'undefined' ? purposeGuests : []).map(g => g.email || '').join('|');
+      const out = orig.apply(this, arguments);
+      const after = (typeof purposeGuests !== 'undefined' ? purposeGuests : []).map(g => g.email || '').join('|');
+      if (after !== before && typeof gmScheduleAutoSave === 'function') gmScheduleAutoSave();
+      return out;
+    };
+    window.processImportEmails.__gm = true;
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run); else run();
+})();

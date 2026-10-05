@@ -348,14 +348,18 @@ async function _gmMigrateToShared() {
 // Also bypasses fbSet() / localStorage mirroring — see note above.
 function _gmPersist() {
   clearTimeout(_gmSaveTimer);
-  _gmSaveTimer = setTimeout(async () => {
+  _gmSaveTimer = setTimeout(_gmPersistNow, 3000);
+}
+async function _gmPersistNow() {
+  clearTimeout(_gmSaveTimer);
+  {
     const patch = {};
     Object.keys(_gmStore).forEach(k => { if (JSON.stringify(_gmStore[k]) !== JSON.stringify(_gmServer[k])) patch[k] = _gmStore[k]; });
     Object.keys(_gmServer).forEach(k => { if (!(k in _gmStore)) patch[k] = null; });
     if (!Object.keys(patch).length) return;
-    try { await firebase.database().ref(GM_SHARED_PATH).update(patch); }
+    try { await firebase.database().ref(GM_SHARED_PATH).update(patch); Object.assign(_gmServer, JSON.parse(JSON.stringify(patch))); Object.keys(patch).forEach(k => { if (patch[k] === null) delete _gmServer[k]; }); }
     catch (e) { console.warn('[GuestMemory] save failed:', e); }
-  }, 3000);
+  }
 }
 
 // ── Auto-fill: called once after import ───────────────────
@@ -395,10 +399,46 @@ function gmOnEdit(name, field, value) {
 // ── "Save to Memory" button ───────────────────────────────
 function gmScanAndSaveAll() {
   if (!_gmUnlocked) { showToast('Unlock Guest Memory first 🔒', 'err'); return; }
+  gmCancelAutoSave();
+  const r = _gmMergeLoaded();
+  if (!r) { showToast('No guests loaded — load Arrivals or Purpose first', 'err'); return; }
+  _gmPersist();
+  _gmUpdateUI();
+  showToast(`🧠 ${r.saved} new · ${r.updated} updated in memory`, 'ok');
+}
+
+// ── Auto-save after Import Emails ─────────────────────────
+// After emails are imported, wait a little (time to fix a wrong email) and
+// then save everyone to Guest Memory, unless "Save to Memory" was clicked.
+// Leaving the page or the app saves straight away instead of waiting.
+const GM_AUTOSAVE_MS = 120000;
+let _gmAutoT = null;
+function gmScheduleAutoSave() {
+  clearTimeout(_gmAutoT);
+  _gmAutoT = setTimeout(() => gmAutoSaveNow('timer'), GM_AUTOSAVE_MS);
+  showToast('📧 Emails imported — they go into Guest Memory automatically in 2 minutes (or tap 🧠 Save to Memory now)', 'ok');
+}
+function gmCancelAutoSave() { clearTimeout(_gmAutoT); _gmAutoT = null; }
+function gmAutoSaveNow(why) {
+  if (!_gmAutoT && why !== 'force') return;
+  gmCancelAutoSave();
+  if (!_gmReady) return;
+  const r = _gmMergeLoaded();
+  if (!r) return;
+  _gmPersistNow();
+  if (_gmUnlocked) _gmUpdateUI();
+  if (why === 'timer') showToast(`🧠 Saved to Guest Memory: ${r.saved} new · ${r.updated} updated`, 'ok');
+  if (typeof logActivity === 'function') try { logActivity('guestmem_autosave', `${r.saved} new · ${r.updated} updated`); } catch (_) {}
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') gmAutoSaveNow('leave'); });
+window.addEventListener('pagehide', () => gmAutoSaveNow('leave'));
+
+/** Put every loaded arrival / Purpose guest into the memory (no saving yet). */
+function _gmMergeLoaded() {
   const lists = [];
   if (typeof arrGuests     !== 'undefined' && arrGuests.length)     lists.push(...arrGuests);
   if (typeof purposeGuests !== 'undefined' && purposeGuests.length) lists.push(...purposeGuests);
-  if (!lists.length) { showToast('No guests loaded — load Arrivals or Purpose first', 'err'); return; }
+  if (!lists.length) return null;
 
   let saved = 0, updated = 0;
   lists.forEach(g => {
@@ -415,9 +455,7 @@ function gmScanAndSaveAll() {
     };
     if (isNew) saved++; else updated++;
   });
-  _gmPersist();
-  _gmUpdateUI();
-  showToast(`🧠 ${saved} new · ${updated} updated in memory`, 'ok');
+  return { saved, updated };
 }
 
 function gmLookup(name) { return _gmStore[gmKey(name)] || null; }
