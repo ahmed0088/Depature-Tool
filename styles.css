@@ -5610,6 +5610,7 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
 
   /* Purpose of Stay: cards instead of the 13-column table */
   #panel-purpose .tbl-wrap { display: none; }
+  #panel-arrivals .tbl-wrap { display: none; }
   .pc-list { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
   .pc-card { background: var(--bg2); border: 1px solid var(--border); border-left: 4px solid var(--blue); border-radius: 14px; padding: 12px; }
   .pc-card.leisure { border-left-color: var(--amber); }
@@ -5762,3 +5763,25 @@ body.fr-dragging::after {
   .hist-filters input[type=search] { flex-basis: 100%; }
   .hist-filters select { flex: 1; min-width: 0; }
 }
+
+/* ── Phones: DTCM gap table — the note drops under label + amount ── */
+@media (max-width: 768px) {
+  #dtcFixPlan table:not(.dtc-sheet-table) { display: block; width: 100% !important; min-width: 0 !important; }
+  #dtcFixPlan table:not(.dtc-sheet-table) tbody { display: block; }
+  #dtcFixPlan table:not(.dtc-sheet-table) tr { display: grid; grid-template-columns: 1fr auto; border-bottom: 1px solid var(--border); }
+  #dtcFixPlan table:not(.dtc-sheet-table) td { border: 0 !important; }
+  #dtcFixPlan table:not(.dtc-sheet-table) td:nth-child(3) { grid-column: 1 / -1; padding-top: 0 !important; }
+  #dtcFixPlan table:not(.dtc-sheet-table) td:nth-child(3):empty { display: none; }
+  #dtcFixPlan, #dtcFixPlan > * { max-width: 100%; box-sizing: border-box; overflow-wrap: anywhere; }
+}
+
+/* ── Add to home screen (install-prompt.js) ── */
+.ip-banner { position: fixed; left: 12px; right: 12px; bottom: 92px; z-index: 9990; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  background: var(--card); color: var(--text); border: 1px solid var(--border2); border-radius: 16px; padding: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.35);
+  animation: ipUp .3s ease; }
+.ip-ico { font-size: 1.8rem; }
+.ip-txt { flex: 1; min-width: 180px; display: flex; flex-direction: column; gap: 3px; font-size: .8rem; }
+.ip-txt span { color: var(--text2); font-size: .74rem; line-height: 1.45; }
+.ip-share { display: inline-block; border: 1px solid var(--border2); border-radius: 5px; padding: 0 4px; }
+.ip-btns { display: flex; gap: 6px; margin-left: auto; }
+@keyframes ipUp { from { transform: translateY(20px); opacity: 0; } to { transform: none; opacity: 1; } }

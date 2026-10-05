@@ -665,7 +665,48 @@ function arrRender() {
       <td><button class="icon-btn" onclick="arrRemoveGuest(${i})">✕</button></td>
     </tr>`;
   }).join('');
+  arrRenderCards(filtered);
   arrKpiUpdate();
+}
+
+// Phones: one card per arriving guest instead of the 10-column table
+function arrRenderCards(list) {
+  const box = document.getElementById('arrCards');
+  if (!box) return;
+  if (!arrGuests.length) { box.innerHTML = ''; return; }
+  if (!list.length) { box.innerHTML = '<div class="pc-empty">No guest matches this filter.</div>'; return; }
+  const f = (i, key, label, extra = '', type = 'text') => `
+    <label class="pc-f"><span>${label}</span>
+      <input type="${type}" value="${escapeHtml(arrGuests[i][key] || '')}" ${extra}
+        oninput="arrGuests[${i}].${key}=this.value" onblur="debounceSaveArrivals()"></label>`;
+  box.innerHTML = list.map(g => {
+    const i = arrGuests.indexOf(g);
+    const srcCat = sourceCategory(g.source);
+    const noEmail = !g.email || !String(g.email).includes('@');
+    return `<div class="pc-card ${g.purpose === 'Leisure' ? 'leisure' : ''}">
+      <div class="pc-hd">
+        <span class="pc-room">${escapeHtml(g.room || '—')}</span>
+        <span class="pc-name">${escapeHtml(g.name || '')}</span>
+        <button class="pc-del" onclick="arrRemoveGuest(${i})" title="Remove guest">✕</button>
+      </div>
+      <div class="pc-seg">${['Business', 'Leisure', 'Flight'].map(p =>
+        `<button class="${g.purpose === p ? 'on' : ''}" onclick="arrChangePurpose(${i},'${p}')">${p}</button>`).join('')}</div>
+      <div class="pc-grid">
+        <label class="pc-f"><span>Nationality</span>
+          <div style="display:flex;gap:6px;"><input value="${escapeHtml(g.nat || '')}" style="flex:1;${g.nat ? '' : 'border-color:var(--amber);'}"
+            oninput="arrGuests[${i}].nat=this.value" onblur="gmOnEdit(arrGuests[${i}].name,'nat',this.value);debounceSaveArrivals()">
+          <button class="pc-ai" onclick="aiOneGuest(${i},'arr')" title="Guess with AI">✦</button></div></label>
+        ${f(i, 'nights', 'Nights', 'onchange="arrKpiUpdate()"', 'number')}
+        <label class="pc-f pc-wide"><span>Email</span>
+          <input type="email" value="${escapeHtml(g.email || '')}" style="${noEmail ? 'border-color:var(--amber);' : ''}" oninput="arrGuests[${i}].email=this.value"
+            onblur="gmOnEdit(arrGuests[${i}].name,'email',this.value);debounceSaveArrivals()"></label>
+        <label class="pc-f"><span>Source <span class="src-badge ${srcCat}">${SOURCE_CATEGORIES[srcCat].label}</span></span>
+          <input value="${escapeHtml(g.source || '')}" oninput="arrGuests[${i}].source=this.value" onblur="debounceSaveArrivals()"></label>
+        ${f(i, 'conf', 'Confirmation #')}
+        <div class="pc-wide">${f(i, 'remarks', 'Remarks')}</div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function arrFilter(f, el) {

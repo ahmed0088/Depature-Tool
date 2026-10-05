@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 115, items: [
+    '📱 Phone: Arrivals shows one card per guest (big fields, one-tap Business / Leisure / Flight). Empty email or nationality is outlined.',
+    '📱 Phone: the DTCM gap summary fits the screen. The explanation sits under each line.',
+    '📲 Add to home screen: phones get a one-time prompt to install the app (iPhone shows the two taps). It is also under More → Install app.',
+  ] },
   { v: 114, items: [
     '✨ This window: after every update the app tells you what changed.',
     '🕘 History page: who did what and when, for the whole team. Search by name, room or page.',

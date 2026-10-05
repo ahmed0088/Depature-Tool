@@ -818,6 +818,7 @@
     <thead><tr><th>Room</th><th>Conf.</th><th>Name</th><th>Purpose</th><th>Nights</th><th>Nationality</th><th>Email</th><th>Source</th><th>Remarks</th><th></th></tr></thead>
     <tbody id="arrTable"></tbody>
   </table></div>
+  <div id="arrCards" class="pc-list"></div>
     <div class="dep-log-wrap" id="arrLogWrap" style="display:none;">
       <div class="dep-log-header" onclick="toggleActivityLog('arrLogBody','arrLogToggleIcon')" role="button" tabindex="0" title="Show or hide the activity log">
         <span>📋</span>
@@ -5073,6 +5074,7 @@ async function appInit() {
 
   <!-- Utility strip: feedback · export · import · sign out -->
   <div class="mob-util-strip">
+    <button class="mob-util-btn" id="mobInstallBtn" style="display:none;" onclick="closeMobMore();ipOpen(true)">📲 Install app</button>
     <button class="mob-util-btn" onclick="closeMobMore();wnOpen(true)">✨ What's new</button>
     <button class="mob-util-btn" onclick="openFeedback();closeMobMore()">💬 Feedback</button>
     <button class="mob-util-btn" onclick="exportAllData();closeMobMore()">💾 Export</button>
@@ -5259,6 +5261,7 @@ async function appInit() {
 <script src="file-router.js"></script>
 <script src="whats-new.js"></script>
 <script src="history.js"></script>
+<script src="install-prompt.js"></script>
 <script>
   // ── PWA: register service worker for offline app-shell ──
   if ('serviceWorker' in navigator) {
