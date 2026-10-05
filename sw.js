@@ -14,7 +14,7 @@
 //  clients pick up the new version instead of a stale cache.
 // ═══════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'ibis-ops-shell-v126';
+const CACHE_NAME = 'ibis-ops-shell-v127';
 
 const SHELL_FILES = [
   './',
@@ -63,6 +63,7 @@ const SHELL_FILES = [
   './brain.js',
   './brain-live.js',
   './brain-agent.js',
+  './brain-smart.js',
   './brand.js',
   './settings.js',
   './tenant.js',

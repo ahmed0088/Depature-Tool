@@ -438,3 +438,20 @@ body.ho-privacy :is(#panel-purpose, #panel-arrivals) tbody td:focus-within { fil
   .cl-note-input { min-height: 40px; height: auto; }
 }
 @media (max-width: 768px) { .page-hd-left { min-width: 0 !important; width: 100% !important; max-width: 100% !important; flex: 0 0 auto !important; } .page-hd-left p { max-width: 100% !important; overflow-wrap: anywhere; } }
+
+/* ══ Ops Brain answers from your data (brain-smart.js) ══ */
+.bs-ans { border-left: 4px solid var(--sky, #5ab4e8); }
+.bs-heard { font-size: .72rem; color: var(--text3); margin-bottom: 6px; font-style: italic; }
+.bs-bars { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
+.bs-bar { display: grid; grid-template-columns: minmax(80px, 38%) 1fr 34px; gap: 8px; align-items: center; font-size: .76rem; }
+.bs-bar span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text2); }
+.bs-bar i { height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 55%, transparent)); min-width: 4px; }
+.bs-bar b { text-align: right; font-variant-numeric: tabular-nums; }
+.bs-list { margin-top: 8px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; max-height: 320px; overflow-y: auto; }
+.bs-li { display: grid; grid-template-columns: 52px 1fr; gap: 2px 10px; padding: 7px 10px; border-bottom: 1px solid var(--border); font-size: .76rem; }
+.bs-li:nth-child(even) { background: color-mix(in srgb, var(--bg2) 50%, transparent); }
+.bs-li:last-child { border-bottom: 0; }
+.bs-li b { font-family: var(--mono); color: var(--accent); grid-row: span 2; align-self: center; }
+.bs-li small { color: var(--text3); font-size: .7rem; }
+.bs-step { border-left: 2px solid var(--border2); padding-left: 10px; margin-bottom: 10px; }
+.bs-step > span { display: block; font-size: .72rem; font-weight: 600; color: var(--text2); margin-bottom: 4px; }

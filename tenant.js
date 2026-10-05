@@ -15,8 +15,8 @@
 
 const TN_KEY = 'hotelops_hotel';
 // kept on the device across hotels (personal, not hotel data)
-const TN_KEEP = new Set([TN_KEY, 'hotelops_prefs_v1', 'whats_new_seen_v1', 'install_prompt_later_v1', 'brain_usage_v1',
-  'brain_votes_v1', 'brain_thought_stats_v1', 'brain_snooze_v1', 'brain_autopilot_v1', 'ibis_saved_email']);
+const TN_KEEP = new Set([TN_KEY, 'hotelops_prefs_v1', 'whats_new_seen_v1', 'install_prompt_later_v1',
+  'ibis_saved_email']);   // Ops Brain's memory is per hotel, so it is cleared too
 
 const _tnDb = () => firebase.database();
 const tnSlug = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')

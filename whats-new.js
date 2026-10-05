@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 127, items: [
+    '🧠 Ops Brain reads your data: ask "how many arrivals from France", "who has no email", "french guests", "guests staying more than 5 nights", "nationality breakdown", "arrivals by source", "average nights", "rooms that owe money", "who checked out". Each answer has the list and a Copy for Excel button.',
+    '🧠 It understands typos ("arivals without natonality"), remembers the room you just asked about ("room 513" then "check it out" or "what about 512?"), and does several jobs in one line ("guess nationalities then remove duplicates and brief me").',
+    '🧠 It notices more: Booking/Expedia relay emails, emails that can\'t be right, a nationality that doesn\'t fit the name, the same guest in two rooms, stays longer than the TD cap, and checked-out rooms that still owe money.',
+    '🏨 Ops Brain\'s memory (habits, 👍/👎, turned-off suggestions) now stays with each hotel, so hotels never mix.',
+  ] },
   { v: 126, items: [
     '🏨 More than one hotel: each hotel has its own separate space. People you add in Team management work in your hotel, and the app opens their hotel when they sign in.',
     '➕ Owners can add a new hotel in ⚙️ Settings → Hotel: its name, TD code and rate, and its owner\'s login. That owner then adds their own team. Nothing is shared between the hotels.',
