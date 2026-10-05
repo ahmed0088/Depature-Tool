@@ -1376,7 +1376,7 @@
     <!-- STEP 2 -->
     <div class="card gp-step">
       <div class="gp-step-hd"><span class="gp-num">2</span><div><div class="gp-step-t">Clean the list</div><div class="gp-step-s">Paste the Neorcha output — duplicates, OTA emails and typos are handled for you</div></div></div>
-      <textarea id="gpInput" placeholder="Paste the Neorcha output here (Confirmation_Number · Name · Email · Phone · Nationality)…" style="width:100%;min-height:90px;font-family:var(--mono);font-size:.72rem;"></textarea>
+      <textarea id="gpInput" class="tt-textarea" placeholder="Paste the Neorcha output here (Confirmation_Number · Name · Email · Phone · Nationality)…" style="width:100%;min-height:90px;font-family:var(--mono);font-size:.72rem;"></textarea>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
         <button class="btn gold" onclick="gpPasteClipboard()">📥 Paste from clipboard</button>
         <button class="btn" onclick="gpLoad()">▶ Load what's in the box</button>
@@ -1421,7 +1421,7 @@
     <!-- STEP 4 -->
     <div class="card gp-step">
       <div class="gp-step-hd"><span class="gp-num">4</span><div><div class="gp-step-t">Enrollment tracker</div><div class="gp-step-s">Shared with the team · paste the results from the ALL Enroll panel</div></div></div>
-      <textarea id="gpResultsInput" placeholder="Paste the results (Email · Status · Date)…" style="width:100%;min-height:60px;font-family:var(--mono);font-size:.72rem;"></textarea>
+      <textarea id="gpResultsInput" class="tt-textarea" placeholder="Paste the results (Email · Status · Date)…" style="width:100%;min-height:60px;font-family:var(--mono);font-size:.72rem;"></textarea>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
         <button class="btn gold" onclick="gpImportResults()">💾 Save results</button>
         <button class="btn" onclick="gpLoadLog()">↻ Refresh</button>
