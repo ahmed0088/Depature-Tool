@@ -24,6 +24,7 @@ const HO_PREF_DEFAULTS = {
   installPrompt: true,
   dropAnywhere: true,
   confirmCheckout: true,
+  autoResetShifts: true,
   accent: 'theme',        // theme · gold · blue · green · teal · rose · purple
   corners: 'rounded',     // rounded · soft · sharp
   font: 'inter',          // inter · system
@@ -200,7 +201,8 @@ function hoSettingsRender() {
       + _hoTog('installPrompt', '"Add to home screen" on phones', 'The one-time install suggestion')
       + _hoTog('dropAnywhere', 'Drop a report anywhere', 'Drag a file onto any page and it opens the right page')
       + _hoTog('confirmCheckout', 'Ask before checking out a room that owes money', 'Applies to Ops Brain commands like "check out 512"')
-      + _hoTog('haptics', 'Vibration on phones', 'A light tap when you press buttons')),
+      + _hoTog('haptics', 'Vibration on phones', 'A light tap when you press buttons')
+      + _hoTog('autoResetShifts', 'Fresh shift tasks every shift', 'Each new morning, afternoon and night shift starts with nothing ticked, for the whole team. The shift that just ended keeps its ticks for handover')),
 
     _hoSec('alerts', 'feedback', 'Alerts & sounds', 'How HotelOps gets your attention',
       `<label class="hs-row" data-s="overdue late checkout alerts departures">

@@ -413,10 +413,10 @@ function gmScanAndSaveAll() {
 // Leaving the page or the app saves straight away instead of waiting.
 const GM_AUTOSAVE_MS = 120000;
 let _gmAutoT = null;
-function gmScheduleAutoSave() {
+function gmScheduleAutoSave(quiet) {
   clearTimeout(_gmAutoT);
-  _gmAutoT = setTimeout(() => gmAutoSaveNow('timer'), GM_AUTOSAVE_MS);
-  showToast('📧 Emails imported — they go into Guest Memory automatically in 2 minutes (or tap 🧠 Save to Memory now)', 'ok');
+  _gmAutoT = setTimeout(() => gmAutoSaveNow(quiet ? 'quiet' : 'timer'), GM_AUTOSAVE_MS);
+  if (!quiet) showToast('📧 Emails imported — they go into Guest Memory automatically in 2 minutes (or tap 🧠 Save to Memory now)', 'ok');
 }
 function gmCancelAutoSave() { clearTimeout(_gmAutoT); _gmAutoT = null; }
 function gmAutoSaveNow(why) {

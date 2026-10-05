@@ -337,8 +337,45 @@ function applyShiftData(saved, heardFromDb = true) {
       SHIFTS[k].tasks   = Array.isArray(s.tasks) && s.tasks.length ? s.tasks : [];
       SHIFTS[k].done    = Array.isArray(s.done) ? s.done : [];
       SHIFTS[k].resetAt = s.resetAt || '';
+      SHIFTS[k].autoDay = s.autoDay || '';
     }
   });
   initShifts();   // fills in any shift left with nothing, and repaints the badges
   if (heardFromDb) _shiftsLoaded = true;
 }
+
+// ── A fresh list for every shift, by itself ───────────────
+// Each shift starts with nothing ticked: the first time the app is open
+// during a new morning / afternoon / night, that shift's ticks are cleared
+// for the whole team (once — the date is saved with the tasks). The shift
+// that just ended keeps its ticks for the handover. Settings → Helpers can
+// turn this off.
+function _stCurrentInstance() {
+  const now = new Date(), h = now.getHours();
+  const key = h >= 23 || h < 7 ? 'night' : h < 15 ? 'morning' : 'afternoon';
+  const start = new Date(now);
+  if (key === 'night' && h < 7) start.setDate(start.getDate() - 1);   // tonight's shift began yesterday at 23:00
+  const pad = n => String(n).padStart(2, '0');   // local date, not UTC
+  return { key, day: `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}` };
+}
+function stAutoFreshStart() {
+  if (typeof hoPref === 'function' && hoPref('autoResetShifts') === false) return;
+  if (typeof _shiftsLoaded === 'undefined' || !_shiftsLoaded || typeof SHIFTS === 'undefined') return;
+  if (typeof currentUser === 'undefined' || !currentUser) return;
+  const { key, day } = _stCurrentInstance();
+  const sh = SHIFTS[key];
+  if (!sh || sh.autoDay === day) return;
+  // first time ever (just after this update): keep what is ticked, start counting from now
+  if (!sh.autoDay) { sh.autoDay = day; persistShifts(); return; }
+  const hadTicks = (sh.done || []).length;
+  sh.done = [];
+  sh.autoDay = day;
+  sh.resetAt = new Date().toLocaleString('en-GB');
+  if (hadTicks) { try { stLog(key, 'reset', 'New shift — started fresh automatically'); } catch (_) {} }
+  persistShifts();
+  updateShiftBadge(key);
+  if (typeof activeShift !== 'undefined' && activeShift === key && document.getElementById('panel-shifts')?.classList.contains('active')) _renderShiftContent(key);
+  if (hadTicks && typeof showToast === 'function') showToast(`⏰ New ${sh.label || key}: shift tasks start fresh`, 'ok');
+}
+setInterval(stAutoFreshStart, 60000);
+document.addEventListener('DOMContentLoaded', () => setTimeout(stAutoFreshStart, 6000));

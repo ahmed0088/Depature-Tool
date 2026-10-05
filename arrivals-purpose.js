@@ -1566,3 +1566,33 @@ function loadOperaFile(input, target) {
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run); else run();
 })();
+
+// Anything loaded or changed on Arrivals / Purpose of Stay goes into Guest
+// Memory by itself (2 minutes after the last change), and clearing a page
+// always saves its guests first — so the daily clear never loses anyone.
+(function () {
+  const run = () => {
+    const wrapAfter = name => {
+      const f = window[name];
+      if (typeof f !== 'function' || f.__gmAuto) return;
+      window[name] = function (list) {
+        const out = f.apply(this, arguments);
+        if (Array.isArray(list) && list.length && typeof gmScheduleAutoSave === 'function') gmScheduleAutoSave(true);
+        return out;
+      };
+      window[name].__gmAuto = true;
+    };
+    const wrapBefore = name => {
+      const f = window[name];
+      if (typeof f !== 'function' || f.__gmAuto) return;
+      window[name] = function () {
+        if (typeof gmAutoSaveNow === 'function') gmAutoSaveNow('force');
+        return f.apply(this, arguments);
+      };
+      window[name].__gmAuto = true;
+    };
+    ['saveArrivals', 'savePurpose'].forEach(wrapAfter);
+    ['clearArrivals', 'clearPurpose', 'syncFromArrivals'].forEach(wrapBefore);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run); else run();
+})();

@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 130, items: [
+    '🧠 Guest Memory saves by itself: whatever you load, import or edit on Arrivals and Purpose of Stay goes into Guest Memory 2 minutes after your last change. Clearing a page always saves its guests first, so the daily clear never loses anyone.',
+    '⏰ Shift tasks start fresh by themselves: each new morning (07:00), afternoon (15:00) and night (23:00) shift begins with nothing ticked, once for the whole team. The shift that just ended keeps its ticks for handover. Turn it off in ⚙️ Settings → Helpers.',
+  ] },
   { v: 129, items: [
     '📧 After Import Emails, the guests go into Guest Memory by themselves: HotelOps waits 2 minutes so you can fix a wrong email, then saves. Tap 🧠 Save to Memory to save right away. Leaving the page or the app before then saves straight away, so nothing is lost.',
   ] },
