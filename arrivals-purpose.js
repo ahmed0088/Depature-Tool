@@ -1014,22 +1014,32 @@ function processImportEmails() {
   const nameByConf  = {};
   const natByConf   = {};
   let parsedRows = 0;
+  /* Column positions come from the header row when there is one. Scraper v9+ adds a Phone column
+     BEFORE Nationality (Conf · Name · Email · Phone · Nationality); reading by position alone
+     would store phone numbers as nationality. Without a header: 5 columns = v9+, 4 = older. */
+  let colMap = null;
   for (const line of lines) {
     const cells = line.includes('\t') ? line.split('\t') : line.split(',');
     if (cells.length < 2) continue;
     const conf = (cells[0] || '').trim();
-    if (!conf || /^confirmation/i.test(conf)) continue; // skip header row
+    if (/^confirmation/i.test(conf)) {
+      const h = cells.map(c => c.trim().toLowerCase());
+      const at = re => h.findIndex(x => re.test(x));
+      colMap = { name: at(/^name/), email: at(/mail/), nat: at(/national|country/) };
+      continue;
+    }
+    if (!conf) continue;
 
-    // Scraper output columns, in order: Confirmation_Number, Name, Email, Nationality
-    // (Nationality is optional — older pastes without it still work fine.)
-    // A bare 2-column "Conf / Email" paste is also still supported for backward compat.
     let name = '', email = '', nat = '';
-    if (cells.length === 2) {
-      email = (cells[1] || '').trim();
+    const cell = i => (i != null && i >= 0 ? (cells[i] || '').trim() : '');
+    if (colMap) {
+      name = cell(colMap.name); email = cell(colMap.email); nat = cell(colMap.nat);
+    } else if (cells.length === 2) {
+      email = cell(1);                                  // bare "Conf / Email" paste
     } else {
-      name  = (cells[1] || '').trim();
-      email = (cells[2] || '').trim();
-      nat   = cells.length >= 4 ? (cells[3] || '').trim() : '';
+      name  = cell(1);
+      email = cell(2);
+      nat   = cells.length >= 5 ? cell(4) : cell(3);    // v9+: Phone sits in column 4
     }
 
     const key = _normConf(conf);

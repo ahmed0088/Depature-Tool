@@ -483,6 +483,10 @@
   <!-- Guest Memory — intentionally not listed in the visible nav. Reach it
        with Ctrl/Cmd+Shift+M (see the keydown handler further down), or the
        panel is still addressable directly via showPanel('guestmem'). -->
+  <div class="nav-item" onclick="showPanel('pipeline')" id="nav-pipeline" data-panel="pipeline">
+    <div class="nav-icon">🧲</div>Guest Pipeline
+    <span class="nav-badge" id="badge-pipeline">—</span>
+  </div>
   <div class="nav-item" onclick="showPanel('standards')" id="nav-standards" data-panel="standards">
     <div class="nav-icon">📘</div>Accor Standards
     <span class="nav-badge" id="badge-standards">—</span>
@@ -895,7 +899,7 @@
       <button class="btn mint" onclick="syncFromArrivals()">↑ Sync Arrivals</button>
       <button class="btn sky"  onclick="openImportEmailsModal()" title="Paste the TSV output from the Neorcha email-scraper script to auto-fill emails by Confirmation Number">📧 Import Emails</button>
       <button class="btn sky" onclick="copyNeorchaScraper()" title="Copies the Neorcha console script straight to your clipboard">📋 Copy Scraper</button>
-      <button class="btn" onclick="window.open('https://claude.ai/code/artifact/cf5b2083-1c05-4d37-a513-743a86757512','_blank')" title="Opens the full instructions + copy-paste console script page">🧲 Neorcha Scraper</button>
+      <button class="btn" onclick="showPanel('pipeline')" title="Opens Guest Pipeline: run the Neorcha script, clean the list, fill emails and prepare ALL enrollment">🧲 Guest Pipeline</button>
       <button class="btn mint" onclick="openAddGuest('purpose')">+ Add</button>
       <button class="btn sky"  onclick="gmScanAndSaveAll()" title="Save all loaded guests to Guest Memory">🧠 Save to Memory</button>
       <button class="btn rose" onclick="clearPurpose()">✕ Clear</button>
@@ -1336,6 +1340,97 @@
 </div>
 
 <!-- ════════════════ TRENDS ════════════════ -->
+<div class="panel" id="panel-pipeline">
+  <div style="max-width:1200px;">
+    <div class="page-hd">
+      <div class="page-hd-left">
+        <h1>Guest Pipeline</h1>
+        <p>Neorcha guest emails → clean list → Purpose of Stay and ALL enrollment · everything in one place</p>
+      </div>
+    </div>
+
+    <details class="howto"><summary>❔ How to use this</summary>
+      <p style="margin:0 0 6px;">This page runs the daily guest-email routine in four steps. You do them in order, top to bottom:</p>
+      <ol>
+        <li><b>Get the guest list from Neorcha</b> — copy the Neorcha Extractor script, run it on Neorcha. It reads every guest's email, phone and nationality and copies the list for you.</li>
+        <li><b>Clean it here</b> — paste the list into the workbench. The tool removes duplicates, OTA relay emails (Booking.com/Expedia addresses that are not the guest's own) and fixes common typos like <code>gmial.com</code>.</li>
+        <li><b>Use it</b> — one button fills the emails into <b>Purpose of Stay</b>. For ALL: tick <b>Agreed</b> only for guests who said yes to joining ALL, pick Mr/Ms, and copy the enrollment list for the ALL Enroll script.</li>
+        <li><b>Log the result</b> — after the ALL Enroll script finishes, paste its results here. The whole team sees what was sent this month, and guests already enrolled are marked so nobody sends them twice.</li>
+      </ol>
+      <p style="margin:6px 0 0;"><b>How to run a script:</b> open the website it belongs to (Neorcha or fc.accor.net), press <b>F12</b>, click the <b>Console</b> tab, paste (Ctrl+V) and press <b>Enter</b>. If Chrome asks, type <code>allow pasting</code> first and press Enter.</p>
+    </details>
+
+    <!-- STEP 1 -->
+    <div class="card gp-step">
+      <div class="gp-step-hd"><span class="gp-num">1</span><div><div class="gp-step-t">Get the guest list from Neorcha</div><div class="gp-step-s">Neorcha Extractor v10.0 · run on the Neorcha <b>Guest Documents</b> list page</div></div>
+        <button class="btn gold" onclick="gpCopyScript('neorcha', this)">📋 Copy script</button></div>
+      <ol class="gp-howlist">
+        <li>Open Neorcha → <b>Guest Documents</b> (the list of guests).</li>
+        <li>Press <b>F12</b> → <b>Console</b>, paste the script, press <b>Enter</b>.</li>
+        <li>A green box appears bottom-right and reads every guest, page by page. You can keep working in another tab.</li>
+        <li>When it says <b>done</b>, the list is already copied. Come back here and press <b>Paste from clipboard</b> below.</li>
+      </ol>
+      <div class="gp-tip">💡 If it stops halfway (page reload, logout), just run it again — it asks to <b>carry on</b> and skips the guests it already read.</div>
+    </div>
+
+    <!-- STEP 2 -->
+    <div class="card gp-step">
+      <div class="gp-step-hd"><span class="gp-num">2</span><div><div class="gp-step-t">Clean the list</div><div class="gp-step-s">Paste the Neorcha output — duplicates, OTA emails and typos are handled for you</div></div></div>
+      <textarea id="gpInput" placeholder="Paste the Neorcha output here (Confirmation_Number · Name · Email · Phone · Nationality)…" style="width:100%;min-height:90px;font-family:var(--mono);font-size:.72rem;"></textarea>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+        <button class="btn gold" onclick="gpPasteClipboard()">📥 Paste from clipboard</button>
+        <button class="btn" onclick="gpLoad()">▶ Load what's in the box</button>
+        <button class="btn" onclick="gpClear()">✕ Clear</button>
+      </div>
+      <div id="gpSummary" class="gp-summary"></div>
+      <div id="gpTableWrap" style="display:none;overflow-x:auto;margin-top:8px;">
+        <table class="gp-table"><thead><tr><th>Conf #</th><th>Name</th><th>Email</th><th>Phone</th><th>Nationality</th><th>Note</th><th>Mr/Ms</th><th>Agreed</th></tr></thead>
+          <tbody id="gpTable"></tbody></table>
+      </div>
+    </div>
+
+    <!-- STEP 3 -->
+    <div class="card gp-step" id="gpActions" style="display:none;">
+      <div class="gp-step-hd"><span class="gp-num">3</span><div><div class="gp-step-t">Use the list</div><div class="gp-step-s">Fill Purpose of Stay, and/or prepare the ALL enrollment</div></div></div>
+      <div class="gp-two">
+        <div>
+          <div class="gp-sub">📧 Purpose of Stay</div>
+          <p class="gp-p">Fills each guest's email, name and nationality in Purpose of Stay, matched by confirmation number. Guests with no email are left as they are.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn sky" onclick="gpSendToPurpose()">➜ Send to Purpose of Stay</button>
+            <button class="btn" onclick="gpCopyClean()">📋 Copy clean list</button>
+          </div>
+        </div>
+        <div>
+          <div class="gp-sub">💎 ALL enrollment</div>
+          <p class="gp-p">Tick <b>Agreed</b> only for guests who said <b>yes</b> to joining ALL, and pick <b>Mr/Ms</b>. Only those are copied — the enrollment form records that the guest asked for the invitation, so it must be true.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn gold" id="gpCopyEnroll" onclick="gpCopyEnroll()" disabled>📋 Copy enrollment list</button>
+            <button class="btn" onclick="gpCopyScript('enroll', this)">📋 Copy ALL Enroll script</button>
+          </div>
+          <ol class="gp-howlist" style="margin-top:8px;">
+            <li>Open <b>fc.accor.net</b> → <b>Enroll ALL</b> (the page with the e-mail box).</li>
+            <li><b>F12</b> → <b>Console</b> → paste the ALL Enroll script → <b>Enter</b>. A blue panel opens.</li>
+            <li>Paste the enrollment list into the panel → <b>Parse</b> → <b>Start Enrollment</b>.</li>
+            <li>When it says <b>done</b>, click <b>Copy results for Ibis Ops</b> and go to step 4.</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 4 -->
+    <div class="card gp-step">
+      <div class="gp-step-hd"><span class="gp-num">4</span><div><div class="gp-step-t">Enrollment tracker</div><div class="gp-step-s">Shared with the team · paste the results from the ALL Enroll panel</div></div></div>
+      <textarea id="gpResultsInput" placeholder="Paste the results (Email · Status · Date)…" style="width:100%;min-height:60px;font-family:var(--mono);font-size:.72rem;"></textarea>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+        <button class="btn gold" onclick="gpImportResults()">💾 Save results</button>
+        <button class="btn" onclick="gpLoadLog()">↻ Refresh</button>
+      </div>
+      <div id="gpTracker" style="margin-top:12px;"></div>
+    </div>
+  </div>
+</div>
+
 <div class="panel" id="panel-standards">
   <div style="max-width:1100px;">
     <div class="page-hd">
@@ -4855,6 +4950,9 @@ async function appInit() {
     <button class="mob-more-item" data-panel="package-audit"  onclick="showPanel('package-audit');toggleMobMore()">
       <span class="mob-item-icon">🎁</span>Package Audit
     </button>
+    <button class="mob-more-item" data-panel="pipeline"       onclick="showPanel('pipeline');toggleMobMore()">
+      <span class="mob-item-icon">🧲</span>Guest Pipeline
+    </button>
     <button class="mob-more-item" data-panel="standards"      onclick="showPanel('standards');toggleMobMore()">
       <span class="mob-item-icon">📘</span>Standards
     </button>
@@ -5047,6 +5145,7 @@ async function appInit() {
 <script src="global-search.js"></script>
 <script src="handover.js"></script>
 <script src="accor-standards.js"></script>
+<script src="guest-pipeline.js"></script>
 <script>
   // ── PWA: register service worker for offline app-shell ──
   if ('serviceWorker' in navigator) {
