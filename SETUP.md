@@ -1,4 +1,4 @@
-# Ibis Styles Ops Platform — Firebase Setup Guide
+# Hotel Ops — Firebase Setup Guide
 
 ## Your Files
 

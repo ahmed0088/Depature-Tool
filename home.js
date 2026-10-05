@@ -120,7 +120,7 @@ function homeRender() {
   const tiles = homeTiles();
   box.innerHTML = tiles.map(t => `
     <button class="home-tile ${t.tone}" onclick="showPanel('${t.panel}')">
-      <div class="home-tile-top"><span class="home-ico">${t.icon}</span><span class="home-t">${escapeHtml(t.title)}</span></div>
+      <div class="home-tile-top"><span class="home-ico">${(typeof hoIcon === 'function' && hoIcon(t.panel)) || t.icon}</span><span class="home-t">${escapeHtml(t.title)}</span></div>
       <div class="home-big">${escapeHtml(String(t.big))}</div>
       <div class="home-sub">${escapeHtml(t.sub)}</div>
       ${t.pct != null ? `<div class="home-bar"><div style="width:${t.pct}%"></div></div>` : ''}

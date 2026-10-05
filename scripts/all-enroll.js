@@ -17,9 +17,9 @@
  *     without one is skipped ("civility missing") instead of everyone being "Mr".
  *   • No faked "trusted" clicks: plain DOM events only.
  *   • RESULTS TSV: when the run ends, "Copy results" puts Email · Status · Date on
- *     the clipboard — paste it into Ibis Ops → Guest Pipeline → Enrollment tracker.
+ *     the clipboard — paste it into Hotel Ops → Guest Pipeline → Enrollment tracker.
  *
- * Easiest: build the list in Ibis Ops → Guest Pipeline (tick Consent, pick
+ * Easiest: build the list in Hotel Ops → Guest Pipeline (tick Consent, pick
  * Civility, "Copy enrollment list") and paste it into this panel.
  *
  * Unchanged from v17: reads each name field before writing, never touches
@@ -73,7 +73,7 @@
         </div>
         <div id="__acdc_body_data" style="padding:14px 16px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:10px">
           <div>
-            <div style="font-size:11px;color:#8892a0;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Paste the enrollment list (from Ibis Ops → Guest Pipeline)</div>
+            <div style="font-size:11px;color:#8892a0;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Paste the enrollment list (from Hotel Ops → Guest Pipeline)</div>
             <textarea id="__acdc_input" placeholder="Confirmation_Number&#9;Name&#9;Email&#9;Nationality&#9;Civility&#9;Consent
 595963843717&#9;Mohammed Sameer&#9;mdsam@example.com&#9;UAE&#9;Mr&#9;Y" style="width:100%;box-sizing:border-box;height:150px;resize:vertical;background:#0a0d11;color:#e6e9ee;border:1px solid #1e2530;border-radius:8px;padding:10px 12px;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;outline:none;"></textarea>
           </div>
@@ -96,7 +96,7 @@
             <button id="__acdc_start" style="flex:2;padding:11px 14px;border:0;border-radius:8px;cursor:pointer;background:#16a34a;color:#fff;font-weight:700;font-size:13px;opacity:.4;pointer-events:none;">▶ Start Enrollment</button>
             <button id="__acdc_stop" style="flex:1;padding:11px 14px;border:0;border-radius:8px;cursor:pointer;background:#7f1d1d;color:#fca5a5;font-weight:700;font-size:13px;opacity:.5;pointer-events:none;">■ Stop</button>
           </div>
-          <button id="__acdc_copyres" style="padding:9px 14px;border:0;border-radius:8px;cursor:pointer;background:#1e2530;color:#cbd5e1;font-weight:600;font-size:12px;opacity:.4;pointer-events:none;">📋 Copy results for Ibis Ops</button>
+          <button id="__acdc_copyres" style="padding:9px 14px;border:0;border-radius:8px;cursor:pointer;background:#1e2530;color:#cbd5e1;font-weight:600;font-size:12px;opacity:.4;pointer-events:none;">📋 Copy results for Hotel Ops</button>
         </div>
         <div id="__acdc_body_log" style="padding:12px 14px;overflow-y:auto;flex:1;display:none">
           <div id="__acdc_log" style="font:11px/1.55 ui-monospace,Menlo,Consolas,monospace;color:#cbd5e1;background:#0a0d11;border:1px solid #1e2530;border-radius:8px;padding:10px;min-height:200px;max-height:60vh;overflow-y:auto;white-space:pre-wrap;word-break:break-word;"></div>
@@ -210,7 +210,7 @@
     const nameCol = col('name'), emailCol = col('email'), countryCol = col('nationality', 'country');
     const civCol = col('civility', 'title'), consentCol = col('consent', 'agreed');
     if (emailCol == null || nameCol == null) throw new Error('Could not find Name and Email columns (the first line must be the header).');
-    if (consentCol == null && !opts.allConsent) throw new Error('This list has no Consent column. If every guest on it agreed to join ALL, tick "Every guest on this list agreed" above and press Parse again. Otherwise tick only the guests who agreed in Ibis Ops → Guest Pipeline.');
+    if (consentCol == null && !opts.allConsent) throw new Error('This list has no Consent column. If every guest on it agreed to join ALL, tick "Every guest on this list agreed" above and press Parse again. Otherwise tick only the guests who agreed in Hotel Ops → Guest Pipeline.');
     const seen = new Set(), records = [], excluded = [];
     for (const row of rows) {
       let email = (row[emailCol] || '').trim().toLowerCase();
@@ -577,12 +577,12 @@
     panel.log(`◯ Pending:        ${n('pending-account')}`);
     panel.log(`◯ No consent:     ${n('no consent')}`);
     panel.log(`✗ Other:          ${panel.results.length - n('submitted') - n('already-member') - n('pending-account') - n('no consent')}`);
-    panel.log('Use "Copy results for Ibis Ops" on the Data tab to log this run.');
+    panel.log('Use "Copy results for Hotel Ops" on the Data tab to log this run.');
     console.table(panel.results);
     window.__enrollmentResults = panel.results;
   }
 
   panel.mount();
-  panel.log('Panel ready. Paste the list from Ibis Ops → Guest Pipeline and click Parse.');
+  panel.log('Panel ready. Paste the list from Hotel Ops → Guest Pipeline and click Parse.');
   console.info('%c ALL Enroll v19 ready — use the panel on the right.', 'color:#3b82f6;font-weight:700');
 })();

@@ -1,4 +1,4 @@
-# 🏨 Ibis Ops Platform
+# 🏨 Hotel Ops
 
 A front-office operations web app built for daily hotel shift work — departures, arrivals, night audit, shift tasks, and guest tracking, all synced in real time across every device on the team via Firebase.
 

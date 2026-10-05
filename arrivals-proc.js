@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════
 //  arrivals-proc.js  —  Arrivals Report Processor
-//  Integrated into Ibis Ops Platform
+//  Integrated into Hotel Ops
 //  Uses showToast(), logActivity() from the main app
 // ═══════════════════════════════════════════════════════════
 

@@ -23,7 +23,7 @@ window.addEventListener('appinstalled', () => {
   _ipEvent = null;
   document.getElementById('ipBanner')?.remove();
   _ipShowButton();
-  showToast('Installed — open Ibis Ops from your home screen', 'ok');
+  showToast('Installed — open Hotel Ops from your home screen', 'ok');
 });
 
 function _ipShowButton() {
@@ -42,9 +42,9 @@ function ipOpen(force) {
   el.id = 'ipBanner';
   el.className = 'ip-banner';
   el.innerHTML = _ipEvent
-    ? `<div class="ip-ico">📲</div><div class="ip-txt"><b>Add Ibis Ops to your home screen</b><span>Opens full-screen like an app, starts faster and works with weak Wi-Fi.</span></div>
+    ? `<div class="ip-ico">📲</div><div class="ip-txt"><b>Add Hotel Ops to your home screen</b><span>Opens full-screen like an app, starts faster and works with weak Wi-Fi.</span></div>
        <div class="ip-btns"><button class="btn gold" data-ip="go">Add</button><button class="btn ghost" data-ip="later">Not now</button></div>`
-    : `<div class="ip-ico">📲</div><div class="ip-txt"><b>Add Ibis Ops to your home screen</b><span>In Safari tap <b>Share</b> <span class="ip-share">⬆︎</span> at the bottom, then <b>Add to Home Screen</b>.</span></div>
+    : `<div class="ip-ico">📲</div><div class="ip-txt"><b>Add Hotel Ops to your home screen</b><span>In Safari tap <b>Share</b> <span class="ip-share">⬆︎</span> at the bottom, then <b>Add to Home Screen</b>.</span></div>
        <div class="ip-btns"><button class="btn ghost" data-ip="later">Got it</button></div>`;
   el.addEventListener('click', async e => {
     const b = e.target.closest('[data-ip]');

@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════
 //  td-audit.js — Tourism Dirham 30-Night Cap Audit
-//  Ibis Ops Platform
+//  Hotel Ops
 //
 //  Problem: Opera keeps charging Tourism Dirham (tax code 7510)
 //  every night for the life of a reservation. DTCM only counts/

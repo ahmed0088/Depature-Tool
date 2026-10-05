@@ -1,13 +1,13 @@
 {
-  "name": "Ibis Ops Platform",
-  "short_name": "Ibis Ops",
-  "description": "Hotel front office operations — departures, arrivals, checklist, and shift tools",
+  "name": "Hotel Ops",
+  "short_name": "Hotel Ops",
+  "description": "Hotel Ops — front office operations: departures, arrivals, night audit, Tourism Dirham, packages, reports and the Ops Brain assistant",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#080b10",
-  "theme_color": "#080b10",
+  "background_color": "#07090d",
+  "theme_color": "#07090d",
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
