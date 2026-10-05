@@ -1692,6 +1692,8 @@
 
       <div style="margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <button class="btn gold sm" id="pkgCopyBtn" onclick="pkgCopyResolved()">📋 Copy rows to update</button>
+        <button class="btn sm" onclick="mePkgCommission()" title="Packages and AED per seller, with the pinned and manual decisions — print or save as PDF">💰 Commission report (PDF)</button>
+        <button class="btn sm" onclick="mePkgCommissionCopy()" title="Seller · packages · nights · AED as a table for Excel">📋 Commission to Excel</button>
         <button class="btn rose sm" id="pkgDenyBtn" onclick="pkgCopyDeny()">⛔ Copy rows to remove</button>
       </div>
 
@@ -2014,6 +2016,7 @@
 
         <div style="margin-top:14px;">
           <button class="btn mint" id="dtcExportBtn" onclick="dtcExportFull()" style="display:none;">📥 Download full reconciliation (Excel)</button>
+          <button class="btn gold" onclick="meDtcmReport()">🗂 Month-end report (PDF)</button>
         </div>
       </div>
 
@@ -5225,6 +5228,7 @@ async function appInit() {
 <script src="accor-standards.js"></script>
 <script src="guest-pipeline.js"></script>
 <script src="home.js"></script>
+<script src="month-end.js"></script>
 <script>
   // ── PWA: register service worker for offline app-shell ──
   if ('serviceWorker' in navigator) {
