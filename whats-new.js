@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 146, items: [
+    '🌙 New rules in the roster builder: a day off between night and day shifts (nobody goes from a night to 08:00 the next day, or the other way), and the 00:00 – 09:00 night only for Supervisors and Duty Managers. Change who can work any shift in 👥 Cover needed.',
+    '🧑‍💼 People can be set to 🌙 nights only or ☀️ days only on their card; new title: Duty Manager.',
+    '🖼 Roster → Picture: download or send any posted week as a picture, in the usual roster style. 📥 Team file: load the whole team (names, numbers, hotels, titles) and a roster in one go.',
+  ] },
   { v: 145, items: [
     '🧑‍💼 Team in the roster builder: titles (Manager, Supervisor, Team Leader, Agent…), each person static on a shift, rotating week to week, or any shift; can\'t-work shifts; sick and leave dates; joined and left dates; add and delete staff; and their history (what they worked the last weeks).',
     '🤒 Someone sick or on leave mid-week: Roster → Sick / leave (or tell Ops Brain "Saad is sick tomorrow"). It goes straight into the posted roster and you get the ways to cover: a day off moved, a move from a shift with spare, borrowing from another hotel, a manager as the last resort, or "bring in a staff member". One tap applies it; only the people whose shifts changed are told.',

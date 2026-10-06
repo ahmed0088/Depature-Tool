@@ -76,7 +76,8 @@ function rtCoverOptions(I, cells, group, date, shift) {
   });
   const best = {}; opts.forEach(o => { if (!best[o.key] || best[o.key].cost > o.cost) best[o.key] = o; });
   const list = Object.values(best).sort((a, b) => a.cost - b.cost).slice(0, 6);
-  if (!list.length) list.push({ kind: 'bring', cost: 999, cells: null, text: `Nobody can take ${shift} on ${roDayLbl(date)} without breaking the rest or 9-hour rules. Bring in a staff member${(G[group] && need(group, shift, d) > 1) ? ', or run it with one person' : ''}.` });
+  const who = ((G[group] || {}).who || {})[shift];
+  if (!list.length) list.push({ kind: 'bring', cost: 999, cells: null, text: `Nobody can take ${shift} on ${roDayLbl(date)} without breaking the rules${who ? ` (it's for ${who.join(' / ')} only: set titles in Team, or change who can work it in Cover needed)` : ' (rest, a day off between night and day, 9 hours)'}. Bring in a staff member${(G[group] && need(group, shift, d) > 1) ? ', or run it with one person' : ''}.` });
   return list;
 }
 /** Swaps that keep everyone's rules: with a colleague that day, or with another of their own days. */
@@ -151,9 +152,56 @@ function rtMarkAbsent(k, from, to, code, quiet) {
   return touched;
 }
 
+// ── The posted week as a picture ──────────────────────────
+function rtPostedRes(week) {
+  const dates = rtDates(week), names = [], cells = {}, groups = {}, ids = {};
+  const keys = Object.keys(roStaff).filter(k => dates.some(dt => (roDays[dt] || {})[k]));
+  const gOrder = roGroups();
+  keys.sort((a, b) => gOrder.indexOf(roStaff[a].group || '') - gOrder.indexOf(roStaff[b].group || '') || (roStaff[a].order ?? 999) - (roStaff[b].order ?? 999));
+  keys.forEach(k => { const s = roStaff[k]; names.push(s.name); cells[s.name] = {}; dates.forEach(dt => { const v = (roDays[dt] || {})[k]; if (v) cells[s.name][dt] = v; }); if (s.group) groups[s.name] = s.group; if (s.id) ids[s.name] = s.id; });
+  return { names, dates, cells, groups, ids };
+}
+function rtSharePosted(week) {
+  week = week || roWeek;
+  const res = rtPostedRes(week);
+  if (!res.names.length) { showToast('No roster posted for this week yet', 'warn'); return; }
+  rbSharePic(res);
+}
+
+// ── Team file (staff and a roster, imported in one go) ────
+/** { hotelopsTeam: 1, staff: [{ name, id, hotel, title }], roster: [{ name, days: { 'YYYY-MM-DD': 'OFF' } }] } */
+function rtImportTeam(data) {
+  if (!data || !data.hotelopsTeam || !Array.isArray(data.staff)) { showToast('That isn\'t a HotelOps team file', 'err'); return; }
+  let n = 0, t = 0, cells = 0;
+  const base = Math.max(0, ...Object.values(roStaff).map(x => x.order || 0));
+  data.staff.forEach((p, i) => {
+    if (!p || !p.name) return;
+    const k = roKey(p.name);
+    roStaff[k] = Object.assign({}, roStaff[k], { name: p.name, order: (roStaff[k] && roStaff[k].order != null) ? roStaff[k].order : base + i + 1 });
+    if (p.hotel) roStaff[k].group = p.hotel;
+    if (p.id) roStaff[k].id = String(p.id);
+    fbSet('roster/staff/' + k, roStaff[k]); n++;
+    if (p.title && !rbTitle(k)) { rbSetPerson(k, 'title', p.title); t++; }
+  });
+  (data.roster || []).forEach(r => {
+    const k = roKey(r.name || ''); if (!roStaff[k]) return;
+    Object.entries(r.days || {}).forEach(([dt, v]) => { if (!/^\d{4}-\d{2}-\d{2}$/.test(dt) || !v) return; roDays[dt] = Object.assign({}, roDays[dt], { [k]: v }); fbSet(`roster/days/${dt}/${k}`, v); cells++; });
+  });
+  if (typeof roGuessMe === 'function') roGuessMe();
+  showToast(`Team file: ${n} staff, ${t} titles, ${cells} roster days`, 'ok');
+  if (typeof logActivity === 'function') try { logActivity('team_import', `${n} staff`); } catch (_) {}
+  if (typeof rbRender === 'function') rbRender();
+  if (typeof _roRefresh === 'function') _roRefresh();
+}
+function rtImportTeamFile(input) {
+  const f = input.files && input.files[0]; input.value = '';
+  if (!f) return;
+  f.text().then(t => { try { rtImportTeam(JSON.parse(t)); } catch (e) { showToast('Could not read the team file: ' + e.message, 'err'); } });
+}
+
 // ── Team ──────────────────────────────────────────────────
 function rtTeamHtml(shown) {
-  return `<div class="rt-team-acts"><button class="btn sm gold" onclick="rtAddStaff()">＋ Add staff</button><button class="btn sm" onclick="rtSickDialog()">🤒 Sick / leave</button><small>Tap a name for titles, shift, leave and history.</small></div>
+  return `<div class="rt-team-acts"><button class="btn sm gold" onclick="rtAddStaff()">＋ Add staff</button><button class="btn sm" onclick="rtSickDialog()">🤒 Sick / leave</button><label class="btn sm">📥 Team file<input type="file" accept=".json,application/json" hidden onchange="rtImportTeamFile(this)"></label><small>Tap a name for titles, shift, leave and history.</small></div>
   ${shown.map(g => `<div class="rb-sub">${escapeHtml(g || 'Team')}</div><div class="rt-list">${Object.keys(roStaff).filter(k => ((roStaff[k] || {}).group || '') === g && !((rbPeople[k] || {}).deleted)).sort((a, b) => (roStaff[a].order ?? 999) - (roStaff[b].order ?? 999) || roStaff[a].name.localeCompare(roStaff[b].name)).map(k => {
     const c = rbPeople[k] || {}, p = rbPersonCfg(k), ph = rbPhOwed(k), today = roToday();
     const away = Object.values(c.absences || {}).find(a => a.to >= today);
@@ -194,6 +242,7 @@ function rtPerson(k) {
       <label>Prefers off<select onchange="rtSet(${q},'prefOff',this.value===''?[]:[+this.value])"><option value="">no preference</option>${RB_DAYS.map((x, i) => `<option value="${i}"${(p.prefOff || []).includes(i) ? ' selected' : ''}>${x}</option>`).join('')}</select></label>
       <label>PH owed<input type="number" min="0" max="30" value="${ph.owed}" onchange="rbSetPh(${q},+this.value)"></label>
     </div>
+    <div class="rt-cant"><span>Works:</span><button class="rb-opt ro-t-night" onclick="rtOnly(${q},'night')">🌙 Nights only</button><button class="rb-opt ro-t-morning" onclick="rtOnly(${q},'day')">☀️ Days only</button><button class="rb-opt" onclick="rtOnly(${q},'all')">All shifts</button></div>
     <div class="rt-cant"><span>Can't work:</span>${shifts.map(x => { const no = (c.allowed && c.allowed.length && !c.allowed.includes(x)); return `<button class="rb-opt ro-t-${(roInfo(x) || {}).type}${no ? ' on' : ''}" onclick="rtToggleCant(${q},${_rtQ(x)})">${no ? '🚫 ' : ''}${escapeHtml(x)}</button>`; }).join('')}</div>
     <div class="rb-sub">Sick & leave</div>
     <div class="rt-abs">${absences.map(([id, a]) => `<span class="rb-hol">${escapeHtml(a.code)} · ${escapeHtml(roDayLbl(a.from))}${a.to !== a.from ? ' → ' + escapeHtml(roDayLbl(a.to)) : ''}<button class="ro-x" onclick="rtDelAbsence(${q},'${id}')">✕</button></span>`).join('') || '<span class="ro-empty">None.</span>'}</div>
@@ -206,6 +255,13 @@ function rtPerson(k) {
   </div>`;
   d.addEventListener('click', e => { if (e.target === d) { d.remove(); rbRender(); } });
   document.body.appendChild(d);
+}
+function rtOnly(k, kind) {
+  const g = (roStaff[k] || {}).group || '', all = rbGroupCfg(g).shifts;
+  const list = kind === 'all' ? all : all.filter(s => (kind === 'night') === rbIsNight(s));
+  rtSet(k, 'allowed', kind === 'all' || !list.length ? undefined : list);
+  if (kind !== 'all' && (rbPeople[k] || {}).fixed && !list.includes(rbPeople[k].fixed)) rtSet(k, 'fixed', undefined);
+  rtPerson(k);
 }
 function rtToggleCant(k, s) {
   const g = (roStaff[k] || {}).group || '', all = rbGroupCfg(g).shifts, c = rbPeople[k] || {};
@@ -325,7 +381,8 @@ function rtDragSwap(k1, d1, k2, d2) {
   D.cells[k1][d1] = b; D.cells[k2][d2] = a;
   const bad = rbProblems(I, D.cells).filter(p => (p.key === k1 || p.key === k2) && p.kind !== 'offs');
   rbSaveDraft(); rbRefreshOut();
-  showToast(bad.length ? `Swapped, but check: ${bad.map(p => p.kind === 'rest' ? rtName(p.key) + ' gets only ' + Math.round(p.hours) + ' h rest' : p.kind === 'long' ? 'shift over 9 h' : rtName(p.key) + ' too many days in a row').join('; ')}. ↶ Undo is above the table.` : 'Swapped', bad.length ? 'warn' : 'ok');
+  const why = p => p.kind === 'rest' ? `${rtName(p.key)} gets only ${Math.round(p.hours)} h rest` : p.kind === 'long' ? 'a shift over 9 h' : p.kind === 'switch' ? `${rtName(p.key)} goes between night and day without a day off` : p.kind === 'who' ? `${rtName(p.key)}: ${p.code} is for ${(p.who || []).join(' / ')} only` : `${rtName(p.key)} works too many days in a row`;
+  showToast(bad.length ? `Swapped, but check: ${[...new Set(bad.map(why))].join('; ')}. ↶ Undo is above the table.` : 'Swapped', bad.length ? 'warn' : 'ok');
 }
 
 // ── Ops Brain ─────────────────────────────────────────────

@@ -117,6 +117,11 @@ function _frPutFiles(inp, files) {
 async function frRoute(fileList) {
   const pics = [...fileList].filter(f => /^image\//.test(f.type));
   if (pics.length && typeof roFromImage === 'function' && typeof roCanEdit === 'function' && roCanEdit()) { showPanel('roster'); roFromImage(pics[0]); }
+  // a HotelOps team file (staff and their roster) goes to the roster
+  for (const f of [...fileList].filter(f => /\.json$/i.test(f.name))) {
+    const head = await _frReadHead(f);
+    if (/"hotelopsTeam"/.test(head) && typeof rtImportTeam === 'function') { try { rtImportTeam(JSON.parse(await f.text())); showPanel('roster'); } catch (e) { showToast('Could not read the team file', 'err'); } fileList = [...fileList].filter(x => x !== f); }
+  }
   const files = [...fileList].filter(f => !/^image\//.test(f.type));
   if (!files.length) return;
   const groups = {};
