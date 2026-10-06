@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 147, items: [
+    '🙋 Short shift? The builder now says who you can put there and why they\'re OK: "Put Zin Min Han on 08:00 - 17:00, their day off moves to Thu · OK: off the day before, 15 h rest after, 9 h shift". It also finds bigger fixes a manager would do: two days changed together, or a night block ("19:00 - 04:00 from Thu to Sun").',
+    '🔎 "Why not the others" lists every colleague who can\'t take it and the reason: on SL, only 7 h rest, night ↔ day without a day off, nights are for Supervisors only, it would leave their own shift empty. Tap any number in the cover table to see who can take that shift that day.',
+  ] },
   { v: 146, items: [
     '🌙 New rules in the roster builder: a day off between night and day shifts (nobody goes from a night to 08:00 the next day, or the other way), and the 00:00 – 09:00 night only for Supervisors and Duty Managers. Change who can work any shift in 👥 Cover needed.',
     '🧑‍💼 People can be set to 🌙 nights only or ☀️ days only on their card; new title: Duty Manager.',

@@ -34,6 +34,50 @@ function rtPublished(week) {
 function rtIsPublished(week) { return rtDates(week).some(dt => Object.keys(roDays[dt] || {}).length); }
 const _rtClone = c => JSON.parse(JSON.stringify(c || {}));
 
+// ── Why someone is OK (or not) for a shift ────────────────
+/** Short reasons a placement is fine: rest before and after, no night/day switch, title, days in a row, hours. */
+function rtWhyOk(I, cells, p, date, code) {
+  const dates = rtDates(I.week), d = dates.indexOf(date), out = [];
+  const prev = d === 0 ? p.lastShift || '' : (cells[p.key] || {})[dates[d - 1]] || '';
+  const next = d < 6 ? (cells[p.key] || {})[dates[d + 1]] || '' : '';
+  out.push(rbParse(prev) ? `${Math.round(rbRest(prev, code))} h rest before` : 'off the day before');
+  if (rbParse(next)) out.push(`${Math.round(rbRest(code, next))} h rest after`);
+  else if (d < 6) out.push('off the day after');
+  const x = rbParse(code); if (x) out.push(`${(x.e - x.s) / 60} h shift`);
+  const g = (x && x.note && Object.keys(I.groups).find(gg => rbShort(gg).toLowerCase() === x.note.split(/\s+/)[0].toLowerCase())) || p.group;
+  const who = ((I.groups[g] || {}).who || {})[rbNorm(code)];
+  if (who) out.push(`${p.title} ✓`);
+  let run = 0; for (let i = d; i >= 0 && rbParse((cells[p.key] || {})[dates[i]]); i--) run++; if (run === d + 1) run += p.run || 0;
+  for (let i = d + 1; i < 7 && rbParse((cells[p.key] || {})[dates[i]]); i++) run++;
+  out.push(`${run} day${run === 1 ? '' : 's'} in a row`);
+  return out.join(' · ');
+}
+/** Why each other colleague can't take it (on leave, rest, night/day, title…). */
+function rtWhyNot(I, cells, group, date, shift, skip) {
+  const dates = rtDates(I.week), d = dates.indexOf(date), G = I.groups;
+  const who = ((G[group] || {}).who || {})[shift];
+  return I.people.filter(p => !(skip || []).includes(p.key) && (p.group === group || (who ? who.includes(p.title || '') : false))).map(p => {
+    const v = (cells[p.key] || {})[date] || '', pre = ((I.pre || {})[p.key] || {})[date];
+    let r;
+    if (pre === '—') return null;
+    const there = p.group !== group ? ` (${p.group})` : '';
+    if (pre) r = rbKind(pre) === 'off' ? 'asked for this day off' : `on ${pre}`;
+    else if (rbNorm(v) === shift) r = p.group === group ? 'already on it' : `on ${shift} at ${p.group}; moving them leaves it short there`;
+    else if (who && !who.includes(p.title || '')) r = `${shift} is for ${who.join(' / ')} only${p.title ? ` (${p.title})` : ' (no title set)'}`;
+    else if (p.allowed && p.allowed.length && !p.allowed.includes(shift)) r = 'can\'t work this shift';
+    else {
+      const c2 = _rtClone(cells); c2[p.key][date] = shift;
+      const pb = rbProblems(I, c2).find(x => x.key === p.key && x.date >= dates[Math.max(0, d - 1)] && x.date <= dates[Math.min(6, d + 1)] && x.kind !== 'offs');
+      if (pb) r = pb.kind === 'rest' ? (pb.hours <= 0 ? `overlaps with their ${pb.to === shift ? pb.from : pb.to}` : `only ${Math.round(pb.hours)} h rest (${pb.from} → ${pb.to})`) : pb.kind === 'switch' ? `night ↔ day without a day off (${pb.from} → ${pb.to})` : pb.kind === 'run' ? `${pb.days} days in a row` : pb.kind === 'long' ? 'over 9 h' : 'breaks a rule';
+      else if (rbKind(v) === 'off') r = 'day off, and no later day to move it to without leaving a shift empty';
+      else if (rbParse(v)) r = `moving them leaves ${p.group !== group ? p.group + "'s " : ''}${rbNorm(v)} empty`;
+      else if (v) r = `on ${v}`;
+      else r = 'not available';
+    }
+    return { key: p.key, name: rtName(p.key) + there, reason: r };
+  }).filter(Boolean);
+}
+
 // ── Who can cover ─────────────────────────────────────────
 /** Ways to fill one gap, best first. Each: { text, cells (the week after), cost, kind } */
 function rtCoverOptions(I, cells, group, date, shift) {
@@ -43,9 +87,12 @@ function rtCoverOptions(I, cells, group, date, shift) {
   const before = rbProblems(I, cells);
   const fine = (c2, keys) => !rbProblems(I, c2).some(p => p.key && keys.includes(p.key) && p.kind !== 'offs' && !before.some(b => b.kind === p.kind && b.key === p.key && b.date === p.date));
   const opts = [];
+  const offs = (c, k) => dates.filter(x => rbKind((c[k] || {})[x]) === 'off').length;
+  const keepsOffs = (c2, k) => offs(c2, k) >= offs(cells, k);   // nobody loses a day off to cover a gap
   I.people.forEach(p => {
     const v = (cells[p.key] || {})[date] || '';
     if (((I.pre || {})[p.key] || {})[date]) return;            // asked for this day, on leave, or not employed
+    if (v && !rbParse(v) && rbKind(v) !== 'off') return;       // sick, on leave, training… written in the roster
     const mgr = /manager/i.test(p.title || '');
     const away = p.group !== group, label = away ? `${shift} - ${rbShort(group)}` : shift;
     const from = away ? ` from ${p.group}` : '';
@@ -59,7 +106,7 @@ function rtCoverOptions(I, cells, group, date, shift) {
         if (!fine(c2, [p.key])) return;
         const cov = rbCover(I, c2)[p.group]; const left = cov && cov[T] ? cov[T][i] : 1;
         if (need(p.group, T, i) > 0 && left < 1) return;           // never empties another shift
-        opts.push({ kind: 'offmove', key: p.key, cost: 10 + extra + (left < need(p.group, T, i) ? 15 : 0), cells: c2, text: `${rtName(p.key)}${from} works ${shift} on ${roDayLbl(date)}; their day off moves to ${roDayLbl(e)}${mgr ? ' (manager)' : ''}` });
+        opts.push({ kind: 'offmove', key: p.key, cost: 10 + extra + (left < need(p.group, T, i) ? 15 : 0), cells: c2, ok: rtWhyOk(I, c2, p, date, label) + (left < need(p.group, T, i) ? ` · ${T} on ${roDayLbl(e)} drops to ${left}` : ''), text: `Put ${rtName(p.key)}${from} on ${shift}${mgr ? ' (manager)' : ''}: their day off moves to ${roDayLbl(e)}` });
       });
     } else if (rbParse(v) && !rbParse(v).note) {
       const T = rbNorm(v);
@@ -70,9 +117,61 @@ function rtCoverOptions(I, cells, group, date, shift) {
       if (need(p.group, T, d) > 0 && left < 1) return;
       const spare = left >= need(p.group, T, d);
       opts.push({ kind: away ? 'borrow' : 'move', key: p.key, cost: (away && T === shift ? 12 : 15) + extra + (spare ? 0 : 20), cells: c2,
-        text: away ? `Borrow ${rtName(p.key)} from ${p.group} (${T === shift ? 'same shift' : 'moves from ' + T})${spare ? '' : ': leaves ' + p.group + ' one short there'}`
-                   : `Move ${rtName(p.key)} from ${T} to ${shift}${spare ? '' : ' (leaves ' + T + ' one short)'}${mgr ? ' (manager)' : ''}` });
+        ok: rtWhyOk(I, c2, p, date, label) + (spare ? ` · their ${T} still has ${left}` : ` · their ${T} drops to ${left}`),
+        text: away ? `Borrow ${rtName(p.key)} from ${p.group} for ${shift}${T === shift ? ' (same shift)' : ' (instead of ' + T + ')'}`
+                   : `Put ${rtName(p.key)} on ${shift}${mgr ? ' (manager)' : ''} instead of ${T}` });
     }
+  });
+  // two-day fixes: they take the gap, a day next to it becomes their day off, and they work their old day off instead
+  if (Object.keys(opts.reduce((m, o) => (m[o.key] = 1, m), {})).length < 3) I.people.forEach(p => {
+    if (((I.pre || {})[p.key] || {})[date] || opts.some(o => o.key === p.key)) return;
+    const away = p.group !== group, label = away ? `${shift} - ${rbShort(group)}` : shift, mgr = /^(manager|asst\. manager)$/i.test(p.title || '');
+    const v = (cells[p.key] || {})[date] || '';
+    if (!rbMayWork(I, group, p, shift) || (p.allowed && p.allowed.length && !p.allowed.includes(shift)) || (rbParse(v) && rbParse(v).note)) return;
+    if (v && !rbParse(v) && rbKind(v) !== 'off') return;     // sick, on leave, training…: never
+    const f = dates.find(x => x > today && x !== date && rbKind((cells[p.key] || {})[x]) === 'off' && !((I.pre || {})[p.key] || {})[x]);
+    dates.forEach((e, i) => {
+      if (e === date || e <= today || ((I.pre || {})[p.key] || {})[e] || e === f) return;
+      const Te = (cells[p.key] || {})[e] || ''; if (!rbParse(Te) || rbParse(Te).note) return;
+      const c2 = _rtClone(cells); c2[p.key][date] = label; c2[p.key][e] = 'OFF';
+      if (rbKind(v) === 'off' && f === undefined) return;
+      if (f) c2[p.key][f] = rbParse(v) ? v : Te;          // their old day off becomes a working day
+      if (!fine(c2, [p.key]) || !keepsOffs(c2, p.key)) return;
+      const cov = rbCover(I, c2), had = rbCover(I, cells);
+      const emptied = Object.keys(G).some(g => (G[g].shifts || []).some(s => dates.some((x, j) => need(g, s, j) > 0 && had[g][s][j] > 0 && cov[g][s][j] === 0)));
+      if (emptied) return;
+      opts.push({ kind: 'rework', key: p.key, cost: 28 + (mgr ? 40 : 0) + (away ? 10 : 0), cells: c2, ok: rtWhyOk(I, c2, p, date, label),
+        text: `Put ${rtName(p.key)}${away ? ' from ' + p.group : ''} on ${shift}: ${roDayLbl(e)} becomes their day off${f ? `, and they work ${roDayLbl(f)} (${rbNorm(c2[p.key][f])})` : ''}` });
+    });
+  });
+  // a block on that shift: from the gap until their day off (or the end of the week); if the day before
+  // doesn't give enough rest or is a day shift, that day becomes their day off instead
+  if (Object.keys(opts.reduce((m, o) => (m[o.key] = 1, m), {})).length < 3) I.people.forEach(p => {
+    if (opts.some(o => o.key === p.key)) return;
+    const pre = (I.pre || {})[p.key] || {}, row = cells[p.key] || {}, v = row[date] || '';
+    if (pre[date] || (v && !rbParse(v) && rbKind(v) !== 'off') || (rbParse(v) && rbParse(v).note)) return;
+    if (!rbMayWork(I, group, p, shift) || (p.allowed && p.allowed.length && !p.allowed.includes(shift))) return;
+    const away = p.group !== group, label = away ? `${shift} - ${rbShort(group)}` : shift;
+    const c2 = _rtClone(cells), r2 = c2[p.key];
+    const prevDt = d > 0 ? dates[d - 1] : null, prevV = prevDt ? row[prevDt] || '' : p.lastShift || '';
+    let moved = '';
+    if (rbParse(prevV) && (rbRest(prevV, shift) < (I.rules.minRest || 11) || !rbSwitchOk(prevV, shift, I.rules))) {
+      if (!prevDt || prevDt <= today || pre[prevDt]) return;
+      const f = dates.find(x => x > date && rbKind(row[x]) === 'off' && !pre[x]);
+      if (!f) return;
+      r2[prevDt] = 'OFF'; r2[f] = ''; moved = prevDt;          // their day off comes before the block
+    }
+    let last = date;
+    for (let j = d; j < 7; j++) {
+      const x = dates[j], cur = r2[x] || '';
+      if (pre[x] || (rbKind(cur) === 'off' && x !== date) || (cur && !rbParse(cur) && rbKind(cur) !== 'off') || (rbParse(cur) && rbParse(cur).note)) break;
+      r2[x] = label; last = x;
+    }
+    if (!fine(c2, [p.key]) || !keepsOffs(c2, p.key)) return;
+    const cov = rbCover(I, c2), had = rbCover(I, cells);
+    if (Object.keys(G).some(g => (G[g].shifts || []).some(s2 => dates.some((x, j) => need(g, s2, j) > 0 && had[g][s2][j] > 0 && cov[g][s2][j] === 0)))) return;
+    opts.push({ kind: 'block', key: p.key, cost: 35 + (away ? 10 : 0), cells: c2, ok: rtWhyOk(I, c2, p, date, label),
+      text: `Put ${rtName(p.key)}${away ? ' from ' + p.group : ''} on ${shift} ${last === date ? 'on ' + roDayLbl(date) : 'from ' + roDayLbl(date) + ' to ' + roDayLbl(last)}${moved ? `; ${roDayLbl(moved)} becomes their day off` : ''}` });
   });
   const best = {}; opts.forEach(o => { if (!best[o.key] || best[o.key].cost > o.cost) best[o.key] = o; });
   const list = Object.values(best).sort((a, b) => a.cost - b.cost).slice(0, 6);
@@ -419,7 +518,7 @@ function _rtOut(html) { if (typeof _bxOut === 'function') _bxOut(html); else { c
 let _rtPending = {};
 /** Buttons in an Ops Brain answer that apply a change to a posted week. */
 function rtOptButtons(week, opts) {
-  return `<div class="rt-opts">${opts.map(o => { if (!o.cells) return `<div class="rb-prob short">${escapeHtml(o.text)}</div>`; const id = 'o' + Math.random().toString(36).slice(2, 8); _rtPending[id] = { week, cells: o.cells }; return `<button class="btn sm" onclick="rtApplyPending('${id}')">✓ ${escapeHtml(o.text)}</button>`; }).join('')}</div>`;
+  return `<div class="rt-opts">${opts.map(o => { if (!o.cells) return `<div class="rb-prob short">${escapeHtml(o.text)}</div>`; const id = 'o' + Math.random().toString(36).slice(2, 8); _rtPending[id] = { week, cells: o.cells }; return `<button class="btn sm" onclick="rtApplyPending('${id}')">✓ ${escapeHtml(o.text)}${o.ok ? `<small class="rb-ok">OK: ${escapeHtml(o.ok)}</small>` : ''}</button>`; }).join('')}</div>`;
 }
 function rtApplyPending(id) {
   const o = _rtPending[id]; if (!o) return;

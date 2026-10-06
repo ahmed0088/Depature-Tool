@@ -929,3 +929,12 @@ body.rb-dragging, body.rb-dragging * { cursor: grabbing !important; }
 .rb-who { all: unset; cursor: pointer; display: block; margin-top: 3px; font: 600 10.5px var(--font); color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .rb-who.set { color: var(--accent); }
 .rb-who-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 4px 0 10px; font-size: 13px; color: var(--text); }
+.rb-ok { display: block; margin-top: 3px; font: 500 11px var(--font); color: var(--green); opacity: .9; }
+.rb-fix-opts .btn, .rt-opts .btn { flex-direction: column; align-items: flex-start !important; }
+.rb-whynot { margin-top: 6px; font-size: 12px; color: var(--text3); }
+.rb-whynot summary { cursor: pointer; }
+.rb-whynot ul { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+.rb-whynot b { color: var(--text2); font-weight: 600; }
+.rb-covtap { cursor: pointer; }
+.rb-covtap:hover { outline: 1px solid var(--accent-border); outline-offset: -2px; }
+#rbMenu .rb-fix-item { border-top: 0; padding-top: 0; }

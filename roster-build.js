@@ -775,11 +775,11 @@ function rbOutHtml(shown, dates) {
   const name = k => (roStaff[k] || {}).name || k;
   const today = roToday();
   const rows = shown.map(g => `${shown.length > 1 || g ? `<tr class="ro-sec"><td colspan="8"><span>${escapeHtml(g || 'Team')}</span></td></tr>` : ''}${rbMembers(g).map(k => `<tr><td class="ro-name" title="${escapeHtml(name(k))}"><button class="ro-tap" onclick="rtPerson(${_rbQ(k)})">${escapeHtml(name(k))}${rbTitle(k) ? `<i class="rt-t">${escapeHtml(rbTitle(k))}</i>` : ''}</button></td>${dates.map(dt => { const v = cells[k][dt] || '', i = roInfo(v); const bad = probs.some(p => p.key === k && p.date === dt); return `<td class="ro-cell ${i ? 'ro-t-' + i.type : ''}${bad ? ' ro-unsure' : ''}${dt === today ? ' ro-today' : ''}" data-k="${escapeHtml(k)}" data-d="${dt}" onclick="if(!this.dataset.noClick)rbPick(this,${_rbQ(k)},'${dt}')" title="${escapeHtml(v || 'empty')}: tap to change, or drag onto another cell to swap">${escapeHtml(roCellTxt(i)) || '·'}${i && i.note ? `<i class="ro-note">${escapeHtml(i.note)}</i>` : ''}</td>`; }).join('')}</tr>`).join('')}`).join('');
-  const covers = shown.map(g => { const G = I.groups[g]; if (!G) return ''; return `<div class="rb-sub">${escapeHtml(g || 'Team')} · cover</div><div class="ro-scroll"><table class="ro-table rb-cover"><thead><tr><th class="ro-name">Shift</th>${dates.map(dt => `<th>${escapeHtml(roDayLbl(dt))}</th>`).join('')}</tr></thead><tbody>${G.shifts.map(s => `<tr><td class="ro-name">${escapeHtml(s)}</td>${dates.map((dt, d) => { const n = (G.need[s] || [])[d] || 0, h = cover[g][s][d]; return `<td class="${h < n ? 'rb-short' : h > n ? 'rb-over' : 'rb-ok'}">${h}/${n}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>`; }).join('');
+  const covers = shown.map(g => { const G = I.groups[g]; if (!G) return ''; return `<div class="rb-sub">${escapeHtml(g || 'Team')} · cover</div><div class="ro-scroll"><table class="ro-table rb-cover"><thead><tr><th class="ro-name">Shift</th>${dates.map(dt => `<th>${escapeHtml(roDayLbl(dt))}</th>`).join('')}</tr></thead><tbody>${G.shifts.map(s => `<tr><td class="ro-name">${escapeHtml(s)}</td>${dates.map((dt, d) => { const n = (G.need[s] || [])[d] || 0, h = cover[g][s][d]; return `<td class="${h < n ? 'rb-short' : h > n ? 'rb-over' : 'rb-ok'} rb-covtap" title="Who can take ${escapeHtml(s)} on ${escapeHtml(roDayLbl(dt))}" onclick="rbGapMenu(${_rbQ(g)},${_rbQ(s)},'${dt}')">${h}/${n}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>`; }).join('');
   const inShown = p => !p.group || shown.includes(p.group) || (p.key && shown.includes((roStaff[p.key] || {}).group || ''));
   const P = probs.filter(inShown);
   const ptxt = p => p.kind === 'short' ? `${escapeHtml(roDayLbl(p.date))} · ${escapeHtml(p.shift)}${shown.length > 1 ? ' · ' + escapeHtml(p.group) : ''}: needs ${p.need}, has ${p.have}`
-    : p.kind === 'rest' ? `${escapeHtml(name(p.key))}: only ${Math.round(p.hours)} h rest before ${escapeHtml(roDayLbl(p.date))} (${escapeHtml(p.from)} → ${escapeHtml(p.to)})`
+    : p.kind === 'rest' ? `${escapeHtml(name(p.key))}: ${p.hours <= 0 ? 'shifts overlap' : 'only ' + Math.round(p.hours) + ' h rest'} before ${escapeHtml(roDayLbl(p.date))} (${escapeHtml(p.from)} → ${escapeHtml(p.to)})`
     : p.kind === 'run' ? `${escapeHtml(name(p.key))}: ${p.days} days in a row by ${escapeHtml(roDayLbl(p.date))}`
     : p.kind === 'thin' ? `${escapeHtml(roDayLbl(p.date))} · ${escapeHtml(p.shift)}${shown.length > 1 ? ' · ' + escapeHtml(p.group) : ''}: one person (ideal ${p.need})`
     : p.kind === 'switch' ? `${escapeHtml(name(p.key))}: ${escapeHtml(p.from)} then ${escapeHtml(p.to)} on ${escapeHtml(roDayLbl(p.date))}: night and day shifts need a day off between`
@@ -792,7 +792,7 @@ function rbOutHtml(shown, dates) {
     ${rbFixHtml(I, cells, shown, ptxt)}
     <div class="rb-tools"><button class="btn sm" onclick="rbUndo()"${rbUndoStack.length ? '' : ' disabled'}>↶ Undo</button><small>Tap a cell to change it · drag a cell onto another to swap (long-press on a phone) · tap a name for their card</small></div>
     <div class="ro-scroll"><table class="ro-table rb-table"><thead><tr><th class="ro-name">Name</th>${dates.map(dt => `<th>${escapeHtml(roDayLbl(dt))}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
-    <details class="rb-covers" open><summary>Cover: people on each shift (has / needs)</summary>${covers}</details>
+    <details class="rb-covers" open><summary>Cover: people on each shift (has / needs) · tap a number for who can take it</summary>${covers}</details>
     <div class="ro-acts rb-acts">
       <button class="btn gold" onclick="rbPublish()">📤 Publish to the team</button>
       <button class="btn" onclick="rbSharePic()">🖼 Picture to share</button>
@@ -808,8 +808,31 @@ function rbFixHtml(I, cells, shown, ptxt) {
   _rbOpt = [];
   if (!adv.length) return '';
   return `<div class="rb-fix" id="rbFix"><div class="rb-sub">Cover to fix <small>${adv.filter(a => a.kind === 'short').length} empty · ${adv.filter(a => a.kind === 'thin').length} with one person</small></div>
-    ${adv.slice(0, 12).map(a => `<div class="rb-fix-item ${a.kind}"><div>${a.kind === 'short' ? '⚠' : '◐'} ${ptxt(a)}</div><div class="rb-fix-opts">${a.options.map(o => { if (!o.cells) return `<span class="rb-bring">🙋 ${escapeHtml(o.text)}</span>`; _rbOpt.push(o); return `<button class="btn sm" onclick="rbOptApply(${_rbOpt.length - 1})">✓ ${escapeHtml(o.text)}</button>`; }).join('')}</div></div>`).join('')}
+    ${adv.slice(0, 12).map(a => rbGapHtml(I, cells, a, ptxt(a))).join('')}
   </div>`;
+}
+/** One short shift: the people who can take it and why they're OK, and why not the others. */
+function rbGapHtml(I, cells, a, title) {
+  const opts = a.options || rtCoverOptions(I, cells, a.group, a.date, a.shift).slice(0, 3);
+  const not = typeof rtWhyNot === 'function' ? rtWhyNot(I, cells, a.group, a.date, a.shift, opts.map(o => o.key)) : [];
+  return `<div class="rb-fix-item ${a.kind || ''}"><div>${a.kind === 'short' ? '⚠' : '◐'} ${title}</div>
+    <div class="rb-fix-opts">${opts.map(o => { if (!o.cells) return `<span class="rb-bring">🙋 ${escapeHtml(o.text)}</span>`; _rbOpt.push(o); return `<button class="btn sm" onclick="rbOptApply(${_rbOpt.length - 1})"><span>✓ ${escapeHtml(o.text)}</span>${o.ok ? `<small class="rb-ok">OK: ${escapeHtml(o.ok)}</small>` : ''}</button>`; }).join('')}</div>
+    ${not.length ? `<details class="rb-whynot"><summary>Why not the others (${not.length})</summary><ul>${not.map(n => `<li><b>${escapeHtml(n.name)}</b>: ${escapeHtml(n.reason)}</li>`).join('')}</ul></details>` : ''}
+  </div>`;
+}
+/** Tap a cell of the cover table: who can take that shift that day. */
+function rbGapMenu(g, s, dt) {
+  document.getElementById('rbMenu')?.remove();
+  const I = rbInput(rbSeed), cells = rbDrafts[rbWeek].cells, d = rtDates(rbWeek).indexOf(dt);
+  const need = ((I.groups[g] || {}).need[s] || [])[d] || 0, have = rbCover(I, cells)[g][s][d];
+  const opts = rtCoverOptions(I, cells, g, dt, s).slice(0, 5);
+  const m = document.createElement('div'); m.id = 'rbMenu'; m.className = 'rb-menu';
+  m.innerHTML = `<div class="rb-menu-hd"><b>${escapeHtml(s)} · ${escapeHtml(roDayLbl(dt, true))}</b><span>${escapeHtml(g || 'Team')} · has ${have} / needs ${need}</span></div>
+    ${rbGapHtml(I, cells, { group: g, shift: s, date: dt, kind: have === 0 ? 'short' : 'thin', options: opts }, have >= need ? 'Covered. To add one more:' : `Short by ${need - have}. You can put:`)}
+    <div class="ro-acts"><button class="btn sm" onclick="document.getElementById('rbMenu').remove()">Close</button></div>`;
+  document.body.appendChild(m);
+  const w = Math.min(420, window.innerWidth - 16); m.style.width = w + 'px'; m.style.left = ((window.innerWidth - w) / 2) + 'px'; m.style.top = Math.max(8, (window.innerHeight - m.offsetHeight) / 2) + 'px';
+  setTimeout(() => document.addEventListener('click', function close(e) { if (!m.contains(e.target)) { m.remove(); document.removeEventListener('click', close, true); } }, true), 0);
 }
 function rbRefreshOut() {
   const st = document.querySelector('.rb-status'); if (st) st.innerHTML = rbStatusHtml();
