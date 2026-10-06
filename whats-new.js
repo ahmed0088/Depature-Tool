@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 141, items: [
+    '🗓️ Roster reads the cluster roster as it comes: the hotel sections (each hotel gets its own filter, and you see your own hotel first), employee numbers in front of names, hours like 00:00 - 09:00 or 19:00-04:00, ALA / SL / PH, and notes like "12:00 - 21:00 - Adagio".',
+    '🌙 Night shifts are understood: 00:00–09:00 on the 6th is the night of the 5th. "Today" shows who is on shift right now (green dot), Home says "On shift now, until 09:00", and Ops Brain answers "who is on now" and "who is on tonight" correctly, even after midnight.',
+  ] },
   { v: 140, items: [
     '🗓️ New: Roster. Add the team\'s roster once (paste it from Excel or upload the .xlsx) and everyone sees it on any phone: My shifts (your next shift and the next 7 days), who is on today, and the full week. Weekly, two-week or monthly rosters all work; each paste only replaces its own days.',
     '🗓️ Understands M, A, N, OFF, AL, SL, PH and hours like 07-15 by itself; add your hotel\'s own codes under Shift codes and times. Supervisors can edit any day, and Edit → Copy last week starts a new week.',

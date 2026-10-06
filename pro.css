@@ -720,3 +720,15 @@ textarea::placeholder { font-size: 13px; line-height: 1.55; }
   .ro-you { display: block; margin: 0; font-size: 9px; }
   .ro-on-k { flex-basis: 86px; }
 }
+/* roster: hotels, notes, who is on now */
+.ro-groups { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.ro-table tr.ro-sec td { text-align: left; padding: 8px 10px; background: var(--card2); border-bottom: 1px solid var(--border); }
+.ro-table tr.ro-sec span { position: sticky; left: 10px; font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+.ro-note { display: block; font: 600 9px var(--font); font-style: normal; color: var(--text3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70px; margin-inline: auto; }
+.ro-on b i { font-style: normal; font-weight: 500; font-size: 10.5px; color: var(--text3); }
+.ro-on b.is-on::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--green); margin-right: 6px; vertical-align: middle; box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 25%, transparent); }
+.ro-live { font-style: normal; color: var(--green); font-weight: 600; }
+.ro-next.is-now { border-color: var(--green-border); }
+.ro-next.is-now small { color: var(--green); }
+@media (max-width: 860px) { .ro-note { max-width: 44px; font-size: 8.5px; } }
+.ro-cell { white-space: nowrap; }

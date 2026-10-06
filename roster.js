@@ -24,6 +24,7 @@ const RO_DEFAULT_CODES = {
   DO:  { label: 'Day off', type: 'off' },
   RD:  { label: 'Rest day', type: 'off' },
   AL:  { label: 'Annual leave', type: 'leave' },
+  ALA: { label: 'Annual leave', type: 'leave' },
   SL:  { label: 'Sick leave', type: 'leave' },
   PH:  { label: 'Public holiday', type: 'leave' },
   TR:  { label: 'Training', type: 'other' },
@@ -46,7 +47,7 @@ function roDayLbl(iso, long) { const d = roDate(iso); return d.toLocaleDateStrin
 // ── Names and codes ───────────────────────────────────────
 function roKey(name) { return String(name || '').trim().toUpperCase().replace(/[.#$\[\]\/]/g, ' ').replace(/\s+/g, ' ').trim(); }
 function roAllCodes() { return Object.assign({}, RO_DEFAULT_CODES, roCodes || {}); }
-function _roType(h) { return h >= 5 && h < 12 ? 'morning' : h >= 12 && h < 20 ? 'afternoon' : 'night'; }
+function _roType(h) { return h >= 5 && h < 11 ? 'morning' : h >= 11 && h < 18 ? 'afternoon' : 'night'; }   // 00:00 and 19:00 starts are nights
 
 /** What a cell means: { code, label, from, to, type } or null for an empty cell. */
 function roInfo(code) {
@@ -59,12 +60,15 @@ function roInfo(code) {
     const h1 = +t[1], h2 = +t[3];
     if (h1 < 24 && h2 < 24) {
       const f = `${String(h1).padStart(2, '0')}:${t[2] || '00'}`, to = `${String(h2).padStart(2, '0')}:${t[4] || '00'}`;
-      return { code: c, label: `${f}–${to}`, from: f, to, type: _roType(h1) };
+      const note = c.slice(t.index + t[0].length).replace(/^[\s\-–:,/]+/, '').trim();   // "12:00 - 21:00 - Adagio": working at Adagio
+      return { code: c, label: `${f}–${to}${note ? ' · ' + note : ''}`, from: f, to, note, type: _roType(h1) };
     }
   }
+  const lead = c.match(/^([A-Za-z]{1,4})\b\s*[-–:,]?\s*(.*)$/);
+  if (lead && codes[lead[1].toUpperCase()]) { const b = codes[lead[1].toUpperCase()]; return Object.assign({ code: c }, b, { label: b.label + (lead[2] ? ' · ' + lead[2] : ''), note: lead[2] }); }
   const l = c.toLowerCase();
   const type = /\b(off|rest|r\/d|day ?off)\b/.test(l) ? 'off'
-    : /leave|vacation|holiday|sick|^ul$|^ml$/.test(l) ? 'leave'
+    : /leave|vacation|holiday|sick|^(al|ala|sl|ul|ml|cl|ph|el)\b/.test(l) ? 'leave'
     : /morn|^am$|^ms$/.test(l) ? 'morning'
     : /after|even|^pm$|^as$/.test(l) ? 'afternoon'
     : /night|^ns$|^ng$/.test(l) ? 'night' : 'other';
@@ -142,9 +146,8 @@ function roParse(rows, weekStart) {
   const width = Math.max(...rows.map(r => r.length));
   let nameCol = -1, best = 0;
   for (let j = 0; j < Math.min(firstDay, width); j++) {
-    const head = heads.length ? String(rows[heads[0].i][j] || '') : '';
     let n = body.filter(r => { const c = String(r[j] == null ? '' : r[j]); return /[a-z]{2,}/i.test(c) && !RO_NOT_NAMES.test(c) && !RO_DEFAULT_CODES[c.toUpperCase()]; }).length;
-    if (/name|employee|staff/i.test(head)) n += 1000;
+    if (heads.some(h => /name|employee|staff/i.test(String(rows[h.i][j] || '')))) n += 1000;
     if (n > best) { best = n; nameCol = j; }
   }
   if (nameCol < 0) nameCol = 0;
@@ -152,18 +155,32 @@ function roParse(rows, weekStart) {
     dayCols = [1, 2, 3, 4, 5, 6, 7].map(k => nameCol + k);
     dayCols.forEach((j, k) => { colDate[j] = roAdd(weekStart, k); });
   }
-  const names = [], cells = {};
-  body.forEach(r => {
-    const nm = String(r[nameCol] == null ? '' : r[nameCol]).replace(/\s+/g, ' ').trim();
-    if (!/[a-z]{2,}/i.test(nm) || RO_NOT_NAMES.test(nm) || nm.length > 60) return;
+  const names = [], cells = {}, groups = {}, ids = {};
+  const lastHead = heads.length ? Math.max(...heads.map(h => h.i)) : -1;
+  let group = '';
+  rows.forEach((r, i) => {
+    if (headRows.has(i)) return;
+    let nm = String(r[nameCol] == null ? '' : r[nameCol]).replace(/\s+/g, ' ').trim();
     const row = {}; let any = false;
     dayCols.forEach(j => { const v = r[j] == null ? '' : String(r[j]).trim(); if (v) { row[colDate[j]] = v; any = true; } });
-    if (!any) return;
+    // a title line on its own ("Ibis DD", "Mercure DD"…) starts a section; a cluster roster has several hotels
+    const filled = r.filter(c => c !== '').length;
+    if (!any || i < lastHead) {
+      if (nm && /[a-z]{2,}/i.test(nm) && !/^\d{3,}/.test(nm) && !RO_NOT_NAMES.test(nm) && nm.length <= 30 && filled <= 2) group = nm;
+      return;
+    }
+    // "001032 - Name": the employee number goes, the name stays
+    const idm = nm.match(/^\s*(\d{3,})\s*[-–.:]?\s*(.+)$/);
+    let id = '';
+    if (idm) { id = idm[1]; nm = idm[2].trim(); }
+    if (!/[a-z]{2,}/i.test(nm) || RO_NOT_NAMES.test(nm) || nm.length > 60) return;
     if (!cells[nm]) names.push(nm);
     cells[nm] = Object.assign(cells[nm] || {}, row);
+    if (group) groups[nm] = group;
+    if (id) ids[nm] = id;
   });
   const dates = [...new Set(dayCols.map(j => colDate[j]))].sort();
-  return names.length ? { names, dates, cells } : null;
+  return names.length ? { names, dates, cells, groups, ids } : null;
 }
 
 // ── Import: paste, file, preview, save ────────────────────
@@ -213,7 +230,7 @@ function roSavePreview() {
   if (!res) return;
   if (!roCanEdit()) { showToast('Only supervisors, managers and owners can change the roster', 'err'); return; }
   const staff = Object.assign({}, roStaff);
-  res.names.forEach((n, i) => { const k = roKey(n); staff[k] = { name: n, order: i }; });
+  res.names.forEach((n, i) => { const k = roKey(n); staff[k] = { name: n, order: i }; if (res.groups && res.groups[n]) staff[k].group = res.groups[n]; if (res.ids && res.ids[n]) staff[k].id = res.ids[n]; });
   res.dates.forEach(d => {
     const day = {};
     res.names.forEach(n => { const v = res.cells[n][d]; if (v) day[roKey(n)] = v; });
@@ -315,12 +332,62 @@ async function roLoadMe() {
 
 // ── Questions the rest of the app asks ────────────────────
 function roCode(key, date) { return (roDays[date] || {})[key] || ''; }
-/** Who works on a date, by shift type. */
-function roOn(date) {
-  const out = {};
-  Object.entries(roDays[date] || {}).forEach(([k, c]) => { const i = roInfo(c); if (!i) return; (out[i.type] = out[i.type] || []).push({ key: k, name: (roStaff[k] || {}).name || k, info: i }); });
+const _roMin = t => { const [h, m] = String(t).split(':').map(Number); return h * 60 + (m || 0); };
+/** When a shift really starts and ends. 00:00 on the 6th starts the night of the 5th; an end before the start is the next morning. */
+function roSpan(date, info) {
+  if (!info || !info.from) return null;
+  const s = roDate(date); s.setMinutes(_roMin(info.from));
+  const e = roDate(date); e.setMinutes(_roMin(info.to));
+  if (e <= s) e.setDate(e.getDate() + 1);
+  return { start: s, end: e };
+}
+/** Short text for a cell: 12–21, OFF, ALA, SL, PH… */
+function roCellTxt(i) {
+  if (!i) return '';
+  if (i.from) return roShort(i);
+  const m = i.code.match(/^[A-Za-z]{1,4}\b/);
+  return (m ? m[0] : i.code).toUpperCase().slice(0, 5);
+}
+
+// ── Hotels on a cluster roster ────────────────────────────
+function roGroups() { return [...new Set(Object.values(roStaff).map(s => s && s.group).filter(Boolean))]; }
+/** The hotel shown: your choice on this device, else the hotel your name is under, else all. */
+function roCurGroup() {
+  let g = null;
+  try { g = localStorage.getItem('roster_group_v1'); } catch (_) {}
+  if (g === null) g = (roStaff[roMeKey] || {}).group || 'all';
+  return g === 'all' || !roGroups().includes(g) ? '' : g;
+}
+function roSetGroup(g) { try { localStorage.setItem('roster_group_v1', g || 'all'); } catch (_) {} roRender(); }
+function roInGroup(key) { const g = roCurGroup(); return !g || (roStaff[key] || {}).group === g; }
+
+/** Everyone with something on a date (your hotel unless all), earliest start first. */
+function roPeople(date, all) {
+  return Object.entries(roDays[date] || {}).map(([k, c]) => ({ key: k, name: (roStaff[k] || {}).name || k, group: (roStaff[k] || {}).group || '', info: roInfo(c) }))
+    .filter(x => x.info && (all || roInGroup(x.key)))
+    .sort((a, b) => (a.info.from ? _roMin(a.info.from) : 9999) - (b.info.from ? _roMin(b.info.from) : 9999) || a.name.localeCompare(b.name));
+}
+/** Who is working at a moment (yesterday's overnight shifts count). */
+function roWorkingAt(t, all) {
+  const d = roIso(t), out = [];
+  [roAdd(d, -1), d].forEach(day => roPeople(day, all).forEach(x => { const sp = roSpan(day, x.info); if (sp && sp.start <= t && t < sp.end) out.push(Object.assign({ day }, x)); }));
   return out;
 }
+/** The night of a date: shifts starting from 18:00 that evening up to 05:00 the next morning. */
+function roNight(date, all) {
+  const a = roDate(date); a.setHours(18);
+  const b = roDate(roAdd(date, 1)); b.setHours(5);
+  const out = [];
+  [date, roAdd(date, 1)].forEach(day => roPeople(day, all).forEach(x => { const sp = roSpan(day, x.info); if (sp && sp.start >= a && sp.start < b) out.push(Object.assign({ day }, x)); }));
+  return out;
+}
+/** People grouped by their hours: [[label, type, [people]]] */
+function roByTime(list) {
+  const m = new Map();
+  list.forEach(x => { const k = x.info.from ? roTime(x.info) : RO_TYPES[x.info.type]; if (!m.has(k)) m.set(k, [k, x.info.type, []]); m.get(k)[2].push(x); });
+  return [...m.values()];
+}
+
 /** Your next n days, from today. */
 function roMine(n = 7) {
   if (!roMeKey) return [];
@@ -329,61 +396,77 @@ function roMine(n = 7) {
 function roNextShift() {
   if (!roMeKey) return null;
   const now = new Date();
-  for (let i = 0; i < 21; i++) {
+  for (let i = -1; i < 21; i++) {
     const d = roAdd(roToday(), i), inf = roInfo(roCode(roMeKey, d));
     if (!inf || inf.type === 'off' || inf.type === 'leave') continue;
-    if (i === 0 && inf.to && inf.type !== 'night') { const [h, m] = inf.to.split(':').map(Number); if (now.getHours() * 60 + now.getMinutes() >= h * 60 + m) continue; }
-    return { date: d, info: inf, inDays: i };
+    const sp = roSpan(d, inf);
+    if (sp ? sp.end <= now : i < 0) continue;            // already over
+    return { date: d, info: inf, inDays: i, span: sp, now: !!(sp && sp.start <= now) };
   }
   return null;
 }
-function _roWhen(n) { return n.inDays === 0 ? 'Today' : n.inDays === 1 ? 'Tomorrow' : roDayLbl(n.date, true); }
+function _roWhen(n) {
+  if (n.now) return `Now, until ${n.info.to === '00:00' ? 'midnight' : n.info.to}`;
+  if (!n.span) return n.inDays === 0 ? 'Today' : n.inDays === 1 ? 'Tomorrow' : roDayLbl(n.date, true);
+  if (n.info.from === '00:00') { const prev = roAdd(n.date, -1); return prev === roToday() ? 'Tonight at midnight' : `${roDayLbl(prev, true)}, at midnight`; }
+  const d = n.date;
+  return `${d === roToday() ? 'Today' : d === roAdd(roToday(), 1) ? 'Tomorrow' : roDayLbl(d, true)} at ${n.info.from}`;
+}
 
 // ── Page ──────────────────────────────────────────────────
 function _roTable(rows, dates, get, editable) {
   const today = roToday();
+  const q = s => JSON.stringify(s).replace(/"/g, '&quot;');
+  const span = dates.length + 1 + (editable ? 1 : 0);
   return `<div class="ro-scroll"><table class="ro-table">
     <thead><tr><th class="ro-name">Name</th>${dates.map(d => `<th class="${d === today ? 'ro-today' : ''}">${escapeHtml(roDayLbl(d))}</th>`).join('')}${editable ? '<th></th>' : ''}</tr></thead>
-    <tbody>${rows.map(r => `<tr class="${r.key === roMeKey ? 'ro-me' : ''}"><td class="ro-name">${escapeHtml(r.name)}${r.key === roMeKey ? ' <span class="ro-you">you</span>' : ''}</td>${dates.map(d => {
+    <tbody>${rows.map(r => r.section ? `<tr class="ro-sec"><td colspan="${span}"><span>${escapeHtml(r.section)}</span></td></tr>` : `<tr class="${r.key === roMeKey ? 'ro-me' : ''}"><td class="ro-name" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}${r.key === roMeKey ? ' <span class="ro-you">you</span>' : ''}</td>${dates.map(d => {
       const v = get(r, d) || '', i = roInfo(v);
-      return `<td class="ro-cell ${i ? 'ro-t-' + i.type : ''}${d === today ? ' ro-today' : ''}" data-k="${escapeHtml(r.key)}" data-d="${d}" title="${escapeHtml(i ? i.label + (roTime(i) ? ' ' + roTime(i) : '') : '')}">${editable
-        ? `<input value="${escapeHtml(v)}" maxlength="14" onchange="roSetCell(${JSON.stringify(r.key).replace(/"/g, '&quot;')},'${d}',this.value)">`
-        : escapeHtml(v)}</td>`; }).join('')}${editable ? `<td><button class="ro-x" title="Clear this week" onclick="roClearPerson(${JSON.stringify(r.key).replace(/"/g, '&quot;')})">✕</button></td>` : ''}</tr>`).join('')}</tbody>
+      return `<td class="ro-cell ${i ? 'ro-t-' + i.type : ''}${d === today ? ' ro-today' : ''}" data-k="${escapeHtml(r.key)}" data-d="${d}" title="${escapeHtml(i ? i.label + (i.from && !i.label.startsWith(i.from) ? ' ' + roTime(i) : '') : '')}">${editable
+        ? `<input value="${escapeHtml(v)}" maxlength="30" onchange="roSetCell(${q(r.key)},'${d}',this.value)">`
+        : `${escapeHtml(roCellTxt(i))}${i && i.note ? `<i class="ro-note">${escapeHtml(i.note)}</i>` : ''}`}</td>`; }).join('')}${editable ? `<td><button class="ro-x" title="Clear this week" onclick="roClearPerson(${q(r.key)})">✕</button></td>` : ''}</tr>`).join('')}</tbody>
   </table></div>`;
 }
 
 function roWeekRows() {
   const keys = new Set(roWeekAdd[roWeek] || []);
   for (let i = 0; i < 7; i++) Object.keys(roDays[roAdd(roWeek, i)] || {}).forEach(k => keys.add(k));
-  return [...keys].map(k => ({ key: k, name: (roStaff[k] || {}).name || k, order: (roStaff[k] || {}).order ?? 999 }))
+  const list = [...keys].filter(roInGroup).map(k => ({ key: k, name: (roStaff[k] || {}).name || k, group: (roStaff[k] || {}).group || '', order: (roStaff[k] || {}).order ?? 999 }))
     .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+  // all hotels: a title line before each hotel's people
+  if (roCurGroup() || roGroups().length < 2) return list;
+  const out = []; let last = null;
+  list.forEach(r => { if (r.group !== last) { out.push({ section: r.group || 'Others' }); last = r.group; } out.push(r); });
+  return out;
 }
 
 function roRenderSide() {
   // My shifts
   const me = document.getElementById('roMine');
   if (me) {
-    const names = Object.keys(roStaff).map(k => ({ k, n: roStaff[k].name || k })).sort((a, b) => a.n.localeCompare(b.n));
+    const names = Object.keys(roStaff).map(k => ({ k, n: roStaff[k].name || k, g: roStaff[k].group || '' })).sort((a, b) => a.n.localeCompare(b.n));
     if (!roMeKey) {
       me.innerHTML = `<div class="ro-card-hd"><b>My shifts</b></div>${names.length
-        ? `<div class="ro-pick"><span>Which one is you? You only choose once.</span><select onchange="roSetMe(this.value)"><option value="">Choose your name…</option>${names.map(x => `<option value="${escapeHtml(x.k)}">${escapeHtml(x.n)}</option>`).join('')}</select></div>`
+        ? `<div class="ro-pick"><span>Which one is you? You only choose once.</span><select onchange="roSetMe(this.value)"><option value="">Choose your name…</option>${names.map(x => `<option value="${escapeHtml(x.k)}">${escapeHtml(x.n)}${x.g ? ' · ' + escapeHtml(x.g) : ''}</option>`).join('')}</select></div>`
         : '<div class="ro-empty">No roster yet. ' + (roCanEdit() ? 'Press <b>Add roster</b> and paste it from Excel.' : 'Your supervisor adds it here once a week.') + '</div>'}`;
     } else {
-      const nx = roNextShift();
-      me.innerHTML = `<div class="ro-card-hd"><b>My shifts</b><span>${escapeHtml((roStaff[roMeKey] || {}).name || roMeKey)} · <a href="javascript:void 0" onclick="roSetMe('')">not you?</a></span></div>
-        ${nx ? `<div class="ro-next ro-t-${nx.info.type}"><small>Next shift</small><b>${escapeHtml(_roWhen(nx))} · ${escapeHtml(nx.info.label)}</b>${roTime(nx.info) ? `<span>${escapeHtml(roTime(nx.info))}</span>` : ''}</div>` : '<div class="ro-empty">No shift in the roster for the next three weeks.</div>'}
-        <div class="ro-days">${roMine(7).map(x => `<div class="ro-day ${x.info ? 'ro-t-' + x.info.type : 'ro-t-none'}${x.date === roToday() ? ' is-today' : ''}"><small>${escapeHtml(x.date === roToday() ? 'Today' : roDate(x.date).toLocaleDateString('en-GB', { weekday: 'short' }))}</small><b>${escapeHtml(x.info ? x.info.code : '—')}</b><span>${escapeHtml(x.info ? (roShort(x.info) || x.info.label) : '—')}</span></div>`).join('')}</div>`;
+      const nx = roNextShift(), st = roStaff[roMeKey] || {};
+      me.innerHTML = `<div class="ro-card-hd"><b>My shifts</b><span>${escapeHtml(st.name || roMeKey)}${st.group ? ' · ' + escapeHtml(st.group) : ''} · <a href="javascript:void 0" onclick="roSetMe('')">not you?</a></span></div>
+        ${nx ? `<div class="ro-next ro-t-${nx.info.type}${nx.now ? ' is-now' : ''}"><small>${nx.now ? 'On shift now' : 'Next shift'}</small><b>${escapeHtml(_roWhen(nx))}</b><span>${escapeHtml(nx.info.from ? roTime(nx.info) + (nx.info.note ? ' · ' + nx.info.note : '') : nx.info.label)}</span></div>` : '<div class="ro-empty">No shift in the roster for the next three weeks.</div>'}
+        <div class="ro-days">${roMine(7).map(x => `<div class="ro-day ${x.info ? 'ro-t-' + x.info.type : 'ro-t-none'}${x.date === roToday() ? ' is-today' : ''}" title="${escapeHtml(x.info ? x.info.label : '')}"><small>${escapeHtml(x.date === roToday() ? 'Today' : roDate(x.date).toLocaleDateString('en-GB', { weekday: 'short' }))}</small><b>${escapeHtml(x.info ? roCellTxt(x.info) : '—')}</b><span>${escapeHtml(x.info ? (x.info.note || (x.info.from ? RO_TYPES[x.info.type] : x.info.label)) : '—')}</span></div>`).join('')}</div>`;
     }
   }
-  // Today on shift
+  // Today, by hours
   const on = document.getElementById('roTodayOn');
   if (on) {
-    const t = roOn(roToday());
-    const order = ['morning', 'afternoon', 'night', 'other'];
-    const any = order.some(k => t[k] && t[k].length);
-    on.innerHTML = `<div class="ro-card-hd"><b>On shift today</b><span>${escapeHtml(roDayLbl(roToday(), true))}</span></div>` + (any
-      ? order.filter(k => t[k] && t[k].length).map(k => `<div class="ro-on ro-t-${k}"><span class="ro-on-k">${RO_TYPES[k]}${t[k][0].info.from ? ` <small>${escapeHtml(roTime(t[k][0].info))}</small>` : ''}</span><span>${t[k].map(x => `<b class="${x.key === roMeKey ? 'is-me' : ''}">${escapeHtml(x.name)}</b>`).join('')}</span></div>`).join('')
-        + ((t.off || []).length + (t.leave || []).length ? `<div class="ro-on ro-t-off"><span class="ro-on-k">Off / leave</span><span>${[...(t.off || []), ...(t.leave || [])].map(x => `<b>${escapeHtml(x.name)}</b>`).join('')}</span></div>` : '')
+    const g = roCurGroup(), now = new Date();
+    const working = new Set(roWorkingAt(now).map(x => x.key));
+    const ppl = roPeople(roToday());
+    const work = ppl.filter(x => x.info.type !== 'off' && x.info.type !== 'leave'), away = ppl.filter(x => x.info.type === 'off' || x.info.type === 'leave');
+    const chip = x => `<b class="${x.key === roMeKey ? 'is-me' : ''}${working.has(x.key) ? ' is-on' : ''}" title="${escapeHtml(x.info.label)}">${escapeHtml(x.name)}${x.info.note ? ` <i>${escapeHtml(x.info.note)}</i>` : ''}</b>`;
+    on.innerHTML = `<div class="ro-card-hd"><b>Today${g ? ' · ' + escapeHtml(g) : ''}</b><span>${escapeHtml(roDayLbl(roToday(), true))}${working.size ? ` · <em class="ro-live">${working.size} on shift now</em>` : ''}</span></div>` + (work.length
+      ? roByTime(work).map(([lbl, type, xs]) => `<div class="ro-on ro-t-${type}"><span class="ro-on-k">${escapeHtml(lbl)}</span><span>${xs.map(chip).join('')}</span></div>`).join('')
+        + (away.length ? `<div class="ro-on ro-t-off"><span class="ro-on-k">Off / leave</span><span>${away.map(chip).join('')}</span></div>` : '')
       : '<div class="ro-empty">Nobody is on the roster for today.</div>');
   }
 }
@@ -409,6 +492,7 @@ function roRender() {
       ${isNow ? '<span class="ro-tag">This week</span>' : '<button class="btn sm" onclick="roGo(0)">This week</button>'}
       ${roEdit ? '<button class="btn sm" onclick="roCopyLastWeek()">⧉ Copy last week</button>' : ''}
     </div>
+    ${roGroups().length > 1 ? `<div class="ro-groups">${['', ...roGroups()].map(g => `<button class="fchip${roCurGroup() === g ? ' on' : ''}" onclick="roSetGroup(${JSON.stringify(g || 'all').replace(/"/g, '&quot;')})">${escapeHtml(g || 'All hotels')}</button>`).join('')}</div>` : ''}
     ${rows.length || roEdit ? _roTable(rows, dates, (r, d) => roCode(r.key, d), roEdit) : `<div class="ro-empty ro-big">No roster for this week yet.${ed ? ' Press <b>Add roster</b> to paste it, or <b>Edit</b> → <b>Copy last week</b>.' : ''}</div>`}
     ${roEdit ? `<div class="ro-add"><input id="roNewName" placeholder="Add a person to this week…" onkeydown="if(event.key==='Enter')roAddPerson()"><button class="btn sm" onclick="roAddPerson()">+ Add</button><small>Type a code in each day: M, A, N, OFF, AL, or hours like 07-15.</small></div>` : ''}
     <div class="ro-legend">${['morning', 'afternoon', 'night', 'off', 'leave', 'other'].map(k => `<span class="ro-t-${k}">${RO_TYPES[k]}</span>`).join('')}</div>
@@ -448,27 +532,38 @@ function roHomeTile() {
   if (!Object.keys(roStaff).length) return { panel: 'roster', icon: '🗓️', title: 'Roster', big: '—', sub: roCanEdit() ? 'Add the team roster once a week' : 'No roster yet', tone: 'idle' };
   if (!roMeKey) return { panel: 'roster', icon: '🗓️', title: 'Roster', big: '?', sub: 'Choose your name to see your shifts', tone: 'idle' };
   const nx = roNextShift();
-  return { panel: 'roster', icon: '🗓️', title: 'My next shift', big: nx ? nx.info.code : '—', sub: nx ? `${_roWhen(nx)}${roTime(nx.info) ? ' · ' + roTime(nx.info) : ' · ' + nx.info.label}` : 'Nothing in the roster yet', tone: 'idle' };
+  return { panel: 'roster', icon: '🗓️', title: nx && nx.now ? 'On shift now' : 'My next shift', big: nx ? roCellTxt(nx.info) : '—', sub: nx ? _roWhen(nx) + (nx.info.note ? ' · ' + nx.info.note : '') : 'Nothing in the roster yet', tone: nx && nx.now ? 'ok' : 'idle' };
 }
 
 // ── Ops Brain ─────────────────────────────────────────────
 function roIsQuestion(q) { return RO_COMMANDS.some(c => c.re.test(String(q).trim())); }
 function _roOut(html) { if (typeof _bxOut === 'function') _bxOut(html); else { const b = document.getElementById('brAnswers'); if (b) b.innerHTML = `<div class="br-card ba-res">${html}</div>`; } }
+const _roOpenBtn = '<div class="br-acts"><button class="btn sm" onclick="typeof brClose===\'function\'&&brClose();showPanel(\'roster\')">Open Roster</button></div>';
+function _roList(list) { return roByTime(list).map(([lbl, , xs]) => `<li><b>${escapeHtml(lbl)}</b>: ${xs.map(x => escapeHtml(x.name) + (x.info.note ? ` (${escapeHtml(x.info.note)})` : '')).join(', ')}</li>`).join(''); }
 const RO_COMMANDS = [
   { re: /^(my (shifts?|roster|rota|schedule|week|days? off)|when (do|am) i (work|working|on|off)|what'?s my (shift|roster|rota|schedule)|am i (working|on|off)\b.*|my next shift|when is my next shift)\s*\??$/i, ask: true, ex: 'my shifts', does: 'your next 7 days from the roster', run: () => {
-      if (!roMeKey) { _roOut(`<div class="br-title">I don't know which name on the roster is you yet.</div><div class="br-acts"><button class="btn sm gold" onclick="brClose&&brClose();showPanel('roster')">Open Roster</button></div>`); return true; }
+      if (!roMeKey) { _roOut(`<div class="br-title">I don't know which name on the roster is you yet.</div>${_roOpenBtn}`); return true; }
       const nx = roNextShift();
-      _roOut(`<div class="br-kind">🗓️ Your roster</div><div class="br-title">${nx ? `Next: ${escapeHtml(_roWhen(nx))}, ${escapeHtml(nx.info.label)}${roTime(nx.info) ? ' ' + escapeHtml(roTime(nx.info)) : ''}` : 'No shift in the roster for the next three weeks.'}</div>
-        <ul class="ba-ul">${roMine(7).map(x => `<li><b>${escapeHtml(x.date === roToday() ? 'Today' : roDayLbl(x.date))}</b>: ${escapeHtml(x.info ? x.info.label + (roTime(x.info) ? ' ' + roTime(x.info) : '') : 'not in the roster')}</li>`).join('')}</ul>
-        <div class="br-acts"><button class="btn sm" onclick="brClose&&brClose();showPanel('roster')">Open Roster</button></div>`);
+      _roOut(`<div class="br-kind">🗓️ Your roster</div><div class="br-title">${nx ? `${nx.now ? 'On shift' : 'Next'}: ${escapeHtml(_roWhen(nx))}${nx.info.from ? ` (${escapeHtml(roTime(nx.info))})` : ''}${nx.info.note ? ' · ' + escapeHtml(nx.info.note) : ''}` : 'No shift in the roster for the next three weeks.'}</div>
+        <ul class="ba-ul">${roMine(7).map(x => `<li><b>${escapeHtml(x.date === roToday() ? 'Today' : roDayLbl(x.date))}</b>: ${escapeHtml(x.info ? x.info.label : 'not in the roster')}</li>`).join('')}</ul>${_roOpenBtn}`);
       return true; } },
-  { re: /^(who'?s|who is|who are|who)\s+(on|working|on shift|on duty|in)\b.*$|^who works\b.*$/i, ask: true, ex: 'who is on tonight', does: 'who works today, tonight or tomorrow', run: q => {
-      const tm = /tomorrow/i.test(q), early = new Date().getHours() < 7 && /tonight|night|now/i.test(q);
-      const d = tm ? roAdd(roToday(), 1) : early ? roAdd(roToday(), -1) : roToday();   // after midnight the night shift began yesterday
-      const want = /tonight|night/i.test(q) ? ['night'] : /morning/i.test(q) ? ['morning'] : /afternoon|evening/i.test(q) ? ['afternoon'] : ['morning', 'afternoon', 'night', 'other'];
-      const t = roOn(d);
-      const lines = want.filter(k => t[k] && t[k].length).map(k => `<li><b>${RO_TYPES[k]}</b>${t[k][0].info.from ? ` (${escapeHtml(roTime(t[k][0].info))})` : ''}: ${t[k].map(x => escapeHtml(x.name)).join(', ')}</li>`);
-      _roOut(`<div class="br-kind">🗓️ Roster · ${escapeHtml(roDayLbl(d, true))}</div>${lines.length ? `<ul class="ba-ul">${lines.join('')}</ul>` : '<div class="br-title">Nobody on the roster for that.</div>'}<div class="br-acts"><button class="btn sm" onclick="brClose&&brClose();showPanel('roster')">Open Roster</button></div>`);
+  { re: /^(who'?s|who is|who are|who)\s+(on|working|on shift|on duty|in|off|on leave)\b.*$|^who works\b.*$/i, ask: true, ex: 'who is on tonight', does: 'who works now, tonight, today or tomorrow', run: q => {
+      const g = roCurGroup(), where = g ? ` · ${escapeHtml(g)}` : '';
+      const tm = /tomorrow/i.test(q), base = tm ? roAdd(roToday(), 1) : roToday();
+      let title, list;
+      if (/\b(off|leave)\b/i.test(q)) { list = roPeople(base).filter(x => x.info.type === 'off' || x.info.type === 'leave'); title = `Off or on leave ${tm ? 'tomorrow' : 'today'}`; return _roOut(`<div class="br-kind">🗓️ Roster${where}</div><div class="br-title">${title}</div>${list.length ? `<ul class="ba-ul">${list.map(x => `<li>${escapeHtml(x.name)}: ${escapeHtml(x.info.label)}</li>`).join('')}</ul>` : '<div class="br-body">Nobody.</div>'}${_roOpenBtn}`), true; }
+      if (/tonight|night/i.test(q)) {
+        const d = tm ? base : (new Date().getHours() < 7 ? roAdd(roToday(), -1) : roToday());   // after midnight, "tonight" began yesterday evening
+        list = roNight(d); title = `The night of ${roDayLbl(d, true)}`;
+      } else if (/\bnow\b|right now|at the moment|currently/i.test(q) || !/today|tomorrow|morning|afternoon|evening/i.test(q) && !tm) {
+        list = roWorkingAt(new Date()); title = 'On shift right now';
+      } else {
+        list = roPeople(base).filter(x => x.info.type !== 'off' && x.info.type !== 'leave');
+        if (/morning/i.test(q)) list = list.filter(x => x.info.type === 'morning');
+        if (/afternoon|evening/i.test(q)) list = list.filter(x => x.info.type === 'afternoon');
+        title = roDayLbl(base, true);
+      }
+      _roOut(`<div class="br-kind">🗓️ Roster${where}</div><div class="br-title">${escapeHtml(title)}</div>${list.length ? `<ul class="ba-ul">${_roList(list)}</ul>` : '<div class="br-body">Nobody on the roster for that.</div>'}${_roOpenBtn}`);
       return true; } },
 ];
 
