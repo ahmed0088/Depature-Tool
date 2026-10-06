@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 144, items: [
+    '🛠 Roster builder: Roster → Build roster makes next week\'s roster for you. Add the requests (day off, AL / ALA / SL, PH, must or can\'t work a shift), press Build, check it, publish. It learns the shifts, the cover each hotel needs and everyone\'s usual pattern (the night auditor stays on nights) from your past rosters.',
+    '⚖️ It keeps the rules: one OFF a week, at least 11 hours\' rest between shifts (no 15:00–00:00 then 08:00), a cap on days in a row, leave and requests first. If a shift can\'t be covered it shows the gap instead of breaking a rule. Short hotels borrow from the others ("12:00 - 21:00 - Adagio"); PH days owed are given when there is spare cover.',
+    '📋 Tap any cell to change it; the cover table and problems update as you go. Publish tells the whole team, and 🖼 Picture to share makes a roster picture in the usual style for WhatsApp.',
+  ] },
   { v: 143, items: [
     '📷 Roster pictures are now read on your phone or PC, free, with no AI and no key: it finds the table\'s lines and reads every cell (hours digits-only, so 09 is never 08), the hotel titles, the dates and the names. Your roster read 133 of 133 cells right in about 15 seconds.',
     '🛡️ It checks itself: a shift one digit away from the usual ones, an odd shift length or a code it doesn\'t know is marked red. Tap a cell to correct it. From the second week names are matched to the team by employee number, even when the picture is blurry.',

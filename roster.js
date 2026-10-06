@@ -644,6 +644,7 @@ function roRender() {
   const ed = roCanEdit();
   document.getElementById('roEditBtn')?.toggleAttribute('hidden', !ed);
   document.getElementById('roAddBtn')?.toggleAttribute('hidden', !ed);
+  document.getElementById('roBuildBtn')?.toggleAttribute('hidden', !ed);
   const eb = document.getElementById('roEditBtn'); if (eb) { eb.textContent = roEdit ? '✓ Done' : '✏️ Edit'; eb.classList.toggle('gold', roEdit); }
   roRenderSide();
   const dates = [0, 1, 2, 3, 4, 5, 6].map(i => roAdd(roWeek, i));
@@ -765,7 +766,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const has = [0, 1, 2, 3, 4, 5, 6].some(i => Object.keys(roDays[roAdd(next, i)] || {}).length);
     if (has) return;
     add({ id: 'roster:' + next, type: 'roster', icon: '🗓️', tone: 'idle', text: 'Next week\'s roster isn\'t in HotelOps yet.', why: 'Paste it once and the team sees their shifts on their phones.',
-      acts: [['Add roster', () => { showPanel('roster'); setTimeout(() => roImportOpen(true), 300); }]] });
+      acts: [['Build it', () => { if (typeof rbOpen === 'function') rbOpen(); }], ['Add roster', () => { showPanel('roster'); setTimeout(() => roImportOpen(true), 300); }]] });
   });
 });
 function _roRefresh() {
