@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 151, items: [
+    '🕐 Two on the desk: the builder now counts people on the desk hour by hour, so 08–17 and 12–21 overlapping from 12:00 to 17:00 counts as two at once. It aims for 2 at the same time from 08:00 to 23:00 (set the number and hours in ⚖️ Rules) and never at the cost of cover or the rules.',
+    '🕐 New "On the desk, hour by hour" grid under the draft: how many are on each hour of each day (hover or long-press for names), with the hours someone is alone in amber and a summary like "Alone at the desk: 21–23 every day". Tap an amber hour for who can come in on an overlapping shift; "2 on desk" in the summary row shows the share of hours with two at once.',
+    '💡 Same people, more overlap: when moving one place in the cover table (e.g. from 12–21 to 15–00) leaves fewer hours with someone alone, the builder says so. It tries the week with your team first and only suggests it if every shift and rule still holds.',
+  ] },
   { v: 150, items: [
     '🧭 Roster builder, cleaner: a 4-step guide at the top (Requests → Build → Check → Publish) shows where the week is, and the setup sections fold away so the draft is what you see.',
     '📈 The draft at a glance: places filled, rules kept, one-person shifts and hours changes in one row; a Week column with days and hours for each person; tap Morning, Afternoon, Night, Off, Leave or ↻ Changes to highlight them in the table. Ctrl+Z undoes on a computer.',

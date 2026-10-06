@@ -960,7 +960,7 @@ body.rb-dragging, body.rb-dragging * { cursor: grabbing !important; }
 @media (max-width: 560px) { .rb-steps { gap: 4px; } .rb-step { grid-template-columns: 1fr; justify-items: center; text-align: center; padding: 7px 4px; row-gap: 3px; } .rb-step i { grid-row: auto; } .rb-step b { font-size: 11px; } .rb-step small { font-size: 9.5px; max-width: 100%; } }
 .rb-count { font-style: normal; display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--accent-bg); color: var(--accent); font: 700 11px var(--font); }
 
-.rb-health { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 0 0 12px; }
+.rb-health { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin: 0 0 12px; }
 .rb-h { padding: 10px 12px; border-radius: 10px; background: var(--bg2); border: 1px solid var(--border); min-width: 0; }
 .rb-h b { display: block; font: 700 20px/1.1 var(--font); color: var(--text); font-variant-numeric: tabular-nums; }
 .rb-h b small { font-size: 12px; font-weight: 600; color: var(--text3); }
@@ -968,7 +968,7 @@ body.rb-dragging, body.rb-dragging * { cursor: grabbing !important; }
 .rb-h.ok b { color: var(--green); }
 .rb-h.warn { border-color: color-mix(in srgb, var(--amber) 45%, var(--border)); } .rb-h.warn b { color: var(--amber); }
 .rb-h.bad { border-color: color-mix(in srgb, var(--red) 55%, var(--border)); background: var(--red-bg); } .rb-h.bad b { color: var(--red); }
-@media (max-width: 560px) { .rb-health { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; } .rb-h { padding: 8px 7px; } .rb-h b { font-size: 16px; } .rb-h b small { font-size: 10px; } .rb-h span { font-size: 9.5px; white-space: normal; line-height: 1.2; } .rb-h:last-child { display: none; } }
+@media (max-width: 560px) { .rb-health { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; } .rb-h { padding: 8px 7px; } .rb-h b { font-size: 16px; } .rb-h b small { font-size: 10px; } .rb-h span { font-size: 9.5px; white-space: normal; line-height: 1.2; } }
 details.rb-card > summary.ro-card-hd { flex-wrap: nowrap; align-items: center; }
 details.rb-card > summary.ro-card-hd b { flex: 0 0 auto; }
 details.rb-card > summary.ro-card-hd span { flex: 1 1 auto; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -995,3 +995,30 @@ details.rb-card > summary.ro-card-hd span { flex: 1 1 auto; text-align: right; w
 .rb-fbar { display: inline-flex; align-items: center; gap: 6px; width: 100%; min-width: 70px; }
 .rb-fbar i { height: 6px; border-radius: 3px; background: var(--accent); opacity: .55; flex: 0 0 auto; max-width: 70%; min-width: 2px; }
 .rb-fbar.hot i { background: var(--amber); opacity: 1; } .rb-fbar.hot b { color: var(--amber); }
+
+/* On the desk, hour by hour */
+.rb-desk { border-collapse: separate; border-spacing: 2px; width: 100%; min-width: 330px; table-layout: fixed; margin: 4px 0 6px; }
+.rb-desk th { font: 600 9.5px var(--mono) !important; color: var(--text3) !important; background: none !important; text-transform: none !important; letter-spacing: 0 !important; padding: 0 !important; text-align: left; }
+.rb-desk tbody th { width: 34px; font: 600 10.5px var(--font) !important; }
+.rb-desk thead th:first-child { width: 34px; }
+.rb-dk { height: 22px; padding: 0 !important; text-align: center; font: 700 10px var(--mono); border-radius: 4px; border: 0 !important; color: var(--text); }
+.rb-dk.ok { background: color-mix(in srgb, var(--green) 30%, transparent); }
+.rb-dk.one { background: color-mix(in srgb, var(--text3) 18%, transparent); color: var(--text2); }
+.rb-dk.lo { background: color-mix(in srgb, var(--amber) 38%, transparent); color: var(--text); cursor: pointer; }
+.rb-dk.lo:hover { outline: 1px solid var(--amber); }
+.rb-dk.z { background: color-mix(in srgb, var(--red) 30%, transparent); }
+.rb-dk.out { opacity: .65; }
+.rb-desk-note { font-size: 12px; color: var(--text2); margin: 2px 0 12px; line-height: 1.5; }
+.rb-desk-note b { font-family: var(--mono); color: var(--amber); }
+.rb-desk-note.ok { color: var(--green); }
+.rb-desk-rule { display: block; line-height: 2.1; }
+.rb-desk-rule input { width: 52px; }
+.rb-desk-rule small { color: var(--text3); }
+@media (max-width: 560px) { .rb-desk { border-spacing: 1px; } .rb-dk { height: 20px; font-size: 9px; border-radius: 3px; } .rb-desk tbody th, .rb-desk thead th:first-child { width: 28px; } }
+
+.rb-desk-tip { margin: -4px 0 14px; padding: 10px 12px; border-radius: 10px; border: 1px dashed var(--accent-border); background: color-mix(in srgb, var(--accent) 5%, transparent); font-size: 12.5px; color: var(--text2); display: grid; gap: 6px; }
+.rb-desk-tip > b { color: var(--text); font-size: 13px; }
+.rb-desk-tip div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.rb-desk-tip div b { font-family: var(--mono); color: var(--text); font-weight: 650; }
+.rb-desk-tip small { color: var(--text3); }
+.rb-desk-tip > .btn { justify-self: start; }

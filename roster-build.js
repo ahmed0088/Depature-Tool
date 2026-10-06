@@ -41,6 +41,56 @@ function rbNorm(code) { const p = rbParse(code); return p ? `${p.from} - ${p.to}
 function rbRest(prev, next) { const a = rbParse(prev), b = rbParse(next); return a && b ? (1440 + b.s - a.e) / 60 : 99; }
 /** What a change of shift costs from one working day to the next: people want the same hours through a run of
  *  working days; changing only after a day off. Earlier hours than the day before (afternoon → morning) is worst. */
+// ── On the desk, hour by hour ─────────────────────────────
+// "Two in the shift" means two people at the desk at the same time: 08–17 and 12–21 overlap 12:00–17:00.
+const RB_DESK_W = 8;   // how much each person-hour short of the desk aim counts: well under cover and rules
+const _rbHC = new Map();
+/** The whole hours a shift covers: on its own day, and after midnight on the next. */
+function rbShiftHours(code) {
+  const k = String(code || ''); if (_rbHC.has(k)) return _rbHC.get(k);
+  const x = rbParse(k); let r = null;
+  if (x) { r = [[], []]; for (let h = 0; h < 48; h++) if (x.s <= h * 60 && x.e >= (h + 1) * 60) r[h < 24 ? 0 : 1].push(h % 24); }
+  _rbHC.set(k, r); return r;
+}
+/** Whether the desk target is on, and the hours it covers. */
+function rbDeskOn(R) { return R && R.deskMin > 1 && R.deskTo > R.deskFrom; }
+function rbDeskHour(R, h) { return h >= R.deskFrom && h < R.deskTo; }
+/** People on the desk each hour, 7 days × 24: count(d, code) says how many work that shift that day;
+ *  prev = the shifts of the day before the week (spill past midnight into Monday). */
+function rbDeskGrid(shifts, count, prev) {
+  const out = Array.from({ length: 7 }, () => new Array(24).fill(0));
+  for (let d = -1; d < 7; d++) shifts.forEach(sh => {
+    const n = d < 0 ? (prev ? prev(sh) : 0) : count(d, sh); if (!n) return;
+    const H = rbShiftHours(sh); if (!H) return;
+    if (d >= 0) H[0].forEach(h => { out[d][h] += n; });
+    if (d + 1 < 7) H[1].forEach(h => { out[d + 1][h] += n; });
+  });
+  return out;
+}
+/** Hours (and people-hours) below the desk target in a grid. */
+function rbDeskShort(grid, R) {
+  let hours = 0, gap = 0;
+  if (!rbDeskOn(R)) return { hours, gap };
+  grid.forEach(row => row.forEach((c, h) => { if (rbDeskHour(R, h) && c < R.deskMin) { hours++; gap += R.deskMin - c; } }));
+  return { hours, gap };
+}
+/** One hotel's desk grid from a roster (lent people count where they work). */
+function rbDesk(I, cells, g) {
+  const dates = Array.from({ length: 7 }, (_, d) => roAdd(I.week, d)), G = I.groups[g];
+  if (!G) return null;
+  const sh = new Set(G.shifts), cnt = Array.from({ length: 7 }, () => ({})), extra = new Set(), prev = {};
+  const byShort = {}; Object.keys(I.groups).forEach(x => { byShort[rbShort(x).toLowerCase()] = x; });
+  I.people.forEach(p => {
+    dates.forEach((dt, d) => {
+      const v = cells[p.key] && cells[p.key][dt], x = rbParse(v); if (!x) return;
+      const at = (x.note && byShort[x.note.split(/\s+/)[0].toLowerCase()]) || p.group; if (at !== g) return;
+      const c = `${x.from} - ${x.to}`; cnt[d][c] = (cnt[d][c] || 0) + 1; if (!sh.has(c)) extra.add(c);
+    });
+    if (p.group === g && rbParse(p.lastShift)) { const c = rbNorm(p.lastShift); prev[c] = (prev[c] || 0) + 1; if (!sh.has(c)) extra.add(c); }
+  });
+  return rbDeskGrid([...sh, ...extra], (d, c) => cnt[d][c] || 0, c => prev[c] || 0);
+}
+
 function rbChangeCost(prev, next, acrossWeeks) {
   const a = rbParse(prev), b = rbParse(next);
   if (!a || !b) return 0;
@@ -88,7 +138,7 @@ function rbShort(group) { return String(group || '').split(/\s+/)[0]; }
 function rbSolve(I) {
   _rbPC.clear(); _rbKC.clear();   // codes may have been renamed since last time
   // a few attempts from different starting points; the best week wins
-  const R0 = Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, givePh: true, lend: true }, I.rules || {});
+  const R0 = Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, givePh: true, lend: true, deskMin: 2, deskFrom: 8, deskTo: 23 }, I.rules || {});
   const dates0 = Array.from({ length: 7 }, (_, d) => roAdd(I.week, d));
   let best = null, bestSc = Infinity;
   for (let k = 0; k < (I.attempts || 4); k++) {
@@ -101,7 +151,7 @@ function rbSolve(I) {
 function _rbAttempt(I, seed) {
   const D = 7, dates = Array.from({ length: D }, (_, d) => roAdd(I.week, d));
   const rnd = rbRand(seed || 1);
-  const R = Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, givePh: true, lend: true }, I.rules || {});
+  const R = Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, givePh: true, lend: true, deskMin: 2, deskFrom: 8, deskTo: 23 }, I.rules || {});
   const cells = {};
   I.people.forEach(p => { cells[p.key] = {}; dates.forEach(dt => { const v = ((I.pre || {})[p.key] || {})[dt]; if (v) cells[p.key][dt] = v; }); });
   const G = I.groups;
@@ -153,7 +203,7 @@ function _rbAttempt(I, seed) {
 }
 function _rbFinish(I, cells) {
   const D = 7, dates = Array.from({ length: D }, (_, d) => roAdd(I.week, d)), G = I.groups;
-  const R = Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, givePh: true, lend: true }, I.rules || {});
+  const R = Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, givePh: true, lend: true, deskMin: 2, deskFrom: 8, deskTo: 23 }, I.rules || {});
   const need = (g, s, d) => ((G[g] && G[g].need[s]) || [])[d] || 0;
   // 4. a hotel that is short borrows someone on the same shift from a hotel with one spare
   let cover = rbCover(I, cells);
@@ -257,8 +307,9 @@ function rbOffsDue(I, p, dates) {
 function rbScore(I, g, cells, dates, R) {
   const G = I.groups[g], P = I.people.filter(p => p.group === g);
   let sc = 0;
+  const haveAll = [];
   for (let d = 0; d < 7; d++) {
-    const have = {}; G.shifts.forEach(s => { have[s] = 0; });
+    const have = haveAll[d] = {}; G.shifts.forEach(s => { have[s] = 0; });
     P.forEach(p => { const v = cells[p.key][dates[d]]; if (have[v] != null) have[v]++; });
     G.shifts.forEach(s => {
       const n = (G.need[s] || [])[d] || 0, h = have[s];
@@ -266,6 +317,7 @@ function rbScore(I, g, cells, dates, R) {
       else sc += 0.5 * (h - n);
     });
   }
+  if (rbDeskOn(R)) sc += RB_DESK_W * rbDeskShort(rbDeskGrid(G.shifts, (d, s) => haveAll[d][s] || 0, s => P.filter(p => rbNorm(p.lastShift) === s).length), R).gap;   // two on the desk at once, when it can be done
   P.forEach(p => {
     let run = p.run || 0, prev = p.lastShift || '', offs = 0;
     for (let d = 0; d < 7; d++) {
@@ -385,7 +437,7 @@ function rbCover(I, cells) {
 /** What is wrong with a roster: short cover, too little rest, too many days in a row, no day off. */
 function rbProblems(I, cells, cover) {
   const dates = Array.from({ length: 7 }, (_, d) => roAdd(I.week, d)), out = [];
-  const R = Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true }, I.rules || {});
+  const R = Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, deskMin: 2, deskFrom: 8, deskTo: 23 }, I.rules || {});
   cover = cover || rbCover(I, cells);
   Object.keys(I.groups).forEach(g => I.groups[g].shifts.forEach(s => dates.forEach((dt, d) => {
     const n = (I.groups[g].need[s] || [])[d] || 0, h = cover[g][s][d];
@@ -493,7 +545,7 @@ let rbSettings = {}, rbPeople = {}, rbReqs = {}, rbDrafts = {};
 let rbWeek = null, rbGroup = null, rbOut = null, rbSeed = 1;
 const RB_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-function rbRules() { return Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, givePh: true, lend: true }, rbSettings.rules || {}); }
+function rbRules() { return Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, givePh: true, lend: true, deskMin: 2, deskFrom: 8, deskTo: 23 }, rbSettings.rules || {}); }
 function rbGroups() { const g = roGroups(); return g.length ? g : ['']; }
 const RB_TITLES = ['Manager', 'Asst. Manager', 'Duty Manager', 'Supervisor', 'Team Leader', 'Night Auditor', 'Agent', 'Trainee'];
 const RB_NIGHT_WHO = ['Supervisor', 'Duty Manager'];   // who works 00:00 - 09:00 unless set otherwise
@@ -826,6 +878,7 @@ function rbRulesHtml() {
     <label>Days in a row, at most <input type="number" min="3" max="14" value="${R.maxRun}" onchange="rbSetRule('maxRun',+this.value)"></label>
     <label>Longest shift <input type="number" min="6" max="12" value="${R.maxHours}" onchange="rbSetRule('maxHours',+this.value)"> hours</label>
     <label class="rb-chk"><input type="checkbox" ${R.nightSwitch !== false ? 'checked' : ''} onchange="rbSetRule('nightSwitch',this.checked)"> A day off between night and day shifts (no night on Monday then 08:00 on Tuesday, or the other way)</label>
+    <label class="rb-desk-rule">Two on the desk: aim for <input type="number" min="1" max="6" value="${R.deskMin}" onchange="rbSetRule('deskMin',+this.value)"> people at the same time from <input type="number" min="0" max="23" value="${R.deskFrom}" onchange="rbSetRule('deskFrom',+this.value)">:00 to <input type="number" min="1" max="24" value="${R.deskTo}" onchange="rbSetRule('deskTo',+this.value)">:00 <small>(e.g. one on 08–17 and one on 12–21 overlap 12:00–17:00). 1 = off.</small></label>
     <label class="rb-chk"><input type="checkbox" ${R.allowOne !== false ? 'checked' : ''} onchange="rbSetRule('allowOne',this.checked)"> When there's no other way, run a shift with one person (cover number = the ideal)</label>
     <label class="rb-chk"><input type="checkbox" ${R.givePh ? 'checked' : ''} onchange="rbSetRule('givePh',this.checked)"> Give PH days owed when a shift has someone spare</label>
     <label class="rb-chk"><input type="checkbox" ${R.lend ? 'checked' : ''} onchange="rbSetRule('lend',this.checked)"> A hotel that is short borrows from another hotel ("12:00 - 21:00 - Adagio")</label>
@@ -868,6 +921,7 @@ function rbOutHtml(shown, dates) {
     <div class="rb-tools"><button class="btn sm" onclick="rbUndo()"${rbUndoStack.length ? '' : ' disabled'} title="Undo (Ctrl+Z)">↶ Undo</button>${rbLegendHtml()}</div>
     <small class="rb-hint">Tap a cell to change it · drag onto another to swap (long-press on a phone) · tap a name for their card</small>
     <div class="ro-scroll"><table class="ro-table rb-table${rbHi ? ' rb-hi rb-hi-' + rbHi : ''}" id="rbTable"><thead><tr><th class="ro-name">Name</th>${dates.map(dt => `<th>${escapeHtml(roDayLbl(dt))}</th>`).join('')}<th class="rb-tot" title="Days worked · hours this week">Week</th></tr></thead><tbody>${rows}</tbody></table></div>
+    ${rbDeskHtml(I, cells, shown, dates)}
     <details class="rb-covers"${P.some(p => p.kind === 'short' || p.kind === 'thin') ? ' open' : ''}><summary>Cover: people on each shift (has / needs) · tap a number for who can take it</summary>${covers}</details>
     <details class="rb-covers"><summary>📊 Fairness: nights, weekends and hours over the last 4 weeks and this one</summary>${rbFairHtml(I, cells, shown, dates)}</details>
     <div class="ro-acts rb-acts">
@@ -896,10 +950,128 @@ function rbHealthHtml(I, cells, cover, P, shown, dates) {
   return `<div class="rb-health">
     ${chip(short ? 'bad' : 'ok', `${have}<small>/${need}</small>`, 'places filled', short ? short + ' shift' + (short === 1 ? '' : 's') + ' short' : 'every shift has its people')}
     ${chip(bad - short ? 'bad' : 'ok', bad - short ? bad - short : '✓', bad - short ? 'rule breaks' : 'rules kept', 'rest, days off, days in a row, night ↔ day, who can work nights, 9 h')}
+    ${rbDeskChip(I, cells, shown, chip)}
     ${chip(thin ? 'warn' : 'ok', thin, 'one-person', 'shifts where the ideal is two but only one is on')}
     ${chip(ch ? 'warn' : 'ok', ch, 'hours changes', 'hours that change in the middle of a run of working days')}
     ${chip('', Math.round(hours), 'hours planned', 'all shifts this week')}
   </div>`;
+}
+/** Share of the desk hours with the target number of people on at once. */
+function rbDeskChip(I, cells, shown, chip) {
+  const R = rbRules(); if (!rbDeskOn(R)) return '';
+  let ok = 0, all = 0;
+  shown.forEach(g => { const gr = rbDesk(I, cells, g); if (!gr) return; gr.forEach(row => row.forEach((c, h) => { if (rbDeskHour(R, h)) { all++; if (c >= R.deskMin) ok++; } })); });
+  if (!all) return '';
+  const pc = Math.round(ok / all * 100);
+  return chip(pc >= 90 ? 'ok' : pc >= 60 ? 'warn' : 'bad', pc + '<small>%</small>', `${R.deskMin} on desk`, `${ok} of ${all} hours between ${R.deskFrom}:00 and ${R.deskTo}:00 have ${R.deskMin} or more people on at once`);
+}
+/** Hour by hour: how many are on the desk, who, and where someone is alone. */
+function rbDeskHtml(I, cells, shown, dates) {
+  const R = rbRules(), byShort = {}; Object.keys(I.groups).forEach(x => { byShort[rbShort(x).toLowerCase()] = x; });
+  const first = k => ((roStaff[k] || {}).name || k).split(' ')[0];
+  const blocks = shown.map(g => {
+    const G = I.groups[g]; if (!G) return '';
+    const who = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => []));
+    I.people.forEach(p => {
+      const put = (code, d, at) => { const x = rbParse(code); if (!x || at !== g) return; const H = rbShiftHours(code); if (d >= 0) H[0].forEach(h => who[d][h].push(first(p.key))); if (d + 1 < 7) H[1].forEach(h => who[d + 1][h].push(first(p.key))); };
+      dates.forEach((dt, d) => { const v = cells[p.key] && cells[p.key][dt], x = rbParse(v); if (x) put(v, d, (x.note && byShort[x.note.split(/\s+/)[0].toLowerCase()]) || p.group); });
+      if (p.group === g && p.lastShift) put(p.lastShift, -1, g);
+    });
+    const solo = {};   // "09–12" → days
+    const rows = dates.map((dt, d) => {
+      let run = null;
+      const flush = h => { if (run != null) { const k = `${String(run).padStart(2, '0')}–${String(h).padStart(2, '0')}`; (solo[k] = solo[k] || []).push(d); run = null; } };
+      const tds = who[d].map((names, h) => {
+        const c = names.length, inWin = rbDeskOn(R) && rbDeskHour(R, h), low = inWin && c < R.deskMin;
+        if (low && c > 0) { if (run == null) run = h; } else flush(h);
+        const cls = c === 0 ? 'z' : low ? 'lo' : c >= 2 ? 'ok' : 'one';
+        const best = low ? rbDeskBest(G, h) : '';
+        return `<td class="rb-dk ${cls}${inWin ? '' : ' out'}" title="${escapeHtml(roDayLbl(dt))} ${h}:00–${h + 1}:00 · ${c ? escapeHtml(names.join(', ')) : 'nobody'}${best ? ' · tap: who can take ' + escapeHtml(best) : ''}"${best ? ` onclick="rbGapMenu(${_rbQ(g)},${_rbQ(best)},'${dt}')"` : ''}>${c || ''}</td>`;
+      }).join('');
+      flush(24);
+      return `<tr><th>${escapeHtml(roDayLbl(dt).split(' ')[0])}</th>${tds}</tr>`;
+    }).join('');
+    const DN = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const days = ds => ds.length === 7 ? 'every day' : ds.map(d => DN[d]).join(', ');
+    const sl = Object.entries(solo).sort((a, b) => b[1].length - a[1].length);
+    return `<div class="rb-sub">${escapeHtml(g || 'Team')}</div>
+      <div class="ro-scroll"><table class="rb-desk"><thead><tr><th></th>${Array.from({ length: 24 }, (_, h) => `<th>${h % 3 === 0 ? h : ''}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
+      ${rbDeskOn(R) ? (sl.length ? `<div class="rb-desk-note">👤 Alone at the desk: ${sl.slice(0, 5).map(([k, ds]) => `<b>${k}</b> ${days(ds)}`).join(' · ')}${sl.length > 5 ? ' …' : ''}</div>` : `<div class="rb-desk-note ok">✓ ${R.deskMin} or more on the desk from ${R.deskFrom}:00 to ${R.deskTo}:00 every day</div>`) : ''}
+      ${rbDeskAdviceHtml(g, days)}`;
+  }).join('');
+  return `<details class="rb-covers rb-desk-wrap" open><summary>🕐 On the desk, hour by hour${rbDeskOn(R) ? ` · aim: ${R.deskMin} at once from ${R.deskFrom}:00 to ${R.deskTo}:00` : ''}</summary>
+    ${blocks}
+    <small class="ro-hint">Number = people on at that hour (hover or long-press for names). Amber = alone when the aim is ${R.deskMin}; tap it for who can come in on an overlapping shift. Set the aim in ⚖️ Rules.</small></details>`;
+}
+/** Same number of people, more overlap: ways to move places in the cover table from one shift to another
+ *  (on every day it fits) that leave fewer hours with someone alone at the desk. Best on paper first. */
+function rbDeskCands(g) {
+  const R = rbRules(); if (!rbDeskOn(R)) return [];
+  const c = rbGroupCfg(g), who = rbWho(g, c);
+  const base = {}; c.shifts.forEach(x => { base[x] = (c.need[x] || [0, 0, 0, 0, 0, 0, 0]).slice(); });
+  const clone = n => { const o = {}; c.shifts.forEach(x => { o[x] = n[x].slice(); }); return o; };
+  const score = n => { const gr = rbDeskGrid(c.shifts, (d, x) => n[x][d] || 0, x => n[x][6] || 0); let gap = 0, zero = 0; gr.forEach(row => row.forEach((v, h) => { if (rbDeskHour(R, h) && v < R.deskMin) gap += R.deskMin - v; if (v === 0) zero++; })); return { gap, zero }; };
+  const moves = n => { const cur = score(n), out = [];
+    c.shifts.forEach(a => c.shifts.forEach(b => {
+      if (a === b || who[b]) return;                                   // nights for some titles only: never moved into
+      const days = [0, 1, 2, 3, 4, 5, 6].filter(d => n[a][d] >= 2);   // a shift keeps at least one person
+      if (!days.length) return;
+      const m = clone(n); days.forEach(d => { m[a][d]--; m[b][d]++; });
+      const r = score(m); if (r.zero <= cur.zero && r.gap < cur.gap) out.push({ from: a, to: b, days, need: m, gap: r.gap });
+    }));
+    return out.sort((x, y) => x.gap - y.gap); };
+  const out = [], seen = new Set();
+  moves(base).slice(0, 4).forEach(m1 => {
+    out.push({ moves: [m1], need: m1.need, gap: m1.gap });
+    const m2 = moves(m1.need)[0]; if (m2) out.push({ moves: [m1, m2], need: m2.need, gap: m2.gap });
+  });
+  return out.filter(o => { const k = JSON.stringify(o.need); if (seen.has(k)) return false; seen.add(k); return true; }).sort((x, y) => x.gap - y.gap).slice(0, 3);
+}
+/** Each idea is built with the real team before it is shown: kept only if every shift and rule holds as well as now. */
+const _rbDeskChecked = {};
+function _rbDeskKey(g) { const c = rbGroupCfg(g); return JSON.stringify([rbWeek, g, c.shifts, c.need, rbRules(), Object.keys(rbPeople).length, Object.keys(roStaff).length]); }
+function rbDeskCheck(g, done) {
+  const key = _rbDeskKey(g); if (_rbDeskChecked[key]) { done(_rbDeskChecked[key]); return; }
+  const cands = rbDeskCands(g); if (!cands.length) { done(_rbDeskChecked[key] = { best: null }); return; }
+  const R = rbRules();
+  const run = need => { const I = rbInput(1); if (need) I.groups[g] = Object.assign({}, I.groups[g], { need }); const res = rbSolve(I); return { bad: res.problems.filter(p => p.kind !== 'thin').length, thin: res.problems.filter(p => p.kind === 'thin').length, alone: rbDeskShort(rbDesk(I, res.cells, g), R).hours }; };
+  let i = -1, base = null, best = null;
+  const step = () => {
+    if (rbWeek !== JSON.parse(key)[0]) return;
+    if (i < 0) base = run(null);
+    else { const o = cands[i], r = run(o.need); if (r.bad <= base.bad && r.thin <= base.thin && r.alone < base.alone && (!best || r.alone < best.r.alone)) best = { o, r }; }
+    if (++i < cands.length) setTimeout(step, 0); else done(_rbDeskChecked[key] = { best, base });
+  };
+  setTimeout(step, 30);
+}
+function rbDeskApply(g) {
+  const st = _rbDeskChecked[_rbDeskKey(g)]; if (!st || !st.best) return;
+  const c = rbGroupCfg(g); c.need = Object.assign({}, c.need, st.best.o.need);
+  _rbSetGroup(g, c);
+  if (typeof rtIsPublished === 'function' && rtIsPublished(rbWeek)) { rbRender(); showToast('Cover changed. The posted week stays as it is; the next week you build uses it', 'ok'); return; }
+  if (rbDrafts[rbWeek]) rbUndoPush();
+  rbSeed = 1; _rbBuildNow();
+  showToast('Cover changed and the week built again with more overlap. ↶ Undo brings the old draft back', 'ok');
+}
+function rbDeskAdviceHtml(g, days) {
+  const id = 'rbDT_' + g.replace(/[^A-Za-z0-9]/g, '_');
+  const fill = st => {
+    const el = document.getElementById(id); if (!el) return;
+    if (!st.best) { el.innerHTML = ''; return; }
+    const { o, r } = st.best;
+    el.innerHTML = `<div class="rb-desk-tip"><b>💡 Same people, more overlap</b>${o.moves.map(m => `<div>Move one place from <b>${escapeHtml(m.from)}</b> to <b>${escapeHtml(m.to)}</b> (${days(m.days)})</div>`).join('')}
+      <small>Alone at the desk: ${st.base.alone} h → ${r.alone} h a week. Built with your team to check: ${r.bad ? `${r.bad} problem${r.bad === 1 ? '' : 's'}, no more than now` : 'every shift covered, all rules kept'}; nobody works more. It changes 👥 Cover needed.</small>
+      <button class="btn sm gold" onclick="rbDeskApply(${_rbQ(g)})">Use this</button></div>`;
+  };
+  const st = _rbDeskChecked[_rbDeskKey(g)];
+  if (!st) setTimeout(() => rbDeskCheck(g, fill), 0); else setTimeout(() => fill(st), 0);
+  return `<div id="${id}">${st ? '' : rbDeskOn(rbRules()) && rbDeskCands(g).length ? '<small class="ro-hint">💡 Checking if the same people can overlap more…</small>' : ''}</div>`;
+}
+/** The shift that best gives a second person at hour h: it covers h and starts on that day, the longest overlap first. */
+function rbDeskBest(G, h) {
+  let best = '', bl = -1;
+  G.shifts.forEach(s => { const H = rbShiftHours(s); if (!H || !H[0].includes(h)) return; const l = H[0].length; if (l > bl) { bl = l; best = s; } });
+  return best;
 }
 /** Days worked and hours this week, for the last column. */
 function rbTotCell(k, row, dates, probs) {

@@ -297,7 +297,19 @@ console.log('\nRoster scenarios');
     check('shift type: rules still kept', r.problems.filter(p => p.kind !== 'thin').length, 0);
     const same = sb.rbSolve({ week: W, groups: G, people: ppl, pre: {}, keep: base, rules: { minRest: 11, maxHours: 9, allowOne: true }, seed: 3 }).cells;
     check('keep: nothing asked, nothing changes', ['A', 'B', 'C', 'D'].reduce((n, k) => n + dates.filter(d => same[k][d] !== base[k][d]).length, 0), 0);
+  }  // 9. two on the desk: 08–17 and 12–21 overlap 12–17; a spare person goes where someone would be alone
+  {
+    const A = '07:00 - 16:00', B = '12:00 - 21:00', O = '19:00 - 04:00';
+    const g = sb.rbDeskGrid([M, '12:00 - 21:00', O], (d, x) => (x === M || x === '12:00 - 21:00' || x === O ? 1 : 0), () => 0);
+    check('desk: 08–17 + 12–21 = two at 12:00–17:00', [11, 12, 16, 17].map(h => g[1][h]).join(','), '1,2,2,1');
+    check('desk: a 19–04 shift is on the desk after midnight the next day', g[1][2], 1);
+    check('desk: the week starts with nobody before the first night', g[0][2], 0);
+    const G = { 'Ibis DD': { shifts: [A, B], need: { [A]: day(1), [B]: day(1) } } };
+    const r = sb.rbSolve({ week: W, groups: G, people: ['A', 'B', 'C'].map(k => P(k, { offs: 0 })), pre: {}, rules: { minRest: 11, maxHours: 9, allowOne: true, deskMin: 2, deskFrom: 6, deskTo: 18 }, seed: 1 });
+    const onA = dates.filter(d => ['A', 'B', 'C'].filter(k => r.cells[k][d] === A).length === 2).length;
+    check('desk: the spare person goes where someone would be alone (07–16 when the aim is 06:00–18:00)', onA >= 6, true);
   }
+
 }
 
 console.log(`\n${pass} passed · ${fail} failed`);
