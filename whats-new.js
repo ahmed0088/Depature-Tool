@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 150, items: [
+    '🧭 Roster builder, cleaner: a 4-step guide at the top (Requests → Build → Check → Publish) shows where the week is, and the setup sections fold away so the draft is what you see.',
+    '📈 The draft at a glance: places filled, rules kept, one-person shifts and hours changes in one row; a Week column with days and hours for each person; tap Morning, Afternoon, Night, Off, Leave or ↻ Changes to highlight them in the table. Ctrl+Z undoes on a computer.',
+    '📊 New Fairness view under the draft: nights, weekend days off and hours a week for everyone over the last 4 weeks, with anyone well out of line in amber.',
+    '🛠 Fixed: the cover table (has / needs) showed every day stacked in one column on phones.',
+  ] },
   { v: 149, items: [
     '🎯 Put someone on a shift type: in the roster builder, "🎯 Put someone on…" → pick a person (or two, "this one or that one"), Morning, Day (morning + 12:00), Evening or Night, and the days. It builds the week each way, changing as little as possible, and shows the options best first: covered or not, who else changes, and any hours changing mid-run. Tap one to use it, in the draft or in the posted week (only the people affected are told).',
     '🧠 Or tell Ops Brain: "put Sam on mornings next week", "put Sam or Lina on day shifts this week", "Lina evening next week". The choice is kept as a request, so building the week again keeps it.',

@@ -287,8 +287,8 @@ function rtApplyPlan(i) {
 function rtPlanHtml(shown, dates) {
   const people = shown.map(g => `<optgroup label="${escapeHtml(g || 'Team')}">${rbMembers(g).map(k => `<option value="${escapeHtml(k)}">${escapeHtml(rtName(k))}</option>`).join('')}</optgroup>`).join('');
   const first = dates.find(dt => dt > roToday()) || dates[0];
-  return `<div class="card rb-card">
-    <div class="ro-card-hd"><b>🎯 Put someone on…</b><span>morning, day, evening or night: see the options</span></div>
+  return `<details class="card rb-card"${typeof rbSec === 'function' ? rbSec('plan', false) : ''}>
+    <summary class="ro-card-hd"><b>🎯 Put someone on…</b><span>morning, day, evening or night</span></summary>
     <div class="rb-req-add">
       <select id="rtPlP1">${people}</select>
       <select id="rtPlP2"><option value="">or someone else? (optional)</option>${people}</select>
@@ -298,7 +298,7 @@ function rtPlanHtml(shown, dates) {
       <button class="btn sm gold" onclick="rtPlanRun()">Show options</button>
     </div>
     <div id="rtPlOut"></div>
-  </div>`;
+  </details>`;
 }
 function rtPlanRun() {
   const k1 = document.getElementById('rtPlP1').value, k2 = document.getElementById('rtPlP2').value, band = document.getElementById('rtPlB').value;

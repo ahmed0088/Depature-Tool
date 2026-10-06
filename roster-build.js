@@ -629,11 +629,12 @@ function rbRender() {
       <div class="ro-weeknav"><button class="btn sm" onclick="rbGo(-7)">‹</button><b>${escapeHtml(rbWeekLabel(rbWeek))}</b><button class="btn sm" onclick="rbGo(7)">›</button>${rbWeek === rbDefaultWeek() ? '<span class="ro-tag">Next week</span>' : '<button class="btn sm" onclick="rbGo(0)">Next week</button>'}</div>
       ${groups.length > 1 ? `<div class="ro-groups">${['', ...groups].map(g => `<button class="fchip${(rbGroup || '') === g ? ' on' : ''}" onclick="rbGroup=${_rbQ(g)};rbRender()">${escapeHtml(g || 'All hotels')}</button>`).join('')}</div>` : ''}
       <div class="rb-status">${rbStatusHtml()}</div>
+      <div class="rb-steps" id="rbSteps">${rbStepsHtml()}</div>
     </div>
 
     <div class="rb-grid">
-      <div class="card rb-card">
-        <div class="ro-card-hd"><b>📝 Requests this week</b><span>${reqs.length || 'none yet'}</span></div>
+      <details class="card rb-card"${rbSec('req', !draft)}>
+        <summary class="ro-card-hd"><b>📝 Requests this week</b><span>${reqs.length ? `<i class="rb-count">${reqs.length}</i>` : 'none yet'}</span></summary>
         ${reqs.length ? `<div class="rb-reqs">${reqs.sort((a, b) => a[1].from.localeCompare(b[1].from)).map(([id, r]) => `<div class="rb-req"><b>${escapeHtml((roStaff[r.key] || {}).name || r.key)}</b><span>${escapeHtml(rbReqText(r))}</span><button class="ro-x" title="Remove" onclick="rbDelReq('${id}')">✕</button></div>`).join('')}</div>` : '<div class="ro-empty">Day-off requests, leave, PH days, "must work" or "can\'t work" a shift. Everything else the builder decides.</div>'}
         <div class="rb-req-add">
           <select id="rbRqP">${shown.map(g => `<optgroup label="${escapeHtml(g || 'Team')}">${rbMembers(g).map(k => `<option value="${escapeHtml(k)}">${escapeHtml(roStaff[k].name)}</option>`).join('')}</optgroup>`).join('')}</select>
@@ -645,20 +646,20 @@ function rbRender() {
           <label>To <input type="date" id="rbRqTo" value="${dates[0]}" min="${dates[0]}" max="${dates[6]}"></label>
           <button class="btn sm gold" onclick="rbAddReq()">+ Add</button>
         </div>
-      </div>
+      </details>
 
       ${typeof rtPlanHtml === 'function' && Object.keys(roStaff).length ? rtPlanHtml(shown, dates) : ''}
-      <details class="card rb-card"${draft ? '' : ' open'}>
+      <details class="card rb-card"${rbSec('need', false)}>
         <summary class="ro-card-hd"><b>👥 Cover needed</b><span>people on each shift, each day</span></summary>
         ${shown.map(g => rbNeedHtml(g)).join('')}
       </details>
 
-      <details class="card rb-card">
+      <details class="card rb-card"${rbSec('team', false)}>
         <summary class="ro-card-hd"><b>🧑‍💼 Team</b><span>titles, static or rotating, leave, history</span></summary>
         ${typeof rtTeamHtml === 'function' ? rtTeamHtml(shown) : shown.map(g => rbTeamHtml(g)).join('')}
       </details>
 
-      <details class="card rb-card">
+      <details class="card rb-card"${rbSec('rules', false)}>
         <summary class="ro-card-hd"><b>⚖️ Rules & public holidays</b></summary>
         ${rbRulesHtml()}
       </details>
@@ -671,6 +672,27 @@ function rbRender() {
     </div>
     <div id="rbOut">${draft ? rbOutHtml(shown, dates) : ''}</div>`;
   rbReqTypeChange();
+  rbSecWire(root);
+  const sp = document.getElementById('rbSteps'); if (sp) sp.innerHTML = rbStepsHtml();
+}
+// Setup sections stay open or closed as the person left them, across re-renders.
+const rbSecState = {};
+function rbSec(id, dflt) { return `${(id in rbSecState ? rbSecState[id] : dflt) ? ' open' : ''} data-sec="${id}"`; }
+function rbSecWire(root) { root.querySelectorAll('details[data-sec]').forEach(d => d.addEventListener('toggle', () => { rbSecState[d.dataset.sec] = d.open; })); }
+/** ① Requests ② Build ③ Check ④ Publish: where this week is. */
+let _rbHealth = null;
+function rbStepsHtml() {
+  const D = rbDrafts[rbWeek], pub = typeof rtIsPublished === 'function' && rtIsPublished(rbWeek);
+  const n = Object.keys(rbReqs[rbWeek] || {}).length, h = D && _rbHealth && _rbHealth.week === rbWeek ? _rbHealth : null;
+  const pending = pub && D && D.fromPublished && typeof rtDiff === 'function' ? rtDiff(rbWeek, D.cells).length : 0;
+  const st = [
+    ['Requests', n ? n + ' added' : 'optional', n ? 'done' : ''],
+    ['Build', D ? 'built' : 'not yet', D ? 'done' : 'now'],
+    ['Check', !D ? '' : !h ? '' : h.bad ? h.bad + ' to fix' : h.thin ? h.thin + ' one-person' : 'all good', !D ? '' : h && h.bad ? 'warn' : 'done'],
+    ['Publish', pub ? (pending ? pending + ' unsent' : 'posted') : D ? 'ready' : '', pub && !pending ? 'done' : D && !(h && h.bad) ? 'now' : ''],
+  ];
+  if (st[2][2] === 'done' && !(pub && !pending)) st[3][2] = 'now';
+  return st.map(([t, sub, c], i) => `<div class="rb-step ${c}"><i>${c === 'done' ? '✓' : i + 1}</i><b>${t}</b><small>${escapeHtml(sub)}</small></div>`).join('');
 }
 
 function rbStatusHtml() {
@@ -696,6 +718,9 @@ function rbUndo() {
   const u = rbUndoStack.pop(); if (!u) { showToast('Nothing to undo', 'warn'); return; }
   rbWeek = u.week; rbDrafts[u.week] = Object.assign({}, rbDrafts[u.week], { cells: u.cells }); rbSaveDraft(); rbRender();
 }
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'z' || e.key === 'Z') && document.getElementById('panel-roster-build')?.classList.contains('active') && !/INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || '')) { e.preventDefault(); rbUndo(); }
+});
 function rbApplyCells(cells) { rbUndoPush(); rbDrafts[rbWeek] = Object.assign({}, rbDrafts[rbWeek], { cells }); rbSaveDraft(); rbRefreshOut(); showToast('Done. ↶ Undo is above the table', 'ok'); }
 let _rbOpt = [];
 function rbOptApply(i) { const o = _rbOpt[i]; if (o && o.cells) rbApplyCells(o.cells); }
@@ -822,8 +847,8 @@ function rbOutHtml(shown, dates) {
   const name = k => (roStaff[k] || {}).name || k;
   const today = roToday();
   const chg = new Set(rbChanges(I, cells, dates).filter(c => !c.week).map(c => c.key + '|' + c.date));
-  const rows = shown.map(g => `${shown.length > 1 || g ? `<tr class="ro-sec"><td colspan="8"><span>${escapeHtml(g || 'Team')}</span></td></tr>` : ''}${rbMembers(g).map(k => `<tr><td class="ro-name" title="${escapeHtml(name(k))}"><button class="ro-tap" onclick="rtPerson(${_rbQ(k)})">${escapeHtml(name(k))}${rbTitle(k) ? `<i class="rt-t">${escapeHtml(rbTitle(k))}</i>` : ''}</button></td>${dates.map(dt => { const v = cells[k][dt] || '', i = roInfo(v); const bad = probs.some(p => p.key === k && p.date === dt); return `<td class="ro-cell ${i ? 'ro-t-' + i.type : ''}${bad ? ' ro-unsure' : ''}${dt === today ? ' ro-today' : ''}${chg.has(k + '|' + dt) ? ' rb-chg' : ''}" data-k="${escapeHtml(k)}" data-d="${dt}" onclick="if(!this.dataset.noClick)rbPick(this,${_rbQ(k)},'${dt}')" title="${escapeHtml(v || 'empty')}: tap to change, or drag onto another cell to swap">${escapeHtml(roCellTxt(i)) || '·'}${i && i.note ? `<i class="ro-note">${escapeHtml(i.note)}</i>` : ''}</td>`; }).join('')}</tr>`).join('')}`).join('');
-  const covers = shown.map(g => { const G = I.groups[g]; if (!G) return ''; return `<div class="rb-sub">${escapeHtml(g || 'Team')} · cover</div><div class="ro-scroll"><table class="ro-table rb-cover"><thead><tr><th class="ro-name">Shift</th>${dates.map(dt => `<th>${escapeHtml(roDayLbl(dt))}</th>`).join('')}</tr></thead><tbody>${G.shifts.map(s => `<tr><td class="ro-name">${escapeHtml(s)}</td>${dates.map((dt, d) => { const n = (G.need[s] || [])[d] || 0, h = cover[g][s][d]; return `<td class="${h < n ? 'rb-short' : h > n ? 'rb-over' : 'rb-ok'} rb-covtap" title="Who can take ${escapeHtml(s)} on ${escapeHtml(roDayLbl(dt))}" onclick="rbGapMenu(${_rbQ(g)},${_rbQ(s)},'${dt}')">${h}/${n}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>`; }).join('');
+  const rows = shown.map(g => `${shown.length > 1 || g ? `<tr class="ro-sec"><td colspan="9"><span>${escapeHtml(g || 'Team')}</span></td></tr>` : ''}${rbMembers(g).map(k => `<tr><td class="ro-name" title="${escapeHtml(name(k))}"><button class="ro-tap" onclick="rtPerson(${_rbQ(k)})">${escapeHtml(name(k))}${rbTitle(k) ? `<i class="rt-t">${escapeHtml(rbTitle(k))}</i>` : ''}</button></td>${dates.map(dt => { const v = cells[k][dt] || '', i = roInfo(v); const bad = probs.some(p => p.key === k && p.date === dt); return `<td class="ro-cell ${i ? 'ro-t-' + i.type : ''}${bad ? ' ro-unsure' : ''}${dt === today ? ' ro-today' : ''}${chg.has(k + '|' + dt) ? ' rb-chg' : ''}" data-k="${escapeHtml(k)}" data-d="${dt}" onclick="if(!this.dataset.noClick)rbPick(this,${_rbQ(k)},'${dt}')" title="${escapeHtml(v || 'empty')}: tap to change, or drag onto another cell to swap">${escapeHtml(roCellTxt(i)) || '·'}${i && i.note ? `<i class="ro-note">${escapeHtml(i.note)}</i>` : ''}</td>`; }).join('')}${rbTotCell(k, cells[k], dates, probs)}</tr>`).join('')}`).join('');
+  const covers = shown.map(g => { const G = I.groups[g]; if (!G) return ''; return `<div class="rb-sub">${escapeHtml(g || 'Team')} · cover</div><div class="ro-scroll"><table class="ro-table rb-cover"><thead><tr><th class="ro-name">Shift</th>${dates.map(dt => `<th>${escapeHtml(roDayLbl(dt))}</th>`).join('')}</tr></thead><tbody>${G.shifts.map(s => `<tr><td class="ro-name">${escapeHtml(s)}</td>${dates.map((dt, d) => { const n = (G.need[s] || [])[d] || 0, h = cover[g][s][d]; return `<td class="${h < n ? 'rb-cv-short' : h > n ? 'rb-cv-over' : 'rb-cv-ok'} rb-covtap" title="Who can take ${escapeHtml(s)} on ${escapeHtml(roDayLbl(dt))}" onclick="rbGapMenu(${_rbQ(g)},${_rbQ(s)},'${dt}')">${h}/${n}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>`; }).join('');
   const inShown = p => !p.group || shown.includes(p.group) || (p.key && shown.includes((roStaff[p.key] || {}).group || ''));
   const P = probs.filter(inShown);
   const ptxt = p => p.kind === 'short' ? `${escapeHtml(roDayLbl(p.date))} · ${escapeHtml(p.shift)}${shown.length > 1 ? ' · ' + escapeHtml(p.group) : ''}: needs ${p.need}, has ${p.have}`
@@ -836,12 +861,15 @@ function rbOutHtml(shown, dates) {
     : `${escapeHtml(name(p.key))}: ${p.have} day${p.have === 1 ? '' : 's'} off (should have ${p.need})`;
   return `<div class="card rb-draft">
     <div class="ro-card-hd"><b>📋 Draft roster · ${escapeHtml(rbWeekLabel(rbWeek))}</b><span>built ${escapeHtml(new Date(rbDrafts[rbWeek].at || Date.now()).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' }))} · tap a cell to change it</span></div>
-    ${P.length ? `<div class="rb-probs">${P.filter(p => p.kind !== 'short' && p.kind !== 'thin').map(p => `<div class="rb-prob ${p.kind}">⛔ ${ptxt(p)}</div>`).join('')}</div>` : '<div class="rb-allgood">✓ Every shift is covered, everyone has their days off and enough rest.</div>'}
+    ${rbHealthHtml(I, cells, cover, P, shown, dates)}
+    ${P.some(p => p.kind !== 'short' && p.kind !== 'thin') ? `<div class="rb-probs">${P.filter(p => p.kind !== 'short' && p.kind !== 'thin').map(p => `<div class="rb-prob ${p.kind}">⛔ ${ptxt(p)}</div>`).join('')}</div>` : ''}
     ${rbFixHtml(I, cells, shown, ptxt)}
-    ${rbChangesHtml(I, cells, shown, dates)}
-    <div class="rb-tools"><button class="btn sm" onclick="rbUndo()"${rbUndoStack.length ? '' : ' disabled'}>↶ Undo</button><small>Tap a cell to change it · drag a cell onto another to swap (long-press on a phone) · tap a name for their card</small></div>
-    <div class="ro-scroll"><table class="ro-table rb-table"><thead><tr><th class="ro-name">Name</th>${dates.map(dt => `<th>${escapeHtml(roDayLbl(dt))}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
-    <details class="rb-covers" open><summary>Cover: people on each shift (has / needs) · tap a number for who can take it</summary>${covers}</details>
+    ${chg.size ? rbChangesHtml(I, cells, shown, dates) : ''}
+    <div class="rb-tools"><button class="btn sm" onclick="rbUndo()"${rbUndoStack.length ? '' : ' disabled'} title="Undo (Ctrl+Z)">↶ Undo</button>${rbLegendHtml()}</div>
+    <small class="rb-hint">Tap a cell to change it · drag onto another to swap (long-press on a phone) · tap a name for their card</small>
+    <div class="ro-scroll"><table class="ro-table rb-table${rbHi ? ' rb-hi rb-hi-' + rbHi : ''}" id="rbTable"><thead><tr><th class="ro-name">Name</th>${dates.map(dt => `<th>${escapeHtml(roDayLbl(dt))}</th>`).join('')}<th class="rb-tot" title="Days worked · hours this week">Week</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <details class="rb-covers"${P.some(p => p.kind === 'short' || p.kind === 'thin') ? ' open' : ''}><summary>Cover: people on each shift (has / needs) · tap a number for who can take it</summary>${covers}</details>
+    <details class="rb-covers"><summary>📊 Fairness: nights, weekends and hours over the last 4 weeks and this one</summary>${rbFairHtml(I, cells, shown, dates)}</details>
     <div class="ro-acts rb-acts">
       <button class="btn gold" onclick="rbPublish()">📤 Publish to the team</button>
       <button class="btn" onclick="rbSharePic()">🖼 Picture to share</button>
@@ -855,6 +883,59 @@ function rbChanges(I, cells, dates) {
   const out = [];
   I.people.forEach(p => { let prev = p.lastShift || ''; dates.forEach((dt, d) => { const v = (cells[p.key] || {})[dt] || ''; if (rbParse(v) && rbParse(prev) && rbNorm(v) !== rbNorm(prev)) out.push({ key: p.key, date: dt, from: rbNorm(prev), to: rbNorm(v), back: rbParse(v).s < rbParse(prev).s, week: d === 0 }); prev = v; }); });
   return out;
+}
+/** The draft at a glance: cover, rules, one-person shifts, steady hours, total hours. */
+function rbHealthHtml(I, cells, cover, P, shown, dates) {
+  let need = 0, have = 0, hours = 0;
+  shown.forEach(g => { const G = I.groups[g]; if (!G) return; G.shifts.forEach(sh => dates.forEach((dt, d) => { const n = (G.need[sh] || [])[d] || 0; need += n; have += Math.min(n, ((cover[g] || {})[sh] || [])[d] || 0); })); });
+  shown.forEach(g => rbMembers(g).forEach(k => dates.forEach(dt => { const x = rbParse((cells[k] || {})[dt]); if (x) hours += (x.e - x.s) / 60; })));
+  const short = P.filter(p => p.kind === 'short').length, thin = P.filter(p => p.kind === 'thin').length, bad = P.filter(p => p.kind !== 'thin').length;
+  const ch = rbChanges(I, cells, dates).filter(c => !c.week && shown.includes((roStaff[c.key] || {}).group || '')).length;
+  _rbHealth = { week: rbWeek, bad, thin };
+  const chip = (cls, big, lbl, tip) => `<div class="rb-h ${cls}" title="${escapeHtml(tip)}"><b>${big}</b><span>${lbl}</span></div>`;
+  return `<div class="rb-health">
+    ${chip(short ? 'bad' : 'ok', `${have}<small>/${need}</small>`, 'places filled', short ? short + ' shift' + (short === 1 ? '' : 's') + ' short' : 'every shift has its people')}
+    ${chip(bad - short ? 'bad' : 'ok', bad - short ? bad - short : '✓', bad - short ? 'rule breaks' : 'rules kept', 'rest, days off, days in a row, night ↔ day, who can work nights, 9 h')}
+    ${chip(thin ? 'warn' : 'ok', thin, 'one-person', 'shifts where the ideal is two but only one is on')}
+    ${chip(ch ? 'warn' : 'ok', ch, 'hours changes', 'hours that change in the middle of a run of working days')}
+    ${chip('', Math.round(hours), 'hours planned', 'all shifts this week')}
+  </div>`;
+}
+/** Days worked and hours this week, for the last column. */
+function rbTotCell(k, row, dates, probs) {
+  let d = 0, h = 0; dates.forEach(dt => { const x = rbParse((row || {})[dt]); if (x) { d++; h += (x.e - x.s) / 60; } });
+  const bad = probs.some(p => p.key === k && p.kind === 'offs');
+  return `<td class="rb-tot${bad ? ' bad' : ''}" title="${d} days, ${h} hours${bad ? ': wrong number of days off' : ''}"><b>${d}d</b><small>${Math.round(h)}h</small></td>`;
+}
+/** Highlight one kind of shift in the table. */
+let rbHi = '';
+const RB_HI = [['morning', 'Morning'], ['afternoon', 'Afternoon'], ['night', 'Night'], ['off', 'Off'], ['leave', 'Leave'], ['chg', '↻ Changes']];
+function rbLegendHtml() {
+  return `<div class="rb-legend" role="group" aria-label="Highlight">${RB_HI.map(([t, l]) => `<button class="rb-lg ro-t-${t}${rbHi === t ? ' on' : ''}" onclick="rbSetHi('${t}')"><i></i>${l}</button>`).join('')}</div>`;
+}
+function rbSetHi(t) {
+  rbHi = rbHi === t ? '' : t;
+  const tb = document.getElementById('rbTable'); if (tb) tb.className = `ro-table rb-table${rbHi ? ' rb-hi rb-hi-' + rbHi : ''}`;
+  document.querySelectorAll('.rb-lg').forEach(b => b.classList.toggle('on', b.classList.contains('ro-t-' + rbHi)));
+}
+/** Who has had the most nights, the fewest weekends off, the most hours: last 4 weeks plus this draft. */
+function rbFairHtml(I, cells, shown, dates) {
+  const weeks = [4, 3, 2, 1].map(n => roAdd(rbWeek, -7 * n));
+  const rows = [];
+  shown.forEach(g => rbMembers(g).forEach(k => {
+    let nights = 0, wkOff = 0, hrs = 0, weeksSeen = 0;
+    const tally = (get, ds) => { let seen = false; ds.forEach((dt, d) => { const v = get(dt); if (!v) return; seen = true; const x = rbParse(v), i = roInfo(v); if (x) { hrs += (x.e - x.s) / 60; if (x.type === 'night' || rbIsNight(rbNorm(v))) nights++; } else if (d >= 5 && i && (i.type === 'off' || i.type === 'leave')) wkOff++; }); if (seen) weeksSeen++; };
+    weeks.forEach(w => tally(dt => (roDays[dt] || {})[k], Array.from({ length: 7 }, (_, d) => roAdd(w, d))));
+    tally(dt => (cells[k] || {})[dt], dates);
+    rows.push({ k, g, nights, wkOff, avg: weeksSeen ? hrs / weeksSeen : 0, weeksSeen });
+  }));
+  if (!rows.length) return '';
+  const avgN = rows.reduce((a, r) => a + r.nights, 0) / rows.length, avgW = rows.reduce((a, r) => a + r.wkOff, 0) / rows.length;
+  const maxN = Math.max(1, ...rows.map(r => r.nights)), maxW = Math.max(1, ...rows.map(r => r.wkOff));
+  const bar = (v, max, hot) => `<span class="rb-fbar${hot ? ' hot' : ''}"><i style="width:${Math.round(v / max * 100)}%"></i><b>${v}</b></span>`;
+  return `<div class="ro-scroll"><table class="ro-table rb-fair"><thead><tr><th class="ro-name">Name</th><th>Nights</th><th>Weekend days off</th><th>Hours a week</th></tr></thead><tbody>
+    ${rows.map(r => `<tr><td class="ro-name">${escapeHtml((roStaff[r.k] || {}).name || r.k)}${shown.length > 1 ? `<i class="rt-t">${escapeHtml(r.g)}</i>` : ''}</td><td>${bar(r.nights, maxN, r.nights > avgN * 1.6 && r.nights - avgN >= 3)}</td><td>${bar(r.wkOff, maxW, r.wkOff < avgW * 0.4 && avgW - r.wkOff >= 2)}</td><td>${r.weeksSeen ? Math.round(r.avg) : '–'}</td></tr>`).join('')}
+  </tbody></table></div><small class="ro-hint">${rows[0].weeksSeen > 1 ? 'From the rosters in HotelOps plus this draft. Amber = well above (nights) or below (weekends off) the team.' : 'Fills in as more weeks are added to HotelOps.'} Static night staff will always show more nights.</small>`;
 }
 function rbChangesHtml(I, cells, shown, dates) {
   const ch = rbChanges(I, cells, dates).filter(c => !c.week && shown.includes((roStaff[c.key] || {}).group || ''));
@@ -900,6 +981,7 @@ function rbRefreshOut() {
   if (!o || !rbDrafts[rbWeek]) return;
   const groups = rbGroups(), shown = rbGroup && groups.includes(rbGroup) ? [rbGroup] : groups;
   o.innerHTML = rbOutHtml(shown, Array.from({ length: 7 }, (_, d) => roAdd(rbWeek, d)));
+  const sp = document.getElementById('rbSteps'); if (sp) sp.innerHTML = rbStepsHtml();
 }
 function rbClearDraft() { if (!confirm('Discard this draft?')) return; delete rbDrafts[rbWeek]; fbSet('roster/builder/drafts/' + rbWeek, null); rbRender(); }
 
