@@ -9,7 +9,7 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
-  { v: 153, items: [
+  { v: 155, items: [
     '🔒 Managers keep their own shift (e.g. 09:00 - 18:00) to run the operation: the builder never moves them and they are never suggested to cover. Lock or unlock anyone on their card ("🔒 Keeps 09:00 - 18:00"), or tell Ops Brain "keep Sam on his shift".',
     '🏨 Lock someone to their hotel (card: "Stays at Adagio GD", or "lock Sam in his hotel"), or everyone at once: ⚖️ Rules → "Keep everyone in their own hotel" (or tell Ops Brain "keep everyone in their own hotel"). Nobody is then moved between hotels, by the builder or in suggestions.',
     '🛎️ Bell boys: title "Bell Boy" (or tell Ops Brain "Sam and Lina are bell boys"). They get their own bell shifts, days off and cover ("Adagio GD · Bell"), never count as front desk and are never suggested for desk gaps.',
