@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 145, items: [
+    '🧑‍💼 Team in the roster builder: titles (Manager, Supervisor, Team Leader, Agent…), each person static on a shift, rotating week to week, or any shift; can\'t-work shifts; sick and leave dates; joined and left dates; add and delete staff; and their history (what they worked the last weeks).',
+    '🤒 Someone sick or on leave mid-week: Roster → Sick / leave (or tell Ops Brain "Saad is sick tomorrow"). It goes straight into the posted roster and you get the ways to cover: a day off moved, a move from a shift with spare, borrowing from another hotel, a manager as the last resort, or "bring in a staff member". One tap applies it; only the people whose shifts changed are told.',
+    '✏️ Edit the posted week any time; drag a cell onto another to swap; 🔁 swap suggestions that keep everyone\'s rest; ↶ undo. Cover is the ideal (keep 2) with one-person shifts only when there\'s no other way. Shifts over 9 hours are refused. Change a shift\'s hours (bus times) in one place.',
+    '🧠 Ops Brain: "Ali wants Friday off", "swap Hassan and Turab on Tue", "who can cover nights on Wed", "roster problems", "Manisha last week"; and on Saturday and Sunday it reminds you to post next week\'s roster. ⏰ Shift Tasks now follow the roster\'s hours (night from 00:00, morning from 08:00…).',
+  ] },
   { v: 144, items: [
     '🛠 Roster builder: Roster → Build roster makes next week\'s roster for you. Add the requests (day off, AL / ALA / SL, PH, must or can\'t work a shift), press Build, check it, publish. It learns the shifts, the cover each hotel needs and everyone\'s usual pattern (the night auditor stays on nights) from your past rosters.',
     '⚖️ It keeps the rules: one OFF a week, at least 11 hours\' rest between shifts (no 15:00–00:00 then 08:00), a cap on days in a row, leave and requests first. If a shift can\'t be covered it shows the gap instead of breaking a rule. Short hotels borrow from the others ("12:00 - 21:00 - Adagio"); PH days owed are given when there is spare cover.',

@@ -29,7 +29,7 @@ const BS_VOCAB = ['arrivals', 'arrival', 'departures', 'departure', 'nationality
   'duplicates', 'duplicate', 'breakdown', 'average', 'missing', 'without', 'package', 'packages', 'balance', 'tourism', 'dirham', 'reconciliation',
   'checklist', 'remove', 'guess', 'brief', 'report', 'history', 'leaving', 'staying', 'country', 'countries', 'commission', 'noshow', 'noshows', 'everything',
   // everyday words that must stay as they are
-  'night', 'audit', 'shift', 'check', 'card', 'cards', 'late', 'early', 'plan', 'note', 'notes', 'call', 'wake', 'work', 'does', 'what', 'when', 'where', 'there', 'their', 'with', 'this', 'that', 'have', 'need', 'help', 'guest', 'angry', 'upset', 'refund', 'charge', 'cancel', 'extend', 'move', 'lost', 'fire', 'alarm', 'taxi', 'luggage', 'phone', 'group', 'remind', 'handover', 'thanks', 'hello', 'should', 'would', 'could', 'about', 'after', 'before', 'today', 'tonight', 'tomorrow',
+  'night', 'audit', 'shift', 'check', 'card', 'cards', 'late', 'early', 'plan', 'note', 'notes', 'call', 'wake', 'work', 'does', 'what', 'when', 'where', 'there', 'their', 'with', 'this', 'that', 'have', 'need', 'help', 'guest', 'angry', 'upset', 'refund', 'charge', 'cancel', 'extend', 'move', 'lost', 'fire', 'alarm', 'taxi', 'luggage', 'phone', 'group', 'remind', 'handover', 'thanks', 'hello', 'should', 'would', 'could', 'about', 'after', 'before', 'today', 'tonight', 'tomorrow', 'last', 'month', 'swap', 'cover', 'sick', 'wants', 'asks',
   'shifts', 'working', 'works', 'worked', 'roster', 'rosters', 'schedule', 'duty', 'week', 'weekend'];
 function _bsLev(a, b) {
   if (Math.abs(a.length - b.length) > 2) return 9;

@@ -193,5 +193,78 @@ console.log('\nRoster builder');
   check(`${weeks} weeks in a row for 3 teams of 5 to 7: no gaps, rest or day-off problems`, probs, 0);
 }
 
+// ── Roster scenarios ──────────────────────────────────────
+console.log('\nRoster scenarios');
+{
+  const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} },
+               document: { addEventListener() {}, getElementById() { return null; }, querySelectorAll() { return []; } }, window: {}, setTimeout: () => 0, setInterval: () => 0, navigator: {} };
+  vm.createContext(sb);
+  for (const f of ['roster.js', 'roster-build.js', 'roster-team.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sb, { filename: f });
+  const W = '2026-10-12', dates = [0, 1, 2, 3, 4, 5, 6].map(d => sb.roAdd(W, d)), day = n => Array(7).fill(n);
+  const P = (key, x) => Object.assign({ key, group: 'Ibis DD', offs: 1, fixed: '', usual: '', allowed: null, prefOff: [], lastShift: '', run: 0, lastOffs: [], phOwed: 0, title: '' }, x);
+  const solve = (groups, people, pre, rules) => sb.rbSolve({ week: W, groups, people, pre: pre || {}, rules: Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, givePh: false, lend: true }, rules), seed: 1 });
+  const M = '08:00 - 17:00', E = '15:00 - 00:00', N = '00:00 - 09:00', D9 = '09:00 - 18:00';
+
+  // 1. ideal two per shift, too few people: never an empty shift, some one-person shifts
+  {
+    const r = solve({ 'Ibis DD': { shifts: [M, E], need: { [M]: day(2), [E]: day(2) } } }, ['A', 'B', 'C', 'D'].map(k => P(k)));
+    check('short-handed: no shift left empty', r.problems.filter(p => p.kind === 'short').length, 0);
+    check('short-handed: one-person shifts reported instead', r.problems.filter(p => p.kind === 'thin').length > 0, true);
+  }
+  // 2. three staff, three shifts of one (one-man shifts): the gaps that can't be filled say "bring in a staff member"
+  {
+    const G = { 'Ibis DD': { shifts: [N, M, E], need: { [N]: day(1), [M]: day(1), [E]: day(1) } } };
+    const ppl = ['A', 'B', 'C'].map(k => P(k)), r = solve(G, ppl);
+    const gaps = r.problems.filter(p => p.kind === 'short');
+    check('three staff, 21 shifts, 18 working days: only 3 gaps', gaps.length, 3);
+    check('no rest or day-off rule broken to close them', r.problems.filter(p => p.kind === 'rest' || p.kind === 'offs').length, 0);
+    const I = { week: W, groups: G, people: ppl, pre: {}, rules: { minRest: 11, maxHours: 9, allowOne: true } };
+    const o = sb.rtCoverOptions(I, r.cells, 'Ibis DD', gaps[0].date, gaps[0].shift);
+    check('a gap nobody can fill → "bring in a staff member"', o.length === 1 && o[0].kind === 'bring', true);
+  }
+  // 3. managers hold a shift only when it would be empty
+  {
+    const G = { 'Ibis DD': { shifts: [N, D9], need: { [N]: day(1), [D9]: day(1) } } };
+    const mgrStays = solve(G, [P('MGR', { title: 'Manager', fixed: D9, fixedCost: 400 }), P('A1'), P('A2')]);
+    check('enough agents: the manager stays on 09:00 - 18:00', dates.map(d => mgrStays.cells.MGR[d]).filter(v => v !== 'OFF').every(v => v === D9), true);
+    const pre = { A1: { [dates[2]]: 'SL', [dates[3]]: 'SL', [dates[4]]: 'SL' } };
+    const mgrMoves = solve(G, [P('MGR', { title: 'Manager', fixed: D9, fixedCost: 400 }), P('A1'), P('A2')], pre);
+    check('agent sick 3 days: no night left empty (the manager steps in if needed)', mgrMoves.problems.filter(p => p.kind === 'short' && p.shift === N).length, 0);
+  }
+  // 4. rotation: a different main shift from last week
+  {
+    const r = solve({ 'Ibis DD': { shifts: [M, E], need: { [M]: day(1), [E]: day(1) } } }, [P('ROT', { mode: 'rotate', lastMain: M }), P('B'), P('C')]);
+    const mine = dates.map(d => r.cells.ROT[d]).filter(v => v !== 'OFF');
+    check('rotating person moves off last week\'s shift', mine.filter(v => v === E).length > mine.filter(v => v === M).length, true);
+  }
+  // 5. nine hours at most
+  {
+    const I = { week: W, groups: { 'Ibis DD': { shifts: [M], need: { [M]: day(0) } } }, people: [P('LONG')], pre: {}, rules: { maxHours: 9 } };
+    const cells = { LONG: { [dates[0]]: '08:00 - 19:00' } };
+    check('an 11-hour shift is flagged', sb.rbProblems(I, cells).some(p => p.kind === 'long' && p.hours === 11), true);
+  }
+  // 6. someone who leaves mid-week is not rostered after, and isn't owed a day off
+  {
+    const pre = { GONE: { [dates[3]]: '—', [dates[4]]: '—', [dates[5]]: '—', [dates[6]]: '—' } };
+    const r = solve({ 'Ibis DD': { shifts: [M], need: { [M]: day(1) } } }, [P('GONE'), P('B'), P('C')], pre);
+    check('leaver: not on shift after leaving', [3, 4, 5, 6].every(i => r.cells.GONE[dates[i]] === '—'), true);
+    check('leaver: no "day off missing" for them', r.problems.some(p => p.key === 'GONE'), false);
+  }
+  // 7. sick mid-week: cover suggestions that keep the rules
+  {
+    const G = { 'Ibis DD': { shifts: [M, E], need: { [M]: day(1), [E]: day(1) } } };
+    const ppl = ['A', 'B', 'C', 'D'].map(k => P(k));
+    const I = { week: W, groups: G, people: ppl, pre: {}, rules: { minRest: 11, maxHours: 9, allowOne: true } };
+    const r = sb.rbSolve(Object.assign({ seed: 1 }, I));
+    const who = Object.keys(r.cells).find(k => r.cells[k][dates[2]] === M);
+    const cells = JSON.parse(JSON.stringify(r.cells)); cells[who][dates[2]] = 'SL';
+    I.pre = { [who]: { [dates[2]]: 'SL' } };
+    const o = sb.rtCoverOptions(I, cells, 'Ibis DD', dates[2], M);
+    check('sick: at least one way to cover', o.length > 0 && !!o[0].cells, true);
+    const after = o[0].cells;
+    check('sick: the first suggestion fills the shift without new rule breaks', sb.rbProblems(I, after).filter(p => p.kind !== 'thin').length, 0);
+  }
+}
+
 console.log(`\n${pass} passed · ${fail} failed`);
 process.exit(fail ? 1 : 0);

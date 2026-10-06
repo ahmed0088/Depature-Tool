@@ -629,6 +629,15 @@ function roOnPosted(v) {
   if (v.at <= al) return;
   try { localStorage.setItem('roster_alerted_v1', String(v.at)); } catch (_) {}
   const span = `${roDate(v.from).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${roDate(v.to).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`;
+  if (v.update) {
+    // a change to a posted week: only the people whose shifts changed are told
+    const mine = (v.changes || []).filter(c => c.k === roMeKey);
+    if (!mine.length) { roMarkSeen(); return; }
+    const txt = mine.map(c => `${roDayLbl(c.d)}: ${roCellTxt(roInfo(c.f)) || '—'} → ${roCellTxt(roInfo(c.t)) || '—'}`).join(', ');
+    showToast(`🗓️ Your roster changed: ${txt}`, 'warn');
+    roNotify('Your roster changed', `${v.by}: ${txt}`);
+    return;
+  }
   showToast(`🗓️ New roster posted by ${v.by} (${span})`, 'ok');
   roNotify('New roster posted', `${v.by} posted the roster for ${span}. Tap to see your shifts.`);
 }
@@ -645,6 +654,8 @@ function roRender() {
   document.getElementById('roEditBtn')?.toggleAttribute('hidden', !ed);
   document.getElementById('roAddBtn')?.toggleAttribute('hidden', !ed);
   document.getElementById('roBuildBtn')?.toggleAttribute('hidden', !ed);
+  document.getElementById('roSickBtn')?.toggleAttribute('hidden', !ed);
+  document.getElementById('roChangeBtn')?.toggleAttribute('hidden', !ed || !Object.keys(roStaff).length);
   const eb = document.getElementById('roEditBtn'); if (eb) { eb.textContent = roEdit ? '✓ Done' : '✏️ Edit'; eb.classList.toggle('gold', roEdit); }
   roRenderSide();
   const dates = [0, 1, 2, 3, 4, 5, 6].map(i => roAdd(roWeek, i));

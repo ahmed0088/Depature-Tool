@@ -14,7 +14,7 @@
 //  clients pick up the new version instead of a stale cache.
 // ═══════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'ibis-ops-shell-v144';
+const CACHE_NAME = 'ibis-ops-shell-v145';
 
 const SHELL_FILES = [
   './',
@@ -71,6 +71,7 @@ const SHELL_FILES = [
   './roster-ocr.js',
   './roster-image.js',
   './roster-build.js',
+  './roster-team.js',
   './brain-expert.js',
   './brand.js',
   './settings.js',

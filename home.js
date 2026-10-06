@@ -82,8 +82,7 @@ function homeTiles() {
   // Shift tasks
   _homeSafe(() => {
     if (typeof SHIFTS === 'undefined') return;
-    const h = new Date().getHours();
-    const key = h >= 23 || h < 7 ? 'night' : h < 15 ? 'morning' : 'afternoon';
+    const key = typeof hoShiftNow === 'function' ? hoShiftNow().key : 'morning';
     const sh = SHIFTS[key];
     if (!sh) return;
     const pct = sh.tasks.length ? Math.round(sh.done.length / sh.tasks.length * 100) : 0;
@@ -106,7 +105,8 @@ function homeTiles() {
 
 function homeGreeting() {
   const h = new Date().getHours();
-  const shift = h >= 23 || h < 7 ? 'Night shift' : h < 15 ? 'Morning shift' : 'Afternoon shift';
+  const sk = typeof hoShiftNow === 'function' ? hoShiftNow().key : (h >= 23 || h < 7 ? 'night' : h < 15 ? 'morning' : 'afternoon');
+  const shift = sk === 'night' ? 'Night shift' : sk === 'morning' ? 'Morning shift' : 'Afternoon shift';
   const hi = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
   const name = (typeof hoPref === 'function' && !hoPref('greetName')) ? '' : (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) ? currentProfile.name.split(' ')[0] : '';
   return { hi: `${hi}${name ? ', ' + name : ''}`, shift };

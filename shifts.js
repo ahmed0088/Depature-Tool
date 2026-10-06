@@ -350,11 +350,22 @@ function applyShiftData(saved, heardFromDb = true) {
 // for the whole team (once — the date is saved with the tasks). The shift
 // that just ended keeps its ticks for the handover. Settings → Helpers can
 // turn this off.
+/** Which shift's task list is current, by the hours on the roster (night from 00:00, morning from 08:00…).
+ *  Falls back to 07:00 / 15:00 / 23:00 before any roster is in. */
+function hoShiftNow(now) {
+  now = now || new Date();
+  const T = typeof rtTaskTimes === 'function' ? (() => { try { return rtTaskTimes(); } catch (_) { return null; } })() : null;
+  const min = t => { const m = String(t || '').match(/(\d{1,2}):(\d{2})/); return m ? +m[1] * 60 + +m[2] : null; };
+  const starts = [['night', min(T && T.night) ?? 23 * 60], ['morning', min(T && T.morning) ?? 7 * 60], ['afternoon', min(T && T.afternoon) ?? 15 * 60]].sort((a, b) => a[1] - b[1]);
+  const m = now.getHours() * 60 + now.getMinutes();
+  let cur = starts.filter(s => s[1] <= m).pop(), prevDay = false;
+  if (!cur) { cur = starts[starts.length - 1]; prevDay = true; }   // before the first start: the last shift of yesterday
+  const start = new Date(now); start.setHours(0, 0, 0, 0); if (prevDay) start.setDate(start.getDate() - 1);
+  start.setMinutes(cur[1]);
+  return { key: cur[0], start };
+}
 function _stCurrentInstance() {
-  const now = new Date(), h = now.getHours();
-  const key = h >= 23 || h < 7 ? 'night' : h < 15 ? 'morning' : 'afternoon';
-  const start = new Date(now);
-  if (key === 'night' && h < 7) start.setDate(start.getDate() - 1);   // tonight's shift began yesterday at 23:00
+  const now = new Date(), sh = hoShiftNow(now), key = sh.key, start = sh.start;
   const pad = n => String(n).padStart(2, '0');   // local date, not UTC
   return { key, day: `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}` };
 }

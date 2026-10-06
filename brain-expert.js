@@ -111,7 +111,7 @@ const BX_KNOW = [
 ];
 
 // ── Shift plan ────────────────────────────────────────────
-function _bxShift() { const h = new Date().getHours(); return h >= 23 || h < 7 ? 'night' : h < 15 ? 'morning' : 'afternoon'; }
+function _bxShift() { if (typeof hoShiftNow === 'function') return hoShiftNow().key; const h = new Date().getHours(); return h >= 23 || h < 7 ? 'night' : h < 15 ? 'morning' : 'afternoon'; }
 function _bxSafe(f, d) { try { return f(); } catch (_) { return d; } }
 function bxPlan() {
   const k = _bxShift();
@@ -246,7 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // a new shift: say hello once, with the plan
   (window.BL_THINKERS = window.BL_THINKERS || []).push(add => {
     if (typeof currentUser === 'undefined' || !currentUser) return;
-    const h = new Date().getHours(), k = _bxShift(), day = new Date(Date.now() - (k === 'night' && h < 7 ? 864e5 : 0)).toDateString();
+    const h = new Date().getHours(), k = _bxShift(), day = (typeof hoShiftNow === 'function' ? hoShiftNow().start : new Date(Date.now() - (k === 'night' && h < 7 ? 864e5 : 0))).toDateString();
     const { items } = bxPlan(); const open = items.filter(i => !i[2].ok).length;
     add({ id: 'shiftStart:' + k + ':' + day, type: 'shiftStart', icon: '👋', tone: 'idle', text: `${k[0].toUpperCase() + k.slice(1)} shift: ${open} thing${open === 1 ? '' : 's'} on the plan.`,
       why: 'Your jobs in order, with what is already done.', acts: [['Show the plan', () => { brOpen(); brAsk('plan my shift'); }]] });
