@@ -315,12 +315,13 @@ console.log('\nRoster scenarios');
 // ── What if… (roster-team.js) ─────────────────────────────
 {
   const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} }, fbSet() {}, showToast() {}, escapeHtml: x => String(x),
-               document: { addEventListener() {}, getElementById() { return null; }, querySelectorAll() { return []; } }, window: {}, setTimeout: () => 0, setInterval: () => 0, navigator: {} };
+               document: { addEventListener() {}, getElementById() { return null; }, querySelectorAll() { return []; }, querySelector() { return null; } }, window: {}, setTimeout: () => 0, setInterval: () => 0, navigator: {} };
   vm.createContext(sb);
   for (const f of ['roster.js', 'roster-build.js', 'roster-team.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sb, { filename: f });
   vm.runInContext(`
     var W = roAdd(roMonday(new Date()), 7), M = '08:00 - 17:00', E = '15:00 - 00:00';
-    ['A', 'B', 'C', 'D', 'F'].forEach((k, i) => { roStaff[k] = { name: 'Person ' + k, group: 'Ibis DD', order: i }; });
+    const NM = { A: 'Anna Lee', B: 'Bilal Khan', C: 'Carla Diaz', D: 'Dmitri Sokolov', F: 'Stanley Okafor' };
+    ['A', 'B', 'C', 'D', 'F'].forEach((k, i) => { roStaff[k] = { name: NM[k], group: 'Ibis DD', order: i }; });
     for (const base of [roAdd(W, -7), W]) for (let d = 0; d < 7; d++) {
       const dt = roAdd(base, d);
       roDays[dt] = { A: d === 0 ? 'OFF' : M, B: d === 1 ? 'OFF' : E, C: d === 2 ? 'OFF' : d % 2 ? M : E, D: d === 3 ? 'OFF' : d % 2 ? E : M, F: d === 4 ? 'OFF' : d === 5 ? 'AL' : d % 2 ? M : E };
@@ -341,14 +342,59 @@ console.log('\nRoster scenarios');
   // the Ops Brain reads the question
   run(`var _last = null; rtWhatIf = (function (f) { return function (q) { _last = q; return f(q); }; })(rtWhatIf); _rtOut = () => {};`);
   const ask = q => { run(`RT_COMMANDS.find(c => c.re.test(${JSON.stringify(q)})).run(${JSON.stringify(q)})`); return run('_last'); };
-  const q1 = ask('what if Person A is sick for 2 days');
+  const q1 = ask('what if Anna is sick for 2 days');
   check('brain: "sick for 2 days" = two days from today', [q1.kind, q1.from === run('roToday()'), q1.to === run('roAdd(roToday(), 1)')].join(), 'sick,true,true');
-  const q2 = ask('what if Person B takes Monday next week off');
+  const q2 = ask('what if Bilal takes Monday next week off');
   check('brain: "takes Monday next week off" = that Monday, off', [q2.kind, q2.from === run('W'), q2.to === run('W')].join(), 'off,true,true');
-  const q3 = ask("what if Person C isn't on 08-17 on Friday next week");
+  const q3 = ask("what if Carla isn't on 08-17 on Friday next week");
   check('brain: "isn\'t on 08-17" = not on that shift', [q3.kind, q3.shift, q3.from === run('roAdd(W, 4)')].join(), 'notshift,08:00 - 17:00,true');
-  const q4 = ask('what if Person D is on leave next week');
+  const q4 = ask('what if Dmitri is on leave next week');
   check('brain: "on leave next week" = the whole week', [q4.kind, q4.from === run('W'), q4.to === run('roAdd(W, 6)')].join(), 'leave,true,true');
+  // bell boys: rostered on their own shifts, never front desk cover
+  const t1 = ask0 => { run(`RT_COMMANDS.find(c => c.re.test(${JSON.stringify(ask0)})).run(${JSON.stringify(ask0)})`); };
+  t1('stanly and dmitry are bell bits');
+  check('brain: "X and Y are bell bits" sets Bell Boy (typos too)', run("[rbTitle('F'), rbTitle('D')].join()"), 'Bell Boy,Bell Boy');
+  run("rbSetPerson('D', 'title', '')");
+  const bell = run(`(() => { rbWeek = W; const I = rbInput(1), res = rbSolve(I), dates = [0, 1, 2, 3, 4, 5, 6].map(d => roAdd(W, d)), F = I.people.find(p => p.key === 'F');
+    const desk = dates.some(dt => { const x = rbParse(res.cells.F[dt]); return x && !rbAt(I, F, x).includes(' · '); });
+    const gap = res.problems.find(p => p.group === 'Ibis DD' && p.kind === 'short') || { date: dates[3], shift: Object.keys(I.groups['Ibis DD'].need)[0] };
+    const sugg = rtCoverOptions(I, res.cells, 'Ibis DD', gap.date, gap.shift).some(o => o.key === 'F');
+    return { groups: Object.keys(I.groups).join('|'), fGroup: F.group, desk, sugg }; })()`);
+  check('bell: the hotel gets its own bell cover', bell.groups, 'Ibis DD|Ibis DD · Bell');
+  check('bell: a bell boy is in the bell team', bell.fGroup, 'Ibis DD · Bell');
+  check('bell: a bell boy never counts as front desk', bell.desk, false);
+  check('bell: a bell boy is never suggested for a desk gap', bell.sugg, false);
+  run("rbSetPerson('F', 'title', '')");
+  // 🔒 managers keep their shift; 🏨 people (or everyone) stay at their hotel
+  run(`roStaff.G = { name: 'Gina Morales', group: 'Mercure DD', order: 9 }; roStaff.H = { name: 'Hugo Brandt', group: 'Mercure DD', order: 10 };
+       for (const base of [roAdd(W, -7), W]) for (let d = 0; d < 7; d++) { const dt = roAdd(base, d); roDays[dt].G = d === 6 ? 'OFF' : '09:00 - 18:00'; roDays[dt].H = d === 5 ? 'OFF' : '09:00 - 18:00'; }
+       rbSetPerson('A', 'title', 'Manager');`);
+  const lk = run(`(() => { rbWeek = W; const I = rbInput(1), A = I.people.find(p => p.key === 'A'), res = rbSolve(I), dates = [0, 1, 2, 3, 4, 5, 6].map(d => roAdd(W, d));
+    const moved = dates.some(dt => rbParse(res.cells.A[dt]) && rbNorm(res.cells.A[dt]) !== A.fixed);
+    const gap = { date: dates[3], shift: '15:00 - 00:00' };
+    const optA = rtCoverOptions(I, res.cells, 'Ibis DD', gap.date, gap.shift).some(o => o.key === 'A');
+    const borrowG = rtCoverOptions(I, res.cells, 'Ibis DD', gap.date, '08:00 - 17:00').some(o => o.key === 'G');
+    rbSetPerson('G', 'home', true);
+    const I2 = rbInput(1), homeG = rtCoverOptions(I2, res.cells, 'Ibis DD', gap.date, '08:00 - 17:00').some(o => o.key === 'G');
+    rbSetPerson('G', 'home', undefined); rbSetRule('lend', false);
+    const I3 = rbInput(1), allHome = rtCoverOptions(I3, res.cells, 'Ibis DD', gap.date, '08:00 - 17:00').some(o => o.key === 'G' || o.key === 'H');
+    rbSetRule('lend', true);
+    return { lock: A.lock, fixed: A.fixed, moved, optA, borrowG, homeG, allHome }; })()`);
+  check('lock: a manager keeps their shift by default', [lk.lock, lk.fixed].join(), 'true,08:00 - 17:00');
+  check('lock: the builder never moves a manager off it', lk.moved, false);
+  check('lock: a manager is never suggested to cover', lk.optA, false);
+  check('lock: someone from another hotel can be borrowed normally', lk.borrowG, true);
+  check('lock: 🏨 someone who stays at their hotel is never borrowed', lk.homeG, false);
+  check('lock: "keep everyone in their own hotel" stops all borrowing', lk.allHome, false);
+  const lp = q => { const r = run(`rtLockParse(${JSON.stringify(q)})`); return r ? r.mode + ':' + r.keys.join('') : 'none'; };
+  check('brain: lock phrases', [lp('lock Gina in her hotel'), lp('keep Hugo on his shift'), lp('Gina stays at Mercure'), lp('unlock gina'), lp('the guest stays in room 512'), lp('lock Gina in room 4')].join(' '), 'home:G shift:H home:G un:G none none');
+  // autocomplete
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'brain-complete.js'), 'utf8'), sb, { filename: 'brain-complete.js' });
+  const sug = q => run(`bcSuggest(${JSON.stringify(q)}, 6).map(x => x.q)`);
+  check('autocomplete: "what if gi" offers what-ifs for Gina', sug('what if gi').every(x => /^what if Gina/.test(x)) && sug('what if gi').length > 0, true);
+  check('autocomplete: words cut short, in order ("put hu nig")', sug('put hu nig')[0], 'put Hugo on nights next week');
+  check('autocomplete: "keep every" → keep everyone in their own hotel', sug('keep every')[0], 'keep everyone in their own hotel');
+  check('autocomplete: made-up example names never show', sug('sam').some(x => /\bSam\b/.test(x)), false);
 }
 
 console.log(`\n${pass} passed · ${fail} failed`);

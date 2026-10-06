@@ -9,6 +9,17 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 153, items: [
+    '🔒 Managers keep their own shift (e.g. 09:00 - 18:00) to run the operation: the builder never moves them and they are never suggested to cover. Lock or unlock anyone on their card ("🔒 Keeps 09:00 - 18:00"), or tell Ops Brain "keep Sam on his shift".',
+    '🏨 Lock someone to their hotel (card: "Stays at Adagio GD", or "lock Sam in his hotel"), or everyone at once: ⚖️ Rules → "Keep everyone in their own hotel" (or tell Ops Brain "keep everyone in their own hotel"). Nobody is then moved between hotels, by the builder or in suggestions.',
+    '🛎️ Bell boys: title "Bell Boy" (or tell Ops Brain "Sam and Lina are bell boys"). They get their own bell shifts, days off and cover ("Adagio GD · Bell"), never count as front desk and are never suggested for desk gaps.',
+    '⌨️ Ops Brain autocomplete: start typing and finished questions appear, with the team\'s names filled in ("what if ah…" → "what if Ahmed is sick tomorrow"). Tab to fill, Enter or tap to ask; your recent questions come first.',
+    '🤔 What if… finds more full-cover plans: one move may open a gap the next move fills.',
+  ] },
+  { v: 153, items: [
+    '🛎️ Bell boys: new title "Bell Boy" (on their card, or tell Ops Brain "Sam and Lina are bell boys"). They are rostered on their own bell shifts and days off with their own cover ("Adagio GD · Bell" in 👥 Cover needed), never count as front desk, and are never suggested for desk gaps; front desk staff aren\'t put on bell shifts either. A day with no bell boy (one bell boy on his day off) is shown as a note, not a red gap.',
+    '🤔 What if… finds more full-cover plans: a move may open a gap that the next move fills (e.g. Saad covers Thursday, Judith covers Saad\'s Wednesday). Ops Brain also understands names with a typo.',
+  ] },
   { v: 152, items: [
     '🤔 What if…: ask before you change anything: "what if Ahmed is sick tomorrow", "takes Thursday off", "is on leave next week", "isn\'t on 12-21 on Friday". Roster → 🤔 What if…, the builder, or Ops Brain.',
     '🤔 You see what would be short, then whole plans that fill every gap under your rules (rest, night ↔ day, who can work nights, 9 h, days off), fewest changes first: % covered, rules kept, one-person shifts, who else changes. If nothing reaches 100% with this team, it says so and shows the closest. Leave, PH and days gone by are never moved; "Use this" changes the roster and tells only the people affected.',
