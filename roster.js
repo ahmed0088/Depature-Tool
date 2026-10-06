@@ -28,6 +28,28 @@ const RO_DEFAULT_CODES = {
   SL:  { label: 'Sick leave', type: 'leave' },
   PH:  { label: 'Public holiday', type: 'leave' },
   TR:  { label: 'Training', type: 'other' },
+  TRN: { label: 'Training', type: 'other' },
+  CL:  { label: 'Casual leave', type: 'leave' },
+  EL:  { label: 'Emergency leave', type: 'leave' },
+  ML:  { label: 'Medical / maternity leave', type: 'leave' },
+  UL:  { label: 'Unpaid leave', type: 'leave' },
+  LWP: { label: 'Leave without pay', type: 'leave' },
+  BL:  { label: 'Bereavement leave', type: 'leave' },
+  VAC: { label: 'Vacation', type: 'leave' },
+  CO:  { label: 'Compensatory off', type: 'off' },
+  COFF:{ label: 'Compensatory off', type: 'off' },
+  SB:  { label: 'Standby', type: 'other' },
+  STBY:{ label: 'Standby', type: 'other' },
+};
+/** First guesses for words a roster uses without saying what they mean. */
+const RO_GUESS = {
+  ALA: ['Annual leave (approved)', 'leave'], ALP: ['Annual leave (pending)', 'leave'], AL: ['Annual leave', 'leave'], ANL: ['Annual leave', 'leave'],
+  PHL: ['Public holiday (in lieu)', 'off'], LIEU: ['Day off in lieu', 'off'], IL: ['Day off in lieu', 'off'], OIL: ['Off in lieu', 'off'], DIL: ['Day in lieu', 'off'],
+  HOL: ['Holiday', 'leave'], PL: ['Paid / paternity leave', 'leave'], LOP: ['Loss of pay (unpaid leave)', 'leave'], UPL: ['Unpaid leave', 'leave'], HL: ['Hajj leave', 'leave'], MAT: ['Maternity leave', 'leave'], PAT: ['Paternity leave', 'leave'],
+  RO: ['Rest off', 'off'], WO: ['Weekly off', 'off'], X: ['Off', 'off'], NA: ['Not available', 'off'],
+  OD: ['On duty elsewhere', 'other'], BT: ['Business trip', 'other'], WFH: ['Working from home', 'other'], TBA: ['To be announced', 'other'], TBC: ['To be confirmed', 'other'],
+  MS: ['Morning shift', 'morning'], AS: ['Afternoon shift', 'afternoon'], ES: ['Evening shift', 'afternoon'], NS: ['Night shift', 'night'], GY: ['Graveyard (night) shift', 'night'], MID: ['Middle shift', 'other'], SPL: ['Split shift', 'other'], SPLIT: ['Split shift', 'other'],
+  NJ: ['New joiner', 'other'], RES: ['Resigned', 'off'], TRF: ['Transferred', 'other'], ADAGIO: ['Working at Adagio that day', 'other'], MERCURE: ['Working at Mercure that day', 'other'], IBIS: ['Working at Ibis that day', 'other'],
 };
 const RO_TYPES = { morning: 'Morning', afternoon: 'Afternoon', night: 'Night', other: 'Other', leave: 'Leave', off: 'Off' };
 const RO_DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
@@ -187,7 +209,8 @@ function roParse(rows, weekStart) {
 function roImportOpen(show) {
   const b = document.getElementById('roImport');
   if (!b) return;
-  b.hidden = show === false ? true : !b.hidden;
+  b.hidden = show === false ? true : show === true ? false : !b.hidden;
+  if (!b.hidden && typeof riRenderAiLine === 'function') riRenderAiLine();
   if (!b.hidden) { const w = document.getElementById('roImpWeek'); if (w && !w.value) w.value = roAdd(roMonday(new Date()), new Date().getDay() >= 4 || new Date().getDay() === 0 ? 7 : 0); b.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 }
 function roFromPaste() {
@@ -214,16 +237,50 @@ function roFromFile(input) {
   };
   rd.readAsArrayBuffer(f);
 }
+function roPrevSet(name, date, v) {
+  if (!roPreview) return;
+  v = String(v || '').trim();
+  const row = roPreview.cells[name] = roPreview.cells[name] || {};
+  if (v) row[date] = v; else delete row[date];
+  const td = document.querySelector(`#roPreview .ro-cell[data-k="${CSS.escape(name)}"][data-d="${date}"]`);
+  if (td) { const i = roInfo(v); td.className = 'ro-cell ' + (i ? 'ro-t-' + i.type : '') + (/\?/.test(v) ? ' ro-unsure' : ''); }
+}
+/** Codes in a roster the app doesn't know yet, with a first guess (from the AI when it read the picture). */
+function roUnknownWords(res) {
+  const seen = new Map(), all = roAllCodes();
+  const tokOf = v => (String(v || '').trim().match(/^[A-Za-z][A-Za-z\-]{0,7}\b/) || [])[0];
+  const add = (code, meaning, type, from) => { const k = String(code || '').toUpperCase(); if (!k || seen.has(k) || all[k] || /^(OFF|AM|PM)$/.test(k)) return; seen.set(k, { code: k, meaning: meaning || '', type: type || 'other', from }); };
+  (res.terms || []).forEach(t => { const k = tokOf(t.text); if (k) add(k, t.meaning, { leave: 'leave', off: 'off', work: 'other', morning: 'morning', afternoon: 'afternoon', night: 'night' }[t.kind] || 'other', 'ai'); });
+  Object.values(res.cells).forEach(row => Object.values(row).forEach(v => {
+    const i = roInfo(v);
+    if (!i || i.from || all[String(v).trim().toUpperCase()]) return;
+    const k = tokOf(v); if (!k || all[k.toUpperCase()]) return;
+    const g = RO_GUESS[k.toUpperCase()];
+    add(k, g ? g[0] : '', g ? g[1] : i.type, g ? 'guess' : '');
+  }));
+  return [...seen.values()];
+}
 function roShowPreview(res) {
   const box = document.getElementById('roPreview');
   roPreview = res;
   if (!box) return;
   if (!res) { box.innerHTML = '<div class="ro-empty">Couldn\'t find names and days in that. The roster needs one person per row, with their name and then a code for each day (like M, A, N, OFF or 07-15).</div>'; return; }
   const first = res.dates[0], last = res.dates[res.dates.length - 1];
-  box.innerHTML = `<div class="ro-prev-hd"><b>${res.names.length} people · ${res.dates.length} day${res.dates.length === 1 ? '' : 's'}</b> <span>${escapeHtml(roDayLbl(first, true))} → ${escapeHtml(roDayLbl(last, true))}</span></div>
-    ${_roTable(res.names.map(n => ({ key: n, name: n })), res.dates, (r, d) => res.cells[r.key][d], false)}
-    <div class="ro-acts"><button class="btn gold" onclick="roSavePreview()">✓ Save roster</button><button class="btn" onclick="roShowPreview(null);document.getElementById('roPreview').innerHTML=''">Cancel</button>
-    <small>These days are replaced; other weeks stay as they are.</small></div>`;
+  const rows = []; let lastG = null;
+  res.names.forEach(n => { const g = (res.groups || {})[n] || ''; if (g !== lastG && Object.keys(res.groups || {}).length) { rows.push({ section: g || 'Others' }); lastG = g; } rows.push({ key: n, name: n }); });
+  const unsure = res.names.reduce((t, n) => t + Object.values(res.cells[n] || {}).filter(v => /\?/.test(v)).length, 0);
+  const words = roUnknownWords(res);
+  const q = s => JSON.stringify(s).replace(/"/g, '&quot;');
+  box.innerHTML = `<div class="ro-prev-hd"><b>${res.names.length} people · ${res.dates.length} day${res.dates.length === 1 ? '' : 's'}</b> <span>${escapeHtml(roDayLbl(first, true))} → ${escapeHtml(roDayLbl(last, true))}</span>${res.by ? `<span class="ro-tag">${escapeHtml(res.by)}</span>` : ''}</div>
+    ${res.notes ? `<div class="ro-ai-note">🤖 ${escapeHtml(res.notes)}</div>` : ''}
+    ${unsure ? `<div class="ro-warn">⚠ ${unsure} cell${unsure === 1 ? '' : 's'} could not be read clearly (marked in red). Check them against the picture and type the right value.</div>` : ''}
+    <div class="ro-hint">Check it against the picture. Tap any cell to correct it before saving.</div>
+    ${_roTable(rows, res.dates, (r, d) => (res.cells[r.key] || {})[d], 'preview')}
+    ${words.length ? `<div class="ro-words"><div class="ro-card-hd"><b>🔎 Words in this roster</b><span>Say what they mean once; HotelOps remembers for every roster after.</span></div>
+      ${words.map(w => `<div class="ro-word"><b>${escapeHtml(w.code)}</b><input class="ro-w-m" data-code="${escapeHtml(w.code)}" value="${escapeHtml(w.meaning)}" placeholder="What does ${escapeHtml(w.code)} mean?"><select class="ro-w-t">${Object.entries(RO_TYPES).map(([k, v]) => `<option value="${k}"${k === w.type ? ' selected' : ''}>${v}</option>`).join('')}</select>${w.from ? `<small>${w.from === 'ai' ? 'AI guess' : 'usual meaning'}</small>` : '<small class="bad">unknown</small>'}</div>`).join('')}
+    </div>` : ''}
+    <div class="ro-acts"><button class="btn gold" onclick="roSavePreview()">✓ Save roster${typeof riPending !== 'undefined' && riPending ? ' and post it' : ''}</button><button class="btn" onclick="roShowPreview(null);document.getElementById('roPreview').innerHTML='';if(typeof riPending!=='undefined')riPending=null">Cancel</button>
+    <small>These days are replaced; other weeks stay as they are. The team is told a new roster is posted.</small></div>`;
 }
 function roSavePreview() {
   const res = roPreview;
@@ -239,6 +296,14 @@ function roSavePreview() {
   });
   roStaff = staff;
   fbSet('roster/staff', staff);
+  document.querySelectorAll('#roPreview .ro-w-m').forEach(inp => {
+    const k = inp.dataset.code, m = inp.value.trim();
+    if (!k || !m) return;
+    const v = { label: m, type: inp.parentElement.querySelector('.ro-w-t').value };
+    roCodes = Object.assign({}, roCodes, { [k]: v });
+    fbSet('roster/codes/' + k.replace(/[.#$\[\]\/]/g, ''), v);
+  });
+  roPost(res);
   if (typeof logActivity === 'function') try { logActivity('roster_saved', `${res.names.length} people · ${res.dates[0]} to ${res.dates[res.dates.length - 1]}`); } catch (_) {}
   roPreview = null;
   document.getElementById('roPreview').innerHTML = '';
@@ -417,14 +482,14 @@ function _roWhen(n) {
 function _roTable(rows, dates, get, editable) {
   const today = roToday();
   const q = s => JSON.stringify(s).replace(/"/g, '&quot;');
-  const span = dates.length + 1 + (editable ? 1 : 0);
+  const span = dates.length + 1 + (editable === true ? 1 : 0);
   return `<div class="ro-scroll"><table class="ro-table">
-    <thead><tr><th class="ro-name">Name</th>${dates.map(d => `<th class="${d === today ? 'ro-today' : ''}">${escapeHtml(roDayLbl(d))}</th>`).join('')}${editable ? '<th></th>' : ''}</tr></thead>
+    <thead><tr><th class="ro-name">Name</th>${dates.map(d => `<th class="${d === today ? 'ro-today' : ''}">${escapeHtml(roDayLbl(d))}</th>`).join('')}${editable === true ? '<th></th>' : ''}</tr></thead>
     <tbody>${rows.map(r => r.section ? `<tr class="ro-sec"><td colspan="${span}"><span>${escapeHtml(r.section)}</span></td></tr>` : `<tr class="${r.key === roMeKey ? 'ro-me' : ''}"><td class="ro-name" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}${r.key === roMeKey ? ' <span class="ro-you">you</span>' : ''}</td>${dates.map(d => {
       const v = get(r, d) || '', i = roInfo(v);
-      return `<td class="ro-cell ${i ? 'ro-t-' + i.type : ''}${d === today ? ' ro-today' : ''}" data-k="${escapeHtml(r.key)}" data-d="${d}" title="${escapeHtml(i ? i.label + (i.from && !i.label.startsWith(i.from) ? ' ' + roTime(i) : '') : '')}">${editable
-        ? `<input value="${escapeHtml(v)}" maxlength="30" onchange="roSetCell(${q(r.key)},'${d}',this.value)">`
-        : `${escapeHtml(roCellTxt(i))}${i && i.note ? `<i class="ro-note">${escapeHtml(i.note)}</i>` : ''}`}</td>`; }).join('')}${editable ? `<td><button class="ro-x" title="Clear this week" onclick="roClearPerson(${q(r.key)})">✕</button></td>` : ''}</tr>`).join('')}</tbody>
+      return `<td class="ro-cell ${i ? 'ro-t-' + i.type : ''}${d === today ? ' ro-today' : ''}${/\?/.test(v) ? ' ro-unsure' : ''}" data-k="${escapeHtml(r.key)}" data-d="${d}" title="${escapeHtml(i ? i.label + (i.from && !i.label.startsWith(i.from) ? ' ' + roTime(i) : '') : '')}">${editable
+        ? `<input value="${escapeHtml(v)}" maxlength="40" onchange="${editable === 'preview' ? 'roPrevSet' : 'roSetCell'}(${q(r.key)},'${d}',this.value)">`
+        : `${escapeHtml(roCellTxt(i))}${i && i.note ? `<i class="ro-note">${escapeHtml(i.note)}</i>` : ''}`}</td>`; }).join('')}${editable === true ? `<td><button class="ro-x" title="Clear this week" onclick="roClearPerson(${q(r.key)})">✕</button></td>` : ''}</tr>`).join('')}</tbody>
   </table></div>`;
 }
 
@@ -448,7 +513,7 @@ function roRenderSide() {
     if (!roMeKey) {
       me.innerHTML = `<div class="ro-card-hd"><b>My shifts</b></div>${names.length
         ? `<div class="ro-pick"><span>Which one is you? You only choose once.</span><select onchange="roSetMe(this.value)"><option value="">Choose your name…</option>${names.map(x => `<option value="${escapeHtml(x.k)}">${escapeHtml(x.n)}${x.g ? ' · ' + escapeHtml(x.g) : ''}</option>`).join('')}</select></div>`
-        : '<div class="ro-empty">No roster yet. ' + (roCanEdit() ? 'Press <b>Add roster</b> and paste it from Excel.' : 'Your supervisor adds it here once a week.') + '</div>'}`;
+        : '<div class="ro-empty">No roster yet. ' + (roCanEdit() ? 'Press <b>Add roster</b> and add the roster picture.' : 'Your supervisor adds it here once a week.') + '</div>'}`;
     } else {
       const nx = roNextShift(), st = roStaff[roMeKey] || {};
       me.innerHTML = `<div class="ro-card-hd"><b>My shifts</b><span>${escapeHtml(st.name || roMeKey)}${st.group ? ' · ' + escapeHtml(st.group) : ''} · <a href="javascript:void 0" onclick="roSetMe('')">not you?</a></span></div>
@@ -456,19 +521,79 @@ function roRenderSide() {
         <div class="ro-days">${roMine(7).map(x => `<div class="ro-day ${x.info ? 'ro-t-' + x.info.type : 'ro-t-none'}${x.date === roToday() ? ' is-today' : ''}" title="${escapeHtml(x.info ? x.info.label : '')}"><small>${escapeHtml(x.date === roToday() ? 'Today' : roDate(x.date).toLocaleDateString('en-GB', { weekday: 'short' }))}</small><b>${escapeHtml(x.info ? roCellTxt(x.info) : '—')}</b><span>${escapeHtml(x.info ? (x.info.note || (x.info.from ? RO_TYPES[x.info.type] : x.info.label)) : '—')}</span></div>`).join('')}</div>`;
     }
   }
-  // Today, by hours
+  // Today: everyone's hours on one timeline, with a line at the time now
   const on = document.getElementById('roTodayOn');
   if (on) {
-    const g = roCurGroup(), now = new Date();
+    const g = roCurGroup(), now = new Date(), today = roToday();
+    const d0 = roDate(today), d1 = roDate(roAdd(today, 1)), DAY = 864e5;
     const working = new Set(roWorkingAt(now).map(x => x.key));
-    const ppl = roPeople(roToday());
-    const work = ppl.filter(x => x.info.type !== 'off' && x.info.type !== 'leave'), away = ppl.filter(x => x.info.type === 'off' || x.info.type === 'leave');
-    const chip = x => `<b class="${x.key === roMeKey ? 'is-me' : ''}${working.has(x.key) ? ' is-on' : ''}" title="${escapeHtml(x.info.label)}">${escapeHtml(x.name)}${x.info.note ? ` <i>${escapeHtml(x.info.note)}</i>` : ''}</b>`;
-    on.innerHTML = `<div class="ro-card-hd"><b>Today${g ? ' · ' + escapeHtml(g) : ''}</b><span>${escapeHtml(roDayLbl(roToday(), true))}${working.size ? ` · <em class="ro-live">${working.size} on shift now</em>` : ''}</span></div>` + (work.length
-      ? roByTime(work).map(([lbl, type, xs]) => `<div class="ro-on ro-t-${type}"><span class="ro-on-k">${escapeHtml(lbl)}</span><span>${xs.map(chip).join('')}</span></div>`).join('')
+    const bars = [];   // { key, name, info, a, b (0–1), carry }
+    // yesterday's overnight shifts still running this morning
+    roPeople(roAdd(today, -1)).forEach(x => { const sp = roSpan(roAdd(today, -1), x.info); if (sp && sp.end > d0) bars.push({ x, a: 0, b: Math.min(1, (sp.end - d0) / DAY), carry: true }); });
+    const ppl = roPeople(today);
+    ppl.forEach(x => { const sp = roSpan(today, x.info); if (sp) bars.push({ x, a: Math.max(0, (sp.start - d0) / DAY), b: Math.min(1, (Math.min(sp.end, d1) - d0) / DAY), carry: false }); });
+    bars.sort((p, q) => p.a - q.a || q.b - p.b || p.x.name.localeCompare(q.x.name));
+    const away = ppl.filter(x => x.info.type === 'off' || x.info.type === 'leave');
+    const other = ppl.filter(x => !x.info.from && x.info.type !== 'off' && x.info.type !== 'leave');
+    const pct = v => (v * 100).toFixed(2) + '%';
+    const nowP = (now - d0) / DAY;
+    const chip = x => `<b class="${x.key === roMeKey ? 'is-me' : ''}" title="${escapeHtml(x.info.label)}">${escapeHtml(x.name)} <i>${escapeHtml(roCellTxt(x.info))}</i></b>`;
+    on.innerHTML = `<div class="ro-card-hd"><b>Today${g ? ' · ' + escapeHtml(g) : ''}</b><span>${escapeHtml(roDayLbl(today, true))}${working.size ? ` · <em class="ro-live">${working.size} on shift now</em>` : ''}</span></div>` + (bars.length || other.length
+      ? `<div class="ro-tl" style="--now:${pct(nowP)}">
+          <div class="ro-tl-axis"><span></span><div>${[0, 3, 6, 9, 12, 15, 18, 21, 24].map(h => `<i style="left:${pct(h / 24)}">${String(h % 24).padStart(2, '0')}</i>`).join('')}</div></div>
+          ${bars.map(({ x, a, b, carry }) => `<div class="ro-tl-row${x.key === roMeKey ? ' is-me' : ''}${working.has(x.key) && (carry || a <= nowP) ? ' is-on' : ''}">
+            <span class="ro-tl-name" title="${escapeHtml(x.name)}">${escapeHtml(x.name)}</span>
+            <div class="ro-tl-track"><i class="ro-tl-bar ro-t-${x.info.type}${carry ? ' carry' : ''}" style="left:${pct(a)};width:${pct(Math.max(b - a, 0.02))}" title="${escapeHtml(x.name + ' · ' + x.info.label + (carry ? ' (from yesterday)' : ''))}"><em>${escapeHtml(carry ? '…' + x.info.to : roShort(x.info))}${x.info.note && !carry ? ' · ' + escapeHtml(x.info.note) : ''}</em></i></div>
+          </div>`).join('')}
+        </div>`
+        + (other.length ? `<div class="ro-on ro-t-other"><span class="ro-on-k">Other</span><span>${other.map(chip).join('')}</span></div>` : '')
         + (away.length ? `<div class="ro-on ro-t-off"><span class="ro-on-k">Off / leave</span><span>${away.map(chip).join('')}</span></div>` : '')
       : '<div class="ro-empty">Nobody is on the roster for today.</div>');
   }
+}
+
+// ── A new roster is posted: tell the team ─────────────────
+let roPosted = null;
+function roSeen() { try { return +localStorage.getItem('roster_seen_v1') || 0; } catch (_) { return 0; } }
+function roIsNew() { return !!(roPosted && roPosted.at > roSeen() && roPosted.byUid !== roMyUid()); }
+function roMarkSeen() { if (roPosted) try { localStorage.setItem('roster_seen_v1', String(roPosted.at)); } catch (_) {} roBadge(); }
+function roBadge() { const n = roIsNew(); document.querySelectorAll('#nav-roster, .mob-more-item[data-panel="roster"], #tbRoster').forEach(e => e.classList.toggle('ro-has-new', n)); }
+function roNotifyOn() { try { return localStorage.getItem('roster_notify_v1') !== '0'; } catch (_) { return true; } }
+async function roToggleNotify() {
+  const on = !(roNotifyOn() && 'Notification' in window && Notification.permission === 'granted');
+  if (on && 'Notification' in window && Notification.permission !== 'granted') {
+    const p = await Notification.requestPermission();
+    if (p !== 'granted') { showToast('Notifications are blocked. Allow them for this site in the browser settings', 'err'); return; }
+  }
+  try { localStorage.setItem('roster_notify_v1', on ? '1' : '0'); } catch (_) {}
+  showToast(on ? 'You\'ll get a notification when a new roster is posted' : 'Roster notifications off', 'ok');
+  roRender();
+}
+function roNotify(title, body) {
+  if (typeof hoChime === 'function') try { hoChime(); } catch (_) {}
+  if (!roNotifyOn() || !('Notification' in window) || Notification.permission !== 'granted') return;
+  const opts = { body, icon: 'icon-192.png', badge: 'icon-192.png', tag: 'hotelops-roster', data: { panel: 'roster' } };
+  const plain = () => { try { new Notification(title, opts); } catch (_) {} };
+  if (navigator.serviceWorker && navigator.serviceWorker.controller) navigator.serviceWorker.ready.then(r => r.showNotification(title, opts)).catch(plain); else plain();
+}
+async function roPost(res) {
+  let image = null;
+  if (typeof riStorePending === 'function') try { image = await riStorePending(res); } catch (e) { console.warn('[roster] picture', e); }
+  roPosted = { at: Date.now(), by: (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || 'Someone', byUid: roMyUid(), from: res.dates[0], to: res.dates[res.dates.length - 1], people: res.names.length, image: image || null };
+  fbSet('roster/posted', roPosted);
+  roMarkSeen();
+}
+function roOnPosted(v) {
+  roPosted = v || null;
+  roBadge();
+  if (!v || !roIsNew()) return;
+  if (document.getElementById('panel-roster')?.classList.contains('active')) { roMarkSeen(); return; }
+  let al = 0; try { al = +localStorage.getItem('roster_alerted_v1') || 0; } catch (_) {}
+  if (v.at <= al) return;
+  try { localStorage.setItem('roster_alerted_v1', String(v.at)); } catch (_) {}
+  const span = `${roDate(v.from).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${roDate(v.to).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`;
+  showToast(`🗓️ New roster posted by ${v.by} (${span})`, 'ok');
+  roNotify('New roster posted', `${v.by} posted the roster for ${span}. Tap to see your shifts.`);
 }
 
 function roRender() {
@@ -476,6 +601,9 @@ function roRender() {
   if (!box) return;
   if (!roWeek) roWeek = roMonday(new Date());
   roLoadMe();
+  roMarkSeen();
+  const bell = document.getElementById('roBellBtn');
+  if (bell) { const on = roNotifyOn() && 'Notification' in window && Notification.permission === 'granted'; bell.textContent = on ? '🔔 Alerts on' : '🔕 Alerts off'; bell.title = on ? 'You get a notification when a new roster is posted. Tap to turn off.' : 'Get a notification when a new roster is posted'; }
   const ed = roCanEdit();
   document.getElementById('roEditBtn')?.toggleAttribute('hidden', !ed);
   document.getElementById('roAddBtn')?.toggleAttribute('hidden', !ed);
@@ -484,6 +612,7 @@ function roRender() {
   const dates = [0, 1, 2, 3, 4, 5, 6].map(i => roAdd(roWeek, i));
   const rows = roWeekRows();
   const isNow = roWeek === roMonday(new Date());
+  const pic = typeof riPicFor === 'function' ? riPicFor(roWeek) : null;
   box.innerHTML = `
     <div class="ro-weeknav">
       <button class="btn sm" onclick="roGo(-7)" title="Previous week">‹</button>
@@ -491,9 +620,11 @@ function roRender() {
       <button class="btn sm" onclick="roGo(7)" title="Next week">›</button>
       ${isNow ? '<span class="ro-tag">This week</span>' : '<button class="btn sm" onclick="roGo(0)">This week</button>'}
       ${roEdit ? '<button class="btn sm" onclick="roCopyLastWeek()">⧉ Copy last week</button>' : ''}
+      ${pic ? `<button class="btn sm" onclick="riOpen('${pic[0]}')" title="The roster picture management sent">📷 Original picture</button>` : ''}
     </div>
     ${roGroups().length > 1 ? `<div class="ro-groups">${['', ...roGroups()].map(g => `<button class="fchip${roCurGroup() === g ? ' on' : ''}" onclick="roSetGroup(${JSON.stringify(g || 'all').replace(/"/g, '&quot;')})">${escapeHtml(g || 'All hotels')}</button>`).join('')}</div>` : ''}
-    ${rows.length || roEdit ? _roTable(rows, dates, (r, d) => roCode(r.key, d), roEdit) : `<div class="ro-empty ro-big">No roster for this week yet.${ed ? ' Press <b>Add roster</b> to paste it, or <b>Edit</b> → <b>Copy last week</b>.' : ''}</div>`}
+    ${rows.length || roEdit ? _roTable(rows, dates, (r, d) => roCode(r.key, d), roEdit) : pic ? `<div class="ro-empty ro-big">Only the picture is posted for this week. <button class="btn sm gold" onclick="riOpen('${pic[0]}')">📷 Open the roster picture</button>${ed ? '<br><small>Set up AI reading and add the picture again to get My shifts and the timeline, or type the shifts with Edit.</small>' : ''}</div>`
+      : `<div class="ro-empty ro-big">No roster for this week yet.${ed ? ' Press <b>Add roster</b> to paste it, or <b>Edit</b> → <b>Copy last week</b>.' : ''}</div>`}
     ${roEdit ? `<div class="ro-add"><input id="roNewName" placeholder="Add a person to this week…" onkeydown="if(event.key==='Enter')roAddPerson()"><button class="btn sm" onclick="roAddPerson()">+ Add</button><small>Type a code in each day: M, A, N, OFF, AL, or hours like 07-15.</small></div>` : ''}
     <div class="ro-legend">${['morning', 'afternoon', 'night', 'off', 'leave', 'other'].map(k => `<span class="ro-t-${k}">${RO_TYPES[k]}</span>`).join('')}</div>
     ${roCodesHtml()}`;
@@ -570,13 +701,24 @@ const RO_COMMANDS = [
 // ── Start ─────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   if (typeof BA_COMMANDS !== 'undefined') BA_COMMANDS.unshift(...RO_COMMANDS);
-  if (typeof BR_FAQ !== 'undefined') BR_FAQ.push({ q: 'roster rota schedule my shifts day off who is working add the roster', t: 'Roster', a: 'Open <b>Roster</b>. Supervisors and managers press <b>Add roster</b> and paste it from Excel (or upload the file) once a week; everyone then sees <b>My shifts</b> and who is on today. Ask me "my shifts" or "who is on tonight".', go: 'roster', kind: '💡 How the app works' });
+  if (typeof BR_FAQ !== 'undefined') BR_FAQ.push({ q: 'roster rota schedule my shifts day off who is working add the roster', t: 'Roster', a: 'Open <b>Roster</b> (🗓 in the top bar). Supervisors and managers press <b>Add roster</b> and add the roster picture (AI reads it) or paste it from Excel, once a week; everyone then sees <b>My shifts</b> and who is on today. Ask me "my shifts" or "who is on tonight".', go: 'roster', kind: '💡 How the app works' });
   setTimeout(() => {
     if (typeof fbListen !== 'function') return;
     fbListen('roster/days', v => { roDays = v || {}; _roRefresh(); });
     fbListen('roster/staff', v => { roStaff = v || {}; roGuessMe(); _roRefresh(); });
     fbListen('roster/codes', v => { roCodes = v || {}; _roRefresh(); });
+    fbListen('roster/posted', roOnPosted);
   }, 1500);
+  // the timeline's "now" line moves while the page is open
+  setInterval(() => { if (document.getElementById('panel-roster')?.classList.contains('active') && !roEdit) roRenderSide(); }, 60000);
+  // opened from a "new roster" notification
+  if (/[?&]panel=roster\b/.test(location.search)) setTimeout(() => { if (typeof showPanel === 'function') showPanel('roster'); }, 2600);
+  if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.panel === 'roster' && typeof showPanel === 'function') showPanel('roster'); });
+  (window.BL_THINKERS = window.BL_THINKERS || []).push(add => {
+    if (!roIsNew()) return;
+    add({ id: 'rosterNew:' + roPosted.at, type: 'roster', icon: '🗓️', tone: 'idle', text: `New roster posted by ${roPosted.by}.`, why: 'Your shifts for the coming days are in.',
+      acts: [['Show my shifts', () => showPanel('roster')]] });
+  });
   // supervisors: a nudge when next week's roster isn't in by Thursday
   (window.BL_THINKERS = window.BL_THINKERS || []).push(add => {
     if (!roCanEdit() || !Object.keys(roStaff).length) return;

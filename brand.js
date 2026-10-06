@@ -68,7 +68,7 @@ function hoApplyIcons(root = document) {
     if (k) { el.dataset.hoIc = '1'; el.innerHTML = HOX_ICONS[k]; }
   });
   // top bar buttons, matched by their tooltip
-  const TB = [[/^search/i, 'search'], [/handover/i, 'handover'], [/what's new/i, 'sparkle'], [/feedback/i, 'feedback'], [/keyboard/i, 'keyboard'], [/export/i, 'save'], [/import/i, 'open'], [/team/i, 'team'], [/^settings/i, 'settings'], [/hide menu|menu/i, 'menu']];
+  const TB = [[/^roster/i, 'roster'], [/^search/i, 'search'], [/handover/i, 'handover'], [/what's new/i, 'sparkle'], [/feedback/i, 'feedback'], [/keyboard/i, 'keyboard'], [/export/i, 'save'], [/import/i, 'open'], [/team/i, 'team'], [/^settings/i, 'settings'], [/hide menu|menu/i, 'menu']];
   root.querySelectorAll('.topbar .icon-round').forEach(el => {
     if (el.dataset.hoIc) return;
     const hit = TB.find(([re]) => re.test(el.title || ''));

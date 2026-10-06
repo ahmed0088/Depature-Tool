@@ -115,6 +115,8 @@ function _frPutFiles(inp, files) {
 
 /** Work out where each dropped file goes, group them, send or ask. */
 async function frRoute(fileList) {
+  const pics = [...fileList].filter(f => /^image\//.test(f.type));
+  if (pics.length && typeof roFromImage === 'function' && typeof roCanEdit === 'function' && roCanEdit()) { showPanel('roster'); roFromImage(pics[0]); }
   const files = [...fileList].filter(f => !/^image\//.test(f.type));
   if (!files.length) return;
   const groups = {};

@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 142, items: [
+    '📷 Roster from a picture: Add roster → choose the roster image management sent (or drop or paste it). Claude, Anthropic\'s AI, reads the whole table even when the layout changes: hotels, names, dates and every shift. Check it against the picture, fix anything marked in red, and save. Needs AI reading set up once on the device that posts the roster.',
+    '🔎 Words nobody understands: the roster\'s unknown codes are listed with the most likely meaning; confirm or correct it once and it is remembered for every roster after.',
+    '🕘 Today is now a timeline of everyone\'s hours, with a red line at the time now and a green dot for who is on shift. 📷 Original picture opens what management sent.',
+    '🔔 New roster posted: everyone sees NEW on Roster (and the new 🗓 button in the top bar), a message and an Ops Brain note. Turn on 🔔 Alerts on the Roster page for a phone or desktop notification.',
+  ] },
   { v: 141, items: [
     '🗓️ Roster reads the cluster roster as it comes: the hotel sections (each hotel gets its own filter, and you see your own hotel first), employee numbers in front of names, hours like 00:00 - 09:00 or 19:00-04:00, ALA / SL / PH, and notes like "12:00 - 21:00 - Adagio".',
     '🌙 Night shifts are understood: 00:00–09:00 on the 6th is the night of the 5th. "Today" shows who is on shift right now (green dot), Home says "On shift now, until 09:00", and Ops Brain answers "who is on now" and "who is on tonight" correctly, even after midnight.',

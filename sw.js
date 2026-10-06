@@ -14,7 +14,7 @@
 //  clients pick up the new version instead of a stale cache.
 // ═══════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'ibis-ops-shell-v141';
+const CACHE_NAME = 'ibis-ops-shell-v142';
 
 const SHELL_FILES = [
   './',
@@ -68,6 +68,7 @@ const SHELL_FILES = [
   './brain-goto.js',
   './learn.js',
   './roster.js',
+  './roster-image.js',
   './brain-expert.js',
   './brand.js',
   './settings.js',
@@ -120,4 +121,15 @@ self.addEventListener('fetch', event => {
       return cached || network;
     })
   );
+});
+
+// A "new roster" notification: tap opens HotelOps on the Roster page
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const panel = (event.notification.data && event.notification.data.panel) || '';
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    const c = list.find(w => 'focus' in w);
+    if (c) { c.postMessage({ panel }); return c.focus(); }
+    return self.clients.openWindow('./' + (panel ? '?panel=' + panel : ''));
+  }));
 });

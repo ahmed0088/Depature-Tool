@@ -19,7 +19,7 @@
      onclick="" handlers and <style> blocks throughout — this policy's real
      value is blocking any OTHER origin from ever being loaded or contacted,
      not blocking inline handlers. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://www.gstatic.com https://apis.google.com https://*.firebasedatabase.app https://*.firebaseio.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebaseio.com wss://*.firebasedatabase.app https://apis.google.com; frame-src https://*.firebaseapp.com https://accounts.google.com; object-src 'none'; base-uri 'self'; form-action 'self';"/>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://www.gstatic.com https://apis.google.com https://*.firebasedatabase.app https://*.firebaseio.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com https://*.googleapis.com https://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebaseio.com wss://*.firebasedatabase.app https://apis.google.com; frame-src https://*.firebaseapp.com https://accounts.google.com; object-src 'none'; base-uri 'self'; form-action 'self';"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -399,6 +399,7 @@
     <div class="tb-pill" id="appVersionPill" onclick="appForceUpdate()" title="App version — tap to force an update if it looks out of date" style="cursor:pointer;">—</div>
     <div class="icon-round mob-hide" onclick="gsOpen()" title="Search — room / guest / task (Ctrl+K)">🔍</div>
     <div class="icon-round mob-hide" onclick="hoOpen()" title="Shift Handover">📋</div>
+    <div class="icon-round" id="tbRoster" onclick="showPanel('roster')" title="Roster: the team's shifts">🗓️</div>
     <div class="icon-round" onclick="showPanel('settings')" title="Settings">⚙️</div>
     <div class="icon-round mob-hide" onclick="wnOpen(true)" title="What's new in this version">✨</div>
     <div class="icon-round mob-hide" onclick="openFeedback()"  title="Feedback">💬</div>
@@ -1476,11 +1477,17 @@
 <div class="panel" id="panel-roster">
   <div class="ro-wrap">
     <div class="page-hd">
-      <div class="page-hd-left"><h1>Roster</h1><p>The team's shifts. Add the roster once (paste it from Excel or upload the file) and everyone sees their own shifts on any phone.</p></div>
-      <div class="page-hd-actions"><button class="btn gold" id="roAddBtn" onclick="roImportOpen()" hidden>＋ Add roster</button><button class="btn" id="roEditBtn" onclick="roToggleEdit()" hidden>✏️ Edit</button></div>
+      <div class="page-hd-left"><h1>Roster</h1><p>The team's shifts. Add the roster picture management sends (or paste it from Excel) and everyone sees their own shifts, today's timeline and the original picture on any phone.</p></div>
+      <div class="page-hd-actions"><button class="btn gold" id="roAddBtn" onclick="roImportOpen()" hidden>＋ Add roster</button><button class="btn" id="roEditBtn" onclick="roToggleEdit()" hidden>✏️ Edit</button><button class="btn" id="roBellBtn" onclick="roToggleNotify()">🔔 Alerts</button></div>
     </div>
     <div class="card ro-import" id="roImport" hidden>
-      <div class="ro-card-hd"><b>Add the roster</b><span>From Excel: select the names and the days, copy, paste here. Or upload the .xlsx.</span></div>
+      <div class="ro-card-hd"><b>Add the roster</b><span>The picture management sends, or a copy from Excel. <button class="ro-x" title="Close" onclick="roImportOpen(false)">✕</button></span></div>
+      <label class="ri-drop" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="event.preventDefault();this.classList.remove('over');event.stopPropagation();roFromImage(event.dataTransfer.files[0])">
+        <input type="file" accept="image/*" hidden onchange="riFromFile(this)">
+        <span class="ri-drop-ic">📷</span><b>Roster picture</b><small>Tap to choose the image (photo or screenshot), drop it here, or paste it with Ctrl+V</small>
+      </label>
+      <div class="ri-ai-line" id="riAiLine"></div>
+      <details class="ro-xl"><summary>Or paste it from Excel</summary>
       <div class="ro-imp-row">
         <label>Week starting <input type="date" id="roImpWeek"></label>
         <small>Used when the roster only shows day names (Mon, Tue…). Dates in the roster are read by themselves.</small>
@@ -1491,6 +1498,7 @@
         <label class="btn">📂 Upload Excel<input type="file" accept=".xlsx,.xls,.csv" hidden onchange="roFromFile(this)"></label>
         <button class="btn" onclick="roImportOpen(false)">Close</button>
       </div>
+      </details>
       <div id="roPreview"></div>
     </div>
     <div class="ro-top">
@@ -5354,6 +5362,7 @@ async function appInit() {
 <script src="brain-goto.js"></script>
 <script src="learn.js"></script>
 <script src="roster.js"></script>
+<script src="roster-image.js"></script>
 <script src="brain-expert.js"></script>
 <script src="brand.js"></script>
 <script src="settings.js"></script>
