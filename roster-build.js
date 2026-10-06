@@ -53,6 +53,19 @@ function rbIsNight(code) { const p = rbParse(code); return !!p && p.type === 'ni
 function rbSwitchOk(prev, next, R) { if (R && R.nightSwitch === false) return true; return !rbParse(prev) || !rbParse(next) || rbIsNight(prev) === rbIsNight(next); }
 /** Who may work a shift: the titles set for it (e.g. nights: Supervisor, Duty Manager), else everyone. */
 function rbMayWork(I, g, p, s) { const who = (((I.groups || {})[g] || {}).who || {})[rbNorm(s) || s]; return !who || !who.length || who.includes((p && p.title) || ''); }
+/** Shift types people ask for: morning, day (morning + 12:00), evening, night. */
+const RB_BANDS = {
+  morning: { label: 'Morning', test: x => x.type !== 'night' && x.s >= 300 && x.s < 660 },
+  day: { label: 'Day (morning + 12:00)', test: x => x.type !== 'night' && x.s >= 300 && x.s < 780 },
+  evening: { label: 'Evening', test: x => x.type !== 'night' && x.s >= 720 && x.s < 1080 },
+  night: { label: 'Night', test: x => x.type === 'night' },
+};
+/** The shifts of a hotel in a type (or the exact shift asked for). */
+function rbBandShifts(shifts, band) {
+  if (RB_BANDS[band]) return shifts.filter(s => { const x = rbParse(s); return x && RB_BANDS[band].test(x); });
+  const n = rbNorm(band); return n && shifts.includes(n) ? [n] : [];
+}
+function rbBandLabel(band) { return RB_BANDS[band] ? RB_BANDS[band].label : band; }
 function rbKind(code) {
   code = code == null ? '' : String(code);
   if (_rbKC.has(code)) return _rbKC.get(code);
@@ -118,6 +131,7 @@ function _rbAttempt(I, seed) {
             if (cover < need(g, p.fixed, d)) c += 70;
           }
           if ((p.prefOff || []).includes(d)) c -= 25;
+          if (I.keep && I.keep[p.key] && rbKind(I.keep[p.key][dates[d]]) === 'off') c -= 30;   // keep their day off where it was
           if ((p.lastOffs || []).includes(d)) c -= 2;
           if (p.lastWeekendOff && d >= 4) c += 5;                       // weekend offs take turns
           const firstBreak = dates.findIndex(dt => offOrAway(cells[p.key][dt]));
@@ -219,6 +233,7 @@ function rbMatchDay(I, g, cells, dates, d, R, rnd) {
     if (!rbMayWork(I, g, p, s)) return BAD;
     if ((rbParse(s) || {}).e - (rbParse(s) || {}).s > (R.maxHours || 9) * 60) return BAD;
     let c = 0;
+    if (I.keep && I.keep[p.key] && I.keep[p.key][dt] !== undefined) c += rbNorm(I.keep[p.key][dt]) === s ? -6 : 10;   // change as little as possible
     if (p.fixed) c += s === p.fixed ? -8 : (p.fixedCost || 30);
     if (p.lastMain && p.mode === 'rotate' && s === p.lastMain) c += 6;   // rotates: a different shift from last week
     c += rbChangeCost(pv, s, d === 0);
@@ -255,6 +270,7 @@ function rbScore(I, g, cells, dates, R) {
     let run = p.run || 0, prev = p.lastShift || '', offs = 0;
     for (let d = 0; d < 7; d++) {
       const dt = dates[d], v = cells[p.key][dt] || '';
+      if (I.keep && I.keep[p.key] && (I.keep[p.key][dt] || '') !== v) sc += 10;   // each change from the week as it was
       if (rbParse(v)) {
         run++;
         if (run > R.maxRun) sc += 2500;
@@ -529,6 +545,11 @@ function rbPre() {
     if (!r || !r.key) return;
     dates.filter(dt => dt >= r.from && dt <= (r.to || r.from)).forEach(dt => {
       if (r.type === 'avoid') { ((avoid[r.key] = avoid[r.key] || {})[dt] = (avoid[r.key][dt] || [])).push(r.code); return; }
+      if (r.type === 'band') {
+        const sh = rbGroupCfg((roStaff[r.key] || {}).group || '').shifts, ok = rbBandShifts(sh, r.code);
+        if (ok.length) { (avoid[r.key] = avoid[r.key] || {})[dt] = (avoid[r.key][dt] || []).concat(sh.filter(x => !ok.includes(x))); }
+        return;
+      }
       const v = r.type === 'off' ? 'OFF' : r.type === 'shift' ? r.code : r.type === 'ph' ? (r.code ? `PH - ${r.code}` : 'PH') : (r.code || 'AL');
       (pre[r.key] = pre[r.key] || {})[dt] = v;
     });
@@ -617,7 +638,7 @@ function rbRender() {
         <div class="rb-req-add">
           <select id="rbRqP">${shown.map(g => `<optgroup label="${escapeHtml(g || 'Team')}">${rbMembers(g).map(k => `<option value="${escapeHtml(k)}">${escapeHtml(roStaff[k].name)}</option>`).join('')}</optgroup>`).join('')}</select>
           <select id="rbRqT" onchange="rbReqTypeChange()">
-            <option value="off">Day off request</option><option value="leave">Leave (AL, ALA, SL…)</option><option value="ph">PH day (in lieu)</option><option value="shift">Must work a shift</option><option value="avoid">Can't work a shift</option>
+            <option value="off">Day off request</option><option value="leave">Leave (AL, ALA, SL…)</option><option value="ph">PH day (in lieu)</option><option value="band">Shift type (morning, day, evening, night)</option><option value="shift">Must work a shift</option><option value="avoid">Can't work a shift</option>
           </select>
           <span id="rbRqC"></span>
           <label>From <input type="date" id="rbRqF" value="${dates[0]}" min="${dates[0]}" max="${dates[6]}"></label>
@@ -626,6 +647,7 @@ function rbRender() {
         </div>
       </div>
 
+      ${typeof rtPlanHtml === 'function' && Object.keys(roStaff).length ? rtPlanHtml(shown, dates) : ''}
       <details class="card rb-card"${draft ? '' : ' open'}>
         <summary class="ro-card-hd"><b>👥 Cover needed</b><span>people on each shift, each day</span></summary>
         ${shown.map(g => rbNeedHtml(g)).join('')}
@@ -680,7 +702,7 @@ function rbOptApply(i) { const o = _rbOpt[i]; if (o && o.cells) rbApplyCells(o.c
 
 function rbReqText(r) {
   const d = r.from === (r.to || r.from) ? roDayLbl(r.from) : `${roDayLbl(r.from)} → ${roDayLbl(r.to)}`;
-  return `${r.type === 'off' ? 'Day off' : r.type === 'leave' ? (r.code || 'Leave') : r.type === 'ph' ? 'PH' + (r.code ? ' (' + r.code + ')' : '') : r.type === 'shift' ? 'Works ' + r.code : 'Not ' + r.code} · ${d}`;
+  return `${r.type === 'off' ? 'Day off' : r.type === 'leave' ? (r.code || 'Leave') : r.type === 'ph' ? 'PH' + (r.code ? ' (' + r.code + ')' : '') : r.type === 'shift' ? 'Works ' + r.code : r.type === 'band' ? rbBandLabel(r.code) + ' shifts' : 'Not ' + r.code} · ${d}`;
 }
 function rbReqTypeChange() {
   const t = document.getElementById('rbRqT')?.value, box = document.getElementById('rbRqC');
@@ -689,6 +711,7 @@ function rbReqTypeChange() {
   const shifts = rbGroupCfg(g).shifts;
   const leave = Object.entries(roAllCodes()).filter(([, v]) => v.type === 'leave' && !/^PH$/.test('')).map(([c]) => c).filter(c => c !== 'PH');
   box.innerHTML = t === 'leave' ? `<select id="rbRqCode">${leave.map(c => `<option${c === 'AL' ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}</select>`
+    : t === 'band' ? `<select id="rbRqCode">${Object.keys(RB_BANDS).map(b => `<option value="${b}">${escapeHtml(RB_BANDS[b].label)}</option>`).join('')}</select>`
     : t === 'shift' || t === 'avoid' ? `<select id="rbRqCode">${shifts.map(s => `<option>${escapeHtml(s)}</option>`).join('')}</select>`
     : t === 'ph' ? `<input id="rbRqCode" placeholder="for (e.g. 28th Aug.)" value="${escapeHtml(rbPhOwed(k).label)}">` : '';
 }

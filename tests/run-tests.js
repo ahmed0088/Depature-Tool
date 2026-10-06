@@ -284,6 +284,20 @@ console.log('\nRoster scenarios');
     const after = o[0].cells;
     check('sick: the first suggestion fills the shift without new rule breaks', sb.rbProblems(I, after).filter(p => p.kind !== 'thin').length, 0);
   }
+  // 8. "put B on mornings": band request keeps B on morning shifts, and keep = the old week changes little
+  {
+    const G = { 'Ibis DD': { shifts: [M, E], need: { [M]: day(1), [E]: day(1) } } };
+    const ppl = ['A', 'B', 'C', 'D'].map(k => P(k));
+    const base = sb.rbSolve({ week: W, groups: G, people: ppl, pre: {}, rules: { minRest: 11, maxHours: 9, allowOne: true }, seed: 1 }).cells;
+    check('shift type: morning band holds only morning shifts', JSON.stringify(sb.rbBandShifts([M, E, N, D9], 'morning')), JSON.stringify([M, D9]));
+    check('shift type: night band', JSON.stringify(sb.rbBandShifts([M, E, N], 'night')), JSON.stringify([N]));
+    const avoid = { B: {} }; dates.forEach(d => { avoid.B[d] = [E]; });
+    const r = sb.rbSolve({ week: W, groups: G, people: ppl, pre: {}, avoid, keep: base, rules: { minRest: 11, maxHours: 9, allowOne: true }, seed: 1 });
+    check('shift type: B never on evenings', dates.some(d => r.cells.B[d] === E), false);
+    check('shift type: rules still kept', r.problems.filter(p => p.kind !== 'thin').length, 0);
+    const same = sb.rbSolve({ week: W, groups: G, people: ppl, pre: {}, keep: base, rules: { minRest: 11, maxHours: 9, allowOne: true }, seed: 3 }).cells;
+    check('keep: nothing asked, nothing changes', ['A', 'B', 'C', 'D'].reduce((n, k) => n + dates.filter(d => same[k][d] !== base[k][d]).length, 0), 0);
+  }
 }
 
 console.log(`\n${pass} passed · ${fail} failed`);

@@ -12,9 +12,9 @@
 //    • Mid-week changes: edit the posted week; only the people whose
 //      shifts changed are told.
 //    • Drag a cell onto another to swap (long-press on a phone).
-//    • Ops Brain: "Saad is sick tomorrow", "Ali wants Friday off",
-//      "swap Hassan and Turab on Tue", "who can cover nights on Wed",
-//      "roster problems", "Manisha last week".
+//    • Ops Brain: "Omar is sick tomorrow", "Ali wants Friday off",
+//      "swap Sam and Lina on Tue", "who can cover nights on Wed",
+//      "roster problems", "Lina last week".
 //    • Shift Tasks follow the roster's real hours.
 // ═══════════════════════════════════════════════════════════
 
@@ -218,6 +218,100 @@ function rtSwapOptions(I, cells, key, date) {
 /** Gaps in a week with the best ways to fill each. */
 function rtAdvice(I, cells) {
   return rbProblems(I, cells).filter(p => p.kind === 'short' || p.kind === 'thin').map(p => Object.assign({}, p, { options: rtCoverOptions(I, cells, p.group, p.date, p.shift).slice(0, 3) }));
+}
+
+// ── "Put Sam on mornings this week" ─────────────────────
+/** Try one person (or each of several) on a shift type for some days; each option is the week with that,
+ *  changing as little as possible, with what it costs: changes for others, problems, hours changing mid-run. */
+function rtPlanOptions(week, keys, band, from, to, both) {
+  const dates = rtDates(week), today = roToday();
+  from = from || dates[0]; to = to || dates[6];
+  const base = rbDrafts[week] && rbDrafts[week].cells ? _rtClone(rbDrafts[week].cells) : rtIsPublished(week) ? rtPublished(week) : null;
+  const days = dates.filter(dt => dt >= from && dt <= to && dt > today);
+  return (both ? [keys] : keys.map(k => [k])).map(ks => {
+    const keepWeek = rbWeek; rbWeek = week;
+    let I; try { I = rbInput(1); } finally { rbWeek = keepWeek; }
+    I.avoid = I.avoid || {}; I.pre = I.pre || {};
+    ks.forEach(k => {
+      const g = (roStaff[k] || {}).group || '', sh = (I.groups[g] || {}).shifts || [], ok = rbBandShifts(sh, band);
+      days.forEach(dt => { const av = (I.avoid[k] = I.avoid[k] || {}); av[dt] = (av[dt] || []).concat(sh.filter(x => !ok.includes(x))); });
+    });
+    if (base) {
+      I.keep = base;
+      dates.filter(dt => dt <= today).forEach(dt => Object.keys(base).forEach(k => { const v = base[k][dt]; if (v) (I.pre[k] = I.pre[k] || {})[dt] = v; }));   // days gone by stay as they were
+    }
+    I.attempts = 3;
+    const res = rbSolve(I);
+    const changes = [];
+    if (base) Object.keys(res.cells).forEach(k => dates.forEach(dt => { const a = (base[k] || {})[dt] || '', b = res.cells[k][dt] || ''; if (a !== b) changes.push({ key: k, date: dt, from: a, to: b }); }));
+    let inBand = 0, work = 0;
+    ks.forEach(k => days.forEach(dt => { const v = res.cells[k][dt]; if (rbParse(v)) { work++; if (rbBandShifts([rbNorm(v)], band).length) inBand++; } }));
+    const hourChanges = rbChanges(I, res.cells, dates).filter(c => !c.week).length;
+    const probs = res.problems.filter(p => p.kind !== 'thin');
+    return { keys: ks, band, from, to, week, cells: res.cells, changes, probs, thin: res.problems.length - probs.length, hourChanges, inBand, work,
+      score: probs.length * 100 + changes.length * 2 + hourChanges * 6 + (work - inBand) * 60 };
+  }).sort((a, b) => a.score - b.score);
+}
+function rtPlanText(o) {
+  const who = o.keys.map(rtName).join(' and ');
+  const others = o.changes.filter(c => !o.keys.includes(c.key));
+  const fmt = c => `${rtName(c.key).split(' ')[0]} ${roDayLbl(c.date)} ${roCellTxt(roInfo(c.from)) || '·'}→${roCellTxt(roInfo(c.to)) || '·'}`;
+  return {
+    title: `${who} on ${rbBandLabel(o.band).toLowerCase()} shifts${o.work && o.inBand < o.work ? ` (${o.inBand} of ${o.work} days)` : ''}`,
+    ok: [o.probs.length ? `⚠ ${o.probs.length} problem${o.probs.length === 1 ? '' : 's'}` : '✓ every shift covered, all rules kept', o.thin ? `${o.thin} one-person shift${o.thin === 1 ? '' : 's'}` : '', others.length ? `${others.length} change${others.length === 1 ? '' : 's'} for others: ${others.slice(0, 4).map(fmt).join(', ')}${others.length > 4 ? '…' : ''}` : 'nobody else changes', o.hourChanges ? `↻ ${o.hourChanges} hour change${o.hourChanges === 1 ? '' : 's'} mid-run` : 'steady hours'].filter(Boolean).join(' · '),
+  };
+}
+let _rtPlans = [];
+function rtPlanButtons(opts) {
+  return `<div class="rt-opts">${opts.map(o => { _rtPlans.push(o); const t = rtPlanText(o); return `<button class="btn sm" onclick="rtApplyPlan(${_rtPlans.length - 1})"><span>✓ ${escapeHtml(t.title)}</span><small class="rb-ok">${escapeHtml(t.ok)}</small></button>`; }).join('')}</div>`;
+}
+/** Use an option: the request is kept for rebuilds, and the week (draft or posted) takes the new cells. */
+function rtApplyPlan(i) {
+  const o = _rtPlans[i]; if (!o) return;
+  if (!roCanEdit()) { showToast('Only supervisors, managers and owners can change the roster', 'err'); return; }
+  o.keys.forEach(k => { const id = 'q' + Date.now().toString(36) + k.length, r = { key: k, type: 'band', code: o.band, from: o.from > roToday() ? o.from : roAdd(roToday(), 1), to: o.to }; (rbReqs[o.week] = rbReqs[o.week] || {})[id] = r; fbSet(`roster/builder/requests/${o.week}/${id}`, r); });
+  if (rtIsPublished(o.week)) {
+    const n = rtApplyPublished(o.week, o.cells, 'shift type');
+    rbDrafts[o.week] = { cells: _rtClone(o.cells), at: Date.now(), fromPublished: true }; fbSet('roster/builder/drafts/' + o.week, rbDrafts[o.week]);
+    showToast(`${n} change${n === 1 ? '' : 's'} made in the posted roster; the people concerned are told`, 'ok');
+  } else {
+    if (typeof rbUndoPush === 'function' && rbWeek === o.week) rbUndoPush();
+    rbDrafts[o.week] = Object.assign({}, rbDrafts[o.week], { cells: _rtClone(o.cells), at: Date.now() }); fbSet('roster/builder/drafts/' + o.week, rbDrafts[o.week]);
+    showToast('Done in the draft. ↶ Undo is above the table', 'ok');
+  }
+  _rtPlans = [];
+  if (typeof brClose === 'function') try { brClose(); } catch (_) {}
+  if (document.getElementById('panel-roster-build')?.classList.contains('active')) { rbWeek = o.week; rbRender(); }
+}
+/** The builder card. */
+function rtPlanHtml(shown, dates) {
+  const people = shown.map(g => `<optgroup label="${escapeHtml(g || 'Team')}">${rbMembers(g).map(k => `<option value="${escapeHtml(k)}">${escapeHtml(rtName(k))}</option>`).join('')}</optgroup>`).join('');
+  const first = dates.find(dt => dt > roToday()) || dates[0];
+  return `<div class="card rb-card">
+    <div class="ro-card-hd"><b>🎯 Put someone on…</b><span>morning, day, evening or night: see the options</span></div>
+    <div class="rb-req-add">
+      <select id="rtPlP1">${people}</select>
+      <select id="rtPlP2"><option value="">or someone else? (optional)</option>${people}</select>
+      <select id="rtPlB">${Object.keys(RB_BANDS).map(b => `<option value="${b}">${escapeHtml(RB_BANDS[b].label)}</option>`).join('')}</select>
+      <label>From <input type="date" id="rtPlF" value="${first}" min="${dates[0]}" max="${dates[6]}"></label>
+      <label>To <input type="date" id="rtPlT" value="${dates[6]}" min="${dates[0]}" max="${dates[6]}"></label>
+      <button class="btn sm gold" onclick="rtPlanRun()">Show options</button>
+    </div>
+    <div id="rtPlOut"></div>
+  </div>`;
+}
+function rtPlanRun() {
+  const k1 = document.getElementById('rtPlP1').value, k2 = document.getElementById('rtPlP2').value, band = document.getElementById('rtPlB').value;
+  const from = document.getElementById('rtPlF').value, to = document.getElementById('rtPlT').value, out = document.getElementById('rtPlOut');
+  const keys = [k1, k2].filter((k, i, a) => k && a.indexOf(k) === i);
+  out.innerHTML = '<div class="ri-reading"><span class="ri-spin"></span><div><b>Trying it…</b><small>Building the week each way, changing as little as possible.</small></div></div>';
+  setTimeout(() => {
+    _rtPlans = [];
+    const opts = rtPlanOptions(rbWeek, keys, band, from, to, false);
+    if (keys.length > 1) opts.push(...rtPlanOptions(rbWeek, keys, band, from, to, true));
+    opts.sort((a, b) => a.score - b.score);
+    out.innerHTML = `<div class="rb-sub">${keys.length > 1 ? 'Best first' : 'What it would look like'}</div>${rtPlanButtons(opts)}<small class="ro-hint">Tap one to use it. It's kept as a request, so building again keeps it.</small>`;
+  }, 60);
 }
 
 // ── Changes to a posted week ──────────────────────────────
@@ -539,8 +633,27 @@ function rtApplyPending(id) {
   _rtPending = {};
   if (typeof brClose === 'function') brClose();
 }
+function _rtPlanCmd(q) {
+  const m = q.match(/^(?:put|move|switch|change|give|set|make)\s+(.+?)\s+(?:on|to|for|in|onto)\s+(?:the\s+|a\s+)?(morning|day|evening|afternoon|night|\d{1,2}[:.]?\d{0,2}\s*(?:-|–|to)\s*\d{1,2}[:.]?\d{0,2})s?(?:\s+shifts?)?\s*(this week|next week)?\s*$/i)
+         || q.match(/^(.+?)\s+(?:on\s+)?(morning|day|evening|afternoon|night)s?(?:\s+shifts?)?\s+(this week|next week)$/i);
+  if (!m) return false;
+  const both = /\s(and|&)\s/i.test(m[1]);
+  const names = m[1].split(/\s*(?:\bor\b|\band\b|&|\/|,)\s*/i).filter(Boolean);
+  const keys = names.map(rtFind);
+  if (keys.some(k => !k || Array.isArray(k))) { _rtOut(`<div class="br-title">I couldn't tell who: ${names.map((n, i) => !keys[i] ? '"' + escapeHtml(n) + '" isn\'t in the team' : Array.isArray(keys[i]) ? escapeHtml(n) + ' could be ' + keys[i].map(rtName).map(escapeHtml).join(' or ') : '').filter(Boolean).join('; ')}.</div>`); return true; }
+  if (!roCanEdit()) { _rtOut('<div class="br-title">Only supervisors, managers and owners can change the roster.</div>'); return true; }
+  const band = /afternoon/i.test(m[2]) ? 'evening' : RB_BANDS[m[2].toLowerCase()] ? m[2].toLowerCase() : rbNorm(m[2]);
+  const week = /this week/i.test(m[3] || '') ? roMonday(new Date()) : /next week/i.test(m[3] || '') ? roAdd(roMonday(new Date()), 7) : (document.getElementById('panel-roster-build')?.classList.contains('active') && rbWeek) || roAdd(roMonday(new Date()), 7);
+  _rtPlans = [];
+  const opts = rtPlanOptions(week, keys, band, null, null, both);
+  if (!both && keys.length > 1) opts.push(...rtPlanOptions(week, keys, band, null, null, true));
+  opts.sort((a, b) => a.score - b.score);
+  _rtOut(`<div class="br-kind">🎯 Roster · ${escapeHtml(rbWeekLabel(week))}</div><div class="br-title">${escapeHtml(keys.map(rtName).join(both ? ' and ' : ' or '))} on ${escapeHtml(rbBandLabel(band).toLowerCase())}</div><div class="br-body">${keys.length > 1 && !both ? 'Each way, best first:' : 'What it would look like:'}</div>${rtPlanButtons(opts)}`);
+  return true;
+}
 const RT_COMMANDS = [
-  { re: /^(.+?)\s+(?:is\s+|got\s+|called\s+|has\s+)?(sick|on sick leave|off sick|absent|not coming|can'?t come|cannot come|on leave|on vacation|on annual leave)\b(.*)$/i, ex: 'Saad is sick tomorrow', does: 'marks it and finds cover', run: q => {
+  { re: /^(?:put|move|switch|change|give|set|make)\s+.+?\s+(?:on|to|for|in|onto)\s+(?:the\s+|a\s+)?(?:morning|day|evening|afternoon|night|\d{1,2}[:.]?\d{0,2}\s*(?:-|–|to)\s*\d{1,2}[:.]?\d{0,2})s?(?:\s+shifts?)?\s*(?:this week|next week)?\s*$|^.+?\s+(?:on\s+)?(?:morning|day|evening|afternoon|night)s?(?:\s+shifts?)?\s+(?:this|next) week$/i, ex: 'put Sam or Lina on day shifts', does: 'tries it each way and shows what changes', run: q => _rtPlanCmd(q) },
+  { re: /^(.+?)\s+(?:is\s+|got\s+|called\s+|has\s+)?(sick|on sick leave|off sick|absent|not coming|can'?t come|cannot come|on leave|on vacation|on annual leave)\b(.*)$/i, ex: 'Omar is sick tomorrow', does: 'marks it and finds cover', run: q => {
       const m = q.match(/^(.+?)\s+(?:is\s+|got\s+|called\s+|has\s+)?(sick|on sick leave|off sick|absent|not coming|can'?t come|cannot come|on leave|on vacation|on annual leave)\b(.*)$/i);
       const k = rtFind(m[1]);
       if (!k || Array.isArray(k)) { _rtOut(`<div class="br-title">${Array.isArray(k) ? 'Which one: ' + k.map(rtName).map(escapeHtml).join(', ') + '?' : 'I can\'t find "' + escapeHtml(m[1]) + '" in the team.'}</div>`); return true; }
@@ -582,7 +695,7 @@ const RT_COMMANDS = [
         _rtOut(`<div class="br-kind">🗓️ Roster</div><div class="br-title">Noted: ${escapeHtml(rtName(k))} off on ${escapeHtml(roDayLbl(day, true))}</div><div class="br-body">It's a request for the week of ${escapeHtml(rbWeekLabel(w))}; the builder keeps it.</div>`);
       }
       return true; } },
-  { re: /^swap\s+(.+?)\s+(?:and|with|&)\s+(.+?)(?:\s+(?:on|for)\s+(.+))?$/i, ex: 'swap Hassan and Turab on Tue', does: 'swaps their shifts if the rules allow', run: q => {
+  { re: /^swap\s+(.+?)\s+(?:and|with|&)\s+(.+?)(?:\s+(?:on|for)\s+(.+))?$/i, ex: 'swap Sam and Lina on Tue', does: 'swaps their shifts if the rules allow', run: q => {
       const m = q.match(/^swap\s+(.+?)\s+(?:and|with|&)\s+(.+?)(?:\s+(?:on|for)\s+(.+))?$/i);
       const a = rtFind(m[1]), b = rtFind(m[2]), day = rtDay(m[3] || 'today');
       if (!a || !b || Array.isArray(a) || Array.isArray(b)) { _rtOut('<div class="br-title">I couldn\'t tell who. Use their names as on the roster.</div>'); return true; }
@@ -606,7 +719,7 @@ const RT_COMMANDS = [
         return `<div class="br-body"><b>${escapeHtml(rbWeekLabel(w))}</b>: ${adv.length ? adv.length + ' gap' + (adv.length === 1 ? '' : 's') : 'every shift covered'}</div>${adv.slice(0, 3).map(a => `<div class="br-body">${escapeHtml(roDayLbl(a.date))} · ${escapeHtml(a.shift)} · ${escapeHtml(a.group)}: ${a.have}/${a.need}</div>${rtOptButtons(w, a.options.slice(0, 2))}`).join('')}`;
       }).join('');
       _rtOut(`<div class="br-kind">🗓️ Roster</div><div class="br-title">Cover</div>${out}`); return true; } },
-  { re: /^(?:when|what)\s+(?:did|does|is)\s+(.+?)\s+work(?:ing|ed)?\b.*$|^(.+?)(?:'s)?\s+(?:history|shifts?\s+last\s+week|last\s+week|last\s+month)$/i, ex: 'Manisha last week', does: 'what someone worked lately', run: q => {
+  { re: /^(?:when|what)\s+(?:did|does|is)\s+(.+?)\s+work(?:ing|ed)?\b.*$|^(.+?)(?:'s)?\s+(?:history|shifts?\s+last\s+week|last\s+week|last\s+month)$/i, ex: 'Lina last week', does: 'what someone worked lately', run: q => {
       const m = q.match(/^(?:when|what)\s+(?:did|does|is)\s+(.+?)\s+work/i) || q.match(/^(.+?)(?:'s)?\s+(?:history|shifts?\s+last\s+week|last\s+week|last\s+month)$/i);
       const k = rtFind(m[1]); if (!k || Array.isArray(k)) return false;
       const days = /month/i.test(q) ? 30 : 14, list = [];
@@ -647,10 +760,11 @@ function rtSetTaskTime(k, v) { rbSettings.taskTimes = Object.assign({}, rbSettin
 document.addEventListener('DOMContentLoaded', () => {
   if (typeof BA_COMMANDS !== 'undefined') BA_COMMANDS.unshift(...RT_COMMANDS);
   if (typeof BR_FAQ !== 'undefined') [
-    ['someone sick call in sick sick leave vacation absent cover roster', 'Someone is sick', 'Roster → 🤒 Sick / leave (or tell me "Saad is sick tomorrow"). It goes into the posted roster, and I show who can cover: someone whose day off moves, someone moved from a shift with spare, someone borrowed from another hotel, a manager as the last resort, or "bring in a staff member".'],
+    ['someone sick call in sick sick leave vacation absent cover roster', 'Someone is sick', 'Roster → 🤒 Sick / leave (or tell me "Omar is sick tomorrow"). It goes into the posted roster, and I show who can cover: someone whose day off moves, someone moved from a shift with spare, someone borrowed from another hotel, a manager as the last resort, or "bring in a staff member".'],
     ['change roster mid week edit posted roster adjust this week', 'Changing the posted roster', 'Roster → ✏️ Change this week, or in the builder ✏️ Edit this week. Change cells, drag to swap, apply a fix, then 📤 Publish: only the people whose shifts changed are told.'],
-    ['swap shift change timing staff asks change shift', 'Someone asks to change their shift', 'Tap their cell in the builder: 🔁 shows only swaps that keep everyone\'s rest and cover. Or ask me "swap Hassan and Turab on Tue" or "Ali wants Friday off".'],
+    ['swap shift change timing staff asks change shift', 'Someone asks to change their shift', 'Tap their cell in the builder: 🔁 shows only swaps that keep everyone\'s rest and cover. Or ask me "swap Sam and Lina on Tue" or "Ali wants Friday off".'],
     ['add staff new staff delete staff left terminated resigned title manager supervisor', 'Team: add, remove, titles', 'Builder → 🧑‍💼 Team: ＋ Add staff, or tap a name for title, hotel, static or rotating shift, days off, can\'t-work shifts, sick and leave dates, "left on" date, delete, and their history.'],
+    ['put someone on morning mornings day evening night shift type this week keep on mornings', 'Put someone on mornings / days / evenings / nights', 'Builder → 🎯 Put someone on…: pick one person (or two, "this or that"), the shift type and the days; you get the options best first with what changes for others. Or ask me "put Sam or Lina on day shifts this week".'],
     ['bus time shift times change hours shift timing', 'Shift hours changed (bus times)', 'Builder → 👥 Cover needed: tap the shift\'s hours ✏️ and type the new ones (9 hours at most). It changes everywhere: cover, people on it, and drafts to come.'],
   ].forEach(([q, t, a]) => BR_FAQ.push({ q, t, a, go: 'roster-build', kind: '💡 How the app works' }));
   const old = typeof roIsQuestion === 'function' ? roIsQuestion : null;

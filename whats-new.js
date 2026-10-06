@@ -9,12 +9,16 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 149, items: [
+    '🎯 Put someone on a shift type: in the roster builder, "🎯 Put someone on…" → pick a person (or two, "this one or that one"), Morning, Day (morning + 12:00), Evening or Night, and the days. It builds the week each way, changing as little as possible, and shows the options best first: covered or not, who else changes, and any hours changing mid-run. Tap one to use it, in the draft or in the posted week (only the people affected are told).',
+    '🧠 Or tell Ops Brain: "put Sam on mornings next week", "put Sam or Lina on day shifts this week", "Lina evening next week". The choice is kept as a request, so building the week again keeps it.',
+  ] },
   { v: 148, items: [
     '↻ Steadier hours: the builder keeps each person on the same shift through a run of working days and changes hours only after a day off; never earlier hours than the day before (afternoon → morning) unless there\'s no other way. A week built for the current team has 0–1 such changes instead of 3–5.',
-    '↻ Any change of hours left in a run is marked in the draft and listed ("Hours change mid-run: Charlene Wed 08:00→12:00"), and cover suggestions put "same hours" people first and flag "⚠ hours change" on the rest.',
+    '↻ Any change of hours left in a run is marked in the draft and listed ("Hours change mid-run: Lina Wed 08:00→12:00"), and cover suggestions put "same hours" people first and flag "⚠ hours change" on the rest.',
   ] },
   { v: 147, items: [
-    '🙋 Short shift? The builder now says who you can put there and why they\'re OK: "Put Zin Min Han on 08:00 - 17:00, their day off moves to Thu · OK: off the day before, 15 h rest after, 9 h shift". It also finds bigger fixes a manager would do: two days changed together, or a night block ("19:00 - 04:00 from Thu to Sun").',
+    '🙋 Short shift? The builder now says who you can put there and why they\'re OK: "Put Sam on 08:00 - 17:00, their day off moves to Thu · OK: off the day before, 15 h rest after, 9 h shift". It also finds bigger fixes a manager would do: two days changed together, or a night block ("19:00 - 04:00 from Thu to Sun").',
     '🔎 "Why not the others" lists every colleague who can\'t take it and the reason: on SL, only 7 h rest, night ↔ day without a day off, nights are for Supervisors only, it would leave their own shift empty. Tap any number in the cover table to see who can take that shift that day.',
   ] },
   { v: 146, items: [
@@ -24,9 +28,9 @@ const WHATS_NEW = [
   ] },
   { v: 145, items: [
     '🧑‍💼 Team in the roster builder: titles (Manager, Supervisor, Team Leader, Agent…), each person static on a shift, rotating week to week, or any shift; can\'t-work shifts; sick and leave dates; joined and left dates; add and delete staff; and their history (what they worked the last weeks).',
-    '🤒 Someone sick or on leave mid-week: Roster → Sick / leave (or tell Ops Brain "Saad is sick tomorrow"). It goes straight into the posted roster and you get the ways to cover: a day off moved, a move from a shift with spare, borrowing from another hotel, a manager as the last resort, or "bring in a staff member". One tap applies it; only the people whose shifts changed are told.',
+    '🤒 Someone sick or on leave mid-week: Roster → Sick / leave (or tell Ops Brain "Omar is sick tomorrow"). It goes straight into the posted roster and you get the ways to cover: a day off moved, a move from a shift with spare, borrowing from another hotel, a manager as the last resort, or "bring in a staff member". One tap applies it; only the people whose shifts changed are told.',
     '✏️ Edit the posted week any time; drag a cell onto another to swap; 🔁 swap suggestions that keep everyone\'s rest; ↶ undo. Cover is the ideal (keep 2) with one-person shifts only when there\'s no other way. Shifts over 9 hours are refused. Change a shift\'s hours (bus times) in one place.',
-    '🧠 Ops Brain: "Ali wants Friday off", "swap Hassan and Turab on Tue", "who can cover nights on Wed", "roster problems", "Manisha last week"; and on Saturday and Sunday it reminds you to post next week\'s roster. ⏰ Shift Tasks now follow the roster\'s hours (night from 00:00, morning from 08:00…).',
+    '🧠 Ops Brain: "Ali wants Friday off", "swap Sam and Lina on Tue", "who can cover nights on Wed", "roster problems", "Lina last week"; and on Saturday and Sunday it reminds you to post next week\'s roster. ⏰ Shift Tasks now follow the roster\'s hours (night from 00:00, morning from 08:00…).',
   ] },
   { v: 144, items: [
     '🛠 Roster builder: Roster → Build roster makes next week\'s roster for you. Add the requests (day off, AL / ALA / SL, PH, must or can\'t work a shift), press Build, check it, publish. It learns the shifts, the cover each hotel needs and everyone\'s usual pattern (the night auditor stays on nights) from your past rosters.',
