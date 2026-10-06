@@ -34,6 +34,12 @@ function rtPublished(week) {
 function rtIsPublished(week) { return rtDates(week).some(dt => Object.keys(roDays[dt] || {}).length); }
 const _rtClone = c => JSON.parse(JSON.stringify(c || {}));
 
+/** Changes of hours between working days in a row (counting from last week's last shift). */
+function rtHourChanges(I, cells, p) {
+  const dates = rtDates(I.week); let n = 0, prev = p.lastShift || '';
+  dates.forEach(dt => { const v = (cells[p.key] || {})[dt] || ''; if (rbParse(v) && rbParse(prev) && rbNorm(v) !== rbNorm(prev)) n++; prev = v; });
+  return n;
+}
 // ── Why someone is OK (or not) for a shift ────────────────
 /** Short reasons a placement is fine: rest before and after, no night/day switch, title, days in a row, hours. */
 function rtWhyOk(I, cells, p, date, code) {
@@ -41,6 +47,10 @@ function rtWhyOk(I, cells, p, date, code) {
   const prev = d === 0 ? p.lastShift || '' : (cells[p.key] || {})[dates[d - 1]] || '';
   const next = d < 6 ? (cells[p.key] || {})[dates[d + 1]] || '' : '';
   out.push(rbParse(prev) ? `${Math.round(rbRest(prev, code))} h rest before` : 'off the day before');
+  // the same hours as the days around it, or a change of hours (what people dislike)
+  const near = [prev, next].filter(x => rbParse(x));
+  if (near.length && near.every(x => rbNorm(x) === rbNorm(code))) out.unshift('same hours as their other days');
+  else if (near.some(x => rbNorm(x) !== rbNorm(code))) out.unshift(`⚠ hours change (${[...new Set(near.filter(x => rbNorm(x) !== rbNorm(code)).map(x => rbNorm(x).slice(0, 5)))].join(', ')} → ${rbNorm(code).slice(0, 5)})`);
   if (rbParse(next)) out.push(`${Math.round(rbRest(code, next))} h rest after`);
   else if (d < 6) out.push('off the day after');
   const x = rbParse(code); if (x) out.push(`${(x.e - x.s) / 60} h shift`);
@@ -173,6 +183,7 @@ function rtCoverOptions(I, cells, group, date, shift) {
     opts.push({ kind: 'block', key: p.key, cost: 35 + (away ? 10 : 0), cells: c2, ok: rtWhyOk(I, c2, p, date, label),
       text: `Put ${rtName(p.key)}${away ? ' from ' + p.group : ''} on ${shift} ${last === date ? 'on ' + roDayLbl(date) : 'from ' + roDayLbl(date) + ' to ' + roDayLbl(last)}${moved ? `; ${roDayLbl(moved)} becomes their day off` : ''}` });
   });
+  opts.forEach(o => { const p = I.people.find(x => x.key === o.key); if (p && o.cells) o.cost += Math.max(0, rtHourChanges(I, o.cells, p) - rtHourChanges(I, cells, p)) * 14; });
   const best = {}; opts.forEach(o => { if (!best[o.key] || best[o.key].cost > o.cost) best[o.key] = o; });
   const list = Object.values(best).sort((a, b) => a.cost - b.cost).slice(0, 6);
   const who = ((G[group] || {}).who || {})[shift];

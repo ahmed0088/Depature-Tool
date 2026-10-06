@@ -39,6 +39,15 @@ function rbParse(code) {
 function rbNorm(code) { const p = rbParse(code); return p ? `${p.from} - ${p.to}` : null; }
 /** Hours of rest between a shift on one day and a shift on the next. */
 function rbRest(prev, next) { const a = rbParse(prev), b = rbParse(next); return a && b ? (1440 + b.s - a.e) / 60 : 99; }
+/** What a change of shift costs from one working day to the next: people want the same hours through a run of
+ *  working days; changing only after a day off. Earlier hours than the day before (afternoon → morning) is worst. */
+function rbChangeCost(prev, next, acrossWeeks) {
+  const a = rbParse(prev), b = rbParse(next);
+  if (!a || !b) return 0;
+  if (rbNorm(prev) === rbNorm(next)) return -15;
+  const back = b.s < a.s ? 15 : 0;
+  return acrossWeeks ? 8 + back / 2 : 25 + back;   // a new week may start on new hours; mid-run it hurts
+}
 /** Night shifts (00:00–09:00, 19:00–04:00) and day shifts don't follow each other: a day off comes between. */
 function rbIsNight(code) { const p = rbParse(code); return !!p && p.type === 'night'; }
 function rbSwitchOk(prev, next, R) { if (R && R.nightSwitch === false) return true; return !rbParse(prev) || !rbParse(next) || rbIsNight(prev) === rbIsNight(next); }
@@ -212,8 +221,8 @@ function rbMatchDay(I, g, cells, dates, d, R, rnd) {
     let c = 0;
     if (p.fixed) c += s === p.fixed ? -8 : (p.fixedCost || 30);
     if (p.lastMain && p.mode === 'rotate' && s === p.lastMain) c += 6;   // rotates: a different shift from last week
-    if (rbParse(pv)) c += rbNorm(pv) === s ? -6 : 3;
-    if (rbParse(nx)) c += rbNorm(nx) === s ? -3 : 1.5;
+    c += rbChangeCost(pv, s, d === 0);
+    if (rbParse(nx)) c += rbNorm(nx) === s ? -8 : rbChangeCost(s, nx, false) / 2;
     if (p.usual && s === p.usual && p.mode !== 'rotate') c -= 3;
     return c + (rnd ? rnd() * 1.5 : 0);
   };
@@ -257,7 +266,7 @@ function rbScore(I, g, cells, dates, R) {
         if (rbParse(v).e - rbParse(v).s > (R.maxHours || 9) * 60) sc += 3000;
         if (p.allowed && p.allowed.length && !p.allowed.includes(v)) sc += 800;
         if ((((I.avoid || {})[p.key] || {})[dt] || []).includes(v)) sc += 800;
-        if (prev && rbParse(prev) && rbNorm(prev) !== rbNorm(v)) sc += 3;   // a change of shift mid-week
+        if (prev && rbParse(prev) && rbNorm(prev) !== rbNorm(v)) sc += rbChangeCost(prev, v, d === 0) + 15;   // a change of shift in a run of working days
         if (p.usual && v === p.usual) sc -= 1;
       } else {
         run = 0;
@@ -317,6 +326,21 @@ function rbImprove(I, g, cells, dates, R, rnd) {
         const a = cells[p.key][dt], b = cells[q.key][dt];
         if (a === b) continue;
         if (tryIt(() => { cells[p.key][dt] = b; cells[q.key][dt] = a; }, () => { cells[p.key][dt] = a; cells[q.key][dt] = b; })) improved = true;
+      }
+    }
+    // one shift for a whole run of working days, and everyone else re-solved around it
+    for (const p of P) {
+      const runs = []; let cur = [];
+      for (let d = 0; d < 7; d++) { const v = cells[p.key][dates[d]]; if (rbParse(v) && !rbParse(v).note && !locked(p, d)) cur.push(d); else { if (cur.length > 1) runs.push(cur); cur = []; } }
+      if (cur.length > 1) runs.push(cur);
+      for (const run of runs) {
+        if (new Set(run.map(d => cells[p.key][dates[d]])).size < 2) continue;      // already one shift
+        for (const sh of G.shifts) {
+          const snap = P.map(q => [q.key, run.map(d => cells[q.key][dates[d]])]);
+          const pre0 = I.pre; I.pre = Object.assign({}, I.pre, { [p.key]: Object.assign({}, (I.pre || {})[p.key]) });
+          if (tryIt(() => { run.forEach(d => { cells[p.key][dates[d]] = sh; I.pre[p.key][dates[d]] = sh; }); run.forEach(d => rbMatchDay(I, g, cells, dates, d, R, null)); I.pre = pre0; },
+                    () => { I.pre = pre0; snap.forEach(([k, vs]) => run.forEach((d, i) => { cells[k][dates[d]] = vs[i]; })); })) { improved = true; break; }
+        }
       }
     }
     // re-solve each day as a whole with the days around it as they are now
@@ -774,7 +798,8 @@ function rbOutHtml(shown, dates) {
   const cover = rbCover(I, cells), probs = rbProblems(I, cells, cover);
   const name = k => (roStaff[k] || {}).name || k;
   const today = roToday();
-  const rows = shown.map(g => `${shown.length > 1 || g ? `<tr class="ro-sec"><td colspan="8"><span>${escapeHtml(g || 'Team')}</span></td></tr>` : ''}${rbMembers(g).map(k => `<tr><td class="ro-name" title="${escapeHtml(name(k))}"><button class="ro-tap" onclick="rtPerson(${_rbQ(k)})">${escapeHtml(name(k))}${rbTitle(k) ? `<i class="rt-t">${escapeHtml(rbTitle(k))}</i>` : ''}</button></td>${dates.map(dt => { const v = cells[k][dt] || '', i = roInfo(v); const bad = probs.some(p => p.key === k && p.date === dt); return `<td class="ro-cell ${i ? 'ro-t-' + i.type : ''}${bad ? ' ro-unsure' : ''}${dt === today ? ' ro-today' : ''}" data-k="${escapeHtml(k)}" data-d="${dt}" onclick="if(!this.dataset.noClick)rbPick(this,${_rbQ(k)},'${dt}')" title="${escapeHtml(v || 'empty')}: tap to change, or drag onto another cell to swap">${escapeHtml(roCellTxt(i)) || '·'}${i && i.note ? `<i class="ro-note">${escapeHtml(i.note)}</i>` : ''}</td>`; }).join('')}</tr>`).join('')}`).join('');
+  const chg = new Set(rbChanges(I, cells, dates).filter(c => !c.week).map(c => c.key + '|' + c.date));
+  const rows = shown.map(g => `${shown.length > 1 || g ? `<tr class="ro-sec"><td colspan="8"><span>${escapeHtml(g || 'Team')}</span></td></tr>` : ''}${rbMembers(g).map(k => `<tr><td class="ro-name" title="${escapeHtml(name(k))}"><button class="ro-tap" onclick="rtPerson(${_rbQ(k)})">${escapeHtml(name(k))}${rbTitle(k) ? `<i class="rt-t">${escapeHtml(rbTitle(k))}</i>` : ''}</button></td>${dates.map(dt => { const v = cells[k][dt] || '', i = roInfo(v); const bad = probs.some(p => p.key === k && p.date === dt); return `<td class="ro-cell ${i ? 'ro-t-' + i.type : ''}${bad ? ' ro-unsure' : ''}${dt === today ? ' ro-today' : ''}${chg.has(k + '|' + dt) ? ' rb-chg' : ''}" data-k="${escapeHtml(k)}" data-d="${dt}" onclick="if(!this.dataset.noClick)rbPick(this,${_rbQ(k)},'${dt}')" title="${escapeHtml(v || 'empty')}: tap to change, or drag onto another cell to swap">${escapeHtml(roCellTxt(i)) || '·'}${i && i.note ? `<i class="ro-note">${escapeHtml(i.note)}</i>` : ''}</td>`; }).join('')}</tr>`).join('')}`).join('');
   const covers = shown.map(g => { const G = I.groups[g]; if (!G) return ''; return `<div class="rb-sub">${escapeHtml(g || 'Team')} · cover</div><div class="ro-scroll"><table class="ro-table rb-cover"><thead><tr><th class="ro-name">Shift</th>${dates.map(dt => `<th>${escapeHtml(roDayLbl(dt))}</th>`).join('')}</tr></thead><tbody>${G.shifts.map(s => `<tr><td class="ro-name">${escapeHtml(s)}</td>${dates.map((dt, d) => { const n = (G.need[s] || [])[d] || 0, h = cover[g][s][d]; return `<td class="${h < n ? 'rb-short' : h > n ? 'rb-over' : 'rb-ok'} rb-covtap" title="Who can take ${escapeHtml(s)} on ${escapeHtml(roDayLbl(dt))}" onclick="rbGapMenu(${_rbQ(g)},${_rbQ(s)},'${dt}')">${h}/${n}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>`; }).join('');
   const inShown = p => !p.group || shown.includes(p.group) || (p.key && shown.includes((roStaff[p.key] || {}).group || ''));
   const P = probs.filter(inShown);
@@ -790,6 +815,7 @@ function rbOutHtml(shown, dates) {
     <div class="ro-card-hd"><b>📋 Draft roster · ${escapeHtml(rbWeekLabel(rbWeek))}</b><span>built ${escapeHtml(new Date(rbDrafts[rbWeek].at || Date.now()).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' }))} · tap a cell to change it</span></div>
     ${P.length ? `<div class="rb-probs">${P.filter(p => p.kind !== 'short' && p.kind !== 'thin').map(p => `<div class="rb-prob ${p.kind}">⛔ ${ptxt(p)}</div>`).join('')}</div>` : '<div class="rb-allgood">✓ Every shift is covered, everyone has their days off and enough rest.</div>'}
     ${rbFixHtml(I, cells, shown, ptxt)}
+    ${rbChangesHtml(I, cells, shown, dates)}
     <div class="rb-tools"><button class="btn sm" onclick="rbUndo()"${rbUndoStack.length ? '' : ' disabled'}>↶ Undo</button><small>Tap a cell to change it · drag a cell onto another to swap (long-press on a phone) · tap a name for their card</small></div>
     <div class="ro-scroll"><table class="ro-table rb-table"><thead><tr><th class="ro-name">Name</th>${dates.map(dt => `<th>${escapeHtml(roDayLbl(dt))}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
     <details class="rb-covers" open><summary>Cover: people on each shift (has / needs) · tap a number for who can take it</summary>${covers}</details>
@@ -800,6 +826,17 @@ function rbOutHtml(shown, dates) {
       <button class="btn" onclick="rbClearDraft()">🗑 Discard draft</button>
     </div>
   </div>`;
+}
+/** Hours that change from one working day to the next (people dislike it): marked and listed. */
+function rbChanges(I, cells, dates) {
+  const out = [];
+  I.people.forEach(p => { let prev = p.lastShift || ''; dates.forEach((dt, d) => { const v = (cells[p.key] || {})[dt] || ''; if (rbParse(v) && rbParse(prev) && rbNorm(v) !== rbNorm(prev)) out.push({ key: p.key, date: dt, from: rbNorm(prev), to: rbNorm(v), back: rbParse(v).s < rbParse(prev).s, week: d === 0 }); prev = v; }); });
+  return out;
+}
+function rbChangesHtml(I, cells, shown, dates) {
+  const ch = rbChanges(I, cells, dates).filter(c => !c.week && shown.includes((roStaff[c.key] || {}).group || ''));
+  if (!ch.length) return '<div class="rb-steady">✓ Nobody\'s hours change in the middle of a run of working days.</div>';
+  return `<div class="rb-steady warn">↻ Hours change mid-run (people dislike it): ${ch.map(c => `<b>${escapeHtml((roStaff[c.key] || {}).name || c.key)}</b> ${escapeHtml(roDayLbl(c.date))} ${escapeHtml(c.from.slice(0, 5))}→${escapeHtml(c.to.slice(0, 5))}${c.back ? ' (earlier)' : ''}`).join(' · ')}. Drag or tap a cell to even it out, or 🔀 Try another way.</div>`;
 }
 /** Gaps in cover, each with the best ways to fill it (or "bring in a staff member"). */
 function rbFixHtml(I, cells, shown, ptxt) {

@@ -938,3 +938,7 @@ body.rb-dragging, body.rb-dragging * { cursor: grabbing !important; }
 .rb-covtap { cursor: pointer; }
 .rb-covtap:hover { outline: 1px solid var(--accent-border); outline-offset: -2px; }
 #rbMenu .rb-fix-item { border-top: 0; padding-top: 0; }
+.rb-steady { font-size: 12.5px; padding: 8px 12px; border-radius: 9px; margin: 0 0 10px; background: var(--green-bg); border: 1px solid var(--green-border); color: var(--text); }
+.rb-steady.warn { background: var(--amber-bg); border-color: var(--amber-border); }
+.rb-table td.rb-chg { position: relative; }
+.rb-table td.rb-chg::after { content: '↻'; position: absolute; top: 1px; right: 3px; font-size: 9px; color: var(--amber); }
