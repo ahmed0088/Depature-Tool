@@ -720,6 +720,7 @@ function rbRender() {
     <div class="rb-go">
       <button class="btn gold rb-big" onclick="rbBuild()">✨ ${draft ? 'Build again from scratch' : 'Build the roster'}</button>
       ${draft ? '<button class="btn" onclick="rbBuild(true)">🔀 Try another way</button>' : ''}
+      ${draft ? '<button class="btn" onclick="rtWhatIfDialog()">🤔 What if…</button>' : ''}
       <small>Requests and rules come first; you can change any cell after.</small>
     </div>
     <div id="rbOut">${draft ? rbOutHtml(shown, dates) : ''}</div>`;

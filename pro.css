@@ -1022,3 +1022,26 @@ details.rb-card > summary.ro-card-hd span { flex: 1 1 auto; text-align: right; w
 .rb-desk-tip div b { font-family: var(--mono); color: var(--text); font-weight: 650; }
 .rb-desk-tip small { color: var(--text3); }
 .rb-desk-tip > .btn { justify-self: start; }
+
+/* What if… */
+.rt-wi { max-width: 640px; }
+.rt-wi-q { font: 650 14px var(--font); color: var(--text); margin: 14px 0 8px; }
+.rt-wi-imp { font-size: 12.5px; color: var(--text2); margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.rt-wi-gap { padding: 3px 8px; border-radius: 999px; background: var(--amber-bg); color: var(--amber); font: 600 11.5px var(--font); }
+.rt-wi-gap.z { background: var(--red-bg); color: var(--red); }
+.rt-wi-plans { display: grid; gap: 8px; margin: 8px 0; }
+.rt-wi-plan { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg2); display: grid; gap: 6px; justify-items: start; }
+.rt-wi-plan.best { border-color: var(--green-border, var(--green)); background: color-mix(in srgb, var(--green) 6%, var(--bg2)); }
+.rt-wi-hd b { display: block; font-size: 13px; color: var(--text); line-height: 1.4; }
+.rt-wi-hd span { display: block; font-size: 12px; color: var(--text2); margin-top: 2px; line-height: 1.4; }
+.rt-wi-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.rt-wi-chips i { font: 600 11px var(--font); font-style: normal; padding: 2px 8px; border-radius: 999px; background: var(--card2); color: var(--text2); }
+.rt-wi-chips i.ok { background: var(--green-bg); color: var(--green); }
+.rt-wi-chips i.warn { background: var(--amber-bg); color: var(--amber); }
+.rt-wi-chips i.bad { background: var(--red-bg); color: var(--red); }
+.rt-wi-ch { font: 500 11.5px var(--mono); color: var(--text3); line-height: 1.5; }
+.rt-wi-ch.bad { color: var(--red); }
+.rt-wi-hd em { display: inline-block; font: 700 11px var(--font); font-style: normal; color: var(--green); margin-bottom: 3px; }
+.rt-wi-hd ol { margin: 0; padding-left: 18px; font-size: 12.5px; color: var(--text); line-height: 1.45; }
+.rt-wi-hd ol li + li { margin-top: 2px; }
+.rt-form label[hidden] { display: none !important; }

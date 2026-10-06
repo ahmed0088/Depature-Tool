@@ -655,6 +655,7 @@ function roRender() {
   document.getElementById('roAddBtn')?.toggleAttribute('hidden', !ed);
   document.getElementById('roBuildBtn')?.toggleAttribute('hidden', !ed);
   document.getElementById('roSickBtn')?.toggleAttribute('hidden', !ed);
+  document.getElementById('roWhatBtn')?.toggleAttribute('hidden', !ed);
   document.getElementById('roChangeBtn')?.toggleAttribute('hidden', !ed || !Object.keys(roStaff).length);
   const eb = document.getElementById('roEditBtn'); if (eb) { eb.textContent = roEdit ? '✓ Done' : '✏️ Edit'; eb.classList.toggle('gold', roEdit); }
   roRenderSide();

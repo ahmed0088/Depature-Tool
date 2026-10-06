@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 152, items: [
+    '🤔 What if…: ask before you change anything: "what if Ahmed is sick tomorrow", "takes Thursday off", "is on leave next week", "isn\'t on 12-21 on Friday". Roster → 🤔 What if…, the builder, or Ops Brain.',
+    '🤔 You see what would be short, then whole plans that fill every gap under your rules (rest, night ↔ day, who can work nights, 9 h, days off), fewest changes first: % covered, rules kept, one-person shifts, who else changes. If nothing reaches 100% with this team, it says so and shows the closest. Leave, PH and days gone by are never moved; "Use this" changes the roster and tells only the people affected.',
+  ] },
   { v: 151, items: [
     '🕐 Two on the desk: the builder now counts people on the desk hour by hour, so 08–17 and 12–21 overlapping from 12:00 to 17:00 counts as two at once. It aims for 2 at the same time from 08:00 to 23:00 (set the number and hours in ⚖️ Rules) and never at the cost of cover or the rules.',
     '🕐 New "On the desk, hour by hour" grid under the draft: how many are on each hour of each day (hover or long-press for names), with the hours someone is alone in amber and a summary like "Alone at the desk: 21–23 every day". Tap an amber hour for who can come in on an overlapping shift; "2 on desk" in the summary row shows the share of hours with two at once.',
