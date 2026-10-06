@@ -68,14 +68,10 @@ async function roFromImage(file) {
   const shown = riJpeg(im, 1800, 0.78);
   riPending = { dataUrl: shown };
   const cfg = riCfg();
-  if (!cfg.key) {
-    box.innerHTML = `${riPicHtml(shown)}
-      <div class="ro-warn">To turn the picture into a table, HotelOps needs AI reading set up on this device (once).</div>
-      <div class="ro-acts"><button class="btn gold" onclick="riSetupOpen()">✨ Set up AI reading</button><button class="btn" onclick="riPostPictureOnly()">📌 Post the picture only</button><button class="btn" onclick="riPending=null;document.getElementById('roPreview').innerHTML=''">Cancel</button></div>
-      <small class="ro-hint">Post the picture only: everyone can open it on the Roster page and gets the "new roster" alert, but there are no My shifts or timeline until the shifts are in the table.</small>`;
-    return;
-  }
-  box.innerHTML = `${riPicHtml(shown)}<div class="ri-reading"><span class="ri-spin"></span><div><b>Reading the roster…</b><small>Names, dates and every shift. This takes about 20–40 seconds.</small></div></div>`;
+  const useAi = !!cfg.key && cfg.engine !== 'device' && riRetry._engine !== 'device';
+  riRetry._engine = '';
+  if (!useAi) return riReadOnDevice(im, shown);
+  box.innerHTML = `${riPicHtml(shown)}<div class="ri-reading"><span class="ri-spin"></span><div><b>Reading the roster with AI…</b><small>Names, dates and every shift. This takes about 20–40 seconds.</small></div></div>`;
   try {
     const forAi = riJpeg(im, 2000, 0.9);
     const json = await riAskAI(forAi.split(',')[1], document.getElementById('roImpWeek')?.value || roMonday(new Date()));
@@ -85,13 +81,35 @@ async function roFromImage(file) {
     box.insertAdjacentHTML('afterbegin', riPicHtml(shown));
   } catch (e) {
     console.warn('[roster-image]', e);
-    box.innerHTML = `${riPicHtml(shown)}<div class="ro-warn">Couldn't read the roster: ${escapeHtml(e.message || String(e))}</div>
-      <div class="ro-acts"><button class="btn gold" onclick="riRetry()">↻ Try again</button><button class="btn" onclick="riPostPictureOnly()">📌 Post the picture only</button><button class="btn" onclick="riSetupOpen()">AI settings</button></div>`;
+    box.innerHTML = `${riPicHtml(shown)}<div class="ro-warn">The AI couldn't read the roster: ${escapeHtml(e.message || String(e))}</div>
+      <div class="ro-acts"><button class="btn gold" onclick="riRetry('device')">📷 Read it on this device</button><button class="btn" onclick="riRetry()">↻ Try the AI again</button><button class="btn" onclick="riPostPictureOnly()">📌 Post the picture only</button></div>`;
   }
 }
-async function riRetry() {
+/** Free reading on this device (no AI, no key). */
+async function riReadOnDevice(im, shown) {
+  const box = document.getElementById('roPreview');
+  const hint = (document.getElementById('roImpWeek')?.value) || roAdd(roMonday(new Date()), [0, 4, 5, 6].includes(new Date().getDay()) ? 7 : 0);
+  box.innerHTML = `${riPicHtml(shown)}<div class="ri-reading"><span class="ri-spin"></span><div><b id="riStepT">Reading the roster on this device…</b><small id="riStepS">The first time it downloads its reader (about 3 MB). Then it takes about a minute.</small><div class="ri-bar"><i id="riStepBar" style="width:2%"></i></div></div></div>`;
+  const t0 = Date.now();
+  try {
+    const res = await roOcrRead(im, hint, (done, total, text) => {
+      const bar = document.getElementById('riStepBar'); if (bar) bar.style.width = Math.max(2, Math.round(done / total * 100)) + '%';
+      if (text) { const t = document.getElementById('riStepT'); if (t) t.textContent = text; }
+      const sm = document.getElementById('riStepS'); if (sm && done > 1) { const left = Math.round((Date.now() - t0) / done * (total - done) / 1000); sm.textContent = `${done} of ${total} cells · about ${left < 60 ? left + ' s' : Math.round(left / 60) + ' min'} left`; }
+    });
+    roShowPreview(res);
+    box.insertAdjacentHTML('afterbegin', riPicHtml(shown));
+  } catch (e) {
+    console.warn('[roster-ocr]', e);
+    box.innerHTML = `${riPicHtml(shown)}<div class="ro-warn">Couldn't read the roster: ${escapeHtml(e.message || String(e))}</div>
+      <div class="ro-acts"><button class="btn gold" onclick="riRetry('device')">↻ Try again</button>${riCfg().key ? '<button class="btn" onclick="riRetry(\'ai\')">✨ Read it with AI</button>' : ''}<button class="btn" onclick="riPostPictureOnly()">📌 Post the picture only</button></div>`;
+  }
+}
+async function riRetry(engine) {
   const im = riRetry._im;
   if (!im) return;
+  riRetry._engine = engine === 'device' ? 'device' : '';
+  if (engine === 'ai') { const c = riCfg(); delete c.engine; riSetCfg(c); }
   const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; c.getContext('2d').drawImage(im, 0, 0);
   c.toBlob(b => roFromImage(new File([b], 'roster.png', { type: 'image/png' })), 'image/png');
 }
@@ -235,7 +253,8 @@ function riSetupOpen() {
   d.id = 'riSetup'; d.className = 'ri-viewer';
   d.innerHTML = `<div class="ri-setup card">
     <div class="ro-card-hd"><b>✨ AI reading of roster pictures</b><button class="ro-x" onclick="document.getElementById('riSetup').remove()">✕</button></div>
-    <p>HotelOps sends the roster picture to Claude, Anthropic's AI, which reads the table even when the layout changes and explains words nobody understands. It needs an Anthropic API key, set once on the device that posts the roster.</p>
+    <p>Roster pictures are read <b>on this device for free</b> (the table's lines, cell by cell). For pictures without clear table lines, phone photos at an angle, or to get the meaning of odd words explained, you can use <b>Claude, Anthropic's AI</b> instead. It needs an Anthropic API key, set once on the device that posts the roster.</p>
+    <label>Read roster pictures<select id="riEngine"><option value="device"${cfg.engine === 'device' || !cfg.key ? ' selected' : ''}>On this device (free)</option><option value="ai"${cfg.key && cfg.engine !== 'device' ? ' selected' : ''}>With AI (Claude, needs a key)</option></select></label>
     <ol><li>Go to <b>console.anthropic.com</b>, sign in, add a little credit (Billing).</li><li>Open <b>API keys</b> → <b>Create key</b>, copy it.</li><li>Paste it below and press Save. Each roster costs a few cents.</li></ol>
     <label>API key<input id="riKey" type="password" autocomplete="off" placeholder="sk-ant-…" value="${escapeHtml(cfg.key || '')}"></label>
     <label>Model<select id="riModel">${RI_MODELS.map(([v, t]) => `<option value="${v}"${(cfg.model || RI_MODELS[0][0]) === v ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
@@ -246,11 +265,12 @@ function riSetupOpen() {
   document.body.appendChild(d);
 }
 function riSaveSetup() {
-  const key = document.getElementById('riKey').value.trim();
-  if (!/^sk-ant-/.test(key)) { showToast('That doesn\'t look like an Anthropic key (it starts with sk-ant-)', 'warn'); return; }
-  riSetCfg({ key, model: document.getElementById('riModel').value });
+  const key = document.getElementById('riKey').value.trim(), engine = document.getElementById('riEngine').value;
+  if (engine === 'ai' && !/^sk-ant-/.test(key)) { showToast('To use AI, paste an Anthropic key (it starts with sk-ant-)', 'warn'); return; }
+  if (key && !/^sk-ant-/.test(key)) { showToast('That doesn\'t look like an Anthropic key (it starts with sk-ant-)', 'warn'); return; }
+  riSetCfg({ key, model: document.getElementById('riModel').value, engine });
   document.getElementById('riSetup')?.remove();
-  showToast('AI reading is ready on this device', 'ok');
+  showToast(engine === 'ai' ? 'Roster pictures will be read with AI on this device' : 'Roster pictures will be read on this device', 'ok');
   riRenderAiLine();
   if (riPending && riRetry._im) riRetry();
   else if (riPending) { const im = new Image(); im.onload = () => { riRetry._im = im; riRetry(); }; im.src = riPending.dataUrl; }
@@ -260,9 +280,9 @@ function riRenderAiLine() {
   const el = document.getElementById('riAiLine');
   if (!el) return;
   const cfg = riCfg();
-  el.innerHTML = cfg.key
-    ? `✨ AI reading is on (${escapeHtml((RI_MODELS.find(m => m[0] === cfg.model) || RI_MODELS[0])[1].replace(/ \(.*/, ''))}) · <a href="javascript:void 0" onclick="riSetupOpen()">settings</a>`
-    : `Pictures need AI reading, set up once on this device · <a href="javascript:void 0" onclick="riSetupOpen()">set it up</a>`;
+  el.innerHTML = cfg.key && cfg.engine !== 'device'
+    ? `✨ Pictures are read with AI (${escapeHtml((RI_MODELS.find(m => m[0] === cfg.model) || RI_MODELS[0])[1].replace(/ \(.*/, ''))}) · <a href="javascript:void 0" onclick="riSetupOpen()">change</a>`
+    : `📷 Pictures are read on this device, free · <a href="javascript:void 0" onclick="riSetupOpen()">options</a>`;
 }
 
 // ── Start ─────────────────────────────────────────────────

@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 143, items: [
+    '📷 Roster pictures are now read on your phone or PC, free, with no AI and no key: it finds the table\'s lines and reads every cell (hours digits-only, so 09 is never 08), the hotel titles, the dates and the names. Your roster read 133 of 133 cells right in about 15 seconds.',
+    '🛡️ It checks itself: a shift one digit away from the usual ones, an odd shift length or a code it doesn\'t know is marked red. Tap a cell to correct it. From the second week names are matched to the team by employee number, even when the picture is blurry.',
+    '🕑 Understands 7-3, 3-11, 11-7 and 9-6 style hours too. AI reading is still there as an option for hard pictures.',
+  ] },
   { v: 142, items: [
     '📷 Roster from a picture: Add roster → choose the roster image management sent (or drop or paste it). Claude, Anthropic\'s AI, reads the whole table even when the layout changes: hotels, names, dates and every shift. Check it against the picture, fix anything marked in red, and save. Needs AI reading set up once on the device that posts the roster.',
     '🔎 Words nobody understands: the roster\'s unknown codes are listed with the most likely meaning; confirm or correct it once and it is remembered for every roster after.',

@@ -804,3 +804,11 @@ textarea::placeholder { font-size: 13px; line-height: 1.55; }
 .ro-xl { margin-top: 12px; }
 .ro-xl summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--text2); padding: 6px 0; }
 .ro-xl[open] summary { margin-bottom: 10px; }
+.ro-name-in { width: 100%; min-width: 110px; height: 30px; border: 1px solid var(--border2); border-radius: 7px; background: var(--bg2); color: var(--text); font: 550 12.5px var(--font); padding: 0 6px; }
+.ro-table td.ro-name.ro-unsure { box-shadow: inset 0 0 0 2px var(--red); }
+.ri-bar { height: 5px; border-radius: 99px; background: var(--border); margin-top: 8px; overflow: hidden; }
+.ri-bar i { display: block; height: 100%; background: var(--accent); border-radius: 99px; transition: width .3s; }
+.ro-tap { all: unset; cursor: pointer; display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#roPreview .ro-cell { cursor: pointer; }
+#roPreview .ro-cell:hover { outline: 1px solid var(--accent-border); outline-offset: -2px; }
+#roPreview .ro-cell input { width: 118px; text-align: left; padding: 0 6px; }

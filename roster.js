@@ -79,7 +79,14 @@ function roInfo(code) {
   if (codes[k]) return Object.assign({ code: c }, codes[k]);
   const t = c.match(/(\d{1,2})(?:[:.]?(\d{2}))?\s*(?:-|–|to)\s*(\d{1,2})(?:[:.]?(\d{2}))?/i);
   if (t) {
-    const h1 = +t[1], h2 = +t[3];
+    let h1 = +t[1], h2 = +t[3];
+    // short hotel forms without minutes ("7-3", "3-11", "11-7", "9-6"): a 12-hour clock
+    if (!t[2] && !t[4] && h1 <= 12 && h2 <= 12) {
+      if ((h1 === 10 || h1 === 11) && (h2 === 6 || h2 === 7)) h1 += 12;      // 11-7: the night shift
+      else if (h1 < 5) h1 += 12;                                              // 3-11: afternoon
+      if (h2 <= h1 % 24 && h2 + 12 > h1 && h2 + 12 - h1 <= 12) h2 += 12;      // 7-3 → 07:00-15:00, 9-6 → 09:00-18:00
+      h1 %= 24; h2 %= 24;
+    }
     if (h1 < 24 && h2 < 24) {
       const f = `${String(h1).padStart(2, '0')}:${t[2] || '00'}`, to = `${String(h2).padStart(2, '0')}:${t[4] || '00'}`;
       const note = c.slice(t.index + t[0].length).replace(/^[\s\-–:,/]+/, '').trim();   // "12:00 - 21:00 - Adagio": working at Adagio
@@ -237,6 +244,21 @@ function roFromFile(input) {
   };
   rd.readAsArrayBuffer(f);
 }
+/** Tap a cell in the check table: edit its full text. */
+function roPrevEdit(td) {
+  if (!roPreview || td.querySelector('input')) return;
+  const k = td.dataset.k, d = td.dataset.d, v = ((roPreview.cells[k] || {})[d] || '');
+  td.innerHTML = `<input value="${escapeHtml(v)}" maxlength="40" placeholder="empty">`;
+  const inp = td.querySelector('input');
+  inp.focus(); inp.select();
+  const done = () => { const nv = inp.value.replace(/\s*\?$/, '').trim(); roPrevSet(k, d, nv); const i = roInfo(nv); td.innerHTML = `${escapeHtml(roCellTxt(i))}${i && i.note ? `<i class="ro-note">${escapeHtml(i.note)}</i>` : ''}`; td.title = (nv || 'empty') + ': tap to correct'; };
+  inp.addEventListener('blur', done, { once: true });
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') inp.blur(); if (e.key === 'Escape') { inp.value = v; inp.blur(); } });
+}
+function roPrevEditName(btn, key) {
+  const nv = prompt('Name', key.replace(/\s*\?$/, ''));
+  if (nv != null && nv.trim()) roPrevRename(key, nv.trim());
+}
 function roPrevSet(name, date, v) {
   if (!roPreview) return;
   v = String(v || '').trim();
@@ -244,6 +266,15 @@ function roPrevSet(name, date, v) {
   if (v) row[date] = v; else delete row[date];
   const td = document.querySelector(`#roPreview .ro-cell[data-k="${CSS.escape(name)}"][data-d="${date}"]`);
   if (td) { const i = roInfo(v); td.className = 'ro-cell ' + (i ? 'ro-t-' + i.type : '') + (/\?/.test(v) ? ' ro-unsure' : ''); }
+}
+function roPrevRename(old, nu, quiet) {
+  const R = roPreview; nu = String(nu || '').replace(/\s+/g, ' ').trim();
+  if (!R || !nu || nu === old || !R.cells[old]) return;
+  if (R.cells[nu]) { showToast(`${nu} is already in the roster`, 'warn'); return; }
+  R.names = R.names.map(n => (n === old ? nu : n));
+  R.cells[nu] = R.cells[old]; delete R.cells[old];
+  ['groups', 'ids'].forEach(k => { if (R[k] && R[k][old] != null) { R[k][nu] = R[k][old]; delete R[k][old]; } });
+  if (!quiet) roShowPreview(R);
 }
 /** Codes in a roster the app doesn't know yet, with a first guess (from the AI when it read the picture). */
 function roUnknownWords(res) {
@@ -286,6 +317,11 @@ function roSavePreview() {
   const res = roPreview;
   if (!res) return;
   if (!roCanEdit()) { showToast('Only supervisors, managers and owners can change the roster', 'err'); return; }
+  const qNames = res.names.filter(n => /\s*\?$/.test(n)).length;
+  const qCells = res.names.reduce((t, n) => t + Object.values(res.cells[n] || {}).filter(v => /\?/.test(v)).length, 0);
+  if ((qNames || qCells) && !confirm(`${qCells ? qCells + ' cell' + (qCells === 1 ? '' : 's') : ''}${qCells && qNames ? ' and ' : ''}${qNames ? qNames + ' name' + (qNames === 1 ? '' : 's') : ''} still marked to check (red). Save anyway? Marked cells stay red for everyone until someone fixes them.`)) return;
+  // a name left with "?" is saved without it
+  res.names.slice().forEach(n => { if (/\s*\?$/.test(n)) { const c = n.replace(/\s*\?$/, ''); if (!res.cells[c]) roPrevRename(n, c, true); } });
   const staff = Object.assign({}, roStaff);
   res.names.forEach((n, i) => { const k = roKey(n); staff[k] = { name: n, order: i }; if (res.groups && res.groups[n]) staff[k].group = res.groups[n]; if (res.ids && res.ids[n]) staff[k].id = res.ids[n]; });
   res.dates.forEach(d => {
@@ -485,8 +521,9 @@ function _roTable(rows, dates, get, editable) {
   const span = dates.length + 1 + (editable === true ? 1 : 0);
   return `<div class="ro-scroll"><table class="ro-table">
     <thead><tr><th class="ro-name">Name</th>${dates.map(d => `<th class="${d === today ? 'ro-today' : ''}">${escapeHtml(roDayLbl(d))}</th>`).join('')}${editable === true ? '<th></th>' : ''}</tr></thead>
-    <tbody>${rows.map(r => r.section ? `<tr class="ro-sec"><td colspan="${span}"><span>${escapeHtml(r.section)}</span></td></tr>` : `<tr class="${r.key === roMeKey ? 'ro-me' : ''}"><td class="ro-name" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}${r.key === roMeKey ? ' <span class="ro-you">you</span>' : ''}</td>${dates.map(d => {
+    <tbody>${rows.map(r => r.section ? `<tr class="ro-sec"><td colspan="${span}"><span>${escapeHtml(r.section)}</span></td></tr>` : `<tr class="${r.key === roMeKey ? 'ro-me' : ''}"><td class="ro-name${/\?$/.test(r.name) ? ' ro-unsure' : ''}" title="${escapeHtml(r.name)}">${editable === 'preview' ? `<button class="ro-tap" onclick="roPrevEditName(this,${q(r.key)})" title="Tap to correct">${escapeHtml(r.name)}</button>` : escapeHtml(r.name)}${r.key === roMeKey ? ' <span class="ro-you">you</span>' : ''}</td>${dates.map(d => {
       const v = get(r, d) || '', i = roInfo(v);
+      if (editable === 'preview') return `<td class="ro-cell ${i ? 'ro-t-' + i.type : ''}${/\?/.test(v) ? ' ro-unsure' : ''}" data-k="${escapeHtml(r.key)}" data-d="${d}" title="${escapeHtml(v || 'empty')}: tap to correct" onclick="roPrevEdit(this)">${escapeHtml(v === '?' ? '?' : roCellTxt(i))}${i && i.note ? `<i class="ro-note">${escapeHtml(i.note.replace(/\s*\?$/, ''))}</i>` : ''}</td>`;
       return `<td class="ro-cell ${i ? 'ro-t-' + i.type : ''}${d === today ? ' ro-today' : ''}${/\?/.test(v) ? ' ro-unsure' : ''}" data-k="${escapeHtml(r.key)}" data-d="${d}" title="${escapeHtml(i ? i.label + (i.from && !i.label.startsWith(i.from) ? ' ' + roTime(i) : '') : '')}">${editable
         ? `<input value="${escapeHtml(v)}" maxlength="40" onchange="${editable === 'preview' ? 'roPrevSet' : 'roSetCell'}(${q(r.key)},'${d}',this.value)">`
         : `${escapeHtml(roCellTxt(i))}${i && i.note ? `<i class="ro-note">${escapeHtml(i.note)}</i>` : ''}`}</td>`; }).join('')}${editable === true ? `<td><button class="ro-x" title="Clear this week" onclick="roClearPerson(${q(r.key)})">✕</button></td>` : ''}</tr>`).join('')}</tbody>
@@ -701,7 +738,7 @@ const RO_COMMANDS = [
 // ── Start ─────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   if (typeof BA_COMMANDS !== 'undefined') BA_COMMANDS.unshift(...RO_COMMANDS);
-  if (typeof BR_FAQ !== 'undefined') BR_FAQ.push({ q: 'roster rota schedule my shifts day off who is working add the roster', t: 'Roster', a: 'Open <b>Roster</b> (🗓 in the top bar). Supervisors and managers press <b>Add roster</b> and add the roster picture (AI reads it) or paste it from Excel, once a week; everyone then sees <b>My shifts</b> and who is on today. Ask me "my shifts" or "who is on tonight".', go: 'roster', kind: '💡 How the app works' });
+  if (typeof BR_FAQ !== 'undefined') BR_FAQ.push({ q: 'roster rota schedule my shifts day off who is working add the roster', t: 'Roster', a: 'Open <b>Roster</b> (🗓 in the top bar). Supervisors and managers press <b>Add roster</b> and add the roster picture (read on the device, free) or paste it from Excel, once a week; everyone then sees <b>My shifts</b> and who is on today. Ask me "my shifts" or "who is on tonight".', go: 'roster', kind: '💡 How the app works' });
   setTimeout(() => {
     if (typeof fbListen !== 'function') return;
     fbListen('roster/days', v => { roDays = v || {}; _roRefresh(); });
