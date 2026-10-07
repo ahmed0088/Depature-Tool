@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 178, items: [
+    '⏰ Wake-up Calls, redesigned: a summary on top (today, still to call, called, due now), the next call with a countdown, and a cleaner list. New: a backup call 5, 10 or 15 minutes later (booked by itself once the first is answered), "read back to the guest ✓", ✓ Answered / 📵 No answer / 🚶 Sent someone up / Cancelled by the guest, a warning when the room is already checked out or the call is set twice, search, and a log of who did what. Its icon now matches the rest of the menu.',
+  ] },
   { v: 177, items: [
     '⏰ New page: Wake-up Calls (in the menu, and under More on a phone). Write the room and time (the guest\'s name fills in from today\'s reports), pick the day, add a note, or repeat it every day until a date. Several at once: "512 6:30, 610 7:15 tomorrow". At the time everyone on shift is alerted, again every 5 minutes until someone taps ✓ Called. 📵 No answer tries again in 5 minutes. Copy or print the list for the night. Ops Brain\'s "wake up 512 at 6:30" lands on the same list.',
     '✕ What\'s new has a close button at the top now, always visible while you scroll.',
