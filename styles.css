@@ -5903,3 +5903,10 @@ body.fr-dragging::after {
 .ba-ul { margin: 6px 0 0 16px; padding: 0; line-height: 1.55; }
 .ba-ul small { color: var(--text3); }
 .ba-res { border-left: 4px solid var(--mint); }
+.pkg-conf { display: inline-flex; align-items: center; gap: 5px; padding: 3px 6px; margin: -3px -6px; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--text); font: 500 .72rem var(--mono); cursor: copy; user-select: text; -webkit-user-select: text; }
+.pkg-conf i { font-style: normal; font-size: .7rem; color: var(--text3); opacity: .55; transition: opacity .15s; }
+.pkg-conf:hover { border-color: var(--border2); background: var(--bg2); }
+.pkg-conf:hover i { opacity: 1; color: var(--accent); }
+.pkg-conf.copied { border-color: var(--green, #22c55e); }
+.pkg-conf.copied i { opacity: 1; color: var(--green, #22c55e); }
+.pkg-conf.copied i::before { content: '✓'; } .pkg-conf.copied i { font-size: 0; } .pkg-conf.copied i::before { font-size: .7rem; }

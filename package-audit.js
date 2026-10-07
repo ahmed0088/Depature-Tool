@@ -1432,9 +1432,9 @@ function _pkgGroupHtml(g) {
   const actTxt = actKeys.length === 1 ? actKeys[0] : actKeys.map(k => `${acts[k]}× ${k}`).join(' · ');
   const needs = rows.some(r => !r.pinSkip && (r.verdict === 'deny' || r.verdict === 'review' || (r.verdict === 'credit' && !r.alreadyComplete)));
   const color = rows.some(r => r.verdict === 'deny') ? 'var(--rose)' : needs ? 'var(--amber)' : 'var(--text3)';
-  return `<tr class="pkg-group" onclick="if(!event.target.closest('select'))pkgToggleGroup('${escapeHtml(g.key)}')" style="cursor:pointer;">
+  return `<tr class="pkg-group" onclick="if(!event.target.closest('select,.pkg-conf')&&!String(window.getSelection()))pkgToggleGroup('${escapeHtml(g.key)}')" style="cursor:pointer;">
     <td><span class="tt-room-pill">${escapeHtml(r0.room)}</span></td>
-    <td style="font-family:var(--mono);font-size:0.72rem;">${escapeHtml(r0.conf)}</td>
+    ${_pkgConfCell(r0.conf)}
     <td style="font-family:var(--mono);font-size:0.76rem;font-weight:700;">${open ? '▾' : '▸'} ${escapeHtml(_pkgFamilyName(r0))} <span class="pkg-nights">× ${rows.length} nights</span></td>
     <td style="font-family:var(--mono);font-size:0.72rem;">AED ${escapeHtml(String(Math.round(total * 100) / 100))}</td>
     <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text2);">${dates.length ? escapeHtml(dates[0]) + ' → ' + escapeHtml(dates[dates.length - 1]) : '—'}</td>
@@ -1445,12 +1445,23 @@ function _pkgGroupHtml(g) {
   </tr>`;
 }
 
+/** A confirmation number: tap to copy it (and still selectable); never opens or closes the row. */
+function _pkgConfCell(conf) {
+  const c = String(conf || '');
+  if (!c) return '<td>—</td>';
+  return `<td><button type="button" class="pkg-conf" title="Copy ${escapeHtml(c)}" onclick="event.stopPropagation();pkgCopyConf(this,${escapeHtml(JSON.stringify(c))})">${escapeHtml(c)}<i aria-hidden="true">⧉</i></button></td>`;
+}
+function pkgCopyConf(btn, conf) {
+  copyToClipboard(conf);
+  btn.classList.add('copied'); setTimeout(() => btn.classList.remove('copied'), 1400);
+  if (typeof showToast === 'function') showToast(`Copied ${conf}`, 'ok');
+}
 function _pkgRowHtmlInner(r) {
     const gapCell = _pkgActionCell(r);
     if (r.verdict === 'deny') {
       return `<tr style="opacity:0.8;">
         <td><span class="tt-room-pill">${escapeHtml(r.room)}</span></td>
-        <td style="font-family:var(--mono);font-size:0.72rem;">${escapeHtml(r.conf)}</td>
+        ${_pkgConfCell(r.conf)}
         <td style="font-family:var(--mono);font-size:0.76rem;color:var(--text2);text-decoration:line-through;">${escapeHtml(r.family || r.code)}</td>
         <td style="font-family:var(--mono);font-size:0.72rem;color:var(--text3);">AED ${escapeHtml(String(r.charge))}</td>
         <td colspan="2" style="font-size:0.68rem;color:var(--rose);">${escapeHtml(r.denyReason)}</td>
@@ -1465,7 +1476,7 @@ function _pkgRowHtmlInner(r) {
         : `<span style="color:var(--mint);">✏️ Update</span>`;
       return `<tr>
         <td><span class="tt-room-pill">${escapeHtml(r.room)}</span></td>
-        <td style="font-family:var(--mono);font-size:0.72rem;">${escapeHtml(r.conf)}</td>
+        ${_pkgConfCell(r.conf)}
         <td style="font-family:var(--mono);font-size:0.76rem;font-weight:700;color:${r.alreadyComplete ? 'var(--text2)' : 'var(--mint)'};">${escapeHtml(r.code)}</td>
         <td style="font-family:var(--mono);font-size:0.72rem;">AED ${escapeHtml(r.price)}</td>
         <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text2);">${escapeHtml(r.from) || '—'} → ${escapeHtml(r.to) || '—'}</td>
@@ -1496,7 +1507,7 @@ function _pkgRowHtmlInner(r) {
       : `<span style="color:var(--amber);">⚠ Check</span>`;
     return `<tr${r.verdict === 'outside' ? ' style="opacity:0.75;"' : ''}>
       <td><span class="tt-room-pill">${escapeHtml(r.room)}</span></td>
-      <td style="font-family:var(--mono);font-size:0.72rem;">${escapeHtml(r.conf)}</td>
+      ${_pkgConfCell(r.conf)}
       <td style="font-family:var(--mono);font-size:0.76rem;">${productCell}</td>
       <td style="font-family:var(--mono);font-size:0.72rem;color:var(--text3);">AED ${escapeHtml(String(r.charge))}</td>
       <td style="font-size:0.66rem;color:var(--text3);">${candText}</td>
