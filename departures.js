@@ -348,6 +348,34 @@ function processDep() {
   saveDepartures(depRooms, depLog).then(() => showToast('Departure board loaded ✓'));
 }
 
+// ── A room added by hand ───────────────────────────────────
+// The report wasn't loaded today, or a room isn't on it (in-house, early
+// departure): add it to the board so it can be checked out, made late, etc.
+function depAddManualRoom(room, name) {
+  room = String(room || '').trim();
+  if (!/^\d{1,5}[A-Za-z]?$/.test(room)) { showToast('Write the room number', 'warn'); return false; }
+  if (depRooms.some(r => String(r.roomStr).trim() === room)) { showToast(`Room ${room} is already on the board`, 'warn'); return false; }
+  const today = hoLocalISO();
+  depRooms.push({
+    room: parseInt(room), roomStr: room, name: String(name || '').trim().toUpperCase() || '—',
+    arrival: '', departure: today, nights: 0, balance: 0, source: '', company: '', rateCode: '', isVip: false, depTime: '',
+    status: 'due', lateTime: '', extensionNights: 0, intent: '', note: '', checkoutAt: '', manual: true,
+  });
+  depRooms.sort((a, b) => a.room - b.room);
+  ['depBoard'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'block'; });
+  const up = document.getElementById('depUploadCard'); if (up) up.style.display = 'none';
+  ['depPrintBtn','depExportBtn','depViewToggle','depReloadBtn','depAlertToggle','depTrendsBtn'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = ''; });
+  depRender(); updateDepBadge(); saveDepartures(depRooms, depLog);
+  if (typeof logActivity === 'function') logActivity('dep_added', `Room ${room} added by hand`);
+  return true;
+}
+function depAddManualPrompt(room) {
+  room = room || prompt('Room number');
+  if (!room) return;
+  const name = prompt(`Guest name in room ${room} (optional)`) || '';
+  if (depAddManualRoom(room, name)) showToast(`Room ${room} added to today's departures`, 'ok');
+}
+
 // ── Smart Reload / Merge ───────────────────────────────────
 // New report from Opera:
 //   Rooms that already exist  → keep status, notes, intent, times
@@ -425,7 +453,7 @@ function processDepReload() {
   depRooms.forEach(r => {
     if (!freshRooms.find(f => f.room === r.room)) {
       removed++;
-      if (r.status === 'out' || r.status === 'extended' || r.status === 'na') {
+      if (r.status === 'out' || r.status === 'extended' || r.status === 'na' || r.manual) {   // (a room added by hand isn't in Opera's report: keep it)
         merged.push(r); // preserve — has real tracked checkout/extension data
         preserved++;
       }

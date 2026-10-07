@@ -221,6 +221,17 @@ function brAsk(raw) {
 
   let html = '';
   if (look.length) html += `<div class="br-card"><div class="br-kind">🔎 In the app right now</div>${look.map(([p, i, t]) => `<button class="br-hit" onclick="brClose();showPanel('${p}')">${i} ${escapeHtml(t)}</button>`).join('')}</div>`;
+  else {
+    // a room number the app doesn't have today (arrivals not loaded, in-house guest): what can be done with it
+    const rm = q.match(/^\s*(?:room\s*)?(\d{3,4})\s*$/i);
+    if (rm) {
+      const r = rm[1];
+      html += `<div class="br-card"><div class="br-kind">🛏️ Room ${r}</div><div class="br-body">It isn't in today's reports (arrivals or departures may not be loaded, or the guest is in-house).</div><div class="br-acts">`
+        + `<button class="btn gold" onclick="brClose();showPanel('departures');depAddManualPrompt('${r}')">🚪 Add to today's departures</button>`
+        + `<button class="btn" onclick="brClose();showPanel('arrivals');openAddGuest('arrivals');setTimeout(()=>{const e=document.getElementById('mg-room');if(e)e.value='${r}'},50)">🛎️ Add as an arrival</button>`
+        + `<button class="btn ghost" onclick="brAsk('history ${r}')">📜 Who did what to ${r}</button></div></div>`;
+    }
+  }
   html += ranked.map((x, i) => `
     <div class="br-card">
       <div class="br-kind">${x.k.kind}</div>
@@ -232,8 +243,9 @@ function brAsk(raw) {
         <button class="br-vote" title="Wrong answer" onclick="brVote(${i},-1,this)">👎</button>
       </div>
     </div>`).join('');
-  if (!ranked.length && !look.length) html += `<div class="br-card"><div class="br-title">I don't know this yet.</div><div class="br-body">Teach me and I'll know it next time, for the whole team.</div></div>`;
-  html += `<details class="br-teach"${!ranked.length && !look.length ? ' open' : ''}><summary>✍️ Teach the answer to "${escapeHtml(q)}"</summary>
+  const isRoom = /^\s*(?:room\s*)?\d{3,4}\s*$/i.test(q);   // a room number got its own card above
+  if (!ranked.length && !look.length && !isRoom) html += `<div class="br-card"><div class="br-title">I don't know this yet.</div><div class="br-body">Teach me and I'll know it next time, for the whole team.</div></div>`;
+  html += `<details class="br-teach"${!ranked.length && !look.length && !isRoom ? ' open' : ''}><summary>✍️ Teach the answer to "${escapeHtml(q)}"</summary>
     <textarea id="brTeachA" class="tt-textarea" placeholder="Write the answer the way you'd explain it to a new colleague…"></textarea>
     <button class="btn gold" onclick="brTeach(brCurrentQ, document.getElementById('brTeachA').value)">Save for the team</button></details>`;
   brCurrentQ = q;

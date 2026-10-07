@@ -25,7 +25,22 @@ function _sfGuests(which) {
   const lists = which === 'dep' ? [dep] : which === 'arr' ? [arr] : which === 'purpose' ? [pur] : [dep, arr, pur];
   const rooms = [], names = [];
   lists.forEach(l => l.forEach(g => { if (!g) return; rooms.push(g.roomStr || g.room); names.push(g.name); }));
-  return _sfUniq([...rooms.sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true })), ...names]).slice(0, 400);
+  // today's rooms and guests first, then every other room of the hotel (a room not loaded today)
+  return _sfUniq([...rooms.sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true })), ...names, ...hoRoomsKnown()]).slice(0, 1200);
+}
+/** Every room number this hotel has had in any report on this device, so a room not loaded today still
+ *  comes up (room numbers only, no guest details, are kept). */
+function hoRoomsKnown() {
+  const key = 'ho_rooms_v1_' + (typeof HOTEL_ID !== 'undefined' ? HOTEL_ID : 'x');
+  let known = []; try { known = JSON.parse(localStorage.getItem(key) || '[]'); } catch (_) {}
+  const now = [];
+  try { _sfArr(depRooms).forEach(r => r && now.push(r.roomStr || r.room)); } catch (_) {}
+  try { _sfArr(arrGuests).forEach(g => g && now.push(g.room)); } catch (_) {}
+  try { _sfArr(purposeGuests).forEach(g => g && now.push(g.room)); } catch (_) {}
+  const all = _sfUniq([...known, ...now].map(x => String(x || '').trim()).filter(x => /^\d{1,5}[A-Za-z]?$/.test(x)))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  if (all.length !== known.length) try { localStorage.setItem(key, JSON.stringify(all.slice(0, 2000))); } catch (_) {}
+  return all;
 }
 function _sfStaff() {
   const out = [];
@@ -73,7 +88,7 @@ const SF_LISTS = {
   'search-arr': () => _sfGuests('arr'),
   'search-purpose': () => _sfGuests('purpose'),
   'search-all': () => _sfGuests('all'),
-  room: () => _sfGuests('all').filter(x => /^\d/.test(x)),
+  room: () => hoRoomsKnown(),
   email: el => {
     const v = String(el.value || ''), at = v.indexOf('@');
     if (at < 1) return [];

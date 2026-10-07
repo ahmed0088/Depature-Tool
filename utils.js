@@ -501,7 +501,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v174';
+const APP_VERSION = 'v175';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;
@@ -694,4 +694,47 @@ function writeStyledXlsx(filename, sheetName, rows, styleAt, styles, cols) {
     // a page opening, or its buttons appearing, can change what fits
     new MutationObserver(() => { clearTimeout(all._t); all._t = setTimeout(all, 120); }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class', 'hidden'] });
   });
+})();
+
+// ── Sideways rows on a computer ───────────────────────────
+// Rows of buttons and chips that scroll sideways (Ops Brain suggestions, page tabs, filters…) move with a
+// finger on a phone, but a mouse wheel only scrolls up and down. Here the wheel scrolls such a row sideways
+// while it still can, and a row can be dragged with the mouse. Everywhere in the app, for every such row.
+(function () {
+  const sideways = el => {
+    for (let n = el; n && n !== document.body && n.nodeType === 1; n = n.parentElement) {
+      // only a low row (chips, tabs, buttons): a wide table keeps the wheel for scrolling the page down
+      if (n.scrollWidth > n.clientWidth + 2 && n.clientHeight <= 120) {
+        const ox = getComputedStyle(n).overflowX;
+        if (ox === 'auto' || ox === 'scroll') return n;
+      }
+    }
+    return null;
+  };
+  document.addEventListener('wheel', e => {
+    if (e.ctrlKey || e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;   // trackpad sideways and zoom work already
+    const row = sideways(e.target); if (!row) return;
+    // a tall box that scrolls both ways (a table) keeps the wheel for up and down
+    if (row.scrollHeight > row.clientHeight + 2 && /auto|scroll/.test(getComputedStyle(row).overflowY)) return;
+    const max = row.scrollWidth - row.clientWidth;
+    if ((e.deltaY > 0 && row.scrollLeft >= max - 1) || (e.deltaY < 0 && row.scrollLeft <= 0)) return;   // at the end: the page scrolls on
+    row.scrollLeft += e.deltaY * (e.deltaMode === 1 ? 32 : 1);
+    e.preventDefault();
+  }, { passive: false });
+  // drag with the mouse
+  let drag = null;
+  document.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'mouse' || e.button !== 0 || e.target.closest('input,textarea,select,[contenteditable]')) return;
+    const row = sideways(e.target); if (!row) return;
+    drag = { row, x: e.clientX, left: row.scrollLeft, moved: false };
+  });
+  document.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x;
+    if (!drag.moved && Math.abs(dx) < 6) return;
+    drag.moved = true; drag.row.scrollLeft = drag.left - dx; drag.row.style.cursor = 'grabbing';
+  });
+  const end = () => { if (!drag) return; const d = drag; drag = null; d.row.style.cursor = ''; if (d.moved) { const stop = ev => { ev.stopPropagation(); ev.preventDefault(); }; document.addEventListener('click', stop, { capture: true, once: true }); setTimeout(() => document.removeEventListener('click', stop, true), 50); } };
+  document.addEventListener('pointerup', end);
+  document.addEventListener('pointercancel', end);
 })();

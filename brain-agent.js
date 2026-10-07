@@ -78,6 +78,16 @@ function baMapCountry(opName, excel, auto) {
 
 // ── Commands ──────────────────────────────────────────────
 const _baRoom = s => (String(s).match(/\b(\d{3,4})\b/) || [])[1];
+/** Add a room that isn't on the board, then do what was asked ("check out 512"). */
+function baAddAndAct(room, st) {
+  if (typeof depAddManualRoom !== 'function') return;
+  const name = prompt(`Guest name in room ${room} (optional)`) || '';
+  if (!depAddManualRoom(room, name)) return;
+  const i = _baDepIdx(room);
+  if (i >= 0 && st && st !== 'due') depAction(i, st);
+  showToast(`Room ${room} added${st && st !== 'due' ? ' and done' : ''}`, 'ok');
+  if (typeof brClose === 'function') try { brClose(); } catch (_) {}
+}
 const _baDepIdx = room => (typeof depRooms !== 'undefined' ? depRooms.findIndex(r => String(r.roomStr).trim() === String(room)) : -1);
 const _baOut = (html) => { const box = document.getElementById('brAnswers'); if (box) box.innerHTML = `<div class="br-card ba-res">${html}</div>`; };
 const _baList = (title, rows) => `<div class="br-kind">🤖 Done</div><div class="br-title">${escapeHtml(title)}</div>${rows.length ? '<ul class="ba-ul">' + rows.map(r => `<li>${r}</li>`).join('') + '</ul>' : ''}`;
@@ -132,7 +142,12 @@ const BA_COMMANDS = [
       const w = q.toLowerCase();
       const st = /late|lco/.test(w) ? 'late' : /\bna\b|no answer/.test(w) ? 'na' : /dnd/.test(w) ? 'dnd' : /due|undo/.test(w) ? 'due' : 'out';
       const i = _baDepIdx(room);
-      if (i < 0) { _baOut(_baList(`Room ${room} is not on today's departures.`, [])); return true; }
+      if (i < 0) {
+        // not loaded today, or not on the report: offer to add it and do it in one tap
+        const what = { out: 'check it out', late: 'mark it late', na: 'mark no answer', dnd: 'mark DND', due: 'add it as due' }[st];
+        _baOut(`<div class="br-card"><div class="br-kind">🚪 Room ${escapeHtml(room)} isn't on today's departures</div><div class="br-body">Today's report may not be loaded, or the room isn't on it (in-house, leaving early).</div><div class="br-acts"><button class="btn gold" onclick="baAddAndAct('${escapeHtml(room)}','${st}')">➕ Add room ${escapeHtml(room)} and ${what}</button></div></div>`);
+        return true;
+      }
       const r = depRooms[i];
       if (st === 'out' && r.balance > 0 && (typeof hoPref !== 'function' || hoPref('confirmCheckout')) && !confirm(`Room ${room} still owes AED ${r.balance}. Check out anyway?`)) return true;
       depAction(i, st);

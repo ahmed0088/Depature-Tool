@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 175, items: [
+    '🖱 On a computer, rows that scroll sideways (Ops Brain suggestions, tabs, filters, chips) now move with the mouse wheel, and you can drag them with the mouse. Everywhere in the app.',
+    '🛏️ A room that isn\'t loaded today still works: ask Ops Brain "512" and it offers to add it to today\'s departures or as an arrival. "check out 512" on a room not on the board offers "Add room 512 and check it out" in one tap. Rooms added by hand stay on the board when you reload the report.',
+    '💡 The app remembers every room number your hotel has had, so room suggestions include rooms not in today\'s reports.',
+  ] },
   { v: 174, items: [
     '💡 Suggestions while you type, everywhere: every country in a nationality box, the usual booking sources, the whole email after you type "@g" (gmail.com, hotmail.com…), today\'s rooms and guests in the search boxes, the team in a name box, and the roster\'s own shifts and codes when you change a roster cell. Tap one to fill it in.',
     '⌚ Times fill themselves in: type 1245 and it becomes 12:45. A "full name in caps" box writes in capitals by itself. Room boxes open the number keypad.',
