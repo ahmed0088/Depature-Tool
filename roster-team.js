@@ -98,7 +98,7 @@ function rtWhyNot(I, cells, group, date, shift, skip) {
 function rtStays(I, p, group) {
   if (p.lock) return true;
   const away = rbBaseGroup(p.group) !== rbBaseGroup(group);
-  return away && (p.home || (I.rules || {}).lend === false);
+  return away && (p.home || ((I.rules || {}).lend === false && !rbFloats(p) && !rbFloatsLast(p)));   // Duty Managers work anywhere; Supervisors too, last
 }
 function rtCoverOptions(I, cells, group, date, shift, opt) {
   const allowEmpty = !!(opt && opt.allowEmpty);   // a plan of several moves may empty a shift that a later move fills
@@ -119,7 +119,7 @@ function rtCoverOptions(I, cells, group, date, shift, opt) {
     const mgr = /manager/i.test(p.title || '');
     const away = p.group !== group, label = away ? `${shift} - ${rbShortU(rbBaseGroup(group))}` : shift;
     const from = away ? ` from ${p.group}` : '';
-    const extra = (mgr ? 40 : 0) + (away ? 10 : 0);
+    const extra = (mgr ? 40 : 0) + (away && !rbFloats(p) ? 10 : 0) + (away && rbFloatsLast(p) ? 60 : 0);   // a Supervisor from another hotel: only when nobody else
     if (rbKind(v) === 'off') {
       // works that day; their day off moves to a day with spare cover
       dates.forEach((e, i) => {
@@ -200,6 +200,34 @@ function rtCoverOptions(I, cells, group, date, shift, opt) {
   const best = {}; opts.forEach(o => { if (!best[o.key] || best[o.key].cost > o.cost) best[o.key] = o; });
   const list = Object.values(best).sort((a, b) => a.cost - b.cost).slice(0, 6);
   const who = ((G[group] || {}).who || {})[shift];
+  // nobody fits every rule: who could do it if the "day off between night and day" rule is bent this once (rest and 9 h still hold)
+  if (!list.length && !(opt && opt.noBend) && (I.rules || {}).nightSwitch !== false && !(G[group] || {}).post) {
+    const I2 = Object.assign({}, I, { rules: Object.assign({}, I.rules, { nightSwitch: false }) });
+    const shortsIn = c => rbProblems(I, c).filter(p => p.kind === 'short'), before = shortsIn(cells);
+    const isNew = p => !before.some(b => b.group === p.group && b.date === p.date && b.shift === p.shift);
+    const seen = new Set();
+    for (const o of rtCoverOptions(I2, cells, group, date, shift, Object.assign({}, opt, { noBend: true, allowEmpty: true })).filter(o => o.cells)) {
+      if (list.length >= 3 || seen.has(o.key)) continue;
+      const left = shortsIn(o.cells).filter(isNew);
+      let cells2 = o.cells, text = o.text, ok = o.ok || '';
+      const fn = k => rtName(k).split(' ')[0], away = rbBaseGroup((I.people.find(x => x.key === o.key) || {}).group) !== rbBaseGroup(group);
+      let why = `${fn(o.key)} covers ${shift} on ${roDayLbl(date)}${away ? ' at ' + rbBaseGroup(group) : ''} with no day off between night and day shifts: nobody else could take it with every rule kept.`;
+      if (left.length > 1) continue;
+      if (left.length === 1) {           // their own shift is left empty: someone else takes it, every rule kept
+        const g2 = left[0], f = rtCoverOptions(I, o.cells, g2.group, g2.date, g2.shift, { noBend: true }).find(x => x.cells && x.key !== o.key);
+        if (!f) continue;
+        cells2 = f.cells; text += `; then ${f.text.charAt(0).toLowerCase() + f.text.slice(1)}`; ok = ok.replace(/\s·\s[^·]*drops to \d+/g, '');
+        why += ` ${fn(f.key)} takes over the ${g2.shift} on ${roDayLbl(g2.date)}${rbBaseGroup(g2.group) !== rbBaseGroup((I.people.find(x => x.key === f.key) || {}).group) ? ' at ' + rbBaseGroup(g2.group) : ''}.`;
+      }
+      seen.add(o.key);
+      // does it really bend the night ↔ day rule? (a two-step plan may keep every rule)
+      const was = rbProblems(I, cells).filter(p => p.kind === 'switch'), bends = rbProblems(I, cells2).some(p => p.kind === 'switch' && !was.some(w => w.key === p.key && w.date === p.date));
+      if (bends) list.push(Object.assign({}, o, { cells: cells2, bend: true, why, notes: [{ key: o.key, date, text: why }], cost: o.cost + 200, text: text + ' ⚠ no day off between night and day', ok: '⚠ bends one rule: night ↔ day without a day off (rest and 9 h still kept) · ' + ok }));
+      else list.push(Object.assign({}, o, { cells: cells2, cost: o.cost + 60, text, why: why.replace(/ with no day off between night and day shifts: nobody else could take it with every rule kept\./, '.'), notes: null }));
+    }
+    list.sort((a, b) => a.cost - b.cost);
+    if (list.some(o => o.bend) && !list.some(o => o.cells && !o.bend)) list.unshift({ kind: 'bring', cost: 998, cells: null, text: `Nobody can take ${shift} on ${roDayLbl(date)} with every rule kept. Only by bending the night ↔ day rule once:` });
+  }
   if (!list.length) list.push({ kind: 'bring', cost: 999, cells: null, text: `Nobody can take ${shift} on ${roDayLbl(date)} without breaking the rules${who ? ` (it's for ${who.join(' / ')} only: set titles in Team, or change who can work it in Cover needed)` : ' (rest, a day off between night and day, 9 hours)'}. Bring in a staff member${(G[group] && need(group, shift, d) > 1) ? ', or run it with one person' : ''}.` });
   return list;
 }
@@ -287,7 +315,7 @@ function rtApplyPlan(i) {
   if (rtIsPublished(o.week)) {
     const n = rtApplyPublished(o.week, o.cells, 'shift type');
     rbDrafts[o.week] = { cells: _rtClone(o.cells), at: Date.now(), fromPublished: true }; fbSet('roster/builder/drafts/' + o.week, rbDrafts[o.week]);
-    showToast(`${n} change${n === 1 ? '' : 's'} made in the posted roster; the people concerned are told`, 'ok');
+    showToast(bent ? `Done, and noted in the builder: ${bent}` : `${n} change${n === 1 ? '' : 's'} made in the posted roster; the people concerned are told`, bent ? 'warn' : 'ok');
   } else {
     if (typeof rbUndoPush === 'function' && rbWeek === o.week) rbUndoPush();
     rbDrafts[o.week] = Object.assign({}, rbDrafts[o.week], { cells: _rtClone(o.cells), at: Date.now() }); fbSet('roster/builder/drafts/' + o.week, rbDrafts[o.week]);
@@ -387,7 +415,7 @@ function rtWhatIf(s) {
   const fixable = (next, prev) => { const g = gapsIn(next).find(z => !gapsIn(prev).some(w => same(w, z))); return !!g && rtCoverOptions(Iq, next, g.group, g.date, g.shift).some(y => y.cells && better(y.cells, prev)); };
   const chain = (cells, first) => {
     const texts = [], used = {}; let c = cells;
-    if (first) { if (!respects(first.cells) || breaks(first.cells) > breaks(c)) return null; c = first.cells; texts.push(first.text); used[first.key] = 1; }
+    if (first) { if (!respects(first.cells) || (breaks(first.cells) > breaks(c) && !first.bend)) return null; c = first.cells; texts.push(first.text); used[first.key] = 1; }
     for (let n = 0; n < 8; n++) {
       const g = gapsIn(c)[0];
       if (!g) break;
@@ -458,6 +486,7 @@ function rtWhatIfUse(i) {
   if (!roCanEdit()) { showToast('Only supervisors, managers and owners can change the roster', 'err'); return; }
   const k = r.s.key;
   if (r.code && r.code !== 'OFF') { const c = Object.assign({}, rbPeople[k]); c.absences = Object.assign({}, c.absences, { ['a' + Date.now().toString(36)]: { from: r.days[0], to: r.days[r.days.length - 1], code: r.code } }); rbPeople[k] = c; fbSet('roster/builder/people/' + k, c); }
+  const bent = p.bad.length ? `${rtWhatIfText(r)}: ${p.texts.join('; then ')}. Bends: ${p.bad.map(rtProbText).join(', ')} (the closest plan with this team).` : '';
   if (r.posted) {
     const n = rtApplyPublished(r.week, p.cells, rtWhatIfText(r));
     rbDrafts[r.week] = { cells: _rtClone(p.cells), at: Date.now(), fromPublished: true }; fbSet('roster/builder/drafts/' + r.week, rbDrafts[r.week]);
@@ -465,8 +494,9 @@ function rtWhatIfUse(i) {
   } else {
     if (typeof rbUndoPush === 'function' && rbWeek === r.week) rbUndoPush();
     rbDrafts[r.week] = Object.assign({}, rbDrafts[r.week], { cells: _rtClone(p.cells), at: Date.now() }); fbSet('roster/builder/drafts/' + r.week, rbDrafts[r.week]);
-    showToast('Done in the draft. ↶ Undo is above the table', 'ok');
+    showToast(bent ? `Done, and noted in the draft: ${bent}` : 'Done in the draft. ↶ Undo is above the table', bent ? 'warn' : 'ok');
   }
+  if (bent) { rbAddNotes(r.week, p.bad.map(x => ({ key: x.key, date: x.date, text: bent }))); fbSet('roster/builder/drafts/' + r.week, rbDrafts[r.week]); }
   document.getElementById('rtWI')?.remove();
   if (typeof brClose === 'function') try { brClose(); } catch (_) {}
   if (document.getElementById('panel-roster-build')?.classList.contains('active')) { rbWeek = r.week; rbRender(); }
@@ -921,13 +951,15 @@ function _rtOut(html) { if (typeof _bxOut === 'function') _bxOut(html); else { c
 let _rtPending = {};
 /** Buttons in an Ops Brain answer that apply a change to a posted week. */
 function rtOptButtons(week, opts) {
-  return `<div class="rt-opts">${opts.map(o => { if (!o.cells) return `<div class="rb-prob short">${escapeHtml(o.text)}</div>`; const id = 'o' + Math.random().toString(36).slice(2, 8); _rtPending[id] = { week, cells: o.cells }; return `<button class="btn sm" onclick="rtApplyPending('${id}')">✓ ${escapeHtml(o.text)}${o.ok ? `<small class="rb-ok">OK: ${escapeHtml(o.ok)}</small>` : ''}</button>`; }).join('')}</div>`;
+  return `<div class="rt-opts">${opts.map(o => { if (!o.cells) return `<div class="rb-prob short">${escapeHtml(o.text)}</div>`; const id = 'o' + Math.random().toString(36).slice(2, 8); _rtPending[id] = { week, cells: o.cells, why: o.why, notes: o.notes }; return `<button class="btn sm" onclick="rtApplyPending('${id}')">✓ ${escapeHtml(o.text)}${o.ok ? `<small class="rb-ok">OK: ${escapeHtml(o.ok)}</small>` : ''}</button>`; }).join('')}</div>`;
 }
 function rtApplyPending(id) {
   const o = _rtPending[id]; if (!o) return;
   if (!roCanEdit()) { showToast('Only supervisors, managers and owners can change the roster', 'err'); return; }
-  if (rtIsPublished(o.week)) { const n = rtApplyPublished(o.week, o.cells, 'cover'); showToast(`${n} change${n === 1 ? '' : 's'} made; the people concerned are told`, 'ok'); }
-  else { rbDrafts[o.week] = Object.assign({}, rbDrafts[o.week], { cells: o.cells, at: Date.now() }); fbSet('roster/builder/drafts/' + o.week, rbDrafts[o.week]); showToast('Changed in the draft', 'ok'); }
+  if (rtIsPublished(o.week)) { const n = rtApplyPublished(o.week, o.cells, o.why || 'cover'); rbDrafts[o.week] = Object.assign({}, rbDrafts[o.week], { cells: _rtClone(o.cells), at: Date.now(), fromPublished: true }); showToast(o.why ? `Done: ${o.why}` : `${n} change${n === 1 ? '' : 's'} made; the people concerned are told`, o.why ? 'warn' : 'ok'); }
+  else { rbDrafts[o.week] = Object.assign({}, rbDrafts[o.week], { cells: o.cells, at: Date.now() }); showToast(o.why ? `Done: ${o.why}` : 'Changed in the draft', o.why ? 'warn' : 'ok'); }
+  rbAddNotes(o.week, o.notes);
+  fbSet('roster/builder/drafts/' + o.week, rbDrafts[o.week]);
   _rtPending = {};
   if (typeof brClose === 'function') brClose();
 }

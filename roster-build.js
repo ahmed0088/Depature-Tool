@@ -232,11 +232,11 @@ function _rbFinish(I, cells) {
   const need = (g, s, d) => ((G[g] && G[g].need[s]) || [])[d] || 0;
   // 4. a hotel that is short borrows someone on the same shift from a hotel with one spare
   let cover = rbCover(I, cells);
-  if (R.lend) {
+  { // even with lending off, a Duty Manager may go where they're needed
     for (const g of Object.keys(G)) for (let d = 0; d < D; d++) for (const s of G[g].shifts) {
       while (cover[g][s][d] < need(g, s, d)) {
         const dt = dates[d];
-        const donor = I.people.find(q => q.group !== g && !q.home && !q.lock && !((I.pre || {})[q.key] || {})[dt] && G[q.group] && cells[q.key][dt] === s && cover[q.group][s] && cover[q.group][s][d] > need(q.group, s, d) && rbMayWork(I, g, q, s));
+        const donor = I.people.filter(q => q.group !== g && !q.home && !q.lock && (R.lend || rbFloats(q) || rbFloatsLast(q)) && !((I.pre || {})[q.key] || {})[dt] && G[q.group] && cells[q.key][dt] === s && cover[q.group][s] && cover[q.group][s][d] > need(q.group, s, d) && rbMayWork(I, g, q, s)).sort((a, b) => (rbFloatsLast(a) ? 1 : 0) - (rbFloatsLast(b) ? 1 : 0) || (rbFloats(b) ? 1 : 0) - (rbFloats(a) ? 1 : 0))[0];
         if (!donor) break;
         cells[donor.key][dt] = `${s} - ${rbShortU(g, Object.keys(G))}`;
         cover = rbCover(I, cells);
@@ -585,6 +585,10 @@ function rbActive(k, week) {
   return !c.inactive && !(c.left && c.left <= w) && !(c.joined && c.joined > roAdd(w, 6));
 }
 function rbTitle(k) { return (rbPeople[k] || {}).title || ''; }
+/** Duty Managers float: any hotel, any shift, even when everyone else stays at their own hotel. */
+function rbFloats(p) { return /^duty manager$/i.test((p && p.title) || ''); }
+/** Supervisors can go anywhere too, but only when nobody else can: they come after everyone else. */
+function rbFloatsLast(p) { return /^supervisor$/i.test((p && p.title) || ''); }
 function rbIsManager(k) { return /^(manager|asst\. manager)$/i.test(rbTitle(k)); }   // duty managers rotate like supervisors
 function rbMembers(g, week) { return Object.keys(roStaff).filter(k => ((roStaff[k] || {}).group || '') === g && rbActive(k, week)).sort((a, b) => ((roStaff[a].order ?? 999) - (roStaff[b].order ?? 999)) || roStaff[a].name.localeCompare(roStaff[b].name)); }
 /** Cover needed for a hotel: what was set by hand, else what past rosters show. */
@@ -864,9 +868,31 @@ function rbUndo() {
 document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'z' || e.key === 'Z') && document.getElementById('panel-roster-build')?.classList.contains('active') && !/INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || '')) { e.preventDefault(); rbUndo(); }
 });
-function rbApplyCells(cells) { rbUndoPush(); rbDrafts[rbWeek] = Object.assign({}, rbDrafts[rbWeek], { cells }); rbSaveDraft(); rbRefreshOut(); showToast('Done. ↶ Undo is above the table', 'ok'); }
+function rbApplyCells(cells, why, notes) { rbUndoPush(); rbDrafts[rbWeek] = Object.assign({}, rbDrafts[rbWeek], { cells }); rbAddNotes(rbWeek, notes); rbSaveDraft(); rbRefreshOut(); showToast(why ? `Done: ${why} It's noted under Decisions. ↶ Undo is above the table` : 'Done. ↶ Undo is above the table', why ? 'warn' : 'ok'); }
 let _rbOpt = [];
-function rbOptApply(i) { const o = _rbOpt[i]; if (o && o.cells) rbApplyCells(o.cells); }
+function rbOptApply(i) { const o = _rbOpt[i]; if (o && o.cells) rbApplyCells(o.cells, o.why, o.notes); }
+/** Decisions kept with the week: a rule bent on purpose, and why. */
+function rbAddNotes(week, notes) {
+  if (!notes || !notes.length || !rbDrafts[week]) return;
+  const D = rbDrafts[week], who = (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '';
+  D.notes = (D.notes || []).concat(notes.map(n => Object.assign({ at: Date.now(), by: who }, n)));
+}
+/** A rule break that a decision covers: same person, that day or the day after (night ↔ day shows on the next day). */
+function rbNoted(p) { return !!p.key && ((rbDrafts[rbWeek] || {}).notes || []).some(n => n.key === p.key && n.date && p.date && Math.abs(roDate(p.date) - roDate(n.date)) <= 864e5 * 1.5); }
+function rbDelNote(i) { const D = rbDrafts[rbWeek]; if (!D || !D.notes) return; D.notes = D.notes.filter((_, j) => j !== i); rbSaveDraft(); rbRefreshOut(); }
+/** Decisions this week: rules bent on purpose (with why) and everyone working at another hotel. */
+function rbDecisionsHtml(I, cells, shown, dates) {
+  const D = rbDrafts[rbWeek] || {}, notes = D.notes || [], moved = [];
+  I.people.forEach(p => dates.forEach(dt => { const v = (cells[p.key] || {})[dt], x = rbParse(v); if (!x || !x.note) return; const at = rbBaseGroup(rbAt(I, p, x)), home = rbBaseGroup(p.group); if (at !== home && (shown.includes(at) || shown.includes(home))) moved.push({ p, dt, at, home, sh: rbNorm(v) }); }));
+  if (!notes.length && !moved.length) return '';
+  const fn = k => escapeHtml(((roStaff[k] || {}).name || k).split(' ')[0]);
+  const named = p => notes.some(n => new RegExp('\\b' + ((roStaff[p.key] || {}).name || '').split(' ')[0] + '\\b').test(n.text || ''));
+  const why = p => named(p) ? 'part of the decision above' : rbFloats(p) ? 'Duty Manager: works wherever needed' : rbFloatsLast(p) ? 'Supervisor from another hotel: only because nobody else could' : I.rules.lend === false ? '' : 'spare at their own hotel that day';
+  return `<div class="rb-decide"><div class="rb-sub">📝 Decisions this week <small>so you know what was done, and why</small></div>
+    ${notes.map((n, i) => `<div class="rb-dec warn"><span>⚠ ${escapeHtml(n.text)}${n.by ? ` <i>· ${escapeHtml(n.by)}</i>` : ''}</span><button class="ro-x" title="Remove this note" onclick="rbDelNote(${i})">✕</button></div>`).join('')}
+    ${moved.map(m => `<div class="rb-dec"><span>🏨 <b>${fn(m.p.key)}</b> (${escapeHtml(m.home)}) works ${escapeHtml(m.sh)} at <b>${escapeHtml(m.at)}</b> on ${escapeHtml(roDayLbl(m.dt))}${why(m.p) ? ': ' + escapeHtml(why(m.p)) : ''}</span></div>`).join('')}
+  </div>`;
+}
 
 function rbReqText(r) {
   const d = r.from === (r.to || r.from) ? roDayLbl(r.from) : `${roDayLbl(r.from)} → ${roDayLbl(r.to)}`;
@@ -1008,7 +1034,8 @@ function rbOutHtml(shown, dates) {
   return `<div class="card rb-draft">
     <div class="ro-card-hd"><b>📋 Draft roster · ${escapeHtml(rbWeekLabel(rbWeek))}</b><span>built ${escapeHtml(new Date(rbDrafts[rbWeek].at || Date.now()).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' }))} · tap a cell to change it</span></div>
     ${rbHealthHtml(I, cells, cover, P, shown, dates)}
-    ${P.some(p => p.kind !== 'short' && p.kind !== 'thin') ? `<div class="rb-probs">${P.filter(p => p.kind !== 'short' && p.kind !== 'thin').map(p => `<div class="rb-prob ${p.kind}">⛔ ${ptxt(p)}</div>`).join('')}</div>` : ''}
+    ${P.some(p => p.kind !== 'short' && p.kind !== 'thin') ? `<div class="rb-probs">${P.filter(p => p.kind !== 'short' && p.kind !== 'thin').map(p => { const agreed = rbNoted(p); return `<div class="rb-prob ${p.kind}${agreed ? ' agreed' : ''}">${agreed ? '⚠ Bent on purpose (see Decisions):' : '⛔'} ${ptxt(p)}</div>`; }).join('')}</div>` : ''}
+    ${rbDecisionsHtml(I, cells, shown, dates)}
     ${rbFixHtml(I, cells, shown, ptxt)}
     ${chg.size ? rbChangesHtml(I, cells, shown, dates) : ''}
     <div class="rb-tools"><button class="btn sm" onclick="rbUndo()"${rbUndoStack.length ? '' : ' disabled'} title="Undo (Ctrl+Z)">↶ Undo</button>${rbLegendHtml()}</div>
@@ -1222,7 +1249,7 @@ function rbChangesHtml(I, cells, shown, dates) {
 /** Gaps in cover, each with the best ways to fill it (or "bring in a staff member"). */
 function rbFixHtml(I, cells, shown, ptxt) {
   if (typeof rtAdvice !== 'function') return '';
-  const adv = rtAdvice(I, cells).filter(a => shown.includes(rbBaseGroup(a.group)));
+  const adv = rtAdvice(I, cells).filter(a => shown.includes(rbBaseGroup(a.group)) && !(I.groups[a.group] || {}).post);   // a bell boy's day off needs no cover
   _rbOpt = [];
   if (!adv.length) return '';
   return `<div class="rb-fix" id="rbFix"><div class="rb-sub">Cover to fix <small>${adv.filter(a => a.kind === 'short').length} empty · ${adv.filter(a => a.kind === 'thin').length} with one person</small></div>

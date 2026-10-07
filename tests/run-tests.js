@@ -284,6 +284,26 @@ console.log('\nRoster scenarios');
     const after = o[0].cells;
     check('sick: the first suggestion fills the shift without new rule breaks', sb.rbProblems(I, after).filter(p => p.kind !== 'thin').length, 0);
   }
+  // 7b. nobody fits every rule: an option that bends night ↔ day once, flagged, with the reason; never when a clean option exists
+  {
+    const G = { 'Ibis DD': { shifts: [N, M], need: { [N]: day(1), [M]: day(1) }, who: { [N]: ['Supervisor'] } } };
+    const ppl = [P('S', { title: 'Supervisor' }), P('T', { title: 'Supervisor' }), P('A'), P('B')];
+    const cells = { S: {}, T: {}, A: {}, B: {} };
+    dates.forEach((dt, d) => { cells.S[dt] = d === 1 ? 'OFF' : M; cells.T[dt] = d === 6 ? 'OFF' : N; cells.A[dt] = d === 2 ? 'OFF' : M; cells.B[dt] = 'OFF'; });
+    cells.T[dates[1]] = 'SL';
+    const I = { week: W, groups: G, people: ppl, pre: { T: { [dates[1]]: 'SL' } }, rules: { minRest: 11, maxHours: 9, allowOne: true, nightSwitch: true, lend: true } };
+    const o = sb.rtCoverOptions(I, cells, 'Ibis DD', dates[1], N);
+    const b = o.find(x => x.bend);
+    check('bend: offered only as a flagged last resort', !!b && !o.some(x => x.cells && !x.bend), true);
+    check('bend: it says what it does and why', !!(b && /no day off between night and day/.test(b.text) && /nobody else could/.test(b.why)), true);
+    check('bend: rest and 9 h are still kept', b ? sb.rbProblems(I, b.cells).filter(p => p.kind === 'rest' || p.kind === 'long').length : -1, 0);
+  }
+  // 7c. Duty Managers work anywhere; Supervisors too, but only after everyone else
+  check('floats: Duty Manager yes, Supervisor last, Agent no', [sb.rbFloats({ title: 'Duty Manager' }), sb.rbFloatsLast({ title: 'Supervisor' }), sb.rbFloats({ title: 'Agent' }) || sb.rbFloatsLast({ title: 'Agent' })].join(), 'true,true,false');
+  {
+    const I = { rules: { lend: false } };
+    check('floats: with everyone kept home, a Duty Manager or Supervisor can still help another hotel; an Agent stays', [sb.rtStays(I, { group: 'Mercure DD', title: 'Duty Manager' }, 'Ibis DD'), sb.rtStays(I, { group: 'Mercure DD', title: 'Supervisor' }, 'Ibis DD'), sb.rtStays(I, { group: 'Mercure DD', title: 'Agent' }, 'Ibis DD'), sb.rtStays(I, { group: 'Mercure DD', title: 'Duty Manager', home: true }, 'Ibis DD')].join(), 'false,false,true,true');
+  }
   // 8. "put B on mornings": band request keeps B on morning shifts, and keep = the old week changes little
   {
     const G = { 'Ibis DD': { shifts: [M, E], need: { [M]: day(1), [E]: day(1) } } };
