@@ -76,7 +76,7 @@ function sfKind(el) {
   if (/^(arrSearch|xrefSearch)$/.test(id)) return 'search-arr';
   if (id === 'purposeSearch') return 'search-purpose';
   if (/^(ttSearch|itSearch|tdaSearch|immigSearch2|nsSearch|adg-search)$/.test(id)) return 'search-all';
-  if (id === 'mg-room') return 'room';
+  if (id === 'mg-room' || id === 'wkRoom') return 'room';
   return '';
 }
 const SF_LISTS = {

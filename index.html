@@ -492,6 +492,10 @@
     <div class="nav-icon">📊</div>Arrivals Processor
     <span class="nav-badge" id="badge-arrivals-proc">—</span>
   </div>
+  <div class="nav-item" onclick="showPanel('wakeups')" id="nav-wakeups" data-panel="wakeups">
+    <div class="nav-icon">⏰</div>Wake-up Calls
+    <span class="nav-badge" id="badge-wakeups">—</span>
+  </div>
   <div class="nav-item" onclick="showPanel('noshow')" id="nav-noshow" data-panel="noshow">
     <div class="nav-icon">🚫</div>No-Show Tracker
     <span class="nav-badge" id="badge-noshow">—</span>
@@ -2713,6 +2717,16 @@
 <!-- ══════════════════════════════════════════════════════
      PANEL: No-Show Tracker
 ══════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-wakeups">
+  <div class="page-hd">
+    <div class="page-hd-left">
+      <h1>Wake-up Calls</h1>
+      <p>Set them here for the whole team. At the time, everyone on shift is alerted, again every 5 minutes until someone taps ✓ Called.</p>
+    </div>
+  </div>
+  <div id="wkRoot"></div>
+</div>
+
 <div class="panel" id="panel-noshow">
 
   <div class="page-hd">
@@ -5111,6 +5125,10 @@ async function appInit() {
       <span class="mob-item-icon">🔗</span>
       <span class="mob-more-badge" id="mob-badge-xref"></span>Arr ↔ Dep
     </button>
+    <button class="mob-more-item" data-panel="wakeups"        onclick="showPanel('wakeups');closeMobMore()">
+      <span class="mob-item-icon">⏰</span>
+      <span class="mob-more-badge" id="mob-badge-wakeups"></span>Wake-ups
+    </button>
     <button class="mob-more-item" data-panel="noshow"         onclick="showPanel('noshow');closeMobMore()">
       <span class="mob-item-icon">🚫</span>
       <span class="mob-more-badge" id="mob-badge-noshow"></span>No-Shows
@@ -5386,6 +5404,7 @@ async function appInit() {
 <script src="brain-complete.js"></script>
 <script src="smart-fill.js"></script>
 <script src="brain-online.js"></script>
+<script src="wakeup.js"></script>
 <script src="brain-expert.js"></script>
 <script src="brand.js"></script>
 <script src="settings.js"></script>

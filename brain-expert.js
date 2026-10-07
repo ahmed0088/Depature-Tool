@@ -180,13 +180,16 @@ function bxTick() {
     bxAlert('⏰', `Reminder: ${r.text}`, 'Set at ' + r.set);
   });
   _bxSaveRem();
+  // a wake-up call rings at its time and again every 5 minutes (up to 3 times) until someone marks it called
   Object.entries(bxWakes).forEach(([id, w]) => {
-    if (w && !w.done && w.at <= now && w.at > now - 30 * 60e3) {
-      w.done = true;
-      if (typeof fbSet === 'function') fbSet('brain/wakeups/' + id + '/done', true);
-      bxAlert('☎️', `Wake-up call now: room ${w.room} (${w.time})`, `Set by ${w.by}`);
-    }
+    if (!w || w.done || w.at > now || w.at < now - 60 * 60e3) return;
+    const n = w.alerts || 0;
+    if (n >= 3 || (w.lastAlert && now - w.lastAlert < 5 * 60e3)) return;
+    w.alerts = n + 1; w.lastAlert = now;
+    if (typeof fbUpdate === 'function') fbUpdate('brain/wakeups/' + id, { alerts: w.alerts, lastAlert: now });
+    bxAlert('☎️', `Wake-up call now: room ${w.room}${w.name ? ' · ' + w.name : ''} (${w.time})${n ? ' — still not marked called' : ''}`, `Set by ${w.by}${w.note ? ' · ' + w.note : ''}`);
   });
+  if (typeof wkRender === 'function' && document.getElementById('panel-wakeups')?.classList.contains('active')) wkRender();
 }
 function bxAlert(icon, text, why) {
   if (typeof hoAlert === 'function') hoAlert(text, true);
@@ -239,7 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
     if (typeof fbListen === 'function') {
       fbListen('brain/notes', v => { bxNotes = v || {}; });
-      fbListen('brain/wakeups', v => { bxWakes = v || {}; });
+      fbListen('brain/wakeups', v => { bxWakes = v || {}; if (typeof wkRender === 'function') wkRender(); });
     }
   }, 1600);
   setInterval(bxTick, 20000);

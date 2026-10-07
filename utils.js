@@ -38,6 +38,7 @@ function showPanel(name) {
   if (name === 'history' && typeof histLoad === 'function') histLoad();
   if (name === 'settings' && typeof hoSettingsRender === 'function') hoSettingsRender();
   if (name === 'learn' && typeof learnRender === 'function') learnRender();
+  if (name === 'wakeups' && typeof wkRender === 'function') wkRender();
   if (name === 'roster' && typeof roRender === 'function') roRender();
   if (name === 'roster-build' && typeof rbRender === 'function') rbRender();
   if (typeof brTrackPanel === 'function') brTrackPanel(name);
@@ -501,7 +502,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v176';
+const APP_VERSION = 'v177';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;

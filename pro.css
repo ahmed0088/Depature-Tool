@@ -1123,3 +1123,34 @@ label.rb-q:first-child { border-color: var(--accent-border); background: color-m
 .bo-src a { color: var(--sky, #5ab4e8); }
 .bo-note { font-size: .68rem; opacity: .7; }
 .bo-more { margin: 2px 0 10px; }
+
+/* Wake-up calls */
+.wk-form { display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:10px; align-items:end; padding:4px 0 8px; }
+.wk-form label { display:flex; flex-direction:column; gap:4px; font-size:.72rem; color:var(--text3); }
+.wk-form input:not([type=checkbox]), .wk-form select, .wk-many textarea { font: inherit; font-size:.92rem; color: var(--text); background: var(--card2, rgba(127,127,127,.08)); border: 1px solid var(--border); border-radius: 10px; padding: 9px 11px; min-height: 40px; width: 100%; box-sizing: border-box; outline: none; }
+.wk-form input:focus, .wk-form select:focus, .wk-many textarea:focus { border-color: var(--accent, var(--gold)); }
+.wk-form .wk-rep input[type=date] { width: auto; flex: 1; min-width: 140px; }
+.wk-form .wk-rep input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent, var(--gold)); }
+.wk-form .wk-wide { grid-column: span 2; }
+.wk-form .wk-rep { flex-direction:row; align-items:center; gap:6px; flex-wrap:wrap; color:var(--text2); }
+.wk-many { margin-top:6px; } .wk-many summary { cursor:pointer; font-size:.78rem; color:var(--text2); }
+.wk-many textarea { width:100%; margin:6px 0; }
+.wk-row { display:flex; align-items:center; gap:12px; padding:10px 4px; border-top:1px solid var(--border, rgba(255,255,255,.08)); }
+.wk-time { font-family:var(--mono); font-weight:700; font-size:1.05rem; min-width:54px; }
+.wk-main { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.wk-main small { color:var(--text3); font-size:.7rem; }
+.wk-acts { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+.wk-day { font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; color:var(--text3); margin:10px 0 2px; }
+.wk-now { border-color: var(--rose, #f06b7a) !important; }
+.wk-now .wk-time { color: var(--rose, #f06b7a); animation: wkPulse 1.4s ease-in-out infinite; }
+@keyframes wkPulse { 50% { opacity:.45; } }
+.wk-done summary { cursor:pointer; }
+.wk-done .wk-row { opacity:.7; }
+@media (max-width: 600px) { .wk-form { grid-template-columns: 1fr 1fr; } .wk-form .wk-wide, .wk-form .wk-rep, .wk-form > .btn { grid-column: 1 / -1; } .wk-row { flex-wrap:wrap; } .wk-acts { width:100%; justify-content:flex-start; } }
+
+/* What's new: close button always at the top */
+.wn-top { position: sticky; top: -18px; z-index: 2; display:flex; align-items:center; justify-content:space-between; gap:10px; background: var(--card); margin: -18px -18px 8px; padding: 14px 18px 10px; border-bottom: 1px solid var(--border); }
+.wn-top .fr-h { margin: 0; }
+.wn-sheet { background-clip: padding-box; }
+.wn-x { flex:none; width:34px; height:34px; border-radius:50%; border:1px solid var(--border, rgba(255,255,255,.15)); background: var(--surface2, rgba(127,127,127,.15)); color: var(--text); font-size: 1rem; cursor:pointer; line-height:1; }
+.wn-x:hover { background: var(--surface3, rgba(127,127,127,.28)); }

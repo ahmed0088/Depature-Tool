@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 177, items: [
+    '⏰ New page: Wake-up Calls (in the menu, and under More on a phone). Write the room and time (the guest\'s name fills in from today\'s reports), pick the day, add a note, or repeat it every day until a date. Several at once: "512 6:30, 610 7:15 tomorrow". At the time everyone on shift is alerted, again every 5 minutes until someone taps ✓ Called. 📵 No answer tries again in 5 minutes. Copy or print the list for the night. Ops Brain\'s "wake up 512 at 6:30" lands on the same list.',
+    '✕ What\'s new has a close button at the top now, always visible while you scroll.',
+  ] },
   { v: 176, items: [
     '🌐 Ops Brain searches online when the app can\'t answer: it looks the question up by itself and shows a short answer with its sources. With an AI key on the device (Roster → AI settings) it searches the whole web and answers in plain words; without one it uses Wikipedia. "🔎 Search Google" is always one tap away, and "search online …" or "google …" asks the web directly.',
   ] },
@@ -316,7 +320,7 @@ function wnOpen(all) {
   m.className = 'fr-overlay';
   m.innerHTML = `
     <div class="fr-sheet wn-sheet" role="dialog" aria-modal="true" aria-label="What's new">
-      <div class="fr-h">✨ What's new</div>
+      <div class="wn-top"><div class="fr-h">✨ What's new</div><button class="wn-x" type="button" aria-label="Close" title="Close">✕</button></div>
       <div class="fr-file">You are on ${escapeHtml(APP_VERSION)}</div>
       ${list.map(e => `<div class="wn-ver">v${e.v}</div><ul class="wn-list">${e.items.map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul>`).join('')}
       ${all ? '' : '<button class="btn ghost wn-all" style="width:100%;margin-bottom:6px;">Show older updates</button>'}
@@ -324,7 +328,7 @@ function wnOpen(all) {
     </div>`;
   m.addEventListener('click', e => {
     if (e.target.closest('.wn-all')) { wnOpen(true); return; }
-    if (e.target === m || e.target.closest('.fr-cancel')) m.remove();
+    if (e.target === m || e.target.closest('.fr-cancel') || e.target.closest('.wn-x')) m.remove();
   });
   const back = document.activeElement;
   const esc = e => { if (e.key === 'Escape' && document.getElementById('wnModal') === m) { m.remove(); } };
