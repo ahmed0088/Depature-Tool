@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 158, items: [
+    '📥 Give this week\'s roster: in the roster builder, tap it and choose the roster picture (or Excel). HotelOps reads it, you check it and press Save, and it goes straight on to build the next week from it.',
+    '📋 Same as last week: builds the week by carrying last week on (same days off and shifts where they still fit), changed only for this week\'s requests, leave and the rules.',
+    '＋ New staff: a proper form for someone joining (name, hotel, title, start date, days off, shift). Or tell Ops Brain "add new staff Maria Santos to Ibis as agent from Monday". They\'re on the roster from their start date.',
+    '🖼 Download picture is now one tap at the top of the builder, for the draft or the posted week.',
+  ] },
   { v: 157, items: [
     '📋 Package Audit: tap any confirmation number to copy it (it shows a ✓). Tapping it no longer opens or closes the row, and you can still select the text.',
   ] },

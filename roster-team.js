@@ -617,7 +617,7 @@ function rtImportTeamFile(input) {
 
 // ── Team ──────────────────────────────────────────────────
 function rtTeamHtml(shown) {
-  return `<div class="rt-team-acts"><button class="btn sm gold" onclick="rtAddStaff()">＋ Add staff</button><button class="btn sm" onclick="rtSickDialog()">🤒 Sick / leave</button><label class="btn sm">📥 Team file<input type="file" accept=".json,application/json" hidden onchange="rtImportTeamFile(this)"></label><small>Tap a name for titles, shift, leave and history.</small></div>
+  return `<div class="rt-team-acts"><button class="btn sm gold" onclick="rtNewStaffDialog()">＋ Add staff</button><button class="btn sm" onclick="rtSickDialog()">🤒 Sick / leave</button><label class="btn sm">📥 Team file<input type="file" accept=".json,application/json" hidden onchange="rtImportTeamFile(this)"></label><small>Tap a name for titles, shift, leave and history.</small></div>
   ${shown.map(g => `<div class="rb-sub">${escapeHtml(g || 'Team')}</div><div class="rt-list">${Object.keys(roStaff).filter(k => ((roStaff[k] || {}).group || '') === g && !((rbPeople[k] || {}).deleted)).sort((a, b) => (roStaff[a].order ?? 999) - (roStaff[b].order ?? 999) || roStaff[a].name.localeCompare(roStaff[b].name)).map(k => {
     const c = rbPeople[k] || {}, p = rbPersonCfg(k), ph = rbPhOwed(k), today = roToday();
     const away = Object.values(c.absences || {}).find(a => a.to >= today);
@@ -701,6 +701,47 @@ function rtDelete(k) {
   delete roStaff[k]; fbSet('roster/staff/' + k, null);
   document.getElementById('rtSheet')?.remove(); rbRender();
   showToast('Removed from the team', 'ok');
+}
+/** A new person joining: one form, then they're in the team and the next build. */
+function rtNewStaffDialog(pre) {
+  pre = pre || {};
+  document.getElementById('rtNew')?.remove();
+  const d = document.createElement('div'); d.id = 'rtNew'; d.className = 'ri-viewer';
+  const groups = rbGroups().filter(Boolean), g0 = pre.group || rbGroup || (roStaff[roMeKey] || {}).group || groups[0] || '';
+  const start = pre.from || (rbWeek && rbWeek > roToday() ? rbWeek : roToday());
+  const shifts = rbGroupCfg(g0).shifts;
+  d.innerHTML = `<div class="card rt-sheet"><div class="ro-card-hd"><b>＋ New staff</b><button class="ro-x" onclick="document.getElementById('rtNew').remove()">✕</button></div>
+    <div class="rt-form">
+      <label>Full name<input id="rtNwN" value="${escapeHtml(pre.name || '')}" placeholder="e.g. Maria Santos" autocomplete="off"></label>
+      <label>Employee no. <small>(optional)</small><input id="rtNwI" autocomplete="off"></label>
+      <label>Hotel<select id="rtNwG" onchange="rtNwShifts()">${groups.map(x => `<option${x === g0 ? ' selected' : ''}>${escapeHtml(x)}</option>`).join('') || '<option value="">—</option>'}</select></label>
+      <label>Title<select id="rtNwT"><option value="">Agent (no title)</option>${RB_TITLES.map(t => `<option${t === pre.title ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
+      <label>Starts on<input type="date" id="rtNwF" value="${start}"></label>
+      <label>Days off a week<select id="rtNwO">${[1, 2, 3].map(n => `<option${n === 1 ? ' selected' : ''}>${n}</option>`).join('')}</select></label>
+      <label>Shifts<select id="rtNwS"><option value="">Any shift (rotates)</option>${shifts.map(x => `<option>${escapeHtml(x)}</option>`).join('')}</select></label>
+    </div>
+    <div class="ro-acts"><button class="btn gold" onclick="rtNewStaffSave()">Add to the team</button><small>They're rostered from their start date. Training days or a fixed shift can be set on their card after.</small></div></div>`;
+  d.addEventListener('click', e => { if (e.target === d) d.remove(); });
+  document.body.appendChild(d);
+  setTimeout(() => document.getElementById('rtNwN')?.focus(), 50);
+}
+function rtNwShifts() { const g = document.getElementById('rtNwG').value; document.getElementById('rtNwS').innerHTML = '<option value="">Any shift (rotates)</option>' + rbGroupCfg(g).shifts.map(x => `<option>${escapeHtml(x)}</option>`).join(''); }
+function rtNewStaffSave() {
+  const name = document.getElementById('rtNwN').value.trim().replace(/\s+/g, ' ');
+  if (!name) { showToast('Write their name', 'warn'); return; }
+  if (!roCanEdit()) { showToast('Only supervisors, managers and owners can change the team', 'err'); return; }
+  const k = roKey(name);
+  if (roStaff[k] && !(rbPeople[k] || {}).deleted) { showToast(`${roStaff[k].name} is already in the team`, 'warn'); return; }
+  const g = document.getElementById('rtNwG').value, id = document.getElementById('rtNwI').value.trim(), title = document.getElementById('rtNwT').value;
+  const from = document.getElementById('rtNwF').value || roToday(), offs = +document.getElementById('rtNwO').value, fixed = document.getElementById('rtNwS').value;
+  const order = Math.max(0, ...Object.values(roStaff).map(x => x.order || 0)) + 1;
+  roStaff[k] = Object.assign({ name, group: g, order }, id ? { id } : {});
+  fbSet('roster/staff/' + k, roStaff[k]);
+  rbPeople[k] = Object.assign({ joined: from, offs }, title ? { title } : {}, fixed ? { mode: 'static', fixed } : { mode: 'any' });
+  fbSet('roster/builder/people/' + k, rbPeople[k]);
+  document.getElementById('rtNew')?.remove();
+  showToast(`${name} added to ${g || 'the team'} from ${roDayLbl(from)}. Build again to put them on the roster`, 'ok');
+  if (document.getElementById('panel-roster-build')?.classList.contains('active')) rbRender();
 }
 function rtAddStaff() {
   const name = prompt('Full name of the new staff member');
@@ -897,6 +938,16 @@ function _rtPlanCmd(q) {
   return true;
 }
 const RT_COMMANDS = [
+  { re: /^(?:add|new)\s+(?:a\s+)?(?:new\s+)?(?:staff|member|person|employee|joiner|agent)(?:\s+member)?\b(.*)$|^(.+?)\s+(?:is\s+)?(?:joining|joins|starts|started)\b(.*)$/i, ex: 'add new staff Maria Santos to Ibis from Monday', does: 'opens the new staff form, filled in', run: q => {
+      let m = q.match(/^(?:add|new)\s+(?:a\s+)?(?:new\s+)?(?:staff|member|person|employee|joiner|agent)(?:\s+member)?\b(.*)$/i), rest, name = '';
+      if (m) rest = m[1] || ''; else { m = q.match(/^(.+?)\s+(?:is\s+)?(?:joining|joins|starts|started)\b(.*)$/i); name = m[1]; rest = m[2] || ''; if (rtFind(name)) return false; }
+      const gm = rbGroups().find(g => g && new RegExp('\\b(?:to|at|in)\\s+' + rbShort(g), 'i').test(rest));
+      const tm = rest.match(/\bas\s+(?:an?\s+)?([a-z .]+?)(?=\s+(?:from|on|starting|at|in|to)\b|$)/i);
+      const fm = rest.match(/\b(?:from|on|starting)\s+(.+)$/i);
+      if (!name) name = rest.replace(/\b(?:to|at|in)\s+\S+(?:\s+(?:dd|gd))?/i, '').replace(/\bas\s+.+$/i, '').replace(/\b(?:from|on|starting)\s+.+$/i, '').replace(/^\s*(?:called|named)\s+/i, '').trim();
+      if (typeof brClose === 'function') try { brClose(); } catch (_) {}
+      rtNewStaffDialog({ name: name.replace(/\b\w/g, c => c.toUpperCase()), group: gm, title: tm ? rtTitleWord(tm[1]) : '', from: fm ? rtDay(fm[1]) : '' });
+      return true; } },
   { re: /^(?:lock|keep|leave)\s+(?:all|everyone|everybody|all staff|all the staff|the staff|all people)\s+(?:in|at|to)\s+(?:their|his|her|the same|same|own|their own)\s*(?:own\s+)?hotels?$|^(?:no|stop|don'?t)\s+(?:move|moving|lend|lending|borrow|borrowing)\b.*hotels?|^(?:allow|let|start)\s+(?:moving|lending|borrowing|people to move)\b.*hotels?|^unlock\s+(?:all|everyone)\b.*hotels?$/i, ex: 'keep everyone in their own hotel', does: 'no moving people between hotels (or "allow moving between hotels")', run: q => {
       if (!roCanEdit()) { _rtOut('<div class="br-title">Only supervisors, managers and owners can change roster rules.</div>'); return true; }
       const on = !/^(allow|let|start|unlock)/i.test(q);

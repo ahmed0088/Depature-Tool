@@ -349,6 +349,8 @@ function roSavePreview() {
   roGuessMe();
   roRender();
   showToast(`Roster saved: ${res.names.length} people`, 'ok');
+  // given from the builder's "Give this week's roster": straight on to building the week after it
+  if (window._rbContinue && Date.now() - window._rbContinue < 30 * 60000 && typeof rbContinueFrom === 'function') { window._rbContinue = false; rbContinueFrom(res.dates[0]); }
 }
 
 // ── Editing in place ──────────────────────────────────────

@@ -706,6 +706,8 @@ function rbRender() {
       <div class="rb-steps" id="rbSteps">${rbStepsHtml()}</div>
     </div>
 
+    ${rbQuickHtml(draft)}
+
     <div class="rb-grid">
       <details class="card rb-card"${rbSec('req', !draft)}>
         <summary class="ro-card-hd"><b>📝 Requests this week</b><span>${reqs.length ? `<i class="rb-count">${reqs.length}</i>` : 'none yet'}</span></summary>
@@ -768,6 +770,59 @@ function rbStepsHtml() {
   ];
   if (st[2][2] === 'done' && !(pub && !pending)) st[3][2] = 'now';
   return st.map(([t, sub, c], i) => `<div class="rb-step ${c}"><i>${c === 'done' ? '✓' : i + 1}</i><b>${t}</b><small>${escapeHtml(sub)}</small></div>`).join('');
+}
+
+// ── Quick start: the four things done most ─────────────────
+function rbQuickHtml(draft) {
+  const prev = rbPrevWeek(rbWeek), pub = typeof rtIsPublished === 'function' && rtIsPublished(rbWeek);
+  return `<div class="rb-quick">
+    <label class="rb-q" title="A picture or Excel of the current roster: it's read, you check it, then next week is built from it">
+      <b>📥 Give this week's roster</b><small>Picture or Excel: it reads it, then builds the next week from it</small>
+      <input type="file" accept="image/*,.xlsx,.xls,.csv" hidden onchange="rbStartFromFile(this)"></label>
+    <button class="rb-q" onclick="rbFromLastWeek()"${prev ? '' : ' disabled'}><b>📋 Same as last week</b><small>${prev ? `${escapeHtml(rbWeekLabel(prev))} carried on, with this week's requests and the rules` : 'No earlier week in HotelOps yet'}</small></button>
+    <button class="rb-q" onclick="rtNewStaffDialog()"><b>＋ New staff</b><small>Someone joining: name, hotel, title, start date</small></button>
+    <button class="rb-q" onclick="rbDownloadPic()"${draft || pub ? '' : ' disabled'}><b>🖼 Download picture</b><small>${draft ? 'This draft' : pub ? 'The posted roster' : 'Build or post the week first'}, as an image to send</small></button>
+  </div>`;
+}
+/** The newest week before this one that has a roster in HotelOps. */
+function rbPrevWeek(week) { for (let i = 1; i <= 8; i++) { const w = roAdd(week, -7 * i); if ([0, 1, 2, 3, 4, 5, 6].some(d => Object.keys(roDays[roAdd(w, d)] || {}).length)) return w; } return null; }
+function rbStartFromFile(input) {
+  const f = input.files && input.files[0]; if (!f) return;
+  if (!roCanEdit()) { showToast('Only supervisors, managers and owners can change the roster', 'err'); return; }
+  window._rbContinue = Date.now();
+  showPanel('roster');
+  if (/^image\//.test(f.type) && typeof roFromImage === 'function') roFromImage(f);
+  else { roImportOpen(true); roFromFile(input); }
+  showToast('Reading the roster… check it, press Save, and next week is built from it', 'ok');
+}
+/** After a roster is saved: open the builder on the week after it and build it. */
+function rbContinueFrom(firstDate) {
+  rbWeek = roAdd(roMonday(roDate(firstDate)), 7);
+  rbOpen();
+  setTimeout(() => {
+    if (rbDrafts[rbWeek] && Object.keys(rbDrafts[rbWeek].cells || {}).length && !confirm(`There's already a draft for ${rbWeekLabel(rbWeek)}. Build it again from the roster you just gave?`)) { rbRender(); return; }
+    rbSeed = 1; rbRender(); _rbBuildNow();
+  }, 250);
+}
+/** Last week carried on: the same days off and shifts where they still fit, fixed for this week's requests and the rules. */
+function rbFromLastWeek() {
+  const prev = rbPrevWeek(rbWeek); if (!prev) return;
+  if (rbDrafts[rbWeek] && Object.keys(rbDrafts[rbWeek].cells || {}).length && !confirm('Replace the draft for this week with last week carried on?')) return;
+  const I = rbInput(1), keep = {};
+  I.people.forEach(p => { keep[p.key] = {}; for (let d = 0; d < 7; d++) { const v = (roDays[roAdd(prev, d)] || {})[p.key]; if (v && (rbParse(v) || rbKind(v) === 'off')) keep[p.key][roAdd(rbWeek, d)] = rbParse(v) ? rbNorm(v) : 'OFF'; } });
+  I.keep = keep;
+  const res = rbSolve(I);
+  if (rbDrafts[rbWeek]) rbUndoPush();
+  rbDrafts[rbWeek] = { cells: res.cells, at: Date.now(), by: (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '', from: prev };
+  rbSaveDraft(); rbRender();
+  let same = 0, all = 0; Object.keys(keep).forEach(k => Object.keys(keep[k]).forEach(dt => { all++; if (rbNorm(res.cells[k][dt]) === keep[k][dt] || (keep[k][dt] === 'OFF' && rbKind(res.cells[k][dt]) === 'off')) same++; }));
+  showToast(`Built from ${rbWeekLabel(prev)}: ${same} of ${all} days the same; the rest changed for requests, leave and the rules`, 'ok');
+  setTimeout(() => document.getElementById('rbOut')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+}
+function rbDownloadPic() {
+  if (rbDrafts[rbWeek]) { rbSharePic(); return; }
+  if (typeof rtIsPublished === 'function' && rtIsPublished(rbWeek)) { rtSharePosted(rbWeek); return; }
+  showToast('Build or post this week first', 'warn');
 }
 
 function rbStatusHtml() {

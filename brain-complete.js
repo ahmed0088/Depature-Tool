@@ -17,6 +17,7 @@ const BC_TEMPLATES = [
 ];
 const BC_FIXED = [
   'who is on tonight', 'who is on now', 'my shifts', 'roster problems', 'who can cover nights on Wednesday', 'who can cover mornings tomorrow',
+  'add new staff', 'add new staff to Ibis from Monday',
   'keep everyone in their own hotel', 'lock all in the same hotel', 'allow moving between hotels',
   'plan my shift', 'brief me', 'fix everything', 'write the handover', 'late checkouts', 'who owes', 'what can you do',
   'who has no email', 'nationality breakdown', 'arrivals by source', 'rooms that owe money',
