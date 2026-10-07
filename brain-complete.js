@@ -22,6 +22,7 @@ const BC_FIXED = [
   'plan my shift', 'brief me', 'fix everything', 'write the handover', 'late checkouts', 'who owes', 'what can you do',
   'who has no email', 'nationality breakdown', 'arrivals by source', 'rooms that owe money',
 ];
+const BC_ROOMS = ['check out {r}', '{r} late', '{r} dnd', '{r} no answer', 'room {r}'];
 const BC_RECENT = 'brain_recent_v1';
 
 function _bcRecent() { try { return JSON.parse(localStorage.getItem(BC_RECENT) || '[]'); } catch (_) { return []; } }
@@ -39,6 +40,9 @@ function _bcPool() {
   const uniq = [...new Set(names)];
   const roster = [];
   BC_TEMPLATES.forEach(t => uniq.forEach((n, i) => roster.push(t.replace('{n}', n).replace('{m}', uniq[(i + 1) % uniq.length] || n))));
+  // today's departures: the room questions, filled in ("check out 512", "512 late")
+  const rooms = typeof depRooms !== 'undefined' && Array.isArray(depRooms) ? depRooms.filter(r => r && (r.roomStr || r.room)).map(r => String(r.roomStr || r.room)).slice(0, 200) : [];
+  rooms.forEach(r => BC_ROOMS.forEach(t => roster.push(t.replace('{r}', r))));
   const seen = new Set(), out = [];
   [..._bcRecent().map(q => ({ q, recent: true })), ...cmds.map(q => ({ q })), ...roster.map(q => ({ q, tpl: true }))].forEach(x => { const k = x.q.toLowerCase(); if (!seen.has(k)) { seen.add(k); out.push(x); } });
   return out;

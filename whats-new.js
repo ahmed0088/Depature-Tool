@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 174, items: [
+    '💡 Suggestions while you type, everywhere: every country in a nationality box, the usual booking sources, the whole email after you type "@g" (gmail.com, hotmail.com…), today\'s rooms and guests in the search boxes, the team in a name box, and the roster\'s own shifts and codes when you change a roster cell. Tap one to fill it in.',
+    '⌚ Times fill themselves in: type 1245 and it becomes 12:45. A "full name in caps" box writes in capitals by itself. Room boxes open the number keypad.',
+    '🧠 Ops Brain suggests room questions too: type a room number and pick "512 late", "room 512", "512 dnd"…',
+  ] },
   { v: 173, items: [
     '🚪 Departures: "Reload" keeps everything tracked on each room (extension rate and reason, DND time, acknowledged late check-out).',
     '📅 Days are saved on Dubai time: the night audit after midnight no longer writes over the day before. No-show history is saved under the report\'s own date.',
