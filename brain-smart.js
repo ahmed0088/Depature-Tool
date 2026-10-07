@@ -191,6 +191,8 @@ function bsSplit(q) {
 
 // ── Plug in front of the brain ───────────────────────────
 function bsAsk(raw, inner) {
+  // a web search goes out exactly as typed (no spelling "fixes": "rate" must not become "late")
+  if (/^\s*(?:search(?: online| the web| internet)?(?: for)?|google|look up|web)\s*[:\-]?\s+\S/i.test(String(raw || ''))) return inner(String(raw).trim());
   let q = bsWithContext(bsFixTypos(String(raw || '').trim()));
   const _norm = s => String(s || '').trim().replace(/\bcheck ?outs?\b/gi, 'checkout').replace(/\bcheck ?ins?\b/gi, 'checkin');
   const fixed = bsFixTypos(String(raw || '').trim()) !== _norm(raw);

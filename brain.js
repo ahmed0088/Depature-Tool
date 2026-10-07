@@ -209,6 +209,10 @@ function brAsk(raw) {
   if ((m = q.match(/^(?:remember|teach)\s*[:\-]?\s*(.+?)\s*(?:=|->|→)\s*(.+)$/i))) { brTeach(m[1], m[2]); return; }
   const page = [...document.querySelectorAll('.nav-item[data-panel]')].find(n => new RegExp('^(?:open|go to|show)\\s+' + n.textContent.replace(/[\d—✓]+\s*$/, '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i').test(q));
   if (page) { brClose(); showPanel(page.dataset.panel); return; }
+  // "search online …", "google …", "look up …": straight to the web
+  if ((m = q.match(/^(?:search(?: online| the web| internet)?(?: for)?|google|look up|web)\s*[:\-]?\s+(.+)$/i)) && typeof boSearch === 'function') {
+    brCurrentQ = m[1]; box.innerHTML = boCardHtml(m[1]); boSearch(m[1]); return;
+  }
 
   const qt = brTokens(q);
   const votes = _brLS.get(BR_VOTES_KEY, {});
@@ -244,13 +248,21 @@ function brAsk(raw) {
       </div>
     </div>`).join('');
   const isRoom = /^\s*(?:room\s*)?\d{3,4}\s*$/i.test(q);   // a room number got its own card above
-  if (!ranked.length && !look.length && !isRoom) html += `<div class="br-card"><div class="br-title">I don't know this yet.</div><div class="br-body">Teach me and I'll know it next time, for the whole team.</div></div>`;
+  // nothing in the app answers it: look it up online by itself
+  // (also when the best answer here only matches a word or two of the question: likely not what was asked)
+  const strong = ranked.length && (() => { const d = new Set(brTokens(ranked[0].k.text + ' ' + ranked[0].k.title)); const w = qt.filter(x => x.length > 3); return !w.length || w.filter(x => d.has(x)).length / w.length >= 0.5; })();
+  const goOnline = !strong && !look.length && !isRoom && typeof boSearch === 'function' && q.length >= 4;
+  if (goOnline && ranked.length) html = boCardHtml(q) + html;   // the web answer first, the app's weak guesses after it
+  else if (goOnline) html += boCardHtml(q);
+  else if (!ranked.length && !look.length && !isRoom) html += `<div class="br-card"><div class="br-title">I don't know this yet.</div><div class="br-body">Teach me and I'll know it next time, for the whole team.</div></div>`;
+  else if (!isRoom && !goOnline && typeof boSearch === 'function') html += `<div class="br-acts bo-more"><button class="btn ghost" onclick="this.parentElement.outerHTML=boCardHtml(brCurrentQ);boSearch(brCurrentQ)">🌐 Not it? Search online</button></div>`;
   html += `<details class="br-teach"${!ranked.length && !look.length && !isRoom ? ' open' : ''}><summary>✍️ Teach the answer to "${escapeHtml(q)}"</summary>
     <textarea id="brTeachA" class="tt-textarea" placeholder="Write the answer the way you'd explain it to a new colleague…"></textarea>
     <button class="btn gold" onclick="brTeach(brCurrentQ, document.getElementById('brTeachA').value)">Save for the team</button></details>`;
   brCurrentQ = q;
   box.innerHTML = html;
   box.dataset.q = vkey;
+  if (goOnline) boSearch(q);
 }
 
 function brVote(i, v, btn) {

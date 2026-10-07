@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 176, items: [
+    '🌐 Ops Brain searches online when the app can\'t answer: it looks the question up by itself and shows a short answer with its sources. With an AI key on the device (Roster → AI settings) it searches the whole web and answers in plain words; without one it uses Wikipedia. "🔎 Search Google" is always one tap away, and "search online …" or "google …" asks the web directly.',
+  ] },
   { v: 175, items: [
     '🖱 On a computer, rows that scroll sideways (Ops Brain suggestions, tabs, filters, chips) now move with the mouse wheel, and you can drag them with the mouse. Everywhere in the app.',
     '🛏️ A room that isn\'t loaded today still works: ask Ops Brain "512" and it offers to add it to today\'s departures or as an arrival. "check out 512" on a room not on the board offers "Add room 512 and check it out" in one tap. Rooms added by hand stay on the board when you reload the report.',
