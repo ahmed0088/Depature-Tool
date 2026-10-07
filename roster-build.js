@@ -100,7 +100,17 @@ function rbChangeCost(prev, next, acrossWeeks) {
 }
 /** Night shifts (00:00–09:00, 19:00–04:00) and day shifts don't follow each other: a day off comes between. */
 function rbIsNight(code) { const p = rbParse(code); return !!p && p.type === 'night'; }
-function rbSwitchOk(prev, next, R) { if (R && R.nightSwitch === false) return true; return !rbParse(prev) || !rbParse(next) || rbIsNight(prev) === rbIsNight(next); }
+function rbSwitchOk(prev, next, R) {
+  if (R && R.nightSwitch === false) return true;
+  if (!rbParse(prev) || !rbParse(next) || rbIsNight(prev) === rbIsNight(next)) return true;
+  // a day shift (08:00 - 17:00, 12:00 - 21:00…) and a night always need a day off between: never bent.
+  // Only an evening (15:00 - 00:00) next to a night may go without one, as a last resort, as past rosters did.
+  const day = c => !rbIsNight(c) && rbParse(c).s < 13 * 60;
+  if (day(prev) || day(next)) return false;
+  return !!(R && R.eveNight);
+}
+/** The real night: starts around midnight or ends in the morning (00:00 - 09:00), not a late evening (19:00 - 04:00). */
+function rbDeepNight(code) { const x = rbParse(code); return !!x && x.type === 'night' && (x.s < 120 || x.e >= 1440 + 360); }
 /** Who may work a shift: the titles set for it (e.g. nights: Supervisor, Duty Manager), else everyone. */
 function rbMayWork(I, g, p, s) { if (p && (((I.groups || {})[g] || {}).post || '') !== (p.post || '')) return false; const who = (((I.groups || {})[g] || {}).who || {})[rbNorm(s) || s]; return !who || !who.length || who.includes((p && p.title) || ''); }
 /** Shift types people ask for: morning, day (morning + 12:00), evening, night. */
@@ -174,7 +184,7 @@ function rbSolve(I) {
     if (sc < bestSc) { bestSc = sc; best = cells; }
   }
   const res = rbRepair(I, _rbFinish(I, best));
-  if (plan) res.notes = plan.notes;
+  res.notes = ((plan && plan.notes) || []).concat(res.notes || []);
   return res;
 }
 
@@ -275,9 +285,22 @@ function rbRepair(I, res) {
     if (!done) break;
     gaps = shorts(cells);
   }
+  // still stuck: every shift has to be covered, so the mildest way past rosters used (evening then late night,
+  // night ↔ day without a day off, short rest, back to back), never over 9 h a shift. Each one is written down.
+  const notes = [];
+  for (let gaps = shorts(cells), n = 0; gaps.length && n < 8 && !I.noBend; n++) {
+    let pick = null;
+    for (const g of gaps) {
+      const o = rtCoverOptions(Object.assign({}, I, { noRepair: true }), cells, g.group, g.date, g.shift).filter(o => o.cells && o.bend && shorts(o.cells).length < gaps.length).sort((a, b) => a.cost - b.cost)[0];
+      if (o && (!pick || o.cost < pick.cost)) pick = o;
+    }
+    if (!pick) break;
+    cells = pick.cells; (pick.notes || []).forEach(x => notes.push(Object.assign({ auto: true }, x)));
+    gaps = shorts(cells);
+  }
   if (cells === res.cells) return res;
   const cover = rbCover(I, cells);
-  return { cells, cover, problems: rbProblems(I, cells, cover) };
+  return { cells, cover, problems: rbProblems(I, cells, cover), notes };
 }
 function _rbAttempt(I, seed) {
   const D = 7, dates = Array.from({ length: D }, (_, d) => roAdd(I.week, d));
@@ -787,8 +810,8 @@ function _rbBuildNow() {
   rbDrafts[rbWeek] = Object.assign({ cells: res.cells, at: Date.now(), by: (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '' }, res.notes && res.notes.length ? { notes: res.notes } : {});
   rbSaveDraft();
   rbRender();
-  const short = res.problems.filter(p => p.kind === 'short').length;
-  showToast(short ? `Roster built: ${short} gap${short === 1 ? '' : 's'} in cover to look at` : 'Roster built: every shift is covered', short ? 'warn' : 'ok');
+  const short = res.problems.filter(p => p.kind === 'short').length, bent = (res.notes || []).filter(n => n.auto).length;
+  showToast(short ? `Roster built: ${short} gap${short === 1 ? '' : 's'} in cover to look at` : bent ? `Roster built: every shift is covered. ${bent} shift${bent === 1 ? '' : 's'} needed a rule bent the way past rosters did; see "Decisions this week"` : 'Roster built: every shift is covered', short || bent ? 'warn' : 'ok');
   setTimeout(() => document.getElementById('rbOut')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
 }
 const _rbSaving = {};

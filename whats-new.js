@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 166, items: [
+    '🛌 A day shift and a night always have a day off between them: nobody on 08:00 - 17:00 or 12:00 - 21:00 goes onto 00:00 - 09:00 or 19:00 - 04:00 the next day, or the other way. This is never bent, even when stuck.',
+    '✅ Every shift gets covered: the builder uses your rules first. Only when there is no other way does it use what past rosters did, mildest first: an evening (15:00 - 00:00) next to a night without a day off, rest down to 7 hours, an evening straight into a night. Never more than 9 hours a shift. Each time it says so ("needed a rule bent") and writes who, what and why under Decisions this week.',
+  ] },
   { v: 165, items: [
     '🌙 Nights are planned across all hotels first: every hotel gets a Supervisor or above every night. The regular night person\'s day off at each hotel is lined up next to the others, and one Supervisor or Duty Manager covers those nights as one block, with their day off right next to it, so nobody goes from night to day without a day off. With 3 Duty Managers and 2 Supervisors, every night is covered with no rule bent.',
     '🏨 People stay in their own hotel by preference: a hotel\'s own Supervisor covers its own night first, and someone moves hotel only when nobody there could; a Duty Manager is used before a Supervisor. The plan is written under Decisions this week ("Nights: Charlene covers… Sun at Mercure DD… only because nobody there could").',

@@ -200,33 +200,51 @@ function rtCoverOptions(I, cells, group, date, shift, opt) {
   const best = {}; opts.forEach(o => { if (!best[o.key] || best[o.key].cost > o.cost) best[o.key] = o; });
   const list = Object.values(best).sort((a, b) => a.cost - b.cost).slice(0, 6);
   const who = ((G[group] || {}).who || {})[shift];
-  // nobody fits every rule: who could do it if the "day off between night and day" rule is bent this once (rest and 9 h still hold)
-  if (!list.length && !(opt && opt.noBend) && (I.rules || {}).nightSwitch !== false && !(G[group] || {}).post) {
-    const I2 = Object.assign({}, I, { rules: Object.assign({}, I.rules, { nightSwitch: false }) });
+  // nobody fits every rule: our rules first, then what past rosters did when there was no other way, mildest first:
+  // an evening next to a night without a day off, rest down to 7 h, an evening straight into a night. Never over 9 h a shift.
+  // (a day shift next to a night always keeps its day off between: not in any step)
+  const TIERS = [
+    { rules: { eveNight: true }, cost: 120 },
+    { rules: { eveNight: true, minRest: 7 }, cost: 400 },
+    { rules: { eveNight: true, minRest: 0 }, cost: 600 },
+  ];
+  const fn = k => rtName(k).split(' ')[0];
+  const bendText = (c0, c1, keys) => {   // what the plan bends, in words
+    const was = rbProblems(I, c0), now = rbProblems(I, c1).filter(p => keys.includes(p.key) && (p.kind === 'switch' || p.kind === 'rest') && !was.some(w => w.kind === p.kind && w.key === p.key && w.date === p.date));
+    return now.map(p => p.kind === 'switch' ? `${fn(p.key)}: ${rbIsNight(p.from) ? 'a night then an evening' : 'an evening then a night'} without a day off (${rbNorm(p.from).slice(0, 5)} → ${rbNorm(p.to).slice(0, 5)}), as in past rosters`
+      : p.hours <= 0 ? `${fn(p.key)}: back to back (${rbNorm(p.from).slice(0, 5)} straight into ${rbNorm(p.to).slice(0, 5)}, ${Math.round(((rbParse(p.from).e - rbParse(p.from).s) + (rbParse(p.to).e - rbParse(p.to).s)) / 60)} h)` : `${fn(p.key)}: only ${Math.round(p.hours)} h rest (${rbNorm(p.from).slice(0, 5)} → ${rbNorm(p.to).slice(0, 5)})`);
+  };
+  if (!list.length && !(opt && opt.noBend) && !(G[group] || {}).post) {
     const shortsIn = c => rbProblems(I, c).filter(p => p.kind === 'short'), before = shortsIn(cells);
     const isNew = p => !before.some(b => b.group === p.group && b.date === p.date && b.shift === p.shift);
-    const seen = new Set();
-    for (const o of rtCoverOptions(I2, cells, group, date, shift, Object.assign({}, opt, { noBend: true, allowEmpty: true })).filter(o => o.cells)) {
-      if (list.length >= 3 || seen.has(o.key)) continue;
-      const left = shortsIn(o.cells).filter(isNew);
-      let cells2 = o.cells, text = o.text, ok = o.ok || '';
-      const fn = k => rtName(k).split(' ')[0], away = rbBaseGroup((I.people.find(x => x.key === o.key) || {}).group) !== rbBaseGroup(group);
-      let why = `${fn(o.key)} covers ${shift} on ${roDayLbl(date)}${away ? ' at ' + rbBaseGroup(group) : ''} with no day off between night and day shifts: nobody else could take it with every rule kept.`;
-      if (left.length > 1) continue;
-      if (left.length === 1) {           // their own shift is left empty: someone else takes it, every rule kept
-        const g2 = left[0], f = rtCoverOptions(I, o.cells, g2.group, g2.date, g2.shift, { noBend: true }).find(x => x.cells && x.key !== o.key);
-        if (!f) continue;
-        cells2 = f.cells; text += `; then ${f.text.charAt(0).toLowerCase() + f.text.slice(1)}`; ok = ok.replace(/\s·\s[^·]*drops to \d+/g, '');
-        why += ` ${fn(f.key)} takes over the ${g2.shift} on ${roDayLbl(g2.date)}${rbBaseGroup(g2.group) !== rbBaseGroup((I.people.find(x => x.key === f.key) || {}).group) ? ' at ' + rbBaseGroup(g2.group) : ''}.`;
+    for (const T of TIERS) {
+      if (list.some(o => o.cells)) break;
+      const I2 = Object.assign({}, I, { rules: Object.assign({}, I.rules, T.rules) });
+      const seen = new Set();
+      for (const o of rtCoverOptions(I2, cells, group, date, shift, Object.assign({}, opt, { noBend: true, allowEmpty: true })).filter(o => o.cells)) {
+        if (list.length >= 3 || seen.has(o.key)) continue;
+        const left = shortsIn(o.cells).filter(isNew);
+        if (left.length > 1) continue;
+        let cells2 = o.cells, text = o.text, ok = o.ok || '', keys = [o.key];
+        const away = rbBaseGroup((I.people.find(x => x.key === o.key) || {}).group) !== rbBaseGroup(group);
+        let tail = '';
+        if (left.length === 1) {         // their own shift is left empty: someone else takes it, every rule kept
+          const g2 = left[0], f = rtCoverOptions(I, o.cells, g2.group, g2.date, g2.shift, { noBend: true }).find(x => x.cells && x.key !== o.key);
+          if (!f) continue;
+          cells2 = f.cells; keys.push(f.key); text += `; then ${f.text.charAt(0).toLowerCase() + f.text.slice(1)}`; ok = ok.replace(/\s·\s[^·]*drops to \d+/g, '');
+          tail = ` ${fn(f.key)} takes over the ${g2.shift} on ${roDayLbl(g2.date)}${rbBaseGroup(g2.group) !== rbBaseGroup((I.people.find(x => x.key === f.key) || {}).group) ? ' at ' + rbBaseGroup(g2.group) : ''}.`;
+        }
+        seen.add(o.key);
+        const bent = bendText(cells, cells2, keys);
+        const lead = `${fn(o.key)} covers ${shift} on ${roDayLbl(date)}${away ? ' at ' + rbBaseGroup(group) : ''}`;
+        if (bent.length) {
+          const why = `${lead}: nobody could take it with every rule kept, so it bends ${bent.join('; ')}.${tail}`;
+          list.push(Object.assign({}, o, { cells: cells2, bend: true, why, notes: [{ key: o.key, date, text: why }], cost: o.cost + T.cost, text: text + ' ⚠ ' + bent.join(' · '), ok: '⚠ bends: ' + bent.join(' · ') + ' (never over 9 h a shift) · ' + ok }));
+        } else list.push(Object.assign({}, o, { cells: cells2, cost: o.cost + 60, text, why: lead + '.' + tail, notes: null }));
       }
-      seen.add(o.key);
-      // does it really bend the night ↔ day rule? (a two-step plan may keep every rule)
-      const was = rbProblems(I, cells).filter(p => p.kind === 'switch'), bends = rbProblems(I, cells2).some(p => p.kind === 'switch' && !was.some(w => w.key === p.key && w.date === p.date));
-      if (bends) list.push(Object.assign({}, o, { cells: cells2, bend: true, why, notes: [{ key: o.key, date, text: why }], cost: o.cost + 200, text: text + ' ⚠ no day off between night and day', ok: '⚠ bends one rule: night ↔ day without a day off (rest and 9 h still kept) · ' + ok }));
-      else list.push(Object.assign({}, o, { cells: cells2, cost: o.cost + 60, text, why: why.replace(/ with no day off between night and day shifts: nobody else could take it with every rule kept\./, '.'), notes: null }));
     }
     list.sort((a, b) => a.cost - b.cost);
-    if (list.some(o => o.bend) && !list.some(o => o.cells && !o.bend)) list.unshift({ kind: 'bring', cost: 998, cells: null, text: `Nobody can take ${shift} on ${roDayLbl(date)} with every rule kept. Only by bending the night ↔ day rule once:` });
+    if (list.some(o => o.bend) && !list.some(o => o.cells && !o.bend)) list.unshift({ kind: 'bring', cost: 998, cells: null, text: `Nobody can take ${shift} on ${roDayLbl(date)} with every rule kept. Only by bending a rule, the way past rosters did when there was no other way:` });
   }
   if (!list.length) list.push({ kind: 'bring', cost: 999, cells: null, text: `Nobody can take ${shift} on ${roDayLbl(date)} without breaking the rules${who ? ` (it's for ${who.join(' / ')} only: set titles in Team, or change who can work it in Cover needed)` : ' (rest, a day off between night and day, 9 hours)'}. Bring in a staff member${(G[group] && need(group, shift, d) > 1) ? ', or run it with one person' : ''}.` });
   return list;

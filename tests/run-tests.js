@@ -293,10 +293,21 @@ console.log('\nRoster scenarios');
     cells.T[dates[1]] = 'SL';
     const I = { week: W, groups: G, people: ppl, pre: { T: { [dates[1]]: 'SL' } }, rules: { minRest: 11, maxHours: 9, allowOne: true, nightSwitch: true, lend: true } };
     const o = sb.rtCoverOptions(I, cells, 'Ibis DD', dates[1], N);
-    const b = o.find(x => x.bend);
-    check('bend: offered only as a flagged last resort', !!b && !o.some(x => x.cells && !x.bend), true);
-    check('bend: it says what it does and why', !!(b && /no day off between night and day/.test(b.text) && /nobody else could/.test(b.why)), true);
-    check('bend: rest and 9 h are still kept', b ? sb.rbProblems(I, b.cells).filter(p => p.kind === 'rest' || p.kind === 'long').length : -1, 0);
+    check('never: a day-shift person is not put on a night without a day off, even when stuck', o.some(x => x.cells), false);
+    check('never: day ↔ night always needs a day off; an evening next to a night only as a last resort', [
+      sb.rbSwitchOk('12:00 - 21:00', '19:00 - 04:00', { eveNight: true }), sb.rbSwitchOk('08:00 - 17:00', '00:00 - 09:00', { eveNight: true }), sb.rbSwitchOk('00:00 - 09:00', '08:00 - 17:00', { eveNight: true }),
+      sb.rbSwitchOk('15:00 - 00:00', '19:00 - 04:00', {}), sb.rbSwitchOk('15:00 - 00:00', '19:00 - 04:00', { eveNight: true })].join(), 'false,false,false,false,true');
+    // an evening person can cover a night as a last resort, flagged, with the reason
+    {
+      const E2 = '15:00 - 00:00', L = '19:00 - 04:00';
+      const G2 = { 'Ibis DD': { shifts: [M, E2, L], need: { [M]: day(1), [E2]: day(1), [L]: day(1) } } };
+      const pp = [P('X'), P('Y'), P('Z'), P('Q')], c = { X: {}, Y: {}, Z: {}, Q: {} };
+      dates.forEach((dt, d) => { c.X[dt] = d === 6 ? 'OFF' : M; c.Y[dt] = d === 5 ? 'OFF' : E2; c.Z[dt] = d === 4 ? 'OFF' : L; c.Q[dt] = d === 3 ? 'OFF' : E2; });
+      c.Z[dates[2]] = 'SL';
+      const I2 = { week: W, groups: G2, people: pp, pre: { Z: { [dates[2]]: 'SL' } }, rules: { minRest: 11, maxHours: 9, allowOne: true, nightSwitch: true, lend: true } };
+      const o2 = sb.rtCoverOptions(I2, c, 'Ibis DD', dates[2], L), b = o2.find(x => x.bend);
+      check('last resort: an evening person may take the late night, flagged and explained', !!(b && /evening then a night without a day off/.test(b.text) && /nobody could take it with every rule kept/.test(b.why) && b.key !== 'X'), true);
+    }
   }
   // 7d. nights across hotels: every night has a Supervisor or above; the regulars' days off line up and one floater does them as a block
   {
