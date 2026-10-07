@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 164, items: [
+    '🌙 The roster builder now fills empty shifts itself when a fix keeps every rule: another hotel\'s Duty Manager or Supervisor, a day off moved, or two people trading ("Charlene does the Mercure night, Irene takes her 09:00 - 18:00"). Every move is listed under Decisions this week. Fixes that would bend a rule are still only suggested, never made for you.',
+    '🔄 Updates arrive properly: the app always fetches the new version fresh, checks for one whenever you come back to it, and loads it (right away if you just opened the app, otherwise "tap to load the new version" so nothing you\'re doing is lost).',
+  ] },
   { v: 163, items: [
     '📱 New themes: iPhone (Apple\'s system font, soft grey background, white rounded cards, blue, glass top and bottom bars, large titles), iPhone Dark (true black), Titanium (warm graphite with the Pro titanium finish) and Ocean (deep blue and teal). Tap the theme button in the top bar, or Settings → Appearance; on a phone, More at the bottom.',
     '⚡ Faster: the first screen shows about a third sooner. The Excel and PDF readers and the fonts now load in the background instead of holding up the start, and pages open with a shorter, lighter animation.',

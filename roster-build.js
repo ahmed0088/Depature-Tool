@@ -171,7 +171,28 @@ function rbSolve(I) {
     const sc = Object.keys(I.groups).reduce((t, g) => t + rbScore(I, g, cells, dates0, R0), 0);
     if (sc < bestSc) { bestSc = sc; best = cells; }
   }
-  return _rbFinish(I, best);
+  return rbRepair(I, _rbFinish(I, best));
+}
+/** Empty shifts left after building: fill each with the best fix a supervisor would make that keeps every rule
+ *  (another hotel's Duty Manager, a day off moved, two people trading), never one that bends a rule. */
+function rbRepair(I, res) {
+  if (I.noRepair || typeof rtCoverOptions !== 'function') return res;
+  let cells = res.cells, guard = 0;
+  const shorts = c => rbProblems(I, c).filter(p => p.kind === 'short');
+  const breaks = c => rbProblems(I, c).filter(p => p.kind !== 'short' && p.kind !== 'thin').length;
+  for (let gaps = shorts(cells); gaps.length && guard < 12; guard++) {
+    const before = breaks(cells); let done = false;
+    for (const g of gaps) {
+      const opts = rtCoverOptions(Object.assign({}, I, { noRepair: true }), cells, g.group, g.date, g.shift).filter(o => o.cells && !o.bend);
+      const ok = opts.find(o => shorts(o.cells).length < gaps.length && breaks(o.cells) <= before);
+      if (ok) { cells = ok.cells; done = true; break; }
+    }
+    if (!done) break;
+    gaps = shorts(cells);
+  }
+  if (cells === res.cells) return res;
+  const cover = rbCover(I, cells);
+  return { cells, cover, problems: rbProblems(I, cells, cover) };
 }
 function _rbAttempt(I, seed) {
   const D = 7, dates = Array.from({ length: D }, (_, d) => roAdd(I.week, d));

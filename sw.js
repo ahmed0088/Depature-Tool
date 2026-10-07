@@ -14,7 +14,7 @@
 //  clients pick up the new version instead of a stale cache.
 // ═══════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'ibis-ops-shell-v163';
+const CACHE_NAME = 'ibis-ops-shell-v164';
 
 const SHELL_FILES = [
   './',
@@ -87,7 +87,7 @@ const SHELL_FILES = [
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(SHELL_FILES))
+      .then(cache => cache.addAll(SHELL_FILES.map(u => new Request(u, { cache: 'reload' }))))   // fresh from the server, never the browser's old copy
       .catch(err => console.warn('[SW] shell cache failed:', err))
   );
   self.skipWaiting();

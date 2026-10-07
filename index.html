@@ -5383,7 +5383,21 @@ async function appInit() {
   // ── PWA: register service worker for offline app-shell ──
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(err => console.warn('[SW] registration failed:', err));
+      const hadCtl = !!navigator.serviceWorker.controller, t0 = Date.now();
+      navigator.serviceWorker.register('sw.js').then(reg => {
+        // look for a new version when the app comes back to the front, and every 30 minutes
+        const check = () => reg.update().catch(() => {});
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+        setInterval(check, 30 * 60000);
+      }).catch(err => console.warn('[SW] registration failed:', err));
+      // a new version took over: reload into it straight away if the app was just opened, else ask (work in progress stays safe)
+      let reloading = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!hadCtl || reloading) return;
+        if (Date.now() - t0 < 15000) { reloading = true; location.reload(); return; }   // just opened: nothing to lose
+        if (typeof showToast === 'function') showToast('HotelOps was updated. Tap here when you\'re ready to load the new version', 'ok');
+        document.getElementById('appToast')?.addEventListener('click', () => location.reload(), { once: true });
+      });
     });
   }
 </script>
