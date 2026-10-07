@@ -393,11 +393,11 @@ function rtWhatIf(s) {
   const respects = c => code || !days.some(dt => avoided(dt).includes(rbNorm((c[k] || {})[dt])));
   const before = rbProblems(Iq, base);
   const isNew = p => !before.some(b => b.kind === p.kind && b.key === p.key && b.date === p.date && b.shift === p.shift && b.group === p.group);
-  const probsOf = c => rbProblems(Iq, c).filter(p => !ignore(p) && isNew(p) && (!p.date || p.date >= today));
+  const probsOf = c => rbProblems(Iq, c).filter(p => !ignore(p) && isNew(p) && (!p.date || p.date >= today) && !(p.group && (Iq.groups[p.group] || {}).post));   // a day without a bell boy is fine
   out.gaps = probsOf(sc).filter(p => (p.kind === 'short' || p.kind === 'thin') && p.date >= today).sort((a, b) => a.date.localeCompare(b.date) || rbMin(a.shift) - rbMin(b.shift));
   out.was = before.filter(p => p.kind !== 'thin').length;
   // places filled, for "100% covered"
-  const fill = c => { const cov = rbCover(Iq, c); let n = 0, h = 0; Object.keys(Iq.groups).forEach(g => Iq.groups[g].shifts.forEach(x => dates.forEach((dt, d) => { if (dt < today) return; const nd = (Iq.groups[g].need[x] || [])[d] || 0; n += nd; h += Math.min(nd, cov[g][x][d]); }))); return n ? h / n : 1; };
+  const fill = c => { const cov = rbCover(Iq, c); let n = 0, h = 0; Object.keys(Iq.groups).filter(g => !Iq.groups[g].post).forEach(g => Iq.groups[g].shifts.forEach(x => dates.forEach((dt, d) => { if (dt < today) return; const nd = (Iq.groups[g].need[x] || [])[d] || 0; n += nd; h += Math.min(nd, cov[g][x][d]); }))); return n ? h / n : 1; };
   const plans = [];
   const add = (cells, texts, how) => {
     if (!respects(cells)) return;

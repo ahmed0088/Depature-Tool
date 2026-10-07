@@ -384,6 +384,7 @@ console.log('\nRoster scenarios');
   check('bell: a bell boy is in the bell team', bell.fGroup, 'Ibis DD · Bell');
   check('bell: a bell boy never counts as front desk', bell.desk, false);
   check('bell: a bell boy is never suggested for a desk gap', bell.sugg, false);
+  check('bell: "what if the bell boy is sick" needs no cover', run(`(() => { rbSetPerson('F', 'title', 'Bell Boy'); const dt = [0, 1, 2, 3, 4, 5, 6].map(d => roAdd(W, d)).find(d => rbParse((roDays[d] || {}).F)); const r = rtWhatIf({ key: 'F', kind: 'sick', from: dt }); return r.gaps.length + ':' + (r.plans[0] ? Math.round(r.plans[0].cover * 100) : 'x'); })()`), '0:100');
   run("rbSetPerson('F', 'title', '')");
   // 🔒 managers keep their shift; 🏨 people (or everyone) stay at their hotel
   run(`roStaff.G = { name: 'Gina Morales', group: 'Mercure DD', order: 9 }; roStaff.H = { name: 'Hugo Brandt', group: 'Mercure DD', order: 10 };

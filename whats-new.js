@@ -13,7 +13,7 @@ const WHATS_NEW = [
     '🌙 When nobody can take a shift with every rule kept, the builder now shows the closest real fix instead of only "bring in a staff member", e.g. "Put Charlene on 00:00 - 09:00; then Irene from Mercure takes her 09:00 - 18:00 ⚠ no day off between night and day". It bends only the night ↔ day rule, only when there is no other way; rest (11 h) and 9-hour shifts are always kept.',
     '📝 Decisions this week: when you use a plan like that, HotelOps tells you exactly what it did and why, and keeps it under the draft ("Charlene covers the Tue night with no day off between night and day: nobody else could…"), with everyone working at another hotel listed too. The rule break it caused is marked "bent on purpose".',
     '🧑‍💼 Duty Managers can work anywhere (any hotel, any shift), even when everyone else stays at their own hotel. Supervisors can too, but only when nobody else can.',
-    '🛎️ A bell boy\'s day off is no longer listed as cover to fix.',
+    '🛎️ Bell boys: a day without one is fine. Their day off, sickness or vacation is never listed as cover to fix, and What if… needs no cover for them.',
   ] },
   { v: 161, items: [
     '🖼 Roster picture options: before you download or share, choose to show or hide the heading (and change its words), show job titles next to names (Manager, Supervisor…), and show or hide employee numbers, with a live preview. Your choice is kept and used for the picture posted with the roster.',
