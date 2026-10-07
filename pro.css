@@ -642,7 +642,7 @@ textarea::placeholder { font-size: 13px; line-height: 1.55; }
 .ro-t-off       { --rc: var(--text3);  --rcb: color-mix(in srgb, var(--text3) 10%, transparent); }
 .ro-t-other     { --rc: var(--text2);  --rcb: var(--card2); }
 .ro-t-none      { --rc: var(--text3);  --rcb: transparent; }
-.ro-top { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 14px; margin-bottom: 14px; }
+.ro-top { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 14px; margin-bottom: 14px; align-items: start; }
 .ro-top .card, .ro-week, .ro-import { padding: 16px 18px; margin: 0; }
 .ro-import { margin-bottom: 14px; }
 .ro-card-hd { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
@@ -1064,3 +1064,12 @@ details.rb-card > summary.ro-card-hd span { flex: 1 1 auto; text-align: right; w
 .rb-q[disabled] { opacity: .5; cursor: default; }
 label.rb-q:first-child { border-color: var(--accent-border); background: color-mix(in srgb, var(--accent) 7%, var(--card)); }
 @media (max-width: 860px) { .rb-quick { grid-template-columns: 1fr 1fr; gap: 8px; } .rb-q { padding: 10px 11px; } .rb-q small { font-size: 10.5px; } }
+/* Swipeable header buttons: a fade on the side where more buttons are hidden */
+@media (max-width: 768px) {
+  .page-hd-actions.hd-more-r { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 44px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 44px), transparent); }
+  .page-hd-actions.hd-more-l { -webkit-mask-image: linear-gradient(90deg, transparent, #000 44px); mask-image: linear-gradient(90deg, transparent, #000 44px); }
+  .page-hd-actions.hd-more-l.hd-more-r { -webkit-mask-image: linear-gradient(90deg, transparent, #000 44px, #000 calc(100% - 44px), transparent); mask-image: linear-gradient(90deg, transparent, #000 44px, #000 calc(100% - 44px), transparent); }
+  /* the Roster page has many actions: they wrap, nothing hidden */
+  #panel-roster .page-hd-actions { flex-wrap: wrap !important; overflow: visible !important; -webkit-mask-image: none !important; mask-image: none !important; gap: 6px !important; }
+  #panel-roster .page-hd-actions .btn { height: 34px !important; min-height: 34px; padding: 0 11px !important; font-size: 12px !important; }
+}

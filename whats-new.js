@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 159, items: [
+    '📱 On phones, rows of buttons at the top of a page fade at the edge when there are more to swipe to, and the Roster page shows all its buttons (What if, Picture, Alerts were hidden off the side).',
+    '🗓️ Roster page: "My shifts" no longer stretches into a tall empty box next to Today.',
+  ] },
   { v: 158, items: [
     '📥 Give this week\'s roster: in the roster builder, tap it and choose the roster picture (or Excel). HotelOps reads it, you check it and press Save, and it goes straight on to build the next week from it.',
     '📋 Same as last week: builds the week by carrying last week on (same days off and shifts where they still fit), changed only for this week\'s requests, leave and the rules.',

@@ -461,7 +461,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v158';
+const APP_VERSION = 'v159';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;
@@ -642,3 +642,16 @@ function writeStyledXlsx(filename, sheetName, rows, styleAt, styles, cols) {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+// Swipeable header button rows: mark the sides where more buttons are hidden (pro.css fades them)
+(function () {
+  const mark = el => { const more = el.scrollWidth - el.clientWidth > 4; el.classList.toggle('hd-more-r', more && el.scrollLeft + el.clientWidth < el.scrollWidth - 4); el.classList.toggle('hd-more-l', more && el.scrollLeft > 4); };
+  const all = () => document.querySelectorAll('.page-hd-actions').forEach(mark);
+  document.addEventListener('scroll', e => { if (e.target && e.target.classList && e.target.classList.contains('page-hd-actions')) mark(e.target); }, true);
+  window.addEventListener('resize', () => setTimeout(all, 50));
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(all, 300);
+    // a page opening, or its buttons appearing, can change what fits
+    new MutationObserver(() => { clearTimeout(all._t); all._t = setTimeout(all, 120); }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class', 'hidden'] });
+  });
+})();
