@@ -169,5 +169,118 @@ html[data-skin="ocean"] .btn.gold, html[data-skin="ocean"] .btn.primary { backgr
 html[data-skin="ocean"] .nav-item.active::before { background: #2dd4bf !important; box-shadow: 0 0 10px rgba(45,212,191,.6) !important; }
 html[data-skin="ocean"] .nav-item.active .nav-badge { background: #2dd4bf !important; color: #04201d !important; }
 
+
+/* ═════════ Popular themes, in their own official colours ═════════ */
+/* Catppuccin Mocha: soft pastel on dark */
+html[data-skin="catppuccin"] {
+  --bg: #11111b !important; --bg2: #181825 !important; --surface: #1e1e2e !important; --card: #1e1e2e !important; --card2: #313244 !important;
+  --border: rgba(205,214,244,0.08) !important; --border2: rgba(205,214,244,0.13) !important; --border3: rgba(205,214,244,0.2) !important;
+  --text: #cdd6f4 !important; --text2: #a6adc8 !important; --text3: #7f849c !important;
+  --accent: #cba6f7 !important; --accent2: #b4befe !important; --accent-bg: rgba(203,166,247,0.13) !important; --accent-border: rgba(203,166,247,0.36) !important;
+  --blue: #89b4fa !important; --green: #a6e3a1 !important; --red: #f38ba8 !important; --amber: #f9e2af !important; --purple: #cba6f7 !important;
+  --topbar-bg: rgba(30,30,46,0.82) !important; --topbar-border: rgba(205,214,244,0.09) !important;
+  --ho-a1: #b4befe; --ho-a2: #cba6f7; --ho-ink: #1e1e2e;
+}
+html[data-skin="catppuccin"] body { background: #11111b; }
+html[data-skin="catppuccin"] .topbar { backdrop-filter: blur(16px) saturate(140%); -webkit-backdrop-filter: blur(16px) saturate(140%); }
+html[data-skin="catppuccin"] .btn.gold, html[data-skin="catppuccin"] .btn.primary { background: linear-gradient(180deg, #b4befe, #cba6f7) !important; color: #1e1e2e !important; border-color: transparent !important; box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 6px 18px -8px rgba(203,166,247,0.55) !important; }
+html[data-skin="catppuccin"] .nav-item.active::before { background: #cba6f7 !important; box-shadow: 0 0 10px rgba(203,166,247,0.55) !important; }
+html[data-skin="catppuccin"] .nav-item.active .nav-badge { background: #cba6f7 !important; color: #1e1e2e !important; }
+html[data-skin="catppuccin"] .mob-nav-btn.active .mob-nav-icon, html[data-skin="catppuccin"] .mob-nav-btn.active .mob-nav-lbl { color: #cba6f7 !important; }
+
+/* Catppuccin Latte: soft pastel on light */
+html[data-skin="latte"] {
+  --bg: #dce0e8 !important; --bg2: #e6e9ef !important; --surface: #eff1f5 !important; --card: #ffffff !important; --card2: #e6e9ef !important;
+  --border: rgba(76,79,105,0.14) !important; --border2: rgba(76,79,105,0.2) !important; --border3: rgba(76,79,105,0.3) !important;
+  --text: #4c4f69 !important; --text2: #5c5f77 !important; --text3: #8c8fa1 !important;
+  --accent: #8839ef !important; --accent2: #7287fd !important; --accent-bg: rgba(136,57,239,0.13) !important; --accent-border: rgba(136,57,239,0.36) !important;
+  --blue: #1e66f5 !important; --green: #40a02b !important; --red: #d20f39 !important; --amber: #df8e1d !important; --purple: #8839ef !important;
+  --topbar-bg: rgba(239,241,245,0.82) !important; --topbar-border: rgba(76,79,105,0.09) !important;
+  --ho-a1: #7287fd; --ho-a2: #8839ef; --ho-ink: #ffffff;
+}
+html[data-skin="latte"] body { background: #dce0e8; }
+html[data-skin="latte"] .topbar { backdrop-filter: blur(16px) saturate(140%); -webkit-backdrop-filter: blur(16px) saturate(140%); }
+html[data-skin="latte"] .btn.gold, html[data-skin="latte"] .btn.primary { background: linear-gradient(180deg, #7287fd, #8839ef) !important; color: #ffffff !important; border-color: transparent !important; box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 6px 18px -8px rgba(136,57,239,0.55) !important; }
+html[data-skin="latte"] .nav-item.active::before { background: #8839ef !important; box-shadow: 0 0 10px rgba(136,57,239,0.55) !important; }
+html[data-skin="latte"] .nav-item.active .nav-badge { background: #8839ef !important; color: #ffffff !important; }
+html[data-skin="latte"] .mob-nav-btn.active .mob-nav-icon, html[data-skin="latte"] .mob-nav-btn.active .mob-nav-lbl { color: #8839ef !important; }
+
+/* Nord: arctic blue-grey */
+html[data-skin="nord"] {
+  --bg: #242933 !important; --bg2: #2a303c !important; --surface: #2e3440 !important; --card: #3b4252 !important; --card2: #434c5e !important;
+  --border: rgba(216,222,233,0.08) !important; --border2: rgba(216,222,233,0.13) !important; --border3: rgba(216,222,233,0.2) !important;
+  --text: #eceff4 !important; --text2: #d8dee9 !important; --text3: #8f9bb3 !important;
+  --accent: #88c0d0 !important; --accent2: #81a1c1 !important; --accent-bg: rgba(136,192,208,0.13) !important; --accent-border: rgba(136,192,208,0.36) !important;
+  --blue: #81a1c1 !important; --green: #a3be8c !important; --red: #bf616a !important; --amber: #ebcb8b !important; --purple: #b48ead !important;
+  --topbar-bg: rgba(46,52,64,0.82) !important; --topbar-border: rgba(216,222,233,0.09) !important;
+  --ho-a1: #81a1c1; --ho-a2: #88c0d0; --ho-ink: #2e3440;
+}
+html[data-skin="nord"] body { background: #242933; }
+html[data-skin="nord"] .topbar { backdrop-filter: blur(16px) saturate(140%); -webkit-backdrop-filter: blur(16px) saturate(140%); }
+html[data-skin="nord"] .btn.gold, html[data-skin="nord"] .btn.primary { background: linear-gradient(180deg, #81a1c1, #88c0d0) !important; color: #2e3440 !important; border-color: transparent !important; box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 6px 18px -8px rgba(136,192,208,0.55) !important; }
+html[data-skin="nord"] .nav-item.active::before { background: #88c0d0 !important; box-shadow: 0 0 10px rgba(136,192,208,0.55) !important; }
+html[data-skin="nord"] .nav-item.active .nav-badge { background: #88c0d0 !important; color: #2e3440 !important; }
+html[data-skin="nord"] .mob-nav-btn.active .mob-nav-icon, html[data-skin="nord"] .mob-nav-btn.active .mob-nav-lbl { color: #88c0d0 !important; }
+
+/* Dracula: purple and pink on dark */
+html[data-skin="dracula"] {
+  --bg: #1e1f29 !important; --bg2: #21222c !important; --surface: #282a36 !important; --card: #2c2e3b !important; --card2: #44475a !important;
+  --border: rgba(248,248,242,0.08) !important; --border2: rgba(248,248,242,0.13) !important; --border3: rgba(248,248,242,0.2) !important;
+  --text: #f8f8f2 !important; --text2: #c9cbd8 !important; --text3: #8b93c4 !important;
+  --accent: #bd93f9 !important; --accent2: #ff79c6 !important; --accent-bg: rgba(189,147,249,0.13) !important; --accent-border: rgba(189,147,249,0.36) !important;
+  --blue: #8be9fd !important; --green: #50fa7b !important; --red: #ff5555 !important; --amber: #ffb86c !important; --purple: #bd93f9 !important;
+  --topbar-bg: rgba(40,42,54,0.82) !important; --topbar-border: rgba(248,248,242,0.09) !important;
+  --ho-a1: #ff79c6; --ho-a2: #bd93f9; --ho-ink: #1e1f29;
+}
+html[data-skin="dracula"] body { background: #1e1f29; }
+html[data-skin="dracula"] .topbar { backdrop-filter: blur(16px) saturate(140%); -webkit-backdrop-filter: blur(16px) saturate(140%); }
+html[data-skin="dracula"] .btn.gold, html[data-skin="dracula"] .btn.primary { background: linear-gradient(180deg, #ff79c6, #bd93f9) !important; color: #1e1f29 !important; border-color: transparent !important; box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 6px 18px -8px rgba(189,147,249,0.55) !important; }
+html[data-skin="dracula"] .nav-item.active::before { background: #bd93f9 !important; box-shadow: 0 0 10px rgba(189,147,249,0.55) !important; }
+html[data-skin="dracula"] .nav-item.active .nav-badge { background: #bd93f9 !important; color: #1e1f29 !important; }
+html[data-skin="dracula"] .mob-nav-btn.active .mob-nav-icon, html[data-skin="dracula"] .mob-nav-btn.active .mob-nav-lbl { color: #bd93f9 !important; }
+
+/* Tokyo Night: city lights blue */
+html[data-skin="tokyo"] {
+  --bg: #16161e !important; --bg2: #1a1b26 !important; --surface: #1a1b26 !important; --card: #1f2335 !important; --card2: #292e42 !important;
+  --border: rgba(192,202,245,0.08) !important; --border2: rgba(192,202,245,0.13) !important; --border3: rgba(192,202,245,0.2) !important;
+  --text: #c0caf5 !important; --text2: #a9b1d6 !important; --text3: #6b739c !important;
+  --accent: #7aa2f7 !important; --accent2: #bb9af7 !important; --accent-bg: rgba(122,162,247,0.13) !important; --accent-border: rgba(122,162,247,0.36) !important;
+  --blue: #7aa2f7 !important; --green: #9ece6a !important; --red: #f7768e !important; --amber: #e0af68 !important; --purple: #bb9af7 !important;
+  --topbar-bg: rgba(26,27,38,0.82) !important; --topbar-border: rgba(192,202,245,0.09) !important;
+  --ho-a1: #bb9af7; --ho-a2: #7aa2f7; --ho-ink: #16161e;
+}
+html[data-skin="tokyo"] body { background: #16161e; }
+html[data-skin="tokyo"] .topbar { backdrop-filter: blur(16px) saturate(140%); -webkit-backdrop-filter: blur(16px) saturate(140%); }
+html[data-skin="tokyo"] .btn.gold, html[data-skin="tokyo"] .btn.primary { background: linear-gradient(180deg, #bb9af7, #7aa2f7) !important; color: #16161e !important; border-color: transparent !important; box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 6px 18px -8px rgba(122,162,247,0.55) !important; }
+html[data-skin="tokyo"] .nav-item.active::before { background: #7aa2f7 !important; box-shadow: 0 0 10px rgba(122,162,247,0.55) !important; }
+html[data-skin="tokyo"] .nav-item.active .nav-badge { background: #7aa2f7 !important; color: #16161e !important; }
+html[data-skin="tokyo"] .mob-nav-btn.active .mob-nav-icon, html[data-skin="tokyo"] .mob-nav-btn.active .mob-nav-lbl { color: #7aa2f7 !important; }
+
+/* Rosé Pine: muted rose and pine */
+html[data-skin="rosepine"] {
+  --bg: #191724 !important; --bg2: #1f1d2e !important; --surface: #1f1d2e !important; --card: #1f1d2e !important; --card2: #26233a !important;
+  --border: rgba(224,222,244,0.08) !important; --border2: rgba(224,222,244,0.13) !important; --border3: rgba(224,222,244,0.2) !important;
+  --text: #e0def4 !important; --text2: #908caa !important; --text3: #6e6a86 !important;
+  --accent: #ebbcba !important; --accent2: #c4a7e7 !important; --accent-bg: rgba(235,188,186,0.13) !important; --accent-border: rgba(235,188,186,0.36) !important;
+  --blue: #9ccfd8 !important; --green: #31748f !important; --red: #eb6f92 !important; --amber: #f6c177 !important; --purple: #c4a7e7 !important;
+  --topbar-bg: rgba(31,29,46,0.82) !important; --topbar-border: rgba(224,222,244,0.09) !important;
+  --ho-a1: #c4a7e7; --ho-a2: #ebbcba; --ho-ink: #191724;
+}
+html[data-skin="rosepine"] body { background: #191724; }
+html[data-skin="rosepine"] .topbar { backdrop-filter: blur(16px) saturate(140%); -webkit-backdrop-filter: blur(16px) saturate(140%); }
+html[data-skin="rosepine"] .btn.gold, html[data-skin="rosepine"] .btn.primary { background: linear-gradient(180deg, #c4a7e7, #ebbcba) !important; color: #191724 !important; border-color: transparent !important; box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 6px 18px -8px rgba(235,188,186,0.55) !important; }
+html[data-skin="rosepine"] .nav-item.active::before { background: #ebbcba !important; box-shadow: 0 0 10px rgba(235,188,186,0.55) !important; }
+html[data-skin="rosepine"] .nav-item.active .nav-badge { background: #ebbcba !important; color: #191724 !important; }
+html[data-skin="rosepine"] .mob-nav-btn.active .mob-nav-icon, html[data-skin="rosepine"] .mob-nav-btn.active .mob-nav-lbl { color: #ebbcba !important; }
+
+/* Latte is light: dark writing in the top bar (Opera's own bar is coloured with white writing) */
+html[data-skin="latte"] { --topbar-text: #4c4f69 !important; }
+html[data-skin="latte"] .topbar { background: rgba(239,241,245,.85) !important; border-bottom: 1px solid rgba(76,79,105,.14) !important; }
+html[data-skin="latte"] .topbar::after { display: none; }
+html[data-skin="latte"] .ho-name b, html[data-skin="latte"] .logo .logo-name, html[data-skin="latte"] .topbar-center, html[data-skin="latte"] #topbarTime, html[data-skin="latte"] .ho-name small { color: #4c4f69 !important; }
+html[data-skin="latte"] .ho-search, html[data-skin="latte"] .tb-pill, html[data-skin="latte"] .fb-status, html[data-skin="latte"] .theme-switcher, html[data-skin="latte"] .icon-round, html[data-skin="latte"] #appVersionPill, html[data-skin="latte"] #fbLabel {
+  background: rgba(76,79,105,.07) !important; border-color: rgba(76,79,105,.12) !important; color: #5c5f77 !important; }
+html[data-skin="latte"] .icon-round:hover { background: rgba(76,79,105,.14) !important; }
+
 /* Smooth: less motion where the system asks for it */
 @media (prefers-reduced-motion: reduce) { .panel.active, .ho-theme-pop { animation: none !important; } }

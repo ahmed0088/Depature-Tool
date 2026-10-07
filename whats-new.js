@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 180, items: [
+    '🎨 Six new themes, the best-loved colour themes in their own official colours: 🐱 Catppuccin (soft pastels on dark), 🥛 Latte (the light version), 🧊 Nord (arctic blue-grey), 🧛 Dracula (purple and pink), 🌃 Tokyo Night (city-lights blue) and 🌹 Rosé Pine (muted rose). Tap the theme button in the top bar, or More → themes on a phone. Your theme is only yours.',
+  ] },
   { v: 179, items: [
     '🔕 Roster reminders are quiet now: no alarm sound, and nothing about a shift that has already started or a day gone by (nothing can change it any more; "Cover to fix" leaves those out too). An empty shift later today or tomorrow waits in Ops Brain (the 🧠 count) and pops up only once, when it starts within 3 hours. Closed with ✕, it stays closed.',
   ] },

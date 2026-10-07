@@ -290,6 +290,12 @@ function _applyLoginTheme(name) {
     'ios-dark':  { accent:'#0a84ff', accentDark:'#0071e3', btnColor:'#ffffff' },
     'titanium':  { accent:'#c9a27e', accentDark:'#a8845f', btnColor:'#1b1a18' },
     'ocean':     { accent:'#2dd4bf', accentDark:'#14b8a6', btnColor:'#04201d' },
+    'catppuccin': { accent:'#cba6f7', accentDark:'#b4befe', btnColor:'#1e1e2e' },
+    'latte': { accent:'#8839ef', accentDark:'#7287fd', btnColor:'#ffffff' },
+    'nord': { accent:'#88c0d0', accentDark:'#81a1c1', btnColor:'#2e3440' },
+    'dracula': { accent:'#bd93f9', accentDark:'#ff79c6', btnColor:'#1e1f29' },
+    'tokyo': { accent:'#7aa2f7', accentDark:'#bb9af7', btnColor:'#16161e' },
+    'rosepine': { accent:'#ebbcba', accentDark:'#c4a7e7', btnColor:'#191724' },
   };
   const t = accents[name] || accents['night-ops'];
   const s = document.getElementById('loginThemeStyle');

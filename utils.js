@@ -291,6 +291,12 @@ const HO_THEMES = {
   'ocean':     { label: 'Ocean', emoji: '🌊', base: 'midnight', skin: 'ocean', bg: '#06161f', a: '#2dd4bf', btn: '#04201d' },
   'opera':     { label: 'Opera', emoji: '☀️', base: 'opera', bg: '#f4f5f7', a: '#c74634', btn: '#ffffff' },
   'midnight':  { label: 'Midnight', emoji: '🌌', base: 'midnight', bg: '#0b1020', a: '#818cf8', btn: '#ffffff' },
+  'catppuccin': { label: 'Catppuccin', emoji: '🐱', base: 'midnight', skin: 'catppuccin', bg: '#1e1e2e', a: '#cba6f7', btn: '#1e1e2e' },
+  'latte': { label: 'Latte', emoji: '🥛', base: 'opera', skin: 'latte', bg: '#eff1f5', a: '#8839ef', btn: '#ffffff' },
+  'nord': { label: 'Nord', emoji: '🧊', base: 'midnight', skin: 'nord', bg: '#2e3440', a: '#88c0d0', btn: '#2e3440' },
+  'dracula': { label: 'Dracula', emoji: '🧛', base: 'midnight', skin: 'dracula', bg: '#282a36', a: '#bd93f9', btn: '#1e1f29' },
+  'tokyo': { label: 'Tokyo Night', emoji: '🌃', base: 'midnight', skin: 'tokyo', bg: '#1a1b26', a: '#7aa2f7', btn: '#16161e' },
+  'rosepine': { label: 'Rosé Pine', emoji: '🌹', base: 'midnight', skin: 'rosepine', bg: '#1f1d2e', a: '#ebbcba', btn: '#191724' },
 };
 function hoThemeName() { return document.documentElement.getAttribute('data-skin') || document.documentElement.getAttribute('data-theme') || 'night-ops'; }
 function setTheme(name, btn, noSave) {
@@ -502,7 +508,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v179';
+const APP_VERSION = 'v180';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;
