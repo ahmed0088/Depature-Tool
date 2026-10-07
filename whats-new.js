@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 172, items: [
+    '🗓️ Roster fixes: Undo takes back only your own change (not a colleague\'s since), notes two people add at once are both kept, and every way of changing a week (what-if, sick, cover, plans) now saves cell by cell. "Put X on mornings" on a posted week no longer stops halfway.',
+    '📷 Roster pictures: someone matched to the team is saved under their own record (no duplicate person), three rows with the same name stay separate, a new joiner with an employee number is never dropped, Escape cancels a cell edit, and giving a second picture while one is being read no longer mixes them up.',
+    '🛡 Names with unusual characters can no longer break buttons or run anything.',
+  ] },
   { v: 171, items: [
     '🔒 Safer sign-in: an account nobody added to the team no longer gets access, and each role can only open its own pages (also through Ops Brain and the home tiles). A read-only account can\'t change departures.',
     '🎨 Your theme is your own: changing it no longer changes everyone else\'s screen.',

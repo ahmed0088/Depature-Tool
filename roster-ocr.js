@@ -391,6 +391,7 @@ async function roOcrRead(im, hint, onStep) {
     const med = a => a.slice().sort((x, y) => x - y)[a.length >> 1];
     const tH = med(G.hr.map(thick));
     const cols = []; for (let i = 0; i + 1 < G.vr.length; i++) if (G.vr[i + 1][0] - G.vr[i][1] > 20) cols.push({ l: G.vr[i][1] + 1, r: G.vr[i + 1][0] - 1 });
+    if (cols.length < 2) return await _roOcrNoLines(P, wf, hint, step);   // lines too close to be columns (a double border)
     const lines = [];   // bands and hotel bars, top to bottom
     for (let i = 0; i < G.hr.length; i++) {
       const r = G.hr[i];
@@ -447,7 +448,7 @@ async function roOcrRead(im, hint, onStep) {
         // not someone in the team: a hotel's title bar read as a row, or nothing at all
         const kg = !/\d{3}/.test(nameRaw) && _roOcrKnownGroup(nameRaw);
         if (kg && !day.some(v => _roOcrTime(v) && !/\?$/.test(v))) { group = kg; continue; }
-        if (!day.some(v => v && !/\?$/.test(v))) continue;   // every cell a guess: a junk row, not a person
+        if (!day.some(v => v && !/\?$/.test(v)) && !/\d{3}/.test(nameRaw)) continue;   // every cell a guess and no employee number: a junk row, not a person
       }
       seenPerson = true;
       // the hotel: the title read above the row when it is one of the team's hotels, else the hotel this person works at
@@ -502,20 +503,22 @@ function _roOcrFix(people) {
 
 function _roOcrRes(people, dates, note) {
   _roOcrFix(people);
-  const names = [], cells = {}, groups = {}, ids = {};
+  const names = [], cells = {}, groups = {}, ids = {}, keys = {};
   let unsureNames = 0;
   people.forEach(p => {
     let n = p.nm.name;
     if (!p.nm.sure) { unsureNames++; n += ' ?'; }
-    if (cells[n]) n += ' (2)';
+    const b = n; let i = 2; while (cells[n]) n = `${b} (${i++})`;
     names.push(n);
+    // matched to someone in the team: saved under their own record, even if they were renamed since
+    if (p.nm.known && typeof roStaff !== 'undefined') { const k = Object.keys(roStaff).find(x => roStaff[x] === p.nm.known); if (k) keys[n] = k; }
     cells[n] = {};
     p.day.forEach((v, i) => { if (v && dates[i]) cells[n][dates[i]] = v; });
     if (p.group) groups[n] = p.group;
     if (p.nm.id) ids[n] = p.nm.id;
   });
   if (!names.length) throw new Error('No names found in the picture. Try a clearer picture or a screenshot of the roster.');
-  return { names, dates, cells, groups, ids, terms: [], notes: note + (unsureNames ? ` ${unsureNames} name${unsureNames === 1 ? '' : 's'} could not be read clearly (ending in ?): tap to correct.` : ''), by: '📷 Read on this device' };
+  return { names, dates, cells, groups, ids, keys, terms: [], notes: note + (unsureNames ? ` ${unsureNames} name${unsureNames === 1 ? '' : 's'} could not be read clearly (ending in ?): tap to correct.` : ''), by: '📷 Read on this device' };
 }
 
 /** No table lines: read every word with its position and rebuild rows and columns. */

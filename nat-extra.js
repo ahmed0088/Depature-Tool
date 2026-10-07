@@ -48,7 +48,7 @@ function natRenderUnmatched() {
   const um = window._natUnmatched || [];
   if (!um.length) return;
   const opts = EXCEL_COUNTRIES.map((c, i) => `<option value="${escapeHtml(c)}">${NAT_FIRST_ROW + i} · ${escapeHtml(c)}</option>`).join('');
-  const q = s => JSON.stringify(s).replace(/"/g, '&quot;');
+  const q = s => JSON.stringify(s).replace(/&/g, '&amp;').replace(/\"/g, '&quot;').replace(/</g, '&lt;');
   box.innerHTML = um.map(u => {
     const cand = typeof baCountryCandidates === 'function' ? baCountryCandidates(u.name).filter(c => c.s >= 0.45).slice(0, 3) : [];
     const n = u.PRS || u.APR || 0;

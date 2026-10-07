@@ -839,6 +839,7 @@ function rbDraftDiff(base, cur) {
 }
 /** Send week w's draft now. */
 function rbPutDraft(w) {
+  _rbUndoMark(w);
   const cur = rbDrafts[w] || null, base = _rbBase[w];
   if (!cur || !base) fbSet('roster/builder/drafts/' + w, cur);
   else fbUpdate('roster/builder/drafts/' + w, rbDraftDiff(base, cur));
@@ -846,6 +847,7 @@ function rbPutDraft(w) {
 }
 function rbSaveDraft() {
   const w = rbWeek;   // the week edited, even if another week is open when the save runs
+  _rbUndoMark(w);
   clearTimeout(_rbSaving[w]);
   _rbSaving[w] = setTimeout(() => { delete _rbSaving[w]; rbPutDraft(w); }, 400);
 }
@@ -854,8 +856,18 @@ function rbDraftsIn(v) {
   v = v || {};
   const server = _rbClone(v);
   Object.keys(_rbSaving).forEach(w => {
+    // a colleague discarded the whole draft meanwhile: that wins, my waiting edit goes with it
+    if (_rbBase[w] && !v[w]) { clearTimeout(_rbSaving[w]); delete _rbSaving[w]; return; }
     const mine = rbDraftDiff(_rbBase[w], rbDrafts[w]);
-    if (rbDrafts[w] && Object.keys(mine).length) v[w] = fbApplyPatch(v[w], mine);
+    if (!rbDrafts[w] || !Object.keys(mine).length) return;
+    if ('notes' in mine && v[w]) {
+      // notes: theirs and mine both kept (only the ones I removed go)
+      const id = n => JSON.stringify(n), had = new Set(((_rbBase[w] || {}).notes || []).map(id)), keep = new Set((rbDrafts[w].notes || []).map(id));
+      const merged = [...(v[w].notes || []).filter(n => !(had.has(id(n)) && !keep.has(id(n))))];
+      (rbDrafts[w].notes || []).forEach(n => { if (!merged.some(m => id(m) === id(n))) merged.push(n); });
+      mine.notes = merged.length ? merged : null;
+    }
+    v[w] = fbApplyPatch(v[w], mine);
   });
   // what the server has is the base now, so the next save sends only this person's own changes
   Object.keys(_rbBase).forEach(w => delete _rbBase[w]);
@@ -868,7 +880,7 @@ function rbOpen() { showPanel('roster-build'); }
 function rbDefaultWeek() { const t = new Date(), w = roMonday(t); return [0, 4, 5, 6].includes(t.getDay()) ? roAdd(w, 7) : roAdd(w, 7); }
 function rbGo(n) { rbWeek = n === 0 ? rbDefaultWeek() : roAdd(rbWeek, n); rbRender(); }
 function rbWeekLabel(w) { return `${roDate(w).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${roDate(roAdd(w, 6)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`; }
-const _rbQ = s => JSON.stringify(s).replace(/"/g, '&quot;');
+const _rbQ = s => JSON.stringify(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
 function rbRender() {
   const root = document.getElementById('rbRoot');
@@ -1034,7 +1046,18 @@ let rbUndoStack = [];
 function rbUndoPush() { const D = rbDrafts[rbWeek]; if (!D) return; rbUndoStack.push({ week: rbWeek, cells: JSON.parse(JSON.stringify(D.cells || {})) }); if (rbUndoStack.length > 30) rbUndoStack.shift(); }
 function rbUndo() {
   const u = rbUndoStack.pop(); if (!u) { showToast('Nothing to undo', 'warn'); return; }
-  rbWeek = u.week; rbDrafts[u.week] = Object.assign({}, rbDrafts[u.week], { cells: u.cells }); rbSaveDraft(); rbRender();
+  rbWeek = u.week;
+  if (u.after && rbDrafts[u.week]) {
+    // put back only the cells this change touched, so a colleague's edits since then stay
+    const cells = _rbClone(rbDrafts[u.week].cells || {}), patch = rbDraftDiff({ cells: u.after }, { cells: u.cells });
+    rbDrafts[u.week] = Object.assign({}, rbDrafts[u.week], fbApplyPatch({ cells }, patch));
+  } else rbDrafts[u.week] = Object.assign({}, rbDrafts[u.week], { cells: u.cells });
+  rbSaveDraft(); rbRender();
+}
+/** Right after a change: what the week looks like with it, so Undo knows which cells it touched. */
+function _rbUndoMark(w) {
+  const u = rbUndoStack[rbUndoStack.length - 1];
+  if (u && u.week === w && !u.after && rbDrafts[w]) u.after = _rbClone(rbDrafts[w].cells || {});
 }
 document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'z' || e.key === 'Z') && document.getElementById('panel-roster-build')?.classList.contains('active') && !/INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || '')) { e.preventDefault(); rbUndo(); }
@@ -1046,7 +1069,8 @@ function rbOptApply(i) { const o = _rbOpt[i]; if (o && o.cells) rbApplyCells(o.c
 function rbAddNotes(week, notes) {
   if (!notes || !notes.length || !rbDrafts[week]) return;
   const D = rbDrafts[week], who = (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '';
-  D.notes = (D.notes || []).concat(notes.map(n => Object.assign({ at: Date.now(), by: who }, n)));
+  // (the database refuses a value that is undefined: leave such fields out)
+  D.notes = (D.notes || []).concat(notes.map(n => JSON.parse(JSON.stringify(Object.assign({ at: Date.now(), by: who }, n)))));
 }
 /** A rule break that a decision covers: same person, that day or the day after (night ↔ day shows on the next day). */
 function rbNoted(p) { return !!p.key && ((rbDrafts[rbWeek] || {}).notes || []).some(n => n.key === p.key && n.date && p.date && Math.abs(roDate(p.date) - roDate(n.date)) <= 864e5 * 1.5); }

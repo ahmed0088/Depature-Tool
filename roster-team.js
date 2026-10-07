@@ -21,7 +21,7 @@
 const RT_LEAVE = ['SL', 'AL', 'ALA', 'EL', 'ML', 'UL', 'CL', 'PH', 'TRN'];
 const rtDates = w => Array.from({ length: 7 }, (_, d) => roAdd(w, d));
 const rtName = k => (roStaff[k] || {}).name || k;
-const _rtQ = s => JSON.stringify(s).replace(/"/g, '&quot;');
+const _rtQ = s => JSON.stringify(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
 /** Builder input (rules, cover, people) for any week. */
 function rtCtx(week) { const keep = rbWeek; rbWeek = week; try { return rbInput(1); } finally { rbWeek = keep; } }
@@ -333,11 +333,11 @@ function rtApplyPlan(i) {
   o.keys.forEach((k, i) => { const id = 'q' + Date.now().toString(36) + i + '_' + k.replace(/[^A-Za-z0-9]/g, '').slice(0, 12), r = { key: k, type: 'band', code: o.band, from: o.from > roToday() ? o.from : roAdd(roToday(), 1), to: o.to }; (rbReqs[o.week] = rbReqs[o.week] || {})[id] = r; fbSet(`roster/builder/requests/${o.week}/${id}`, r); });
   if (rtIsPublished(o.week)) {
     const n = rtApplyPublished(o.week, o.cells, 'shift type');
-    rbDrafts[o.week] = { cells: _rtClone(o.cells), at: Date.now(), fromPublished: true }; fbSet('roster/builder/drafts/' + o.week, rbDrafts[o.week]);
-    showToast(bent ? `Done, and noted in the builder: ${bent}` : `${n} change${n === 1 ? '' : 's'} made in the posted roster; the people concerned are told`, bent ? 'warn' : 'ok');
+    rbDrafts[o.week] = { cells: _rtClone(o.cells), at: Date.now(), fromPublished: true }; rbPutDraft(o.week);
+    showToast(`${n} change${n === 1 ? '' : 's'} made in the posted roster; the people concerned are told`, 'ok');
   } else {
     if (typeof rbUndoPush === 'function' && rbWeek === o.week) rbUndoPush();
-    rbDrafts[o.week] = Object.assign({}, rbDrafts[o.week], { cells: _rtClone(o.cells), at: Date.now() }); fbSet('roster/builder/drafts/' + o.week, rbDrafts[o.week]);
+    rbDrafts[o.week] = Object.assign({}, rbDrafts[o.week], { cells: _rtClone(o.cells), at: Date.now() }); rbPutDraft(o.week);
     showToast('Done in the draft. ↶ Undo is above the table', 'ok');
   }
   _rtPlans = [];
@@ -508,14 +508,14 @@ function rtWhatIfUse(i) {
   const bent = p.bad.length ? `${rtWhatIfText(r)}: ${p.texts.join('; then ')}. Bends: ${p.bad.map(rtProbText).join(', ')} (the closest plan with this team).` : '';
   if (r.posted) {
     const n = rtApplyPublished(r.week, p.cells, rtWhatIfText(r));
-    rbDrafts[r.week] = { cells: _rtClone(p.cells), at: Date.now(), fromPublished: true }; fbSet('roster/builder/drafts/' + r.week, rbDrafts[r.week]);
+    rbDrafts[r.week] = { cells: _rtClone(p.cells), at: Date.now(), fromPublished: true }; rbPutDraft(r.week);
     showToast(`${n} change${n === 1 ? '' : 's'} made in the posted roster; the people concerned are told`, 'ok');
   } else {
     if (typeof rbUndoPush === 'function' && rbWeek === r.week) rbUndoPush();
-    rbDrafts[r.week] = Object.assign({}, rbDrafts[r.week], { cells: _rtClone(p.cells), at: Date.now() }); fbSet('roster/builder/drafts/' + r.week, rbDrafts[r.week]);
+    rbDrafts[r.week] = Object.assign({}, rbDrafts[r.week], { cells: _rtClone(p.cells), at: Date.now() }); rbPutDraft(r.week);
     showToast(bent ? `Done, and noted in the draft: ${bent}` : 'Done in the draft. ↶ Undo is above the table', bent ? 'warn' : 'ok');
   }
-  if (bent) { rbAddNotes(r.week, p.bad.map(x => ({ key: x.key, date: x.date, text: bent }))); fbSet('roster/builder/drafts/' + r.week, rbDrafts[r.week]); }
+  if (bent) { rbAddNotes(r.week, p.bad.map(x => ({ key: x.key, date: x.date, text: bent }))); rbPutDraft(r.week); }
   document.getElementById('rtWI')?.remove();
   if (typeof brClose === 'function') try { brClose(); } catch (_) {}
   if (document.getElementById('panel-roster-build')?.classList.contains('active')) { rbWeek = r.week; rbRender(); }
@@ -610,7 +610,7 @@ function rtMarkAbsent(k, from, to, code, quiet) {
   const weeks = new Set(); for (let dt = from; dt <= to; dt = roAdd(dt, 1)) weeks.add(roMonday(roDate(dt)));
   const touched = [];
   weeks.forEach(w => {
-    if (rbDrafts[w]) { rtDates(w).forEach(dt => { if (dt >= from && dt <= to) { rbDrafts[w].cells[k] = rbDrafts[w].cells[k] || {}; rbDrafts[w].cells[k][dt] = code; } }); fbSet('roster/builder/drafts/' + w, rbDrafts[w]); }
+    if (rbDrafts[w]) { rtDates(w).forEach(dt => { if (dt >= from && dt <= to) { rbDrafts[w].cells[k] = rbDrafts[w].cells[k] || {}; rbDrafts[w].cells[k][dt] = code; } }); rbPutDraft(w); }
     if (rtIsPublished(w)) {
       const cells = rtPublished(w); rtDates(w).forEach(dt => { if (dt >= from && dt <= to) cells[k][dt] = code; });
       if (rtApplyPublished(w, cells, `${rtName(k)}: ${code}`)) touched.push(w);
@@ -1000,7 +1000,7 @@ function rtApplyPending(id) {
   if (rtIsPublished(o.week)) { const n = rtApplyPublished(o.week, o.cells, o.why || 'cover'); rbDrafts[o.week] = Object.assign({}, rbDrafts[o.week], { cells: _rtClone(o.cells), at: Date.now(), fromPublished: true }); showToast(o.why ? `Done: ${o.why}` : `${n} change${n === 1 ? '' : 's'} made; the people concerned are told`, o.why ? 'warn' : 'ok'); }
   else { rbDrafts[o.week] = Object.assign({}, rbDrafts[o.week], { cells: o.cells, at: Date.now() }); showToast(o.why ? `Done: ${o.why}` : 'Changed in the draft', o.why ? 'warn' : 'ok'); }
   rbAddNotes(o.week, o.notes);
-  fbSet('roster/builder/drafts/' + o.week, rbDrafts[o.week]);
+  rbPutDraft(o.week);
   _rtPending = {};
   if (typeof brClose === 'function') brClose();
 }

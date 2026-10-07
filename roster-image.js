@@ -23,6 +23,7 @@ const RI_MODELS = [
   ['claude-opus-5-5', 'Opus 5.5 (hardest pictures, costs more)'],
   ['claude-haiku-4-5-20251001', 'Haiku 4.5 (cheapest, less exact)'],
 ];
+let riRun = 0;            // the latest reading: an older one still running is ignored when it finishes
 let riPending = null;     // { dataUrl } waiting for "Save roster"
 let riIndex = {};         // pictures already posted
 
@@ -71,15 +72,18 @@ async function roFromImage(file) {
   const useAi = !!cfg.key && cfg.engine !== 'device' && riRetry._engine !== 'device';
   riRetry._engine = '';
   if (!useAi) return riReadOnDevice(im, shown);
+  const run = ++riRun;
   box.innerHTML = `${riPicHtml(shown)}<div class="ri-reading"><span class="ri-spin"></span><div><b>Reading the roster with AI…</b><small>Names, dates and every shift. This takes about 20–40 seconds.</small></div></div>`;
   try {
     const forAi = riJpeg(im, 2000, 0.9);
     const json = await riAskAI(forAi.split(',')[1], document.getElementById('roImpWeek')?.value || roMonday(new Date()));
+    if (run !== riRun) return;
     const res = riToRes(json);
     res.by = '✨ Read by AI';
     roShowPreview(res);
     box.insertAdjacentHTML('afterbegin', riPicHtml(shown));
   } catch (e) {
+    if (run !== riRun) return;
     console.warn('[roster-image]', e);
     box.innerHTML = `${riPicHtml(shown)}<div class="ro-warn">The AI couldn't read the roster: ${escapeHtml(e.message || String(e))}</div>
       <div class="ro-acts"><button class="btn gold" onclick="riRetry('device')">📷 Read it on this device</button><button class="btn" onclick="riRetry()">↻ Try the AI again</button><button class="btn" onclick="riPostPictureOnly()">📌 Post the picture only</button></div>`;
@@ -90,16 +94,19 @@ async function riReadOnDevice(im, shown) {
   const box = document.getElementById('roPreview');
   const hint = (document.getElementById('roImpWeek')?.value) || roAdd(roMonday(new Date()), [0, 4, 5, 6].includes(new Date().getDay()) ? 7 : 0);
   box.innerHTML = `${riPicHtml(shown)}<div class="ri-reading"><span class="ri-spin"></span><div><b id="riStepT">Reading the roster on this device…</b><small id="riStepS">The first time it downloads its reader (about 3 MB). Then it takes about a minute.</small><div class="ri-bar"><i id="riStepBar" style="width:2%"></i></div></div></div>`;
-  const t0 = Date.now();
+  const t0 = Date.now(), run = ++riRun;
   try {
     const res = await roOcrRead(im, hint, (done, total, text) => {
+      if (run !== riRun) return;
       const bar = document.getElementById('riStepBar'); if (bar) bar.style.width = Math.max(2, Math.round(done / total * 100)) + '%';
       if (text) { const t = document.getElementById('riStepT'); if (t) t.textContent = text; }
       const sm = document.getElementById('riStepS'); if (sm && done > 1) { const left = Math.round((Date.now() - t0) / done * (total - done) / 1000); sm.textContent = `${done} of ${total} cells · about ${left < 60 ? left + ' s' : Math.round(left / 60) + ' min'} left`; }
     });
+    if (run !== riRun) return;   // another picture was given meanwhile
     roShowPreview(res);
     box.insertAdjacentHTML('afterbegin', riPicHtml(shown));
   } catch (e) {
+    if (run !== riRun) return;
     console.warn('[roster-ocr]', e);
     box.innerHTML = `${riPicHtml(shown)}<div class="ro-warn">Couldn't read the roster: ${escapeHtml(e.message || String(e))}</div>
       <div class="ro-acts"><button class="btn gold" onclick="riRetry('device')">↻ Try again</button>${riCfg().key ? '<button class="btn" onclick="riRetry(\'ai\')">✨ Read it with AI</button>' : ''}<button class="btn" onclick="riPostPictureOnly()">📌 Post the picture only</button></div>`;
@@ -240,7 +247,7 @@ function riView(src) {
   document.getElementById('riViewer')?.remove();
   const v = document.createElement('div');
   v.id = 'riViewer'; v.className = 'ri-viewer';
-  v.innerHTML = `<div class="ri-v-bar"><b>Roster picture</b><span><button class="btn sm" onclick="document.getElementById('riViewer').classList.toggle('zoom')">🔍 Zoom</button><button class="btn sm" onclick="document.getElementById('riViewer').remove()">✕ Close</button></span></div><div class="ri-v-body"><img src="${src}" alt="Roster picture"></div>`;
+  v.innerHTML = `<div class="ri-v-bar"><b>Roster picture</b><span><button class="btn sm" onclick="document.getElementById('riViewer').classList.toggle('zoom')">🔍 Zoom</button><button class="btn sm" onclick="document.getElementById('riViewer').remove()">✕ Close</button></span></div><div class="ri-v-body"><img src="${/^data:image\/[a-z+]+;base64,[A-Za-z0-9+/=]+$/.test(String(src)) || /^https:\/\//.test(String(src)) ? escapeHtml(src) : ''}" alt="Roster picture"></div>`;
   v.addEventListener('click', e => { if (e.target === v) v.remove(); });
   document.body.appendChild(v);
 }

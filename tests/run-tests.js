@@ -367,7 +367,7 @@ console.log('\nRoster scenarios');
 // ── What if… (roster-team.js) ─────────────────────────────
 {
   const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} }, fbSet() {}, showToast() {}, escapeHtml: x => String(x),
-               document: { addEventListener() {}, getElementById() { return null; }, querySelectorAll() { return []; }, querySelector() { return null; } }, window: {}, setTimeout: () => 0, setInterval: () => 0, navigator: {} };
+               document: { addEventListener() {}, getElementById() { return null; }, querySelectorAll() { return []; }, querySelector() { return null; } }, window: {}, setTimeout: () => 0, setInterval: () => 0, clearTimeout() {}, navigator: {} };
   vm.createContext(sb);
   for (const f of ['roster.js', 'roster-build.js', 'roster-team.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sb, { filename: f });
   vm.runInContext(`
@@ -482,6 +482,20 @@ console.log('\nRoster scenarios');
     delete _rbSaving[W];
     return shown + ' ' + out;
   })()`), 'OFFM {"cells/A/d1":"OFF"}');
+  check('drafts: Undo puts back only my change, not a colleague\'s', run(`(() => {
+    rbDraftsIn({ [W]: { cells: { A: { d1: 'M' }, B: { d1: 'N' } } } });
+    rbWeek = W; rbUndoStack.length = 0; rbUndoPush(); rbDrafts[W].cells.A.d1 = 'OFF'; _rbUndoMark(W);   // I change Anna
+    rbDraftsIn({ [W]: { cells: { A: { d1: 'OFF' }, B: { d1: 'E' } } } });                                  // a colleague changes Bilal
+    rbRender = () => {}; rbUndo(); delete _rbSaving[W];
+    return rbDrafts[W].cells.A.d1 + rbDrafts[W].cells.B.d1;
+  })()`), 'ME');
+  check('drafts: two people adding a note both keep theirs', run(`(() => {
+    rbDraftsIn({ [W]: { cells: {}, notes: [{ text: 'n1' }] } });
+    rbDrafts[W].notes = rbDrafts[W].notes.concat([{ text: 'mine' }]); _rbSaving[W] = 1;
+    rbDraftsIn({ [W]: { cells: {}, notes: [{ text: 'n1' }, { text: 'theirs' }] } });
+    delete _rbSaving[W];
+    return rbDrafts[W].notes.map(n => n.text).join();
+  })()`), 'n1,theirs,mine');
 }
 
 console.log(`\n${pass} passed · ${fail} failed`);

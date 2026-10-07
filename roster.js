@@ -67,7 +67,11 @@ function roToday() { return roIso(new Date()); }
 function roDayLbl(iso, long) { const d = roDate(iso); return d.toLocaleDateString('en-GB', long ? { weekday: 'long', day: 'numeric', month: 'long' } : { weekday: 'short', day: 'numeric' }); }
 
 // ── Names and codes ───────────────────────────────────────
-function roKey(name) { return String(name || '').trim().toUpperCase().replace(/[.#$\[\]\/]/g, ' ').replace(/\s+/g, ' ').trim(); }
+function roKey(name) {
+  const k = String(name || '').trim().toUpperCase().replace(/[.#$\[\]\/]/g, ' ').replace(/\s+/g, ' ').trim();
+  // a "name" of only . # $ [ ] / would give an empty key, and saving under it would overwrite the whole team
+  return k || (String(name || '').trim() ? 'NAME ' + [...String(name).trim()].map(c => c.charCodeAt(0).toString(36)).join('') : '');
+}
 function roAllCodes() { return Object.assign({}, RO_DEFAULT_CODES, roCodes || {}); }
 function _roType(h) { return h >= 5 && h < 11 ? 'morning' : h >= 11 && h < 18 ? 'afternoon' : 'night'; }   // 00:00 and 19:00 starts are nights
 
@@ -251,9 +255,15 @@ function roPrevEdit(td) {
   td.innerHTML = `<input value="${escapeHtml(v)}" maxlength="40" placeholder="empty">`;
   const inp = td.querySelector('input');
   inp.focus(); inp.select();
-  const done = () => { const nv = inp.value.replace(/\s*\?$/, '').trim(); roPrevSet(k, d, nv); const i = roInfo(nv); td.innerHTML = `${escapeHtml(roCellTxt(i))}${i && i.note ? `<i class="ro-note">${escapeHtml(i.note)}</i>` : ''}`; td.title = (nv || 'empty') + ': tap to correct'; };
+  let how = 'blur';
+  const show = x => { const i = roInfo(x); td.innerHTML = `${escapeHtml(roCellTxt(i))}${i && i.note ? `<i class="ro-note">${escapeHtml(i.note)}</i>` : ''}`; td.title = (x || 'empty') + ': tap to correct'; };
+  const done = () => {
+    // Escape, or tapping away without changing anything: the cell stays as it was (still marked to check)
+    if (how === 'esc' || (how === 'blur' && inp.value === v)) { show(v); return; }
+    const nv = inp.value.replace(/\s*\?$/, '').trim(); roPrevSet(k, d, nv); show(nv);   // Enter or a new value: checked
+  };
   inp.addEventListener('blur', done, { once: true });
-  inp.addEventListener('keydown', e => { if (e.key === 'Enter') inp.blur(); if (e.key === 'Escape') { inp.value = v; inp.blur(); } });
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') { how = 'enter'; inp.blur(); } if (e.key === 'Escape') { how = 'esc'; inp.blur(); } });
 }
 function roPrevEditName(btn, key) {
   const nv = prompt('Name', key.replace(/\s*\?$/, ''));
@@ -274,6 +284,8 @@ function roPrevRename(old, nu, quiet) {
   R.names = R.names.map(n => (n === old ? nu : n));
   R.cells[nu] = R.cells[old]; delete R.cells[old];
   ['groups', 'ids'].forEach(k => { if (R[k] && R[k][old] != null) { R[k][nu] = R[k][old]; delete R[k][old]; } });
+  // the team member this row was matched to: kept when only the "?" goes, dropped when renamed to someone else
+  if (R.keys && R.keys[old] != null) { if (quiet) R.keys[nu] = R.keys[old]; delete R.keys[old]; }
   if (!quiet) roShowPreview(R);
 }
 /** Codes in a roster the app doesn't know yet, with a first guess (from the AI when it read the picture). */
@@ -301,7 +313,7 @@ function roShowPreview(res) {
   res.names.forEach(n => { const g = (res.groups || {})[n] || ''; if (g !== lastG && Object.keys(res.groups || {}).length) { rows.push({ section: g || 'Others' }); lastG = g; } rows.push({ key: n, name: n }); });
   const unsure = res.names.reduce((t, n) => t + Object.values(res.cells[n] || {}).filter(v => /\?/.test(v)).length, 0);
   const words = roUnknownWords(res);
-  const q = s => JSON.stringify(s).replace(/"/g, '&quot;');
+  const q = s => JSON.stringify(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
   box.innerHTML = `<div class="ro-prev-hd"><b>${res.names.length} people · ${res.dates.length} day${res.dates.length === 1 ? '' : 's'}</b> <span>${escapeHtml(roDayLbl(first, true))} → ${escapeHtml(roDayLbl(last, true))}</span>${res.by ? `<span class="ro-tag">${escapeHtml(res.by)}</span>` : ''}</div>
     ${res.notes ? `<div class="ro-ai-note">🤖 ${escapeHtml(res.notes)}</div>` : ''}
     ${unsure ? `<div class="ro-warn">⚠ ${unsure} cell${unsure === 1 ? '' : 's'} could not be read clearly (marked in red). Check them against the picture and type the right value.</div>` : ''}
@@ -520,7 +532,7 @@ function _roWhen(n) {
 // ── Page ──────────────────────────────────────────────────
 function _roTable(rows, dates, get, editable) {
   const today = roToday();
-  const q = s => JSON.stringify(s).replace(/"/g, '&quot;');
+  const q = s => JSON.stringify(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
   const span = dates.length + 1 + (editable === true ? 1 : 0);
   return `<div class="ro-scroll"><table class="ro-table">
     <thead><tr><th class="ro-name">Name</th>${dates.map(d => `<th class="${d === today ? 'ro-today' : ''}">${escapeHtml(roDayLbl(d))}</th>`).join('')}${editable === true ? '<th></th>' : ''}</tr></thead>
@@ -675,7 +687,7 @@ function roRender() {
       ${roEdit ? '<button class="btn sm" onclick="roCopyLastWeek()">⧉ Copy last week</button>' : ''}
       ${pic ? `<button class="btn sm" onclick="riOpen('${pic[0]}')" title="The roster picture management sent">📷 Original picture</button>` : ''}
     </div>
-    ${roGroups().length > 1 ? `<div class="ro-groups">${['', ...roGroups()].map(g => `<button class="fchip${roCurGroup() === g ? ' on' : ''}" onclick="roSetGroup(${JSON.stringify(g || 'all').replace(/"/g, '&quot;')})">${escapeHtml(g || 'All hotels')}</button>`).join('')}</div>` : ''}
+    ${roGroups().length > 1 ? `<div class="ro-groups">${['', ...roGroups()].map(g => `<button class="fchip${roCurGroup() === g ? ' on' : ''}" onclick="roSetGroup(${JSON.stringify(g || 'all').replace(/&/g, '&amp;').replace(/\"/g, '&quot;').replace(/</g, '&lt;')})">${escapeHtml(g || 'All hotels')}</button>`).join('')}</div>` : ''}
     ${rows.length || roEdit ? _roTable(rows, dates, (r, d) => roCode(r.key, d), roEdit) : pic ? `<div class="ro-empty ro-big">Only the picture is posted for this week. <button class="btn sm gold" onclick="riOpen('${pic[0]}')">📷 Open the roster picture</button>${ed ? '<br><small>Set up AI reading and add the picture again to get My shifts and the timeline, or type the shifts with Edit.</small>' : ''}</div>`
       : `<div class="ro-empty ro-big">No roster for this week yet.${ed ? ' Press <b>Add roster</b> to paste it, or <b>Edit</b> → <b>Copy last week</b>.' : ''}</div>`}
     ${roEdit ? `<div class="ro-add"><input id="roNewName" placeholder="Add a person to this week…" onkeydown="if(event.key==='Enter')roAddPerson()"><button class="btn sm" onclick="roAddPerson()">+ Add</button><small>Type a code in each day: M, A, N, OFF, AL, or hours like 07-15.</small></div>` : ''}

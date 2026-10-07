@@ -111,7 +111,7 @@ const _hoTog = (k, label, desc) => `
 const _hoSeg = (k, label, desc, opts) => `
   <div class="hs-row" data-s="${escapeHtml((label + ' ' + desc).toLowerCase())}">
     <span class="hs-txt"><b>${label}</b><small>${desc}</small></span>
-    <span class="hs-seg">${opts.map(([v, t]) => `<button class="${hoPrefs[k] === v ? 'on' : ''}" onclick="hoSetPref('${k}',${JSON.stringify(v).replace(/"/g, '&quot;')});hoSettingsRender()">${t}</button>`).join('')}</span>
+    <span class="hs-seg">${opts.map(([v, t]) => `<button class="${hoPrefs[k] === v ? 'on' : ''}" onclick="hoSetPref('${k}',${JSON.stringify(v).replace(/&/g, '&amp;').replace(/\"/g, '&quot;').replace(/</g, '&lt;')});hoSettingsRender()">${t}</button>`).join('')}</span>
   </div>`;
 const _hoBtn = (label, desc, btn, fn, cls = '') => `
   <div class="hs-row" data-s="${escapeHtml((label + ' ' + desc).toLowerCase())}">

@@ -317,7 +317,7 @@ async function brHealth() {
       if (/^[\[{]/.test(v)) { try { JSON.parse(v); } catch (_) { broken.push(k); } }
     }
   } catch (_) {}
-  if (broken.length) row(false, `${broken.length} saved item${broken.length > 1 ? 's are' : ' is'} damaged on this device`, broken.join(', '), ['Repair', `brRepair(${JSON.stringify(broken).replace(/"/g, '&quot;')})`]);
+  if (broken.length) row(false, `${broken.length} saved item${broken.length > 1 ? 's are' : ' is'} damaged on this device`, broken.join(', '), ['Repair', `brRepair(${JSON.stringify(broken).replace(/&/g, '&amp;').replace(/\"/g, '&quot;').replace(/</g, '&lt;')})`]);
   else row(true, 'Saved data on this device reads fine', `${Math.round(bytes * 2 / 1024)} KB used`);
   if (bytes * 2 > 4.5e6) row(false, 'This device\'s storage is almost full', 'Old local copies can be cleared; the team data stays in Firebase.', ['Free space', 'brFreeSpace()']);
 
