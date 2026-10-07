@@ -1107,3 +1107,11 @@ label.rb-q:first-child { border-color: var(--accent-border); background: color-m
   .ro-mine > .ro-days { align-self: stretch; }
   .ro-mine > .ro-days .ro-day { height: 100%; }
 }
+/* Roster picture options: the app's own field and tick styles */
+.rb-pic-opts { grid-template-columns: auto minmax(0, 1fr) !important; gap: 10px 14px !important; padding: 12px; border-radius: 12px; background: var(--bg2); border: 1px solid var(--border); }
+.rb-pic-opts .rb-chk { display: inline-flex; align-items: center; gap: 8px; font: 600 13px var(--font); color: var(--text); white-space: nowrap; cursor: pointer; }
+.rb-pic-opts input[type=checkbox] { width: 17px; height: 17px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.rb-pic-opts #rbPoT { height: 36px; width: 100%; padding: 0 12px; border-radius: 10px; border: 1px solid var(--border2); background: var(--card); color: var(--text); font: 500 13.5px var(--font); }
+.rb-pic-opts #rbPoT:focus { outline: none; border-color: var(--accent); box-shadow: var(--ho-ring); }
+.rb-pic-opts #rbPoT:disabled { opacity: .45; }
+@media (max-width: 560px) { .rb-pic-opts { grid-template-columns: 1fr !important; } }

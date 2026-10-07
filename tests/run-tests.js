@@ -321,6 +321,15 @@ console.log('\nRoster scenarios');
     check('nights: no rule broken to do it', r.problems.filter(p => p.kind !== 'thin').length, 0);
     check('nights: the plan is written down', (r.notes || []).some(n => /covers the night supervisor's days off/.test(n.text)), true);
   }
+  // 7e. "prefer not": kept off a shift when someone else can do it, still used when it's the only way
+  {
+    const G = { 'Ibis DD': { shifts: [M, E], need: { [M]: day(1), [E]: day(1) } } };
+    const base = { week: W, groups: G, pre: {}, rules: { minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, givePh: false, lend: true }, seed: 1 };
+    const r1 = sb.rbSolve(Object.assign({}, base, { people: [P('A', { soft: [E] }), P('B'), P('C')] }));
+    check('prefer not: kept off it when others can do it', dates.filter(d => r1.cells.A[d] === E).length, 0);
+    const r2 = sb.rbSolve(Object.assign({}, base, { people: [P('A', { soft: [E], offs: 1 }), P('B', { allowed: [M] })] }));
+    check('prefer not: still used when it is the only way to cover', r2.problems.filter(p => p.kind === 'short').length <= 2 && dates.some(d => r2.cells.A[d] === E), true);
+  }
   // 7c. Duty Managers work anywhere; Supervisors too, but only after everyone else
   check('floats: Duty Manager yes, Supervisor last, Agent no', [sb.rbFloats({ title: 'Duty Manager' }), sb.rbFloatsLast({ title: 'Supervisor' }), sb.rbFloats({ title: 'Agent' }) || sb.rbFloatsLast({ title: 'Agent' })].join(), 'true,true,false');
   {
@@ -431,6 +440,8 @@ console.log('\nRoster scenarios');
   check('lock: 🏨 someone who stays at their hotel is never borrowed', lk.homeG, false);
   check('lock: "keep everyone in their own hotel" stops all borrowing', lk.allHome, false);
   const lp = q => { const r = run(`rtLockParse(${JSON.stringify(q)})`); return r ? r.mode + ':' + r.keys.join('') : 'none'; };
+  const sp = q => { const r = run(`rtSoftParse(${JSON.stringify(q)})`); return r ? (r.undo ? 'undo:' : '') + r.keys.join('') + ':' + (r.band || r.shift) : 'none'; };
+  check('brain: prefer-not phrases', [sp('Gina prefers not nights'), sp('try to avoid evenings for Hugo'), sp('Gina can do nights again'), sp('the guest prefers not the 5th floor')].join(' '), 'G:night H:evening undo:G:night none');
   check('brain: lock phrases', [lp('lock Gina in her hotel'), lp('keep Hugo on his shift'), lp('Gina stays at Mercure'), lp('unlock gina'), lp('the guest stays in room 512'), lp('lock Gina in room 4')].join(' '), 'home:G shift:H home:G un:G none none');
   // autocomplete
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'brain-complete.js'), 'utf8'), sb, { filename: 'brain-complete.js' });

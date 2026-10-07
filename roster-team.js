@@ -197,6 +197,7 @@ function rtCoverOptions(I, cells, group, date, shift, opt) {
       text: `Put ${rtName(p.key)}${away ? ' from ' + p.group : ''} on ${shift} ${last === date ? 'on ' + roDayLbl(date) : 'from ' + roDayLbl(date) + ' to ' + roDayLbl(last)}${moved ? `; ${roDayLbl(moved)} becomes their day off` : ''}` });
   });
   opts.forEach(o => { const p = I.people.find(x => x.key === o.key); if (p && o.cells) o.cost += Math.max(0, rtHourChanges(I, o.cells, p) - rtHourChanges(I, cells, p)) * 14; });
+  opts.forEach(o => { const p = I.people.find(x => x.key === o.key); if (p && o.cells && rbSoftNo(I, p, date, shift)) { o.cost += 50; o.text += ' (prefers not this shift)'; } });
   const best = {}; opts.forEach(o => { if (!best[o.key] || best[o.key].cost > o.cost) best[o.key] = o; });
   const list = Object.values(best).sort((a, b) => a.cost - b.cost).slice(0, 6);
   const who = ((G[group] || {}).who || {})[shift];
@@ -711,7 +712,7 @@ function rtPerson(k) {
     </div>
     <div class="rt-cant"><span>Locks:</span><button class="rb-opt${p.lock ? ' on' : ''}" onclick="rtSet(${q},'lockShift',${!p.lock});rtPerson(${q})">${p.lock ? '🔒' : '🔓'} ${p.lock ? 'Keeps ' + escapeHtml(p.fixed || 'their shift') : 'Shift can change'}</button><button class="rb-opt${c.home ? ' on' : ''}" onclick="rtSet(${q},'home',${c.home ? 'undefined' : 'true'});rtPerson(${q})">🏨 ${c.home ? 'Stays at ' + escapeHtml(g || 'their hotel') : 'Can help other hotels'}</button></div>
     <div class="rt-cant"><span>Works:</span><button class="rb-opt ro-t-night" onclick="rtOnly(${q},'night')">🌙 Nights only</button><button class="rb-opt ro-t-morning" onclick="rtOnly(${q},'day')">☀️ Days only</button><button class="rb-opt" onclick="rtOnly(${q},'all')">All shifts</button></div>
-    <div class="rt-cant"><span>Can't work:</span>${shifts.map(x => { const no = (c.allowed && c.allowed.length && !c.allowed.includes(x)); return `<button class="rb-opt ro-t-${(roInfo(x) || {}).type}${no ? ' on' : ''}" onclick="rtToggleCant(${q},${_rtQ(x)})">${no ? '🚫 ' : ''}${escapeHtml(x)}</button>`; }).join('')}</div>
+    <div class="rt-cant"><span>Shifts:</span>${shifts.map(x => { const no = (c.allowed && c.allowed.length && !c.allowed.includes(x)), soft = (c.soft || []).includes(x); return `<button class="rb-opt ro-t-${(roInfo(x) || {}).type}${no ? ' on' : soft ? ' soft' : ''}" onclick="rtToggleShift(${q},${_rtQ(x)})" title="Tap: prefer not → can't work → fine">${no ? '🚫 ' : soft ? '⚠ ' : ''}${escapeHtml(x)}</button>`; }).join('')}<small class="ro-hint">Tap a shift: ⚠ prefer not (only if needed) → 🚫 can't work → fine</small></div>
     <div class="rb-sub">Sick & leave</div>
     <div class="rt-abs">${absences.map(([id, a]) => `<span class="rb-hol">${escapeHtml(a.code)} · ${escapeHtml(roDayLbl(a.from))}${a.to !== a.from ? ' → ' + escapeHtml(roDayLbl(a.to)) : ''}<button class="ro-x" onclick="rtDelAbsence(${q},'${id}')">✕</button></span>`).join('') || '<span class="ro-empty">None.</span>'}</div>
     <div class="rb-inline"><select id="rtAbC">${RT_LEAVE.map(x => `<option>${x}</option>`).join('')}</select><input type="date" id="rtAbF" value="${roToday()}"><input type="date" id="rtAbT" value="${roToday()}"><button class="btn sm gold" onclick="rtAbsentFromSheet(${q})">Add</button></div>
@@ -730,6 +731,13 @@ function rtOnly(k, kind) {
   rtSet(k, 'allowed', kind === 'all' || !list.length ? undefined : list);
   if (kind !== 'all' && (rbPeople[k] || {}).fixed && !list.includes(rbPeople[k].fixed)) rtSet(k, 'fixed', undefined);
   rtPerson(k);
+}
+/** fine → ⚠ prefer not (used only when needed) → 🚫 can't work → fine */
+function rtToggleShift(k, s) {
+  const c = rbPeople[k] || {}, soft = (c.soft || []).slice(), cant = c.allowed && c.allowed.length && !c.allowed.includes(s);
+  if (cant) { rtToggleCant(k, s, true); return; }                              // can't → fine
+  if (soft.includes(s)) { rtSet(k, 'soft', soft.filter(x => x !== s).length ? soft.filter(x => x !== s) : undefined); rtToggleCant(k, s); return; }   // prefer not → can't
+  rtSet(k, 'soft', soft.concat([s])); rtPerson(k);                               // fine → prefer not
 }
 function rtToggleCant(k, s) {
   const g = (roStaff[k] || {}).group || '', all = rbGroupCfg(g).shifts, c = rbPeople[k] || {};
@@ -921,6 +929,21 @@ function rtFind(text) {
 function rtNamesOk(s) { const parts = String(s || '').split(/\s*(?:,|\bor\b|\band\b|&|\/)\s*/i).filter(Boolean); return parts.length > 0 && parts.every(x => !!rtFind(x)); }
 /** A command pattern that only matches when the names it captures are staff: guests' and rooms' questions go to the rest of Ops Brain. */
 function rtNamed(re, pick) { return { test: q => { const m = String(q).trim().match(re); return !!m && pick(m).filter(x => x != null).every(rtNamesOk); }, source: re.source }; }
+/** "Manisha prefers not nights", "try to avoid nights for Manisha", "avoid 19-04 for Ahmed", "Manisha can do nights again" */
+function rtSoftParse(q) {
+  q = String(q || '').trim();
+  const SH = '(mornings?|days?|day shifts?|evenings?|afternoons?|nights?|\\d{1,2}[:.]?\\d{0,2}\\s*(?:-|–|to)\\s*\\d{1,2}[:.]?\\d{0,2})';
+  let m = q.match(new RegExp('^(.+?)\\s+(?:prefers? not(?: to (?:do|work))?|would rather not(?: do| work)?|doesn\'?t like|does not like|should avoid|tries to avoid)\\s+(?:the\\s+)?' + SH + '(?:\\s+shifts?)?$', 'i')), who, sh, undo = false;
+  if (m) { who = m[1]; sh = m[2]; }
+  else if ((m = q.match(new RegExp('^(?:try to\\s+)?avoid\\s+(?:the\\s+)?' + SH + '(?:\\s+shifts?)?\\s+for\\s+(.+)$', 'i')))) { sh = m[1]; who = m[2]; }
+  else if ((m = q.match(new RegExp('^(.+?)\\s+(?:can do|is fine (?:with|on)|is ok (?:with|on))\\s+(?:the\\s+)?' + SH + '(?:\\s+shifts?)?(?:\\s+again)?$', 'i')))) { who = m[1]; sh = m[2]; undo = true; }
+  else return null;
+  const keys = who.split(/\s*(?:,|\band\b|&|\/)\s*/i).filter(Boolean).map(rtFind);
+  if (!keys.length || keys.some(k => !k || Array.isArray(k))) return null;
+  const t = sh.toLowerCase().replace(/s$/, '').replace(/ shift$/, '');
+  const band = /^morning/.test(t) ? 'morning' : /^day/.test(t) ? 'day' : /^(evening|afternoon)/.test(t) ? 'evening' : /^night/.test(t) ? 'night' : '';
+  return { keys, band, shift: band ? '' : rbNorm(sh), undo };
+}
 /** Words people use for a title → the title in the app. */
 /** "lock Ayoub in Adagio", "keep Saad on his shift", "Ali stays at his hotel", "unlock Ayoub": only with real names and a hotel. */
 function rtLockParse(q) {
@@ -1001,6 +1024,15 @@ function _rtPlanCmd(q) {
   return true;
 }
 const RT_COMMANDS = [
+  { re: { test: q => !!rtSoftParse(q) }, ex: 'Lina prefers not nights', does: '⚠ kept off those shifts unless they are the only way to cover', run: q => {
+      const L = rtSoftParse(q); if (!L) return false;
+      if (!roCanEdit()) { _rtOut('<div class="br-title">Only supervisors, managers and owners can change this.</div>'); return true; }
+      const done = [];
+      L.keys.forEach(k => { const sh = rbGroupCfg((roStaff[k] || {}).group || '').shifts.filter(x => L.band ? rbBandShifts([x], L.band).length : rbNorm(x) === L.shift); const c = rbPeople[k] || {}; const cur = c.soft || [];
+        const next = L.undo ? cur.filter(x => !sh.includes(x)) : [...new Set(cur.concat(sh))]; rbSetPerson(k, 'soft', next.length ? next : undefined); done.push(`${rtName(k)}: ${sh.join(', ') || 'no such shift'}`); });
+      if (document.getElementById('panel-roster-build')?.classList.contains('active')) rbRender();
+      _rtOut(`<div class="br-kind">⚠ Team</div><div class="br-title">${L.undo ? 'Fine again' : 'Prefers not'}: ${done.map(escapeHtml).join(' · ')}</div><div class="br-body">${L.undo ? 'The builder uses them on those shifts like anyone else.' : 'The builder keeps them off these shifts, and only uses them there when it is the only way to cover (it then says so under Decisions this week).'} Change it on their card in 🧑‍💼 Team.</div>`);
+      return true; } },
   { re: { test: q => /^(?:add|new)\s+(?:a\s+)?(?:new\s+)?(?:staff|member|person|employee|joiner|agent)(?:\s+member)?\b/i.test(q) || (/^([a-z][a-z'-]+(?:\s+[a-z][a-z'-]+){0,3})\s+(?:is\s+)?(?:joining|joins)\b/i.test(q) && !RT_NOT_STAFF.test(q) && !/^(?:the|a|an|our|my|breakfast|lunch|dinner|check|group|event|meeting|conference)\b/i.test(q)) }, ex: 'add new staff Maria Santos to Ibis from Monday', does: 'opens the new staff form, filled in', run: q => {
       let m = q.match(/^(?:add|new)\s+(?:a\s+)?(?:new\s+)?(?:staff|member|person|employee|joiner|agent)(?:\s+member)?\b(.*)$/i), rest, name = '';
       if (m) rest = m[1] || ''; else { m = q.match(/^(.+?)\s+(?:is\s+)?(?:joining|joins)\b(.*)$/i); name = m[1]; rest = m[2] || ''; if (rtFind(name)) return false; }

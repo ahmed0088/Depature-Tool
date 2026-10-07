@@ -109,6 +109,9 @@ function rbSwitchOk(prev, next, R) {
   if (day(prev) || day(next)) return false;
   return !!(R && R.eveNight);
 }
+/** "Prefer not" a shift (on their card, or asked for that week): kept off it when there is another way. */
+function rbSoftNo(I, p, dt, s) { const c = rbNorm(s) || s; return ((p && p.soft) || []).includes(c) || ((((I.soft || {})[p && p.key] || {})[dt]) || []).includes(c); }
+const RB_SOFT_W = 80;   // above steady-hours costs, far below an empty shift: used when it's the only way
 /** The real night: starts around midnight or ends in the morning (00:00 - 09:00), not a late evening (19:00 - 04:00). */
 function rbDeepNight(code) { const x = rbParse(code); return !!x && x.type === 'night' && (x.s < 120 || x.e >= 1440 + 360); }
 /** Who may work a shift: the titles set for it (e.g. nights: Supervisor, Duty Manager), else everyone. */
@@ -436,8 +439,9 @@ function rbMatchDay(I, g, cells, dates, d, R, rnd) {
     if (!rbSwitchOk(pv, s, R) || !rbSwitchOk(s, nx, R)) return BAD;
     if (!rbMayWork(I, g, p, s)) return BAD;
     if (p.lock && p.fixed && G.shifts.includes(p.fixed) && s !== p.fixed) return BAD;   // 🔒 always their own shift
+    const soft = rbSoftNo(I, p, dt, s) ? RB_SOFT_W : 0;
     if ((rbParse(s) || {}).e - (rbParse(s) || {}).s > (R.maxHours || 9) * 60) return BAD;
-    let c = 0;
+    let c = soft;
     if (I.keep && I.keep[p.key] && I.keep[p.key][dt] !== undefined) c += rbNorm(I.keep[p.key][dt]) === s ? -6 : 10;   // change as little as possible
     if (p.fixed) c += s === p.fixed ? -8 : (p.fixedCost || 30);
     if (p.lastMain && p.mode === 'rotate' && s === p.lastMain) c += 6;   // rotates: a different shift from last week
@@ -488,6 +492,7 @@ function rbScore(I, g, cells, dates, R) {
         if (p.lastMain && p.mode === 'rotate' && rbNorm(v) === p.lastMain) sc += 6;
         if (rbParse(v).e - rbParse(v).s > (R.maxHours || 9) * 60) sc += 3000;
         if (p.allowed && p.allowed.length && !p.allowed.includes(v)) sc += 800;
+        if (rbSoftNo(I, p, dt, v)) sc += RB_SOFT_W;   // prefers not: only when it's the way to cover
         if ((((I.avoid || {})[p.key] || {})[dt] || []).includes(v)) sc += 800;
         if (prev && rbParse(prev) && rbNorm(prev) !== rbNorm(v)) sc += rbChangeCost(prev, v, d === 0) + 15;   // a change of shift in a run of working days
         if (p.usual && v === p.usual) sc -= 1;
@@ -742,13 +747,13 @@ function rbPersonCfg(k) {
     fixed, fixedLearned: !c.fixed && !!fixed,
     fixedCost: mgr ? 400 : /supervisor|leader|duty/i.test(c.title || '') ? 60 : 30,   // managers move only to stop a shift being empty
     lastMain: L.lastMain,
-    usual: L.usual, allowed: c.allowed || null, prefOff: c.prefOff || [],
+    usual: L.usual, allowed: c.allowed || null, soft: c.soft || [], prefOff: c.prefOff || [],
     lastShift: L.lastShift, run: L.run, lastOffs: L.lastOffs, lastWeekendOff: L.lastWeekendOff,
   };
 }
 /** Requests for the week → cells fixed before building, and shifts to avoid. */
 function rbPre() {
-  const pre = {}, avoid = {}, dates = Array.from({ length: 7 }, (_, d) => roAdd(rbWeek, d));
+  const pre = {}, avoid = {}, soft = {}, dates = Array.from({ length: 7 }, (_, d) => roAdd(rbWeek, d));
   // before someone joins or after they leave: not on the roster
   Object.keys(roStaff).forEach(k => {
     const c = rbPeople[k] || {};
@@ -762,6 +767,7 @@ function rbPre() {
     if (!r || !r.key) return;
     dates.filter(dt => dt >= r.from && dt <= (r.to || r.from)).forEach(dt => {
       if (r.type === 'avoid') { ((avoid[r.key] = avoid[r.key] || {})[dt] = (avoid[r.key][dt] || [])).push(r.code); return; }
+      if (r.type === 'soft') { ((soft[r.key] = soft[r.key] || {})[dt] = (soft[r.key][dt] || [])).push(r.code); return; }
       if (r.type === 'band') {
         const sh = rbGroupCfg(rbPGroup(r.key)).shifts, ok = rbBandShifts(sh, r.code);
         if (ok.length) { (avoid[r.key] = avoid[r.key] || {})[dt] = (avoid[r.key][dt] || []).concat(sh.filter(x => !ok.includes(x))); }
@@ -771,7 +777,7 @@ function rbPre() {
       (pre[r.key] = pre[r.key] || {})[dt] = v;
     });
   });
-  return { pre, avoid };
+  return { pre, avoid, soft };
 }
 /** Who may work each shift: as set, else the night shift (00:00 start) for Supervisors and Duty Managers,
  *  once anyone in the cluster has one of those titles. */
@@ -789,8 +795,8 @@ function rbInput(seed) {
     rbMembers(g).forEach(k => { const p = rbPersonCfg(k); const ph = rbPhOwed(k); p.phOwed = ph.owed; p.phLabel = ph.label; people.push(p); });
     rbPostGroups(g).forEach(gp => { const c2 = rbGroupCfg(gp); groups[gp] = { shifts: c2.shifts, need: c2.need, who: rbWho(gp, c2), post: gp.slice(g.length + 3) }; });
   });
-  const { pre, avoid } = rbPre();
-  return { week: rbWeek, groups, people, pre, avoid, rules: rbRules(), seed: seed || 1 };
+  const { pre, avoid, soft } = rbPre();
+  return { week: rbWeek, groups, people, pre, avoid, soft, rules: rbRules(), seed: seed || 1 };
 }
 
 // ── Building ──────────────────────────────────────────────
@@ -861,7 +867,7 @@ function rbRender() {
         <div class="rb-req-add">
           <select id="rbRqP">${shown.map(g => `<optgroup label="${escapeHtml(g || 'Team')}">${rbMembers(g).map(k => `<option value="${escapeHtml(k)}">${escapeHtml(roStaff[k].name)}</option>`).join('')}</optgroup>`).join('')}</select>
           <select id="rbRqT" onchange="rbReqTypeChange()">
-            <option value="off">Day off request</option><option value="leave">Leave (AL, ALA, SL…)</option><option value="ph">PH day (in lieu)</option><option value="band">Shift type (morning, day, evening, night)</option><option value="shift">Must work a shift</option><option value="avoid">Can't work a shift</option>
+            <option value="off">Day off request</option><option value="leave">Leave (AL, ALA, SL…)</option><option value="ph">PH day (in lieu)</option><option value="band">Shift type (morning, day, evening, night)</option><option value="shift">Must work a shift</option><option value="soft">Prefer not a shift (only if needed)</option><option value="avoid">Can't work a shift</option>
           </select>
           <span id="rbRqC"></span>
           <label>From <input type="date" id="rbRqF" value="${dates[0]}" min="${dates[0]}" max="${dates[6]}"></label>
@@ -1013,19 +1019,21 @@ function rbDelNote(i) { const D = rbDrafts[rbWeek]; if (!D || !D.notes) return; 
 function rbDecisionsHtml(I, cells, shown, dates) {
   const D = rbDrafts[rbWeek] || {}, notes = D.notes || [], moved = [];
   I.people.forEach(p => dates.forEach(dt => { const v = (cells[p.key] || {})[dt], x = rbParse(v); if (!x || !x.note) return; const at = rbBaseGroup(rbAt(I, p, x)), home = rbBaseGroup(p.group); if (at !== home && (shown.includes(at) || shown.includes(home))) moved.push({ p, dt, at, home, sh: rbNorm(v) }); }));
-  if (!notes.length && !moved.length) return '';
+  const soft = []; I.people.forEach(p => dates.forEach(dt => { const v = (cells[p.key] || {})[dt]; if (rbParse(v) && rbSoftNo(I, p, dt, v) && shown.includes(rbBaseGroup(p.group))) soft.push({ p, dt, sh: rbNorm(v) }); }));
+  if (!notes.length && !moved.length && !soft.length) return '';
   const fn = k => escapeHtml(((roStaff[k] || {}).name || k).split(' ')[0]);
   const named = p => notes.some(n => new RegExp('\\b' + ((roStaff[p.key] || {}).name || '').split(' ')[0] + '\\b').test(n.text || ''));
   const why = p => named(p) ? 'part of the decision above' : rbFloats(p) ? 'Duty Manager: works wherever needed' : rbFloatsLast(p) ? 'Supervisor from another hotel: only because nobody else could' : I.rules.lend === false ? '' : 'spare at their own hotel that day';
   return `<div class="rb-decide"><div class="rb-sub">📝 Decisions this week <small>so you know what was done, and why</small></div>
     ${notes.map((n, i) => `<div class="rb-dec warn"><span>⚠ ${escapeHtml(n.text)}${n.by ? ` <i>· ${escapeHtml(n.by)}</i>` : ''}</span><button class="ro-x" title="Remove this note" onclick="rbDelNote(${i})">✕</button></div>`).join('')}
+    ${soft.map(m => `<div class="rb-dec"><span>🙏 <b>${fn(m.p.key)}</b> works ${escapeHtml(m.sh)} on ${escapeHtml(roDayLbl(m.dt))}, a shift they prefer not to: needed to cover it</span></div>`).join('')}
     ${moved.map(m => `<div class="rb-dec"><span>🏨 <b>${fn(m.p.key)}</b> (${escapeHtml(m.home)}) works ${escapeHtml(m.sh)} at <b>${escapeHtml(m.at)}</b> on ${escapeHtml(roDayLbl(m.dt))}${why(m.p) ? ': ' + escapeHtml(why(m.p)) : ''}</span></div>`).join('')}
   </div>`;
 }
 
 function rbReqText(r) {
   const d = r.from === (r.to || r.from) ? roDayLbl(r.from) : `${roDayLbl(r.from)} → ${roDayLbl(r.to)}`;
-  return `${r.type === 'off' ? 'Day off' : r.type === 'leave' ? (r.code || 'Leave') : r.type === 'ph' ? 'PH' + (r.code ? ' (' + r.code + ')' : '') : r.type === 'shift' ? 'Works ' + r.code : r.type === 'band' ? rbBandLabel(r.code) + ' shifts' : 'Not ' + r.code} · ${d}`;
+  return `${r.type === 'off' ? 'Day off' : r.type === 'leave' ? (r.code || 'Leave') : r.type === 'ph' ? 'PH' + (r.code ? ' (' + r.code + ')' : '') : r.type === 'shift' ? 'Works ' + r.code : r.type === 'soft' ? 'Prefers not ' + r.code : r.type === 'band' ? rbBandLabel(r.code) + ' shifts' : 'Not ' + r.code} · ${d}`;
 }
 function rbReqTypeChange() {
   const t = document.getElementById('rbRqT')?.value, box = document.getElementById('rbRqC');
@@ -1035,7 +1043,7 @@ function rbReqTypeChange() {
   const leave = Object.entries(roAllCodes()).filter(([, v]) => v.type === 'leave' && !/^PH$/.test('')).map(([c]) => c).filter(c => c !== 'PH');
   box.innerHTML = t === 'leave' ? `<select id="rbRqCode">${leave.map(c => `<option${c === 'AL' ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}</select>`
     : t === 'band' ? `<select id="rbRqCode">${Object.keys(RB_BANDS).map(b => `<option value="${b}">${escapeHtml(RB_BANDS[b].label)}</option>`).join('')}</select>`
-    : t === 'shift' || t === 'avoid' ? `<select id="rbRqCode">${shifts.map(s => `<option>${escapeHtml(s)}</option>`).join('')}</select>`
+    : t === 'shift' || t === 'avoid' || t === 'soft' ? `<select id="rbRqCode">${shifts.map(s => `<option>${escapeHtml(s)}</option>`).join('')}</select>`
     : t === 'ph' ? `<input id="rbRqCode" placeholder="for (e.g. 28th Aug.)" value="${escapeHtml(rbPhOwed(k).label)}">` : '';
 }
 function rbAddReq() {

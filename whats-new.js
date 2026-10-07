@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 168, items: [
+    '⚠ "Prefer not" a shift: on someone\'s card tap a shift once for ⚠ prefer not (they\'re kept off it unless it\'s the only way to cover), twice for 🚫 can\'t work. Also a request for one week ("Prefer not a shift"), or tell Ops Brain "Manisha prefers not nights" / "Manisha can do nights again". When it has to be used, it\'s listed under Decisions this week.',
+    '🖼 The roster picture options look like the rest of the app.',
+  ] },
   { v: 167, items: [
     '🗓️ Roster page: no more empty space. "My shifts" is one row on a computer (on shift now, then your next 7 days) and "Today" runs full width under it, with a wider timeline.',
   ] },
