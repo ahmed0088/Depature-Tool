@@ -344,16 +344,27 @@ function _roOcrSim(a, b) {
 function _roOcrName(raw) {
   let s = String(raw || '').replace(/[|\[\]{}_]/g, ' ').replace(/\s+/g, ' ').trim(), id = '';
   // the employee number in front; letters a picture often mixes up with digits are read as those digits
-  const m = s.match(/^\s*([0-9OoDIlSB%]{3,}[0-9%]*)\s*[-–.:]?\s+(.*)$/) || s.match(/^\s*([0-9OoDIlSB%]*\d[0-9OoDIlSB%]*)\s*[-–.:]\s*(.*)$/);
-  if (m && /\d/.test(m[1])) { id = m[1].replace(/[OoD]/g, '0').replace(/[Il]/g, '1').replace(/S/g, '5').replace(/B/g, '8'); s = m[2].trim(); }
+  const m = s.match(/^\s*([0-9OoDIlSB%]{3,}[0-9%]*)\s*[-–.:]?\s+(.*)$/) || s.match(/^\s*([0-9OoDIlSB%]*\d[0-9OoDIlSB%]*)\s*[-–.:]\s*(.*)$/)
+    || s.match(/^\s*([A-Z0-9%]{0,2}[0-9OoDIlSB%]{3,})\s*[-–.:]?\s+(.*)$/);   // "W0I012 - …": a photo turns a 0 into a letter
+  if (m && /\d/.test(m[1])) { id = m[1].replace(/[OoD]/g, '0').replace(/[Il]/g, '1').replace(/S/g, '5').replace(/B/g, '8').replace(/[^0-9]/g, ''); s = m[2].trim(); }
   s = s.replace(/^[^A-Za-z]+/, '').replace(/[^A-Za-z.')\s-]+$/, '').trim();
-  const known = Object.values(typeof roStaff !== 'undefined' ? roStaff : {});
-  const byId = id && known.find(k => k.id && String(k.id).replace(/^0+/, '') === id.replace(/^0+/, ''));
-  if (byId && _roOcrSim(byId.name, s) >= 0.4) return { id, name: byId.name, sure: true };
-  let best = null, bs = 0, second = 0;
-  known.forEach(k => { const v = _roOcrSim(k.name, s); if (v > bs) { second = bs; bs = v; best = k; } else if (v > second) second = v; });
-  if (best && (bs >= 0.8 || (bs >= 0.66 && bs - second >= 0.2))) return { id: best.id || id, name: best.name, sure: bs >= 0.8 };
+  const known = Object.values(typeof roStaff !== 'undefined' ? roStaff : {}).filter(k => k && k.name);
+  const bare = v => String(v || '').replace(/\D/g, '').replace(/^0+/, '');
+  const byId = id && known.find(k => k.id && bare(k.id) === bare(id));
+  if (byId && _roOcrSim(byId.name, s) >= 0.25) return { id: byId.id || id, name: byId.name, sure: _roOcrSim(byId.name, s) >= 0.4, known: byId };
+  // the name and the number together: a blurred name with most of its number right is still that person
+  const idSim = k => { const a = bare(id), b = bare(k.id); if (!a || !b) return 0; let same = 0; for (let i = 1; i <= Math.min(a.length, b.length); i++) if (a[a.length - i] === b[b.length - i]) same++; return same / Math.max(a.length, b.length); };
+  let best = null, bs = 0, second = 0, bn = 0;
+  known.forEach(k => { const n = _roOcrSim(k.name, s), v = n + 0.35 * idSim(k); if (v > bs) { second = bs; bs = v; best = k; bn = n; } else if (v > second) second = v; });
+  if (best && (bn >= 0.8 || (bn >= 0.66 && bs - second >= 0.2))) return { id: best.id || id, name: best.name, sure: bn >= 0.8, known: best };
+  if (best && bn >= 0.4 && bs >= 0.6 && bs - second >= 0.15) return { id: best.id || id, name: best.name, sure: false, known: best };   // likely: marked to check
   return { id, name: s, sure: s.length >= 3 && /[aeiou]/i.test(s) };
+}
+/** The team's hotels, and the one a misread title most likely is ("Mercure 0D" → Mercure DD). */
+function _roOcrGroups() { return [...new Set(Object.values(typeof roStaff !== 'undefined' ? roStaff : {}).map(k => k && k.group).filter(Boolean))]; }
+function _roOcrKnownGroup(t) {
+  let best = '', bs = 0; _roOcrGroups().forEach(g => { const v = _roOcrSim(g, t); if (v > bs) { bs = v; best = g; } });
+  return bs >= 0.55 ? best : '';
 }
 function _roOcrGroupName(t) {
   const s = String(t || '').replace(/[|\[\]{}_]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -408,12 +419,13 @@ async function roOcrRead(im, hint, onStep) {
       const top = await read(wf, cols[0].l, 0, cols[0].r, G.hr[0][0]);
       await wf.setParameters({ tessedit_pageseg_mode: '7' });
       group = top.split('\n').map(_roOcrGroupName).find(Boolean) || '';
+      group = _roOcrKnownGroup(group) || group;
     }
     step(++done, total, 'Reading the table…');
     const people = [], heads = [];
     let seenPerson = false;
     for (const ln of lines) {
-      if (ln.bar) { const t = _roOcrGroupName(await read(wf, cols[0].l, ln.top - 2, Math.max(cols[0].r, cols[1] ? cols[1].r : cols[0].r), ln.bot + 2)); if (t) group = t; step(++done, total); continue; }
+      if (ln.bar) { const t = _roOcrGroupName(await read(wf, cols[0].l, ln.top - 2, Math.max(cols[0].r, cols[1] ? cols[1].r : cols[0].r), ln.bot + 2)); if (t) group = _roOcrKnownGroup(t) || t; step(++done, total); continue; }
       const nameRaw = await read(wf, cols[0].l, ln.top, cols[0].r, ln.bot);
       step(++done, total);
       const day = [];
@@ -430,9 +442,17 @@ async function roOcrRead(im, hint, onStep) {
         for (let c = 1; c < cols.length; c++) { const cr = _roOcrCrop(P, cols[c].l + pad, ln.top + pad, cols[c].r - pad, ln.bot - pad); day.push(await _roOcrCell(wd, wf, cr)); step(++done, total); }
       }
       const nm = _roOcrName(nameRaw);
-      if (!nm.name || !/[a-z]{2,}/i.test(nm.name) || !day.some(Boolean)) { const gName = _roOcrGroupName(nameRaw); if (gName && !day.some(Boolean)) group = gName; continue; }
+      if (!nm.name || !/[a-z]{2,}/i.test(nm.name) || !day.some(Boolean)) { const gName = _roOcrGroupName(nameRaw); if (gName && !day.some(Boolean)) group = _roOcrKnownGroup(gName) || gName; continue; }
+      if (!nm.known && _roOcrGroups().length && Object.keys(roStaff).length >= 3) {
+        // not someone in the team: a hotel's title bar read as a row, or nothing at all
+        const kg = !/\d{3}/.test(nameRaw) && _roOcrKnownGroup(nameRaw);
+        if (kg && !day.some(v => _roOcrTime(v) && !/\?$/.test(v))) { group = kg; continue; }
+        if (!day.some(v => v && !/\?$/.test(v))) continue;   // every cell a guess: a junk row, not a person
+      }
       seenPerson = true;
-      people.push({ nm, day, group });
+      // the hotel: the title read above the row when it is one of the team's hotels, else the hotel this person works at
+      const g = (group && (_roOcrKnownGroup(group) || (!_roOcrGroups().length && group))) || (nm.known && nm.known.group) || group;
+      people.push({ nm, day, group: g });
     }
     let dates = null;
     for (const h of heads) { dates = _roOcrDates(h, hint); if (dates) break; }
@@ -452,7 +472,9 @@ function _roOcrFix(people) {
   people.forEach(p => p.day.forEach(v => { if (!v || v === '?') return; const x = split(v); if (x.t) { tCnt[x.t] = (tCnt[x.t] || 0) + 1; const d = dur(x.t); durCnt[d] = (durCnt[d] || 0) + 1; } else wCnt[x.w.toUpperCase()] = (wCnt[x.w.toUpperCase()] || 0) + 1; }));
   const commonT = Object.keys(tCnt).filter(k => tCnt[k] >= 3), commonW = Object.keys(wCnt).filter(k => wCnt[k] >= 2);
   const nT = Object.values(durCnt).reduce((a, b) => a + b, 0);
-  const usualDur = new Set(Object.keys(durCnt).filter(d => durCnt[d] >= 3 && durCnt[d] >= nT * 0.15).map(Number));
+  // in a photo one person's row can be misread the same way all week, so a usual length is one several people work
+  const durWho = {}; people.forEach((p, i) => p.day.forEach(v => { const x = v && v !== '?' && split(v); const d = x && x.t && dur(x.t); if (d) (durWho[d] = durWho[d] || new Set()).add(i); }));
+  const usualDur = new Set(Object.keys(durCnt).filter(d => durCnt[d] >= 3 && durCnt[d] >= nT * 0.15 && (!_roOcrStrict || durWho[d].size >= 3)).map(Number));
   const lev = (a, b) => { const d = Array.from({ length: a.length + 1 }, (_, i) => [i]); for (let j = 1; j <= b.length; j++) d[0][j] = j; for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return d[a.length][b.length]; };
   const known = Object.keys(roAllCodes());
   people.forEach(p => { p.day = p.day.map(v => {

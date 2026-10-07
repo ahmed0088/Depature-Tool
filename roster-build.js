@@ -820,11 +820,47 @@ function _rbBuildNow() {
   showToast(short ? `Roster built: ${short} gap${short === 1 ? '' : 's'} in cover to look at` : bent ? `Roster built: every shift is covered. ${bent} shift${bent === 1 ? '' : 's'} needed a rule bent the way past rosters did; see "Decisions this week"` : 'Roster built: every shift is covered', short || bent ? 'warn' : 'ok');
   setTimeout(() => document.getElementById('rbOut')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
 }
-const _rbSaving = {};
+// Saving a draft sends only what changed since it was last seen from the server (cell by cell), so two
+// people editing the same week at once keep each other's changes; only the very same cell is "last one wins".
+const _rbSaving = {}, _rbBase = {};
+const _rbClone = v => (v == null ? null : JSON.parse(JSON.stringify(v)));
+/** What changed from base to cur, as paths: { 'cells/KEY/2026-10-12': '09:00 - 18:00', 'notes': [...] }. */
+function rbDraftDiff(base, cur) {
+  const up = {}, bc = (base && base.cells) || {}, cc = (cur && cur.cells) || {};
+  new Set([...Object.keys(bc), ...Object.keys(cc)]).forEach(k => {
+    if (!cc[k]) { if (bc[k]) up['cells/' + k] = null; return; }
+    const b = bc[k] || {}, c = cc[k];
+    new Set([...Object.keys(b), ...Object.keys(c)]).forEach(d => { if ((b[d] ?? null) !== (c[d] ?? null)) up[`cells/${k}/${d}`] = c[d] ?? null; });
+  });
+  new Set([...Object.keys(base || {}), ...Object.keys(cur || {})]).forEach(f => {
+    if (f !== 'cells' && JSON.stringify((base || {})[f] ?? null) !== JSON.stringify((cur || {})[f] ?? null)) up[f] = (cur || {})[f] ?? null;
+  });
+  return up;
+}
+/** Send week w's draft now. */
+function rbPutDraft(w) {
+  const cur = rbDrafts[w] || null, base = _rbBase[w];
+  if (!cur || !base) fbSet('roster/builder/drafts/' + w, cur);
+  else fbUpdate('roster/builder/drafts/' + w, rbDraftDiff(base, cur));
+  _rbBase[w] = _rbClone(cur);
+}
 function rbSaveDraft() {
   const w = rbWeek;   // the week edited, even if another week is open when the save runs
   clearTimeout(_rbSaving[w]);
-  _rbSaving[w] = setTimeout(() => { delete _rbSaving[w]; fbSet('roster/builder/drafts/' + w, rbDrafts[w] || null); }, 400);
+  _rbSaving[w] = setTimeout(() => { delete _rbSaving[w]; rbPutDraft(w); }, 400);
+}
+/** Drafts from the server: a week with an edit still waiting to be sent keeps that edit on top of the new version. */
+function rbDraftsIn(v) {
+  v = v || {};
+  const server = _rbClone(v);
+  Object.keys(_rbSaving).forEach(w => {
+    const mine = rbDraftDiff(_rbBase[w], rbDrafts[w]);
+    if (rbDrafts[w] && Object.keys(mine).length) v[w] = fbApplyPatch(v[w], mine);
+  });
+  // what the server has is the base now, so the next save sends only this person's own changes
+  Object.keys(_rbBase).forEach(w => delete _rbBase[w]);
+  Object.keys(server).forEach(w => { _rbBase[w] = server[w]; });
+  rbDrafts = v;
 }
 
 // ── Screen ────────────────────────────────────────────────
@@ -990,7 +1026,7 @@ function rbLoadPublished(week, quiet) {
   Object.keys(cells).forEach(k => { if (!Object.keys(cells[k]).length && !rbActive(k, week)) delete cells[k]; });
   rbDrafts[week] = { cells, at: Date.now(), by: (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '', fromPublished: true };
   rbWeek = week;
-  fbSet('roster/builder/drafts/' + week, rbDrafts[week]);
+  rbPutDraft(week);
   rbRender();
 }
 // ↶ undo for changes made in the draft
@@ -1102,7 +1138,7 @@ function rbEditShift(g, s) {
   c.shifts = c.shifts.map(y => (y === s ? n : y)).sort((a, b) => rbMin(a) - rbMin(b)); c.need[n] = c.need[s]; delete c.need[s];
   _rbSetGroup(g, c);
   Object.keys(rbPeople).forEach(k => { const p = rbPeople[k]; if (!p || ((roStaff[k] || {}).group || '') !== g) return; let ch = false; if (p.fixed === s) { p.fixed = n; ch = true; } if (p.allowed && p.allowed.includes(s)) { p.allowed = p.allowed.map(y => (y === s ? n : y)); ch = true; } if (ch) fbSet('roster/builder/people/' + k, p); });
-  Object.keys(rbDrafts).filter(w => w >= roMonday(new Date())).forEach(w => { const D = rbDrafts[w]; let ch = false; Object.keys(D.cells || {}).forEach(k => { if (((roStaff[k] || {}).group || '') !== g) return; Object.keys(D.cells[k]).forEach(dt => { const cur = D.cells[k][dt]; if (rbNorm(cur) === s) { D.cells[k][dt] = n + (rbParse(cur).note ? ' - ' + rbParse(cur).note : ''); ch = true; } }); }); if (ch) fbSet('roster/builder/drafts/' + w, D); });
+  Object.keys(rbDrafts).filter(w => w >= roMonday(new Date())).forEach(w => { const D = rbDrafts[w]; let ch = false; Object.keys(D.cells || {}).forEach(k => { if (((roStaff[k] || {}).group || '') !== g) return; Object.keys(D.cells[k]).forEach(dt => { const cur = D.cells[k][dt]; if (rbNorm(cur) === s) { D.cells[k][dt] = n + (rbParse(cur).note ? ' - ' + rbParse(cur).note : ''); ch = true; } }); }); if (ch) rbPutDraft(w); });
   rbRender();
   showToast(`${s} is now ${n}`, 'ok');
 }
@@ -1424,7 +1460,7 @@ function rbRefreshOut() {
   o.innerHTML = rbOutHtml(shown, Array.from({ length: 7 }, (_, d) => roAdd(rbWeek, d)));
   const sp = document.getElementById('rbSteps'); if (sp) sp.innerHTML = rbStepsHtml();
 }
-function rbClearDraft() { if (!confirm('Discard this draft?')) return; delete rbDrafts[rbWeek]; fbSet('roster/builder/drafts/' + rbWeek, null); rbRender(); }
+function rbClearDraft() { if (!confirm('Discard this draft?')) return; clearTimeout(_rbSaving[rbWeek]); delete _rbSaving[rbWeek]; delete rbDrafts[rbWeek]; rbPutDraft(rbWeek); rbRender(); }
 
 /** Tap a cell: pick a shift, OFF, leave or PH. */
 function rbPick(td, k, dt) {
@@ -1498,7 +1534,7 @@ async function rbPublish() {
     // a posted week: write only what changed and tell those people
     if (!changes.length) { showToast('No changes to publish', 'warn'); return; }
     rtApplyPublished(rbWeek, rbDrafts[rbWeek].cells, 'roster updated');
-    const D = rbDrafts[rbWeek]; D.fromPublished = true; fbSet('roster/builder/drafts/' + rbWeek, D);
+    const D = rbDrafts[rbWeek]; D.fromPublished = true; rbPutDraft(rbWeek);
     showToast(`${changes.length} change${changes.length === 1 ? '' : 's'} published; the people concerned are told`, 'ok');
     rbRender(); return;
   }
@@ -1598,7 +1634,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fbListen('roster/builder/settings', v => { rbSettings = v || {}; re(); });
     fbListen('roster/builder/people', v => { rbPeople = v || {}; re(); });
     fbListen('roster/builder/requests', v => { rbReqs = v || {}; re(); });
-    fbListen('roster/builder/drafts', v => { rbDrafts = v || {}; re(); });
+    fbListen('roster/builder/drafts', v => { rbDraftsIn(v); re(); });
   }, 1600);
   if (typeof BA_COMMANDS !== 'undefined') BA_COMMANDS.unshift({ re: /^(build|make|create|plan|do)\s+(the\s+|a\s+|next\s+week'?s?\s+|the\s+next\s+)*(roster|rota|schedule)\b/i, ask: true, ex: 'build the roster', does: 'opens the roster builder for next week', run: () => { if (typeof brClose === 'function') brClose(); rbOpen(); return true; } });
 });

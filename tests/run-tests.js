@@ -468,6 +468,20 @@ console.log('\nRoster scenarios');
   run(`roStaff.NOH = { name: 'Nora Hale', order: 30 };`);
   check('groups: someone with no hotel set is still rostered', run(`rbGroups().includes('')`), true);
   run(`delete roStaff.NOH;`);
+  // two people editing the same draft: each save sends only its own cells, and a change arriving
+  // while an edit waits to be sent keeps both
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'db.js'), 'utf8').match(/function fbApplyPatch[\s\S]*?\n}\n/)[0], sb);
+  check('drafts: a save sends only the changed cells', run(`JSON.stringify(rbDraftDiff({ cells: { A: { d1: 'M', d2: 'E' }, B: { d1: 'OFF' } }, at: 1 }, { cells: { A: { d1: 'M', d2: 'OFF' }, C: { d1: 'E' } }, at: 2 }))`),
+    JSON.stringify({ 'cells/A/d2': 'OFF', 'cells/B': null, 'cells/C/d1': 'E', at: 2 }));
+  check('drafts: my waiting edit and a colleague\'s edit both stay', run(`(() => {
+    rbDraftsIn({ [W]: { cells: { A: { d1: 'M' }, B: { d1: 'E' } } } });
+    rbWeek = W; rbDrafts[W].cells.A.d1 = 'OFF'; _rbSaving[W] = 1;           // I change Anna, not sent yet
+    rbDraftsIn({ [W]: { cells: { A: { d1: 'M' }, B: { d1: 'M' } } } });     // meanwhile a colleague changes Bilal
+    const shown = rbDrafts[W].cells.A.d1 + rbDrafts[W].cells.B.d1;
+    const out = JSON.stringify(rbDraftDiff(_rbBase[W], rbDrafts[W]));       // what my save will send
+    delete _rbSaving[W];
+    return shown + ' ' + out;
+  })()`), 'OFFM {"cells/A/d1":"OFF"}');
 }
 
 console.log(`\n${pass} passed · ${fail} failed`);

@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 170, items: [
+    '👥 Two people can work on the same roster draft at once: each change saves only the cells it touched, so nobody\'s edits are wiped by someone else\'s save (only the very same cell: the last change wins).',
+    '📷 Roster photos: names are matched to your team using the name and the employee number together, so a blurry "Charlene Ponda" is still Charlene Pineda. Everyone gets their own hotel even when the hotel bar can\'t be read, and junk rows (a title bar read as a person) are left out.',
+  ] },
   { v: 169, items: [
     '📷 Roster photos read better: a photo taken a little tilted or at an angle is straightened first, then read. Blurry or small photos get a second try at each cell, and anything it isn\'t sure of is marked to check (never silently guessed). A screenshot still reads best; for a photo, hold the phone straight above the roster in good light.',
   ] },

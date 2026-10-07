@@ -101,6 +101,25 @@ async function fbSet(path, data) {
   catch (e) { _dbNoteError('saving ' + path, e); }
 }
 
+/** A patch { 'a/b': value, 'a/c': null } applied to a copy of obj (null removes). */
+function fbApplyPatch(obj, patch) {
+  const out = JSON.parse(JSON.stringify(obj == null ? {} : obj));
+  Object.keys(patch || {}).forEach(p => {
+    const parts = p.split('/'), last = parts.pop(); let o = out;
+    for (const k of parts) { if (o[k] == null || typeof o[k] !== 'object') o[k] = {}; o = o[k]; }
+    if (patch[p] == null) delete o[last]; else o[last] = JSON.parse(JSON.stringify(patch[p]));
+  });
+  return out;
+}
+/** Change only some fields under path, so two people editing different parts don't overwrite each other. */
+async function fbUpdate(path, patch) {
+  if (!patch || !Object.keys(patch).length) return;
+  lsSave(path, fbApplyPatch(lsLoad(path), patch));
+  if (!_ref) return;
+  try { await _ref.child(path).update(patch); _dbClearError(); }
+  catch (e) { _dbNoteError('saving ' + path, e); }
+}
+
 async function fbGet(path) {
   if (!_ref) return lsLoad(path);
   try {
