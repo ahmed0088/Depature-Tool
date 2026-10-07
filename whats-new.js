@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 169, items: [
+    '📷 Roster photos read better: a photo taken a little tilted or at an angle is straightened first, then read. Blurry or small photos get a second try at each cell, and anything it isn\'t sure of is marked to check (never silently guessed). A screenshot still reads best; for a photo, hold the phone straight above the roster in good light.',
+  ] },
   { v: 168, items: [
     '⚠ "Prefer not" a shift: on someone\'s card tap a shift once for ⚠ prefer not (they\'re kept off it unless it\'s the only way to cover), twice for 🚫 can\'t work. Also a request for one week ("Prefer not a shift"), or tell Ops Brain "Manisha prefers not nights" / "Manisha can do nights again". When it has to be used, it\'s listed under Decisions this week.',
     '🖼 The roster picture options look like the rest of the app.',
