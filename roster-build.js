@@ -162,6 +162,8 @@ function rbAt(I, p, x) {
  */
 function rbSolve(I) {
   _rbPC.clear(); _rbKC.clear();   // codes may have been renamed since last time
+  const plan = I.noNightPlan ? null : rbPlanNights(I);
+  if (plan) I = Object.assign({}, I, { pre: plan.pre });
   // a few attempts from different starting points; the best week wins
   const R0 = Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, givePh: true, lend: true, lockMgr: true, deskMin: 2, deskFrom: 8, deskTo: 23 }, I.rules || {});
   const dates0 = Array.from({ length: 7 }, (_, d) => roAdd(I.week, d));
@@ -171,7 +173,90 @@ function rbSolve(I) {
     const sc = Object.keys(I.groups).reduce((t, g) => t + rbScore(I, g, cells, dates0, R0), 0);
     if (sc < bestSc) { bestSc = sc; best = cells; }
   }
-  return rbRepair(I, _rbFinish(I, best));
+  const res = rbRepair(I, _rbFinish(I, best));
+  if (plan) res.notes = plan.notes;
+  return res;
+}
+
+// ── Nights across the cluster ─────────────────────────────
+/** Every hotel needs a Supervisor (or above) on its night. Each hotel's regular night person has a day off, so:
+ *  their days off are put on days next to each other, and one Supervisor / Duty Manager does those nights as one
+ *  block at the start or end of the week, going wherever needed, with their day off right after (or before) it,
+ *  so nobody goes from night to day without a day off. Their own hotel first: moving hotel only when needed. */
+function rbPlanNights(I) {
+  const dates = Array.from({ length: 7 }, (_, d) => roAdd(I.week, d)), R = Object.assign({ nightSwitch: true, lend: true }, I.rules || {});
+  const pre = JSON.parse(JSON.stringify(I.pre || {})), has = (k, d) => !!(pre[k] || {})[dates[d]];
+  const hotels = [];
+  Object.keys(I.groups).forEach(g => {
+    const G = I.groups[g]; if (G.post) return;
+    const ns = G.shifts.find(sh => { const x = rbParse(sh); return x && x.type === 'night' && x.s < 120 && ((G.who || {})[sh] || []).length; });
+    if (!ns) return;
+    const regs = I.people.filter(p => p.group === g && (p.fixed === ns || p.usual === ns) && rbMayWork(I, g, p, ns) && !p.post);
+    if (regs.length !== 1 || dates.some((_, d) => ((G.need[ns] || [])[d] || 0) !== 1)) return;   // one regular night person, one a night: the usual case
+    hotels.push({ g, ns, reg: regs[0] });
+  });
+  if (!hotels.length) return null;
+  const isReg = new Set(hotels.map(h => h.reg.key));
+  const floaters = I.people.filter(p => !isReg.has(p.key) && !p.post && !p.lock && hotels.some(h => rbMayWork(I, h.g, p, h.ns)));
+  if (!floaters.length) return null;
+  // each regular: the days their day off could go (nothing fixed that day), or none if leave already covers it
+  const offOpts = hotels.map(h => {
+    const p = h.reg, taken = dates.filter((_, d) => has(p.key, d) && rbKind(pre[p.key][dates[d]]) === 'off').length;
+    const due = Math.max(0, rbOffsDue(I, p, dates) - taken);
+    const away = dates.map((_, d) => has(p.key, d) && !rbParse(pre[p.key][dates[d]])).map((x, d) => x ? d : -1).filter(d => d >= 0);   // leave, requests: nights to cover anyway
+    return { due, away, days: due ? [0, 1, 2, 3, 4, 5, 6].filter(d => !has(p.key, d)) : [null] };
+  });
+  if (offOpts.some(o => o.due > 1)) return null;
+  let best = null;
+  const homeOf = p => rbBaseGroup(p.group);
+  const tryCombo = offs => {
+    // the nights to cover: each regular's day off and leave
+    const gaps = [];
+    hotels.forEach((h, i) => { const ds = new Set(offOpts[i].away); if (offs[i] != null) ds.add(offs[i]); ds.forEach(d => gaps.push({ i, d })); });
+    if (!gaps.length) return;
+    const byDay = {}; gaps.forEach(x => { (byDay[x.d] = byDay[x.d] || []).push(x); });
+    // blocks for floaters: the first k days or the last k days of the week
+    const blocks = f => { const out = [{ days: [] }]; for (let k = 1; k <= 6; k++) { out.push({ days: Array.from({ length: k }, (_, j) => j), off: k, start: true }); out.push({ days: Array.from({ length: k }, (_, j) => 7 - k + j), off: 6 - k }); } return out.filter(b => b.days.every(d => !has(f.key, d)) && (b.off == null || b.off > 6 || b.off < 0 || !has(f.key, b.off)) && (!b.start || !rbParse(f.lastShift) || (rbIsNight(rbNorm(f.lastShift)) || rbParse(f.lastShift).e <= 1440 - 11 * 60 + 0))); };
+    const fl = floaters.slice(0, 4), opts = fl.map(blocks);
+    const walk = (fi, used, plan, cost) => {
+      if (fi === fl.length) {
+        if (gaps.some(x => !used.has(x.i + ':' + x.d))) return;
+        // preferences: regulars' usual days off, the regulars' requests
+        let c = cost; offs.forEach((d, i) => { const p = hotels[i].reg; if (d != null && (p.prefOff || []).includes(d)) c -= 3; if (d != null && (p.lastOffs || []).includes(d)) c -= 1; });
+        if (!best || c < best.cost) best = { cost: c, offs: offs.slice(), plan: plan.slice() };
+        return;
+      }
+      const f = fl[fi];
+      for (const b of opts[fi]) {
+        if (!b.days.length) { walk(fi + 1, used, plan, cost); continue; }
+        // every night of the block covers a gap that day: their own hotel first
+        const pick = [], u2 = new Set(used); let ok = true, c = cost + 4 + (rbFloats(f) ? 0 : 3) * b.days.length;   // a Duty Manager before a Supervisor
+        for (const d of b.days) {
+          const cand = (byDay[d] || []).filter(x => !u2.has(x.i + ':' + x.d) && rbMayWork(I, hotels[x.i].g, f, hotels[x.i].ns));
+          if (!cand.length) { ok = false; break; }
+          const own = cand.find(x => hotels[x.i].g === homeOf(f)) || cand[0];
+          if (hotels[own.i].g !== homeOf(f)) { if (f.home || (!R.lend && !rbFloats(f) && !rbFloatsLast(f))) { ok = false; break; } c += 25; }   // working at another hotel: only when needed
+          u2.add(own.i + ':' + own.d); pick.push({ d, i: own.i });
+        }
+        if (ok) walk(fi + 1, u2, plan.concat([{ f, b, pick }]), c);
+      }
+    };
+    walk(0, new Set(), [], 0);
+  };
+  const rec = (i, offs) => { if (i === hotels.length) { tryCombo(offs); return; } for (const d of offOpts[i].days) { if (d != null && offs.includes(d)) continue; rec(i + 1, offs.concat([d])); } };
+  rec(0, []);
+  if (!best) return null;
+  const notes = [];
+  best.offs.forEach((d, i) => { if (d != null) (pre[hotels[i].reg.key] = pre[hotels[i].reg.key] || {})[dates[d]] = 'OFF'; });
+  best.plan.forEach(({ f, b, pick }) => {
+    const row = (pre[f.key] = pre[f.key] || {});
+    pick.forEach(({ d, i }) => { const h = hotels[i]; row[dates[d]] = h.g === homeOf(f) ? h.ns : `${h.ns} - ${rbShortU(h.g, Object.keys(I.groups))}`; });
+    if (b.off >= 0 && b.off <= 6) row[dates[b.off]] = 'OFF';
+    const nm = typeof roStaff !== 'undefined' && roStaff[f.key] ? roStaff[f.key].name.split(' ')[0] : f.key;
+    const where = pick.map(({ d, i }) => `${RB_DAYS[d]}${hotels[i].g !== homeOf(f) ? ' at ' + hotels[i].g : ''}`).join(', ');
+    notes.push({ key: f.key, date: dates[pick[0].d], plan: true, text: `Nights: ${nm} covers the night supervisor's days off (${where}), ${b.off >= 0 && b.off <= 6 ? (b.start ? 'then their day off ' + RB_DAYS[b.off] : 'with their day off just before, ' + RB_DAYS[b.off]) : ''}${pick.some(({ i }) => hotels[i].g !== homeOf(f)) ? '. Working at another hotel only because nobody there could' : ''}.` });
+  });
+  return { pre, notes };
 }
 /** Empty shifts left after building: fill each with the best fix a supervisor would make that keeps every rule
  *  (another hotel's Duty Manager, a day off moved, two people trading), never one that bends a rule. */
@@ -699,7 +784,7 @@ function rbBuild(again) {
 function _rbBuildNow() {
   const I = rbInput(rbSeed);
   const res = rbSolve(I);
-  rbDrafts[rbWeek] = { cells: res.cells, at: Date.now(), by: (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '' };
+  rbDrafts[rbWeek] = Object.assign({ cells: res.cells, at: Date.now(), by: (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '' }, res.notes && res.notes.length ? { notes: res.notes } : {});
   rbSaveDraft();
   rbRender();
   const short = res.problems.filter(p => p.kind === 'short').length;

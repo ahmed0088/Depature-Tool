@@ -298,6 +298,18 @@ console.log('\nRoster scenarios');
     check('bend: it says what it does and why', !!(b && /no day off between night and day/.test(b.text) && /nobody else could/.test(b.why)), true);
     check('bend: rest and 9 h are still kept', b ? sb.rbProblems(I, b.cells).filter(p => p.kind === 'rest' || p.kind === 'long').length : -1, 0);
   }
+  // 7d. nights across hotels: every night has a Supervisor or above; the regulars' days off line up and one floater does them as a block
+  {
+    const H = ['Adagio GD', 'Mercure DD', 'Ibis DD'], G = {}, ppl = [];
+    H.forEach((h, i) => { G[h] = { shifts: [N, M], need: { [N]: day(1), [M]: day(1) }, who: { [N]: ['Supervisor', 'Duty Manager'] } };
+      ppl.push(P('DM' + i, { group: h, title: 'Duty Manager', fixed: N, usual: N, lastShift: N }), P('A' + i, { group: h, usual: M, lastShift: M }), P('B' + i, { group: h, usual: M, lastShift: M })); });
+    ppl.push(P('SUP', { group: 'Adagio GD', title: 'Supervisor', usual: M, lastShift: 'OFF' }));
+    const r = sb.rbSolve({ week: W, groups: G, people: ppl, pre: {}, rules: { minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, lend: true, givePh: false }, seed: 1 });
+    const nightsOk = H.every(h => dates.every(dt => ppl.some(p => { const x = sb.rbParse(r.cells[p.key][dt]); return x && x.s === 0 && x.type === 'night' && sb.rbAt({ groups: G }, p, x) === h && /Supervisor|Duty Manager/.test(p.title); })));
+    check('nights: every hotel, every night, a Supervisor or above', nightsOk, true);
+    check('nights: no rule broken to do it', r.problems.filter(p => p.kind !== 'thin').length, 0);
+    check('nights: the plan is written down', (r.notes || []).some(n => /covers the night supervisor's days off/.test(n.text)), true);
+  }
   // 7c. Duty Managers work anywhere; Supervisors too, but only after everyone else
   check('floats: Duty Manager yes, Supervisor last, Agent no', [sb.rbFloats({ title: 'Duty Manager' }), sb.rbFloatsLast({ title: 'Supervisor' }), sb.rbFloats({ title: 'Agent' }) || sb.rbFloatsLast({ title: 'Agent' })].join(), 'true,true,false');
   {

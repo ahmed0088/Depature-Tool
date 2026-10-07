@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 165, items: [
+    '🌙 Nights are planned across all hotels first: every hotel gets a Supervisor or above every night. The regular night person\'s day off at each hotel is lined up next to the others, and one Supervisor or Duty Manager covers those nights as one block, with their day off right next to it, so nobody goes from night to day without a day off. With 3 Duty Managers and 2 Supervisors, every night is covered with no rule bent.',
+    '🏨 People stay in their own hotel by preference: a hotel\'s own Supervisor covers its own night first, and someone moves hotel only when nobody there could; a Duty Manager is used before a Supervisor. The plan is written under Decisions this week ("Nights: Charlene covers… Sun at Mercure DD… only because nobody there could").',
+  ] },
   { v: 164, items: [
     '🌙 The roster builder now fills empty shifts itself when a fix keeps every rule: another hotel\'s Duty Manager or Supervisor, a day off moved, or two people trading ("Charlene does the Mercure night, Irene takes her 09:00 - 18:00"). Every move is listed under Decisions this week. Fixes that would bend a rule are still only suggested, never made for you.',
     '🔄 Updates arrive properly: the app always fetches the new version fresh, checks for one whenever you come back to it, and loads it (right away if you just opened the app, otherwise "tap to load the new version" so nothing you\'re doing is lost).',
