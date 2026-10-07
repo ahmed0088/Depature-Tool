@@ -37,7 +37,9 @@ const _brLS = {
 const _brMe = () => (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || 'Someone';
 const _brPanelName = id => {
   const n = document.getElementById('nav-' + id);
-  return n ? n.textContent.replace(/\s*[\d—✓]+\s*$/, '').replace(/^\W+/, '').trim() : id;
+  if (n) return n.textContent.replace(/\s*[\d—✓]+\s*$/, '').replace(/^\W+/, '').trim();
+  const h = document.querySelector('#panel-' + id + ' h1');   // pages without a menu item (the roster builder): their own title
+  return (h && h.textContent.trim()) || ({ 'roster-build': 'Roster builder' })[id] || id;
 };
 
 // ── 1. Learning how you use the app ───────────────────────

@@ -240,7 +240,7 @@ function showLoginScreen(errorMsg) {
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('appWrapper').style.display  = 'none';
   // Apply correct theme to login screen too
-  const cur = document.documentElement.getAttribute('data-theme') || 'night-ops';
+  const cur = typeof hoThemeName === 'function' ? hoThemeName() : (document.documentElement.getAttribute('data-theme') || 'night-ops');
   _applyLoginTheme(cur);
   if (errorMsg) {
     const el = document.getElementById('loginError');
@@ -267,6 +267,10 @@ function _applyLoginTheme(name) {
     'night-ops': { accent:'#e8b84b', accentDark:'#c49a2f', btnColor:'#080b10' },
     'opera':     { accent:'#C74634', accentDark:'#A3362A', btnColor:'#ffffff' },
     'midnight':  { accent:'#818cf8', accentDark:'#6366f1', btnColor:'#ffffff' },
+    'ios':       { accent:'#007aff', accentDark:'#0062cc', btnColor:'#ffffff' },
+    'ios-dark':  { accent:'#0a84ff', accentDark:'#0071e3', btnColor:'#ffffff' },
+    'titanium':  { accent:'#c9a27e', accentDark:'#a8845f', btnColor:'#1b1a18' },
+    'ocean':     { accent:'#2dd4bf', accentDark:'#14b8a6', btnColor:'#04201d' },
   };
   const t = accents[name] || accents['night-ops'];
   const s = document.getElementById('loginThemeStyle');

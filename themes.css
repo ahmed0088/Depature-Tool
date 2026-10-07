@@ -1,0 +1,173 @@
+/* ═══════════════════════════════════════════════════════════
+   themes.css — skins on top of the three base themes
+   iPhone (on Opera, light) · iPhone Dark and Titanium (on Night Ops) · Ocean (on Midnight)
+   A skin changes colours, type, corners, glass and controls; the base theme keeps every
+   page's light/dark details right. html[data-skin=…] outranks [data-theme=…] rules.
+═══════════════════════════════════════════════════════════ */
+
+/* ── The theme menu (top bar) ── */
+.ho-theme-pop { position: fixed; z-index: 1200; width: 220px; padding: 6px; border-radius: 16px; background: color-mix(in srgb, var(--card) 92%, transparent);
+  border: 1px solid var(--border2); box-shadow: 0 18px 50px -12px rgba(0,0,0,.45); backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%);
+  animation: hoPop .14s cubic-bezier(.2,.8,.2,1); }
+@keyframes hoPop { from { opacity: 0; transform: translateY(-4px) scale(.98); } to { opacity: 1; transform: none; } }
+.ho-tp-hd { font: 600 11px var(--font); letter-spacing: .06em; text-transform: uppercase; color: var(--text3); padding: 6px 10px 4px; }
+.ho-theme-pop button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 10px; background: none; color: var(--text); font: 500 13.5px var(--font); text-align: left; cursor: pointer; }
+.ho-theme-pop button:hover { background: var(--accent-bg); }
+.ho-theme-pop button.on { font-weight: 650; }
+.ho-theme-pop button b { margin-left: auto; color: var(--accent); }
+.ho-tp-sw { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; border: 1px solid rgba(128,128,128,.35); flex: 0 0 auto; }
+.ho-tp-sw i { width: 9px; height: 9px; border-radius: 50%; }
+#hoThemeBtn .theme-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.hs-themes { flex-wrap: wrap; }
+
+/* ═════════ iPhone (light) ═════════ */
+html[data-skin="ios"] {
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', 'Inter', system-ui, sans-serif;
+  --mono: 'SF Mono', ui-monospace, Menlo, 'JetBrains Mono', monospace;
+  --bg: #f2f2f7 !important; --bg2: #f2f2f7 !important; --surface: #ffffff !important; --card: #ffffff !important; --card2: #f2f2f7 !important;
+  --border: rgba(60,60,67,.12) !important; --border2: rgba(60,60,67,.18) !important; --border3: rgba(60,60,67,.29) !important;
+  --text: #000000 !important; --text2: rgba(60,60,67,.72) !important; --text3: rgba(60,60,67,.5) !important;
+  --accent: #007aff !important; --accent2: #0062cc !important; --accent-bg: rgba(0,122,255,.1) !important; --accent-border: rgba(0,122,255,.32) !important;
+  --green: #34c759; --green-bg: rgba(52,199,89,.12); --green-border: rgba(52,199,89,.35);
+  --red: #ff3b30; --red-bg: rgba(255,59,48,.1); --red-border: rgba(255,59,48,.32); --rose: #ff3b30;
+  --amber: #ff9500; --amber-bg: rgba(255,149,0,.12); --amber-border: rgba(255,149,0,.35);
+  --blue: #007aff; --blue-bg: rgba(0,122,255,.1); --purple: #af52de; --purple-bg: rgba(175,82,222,.1); --teal: #30b0c7; --mint: #34c759; --sky: #5ac8fa;
+  --topbar-bg: rgba(249,249,249,.8) !important; --topbar-border: rgba(0,0,0,.12) !important; --topbar-text: #000 !important;
+  --r: 12px !important; --r2: 16px !important; --r3: 22px !important;
+  --ho-a1: #ffffff; --ho-a2: #d6e8ff; --ho-ink: #007aff;
+  --ho-shadow: 0 1px 1px rgba(0,0,0,.03), 0 8px 24px -16px rgba(0,0,0,.18);
+  --ho-ring: 0 0 0 4px rgba(0,122,255,.18);
+}
+html[data-skin="ios"] body { background: #f2f2f7; -webkit-font-smoothing: antialiased; letter-spacing: -0.01em; }
+/* glass bars */
+html[data-skin="ios"] .topbar { background: rgba(249,249,249,.78) !important; border-bottom: .5px solid rgba(0,0,0,.14) !important; backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); }
+html[data-skin="ios"] .topbar::after { display: none; }
+html[data-skin="ios"] .ho-name b, html[data-skin="ios"] .logo .logo-name, html[data-skin="ios"] .topbar-center, html[data-skin="ios"] #topbarTime { color: #000 !important; }
+html[data-skin="ios"] .logo { border-right: 0; }
+html[data-skin="ios"] .logo-mark { background: none !important; border: 0 !important; }
+html[data-skin="ios"] .ho-search, html[data-skin="ios"] .tb-pill, html[data-skin="ios"] .fb-status, html[data-skin="ios"] .theme-switcher, html[data-skin="ios"] .icon-round, html[data-skin="ios"] #appVersionPill {
+  background: rgba(118,118,128,.12) !important; border-color: transparent !important; color: rgba(60,60,67,.85) !important; }
+html[data-skin="ios"] #fbLabel { color: rgba(60,60,67,.85) !important; }
+html[data-skin="ios"] .ho-search kbd { background: #fff; border-color: rgba(0,0,0,.08); color: rgba(60,60,67,.6); }
+html[data-skin="ios"] .icon-round:hover { background: rgba(118,118,128,.2) !important; }
+html[data-skin="ios"] .theme-btn, html[data-skin="ios"] .theme-btn.active { background: transparent !important; color: #000 !important; box-shadow: none; }
+/* side menu: an iOS list */
+html[data-skin="ios"] .sidenav { background: #f2f2f7 !important; border-right: .5px solid rgba(0,0,0,.12); padding: 14px 10px 24px; }
+html[data-skin="ios"] .nav-item { border-radius: 10px !important; border-left: 0 !important; padding: 0 10px !important; color: #000; }
+html[data-skin="ios"] .nav-item:hover { background: rgba(118,118,128,.12) !important; }
+html[data-skin="ios"] .nav-item.active { background: #007aff !important; color: #fff !important; }
+html[data-skin="ios"] .nav-item.active .nav-icon { color: #fff !important; }
+html[data-skin="ios"] .nav-item.active::before { display: none !important; }
+html[data-skin="ios"] .nav-badge { background: rgba(118,118,128,.14) !important; border: 0 !important; color: rgba(60,60,67,.7) !important; border-radius: 10px; }
+html[data-skin="ios"] .nav-item.active .nav-badge { background: rgba(255,255,255,.25) !important; color: #fff !important; }
+html[data-skin="ios"] .nav-section-label { color: rgba(60,60,67,.5) !important; }
+/* large titles, grouped cards */
+html[data-skin="ios"] .page-hd { border-bottom: 0 !important; padding-bottom: 6px !important; }
+html[data-skin="ios"] .page-hd-left h1, html[data-skin="ios"] .panel h1 { font: 700 34px/1.12 var(--font) !important; letter-spacing: -0.025em !important; }
+html[data-skin="ios"] .card, html[data-skin="ios"] .kpi, html[data-skin="ios"] .home-tile, html[data-skin="ios"] .br-card { border-color: transparent !important; box-shadow: var(--ho-shadow) !important; }
+/* buttons: tinted fills, solid blue primary, no glow */
+html[data-skin="ios"] .btn { border: 0 !important; background: rgba(118,118,128,.12) !important; color: #007aff !important; box-shadow: none !important; font-weight: 600; border-radius: 12px; }
+html[data-skin="ios"] .btn:hover { background: rgba(118,118,128,.2) !important; transform: none; }
+html[data-skin="ios"] .btn:active { opacity: .7; }
+html[data-skin="ios"] .btn.gold, html[data-skin="ios"] .btn.primary { background: #007aff !important; color: #fff !important; }
+html[data-skin="ios"] .btn.gold:hover, html[data-skin="ios"] .btn.primary:hover { background: #0a6fe6 !important; filter: none; }
+html[data-skin="ios"] .btn.rose { color: #ff3b30 !important; background: rgba(255,59,48,.1) !important; }
+html[data-skin="ios"] .btn.mint { color: #248a3d !important; } html[data-skin="ios"] .btn.sky { color: #007aff !important; } html[data-skin="ios"] .btn.ai { color: #8944ab !important; }
+html[data-skin="ios"] .btn[disabled] { opacity: .45; }
+/* fields: grey fills, no borders */
+html[data-skin="ios"] input[type=text], html[data-skin="ios"] input[type=search], html[data-skin="ios"] input[type=email], html[data-skin="ios"] input[type=number], html[data-skin="ios"] input[type=password], html[data-skin="ios"] input[type=date], html[data-skin="ios"] input:not([type]), html[data-skin="ios"] select, html[data-skin="ios"] textarea {
+  background: rgba(118,118,128,.12) !important; border-color: transparent !important; color: #000 !important; border-radius: 10px !important; }
+html[data-skin="ios"] input:focus, html[data-skin="ios"] select:focus, html[data-skin="ios"] textarea:focus { background: #fff !important; border-color: #007aff !important; }
+/* chips and segmented controls */
+html[data-skin="ios"] .fchip { background: rgba(118,118,128,.12) !important; border-color: transparent !important; color: #000 !important; }
+html[data-skin="ios"] .fchip.on { background: #007aff !important; color: #fff !important; }
+html[data-skin="ios"] .hs-seg { background: rgba(118,118,128,.12) !important; border: 0 !important; border-radius: 9px; }
+html[data-skin="ios"] .hs-seg button.on { background: #fff !important; color: #000 !important; box-shadow: 0 3px 8px rgba(0,0,0,.12), 0 3px 1px rgba(0,0,0,.04); }
+/* tables */
+html[data-skin="ios"] table th, html[data-skin="ios"] thead th { background: #f9f9fb !important; color: rgba(60,60,67,.6) !important; }
+/* phone tab bar: glass */
+html[data-skin="ios"] .mob-nav { background: rgba(249,249,249,.82) !important; border-color: rgba(0,0,0,.12) !important; backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); }
+html[data-skin="ios"] .mob-nav-btn.active .mob-nav-icon, html[data-skin="ios"] .mob-nav-btn.active .mob-nav-lbl { color: #007aff !important; }
+
+/* ═════════ iPhone Dark ═════════ */
+html[data-skin="ios-dark"] {
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', 'Inter', system-ui, sans-serif;
+  --mono: 'SF Mono', ui-monospace, Menlo, 'JetBrains Mono', monospace;
+  --bg: #000000 !important; --bg2: #000000 !important; --surface: #1c1c1e !important; --card: #1c1c1e !important; --card2: #2c2c2e !important;
+  --border: rgba(84,84,88,.36) !important; --border2: rgba(84,84,88,.55) !important; --border3: rgba(84,84,88,.75) !important;
+  --text: #ffffff !important; --text2: rgba(235,235,245,.68) !important; --text3: rgba(235,235,245,.42) !important;
+  --accent: #0a84ff !important; --accent2: #0071e3 !important; --accent-bg: rgba(10,132,255,.16) !important; --accent-border: rgba(10,132,255,.42) !important;
+  --green: #30d158; --green-bg: rgba(48,209,88,.14); --green-border: rgba(48,209,88,.38);
+  --red: #ff453a; --red-bg: rgba(255,69,58,.14); --red-border: rgba(255,69,58,.38); --rose: #ff453a;
+  --amber: #ff9f0a; --amber-bg: rgba(255,159,10,.14); --amber-border: rgba(255,159,10,.38);
+  --blue: #0a84ff; --blue-bg: rgba(10,132,255,.16); --purple: #bf5af2; --purple-bg: rgba(191,90,242,.16); --teal: #40c8e0; --mint: #30d158; --sky: #64d2ff;
+  --topbar-bg: rgba(22,22,24,.78) !important; --topbar-border: rgba(84,84,88,.5) !important; --topbar-text: #fff !important;
+  --r: 12px !important; --r2: 16px !important; --r3: 22px !important;
+  --ho-a1: #64d2ff; --ho-a2: #0a84ff; --ho-ink: #000;
+  --ho-shadow: none; --ho-ring: 0 0 0 4px rgba(10,132,255,.28);
+}
+html[data-skin="ios-dark"] body { background: #000; -webkit-font-smoothing: antialiased; letter-spacing: -0.01em; }
+html[data-skin="ios-dark"] .topbar { background: rgba(22,22,24,.78) !important; border-bottom: .5px solid rgba(84,84,88,.6) !important; backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); }
+html[data-skin="ios-dark"] .topbar::after { display: none; }
+html[data-skin="ios-dark"] .ho-search, html[data-skin="ios-dark"] .tb-pill, html[data-skin="ios-dark"] .fb-status, html[data-skin="ios-dark"] .theme-switcher, html[data-skin="ios-dark"] .icon-round, html[data-skin="ios-dark"] #appVersionPill {
+  background: rgba(118,118,128,.24) !important; border-color: transparent !important; color: rgba(235,235,245,.8) !important; }
+html[data-skin="ios-dark"] .theme-btn, html[data-skin="ios-dark"] .theme-btn.active { background: transparent !important; color: #fff !important; box-shadow: none; }
+html[data-skin="ios-dark"] .sidenav { background: #000 !important; border-right: .5px solid rgba(84,84,88,.5); }
+html[data-skin="ios-dark"] .nav-item { color: #fff; border-radius: 10px !important; }
+html[data-skin="ios-dark"] .nav-item:hover { background: #1c1c1e !important; }
+html[data-skin="ios-dark"] .nav-item.active { background: #0a84ff !important; color: #fff !important; }
+html[data-skin="ios-dark"] .nav-item.active .nav-icon { color: #fff !important; }
+html[data-skin="ios-dark"] .nav-item.active::before { display: none !important; }
+html[data-skin="ios-dark"] .nav-badge { background: rgba(118,118,128,.24) !important; border: 0 !important; color: rgba(235,235,245,.7) !important; border-radius: 10px; }
+html[data-skin="ios-dark"] .nav-item.active .nav-badge { background: rgba(255,255,255,.25) !important; color: #fff !important; }
+html[data-skin="ios-dark"] .page-hd { border-bottom: 0 !important; padding-bottom: 6px !important; }
+html[data-skin="ios-dark"] .page-hd-left h1, html[data-skin="ios-dark"] .panel h1 { font: 700 34px/1.12 var(--font) !important; letter-spacing: -0.025em !important; }
+html[data-skin="ios-dark"] .card, html[data-skin="ios-dark"] .kpi, html[data-skin="ios-dark"] .home-tile, html[data-skin="ios-dark"] .br-card { border-color: transparent !important; box-shadow: none !important; }
+html[data-skin="ios-dark"] .btn { border: 0 !important; background: rgba(118,118,128,.24) !important; color: #0a84ff !important; box-shadow: none !important; border-radius: 12px; }
+html[data-skin="ios-dark"] .btn:hover { background: rgba(118,118,128,.32) !important; transform: none; }
+html[data-skin="ios-dark"] .btn:active { opacity: .7; }
+html[data-skin="ios-dark"] .btn.gold, html[data-skin="ios-dark"] .btn.primary { background: #0a84ff !important; color: #fff !important; }
+html[data-skin="ios-dark"] .btn.rose { color: #ff453a !important; background: rgba(255,69,58,.16) !important; }
+html[data-skin="ios-dark"] input[type=text], html[data-skin="ios-dark"] input[type=search], html[data-skin="ios-dark"] input[type=email], html[data-skin="ios-dark"] input[type=number], html[data-skin="ios-dark"] input[type=password], html[data-skin="ios-dark"] input[type=date], html[data-skin="ios-dark"] input:not([type]), html[data-skin="ios-dark"] select, html[data-skin="ios-dark"] textarea {
+  background: rgba(118,118,128,.24) !important; border-color: transparent !important; color: #fff !important; border-radius: 10px !important; }
+html[data-skin="ios-dark"] .fchip { background: rgba(118,118,128,.24) !important; border-color: transparent !important; color: #fff !important; }
+html[data-skin="ios-dark"] .fchip.on { background: #0a84ff !important; color: #fff !important; }
+html[data-skin="ios-dark"] .hs-seg { background: rgba(118,118,128,.24) !important; border: 0 !important; border-radius: 9px; }
+html[data-skin="ios-dark"] .hs-seg button.on { background: #636366 !important; color: #fff !important; }
+html[data-skin="ios-dark"] table th, html[data-skin="ios-dark"] thead th { background: #1c1c1e !important; }
+html[data-skin="ios-dark"] .mob-nav { background: rgba(22,22,24,.82) !important; border-color: rgba(84,84,88,.5) !important; backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); }
+html[data-skin="ios-dark"] .mob-nav-btn.active .mob-nav-icon, html[data-skin="ios-dark"] .mob-nav-btn.active .mob-nav-lbl { color: #0a84ff !important; }
+
+/* ═════════ Titanium: warm graphite and the Pro titanium finish ═════════ */
+html[data-skin="titanium"] {
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif;
+  --bg: #121110 !important; --bg2: #161513 !important; --surface: #1b1a18 !important; --card: #1f1d1b !important; --card2: #282623 !important;
+  --border: rgba(255,240,220,.07) !important; --border2: rgba(255,240,220,.11) !important; --border3: rgba(255,240,220,.18) !important;
+  --text: #f3eee7 !important; --text2: #b3aa9f !important; --text3: #7d756c !important;
+  --accent: #c9a27e !important; --accent2: #a8845f !important; --accent-bg: rgba(201,162,126,.12) !important; --accent-border: rgba(201,162,126,.34) !important;
+  --topbar-bg: rgba(22,21,19,.8) !important; --topbar-border: rgba(255,240,220,.08) !important;
+  --r: 11px !important; --r2: 16px !important; --r3: 20px !important;
+  --ho-a1: #e8d2bb; --ho-a2: #a8845f; --ho-ink: #1b1a18;
+}
+html[data-skin="titanium"] body { background: #121110; }
+html[data-skin="titanium"] .topbar { backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%); }
+html[data-skin="titanium"] .btn.gold, html[data-skin="titanium"] .btn.primary { background: linear-gradient(180deg, #dcbc9b, #b08b66) !important; color: #1b1a18 !important; box-shadow: 0 1px 0 rgba(255,255,255,.3) inset, 0 6px 18px -8px rgba(201,162,126,.5) !important; }
+html[data-skin="titanium"] .nav-item.active::before { background: #c9a27e !important; box-shadow: 0 0 10px rgba(201,162,126,.6) !important; }
+html[data-skin="titanium"] .nav-item.active .nav-badge { background: #c9a27e !important; color: #1b1a18 !important; }
+
+/* ═════════ Ocean: deep sea blue and teal ═════════ */
+html[data-skin="ocean"] {
+  --bg: #04121a !important; --bg2: #061822 !important; --surface: #08202c !important; --card: #0a2330 !important; --card2: #0e2d3d !important;
+  --border: rgba(120,220,230,.08) !important; --border2: rgba(120,220,230,.13) !important; --border3: rgba(120,220,230,.2) !important;
+  --text: #e4f5f6 !important; --text2: #8fb6bd !important; --text3: #5d8189 !important;
+  --accent: #2dd4bf !important; --accent2: #14b8a6 !important; --accent-bg: rgba(45,212,191,.11) !important; --accent-border: rgba(45,212,191,.32) !important;
+  --topbar-bg: rgba(5,20,28,.8) !important; --topbar-border: rgba(120,220,230,.09) !important;
+  --ho-a1: #99f6e4; --ho-a2: #0d9488; --ho-ink: #04201d;
+}
+html[data-skin="ocean"] body { background: #04121a; }
+html[data-skin="ocean"] .btn.gold, html[data-skin="ocean"] .btn.primary { background: linear-gradient(180deg, #5eead4, #14b8a6) !important; color: #04201d !important; box-shadow: 0 1px 0 rgba(255,255,255,.35) inset, 0 6px 18px -8px rgba(45,212,191,.55) !important; }
+html[data-skin="ocean"] .nav-item.active::before { background: #2dd4bf !important; box-shadow: 0 0 10px rgba(45,212,191,.6) !important; }
+html[data-skin="ocean"] .nav-item.active .nav-badge { background: #2dd4bf !important; color: #04201d !important; }
+
+/* Smooth: less motion where the system asks for it */
+@media (prefers-reduced-motion: reduce) { .panel.active, .ho-theme-pop { animation: none !important; } }

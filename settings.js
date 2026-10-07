@@ -127,7 +127,7 @@ const _hoSec = (id, icon, title, sub, body) => `
 function hoSettingsRender() {
   const box = document.getElementById('hsBody');
   if (!box) return;
-  const theme = document.documentElement.getAttribute('data-theme') || 'night-ops';
+  const theme = typeof hoThemeName === 'function' ? hoThemeName() : (document.documentElement.getAttribute('data-theme') || 'night-ops');
   const pages = _hoPages();
   const hidden = new Set(hoPrefs.hiddenPages || []);
   const tiles = [['departures', 'Departures'], ['arrivals', 'Arrivals'], ['purpose', 'Purpose of Stay'], ['dtcm', 'DTCM Recon'], ['package-audit', 'Package Audit'], ['checklist', 'Night Checklist'], ['shifts', 'Shift Tasks'], ['pipeline', 'ALL enrollment']];
@@ -141,7 +141,7 @@ function hoSettingsRender() {
     _hoSec('look', 'sparkle', 'Appearance', 'How HotelOps looks on this device',
       `<div class="hs-row" data-s="theme colour color dark light night opera midnight">
          <span class="hs-txt"><b>Theme</b><small>Colours for the whole app</small></span>
-         <span class="hs-themes">${[['night-ops', 'Night Ops', '#eab94a', '#0b0e14'], ['opera', 'Opera', '#c74634', '#f4f5f7'], ['midnight', 'Midnight', '#818cf8', '#0b1020']].map(([v, t, a, bg]) =>
+         <span class="hs-themes">${Object.entries(HO_THEMES).map(([v, T]) => [v, T.label, T.a, T.bg]).map(([v, t, a, bg]) =>
            `<button class="${theme === v ? 'on' : ''}" onclick="setTheme('${v}');hoSettingsRender()"><span style="background:${bg}"><i style="background:${a}"></i></span>${t}</button>`).join('')}</span>
        </div>`
       + _hoSeg('textSize', 'Text size', 'Bigger text is easier to read on the desk PC', [['s', 'Small'], ['m', 'Normal'], ['l', 'Large'], ['xl', 'Extra large']])

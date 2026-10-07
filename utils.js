@@ -272,8 +272,23 @@ function showUndoToast(msg, undoFn, timeoutMs = 6000) {
 }
 
 // ── Theme ─────────────────────────────────────────────────
+// Each theme sits on one of the three base themes (night-ops dark, opera light, midnight) and adds its own skin on top.
+const HO_THEMES = {
+  'night-ops': { label: 'Night Ops', emoji: '🌙', base: 'night-ops', bg: '#0b0e14', a: '#eab94a', btn: '#080b10' },
+  'ios':       { label: 'iPhone', emoji: '📱', base: 'opera', skin: 'ios', bg: '#f2f2f7', a: '#007aff', btn: '#ffffff' },
+  'ios-dark':  { label: 'iPhone Dark', emoji: '🖤', base: 'night-ops', skin: 'ios-dark', bg: '#000000', a: '#0a84ff', btn: '#ffffff' },
+  'titanium':  { label: 'Titanium', emoji: '🪨', base: 'night-ops', skin: 'titanium', bg: '#1b1a18', a: '#c9a27e', btn: '#1b1a18' },
+  'ocean':     { label: 'Ocean', emoji: '🌊', base: 'midnight', skin: 'ocean', bg: '#06161f', a: '#2dd4bf', btn: '#04201d' },
+  'opera':     { label: 'Opera', emoji: '☀️', base: 'opera', bg: '#f4f5f7', a: '#c74634', btn: '#ffffff' },
+  'midnight':  { label: 'Midnight', emoji: '🌌', base: 'midnight', bg: '#0b1020', a: '#818cf8', btn: '#ffffff' },
+};
+function hoThemeName() { return document.documentElement.getAttribute('data-skin') || document.documentElement.getAttribute('data-theme') || 'night-ops'; }
 function setTheme(name, btn) {
-  document.documentElement.setAttribute('data-theme', name);
+  const T = HO_THEMES[name] || HO_THEMES['night-ops']; if (!HO_THEMES[name]) name = 'night-ops';
+  document.documentElement.setAttribute('data-theme', T.base);
+  if (T.skin) document.documentElement.setAttribute('data-skin', T.skin); else document.documentElement.removeAttribute('data-skin');
+  const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.setAttribute('content', T.bg);
+  hoThemeMenuSync();
   document.querySelectorAll('.theme-btn, .mob-theme-btn').forEach(b => b.classList.remove('active'));
   // sync login theme buttons too
   document.querySelectorAll('.login-theme-btn').forEach(b => {
@@ -292,9 +307,23 @@ function setTheme(name, btn) {
   if (typeof _applyLoginTheme === 'function') _applyLoginTheme(name);
 }
 
+/** The top bar's one theme button, and its menu of every theme. */
+function hoThemeMenuSync() {
+  const T = HO_THEMES[hoThemeName()] || HO_THEMES['night-ops'], b = document.getElementById('hoThemeBtn');
+  if (b) b.innerHTML = `<span class="theme-dot" style="background:${T.a};box-shadow:0 0 0 2px ${T.bg}, 0 0 0 3px ${T.a}55"></span><span>${T.label}</span>`;
+}
+function hoThemeMenu(btn) {
+  const old = document.getElementById('hoThemePop'); if (old) { old.remove(); return; }
+  const cur = hoThemeName(), pop = document.createElement('div'); pop.id = 'hoThemePop'; pop.className = 'ho-theme-pop'; pop.setAttribute('role', 'menu');
+  pop.innerHTML = '<div class="ho-tp-hd">Theme</div>' + Object.entries(HO_THEMES).map(([k, t]) => `<button role="menuitemradio" aria-checked="${k === cur}" class="${k === cur ? 'on' : ''}" onclick="setTheme('${k}');document.getElementById('hoThemePop')?.remove()"><span class="ho-tp-sw" style="background:${t.bg}"><i style="background:${t.a}"></i></span>${t.label}${k === cur ? '<b>✓</b>' : ''}</button>`).join('');
+  document.body.appendChild(pop);
+  const r = btn.getBoundingClientRect(), w = 220; pop.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w)) + 'px'; pop.style.top = (r.bottom + 8) + 'px';
+  setTimeout(() => document.addEventListener('click', function off(e) { if (!pop.contains(e.target) && e.target !== btn && !btn.contains(e.target)) { pop.remove(); document.removeEventListener('click', off); } }), 0);
+}
+document.addEventListener('DOMContentLoaded', () => setTimeout(hoThemeMenuSync, 50));
 function toggleTheme() {
-  const cur    = document.documentElement.getAttribute('data-theme') || 'night-ops';
-  const themes = ['night-ops', 'opera', 'midnight'];
+  const cur    = hoThemeName();
+  const themes = Object.keys(HO_THEMES);
   setTheme(themes[(themes.indexOf(cur) + 1) % themes.length]);
 }
 
@@ -461,7 +490,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v162';
+const APP_VERSION = 'v163';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;

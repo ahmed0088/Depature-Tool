@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 163, items: [
+    '📱 New themes: iPhone (Apple\'s system font, soft grey background, white rounded cards, blue, glass top and bottom bars, large titles), iPhone Dark (true black), Titanium (warm graphite with the Pro titanium finish) and Ocean (deep blue and teal). Tap the theme button in the top bar, or Settings → Appearance; on a phone, More at the bottom.',
+    '⚡ Faster: the first screen shows about a third sooner. The Excel and PDF readers and the fonts now load in the background instead of holding up the start, and pages open with a shorter, lighter animation.',
+    '🧠 Ops Brain calls the roster builder "Roster builder", not "roster-build".',
+  ] },
   { v: 162, items: [
     '🌙 When nobody can take a shift with every rule kept, the builder now shows the closest real fix instead of only "bring in a staff member", e.g. "Put Charlene on 00:00 - 09:00; then Irene from Mercure takes her 09:00 - 18:00 ⚠ no day off between night and day". It bends only the night ↔ day rule, only when there is no other way; rest (11 h) and 9-hour shifts are always kept.',
     '📝 Decisions this week: when you use a plan like that, HotelOps tells you exactly what it did and why, and keeps it under the draft ("Charlene covers the Tue night with no day off between night and day: nobody else could…"), with everyone working at another hotel listed too. The rule break it caused is marked "bent on purpose".',

@@ -107,6 +107,8 @@ function nsOnDrop(e) {
 async function nsParsePDF(arrayBuffer) {
   nsSetLoading(true);
 
+  for (let i = 0; i < 50 && typeof pdfjsLib === 'undefined'; i++) await new Promise(r => setTimeout(r, 100));   // the PDF reader loads in the background
+  if (typeof pdfjsLib !== 'undefined' && !pdfjsLib.GlobalWorkerOptions.workerSrc) pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
   if (typeof pdfjsLib === 'undefined') {
     showToast('PDF engine not loaded yet — please wait a moment and try again', 'err');
     busyDone(); nsSetLoading(false);

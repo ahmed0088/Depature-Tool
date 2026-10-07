@@ -113,7 +113,7 @@ body { font-family: var(--font); font-size: 13.5px; letter-spacing: -0.006em; fo
 
 /* ══ Pages ══ */
 .panel { padding: 30px 36px 96px; }
-.panel.active { animation: hoIn .28s var(--ho-ease); }
+.panel.active { animation: hoIn .16s var(--ho-ease); }
 @keyframes hoIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .page-hd { margin-bottom: 22px !important; padding-bottom: 18px !important; border-bottom: 1px solid var(--border) !important; align-items: flex-end !important; }
 .page-hd-left h1, .panel h1 { font: 700 26px/1.15 var(--font) !important; letter-spacing: -0.028em !important; color: var(--text) !important; }

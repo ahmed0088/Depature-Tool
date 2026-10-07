@@ -20,9 +20,12 @@
      value is blocking any OTHER origin from ever being loaded or contacted,
      not blocking inline handlers. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://www.gstatic.com https://apis.google.com https://*.firebasedatabase.app https://*.firebaseio.com https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' blob: https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com https://cdn.jsdelivr.net data: blob: https://*.googleapis.com https://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebaseio.com wss://*.firebasedatabase.app https://apis.google.com; frame-src https://*.firebaseapp.com https://accounts.google.com; object-src 'none'; base-uri 'self'; form-action 'self';"/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<!-- fonts and the Excel/PDF readers load without holding up the first screen -->
+<link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'"/>
+<noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/></noscript>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
 <!-- Firebase SDKs -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -32,6 +35,7 @@
 <!-- App styles -->
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
+<link rel="stylesheet" href="themes.css"/>
 
 <!-- ⚡ Instant theme — reads localStorage before Firebase responds, kills the flash -->
 <script>
@@ -42,7 +46,10 @@
       if (raw) {
         var s = JSON.parse(raw);
         if (s && s.theme) {
-          document.documentElement.setAttribute('data-theme', s.theme);
+          // a skin sits on a base theme: iPhone on Opera, iPhone Dark and Titanium on Night Ops, Ocean on Midnight
+          var skins = { 'ios': 'opera', 'ios-dark': 'night-ops', 'titanium': 'night-ops', 'ocean': 'midnight' };
+          document.documentElement.setAttribute('data-theme', skins[s.theme] || s.theme);
+          if (skins[s.theme]) document.documentElement.setAttribute('data-skin', s.theme);
         }
       }
     } catch(e) {}
@@ -311,6 +318,10 @@
         <button class="login-theme-btn active" data-t="night-ops" onclick="setTheme('night-ops',this)" title="Night Ops">🌙 Night</button>
         <button class="login-theme-btn" data-t="opera" onclick="setTheme('opera',this)" title="Opera">🔴 Opera</button>
         <button class="login-theme-btn" data-t="midnight" onclick="setTheme('midnight',this)" title="Midnight">🌌 Midnight</button>
+        <button class="login-theme-btn" data-t="ios" onclick="setTheme('ios',this)" title="iPhone">📱 iPhone</button>
+        <button class="login-theme-btn" data-t="ios-dark" onclick="setTheme('ios-dark',this)" title="iPhone Dark">🖤 iPhone Dark</button>
+        <button class="login-theme-btn" data-t="titanium" onclick="setTheme('titanium',this)" title="Titanium">🪨 Titanium</button>
+        <button class="login-theme-btn" data-t="ocean" onclick="setTheme('ocean',this)" title="Ocean">🌊 Ocean</button>
       </div>
 
       <div class="login-logo">🏨</div>
@@ -378,15 +389,7 @@
     <div class="icon-round" id="adminPanelBtn" onclick="openAdminPanel()" title="Team Management" style="display:none;">👥</div>
     <!-- Theme Switcher -->
     <div class="theme-switcher">
-      <button class="theme-btn active" data-t="night-ops" onclick="setTheme('night-ops',this)" title="Night Ops — dark gold">
-        <span class="theme-dot"></span><span>Night Ops</span>
-      </button>
-      <button class="theme-btn" data-t="opera" onclick="setTheme('opera',this)" title="Opera Cloud — light red">
-        <span class="theme-dot"></span><span>Opera</span>
-      </button>
-      <button class="theme-btn" data-t="midnight" onclick="setTheme('midnight',this)" title="Midnight — deep blue">
-        <span class="theme-dot"></span><span>Midnight</span>
-      </button>
+      <button class="theme-btn active" id="hoThemeBtn" onclick="hoThemeMenu(this)" title="Theme" aria-haspopup="menu"><span class="theme-dot"></span><span>Theme</span></button>
     </div>
     <!-- Firebase status -->
     <div class="fb-status">
@@ -5069,6 +5072,10 @@ async function appInit() {
       <button class="mob-theme-btn" data-t="night-ops" onclick="setTheme('night-ops',this)" title="Night Ops">🌙</button>
       <button class="mob-theme-btn" data-t="opera"     onclick="setTheme('opera',this)"     title="Opera">🔴</button>
       <button class="mob-theme-btn" data-t="midnight"  onclick="setTheme('midnight',this)"  title="Midnight">🌌</button>
+      <button class="mob-theme-btn" data-t="ios" onclick="setTheme('ios',this)" title="iPhone">📱</button>
+      <button class="mob-theme-btn" data-t="ios-dark" onclick="setTheme('ios-dark',this)" title="iPhone Dark">🖤</button>
+      <button class="mob-theme-btn" data-t="titanium" onclick="setTheme('titanium',this)" title="Titanium">🪨</button>
+      <button class="mob-theme-btn" data-t="ocean" onclick="setTheme('ocean',this)" title="Ocean">🌊</button>
     </div>
   </div>
 
