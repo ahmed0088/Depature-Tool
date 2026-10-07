@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 161, items: [
+    '🖼 Roster picture options: before you download or share, choose to show or hide the heading (and change its words), show job titles next to names (Manager, Supervisor…), and show or hide employee numbers, with a live preview. Your choice is kept and used for the picture posted with the roster.',
+    '⚡ No more lag when you change titles or anything on the team: the "same people, more overlap" check (which builds the week several times) now only runs when you tap "Check", instead of in the background after every change.',
+  ] },
   { v: 160, items: [
     '🧹 Roster builder tidied: the setup sections (requests, cover, team, rules) stack in one column with no empty gaps, the team shows as a neat grid, and the "two on the desk" setting sits on one line. Desk hours can run past midnight (8 to 2 = 08:00 – 02:00).',
     '🛡️ Ops Brain is careful with names: "Mr Ahmed is sick", "the guest in 512…", "breakfast starts at 6:30" or "swap room 512 and 514" are never taken as roster commands, and a name must match a whole word ("Khalid" is not Ali).',

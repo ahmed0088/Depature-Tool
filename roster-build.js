@@ -1150,17 +1150,25 @@ function rbDeskApply(g) {
 }
 function rbDeskAdviceHtml(g, days) {
   const id = 'rbDT_' + g.replace(/[^A-Za-z0-9]/g, '_');
-  const fill = st => {
-    const el = document.getElementById(id); if (!el) return;
-    if (!st.best) { el.innerHTML = ''; return; }
-    const { o, r } = st.best;
-    el.innerHTML = `<div class="rb-desk-tip"><b>💡 Same people, more overlap</b>${o.moves.map(m => `<div>Move one place from <b>${escapeHtml(m.from)}</b> to <b>${escapeHtml(m.to)}</b> (${days(m.days)})</div>`).join('')}
+  const st = _rbDeskChecked[_rbDeskKey(g)];
+  if (st && !st.pending) { setTimeout(() => rbDeskFill(g, id, days, st), 0); return `<div id="${id}"></div>`; }
+  if (!rbDeskOn(rbRules()) || !rbDeskCands(g).length) return '';
+  // test-building the week several times takes a few seconds: only when asked, never in the background
+  return `<div id="${id}"><button class="btn sm rb-desk-ask" onclick="rbDeskAsk(${_rbQ(g)},'${id}')">💡 Can the same people overlap more? Check</button></div>`;
+}
+function rbDeskAsk(g, id) {
+  const el = document.getElementById(id); if (!el) return;
+  el.innerHTML = '<div class="ri-reading"><span class="ri-spin"></span><div><b>Trying it with your team…</b><small>A few seconds: the week is built each way to make sure every shift stays covered.</small></div></div>';
+  const DN = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], days = ds => ds.length === 7 ? 'every day' : ds.map(d => DN[d]).join(', ');
+  setTimeout(() => rbDeskCheck(g, st => rbDeskFill(g, id, days, st, true)), 60);
+}
+function rbDeskFill(g, id, days, st, asked) {
+  const el = document.getElementById(id); if (!el) return;
+  if (!st.best) { el.innerHTML = asked ? '<small class="ro-hint">✓ Checked: with this team, moving places in the cover table doesn\'t give more overlap without leaving a shift short.</small>' : ''; return; }
+  const { o, r } = st.best;
+  el.innerHTML = `<div class="rb-desk-tip"><b>💡 Same people, more overlap</b>${o.moves.map(m => `<div>Move one place from <b>${escapeHtml(m.from)}</b> to <b>${escapeHtml(m.to)}</b> (${days(m.days)})</div>`).join('')}
       <small>Alone at the desk: ${st.base.alone} h → ${r.alone} h a week. Built with your team to check: ${r.bad ? `${r.bad} problem${r.bad === 1 ? '' : 's'}, no more than now` : 'every shift covered, all rules kept'}; nobody works more. It changes 👥 Cover needed.</small>
       <button class="btn sm gold" onclick="rbDeskApply(${_rbQ(g)})">Use this</button></div>`;
-  };
-  const st = _rbDeskChecked[_rbDeskKey(g)];
-  if (!st || st.pending) setTimeout(() => rbDeskCheck(g, fill), 0); else setTimeout(() => fill(st), 0);
-  return `<div id="${id}">${st && !st.pending ? '' : rbDeskOn(rbRules()) && rbDeskCands(g).length ? '<small class="ro-hint">💡 Checking if the same people can overlap more…</small>' : ''}</div>`;
 }
 /** The shift that best gives a second person at hour h: it covers h and starts on that day, the longest overlap first. */
 function rbDeskBest(G, h) {
@@ -1339,20 +1347,24 @@ async function rbPublish() {
   roWeek = rbWeek; roRender();
 }
 /** The roster as a picture, laid out like management's (title, dates, hotel bars, coloured cells). */
-function rbPicture(res, title) {
-  res = res || rbAsRes(); const dates = res.dates;
+/** What the roster picture shows: the heading (and its words), job titles, employee numbers. Kept for everyone. */
+function rbPicOpts() { return Object.assign({ heading: true, text: '', titles: false, ids: true }, rbSettings.pic || {}); }
+function rbPicture(res, title, opts) {
+  res = res || rbAsRes(); const dates = res.dates, O = Object.assign(rbPicOpts(), opts || {});
+  const keyOf = n => (res.keys || {})[n] || Object.keys(roStaff).find(k => (roStaff[k] || {}).name === n);
   const colors = { morning: '#92d050', afternoon: '#f4b084', night: '#ffff00', nightLate: '#00b0f0', off: '#bfbfbf', leave: '#ff4040', ph: '#9bc2e6', other: '#ffffff' };
   const fill = v => { const i = roInfo(v); if (!i) return '#ffffff'; if (/^PH\b/i.test(v)) return colors.ph; if (i.type === 'night') return rbMin(i.from || '00:00') >= 12 * 60 ? colors.nightLate : colors.night; return colors[i.type] || colors.other; };
   const nameW = 260, colW = 128, rowH = 26, x0 = 10, W = x0 * 2 + nameW + colW * 7;
   const groups = []; res.names.forEach(n => { const g = res.groups[n] || ''; let G = groups.find(x => x.g === g); if (!G) groups.push(G = { g, n: [] }); G.n.push(n); });
-  const H = 40 + rowH * 2 + groups.reduce((t, G) => t + (G.g || groups.length > 1 ? rowH : 0) + G.n.length * rowH, 0) + 14;
+  const top = O.heading ? 40 : 10;
+  const H = top + rowH * 2 + groups.reduce((t, G) => t + (G.g || groups.length > 1 ? rowH : 0) + G.n.length * rowH, 0) + 14;
   const c = document.createElement('canvas'); c.width = W * 2; c.height = H * 2;
   const x = c.getContext('2d'); x.scale(2, 2);
   x.fillStyle = '#fff'; x.fillRect(0, 0, W, H);
   x.textBaseline = 'middle'; x.textAlign = 'center';
   x.fillStyle = '#111'; x.font = 'bold 20px Georgia, serif';
-  x.fillText(title || rbSettings.title || `Roster · ${rbWeekLabel(roMonday(roDate(dates[0])))}`, W / 2, 22);
-  let y = 40;
+  if (O.heading) x.fillText(O.text || title || rbSettings.title || `Roster · ${rbWeekLabel(roMonday(roDate(dates[0])))}`, W / 2, 22, W - 20);
+  let y = top;
   const cell = (cx, cy, w, h, bg, txt, font, color) => { x.fillStyle = bg; x.fillRect(cx, cy, w, h); x.strokeStyle = '#333'; x.lineWidth = 0.8; x.strokeRect(cx, cy, w, h); if (txt) { x.fillStyle = color || '#111'; x.font = font || '12px Calibri, Arial'; x.fillText(txt, cx + w / 2, cy + h / 2, w - 6); } };
   cell(x0, y, nameW, rowH * 2, '#c6efce', 'Employee Name', 'bold 13px Calibri, Arial');
   dates.forEach((dt, d) => { const D = roDate(dt); cell(x0 + nameW + d * colW, y, colW, rowH, '#c6efce', `${D.getDate()}-${D.toLocaleDateString('en-GB', { month: 'short' })}`, 'bold 13px Calibri, Arial'); cell(x0 + nameW + d * colW, y + rowH, colW, rowH, '#c6efce', RB_DAYS[d], 'bold 13px Calibri, Arial'); });
@@ -1361,15 +1373,45 @@ function rbPicture(res, title) {
     if (G.g || groups.length > 1) { x.fillStyle = '#000'; x.fillRect(x0, y, W - x0 * 2, rowH); x.fillStyle = '#fff'; x.font = 'bold 15px Georgia, serif'; x.textAlign = 'left'; x.fillText(G.g || 'Team', x0 + 12, y + rowH / 2); x.textAlign = 'center'; y += rowH; }
     G.n.forEach(n => {
       x.fillStyle = '#fff'; x.fillRect(x0, y, nameW, rowH); x.strokeStyle = '#333'; x.strokeRect(x0, y, nameW, rowH);
-      x.fillStyle = '#111'; x.font = '12px Calibri, Arial'; x.textAlign = 'left'; x.fillText(`${res.ids[n] ? res.ids[n] + ' - ' : ''}${n}`, x0 + 6, y + rowH / 2, nameW - 10); x.textAlign = 'center';
+      const t = O.titles ? rbTitle(keyOf(n) || '') : '';
+      if (t) { x.font = 'italic 10.5px Calibri, Arial'; x.fillStyle = '#666'; x.textAlign = 'right'; x.fillText(t, x0 + nameW - 6, y + rowH / 2, 90); }
+      x.fillStyle = '#111'; x.font = '12px Calibri, Arial'; x.textAlign = 'left'; x.fillText(`${O.ids && res.ids[n] ? res.ids[n] + ' - ' : ''}${n}`, x0 + 6, y + rowH / 2, nameW - (t ? 100 : 10)); x.textAlign = 'center';
       dates.forEach((dt, d) => { const v = res.cells[n][dt] || ''; cell(x0 + nameW + d * colW, y, colW, rowH, fill(v), v, rbParse(v) || /^OFF$/i.test(v) ? 'bold 12px Calibri, Arial' : '12px Calibri, Arial'); });
       y += rowH;
     });
   });
   return c;
 }
+/** Picture options with a live preview, then share or download. */
 function rbSharePic(res) {
-  const c = rbPicture(res), name = `Roster ${roMonday(roDate((res || rbAsRes()).dates[0]))}.png`;
+  res = res || rbAsRes();
+  document.getElementById('rbPicSheet')?.remove();
+  const O = rbPicOpts(), d = document.createElement('div'); d.id = 'rbPicSheet'; d.className = 'ri-viewer';
+  const dflt = rbSettings.title || `Roster · ${rbWeekLabel(roMonday(roDate(res.dates[0])))}`;
+  d.innerHTML = `<div class="card rt-sheet rb-pic-sheet"><div class="ro-card-hd"><b>🖼 Roster picture</b><button class="ro-x" onclick="document.getElementById('rbPicSheet').remove()">✕</button></div>
+    <div class="rb-pic-opts">
+      <label class="rb-chk"><input type="checkbox" id="rbPoH" ${O.heading ? 'checked' : ''}> Heading</label>
+      <input id="rbPoT" value="${escapeHtml(O.text || dflt)}" placeholder="${escapeHtml(dflt)}" ${O.heading ? '' : 'disabled'}>
+      <label class="rb-chk"><input type="checkbox" id="rbPoJ" ${O.titles ? 'checked' : ''}> Job titles (Manager, Supervisor…)</label>
+      <label class="rb-chk"><input type="checkbox" id="rbPoI" ${O.ids ? 'checked' : ''}> Employee numbers</label>
+    </div>
+    <div class="rb-pic-prev"><img id="rbPoImg" alt="Roster picture preview"></div>
+    <div class="ro-acts"><button class="btn gold" id="rbPoGo">⬇ Download / share</button><small>Your choices are kept for next time and for the picture posted with the roster.</small></div></div>`;
+  d.addEventListener('click', e => { if (e.target === d) d.remove(); });
+  document.body.appendChild(d);
+  const read = () => ({ heading: document.getElementById('rbPoH').checked, text: document.getElementById('rbPoT').value.trim() === dflt ? '' : document.getElementById('rbPoT').value.trim(), titles: document.getElementById('rbPoJ').checked, ids: document.getElementById('rbPoI').checked });
+  const draw = () => { const o = read(); document.getElementById('rbPoT').disabled = !o.heading; document.getElementById('rbPoImg').src = rbPicture(res, null, o).toDataURL('image/png'); };
+  ['rbPoH', 'rbPoJ', 'rbPoI'].forEach(id => document.getElementById(id).addEventListener('change', draw));
+  document.getElementById('rbPoT').addEventListener('input', () => { clearTimeout(draw._t); draw._t = setTimeout(draw, 250); });
+  document.getElementById('rbPoGo').onclick = () => {
+    const o = read(); rbSettings.pic = o;
+    if (typeof roCanEdit === 'function' && roCanEdit()) fbSet('roster/builder/settings/pic', o);
+    d.remove(); rbSharePicNow(res, o);
+  };
+  draw();
+}
+function rbSharePicNow(res, opts) {
+  const c = rbPicture(res, null, opts), name = `Roster ${roMonday(roDate((res || rbAsRes()).dates[0]))}.png`;
   c.toBlob(async b => {
     const f = new File([b], name, { type: 'image/png' });
     if (navigator.canShare && navigator.canShare({ files: [f] })) { try { await navigator.share({ files: [f], title: 'Roster' }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
