@@ -395,6 +395,24 @@ console.log('\nRoster scenarios');
   check('autocomplete: words cut short, in order ("put hu nig")', sug('put hu nig')[0], 'put Hugo on nights next week');
   check('autocomplete: "keep every" → keep everyone in their own hotel', sug('keep every')[0], 'keep everyone in their own hotel');
   check('autocomplete: made-up example names never show', sug('sam').some(x => /\bSam\b/.test(x)), false);
+  // review fixes: Ops Brain never takes a guest's sentence as a staff command
+  run(`roStaff.ALI = { name: 'Ali', group: 'Ibis DD', order: 20 };`);
+  check('names: "Khalid" is not Ali, "Mr Bilal" is a guest, "who" is nobody', run(`[rtFind('Khalid'), rtFind('Mr Bilal'), rtFind('who'), rtFind('the guest in 512')].map(x => x || '-').join()`), '-,-,-,-');
+  check('names: real names still found', run(`[rtFind('Ali'), rtFind('bilal'), rtFind('Carla Diaz')].join()`), 'ALI,B,C');
+  const takes = q => run(`RT_COMMANDS.some(c => c.re.test(${JSON.stringify(q)}))`);
+  const guest = ['Mr Bilal is sick, send doctor to 512', 'breakfast starts at 6:30', 'the conference starts at 9am tomorrow', 'swap room 512 and 514', 'who can do late checkout for 512', 'who can take the airport pickup', 'pillow cover issues in 512', 'arrivals last week', 'nationality history', 'how many guests on vacation', 'who is the manager', 'Mr Bilal stays at the hotel', 'what if the guest is late'];
+  check('brain: guest and room sentences are left to the rest of Ops Brain', guest.filter(takes).join(' | '), '');
+  const staffQ = ['Bilal is sick tomorrow', 'Ali wants Friday off', 'swap Bilal and Carla on Tue', 'who can cover nights on Wed', 'roster problems', 'Carla last week', 'what if Anna is sick tomorrow', 'put Anna on mornings next week', 'put Anna or Carla on day shifts this week', 'Bilal is a supervisor', 'lock Gina in her hotel', 'add new staff Rosa Diaz to Ibis'];
+  check('brain: staff commands still work', staffQ.filter(q => !takes(q)).join(' | '), '');
+  run(`delete roStaff.ALI;`);
+  // review fixes: the builder
+  check('groups: a hotel name with " · " is not a bell team', run(`rbBaseGroup('Rove · Downtown') + '|' + rbBaseGroup('Ibis DD · Bell')`), 'Rove · Downtown|Ibis DD');
+  check('groups: hotels sharing a first word are told apart', run(`[rbShortU('Ibis DD', ['Ibis DD', 'Ibis GD']), rbShortU('Adagio GD', ['Adagio GD', 'Ibis DD']), rbNoteGroup('Ibis GD', ['Ibis DD', 'Ibis GD']), rbNoteGroup('Adagio', ['Adagio GD', 'Ibis DD'])].join()`), 'Ibis DD,Adagio,Ibis GD,Adagio GD');
+  check('problems: a person with no row in the draft does not crash', run(`(() => { rbWeek = W; const I = rbInput(1); try { rbProblems(I, {}); rtCoverOptions(I, {}, 'Ibis DD', roAdd(W, 3), I.groups['Ibis DD'].shifts[0]); return 'ok'; } catch (e) { return e.message; } })()`), 'ok');
+  check('PH is never given on a fixed day', run(`(() => { rbWeek = W; const I = rbInput(1); const A = I.people.find(p => p.key === 'B'); A.phOwed = 1; A.phLabel = 'test'; const d = roAdd(W, 0); I.pre = Object.assign({}, I.pre, { B: { [d]: '15:00 - 00:00' } }); I.groups['Ibis DD'].need['15:00 - 00:00'] = [0, 0, 0, 0, 0, 0, 0]; const r = rbSolve(I); return r.cells.B[d]; })()`), '15:00 - 00:00');
+  run(`roStaff.NOH = { name: 'Nora Hale', order: 30 };`);
+  check('groups: someone with no hotel set is still rostered', run(`rbGroups().includes('')`), true);
+  run(`delete roStaff.NOH;`);
 }
 
 console.log(`\n${pass} passed · ${fail} failed`);

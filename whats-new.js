@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 160, items: [
+    '🧹 Roster builder tidied: the setup sections (requests, cover, team, rules) stack in one column with no empty gaps, the team shows as a neat grid, and the "two on the desk" setting sits on one line. Desk hours can run past midnight (8 to 2 = 08:00 – 02:00).',
+    '🛡️ Ops Brain is careful with names: "Mr Ahmed is sick", "the guest in 512…", "breakfast starts at 6:30" or "swap room 512 and 514" are never taken as roster commands, and a name must match a whole word ("Khalid" is not Ali).',
+    '🛠 Fixes: PH days are never given on a day already fixed (or gone by); hotels whose names start with the same word are told apart when lending; a renamed person stays one person when a week is published; people with no hotel set are still rostered; edits made just before changing week are saved to the right week.',
+  ] },
   { v: 159, items: [
     '📱 On phones, rows of buttons at the top of a page fade at the edge when there are more to swipe to, and the Roster page shows all its buttons (What if, Picture, Alerts were hidden off the side).',
     '🗓️ Roster page: "My shifts" no longer stretches into a tall empty box next to Today.',

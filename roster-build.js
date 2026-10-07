@@ -53,8 +53,9 @@ function rbShiftHours(code) {
   _rbHC.set(k, r); return r;
 }
 /** Whether the desk target is on, and the hours it covers. */
-function rbDeskOn(R) { return R && R.deskMin > 1 && R.deskTo > R.deskFrom; }
-function rbDeskHour(R, h) { return h >= R.deskFrom && h < R.deskTo; }
+function rbDeskOn(R) { return !!R && R.deskMin > 1 && R.deskTo % 24 !== R.deskFrom % 24; }
+/** Within the desk hours; "8 to 2" runs past midnight (08:00 – 02:00). */
+function rbDeskHour(R, h) { const f = R.deskFrom % 24, t = R.deskTo % 24; return f < t ? h >= f && h < t : h >= f || h < t; }
 /** People on the desk each hour, 7 days × 24: count(d, code) says how many work that shift that day;
  *  prev = the shifts of the day before the week (spill past midnight into Monday). */
 function rbDeskGrid(shifts, count, prev) {
@@ -79,7 +80,6 @@ function rbDesk(I, cells, g) {
   const dates = Array.from({ length: 7 }, (_, d) => roAdd(I.week, d)), G = I.groups[g];
   if (!G) return null;
   const sh = new Set(G.shifts), cnt = Array.from({ length: 7 }, () => ({})), extra = new Set(), prev = {};
-  const byShort = {}; Object.keys(I.groups).forEach(x => { byShort[rbShort(x).toLowerCase()] = x; });
   I.people.forEach(p => {
     dates.forEach((dt, d) => {
       const v = cells[p.key] && cells[p.key][dt], x = rbParse(v); if (!x) return;
@@ -130,13 +130,24 @@ function rbShort(group) { return String(group || '').split(/\s+/)[0]; }
 const RB_POSTS = { 'Bell Boy': 'Bell' };
 function rbPost(k) { return RB_POSTS[rbTitle(k)] || ''; }
 function rbPGroup(k) { const g = (roStaff[k] || {}).group || '', p = rbPost(k); return p ? `${g} · ${p}` : g; }
-function rbBaseGroup(g) { return String(g || '').replace(/ · [^·]+$/, ''); }
+function rbBaseGroup(g) { const m = String(g || '').match(/^(.*) · ([^·]+)$/); return m && Object.values(RB_POSTS).includes(m[2]) ? m[1] : String(g || ''); }
+/** The word written after a lent shift ("12:00 - 21:00 - Adagio"): the hotel's first word, or its whole name when another hotel starts with the same word. */
+function rbShortU(g, all) { const w = rbShort(g).toLowerCase(), hs = (all || rbGroups()).filter(x => x && rbBaseGroup(x) === x); return hs.filter(x => rbShort(x).toLowerCase() === w).length > 1 ? g : rbShort(g); }
+/** Which hotel a lent shift's note names: the whole name first, else a first word only one hotel has. */
+function rbNoteGroup(note, groups) {
+  const n = String(note || '').toLowerCase().trim(); if (!n) return null;
+  const hs = groups.filter(x => rbBaseGroup(x) === x);
+  const full = hs.filter(x => x && n.startsWith(x.toLowerCase())).sort((a, b) => b.length - a.length)[0]; if (full) return full;
+  const w = n.split(/\s+/)[0], one = hs.filter(x => x && rbShort(x).toLowerCase() === w);
+  return one.length === 1 ? one[0] : null;
+}
 /** The cover a shift counts for: the hotel in its note ("12:00 - 21:00 - Adagio") or their own, at their position. */
 function rbAt(I, p, x) {
   let h = rbBaseGroup(p.group);
   if (x && x.note) {
-    if (!I._sh) { I._sh = {}; Object.keys(I.groups).forEach(g => { if (!I.groups[g].post) I._sh[rbShort(g).toLowerCase()] = g; }); }
-    const hit = I._sh[x.note.split(/\s+/)[0].toLowerCase()]; if (hit) h = hit;
+    if (!I._nc) I._nc = {};
+    const hit = I._nc[x.note] !== undefined ? I._nc[x.note] : (I._nc[x.note] = rbNoteGroup(x.note, Object.keys(I.groups).filter(g => !I.groups[g].post)));
+    if (hit) h = hit;
   }
   return p.post ? `${h} · ${p.post}` : h;
 }
@@ -225,9 +236,9 @@ function _rbFinish(I, cells) {
     for (const g of Object.keys(G)) for (let d = 0; d < D; d++) for (const s of G[g].shifts) {
       while (cover[g][s][d] < need(g, s, d)) {
         const dt = dates[d];
-        const donor = I.people.find(q => q.group !== g && !q.home && !q.lock && G[q.group] && cells[q.key][dt] === s && cover[q.group][s] && cover[q.group][s][d] > need(q.group, s, d) && rbMayWork(I, g, q, s));
+        const donor = I.people.find(q => q.group !== g && !q.home && !q.lock && !((I.pre || {})[q.key] || {})[dt] && G[q.group] && cells[q.key][dt] === s && cover[q.group][s] && cover[q.group][s][d] > need(q.group, s, d) && rbMayWork(I, g, q, s));
         if (!donor) break;
-        cells[donor.key][dt] = `${s} - ${rbShort(g)}`;
+        cells[donor.key][dt] = `${s} - ${rbShortU(g, Object.keys(G))}`;
         cover = rbCover(I, cells);
       }
     }
@@ -237,7 +248,7 @@ function _rbFinish(I, cells) {
     I.people.filter(p => (p.phOwed || 0) > 0).forEach(p => {
       for (let d = 0; d < D; d++) {
         const dt = dates[d], s = cells[p.key][dt];
-        if (!s || !G[p.group] || !G[p.group].shifts.includes(s)) continue;
+        if (!s || !G[p.group] || !G[p.group].shifts.includes(s) || ((I.pre || {})[p.key] || {})[dt]) continue;   // never over a fixed day (requests, days gone by)
         if (cover[p.group][s][d] > need(p.group, s, d)) { cells[p.key][dt] = p.phLabel ? `PH - ${p.phLabel}` : 'PH'; cover = rbCover(I, cells); break; }
       }
     });
@@ -439,7 +450,7 @@ function rbImprove(I, g, cells, dates, R, rnd) {
 /** How many people each hotel has on each shift each day (someone lent out counts where they work). */
 function rbCover(I, cells) {
   const dates = Array.from({ length: 7 }, (_, d) => roAdd(I.week, d)), out = {};
-  const byShort = {}; Object.keys(I.groups).forEach(g => { byShort[rbShort(g).toLowerCase()] = g; out[g] = {}; I.groups[g].shifts.forEach(s => { out[g][s] = [0, 0, 0, 0, 0, 0, 0]; }); });
+  Object.keys(I.groups).forEach(g => { out[g] = {}; I.groups[g].shifts.forEach(s => { out[g][s] = [0, 0, 0, 0, 0, 0, 0]; }); });
   I.people.forEach(p => dates.forEach((dt, d) => {
     const v = cells[p.key] && cells[p.key][dt], x = rbParse(v);
     if (!x) return;
@@ -461,7 +472,7 @@ function rbProblems(I, cells, cover) {
   I.people.forEach(p => {
     let run = p.run || 0, prev = p.lastShift || '';
     dates.forEach((dt, d) => {
-      const v = cells[p.key][dt] || '';
+      const v = (cells[p.key] || {})[dt] || '';
       if (rbParse(v)) {
         run++;
         if (rbParse(v).e - rbParse(v).s > (R.maxHours || 9) * 60) out.push({ kind: 'long', key: p.key, date: dt, hours: (rbParse(v).e - rbParse(v).s) / 60, code: v });
@@ -473,7 +484,7 @@ function rbProblems(I, cells, cover) {
       } else if (v) run = 0;
       prev = v;
     });
-    const offs = dates.filter(dt => rbKind(cells[p.key][dt]) === 'off').length, due = rbOffsDue(I, p, dates);
+    const offs = dates.filter(dt => rbKind((cells[p.key] || {})[dt]) === 'off').length, due = rbOffsDue(I, p, dates);
     if (offs < due) out.push({ kind: 'offs', key: p.key, have: offs, need: due });
   });
   return out;
@@ -493,13 +504,13 @@ function rbLearnGroup(group, week) {
   const weeks = rbHistory(week);
   const counts = {};                     // code → weekday → [per week]
   const groupOf = {}, postOf = {}; Object.keys(roStaff).forEach(k => { groupOf[k] = rbPGroup(k); postOf[k] = rbPost(k); });
-  const shorts = {}; Object.values(roStaff).forEach(st => { const g = (st && st.group) || ''; if (g) shorts[rbShort(g).toLowerCase()] = g; });
+  const hotels = [...new Set(Object.values(roStaff).map(st => (st && st.group) || '').filter(Boolean))];
   const tally = [];
   weeks.forEach(w => { for (let d = 0; d < 7; d++) {
     const c = {};
     Object.entries(roDays[roAdd(w, d)] || {}).forEach(([k, v]) => {
       const x = rbParse(v); if (!x) return;
-      const h = x.note && shorts[x.note.split(/\s+/)[0].toLowerCase()];
+      const h = x.note && rbNoteGroup(x.note, hotels);
       const g = h ? (postOf[k] ? `${h} · ${postOf[k]}` : h) : groupOf[k] || '';
       if (g !== group) return;
       const s = `${x.from} - ${x.to}`; c[s] = (c[s] || 0) + 1;
@@ -562,7 +573,7 @@ let rbWeek = null, rbGroup = null, rbOut = null, rbSeed = 1;
 const RB_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 function rbRules() { return Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, givePh: true, lend: true, lockMgr: true, deskMin: 2, deskFrom: 8, deskTo: 23 }, rbSettings.rules || {}); }
-function rbGroups() { const g = roGroups(); return g.length ? g : ['']; }
+function rbGroups() { const g = roGroups(); return !g.length ? [''] : Object.values(roStaff).some(st => st && !st.group) ? g.concat(['']) : g; }   // '' = people with no hotel set
 /** "Adagio GD · Bell" when the hotel has bell boys: their own cover, shifts and people. */
 function rbPostGroups(g, week) { return [...new Set(rbMembers(g, week).map(rbPost).filter(Boolean))].map(p => `${g} · ${p}`); }
 function rbWithPosts(shown) { return [].concat(...shown.map(g => [g, ...rbPostGroups(g)])); }
@@ -670,9 +681,11 @@ function _rbBuildNow() {
   showToast(short ? `Roster built: ${short} gap${short === 1 ? '' : 's'} in cover to look at` : 'Roster built: every shift is covered', short ? 'warn' : 'ok');
   setTimeout(() => document.getElementById('rbOut')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
 }
+const _rbSaving = {};
 function rbSaveDraft() {
-  clearTimeout(rbSaveDraft._t);
-  rbSaveDraft._t = setTimeout(() => fbSet('roster/builder/drafts/' + rbWeek, rbDrafts[rbWeek] || null), 400);
+  const w = rbWeek;   // the week edited, even if another week is open when the save runs
+  clearTimeout(_rbSaving[w]);
+  _rbSaving[w] = setTimeout(() => { delete _rbSaving[w]; fbSet('roster/builder/drafts/' + w, rbDrafts[w] || null); }, 400);
 }
 
 // ── Screen ────────────────────────────────────────────────
@@ -956,7 +969,8 @@ function rbRulesHtml() {
     <label>Days in a row, at most <input type="number" min="3" max="14" value="${R.maxRun}" onchange="rbSetRule('maxRun',+this.value)"></label>
     <label>Longest shift <input type="number" min="6" max="12" value="${R.maxHours}" onchange="rbSetRule('maxHours',+this.value)"> hours</label>
     <label class="rb-chk"><input type="checkbox" ${R.nightSwitch !== false ? 'checked' : ''} onchange="rbSetRule('nightSwitch',this.checked)"> A day off between night and day shifts (no night on Monday then 08:00 on Tuesday, or the other way)</label>
-    <label class="rb-desk-rule">Two on the desk: aim for <input type="number" min="1" max="6" value="${R.deskMin}" onchange="rbSetRule('deskMin',+this.value)"> people at the same time from <input type="number" min="0" max="23" value="${R.deskFrom}" onchange="rbSetRule('deskFrom',+this.value)">:00 to <input type="number" min="1" max="24" value="${R.deskTo}" onchange="rbSetRule('deskTo',+this.value)">:00 <small>(e.g. one on 08–17 and one on 12–21 overlap 12:00–17:00). 1 = off.</small></label>
+    <div class="rb-desk-rule"><span>Two on the desk: aim for</span><input type="number" min="1" max="6" value="${R.deskMin}" onchange="rbSetRule('deskMin',+this.value)"><span>at once, from</span><input type="number" min="0" max="23" value="${R.deskFrom}" onchange="rbSetRule('deskFrom',+this.value)"><span>:00 to</span><input type="number" min="0" max="24" value="${R.deskTo}" onchange="rbSetRule('deskTo',+this.value)"><span>:00${R.deskTo % 24 < R.deskFrom % 24 ? ' (next day)' : ''}</span>
+      <small>One on 08–17 and one on 12–21 = two at once 12:00–17:00. An end before the start runs past midnight; 1 person = off.</small></div>
     <label class="rb-chk"><input type="checkbox" ${R.allowOne !== false ? 'checked' : ''} onchange="rbSetRule('allowOne',this.checked)"> When there's no other way, run a shift with one person (cover number = the ideal)</label>
     <label class="rb-chk"><input type="checkbox" ${R.givePh ? 'checked' : ''} onchange="rbSetRule('givePh',this.checked)"> Give PH days owed when a shift has someone spare</label>
     <label class="rb-chk"><input type="checkbox" ${R.lend === false ? 'checked' : ''} onchange="rbSetRule('lend',!this.checked)"> 🏨 Keep everyone in their own hotel (nobody is moved between hotels, by the builder or in suggestions). Off: a short hotel can borrow ("12:00 - 21:00 - Adagio"); lock single people on their card.</label>
@@ -1046,7 +1060,7 @@ function rbDeskChip(I, cells, shown, chip) {
 }
 /** Hour by hour: how many are on the desk, who, and where someone is alone. */
 function rbDeskHtml(I, cells, shown, dates) {
-  const R = rbRules(), byShort = {}; Object.keys(I.groups).forEach(x => { byShort[rbShort(x).toLowerCase()] = x; });
+  const R = rbRules();
   const first = k => ((roStaff[k] || {}).name || k).split(' ')[0];
   const blocks = shown.map(g => {
     const G = I.groups[g]; if (!G) return '';
@@ -1108,18 +1122,20 @@ function rbDeskCands(g) {
 }
 /** Each idea is built with the real team before it is shown: kept only if every shift and rule holds as well as now. */
 const _rbDeskChecked = {};
-function _rbDeskKey(g) { const c = rbGroupCfg(g); return JSON.stringify([rbWeek, g, c.shifts, c.need, rbRules(), Object.keys(rbPeople).length, Object.keys(roStaff).length]); }
+function _rbDeskKey(g) { const c = rbGroupCfg(g); return JSON.stringify([rbWeek, g, c.shifts, c.need, rbRules(), rbReqs[rbWeek] || {}, rbPeople, Object.keys(roStaff).length]); }
 function rbDeskCheck(g, done) {
-  const key = _rbDeskKey(g); if (_rbDeskChecked[key]) { done(_rbDeskChecked[key]); return; }
+  const key = _rbDeskKey(g); if (_rbDeskChecked[key]) { if (!_rbDeskChecked[key].pending) done(_rbDeskChecked[key]); else _rbDeskChecked[key].wait.push(done); return; }
   const cands = rbDeskCands(g); if (!cands.length) { done(_rbDeskChecked[key] = { best: null }); return; }
   const R = rbRules();
+  _rbDeskChecked[key] = { pending: true, wait: [done] };   // renders meanwhile wait for this check instead of starting another
+  const finish = st => { const w = _rbDeskChecked[key].wait; _rbDeskChecked[key] = st; w.forEach(f => f(st)); };
   const run = need => { const I = rbInput(1); if (need) I.groups[g] = Object.assign({}, I.groups[g], { need }); const res = rbSolve(I); return { bad: res.problems.filter(p => p.kind !== 'thin').length, thin: res.problems.filter(p => p.kind === 'thin').length, alone: rbDeskShort(rbDesk(I, res.cells, g), R).hours }; };
   let i = -1, base = null, best = null;
   const step = () => {
-    if (rbWeek !== JSON.parse(key)[0]) return;
+    if (rbWeek !== JSON.parse(key)[0]) { delete _rbDeskChecked[key]; return; }
     if (i < 0) base = run(null);
     else { const o = cands[i], r = run(o.need); if (r.bad <= base.bad && r.thin <= base.thin && r.alone < base.alone && (!best || r.alone < best.r.alone)) best = { o, r }; }
-    if (++i < cands.length) setTimeout(step, 0); else done(_rbDeskChecked[key] = { best, base });
+    if (++i < cands.length) setTimeout(step, 0); else finish({ best, base });
   };
   setTimeout(step, 30);
 }
@@ -1143,8 +1159,8 @@ function rbDeskAdviceHtml(g, days) {
       <button class="btn sm gold" onclick="rbDeskApply(${_rbQ(g)})">Use this</button></div>`;
   };
   const st = _rbDeskChecked[_rbDeskKey(g)];
-  if (!st) setTimeout(() => rbDeskCheck(g, fill), 0); else setTimeout(() => fill(st), 0);
-  return `<div id="${id}">${st ? '' : rbDeskOn(rbRules()) && rbDeskCands(g).length ? '<small class="ro-hint">💡 Checking if the same people can overlap more…</small>' : ''}</div>`;
+  if (!st || st.pending) setTimeout(() => rbDeskCheck(g, fill), 0); else setTimeout(() => fill(st), 0);
+  return `<div id="${id}">${st && !st.pending ? '' : rbDeskOn(rbRules()) && rbDeskCands(g).length ? '<small class="ro-hint">💡 Checking if the same people can overlap more…</small>' : ''}</div>`;
 }
 /** The shift that best gives a second person at hour h: it covers h and starts on that day, the longest overlap first. */
 function rbDeskBest(G, h) {
@@ -1253,7 +1269,7 @@ function rbPick(td, k, dt) {
     <div class="rb-opts">${opt('OFF', 'OFF', 'ro-t-off')}${opt(rbPhOwed(k).label ? 'PH - ' + rbPhOwed(k).label : 'PH', 'PH', 'ro-t-leave')}${leave.slice(0, 8).map(c => opt(c, c, 'ro-t-leave')).join('')}</div>
     ${rbSwapMenuHtml(k, dt)}
     <div class="rb-opts"><small>Sick or leave from this day:</small>${['SL', 'AL', 'EL'].map(c => `<button class="rb-opt ro-t-leave" onclick="rbLeaveFrom(${_rbQ(k)},'${dt}','${c}')">${c} …</button>`).join('')}</div>
-    ${others.length ? `<details class="rb-opts-more"><summary>Lend to another hotel…</summary><div class="rb-opts">${others.map(o => shifts.map(s => opt(`${s} - ${rbShort(o)}`, `${s.slice(0, 5)} at ${rbShort(o)}`, 'ro-t-other')).join('')).join('')}</div></details>` : ''}
+    ${others.length ? `<details class="rb-opts-more"><summary>Lend to another hotel…</summary><div class="rb-opts">${others.map(o => shifts.map(s => opt(`${s} - ${rbShortU(o)}`, `${s.slice(0, 5)} at ${rbShortU(o)}`, 'ro-t-other')).join('')).join('')}</div></details>` : ''}
     <div class="rb-inline"><input id="rbOther" placeholder="Other (e.g. TRN, 10:00 - 19:00)" value=""><button class="btn sm" onclick="rbSetCell(${_rbQ(k)},'${dt}',document.getElementById('rbOther').value)">Set</button><button class="btn sm" onclick="rbSetCell(${_rbQ(k)},'${dt}','')">Clear</button></div>`;
   document.body.appendChild(m);
   const r = td.getBoundingClientRect(), mw = Math.min(340, window.innerWidth - 16);
@@ -1291,15 +1307,16 @@ function rbSetCell(k, dt, v) {
 // ── Out: publish, picture, Excel ──────────────────────────
 function rbAsRes() {
   const dates = Array.from({ length: 7 }, (_, d) => roAdd(rbWeek, d)), cells = rbDrafts[rbWeek].cells;
-  const names = [], out = {}, groups = {}, ids = {};
+  const names = [], out = {}, groups = {}, ids = {}, keys = {};
   rbGroups().forEach(g => rbMembers(g).forEach(k => {
     const s = roStaff[k]; if (!s) return;
-    names.push(s.name); out[s.name] = Object.assign({}, cells[k] || {});
+    names.push(s.name); out[s.name] = Object.assign({}, cells[k] || {}); keys[s.name] = k;   // their own key: a renamed person stays one person
     if (g) groups[s.name] = g; if (s.id) ids[s.name] = s.id;
   }));
-  return { names, dates, cells: out, groups, ids, by: '🛠 Built in HotelOps' };
+  return { names, dates, cells: out, groups, ids, keys, by: '🛠 Built in HotelOps' };
 }
 async function rbPublish() {
+  window._rbContinue = false;   // publishing is never the "give this week's roster" step
   const res = rbAsRes();
   const probs = rbProblems(rbInput(rbSeed), rbDrafts[rbWeek].cells).length;
   if (probs && !confirm(`${probs} problem${probs === 1 ? '' : 's'} still in the draft. Publish anyway?`)) return;

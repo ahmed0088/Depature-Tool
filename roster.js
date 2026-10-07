@@ -310,7 +310,7 @@ function roShowPreview(res) {
     ${words.length ? `<div class="ro-words"><div class="ro-card-hd"><b>🔎 Words in this roster</b><span>Say what they mean once; HotelOps remembers for every roster after.</span></div>
       ${words.map(w => `<div class="ro-word"><b>${escapeHtml(w.code)}</b><input class="ro-w-m" data-code="${escapeHtml(w.code)}" value="${escapeHtml(w.meaning)}" placeholder="What does ${escapeHtml(w.code)} mean?"><select class="ro-w-t">${Object.entries(RO_TYPES).map(([k, v]) => `<option value="${k}"${k === w.type ? ' selected' : ''}>${v}</option>`).join('')}</select>${w.from ? `<small>${w.from === 'ai' ? 'AI guess' : 'usual meaning'}</small>` : '<small class="bad">unknown</small>'}</div>`).join('')}
     </div>` : ''}
-    <div class="ro-acts"><button class="btn gold" onclick="roSavePreview()">✓ Save roster${typeof riPending !== 'undefined' && riPending ? ' and post it' : ''}</button><button class="btn" onclick="roShowPreview(null);document.getElementById('roPreview').innerHTML='';if(typeof riPending!=='undefined')riPending=null">Cancel</button>
+    <div class="ro-acts"><button class="btn gold" onclick="roSavePreview()">✓ Save roster${typeof riPending !== 'undefined' && riPending ? ' and post it' : ''}</button><button class="btn" onclick="window._rbContinue=false;roShowPreview(null);document.getElementById('roPreview').innerHTML='';if(typeof riPending!=='undefined')riPending=null">Cancel</button>
     <small>These days are replaced; other weeks stay as they are. The team is told a new roster is posted.</small></div>`;
 }
 function roSavePreview() {
@@ -323,10 +323,11 @@ function roSavePreview() {
   // a name left with "?" is saved without it
   res.names.slice().forEach(n => { if (/\s*\?$/.test(n)) { const c = n.replace(/\s*\?$/, ''); if (!res.cells[c]) roPrevRename(n, c, true); } });
   const staff = Object.assign({}, roStaff);
-  res.names.forEach((n, i) => { const k = roKey(n); staff[k] = { name: n, order: i }; if (res.groups && res.groups[n]) staff[k].group = res.groups[n]; if (res.ids && res.ids[n]) staff[k].id = res.ids[n]; });
+  const kOf = n => (res.keys && res.keys[n]) || roKey(n);
+  res.names.forEach((n, i) => { const k = kOf(n); staff[k] = Object.assign({}, roStaff[k], { name: n, order: i }); if (res.groups && res.groups[n]) staff[k].group = res.groups[n]; if (res.ids && res.ids[n]) staff[k].id = res.ids[n]; });
   res.dates.forEach(d => {
     const day = {};
-    res.names.forEach(n => { const v = res.cells[n][d]; if (v) day[roKey(n)] = v; });
+    res.names.forEach(n => { const v = res.cells[n][d]; if (v) day[kOf(n)] = v; });
     roDays[d] = day;
     fbSet('roster/days/' + d, Object.keys(day).length ? day : null);
   });
