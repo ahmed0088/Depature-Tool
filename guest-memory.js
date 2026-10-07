@@ -236,7 +236,8 @@ function gmClosePwOverlay() {
 }
 
 function gmKey(name) {
-  return String(name || '').toUpperCase().replace(/\s+/g, ' ').trim();
+  // the database refuses . # $ [ ] / in a key ("JOHN A. SMITH"): one bad key would stop every later save
+  return String(name || '').toUpperCase().replace(/[.#$\[\]\/]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 // ── Auto-fill toggle ──────────────────────────────────────
@@ -305,8 +306,13 @@ function gmInit() {
     // bring this hotel's old separate memory in, once someone is signed in
     const _gmWaitLogin = setInterval(() => { if (typeof currentUser !== 'undefined' && currentUser) { clearInterval(_gmWaitLogin); _gmMigrateToShared(); } }, 1500);
     firebase.database().ref(GM_SHARED_PATH).on('value', snap => {
-      _gmStore = snap.val() || {};
-      _gmServer = JSON.parse(JSON.stringify(_gmStore));
+      // an edit still waiting to be saved (3 s) stays on top of what another hotel just saved
+      const mine = {};
+      if (_gmSaveTimer) { Object.keys(_gmStore).forEach(k => { if (JSON.stringify(_gmStore[k]) !== JSON.stringify(_gmServer[k])) mine[k] = _gmStore[k]; }); Object.keys(_gmServer).forEach(k => { if (!(k in _gmStore)) mine[k] = null; }); }
+      const fresh = snap.val() || {};
+      _gmServer = JSON.parse(JSON.stringify(fresh));
+      Object.keys(mine).forEach(k => { if (mine[k] === null) delete fresh[k]; else fresh[k] = mine[k]; });
+      _gmStore = fresh;
       _gmReady = true;
       if (!_gmUnlocked) return;  // don't touch DOM if locked
       const tbl     = document.getElementById('gmTable');
@@ -391,7 +397,7 @@ function gmOnEdit(name, field, value) {
   const key = gmKey(name);
   if (!_gmStore[key]) _gmStore[key] = { nat:'', email:'', purpose:'Business', hits:0, lastSeen:'' };
   _gmStore[key][field]   = value;
-  _gmStore[key].lastSeen = new Date().toISOString().split('T')[0];
+  _gmStore[key].lastSeen = hoLocalISO();
   _gmUpdateStatsOnly();
   _gmPersist();
 }
@@ -451,7 +457,7 @@ function _gmMergeLoaded() {
       conf:           g.conf           || ex.conf           || '',
       originOfTravel: g.originOfTravel || ex.originOfTravel || '',
       hits:           ex.hits    || 0,
-      lastSeen:       ex.lastSeen|| new Date().toISOString().split('T')[0],
+      lastSeen:       ex.lastSeen|| hoLocalISO(),
     };
     if (isNew) saved++; else updated++;
   });
@@ -503,6 +509,8 @@ function _gmUpdateUI() {
 }
 
 // ── Render table ──────────────────────────────────────────
+let _gmRenderT = null;
+function _gmRenderSoon() { clearTimeout(_gmRenderT); _gmRenderT = setTimeout(_gmRenderTable, 200); }   // while typing a search
 function _gmRenderTable() {
   const tbody = document.getElementById('gmTable');
   if (!tbody) return;
@@ -521,18 +529,20 @@ function _gmRenderTable() {
     return;
   }
 
-  tbody.innerHTML = entries.map(([key, p]) => {
-    const ek = key.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  // the memory is shared by every hotel: show at most 500 rows (search to find the rest)
+  const more = entries.length - 500;
+  tbody.innerHTML = entries.slice(0, 500).map(([key, p]) => {
+    const ek = escapeHtml(key.replace(/\\/g,'\\\\').replace(/'/g,"\\'"));
     return `
     <tr>
-      <td style="font-weight:500;color:var(--text);font-size:0.72rem;">${key}</td>
+      <td style="font-weight:500;color:var(--text);font-size:0.72rem;">${escapeHtml(key)}</td>
       <td>
-        <input class="gm-inline-inp" value="${(p.nat||'').replace(/"/g,'&quot;')}"
+        <input class="gm-inline-inp" value="${escapeHtml(p.nat||'')}"
           onchange="gmOnEdit('${ek}','nat',this.value)"
           placeholder="—" style="width:90px;"/>
       </td>
       <td>
-        <input class="gm-inline-inp" value="${(p.email||'').replace(/"/g,'&quot;')}"
+        <input class="gm-inline-inp" value="${escapeHtml(p.email||'')}"
           onchange="gmOnEdit('${ek}','email',this.value)"
           placeholder="—" style="width:160px;"/>
       </td>
@@ -557,7 +567,7 @@ function _gmRenderTable() {
           title="Delete" style="color:var(--rose);">✕</button>
       </td>
     </tr>`;
-  }).join('');
+  }).join('') + (more > 0 ? `<tr><td colspan="7" style="text-align:center;padding:14px;font-family:var(--mono);font-size:0.68rem;color:var(--text3);">${more} more — type a name in Search to find them</td></tr>` : '');
 }
 
 // ── Export CSV ────────────────────────────────────────────
@@ -570,7 +580,7 @@ function gmExport() {
   const blob = new Blob([csv], {type:'text/csv'});
   const a    = document.createElement('a');
   a.href     = URL.createObjectURL(blob);
-  a.download = 'guest_memory_' + new Date().toISOString().split('T')[0] + '.csv';
+  a.download = 'guest_memory_' + hoLocalISO() + '.csv';
   a.click(); URL.revokeObjectURL(a.href);
   showToast('Memory exported ✓', 'ok');
 }

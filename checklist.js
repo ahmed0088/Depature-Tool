@@ -187,7 +187,7 @@ function clCopyLog() {
 // ════════════════════════════════════════════════════════════
 
 function clHandlePhotoUpload(evt, stepId) {
-  const files = Array.from(evt.target.files);
+  const files = Array.from(evt.target.files).filter(f => (f.type || '').startsWith('image/'));   // a PDF picked too would stop the photos from saving
   if (!files.length) return;
   if (!clPhotos[stepId]) clPhotos[stepId] = [];
   let loaded = 0;

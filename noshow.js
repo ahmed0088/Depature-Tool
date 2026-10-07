@@ -362,6 +362,9 @@ function _nsArchive() {
 const _NS_MON = { JAN:'01',FEB:'02',MAR:'03',APR:'04',MAY:'05',JUN:'06',
                   JUL:'07',AUG:'08',SEP:'09',OCT:'10',NOV:'11',DEC:'12' };
 function _nsIsoDate(s) {
+  // the report's own dates are DD-MM-YY ("13-08-26")
+  const n = String(s || '').trim().match(/^(\d{1,2})-(\d{1,2})-(\d{2}|\d{4})$/);
+  if (n && +n[2] >= 1 && +n[2] <= 12) return `${n[3].length === 2 ? '20' + n[3] : n[3]}-${n[2].padStart(2, '0')}-${n[1].padStart(2, '0')}`;
   const m = String(s || '').match(/(\d{1,2})\s*-\s*([A-Za-z]{3})[A-Za-z]*\s*-\s*(\d{2,4})/);
   if (!m) return null;                       // unknown → saveHistory falls back to today
   const mm = _NS_MON[m[2].toUpperCase()];
@@ -439,7 +442,7 @@ function nsRender() {
           class="ns-new-conf-input"
           type="text"
           placeholder="Enter new conf…"
-          value="${g.newConf || ''}"
+          value="${escapeHtml(g.newConf || '')}"
           data-idx="${idx}"
           oninput="nsSetNewConf(${idx}, this.value)"
         />

@@ -864,7 +864,7 @@ function exportArrivals() {
     typeof sourceCategory === 'function' && sourceCategory(g.source) === 'walkin');
 
   writeStyledXlsx(
-    'Arrivals_' + new Date().toISOString().split('T')[0] + '.xlsx',
+    'Arrivals_' + hoLocalISO() + '.xlsx',
     'Arrivals', rows,
     (r) => r === 0 ? 1 : (walkIn[r - 1] ? 2 : 0),
     styles,
@@ -1384,11 +1384,11 @@ function _purposeArchive() {
   const nat = {}, src = {}, purpose = {};
   let withNat = 0;
   purposeGuests.forEach(g => {
-    const n = String(g.nat || '').trim();
+    const n = String(g.nat || '').replace(/[.#$\[\]\/]/g, ' ').replace(/\s+/g, ' ').trim();   // "U.S.A." can't be a database key
     if (n) { nat[n] = (nat[n] || 0) + 1; withNat++; }
     const s = (typeof sourceCategory === 'function') ? sourceCategory(g.source) : 'other';
     src[s] = (src[s] || 0) + 1;
-    const p = String(g.purpose || 'Business').trim();
+    const p = String(g.purpose || 'Business').replace(/[.#$\[\]\/]/g, ' ').replace(/\s+/g, ' ').trim();
     purpose[p] = (purpose[p] || 0) + 1;
   });
   saveHistory('guests', {

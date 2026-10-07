@@ -1014,8 +1014,9 @@ function _pkgArchive(results) {
     const day = _pkgDayNum(r.daily);
     if (!day) return;
     const iso = `${String(day).slice(0,4)}-${String(day).slice(4,6)}-${String(day).slice(6,8)}`;
-    const who = _pkgUserLabel(r.user || r.employee) || 'Unassigned';
-    const fam = _pkgFamilyName(r);
+    const safe = v => String(v).replace(/[.#$\[\]\/]/g, ' ').replace(/\s+/g, ' ').trim() || '—';   // names become database keys
+    const who = safe(_pkgUserLabel(r.user || r.employee) || 'Unassigned');
+    const fam = safe(_pkgFamilyName(r));
     const d = byDay[iso] = byDay[iso] || { sellers:{}, products:{}, rows:0, aed:0 };
     const amt = parseFloat(r.charge) || 0;
     d.rows++; d.aed += amt;

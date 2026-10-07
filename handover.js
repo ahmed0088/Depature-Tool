@@ -77,6 +77,8 @@ function _hoSnapshot() {
 async function hoGenerate() {
   const body = document.getElementById('hoBody');
   if (!body) return;
+  const typed = document.getElementById('hoNotes')?.value || hoGenerate._notes || '';   // notes typed before Refresh or a new range stay
+  hoGenerate._notes = typed;
   body.innerHTML = `<div class="gs-empty">Loading activity…</div>`;
 
   const since = _hoSinceISO();
@@ -101,7 +103,7 @@ async function hoGenerate() {
     ? entries.map(e => `
         <div class="ho-log-row">
           <span class="ho-log-icon">${HO_ICONS[e.action] || '•'}</span>
-          <span class="ho-log-text"><strong>${e.name || '—'}</strong> — ${(e.action || '').replace(/_/g,' ')}${e.detail ? `: ${e.detail}` : ''}</span>
+          <span class="ho-log-text"><strong>${escapeHtml(e.name || '—')}</strong> — ${escapeHtml((e.action || '').replace(/_/g,' '))}${e.detail ? `: ${escapeHtml(e.detail)}` : ''}</span>
           <span class="ho-log-time">${new Date(e.ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</span>
         </div>`).join('')
     : `<div class="gs-empty">No logged activity in this window</div>`;
@@ -113,7 +115,7 @@ async function hoGenerate() {
     </div>
     <div class="ho-section">
       <div class="ho-section-title">📝 Handover Notes</div>
-      <textarea id="hoNotes" class="ho-notes" placeholder="Anything the next shift needs to know — pending issues, guest requests, VIPs, follow-ups…"></textarea>
+      <textarea id="hoNotes" class="ho-notes" oninput="hoGenerate._notes=this.value" placeholder="Anything the next shift needs to know — pending issues, guest requests, VIPs, follow-ups…">${escapeHtml(typed)}</textarea>
     </div>
     <div class="ho-section">
       <div class="ho-section-title">🕓 Activity — ${rangeLabel}</div>

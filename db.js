@@ -94,6 +94,8 @@ function updateConnectionUI(online) {
 }
 
 // ── Helpers ───────────────────────────────────────────────
+/** Today (or date d) as YYYY-MM-DD on this device's clock: toISOString() is UTC, the day before in Dubai until 04:00. */
+function hoLocalISO(d) { d = d || new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 async function fbSet(path, data) {
   lsSave(path, data);
   if (!_ref) return;
@@ -156,15 +158,15 @@ function lsLoad(path) {
 // ── Save functions ────────────────────────────────────────
 // In db.js - verify these functions exist
 async function saveDepartures(rooms, log) {
-  await fbSet('departures', { rooms, log, date: new Date().toISOString().split('T')[0], updatedAt: new Date().toISOString() });
+  await fbSet('departures', { rooms, log, date: hoLocalISO(), updatedAt: new Date().toISOString() });
 }
 
 async function saveArrivals(guests) {
-  await fbSet('arrivals', { guests, date: new Date().toISOString().split('T')[0], updatedAt: new Date().toISOString() });
+  await fbSet('arrivals', { guests, date: hoLocalISO(), updatedAt: new Date().toISOString() });
 }
 
 async function savePurpose(guests) {
-  await fbSet('purpose', { guests, date: new Date().toISOString().split('T')[0], updatedAt: new Date().toISOString() });
+  await fbSet('purpose', { guests, date: hoLocalISO(), updatedAt: new Date().toISOString() });
 }
 
 async function saveShifts(shiftsObj) {
@@ -199,7 +201,7 @@ async function savePurposeLog(log) {
 // counts and totals, never guest lists, so the archive stays cheap and holds
 // nothing personal.
 async function saveHistory(section, data, dateStr) {
-  const d = dateStr || new Date().toISOString().split('T')[0];
+  const d = dateStr || hoLocalISO();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
   await fbSet(`history/${d}/${section}`, { ...data, savedAt: new Date().toISOString() });
 }
@@ -217,7 +219,7 @@ async function saveAdagio(payload) {
 }
 
 async function saveNoShow(guests) {
-  await fbSet('noshow', { guests, date: new Date().toISOString().split('T')[0], updatedAt: new Date().toISOString() });
+  await fbSet('noshow', { guests, date: hoLocalISO(), updatedAt: new Date().toISOString() });
 }
 
 async function saveSettings(settings) {
@@ -294,7 +296,7 @@ async function exportAllData() {
   const snap = await fbGet('');
   const blob = new Blob([JSON.stringify(snap, null, 2)], {type:'application/json'});
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-  a.download = 'ibis_backup_' + new Date().toISOString().split('T')[0] + '.json';
+  a.download = 'ibis_backup_' + hoLocalISO() + '.json';
   a.click(); URL.revokeObjectURL(a.href);
 }
 async function importAllData(file) {

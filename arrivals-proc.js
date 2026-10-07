@@ -743,10 +743,12 @@ function apRun() {
     // Count mode: global fbCount dropdown is the single source of truth —
     //   'pax'  → add the actual number of adults in this room (correct for "With F&B Pkg" pax column)
     //   'room' → add 1 per room regardless of occupancy
+    // (cancelled / no-show rows are left out of F&B as they are of everything else)
+    if (exclStatus.has(status)) continue;
     if (apPkgData.fb.length) {
       const tokens = products.toUpperCase().split(/[,;\s\/|]+/).map(t => t.trim()).filter(Boolean);
       tokens.forEach(token => {
-        const tokenKey = 'fb|' + dateVal + '|' + dedupId + '|' + token;
+        const tokenKey = 'fb|' + dateVal + '|' + dedupId;   // a room with two F&B codes (breakfast + dinner) counts once
         if (seen.has(tokenKey)) return;
         const hit = apPkgData.fb.some(p => {
           const pat = p.toUpperCase();
@@ -761,8 +763,6 @@ function apRun() {
         }
       });
     }
-
-    if (exclStatus.has(status)) continue;
 
     const upsellPkgKey = 'upsell|' + dateVal + '|' + dedupId;
     if (apPkgData.upsell.length && apMatchPkg(products, apPkgData.upsell, upsellMode) && !seen.has(upsellPkgKey)) {
@@ -780,7 +780,8 @@ function apRun() {
   if (!useOperaTotals) Object.values(dayMap).forEach(d => { d.rms = d.rmsSum; d.adl = d.adlSum; });
   Object.values(dayMap).forEach(d => { d.fbWithout = Math.max(0, d.adl - d.fbWith); });
 
-  apDays   = Object.entries(dayMap).sort((a, b) => (sortMap[a[0]] || a[0]).localeCompare(sortMap[b[0]] || b[0]));
+  _apSortKeys = sortMap;
+  apDays   = Object.entries(dayMap).sort((a, b) => _apDateKey(a[0]).localeCompare(_apDateKey(b[0])));
   apSelIdx = null; apSortCol = 'date'; apSortDir = 'asc';
 
   if (!apDays.length) { apMsg('No arrivals found — check excluded statuses or column mapping.', true); return; }
@@ -795,13 +796,20 @@ function apRun() {
 }
 
 // ── SORT ──────────────────────────────────────────────────
+/** A date as it sorts: the report's own sort value, else DD-MM-YY turned into YYYY-MM-DD (so 01-11 comes after 30-10). */
+let _apSortKeys = {};
+function _apDateKey(s) {
+  if (_apSortKeys[s]) return String(_apSortKeys[s]);
+  const m = String(s).match(/^(\d{1,2})[-./](\d{1,2})[-./](\d{2}|\d{4})$/);
+  return m ? `${m[3].length === 2 ? '20' + m[3] : m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : String(s);
+}
 function apSortBy(col) {
   if (apSortCol === col) apSortDir = apSortDir === 'asc' ? 'desc' : 'asc';
   else { apSortCol = col; apSortDir = 'asc'; }
   const keyMap = { date:null, rms:'rms', upsell:'upsell', adl:'adl', fbWith:'fbWith', fbWithout:'fbWithout', fo:'fo' };
   apDays.sort((a, b) => {
     let va, vb;
-    if (col === 'date') { va = a[0]; vb = b[0]; }
+    if (col === 'date') { va = _apDateKey(a[0]); vb = _apDateKey(b[0]); }
     else { va = a[1][keyMap[col]]; vb = b[1][keyMap[col]]; }
     return (va < vb ? -1 : va > vb ? 1 : 0) * (apSortDir === 'asc' ? 1 : -1);
   });
@@ -910,7 +918,7 @@ function apExportExcel() {
     { bold:true, fill:'DDEBF7' },
   ];
   const last = rows.length;   // the TOTAL row, after the header
-  const date = new Date().toISOString().slice(0, 10);
+  const date = hoLocalISO();
   writeStyledXlsx(`arrivals_report_${date}.xlsx`, 'Arrivals', [headers, ...rows],
                   r => r === 0 ? 1 : (r === last ? 2 : 0),
                   styles, [14, 14, 14, 12, 14, 16, 14]);

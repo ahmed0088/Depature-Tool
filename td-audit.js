@@ -375,9 +375,9 @@ function tdaRender() {
 
     return `<tr>
       <td style="font-family:var(--mono);font-weight:700;color:var(--sky);">${r.room}</td>
-      <td><div style="font-size:0.73rem;color:var(--text2);">${r.dtcmName || '—'}</div>${statusTag}</td>
+      <td><div style="font-size:0.73rem;color:var(--text2);">${escapeHtml(r.dtcmName || '—')}</div>${statusTag}</td>
       <td style="font-family:var(--mono);font-size:0.66rem;color:var(--text3);">${r.dtcmNights}n · AED ${r.dtcmFees.toFixed(0)}</td>
-      <td><div style="font-size:0.73rem;color:var(--text2);">${r.operaName || '—'}</div>${nameFlag}</td>
+      <td><div style="font-size:0.73rem;color:var(--text2);">${escapeHtml(r.operaName || '—')}</div>${nameFlag}</td>
       <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text3);">${tdaFmtDate(r.checkIn)}</td>
       <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text3);">${tdaFmtDate(r.capDate)}</td>
       <td>${verdict}</td>

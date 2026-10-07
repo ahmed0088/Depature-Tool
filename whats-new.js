@@ -9,6 +9,13 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 173, items: [
+    '🚪 Departures: "Reload" keeps everything tracked on each room (extension rate and reason, DND time, acknowledged late check-out).',
+    '📅 Days are saved on Dubai time: the night audit after midnight no longer writes over the day before. No-show history is saved under the report\'s own date.',
+    '🍳 Arrivals: cancelled and no-show rooms no longer count in F&B, a room with two meal codes counts once, and days sort properly across a month end.',
+    '🧠 Guest Memory: names with a full stop ("John A. Smith") save properly, an edit isn\'t lost when another hotel saves at the same moment, and the list stays fast (500 rows, search for the rest).',
+    '✅ Night Checklist doesn\'t offer a "new night" reset after midnight in the middle of a shift. Handover notes survive Refresh. A photo picked with a PDF still saves. Enrolment results don\'t wipe colleagues\' rows. Guest and staff names are shown safely everywhere.',
+  ] },
   { v: 172, items: [
     '🗓️ Roster fixes: Undo takes back only your own change (not a colleague\'s since), notes two people add at once are both kept, and every way of changing a week (what-if, sick, cover, plans) now saves cell by cell. "Put X on mornings" on a posted week no longer stops halfway.',
     '📷 Roster pictures: someone matched to the team is saved under their own record (no duplicate person), three rows with the same name stay separate, a new joiner with an employee number is never dropped, Escape cancels a cell edit, and giving a second picture while one is being read no longer mixes them up.',

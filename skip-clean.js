@@ -31,7 +31,8 @@ const toks=s=>new Set((String(s||'').replace(/I Want To…|Manage Reservation/gi
 const subset=(a,b)=>[...a].every(x=>b.has(x)), inter=(a,b)=>[...a].filter(x=>b.has(x)).length, same=(a,b)=>a.size===b.size&&subset(a,b);
 function titleDate(title,fm,hdr){
   const m=String(title).trim().match(/^(\d{1,2})[.,\-/](\d{1,2})(?:[.,\-/](\d{4}))?/); if(!m)return null;
-  const d=+m[1],mo=+m[2],x=iso(+(m[3]||2026),mo,d);
+  const h0=(hdr||[]).find(Boolean),yr=+m[3]||(h0?+ymd(h0)[0]:new Date().getFullYear());   // a title with no year: the sheet's own dates, else this year
+  const d=+m[1],mo=+m[2],x=iso(yr,mo,d);
   if(mo!==fm){const alt=hdr.find(h=>h&&+ymd(h)[2]===d&&+ymd(h)[1]===fm);if(alt)return alt}
   return x;
 }

@@ -194,9 +194,9 @@ function ttRender() {
 
   tbody.innerHTML = rows.map(g => `
     <tr class="tt-row-midnight">
-      <td><span class="tt-room-pill">${g.room}</span></td>
-      <td style="font-weight:500;color:var(--text);">${g.name}</td>
-      <td style="font-family:var(--mono);font-size:0.72rem;color:var(--text2);">${g.conf || '—'}</td>
+      <td><span class="tt-room-pill">${escapeHtml(g.room)}</span></td>
+      <td style="font-weight:500;color:var(--text);">${escapeHtml(g.name)}</td>
+      <td style="font-family:var(--mono);font-size:0.72rem;color:var(--text2);">${escapeHtml(g.conf || '—')}</td>
       <td style="font-family:var(--mono);font-size:0.72rem;color:var(--amber);font-weight:600;">*${g.arrTime}</td>
       <td style="font-family:var(--mono);font-size:0.72rem;color:var(--text2);">${g.arrDate} <span style="color:var(--text3);font-size:0.62rem;">(Opera)</span></td>
       <td style="font-family:var(--mono);font-size:0.72rem;font-weight:600;color:var(--rose);">${g.tdDate || '—'} <span style="color:var(--text3);font-size:0.62rem;">← TD Portal</span></td>

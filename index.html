@@ -2671,7 +2671,7 @@
           type="text"
           class="gm-search-inp"
           placeholder="Search guest name…"
-          oninput="_gmRenderTable()"
+          oninput="_gmRenderSoon()"
         />
       </div>
       <span id="gmProfileCount" class="gm-count-pill">0 profiles</span>
@@ -4274,10 +4274,12 @@ function checkNewNight(checklistData) {
 
   const lastUsed = new Date(times.reduce((a, b) => a > b ? a : b));
   const today    = new Date();
-  const lastDate = lastUsed.toDateString();
-  const todayStr = today.toDateString();
+  // the night a time belongs to: 12 hours earlier, so 23:30 and 01:00 are the same night
+  const nightOf  = d => new Date(d.getTime() - 12 * 3600e3).toDateString();
+  const lastDate = nightOf(lastUsed);
+  const todayStr = nightOf(today);
 
-  if (lastDate === todayStr) return; // same day — no prompt
+  if (lastDate === todayStr) return; // same night — no prompt
 
   const el = document.getElementById('lastNightDate');
   if (el) el.textContent = lastUsed.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});

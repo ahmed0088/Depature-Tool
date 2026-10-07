@@ -231,17 +231,20 @@ async function gpLoadLog() {
 async function gpImportResults() {
   const raw = (document.getElementById('gpResultsInput').value || '').trim();
   if (!raw) { showToast('Paste the results from the ALL Enroll panel first', 'err'); return; }
-  const today = new Date().toISOString().slice(0, 10);
+  const today = hoLocalISO();
   let added = 0;
+  const patch = {};
   raw.split(/\r?\n/).forEach(line => {
     const [email, status, date] = line.split('\t').map(x => (x || '').trim());
     if (!email || /^email$/i.test(email) || !email.includes('@')) return;
     const g = gpRows.find(r => r.email === email.toLowerCase());
-    gpLog[gpLogKey(email)] = { email: email.toLowerCase(), status: status || 'unknown', date: date || today, name: g ? g.name : '' };
+    patch[gpLogKey(email)] = gpLog[gpLogKey(email)] = { email: email.toLowerCase(), status: status || 'unknown', date: date || today, name: g ? g.name : '' };
     added++;
   });
   if (!added) { showToast('No result lines found', 'err'); return; }
-  if (typeof fbSet === 'function') await fbSet('enrollLog', gpLog);
+  // only these rows: colleagues' entries in the shared log stay as they are
+  if (typeof fbUpdate === 'function') await fbUpdate('enrollLog', patch);
+  else if (typeof fbSet === 'function') await fbSet('enrollLog', gpLog);
   document.getElementById('gpResultsInput').value = '';
   showToast(`${added} result(s) saved to the tracker`, 'ok');
   gpRenderTracker(); gpRender();

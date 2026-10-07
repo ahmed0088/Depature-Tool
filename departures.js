@@ -221,7 +221,7 @@ function _depQueueTrendSnapshot() {
 async function _depSaveTrendSnapshot() {
   if (typeof depRooms === 'undefined' || !depRooms.length) return;
   if (typeof fbSet !== 'function') return;
-  const today = new Date().toISOString().split('T')[0];
+  const today = hoLocalISO();
   const c = depCounts();
   try {
     await fbSet('depTrends/' + today, {
@@ -380,8 +380,12 @@ function processDepReload() {
   freshRooms.forEach(fresh => {
     const old = existing[fresh.room];
     if (old) {
+      // fresh Opera data (name, balance, dates) over everything tracked on the board (extension rate and
+      // reason, DND time, acknowledged late check-out…), then the live tracking itself
+      const tracked = {}; Object.keys(old).forEach(k => { if (!(k in fresh)) tracked[k] = old[k]; });
       merged.push({
-        ...fresh,                          // fresh Opera data: name, balance, dates
+        ...tracked,
+        ...fresh,
         status:          old.status,       // keep all live tracking
         lateTime:        old.lateTime,
         extensionNights: old.extensionNights,
@@ -981,7 +985,7 @@ function renderDepQuickJump() {
             : g.key === 'dnd'      ? 'dnd'
             : g.key === 'extended' ? 'extended'
             : 'all'}','${r.roomStr}')">
-            ${r.roomStr}<span class="jump-pill-name">${r.name.split(' ')[0]}</span>
+            ${r.roomStr}<span class="jump-pill-name">${escapeHtml(String(r.name || '').split(' ')[0])}</span>
           </button>`).join('')}
       </div>
     </div>`).join('');
@@ -1081,7 +1085,7 @@ function depCardHTML(r) {
   const gmHTML    = gmProfile
     ? `<div class="dc-gm-badge" title="Stayed before${gmProfile.lastSeen ? ' · last seen ' + escapeHtml(gmProfile.lastSeen) : ''}${gmProfile.nat ? ' · ' + escapeHtml(gmProfile.nat) : ''}">🔁 Returning guest</div>`
     : '';
-  const compTag   = r.company ? `<div class="dc-mi">🏢 ${r.company.substring(0,36)}</div>` : '';
+  const compTag   = r.company ? `<div class="dc-mi">🏢 ${escapeHtml(r.company.substring(0,36))}</div>` : '';
   const timeTag   = depTimeTag(r);
 
   // Intent banner
@@ -2297,7 +2301,7 @@ function exportDepSummary() {
   const ws = XLSX.utils.aoa_to_sheet(data);
   ws['!cols'] = [8,24,12,12,7,12,20,22,12,16,10,8,10,40].map(w => ({wch:w}));
   XLSX.utils.book_append_sheet(wb, ws, 'Departures');
-  XLSX.writeFile(wb, 'Departures_' + new Date().toISOString().split('T')[0] + '.xlsx');
+  XLSX.writeFile(wb, 'Departures_' + hoLocalISO() + '.xlsx');
 }
 
 function depPrintList() { window.print(); }
@@ -2421,7 +2425,7 @@ function depAskLCO(i) {
     <div id="lcoPicker">
       <div class="lco-tag">🕐 Late Checkout</div>
       <div class="lco-room">Room ${r.roomStr}</div>
-      <div class="lco-name">${r.name}</div>
+      <div class="lco-name">${escapeHtml(r.name || '')}</div>
       <div class="lco-lbl">AGREED TIME</div>
       <div id="lcoQuickBtns">
         ${QUICK.map(t => `<button data-t="${t}" onclick="lcoQuickPick('${t}')">${t}</button>`).join('')}
