@@ -1097,3 +1097,13 @@ label.rb-q:first-child { border-color: var(--accent-border); background: color-m
 .rb-dec i { color: var(--text3); font-style: normal; }
 .rb-dec.warn span { color: var(--text); }
 .rb-prob.agreed { border-color: color-mix(in srgb, var(--amber) 45%, var(--border)) !important; background: var(--amber-bg) !important; }
+/* Roster page: My shifts and Today stacked full width, no empty space beside a short box */
+.ro-top { grid-template-columns: 1fr !important; }
+@media (min-width: 900px) {
+  /* My shifts in one row: "now / next" on the left, the week's days beside it */
+  .ro-mine { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); column-gap: 14px; align-items: stretch; }
+  .ro-mine > .ro-card-hd, .ro-mine > .ro-pick, .ro-mine > .ro-empty, .ro-mine > :not(.ro-next):not(.ro-days) { grid-column: 1 / -1; }
+  .ro-mine > .ro-next { margin-bottom: 0; justify-content: center; }
+  .ro-mine > .ro-days { align-self: stretch; }
+  .ro-mine > .ro-days .ro-day { height: 100%; }
+}

@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 167, items: [
+    '🗓️ Roster page: no more empty space. "My shifts" is one row on a computer (on shift now, then your next 7 days) and "Today" runs full width under it, with a wider timeline.',
+  ] },
   { v: 166, items: [
     '🛌 A day shift and a night always have a day off between them: nobody on 08:00 - 17:00 or 12:00 - 21:00 goes onto 00:00 - 09:00 or 19:00 - 04:00 the next day, or the other way. This is never bent, even when stuck.',
     '✅ Every shift gets covered: the builder uses your rules first. Only when there is no other way does it use what past rosters did, mildest first: an evening (15:00 - 00:00) next to a night without a day off, rest down to 7 hours, an evening straight into a night. Never more than 9 hours a shift. Each time it says so ("needed a rule bent") and writes who, what and why under Decisions this week.',
