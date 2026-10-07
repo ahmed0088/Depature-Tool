@@ -1443,10 +1443,17 @@ function rbChangesHtml(I, cells, shown, dates) {
   if (!ch.length) return '<div class="rb-steady">✓ Nobody\'s hours change in the middle of a run of working days.</div>';
   return `<div class="rb-steady warn">↻ Hours change mid-run (people dislike it): ${ch.map(c => `<b>${escapeHtml((roStaff[c.key] || {}).name || c.key)}</b> ${escapeHtml(roDayLbl(c.date))} ${escapeHtml(c.from.slice(0, 5))}→${escapeHtml(c.to.slice(0, 5))}${c.back ? ' (earlier)' : ''}`).join(' · ')}. Drag or tap a cell to even it out, or 🔀 Try another way.</div>`;
 }
+/** A shift that has already started (or a day gone by): nothing can change it any more. */
+function rbShiftStarted(date, shift) {
+  const m = String(shift || '').match(/(\d{1,2}):(\d{2})/), d = roDate(date);
+  if (m) d.setHours(+m[1], +m[2], 0, 0); else d.setHours(23, 59, 0, 0);
+  return d.getTime() <= Date.now();
+}
 /** Gaps in cover, each with the best ways to fill it (or "bring in a staff member"). */
 function rbFixHtml(I, cells, shown, ptxt) {
   if (typeof rtAdvice !== 'function') return '';
-  const adv = rtAdvice(I, cells).filter(a => shown.includes(rbBaseGroup(a.group)) && !(I.groups[a.group] || {}).post);   // a bell boy's day off needs no cover
+  const adv = rtAdvice(I, cells).filter(a => shown.includes(rbBaseGroup(a.group)) && !(I.groups[a.group] || {}).post   // a bell boy's day off needs no cover
+    && !rbShiftStarted(a.date, a.shift));   // a shift already under way or gone by: nothing to fix any more
   _rbOpt = [];
   if (!adv.length) return '';
   return `<div class="rb-fix" id="rbFix"><div class="rb-sub">Cover to fix <small>${adv.filter(a => a.kind === 'short').length} empty · ${adv.filter(a => a.kind === 'thin').length} with one person</small></div>

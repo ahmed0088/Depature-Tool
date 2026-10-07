@@ -251,7 +251,7 @@ function blTick() {
   if (sig === blLastSig && document.getElementById('blBubble')) return;
   blLastSig = sig;
   if (document.getElementById('brSheet')?.classList.contains('open')) return;
-  const next = blThoughts.find(t => !(snooze[t.id] > Date.now()));
+  const next = blThoughts.find(t => !(snooze[t.id] > Date.now()) && !t.silent);   // a quiet one only waits in Ops Brain (the 🧠 count)
   if (next && (!blShown || blShown.id !== next.id)) blSay(next);
   if (typeof brTab !== 'undefined' && brTab === 'think' && document.getElementById('brSheet')?.classList.contains('open')) blRenderFeed();
 }
@@ -277,7 +277,7 @@ function blSay(t, urgent) {
     if (b.dataset.a != null) { _blNote(t.type, 'used'); el.remove(); blShown = null; if (t.type !== 'did' && t.type !== 'heal') { const sn0 = _blLS.get(BL_SNOOZE_KEY, {}); sn0[t.id] = Date.now() + 30 * 60e3; _blLS.set(BL_SNOOZE_KEY, sn0); } try { t.acts[+b.dataset.a][1](); } catch (err) { showToast('That did not work: ' + err.message, 'err'); } setTimeout(blTick, 800); return; }
     const sn = _blLS.get(BL_SNOOZE_KEY, {});
     if (b.classList.contains('bl-b-never')) { _blNote(t.type, 'never'); blDid('🤐', 'OK, I won\'t suggest that again. (🧠 → Learned to undo.)'); }
-    else { _blNote(t.type, 'no'); sn[t.id] = Date.now() + 2 * 3600e3; }
+    else { _blNote(t.type, 'no'); sn[t.id] = Math.max(Date.now() + 2 * 3600e3, t.snoozeUntil || 0); }   // closed: not again (until it no longer applies)
     Object.keys(sn).forEach(k => { if (sn[k] < Date.now()) delete sn[k]; });
     _blLS.set(BL_SNOOZE_KEY, sn);
     el.remove(); blShown = null;

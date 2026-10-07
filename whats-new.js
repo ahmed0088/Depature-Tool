@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 179, items: [
+    '🔕 Roster reminders are quiet now: no alarm sound, and nothing about a shift that has already started or a day gone by (nothing can change it any more; "Cover to fix" leaves those out too). An empty shift later today or tomorrow waits in Ops Brain (the 🧠 count) and pops up only once, when it starts within 3 hours. Closed with ✕, it stays closed.',
+  ] },
   { v: 178, items: [
     '⏰ Wake-up Calls, redesigned: a summary on top (today, still to call, called, due now), the next call with a countdown, and a cleaner list. New: a backup call 5, 10 or 15 minutes later (booked by itself once the first is answered), "read back to the guest ✓", ✓ Answered / 📵 No answer / 🚶 Sent someone up / Cancelled by the guest, a warning when the room is already checked out or the call is set twice, search, and a log of who did what. Its icon now matches the rest of the menu.',
   ] },
