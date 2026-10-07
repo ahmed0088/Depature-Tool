@@ -160,7 +160,7 @@ function hoSettingsRender() {
       _hoTog('tbClock', 'Clock', 'The current time')
       + _hoTog('tbConn', 'Connection', 'Whether you are connected to the team database')
       + _hoTog('tbVersion', 'Version', 'The version label (tap it to update)')
-      + _hoTog('tbThemes', 'Theme switcher', 'The three colour dots')
+      + _hoTog('tbThemes', 'Theme switcher', 'The theme button that opens the list of themes')
       + _hoTog('tbUser', 'Your name', 'Who is signed in')),
 
     _hoSec('time', 'shifts', 'Date & time', 'How times are shown',
