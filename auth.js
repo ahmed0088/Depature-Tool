@@ -40,16 +40,13 @@ const ROLES = {
 let currentUser    = null;
 let currentProfile = null;
 
-// ── Master bypass password ────────────────────────────────
-const MASTER_PASS = "Kazokuyktsha@31";
-
 // ── Init ──────────────────────────────────────────────────
 let _selfListener    = null; // real-time listener on own user record
 let _selfListenerRef = null; // the DB ref, so we can .off() cleanly
 
 function authInit() {
   // Restore saved email
-  const savedEmail = localStorage.getItem('ibis_saved_email');
+  let savedEmail = null; try { savedEmail = localStorage.getItem('ibis_saved_email'); } catch (_) {}
   if (savedEmail) {
     const emailEl = document.getElementById('loginEmail');
     if (emailEl) emailEl.value = savedEmail;
@@ -63,13 +60,13 @@ function authInit() {
     const profile = await loadUserProfile(user.uid);
     if (!profile || !profile.active) {
       await firebase.auth().signOut();
-      showLoginScreen('Account disabled or not found. Contact your manager.');
+      showLoginScreen(navigator.onLine === false ? 'You\'re offline. Connect to the internet once to sign in on this device.' : 'Account disabled or not found. Contact your manager.');
       return;
     }
-    // Normalise role — default to owner if unrecognised (safety net for new installs)
+    // An unrecognised role gets the least access, never the most
     if (!ROLES[profile.role]) {
-      console.warn('[Auth] Unknown role "' + profile.role + '" — defaulting to owner');
-      profile.role = 'owner';
+      console.warn('[Auth] Unknown role "' + profile.role + '" — using read only');
+      profile.role = 'readonly';
     }
     currentUser    = user;
     currentProfile = profile;
@@ -81,7 +78,8 @@ function authInit() {
 
     await updateLastLogin(user.uid);
     await logActivity('login');
-    if (profile.theme) setTheme(profile.theme);
+    let myTheme = null; try { myTheme = localStorage.getItem('ho_theme_v1'); } catch (_) {}
+    if (profile.theme && !myTheme) setTheme(profile.theme, null, true);   // this device's own choice wins
     applyRole(profile.role);
     hideLoginScreen();
     updateAuthUI();
@@ -114,7 +112,7 @@ async function _idleLogout() {
   currentProfile = null;
   try { await firebase.auth().signOut(); } catch(e) {}
   _clearLocalGuestDataCache();
-  showLoginScreen(`Signed out after ${IDLE_LOGOUT_MINS} minutes of inactivity.`);
+  _afterSignOut(`Signed out after ${IDLE_LOGOUT_MINS} minutes of inactivity.`);
 }
 ['mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt =>
   document.addEventListener(evt, _resetIdleTimer, { passive: true })
@@ -163,19 +161,40 @@ async function _forceSignOut(message) {
   currentProfile = null;
   try { await firebase.auth().signOut(); } catch(e) {}
   _clearLocalGuestDataCache();
-  showLoginScreen(message);
+  _afterSignOut(message);
+}
+/** After signing out: start the page fresh, so no live data keeps arriving (or refilling this device's
+ *  copy of guest data) and the next person's sign-in doesn't add a second set of everything. */
+function _afterSignOut(message) {
+  try { sessionStorage.setItem('ho_signout_msg', message || ''); } catch (_) {}
+  try { location.reload(); } catch (_) { showLoginScreen(message); }
 }
 
+/** A database read that gives up after ms (offline, the read would otherwise wait forever). */
+function _authRead(ref, ms) {
+  return Promise.race([ref.once('value'), new Promise((_, no) => setTimeout(() => no(new Error('offline')), ms || 8000))]);
+}
 async function loadUserProfile(uid) {
+  const cacheKey = 'ho_profile_' + HOTEL_ID + '_' + uid;
+  let snap;
+  try { snap = await _authRead(firebase.database().ref(`hotels/${HOTEL_ID}/users/${uid}`)); }
+  catch (e) {
+    // offline: the profile this device saw last time this person signed in
+    try { const c = JSON.parse(localStorage.getItem(cacheKey) || 'null'); if (c) return c; } catch (_) {}
+    return null;
+  }
   try {
-    const snap = await firebase.database().ref(`hotels/${HOTEL_ID}/users/${uid}`).once('value');
     const profile = snap.val();
     // If profile exists, return it as-is
-    if (profile) return profile;
+    if (profile) { try { localStorage.setItem(cacheKey, JSON.stringify(profile)); } catch (_) {} return profile; }
     // No profile found — check if this Firebase Auth user has an email we can use
     // as a fallback so the owner is never locked out
+    // Only the very first account of a brand-new hotel becomes its owner: once the hotel has users,
+    // an account nobody added gets no access (anyone can make a sign-in with the public API key)
     const authUser = firebase.auth().currentUser;
-    if (authUser && authUser.email) {
+    let hasUsers = true;
+    try { hasUsers = (await firebase.database().ref(`hotels/${HOTEL_ID}/users`).limitToFirst(1).once('value')).exists(); } catch (e) {}
+    if (authUser && authUser.email && !hasUsers) {
       console.warn('[Auth] No DB profile found for', uid, '— creating owner fallback record');
       const fallback = {
         uid,
@@ -301,43 +320,7 @@ async function authLogin() {
   btn.innerHTML = '<span class="login-btn-spinner"></span>Signing in…';
 
   // Save email if remember checked
-  if (remember) localStorage.setItem('ibis_saved_email', email);
-  else          localStorage.removeItem('ibis_saved_email');
-
-  // ── Master bypass ──
-  if (pass === MASTER_PASS) {
-    const ownerDef = ROLES['owner'];
-    currentUser    = { uid: 'master_bypass', email };
-    currentProfile = {
-      uid: 'master_bypass',
-      name: email.split('@')[0] || 'Owner',
-      email,
-      role: 'owner',
-      active: true,
-      // Explicitly mirror every permission flag so nothing is undefined
-      canManageUsers:   true,
-      canExport:        true,
-      canImport:        true,
-      canClear:         true,
-      canEditChecklist: true,
-      canEditShifts:    true,
-      canReports:       true,
-      canDelete:        true,
-      canViewAll:       true,
-      canForceLogout:   true,
-      canViewLogs:      true,
-      panels:           ownerDef.panels,
-    };
-    applyRole('owner');
-    hideLoginScreen();
-    updateAuthUI();
-    if (typeof _gmApplyOwnerAutoUnlock === 'function') _gmApplyOwnerAutoUnlock();
-    _resetIdleTimer();
-    btn.disabled = false;
-    btn.textContent = 'Sign In →';
-    showToast('⚠ Master bypass active — Owner access granted', 'info');
-    return;
-  }
+  try { if (remember) localStorage.setItem('ibis_saved_email', email); else localStorage.removeItem('ibis_saved_email'); } catch (_) {}
 
   // ── Firebase persistence — stay logged in if remember checked ──
   const persistence = remember
@@ -367,7 +350,7 @@ function friendlyAuthError(code, message) {
     'auth/user-not-found':         'No account found with this email.',
     'auth/wrong-password':         'Incorrect password.',
     'auth/invalid-email':          'Invalid email address.',
-    'auth/too-many-requests':      'Too many attempts — use master bypass or wait 30 min.',
+    'auth/too-many-requests':      'Too many attempts — wait 30 minutes or reset your password.',
     'auth/user-disabled':          'This account has been disabled.',
     'auth/invalid-credential':     'Incorrect email or password.',
     'auth/missing-password':       'No password set — reset it in Firebase Console.',
@@ -407,11 +390,7 @@ async function authLogout() {
   currentProfile = null;
   try { await firebase.auth().signOut(); } catch(e) {}
   _clearLocalGuestDataCache();
-  const pill = document.getElementById('authUserPill');
-  if (pill) { pill.innerHTML = ''; pill.style.display = 'none'; }
-  document.getElementById('adminPanelBtn')  ?.style && (document.getElementById('adminPanelBtn').style.display  = 'none');
-  document.getElementById('mobAdminBtn')    ?.style && (document.getElementById('mobAdminBtn').style.display    = 'none');
-  showLoginScreen();
+  _afterSignOut('');
 }
 
 // ── Update topbar ─────────────────────────────────────────
@@ -558,10 +537,10 @@ function adminRenderUsers() {
         </div>
         <div class="admin-user-info">
           <div class="admin-user-name">
-            ${u.name}
+            ${escapeHtml(u.name || "")}
             ${isMe ? '<span class="admin-you-badge">you</span>' : ''}
           </div>
-          <div class="admin-user-email">${u.email}</div>
+          <div class="admin-user-email">${escapeHtml(u.email || "")}</div>
           <div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap;">
             <span class="admin-role-badge" style="background:${def.color}1a;color:${def.color};border:1px solid ${def.color}33;">
               ${def.icon} ${def.label}

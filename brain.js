@@ -392,7 +392,7 @@ function brRenderFixes() {
   const box = document.getElementById('brFixList');
   if (!box) return;
   const list = Object.entries(brFixes).sort((a, b) => String(b[1].at).localeCompare(String(a[1].at)));
-  box.innerHTML = list.length ? list.map(([id, f]) => `<div class="br-card br-fix ${f.status}">
+  box.innerHTML = list.length ? list.map(([id, f]) => `<div class="br-card br-fix ${escapeHtml(f.status || "")}">
     <div class="br-kind">${f.status === 'done' ? '✅ Done' : f.status === 'sent' ? '📨 Sent to developer' : '📝 Not sent yet'} · ${escapeHtml(f.by || '')} · ${escapeHtml((f.at || '').slice(0, 10))}${f.page ? ' · ' + escapeHtml(_brPanelName(f.page)) : ''}</div>
     <div class="br-body">${escapeHtml(f.text)}</div>
     <div class="br-acts">${f.status !== 'done' ? `<button class="btn gold" onclick="brGithub('${id}')">Send on GitHub</button><button class="btn ghost" onclick="brFixDone('${id}')">Mark done</button>` : ''}</div></div>`).join('')
@@ -451,7 +451,7 @@ function brBuild() {
   el.id = 'brSheet';
   el.className = 'br-overlay';
   el.innerHTML = `
-    <div class="br-sheet" role="dialog" aria-label="Ops Brain">
+    <div class="br-sheet" role="dialog" aria-modal="true" aria-label="Ops Brain">
       <div class="br-head"><span class="br-logo">🧠</span><div><b>Ops Brain</b><small>Thinks with you · learns how you work</small></div><button class="br-x" onclick="brClose()">✕</button></div>
       <form class="br-ask" onsubmit="event.preventDefault();brTabShow('think');brAsk(document.getElementById('brQ').value)">
         <input id="brQ" type="search" autocomplete="off" placeholder="Ask anything… room 512 · how do I post TD · fix: …"/>

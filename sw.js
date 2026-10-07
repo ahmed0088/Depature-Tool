@@ -14,7 +14,7 @@
 //  clients pick up the new version instead of a stale cache.
 // ═══════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'ibis-ops-shell-v170';
+const CACHE_NAME = 'ibis-ops-shell-v171';
 
 const SHELL_FILES = [
   './',
@@ -88,7 +88,7 @@ self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => cache.addAll(SHELL_FILES.map(u => new Request(u, { cache: 'reload' }))))   // fresh from the server, never the browser's old copy
-      .catch(err => console.warn('[SW] shell cache failed:', err))
+      // no catch: if a file can't be fetched the update waits for next time, and the old version keeps working offline
   );
   self.skipWaiting();
 });
@@ -111,11 +111,13 @@ self.addEventListener('fetch', event => {
   // pass straight through to the network untouched.
   if (req.method !== 'GET' || url.origin !== self.location.origin) return;
 
+  // "?panel=roster", "?v=…" open the app page itself; "sw.js?x=…" checks are never kept
+  const nav = req.mode === 'navigate', keep = !url.search;
   event.respondWith(
-    caches.match(req).then(cached => {
+    caches.match(req, { ignoreSearch: nav }).then(cached => {
       const network = fetch(req)
         .then(res => {
-          if (res && res.ok) {
+          if (res && res.ok && keep) {
             const clone = res.clone();
             caches.open(CACHE_NAME).then(c => c.put(req, clone));
           }

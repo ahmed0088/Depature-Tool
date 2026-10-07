@@ -221,8 +221,7 @@ async function saveNoShow(guests) {
 }
 
 async function saveSettings(settings) {
-  const current = await fbGet('settings') || {};
-  await fbSet('settings', { ...current, ...settings, updatedAt: new Date().toISOString() });
+  await fbUpdate('settings', { ...settings, updatedAt: new Date().toISOString() });
 }
 
 // Add to db.js - loads all data from Firebase in one call

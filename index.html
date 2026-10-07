@@ -42,9 +42,11 @@
   (function() {
     try {
       // localStorage key matches what db.js uses: 'ibis_' + path
-      var raw = localStorage.getItem('ibis_settings');
-      if (raw) {
-        var s = JSON.parse(raw);
+      // this device's own theme first; the hotel's old shared one only if none was ever chosen here
+      var mine = localStorage.getItem('ho_theme_v1');
+      var raw = mine ? null : localStorage.getItem('ibis_settings');
+      if (mine || raw) {
+        var s = mine ? { theme: mine } : JSON.parse(raw);
         if (s && s.theme) {
           // a skin sits on a base theme: iPhone on Opera, iPhone Dark and Titanium on Night Ops, Ocean on Midnight
           var skins = { 'ios': 'opera', 'ios-dark': 'night-ops', 'titanium': 'night-ops', 'ocean': 'midnight' };
@@ -4028,6 +4030,8 @@ async function handleImport(input) {
 }
 
 async function saveSettings(patch) {
+  // only the fields changed, so two people saving different settings don't undo each other
+  if (typeof fbUpdate === 'function') { await fbUpdate('settings', { ...patch, updatedAt: new Date().toISOString() }); return; }
   const current = await fbGet('settings') || {};
   await fbSet('settings', { ...current, ...patch, updatedAt: new Date().toISOString() });
 }
@@ -4706,8 +4710,10 @@ async function appInit() {
 
   // 9 — Apply settings
   if (data.settings) {
-    const savedTheme = data.settings.theme || 'night-ops';
-    setTheme(savedTheme);
+    // the theme is each person's own: this device's choice, else their profile's, else the hotel's old shared one
+    let mine = null; try { mine = localStorage.getItem('ho_theme_v1'); } catch (_) {}
+    const savedTheme = mine || (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.theme) || data.settings.theme || 'night-ops';
+    setTheme(savedTheme, null, true);
     if (data.settings.hotelName) {
       const hotelEl = document.getElementById('hotelName');
       if (hotelEl) hotelEl.textContent = data.settings.hotelName;
@@ -5395,8 +5401,14 @@ async function appInit() {
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (!hadCtl || reloading) return;
         if (Date.now() - t0 < 15000) { reloading = true; location.reload(); return; }   // just opened: nothing to lose
-        if (typeof showToast === 'function') showToast('HotelOps was updated. Tap here when you\'re ready to load the new version', 'ok');
-        document.getElementById('appToast')?.addEventListener('click', () => location.reload(), { once: true });
+        // a banner that stays until tapped (a toast fades and can't be tapped)
+        if (document.getElementById('hoUpdBar')) return;
+        const bar = document.createElement('button');
+        bar.id = 'hoUpdBar'; bar.type = 'button';
+        bar.textContent = '✨ HotelOps was updated · tap to load the new version';
+        bar.style.cssText = 'position:fixed;left:50%;bottom:calc(88px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:10000;max-width:calc(100% - 32px);padding:11px 18px;border:0;border-radius:12px;background:var(--gold,#e8b84a);color:#0a0c10;font:600 .8rem var(--sans,system-ui);box-shadow:0 6px 24px rgba(0,0,0,.35);cursor:pointer';
+        bar.onclick = () => { reloading = true; location.reload(); };
+        document.body.appendChild(bar);
       });
     });
   }
@@ -5412,13 +5424,23 @@ async function appInit() {
     console.warn('Firebase init failed:', e);
     updateConnectionUI(false);
   }
-  showLoginScreen();
-  authInit();
+  let msg = ''; try { msg = sessionStorage.getItem('ho_signout_msg') || ''; sessionStorage.removeItem('ho_signout_msg'); } catch (_) {}
+  showLoginScreen(msg || undefined);
+  try { authInit(); }
+  catch (e) {
+    // no sign-in service (offline the first time, or it was blocked): say so instead of hanging
+    console.warn('Sign-in unavailable:', e);
+    const err = document.getElementById('loginError');
+    if (err) { err.textContent = 'Can\'t reach the sign-in service. Check the internet connection and reload.'; err.style.display = 'block'; }
+  }
 })();
 
 const _origHide = hideLoginScreen;
+let _appInitDone = false;
 window.hideLoginScreen = function() {
   _origHide();
+  if (_appInitDone) return;   // once per page: a second sign-in must not add a second set of live updates
+  _appInitDone = true;
   appInit();
 };
 </script>

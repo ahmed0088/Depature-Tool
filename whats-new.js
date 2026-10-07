@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 171, items: [
+    '🔒 Safer sign-in: an account nobody added to the team no longer gets access, and each role can only open its own pages (also through Ops Brain and the home tiles). A read-only account can\'t change departures.',
+    '🎨 Your theme is your own: changing it no longer changes everyone else\'s screen.',
+    '🔄 "HotelOps was updated" is now a button that stays until you tap it. Signing out starts the app fresh, so the next person doesn\'t get double updates. Offline, signing in no longer hangs.',
+  ] },
   { v: 170, items: [
     '👥 Two people can work on the same roster draft at once: each change saves only the cells it touched, so nobody\'s edits are wiped by someone else\'s save (only the very same cell: the last change wins).',
     '📷 Roster photos: names are matched to your team using the name and the employee number together, so a blurry "Charlene Ponda" is still Charlene Pineda. Everyone gets their own hotel even when the hotel bar can\'t be read, and junk rows (a title bar read as a person) are left out.',
@@ -285,7 +290,7 @@ function wnOpen(all) {
   m.id = 'wnModal';
   m.className = 'fr-overlay';
   m.innerHTML = `
-    <div class="fr-sheet wn-sheet" role="dialog" aria-label="What's new">
+    <div class="fr-sheet wn-sheet" role="dialog" aria-modal="true" aria-label="What's new">
       <div class="fr-h">✨ What's new</div>
       <div class="fr-file">You are on ${escapeHtml(APP_VERSION)}</div>
       ${list.map(e => `<div class="wn-ver">v${e.v}</div><ul class="wn-list">${e.items.map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul>`).join('')}
@@ -296,7 +301,12 @@ function wnOpen(all) {
     if (e.target.closest('.wn-all')) { wnOpen(true); return; }
     if (e.target === m || e.target.closest('.fr-cancel')) m.remove();
   });
+  const back = document.activeElement;
+  const esc = e => { if (e.key === 'Escape' && document.getElementById('wnModal') === m) { m.remove(); } };
+  document.addEventListener('keydown', esc);
+  new MutationObserver((_, o) => { if (!m.isConnected) { document.removeEventListener('keydown', esc); o.disconnect(); if (back && back.focus) try { back.focus(); } catch (_) {} } }).observe(document.body, { childList: true });
   document.body.appendChild(m);
+  m.querySelector('.fr-cancel')?.focus();
   try { localStorage.setItem(WN_KEY, APP_VERSION); } catch (_) {}
   return true;
 }

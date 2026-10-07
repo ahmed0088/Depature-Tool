@@ -13,7 +13,16 @@ function updateClock() {
 }
 
 // ── Panel switcher ────────────────────────────────────────
+/** Whether the signed-in person's role may open this page (the menu hides the others; this stops
+ *  Ops Brain, home tiles and links from opening them anyway). */
+function hoPanelAllowed(name) {
+  if (typeof currentProfile === 'undefined' || !currentProfile || typeof ROLES === 'undefined') return true;
+  const role = currentProfile.role, def = ROLES[role] || ROLES.readonly;
+  if (role === 'owner' || name === 'guestmem' || (def.panels || []).includes(name)) return true;
+  return !document.querySelector(`.nav-item[data-panel="${name}"]`);   // pages without a menu entry are opened from allowed ones
+}
 function showPanel(name) {
+  if (!hoPanelAllowed(name)) { if (typeof showToast === 'function') showToast('Your role can\'t open that page. Ask a manager if you need it.', 'err'); return; }
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const panel = document.getElementById('panel-' + name);
@@ -283,7 +292,7 @@ const HO_THEMES = {
   'midnight':  { label: 'Midnight', emoji: '🌌', base: 'midnight', bg: '#0b1020', a: '#818cf8', btn: '#ffffff' },
 };
 function hoThemeName() { return document.documentElement.getAttribute('data-skin') || document.documentElement.getAttribute('data-theme') || 'night-ops'; }
-function setTheme(name, btn) {
+function setTheme(name, btn, noSave) {
   const T = HO_THEMES[name] || HO_THEMES['night-ops']; if (!HO_THEMES[name]) name = 'night-ops';
   document.documentElement.setAttribute('data-theme', T.base);
   if (T.skin) document.documentElement.setAttribute('data-skin', T.skin); else document.documentElement.removeAttribute('data-skin');
@@ -300,9 +309,11 @@ function setTheme(name, btn) {
   });
   const target = btn || document.querySelector(`.theme-btn[data-t="${name}"]`);
   if (target) target.classList.add('active');
-  saveSettings({ theme: name });
-  // save to user profile so it persists across devices
-  if (typeof saveThemeToProfile === 'function') saveThemeToProfile(name);
+  // each person's own choice: this device, and their profile for their other devices (never the whole hotel)
+  if (!noSave) {
+    try { localStorage.setItem('ho_theme_v1', name); } catch (_) {}
+    if (typeof saveThemeToProfile === 'function') saveThemeToProfile(name);
+  }
   // sync login screen colors if visible
   if (typeof _applyLoginTheme === 'function') _applyLoginTheme(name);
 }
@@ -332,12 +343,12 @@ function toggleSidenav() {
   const nav = document.querySelector('.sidenav');
   if (!nav) return;
   const collapsed = nav.classList.toggle('collapsed');
-  localStorage.setItem('sidenavCollapsed', collapsed ? '1' : '0');
+  try { localStorage.setItem('sidenavCollapsed', collapsed ? '1' : '0'); } catch (_) {}
   const btn = document.getElementById('sidenavToggleBtn');
   if (btn) btn.title = collapsed ? 'Show menu' : 'Hide menu';
 }
 (function _restoreSidenavState() {
-  if (localStorage.getItem('sidenavCollapsed') !== '1') return;
+  try { if (localStorage.getItem('sidenavCollapsed') !== '1') return; } catch (_) { return; }
   const nav = document.querySelector('.sidenav');
   if (nav) nav.classList.add('collapsed');
   const btn = document.getElementById('sidenavToggleBtn');
@@ -490,7 +501,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v170';
+const APP_VERSION = 'v171';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;

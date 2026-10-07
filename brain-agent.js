@@ -127,6 +127,7 @@ const BA_COMMANDS = [
       if (left.length) setTimeout(() => typeof blTick === 'function' && blTick(), 500);
       return true; } },
   { re: /^(?:check ?out|co|mark)?\s*(?:room\s*)?(\d{3,4})\s*(?:is\s*)?(out|checked out|check ?out|late|lco|na|no answer|dnd|due|undo)$|^(?:check ?out|co)\s+(?:room\s*)?(\d{3,4})$/i, ex: 'check out 512', does: 'marks a departure (also "512 late", "512 dnd", "512 due")', run: (q) => {
+      if (document.body.classList.contains('role-readonly')) { _baOut(_baList('A read-only account can\'t change departures.', [])); return true; }
       const m = q.match(/(\d{3,4})/); const room = m && m[1];
       const w = q.toLowerCase();
       const st = /late|lco/.test(w) ? 'late' : /\bna\b|no answer/.test(w) ? 'na' : /dnd/.test(w) ? 'dnd' : /due|undo/.test(w) ? 'due' : 'out';

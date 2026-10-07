@@ -29,11 +29,14 @@ const _tnHotelOf = v => (typeof v === 'string' ? v : (v && typeof v === 'object'
  */
 async function tnResolveHotel(uid) {
   let assigned = null;
-  try { assigned = _tnHotelOf((await _tnDb().ref('userHotels/' + uid).once('value')).val()); } catch (_) {}
-  if (!assigned) {
+  // (offline the reads would wait forever: give up after a few seconds and stay on this device's hotel)
+  const read = ref => Promise.race([ref.once('value'), new Promise((_, no) => setTimeout(() => no(new Error('offline')), 6000))]);
+  let offline = false;
+  try { assigned = _tnHotelOf((await read(_tnDb().ref('userHotels/' + uid))).val()); } catch (e) { offline = e && e.message === 'offline'; }
+  if (!assigned && !offline) {
     // accounts from before hotels had their own spaces belong to this one
     try {
-      const here = await _tnDb().ref(`hotels/${HOTEL_ID}/users/${uid}`).once('value');
+      const here = await read(_tnDb().ref(`hotels/${HOTEL_ID}/users/${uid}`));
       if (here.exists()) { await _tnDb().ref('userHotels/' + uid).set(HOTEL_ID); assigned = HOTEL_ID; }
     } catch (_) {}
   }
