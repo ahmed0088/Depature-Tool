@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 188, items: [
+    '🧠 The roster builder learns from every posted week, whoever made it (built here, a picture, Excel, or a manager who made it themselves), up to the last 8 weeks that have a roster; weeks with none are skipped. It learns each person\'s usual shift, their usual days off, whether they take them together, and how they rotate week to week (mornings → evenings → …), and builds the same way. Anything set on someone\'s card comes first.',
+    '📅 The builder opens on the week right after the latest posted roster, so you can pick up from any week you give it.',
+    '🧠 New in the builder: "What I learned", person by person, and from which weeks.',
+  ] },
   { v: 187, items: [
     '😴 Night → one day off → morning is avoided: that day off goes on sleep, so the builder gives a morning after a night only with two days off between, unless there\'s no other way (then it says so under Decisions this week). Cover suggestions put these last too.',
     '🛌 Under 7 hours of rest only after every other way: before that, the builder also tries a longer chain (A covers the gap, B covers A\'s shift, C covers B\'s).',

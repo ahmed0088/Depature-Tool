@@ -1254,3 +1254,9 @@ label.rb-q:first-child { border-color: var(--accent-border); background: color-m
 .rt-note:focus { border-color: var(--accent-border); outline: none; }
 .rb-hp-note { flex-basis:100%; font-style:normal; font-size:.74rem; color:var(--text2); }
 .rb-hp-w i.owed { color: var(--accent); border-color: var(--accent-border); }
+
+/* What the builder learned */
+.rb-learned { display:flex; flex-direction:column; }
+.rb-ln-row { display:grid; grid-template-columns: minmax(110px,180px) minmax(0,1fr) auto; gap:10px; align-items:baseline; padding:7px 0; border-top:1px solid var(--border); font-size:.8rem; }
+.rb-ln-row span { color: var(--text2); } .rb-ln-row small { color: var(--text3); font-family: var(--mono); font-size:.68rem; }
+@media (max-width: 600px) { .rb-ln-row { grid-template-columns: 1fr auto; } .rb-ln-row span { grid-column: 1 / -1; } }

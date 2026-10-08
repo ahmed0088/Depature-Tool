@@ -495,6 +495,17 @@ console.log('\nRoster scenarios');
     const one = { X: { [dts[0]]: N, [dts[1]]: 'OFF', [dts[2]]: Mo } }, two = { X: { [dts[0]]: N, [dts[1]]: 'OFF', [dts[2]]: 'OFF', [dts[3]]: Mo } };
     return rbNightToMorning(one, p, dts).length + ',' + rbNightToMorning(two, p, dts).length;
   })()`), '1,0');
+  check('learning: usual days off, weekly rotation, and the week after the latest posted', run(`(() => {
+    const next = roAdd(W, 7), L = rbLearnPerson('A', next);   // Anna: off on Monday in both posted weeks
+    // Rita rotates by week (posted by a manager, three weeks: mornings, evenings, mornings)
+    const M = '08:00 - 17:00', E = '15:00 - 00:00', wks = [roAdd(W, -7), W, next];
+    roStaff.R = { name: 'Rita Moss', group: 'Ibis DD' };
+    const save = {}; wks.forEach((w, i) => rtDates(w).forEach((dt, d) => { save[dt] = roDays[dt]; roDays[dt] = Object.assign({}, roDays[dt], { R: d === 6 ? 'OFF' : [M, E, M][i] }); }));
+    const R = rbLearnPerson('R', roAdd(next, 7));
+    const def = rbDefaultWeek();
+    Object.keys(save).forEach(dt => { if (save[dt]) roDays[dt] = save[dt]; else delete roDays[dt]; }); delete roStaff.R;
+    return [L.learnedOff.join(), R.rotates, R.nextMain === E, def === roAdd(next, 7)].join(' ');
+  })()`), '0 true true true');
   check('drafts: a save sends only the changed cells', run(`JSON.stringify(rbDraftDiff({ cells: { A: { d1: 'M', d2: 'E' }, B: { d1: 'OFF' } }, at: 1 }, { cells: { A: { d1: 'M', d2: 'OFF' }, C: { d1: 'E' } }, at: 2 }))`),
     JSON.stringify({ 'cells/A/d2': 'OFF', 'cells/B': null, 'cells/C/d1': 'E', at: 2 }));
   check('drafts: my waiting edit and a colleague\'s edit both stay', run(`(() => {

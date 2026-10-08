@@ -455,6 +455,7 @@ function rbMatchDay(I, g, cells, dates, d, R, rnd) {
     if (I.keep && I.keep[p.key] && I.keep[p.key][dt] !== undefined) c += rbNorm(I.keep[p.key][dt]) === s ? -6 : 10;   // change as little as possible
     if (p.fixed) c += s === p.fixed ? -8 : (p.fixedCost || 30);
     if (p.lastMain && p.mode === 'rotate' && s === p.lastMain) c += 6;   // rotates: a different shift from last week
+    if (p.mode === 'rotate' && p.nextMain && s === p.nextMain) c -= 5;   // …and the one that usually comes next, as the posted rosters show
     c += rbChangeCost(pv, s, d === 0);
     if (rbParse(nx)) c += rbNorm(nx) === s ? -8 : rbChangeCost(s, nx, false) / 2;
     if (p.usual && s === p.usual && p.mode !== 'rotate') c -= 3;
@@ -504,6 +505,7 @@ function rbScore(I, g, cells, dates, R) {
         if (!rbMayWork(I, g, p, v)) sc += 3000;
         if (p.fixed && rbNorm(v) !== p.fixed) sc += p.lock ? 3000 : p.fixedCost || 30;
         if (p.lastMain && p.mode === 'rotate' && rbNorm(v) === p.lastMain) sc += 6;
+        if (p.mode === 'rotate' && p.nextMain && rbNorm(v) === p.nextMain) sc -= 2;
         if (rbParse(v).e - rbParse(v).s > (R.maxHours || 9) * 60) sc += 3000;
         if (p.allowed && p.allowed.length && !p.allowed.includes(v)) sc += 800;
         if (rbSoftNo(I, p, dt, v)) sc += RB_SOFT_W;   // prefers not: only when it's the way to cover
@@ -514,7 +516,7 @@ function rbScore(I, g, cells, dates, R) {
         if (rbIsNight(v)) { nights++; if (p.nightExtra > 0) sc += 3 * p.nightExtra; }   // fair nights: whoever had more lately gets fewer
       } else {
         run = 0;
-        if (rbKind(v) === 'off') { offs++; offDays.push(d); if ((p.prefOff || []).includes(d)) sc -= 10 * rbWishWeight(p); if (d >= 5 && p.wkOffShort > 0) sc -= 4 * p.wkOffShort; /* fewer weekends off than the team lately: theirs first */ if ((p.lastOffs || []).includes(d)) sc -= 1; if (p.lastWeekendOff && d >= 4) sc += 5; }
+        if (rbKind(v) === 'off') { offs++; offDays.push(d); if ((p.prefOff || []).includes(d)) sc -= 10 * rbWishWeight(p); if (d >= 5 && p.wkOffShort > 0) sc -= 4 * p.wkOffShort; /* fewer weekends off than the team lately: theirs first */ if ((p.learnedOff || []).includes(d)) sc -= 3; /* their usual day off, as the posted rosters show */ if ((p.lastOffs || []).includes(d)) sc -= 1; if (p.lastWeekendOff && d >= 4) sc += 5; }
       }
       prev = v;
     }
@@ -522,6 +524,7 @@ function rbScore(I, g, cells, dates, R) {
     sc += 90 * rbNightToMorning(cells, p, dates).length;   // a night, one day off, then a morning: the day off goes on sleep, so only when there's no other way
     if (p.maxNights != null && nights > p.maxNights) sc += 60 * rbWishWeight(p) * (nights - p.maxNights);   // 💛 no more nights than they asked for (unless it's the only way)
     if (p.together && offDays.length >= 2 && !offDays.some((d, i) => i && d - offDays[i - 1] === 1)) sc += 25 * rbWishWeight(p);   // 💛 their days off next to each other
+    else if (!p.together && p.learnedTogether && offDays.length >= 2 && !offDays.some((d, i) => i && d - offDays[i - 1] === 1)) sc += 6;   // they usually have them together
   });
   return sc;
 }
@@ -683,10 +686,31 @@ function rbLearnGroup(group, week) {
   return { shifts, need, weeks: weeks.length };
 }
 /** Someone's usual shift, days off a week, and how last week ended. */
+const _rbLearnC = new Map();   // the same week asked again while building: learned once
 function rbLearnPerson(key, week) {
-  const weeks = rbHistory(week, 4), seen = {};
-  let samples = 0; const offsPerWeek = [];
-  weeks.forEach(w => { let offs = 0, any = false; for (let d = 0; d < 7; d++) { const v = (roDays[roAdd(w, d)] || {})[key]; if (!v) continue; any = true; const n = rbNorm(v); if (n) { seen[n] = (seen[n] || 0) + 1; samples++; } else if (rbKind(v) === 'off') offs++; } if (any) offsPerWeek.push(offs); });
+  const ck = key + '|' + week + '|' + _rbLearnStamp(); if (_rbLearnC.has(ck)) return _rbLearnC.get(ck);
+  const r = _rbLearnPerson(key, week); if (_rbLearnC.size > 600) _rbLearnC.clear(); _rbLearnC.set(ck, r); return r;
+}
+/** Changes when a roster is posted or edited, so what was learned is read again. */
+function _rbLearnStamp() { let n = 0; for (const dt in roDays) n += Object.keys(roDays[dt] || {}).length; return Object.keys(roDays).length + ':' + n; }
+/** What the posted rosters say about someone: whoever made them (built here, a picture, Excel, another manager),
+ *  the last 8 weeks that have a roster (weeks without one are skipped). Settings on their card always come first. */
+function _rbLearnPerson(key, week) {
+  const weeks = rbHistory(week, 8), seen = {};
+  let samples = 0; const offsPerWeek = [], offDay = [0, 0, 0, 0, 0, 0, 0], mains = []; let weeksSeen = 0, pairWeeks = 0, togetherWeeks = 0;
+  weeks.slice().reverse().forEach(w => {   // oldest first
+    let offs = 0, any = false; const wk = {}, od = [];
+    for (let d = 0; d < 7; d++) { const v = (roDays[roAdd(w, d)] || {})[key]; if (!v) continue; any = true; const n = rbNorm(v); if (n) { seen[n] = (seen[n] || 0) + 1; samples++; wk[n] = (wk[n] || 0) + 1; } else if (rbKind(v) === 'off') { offs++; offDay[d]++; od.push(d); } }
+    if (!any) return;
+    weeksSeen++; offsPerWeek.push(offs);
+    if (od.length >= 2) { pairWeeks++; if (od.some((d, i) => i && d - od[i - 1] === 1)) togetherWeeks++; }
+    const m = Object.keys(wk).sort((a, b) => wk[b] - wk[a])[0]; if (m) mains.push(m);
+  });
+  // their usual days off: the days they had off in at least half of the weeks
+  const learnedOff = weeksSeen >= 2 ? offDay.map((n, d) => n / weeksSeen >= 0.5 ? d : -1).filter(d => d >= 0) : [];
+  // rotation: the main shift changes week to week; and what usually comes after which
+  const changes = mains.slice(1).filter((m, i) => m !== mains[i]).length, rotates = mains.length >= 3 && changes >= Math.ceil((mains.length - 1) * 0.6);
+  const next = {}; mains.slice(1).forEach((m, i) => { if (m !== mains[i]) { const a = mains[i]; next[a] = next[a] || {}; next[a][m] = (next[a][m] || 0) + 1; } });
   const usual = Object.keys(seen).sort((a, b) => seen[b] - seen[a])[0] || '';
   const share = usual ? seen[usual] / samples : 0;
   let run = 0;
@@ -695,7 +719,9 @@ function rbLearnPerson(key, week) {
   for (let d = 0; d < 7; d++) if (rbKind((roDays[roAdd(last, d)] || {})[key]) === 'off') lastOffs.push(d);
   const lastSeen = {}; for (let d = 0; d < 7; d++) { const n = rbNorm((roDays[roAdd(last, d)] || {})[key]); if (n) lastSeen[n] = (lastSeen[n] || 0) + 1; }
   const lastMain = Object.keys(lastSeen).sort((a, b) => lastSeen[b] - lastSeen[a])[0] || '';
-  return { usual, lastMain, fixedGuess: samples >= 5 && share >= 0.85 ? usual : '', offs: offsPerWeek.length ? Math.max(1, _rbMed(offsPerWeek)) : 1, lastShift: (roDays[roAdd(week, -1)] || {})[key] || '', run, lastOffs, lastWeekendOff: lastOffs.some(d => d >= 4) };
+  const nx = lastMain && next[lastMain] ? Object.keys(next[lastMain]).sort((a, b) => next[lastMain][b] - next[lastMain][a])[0] : '';
+  return { usual, lastMain, fixedGuess: samples >= 5 && share >= 0.85 ? usual : '', offs: offsPerWeek.length ? Math.max(1, _rbMed(offsPerWeek)) : 1, lastShift: (roDays[roAdd(week, -1)] || {})[key] || '', run, lastOffs, lastWeekendOff: lastOffs.some(d => d >= 4),
+    learnedOff, learnedTogether: pairWeeks >= 2 && togetherWeeks / pairWeeks >= 0.6, rotates, nextMain: rotates ? nx : '', weeksLearned: weeks.filter(w => [0, 1, 2, 3, 4, 5, 6].some(d => (roDays[roAdd(w, d)] || {})[key])) };
 }
 /** Public holidays: the ones entered, plus any named in PH cells ("PH - 28th Aug."). */
 function rbHolidays() {
@@ -758,7 +784,7 @@ function rbPersonCfg(k) {
   // static / rotates weekly / any: set by hand, else managers and anyone always on one shift stay static
   // 🔒 their shift is locked: set on their card, or a manager while "managers keep their shift" is on
   const lock = c.lockShift != null ? !!c.lockShift : mgr && rbRules().lockMgr !== false;
-  const mode = c.mode || (c.fixed ? 'static' : c.fixed === '' && !lock ? 'any' : (L.fixedGuess || ((mgr || lock) && L.usual)) ? 'static' : 'any');
+  const mode = c.mode || (c.fixed ? 'static' : c.fixed === '' && !lock ? 'any' : (L.fixedGuess || ((mgr || lock) && L.usual)) ? 'static' : L.rotates ? 'rotate' : 'any');   // (rotates week to week, as the posted rosters show)
   const fixed = mode === 'static' || lock ? (c.fixed || L.fixedGuess || L.usual || '') : '';
   return {
     key: k, group: rbPGroup(k), post: rbPost(k), title: c.title || '', mode, lock: lock && !!fixed, home: !!c.home, alt: c.alt || '',
@@ -769,6 +795,8 @@ function rbPersonCfg(k) {
     usual: L.usual, allowed: c.allowed || null, soft: c.soft || [], prefOff: c.prefOff || [],
     // their wishes (💛 on their card): shifts they like, days off together, steady hours, a cap on nights
     likes: (c.likes || []).filter(x => rbGroupCfg((roStaff[k] || {}).group || '').shifts.includes(x)), together: !!c.together, steady: !!c.steady,
+    // learned from the posted rosters (lighter than anything set on their card)
+    learnedOff: c.prefOff && c.prefOff.length ? [] : (L.learnedOff || []), learnedTogether: c.together == null && !!L.learnedTogether, nextMain: L.nextMain || '', learnedFrom: (L.weeksLearned || []).length,
     maxNights: c.maxNights != null && !isNaN(+c.maxNights) && !(fixed && rbIsNight(fixed)) ? +c.maxNights : null,   // (static night staff: nights are their job)
     lastShift: L.lastShift, run: L.run, lastOffs: L.lastOffs, lastWeekendOff: L.lastWeekendOff,
   };
@@ -826,7 +854,7 @@ function rbInput(seed) {
  *  wishes that weren't granted lately are owed (they come first this week), and whoever had more nights or
  *  fewer weekends off than the team gets the lighter side this time. */
 function rbFairHistory(I) {
-  const weeks = [1, 2, 3, 4].map(n => roAdd(I.week, -7 * n)), W = [1, 0.75, 0.5, 0.25];
+  const weeks = rbHistory(I.week, 4).filter(w => w < I.week), W = [1, 0.75, 0.5, 0.25];   // the last 4 weeks that have a roster, gaps skipped
   const byGroup = {};
   I.people.forEach(p => {
     let debt = 0, nights = 0, wkOff = 0, seen = 0;
@@ -939,7 +967,12 @@ function rbDraftsIn(v) {
 
 // ── Screen ────────────────────────────────────────────────
 function rbOpen() { showPanel('roster-build'); }
-function rbDefaultWeek() { const t = new Date(), w = roMonday(t); return [0, 4, 5, 6].includes(t.getDay()) ? roAdd(w, 7) : roAdd(w, 7); }
+/** The week to build: the one right after the latest posted roster (whoever posted it), else next week. */
+function rbDefaultWeek() {
+  const w = roMonday(new Date()), has = x => [0, 1, 2, 3, 4, 5, 6].some(d => Object.keys(roDays[roAdd(x, d)] || {}).length);
+  let last = null; for (let i = 0; i <= 4; i++) { const x = roAdd(w, 7 * i); if (has(x)) last = x; }
+  return last && last >= w ? roAdd(last, 7) : roAdd(w, 7);
+}
 function rbGo(n) { rbWeek = n === 0 ? rbDefaultWeek() : roAdd(rbWeek, n); rbRender(); }
 function rbWeekLabel(w) { return `${roDate(w).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${roDate(roAdd(w, 6)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`; }
 const _rbQ = s => JSON.stringify(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -1306,6 +1339,7 @@ function rbOutHtml(shown, dates) {
     ${rbDeskHtml(I, cells, shown, dates)}
     <details class="rb-covers"${P.some(p => p.kind === 'short' || p.kind === 'thin') ? ' open' : ''}><summary>Cover: people on each shift (has / needs) · tap a number for who can take it</summary>${covers}</details>
     ${(() => { const H = rbHappyHtml(I, cells, shown, dates); return `<details class="rb-covers"><summary>💛 Team happiness${H.sum ? ': ' + H.sum : ''}</summary>${H.html}</details>`; })()}
+    ${(() => { const L = rbLearnedHtml(I, shown); return `<details class="rb-covers"><summary>🧠 What I learned: ${L.sum}</summary>${L.html}</details>`; })()}
     <details class="rb-covers"><summary>📊 Fairness: nights, weekends and hours over the last 4 weeks and this one</summary>${rbFairHtml(I, cells, shown, dates)}</details>
     <div class="ro-acts rb-acts">
       <button class="btn gold" onclick="rbPublish()">📤 Publish to the team</button>
@@ -1484,6 +1518,25 @@ function rbSetHi(t) {
   rbHi = rbHi === t ? '' : t;
   const tb = document.getElementById('rbTable'); if (tb) tb.className = `ro-table rb-table${rbHi ? ' rb-hi rb-hi-' + rbHi : ''}`;
   document.querySelectorAll('.rb-lg').forEach(b => b.classList.toggle('on', b.classList.contains('ro-t-' + rbHi)));
+}
+/** 🧠 What the builder learned from the posted rosters, person by person (whoever made them). */
+function rbLearnedHtml(I, shown) {
+  const weeks = rbHistory(I.week, 8).filter(w => w < I.week).sort();
+  if (!weeks.length) return { sum: 'no posted weeks yet', html: '<div class="ro-empty">Nothing to learn from yet. Post a week (a picture, Excel, or built here): every posted week teaches the builder how your team works.</div>' };
+  const sh = x => { const i = roInfo(x); return i && i.from ? roShort(i) : x; };
+  const rows = I.people.filter(p => shown.includes(rbBaseGroup(p.group)) && p.learnedFrom).map(p => {
+    const c = rbPeople[p.key] || {}, bits = [];
+    if (p.mode === 'static' && p.fixed) bits.push(`always ${sh(p.fixed)}${c.fixed || c.mode ? ' (set by you)' : ''}`);
+    else if (p.mode === 'rotate') bits.push(`rotates week to week${p.lastMain ? ` · last week ${sh(p.lastMain)}${p.nextMain ? ` → usually ${sh(p.nextMain)} next` : ''}` : ''}`);
+    else if (p.usual) bits.push(`mostly ${sh(p.usual)}`);
+    const offs = (p.prefOff && p.prefOff.length ? p.prefOff : p.learnedOff || []);
+    if (offs.length) bits.push(`off ${offs.map(d => RB_DAYS[d]).join(' & ')}${p.prefOff && p.prefOff.length ? ' (their wish)' : ' usually'}`);
+    if (p.together || p.learnedTogether) bits.push('days off together');
+    bits.push(`${p.offs} day${p.offs === 1 ? '' : 's'} off a week`);
+    return `<div class="rb-ln-row"><b>${escapeHtml((roStaff[p.key] || {}).name || p.key)}</b><span>${bits.map(escapeHtml).join(' · ')}</span><small>${p.learnedFrom} wk</small></div>`;
+  });
+  const lbl = w => roDate(w).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return { sum: `from ${weeks.length} posted week${weeks.length === 1 ? '' : 's'}`, html: `<div class="rb-learned">${rows.join('')}</div><small class="ro-hint">Learned from the weeks posted here, whoever made them (built here, a picture, Excel, another manager): ${weeks.map(lbl).join(', ')}. Weeks with no roster are skipped. Anything set on someone's card comes first; post each week (even one you made yourself) and the builder keeps learning.</small>` };
 }
 /** Each person's wishes (💛 on their card) and which ones this week grants. */
 function rbWishes(I, p, cells, dates) {
