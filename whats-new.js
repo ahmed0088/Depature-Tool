@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 193, items: [
+    '🏖 A week normally has one day off (4 a month), so a PH day (a second day off that week) is now the last option: the builder gives at most 1 PH a week each, and only when a shift has someone spare anyway. You can change the number under ⚖️ Rules.',
+  ] },
   { v: 192, items: [
     '👔 Fixed: the "one is enough for all the hotels" rule is for the main managers (Manager and Asst. Manager), not Duty Managers. The builder keeps at least one manager on duty every day across all hotels (two is fine) and doesn\'t give them the same day off. ⚖️ Rules shows who counts as a manager; set the title on their card in 🧑‍💼 Team.',
   ] },

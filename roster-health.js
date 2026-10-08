@@ -94,7 +94,7 @@ function rhScore(k, r, a) {
       v: `${r.sick} day${r.sick === 1 ? '' : 's'}`, d: r.sick ? `${r.sick} sick day${r.sick === 1 ? '' : 's'} in 4 weeks` : 'No sick days in 4 weeks', tip: 'Check in with them: a short chat goes a long way' },
     { id: 'ph', ico: '🎟', name: 'PH owed', w: 1,
       s: ph <= 2 ? 100 : ph <= 4 ? 75 : ph <= 7 ? 50 : 25,
-      v: `${ph}`, d: ph ? `${ph} PH day${ph === 1 ? '' : 's'} owed` : 'No PH owed', tip: 'Clear some PH: the builder gives up to 2 a week when a shift has someone spare' },
+      v: `${ph}`, d: ph ? `${ph} PH day${ph === 1 ? '' : 's'} owed` : 'No PH owed', tip: 'Clear some PH: the builder gives 1 a week when a shift has someone spare anyway' },
   ];
   const score = Math.round(M.reduce((t, m) => t + m.s * m.w, 0) / M.reduce((t, m) => t + m.w, 0));
   const worst = M.filter(m => m.s < 70).sort((x, y) => x.s - y.s);

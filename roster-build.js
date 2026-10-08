@@ -389,12 +389,13 @@ function _rbFinish(I, cells) {
       }
     }
   }
-  // 5. PH days owed, when the shift has someone spare: the biggest balance first, up to 2 a week each,
+  // 5. PH days owed, only as the last option: when the shift has someone spare anyway. Normally a week has one day off
+  //    (4 a month), so at most 1 PH a week each (a rule), the biggest balance first,
   //    next to a day off where possible (a longer break), oldest PH first
   if (R.givePh) {
     const isPh = v => /^PH\b/i.test(String(v || ''));
     const offish = v => !!v && v !== '—' && !rbParse(v);   // OFF, PH, leave: anything that isn't a shift
-    const phMax = R.phMax == null ? 2 : +R.phMax;
+    const phMax = R.phMax == null ? 1 : +R.phMax;
     I.people.filter(p => (p.phOwed || 0) > 0).sort((a, b) => (b.phOwed || 0) - (a.phOwed || 0)).forEach(p => {
       const already = dates.filter(dt => isPh(cells[p.key][dt])).length;   // PH asked for this week
       const labels = (p.phLabels && p.phLabels.length ? p.phLabels : [p.phLabel || '']).slice(already);
@@ -1354,7 +1355,7 @@ function rbRulesHtml() {
     <div class="rb-desk-rule"><span>Two on the desk: aim for</span><input type="number" min="1" max="6" value="${R.deskMin}" onchange="rbSetRule('deskMin',+this.value)"><span>at once, from</span><input type="number" min="0" max="23" value="${R.deskFrom}" onchange="rbSetRule('deskFrom',+this.value)"><span>:00 to</span><input type="number" min="0" max="24" value="${R.deskTo}" onchange="rbSetRule('deskTo',+this.value)"><span>:00${R.deskTo % 24 < R.deskFrom % 24 ? ' (next day)' : ''}</span>
       <small>One on 08–17 and one on 12–21 = two at once 12:00–17:00. An end before the start runs past midnight; 1 person = off.</small></div>
     <label class="rb-chk"><input type="checkbox" ${R.allowOne !== false ? 'checked' : ''} onchange="rbSetRule('allowOne',this.checked)"> When there's no other way, run a shift with one person (cover number = the ideal)</label>
-    <label class="rb-chk"><input type="checkbox" ${R.givePh ? 'checked' : ''} onchange="rbSetRule('givePh',this.checked)"> Give PH days owed when a shift has someone spare</label>
+    <label class="rb-chk"><input type="checkbox" ${R.givePh ? 'checked' : ''} onchange="rbSetRule('givePh',this.checked)"> Give PH days owed, only as the last option: when a shift has someone spare anyway. At most <input type="number" min="0" max="3" value="${R.phMax == null ? 1 : R.phMax}" onclick="event.stopPropagation()" onchange="rbSetRule('phMax',Math.max(0,Math.min(3,+this.value||0)))"> a week each <small>(a week normally has one day off, 4 a month)</small></label>
     <label class="rb-chk"><input type="checkbox" ${R.lend === false ? 'checked' : ''} onchange="rbSetRule('lend',!this.checked)"> 🏨 Keep everyone in their own hotel (nobody is moved between hotels, by the builder or in suggestions). Off: a short hotel can borrow ("12:00 - 21:00 - Adagio"); lock single people on their card.</label>
     <label class="rb-chk"><input type="checkbox" ${R.lockMgr !== false ? 'checked' : ''} onchange="rbSetRule('lockMgr',this.checked);rbRender()"> 🔒 Managers keep their own shift (e.g. 09:00 - 18:00 to run the operation): never moved to cover. Unlock one on their card.</label>
     <label>👔 Managers on duty (Manager, Asst. Manager), all hotels together: at least <input type="number" min="0" max="3" value="${R.mgrMin}" onchange="rbSetRule('mgrMin',Math.max(0,Math.min(3,+this.value||0)))"> each day <small>(one can look after all the hotels when needed; two is fine too; 0 = off) · now: ${escapeHtml(Object.keys(roStaff).filter(k => rbMgrP({ title: rbTitle(k) }) && !((rbPeople[k] || {}).deleted)).map(k => (roStaff[k].name || k).split(' ')[0]).join(', ') || 'nobody has the title yet: set it on their card in 🧑‍💼 Team')}</small></label>
@@ -1628,7 +1629,7 @@ function rbPhHtml(I, cells, shown, dates) {
   }).sort((a, b) => b.left - a.left || b.p.phOwed - a.p.phOwed);
   if (!rows.length) return null;
   const owed = rows.reduce((t, r) => t + r.p.phOwed, 0), given = rows.reduce((t, r) => t + r.given, 0);
-  return { open: rows.some(r => r.left && r.fits.length), sum: `${given} of ${owed} PH day${owed === 1 ? '' : 's'} owed given this week`, html: `<div class="rb-happy">${rows.map(r => `<div class="rb-hp-row"><span class="rb-hp-f">${r.left ? '🏖' : '✅'}</span><b>${escapeHtml((roStaff[r.p.key] || {}).name || r.p.key)}</b><span class="rb-hp-n">${r.p.phOwed}</span><span class="rb-hp-w">${r.given ? `<i class="ok">✓ ${r.given} given this week</i>` : ''}${r.left ? `<i class="no">${r.left} still owed${r.p.phLabels && r.p.phLabels[r.given] ? ' · oldest ' + escapeHtml(r.p.phLabels[r.given]) : ''}</i>` : ''}${r.fits.map(x => `<button class="btn sm ghost" onclick="rbGivePh(${_rbQ(r.p.key)},'${x.dt}')">PH on ${escapeHtml(RB_DAYS[x.d])}</button>`).join('')}${r.left && !r.fits.length ? '<em class="rb-hp-note">no spare shift this week: if they ask for a day off, tap → PH on the request</em>' : ''}</span></div>`).join('')}</div><small class="ro-hint">The builder clears the biggest balances first, up to 2 PH a week each, next to a day off where it can, only when the shift keeps enough people. The buttons show other days where a PH fits. Change the balance on the person's row under ⚙ Settings → People (PH owed).</small>` };
+  return { open: rows.some(r => r.left && r.fits.length), sum: `${given} of ${owed} PH day${owed === 1 ? '' : 's'} owed given this week`, html: `<div class="rb-happy">${rows.map(r => `<div class="rb-hp-row"><span class="rb-hp-f">${r.left ? '🏖' : '✅'}</span><b>${escapeHtml((roStaff[r.p.key] || {}).name || r.p.key)}</b><span class="rb-hp-n">${r.p.phOwed}</span><span class="rb-hp-w">${r.given ? `<i class="ok">✓ ${r.given} given this week</i>` : ''}${r.left ? `<i class="no">${r.left} still owed${r.p.phLabels && r.p.phLabels[r.given] ? ' · oldest ' + escapeHtml(r.p.phLabels[r.given]) : ''}</i>` : ''}${r.fits.map(x => `<button class="btn sm ghost" onclick="rbGivePh(${_rbQ(r.p.key)},'${x.dt}')">PH on ${escapeHtml(RB_DAYS[x.d])}</button>`).join('')}${r.left && !r.fits.length ? '<em class="rb-hp-note">no spare shift this week: if they ask for a day off, tap → PH on the request</em>' : ''}</span></div>`).join('')}</div><small class="ro-hint">A week normally has one day off (4 a month), so PH is the last option: the builder gives at most ${rbRules().phMax == null ? 1 : rbRules().phMax} a week each, biggest balance first, and only when a shift has someone spare anyway. The buttons show other days where a PH fits, if you decide to give one. Change the balance on the person's row under ⚙ Settings → People (PH owed).</small>` };
 }
 function rbGivePh(k, dt) {
   const D = rbDrafts[rbWeek]; if (!D || !D.cells) return;
