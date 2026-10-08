@@ -490,6 +490,11 @@ console.log('\nRoster scenarios');
     rbSetPerson('A', 'prefOff', undefined);
     return [a.wishDebt > 0, rbWishWeight(a) > 1, rbWishWeight(b) === 1, typeof a.wkOffShort === 'number'].join();
   })()`), 'true,true,true,true');
+  check('night → one day off → morning is found (and two days off is fine)', run(`(() => {
+    const dts = rtDates(W), N = '00:00 - 09:00', Mo = '07:00 - 16:00', p = { key: 'X', lastShift: '' };
+    const one = { X: { [dts[0]]: N, [dts[1]]: 'OFF', [dts[2]]: Mo } }, two = { X: { [dts[0]]: N, [dts[1]]: 'OFF', [dts[2]]: 'OFF', [dts[3]]: Mo } };
+    return rbNightToMorning(one, p, dts).length + ',' + rbNightToMorning(two, p, dts).length;
+  })()`), '1,0');
   check('drafts: a save sends only the changed cells', run(`JSON.stringify(rbDraftDiff({ cells: { A: { d1: 'M', d2: 'E' }, B: { d1: 'OFF' } }, at: 1 }, { cells: { A: { d1: 'M', d2: 'OFF' }, C: { d1: 'E' } }, at: 2 }))`),
     JSON.stringify({ 'cells/A/d2': 'OFF', 'cells/B': null, 'cells/C/d1': 'E', at: 2 }));
   check('drafts: my waiting edit and a colleague\'s edit both stay', run(`(() => {

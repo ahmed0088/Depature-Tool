@@ -186,8 +186,17 @@ function rbSolve(I) {
     const sc = Object.keys(I.groups).reduce((t, g) => t + rbScore(I, g, cells, dates0, R0), 0);
     if (sc < bestSc) { bestSc = sc; best = cells; }
   }
-  const res = rbRepair(I, _rbFinish(I, best));
+  let res = rbRepair(I, _rbFinish(I, best));
   res.notes = ((plan && plan.notes) || []).concat(res.notes || []);
+  // covering every shift comes before any wish: a week with an empty shift is tried again without the wishes,
+  // and the one that covers more wins (on a tie, the one with the wishes)
+  const shorts = r => { try { return rbProblems(I, r.cells).filter(x => x.kind === 'short').length; } catch (_) { return 0; } };
+  const hasWishes = I.people.some(p => (p.likes || []).length || (p.prefOff || []).length || p.together || p.steady || p.maxNights != null || p.wishDebt || p.nightExtra || p.wkOffShort);
+  if (!I._plain && hasWishes && shorts(res) > 0) {
+    const plainPeople = I.people.map(p => Object.assign({}, p, { likes: [], prefOff: [], together: false, steady: false, maxNights: null, wishDebt: 0, nightExtra: 0, wkOffShort: 0 }));
+    const alt = rbSolve(Object.assign({}, I, { people: plainPeople, _plain: true, noNightPlan: true, attempts: 2 }));   // (the night plan is already in I.pre)
+    if (shorts(alt) < shorts(res)) { alt.notes = ((plan && plan.notes) || []).concat((alt.notes || []).filter(n => !((plan && plan.notes) || []).some(m => m.text === n.text))); res = alt; }
+  }
   return res;
 }
 
@@ -450,6 +459,7 @@ function rbMatchDay(I, g, cells, dates, d, R, rnd) {
     if (rbParse(nx)) c += rbNorm(nx) === s ? -8 : rbChangeCost(s, nx, false) / 2;
     if (p.usual && s === p.usual && p.mode !== 'rotate') c -= 3;
     if ((p.likes || []).includes(s)) c -= 12 * rbWishWeight(p);   // 💛 a shift they like (more when they missed wishes lately)
+    if (d >= 1 && rbIsMorning(s) && rbKind(cells[p.key][dates[d - 1]] || '') === 'off' && rbIsNight(d >= 2 ? cells[p.key][dates[d - 2]] || '' : p.lastShift || '')) c += 45;   // night → day off → morning: only when needed
     if (rbIsNight(s) && p.nightExtra > 0) c += 3 * p.nightExtra;  // more nights than the team lately: someone else's turn
     return c + (rnd ? rnd() * 1.5 : 0);
   };
@@ -509,6 +519,7 @@ function rbScore(I, g, cells, dates, R) {
       prev = v;
     }
     sc += 2000 * Math.abs(offs - rbOffsDue(I, p, dates));   // rest, days in a row and days off come before cover
+    sc += 90 * rbNightToMorning(cells, p, dates).length;   // a night, one day off, then a morning: the day off goes on sleep, so only when there's no other way
     if (p.maxNights != null && nights > p.maxNights) sc += 60 * rbWishWeight(p) * (nights - p.maxNights);   // 💛 no more nights than they asked for (unless it's the only way)
     if (p.together && offDays.length >= 2 && !offDays.some((d, i) => i && d - offDays[i - 1] === 1)) sc += 25 * rbWishWeight(p);   // 💛 their days off next to each other
   });
@@ -757,7 +768,8 @@ function rbPersonCfg(k) {
     lastMain: L.lastMain,
     usual: L.usual, allowed: c.allowed || null, soft: c.soft || [], prefOff: c.prefOff || [],
     // their wishes (💛 on their card): shifts they like, days off together, steady hours, a cap on nights
-    likes: c.likes || [], together: !!c.together, steady: !!c.steady, maxNights: c.maxNights != null ? +c.maxNights : null,
+    likes: (c.likes || []).filter(x => rbGroupCfg((roStaff[k] || {}).group || '').shifts.includes(x)), together: !!c.together, steady: !!c.steady,
+    maxNights: c.maxNights != null && !isNaN(+c.maxNights) && !(fixed && rbIsNight(fixed)) ? +c.maxNights : null,   // (static night staff: nights are their job)
     lastShift: L.lastShift, run: L.run, lastOffs: L.lastOffs, lastWeekendOff: L.lastWeekendOff,
   };
 }
@@ -836,6 +848,15 @@ function rbFairHistory(I) {
     const avgN = list.reduce((t, p) => t + p.nightsHist / p.histWeeks, 0) / list.length, avgW = list.reduce((t, p) => t + p.wkOffHist / p.histWeeks, 0) / list.length;
     list.forEach(p => { p.nightExtra = Math.round((p.nightsHist / p.histWeeks - avgN) * 10) / 10; p.wkOffShort = Math.round((avgW - p.wkOffHist / p.histWeeks) * 10) / 10; });
   });
+}
+/** A morning shift (starting before 10:00, not a night). */
+function rbIsMorning(v) { const x = rbParse(v); return !!x && !rbIsNight(v) && x.s < 10 * 60; }
+/** Days where someone goes night → one day off → a morning: their day off is spent sleeping, so it's kept for when there's no other way. */
+function rbNightToMorning(cells, p, dates) {
+  const v = d => d < 0 ? (d === -1 ? (p.lastShift || '') : '') : ((cells[p.key] || {})[dates[d]] || '');
+  const out = [];
+  for (let d = 1; d < dates.length; d++) if (rbIsMorning(v(d)) && rbKind(v(d - 1)) === 'off' && rbIsNight(v(d - 2))) out.push(dates[d]);
+  return out;
 }
 /** How much more a person's wishes count this week: 1, up to 3 when they missed wishes in the weeks before. */
 function rbWishWeight(p) { return 1 + Math.min(2, (p.wishDebt || 0) * 0.5); }
@@ -1121,13 +1142,15 @@ function rbDecisionsHtml(I, cells, shown, dates) {
   const D = rbDrafts[rbWeek] || {}, notes = D.notes || [], moved = [];
   I.people.forEach(p => dates.forEach(dt => { const v = (cells[p.key] || {})[dt], x = rbParse(v); if (!x || !x.note) return; const at = rbBaseGroup(rbAt(I, p, x)), home = rbBaseGroup(p.group); if (at !== home && (shown.includes(at) || shown.includes(home))) moved.push({ p, dt, at, home, sh: rbNorm(v) }); }));
   const soft = []; I.people.forEach(p => dates.forEach(dt => { const v = (cells[p.key] || {})[dt]; if (rbParse(v) && rbSoftNo(I, p, dt, v) && shown.includes(rbBaseGroup(p.group))) soft.push({ p, dt, sh: rbNorm(v) }); }));
-  if (!notes.length && !moved.length && !soft.length) return '';
+  const n2m = []; I.people.forEach(p => { if (shown.includes(rbBaseGroup(p.group))) rbNightToMorning(cells, p, dates).forEach(dt => n2m.push({ p, dt })); });
+  if (!notes.length && !moved.length && !soft.length && !n2m.length) return '';
   const fn = k => escapeHtml(((roStaff[k] || {}).name || k).split(' ')[0]);
   const named = p => notes.some(n => new RegExp('\\b' + ((roStaff[p.key] || {}).name || '').split(' ')[0] + '\\b').test(n.text || ''));
   const why = p => named(p) ? 'part of the decision above' : rbFloats(p) ? 'Duty Manager: works wherever needed' : rbFloatsLast(p) ? 'Supervisor from another hotel: only because nobody else could' : I.rules.lend === false ? '' : 'spare at their own hotel that day';
   return `<div class="rb-decide"><div class="rb-sub">📝 Decisions this week <small>so you know what was done, and why</small></div>
     ${notes.map((n, i) => `<div class="rb-dec warn"><span>⚠ ${escapeHtml(n.text)}${n.by ? ` <i>· ${escapeHtml(n.by)}</i>` : ''}</span><button class="ro-x" title="Remove this note" onclick="rbDelNote(${i})">✕</button></div>`).join('')}
     ${soft.map(m => `<div class="rb-dec"><span>🙏 <b>${fn(m.p.key)}</b> works ${escapeHtml(m.sh)} on ${escapeHtml(roDayLbl(m.dt))}, a shift they prefer not to: needed to cover it</span></div>`).join('')}
+    ${n2m.map(m => `<div class="rb-dec"><span>😴 <b>${fn(m.p.key)}</b> goes from a night to a morning on ${escapeHtml(roDayLbl(m.dt))} with only one day off between (their day off goes on sleep): no other way to cover it</span></div>`).join('')}
     ${moved.map(m => `<div class="rb-dec"><span>🏨 <b>${fn(m.p.key)}</b> (${escapeHtml(m.home)}) works ${escapeHtml(m.sh)} at <b>${escapeHtml(m.at)}</b> on ${escapeHtml(roDayLbl(m.dt))}${why(m.p) ? ': ' + escapeHtml(why(m.p)) : ''}</span></div>`).join('')}
   </div>`;
 }
@@ -1230,7 +1253,7 @@ function rbRulesHtml() {
   const R = rbRules(), hol = rbSettings.holidays || [];
   return `<div class="rb-rules">
     <label>Rest between shifts, at least <input type="number" min="6" max="16" value="${R.minRest}" onchange="rbSetRule('minRest',+this.value)"> hours</label>
-    <label>Only when there's no other way, down to <input type="number" min="0" max="${R.minRest}" value="${R.restFloor != null ? R.restFloor : 7}" onchange="rbSetRule('restFloor',Math.min(+this.value,rbRules().minRest))"> hours <small>(one hour at a time, and it tells you who and why)</small></label>
+    <label>Only when there's no other way, down to <input type="number" min="0" max="${R.minRest}" value="${R.restFloor != null ? R.restFloor : 7}" onchange="rbSetRule('restFloor',this.value===''||isNaN(+this.value)?undefined:Math.max(0,Math.min(+this.value,rbRules().minRest)))"> hours <small>(one hour at a time, and it tells you who and why)</small></label>
     <label>Days in a row, at most <input type="number" min="3" max="14" value="${R.maxRun}" onchange="rbSetRule('maxRun',+this.value)"></label>
     <label>Longest shift <input type="number" min="6" max="12" value="${R.maxHours}" onchange="rbSetRule('maxHours',+this.value)"> hours</label>
     <label class="rb-chk"><input type="checkbox" ${R.nightSwitch !== false ? 'checked' : ''} onchange="rbSetRule('nightSwitch',this.checked)"> A day off between night and day shifts (no night on Monday then 08:00 on Tuesday, or the other way)</label>
@@ -1466,7 +1489,10 @@ function rbSetHi(t) {
 function rbWishes(I, p, cells, dates) {
   const W = [], v = d => (cells[p.key] || {})[dates[d]] || '', worked = dates.map((_, d) => v(d)).filter(x => rbParse(x));
   const offD = dates.map((_, d) => d).filter(d => rbKind(v(d)) === 'off');
-  (p.prefOff || []).forEach(d => W.push({ t: `${RB_DAYS[d]} off`, ok: offD.includes(d) }));
+  // days they'd like off: one wish per day they can actually have (wishing for 4 days with 2 days off a week: 2 wishes, any of the 4)
+  const want = (p.prefOff || []).filter(d => d >= 0 && d < 7), canHave = Math.min(want.length, Math.max(1, p.offs || 1)), got = want.filter(d => offD.includes(d)).length;
+  if (want.length && want.length <= canHave) want.forEach(d => W.push({ t: `${RB_DAYS[d]} off`, ok: offD.includes(d) }));
+  else if (want.length) for (let i = 0; i < canHave; i++) W.push({ t: `a day off on ${want.map(d => RB_DAYS[d]).join('/')}`, ok: got > i });
   if ((p.likes || []).length && worked.length) { const n = worked.filter(x => p.likes.includes(rbNorm(x))).length; W.push({ t: `likes ${p.likes.join(' / ')}`, ok: n * 2 >= worked.length, n: `${n} of ${worked.length} days` }); }
   if ((p.soft || []).length) { const bad = worked.filter(x => p.soft.includes(rbNorm(x))); W.push({ t: `not ${p.soft.join(' / ')}`, ok: !bad.length, n: bad.length ? `${bad.length} day${bad.length === 1 ? '' : 's'}` : '' }); }
   if (p.together && offD.length >= 2) W.push({ t: 'days off together', ok: offD.some((d, i) => i && d - offD[i - 1] === 1) });

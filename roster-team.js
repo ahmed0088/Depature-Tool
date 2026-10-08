@@ -199,6 +199,8 @@ function rtCoverOptions(I, cells, group, date, shift, opt) {
   });
   opts.forEach(o => { const p = I.people.find(x => x.key === o.key); if (p && o.cells) o.cost += Math.max(0, rtHourChanges(I, o.cells, p) - rtHourChanges(I, cells, p)) * 14; });
   opts.forEach(o => { const p = I.people.find(x => x.key === o.key); if (p && o.cells && rbSoftNo(I, p, date, shift)) { o.cost += 50; o.text += ' (prefers not this shift)'; } });
+  // a night, one day off, then a morning: their day off goes on sleep, so these come after every other way
+  { const dts = rtDates(I.week); opts.forEach(o => { const p = I.people.find(x => x.key === o.key); if (!p || !o.cells) return; const was = rbNightToMorning(cells, p, dts).length, now = rbNightToMorning(o.cells, p, dts).length; if (now > was) { o.cost += 70; o.text += ' (night → morning with one day off)'; } }); }
   const best = {}; opts.forEach(o => { if (!best[o.key] || best[o.key].cost > o.cost) best[o.key] = o; });
   const list = Object.values(best).sort((a, b) => a.cost - b.cost).slice(0, 6);
   const who = ((G[group] || {}).who || {})[shift];
@@ -206,9 +208,12 @@ function rtCoverOptions(I, cells, group, date, shift, opt) {
   // an evening next to a night without a day off, rest down to 7 h, an evening straight into a night. Never over 9 h a shift.
   // (a day shift next to a night always keeps its day off between: not in any step)
   // rest goes down one hour at a time (10 h, 9 h, 8 h…) to the lowest set in the rules (7 h unless changed): as much rest as can be kept
-  const minR = (I.rules || {}).minRest || 11, floor = (I.rules || {}).restFloor != null ? +(I.rules || {}).restFloor : 7;
+  const minR = (I.rules || {}).minRest || 11, rf0 = (I.rules || {}).restFloor, rf = rf0 === '' || rf0 == null ? NaN : +rf0;
+  const floor = !isNaN(rf) ? Math.max(0, Math.min(rf, minR)) : 7;   // an empty or odd setting: 7 h
   const TIERS = [{ rules: { eveNight: true }, cost: 120 }];
-  for (let h = minR - 1; h >= Math.max(1, floor); h--) TIERS.push({ rules: { eveNight: true, minRest: h }, cost: 140 + (minR - h) * 45 });
+  // one hour at a time down to 7 h; below that (if the rules allow it) straight to the lowest, so a search never runs ten times over
+  const steps = []; for (let h = minR - 1; h >= Math.max(7, floor); h--) steps.push(h); if (floor < 7 && floor >= 1) steps.push(floor);
+  steps.forEach(h => TIERS.push({ rules: { eveNight: true, minRest: h }, cost: 140 + (minR - h) * 45 }));
   TIERS.push({ rules: { eveNight: true, minRest: 0 }, cost: 600 });   // the very last way, as past rosters did: an evening straight into a night
   const fn = k => rtName(k).split(' ')[0];
   const bendText = (c0, c1, keys) => {   // what the plan bends, in words
@@ -231,7 +236,17 @@ function rtCoverOptions(I, cells, group, date, shift, opt) {
         const away = rbBaseGroup((I.people.find(x => x.key === o.key) || {}).group) !== rbBaseGroup(group);
         let tail = '';
         if (left.length === 1) {         // their own shift is left empty: someone else takes it, every rule kept
-          const g2 = left[0], f = rtCoverOptions(I, o.cells, g2.group, g2.date, g2.shift, { noBend: true }).find(x => x.cells && x.key !== o.key);
+          const g2 = left[0];
+          let f = rtCoverOptions(I, o.cells, g2.group, g2.date, g2.shift, { noBend: true }).find(x => x.cells && x.key !== o.key);
+          if (!f && T === TIERS[TIERS.length - 2]) {   // (only right before going under 7 h: it is the slow search)
+            // one step further before going under: B takes A's shift, leaving B's own, which C takes (every rule kept)
+            for (const f1 of rtCoverOptions(I, o.cells, g2.group, g2.date, g2.shift, { noBend: true, allowEmpty: true }).filter(x => x.cells && x.key !== o.key).slice(0, 4)) {
+              const l2 = shortsIn(f1.cells).filter(isNew).filter(x => !(x.group === g2.group && x.date === g2.date && x.shift === g2.shift));
+              if (l2.length !== 1) continue;
+              const f2 = rtCoverOptions(I, f1.cells, l2[0].group, l2[0].date, l2[0].shift, { noBend: true }).find(x => x.cells && x.key !== o.key && x.key !== f1.key);
+              if (f2) { f = Object.assign({}, f2, { key: f1.key, text: `${f1.text}; then ${f2.text.charAt(0).toLowerCase() + f2.text.slice(1)}` }); keys.push(f2.key); break; }
+            }
+          }
           if (!f) continue;
           cells2 = f.cells; keys.push(f.key); text += `; then ${f.text.charAt(0).toLowerCase() + f.text.slice(1)}`; ok = ok.replace(/\s·\s[^·]*drops to \d+/g, '');
           tail = ` ${fn(f.key)} takes over the ${g2.shift} on ${roDayLbl(g2.date)}${rbBaseGroup(g2.group) !== rbBaseGroup((I.people.find(x => x.key === f.key) || {}).group) ? ' at ' + rbBaseGroup(g2.group) : ''}.`;

@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 187, items: [
+    '😴 Night → one day off → morning is avoided: that day off goes on sleep, so the builder gives a morning after a night only with two days off between, unless there\'s no other way (then it says so under Decisions this week). Cover suggestions put these last too.',
+    '🛌 Under 7 hours of rest only after every other way: before that, the builder also tries a longer chain (A covers the gap, B covers A\'s shift, C covers B\'s).',
+    '🛡 Safer builder: covering every shift always comes before wishes (a week left with an empty shift is tried again without wishes, and the better one wins); wishes for shifts a hotel doesn\'t have, more days off than someone gets, or "no nights" on a static night person can\'t confuse it; an empty rest setting can\'t make it slow. Tested with random wishes, sick staff and odd settings.',
+  ] },
   { v: 186, items: [
     '⚖️ The builder is fair over time: every week it reads the last 4 posted weeks. Wishes that weren\'t granted lately count more this week (📈 first in line in Team happiness), so everyone gets their turn as the rotation moves. Whoever had more nights than the team lately gets fewer, and whoever had fewer weekends off gets one first. Static night staff aren\'t counted against anyone.',
   ] },
