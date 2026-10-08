@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 197, items: [
+    '🎉 Public holidays (Builder → ⚖️ Rules) has a new look: proper dropdowns, a "Coming up" list with a date tile and its status (✓ Added, Not a PH, or when I\'ll ask), the PH list grouped by holiday (Eid = one row) with ✕ to remove, and a neat add row.',
+  ] },
   { v: 196, items: [
     '🏨 Moving staff between hotels is now the very last step: an empty shift is first fixed inside the hotel (a day off moved, two people trading), and only what is still empty borrows someone from another hotel.',
     '🏨 When someone has to move, it stays between one pair of hotels that week (one hotel helps one other), for the night cover too. A third hotel only when there is no other way, and the week summary shows it in red ("moves, 3 hotels"); otherwise it shows "nobody moved" or how many shifts were moved.',

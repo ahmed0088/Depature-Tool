@@ -1395,10 +1395,9 @@ function rbRulesHtml() {
     <label class="rb-chk"><input type="checkbox" ${R.lend === false ? 'checked' : ''} onchange="rbSetRule('lend',!this.checked)"> 🏨 Keep everyone in their own hotel (nobody is moved between hotels, by the builder or in suggestions). Off: a short hotel can borrow ("12:00 - 21:00 - Adagio"); lock single people on their card.</label>
     <label class="rb-chk"><input type="checkbox" ${R.lockMgr !== false ? 'checked' : ''} onchange="rbSetRule('lockMgr',this.checked);rbRender()"> 🔒 Managers keep their own shift (e.g. 09:00 - 18:00 to run the operation): never moved to cover. Unlock one on their card.</label>
     <label>👔 Managers on duty (Manager, Asst. Manager), all hotels together: at least <input type="number" min="0" max="3" value="${R.mgrMin}" onchange="rbSetRule('mgrMin',Math.max(0,Math.min(3,+this.value||0)))"> each day <small>(one can look after all the hotels when needed; two is fine too; 0 = off) · now: ${escapeHtml(Object.keys(roStaff).filter(k => rbMgrP({ title: rbTitle(k) }) && !((rbPeople[k] || {}).deleted)).map(k => (roStaff[k].name || k).split(' ')[0]).join(', ') || 'nobody has the title yet: set it on their card in 🧑‍💼 Team')}</small></label>
-    <div class="rb-sub">Public holidays <small>${(rbSettings.phEarn || 'all') === 'all' ? 'everyone on the team earns a PH day for each one' : 'working one earns a PH day'}; PH cells in posted rosters come off the balance</small></div>
-    ${typeof hdRulesHtml === 'function' ? hdRulesHtml() : ''}
+    ${typeof hdPanelHtml === 'function' ? hdPanelHtml() : `<div class="rb-sub">Public holidays</div>
     <div class="rb-hols">${hol.map((h, i) => `<span class="rb-hol">${escapeHtml(roDayLbl(h.date, true))}${h.name ? ' · ' + escapeHtml(h.name) : ''}<button class="ro-x" onclick="rbDelHol(${i})">✕</button></span>`).join('') || '<span class="ro-empty">None added yet.</span>'}</div>
-    <div class="rb-inline"><input type="date" id="rbHd"><input id="rbHn" placeholder="Name, e.g. National Day"><button class="btn sm" onclick="rbAddHol()">+ Holiday</button></div>
+    <div class="rb-inline"><input type="date" id="rbHd"><input id="rbHn" placeholder="Name, e.g. National Day"><button class="btn sm" onclick="rbAddHol()">+ Holiday</button></div>`}
     ${typeof rtTaskTimesHtml === 'function' ? rtTaskTimesHtml() : ''}
   </div>`;
 }

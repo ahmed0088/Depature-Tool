@@ -9,7 +9,7 @@
 // ═══════════════════════════════════════════════════════════
 
 const HD_REGIONS = {
-  AE: { label: '🇦🇪 UAE (Dubai)', days: {
+  AE: { label: 'UAE (Dubai)', days: {
     // [first day, number of days, name, expected (moon sighting)?]
     2026: [['2026-01-01', 1, "New Year's Day"], ['2026-03-19', 3, 'Eid Al Fitr', 1], ['2026-05-26', 1, 'Arafat Day', 1], ['2026-05-27', 3, 'Eid Al Adha', 1],
            ['2026-06-15', 1, 'Hijri New Year'], ['2026-08-25', 1, "Prophet's Birthday", 1], ['2026-12-02', 2, 'National Day']],
@@ -71,16 +71,37 @@ function hdAskHtml(h) {
     <div class="hd-acts"><button class="btn sm gold" onclick="hdAccept(${_hdQ(h.id)})">✓ Add</button><button class="btn sm" onclick="hdChange(${_hdQ(h.id)})">✏️ Dates</button><button class="btn sm ghost" onclick="hdReject(${_hdQ(h.id)})">Not a PH</button></div></div>`;
 }
 function _hdQ(s) { return escapeHtml(JSON.stringify(String(s))); }
-/** In the builder, under ⚖️ Rules & public holidays. */
-function hdRulesHtml() {
-  const pend = hdPending(), up = hdList().filter(h => h.dates[h.dates.length - 1] >= roToday() && !pend.includes(h)).slice(0, 4);
-  const reg = (rbSettings.holRegion) || 'AE';
-  return `<div class="hd-box">
-    <div class="rb-inline"><label>Region <select onchange="hdSetRegion(this.value)">${Object.entries(HD_REGIONS).map(([k, v]) => `<option value="${k}"${reg === k ? ' selected' : ''}>${v.label}</option>`).join('')}<option value="none"${reg === 'none' ? ' selected' : ''}>None (add them by hand)</option></select></label>
-      <label>Who earns a PH <select onchange="hdSetEarn(this.value)"><option value="all"${(rbSettings.phEarn || 'all') === 'all' ? ' selected' : ''}>Everyone on the team</option><option value="worked"${rbSettings.phEarn === 'worked' ? ' selected' : ''}>Only who works that day</option></select></label></div>
+/** In the builder, under ⚖️ Rules: region, who earns, questions, the coming holidays and the PH list. */
+function hdPanelHtml() {
+  const today = roToday(), pend = hdPending(), reg = rbSettings.holRegion || 'AE', earnAll = (rbSettings.phEarn || 'all') === 'all';
+  const have = new Set((rbSettings.holidays || []).map(h => h && h.date));
+  const up = hdList().filter(h => h.dates[h.dates.length - 1] >= today && !pend.some(x => x.id === h.id)).slice(0, 5);
+  const tile = iso => { const d = roDate(iso); return `<span class="hd-date"><b>${d.getDate()}</b><i>${d.toLocaleDateString('en-GB', { month: 'short' })}</i></span>`; };
+  const range = h => { const a = roDate(h.dates[0]), b = roDate(h.dates[h.dates.length - 1]); const wd = x => x.toLocaleDateString('en-GB', { weekday: 'short' }); return h.dates.length > 1 ? `${wd(a)} – ${wd(b)} · ${h.dates.length} days` : wd(a); };
+  const status = h => { const dec = hdDecided(h.id), added = h.dates.every(d => have.has(d));
+    if (dec === 'no') return '<span class="hd-st no">Not a PH</span>';
+    if (dec === 'yes' || added) return '<span class="hd-st yes">✓ Added</span>';
+    return `<span class="hd-st wait">I'll ask ${escapeHtml(roDate(roAdd(h.dates[0], -HD_AHEAD)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }))}</span>`; };
+  // the PH list, grouped by holiday (Eid = one row with its days)
+  const groups = []; (rbSettings.holidays || []).filter(h => h && h.date).forEach(h => { const g = groups[groups.length - 1]; if (g && g.name === (h.name || '') && roAdd(g.dates[g.dates.length - 1], 1) === h.date) g.dates.push(h.date); else groups.push({ name: h.name || '', dates: [h.date] }); });
+  const recent = groups.filter(g => g.dates[g.dates.length - 1] >= roAdd(today, -400)).reverse();
+  return `<div class="hd-panel">
+    <div class="hd-hd"><div><b>🎉 Public holidays</b><small>${earnAll ? 'Everyone on the team earns a PH day for each one.' : 'Whoever works it earns a PH day.'} A PH on a posted roster comes off the balance.</small></div></div>
+    <div class="hd-ctls">
+      <label>Region<select onchange="hdSetRegion(this.value)">${Object.entries(HD_REGIONS).map(([k, v]) => `<option value="${k}"${reg === k ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}<option value="none"${reg === 'none' ? ' selected' : ''}>None: add them by hand</option></select></label>
+      <label>Who earns a PH<select onchange="hdSetEarn(this.value)"><option value="all"${earnAll ? ' selected' : ''}>Everyone on the team</option><option value="worked"${!earnAll ? ' selected' : ''}>Only who works that day</option></select></label>
+    </div>
     ${pend.map(hdAskHtml).join('')}
-    ${up.length ? `<small class="ro-hint">Coming up: ${up.map(h => `${escapeHtml(h.name)} ${escapeHtml(hdWhen(h))}${hdDecided(h.id) === 'no' ? ' (not a PH)' : hdDecided(h.id) === 'yes' ? ' ✓' : ''}`).join(' · ')}. I'll ask 3 weeks before each one.</small>` : ''}
+    ${up.length ? `<div class="hd-sec">Coming up</div><div class="hd-list">${up.map(h => `<div class="hd-row">${tile(h.dates[0])}<div class="hd-m"><b>${escapeHtml(h.name)}</b><small>${escapeHtml(range(h))}${h.expected ? ' · expected' : ''}</small></div>${status(h)}</div>`).join('')}</div>` : ''}
+    <div class="hd-sec">In the PH list <small>${recent.length ? recent.reduce((t, g) => t + g.dates.length, 0) + ' days' : ''}</small></div>
+    ${recent.length ? `<div class="hd-chips">${recent.map(g => `<span class="hd-chip">${tile(g.dates[0])}<span><b>${escapeHtml(g.name || 'Holiday')}</b><small>${g.dates.length > 1 ? g.dates.length + ' days' : roDate(g.dates[0]).toLocaleDateString('en-GB', { weekday: 'short' })}${g.dates[0] > today ? ' · coming' : ''}</small></span><button class="ro-x" title="Remove" onclick="hdDelGroup(${_hdQ(g.dates.join(','))})">✕</button></span>`).join('')}</div>` : `<div class="hd-empty">None yet. Say ✓ Add when I ask, or add one below.</div>`}
+    <div class="hd-add"><input type="date" id="rbHd" aria-label="Date"><input id="rbHn" placeholder="Name, e.g. National Day" aria-label="Name"><button class="btn sm gold" onclick="rbAddHol()">＋ Add</button></div>
   </div>`;
+}
+function hdDelGroup(list) {
+  const ds = String(list).split(',');
+  const h = (rbSettings.holidays || []).filter(x => x && !ds.includes(x.date));
+  rbSettings.holidays = h; fbSet('roster/builder/settings/holidays', h); hdRefresh();
 }
 
 // Ops Brain: asks quietly when one is near
