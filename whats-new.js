@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 203, items: [
+    '🔎 Rate Shop without AI or any subscription: 🔎 Search prices opens Booking.com with every hotel in Deira for that night (cheapest first), and a quick box here to type what you see: Enter jumps to the next hotel, then "Save · next night →" moves on to the next day in the same Booking tab.',
+    '💲 The AI buttons only show if an AI key is ever added; nothing needs one.',
+  ] },
   { v: 202, items: [
     '💲 Rate Shop has a new, cleaner design: one bar to switch hotels and dates, four clear numbers, a chart and a tidy price table, and a guided start when a hotel has no neighbours yet. Fixed: typing a price and pressing Enter.',
   ] },

@@ -85,19 +85,18 @@ function rkRender() {
     <section class="rk-panel">
       <header class="rk-ph"><div><h3>Prices</h3><p>1 night, 2 adults, the cheapest public room. Tap a price to type it.</p></div>
         <div class="rk-tools">
-          <button class="btn sm gold" onclick="rkCheckOnline()"${rkBusy ? ' disabled' : ''}>${rkBusy ? '<span class="ri-spin"></span> Checking…' : `✨ Check ${escapeHtml(rkDay(rkSel))}`}</button>
-          <button class="btn sm" onclick="rkCheckOnline(7)"${rkBusy ? ' disabled' : ''}>✨ Next 7 days</button>
-          <details class="rk-more"><summary class="btn sm ghost" title="More">＋ Hotels around</summary><div class="rk-pop">
-            <button onclick="this.closest('details').open=false;rkFindNearby()">✨ Find hotels around us</button>
+          <button class="btn sm gold" onclick="rkSearch()">🔎 Search prices · ${escapeHtml(rkDay(rkSel))}</button>
+          ${cfg.key ? `<button class="btn sm" onclick="rkCheckOnline()"${rkBusy ? ' disabled' : ''}>${rkBusy ? '<span class="ri-spin"></span> Checking…' : '✨ Fill with AI'}</button>` : ''}
+          <details class="rk-more"><summary class="btn sm ghost" title="More">＋ Hotels around</summary><div class="rk-pop right">
             <button onclick="this.closest('details').open=false;rkAddCompDlg()">✍️ Add one by name</button>
-            <a target="_blank" rel="noopener" href="https://www.google.com/maps/search/${encodeURIComponent('hotels near ' + (h.search || h.name))}">🗺 See them on Google Maps</a>
+            <a target="_blank" rel="noopener" href="https://www.google.com/maps/search/${encodeURIComponent('hotels near ' + (h.search || h.name))}">🗺 Find them on Google Maps</a>
+            ${cfg.key ? '<button onclick="this.closest(\'details\').open=false;rkFindNearby()">✨ Suggest with AI</button>' : ''}
           </div></details>
         </div>
       </header>
-      ${!cfg.key ? `<div class="rk-note">To look up the prices by itself, the app needs the AI key once on this device (the same one that reads roster pictures).${typeof riSetupOpen === 'function' ? ' <button class="btn sm" onclick="riSetupOpen()">✨ Set it up</button>' : ''} Until then, tap B (Booking.com) or G (Google) next to a hotel and type the price.</div>` : ''}
       ${rkTableHtml(h, dates)}
-      ${comps ? '' : `<div class="rk-empty in"><div class="rk-empty-ico">📍</div><b>Add the hotels around ${escapeHtml(h.name)}</b><p>The hotels guests compare you with. Pick from a list found online, or add them by name.</p><div class="rk-addrow"><button class="btn gold" onclick="rkFindNearby()"${rkBusy ? ' disabled' : ''}>✨ Find hotels around us</button><button class="btn" onclick="rkAddCompDlg()">✍️ Add by name</button></div></div>`}
-      <div class="rk-foot">🌐 = found online by the AI: check the important ones on the link · the market is the median of the hotels around us</div>
+      ${comps ? '' : `<div class="rk-empty in"><div class="rk-empty-ico">📍</div><b>Add the hotels around ${escapeHtml(h.name)}</b><p>The hotels guests compare you with. Open the map to see who is around, then add them by name.</p><div class="rk-addrow"><a class="btn" target="_blank" rel="noopener" href="https://www.google.com/maps/search/${encodeURIComponent('hotels near ' + (h.search || h.name))}">🗺 Hotels around us on Google Maps</a><button class="btn gold" onclick="rkAddCompDlg()">✍️ Add by name</button></div></div>`}
+      <div class="rk-foot">🔎 Search prices opens Booking.com with every hotel around us for that night: type the prices you see (Tab moves to the next). B / G next to a hotel open just that one. The market is the median of the hotels around us.</div>
     </section>
   </div>`;
 }
@@ -206,6 +205,45 @@ function rkAllHtml(H, dates) {
       ${H.length > 1 ? `<tr class="rk-sum"><td class="rk-n">Our rates</td>${dates.map(d => `<td class="rk-c">${H.map(h => { const p = rkPrice(d, h.id, 'us'); return p ? Math.round(p.r) : '·'; }).join('<br>')}</td>`).join('')}</tr>` : ''}
       </tbody></table></div>
   </section>`;
+}
+
+/** 🔎 Search: Booking.com with every hotel in our area for that night (one tab), and the quick-entry box here. */
+function rkSearch(d) {
+  const h = rkCur(); if (!h) return;
+  d = d || rkSel;
+  const area = h.area || ((h.search || h.name).match(/\b(Deira|Bur Dubai|Al Barsha|Downtown|Business Bay|Marina|Jumeirah|Al Rigga|Al Nahda|Karama)\b/i) || [])[0] || (h.search || h.name);
+  const url = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(area + ', Dubai')}&checkin=${d}&checkout=${rkAdd(d, 1)}&group_adults=2&no_rooms=1&group_children=0&order=price`;
+  const w = window.open(url, 'hotelopsPrices');   // the same tab each time (next night replaces it)
+  if (w) { try { w.opener = null; } catch (_) {} }
+  rkQuick(d);
+}
+/** Type the night's prices fast: one line per hotel, Tab to the next, Save, then the next night. */
+function rkQuick(d) {
+  const h = rkCur(); if (!h) return;
+  d = d || rkSel; rkSel = d;
+  if (!rkDates().includes(d)) rkFrom = d;
+  document.getElementById('rkDlg')?.remove();
+  const rows = [{ id: 'us', name: h.name, us: true }].concat((h.comps || []).map(c => ({ id: c.id, name: c.name })));
+  const link = n => { const q = encodeURIComponent(n + ' Dubai'); return `<a target="_blank" rel="noopener" title="Booking.com" href="https://www.booking.com/searchresults.html?ss=${q}&checkin=${d}&checkout=${rkAdd(d, 1)}&group_adults=2&no_rooms=1&group_children=0">B</a><a target="_blank" rel="noopener" title="Google" href="https://www.google.com/travel/search?q=${q}">G</a>`; };
+  const x = document.createElement('div'); x.id = 'rkDlg'; x.className = 'ri-viewer';
+  x.innerHTML = `<div class="rk-qk">
+    <div class="rk-qk-hd"><div><b>Prices for ${escapeHtml(rkDay(d, true))}</b><small>1 night, 2 adults, the cheapest room · AED</small></div><button class="rk-icon" onclick="document.getElementById('rkDlg').remove()" aria-label="Close">✕</button></div>
+    <div class="rk-qk-list">${rows.map((r, i) => { const p = rkPrice(d, h.id, r.id); return `<label class="rk-qk-row${r.us ? ' us' : ''}"><span class="rk-qk-n"><b>${escapeHtml(r.name)}</b>${r.us ? '<small class="rk-us-tag">Our hotel</small>' : ''}</span><span class="rk-links">${link(r.name)}</span><input type="number" inputmode="numeric" min="0" data-who="${escapeHtml(r.id)}" value="${p ? Math.round(p.r) : ''}" placeholder="—"${i === 0 ? ' autofocus' : ''}></label>`; }).join('')}</div>
+    ${(h.comps || []).length ? '' : '<div class="rk-note">No hotels around us yet: add them with ＋ Hotels around, then their prices go here too.</div>'}
+    <div class="rk-qk-acts"><button class="btn" onclick="rkQuickSave(${_rkQ(d)},false)">Save</button><button class="btn gold" onclick="rkQuickSave(${_rkQ(d)},true)">Save · next night →</button></div>
+  </div>`;
+  x.addEventListener('click', e => { if (e.target === x) x.remove(); });
+  x.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); const L = [...x.querySelectorAll('input')], i = L.indexOf(e.target); if (i < L.length - 1) L[i + 1].focus(); else rkQuickSave(d, true); } if (e.key === 'Escape') x.remove(); });
+  document.body.appendChild(x);
+  setTimeout(() => x.querySelector('input')?.focus(), 50);
+}
+function rkQuickSave(d, next) {
+  const h = rkCur(), x = document.getElementById('rkDlg'); if (!h || !x) return;
+  let n = 0;
+  x.querySelectorAll('input[data-who]').forEach(inp => { const v = inp.value.trim(), old = rkPrice(d, h.id, inp.dataset.who); if (v === '' && !old) return; if (old && +v === Math.round(old.r)) return; rkSetPrice(d, h.id, inp.dataset.who, v === '' ? null : +v, 'typed'); n++; });
+  x.remove(); rkRender();
+  if (n) showToast(`${n} price${n === 1 ? '' : 's'} saved for ${rkDay(d)}`, 'ok');
+  if (next) rkSearch(rkAdd(d, 1));
 }
 
 // ── Our hotels and the hotels around ──────────────────────
