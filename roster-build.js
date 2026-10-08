@@ -166,6 +166,13 @@ function rbAt(I, p, x) {
   }
   return p.post ? `${h} · ${p.post}` : h;
 }
+/** The hotels that moves between hotels touch this week (where people come from and where they go).
+ *  Staff stay in their own hotel as much as we can, and when someone has to move it stays between one pair of hotels. */
+function rbMoveHotels(I, cells) {
+  const out = new Set();
+  I.people.forEach(p => Object.values(cells[p.key] || {}).forEach(v => { const x = rbParse(v); if (!x || !x.note) return; const at = rbBaseGroup(rbAt(I, p, x)), home = rbBaseGroup(p.group); if (at !== home) { out.add(at); out.add(home); } }));
+  return out;
+}
 
 // ── The engine (no screen, so it can be tested) ───────────
 /**
@@ -188,7 +195,10 @@ function rbSolve(I) {
     const sc = Object.keys(I.groups).reduce((t, g) => t + rbScore(I, g, cells, dates0, R0), 0);
     if (sc < bestSc) { bestSc = sc; best = cells; }
   }
-  let res = rbRepair(I, _rbFinish(I, best));
+  // staff stay in their own hotel as much as we can: an empty shift is first fixed inside the hotel (a day off moved,
+  // two people trading); only what's still empty borrows someone from another hotel, then the usual last resorts
+  const home = rbRepair(I, _rbFinish(I, best, { lend: false, ph: false }), { homeOnly: true });
+  let res = rbRepair(I, _rbFinish(I, home.cells));
   res.notes = ((plan && plan.notes) || []).concat(res.notes || []);
   // covering every shift comes before any wish: a week with an empty shift is tried again without the wishes,
   // and the one that covers more wins (on a tie, the one with the wishes)
@@ -246,7 +256,9 @@ function rbPlanNights(I) {
       if (fi === fl.length) {
         if (gaps.some(x => !used.has(x.i + ':' + x.d))) return;
         // preferences: regulars' usual days off, the regulars' requests
-        let c = cost; offs.forEach((d, i) => { const p = hotels[i].reg; if (d != null && (p.prefOff || []).includes(d)) c -= 3; if (d != null && (p.lastOffs || []).includes(d)) c -= 1; });
+        let c = cost;
+        { const t = new Set(); plan.forEach(({ f, pick }) => pick.forEach(({ i }) => { if (hotels[i].g !== homeOf(f)) { t.add(hotels[i].g); t.add(homeOf(f)); } })); if (t.size > 2) c += 300 * (t.size - 2); }   // moves stay between one pair of hotels
+        offs.forEach((d, i) => { const p = hotels[i].reg; if (d != null && (p.prefOff || []).includes(d)) c -= 3; if (d != null && (p.lastOffs || []).includes(d)) c -= 1; });
         if (!best || c < best.cost) best = { cost: c, offs: offs.slice(), plan: plan.slice() };
         return;
       }
@@ -285,15 +297,18 @@ function rbPlanNights(I) {
 }
 /** Empty shifts left after building: fill each with the best fix a supervisor would make that keeps every rule
  *  (another hotel's Duty Manager, a day off moved, two people trading), never one that bends a rule. */
-function rbRepair(I, res) {
+function rbRepair(I, res, o) {
   if (I.noRepair || typeof rtCoverOptions !== 'function') return res;
+  o = o || {};
+  // homeOnly: fixes inside each hotel only (a day off moved, two people trading), nobody sent to another hotel
+  const moves = c2 => I.people.some(p => Object.keys(c2[p.key] || {}).some(dt => { const v = c2[p.key][dt]; return v !== (res.cells[p.key] || {})[dt] && rbParse(v) && rbParse(v).note; }));
   let cells = res.cells, guard = 0;
   const shorts = c => rbProblems(I, c).filter(p => p.kind === 'short');
   const breaks = c => rbProblems(I, c).filter(p => p.kind !== 'short' && p.kind !== 'thin').length;
   for (let gaps = shorts(cells); gaps.length && guard < 12; guard++) {
     const before = breaks(cells); let done = false;
     for (const g of gaps) {
-      const opts = rtCoverOptions(Object.assign({}, I, { noRepair: true }), cells, g.group, g.date, g.shift).filter(o => o.cells && !o.bend);
+      const opts = rtCoverOptions(Object.assign({}, I, { noRepair: true }), cells, g.group, g.date, g.shift).filter(x => x.cells && !x.bend && !(o.homeOnly && moves(x.cells)));
       const ok = opts.find(o => shorts(o.cells).length < gaps.length && breaks(o.cells) <= before);
       if (ok) { cells = ok.cells; done = true; break; }
     }
@@ -303,7 +318,7 @@ function rbRepair(I, res) {
   // still stuck: every shift has to be covered, so the mildest way past rosters used (evening then late night,
   // night ↔ day without a day off, short rest, back to back), never over 9 h a shift. Each one is written down.
   const notes = [];
-  for (let gaps = shorts(cells), n = 0; gaps.length && n < 8 && !I.noBend; n++) {
+  for (let gaps = shorts(cells), n = 0; gaps.length && n < 8 && !I.noBend && !o.homeOnly; n++) {
     let pick = null;
     for (const g of gaps) {
       const o = rtCoverOptions(Object.assign({}, I, { noRepair: true }), cells, g.group, g.date, g.shift).filter(o => o.cells && o.bend && shorts(o.cells).length < gaps.length).sort((a, b) => a.cost - b.cost)[0];
@@ -372,18 +387,21 @@ function _rbAttempt(I, seed) {
   Object.keys(G).forEach(g => rbImprove(I, g, cells, dates, R, rnd));
   return cells;
 }
-function _rbFinish(I, cells) {
+function _rbFinish(I, cells, o) {
+  o = o || {};
   const D = 7, dates = Array.from({ length: D }, (_, d) => roAdd(I.week, d)), G = I.groups;
   const R = Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, givePh: true, lend: true, lockMgr: true, mgrMin: 1, deskMin: 2, deskFrom: 8, deskTo: 23 }, I.rules || {});
   const need = (g, s, d) => ((G[g] && G[g].need[s]) || [])[d] || 0;
   // 4. a hotel with an empty shift borrows someone on the same shift from a hotel with one spare (staff stay in their own hotel as much as we can)
   let cover = rbCover(I, cells);
-  { // even with lending off, a Duty Manager may go where they're needed
+  if (o.lend !== false) { // even with lending off, a Duty Manager may go where they're needed
     for (const g of Object.keys(G)) for (let d = 0; d < D; d++) for (const s of G[g].shifts) {
       while (cover[g][s][d] < need(g, s, d)) {
         if (cover[g][s][d] >= 1 && R.allowOne !== false && !R.lendIdeal) break;   // moving someone to another hotel only for an empty shift, not for the ideal second person
         const dt = dates[d];
-        const donor = I.people.filter(q => q.group !== g && !q.home && !q.lock && (R.lend || rbFloats(q) || rbFloatsLast(q)) && !((I.pre || {})[q.key] || {})[dt] && G[q.group] && cells[q.key][dt] === s && cover[q.group][s] && cover[q.group][s][d] > need(q.group, s, d) && rbMayWork(I, g, q, s)).sort((a, b) => (rbFloatsLast(a) ? 1 : 0) - (rbFloatsLast(b) ? 1 : 0) || (rbFloats(b) ? 1 : 0) - (rbFloats(a) ? 1 : 0) || (b.alt === rbBaseGroup(g) ? 1 : 0) - (a.alt === rbBaseGroup(g) ? 1 : 0))[0];   // (then whoever would rather come to this hotel)
+        const cand = I.people.filter(q => q.group !== g && !q.home && !q.lock && (R.lend || rbFloats(q) || rbFloatsLast(q)) && !((I.pre || {})[q.key] || {})[dt] && G[q.group] && cells[q.key][dt] === s && cover[q.group][s] && cover[q.group][s][d] > need(q.group, s, d) && rbMayWork(I, g, q, s)).sort((a, b) => (rbFloatsLast(a) ? 1 : 0) - (rbFloatsLast(b) ? 1 : 0) || (rbFloats(b) ? 1 : 0) - (rbFloats(a) ? 1 : 0) || (b.alt === rbBaseGroup(g) ? 1 : 0) - (a.alt === rbBaseGroup(g) ? 1 : 0));   // (then whoever would rather come to this hotel)
+        const used = rbMoveHotels(I, cells), inPair = q => used.size === 0 || (used.has(rbBaseGroup(g)) && used.has(rbBaseGroup(q.group)) ) || (used.size < 2 && (used.has(rbBaseGroup(g)) || used.has(rbBaseGroup(q.group))));
+        const donor = cand.find(inPair) || cand[0];   // one pair of hotels a week; a third hotel only when there's no other way
         if (!donor) break;
         cells[donor.key][dt] = `${s} - ${rbShortU(g, Object.keys(G))}`;
         cover = rbCover(I, cells);
@@ -393,7 +411,7 @@ function _rbFinish(I, cells) {
   // 5. PH days owed, only as the last option: when the shift has someone spare anyway. Normally a week has one day off
   //    (4 a month), so 1 person a week per hotel gets one (rules: phPeople, phMax), the biggest balance first,
   //    next to a day off where possible (a longer break), oldest PH first
-  if (R.givePh) {
+  if (R.givePh && o.ph !== false) {
     const isPh = v => /^PH\b/i.test(String(v || ''));
     const offish = v => !!v && v !== '—' && !rbParse(v);   // OFF, PH, leave: anything that isn't a shift
     const phMax = R.phMax == null ? 1 : +R.phMax, phPeople = R.phPeople == null ? 1 : +R.phPeople;
@@ -1453,6 +1471,7 @@ function rbHealthHtml(I, cells, cover, P, shown, dates) {
     ${rbDeskChip(I, cells, shown, chip)}
     ${chip(thin ? 'warn' : 'ok', thin, 'one-person', 'shifts where the ideal is two but only one is on')}
     ${(() => { const mg = I.people.filter(rbMgrP), min = rbRules().mgrMin; if (mg.length < 2 || !(min > 0)) return ''; const none = dates.filter(dt => mg.filter(p => rbParse((cells[p.key] || {})[dt])).length < min); return chip(none.length ? 'warn' : 'ok', none.length ? none.length : '✓', none.length ? 'days without a manager' : 'manager every day', none.length ? 'No Manager / Asst. Manager on duty (any hotel): ' + none.map(dt => roDayLbl(dt)).join(', ') : 'At least ' + min + ' manager on duty every day, across all hotels'); })()}
+    ${(() => { if (Object.keys(I.groups).filter(g => !I.groups[g].post).length < 2) return ''; const mh = rbMoveHotels(I, cells); let n = 0; I.people.forEach(p => Object.values(cells[p.key] || {}).forEach(v => { const x = rbParse(v); if (x && x.note && rbBaseGroup(rbAt(I, p, x)) !== rbBaseGroup(p.group)) n++; })); return chip(!n ? 'ok' : mh.size > 2 ? 'bad' : 'warn', n ? n : '✓', n ? (mh.size > 2 ? 'moves, ' + mh.size + ' hotels' : 'moved shifts') : 'nobody moved', n ? 'Shifts worked at another hotel: ' + [...mh].join(' ↔ ') + (mh.size > 2 ? '. More than one pair of hotels: only because there was no other way' : '') : 'Everyone works at their own hotel'); })()}
     ${chip(ch ? 'warn' : 'ok', ch, 'hours changes', 'hours that change in the middle of a run of working days')}
     ${chip('', Math.round(hours), 'hours planned', 'all shifts this week')}
   </div>`;

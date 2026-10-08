@@ -199,6 +199,8 @@ function rtCoverOptions(I, cells, group, date, shift, opt) {
   });
   opts.forEach(o => { const p = I.people.find(x => x.key === o.key); if (p && o.cells) o.cost += Math.max(0, rtHourChanges(I, o.cells, p) - rtHourChanges(I, cells, p)) * 14; });
   opts.forEach(o => { const p = I.people.find(x => x.key === o.key); if (p && o.cells && rbSoftNo(I, p, date, shift)) { o.cost += 50; o.text += ' (prefers not this shift)'; } });
+  // staff stay in their own hotel: a move that brings a third hotel into this week's moves comes after the other ways
+  { const was = rbMoveHotels(I, cells).size; opts.forEach(o => { if (!o.cells) return; const now = rbMoveHotels(I, o.cells).size; if (now > Math.max(2, was)) { o.cost += 120; o.ok = (o.ok || '') + ' · ⚠ a third hotel moving staff this week'; } }); }
   // a night, one day off, then a morning: their day off goes on sleep, so these come after every other way
   { const dts = rtDates(I.week); opts.forEach(o => { const p = I.people.find(x => x.key === o.key); if (!p || !o.cells) return; const was = rbNightToMorning(cells, p, dts).length, now = rbNightToMorning(o.cells, p, dts).length; if (now > was) { o.cost += 70; o.text += ' (night → morning with one day off)'; } }); }
   const best = {}; opts.forEach(o => { if (!best[o.key] || best[o.key].cost > o.cost) best[o.key] = o; });

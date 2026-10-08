@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 196, items: [
+    '🏨 Moving staff between hotels is now the very last step: an empty shift is first fixed inside the hotel (a day off moved, two people trading), and only what is still empty borrows someone from another hotel.',
+    '🏨 When someone has to move, it stays between one pair of hotels that week (one hotel helps one other), for the night cover too. A third hotel only when there is no other way, and the week summary shows it in red ("moves, 3 hotels"); otherwise it shows "nobody moved" or how many shifts were moved.',
+  ] },
   { v: 195, items: [
     '⚡ Staff profiles are much lighter: a tap on a person\'s card (likes, shifts, titles) no longer redraws the whole roster builder behind it, and the card stays where you were instead of jumping to the top. The builder screen itself also draws faster.',
     '🏨 Staff stay in their own hotel as much as we can: the builder moves someone to another hotel only when a shift there would be empty (not just for the ideal second person), covers night days off from their own hotel first, and cover suggestions show options in their own hotel first.',
