@@ -572,7 +572,8 @@ function rbScore(I, g, cells, dates, R) {
     if (p.together && offDays.length >= 2 && !offDays.some((d, i) => i && d - offDays[i - 1] === 1)) sc += 25 * rbWishWeight(p);   // 💛 their days off next to each other
     else if (!p.together && p.learnedTogether && offDays.length >= 2 && !offDays.some((d, i) => i && d - offDays[i - 1] === 1)) sc += 6;   // they usually have them together
   });
-  if (P.some(rbMgrP)) sc += 400 * rbMgrGap(I, cells, dates, R);   // a day with no manager anywhere: below an empty shift, above any wish
+  if (P.some(rbMgrP)) sc += 400 * rbMgrGap(I, cells, dates, R);
+  if (P.some(p => rbFloats(p) || rbFloatsLast(p))) sc += 500 * rbSeniorClash(I, cells, dates).filter(c => c.hotel === rbBaseGroup(g)).length;   // a Duty Manager and a Supervisor on the same shift: one is enough   // a day with no manager anywhere: below an empty shift, above any wish
   return sc;
 }
 /** Local search: change a cell, move someone's day off, or swap two people's shifts; keep what scores better. */
@@ -851,6 +852,18 @@ function rbTitle(k) { return (rbPeople[k] || {}).title || ''; }
 function rbFloats(p) { return /^duty manager$/i.test((p && p.title) || ''); }
 /** Supervisors can go anywhere too, but only when nobody else can: they come after everyone else. */
 function rbFloatsLast(p) { return /^supervisor$/i.test((p && p.title) || ''); }
+/** A Duty Manager and a Supervisor are never on the same shift together in the same hotel (one of them is enough):
+ *  every such day and shift, as { date, hotel, shift, keys }. */
+function rbSeniorClash(I, cells, dates) {
+  const out = [], sen = I.people.filter(p => /^(duty manager|supervisor)$/i.test(p.title || ''));
+  if (!sen.some(p => /^duty manager$/i.test(p.title)) || !sen.some(p => /^supervisor$/i.test(p.title))) return out;
+  dates.forEach(dt => {
+    const at = {};
+    sen.forEach(p => { const v = (cells[p.key] || {})[dt], x = rbParse(v); if (!x) return; const k = rbBaseGroup(rbAt(I, p, x)) + '|' + rbNorm(v); (at[k] = at[k] || []).push(p); });
+    Object.entries(at).forEach(([k, L]) => { if (L.some(rbFloats) && L.some(rbFloatsLast)) { const [hotel, shift] = k.split('|'); out.push({ date: dt, hotel, shift, keys: L.map(p => p.key) }); } });
+  });
+  return out;
+}
 /** Managers and Asst. Managers (not Duty Managers): one can look after all the hotels when needed, two is fine. */
 function rbMgrP(p) { return /^(manager|asst\.? manager|assistant manager)$/i.test((p && p.title) || ''); }
 /** Days in the week with fewer managers on duty (all hotels together) than the rule asks. Only counted when the
@@ -995,7 +1008,7 @@ function rbBuild(again) {
   if (has && !again && !confirm('Build the week again? Changes you made to the draft are replaced.')) return;
   rbSeed = again ? (rbSeed * 7 + 13) % 100000 : 1;
   const out = document.getElementById('rbOut');
-  if (out) { out.innerHTML = '<div class="ri-reading"><span class="ri-spin"></span><div><b>Building the roster…</b><small>Trying several ways and keeping the one that covers every shift and keeps every rule.</small></div></div>'; out.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  if (out) { out.innerHTML = `<div class="ri-reading ro-busy">${roBusyAnim('build')}<div><b>Building the roster…</b>${roBusySteps(['Reading the last weeks of rosters…', 'Placing days off fairly…', 'Covering every shift, reception first…', 'Checking rest between shifts…', 'Keeping wishes where it can…', 'Fixing gaps inside each hotel…', 'Trying another way and keeping the best…'])}<div class="ro-prog"><i></i></div></div></div>`; out.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   _rbBuilding = true;
   setTimeout(() => _rbBuildNow().catch(e => { console.error(e); showToast('Building failed: ' + e.message, 'err'); rbRender(); }).finally(() => { _rbBuilding = false; }), 60);
 }
@@ -1521,6 +1534,7 @@ function rbHealthHtml(I, cells, cover, P, shown, dates) {
     ${rbDeskChip(I, cells, shown, chip)}
     ${chip(thin ? 'warn' : 'ok', thin, 'one-person', 'shifts where the ideal is two but only one is on')}
     ${(() => { const mg = I.people.filter(rbMgrP), min = rbRules().mgrMin; if (mg.length < 2 || !(min > 0)) return ''; const none = dates.filter(dt => mg.filter(p => rbParse((cells[p.key] || {})[dt])).length < min); return chip(none.length ? 'warn' : 'ok', none.length ? none.length : '✓', none.length ? 'days without a manager' : 'manager every day', none.length ? 'No Manager / Asst. Manager on duty (any hotel): ' + none.map(dt => roDayLbl(dt)).join(', ') : 'At least ' + min + ' manager on duty every day, across all hotels'); })()}
+    ${(() => { const cl = rbSeniorClash(I, cells, dates).filter(c => shown.includes(c.hotel)); return cl.length ? chip('bad', cl.length, 'DM + Supervisor together', cl.map(c => `${roDayLbl(c.date)} ${c.shift.slice(0, 5)} at ${c.hotel}: ${c.keys.map(k => ((roStaff[k] || {}).name || k).split(' ')[0]).join(' + ')}`).join(' · ') + '. A Duty Manager and a Supervisor should not be on the same shift: tap a cell to move one') : ''; })()}
     ${(() => { if (Object.keys(I.groups).filter(g => !I.groups[g].post).length < 2) return ''; const mh = rbMoveHotels(I, cells); let n = 0; I.people.forEach(p => Object.values(cells[p.key] || {}).forEach(v => { const x = rbParse(v); if (x && x.note && rbBaseGroup(rbAt(I, p, x)) !== rbBaseGroup(p.group)) n++; })); return chip(!n ? 'ok' : mh.size > 2 ? 'bad' : 'warn', n ? n : '✓', n ? (mh.size > 2 ? 'moves, ' + mh.size + ' hotels' : 'moved shifts') : 'nobody moved', n ? 'Shifts worked at another hotel: ' + [...mh].join(' ↔ ') + (mh.size > 2 ? '. More than one pair of hotels: only because there was no other way' : '') : 'Everyone works at their own hotel'); })()}
     ${chip(ch ? 'warn' : 'ok', ch, 'hours changes', 'hours that change in the middle of a run of working days')}
     ${chip('', Math.round(hours), 'hours planned', 'all shifts this week')}
@@ -1635,7 +1649,7 @@ function rbDeskAdviceHtml(g, days) {
 }
 function rbDeskAsk(g, id) {
   const el = document.getElementById(id); if (!el) return;
-  el.innerHTML = '<div class="ri-reading"><span class="ri-spin"></span><div><b>Trying it with your team…</b><small>A few seconds: the week is built each way to make sure every shift stays covered.</small></div></div>';
+  el.innerHTML = '<div class="ri-reading ro-busy">' + roBusyAnim('build') + '<div><b>Trying it with your team…</b><small>A few seconds: the week is built each way to make sure every shift stays covered.</small></div></div>';
   const DN = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], days = ds => ds.length === 7 ? 'every day' : ds.map(d => DN[d]).join(', ');
   setTimeout(() => rbDeskCheck(g, st => rbDeskFill(g, id, days, st, true)), 60);
 }

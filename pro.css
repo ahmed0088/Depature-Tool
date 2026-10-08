@@ -1380,3 +1380,20 @@ label.rb-q:first-child { border-color: var(--accent-border); background: color-m
 .rr-sw input:focus-visible + i { box-shadow: 0 0 0 3px var(--accent-bg); }
 .rb-rules > .hd-panel { margin-top: 4px; }
 .rr-step { min-width: 120px; justify-content: space-between; } .rr-step input { flex: 1; }
+
+/* ── Busy animation: building / reading a roster ────────── */
+.ro-busy { align-items: center; overflow: hidden; position: relative; }
+.ro-busy > div { flex: 1; min-width: 0; }
+.ro-anim { position: relative; flex: none; display: grid; grid-template-columns: repeat(7, 9px); grid-auto-rows: 9px; gap: 3px; padding: 7px; border-radius: 10px; background: var(--bg2); border: 1px solid var(--border); overflow: hidden; }
+.ro-anim i { border-radius: 2.5px; background: var(--border2); opacity: .25; transform: scale(.4); animation: roPop 2.6s cubic-bezier(.3,1.4,.5,1) infinite; animation-delay: calc(var(--i) * 95ms); }
+.ro-anim .ra-m { --c: #f59e0b; } .ro-anim .ra-a { --c: #3b82f6; } .ro-anim .ra-n { --c: #8b5cf6; } .ro-anim .ra-o { --c: var(--text3); }
+@keyframes roPop { 0%, 8% { opacity: .2; transform: scale(.4); background: var(--border2); } 22%, 70% { opacity: 1; transform: scale(1); background: var(--c); } 100% { opacity: .2; transform: scale(.6); background: var(--border2); } }
+.ro-anim.read i { animation-duration: 3.2s; }
+.ro-scan { position: absolute; left: 0; right: 0; height: 2px; top: 0; background: var(--accent); box-shadow: 0 0 10px 2px var(--accent); animation: roScan 1.6s ease-in-out infinite alternate; }
+@keyframes roScan { from { top: 4px; } to { top: calc(100% - 6px); } }
+.ro-steps { display: block; margin-top: 2px; } .ro-steps.in { animation: roStepIn .35s ease both; }
+@keyframes roStepIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.ro-prog { margin-top: 8px; height: 4px; border-radius: 99px; background: var(--accent-bg); overflow: hidden; }
+.ro-prog i { display: block; width: 35%; height: 100%; border-radius: 99px; background: linear-gradient(90deg, transparent, var(--accent), transparent); animation: roProg 1.4s ease-in-out infinite; }
+@keyframes roProg { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+@media (prefers-reduced-motion: reduce) { .ro-anim i, .ro-scan, .ro-prog i, .ro-steps.in { animation: none; opacity: 1; transform: none; } .ro-anim i { background: var(--c); } }

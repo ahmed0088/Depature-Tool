@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 200, items: [
+    '🛎 Reception is never left empty (the bell team may be short): after every other way, the builder now also lets a day shift go next to a night without the day off between, and if a night is for Supervisors only and none is free, a front-desk colleague covers it. Each one is flagged ⚠ and written under Decisions this week.',
+    '👥 A Duty Manager and a Supervisor are never put on the same shift together in the same hotel (one of them is enough). If it happens anyway (by hand), the week summary shows "DM + Supervisor together" in red.',
+    '✨ Building a roster or reading a roster picture now shows a little animated week filling in, a message that changes as it works, and a moving bar.',
+  ] },
   { v: 199, items: [
     '⚖️ Builder rules have a new look: 4 small cards (Rest & hours · Desk & cover · PH days · Hotels & managers), each rule with a short title and hint, − / + buttons for numbers and on/off switches.',
   ] },

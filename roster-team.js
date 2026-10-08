@@ -199,6 +199,8 @@ function rtCoverOptions(I, cells, group, date, shift, opt) {
   });
   opts.forEach(o => { const p = I.people.find(x => x.key === o.key); if (p && o.cells) o.cost += Math.max(0, rtHourChanges(I, o.cells, p) - rtHourChanges(I, cells, p)) * 14; });
   opts.forEach(o => { const p = I.people.find(x => x.key === o.key); if (p && o.cells && rbSoftNo(I, p, date, shift)) { o.cost += 50; o.text += ' (prefers not this shift)'; } });
+  // a Duty Manager and a Supervisor are not put on the same shift together
+  { const dts = rtDates(I.week), was = rbSeniorClash(I, cells, dts).length; opts.forEach(o => { if (!o.cells) return; if (rbSeniorClash(I, o.cells, dts).length > was) { o.cost += 200; o.ok = (o.ok || '') + ' · ⚠ a Duty Manager and a Supervisor on the same shift'; } }); }
   // staff stay in their own hotel: a move that brings a third hotel into this week's moves comes after the other ways
   { const was = rbMoveHotels(I, cells).size; opts.forEach(o => { if (!o.cells) return; const now = rbMoveHotels(I, o.cells).size; if (now > Math.max(2, was)) { o.cost += 120; o.ok = (o.ok || '') + ' · ⚠ a third hotel moving staff this week'; } }); }
   // a night, one day off, then a morning: their day off goes on sleep, so these come after every other way
@@ -215,12 +217,22 @@ function rtCoverOptions(I, cells, group, date, shift, opt) {
   const TIERS = [{ rules: { eveNight: true }, cost: 120 }];
   // one hour at a time down to 7 h; below that (if the rules allow it) straight to the lowest, so a search never runs ten times over
   const steps = []; for (let h = minR - 1; h >= Math.max(7, floor); h--) steps.push(h); if (floor < 7 && floor >= 1) steps.push(floor);
-  steps.forEach(h => TIERS.push({ rules: { eveNight: true, minRest: h }, cost: 140 + (minR - h) * 45 }));
+  steps.forEach((h, i) => TIERS.push({ rules: { eveNight: true, minRest: h }, cost: 140 + (minR - h) * 45, deep: i === steps.length - 1 }));   // deep: the longer chain, tried once, right before going straight into a night
   TIERS.push({ rules: { eveNight: true, minRest: 0 }, cost: 600 });   // the very last way, as past rosters did: an evening straight into a night
+  // reception is never left empty (a bell team may be short): after every other way, a day shift next to a night
+  // without the day off between (rest kept first, then less rest). Written down under Decisions, like every bend.
+  if (!(G[group] || {}).post) {
+    const sup = !!(((G[group] || {}).who || {})[shift]);   // a shift for Supervisors only: then a front-desk colleague too, flagged, after a Supervisor bending
+    if (sup) TIERS.push({ rules: { eveNight: true }, anyone: true, cost: 650 });
+    [[{ eveNight: true, nightSwitch: false }, 700], [{ eveNight: true, nightSwitch: false, minRest: Math.max(7, floor) }, 760], [{ eveNight: true, nightSwitch: false, minRest: 0 }, 820]].forEach(([r, c]) => {
+      TIERS.push({ rules: r, cost: c });
+      if (sup) TIERS.push({ rules: r, anyone: true, cost: c + 20 });
+    });
+  }
   const fn = k => rtName(k).split(' ')[0];
   const bendText = (c0, c1, keys) => {   // what the plan bends, in words
-    const was = rbProblems(I, c0), now = rbProblems(I, c1).filter(p => keys.includes(p.key) && (p.kind === 'switch' || p.kind === 'rest') && !was.some(w => w.kind === p.kind && w.key === p.key && w.date === p.date));
-    return now.map(p => p.kind === 'switch' ? `${fn(p.key)}: ${rbIsNight(p.from) ? 'a night then an evening' : 'an evening then a night'} without a day off (${rbNorm(p.from).slice(0, 5)} → ${rbNorm(p.to).slice(0, 5)}), as in past rosters`
+    const was = rbProblems(I, c0), now = rbProblems(I, c1).filter(p => keys.includes(p.key) && (p.kind === 'switch' || p.kind === 'rest' || p.kind === 'who') && !was.some(w => w.kind === p.kind && w.key === p.key && w.date === p.date));
+    return now.map(p => p.kind === 'who' ? `${fn(p.key)} is not ${(p.who || []).join(' / ') || 'a Supervisor'}, but no Supervisor or Duty Manager could take it (reception is never left empty)` : p.kind === 'switch' ? `${fn(p.key)}: ${rbIsNight(p.from) ? (rbIsMorning(p.to) ? 'a night then a morning' : 'a night then a day shift') : (rbIsMorning(p.from) || !/^(1[5-9]|2)/.test(rbNorm(p.from) || '') ? 'a day shift then a night' : 'an evening then a night')} without a day off (${rbNorm(p.from).slice(0, 5)} → ${rbNorm(p.to).slice(0, 5)}), as in past rosters`
       : p.hours <= 0 ? `${fn(p.key)}: back to back (${rbNorm(p.from).slice(0, 5)} straight into ${rbNorm(p.to).slice(0, 5)}, ${Math.round(((rbParse(p.from).e - rbParse(p.from).s) + (rbParse(p.to).e - rbParse(p.to).s)) / 60)} h)` : `${fn(p.key)}: only ${Math.round(p.hours)} h rest (${rbNorm(p.from).slice(0, 5)} → ${rbNorm(p.to).slice(0, 5)})`);
   };
   if (!list.length && !(opt && opt.noBend) && !(G[group] || {}).post) {
@@ -229,6 +241,7 @@ function rtCoverOptions(I, cells, group, date, shift, opt) {
     for (const T of TIERS) {
       if (list.some(o => o.cells)) break;
       const I2 = Object.assign({}, I, { rules: Object.assign({}, I.rules, T.rules) });
+      if (T.anyone) { const w = Object.assign({}, (G[group] || {}).who); delete w[shift]; I2.groups = Object.assign({}, G, { [group]: Object.assign({}, G[group], { who: w }) }); }
       const seen = new Set();
       for (const o of rtCoverOptions(I2, cells, group, date, shift, Object.assign({}, opt, { noBend: true, allowEmpty: true })).filter(o => o.cells)) {
         if (list.length >= 3 || seen.has(o.key)) continue;
@@ -240,7 +253,7 @@ function rtCoverOptions(I, cells, group, date, shift, opt) {
         if (left.length === 1) {         // their own shift is left empty: someone else takes it, every rule kept
           const g2 = left[0];
           let f = rtCoverOptions(I, o.cells, g2.group, g2.date, g2.shift, { noBend: true }).find(x => x.cells && x.key !== o.key);
-          if (!f && T === TIERS[TIERS.length - 2]) {   // (only right before going under 7 h: it is the slow search)
+          if (!f && (T.deep || (!steps.length && T === TIERS[0]))) {   // (only right before going under 7 h: it is the slow search)
             // one step further before going under: B takes A's shift, leaving B's own, which C takes (every rule kept)
             for (const f1 of rtCoverOptions(I, o.cells, g2.group, g2.date, g2.shift, { noBend: true, allowEmpty: true }).filter(x => x.cells && x.key !== o.key).slice(0, 4)) {
               const l2 = shortsIn(f1.cells).filter(isNew).filter(x => !(x.group === g2.group && x.date === g2.date && x.shift === g2.shift));
@@ -394,7 +407,7 @@ function rtPlanRun() {
   const k1 = document.getElementById('rtPlP1').value, k2 = document.getElementById('rtPlP2').value, band = document.getElementById('rtPlB').value;
   const from = document.getElementById('rtPlF').value, to = document.getElementById('rtPlT').value, out = document.getElementById('rtPlOut');
   const keys = [k1, k2].filter((k, i, a) => k && a.indexOf(k) === i);
-  out.innerHTML = '<div class="ri-reading"><span class="ri-spin"></span><div><b>Trying it…</b><small>Building the week each way, changing as little as possible.</small></div></div>';
+  out.innerHTML = '<div class="ri-reading ro-busy">' + roBusyAnim('build') + '<div><b>Trying it…</b><small>Building the week each way, changing as little as possible.</small></div></div>';
   setTimeout(() => {
     _rtPlans = [];
     const opts = rtPlanOptions(rbWeek, keys, band, from, to, false);
@@ -578,7 +591,7 @@ function rtWiShifts() {
 function rtWhatIfRun() {
   const s = { key: document.getElementById('rtWiP').value, kind: document.getElementById('rtWiK').value, from: document.getElementById('rtWiF').value, to: document.getElementById('rtWiT').value, shift: document.getElementById('rtWiS').value };
   const out = document.getElementById('rtWiOut');
-  out.innerHTML = '<div class="ri-reading"><span class="ri-spin"></span><div><b>Working it out…</b><small>Finding who can cover, under the rules, with the fewest changes.</small></div></div>';
+  out.innerHTML = '<div class="ri-reading ro-busy">' + roBusyAnim('build') + '<div><b>Working it out…</b><small>Finding who can cover, under the rules, with the fewest changes.</small></div></div>';
   setTimeout(() => { out.innerHTML = rtWhatIfHtml(rtWhatIf(s)); }, 50);
 }
 const RT_WI_RE = /^what\s+if\s+(.+?)\s+(?:is\s+|was\s+|gets\s+|got\s+|calls\s+in\s+|goes\s+)?(sick|off sick|on sick leave|absent|on leave|on vacation|on annual leave|off|takes?\s+(?:the\s+)?(?:day\s+)?off|takes?\s+.+?\s+off|doesn'?t come|does not come|can'?t come|not coming|isn'?t on|is not on|not on|doesn'?t work|does not work|can'?t work|isn'?t in|not in)\b\s*(.*)$/i;

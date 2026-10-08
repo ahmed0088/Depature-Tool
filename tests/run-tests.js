@@ -172,6 +172,14 @@ console.log('\nRoster builder');
     pre: {}, rules: { minRest: 11, maxRun: 6, givePh: false, lend: true, lendIdeal: true }, seed: 3 };
   const r2 = sb.rbSolve(I2);
   check('moves: the hotels touched by moves are counted (from and to)', [...sb.rbMoveHotels(I2, { 'M ONE': { [dates[0]]: '12:00 - 21:00 - Adagio' }, 'A ONE': {}, 'M TWO': {}, 'M THREE': {} })].sort().join(), 'Adagio GD,Mercure DD');
+  { // a Duty Manager and a Supervisor never on the same shift together
+    const Mx = '08:00 - 17:00', Ex = '15:00 - 00:00', twoD = [2, 2, 2, 2, 2, 2, 2];
+    const I5 = { week: W, groups: { 'Ibis DD': { shifts: [Mx, Ex], need: { [Mx]: twoD, [Ex]: twoD } } },
+      people: [person('DM1', { title: 'Duty Manager', likes: [Mx], usual: Mx }), person('SUP1', { title: 'Supervisor', likes: [Mx], usual: Mx }), person('AG1'), person('AG2'), person('AG3'), person('AG4')],
+      pre: {}, rules: { minRest: 11, maxRun: 6, givePh: false, lend: true }, seed: 5 };
+    const r5 = sb.rbSolve(I5);
+    check('a Duty Manager and a Supervisor are never on the same shift (even when both like mornings)', sb.rbSeniorClash(I5, r5.cells, dates).length + '|' + r5.problems.filter(p => p.kind === 'short').length, '0|0');
+  }
   { // by default staff stay in their own hotel: moved only to a shift that would be empty, not for the ideal second person
     const r3 = sb.rbSolve(Object.assign({}, I2, { rules: Object.assign({}, I2.rules, { lendIdeal: false }) }));
     const moved = Object.values(r3.cells).reduce((t, row) => t + Object.values(row).filter(v => / - Adagio$/.test(v)).length, 0);
@@ -300,7 +308,9 @@ console.log('\nRoster scenarios');
     cells.T[dates[1]] = 'SL';
     const I = { week: W, groups: G, people: ppl, pre: { T: { [dates[1]]: 'SL' } }, rules: { minRest: 11, maxHours: 9, allowOne: true, nightSwitch: true, lend: true } };
     const o = sb.rtCoverOptions(I, cells, 'Ibis DD', dates[1], N);
-    check('never: a day-shift person is not put on a night without a day off, even when stuck', o.some(x => x.cells), false);
+    check('reception never empty: day → night without a day off only as the very last bend, flagged', o.filter(x => x.cells).every(x => x.bend && /without a day off/.test(x.why || '')) && o.some(x => x.cells), true);
+    const ob = sb.rtCoverOptions(Object.assign({}, I, { groups: { 'Ibis DD · Bell': Object.assign({ post: 'Bell' }, G['Ibis DD']) } }), cells, 'Ibis DD · Bell', dates[1], N);
+    check('a bell team may stay short: no rule is bent for it', ob.some(x => x.cells && x.bend), false);
     check('never: day ↔ night always needs a day off; an evening next to a night only as a last resort', [
       sb.rbSwitchOk('12:00 - 21:00', '19:00 - 04:00', { eveNight: true }), sb.rbSwitchOk('08:00 - 17:00', '00:00 - 09:00', { eveNight: true }), sb.rbSwitchOk('00:00 - 09:00', '08:00 - 17:00', { eveNight: true }),
       sb.rbSwitchOk('15:00 - 00:00', '19:00 - 04:00', {}), sb.rbSwitchOk('15:00 - 00:00', '19:00 - 04:00', { eveNight: true })].join(), 'false,false,false,false,true');

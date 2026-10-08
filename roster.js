@@ -804,3 +804,22 @@ function _roRefresh() {
     if (document.getElementById('panel-home')?.classList.contains('active') && typeof homeRender === 'function') homeRender();
   }, 150);
 }
+
+// ── Busy animation (building or reading a roster) ─────────
+/** A little week grid whose cells fill in like shifts; 'read' adds a scan line (reading a picture). */
+function roBusyAnim(kind) {
+  const pal = ['m', 'a', 'n', 'o', 'm', 'a', 'm', 'o', 'n', 'a', 'm'];
+  let cells = '';
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 7; c++) cells += `<i class="ra-${pal[(c * 5 + r * 3) % pal.length]}" style="--i:${c + r * 2}"></i>`;
+  return `<span class="ro-anim ${kind || 'build'}" aria-hidden="true">${cells}${kind === 'read' ? '<b class="ro-scan"></b>' : ''}</span>`;
+}
+/** A line under the title that changes every couple of seconds, so you see it working. */
+function roBusySteps(steps) { return `<small class="ro-steps" data-steps="${escapeHtml(JSON.stringify(steps))}">${escapeHtml(steps[0])}</small>`; }
+if (typeof setInterval === 'function' && typeof document !== 'undefined') setInterval(() => {
+  document.querySelectorAll('.ro-steps[data-steps]').forEach(el => {
+    let L; try { L = JSON.parse(el.dataset.steps); } catch (_) { return; }
+    const i = ((+el.dataset.i || 0) + 1) % L.length; el.dataset.i = i;
+    el.classList.remove('in'); void el.offsetWidth; el.textContent = L[i]; el.classList.add('in');
+  });
+}, 1900);
+

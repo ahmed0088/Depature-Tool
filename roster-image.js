@@ -73,7 +73,7 @@ async function roFromImage(file) {
   riRetry._engine = '';
   if (!useAi) return riReadOnDevice(im, shown);
   const run = ++riRun;
-  box.innerHTML = `${riPicHtml(shown)}<div class="ri-reading"><span class="ri-spin"></span><div><b>Reading the roster with AI…</b><small>Names, dates and every shift. This takes about 20–40 seconds.</small></div></div>`;
+  box.innerHTML = `${riPicHtml(shown)}<div class="ri-reading ro-busy">${roBusyAnim('read')}<div><b>Reading the roster with AI…</b>${roBusySteps(['Looking at the picture…', 'Finding the names…', 'Reading the dates…', 'Reading every shift…', 'Almost there: about 20–40 seconds in all'])}<div class="ro-prog"><i></i></div></div></div>`;
   try {
     const forAi = riJpeg(im, 2000, 0.9);
     const json = await riAskAI(forAi.split(',')[1], document.getElementById('roImpWeek')?.value || roMonday(new Date()));
@@ -93,7 +93,7 @@ async function roFromImage(file) {
 async function riReadOnDevice(im, shown) {
   const box = document.getElementById('roPreview');
   const hint = (document.getElementById('roImpWeek')?.value) || roAdd(roMonday(new Date()), [0, 4, 5, 6].includes(new Date().getDay()) ? 7 : 0);
-  box.innerHTML = `${riPicHtml(shown)}<div class="ri-reading"><span class="ri-spin"></span><div><b id="riStepT">Reading the roster on this device…</b><small id="riStepS">The first time it downloads its reader (about 3 MB). Then it takes about a minute.</small><div class="ri-bar"><i id="riStepBar" style="width:2%"></i></div></div></div>`;
+  box.innerHTML = `${riPicHtml(shown)}<div class="ri-reading ro-busy">${roBusyAnim('read')}<div><b id="riStepT">Reading the roster on this device…</b><small id="riStepS">The first time it downloads its reader (about 3 MB). Then it takes about a minute.</small><div class="ri-bar"><i id="riStepBar" style="width:2%"></i></div></div></div>`;
   const t0 = Date.now(), run = ++riRun;
   try {
     const res = await roOcrRead(im, hint, (done, total, text) => {
