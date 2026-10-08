@@ -112,6 +112,8 @@ function rbSwitchOk(prev, next, R) {
 /** "Prefer not" a shift (on their card, or asked for that week): kept off it when there is another way. */
 function rbSoftNo(I, p, dt, s) { const c = rbNorm(s) || s; return ((p && p.soft) || []).includes(c) || ((((I.soft || {})[p && p.key] || {})[dt]) || []).includes(c); }
 const RB_SOFT_W = 80;   // above steady-hours costs, far below an empty shift: used when it's the only way
+const RB_EV_W = 300;    // 📅 a shift that misses their meeting or training: well above wishes, below an empty shift
+function rbEvMiss(I, p, dt, s) { const L = (((I.evMiss || {})[p && p.key] || {})[dt]); return !!L && L.includes(rbNorm(s) || s); }
 /** The real night: starts around midnight or ends in the morning (00:00 - 09:00), not a late evening (19:00 - 04:00). */
 function rbDeepNight(code) { const x = rbParse(code); return !!x && x.type === 'night' && (x.s < 120 || x.e >= 1440 + 360); }
 /** Who may work a shift: the titles set for it (e.g. nights: Supervisor, Duty Manager), else everyone. */
@@ -178,7 +180,7 @@ function rbSolve(I) {
   const plan = I.noNightPlan ? null : rbPlanNights(I);
   if (plan) I = Object.assign({}, I, { pre: plan.pre });
   // a few attempts from different starting points; the best week wins
-  const R0 = Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, givePh: true, lend: true, lockMgr: true, deskMin: 2, deskFrom: 8, deskTo: 23 }, I.rules || {});
+  const R0 = Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, givePh: true, lend: true, lockMgr: true, dmMin: 1, deskMin: 2, deskFrom: 8, deskTo: 23 }, I.rules || {});
   const dates0 = Array.from({ length: 7 }, (_, d) => roAdd(I.week, d));
   let best = null, bestSc = Infinity;
   for (let k = 0; k < (I.attempts || 4); k++) {
@@ -318,7 +320,7 @@ function rbRepair(I, res) {
 function _rbAttempt(I, seed) {
   const D = 7, dates = Array.from({ length: D }, (_, d) => roAdd(I.week, d));
   const rnd = rbRand(seed || 1);
-  const R = Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, givePh: true, lend: true, lockMgr: true, deskMin: 2, deskFrom: 8, deskTo: 23 }, I.rules || {});
+  const R = Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, givePh: true, lend: true, lockMgr: true, dmMin: 1, deskMin: 2, deskFrom: 8, deskTo: 23 }, I.rules || {});
   const cells = {};
   I.people.forEach(p => { cells[p.key] = {}; dates.forEach(dt => { const v = ((I.pre || {})[p.key] || {})[dt]; if (v) cells[p.key][dt] = v; }); });
   const G = I.groups;
@@ -348,6 +350,8 @@ function _rbAttempt(I, seed) {
             if (cover < need(g, p.fixed, d)) c += 70;
           }
           if ((p.prefOff || []).includes(d)) c -= 25;
+          if (((I.busy || {})[p.key] || {})[dates[d]]) c += 60;   // 📅 a meeting or training that day: not their day off
+          if (rbFloats(p)) { const min = R.dmMin == null ? 1 : +R.dmMin, dms = I.people.filter(q => q !== p && rbFloats(q)); if (min > 0 && dms.length >= min && dms.filter(q => !offOrAway(cells[q.key][dates[d]])).length < min) c += 150; }   // keep a Duty Manager on duty every day
           if (I.keep && I.keep[p.key] && rbKind(I.keep[p.key][dates[d]]) === 'off') c -= 30;   // keep their day off where it was
           if ((p.lastOffs || []).includes(d)) c -= 2;
           if (p.lastWeekendOff && d >= 4) c += 5;                       // weekend offs take turns
@@ -370,7 +374,7 @@ function _rbAttempt(I, seed) {
 }
 function _rbFinish(I, cells) {
   const D = 7, dates = Array.from({ length: D }, (_, d) => roAdd(I.week, d)), G = I.groups;
-  const R = Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, givePh: true, lend: true, lockMgr: true, deskMin: 2, deskFrom: 8, deskTo: 23 }, I.rules || {});
+  const R = Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, givePh: true, lend: true, lockMgr: true, dmMin: 1, deskMin: 2, deskFrom: 8, deskTo: 23 }, I.rules || {});
   const need = (g, s, d) => ((G[g] && G[g].need[s]) || [])[d] || 0;
   // 4. a hotel that is short borrows someone on the same shift from a hotel with one spare
   let cover = rbCover(I, cells);
@@ -399,7 +403,7 @@ function _rbFinish(I, cells) {
         const cand = [];
         for (let d = 0; d < D; d++) {
           const dt = dates[d], s = cells[p.key][dt];
-          if (!s || !G[p.group] || !G[p.group].shifts.includes(s) || ((I.pre || {})[p.key] || {})[dt]) continue;   // never over a fixed day (requests, days gone by)
+          if (!s || !G[p.group] || !G[p.group].shifts.includes(s) || ((I.pre || {})[p.key] || {})[dt] || ((I.busy || {})[p.key] || {})[dt]) continue;   // never over a fixed day (requests, days gone by) or a meeting day
           if (!(cover[p.group][s][d] > need(p.group, s, d))) continue;
           const next = offish(cells[p.key][dates[d - 1]]) || offish(cells[p.key][dates[d + 1]]);
           cand.push({ d, c: (next ? 0 : 10) - ((p.prefOff || []).includes(d) ? 5 : 0) + d * 0.1 });
@@ -469,7 +473,7 @@ function rbMatchDay(I, g, cells, dates, d, R, rnd) {
     if (p.lock && p.fixed && G.shifts.includes(p.fixed) && s !== p.fixed) return BAD;   // 🔒 always their own shift
     const soft = rbSoftNo(I, p, dt, s) ? RB_SOFT_W : 0;
     if ((rbParse(s) || {}).e - (rbParse(s) || {}).s > (R.maxHours || 9) * 60) return BAD;
-    let c = soft;
+    let c = soft + (rbEvMiss(I, p, dt, s) ? RB_EV_W : 0);
     if (I.keep && I.keep[p.key] && I.keep[p.key][dt] !== undefined) c += rbNorm(I.keep[p.key][dt]) === s ? -6 : 10;   // change as little as possible
     if (p.fixed) c += s === p.fixed ? -8 : (p.fixedCost || 30);
     if (p.lastMain && p.mode === 'rotate' && s === p.lastMain) c += 6;   // rotates: a different shift from last week
@@ -527,6 +531,7 @@ function rbScore(I, g, cells, dates, R) {
         if (rbParse(v).e - rbParse(v).s > (R.maxHours || 9) * 60) sc += 3000;
         if (p.allowed && p.allowed.length && !p.allowed.includes(v)) sc += 800;
         if (rbSoftNo(I, p, dt, v)) sc += RB_SOFT_W;   // prefers not: only when it's the way to cover
+        if (rbEvMiss(I, p, dt, v)) sc += RB_EV_W;   // 📅 misses their meeting or training
         if ((((I.avoid || {})[p.key] || {})[dt] || []).includes(v)) sc += 800;
         if (prev && rbParse(prev) && rbNorm(prev) !== rbNorm(v)) sc += rbChangeCost(prev, v, d === 0) + 15 + (p.steady ? 40 * rbWishWeight(p) : 0);   // a change of shift in a run of working days (💛 steady hours: much more)
         if (p.usual && v === p.usual) sc -= 1;
@@ -534,7 +539,7 @@ function rbScore(I, g, cells, dates, R) {
         if (rbIsNight(v)) { nights++; if (p.nightExtra > 0) sc += 3 * p.nightExtra; }   // fair nights: whoever had more lately gets fewer
       } else {
         run = 0;
-        if (rbKind(v) === 'off') { offs++; offDays.push(d); if ((p.prefOff || []).includes(d)) sc -= 10 * rbWishWeight(p); if (d >= 5 && p.wkOffShort > 0) sc -= 4 * p.wkOffShort; /* fewer weekends off than the team lately: theirs first */ if ((p.learnedOff || []).includes(d)) sc -= 3; /* their usual day off, as the posted rosters show */ if ((p.lastOffs || []).includes(d)) sc -= 1; if (p.lastWeekendOff && d >= 4) sc += 5; }
+        if (rbKind(v) === 'off') { offs++; offDays.push(d); if (((I.busy || {})[p.key] || {})[dt]) sc += 60; if ((p.prefOff || []).includes(d)) sc -= 10 * rbWishWeight(p); if (d >= 5 && p.wkOffShort > 0) sc -= 4 * p.wkOffShort; /* fewer weekends off than the team lately: theirs first */ if ((p.learnedOff || []).includes(d)) sc -= 3; /* their usual day off, as the posted rosters show */ if ((p.lastOffs || []).includes(d)) sc -= 1; if (p.lastWeekendOff && d >= 4) sc += 5; }
       }
       prev = v;
     }
@@ -544,6 +549,7 @@ function rbScore(I, g, cells, dates, R) {
     if (p.together && offDays.length >= 2 && !offDays.some((d, i) => i && d - offDays[i - 1] === 1)) sc += 25 * rbWishWeight(p);   // 💛 their days off next to each other
     else if (!p.together && p.learnedTogether && offDays.length >= 2 && !offDays.some((d, i) => i && d - offDays[i - 1] === 1)) sc += 6;   // they usually have them together
   });
+  if (P.some(rbFloats)) sc += 400 * rbDmGap(I, cells, dates, R);   // a day with no Duty Manager anywhere: below an empty shift, above any wish
   return sc;
 }
 /** Local search: change a cell, move someone's day off, or swap two people's shifts; keep what scores better. */
@@ -754,9 +760,25 @@ function rbHolidays() {
   return out;
 }
 function rbPhLabel(iso) { const d = roDate(iso), n = d.getDate(), suf = n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th'; return `${n}${suf} ${d.toLocaleDateString('en-GB', { month: 'short' })}.`; }
-/** PH days someone is owed: public holidays they worked, minus PH days already given, plus any set by hand. */
+/** PH days someone is owed: public holidays earned (see rbPhEarns), minus PH days in posted rosters, plus any set by hand. */
+/** Who earns a PH for a holiday: 'all' = everyone on the team that day (the holidays in the list), 'worked' = only who worked it.
+ *  Holidays only seen in PH cells ("PH - 28th Aug.") always count for who worked them. */
+function rbPhEarns(key, dt, listed) {
+  if (rbParse((roDays[dt] || {})[key])) return true;
+  if ((rbSettings.phEarn || 'all') !== 'all' || !listed.has(dt)) return false;
+  const c = rbPeople[key] || {};
+  if (c.left && c.left <= dt) return false;
+  if (c.joined) return c.joined <= dt;
+  return rbFirstDay(key) <= dt;   // no join date: from their first day on a roster
+}
+function rbFirstDay(key) {
+  let first = '9999';
+  for (const dt in roDays) if (dt < first && (roDays[dt] || {})[key]) first = dt;
+  return first;
+}
 function rbPhOwed(key, skipWeek) {
-  const hol = rbHolidays(), worked = Object.keys(hol).filter(dt => dt <= roToday() && rbParse((roDays[dt] || {})[key])).sort();
+  const hol = rbHolidays(), listed = new Set((rbSettings.holidays || []).map(h => h && h.date)), today = roToday();
+  const worked = Object.keys(hol).filter(dt => dt <= today && rbPhEarns(key, dt, listed)).sort();
   const skip = skipWeek ? dt => dt >= skipWeek && dt <= roAdd(skipWeek, 6) : () => false;   // a week being rebuilt: its PH days are the builder's to place again
   let taken = 0; Object.entries(roDays).forEach(([dt, day]) => { if (!skip(dt) && /^PH\b/i.test(String((day || {})[key] || ''))) taken++; });
   const adj = +(((rbPeople[key]) || {}).phAdj) || 0;
@@ -776,7 +798,7 @@ let rbSettings = {}, rbPeople = {}, rbReqs = {}, rbDrafts = {};
 let rbWeek = null, rbGroup = null, rbOut = null, rbSeed = 1;
 const RB_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-function rbRules() { return Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, givePh: true, lend: true, lockMgr: true, deskMin: 2, deskFrom: 8, deskTo: 23 }, rbSettings.rules || {}); }
+function rbRules() { return Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, givePh: true, lend: true, lockMgr: true, dmMin: 1, deskMin: 2, deskFrom: 8, deskTo: 23 }, rbSettings.rules || {}); }
 function rbGroups() { const g = roGroups(); return !g.length ? [''] : Object.values(roStaff).some(st => st && !st.group) ? g.concat(['']) : g; }   // '' = people with no hotel set
 /** "Adagio GD · Bell" when the hotel has bell boys: their own cover, shifts and people. */
 function rbPostGroups(g, week) { return [...new Set(rbMembers(g, week).map(rbPost).filter(Boolean))].map(p => `${g} · ${p}`); }
@@ -793,6 +815,15 @@ function rbTitle(k) { return (rbPeople[k] || {}).title || ''; }
 function rbFloats(p) { return /^duty manager$/i.test((p && p.title) || ''); }
 /** Supervisors can go anywhere too, but only when nobody else can: they come after everyone else. */
 function rbFloatsLast(p) { return /^supervisor$/i.test((p && p.title) || ''); }
+/** Days in the week with fewer Duty Managers on duty (all hotels together) than the rule asks: one can look after
+ *  every hotel, two is fine. Only counted when the cluster has more Duty Managers than that, so it can be done. */
+function rbDmGap(I, cells, dates, R) {
+  const min = R.dmMin == null ? 1 : +R.dmMin; if (!(min > 0)) return 0;
+  const dms = I.people.filter(rbFloats); if (dms.length <= min) return 0;
+  let gap = 0;
+  dates.forEach(dt => { const on = dms.filter(p => rbParse((cells[p.key] || {})[dt])).length; if (on < min) gap += min - on; });
+  return gap;
+}
 function rbIsManager(k) { return /^(manager|asst\. manager)$/i.test(rbTitle(k)); }   // duty managers rotate like supervisors
 function rbMembers(g, week) { return Object.keys(roStaff).filter(k => ((roStaff[k] || {}).group || '') === g && rbActive(k, week)).sort((a, b) => ((roStaff[a].order ?? 999) - (roStaff[b].order ?? 999)) || roStaff[a].name.localeCompare(roStaff[b].name)); }
 /** Cover needed for a hotel: what was set by hand, else what past rosters show. */
@@ -852,7 +883,9 @@ function rbPre() {
       (pre[r.key] = pre[r.key] || {})[dt] = v;
     });
   });
-  return { pre, avoid, soft };
+  const busy = {}, evMiss = {};
+  if (typeof evPre === 'function') evPre(dates, pre, evMiss, busy);   // 📅 meetings and training
+  return { pre, avoid, soft, busy, evMiss };
 }
 /** Who may work each shift: as set, else the night shift (00:00 start) for Supervisors and Duty Managers,
  *  once anyone in the cluster has one of those titles. */
@@ -870,8 +903,8 @@ function rbInput(seed) {
     rbMembers(g).forEach(k => { const p = rbPersonCfg(k); const ph = rbPhOwed(k, rbWeek); p.phOwed = ph.owed; p.phLabel = ph.label; p.phLabels = ph.labels; people.push(p); });
     rbPostGroups(g).forEach(gp => { const c2 = rbGroupCfg(gp); groups[gp] = { shifts: c2.shifts, need: c2.need, who: rbWho(gp, c2), post: gp.slice(g.length + 3) }; });
   });
-  const { pre, avoid, soft } = rbPre();
-  const I = { week: rbWeek, groups, people, pre, avoid, soft, rules: rbRules(), seed: seed || 1 };
+  const { pre, avoid, soft, busy, evMiss } = rbPre();
+  const I = { week: rbWeek, groups, people, pre, avoid, soft, busy, evMiss, rules: rbRules(), seed: seed || 1 };
   rbFairHistory(I);
   return I;
 }
@@ -1029,6 +1062,7 @@ function rbRender() {
     ${rbQuickHtml(draft)}
 
     <div class="rb-grid">
+      ${typeof evBuilderHtml === 'function' ? evBuilderHtml(dates) : ''}
       <details class="card rb-card"${rbSec('req', !draft)}>
         <summary class="ro-card-hd"><b>📝 Requests this week</b><span>${reqs.length ? `<i class="rb-count">${reqs.length}</i>` : 'none yet'}</span></summary>
         ${reqs.length ? `<div class="rb-reqs">${reqs.sort((a, b) => a[1].from.localeCompare(b[1].from)).map(([id, r]) => `<div class="rb-req"><b>${escapeHtml((roStaff[r.key] || {}).name || r.key)}</b><span>${escapeHtml(rbReqText(r))}</span>${r.type === 'off' && rbPhOwed(r.key, rbWeek).owed > 0 ? `<button class="btn sm ghost" title="They have PH owed: take it from the balance instead" onclick="rbReqToPh('${id}')">→ PH (${rbPhOwed(r.key, rbWeek).owed} owed)</button>` : ''}<button class="ro-x" title="Remove" onclick="rbDelReq('${id}')">✕</button></div>`).join('')}</div>` : '<div class="ro-empty">Day-off requests, leave, PH days, "must work" or "can\'t work" a shift. Everything else the builder decides.</div>'}
@@ -1321,7 +1355,9 @@ function rbRulesHtml() {
     <label class="rb-chk"><input type="checkbox" ${R.givePh ? 'checked' : ''} onchange="rbSetRule('givePh',this.checked)"> Give PH days owed when a shift has someone spare</label>
     <label class="rb-chk"><input type="checkbox" ${R.lend === false ? 'checked' : ''} onchange="rbSetRule('lend',!this.checked)"> 🏨 Keep everyone in their own hotel (nobody is moved between hotels, by the builder or in suggestions). Off: a short hotel can borrow ("12:00 - 21:00 - Adagio"); lock single people on their card.</label>
     <label class="rb-chk"><input type="checkbox" ${R.lockMgr !== false ? 'checked' : ''} onchange="rbSetRule('lockMgr',this.checked);rbRender()"> 🔒 Managers keep their own shift (e.g. 09:00 - 18:00 to run the operation): never moved to cover. Unlock one on their card.</label>
-    <div class="rb-sub">Public holidays <small>working one earns a PH day; PH cells in past rosters are counted too</small></div>
+    <label>👔 Duty Managers on duty, all hotels together: at least <input type="number" min="0" max="3" value="${R.dmMin}" onchange="rbSetRule('dmMin',Math.max(0,Math.min(3,+this.value||0)))"> each day <small>(one can look after all the hotels; two is fine too; 0 = off)</small></label>
+    <div class="rb-sub">Public holidays <small>${(rbSettings.phEarn || 'all') === 'all' ? 'everyone on the team earns a PH day for each one' : 'working one earns a PH day'}; PH cells in posted rosters come off the balance</small></div>
+    ${typeof hdRulesHtml === 'function' ? hdRulesHtml() : ''}
     <div class="rb-hols">${hol.map((h, i) => `<span class="rb-hol">${escapeHtml(roDayLbl(h.date, true))}${h.name ? ' · ' + escapeHtml(h.name) : ''}<button class="ro-x" onclick="rbDelHol(${i})">✕</button></span>`).join('') || '<span class="ro-empty">None added yet.</span>'}</div>
     <div class="rb-inline"><input type="date" id="rbHd"><input id="rbHn" placeholder="Name, e.g. National Day"><button class="btn sm" onclick="rbAddHol()">+ Holiday</button></div>
     ${typeof rtTaskTimesHtml === 'function' ? rtTaskTimesHtml() : ''}
@@ -1339,7 +1375,7 @@ function rbOutHtml(shown, dates) {
   const name = k => (roStaff[k] || {}).name || k;
   const today = roToday();
   const chg = new Set(rbChanges(I, cells, dates).filter(c => !c.week).map(c => c.key + '|' + c.date));
-  const rows = shown.map(g => `${shown.length > 1 || g ? `<tr class="ro-sec"><td colspan="9"><span>${escapeHtml(g || 'Team')}</span></td></tr>` : ''}${rbMembers(g).map(k => `<tr><td class="ro-name" title="${escapeHtml(name(k))}"><button class="ro-tap" onclick="rtPerson(${_rbQ(k)})">${escapeHtml(name(k))}${rbTitle(k) || rbLockMark(I, k) ? `<i class="rt-t">${escapeHtml(rbTitle(k))}${rbLockMark(I, k)}</i>` : ''}</button></td>${dates.map(dt => { const v = cells[k][dt] || '', i = roInfo(v); const bad = probs.some(p => p.key === k && p.date === dt); return `<td class="ro-cell ${i ? 'ro-t-' + i.type : ''}${bad ? ' ro-unsure' : ''}${dt === today ? ' ro-today' : ''}${chg.has(k + '|' + dt) ? ' rb-chg' : ''}" data-k="${escapeHtml(k)}" data-d="${dt}" onclick="if(!this.dataset.noClick)rbPick(this,${_rbQ(k)},'${dt}')" title="${escapeHtml(v || 'empty')}: tap to change, or drag onto another cell to swap">${escapeHtml(roCellTxt(i)) || '·'}${i && i.note ? `<i class="ro-note">${escapeHtml(i.note)}</i>` : ''}</td>`; }).join('')}${rbTotCell(k, cells[k], dates, probs)}</tr>`).join('')}`).join('');
+  const rows = shown.map(g => `${shown.length > 1 || g ? `<tr class="ro-sec"><td colspan="9"><span>${escapeHtml(g || 'Team')}</span></td></tr>` : ''}${rbMembers(g).map(k => `<tr><td class="ro-name" title="${escapeHtml(name(k))}"><button class="ro-tap" onclick="rtPerson(${_rbQ(k)})">${escapeHtml(name(k))}${rbTitle(k) || rbLockMark(I, k) ? `<i class="rt-t">${escapeHtml(rbTitle(k))}${rbLockMark(I, k)}</i>` : ''}</button></td>${dates.map(dt => { const v = cells[k][dt] || '', i = roInfo(v); const bad = probs.some(p => p.key === k && p.date === dt); return `<td class="ro-cell ${i ? 'ro-t-' + i.type : ''}${bad ? ' ro-unsure' : ''}${dt === today ? ' ro-today' : ''}${chg.has(k + '|' + dt) ? ' rb-chg' : ''}" data-k="${escapeHtml(k)}" data-d="${dt}" onclick="if(!this.dataset.noClick)rbPick(this,${_rbQ(k)},'${dt}')" title="${escapeHtml(v || 'empty')}: tap to change, or drag onto another cell to swap">${escapeHtml(roCellTxt(i)) || '·'}${i && i.note ? `<i class="ro-note">${escapeHtml(i.note)}</i>` : ''}${typeof evMark === 'function' ? evMark(k, dt) : ''}</td>`; }).join('')}${rbTotCell(k, cells[k], dates, probs)}</tr>`).join('')}`).join('');
   const covers = rbWithPosts(shown).map(g => { const G = I.groups[g]; if (!G) return ''; return `<div class="rb-sub">${escapeHtml(g || 'Team')} · cover</div><div class="ro-scroll"><table class="ro-table rb-cover"><thead><tr><th class="ro-name">Shift</th>${dates.map(dt => `<th>${escapeHtml(roDayLbl(dt))}</th>`).join('')}</tr></thead><tbody>${G.shifts.map(s => `<tr><td class="ro-name">${escapeHtml(s)}</td>${dates.map((dt, d) => { const n = (G.need[s] || [])[d] || 0, h = cover[g][s][d]; return `<td class="${h < n ? 'rb-cv-short' : h > n ? 'rb-cv-over' : 'rb-cv-ok'} rb-covtap" title="Who can take ${escapeHtml(s)} on ${escapeHtml(roDayLbl(dt))}" onclick="rbGapMenu(${_rbQ(g)},${_rbQ(s)},'${dt}')">${h}/${n}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>`; }).join('');
   const inShown = p => !p.group || shown.includes(rbBaseGroup(p.group)) || (p.key && shown.includes((roStaff[p.key] || {}).group || ''));
   const P = probs.filter(inShown);
@@ -1395,6 +1431,7 @@ function rbHealthHtml(I, cells, cover, P, shown, dates) {
     ${chip(bad - short ? 'bad' : 'ok', bad - short ? bad - short : '✓', bad - short ? 'rule breaks' : 'rules kept', 'rest, days off, days in a row, night ↔ day, who can work nights, 9 h')}
     ${rbDeskChip(I, cells, shown, chip)}
     ${chip(thin ? 'warn' : 'ok', thin, 'one-person', 'shifts where the ideal is two but only one is on')}
+    ${(() => { const dms = I.people.filter(rbFloats), min = rbRules().dmMin; if (dms.length < 2 || !(min > 0)) return ''; const none = dates.filter(dt => dms.filter(p => rbParse((cells[p.key] || {})[dt])).length < min); return chip(none.length ? 'warn' : 'ok', none.length ? none.length : '✓', none.length ? 'days without a DM' : 'DM every day', none.length ? 'No Duty Manager on duty (any hotel): ' + none.map(dt => roDayLbl(dt)).join(', ') : 'At least ' + min + ' Duty Manager on duty every day, across all hotels'); })()}
     ${chip(ch ? 'warn' : 'ok', ch, 'hours changes', 'hours that change in the middle of a run of working days')}
     ${chip('', Math.round(hours), 'hours planned', 'all shifts this week')}
   </div>`;

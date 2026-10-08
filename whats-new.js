@@ -9,6 +9,13 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 191, items: [
+    '🎉 Public holidays for the UAE are built in. 3 weeks before each one the app asks you (in the builder and in Ops Brain): ✓ Add, ✏️ change the dates (Eid moves with the moon), or Not a PH. Nothing is added without your yes.',
+    '🏖 Everyone on the team earns a PH day for each holiday you accept, also people who were off that day (new staff only from the day they joined). You can switch to "only who works that day" under ⚖️ Rules. A PH day comes off the balance once the roster with it is posted.',
+    '👔 One Duty Manager can look after all the hotels: the builder keeps at least one on duty every day, across all hotels (two is fine too), and spreads their days off. Set it under ⚖️ Rules.',
+    '📅 New: Meetings & training in the roster builder. Add one by hand, or from Outlook: a saved email (.msg or .eml), an invite (.ics), or paste the email text. It reads the subject, day, time, place and the team members named.',
+    '📅 The builder keeps them in mind: no day off that day, and a shift that covers the time (or the whole day as TRN for an all-day course). It warns you when the roster doesn\'t fit, with a button to build the week again. Ops Brain reminds you the day before and an hour before.',
+  ] },
   { v: 190, items: [
     '💚 Team health: every team member gets a health score out of 100 from the last 4 weeks of rosters, as a ring next to their name in 🧑‍💼 Team (green = thriving, amber = watch, red = needs care), with small icons for what needs a look.',
     '💚 On top of the team list: the whole team at a glance and "Look after first", the people who need care, one tap to their card.',

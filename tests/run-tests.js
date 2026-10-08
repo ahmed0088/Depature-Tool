@@ -390,6 +390,97 @@ console.log('\nRoster scenarios');
   check('health: the card and the team view render', run(`rhPersonHtml('B').includes('What would help') && rhTeamHtml(['Ibis DD']).includes('Team health') && rhBadge('A').includes('rh-ring')`), true);
 }
 
+// ── Public holidays, Duty Managers, meetings (roster-holidays.js, roster-events.js) ──
+{
+  const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} }, fbSet() {}, showToast() {}, escapeHtml: x => String(x), confirm: () => true, prompt: () => null,
+               document: { addEventListener() {}, getElementById() { return null; }, querySelectorAll() { return []; }, querySelector() { return null; } }, window: {}, setTimeout: () => 0, setInterval: () => 0, clearTimeout() {}, navigator: {},
+               TextDecoder, TextEncoder, atob: s => Buffer.from(s, 'base64').toString('binary') };
+  vm.createContext(sb);
+  for (const f of ['roster.js', 'roster-build.js', 'roster-team.js', 'roster-holidays.js', 'roster-events.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sb, { filename: f });
+  const run = js => vm.runInContext(js, sb);
+  run(`
+    var M = '08:00 - 17:00', E = '15:00 - 00:00';
+    roStaff.A = { name: 'Anna Lee', group: 'Ibis DD' }; roStaff.B = { name: 'Sam Reed', group: 'Ibis DD' }; roStaff.C = { name: 'Lina Park', group: 'Mercure DD' }; roStaff.D = { name: 'Omar Hale', group: 'Mercure DD' };
+    roToday = () => '2026-03-25';
+    ['2026-03-16','2026-03-17','2026-03-18','2026-03-19','2026-03-20','2026-03-21','2026-03-22'].forEach((dt, i) => { roDays[dt] = Object.assign({ A: dt === '2026-03-19' ? 'OFF' : M, B: E, C: M }, dt >= '2026-03-21' ? { D: E } : {}, dt >= '2026-03-20' ? { F: 'OFF' } : {}); });
+    roStaff.F = { name: 'Rita Moss', group: 'Ibis DD' };
+    rbPeople = { D: { joined: '2026-03-21' } };
+  `);
+  check('holidays: Eid shows as a question while it is near, not before', run(`[hdPending('2026-02-20').length, hdPending('2026-03-05').map(h => h.name).join()].join('|')`), '0|Eid Al Fitr');
+  check('holidays: nothing counts before you say yes', run(`rbPhOwed('A').owed`), 0);
+  run(`hdAccept(hdPending('2026-03-05')[0].id)`);
+  check('holidays: after yes, everyone on the team earns them (also on their day off); new people from the day they joined', run(`['A','B','C','D','F'].map(k => rbPhOwed(k).owed).join()`), '3,3,3,1,2');
+  check('holidays: answered once, not asked again', run(`hdPending('2026-03-05').length`), 0);
+  run(`roDays['2026-03-23'] = { A: 'PH - 19th Mar.' };`);
+  check('holidays: a PH on a posted roster comes off the balance, oldest first', run(`[rbPhOwed('A').owed, rbPhOwed('A').label].join()`), '2,20th Mar.');
+  run(`rbSettings.phEarn = 'worked';`);
+  check('holidays: "only who works it" mode', run(`['A','B'].map(k => rbPhOwed(k).owed).join()`), '1,3');
+  run(`rbSettings.phEarn = 'all'; hdReject(hdList().find(h => h.name === 'Arafat Day').id);`);
+  check('holidays: "not a PH" is remembered', run(`hdPending('2026-05-10').map(h => h.name).join()`), 'Eid Al Adha');
+
+  // Duty Managers: one is enough for all the hotels, so their days off are spread
+  run(`
+    roToday = () => '2026-10-07'; rbSettings = {}; roDays = {}; rbPeople = {};
+    var W = '2026-10-12', DM = '09:00 - 18:00';
+    ['Ibis DD', 'Mercure DD'].forEach((g, gi) => { for (let i = 0; i < 4; i++) roStaff[g[0] + i] = { name: 'P' + g[0] + i, group: g, order: i }; });
+    delete roStaff.A; delete roStaff.B; delete roStaff.C; delete roStaff.D;
+    rbPeople.I0 = { title: 'Duty Manager' }; rbPeople.M0 = { title: 'Duty Manager' };
+    rbSettings.groups = {};
+  `);
+  const dm = run(`(() => { rbWeek = W; const I = rbInput(3); I.people.filter(p => rbFloats(p)).forEach(p => { p.prefOff = [5]; }); const r = rbSolve(I); const ds = Array.from({ length: 7 }, (_, d) => roAdd(W, d)); return ds.filter(dt => !['I0','M0'].some(k => rbParse(r.cells[k][dt]))).length + '|' + rbDmGap(I, r.cells, ds, I.rules); })()`);
+  check('duty managers: never both off on the same day, even when both ask for Saturday', dm, '0|0');
+  check('duty managers: with the rule off they may share a day off', run(`(() => { rbWeek = W; const I = rbInput(3); I.rules.dmMin = 0; return rbDmGap(I, { I0: {}, M0: {} }, [W], I.rules); })()`), 0);
+
+  // Meetings: reading Outlook
+  run(`roToday = () => '2026-10-08'; rbPeople = {}; roStaff = { A: { name: 'Anna Lee', group: 'Ibis DD' }, B: { name: 'Sam Reed', group: 'Ibis DD' }, C: { name: 'Lina Park', group: 'Ibis DD' }, D: { name: 'Sam Cole', group: 'Ibis DD' } };`);
+  const ics = 'BEGIN:VCALENDAR\r\nMETHOD:REQUEST\r\nBEGIN:VEVENT\r\nUID:abc-123\r\nSUMMARY:Fire safety\r\n  training\r\nDTSTART;TZID=Arabian Standard Time:20261013T100000\r\nDTEND;TZID=Arabian Standard Time:20261013T113000\r\nLOCATION:Meeting room 2\r\nORGANIZER;CN=Training Team:mailto:training@example.com\r\nATTENDEE;CN=Anna Lee;ROLE=REQ-PARTICIPANT:mailto:anna.lee@example.com\r\nATTENDEE;CN="Reed, Sam":mailto:sam.reed@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR';
+  const ri = run(`evParse(${JSON.stringify(ics)})`);
+  check('outlook: invite (.ics) → title, day, time, place, people', [ri.title, ri.date, ri.from, ri.to, ri.where, ri.keys.sort().join('+'), ri.kind, ri.uid].join('|'), 'Fire safety training|2026-10-13|10:00|11:30|Meeting room 2|A+B|training|abc-123');
+  const eml = 'From: Front Office Manager <fom@example.com>\nTo: Lina Park <lina.park@example.com>, "Sam Cole" <sam.cole@example.com>\nSubject: =?utf-8?B?TW9udGhseSBicmllZmluZw==?=\nMIME-Version: 1.0\nContent-Type: multipart/alternative; boundary="b1"\n\n--b1\nContent-Type: text/plain; charset=utf-8\nContent-Transfer-Encoding: quoted-printable\n\nWhen: Thursday, 15 October 2026 3:00 PM-4:00 PM (UTC+04:00) Abu Dhabi, Muscat=0AWhere: Lobby lounge\n--b1--\n';
+  const re = run(`evParse(${JSON.stringify(eml)})`);
+  check('outlook: email (.eml, encoded subject, quoted-printable) → meeting', [re.title, re.date, re.from, re.to, re.where, re.keys.sort().join('+'), re.kind].join('|'), 'Monthly briefing|2026-10-15|15:00|16:00|Lobby lounge|C+D|meeting');
+  const rp = run(`evParse('Hi all, Anna and Lina have the induction on 20/10/2026 from 9am to 1pm in the training room')`);
+  check('outlook: pasted text, day/month/year, 9am to 1pm, first names', [rp.date, rp.from, rp.to, rp.keys.sort().join('+'), rp.kind].join('|'), '2026-10-20|09:00|13:00|A+C|training');
+  check('outlook: "Sam" alone is not guessed when two people are called Sam', run(`evParse('Sam has a meeting tomorrow at 3 pm').keys.length + '|' + evParse('Sam has a meeting tomorrow at 3 pm').date + '|' + evParse('Sam has a meeting tomorrow at 3 pm').from`), '0|2026-10-09|15:00');
+  check('outlook: a forwarded email: the Sent: date is not the meeting day', run(`(() => { const r = evParse('From: Anna Lee\\nSent: Monday, October 12, 2026 9:14 AM\\nSubject: FW: Audit meeting\\n\\nPlease join the audit meeting on 22 October 2026 at 14:30.'); return [r.title, r.date, r.from].join('|'); })()`), 'Audit meeting|2026-10-22|14:30');
+  check('outlook: a cancelled invite is recognised', run(`evParse('Subject: Canceled: Monthly briefing\\nWhen: 15 Oct 2026 15:00').cancel`), true);
+  // a real .msg (Compound File) built here, with small streams in the mini stream like Outlook writes them
+  const u16 = str => Buffer.from(str, 'utf16le');
+  const streams = [['__substg1.0_0037001F', u16('Duty manager meeting')], ['__substg1.0_1000001F', u16('When: Monday, October 19, 2026 11:00 AM-12:00 PM\r\nWhere: GM office\r\nAll duty managers please attend.')], ['__substg1.0_0E04001F', u16('Lee, Anna; Park, Lina')]];
+  const SS = 512, MS = 64, mini = [], mfat = [], ents = [];
+  streams.forEach(([n, b]) => { const start = mini.length / MS; const pad = Math.ceil(b.length / MS) * MS; const buf = Buffer.alloc(pad); b.copy(buf); for (let i = 0; i < pad / MS; i++) mfat.push(i === pad / MS - 1 ? 0xFFFFFFFE : start + i + 1); mini.push(...buf); ents.push({ n, type: 2, start, size: b.length }); });
+  const miniBuf = Buffer.from(mini), miniSecs = Math.ceil(miniBuf.length / SS);
+  const fat = [0xFFFFFFFD, 0xFFFFFFFE, 0xFFFFFFFE]; for (let i = 0; i < miniSecs; i++) fat.push(i === miniSecs - 1 ? 0xFFFFFFFE : 4 + i);
+  ents.unshift({ n: 'Root Entry', type: 5, start: 3, size: miniBuf.length });
+  const file = Buffer.alloc(SS * (4 + miniSecs), 0);
+  Buffer.from('D0CF11E0A1B11AE1', 'hex').copy(file, 0); file.writeUInt16LE(0x3E, 24); file.writeUInt16LE(3, 26); file.writeUInt16LE(0xFFFE, 28); file.writeUInt16LE(9, 30); file.writeUInt16LE(6, 32);
+  file.writeUInt32LE(1, 44); file.writeUInt32LE(1, 48); file.writeUInt32LE(4096, 56); file.writeUInt32LE(2, 60); file.writeUInt32LE(1, 64); file.writeUInt32LE(0xFFFFFFFE, 68); file.writeUInt32LE(0, 72);
+  for (let i = 0; i < 109; i++) file.writeUInt32LE(i === 0 ? 0 : 0xFFFFFFFF, 76 + i * 4);
+  for (let i = 0; i < SS / 4; i++) file.writeUInt32LE(i < fat.length ? fat[i] : 0xFFFFFFFF, SS + i * 4);
+  ents.forEach((e, i) => { const o = SS * 2 + i * 128, nm = Buffer.from(e.n + '\0', 'utf16le'); nm.copy(file, o); file.writeUInt16LE(nm.length, o + 64); file[o + 66] = e.type; file.writeUInt32LE(0xFFFFFFFF, o + 68); file.writeUInt32LE(0xFFFFFFFF, o + 72); file.writeUInt32LE(0xFFFFFFFF, o + 76); file.writeUInt32LE(e.start, o + 116); file.writeUInt32LE(e.size, o + 120); });
+  for (let i = 0; i < SS / 4; i++) file.writeUInt32LE(i < mfat.length ? mfat[i] : 0xFFFFFFFF, SS * 3 + i * 4);
+  miniBuf.copy(file, SS * 4);
+  sb._msg = Uint8Array.from(file);
+  const rm = run(`(() => { const b = new Uint8Array(_msg).buffer; const r = evParse(evMsgText(b)); return [evIsCfb(b), r.title, r.date, r.from, r.to, r.where, r.keys.sort().join('+')].join('|'); })()`);
+  check('outlook: a saved Outlook email (.msg) is read', rm, 'true|Duty manager meeting|2026-10-19|11:00|12:00|GM office|A+C');
+
+  // Meetings in the builder
+  run(`
+    roDays = {}; rbPeople = {}; rbSettings = { groups: {} }; roStaff = {};
+    for (let i = 0; i < 6; i++) roStaff['S' + i] = { name: 'Staff ' + 'ABCDEF'[i] + ' Test', group: 'Ibis DD', order: i };
+    W = '2026-10-12';
+    evAll = { e1: { title: 'Briefing', kind: 'meeting', plan: 'cover', date: '2026-10-14', from: '10:00', to: '11:00', keys: ['S0', 'S1'] },
+              e2: { title: 'Course', kind: 'training', plan: 'away', date: '2026-10-15', until: '2026-10-16', keys: ['S2'] } };
+  `);
+  const sh = run(`rbGroupCfg('Ibis DD').shifts.join('|')`);
+  const rb = run(`(() => { rbWeek = W; const I = rbInput(1); const r = rbSolve(I); return [r.cells.S0['2026-10-14'], r.cells.S1['2026-10-14'], r.cells.S2['2026-10-15'], r.cells.S2['2026-10-16']].join('|'); })()`).split('|');
+  const covers = v => run(`evCoverShifts([${JSON.stringify(v)}], '10:00', '11:00').length`) === 1;
+  check('meetings: on shift at that time, never their day off', [covers(rb[0]), covers(rb[1])].join(), 'true,true');
+  check('meetings: an away training day is TRN', rb.slice(2).join(), 'TRN,TRN');
+  check('meetings: the shifts that cover 10:00–11:00 are found', run(`evCoverShifts(['07:00 - 16:00', '15:00 - 00:00', '23:00 - 08:00'], '10:00', '11:00').join()`) + ' · ' + sh.length, '07:00 - 16:00 · ' + sh.length);
+  check('meetings: a meeting that falls outside their posted shift is flagged', run(`(() => { roDays['2026-10-14'] = { S0: '15:00 - 00:00' }; return evCheck(evAll.e1).length; })()`), 1);
+}
+
 // ── What if… (roster-team.js) ─────────────────────────────
 {
   const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} }, fbSet() {}, showToast() {}, escapeHtml: x => String(x),

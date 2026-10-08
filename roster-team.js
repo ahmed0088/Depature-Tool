@@ -715,6 +715,7 @@ function rtPerson(k) {
   d.innerHTML = `<div class="card rt-sheet">
     <div class="ro-card-hd"><b>${escapeHtml(s.name)}</b><button class="ro-x" onclick="document.getElementById('rtSheet').remove();rbRender()">✕</button></div>
     ${typeof rhPersonHtml === 'function' ? rhPersonHtml(k) : ''}
+    ${typeof evPersonHtml === 'function' ? evPersonHtml(k) : ''}
     <div class="rt-form">
       <label>Name<input value="${escapeHtml(s.name)}" onchange="rtSetStaff(${q},'name',this.value.trim())"></label>
       <label>Employee no.<input value="${escapeHtml(s.id || '')}" onchange="rtSetStaff(${q},'id',this.value.trim())"></label>
