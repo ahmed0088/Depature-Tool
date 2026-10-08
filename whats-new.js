@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 186, items: [
+    '⚖️ The builder is fair over time: every week it reads the last 4 posted weeks. Wishes that weren\'t granted lately count more this week (📈 first in line in Team happiness), so everyone gets their turn as the rotation moves. Whoever had more nights than the team lately gets fewer, and whoever had fewer weekends off gets one first. Static night staff aren\'t counted against anyone.',
+  ] },
   { v: 185, items: [
     '🛌 Rest between shifts stays 11 hours. Only when a shift can\'t be covered any other way does the builder give up rest, and then one hour at a time (10 h, then 9 h, 8 h…), keeping as much as it can, and it tells you who and why. Builder → rules: "Only when there\'s no other way, down to [7] hours" sets the lowest it may go.',
   ] },

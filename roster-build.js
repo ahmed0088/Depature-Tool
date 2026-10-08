@@ -449,7 +449,8 @@ function rbMatchDay(I, g, cells, dates, d, R, rnd) {
     c += rbChangeCost(pv, s, d === 0);
     if (rbParse(nx)) c += rbNorm(nx) === s ? -8 : rbChangeCost(s, nx, false) / 2;
     if (p.usual && s === p.usual && p.mode !== 'rotate') c -= 3;
-    if ((p.likes || []).includes(s)) c -= 12;   // 💛 a shift they like
+    if ((p.likes || []).includes(s)) c -= 12 * rbWishWeight(p);   // 💛 a shift they like (more when they missed wishes lately)
+    if (rbIsNight(s) && p.nightExtra > 0) c += 3 * p.nightExtra;  // more nights than the team lately: someone else's turn
     return c + (rnd ? rnd() * 1.5 : 0);
   };
   const C = rows.map(p => { const b = {}; G.shifts.forEach(s => { b[s] = base(p, s); }); return cols.map(c => b[c.s] >= BAD ? BAD : b[c.s] + (c.req ? -c.w : 2 + c.k * 0.3)); });
@@ -497,19 +498,19 @@ function rbScore(I, g, cells, dates, R) {
         if (p.allowed && p.allowed.length && !p.allowed.includes(v)) sc += 800;
         if (rbSoftNo(I, p, dt, v)) sc += RB_SOFT_W;   // prefers not: only when it's the way to cover
         if ((((I.avoid || {})[p.key] || {})[dt] || []).includes(v)) sc += 800;
-        if (prev && rbParse(prev) && rbNorm(prev) !== rbNorm(v)) sc += rbChangeCost(prev, v, d === 0) + 15 + (p.steady ? 40 : 0);   // a change of shift in a run of working days (💛 steady hours: much more)
+        if (prev && rbParse(prev) && rbNorm(prev) !== rbNorm(v)) sc += rbChangeCost(prev, v, d === 0) + 15 + (p.steady ? 40 * rbWishWeight(p) : 0);   // a change of shift in a run of working days (💛 steady hours: much more)
         if (p.usual && v === p.usual) sc -= 1;
-        if ((p.likes || []).includes(rbNorm(v))) sc -= 6;   // 💛 a shift they like
-        if (rbIsNight(v)) nights++;
+        if ((p.likes || []).includes(rbNorm(v))) sc -= 6 * rbWishWeight(p);   // 💛 a shift they like
+        if (rbIsNight(v)) { nights++; if (p.nightExtra > 0) sc += 3 * p.nightExtra; }   // fair nights: whoever had more lately gets fewer
       } else {
         run = 0;
-        if (rbKind(v) === 'off') { offs++; offDays.push(d); if ((p.prefOff || []).includes(d)) sc -= 10; if ((p.lastOffs || []).includes(d)) sc -= 1; if (p.lastWeekendOff && d >= 4) sc += 5; }
+        if (rbKind(v) === 'off') { offs++; offDays.push(d); if ((p.prefOff || []).includes(d)) sc -= 10 * rbWishWeight(p); if (d >= 5 && p.wkOffShort > 0) sc -= 4 * p.wkOffShort; /* fewer weekends off than the team lately: theirs first */ if ((p.lastOffs || []).includes(d)) sc -= 1; if (p.lastWeekendOff && d >= 4) sc += 5; }
       }
       prev = v;
     }
     sc += 2000 * Math.abs(offs - rbOffsDue(I, p, dates));   // rest, days in a row and days off come before cover
-    if (p.maxNights != null && nights > p.maxNights) sc += 60 * (nights - p.maxNights);   // 💛 no more nights than they asked for (unless it's the only way)
-    if (p.together && offDays.length >= 2 && !offDays.some((d, i) => i && d - offDays[i - 1] === 1)) sc += 25;   // 💛 their days off next to each other
+    if (p.maxNights != null && nights > p.maxNights) sc += 60 * rbWishWeight(p) * (nights - p.maxNights);   // 💛 no more nights than they asked for (unless it's the only way)
+    if (p.together && offDays.length >= 2 && !offDays.some((d, i) => i && d - offDays[i - 1] === 1)) sc += 25 * rbWishWeight(p);   // 💛 their days off next to each other
   });
   return sc;
 }
@@ -805,8 +806,39 @@ function rbInput(seed) {
     rbPostGroups(g).forEach(gp => { const c2 = rbGroupCfg(gp); groups[gp] = { shifts: c2.shifts, need: c2.need, who: rbWho(gp, c2), post: gp.slice(g.length + 3) }; });
   });
   const { pre, avoid, soft } = rbPre();
-  return { week: rbWeek, groups, people, pre, avoid, soft, rules: rbRules(), seed: seed || 1 };
+  const I = { week: rbWeek, groups, people, pre, avoid, soft, rules: rbRules(), seed: seed || 1 };
+  rbFairHistory(I);
+  return I;
 }
+/** The last 4 posted weeks, person by person, so every week is fair over time:
+ *  wishes that weren't granted lately are owed (they come first this week), and whoever had more nights or
+ *  fewer weekends off than the team gets the lighter side this time. */
+function rbFairHistory(I) {
+  const weeks = [1, 2, 3, 4].map(n => roAdd(I.week, -7 * n)), W = [1, 0.75, 0.5, 0.25];
+  const byGroup = {};
+  I.people.forEach(p => {
+    let debt = 0, nights = 0, wkOff = 0, seen = 0;
+    weeks.forEach((w, i) => {
+      const dates = Array.from({ length: 7 }, (_, d) => roAdd(w, d));
+      const row = {}; dates.forEach(dt => { const v = (roDays[dt] || {})[p.key]; if (v) row[dt] = v; });
+      if (!Object.keys(row).length) return;
+      seen++;
+      const wishes = rbWishes(I, p, { [p.key]: row }, dates);
+      debt += W[i] * wishes.filter(x => !x.ok).length;
+      dates.forEach((dt, d) => { const v = row[dt] || ''; if (rbIsNight(v)) nights++; else if (d >= 5 && /^(off|leave)$/.test(rbKind(v))) wkOff++; });
+    });
+    p.wishDebt = Math.round(debt * 10) / 10; p.histWeeks = seen; p.nightsHist = nights; p.wkOffHist = wkOff;
+    const night = p.fixed && rbIsNight(p.fixed);   // static night staff: nights are their job, not counted against anyone
+    if (seen && !night && !p.post) (byGroup[p.group] = byGroup[p.group] || []).push(p);
+  });
+  Object.values(byGroup).forEach(list => {
+    if (list.length < 2) return;
+    const avgN = list.reduce((t, p) => t + p.nightsHist / p.histWeeks, 0) / list.length, avgW = list.reduce((t, p) => t + p.wkOffHist / p.histWeeks, 0) / list.length;
+    list.forEach(p => { p.nightExtra = Math.round((p.nightsHist / p.histWeeks - avgN) * 10) / 10; p.wkOffShort = Math.round((avgW - p.wkOffHist / p.histWeeks) * 10) / 10; });
+  });
+}
+/** How much more a person's wishes count this week: 1, up to 3 when they missed wishes in the weeks before. */
+function rbWishWeight(p) { return 1 + Math.min(2, (p.wishDebt || 0) * 0.5); }
 
 // ── Building ──────────────────────────────────────────────
 function rbBuild(again) {
@@ -1451,7 +1483,7 @@ function rbHappyHtml(I, cells, shown, dates) {
   rows.sort((a, b) => a.f - b.f || (roStaff[a.p.key] || {}).name?.localeCompare((roStaff[b.p.key] || {}).name || ''));
   const all = rows.reduce((t, r) => t + r.W.length, 0), met = rows.reduce((t, r) => t + r.ok, 0);
   const face = f => f >= 1 ? '😊' : f >= 0.5 ? '🙂' : '😐';
-  return { sum: `${face(met / all)} ${met} of ${all} wishes granted`, html: `<div class="rb-happy">${rows.map(r => `<div class="rb-hp-row"><span class="rb-hp-f">${face(r.f)}</span><b>${escapeHtml((roStaff[r.p.key] || {}).name || r.p.key)}</b><span class="rb-hp-n">${r.ok}/${r.W.length}</span><span class="rb-hp-w">${(rbPeople[r.p.key] || {}).note ? `<em class="rb-hp-note">📝 ${escapeHtml(rbPeople[r.p.key].note)}</em>` : ''}${r.W.map(w => `<i class="${w.ok ? 'ok' : 'no'}">${w.ok ? '✓' : '✗'} ${escapeHtml(w.t)}${w.n && !w.ok ? ' · ' + escapeHtml(w.n) : ''}</i>`).join('')}</span><button class="btn sm ghost" onclick="rtPerson(${_rbQ(r.p.key)})">💛</button></div>`).join('')}</div>${noted.map(p => `<div class="rb-hp-row"><span class="rb-hp-f">📝</span><b>${escapeHtml((roStaff[p.key] || {}).name || p.key)}</b><span class="rb-hp-n"></span><span class="rb-hp-w"><em class="rb-hp-note">${escapeHtml(rbPeople[p.key].note)}</em></span><button class="btn sm ghost" onclick="rtPerson(${_rbQ(p.key)})">💛</button></div>`).join('')}<small class="ro-hint">Wishes are granted when the cover and the rest rules allow it. ✗ = not this week (usually because a shift would be empty otherwise). Try 🔀 another way to see a different week.</small>` };
+  return { sum: `${face(met / all)} ${met} of ${all} wishes granted`, html: `<div class="rb-happy">${rows.map(r => `<div class="rb-hp-row"><span class="rb-hp-f">${face(r.f)}</span><b>${escapeHtml((roStaff[r.p.key] || {}).name || r.p.key)}</b><span class="rb-hp-n">${r.ok}/${r.W.length}</span><span class="rb-hp-w">${r.p.wishDebt >= 1 ? `<i class="owed" title="Wishes not granted in the last weeks count more this week">📈 first in line</i>` : ''}${(rbPeople[r.p.key] || {}).note ? `<em class="rb-hp-note">📝 ${escapeHtml(rbPeople[r.p.key].note)}</em>` : ''}${r.W.map(w => `<i class="${w.ok ? 'ok' : 'no'}">${w.ok ? '✓' : '✗'} ${escapeHtml(w.t)}${w.n && !w.ok ? ' · ' + escapeHtml(w.n) : ''}</i>`).join('')}</span><button class="btn sm ghost" onclick="rtPerson(${_rbQ(r.p.key)})">💛</button></div>`).join('')}</div>${noted.map(p => `<div class="rb-hp-row"><span class="rb-hp-f">📝</span><b>${escapeHtml((roStaff[p.key] || {}).name || p.key)}</b><span class="rb-hp-n"></span><span class="rb-hp-w"><em class="rb-hp-note">${escapeHtml(rbPeople[p.key].note)}</em></span><button class="btn sm ghost" onclick="rtPerson(${_rbQ(p.key)})">💛</button></div>`).join('')}<small class="ro-hint">Every week the builder reads the last 4 posted weeks: wishes that weren't granted lately count more now (📈 first in line), and whoever had more nights or fewer weekends off than the team gets the lighter side. Wishes are granted when the cover and the rest rules allow it. ✗ = not this week (usually because a shift would be empty otherwise). Try 🔀 another way to see a different week.</small>` };
 }
 /** Who has had the most nights, the fewest weekends off, the most hours: last 4 weeks plus this draft. */
 function rbFairHtml(I, cells, shown, dates) {

@@ -484,6 +484,12 @@ console.log('\nRoster scenarios');
     const happy = rbWishes(I2, pC, r2.cells, rtDates(W));
     return [liked >= plain, offs.includes(3), offs.some((d, i) => i && d - offs[i - 1] === 1), happy.length === 2].join();
   })()`), 'true,true,true,true');
+  check('fair over weeks: a wish not granted last week counts more this week', run(`(() => {
+    rbWeek = W; rbSetPerson('A', 'prefOff', [3]);   // last week Anna was off on Monday, not Thursday
+    const I = rbInput(1), a = I.people.find(p => p.key === 'A'), b = I.people.find(p => p.key === 'B');
+    rbSetPerson('A', 'prefOff', undefined);
+    return [a.wishDebt > 0, rbWishWeight(a) > 1, rbWishWeight(b) === 1, typeof a.wkOffShort === 'number'].join();
+  })()`), 'true,true,true,true');
   check('drafts: a save sends only the changed cells', run(`JSON.stringify(rbDraftDiff({ cells: { A: { d1: 'M', d2: 'E' }, B: { d1: 'OFF' } }, at: 1 }, { cells: { A: { d1: 'M', d2: 'OFF' }, C: { d1: 'E' } }, at: 2 }))`),
     JSON.stringify({ 'cells/A/d2': 'OFF', 'cells/B': null, 'cells/C/d1': 'E', at: 2 }));
   check('drafts: my waiting edit and a colleague\'s edit both stay', run(`(() => {
