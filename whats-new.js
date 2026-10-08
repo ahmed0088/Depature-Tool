@@ -9,10 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 192, items: [
+    '👔 Fixed: the "one is enough for all the hotels" rule is for the main managers (Manager and Asst. Manager), not Duty Managers. The builder keeps at least one manager on duty every day across all hotels (two is fine) and doesn\'t give them the same day off. ⚖️ Rules shows who counts as a manager; set the title on their card in 🧑‍💼 Team.',
+  ] },
   { v: 191, items: [
     '🎉 Public holidays for the UAE are built in. 3 weeks before each one the app asks you (in the builder and in Ops Brain): ✓ Add, ✏️ change the dates (Eid moves with the moon), or Not a PH. Nothing is added without your yes.',
     '🏖 Everyone on the team earns a PH day for each holiday you accept, also people who were off that day (new staff only from the day they joined). You can switch to "only who works that day" under ⚖️ Rules. A PH day comes off the balance once the roster with it is posted.',
-    '👔 One Duty Manager can look after all the hotels: the builder keeps at least one on duty every day, across all hotels (two is fine too), and spreads their days off. Set it under ⚖️ Rules.',
     '📅 New: Meetings & training in the roster builder. Add one by hand, or from Outlook: a saved email (.msg or .eml), an invite (.ics), or paste the email text. It reads the subject, day, time, place and the team members named.',
     '📅 The builder keeps them in mind: no day off that day, and a shift that covers the time (or the whole day as TRN for an all-day course). It warns you when the roster doesn\'t fit, with a button to build the week again. Ops Brain reminds you the day before and an hour before.',
   ] },

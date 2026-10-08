@@ -418,18 +418,19 @@ console.log('\nRoster scenarios');
   run(`rbSettings.phEarn = 'all'; hdReject(hdList().find(h => h.name === 'Arafat Day').id);`);
   check('holidays: "not a PH" is remembered', run(`hdPending('2026-05-10').map(h => h.name).join()`), 'Eid Al Adha');
 
-  // Duty Managers: one is enough for all the hotels, so their days off are spread
+  // Managers / Asst. Managers: one is enough for all the hotels, so their days off are spread
   run(`
     roToday = () => '2026-10-07'; rbSettings = {}; roDays = {}; rbPeople = {};
     var W = '2026-10-12', DM = '09:00 - 18:00';
     ['Ibis DD', 'Mercure DD'].forEach((g, gi) => { for (let i = 0; i < 4; i++) roStaff[g[0] + i] = { name: 'P' + g[0] + i, group: g, order: i }; });
     delete roStaff.A; delete roStaff.B; delete roStaff.C; delete roStaff.D;
-    rbPeople.I0 = { title: 'Duty Manager' }; rbPeople.M0 = { title: 'Duty Manager' };
+    rbPeople.I0 = { title: 'Asst. Manager' }; rbPeople.M0 = { title: 'Asst. Manager' };
     rbSettings.groups = {};
   `);
-  const dm = run(`(() => { rbWeek = W; const I = rbInput(3); I.people.filter(p => rbFloats(p)).forEach(p => { p.prefOff = [5]; }); const r = rbSolve(I); const ds = Array.from({ length: 7 }, (_, d) => roAdd(W, d)); return ds.filter(dt => !['I0','M0'].some(k => rbParse(r.cells[k][dt]))).length + '|' + rbDmGap(I, r.cells, ds, I.rules); })()`);
-  check('duty managers: never both off on the same day, even when both ask for Saturday', dm, '0|0');
-  check('duty managers: with the rule off they may share a day off', run(`(() => { rbWeek = W; const I = rbInput(3); I.rules.dmMin = 0; return rbDmGap(I, { I0: {}, M0: {} }, [W], I.rules); })()`), 0);
+  const dm = run(`(() => { rbWeek = W; const I = rbInput(3); I.people.filter(p => rbMgrP(p)).forEach(p => { p.prefOff = [5]; }); const r = rbSolve(I); const ds = Array.from({ length: 7 }, (_, d) => roAdd(W, d)); return ds.filter(dt => !['I0','M0'].some(k => rbParse(r.cells[k][dt]))).length + '|' + rbMgrGap(I, r.cells, ds, I.rules); })()`);
+  check('managers: never both off on the same day, even when both ask for Saturday (one covers all hotels)', dm, '0|0');
+  check('managers: Duty Managers are not counted as managers', run(`rbMgrP({ title: 'Duty Manager' }) + '|' + rbMgrP({ title: 'Asst. Manager' }) + '|' + rbMgrP({ title: 'Manager' })`), 'false|true|true');
+  check('managers: with the rule off they may share a day off', run(`(() => { rbWeek = W; const I = rbInput(3); I.rules.mgrMin = 0; return rbMgrGap(I, { I0: {}, M0: {} }, [W], I.rules); })()`), 0);
 
   // Meetings: reading Outlook
   run(`roToday = () => '2026-10-08'; rbPeople = {}; roStaff = { A: { name: 'Anna Lee', group: 'Ibis DD' }, B: { name: 'Sam Reed', group: 'Ibis DD' }, C: { name: 'Lina Park', group: 'Ibis DD' }, D: { name: 'Sam Cole', group: 'Ibis DD' } };`);
