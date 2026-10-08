@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 194, items: [
+    '🏖 PH as the last option, now for 1 person a week per hotel: the builder gives a PH day to only one person each week in each hotel (whoever is owed the most), and only when a shift has someone spare anyway. Both numbers can be changed under ⚖️ Rules.',
+  ] },
   { v: 193, items: [
     '🏖 A week normally has one day off (4 a month), so a PH day (a second day off that week) is now the last option: the builder gives at most 1 PH a week each, and only when a shift has someone spare anyway. You can change the number under ⚖️ Rules.',
   ] },
