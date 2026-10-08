@@ -119,7 +119,7 @@ function rtCoverOptions(I, cells, group, date, shift, opt) {
     const mgr = /manager/i.test(p.title || '');
     const away = p.group !== group, label = away ? `${shift} - ${rbShortU(rbBaseGroup(group))}` : shift;
     const from = away ? ` from ${p.group}` : '';
-    const extra = (mgr ? 40 : 0) + (away && !rbFloats(p) ? 10 : 0) + (away && rbFloatsLast(p) ? 60 : 0)   // a Supervisor from another hotel: only when nobody else
+    const extra = (mgr ? 40 : 0) + (away && !rbFloats(p) ? 35 : away ? 15 : 0) + (away && rbFloatsLast(p) ? 60 : 0)   // a Supervisor from another hotel: only when nobody else
       - (away && p.alt && p.alt === rbBaseGroup(group) ? 6 : 0);   // the hotel they'd rather go to when moved
     if (rbKind(v) === 'off') {
       // works that day; their day off moves to a day with spare cover
@@ -292,7 +292,17 @@ function rtSwapOptions(I, cells, key, date) {
   return out.slice(0, 8);
 }
 /** Gaps in a week with the best ways to fill each. */
+let _rtAdvC = null;
 function rtAdvice(I, cells) {
+  // the same week asked again (every redraw): worked out once, until anything in it changes
+  let key = null;
+  try { key = JSON.stringify([I.week, cells, I.rules, I.pre, I.avoid, I.soft, I.busy, I.evMiss, I.groups, I.people, roToday()]); } catch (_) {}
+  if (key && _rtAdvC && _rtAdvC.key === key) return _rtAdvC.out;
+  const out = _rtAdvice(I, cells);
+  if (key) _rtAdvC = { key, out };
+  return out;
+}
+function _rtAdvice(I, cells) {
   return rbProblems(I, cells).filter(p => p.kind === 'short' || p.kind === 'thin').map(p => Object.assign({}, p, { options: rtCoverOptions(I, cells, p.group, p.date, p.shift).slice(0, 3) }));
 }
 
@@ -709,9 +719,10 @@ function rtPerson(k) {
   const since = roAdd(roToday(), -30), tally = {};
   Object.keys(roDays).filter(dt => dt >= since && dt <= roToday()).forEach(dt => { const v = (roDays[dt] || {})[k]; if (!v) return; const key = rbNorm(v) || (/^PH/i.test(v) ? 'PH' : v.toUpperCase()); tally[key] = (tally[key] || 0) + 1; });
   const absences = Object.entries(c.absences || {}).sort((a, b) => b[1].from.localeCompare(a[1].from));
-  document.getElementById('rtSheet')?.remove();
+  const old = document.getElementById('rtSheet'), keepTop = old && old.dataset.k === k ? [old.scrollTop, (old.querySelector('.rt-sheet') || {}).scrollTop || 0] : null;   // same person: stay where you were
+  old?.remove();
   const d = document.createElement('div');
-  d.id = 'rtSheet'; d.className = 'ri-viewer';
+  d.id = 'rtSheet'; d.className = 'ri-viewer'; d.dataset.k = k;
   d.innerHTML = `<div class="card rt-sheet">
     <div class="ro-card-hd"><b>${escapeHtml(s.name)}</b><button class="ro-x" onclick="document.getElementById('rtSheet').remove();rbRender()">✕</button></div>
     ${typeof rhPersonHtml === 'function' ? rhPersonHtml(k) : ''}
@@ -743,6 +754,7 @@ function rtPerson(k) {
   </div>`;
   d.addEventListener('click', e => { if (e.target === d) { d.remove(); rbRender(); } });
   document.body.appendChild(d);
+  if (keepTop) { d.scrollTop = keepTop[0]; const c = d.querySelector('.rt-sheet'); if (c) c.scrollTop = keepTop[1]; }
 }
 function rtOnly(k, kind) {
   const g = (roStaff[k] || {}).group || '', all = rbGroupCfg(g).shifts;

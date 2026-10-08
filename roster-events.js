@@ -94,7 +94,7 @@ function evEdit(id, pre) {
   const d = document.createElement('div'); d.id = 'evDlg'; d.className = 'ri-viewer';
   const staff = Object.keys(roStaff).filter(k => !((rbPeople[k] || {}).deleted)).sort((a, b) => roStaff[a].name.localeCompare(roStaff[b].name));
   d.innerHTML = `<div class="card rt-sheet ev-dlg">
-    <div class="ro-card-hd"><b>${id ? '✏️ Meeting / training' : '📅 New meeting or training'}</b><button class="ro-x" onclick="document.getElementById('evDlg').remove()">✕</button></div>
+    <div class="ro-card-hd"><b>${id ? '✏️ Meeting / training' : '📅 New meeting or training'}</b><button class="ro-x" onclick="evClose()">✕</button></div>
     ${e.src ? `<div class="ev-src">📥 Read from ${escapeHtml(e.src)}: check it and save</div>` : ''}
     <div class="ev-kinds">${Object.entries(EV_KINDS).map(([k, l]) => `<button class="rb-opt${e.kind === k ? ' on' : ''}" onclick="_evSet('kind','${k}',this)">${l}</button>`).join('')}</div>
     <div class="rt-form">
@@ -114,7 +114,7 @@ function evEdit(id, pre) {
     <label class="ev-note">Note<input id="evN" value="${escapeHtml(e.note || '')}" placeholder="optional"></label>
     <div class="ro-acts"><button class="btn gold" onclick="evSave()">Save</button>${id ? `<button class="btn" onclick="evDel(${_evQ(id)});document.getElementById('evDlg').remove()">🗑 Delete</button>` : ''}</div>
   </div>`;
-  d.addEventListener('click', ev => { if (ev.target === d) d.remove(); });
+  d.addEventListener('click', ev => { if (ev.target === d) evClose(); });
   document.body.appendChild(d);
 }
 function _evSet(f, v, btn) { _evDraft[f] = v; btn.parentNode.querySelectorAll('.rb-opt').forEach(b => b.classList.toggle('on', b === btn)); }
@@ -137,16 +137,17 @@ function evSave() {
   evRefresh();
 }
 function evDel(id) { if (!evAll[id] || !confirm(`Delete "${evAll[id].title}"?`)) return; delete evAll[id]; fbSet('roster/builder/events/' + id, null); evRefresh(); }
+function evClose() { document.getElementById('evDlg')?.remove(); if (typeof rbStale !== 'undefined' && rbStale) evRefresh(); }
 function evRefresh() { if (typeof rbRender === 'function' && document.getElementById('panel-roster-build')?.classList.contains('active')) rbRender(); }
 
 // ── Reading Outlook ───────────────────────────────────────
 function evPasteDialog() {
   document.getElementById('evDlg')?.remove();
   const d = document.createElement('div'); d.id = 'evDlg'; d.className = 'ri-viewer';
-  d.innerHTML = `<div class="card rt-sheet ev-dlg"><div class="ro-card-hd"><b>📋 Paste the email</b><button class="ro-x" onclick="document.getElementById('evDlg').remove()">✕</button></div>
+  d.innerHTML = `<div class="card rt-sheet ev-dlg"><div class="ro-card-hd"><b>📋 Paste the email</b><button class="ro-x" onclick="evClose()">✕</button></div>
     <textarea id="evTxt" rows="9" placeholder="Paste the invitation or email here (subject, When:, who is invited)…"></textarea>
     <div class="ro-acts"><button class="btn gold" onclick="evFromText(document.getElementById('evTxt').value,'the pasted email')">Read it</button></div></div>`;
-  d.addEventListener('click', ev => { if (ev.target === d) d.remove(); });
+  d.addEventListener('click', ev => { if (ev.target === d) evClose(); });
   document.body.appendChild(d);
   setTimeout(() => document.getElementById('evTxt')?.focus(), 50);
 }

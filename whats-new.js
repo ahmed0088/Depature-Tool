@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 195, items: [
+    '⚡ Staff profiles are much lighter: a tap on a person\'s card (likes, shifts, titles) no longer redraws the whole roster builder behind it, and the card stays where you were instead of jumping to the top. The builder screen itself also draws faster.',
+    '🏨 Staff stay in their own hotel as much as we can: the builder moves someone to another hotel only when a shift there would be empty (not just for the ideal second person), covers night days off from their own hotel first, and cover suggestions show options in their own hotel first.',
+  ] },
   { v: 194, items: [
     '🏖 PH as the last option, now for 1 person a week per hotel: the builder gives a PH day to only one person each week in each hotel (whoever is owed the most), and only when a shift has someone spare anyway. Both numbers can be changed under ⚖️ Rules.',
   ] },

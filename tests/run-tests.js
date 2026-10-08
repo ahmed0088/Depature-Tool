@@ -169,8 +169,14 @@ console.log('\nRoster builder');
   const N = '12:00 - 21:00', two = [2, 2, 2, 2, 2, 2, 2];
   const I2 = { week: W, groups: { 'Adagio GD': { shifts: [N], need: { [N]: two } }, 'Mercure DD': { shifts: [N], need: { [N]: one } } },
     people: [person('A ONE', { group: 'Adagio GD' }), person('M ONE', { group: 'Mercure DD' }), person('M TWO', { group: 'Mercure DD' }), person('M THREE', { group: 'Mercure DD' })],
-    pre: {}, rules: { minRest: 11, maxRun: 6, givePh: false, lend: true }, seed: 3 };
+    pre: {}, rules: { minRest: 11, maxRun: 6, givePh: false, lend: true, lendIdeal: true }, seed: 3 };
   const r2 = sb.rbSolve(I2);
+  { // by default staff stay in their own hotel: moved only to a shift that would be empty, not for the ideal second person
+    const r3 = sb.rbSolve(Object.assign({}, I2, { rules: Object.assign({}, I2.rules, { lendIdeal: false }) }));
+    const moved = Object.values(r3.cells).reduce((t, row) => t + Object.values(row).filter(v => / - Adagio$/.test(v)).length, 0);
+    const emptyDays = dates.filter(dt => !sb.rbParse(r3.cells['A ONE'][dt])).length;
+    check('staff stay in their own hotel: moved only on the days a shift would be empty', moved === emptyDays && moved >= 1, true);
+  }
   const lent = Object.values(r2.cells).reduce((t, row) => t + Object.values(row).filter(v => / - Adagio$/.test(v)).length, 0);
   check('Mercure lends staff to Adagio ("12:00 - 21:00 - Adagio")', lent >= 5, true);
   check('lending never leaves the lender short', r2.problems.filter(p => p.kind === 'short' && p.group === 'Mercure DD').length, 0);

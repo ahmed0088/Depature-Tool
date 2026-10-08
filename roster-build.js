@@ -260,7 +260,7 @@ function rbPlanNights(I) {
           if (!cand.length) { ok = false; break; }
           // their own hotel first, then the hotel they'd rather go to when moved
           const own = cand.find(x => hotels[x.i].g === homeOf(f)) || (f.alt && cand.find(x => rbBaseGroup(hotels[x.i].g) === f.alt)) || cand[0];
-          if (hotels[own.i].g !== homeOf(f)) { if (f.home || (!R.lend && !rbFloats(f) && !rbFloatsLast(f))) { ok = false; break; } c += f.alt && rbBaseGroup(hotels[own.i].g) === f.alt ? 18 : 25; }   // working at another hotel: only when needed
+          if (hotels[own.i].g !== homeOf(f)) { if (f.home || (!R.lend && !rbFloats(f) && !rbFloatsLast(f))) { ok = false; break; } c += f.alt && rbBaseGroup(hotels[own.i].g) === f.alt ? 50 : 60; }   // working at another hotel: only when there's no way at their own hotel
           u2.add(own.i + ':' + own.d); pick.push({ d, i: own.i });
         }
         if (ok) walk(fi + 1, u2, plan.concat([{ f, b, pick }]), c);
@@ -376,11 +376,12 @@ function _rbFinish(I, cells) {
   const D = 7, dates = Array.from({ length: D }, (_, d) => roAdd(I.week, d)), G = I.groups;
   const R = Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, givePh: true, lend: true, lockMgr: true, mgrMin: 1, deskMin: 2, deskFrom: 8, deskTo: 23 }, I.rules || {});
   const need = (g, s, d) => ((G[g] && G[g].need[s]) || [])[d] || 0;
-  // 4. a hotel that is short borrows someone on the same shift from a hotel with one spare
+  // 4. a hotel with an empty shift borrows someone on the same shift from a hotel with one spare (staff stay in their own hotel as much as we can)
   let cover = rbCover(I, cells);
   { // even with lending off, a Duty Manager may go where they're needed
     for (const g of Object.keys(G)) for (let d = 0; d < D; d++) for (const s of G[g].shifts) {
       while (cover[g][s][d] < need(g, s, d)) {
+        if (cover[g][s][d] >= 1 && R.allowOne !== false && !R.lendIdeal) break;   // moving someone to another hotel only for an empty shift, not for the ideal second person
         const dt = dates[d];
         const donor = I.people.filter(q => q.group !== g && !q.home && !q.lock && (R.lend || rbFloats(q) || rbFloatsLast(q)) && !((I.pre || {})[q.key] || {})[dt] && G[q.group] && cells[q.key][dt] === s && cover[q.group][s] && cover[q.group][s][d] > need(q.group, s, d) && rbMayWork(I, g, q, s)).sort((a, b) => (rbFloatsLast(a) ? 1 : 0) - (rbFloatsLast(b) ? 1 : 0) || (rbFloats(b) ? 1 : 0) - (rbFloats(a) ? 1 : 0) || (b.alt === rbBaseGroup(g) ? 1 : 0) - (a.alt === rbBaseGroup(g) ? 1 : 0))[0];   // (then whoever would rather come to this hotel)
         if (!donor) break;
@@ -684,7 +685,13 @@ function rbHistory(week, n) {
 }
 const _rbMed = a => { if (!a.length) return 0; const s = a.slice().sort((x, y) => x - y); return s[s.length >> 1]; };
 /** The shifts a hotel runs and the cover each one needs on each weekday, from past weeks. */
+const _rbLGC = new Map();   // asked many times per screen: learned once until the rosters or the team change
 function rbLearnGroup(group, week) {
+  const ck = group + '|' + week + '|' + _rbLearnStamp() + '|' + Object.keys(roStaff).map(k => (roStaff[k] || {}).group + '/' + rbTitle(k)).join(',');
+  if (!_rbLGC.has(ck)) { if (_rbLGC.size > 50) _rbLGC.clear(); _rbLGC.set(ck, JSON.stringify(_rbLearnGroup(group, week))); }
+  return JSON.parse(_rbLGC.get(ck));   // a copy: callers may change it
+}
+function _rbLearnGroup(group, week) {
   const weeks = rbHistory(week);
   const counts = {};                     // code → weekday → [per week]
   const groupOf = {}, postOf = {}; Object.keys(roStaff).forEach(k => { groupOf[k] = rbPGroup(k); postOf[k] = rbPost(k); });
@@ -775,16 +782,23 @@ function rbPhEarns(key, dt, listed) {
   if (c.joined) return c.joined <= dt;
   return rbFirstDay(key) <= dt;   // no join date: from their first day on a roster
 }
-function rbFirstDay(key) {
-  let first = '9999';
-  for (const dt in roDays) if (dt < first && (roDays[dt] || {})[key]) first = dt;
-  return first;
+/** Read once per redraw: everyone's first day on a roster and PH days taken (a list of 20 people asked 20 times). */
+let _rbScanC = null;
+function _rbScan() {
+  const stamp = _rbLearnStamp() + JSON.stringify(rbSettings.holidays || []);
+  if (_rbScanC && _rbScanC.stamp === stamp) return _rbScanC;
+  const first = {}, taken = {}, hol = rbHolidays();
+  for (const dt in roDays) { const day = roDays[dt] || {}; for (const k in day) { if (!day[k]) continue; if (!first[k] || dt < first[k]) first[k] = dt; if (/^PH\b/i.test(String(day[k]))) (taken[k] = taken[k] || []).push(dt); } }
+  _rbScanC = { first, taken, hol, stamp };
+  setTimeout(() => { _rbScanC = null; }, 0);
+  return _rbScanC;
 }
+function rbFirstDay(key) { return _rbScan().first[key] || '9999'; }
 function rbPhOwed(key, skipWeek) {
-  const hol = rbHolidays(), listed = new Set((rbSettings.holidays || []).map(h => h && h.date)), today = roToday();
+  const hol = _rbScan().hol, listed = new Set((rbSettings.holidays || []).map(h => h && h.date)), today = roToday();
   const worked = Object.keys(hol).filter(dt => dt <= today && rbPhEarns(key, dt, listed)).sort();
   const skip = skipWeek ? dt => dt >= skipWeek && dt <= roAdd(skipWeek, 6) : () => false;   // a week being rebuilt: its PH days are the builder's to place again
-  let taken = 0; Object.entries(roDays).forEach(([dt, day]) => { if (!skip(dt) && /^PH\b/i.test(String((day || {})[key] || ''))) taken++; });
+  const taken = (_rbScan().taken[key] || []).filter(dt => !skip(dt)).length;
   const adj = +(((rbPeople[key]) || {}).phAdj) || 0;
   const owed = Math.max(0, worked.length - taken + adj);
   const labels = Array.from({ length: owed }, (_, i) => worked[taken + i] ? rbPhLabel(worked[taken + i]) : '');
@@ -799,7 +813,7 @@ function rbPhNext(k, cells) {
 }
 // ── State ─────────────────────────────────────────────────
 let rbSettings = {}, rbPeople = {}, rbReqs = {}, rbDrafts = {};
-let rbWeek = null, rbGroup = null, rbOut = null, rbSeed = 1;
+let rbWeek = null, rbGroup = null, rbOut = null, rbSeed = 1, rbStale = false;
 const RB_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 function rbRules() { return Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, givePh: true, lend: true, lockMgr: true, mgrMin: 1, deskMin: 2, deskFrom: 8, deskTo: 23 }, rbSettings.rules || {}); }
@@ -1042,6 +1056,7 @@ function rbWeekLabel(w) { return `${roDate(w).toLocaleDateString('en-GB', { day:
 const _rbQ = s => JSON.stringify(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
 function rbRender() {
+  rbStale = false;
   const root = document.getElementById('rbRoot');
   if (!root) return;
   if (!rbWeek) rbWeek = rbDefaultWeek();
@@ -1224,7 +1239,7 @@ document.addEventListener('keydown', e => {
 });
 function rbApplyCells(cells, why, notes) { rbUndoPush(); rbDrafts[rbWeek] = Object.assign({}, rbDrafts[rbWeek], { cells }); rbAddNotes(rbWeek, notes); rbSaveDraft(); rbRefreshOut(); showToast(why ? `Done: ${why} It's noted under Decisions. ↶ Undo is above the table` : 'Done. ↶ Undo is above the table', why ? 'warn' : 'ok'); }
 let _rbOpt = [];
-function rbOptApply(i) { const o = _rbOpt[i]; if (o && o.cells) rbApplyCells(o.cells, o.why, o.notes); }
+function rbOptApply(i) { const o = _rbOpt[i]; if (o && o.cells) rbApplyCells(JSON.parse(JSON.stringify(o.cells)), o.why, o.notes); }
 /** Decisions kept with the week: a rule bent on purpose, and why. */
 function rbAddNotes(week, notes) {
   if (!notes || !notes.length || !rbDrafts[week]) return;
@@ -1931,7 +1946,10 @@ function rbCopy(btn) {
 document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
     if (typeof fbListen !== 'function') return;
-    const re = () => { if (document.getElementById('panel-roster-build')?.classList.contains('active') && !document.getElementById('rbMenu') && !(document.activeElement && /INPUT|SELECT/.test(document.activeElement.tagName) && document.activeElement.closest('#rbRoot'))) rbRender(); };
+    // a change saved comes straight back from the database: redraw once (not per field), and not while a card or
+    // dialog is open on top (it's redrawn when that closes): that made every tap on a person's card slow
+    let reT = 0;
+    const re = () => { clearTimeout(reT); reT = setTimeout(() => { if (document.getElementById('rtSheet') || document.getElementById('evDlg')) { rbStale = true; return; } if (document.getElementById('panel-roster-build')?.classList.contains('active') && !document.getElementById('rbMenu') && !(document.activeElement && /INPUT|SELECT/.test(document.activeElement.tagName) && document.activeElement.closest('#rbRoot'))) rbRender(); }, 150); };
     fbListen('roster/builder/settings', v => { rbSettings = v || {}; re(); });
     fbListen('roster/builder/people', v => { rbPeople = v || {}; re(); });
     fbListen('roster/builder/requests', v => { rbReqs = v || {}; re(); });
