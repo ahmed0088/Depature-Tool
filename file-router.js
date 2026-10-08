@@ -19,7 +19,7 @@ const FR_DEST = {
   rent2:       { label: 'Rent report · Room Type Stats',  panel: 'rent',      ico: '📈', ext: /\.(txt|tsv|csv)$/i, ta: 'rentInput2' },
   arrivals:    { label: 'Arrivals',                   panel: 'arrivals',      ico: '🛎️', ext: /\.(xlsx|xls|csv)$/i, sel: 'input[onchange*="loadOperaFile(this,\'arr\')"]' },
   purpose:     { label: 'Purpose of Stay',            panel: 'purpose',       ico: '📋', ext: /\.(xlsx|xls|csv)$/i, sel: 'input[onchange*="loadOperaFile(this,\'pur\')"]' },
-  origin:      { label: 'Purpose · Origin XML',       panel: 'purpose',       ico: '📋', ext: /\.xml$/i, sel: 'input[onchange*="loadOriginXML"]' },
+  origin:      { label: 'Purpose · Origin XML',       panel: 'purpose',       ico: '📋', ext: /\.xml$/i, sel: 'input[onchange*="loadOriginXML"]', multi: true },
   xref:        { label: 'Arrivals × Departures check', panel: 'xref',         ico: '🔀', ext: /\.(txt|tsv|csv)$/i, sel: 'input[onchange*="xrefLoadFile"]' },
   immig:       { label: 'Immigration · report XML',   panel: 'immig',         ico: '🛂', ext: /\.xml$/i, sel: '#immigFileInput2' },
   immigIn:     { label: 'Immigration · Inhouse XML',  panel: 'immig',         ico: '🛂', ext: /\.xml$/i, sel: '#immigInhouseXmlInput' },
@@ -60,6 +60,8 @@ function frDetect(name, head) {
     return { dest: null };
   }
   if (/\.xml$/.test(n) && /immig/.test(n)) return { dest: 'immig', why: 'immigration XML' };
+  // Vicas exports (Transaction Report / Arrival Today Vicas): Purpose of Stay or the In-house tally both read them, so ask once
+  if (/\.xml$/.test(n) && (/vicas/.test(n) || /usp_RPTTransactionReport|\{Command\.Nationality\}/.test(h))) return { dest: null, ask: 'vicas', prefer: ['origin', 'itXml'] };
   if (/\.(xlsx|xls)$/.test(n) && /ingauge|in-gauge|upsell/.test(n)) return { dest: 'pkgExcel', why: 'IN-Gauge export' };
   if (/\.json$/.test(n)) return { dest: 'backup', why: 'app backup' };
   return { dest: null };
@@ -125,10 +127,11 @@ async function frRoute(fileList) {
   const files = [...fileList].filter(f => !/^image\//.test(f.type));
   if (!files.length) return;
   const groups = {};
-  const unknown = [];
+  const unknown = [], asks = {};
   for (const f of files) {
     const g = frDetect(f.name, await _frReadHead(f));
     if (g.dest) (groups[g.dest] = groups[g.dest] || { why: g.why, files: [] }).files.push(f);
+    else if (g.ask) (asks[g.ask] = asks[g.ask] || { prefer: g.prefer, files: [] }).files.push(f);   // same kind: one question for all of them
     else unknown.push(f);
   }
   const keys = Object.keys(groups);
@@ -137,21 +140,25 @@ async function frRoute(fileList) {
     const d = FR_DEST[k];
     showToast(`${groups[k].why} → ${d ? d.label : 'backup import'}`, 'ok');
   }
+  for (const a of Object.values(asks)) await frAsk(a.files, a.prefer);
   for (const f of unknown) await frAsk(f);
 }
 
 /** Can't tell: show the pages that take this kind of file. */
-function frAsk(file) {
+function frAsk(file, prefer) {
+  const list = Array.isArray(file) ? file : [file];
+  file = list[0];
   return new Promise(resolve => {
-    const opts = Object.entries(FR_DEST).filter(([, d]) => d.ext.test(file.name));
+    let opts = Object.entries(FR_DEST).filter(([, d]) => d.ext.test(file.name));
+    if (prefer && prefer.length) opts = prefer.filter(k => FR_DEST[k]).map(k => [k, FR_DEST[k]]).concat(opts.filter(([k]) => !prefer.includes(k)));
     document.getElementById('frSheet')?.remove();
     const wrap = document.createElement('div');
     wrap.id = 'frSheet';
     wrap.className = 'fr-overlay';
     wrap.innerHTML = `
       <div class="fr-sheet" role="dialog" aria-label="Where should this file go?">
-        <div class="fr-h">Where should this file go?</div>
-        <div class="fr-file">📄 ${escapeHtml(file.name)}</div>
+        <div class="fr-h">Where should ${list.length > 1 ? `these ${list.length} files` : 'this file'} go?</div>
+        ${list.map(f => `<div class="fr-file">📄 ${escapeHtml(f.name)}</div>`).join('')}
         ${opts.length ? `<div class="fr-list">${opts.map(([k, d]) => `<button class="fr-opt" data-k="${k}"><span>${d.ico}</span>${escapeHtml(d.label)}</button>`).join('')}</div>`
                       : `<div class="fr-none">No page in the app reads this kind of file.</div>`}
         <button class="btn fr-cancel">Cancel</button>
@@ -159,7 +166,7 @@ function frAsk(file) {
     const close = () => { wrap.remove(); resolve(); };
     wrap.addEventListener('click', e => {
       const b = e.target.closest('.fr-opt');
-      if (b) { wrap.remove(); frSend(b.dataset.k, [file]).then(resolve); return; }
+      if (b) { wrap.remove(); frSend(b.dataset.k, list).then(resolve); return; }
       if (e.target === wrap || e.target.closest('.fr-cancel')) close();
     });
     document.body.appendChild(wrap);

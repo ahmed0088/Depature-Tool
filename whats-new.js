@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 204, items: [
+    '🌍 Purpose of Stay: load both nationality reports at once. In "Origin XML", pick Vicas and Arrival Today Vicas together (Ctrl or Shift + click), or drop both on the app: one question for both, and one message with what each file added.',
+  ] },
   { v: 203, items: [
     '🔎 Rate Shop without AI or any subscription: 🔎 Search prices opens Booking.com with every hotel in Deira for that night (cheapest first), and a quick box here to type what you see: Enter jumps to the next hotel, then "Save · next night →" moves on to the next day in the same Booking tab.',
     '💲 The AI buttons only show if an AI key is ever added; nothing needs one.',

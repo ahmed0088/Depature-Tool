@@ -226,76 +226,58 @@ function parseOriginXML(xmlText) {
 // Load XML from file input (called by HTML button).
 // Accepts either the Inhouse Guest XML or the Vicas "Transaction Report — Check In" XML —
 // format is auto-detected in parseOriginXML(), so this one button/one input handles both.
-function loadOriginXML(input) {
-  const file = input?.files?.[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      const result = parseOriginXML(e.target.result) || {};
-      const roomMap    = result.roomMap    || {};
-      const nameMap    = result.nameMap    || {};
-      const natMap     = result.natMap     || {};
-      const natRoomMap = result.natRoomMap || {};
-      const source     = result.source     || null;
-
-      // Merged, not replaced. Vicas is usually pulled before every arrival has
-      // been registered with immigration — a real export held 30 rooms against
-      // Opera's 40 — so the answer is to pull it again later and load that too.
-      // Replacing would throw away the guests the first file did cover.
-      // The newer file wins on any guest both contain, since it is the more
-      // recent reading.
-      // Counted on one map only — natMap and natBagMap hold the same guests
-      // under two different keys, so summing them reports double.
-      const before = Object.keys(_originNatMap).length;
-      _originMap        = { ..._originMap,        ...roomMap };
-      _originNameMap    = { ..._originNameMap,    ...nameMap };
-      _originNatMap     = { ..._originNatMap,     ...natMap };
-      _originNatRoomMap = { ..._originNatRoomMap, ...natRoomMap };
-      _originBagMap     = { ..._originBagMap,     ...(result.bagMap    || {}) };
-      _originNatBagMap  = { ..._originNatBagMap,  ...(result.natBagMap || {}) };
-      const added = Object.keys(_originNatMap).length - before;
-
-      const count = Math.max(Object.keys(nameMap).length, Object.keys(roomMap).length);
-      if (!count) {
-        // Give a toast that actually says WHY, instead of one generic message —
-        // these three cases have completely different fixes.
-        if (result.parseErrorMsg) {
-          showToast('XML file is not valid — the browser could not parse it (bad encoding/export?)', 'err');
-        } else if (!result.sectionsFound) {
-          showToast('No <Section> elements found — is this really a Crystal Reports XML export?', 'err');
-        } else if (!result.detailRowsSeen) {
-          showToast('XML parsed but had no data rows under <Details> — is the report empty?', 'err');
-        } else {
-          showToast('Rows found but none had a Nationality — check the report includes Nationality1', 'err');
-        }
-        console.warn('[OriginXML] empty maps — diagnostics:', {
-          parseErrorMsg:   result.parseErrorMsg,
-          sectionsFound:   result.sectionsFound,
-          detailRowsSeen:  result.detailRowsSeen
-        });
-        return;
-      }
-      const sourceLabel = source === 'vicas' ? 'Vicas' : 'Inhouse';
-      const total = Object.keys(_originNatMap).length;
-      showToast(before
-        ? `✦ ${sourceLabel} merged — ${count} in this file, ${added > 0 ? added + ' new' : 'none new'} · ${total} guests known`
-        : `✦ ${sourceLabel} data loaded — ${count} guests`, 'ok');
-      // Apply to any already-loaded purpose guests
-      _applyOriginToPurpose();
-      _purposeArchive();   // nationalities have just improved — record the better mix
-      purposeRender();
-      // Update the badge/label
-      const lbl = document.getElementById('originXmlLabel');
-      if (lbl) lbl.textContent = before
-        ? `${total} guests known (${sourceLabel}, ${added > 0 ? '+' + added : 'no new'} from this file)`
-        : `${count} guests loaded (${sourceLabel})`;
-    } catch (err) {
-      console.error('[OriginXML] load failed:', err);
-      showToast('Failed to parse Origin XML — see console', 'err');
+/** One or more Origin XML files (Vicas transactions, Arrival Today Vicas, Inhouse) at once: each is read and merged,
+ *  then one message for all of them. */
+async function loadOriginXML(input) {
+  const files = [...((input && input.files) || [])];
+  if (!files.length) return;
+  const before = Object.keys(_originNatMap).length, done = [], bad = [];
+  for (const file of files) {
+    let text;
+    try { text = await file.text(); } catch (_) { bad.push(`${file.name}: could not be opened`); continue; }
+    const r = _originMerge(text, file.name);
+    if (r.error) bad.push(`${file.name}: ${r.error}`); else done.push(r);
+  }
+  if (input) try { input.value = ''; } catch (_) {}   // the same files can be picked again later
+  if (bad.length) showToast(bad.join(' · '), 'err');
+  if (!done.length) return;
+  const total = Object.keys(_originNatMap).length, added = total - before;
+  const what = done.map(r => `${r.label} ${r.count}`).join(' + ');
+  showToast(done.length > 1 || before
+    ? `✦ ${done.length} file${done.length > 1 ? 's' : ''} merged (${what}) · ${added > 0 ? added + ' new' : 'none new'} · ${total} guests known`
+    : `✦ ${done[0].label} data loaded — ${done[0].count} guests`, 'ok');
+  _applyOriginToPurpose();
+  _purposeArchive();   // nationalities have just improved — record the better mix
+  purposeRender();
+  const lbl = document.getElementById('originXmlLabel');
+  if (lbl) lbl.textContent = `${total} guests known (${done.map(r => r.label).join(' + ')})`;
+}
+/** Read one Origin XML and merge it into what is already known. Returns { count, label } or { error }.
+ *  Merged, not replaced: Vicas is usually pulled before every arrival has been registered with immigration (a real
+ *  export held 30 rooms against Opera's 40), so the answer is to pull it again later and load that too. The newer
+ *  file wins on any guest both contain. Counted on one map only: natMap and natBagMap hold the same guests under two
+ *  keys, so summing them reports double. */
+function _originMerge(text, name) {
+  try {
+    const result = parseOriginXML(text) || {};
+    const roomMap = result.roomMap || {}, nameMap = result.nameMap || {};
+    const count = Math.max(Object.keys(nameMap).length, Object.keys(roomMap).length);
+    if (!count) {
+      console.warn('[OriginXML] empty maps — diagnostics:', { parseErrorMsg: result.parseErrorMsg, sectionsFound: result.sectionsFound, detailRowsSeen: result.detailRowsSeen });
+      // these cases have completely different fixes, so say which one
+      return { error: result.parseErrorMsg ? 'not a valid XML file (bad encoding/export?)' : !result.sectionsFound ? 'not a Crystal Reports XML export' : !result.detailRowsSeen ? 'the report has no rows' : 'no Nationality in the rows' };
     }
-  };
-  reader.readAsText(file, 'utf-8');
+    _originMap        = { ..._originMap,        ...roomMap };
+    _originNameMap    = { ..._originNameMap,    ...nameMap };
+    _originNatMap     = { ..._originNatMap,     ...(result.natMap || {}) };
+    _originNatRoomMap = { ..._originNatRoomMap, ...(result.natRoomMap || {}) };
+    _originBagMap     = { ..._originBagMap,     ...(result.bagMap    || {}) };
+    _originNatBagMap  = { ..._originNatBagMap,  ...(result.natBagMap || {}) };
+    return { count, label: /arriv/i.test(name || '') || /\{Command\.Nationality\}/.test(text.slice(0, 20000)) ? 'Arrival Today' : result.source === 'vicas' ? 'Vicas' : 'Inhouse' };
+  } catch (err) {
+    console.error('[OriginXML] load failed:', err);
+    return { error: 'could not be read' };
+  }
 }
 
 // Fill originOfTravel field on purposeGuests from the XML lookup maps.

@@ -969,9 +969,9 @@
         <span style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">📂 Upload Excel:</span>
         <input type="file" accept=".xlsx,.xls,.csv" onchange="loadOperaFile(this,'pur')" style="font-size:0.68rem;color:var(--text2);"/>
         <span style="width:1px;height:18px;background:var(--border);flex-shrink:0;"></span>
-        <span style="font-family:var(--mono);font-size:0.6rem;color:var(--mint);">🌍 Origin XML:</span>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-          <input type="file" accept=".xml" onchange="loadOriginXML(this)" style="font-size:0.68rem;color:var(--text2);"/>
+        <span style="font-family:var(--mono);font-size:0.6rem;color:var(--mint);">🌍 Origin XML (pick both at once):</span>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;" title="Vicas and Arrival Today Vicas: select both files together (Ctrl or Shift + click)">
+          <input type="file" accept=".xml" multiple onchange="loadOriginXML(this)" style="font-size:0.68rem;color:var(--text2);"/>
         </label>
         <span id="originXmlLabel" style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);white-space:nowrap;"></span>
       </div>

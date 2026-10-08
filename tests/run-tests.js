@@ -544,6 +544,18 @@ console.log('\nRoster scenarios');
   check('rate shop: changing one keeps all three of ours', run(`rkHotels().length + '|' + rkHotels()[0].comps.length`), '3|1');
 }
 
+// ── Dropping files: Vicas exports go to one question together ──
+{
+  const sb = { console: { log() {}, warn() {}, error() {} }, document: { addEventListener() {}, getElementById() { return null }, querySelector() { return null }, body: { classList: { toggle() {} } } }, window: {}, setTimeout: () => 0 };
+  vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'file-router.js'), 'utf8'), sb, { filename: 'file-router.js' });
+  const d = (n, h) => JSON.stringify(sb.frDetect(n, h));
+  check('drop: Vicas transaction XML is asked about (Purpose first)', d('Vicas_V2.xml', '<Field FieldName="{usp_RPTTransactionReport;1.Nationality}">'), JSON.stringify({ dest: null, ask: 'vicas', prefer: ['origin', 'itXml'] }));
+  check('drop: Arrival Today Vicas XML is recognised by its fields too', JSON.parse(d('report.xml', '<Field FieldName="{Command.Nationality}">')).ask, 'vicas');
+  check('drop: a DTCM portal XML still goes straight to DTCM', JSON.parse(d('HotelTransactionReport_Dynamic_5.xml', '')).dest, 'dtcm');
+  check('drop: Purpose takes several Origin XML files at once', vm.runInContext('!!FR_DEST.origin.multi', sb), true);
+}
+
 // ── What if… (roster-team.js) ─────────────────────────────
 {
   const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} }, fbSet() {}, showToast() {}, escapeHtml: x => String(x),
