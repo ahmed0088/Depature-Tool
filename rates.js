@@ -58,48 +58,60 @@ function rkMarket(h, d) {
 function rkRender() {
   const root = document.getElementById('rkRoot'); if (!root) return;
   const H = rkHotels(), h = rkCur();
-  if (!h) { root.innerHTML = `<div class="card"><div class="ro-empty">Add your hotel first.</div><div class="rb-inline"><input id="rkNewH" placeholder="Our hotel's name, e.g. Ibis Dubai Deira"><button class="btn gold" onclick="rkAddHotel()">＋ Add</button></div></div>`; return; }
+  if (!h) { root.innerHTML = `<div class="rk"><div class="rk-empty"><div class="rk-empty-ico">🏨</div><b>Add your hotel first</b><p>Its name as guests search for it.</p><div class="rk-addrow"><input id="rkNewH" placeholder="e.g. Ibis Styles Dubai Deira"><button class="btn gold" onclick="rkAddHotel()">＋ Add</button></div></div></div>`; return; }
   const dates = rkDates(); if (!rkSel || !dates.includes(rkSel)) rkSel = dates[0];
-  if (rkHotel === '*' && H.length > 1) { root.innerHTML = rkTopHtml(H, '*') + rkAllHtml(H, dates); return; }
+  if (rkHotel === '*' && H.length > 1) { root.innerHTML = `<div class="rk">${rkTopHtml(H, '*')}${rkAllHtml(H, dates)}</div>`; return; }
   rkHotel = h.id;
   const M = rkMarket(h, rkSel), cfg = typeof riCfg === 'function' ? riCfg() : {};
   const fmt = v => v == null ? '—' : Math.round(v).toLocaleString('en-GB');
   const pct = v => (v > 0 ? '+' : '') + Math.round(v * 100) + '%';
-  const tone = M.diff == null ? '' : Math.abs(M.diff) <= 0.05 ? 'ok' : M.diff > 0 ? 'up' : 'down';
+  const tone = M.diff == null ? 'none' : Math.abs(M.diff) <= 0.05 ? 'ok' : M.diff > 0 ? 'up' : 'down';
   const ord = n => n + (n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th');
-  root.innerHTML = `
+  const kpi = (label, val, unit, sub, cls) => `<div class="rk-kpi ${cls || ''}"><span class="rk-kl">${label}</span><span class="rk-kv">${val}${unit ? `<i>${unit}</i>` : ''}</span><span class="rk-ks">${sub}</span></div>`;
+  const comps = (h.comps || []).length;
+  root.innerHTML = `<div class="rk">
     ${rkTopHtml(H, h.id, h)}
-    <div class="rk-tiles">
-      <div class="rk-tile"><small>Our rate · ${escapeHtml(rkDay(rkSel, true))}</small><b>${M.us ? fmt(M.us.r) : '—'}<i>AED</i></b><span>${M.us ? (M.us.src === 'online' ? '🌐 found online' : '✍️ typed in') : 'not entered yet'}</span></div>
-      <div class="rk-tile"><small>Market (median of ${M.n || 0})</small><b>${fmt(M.med)}<i>AED</i></b><span>${M.n ? `${fmt(M.min)} – ${fmt(M.max)}` : 'no prices yet'}</span></div>
-      <div class="rk-tile rk-${tone}"><small>Difference</small><b>${M.diff == null ? '—' : pct(M.diff)}</b><span>${M.diff == null ? 'needs our rate and the market' : tone === 'ok' ? '● in line with the market' : tone === 'up' ? '▲ above the market' : '▼ below the market'}</span></div>
-      <div class="rk-tile"><small>Our place (1 = cheapest)</small><b>${M.rank ? ord(M.rank) : '—'}<i>${M.rank ? 'of ' + M.of : ''}</i></b><span>${M.rank ? (M.rank === 1 ? 'the cheapest around' : M.rank === M.of ? 'the most expensive around' : 'in the middle') : ''}</span></div>
+    <div class="rk-kpis">
+      ${kpi(`Our rate · ${escapeHtml(rkDay(rkSel, true))}`, M.us ? fmt(M.us.r) : '—', 'AED', M.us ? (M.us.src === 'online' ? '🌐 Found online' : '✍️ Typed in') : 'Not entered yet')}
+      ${kpi('Market median', fmt(M.med), M.n ? 'AED' : '', M.n ? `${fmt(M.min)} – ${fmt(M.max)} · ${M.n} hotel${M.n === 1 ? '' : 's'}` : 'No prices around us yet')}
+      ${kpi('Vs the market', M.diff == null ? '—' : pct(M.diff), '', M.diff == null ? 'Needs our rate and the market' : tone === 'ok' ? '● In line with the market' : tone === 'up' ? '▲ Above the market' : '▼ Below the market', 'rk-t-' + tone)}
+      ${kpi('Our place', M.rank ? ord(M.rank) : '—', M.rank ? 'of ' + M.of : '', M.rank ? (M.rank === 1 ? 'The cheapest around' : M.rank === M.of ? 'The most expensive around' : '1 = the cheapest') : '1 = the cheapest')}
     </div>
     ${rkAdviceHtml(h, dates)}
-    <div class="card rk-card">
-      <div class="ro-card-hd"><b>📈 Next ${RK_DAYS} days</b><span>our rate vs the hotels around us · AED a night</span></div>
+    <section class="rk-panel">
+      <header class="rk-ph"><div><h3>Next ${RK_DAYS} days</h3><p>Our rate against the hotels around us, AED a night. Tap a day to choose it.</p></div></header>
       ${rkChartHtml(h, dates)}
-    </div>
-    <div class="card rk-card">
-      <div class="ro-card-hd"><b>🏨 Prices</b><span>tap a price to type it · tap a date to choose it</span></div>
-      <div class="rk-acts">
-        <button class="btn sm gold" onclick="rkCheckOnline()"${rkBusy ? ' disabled' : ''}>${rkBusy ? '<span class="ri-spin"></span> Checking…' : `✨ Check online · ${escapeHtml(rkDay(rkSel))}`}</button>
-        <button class="btn sm" onclick="rkCheckOnline(7)"${rkBusy ? ' disabled' : ''}>✨ Next 7 days</button>
-        <button class="btn sm" onclick="rkAddCompDlg()">＋ Hotel nearby</button>
-        <button class="btn sm" onclick="rkFindNearby()"${rkBusy ? ' disabled' : ''}>✨ Find hotels around us</button>
-        <a class="btn sm ghost" target="_blank" rel="noopener" href="https://www.google.com/maps/search/${encodeURIComponent('hotels near ' + (h.search || h.name))}">🗺 Map around us</a>
-      </div>
-      ${!cfg.key ? '<small class="ro-hint">✨ Check online needs the AI key (Roster → ✨ AI settings). Without it: open the links next to each hotel and type the price.</small>' : ''}
+    </section>
+    <section class="rk-panel">
+      <header class="rk-ph"><div><h3>Prices</h3><p>1 night, 2 adults, the cheapest public room. Tap a price to type it.</p></div>
+        <div class="rk-tools">
+          <button class="btn sm gold" onclick="rkCheckOnline()"${rkBusy ? ' disabled' : ''}>${rkBusy ? '<span class="ri-spin"></span> Checking…' : `✨ Check ${escapeHtml(rkDay(rkSel))}`}</button>
+          <button class="btn sm" onclick="rkCheckOnline(7)"${rkBusy ? ' disabled' : ''}>✨ Next 7 days</button>
+          <details class="rk-more"><summary class="btn sm ghost" title="More">＋ Hotels around</summary><div class="rk-pop">
+            <button onclick="this.closest('details').open=false;rkFindNearby()">✨ Find hotels around us</button>
+            <button onclick="this.closest('details').open=false;rkAddCompDlg()">✍️ Add one by name</button>
+            <a target="_blank" rel="noopener" href="https://www.google.com/maps/search/${encodeURIComponent('hotels near ' + (h.search || h.name))}">🗺 See them on Google Maps</a>
+          </div></details>
+        </div>
+      </header>
+      ${!cfg.key ? `<div class="rk-note">To look up the prices by itself, the app needs the AI key once on this device (the same one that reads roster pictures).${typeof riSetupOpen === 'function' ? ' <button class="btn sm" onclick="riSetupOpen()">✨ Set it up</button>' : ''} Until then, tap B (Booking.com) or G (Google) next to a hotel and type the price.</div>` : ''}
       ${rkTableHtml(h, dates)}
-      <small class="ro-hint">Prices for 1 night, 2 adults, the cheapest public room, in AED. "🌐" = found online by the AI: check the important ones on the link. The market is the median of the hotels around us.</small>
-    </div>`;
+      ${comps ? '' : `<div class="rk-empty in"><div class="rk-empty-ico">📍</div><b>Add the hotels around ${escapeHtml(h.name)}</b><p>The hotels guests compare you with. Pick from a list found online, or add them by name.</p><div class="rk-addrow"><button class="btn gold" onclick="rkFindNearby()"${rkBusy ? ' disabled' : ''}>✨ Find hotels around us</button><button class="btn" onclick="rkAddCompDlg()">✍️ Add by name</button></div></div>`}
+      <div class="rk-foot">🌐 = found online by the AI: check the important ones on the link · the market is the median of the hotels around us</div>
+    </section>
+  </div>`;
 }
 function rkTopHtml(H, cur, h) {
-  return `<div class="rk-top">
-      <div class="rk-tabs">${H.length > 1 ? `<button class="rk-tab${cur === '*' ? ' on' : ''}" onclick="rkHotel='*';rkRender()">📊 All our hotels</button>` : ''}${H.map(x => `<button class="rk-tab${x.id === cur ? ' on' : ''}" onclick="rkHotel='${x.id}';rkRender()">${escapeHtml(x.name)}</button>`).join('')}<button class="rk-tab add" onclick="rkAddHotelDlg()" title="Add one of our hotels">＋ Our hotel</button></div>
-      <div class="rk-range"><button class="btn sm ghost" onclick="rkShift(-7)">‹</button><input type="date" value="${rkDates()[0]}" onchange="rkFrom=this.value||null;rkRender()"><button class="btn sm ghost" onclick="rkShift(7)">›</button></div>
-    </div>
-    ${h ? `<div class="rk-me"><span>${escapeHtml(h.name)}</span><button class="btn sm ghost" onclick="rkRenameHotel()">✏️ Rename</button><button class="btn sm ghost" onclick="rkDelHotel()">🗑 Remove</button></div>` : ''}`;
+  return `<div class="rk-bar">
+      <div class="rk-seg">${H.length > 1 ? `<button class="${cur === '*' ? 'on' : ''}" onclick="rkHotel='*';rkRender()">All our hotels</button>` : ''}${H.map(x => `<button class="${x.id === cur ? 'on' : ''}" onclick="rkHotel='${x.id}';rkRender()">${escapeHtml(x.name)}</button>`).join('')}</div>
+      <div class="rk-bar-r">
+        <details class="rk-more"><summary class="rk-icon" title="Our hotels">⋯</summary><div class="rk-pop right">
+          <button onclick="this.closest('details').open=false;rkAddHotelDlg()">＋ Add one of our hotels</button>
+          ${h ? `<button onclick="this.closest('details').open=false;rkRenameHotel()">✏️ Rename ${escapeHtml(h.name)}</button><button class="danger" onclick="this.closest('details').open=false;rkDelHotel()">🗑 Remove ${escapeHtml(h.name)}</button>` : ''}
+        </div></details>
+        <div class="rk-dates"><button class="rk-icon" onclick="rkShift(-7)" title="7 days back">‹</button><input type="date" value="${rkDates()[0]}" onchange="rkFrom=this.value||null;rkRender()" aria-label="From"><button class="rk-icon" onclick="rkShift(7)" title="7 days on">›</button></div>
+      </div>
+    </div>`;
 }
 function rkShift(n) { rkFrom = rkAdd(rkDates()[0], n); if (rkFrom < rkAdd(rkToday(), -60)) rkFrom = rkAdd(rkToday(), -60); rkRender(); }
 
@@ -119,7 +131,7 @@ function rkAdviceHtml(h, dates) {
 function rkChartHtml(h, dates) {
   const pts = dates.map(d => ({ d, M: rkMarket(h, d) }));
   const vals = []; pts.forEach(p => { if (p.M.us) vals.push(p.M.us.r); if (p.M.n) vals.push(p.M.min, p.M.max); });
-  if (!vals.length) return '<div class="ro-empty">No prices yet: ✨ Check online, or type them in the table below.</div>';
+  if (!vals.length) return '<div class="rk-chart-empty"><span>📈</span>No prices yet for these days. ✨ Check online, or type them in the table below.</div>';
   const box = document.getElementById('rkRoot'), W = Math.max(300, Math.min(1200, ((box && box.clientWidth) || 720) - 34)), H = W < 500 ? 200 : 240, L = 40, R = 12, T = 14, B = 28, lo = Math.min(...vals), hi = Math.max(...vals);
   const pad = Math.max(10, (hi - lo) * 0.12), y0 = Math.max(0, Math.floor((lo - pad) / 10) * 10), y1 = Math.ceil((hi + pad) / 10) * 10;
   const x = i => L + (W - L - R) * (dates.length === 1 ? 0.5 : i / (dates.length - 1)), y = v => T + (H - T - B) * (1 - (v - y0) / ((y1 - y0) || 1));
@@ -152,12 +164,12 @@ function rkTableHtml(h, dates) {
   const cell = (d, who) => { const p = rkPrice(d, h.id, who); return `<td class="rk-c${d === rkSel ? ' sel' : ''}${p && p.src === 'online' ? ' web' : ''}" onclick="rkEdit(this,'${d}',${_rkQ(who)})" title="${p ? (p.src === 'online' ? 'Found online' : 'Typed in') + (p.by ? ' by ' + escapeHtml(p.by) : '') + (p.at ? ' · ' + new Date(p.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '') : 'Tap to type the price'}">${p ? Math.round(p.r) + (p.src === 'online' ? '<i>🌐</i>' : '') : '<span>·</span>'}</td>`; };
   const links = c => { const q = encodeURIComponent((c.name || '') + ' Dubai'), d = rkSel, d2 = rkAdd(rkSel, 1);
     return `<span class="rk-links"><a target="_blank" rel="noopener" title="Booking.com · ${escapeHtml(rkDay(d))}" href="https://www.booking.com/searchresults.html?ss=${q}&checkin=${d}&checkout=${d2}&group_adults=2&no_rooms=1&group_children=0">B</a><a target="_blank" rel="noopener" title="Google · ${escapeHtml(rkDay(d))}" href="https://www.google.com/travel/search?q=${q}">G</a><a target="_blank" rel="noopener" title="Google Maps" href="https://www.google.com/maps/search/${q}">🗺</a></span>`; };
-  const diffRow = dates.map(d => { const M = rkMarket(h, d); if (M.diff == null) return '<td class="rk-c">·</td>'; const t = Math.abs(M.diff) <= 0.05 ? 'ok' : M.diff > 0 ? 'up' : 'down'; return `<td class="rk-c rk-${t}">${M.diff > 0 ? '+' : ''}${Math.round(M.diff * 100)}%</td>`; }).join('');
-  return `<div class="ro-scroll"><table class="rk-table">
+  const diffRow = dates.map(d => { const M = rkMarket(h, d); if (M.diff == null) return '<td class="rk-c">·</td>'; const t = Math.abs(M.diff) <= 0.05 ? 'ok' : M.diff > 0 ? 'up' : 'down'; return `<td class="rk-c rk-d-${t}">${M.diff > 0 ? '+' : ''}${Math.round(M.diff * 100)}%</td>`; }).join('');
+  return `<div class="rk-scroll"><table class="rk-table">
     <thead><tr><th class="rk-n">Hotel</th>${dates.map(d => `<th class="${d === rkSel ? 'sel' : ''}" onclick="rkSel='${d}';rkRender()">${escapeHtml(rkDay(d))}</th>`).join('')}</tr></thead>
     <tbody>
-      <tr class="rk-us-row"><td class="rk-n"><b>⭐ ${escapeHtml(h.name)}</b><small>our rate</small>${links({ name: h.search || h.name })}</td>${dates.map(d => cell(d, 'us')).join('')}</tr>
-      ${comps.map(c => `<tr><td class="rk-n"><b>${escapeHtml(c.name)}</b>${links(c)}<button class="ro-x" title="Remove" onclick="rkDelComp(${_rkQ(c.id)})">✕</button></td>${dates.map(d => cell(d, c.id)).join('')}</tr>`).join('') || `<tr><td class="rk-n" colspan="${dates.length + 1}"><span class="ro-empty">No hotels around us yet: ＋ Hotel nearby, or ✨ Find hotels around us.</span></td></tr>`}
+      <tr class="rk-us-row"><td class="rk-n"><b>${escapeHtml(h.name)}</b><small class="rk-us-tag">Our hotel</small>${links({ name: h.search || h.name })}</td>${dates.map(d => cell(d, 'us')).join('')}</tr>
+      ${comps.map(c => `<tr><td class="rk-n"><b>${escapeHtml(c.name)}</b>${links(c)}<button class="rk-x" title="Remove" onclick="rkDelComp(${_rkQ(c.id)})">✕</button></td>${dates.map(d => cell(d, c.id)).join('')}</tr>`).join('') || ''}
       <tr class="rk-sum"><td class="rk-n">Market median</td>${dates.map(d => { const M = rkMarket(h, d); return `<td class="rk-c">${M.n ? Math.round(M.med) : '·'}</td>`; }).join('')}</tr>
       <tr class="rk-sum"><td class="rk-n">Us vs market</td>${diffRow}</tr>
     </tbody></table></div>`;
@@ -167,7 +179,8 @@ function rkEdit(td, d, who) {
   const h = rkCur(), p = rkPrice(d, h.id, who);
   td.innerHTML = `<input type="number" inputmode="numeric" min="0" step="1" value="${p ? Math.round(p.r) : ''}">`;
   const inp = td.querySelector('input'); inp.focus(); inp.select();
-  const done = save => { if (save) rkSetPrice(d, h.id, who, inp.value === '' ? null : +inp.value, 'typed'); rkRender(); };
+  let fin = false;   // Enter saves and redraws, which also blurs the box: save once
+  const done = save => { if (fin) return; fin = true; if (save) rkSetPrice(d, h.id, who, inp.value === '' ? null : +inp.value, 'typed'); setTimeout(rkRender, 0); };
   inp.addEventListener('keydown', e => { if (e.key === 'Enter') done(true); if (e.key === 'Escape') done(false); });
   inp.addEventListener('blur', () => done(true));
 }
@@ -182,20 +195,17 @@ function rkSetPrice(d, hid, who, r, src, extra) {
 /** 📊 Every one of our hotels on the chosen date, and the difference from its market over the 14 days. */
 function rkAllHtml(H, dates) {
   const fmt = v => v == null ? '—' : Math.round(v).toLocaleString('en-GB');
-  const cls = d => d == null ? '' : Math.abs(d) <= 0.05 ? 'ok' : d > 0 ? 'up' : 'down';
+  const cls = d => d == null ? 'none' : Math.abs(d) <= 0.05 ? 'ok' : d > 0 ? 'up' : 'down';
   const pct = d => d == null ? '·' : (d > 0 ? '+' : '') + Math.round(d * 100) + '%';
-  return `<div class="card rk-card">
-    <div class="ro-card-hd"><b>📊 Our hotels · ${escapeHtml(rkDay(rkSel, true))}</b><span>tap a date in the table to change it</span></div>
-    <div class="rk-all">${H.map(h => { const M = rkMarket(h, rkSel); return `<button class="rk-allc rk-${cls(M.diff)}" onclick="rkHotel='${h.id}';rkRender()"><b>${escapeHtml(h.name)}</b><span class="rk-big">${M.us ? fmt(M.us.r) : '—'}<i>AED</i></span><span>Market ${fmt(M.med)}${M.n ? ` (${M.n} hotels)` : ''}</span><span class="rk-pill">${M.diff == null ? 'no comparison yet' : (M.diff > 0 ? '▲ ' : M.diff < 0 ? '▼ ' : '● ') + pct(M.diff) + ' vs market'}</span></button>`; }).join('')}</div>
-  </div>
-  <div class="card rk-card">
-    <div class="ro-card-hd"><b>Us vs the market, every day</b><span>+ = we are dearer · − = we are cheaper</span></div>
-    <div class="ro-scroll"><table class="rk-table">
+  return `<div class="rk-all">${H.map(h => { const M = rkMarket(h, rkSel); return `<button class="rk-allc rk-t-${cls(M.diff)}" onclick="rkHotel='${h.id}';rkRender()"><span class="rk-kl">${escapeHtml(h.name)}</span><span class="rk-kv">${M.us ? fmt(M.us.r) : '—'}<i>AED</i></span><span class="rk-ks">Market ${fmt(M.med)}${M.n ? ` · ${M.n} hotels` : ''}</span><span class="rk-chip">${M.diff == null ? 'No comparison yet' : (M.diff > 0 ? '▲ ' : M.diff < 0 ? '▼ ' : '● ') + pct(M.diff) + ' vs market'}</span></button>`; }).join('')}</div>
+  <section class="rk-panel">
+    <header class="rk-ph"><div><h3>Us vs the market, every day</h3><p>+ we are dearer · − we are cheaper. Tap a day to choose it.</p></div></header>
+    <div class="rk-scroll"><table class="rk-table">
       <thead><tr><th class="rk-n">Hotel</th>${dates.map(d => `<th class="${d === rkSel ? 'sel' : ''}" onclick="rkSel='${d}';rkRender()">${escapeHtml(rkDay(d))}</th>`).join('')}</tr></thead>
-      <tbody>${H.map(h => `<tr><td class="rk-n"><b>${escapeHtml(h.name)}</b></td>${dates.map(d => { const M = rkMarket(h, d); return `<td class="rk-c rk-${cls(M.diff)}${d === rkSel ? ' sel' : ''}" title="Ours ${M.us ? Math.round(M.us.r) : '—'} · market ${M.n ? Math.round(M.med) : '—'}">${pct(M.diff)}</td>`; }).join('')}</tr>`).join('')}
-      ${H.length > 1 ? `<tr class="rk-sum"><td class="rk-n">Our rates side by side</td>${dates.map(d => `<td class="rk-c">${H.map(h => { const p = rkPrice(d, h.id, 'us'); return p ? Math.round(p.r) : '·'; }).join('<br>')}</td>`).join('')}</tr>` : ''}
+      <tbody>${H.map(h => `<tr><td class="rk-n"><b>${escapeHtml(h.name)}</b></td>${dates.map(d => { const M = rkMarket(h, d); return `<td class="rk-c rk-d-${cls(M.diff)}${d === rkSel ? ' sel' : ''}" title="Ours ${M.us ? Math.round(M.us.r) : '—'} · market ${M.n ? Math.round(M.med) : '—'}">${pct(M.diff)}</td>`; }).join('')}</tr>`).join('')}
+      ${H.length > 1 ? `<tr class="rk-sum"><td class="rk-n">Our rates</td>${dates.map(d => `<td class="rk-c">${H.map(h => { const p = rkPrice(d, h.id, 'us'); return p ? Math.round(p.r) : '·'; }).join('<br>')}</td>`).join('')}</tr>` : ''}
       </tbody></table></div>
-  </div>`;
+  </section>`;
 }
 
 // ── Our hotels and the hotels around ──────────────────────
@@ -238,6 +248,7 @@ async function _rkAsk(prompt, uses) {
 /** Prices for the chosen date (or the next n days), ours and the hotels around, all in one search. */
 async function rkCheckOnline(nDays) {
   const h = rkCur(); if (!h || rkBusy) return;
+  if (!(typeof riCfg === 'function' && riCfg().key)) { if (typeof riSetupOpen === 'function') riSetupOpen(); showToast('The price check needs the AI key once on this device', 'warn'); return; }
   if (!(h.comps || []).length && !confirm('No hotels around us in the list yet: check only our own rate?')) return;
   const days = nDays ? rkDates().slice(rkDates().indexOf(rkSel), rkDates().indexOf(rkSel) + nDays) : [rkSel];
   rkBusy = true; rkRender();

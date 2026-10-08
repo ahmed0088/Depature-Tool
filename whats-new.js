@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 202, items: [
+    '💲 Rate Shop has a new, cleaner design: one bar to switch hotels and dates, four clear numbers, a chart and a tidy price table, and a guided start when a hotel has no neighbours yet. Fixed: typing a price and pressing Enter.',
+  ] },
   { v: 201, items: [
     '💲 New: Rate Shop (menu → Tools). Our hotels (Ibis Styles, Mercure and Adagio Dubai Deira; add, rename or remove any) next to the hotels around each one: our rate, the market (median, lowest–highest), the difference in %, our place (1 = cheapest), a chart of the next 14 days and the table of prices.',
     '✨ Check online fills the prices for a day or the next 7 days (AI web search with the key from Roster → AI settings; marked 🌐 so you can check them). ✨ Find hotels around us suggests the hotels to compare with. Every hotel has one-tap links to Booking.com, Google and Google Maps, and any price can be typed in.',
