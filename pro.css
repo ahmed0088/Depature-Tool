@@ -1201,3 +1201,29 @@ label.rb-q:first-child { border-color: var(--accent-border); background: color-m
 .wn-sheet { background-clip: padding-box; }
 .wn-x { flex:none; width:34px; height:34px; border-radius:50%; border:1px solid var(--border, rgba(255,255,255,.15)); background: var(--surface2, rgba(127,127,127,.15)); color: var(--text); font-size: 1rem; cursor:pointer; line-height:1; }
 .wn-x:hover { background: var(--surface3, rgba(127,127,127,.28)); }
+
+/* Shift swaps and My week */
+.rs-mine-acts { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+.ro-swaps { margin-bottom: 16px; }
+.rs-row { display:grid; grid-template-columns: 120px minmax(0,1fr) auto; gap:12px; align-items:center; padding:11px 0; border-top:1px solid var(--border); }
+.rs-row.rs-done { opacity:.6; }
+.rs-when { display:flex; flex-direction:column; } .rs-when small { font-size:.68rem; color:var(--text3); }
+.rs-who { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:.84rem; }
+.rs-who > small { flex-basis:100%; font-size:.72rem; color:var(--text3); } .rs-who .rs-w { color: var(--amber); }
+.rs-arrow { color: var(--accent); font-weight:700; }
+.rs-cell { display:inline-block; font-family:var(--mono); font-size:.74rem; padding:2px 8px; border-radius:8px; background: var(--rcb, var(--card2)); color: var(--rc, var(--text2)); border:1px solid var(--border); white-space:nowrap; }
+.rs-acts { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+.rs-recent summary { cursor:pointer; font-size:.76rem; color:var(--text3); margin-top:6px; }
+.rs-dlg { width:min(560px, 100%); padding:18px; }
+.rs-form { display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin:8px 0 12px; }
+.rs-form label { display:flex; flex-direction:column; gap:5px; font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--text3); }
+.rs-form small { text-transform:none; font-weight:400; }
+.rs-form .rs-wide { grid-column: 1 / -1; }
+.rs-form select, .rs-form input { font: inherit; font-size:.9rem; text-transform:none; letter-spacing:0; color:var(--text); background:var(--bg2, var(--card2)); border:1px solid var(--border2, var(--border)); border-radius:10px; padding:9px 11px; min-height:42px; }
+.rs-prev { margin-bottom:12px; }
+.rs-swap { display:flex; align-items:center; gap:14px; padding:12px; border-radius:12px; background:var(--card2); border:1px solid var(--border); }
+.rs-swap > div { flex:1; display:flex; flex-direction:column; gap:4px; align-items:flex-start; }
+.rs-swap small { font-size:.68rem; color:var(--text3); }
+.rs-warn { margin-top:8px; font-size:.78rem; color: var(--amber); }
+.rs-ok { margin-top:8px; font-size:.78rem; color: var(--green); }
+@media (max-width: 600px) { .rs-row { grid-template-columns: 1fr; gap:6px; } .rs-acts { justify-content:flex-start; } .rs-form { grid-template-columns: 1fr; } .rs-swap { flex-direction:column; align-items:stretch; } .rs-arrow { align-self:center; transform: rotate(90deg); } }

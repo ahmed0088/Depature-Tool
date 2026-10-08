@@ -119,7 +119,8 @@ function rtCoverOptions(I, cells, group, date, shift, opt) {
     const mgr = /manager/i.test(p.title || '');
     const away = p.group !== group, label = away ? `${shift} - ${rbShortU(rbBaseGroup(group))}` : shift;
     const from = away ? ` from ${p.group}` : '';
-    const extra = (mgr ? 40 : 0) + (away && !rbFloats(p) ? 10 : 0) + (away && rbFloatsLast(p) ? 60 : 0);   // a Supervisor from another hotel: only when nobody else
+    const extra = (mgr ? 40 : 0) + (away && !rbFloats(p) ? 10 : 0) + (away && rbFloatsLast(p) ? 60 : 0)   // a Supervisor from another hotel: only when nobody else
+      - (away && p.alt && p.alt === rbBaseGroup(group) ? 6 : 0);   // the hotel they'd rather go to when moved
     if (rbKind(v) === 'off') {
       // works that day; their day off moves to a day with spare cover
       dates.forEach((e, i) => {
@@ -703,6 +704,7 @@ function rtPerson(k) {
       <label>Employee no.<input value="${escapeHtml(s.id || '')}" onchange="rtSetStaff(${q},'id',this.value.trim())"></label>
       <label>Title<select onchange="rtSet(${q},'title',this.value||undefined)"><option value="">—</option>${RB_TITLES.map(t => `<option${c.title === t ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
       <label>Hotel<select onchange="if(this.value==='~'){const n=prompt('New hotel name');if(n)rtSetStaff(${q},'group',n.trim());}else rtSetStaff(${q},'group',this.value);rtPerson(${q})">${groups.map(x => `<option${x === g ? ' selected' : ''}>${escapeHtml(x)}</option>`).join('')}${!g ? '<option selected value="">—</option>' : ''}<option value="~">＋ New hotel…</option></select></label>
+      <label>If moved, prefers<select onchange="rtSet(${q},'alt',this.value||undefined);rtPerson(${q})" title="When they have to work at another hotel, this one is tried first"><option value="">No preference</option>${groups.filter(x => x !== g && !/·/.test(x)).map(x => `<option${c.alt === x ? ' selected' : ''}>${escapeHtml(x)}</option>`).join('')}</select></label>
       <label>Shift<select onchange="const v=this.value;if(v==='rotate'||v==='any'){rtSet(${q},'mode',v);rtSet(${q},'fixed',v==='any'?'':undefined);}else{rtSet(${q},'mode','static');rtSet(${q},'fixed',v);}rtPerson(${q})">
         ${shifts.map(x => `<option value="${escapeHtml(x)}"${p.mode === 'static' && p.fixed === x ? ' selected' : ''}>Static: always ${escapeHtml(x)}</option>`).join('')}
         <option value="rotate"${p.mode === 'rotate' ? ' selected' : ''}>Rotates week to week</option><option value="any"${p.mode === 'any' ? ' selected' : ''}>Any shift (flexible)</option></select></label>

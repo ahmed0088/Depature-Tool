@@ -247,8 +247,9 @@ function rbPlanNights(I) {
         for (const d of b.days) {
           const cand = (byDay[d] || []).filter(x => !u2.has(x.i + ':' + x.d) && rbMayWork(I, hotels[x.i].g, f, hotels[x.i].ns));
           if (!cand.length) { ok = false; break; }
-          const own = cand.find(x => hotels[x.i].g === homeOf(f)) || cand[0];
-          if (hotels[own.i].g !== homeOf(f)) { if (f.home || (!R.lend && !rbFloats(f) && !rbFloatsLast(f))) { ok = false; break; } c += 25; }   // working at another hotel: only when needed
+          // their own hotel first, then the hotel they'd rather go to when moved
+          const own = cand.find(x => hotels[x.i].g === homeOf(f)) || (f.alt && cand.find(x => rbBaseGroup(hotels[x.i].g) === f.alt)) || cand[0];
+          if (hotels[own.i].g !== homeOf(f)) { if (f.home || (!R.lend && !rbFloats(f) && !rbFloatsLast(f))) { ok = false; break; } c += f.alt && rbBaseGroup(hotels[own.i].g) === f.alt ? 18 : 25; }   // working at another hotel: only when needed
           u2.add(own.i + ':' + own.d); pick.push({ d, i: own.i });
         }
         if (ok) walk(fi + 1, u2, plan.concat([{ f, b, pick }]), c);
@@ -368,7 +369,7 @@ function _rbFinish(I, cells) {
     for (const g of Object.keys(G)) for (let d = 0; d < D; d++) for (const s of G[g].shifts) {
       while (cover[g][s][d] < need(g, s, d)) {
         const dt = dates[d];
-        const donor = I.people.filter(q => q.group !== g && !q.home && !q.lock && (R.lend || rbFloats(q) || rbFloatsLast(q)) && !((I.pre || {})[q.key] || {})[dt] && G[q.group] && cells[q.key][dt] === s && cover[q.group][s] && cover[q.group][s][d] > need(q.group, s, d) && rbMayWork(I, g, q, s)).sort((a, b) => (rbFloatsLast(a) ? 1 : 0) - (rbFloatsLast(b) ? 1 : 0) || (rbFloats(b) ? 1 : 0) - (rbFloats(a) ? 1 : 0))[0];
+        const donor = I.people.filter(q => q.group !== g && !q.home && !q.lock && (R.lend || rbFloats(q) || rbFloatsLast(q)) && !((I.pre || {})[q.key] || {})[dt] && G[q.group] && cells[q.key][dt] === s && cover[q.group][s] && cover[q.group][s][d] > need(q.group, s, d) && rbMayWork(I, g, q, s)).sort((a, b) => (rbFloatsLast(a) ? 1 : 0) - (rbFloatsLast(b) ? 1 : 0) || (rbFloats(b) ? 1 : 0) - (rbFloats(a) ? 1 : 0) || (b.alt === rbBaseGroup(g) ? 1 : 0) - (a.alt === rbBaseGroup(g) ? 1 : 0))[0];   // (then whoever would rather come to this hotel)
         if (!donor) break;
         cells[donor.key][dt] = `${s} - ${rbShortU(g, Object.keys(G))}`;
         cover = rbCover(I, cells);
@@ -742,7 +743,7 @@ function rbPersonCfg(k) {
   const mode = c.mode || (c.fixed ? 'static' : c.fixed === '' && !lock ? 'any' : (L.fixedGuess || ((mgr || lock) && L.usual)) ? 'static' : 'any');
   const fixed = mode === 'static' || lock ? (c.fixed || L.fixedGuess || L.usual || '') : '';
   return {
-    key: k, group: rbPGroup(k), post: rbPost(k), title: c.title || '', mode, lock: lock && !!fixed, home: !!c.home,
+    key: k, group: rbPGroup(k), post: rbPost(k), title: c.title || '', mode, lock: lock && !!fixed, home: !!c.home, alt: c.alt || '',
     offs: c.offs != null ? +c.offs : L.offs,
     fixed, fixedLearned: !c.fixed && !!fixed,
     fixedCost: mgr ? 400 : /supervisor|leader|duty/i.test(c.title || '') ? 60 : 30,   // managers move only to stop a shift being empty

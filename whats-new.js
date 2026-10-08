@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 181, items: [
+    '🔁 Shift swaps: on Roster → My shifts, tap 🔁 Ask to swap, pick the day and the colleague. You see both shifts and whether the rest rules still hold for both of you. They tap Agree on their phone (Ops Brain tells them), then a supervisor taps Approve and the posted roster changes, and both get the usual message.',
+    '📷 My week picture: your next 7 days as one clean picture (shift colours, today marked), to keep or send to anyone.',
+    '🏨 Second-choice hotel: on a person\'s card, "If moved, prefers" a hotel. When they have to work at another hotel, the builder and the cover suggestions try that one first.',
+  ] },
   { v: 180, items: [
     '🎨 Six new themes, the best-loved colour themes in their own official colours: 🐱 Catppuccin (soft pastels on dark), 🥛 Latte (the light version), 🧊 Nord (arctic blue-grey), 🧛 Dracula (purple and pink), 🌃 Tokyo Night (city-lights blue) and 🌹 Rosé Pine (muted rose). Tap the theme button in the top bar, or More → themes on a phone. Your theme is only yours.',
   ] },
