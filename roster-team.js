@@ -295,13 +295,14 @@ function rtSwapOptions(I, cells, key, date) {
 }
 /** Gaps in a week with the best ways to fill each. */
 let _rtAdvC = null;
+function _rtAdvKey(I, cells) { try { return JSON.stringify([I.week, cells, I.rules, I.pre, I.avoid, I.soft, I.busy, I.evMiss, I.groups, I.people, roToday()]); } catch (_) { return null; } }
+function rtAdviceCached(I, cells) { const key = _rtAdvKey(I, cells); return key && _rtAdvC && _rtAdvC.key === key ? _rtAdvC.out : null; }
+function rtAdviceStore(I, cells, out) { const key = _rtAdvKey(I, cells); if (key) _rtAdvC = { key, out }; }
 function rtAdvice(I, cells) {
   // the same week asked again (every redraw): worked out once, until anything in it changes
-  let key = null;
-  try { key = JSON.stringify([I.week, cells, I.rules, I.pre, I.avoid, I.soft, I.busy, I.evMiss, I.groups, I.people, roToday()]); } catch (_) {}
-  if (key && _rtAdvC && _rtAdvC.key === key) return _rtAdvC.out;
+  const hit = rtAdviceCached(I, cells); if (hit) return hit;
   const out = _rtAdvice(I, cells);
-  if (key) _rtAdvC = { key, out };
+  rtAdviceStore(I, cells, out);
   return out;
 }
 function _rtAdvice(I, cells) {

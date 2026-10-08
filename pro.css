@@ -1352,3 +1352,4 @@ label.rb-q:first-child { border-color: var(--accent-border); background: color-m
 .rb-rules .hd-add input { height: 36px; flex: 1 1 150px; width: auto; border-radius: 10px; }
 .hd-ask { margin: 0; }
 @media (max-width: 520px) { .hd-ctls { grid-template-columns: 1fr; } }
+.rb-finding { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text3); } .rb-finding .ri-spin { width: 14px; height: 14px; }

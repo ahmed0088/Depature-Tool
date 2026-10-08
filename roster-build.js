@@ -986,7 +986,9 @@ function rbNightToMorning(cells, p, dates) {
 function rbWishWeight(p) { return 1 + Math.min(2, (p.wishDebt || 0) * 0.5); }
 
 // ── Building ──────────────────────────────────────────────
+let _rbBuilding = false;
 function rbBuild(again) {
+  if (_rbBuilding) return;   // already building: one at a time
   if (!roCanEdit()) { showToast('Only supervisors, managers and owners can build the roster', 'err'); return; }
   if (!Object.keys(roStaff).length) { showToast('Add one roster first (picture or Excel), so the builder knows the team', 'warn'); return; }
   const has = rbDrafts[rbWeek] && Object.keys(rbDrafts[rbWeek].cells || {}).length;
@@ -994,11 +996,34 @@ function rbBuild(again) {
   rbSeed = again ? (rbSeed * 7 + 13) % 100000 : 1;
   const out = document.getElementById('rbOut');
   if (out) { out.innerHTML = '<div class="ri-reading"><span class="ri-spin"></span><div><b>Building the roster…</b><small>Trying several ways and keeping the one that covers every shift and keeps every rule.</small></div></div>'; out.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
-  setTimeout(() => _rbBuildNow(), 60);
+  _rbBuilding = true;
+  setTimeout(() => _rbBuildNow().catch(e => { console.error(e); showToast('Building failed: ' + e.message, 'err'); rbRender(); }).finally(() => { _rbBuilding = false; }), 60);
 }
-function _rbBuildNow() {
-  const I = rbInput(rbSeed);
-  const res = rbSolve(I);
+/** The engine in the background (roster-worker.js), so the screen never freezes while it builds. Falls back to
+ *  building here if the browser can't (old browser, file opened offline before the worker was cached). */
+let _rbWk = null, _rbWkN = 0;
+function rbSolveAsync(I) {
+  const here = () => rbSolve(I);
+  if (typeof Worker !== 'function' || self._rbNoWorker) return Promise.resolve(here());
+  return new Promise(resolve => {
+    let done = false;
+    const finish = r => { if (done) return; done = true; resolve(r); };
+    try {
+      if (!_rbWk) { _rbWk = new Worker('roster-worker.js'); _rbWk.onerror = () => { self._rbNoWorker = true; try { _rbWk.terminate(); } catch (_) {} _rbWk = null; }; }
+      const id = ++_rbWkN, w = _rbWk;
+      const onMsg = e => { if (!e.data || e.data.id !== id) return; w.removeEventListener('message', onMsg); clearTimeout(t);
+        if (e.data.ok) { const cells = e.data.res.cells; finish({ cells, notes: e.data.res.notes || [], problems: rbProblems(I, cells) }); }
+        else { console.warn('Roster worker:', e.data.error); finish(here()); } };
+      w.addEventListener('message', onMsg);
+      const t = setTimeout(() => { w.removeEventListener('message', onMsg); try { w.terminate(); } catch (_) {} _rbWk = null; finish(here()); }, 90000);   // stuck: start again here
+      w.postMessage({ id, I: JSON.parse(JSON.stringify(I)), roDays, roStaff, roCodes, rbPeople, rbSettings });
+    } catch (e) { self._rbNoWorker = true; finish(here()); }
+  });
+}
+async function _rbBuildNow() {
+  const I = rbInput(rbSeed), week = rbWeek;
+  const res = await rbSolveAsync(I);
+  if (rbWeek !== week) rbWeek = week;   // (the week built is the week saved, even if someone switched meanwhile)
   rbDrafts[rbWeek] = Object.assign({ cells: res.cells, at: Date.now(), by: (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '' }, res.notes && res.notes.length ? { notes: res.notes } : {});
   rbSaveDraft();
   rbRender();
@@ -1120,17 +1145,17 @@ function rbRender() {
       ${typeof rtPlanHtml === 'function' && Object.keys(roStaff).length ? rtPlanHtml(shown, dates) : ''}
       <details class="card rb-card"${rbSec('need', false)}>
         <summary class="ro-card-hd"><b>👥 Cover needed</b><span>people on each shift, each day</span></summary>
-        ${rbWithPosts(shown).map(g => rbNeedHtml(g)).join('')}
+        ${rbLazy('need', false, () => rbWithPosts(shown).map(g => rbNeedHtml(g)).join(''))}
       </details>
 
       <details class="card rb-card"${rbSec('team', false)}>
         <summary class="ro-card-hd"><b>🧑‍💼 Team</b><span>titles, static or rotating, leave, history</span></summary>
-        ${typeof rtTeamHtml === 'function' ? rtTeamHtml(shown) : shown.map(g => rbTeamHtml(g)).join('')}
+        ${rbLazy('team', false, () => typeof rtTeamHtml === 'function' ? rtTeamHtml(shown) : shown.map(g => rbTeamHtml(g)).join(''))}
       </details>
 
       <details class="card rb-card"${rbSec('rules', false)}>
         <summary class="ro-card-hd"><b>⚖️ Rules & public holidays</b></summary>
-        ${rbRulesHtml()}
+        ${rbLazy('rules', false, () => rbRulesHtml())}
       </details>
     </div>
 
@@ -1147,8 +1172,15 @@ function rbRender() {
 }
 // Setup sections stay open or closed as the person left them, across re-renders.
 const rbSecState = {};
+/** A folded section's inside is drawn when it's opened (not on every redraw while it's shut). */
+const _rbLazyFn = {};
+function rbLazy(id, dflt, fn) {
+  if (id in rbSecState ? rbSecState[id] : dflt) return fn();
+  _rbLazyFn[id] = fn;
+  return `<div class="rb-lazy" data-lazy="${id}"></div>`;
+}
 function rbSec(id, dflt) { return `${(id in rbSecState ? rbSecState[id] : dflt) ? ' open' : ''} data-sec="${id}"`; }
-function rbSecWire(root) { root.querySelectorAll('details[data-sec]').forEach(d => d.addEventListener('toggle', () => { rbSecState[d.dataset.sec] = d.open; })); }
+function rbSecWire(root) { root.querySelectorAll('details[data-sec]').forEach(d => d.addEventListener('toggle', () => { rbSecState[d.dataset.sec] = d.open; const ph = d.open && d.querySelector(':scope > .rb-lazy'); if (ph && _rbLazyFn[ph.dataset.lazy]) { try { ph.outerHTML = _rbLazyFn[ph.dataset.lazy](); } catch (e) { console.error(e); } } })); }
 /** ① Requests ② Build ③ Check ④ Publish: where this week is. */
 let _rbHealth = null;
 function rbStepsHtml() {
@@ -1407,6 +1439,7 @@ function rbDelHol(i) { const h = (rbSettings.holidays || []).slice(); h.splice(i
 
 // ── The draft: table, cover, problems ─────────────────────
 function rbOutHtml(shown, dates) {
+  _rbDefGen++;
   const I = rbInput(rbSeed), cells = rbDrafts[rbWeek].cells || {};
   I.people.forEach(p => { cells[p.key] = cells[p.key] || {}; });
   const cover = rbCover(I, cells), probs = rbProblems(I, cells, cover);
@@ -1435,7 +1468,7 @@ function rbOutHtml(shown, dates) {
     <div class="rb-tools"><button class="btn sm" onclick="rbUndo()"${rbUndoStack.length ? '' : ' disabled'} title="Undo (Ctrl+Z)">↶ Undo</button>${rbLegendHtml()}</div>
     <small class="rb-hint">Tap a cell to change it · drag onto another to swap (long-press on a phone) · tap a name for their card</small>
     <div class="ro-scroll"><table class="ro-table rb-table${rbHi ? ' rb-hi rb-hi-' + rbHi : ''}" id="rbTable"><thead><tr><th class="ro-name">Name</th>${dates.map(dt => `<th>${escapeHtml(roDayLbl(dt))}</th>`).join('')}<th class="rb-tot" title="Days worked · hours this week">Week</th></tr></thead><tbody>${rows}</tbody></table></div>
-    ${rbDeskHtml(I, cells, shown, dates)}
+    ${rbDefer('rbDeskD', () => rbDeskHtml(I, cells, shown, dates))}
     <details class="rb-covers"${P.some(p => p.kind === 'short' || p.kind === 'thin') ? ' open' : ''}><summary>Cover: people on each shift (has / needs) · tap a number for who can take it</summary>${covers}</details>
     ${(() => { const H = rbHappyHtml(I, cells, shown, dates); return `<details class="rb-covers"><summary>💛 Team happiness${H.sum ? ': ' + H.sum : ''}</summary>${H.html}</details>`; })()}
     ${(() => { const B = rbPhHtml(I, cells, shown, dates); return B ? `<details class="rb-covers"${B.open ? ' open' : ''}><summary>🏖 PH balance: ${B.sum}</summary>${B.html}</details>` : ''; })()}
@@ -1725,13 +1758,35 @@ function rbShiftStarted(date, shift) {
 /** Gaps in cover, each with the best ways to fill it (or "bring in a staff member"). */
 function rbFixHtml(I, cells, shown, ptxt) {
   if (typeof rtAdvice !== 'function') return '';
-  const adv = rtAdvice(I, cells).filter(a => shown.includes(rbBaseGroup(a.group)) && !(I.groups[a.group] || {}).post   // a bell boy's day off needs no cover
-    && !rbShiftStarted(a.date, a.shift));   // a shift already under way or gone by: nothing to fix any more
+  const keep = a => shown.includes(rbBaseGroup(a.group)) && !(I.groups[a.group] || {}).post   // a bell boy's day off needs no cover
+    && !rbShiftStarted(a.date, a.shift);   // a shift already under way or gone by: nothing to fix any more
   _rbOpt = [];
-  if (!adv.length) return '';
-  return `<div class="rb-fix" id="rbFix"><div class="rb-sub">Cover to fix <small>${adv.filter(a => a.kind === 'short').length} empty · ${adv.filter(a => a.kind === 'thin').length} with one person</small></div>
-    ${adv.slice(0, 12).map(a => rbGapHtml(I, cells, a, ptxt(a))).join('')}
-  </div>`;
+  const head = adv => `<div class="rb-sub">Cover to fix <small>${adv.filter(a => a.kind === 'short').length} empty · ${adv.filter(a => a.kind === 'thin').length} with one person</small></div>`;
+  const cached = typeof rtAdviceCached === 'function' ? rtAdviceCached(I, cells) : null;
+  if (cached) { const adv = cached.filter(keep); return adv.length ? `<div class="rb-fix" id="rbFix">${head(adv)}${adv.slice(0, 12).map(a => rbGapHtml(I, cells, a, ptxt(a))).join('')}</div>` : ''; }
+  // not worked out yet: the gaps show at once, and who can take each one fills in a moment later, one gap at a time,
+  // so a tap on the table never waits for it
+  const all = rbProblems(I, cells).filter(p => p.kind === 'short' || p.kind === 'thin'), shownIdx = all.map((a, i) => keep(a) ? i : -1).filter(i => i >= 0).slice(0, 12);
+  if (!shownIdx.length && !all.length) return '';
+  const gen = _rbDefGen, done = [];
+  const step = i => {
+    if (gen !== _rbDefGen) return;   // redrawn since: that redraw does its own
+    if (i >= all.length) { if (typeof rtAdviceStore === 'function') rtAdviceStore(I, cells, done); return; }
+    const a = Object.assign({}, all[i], { options: rtCoverOptions(I, cells, all[i].group, all[i].date, all[i].shift).slice(0, 3) });
+    done.push(a);
+    const el = document.getElementById('rbGap' + i); if (el) el.outerHTML = rbGapHtml(I, cells, a, ptxt(a));
+    setTimeout(() => step(i + 1), 0);
+  };
+  setTimeout(() => step(0), 30);
+  if (!shownIdx.length) return '';
+  return `<div class="rb-fix" id="rbFix">${head(shownIdx.map(i => all[i]))}${shownIdx.map(i => `<div class="rb-fix-item ${all[i].kind || ''}" id="rbGap${i}"><div>${all[i].kind === 'short' ? '⚠' : '◐'} ${ptxt(all[i])}</div><div class="rb-fix-opts"><span class="rb-finding"><span class="ri-spin"></span> finding who can take it…</span></div></div>`).join('')}</div>`;
+}
+/** A part of the screen drawn a moment after the rest (heavy, and below the table): the table shows at once. */
+let _rbDefGen = 0;
+function rbDefer(id, fn) {
+  const gen = _rbDefGen;
+  setTimeout(() => { if (gen !== _rbDefGen) return; const el = document.getElementById(id); if (!el) return; try { el.outerHTML = fn() || ''; } catch (e) { console.error(e); el.remove(); } }, 0);
+  return `<div id="${id}" class="rb-defer"></div>`;
 }
 /** One short shift: the people who can take it and why they're OK, and why not the others. */
 function rbGapHtml(I, cells, a, title) {
@@ -1968,10 +2023,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // dialog is open on top (it's redrawn when that closes): that made every tap on a person's card slow
     let reT = 0;
     const re = () => { clearTimeout(reT); reT = setTimeout(() => { if (document.getElementById('rtSheet') || document.getElementById('evDlg')) { rbStale = true; return; } if (document.getElementById('panel-roster-build')?.classList.contains('active') && !document.getElementById('rbMenu') && !(document.activeElement && /INPUT|SELECT/.test(document.activeElement.tagName) && document.activeElement.closest('#rbRoot'))) rbRender(); }, 150); };
-    fbListen('roster/builder/settings', v => { rbSettings = v || {}; re(); });
-    fbListen('roster/builder/people', v => { rbPeople = v || {}; re(); });
-    fbListen('roster/builder/requests', v => { rbReqs = v || {}; re(); });
-    fbListen('roster/builder/drafts', v => { rbDraftsIn(v); re(); });
+    // what we just saved comes straight back: if nothing differs from what's on screen, nothing is redrawn
+    const same = (a, b) => { try { return JSON.stringify(a || {}) === JSON.stringify(b || {}); } catch (_) { return false; } };
+    fbListen('roster/builder/settings', v => { if (same(v, rbSettings)) return; rbSettings = v || {}; re(); });
+    fbListen('roster/builder/people', v => { if (same(v, rbPeople)) return; rbPeople = v || {}; re(); });
+    fbListen('roster/builder/requests', v => { if (same(v, rbReqs)) return; rbReqs = v || {}; re(); });
+    fbListen('roster/builder/drafts', v => { const before = JSON.stringify(rbDrafts || {}); rbDraftsIn(v); if (JSON.stringify(rbDrafts || {}) !== before) re(); });
   }, 1600);
   if (typeof BA_COMMANDS !== 'undefined') BA_COMMANDS.unshift({ re: /^(build|make|create|plan|do)\s+(the\s+|a\s+|next\s+week'?s?\s+|the\s+next\s+)*(roster|rota|schedule)\b/i, ask: true, ex: 'build the roster', does: 'opens the roster builder for next week', run: () => { if (typeof brClose === 'function') brClose(); rbOpen(); return true; } });
 });

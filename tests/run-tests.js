@@ -489,6 +489,35 @@ console.log('\nRoster scenarios');
   check('meetings: a meeting that falls outside their posted shift is flagged', run(`(() => { roDays['2026-10-14'] = { S0: '15:00 - 00:00' }; return evCheck(evAll.e1).length; })()`), 1);
 }
 
+// ── The background builder (roster-worker.js) gives the same week as the page ──
+{
+  const out = [];
+  const wk = { console: { log() {}, warn() {}, error() {} }, setTimeout: () => 0, clearTimeout() {}, Date, Math, JSON };
+  wk.self = wk; wk.postMessage = m => out.push(m);
+  wk.importScripts = (...fs) => fs.forEach(f => vm.runInContext(fs_read(f), wk, { filename: f }));
+  function fs_read(f) { return fs.readFileSync(path.join(ROOT, f), 'utf8'); }
+  vm.createContext(wk);
+  vm.runInContext(fs_read('roster-worker.js'), wk, { filename: 'roster-worker.js' });
+  // the page side, to make the input
+  const pg = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} }, fbSet() {}, showToast() {}, escapeHtml: x => String(x),
+               document: { addEventListener() {}, getElementById() { return null; }, querySelectorAll() { return []; }, querySelector() { return null; } }, window: {}, setTimeout: () => 0, setInterval: () => 0, clearTimeout() {}, navigator: {} };
+  vm.createContext(pg);
+  for (const f of ['roster.js', 'roster-build.js', 'roster-team.js']) vm.runInContext(fs_read(f), pg, { filename: f });
+  const data = JSON.parse(vm.runInContext(`(() => {
+    const M = '08:00 - 17:00', E = '15:00 - 00:00', N = '00:00 - 09:00';
+    ['Anna Lee', 'Sam Reed', 'Lina Park', 'Omar Hale', 'Rita Moss'].forEach((n, i) => { roStaff['K' + i] = { name: n, group: 'Ibis DD', order: i }; });
+    const W0 = roAdd(roMonday(new Date()), -7);
+    for (let d = 0; d < 7; d++) roDays[roAdd(W0, d)] = { K0: d === 0 ? 'OFF' : M, K1: d === 1 ? 'OFF' : E, K2: d === 2 ? 'OFF' : M, K3: d === 3 ? 'OFF' : N, K4: d === 4 ? 'OFF' : E };
+    rbWeek = roAdd(W0, 14);
+    const I = rbInput(1);
+    return JSON.stringify({ I, roDays, roStaff, roCodes, rbPeople, rbSettings, page: rbSolve(I).cells });
+  })()`, pg));
+  wk.onmessage({ data: { id: 7, I: data.I, roDays: data.roDays, roStaff: data.roStaff, roCodes: data.roCodes, rbPeople: data.rbPeople, rbSettings: data.rbSettings } });
+  const m = out[0] || {};
+  check('background builder: loads and answers', [m.id, m.ok, m.error || ''].join('|'), '7|true|');
+  check('background builder: the same week as building on the page', JSON.stringify(m.res && m.res.cells), JSON.stringify(data.page));
+}
+
 // ── What if… (roster-team.js) ─────────────────────────────
 {
   const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} }, fbSet() {}, showToast() {}, escapeHtml: x => String(x),

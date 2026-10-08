@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 198, items: [
+    '⚡ The roster builder is much smoother, especially on phones: 🔨 Build now works in the background (the screen no longer freezes for seconds; you can scroll while it builds), and tapping a cell, undo, rules and requests answer straight away.',
+    '⚡ "Cover to fix" and the desk check fill in a moment after the table, one gap at a time; folded sections (Team, Rules, Cover needed) are drawn only when you open them; and a change you save is no longer drawn twice when it comes back from the database.',
+  ] },
   { v: 197, items: [
     '🎉 Public holidays (Builder → ⚖️ Rules) has a new look: proper dropdowns, a "Coming up" list with a date tile and its status (✓ Added, Not a PH, or when I\'ll ask), the PH list grouped by holiday (Eid = one row) with ✕ to remove, and a neat add row.',
   ] },
