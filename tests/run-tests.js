@@ -364,6 +364,32 @@ console.log('\nRoster scenarios');
 
 }
 
+// ── Team health (roster-health.js) ───────────────────────
+{
+  const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} }, fbSet() {}, showToast() {}, escapeHtml: x => String(x),
+               document: { addEventListener() {}, getElementById() { return null; }, querySelectorAll() { return []; }, querySelector() { return null; } }, window: {}, setTimeout: () => 0, setInterval: () => 0, clearTimeout() {}, navigator: {} };
+  vm.createContext(sb);
+  for (const f of ['roster.js', 'roster-build.js', 'roster-team.js', 'roster-health.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sb, { filename: f });
+  vm.runInContext(`
+    var M = '08:00 - 17:00', E = '15:00 - 00:00', N = '23:00 - 08:00';
+    roStaff.A = { name: 'Anna Lee', group: 'Ibis DD' }; roStaff.B = { name: 'Sam Reed', group: 'Ibis DD' }; roStaff.C = { name: 'Lina Park', group: 'Ibis DD' }; roStaff.Z = { name: 'Omar Hale', group: 'Ibis DD' };
+    rhWindow().forEach((dt, i) => {
+      const wd = i % 7;
+      roDays[dt] = { A: wd >= 5 ? 'OFF' : M,                        // easy: weekends off, mornings
+                     B: wd === 2 ? 'OFF' : wd % 2 ? E : M,           // evening then morning: short rest, no weekends
+                     C: i % 9 === 8 ? 'OFF' : N };                   // long stretches of nights
+    });
+  `, sb);
+  const run = js => vm.runInContext(js, sb);
+  const H = run('rhAll()');
+  check('health: someone with weekends off and good rest is thriving', H.A.grade[1], 'Thriving');
+  check('health: evening → morning shows as short rest', H.B.M.find(m => m.id === 'rest').s < 70 && H.B.worst.some(m => m.id === 'rest'), true);
+  check('health: 8 days in a row is flagged', H.C.M.find(m => m.id === 'run').s < 70, true);
+  check('health: the weakest person scores lower than the strongest', H.A.score > H.B.score && H.A.score > H.C.score, true);
+  check('health: no roster yet means no score, not a bad one', !!H.Z.none, true);
+  check('health: the card and the team view render', run(`rhPersonHtml('B').includes('What would help') && rhTeamHtml(['Ibis DD']).includes('Team health') && rhBadge('A').includes('rh-ring')`), true);
+}
+
 // ── What if… (roster-team.js) ─────────────────────────────
 {
   const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} }, fbSet() {}, showToast() {}, escapeHtml: x => String(x),

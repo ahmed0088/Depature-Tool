@@ -1260,3 +1260,46 @@ label.rb-q:first-child { border-color: var(--accent-border); background: color-m
 .rb-ln-row { display:grid; grid-template-columns: minmax(110px,180px) minmax(0,1fr) auto; gap:10px; align-items:baseline; padding:7px 0; border-top:1px solid var(--border); font-size:.8rem; }
 .rb-ln-row span { color: var(--text2); } .rb-ln-row small { color: var(--text3); font-family: var(--mono); font-size:.68rem; }
 @media (max-width: 600px) { .rb-ln-row { grid-template-columns: 1fr auto; } .rb-ln-row span { grid-column: 1 / -1; } }
+
+/* ── Team health (roster-health.js) ─────────────────────── */
+@property --rhp { syntax: '<number>'; inherits: false; initial-value: 0; }
+.rh-good { --rh: var(--green); } .rh-ok { --rh: var(--mint, var(--green)); } .rh-warn { --rh: var(--amber); } .rh-bad { --rh: var(--red); } .rh-none { --rh: var(--border2); }
+.rh-ring { --rhp: var(--p); position: relative; flex: none; display: inline-grid; place-items: center; width: var(--sz); height: var(--sz); border-radius: 50%;
+  background: conic-gradient(var(--rh) calc(var(--rhp) * 1%), color-mix(in srgb, var(--rh) 14%, transparent) 0); animation: rh-fill 1s var(--ho-ease, ease) both; }
+.rh-ring::before { content: ''; position: absolute; inset: calc(var(--sz) * .12); border-radius: 50%; background: var(--card); }
+.rh-ring b { position: relative; font: 700 calc(var(--sz) * .34)/1 var(--mono); color: var(--text); }
+.rh-ring.big { box-shadow: 0 0 calc(var(--sz) * .35) color-mix(in srgb, var(--rh) 30%, transparent); }
+@keyframes rh-fill { from { --rhp: 0; } }
+@media (prefers-reduced-motion: reduce) { .rh-ring { animation: none; } }
+.rt-row { position: relative; padding-right: 54px; }
+.rh-badge { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; }
+.rh-badge i { font-style: normal; font-size: 12px; opacity: .85; }
+.rh-badge .rh-ring::before { background: var(--card2); }
+.rh-team { display: flex; gap: 16px; align-items: center; padding: 14px 16px; margin: 0 0 12px; border-radius: 14px; border: 1px solid var(--border);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--rh, var(--accent)) 8%, var(--card)), var(--card)); }
+.rh-team-m { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.rh-team-hd { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; } .rh-team-hd small { color: var(--text3); }
+.rh-pill { padding: 2px 9px; border-radius: 99px; font-size: 11px; font-weight: 700; color: var(--rh); background: color-mix(in srgb, var(--rh) 15%, transparent); }
+.rh-bar { display: flex; height: 10px; border-radius: 99px; overflow: hidden; gap: 2px; }
+.rh-seg { background: var(--rh); font-size: 0; transition: flex .6s var(--ho-ease, ease); }
+.rh-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--text2); }
+.rh-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--rh); margin-right: 5px; }
+.rh-care { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; color: var(--text2); } .rh-care.ok { color: var(--green); }
+.rh-chip { all: unset; cursor: pointer; font-size: 12px; padding: 3px 9px; border-radius: 99px; border: 1px solid color-mix(in srgb, var(--rh) 45%, transparent); background: color-mix(in srgb, var(--rh) 10%, transparent); color: var(--text); }
+.rh-chip b { color: var(--rh); font-family: var(--mono); margin-left: 3px; } .rh-chip:hover { background: color-mix(in srgb, var(--rh) 22%, transparent); }
+.rh-card { margin: 4px 0 14px; padding: 14px; border-radius: 14px; border: 1px solid var(--border); background: var(--card2); }
+.rh-card .rh-ring::before { background: var(--card2); }
+.rh-empty-card { display: flex; gap: 12px; align-items: center; } .rh-empty-card small, .rh-card-hd small { display: block; color: var(--text3); font-size: 11px; }
+.rh-card-hd { display: flex; gap: 14px; align-items: center; margin-bottom: 12px; }
+.rh-txt-good { color: var(--green); } .rh-txt-ok { color: var(--mint, var(--green)); } .rh-txt-warn { color: var(--amber); } .rh-txt-bad { color: var(--red); }
+.rh-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 560px) { .rh-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .rh-team { padding: 12px; gap: 12px; } }
+.rh-tile { padding: 8px 10px; border-radius: 10px; background: var(--card); border: 1px solid var(--border); border-left: 3px solid var(--rh); display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.rh-tile-t { font-size: 11px; color: var(--text2); display: flex; gap: 5px; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rh-tile-v { font: 700 14px/1.1 var(--mono); color: var(--text); }
+.rh-meter { height: 4px; border-radius: 99px; background: color-mix(in srgb, var(--rh) 15%, transparent); overflow: hidden; }
+.rh-meter i { display: block; height: 100%; border-radius: 99px; background: var(--rh); animation: rh-grow .9s var(--ho-ease, ease) both; }
+@keyframes rh-grow { from { width: 0; } }
+.rh-tips { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; } .rh-tips.ok { color: var(--green); }
+.rh-tip { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--rh) 9%, transparent); }
+.rh-tip small { display: block; color: var(--text3); font-size: 11px; margin-top: 2px; }

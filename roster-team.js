@@ -685,12 +685,12 @@ function rtImportTeamFile(input) {
 
 // ── Team ──────────────────────────────────────────────────
 function rtTeamHtml(shown) {
-  return `<div class="rt-team-acts"><button class="btn sm gold" onclick="rtNewStaffDialog()">＋ Add staff</button><button class="btn sm" onclick="rtSickDialog()">🤒 Sick / leave</button><label class="btn sm">📥 Team file<input type="file" accept=".json,application/json" hidden onchange="rtImportTeamFile(this)"></label><small>Tap a name for titles, shift, leave and history.</small></div>
+  return `${typeof rhTeamHtml === 'function' ? rhTeamHtml(shown) : ''}<div class="rt-team-acts"><button class="btn sm gold" onclick="rtNewStaffDialog()">＋ Add staff</button><button class="btn sm" onclick="rtSickDialog()">🤒 Sick / leave</button><label class="btn sm">📥 Team file<input type="file" accept=".json,application/json" hidden onchange="rtImportTeamFile(this)"></label><small>Tap a name for titles, shift, leave and history.</small></div>
   ${shown.map(g => `<div class="rb-sub">${escapeHtml(g || 'Team')}</div><div class="rt-list">${Object.keys(roStaff).filter(k => ((roStaff[k] || {}).group || '') === g && !((rbPeople[k] || {}).deleted)).sort((a, b) => (roStaff[a].order ?? 999) - (roStaff[b].order ?? 999) || roStaff[a].name.localeCompare(roStaff[b].name)).map(k => {
     const c = rbPeople[k] || {}, p = rbPersonCfg(k), ph = rbPhOwed(k), today = roToday();
     const away = Object.values(c.absences || {}).find(a => a.to >= today);
     const left = c.left && c.left <= roAdd(rbWeek, 6);
-    return `<button class="rt-row${left ? ' gone' : ''}" onclick="rtPerson(${_rtQ(k)})">
+    return `<button class="rt-row${left ? ' gone' : ''}" onclick="rtPerson(${_rtQ(k)})">${!left && typeof rhBadge === 'function' ? rhBadge(k) : ''}
       <span class="rt-n"><b>${escapeHtml(roStaff[k].name)}${p.lock ? ' 🔒' : ''}${c.home ? ' 🏨' : ''}</b>${c.title ? `<i class="rt-title ${/manager/i.test(c.title) ? 'mgr' : /supervisor|leader/i.test(c.title) ? 'sup' : ''}">${escapeHtml(c.title)}</i>` : ''}</span>
       <span class="rt-m">${left ? 'left ' + escapeHtml(roDayLbl(c.left)) : p.mode === 'static' ? 'Static ' + escapeHtml(roShort(roInfo(p.fixed)) || p.fixed) : p.mode === 'rotate' ? 'Rotates' : 'Any shift'} · ${p.offs} off${ph.owed ? ' · PH ' + ph.owed : ''}${away ? ` · <em>${escapeHtml(away.code)} ${escapeHtml(roDayLbl(away.from))}${away.to !== away.from ? '–' + escapeHtml(roDayLbl(away.to)) : ''}</em>` : ''}</span></button>`; }).join('') || '<div class="ro-empty">Nobody yet.</div>'}</div>`).join('')}`;
 }
@@ -714,6 +714,7 @@ function rtPerson(k) {
   d.id = 'rtSheet'; d.className = 'ri-viewer';
   d.innerHTML = `<div class="card rt-sheet">
     <div class="ro-card-hd"><b>${escapeHtml(s.name)}</b><button class="ro-x" onclick="document.getElementById('rtSheet').remove();rbRender()">✕</button></div>
+    ${typeof rhPersonHtml === 'function' ? rhPersonHtml(k) : ''}
     <div class="rt-form">
       <label>Name<input value="${escapeHtml(s.name)}" onchange="rtSetStaff(${q},'name',this.value.trim())"></label>
       <label>Employee no.<input value="${escapeHtml(s.id || '')}" onchange="rtSetStaff(${q},'id',this.value.trim())"></label>

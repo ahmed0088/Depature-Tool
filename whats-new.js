@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 190, items: [
+    '💚 Team health: every team member gets a health score out of 100 from the last 4 weeks of rosters, as a ring next to their name in 🧑‍💼 Team (green = thriving, amber = watch, red = needs care), with small icons for what needs a look.',
+    '💚 On top of the team list: the whole team at a glance and "Look after first", the people who need care, one tap to their card.',
+    '💚 On each person\'s card: 8 tiles (rest between shifts, days in a row, nights, weekends off, hours, days off, sick days, PH owed), compared with their hotel, plus "What would help".',
+  ] },
   { v: 189, items: [
     '🏖 The roster builder clears PH balances: whoever is owed the most goes first, up to 2 PH days a week each, placed next to their day off where it can (a longer break), oldest PH first, and only when the shift still has enough people.',
     '🏖 New in the builder: "PH balance", person by person: what this week gives, what is still owed, and one-tap "PH on Thu" buttons for other days where a PH fits.',
