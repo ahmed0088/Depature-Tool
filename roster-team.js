@@ -713,13 +713,8 @@ function rtPerson(k) {
     </div>
     <div class="rt-cant"><span>Locks:</span><button class="rb-opt${p.lock ? ' on' : ''}" onclick="rtSet(${q},'lockShift',${!p.lock});rtPerson(${q})">${p.lock ? '🔒' : '🔓'} ${p.lock ? 'Keeps ' + escapeHtml(p.fixed || 'their shift') : 'Shift can change'}</button><button class="rb-opt${c.home ? ' on' : ''}" onclick="rtSet(${q},'home',${c.home ? 'undefined' : 'true'});rtPerson(${q})">🏨 ${c.home ? 'Stays at ' + escapeHtml(g || 'their hotel') : 'Can help other hotels'}</button></div>
     <div class="rt-cant"><span>Works:</span><button class="rb-opt ro-t-night" onclick="rtOnly(${q},'night')">🌙 Nights only</button><button class="rb-opt ro-t-morning" onclick="rtOnly(${q},'day')">☀️ Days only</button><button class="rb-opt" onclick="rtOnly(${q},'all')">All shifts</button></div>
-    <div class="rt-cant"><span>Shifts:</span>${shifts.map(x => { const no = (c.allowed && c.allowed.length && !c.allowed.includes(x)), soft = (c.soft || []).includes(x), like = (c.likes || []).includes(x); return `<button class="rb-opt ro-t-${(roInfo(x) || {}).type}${no ? ' on' : soft ? ' soft' : like ? ' like' : ''}" onclick="rtToggleShift(${q},${_rtQ(x)})" title="Tap: 💛 likes → ⚠ prefer not → 🚫 can't work → fine">${no ? '🚫 ' : soft ? '⚠ ' : like ? '💛 ' : ''}${escapeHtml(x)}</button>`; }).join('')}<small class="ro-hint">Tap a shift: 💛 likes it → ⚠ prefer not (only if needed) → 🚫 can't work → fine</small></div>
-    <div class="rt-wish">
-      <div class="rb-sub">💛 Likes & wishes <small>the builder tries to grant every one, and shows under Team happiness which it could</small></div>
-      <div class="rt-cant"><span>Days off:</span><span class="rt-days">${RB_DAYS.map((x, i) => `<button class="rb-opt${(p.prefOff || []).includes(i) ? ' on' : ''}" onclick="rtWishDay(${q},${i})">${x}</button>`).join('')}</span></div>
-      <div class="rt-cant"><span>Also:</span><button class="rb-opt${c.together ? ' on' : ''}" onclick="rtSet(${q},'together',${c.together ? 'undefined' : 'true'});rtPerson(${q})">📅 Days off together</button><button class="rb-opt${c.steady ? ' on' : ''}" onclick="rtSet(${q},'steady',${c.steady ? 'undefined' : 'true'});rtPerson(${q})">⏱ Same hours all week</button><label class="rb-opt rt-inl">🌙 Nights a week, at most <select onchange="rtSet(${q},'maxNights',this.value===''?undefined:+this.value);rtPerson(${q})"><option value="">no limit</option>${[0, 1, 2, 3, 4, 5].map(n => `<option value="${n}"${c.maxNights === n ? ' selected' : ''}>${n}</option>`).join('')}</select></label></div>
-      <textarea class="rt-note" placeholder="Anything else to keep in mind (e.g. studying Tuesday evenings, takes the 8:00 bus, prefers working with Lina)…" onchange="rtSet(${q},'note',this.value.trim()||undefined)">${escapeHtml(c.note || '')}</textarea>
-    </div>
+    <div class="rt-cant"><span>Shifts:</span>${shifts.map(x => { const no = (c.allowed && c.allowed.length && !c.allowed.includes(x)), soft = (c.soft || []).includes(x), like = (c.likes || []).includes(x); return `<button class="rb-opt ro-t-${(roInfo(x) || {}).type}${no ? ' on' : soft ? ' soft' : like ? ' like' : ''}" onclick="rtToggleShift(${q},${_rtQ(x)})" title="Tap: 💛 likes → ⚠ prefer not → 🚫 can't work → fine">${no ? '🚫 ' : soft ? '⚠ ' : like ? '💛 ' : ''}${escapeHtml(x)}</button>`; }).join('')}<small class="ro-hint">Tap: 💛 likes → ⚠ prefer not → 🚫 can't</small></div>
+    ${rtWishHtml(k)}
     <div class="rb-sub">Sick & leave</div>
     <div class="rt-abs">${absences.map(([id, a]) => `<span class="rb-hol">${escapeHtml(a.code)} · ${escapeHtml(roDayLbl(a.from))}${a.to !== a.from ? ' → ' + escapeHtml(roDayLbl(a.to)) : ''}<button class="ro-x" onclick="rtDelAbsence(${q},'${id}')">✕</button></span>`).join('') || '<span class="ro-empty">None.</span>'}</div>
     <div class="rb-inline"><select id="rtAbC">${RT_LEAVE.map(x => `<option>${x}</option>`).join('')}</select><input type="date" id="rtAbF" value="${roToday()}"><input type="date" id="rtAbT" value="${roToday()}"><button class="btn sm gold" onclick="rtAbsentFromSheet(${q})">Add</button></div>
@@ -747,6 +742,62 @@ function rtToggleShift(k, s) {
   if (soft.includes(s)) { rtSet(k, 'soft', without(soft, s)); rtToggleCant(k, s); return; }   // prefer not → can't
   if (likes.includes(s)) { rtSet(k, 'likes', without(likes, s)); rtSet(k, 'soft', soft.concat([s])); rtPerson(k); return; }   // likes → prefer not
   rtSet(k, 'likes', likes.concat([s])); rtPerson(k);                             // fine → likes
+}
+// ── 💛 Wishes: one tap each ────────────────────────────────
+// a shift's band, from its start: morning before 10:00, day until 14:00, evening after, night from 19:00 or a 00:00 start
+function _rtBand(x) { const i = roInfo(x); if (!i || !i.from) return ''; const h = +i.from.slice(0, 2); return i.type === 'night' || h >= 19 || h < 4 ? 'night' : h < 10 ? 'morning' : h < 14 ? 'day' : 'evening'; }
+const _rtEarly = x => { const i = roInfo(x); return !!(i && i.from && +i.from.slice(0, 2) >= 4 && +i.from.slice(0, 2) < 8); };
+const _rtLate = x => { const i = roInfo(x); if (!i || !i.from || _rtBand(x) === 'night') return false; const e = +i.to.slice(0, 2), s0 = +i.from.slice(0, 2); return e >= 23 || e < s0; };
+const RT_WISHES = [
+  ['morning', '☀️ Mornings', 'likes'], ['day', '🌤 Day', 'likes'], ['evening', '🌆 Evenings', 'likes'], ['night', '🌙 Nights', 'likes'],
+  ['noNights', '🚫 No nights'], ['fewNights', '🌙 ≤ 2 nights'], ['noEarly', '🌅 No early start'], ['noLate', '🌃 No late finish'],
+  ['weekend', '🏖 Weekends off'], ['together', '📅 Days off together'], ['steady', '⏱ Same hours'],
+];
+/** Is this wish on for them? */
+function _rtWishOn(k, w) {
+  const c = rbPeople[k] || {}, p = rbPersonCfg(k), shifts = rbGroupCfg((roStaff[k] || {}).group || '').shifts;
+  const likes = c.likes || [], soft = c.soft || [], band = b => shifts.filter(x => _rtBand(x) === b);
+  if (['morning', 'day', 'evening', 'night'].includes(w)) { const l = band(w); return !!l.length && l.every(x => likes.includes(x)); }
+  if (w === 'noNights') return c.maxNights === 0;
+  if (w === 'fewNights') return c.maxNights === 2;
+  if (w === 'noEarly') { const l = shifts.filter(_rtEarly); return !!l.length && l.every(x => soft.includes(x)); }
+  if (w === 'noLate') { const l = shifts.filter(_rtLate); return !!l.length && l.every(x => soft.includes(x)); }
+  if (w === 'weekend') return [5, 6].every(d => (p.prefOff || []).includes(d));
+  return !!c[w];
+}
+function rtWish(k, w) {
+  const c = rbPeople[k] || {}, p = rbPersonCfg(k), shifts = rbGroupCfg((roStaff[k] || {}).group || '').shifts, on = _rtWishOn(k, w);
+  const set = (f, list) => rtSet(k, f, list && list.length ? [...new Set(list)] : undefined);
+  const likes = (c.likes || []).slice(), soft = (c.soft || []).slice();
+  if (['morning', 'day', 'evening', 'night'].includes(w)) {
+    const l = shifts.filter(x => _rtBand(x) === w);
+    if (on) set('likes', likes.filter(x => !l.includes(x)));
+    else { set('likes', likes.concat(l)); set('soft', soft.filter(x => !l.includes(x))); if (w === 'night' && c.maxNights === 0) rtSet(k, 'maxNights', undefined); }
+  } else if (w === 'noNights' || w === 'fewNights') {
+    rtSet(k, 'maxNights', on ? undefined : w === 'noNights' ? 0 : 2);
+    if (!on && w === 'noNights') set('likes', likes.filter(x => _rtBand(x) !== 'night'));
+  } else if (w === 'noEarly' || w === 'noLate') {
+    const l = shifts.filter(w === 'noEarly' ? _rtEarly : _rtLate);
+    if (on) set('soft', soft.filter(x => !l.includes(x))); else { set('soft', soft.concat(l)); set('likes', likes.filter(x => !l.includes(x))); }
+  } else if (w === 'weekend') {
+    const cur = (p.prefOff || []).filter(d => d < 5);
+    rtSet(k, 'prefOff', on ? cur : cur.concat([5, 6]));
+  } else rtSet(k, w, on ? undefined : true);
+  rtPerson(k);
+}
+/** The wishes panel on a card: small chips, one tap each, and the days they'd like off. */
+function rtWishHtml(k) {
+  const c = rbPeople[k] || {}, p = rbPersonCfg(k), q = _rtQ(k), shifts = rbGroupCfg((roStaff[k] || {}).group || '').shifts;
+  const have = new Set(shifts.map(_rtBand));
+  const list = RT_WISHES.filter(([w]) => !['morning', 'day', 'evening', 'night'].includes(w) || have.has(w))
+    .filter(([w]) => w !== 'noEarly' || shifts.some(_rtEarly)).filter(([w]) => w !== 'noLate' || shifts.some(_rtLate));
+  const n = list.filter(([w]) => _rtWishOn(k, w)).length + (p.prefOff || []).filter(d => d < 5).length + (c.note ? 1 : 0);
+  return `<div class="rt-wish">
+    <div class="rt-wish-hd"><b>💛 Wishes</b><small>${n ? `${n} set · ` : ''}tap to turn on or off · the builder tries to grant them</small></div>
+    <div class="rt-chips">${list.map(([w, l]) => `<button class="rt-chip${_rtWishOn(k, w) ? ' on' : ''}" onclick="rtWish(${q},'${w}')">${l}</button>`).join('')}</div>
+    <div class="rt-wish-row"><span>Off on</span><span class="rt-days">${RB_DAYS.map((x, i) => `<button class="rt-day${(p.prefOff || []).includes(i) ? ' on' : ''}" onclick="rtWishDay(${q},${i})" title="Would like ${x} off">${x.slice(0, 2)}</button>`).join('')}</span></div>
+    <input class="rt-note" value="${escapeHtml(c.note || '')}" placeholder="📝 Anything else… (studying Tue evenings, takes the 8:00 bus)" onchange="rtSet(${q},'note',this.value.trim()||undefined)">
+  </div>`;
 }
 /** 💛 a day they'd like off (as many as they want; tap again to remove) */
 function rtWishDay(k, d) {

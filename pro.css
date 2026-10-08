@@ -1236,11 +1236,20 @@ label.rb-q:first-child { border-color: var(--accent-border); background: color-m
 .rb-hp-w i { font-style:normal; font-size:.7rem; padding:2px 8px; border-radius:99px; border:1px solid var(--border); background:var(--card2); }
 .rb-hp-w i.ok { color: var(--green); } .rb-hp-w i.no { color: var(--amber); }
 @media (max-width: 600px) { .rb-hp-row { grid-template-columns: 26px 1fr auto auto; } .rb-hp-w { grid-column: 1 / -1; } }
-/* Likes & wishes on the card */
-.rt-wish { margin: 10px 0 4px; padding: 12px; border-radius: 12px; border: 1px solid var(--border); background: color-mix(in srgb, var(--accent) 5%, transparent); }
-.rt-wish .rb-sub { margin-top: 0; }
-.rt-days { display:flex; gap:6px; flex-wrap:wrap; }
-.rt-days .rb-opt.on, .rt-wish .rb-opt.on { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
+/* 💛 Wishes on the card: small chips, one tap each */
+.rt-wish { margin: 12px 0 6px; padding: 10px 12px 12px; border-radius: 12px; border: 1px solid var(--border); background: transparent; }
+.rt-wish-hd { display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+.rt-wish-hd b { font-size:.8rem; } .rt-wish-hd small { font-size:.68rem; color:var(--text3); }
+.rt-chips { display:flex; flex-wrap:wrap; gap:6px; }
+.rt-chip { font: inherit; font-size:.72rem; line-height:1; padding:6px 10px; border-radius:99px; border:1px solid var(--border2, var(--border)); background: transparent; color: var(--text2); cursor:pointer; transition: background .12s, color .12s, border-color .12s; white-space:nowrap; }
+.rt-chip:hover { border-color: var(--border3, var(--accent-border)); color: var(--text); }
+.rt-chip.on { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent); font-weight:600; }
+.rt-wish-row { display:flex; align-items:center; gap:8px; margin-top:10px; flex-wrap:wrap; }
+.rt-wish-row > span:first-child { font-size:.7rem; color:var(--text3); min-width:42px; }
+.rt-days { display:inline-flex; gap:4px; flex-wrap:wrap; }
+.rt-day { font: inherit; font-size:.7rem; width:32px; height:28px; border-radius:8px; border:1px solid var(--border2, var(--border)); background: transparent; color: var(--text2); cursor:pointer; }
+.rt-day.on { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent); font-weight:700; }
 .rb-opt.like { border-color: color-mix(in srgb, var(--green) 50%, transparent); color: var(--green); }
-.rt-note { width:100%; box-sizing:border-box; min-height:56px; margin-top:6px; font: inherit; font-size:.85rem; color:var(--text); background:var(--bg2, var(--card2)); border:1px solid var(--border2, var(--border)); border-radius:10px; padding:8px 10px; resize:vertical; }
+.rt-note { width:100%; box-sizing:border-box; margin-top:10px; font: inherit; font-size:.78rem; color:var(--text); background: transparent; border:1px solid var(--border); border-radius:9px; padding:7px 10px; min-height:34px; }
+.rt-note:focus { border-color: var(--accent-border); outline: none; }
 .rb-hp-note { flex-basis:100%; font-style:normal; font-size:.74rem; color:var(--text2); }

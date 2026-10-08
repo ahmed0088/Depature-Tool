@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 184, items: [
+    '💛 Wishes on a person\'s card are now small one-tap chips: ☀️ Mornings · 🌤 Day · 🌆 Evenings · 🌙 Nights · 🚫 No nights · 🌙 ≤ 2 nights · 🌅 No early start · 🌃 No late finish · 🏖 Weekends off · 📅 Days off together · ⏱ Same hours. Plus the days they\'d like off (Mo–Su) and a one-line note. Tap to turn on, tap again to turn off; only the options that fit their hotel\'s shifts appear.',
+  ] },
   { v: 183, items: [
     '💛 Likes & wishes for every team member (open their card in 🧑‍💼 Team): shifts they like (tap a shift: 💛 likes → ⚠ prefer not → 🚫 can\'t → fine), the days they\'d like off (as many as they want), days off together, same hours all week, a limit on nights a week, and a note for anything else ("studying Tuesday evenings", "takes the 8:00 bus"). The builder tries to grant every wish, as long as every shift is still covered and the rest rules hold.',
     '😊 Team happiness in the builder: how many wishes this week grants ("14 of 16 wishes granted"), person by person with ✓ and ✗, the least happy first, and their notes. Not happy with it? 🔀 Try another way.',
