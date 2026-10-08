@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 201, items: [
+    '💲 New: Rate Shop (menu → Tools). Our hotels (Ibis Styles, Mercure and Adagio Dubai Deira; add, rename or remove any) next to the hotels around each one: our rate, the market (median, lowest–highest), the difference in %, our place (1 = cheapest), a chart of the next 14 days and the table of prices.',
+    '✨ Check online fills the prices for a day or the next 7 days (AI web search with the key from Roster → AI settings; marked 🌐 so you can check them). ✨ Find hotels around us suggests the hotels to compare with. Every hotel has one-tap links to Booking.com, Google and Google Maps, and any price can be typed in.',
+    '📊 All our hotels: the three side by side with their market, and "us vs market" for every day.',
+  ] },
   { v: 200, items: [
     '🛎 Reception is never left empty (the bell team may be short): after every other way, the builder now also lets a day shift go next to a night without the day off between, and if a night is for Supervisors only and none is free, a front-desk colleague covers it. Each one is flagged ⚠ and written under Decisions this week.',
     '👥 A Duty Manager and a Supervisor are never put on the same shift together in the same hotel (one of them is enough). If it happens anyway (by hand), the week summary shows "DM + Supervisor together" in red.',

@@ -496,6 +496,9 @@
     <div class="nav-icon">⏰</div>Wake-up Calls
     <span class="nav-badge" id="badge-wakeups">—</span>
   </div>
+  <div class="nav-item" onclick="showPanel('rates')" id="nav-rates" data-panel="rates">
+    <div class="nav-icon">💲</div>Rate Shop
+  </div>
   <div class="nav-item" onclick="showPanel('noshow')" id="nav-noshow" data-panel="noshow">
     <div class="nav-icon">🚫</div>No-Show Tracker
     <span class="nav-badge" id="badge-noshow">—</span>
@@ -2718,6 +2721,16 @@
 <!-- ══════════════════════════════════════════════════════
      PANEL: No-Show Tracker
 ══════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-rates">
+  <div class="page-hd">
+    <div class="page-hd-left">
+      <h1>Rate Shop</h1>
+      <p>Our rates next to the hotels around us: the difference from the market, where we rank, and the next 14 days.</p>
+    </div>
+  </div>
+  <div id="rkRoot"></div>
+</div>
+
 <div class="panel" id="panel-wakeups">
   <div class="page-hd">
     <div class="page-hd-left">
@@ -5136,6 +5149,9 @@ async function appInit() {
       <span class="mob-item-icon">⏰</span>
       <span class="mob-more-badge" id="mob-badge-wakeups"></span>Wake-ups
     </button>
+    <button class="mob-more-item" data-panel="rates"          onclick="showPanel('rates');closeMobMore()">
+      <span class="mob-item-icon">💲</span>Rate Shop
+    </button>
     <button class="mob-more-item" data-panel="noshow"         onclick="showPanel('noshow');closeMobMore()">
       <span class="mob-item-icon">🚫</span>
       <span class="mob-more-badge" id="mob-badge-noshow"></span>No-Shows
@@ -5416,6 +5432,7 @@ async function appInit() {
 <script src="brain-online.js"></script>
 <script src="wakeup.js"></script>
 <script src="roster-swap.js"></script>
+<script src="rates.js"></script>
 <script src="brain-expert.js"></script>
 <script src="brand.js"></script>
 <script src="settings.js"></script>

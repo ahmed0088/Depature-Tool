@@ -528,6 +528,22 @@ console.log('\nRoster scenarios');
   check('background builder: the same week as building on the page', JSON.stringify(m.res && m.res.cells), JSON.stringify(data.page));
 }
 
+// ── Rate Shop (rates.js) ─────────────────────────────────
+{
+  const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} }, fbSet() {}, showToast() {}, escapeHtml: x => String(x),
+               document: { addEventListener() {}, getElementById() { return null; }, querySelectorAll() { return []; }, querySelector() { return null; } }, window: {}, setTimeout: () => 0 };
+  vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'rates.js'), 'utf8'), sb, { filename: 'rates.js' });
+  const run = js => vm.runInContext(js, sb);
+  check('rate shop: our three hotels to start with', run(`rkHotels().map(h => h.name).join(' | ')`), 'Ibis Styles Dubai Deira | Mercure Dubai Deira | Adagio Dubai Deira');
+  run(`var h = { id: 'ibis', name: 'Ibis Styles Dubai Deira', comps: [{ id: 'a', name: 'Hotel A' }, { id: 'b', name: 'Hotel B' }, { id: 'c', name: 'Hotel C' }, { id: 'd', name: 'Hotel D' }] };
+       rkPrices = { '2026-10-20': { ibis: { us: { r: 300 }, a: { r: 250 }, b: { r: 280 }, c: { r: 320 }, d: { r: 400 } } } };`);
+  check('rate shop: market median, lowest, highest, our difference and place', run(`(() => { const M = rkMarket(h, '2026-10-20'); return [M.n, M.med, M.min, M.max, Math.round(M.diff * 1000) / 10, M.rank, M.of].join(); })()`), '4,300,250,400,0,3,5');
+  check('rate shop: no prices = no comparison (not zero)', run(`(() => { const M = rkMarket(h, '2026-10-21'); return [M.n, M.diff === undefined].join(); })()`), '0,true');
+  run(`rkSetup = {}; rkSaveHotel(Object.assign({}, rkHotels()[0], { comps: [{ id: 'x', name: 'Hotel X' }] }));`);
+  check('rate shop: changing one keeps all three of ours', run(`rkHotels().length + '|' + rkHotels()[0].comps.length`), '3|1');
+}
+
 // ── What if… (roster-team.js) ─────────────────────────────
 {
   const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} }, fbSet() {}, showToast() {}, escapeHtml: x => String(x),

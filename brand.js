@@ -33,6 +33,7 @@ const HOX_ICONS = {
   trends: _hoI('<path d="m3 17 6-6 4 4 8-8"/><path d="M14 7h7v7"/>'),
   pipeline: _hoI('<path d="M3 4h18l-7 8.5V19l-4 2v-8.5z"/>'),
   standards: _hoI('<path d="M4 19.5V5a2 2 0 0 1 2-2h14v16H6a2 2 0 0 0-2 2z"/><path d="M8 7h8M8 11h5"/>'),
+  rates: _hoI('<path d="M3 20h18"/><path d="M6 16V11M11 16V7M16 16v-6"/><path d="m4 8 5-4 4 3 7-4"/>'),
   wakeups: _hoI('<circle cx="12" cy="13" r="7.5"/><path d="M12 9.5V13l2.5 1.5"/><path d="M4.5 4.5 7 2.5M19.5 4.5 17 2.5"/><path d="M6.5 19.5 5 21.5M17.5 19.5 19 21.5"/>'),
   roster: _hoI('<rect x="3" y="4.5" width="18" height="16.5" rx="2"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/><path d="M7.5 13.5h3M13.5 13.5h3M7.5 17h3"/>'),
   history: _hoI('<path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/>'),
