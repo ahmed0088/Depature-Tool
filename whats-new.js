@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 182, items: [
+    '🔁 Supervisors, managers and owners swap shifts straight away: Roster → 🔁 Swap shifts (or on My shifts). Pick the day and the two people, see both shifts and the rest check, tap Swap now. No asking and no approval, because most of the team doesn\'t use the app. Staff who do use it still ask, and you approve.',
+    '🖼 The roster picture is easier to read: bigger writing, full day names, the weekend shaded, each hotel\'s bar with its staff count, alternate row shading, and a colour key at the bottom (Morning, Afternoon / evening, Night, Day off, Leave / sick, Public holiday).',
+    '👤 "A picture for each person" (in the picture options): every staff member\'s own week as one big, simple picture, ready to send to them on WhatsApp.',
+  ] },
   { v: 181, items: [
     '🔁 Shift swaps: on Roster → My shifts, tap 🔁 Ask to swap, pick the day and the colleague. You see both shifts and whether the rest rules still hold for both of you. They tap Agree on their phone (Ops Brain tells them), then a supervisor taps Approve and the posted roster changes, and both get the usual message.',
     '📷 My week picture: your next 7 days as one clean picture (shift colours, today marked), to keep or send to anyone.',

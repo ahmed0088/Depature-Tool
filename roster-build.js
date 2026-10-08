@@ -1584,35 +1584,64 @@ function rbPicOpts() { return Object.assign({ heading: true, text: '', titles: f
 function rbPicture(res, title, opts) {
   res = res || rbAsRes(); const dates = res.dates, O = Object.assign(rbPicOpts(), opts || {});
   const keyOf = n => (res.keys || {})[n] || Object.keys(roStaff).find(k => (roStaff[k] || {}).name === n);
-  const colors = { morning: '#92d050', afternoon: '#f4b084', night: '#ffff00', nightLate: '#00b0f0', off: '#bfbfbf', leave: '#ff4040', ph: '#9bc2e6', other: '#ffffff' };
-  const fill = v => { const i = roInfo(v); if (!i) return '#ffffff'; if (/^PH\b/i.test(v)) return colors.ph; if (i.type === 'night') return rbMin(i.from || '00:00') >= 12 * 60 ? colors.nightLate : colors.night; return colors[i.type] || colors.other; };
-  const nameW = 260, colW = 128, rowH = 26, x0 = 10, W = x0 * 2 + nameW + colW * 7;
+  // the colours management uses, with a key at the bottom so anyone can read it
+  const colors = { morning: '#92d050', afternoon: '#f4b084', night: '#ffff00', nightLate: '#00b0f0', off: '#d9d9d9', leave: '#ff5a5a', ph: '#9bc2e6', other: '#ffffff' };
+  const kindOf = v => { const i = roInfo(v); if (!i) return ''; if (/^PH\b/i.test(v)) return 'ph'; if (i.type === 'night') return rbMin(i.from || '00:00') >= 12 * 60 ? 'nightLate' : 'night'; return colors[i.type] ? i.type : 'other'; };
+  const fill = v => colors[kindOf(v)] || '#ffffff';
+  const F = "Arial, 'Helvetica Neue', Helvetica, sans-serif";
+  const nameW = 300, colW = 150, rowH = 36, hdH = 30, x0 = 14, W = x0 * 2 + nameW + colW * 7;
   const groups = []; res.names.forEach(n => { const g = res.groups[n] || ''; let G = groups.find(x => x.g === g); if (!G) groups.push(G = { g, n: [] }); G.n.push(n); });
-  const top = O.heading ? 40 : 10;
-  const H = top + rowH * 2 + groups.reduce((t, G) => t + (G.g || groups.length > 1 ? rowH : 0) + G.n.length * rowH, 0) + 14;
+  const used = new Set(); res.names.forEach(n => dates.forEach(dt => { const k = kindOf(res.cells[n][dt] || ''); if (k) used.add(k); }));
+  const top = O.heading ? 56 : 14, legendH = used.size ? 54 : 10;
+  const H = top + hdH * 2 + groups.reduce((t, G) => t + (G.g || groups.length > 1 ? rowH : 0) + G.n.length * rowH, 0) + legendH + 10;
   const c = document.createElement('canvas'); c.width = W * 2; c.height = H * 2;
   const x = c.getContext('2d'); x.scale(2, 2);
   x.fillStyle = '#fff'; x.fillRect(0, 0, W, H);
   x.textBaseline = 'middle'; x.textAlign = 'center';
-  x.fillStyle = '#111'; x.font = 'bold 20px Georgia, serif';
-  if (O.heading) x.fillText(O.text || title || rbSettings.title || `Roster · ${rbWeekLabel(roMonday(roDate(dates[0])))}`, W / 2, 22, W - 20);
+  if (O.heading) { x.fillStyle = '#111'; x.font = `bold 24px ${F}`; x.fillText(O.text || title || rbSettings.title || `Roster · ${rbWeekLabel(roMonday(roDate(dates[0])))}`, W / 2, 30, W - 28); }
   let y = top;
-  const cell = (cx, cy, w, h, bg, txt, font, color) => { x.fillStyle = bg; x.fillRect(cx, cy, w, h); x.strokeStyle = '#333'; x.lineWidth = 0.8; x.strokeRect(cx, cy, w, h); if (txt) { x.fillStyle = color || '#111'; x.font = font || '12px Calibri, Arial'; x.fillText(txt, cx + w / 2, cy + h / 2, w - 6); } };
-  cell(x0, y, nameW, rowH * 2, '#c6efce', 'Employee Name', 'bold 13px Calibri, Arial');
-  dates.forEach((dt, d) => { const D = roDate(dt); cell(x0 + nameW + d * colW, y, colW, rowH, '#c6efce', `${D.getDate()}-${D.toLocaleDateString('en-GB', { month: 'short' })}`, 'bold 13px Calibri, Arial'); cell(x0 + nameW + d * colW, y + rowH, colW, rowH, '#c6efce', RB_DAYS[d], 'bold 13px Calibri, Arial'); });
-  y += rowH * 2;
+  const cell = (cx, cy, w, h, bg, txt, font, color) => { x.fillStyle = bg; x.fillRect(cx, cy, w, h); x.strokeStyle = '#555'; x.lineWidth = 0.8; x.strokeRect(cx, cy, w, h); if (txt) { x.fillStyle = color || '#111'; x.font = font || `14px ${F}`; x.fillText(txt, cx + w / 2, cy + h / 2 + 0.5, w - 8); } };
+  cell(x0, y, nameW, hdH * 2, '#c6efce', 'Employee Name', `bold 15px ${F}`);
+  dates.forEach((dt, d) => { const D = roDate(dt), we = D.getDay() === 6 || D.getDay() === 0 /* Saturday and Sunday: the UAE weekend */; cell(x0 + nameW + d * colW, y, colW, hdH, we ? '#b4dfa0' : '#c6efce', `${D.getDate()} ${D.toLocaleDateString('en-GB', { month: 'short' })}`, `bold 15px ${F}`); cell(x0 + nameW + d * colW, y + hdH, colW, hdH, we ? '#b4dfa0' : '#c6efce', D.toLocaleDateString('en-GB', { weekday: 'long' }), `bold 14px ${F}`); });
+  y += hdH * 2;
   groups.forEach(G => {
-    if (G.g || groups.length > 1) { x.fillStyle = '#000'; x.fillRect(x0, y, W - x0 * 2, rowH); x.fillStyle = '#fff'; x.font = 'bold 15px Georgia, serif'; x.textAlign = 'left'; x.fillText(G.g || 'Team', x0 + 12, y + rowH / 2); x.textAlign = 'center'; y += rowH; }
-    G.n.forEach(n => {
-      x.fillStyle = '#fff'; x.fillRect(x0, y, nameW, rowH); x.strokeStyle = '#333'; x.strokeRect(x0, y, nameW, rowH);
+    if (G.g || groups.length > 1) { x.fillStyle = '#1f2937'; x.fillRect(x0, y, W - x0 * 2, rowH); x.fillStyle = '#fff'; x.font = `bold 17px ${F}`; x.textAlign = 'left'; x.fillText(`${G.g || 'Team'}`, x0 + 14, y + rowH / 2); x.font = `13px ${F}`; x.fillStyle = '#c9d1dc'; x.textAlign = 'right'; x.fillText(`${G.n.length} staff`, W - x0 - 14, y + rowH / 2); x.textAlign = 'center'; y += rowH; }
+    G.n.forEach((n, ri) => {
+      x.fillStyle = ri % 2 ? '#f4f6f8' : '#fff'; x.fillRect(x0, y, nameW, rowH); x.strokeStyle = '#555'; x.strokeRect(x0, y, nameW, rowH);
       const t = O.titles ? rbTitle(keyOf(n) || '') : '';
-      if (t) { x.font = 'italic 10.5px Calibri, Arial'; x.fillStyle = '#666'; x.textAlign = 'right'; x.fillText(t, x0 + nameW - 6, y + rowH / 2, 90); }
-      x.fillStyle = '#111'; x.font = '12px Calibri, Arial'; x.textAlign = 'left'; x.fillText(`${O.ids && res.ids[n] ? res.ids[n] + ' - ' : ''}${n}`, x0 + 6, y + rowH / 2, nameW - (t ? 100 : 10)); x.textAlign = 'center';
-      dates.forEach((dt, d) => { const v = res.cells[n][dt] || ''; cell(x0 + nameW + d * colW, y, colW, rowH, fill(v), v, rbParse(v) || /^OFF$/i.test(v) ? 'bold 12px Calibri, Arial' : '12px Calibri, Arial'); });
+      if (t) { x.font = `italic 12px ${F}`; x.fillStyle = '#666'; x.textAlign = 'right'; x.fillText(t, x0 + nameW - 8, y + rowH / 2, 96); }
+      x.textAlign = 'left';
+      let tx = x0 + 10;
+      if (O.ids && res.ids[n]) { x.font = `12px ${F}`; x.fillStyle = '#777'; x.fillText(res.ids[n], tx, y + rowH / 2); tx += x.measureText(res.ids[n]).width + 10; }
+      x.fillStyle = '#111'; x.font = `bold 15px ${F}`; x.fillText(n, tx, y + rowH / 2, x0 + nameW - tx - (t ? 104 : 10)); x.textAlign = 'center';
+      dates.forEach((dt, d) => { const v = res.cells[n][dt] || '', i = roInfo(v); const txt = i && i.from ? `${i.from} - ${i.to}${i.note ? ' · ' + i.note : ''}` : v; cell(x0 + nameW + d * colW, y, colW, rowH, fill(v), txt, `${i && (i.from || /^OFF$/i.test(v)) ? 'bold ' : 'bold '}${i && i.note ? 13 : 15}px ${F}`, kindOf(v) === 'leave' ? '#fff' : '#111'); });
       y += rowH;
     });
   });
+  // the key: what each colour means
+  if (used.size) {
+    const L = [['morning', 'Morning'], ['afternoon', 'Afternoon / evening'], ['night', 'Night (00:00)'], ['nightLate', 'Night (19:00)'], ['off', 'Day off'], ['leave', 'Leave / sick'], ['ph', 'Public holiday']].filter(([k]) => used.has(k));
+    let lx = x0; y += 18; x.textAlign = 'left'; x.font = `13px ${F}`;
+    L.forEach(([k, lbl]) => { x.fillStyle = colors[k]; x.fillRect(lx, y, 22, 18); x.strokeStyle = '#555'; x.strokeRect(lx, y, 22, 18); x.fillStyle = '#333'; x.fillText(lbl, lx + 30, y + 9.5); lx += 30 + x.measureText(lbl).width + 26; });
+  }
   return c;
+}
+/** Each person's own week as a picture, for the team members who don't use the app. */
+async function rbPersonPics(res) {
+  res = res || rbAsRes();
+  if (typeof rsWeekCanvas !== 'function') return;
+  const files = [];
+  for (const n of res.names) {
+    const k = (res.keys || {})[n] || Object.keys(roStaff).find(q => (roStaff[q] || {}).name === n);
+    const days = res.dates.map(dt => ({ date: dt, code: res.cells[n][dt] || '' }));
+    const c = rsWeekCanvas(n, res.groups[n] || ((roStaff[k] || {}).group) || '', days);
+    const b = await new Promise(r => c.toBlob(r, 'image/png'));
+    files.push(new File([b], `${n} ${res.dates[0]}.png`, { type: 'image/png' }));
+  }
+  if (!files.length) return;
+  try { if (navigator.canShare && navigator.canShare({ files })) { await navigator.share({ files, title: 'Roster' }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+  for (const f of files) { const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name; document.body.appendChild(a); a.click(); a.remove(); await new Promise(r => setTimeout(r, 250)); }
+  showToast(`👤 ${files.length} pictures saved, one for each person`, 'ok');
 }
 /** Picture options with a live preview, then share or download. */
 function rbSharePic(res) {
@@ -1628,13 +1657,14 @@ function rbSharePic(res) {
       <label class="rb-chk"><input type="checkbox" id="rbPoI" ${O.ids ? 'checked' : ''}> Employee numbers</label>
     </div>
     <div class="rb-pic-prev"><img id="rbPoImg" alt="Roster picture preview"></div>
-    <div class="ro-acts"><button class="btn gold" id="rbPoGo">⬇ Download / share</button><small>Your choices are kept for next time and for the picture posted with the roster.</small></div></div>`;
+    <div class="ro-acts"><button class="btn gold" id="rbPoGo">⬇ Download / share</button><button class="btn" id="rbPoEach" title="Each person's own week, big and simple, to send to them">👤 A picture for each person</button><small>Your choices are kept for next time and for the picture posted with the roster.</small></div></div>`;
   d.addEventListener('click', e => { if (e.target === d) d.remove(); });
   document.body.appendChild(d);
   const read = () => ({ heading: document.getElementById('rbPoH').checked, text: document.getElementById('rbPoT').value.trim() === dflt ? '' : document.getElementById('rbPoT').value.trim(), titles: document.getElementById('rbPoJ').checked, ids: document.getElementById('rbPoI').checked });
   const draw = () => { const o = read(); document.getElementById('rbPoT').disabled = !o.heading; document.getElementById('rbPoImg').src = rbPicture(res, null, o).toDataURL('image/png'); };
   ['rbPoH', 'rbPoJ', 'rbPoI'].forEach(id => document.getElementById(id).addEventListener('change', draw));
   document.getElementById('rbPoT').addEventListener('input', () => { clearTimeout(draw._t); draw._t = setTimeout(draw, 250); });
+  document.getElementById('rbPoEach').onclick = () => { d.remove(); rbPersonPics(res); };
   document.getElementById('rbPoGo').onclick = () => {
     const o = read(); rbSettings.pic = o;
     if (typeof roCanEdit === 'function' && roCanEdit()) fbSet('roster/builder/settings/pic', o);

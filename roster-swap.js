@@ -37,8 +37,77 @@ function rsRestCheck(k, date, code) {
   return [...new Set(out)];
 }
 
+// ── A supervisor or manager swaps two people straight away ─
+// (most of the team never opens the app: no asking, no approving)
+function rsSwapOpen(day, a) {
+  if (!roCanEdit()) { rsAskOpen(); return; }
+  const days = Array.from({ length: 28 }, (_, i) => roAdd(roToday(), i)).filter(d => Object.keys(roDays[d] || {}).length);
+  if (!days.length) { showToast('No posted roster for the coming days yet', 'warn'); return; }
+  const people = Object.keys(roStaff).filter(k => !(typeof rbPeople !== 'undefined' && (rbPeople[k] || {}).deleted)).sort((x, y) => (roStaff[x].group || '').localeCompare(roStaff[y].group || '') || _rsName(x).localeCompare(_rsName(y)));
+  const opt = (k, sel) => `<option value="${escapeHtml(k)}"${k === sel ? ' selected' : ''}>${escapeHtml(_rsName(k))}${roStaff[k].group ? ' · ' + escapeHtml(roStaff[k].group) : ''}</option>`;
+  a = a || roMeKey || people[0];
+  document.getElementById('rsDlg')?.remove();
+  const d = document.createElement('div');
+  d.id = 'rsDlg'; d.className = 'ri-viewer';
+  d.innerHTML = `<div class="card rs-dlg">
+    <div class="ro-card-hd"><b>🔁 Swap shifts</b><button class="ro-x" onclick="document.getElementById('rsDlg').remove()">✕</button></div>
+    <div class="rs-form">
+      <label class="rs-wide">Day<select id="rsDay" onchange="rsSwapPreview()">${days.map(x => `<option value="${x}"${x === day ? ' selected' : ''}>${escapeHtml(roDayLbl(x, true))}${x === roToday() ? ' · today' : ''}</option>`).join('')}</select></label>
+      <label>Person<select id="rsA" onchange="rsSwapPreview()">${people.map(k => opt(k, a)).join('')}</select></label>
+      <label>With<select id="rsB" onchange="rsSwapPreview()">${people.filter(k => k !== a).map(k => opt(k)).join('')}</select></label>
+    </div>
+    <div id="rsPrev" class="rs-prev"></div>
+    <div class="ro-acts"><button class="btn gold" id="rsSend" onclick="rsSwapNow()">Swap now</button><small>Changes the posted roster straight away; both are told if they use the app.</small></div>
+  </div>`;
+  d.addEventListener('click', e => { if (e.target === d) d.remove(); });
+  document.body.appendChild(d);
+  rsSwapPreview();
+}
+function rsSwapPreview() {
+  const day = document.getElementById('rsDay').value, A = document.getElementById('rsA').value, Bs = document.getElementById('rsB');
+  // "With": people who have something different that day first
+  if (Bs.value === A || !Bs.dataset.day || Bs.dataset.day !== day || Bs.dataset.a !== A) {
+    const keep = Bs.value, a = roCode(A, day);
+    const list = Object.keys(roStaff).filter(k => k !== A && !(typeof rbPeople !== 'undefined' && (rbPeople[k] || {}).deleted))
+      .sort((x, y) => ((roStaff[y].group || '') === (roStaff[A].group || '')) - ((roStaff[x].group || '') === (roStaff[A].group || '')) || ((roCode(y, day) !== a) - (roCode(x, day) !== a)) || _rsName(x).localeCompare(_rsName(y)));
+    Bs.innerHTML = list.map(k => `<option value="${escapeHtml(k)}"${k === keep ? ' selected' : ''}>${escapeHtml(_rsName(k))} · ${escapeHtml(roCellTxt(roInfo(roCode(k, day))) || '—')}</option>`).join('');
+    Bs.dataset.day = day; Bs.dataset.a = A;
+  }
+  const B = Bs.value, box = document.getElementById('rsPrev');
+  const a = roCode(A, day) || '', b = roCode(B, day) || '';
+  const probs = [...rsRestCheck(A, day, b).map(x => `${_rsFirst(A)}: ${x}`), ...rsRestCheck(B, day, a).map(x => `${_rsFirst(B)}: ${x}`)];
+  const same = a === b;
+  const started = typeof rbShiftStarted === 'function' && ((a && roInfo(a) && roInfo(a).from && rbShiftStarted(day, a)) || (b && roInfo(b) && roInfo(b).from && rbShiftStarted(day, b)));
+  box.innerHTML = `<div class="rs-swap"><div><small>${escapeHtml(_rsFirst(A))} works</small>${_rsCell(b)}<small>instead of</small>${_rsCell(a)}</div><span class="rs-arrow">⇄</span><div><small>${escapeHtml(_rsFirst(B))} works</small>${_rsCell(a)}<small>instead of</small>${_rsCell(b)}</div></div>
+    ${same ? '<div class="rs-warn">Both have the same that day: nothing would change.</div>' : `${started ? '<div class="rs-warn">⚠ One of these shifts has already started.</div>' : ''}${probs.length ? `<div class="rs-warn">⚠ ${probs.map(escapeHtml).join(' · ')}</div>` : '<div class="rs-ok">✓ Rest rules hold for both.</div>'}`}`;
+  document.getElementById('rsSend').disabled = same;
+}
+function _rsApply(A, B, day, why) {
+  const a = roCode(A, day) || '', b = roCode(B, day) || '';
+  const week = roMonday(roDate(day)), cells = rtPublished(week);
+  cells[A] = cells[A] || {}; cells[B] = cells[B] || {};
+  if (b) cells[A][day] = b; else delete cells[A][day];
+  if (a) cells[B][day] = a; else delete cells[B][day];
+  const n = rtApplyPublished(week, cells, why);
+  if (typeof rbDrafts !== 'undefined' && rbDrafts[week] && rbDrafts[week].fromPublished) { rbDrafts[week].cells = cells; if (typeof rbPutDraft === 'function') rbPutDraft(week); }
+  return n;
+}
+function rsSwapNow() {
+  const day = document.getElementById('rsDay').value, A = document.getElementById('rsA').value, B = document.getElementById('rsB').value;
+  const a = roCode(A, day) || '', b = roCode(B, day) || '';
+  _rsApply(A, B, day, `swap: ${_rsFirst(A)} ↔ ${_rsFirst(B)}`);
+  const id = 's' + Date.now().toString(36);
+  rsSwaps[id] = { from: A, to: B, date: day, a, b, by: _rsMe(), at: Date.now(), status: 'approved', closedBy: _rsMe(), closedAt: Date.now(), direct: true };
+  if (typeof fbSet === 'function') fbSet('roster/swaps/' + id, rsSwaps[id]);
+  if (typeof logActivity === 'function') try { logActivity('swap_done', `${_rsName(A)} ↔ ${_rsName(B)} · ${day}`); } catch (_) {}
+  document.getElementById('rsDlg')?.remove();
+  showToast(`🔁 Swapped: ${_rsFirst(A)} now ${roCellTxt(roInfo(b)) || '—'}, ${_rsFirst(B)} now ${roCellTxt(roInfo(a)) || '—'} on ${roDayLbl(day)}`, 'ok');
+  rsRender();
+}
+
 // ── Asking ────────────────────────────────────────────────
 function rsAskOpen() {
+  if (roCanEdit()) { rsSwapOpen(); return; }   // a supervisor or manager just swaps
   if (!roMeKey) { showToast('Choose your name in My shifts first', 'warn'); return; }
   const days = Array.from({ length: 21 }, (_, i) => roAdd(roToday(), i + 1)).filter(d => Object.keys(roDays[d] || {}).length);
   if (!days.length) { showToast('No posted roster for the coming days yet', 'warn'); return; }
@@ -95,12 +164,7 @@ function rsApprove(id) {
   const a = roCode(s.from, s.date) || '', b = roCode(s.to, s.date) || '';
   if (a !== s.a || b !== s.b) { if (!confirm(`The roster for ${roDayLbl(s.date)} changed since this was asked (${_rsFirst(s.from)}: ${a || '—'}, ${_rsFirst(s.to)}: ${b || '—'}). Swap what they have now?`)) return; }
   if (s.status !== 'agreed' && !confirm(`${_rsFirst(s.to)} hasn't agreed yet. Approve anyway?`)) return;
-  const week = roMonday(roDate(s.date)), cells = rtPublished(week);
-  cells[s.from] = cells[s.from] || {}; cells[s.to] = cells[s.to] || {};
-  if (b) cells[s.from][s.date] = b; else delete cells[s.from][s.date];
-  if (a) cells[s.to][s.date] = a; else delete cells[s.to][s.date];
-  const n = rtApplyPublished(week, cells, `swap: ${_rsFirst(s.from)} ↔ ${_rsFirst(s.to)}`);
-  if (typeof rbDrafts !== 'undefined' && rbDrafts[week] && rbDrafts[week].fromPublished) { rbDrafts[week].cells = cells; if (typeof rbPutDraft === 'function') rbPutDraft(week); }
+  const n = _rsApply(s.from, s.to, s.date, `swap: ${_rsFirst(s.from)} ↔ ${_rsFirst(s.to)}`);
   _rsSet(id, { status: 'approved', closedBy: _rsMe(), closedAt: Date.now() });
   showToast(`Swap approved: ${n} cell${n === 1 ? '' : 's'} changed in the posted roster. Both are told.`, 'ok');
 }
@@ -127,25 +191,24 @@ function rsRender() {
 }
 
 // ── 📷 My week picture ────────────────────────────────────
-async function rsMyWeekPic() {
-  if (!roMeKey) { showToast('Choose your name in My shifts first', 'warn'); return; }
-  const st = roStaff[roMeKey] || {}, days = roMine(7);
+/** A person's week as one big, simple picture: days down the page, each shift in its colour. */
+function rsWeekCanvas(name, group, days) {
   const W = 1080, H = 1420, c = document.createElement('canvas'); c.width = W; c.height = H;
   const x = c.getContext('2d');
   const cs = getComputedStyle(document.documentElement), v = n => (cs.getPropertyValue(n) || '').trim();
   const accent = v('--accent') || '#eab94a';
   const g = x.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#0f1420'); g.addColorStop(1, '#070a10');
   x.fillStyle = g; x.fillRect(0, 0, W, H);
-  const font = (w, s) => `${w} ${s}px Inter, -apple-system, 'Segoe UI', Roboto, sans-serif`;
+  const font = (w, sz) => `${w} ${sz}px Inter, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif`;
   x.fillStyle = accent; x.font = font(700, 30); x.fillText('MY WEEK', 80, 120);
-  x.fillStyle = '#ffffff'; x.font = font(800, 66); x.fillText(String(st.name || roMeKey).slice(0, 26), 80, 200);
+  x.fillStyle = '#ffffff'; x.font = font(800, 66); x.fillText(String(name).slice(0, 26), 80, 200);
   x.fillStyle = '#9aa6b8'; x.font = font(500, 32);
-  x.fillText(`${st.group ? st.group + ' · ' : ''}${roDate(days[0].date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${roDate(days[6].date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`, 80, 252);
+  x.fillText(`${group ? group + ' · ' : ''}${roDate(days[0].date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${roDate(days[days.length - 1].date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`, 80, 252);
   const COL = { morning: '#f5b84a', afternoon: '#5ab4e8', night: '#a78bfa', other: '#8fa3b8', leave: '#f06b7a', off: '#3a4352' };
   const round = (X, Y, w, h, r) => { x.beginPath(); x.moveTo(X + r, Y); x.arcTo(X + w, Y, X + w, Y + h, r); x.arcTo(X + w, Y + h, X, Y + h, r); x.arcTo(X, Y + h, X, Y, r); x.arcTo(X, Y, X + w, Y, r); x.closePath(); };
   let y = 310;
-  days.forEach(dd => {
-    const i = dd.info, t = i ? i.type : 'off', col = COL[t] || COL.other, today = dd.date === roToday();
+  days.slice(0, 7).forEach(dd => {
+    const i = roInfo(dd.code), t = i ? i.type : 'off', col = COL[t] || COL.other, today = dd.date === roToday();
     round(60, y, W - 120, 132, 26); x.fillStyle = today ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.045)'; x.fill();
     if (today) { x.strokeStyle = accent; x.lineWidth = 3; x.stroke(); }
     round(60, y, 14, 132, 7); x.fillStyle = col; x.fill();
@@ -157,6 +220,12 @@ async function rsMyWeekPic() {
     y += 148;
   });
   x.fillStyle = '#5f6b7d'; x.font = font(600, 24); x.fillText('HotelOps · ' + new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }), 80, H - 30);
+  return c;
+}
+async function rsMyWeekPic() {
+  if (!roMeKey) { showToast('Choose your name in My shifts first', 'warn'); return; }
+  const st = roStaff[roMeKey] || {}, days = roMine(7).map(d => ({ date: d.date, code: roCode(roMeKey, d.date) }));
+  const c = rsWeekCanvas(st.name || roMeKey, st.group || '', days);
   const blob = await new Promise(r => c.toBlob(r, 'image/png'));
   const file = new File([blob], `My week ${days[0].date}.png`, { type: 'image/png' });
   try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'My week' }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
@@ -173,7 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.roRenderSide = roRenderSide = function () {
       orig.apply(this, arguments);
       const me = document.getElementById('roMine');
-      if (me && roMeKey && !me.querySelector('.rs-mine-acts')) me.insertAdjacentHTML('beforeend', `<div class="rs-mine-acts"><button class="btn sm" onclick="rsAskOpen()">🔁 Ask to swap</button><button class="btn sm" onclick="rsMyWeekPic()">📷 My week picture</button></div>`);
+      if (me && roMeKey && !me.querySelector('.rs-mine-acts')) me.insertAdjacentHTML('beforeend', `<div class="rs-mine-acts"><button class="btn sm" onclick="rsAskOpen()">🔁 ${roCanEdit() ? 'Swap shifts' : 'Ask to swap'}</button><button class="btn sm" onclick="rsMyWeekPic()">📷 My week picture</button></div>`);
       rsRender();
     };
   }
