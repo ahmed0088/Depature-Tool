@@ -471,6 +471,19 @@ console.log('\nRoster scenarios');
   // two people editing the same draft: each save sends only its own cells, and a change arriving
   // while an edit waits to be sent keeps both
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'db.js'), 'utf8').match(/function fbApplyPatch[\s\S]*?\n}\n/)[0], sb);
+  // 💛 wishes: the builder grants them when cover allows
+  check('wishes: a liked shift, a day off wished for, days off together', run(`(() => {
+    rbWeek = W;
+    const count = (I, k, f) => rtDates(W).filter(dt => f(rbSolve(I).cells[k][dt])).length;
+    const base = rbInput(1), shifts = base.groups['Ibis DD'].shifts, E = shifts[shifts.length - 1];
+    const plain = (() => { const I = rbInput(1); const r = rbSolve(I); return rtDates(W).filter(dt => r.cells.C[dt] === E).length; })();
+    const I1 = rbInput(1); I1.people.find(p => p.key === 'C').likes = [E];
+    const liked = rtDates(W).filter(dt => rbSolve(I1).cells.C[dt] === E).length;
+    const I2 = rbInput(1); const pC = I2.people.find(p => p.key === 'C'); pC.prefOff = [3]; pC.offs = 2; pC.together = true;
+    const r2 = rbSolve(I2), offs = rtDates(W).map((dt, d) => rbKind(r2.cells.C[dt]) === 'off' ? d : -1).filter(d => d >= 0);
+    const happy = rbWishes(I2, pC, r2.cells, rtDates(W));
+    return [liked >= plain, offs.includes(3), offs.some((d, i) => i && d - offs[i - 1] === 1), happy.length === 2].join();
+  })()`), 'true,true,true,true');
   check('drafts: a save sends only the changed cells', run(`JSON.stringify(rbDraftDiff({ cells: { A: { d1: 'M', d2: 'E' }, B: { d1: 'OFF' } }, at: 1 }, { cells: { A: { d1: 'M', d2: 'OFF' }, C: { d1: 'E' } }, at: 2 }))`),
     JSON.stringify({ 'cells/A/d2': 'OFF', 'cells/B': null, 'cells/C/d1': 'E', at: 2 }));
   check('drafts: my waiting edit and a colleague\'s edit both stay', run(`(() => {

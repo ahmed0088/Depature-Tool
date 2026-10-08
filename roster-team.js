@@ -709,12 +709,17 @@ function rtPerson(k) {
         ${shifts.map(x => `<option value="${escapeHtml(x)}"${p.mode === 'static' && p.fixed === x ? ' selected' : ''}>Static: always ${escapeHtml(x)}</option>`).join('')}
         <option value="rotate"${p.mode === 'rotate' ? ' selected' : ''}>Rotates week to week</option><option value="any"${p.mode === 'any' ? ' selected' : ''}>Any shift (flexible)</option></select></label>
       <label>Days off a week<select onchange="rtSet(${q},'offs',+this.value)">${[0, 1, 2, 3].map(n => `<option${n === p.offs ? ' selected' : ''}>${n}</option>`).join('')}</select></label>
-      <label>Prefers off<select onchange="rtSet(${q},'prefOff',this.value===''?[]:[+this.value])"><option value="">no preference</option>${RB_DAYS.map((x, i) => `<option value="${i}"${(p.prefOff || []).includes(i) ? ' selected' : ''}>${x}</option>`).join('')}</select></label>
       <label>PH owed<input type="number" min="0" max="30" value="${ph.owed}" onchange="rbSetPh(${q},+this.value)"></label>
     </div>
     <div class="rt-cant"><span>Locks:</span><button class="rb-opt${p.lock ? ' on' : ''}" onclick="rtSet(${q},'lockShift',${!p.lock});rtPerson(${q})">${p.lock ? '🔒' : '🔓'} ${p.lock ? 'Keeps ' + escapeHtml(p.fixed || 'their shift') : 'Shift can change'}</button><button class="rb-opt${c.home ? ' on' : ''}" onclick="rtSet(${q},'home',${c.home ? 'undefined' : 'true'});rtPerson(${q})">🏨 ${c.home ? 'Stays at ' + escapeHtml(g || 'their hotel') : 'Can help other hotels'}</button></div>
     <div class="rt-cant"><span>Works:</span><button class="rb-opt ro-t-night" onclick="rtOnly(${q},'night')">🌙 Nights only</button><button class="rb-opt ro-t-morning" onclick="rtOnly(${q},'day')">☀️ Days only</button><button class="rb-opt" onclick="rtOnly(${q},'all')">All shifts</button></div>
-    <div class="rt-cant"><span>Shifts:</span>${shifts.map(x => { const no = (c.allowed && c.allowed.length && !c.allowed.includes(x)), soft = (c.soft || []).includes(x); return `<button class="rb-opt ro-t-${(roInfo(x) || {}).type}${no ? ' on' : soft ? ' soft' : ''}" onclick="rtToggleShift(${q},${_rtQ(x)})" title="Tap: prefer not → can't work → fine">${no ? '🚫 ' : soft ? '⚠ ' : ''}${escapeHtml(x)}</button>`; }).join('')}<small class="ro-hint">Tap a shift: ⚠ prefer not (only if needed) → 🚫 can't work → fine</small></div>
+    <div class="rt-cant"><span>Shifts:</span>${shifts.map(x => { const no = (c.allowed && c.allowed.length && !c.allowed.includes(x)), soft = (c.soft || []).includes(x), like = (c.likes || []).includes(x); return `<button class="rb-opt ro-t-${(roInfo(x) || {}).type}${no ? ' on' : soft ? ' soft' : like ? ' like' : ''}" onclick="rtToggleShift(${q},${_rtQ(x)})" title="Tap: 💛 likes → ⚠ prefer not → 🚫 can't work → fine">${no ? '🚫 ' : soft ? '⚠ ' : like ? '💛 ' : ''}${escapeHtml(x)}</button>`; }).join('')}<small class="ro-hint">Tap a shift: 💛 likes it → ⚠ prefer not (only if needed) → 🚫 can't work → fine</small></div>
+    <div class="rt-wish">
+      <div class="rb-sub">💛 Likes & wishes <small>the builder tries to grant every one, and shows under Team happiness which it could</small></div>
+      <div class="rt-cant"><span>Days off:</span><span class="rt-days">${RB_DAYS.map((x, i) => `<button class="rb-opt${(p.prefOff || []).includes(i) ? ' on' : ''}" onclick="rtWishDay(${q},${i})">${x}</button>`).join('')}</span></div>
+      <div class="rt-cant"><span>Also:</span><button class="rb-opt${c.together ? ' on' : ''}" onclick="rtSet(${q},'together',${c.together ? 'undefined' : 'true'});rtPerson(${q})">📅 Days off together</button><button class="rb-opt${c.steady ? ' on' : ''}" onclick="rtSet(${q},'steady',${c.steady ? 'undefined' : 'true'});rtPerson(${q})">⏱ Same hours all week</button><label class="rb-opt rt-inl">🌙 Nights a week, at most <select onchange="rtSet(${q},'maxNights',this.value===''?undefined:+this.value);rtPerson(${q})"><option value="">no limit</option>${[0, 1, 2, 3, 4, 5].map(n => `<option value="${n}"${c.maxNights === n ? ' selected' : ''}>${n}</option>`).join('')}</select></label></div>
+      <textarea class="rt-note" placeholder="Anything else to keep in mind (e.g. studying Tuesday evenings, takes the 8:00 bus, prefers working with Lina)…" onchange="rtSet(${q},'note',this.value.trim()||undefined)">${escapeHtml(c.note || '')}</textarea>
+    </div>
     <div class="rb-sub">Sick & leave</div>
     <div class="rt-abs">${absences.map(([id, a]) => `<span class="rb-hol">${escapeHtml(a.code)} · ${escapeHtml(roDayLbl(a.from))}${a.to !== a.from ? ' → ' + escapeHtml(roDayLbl(a.to)) : ''}<button class="ro-x" onclick="rtDelAbsence(${q},'${id}')">✕</button></span>`).join('') || '<span class="ro-empty">None.</span>'}</div>
     <div class="rb-inline"><select id="rtAbC">${RT_LEAVE.map(x => `<option>${x}</option>`).join('')}</select><input type="date" id="rtAbF" value="${roToday()}"><input type="date" id="rtAbT" value="${roToday()}"><button class="btn sm gold" onclick="rtAbsentFromSheet(${q})">Add</button></div>
@@ -734,12 +739,20 @@ function rtOnly(k, kind) {
   if (kind !== 'all' && (rbPeople[k] || {}).fixed && !list.includes(rbPeople[k].fixed)) rtSet(k, 'fixed', undefined);
   rtPerson(k);
 }
-/** fine → ⚠ prefer not (used only when needed) → 🚫 can't work → fine */
+/** fine → 💛 likes → ⚠ prefer not (used only when needed) → 🚫 can't work → fine */
 function rtToggleShift(k, s) {
-  const c = rbPeople[k] || {}, soft = (c.soft || []).slice(), cant = c.allowed && c.allowed.length && !c.allowed.includes(s);
+  const c = rbPeople[k] || {}, soft = (c.soft || []).slice(), likes = (c.likes || []).slice(), cant = c.allowed && c.allowed.length && !c.allowed.includes(s);
+  const without = (l, x) => { const r = l.filter(y => y !== x); return r.length ? r : undefined; };
   if (cant) { rtToggleCant(k, s, true); return; }                              // can't → fine
-  if (soft.includes(s)) { rtSet(k, 'soft', soft.filter(x => x !== s).length ? soft.filter(x => x !== s) : undefined); rtToggleCant(k, s); return; }   // prefer not → can't
-  rtSet(k, 'soft', soft.concat([s])); rtPerson(k);                               // fine → prefer not
+  if (soft.includes(s)) { rtSet(k, 'soft', without(soft, s)); rtToggleCant(k, s); return; }   // prefer not → can't
+  if (likes.includes(s)) { rtSet(k, 'likes', without(likes, s)); rtSet(k, 'soft', soft.concat([s])); rtPerson(k); return; }   // likes → prefer not
+  rtSet(k, 'likes', likes.concat([s])); rtPerson(k);                             // fine → likes
+}
+/** 💛 a day they'd like off (as many as they want; tap again to remove) */
+function rtWishDay(k, d) {
+  const cur = (rbPersonCfg(k).prefOff || []).slice(), i = cur.indexOf(d);
+  if (i >= 0) cur.splice(i, 1); else cur.push(d);
+  rtSet(k, 'prefOff', cur.sort()); rtPerson(k);
 }
 function rtToggleCant(k, s) {
   const g = (roStaff[k] || {}).group || '', all = rbGroupCfg(g).shifts, c = rbPeople[k] || {};

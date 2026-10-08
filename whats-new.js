@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 183, items: [
+    '💛 Likes & wishes for every team member (open their card in 🧑‍💼 Team): shifts they like (tap a shift: 💛 likes → ⚠ prefer not → 🚫 can\'t → fine), the days they\'d like off (as many as they want), days off together, same hours all week, a limit on nights a week, and a note for anything else ("studying Tuesday evenings", "takes the 8:00 bus"). The builder tries to grant every wish, as long as every shift is still covered and the rest rules hold.',
+    '😊 Team happiness in the builder: how many wishes this week grants ("14 of 16 wishes granted"), person by person with ✓ and ✗, the least happy first, and their notes. Not happy with it? 🔀 Try another way.',
+  ] },
   { v: 182, items: [
     '🔁 Supervisors, managers and owners swap shifts straight away: Roster → 🔁 Swap shifts (or on My shifts). Pick the day and the two people, see both shifts and the rest check, tap Swap now. No asking and no approval, because most of the team doesn\'t use the app. Staff who do use it still ask, and you approve.',
     '🖼 The roster picture is easier to read: bigger writing, full day names, the weekend shaded, each hotel\'s bar with its staff count, alternate row shading, and a colour key at the bottom (Morning, Afternoon / evening, Night, Day off, Leave / sick, Public holiday).',
