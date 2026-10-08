@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 189, items: [
+    '🏖 The roster builder clears PH balances: whoever is owed the most goes first, up to 2 PH days a week each, placed next to their day off where it can (a longer break), oldest PH first, and only when the shift still has enough people.',
+    '🏖 New in the builder: "PH balance", person by person: what this week gives, what is still owed, and one-tap "PH on Thu" buttons for other days where a PH fits.',
+    '🏖 A day-off request for someone with PH owed now shows a "→ PH" button: one tap turns it into a PH day from their balance.',
+  ] },
   { v: 188, items: [
     '🧠 The roster builder learns from every posted week, whoever made it (built here, a picture, Excel, or a manager who made it themselves), up to the last 8 weeks that have a roster; weeks with none are skipped. It learns each person\'s usual shift, their usual days off, whether they take them together, and how they rotate week to week (mornings → evenings → …), and builds the same way. Anything set on someone\'s card comes first.',
     '📅 The builder opens on the week right after the latest posted roster, so you can pick up from any week you give it.',

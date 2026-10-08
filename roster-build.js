@@ -385,14 +385,32 @@ function _rbFinish(I, cells) {
       }
     }
   }
-  // 5. PH days owed, when the shift has someone spare
+  // 5. PH days owed, when the shift has someone spare: the biggest balance first, up to 2 a week each,
+  //    next to a day off where possible (a longer break), oldest PH first
   if (R.givePh) {
-    I.people.filter(p => (p.phOwed || 0) > 0).forEach(p => {
-      for (let d = 0; d < D; d++) {
-        const dt = dates[d], s = cells[p.key][dt];
-        if (!s || !G[p.group] || !G[p.group].shifts.includes(s) || ((I.pre || {})[p.key] || {})[dt]) continue;   // never over a fixed day (requests, days gone by)
-        if (cover[p.group][s][d] > need(p.group, s, d)) { cells[p.key][dt] = p.phLabel ? `PH - ${p.phLabel}` : 'PH'; cover = rbCover(I, cells); break; }
+    const isPh = v => /^PH\b/i.test(String(v || ''));
+    const offish = v => !!v && v !== '—' && !rbParse(v);   // OFF, PH, leave: anything that isn't a shift
+    const phMax = R.phMax == null ? 2 : +R.phMax;
+    I.people.filter(p => (p.phOwed || 0) > 0).sort((a, b) => (b.phOwed || 0) - (a.phOwed || 0)).forEach(p => {
+      const already = dates.filter(dt => isPh(cells[p.key][dt])).length;   // PH asked for this week
+      const labels = (p.phLabels && p.phLabels.length ? p.phLabels : [p.phLabel || '']).slice(already);
+      let left = Math.min(p.phOwed - already, phMax - already), n = 0;
+      while (left > 0) {
+        const cand = [];
+        for (let d = 0; d < D; d++) {
+          const dt = dates[d], s = cells[p.key][dt];
+          if (!s || !G[p.group] || !G[p.group].shifts.includes(s) || ((I.pre || {})[p.key] || {})[dt]) continue;   // never over a fixed day (requests, days gone by)
+          if (!(cover[p.group][s][d] > need(p.group, s, d))) continue;
+          const next = offish(cells[p.key][dates[d - 1]]) || offish(cells[p.key][dates[d + 1]]);
+          cand.push({ d, c: (next ? 0 : 10) - ((p.prefOff || []).includes(d) ? 5 : 0) + d * 0.1 });
+        }
+        if (!cand.length) break;
+        cand.sort((a, b) => a.c - b.c);
+        const lb = labels[n] || '';
+        cells[p.key][dates[cand[0].d]] = lb ? `PH - ${lb}` : 'PH';
+        cover = rbCover(I, cells); left--; n++;
       }
+      if (n > 1) { let i = 0; dates.forEach(dt => { if (isPh(cells[p.key][dt]) && !((I.pre || {})[p.key] || {})[dt]) { const lb = labels[i++] || ''; cells[p.key][dt] = lb ? `PH - ${lb}` : 'PH'; } }); }   // oldest PH on the earliest day
     });
   }
   return { cells, cover, problems: rbProblems(I, cells, cover) };
@@ -737,15 +755,22 @@ function rbHolidays() {
 }
 function rbPhLabel(iso) { const d = roDate(iso), n = d.getDate(), suf = n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th'; return `${n}${suf} ${d.toLocaleDateString('en-GB', { month: 'short' })}.`; }
 /** PH days someone is owed: public holidays they worked, minus PH days already given, plus any set by hand. */
-function rbPhOwed(key) {
+function rbPhOwed(key, skipWeek) {
   const hol = rbHolidays(), worked = Object.keys(hol).filter(dt => dt <= roToday() && rbParse((roDays[dt] || {})[key])).sort();
-  let taken = 0; Object.values(roDays).forEach(day => { if (/^PH\b/i.test(String((day || {})[key] || ''))) taken++; });
+  const skip = skipWeek ? dt => dt >= skipWeek && dt <= roAdd(skipWeek, 6) : () => false;   // a week being rebuilt: its PH days are the builder's to place again
+  let taken = 0; Object.entries(roDays).forEach(([dt, day]) => { if (!skip(dt) && /^PH\b/i.test(String((day || {})[key] || ''))) taken++; });
   const adj = +(((rbPeople[key]) || {}).phAdj) || 0;
   const owed = Math.max(0, worked.length - taken + adj);
-  const next = worked[taken];
-  return { owed, label: next ? rbPhLabel(next) : '' };
+  const labels = Array.from({ length: owed }, (_, i) => worked[taken + i] ? rbPhLabel(worked[taken + i]) : '');
+  return { owed, label: labels[0] || '', labels };
 }
 
+/** The PH label to use next for someone in the draft: skips the ones this week already has. */
+function rbPhNext(k, cells) {
+  const ph = rbPhOwed(k, rbWeek), c = (cells || ((rbDrafts[rbWeek] || {}).cells) || {})[k] || {};
+  const used = Array.from({ length: 7 }, (_, d) => c[roAdd(rbWeek, d)]).filter(v => /^PH\b/i.test(String(v || ''))).length;
+  return used < ph.owed ? ph.labels[used] || '' : '';
+}
 // ── State ─────────────────────────────────────────────────
 let rbSettings = {}, rbPeople = {}, rbReqs = {}, rbDrafts = {};
 let rbWeek = null, rbGroup = null, rbOut = null, rbSeed = 1;
@@ -842,7 +867,7 @@ function rbInput(seed) {
   const groups = {}, people = [];
   rbGroups().forEach(g => {
     const c = rbGroupCfg(g); groups[g] = { shifts: c.shifts, need: c.need, who: rbWho(g, c) };
-    rbMembers(g).forEach(k => { const p = rbPersonCfg(k); const ph = rbPhOwed(k); p.phOwed = ph.owed; p.phLabel = ph.label; people.push(p); });
+    rbMembers(g).forEach(k => { const p = rbPersonCfg(k); const ph = rbPhOwed(k, rbWeek); p.phOwed = ph.owed; p.phLabel = ph.label; p.phLabels = ph.labels; people.push(p); });
     rbPostGroups(g).forEach(gp => { const c2 = rbGroupCfg(gp); groups[gp] = { shifts: c2.shifts, need: c2.need, who: rbWho(gp, c2), post: gp.slice(g.length + 3) }; });
   });
   const { pre, avoid, soft } = rbPre();
@@ -1006,7 +1031,7 @@ function rbRender() {
     <div class="rb-grid">
       <details class="card rb-card"${rbSec('req', !draft)}>
         <summary class="ro-card-hd"><b>📝 Requests this week</b><span>${reqs.length ? `<i class="rb-count">${reqs.length}</i>` : 'none yet'}</span></summary>
-        ${reqs.length ? `<div class="rb-reqs">${reqs.sort((a, b) => a[1].from.localeCompare(b[1].from)).map(([id, r]) => `<div class="rb-req"><b>${escapeHtml((roStaff[r.key] || {}).name || r.key)}</b><span>${escapeHtml(rbReqText(r))}</span><button class="ro-x" title="Remove" onclick="rbDelReq('${id}')">✕</button></div>`).join('')}</div>` : '<div class="ro-empty">Day-off requests, leave, PH days, "must work" or "can\'t work" a shift. Everything else the builder decides.</div>'}
+        ${reqs.length ? `<div class="rb-reqs">${reqs.sort((a, b) => a[1].from.localeCompare(b[1].from)).map(([id, r]) => `<div class="rb-req"><b>${escapeHtml((roStaff[r.key] || {}).name || r.key)}</b><span>${escapeHtml(rbReqText(r))}</span>${r.type === 'off' && rbPhOwed(r.key, rbWeek).owed > 0 ? `<button class="btn sm ghost" title="They have PH owed: take it from the balance instead" onclick="rbReqToPh('${id}')">→ PH (${rbPhOwed(r.key, rbWeek).owed} owed)</button>` : ''}<button class="ro-x" title="Remove" onclick="rbDelReq('${id}')">✕</button></div>`).join('')}</div>` : '<div class="ro-empty">Day-off requests, leave, PH days, "must work" or "can\'t work" a shift. Everything else the builder decides.</div>'}
         <div class="rb-req-add">
           <select id="rbRqP">${shown.map(g => `<optgroup label="${escapeHtml(g || 'Team')}">${rbMembers(g).map(k => `<option value="${escapeHtml(k)}">${escapeHtml(roStaff[k].name)}</option>`).join('')}</optgroup>`).join('')}</select>
           <select id="rbRqT" onchange="rbReqTypeChange()">
@@ -1339,6 +1364,7 @@ function rbOutHtml(shown, dates) {
     ${rbDeskHtml(I, cells, shown, dates)}
     <details class="rb-covers"${P.some(p => p.kind === 'short' || p.kind === 'thin') ? ' open' : ''}><summary>Cover: people on each shift (has / needs) · tap a number for who can take it</summary>${covers}</details>
     ${(() => { const H = rbHappyHtml(I, cells, shown, dates); return `<details class="rb-covers"><summary>💛 Team happiness${H.sum ? ': ' + H.sum : ''}</summary>${H.html}</details>`; })()}
+    ${(() => { const B = rbPhHtml(I, cells, shown, dates); return B ? `<details class="rb-covers"${B.open ? ' open' : ''}><summary>🏖 PH balance: ${B.sum}</summary>${B.html}</details>` : ''; })()}
     ${(() => { const L = rbLearnedHtml(I, shown); return `<details class="rb-covers"><summary>🧠 What I learned: ${L.sum}</summary>${L.html}</details>`; })()}
     <details class="rb-covers"><summary>📊 Fairness: nights, weekends and hours over the last 4 weeks and this one</summary>${rbFairHtml(I, cells, shown, dates)}</details>
     <div class="ro-acts rb-acts">
@@ -1553,6 +1579,32 @@ function rbWishes(I, p, cells, dates) {
   if (p.maxNights != null) { const n = worked.filter(x => rbIsNight(x)).length; W.push({ t: `at most ${p.maxNights} night${p.maxNights === 1 ? '' : 's'}`, ok: n <= p.maxNights, n: `${n} night${n === 1 ? '' : 's'}` }); }
   return W;
 }
+/** 🏖 PH owed, person by person: what this week clears and one-tap days where a PH fits (the shift has someone spare). */
+function rbPhHtml(I, cells, shown, dates) {
+  const G = I.groups, cover = rbCover(I, cells), isPh = v => /^PH\b/i.test(String(v || ''));
+  const rows = I.people.filter(p => shown.includes(rbBaseGroup(p.group)) && cells[p.key] && (p.phOwed || 0) > 0).map(p => {
+    const given = dates.filter(dt => isPh(cells[p.key][dt])).length, left = Math.max(0, p.phOwed - given);
+    const fits = left ? dates.map((dt, d) => ({ dt, d, s: cells[p.key][dt] })).filter(x => x.s && G[p.group] && G[p.group].shifts.includes(x.s) && !((I.pre || {})[p.key] || {})[x.dt] && x.dt >= roToday() && cover[p.group][x.s][x.d] > (((G[p.group].need[x.s]) || [])[x.d] || 0)) : [];
+    return { p, given, left, fits };
+  }).sort((a, b) => b.left - a.left || b.p.phOwed - a.p.phOwed);
+  if (!rows.length) return null;
+  const owed = rows.reduce((t, r) => t + r.p.phOwed, 0), given = rows.reduce((t, r) => t + r.given, 0);
+  return { open: rows.some(r => r.left && r.fits.length), sum: `${given} of ${owed} PH day${owed === 1 ? '' : 's'} owed given this week`, html: `<div class="rb-happy">${rows.map(r => `<div class="rb-hp-row"><span class="rb-hp-f">${r.left ? '🏖' : '✅'}</span><b>${escapeHtml((roStaff[r.p.key] || {}).name || r.p.key)}</b><span class="rb-hp-n">${r.p.phOwed}</span><span class="rb-hp-w">${r.given ? `<i class="ok">✓ ${r.given} given this week</i>` : ''}${r.left ? `<i class="no">${r.left} still owed${r.p.phLabels && r.p.phLabels[r.given] ? ' · oldest ' + escapeHtml(r.p.phLabels[r.given]) : ''}</i>` : ''}${r.fits.map(x => `<button class="btn sm ghost" onclick="rbGivePh(${_rbQ(r.p.key)},'${x.dt}')">PH on ${escapeHtml(RB_DAYS[x.d])}</button>`).join('')}${r.left && !r.fits.length ? '<em class="rb-hp-note">no spare shift this week: if they ask for a day off, tap → PH on the request</em>' : ''}</span></div>`).join('')}</div><small class="ro-hint">The builder clears the biggest balances first, up to 2 PH a week each, next to a day off where it can, only when the shift keeps enough people. The buttons show other days where a PH fits. Change the balance on the person's row under ⚙ Settings → People (PH owed).</small>` };
+}
+function rbGivePh(k, dt) {
+  const D = rbDrafts[rbWeek]; if (!D || !D.cells) return;
+  const cells = JSON.parse(JSON.stringify(D.cells)), L = rbPhNext(k, cells);
+  (cells[k] = cells[k] || {})[dt] = L ? `PH - ${L}` : 'PH';
+  rbApplyCells(cells, '');
+}
+/** A day-off request → a PH day, for someone with PH owed (it uses their balance instead of a normal day off). */
+function rbReqToPh(id) {
+  const r = (rbReqs[rbWeek] || {})[id]; if (!r) return;
+  const n = Object.values(rbReqs[rbWeek]).filter(x => x !== r && x.key === r.key && x.type === 'ph').length;
+  r.type = 'ph'; r.code = rbPhOwed(r.key, rbWeek).labels[n] || '';
+  fbSet(`roster/builder/requests/${rbWeek}/${id}`, r);
+  rbRender(); showToast('Changed to PH: it comes off their PH balance', 'ok');
+}
 /** 😊 How many wishes the week grants, person by person: the least happy first. */
 function rbHappyHtml(I, cells, shown, dates) {
   const rows = I.people.filter(p => shown.includes(rbBaseGroup(p.group)) && cells[p.key]).map(p => ({ p, W: rbWishes(I, p, cells, dates) })).filter(r => r.W.length);
@@ -1650,7 +1702,7 @@ function rbPick(td, k, dt) {
   m.id = 'rbMenu'; m.className = 'rb-menu';
   m.innerHTML = `<div class="rb-menu-hd"><b>${escapeHtml((roStaff[k] || {}).name || k)}</b><span>${escapeHtml(roDayLbl(dt, true))}</span></div>
     <div class="rb-opts">${shifts.map(s => opt(s, s, 'ro-t-' + ((roInfo(s) || {}).type || 'other'))).join('')}</div>
-    <div class="rb-opts">${opt('OFF', 'OFF', 'ro-t-off')}${opt(rbPhOwed(k).label ? 'PH - ' + rbPhOwed(k).label : 'PH', 'PH', 'ro-t-leave')}${leave.slice(0, 8).map(c => opt(c, c, 'ro-t-leave')).join('')}</div>
+    <div class="rb-opts">${opt('OFF', 'OFF', 'ro-t-off')}${(() => { const L = rbPhNext(k); return opt(L ? 'PH - ' + L : 'PH', 'PH', 'ro-t-leave'); })()}${leave.slice(0, 8).map(c => opt(c, c, 'ro-t-leave')).join('')}</div>
     ${rbSwapMenuHtml(k, dt)}
     <div class="rb-opts"><small>Sick or leave from this day:</small>${['SL', 'AL', 'EL'].map(c => `<button class="rb-opt ro-t-leave" onclick="rbLeaveFrom(${_rbQ(k)},'${dt}','${c}')">${c} …</button>`).join('')}</div>
     ${others.length ? `<details class="rb-opts-more"><summary>Lend to another hotel…</summary><div class="rb-opts">${others.map(o => shifts.map(s => opt(`${s} - ${rbShortU(o)}`, `${s.slice(0, 5)} at ${rbShortU(o)}`, 'ro-t-other')).join('')).join('')}</div></details>` : ''}
