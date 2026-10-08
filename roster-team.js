@@ -205,11 +205,11 @@ function rtCoverOptions(I, cells, group, date, shift, opt) {
   // nobody fits every rule: our rules first, then what past rosters did when there was no other way, mildest first:
   // an evening next to a night without a day off, rest down to 7 h, an evening straight into a night. Never over 9 h a shift.
   // (a day shift next to a night always keeps its day off between: not in any step)
-  const TIERS = [
-    { rules: { eveNight: true }, cost: 120 },
-    { rules: { eveNight: true, minRest: 7 }, cost: 400 },
-    { rules: { eveNight: true, minRest: 0 }, cost: 600 },
-  ];
+  // rest goes down one hour at a time (10 h, 9 h, 8 h…) to the lowest set in the rules (7 h unless changed): as much rest as can be kept
+  const minR = (I.rules || {}).minRest || 11, floor = (I.rules || {}).restFloor != null ? +(I.rules || {}).restFloor : 7;
+  const TIERS = [{ rules: { eveNight: true }, cost: 120 }];
+  for (let h = minR - 1; h >= Math.max(1, floor); h--) TIERS.push({ rules: { eveNight: true, minRest: h }, cost: 140 + (minR - h) * 45 });
+  TIERS.push({ rules: { eveNight: true, minRest: 0 }, cost: 600 });   // the very last way, as past rosters did: an evening straight into a night
   const fn = k => rtName(k).split(' ')[0];
   const bendText = (c0, c1, keys) => {   // what the plan bends, in words
     const was = rbProblems(I, c0), now = rbProblems(I, c1).filter(p => keys.includes(p.key) && (p.kind === 'switch' || p.kind === 'rest') && !was.some(w => w.kind === p.kind && w.key === p.key && w.date === p.date));

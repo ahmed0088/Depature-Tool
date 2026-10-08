@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 185, items: [
+    '🛌 Rest between shifts stays 11 hours. Only when a shift can\'t be covered any other way does the builder give up rest, and then one hour at a time (10 h, then 9 h, 8 h…), keeping as much as it can, and it tells you who and why. Builder → rules: "Only when there\'s no other way, down to [7] hours" sets the lowest it may go.',
+  ] },
   { v: 184, items: [
     '💛 Wishes on a person\'s card are now small one-tap chips: ☀️ Mornings · 🌤 Day · 🌆 Evenings · 🌙 Nights · 🚫 No nights · 🌙 ≤ 2 nights · 🌅 No early start · 🌃 No late finish · 🏖 Weekends off · 📅 Days off together · ⏱ Same hours. Plus the days they\'d like off (Mo–Su) and a one-line note. Tap to turn on, tap again to turn off; only the options that fit their hotel\'s shifts appear.',
   ] },

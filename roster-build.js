@@ -1198,6 +1198,7 @@ function rbRulesHtml() {
   const R = rbRules(), hol = rbSettings.holidays || [];
   return `<div class="rb-rules">
     <label>Rest between shifts, at least <input type="number" min="6" max="16" value="${R.minRest}" onchange="rbSetRule('minRest',+this.value)"> hours</label>
+    <label>Only when there's no other way, down to <input type="number" min="0" max="${R.minRest}" value="${R.restFloor != null ? R.restFloor : 7}" onchange="rbSetRule('restFloor',Math.min(+this.value,rbRules().minRest))"> hours <small>(one hour at a time, and it tells you who and why)</small></label>
     <label>Days in a row, at most <input type="number" min="3" max="14" value="${R.maxRun}" onchange="rbSetRule('maxRun',+this.value)"></label>
     <label>Longest shift <input type="number" min="6" max="12" value="${R.maxHours}" onchange="rbSetRule('maxHours',+this.value)"> hours</label>
     <label class="rb-chk"><input type="checkbox" ${R.nightSwitch !== false ? 'checked' : ''} onchange="rbSetRule('nightSwitch',this.checked)"> A day off between night and day shifts (no night on Monday then 08:00 on Tuesday, or the other way)</label>
