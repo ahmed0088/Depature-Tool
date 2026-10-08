@@ -1414,25 +1414,43 @@ function rbSetPh(k, v) { const base = rbPhOwed(k).owed - (+((rbPeople[k] || {}).
 
 function rbRulesHtml() {
   const R = rbRules(), hol = rbSettings.holidays || [];
+  // one rule = a title, a short hint and its control: − value + for numbers, a switch for yes/no
+  const row = (title, hint, ctl, off) => `<div class="rr-row${off ? ' off' : ''}"><div class="rr-l"><b>${title}</b>${hint ? `<small>${hint}</small>` : ''}</div><div class="rr-c">${ctl}</div></div>`;
+  const step = (val, min, max, set, unit) => `<div class="rr-step"><button type="button" aria-label="Less" onclick="rbStep(this,-1)">−</button><input type="number" inputmode="numeric" min="${min}" max="${max}" value="${val}" onchange="${set}">${unit ? `<span>${unit}</span>` : ''}<button type="button" aria-label="More" onclick="rbStep(this,1)">+</button></div>`;
+  const sw = (on, set) => `<label class="rr-sw"><input type="checkbox" ${on ? 'checked' : ''} onchange="${set}"><i></i></label>`;
+  const card = (ico, title, body) => `<div class="rr-card"><div class="rr-hd"><span>${ico}</span>${title}</div>${body}</div>`;
+  const mgrs = Object.keys(roStaff).filter(k => rbMgrP({ title: rbTitle(k) }) && !((rbPeople[k] || {}).deleted)).map(k => (roStaff[k].name || k).split(' ')[0]);
+  const hh = h => String(h % 24).padStart(2, '0') + ':00';
   return `<div class="rb-rules">
-    <label>Rest between shifts, at least <input type="number" min="6" max="16" value="${R.minRest}" onchange="rbSetRule('minRest',+this.value)"> hours</label>
-    <label>Only when there's no other way, down to <input type="number" min="0" max="${R.minRest}" value="${R.restFloor != null ? R.restFloor : 7}" onchange="rbSetRule('restFloor',this.value===''||isNaN(+this.value)?undefined:Math.max(0,Math.min(+this.value,rbRules().minRest)))"> hours <small>(one hour at a time, and it tells you who and why)</small></label>
-    <label>Days in a row, at most <input type="number" min="3" max="14" value="${R.maxRun}" onchange="rbSetRule('maxRun',+this.value)"></label>
-    <label>Longest shift <input type="number" min="6" max="12" value="${R.maxHours}" onchange="rbSetRule('maxHours',+this.value)"> hours</label>
-    <label class="rb-chk"><input type="checkbox" ${R.nightSwitch !== false ? 'checked' : ''} onchange="rbSetRule('nightSwitch',this.checked)"> A day off between night and day shifts (no night on Monday then 08:00 on Tuesday, or the other way)</label>
-    <div class="rb-desk-rule"><span>Two on the desk: aim for</span><input type="number" min="1" max="6" value="${R.deskMin}" onchange="rbSetRule('deskMin',+this.value)"><span>at once, from</span><input type="number" min="0" max="23" value="${R.deskFrom}" onchange="rbSetRule('deskFrom',+this.value)"><span>:00 to</span><input type="number" min="0" max="24" value="${R.deskTo}" onchange="rbSetRule('deskTo',+this.value)"><span>:00${R.deskTo % 24 < R.deskFrom % 24 ? ' (next day)' : ''}</span>
-      <small>One on 08–17 and one on 12–21 = two at once 12:00–17:00. An end before the start runs past midnight; 1 person = off.</small></div>
-    <label class="rb-chk"><input type="checkbox" ${R.allowOne !== false ? 'checked' : ''} onchange="rbSetRule('allowOne',this.checked)"> When there's no other way, run a shift with one person (cover number = the ideal)</label>
-    <label class="rb-chk"><input type="checkbox" ${R.givePh ? 'checked' : ''} onchange="rbSetRule('givePh',this.checked)"> Give PH days owed, only as the last option: when a shift has someone spare anyway. <input type="number" min="0" max="9" value="${R.phPeople == null ? 1 : R.phPeople}" onclick="event.stopPropagation()" onchange="rbSetRule('phPeople',Math.max(0,Math.min(9,+this.value||0)))"> person a week per hotel (the biggest balance first), <input type="number" min="0" max="3" value="${R.phMax == null ? 1 : R.phMax}" onclick="event.stopPropagation()" onchange="rbSetRule('phMax',Math.max(0,Math.min(3,+this.value||0)))"> PH each <small>(a week normally has one day off, 4 a month)</small></label>
-    <label class="rb-chk"><input type="checkbox" ${R.lend === false ? 'checked' : ''} onchange="rbSetRule('lend',!this.checked)"> 🏨 Keep everyone in their own hotel (nobody is moved between hotels, by the builder or in suggestions). Off: a short hotel can borrow ("12:00 - 21:00 - Adagio"); lock single people on their card.</label>
-    <label class="rb-chk"><input type="checkbox" ${R.lockMgr !== false ? 'checked' : ''} onchange="rbSetRule('lockMgr',this.checked);rbRender()"> 🔒 Managers keep their own shift (e.g. 09:00 - 18:00 to run the operation): never moved to cover. Unlock one on their card.</label>
-    <label>👔 Managers on duty (Manager, Asst. Manager), all hotels together: at least <input type="number" min="0" max="3" value="${R.mgrMin}" onchange="rbSetRule('mgrMin',Math.max(0,Math.min(3,+this.value||0)))"> each day <small>(one can look after all the hotels when needed; two is fine too; 0 = off) · now: ${escapeHtml(Object.keys(roStaff).filter(k => rbMgrP({ title: rbTitle(k) }) && !((rbPeople[k] || {}).deleted)).map(k => (roStaff[k].name || k).split(' ')[0]).join(', ') || 'nobody has the title yet: set it on their card in 🧑‍💼 Team')}</small></label>
+    <div class="rr-grid">
+    ${card('😴', 'Rest & hours',
+      row('Rest between shifts', 'at least', step(R.minRest, 6, 16, "rbSetRule('minRest',+this.value)", 'h'))
+      + row('Only if there\'s no other way', 'down to, one hour at a time; it tells you who and why', step(R.restFloor != null ? R.restFloor : 7, 0, R.minRest, "rbSetRule('restFloor',this.value===''||isNaN(+this.value)?undefined:Math.max(0,Math.min(+this.value,rbRules().minRest)))", 'h'))
+      + row('Days in a row', 'at most', step(R.maxRun, 3, 14, "rbSetRule('maxRun',+this.value)", 'days'))
+      + row('Longest shift', '', step(R.maxHours, 6, 12, "rbSetRule('maxHours',+this.value)", 'h'))
+      + row('Day off between night and day', 'no night on Monday then 08:00 on Tuesday', sw(R.nightSwitch !== false, "rbSetRule('nightSwitch',this.checked)")))}
+    ${card('🛎', 'Desk & cover',
+      row('People on the desk at once', 'aim for; 1 = off', step(R.deskMin, 1, 6, "rbSetRule('deskMin',+this.value)", ''))
+      + row('From', 'e.g. one on 08–17 and one on 12–21 = two at once 12–17', step(R.deskFrom, 0, 23, "rbSetRule('deskFrom',+this.value)", ':00'))
+      + row('To', R.deskTo % 24 < R.deskFrom % 24 ? 'the next day (runs past midnight)' : hh(R.deskFrom) + ' – ' + hh(R.deskTo), step(R.deskTo, 0, 24, "rbSetRule('deskTo',+this.value)", ':00'))
+      + row('One person on a shift', 'only when there\'s no other way', sw(R.allowOne !== false, "rbSetRule('allowOne',this.checked)")))}
+    ${card('🏖', 'PH days',
+      row('Give PH owed', 'the last option: only when a shift has someone spare anyway', sw(R.givePh, "rbSetRule('givePh',this.checked);rbRender()"))
+      + row('People a week, per hotel', 'the biggest balance first', step(R.phPeople == null ? 1 : R.phPeople, 0, 9, "rbSetRule('phPeople',Math.max(0,Math.min(9,+this.value||0)))", ''), !R.givePh)
+      + row('PH each', 'a week normally has one day off (4 a month)', step(R.phMax == null ? 1 : R.phMax, 0, 3, "rbSetRule('phMax',Math.max(0,Math.min(3,+this.value||0)))", ''), !R.givePh))}
+    ${card('🏨', 'Hotels & managers',
+      row('Keep everyone in their own hotel', R.lend === false ? 'nobody is moved, by the builder or in suggestions' : 'off: moved only when a shift would be empty, one pair of hotels a week', sw(R.lend === false, "rbSetRule('lend',!this.checked);rbRender()"))
+      + row('Managers keep their own shift', 'never moved to cover; unlock one on their card', sw(R.lockMgr !== false, "rbSetRule('lockMgr',this.checked);rbRender()"))
+      + row('Managers on duty each day', `all hotels together; 0 = off · ${mgrs.length ? 'now: ' + escapeHtml(mgrs.join(', ')) : 'nobody has the title yet (their card in 🧑‍💼 Team)'}`, step(R.mgrMin, 0, 3, "rbSetRule('mgrMin',Math.max(0,Math.min(3,+this.value||0)))", '')))}
+    </div>
     ${typeof hdPanelHtml === 'function' ? hdPanelHtml() : `<div class="rb-sub">Public holidays</div>
     <div class="rb-hols">${hol.map((h, i) => `<span class="rb-hol">${escapeHtml(roDayLbl(h.date, true))}${h.name ? ' · ' + escapeHtml(h.name) : ''}<button class="ro-x" onclick="rbDelHol(${i})">✕</button></span>`).join('') || '<span class="ro-empty">None added yet.</span>'}</div>
     <div class="rb-inline"><input type="date" id="rbHd"><input id="rbHn" placeholder="Name, e.g. National Day"><button class="btn sm" onclick="rbAddHol()">+ Holiday</button></div>`}
     ${typeof rtTaskTimesHtml === 'function' ? rtTaskTimesHtml() : ''}
   </div>`;
 }
+/** − / + next to a number: change it and save it like typing it would. */
+function rbStep(btn, d) { const inp = btn.parentNode.querySelector('input'); if (!inp) return; const v = Math.max(+inp.min, Math.min(+inp.max, (+inp.value || 0) + d)); if (v === +inp.value) return; inp.value = v; inp.dispatchEvent(new Event('change')); }
 function rbSetRule(k, v) { rbSettings.rules = Object.assign({}, rbSettings.rules, { [k]: v }); fbSet('roster/builder/settings/rules', rbSettings.rules); rbRefreshOut(); }
 function rbAddHol() { const d = document.getElementById('rbHd').value; if (!d) return; const h = (rbSettings.holidays || []).concat([{ date: d, name: document.getElementById('rbHn').value.trim() }]).sort((a, b) => a.date.localeCompare(b.date)); rbSettings.holidays = h; fbSet('roster/builder/settings/holidays', h); rbRender(); }
 function rbDelHol(i) { const h = (rbSettings.holidays || []).slice(); h.splice(i, 1); rbSettings.holidays = h; fbSet('roster/builder/settings/holidays', h); rbRender(); }

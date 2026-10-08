@@ -1353,3 +1353,30 @@ label.rb-q:first-child { border-color: var(--accent-border); background: color-m
 .hd-ask { margin: 0; }
 @media (max-width: 520px) { .hd-ctls { grid-template-columns: 1fr; } }
 .rb-finding { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text3); } .rb-finding .ri-spin { width: 14px; height: 14px; }
+
+/* ── Rules (builder → ⚖️ Rules) ─────────────────────────── */
+.rr-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 760px) { .rr-grid { grid-template-columns: 1fr; } }
+.rr-card { border: 1px solid var(--border); border-radius: 14px; background: var(--card2); padding: 4px 14px 6px; }
+.rr-hd { display: flex; align-items: center; gap: 8px; padding: 10px 0 8px; font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--accent); border-bottom: 1px solid var(--border); }
+.rr-hd span { font-size: 15px; }
+.rr-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; min-height: 40px; }
+.rr-row + .rr-row { border-top: 1px solid var(--border); }
+.rr-row.off { opacity: .45; }
+.rr-l { min-width: 0; } .rr-l b { display: block; font-size: 13px; font-weight: 600; color: var(--text); } .rr-l small { display: block; margin-top: 2px; font-size: 11.5px; line-height: 1.35; color: var(--text3); }
+.rr-c { flex: none; }
+.rr-step { display: inline-flex; align-items: center; height: 34px; border: 1px solid var(--border2); border-radius: 10px; background: var(--bg2); overflow: hidden; }
+.rr-step button { all: unset; cursor: pointer; width: 32px; height: 100%; display: grid; place-items: center; font-size: 17px; color: var(--text2); transition: background .15s; }
+.rr-step button:hover { background: var(--accent-bg); color: var(--accent); } .rr-step button:active { transform: scale(.92); }
+.rb-rules .rr-step input { width: 34px; height: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; text-align: center; font: 700 14px var(--mono); color: var(--text); -moz-appearance: textfield; }
+.rr-step input::-webkit-outer-spin-button, .rr-step input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.rr-step input:focus { outline: none; background: var(--accent-bg); }
+.rr-step span { font-size: 11.5px; color: var(--text3); padding-right: 4px; margin-left: -2px; }
+.rr-sw { position: relative; display: inline-block; width: 42px; height: 24px; cursor: pointer; }
+.rr-sw input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.rr-sw i { position: absolute; inset: 0; border-radius: 99px; background: var(--border2); transition: background .2s; pointer-events: none; }
+.rr-sw i::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .2s; }
+.rr-sw input:checked + i { background: var(--accent); } .rr-sw input:checked + i::after { transform: translateX(18px); }
+.rr-sw input:focus-visible + i { box-shadow: 0 0 0 3px var(--accent-bg); }
+.rb-rules > .hd-panel { margin-top: 4px; }
+.rr-step { min-width: 120px; justify-content: space-between; } .rr-step input { flex: 1; }
