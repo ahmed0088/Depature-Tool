@@ -28,10 +28,26 @@ function vcStart(k) {
   if (c.vacBal && _vcISO(c.vacBal.at)) return { n: +c.vacBal.n || 0, at: c.vacBal.at, set: true };
   return { n: 0, at: _vcISO(c.joined) || _vcISO(typeof rbFirstDay === 'function' ? rbFirstDay(k) : '') || roToday(), set: false };
 }
+/** The roster read once per redraw for everyone (a list of 20 people asked 20 times reads it once),
+ *  and each code looked up once ("AL", "07:00 - 15:00"… are the same few hundred values over and over). */
+let _vcScanC = null;
+function _vcScan() {
+  if (_vcScanC && _vcScanC.live) return _vcScanC;   // same redraw: no need to even check
+  const stamp = typeof _rbLearnStamp === 'function' ? _rbLearnStamp() : '';
+  if (_vcScanC && _vcScanC.stamp === stamp) { _vcLive(); return _vcScanC; }
+  const al = {}, memo = new Map();
+  for (const dt in roDays) {
+    const day = roDays[dt]; if (!day) continue;
+    for (const k in day) { const v = day[k]; if (!v) continue; let r = memo.get(v); if (r === undefined) { r = vcIsAL(v); memo.set(v, r); } if (r) (al[k] = al[k] || []).push(dt); }
+  }
+  _vcScanC = { al, stamp }; _vcLive();
+  return _vcScanC;
+}
+function _vcLive() { const C = _vcScanC; C.live = true; setTimeout(() => { C.live = false; }, 0); }
 /** Every vacation day someone has from a date on: posted roster and leave on their card (each day once). */
 function vcDates(k, from) {
   const days = new Set(), c = rbPeople[k] || {};
-  for (const dt in roDays) if (dt >= from && vcIsAL((roDays[dt] || {})[k])) days.add(dt);
+  (_vcScan().al[k] || []).forEach(dt => { if (dt >= from) days.add(dt); });
   Object.values(c.absences || {}).forEach(a => {
     if (!a || !a.from || !vcIsAL(a.code)) return;
     let dt = a.from, n = 0;

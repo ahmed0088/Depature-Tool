@@ -780,7 +780,15 @@ function rbLearnPerson(key, week) {
   const r = _rbLearnPerson(key, week); if (_rbLearnC.size > 600) _rbLearnC.clear(); _rbLearnC.set(ck, r); return r;
 }
 /** Changes when a roster is posted or edited, so what was learned is read again. */
-function _rbLearnStamp() { let n = 0; for (const dt in roDays) n += Object.keys(roDays[dt] || {}).length; return Object.keys(roDays).length + ':' + n; }
+let _rbStampC = null;   // counted once per redraw: a card asks it dozens of times
+function _rbLearnStamp() {
+  if (_rbStampC && _rbStampC.live && _rbStampC.days === roDays) return _rbStampC.v;
+  let n = 0, d = 0; for (const dt in roDays) { d++; for (const k in (roDays[dt] || {})) n++; }
+  const C = _rbStampC = { v: d + ':' + n, days: roDays, live: true }; setTimeout(() => { C.live = false; }, 0);
+  return C.v;
+}
+/** Something wrote to the roster and draws again straight away: count it again. */
+function rbStampReset() { _rbStampC = null; if (typeof _rbScanC !== 'undefined' && _rbScanC) _rbScanC.live = false; if (typeof _vcScanC !== 'undefined' && _vcScanC) _vcScanC.live = false; }
 /** What the posted rosters say about someone: whoever made them (built here, a picture, Excel, another manager),
  *  the last 8 weeks that have a roster (weeks without one are skipped). Settings on their card always come first. */
 function _rbLearnPerson(key, week) {
@@ -816,6 +824,7 @@ function rbHolidays() {
   const out = {};
   ((rbSettings.holidays) || []).forEach(h => { if (h && h.date) out[h.date] = h.name || ''; });
   Object.entries(roDays).forEach(([dt, day]) => Object.values(day || {}).forEach(v => {
+    if (!v || (v[0] !== 'P' && v[0] !== 'p')) return;   // only PH cells: skip the regex for the rest
     const m = String(v).match(/^PH\s*[-–:]?\s*(\d{1,2})(?:st|nd|rd|th)?\s*([A-Za-z]{3})/i);
     if (!m) return;
     const iso = roParseDate(`${m[1]} ${m[2]}`, dt);
@@ -838,12 +847,15 @@ function rbPhEarns(key, dt, listed) {
 /** Read once per redraw: everyone's first day on a roster and PH days taken (a list of 20 people asked 20 times). */
 let _rbScanC = null;
 function _rbScan() {
+  if (_rbScanC && _rbScanC.live && _rbScanC.hl === rbSettings.holidays) return _rbScanC;   // same redraw: no need to even check
   const stamp = _rbLearnStamp() + JSON.stringify(rbSettings.holidays || []);
-  if (_rbScanC && _rbScanC.stamp === stamp) return _rbScanC;
-  const first = {}, taken = {}, hol = rbHolidays();
-  for (const dt in roDays) { const day = roDays[dt] || {}; for (const k in day) { if (!day[k]) continue; if (!first[k] || dt < first[k]) first[k] = dt; if (/^PH\b/i.test(String(day[k]))) (taken[k] = taken[k] || []).push(dt); } }
-  _rbScanC = { first, taken, hol, stamp };
-  setTimeout(() => { _rbScanC = null; }, 0);
+  if (!_rbScanC || _rbScanC.stamp !== stamp) {
+    const first = {}, taken = {}, hol = rbHolidays();
+    for (const dt in roDays) { const day = roDays[dt] || {}; for (const k in day) { if (!day[k]) continue; if (!first[k] || dt < first[k]) first[k] = dt; if (/^PH\b/i.test(String(day[k]))) (taken[k] = taken[k] || []).push(dt); } }
+    _rbScanC = { first, taken, hol, stamp };
+  }
+  _rbScanC.live = true; _rbScanC.hl = rbSettings.holidays;
+  const C = _rbScanC; setTimeout(() => { C.live = false; }, 0);
   return _rbScanC;
 }
 function rbFirstDay(key) { return _rbScan().first[key] || '9999'; }

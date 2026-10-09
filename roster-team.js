@@ -1325,6 +1325,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const old = typeof roIsQuestion === 'function' ? roIsQuestion : null;
   window.roIsQuestion = q => (old && old(q)) || RT_COMMANDS.some(c => c.re.test(String(q).trim()));
   setInterval(rtApplyTaskTimes, 60000); setTimeout(rtApplyTaskTimes, 4000);
+  let _rtGapC = null;
   (window.BL_THINKERS = window.BL_THINKERS || []).push(add => {
     if (typeof roCanEdit !== 'function' || !roCanEdit() || !Object.keys(roStaff).length) return;
     // someone who left is still on a posted shift
@@ -1339,7 +1340,10 @@ document.addEventListener('DOMContentLoaded', () => {
       // Quiet: no alarm; it waits in Ops Brain, and pops up once only when the shift starts within 3 hours.
       const startOf = a => { const m = String(a.shift).match(/(\d{1,2}):(\d{2})/); if (!m) return 0; const d = roDate(a.date); d.setHours(+m[1], +m[2], 0, 0); return d.getTime(); };
       const now = Date.now();
-      const I = rtCtx(w), adv = rtAdvice(I, rtPublished(w)).filter(a => a.kind === 'short' && (a.date === roToday() || a.date === roAdd(roToday(), 1)) && !rbShiftStarted(a.date, a.shift));
+      // worked out again only when the roster or the team changes (Ops Brain asks every 20 s)
+      const key = w + '|' + roToday() + '|' + _rbLearnStamp() + '|' + JSON.stringify(rbPeople).length + '|' + JSON.stringify(rbSettings.rules || {});
+      if (!_rtGapC || _rtGapC.key !== key) { const I = rtCtx(w); _rtGapC = { key, all: rtAdvice(I, rtPublished(w)) }; }
+      const adv = _rtGapC.all.filter(a => a.kind === 'short' && (a.date === roToday() || a.date === roAdd(roToday(), 1)) && !rbShiftStarted(a.date, a.shift));
       adv.slice(0, 2).forEach(a => { const st = startOf(a), soon = st - now < 3 * 3600e3; add({ id: `rosterGap:${a.date}:${a.group}:${a.shift}`, type: 'roster', icon: '🗓️', tone: soon ? 'warn' : 'idle', silent: !soon, snoozeUntil: st, text: `${a.date === roToday() ? 'Today' : 'Tomorrow'} ${a.shift} at ${a.group || 'the hotel'} has nobody yet.`, why: a.options[0] ? 'Best cover: ' + a.options[0].text : 'Nobody can cover within the rules.', acts: [['Fix it', () => rtOfferCover(w)]] }); });
     }
   });

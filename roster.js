@@ -61,10 +61,19 @@ let roWeek = null, roEdit = false, roPreview = null;
 // ── Dates ─────────────────────────────────────────────────
 function roIso(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 function roDate(iso) { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d); }
-function roAdd(iso, n) { const d = roDate(iso); d.setDate(d.getDate() + n); return roIso(d); }
+const _roAddC = new Map(), _roLblC = new Map();   // asked thousands of times per screen with the same few dates
+function roAdd(iso, n) {
+  const k = iso + '|' + n; let v = _roAddC.get(k);
+  if (v === undefined) { if (_roAddC.size > 20000) _roAddC.clear(); const d = roDate(iso); d.setDate(d.getDate() + n); v = roIso(d); _roAddC.set(k, v); }
+  return v;
+}
 function roMonday(d) { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return roIso(x); }
 function roToday() { return roIso(new Date()); }
-function roDayLbl(iso, long) { const d = roDate(iso); return d.toLocaleDateString('en-GB', long ? { weekday: 'long', day: 'numeric', month: 'long' } : { weekday: 'short', day: 'numeric' }); }
+function roDayLbl(iso, long) {
+  const k = long ? iso + 'L' : iso; let v = _roLblC.get(k);
+  if (v === undefined) { if (_roLblC.size > 5000) _roLblC.clear(); v = roDate(iso).toLocaleDateString('en-GB', long ? { weekday: 'long', day: 'numeric', month: 'long' } : { weekday: 'short', day: 'numeric' }); _roLblC.set(k, v); }
+  return v;
+}
 
 // ── Names and codes ───────────────────────────────────────
 function roKey(name) {

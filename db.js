@@ -97,6 +97,7 @@ function updateConnectionUI(online) {
 /** Today (or date d) as YYYY-MM-DD on this device's clock: toISOString() is UTC, the day before in Dubai until 04:00. */
 function hoLocalISO(d) { d = d || new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 async function fbSet(path, data) {
+  if (typeof rbStampReset === 'function' && /^roster\/days/.test(path)) rbStampReset();   // the roster changed: counted again on the next redraw
   lsSave(path, data);
   if (!_ref) return;
   try { await _ref.child(path).set(data); _dbClearError(); }

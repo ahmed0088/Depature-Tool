@@ -429,7 +429,7 @@ console.log('\nRoster scenarios');
   run(`hdAccept(hdPending('2026-03-05')[0].id)`);
   check('holidays: after yes, everyone on the team earns them (also on their day off); new people from the day they joined', run(`['A','B','C','D','F'].map(k => rbPhOwed(k).owed).join()`), '3,3,3,1,2');
   check('holidays: answered once, not asked again', run(`hdPending('2026-03-05').length`), 0);
-  run(`roDays['2026-03-23'] = { A: 'PH - 19th Mar.' };`);
+  run(`roDays['2026-03-23'] = { A: 'PH - 19th Mar.' }; rbStampReset();`);   // the app saves through fbSet, which does this
   check('holidays: a PH on a posted roster comes off the balance, oldest first', run(`[rbPhOwed('A').owed, rbPhOwed('A').label].join()`), '2,20th Mar.');
   run(`rbSettings.phEarn = 'worked';`);
   check('holidays: "only who works it" mode', run(`['A','B'].map(k => rbPhOwed(k).owed).join()`), '1,3');

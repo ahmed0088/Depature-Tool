@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 211, items: [
+    '⚡ Faster everywhere in the roster: the app was counting every roster day again and again (once per person, dozens of times per card). Now it counts once per screen. A person\'s card opens about 10 times faster, the vacation list about 30 times faster, and the builder, undo, rules and requests react about a third to half quicker.',
+    '🧠 Ops Brain\'s background check (every 20 seconds) no longer re-reads the whole posted week each time, so the app stays smooth while it runs.',
+  ] },
   { v: 210, items: [
     '🌴 Vacation balance: everyone earns vacation every day (30 days a year, 2.5 a month; change it in Rules or for one person on their card). AL, ALA and VAC days in the roster and leave added on their card come off it: days up to today are used, later ones are booked.',
     '👤 Each card shows the vacation days today, used, booked and what is left after. Type the balance from HR once and it counts on from there; without it, it counts from the day they joined.',
