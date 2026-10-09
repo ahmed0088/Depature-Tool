@@ -28,6 +28,11 @@ const GS_PANEL_LABEL = {
   checklist:  'Night Checklist',
   shifts:     'Shift Tasks',
   standards:  'Accor Standards',
+  'roster-build': 'Roster builder',
+  roster:     'Roster',
+  wakeups:    'Wake-up Calls',
+  rates:      'Rate Shop',
+  page:       'Page',
 };
 
 let _gsSelIdx = 0;
@@ -93,7 +98,30 @@ function gsBuildIndex(q) {
     }
   });
 
-  return out.slice(0, 30);
+  // team members, meetings, wake-up calls, our hotels, and every page by its name
+  const edit = typeof roCanEdit === 'function' && roCanEdit();
+  Object.entries(typeof roStaff !== 'undefined' ? roStaff : {}).forEach(([k, st]) => {
+    if (!st || !hit(st.name, st.group)) return;
+    out.push({ panel: edit ? 'roster-build' : 'roster', room: '', name: st.name, extra: (st.group || '') + (edit ? ' · open their card' : ''), icon: '🧑‍💼', act: () => { if (edit && typeof rtPerson === 'function') { showPanel('roster-build'); setTimeout(() => rtPerson(k), 80); } else showPanel('roster'); } });
+  });
+  if (edit && typeof evList === 'function') evList().filter(e => (e.until || e.date) >= roToday() && hit(e.title, e.where, evWho(e))).forEach(e => {
+    out.push({ panel: 'roster-build', room: '', name: e.title, extra: `${roDayLbl(e.date)} · ${evTime(e)} · ${evWho(e)}`, icon: '📅', act: () => { showPanel('roster-build'); setTimeout(() => evEdit(e.id), 80); } });
+  });
+  Object.values(typeof bxWakes !== 'undefined' ? bxWakes : {}).filter(w => w && !w.done && hit(w.room, w.name)).forEach(w => {
+    out.push({ panel: 'wakeups', room: w.room, name: w.name || 'Wake-up call', extra: w.time || '', icon: '⏰' });
+  });
+  if (typeof rkHotels === 'function' && (typeof hoPanelAllowed !== 'function' || hoPanelAllowed('rates'))) rkHotels().filter(h => hit(h.name)).forEach(h => {
+    out.push({ panel: 'rates', room: '', name: h.name, extra: 'rates vs the hotels around', icon: '💲', act: () => { rkHotel = h.id; showPanel('rates'); } });
+  });
+  document.querySelectorAll('.nav-item[data-panel]').forEach(n => {
+    const label = n.textContent.replace(/\s+/g, ' ').replace(/\s[\d—–]+\s*$/, '').trim();
+    if (hit(label) && (typeof hoPanelAllowed !== 'function' || hoPanelAllowed(n.dataset.panel))) out.push({ panel: 'page', room: '', name: label, extra: 'open the page', icon: '➡️', act: () => showPanel(n.dataset.panel) });
+  });
+
+  // a word that starts with what was typed beats a match inside a word ("Ali" before "invalid"); people and pages first
+  const starts = r => new RegExp('(^|[^a-z0-9])' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(`${r.room} ${r.name}`);
+  const rank = r => (starts(r) ? 0 : 10) + (r.act ? 0 : 1);
+  return out.map((r, i) => [r, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(x => x[0]).slice(0, 30);
 }
 
 function gsSearch(val) {
@@ -108,7 +136,7 @@ function gsRenderResults(q) {
   if (!box) return;
 
   if (!q) {
-    box.innerHTML = `<div class="gs-empty">Type a room number, guest name, checklist step, or task…</div>`;
+    box.innerHTML = `<div class="gs-empty">Type a room, guest, staff member, meeting, hotel, page, checklist step or task…</div>`;
     return;
   }
   if (!_gsResults.length) {
@@ -138,6 +166,7 @@ function gsJump(i) {
   const r = _gsResults[i];
   if (!r) return;
   gsClose();
+  if (r.act) { r.act(); return; }
   showPanel(r.panel);
 
   const inputId = GS_SEARCH_INPUT[r.panel];

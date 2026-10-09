@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 205, items: [
+    '🔗 Home has new tiles: ⏰ wake-up calls today (red if one is late), 🧩 Roster builder (is next week built or posted, a holiday to answer, meetings today/tomorrow, who needs care) and 💲 our rates vs the market today.',
+    '🔍 Search (Ctrl K) now finds team members (opens their card), meetings and training, wake-up calls, our hotels in the Rate Shop, and any page by its name. Whole-word matches first.',
+    '🚪 Someone leaves: set "Left on" on their card and the app takes them off the posted days after it (the gaps show in Cover to fix) and offers to build the draft week again. Ops Brain warns if someone who left is still on a posted shift.',
+    '📅 Meetings and training now show on the posted roster too (a small 📅 on that day).',
+  ] },
   { v: 204, items: [
     '🌍 Purpose of Stay: load both nationality reports at once. In "Origin XML", pick Vicas and Arrival Today Vicas together (Ctrl or Shift + click), or drop both on the app: one question for both, and one message with what each file added.',
   ] },

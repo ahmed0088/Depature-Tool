@@ -541,7 +541,7 @@ function _roTable(rows, dates, get, editable) {
       if (editable === 'preview') return `<td class="ro-cell ${i ? 'ro-t-' + i.type : ''}${/\?/.test(v) ? ' ro-unsure' : ''}" data-k="${escapeHtml(r.key)}" data-d="${d}" title="${escapeHtml(v || 'empty')}: tap to correct" onclick="roPrevEdit(this)">${escapeHtml(v === '?' ? '?' : roCellTxt(i))}${i && i.note ? `<i class="ro-note">${escapeHtml(i.note.replace(/\s*\?$/, ''))}</i>` : ''}</td>`;
       return `<td class="ro-cell ${i ? 'ro-t-' + i.type : ''}${d === today ? ' ro-today' : ''}${/\?/.test(v) ? ' ro-unsure' : ''}" data-k="${escapeHtml(r.key)}" data-d="${d}" title="${escapeHtml(i ? i.label + (i.from && !i.label.startsWith(i.from) ? ' ' + roTime(i) : '') : '')}">${editable
         ? `<input value="${escapeHtml(v)}" maxlength="40" onchange="${editable === 'preview' ? 'roPrevSet' : 'roSetCell'}(${q(r.key)},'${d}',this.value)">`
-        : `${escapeHtml(roCellTxt(i))}${i && i.note ? `<i class="ro-note">${escapeHtml(i.note)}</i>` : ''}`}</td>`; }).join('')}${editable === true ? `<td><button class="ro-x" title="Clear this week" onclick="roClearPerson(${q(r.key)})">✕</button></td>` : ''}</tr>`).join('')}</tbody>
+        : `${escapeHtml(roCellTxt(i))}${i && i.note ? `<i class="ro-note">${escapeHtml(i.note)}</i>` : ''}${typeof evMark === 'function' ? evMark(r.key, d) : ''}`}</td>`; }).join('')}${editable === true ? `<td><button class="ro-x" title="Clear this week" onclick="roClearPerson(${q(r.key)})">✕</button></td>` : ''}</tr>`).join('')}</tbody>
   </table></div>`;
 }
 

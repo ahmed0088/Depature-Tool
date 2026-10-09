@@ -644,6 +644,26 @@ function rtNotify(week, changes, why) {
   roMarkSeen();
 }
 /** Mark someone sick or on leave for dates, in drafts to come and in any posted week. */
+/** Someone leaves (or resigned): from that day they're off every roster still to come. Posted days after it are
+ *  taken off (the gaps show in Cover to fix, with who can take them), and a built week is built again. */
+function rtLeft(k, date) {
+  rtSet(k, 'left', date);
+  if (!date) { rtPerson(k); return; }
+  const name = rtName(k), posted = [], drafts = [];
+  for (let w = roMonday(roDate(date)), i = 0; i < 6; w = roAdd(w, 7), i++) {
+    const after = rtDates(w).filter(dt => dt >= date);
+    if (rtIsPublished(w)) { const cells = rtPublished(w), days = after.filter(dt => rbParse((cells[k] || {})[dt])); if (days.length) posted.push({ w, cells, days }); }
+    else if (rbDrafts[w] && after.some(dt => rbParse(((rbDrafts[w].cells || {})[k] || {})[dt]))) drafts.push(w);
+  }
+  if (posted.length && confirm(`${name} is still on the posted roster after leaving: ${posted.map(p => p.days.map(dt => roDayLbl(dt)).join(', ')).join(', ')}.\n\nTake them off those days? The gaps then show under Cover to fix, with who can take them.`)) {
+    posted.forEach(p => { p.days.forEach(dt => { p.cells[k][dt] = '—'; }); rtApplyPublished(p.w, p.cells, `${name} has left`); });
+  }
+  drafts.forEach(w => { rtDates(w).filter(dt => dt >= date).forEach(dt => { (rbDrafts[w].cells[k] = rbDrafts[w].cells[k] || {})[dt] = '—'; }); rbPutDraft(w); });
+  rtPerson(k);
+  if (drafts.length && confirm(`${name} was on the draft for ${drafts.map(w => roDayLbl(w)).join(', ')}. Build ${drafts.length > 1 ? 'the first one' : 'it'} again now, so their shifts go to the rest of the team?`)) {
+    document.getElementById('rtSheet')?.remove(); rbWeek = drafts[0]; rbRender(); rbBuild(true);
+  } else if (!posted.length && !drafts.length) showToast(`${name}: off every roster from ${roDayLbl(date)}`, 'ok');
+}
 function rtMarkAbsent(k, from, to, code, quiet) {
   to = to && to >= from ? to : from; code = code || 'SL';
   const c = Object.assign({}, rbPeople[k]); const id = 'a' + Date.now().toString(36);
@@ -765,7 +785,7 @@ function rtPerson(k) {
     <div class="rb-sub">History <small>last weeks, and the last 30 days: ${Object.entries(tally).sort((a, b) => b[1] - a[1]).map(([x, n]) => `${escapeHtml(x)} ×${n}`).join(' · ') || 'nothing yet'}</small></div>
     <div class="ro-scroll"><table class="ro-table"><thead><tr><th class="ro-name">Week</th>${RB_DAYS.map(x => `<th>${x}</th>`).join('')}</tr></thead><tbody>${hist}</tbody></table></div>
     <div class="rb-sub">Working here</div>
-    <div class="rb-inline"><label>Joined <input type="date" value="${escapeHtml(c.joined || '')}" onchange="rtSet(${q},'joined',this.value||undefined)"></label><label>Left on <input type="date" value="${escapeHtml(c.left || '')}" onchange="rtSet(${q},'left',this.value||undefined);rtPerson(${q})"></label></div>
+    <div class="rb-inline"><label>Joined <input type="date" value="${escapeHtml(c.joined || '')}" onchange="rtSet(${q},'joined',this.value||undefined)"></label><label>Left on <input type="date" value="${escapeHtml(c.left || '')}" onchange="rtLeft(${q},this.value||undefined)"></label></div>
     <div class="ro-acts"><button class="btn" onclick="rtDelete(${q})">🗑 Delete from the team</button><small>Left staff stay in old rosters; deleting removes them from the team list too.</small></div>
   </div>`;
   d.addEventListener('click', e => { if (e.target === d) { d.remove(); rbRender(); } });
@@ -1301,6 +1321,8 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(rtApplyTaskTimes, 60000); setTimeout(rtApplyTaskTimes, 4000);
   (window.BL_THINKERS = window.BL_THINKERS || []).push(add => {
     if (typeof roCanEdit !== 'function' || !roCanEdit() || !Object.keys(roStaff).length) return;
+    // someone who left is still on a posted shift
+    Object.keys(roStaff).forEach(k => { const lf = (rbPeople[k] || {}).left; if (!lf) return; const dt = Array.from({ length: 21 }, (_, i) => roAdd(roToday(), i)).find(d => d >= lf && rbParse((roDays[d] || {})[k])); if (dt) add({ id: `leftOn:${k}:${dt}`, type: 'roster', icon: '🚪', tone: 'warn', text: `${rtName(k)} left on ${roDayLbl(lf)} but is still on the roster on ${roDayLbl(dt)}.`, why: 'Open their card and set the date again to take them off, or change the cell.', acts: [['Open card', () => { showPanel('roster-build'); setTimeout(() => rtPerson(k), 80); }]] }); });
     const wd = new Date().getDay(), next = roAdd(roMonday(new Date()), 7);
     // Sunday is roster day
     if ((wd === 6 || wd === 0) && !rtIsPublished(next)) add({ id: 'rosterSunday:' + next, type: 'roster', icon: '🗓️', tone: wd === 0 ? 'warn' : 'idle', text: wd === 0 ? 'It\'s Sunday: next week\'s roster isn\'t posted yet.' : 'Tomorrow is Sunday: next week\'s roster is ready to build.', why: rbDrafts[next] ? 'A draft is waiting: check it and publish.' : 'Requests in, press Build, publish.', acts: [['Open the builder', () => { rbWeek = next; rbOpen(); }]] });

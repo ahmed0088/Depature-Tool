@@ -97,6 +97,40 @@ function homeTiles() {
     add({ panel: 'pipeline', icon: '💎', title: 'ALL enrollment', big: sent, sub: 'invitations sent this month', tone: 'idle' });
   });
 
+  // Wake-up calls today
+  _homeSafe(() => {
+    if (typeof bxWakes === 'undefined') return;
+    const now = Date.now(), day = new Date(); day.setHours(0, 0, 0, 0);
+    const L = Object.values(bxWakes || {}).filter(w => w && w.at >= day.getTime() && w.at < day.getTime() + 864e5);
+    if (!L.length) return;
+    const open = L.filter(w => !w.done).sort((a, b) => a.at - b.at), late = open.filter(w => w.at < now);
+    add({ panel: 'wakeups', icon: '⏰', title: 'Wake-up calls', big: open.length, sub: late.length ? `${late.length} not called yet!` : open.length ? `next ${open[0].time} · room ${open[0].room}` : `all ${L.length} done today`, tone: late.length ? 'bad' : open.length ? 'warn' : 'ok' });
+  });
+
+  // Roster builder: next week, holidays to answer, meetings coming up, who needs care
+  _homeSafe(() => {
+    if (typeof roCanEdit !== 'function' || !roCanEdit() || typeof rbDrafts === 'undefined' || !Object.keys(roStaff || {}).length) return;
+    const next = roAdd(roMonday(new Date()), 7), posted = typeof rtIsPublished === 'function' && rtIsPublished(next), drafted = !!(rbDrafts[next] && Object.keys(rbDrafts[next].cells || {}).length);
+    const bits = [];
+    const hol = typeof hdPending === 'function' ? hdPending() : [];
+    if (hol.length) bits.push(`🎉 ${hol[0].name}: add the PH?`);
+    const t = roToday(), tm = roAdd(t, 1), ev = typeof evList === 'function' ? evList().filter(e => evDays(e).some(d => d === t || d === tm)) : [];
+    if (ev.length) bits.push(`📅 ${ev.length} meeting${ev.length > 1 ? 's' : ''} today/tomorrow`);
+    const care = typeof rhAll === 'function' ? Object.values(rhAll()).filter(H => !H.none && H.score < 50).length : 0;
+    if (care) bits.push(`💚 ${care} need${care === 1 ? 's' : ''} care`);
+    const wd = new Date().getDay(), soon = wd === 0 || wd >= 4;
+    add({ panel: 'roster-build', icon: '🧩', title: 'Roster builder', big: posted ? '✓' : drafted ? 'Draft' : '—', sub: [posted ? 'next week posted' : drafted ? 'next week built, not posted' : 'next week not built yet'].concat(bits).join(' · '), tone: !posted && soon ? 'warn' : hol.length || care ? 'warn' : posted ? 'ok' : 'idle' });
+  });
+
+  // Rate Shop: today against the market
+  _homeSafe(() => {
+    if (typeof rkHotels !== 'function' || (typeof hoPanelAllowed === 'function' && !hoPanelAllowed('rates'))) return;
+    const d = roToday(), rows = rkHotels().map(h => ({ h, M: rkMarket(h, d) })).filter(x => x.M.diff != null);
+    if (!rows.length) return;
+    const avg = rows.reduce((a, x) => a + x.M.diff, 0) / rows.length, pct = v => (v > 0 ? '+' : '') + Math.round(v * 100) + '%';
+    add({ panel: 'rates', icon: '💲', title: 'Rates vs market', big: pct(avg), sub: rows.map(x => `${x.h.name.split(' ')[0]} ${pct(x.M.diff)}`).join(' · '), tone: Math.abs(avg) <= 0.05 ? 'ok' : 'warn' });
+  });
+
   // Roster: your next shift
   _homeSafe(() => { if (typeof roHomeTile === 'function') { const t = roHomeTile(); if (t) add(t); } });
 
