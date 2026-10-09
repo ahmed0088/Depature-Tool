@@ -89,6 +89,7 @@ function _rsApply(A, B, day, why) {
   if (b) cells[A][day] = b; else delete cells[A][day];
   if (a) cells[B][day] = a; else delete cells[B][day];
   const n = rtApplyPublished(week, cells, why);
+  if (typeof tlLog === 'function') tlLog('swap', { keys: [A, B], date: day, text: `${(roStaff[A] || {}).name || A} (${a || '—'}) ↔ ${(roStaff[B] || {}).name || B} (${b || '—'}) on ${roDayLbl(day)}${why ? ' · ' + why : ''}` });
   if (typeof rbDrafts !== 'undefined' && rbDrafts[week] && rbDrafts[week].fromPublished) { rbDrafts[week].cells = cells; if (typeof rbPutDraft === 'function') rbPutDraft(week); }
   return n;
 }

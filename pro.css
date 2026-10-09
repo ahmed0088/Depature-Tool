@@ -1562,3 +1562,20 @@ details > summary + * { animation: hoRise .3s ease both; }
   .panel.active > *, .home-tile, .rk-kpi, .rk-allc, .rh-tile, .rr-card, .hd-row, .rt-row, .ev-row, .ri-viewer, .ri-viewer > *, details > summary + *, .rk-pop, .ro-tl-row, .ro-tl-bar, #rbTable.rb-reveal td.ro-cell, .rb-sh-c.pop, .rb-sh-c.swap, .ro-tl-row.is-on .ro-av::after { animation: none !important; }
   .home-tile:hover, .rt-row:hover { transform: none; }
 }
+
+/* ── Team history (team-log.js) ─────────────────────────── */
+.tl-card { margin: 0 0 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--card2); }
+.tl-card > summary { cursor: pointer; padding: 10px 12px; font: 650 13px var(--font); color: var(--text); list-style: none; }
+.tl-card > summary::-webkit-details-marker { display: none; }
+.tl-card > summary small { font-weight: 500; color: var(--text3); margin-left: 6px; }
+.tl-card .tl-list { padding: 0 12px 10px; max-height: 320px; overflow-y: auto; }
+.tl-list { display: flex; flex-direction: column; }
+.tl-row { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--border); }
+.tl-row:first-child { border-top: 0; }
+.tl-ico { flex: none; width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; background: var(--bg2); font-size: 14px; }
+.tl-wish .tl-ico { background: color-mix(in srgb, var(--rose, #e5598a) 16%, transparent); } .tl-ph .tl-ico { background: var(--accent-bg); } .tl-leave .tl-ico { background: color-mix(in srgb, var(--red) 12%, transparent); } .tl-joined .tl-ico, .tl-posted .tl-ico { background: color-mix(in srgb, var(--green) 14%, transparent); }
+.tl-m { flex: 1; min-width: 0; } .tl-m b { display: block; font: 600 12.5px var(--font); color: var(--text); } .tl-m span { display: block; font-size: 12px; color: var(--text2); margin-top: 1px; }
+.tl-d { flex: none; text-align: right; font-size: 11px; color: var(--text3); line-height: 1.35; }
+.tl-filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 10px; }
+.tl-q { flex: 1 1 160px; height: 32px; padding: 0 10px; border: 1px solid var(--border2); border-radius: 9px; background: var(--bg2); color: var(--text); font: 500 12.5px var(--font); }
+.tl-team .tl-list { max-height: 520px; overflow-y: auto; }

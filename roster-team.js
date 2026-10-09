@@ -648,6 +648,7 @@ function rtNotify(week, changes, why) {
  *  taken off (the gaps show in Cover to fix, with who can take them), and a built week is built again. */
 function rtLeft(k, date) {
   rtSet(k, 'left', date);
+  if (date && typeof tlLog === 'function') tlLog('left', { id: `left:${k}`, key: k, date, text: `${rtName(k)} left on ${roDayLbl(date)}` });
   if (!date) { rtPerson(k); return; }
   const name = rtName(k), posted = [], drafts = [];
   for (let w = roMonday(roDate(date)), i = 0; i < 6; w = roAdd(w, 7), i++) {
@@ -669,6 +670,7 @@ function rtMarkAbsent(k, from, to, code, quiet) {
   const c = Object.assign({}, rbPeople[k]); const id = 'a' + Date.now().toString(36);
   c.absences = Object.assign({}, c.absences, { [id]: { from, to, code } });
   rbPeople[k] = c; fbSet('roster/builder/people/' + k, c);
+  if (typeof tlLog === 'function') tlLog('leave', { key: k, date: from, text: `${code} ${from === to ? roDayLbl(from) : roDayLbl(from) + ' → ' + roDayLbl(to)}` });
   const weeks = new Set(); for (let dt = from; dt <= to; dt = roAdd(dt, 1)) weeks.add(roMonday(roDate(dt)));
   const touched = [];
   weeks.forEach(w => {
@@ -763,6 +765,7 @@ function rtPerson(k) {
     <div class="ro-card-hd"><b>${escapeHtml(s.name)}</b><button class="ro-x" onclick="document.getElementById('rtSheet').remove();rbRender()">✕</button></div>
     ${typeof rhPersonHtml === 'function' ? rhPersonHtml(k) : ''}
     ${typeof evPersonHtml === 'function' ? evPersonHtml(k) : ''}
+    ${typeof tlPersonHtml === 'function' ? tlPersonHtml(k) : ''}
     <div class="rt-form">
       <label>Name<input value="${escapeHtml(s.name)}" onchange="rtSetStaff(${q},'name',this.value.trim())"></label>
       <label>Employee no.<input value="${escapeHtml(s.id || '')}" onchange="rtSetStaff(${q},'id',this.value.trim())"></label>
@@ -929,6 +932,7 @@ function rtNewStaffSave() {
   fbSet('roster/staff/' + k, roStaff[k]);
   rbPeople[k] = Object.assign({ joined: from, offs }, title ? { title } : {}, fixed ? { mode: 'static', fixed } : { mode: 'any' });
   fbSet('roster/builder/people/' + k, rbPeople[k]);
+  if (typeof tlLog === 'function') tlLog('joined', { key: k, date: from, text: `${name} joined ${g || 'the team'}${title ? ' as ' + title : ''}` });
   document.getElementById('rtNew')?.remove();
   showToast(`${name} added to ${g || 'the team'} from ${roDayLbl(from)}. Build again to put them on the roster`, 'ok');
   if (document.getElementById('panel-roster-build')?.classList.contains('active')) rbRender();

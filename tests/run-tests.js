@@ -560,6 +560,27 @@ console.log('\nRoster scenarios');
   check('drop: Purpose takes several Origin XML files at once', vm.runInContext('!!FR_DEST.origin.multi', sb), true);
 }
 
+// ── Team history (team-log.js): a posted week writes down the wishes it granted ──
+{
+  const sent = [];
+  const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} }, fbSet: (p, v) => sent.push(p), showToast: m => sent.push('toast:' + m), escapeHtml: x => String(x),
+               document: { addEventListener() {}, getElementById() { return null; }, querySelectorAll() { return []; }, querySelector() { return null; } }, window: {}, setTimeout: () => 0, setInterval: () => 0, clearTimeout() {}, navigator: {} };
+  vm.createContext(sb);
+  for (const f of ['roster.js', 'roster-build.js', 'roster-team.js', 'team-log.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sb, { filename: f });
+  const run = js => vm.runInContext(js, sb);
+  run(`
+    var W = '2026-10-12', M = '07:00 - 15:00', E = '15:00 - 23:00';
+    roStaff.A = { name: 'Anna Lee', group: 'Ibis DD' }; roStaff.B = { name: 'Sam Reed', group: 'Ibis DD' };
+    rbPeople.A = { likes: [M] }; rbPeople.B = { prefOff: [5, 6] };
+    var cells = { A: {}, B: {} }; for (let d = 0; d < 7; d++) { const dt = roAdd(W, d); cells.A[dt] = d === 2 ? 'OFF' : M; cells.B[dt] = d === 5 ? 'OFF' : E; }
+    tlWeekPosted(W, cells);
+  `);
+  check('history: a posted week writes the wishes it granted, person by person', run(`tlOf('A').filter(e => e.t === 'wish').length + '|' + tlList(e => e.t === 'posted').length`), '1|1');
+  check('history: you are told which wishes were granted', sent.some(x => /^toast:💛 .*granted/.test(x) && /Anna/.test(x)), true);
+  check('history: posting the same week again does not write it twice', run(`tlWeekPosted(W, cells); tlList(e => e.t === 'posted').length + '|' + tlOf('A').filter(e => e.t === 'wish').length`), '1|1');
+  check('history: shows on the card and in the builder', run(`tlPersonHtml('A').includes('History') && tlTeamHtml().includes('Wish granted')`), true);
+}
+
 // ── What if… (roster-team.js) ─────────────────────────────
 {
   const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} }, fbSet() {}, showToast() {}, escapeHtml: x => String(x),

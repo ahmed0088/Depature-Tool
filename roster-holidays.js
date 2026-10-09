@@ -77,6 +77,7 @@ function hdAccept(id, dates) {
   const list = (rbSettings.holidays || []).filter(x => x && !dates.includes(x.date)).concat(dates.map(d => ({ date: d, name: h.name, src: hdRegion() }))).sort((a, b) => a.date.localeCompare(b.date));
   rbSettings.holidays = list; fbSet('roster/builder/settings/holidays', list);
   hdSetDecided(id, 'yes');
+  if (typeof tlLog === 'function') tlLog('holiday', { id: 'hol:' + id, date: dates[0], text: `${h.name} (${dates.length} day${dates.length > 1 ? 's' : ''}) added to the PH balance` });
   showToast(`${h.name}: ${dates.length} PH day${dates.length > 1 ? 's' : ''} added${(rbSettings.phEarn || 'all') === 'all' ? ' to everyone\'s balance (once the day has come)' : ' for whoever works it'}`, 'ok');
   hdRefresh();
 }

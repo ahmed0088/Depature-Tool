@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 209, items: [
+    '💛 When you post a week, the app tells you which wishes it grants (for example "Lina: a day off on Fri/Sat"). Ops Brain keeps the message for the day.',
+    '📜 Team history: everything that happens to the team is now written down as it happens: weeks posted, wishes granted, PH days given, sick and leave, people joining and leaving, swaps, days at another hotel, meetings, public holidays and roster changes.',
+    '👤 Each person\'s card has a 📜 History with their past, and how many weeks their wishes were granted. The builder has a 📜 Team history section with filters and a name search.',
+  ] },
   { v: 208, items: [
     '🧘 Steady shifts: the builder keeps each person on the same shift all week as far as it can. A change of hours without a day off between now counts far more (more again if the start gets earlier), a second shift in the same week counts too, and a last pass trades days between colleagues so both keep one shift. Cover and the rules still come first; one person on a shift only when there is no other way.',
     '📅 A daytime meeting or training now steers that person\'s whole week toward day shifts (a night one toward nights), so they can be there without breaking their week.',

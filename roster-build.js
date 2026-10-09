@@ -1255,6 +1255,11 @@ function rbRender() {
         ${rbLazy('team', false, () => typeof rtTeamHtml === 'function' ? rtTeamHtml(shown) : shown.map(g => rbTeamHtml(g)).join(''))}
       </details>
 
+      <details class="card rb-card"${rbSec('log', false)}>
+        <summary class="ro-card-hd"><b>📜 Team history</b><span>weeks posted, wishes granted, PH, leave, swaps, joining and leaving</span></summary>
+        ${rbLazy('log', false, () => typeof tlTeamHtml === 'function' ? tlTeamHtml() : '')}
+      </details>
+
       <details class="card rb-card"${rbSec('rules', false)}>
         <summary class="ro-card-hd"><b>⚖️ Rules & public holidays</b></summary>
         ${rbLazy('rules', false, () => rbRulesHtml())}
@@ -2015,6 +2020,8 @@ async function rbPublish() {
     // a posted week: write only what changed and tell those people
     if (!changes.length) { showToast('No changes to publish', 'warn'); return; }
     rtApplyPublished(rbWeek, rbDrafts[rbWeek].cells, 'roster updated');
+    if (typeof tlLog === 'function') changes.slice(0, 40).forEach(c => tlLog('change', { key: c.key, week: rbWeek, date: c.date, text: `${c.from || '—'} → ${c.to || '—'} on ${roDayLbl(c.date)}` }));
+    if (typeof tlWeekPosted === 'function') try { tlWeekPosted(rbWeek, rbDrafts[rbWeek].cells); } catch (e) { console.warn(e); }
     const D = rbDrafts[rbWeek]; D.fromPublished = true; rbPutDraft(rbWeek);
     showToast(`${changes.length} change${changes.length === 1 ? '' : 's'} published; the people concerned are told`, 'ok');
     rbRender(); return;
@@ -2023,7 +2030,9 @@ async function rbPublish() {
   roPreview = res;
   document.getElementById('roPreview') && (document.getElementById('roPreview').innerHTML = '');
   const ok = window.confirm; window.confirm = () => true;   // the questions were asked above
+  const postedCells = JSON.parse(JSON.stringify(rbDrafts[rbWeek].cells)), postedWeek = rbWeek;
   try { roSavePreview(); } finally { window.confirm = ok; }
+  if (typeof tlWeekPosted === 'function') try { tlWeekPosted(postedWeek, postedCells); } catch (e) { console.warn(e); }
   showPanel('roster');
   roWeek = rbWeek; roRender();
 }
