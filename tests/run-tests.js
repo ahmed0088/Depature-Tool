@@ -223,6 +223,17 @@ console.log('\nRoster scenarios');
   const solve = (groups, people, pre, rules) => sb.rbSolve({ week: W, groups, people, pre: pre || {}, rules: Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, givePh: false, lend: true }, rules), seed: 1 });
   const M = '08:00 - 17:00', E = '15:00 - 00:00', N = '00:00 - 09:00', D9 = '09:00 - 18:00';
 
+  // 0. a gap is fixed the gentlest way: one night borrowed beats a whole week moved to another hotel
+  {
+    const G = { 'Ibis DD': { shifts: [M, E], need: { [M]: day(1), [E]: day(1) } }, 'Mercure DD': { shifts: [M, E], need: { [M]: day(1), [E]: day(1) } } };
+    const ppl = [P('A'), P('B'), P('Y', { group: 'Mercure DD' }), P('Z', { group: 'Mercure DD' })];
+    const I = { week: W, groups: G, people: ppl, pre: {}, rules: { minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, givePh: false, lend: true } };
+    const base = {}; ppl.forEach((p, i) => { base[p.key] = {}; dates.forEach((dt, d) => { base[p.key][dt] = d === i ? 'OFF' : i % 2 ? E : M; }); });
+    const one = JSON.parse(JSON.stringify(base)); one.Z[dates[3]] = E + ' - Ibis';
+    const week = JSON.parse(JSON.stringify(base)); dates.forEach((dt, d) => { if (d !== 2) week.Y[dt] = E + ' - Ibis'; });
+    check('stay home: one night at another hotel costs less than a whole week moved', sb.rbUpset(I, base, one) < sb.rbUpset(I, base, week), true);
+    check('stay home: each day at another hotel counts much more than a day changed at home', sb.rbUpset(I, base, one) > 10 * 10, true);
+  }
   // 1. ideal two per shift, too few people: never an empty shift, some one-person shifts
   {
     const r = solve({ 'Ibis DD': { shifts: [M, E], need: { [M]: day(2), [E]: day(2) } } }, ['A', 'B', 'C', 'D'].map(k => P(k)));

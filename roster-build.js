@@ -310,8 +310,11 @@ function rbRepair(I, res, o) {
     const before = breaks(cells); let done = false;
     for (const g of gaps) {
       const opts = rtCoverOptions(Object.assign({}, I, { noRepair: true }), cells, g.group, g.date, g.shift).filter(x => x.cells && !x.bend && !(o.homeOnly && moves(x.cells)));
-      const ok = opts.find(o => shorts(o.cells).length < gaps.length && breaks(o.cells) <= before);
-      if (ok) { cells = ok.cells; done = true; break; }
+      // of the fixes that work, the gentlest: fewest days changed, days at another hotel counting most
+      // (one night borrowed beats a whole week moved), and no shift left with one person if it can be helped
+      const ok = opts.filter(x => shorts(x.cells).length < gaps.length && breaks(x.cells) <= before)
+        .map(x => ({ x, c: rbUpset(I, cells, x.cells) })).sort((a, b) => a.c - b.c)[0];
+      if (ok) { cells = ok.x.cells; done = true; break; }
     }
     if (!done) break;
     gaps = shorts(cells);
@@ -332,6 +335,19 @@ function rbRepair(I, res, o) {
   if (cells === res.cells) return res;
   const cover = rbCover(I, cells);
   return { cells, cover, problems: rbProblems(I, cells, cover), notes };
+}
+/** How much a fix upsets the week: each day changed, each day at another hotel (a lot), each shift left with one person. */
+function rbUpset(I, a, b) {
+  const dates = Array.from({ length: 7 }, (_, d) => roAdd(I.week, d));
+  const away = (p, v) => { const x = rbParse(v); return !!(x && x.note && rbBaseGroup(rbAt(I, p, x)) !== rbBaseGroup(p.group)); };
+  let c = 0;
+  I.people.forEach(p => dates.forEach(dt => {
+    const u = (a[p.key] || {})[dt], v = (b[p.key] || {})[dt]; if (u === v) return;
+    c += 10; if (away(p, v) && !away(p, u)) c += 200;
+  }));
+  const thin = x => rbProblems(I, x).filter(q => q.kind === 'thin').length;
+  const hotels = x => rbMoveHotels(I, x).size;   // never all three hotels in one week if it can be helped
+  return c + 300 * Math.max(0, thin(b) - thin(a)) + 500 * Math.max(0, hotels(b) - Math.max(2, hotels(a)));
 }
 function _rbAttempt(I, seed) {
   const D = 7, dates = Array.from({ length: D }, (_, d) => roAdd(I.week, d));

@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 212, items: [
+    '🏨 Staff stay in their own hotel even more: when a shift is empty, the builder now compares every fix and picks the gentlest one: fewest days changed, a day at another hotel counting far more than a change at home, no new one-person shifts, and never a third hotel if it can be helped. Before, it could move someone for a whole week to fill one night; now it borrows one person for that one night.',
+  ] },
   { v: 211, items: [
     '⚡ Faster everywhere in the roster: the app was counting every roster day again and again (once per person, dozens of times per card). Now it counts once per screen. A person\'s card opens about 10 times faster, the vacation list about 30 times faster, and the builder, undo, rules and requests react about a third to half quicker.',
     '🧠 Ops Brain\'s background check (every 20 seconds) no longer re-reads the whole posted week each time, so the app stays smooth while it runs.',
