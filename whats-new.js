@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 213, items: [
+    '🤝 One person on a shift is fine when someone else is on the desk with them for a while: 2 hours together by default (enough for a break), like 08–17 with 15–00. The builder no longer pushes for a second person on those shifts and they are not listed as one-person problems, so it keeps more wishes and steadier weeks. Change the hours in ⚖️ Rules → "Alone is fine with company for" (0 = two the whole shift).',
+    '🛎 Reception first: if a week still ends with an empty shift, the builder also tries it the strict way and keeps whichever covers more.',
+  ] },
   { v: 212, items: [
     '🏨 Staff stay in their own hotel even more: when a shift is empty, the builder now compares every fix and picks the gentlest one: fewest days changed, a day at another hotel counting far more than a change at home, no new one-person shifts, and never a third hotel if it can be helped. Before, it could move someone for a whole week to fill one night; now it borrows one person for that one night.',
   ] },

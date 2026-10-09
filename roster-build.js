@@ -43,7 +43,15 @@ function rbRest(prev, next) { const a = rbParse(prev), b = rbParse(next); return
  *  working days; changing only after a day off. Earlier hours than the day before (afternoon → morning) is worst. */
 // ── On the desk, hour by hour ─────────────────────────────
 // "Two in the shift" means two people at the desk at the same time: 08–17 and 12–21 overlap 12:00–17:00.
-const RB_DESK_W = 8;   // how much each person-hour short of the desk aim counts: well under cover and rules
+const RB_DESK_W = 3;   // how much each person-hour short of the desk aim counts: a gentle nudge, never worth pushing for
+/** Someone alone on their shift is fine when another person is on the desk with them for a while (enough for a
+ *  break): at least R.overlapMin hours (2 by default; 0 = they must be two the whole shift). grid = rbDeskGrid. */
+function rbRelieved(grid, d, code, R) {
+  const need = R.overlapMin == null ? 2 : +R.overlapMin; if (!(need > 0) || !grid) return false;
+  const H = rbShiftHours(code); if (!H) return false;
+  let n = 0; H[0].forEach(h => { if (grid[d][h] >= 2) n++; }); if (d + 1 < 7) H[1].forEach(h => { if (grid[d + 1][h] >= 2) n++; });
+  return n >= need;
+}
 const _rbHC = new Map();
 /** The whole hours a shift covers: on its own day, and after midnight on the next. */
 function rbShiftHours(code) {
@@ -184,6 +192,7 @@ function rbMoveHotels(I, cells) {
  * → { cells:{ [key]:{ [date]:value } }, problems:[…], cover:{ [group]:{ [code]:[have×7] } } }
  */
 function rbSolve(I) {
+  const t0 = Date.now();
   _rbPC.clear(); _rbKC.clear();   // codes may have been renamed since last time
   const plan = I.noNightPlan ? null : rbPlanNights(I);
   if (plan) I = Object.assign({}, I, { pre: plan.pre });
@@ -209,6 +218,11 @@ function rbSolve(I) {
     const plainPeople = I.people.map(p => Object.assign({}, p, { likes: [], prefOff: [], together: false, steady: false, maxNights: null, wishDebt: 0, nightExtra: 0, wkOffShort: 0 }));
     const alt = rbSolve(Object.assign({}, I, { people: plainPeople, _plain: true, noNightPlan: true, attempts: 2 }));   // (the night plan is already in I.pre)
     if (shorts(alt) < shorts(res)) { alt.notes = ((plan && plan.notes) || []).concat((alt.notes || []).filter(n => !((plan && plan.notes) || []).some(m => m.text === n.text))); res = alt; }
+  }
+  // still an empty shift: try it the strict way too (two on a shift the whole time); covering every shift comes first
+  if (!I._strict && (R0.overlapMin == null || +R0.overlapMin > 0) && Date.now() - t0 < 10000 && shorts(res) > 0) {   // (a week this hard already took long: not worth the wait)
+    const alt = rbSolve(Object.assign({}, I, { rules: Object.assign({}, I.rules, { overlapMin: 0 }), _strict: true, _plain: true, attempts: 2 }));
+    if (shorts(alt) < shorts(res)) res = alt;
   }
   return res;
 }
@@ -547,13 +561,16 @@ function rbScore(I, g, cells, dates, R) {
   for (let d = 0; d < 7; d++) {
     const have = haveAll[d] = {}; G.shifts.forEach(s => { have[s] = 0; });
     P.forEach(p => { const v = cells[p.key][dates[d]]; if (have[v] != null) have[v]++; });
-    G.shifts.forEach(s => {
-      const n = (G.need[s] || [])[d] || 0, h = have[s];
-      if (h < n) sc += R.allowOne === false ? 1000 * (n - h) : (h === 0 ? 1000 : 0) + 300 * (n - Math.max(h, 1));   // an empty shift is the worst; one person short of the ideal less so
-      else sc += 0.5 * (h - n);
-    });
   }
-  if (rbDeskOn(R)) sc += RB_DESK_W * rbDeskShort(rbDeskGrid(G.shifts, (d, s) => haveAll[d][s] || 0, s => P.filter(p => rbNorm(p.lastShift) === s).length), R).gap;   // two on the desk at once, when it can be done
+  const grid = rbDeskGrid(G.shifts, (d, s) => haveAll[d][s] || 0, s => P.filter(p => rbNorm(p.lastShift) === s).length);
+  for (let d = 0; d < 7; d++) G.shifts.forEach(s => {
+    const n = (G.need[s] || [])[d] || 0, h = haveAll[d][s];
+    // an empty shift is the worst; one person short of the ideal less so, and hardly at all when someone
+    // else is on the desk with them for a few hours (a break): they can handle that
+    if (h < n) sc += R.allowOne === false ? 1000 * (n - h) : (h === 0 ? 1000 : 0) + (h && !G.post && rbRelieved(grid, d, s, R) ? 25 : 300) * (n - Math.max(h, 1));
+    else sc += 0.5 * (h - n);
+  });
+  if (rbDeskOn(R)) sc += RB_DESK_W * rbDeskShort(grid, R).gap;   // two on the desk at once, when it can be done
   P.forEach(p => {
     let run = p.run || 0, prev = p.lastShift || '', offs = 0, nights = 0;
     const offDays = [];
@@ -719,10 +736,14 @@ function rbProblems(I, cells, cover) {
   const dates = Array.from({ length: 7 }, (_, d) => roAdd(I.week, d)), out = [];
   const R = Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, deskMin: 2, deskFrom: 8, deskTo: 23 }, I.rules || {});
   cover = cover || rbCover(I, cells);
-  Object.keys(I.groups).forEach(g => I.groups[g].shifts.forEach(s => dates.forEach((dt, d) => {
+  Object.keys(I.groups).forEach(g => { let grid; I.groups[g].shifts.forEach(s => dates.forEach((dt, d) => {
     const n = (I.groups[g].need[s] || [])[d] || 0, h = cover[g][s][d];
-    if (h < n) out.push({ kind: (h === 0 || R.allowOne === false) && !I.groups[g].post ? 'short' : 'thin', group: g, shift: s, date: dt, need: n, have: h });
-  })));
+    if (h >= n) return;
+    const kind = (h === 0 || R.allowOne === false) && !I.groups[g].post ? 'short' : 'thin';
+    // one person, but someone else is on the desk with them for a few hours (a break): fine, not a problem
+    if (kind === 'thin' && h > 0 && !I.groups[g].post && rbRelieved(grid = grid || rbDeskGrid(I.groups[g].shifts, (e, x) => (cover[g][x] || [])[e] || 0), d, s, R)) return;
+    out.push({ kind, group: g, shift: s, date: dt, need: n, have: h });
+  })); });
   I.people.forEach(p => {
     let run = p.run || 0, prev = p.lastShift || '';
     dates.forEach((dt, d) => {
@@ -1573,7 +1594,8 @@ function rbRulesHtml() {
       row('People on the desk at once', 'aim for; 1 = off', step(R.deskMin, 1, 6, "rbSetRule('deskMin',+this.value)", ''))
       + row('From', 'e.g. one on 08–17 and one on 12–21 = two at once 12–17', step(R.deskFrom, 0, 23, "rbSetRule('deskFrom',+this.value)", ':00'))
       + row('To', R.deskTo % 24 < R.deskFrom % 24 ? 'the next day (runs past midnight)' : hh(R.deskFrom) + ' – ' + hh(R.deskTo), step(R.deskTo, 0, 24, "rbSetRule('deskTo',+this.value)", ':00'))
-      + row('One person on a shift', 'only when there\'s no other way', sw(R.allowOne !== false, "rbSetRule('allowOne',this.checked)")))}
+      + row('One person on a shift', 'only when there\'s no other way', sw(R.allowOne !== false, "rbSetRule('allowOne',this.checked)"))
+      + row('Alone is fine with company for', 'someone else on the desk with them this long (a break); 0 = two the whole shift', step(R.overlapMin == null ? 2 : R.overlapMin, 0, 9, "rbSetRule('overlapMin',Math.max(0,Math.min(9,+this.value||0)))", 'h'), R.allowOne === false))}
     ${card('🏖', 'PH days',
       row('Give PH owed', 'the last option: only when a shift has someone spare anyway', sw(R.givePh, "rbSetRule('givePh',this.checked);rbRender()"))
       + row('People a week, per hotel', 'the biggest balance first', step(R.phPeople == null ? 1 : R.phPeople, 0, 9, "rbSetRule('phPeople',Math.max(0,Math.min(9,+this.value||0)))", ''), !R.givePh)

@@ -236,9 +236,14 @@ console.log('\nRoster scenarios');
   }
   // 1. ideal two per shift, too few people: never an empty shift, some one-person shifts
   {
-    const r = solve({ 'Ibis DD': { shifts: [M, E], need: { [M]: day(2), [E]: day(2) } } }, ['A', 'B', 'C', 'D'].map(k => P(k)));
+    const r = solve({ 'Ibis DD': { shifts: [M, E], need: { [M]: day(2), [E]: day(2) } } }, ['A', 'B', 'C', 'D'].map(k => P(k)), {}, { overlapMin: 0 });
     check('short-handed: no shift left empty', r.problems.filter(p => p.kind === 'short').length, 0);
     check('short-handed: one-person shifts reported instead', r.problems.filter(p => p.kind === 'thin').length > 0, true);
+    // alone on the shift but with company for a few hours (08-17 and 15-00 overlap 15:00-17:00): fine, they can take a break
+    const r2 = solve({ 'Ibis DD': { shifts: [M, E], need: { [M]: day(2), [E]: day(2) } } }, ['A', 'B', 'C', 'D'].map(k => P(k)));
+    check('company: one on a shift with 2 hours together on the desk is not a problem', r2.problems.filter(p => p.kind === 'thin' || p.kind === 'short').length, 0);
+    const r3 = solve({ 'Ibis DD': { shifts: [M, E], need: { [M]: day(2), [E]: day(2) } } }, ['A', 'B', 'C', 'D'].map(k => P(k)), {}, { overlapMin: 3 });
+    check('company: asking for 3 hours together, 2 is not enough', r3.problems.filter(p => p.kind === 'thin').length > 0, true);
   }
   // 2. three staff, three shifts of one (one-man shifts): the gaps that can't be filled say "bring in a staff member"
   {
@@ -630,6 +635,7 @@ console.log('\nRoster scenarios');
     roCanEdit = () => true;
   `, sb);
   const run = js => vm.runInContext(js, sb);
+  run(`rbSettings.rules = Object.assign({}, rbSettings.rules, { overlapMin: 0 })`);   // two the whole shift: one person alone is a gap
   const r = run(`rtWhatIf({ key: 'A', kind: 'sick', from: roAdd(W, 2), to: roAdd(W, 3) })`);
   check('what if: a sick person leaves gaps that are listed', r.gaps.length > 0, true);
   check('what if: plans are offered', r.plans.length > 0, true);
