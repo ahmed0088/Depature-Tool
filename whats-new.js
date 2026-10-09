@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 207, items: [
+    '🎬 Building a roster now shows it being built: your team on a week grid, names flying into shifts, swaps being tried (⇅) and rest being checked (🔎). Then the real week comes in, day by day.',
+    '✨ Smooth animations across the app: pages and cards slide in, buttons press, pop-ups and menus glide, health rings and charts fill. Everything stays still if your phone or PC is set to reduce motion.',
+    '🟢 Roster → Today: each name has a small initials badge, and the "on shift now" green dot sits on it, pulsing, instead of being cut off.',
+  ] },
   { v: 206, items: [
     '🔄 Public holidays update themselves every year: the app works out each year\'s UAE holidays on the device (New Year, Eid Al Fitr, Arafat Day, Eid Al Adha, Hijri New Year, Prophet\'s Birthday, National Day) from the Hijri calendar, no internet or key needed. In December next year\'s are already there.',
     '🎉 When a new year starts, Ops Brain tells you once that its holidays are in. As before, each one is asked about 3 weeks before (✓ Add, ✏️ Dates if the announced date differs, or Not a PH), with a link to check the announced dates.',

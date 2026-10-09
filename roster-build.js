@@ -999,6 +999,59 @@ function rbNightToMorning(cells, p, dates) {
 function rbWishWeight(p) { return 1 + Math.min(2, (p.wishDebt || 0) * 0.5); }
 
 // ── Building ──────────────────────────────────────────────
+/** While the week is being built (in the background): the team on a week grid, people "moving" into shifts,
+ *  swaps being tried and rows being checked. It is only a show of what the builder is doing; the real week replaces it. */
+let _rbReveal = false;
+function rbBuildShowHtml() {
+  const groups = rbGroups(), shown = rbGroup && groups.includes(rbGroup) ? [rbGroup] : groups;
+  const keys = [].concat(...shown.map(g => rbMembers(g))).slice(0, 12);
+  const first = k => ((roStaff[k] || {}).name || k).split(' ')[0];
+  const dates = Array.from({ length: 7 }, (_, d) => roAdd(rbWeek, d));
+  return `<div class="rb-show" id="rbShow">
+    <div class="rb-show-hd">${roBusyAnim('build')}<div><b>Building the roster…</b>${roBusySteps(['Reading the last weeks of rosters…', 'Placing days off fairly…', 'Covering every shift, reception first…', 'Checking rest between shifts…', 'Trying swaps to keep wishes…', 'Fixing gaps inside each hotel…', 'Trying another way and keeping the best…'])}<div class="ro-prog"><i></i></div></div><span class="rb-show-act" id="rbShowAct"></span></div>
+    <div class="rb-show-grid" style="--rows:${keys.length}">
+      <div class="rb-sh-h"></div>${dates.map(dt => `<div class="rb-sh-h">${escapeHtml(roDayLbl(dt).split(' ')[0])}</div>`).join('')}
+      ${keys.map((k, r) => `<div class="rb-sh-n" data-r="${r}">${escapeHtml(first(k))}</div>${dates.map((_, c) => `<div class="rb-sh-c" data-r="${r}" data-c="${c}"></div>`).join('')}`).join('')}
+    </div>
+  </div>`;
+}
+function rbBuildShowStart() {
+  const box = document.getElementById('rbShow'); if (!box) return;
+  const groups = rbGroups(), g = (rbGroup && groups.includes(rbGroup)) ? rbGroup : groups[0];
+  const codes = rbGroupCfg(g).shifts.concat(['OFF']);
+  const cells = [...box.querySelectorAll('.rb-sh-c')], names = [...box.querySelectorAll('.rb-sh-n')];
+  if (!cells.length) return;
+  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const act = t => { const a = document.getElementById('rbShowAct'); if (a) { a.textContent = t; a.classList.remove('in'); void a.offsetWidth; a.classList.add('in'); } };
+  const put = (cell, code) => { const i = roInfo(code) || {}; cell.className = `rb-sh-c ro-t-${i.type || (code === 'OFF' ? 'off' : 'other')} pop`; cell.textContent = code === 'OFF' ? 'OFF' : (roCellTxt(i) || code.slice(0, 5)); };
+  const rnd = n => Math.floor(Math.random() * n);
+  let tick = 0;
+  const step = () => {
+    if (!document.body.contains(box)) return;   // the real week is in: stop
+    tick++;
+    const kind = tick % 9 === 0 ? 'swap' : tick % 13 === 0 ? 'scan' : 'place';
+    if (kind === 'swap') {
+      const c = rnd(7), rows = names.length, a = rnd(rows), b = (a + 1 + rnd(Math.max(1, rows - 1))) % rows;
+      const A = cells[a * 7 + c], B = cells[b * 7 + c];
+      if (A && B && A !== B) { const ta = A.textContent, ca = A.className; A.textContent = B.textContent; A.className = B.className; B.textContent = ta; B.className = ca; A.classList.remove('pop'); B.classList.remove('pop'); A.classList.add('swap'); B.classList.add('swap'); setTimeout(() => { A.classList.remove('swap'); B.classList.remove('swap'); }, 700); act(`⇅ ${names[a].textContent} ↔ ${names[b].textContent}`); }
+    } else if (kind === 'scan') {
+      const r = rnd(names.length); names[r].classList.add('scan'); box.querySelectorAll(`.rb-sh-c[data-r="${r}"]`).forEach(x => x.classList.add('scan'));
+      setTimeout(() => box.querySelectorAll('.scan').forEach(x => x.classList.remove('scan')), 900); act(`🔎 checking ${names[r].textContent}'s rest`);
+    } else {
+      const cell = cells[rnd(cells.length)], r = +cell.dataset.r, code = codes[rnd(codes.length)];
+      if (!reduce && tick % 3 === 0) {   // a name chip flies from the list into the cell
+        const from = names[r].getBoundingClientRect(), to = cell.getBoundingClientRect(), chip = document.createElement('span');
+        chip.className = 'rb-sh-fly'; chip.textContent = names[r].textContent; chip.style.left = from.left + 'px'; chip.style.top = from.top + 'px';
+        document.body.appendChild(chip);
+        requestAnimationFrame(() => { chip.style.transform = `translate(${to.left - from.left}px, ${to.top - from.top}px) scale(.85)`; chip.style.opacity = '.2'; });
+        setTimeout(() => { chip.remove(); put(cell, code); }, 520);
+        act(`➜ ${names[r].textContent}: ${code === 'OFF' ? 'day off' : code}`);
+      } else put(cell, code);
+    }
+    setTimeout(step, reduce ? 420 : 140);
+  };
+  setTimeout(step, 150);
+}
 let _rbBuilding = false;
 function rbBuild(again) {
   if (_rbBuilding) return;   // already building: one at a time
@@ -1008,7 +1061,7 @@ function rbBuild(again) {
   if (has && !again && !confirm('Build the week again? Changes you made to the draft are replaced.')) return;
   rbSeed = again ? (rbSeed * 7 + 13) % 100000 : 1;
   const out = document.getElementById('rbOut');
-  if (out) { out.innerHTML = `<div class="ri-reading ro-busy">${roBusyAnim('build')}<div><b>Building the roster…</b>${roBusySteps(['Reading the last weeks of rosters…', 'Placing days off fairly…', 'Covering every shift, reception first…', 'Checking rest between shifts…', 'Keeping wishes where it can…', 'Fixing gaps inside each hotel…', 'Trying another way and keeping the best…'])}<div class="ro-prog"><i></i></div></div></div>`; out.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  if (out) { out.innerHTML = rbBuildShowHtml(); rbBuildShowStart(); out.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   _rbBuilding = true;
   setTimeout(() => _rbBuildNow().catch(e => { console.error(e); showToast('Building failed: ' + e.message, 'err'); rbRender(); }).finally(() => { _rbBuilding = false; }), 60);
 }
@@ -1034,8 +1087,10 @@ function rbSolveAsync(I) {
   });
 }
 async function _rbBuildNow() {
-  const I = rbInput(rbSeed), week = rbWeek;
+  const I = rbInput(rbSeed), week = rbWeek, t0 = Date.now();
   const res = await rbSolveAsync(I);
+  const wait = 2200 - (Date.now() - t0); if (wait > 0) await new Promise(r => setTimeout(r, wait));   // long enough to see it build
+  _rbReveal = true;
   if (rbWeek !== week) rbWeek = week;   // (the week built is the week saved, even if someone switched meanwhile)
   rbDrafts[rbWeek] = Object.assign({ cells: res.cells, at: Date.now(), by: (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '' }, res.notes && res.notes.length ? { notes: res.notes } : {});
   rbSaveDraft();
@@ -1471,6 +1526,7 @@ function rbDelHol(i) { const h = (rbSettings.holidays || []).slice(); h.splice(i
 // ── The draft: table, cover, problems ─────────────────────
 function rbOutHtml(shown, dates) {
   _rbDefGen++;
+  if (_rbReveal) { _rbReveal = false; setTimeout(() => { const t = document.getElementById('rbTable'); if (t) { t.classList.add('rb-reveal'); setTimeout(() => t.classList.remove('rb-reveal'), 2200); } }, 0); }
   const I = rbInput(rbSeed), cells = rbDrafts[rbWeek].cells || {};
   I.people.forEach(p => { cells[p.key] = cells[p.key] || {}; });
   const cover = rbCover(I, cells), probs = rbProblems(I, cells, cover);
