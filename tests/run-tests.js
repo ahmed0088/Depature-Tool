@@ -432,8 +432,11 @@ console.log('\nRoster scenarios');
   check('holidays: a PH on a posted roster comes off the balance, oldest first', run(`[rbPhOwed('A').owed, rbPhOwed('A').label].join()`), '2,20th Mar.');
   run(`rbSettings.phEarn = 'worked';`);
   check('holidays: "only who works it" mode', run(`['A','B'].map(k => rbPhOwed(k).owed).join()`), '1,3');
-  run(`rbSettings.phEarn = 'all'; hdReject(hdList().find(h => h.name === 'Arafat Day').id);`);
+  run(`rbSettings.phEarn = 'all'; hdReject(hdList().find(h => h.name === 'Arafat Day' && h.dates[0].startsWith('2026')).id);`);
   check('holidays: "not a PH" is remembered', run(`hdPending('2026-05-10').map(h => h.name).join()`), 'Eid Al Adha');
+  check('holidays: any year is worked out on the device (2030: Eid Al Fitr from the Hijri calendar)', run(`hdComputeYear(2030).map(h => h[0] + ' ' + h[2]).join(' | ')`), "2030-01-01 New Year's Day | 2030-02-04 Eid Al Fitr | 2030-04-12 Arafat Day | 2030-04-13 Eid Al Adha | 2030-05-04 Hijri New Year | 2030-07-13 Prophet's Birthday | 2030-12-02 National Day");
+  check('holidays: the worked-out dates match the announced ones (2027)', run(`JSON.stringify(hdComputeYear(2027).map(h => h[0])) === JSON.stringify(HD_REGIONS.AE.days[2027].map(h => h[0]).sort())`), true);
+  check('holidays: next year is there already in December', run(`(() => { const t = roToday; roToday = () => '2029-12-10'; const ok = hdList().some(h => h.dates[0] === '2030-01-01'); roToday = t; return ok; })()`), true);
 
   // Managers / Asst. Managers: one is enough for all the hotels, so their days off are spread
   run(`

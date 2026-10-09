@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 206, items: [
+    '🔄 Public holidays update themselves every year: the app works out each year\'s UAE holidays on the device (New Year, Eid Al Fitr, Arafat Day, Eid Al Adha, Hijri New Year, Prophet\'s Birthday, National Day) from the Hijri calendar, no internet or key needed. In December next year\'s are already there.',
+    '🎉 When a new year starts, Ops Brain tells you once that its holidays are in. As before, each one is asked about 3 weeks before (✓ Add, ✏️ Dates if the announced date differs, or Not a PH), with a link to check the announced dates.',
+  ] },
   { v: 205, items: [
     '🔗 Home has new tiles: ⏰ wake-up calls today (red if one is late), 🧩 Roster builder (is next week built or posted, a holiday to answer, meetings today/tomorrow, who needs care) and 💲 our rates vs the market today.',
     '🔍 Search (Ctrl K) now finds team members (opens their card), meetings and training, wake-up calls, our hotels in the Rate Shop, and any page by its name. Whole-word matches first.',

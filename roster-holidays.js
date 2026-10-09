@@ -21,12 +21,40 @@ const HD_REGIONS = {
 };
 const HD_AHEAD = 21, HD_BEHIND = 45;   // ask from 3 weeks before; still ask up to 45 days after if nobody answered
 
+/** Any year's UAE holidays, worked out on this device: New Year and National Day are fixed; the Islamic ones come from
+ *  the Hijri calendar (Umm al-Qura) every browser knows. They are "expected": the moon sighting can move them a day,
+ *  so each one is asked about with ✏️ Dates before anything is added. Years written out above (announced) come first. */
+const _hdCalc = {};
+function hdComputeYear(Y) {
+  if (_hdCalc[Y]) return _hdCalc[Y];
+  let fmt = null;
+  for (const cal of ['islamic-umalqura', 'islamic']) { try { const f = new Intl.DateTimeFormat('en-u-ca-' + cal, { day: 'numeric', month: 'numeric' }); if (f.resolvedOptions().calendar === cal) { fmt = f; break; } } catch (_) {} }
+  const iso = d => d.toISOString().slice(0, 10), out = [[`${Y}-01-01`, 1, "New Year's Day"]];
+  if (fmt) {
+    const find = {};
+    for (let d = new Date(Date.UTC(Y, 0, 1, 12)); d.getUTCFullYear() === Y; d = new Date(d.getTime() + 864e5)) {
+      const p = {}; fmt.formatToParts(d).forEach(x => { p[x.type] = x.value; });
+      const k = `${+p.month}/${+p.day}`;
+      if (['10/1', '12/9', '1/1', '3/12'].includes(k) && !find[k]) find[k] = iso(d);
+    }
+    if (find['10/1']) out.push([find['10/1'], 3, 'Eid Al Fitr', 1]);
+    if (find['12/9']) { out.push([find['12/9'], 1, 'Arafat Day', 1]); out.push([iso(new Date(Date.parse(find['12/9'] + 'T12:00:00Z') + 864e5)), 3, 'Eid Al Adha', 1]); }
+    if (find['1/1']) out.push([find['1/1'], 1, 'Hijri New Year', 1]);
+    if (find['3/12']) out.push([find['3/12'], 1, "Prophet's Birthday", 1]);
+  }
+  out.push([`${Y}-12-02`, 2, 'National Day']);
+  return (_hdCalc[Y] = out.sort((a, b) => a[0].localeCompare(b[0])));
+}
+/** The years to look at: last year, this year and next year (so December already sees January's). */
+function hdYears() { const Y = +(roToday().slice(0, 4)); return [Y - 1, Y, Y + 1]; }
 function hdRegion() { const r = (typeof rbSettings !== 'undefined' && rbSettings.holRegion) || 'AE'; return HD_REGIONS[r] ? r : ''; }
 /** The region's holidays as groups: { id, name, dates:[iso], expected }. */
 function hdList(region) {
   const R = HD_REGIONS[region || hdRegion()]; if (!R) return [];
   const out = [];
-  Object.values(R.days).forEach(list => list.forEach(([from, n, name, exp]) => {
+  // the years written out above (announced dates) first; any other year is worked out (rescanned every year)
+  const years = new Set(Object.keys(R.days).map(Number).concat(hdYears()));
+  [...years].sort().map(Y => R.days[Y] || ((region || hdRegion()) === 'AE' ? hdComputeYear(Y) : [])).forEach(list => list.forEach(([from, n, name, exp]) => {
     out.push({ id: `${region || hdRegion()}:${from}:${name.replace(/\W+/g, '')}`, name, dates: Array.from({ length: n }, (_, i) => roAdd(from, i)), expected: !!exp });
   }));
   return out;
@@ -92,6 +120,7 @@ function hdPanelHtml() {
       <label>Who earns a PH<select onchange="hdSetEarn(this.value)"><option value="all"${earnAll ? ' selected' : ''}>Everyone on the team</option><option value="worked"${!earnAll ? ' selected' : ''}>Only who works that day</option></select></label>
     </div>
     ${pend.map(hdAskHtml).join('')}
+    ${hdRegion() === 'AE' ? `<div class="hd-auto">🔄 Every year's holidays are worked out on this device: ${hdYears().slice(1).join(' and ')} are in. Islamic ones are expected dates; <a target="_blank" rel="noopener" href="https://www.google.com/search?q=${encodeURIComponent('UAE public holidays ' + roToday().slice(0, 4) + ' announced')}">check the announced dates</a> and fix one with ✏️ Dates when I ask.</div>` : ''}
     ${up.length ? `<div class="hd-sec">Coming up</div><div class="hd-list">${up.map(h => `<div class="hd-row">${tile(h.dates[0])}<div class="hd-m"><b>${escapeHtml(h.name)}</b><small>${escapeHtml(range(h))}${h.expected ? ' · expected' : ''}</small></div>${status(h)}</div>`).join('')}</div>` : ''}
     <div class="hd-sec">In the PH list <small>${recent.length ? recent.reduce((t, g) => t + g.dates.length, 0) + ' days' : ''}</small></div>
     ${recent.length ? `<div class="hd-chips">${recent.map(g => `<span class="hd-chip">${tile(g.dates[0])}<span><b>${escapeHtml(g.name || 'Holiday')}</b><small>${g.dates.length > 1 ? g.dates.length + ' days' : roDate(g.dates[0]).toLocaleDateString('en-GB', { weekday: 'short' })}${g.dates[0] > today ? ' · coming' : ''}</small></span><button class="ro-x" title="Remove" onclick="hdDelGroup(${_hdQ(g.dates.join(','))})">✕</button></span>`).join('')}</div>` : `<div class="hd-empty">None yet. Say ✓ Add when I ask, or add one below.</div>`}
@@ -108,6 +137,15 @@ function hdDelGroup(list) {
 document.addEventListener('DOMContentLoaded', () => {
   (window.BL_THINKERS = window.BL_THINKERS || []).push(add => {
     if (typeof roCanEdit !== 'function' || !roCanEdit() || typeof rbSettings === 'undefined' || !Object.keys(roStaff || {}).length) return;
+    // a new year: its public holidays are in (worked out on this device), said once
+    const Y = roToday().slice(0, 4);
+    if (hdRegion() && rbSettings.holYearSeen !== Y && Object.keys(rbSettings).length) {
+      const L = hdList().filter(h => h.dates[0].startsWith(Y)), days = L.reduce((t, h) => t + h.dates.length, 0);
+      add({ id: 'holYear:' + Y, type: 'roster', icon: '🎉', tone: 'idle', silent: true,
+        text: `${Y} public holidays are in: ${L.length} holidays, ${days} days. I'll ask you about each one 3 weeks before.`,
+        why: 'Islamic holidays are expected dates (the moon can move them a day): change them with ✏️ Dates when they are announced.',
+        acts: [['See them', () => { rbSettings.holYearSeen = Y; fbSet('roster/builder/settings/holYearSeen', Y); if (typeof rbSecState !== 'undefined') rbSecState.rules = true; showPanel('roster-build'); }], ['OK', () => { rbSettings.holYearSeen = Y; fbSet('roster/builder/settings/holYearSeen', Y); }]] });
+    }
     hdPending().slice(0, 2).forEach(h => add({ id: 'holiday:' + h.id, type: 'roster', icon: '🎉', tone: 'idle', silent: true,
       text: `${h.name} ${hdWhen(h)}${h.expected ? ' (expected)' : ''}: add ${h.dates.length} PH day${h.dates.length > 1 ? 's' : ''} to ${(rbSettings.phEarn || 'all') === 'all' ? 'everyone\'s' : 'the'} balance?`,
       why: 'Public holiday in your region. Nothing is added until you say yes.',
