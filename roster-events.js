@@ -35,7 +35,7 @@ function evCoverShifts(shifts, from, to) {
   return top > 0 ? shifts.filter((s, i) => ov[i] === top) : [];
 }
 /** For the builder: fills pre (away days), miss (shifts that miss the time) and busy (not a day off). */
-function evPre(dates, pre, soft, busy) {
+function evPre(dates, pre, soft, busy, near) {
   evList().forEach(e => (e.keys || []).forEach(k => evDays(e).filter(dt => dates.includes(dt)).forEach(dt => {
     if (e.plan === 'note') return;
     if ((pre[k] || {})[dt]) return;                      // leave, sick, a request: that stands
@@ -44,6 +44,8 @@ function evPre(dates, pre, soft, busy) {
     if (!e.from) return;
     const shifts = rbGroupCfg(rbPGroup(k)).shifts, ok = evCoverShifts(shifts, e.from, e.to);
     if (ok.length && ok.length < shifts.length) (soft[k] = soft[k] || {})[dt] = ((soft[k] || {})[dt] || []).concat(shifts.filter(s => !ok.includes(s)));
+    // the rest of the week leans the same way (day or night), so a steady week can still reach the meeting
+    if (near && ok.length) { const night = ok.every(x => rbIsNight(x)), day = ok.every(x => !rbIsNight(x)); if (night || day) { const off = shifts.filter(x => rbIsNight(x) !== night); dates.filter(d2 => d2 !== dt).forEach(d2 => { (near[k] = near[k] || {})[d2] = ((near[k] || {})[d2] || []).concat(off); }); } }
   })));
 }
 /** A little 📅 on the roster cell. */

@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 208, items: [
+    '🧘 Steady shifts: the builder keeps each person on the same shift all week as far as it can. A change of hours without a day off between now counts far more (more again if the start gets earlier), a second shift in the same week counts too, and a last pass trades days between colleagues so both keep one shift. Cover and the rules still come first; one person on a shift only when there is no other way.',
+    '📅 A daytime meeting or training now steers that person\'s whole week toward day shifts (a night one toward nights), so they can be there without breaking their week.',
+  ] },
   { v: 207, items: [
     '🎬 Building a roster now shows it being built: your team on a week grid, names flying into shifts, swaps being tried (⇅) and rest being checked (🔎). Then the real week comes in, day by day.',
     '✨ Smooth animations across the app: pages and cards slide in, buttons press, pop-ups and menus glide, health rings and charts fill. Everything stays still if your phone or PC is set to reduce motion.',

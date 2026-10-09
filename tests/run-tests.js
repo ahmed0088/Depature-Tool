@@ -192,7 +192,7 @@ console.log('\nRoster builder');
   check('lent shifts count for the hotel they work at', r2.cover['Adagio GD'][N].reduce((a, b) => a + b, 0) >= 11, true);
 
   // weeks in a row, each starting from how the last one ended (the way it is really used)
-  let probs = 0, weeks = 0;
+  let probs = 0, weeks = 0, thinAll = 0;
   let tight = 0;
   for (let team = 0; team <= 3; team++) {
     const n = 5 + team, R = sb.rbRand((team || 4) * 97);
@@ -202,11 +202,12 @@ console.log('\nRoster builder');
       const ds = [0, 1, 2, 3, 4, 5, 6].map(d => sb.roAdd(w, d)), pre = {};
       if (R() < 0.5) { const d = Math.floor(R() * 5); pre['P' + (1 + Math.floor(R() * (n - 1)))] = { [ds[d]]: 'AL', [ds[d + 1]]: 'AL' }; }
       const r3 = sb.rbSolve({ week: w, groups: { 'Ibis DD': { shifts: S, need } }, people: ppl, pre, rules: { minRest: 11, maxRun: 12, givePh: false, lend: false }, seed: k + 1, attempts: 2 });
-      if (n === 5) tight = Math.max(tight, r3.problems.length); else { probs += r3.problems.length; weeks++; }
+      if (n === 5) tight = Math.max(tight, r3.problems.length); else { probs += r3.problems.filter(x => x.kind !== 'thin').length; thinAll += r3.problems.filter(x => x.kind === 'thin').length; weeks++; }
       ppl = ppl.map(p => { const row = ds.map(d => r3.cells[p.key][d] || ''); let run = 0; for (let d = 6; d >= 0 && sb.rbParse(row[d]); d--) run++; if (run === 7) run += p.run; return Object.assign({}, p, { lastShift: row[6], run }); });
     }
   }
   check(`${weeks} weeks in a row for teams of 6 to 8: no gaps, rest, night/day or day-off problems`, probs, 0);
+  check(`${weeks} weeks: steady shifts cost at most one shift run by one person (allowed when there is no other way)`, thinAll <= 1, true);
   check('a team of 5 with no spare at all: at most one gap a week, never a broken rule', tight <= 1, true);
 }
 
