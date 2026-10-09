@@ -72,7 +72,7 @@ function rtWhyNot(I, cells, group, date, shift, skip) {
     let r;
     if (pre === '—') return null;
     if (p.lock && rbNorm(v) !== shift) return { key: p.key, name: rtName(p.key) + there0(p), reason: `🔒 keeps ${p.fixed}${/manager/i.test(p.title || '') ? ' (manager)' : ''}` };
-    if (rtStays(I, p, group)) return { key: p.key, name: rtName(p.key) + there0(p), reason: `🏨 stays at ${rbBaseGroup(p.group)}` };
+    if (rtStays(I, p, group)) return { key: p.key, name: rtName(p.key) + there0(p), reason: rbNoGo(p, group) && !p.home && !p.lock ? `🚫 never sent to ${rbBaseGroup(group)}` : `🏨 stays at ${rbBaseGroup(p.group)}` };
     if ((p.post || '') !== ((G[group] || {}).post || '')) return { key: p.key, name: rtName(p.key), reason: p.post ? `${p.title || p.post}: not front desk` : `front desk, not ${(G[group] || {}).post.toLowerCase()}` };
     const there = p.group !== group ? ` (${p.group})` : '';
     if (pre) r = rbKind(pre) === 'off' ? 'asked for this day off' : `on ${pre}`;
@@ -82,7 +82,7 @@ function rtWhyNot(I, cells, group, date, shift, skip) {
     else {
       const c2 = _rtClone(cells); c2[p.key][date] = shift;
       const pb = rbProblems(I, c2).find(x => x.key === p.key && x.date >= dates[Math.max(0, d - 1)] && x.date <= dates[Math.min(6, d + 1)] && x.kind !== 'offs');
-      if (pb) r = pb.kind === 'rest' ? (pb.hours <= 0 ? `overlaps with their ${pb.to === shift ? pb.from : pb.to}` : `only ${Math.round(pb.hours)} h rest (${pb.from} → ${pb.to})`) : pb.kind === 'switch' ? `night ↔ day without a day off (${pb.from} → ${pb.to})` : pb.kind === 'run' ? `${pb.days} days in a row` : pb.kind === 'long' ? 'over 9 h' : 'breaks a rule';
+      if (pb) r = pb.kind === 'rest' ? (pb.hours <= 0 ? `overlaps with their ${pb.to === shift ? pb.from : pb.to}` : `only ${Math.round(pb.hours)} h rest (${pb.from} → ${pb.to})`) : pb.kind === 'switch' ? `night ↔ day without a day off (${pb.from} → ${pb.to})` : pb.kind === 'back' ? `an earlier start than the day before without a day off (${pb.from} → ${pb.to})` : pb.kind === 'run' ? `${pb.days} days in a row` : pb.kind === 'long' ? 'over 9 h' : 'breaks a rule';
       else if (rbKind(v) === 'off') r = 'day off, and no later day to move it to without leaving a shift empty';
       else if (rbParse(v)) r = `moving them leaves ${p.group !== group ? p.group + "'s " : ''}${rbNorm(v)} empty`;
       else if (v) r = `on ${v}`;
@@ -98,7 +98,7 @@ function rtWhyNot(I, cells, group, date, shift, skip) {
 function rtStays(I, p, group) {
   if (p.lock) return true;
   const away = rbBaseGroup(p.group) !== rbBaseGroup(group);
-  return away && (p.home || ((I.rules || {}).lend === false && !rbFloats(p) && !rbFloatsLast(p)));   // Duty Managers work anywhere; Supervisors too, last
+  return away && (p.home || rbNoGo(p, group) || ((I.rules || {}).lend === false && !rbFloats(p) && !rbFloatsLast(p)));   // Duty Managers work anywhere; Supervisors too, last
 }
 function rtCoverOptions(I, cells, group, date, shift, opt) {
   const allowEmpty = !!(opt && opt.allowEmpty);   // a plan of several moves may empty a shift that a later move fills
@@ -231,20 +231,22 @@ function rtCoverOptions(I, cells, group, date, shift, opt) {
   }
   const fn = k => rtName(k).split(' ')[0];
   const bendText = (c0, c1, keys) => {   // what the plan bends, in words
-    const was = rbProblems(I, c0), now = rbProblems(I, c1).filter(p => keys.includes(p.key) && (p.kind === 'switch' || p.kind === 'rest' || p.kind === 'who') && !was.some(w => w.kind === p.kind && w.key === p.key && w.date === p.date));
-    return now.map(p => p.kind === 'who' ? `${fn(p.key)} is not ${(p.who || []).join(' / ') || 'a Supervisor'}, but no Supervisor or Duty Manager could take it (reception is never left empty)` : p.kind === 'switch' ? `${fn(p.key)}: ${rbIsNight(p.from) ? (rbIsMorning(p.to) ? 'a night then a morning' : 'a night then a day shift') : (rbIsMorning(p.from) || !/^(1[5-9]|2)/.test(rbNorm(p.from) || '') ? 'a day shift then a night' : 'an evening then a night')} without a day off (${rbNorm(p.from).slice(0, 5)} → ${rbNorm(p.to).slice(0, 5)}), as in past rosters`
+    const was = rbProblems(I, c0), now = rbProblems(I, c1).filter(p => keys.includes(p.key) && (p.kind === 'switch' || p.kind === 'back' || p.kind === 'rest' || p.kind === 'who') && !was.some(w => w.kind === p.kind && w.key === p.key && w.date === p.date));
+    return now.map(p => p.kind === 'who' ? `${fn(p.key)} is not ${(p.who || []).join(' / ') || 'a Supervisor'}, but no Supervisor or Duty Manager could take it (reception is never left empty)` : p.kind === 'back' ? `${fn(p.key)}: an earlier start than the day before without a day off (${rbNorm(p.from).slice(0, 5)} → ${rbNorm(p.to).slice(0, 5)})` : p.kind === 'switch' ? `${fn(p.key)}: ${rbIsNight(p.from) ? (rbIsMorning(p.to) ? 'a night then a morning' : 'a night then a day shift') : (rbIsMorning(p.from) || !/^(1[5-9]|2)/.test(rbNorm(p.from) || '') ? 'a day shift then a night' : 'an evening then a night')} without a day off (${rbNorm(p.from).slice(0, 5)} → ${rbNorm(p.to).slice(0, 5)}), as in past rosters`
       : p.hours <= 0 ? `${fn(p.key)}: back to back (${rbNorm(p.from).slice(0, 5)} straight into ${rbNorm(p.to).slice(0, 5)}, ${Math.round(((rbParse(p.from).e - rbParse(p.from).s) + (rbParse(p.to).e - rbParse(p.to).s)) / 60)} h)` : `${fn(p.key)}: only ${Math.round(p.hours)} h rest (${rbNorm(p.from).slice(0, 5)} → ${rbNorm(p.to).slice(0, 5)})`);
   };
-  if (!list.length && !(opt && opt.noBend) && !(G[group] || {}).post) {
+  // alsoBend: the builder asks for the bends too when the only rule-keeping fix moves someone for days
+  const plain = list.length;
+  if ((!plain || (opt && opt.alsoBend)) && !(opt && opt.noBend) && !(G[group] || {}).post) {
     const shortsIn = c => rbProblems(I, c).filter(p => p.kind === 'short'), before = shortsIn(cells);
     const isNew = p => !before.some(b => b.group === p.group && b.date === p.date && b.shift === p.shift);
     for (const T of TIERS) {
-      if (list.some(o => o.cells)) break;
+      if (list.slice(plain).some(o => o.cells)) break;
       const I2 = Object.assign({}, I, { rules: Object.assign({}, I.rules, T.rules) });
       if (T.anyone) { const w = Object.assign({}, (G[group] || {}).who); delete w[shift]; I2.groups = Object.assign({}, G, { [group]: Object.assign({}, G[group], { who: w }) }); }
       const seen = new Set();
       for (const o of rtCoverOptions(I2, cells, group, date, shift, Object.assign({}, opt, { noBend: true, allowEmpty: true })).filter(o => o.cells)) {
-        if (list.length >= 3 || seen.has(o.key)) continue;
+        if (list.length - plain >= 3 || seen.has(o.key)) continue;
         const left = shortsIn(o.cells).filter(isNew);
         if (left.length > 1) continue;
         let cells2 = o.cells, text = o.text, ok = o.ok || '', keys = [o.key];
@@ -270,7 +272,7 @@ function rtCoverOptions(I, cells, group, date, shift, opt) {
         const bent = bendText(cells, cells2, keys);
         const lead = `${fn(o.key)} covers ${shift} on ${roDayLbl(date)}${away ? ' at ' + rbBaseGroup(group) : ''}`;
         if (bent.length) {
-          const why = `${lead}: nobody could take it with every rule kept, so it bends ${bent.join('; ')}.${tail}`;
+          const why = plain ? `${lead}: it bends ${bent.join('; ')}, rather than moving someone to another hotel for days.${tail}` : `${lead}: nobody could take it with every rule kept, so it bends ${bent.join('; ')}.${tail}`;
           list.push(Object.assign({}, o, { cells: cells2, bend: true, why, notes: [{ key: o.key, date, text: why }], cost: o.cost + T.cost, text: text + ' ⚠ ' + bent.join(' · '), ok: '⚠ bends: ' + bent.join(' · ') + ' (never over 9 h a shift) · ' + ok }));
         } else list.push(Object.assign({}, o, { cells: cells2, cost: o.cost + 60, text, why: lead + '.' + tail, notes: null }));
       }
@@ -511,7 +513,7 @@ function rtWhatIf(s) {
 let _rtWI = null;
 function rtProbText(x) {
   const n = x.key ? rtName(x.key).split(' ')[0] : '', d = x.date ? roDayLbl(x.date) : '';
-  return x.kind === 'short' ? `${d} ${x.shift} empty` : x.kind === 'rest' ? `${n}: only ${Math.round(x.hours)} h rest before ${d}` : x.kind === 'run' ? `${n}: ${x.days} days in a row` : x.kind === 'switch' ? `${n}: night ↔ day without a day off (${d})` : x.kind === 'who' ? `${n}: ${x.code} is for ${(x.who || []).join(' / ')} only` : x.kind === 'long' ? `${n}: over ${rbRules().maxHours} h on ${d}` : x.kind === 'offs' ? `${n}: ${x.have} day${x.have === 1 ? '' : 's'} off (should be ${x.need})` : `${n} ${d}`.trim();
+  return x.kind === 'short' ? `${d} ${x.shift} empty` : x.kind === 'rest' ? `${n}: only ${Math.round(x.hours)} h rest before ${d}` : x.kind === 'run' ? `${n}: ${x.days} days in a row` : x.kind === 'switch' ? `${n}: night ↔ day without a day off (${d})` : x.kind === 'back' ? `${n}: an earlier start than the day before without a day off (${d})` : x.kind === 'who' ? `${n}: ${x.code} is for ${(x.who || []).join(' / ')} only` : x.kind === 'long' ? `${n}: over ${rbRules().maxHours} h on ${d}` : x.kind === 'offs' ? `${n}: ${x.have} day${x.have === 1 ? '' : 's'} off (should be ${x.need})` : `${n} ${d}`.trim();
 }
 function rtWhatIfText(r) {
   const s = r.s, who = rtName(s.key), when = r.from === r.to ? roDayLbl(r.from) : `${roDayLbl(r.from)} → ${roDayLbl(r.to)}`;
@@ -779,6 +781,7 @@ function rtPerson(k) {
       <label>PH owed<input type="number" min="0" max="30" value="${ph.owed}" onchange="rbSetPh(${q},+this.value)"></label>
     </div>
     <div class="rt-cant"><span>Locks:</span><button class="rb-opt${p.lock ? ' on' : ''}" onclick="rtSet(${q},'lockShift',${!p.lock});rtPerson(${q})">${p.lock ? '🔒' : '🔓'} ${p.lock ? 'Keeps ' + escapeHtml(p.fixed || 'their shift') : 'Shift can change'}</button><button class="rb-opt${c.home ? ' on' : ''}" onclick="rtSet(${q},'home',${c.home ? 'undefined' : 'true'});rtPerson(${q})">🏨 ${c.home ? 'Stays at ' + escapeHtml(g || 'their hotel') : 'Can help other hotels'}</button></div>
+    ${c.home ? '' : `<div class="rt-cant"><span>Never to:</span>${groups.filter(x => x !== g && !/·/.test(x)).map(x => { const on = (c.noGo || []).includes(x); return `<button class="rb-opt${on ? ' on' : ''}" onclick="rtNoGo(${q},${_rtQ(x)})" title="${on ? 'Tap to allow again' : 'Tap: never sent to ' + escapeHtml(x)}">${on ? '🚫 ' : ''}${escapeHtml(x)}</button>`; }).join('')}<small class="ro-hint">Tap a hotel they must never be sent to</small></div>`}
     <div class="rt-cant"><span>Works:</span><button class="rb-opt ro-t-night" onclick="rtOnly(${q},'night')">🌙 Nights only</button><button class="rb-opt ro-t-morning" onclick="rtOnly(${q},'day')">☀️ Days only</button><button class="rb-opt" onclick="rtOnly(${q},'all')">All shifts</button></div>
     <div class="rt-cant"><span>Shifts:</span>${shifts.map(x => { const no = (c.allowed && c.allowed.length && !c.allowed.includes(x)), soft = (c.soft || []).includes(x), like = (c.likes || []).includes(x); return `<button class="rb-opt ro-t-${(roInfo(x) || {}).type}${no ? ' on' : soft ? ' soft' : like ? ' like' : ''}" onclick="rtToggleShift(${q},${_rtQ(x)})" title="Tap: 💛 likes → ⚠ prefer not → 🚫 can't work → fine">${no ? '🚫 ' : soft ? '⚠ ' : like ? '💛 ' : ''}${escapeHtml(x)}</button>`; }).join('')}<small class="ro-hint">Tap: 💛 likes → ⚠ prefer not → 🚫 can't</small></div>
     ${rtWishHtml(k)}
@@ -795,6 +798,13 @@ function rtPerson(k) {
   d.addEventListener('click', e => { if (e.target === d) { d.remove(); rbRender(); } });
   document.body.appendChild(d);
   if (keepTop) { d.scrollTop = keepTop[0]; const c = d.querySelector('.rt-sheet'); if (c) c.scrollTop = keepTop[1]; }
+}
+/** 🚫 never sent to this hotel (tap again to allow) */
+function rtNoGo(k, h) {
+  const cur = ((rbPeople[k] || {}).noGo || []).slice(), i = cur.indexOf(h);
+  if (i >= 0) cur.splice(i, 1); else cur.push(h);
+  rtSet(k, 'noGo', cur.length ? cur : undefined); rtPerson(k);
+  showToast(i >= 0 ? `${rtName(k).split(' ')[0]} can go to ${h} again` : `${rtName(k).split(' ')[0]} will never be sent to ${h}`, 'ok');
 }
 function rtOnly(k, kind) {
   const g = (roStaff[k] || {}).group || '', all = rbGroupCfg(g).shifts;
@@ -1035,7 +1045,7 @@ function rtDragSwap(k1, d1, k2, d2) {
   D.cells[k1][d1] = b; D.cells[k2][d2] = a;
   const bad = rbProblems(I, D.cells).filter(p => (p.key === k1 || p.key === k2) && p.kind !== 'offs');
   rbSaveDraft(); rbRefreshOut();
-  const why = p => p.kind === 'rest' ? `${rtName(p.key)} gets only ${Math.round(p.hours)} h rest` : p.kind === 'long' ? 'a shift over 9 h' : p.kind === 'switch' ? `${rtName(p.key)} goes between night and day without a day off` : p.kind === 'who' ? `${rtName(p.key)}: ${p.code} is for ${(p.who || []).join(' / ')} only` : `${rtName(p.key)} works too many days in a row`;
+  const why = p => p.kind === 'rest' ? `${rtName(p.key)} gets only ${Math.round(p.hours)} h rest` : p.kind === 'long' ? 'a shift over 9 h' : p.kind === 'switch' ? `${rtName(p.key)} goes between night and day without a day off` : p.kind === 'back' ? `${rtName(p.key)} starts earlier than the day before without a day off` : p.kind === 'who' ? `${rtName(p.key)}: ${p.code} is for ${(p.who || []).join(' / ')} only` : `${rtName(p.key)} works too many days in a row`;
   showToast(bad.length ? `Swapped, but check: ${[...new Set(bad.map(why))].join('; ')}. ↶ Undo is above the table.` : 'Swapped', bad.length ? 'warn' : 'ok');
 }
 

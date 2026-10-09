@@ -234,6 +234,27 @@ console.log('\nRoster scenarios');
     check('stay home: one night at another hotel costs less than a whole week moved', sb.rbUpset(I, base, one) < sb.rbUpset(I, base, week), true);
     check('stay home: each day at another hotel counts much more than a day changed at home', sb.rbUpset(I, base, one) > 10 * 10, true);
   }
+  // 0b. an earlier start than the day before (12-21 then 09-18) needs a day off between; an hour earlier is fine
+  {
+    const R = { nightSwitch: true };
+    check('earlier start: 12-21 then 09-18 the next day is not allowed', sb.rbSwitchOk('12:00 - 21:00', '09:00 - 18:00', R), false);
+    check('earlier start: an hour earlier (09-18 then 08-17) is fine; later is fine', [sb.rbSwitchOk('09:00 - 18:00', '08:00 - 17:00', R), sb.rbSwitchOk('09:00 - 18:00', '12:00 - 21:00', R)].join(), 'true,true');
+    check('earlier start: can be switched off in Rules', sb.rbSwitchOk('12:00 - 21:00', '09:00 - 18:00', { noBack: false }), true);
+    const D12 = '12:00 - 21:00';
+    const r = solve({ 'Ibis DD': { shifts: [D9, D12], need: { [D9]: day(1), [D12]: day(1) } } }, ['A', 'B', 'C'].map(k => P(k)));
+    const back = r.problems.filter(p => p.kind === 'back').length;
+    let seen = 0; ['A', 'B', 'C'].forEach(k => dates.forEach((dt, d) => { if (d && r.cells[k][dates[d - 1]] === D12 && r.cells[k][dt] === D9) seen++; }));
+    check('earlier start: the builder never plans 12-21 then 09-18', [seen, back].join(), '0,0');
+  }
+  // 0c. "never to Ibis" on someone's card: never sent there, other hotels still fine
+  {
+    const p = P('Z', { group: 'Mercure DD', noGo: ['Ibis DD'] }), I = { groups: { 'Ibis DD': { shifts: [M] }, 'Adagio GD': { shifts: [M] }, 'Mercure DD': { shifts: [M] } } };
+    check('never to a hotel: not to Ibis, Adagio and home still fine', [sb.rbMayWork(I, 'Ibis DD', p, M), sb.rbMayWork(I, 'Adagio GD', p, M), sb.rbMayWork(I, 'Mercure DD', p, M)].join(), 'false,true,true');
+    const G = { 'Ibis DD': { shifts: [M, E], need: { [M]: day(1), [E]: day(1) } }, 'Mercure DD': { shifts: [M, E], need: { [M]: day(1), [E]: day(1) } } };
+    const ppl = [P('A'), P('Y', { group: 'Mercure DD', noGo: ['Ibis DD'] }), P('Z', { group: 'Mercure DD', noGo: ['Ibis DD'] }), P('X', { group: 'Mercure DD', noGo: ['Ibis DD'] })];
+    const r = sb.rbSolve({ week: W, groups: G, people: ppl, pre: {}, rules: { minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, givePh: false, lend: true }, seed: 1 });
+    check('never to a hotel: the builder never sends them, even to fill Ibis', ['Y', 'Z', 'X'].some(k => dates.some(dt => /Ibis/.test(r.cells[k][dt] || ''))), false);
+  }
   // 1. ideal two per shift, too few people: never an empty shift, some one-person shifts
   {
     const r = solve({ 'Ibis DD': { shifts: [M, E], need: { [M]: day(2), [E]: day(2) } } }, ['A', 'B', 'C', 'D'].map(k => P(k)), {}, { overlapMin: 0 });

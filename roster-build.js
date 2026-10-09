@@ -110,12 +110,21 @@ function rbChangeCost(prev, next, acrossWeeks) {
 function rbIsNight(code) { const p = rbParse(code); return !!p && p.type === 'night'; }
 function rbSwitchOk(prev, next, R) {
   if (R && R.nightSwitch === false) return true;
-  if (!rbParse(prev) || !rbParse(next) || rbIsNight(prev) === rbIsNight(next)) return true;
+  if (!rbParse(prev) || !rbParse(next)) return true;
+  if (rbIsNight(prev) === rbIsNight(next)) return rbBackOk(prev, next, R);
   // a day shift (08:00 - 17:00, 12:00 - 21:00…) and a night always need a day off between: never bent.
   // Only an evening (15:00 - 00:00) next to a night may go without one, as a last resort, as past rosters did.
   const day = c => !rbIsNight(c) && rbParse(c).s < 13 * 60;
   if (day(prev) || day(next)) return false;
   return !!(R && R.eveNight);
+}
+/** A day shift that starts earlier than the day before (12:00 - 21:00 then 09:00 - 18:00) is hard on anyone:
+ *  more than an hour earlier needs a day off between. Bent only as the very last way to keep reception covered. */
+function rbBackOk(prev, next, R) {
+  if (R && R.noBack === false) return true;
+  if (rbIsNight(prev) || rbIsNight(next)) return true;
+  const a = rbParse(prev), b = rbParse(next), h = R && R.backH != null ? +R.backH : 1;
+  return b.s >= a.s - h * 60;
 }
 /** "Prefer not" a shift (on their card, or asked for that week): kept off it when there is another way. */
 function rbSoftNo(I, p, dt, s) { const c = rbNorm(s) || s; return ((p && p.soft) || []).includes(c) || ((((I.soft || {})[p && p.key] || {})[dt]) || []).includes(c); }
@@ -126,7 +135,9 @@ function rbEvMiss(I, p, dt, s) { const L = (((I.evMiss || {})[p && p.key] || {})
 /** The real night: starts around midnight or ends in the morning (00:00 - 09:00), not a late evening (19:00 - 04:00). */
 function rbDeepNight(code) { const x = rbParse(code); return !!x && x.type === 'night' && (x.s < 120 || x.e >= 1440 + 360); }
 /** Who may work a shift: the titles set for it (e.g. nights: Supervisor, Duty Manager), else everyone. */
-function rbMayWork(I, g, p, s) { if (p && (((I.groups || {})[g] || {}).post || '') !== (p.post || '')) return false; const who = (((I.groups || {})[g] || {}).who || {})[rbNorm(s) || s]; return !who || !who.length || who.includes((p && p.title) || ''); }
+/** Never sent to this hotel (set on their card: "🚫 not to Ibis"). */
+function rbNoGo(p, g) { return !!(p && p.noGo && p.noGo.length && g != null && rbBaseGroup(g) !== rbBaseGroup(p.group || '') && p.noGo.includes(rbBaseGroup(g))); }
+function rbMayWork(I, g, p, s) { if (rbNoGo(p, g)) return false; if (p && (((I.groups || {})[g] || {}).post || '') !== (p.post || '')) return false; const who = (((I.groups || {})[g] || {}).who || {})[rbNorm(s) || s]; return !who || !who.length || who.includes((p && p.title) || ''); }
 /** Shift types people ask for: morning, day (morning + 12:00), evening, night. */
 const RB_BANDS = {
   morning: { label: 'Morning', test: x => x.type !== 'night' && x.s >= 300 && x.s < 660 },
@@ -320,22 +331,35 @@ function rbRepair(I, res, o) {
   let cells = res.cells, guard = 0;
   const shorts = c => rbProblems(I, c).filter(p => p.kind === 'short');
   const breaks = c => rbProblems(I, c).filter(p => p.kind !== 'short' && p.kind !== 'thin').length;
+  const notes = [], bendOk = !o.homeOnly && !I.noBend;
   for (let gaps = shorts(cells); gaps.length && guard < 12; guard++) {
-    const before = breaks(cells); let done = false;
+    const before = breaks(cells); let best = null;
     for (const g of gaps) {
-      const opts = rtCoverOptions(Object.assign({}, I, { noRepair: true }), cells, g.group, g.date, g.shift).filter(x => x.cells && !x.bend && !(o.homeOnly && moves(x.cells)));
-      // of the fixes that work, the gentlest: fewest days changed, days at another hotel counting most
-      // (one night borrowed beats a whole week moved), and no shift left with one person if it can be helped
-      const ok = opts.filter(x => shorts(x.cells).length < gaps.length && breaks(x.cells) <= before)
-        .map(x => ({ x, c: rbUpset(I, cells, x.cells) })).sort((a, b) => a.c - b.c)[0];
-      if (ok) { cells = ok.x.cells; done = true; break; }
+      const I2 = Object.assign({}, I, { noRepair: true });
+      let opts = rtCoverOptions(I2, cells, g.group, g.date, g.shift).filter(x => x.cells && (bendOk || !x.bend) && !(o.homeOnly && moves(x.cells)));
+      // the only fixes found move someone for days: look further (two-step fixes that keep every rule, and the bends) and weigh them all
+      if (opts.length && !opts.some(x => x.bend) && Math.min(...opts.map(x => rbUpset(I, cells, x.cells))) > 600)
+        opts = opts.concat(rtCoverOptions(I2, cells, g.group, g.date, g.shift, { alsoBend: true }).filter(x => x.cells && (bendOk || !x.bend) && !(o.homeOnly && moves(x.cells))));
+      // of the fixes that work, the gentlest on people: fewest days changed, days at another hotel counting most
+      // (one night borrowed beats a whole week moved), no shift left with one person if it can be helped.
+      // A rule bent for one person counts like about 4 days at another hotel: moving someone for a whole week
+      // to keep every rule is worse than one bent rule (written down under Decisions)
+      opts.forEach(x => {
+        if (shorts(x.cells).length >= gaps.length) return;
+        const extra = breaks(x.cells) - before;
+        if (extra > 0 && !x.bend) return;
+        const c = rbUpset(I, cells, x.cells) + 800 * Math.max(0, extra);
+        if (!best || c < best.c) best = { x, c };
+      });
+      if (best && !best.x.bend) break;   // a fix that keeps every rule for this gap: take the gentlest
     }
-    if (!done) break;
+    if (!best) break;
+    cells = best.x.cells;
+    if (best.x.bend) (best.x.notes || []).forEach(n => notes.push(Object.assign({ auto: true }, n)));
     gaps = shorts(cells);
   }
   // still stuck: every shift has to be covered, so the mildest way past rosters used (evening then late night,
   // night ↔ day without a day off, short rest, back to back), never over 9 h a shift. Each one is written down.
-  const notes = [];
   for (let gaps = shorts(cells), n = 0; gaps.length && n < 8 && !I.noBend && !o.homeOnly; n++) {
     let pick = null;
     for (const g of gaps) {
@@ -752,9 +776,9 @@ function rbProblems(I, cells, cover) {
         run++;
         if (rbParse(v).e - rbParse(v).s > (R.maxHours || 9) * 60) out.push({ kind: 'long', key: p.key, date: dt, hours: (rbParse(v).e - rbParse(v).s) / 60, code: v });
         if (prev && rbParse(prev) && rbRest(prev, v) < R.minRest) out.push({ kind: 'rest', key: p.key, date: dt, hours: rbRest(prev, v), from: prev, to: v });
-        else if (prev && !rbSwitchOk(prev, v, R)) out.push({ kind: 'switch', key: p.key, date: dt, from: prev, to: v });
+        else if (prev && !rbSwitchOk(prev, v, R)) out.push({ kind: rbIsNight(prev) === rbIsNight(v) ? 'back' : 'switch', key: p.key, date: dt, from: prev, to: v });
         { const tg = rbAt(I, p, rbParse(v));
-          if (!rbMayWork(I, tg, p, v)) out.push({ kind: 'who', key: p.key, date: dt, code: v, who: ((I.groups[tg] || {}).post || '') !== (p.post || '') ? [p.post ? 'front desk staff (not ' + p.post.toLowerCase() + ')' : 'the ' + ((I.groups[tg] || {}).post || '').toLowerCase() + ' team'] : ((I.groups[tg] || {}).who || {})[rbNorm(v)] }); }
+          if (!rbMayWork(I, tg, p, v)) out.push({ kind: 'who', key: p.key, date: dt, code: v, who: rbNoGo(p, tg) ? ['staff allowed at ' + rbBaseGroup(tg) + ' (their card says not there)'] : ((I.groups[tg] || {}).post || '') !== (p.post || '') ? [p.post ? 'front desk staff (not ' + p.post.toLowerCase() + ')' : 'the ' + ((I.groups[tg] || {}).post || '').toLowerCase() + ' team'] : ((I.groups[tg] || {}).who || {})[rbNorm(v)] }); }
         if (run === R.maxRun + 1) out.push({ kind: 'run', key: p.key, date: dt, days: run });
       } else if (v) run = 0;
       prev = v;
@@ -977,7 +1001,7 @@ function rbPersonCfg(k) {
   const mode = c.mode || (c.fixed ? 'static' : c.fixed === '' && !lock ? 'any' : (L.fixedGuess || ((mgr || lock) && L.usual)) ? 'static' : L.rotates ? 'rotate' : 'any');   // (rotates week to week, as the posted rosters show)
   const fixed = mode === 'static' || lock ? (c.fixed || L.fixedGuess || L.usual || '') : '';
   return {
-    key: k, group: rbPGroup(k), post: rbPost(k), title: c.title || '', mode, lock: lock && !!fixed, home: !!c.home, alt: c.alt || '',
+    key: k, group: rbPGroup(k), post: rbPost(k), title: c.title || '', mode, lock: lock && !!fixed, home: !!c.home, noGo: (c.noGo || []).slice(), alt: c.alt || '',
     offs: c.offs != null ? +c.offs : L.offs,
     fixed, fixedLearned: !c.fixed && !!fixed,
     fixedCost: mgr ? 400 : /supervisor|leader|duty/i.test(c.title || '') ? 60 : 30,   // managers move only to stop a shift being empty
@@ -1589,7 +1613,8 @@ function rbRulesHtml() {
       + row('Only if there\'s no other way', 'down to, one hour at a time; it tells you who and why', step(R.restFloor != null ? R.restFloor : 7, 0, R.minRest, "rbSetRule('restFloor',this.value===''||isNaN(+this.value)?undefined:Math.max(0,Math.min(+this.value,rbRules().minRest)))", 'h'))
       + row('Days in a row', 'at most', step(R.maxRun, 3, 14, "rbSetRule('maxRun',+this.value)", 'days'))
       + row('Longest shift', '', step(R.maxHours, 6, 12, "rbSetRule('maxHours',+this.value)", 'h'))
-      + row('Day off between night and day', 'no night on Monday then 08:00 on Tuesday', sw(R.nightSwitch !== false, "rbSetRule('nightSwitch',this.checked)")))}
+      + row('Day off between night and day', 'no night on Monday then 08:00 on Tuesday', sw(R.nightSwitch !== false, "rbSetRule('nightSwitch',this.checked)"))
+      + row('Day off before an earlier start', 'no 12:00 – 21:00 then 09:00 – 18:00 the next day (an hour earlier is fine)', sw(R.noBack !== false, "rbSetRule('noBack',this.checked)")))}
     ${card('🛎', 'Desk & cover',
       row('People on the desk at once', 'aim for; 1 = off', step(R.deskMin, 1, 6, "rbSetRule('deskMin',+this.value)", ''))
       + row('From', 'e.g. one on 08–17 and one on 12–21 = two at once 12–17', step(R.deskFrom, 0, 23, "rbSetRule('deskFrom',+this.value)", ':00'))
@@ -1638,6 +1663,7 @@ function rbOutHtml(shown, dates) {
     : p.kind === 'run' ? `${escapeHtml(name(p.key))}: ${p.days} days in a row by ${escapeHtml(roDayLbl(p.date))}`
     : p.kind === 'thin' ? `${escapeHtml(roDayLbl(p.date))} · ${escapeHtml(p.shift)}${shown.length > 1 || p.group !== rbBaseGroup(p.group) ? ' · ' + escapeHtml(p.group) : ''}: ${p.have ? `one person (ideal ${p.need})` : 'nobody'}`
     : p.kind === 'switch' ? `${escapeHtml(name(p.key))}: ${escapeHtml(p.from)} then ${escapeHtml(p.to)} on ${escapeHtml(roDayLbl(p.date))}: night and day shifts need a day off between`
+    : p.kind === 'back' ? `${escapeHtml(name(p.key))}: ${escapeHtml(p.from)} then ${escapeHtml(p.to)} on ${escapeHtml(roDayLbl(p.date))}: an earlier start than the day before needs a day off between`
     : p.kind === 'who' ? `${escapeHtml(name(p.key))}: ${escapeHtml(p.code)} on ${escapeHtml(roDayLbl(p.date))} is for ${escapeHtml((p.who || []).join(', '))} only`
     : p.kind === 'long' ? `${escapeHtml(name(p.key))}: ${escapeHtml(p.code)} on ${escapeHtml(roDayLbl(p.date))} is ${p.hours} h (over ${rbRules().maxHours})`
     : `${escapeHtml(name(p.key))}: ${p.have} day${p.have === 1 ? '' : 's'} off (should have ${p.need})`;

@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 214, items: [
+    '🌅 No earlier start the next day: 12:00 – 21:00 then 09:00 – 18:00 (or any start more than an hour earlier than the day before) now needs a day off between, like night and day. The builder never plans it; only as the very last way to keep reception covered, written under Decisions. Switch it in ⚖️ Rules → "Day off before an earlier start".',
+    '🚫 Never to a hotel: on each person\'s card, tap a hotel they must never be sent to (e.g. not Ibis). The builder, cover suggestions and last resorts all respect it; other hotels stay possible.',
+    '🤲 Gentler fixes: when a shift is empty the builder now looks further for a small fix (a day off moved plus one night borrowed) instead of moving someone to another hotel for the whole week. In tests with your team, every move became a single day.',
+  ] },
   { v: 213, items: [
     '🤝 One person on a shift is fine when someone else is on the desk with them for a while: 2 hours together by default (enough for a break), like 08–17 with 15–00. The builder no longer pushes for a second person on those shifts and they are not listed as one-person problems, so it keeps more wishes and steadier weeks. Change the hours in ⚖️ Rules → "Alone is fine with company for" (0 = two the whole shift).',
     '🛎 Reception first: if a week still ends with an empty shift, the builder also tries it the strict way and keeps whichever covers more.',
