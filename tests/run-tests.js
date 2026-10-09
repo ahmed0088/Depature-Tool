@@ -581,6 +581,27 @@ console.log('\nRoster scenarios');
   check('history: shows on the card and in the builder', run(`tlPersonHtml('A').includes('History') && tlTeamHtml().includes('Wish granted')`), true);
 }
 
+// ── Vacation balance (roster-vacation.js) ──────────────────
+{
+  const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} }, fbSet() {}, showToast() {}, escapeHtml: x => String(x),
+               document: { addEventListener() {}, getElementById() { return null; }, querySelectorAll() { return []; }, querySelector() { return null; } }, window: {}, setTimeout: () => 0, setInterval: () => 0, clearTimeout() {}, navigator: {} };
+  vm.createContext(sb);
+  for (const f of ['roster.js', 'roster-build.js', 'roster-team.js', 'roster-vacation.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sb, { filename: f });
+  const run = js => vm.runInContext(js, sb);
+  run(`
+    roStaff.A = { name: 'Anna Lee', group: 'Ibis DD' };
+    rbPeople.A = { joined: '2026-01-01', absences: { x: { from: '2026-08-01', to: '2026-08-05', code: 'AL' }, y: { from: '2026-06-10', to: '2026-06-10', code: 'SL' } } };
+    ['2026-03-02', '2026-03-03', '2026-03-04', '2026-08-01'].forEach(dt => { roDays[dt] = { A: 'AL' }; });
+    roDays['2026-03-05'] = { A: 'SL' }; roDays['2026-03-06'] = { A: 'ALP' };
+  `);
+  check('vacation: AL, ALA and VAC count; sick, PH and pending leave do not', run(`['AL','ALA','VAC','AL - 3 days','SL','PH','ALP','OFF'].map(vcIsAL).join(',')`), 'true,true,true,true,false,false,false,false');
+  check('vacation: 30 a year earned from joining, used days off, booked days (each day once) counted apart', run(`const b = vcBalance('A', '2026-07-01'); [b.now, b.used, b.booked, b.after].join('|')`), '12|3|5|7');
+  check('vacation: a balance from HR counts on from the next day', run(`rbPeople.A.vacBal = { n: 20, at: '2026-07-02' }; vcBalance('A', '2026-07-01').now + '|' + vcBalance('A', '2026-08-01').now`), '20|21.5');
+  check('vacation: days a year can be set for one person', run(`rbPeople.A.vacYear = 22; vcRate('A')`), 22);
+  check('vacation: Ops Brain answers "vacation balance of Anna" and "how many vacation days does Anna have"', run(`!!_vcMatch('vacation balance of Anna') && !!_vcMatch('how many vacation days does Anna have') && !_vcMatch('Anna is sick tomorrow')`), true);
+  check('vacation: shows on the card and in the builder', run(`vcPersonHtml('A').includes('vacation days today') && vcTeamHtml().includes('Anna Lee')`), true);
+}
+
 // ── What if… (roster-team.js) ─────────────────────────────
 {
   const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} }, fbSet() {}, showToast() {}, escapeHtml: x => String(x),

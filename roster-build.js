@@ -1255,6 +1255,11 @@ function rbRender() {
         ${rbLazy('team', false, () => typeof rtTeamHtml === 'function' ? rtTeamHtml(shown) : shown.map(g => rbTeamHtml(g)).join(''))}
       </details>
 
+      <details class="card rb-card"${rbSec('vac', false)}>
+        <summary class="ro-card-hd"><b>🌴 Vacation balance</b><span>${typeof vcSummary === 'function' ? escapeHtml(vcSummary()) : ''}</span></summary>
+        ${rbLazy('vac', false, () => typeof vcTeamHtml === 'function' ? vcTeamHtml() : '')}
+      </details>
+
       <details class="card rb-card"${rbSec('log', false)}>
         <summary class="ro-card-hd"><b>📜 Team history</b><span>weeks posted, wishes granted, PH, leave, swaps, joining and leaving</span></summary>
         ${rbLazy('log', false, () => typeof tlTeamHtml === 'function' ? tlTeamHtml() : '')}
@@ -1545,6 +1550,8 @@ function rbRulesHtml() {
       row('Give PH owed', 'the last option: only when a shift has someone spare anyway', sw(R.givePh, "rbSetRule('givePh',this.checked);rbRender()"))
       + row('People a week, per hotel', 'the biggest balance first', step(R.phPeople == null ? 1 : R.phPeople, 0, 9, "rbSetRule('phPeople',Math.max(0,Math.min(9,+this.value||0)))", ''), !R.givePh)
       + row('PH each', 'a week normally has one day off (4 a month)', step(R.phMax == null ? 1 : R.phMax, 0, 3, "rbSetRule('phMax',Math.max(0,Math.min(3,+this.value||0)))", ''), !R.givePh))}
+    ${card('🌴', 'Vacation',
+      row('Vacation days a year', 'earned a little every day; change one person on their card', step(R.vacDays || 30, 0, 60, "rbSetRule('vacDays',Math.max(0,Math.min(60,+this.value||30)))", 'days')))}
     ${card('🏨', 'Hotels & managers',
       row('Keep everyone in their own hotel', R.lend === false ? 'nobody is moved, by the builder or in suggestions' : 'off: moved only when a shift would be empty, one pair of hotels a week', sw(R.lend === false, "rbSetRule('lend',!this.checked);rbRender()"))
       + row('Managers keep their own shift', 'never moved to cover; unlock one on their card', sw(R.lockMgr !== false, "rbSetRule('lockMgr',this.checked);rbRender()"))

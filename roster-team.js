@@ -740,7 +740,7 @@ function rtTeamHtml(shown) {
     const left = c.left && c.left <= roAdd(rbWeek, 6);
     return `<button class="rt-row${left ? ' gone' : ''}" onclick="rtPerson(${_rtQ(k)})">${!left && typeof rhBadge === 'function' ? rhBadge(k) : ''}
       <span class="rt-n"><b>${escapeHtml(roStaff[k].name)}${p.lock ? ' 🔒' : ''}${c.home ? ' 🏨' : ''}</b>${c.title ? `<i class="rt-title ${/manager/i.test(c.title) ? 'mgr' : /supervisor|leader/i.test(c.title) ? 'sup' : ''}">${escapeHtml(c.title)}</i>` : ''}</span>
-      <span class="rt-m">${left ? 'left ' + escapeHtml(roDayLbl(c.left)) : p.mode === 'static' ? 'Static ' + escapeHtml(roShort(roInfo(p.fixed)) || p.fixed) : p.mode === 'rotate' ? 'Rotates' : 'Any shift'} · ${p.offs} off${ph.owed ? ' · PH ' + ph.owed : ''}${away ? ` · <em>${escapeHtml(away.code)} ${escapeHtml(roDayLbl(away.from))}${away.to !== away.from ? '–' + escapeHtml(roDayLbl(away.to)) : ''}</em>` : ''}</span></button>`; }).join('') || '<div class="ro-empty">Nobody yet.</div>'}</div>`).join('')}`;
+      <span class="rt-m">${left ? 'left ' + escapeHtml(roDayLbl(c.left)) : p.mode === 'static' ? 'Static ' + escapeHtml(roShort(roInfo(p.fixed)) || p.fixed) : p.mode === 'rotate' ? 'Rotates' : 'Any shift'} · ${p.offs} off${ph.owed ? ' · PH ' + ph.owed : ''}${typeof vcBalance === 'function' && !left ? ' · 🌴 ' + _vcN(vcBalance(k).now) : ''}${away ? ` · <em>${escapeHtml(away.code)} ${escapeHtml(roDayLbl(away.from))}${away.to !== away.from ? '–' + escapeHtml(roDayLbl(away.to)) : ''}</em>` : ''}</span></button>`; }).join('') || '<div class="ro-empty">Nobody yet.</div>'}</div>`).join('')}`;
 }
 function rtSet(k, f, v) { rbSetPerson(k, f, v); }
 function rtSetStaff(k, f, v) { roStaff[k] = Object.assign({}, roStaff[k], { [f]: v }); fbSet(`roster/staff/${k}/${f}`, v); }
@@ -782,6 +782,7 @@ function rtPerson(k) {
     <div class="rt-cant"><span>Works:</span><button class="rb-opt ro-t-night" onclick="rtOnly(${q},'night')">🌙 Nights only</button><button class="rb-opt ro-t-morning" onclick="rtOnly(${q},'day')">☀️ Days only</button><button class="rb-opt" onclick="rtOnly(${q},'all')">All shifts</button></div>
     <div class="rt-cant"><span>Shifts:</span>${shifts.map(x => { const no = (c.allowed && c.allowed.length && !c.allowed.includes(x)), soft = (c.soft || []).includes(x), like = (c.likes || []).includes(x); return `<button class="rb-opt ro-t-${(roInfo(x) || {}).type}${no ? ' on' : soft ? ' soft' : like ? ' like' : ''}" onclick="rtToggleShift(${q},${_rtQ(x)})" title="Tap: 💛 likes → ⚠ prefer not → 🚫 can't work → fine">${no ? '🚫 ' : soft ? '⚠ ' : like ? '💛 ' : ''}${escapeHtml(x)}</button>`; }).join('')}<small class="ro-hint">Tap: 💛 likes → ⚠ prefer not → 🚫 can't</small></div>
     ${rtWishHtml(k)}
+    ${typeof vcPersonHtml === 'function' ? `<div class="rb-sub">Vacation</div>${vcPersonHtml(k)}` : ''}
     <div class="rb-sub">Sick & leave</div>
     <div class="rt-abs">${absences.map(([id, a]) => `<span class="rb-hol">${escapeHtml(a.code)} · ${escapeHtml(roDayLbl(a.from))}${a.to !== a.from ? ' → ' + escapeHtml(roDayLbl(a.to)) : ''}<button class="ro-x" onclick="rtDelAbsence(${q},'${id}')">✕</button></span>`).join('') || '<span class="ro-empty">None.</span>'}</div>
     <div class="rb-inline"><select id="rtAbC">${RT_LEAVE.map(x => `<option>${x}</option>`).join('')}</select><input type="date" id="rtAbF" value="${roToday()}"><input type="date" id="rtAbT" value="${roToday()}"><button class="btn sm gold" onclick="rtAbsentFromSheet(${q})">Add</button></div>
@@ -883,6 +884,7 @@ function rtToggleCant(k, s) {
 function rtAbsentFromSheet(k) {
   const from = document.getElementById('rtAbF').value, to = document.getElementById('rtAbT').value, code = document.getElementById('rtAbC').value;
   if (!from) return;
+  if (typeof vcCheckAdd === 'function' && !vcCheckAdd(k, from, to, code)) return;
   const touched = rtMarkAbsent(k, from, to, code);
   rtPerson(k);
   if (touched.length) rtOfferCover(touched[0]);

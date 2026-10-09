@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 210, items: [
+    '🌴 Vacation balance: everyone earns vacation every day (30 days a year, 2.5 a month; change it in Rules or for one person on their card). AL, ALA and VAC days in the roster and leave added on their card come off it: days up to today are used, later ones are booked.',
+    '👤 Each card shows the vacation days today, used, booked and what is left after. Type the balance from HR once and it counts on from there; without it, it counts from the day they joined.',
+    '🧩 The builder has a 🌴 Vacation balance section with everyone, biggest first. Adding more leave than someone has asks you first, and Ops Brain warns when leave is booked over the balance or a balance gets big. Ask it "vacation balance of Sam".',
+  ] },
   { v: 209, items: [
     '💛 When you post a week, the app tells you which wishes it grants (for example "Lina: a day off on Fri/Sat"). Ops Brain keeps the message for the day.',
     '📜 Team history: everything that happens to the team is now written down as it happens: weeks posted, wishes granted, PH days given, sick and leave, people joining and leaving, swaps, days at another hotel, meetings, public holidays and roster changes.',
