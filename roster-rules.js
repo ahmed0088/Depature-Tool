@@ -135,7 +135,7 @@ function rrRefresh() {
 // ── Your own rules ────────────────────────────────────────
 const RR_BANDN = { night: 'nights', morning: 'mornings', evening: 'evenings', day: 'day shifts' };
 function rrMineText(r) {
-  if (r.t === 'apart') return `${_rrFirst(r.a)} and ${_rrFirst(r.b)} never on the same shift`;
+  if (r.t === 'apart') return `${_rrFirst(r.a)} and ${_rrFirst(r.b)} never on duty together`;
   if (r.t === 'with') return `${_rrFirst(r.a)} always on the same shift as ${_rrFirst(r.b)}`;
   if (r.t === 'titleNo') return `${r.title}s never on ${RR_BANDN[r.shift] || r.shift}`;
   return '';
@@ -165,7 +165,7 @@ function rrMakeHtml() {
   const ks = Object.keys(roStaff).filter(k => !(rbPeople[k] || {}).deleted).sort((a, b) => (roStaff[a].name || '').localeCompare(roStaff[b].name || ''));
   const ppl = `<option value="">someone…</option>${ks.map(k => `<option value="${escapeHtml(k)}">${escapeHtml(roStaff[k].name)}</option>`).join('')}`;
   return `<div class="rr-make">
-    <div class="rr-make-row"><select id="rrA">${ppl}</select><select id="rrT" onchange="document.getElementById('rrB').style.display=this.value==='never'?'none':'';document.getElementById('rrTi').style.display=this.value==='never'?'':'none'"><option value="apart">never on the same shift as</option><option value="with">always on the same shift as</option><option value="never">— or: a title never on —</option></select><select id="rrB">${ppl}</select>
+    <div class="rr-make-row"><select id="rrA">${ppl}</select><select id="rrT" onchange="document.getElementById('rrB').style.display=this.value==='never'?'none':'';document.getElementById('rrTi').style.display=this.value==='never'?'':'none'"><option value="apart">never on duty together with</option><option value="with">always on the same shift as</option><option value="never">— or: a title never on —</option></select><select id="rrB">${ppl}</select>
       <span id="rrTi" style="display:none"><select id="rrTitle">${RB_TITLES.map(t => `<option>${t}</option>`).join('')}</select><select id="rrSh">${Object.keys(RR_BANDN).map(b => `<option value="${b}">${RR_BANDN[b]}</option>`).join('')}</select></span>
       <button class="btn sm gold" onclick="rrMakeAdd()">＋ Add rule</button></div>
     <small class="ro-hint">New rules start as Very important; tap another level any time.</small></div>`;
@@ -250,6 +250,9 @@ function rrSuggestHtml() {
 
 // ── Ops Brain: say a rule in your own words ───────────────
 const RR_SAY = [
+  [/^(?:avoid|keep|separate)\s+(.+?)\s+(?:and|from|with|away from)\s+(.+?)(?:\s+apart)?(?:\s+(?:on the same shift|together|at the same time))?\s*\.?$/i, 'apart'],
+  [/^(.+?)\s+and\s+(.+?)\s+(?:should\s+)?(?:never|not|can'?t|cannot)\s+(?:be\s+|work\s+)?together\s*\.?$/i, 'apart'],
+  [/^(.+?)\s+(?:should\s+)?(?:never|not|can'?t|cannot|shouldn'?t|mustn'?t)\s+(?:work|be)\s+(?:on duty\s+)?with\s+(.+?)\s*\.?$/i, 'apart'],
   [/^(.+?)\s+and\s+(.+?)\s+(?:should\s+)?(?:never|not|can'?t|cannot|must not|mustn'?t)\s+(?:be\s+|work\s+)?(?:on\s+|in\s+)?(?:the\s+)?same\s+shift\s*\.?$/i, 'apart'],
   [/^(.+?)\s+(?:always\s+(?:works?\s+)?(?:with|together with|on the same shift as)|(?:works?\s+)?on the same shift as)\s+(.+?)(?:\s+always)?\s*\.?$/i, 'with'],
   [/^(.+?)\s+and\s+(.+?)\s+(?:always\s+)?(?:on|in)\s+(?:the\s+)?same\s+shift(?:\s+always)?\s*\.?$/i, 'with'],

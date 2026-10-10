@@ -60,7 +60,10 @@ function rbMineBroken(I, cells, dates, R, g) {
       const A = byKey[r.a], B = byKey[r.b]; if (!A || !B || !P.includes(A)) return;
       dates.forEach(dt => {
         const a = at(A, (cells[A.key] || {})[dt]), b = at(B, (cells[B.key] || {})[dt]);
-        if (r.t === 'apart' ? a && a === b : a && b && a !== b) out.push({ r, keys: [A.key, B.key], date: dt });
+        // apart: not on duty together at the same hotel — the same shift, or shifts that overlap 2 h or more
+        const together = () => { if (!a || !b) return false; if (a === b) return true; if (a.split('|')[0] !== b.split('|')[0]) return false;
+          const x = rbParse((cells[A.key] || {})[dt]), y = rbParse((cells[B.key] || {})[dt]); return Math.min(x.e, y.e) - Math.max(x.s, y.s) >= 120; };
+        if (r.t === 'apart' ? together() : a && b && a !== b) out.push({ r, keys: [A.key, B.key], date: dt });
       });
     } else if (r.t === 'titleNo') {
       P.filter(p => (p.title || '') === r.title).forEach(p => dates.forEach(dt => { if (rbMineShiftHit(r, (cells[p.key] || {})[dt])) out.push({ r, keys: [p.key], date: dt }); }));

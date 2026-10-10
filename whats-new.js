@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 218, items: [
+    '↔️ Keep two people apart: "never on duty together" now also counts shifts that overlap 2 hours or more at the same hotel (09–18 and 12–21), not only the exact same shift. A handover (00–09 then 09–18) is fine. Tell Ops Brain "avoid Souptik with Ali", "Sam and Lina never together" or "Sam can\'t work with Lina", or add it in ⚖️ Rules → Your own rules.',
+  ] },
   { v: 217, items: [
     '📌 The builder carries on from the posted roster: the one management gave (5 Oct) and then each week you post. It now says so at the top ("Builds on the posted roster: 5 Oct – 11 Oct"). A draft counts only once it is posted; if last week isn\'t posted yet, it warns you and offers to go there first.',
   ] },
