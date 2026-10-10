@@ -266,7 +266,8 @@ function rbSolve(I) {
     if (shorts(alt) < shorts(res)) res = alt;
   }
   if (!I._plain && !I._strict) {
-    res.notes = (res.notes || []).filter(n => !n.care);
+    res.notes = (res.notes || []).filter(n => !n.care && !n.like);
+    (I.likeBefore || []).forEach(t => { const nm = typeof roStaff !== 'undefined' && roStaff[t.key] ? roStaff[t.key].name.split(' ')[0] : t.key; res.notes.push({ key: t.key, date: I.week, like: true, text: `📋 ${nm} is away ${t.days.map(d => RB_DAYS[d]).join(', ')}: ${t.hotel} runs like the week of ${roDayLbl(t.week)}, when ${nm} was away too: the same cover, the same people on the same shifts and days off where it fits${Object.keys((I.lendPref || {})[t.hotel] || {}).length ? ', and the same colleagues borrowed first' : ''}.` }); });
   I.people.filter(p => p.care && rbCareW(I, p) > 0).forEach(p => { const nm = typeof roStaff !== 'undefined' && roStaff[p.key] ? roStaff[p.key].name.split(' ')[0] : p.key; res.notes.push({ key: p.key, date: I.week, care: true, text: `💚 Extra care for ${nm} this week (Team Health ${p.careScore}${p.careWhy ? ': ' + p.careWhy : ''}): fewer nights, their wishes first, days off together, one steady shift.` }); });
   }
   return res;
@@ -286,7 +287,11 @@ function rbPlanNights(I) {
     const ns = G.shifts.find(sh => { const x = rbParse(sh); return x && x.type === 'night' && x.s < 120 && ((G.who || {})[sh] || []).length; });
     if (!ns) return;
     const regs = I.people.filter(p => p.group === g && (p.fixed === ns || p.usual === ns) && rbMayWork(I, g, p, ns) && !p.post);
-    if (regs.length !== 1 || dates.some((_, d) => ((G.need[ns] || [])[d] || 0) !== 1)) return;   // one regular night person, one a night: the usual case
+    if (!regs.length || dates.some((_, d) => ((G.need[ns] || [])[d] || 0) !== 1)) return;   // one night person a night: the usual case
+    // two people who both do nights there (like Hassan and Turab): the one with the most nights is the regular,
+    // the other covers his days off, as management did
+    const nightsOf = p => { let n = 0; for (let i = 1; i <= 14; i++) if (rbNorm((roDays[roAdd(I.week, -i)] || {})[p.key]) === ns) n++; return n + (p.fixed === ns ? 20 : 0); };
+    regs.sort((a, b) => nightsOf(b) - nightsOf(a));
     hotels.push({ g, ns, reg: regs[0] });
   });
   if (!hotels.length) return null;
@@ -310,7 +315,11 @@ function rbPlanNights(I) {
     if (!gaps.length) return;
     const byDay = {}; gaps.forEach(x => { (byDay[x.d] = byDay[x.d] || []).push(x); });
     // blocks for floaters: the first k days or the last k days of the week
-    const blocks = f => { const out = [{ days: [] }]; for (let k = 1; k <= 6; k++) { out.push({ days: Array.from({ length: k }, (_, j) => j), off: k, start: true }); out.push({ days: Array.from({ length: k }, (_, j) => 7 - k + j), off: 6 - k }); } return out.filter(b => b.days.every(d => !has(f.key, d)) && (b.off == null || b.off > 6 || b.off < 0 || !has(f.key, b.off)) && (!b.start || !rbParse(f.lastShift) || (rbIsNight(rbNorm(f.lastShift)) || rbParse(f.lastShift).e <= 1440 - 11 * 60 + 0))); };
+    const blocks = f => { const out = [{ days: [] }]; for (let k = 1; k <= 6; k++) { out.push({ days: Array.from({ length: k }, (_, j) => j), off: k, start: true }); out.push({ days: Array.from({ length: k }, (_, j) => 7 - k + j), off: 6 - k }); }
+      // also one or two nights in the middle of the week, with the day off right after (as management did: Hnin's Friday night),
+      // only on nights that need cover, so their own hotel can do it instead of borrowing someone
+      for (let st = 1; st <= 5; st++) for (let k = 1; k <= 2 && st + k <= 6; k++) { const days = Array.from({ length: k }, (_, j) => st + j); if (days.every(d => byDay[d])) out.push({ days, off: st + k, start: true, mid: true }); }
+      return out.filter(b => b.days.every(d => !has(f.key, d)) && (b.off == null || b.off > 6 || b.off < 0 || !has(f.key, b.off)) && (!b.start || b.mid || !rbParse(f.lastShift) || (rbIsNight(rbNorm(f.lastShift)) || rbParse(f.lastShift).e <= 1440 - 11 * 60 + 0))); };
     const fl = floaters.slice(0, 4), opts = fl.map(blocks);
     const walk = (fi, used, plan, cost) => {
       if (fi === fl.length) {
@@ -408,6 +417,8 @@ function rbRepair(I, res, o) {
   const cover = rbCover(I, cells);
   return { cells, cover, problems: rbProblems(I, cells, cover), notes };
 }
+/** Borrowed to this hotel, this weekday, for this shift, the last time the same person was away (📋). */
+function rbLentBefore(I, q, g, d, s) { const L = ((I.lendPref || {})[rbBaseGroup(g)] || {})[d]; return !!(L && L.some(x => x.key === q.key && (!s || x.shift === rbNorm(s)))); }
 /** How much a fix upsets the week: each day changed, each day at another hotel (a lot), each shift left with one person. */
 function rbUpset(I, a, b) {
   const dates = Array.from({ length: 7 }, (_, d) => roAdd(I.week, d));
@@ -415,7 +426,7 @@ function rbUpset(I, a, b) {
   let c = 0;
   I.people.forEach(p => dates.forEach(dt => {
     const u = (a[p.key] || {})[dt], v = (b[p.key] || {})[dt]; if (u === v) return;
-    c += 10; if (away(p, v) && !away(p, u)) c += 200 * Math.max(0.2, rbW(I.rules, 'home'));
+    c += 10; if (away(p, v) && !away(p, u)) c += (rbLentBefore(I, p, rbAt(I, p, rbParse(v)), dates.indexOf(dt), v) ? 60 : 200) * Math.max(0.2, rbW(I.rules, 'home'));   // borrowed like management did: much lighter
   }));
   const thin = x => rbProblems(I, x).filter(q => q.kind === 'thin').length;
   const hotels = x => rbMoveHotels(I, x).size;   // never all three hotels in one week if it can be helped
@@ -491,7 +502,7 @@ function _rbFinish(I, cells, o) {
         // desk for a break); not for the ideal second person when another shift keeps them company for a few hours
         if (cover[g][s][d] >= 1 && R.allowOne !== false && !R.lendIdeal && (G[g].post || rbRelieved(rbDeskGrid(G[g].shifts, (e, x) => (cover[g][x] || [])[e] || 0), d, s, R))) break;
         const dt = dates[d];
-        const cand = I.people.filter(q => q.group !== g && !q.home && !q.lock && (R.lend || rbFloats(q) || rbFloatsLast(q)) && !((I.pre || {})[q.key] || {})[dt] && G[q.group] && cells[q.key][dt] === s && cover[q.group][s] && cover[q.group][s][d] > need(q.group, s, d) && rbMayWork(I, g, q, s)).sort((a, b) => (rbFloatsLast(a) ? 1 : 0) - (rbFloatsLast(b) ? 1 : 0) || (rbFloats(b) ? 1 : 0) - (rbFloats(a) ? 1 : 0) || (b.alt === rbBaseGroup(g) ? 1 : 0) - (a.alt === rbBaseGroup(g) ? 1 : 0));   // (then whoever would rather come to this hotel)
+        const cand = I.people.filter(q => q.group !== g && !q.home && !q.lock && (R.lend || rbFloats(q) || rbFloatsLast(q)) && !((I.pre || {})[q.key] || {})[dt] && G[q.group] && cells[q.key][dt] === s && cover[q.group][s] && cover[q.group][s][d] > need(q.group, s, d) && rbMayWork(I, g, q, s)).sort((a, b) => (rbLentBefore(I, b, g, d, s) ? 1 : 0) - (rbLentBefore(I, a, g, d, s) ? 1 : 0) || (rbFloatsLast(a) ? 1 : 0) - (rbFloatsLast(b) ? 1 : 0) || (rbFloats(b) ? 1 : 0) - (rbFloats(a) ? 1 : 0) || (b.alt === rbBaseGroup(g) ? 1 : 0) - (a.alt === rbBaseGroup(g) ? 1 : 0));   // (then whoever would rather come to this hotel)
         const used = rbMoveHotels(I, cells), inPair = q => used.size === 0 || (used.has(rbBaseGroup(g)) && used.has(rbBaseGroup(q.group)) ) || (used.size < 2 && (used.has(rbBaseGroup(g)) || used.has(rbBaseGroup(q.group))));
         const donor = cand.find(inPair) || cand[0];   // one pair of hotels a week; a third hotel only when there's no other way
         if (!donor) break;
@@ -1105,7 +1116,43 @@ function rbInput(seed) {
   const I = { week: rbWeek, groups, people, pre, avoid, soft, busy, evMiss, evNear, rules: rbRules(), seed: seed || 1 };
   rbFairHistory(I);
   rbCare(I);
+  rbLikeBefore(I);
   return I;
+}
+/** 📋 Someone away this week (vacation, sick): the last posted week they were away too shows how management ran
+ *  their hotel without them. On the same weekdays the builder copies it: the cover that week (not the usual
+ *  average), the same people on the same shifts and days off where it can, the same colleagues borrowed first. */
+function rbLikeBefore(I) {
+  const dates = Array.from({ length: 7 }, (_, d) => roAdd(I.week, d)), away = v => rbKind(v || '') === 'leave';
+  const found = [];
+  I.people.forEach(p => {
+    const days = [0, 1, 2, 3, 4, 5, 6].filter(d => away(((I.pre || {})[p.key] || {})[dates[d]]));
+    if (!days.length || p.post) return;
+    for (let i = 1, w = roAdd(I.week, -7); i <= 12; i++, w = roAdd(w, -7)) {
+      const both = days.filter(d => away((roDays[roAdd(w, d)] || {})[p.key]));
+      if (both.length) { found.push({ key: p.key, hotel: rbBaseGroup(p.group), group: p.group, week: w, days: both }); break; }
+    }
+  });
+  if (!found.length) return;
+  I.keep = Object.assign({}, I.keep); I.lendPref = I.lendPref || {}; I.likeBefore = found;
+  const done = new Set();
+  found.forEach(t => t.days.forEach(d => {
+    if (done.has(t.hotel + '|' + d)) return; done.add(t.hotel + '|' + d);
+    const day = roDays[roAdd(t.week, d)] || {}, dt = dates[d], cnt = {};
+    Object.entries(day).forEach(([k, v]) => {
+      const q = I.people.find(x => x.key === k); if (!q || q.post) return;
+      const x = rbParse(v), mine = rbBaseGroup(q.group) === t.hotel, free = !((I.pre || {})[k] || {})[dt];
+      if (!x) { if (mine && free && rbKind(v) === 'off') (I.keep[k] = Object.assign({}, I.keep[k]))[dt] = 'OFF'; return; }   // the same days off
+      if (rbBaseGroup(rbAt(I, q, x)) !== t.hotel) return;
+      const s = rbNorm(v); cnt[s] = (cnt[s] || 0) + 1;
+      if (mine && !x.note) { if (free) (I.keep[k] = Object.assign({}, I.keep[k]))[dt] = s; }   // the same person on the same shift
+      else if (!mine) (((I.lendPref[t.hotel] = I.lendPref[t.hotel] || {})[d] = I.lendPref[t.hotel][d] || [])).push({ key: k, shift: s });   // borrowed then: asked first
+    });
+    // that day's cover: never more than management ran with them away
+    const G = I.groups[t.group]; if (!G) return;
+    G.need = JSON.parse(JSON.stringify(G.need));
+    G.shifts.forEach(s => { const n = (G.need[s] || [])[d] || 0, had = cnt[s] || 0; if (had < n) G.need[s][d] = had; });
+  }));
 }
 /** 💚 Someone close to breaking (Team Health under 70, or under 50): this week is gentler on them —
  *  fewer nights, their wishes first, days off together, one steady shift. care: 1 = watch, 2 = needs care. */

@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 222, items: [
+    '📋 Someone away? The builder copies how management ran it the last time they were away: with Sandrine on leave, Adagio runs like the week of 5 Oct — the same cover on those days (not an average guess), the same people on the same shifts and days off, and the same colleagues borrowed first. It says so in the draft.',
+    '🌙 Night cover inside the hotel: when two people do nights at a hotel (like Hassan and Turab), the one with fewer nights covers the other\'s night off, as management did, instead of leaving it to a last resort. A single night in the middle of the week (with the day off after) is possible too, so nobody has to come from another hotel for one night.',
+  ] },
   { v: 221, items: [
     '🌴 Leave never overwrites the posted roster: a day already OFF or on leave (like Sandrine\'s ALA from management) stays as it is; only working days become AL / SL.',
     '🩹 After marking sick or leave, Ops Brain offers cover only for gaps that this caused. A shift that was already short is mentioned apart ("already short before this, not because of …"), and days in a week not built yet are saved for the builder.',
