@@ -536,6 +536,8 @@ function _rbFinish(I, cells, o) {
       while (cover[g][s][d] < need(g, s, d)) {
         // moving someone to another hotel: for an empty shift, or for someone truly alone (nobody with them on the
         // desk for a break); not for the ideal second person when another shift keeps them company for a few hours
+        // nobody on it, but the desk is covered those hours by the other shifts: fine, nobody is borrowed for it
+        if (cover[g][s][d] === 0 && !G[g].post && R.allowOne !== false && rbHoursCovered(rbDeskGrid(G[g].shifts, (e, x) => (cover[g][x] || [])[e] || 0), d, s)) break;
         if (cover[g][s][d] >= 1 && R.allowOne !== false && !R.lendIdeal && (G[g].post || rbRelieved(rbDeskGrid(G[g].shifts, (e, x) => (cover[g][x] || [])[e] || 0), d, s, R))) break;
         const dt = dates[d];
         const cand = I.people.filter(q => q.group !== g && !q.home && !q.lock && (R.lend || rbFloats(q) || rbFloatsLast(q)) && !((I.pre || {})[q.key] || {})[dt] && G[q.group] && cells[q.key][dt] === s && cover[q.group][s] && cover[q.group][s][d] > need(q.group, s, d) && rbMayWork(I, g, q, s)).sort((a, b) => (rbLentBefore(I, b, g, d, s) ? 1 : 0) - (rbLentBefore(I, a, g, d, s) ? 1 : 0) || (rbFloatsLast(a) ? 1 : 0) - (rbFloatsLast(b) ? 1 : 0) || (rbFloats(b) ? 1 : 0) - (rbFloats(a) ? 1 : 0) || (b.alt === rbBaseGroup(g) ? 1 : 0) - (a.alt === rbBaseGroup(g) ? 1 : 0));   // (then whoever would rather come to this hotel)
@@ -1932,7 +1934,8 @@ function rbHealthHtml(I, cells, cover, P, shown, dates) {
   _rbHealth = { week: rbWeek, bad, thin };
   const chip = (cls, big, lbl, tip) => `<div class="rb-h ${cls}" title="${escapeHtml(tip)}"><b>${big}</b><span>${lbl}</span></div>`;
   return `<div class="rb-health">
-    ${chip(short ? 'bad' : 'ok', `${have}<small>/${need}</small>`, short ? 'places filled · tap: why' : 'places filled', short ? short + ' shift' + (short === 1 ? '' : 's') + ' short: tap to see which and why nobody can take it' : 'every shift has its people').replace('<div class="rb-h bad"', short ? `<div class="rb-h bad" role="button" tabindex="0" style="cursor:pointer" onclick="(document.getElementById('rbFix')||{scrollIntoView(){}}).scrollIntoView({behavior:'smooth',block:'start'})"` : '<div class="rb-h bad"')}
+    ${(() => { let empty = 0; shown.forEach(g => { const G = I.groups[g]; if (!G || G.post) return; const grid = rbDeskGrid(G.shifts, (e, x) => ((cover[g] || {})[x] || [])[e] || 0); grid.forEach(row => row.forEach(c => { if (!c) empty++; })); });
+      return `<div class="rb-h ${empty ? 'bad' : 'ok'}"${empty ? ` role="button" tabindex="0" style="cursor:pointer" onclick="(document.getElementById('rbFix')||{scrollIntoView(){}}).scrollIntoView({behavior:'smooth',block:'start'})"` : ''} title="${empty ? empty + ' hours this week with nobody at a front desk: tap to see which and why' : 'every hour of the week has someone at the front desk'}"><b>${empty ? empty + '<small> h</small>' : '✓'}</b><span>${empty ? 'desk empty · tap: why' : 'desk never empty'}</span></div>`; })()}
     ${chip(bad - short ? 'bad' : 'ok', bad - short ? bad - short : '✓', bad - short ? 'rule breaks' : 'rules kept', 'rest, days off, days in a row, night ↔ day, who can work nights, 9 h')}
     ${rbDeskChip(I, cells, shown, chip)}
     ${chip(thin ? 'warn' : 'ok', thin, 'one-person', 'shifts where the ideal is two but only one is on')}

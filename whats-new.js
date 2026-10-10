@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 228, items: [
+    '🛎 What counts is that the front office is never empty, not that every shift name is filled. The draft\'s first tile now says "desk never empty" ✓ (or how many hours a desk would have nobody, tap for why), and nobody is borrowed from another hotel for a shift whose hours the other shifts already cover.',
+  ] },
   { v: 227, items: [
     '🧠 Thinks like your managers: moving someone LATER is fine (08:00 → 12:00 → 15:00 → 19:00, even onto a night the next day, as long as the rest is kept), and it costs little to change hours that way. EARLIER stays hard: night → morning, or a start more than an hour earlier, always needs a day off.',
     '📋 Learned from your posted rosters: what your managers do when there is no other way (an evening into a night, borrowing from another hotel, a little less rest, an earlier start). The builder keeps every rule when it can; when it can\'t, it tries these first, the most used first. See them in ⚖️ Rules → "What your managers do".',
