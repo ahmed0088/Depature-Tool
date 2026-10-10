@@ -139,8 +139,9 @@ function rbChangeCost(prev, next, acrossWeeks) {
   const a = rbParse(prev), b = rbParse(next);
   if (!a || !b) return 0;
   if (rbNorm(prev) === rbNorm(next)) return -20;
-  const back = b.s < a.s ? 20 : 0;   // an earlier start the next day is the hardest to adjust to
-  return acrossWeeks ? 8 + back / 2 : 90 + back;   // a new week may start on new hours; mid-run it hurts: people are not machines
+  // later the next day (08:00 → 12:00 → 15:00 → 19:00) is easy to follow; an earlier start is the hardest to adjust to
+  const later = (b.s >= a.s) || (rbIsNight(next) && !rbIsNight(prev));
+  return acrossWeeks ? (later ? 6 : 18) : later ? 40 : 110;   // a new week may start on new hours; mid-run: people are not machines
 }
 /** Night shifts (00:00–09:00, 19:00–04:00) and day shifts don't follow each other: a day off comes between. */
 function rbIsNight(code) { const p = rbParse(code); return !!p && p.type === 'night'; }
@@ -148,10 +149,12 @@ function rbSwitchOk(prev, next, R) {
   if (R && R.nightSwitch === false) return true;
   if (!rbParse(prev) || !rbParse(next)) return true;
   if (rbIsNight(prev) === rbIsNight(next)) return rbBackOk(prev, next, R);
-  // a day shift (08:00 - 17:00, 12:00 - 21:00…) and a night always need a day off between: never bent.
-  // Only an evening (15:00 - 00:00) next to a night may go without one, as a last resort, as past rosters did.
+  // later is fine: from a day or evening shift on to a night the next day (12:00 → 15:00 → 19:00), as long as the rest
+  // is kept (checked on its own). Earlier is hard: from a night back to a day shift always needs a day off between;
+  // only a night then an evening (15:00 - 00:00) may go without one, as a last resort, as past rosters did.
+  if (!rbIsNight(prev) && rbIsNight(next)) return true;
   const day = c => !rbIsNight(c) && rbParse(c).s < 13 * 60;
-  if (day(prev) || day(next)) return false;
+  if (day(next)) return false;
   return !!(R && R.eveNight);
 }
 /** A day shift that starts earlier than the day before (12:00 - 21:00 then 09:00 - 18:00) is hard on anyone:
@@ -1152,7 +1155,36 @@ function rbInput(seed) {
   rbFairHistory(I);
   rbCare(I);
   rbLikeBefore(I);
+  I.habits = rbMgmtHabits(I.week);
   return I;
+}
+/** 📋 What management does when there is no other way, read from the posted rosters (last 8 weeks): the rules
+ *  they bend and how often. When nothing keeps every rule, the builder tries these first, the most used first. */
+let _rbHabC = null;
+function rbMgmtHabits(week) {
+  const stamp = _rbLearnStamp() + '|' + week; if (_rbHabC && _rbHabC.stamp === stamp) return _rbHabC.h;
+  const h = { eveNight: [], back: [], rest: [], b2b: [], lend: [], weeks: 0 };
+  const groups = typeof roGroups === 'function' ? roGroups() : [];
+  rbHistory(week, 8).filter(w => w < week).forEach(w => {
+    h.weeks++;
+    const dates = Array.from({ length: 7 }, (_, d) => roAdd(w, d));
+    Object.keys(roStaff || {}).forEach(k => {
+      const nm = ((roStaff[k] || {}).name || k).split(' ')[0];
+      dates.forEach((dt, d) => {
+        const v = (roDays[dt] || {})[k], x = rbParse(v); if (!x) return;
+        if (x.note) { const home = rbBaseGroup((roStaff[k] || {}).group || ''), at = groups.find(g => g.toLowerCase().startsWith(String(x.note).toLowerCase())) || x.note; if (rbBaseGroup(at) !== home) h.lend.push({ who: nm, date: dt, shift: rbNorm(v), at }); }
+        if (!d) return;
+        const pv = (roDays[dates[d - 1]] || {})[k]; if (!rbParse(pv)) return;
+        const rest = rbRest(pv, v), e = { who: nm, date: dt, from: rbNorm(pv), to: rbNorm(v) };
+        if (rest <= 0) h.b2b.push(e);
+        else if (rest < 11) h.rest.push(Object.assign({ hours: Math.round(rest) }, e));
+        else if (rbIsNight(pv) !== rbIsNight(v)) { const day = c => !rbIsNight(c) && rbParse(c).s < 13 * 60; if (!day(pv) && !day(v)) h.eveNight.push(e); }
+        else if (!rbIsNight(pv) && x.s < rbParse(pv).s - 60) h.back.push(e);
+      });
+    });
+  });
+  _rbHabC = { stamp, h };
+  return h;
 }
 /** 🛋 Never more days off than due (one a week, unless set on their card): an extra day off the builder made
  *  becomes a working day on a shift that fits (enough rest, no night ↔ day, not too many days in a row), or a PH day
@@ -1678,7 +1710,13 @@ function rbDecisionsHtml(I, cells, shown, dates) {
   const named = p => notes.some(n => new RegExp('\\b' + ((roStaff[p.key] || {}).name || '').split(' ')[0] + '\\b').test(n.text || ''));
   const why = p => named(p) ? 'part of the decision above' : rbFloats(p) ? 'Duty Manager: works wherever needed' : rbFloatsLast(p) ? 'Supervisor from another hotel: only because nobody else could' : I.rules.lend === false ? '' : 'spare at their own hotel that day';
   return `<div class="rb-decide"><div class="rb-sub">📝 Decisions this week <small>so you know what was done, and why</small></div>
-    ${notes.map((n, i) => `<div class="rb-dec warn"><span>⚠ ${escapeHtml(n.text)}${n.by ? ` <i>· ${escapeHtml(n.by)}</i>` : ''}</span><button class="ro-x" title="Remove this note" onclick="rbDelNote(${i})">✕</button></div>`).join('')}
+    ${notes.map((n, i) => n.card ? `<div class="rb-dec warn rb-bent"><div><b class="rb-bent-hd">⚠ Rule bent · ${escapeHtml(n.card.day)}</b>
+        <div><b>${escapeHtml(n.card.who)}</b> takes ${escapeHtml(n.card.what)}.</div>
+        ${(n.card.rules || []).map(r => `<div><span class="rb-bent-k">Rule:</span> ${escapeHtml(r.rule)} · ${escapeHtml(r.detail)}</div>`).join('')}
+        <div><span class="rb-bent-k">Why:</span> ${escapeHtml(n.card.why)}.</div>
+        ${n.card.also ? `<div><span class="rb-bent-k">Also:</span> ${escapeHtml(n.card.also)}</div>` : ''}${n.by ? `<div><i>· ${escapeHtml(n.by)}</i></div>` : ''}</div>
+        <button class="ro-x" title="Remove this note" onclick="rbDelNote(${i})">✕</button></div>`
+      : `<div class="rb-dec warn"><span>⚠ ${escapeHtml(n.text)}${n.by ? ` <i>· ${escapeHtml(n.by)}</i>` : ''}</span><button class="ro-x" title="Remove this note" onclick="rbDelNote(${i})">✕</button></div>`).join('')}
     ${soft.map(m => `<div class="rb-dec"><span>🙏 <b>${fn(m.p.key)}</b> works ${escapeHtml(m.sh)} on ${escapeHtml(roDayLbl(m.dt))}, a shift they prefer not to: needed to cover it</span></div>`).join('')}
     ${n2m.map(m => `<div class="rb-dec"><span>😴 <b>${fn(m.p.key)}</b> goes from a night to a morning on ${escapeHtml(roDayLbl(m.dt))} with only one day off between (their day off goes on sleep): no other way to cover it</span></div>`).join('')}
     ${moved.map(m => `<div class="rb-dec"><span>🏨 <b>${fn(m.p.key)}</b> (${escapeHtml(m.home)}) works ${escapeHtml(m.sh)} at <b>${escapeHtml(m.at)}</b> on ${escapeHtml(roDayLbl(m.dt))}${why(m.p) ? ': ' + escapeHtml(why(m.p)) : ''}</span></div>`).join('')}

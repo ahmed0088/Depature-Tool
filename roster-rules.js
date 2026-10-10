@@ -121,6 +121,7 @@ function rrHtml() {
       <div class="rr-list">${g.list.map(([id, ico, t, what]) => rrRuleRow(ico, t, rrExample(id) || what, rrLevelCtl(id, lv[id]), 'lv' + g.L)).join('')}</div>`).join('')}
     <details class="rr-hard"><summary>🔒 Always: ${hard.length} rules that are the base of every roster <small>tap to see</small></summary>
       <div class="rr-list">${hard.map(([ico, t, id, on, set]) => rrRuleRow(ico, t, rrExample(id), always(on, set), 'hard' + (set && !on ? ' off' : ''))).join('')}</div></details>
+    ${rrHabitsHtml()}
     <div class="rr-sec">✍️ Your own rules</div>
     <div class="rr-list">${mine.map((r, i) => rrRuleRow(r.t === 'apart' ? '↔️' : r.t === 'with' ? '🤝' : '🚫', escapeHtml(rrMineText(r)), rrMineLeft(r), `<div class="rr-mine-ctl">${rrMineLvCtl(i, r.level == null ? 2 : +r.level)}<button class="ro-x" title="Remove" onclick="rrDelMine(${i})">✕</button></div>`, 'mine')).join('') || '<div class="ro-empty">None yet. Make one below, or tell Ops Brain: "Sam and Lina never on the same shift".</div>'}</div>
     ${rrMakeHtml()}
@@ -130,6 +131,25 @@ function rrHtml() {
 function rrRefresh() {
   const el = document.getElementById('rrBox'); if (!el) return;
   const y = window.scrollY; el.outerHTML = rrHtml(); window.scrollTo(0, y);
+}
+
+/** 📋 What your managers do when there is no other way (from the posted rosters): the builder tries these first. */
+function rrHabitsHtml() {
+  if (typeof rbMgmtHabits !== 'function' || !rbWeek) return '';
+  const H = rbMgmtHabits(rbWeek); if (!H.weeks) return '';
+  const ex = (L, f) => L.slice(0, 2).map(f).join('; ');
+  const day = d => roDayLbl(d);
+  const rows = [
+    [H.eveNight, '🌙', 'An evening straight into a night', x => `${x.who} ${x.from.slice(0, 5)} → ${x.to.slice(0, 5)} (${day(x.date)})`],
+    [H.lend, '🏨', 'Borrowing someone from another hotel', x => `${x.who} ${x.shift.slice(0, 5)} at ${x.at} (${day(x.date)})`],
+    [H.rest, '😴', 'Less rest between shifts', x => `${x.who} ${x.hours} h (${day(x.date)})`],
+    [H.back, '🌅', 'An earlier start the next day', x => `${x.who} ${x.from.slice(0, 5)} → ${x.to.slice(0, 5)} (${day(x.date)})`],
+    [H.b2b, '⏱', 'Back to back (very rare)', x => `${x.who} ${x.from.slice(0, 5)} → ${x.to.slice(0, 5)} (${day(x.date)})`],
+  ].filter(r => r[0].length).sort((a, b) => b[0].length - a[0].length);
+  if (!rows.length) return '';
+  return `<details class="rr-hard"><summary>📋 What your managers do when there's no other way <small>learned from ${H.weeks} posted week${H.weeks === 1 ? '' : 's'} · tried first, most used first</small></summary>
+    <div class="rr-list">${rows.map(([L, ico, t, f]) => rrRuleRow(ico, `${t} · ${L.length}×`, 'e.g. ' + ex(L, f), '', 'hard')).join('')}</div>
+    <small class="ro-hint" style="display:block;padding:0 10px 10px">The builder keeps every rule when it can. When it can't, it bends one of these and says so under 📝 Decisions: who, which rule and why.</small></details>`;
 }
 
 // ── Your own rules ────────────────────────────────────────

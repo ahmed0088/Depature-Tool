@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 227, items: [
+    '🧠 Thinks like your managers: moving someone LATER is fine (08:00 → 12:00 → 15:00 → 19:00, even onto a night the next day, as long as the rest is kept), and it costs little to change hours that way. EARLIER stays hard: night → morning, or a start more than an hour earlier, always needs a day off.',
+    '📋 Learned from your posted rosters: what your managers do when there is no other way (an evening into a night, borrowing from another hotel, a little less rest, an earlier start). The builder keeps every rule when it can; when it can\'t, it tries these first, the most used first. See them in ⚖️ Rules → "What your managers do".',
+    '⚠ Every rule bent is explained simply in 📝 Decisions: who takes which shift, which rule (e.g. "Rest between shifts · only 7 h instead of 11 h, finishes 17:00, starts 00:00"), why, and what else changes.',
+  ] },
   { v: 226, items: [
     '🎨 Five new bright, white themes: 📄 Paper (clean white and teal), 🌤 Sky (white and blue), 🌿 Mint (fresh green), 🌸 Sakura (soft pink) and 🏜 Desert (warm sand and gold). Pick one from the theme button in the top bar (or the theme row in the phone menu); like every theme it is your own, on all your devices.',
   ] },

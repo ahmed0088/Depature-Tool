@@ -1736,3 +1736,6 @@ details > summary + * { animation: hoRise .3s ease both; }
 .bu-opt:hover { border-color: var(--accent-border); }
 .bu-form { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
 .bu-sel { height: 36px; max-width: 100%; border-radius: 9px; border: 1px solid var(--border2); background: var(--bg2); color: var(--text); font: 500 13px var(--font); padding: 0 8px; }
+.rb-bent > div { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; line-height: 1.45; }
+.rb-bent-hd { font-size: 12.5px; color: var(--amber); }
+.rb-bent-k { font-weight: 700; color: var(--text); }

@@ -340,7 +340,7 @@ console.log('\nRoster scenarios');
   // 8. a day off between night and day shifts
   {
     check('night (00:00 - 09:00) then 08:00 the next day is not allowed', sb.rbSwitchOk(N, M, {}), false);
-    check('day then 19:00 - 04:00 the next day is not allowed', sb.rbSwitchOk(M, '19:00 - 04:00', {}), false);
+    check('day then 19:00 - 04:00 the next day is fine (later is easy to follow)', sb.rbSwitchOk(M, '19:00 - 04:00', {}), true);
     check('night then night is fine', sb.rbSwitchOk(N, N, {}), true);
     const r = solve({ 'Ibis DD': { shifts: [N, M, E], need: { [N]: day(1), [M]: day(1), [E]: day(1) } } }, ['A', 'B', 'C', 'D', 'F'].map(k => P(k, { lastShift: k === 'A' ? N : '' })));
     let bad = 0; Object.keys(r.cells).forEach(k => { let prev = k === 'A' ? N : ''; dates.forEach(d => { const v = r.cells[k][d] || ''; if (sb.rbParse(prev) && sb.rbParse(v) && sb.rbIsNight(prev) !== sb.rbIsNight(v)) bad++; prev = v; }); });
@@ -378,7 +378,7 @@ console.log('\nRoster scenarios');
     cells.T[dates[1]] = 'SL';
     const I = { week: W, groups: G, people: ppl, pre: { T: { [dates[1]]: 'SL' } }, rules: { minRest: 11, maxHours: 9, allowOne: true, nightSwitch: true, lend: true } };
     const o = sb.rtCoverOptions(I, cells, 'Ibis DD', dates[1], N);
-    check('reception never empty: day → night without a day off only as the very last bend, flagged', o.filter(x => x.cells).every(x => x.bend && /without a day off/.test(x.why || '')) && o.some(x => x.cells), true);
+    check('reception never empty: when only a bend is left (short rest), it is offered and flagged', o.some(x => x.cells && x.bend && x.key === 'S' && /rest/.test(x.why || '')), true);
     { // no Supervisor free for the night: a Team Leader is asked before an agent
       const pl = [P('S', { title: 'Supervisor' }), P('T', { title: 'Supervisor' }), P('L', { title: 'Team Leader' }), P('A')], c = { S: {}, T: {}, L: {}, A: {} };
       dates.forEach((dt, d) => { c.S[dt] = d === 1 ? 'OFF' : M; c.T[dt] = d === 6 ? 'OFF' : N; c.L[dt] = d <= 2 ? 'OFF' : M; c.A[dt] = d <= 2 ? 'OFF' : M; });
@@ -389,9 +389,9 @@ console.log('\nRoster scenarios');
     }
     const ob = sb.rtCoverOptions(Object.assign({}, I, { groups: { 'Ibis DD · Bell': Object.assign({ post: 'Bell' }, G['Ibis DD']) } }), cells, 'Ibis DD · Bell', dates[1], N);
     check('a bell team may stay short: no rule is bent for it', ob.some(x => x.cells && x.bend), false);
-    check('never: day ↔ night always needs a day off; an evening next to a night only as a last resort', [
-      sb.rbSwitchOk('12:00 - 21:00', '19:00 - 04:00', { eveNight: true }), sb.rbSwitchOk('08:00 - 17:00', '00:00 - 09:00', { eveNight: true }), sb.rbSwitchOk('00:00 - 09:00', '08:00 - 17:00', { eveNight: true }),
-      sb.rbSwitchOk('15:00 - 00:00', '19:00 - 04:00', {}), sb.rbSwitchOk('15:00 - 00:00', '19:00 - 04:00', { eveNight: true })].join(), 'false,false,false,false,true');
+    check('later is fine, earlier is not: day or evening → night next day is fine (rest still checked); night → day needs a day off', [
+      sb.rbSwitchOk('12:00 - 21:00', '19:00 - 04:00', {}), sb.rbSwitchOk('15:00 - 00:00', '19:00 - 04:00', {}), sb.rbSwitchOk('00:00 - 09:00', '08:00 - 17:00', { eveNight: true }),
+      sb.rbSwitchOk('19:00 - 04:00', '12:00 - 21:00', {}), sb.rbRest('08:00 - 17:00', '00:00 - 09:00') < 11].join(), 'true,true,false,false,true');
     // an evening person can cover a night as a last resort, flagged, with the reason
     {
       const E2 = '15:00 - 00:00', L = '19:00 - 04:00';
@@ -401,7 +401,7 @@ console.log('\nRoster scenarios');
       c.Z[dates[2]] = 'SL';
       const I2 = { week: W, groups: G2, people: pp, pre: { Z: { [dates[2]]: 'SL' } }, rules: { minRest: 11, maxHours: 9, allowOne: true, nightSwitch: true, lend: true } };
       const o2 = sb.rtCoverOptions(I2, c, 'Ibis DD', dates[2], L), b = o2.find(x => x.bend);
-      check('last resort: an evening person may take the late night, flagged and explained', !!(b && /evening then a night without a day off/.test(b.text) && /nobody could take it with every rule kept/.test(b.why) && b.key !== 'X'), true);
+      check('later is fine: an evening person takes the late night next day, no rule bent', o2.some(x => x.cells && !x.bend && (x.key === 'Y' || x.key === 'Q')), true);
     }
   }
   // 7d. nights across hotels: every night has a Supervisor or above; the regulars' days off line up and one floater does them as a block
