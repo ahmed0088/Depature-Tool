@@ -1607,3 +1607,11 @@ details > summary + * { animation: hoRise .3s ease both; }
 .vc-n { text-align: right; font-size: 12.5px; } .vc-n small { display: block; font-size: 10.5px; color: var(--text3); }
 .vc-row.bad .vc-n small { color: var(--red); }
 @media (max-width: 520px) { .vc-row { grid-template-columns: minmax(0, 1.3fr) minmax(50px, 1fr) 70px; gap: 8px; } .vc-nm small { display: none; } }
+
+/* ── Rules: what comes first ─────────────────────────────── */
+.rr-order { margin: 0 0 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--card2); }
+.rr-order > summary { cursor: pointer; padding: 10px 12px; font: 650 13px var(--font); color: var(--text); list-style: none; }
+.rr-order > summary::-webkit-details-marker { display: none; }
+.rr-order ol { margin: 0; padding: 0 14px 12px 32px; display: flex; flex-direction: column; gap: 7px; }
+.rr-order li { font-size: 12.5px; line-height: 1.45; color: var(--text2); }
+.rr-order li b { color: var(--text); }

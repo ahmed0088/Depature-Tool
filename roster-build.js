@@ -453,7 +453,9 @@ function _rbFinish(I, cells, o) {
   if (o.lend !== false) { // even with lending off, a Duty Manager may go where they're needed
     for (const g of Object.keys(G)) for (let d = 0; d < D; d++) for (const s of G[g].shifts) {
       while (cover[g][s][d] < need(g, s, d)) {
-        if (cover[g][s][d] >= 1 && R.allowOne !== false && !R.lendIdeal) break;   // moving someone to another hotel only for an empty shift, not for the ideal second person
+        // moving someone to another hotel: for an empty shift, or for someone truly alone (nobody with them on the
+        // desk for a break); not for the ideal second person when another shift keeps them company for a few hours
+        if (cover[g][s][d] >= 1 && R.allowOne !== false && !R.lendIdeal && (G[g].post || rbRelieved(rbDeskGrid(G[g].shifts, (e, x) => (cover[g][x] || [])[e] || 0), d, s, R))) break;
         const dt = dates[d];
         const cand = I.people.filter(q => q.group !== g && !q.home && !q.lock && (R.lend || rbFloats(q) || rbFloatsLast(q)) && !((I.pre || {})[q.key] || {})[dt] && G[q.group] && cells[q.key][dt] === s && cover[q.group][s] && cover[q.group][s][d] > need(q.group, s, d) && rbMayWork(I, g, q, s)).sort((a, b) => (rbFloatsLast(a) ? 1 : 0) - (rbFloatsLast(b) ? 1 : 0) || (rbFloats(b) ? 1 : 0) - (rbFloats(a) ? 1 : 0) || (b.alt === rbBaseGroup(g) ? 1 : 0) - (a.alt === rbBaseGroup(g) ? 1 : 0));   // (then whoever would rather come to this hotel)
         const used = rbMoveHotels(I, cells), inPair = q => used.size === 0 || (used.has(rbBaseGroup(g)) && used.has(rbBaseGroup(q.group)) ) || (used.size < 2 && (used.has(rbBaseGroup(g)) || used.has(rbBaseGroup(q.group))));
@@ -1607,6 +1609,14 @@ function rbRulesHtml() {
   const mgrs = Object.keys(roStaff).filter(k => rbMgrP({ title: rbTitle(k) }) && !((rbPeople[k] || {}).deleted)).map(k => (roStaff[k].name || k).split(' ')[0]);
   const hh = h => String(h % 24).padStart(2, '0') + ':00';
   return `<div class="rb-rules">
+    <details class="rr-order"><summary>📋 What comes first: the order the builder follows</summary><ol>
+      <li><b>Reception is never empty.</b> Only to keep it covered, as the very last way, may a rule below bend once (written under Decisions).</li>
+      <li><b>Hard rules:</b> ${R.minRest} h rest between shifts · a day off between night and day · a day off before an earlier start · no shift over ${R.maxHours} h · nights only for Supervisors / Duty Managers · locked shifts, "stays at their hotel" and "never to" kept · at most ${R.maxRun} days in a row · the days off each week.</li>
+      <li><b>Very important:</b> "can't work" requests · meetings and training · a Duty Manager and a Supervisor not on the same shift · a manager on duty every day.</li>
+      <li><b>Important:</b> nobody alone the whole shift (with ${R.overlapMin == null ? 2 : R.overlapMin} h of company it's fine; if not, a colleague may come from a hotel with one spare) · staff stay in their own hotel (one day at a time, never all three) · the same shift all week.</li>
+      <li><b>Nice to have:</b> no night → one day off → morning · "prefer not" shifts · nights asked for · usual shift · days off together · two on the desk at once · PH when there's spare.</li>
+      <li><b>Wishes and fairness:</b> liked shifts and days off (more weight for whoever missed out lately) · nights and weekends off shared fairly over 4 weeks.</li>
+    </ol></details>
     <div class="rr-grid">
     ${card('😴', 'Rest & hours',
       row('Rest between shifts', 'at least', step(R.minRest, 6, 16, "rbSetRule('minRest',+this.value)", 'h'))

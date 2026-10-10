@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 215, items: [
+    '📋 ⚖️ Rules now shows "What comes first": the order the builder follows, from "reception is never empty" and the hard rules down to wishes and fairness.',
+    '👥 Nobody alone the whole shift: if someone would be on their own with nobody on the desk with them for a break, a colleague may come from a hotel that has one spare on the same shift (that hotel is never left short). With 2 hours of company from another shift, one person is still fine and nobody is moved.',
+  ] },
   { v: 214, items: [
     '🌅 No earlier start the next day: 12:00 – 21:00 then 09:00 – 18:00 (or any start more than an hour earlier than the day before) now needs a day off between, like night and day. The builder never plans it; only as the very last way to keep reception covered, written under Decisions. Switch it in ⚖️ Rules → "Day off before an earlier start".',
     '🚫 Never to a hotel: on each person\'s card, tap a hotel they must never be sent to (e.g. not Ibis). The builder, cover suggestions and last resorts all respect it; other hotels stay possible.',

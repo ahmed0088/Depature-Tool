@@ -184,7 +184,19 @@ console.log('\nRoster builder');
     const r3 = sb.rbSolve(Object.assign({}, I2, { rules: Object.assign({}, I2.rules, { lendIdeal: false }) }));
     const moved = Object.values(r3.cells).reduce((t, row) => t + Object.values(row).filter(v => / - Adagio$/.test(v)).length, 0);
     const emptyDays = dates.filter(dt => !sb.rbParse(r3.cells['A ONE'][dt])).length;
-    check('staff stay in their own hotel: moved only on the days a shift would be empty', moved === emptyDays && moved >= 1, true);
+    // someone alone the whole shift (nobody with them for a break) is worse than borrowing a colleague (the lender keeps its own cover)
+    const aloneLeft = r3.problems.filter(p => p.group === 'Adagio GD' && (p.kind === 'thin' || p.kind === 'short')).length;
+    check('alone all shift: a colleague comes from a hotel with one spare; the lender is never left short', [moved >= emptyDays, aloneLeft, r3.problems.filter(p => p.group === 'Mercure DD' && p.kind === 'short').length].join(), 'true,0,0');
+  }
+  { // with company for a few hours (another shift overlaps), nobody is moved for the second person
+    const D9 = '09:00 - 18:00', D12 = '12:00 - 21:00', both = [1, 1, 1, 1, 1, 1, 1], two = [2, 2, 2, 2, 2, 2, 2];
+    const I6 = { week: W, groups: { 'Adagio GD': { shifts: [D9, D12], need: { [D9]: two, [D12]: both } }, 'Mercure DD': { shifts: [D9], need: { [D9]: both } } },
+      people: [person('A1', { group: 'Adagio GD' }), person('A2', { group: 'Adagio GD' }), person('A3', { group: 'Adagio GD' }), person('M1', { group: 'Mercure DD' }), person('M2', { group: 'Mercure DD' }), person('M3', { group: 'Mercure DD' })],
+      pre: {}, rules: { minRest: 11, maxRun: 6, givePh: false, lend: true }, seed: 3 };
+    const r6 = sb.rbSolve(I6);
+    const moved6 = Object.values(r6.cells).reduce((t, row) => t + Object.values(row).filter(v => / - Adagio$/.test(v)).length, 0);
+    const emptyA = r6.problems.filter(p => p.group === 'Adagio GD' && p.kind === 'short').length;
+    check('company for a few hours: one on a shift stays one, nobody moved for the ideal second', [moved6, emptyA].join(), '0,0');
   }
   const lent = Object.values(r2.cells).reduce((t, row) => t + Object.values(row).filter(v => / - Adagio$/.test(v)).length, 0);
   check('Mercure lends staff to Adagio ("12:00 - 21:00 - Adagio")', lent >= 5, true);
