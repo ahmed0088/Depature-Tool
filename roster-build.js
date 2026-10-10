@@ -324,7 +324,9 @@ function rbPlanNights(I) {
     const blocks = f => { const out = [{ days: [] }]; for (let k = 1; k <= 6; k++) { out.push({ days: Array.from({ length: k }, (_, j) => j), off: k, start: true }); out.push({ days: Array.from({ length: k }, (_, j) => 7 - k + j), off: 6 - k }); }
       // also one or two nights in the middle of the week, with the day off right after (as management did: Hnin's Friday night),
       // only on nights that need cover, so their own hotel can do it instead of borrowing someone
-      for (let st = 1; st <= 5; st++) for (let k = 1; k <= 2 && st + k <= 6; k++) { const days = Array.from({ length: k }, (_, j) => st + j); if (days.every(d => byDay[d])) out.push({ days, off: st + k, start: true, mid: true }); }
+      // (a night in the middle needs a day off before it too, coming off day shifts: two days off that week, so only for
+      //  someone who has two days off a week anyway; everyone else keeps their one day off)
+      if ((f.offs || 1) >= 2) for (let st = 1; st <= 5; st++) for (let k = 1; k <= 2 && st + k <= 6; k++) { const days = Array.from({ length: k }, (_, j) => st + j); if (days.every(d => byDay[d])) out.push({ days, off: st + k, start: true, mid: true }); }
       return out.filter(b => b.days.every(d => !has(f.key, d)) && (b.off == null || b.off > 6 || b.off < 0 || !has(f.key, b.off)) && (!b.start || b.mid || !rbParse(f.lastShift) || (rbIsNight(rbNorm(f.lastShift)) || rbParse(f.lastShift).e <= 1440 - 11 * 60 + 0))); };
     const fl = floaters.slice(0, 4), opts = fl.map(blocks);
     const walk = (fi, used, plan, cost) => {

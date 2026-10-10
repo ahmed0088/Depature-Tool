@@ -267,6 +267,14 @@ console.log('\nRoster scenarios');
     const r = sb.rbSolve({ week: W, groups: G, people: ppl, pre: {}, rules: { minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, givePh: false, lend: true }, seed: 1 });
     check('never to a hotel: the builder never sends them, even to fill Ibis', ['Y', 'Z', 'X'].some(k => dates.some(dt => /Ibis/.test(r.cells[k][dt] || ''))), false);
   }
+  // 0d. covering the night supervisor's day off never costs anyone a second day off that week
+  {
+    const G = { 'Ibis DD': { shifts: [N, M, E], need: { [N]: day(1), [M]: day(1), [E]: day(1) }, who: { [N]: ['Supervisor'] } } };
+    const ppl = [P('H', { title: 'Supervisor', fixed: N, usual: N }), P('T', { title: 'Supervisor', usual: N }), P('A'), P('B'), P('C')];
+    const r = sb.rbSolve({ week: W, groups: G, people: ppl, pre: {}, rules: { minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, givePh: false, lend: true }, seed: 1 });
+    const extra = ppl.filter(p => dates.filter(dt => sb.rbKind(r.cells[p.key][dt] || '') === 'off').length > 1).map(p => p.key);
+    check('night cover: nobody gets two days off in the week', extra.join(), '');
+  }
   // 1. ideal two per shift, too few people: never an empty shift, some one-person shifts
   {
     const r = solve({ 'Ibis DD': { shifts: [M, E], need: { [M]: day(2), [E]: day(2) } } }, ['A', 'B', 'C', 'D'].map(k => P(k)), {}, { overlapMin: 0 });
