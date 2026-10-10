@@ -386,7 +386,9 @@ function rbRepair(I, res, o) {
   const moves = c2 => I.people.some(p => Object.keys(c2[p.key] || {}).some(dt => { const v = c2[p.key][dt]; return v !== (res.cells[p.key] || {})[dt] && rbParse(v) && rbParse(v).note; }));
   let cells = res.cells, guard = 0;
   const shorts = c => rbProblems(I, c).filter(p => p.kind === 'short');
-  const breaks = c => rbProblems(I, c).filter(p => p.kind !== 'short' && p.kind !== 'thin').length;
+  // a Team Leader on a night (no Supervisor or Duty Manager free) is a small thing next to cut rest or a hard switch
+  const tlNight = p => p.kind === 'who' && rbIsNight(p.code) && /team\s*leader/i.test((I.people.find(x => x.key === p.key) || {}).title || '');
+  const breaks = c => rbProblems(I, c).filter(p => p.kind !== 'short' && p.kind !== 'thin').reduce((t, p) => t + (tlNight(p) ? 0.25 : 1), 0);
   const notes = [], bendOk = !o.homeOnly && !I.noBend;
   for (let gaps = shorts(cells); gaps.length && guard < 12; guard++) {
     const before = breaks(cells); let best = null;
@@ -394,7 +396,8 @@ function rbRepair(I, res, o) {
       const I2 = Object.assign({}, I, { noRepair: true });
       let opts = rtCoverOptions(I2, cells, g.group, g.date, g.shift).filter(x => x.cells && (bendOk || !x.bend) && !(o.homeOnly && moves(x.cells)));
       // the only fixes found move someone for days: look further (two-step fixes that keep every rule, and the bends) and weigh them all
-      if (opts.length && !opts.some(x => x.bend) && Math.min(...opts.map(x => rbUpset(I, cells, x.cells))) > 600)
+      const supOnly = !!(((I.groups[g.group] || {}).who || {})[g.shift]);   // (a Supervisors' night: a Team Leader at home may beat moving someone for days)
+      if (opts.length && !opts.some(x => x.bend) && Math.min(...opts.map(x => rbUpset(I, cells, x.cells))) > (supOnly ? 250 : 600))
         opts = opts.concat(rtCoverOptions(I2, cells, g.group, g.date, g.shift, { alsoBend: true }).filter(x => x.cells && (bendOk || !x.bend) && !(o.homeOnly && moves(x.cells))));
       // of the fixes that work, the gentlest on people: fewest days changed, days at another hotel counting most
       // (one night borrowed beats a whole week moved), no shift left with one person if it can be helped.

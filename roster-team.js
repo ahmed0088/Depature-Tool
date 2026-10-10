@@ -226,6 +226,9 @@ function rtCoverOptions(I, cells, group, date, shift, opt) {
   // without the day off between (rest kept first, then less rest). Written down under Decisions, like every bend.
   if (!(G[group] || {}).post) {
     const sup = !!(((G[group] || {}).who || {})[shift]);   // a shift for Supervisors only: then a front-desk colleague too, flagged, after a Supervisor bending
+    // no Supervisor or Duty Manager free: a Team Leader takes the night, with their rest and day off kept, before
+    // anyone's rest is cut or anyone goes from an evening straight into a night (that is how a manager would do it)
+    if (sup) TIERS.push({ rules: {}, addWho: ['Team Leader'], cost: 50, deep: true });
     if (sup) TIERS.push({ rules: { eveNight: true }, addWho: ['Team Leader'], cost: 630 });   // a Team Leader on the night before anyone else
     if (sup) TIERS.push({ rules: { eveNight: true }, anyone: true, cost: 650 });
     [[{ eveNight: true, nightSwitch: false }, 700], [{ eveNight: true, nightSwitch: false, minRest: Math.max(7, floor) }, 760], [{ eveNight: true, nightSwitch: false, minRest: 0 }, 820]].forEach(([r, c]) => {

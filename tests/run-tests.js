@@ -401,6 +401,15 @@ console.log('\nRoster scenarios');
       const ot = sb.rtCoverOptions(It, c, 'Ibis DD', dates[1], N).filter(x => x.cells);
       check('night with no Supervisor free: a Team Leader first, flagged', [ot[0] && ot[0].key, !!(ot[0] && ot[0].bend && /Team Leader/.test(ot[0].why || ''))].join(), 'L,true');
     }
+    { // the only Supervisor free would get 7 h rest (17:00 → 00:00): the Team Leader takes the night instead, rest kept
+      const G2 = { 'Ibis DD': { shifts: [N, M], need: { [N]: day(1), [M]: [1, 2, 1, 1, 1, 1, 1] }, who: { [N]: ['Supervisor'] } } };
+      const pl = [P('S', { title: 'Supervisor' }), P('T', { title: 'Supervisor' }), P('L', { title: 'Team Leader' }), P('A')], c = { S: {}, T: {}, L: {}, A: {} };
+      dates.forEach((dt, d) => { c.S[dt] = d === 2 ? 'OFF' : M; c.T[dt] = d === 6 ? 'OFF' : N; c.L[dt] = d === 0 || d === 2 ? 'OFF' : M; c.A[dt] = d === 4 ? 'OFF' : M; });
+      c.T[dates[1]] = 'SL'; c.L[dates[0]] = 'OFF';
+      const It = { week: W, groups: G2, people: pl, pre: { T: { [dates[1]]: 'SL' }, S: { [dates[0]]: M, [dates[2]]: 'OFF' } }, rules: { minRest: 11, maxHours: 9, allowOne: true, nightSwitch: true, lend: true } };
+      const ot = sb.rtCoverOptions(It, c, 'Ibis DD', dates[1], N).filter(x => x.cells);
+      check('night: a Team Leader (rest kept) comes before cutting a Supervisor\'s rest', ot[0] && ot[0].key, 'L');
+    }
     const ob = sb.rtCoverOptions(Object.assign({}, I, { groups: { 'Ibis DD · Bell': Object.assign({ post: 'Bell' }, G['Ibis DD']) } }), cells, 'Ibis DD · Bell', dates[1], N);
     check('a bell team may stay short: no rule is bent for it', ob.some(x => x.cells && x.bend), false);
     check('later is fine, earlier is not: day or evening → night next day is fine (rest still checked); night → day needs a day off', [

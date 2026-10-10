@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 232, items: [
+    '🌙 Team Leaders on nights, the way a manager would do it: when no Supervisor or Duty Manager can take the 00:00 night (from this hotel or borrowed for a short time), a Team Leader takes it, with their rest and day off kept. This now comes before cutting anyone\'s rest or putting someone from an evening straight into a night. Only when no Team Leader can (for example, they are still on their 19:00 – 04:00) is another colleague asked. Each time, the Decisions list says so in plain words.',
+  ] },
   { v: 231, items: [
     '🌙 Back from nights on a later shift: going from 00:00 – 09:00 to a 09:00 morning is hard even after a day off. As a last step the builder now trades with a colleague in the same hotel, so the first shifts back start at 12:00, 15:00 or 19:00 and the colleague takes the mornings. The same shifts are worked at the same hotel every day, so the cover, the days off and every other rule stay exactly as they were. You see it in the notes ("🌙 … traded with …"). On your team\'s next weeks this cut the hard returns from 7 to 3; the other 3 had no safe trade.',
   ] },
