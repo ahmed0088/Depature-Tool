@@ -716,6 +716,29 @@ console.log('\nRoster scenarios');
   check('looks: picked on the card, never guessed; a cartoon for everyone', run(`rbPeople.A = { look: { hair: 'hijab', skin: 4 } }; [avLook('A').hair, avLook('A').skin, avLook('B').skin, /<svg/.test(avSvg('B', 40))].join()`), 'hijab,4,2,true');
 }
 
+// ── Ops Brain understands plain talk (brain-understand.js) ──
+{
+  const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} }, fbSet() {}, showToast() {}, escapeHtml: x => String(x),
+               document: { addEventListener() {}, getElementById() { return null; }, querySelectorAll() { return []; }, querySelector() { return null; } }, window: {}, setTimeout: () => 0, setInterval: () => 0, clearTimeout() {}, navigator: {} };
+  vm.createContext(sb);
+  for (const f of ['roster.js', 'roster-build.js', 'roster-team.js', 'brain-understand.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sb, { filename: f });
+  const run = js => vm.runInContext(js, sb);
+  run(`[['S', 'Souptik Bhadra', 'Adagio GD'], ['A', 'Ali Zama Mirza', 'Adagio GD'], ['H', 'Ahmed Saleh', 'Ibis DD'], ['M', 'Manisha Rai', 'Ibis DD'], ['L', 'Lina Park', 'Mercure DD']].forEach(([k, n, g]) => { roStaff[k] = { name: n, group: g }; });`);
+  const say = q => run(`(u => (u.sure ? 'DO ' : 'ASK ') + (u.cmd || u.options.map(o => o.cmd).join(' / ')))(buUnderstand(${JSON.stringify(q)}))`);
+  check('plain talk: "can u keep souptik away from mr ali pls"', say('can u keep souptik away from mr ali pls'), 'DO avoid Souptik Bhadra with Ali Zama Mirza');
+  check('plain talk: "ahmed not coming tmrw" (typo)', say('ahmed not coming tmrw'), 'DO Ahmed Saleh is sick tomorrow');
+  check('plain talk: "manisha dont want nights anymore"', say('manisha dont want nights anymore'), 'DO Manisha Rai prefers not nights');
+  check('plain talk: "how many vacation days left for lina"', say('how many vacation days left for lina'), 'DO vacation balance of Lina Park');
+  check('plain talk: "who is working now"', say('who is working now'), 'DO who is on now');
+  check('plain talk: "make next week roster"', say('make next week roster'), 'DO build the roster');
+  check('plain talk: a misspelt name ("souptk and ali never together")', say('souptk and ali never together'), 'DO avoid Souptik Bhadra with Ali Zama Mirza');
+  check('plain talk: "dont send lina to ibis"', say('dont send lina to ibis'), 'DO never send Lina Park to Ibis DD');
+  check('plain talk: a guest or a room is never a change to the team ("Mr Ahmed in 512 is sick")', run(`buUnderstand('Mr Ahmed in 512 is sick').options.length`), 0);
+  check('plain talk: "Mr Ahmed is sick" asks first (could be a guest)', say('Mr Ahmed is sick'), 'ASK Ahmed Saleh is sick today');
+  check('plain talk: a plain question is left to Ops Brain ("how do I post TD")', run(`buUnderstand('how do I post TD').options.length`), 0);
+  check('plain talk: learns what you meant', run(`const c = buRead('put souptik far from ali'); buLearn(c, 'apart'); buUnderstand('put lina far from manisha').cmd`), 'avoid Lina Park with Manisha Rai');
+}
+
 // ── What if… (roster-team.js) ─────────────────────────────
 {
   const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} }, fbSet() {}, showToast() {}, escapeHtml: x => String(x),

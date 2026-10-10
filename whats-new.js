@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 219, items: [
+    '🧠 Ops Brain understands plain talk, no commands to remember: "can u keep souptik away from mr ali pls", "ahmed not coming tmrw", "manisha dont want nights anymore", "how many vacation days left for lina". It finds the names (even misspelt), the day and the shift, says "I understood: …" and does it. "Not this?" shows the other choices.',
+    '❓ Not sure what you mean? It shows "Did you mean…" buttons, and learns the one you tap, for everyone, next time. Only names ("ali and souptik")? It asks: keep apart, together or swap?',
+    '👆 Quick buttons under the Ops Brain box: Someone is sick · Day off · Vacation · Keep two apart · Always together · Swap · Prefers not a shift · What if… · Vacation balance · Who is on · Build next week. Pick the names and the day, tap Do it.',
+    '🛡 Anything about a guest or a room ("Mr Ahmed in 512 is sick") never changes the team; "Mr …" alone asks first.',
+  ] },
   { v: 218, items: [
     '↔️ Keep two people apart: "never on duty together" now also counts shifts that overlap 2 hours or more at the same hotel (09–18 and 12–21), not only the exact same shift. A handover (00–09 then 09–18) is fine. Tell Ops Brain "avoid Souptik with Ali", "Sam and Lina never together" or "Sam can\'t work with Lina", or add it in ⚖️ Rules → Your own rules.',
   ] },

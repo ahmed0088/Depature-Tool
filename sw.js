@@ -14,7 +14,7 @@
 //  clients pick up the new version instead of a stale cache.
 // ═══════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'ibis-ops-shell-v218';
+const CACHE_NAME = 'ibis-ops-shell-v219';
 
 const SHELL_FILES = [
   './',
@@ -82,6 +82,7 @@ const SHELL_FILES = [
   './roster-worker.js',
   './rates.js',
   './brain-complete.js',
+  './brain-understand.js',
   './smart-fill.js',
   './brain-online.js',
   './wakeup.js',
