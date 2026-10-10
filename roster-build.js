@@ -43,6 +43,33 @@ function rbRest(prev, next) { const a = rbParse(prev), b = rbParse(next); return
  *  working days; changing only after a day off. Earlier hours than the day before (afternoon → morning) is worst. */
 // ── On the desk, hour by hour ─────────────────────────────
 // "Two in the shift" means two people at the desk at the same time: 08–17 and 12–21 overlap 12:00–17:00.
+// ── Rule levels: how much each rule counts, set in ⚖️ Rules (the defaults are how it always worked) ──
+const RB_LEVELS = ['Off', 'Nice', 'Important', 'Very important', 'Must'], RB_LF = [0, 0.3, 1, 2.5, 6];
+const RB_RULE_DEF = { care: 2, alone: 2, home: 2, steady: 2, meet: 3, senior: 3, mgr: 3, nm: 1, preferNot: 1, wishes: 1, together: 1, desk: 1, fair: 1 };
+/** How much a rule counts now, against how it counts by default (1 = as always, 0 = off). */
+function rbW(R, id) { const L = R && R.levels && R.levels[id]; if (L == null || RB_RULE_DEF[id] == null || isNaN(+L)) return 1; return RB_LF[Math.max(0, Math.min(4, +L))] / RB_LF[RB_RULE_DEF[id]]; }
+/** Your own rules: "Sam and Lina never on the same shift", "Rita always with Lina", "Trainees never on nights".
+ *  Returns what a week breaks: [{ r, keys, date }]. g: only the people of that hotel (each counted once). */
+function rbMineBroken(I, cells, dates, R, g) {
+  const out = [], rules = ((R && R.custom) || []).filter(r => r && r.level !== 0 && r.level !== '0');
+  if (!rules.length) return out;
+  const P = I.people.filter(p => g == null || p.group === g), byKey = {}; I.people.forEach(p => { byKey[p.key] = p; });
+  const at = (p, v) => { const x = rbParse(v); return x ? rbBaseGroup(rbAt(I, p, x)) + '|' + rbNorm(v) : ''; };
+  rules.forEach(r => {
+    if (r.t === 'apart' || r.t === 'with') {
+      const A = byKey[r.a], B = byKey[r.b]; if (!A || !B || !P.includes(A)) return;
+      dates.forEach(dt => {
+        const a = at(A, (cells[A.key] || {})[dt]), b = at(B, (cells[B.key] || {})[dt]);
+        if (r.t === 'apart' ? a && a === b : a && b && a !== b) out.push({ r, keys: [A.key, B.key], date: dt });
+      });
+    } else if (r.t === 'titleNo') {
+      P.filter(p => (p.title || '') === r.title).forEach(p => dates.forEach(dt => { if (rbMineShiftHit(r, (cells[p.key] || {})[dt])) out.push({ r, keys: [p.key], date: dt }); }));
+    }
+  });
+  return out;
+}
+function rbMineShiftHit(r, v) { const x = rbParse(v); if (!x) return false; return RB_BANDS[r.shift] ? RB_BANDS[r.shift].test(x) : rbNorm(v) === r.shift; }
+function rbMineW(r) { return 400 * RB_LF[Math.max(0, Math.min(4, r.level == null ? 2 : +r.level))]; }
 const RB_DESK_W = 3;   // how much each person-hour short of the desk aim counts: a gentle nudge, never worth pushing for
 /** Someone alone on their shift is fine when another person is on the desk with them for a while (enough for a
  *  break): at least R.overlapMin hours (2 by default; 0 = they must be two the whole shift). grid = rbDeskGrid. */
@@ -235,6 +262,10 @@ function rbSolve(I) {
     const alt = rbSolve(Object.assign({}, I, { rules: Object.assign({}, I.rules, { overlapMin: 0 }), _strict: true, _plain: true, attempts: 2 }));
     if (shorts(alt) < shorts(res)) res = alt;
   }
+  if (!I._plain && !I._strict) {
+    res.notes = (res.notes || []).filter(n => !n.care);
+  I.people.filter(p => p.care && rbCareW(I, p) > 0).forEach(p => { const nm = typeof roStaff !== 'undefined' && roStaff[p.key] ? roStaff[p.key].name.split(' ')[0] : p.key; res.notes.push({ key: p.key, date: I.week, care: true, text: `💚 Extra care for ${nm} this week (Team Health ${p.careScore}${p.careWhy ? ': ' + p.careWhy : ''}): fewer nights, their wishes first, days off together, one steady shift.` }); });
+  }
   return res;
 }
 
@@ -298,7 +329,7 @@ function rbPlanNights(I) {
           if (!cand.length) { ok = false; break; }
           // their own hotel first, then the hotel they'd rather go to when moved
           const own = cand.find(x => hotels[x.i].g === homeOf(f)) || (f.alt && cand.find(x => rbBaseGroup(hotels[x.i].g) === f.alt)) || cand[0];
-          if (hotels[own.i].g !== homeOf(f)) { if (f.home || (!R.lend && !rbFloats(f) && !rbFloatsLast(f))) { ok = false; break; } c += f.alt && rbBaseGroup(hotels[own.i].g) === f.alt ? 50 : 60; }   // working at another hotel: only when there's no way at their own hotel
+          if (hotels[own.i].g !== homeOf(f)) { if (f.home || (!R.lend && !rbFloats(f) && !rbFloatsLast(f))) { ok = false; break; } c += (f.alt && rbBaseGroup(hotels[own.i].g) === f.alt ? 50 : 60) * Math.max(0.2, rbW(R, 'home')); }   // working at another hotel: only when there's no way at their own hotel
           u2.add(own.i + ':' + own.d); pick.push({ d, i: own.i });
         }
         if (ok) walk(fi + 1, u2, plan.concat([{ f, b, pick }]), c);
@@ -381,11 +412,11 @@ function rbUpset(I, a, b) {
   let c = 0;
   I.people.forEach(p => dates.forEach(dt => {
     const u = (a[p.key] || {})[dt], v = (b[p.key] || {})[dt]; if (u === v) return;
-    c += 10; if (away(p, v) && !away(p, u)) c += 200;
+    c += 10; if (away(p, v) && !away(p, u)) c += 200 * Math.max(0.2, rbW(I.rules, 'home'));
   }));
   const thin = x => rbProblems(I, x).filter(q => q.kind === 'thin').length;
   const hotels = x => rbMoveHotels(I, x).size;   // never all three hotels in one week if it can be helped
-  return c + 300 * Math.max(0, thin(b) - thin(a)) + 500 * Math.max(0, hotels(b) - Math.max(2, hotels(a)));
+  return c + 300 * rbW(I.rules, 'alone') * Math.max(0, thin(b) - thin(a)) + 500 * Math.max(0, hotels(b) - Math.max(2, hotels(a)));
 }
 function _rbAttempt(I, seed) {
   const D = 7, dates = Array.from({ length: D }, (_, d) => roAdd(I.week, d));
@@ -419,8 +450,8 @@ function _rbAttempt(I, seed) {
             const cover = P.filter(q => q !== p && (q.fixed === p.fixed || (!q.fixed && (!q.allowed || !q.allowed.length || q.allowed.includes(p.fixed)))) && (free(q, d) || rbNorm(cells[q.key][dates[d]]) === p.fixed)).length;
             if (cover < need(g, p.fixed, d)) c += 70;
           }
-          if ((p.prefOff || []).includes(d)) c -= 25;
-          if (((I.busy || {})[p.key] || {})[dates[d]]) c += 250;   // 📅 a meeting or training that day: not their day off
+          if ((p.prefOff || []).includes(d)) c -= 25 * rbW(R, 'wishes');
+          if (((I.busy || {})[p.key] || {})[dates[d]]) c += 250 * rbW(R, 'meet');   // 📅 a meeting or training that day: not their day off
           if (rbMgrP(p)) { const min = R.mgrMin == null ? 1 : +R.mgrMin, mg = I.people.filter(q => q !== p && rbMgrP(q)); if (min > 0 && mg.length >= min && mg.filter(q => !offOrAway(cells[q.key][dates[d]])).length < min) c += 150; }   // keep a manager on duty every day (one can look after all the hotels)
           if (I.keep && I.keep[p.key] && rbKind(I.keep[p.key][dates[d]]) === 'off') c -= 30;   // keep their day off where it was
           if ((p.lastOffs || []).includes(d)) c -= 2;
@@ -540,7 +571,7 @@ function rbMatchDay(I, g, cells, dates, d, R, rnd) {
   if (!rows.length) return;
   const cols = [];
   // the first person on a shift is worth the most; with one-person shifts allowed the rest up to the ideal count less
-  G.shifts.forEach(s => { for (let k = have[s]; k < (((G.need[s] || [])[d]) || 0); k++) cols.push({ s, req: true, w: k === 0 || R.allowOne === false ? 1000 : 300 }); });
+  G.shifts.forEach(s => { for (let k = have[s]; k < (((G.need[s] || [])[d]) || 0); k++) cols.push({ s, req: true, w: k === 0 || R.allowOne === false ? 1000 : 300 * Math.max(0.2, rbW(R, 'alone')) }); });
   G.shifts.forEach(s => { for (let k = 0; k < rows.length; k++) cols.push({ s, req: false, k }); });
   const base = (p, s) => {
     if (p.allowed && p.allowed.length && !p.allowed.includes(s)) return BAD;
@@ -552,19 +583,21 @@ function rbMatchDay(I, g, cells, dates, d, R, rnd) {
     if (!rbSwitchOk(pv, s, R) || !rbSwitchOk(s, nx, R)) return BAD;
     if (!rbMayWork(I, g, p, s)) return BAD;
     if (p.lock && p.fixed && G.shifts.includes(p.fixed) && s !== p.fixed) return BAD;   // 🔒 always their own shift
-    const soft = rbSoftNo(I, p, dt, s) ? RB_SOFT_W : 0;
+    const soft = rbSoftNo(I, p, dt, s) ? RB_SOFT_W * rbW(R, 'preferNot') : 0;
     if ((rbParse(s) || {}).e - (rbParse(s) || {}).s > (R.maxHours || 9) * 60) return BAD;
-    let c = soft + (rbEvMiss(I, p, dt, s) ? RB_EV_W : 0) + (rbEvNear(I, p, dt, s) ? 120 : 0);
+    let c = soft + ((rbEvMiss(I, p, dt, s) ? RB_EV_W : 0) + (rbEvNear(I, p, dt, s) ? 120 : 0)) * rbW(R, 'meet');
+    ((R.custom) || []).forEach(r => { if (r && r.t === 'titleNo' && (p.title || '') === r.title && rbMineShiftHit(r, s)) c += rbMineW(r); });   // your own rule: a title never on a shift
     if (I.keep && I.keep[p.key] && I.keep[p.key][dt] !== undefined) c += rbNorm(I.keep[p.key][dt]) === s ? -6 : 10;   // change as little as possible
     if (p.fixed) c += s === p.fixed ? -8 : (p.fixedCost || 30);
     if (p.lastMain && p.mode === 'rotate' && s === p.lastMain) c += 6;   // rotates: a different shift from last week
     if (p.mode === 'rotate' && p.nextMain && s === p.nextMain) c -= 5;   // …and the one that usually comes next, as the posted rosters show
-    c += rbChangeCost(pv, s, d === 0);
-    if (rbParse(nx)) c += rbNorm(nx) === s ? -8 : rbChangeCost(s, nx, false) / 2;
+    c += rbChangeCost(pv, s, d === 0) * rbW(R, 'steady');
+    if (rbParse(nx)) c += (rbNorm(nx) === s ? -8 : rbChangeCost(s, nx, false) / 2) * rbW(R, 'steady');
     if (p.usual && s === p.usual && p.mode !== 'rotate') c -= 3;
-    if ((p.likes || []).includes(s)) c -= 12 * rbWishWeight(p);   // 💛 a shift they like (more when they missed wishes lately)
-    if (d >= 1 && rbIsMorning(s) && rbKind(cells[p.key][dates[d - 1]] || '') === 'off' && rbIsNight(d >= 2 ? cells[p.key][dates[d - 2]] || '' : p.lastShift || '')) c += 45;   // night → day off → morning: only when needed
-    if (rbIsNight(s) && p.nightExtra > 0) c += 3 * p.nightExtra;  // more nights than the team lately: someone else's turn
+    if ((p.likes || []).includes(s)) c -= 12 * rbWishWeight(p) * rbW(R, 'wishes');   // 💛 a shift they like (more when they missed wishes lately)
+    if (d >= 1 && rbIsMorning(s) && rbKind(cells[p.key][dates[d - 1]] || '') === 'off' && rbIsNight(d >= 2 ? cells[p.key][dates[d - 2]] || '' : p.lastShift || '')) c += 45 * rbW(R, 'nm');   // night → day off → morning: only when needed
+    if (rbIsNight(s) && p.nightExtra > 0) c += 3 * p.nightExtra * rbW(R, 'fair');
+    if (rbIsNight(s) && p.care && !(p.mode === 'static' && rbIsNight(p.fixed))) c += 40 * rbCareW(I, p);   // 💚 needs care: fewer nights  // more nights than the team lately: someone else's turn
     return c + (rnd ? rnd() * 1.5 : 0);
   };
   const C = rows.map(p => { const b = {}; G.shifts.forEach(s => { b[s] = base(p, s); }); return cols.map(c => b[c.s] >= BAD ? BAD : b[c.s] + (c.req ? -c.w : 2 + c.k * 0.3)); });
@@ -593,10 +626,11 @@ function rbScore(I, g, cells, dates, R) {
     const n = (G.need[s] || [])[d] || 0, h = haveAll[d][s];
     // an empty shift is the worst; one person short of the ideal less so, and hardly at all when someone
     // else is on the desk with them for a few hours (a break): they can handle that
-    if (h < n) sc += R.allowOne === false ? 1000 * (n - h) : (h === 0 ? 1000 : 0) + (h && !G.post && rbRelieved(grid, d, s, R) ? 25 : 300) * (n - Math.max(h, 1));
+    if (h < n) sc += R.allowOne === false ? 1000 * (n - h) : (h === 0 ? 1000 : 0) + (h && !G.post && rbRelieved(grid, d, s, R) ? 25 : 300 * rbW(R, 'alone')) * (n - Math.max(h, 1));
     else sc += 0.5 * (h - n);
   });
-  if (rbDeskOn(R)) sc += RB_DESK_W * rbDeskShort(grid, R).gap;   // two on the desk at once, when it can be done
+  if (rbDeskOn(R)) sc += RB_DESK_W * rbW(R, 'desk') * rbDeskShort(grid, R).gap;   // two on the desk at once, when it can be done
+  rbMineBroken(I, cells, dates, R, g).forEach(b => { sc += rbMineW(b.r); });   // your own rules
   P.forEach(p => {
     let run = p.run || 0, prev = p.lastShift || '', offs = 0, nights = 0;
     const offDays = [];
@@ -614,29 +648,30 @@ function rbScore(I, g, cells, dates, R) {
         if (p.mode === 'rotate' && p.nextMain && rbNorm(v) === p.nextMain) sc -= 2;
         if (rbParse(v).e - rbParse(v).s > (R.maxHours || 9) * 60) sc += 3000;
         if (p.allowed && p.allowed.length && !p.allowed.includes(v)) sc += 800;
-        if (rbSoftNo(I, p, dt, v)) sc += RB_SOFT_W;   // prefers not: only when it's the way to cover
-        if (rbEvMiss(I, p, dt, v)) sc += RB_EV_W;   // 📅 misses their meeting or training
-        if (rbEvNear(I, p, dt, v)) sc += 120;   // 📅 the week leans toward the meeting's day/night side
+        if (rbSoftNo(I, p, dt, v)) sc += RB_SOFT_W * rbW(R, 'preferNot');   // prefers not: only when it's the way to cover
+        if (rbEvMiss(I, p, dt, v)) sc += RB_EV_W * rbW(R, 'meet');   // 📅 misses their meeting or training
+        if (rbEvNear(I, p, dt, v)) sc += 120 * rbW(R, 'meet');   // 📅 the week leans toward the meeting's day/night side
         if ((((I.avoid || {})[p.key] || {})[dt] || []).includes(v)) sc += 800;
-        if (prev && rbParse(prev) && rbNorm(prev) !== rbNorm(v)) sc += rbChangeCost(prev, v, d === 0) + 15 + (p.steady ? 40 * rbWishWeight(p) : 0);   // a change of shift in a run of working days (💛 steady hours: much more)
+        if (prev && rbParse(prev) && rbNorm(prev) !== rbNorm(v)) sc += (rbChangeCost(prev, v, d === 0) + 15) * rbW(R, 'steady') + (p.steady ? 40 * rbWishWeight(p) * rbW(R, 'wishes') : 0);   // a change of shift in a run of working days (💛 steady hours: much more)
         if (p.usual && v === p.usual) sc -= 1;
-        if ((p.likes || []).includes(rbNorm(v))) sc -= 6 * rbWishWeight(p);   // 💛 a shift they like
-        if (rbIsNight(v)) { nights++; if (p.nightExtra > 0) sc += 3 * p.nightExtra; }   // fair nights: whoever had more lately gets fewer
+        if ((p.likes || []).includes(rbNorm(v))) sc -= 6 * rbWishWeight(p) * rbW(R, 'wishes');   // 💛 a shift they like
+        if (rbIsNight(v)) { nights++; if (p.nightExtra > 0) sc += 3 * p.nightExtra * rbW(R, 'fair'); if (p.care && !(p.mode === 'static' && rbIsNight(p.fixed))) sc += 40 * rbCareW(I, p); }   // 💚 fewer nights for someone who needs care   // fair nights: whoever had more lately gets fewer
       } else {
         run = 0;
-        if (rbKind(v) === 'off') { offs++; offDays.push(d); if (((I.busy || {})[p.key] || {})[dt]) sc += 450; if ((p.prefOff || []).includes(d)) sc -= 10 * rbWishWeight(p); if (d >= 5 && p.wkOffShort > 0) sc -= 4 * p.wkOffShort; /* fewer weekends off than the team lately: theirs first */ if ((p.learnedOff || []).includes(d)) sc -= 3; /* their usual day off, as the posted rosters show */ if ((p.lastOffs || []).includes(d)) sc -= 1; if (p.lastWeekendOff && d >= 4) sc += 5; }
+        if (rbKind(v) === 'off') { offs++; offDays.push(d); if (((I.busy || {})[p.key] || {})[dt]) sc += 450 * rbW(R, 'meet'); if ((p.prefOff || []).includes(d)) sc -= 10 * rbWishWeight(p) * rbW(R, 'wishes'); if (d >= 5 && p.wkOffShort > 0) sc -= 4 * p.wkOffShort * rbW(R, 'fair'); /* fewer weekends off than the team lately: theirs first */ if ((p.learnedOff || []).includes(d)) sc -= 3; /* their usual day off, as the posted rosters show */ if ((p.lastOffs || []).includes(d)) sc -= 1; if (p.lastWeekendOff && d >= 4) sc += 5; }
       }
       prev = v;
     }
-    { const kinds = new Set(dates.map(dt => rbNorm(cells[p.key][dt])).filter(Boolean)); if (kinds.size > 1) sc += 110 * (kinds.size - 1); }
+    { const kinds = new Set(dates.map(dt => rbNorm(cells[p.key][dt])).filter(Boolean)); if (kinds.size > 1) sc += (110 * rbW(R, 'steady') + 60 * rbCareW(I, p)) * (kinds.size - 1); }
+    if (p.care && !p.together && offDays.length >= 2 && !offDays.some((d, i) => i && d - offDays[i - 1] === 1)) sc += 30 * rbCareW(I, p);   // 💚 days off together: a real rest
     sc += 2000 * Math.abs(offs - rbOffsDue(I, p, dates));   // rest, days in a row and days off come before cover
-    sc += 90 * rbNightToMorning(cells, p, dates).length;   // a night, one day off, then a morning: the day off goes on sleep, so only when there's no other way
-    if (p.maxNights != null && nights > p.maxNights) sc += 60 * rbWishWeight(p) * (nights - p.maxNights);   // 💛 no more nights than they asked for (unless it's the only way)
-    if (p.together && offDays.length >= 2 && !offDays.some((d, i) => i && d - offDays[i - 1] === 1)) sc += 25 * rbWishWeight(p);   // 💛 their days off next to each other
+    sc += 90 * rbW(R, 'nm') * rbNightToMorning(cells, p, dates).length;   // a night, one day off, then a morning: the day off goes on sleep, so only when there's no other way
+    if (p.maxNights != null && nights > p.maxNights) sc += 60 * rbWishWeight(p) * rbW(R, 'wishes') * (nights - p.maxNights);   // 💛 no more nights than they asked for (unless it's the only way)
+    if (p.together && offDays.length >= 2 && !offDays.some((d, i) => i && d - offDays[i - 1] === 1)) sc += 25 * rbWishWeight(p) * rbW(R, 'together');   // 💛 their days off next to each other
     else if (!p.together && p.learnedTogether && offDays.length >= 2 && !offDays.some((d, i) => i && d - offDays[i - 1] === 1)) sc += 6;   // they usually have them together
   });
-  if (P.some(rbMgrP)) sc += 400 * rbMgrGap(I, cells, dates, R);
-  if (P.some(p => rbFloats(p) || rbFloatsLast(p))) sc += 500 * rbSeniorClash(I, cells, dates).filter(c => c.hotel === rbBaseGroup(g)).length;   // a Duty Manager and a Supervisor on the same shift: one is enough   // a day with no manager anywhere: below an empty shift, above any wish
+  if (P.some(rbMgrP)) sc += 400 * rbW(R, 'mgr') * rbMgrGap(I, cells, dates, R);
+  if (P.some(p => rbFloats(p) || rbFloatsLast(p))) sc += 500 * rbW(R, 'senior') * rbSeniorClash(I, cells, dates).filter(c => c.hotel === rbBaseGroup(g)).length;   // a Duty Manager and a Supervisor on the same shift: one is enough   // a day with no manager anywhere: below an empty shift, above any wish
   return sc;
 }
 /** Steady weeks: someone on two (or more) shifts in the week trades their odd days with a colleague, so each keeps
@@ -1066,8 +1101,18 @@ function rbInput(seed) {
   const { pre, avoid, soft, busy, evMiss, evNear } = rbPre();
   const I = { week: rbWeek, groups, people, pre, avoid, soft, busy, evMiss, evNear, rules: rbRules(), seed: seed || 1 };
   rbFairHistory(I);
+  rbCare(I);
   return I;
 }
+/** 💚 Someone close to breaking (Team Health under 70, or under 50): this week is gentler on them —
+ *  fewer nights, their wishes first, days off together, one steady shift. care: 1 = watch, 2 = needs care. */
+function rbCare(I) {
+  if (typeof rhAll !== 'function' || rbW(I.rules, 'care') === 0) return;
+  let H; try { H = rhAll(); } catch (_) { return; }
+  I.people.forEach(p => { const h = H[p.key]; if (!h || h.none) return; const c = h.score < 50 ? 2 : h.score < 70 ? 1 : 0; if (c) { p.care = c; p.careScore = h.score; p.careWhy = (h.worst || []).slice(0, 2).map(m => m.name.toLowerCase()).join(', '); } });
+}
+/** How much extra a person needs this week (0 = none), as set by the 💚 level. */
+function rbCareW(I, p) { return p && p.care ? p.care * rbW(I.rules, 'care') : 0; }
 /** The last 4 posted weeks, person by person, so every week is fair over time:
  *  wishes that weren't granted lately are owed (they come first this week), and whoever had more nights or
  *  fewer weekends off than the team gets the lighter side this time. */
@@ -1105,7 +1150,7 @@ function rbNightToMorning(cells, p, dates) {
   return out;
 }
 /** How much more a person's wishes count this week: 1, up to 3 when they missed wishes in the weeks before. */
-function rbWishWeight(p) { return 1 + Math.min(2, (p.wishDebt || 0) * 0.5); }
+function rbWishWeight(p) { return (1 + Math.min(2, (p.wishDebt || 0) * 0.5)) * (1 + 0.75 * (p.care || 0)); }   // 💚 more for someone who needs care
 
 // ── Building ──────────────────────────────────────────────
 /** While the week is being built (in the background): the team on a week grid, people "moving" into shifts,
@@ -1609,14 +1654,7 @@ function rbRulesHtml() {
   const mgrs = Object.keys(roStaff).filter(k => rbMgrP({ title: rbTitle(k) }) && !((rbPeople[k] || {}).deleted)).map(k => (roStaff[k].name || k).split(' ')[0]);
   const hh = h => String(h % 24).padStart(2, '0') + ':00';
   return `<div class="rb-rules">
-    <details class="rr-order"><summary>📋 What comes first: the order the builder follows</summary><ol>
-      <li><b>Reception is never empty.</b> Only to keep it covered, as the very last way, may a rule below bend once (written under Decisions).</li>
-      <li><b>Hard rules:</b> ${R.minRest} h rest between shifts · a day off between night and day · a day off before an earlier start · no shift over ${R.maxHours} h · nights only for Supervisors / Duty Managers · locked shifts, "stays at their hotel" and "never to" kept · at most ${R.maxRun} days in a row · the days off each week.</li>
-      <li><b>Very important:</b> "can't work" requests · meetings and training · a Duty Manager and a Supervisor not on the same shift · a manager on duty every day.</li>
-      <li><b>Important:</b> nobody alone the whole shift (with ${R.overlapMin == null ? 2 : R.overlapMin} h of company it's fine; if not, a colleague may come from a hotel with one spare) · staff stay in their own hotel (one day at a time, never all three) · the same shift all week.</li>
-      <li><b>Nice to have:</b> no night → one day off → morning · "prefer not" shifts · nights asked for · usual shift · days off together · two on the desk at once · PH when there's spare.</li>
-      <li><b>Wishes and fairness:</b> liked shifts and days off (more weight for whoever missed out lately) · nights and weekends off shared fairly over 4 weeks.</li>
-    </ol></details>
+    ${typeof rrHtml === 'function' ? rrHtml() + '<div class="rr-sec">🔢 The numbers</div>' : ''}
     <div class="rr-grid">
     ${card('😴', 'Rest & hours',
       row('Rest between shifts', 'at least', step(R.minRest, 6, 16, "rbSetRule('minRest',+this.value)", 'h'))
@@ -1682,6 +1720,7 @@ function rbOutHtml(shown, dates) {
     ${rbHealthHtml(I, cells, cover, P, shown, dates)}
     ${P.some(p => p.kind !== 'short' && p.kind !== 'thin') ? `<div class="rb-probs">${P.filter(p => p.kind !== 'short' && p.kind !== 'thin').map(p => { const agreed = rbNoted(p); return `<div class="rb-prob ${p.kind}${agreed ? ' agreed' : ''}">${agreed ? '⚠ Bent on purpose (see Decisions):' : '⛔'} ${ptxt(p)}</div>`; }).join('')}</div>` : ''}
     ${rbDecisionsHtml(I, cells, shown, dates)}
+    ${typeof rrMineDraftHtml === 'function' ? rrMineDraftHtml(I, cells, dates) : ''}
     ${rbFixHtml(I, cells, shown, ptxt)}
     ${chg.size ? rbChangesHtml(I, cells, shown, dates) : ''}
     <div class="rb-tools"><button class="btn sm" onclick="rbUndo()"${rbUndoStack.length ? '' : ' disabled'} title="Undo (Ctrl+Z)">↶ Undo</button>${rbLegendHtml()}</div>

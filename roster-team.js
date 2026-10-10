@@ -223,16 +223,18 @@ function rtCoverOptions(I, cells, group, date, shift, opt) {
   // without the day off between (rest kept first, then less rest). Written down under Decisions, like every bend.
   if (!(G[group] || {}).post) {
     const sup = !!(((G[group] || {}).who || {})[shift]);   // a shift for Supervisors only: then a front-desk colleague too, flagged, after a Supervisor bending
+    if (sup) TIERS.push({ rules: { eveNight: true }, addWho: ['Team Leader'], cost: 630 });   // a Team Leader on the night before anyone else
     if (sup) TIERS.push({ rules: { eveNight: true }, anyone: true, cost: 650 });
     [[{ eveNight: true, nightSwitch: false }, 700], [{ eveNight: true, nightSwitch: false, minRest: Math.max(7, floor) }, 760], [{ eveNight: true, nightSwitch: false, minRest: 0 }, 820]].forEach(([r, c]) => {
       TIERS.push({ rules: r, cost: c });
+      if (sup) TIERS.push({ rules: r, addWho: ['Team Leader'], cost: c + 10 });
       if (sup) TIERS.push({ rules: r, anyone: true, cost: c + 20 });
     });
   }
   const fn = k => rtName(k).split(' ')[0];
   const bendText = (c0, c1, keys) => {   // what the plan bends, in words
     const was = rbProblems(I, c0), now = rbProblems(I, c1).filter(p => keys.includes(p.key) && (p.kind === 'switch' || p.kind === 'back' || p.kind === 'rest' || p.kind === 'who') && !was.some(w => w.kind === p.kind && w.key === p.key && w.date === p.date));
-    return now.map(p => p.kind === 'who' ? `${fn(p.key)} is not ${(p.who || []).join(' / ') || 'a Supervisor'}, but no Supervisor or Duty Manager could take it (reception is never left empty)` : p.kind === 'back' ? `${fn(p.key)}: an earlier start than the day before without a day off (${rbNorm(p.from).slice(0, 5)} → ${rbNorm(p.to).slice(0, 5)})` : p.kind === 'switch' ? `${fn(p.key)}: ${rbIsNight(p.from) ? (rbIsMorning(p.to) ? 'a night then a morning' : 'a night then a day shift') : (rbIsMorning(p.from) || !/^(1[5-9]|2)/.test(rbNorm(p.from) || '') ? 'a day shift then a night' : 'an evening then a night')} without a day off (${rbNorm(p.from).slice(0, 5)} → ${rbNorm(p.to).slice(0, 5)}), as in past rosters`
+    return now.map(p => p.kind === 'who' ? (/team leader/i.test(((I.people.find(x => x.key === p.key) || {}).title) || rbTitle(p.key)) ? `${fn(p.key)} (Team Leader) takes the night: no Supervisor or Duty Manager could (reception is never left empty)` : `${fn(p.key)} is not ${(p.who || []).join(' / ') || 'a Supervisor'}, but no Supervisor or Duty Manager could take it (reception is never left empty)`) : p.kind === 'back' ? `${fn(p.key)}: an earlier start than the day before without a day off (${rbNorm(p.from).slice(0, 5)} → ${rbNorm(p.to).slice(0, 5)})` : p.kind === 'switch' ? `${fn(p.key)}: ${rbIsNight(p.from) ? (rbIsMorning(p.to) ? 'a night then a morning' : 'a night then a day shift') : (rbIsMorning(p.from) || !/^(1[5-9]|2)/.test(rbNorm(p.from) || '') ? 'a day shift then a night' : 'an evening then a night')} without a day off (${rbNorm(p.from).slice(0, 5)} → ${rbNorm(p.to).slice(0, 5)}), as in past rosters`
       : p.hours <= 0 ? `${fn(p.key)}: back to back (${rbNorm(p.from).slice(0, 5)} straight into ${rbNorm(p.to).slice(0, 5)}, ${Math.round(((rbParse(p.from).e - rbParse(p.from).s) + (rbParse(p.to).e - rbParse(p.to).s)) / 60)} h)` : `${fn(p.key)}: only ${Math.round(p.hours)} h rest (${rbNorm(p.from).slice(0, 5)} → ${rbNorm(p.to).slice(0, 5)})`);
   };
   // alsoBend: the builder asks for the bends too when the only rule-keeping fix moves someone for days
@@ -244,6 +246,7 @@ function rtCoverOptions(I, cells, group, date, shift, opt) {
       if (list.slice(plain).some(o => o.cells)) break;
       const I2 = Object.assign({}, I, { rules: Object.assign({}, I.rules, T.rules) });
       if (T.anyone) { const w = Object.assign({}, (G[group] || {}).who); delete w[shift]; I2.groups = Object.assign({}, G, { [group]: Object.assign({}, G[group], { who: w }) }); }
+      if (T.addWho) { const w = Object.assign({}, (G[group] || {}).who); w[shift] = (w[shift] || []).concat(T.addWho.filter(x => !(w[shift] || []).includes(x))); I2.groups = Object.assign({}, G, { [group]: Object.assign({}, G[group], { who: w }) }); }
       const seen = new Set();
       for (const o of rtCoverOptions(I2, cells, group, date, shift, Object.assign({}, opt, { noBend: true, allowEmpty: true })).filter(o => o.cells)) {
         if (list.length - plain >= 3 || seen.has(o.key)) continue;
@@ -785,6 +788,7 @@ function rtPerson(k) {
     <div class="rt-cant"><span>Works:</span><button class="rb-opt ro-t-night" onclick="rtOnly(${q},'night')">🌙 Nights only</button><button class="rb-opt ro-t-morning" onclick="rtOnly(${q},'day')">☀️ Days only</button><button class="rb-opt" onclick="rtOnly(${q},'all')">All shifts</button></div>
     <div class="rt-cant"><span>Shifts:</span>${shifts.map(x => { const no = (c.allowed && c.allowed.length && !c.allowed.includes(x)), soft = (c.soft || []).includes(x), like = (c.likes || []).includes(x); return `<button class="rb-opt ro-t-${(roInfo(x) || {}).type}${no ? ' on' : soft ? ' soft' : like ? ' like' : ''}" onclick="rtToggleShift(${q},${_rtQ(x)})" title="Tap: 💛 likes → ⚠ prefer not → 🚫 can't work → fine">${no ? '🚫 ' : soft ? '⚠ ' : like ? '💛 ' : ''}${escapeHtml(x)}</button>`; }).join('')}<small class="ro-hint">Tap: 💛 likes → ⚠ prefer not → 🚫 can't</small></div>
     ${rtWishHtml(k)}
+    ${typeof avCardHtml === 'function' ? avCardHtml(k) : ''}
     ${typeof vcPersonHtml === 'function' ? `<div class="rb-sub">Vacation</div>${vcPersonHtml(k)}` : ''}
     <div class="rb-sub">Sick & leave</div>
     <div class="rt-abs">${absences.map(([id, a]) => `<span class="rb-hol">${escapeHtml(a.code)} · ${escapeHtml(roDayLbl(a.from))}${a.to !== a.from ? ' → ' + escapeHtml(roDayLbl(a.to)) : ''}<button class="ro-x" onclick="rtDelAbsence(${q},'${id}')">✕</button></span>`).join('') || '<span class="ro-empty">None.</span>'}</div>

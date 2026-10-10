@@ -359,6 +359,14 @@ console.log('\nRoster scenarios');
     const I = { week: W, groups: G, people: ppl, pre: { T: { [dates[1]]: 'SL' } }, rules: { minRest: 11, maxHours: 9, allowOne: true, nightSwitch: true, lend: true } };
     const o = sb.rtCoverOptions(I, cells, 'Ibis DD', dates[1], N);
     check('reception never empty: day → night without a day off only as the very last bend, flagged', o.filter(x => x.cells).every(x => x.bend && /without a day off/.test(x.why || '')) && o.some(x => x.cells), true);
+    { // no Supervisor free for the night: a Team Leader is asked before an agent
+      const pl = [P('S', { title: 'Supervisor' }), P('T', { title: 'Supervisor' }), P('L', { title: 'Team Leader' }), P('A')], c = { S: {}, T: {}, L: {}, A: {} };
+      dates.forEach((dt, d) => { c.S[dt] = d === 1 ? 'OFF' : M; c.T[dt] = d === 6 ? 'OFF' : N; c.L[dt] = d <= 2 ? 'OFF' : M; c.A[dt] = d <= 2 ? 'OFF' : M; });
+      c.S[dates[1]] = 'SL'; c.T[dates[1]] = 'SL';
+      const It = { week: W, groups: G, people: pl, pre: { S: { [dates[1]]: 'SL' }, T: { [dates[1]]: 'SL' } }, rules: { minRest: 11, maxHours: 9, allowOne: true, nightSwitch: true, lend: true } };
+      const ot = sb.rtCoverOptions(It, c, 'Ibis DD', dates[1], N).filter(x => x.cells);
+      check('night with no Supervisor free: a Team Leader first, flagged', [ot[0] && ot[0].key, !!(ot[0] && ot[0].bend && /Team Leader/.test(ot[0].why || ''))].join(), 'L,true');
+    }
     const ob = sb.rtCoverOptions(Object.assign({}, I, { groups: { 'Ibis DD · Bell': Object.assign({ post: 'Bell' }, G['Ibis DD']) } }), cells, 'Ibis DD · Bell', dates[1], N);
     check('a bell team may stay short: no rule is bent for it', ob.some(x => x.cells && x.bend), false);
     check('never: day ↔ night always needs a day off; an evening next to a night only as a last resort', [
@@ -649,6 +657,54 @@ console.log('\nRoster scenarios');
   check('vacation: days a year can be set for one person', run(`rbPeople.A.vacYear = 22; vcRate('A')`), 22);
   check('vacation: Ops Brain answers "vacation balance of Anna" and "how many vacation days does Anna have"', run(`!!_vcMatch('vacation balance of Anna') && !!_vcMatch('how many vacation days does Anna have') && !_vcMatch('Anna is sick tomorrow')`), true);
   check('vacation: shows on the card and in the builder', run(`vcPersonHtml('A').includes('vacation days today') && vcTeamHtml().includes('Anna Lee')`), true);
+}
+
+// ── Rules: levels and your own rules (roster-build.js, roster-rules.js) ──
+{
+  const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} }, fbSet() {}, showToast() {}, escapeHtml: x => String(x),
+               document: { addEventListener() {}, getElementById() { return null; }, querySelectorAll() { return []; }, querySelector() { return null; } }, window: {}, setTimeout: () => 0, setInterval: () => 0, clearTimeout() {}, navigator: {} };
+  vm.createContext(sb);
+  for (const f of ['roster.js', 'roster-build.js', 'roster-team.js', 'roster-rules.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sb, { filename: f });
+  const run = js => vm.runInContext(js, sb);
+  check('levels: as always by default, Off = 0, Must counts more', run(`[rbW({}, 'home'), rbW({ levels: { home: 0 } }, 'home'), rbW({ levels: { home: 4 } }, 'home') > 2].join()`), '1,0,true');
+  run(`
+    var W = '2026-10-12', M = '07:00 - 15:00', E = '15:00 - 23:00', dates = [0,1,2,3,4,5,6].map(d => roAdd(W, d)), day = n => Array(7).fill(n);
+    var P = (key, x) => Object.assign({ key, group: 'Ibis DD', offs: 1, fixed: '', usual: '', allowed: null, prefOff: [], lastShift: '', run: 0, lastOffs: [], phOwed: 0, title: '' }, x);
+    var G = { 'Ibis DD': { shifts: [M, E], need: { [M]: day(2), [E]: day(2) } } };
+    var ppl = [P('A'), P('B'), P('C'), P('D'), P('T', { title: 'Trainee' })];
+    var solve = custom => rbSolve({ week: W, groups: G, people: ppl, pre: {}, rules: { minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, givePh: false, lend: true, custom }, seed: 1 });
+    var same = (c, a, b) => dates.filter(dt => c[a][dt] && c[a][dt] === c[b][dt] && rbParse(c[a][dt])).length;
+    var apart = solve([{ t: 'apart', a: 'A', b: 'B', level: 4 }]), withR = solve([{ t: 'with', a: 'C', b: 'D', level: 4 }]);
+  `);
+  check('own rule: "A and B never on the same shift" is kept', run(`same(apart.cells, 'A', 'B')`), 0);
+  check('own rule: "C always with D" — on days both work, the same shift', run(`dates.filter(dt => rbParse(withR.cells.C[dt]) && rbParse(withR.cells.D[dt]) && withR.cells.C[dt] !== withR.cells.D[dt]).length`), 0);
+  run(`var G2 = { 'Ibis DD': { shifts: [M, '23:00 - 07:00'], need: { [M]: day(1), ['23:00 - 07:00']: day(1) } } };
+    var tn = rbSolve({ week: W, groups: G2, people: [P('A'), P('B'), P('T', { title: 'Trainee' })], pre: {}, rules: { minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, givePh: false, custom: [{ t: 'titleNo', title: 'Trainee', shift: 'night', level: 4 }] }, seed: 1 });`);
+  check('own rule: "Trainees never on nights" is kept', run(`dates.filter(dt => rbIsNight(tn.cells.T[dt])).length`), 0);
+  run(`roStaff.S1 = { name: 'Sam Reed', group: 'Ibis DD' }; roStaff.L1 = { name: 'Lina Park', group: 'Ibis DD' }; roStaff.R1 = { name: 'Rita Moss', group: 'Ibis DD' };`);
+  check('say it: "Sam and Lina never on the same shift"', run(`JSON.stringify(rrParseSay('Sam and Lina never on the same shift'))`), JSON.stringify({ t: 'apart', a: 'S1', b: 'L1' }));
+  check('say it: "Rita always with Lina"', run(`JSON.stringify(rrParseSay('Rita always with Lina'))`), JSON.stringify({ t: 'with', a: 'R1', b: 'L1' }));
+  check('say it: "trainees never on nights"', run(`JSON.stringify(rrParseSay('trainees never on nights'))`), JSON.stringify({ t: 'titleNo', title: 'Trainee', shift: 'night' }));
+  check('say it: other commands are left alone ("swap Sam with Lina")', run(`rrParseSay('swap Sam with Lina')`), null);
+  run(`var N = '23:00 - 07:00', G3 = { 'Ibis DD': { shifts: [M, E, N], need: { [M]: day(1), [E]: day(1), [N]: day(1) } } };
+    var nightsOf = (care, lvl) => { const pp = ['A', 'B', 'C', 'D'].map(k => P(k, k === 'C' && care ? { care: 2, careScore: 45 } : {})); const r = rbSolve({ week: W, groups: G3, people: pp, pre: {}, rules: { minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, givePh: false, levels: lvl || {} }, seed: 2 }); return { n: dates.filter(dt => rbIsNight(r.cells.C[dt])).length, notes: r.notes || [] }; };`);
+  check('extra care: someone close to breaking gets no more nights than before, and it is written down', run(`const a = nightsOf(false), b = nightsOf(true); [b.n <= a.n, b.notes.some(x => x.care && /Extra care/.test(x.text))].join()`), 'true,true');
+  check('extra care: switched Off in Rules, nothing changes', run(`nightsOf(true, { care: 0 }).notes.some(x => x.care)`), false);
+}
+
+// ── 🎮 Live desk and looks (roster-live.js) ───────────────
+{
+  const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} }, fbSet() {}, showToast() {}, escapeHtml: x => String(x),
+               document: { addEventListener() {}, getElementById() { return null; }, querySelectorAll() { return []; }, querySelector() { return null; } }, window: {}, setTimeout: () => 0, setInterval: () => 0, clearTimeout() {}, navigator: {} };
+  vm.createContext(sb);
+  for (const f of ['roster.js', 'roster-build.js', 'roster-team.js', 'roster-live.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sb, { filename: f });
+  const run = js => vm.runInContext(js, sb);
+  run(`roStaff.A = { name: 'Lina Park', group: 'Ibis DD' }; roStaff.B = { name: 'Omar Hale', group: 'Ibis DD' }; roStaff.C = { name: 'Rita Moss', group: 'Mercure DD' };
+    var T = '2026-10-12'; roDays[T] = { A: '12:00 - 21:00', B: '19:00 - 04:00', C: '08:00 - 17:00 - Ibis' }; roToday = () => T;`);
+  check('live desk: who is on at 19:30 and 2 h together (Lina 12–21, Omar 19–04)', run(`const S = lvScene(roDate(T).getTime() + (19 * 60 + 30) * 6e4).find(x => x.g === 'Ibis DD'); S.on.map(x => x.key).sort().join()`), 'A,B');
+  check('live desk: a day at another hotel shows at that hotel', run(`lvScene(roDate(T).getTime() + 10 * 36e5).find(x => x.g === 'Ibis DD').on.map(x => x.key).join()`), 'C');
+  check('live desk: coming in next', run(`lvScene(roDate(T).getTime() + 18 * 36e5).find(x => x.g === 'Ibis DD').coming.map(x => x.key).join()`), 'B');
+  check('looks: picked on the card, never guessed; a cartoon for everyone', run(`rbPeople.A = { look: { hair: 'hijab', skin: 4 } }; [avLook('A').hair, avLook('A').skin, avLook('B').skin, /<svg/.test(avSvg('B', 40))].join()`), 'hijab,4,2,true');
 }
 
 // ── What if… (roster-team.js) ─────────────────────────────

@@ -599,11 +599,11 @@ function roRenderSide() {
     const pct = v => (v * 100).toFixed(2) + '%';
     const nowP = (now - d0) / DAY;
     const chip = x => `<b class="${x.key === roMeKey ? 'is-me' : ''}" title="${escapeHtml(x.info.label)}">${escapeHtml(x.name)} <i>${escapeHtml(roCellTxt(x.info))}</i></b>`;
-    on.innerHTML = `<div class="ro-card-hd"><b>Today${g ? ' · ' + escapeHtml(g) : ''}</b><span>${escapeHtml(roDayLbl(today, true))}${working.size ? ` · <em class="ro-live">${working.size} on shift now</em>` : ''}</span></div>` + (bars.length || other.length
+    on.innerHTML = `<div class="ro-card-hd"><b>Today${g ? ' · ' + escapeHtml(g) : ''}</b><span>${escapeHtml(roDayLbl(today, true))}${working.size ? ` · <em class="ro-live">${working.size} on shift now</em>` : ''}${typeof lvOpen === 'function' ? ' <button class="lv-open" onclick="lvOpen()">🎮 Live desk</button>' : ''}</span></div>` + (bars.length || other.length
       ? `<div class="ro-tl" style="--now:${pct(nowP)}">
           <div class="ro-tl-axis"><span></span><div>${[0, 3, 6, 9, 12, 15, 18, 21, 24].map(h => `<i style="left:${pct(h / 24)}">${String(h % 24).padStart(2, '0')}</i>`).join('')}</div></div>
           ${bars.map(({ x, a, b, carry }) => `<div class="ro-tl-row${x.key === roMeKey ? ' is-me' : ''}${working.has(x.key) && (carry || a <= nowP) ? ' is-on' : ''}">
-            <span class="ro-tl-name" title="${escapeHtml(x.name)}${working.has(x.key) && (carry || a <= nowP) ? ' · on shift now' : ''}"><i class="ro-av">${escapeHtml(String(x.name || '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase())}</i><span>${escapeHtml(x.name)}</span></span>
+            <span class="ro-tl-name" title="${escapeHtml(x.name)}${working.has(x.key) && (carry || a <= nowP) ? ' · on shift now' : ''}"><i class="ro-av${typeof avSvg === 'function' ? ' has-av' : ''}">${typeof avSvg === 'function' ? avSvg(x.key, 24, 'happy') : escapeHtml(String(x.name || '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase())}</i><span>${escapeHtml(x.name)}</span></span>
             <div class="ro-tl-track"><i class="ro-tl-bar ro-t-${x.info.type}${carry ? ' carry' : ''}" style="left:${pct(a)};width:${pct(Math.max(b - a, 0.02))}" title="${escapeHtml(x.name + ' · ' + x.info.label + (carry ? ' (from yesterday)' : ''))}"><em>${escapeHtml(carry ? '…' + x.info.to : roShort(x.info))}${x.info.note && !carry ? ' · ' + escapeHtml(x.info.note) : ''}</em></i></div>
           </div>`).join('')}
         </div>`

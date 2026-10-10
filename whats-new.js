@@ -9,6 +9,14 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 216, items: [
+    '⚖️ Rules in plain words: every rule has an example from your own team (like "Ali works 09–18 and Abhinav comes at 15: 3 h together, so one can take a break. Fine."). Tap how much each counts: Off · Nice · Important · Very important · Must.',
+    '✍️ Your own rules: "Sam and Lina never on the same shift", "Rita always on the same shift as Lina", "Trainees never on nights". Make them in Rules or just tell Ops Brain. The draft shows whether they are kept.',
+    '❓ Quick questions ("which is worse?") set the levels for you, and 💡 Ops Brain suggests changes from this week\'s draft, with one tap to apply.',
+    '💚 Extra care: anyone whose Team Health drops under 70 gets a gentler week (fewer nights, their wishes first, days off together, one steady shift), written under Decisions.',
+    '🎖 Team Leaders can take the 00:00–09:00 night when no Supervisor or Duty Manager can, before anyone else.',
+    '🎮 Live desk (Roster → Today): each hotel\'s reception as a little scene: who is on, how far into their shift, a funny line each, who walks in next. ▶ plays the whole day. Everyone has a cartoon look they choose themselves on their card.',
+  ] },
   { v: 215, items: [
     '📋 ⚖️ Rules now shows "What comes first": the order the builder follows, from "reception is never empty" and the hard rules down to wishes and fairness.',
     '👥 Nobody alone the whole shift: if someone would be on their own with nobody on the desk with them for a break, a colleague may come from a hotel that has one spare on the same shift (that hotel is never left short). With 2 hours of company from another shift, one person is still fine and nobody is moved.',
