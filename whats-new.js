@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 231, items: [
+    '🌙 Back from nights on a later shift: going from 00:00 – 09:00 to a 09:00 morning is hard even after a day off. As a last step the builder now trades with a colleague in the same hotel, so the first shifts back start at 12:00, 15:00 or 19:00 and the colleague takes the mornings. The same shifts are worked at the same hotel every day, so the cover, the days off and every other rule stay exactly as they were. You see it in the notes ("🌙 … traded with …"). On your team\'s next weeks this cut the hard returns from 7 to 3; the other 3 had no safe trade.',
+  ] },
   { v: 230, items: [
     '⎋ Esc closes anything: the live desk, a person\'s card, Ops Brain, the theme list, menus and every other window. With two open, each Esc closes the top one. If you are typing in a box, the first Esc leaves the box (or cancels that edit) and the next one closes the window. Lock screens stay put.',
   ] },

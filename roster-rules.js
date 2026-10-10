@@ -19,7 +19,7 @@ const RR_SOFT = [
   ['meet', '📅', 'Meetings and training', 'Free for their meeting or training, and not on their day off.'],
   ['senior', '🎖', 'A Duty Manager and a Supervisor not together', 'One senior on a shift is enough; spread them out.'],
   ['mgr', '👔', 'A manager on duty every day', 'Across the three hotels.'],
-  ['nm', '🌅', 'No night → one day off → morning', 'That day off goes on sleep.'],
+  ['nm', '🌅', 'Back from nights on a later shift', 'Night → day off → morning is avoided (that day off goes on sleep). At the end the builder trades so the first shift back starts 12:00 or later, without changing the cover.'],
   ['preferNot', '⚠', '"Prefer not" shifts', 'Kept off the shifts they prefer not to do.'],
   ['wishes', '💛', 'Wishes', 'Liked shifts, days off they asked for, nights they want at most. More weight for whoever missed out lately.'],
   ['together', '🛋', 'Days off together', 'For people who asked for their days off next to each other.'],

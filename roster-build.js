@@ -276,6 +276,7 @@ function rbSolve(I) {
   }
   if (!I._plain && !I._strict) {
     rbOneOff(I, res);
+    rbSoftLanding(I, res);
     res.notes = (res.notes || []).filter(n => !n.care && !n.like);
     (I.likeBefore || []).forEach(t => { const nm = typeof roStaff !== 'undefined' && roStaff[t.key] ? roStaff[t.key].name.split(' ')[0] : t.key; res.notes.push({ key: t.key, date: I.week, like: true, text: `📋 ${nm} is away ${t.days.map(d => RB_DAYS[d]).join(', ')}: ${t.hotel} runs like the week of ${roDayLbl(t.week)}, when ${nm} was away too: the same cover, the same people on the same shifts and days off where it fits${Object.keys((I.lendPref || {})[t.hotel] || {}).length ? ', and the same colleagues borrowed first' : ''}.` }); });
   I.people.filter(p => p.care && rbCareW(I, p) > 0).forEach(p => { const nm = typeof roStaff !== 'undefined' && roStaff[p.key] ? roStaff[p.key].name.split(' ')[0] : p.key; res.notes.push({ key: p.key, date: I.week, care: true, text: `💚 Extra care for ${nm} this week (Team Health ${p.careScore}${p.careWhy ? ': ' + p.careWhy : ''}): fewer nights, their wishes first, days off together, one steady shift.` }); });
@@ -1302,6 +1303,64 @@ function rbNightToMorning(cells, p, dates) {
   const out = [];
   for (let d = 1; d < dates.length; d++) if (rbIsMorning(v(d)) && rbKind(v(d - 1)) === 'off' && rbIsNight(v(d - 2))) out.push(dates[d]);
   return out;
+}
+/** Coming back from nights, how hard a shift is: a morning (before 10:00) the hardest, 10:00–12:00 half, from 12:00 on fine. */
+function rbLandW(v) { const x = rbParse(v); return !x || rbIsNight(v) ? 0 : x.s < 600 ? 1 : x.s < 720 ? 0.5 : 0; }
+/** The first shift back after nights (night → one or two days off → this one), where it's early: [{ d, w }]. */
+function rbLanding(cells, p, dates) {
+  const v = d => d < 0 ? (d === -1 ? (p.lastShift || '') : '') : ((cells[p.key] || {})[dates[d]] || '');
+  const out = [];
+  for (let d = 1; d < dates.length; d++) {
+    const w = rbLandW(v(d)); if (!w) continue;
+    let i = d - 1; while (i >= 0 && v(i) && !rbParse(v(i))) i--;
+    if (i < d - 1 && d - 1 - i <= 2 && rbIsNight(v(i))) out.push({ d, w });   // three days or more away: rested
+  }
+  return out;
+}
+/** 🌙 Back from nights on a later shift: someone whose first shift after their nights is a morning trades those days
+ *  with a colleague in the same hotel on a later shift (12:00 or after), when it breaks nothing. The same shifts are
+ *  worked at the same hotel, so the cover is exactly the same; only who does which changes. */
+function rbSoftLanding(I, res) {
+  const dates = Array.from({ length: 7 }, (_, d) => roAdd(I.week, d));
+  const R = Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, givePh: true, lend: true, lockMgr: true, mgrMin: 1, deskMin: 2, deskFrom: 8, deskTo: 23 }, I.rules || {});
+  if (R.levels && +R.levels.nm === 0) return;
+  const pre = (k, dt) => !!(((I.pre || {})[k] || {})[dt]), name = k => typeof roStaff !== 'undefined' && roStaff[k] ? roStaff[k].name.split(' ')[0] : k;
+  const probs = c => { const P = rbProblems(I, c); return { n: P.length, short: P.filter(x => x.kind === 'short').length }; };
+  let base = probs(res.cells), changed = false;
+  I.people.forEach(p => {
+    const G = I.groups[p.group]; if (!G || G.post) return;
+    rbLanding(res.cells, p, dates).forEach(({ d }) => {
+      const row = res.cells[p.key];
+      if (!rbLanding(res.cells, p, dates).some(l => l.d === d)) return;   // fixed already by an earlier trade
+      let e = d; while (e + 1 < 7 && rbParse(row[dates[e + 1]])) e++;
+      const land = c => I.people.filter(x => x.group === p.group).reduce((t, x) => t + rbLanding(c, x, dates).reduce((u, l) => u + l.w, 0), 0) * 120;
+      const sc0 = rbScore(I, p.group, res.cells, dates, R) + land(res.cells);
+      let best = null;
+      I.people.forEach(q => {
+        if (q === p || q.group !== p.group || q.post) return;
+        const qr = res.cells[q.key]; if (!qr || rbLandW(qr[dates[d]]) || !rbParse(qr[dates[d]])) return;
+        for (let to = e; to >= d; to--) {
+          let ok = true;
+          for (let x = d; x <= to && ok; x++) {
+            const a = row[dates[x]], b = qr[dates[x]];
+            if (pre(p.key, dates[x]) || pre(q.key, dates[x]) || !rbParse(a) || !rbParse(b) || rbAt(I, p, rbParse(a)) !== p.group || rbAt(I, q, rbParse(b)) !== p.group || !G.shifts.includes(rbNorm(a)) || !G.shifts.includes(rbNorm(b))) ok = false;
+          }
+          if (!ok) continue;
+          const c = Object.assign({}, res.cells, { [p.key]: Object.assign({}, row), [q.key]: Object.assign({}, qr) });
+          for (let x = d; x <= to; x++) { c[p.key][dates[x]] = qr[dates[x]]; c[q.key][dates[x]] = row[dates[x]]; }
+          if (rbLanding(c, p, dates).some(l => l.d === d) || rbLanding(c, q, dates).length > rbLanding(res.cells, q, dates).length) continue;
+          const sc = rbScore(I, p.group, c, dates, R) + land(c);
+          if (sc < sc0 - 1 && (!best || sc < best.sc)) best = { sc, c, q, to };
+        }
+      });
+      if (!best) return;
+      const pb = probs(best.c); if (pb.short > base.short || pb.n > base.n) return;   // the cover and every rule stay as they were
+      res.cells = best.c; base = pb; changed = true;
+      const days = best.to > d ? `${RB_DAYS[d]}–${RB_DAYS[best.to]}` : RB_DAYS[d];
+      (res.notes = res.notes || []).push({ key: p.key, date: dates[d], auto: true, text: `🌙 ${name(p.key)} comes back from nights on ${rbNorm(best.c[p.key][dates[d]])} (${days}), not a morning: traded with ${name(best.q.key)}. Same cover.` });
+    });
+  });
+  if (changed) { res.cover = rbCover(I, res.cells); res.problems = rbProblems(I, res.cells, res.cover); }
 }
 /** How much more a person's wishes count this week: 1, up to 3 when they missed wishes in the weeks before. */
 function rbWishWeight(p) { return (1 + Math.min(2, (p.wishDebt || 0) * 0.5)) * (1 + 0.75 * (p.care || 0)); }   // 💚 more for someone who needs care

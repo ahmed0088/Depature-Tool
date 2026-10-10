@@ -287,6 +287,20 @@ console.log('\nRoster scenarios');
     check('one day off a week: an extra day off becomes a working day that fits', [offsOf('T'), res.cells.T[dates[1]]].join('|'), '1|' + M);
     check('one day off a week: no shift fits (after a night) and PH owed → a PH day', [offsOf('U'), /^PH/.test(res.cells.U[dates[1]] + res.cells.U[dates[3]])].join('|'), '1|true');
   }
+  // 0f. back from nights on a later shift: the first shift after the nights (and a day off) is traded with a colleague
+  //     in the same hotel on a later shift, for the whole run, so the cover stays exactly the same
+  {
+    const L = '12:00 - 21:00', G = { 'Ibis DD': { shifts: [N, M, L], need: { [N]: day(1), [M]: day(1), [L]: day(1) } } };
+    const I = { week: W, groups: G, people: [P('X'), P('Y'), P('Z')], pre: {}, rules: { minRest: 11, maxRun: 12, maxHours: 9 } };
+    const res = { cells: { X: {}, Y: {}, Z: {} } };
+    dates.forEach((dt, d) => { res.cells.X[dt] = d < 2 ? N : d === 2 ? 'OFF' : M; res.cells.Y[dt] = d === 0 ? 'OFF' : d < 3 ? M : L; res.cells.Z[dt] = d === 0 ? M : d === 1 ? 'OFF' : d === 2 ? N : d === 3 ? 'OFF' : N; });
+    res.cells.Z[dates[1]] = 'OFF'; res.cells.Y[dates[0]] = L; res.cells.Y[dates[1]] = L; res.cells.Y[dates[2]] = 'OFF';
+    const before = JSON.stringify(dates.map(dt => ['X', 'Y', 'Z'].map(k => res.cells[k][dt]).sort()));
+    sb.rbSoftLanding(I, res);
+    const after = JSON.stringify(dates.map(dt => ['X', 'Y', 'Z'].map(k => res.cells[k][dt]).sort()));
+    check('back from nights: the first shift back is a later one, not a morning', [res.cells.X[dates[3]], sb.rbLanding(res.cells, I.people[0], dates).length].join('|'), L + '|0');
+    check('back from nights: the same shifts are worked every day (same cover)', after, before);
+  }
   // 1. ideal two per shift, too few people: never an empty shift, some one-person shifts
   {
     const r = solve({ 'Ibis DD': { shifts: [M, E], need: { [M]: day(2), [E]: day(2) } } }, ['A', 'B', 'C', 'D'].map(k => P(k)), {}, { overlapMin: 0 });
