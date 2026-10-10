@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 230, items: [
+    '⎋ Esc closes anything: the live desk, a person\'s card, Ops Brain, the theme list, menus and every other window. With two open, each Esc closes the top one. If you are typing in a box, the first Esc leaves the box (or cancels that edit) and the next one closes the window. Lock screens stay put.',
+  ] },
   { v: 229, items: [
     '🎮 The live desk is a real little game now: each hotel\'s lobby with a window on the city (sunrise, blue sky and drifting clouds, sunset, stars and lit windows at night, the sun and moon moving across), a glowing hotel sign, a wall clock showing the time, guests rolling in with suitcases (busier at check-in and check-out), and the team behind a wooden desk with gold name plates and ⚡ energy bars. "Desk covered" or a flashing "Desk EMPTY" on top. ▶ Play the day runs smoothly now.',
   ] },

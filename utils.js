@@ -514,7 +514,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v229';
+const APP_VERSION = 'v230';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;
@@ -751,3 +751,34 @@ function writeStyledXlsx(filename, sheetName, rows, styleAt, styles, cols) {
   document.addEventListener('pointerup', end);
   document.addEventListener('pointercancel', end);
 })();
+
+// ── Esc closes whatever is open on top ────────────────────
+// One key for every popup, sheet and dialog. While typing in a box, the
+// first Esc is left to that box (cancel an edit, clear a search) and just
+// lets go of it; the next Esc closes the window. Lock screens never close.
+const ESC_SEL = '.ri-viewer, .fr-overlay, .br-overlay, .modal-bg.open, .ho-theme-pop, .rb-menu, #mobMoreOverlay, #depCopyOverlay, #lcoPickerOverlay, #ap-assign-popup, #gmChangePwOverlay';
+const ESC_CLOSE = { lvView: () => lvClose(), evDlg: () => evClose(), brSheet: () => brClose(), gsModal: () => gsClose(), hoModal: () => hoClose(), guestModal: () => closeModal(), feedbackModal: () => closeFeedbackModal(), mobMoreOverlay: () => toggleMobMore(), gmChangePwOverlay: () => gmClosePwOverlay() };
+function escShown(el) { if (!el.isConnected || !el.getClientRects().length) return false; const s = getComputedStyle(el); return s.display !== 'none' && s.visibility !== 'hidden'; }
+/** The open overlay drawn on top: highest z-index, then the one added last. */
+function escTop() {
+  let best = null, bz = -Infinity;
+  document.querySelectorAll(ESC_SEL).forEach(el => { if (!escShown(el)) return; const z = parseInt(getComputedStyle(el).zIndex) || 0; if (z >= bz) { best = el; bz = z; } });
+  return best;
+}
+function escClose(el) {
+  const f = ESC_CLOSE[el.id];
+  if (f) { try { f(); } catch (e) {} }
+  if (escShown(el)) el.dispatchEvent(new MouseEvent('click', { bubbles: true }));   // most windows close when you tap outside them
+  if (escShown(el)) { if (el.classList.contains('modal-bg')) el.classList.remove('open'); else el.remove(); }
+}
+window.addEventListener('keydown', e => {
+  if (e.key !== 'Escape' || e.defaultPrevented) return;
+  const a = document.activeElement;
+  if (a && a !== document.body && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable)) {
+    setTimeout(() => { if (document.activeElement === a) a.blur(); }, 0);
+    return;
+  }
+  const top = escTop(); if (!top) return;
+  e.stopImmediatePropagation(); e.preventDefault();
+  escClose(top);
+}, true);
