@@ -214,7 +214,7 @@ console.log('\nRoster builder');
       const ds = [0, 1, 2, 3, 4, 5, 6].map(d => sb.roAdd(w, d)), pre = {};
       if (R() < 0.5) { const d = Math.floor(R() * 5); pre['P' + (1 + Math.floor(R() * (n - 1)))] = { [ds[d]]: 'AL', [ds[d + 1]]: 'AL' }; }
       const r3 = sb.rbSolve({ week: w, groups: { 'Ibis DD': { shifts: S, need } }, people: ppl, pre, rules: { minRest: 11, maxRun: 12, givePh: false, lend: false }, seed: k + 1, attempts: 2 });
-      if (n === 5) tight = Math.max(tight, r3.problems.length); else { probs += r3.problems.filter(x => x.kind !== 'thin').length; thinAll += r3.problems.filter(x => x.kind === 'thin').length; weeks++; }
+      if (n === 5) { tight = Math.max(tight, r3.problems.length); if (r3.problems.length > 1) console.log('   tight:', JSON.stringify(r3.problems.map(x => [x.kind, x.key, x.date && x.date.slice(8), x.shift || x.from, x.to || '']))); } else { probs += r3.problems.filter(x => x.kind !== 'thin').length; thinAll += r3.problems.filter(x => x.kind === 'thin').length; weeks++; }
       ppl = ppl.map(p => { const row = ds.map(d => r3.cells[p.key][d] || ''); let run = 0; for (let d = 6; d >= 0 && sb.rbParse(row[d]); d--) run++; if (run === 7) run += p.run; return Object.assign({}, p, { lastShift: row[6], run }); });
     }
   }
@@ -283,8 +283,8 @@ console.log('\nRoster scenarios');
     const G = { 'Ibis DD': { shifts: [N, M, E], need: { [N]: day(1), [M]: day(1), [E]: day(1) } } };
     const ppl = ['A', 'B', 'C'].map(k => P(k)), r = solve(G, ppl);
     const gaps = r.problems.filter(p => p.kind === 'short');
-    check('three staff, 21 shifts, 18 working days: only 3 gaps', gaps.length, 3);
-    check('no rest or day-off rule broken to close them', r.problems.filter(p => p.kind === 'rest' || p.kind === 'offs').length, 0);
+    check('three staff, 21 shifts, 18 working days: one gap closed by someone working their day off (written down), the rest left', [gaps.length, r.problems.filter(p => p.kind === 'offs').length, (r.notes || []).some(n => /works their day off/.test(n.text))].join(), '2,1,true');
+    check('no rest rule broken to close them, and only one day off given up a week', r.problems.filter(p => p.kind === 'rest').length, 0);
     const I = { week: W, groups: G, people: ppl, pre: {}, rules: { minRest: 11, maxHours: 9, allowOne: true } };
     const o = sb.rtCoverOptions(I, r.cells, 'Ibis DD', gaps[0].date, gaps[0].shift);
     check('a gap nobody can fill → "bring in a staff member"', o.length === 1 && o[0].kind === 'bring', true);

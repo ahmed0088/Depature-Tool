@@ -74,6 +74,12 @@ function rbMineBroken(I, cells, dates, R, g) {
 function rbMineShiftHit(r, v) { const x = rbParse(v); if (!x) return false; return RB_BANDS[r.shift] ? RB_BANDS[r.shift].test(x) : rbNorm(v) === r.shift; }
 function rbMineW(r) { return 400 * RB_LF[Math.max(0, Math.min(4, r.level == null ? 2 : +r.level))]; }
 const RB_DESK_W = 3;   // how much each person-hour short of the desk aim counts: a gentle nudge, never worth pushing for
+/** A shift nobody works is fine when its hours are covered anyway by the other shifts that day (as management runs
+ *  it: no 19:00 – 04:00 when 15:00 – 00:00 and 00:00 – 09:00 are on). grid = rbDeskGrid of the hotel that day. */
+function rbHoursCovered(grid, d, code) {
+  const H = rbShiftHours(code); if (!H || !grid) return false;
+  return H[0].every(h => grid[d][h] >= 1) && (d >= 6 || H[1].every(h => grid[d + 1][h] >= 1));
+}
 /** Someone alone on their shift is fine when another person is on the desk with them for a while (enough for a
  *  break): at least R.overlapMin hours (2 by default; 0 = they must be two the whole shift). grid = rbDeskGrid. */
 function rbRelieved(grid, d, code, R) {
@@ -413,6 +419,30 @@ function rbRepair(I, res, o) {
     cells = pick.cells; (pick.notes || []).forEach(x => notes.push(Object.assign({ auto: true }, x)));
     gaps = shorts(cells);
   }
+  // the very last way, so reception is never empty: someone works their day off (and is owed a day back), at their own
+  // hotel first, else a colleague from another hotel even when everyone is kept home. Never a manager, a locked shift,
+  // a request or leave, or a hotel they must never go to.
+  const offWorked = new Set();   // at most one person a week per hotel gives up a day off: an emergency, not a habit
+  for (let gaps = shorts(cells), n = 0; gaps.length && n < 6 && !I.noBend && !o.homeOnly; n++) {
+    const g = gaps.find(x => !offWorked.has(rbBaseGroup(x.group))); if (!g) break;
+    const G = I.groups[g.group] || {}, was = breaks(cells); let best = null;
+    I.people.forEach(p => {
+      if (rbMgrP(p) || p.lock || (p.post || '') !== (G.post || '')) return;
+      const v = (cells[p.key] || {})[g.date] || ''; if (rbKind(v) !== 'off' || ((I.pre || {})[p.key] || {})[g.date]) return;
+      if (!rbMayWork(I, g.group, p, g.shift)) return;
+      const away = rbBaseGroup(p.group) !== rbBaseGroup(g.group);
+      const c2 = _rbClone(cells); c2[p.key][g.date] = away ? `${g.shift} - ${rbShortU(rbBaseGroup(g.group), Object.keys(I.groups))}` : g.shift;
+      if (shorts(c2).length >= gaps.length) return;
+      if (breaks(c2) - was > 1) return;   // their day off is the one rule given up: no short rest, not too many days in a row
+      const c = (away ? 300 : 0) + (p.care ? 200 : 0) + (p.offs > 1 ? -50 : 0);   // someone with two days off keeps one
+      if (!best || c < best.c) best = { c, p, cells: c2, away };
+    });
+    if (!best) { offWorked.add(rbBaseGroup(g.group)); gaps = shorts(cells); continue; }
+    cells = best.cells; offWorked.add(rbBaseGroup(g.group));
+    const nm = typeof roStaff !== 'undefined' && roStaff[best.p.key] ? roStaff[best.p.key].name.split(' ')[0] : best.p.key;
+    notes.push({ auto: true, key: best.p.key, date: g.date, text: `${nm} works their day off on ${RB_DAYS[(roDate(g.date).getDay() + 6) % 7]} (${g.shift}${best.away ? ' at ' + rbBaseGroup(g.group) : ''}) so reception isn't empty: nobody else could. Give them a day back (PH) later.` });
+    gaps = shorts(cells);
+  }
   if (cells === res.cells) return res;
   const cover = rbCover(I, cells);
   return { cells, cover, problems: rbProblems(I, cells, cover), notes };
@@ -640,7 +670,7 @@ function rbScore(I, g, cells, dates, R) {
     const n = (G.need[s] || [])[d] || 0, h = haveAll[d][s];
     // an empty shift is the worst; one person short of the ideal less so, and hardly at all when someone
     // else is on the desk with them for a few hours (a break): they can handle that
-    if (h < n) sc += R.allowOne === false ? 1000 * (n - h) : (h === 0 ? 1000 : 0) + (h && !G.post && rbRelieved(grid, d, s, R) ? 25 : 300 * rbW(R, 'alone')) * (n - Math.max(h, 1));
+    if (h < n) sc += R.allowOne === false ? 1000 * (n - h) : (h === 0 ? (!G.post && rbHoursCovered(grid, d, s) ? 450 : 1000) : 0) + (h && !G.post && rbRelieved(grid, d, s, R) ? 25 : 300 * rbW(R, 'alone')) * (n - Math.max(h, 1));
     else sc += 0.5 * (h - n);
   });
   if (rbDeskOn(R)) sc += RB_DESK_W * rbW(R, 'desk') * rbDeskShort(grid, R).gap;   // two on the desk at once, when it can be done
@@ -814,7 +844,9 @@ function rbProblems(I, cells, cover) {
   Object.keys(I.groups).forEach(g => { let grid; I.groups[g].shifts.forEach(s => dates.forEach((dt, d) => {
     const n = (I.groups[g].need[s] || [])[d] || 0, h = cover[g][s][d];
     if (h >= n) return;
-    const kind = (h === 0 || R.allowOne === false) && !I.groups[g].post ? 'short' : 'thin';
+    let kind = (h === 0 || R.allowOne === false) && !I.groups[g].post ? 'short' : 'thin';
+    // nobody on it, but its hours are covered by the other shifts that day: not run, like management does — fine
+    if (h === 0 && !I.groups[g].post && R.allowOne !== false && rbHoursCovered(grid = grid || rbDeskGrid(I.groups[g].shifts, (e, x) => (cover[g][x] || [])[e] || 0), d, s)) return;
     // one person, but someone else is on the desk with them for a few hours (a break): fine, not a problem
     if (kind === 'thin' && h > 0 && !I.groups[g].post && rbRelieved(grid = grid || rbDeskGrid(I.groups[g].shifts, (e, x) => (cover[g][x] || [])[e] || 0), d, s, R)) return;
     out.push({ kind, group: g, shift: s, date: dt, need: n, have: h });
@@ -1814,7 +1846,10 @@ function rbChanges(I, cells, dates) {
 /** The draft at a glance: cover, rules, one-person shifts, steady hours, total hours. */
 function rbHealthHtml(I, cells, cover, P, shown, dates) {
   let need = 0, have = 0, hours = 0;
-  shown.forEach(g => { const G = I.groups[g]; if (!G) return; G.shifts.forEach(sh => dates.forEach((dt, d) => { const n = (G.need[sh] || [])[d] || 0; need += n; have += Math.min(n, ((cover[g] || {})[sh] || [])[d] || 0); })); });
+  shown.forEach(g => { const G = I.groups[g]; if (!G) return; const grid = rbDeskGrid(G.shifts, (e, x) => ((cover[g] || {})[x] || [])[e] || 0);
+    G.shifts.forEach(sh => dates.forEach((dt, d) => { const n = (G.need[sh] || [])[d] || 0, h = ((cover[g] || {})[sh] || [])[d] || 0;
+      if (!h && n && !G.post && rbHoursCovered(grid, d, sh)) return;   // not run that day, its hours covered by the other shifts: not a missing place
+      need += n; have += Math.min(n, h); })); });
   shown.forEach(g => rbMembers(g).forEach(k => dates.forEach(dt => { const x = rbParse((cells[k] || {})[dt]); if (x) hours += (x.e - x.s) / 60; })));
   const short = P.filter(p => p.kind === 'short').length, thin = P.filter(p => p.kind === 'thin' && !(I.groups[p.group] || {}).post).length, bad = P.filter(p => p.kind !== 'thin').length;
   const ch = rbChanges(I, cells, dates).filter(c => !c.week && shown.includes((roStaff[c.key] || {}).group || '')).length;

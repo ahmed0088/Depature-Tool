@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 223, items: [
+    '🕐 The builder thinks like management now: what matters is that every hour has someone at the desk, not that every shift name is filled. A shift nobody works is fine when the other shifts cover its hours that day (like no 19:00 – 04:00 when 15:00 – 00:00 and 00:00 – 09:00 are on), as in the 5 Oct roster. So it stops bending rules and moving people to fill shifts management never runs, and "places filled" counts only real gaps.',
+    '🛎 Reception is never empty: if hours are still uncovered after everything else, as the very last way one person on their day off works it (at most one a week per hotel, never a manager or a locked shift, no other rule broken), written under Decisions with "give them a day back (PH) later".',
+  ] },
   { v: 222, items: [
     '📋 Someone away? The builder copies how management ran it the last time they were away: with Sandrine on leave, Adagio runs like the week of 5 Oct — the same cover on those days (not an average guess), the same people on the same shifts and days off, and the same colleagues borrowed first. It says so in the draft.',
     '🌙 Night cover inside the hotel: when two people do nights at a hotel (like Hassan and Turab), the one with fewer nights covers the other\'s night off, as management did, instead of leaving it to a last resort. A single night in the middle of the week (with the day off after) is possible too, so nobody has to come from another hotel for one night.',
