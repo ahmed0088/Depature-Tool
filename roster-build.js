@@ -1774,7 +1774,7 @@ function rbHealthHtml(I, cells, cover, P, shown, dates) {
   _rbHealth = { week: rbWeek, bad, thin };
   const chip = (cls, big, lbl, tip) => `<div class="rb-h ${cls}" title="${escapeHtml(tip)}"><b>${big}</b><span>${lbl}</span></div>`;
   return `<div class="rb-health">
-    ${chip(short ? 'bad' : 'ok', `${have}<small>/${need}</small>`, 'places filled', short ? short + ' shift' + (short === 1 ? '' : 's') + ' short' : 'every shift has its people')}
+    ${chip(short ? 'bad' : 'ok', `${have}<small>/${need}</small>`, short ? 'places filled · tap: why' : 'places filled', short ? short + ' shift' + (short === 1 ? '' : 's') + ' short: tap to see which and why nobody can take it' : 'every shift has its people').replace('<div class="rb-h bad"', short ? `<div class="rb-h bad" role="button" tabindex="0" style="cursor:pointer" onclick="(document.getElementById('rbFix')||{scrollIntoView(){}}).scrollIntoView({behavior:'smooth',block:'start'})"` : '<div class="rb-h bad"')}
     ${chip(bad - short ? 'bad' : 'ok', bad - short ? bad - short : '✓', bad - short ? 'rule breaks' : 'rules kept', 'rest, days off, days in a row, night ↔ day, who can work nights, 9 h')}
     ${rbDeskChip(I, cells, shown, chip)}
     ${chip(thin ? 'warn' : 'ok', thin, 'one-person', 'shifts where the ideal is two but only one is on')}

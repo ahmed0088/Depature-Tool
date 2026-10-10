@@ -739,6 +739,8 @@ console.log('\nRoster scenarios');
   run(`roStaff.SB = { name: 'Sandrine Berinyuy', group: 'Adagio GD' }; roToday = () => '2026-10-10'; roCanEdit = () => true; _rtOut = () => {};`);
   check('dates: "15" and "the 15th" are the next 15th', run(`[rtDay('15'), rtDay('the 15th'), rtDay('until 5')].join()`), '2026-10-15,2026-10-15,2026-11-05');
   check('plain talk: "sandrine on vaction until 15" books vacation today → 15th', run(`const u = buUnderstand('sandrine on vaction until 15'); RT_COMMANDS.find(c => c.re.test(u.cmd)).run(u.cmd); JSON.stringify(Object.values(rbPeople.SB.absences).map(a => [a.from, a.to, a.code]))`), JSON.stringify([['2026-10-10', '2026-10-15', 'AL']]));
+  run(`for (let d = 0; d < 7; d++) { const dt = roAdd('2026-10-05', d); roDays[dt] = Object.assign({}, roDays[dt], { SB: d === 6 ? 'OFF' : d >= 4 ? 'ALA' : '12:00 - 21:00' }); } rbPeople.SB = {}; rtApplyPublished = () => true; rbStampReset();`);
+  check('leave: a day off or leave already posted stays as it is; only working days change', run(`const t = rtMarkAbsent('SB', '2026-10-08', '2026-10-15', 'AL', true); [t.changed.join(' '), t.kept.join(' ')].join(' | ')`), '2026-10-08 | 2026-10-09 2026-10-10 2026-10-11');
   check('plain talk: "until 15 oct" is the end date, not the start', say('sandrine is on vacation until 15 oct'), 'DO Sandrine Berinyuy is on vacation today until 15 oct');
   check('plain talk: "how to …" shows how and asks before doing it', say('how to keep sandrine on vaction until 15 ?'), 'ASK Sandrine Berinyuy is on vacation today until 15');
   check('plain talk: learns what you meant', run(`const c = buRead('put souptik far from ali'); buLearn(c, 'apart'); buUnderstand('put lina far from manisha').cmd`), 'avoid Lina Park with Manisha Rai');

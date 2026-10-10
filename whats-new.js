@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 221, items: [
+    '🌴 Leave never overwrites the posted roster: a day already OFF or on leave (like Sandrine\'s ALA from management) stays as it is; only working days become AL / SL.',
+    '🩹 After marking sick or leave, Ops Brain offers cover only for gaps that this caused. A shift that was already short is mentioned apart ("already short before this, not because of …"), and days in a week not built yet are saved for the builder.',
+    '✓ A two-step cover fix no longer shows a wrong "drops to 0" note when its second step fills that shift.',
+    '🔴 The red "places filled" tile in the draft is tappable: it jumps to the empty shift and why each person can\'t take it.',
+  ] },
   { v: 220, items: [
     '🌴 "Sandrine on vacation until 15" now books today to the 15th (a day number alone, "the 15th" or "15 Oct" all work as the end date).',
     '❓ "How do I…" questions show how to say it, with a button to do it now, instead of doing it straight away.',

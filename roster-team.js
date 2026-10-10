@@ -277,7 +277,7 @@ function rtCoverOptions(I, cells, group, date, shift, opt) {
         if (bent.length) {
           const why = plain ? `${lead}: it bends ${bent.join('; ')}, rather than moving someone to another hotel for days.${tail}` : `${lead}: nobody could take it with every rule kept, so it bends ${bent.join('; ')}.${tail}`;
           list.push(Object.assign({}, o, { cells: cells2, bend: true, why, notes: [{ key: o.key, date, text: why }], cost: o.cost + T.cost, text: text + ' ⚠ ' + bent.join(' · '), ok: '⚠ bends: ' + bent.join(' · ') + ' (never over 9 h a shift) · ' + ok }));
-        } else list.push(Object.assign({}, o, { cells: cells2, cost: o.cost + 60, text, why: lead + '.' + tail, notes: null }));
+        } else list.push(Object.assign({}, o, { cells: cells2, cost: o.cost + 60, text, ok, why: lead + '.' + tail, notes: null }));
       }
     }
     list.sort((a, b) => a.cost - b.cost);
@@ -677,14 +677,17 @@ function rtMarkAbsent(k, from, to, code, quiet) {
   rbPeople[k] = c; fbSet('roster/builder/people/' + k, c);
   if (typeof tlLog === 'function') tlLog('leave', { key: k, date: from, text: `${code} ${from === to ? roDayLbl(from) : roDayLbl(from) + ' → ' + roDayLbl(to)}` });
   const weeks = new Set(); for (let dt = from; dt <= to; dt = roAdd(dt, 1)) weeks.add(roMonday(roDate(dt)));
-  const touched = [];
+  const touched = [], kept = new Set(), changed = new Set();
+  // a day off or leave already there (the posted roster from management) stays as it is: only working days change
+  const stays = v => { const i = roInfo(v); return !!i && (i.type === 'off' || i.type === 'leave'); };
   weeks.forEach(w => {
-    if (rbDrafts[w]) { rtDates(w).forEach(dt => { if (dt >= from && dt <= to) { rbDrafts[w].cells[k] = rbDrafts[w].cells[k] || {}; rbDrafts[w].cells[k][dt] = code; } }); rbPutDraft(w); }
+    if (rbDrafts[w]) { rtDates(w).forEach(dt => { if (dt >= from && dt <= to) { rbDrafts[w].cells[k] = rbDrafts[w].cells[k] || {}; if (stays(rbDrafts[w].cells[k][dt])) kept.add(dt); else { rbDrafts[w].cells[k][dt] = code; changed.add(dt); } } }); rbPutDraft(w); }
     if (rtIsPublished(w)) {
-      const cells = rtPublished(w); rtDates(w).forEach(dt => { if (dt >= from && dt <= to) cells[k][dt] = code; });
+      const cells = rtPublished(w); rtDates(w).forEach(dt => { if (dt >= from && dt <= to) { if (stays(cells[k][dt])) kept.add(dt); else { cells[k][dt] = code; changed.add(dt); } } });
       if (rtApplyPublished(w, cells, `${rtName(k)}: ${code}`)) touched.push(w);
     }
   });
+  touched.kept = [...kept].sort(); touched.changed = [...changed].sort();
   if (!quiet) showToast(`${rtName(k)}: ${code} ${from === to ? 'on ' + roDayLbl(from) : roDayLbl(from) + ' → ' + roDayLbl(to)}`, 'ok');
   return touched;
 }
@@ -1236,13 +1239,19 @@ const RT_COMMANDS = [
       const from = rtDay(rest.replace(/\b(until|till|to)\b.*$/, '')) || roToday();
       const um = rest.match(/\b(?:until|till|to)\s+(.+)$/), fm = rest.match(/for\s+(\d+)\s+days?/);
       const to = um ? rtDay(um[1]) || from : fm ? roAdd(from, +fm[1] - 1) : from;
-      const touched = rtMarkAbsent(k, from, to, code, true);
-      const w = roMonday(roDate(from));
+      const w = roMonday(roDate(from)), gapId = a => `${a.date}|${a.group}|${a.shift}`;
+      const before = rtIsPublished(w) ? new Set(rtAdvice(rtCtx(w), rtPublished(w)).map(gapId)) : new Set();   // short before this (not because of them)
+      const touched = rtMarkAbsent(k, from, to, code, true), fn = rtName(k).split(' ')[0];
       let html = `<div class="br-kind">🗓️ Roster</div><div class="br-title">${escapeHtml(rtName(k))}: ${code} ${from === to ? escapeHtml(roDayLbl(from, true)) : escapeHtml(roDayLbl(from)) + ' → ' + escapeHtml(roDayLbl(to))}</div>`;
+      if ((touched.kept || []).length) html += `<div class="br-body">Already ${(touched.changed || []).length ? '' : 'all '}off or on leave in the roster on ${touched.kept.map(d => escapeHtml(roDayLbl(d))).join(', ')}: kept as it is.</div>`;
       if (rtIsPublished(w)) {
-        const I = rtCtx(w), adv = rtAdvice(I, rtPublished(w)).filter(a => a.date >= from && a.date <= to);
-        html += adv.length ? adv.slice(0, 3).map(a => `<div class="br-body"><b>${escapeHtml(roDayLbl(a.date))} · ${escapeHtml(a.shift)} · ${escapeHtml(a.group)}</b>: ${a.have === 0 ? 'nobody now' : 'one person now'}</div>${rtOptButtons(w, a.options)}`).join('') : '<div class="br-body">Cover is still fine; nothing else to change.</div>';
+        const adv = rtAdvice(rtCtx(w), rtPublished(w)).filter(a => a.date >= from && a.date <= to);
+        const mine = adv.filter(a => !before.has(gapId(a))), old = adv.filter(a => before.has(gapId(a)));
+        html += mine.length ? mine.slice(0, 3).map(a => `<div class="br-body"><b>${escapeHtml(roDayLbl(a.date))} · ${escapeHtml(a.shift)} · ${escapeHtml(a.group)}</b>: ${a.have === 0 ? 'nobody now' : 'one person now'}</div>${rtOptButtons(w, a.options)}`).join('')
+          : `<div class="br-body">✓ Nothing to cover because of ${escapeHtml(fn)}${(touched.changed || []).length ? '' : ': the roster already had them off'}.</div>`;
+        if (old.length) html += `<div class="br-body" style="opacity:.8">Already short before this (not because of ${escapeHtml(fn)}): ${old.slice(0, 3).map(a => `${escapeHtml(roDayLbl(a.date))} ${escapeHtml(a.shift)} · ${escapeHtml(a.group)}`).join('; ')}. Fix in the builder.</div>`;
       } else html += '<div class="br-body">It goes into the roster when you build that week.</div>';
+      { const w2 = roMonday(roDate(to)); if (w2 !== w && !rtIsPublished(w2)) html += `<div class="br-body">📌 ${escapeHtml(roDayLbl(w2 > from ? w2 : from))} → ${escapeHtml(roDayLbl(to))}: saved on ${escapeHtml(fn)}'s card, so the builder puts ${code} there when you build that week${rbDrafts[w2] ? ' (and it is already in the draft)' : ''}.</div>`; }
       html += `<div class="br-acts"><button class="btn sm" onclick="brClose&&brClose();rtOfferCover('${w}')">Open in the builder</button></div>`;
       _rtOut(html); return true; } },
   { re: { test: q => { const m = String(q).trim().match(/^(.+?)\s+(?:wants|asks for|asked for|needs|requests?|would like)\s+(?:a\s+|the\s+)?(?:day\s+)?off\b(.*)$/i) || String(q).trim().match(/^(.+?)\s+(?:wants|asks|asked|needs)\s+(\w+day|tomorrow)\s+off$/i); return !!m && rtNamesOk(m[1]); } }, ex: 'Ali wants Friday off', does: 'a day-off request, or swaps if the week is posted', run: q => {
