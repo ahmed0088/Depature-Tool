@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 226, items: [
+    '🎨 Five new bright, white themes: 📄 Paper (clean white and teal), 🌤 Sky (white and blue), 🌿 Mint (fresh green), 🌸 Sakura (soft pink) and 🏜 Desert (warm sand and gold). Pick one from the theme button in the top bar (or the theme row in the phone menu); like every theme it is your own, on all your devices.',
+  ] },
   { v: 225, items: [
     '🛋 One day off a week, always: a final check on every built week turns any second day off into a working day on a shift that fits (enough rest, no night ↔ day, not too many days in a row), or into a PH day when they are owed one. Requests, leave and PH asked for are never touched. Two days off only when set on someone\'s card.',
   ] },

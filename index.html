@@ -49,7 +49,7 @@
         var s = mine ? { theme: mine } : JSON.parse(raw);
         if (s && s.theme) {
           // a skin sits on a base theme: iPhone on Opera, iPhone Dark and Titanium on Night Ops, Ocean on Midnight
-          var skins = { 'ios': 'opera', 'ios-dark': 'night-ops', 'titanium': 'night-ops', 'ocean': 'midnight', 'catppuccin': 'midnight', 'latte': 'opera', 'nord': 'midnight', 'dracula': 'midnight', 'tokyo': 'midnight', 'rosepine': 'midnight' };
+          var skins = { 'ios': 'opera', 'ios-dark': 'night-ops', 'titanium': 'night-ops', 'ocean': 'midnight', 'catppuccin': 'midnight', 'latte': 'opera', 'nord': 'midnight', 'dracula': 'midnight', 'tokyo': 'midnight', 'rosepine': 'midnight', 'paper': 'opera', 'sky': 'opera', 'mint': 'opera', 'sakura': 'opera', 'sand': 'opera' };
           document.documentElement.setAttribute('data-theme', skins[s.theme] || s.theme);
           if (skins[s.theme]) document.documentElement.setAttribute('data-skin', s.theme);
         }
@@ -5114,6 +5114,11 @@ async function appInit() {
       <button class="mob-theme-btn" data-t="ocean" onclick="setTheme('ocean',this)" title="Ocean">🌊</button>
       <button class="mob-theme-btn" data-t="catppuccin" onclick="setTheme('catppuccin',this)" title="Catppuccin">🐱</button>
       <button class="mob-theme-btn" data-t="latte" onclick="setTheme('latte',this)" title="Latte">🥛</button>
+      <button class="mob-theme-btn" data-t="paper" onclick="setTheme('paper',this)" title="Paper">📄</button>
+      <button class="mob-theme-btn" data-t="sky" onclick="setTheme('sky',this)" title="Sky">🌤</button>
+      <button class="mob-theme-btn" data-t="mint" onclick="setTheme('mint',this)" title="Mint">🌿</button>
+      <button class="mob-theme-btn" data-t="sakura" onclick="setTheme('sakura',this)" title="Sakura">🌸</button>
+      <button class="mob-theme-btn" data-t="sand" onclick="setTheme('sand',this)" title="Desert">🏜</button>
       <button class="mob-theme-btn" data-t="nord" onclick="setTheme('nord',this)" title="Nord">🧊</button>
       <button class="mob-theme-btn" data-t="dracula" onclick="setTheme('dracula',this)" title="Dracula">🧛</button>
       <button class="mob-theme-btn" data-t="tokyo" onclick="setTheme('tokyo',this)" title="Tokyo Night">🌃</button>

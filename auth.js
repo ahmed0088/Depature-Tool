@@ -296,6 +296,11 @@ function _applyLoginTheme(name) {
     'dracula': { accent:'#bd93f9', accentDark:'#ff79c6', btnColor:'#1e1f29' },
     'tokyo': { accent:'#7aa2f7', accentDark:'#bb9af7', btnColor:'#16161e' },
     'rosepine': { accent:'#ebbcba', accentDark:'#c4a7e7', btnColor:'#191724' },
+    'paper': { accent:'#0f766e', accentDark:'#14b8a6', btnColor:'#ffffff' },
+    'sky': { accent:'#0284c7', accentDark:'#38bdf8', btnColor:'#ffffff' },
+    'mint': { accent:'#059669', accentDark:'#34d399', btnColor:'#ffffff' },
+    'sakura': { accent:'#db2777', accentDark:'#f472b6', btnColor:'#ffffff' },
+    'sand': { accent:'#b45309', accentDark:'#f59e0b', btnColor:'#ffffff' },
   };
   const t = accents[name] || accents['night-ops'];
   const s = document.getElementById('loginThemeStyle');
