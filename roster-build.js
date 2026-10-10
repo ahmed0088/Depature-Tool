@@ -1343,6 +1343,7 @@ function rbRender() {
       ${groups.length > 1 ? `<div class="ro-groups">${['', ...groups].map(g => `<button class="fchip${(rbGroup || '') === g ? ' on' : ''}" onclick="rbGroup=${_rbQ(g)};rbRender()">${escapeHtml(g || 'All hotels')}</button>`).join('')}</div>` : ''}
       <div class="rb-status">${rbStatusHtml()}</div>
       <div class="rb-steps" id="rbSteps">${rbStepsHtml()}</div>
+      <div id="rbBase">${rbBaseHtml()}</div>
     </div>
 
     ${rbQuickHtml(draft)}
@@ -1401,6 +1402,7 @@ function rbRender() {
   rbReqTypeChange();
   rbSecWire(root);
   const sp = document.getElementById('rbSteps'); if (sp) sp.innerHTML = rbStepsHtml();
+  const bs = document.getElementById('rbBase'); if (bs) bs.innerHTML = rbBaseHtml();
 }
 // Setup sections stay open or closed as the person left them, across re-renders.
 const rbSecState = {};
@@ -1415,6 +1417,19 @@ function rbSec(id, dflt) { return `${(id in rbSecState ? rbSecState[id] : dflt) 
 function rbSecWire(root) { root.querySelectorAll('details[data-sec]').forEach(d => d.addEventListener('toggle', () => { rbSecState[d.dataset.sec] = d.open; const ph = d.open && d.querySelector(':scope > .rb-lazy'); if (ph && _rbLazyFn[ph.dataset.lazy]) { try { ph.outerHTML = _rbLazyFn[ph.dataset.lazy](); } catch (e) { console.error(e); } } })); }
 /** ① Requests ② Build ③ Check ④ Publish: where this week is. */
 let _rbHealth = null;
+/** 📌 What this week is built on: always the posted roster (the one management gave, then each week posted
+ *  after it). A draft counts only once it is posted. */
+function rbPostedWeek(w) { return [0, 1, 2, 3, 4, 5, 6].some(d => Object.keys(roDays[roAdd(w, d)] || {}).length); }
+function rbBaseHtml() {
+  if (!rbWeek) return '';
+  const prev = roAdd(rbWeek, -7), lbl = w => rbWeekLabel(w).replace(/ \d{4}$/, '');
+  let last = null; for (let i = 1, w = prev; i <= 12; i++, w = roAdd(w, -7)) if (rbPostedWeek(w)) { last = w; break; }
+  if (rbPostedWeek(rbWeek)) return `<div class="rb-base">📌 This week is already posted. You can change it here; the team sees the changes only when you publish again.</div>`;
+  if (!last) return `<div class="rb-base warn">📌 No posted roster before this week yet. Add the current roster first (Roster → Add roster): the builder learns your team from it and carries on from there.</div>`;
+  if (last === prev) return `<div class="rb-base">📌 Builds on the posted roster: <b>${escapeHtml(lbl(prev))}</b> and the weeks before it: how everyone ended that week, their usual shifts, days in a row, fairness, PH and vacation.</div>`;
+  const draft = !!(rbDrafts[prev] && rbDrafts[prev].cells);
+  return `<div class="rb-base warn">⚠ <b>${escapeHtml(lbl(prev))}</b> isn't posted yet${draft ? ' (there is only a draft)' : ''}. This week carries on from the last posted roster, <b>${escapeHtml(lbl(last))}</b>. Post ${escapeHtml(lbl(prev))} first so this week follows on from it. <button class="btn sm" onclick="rbGo(-7)">Go to ${escapeHtml(lbl(prev))}</button></div>`;
+}
 function rbStepsHtml() {
   const D = rbDrafts[rbWeek], pub = typeof rtIsPublished === 'function' && rtIsPublished(rbWeek);
   const n = Object.keys(rbReqs[rbWeek] || {}).length, h = D && _rbHealth && _rbHealth.week === rbWeek ? _rbHealth : null;
@@ -2077,6 +2092,7 @@ function rbRefreshOut() {
   const groups = rbGroups(), shown = rbGroup && groups.includes(rbGroup) ? [rbGroup] : groups;
   o.innerHTML = rbOutHtml(shown, Array.from({ length: 7 }, (_, d) => roAdd(rbWeek, d)));
   const sp = document.getElementById('rbSteps'); if (sp) sp.innerHTML = rbStepsHtml();
+  const bs = document.getElementById('rbBase'); if (bs) bs.innerHTML = rbBaseHtml();
 }
 function rbClearDraft() { if (!confirm('Discard this draft?')) return; clearTimeout(_rbSaving[rbWeek]); delete _rbSaving[rbWeek]; delete rbDrafts[rbWeek]; rbPutDraft(rbWeek); rbRender(); }
 

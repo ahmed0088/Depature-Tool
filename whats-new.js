@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 217, items: [
+    '📌 The builder carries on from the posted roster: the one management gave (5 Oct) and then each week you post. It now says so at the top ("Builds on the posted roster: 5 Oct – 11 Oct"). A draft counts only once it is posted; if last week isn\'t posted yet, it warns you and offers to go there first.',
+  ] },
   { v: 216, items: [
     '⚖️ Rules in plain words: every rule has an example from your own team (like "Ali works 09–18 and Abhinav comes at 15: 3 h together, so one can take a break. Fine."). Tap how much each counts: Off · Nice · Important · Very important · Must.',
     '✍️ Your own rules: "Sam and Lina never on the same shift", "Rita always on the same shift as Lina", "Trainees never on nights". Make them in Rules or just tell Ops Brain. The draft shows whether they are kept.',

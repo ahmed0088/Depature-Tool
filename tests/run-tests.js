@@ -636,6 +636,11 @@ console.log('\nRoster scenarios');
   check('history: you are told which wishes were granted', sent.some(x => /^toast:💛 .*granted/.test(x) && /Anna/.test(x)), true);
   check('history: posting the same week again does not write it twice', run(`tlWeekPosted(W, cells); tlList(e => e.t === 'posted').length + '|' + tlOf('A').filter(e => e.t === 'wish').length`), '1|1');
   check('history: shows on the card and in the builder', run(`tlPersonHtml('A').includes('History') && tlTeamHtml().includes('Wish granted')`), true);
+  // the builder carries on from the posted roster only: a draft that was never posted is not history
+  run(`roDays = {}; var P0 = '2026-10-05'; for (let d = 0; d < 7; d++) roDays[roAdd(P0, d)] = { A: d === 6 ? '15:00 - 23:00' : M, B: E };
+    rbDrafts = { [W]: { cells: { A: { [roAdd(W, 6)]: '23:00 - 07:00' } } } }; rbStampReset();`);
+  check('posted roster: next week follows the posted one, not an unposted draft', run(`[rbLearnPerson('A', W).lastShift, rbLearnPerson('A', roAdd(W, 7)).lastShift || 'none'].join('|')`), '15:00 - 23:00|none');
+  check('posted roster: the builder says what it builds on, and warns when last week is not posted', run(`rbWeek = W; const a = rbBaseHtml(); rbWeek = roAdd(W, 7); const b = rbBaseHtml(); [/Builds on the posted roster/.test(a), /isn't posted yet/.test(b) && /only a draft/.test(b)].join()`), 'true,true');
 }
 
 // ── Vacation balance (roster-vacation.js) ──────────────────

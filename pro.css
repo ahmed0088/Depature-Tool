@@ -1718,3 +1718,7 @@ details > summary + * { animation: hoRise .3s ease both; }
 @keyframes lvWalkIn { from { opacity: 0; transform: translateX(60px); } to { opacity: .62; transform: none; } }
 @keyframes lvWalkOut { from { opacity: .8; transform: none; } to { opacity: .45; transform: translateX(-14px); } }
 @media (prefers-reduced-motion: reduce) { .lv-p, .lv-p .lv-body, .lv-p .av-eyes, .lv-sun, .lv-moon, .lv-star, .lv-empty, .lv-bub { animation: none !important; } }
+.rb-base { margin: 8px 0 4px; padding: 8px 11px; border-radius: 10px; background: var(--bg2); font-size: 12.5px; line-height: 1.45; color: var(--text2); }
+.rb-base b { color: var(--text); }
+.rb-base.warn { background: color-mix(in srgb, var(--amber) 14%, var(--card2)); color: var(--text); }
+.rb-base .btn { margin-left: 6px; }
