@@ -736,6 +736,11 @@ console.log('\nRoster scenarios');
   check('plain talk: a guest or a room is never a change to the team ("Mr Ahmed in 512 is sick")', run(`buUnderstand('Mr Ahmed in 512 is sick').options.length`), 0);
   check('plain talk: "Mr Ahmed is sick" asks first (could be a guest)', say('Mr Ahmed is sick'), 'ASK Ahmed Saleh is sick today');
   check('plain talk: a plain question is left to Ops Brain ("how do I post TD")', run(`buUnderstand('how do I post TD').options.length`), 0);
+  run(`roStaff.SB = { name: 'Sandrine Berinyuy', group: 'Adagio GD' }; roToday = () => '2026-10-10'; roCanEdit = () => true; _rtOut = () => {};`);
+  check('dates: "15" and "the 15th" are the next 15th', run(`[rtDay('15'), rtDay('the 15th'), rtDay('until 5')].join()`), '2026-10-15,2026-10-15,2026-11-05');
+  check('plain talk: "sandrine on vaction until 15" books vacation today → 15th', run(`const u = buUnderstand('sandrine on vaction until 15'); RT_COMMANDS.find(c => c.re.test(u.cmd)).run(u.cmd); JSON.stringify(Object.values(rbPeople.SB.absences).map(a => [a.from, a.to, a.code]))`), JSON.stringify([['2026-10-10', '2026-10-15', 'AL']]));
+  check('plain talk: "until 15 oct" is the end date, not the start', say('sandrine is on vacation until 15 oct'), 'DO Sandrine Berinyuy is on vacation today until 15 oct');
+  check('plain talk: "how to …" shows how and asks before doing it', say('how to keep sandrine on vaction until 15 ?'), 'ASK Sandrine Berinyuy is on vacation today until 15');
   check('plain talk: learns what you meant', run(`const c = buRead('put souptik far from ali'); buLearn(c, 'apart'); buUnderstand('put lina far from manisha').cmd`), 'avoid Lina Park with Manisha Rai');
 }
 

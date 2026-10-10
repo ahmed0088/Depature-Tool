@@ -1127,6 +1127,13 @@ function rtDay(text) {
   if (!t || /\btoday|tonight|now\b/.test(t)) return roToday();
   if (/tomorrow/.test(t)) return roAdd(roToday(), 1);
   if (/yesterday/.test(t)) return roAdd(roToday(), -1);
+  // a day of the month on its own ("15", "the 15th"): the next time that date comes
+  const dm = t.replace(/^(?:on|for|the|until|till)\s+/g, '').replace(/^the\s+/, '').match(/^(\d{1,2})(?:st|nd|rd|th)?$/);
+  if (dm && +dm[1] >= 1 && +dm[1] <= 31) {
+    const d0 = roDate(roToday()); let d = new Date(d0.getFullYear(), d0.getMonth(), +dm[1]);
+    if (d.getDate() !== +dm[1] || roIso(d) < roToday()) d = new Date(d0.getFullYear(), d0.getMonth() + 1, +dm[1]);
+    return roIso(d);
+  }
   const dn = t.match(/\b(mon|tue|wed|thu|fri|sat|sun)[a-z]*/);
   if (dn) { const want = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'].indexOf(dn[1]); for (let i = 0; i < 7; i++) { const d = roAdd(roToday(), i); if (roDate(d).getDay() === want) return /next/.test(t) && i < 7 ? roAdd(d, 7) : d; } }
   const p = roParseDate(t.replace(/^(on|for)\s+/, ''), roToday());

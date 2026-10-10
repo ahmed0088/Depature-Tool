@@ -105,8 +105,9 @@ const BU_INTENTS = [
 function buRead(q) {
   const t = buNorm(q), found = buNames(t);
   const n = found.filter(x => x.k).map(x => x.k), amb = found.filter(x => !x.k);
-  const sp = t.match(/\b(for \d+ days?|until [a-z0-9 ]+|till [a-z0-9 ]+)$/);
-  return { q, t, n, N: n.map(_buN), amb, day: buDay(t), band: buBand(t), hotel: buHotel(t), title: buTitle(t), span: sp ? ' ' + sp[1] : '' };
+  const sp = t.match(/\b(for \d+ days?|(?:until|till|to) (?:the )?\d{1,2}(?:st|nd|rd|th)?(?: [a-z]+)?|(?:until|till) [a-z0-9 ]+)$/);
+  const rest = sp ? t.slice(0, sp.index) : t;   // "until 15 Oct" is the end, not the start
+  return { q, t, n, N: n.map(_buN), amb, day: buDay(rest), band: buBand(t), hotel: buHotel(t), title: buTitle(t), span: sp ? ' ' + sp[1].replace(/^to /, 'until ') : '', how: /^\s*(how\s+(to|do|does|can|could|should|would|will)|where do i|what is the way|what's the way)\b/i.test(String(q || '')) };
 }
 /** What was meant: { sure, cmd, it, options:[{ it, cmd }] }. */
 function buUnderstand(q) {
@@ -130,6 +131,8 @@ function buUnderstand(q) {
     const opts = ids.map(id => BU_INTENTS.find(x => x.id === id)).map(it => ({ it, cmd: it.make(c2) }));
     return { sure: false, c, options: opts, about: c.N.map(x => x.split(' ')[0]).join(' and ') };
   }
+  // "how do I…": show how, with a button to do it now (never done without asking)
+  if (c.how && options.length) return { sure: false, how: true, c, options };
   // "Mr / Mrs" may be a guest: ask before changing anything (Mr Ali the manager is one tap away)
   const titled = /\b(mr|mrs|ms|miss|madam|dr)\b/.test(c.t) && options[0] && !['apart', 'with', 'balance', 'lastweek', 'whoOn', 'build', 'problems', 'mine', 'cover'].includes(options[0].it.id);
   return { sure: !titled && (options.length === 1 || (options.length > 1 && options[0].it.id === 'apart')), cmd: options[0] && options[0].cmd, it: options[0] && options[0].it, c, options };
@@ -232,7 +235,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (_buTry0(q)) return true;
       if (!u.options.length) return false;                            // not a request: Ops Brain answers it as a question
       if (u.sure && buRun(u.cmd, u.it, u.c)) return true;
-      buOptions(u, u.which ? `Which "${u.which}"?` : u.about ? `What about ${u.about}?` : 'Did you mean…'); return true;
+      buOptions(u, u.how ? 'Just say it like this next time. Tap to do it now:' : u.which ? `Which "${u.which}"?` : u.about ? `What about ${u.about}?` : 'Did you mean…'); return true;
     };
     // quick buttons under the box, and an easier hint
     const build = window.brBuild;

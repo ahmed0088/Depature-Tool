@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 220, items: [
+    '🌴 "Sandrine on vacation until 15" now books today to the 15th (a day number alone, "the 15th" or "15 Oct" all work as the end date).',
+    '❓ "How do I…" questions show how to say it, with a button to do it now, instead of doing it straight away.',
+  ] },
   { v: 219, items: [
     '🧠 Ops Brain understands plain talk, no commands to remember: "can u keep souptik away from mr ali pls", "ahmed not coming tmrw", "manisha dont want nights anymore", "how many vacation days left for lina". It finds the names (even misspelt), the day and the shift, says "I understood: …" and does it. "Not this?" shows the other choices.',
     '❓ Not sure what you mean? It shows "Did you mean…" buttons, and learns the one you tap, for everyone, next time. Only names ("ali and souptik")? It asks: keep apart, together or swap?',
