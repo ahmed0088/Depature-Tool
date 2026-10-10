@@ -113,38 +113,79 @@ function lvScene(t) {
   });
 }
 function _lvHM(d) { return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
-function lvHotelHtml(S, t) {
-  const now = new Date(t), hr = now.getHours(), night = hr < 6 || hr >= 21;
-  const person = (x, kind) => {
+// ── The scene: a lobby with a window on the city, a clock, a sign, the desk, guests coming in ──
+const LV_SKY = [[0, '#0b1330', '#1c2550'], [5, '#1e2a5a', '#3a3f7a'], [6.2, '#f6a96b', '#8bb4e8'], [8, '#7cc4ff', '#d4ecff'], [16, '#6fb8ff', '#d9eeff'], [18, '#ff9a62', '#6f63b6'], [19.5, '#3b2f6b', '#18204a'], [21, '#0b1330', '#1c2550'], [24, '#0b1330', '#1c2550']];
+function _lvMix(a, b, f) { const p = x => [1, 3, 5].map(i => parseInt(x.slice(i, i + 2), 16)), A = p(a), B = p(b); return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * f).toString(16).padStart(2, '0')).join(''); }
+function lvSky(h) { for (let i = 1; i < LV_SKY.length; i++) if (h <= LV_SKY[i][0]) { const a = LV_SKY[i - 1], b = LV_SKY[i], f = (h - a[0]) / (b[0] - a[0] || 1); return [_lvMix(a[1], b[1], f), _lvMix(a[2], b[2], f)]; } return [LV_SKY[0][1], LV_SKY[0][2]]; }
+/** Sun by day, moon by night: across the window in an arc. */
+function lvOrb(h) { const day = h >= 6 && h < 18, x = day ? (h - 6) / 12 : ((h + 6) % 24) / 12; return { day, left: 6 + x * 82, top: 62 - Math.sin(Math.PI * x) * 50 }; }
+const LV_CITY = '<svg class="lv-city" viewBox="0 0 400 80" preserveAspectRatio="none" aria-hidden="true"><path d="M0 80V52h18V40h14v14h10V30h16v24h12V44h20V24h10v-8h6v8h10v30h14V36h18v18h10V46h16v10h12V20l4-16 4 16v4h6v-4l3-14 3 14v34h12V40h18v16h14V32h16v22h10V48h20v32z"/><g class="lv-win">' +
+  Array.from({ length: 34 }, (_, i) => `<rect x="${(i * 37) % 390 + 6}" y="${42 + (i * 13) % 30}" width="3" height="3"/>`).join('') + '</g></svg>';
+function _lvClock(d) { const m = d.getMinutes(), h = d.getHours() % 12 + m / 60; return `<svg class="lv-clk" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18"/><line class="lv-hh" x1="20" y1="20" x2="20" y2="10" transform="rotate(${h * 30} 20 20)"/><line class="lv-mh" x1="20" y1="20" x2="20" y2="6" transform="rotate(${m * 6} 20 20)"/><circle cx="20" cy="20" r="2"/></svg>`; }
+/** How busy the lobby is: check-out late morning, check-in afternoon, quiet at night. */
+function _lvGuests(h) { return h >= 10 && h < 12 ? 3 : h >= 14 && h < 19 ? 3 : h >= 7 && h < 22 ? 1 : 0; }
+const LV_GCOL = ['#f97316', '#22c55e', '#3b82f6', '#a855f7', '#ec4899', '#eab308', '#14b8a6'];
+function lvHotelHtml(S, t, idx) {
+  const now = new Date(t), h = now.getHours() + now.getMinutes() / 60, night = h < 6 || h >= 20;
+  const [s1, s2] = lvSky(h), orb = lvOrb(h);
+  const staff = (x, kind) => {
     const p = Math.max(0, Math.min(1, (now - x.sp.start) / (x.sp.end - x.sp.start)));
-    const nightShift = x.info.type === 'night';
-    const mood = kind !== 'on' ? 'happy' : night && hr >= 2 && hr < 6 ? 'sleepy' : p > 0.85 ? 'cheer' : p > 0.6 ? 'tired' : 'happy';
+    const mood = kind !== 'on' ? 'happy' : night && h >= 2 && h < 6 ? 'sleepy' : p > 0.85 ? 'cheer' : p > 0.6 ? 'tired' : 'happy';
     const left = Math.max(0, Math.round((x.sp.end - now) / 6e4)), lh = Math.floor(left / 60), lm = left % 60;
-    const bubble = kind === 'coming' ? `🚶 In at ${_lvHM(x.sp.start)}` : kind === 'gone' ? '👋 Bye, see you!' : _lvLine(x.key, p, t, S.on.length === 1, nightShift);
-    const d = (_avHash(x.key) % 9) / 10;
-    return `<div class="lv-p ${kind}${x.key === roMeKey ? ' me' : ''}" style="--d:${d}s" title="${escapeHtml(x.name)} · ${escapeHtml(roTime(x.info))}">
+    const bubble = kind === 'coming' ? `🔔 In at ${_lvHM(x.sp.start)}` : kind === 'gone' ? '👋 See you!' : _lvLine(x.key, p, t, S.on.length === 1, x.info.type === 'night');
+    const en = Math.round((1 - p) * 100);
+    return `<div class="lv-st ${kind}${x.key === roMeKey ? ' me' : ''}" data-k="${escapeHtml(x.key)}" style="--d:${(_avHash(x.key) % 9) / 10}s" title="${escapeHtml(x.name)} · ${escapeHtml(roTime(x.info))}">
       <div class="lv-bub">${escapeHtml(bubble)}</div>
-      <div class="lv-body">${avSvg(x.key, 54, mood)}</div>
-      <b class="lv-nm">${escapeHtml(String(x.name).split(' ')[0])}</b>
-      ${kind === 'on' ? `<div class="lv-bar" title="${Math.round(p * 100)}% done"><i style="width:${(p * 100).toFixed(1)}%"></i></div><small>${lh ? lh + ' h ' : ''}${lm} min left</small>` : `<small>${escapeHtml(roTime(x.info))}</small>`}
+      <div class="lv-tag"><b>${escapeHtml(String(x.name).split(' ')[0])}</b>${kind === 'on' ? `<span class="lv-en" title="Energy: ${en}% of the shift left"><i style="width:${en}%"></i></span><small>⚡ ${lh ? lh + 'h ' : ''}${lm}m</small>` : `<small>${escapeHtml(roTime(x.info))}</small>`}</div>
+      <div class="lv-body">${avSvg(x.key, 62, mood)}</div>
     </div>`;
   };
-  const together = S.on.length >= 2;
-  return `<div class="lv-hotel${night ? ' night' : ''}">
-    <div class="lv-hd"><b>${escapeHtml(S.g || 'Reception')}</b><span>${S.on.length ? `${S.on.length} on now` : '⚠ nobody on now'}${together ? ' · 🤝 together' : ''}${S.coming.length ? ` · next: ${escapeHtml(String(S.coming[0].name).split(' ')[0])} ${_lvHM(S.coming[0].sp.start)}` : ''}</span></div>
-    <div class="lv-stage">
-      <div class="lv-sky">${night ? '<span class="lv-moon">🌙</span><i class="lv-star" style="left:12%;top:18%"></i><i class="lv-star" style="left:70%;top:12%"></i><i class="lv-star" style="left:40%;top:28%"></i>' : '<span class="lv-sun">☀️</span>'}<span class="lv-clock">${_lvHM(now)}</span></div>
-      <div class="lv-row">${S.gone.map(x => person(x, 'gone')).join('')}${S.on.map(x => person(x, 'on')).join('') || '<div class="lv-empty">🛎 The bell is waiting…</div>'}${S.coming.map(x => person(x, 'coming')).join('')}</div>
-      <div class="lv-desk"><span>🛎</span>RECEPTION<span>🪴</span></div>
+  const g = _lvGuests(h), seed = _avHash(S.g + now.getHours());
+  const guests = Array.from({ length: g }, (_, i) => `<div class="lv-guest" style="--gd:${(i * 2.7 + (seed % 5)).toFixed(1)}s;--gc:${LV_GCOL[(seed + i) % LV_GCOL.length]};--gs:${9 + ((seed >> i) % 5)}s"><i class="lv-gh"></i><i class="lv-gb"></i><span>🧳</span></div>`).join('');
+  const empty = !S.on.length;
+  return `<div class="lv-hotel${night ? ' night' : ''}${empty ? ' empty' : ''}" id="lvH${idx}">
+    <div class="lv-hud"><b>${escapeHtml(S.g || 'Reception')}</b>
+      <span class="lv-pill ${empty ? 'bad' : 'ok'}">${empty ? '⚠ Desk EMPTY' : '🛎 Desk covered'}</span>
+      <span class="lv-pill">👥 ${S.on.length}</span>${S.coming.length ? `<span class="lv-pill">🔜 ${escapeHtml(String(S.coming[0].name).split(' ')[0])} ${_lvHM(S.coming[0].sp.start)}</span>` : ''}</div>
+    <div class="lv-scene">
+      <div class="lv-window" style="--s1:${s1};--s2:${s2}">
+        <span class="lv-orb ${orb.day ? 'sun' : 'moon'}" style="left:${orb.left}%;top:${orb.top}%"></span>
+        ${night ? '<i class="lv-star" style="left:14%;top:16%"></i><i class="lv-star" style="left:68%;top:10%"></i><i class="lv-star" style="left:42%;top:26%"></i><i class="lv-star" style="left:86%;top:30%"></i><i class="lv-star" style="left:28%;top:8%"></i>' : '<i class="lv-cloud" style="top:14%;--cd:0s"></i><i class="lv-cloud" style="top:34%;--cd:-9s;transform:scale(.7)"></i>'}
+        ${LV_CITY}
+      </div>
+      <div class="lv-wall"><span class="lv-sign">${escapeHtml((S.g || 'Hotel').split(' ')[0])}</span>${_lvClock(now)}<span class="lv-keys">🗝🗝🗝</span></div>
+      <div class="lv-staff">${S.gone.map(x => staff(x, 'gone')).join('')}${S.on.map(x => staff(x, 'on')).join('') || '<div class="lv-empty">🛎 Ding… is anyone here?</div>'}${S.coming.map(x => staff(x, 'coming')).join('')}</div>
+      <div class="lv-desk"><span class="lv-bell">🛎</span><b>RECEPTION</b><span>🪴</span></div>
+      <div class="lv-floor">${guests}</div>
     </div>
   </div>`;
 }
+/** Draw again only what changed: during ▶ the sky, clocks and bars move smoothly instead of everything blinking. */
+const _lvKeys = {};
 function lvRender() {
   const box = document.getElementById('lvBody'); if (!box) return;
-  const t = _lvAt != null ? _lvAt : Date.now(), d0 = roDate(roToday()).getTime();
-  box.innerHTML = lvScene(t).map(S => lvHotelHtml(S, t)).join('') || '<div class="ro-empty">No roster for today yet.</div>';
+  const t = _lvAt != null ? _lvAt : Date.now(), d0 = roDate(roToday()).getTime(), now = new Date(t), h = now.getHours() + now.getMinutes() / 60;
+  const scenes = lvScene(t);
+  if (!scenes.length) box.innerHTML = '<div class="ro-empty">No roster for today yet.</div>';
+  scenes.forEach((S, i) => {
+    const key = [S.g, S.on.map(x => x.key), S.coming.map(x => x.key), S.gone.map(x => x.key), now.getHours(), Math.floor(now.getMinutes() / 15), h < 6 || h >= 20].join('|');
+    let el = document.getElementById('lvH' + i);
+    if (!el || _lvKeys[i] !== key) {
+      const html = lvHotelHtml(S, t, i);
+      if (el) el.outerHTML = html; else box.insertAdjacentHTML('beforeend', html);
+      _lvKeys[i] = key; return;
+    }
+    // the same people: move the sky, sun, clock and energy bars only
+    const [s1, s2] = lvSky(h), orb = lvOrb(h), w = el.querySelector('.lv-window');
+    if (w) { w.style.setProperty('--s1', s1); w.style.setProperty('--s2', s2); }
+    const o = el.querySelector('.lv-orb'); if (o) { o.style.left = orb.left + '%'; o.style.top = orb.top + '%'; }
+    const c = el.querySelector('.lv-clk'); if (c) c.outerHTML = _lvClock(now);
+    S.on.forEach(x => { const st = el.querySelector(`.lv-st.on[data-k="${CSS.escape(x.key)}"]`); if (!st) return; const p = Math.max(0, Math.min(1, (now - x.sp.start) / (x.sp.end - x.sp.start))), left = Math.max(0, Math.round((x.sp.end - now) / 6e4));
+      const i2 = st.querySelector('.lv-en i'); if (i2) i2.style.width = Math.round((1 - p) * 100) + '%';
+      const sm = st.querySelector('.lv-tag small'); if (sm) sm.textContent = `⚡ ${Math.floor(left / 60) ? Math.floor(left / 60) + 'h ' : ''}${left % 60}m`; });
+  });
   const sl = document.getElementById('lvSlider'); if (sl && document.activeElement !== sl) sl.value = Math.round((t - d0) / 6e4);
-  const lb = document.getElementById('lvWhen'); if (lb) lb.textContent = _lvAt == null ? 'Live now' : _lvHM(new Date(t));
+  const lb = document.getElementById('lvWhen'); if (lb) lb.textContent = _lvAt == null ? 'Live now' : _lvHM(now);
 }
 function lvOpen() {
   document.getElementById('lvView')?.remove();
@@ -157,7 +198,7 @@ function lvOpen() {
   </div>`;
   d.addEventListener('click', e => { if (e.target === d) lvClose(); });
   document.body.appendChild(d);
-  _lvAt = null; lvRender();
+  _lvAt = null; Object.keys(_lvKeys).forEach(k => delete _lvKeys[k]); lvRender();
   clearInterval(_lvT); _lvT = setInterval(() => { if (!document.getElementById('lvView')) { clearInterval(_lvT); return; } if (_lvAt == null) lvRender(); }, 30000);
 }
 function lvClose() { clearInterval(_lvT); clearInterval(_lvPlay); _lvPlay = null; document.getElementById('lvView')?.remove(); }
@@ -168,5 +209,5 @@ function lvPlay() {
   if (_lvPlay) { clearInterval(_lvPlay); _lvPlay = null; if (b) b.textContent = '▶ Play the day'; return; }
   if (b) b.textContent = '⏸ Pause';
   const d0 = roDate(roToday()).getTime(); let m = _lvAt != null && _lvAt - d0 < 1430 * 6e4 ? Math.round((_lvAt - d0) / 6e4) : 0;
-  _lvPlay = setInterval(() => { m += 10; if (m >= 1440) { lvSeek(null); return; } _lvAt = d0 + m * 6e4; lvRender(); }, 140);
+  _lvPlay = setInterval(() => { m += 4; if (m >= 1440) { lvSeek(null); return; } _lvAt = d0 + m * 6e4; lvRender(); }, 60);   // smooth: small steps
 }

@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 229, items: [
+    '🎮 The live desk is a real little game now: each hotel\'s lobby with a window on the city (sunrise, blue sky and drifting clouds, sunset, stars and lit windows at night, the sun and moon moving across), a glowing hotel sign, a wall clock showing the time, guests rolling in with suitcases (busier at check-in and check-out), and the team behind a wooden desk with gold name plates and ⚡ energy bars. "Desk covered" or a flashing "Desk EMPTY" on top. ▶ Play the day runs smoothly now.',
+  ] },
   { v: 228, items: [
     '🛎 What counts is that the front office is never empty, not that every shift name is filled. The draft\'s first tile now says "desk never empty" ✓ (or how many hours a desk would have nobody, tap for why), and nobody is borrowed from another hotel for a shift whose hours the other shifts already cover.',
   ] },
