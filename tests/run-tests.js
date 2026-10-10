@@ -275,6 +275,18 @@ console.log('\nRoster scenarios');
     const extra = ppl.filter(p => dates.filter(dt => sb.rbKind(r.cells[p.key][dt] || '') === 'off').length > 1).map(p => p.key);
     check('night cover: nobody gets two days off in the week', extra.join(), '');
   }
+  // 0e. the last check: never a second day off — it becomes a working day that fits, or a PH day when one is owed
+  {
+    const G = { 'Ibis DD': { shifts: [M, E], need: { [M]: day(1), [E]: day(1) } } };
+    const t = P('T'), u = P('U', { phOwed: 2, phLabels: ['28th Aug.', '2nd Sep.'], allowed: [M] });
+    const I = { week: W, groups: G, people: [t, u], pre: {}, rules: { minRest: 11, maxRun: 12, maxHours: 9 } };
+    const res = { cells: { T: {}, U: {} } };
+    dates.forEach((dt, d) => { res.cells.T[dt] = d === 1 || d === 3 ? 'OFF' : M; res.cells.U[dt] = d === 1 ? 'OFF' : d === 2 ? '00:00 - 09:00' : d === 3 ? 'OFF' : M; });
+    sb.rbOneOff(I, res);
+    const offsOf = k => dates.filter(dt => /^OFF$/.test(res.cells[k][dt])).length;
+    check('one day off a week: an extra day off becomes a working day that fits', [offsOf('T'), res.cells.T[dates[1]]].join('|'), '1|' + M);
+    check('one day off a week: no shift fits (after a night) and PH owed → a PH day', [offsOf('U'), /^PH/.test(res.cells.U[dates[1]] + res.cells.U[dates[3]])].join('|'), '1|true');
+  }
   // 1. ideal two per shift, too few people: never an empty shift, some one-person shifts
   {
     const r = solve({ 'Ibis DD': { shifts: [M, E], need: { [M]: day(2), [E]: day(2) } } }, ['A', 'B', 'C', 'D'].map(k => P(k)), {}, { overlapMin: 0 });

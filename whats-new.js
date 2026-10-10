@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 225, items: [
+    '🛋 One day off a week, always: a final check on every built week turns any second day off into a working day on a shift that fits (enough rest, no night ↔ day, not too many days in a row), or into a PH day when they are owed one. Requests, leave and PH asked for are never touched. Two days off only when set on someone\'s card.',
+  ] },
   { v: 224, items: [
     '🛋 Fixed: covering a night in the middle of the week was giving that person two days off (a day off before the night and one after). Now a midweek night is only for someone who has two days off a week anyway; everyone else covers nights at the start or end of the week and keeps their one day off.',
   ] },

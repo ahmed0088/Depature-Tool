@@ -272,6 +272,7 @@ function rbSolve(I) {
     if (shorts(alt) < shorts(res)) res = alt;
   }
   if (!I._plain && !I._strict) {
+    rbOneOff(I, res);
     res.notes = (res.notes || []).filter(n => !n.care && !n.like);
     (I.likeBefore || []).forEach(t => { const nm = typeof roStaff !== 'undefined' && roStaff[t.key] ? roStaff[t.key].name.split(' ')[0] : t.key; res.notes.push({ key: t.key, date: I.week, like: true, text: `📋 ${nm} is away ${t.days.map(d => RB_DAYS[d]).join(', ')}: ${t.hotel} runs like the week of ${roDayLbl(t.week)}, when ${nm} was away too: the same cover, the same people on the same shifts and days off where it fits${Object.keys((I.lendPref || {})[t.hotel] || {}).length ? ', and the same colleagues borrowed first' : ''}.` }); });
   I.people.filter(p => p.care && rbCareW(I, p) > 0).forEach(p => { const nm = typeof roStaff !== 'undefined' && roStaff[p.key] ? roStaff[p.key].name.split(' ')[0] : p.key; res.notes.push({ key: p.key, date: I.week, care: true, text: `💚 Extra care for ${nm} this week (Team Health ${p.careScore}${p.careWhy ? ': ' + p.careWhy : ''}): fewer nights, their wishes first, days off together, one steady shift.` }); });
@@ -1087,7 +1088,7 @@ function rbPersonCfg(k) {
   const fixed = mode === 'static' || lock ? (c.fixed || L.fixedGuess || L.usual || '') : '';
   return {
     key: k, group: rbPGroup(k), post: rbPost(k), title: c.title || '', mode, lock: lock && !!fixed, home: !!c.home, noGo: (c.noGo || []).slice(), alt: c.alt || '',
-    offs: c.offs != null ? +c.offs : L.offs,
+    offs: c.offs != null ? +c.offs : Math.min(1, L.offs),   // one day off a week (4 a month); two only when set on their card
     fixed, fixedLearned: !c.fixed && !!fixed,
     fixedCost: mgr ? 400 : /supervisor|leader|duty/i.test(c.title || '') ? 60 : 30,   // managers move only to stop a shift being empty
     lastMain: L.lastMain,
@@ -1152,6 +1153,41 @@ function rbInput(seed) {
   rbCare(I);
   rbLikeBefore(I);
   return I;
+}
+/** 🛋 Never more days off than due (one a week, unless set on their card): an extra day off the builder made
+ *  becomes a working day on a shift that fits (enough rest, no night ↔ day, not too many days in a row), or a PH day
+ *  when they are owed one. Requests, leave and PH asked for are never touched. */
+function rbOneOff(I, res) {
+  const dates = Array.from({ length: 7 }, (_, d) => roAdd(I.week, d)), R = Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, nightSwitch: true }, I.rules || {});
+  let changed = false;
+  I.people.forEach(p => {
+    const row = res.cells[p.key]; if (!row) return;
+    const pre = (I.pre || {})[p.key] || {}, G = I.groups[p.group]; if (!G) return;
+    const mine = dates.filter(dt => !pre[dt] && /^(OFF|O|DO|RD)$/i.test(String(row[dt] || '').trim()));
+    const asked = dates.filter(dt => pre[dt] && rbKind(pre[dt]) === 'off').length;
+    let extra = mine.length + asked - Math.max(rbOffsDue(I, p, dates), asked);
+    if (extra <= 0) return;
+    const nm = typeof roStaff !== 'undefined' && roStaff[p.key] ? roStaff[p.key].name.split(' ')[0] : p.key;
+    for (const dt of mine) {
+      if (extra <= 0) break;
+      const d = dates.indexOf(dt), pv = d ? row[dates[d - 1]] || '' : p.lastShift || '', nx = d < 6 ? row[dates[d + 1]] || '' : '';
+      const fits = s => {
+        if (!rbMayWork(I, p.group, p, s) || (p.allowed && p.allowed.length && !p.allowed.includes(s)) || ((((I.avoid || {})[p.key] || {})[dt]) || []).includes(s)) return false;
+        const x = rbParse(s); if (!x || x.e - x.s > R.maxHours * 60) return false;
+        if (rbParse(pv) && (rbRest(pv, s) < R.minRest || !rbSwitchOk(pv, s, R))) return false;
+        if (rbParse(nx) && (rbRest(s, nx) < R.minRest || !rbSwitchOk(s, nx, R))) return false;
+        let run = 1; for (let i = d - 1; i >= 0 && rbParse(row[dates[i]]); i--) run++; if (d > 0 && dates.slice(0, d).every(x2 => rbParse(row[x2]))) run += p.run || 0;
+        for (let i = d + 1; i < 7 && rbParse(row[dates[i]]); i++) run++;
+        return run <= R.maxRun;
+      };
+      const cover = rbCover(I, res.cells)[p.group] || {};
+      const order = [rbNorm(pv), rbNorm(nx), p.fixed, p.usual].filter(Boolean).concat(G.shifts.slice().sort((a, b) => ((cover[a] || [])[d] || 0) - ((cover[b] || [])[d] || 0)));
+      const s = order.find(x => G.shifts.includes(x) && fits(x));
+      if (s) { row[dt] = s; extra--; changed = true; (res.notes = res.notes || []).push({ key: p.key, date: dt, auto: true, text: `🛋 ${nm} works ${RB_DAYS[d]} (${s}) instead of a second day off: one day off a week.` }); continue; }
+      if ((p.phOwed || 0) > 0) { const used = dates.filter(x2 => /^PH\b/i.test(String(row[x2] || ''))).length, lb = (p.phLabels || [])[used] || p.phLabel || ''; row[dt] = lb ? `PH - ${lb}` : 'PH'; extra--; changed = true; (res.notes = res.notes || []).push({ key: p.key, date: dt, auto: true, text: `🏖 ${nm}: ${RB_DAYS[d]} is a PH day from their balance, not a second day off.` }); }
+    }
+  });
+  if (changed) { res.cover = rbCover(I, res.cells); res.problems = rbProblems(I, res.cells, res.cover); }
 }
 /** 📋 Someone away this week (vacation, sick): the last posted week they were away too shows how management ran
  *  their hotel without them. On the same weekdays the builder copies it: the cover that week (not the usual
