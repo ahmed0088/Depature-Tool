@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 253, items: [
+    '🩹 Tap a red cell in the draft (like a day off before the cut-off) and "Fix this for me" is right at the top. It re-plans only that hotel and keeps everything else as you left it. For Judith it keeps her on the 19:00 nights she was already on (a 12:00 start after Sunday\'s night is too little rest), with her day off after the 15th.',
+  ] },
   { v: 252, items: [
     '✂️ HR cut-off card redesigned for phones: a proper on/off switch, − / + for the cut-off day and the days off in each half (no more oversized number box), and each half shows how many people still have days off left. Tap a half to see and change who.',
   ] },

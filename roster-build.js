@@ -2480,7 +2480,9 @@ function rbPick(td, k, dt) {
   const opt = (v, label, cls) => `<button class="rb-opt ${cls || ''}${v === cur ? ' on' : ''}" onclick="rbSetCell(${_rbQ(k)},'${dt}',${_rbQ(v)})">${escapeHtml(label || v)}</button>`;
   const m = document.createElement('div');
   m.id = 'rbMenu'; m.className = 'rb-menu';
+  const probHere = (() => { try { const I = rbInput(rbSeed); return rbProblems(I, rbDrafts[rbWeek].cells).filter(p => p.key === k && /^(freeze|cutoff|cutshort|offs|rest|switch|back|run)$/.test(p.kind)); } catch (_) { return []; } })();
   m.innerHTML = `<div class="rb-menu-hd"><b>${escapeHtml((roStaff[k] || {}).name || k)}</b><span>${escapeHtml(roDayLbl(dt, true))}</span></div>
+    ${probHere.length ? `<button class="btn gold rb-fixbig" onclick="document.getElementById('rbMenu')?.remove();rbFixPerson(${_rbQ(k)})">🩹 Fix this for me <small>re-plans only ${escapeHtml(rbBaseGroup(g))}, the rest stays as it is</small></button>` : ''}
     <div class="rb-opts">${shifts.map(s => opt(s, s, 'ro-t-' + ((roInfo(s) || {}).type || 'other'))).join('')}</div>
     <div class="rb-opts">${opt('OFF', 'OFF', 'ro-t-off')}${(() => { const L = rbPhNext(k); return opt(L ? 'PH - ' + L : 'PH', 'PH', 'ro-t-leave'); })()}${leave.slice(0, 8).map(c => opt(c, c, 'ro-t-leave')).join('')}</div>
     ${rbSwapMenuHtml(k, dt)}

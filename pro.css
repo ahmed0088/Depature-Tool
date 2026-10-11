@@ -2019,3 +2019,5 @@ html.ho-lang-ar body { font-family: var(--font), 'Segoe UI', 'Noto Sans Arabic',
 .rr-cut-p summary::-webkit-details-marker { display: none; }
 .rr-cut-p summary small { grid-column: 1 / -1; }
 .rr-cut-ttl { font: 800 14px var(--font); } .rr-cut-cnt { font: 700 12px var(--font); color: var(--accent); background: var(--accent-bg); padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+.rb-fixbig { width: 100%; display: grid; gap: 2px; text-align: left; padding: 10px 12px !important; margin: 4px 0 8px; border-radius: 12px !important; font-weight: 800 !important; }
+.rb-fixbig small { font-weight: 500; font-size: 11.5px; opacity: .85; }
