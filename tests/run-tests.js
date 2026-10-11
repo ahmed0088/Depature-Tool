@@ -324,6 +324,15 @@ console.log('\nRoster scenarios');
     const r = sb.rbSolve(I), offDays = k => dates.map((dt, d) => sb.rbKind(r.cells[k][dt] || '') === 'off' ? d : -1).filter(d => d >= 0);
     check('day-off freeze: bell boys too, their day off only after it', ['BB1', 'BB2'].map(k => offDays(k).length === 1 && offDays(k)[0] >= 4).join(), 'true,true');
   }
+  // 0g3. 🛎 a bell boy's day off is fine: the team works without him, no bell boy is borrowed from another hotel for it
+  {
+    const IB = 'Ibis DD · Bell', MB = 'Mercure DD · Bell';
+    const G = { 'Ibis DD': { shifts: [M], need: { [M]: day(1) } }, 'Mercure DD': { shifts: [M], need: { [M]: day(1) } }, [IB]: { shifts: [D9], need: { [D9]: day(1) }, post: 'Bell' }, [MB]: { shifts: [D9], need: { [D9]: day(1) }, post: 'Bell' } };
+    const ppl = [P('A'), P('B'), P('C', { group: 'Mercure DD' }), P('D', { group: 'Mercure DD' }), P('BI', { group: IB, post: 'Bell', title: 'Bell Boy' }), P('BM', { group: MB, post: 'Bell', title: 'Bell Boy' })];
+    const r = solve(G, ppl, {});
+    const moved = ['BI', 'BM'].some(k => dates.some(dt => /Ibis|Mercure/i.test(r.cells[k][dt] || '')));
+    check('bell boys: each takes his day off at home, nobody borrowed to cover it, no problem shown', [moved, ['BI', 'BM'].every(k => dates.filter(dt => sb.rbKind(r.cells[k][dt] || '') === 'off').length === 1), r.problems.filter(p => p.kind === 'short').length].join(), 'false,true,0');
+  }
   // 0h. ✂️ HR cut-off on the 15th, 2 days off each half. Week Mon 12 – Sun 18: the first half ends Thursday.
   //     X took both already (none left: no day off Mon–Thu, the usual one Fri–Sun); Y took none (both before Friday);
   //     Z took one (one before Friday, none after). A 📌 fixed day off stays as it is.

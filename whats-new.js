@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 251, items: [
+    '🛎 Bell boys are part of their hotel\'s team and follow the same day-off rules (cut-off, freeze), but the team works without them when they are off: a bell boy\'s day off is never a gap, nobody is moved from another hotel to cover it, and it never weighs on the rest of the week.',
+  ] },
   { v: 250, items: [
     '🩹 Fix one person without rebuilding: next to a problem in the draft (a day off before the cut-off, short rest, too many days in a row…) tap 🩹 Fix. Only that person\'s hotel is re-planned, changing as little as possible; every other hotel and the bell teams stay exactly as you left them, hand changes included. It is kept only if the week gets better, it lists every cell it changed, and ↶ Undo puts it back.',
   ] },

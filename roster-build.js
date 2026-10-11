@@ -545,6 +545,7 @@ function _rbFinish(I, cells, o) {
   let cover = rbCover(I, cells);
   if (o.lend !== false) { // even with lending off, a Duty Manager may go where they're needed
     for (const g of Object.keys(G)) for (let d = 0; d < D; d++) for (const s of G[g].shifts) {
+      if (G[g].post) continue;   // 🛎 bell boys: the team works without them when they're off; nobody is borrowed for it
       while (cover[g][s][d] < need(g, s, d)) {
         // moving someone to another hotel: for an empty shift, or for someone truly alone (nobody with them on the
         // desk for a break); not for the ideal second person when another shift keeps them company for a few hours
@@ -694,7 +695,8 @@ function rbScore(I, g, cells, dates, R) {
     const n = (G.need[s] || [])[d] || 0, h = haveAll[d][s];
     // an empty shift is the worst; one person short of the ideal less so, and hardly at all when someone
     // else is on the desk with them for a few hours (a break): they can handle that
-    if (h < n) sc += R.allowOne === false ? 1000 * (n - h) : (h === 0 ? (!G.post && rbHoursCovered(grid, d, s) ? 450 : 1000) : 0) + (h && !G.post && rbRelieved(grid, d, s, R) ? 25 : 300 * rbW(R, 'alone')) * (n - Math.max(h, 1));
+    if (h < n && G.post) sc += 15 * (n - h);   // 🛎 a bell boy off: fine, the team works without him
+    else if (h < n) sc += R.allowOne === false ? 1000 * (n - h) : (h === 0 ? (!G.post && rbHoursCovered(grid, d, s) ? 450 : 1000) : 0) + (h && !G.post && rbRelieved(grid, d, s, R) ? 25 : 300 * rbW(R, 'alone')) * (n - Math.max(h, 1));
     else sc += 0.5 * (h - n);
   });
   if (rbDeskOn(R)) sc += RB_DESK_W * rbW(R, 'desk') * rbDeskShort(grid, R).gap;   // two on the desk at once, when it can be done
