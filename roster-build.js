@@ -895,7 +895,7 @@ function rbProblems(I, cells, cover) {
       } else if (v) run = 0;
       prev = v;
     });
-    const offs = dates.filter(dt => rbKind((cells[p.key] || {})[dt]) === 'off').length, due = Math.min(rbOffsDue(I, p, dates), dates.filter(dt => !/^(leave|other)$/.test(rbKind((cells[p.key] || {})[dt] || ''))).length);   // (on leave all week: no day off due)
+    const offs = dates.filter(dt => rbKind((cells[p.key] || {})[dt]) === 'off' || /^PH\b/i.test(String((cells[p.key] || {})[dt] || ''))).length, due = Math.min(rbOffsDue(I, p, dates), dates.filter(dt => !/^(leave|other)$/.test(rbKind((cells[p.key] || {})[dt] || ''))).length);   // (on leave all week: no day off due)
     if (offs < due) out.push({ kind: 'offs', key: p.key, have: offs, need: due });
     else (p.cut || []).forEach(x => { const have = x.days.filter(dt => rbKind(((cells[p.key] || {})[dt]) || '') === 'off').length; if (have < x.due && !x.frozen) out.push({ kind: 'cutshort', key: p.key, have, need: x.due, date: x.days[x.days.length - 1] }); });   // ✂️ days off still owed when the half ends
   });
@@ -1804,13 +1804,48 @@ function rbDayRead(dt) {
   return out;
 }
 function rbPostedWeek(w) { return [0, 1, 2, 3, 4, 5, 6].some(d => Object.keys(roDays[roAdd(w, d)] || {}).length); }
+/** 📋 What a posted week does, in plain words: hours with nobody on the desk, and the hard spots for people.
+ *  PH days owed and vacation are not problems. Cached until the roster changes. */
+let _rbWkC = {};
+function rbWeekCheck(week) {
+  const st = _rbLearnStamp() + '|' + week; if (_rbWkC[st]) return _rbWkC[st];
+  const out = [], dates = Array.from({ length: 7 }, (_, d) => roAdd(week, d)), nm = k => String((roStaff[k] || {}).name || k).split(' ')[0];
+  let I, cells;
+  try { const keep = rbWeek; rbWeek = week; try { I = rbInput(1); } finally { rbWeek = keep; } I.pre = {}; cells = {}; I.people.forEach(p => { cells[p.key] = {}; dates.forEach(dt => { const v = (roDays[dt] || {})[p.key]; if (v) cells[p.key][dt] = v; }); }); } catch (e) { return []; }
+  // hours with nobody on a hotel's desk
+  Object.keys(I.groups).filter(g => !I.groups[g].post).forEach(g => {
+    const grid = rbDesk(I, cells, g); if (!grid) return;
+    grid.forEach((row, d) => { let a = -1; for (let h = 0; h <= 24; h++) { const z = h < 24 && row[h] === 0; if (z && a < 0) a = h; if (!z && a >= 0) { out.push({ ico: '🛎', bad: true, text: `${rbBaseGroup(g)} ${RB_DAYS[d]} ${dates[d].slice(8)}: nobody on the desk ${String(a).padStart(2, '0')}:00–${String(h % 24).padStart(2, '0')}:00` }); a = -1; } } });
+  });
+  rbProblems(I, cells).forEach(x => {
+    if (!x.key) return;
+    const day = x.date ? `${RB_DAYS[dates.indexOf(x.date)]} ${x.date.slice(8)}` : '';
+    const t = v => String(v || '').slice(0, 5);
+    if (x.kind === 'back') out.push({ ico: '🌅', text: `${nm(x.key)}: an earlier start without a day off, ${t(x.from)} → ${t(x.to)} (${day})` });
+    else if (x.kind === 'switch') out.push({ ico: '🌙', bad: true, text: `${nm(x.key)}: night and day shift without a day off between (${day})` });
+    else if (x.kind === 'rest') out.push({ ico: '😴', bad: true, text: `${nm(x.key)}: only ${Math.round(x.hours)} h rest (${day})` });
+    else if (x.kind === 'run') out.push({ ico: '📆', bad: true, text: `${nm(x.key)}: ${x.days} days in a row (${day})` });
+    else if (x.kind === 'offs') out.push({ ico: '🛋', bad: true, text: `${nm(x.key)}: no day off or PH this week` });
+    else if (x.kind === 'long') out.push({ ico: '⏱', bad: true, text: `${nm(x.key)}: a shift over ${rbRules().maxHours} h (${day})` });
+  });
+  I.people.forEach(p => rbNightToMorning(cells, p, dates).forEach(dt => out.push({ ico: '🌗', text: `${nm(p.key)}: night, one day off, then a morning (${RB_DAYS[dates.indexOf(dt)]} ${dt.slice(8)})` })));
+  _rbWkC = { [st]: out };
+  return out;
+}
+function rbWeekCheckHtml(week) {
+  const L = rbWeekCheck(week), lbl = rbWeekLabel(week).replace(/ \d{4}$/, '');
+  if (!L.length) return `<div class="rb-wkcheck ok">📋 <b>${escapeHtml(lbl)}</b> as posted: desk covered every hour, no hard spots. PH days and vacation are fine.</div>`;
+  return `<details class="rb-wkcheck"${L.some(x => x.bad) ? ' open' : ''}><summary>📋 What we noticed in <b>${escapeHtml(lbl)}</b> as posted <span>${L.filter(x => x.bad).length} to look at · ${L.filter(x => !x.bad).length} small</span></summary>
+    <div>${L.sort((a, b) => (b.bad ? 1 : 0) - (a.bad ? 1 : 0)).map(x => `<div class="rb-wk-i${x.bad ? ' bad' : ''}">${x.ico} ${escapeHtml(x.text)}</div>`).join('')}</div>
+    <small>PH days owed and vacation are not problems. The builder learns from this week (the moves, how nights were covered) for the weeks after it. Kinder trades for it: Roster page → 💡 Ideas.</small></details>`;
+}
 function rbBaseHtml() {
   if (!rbWeek) return '';
   const prev = roAdd(rbWeek, -7), lbl = w => rbWeekLabel(w).replace(/ \d{4}$/, '');
   let last = null; for (let i = 1, w = prev; i <= 12; i++, w = roAdd(w, -7)) if (rbPostedWeek(w)) { last = w; break; }
-  if (rbPostedWeek(rbWeek)) return `<div class="rb-base">📌 This week is already posted. You can change it here; the team sees the changes only when you publish again.</div>`;
+  if (rbPostedWeek(rbWeek)) return `<div class="rb-base">📌 This week is already posted. You can change it here; the team sees the changes only when you publish again.</div>` + rbWeekCheckHtml(rbWeek);
   if (!last) return `<div class="rb-base warn">📌 No posted roster before this week yet. Add the current roster first (Roster → Add roster): the builder learns your team from it and carries on from there.</div>`;
-  if (last === prev) return `<div class="rb-base">📌 Builds on the posted roster: <b>${escapeHtml(lbl(prev))}</b> and the weeks before it: how everyone ended that week, their usual shifts, days in a row, fairness, PH and vacation.</div>`;
+  if (last === prev) return `<div class="rb-base">📌 Builds on the posted roster: <b>${escapeHtml(lbl(prev))}</b> and the weeks before it: how everyone ended that week, their usual shifts, days in a row, fairness, PH and vacation.</div>` + rbWeekCheckHtml(prev);
   const draft = !!(rbDrafts[prev] && rbDrafts[prev].cells);
   return `<div class="rb-base warn">⚠ <b>${escapeHtml(lbl(prev))}</b> isn't posted yet${draft ? ' (there is only a draft)' : ''}. This week carries on from the last posted roster, <b>${escapeHtml(lbl(last))}</b>. Post ${escapeHtml(lbl(prev))} first so this week follows on from it. <button class="btn sm" onclick="rbGo(-7)">Go to ${escapeHtml(lbl(prev))}</button></div>`;
 }

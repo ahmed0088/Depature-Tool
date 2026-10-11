@@ -2025,3 +2025,9 @@ html.ho-lang-ar body { font-family: var(--font), 'Segoe UI', 'Noto Sans Arabic',
 .ro-ideas { margin: 12px 0; display: grid; gap: 8px; } .ro-ideas > small { color: var(--text2); font-size: 12px; }
 .ro-idea { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--card); }
 .ro-idea > div { flex: 1; display: grid; gap: 3px; font-size: 13px; } .ro-idea span { color: var(--text2); font-size: 12.5px; }
+/* 📋 check of a posted week (builder) */
+.rb-wkcheck { margin: 8px 0; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--card); font-size: 13px; }
+.rb-wkcheck.ok { border-color: rgba(34,197,94,.45); background: rgba(34,197,94,.08); }
+.rb-wkcheck summary { cursor: pointer; font-weight: 600; } .rb-wkcheck summary span { display: block; font-weight: 500; font-size: 12px; color: var(--text2); }
+.rb-wkcheck > div { display: grid; gap: 4px; margin: 8px 0; } .rb-wk-i { padding: 6px 9px; border-radius: 8px; background: var(--surface); } .rb-wk-i.bad { background: rgba(239,68,68,.09); }
+.rb-wkcheck small { color: var(--text2); font-size: 11.5px; }
