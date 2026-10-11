@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 246, items: [
+    '🛠 Days off fixed: with a 🚫 day-off freeze and the ✂️ HR cut-off both on, people outside the freeze could end up with no day off at all that week. Now the freeze comes first and their one day off moves to after the cut-off. Nobody gets two in a week, and nobody gets none.',
+    '✂️ The cut-off card now says when there is no roster in the app for part of the half (like 1–4 Oct), because days off taken then cannot be counted. Set what each person has LEFT directly with − / +, or "Everyone left: 0 1 2" in one tap.',
+  ] },
   { v: 245, items: [
     '✂️ HR cut-off is a must, every week, and never two days off in one week: each week gives one day off, in the half of the month that still owes one (the half ending first first), so 2 before the 15th and 2 after are done in time. If someone has more left than the weeks allow, the draft says so instead of giving two in one week.',
     '🚫 Day-off freeze: the people you pick now MUST take their day off inside those dates (not just "may"); nobody else is off. A missed day off is no longer given back as a second day off in one week.',

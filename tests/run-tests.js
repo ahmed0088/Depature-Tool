@@ -328,6 +328,12 @@ console.log('\nRoster scenarios');
     check('cut-off: one day off a week, in the half that still owes one (X 0+1, Y 1+0 with 1 still owed, Z 1+0)', ['X', 'Y', 'Z'].map(k => ppl.find(p => p.key === k).cut.map(x => x.due).join('+')).join(' ') + ' ' + ppl.find(p => p.key === 'Y').cut[0].owed, '0+1 1+0 1+0 1');
     const r = sb.rbSolve(I), offIdx = k => ds.map((dt, d) => sb.rbKind(r.cells[k][dt] || '') === 'off' ? d : -1).filter(d => d >= 0);
     check('cut-off: the week follows it (X off Fri–Sun, Y and Z off Mon–Thu, nobody twice)', [offIdx('X').every(d => d >= 4) && offIdx('X').length === 1, offIdx('Y').length === 1 && offIdx('Y')[0] <= 3, offIdx('Z').length === 1 && offIdx('Z')[0] <= 3].join(), 'true,true,true');
+    // with a 🚫 freeze Mon–Thu too (only Y picked): everyone still gets exactly one day off; X, Z and Q after the 15th
+    const ppl2 = ['X', 'Y', 'Z', 'Q'].map(k => P(k));
+    const I2 = { week: WK, groups: G, people: ppl2, pre: {}, rules: { minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, givePh: false, lend: false, cutoff: { on: true, day: 15, per: 2 }, offFreeze: [{ from: ds[0], to: ds[3], allow: ['Y'] }] }, seed: 1 };
+    sb.rbFreeze(I2); sb.rbCutoff(I2);
+    const r2 = sb.rbSolve(I2), off2 = k => ds.map((dt, d) => sb.rbKind(r2.cells[k][dt] || '') === 'off' ? d : -1).filter(d => d >= 0);
+    check('freeze + cut-off: one day off each, only the picked one before the 15th, no problems', [['X', 'Z', 'Q'].every(k => off2(k).length === 1 && off2(k)[0] >= 4), off2('Y').length === 1 && off2('Y')[0] <= 3, r2.problems.filter(p => p.kind !== 'thin').length].join(), 'true,true,0');
     vm.runInContext(`if (_cutSave.a) roDays['2026-10-03'] = _cutSave.a; else delete roDays['2026-10-03']; if (_cutSave.b) roDays['2026-10-08'] = _cutSave.b; else delete roDays['2026-10-08'];`, sb);
   }
   // 0i. ⚠️ "only if no other option" for a hotel: someone else is borrowed first; alone, they still go

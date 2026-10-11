@@ -158,15 +158,19 @@ function rrCutHtml() {
   if (nx.start <= roAdd(W, 6)) periods.push(nx);
   const ppl = _rrFzPeople().filter(k => !((rbPeople[k] || {}).staticOff || []).length), nm = k => String(roStaff[k].name).split(' ')[0];
   return head + periods.map(P => {
+    // days of this half before the week being built that have no posted roster: days off taken then are unknown
+    let missing = 0; for (let dt = P.start; dt <= P.end && dt < W; dt = roAdd(dt, 1)) if (!Object.keys(roDays[dt] || {}).length) missing++;
     const rows = ppl.map(k => { const q = rbCutQuota(C, P, k), t = rbCutTaken(k, P, W), left = Math.max(0, q - t);
-      return `<div class="rr-cut-row${left ? '' : ' none'}"><span>${escapeHtml(nm(k))}</span><small>${t} taken</small><span class="rr-cut-q"><button class="rr-pm" onclick="rrCutAdj('${P.id}',${_rtQ(k)},${Math.max(0, q - 1)})">−</button><b>${q}</b><button class="rr-pm" onclick="rrCutAdj('${P.id}',${_rtQ(k)},${q + 1})">+</button></span><em>${left ? left + ' left' : 'none left'}</em></div>`; }).join('');
-    return `<details class="rr-cut-p" open><summary>${escapeHtml(roDayLbl(P.start))} → ${escapeHtml(roDayLbl(P.end))} <small>days off before the cut-off · taken before ${escapeHtml(roDayLbl(W))}</small></summary>
-      <div class="rr-cut-quick">Everyone: ${[0, 1, 2, 3].map(n => `<button class="btn sm ghost" onclick="rrCutAll('${P.id}',${n})">${n}</button>`).join('')}</div>
+      return `<div class="rr-cut-row${left ? '' : ' none'}"><span>${escapeHtml(nm(k))}</span><small>${t} taken</small><span class="rr-cut-q"><button class="rr-pm" onclick="rrCutAdj('${P.id}',${_rtQ(k)},${t + Math.max(0, left - 1)})">−</button><b>${left}</b><button class="rr-pm" onclick="rrCutAdj('${P.id}',${_rtQ(k)},${t + left + 1})">+</button></span><em>${left ? 'left' : 'none left'}</em></div>`; }).join('');
+    return `<details class="rr-cut-p" open><summary>${escapeHtml(roDayLbl(P.start))} → ${escapeHtml(roDayLbl(P.end))} <small>days off still to take in this half · counted before ${escapeHtml(roDayLbl(W))}</small></summary>
+      ${missing ? `<div class="rr-cut-warn">⚠️ No roster in the app for ${missing} day${missing === 1 ? '' : 's'} of this half (before ${escapeHtml(roDayLbl(W))}), so days off taken then are not counted. Set what each person has <b>left</b> below (or add that roster).</div>` : ''}
+      <div class="rr-cut-quick">Everyone left: ${[0, 1, 2].map(n => `<button class="btn sm ghost" onclick="rrCutAllLeft('${P.id}',${n})">${n}</button>`).join('')}</div>
       <div class="rr-cut-list">${rows}</div></details>`;
   }).join('') + '<small class="ro-hint">A must, every week: one day off a week (never two), in the half that still owes one, the half ending first first. None left: no day off until the cut-off. Managers and anyone with a 📌 fixed day off stay as they are.</small>';
 }
 function rrCutSet(k, v) { rbSetRule('cutoff', Object.assign({ day: 15, per: 2 }, rbRules().cutoff, { [k]: v })); rrRefresh(); }
 function rrCutAdj(id, k, n) { const c = Object.assign({ day: 15, per: 2 }, rbRules().cutoff), adj = Object.assign({}, c.adj); adj[id] = Object.assign({}, adj[id], { [k]: n }); c.adj = adj; rbSetRule('cutoff', c); rrRefresh(); }
+function rrCutAllLeft(id, n) { const c = Object.assign({ day: 15, per: 2 }, rbRules().cutoff), adj = Object.assign({}, c.adj), W = rbWeek || rbDefaultWeek(), P = rbCutPeriod(id.slice(-1) === 'A' ? id.slice(0, 7) + '-01' : id.slice(0, 7) + '-28', c.day || 15); adj[id] = {}; _rrFzPeople().forEach(k => { adj[id][k] = rbCutTaken(k, P, W) + n; }); c.adj = adj; rbSetRule('cutoff', c); rrRefresh(); }
 function rrCutAll(id, n) { const c = Object.assign({ day: 15, per: 2 }, rbRules().cutoff), adj = Object.assign({}, c.adj); adj[id] = {}; _rrFzPeople().forEach(k => { adj[id][k] = n; }); c.adj = adj; rbSetRule('cutoff', c); rrRefresh(); }
 function rrFreezeAdd() {
   const from = (document.getElementById('rrFzFrom') || {}).value, to = (document.getElementById('rrFzTo') || {}).value;

@@ -894,7 +894,7 @@ function rbProblems(I, cells, cover) {
     });
     const offs = dates.filter(dt => rbKind((cells[p.key] || {})[dt]) === 'off').length, due = rbOffsDue(I, p, dates);
     if (offs < due) out.push({ kind: 'offs', key: p.key, have: offs, need: due });
-    else (p.cut || []).forEach(x => { const have = x.days.filter(dt => rbKind(((cells[p.key] || {})[dt]) || '') === 'off').length; if (have < x.due) out.push({ kind: 'cutshort', key: p.key, have, need: x.due, date: x.days[x.days.length - 1] }); });   // ✂️ days off still owed when the half ends
+    else (p.cut || []).forEach(x => { const have = x.days.filter(dt => rbKind(((cells[p.key] || {})[dt]) || '') === 'off').length; if (have < x.due && !x.frozen) out.push({ kind: 'cutshort', key: p.key, have, need: x.due, date: x.days[x.days.length - 1] }); });   // ✂️ days off still owed when the half ends
   });
   return out;
 }
@@ -1214,15 +1214,17 @@ function rbCutoff(I) {
     const parts = [...new Set(dates.map(dt => rbCutPeriod(dt, C.day).id))].map(id => {
       const P = rbCutPeriod(dates.find(dt => rbCutPeriod(dt, C.day).id === id), C.day), days = dates.filter(dt => dt >= P.start && dt <= P.end);
       const quota = rbCutQuota(C, P, p.key), taken = rbCutTaken(p.key, P, I.week), left = Math.max(0, quota - taken);
-      const open = days.filter(dt => !pre[dt] || rbKind(pre[dt]) === 'off').length, asked = days.filter(dt => pre[dt] && rbKind(pre[dt]) === 'off').length;
-      return { id, days, quota, taken, left, open, asked, ends: P.end <= dates[6] ? P.end : '', due: asked };
+      // (a 🚫 day-off freeze comes first: frozen days are not open for a day off)
+      const open = days.filter(dt => (!pre[dt] && !rbNoOff(I, p.key, dt)) || (pre[dt] && rbKind(pre[dt]) === 'off')).length, asked = days.filter(dt => pre[dt] && rbKind(pre[dt]) === 'off').length;
+      return { id, days, quota, taken, left, open, asked, frozen: open === asked && days.some(dt => !pre[dt]), ends: P.end <= dates[6] ? P.end : '', due: asked };
     });
     // never more than their usual days off in one week: those go to the half that still owes days off, the half
     // that ends first first (so by the cut-off they have had them all). A half with none left: no day off in it.
     let free = Math.max(0, weekly - parts.reduce((t, x) => t + x.asked, 0));
     parts.forEach(x => { const n = Math.min(free, Math.max(0, x.left - x.asked), x.open - x.asked); if (n > 0) { x.due += n; free -= n; } });
+    if (free > 0 && parts.some(x => x.frozen)) parts.forEach(x => { const n = Math.min(free, x.open - x.due); if (!x.frozen && n > 0) { x.due += n; free -= n; } });   // frozen before the cut-off: their day off comes after it
     parts.forEach(x => { if (x.due <= x.asked) x.days.forEach(dt => { if (!pre[dt]) (I.noOff[p.key] = I.noOff[p.key] || {})[dt] = true; }); });
-    parts.forEach(x => { x.owed = x.ends ? Math.max(0, x.left - x.due) : 0; });   // more left than one week allows: told, not forced
+    parts.forEach(x => { x.owed = x.ends && !x.frozen ? Math.max(0, x.left - x.due) : 0; });   // more left than one week allows: told, not forced
     p.cut = parts; p.offs = parts.reduce((t, x) => t + x.due, 0);
   });
 }
