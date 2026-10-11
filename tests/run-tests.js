@@ -755,6 +755,14 @@ console.log('\nRoster scenarios');
   check('extra care: switched Off in Rules, nothing changes', run(`nightsOf(true, { care: 0 }).notes.some(x => x.care)`), false);
 }
 
+// ── 🌐 Languages (i18n.js) ────────────────────────────────
+{
+  const sb = { console, hoPrefs: { lang: 'ar' }, document: { documentElement: { style: {} } } };
+  vm.createContext(sb); vm.runInContext(fs.readFileSync(path.join(ROOT, 'i18n.js'), 'utf8'), sb, { filename: 'i18n.js' });
+  check('languages: a menu word, a greeting with a name, and an unknown word left alone', vm.runInContext(`[hoT('Home'), hoT('Good morning, Sam'), hoT('Good morning, Sam', 'fr'), String(hoT('Room 512')), hoT('Home', 'en')].join(' | ')`, sb),
+    'الرئيسية | صباح الخير، Sam | Bonjour, Sam | null | Home');
+  check('languages: every word has all six translations', vm.runInContext(`Object.entries(HO_T).filter(([k, v]) => v.length !== 6 || v.some(x => !x)).map(([k]) => k).join()`, sb), '');
+}
 // ── 🎮 Live desk and looks (roster-live.js) ───────────────
 {
   const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} }, fbSet() {}, showToast() {}, escapeHtml: x => String(x),

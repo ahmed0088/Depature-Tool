@@ -27,7 +27,8 @@ const HO_PREF_DEFAULTS = {
   autoResetShifts: true,
   accent: 'theme',        // theme · gold · blue · green · teal · rose · purple
   corners: 'rounded',     // rounded · soft · sharp
-  font: 'inter',          // inter · system
+  font: 'inter',          // a key of HO_FONTS (i18n.js)
+  lang: 'en',             // en · ar · fr · hi · ru · zh · tl
   contrast: false,
   tbClock: true, tbVersion: true, tbConn: true, tbThemes: true, tbUser: true,
   clock12: false, clockSeconds: false, greetName: true,
@@ -93,13 +94,14 @@ function hoApplyPrefs() {
   ['--r', '--r2', '--r3'].forEach(v => R.removeProperty(v));
   const rr = { soft: ['6px', '9px', '12px'], sharp: ['3px', '4px', '6px'] }[hoPrefs.corners];
   if (rr) { R.setProperty('--r', rr[0], 'important'); R.setProperty('--r2', rr[1], 'important'); R.setProperty('--r3', rr[2], 'important'); }
-  if (hoPrefs.font === 'system') R.setProperty('--font', "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"); else R.removeProperty('--font');
+  if (typeof hoApplyFont === 'function') hoApplyFont(); else if (hoPrefs.font === 'system') R.setProperty('--font', "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"); else R.removeProperty('--font');
   b.classList.toggle('ho-contrast', !!hoPrefs.contrast);
   b.classList.toggle('ho-privacy', !!hoPrefs.privacy);
   [['tbClock', 'ho-no-clock'], ['tbVersion', 'ho-no-ver'], ['tbConn', 'ho-no-conn'], ['tbThemes', 'ho-no-themes'], ['tbUser', 'ho-no-user']].forEach(([k, c]) => b.classList.toggle(c, !hoPrefs[k]));
   if (typeof updateClock === 'function') updateClock();
   hoArmAutoLock();
   if (typeof homeRender === 'function' && document.getElementById('panel-home')?.classList.contains('active')) homeRender();
+  if (typeof hoI18nApply === 'function') hoI18nApply();
 }
 
 // ── Page ─────────────────────────────────────────────────
@@ -127,6 +129,7 @@ const _hoSec = (id, icon, title, sub, body) => `
 function hoSettingsRender() {
   const box = document.getElementById('hsBody');
   if (!box) return;
+  if (typeof hoFontPreviews === 'function') hoFontPreviews();
   const theme = typeof hoThemeName === 'function' ? hoThemeName() : (document.documentElement.getAttribute('data-theme') || 'night-ops');
   const pages = _hoPages();
   const hidden = new Set(hoPrefs.hiddenPages || []);
@@ -153,7 +156,7 @@ function hoSettingsRender() {
            <span class="hs-swatches"><button class="${hoPrefs.accent === 'theme' ? 'on' : ''}" title="Theme default" onclick="hoSetPref('accent','theme');hoSettingsRender()"><i style="background:conic-gradient(#eab94a 0 33%,#c74634 0 66%,#818cf8 0)"></i></button>${Object.entries(HO_ACCENTS).map(([k, c]) => `<button class="${hoPrefs.accent === k ? 'on' : ''}" title="${k}" onclick="hoSetPref('accent','${k}');hoSettingsRender()"><i style="background:${c[0]}"></i></button>`).join('')}</span>
          </div>`
       + _hoSeg('corners', 'Corners', 'How round cards and buttons are', [['rounded', 'Rounded'], ['soft', 'Soft'], ['sharp', 'Sharp']])
-      + _hoSeg('font', 'Font', 'Inter, or your device\'s own font', [['inter', 'Inter'], ['system', 'System']])
+      + (typeof hoLangFontHtml === 'function' ? hoLangFontHtml() : _hoSeg('font', 'Font', 'Inter, or your device\'s own font', [['inter', 'Inter'], ['system', 'System']]))
       + _hoTog('contrast', 'High contrast', 'Brighter secondary text and stronger lines, for bright rooms or tired eyes')),
 
     _hoSec('topbar', 'menu', 'Top bar', 'Choose what the bar at the top shows',

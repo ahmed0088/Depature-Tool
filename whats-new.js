@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 241, items: [
+    '🌐 Languages: ⚙️ Settings → Appearance → Language. English, العربية, Français, हिन्दी, Русский, 中文 and Filipino. The menus, page names, Home tiles, main buttons, settings and sign-in screen change; guest names, rooms and everything typed stay exactly as they are. Works offline, nothing is sent anywhere. Words not translated yet stay in English.',
+    '🔤 Font styles: 12 to choose from, each shown in its own letters. Inter, your phone\'s own, DM Sans, Poppins, Nunito, Montserrat, Roboto, Lato, Lexend (easiest to read fast), Atkinson (made for clear reading), Cairo (Arabic and English) and Playfair (elegant). Each person picks their own.',
+  ] },
   { v: 240, items: [
     '📱 Phone layout: the 🧠 Ops Brain bubble no longer sits on top of buttons and text. It slides away while you scroll down and comes back when you scroll up or stop. Every page now ends with enough room that its last button (like Copy Log) is never under the bubble or the menu.',
   ] },
