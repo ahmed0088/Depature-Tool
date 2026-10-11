@@ -317,13 +317,7 @@
 
       <!-- Theme switcher -->
       <div class="login-theme-row">
-        <button class="login-theme-btn active" data-t="night-ops" onclick="setTheme('night-ops',this)" title="Night Ops">🌙 Night</button>
-        <button class="login-theme-btn" data-t="opera" onclick="setTheme('opera',this)" title="Opera">🔴 Opera</button>
-        <button class="login-theme-btn" data-t="midnight" onclick="setTheme('midnight',this)" title="Midnight">🌌 Midnight</button>
-        <button class="login-theme-btn" data-t="ios" onclick="setTheme('ios',this)" title="iPhone">📱 iPhone</button>
-        <button class="login-theme-btn" data-t="ios-dark" onclick="setTheme('ios-dark',this)" title="iPhone Dark">🖤 iPhone Dark</button>
-        <button class="login-theme-btn" data-t="titanium" onclick="setTheme('titanium',this)" title="Titanium">🪨 Titanium</button>
-        <button class="login-theme-btn" data-t="ocean" onclick="setTheme('ocean',this)" title="Ocean">🌊 Ocean</button>
+        <button type="button" id="loginThemeBtn" class="login-theme-pick" onclick="hoThemeMenu(this)" aria-haspopup="menu" title="Change theme">🎨 Theme</button>
       </div>
 
       <div class="login-logo">🏨</div>

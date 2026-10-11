@@ -335,6 +335,8 @@ function setTheme(name, btn, noSave) {
 function hoThemeMenuSync() {
   const T = HO_THEMES[hoThemeName()] || HO_THEMES['night-ops'], b = document.getElementById('hoThemeBtn');
   if (b) b.innerHTML = `<span class="theme-dot" style="background:${T.a};box-shadow:0 0 0 2px ${T.bg}, 0 0 0 3px ${T.a}55"></span><span>${T.label}</span>`;
+  const L = document.getElementById('loginThemeBtn');   // the sign-in screen's one theme button
+  if (L) L.innerHTML = `<span class="theme-dot" style="background:${T.a};box-shadow:0 0 0 2px ${T.bg}, 0 0 0 3px ${T.a}55"></span><span>${T.label}</span><span class="ltp-caret">▾</span>`;
 }
 function hoThemeMenu(btn) {
   const old = document.getElementById('hoThemePop'); if (old) { old.remove(); return; }
@@ -514,7 +516,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v233';
+const APP_VERSION = 'v234';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;

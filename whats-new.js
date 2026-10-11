@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 234, items: [
+    '🎨 Sign-in screen: the row of theme buttons that ran off the screen on phones (and was hard to read) is now one button, "🎨 Night Ops ▾", that opens the list of every theme, the same list as the top bar inside the app. All 18 themes, not just 7.',
+  ] },
   { v: 233, items: [
     '🌙 Night shifts read the way your managers write them: "00:00 – 09:00" on Saturday is Saturday night (right after Saturday\'s 15:00 – 00:00, until Sunday 09:00), not Friday night. Rest is now counted on the real hours everywhere: the builder, Team Health, swaps, who\'s on now and the live desk. So 15:00 – 00:00 then 00:00 – 09:00 the next day is a full day of rest, not "back to back", and a night is followed by a day shift only after real sleep.',
     '📋 Learning from posted rosters got more honest: false "managers do back-to-back shifts" and "7 h rest" lessons are gone, and an evening before a night is no longer counted as a rule bent. When one hotel has two people on a night and another hotel nobody (Ibis and Mercure, 5–6 Oct), one of them is read as covering the other hotel.',

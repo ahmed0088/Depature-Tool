@@ -198,7 +198,7 @@ tbody tr:hover td { background: color-mix(in srgb, var(--card2) 60%, transparent
 .login-label { font: 600 11.5px var(--font) !important; letter-spacing: .02em !important; text-transform: none !important; color: var(--text2) !important; }
 .login-input { height: 46px; border-radius: 12px !important; font: 500 14px var(--font) !important; }
 .login-btn { height: 48px; border-radius: 12px !important; font: 700 14.5px var(--font) !important; letter-spacing: -0.01em; }
-.login-divider span, .login-footer, .login-theme-btn, .login-check-label { font-family: var(--font) !important; letter-spacing: .02em !important; }
+.login-divider span, .login-footer, .login-theme-btn, .login-theme-pick, .login-check-label { font-family: var(--font) !important; letter-spacing: .02em !important; }
 
 /* ══ Phones ══ */
 @media (max-width: 768px) {

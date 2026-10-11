@@ -3010,32 +3010,18 @@ kbd {
   .admin-table td:nth-child(4) { display: none; }
 }
 
-/* ── Login theme switcher row ── */
-.login-theme-row {
-  display: flex;
-  gap: 6px;
-  justify-content: center;
-  margin-bottom: 20px;
+/* ── Login theme switcher: one button, opens the list of every theme ── */
+.login-theme-row { display: flex; justify-content: flex-end; margin-bottom: 18px; }
+.login-theme-pick {
+  display: inline-flex; align-items: center; gap: 8px; max-width: 100%;
+  padding: 7px 12px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.05);
+  color: #c9d4e3; font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
 }
-.login-theme-btn {
-  flex: 1;
-  padding: 6px 8px;
-  border-radius: 8px;
-  border: 1px solid #1f2d42;
-  background: transparent;
-  color: #374d68;
-  font-family: 'DM Mono', monospace;
-  font-size: 0.58rem;
-  cursor: pointer;
-  transition: all 0.15s;
-  letter-spacing: 0.04em;
-}
-.login-theme-btn:hover { opacity: 0.8; }
-.login-theme-btn.active {
-  border-color: #e8b84b;
-  color: #e8b84b;
-  background: rgba(232,184,75,0.1);
-}
+.login-theme-pick:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.24); }
+.login-theme-pick .theme-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.login-theme-pick .ltp-caret { opacity: 0.6; font-size: 11px; }
 
 /* ── Remember me row ── */
 .login-remember {
