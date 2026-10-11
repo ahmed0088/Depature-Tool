@@ -1871,6 +1871,27 @@ function _rbUndoMark(w) {
 document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'z' || e.key === 'Z') && document.getElementById('panel-roster-build')?.classList.contains('active') && !/INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || '')) { e.preventDefault(); rbUndo(); }
 });
+/** 🩹 Fix one person's problem without building the week again: their hotel is re-planned changing as little as
+ *  possible (the draft as it is counts as the wish), every other hotel and every bell team stay exactly as they are
+ *  (hand changes included). Kept only when it is better than before. */
+function rbFixPerson(k) {
+  const D = rbDrafts[rbWeek]; if (!D || !D.cells) return;
+  const dates = Array.from({ length: 7 }, (_, d) => roAdd(rbWeek, d)), I = rbInput(rbSeed), g = rbBaseGroup(rbPGroup(k));
+  const before = rbProblems(I, D.cells).filter(x => x.kind !== 'thin');
+  I.pre = JSON.parse(JSON.stringify(I.pre || {})); I.keep = {};
+  I.people.forEach(p => {
+    const row = D.cells[p.key] || {};
+    if (rbBaseGroup(p.group) !== g || p.post) dates.forEach(dt => { if (row[dt] && !(I.pre[p.key] || {})[dt]) (I.pre[p.key] = I.pre[p.key] || {})[dt] = row[dt]; });   // stays exactly as it is
+    else I.keep[p.key] = Object.assign({}, row);   // as it is, if it can be
+  });
+  I.noNightPlan = true; I.attempts = 6;
+  const res = rbSolve(I), after = rbProblems(I, res.cells).filter(x => x.kind !== 'thin'), nm = x => String((roStaff[x] || {}).name || x).split(' ')[0];
+  const shortB = rbProblems(I, D.cells).filter(x => x.kind === 'short').length, shortA = rbProblems(I, res.cells).filter(x => x.kind === 'short').length;
+  const mine = L => L.filter(x => x.key === k).length;
+  if (shortA > shortB || after.length > before.length || mine(after) >= mine(before)) { showToast(`Couldn't fix ${nm(k)} without making the week worse. Try changing a cell by hand, or build the week again.`, 'warn'); return; }
+  const changed = []; I.people.forEach(p => dates.forEach(dt => { const a = (D.cells[p.key] || {})[dt] || '', b = (res.cells[p.key] || {})[dt] || ''; if (a !== b) { const t = v => { const i = roInfo(v); return (roCellTxt(i) || v || '—') + (i && i.note ? ' at ' + i.note : ''); }; changed.push(`${nm(p.key)} ${RB_DAYS[dates.indexOf(dt)]} ${t(a)}→${t(b)}`); } }));
+  rbApplyCells(res.cells, `🩹 ${nm(k)} fixed, only ${g} changed: ${changed.join(', ')}.`, [{ key: k, date: rbWeek, auto: true, text: `🩹 Fixed ${nm(k)} (only ${g} re-planned, everything else kept): ${changed.join(', ')}.` }]);
+}
 function rbApplyCells(cells, why, notes) { rbUndoPush(); rbDrafts[rbWeek] = Object.assign({}, rbDrafts[rbWeek], { cells }); rbAddNotes(rbWeek, notes); rbSaveDraft(); rbRefreshOut(); showToast(why ? `Done: ${why} It's noted under Decisions. ↶ Undo is above the table` : 'Done. ↶ Undo is above the table', why ? 'warn' : 'ok'); }
 let _rbOpt = [];
 function rbOptApply(i) { const o = _rbOpt[i]; if (o && o.cells) rbApplyCells(JSON.parse(JSON.stringify(o.cells)), o.why, o.notes); }
@@ -2080,7 +2101,7 @@ function rbOutHtml(shown, dates) {
     <div class="ro-card-hd"><b>📋 Draft roster · ${escapeHtml(rbWeekLabel(rbWeek))}</b><span>built ${escapeHtml(new Date(rbDrafts[rbWeek].at || Date.now()).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' }))} · tap a cell to change it</span></div>
     ${rbStaleHtml()}
     ${rbHealthHtml(I, cells, cover, P, shown, dates)}
-    ${P.some(p => p.kind !== 'short' && p.kind !== 'thin') ? `<div class="rb-probs">${P.filter(p => p.kind !== 'short' && p.kind !== 'thin').map(p => { const agreed = rbNoted(p); return `<div class="rb-prob ${p.kind}${agreed ? ' agreed' : ''}">${agreed ? '⚠ Bent on purpose (see Decisions):' : '⛔'} ${ptxt(p)}</div>`; }).join('')}</div>` : ''}
+    ${P.some(p => p.kind !== 'short' && p.kind !== 'thin') ? `<div class="rb-probs">${P.filter(p => p.kind !== 'short' && p.kind !== 'thin').map(p => { const agreed = rbNoted(p); return `<div class="rb-prob ${p.kind}${agreed ? ' agreed' : ''}">${agreed ? '⚠ Bent on purpose (see Decisions):' : '⛔'} ${ptxt(p)}${p.key && !agreed && /^(freeze|cutoff|cutshort|offs|rest|switch|back|run)$/.test(p.kind) ? ` <button class="btn sm gold rb-fixone" onclick="rbFixPerson(${_rbQ(p.key)})" title="Re-plan only their hotel; everything else stays as it is">🩹 Fix</button>` : ''}</div>`; }).join('')}</div>` : ''}
     ${rbDecisionsHtml(I, cells, shown, dates)}
     ${typeof rrMineDraftHtml === 'function' ? rrMineDraftHtml(I, cells, dates) : ''}
     ${rbFixHtml(I, cells, shown, ptxt)}

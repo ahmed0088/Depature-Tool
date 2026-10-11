@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 250, items: [
+    '🩹 Fix one person without rebuilding: next to a problem in the draft (a day off before the cut-off, short rest, too many days in a row…) tap 🩹 Fix. Only that person\'s hotel is re-planned, changing as little as possible; every other hotel and the bell teams stay exactly as you left them, hand changes included. It is kept only if the week gets better, it lists every cell it changed, and ↶ Undo puts it back.',
+  ] },
   { v: 249, items: [
     '✅ "Everyone took their days off, except…": tell Ops Brain "from 1 to 15 all took 2 days else Sandrine, Ahmed and Turab", or in ⚖️ Rules → ✂️ HR cut-off tap "Everyone took theirs, except…" and pick them. Only those people get a day off before the cut-off; everyone else (bell boys too) gets theirs after it. Then build the week again.',
   ] },
