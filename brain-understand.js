@@ -81,6 +81,7 @@ const _buN = k => typeof rtName === 'function' ? rtName(k) : ((roStaff[k] || {})
 
 /** What each request looks like: test(ctx) → the sentence the app already knows, or null. */
 const BU_INTENTS = [
+  { id: 'cutDone', ico: '✅', label: 'All took their days off, except…', need: { n: 1 }, test: c => c.n.length >= 1 && /\b(except|else|but|apart from|other than|besides)\b/.test(c.t) && /\b(took|taken|take|done|finished|used|offs?)\b/.test(c.t), make: c => `everyone took their days off before the cut-off except ${c.N.join(', ')}`, run: c => buCutDone(c) },
   { id: 'staticOff', ico: '📌', label: 'Fixed day off', need: { n: 1 }, test: c => c.n.length >= 1 && /\b(always|fixed|static|every|permanent)\b/.test(c.t) && /\boff\b/.test(c.t) && /\b(mon|tue|wed|thu|fri|sat|sun)/.test(c.t), make: c => `${c.N.join(', ')} always off on ${RB_DAYS[buWeekday(c.t)]}`, run: c => buStaticOff(c) },
   { id: 'cutoff', ico: '✂️', label: 'Days off per cut-off', need: {}, test: c => /\b(before|cut ?off|cutoff)\b/.test(c.t) && /\b\d\s*(days? )?offs?\b|\boffs?\b/.test(c.t) && /\b\d\b/.test(c.t) && !/\b(only|just)\b/.test(c.t), make: c => { const m = c.t.match(/\b(\d)\s*(?:days? )?offs?\b/), d = c.t.match(/\b(?:before|cut ?off|cutoff)\s+(?:the\s+)?(\d{1,2})/); return `everyone ${m ? m[1] : 2} days off before the ${d ? d[1] : 15}th and ${m ? m[1] : 2} after`; }, run: c => buCutoff(c) },
   { id: 'freeze', ico: '🚫', label: 'Only some may be off', need: { n: 1 }, test: c => c.n.length >= 1 && /\b(only|just)\b/.test(c.t) && /\b(off|offs|day off|days off)\b/.test(c.t), make: c => `only ${c.N.join(', ')} can be off${c.span || ''}`, run: c => buFreeze(c) },
@@ -214,6 +215,16 @@ function buCutoff(c) {
   const m = c.t.match(/\b(\d)\s*(?:days? )?offs?\b/), d = c.t.match(/\b(?:before|cut ?off|cutoff)\s+(?:the\s+)?(\d{1,2})/), per = m ? +m[1] : 2, day = d ? +d[1] : 15;
   rbSetRule('cutoff', Object.assign({}, rbRules().cutoff, { on: true, per, day }));
   _bxOutSafe(`<div class="br-kind">✂️ HR cut-off</div><div class="br-title">Everyone: ${per} days off before the ${day}th and ${per} after</div><div class="br-body">A must, every week: the builder counts what each person already took in that half and gives one day off a week (never two) in the half that still owes one, so it is done by the cut-off; none left means no day off until it. Managers and fixed days off stay as they are. Change anyone's number in ⚖️ Rules → ✂️ HR cut-off.</div>`);
+  return true;
+}
+/** "from 1 to 15 everyone took 2 days off except Sandrine, Ahmed and Turab": only they have a day off left in that half. */
+function buCutDone(c) {
+  if (typeof rbCutExcept !== 'function') return false;
+  if (typeof roCanEdit === 'function' && !roCanEdit()) { _bxOutSafe('<div class="br-title">Only supervisors, managers and owners can change this.</div>'); return true; }
+  const day = +((rbRules().cutoff || {}).day || 15), W = rbWeek || rbDefaultWeek(), m = c.t.match(/\b(\d{1,2})\s*(?:to|-|till|until)\s*(\d{1,2})\b/);
+  const after = m && +m[1] > day, P = rbCutPeriod(after ? W.slice(0, 7) + '-28' : W.slice(0, 8) + '01', day);
+  rbCutExcept(P.id, c.n.slice(), 1);
+  _bxOutSafe(`<div class="br-kind">✂️ HR cut-off</div><div class="br-title">${escapeHtml(roDayLbl(P.start))} → ${escapeHtml(roDayLbl(P.end))}: only ${escapeHtml(c.N.map(x => x.split(' ')[0]).join(', '))} still have a day off</div><div class="br-body">Everyone else already took theirs, so they get no day off until after the cut-off. Build the week again to apply it. Change anyone in ⚖️ Rules → ✂️ HR cut-off.</div>`);
   return true;
 }
 function buNoGo(k, h) {
