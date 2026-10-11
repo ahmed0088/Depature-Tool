@@ -378,7 +378,7 @@ body.ho-compact .page-hd-left h1 { font-size: 22px !important; }
 .hs-meter i { display: block; height: 100%; width: 0; background: var(--mint); transition: width .4s var(--ho-ease); }
 .hs-meter i.hi { background: var(--rose); }
 .hs-pre { margin-top: 10px; padding: 12px; border-radius: 10px; background: var(--bg2); border: 1px solid var(--border); font: 500 11.5px/1.7 var(--mono); color: var(--text2); white-space: pre-wrap; word-break: break-all; }
-.hs-toc { max-height: calc(100vh - 140px); overflow-y: auto; }
+.hs-toc { max-height: calc(100vh - 140px); max-height: calc(100dvh - 140px); overflow-y: auto; }
 /* what part 2 switches */
 body.ho-contrast { --text2: #c3cddb !important; --text3: #9aa7b9 !important; --border: rgba(255,255,255,.12) !important; --border2: rgba(255,255,255,.2) !important; }
 [data-theme="opera"] body.ho-contrast, body.ho-contrast[data-theme="opera"] { --text2: #2c313b !important; --text3: #4b5260 !important; }
@@ -767,10 +767,10 @@ textarea::placeholder { font-size: 13px; line-height: 1.55; }
 .ri-viewer { position: fixed; inset: 0; z-index: 9000; background: rgba(0,0,0,.82); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; backdrop-filter: blur(4px); }
 .ri-v-bar { width: 100%; max-width: 1200px; display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #fff; margin-bottom: 10px; }
 .ri-v-bar span { display: flex; gap: 8px; }
-.ri-v-body { width: 100%; max-width: 1200px; max-height: calc(100vh - 90px); overflow: auto; border-radius: 10px; background: #fff; -webkit-overflow-scrolling: touch; }
+.ri-v-body { width: 100%; max-width: 1200px; max-height: calc(100vh - 90px); max-height: calc(100dvh - 90px); overflow: auto; border-radius: 10px; background: #fff; -webkit-overflow-scrolling: touch; }
 .ri-v-body img { display: block; width: 100%; height: auto; }
 .ri-viewer.zoom .ri-v-body img { width: 220%; max-width: none; }
-.ri-setup { width: 100%; max-width: 520px; padding: 18px 20px; max-height: calc(100vh - 32px); overflow: auto; }
+.ri-setup { width: 100%; max-width: 520px; padding: 18px 20px; max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); overflow: auto; }
 .ri-setup p, .ri-setup ol { font-size: 13px; line-height: 1.55; color: var(--text2); margin: 0 0 10px; }
 .ri-setup ol { padding-left: 20px; }
 .ri-setup label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; font-weight: 600; color: var(--text2); margin: 10px 0; }
@@ -863,7 +863,7 @@ details.rb-card[open] > summary { margin-bottom: 12px; }
 .rb-cover td.rb-cv-short { color: var(--red); background: var(--red-bg); }
 .rb-cover td.rb-cv-over { color: var(--blue); }
 .rb-acts { margin-top: 16px; }
-.rb-menu { position: fixed; z-index: 9600; padding: 12px; border-radius: 14px; background: var(--card); border: 1px solid var(--border2); box-shadow: 0 18px 50px rgba(0,0,0,.45); max-height: calc(100vh - 16px); overflow: auto; }
+.rb-menu { position: fixed; z-index: 9600; padding: 12px; border-radius: 14px; background: var(--card); border: 1px solid var(--border2); box-shadow: 0 18px 50px rgba(0,0,0,.45); max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); overflow: auto; }
 .rb-menu-hd { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 10px; font-size: 12.5px; color: var(--text3); }
 .rb-menu-hd b { color: var(--text); font-size: 13.5px; }
 .rb-opts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; align-items: center; }
@@ -900,7 +900,7 @@ details.rb-card[open] > summary { margin-bottom: 12px; }
 .rt-title.mgr { color: var(--accent); border-color: var(--accent-border); background: var(--accent-bg); }
 .rt-title.sup { color: var(--blue); border-color: var(--blue-border); background: var(--blue-bg); }
 .rt-t { display: block; font-style: normal; font-size: 9.5px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: .04em; overflow: hidden; text-overflow: ellipsis; }
-.rt-sheet { width: 100%; max-width: 640px; max-height: calc(100vh - 32px); overflow: auto; padding: 18px 20px; }
+.rt-sheet { width: 100%; max-width: 640px; max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); overflow: auto; padding: 18px 20px; }
 .rt-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; margin: 6px 0 12px; }
 .rt-form label { display: flex; flex-direction: column; gap: 5px; font-size: 11.5px; font-weight: 600; color: var(--text3); min-width: 0; }
 .rt-form input, .rt-form select { width: 100%; box-sizing: border-box; height: 38px; padding: 0 10px; border: 1px solid var(--border2); border-radius: 9px; background: var(--bg2); color: var(--text); font: 500 14px var(--font); min-width: 0; }
@@ -1485,7 +1485,7 @@ td.rk-d-up { color: var(--red); } td.rk-d-down { color: var(--amber); } td.rk-d-
 .rk-find { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
 @media (max-width: 600px) { .rk-panel { padding: 14px; } .rk-kv { font-size: 24px; } .rk-n { min-width: 150px; } .rk-bar { padding: 5px; } .rk-dates input { width: 130px; } }
 /* Rate Shop: quick entry */
-.rk-qk { width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 60px); overflow: auto; border-radius: 18px; background: var(--card); border: 1px solid var(--border); box-shadow: 0 24px 60px rgba(0,0,0,.3); padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.rk-qk { width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 60px); max-height: calc(100dvh - 60px); overflow: auto; border-radius: 18px; background: var(--card); border: 1px solid var(--border); box-shadow: 0 24px 60px rgba(0,0,0,.3); padding: 18px; display: flex; flex-direction: column; gap: 12px; }
 .rk-qk-hd { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; } .rk-qk-hd b { font-size: 16px; color: var(--text); } .rk-qk-hd small { display: block; font-size: 12px; color: var(--text3); margin-top: 2px; }
 .rk-qk-list { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
 .rk-qk-row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: text; } .rk-qk-row + .rk-qk-row { border-top: 1px solid var(--border); }

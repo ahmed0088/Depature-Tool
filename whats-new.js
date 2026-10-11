@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 239, items: [
+    '📱 iPhone: the end of every page was hidden under the bottom menu. The app was sized to the full screen, including the part behind the browser\'s own bar. It now fits the screen you can actually see, and every page ends with room to spare above the menu. Pop-ups and long lists fit the visible screen too.',
+  ] },
   { v: 238, items: [
     '🏷 Hotel logos: in the 🎮 Live desk, tap 🏷 next to a hotel\'s name and upload its official logo (PNG or SVG). It replaces the painted name on that lobby\'s wall and in Rush Hour, for the whole team.',
     '🏊 Hotel facts: ask Ops Brain "pool timing?", "gym?" or "where is the bar?". Pool 08:00 – 19:00, gym open 24 hours with the room key, and at Ibis the bar is on the rooftop and the first floor. In Rush Hour the desk now gives guests these real answers.',
