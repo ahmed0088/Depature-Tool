@@ -20,7 +20,7 @@ function _avHash(s) { let h = 2166136261; for (const c of String(s)) { h ^= c.ch
 function avLook(k) {
   const c = ((typeof rbPeople !== 'undefined' && rbPeople[k]) || {}).look || {}, h = _avHash(k + ((roStaff[k] || {}).name || ''));
   return {
-    skin: c.skin != null ? c.skin : 2,
+    skin: c.skin != null ? c.skin : String(k).startsWith('~g') ? h % AV_SKIN.length : 2,   // (~g…: a made-up guest)
     hair: c.hair || ['short', 'long', 'curly', 'bun', 'spiky'][h % 5],
     acc: c.acc || (h % 7 === 0 ? 'glasses' : h % 11 === 0 ? 'headset' : 'none'),
     shirt: c.shirt != null ? c.shirt : (h >> 3) % AV_SHIRT.length,
@@ -145,8 +145,9 @@ function lvHotelHtml(S, t, idx) {
     </div>`;
   };
   const g = _lvGuests(h), seed = _avHash(S.g + now.getHours());
-  const guests = Array.from({ length: g }, (_, i) => `<div class="lv-guest" style="--gd:${(i * 2.7 + (seed % 5)).toFixed(1)}s;--gc:${LV_GCOL[(seed + i) % LV_GCOL.length]};--gs:${9 + ((seed >> i) % 5)}s"><i class="lv-gh"></i><i class="lv-gb"></i><span>🧳</span></div>`).join('');
+  const guests = Array.from({ length: g }, (_, i) => `<div class="lv-guest v2" style="--gd:${(i * 2.7 + (seed % 5)).toFixed(1)}s;--gs:${9 + ((seed >> i) % 5)}s"><div class="lv-gav">${avSvg('~g' + seed + i, 34, 'happy')}</div><i class="lv-legs"><b></b><b></b></i><span>🧳</span></div>`).join('');
   const empty = !S.on.length, disco = now.getHours() === 0 && now.getMinutes() < 20;
+  if (disco && typeof lvBadge === 'function') setTimeout(() => lvBadge('disco', '🪩 Disco time: found the midnight party'), 0);
   return `<div class="lv-hotel${night ? ' night' : ''}${empty ? ' empty' : ''}${disco ? ' disco' : ''}" id="lvH${idx}">
     <div class="lv-hud"><b>${escapeHtml(S.g || 'Reception')}</b>
       <span class="lv-pill ${empty ? 'bad' : 'ok'}">${empty ? '⚠ Desk EMPTY' : '🛎 Desk covered'}</span>
@@ -157,7 +158,7 @@ function lvHotelHtml(S, t, idx) {
         ${night ? '<i class="lv-star" style="left:14%;top:16%"></i><i class="lv-star" style="left:68%;top:10%"></i><i class="lv-star" style="left:42%;top:26%"></i><i class="lv-star" style="left:86%;top:30%"></i><i class="lv-star" style="left:28%;top:8%"></i>' : '<i class="lv-cloud" style="top:14%;--cd:0s"></i><i class="lv-cloud" style="top:34%;--cd:-9s;transform:scale(.7)"></i>'}
         ${LV_CITY}
       </div>
-      <div class="lv-wall"><span class="lv-sign">${escapeHtml((S.g || 'Hotel').split(' ')[0])}</span>${_lvClock(now)}<span class="lv-keys">🗝🗝🗝</span></div>
+      <div class="lv-wall"><span class="lv-sign">${escapeHtml((S.g || 'Hotel').split(' ')[0])}</span>${_lvClock(now)}<span class="lv-keys">🗝🗝🗝</span><div class="lv-lift" style="--ld:${(_avHash(S.g) % 10)}s"><i class="l"></i><i class="r"></i><span>▲</span></div></div>
       ${disco ? '<span class="lv-disco">🪩</span><i class="lv-lights"></i>' : ''}
       <div class="lv-staff">${S.gone.map(x => staff(x, 'gone')).join('')}${S.on.map(x => staff(x, 'on')).join('') || '<div class="lv-empty">🛎 Ding… is anyone here? <small>🦗 *crickets*</small></div>'}${S.coming.map(x => staff(x, 'coming')).join('')}</div>
       <div class="lv-desk"><button type="button" class="lv-bell" onclick="lvDing(${idx})" title="Ring the bell!">🛎</button><span class="lv-cup">☕<i></i><i></i></span><b>RECEPTION</b><span class="lv-phone">☎️</span><span class="lv-plant">🪴</span></div>
@@ -199,19 +200,21 @@ function lvOpen() {
   const d = document.createElement('div'); d.id = 'lvView'; d.className = 'ri-viewer lv-view';
   d.innerHTML = `<div class="card lv-card">
     <div class="ro-card-hd"><b>🎮 Live desk</b><button class="ro-x" onclick="lvClose()">✕</button></div>
-    <div class="lv-ctl"><button class="btn sm" id="lvPlayB" onclick="lvPlay()">▶ Play the day</button><input type="range" id="lvSlider" min="0" max="1439" step="5" oninput="lvSeek(+this.value)"><span id="lvWhen">Live now</span><button class="btn sm ghost" onclick="lvSeek(null)">Now</button></div>
+    <div class="lv-ctl"><button class="btn sm" id="lvPlayB" onclick="lvPlay()">▶ Play the day</button><input type="range" id="lvSlider" min="0" max="1439" step="5" oninput="lvSeek(+this.value)"><span id="lvWhen">Live now</span><button class="btn sm ghost" onclick="lvSeek(null)">Now</button><button class="btn sm lv-gamebtn" onclick="lgOpen()">🎯 Rush Hour</button></div>
     <div class="lv-news"><b>📣 LOBBY NEWS</b><span id="lvNews">Welcome to the live desk! Tap anyone, or ring the 🛎</span></div>
     <div id="lvBody" class="lv-body-wrap"></div>
     <div class="lv-stats" id="lvStats"></div>
+    <div class="lv-badges" id="lvBadges"></div>
     <small class="ro-hint">Tap a person to poke them, tap 🛎 to ring the bell. The bar is how far into their shift they are. Looks are each person's own choice: 🧑‍💼 Team → 😀 Their look. <button class="lv-snd" id="lvSnd" onclick="lvSound()">${_lvMute ? '🔇 Sound off' : '🔊 Sound on'}</button></small>
   </div>`;
   d.addEventListener('click', e => { if (e.target === d) lvClose(); });
   document.body.appendChild(d);
   _lvAt = null; Object.keys(_lvKeys).forEach(k => delete _lvKeys[k]); lvRender();
   clearInterval(_lvT); _lvT = setInterval(() => { if (!document.getElementById('lvView')) { clearInterval(_lvT); return; } if (_lvAt == null) lvRender(); }, 30000);
+  if (typeof lvBadgesRender === 'function') { lvBadgesRender(); const hr = new Date().getHours(); if (hr < 5) lvBadge('night', '🦉 Night watch: checked the live desk in the small hours'); }
   clearTimeout(_lvFx); const fx = () => { if (!document.getElementById('lvView')) return; lvSurprise(); _lvFx = setTimeout(fx, _lvPlay ? 1800 : 5000 + Math.random() * 4000); }; _lvFx = setTimeout(fx, 2500);
 }
-function lvClose() { clearInterval(_lvT); clearInterval(_lvPlay); clearTimeout(_lvFx); _lvPlay = null; document.getElementById('lvView')?.remove(); }
+function lvClose() { if (typeof lgStop === 'function') lgStop(); clearInterval(_lvT); clearInterval(_lvPlay); clearTimeout(_lvFx); _lvPlay = null; document.getElementById('lvView')?.remove(); }
 
 // ── The fun: surprises in the lobby, poke someone, ring the bell ──
 let _lvFx = null, _lvMute = false, _lvAc = null;
@@ -272,6 +275,7 @@ function lvPoke(el) {
   if (b) { const was = b.dataset.was || b.textContent; b.dataset.was = was; b.textContent = LV_POKE[Math.floor(Math.random() * LV_POKE.length)]; clearTimeout(b._t); b._t = setTimeout(() => { b.textContent = b.dataset.was; delete b.dataset.was; }, 2600); }
   if (sc) { const r = el.getBoundingClientRect(), s = sc.getBoundingClientRect(); _lvBurst(sc, r.left - s.left + r.width / 2, r.top - s.top + 40, ['❤️', '✨', '😂', '⭐'], 7); }
   _lvBeep(520 + Math.random() * 300, 0.12, 'triangle'); lvStats();
+  if (typeof lvBadge === 'function') { lvBadge('poke', '👉 First poke: say hi to the team'); if (_lvFun.pokes >= 10) lvBadge('poke10', '🤪 Poke master: 10 pokes'); }
 }
 /** Ring the bell: DING! Everyone jumps, "Coming!" */
 function lvDing(i) {
@@ -282,6 +286,7 @@ function lvDing(i) {
   const sc = h.querySelector('.lv-scene'); if (sc) _lvBurst(sc, 28, sc.clientHeight - 60, ['DING!', '🔔', '✨'], 5);
   if (!h.querySelector('.lv-st.on')) _lvNews('🛎 DING DING… nobody here! 🦗');
   else if (_lvFun.dings % 5 === 0) _lvNews(`🛎 Bell rung ${_lvFun.dings} times. The team would like a word 😅`);
+  if (_lvFun.dings >= 10 && typeof lvBadge === 'function') lvBadge('ding10', '🛎 Bell addict: 10 dings');
   lvStats();
 }
 /** Every few seconds something happens somewhere in a lobby. */

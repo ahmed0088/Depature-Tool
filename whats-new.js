@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 237, items: [
+    '🎯 Rush Hour: a real one-minute game in the 🎮 Live desk. You are alone at the desk and guests queue up with requests (WiFi password, late check-out, Dubai Mall, an iron…). Tap them before their bar runs out. Fast serves build a combo up to ×5, 👑 VIPs pay triple but wait less, ☕ calms everyone down, and 🐈 the cat does not want a room. 3 angry guests and the shift is over. Each guest thanks you in their language, angry ones threaten a 1-star review, and you get a rank from 🐣 Trainee to 👑 Front Desk Legend, with your best score kept and confetti for a new best.',
+    '🏅 Badges for playing around: First poke, Poke master, Bell addict, Night watch, Disco time, On fire, Supervisor material, Legend and Cat whisperer.',
+    '🧳 Guests in the lobby are now little cartoon people who walk on their own legs, and each lobby has a lift whose doors open now and then.',
+  ] },
   { v: 236, items: [
     '🎮 The live desk got funny: every few seconds something happens in a lobby (a cat asking for the presidential suite, pizza for room 404, a duck nobody can explain, a VIP with a crown, parcel number 47, a ghost in the lift at night…), told in 📣 Lobby News at the top.',
     '👉 Tap anyone to poke them: they jump and say something silly. Tap the 🛎 bell: DING, everyone jumps and says "Coming!" (and if the desk is empty: 🦗 crickets). Sleepy night staff float little Zzz, the coffee steams, the phone shakes when it rings, the plant sways, and at midnight there\'s a 🪩 disco.',
