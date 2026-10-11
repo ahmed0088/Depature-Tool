@@ -85,17 +85,21 @@ function _lvHotelOf(x) {
   return roGroups().find(g => g.toLowerCase().startsWith(n) || g.toLowerCase().split(' ')[0] === n.split(' ')[0]) || own;
 }
 const LV_LINES = [
-  [0.08, ['☕ Just arrived. Coffee first', '👋 Hello team!', '🔑 Opening the shift']],
-  [0.3, ['😄 Checking guests in', '💪 Fresh and ready', '🛎 Ding ding!']],
-  [0.55, ['🧾 In the zone', '📞 On the phone again', '🗝 Keys, keys, keys']],
-  [0.7, ['🥪 Snack time?', '😌 Halfway there', '💬 Small talk with a guest']],
-  [0.9, ['⏳ Almost there', '📝 Writing the handover', '🧮 Counting the float']],
-  [1.01, ['🏃 Home time soon!', '🏁 Last stretch!', '🛌 Bed is calling']],
+  [0.08, ['☕ Just arrived. Coffee first', '👋 Hello team!', '🔑 Opening the shift', '😎 The legend has arrived', '🫡 Reporting for duty']],
+  [0.3, ['😄 Checking guests in', '💪 Fresh and ready', '🛎 Ding ding!', '📶 "What\'s the WiFi?" #12', '🧳 9 suitcases, 1 night stay', '🗣 "Is breakfast free?"']],
+  [0.55, ['🧾 In the zone', '📞 On the phone again', '🗝 Keys, keys, keys', '🤹 Juggling 5 guests', '🧠 Big brain upsell', '🔁 "Can I change rooms?"']],
+  [0.7, ['🥪 Snack time?', '😌 Halfway there', '💬 Small talk with a guest', '🥱 Fighting a yawn', '🍫 Emergency chocolate', '📸 Guest selfie at the desk']],
+  [0.9, ['⏳ Almost there', '📝 Writing the handover', '🧮 Counting the float', '👀 Watching the clock', '🙏 No more late check-outs pls']],
+  [1.01, ['🏃 Home time soon!', '🏁 Last stretch!', '🛌 Bed is calling', '🚪 One foot out the door', '🕺 Shift-end dance loading…']],
 ];
+const LV_HOUR = { 7: '🍳 Breakfast rush!', 10: '🧾 Check-out rush!', 11: '🏃 "Late check-out please?"', 14: '🗝 Check-in time!', 15: '🛏 "Is my room ready?"', 17: '🌇 Sunset selfies in the lobby', 19: '🍽 "Where should we eat?"', 23: '🌙 Last guests strolling in' };
+const LV_NIGHT = ['😴 Stay awake…', '🌙 Night owl mode', '🦉 Guarding the lobby', '🍜 3 AM noodles', '👻 Was that the lift?', '📊 Night audit magic', '🎧 Lo-fi beats to audit to'];
 function _lvLine(k, p, t, alone, night) {
   const h = _avHash(k + Math.floor(t / 9e5));   // changes every 15 minutes
-  if (night && new Date(t).getHours() >= 2 && new Date(t).getHours() < 6) return ['😴 Stay awake…', '🌙 Night owl mode', '🦉 Guarding the lobby'][h % 3];
+  const hr = new Date(t).getHours();
+  if (night && hr >= 1 && hr < 6) return LV_NIGHT[h % LV_NIGHT.length];
   if (alone && p > 0.1 && p < 0.9 && h % 3 === 0) return '🦸 Holding the fort alone';
+  if (LV_HOUR[hr] && h % 3 === 1) return LV_HOUR[hr];
   const row = LV_LINES.find(r => p < r[0]) || LV_LINES[LV_LINES.length - 1];
   return row[1][h % row[1].length];
 }
@@ -134,7 +138,7 @@ function lvHotelHtml(S, t, idx) {
     const left = Math.max(0, Math.round((x.sp.end - now) / 6e4)), lh = Math.floor(left / 60), lm = left % 60;
     const bubble = kind === 'coming' ? `🔔 In at ${_lvHM(x.sp.start)}` : kind === 'gone' ? '👋 See you!' : _lvLine(x.key, p, t, S.on.length === 1, x.info.type === 'night');
     const en = Math.round((1 - p) * 100);
-    return `<div class="lv-st ${kind}${x.key === roMeKey ? ' me' : ''}" data-k="${escapeHtml(x.key)}" style="--d:${(_avHash(x.key) % 9) / 10}s" title="${escapeHtml(x.name)} · ${escapeHtml(roTime(x.info))}">
+    return `<div class="lv-st ${kind}${x.key === roMeKey ? ' me' : ''}" data-k="${escapeHtml(x.key)}" style="--d:${(_avHash(x.key) % 9) / 10}s" title="${escapeHtml(x.name)} · ${escapeHtml(roTime(x.info))} · tap me!" onclick="lvPoke(this)">${mood === 'sleepy' ? '<span class="lv-zzz"><i>z</i><i>z</i><i>Z</i></span>' : ''}${kind === 'on' && p > 0.93 ? '<span class="lv-party">🎉</span>' : ''}
       <div class="lv-bub">${escapeHtml(bubble)}</div>
       <div class="lv-tag"><b>${escapeHtml(String(x.name).split(' ')[0])}</b>${kind === 'on' ? `<span class="lv-en" title="Energy: ${en}% of the shift left"><i style="width:${en}%"></i></span><small>⚡ ${lh ? lh + 'h ' : ''}${lm}m</small>` : `<small>${escapeHtml(roTime(x.info))}</small>`}</div>
       <div class="lv-body">${avSvg(x.key, 62, mood)}</div>
@@ -142,8 +146,8 @@ function lvHotelHtml(S, t, idx) {
   };
   const g = _lvGuests(h), seed = _avHash(S.g + now.getHours());
   const guests = Array.from({ length: g }, (_, i) => `<div class="lv-guest" style="--gd:${(i * 2.7 + (seed % 5)).toFixed(1)}s;--gc:${LV_GCOL[(seed + i) % LV_GCOL.length]};--gs:${9 + ((seed >> i) % 5)}s"><i class="lv-gh"></i><i class="lv-gb"></i><span>🧳</span></div>`).join('');
-  const empty = !S.on.length;
-  return `<div class="lv-hotel${night ? ' night' : ''}${empty ? ' empty' : ''}" id="lvH${idx}">
+  const empty = !S.on.length, disco = now.getHours() === 0 && now.getMinutes() < 20;
+  return `<div class="lv-hotel${night ? ' night' : ''}${empty ? ' empty' : ''}${disco ? ' disco' : ''}" id="lvH${idx}">
     <div class="lv-hud"><b>${escapeHtml(S.g || 'Reception')}</b>
       <span class="lv-pill ${empty ? 'bad' : 'ok'}">${empty ? '⚠ Desk EMPTY' : '🛎 Desk covered'}</span>
       <span class="lv-pill">👥 ${S.on.length}</span>${S.coming.length ? `<span class="lv-pill">🔜 ${escapeHtml(String(S.coming[0].name).split(' ')[0])} ${_lvHM(S.coming[0].sp.start)}</span>` : ''}</div>
@@ -154,9 +158,11 @@ function lvHotelHtml(S, t, idx) {
         ${LV_CITY}
       </div>
       <div class="lv-wall"><span class="lv-sign">${escapeHtml((S.g || 'Hotel').split(' ')[0])}</span>${_lvClock(now)}<span class="lv-keys">🗝🗝🗝</span></div>
-      <div class="lv-staff">${S.gone.map(x => staff(x, 'gone')).join('')}${S.on.map(x => staff(x, 'on')).join('') || '<div class="lv-empty">🛎 Ding… is anyone here?</div>'}${S.coming.map(x => staff(x, 'coming')).join('')}</div>
-      <div class="lv-desk"><span class="lv-bell">🛎</span><b>RECEPTION</b><span>🪴</span></div>
-      <div class="lv-floor">${guests}</div>
+      ${disco ? '<span class="lv-disco">🪩</span><i class="lv-lights"></i>' : ''}
+      <div class="lv-staff">${S.gone.map(x => staff(x, 'gone')).join('')}${S.on.map(x => staff(x, 'on')).join('') || '<div class="lv-empty">🛎 Ding… is anyone here? <small>🦗 *crickets*</small></div>'}${S.coming.map(x => staff(x, 'coming')).join('')}</div>
+      <div class="lv-desk"><button type="button" class="lv-bell" onclick="lvDing(${idx})" title="Ring the bell!">🛎</button><span class="lv-cup">☕<i></i><i></i></span><b>RECEPTION</b><span class="lv-phone">☎️</span><span class="lv-plant">🪴</span></div>
+      <div class="lv-floor">${guests}${empty ? '<span class="lv-tumble">🌾</span>' : ''}</div>
+      <div class="lv-fx"></div>
     </div>
   </div>`;
 }
@@ -186,6 +192,7 @@ function lvRender() {
   });
   const sl = document.getElementById('lvSlider'); if (sl && document.activeElement !== sl) sl.value = Math.round((t - d0) / 6e4);
   const lb = document.getElementById('lvWhen'); if (lb) lb.textContent = _lvAt == null ? 'Live now' : _lvHM(now);
+  if (!_lvPlay || now.getMinutes() % 20 < 4) lvStats();
 }
 function lvOpen() {
   document.getElementById('lvView')?.remove();
@@ -193,15 +200,115 @@ function lvOpen() {
   d.innerHTML = `<div class="card lv-card">
     <div class="ro-card-hd"><b>🎮 Live desk</b><button class="ro-x" onclick="lvClose()">✕</button></div>
     <div class="lv-ctl"><button class="btn sm" id="lvPlayB" onclick="lvPlay()">▶ Play the day</button><input type="range" id="lvSlider" min="0" max="1439" step="5" oninput="lvSeek(+this.value)"><span id="lvWhen">Live now</span><button class="btn sm ghost" onclick="lvSeek(null)">Now</button></div>
+    <div class="lv-news"><b>📣 LOBBY NEWS</b><span id="lvNews">Welcome to the live desk! Tap anyone, or ring the 🛎</span></div>
     <div id="lvBody" class="lv-body-wrap"></div>
-    <small class="ro-hint">Each person's bar is how far into their shift they are. Their look is theirs to choose: tap a name in 🧑‍💼 Team → 😀 Their look.</small>
+    <div class="lv-stats" id="lvStats"></div>
+    <small class="ro-hint">Tap a person to poke them, tap 🛎 to ring the bell. The bar is how far into their shift they are. Looks are each person's own choice: 🧑‍💼 Team → 😀 Their look. <button class="lv-snd" id="lvSnd" onclick="lvSound()">${_lvMute ? '🔇 Sound off' : '🔊 Sound on'}</button></small>
   </div>`;
   d.addEventListener('click', e => { if (e.target === d) lvClose(); });
   document.body.appendChild(d);
   _lvAt = null; Object.keys(_lvKeys).forEach(k => delete _lvKeys[k]); lvRender();
   clearInterval(_lvT); _lvT = setInterval(() => { if (!document.getElementById('lvView')) { clearInterval(_lvT); return; } if (_lvAt == null) lvRender(); }, 30000);
+  clearTimeout(_lvFx); const fx = () => { if (!document.getElementById('lvView')) return; lvSurprise(); _lvFx = setTimeout(fx, _lvPlay ? 1800 : 5000 + Math.random() * 4000); }; _lvFx = setTimeout(fx, 2500);
 }
-function lvClose() { clearInterval(_lvT); clearInterval(_lvPlay); _lvPlay = null; document.getElementById('lvView')?.remove(); }
+function lvClose() { clearInterval(_lvT); clearInterval(_lvPlay); clearTimeout(_lvFx); _lvPlay = null; document.getElementById('lvView')?.remove(); }
+
+// ── The fun: surprises in the lobby, poke someone, ring the bell ──
+let _lvFx = null, _lvMute = false, _lvAc = null;
+const _lvFun = { dings: 0, pokes: 0, events: 0 };
+try { _lvMute = localStorage.getItem('lv_mute') === '1'; } catch (_) {}
+const LV_EVENTS = [
+  ['🐈', 'walk', 'A cat walked in and asked for the presidential suite'],
+  ['🍕', 'walk', 'Pizza for room 404… room not found'],
+  ['🧹', 'walk', 'Housekeeping cart zooming past at top speed'],
+  ['🎈', 'float', 'A birthday balloon escaped from the lift'],
+  ['📦', 'drop', 'Parcel number 47 for the same guest'],
+  ['🐕', 'walk', 'A very good dog is checking in'],
+  ['👑', 'walk', 'VIP arriving: roll out the red carpet!'],
+  ['🦆', 'walk', 'A duck in the lobby? Nobody knows how'],
+  ['📞', 'ring', '"Hi, do you have WiFi?" (call number 38)'],
+  ['🧳', 'walk', 'Guest with 9 suitcases for a 1-night stay'],
+  ['🛴', 'walk', 'Someone scootered right through the lobby'],
+  ['🌯', 'walk', 'Shawarma delivery. The whole lobby is hungry now'],
+  ['💸', 'float', 'Upgrade sold! The revenue team is dancing'],
+  ['🐪', 'walk', 'Desert safari group is back. Sand everywhere'],
+  ['⭐', 'float', 'New 5-star review: "the reception team is amazing!"'],
+  ['🧦', 'drop', 'Lost and found: one sock. Again'],
+  ['🎂', 'walk', 'Surprise birthday cake on its way to room 312'],
+  ['🤳', 'float', 'Influencer filming "my hotel tour" in the lobby'],
+];
+const LV_NIGHT_EV = [
+  ['👻', 'float', 'Was that the lift going up by itself?'],
+  ['🦉', 'walk', 'The night owl union is checking in'],
+  ['🍜', 'float', '3 AM instant noodles: a night shift tradition'],
+  ['🦗', 'walk', '*crickets*… a very quiet night'],
+  ['🌙', 'float', 'The moon says hi to the night team'],
+  ['🚕', 'walk', 'Late flight guest: "Is it too late to check in?"'],
+];
+function _lvBeep(f, d, type) {
+  if (_lvMute) return;
+  try {
+    _lvAc = _lvAc || new (window.AudioContext || window.webkitAudioContext)();
+    const o = _lvAc.createOscillator(), g = _lvAc.createGain(), t0 = _lvAc.currentTime;
+    o.type = type || 'sine'; o.frequency.value = f; g.gain.setValueAtTime(0.12, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + d);
+    o.connect(g); g.connect(_lvAc.destination); o.start(t0); o.stop(t0 + d);
+  } catch (_) {}
+}
+function lvSound() { _lvMute = !_lvMute; try { localStorage.setItem('lv_mute', _lvMute ? '1' : '0'); } catch (_) {} const b = document.getElementById('lvSnd'); if (b) b.textContent = _lvMute ? '🔇 Sound off' : '🔊 Sound on'; if (!_lvMute) _lvBeep(880, 0.15); }
+function _lvNews(txt) { const n = document.getElementById('lvNews'); if (!n) return; n.textContent = txt; n.classList.remove('in'); void n.offsetWidth; n.classList.add('in'); }
+function _lvBurst(scene, x, y, emojis, n) {
+  const fx = scene && scene.querySelector('.lv-fx'); if (!fx) return;
+  for (let i = 0; i < (n || 8); i++) {
+    const e = document.createElement('i'); e.className = 'lv-pop'; e.textContent = emojis[i % emojis.length];
+    e.style.left = x + 'px'; e.style.top = y + 'px'; e.style.setProperty('--dx', (Math.random() * 120 - 60).toFixed(0) + 'px'); e.style.setProperty('--dy', (-40 - Math.random() * 70).toFixed(0) + 'px');
+    fx.appendChild(e); setTimeout(() => e.remove(), 1200);
+  }
+}
+const LV_POKE = ['😆 Hey, that tickles!', '💪 Flex mode ON', '🕺 *dances*', '☕ More coffee please', '🙈 Don\'t tell the manager', '🤖 Beep boop, I\'m a professional', '😤 I\'m working here!', '🥳 Best team ever', '🫠 I need a holiday', '🧘 Inner peace…', '🤌 Chef\'s kiss service', '🏆 Employee of the minute!'];
+/** Tap someone: they jump and say something silly. */
+function lvPoke(el) {
+  const sc = el.closest('.lv-scene'), b = el.querySelector('.lv-bub');
+  _lvFun.pokes++; el.classList.remove('jump'); void el.offsetWidth; el.classList.add('jump');
+  if (b) { const was = b.dataset.was || b.textContent; b.dataset.was = was; b.textContent = LV_POKE[Math.floor(Math.random() * LV_POKE.length)]; clearTimeout(b._t); b._t = setTimeout(() => { b.textContent = b.dataset.was; delete b.dataset.was; }, 2600); }
+  if (sc) { const r = el.getBoundingClientRect(), s = sc.getBoundingClientRect(); _lvBurst(sc, r.left - s.left + r.width / 2, r.top - s.top + 40, ['❤️', '✨', '😂', '⭐'], 7); }
+  _lvBeep(520 + Math.random() * 300, 0.12, 'triangle'); lvStats();
+}
+/** Ring the bell: DING! Everyone jumps, "Coming!" */
+function lvDing(i) {
+  const h = document.getElementById('lvH' + i); if (!h) return;
+  _lvFun.dings++; _lvBeep(1320, 0.5); setTimeout(() => _lvBeep(1760, 0.4), 120);
+  const bell = h.querySelector('.lv-bell'); if (bell) { bell.classList.remove('ding'); void bell.offsetWidth; bell.classList.add('ding'); }
+  h.querySelectorAll('.lv-st.on').forEach((el, j) => setTimeout(() => { el.classList.remove('jump'); void el.offsetWidth; el.classList.add('jump'); const b = el.querySelector('.lv-bub'); if (b && !b.dataset.was) { b.dataset.was = b.textContent; b.textContent = ['🏃 Coming!', '🙋 Yes, how can I help?', '🫡 Right away!'][j % 3]; clearTimeout(b._t); b._t = setTimeout(() => { b.textContent = b.dataset.was; delete b.dataset.was; }, 2200); } }, j * 120));
+  const sc = h.querySelector('.lv-scene'); if (sc) _lvBurst(sc, 28, sc.clientHeight - 60, ['DING!', '🔔', '✨'], 5);
+  if (!h.querySelector('.lv-st.on')) _lvNews('🛎 DING DING… nobody here! 🦗');
+  else if (_lvFun.dings % 5 === 0) _lvNews(`🛎 Bell rung ${_lvFun.dings} times. The team would like a word 😅`);
+  lvStats();
+}
+/** Every few seconds something happens somewhere in a lobby. */
+function lvSurprise() {
+  const hs = [...document.querySelectorAll('#lvBody .lv-hotel')]; if (!hs.length) return;
+  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const h = hs[Math.floor(Math.random() * hs.length)], sc = h.querySelector('.lv-scene'), fx = h.querySelector('.lv-fx'); if (!fx) return;
+  const L = h.classList.contains('night') ? LV_NIGHT_EV.concat(LV_EVENTS.slice(0, 6)) : LV_EVENTS, [e, kind, txt] = L[Math.floor(Math.random() * L.length)];
+  const el = document.createElement('span'); el.className = 'lv-ev ' + kind; el.textContent = e;
+  if (kind === 'walk' && Math.random() < 0.5) el.classList.add('rev');
+  if (kind !== 'walk') el.style.left = (15 + Math.random() * 70).toFixed(0) + '%';
+  fx.appendChild(el); setTimeout(() => el.remove(), 7000);
+  if (kind === 'ring') { const ph = h.querySelector('.lv-phone'); if (ph) { ph.classList.remove('ring'); void ph.offsetWidth; ph.classList.add('ring'); } _lvBeep(660, 0.08); setTimeout(() => _lvBeep(660, 0.08), 160); }
+  const g = (h.querySelector('.lv-hud b') || {}).textContent || '';
+  _lvFun.events++; _lvNews(`${e} ${g ? g.split(' ')[0] + ': ' : ''}${txt}`);
+  if (sc && kind === 'float' && /💸|⭐/.test(e)) _lvBurst(sc, sc.clientWidth / 2, 80, ['✨', '🎉', '💛'], 8);
+  lvStats();
+}
+/** The day so far, in silly numbers. */
+function lvStats() {
+  const el = document.getElementById('lvStats'); if (!el) return;
+  const t = _lvAt != null ? _lvAt : Date.now(), now = new Date(t), today = roIso(now);
+  let hours = 0, people = 0;
+  [roAdd(today, -1), today].forEach(day => roPeople(day, true).forEach(x => { const sp = roSpan(day, x.info); if (!sp) return; const a = Math.max(sp.start, roDate(today)), b = Math.min(sp.end, now); if (b > a) { hours += (b - a) / 36e5; people++; } }));
+  const hr = now.getHours(), guests = Math.round(hours * 2.3 + (hr >= 14 ? 12 : 0));
+  el.innerHTML = [`☕ <b>${Math.floor(hours / 2.5)}</b> coffees`, `🧳 <b>${guests}</b> guests helped`, `📶 <b>${Math.floor(guests / 3)}</b> "what's the WiFi?"`, `🙋 <b>${people}</b> heroes on duty today`, `🛎 <b>${_lvFun.dings}</b> dings`, `👉 <b>${_lvFun.pokes}</b> pokes`].map(x => `<span>${x}</span>`).join('');
+}
 function lvSeek(min) { clearInterval(_lvPlay); _lvPlay = null; const b = document.getElementById('lvPlayB'); if (b) b.textContent = '▶ Play the day'; _lvAt = min == null ? null : roDate(roToday()).getTime() + min * 6e4; lvRender(); }
 /** ▶ the whole day in about 20 seconds: people walk in, work, walk home. */
 function lvPlay() {

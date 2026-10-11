@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 236, items: [
+    '🎮 The live desk got funny: every few seconds something happens in a lobby (a cat asking for the presidential suite, pizza for room 404, a duck nobody can explain, a VIP with a crown, parcel number 47, a ghost in the lift at night…), told in 📣 Lobby News at the top.',
+    '👉 Tap anyone to poke them: they jump and say something silly. Tap the 🛎 bell: DING, everyone jumps and says "Coming!" (and if the desk is empty: 🦗 crickets). Sleepy night staff float little Zzz, the coffee steams, the phone shakes when it rings, the plant sways, and at midnight there\'s a 🪩 disco.',
+    '📊 Silly numbers for the day: coffees, guests helped, "what\'s the WiFi?" questions, heroes on duty, dings and pokes. Small sounds on taps (🔊/🔇 to turn them off).',
+  ] },
   { v: 235, items: [
     '🎨 Phone menu (More): the long row of theme icons made the menu wider than the screen, so the whole page slid sideways and cut off Roster, No-Shows and the rest. It is now one button showing your theme ("● Night Ops ▾") that opens the list of every theme, like the sign-in screen and the top bar.',
   ] },
