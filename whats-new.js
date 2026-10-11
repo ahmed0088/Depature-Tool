@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 240, items: [
+    '📱 Phone layout: the 🧠 Ops Brain bubble no longer sits on top of buttons and text. It slides away while you scroll down and comes back when you scroll up or stop. Every page now ends with enough room that its last button (like Copy Log) is never under the bubble or the menu.',
+  ] },
   { v: 239, items: [
     '📱 iPhone: the end of every page was hidden under the bottom menu. The app was sized to the full screen, including the part behind the browser\'s own bar. It now fits the screen you can actually see, and every page ends with room to spare above the menu. Pop-ups and long lists fit the visible screen too.',
   ] },

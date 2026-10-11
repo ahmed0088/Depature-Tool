@@ -5656,7 +5656,9 @@ select.ap-col-sel.unmatched        { border-color: var(--amber); }
   .mob-nav-btn.active .mob-nav-lbl { color: var(--accent); font-weight: 800; }
   .mob-nav-btn.active .mob-nav-icon { transform: translateY(-1px) scale(1.12); }
   .mob-nav-icon { transition: transform .15s; }
-  .panel { padding-bottom: calc(110px + env(safe-area-inset-bottom)) !important; }   /* the end of every page clears the floating menu */
+  .panel { padding-bottom: calc(170px + env(safe-area-inset-bottom)) !important; }   /* the end of every page clears the floating menu and the 🧠 above it */
+  .br-fab { transition: translate .28s cubic-bezier(.3,.7,.3,1), opacity .28s; }
+  .br-fab.tuck { translate: 84px 0; opacity: 0; pointer-events: none; }
   #appToast { bottom: calc(84px + env(safe-area-inset-bottom)) !important; }
 
   .panel.mob-enter { animation: mobEnter .22s ease-out; }

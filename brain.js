@@ -529,6 +529,14 @@ document.addEventListener('DOMContentLoaded', () => {
   fab.onclick = () => brOpen();
   document.body.appendChild(fab);
   if (_brLS.get(BR_ERR_KEY, []).some(e => Date.now() - e.t < 864e5)) fab.classList.add('alert');
+  // on a phone it slides out of the way while you scroll down the page, and comes back when you scroll up or stop
+  { let lastY = 0, idle = null; const main = document.querySelector('main');
+    if (main) main.addEventListener('scroll', () => {
+      if (innerWidth > 768) return;
+      const y = main.scrollTop, end = y + main.clientHeight >= main.scrollHeight - 30;
+      if (y > lastY + 6 && y > 80 && !end) fab.classList.add('tuck'); else if (y < lastY - 6 || end) fab.classList.remove('tuck');
+      lastY = y; clearTimeout(idle); idle = setTimeout(() => fab.classList.remove('tuck'), 1400);
+    }, { passive: true }); }
   document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') { e.preventDefault(); brOpen(); } if (e.key === 'Escape') brClose(); });
   setTimeout(() => {
     if (typeof fbListen === 'function') {
