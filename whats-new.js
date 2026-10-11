@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 252, items: [
+    '✂️ HR cut-off card redesigned for phones: a proper on/off switch, − / + for the cut-off day and the days off in each half (no more oversized number box), and each half shows how many people still have days off left. Tap a half to see and change who.',
+  ] },
   { v: 251, items: [
     '🛎 Bell boys are part of their hotel\'s team and follow the same day-off rules (cut-off, freeze), but the team works without them when they are off: a bell boy\'s day off is never a gap, nobody is moved from another hotel to cover it, and it never weighs on the rest of the week.',
   ] },

@@ -148,11 +148,13 @@ function rrFreezeHtml() {
 /** ✂️ HR cut-off: days off per half-month, counted from what each person already took. */
 function rrCutHtml() {
   const R = rbRules(), C = rbCutCfg(R), raw = R.cutoff || {}, day = +raw.day || 15, per = raw.per != null ? +raw.per : 2;
+  const step = (k, v, min, max, suf) => `<span class="rr-step"><button class="rr-pm" onclick="rrCutSet('${k}',${Math.max(min, v - 1)})" aria-label="Less">−</button><b>${v}${suf || ''}</b><button class="rr-pm" onclick="rrCutSet('${k}',${Math.min(max, v + 1)})" aria-label="More">+</button></span>`;
   const head = `<div class="rr-sec">✂️ HR cut-off</div>
-    <div class="rr-cut-top"><label class="rr-sw"><input type="checkbox" ${C ? 'checked' : ''} onchange="rrCutSet('on',this.checked)"><i></i></label>
-      <span>Month cut on the <input type="number" min="1" max="27" value="${day}" onchange="rrCutSet('day',+this.value)" class="rr-cut-n"><b>th</b>: everyone takes
-      <button class="rr-pm" onclick="rrCutSet('per',${Math.max(0, per - 1)})">−</button><b class="rr-cut-v">${per}</b><button class="rr-pm" onclick="rrCutSet('per',${per + 1})">+</button>
-      days off before it and ${per} after.</span></div>`;
+    <div class="rr-cut-box">
+      <label class="rr-cut-line"><span><b>Count days off per half-month</b><small>${C ? 'On: the builder follows it every week' : 'Off: one day off a week as usual'}</small></span><span class="rr-sw"><input type="checkbox" ${C ? 'checked' : ''} onchange="rrCutSet('on',this.checked)"><i></i></span></label>
+      <div class="rr-cut-line"><span><b>Cut-off day</b><small>The half ends on this day of the month</small></span>${step('day', day, 1, 27, 'th')}</div>
+      <div class="rr-cut-line"><span><b>Days off in each half</b><small>${per} before the ${day}th and ${per} after</small></span>${step('per', per, 0, 7)}</div>
+    </div>`;
   if (!C) return head + '<div class="rr-fz-none">Off: days off are one a week as usual. Turn it on to count days off per half-month for HR.</div>';
   const W = rbWeek || rbDefaultWeek(), periods = [rbCutPeriod(W, C.day)], nx = rbCutPeriod(roAdd(periods[0].end, 1), C.day);
   if (nx.start <= roAdd(W, 6)) periods.push(nx);
@@ -162,7 +164,8 @@ function rrCutHtml() {
     let missing = 0; for (let dt = P.start; dt <= P.end && dt < W; dt = roAdd(dt, 1)) if (!Object.keys(roDays[dt] || {}).length) missing++;
     const rows = ppl.map(k => { const q = rbCutQuota(C, P, k), t = rbCutTaken(k, P, W), left = Math.max(0, q - t);
       return `<div class="rr-cut-row${left ? '' : ' none'}"><span>${escapeHtml(nm(k))}</span><small>${t} taken</small><span class="rr-cut-q"><button class="rr-pm" onclick="rrCutAdj('${P.id}',${_rtQ(k)},${t + Math.max(0, left - 1)})">−</button><b>${left}</b><button class="rr-pm" onclick="rrCutAdj('${P.id}',${_rtQ(k)},${t + left + 1})">+</button></span><em>${left ? 'left' : 'none left'}</em></div>`; }).join('');
-    return `<details class="rr-cut-p" open><summary>${escapeHtml(roDayLbl(P.start))} → ${escapeHtml(roDayLbl(P.end))} <small>days off still to take in this half · counted before ${escapeHtml(roDayLbl(W))}</small></summary>
+    const withLeft = ppl.filter(k => rbCutQuota(C, P, k) - rbCutTaken(k, P, W) > 0).length;
+    return `<details class="rr-cut-p"><summary><span class="rr-cut-ttl">${escapeHtml(roDayLbl(P.start))} → ${escapeHtml(roDayLbl(P.end))}</span><span class="rr-cut-cnt">${withLeft} of ${ppl.length} with days off left</span><small>Tap to see and change who · counted before ${escapeHtml(roDayLbl(W))}</small></summary>
       ${missing ? `<div class="rr-cut-warn">⚠️ No roster in the app for ${missing} day${missing === 1 ? '' : 's'} of this half (before ${escapeHtml(roDayLbl(W))}), so days off taken then are not counted. Set what each person has <b>left</b> below (or add that roster).</div>` : ''}
       <div class="rr-cut-quick">Everyone left: ${[0, 1, 2].map(n => `<button class="btn sm ghost" onclick="rrCutAllLeft('${P.id}',${n})">${n}</button>`).join('')}</div>
       <details class="rr-cut-ex"><summary>✅ Everyone took theirs, except…</summary>

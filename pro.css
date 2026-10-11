@@ -2007,3 +2007,15 @@ html.ho-lang-ar body { font-family: var(--font), 'Segoe UI', 'Noto Sans Arabic',
 .rt-sheet .rb-opt.soft { border-color: #f59e0b; background: rgba(245,158,11,.12); color: #b45309; }
 .rr-cut-warn { margin: 8px 0; padding: 8px 10px; border-radius: 10px; background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.45); font-size: 12.5px; color: var(--text); }
 .rb-stale { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 10px; padding: 10px 12px; border-radius: 12px; background: rgba(245,158,11,.13); border: 1px solid rgba(245,158,11,.5); font: 600 13px var(--font); color: var(--text); }
+/* ✂️ cut-off card, phone-friendly */
+.rr-cut-box { display: grid; gap: 2px; border: 1px solid var(--border); border-radius: 14px; background: var(--card); padding: 4px 12px; margin-bottom: 10px; }
+.rr-cut-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; cursor: default; }
+.rr-cut-line + .rr-cut-line { border-top: 1px solid var(--border); }
+.rr-cut-line > span:first-child { display: grid; gap: 2px; min-width: 0; font-size: 14px; } .rr-cut-line small { color: var(--text2); font-size: 12px; }
+.rr-cut-line .rr-sw { flex: none; }
+.rr-step { flex: none; display: inline-flex; align-items: center; gap: 8px; } .rr-step b { min-width: 34px; text-align: center; font: 800 15px var(--font); }
+.rr-step .rr-pm { width: 32px; height: 32px; border-radius: 10px; font-size: 17px; }
+.rr-cut-p summary { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; list-style: none; }
+.rr-cut-p summary::-webkit-details-marker { display: none; }
+.rr-cut-p summary small { grid-column: 1 / -1; }
+.rr-cut-ttl { font: 800 14px var(--font); } .rr-cut-cnt { font: 700 12px var(--font); color: var(--accent); background: var(--accent-bg); padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
