@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 257, items: [
+    '📌 The builder shows the roster you posted: open a posted week and you see what was posted (like management\'s roster given for 12–18 Oct), not the draft the builder made before. Edits made later on the Roster page show up there too. A draft started after posting and still being worked on is kept.',
+  ] },
   { v: 256, items: [
     '🏖 PH only counts as someone\'s rest when they had a PH to take. In the builder\'s "What we noticed" check, a PH given to someone with no balance set shows a note, plus a 🏖 PH balances list for the whole team with − / +. Set each person\'s PH owed once; after that the app keeps count (a PH given −1, a public holiday worked +1). Setting a balance now works even when PH days were already given before the app knew any holidays.',
   ] },

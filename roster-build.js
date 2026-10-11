@@ -1687,6 +1687,7 @@ function rbRender() {
   const root = document.getElementById('rbRoot');
   if (!root) return;
   if (!rbWeek) rbWeek = rbDefaultWeek();
+  rbSyncPosted(rbWeek);
   if (!roCanEdit()) { root.innerHTML = `<div class="page-hd"><div class="page-hd-left"><h1>Roster builder</h1><p>Supervisors, managers and owners build the roster here.</p></div></div>`; return; }
   const groups = rbGroups();
   if (rbGroup == null) rbGroup = (roStaff[roMeKey] || {}).group || '';
@@ -1853,6 +1854,19 @@ function rbPhBalHtml() {
   const ks = [...new Set(rbGroups().flatMap(g => rbMembers(g)))].filter(k => roStaff[k]).sort((a, b) => String(roStaff[a].name).localeCompare(roStaff[b].name));
   return `<details class="rb-phbal" open><summary>🏖 PH balances <small>days owed today, per person. Set them once; after that the app keeps count (PH given −1, a public holiday worked +1)</small></summary>
     <div class="rb-phbal-list">${ks.map(k => { const o = rbPhOwed(k).owed, q = _rbQ(k); return `<div class="rr-cut-row"><span>${escapeHtml(String(roStaff[k].name).split(' ')[0])}</span><small>${(rbPeople[k] || {}).phAdj != null || o ? '' : 'not set'}</small><span class="rr-cut-q"><button class="rr-pm" onclick="rbSetPh(${q},${Math.max(0, o - 1)});_rbWkC={};rbRender()">−</button><b>${o}</b><button class="rr-pm" onclick="rbSetPh(${q},${o + 1});_rbWkC={};rbRender()">+</button></span><em>PH owed</em></div>`; }).join('')}</div></details>`;
+}
+/** A posted week shows what was posted: when it was posted after the builder's draft (management's roster given
+ *  as the week's roster), or the draft is only the posted copy and the posted roster changed since (an edit on the
+ *  Roster page). A draft made after posting, still being worked on, is kept. */
+function rbSyncPosted(w) {
+  if (!w || !rbPostedWeek(w) || typeof rtPublished !== 'function') return;
+  const posted = {}; Object.entries(rtPublished(w)).forEach(([k, row]) => { if (Object.keys(row).length) posted[k] = row; });
+  const D = rbDrafts[w], same = D && D.cells && JSON.stringify(Object.keys(posted).sort().map(k => [k, posted[k]])) === JSON.stringify(Object.keys(D.cells).filter(k => Object.keys(D.cells[k] || {}).length).sort().map(k => [k, Object.fromEntries(Object.entries(D.cells[k]).filter(([, v]) => v))]));
+  if (same) return;
+  const P = typeof roPosted !== 'undefined' && roPosted, postedAt = P && P.from <= roAdd(w, 6) && P.to >= w ? P.at || 0 : 0;
+  if (D && D.cells && !D.fromPublished && (D.at || 0) > postedAt) return;   // a draft newer than the posting: someone is working on it
+  rbDrafts[w] = { cells: JSON.parse(JSON.stringify(posted)), at: Date.now(), by: (P && P.by) || 'posted', fromPublished: true, sig: rbRulesSig(), ver: typeof APP_VERSION !== 'undefined' ? APP_VERSION : '' };
+  if (typeof rbPutDraft === 'function') try { rbPutDraft(w); } catch (_) {}
 }
 function rbBaseHtml() {
   if (!rbWeek) return '';
