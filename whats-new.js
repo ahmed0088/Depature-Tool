@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 238, items: [
+    '🏷 Hotel logos: in the 🎮 Live desk, tap 🏷 next to a hotel\'s name and upload its official logo (PNG or SVG). It replaces the painted name on that lobby\'s wall and in Rush Hour, for the whole team.',
+    '🏊 Hotel facts: ask Ops Brain "pool timing?", "gym?" or "where is the bar?". Pool 08:00 – 19:00, gym open 24 hours with the room key, and at Ibis the bar is on the rooftop and the first floor. In Rush Hour the desk now gives guests these real answers.',
+  ] },
   { v: 237, items: [
     '🎯 Rush Hour: a real one-minute game in the 🎮 Live desk. You are alone at the desk and guests queue up with requests (WiFi password, late check-out, Dubai Mall, an iron…). Tap them before their bar runs out. Fast serves build a combo up to ×5, 👑 VIPs pay triple but wait less, ☕ calms everyone down, and 🐈 the cat does not want a room. 3 angry guests and the shift is over. Each guest thanks you in their language, angry ones threaten a 1-star review, and you get a rank from 🐣 Trainee to 👑 Front Desk Legend, with your best score kept and confetti for a new best.',
     '🏅 Badges for playing around: First poke, Poke master, Bell addict, Night watch, Disco time, On fire, Supervisor material, Legend and Cat whisperer.',

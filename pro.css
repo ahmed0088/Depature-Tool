@@ -1948,3 +1948,13 @@ details > summary + * { animation: hoRise .3s ease both; }
 .lg-conf { position: absolute; top: -10px; width: 8px; height: 12px; border-radius: 2px; animation: lgConf 2.4s ease-in both; z-index: 5; }
 @keyframes lgConf { to { transform: translateY(520px) rotate(var(--r)); opacity: .2; } }
 @media (prefers-reduced-motion: reduce) { .lv-guest.v2 .lv-gav, .lv-legs b, .lv-lift i, .lg-go, .lg-hero, .lg-rank span, .lg-g .lg-av, .lg-conf { animation: none !important; } }
+/* 🏷 hotel logos on the lobby wall, the logo menu, the desk's real answers */
+.lv-logo { height: 26px; max-width: 110px; object-fit: contain; filter: drop-shadow(0 1px 2px rgba(0,0,0,.25)); }
+.lv-hotel.night .lv-logo { filter: drop-shadow(0 0 6px rgba(255,255,255,.55)) brightness(1.08); }
+.lv-logobtn { border: 0; cursor: pointer; }
+.lv-logo-pop { width: 240px; display: grid; gap: 8px; font: 500 12.5px var(--font); color: var(--text); }
+.lv-logo-pop img { max-width: 100%; max-height: 80px; object-fit: contain; background: repeating-conic-gradient(#e5e7eb 0 25%, #fff 0 50%) 0 0 / 14px 14px; border-radius: 8px; padding: 6px; }
+.lv-logo-pop small { color: var(--text2); }
+.lv-logo-acts { display: flex; gap: 6px; } .lv-logo-acts label { cursor: pointer; }
+.lg-logo-img { height: 34px; max-width: 150px; object-fit: contain; }
+.lg-say { position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); white-space: nowrap; font: 800 11.5px var(--font); color: #0f172a; background: #a7f3d0; padding: 4px 9px; border-radius: 10px; box-shadow: 0 3px 8px rgba(0,0,0,.25); animation: lvPop .35s ease both; z-index: 3; }

@@ -6,7 +6,7 @@
 //  Plus 🏅 badges for playing around in the live desk.
 // ═══════════════════════════════════════════════════════════
 
-const LG_REQ = [['🔑', 'Check-in!'], ['🧾', 'Check-out'], ['📶', 'WiFi pwd?'], ['🧳', 'My bags!'], ['🚕', 'Taxi pls'], ['🛏', 'Upgrade?'], ['🗺', 'Dubai Mall?'], ['🍳', 'Breakfast?'], ['🕐', 'Late check-out?'], ['🔌', 'Adapter?'], ['🧺', 'An iron?'], ['🏊', 'Pool open?'], ['🅿️', 'Parking?'], ['🔁', 'New room!']];
+const LG_REQ = [['🔑', 'Check-in!'], ['🧾', 'Check-out'], ['📶', 'WiFi pwd?'], ['🧳', 'My bags!'], ['🚕', 'Taxi pls'], ['🛏', 'Upgrade?'], ['🗺', 'Dubai Mall?'], ['🍳', 'Breakfast?'], ['🕐', 'Late check-out?'], ['🔌', 'Adapter?'], ['🧺', 'An iron?'], ['🏊', 'Pool open?', '🏊 Pool: 8 AM – 7 PM!'], ['🏋️', 'Gym?', '🏋️ 24h, with your room key'], ['🅿️', 'Parking?'], ['🔁', 'New room!']];
 const LG_THANKS = ['Shukran!', 'Merci!', 'Thanks!', 'Danke!', 'Grazie!', 'Gracias!', 'Obrigado!', 'Спасибо!', '谢谢!', 'ありがとう!', 'Dhanyavaad!', 'Salamat!'];
 const LG_RANKS = [[0, '🐣', 'Trainee', 'Everyone starts somewhere. Coffee, then again!'], [120, '🛎', 'Receptionist', 'Solid shift. The guests made it upstairs.'], [260, '⭐', 'Supervisor', 'Calm under pressure. Promotion talks soon.'], [430, '🏆', 'Duty Manager', 'Running the lobby like a pro.'], [650, '👑', 'Front Desk Legend', 'They will tell stories about this shift.']];
 const LG_TIME = 60000;
@@ -46,12 +46,12 @@ function lgStop() { if (_lg) { clearInterval(_lg.tick); clearTimeout(_lg.cd); } 
 function lgStart() {
   const g = document.getElementById('lvGame'); if (!g) return;
   lgStop();
-  const hero = _lgHero();
+  const hero = _lgHero(), hotel = (roStaff[hero] || {}).group || ((typeof roGroups === 'function' && roGroups()[0]) || '');
   g.innerHTML = `<div class="lg-card lg-play">
     <div class="lg-hud"><span class="lg-score">⭐ <b id="lgScore">0</b></span><span class="lg-combo" id="lgCombo"></span><span class="lg-lives" id="lgLives">❤️❤️❤️</span><span class="lg-clock">⏱ <b id="lgTime">60</b></span></div>
     <div class="lg-tbar"><i id="lgTbar"></i></div>
     <div class="lg-scene" id="lgScene">
-      <div class="lg-wall"><span class="lg-sign">RECEPTION</span><div class="lv-lift lg-lift"><i class="l"></i><i class="r"></i><span>▲</span></div></div>
+      <div class="lg-wall">${typeof lvLogo === 'function' && lvLogo(hotel) ? `<img class="lg-logo-img" src="${escapeHtml(lvLogo(hotel))}" alt="">` : '<span class="lg-sign">RECEPTION</span>'}<div class="lv-lift lg-lift"><i class="l"></i><i class="r"></i><span>▲</span></div></div>
       <div class="lg-staff">${avSvg(hero, 70, 'happy')}</div>
       <div class="lg-desk"><span>🛎</span><b>FRONT DESK</b><span>🪴</span></div>
       <div class="lg-lane" id="lgLane"></div>
@@ -59,7 +59,7 @@ function lgStart() {
       <div class="lg-count" id="lgCount">3</div>
     </div>
   </div>`;
-  _lg = { score: 0, combo: 1, bestCombo: 1, lives: 3, served: 0, angry: 0, cats: 0, guests: [], n: 0, t0: 0, last: 0, lastServe: 0, calmUntil: 0, nextSpawn: 0, over: false };
+  _lg = { hotel, score: 0, combo: 1, bestCombo: 1, lives: 3, served: 0, angry: 0, cats: 0, guests: [], n: 0, t0: 0, last: 0, lastServe: 0, calmUntil: 0, nextSpawn: 0, over: false };
   { const sc = document.getElementById('lgScene'); _lg.slots = sc && sc.clientWidth < 420 ? 4 : 5; }
   let c = 3; _lgSnd(440, 0.12);
   const step = () => {
@@ -79,7 +79,8 @@ function _lgSpawn(now) {
   const el = now - L.t0, r = Math.random();
   const kind = el > 8000 && r < 0.09 ? 'cat' : el > 5000 && r < 0.2 ? 'vip' : r > 0.94 && Date.now() > L.calmUntil ? 'coffee' : 'guest';
   const patience = kind === 'cat' ? 4200 : kind === 'coffee' ? 3500 : Math.max(3000, 7600 - el * 0.07) * (kind === 'vip' ? 0.7 : 1);
-  const G = { id: ++L.n, slot: free[Math.floor(Math.random() * free.length)], kind, born: now, patience, waited: 0, req: LG_REQ[Math.floor(Math.random() * LG_REQ.length)] };
+  const pool = LG_REQ.concat(/^ibis/i.test(L.hotel || '') ? [['🍸', 'The bar?', '🍸 Rooftop & 1st floor!']] : []);
+  const G = { id: ++L.n, slot: free[Math.floor(Math.random() * free.length)], kind, born: now, patience, waited: 0, req: pool[Math.floor(Math.random() * pool.length)] };
   L.guests.push(G);
   const lane = document.getElementById('lgLane'); if (!lane) return;
   const d = document.createElement('div'); d.className = 'lg-g ' + kind; d.id = 'lgG' + G.id; d.style.left = (6 + G.slot * (88 / _lgSlots())) + '%'; d.style.width = (88 / _lgSlots()) + '%';
@@ -91,7 +92,7 @@ function _lgSpawn(now) {
 }
 function _lgFloat(x, txt, cls) {
   const fx = document.getElementById('lgFx'); if (!fx) return;
-  const e = document.createElement('span'); e.className = 'lg-float ' + (cls || ''); e.textContent = txt; e.style.left = x + '%';
+  const e = document.createElement('span'); e.className = 'lg-float ' + (cls || ''); e.textContent = txt; e.style.left = Math.max(18, Math.min(82, x)) + '%';
   fx.appendChild(e); setTimeout(() => e.remove(), 1100);
 }
 function _lgLeave(G, how) {
@@ -111,7 +112,8 @@ function lgTap(id) {
   _lgFloat(x, `+${pts} ${LG_THANKS[Math.floor(Math.random() * LG_THANKS.length)]}`, G.kind === 'vip' ? 'vip' : 'good');
   _lgSnd(600 + L.combo * 120, 0.09, 'triangle');
   _lgLeave(G, 'served');
-  const st = document.querySelector('.lg-staff'); if (st) { st.classList.remove('hop'); void st.offsetWidth; st.classList.add('hop'); }
+  const st = document.querySelector('.lg-staff'); if (st) { st.classList.remove('hop'); void st.offsetWidth; st.classList.add('hop');
+    if (G.req[2]) { st.querySelector('.lg-say')?.remove(); const s = document.createElement('span'); s.className = 'lg-say'; s.textContent = G.req[2]; st.appendChild(s); setTimeout(() => s.remove(), 1600); } }   // the real answer
   if (L.combo >= 5) lvBadge('combo5', '🔥 On fire: a ×5 combo in Rush Hour');
   _lgHud();
 }

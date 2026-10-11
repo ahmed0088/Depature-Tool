@@ -86,7 +86,7 @@ function _lvHotelOf(x) {
 }
 const LV_LINES = [
   [0.08, ['☕ Just arrived. Coffee first', '👋 Hello team!', '🔑 Opening the shift', '😎 The legend has arrived', '🫡 Reporting for duty']],
-  [0.3, ['😄 Checking guests in', '💪 Fresh and ready', '🛎 Ding ding!', '📶 "What\'s the WiFi?" #12', '🧳 9 suitcases, 1 night stay', '🗣 "Is breakfast free?"']],
+  [0.3, ['😄 Checking guests in', '💪 Fresh and ready', '🛎 Ding ding!', '📶 "What\'s the WiFi?" #12', '🧳 9 suitcases, 1 night stay', '🗣 "Is breakfast free?"', '🏊 "Pool?" 8 AM – 7 PM!', '🏋️ "Gym?" 24h with your key']],
   [0.55, ['🧾 In the zone', '📞 On the phone again', '🗝 Keys, keys, keys', '🤹 Juggling 5 guests', '🧠 Big brain upsell', '🔁 "Can I change rooms?"']],
   [0.7, ['🥪 Snack time?', '😌 Halfway there', '💬 Small talk with a guest', '🥱 Fighting a yawn', '🍫 Emergency chocolate', '📸 Guest selfie at the desk']],
   [0.9, ['⏳ Almost there', '📝 Writing the handover', '🧮 Counting the float', '👀 Watching the clock', '🙏 No more late check-outs pls']],
@@ -151,14 +151,14 @@ function lvHotelHtml(S, t, idx) {
   return `<div class="lv-hotel${night ? ' night' : ''}${empty ? ' empty' : ''}${disco ? ' disco' : ''}" id="lvH${idx}">
     <div class="lv-hud"><b>${escapeHtml(S.g || 'Reception')}</b>
       <span class="lv-pill ${empty ? 'bad' : 'ok'}">${empty ? '⚠ Desk EMPTY' : '🛎 Desk covered'}</span>
-      <span class="lv-pill">👥 ${S.on.length}</span>${S.coming.length ? `<span class="lv-pill">🔜 ${escapeHtml(String(S.coming[0].name).split(' ')[0])} ${_lvHM(S.coming[0].sp.start)}</span>` : ''}</div>
+      <span class="lv-pill">👥 ${S.on.length}</span>${S.g && typeof roCanEdit === 'function' && roCanEdit() ? `<button type="button" class="lv-pill lv-logobtn" onclick="lvLogoMenu(this, ${escapeHtml(JSON.stringify(S.g))})" title="The hotel's logo">🏷</button>` : ''}${S.coming.length ? `<span class="lv-pill">🔜 ${escapeHtml(String(S.coming[0].name).split(' ')[0])} ${_lvHM(S.coming[0].sp.start)}</span>` : ''}</div>
     <div class="lv-scene">
       <div class="lv-window" style="--s1:${s1};--s2:${s2}">
         <span class="lv-orb ${orb.day ? 'sun' : 'moon'}" style="left:${orb.left}%;top:${orb.top}%"></span>
         ${night ? '<i class="lv-star" style="left:14%;top:16%"></i><i class="lv-star" style="left:68%;top:10%"></i><i class="lv-star" style="left:42%;top:26%"></i><i class="lv-star" style="left:86%;top:30%"></i><i class="lv-star" style="left:28%;top:8%"></i>' : '<i class="lv-cloud" style="top:14%;--cd:0s"></i><i class="lv-cloud" style="top:34%;--cd:-9s;transform:scale(.7)"></i>'}
         ${LV_CITY}
       </div>
-      <div class="lv-wall"><span class="lv-sign">${escapeHtml((S.g || 'Hotel').split(' ')[0])}</span>${_lvClock(now)}<span class="lv-keys">🗝🗝🗝</span><div class="lv-lift" style="--ld:${(_avHash(S.g) % 10)}s"><i class="l"></i><i class="r"></i><span>▲</span></div></div>
+      <div class="lv-wall">${lvLogo(S.g) ? `<img class="lv-logo" src="${escapeHtml(lvLogo(S.g))}" alt="${escapeHtml(S.g)}">` : `<span class="lv-sign">${escapeHtml((S.g || 'Hotel').split(' ')[0])}</span>`}${_lvClock(now)}<span class="lv-keys">🗝🗝🗝</span><div class="lv-lift" style="--ld:${(_avHash(S.g) % 10)}s"><i class="l"></i><i class="r"></i><span>▲</span></div></div>
       ${disco ? '<span class="lv-disco">🪩</span><i class="lv-lights"></i>' : ''}
       <div class="lv-staff">${S.gone.map(x => staff(x, 'gone')).join('')}${S.on.map(x => staff(x, 'on')).join('') || '<div class="lv-empty">🛎 Ding… is anyone here? <small>🦗 *crickets*</small></div>'}${S.coming.map(x => staff(x, 'coming')).join('')}</div>
       <div class="lv-desk"><button type="button" class="lv-bell" onclick="lvDing(${idx})" title="Ring the bell!">🛎</button><span class="lv-cup">☕<i></i><i></i></span><b>RECEPTION</b><span class="lv-phone">☎️</span><span class="lv-plant">🪴</span></div>
@@ -215,6 +215,39 @@ function lvOpen() {
   clearTimeout(_lvFx); const fx = () => { if (!document.getElementById('lvView')) return; lvSurprise(); _lvFx = setTimeout(fx, _lvPlay ? 1800 : 5000 + Math.random() * 4000); }; _lvFx = setTimeout(fx, 2500);
 }
 function lvClose() { if (typeof lgStop === 'function') lgStop(); clearInterval(_lvT); clearInterval(_lvPlay); clearTimeout(_lvFx); _lvPlay = null; document.getElementById('lvView')?.remove(); }
+
+// ── 🏷 Each hotel's own logo, uploaded once for the whole team ──
+function _lvLogoKey(g) { return String(typeof rbBaseGroup === 'function' ? rbBaseGroup(g) : g).replace(/[.#$\[\]\/\s]+/g, '_'); }
+function lvLogo(g) { return g && typeof rbSettings !== 'undefined' ? ((rbSettings.logos || {})[_lvLogoKey(g)] || '') : ''; }
+function lvLogoMenu(btn, g) {
+  document.getElementById('lvLogoPop')?.remove();
+  const pop = document.createElement('div'); pop.id = 'lvLogoPop'; pop.className = 'rb-menu lv-logo-pop';
+  pop.innerHTML = `<b>🏷 ${escapeHtml(typeof rbBaseGroup === 'function' ? rbBaseGroup(g) : g)} logo</b>${lvLogo(g) ? `<img src="${escapeHtml(lvLogo(g))}" alt="">` : '<small>The official logo file (PNG or SVG, best with a clear background). Shown on the lobby wall for everyone.</small>'}
+    <div class="lv-logo-acts"><label class="btn sm">📷 ${lvLogo(g) ? 'Change' : 'Upload'}<input type="file" accept="image/*" hidden></label>${lvLogo(g) ? '<button class="btn sm ghost" data-rm>🗑 Remove</button>' : ''}</div>`;
+  document.body.appendChild(pop);
+  const r = btn.getBoundingClientRect(); pop.style.left = Math.max(8, Math.min(innerWidth - 248, r.right - 240)) + 'px'; pop.style.top = (r.bottom + 6) + 'px';
+  pop.querySelector('input').addEventListener('change', e => { const f = e.target.files[0]; if (f) lvLogoSave(g, f); pop.remove(); });
+  const rm = pop.querySelector('[data-rm]'); if (rm) rm.addEventListener('click', () => { lvLogoSet(g, null); pop.remove(); });
+  setTimeout(() => document.addEventListener('click', function off(e) { if (!pop.contains(e.target)) { pop.remove(); document.removeEventListener('click', off); } }), 0);
+}
+/** Made small (at most 360 × 140) so it loads fast for everyone. */
+function lvLogoSave(g, file) {
+  const rd = new FileReader();
+  rd.onload = () => { const img = new Image(); img.onload = () => {
+    const k = Math.min(1, 360 / img.width, 140 / img.height), c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    lvLogoSet(g, c.toDataURL('image/png'));
+  }; img.onerror = () => typeof showToast === 'function' && showToast('That file is not a picture', 'warn'); img.src = rd.result; };
+  rd.readAsDataURL(file);
+}
+function lvLogoSet(g, url) {
+  rbSettings.logos = Object.assign({}, rbSettings.logos); const k = _lvLogoKey(g);
+  if (url) rbSettings.logos[k] = url; else delete rbSettings.logos[k];
+  if (typeof fbSet === 'function') fbSet('roster/builder/settings/logos/' + k, url || null);
+  Object.keys(_lvKeys).forEach(x => delete _lvKeys[x]); lvRender();
+  if (typeof showToast === 'function') showToast(url ? '🏷 Logo saved for the whole team' : 'Logo removed', 'ok');
+}
 
 // ── The fun: surprises in the lobby, poke someone, ring the bell ──
 let _lvFx = null, _lvMute = false, _lvAc = null;
