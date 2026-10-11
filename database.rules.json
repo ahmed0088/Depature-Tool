@@ -1,0 +1,38 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "userHotels": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && (auth.uid === $uid || (newData.isString() && (root.child('hotels').child(newData.val()).child('users').child(auth.uid).child('role').val() === 'owner' || root.child('hotels').child(newData.val()).child('users').child(auth.uid).child('role').val() === 'manager')) || (!newData.exists() && data.isString() && (root.child('hotels').child(data.val()).child('users').child(auth.uid).child('role').val() === 'owner' || root.child('hotels').child(data.val()).child('users').child(auth.uid).child('role').val() === 'manager')))"
+      }
+    },
+
+    "hotelsIndex": {
+      ".read": "auth != null",
+      "$hid": {
+        ".write": "auth != null && !data.exists() && newData.exists()"
+      }
+    },
+
+    "hotels": {
+      "$hid": {
+        ".read": "auth != null && root.child('hotels').child($hid).child('users').child(auth.uid).exists()",
+        ".write": "auth != null && root.child('hotels').child($hid).child('users').child(auth.uid).child('role').val() === 'owner'",
+
+        "users": {
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": "auth != null && (!root.child('hotels').child($hid).child('users').exists() || root.child('hotels').child($hid).child('users').child(auth.uid).child('role').val() === 'manager' || (auth.uid === $uid && data.exists() && newData.exists() && newData.child('role').val() === data.child('role').val()))"
+          }
+        },
+
+        "$node": {
+          ".write": "auth != null && root.child('hotels').child($hid).child('users').child(auth.uid).exists()"
+        }
+      }
+    }
+  }
+}

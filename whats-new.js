@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 262, items: [
+    '🔒 Safety: sample emails in the sign-up and add-user boxes are now neutral ones, the project blocks report and roster files (Excel, CSV, backups) from ever being uploaded to GitHub by mistake, CI runs with read-only access, and ready-made Firebase rules (database.rules.json) let only your hotel\'s signed-in team read its data.',
+  ] },
   { v: 261, items: [
     '⏰ Shift tasks can have a time: pick it when you add a task (or ✏️ edit one). At that time, on that shift, you get a chime, a notification and a bubble with ✓ Done / In 10 min. A task whose time has passed and isn\'t ticked shows its time in red.',
     '🌴 Quiet when you\'re off: on your day off, PH, vacation or leave, or outside your shift, the app no longer rings or pops up (late check-outs, wake-up calls, Ops Brain bubbles, task reminders). It knows from the roster: your name in Roster → My shifts. Reminders you set yourself ("remind me at …") still ring. Settings → Alerts → Quiet when I\'m off turns it off.',

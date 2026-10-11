@@ -87,24 +87,14 @@ Roles are defined in `auth.js` (`ROLES`): 👑 Owner, 🏅 Manager, ⭐ Supervis
 3. Create the first Owner account with `setup-account.html`. After that, add users from the 👥 admin panel.
 4. Host the folder on any static host. This repo is served by GitHub Pages from `main`.
 
-### Recommended Realtime Database rules
+### Realtime Database rules
 
-```json
-{
-  "rules": {
-    ".read": false,
-    ".write": false,
-    "hotels": {
-      "$hotel": {
-        ".read":  "auth != null && root.child('hotels').child($hotel).child('users').child(auth.uid).exists()",
-        ".write": "auth != null && root.child('hotels').child($hotel).child('users').child(auth.uid).exists()"
-      }
-    }
-  }
-}
-```
+`database.rules.json` holds rules made for this app:
+- Only signed-in members of a hotel can read or change that hotel's data.
+- Only an Owner or Manager can add or change other people's accounts, and nobody can raise their own role.
+- The very first account of a new hotel can still create itself as Owner.
 
-Change the path to match where your users are stored, then test it with the Rules Playground in the Firebase console before you publish it.
+To use them, open Firebase console → Realtime Database → **Rules**. **Copy your current rules somewhere first** (to undo if needed), paste the file, then try it in the **Rules Playground** and click **Publish**. Then sign in to the app and check that pages load and saving works.
 
 ---
 
@@ -147,6 +137,8 @@ roster.js roster-*.js  Roster, team, rules, builder, holidays, swaps, import, li
 brain*.js             Ops Brain assistant (on device)
 
 tests/                run-tests.js + anonymised fixtures
+database.rules.json   Firebase Realtime Database rules (paste in the Firebase console)
+SECURITY.md .gitignore .github/dependabot.yml   Repo safety: how to report, what never gets committed, CI updates
 scripts/              Helper scripts
 .github/workflows/    CI: syntax check and tests on every push
 ```
@@ -159,7 +151,7 @@ scripts/              Helper scripts
 - **Settings → Code security**: enable *Secret scanning*, *Push protection* and *Dependabot alerts*.
 - **Settings → Branches / Rules**: protect `main` by blocking force-pushes and deletion, and requiring the *Tests* check.
 - **Settings → Collaborators / Deploy keys / GitHub Apps**: remove anything you don't recognise.
-- **Firebase**: use the database rules above; never leave them in *test mode*. In Google Cloud → Credentials, restrict the web API key to your site (`https://<user>.github.io/*`).
+- **Firebase**: publish `database.rules.json` (see Setup); never leave the rules in *test mode*. In Google Cloud → Credentials, restrict the web API key to your site (`https://<user>.github.io/*`).
 - Keep real people's data out of commits. If something private was committed, removing it in a new commit is not enough, because it stays in history. Rotate any leaked secret first, then clean history.
 
 ---
