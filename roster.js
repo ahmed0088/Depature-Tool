@@ -458,6 +458,32 @@ async function roLoadMe() {
 
 // ── Questions the rest of the app asks ────────────────────
 function roCode(key, date) { return (roDays[date] || {})[key] || ''; }
+/** Are you working right now, by the roster (your name in My shifts)?
+ *  'on'      a shift of yours covers now (from 1 h before it starts to 30 min after it ends; last night's shift counts)
+ *  'off'     today is a day off, PH, vacation or leave, or your shift today isn't now
+ *  'unknown' no name chosen, or nothing on the roster for today: the app behaves as before */
+function hoMyDuty(now) {
+  now = now || new Date();
+  if (!roMeKey || typeof rbParse !== 'function') return { state: 'unknown' };
+  const today = roIso(now), t = now.getTime();
+  for (const d of [roAdd(today, -1), today]) {
+    const c = roCode(roMeKey, d), p = rbParse(c);
+    if (!p) continue;
+    const base = roDate(d).getTime();
+    if (t >= base + (p.s - 60) * 60e3 && t <= base + (p.e + 30) * 60e3) return { state: 'on', code: c, date: d };
+  }
+  const c = roCode(roMeKey, today);
+  if (!c) return { state: 'unknown' };
+  const i = roInfo(c) || {}, p = rbParse(c);
+  if (p) return { state: 'off', why: `your shift today is ${p.from} – ${p.to}`, code: c };
+  const lbl = String(c).trim().toUpperCase() === 'PH' ? 'PH' : (i.label || c);
+  return { state: 'off', why: i.type === 'off' ? 'you\'re off today' : `you're on ${lbl} today`, code: c, dayOff: true };
+}
+/** True when alarms and reminders should keep quiet: you're not on shift (Settings → Alerts → Quiet when I'm off). */
+function hoQuiet(now) {
+  if (typeof hoPref === 'function' && hoPref('quietOff') === false) return false;
+  try { return hoMyDuty(now).state === 'off'; } catch (_) { return false; }
+}
 const _roMin = t => { const [h, m] = String(t).split(':').map(Number); return h * 60 + (m || 0); };
 /** A shift starting after midnight (00:00 – 09:00) is written on the day it belongs to and starts when that day
  *  ends: "00:00 – 09:00" on Saturday is Saturday night, right after Saturday's 15:00 – 00:00, until Sunday 09:00. */
@@ -805,7 +831,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
     if (typeof fbListen !== 'function') return;
     fbListen('roster/days', v => { roDays = v || {}; _roRefresh(); });
-    fbListen('roster/staff', v => { roStaff = v || {}; roGuessMe(); _roRefresh(); });
+    fbListen('roster/staff', v => { roStaff = v || {}; roLoadMe(); roGuessMe(); _roRefresh(); });
     fbListen('roster/codes', v => { roCodes = v || {}; _roRefresh(); });
     fbListen('roster/posted', roOnPosted);
   }, 1500);

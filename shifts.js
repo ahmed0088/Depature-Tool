@@ -85,6 +85,7 @@ function _renderShiftContent(key) {
     <div class="shift-complete-banner" style="border-color:${shift.color}55;background:${shift.color}14;color:${shift.color};">
       🎉 All caught up on the ${shift.label} — nice work.
     </div>` : ''}
+    ${stQuietHtml()}
     <div id="stList-${key}" class="st-sortable">
       ${total ? shift.tasks.map((t, i) => stItemHTML(key, t, done.has(t.id), i, total)).join('')
               : '<div class="st-empty">No tasks on this shift yet — add one below.</div>'}
@@ -92,6 +93,7 @@ function _renderShiftContent(key) {
     <div class="st-add-wrap">
       <input class="st-add-in"   id="stIn-${key}"   placeholder="Add new task…" onkeydown="if(event.key==='Enter')stAddTask('${key}')"/>
       <input class="st-add-hint" id="stHint-${key}" placeholder="Hint (optional)" onkeydown="if(event.key==='Enter')stAddTask('${key}')"/>
+      <input class="st-add-at" id="stAt-${key}" type="time" title="Time (optional): I remind you then, on this shift" aria-label="Time"/>
       <button class="btn gold sm" onclick="stAddTask('${key}')">+ Add</button>
     </div>
     ${shift.resetAt ? `<div style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);margin-top:6px;">Last reset: ${shift.resetAt}</div>` : ''}
@@ -119,7 +121,7 @@ function stItemHTML(key, t, isDone, index, total) {
     <div class="st-drag-handle" title="Drag to reorder">⠿</div>
     <div class="st-check" onclick="stToggle('${key}','${t.id}')"></div>
     <div class="st-text">
-      <div class="st-name">${escapeHtml(t.name)}</div>
+      <div class="st-name">${t.at ? `<span class="st-at${!isDone && stIsLate(key, t) ? ' late' : ''}" title="${stIsLate(key, t) && !isDone ? 'Time passed, not done yet' : 'Reminder at this time'}">⏰ ${escapeHtml(t.at)}</span>` : ''}${escapeHtml(t.name)}</div>
       ${t.hint ? `<div class="st-hint">${escapeHtml(t.hint)}</div>` : ''}
     </div>
     <div class="st-actions">
@@ -201,11 +203,15 @@ function initDragSort(key) {
 function stAddTask(key) {
   const nEl  = document.getElementById('stIn-'   + key);
   const hEl  = document.getElementById('stHint-' + key);
+  const aEl  = document.getElementById('stAt-'   + key);
   const name = (nEl?.value || '').trim();
   if (!name) return;
-  SHIFTS[key].tasks.push({ id: 't' + Date.now(), name, hint: (hEl?.value || '').trim() });
+  const task = { id: 't' + Date.now(), name, hint: (hEl?.value || '').trim() };
+  if (aEl?.value) task.at = aEl.value;
+  SHIFTS[key].tasks.push(task);
   if (nEl) nEl.value = '';
   if (hEl) hEl.value = '';
+  if (aEl) aEl.value = '';
   stLog(key, 'added', name);
   logActivity('shift_task_added', `[${SHIFTS[key].label}] ${name}`);
   _renderShiftContent(key);
@@ -246,6 +252,7 @@ function openEditTask(key, id) {
   document.getElementById('et-id').value    = id;
   document.getElementById('et-name').value  = task.name;
   document.getElementById('et-hint').value  = task.hint || '';
+  const at = document.getElementById('et-at'); if (at) at.value = task.at || '';
   document.getElementById('editTaskModal').classList.add('open');
 }
 
@@ -256,6 +263,8 @@ function saveEditTask() {
   if (!task) return;
   task.name = document.getElementById('et-name').value.trim() || task.name;
   task.hint = document.getElementById('et-hint').value.trim();
+  const at = document.getElementById('et-at')?.value || '';
+  if (at) task.at = at; else delete task.at;
   document.getElementById('editTaskModal').classList.remove('open');
   _renderShiftContent(key);
   persistShifts();
@@ -386,7 +395,73 @@ function stAutoFreshStart() {
   persistShifts();
   updateShiftBadge(key);
   if (typeof activeShift !== 'undefined' && activeShift === key && document.getElementById('panel-shifts')?.classList.contains('active')) _renderShiftContent(key);
-  if (hadTicks && typeof showToast === 'function') showToast(`⏰ New ${sh.label || key}: shift tasks start fresh`, 'ok');
+  if (hadTicks && typeof showToast === 'function' && !(typeof hoQuiet === 'function' && hoQuiet())) showToast(`⏰ New ${sh.label || key}: shift tasks start fresh`, 'ok');
 }
 setInterval(stAutoFreshStart, 60000);
 document.addEventListener('DOMContentLoaded', () => setTimeout(stAutoFreshStart, 6000));
+
+// ── Task times and reminders ──────────────────────────────
+// A task can have a time ("02:00 check the cash"). On its shift, at that time, it rings (chime, a
+// notification, a bubble with ✓ Done / Later) until it is ticked. Nothing rings when the roster says
+// you're not working (day off, PH, leave, or outside your shift) — Settings → Alerts → Quiet when I'm off.
+const _stMin = t => { const m = String(t || '').match(/^(\d{1,2}):(\d{2})/); return m ? +m[1] * 60 + +m[2] : null; };
+const _stDay = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+/** Is this the shift running now? Mid has no slot of its own, so it counts during the day. */
+function _stIsNow(key, now) {
+  if (key === 'mid') { const h = now.getHours(); return h >= 8 && h < 22; }
+  return hoShiftNow(now).key === key;
+}
+/** The time passed on the running shift and it isn't ticked */
+function stIsLate(key, t, now) {
+  now = now || new Date();
+  const m = _stMin(t.at); if (m == null || !_stIsNow(key, now)) return false;
+  const st = key === 'mid' ? null : hoShiftNow(now).start;
+  const due = new Date(st ? st : now); if (!st) due.setHours(0, 0, 0, 0);
+  due.setHours(Math.floor(m / 60), m % 60, 0, 0);
+  if (st && due < st) due.setDate(due.getDate() + 1);   // 02:00 on a night that started at 23:00
+  return now >= due;
+}
+function stQuietHtml() {
+  if (typeof hoQuiet !== 'function' || !hoQuiet()) return '';
+  const d = hoMyDuty();
+  return `<div class="st-quiet">🌴 Reminders are quiet: ${escapeHtml(d.why || 'you\'re not on shift')}. <small>From the roster · Settings → Alerts</small></div>`;
+}
+const ST_REM_KEY = 'st_reminded_v1';
+function stRemindTick() {
+  if (typeof hoPref === 'function' && hoPref('taskReminders') === false) return;
+  if (!_shiftsLoaded || typeof currentUser === 'undefined' || !currentUser) return;
+  if (typeof hoQuiet === 'function' && hoQuiet()) return;
+  const now = new Date(), nowMs = now.getTime();
+  let seen = {}; try { seen = JSON.parse(localStorage.getItem(ST_REM_KEY) || '{}'); } catch (_) {}
+  const keep = new Set([_stDay(now), _stDay(new Date(nowMs - 86400e3))]);
+  Object.keys(seen).forEach(id => { if (!keep.has(id.slice(0, 10))) delete seen[id]; });
+  Object.keys(SHIFTS).forEach(key => {
+    const sh = SHIFTS[key];
+    (sh.tasks || []).forEach(t => {
+      if (!t.at || (sh.done || []).includes(t.id) || !stIsLate(key, t, now)) return;
+      const day = key === 'mid' ? _stDay(now) : _stDay(hoShiftNow(now).start);
+      const id = `${day}|${key}|${t.id}`, v = seen[id];
+      if (v === 0 || (v && v > nowMs)) return;           // done with it, or "later" not due yet
+      const due = _stMin(t.at), late = (now.getHours() * 60 + now.getMinutes() - due + 1440) % 1440;
+      if (v == null && late > 30) { seen[id] = 0; return; }   // set long after its time: just show it as late
+      seen[id] = 0;
+      _stRing(key, t, id);
+    });
+  });
+  try { localStorage.setItem(ST_REM_KEY, JSON.stringify(seen)); } catch (_) {}
+}
+function _stLater(id, min) {
+  let seen = {}; try { seen = JSON.parse(localStorage.getItem(ST_REM_KEY) || '{}'); } catch (_) {}
+  seen[id] = Date.now() + min * 60e3;
+  try { localStorage.setItem(ST_REM_KEY, JSON.stringify(seen)); } catch (_) {}
+}
+function _stRing(key, t, id) {
+  const text = `⏰ ${t.at} · ${t.name}`, why = `${SHIFTS[key].label}${t.hint ? ' · ' + t.hint : ''}`;
+  if (typeof hoAlert === 'function') hoAlert(text, true);
+  if (typeof blSay === 'function') blSay({ id: 'st:' + id, type: 'heal', tone: 'warn', icon: '⏰', text: `${t.at} · ${t.name}`, why,
+    acts: [['✓ Done', () => { if (!SHIFTS[key].done.includes(t.id)) stToggle(key, t.id); }], ['In 10 min', () => _stLater(id, 10)]] }, true);
+  else if (typeof showToast === 'function') showToast(text, 'warn');
+  if (typeof activeShift !== 'undefined' && activeShift === key && document.getElementById('panel-shifts')?.classList.contains('active')) _renderShiftContent(key);
+}
+setInterval(stRemindTick, 30000);
+document.addEventListener('DOMContentLoaded', () => setTimeout(stRemindTick, 8000));

@@ -1064,5 +1064,36 @@ console.log('\nRoster scenarios');
   })()`), 'n1,theirs,mine');
 }
 
+console.log('\nQuiet when off · shift task times');
+{
+  const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} },
+               document: { addEventListener() {}, getElementById() { return null; }, querySelectorAll() { return []; } }, window: {}, setTimeout: () => 0, setInterval: () => 0, navigator: {} };
+  vm.createContext(sb);
+  for (const f of ['roster.js', 'roster-build.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sb, { filename: f });
+  const run = js => vm.runInContext(js, sb);
+  run(`roMeKey = 'ME'; roDays = { '2026-10-10': { ME: '00:00 - 09:00' }, '2026-10-11': { ME: 'PH' }, '2026-10-12': { ME: '07:00 - 15:00' }, '2026-10-13': { ME: 'OFF' } };`);
+  const duty = (d, h, m) => run(`hoMyDuty(new Date(${d.replace(/-/g, ',').replace(/,0?(\d+),/, (x, mo) => ',' + (mo - 1) + ',')}, ${h}, ${m || 0})).state`);
+  check('PH today: off (quiet)', duty('2026-10-11', 12), 'off');
+  check('PH today after Saturday night: still on until that night ends (09:00 Sunday)', duty('2026-10-11', 8), 'on');
+  check('day off: off', duty('2026-10-13', 10), 'off');
+  check('on shift: on (from 1 h before)', duty('2026-10-12', 6, 15), 'on');
+  check('working day but the shift is over: quiet', duty('2026-10-12', 20), 'off');
+  check('nothing on the roster: unknown, alarms as before', duty('2026-10-20', 10), 'unknown');
+  check('no name chosen: unknown', run(`(() => { const k = roMeKey; roMeKey = ''; const r = hoMyDuty(new Date(2026, 9, 11, 12)).state; roMeKey = k; return r; })()`), 'unknown');
+  check('the reason says PH', run(`hoMyDuty(new Date(2026, 9, 11, 12)).why`), "you're on PH today");
+  check('Quiet when I\'m off can be turned off', run(`(() => { globalThis.hoPref = k => k === 'quietOff' ? false : undefined; const r = hoQuiet(new Date(2026, 9, 11, 12)); delete globalThis.hoPref; return r; })()`), false);
+
+  const sh = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} },
+               document: { addEventListener() {}, getElementById() { return null; } }, setInterval: () => 0, setTimeout: () => 0 };
+  vm.createContext(sh);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'state.js'), 'utf8').replace(/\bconst (SHIFTS|DEFAULT_TASKS)\b/g, 'var $1'), sh);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'shifts.js'), 'utf8'), sh, { filename: 'shifts.js' });
+  const late = (key, at, d) => vm.runInContext(`stIsLate('${key}', { at: '${at}' }, new Date(${d}))`, sh);
+  check('night task at 02:00: not late at 23:30', late('night', '02:00', '2026,9,11,23,30'), false);
+  check('night task at 02:00: late at 02:05 (the night that started yesterday)', late('night', '02:00', '2026,9,12,2,5'), true);
+  check('morning task at 10:00: not rung during the night', late('morning', '10:00', '2026,9,12,2,5'), false);
+  check('morning task at 10:00: late at 10:01', late('morning', '10:00', '2026,9,12,10,1'), true);
+}
+
 console.log(`\n${pass} passed · ${fail} failed`);
 process.exit(fail ? 1 : 0);

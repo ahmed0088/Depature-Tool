@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 261, items: [
+    '⏰ Shift tasks can have a time: pick it when you add a task (or ✏️ edit one). At that time, on that shift, you get a chime, a notification and a bubble with ✓ Done / In 10 min. A task whose time has passed and isn\'t ticked shows its time in red.',
+    '🌴 Quiet when you\'re off: on your day off, PH, vacation or leave, or outside your shift, the app no longer rings or pops up (late check-outs, wake-up calls, Ops Brain bubbles, task reminders). It knows from the roster: your name in Roster → My shifts. Reminders you set yourself ("remind me at …") still ring. Settings → Alerts → Quiet when I\'m off turns it off.',
+  ] },
   { v: 260, items: [
     '📖 The project guide (README) is rewritten and up to date: every page, the roster and builder, Ops Brain, themes and languages, how to set up and ship, plus a security checklist. A sample guest email shown in an input box is now a made-up one.',
   ] },

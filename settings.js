@@ -25,6 +25,8 @@ const HO_PREF_DEFAULTS = {
   dropAnywhere: true,
   confirmCheckout: true,
   autoResetShifts: true,
+  taskReminders: true,
+  quietOff: true,
   accent: 'theme',        // theme · gold · blue · green · teal · rose · purple
   corners: 'rounded',     // rounded · soft · sharp
   font: 'inter',          // a key of HO_FONTS (i18n.js)
@@ -205,6 +207,7 @@ function hoSettingsRender() {
       + _hoTog('dropAnywhere', 'Drop a report anywhere', 'Drag a file onto any page and it opens the right page')
       + _hoTog('confirmCheckout', 'Ask before checking out a room that owes money', 'Applies to Ops Brain commands like "check out 512"')
       + _hoTog('haptics', 'Vibration on phones', 'A light tap when you press buttons')
+      + _hoTog('taskReminders', 'Shift task reminders', 'A task with a time rings at that time on its shift, until it is ticked')
       + _hoTog('autoResetShifts', 'Fresh shift tasks every shift', 'Each new morning, afternoon and night shift starts with nothing ticked, for the whole team. The shift that just ended keeps its ticks for handover')),
 
     _hoSec('alerts', 'feedback', 'Alerts & sounds', 'How HotelOps gets your attention',
@@ -212,6 +215,7 @@ function hoSettingsRender() {
          <span class="hs-txt"><b>Late check-out alerts</b><small>Warn when a room passes its late check-out time</small></span>
          <span class="hs-switch"><input type="checkbox" ${typeof depAlertsOn !== 'undefined' && depAlertsOn ? 'checked' : ''} onchange="if (typeof depToggleAlerts === 'function' && depAlertsOn !== this.checked) depToggleAlerts()"><i></i></span>
        </label>`
+      + _hoTog('quietOff', 'Quiet when I\'m off', 'On your day off, PH, vacation or leave, or outside your shift (from the roster: your name in Roster → My shifts), no alarms, pop-ups or task reminders. Reminders you set yourself ("remind me at …") still ring')
       + _hoTog('soundAlerts', 'Sound', 'A short chime when Ops Brain sees something urgent (late check-out, an error, DTCM not tallying)')
       + `<label class="hs-row" data-s="desktop notifications browser popup">
            <span class="hs-txt"><b>Desktop notifications</b><small>Urgent things pop up even when HotelOps is in another tab${'Notification' in window && Notification.permission === 'denied' ? ' — <b>blocked in this browser</b>: allow notifications in the address bar first' : ''}</small></span>
@@ -317,6 +321,7 @@ function hoChime() {
 }
 /** urgent thing to tell the person: chime and/or desktop notification, as they chose */
 function hoAlert(text, test) {
+  if (!test && typeof hoQuiet === 'function' && hoQuiet()) return;
   if (hoPrefs.soundAlerts || test) hoChime();
   if ((hoPrefs.desktopNotify || test) && 'Notification' in window && Notification.permission === 'granted' && (document.hidden || test)) {
     try { new Notification('HotelOps', { body: text, icon: 'icon-192.png', tag: 'hotelops-' + text.slice(0, 40) }); } catch (_) {}

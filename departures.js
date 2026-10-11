@@ -86,6 +86,7 @@ function _depBeep() {
 
 function _depCheckOverdueAlerts() {
   if (!depAlertsOn || typeof depRooms === 'undefined' || !depRooms.length) return;
+  if (typeof hoQuiet === 'function' && hoQuiet()) return;   // not on shift today
   _renderAlertToggle();
 
   const overdueNow = depRooms.filter(r => {

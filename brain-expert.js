@@ -183,6 +183,7 @@ function bxTick() {
   // a wake-up call rings at its time and again every 5 minutes (up to 3 times) until someone marks it called
   Object.entries(bxWakes).forEach(([id, w]) => {
     if (!w || w.done || w.at > now || w.at < now - 60 * 60e3) return;
+    if (typeof hoQuiet === 'function' && hoQuiet()) return;   // not on shift: the colleagues on duty get it
     const n = w.alerts || 0;
     if (n >= 3 || (w.lastAlert && now - w.lastAlert < 5 * 60e3)) return;
     w.alerts = n + 1; w.lastAlert = now;
