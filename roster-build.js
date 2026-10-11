@@ -1037,11 +1037,16 @@ function rbPhOwed(key, skipWeek) {
   const hol = _rbScan().hol, listed = new Set((rbSettings.holidays || []).map(h => h && h.date)), today = roToday();
   const worked = Object.keys(hol).filter(dt => dt <= today && rbPhEarns(key, dt, listed)).sort();
   const skip = skipWeek ? dt => dt >= skipWeek && dt <= roAdd(skipWeek, 6) : () => false;   // a week being rebuilt: its PH days are the builder's to place again
-  const taken = (_rbScan().taken[key] || []).filter(dt => !skip(dt)).length;
+  const taken = (_rbScan().taken[key] || []).filter(dt => !skip(dt)).sort();
+  // in date order: a holiday worked adds one, a PH given takes one. A PH given when none was counted (management's
+  // roster, a balance never entered) is added and taken at once: it evens out, never a debt for later
+  const ev = worked.map(dt => [dt, 1]).concat(taken.map(dt => [dt, -1])).sort((x, y) => x[0].localeCompare(y[0]) || y[1] - x[1]);
+  let raw = 0; const queue = [];
+  ev.forEach(([dt, n]) => { if (n > 0) { raw++; queue.push(dt); } else if (raw > 0) { raw--; queue.shift(); } });
   const adj = +(((rbPeople[key]) || {}).phAdj) || 0;
-  const owed = Math.max(0, worked.length - taken + adj);
-  const labels = Array.from({ length: owed }, (_, i) => worked[taken + i] ? rbPhLabel(worked[taken + i]) : '');
-  return { owed, label: labels[0] || '', labels, raw: worked.length - taken };   // raw: before what was set by hand (can be below 0 when PH was given before any holiday was recorded)
+  const owed = Math.max(0, raw + adj);
+  const labels = Array.from({ length: owed }, (_, i) => queue[i] ? rbPhLabel(queue[i]) : '');
+  return { owed, label: labels[0] || '', labels, raw };
 }
 
 /** The PH label to use next for someone in the draft: skips the ones this week already has. */
@@ -1830,14 +1835,9 @@ function rbWeekCheck(week) {
     else if (x.kind === 'long') out.push({ ico: '⏱', bad: true, text: `${nm(x.key)}: a shift over ${rbRules().maxHours} h (${day})` });
   });
   I.people.forEach(p => rbNightToMorning(cells, p, dates).forEach(dt => out.push({ ico: '🌗', text: `${nm(p.key)}: night, one day off, then a morning (${RB_DAYS[dates.indexOf(dt)]} ${dt.slice(8)})` })));
-  // 🏖 a PH is fine when they had one to take: balance set (PH owed on their card) or earned on holidays they worked
-  I.people.forEach(p => {
-    const ph = dates.filter(dt => /^PH\b/i.test(String(cells[p.key][dt] || ''))); if (!ph.length) return;
-    const bal = rbPhOwed(p.key, week).owed, known = ((rbPeople[p.key] || {}).phAdj != null) || bal > 0, days = ph.map(dt => RB_DAYS[dates.indexOf(dt)]).join(', ');
-    if (bal >= ph.length) return;
-    if (!known) out.push({ ico: '🏖', ph: true, text: `${nm(p.key)}: PH on ${days}, but no PH balance is set for them yet. Set it below so the builder knows what is owed` });
-    else out.push({ ico: '🏖', bad: true, ph: true, text: `${nm(p.key)}: PH on ${days}, but only ${bal} PH day${bal === 1 ? '' : 's'} owed` });
-  });
+  // 🏖 a PH in a posted roster is management's decision: it is added to their balance and taken, so it evens out
+  const phs = []; I.people.forEach(p => dates.forEach((dt, d) => { if (/^PH\b/i.test(String(cells[p.key][dt] || ''))) phs.push(`${nm(p.key)} ${RB_DAYS[d]}`); }));
+  if (phs.length) out.push({ ico: '🏖', text: `PH given: ${phs.join(', ')}. Counted as owed and taken, so their balance evens out` });
   _rbWkC = { [st]: out };
   return out;
 }
@@ -1846,7 +1846,7 @@ function rbWeekCheckHtml(week) {
   if (!L.length) return `<div class="rb-wkcheck ok">📋 <b>${escapeHtml(lbl)}</b> as posted: desk covered every hour, no hard spots. PH days and vacation are fine.</div>`;
   return `<details class="rb-wkcheck"${L.some(x => x.bad) ? ' open' : ''}><summary>📋 What we noticed in <b>${escapeHtml(lbl)}</b> as posted <span>${L.filter(x => x.bad).length} to look at · ${L.filter(x => !x.bad).length} small</span></summary>
     <div>${L.sort((a, b) => (b.bad ? 1 : 0) - (a.bad ? 1 : 0)).map(x => `<div class="rb-wk-i${x.bad ? ' bad' : ''}">${x.ico} ${escapeHtml(x.text)}</div>`).join('')}</div>
-    ${L.some(x => x.ph) ? rbPhBalHtml() : ''}
+    ${rbPhBalHtml().replace('<details class="rb-phbal" open>', '<details class="rb-phbal">')}
     <small>A PH someone is owed and vacation are not problems. The builder learns from this week (the moves, how nights were covered) for the weeks after it. Kinder trades for it: Roster page → 💡 Ideas.</small></details>`;
 }
 /** 🏖 PH balances for the whole team in one place: how many PH days each person is owed right now. */

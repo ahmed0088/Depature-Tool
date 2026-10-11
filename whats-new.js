@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 258, items: [
+    '🏖 A PH in a posted roster is management\'s decision: it is added to that person\'s balance and taken in the same step, so it evens out. It is never a problem, never a "balance not set" note, and never a debt that cancels the next holiday they work. The week check just lists the PH days given; 🏖 PH balances stays there (folded) if you want to look.',
+    '📌 Management\'s posted roster is final: the builder takes it as it is (even when it differs from the builder\'s own draft), learns from it, and builds the next week on top of it.',
+  ] },
   { v: 257, items: [
     '📌 The builder shows the roster you posted: open a posted week and you see what was posted (like management\'s roster given for 12–18 Oct), not the draft the builder made before. Edits made later on the Roster page show up there too. A draft started after posting and still being worked on is kept.',
   ] },
