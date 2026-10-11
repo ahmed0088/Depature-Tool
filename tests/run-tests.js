@@ -301,6 +301,20 @@ console.log('\nRoster scenarios');
     check('back from nights: the first shift back is a later one, not a morning', [res.cells.X[dates[3]], sb.rbLanding(res.cells, I.people[0], dates).length].join('|'), L + '|0');
     check('back from nights: the same shifts are worked every day (same cover)', after, before);
   }
+  // 0g. 🚫 day-off freeze: Mon–Thu only A may be off; the others take their day off Fri–Sun. A freeze that took the
+  //     whole week before gives the missed day off back the week it ends
+  {
+    const G = { 'Ibis DD': { shifts: [M, E], need: { [M]: day(1), [E]: day(1) } } };
+    const ppl = ['A', 'B', 'C', 'D'].map(k => P(k));
+    const I = { week: W, groups: G, people: ppl, pre: {}, rules: { minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, givePh: false, lend: false, offFreeze: [{ from: dates[0], to: dates[3], allow: ['A'] }] }, seed: 1 };
+    sb.rbFreeze(I);
+    const r = sb.rbSolve(I);
+    const offDays = k => dates.map((dt, d) => sb.rbKind(r.cells[k][dt] || '') === 'off' ? d : -1).filter(d => d >= 0);
+    check('day-off freeze: nobody but A is off Mon–Thu; everyone still gets a day off', ['B', 'C', 'D'].every(k => offDays(k).length === 1 && offDays(k)[0] >= 4) && offDays('A').length === 1, true);
+    const I2 = { week: W, groups: G, people: ['A', 'B'].map(k => P(k)), pre: {}, rules: { offFreeze: [{ from: sb.roAdd(W, -7), to: dates[2], allow: [] }] } };
+    sb.rbFreeze(I2);
+    check('day-off freeze: a whole week missed comes back when it ends (2 days off that week, none before Thursday)', [I2.people[0].offs, sb.rbOffsDue(I2, I2.people[0], dates), !!(I2.noOff.A || {})[dates[2]], !!(I2.noOff.A || {})[dates[3]]].join(), '2,2,true,false');
+  }
   // 1. ideal two per shift, too few people: never an empty shift, some one-person shifts
   {
     const r = solve({ 'Ibis DD': { shifts: [M, E], need: { [M]: day(2), [E]: day(2) } } }, ['A', 'B', 'C', 'D'].map(k => P(k)), {}, { overlapMin: 0 });

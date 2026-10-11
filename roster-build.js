@@ -279,6 +279,9 @@ function rbSolve(I) {
   if (!I._plain && !I._strict) {
     rbOneOff(I, res);
     rbSoftLanding(I, res);
+    if (I.noOff) { const nm = k => typeof roStaff !== 'undefined' && roStaff[k] ? roStaff[k].name.split(' ')[0] : k;
+      rbFreezes(I.rules).filter(f => f.to >= I.week && f.from <= roAdd(I.week, 6)).forEach(f => res.notes.push({ key: '', date: f.from > I.week ? f.from : I.week, auto: true, text: `🚫 Day-off freeze ${roDayLbl(f.from)} → ${roDayLbl(f.to)}: only ${(f.allow || []).length ? f.allow.map(nm).join(', ') : 'nobody'} may be off. Everyone else works through and takes their day off after; managers as usual.` }));
+      I.people.filter(p => p.offOwed).forEach(p => res.notes.push({ key: p.key, date: I.week, auto: true, text: `🛋 ${nm(p.key)} gets ${p.offOwed + 1} days off this week: the one missed during the freeze comes back.` })); }
     res.notes = (res.notes || []).filter(n => !n.care && !n.like);
     (I.likeBefore || []).forEach(t => { const nm = typeof roStaff !== 'undefined' && roStaff[t.key] ? roStaff[t.key].name.split(' ')[0] : t.key; res.notes.push({ key: t.key, date: I.week, like: true, text: `📋 ${nm} is away ${t.days.map(d => RB_DAYS[d]).join(', ')}: ${t.hotel} runs like the week of ${roDayLbl(t.week)}, when ${nm} was away too: the same cover, the same people on the same shifts and days off where it fits${Object.keys((I.lendPref || {})[t.hotel] || {}).length ? ', and the same colleagues borrowed first' : ''}.` }); });
   I.people.filter(p => p.care && rbCareW(I, p) > 0).forEach(p => { const nm = typeof roStaff !== 'undefined' && roStaff[p.key] ? roStaff[p.key].name.split(' ')[0] : p.key; res.notes.push({ key: p.key, date: I.week, care: true, text: `💚 Extra care for ${nm} this week (Team Health ${p.careScore}${p.careWhy ? ': ' + p.careWhy : ''}): fewer nights, their wishes first, days off together, one steady shift.` }); });
@@ -316,7 +319,7 @@ function rbPlanNights(I) {
     const p = h.reg, taken = dates.filter((_, d) => has(p.key, d) && rbKind(pre[p.key][dates[d]]) === 'off').length;
     const due = Math.max(0, rbOffsDue(I, p, dates) - taken);
     const away = dates.map((_, d) => has(p.key, d) && !rbParse(pre[p.key][dates[d]])).map((x, d) => x ? d : -1).filter(d => d >= 0);   // leave, requests: nights to cover anyway
-    return { due, away, days: due ? [0, 1, 2, 3, 4, 5, 6].filter(d => !has(p.key, d)) : [null] };
+    return { due, away, days: due ? [0, 1, 2, 3, 4, 5, 6].filter(d => !has(p.key, d) && !rbNoOff(I, p.key, dates[d])) : [null] };
   });
   if (offOpts.some(o => o.due > 1)) return null;
   let best = null;
@@ -334,7 +337,7 @@ function rbPlanNights(I) {
       // (a night in the middle needs a day off before it too, coming off day shifts: two days off that week, so only for
       //  someone who has two days off a week anyway; everyone else keeps their one day off)
       if ((f.offs || 1) >= 2) for (let st = 1; st <= 5; st++) for (let k = 1; k <= 2 && st + k <= 6; k++) { const days = Array.from({ length: k }, (_, j) => st + j); if (days.every(d => byDay[d])) out.push({ days, off: st + k, start: true, mid: true }); }
-      return out.filter(b => b.days.every(d => !has(f.key, d)) && (b.off == null || b.off > 6 || b.off < 0 || !has(f.key, b.off)) && (!b.start || b.mid || !rbParse(f.lastShift) || (rbIsNight(rbNorm(f.lastShift)) || rbParse(f.lastShift).e <= 1440 - 11 * 60 + 0))); };
+      return out.filter(b => b.days.every(d => !has(f.key, d)) && (b.off == null || b.off > 6 || b.off < 0 || (!has(f.key, b.off) && !rbNoOff(I, f.key, dates[b.off]))) && (!b.start || b.mid || !rbParse(f.lastShift) || (rbIsNight(rbNorm(f.lastShift)) || rbParse(f.lastShift).e <= 1440 - 11 * 60 + 0))); };
     const fl = floaters.slice(0, 4), opts = fl.map(blocks);
     const walk = (fi, used, plan, cost) => {
       if (fi === fl.length) {
@@ -508,6 +511,7 @@ function _rbAttempt(I, seed) {
           }
           if ((p.prefOff || []).includes(d)) c -= 25 * rbW(R, 'wishes');
           if (((I.busy || {})[p.key] || {})[dates[d]]) c += 250 * rbW(R, 'meet');   // 📅 a meeting or training that day: not their day off
+          if (rbNoOff(I, p.key, dates[d])) c += 5000;   // 🚫 day-off freeze: they work these days
           if (rbMgrP(p)) { const min = R.mgrMin == null ? 1 : +R.mgrMin, mg = I.people.filter(q => q !== p && rbMgrP(q)); if (min > 0 && mg.length >= min && mg.filter(q => !offOrAway(cells[q.key][dates[d]])).length < min) c += 150; }   // keep a manager on duty every day (one can look after all the hotels)
           if (I.keep && I.keep[p.key] && rbKind(I.keep[p.key][dates[d]]) === 'off') c -= 30;   // keep their day off where it was
           if ((p.lastOffs || []).includes(d)) c -= 2;
@@ -573,7 +577,7 @@ function _rbFinish(I, cells, o) {
         const cand = [];
         for (let d = 0; d < D; d++) {
           const dt = dates[d], s = cells[p.key][dt];
-          if (!s || !G[p.group] || !G[p.group].shifts.includes(s) || ((I.pre || {})[p.key] || {})[dt] || ((I.busy || {})[p.key] || {})[dt]) continue;   // never over a fixed day (requests, days gone by) or a meeting day
+          if (!s || !G[p.group] || !G[p.group].shifts.includes(s) || ((I.pre || {})[p.key] || {})[dt] || ((I.busy || {})[p.key] || {})[dt] || rbNoOff(I, p.key, dt)) continue;   // never over a fixed day (requests, days gone by), a meeting day or a day-off freeze
           if (!(cover[p.group][s][d] > need(p.group, s, d))) continue;
           const next = offish(cells[p.key][dates[d - 1]]) || offish(cells[p.key][dates[d + 1]]);
           cand.push({ d, c: (next ? 0 : 10) - ((p.prefOff || []).includes(d) ? 5 : 0) + d * 0.1 });
@@ -664,10 +668,12 @@ function rbMatchDay(I, g, cells, dates, d, R, rnd) {
 }
 
 /** Days off someone should get this week: fewer if they join or leave mid-week, or are on leave most of it. */
+/** 🚫 A day-off freeze covers this day for them: they work it (their day off comes outside the freeze, or after it). */
+function rbNoOff(I, k, dt) { return !!(((I.noOff || {})[k] || {})[dt]); }
 function rbOffsDue(I, p, dates) {
   const want = p.offs == null ? 1 : p.offs, pre = (I.pre || {})[p.key] || {};
   if (dates.some(dt => pre[dt] === '—')) return 0;
-  const open = dates.filter(dt => !pre[dt] || rbKind(pre[dt]) === 'off').length;
+  const open = dates.filter(dt => (!pre[dt] || rbKind(pre[dt]) === 'off') && !(rbNoOff(I, p.key, dt) && !pre[dt])).length;
   return Math.min(want, open);
 }
 /** How good a week is for one hotel: lower is better. Gaps in cover and broken rules weigh most. */
@@ -716,7 +722,7 @@ function rbScore(I, g, cells, dates, R) {
         if (rbIsNight(v)) { nights++; if (p.nightExtra > 0) sc += 3 * p.nightExtra * rbW(R, 'fair'); if (p.care && !(p.mode === 'static' && rbIsNight(p.fixed))) sc += 40 * rbCareW(I, p); }   // 💚 fewer nights for someone who needs care   // fair nights: whoever had more lately gets fewer
       } else {
         run = 0;
-        if (rbKind(v) === 'off') { offs++; offDays.push(d); if (((I.busy || {})[p.key] || {})[dt]) sc += 450 * rbW(R, 'meet'); if ((p.prefOff || []).includes(d)) sc -= 10 * rbWishWeight(p) * rbW(R, 'wishes'); if (d >= 5 && p.wkOffShort > 0) sc -= 4 * p.wkOffShort * rbW(R, 'fair'); /* fewer weekends off than the team lately: theirs first */ if ((p.learnedOff || []).includes(d)) sc -= 3; /* their usual day off, as the posted rosters show */ if ((p.lastOffs || []).includes(d)) sc -= 1; if (p.lastWeekendOff && d >= 4) sc += 5; }
+        if (rbKind(v) === 'off') { offs++; offDays.push(d); if (((I.busy || {})[p.key] || {})[dt]) sc += 450 * rbW(R, 'meet'); if (rbNoOff(I, p.key, dt) && !((I.pre || {})[p.key] || {})[dt]) sc += 3000; if ((p.prefOff || []).includes(d)) sc -= 10 * rbWishWeight(p) * rbW(R, 'wishes'); if (d >= 5 && p.wkOffShort > 0) sc -= 4 * p.wkOffShort * rbW(R, 'fair'); /* fewer weekends off than the team lately: theirs first */ if ((p.learnedOff || []).includes(d)) sc -= 3; /* their usual day off, as the posted rosters show */ if ((p.lastOffs || []).includes(d)) sc -= 1; if (p.lastWeekendOff && d >= 4) sc += 5; }
       }
       prev = v;
     }
@@ -869,6 +875,7 @@ function rbProblems(I, cells, cover) {
     let run = p.run || 0, prev = p.lastShift || '';
     dates.forEach((dt, d) => {
       const v = (cells[p.key] || {})[dt] || '';
+      if (rbKind(v) === 'off' && rbNoOff(I, p.key, dt) && !((I.pre || {})[p.key] || {})[dt]) out.push({ kind: 'freeze', key: p.key, date: dt });   // 🚫 a day off in a day-off freeze
       if (rbParse(v)) {
         run++;
         if (rbParse(v).e - rbParse(v).s > (R.maxHours || 9) * 60) out.push({ kind: 'long', key: p.key, date: dt, hours: (rbParse(v).e - rbParse(v).s) / 60, code: v });
@@ -1160,12 +1167,36 @@ function rbInput(seed) {
   });
   const { pre, avoid, soft, busy, evMiss, evNear } = rbPre();
   const I = { week: rbWeek, groups, people, pre, avoid, soft, busy, evMiss, evNear, rules: rbRules(), seed: seed || 1 };
+  rbFreeze(I);
   rbFairHistory(I);
   rbCare(I);
   rbLikeBefore(I);
   I.habits = rbMgmtHabits(I.week);
   return I;
 }
+/** 🚫 Day-off freezes (⚖️ Rules): from one date to another only the people named may have a day off; everyone
+ *  else works through. Managers keep their days off as usual. A whole week without a day off is given back in the
+ *  week the freeze ends (or the week after): their day off plus the one they missed. */
+function rbFreezes(R) { return (((R || {}).offFreeze) || []).filter(f => f && f.from && f.to && f.from <= f.to); }
+function rbFreeze(I) {
+  const F = rbFreezes(I.rules); if (!F.length) return;
+  const dates = Array.from({ length: 7 }, (_, d) => roAdd(I.week, d)), wk = w => Array.from({ length: 7 }, (_, d) => roAdd(w, d));
+  I.noOff = {}; I.freezeNotes = [];
+  I.people.forEach(p => {
+    if (p.post || (typeof rbIsManager === 'function' && rbIsManager(p.key))) return;
+    let owed = 0;
+    F.forEach(f => {
+      if ((f.allow || []).includes(p.key)) return;
+      dates.forEach(dt => { if (dt >= f.from && dt <= f.to) (I.noOff[p.key] = I.noOff[p.key] || {})[dt] = true; });
+      // the day after the freeze falls in this week, or the week after a freeze ending on a Sunday: missed days off come back
+      const after = roAdd(f.to, 1), back = after >= I.week && after <= dates[6] && dates.some(dt => dt > f.to);
+      if (back) for (let w = roMonday(roDate(f.from)); w < I.week; w = roAdd(w, 7)) if (wk(w).every(x => x >= f.from && x <= f.to)) owed++;
+      if (back && f.to >= I.week && wk(I.week).every(x => x <= f.to)) owed = 0;
+    });
+    if (owed) { p.offs = Math.min(3, (p.offs == null ? 1 : p.offs) + owed); p.offOwed = owed; }
+  });
+}
+
 /** 📋 What management does when there is no other way, read from the posted rosters (last 8 weeks): the rules
  *  they bend and how often. When nothing keeps every rule, the builder tries these first, the most used first. */
 let _rbHabC = null;
@@ -1975,6 +2006,7 @@ function rbOutHtml(shown, dates) {
     : p.kind === 'back' ? `${escapeHtml(name(p.key))}: ${escapeHtml(p.from)} then ${escapeHtml(p.to)} on ${escapeHtml(roDayLbl(p.date))}: an earlier start than the day before needs a day off between`
     : p.kind === 'who' ? `${escapeHtml(name(p.key))}: ${escapeHtml(p.code)} on ${escapeHtml(roDayLbl(p.date))} is for ${escapeHtml((p.who || []).join(', '))} only`
     : p.kind === 'long' ? `${escapeHtml(name(p.key))}: ${escapeHtml(p.code)} on ${escapeHtml(roDayLbl(p.date))} is ${p.hours} h (over ${rbRules().maxHours})`
+    : p.kind === 'freeze' ? `${escapeHtml(name(p.key))}: a day off on ${escapeHtml(roDayLbl(p.date))}, inside the 🚫 day-off freeze`
     : `${escapeHtml(name(p.key))}: ${p.have} day${p.have === 1 ? '' : 's'} off (should have ${p.need})`;
   return `<div class="card rb-draft">
     <div class="ro-card-hd"><b>📋 Draft roster · ${escapeHtml(rbWeekLabel(rbWeek))}</b><span>built ${escapeHtml(new Date(rbDrafts[rbWeek].at || Date.now()).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' }))} · tap a cell to change it</span></div>

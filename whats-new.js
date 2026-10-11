@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 242, items: [
+    '🚫 Day-off freeze: pick a from-date, a to-date and who may still be off (⚖️ Rules → 🚫 Day-off freeze, or tell Ops Brain "only Sandrine, Ahmed and Turab can be off until 15"). Everyone else works through and takes their day off after it ends; managers keep their days off as usual. If someone misses a whole week\'s day off, they get it back the week the freeze ends. The draft notes say so, and a day off inside a freeze shows as a problem.',
+  ] },
   { v: 241, items: [
     '🌐 Languages: ⚙️ Settings → Appearance → Language. English, العربية, Français, हिन्दी, Русский, 中文 and Filipino. The menus, page names, Home tiles, main buttons, settings and sign-in screen change; guest names, rooms and everything typed stay exactly as they are. Works offline, nothing is sent anywhere. Words not translated yet stay in English.',
     '🔤 Font styles: 12 to choose from, each shown in its own letters. Inter, your phone\'s own, DM Sans, Poppins, Nunito, Montserrat, Roboto, Lato, Lexend (easiest to read fast), Atkinson (made for clear reading), Cairo (Arabic and English) and Playfair (elegant). Each person picks their own.',

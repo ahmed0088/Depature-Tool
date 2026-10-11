@@ -117,6 +117,7 @@ function rrHtml() {
   return `<div class="rr-box" id="rrBox">
     <div class="rr-intro">Tell the builder what matters. Every rule has an example from your team; tap how much it counts. <b>Must</b> comes first, <b>Off</b> is ignored.</div>
     ${rrSuggestHtml()}
+    ${rrFreezeHtml()}
     ${groups.map(g => `<div class="rr-sec">${['⚪ Off', '🟢 Nice to have', '🟡 Important', '🟠 Very important', '🔴 Must'][g.L]}</div>
       <div class="rr-list">${g.list.map(([id, ico, t, what]) => rrRuleRow(ico, t, rrExample(id) || what, rrLevelCtl(id, lv[id]), 'lv' + g.L)).join('')}</div>`).join('')}
     <details class="rr-hard"><summary>🔒 Always: ${hard.length} rules that are the base of every roster <small>tap to see</small></summary>
@@ -128,6 +129,30 @@ function rrHtml() {
     ${rrQuizHtml()}
   </div>`;
 }
+/** 🚫 Day-off freeze: from one date to another only the people picked may be off; everyone else works through
+ *  and takes the day off after it. Managers keep their days off as usual. */
+function _rrFzPeople() { const seen = new Set(); return rbGroups().flatMap(g => rbMembers(g)).filter(k => !seen.has(k) && seen.add(k) && roStaff[k] && !rbIsManager(k)).sort((a, b) => String(roStaff[a].name).localeCompare(roStaff[b].name)); }
+function rrFreezeHtml() {
+  const F = rbFreezes(rbRules()), nm = k => roStaff[k] ? String(roStaff[k].name).split(' ')[0] : k, today = roToday();
+  const list = F.map((f, i) => `<div class="rr-fz${f.to < today ? ' past' : ''}"><div><b>🚫 ${escapeHtml(roDayLbl(f.from))} → ${escapeHtml(roDayLbl(f.to))}</b><small>Only <b>${f.allow && f.allow.length ? escapeHtml(f.allow.map(nm).join(', ')) : 'nobody'}</b> may be off. Everyone else works through and gets their day off after; managers as usual.${f.to < today ? ' (over)' : ''}</small></div><button class="btn sm ghost" onclick="rrFreezeDel(${i})" title="Remove">🗑</button></div>`).join('');
+  return `<div class="rr-sec">🚫 Day-off freeze</div>
+    <div class="rr-list">${list || '<div class="rr-fz-none">Busy dates? Pick who may still be off; nobody else gets a day off until it ends.</div>'}
+    <details class="rr-fz-add"${F.length ? '' : ' open'}><summary>➕ Add a day-off freeze</summary>
+      <div class="rr-fz-dates"><label>From<input type="date" id="rrFzFrom" value="${today}"></label><label>To<input type="date" id="rrFzTo" value="${roAdd(today, 4)}"></label></div>
+      <div class="rr-fz-lbl">Who may still be off (managers are always as usual):</div>
+      <div class="rr-fz-who">${_rrFzPeople().map(k => `<label><input type="checkbox" value="${escapeHtml(k)}"><span>${escapeHtml(nm(k))}</span></label>`).join('')}</div>
+      <button class="btn sm gold" onclick="rrFreezeAdd()">Save the freeze</button>
+    </details></div>`;
+}
+function rrFreezeAdd() {
+  const from = (document.getElementById('rrFzFrom') || {}).value, to = (document.getElementById('rrFzTo') || {}).value;
+  if (!from || !to || to < from) { if (typeof showToast === 'function') showToast('Pick a start and an end date (the end on or after the start)', 'warn'); return; }
+  const allow = [...document.querySelectorAll('.rr-fz-who input:checked')].map(x => x.value);
+  rbSetRule('offFreeze', rbFreezes(rbRules()).concat([{ from, to, allow }]));
+  rrRefresh();
+  if (typeof showToast === 'function') showToast(`🚫 ${roDayLbl(from)} → ${roDayLbl(to)}: only ${allow.length} may be off. Build the week to apply it`, 'ok');
+}
+function rrFreezeDel(i) { const F = rbFreezes(rbRules()).slice(); F.splice(i, 1); rbSetRule('offFreeze', F); rrRefresh(); }
 function rrRefresh() {
   const el = document.getElementById('rrBox'); if (!el) return;
   const y = window.scrollY; el.outerHTML = rrHtml(); window.scrollTo(0, y);
