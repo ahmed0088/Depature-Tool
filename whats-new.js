@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 244, items: [
+    '📱 Person card on iPhone: it no longer slides sideways and cuts off the left side (names, titles). A long shift choice like "Static: always 00:00 – 09:00" now shortens to fit, and the week table scrolls inside its own box.',
+  ] },
   { v: 243, items: [
     '✂️ HR cut-off: ⚖️ Rules → ✂️ HR cut-off (or tell Ops Brain "everyone 2 off before 15 and 2 after"). The month is cut on the 15th: each half, everyone has a number of days off. The builder counts what each person already took, gives what is left and finishes it before the cut-off; none left means no day off until the 16th. Change anyone\'s number with − / +, or "Everyone 0 1 2 3" in one tap. Managers stay as they are.',
     '📌 Fixed day off: on a person\'s card in 🧑‍💼 Team (or "Saad always off on Thursday"). That weekday is their day off every week; leave and requests still come first.',

@@ -1997,3 +1997,10 @@ html.ho-lang-ar body { font-family: var(--font), 'Segoe UI', 'Noto Sans Arabic',
 .rr-cut-row:nth-child(odd) { background: var(--surface); }
 .rr-cut-row small { color: var(--text2); font-size: 11.5px; } .rr-cut-row em { font-style: normal; font-weight: 700; font-size: 12px; color: var(--accent); text-align: right; }
 .rr-cut-row.none em { color: var(--text3); } .rr-cut-q { display: inline-flex; align-items: center; gap: 5px; } .rr-cut-q b { min-width: 12px; text-align: center; }
+/* person card: never wider than the screen (a long option like "Static: always 00:00 - 09:00" shrinks instead) */
+.rt-sheet { overflow-x: hidden; }
+.rt-form { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+.rt-form label { min-width: 0; }
+.rt-form input, .rt-form select { width: 100%; min-width: 0; max-width: 100%; text-overflow: ellipsis; }
+.rt-sheet .ro-scroll { max-width: 100%; overflow-x: auto; }
+.rt-sheet .rb-opt { max-width: 100%; white-space: normal; }
