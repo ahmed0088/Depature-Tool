@@ -281,7 +281,7 @@ console.log('\nRoster scenarios');
     const t = P('T'), u = P('U', { phOwed: 2, phLabels: ['28th Aug.', '2nd Sep.'], allowed: [M] });
     const I = { week: W, groups: G, people: [t, u], pre: {}, rules: { minRest: 11, maxRun: 12, maxHours: 9 } };
     const res = { cells: { T: {}, U: {} } };
-    dates.forEach((dt, d) => { res.cells.T[dt] = d === 1 || d === 3 ? 'OFF' : M; res.cells.U[dt] = d === 1 ? 'OFF' : d === 2 ? '00:00 - 09:00' : d === 3 ? 'OFF' : M; });
+    dates.forEach((dt, d) => { res.cells.T[dt] = d === 1 || d === 3 ? 'OFF' : M; res.cells.U[dt] = d === 1 ? 'OFF' : d === 0 || d === 2 ? '00:00 - 09:00' : d === 3 ? 'OFF' : M; });   // (each day off right after a night: no morning fits)
     sb.rbOneOff(I, res);
     const offsOf = k => dates.filter(dt => /^OFF$/.test(res.cells[k][dt])).length;
     check('one day off a week: an extra day off becomes a working day that fits', [offsOf('T'), res.cells.T[dates[1]]].join('|'), '1|' + M);
@@ -392,7 +392,21 @@ console.log('\nRoster scenarios');
     cells.T[dates[1]] = 'SL';
     const I = { week: W, groups: G, people: ppl, pre: { T: { [dates[1]]: 'SL' } }, rules: { minRest: 11, maxHours: 9, allowOne: true, nightSwitch: true, lend: true } };
     const o = sb.rtCoverOptions(I, cells, 'Ibis DD', dates[1], N);
-    check('reception never empty: when only a bend is left (short rest), it is offered and flagged', o.some(x => x.cells && x.bend && x.key === 'S' && /rest/.test(x.why || '')), true);
+    // (the night of the 13th starts at midnight after the 13th: S, off that day, takes it; A takes S's morning on the 14th)
+    check('night cover: the Supervisor off that day takes the night, a colleague his next morning, every rule kept', o.some(x => x.cells && !x.bend && x.key === 'S'), true);
+    { // only way left: 7 h rest (the night ends 09:00, their 16:00 – 01:00 that day is locked)
+      const E7 = '16:00 - 01:00', G3 = { 'Ibis DD': { shifts: [N, M, E7], need: { [N]: day(1), [M]: day(1), [E7]: day(1) }, who: { [N]: ['Supervisor'] } } };
+      const mk = tl => { const pl = [P('S', { title: 'Supervisor' }), P('T', { title: 'Supervisor' }), P('A'), P('B')].concat(tl ? [P('L', { title: 'Team Leader' })] : []), c = {};
+        pl.forEach(p => { c[p.key] = {}; });
+        dates.forEach((dt, d) => { c.S[dt] = d === 0 ? M : d === 1 || d === 5 ? 'OFF' : E7; c.T[dt] = d === 6 ? 'OFF' : N; c.A[dt] = d === 4 ? 'OFF' : M; c.B[dt] = d === 5 ? M : E7; if (tl) c.L[dt] = d === 1 || d === 2 ? 'OFF' : M; });
+        c.T[dates[1]] = 'SL';
+        const I3 = { week: W, groups: G3, people: pl, pre: { T: { [dates[1]]: 'SL' }, S: { [dates[0]]: M, [dates[2]]: E7 }, B: { [dates[0]]: E7, [dates[2]]: E7 } }, rules: { minRest: 11, maxHours: 9, allowOne: true, nightSwitch: true, lend: true } };
+        return sb.rtCoverOptions(I3, c, 'Ibis DD', dates[1], N).filter(x => x.cells); };
+      const o3 = mk(false);
+      check('reception never empty: when only a bend is left (short rest), it is offered and flagged', o3.some(x => x.bend && x.key === 'S' && /rest/.test(x.why || '')), true);
+      const ot = mk(true);
+      check('night: a Team Leader (rest kept) comes before cutting a Supervisor\'s rest', ot[0] && ot[0].key, 'L');
+    }
     { // no Supervisor free for the night: a Team Leader is asked before an agent
       const pl = [P('S', { title: 'Supervisor' }), P('T', { title: 'Supervisor' }), P('L', { title: 'Team Leader' }), P('A')], c = { S: {}, T: {}, L: {}, A: {} };
       dates.forEach((dt, d) => { c.S[dt] = d === 1 ? 'OFF' : M; c.T[dt] = d === 6 ? 'OFF' : N; c.L[dt] = d <= 2 ? 'OFF' : M; c.A[dt] = d <= 2 ? 'OFF' : M; });
@@ -401,20 +415,11 @@ console.log('\nRoster scenarios');
       const ot = sb.rtCoverOptions(It, c, 'Ibis DD', dates[1], N).filter(x => x.cells);
       check('night with no Supervisor free: a Team Leader first, flagged', [ot[0] && ot[0].key, !!(ot[0] && ot[0].bend && /Team Leader/.test(ot[0].why || ''))].join(), 'L,true');
     }
-    { // the only Supervisor free would get 7 h rest (17:00 → 00:00): the Team Leader takes the night instead, rest kept
-      const G2 = { 'Ibis DD': { shifts: [N, M], need: { [N]: day(1), [M]: [1, 2, 1, 1, 1, 1, 1] }, who: { [N]: ['Supervisor'] } } };
-      const pl = [P('S', { title: 'Supervisor' }), P('T', { title: 'Supervisor' }), P('L', { title: 'Team Leader' }), P('A')], c = { S: {}, T: {}, L: {}, A: {} };
-      dates.forEach((dt, d) => { c.S[dt] = d === 2 ? 'OFF' : M; c.T[dt] = d === 6 ? 'OFF' : N; c.L[dt] = d === 0 || d === 2 ? 'OFF' : M; c.A[dt] = d === 4 ? 'OFF' : M; });
-      c.T[dates[1]] = 'SL'; c.L[dates[0]] = 'OFF';
-      const It = { week: W, groups: G2, people: pl, pre: { T: { [dates[1]]: 'SL' }, S: { [dates[0]]: M, [dates[2]]: 'OFF' } }, rules: { minRest: 11, maxHours: 9, allowOne: true, nightSwitch: true, lend: true } };
-      const ot = sb.rtCoverOptions(It, c, 'Ibis DD', dates[1], N).filter(x => x.cells);
-      check('night: a Team Leader (rest kept) comes before cutting a Supervisor\'s rest', ot[0] && ot[0].key, 'L');
-    }
     const ob = sb.rtCoverOptions(Object.assign({}, I, { groups: { 'Ibis DD · Bell': Object.assign({ post: 'Bell' }, G['Ibis DD']) } }), cells, 'Ibis DD · Bell', dates[1], N);
     check('a bell team may stay short: no rule is bent for it', ob.some(x => x.cells && x.bend), false);
     check('later is fine, earlier is not: day or evening → night next day is fine (rest still checked); night → day needs a day off', [
       sb.rbSwitchOk('12:00 - 21:00', '19:00 - 04:00', {}), sb.rbSwitchOk('15:00 - 00:00', '19:00 - 04:00', {}), sb.rbSwitchOk('00:00 - 09:00', '08:00 - 17:00', { eveNight: true }),
-      sb.rbSwitchOk('19:00 - 04:00', '12:00 - 21:00', {}), sb.rbRest('08:00 - 17:00', '00:00 - 09:00') < 11].join(), 'true,true,false,false,true');
+      sb.rbSwitchOk('19:00 - 04:00', '12:00 - 21:00', {}), sb.rbRest('15:00 - 00:00', '00:00 - 09:00'), sb.rbRest('00:00 - 09:00', '08:00 - 17:00') < 0].join(), 'true,true,false,false,24,true');
     // an evening person can cover a night as a last resort, flagged, with the reason
     {
       const E2 = '15:00 - 00:00', L = '19:00 - 04:00';
@@ -434,7 +439,7 @@ console.log('\nRoster scenarios');
       ppl.push(P('DM' + i, { group: h, title: 'Duty Manager', fixed: N, usual: N, lastShift: N }), P('A' + i, { group: h, usual: M, lastShift: M }), P('B' + i, { group: h, usual: M, lastShift: M })); });
     ppl.push(P('SUP', { group: 'Adagio GD', title: 'Supervisor', usual: M, lastShift: 'OFF' }));
     const r = sb.rbSolve({ week: W, groups: G, people: ppl, pre: {}, rules: { minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, lend: true, givePh: false }, seed: 1 });
-    const nightsOk = H.every(h => dates.every(dt => ppl.some(p => { const x = sb.rbParse(r.cells[p.key][dt]); return x && x.s === 0 && x.type === 'night' && sb.rbAt({ groups: G }, p, x) === h && /Supervisor|Duty Manager/.test(p.title); })));
+    const nightsOk = H.every(h => dates.every(dt => ppl.some(p => { const x = sb.rbParse(r.cells[p.key][dt]); return x && x.s % 1440 === 0 && x.type === 'night' && sb.rbAt({ groups: G }, p, x) === h && /Supervisor|Duty Manager/.test(p.title); })));
     check('nights: every hotel, every night, a Supervisor or above', nightsOk, true);
     check('nights: no rule broken to do it', r.problems.filter(p => p.kind !== 'thin').length, 0);
     check('nights: the plan is written down', (r.notes || []).some(n => /covers the night supervisor's days off/.test(n.text)), true);
@@ -900,6 +905,15 @@ console.log('\nRoster scenarios');
   check('PH balance: 1 a week by default (last option), oldest label first, never leaving a shift short', run(`(() => { rbWeek = W; const I = rbInput(1); const A = I.people.find(p => p.key === 'B'); A.phOwed = 3; A.phLabels = ['1st Jan.', '2nd Jan.', '3rd Jan.']; A.phLabel = '1st Jan.'; Object.keys(I.groups['Ibis DD'].need).forEach(s => I.groups['Ibis DD'].need[s] = [0, 0, 0, 0, 0, 0, 0]); const r = rbSolve(I); const ph = Object.values(r.cells.B).filter(v => /^PH/.test(v || '')).sort(); const short = r.problems.filter(p => p.kind === 'short').length; return ph.length + '|' + ph.join(',') + '|' + short; })()`), '1|PH - 1st Jan.|0');
   check('PH balance: only 1 person a week per hotel gets a PH (the biggest balance)', run(`(() => { rbWeek = W; const I = rbInput(1); ['A','B','C'].forEach((k, i) => { const p = I.people.find(x => x.key === k); if (p) { p.phOwed = i + 1; p.phLabels = ['x']; } }); Object.keys(I.groups['Ibis DD'].need).forEach(s => I.groups['Ibis DD'].need[s] = [0, 0, 0, 0, 0, 0, 0]); const r = rbSolve(I); return ['A','B','C'].filter(k => r.cells[k] && Object.values(r.cells[k]).some(v => /^PH/.test(v || ''))).join(); })()`), 'C');
   check('PH balance: set to 2 a week, oldest label first, never leaving a shift short', run(`(() => { rbWeek = W; const I = rbInput(1); I.rules.phMax = 2; const A = I.people.find(p => p.key === 'B'); A.phOwed = 3; A.phLabels = ['1st Jan.', '2nd Jan.', '3rd Jan.']; A.phLabel = '1st Jan.'; Object.keys(I.groups['Ibis DD'].need).forEach(s => I.groups['Ibis DD'].need[s] = [0, 0, 0, 0, 0, 0, 0]); const r = rbSolve(I); const ph = Object.values(r.cells.B).filter(v => /^PH/.test(v || '')).sort(); const short = r.problems.filter(p => p.kind === 'short').length; return ph.length + '|' + ph.join(',') + '|' + short; })()`), '2|PH - 1st Jan.,PH - 2nd Jan.|0');
+  check('night times: 00:00 on a day is that day\'s night (after its 15:00 – 00:00), so evening → night next day is a full day of rest', run(`[rbRest('15:00 - 00:00', '00:00 - 09:00'), rbRest('00:00 - 09:00', '00:00 - 09:00'), rbRest('00:00 - 09:00', '15:00 - 00:00')].join()`), '24,15,6');
+  check('posted week: two on one hotel\'s night and nobody at the other → one of them was covering it (for learning)', run(`(() => {
+    const save = {}, N = '00:00 - 09:00', W2 = roAdd(W, 70), dts = rtDates(W2);
+    Object.assign(roStaff, { NA: { name: 'Nat Ames', group: 'Ibis DD' }, NB: { name: 'Ned Bose', group: 'Ibis DD' }, NC: { name: 'Nia Cole', group: 'Mercure DD' } });
+    dts.forEach((dt, d) => { roDays[dt] = { NA: N, NB: d < 2 ? N : 'OFF', NC: d < 2 ? 'SL' : N }; });
+    const r = rbDayRead(dts[0]), q = rbDayRead(dts[3]);
+    dts.forEach(dt => delete roDays[dt]); ['NA', 'NB', 'NC'].forEach(k => delete roStaff[k]);
+    return [r.NA, r.NB, q === q && q.NC].join(' | ');
+  })()`), '00:00 - 09:00 | 00:00 - 09:00 - Mercure DD | 00:00 - 09:00');
   run(`roStaff.NOH = { name: 'Nora Hale', order: 30 };`);
   check('groups: someone with no hotel set is still rostered', run(`rbGroups().includes('')`), true);
   run(`delete roStaff.NOH;`);

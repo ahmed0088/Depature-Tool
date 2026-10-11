@@ -221,7 +221,6 @@ function rtCoverOptions(I, cells, group, date, shift, opt) {
   // one hour at a time down to 7 h; below that (if the rules allow it) straight to the lowest, so a search never runs ten times over
   const steps = []; for (let h = minR - 1; h >= Math.max(7, floor); h--) steps.push(h); if (floor < 7 && floor >= 1) steps.push(floor);
   steps.forEach((h, i) => TIERS.push({ rules: { eveNight: true, minRest: h }, cost: 140 + (minR - h) * 45 - (h >= restLow ? 40 : 0), deep: i === steps.length - 1 }));   // deep: the longer chain, tried once, right before going straight into a night
-  TIERS.push({ rules: { eveNight: true, minRest: 0 }, cost: 600 });   // the very last way, as past rosters did: an evening straight into a night
   // reception is never left empty (a bell team may be short): after every other way, a day shift next to a night
   // without the day off between (rest kept first, then less rest). Written down under Decisions, like every bend.
   if (!(G[group] || {}).post) {
@@ -231,7 +230,8 @@ function rtCoverOptions(I, cells, group, date, shift, opt) {
     if (sup) TIERS.push({ rules: {}, addWho: ['Team Leader'], cost: 50, deep: true });
     if (sup) TIERS.push({ rules: { eveNight: true }, addWho: ['Team Leader'], cost: 630 });   // a Team Leader on the night before anyone else
     if (sup) TIERS.push({ rules: { eveNight: true }, anyone: true, cost: 650 });
-    [[{ eveNight: true, nightSwitch: false }, 700], [{ eveNight: true, nightSwitch: false, minRest: Math.max(7, floor) }, 760], [{ eveNight: true, nightSwitch: false, minRest: 0 }, 820]].forEach(([r, c]) => {
+    [[{ eveNight: true, nightSwitch: false }, 700], [{ eveNight: true, nightSwitch: false, minRest: Math.max(7, floor) }, 760]].concat(floor < 7 ? [[{ eveNight: true, nightSwitch: false, minRest: floor }, 820]] : []).forEach(   // (never under the rest floor: a night ends at 09:00)
+      ([r, c]) => {
       TIERS.push({ rules: r, cost: c });
       if (sup) TIERS.push({ rules: r, addWho: ['Team Leader'], cost: c + 10 });
       if (sup) TIERS.push({ rules: r, anyone: true, cost: c + 20 });

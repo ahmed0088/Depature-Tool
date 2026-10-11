@@ -458,12 +458,16 @@ async function roLoadMe() {
 // ── Questions the rest of the app asks ────────────────────
 function roCode(key, date) { return (roDays[date] || {})[key] || ''; }
 const _roMin = t => { const [h, m] = String(t).split(':').map(Number); return h * 60 + (m || 0); };
-/** When a shift really starts and ends. 00:00 on the 6th starts the night of the 5th; an end before the start is the next morning. */
+/** A shift starting after midnight (00:00 – 09:00) is written on the day it belongs to and starts when that day
+ *  ends: "00:00 – 09:00" on Saturday is Saturday night, right after Saturday's 15:00 – 00:00, until Sunday 09:00. */
+function roNightNext(from) { const m = _roMin(from); return m >= 0 && m < 240; }
+/** When a shift really starts and ends. 00:00 on the 5th is the night of the 5th (into the 6th); an end before the start is the next morning. */
 function roSpan(date, info) {
   if (!info || !info.from) return null;
   const s = roDate(date); s.setMinutes(_roMin(info.from));
   const e = roDate(date); e.setMinutes(_roMin(info.to));
   if (e <= s) e.setDate(e.getDate() + 1);
+  if (roNightNext(info.from)) { s.setDate(s.getDate() + 1); e.setDate(e.getDate() + 1); }
   return { start: s, end: e };
 }
 /** Short text for a cell: 12–21, OFF, ALA, SL, PH… */

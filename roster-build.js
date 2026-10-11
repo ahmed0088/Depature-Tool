@@ -31,7 +31,8 @@ function rbParse(code) {
   if (_rbPC.has(code)) return _rbPC.get(code);
   const i = typeof roInfo === 'function' ? roInfo(code) : null;
   let r = null;
-  if (i && i.from) { const s = rbMin(i.from); let e = rbMin(i.to); if (e <= s) e += 1440; r = { from: i.from, to: i.to, s, e, type: i.type, note: i.note || '' }; }
+  if (i && i.from) { let s = rbMin(i.from), e = rbMin(i.to); if (e <= s) e += 1440; if (s < 240) { s += 1440; e += 1440; }   // 00:00 on Saturday = Saturday night (until Sunday 09:00)
+    r = { from: i.from, to: i.to, s, e, type: i.type, note: i.note || '' }; }
   _rbPC.set(code, r);
   return r;
 }
@@ -78,6 +79,7 @@ const RB_DESK_W = 3;   // how much each person-hour short of the desk aim counts
  *  it: no 19:00 – 04:00 when 15:00 – 00:00 and 00:00 – 09:00 are on). grid = rbDeskGrid of the hotel that day. */
 function rbHoursCovered(grid, d, code) {
   const H = rbShiftHours(code); if (!H || !grid) return false;
+  if (d >= 6 && !H[0].length) return false;   // Sunday night runs into next week: not known here
   return H[0].every(h => grid[d][h] >= 1) && (d >= 6 || H[1].every(h => grid[d + 1][h] >= 1));
 }
 /** Someone alone on their shift is fine when another person is on the desk with them for a while (enough for a
@@ -172,7 +174,7 @@ const RB_EV_W = 500;    // 📅 a shift that misses their meeting or training: w
 function rbEvNear(I, p, dt, s) { const L = (((I.evNear || {})[p && p.key] || {})[dt]); return !!L && L.includes(rbNorm(s) || s); }
 function rbEvMiss(I, p, dt, s) { const L = (((I.evMiss || {})[p && p.key] || {})[dt]); return !!L && L.includes(rbNorm(s) || s); }
 /** The real night: starts around midnight or ends in the morning (00:00 - 09:00), not a late evening (19:00 - 04:00). */
-function rbDeepNight(code) { const x = rbParse(code); return !!x && x.type === 'night' && (x.s < 120 || x.e >= 1440 + 360); }
+function rbDeepNight(code) { const x = rbParse(code); return !!x && x.type === 'night' && (x.s % 1440 < 120 || x.e >= 1440 + 360); }
 /** Who may work a shift: the titles set for it (e.g. nights: Supervisor, Duty Manager), else everyone. */
 /** Never sent to this hotel (set on their card: "🚫 not to Ibis"). */
 function rbNoGo(p, g) { return !!(p && p.noGo && p.noGo.length && g != null && rbBaseGroup(g) !== rbBaseGroup(p.group || '') && p.noGo.includes(rbBaseGroup(g))); }
@@ -295,7 +297,7 @@ function rbPlanNights(I) {
   const hotels = [];
   Object.keys(I.groups).forEach(g => {
     const G = I.groups[g]; if (G.post) return;
-    const ns = G.shifts.find(sh => { const x = rbParse(sh); return x && x.type === 'night' && x.s < 120 && ((G.who || {})[sh] || []).length; });
+    const ns = G.shifts.find(sh => { const x = rbParse(sh); return x && x.type === 'night' && x.s % 1440 < 120 && ((G.who || {})[sh] || []).length; });
     if (!ns) return;
     const regs = I.people.filter(p => p.group === g && (p.fixed === ns || p.usual === ns) && rbMayWork(I, g, p, ns) && !p.post);
     if (!regs.length || dates.some((_, d) => ((G.need[ns] || [])[d] || 0) !== 1)) return;   // one night person a night: the usual case
@@ -908,7 +910,7 @@ function _rbLearnGroup(group, week) {
   const tally = [];
   weeks.forEach(w => { for (let d = 0; d < 7; d++) {
     const c = {};
-    Object.entries(roDays[roAdd(w, d)] || {}).forEach(([k, v]) => {
+    Object.entries(rbDayRead(roAdd(w, d))).forEach(([k, v]) => {
       const x = rbParse(v); if (!x) return;
       const h = x.note && rbNoteGroup(x.note, hotels);
       const g = h ? (postOf[k] ? `${h} · ${postOf[k]}` : h) : groupOf[k] || '';
@@ -1145,7 +1147,7 @@ function rbPre() {
 function rbWho(g, c) {
   const who = Object.assign({}, c.who || {});
   const titled = Object.keys(roStaff).some(k => RB_NIGHT_WHO.includes(rbTitle(k)));
-  if (titled && rbBaseGroup(g) === g) c.shifts.forEach(s => { const x = rbParse(s); if (who[s] === undefined && x && x.type === 'night' && x.s < 120) who[s] = RB_NIGHT_WHO.slice(); });   // [] set by hand stays "everyone"
+  if (titled && rbBaseGroup(g) === g) c.shifts.forEach(s => { const x = rbParse(s); if (who[s] === undefined && x && x.type === 'night' && x.s % 1440 < 120) who[s] = RB_NIGHT_WHO.slice(); });   // [] set by hand stays "everyone"
   Object.keys(who).forEach(s => { if (!who[s] || !who[s].length || who[s].includes('*')) delete who[s]; });   // '*' = everyone, set by hand
   return who;
 }
@@ -1177,14 +1179,14 @@ function rbMgmtHabits(week) {
     Object.keys(roStaff || {}).forEach(k => {
       const nm = ((roStaff[k] || {}).name || k).split(' ')[0];
       dates.forEach((dt, d) => {
-        const v = (roDays[dt] || {})[k], x = rbParse(v); if (!x) return;
+        const v = rbDayRead(dt)[k], x = rbParse(v); if (!x) return;
         if (x.note) { const home = rbBaseGroup((roStaff[k] || {}).group || ''), at = groups.find(g => g.toLowerCase().startsWith(String(x.note).toLowerCase())) || x.note; if (rbBaseGroup(at) !== home) h.lend.push({ who: nm, date: dt, shift: rbNorm(v), at }); }
         if (!d) return;
-        const pv = (roDays[dates[d - 1]] || {})[k]; if (!rbParse(pv)) return;
+        const pv = rbDayRead(dates[d - 1])[k]; if (!rbParse(pv)) return;
         const rest = rbRest(pv, v), e = { who: nm, date: dt, from: rbNorm(pv), to: rbNorm(v) };
         if (rest <= 0) h.b2b.push(e);
         else if (rest < 11) h.rest.push(Object.assign({ hours: Math.round(rest) }, e));
-        else if (rbIsNight(pv) !== rbIsNight(v)) { const day = c => !rbIsNight(c) && rbParse(c).s < 13 * 60; if (!day(pv) && !day(v)) h.eveNight.push(e); }
+        else if (rbIsNight(pv) && !rbIsNight(v)) { const day = c => !rbIsNight(c) && rbParse(c).s < 13 * 60; if (!day(v)) h.eveNight.push(e); }   // a night then an evening (later, into a night, is normal)
         else if (!rbIsNight(pv) && x.s < rbParse(pv).s - 60) h.back.push(e);
       });
     });
@@ -1246,7 +1248,7 @@ function rbLikeBefore(I) {
   const done = new Set();
   found.forEach(t => t.days.forEach(d => {
     if (done.has(t.hotel + '|' + d)) return; done.add(t.hotel + '|' + d);
-    const day = roDays[roAdd(t.week, d)] || {}, dt = dates[d], cnt = {};
+    const day = rbDayRead(roAdd(t.week, d)), dt = dates[d], cnt = {};
     Object.entries(day).forEach(([k, v]) => {
       const q = I.people.find(x => x.key === k); if (!q || q.post) return;
       const x = rbParse(v), mine = rbBaseGroup(q.group) === t.hotel, free = !((I.pre || {})[k] || {})[dt];
@@ -1635,6 +1637,28 @@ function rbSecWire(root) { root.querySelectorAll('details[data-sec]').forEach(d 
 let _rbHealth = null;
 /** 📌 What this week is built on: always the posted roster (the one management gave, then each week posted
  *  after it). A draft counts only once it is posted. */
+/** A posted day as management meant it, for learning: when one hotel has two people on a night and another hotel
+ *  that works that night has nobody, one of the two was covering the other hotel (the note just wasn't written,
+ *  as on 5–6 Oct: two at Ibis, nobody at Mercure). The one who works that night least that week is the one who went. */
+function rbDayRead(dt) {
+  const day = roDays[dt] || {};
+  { const seen = {}; let two = false; for (const k in day) { const x = rbParse(day[k]); if (!x || x.type !== 'night') continue; const c = rbNorm(day[k]) + '|' + (x.note || (roStaff[k] || {}).group); if (seen[c]) { two = true; break; } seen[c] = 1; } if (!two) return day; }   // (nearly always)
+  const hotels = [...new Set(Object.values(roStaff).map(x => x && x.group).filter(Boolean).map(rbBaseGroup))];
+  const home = k => rbBaseGroup((roStaff[k] || {}).group || '');
+  const atOf = (k, v) => { const x = rbParse(v); return x && x.note ? rbBaseGroup(rbNoteGroup(x.note, hotels) || home(k)) : home(k); };
+  const week = Array.from({ length: 7 }, (_, d) => roAdd(roMonday(roDate(dt)), d));
+  const by = {}, out = Object.assign({}, day);
+  Object.entries(day).forEach(([k, v]) => { const x = rbParse(v); if (!x || x.type !== 'night' || !roStaff[k] || rbPost(k)) return; const c = rbNorm(v); ((by[c] = by[c] || {})[atOf(k, v)] = by[c][atOf(k, v)] || []).push(k); });
+  Object.entries(by).forEach(([c, at]) => hotels.forEach(h => {
+    if ((at[h] || []).length) return;
+    const uses = week.some(w => Object.entries(roDays[w] || {}).some(([k, v]) => rbNorm(v) === c && !rbPost(k) && atOf(k, v) === h)); if (!uses) return;
+    const from = Object.keys(at).find(g => at[g].length >= 2); if (!from) return;
+    const n = k => week.filter(w => rbNorm((roDays[w] || {})[k]) === c).length;
+    const pick = at[from].filter(k => !rbParse(day[k]).note).sort((a, b) => n(a) - n(b))[0]; if (!pick) return;
+    out[pick] = `${c} - ${h}`; at[from] = at[from].filter(k => k !== pick); at[h] = [pick];
+  }));
+  return out;
+}
 function rbPostedWeek(w) { return [0, 1, 2, 3, 4, 5, 6].some(d => Object.keys(roDays[roAdd(w, d)] || {}).length); }
 function rbBaseHtml() {
   if (!rbWeek) return '';

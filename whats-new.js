@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 233, items: [
+    '🌙 Night shifts read the way your managers write them: "00:00 – 09:00" on Saturday is Saturday night (right after Saturday\'s 15:00 – 00:00, until Sunday 09:00), not Friday night. Rest is now counted on the real hours everywhere: the builder, Team Health, swaps, who\'s on now and the live desk. So 15:00 – 00:00 then 00:00 – 09:00 the next day is a full day of rest, not "back to back", and a night is followed by a day shift only after real sleep.',
+    '📋 Learning from posted rosters got more honest: false "managers do back-to-back shifts" and "7 h rest" lessons are gone, and an evening before a night is no longer counted as a rule bent. When one hotel has two people on a night and another hotel nobody (Ibis and Mercure, 5–6 Oct), one of them is read as covering the other hotel.',
+    '🛡 Even the very last way to cover a shift never goes under your rest floor (7 h unless you change it). Before, a night could be followed by a 12:00 start the same morning in the hardest weeks.',
+  ] },
   { v: 232, items: [
     '🌙 Team Leaders on nights, the way a manager would do it: when no Supervisor or Duty Manager can take the 00:00 night (from this hotel or borrowed for a short time), a Team Leader takes it, with their rest and day off kept. This now comes before cutting anyone\'s rest or putting someone from an evening straight into a night. Only when no Team Leader can (for example, they are still on their 19:00 – 04:00) is another colleague asked. Each time, the Decisions list says so in plain words.',
   ] },
