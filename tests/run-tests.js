@@ -315,6 +315,21 @@ console.log('\nRoster scenarios');
     sb.rbFreeze(I2);
     check('day-off freeze: a whole week missed comes back when it ends (2 days off that week, none before Thursday)', [I2.people[0].offs, sb.rbOffsDue(I2, I2.people[0], dates), !!(I2.noOff.A || {})[dates[2]], !!(I2.noOff.A || {})[dates[3]]].join(), '2,2,true,false');
   }
+  // 0h. ✂️ HR cut-off on the 15th, 2 days off each half. Week Mon 12 – Sun 18: the first half ends Thursday.
+  //     X took both already (none left: no day off Mon–Thu, the usual one Fri–Sun); Y took none (both before Friday);
+  //     Z took one (one before Friday, none after). A 📌 fixed day off stays as it is.
+  {
+    const WK = '2026-10-12', ds = Array.from({ length: 7 }, (_, d) => sb.roAdd(WK, d));
+    vm.runInContext(`globalThis._cutSave = { a: roDays['2026-10-03'], b: roDays['2026-10-08'] }; roDays['2026-10-03'] = Object.assign({}, roDays['2026-10-03'], { X: 'OFF', Z: 'OFF' }); roDays['2026-10-08'] = Object.assign({}, roDays['2026-10-08'], { X: 'OFF' });`, sb);
+    const G = { 'Ibis DD': { shifts: [M, E], need: { [M]: day(1), [E]: day(1) } } };
+    const ppl = ['X', 'Y', 'Z', 'Q'].map(k => P(k));
+    const I = { week: WK, groups: G, people: ppl, pre: {}, rules: { minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, givePh: false, lend: false, cutoff: { on: true, day: 15, per: 2 } }, seed: 1 };
+    sb.rbCutoff(I);
+    check('cut-off: days off due in each half (X 0+1, Y 2+0, Z 1+0)', ['X', 'Y', 'Z'].map(k => ppl.find(p => p.key === k).cut.map(x => x.due).join('+')).join(' '), '0+1 2+0 1+0');
+    const r = sb.rbSolve(I), offIdx = k => ds.map((dt, d) => sb.rbKind(r.cells[k][dt] || '') === 'off' ? d : -1).filter(d => d >= 0);
+    check('cut-off: the week follows it (X off only Fri–Sun, Y twice Mon–Thu, Z once Mon–Thu)', [offIdx('X').every(d => d >= 4) && offIdx('X').length === 1, offIdx('Y').length === 2 && offIdx('Y').every(d => d <= 3), offIdx('Z').length === 1 && offIdx('Z')[0] <= 3].join(), 'true,true,true');
+    vm.runInContext(`if (_cutSave.a) roDays['2026-10-03'] = _cutSave.a; else delete roDays['2026-10-03']; if (_cutSave.b) roDays['2026-10-08'] = _cutSave.b; else delete roDays['2026-10-08'];`, sb);
+  }
   // 1. ideal two per shift, too few people: never an empty shift, some one-person shifts
   {
     const r = solve({ 'Ibis DD': { shifts: [M, E], need: { [M]: day(2), [E]: day(2) } } }, ['A', 'B', 'C', 'D'].map(k => P(k)), {}, { overlapMin: 0 });

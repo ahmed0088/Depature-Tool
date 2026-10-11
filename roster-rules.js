@@ -117,6 +117,7 @@ function rrHtml() {
   return `<div class="rr-box" id="rrBox">
     <div class="rr-intro">Tell the builder what matters. Every rule has an example from your team; tap how much it counts. <b>Must</b> comes first, <b>Off</b> is ignored.</div>
     ${rrSuggestHtml()}
+    ${rrCutHtml()}
     ${rrFreezeHtml()}
     ${groups.map(g => `<div class="rr-sec">${['⚪ Off', '🟢 Nice to have', '🟡 Important', '🟠 Very important', '🔴 Must'][g.L]}</div>
       <div class="rr-list">${g.list.map(([id, ico, t, what]) => rrRuleRow(ico, t, rrExample(id) || what, rrLevelCtl(id, lv[id]), 'lv' + g.L)).join('')}</div>`).join('')}
@@ -144,6 +145,29 @@ function rrFreezeHtml() {
       <button class="btn sm gold" onclick="rrFreezeAdd()">Save the freeze</button>
     </details></div>`;
 }
+/** ✂️ HR cut-off: days off per half-month, counted from what each person already took. */
+function rrCutHtml() {
+  const R = rbRules(), C = rbCutCfg(R), raw = R.cutoff || {}, day = +raw.day || 15, per = raw.per != null ? +raw.per : 2;
+  const head = `<div class="rr-sec">✂️ HR cut-off</div>
+    <div class="rr-cut-top"><label class="rr-sw"><input type="checkbox" ${C ? 'checked' : ''} onchange="rrCutSet('on',this.checked)"><i></i></label>
+      <span>Month cut on the <input type="number" min="1" max="27" value="${day}" onchange="rrCutSet('day',+this.value)" class="rr-cut-n"><b>th</b>: everyone takes
+      <button class="rr-pm" onclick="rrCutSet('per',${Math.max(0, per - 1)})">−</button><b class="rr-cut-v">${per}</b><button class="rr-pm" onclick="rrCutSet('per',${per + 1})">+</button>
+      days off before it and ${per} after.</span></div>`;
+  if (!C) return head + '<div class="rr-fz-none">Off: days off are one a week as usual. Turn it on to count days off per half-month for HR.</div>';
+  const W = rbWeek || rbDefaultWeek(), periods = [rbCutPeriod(W, C.day)], nx = rbCutPeriod(roAdd(periods[0].end, 1), C.day);
+  if (nx.start <= roAdd(W, 6)) periods.push(nx);
+  const ppl = _rrFzPeople().filter(k => !((rbPeople[k] || {}).staticOff || []).length), nm = k => String(roStaff[k].name).split(' ')[0];
+  return head + periods.map(P => {
+    const rows = ppl.map(k => { const q = rbCutQuota(C, P, k), t = rbCutTaken(k, P, W), left = Math.max(0, q - t);
+      return `<div class="rr-cut-row${left ? '' : ' none'}"><span>${escapeHtml(nm(k))}</span><small>${t} taken</small><span class="rr-cut-q"><button class="rr-pm" onclick="rrCutAdj('${P.id}',${_rtQ(k)},${Math.max(0, q - 1)})">−</button><b>${q}</b><button class="rr-pm" onclick="rrCutAdj('${P.id}',${_rtQ(k)},${q + 1})">+</button></span><em>${left ? left + ' left' : 'none left'}</em></div>`; }).join('');
+    return `<details class="rr-cut-p" open><summary>${escapeHtml(roDayLbl(P.start))} → ${escapeHtml(roDayLbl(P.end))} <small>days off before the cut-off · taken before ${escapeHtml(roDayLbl(W))}</small></summary>
+      <div class="rr-cut-quick">Everyone: ${[0, 1, 2, 3].map(n => `<button class="btn sm ghost" onclick="rrCutAll('${P.id}',${n})">${n}</button>`).join('')}</div>
+      <div class="rr-cut-list">${rows}</div></details>`;
+  }).join('') + '<small class="ro-hint">Managers and anyone with a 📌 fixed day off stay as they are. Whatever is left is given before the cut-off; none left means no day off until it.</small>';
+}
+function rrCutSet(k, v) { rbSetRule('cutoff', Object.assign({ day: 15, per: 2 }, rbRules().cutoff, { [k]: v })); rrRefresh(); }
+function rrCutAdj(id, k, n) { const c = Object.assign({ day: 15, per: 2 }, rbRules().cutoff), adj = Object.assign({}, c.adj); adj[id] = Object.assign({}, adj[id], { [k]: n }); c.adj = adj; rbSetRule('cutoff', c); rrRefresh(); }
+function rrCutAll(id, n) { const c = Object.assign({ day: 15, per: 2 }, rbRules().cutoff), adj = Object.assign({}, c.adj); adj[id] = {}; _rrFzPeople().forEach(k => { adj[id][k] = n; }); c.adj = adj; rbSetRule('cutoff', c); rrRefresh(); }
 function rrFreezeAdd() {
   const from = (document.getElementById('rrFzFrom') || {}).value, to = (document.getElementById('rrFzTo') || {}).value;
   if (!from || !to || to < from) { if (typeof showToast === 'function') showToast('Pick a start and an end date (the end on or after the start)', 'warn'); return; }

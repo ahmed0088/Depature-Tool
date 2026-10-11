@@ -81,6 +81,8 @@ const _buN = k => typeof rtName === 'function' ? rtName(k) : ((roStaff[k] || {})
 
 /** What each request looks like: test(ctx) → the sentence the app already knows, or null. */
 const BU_INTENTS = [
+  { id: 'staticOff', ico: '📌', label: 'Fixed day off', need: { n: 1 }, test: c => c.n.length >= 1 && /\b(always|fixed|static|every|permanent)\b/.test(c.t) && /\boff\b/.test(c.t) && /\b(mon|tue|wed|thu|fri|sat|sun)/.test(c.t), make: c => `${c.N.join(', ')} always off on ${RB_DAYS[buWeekday(c.t)]}`, run: c => buStaticOff(c) },
+  { id: 'cutoff', ico: '✂️', label: 'Days off per cut-off', need: {}, test: c => /\b(before|cut ?off|cutoff)\b/.test(c.t) && /\b\d\s*(days? )?offs?\b|\boffs?\b/.test(c.t) && /\b\d\b/.test(c.t) && !/\b(only|just)\b/.test(c.t), make: c => { const m = c.t.match(/\b(\d)\s*(?:days? )?offs?\b/), d = c.t.match(/\b(?:before|cut ?off|cutoff)\s+(?:the\s+)?(\d{1,2})/); return `everyone ${m ? m[1] : 2} days off before the ${d ? d[1] : 15}th and ${m ? m[1] : 2} after`; }, run: c => buCutoff(c) },
   { id: 'freeze', ico: '🚫', label: 'Only some may be off', need: { n: 1 }, test: c => c.n.length >= 1 && /\b(only|just)\b/.test(c.t) && /\b(off|offs|day off|days off)\b/.test(c.t), make: c => `only ${c.N.join(', ')} can be off${c.span || ''}`, run: c => buFreeze(c) },
   { id: 'apart', ico: '↔️', label: 'Keep two apart', need: { n: 2 }, test: c => c.n.length >= 2 && (BU_NEG.test(c.t) || /\bapart\b/.test(c.t)) && !/\b(swap|switch|exchange|trade)\b/.test(c.t), make: c => `avoid ${c.N[0]} with ${c.N[1]}` },
   { id: 'with', ico: '🤝', label: 'Always together', need: { n: 2 }, test: c => c.n.length >= 2 && !BU_NEG.test(c.t) && /\b(together|with|same shift|pair|partner|train|trains|training)\b/.test(c.t) && !/\b(swap|switch|exchange|trade)\b/.test(c.t), make: c => `${c.N[0]} always with ${c.N[1]}` },
@@ -92,7 +94,7 @@ const BU_INTENTS = [
   { id: 'noGo', ico: '🚫', label: 'Never to a hotel', need: { n: 1, hotel: 1 }, test: c => c.n.length >= 1 && !!c.hotel && BU_NEG.test(c.t) && /\b(send|sent|move|moved|go|goes|work|put|lend)\b/.test(c.t), make: c => `never send ${c.N[0]} to ${c.hotel}`, run: c => buNoGo(c.n[0], c.hotel) },
   { id: 'lock', ico: '🏨', label: 'Stays in their hotel', need: { n: 1 }, test: c => c.n.length >= 1 && !c.hotel && /\b(stay|stays|keep|lock|only)\b/.test(c.t) && /\b(hotel|home|own)\b/.test(c.t), make: c => `lock ${c.N[0]} in his hotel` },
   { id: 'prefNot', ico: '⚠', label: 'Prefers not a shift', need: { n: 1, band: 1 }, test: c => c.n.length >= 1 && !!c.band && (BU_NEG.test(c.t) || /\b(prefer not|tired of|no more|anymore)\b/.test(c.t)), make: c => `${c.N[0]} prefers not ${c.band === 'day shifts' ? 'days' : c.band}` },
-  { id: 'dayoff', ico: '🛋', label: 'Day off request', need: { n: 1, day: 1 }, test: c => c.n.length >= 1 && /\b(off|day off|rest|free)\b/.test(c.t) && !c.band && !/\b(only|just)\b/.test(c.t), make: c => `${c.N[0]} wants ${(c.day && !/today|tonight/.test(c.day) ? c.day : 'Friday').replace(/^on /, '').replace(/^next /, '')} off` },
+  { id: 'dayoff', ico: '🛋', label: 'Day off request', need: { n: 1, day: 1 }, test: c => c.n.length >= 1 && /\b(off|day off|rest|free)\b/.test(c.t) && !c.band && !/\b(only|just|always|fixed|static|every|permanent)\b/.test(c.t), make: c => `${c.N[0]} wants ${(c.day && !/today|tonight/.test(c.day) ? c.day : 'Friday').replace(/^on /, '').replace(/^next /, '')} off` },
   { id: 'titleNo', ico: '🎓', label: 'A title never on a shift', need: { title: 1, band: 1 }, test: c => !c.n.length && !!c.title && !!c.band && BU_NEG.test(c.t), make: c => `${c.title.toLowerCase()}s never on ${c.band}` },
   { id: 'lastweek', ico: '📜', label: 'What someone worked', need: { n: 1 }, test: c => c.n.length === 1 && /\b(last week|worked|history|what did|schedule|shifts)\b/.test(c.t), make: c => `${c.N[0]} last week` },
   { id: 'cover', ico: '🙋', label: 'Who can cover', need: { band: 1, day: 1 }, test: c => /\b(who can|cover|replace|fill|available|free)\b/.test(c.t) && !!c.band, make: c => `who can cover ${c.band === 'day shifts' ? 'mornings' : c.band} on ${(c.day || 'tomorrow').replace(/^on /, '')}` },
@@ -194,6 +196,24 @@ function buFreeze(c) {
   if (!to || to < from) { _bxOutSafe('<div class="br-kind">🚫 Day-off freeze</div><div class="br-title">Until which day?</div><div class="br-body">Say it with an end date, like <i>only Sandrine and Turab can be off until 15</i>, or set it in ⚖️ Rules → 🚫 Day-off freeze.</div>'); return true; }
   rbSetRule('offFreeze', rbFreezes(rbRules()).concat([{ from, to, allow: c.n.slice() }]));
   _bxOutSafe(`<div class="br-kind">🚫 Day-off freeze</div><div class="br-title">${escapeHtml(roDayLbl(from))} → ${escapeHtml(roDayLbl(to))}: only ${escapeHtml(c.N.map(x => x.split(' ')[0]).join(', '))} may be off</div><div class="br-body">Everyone else works through and gets their day off after it; managers keep theirs as usual. Build the week to apply it. Change or remove it in ⚖️ Rules → 🚫 Day-off freeze.</div>`);
+  return true;
+}
+function buWeekday(t) { const m = String(t).match(/\b(mon|tue|wed|thu|fri|sat|sun)/); return m ? ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].indexOf(m[1]) : -1; }
+/** "Saad, Ali and Syed always off on Friday": a fixed day off on their cards. */
+function buStaticOff(c) {
+  const d = buWeekday(c.t); if (d < 0 || typeof rtSet !== 'function') return false;
+  if (typeof roCanEdit === 'function' && !roCanEdit()) { _bxOutSafe('<div class="br-title">Only supervisors, managers and owners can change this.</div>'); return true; }
+  c.n.forEach(k => { const cur = ((rbPeople[k] || {}).staticOff || []).slice(); if (!cur.includes(d)) cur.push(d); rtSet(k, 'staticOff', cur.sort()); });
+  _bxOutSafe(`<div class="br-kind">📌 Team</div><div class="br-title">${escapeHtml(c.N.map(x => x.split(' ')[0]).join(', '))}: always off on ${RB_DAYS[d]}</div><div class="br-body">Saved on their cards. The builder keeps that day off every week (leave and requests still come first). Change it on their card in 🧑‍💼 Team.</div>`);
+  return true;
+}
+/** "everyone 2 off before 15 and 2 after": the HR cut-off in ⚖️ Rules. */
+function buCutoff(c) {
+  if (typeof rbSetRule !== 'function') return false;
+  if (typeof roCanEdit === 'function' && !roCanEdit()) { _bxOutSafe('<div class="br-title">Only supervisors, managers and owners can change this.</div>'); return true; }
+  const m = c.t.match(/\b(\d)\s*(?:days? )?offs?\b/), d = c.t.match(/\b(?:before|cut ?off|cutoff)\s+(?:the\s+)?(\d{1,2})/), per = m ? +m[1] : 2, day = d ? +d[1] : 15;
+  rbSetRule('cutoff', Object.assign({}, rbRules().cutoff, { on: true, per, day }));
+  _bxOutSafe(`<div class="br-kind">✂️ HR cut-off</div><div class="br-title">Everyone: ${per} days off before the ${day}th and ${per} after</div><div class="br-body">The builder counts what each person already took in that half and gives the rest before the cut-off; none left means no day off until it. Managers and fixed days off stay as they are. Change anyone's number in ⚖️ Rules → ✂️ HR cut-off.</div>`);
   return true;
 }
 function buNoGo(k, h) {

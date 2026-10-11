@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 243, items: [
+    '✂️ HR cut-off: ⚖️ Rules → ✂️ HR cut-off (or tell Ops Brain "everyone 2 off before 15 and 2 after"). The month is cut on the 15th: each half, everyone has a number of days off. The builder counts what each person already took, gives what is left and finishes it before the cut-off; none left means no day off until the 16th. Change anyone\'s number with − / +, or "Everyone 0 1 2 3" in one tap. Managers stay as they are.',
+    '📌 Fixed day off: on a person\'s card in 🧑‍💼 Team (or "Saad always off on Thursday"). That weekday is their day off every week; leave and requests still come first.',
+  ] },
   { v: 242, items: [
     '🚫 Day-off freeze: pick a from-date, a to-date and who may still be off (⚖️ Rules → 🚫 Day-off freeze, or tell Ops Brain "only Sandrine, Ahmed and Turab can be off until 15"). Everyone else works through and takes their day off after it ends; managers keep their days off as usual. If someone misses a whole week\'s day off, they get it back the week the freeze ends. The draft notes say so, and a day off inside a freeze shows as a problem.',
   ] },

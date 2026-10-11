@@ -1984,3 +1984,16 @@ html.ho-lang-ar body { font-family: var(--font), 'Segoe UI', 'Noto Sans Arabic',
 .rr-fz-who label { cursor: pointer; } .rr-fz-who input { display: none; }
 .rr-fz-who span { display: inline-block; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--border2); background: var(--surface); font: 600 12.5px var(--font); }
 .rr-fz-who input:checked + span { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
+/* ✂️ HR cut-off (⚖️ Rules) */
+.rr-cut-top { display: flex; gap: 10px; align-items: center; font-size: 13px; padding: 4px 2px 8px; } .rr-cut-top span { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.rr-cut-n { width: 48px; padding: 3px 5px; border-radius: 8px; border: 1px solid var(--border2); background: var(--surface); color: var(--text); font: 700 13px var(--font); }
+.rr-pm { width: 26px; height: 26px; border-radius: 8px; border: 1px solid var(--border2); background: var(--surface); color: var(--text); font: 800 15px var(--font); cursor: pointer; line-height: 1; }
+.rr-cut-v { min-width: 14px; text-align: center; }
+.rr-cut-p { border: 1px solid var(--border); border-radius: 12px; padding: 8px 10px; margin-bottom: 8px; background: var(--card); }
+.rr-cut-p summary { cursor: pointer; font: 700 13px var(--font); } .rr-cut-p summary small { display: block; font-weight: 500; color: var(--text2); font-size: 11.5px; }
+.rr-cut-quick { display: flex; align-items: center; gap: 5px; font: 600 12px var(--font); color: var(--text2); margin: 8px 0; }
+.rr-cut-list { display: grid; gap: 4px; }
+.rr-cut-row { display: grid; grid-template-columns: 1fr auto auto 76px; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 8px; font-size: 13px; }
+.rr-cut-row:nth-child(odd) { background: var(--surface); }
+.rr-cut-row small { color: var(--text2); font-size: 11.5px; } .rr-cut-row em { font-style: normal; font-weight: 700; font-size: 12px; color: var(--accent); text-align: right; }
+.rr-cut-row.none em { color: var(--text3); } .rr-cut-q { display: inline-flex; align-items: center; gap: 5px; } .rr-cut-q b { min-width: 12px; text-align: center; }

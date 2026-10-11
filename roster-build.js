@@ -512,6 +512,7 @@ function _rbAttempt(I, seed) {
           if ((p.prefOff || []).includes(d)) c -= 25 * rbW(R, 'wishes');
           if (((I.busy || {})[p.key] || {})[dates[d]]) c += 250 * rbW(R, 'meet');   // 📅 a meeting or training that day: not their day off
           if (rbNoOff(I, p.key, dates[d])) c += 5000;   // 🚫 day-off freeze: they work these days
+          if (p.cut) { const part = p.cut.find(x => x.days.includes(dates[d])); if (part && part.days.filter(dt => rbKind(cells[p.key][dt]) === 'off').length >= part.due) c += 4000; }   // ✂️ that half already has its days off
           if (rbMgrP(p)) { const min = R.mgrMin == null ? 1 : +R.mgrMin, mg = I.people.filter(q => q !== p && rbMgrP(q)); if (min > 0 && mg.length >= min && mg.filter(q => !offOrAway(cells[q.key][dates[d]])).length < min) c += 150; }   // keep a manager on duty every day (one can look after all the hotels)
           if (I.keep && I.keep[p.key] && rbKind(I.keep[p.key][dates[d]]) === 'off') c -= 30;   // keep their day off where it was
           if ((p.lastOffs || []).includes(d)) c -= 2;
@@ -729,6 +730,7 @@ function rbScore(I, g, cells, dates, R) {
     { const kinds = new Set(dates.map(dt => rbNorm(cells[p.key][dt])).filter(Boolean)); if (kinds.size > 1) sc += (110 * rbW(R, 'steady') + 60 * rbCareW(I, p)) * (kinds.size - 1); }
     if (p.care && !p.together && offDays.length >= 2 && !offDays.some((d, i) => i && d - offDays[i - 1] === 1)) sc += 30 * rbCareW(I, p);   // 💚 days off together: a real rest
     sc += 2000 * Math.abs(offs - rbOffsDue(I, p, dates));   // rest, days in a row and days off come before cover
+    if (p.cut) rbCutMiss(p, cells).forEach(x => { sc += 1500 * Math.abs(x.have - x.due); });   // ✂️ days off in the right half of the month
     sc += 90 * rbW(R, 'nm') * rbNightToMorning(cells, p, dates).length;   // a night, one day off, then a morning: the day off goes on sleep, so only when there's no other way
     if (p.maxNights != null && nights > p.maxNights) sc += 60 * rbWishWeight(p) * rbW(R, 'wishes') * (nights - p.maxNights);   // 💛 no more nights than they asked for (unless it's the only way)
     if (p.together && offDays.length >= 2 && !offDays.some((d, i) => i && d - offDays[i - 1] === 1)) sc += 25 * rbWishWeight(p) * rbW(R, 'together');   // 💛 their days off next to each other
@@ -875,7 +877,7 @@ function rbProblems(I, cells, cover) {
     let run = p.run || 0, prev = p.lastShift || '';
     dates.forEach((dt, d) => {
       const v = (cells[p.key] || {})[dt] || '';
-      if (rbKind(v) === 'off' && rbNoOff(I, p.key, dt) && !((I.pre || {})[p.key] || {})[dt]) out.push({ kind: 'freeze', key: p.key, date: dt });   // 🚫 a day off in a day-off freeze
+      if (rbKind(v) === 'off' && rbNoOff(I, p.key, dt) && !((I.pre || {})[p.key] || {})[dt]) out.push({ kind: rbFreezes(I.rules).some(f => dt >= f.from && dt <= f.to && !(f.allow || []).includes(p.key)) ? 'freeze' : 'cutoff', key: p.key, date: dt });   // 🚫 a day off in a day-off freeze, ✂️ or past this half's days off
       if (rbParse(v)) {
         run++;
         if (rbParse(v).e - rbParse(v).s > (R.maxHours || 9) * 60) out.push({ kind: 'long', key: p.key, date: dt, hours: (rbParse(v).e - rbParse(v).s) / 60, code: v });
@@ -889,6 +891,7 @@ function rbProblems(I, cells, cover) {
     });
     const offs = dates.filter(dt => rbKind((cells[p.key] || {})[dt]) === 'off').length, due = rbOffsDue(I, p, dates);
     if (offs < due) out.push({ kind: 'offs', key: p.key, have: offs, need: due });
+    else (p.cut || []).forEach(x => { const have = x.days.filter(dt => rbKind(((cells[p.key] || {})[dt]) || '') === 'off').length; if (x.ends && have < x.due) out.push({ kind: 'cutshort', key: p.key, have, need: x.due, date: x.ends }); });   // ✂️ days off still owed when the half ends
   });
   return out;
 }
@@ -1145,6 +1148,9 @@ function rbPre() {
       (pre[r.key] = pre[r.key] || {})[dt] = v;
     });
   });
+  // 📌 a fixed day off (on their card): always that weekday, unless leave or a request is already there
+  Object.keys(roStaff).forEach(k => { const so = (rbPeople[k] || {}).staticOff; if (!so || !so.length) return;
+    dates.forEach((dt, d) => { if (so.includes(d) && !(pre[k] || {})[dt]) (pre[k] = pre[k] || {})[dt] = 'OFF'; }); });
   const busy = {}, evMiss = {}, evNear = {};
   if (typeof evPre === 'function') evPre(dates, pre, evMiss, busy, evNear);   // 📅 meetings and training
   return { pre, avoid, soft, busy, evMiss, evNear };
@@ -1168,12 +1174,58 @@ function rbInput(seed) {
   const { pre, avoid, soft, busy, evMiss, evNear } = rbPre();
   const I = { week: rbWeek, groups, people, pre, avoid, soft, busy, evMiss, evNear, rules: rbRules(), seed: seed || 1 };
   rbFreeze(I);
+  rbCutoff(I);
   rbFairHistory(I);
   rbCare(I);
   rbLikeBefore(I);
   I.habits = rbMgmtHabits(I.week);
   return I;
 }
+/** ✂️ HR cut-off: the month is cut on the 15th (set in ⚖️ Rules). Each half (1st–15th, 16th–end) everyone has a
+ *  number of days off (2 by default, or set per person for that half). The builder counts what they already took in
+ *  that half, gives the rest, and finishes them by the cut-off. Nothing left: no day off until the next half.
+ *  Managers, and anyone with a fixed day off, stay as they are. */
+function rbCutPeriod(dt, day) {
+  const y = +dt.slice(0, 4), m = +dt.slice(5, 7), dom = +dt.slice(8, 10), ym = dt.slice(0, 7), last = new Date(Date.UTC(y, m, 0)).getUTCDate(), c = Math.min(day, last - 1);
+  return dom <= c ? { id: ym + '-A', start: ym + '-01', end: `${ym}-${String(c).padStart(2, '0')}` } : { id: ym + '-B', start: `${ym}-${String(c + 1).padStart(2, '0')}`, end: `${ym}-${String(last).padStart(2, '0')}` };
+}
+function rbCutCfg(R) { const c = (R || {}).cutoff; return c && c.on ? { day: +c.day || 15, per: c.per != null ? +c.per : 2, adj: c.adj || {} } : null; }
+function rbCutQuota(C, period, k) { const a = (C.adj[period.id] || {})[k]; return a != null ? +a : C.per; }
+/** Days off already taken in a half, before the week being built (the posted roster, else the saved draft). */
+function rbCutTaken(k, period, before) {
+  let n = 0;
+  for (let dt = period.start; dt <= period.end && dt < before; dt = roAdd(dt, 1)) {
+    let v = (roDays[dt] || {})[k];
+    if (v == null && typeof rbDrafts !== 'undefined') { const w = roMonday(roDate(dt)), D = rbDrafts[w] && rbDrafts[w].cells; v = D && D[k] ? D[k][dt] : undefined; }
+    if (rbKind(v || '') === 'off') n++;
+  }
+  return n;
+}
+function rbCutoff(I) {
+  const C = rbCutCfg(I.rules); if (!C) return;
+  const dates = Array.from({ length: 7 }, (_, d) => roAdd(I.week, d));
+  I.noOff = I.noOff || {};
+  I.people.forEach(p => {
+    if (p.post || rbIsManager(p.key) || ((rbPeople[p.key] || {}).staticOff || []).length) return;
+    const pre = (I.pre || {})[p.key] || {}, weekly = p.offs == null ? 1 : p.offs;
+    const parts = [...new Set(dates.map(dt => rbCutPeriod(dt, C.day).id))].map(id => {
+      const P = rbCutPeriod(dates.find(dt => rbCutPeriod(dt, C.day).id === id), C.day), days = dates.filter(dt => dt >= P.start && dt <= P.end);
+      const quota = rbCutQuota(C, P, p.key), taken = rbCutTaken(p.key, P, I.week), left = Math.max(0, quota - taken);
+      const open = days.filter(dt => !pre[dt] || rbKind(pre[dt]) === 'off').length, asked = days.filter(dt => pre[dt] && rbKind(pre[dt]) === 'off').length;
+      return { id, days, quota, taken, left, open, asked, ends: P.end <= dates[6] ? P.end : '', due: 0 };
+    });
+    // a half that ends this week: everything left is taken before it ends. Otherwise the usual day off a week,
+    // in the half that still has days off left (the later one first). Nothing left: no day off in that half.
+    parts.forEach(x => { if (x.ends) x.due = Math.min(x.left, x.open); });
+    let extra = Math.max(0, weekly - parts.reduce((t, x) => t + x.due, 0));
+    parts.slice().reverse().forEach(x => { if (!x.ends && extra > 0) { const n = Math.min(extra, x.left - x.due, x.open - x.due); if (n > 0) { x.due += n; extra -= n; } } });
+    parts.forEach(x => { x.due = Math.max(x.due, x.asked); if (x.due <= x.asked) x.days.forEach(dt => { if (!pre[dt]) (I.noOff[p.key] = I.noOff[p.key] || {})[dt] = true; }); });
+    p.cut = parts; p.offs = parts.reduce((t, x) => t + x.due, 0);
+  });
+}
+/** ✂️ How far the days off in each half of the week are from what the cut-off asks: [{ id, have, due }]. */
+function rbCutMiss(p, cells) { return (p.cut || []).map(x => ({ id: x.id, have: x.days.filter(dt => rbKind(((cells[p.key] || {})[dt]) || '') === 'off').length, due: x.due, ends: x.ends })).filter(x => x.have !== x.due); }
+
 /** 🚫 Day-off freezes (⚖️ Rules): from one date to another only the people named may have a day off; everyone
  *  else works through. Managers keep their days off as usual. A whole week without a day off is given back in the
  *  week the freeze ends (or the week after): their day off plus the one they missed. */
@@ -2007,6 +2059,8 @@ function rbOutHtml(shown, dates) {
     : p.kind === 'who' ? `${escapeHtml(name(p.key))}: ${escapeHtml(p.code)} on ${escapeHtml(roDayLbl(p.date))} is for ${escapeHtml((p.who || []).join(', '))} only`
     : p.kind === 'long' ? `${escapeHtml(name(p.key))}: ${escapeHtml(p.code)} on ${escapeHtml(roDayLbl(p.date))} is ${p.hours} h (over ${rbRules().maxHours})`
     : p.kind === 'freeze' ? `${escapeHtml(name(p.key))}: a day off on ${escapeHtml(roDayLbl(p.date))}, inside the 🚫 day-off freeze`
+    : p.kind === 'cutshort' ? `${escapeHtml(name(p.key))}: ${p.need - p.have} day${p.need - p.have === 1 ? '' : 's'} off still to take before the ✂️ cut-off (${escapeHtml(roDayLbl(p.date))})`
+    : p.kind === 'cutoff' ? `${escapeHtml(name(p.key))}: a day off on ${escapeHtml(roDayLbl(p.date))}, but no days off left before the ✂️ cut-off`
     : `${escapeHtml(name(p.key))}: ${p.have} day${p.have === 1 ? '' : 's'} off (should have ${p.need})`;
   return `<div class="card rb-draft">
     <div class="ro-card-hd"><b>📋 Draft roster · ${escapeHtml(rbWeekLabel(rbWeek))}</b><span>built ${escapeHtml(new Date(rbDrafts[rbWeek].at || Date.now()).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' }))} · tap a cell to change it</span></div>

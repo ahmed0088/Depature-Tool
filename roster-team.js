@@ -811,6 +811,7 @@ function rtPerson(k) {
     </div>
     <div class="rt-cant"><span>Locks:</span><button class="rb-opt${p.lock ? ' on' : ''}" onclick="rtSet(${q},'lockShift',${!p.lock});rtPerson(${q})">${p.lock ? '🔒' : '🔓'} ${p.lock ? 'Keeps ' + escapeHtml(p.fixed || 'their shift') : 'Shift can change'}</button><button class="rb-opt${c.home ? ' on' : ''}" onclick="rtSet(${q},'home',${c.home ? 'undefined' : 'true'});rtPerson(${q})">🏨 ${c.home ? 'Stays at ' + escapeHtml(g || 'their hotel') : 'Can help other hotels'}</button></div>
     ${c.home ? '' : `<div class="rt-cant"><span>Never to:</span>${groups.filter(x => x !== g && !/·/.test(x)).map(x => { const on = (c.noGo || []).includes(x); return `<button class="rb-opt${on ? ' on' : ''}" onclick="rtNoGo(${q},${_rtQ(x)})" title="${on ? 'Tap to allow again' : 'Tap: never sent to ' + escapeHtml(x)}">${on ? '🚫 ' : ''}${escapeHtml(x)}</button>`; }).join('')}<small class="ro-hint">Tap a hotel they must never be sent to</small></div>`}
+    <div class="rt-cant"><span>📌 Fixed day off:</span>${RB_DAYS.map((x, i) => { const on = (c.staticOff || []).includes(i); return `<button class="rb-opt${on ? ' on' : ''}" onclick="rtStaticOff(${q},${i})" title="${on ? 'Tap to free this day again' : 'Always off on ' + x}">${on ? '📌 ' : ''}${x.slice(0, 2)}</button>`; }).join('')}<small class="ro-hint">Always off that day, every week (like a manager)</small></div>
     <div class="rt-cant"><span>Works:</span><button class="rb-opt ro-t-night" onclick="rtOnly(${q},'night')">🌙 Nights only</button><button class="rb-opt ro-t-morning" onclick="rtOnly(${q},'day')">☀️ Days only</button><button class="rb-opt" onclick="rtOnly(${q},'all')">All shifts</button></div>
     <div class="rt-cant"><span>Shifts:</span>${shifts.map(x => { const no = (c.allowed && c.allowed.length && !c.allowed.includes(x)), soft = (c.soft || []).includes(x), like = (c.likes || []).includes(x); return `<button class="rb-opt ro-t-${(roInfo(x) || {}).type}${no ? ' on' : soft ? ' soft' : like ? ' like' : ''}" onclick="rtToggleShift(${q},${_rtQ(x)})" title="Tap: 💛 likes → ⚠ prefer not → 🚫 can't work → fine">${no ? '🚫 ' : soft ? '⚠ ' : like ? '💛 ' : ''}${escapeHtml(x)}</button>`; }).join('')}<small class="ro-hint">Tap: 💛 likes → ⚠ prefer not → 🚫 can't</small></div>
     ${rtWishHtml(k)}
@@ -830,6 +831,12 @@ function rtPerson(k) {
   if (keepTop) { d.scrollTop = keepTop[0]; const c = d.querySelector('.rt-sheet'); if (c) c.scrollTop = keepTop[1]; }
 }
 /** 🚫 never sent to this hotel (tap again to allow) */
+function rtStaticOff(k, d) {
+  const cur = ((rbPeople[k] || {}).staticOff || []).slice(), i = cur.indexOf(d);
+  if (i >= 0) cur.splice(i, 1); else cur.push(d);
+  rtSet(k, 'staticOff', cur.length ? cur.sort() : undefined); rtPerson(k);
+  showToast(cur.length ? `📌 ${rtName(k).split(' ')[0]}: always off on ${cur.map(x => RB_DAYS[x]).join(' and ')}` : `${rtName(k).split(' ')[0]}: no fixed day off`, 'ok');
+}
 function rtNoGo(k, h) {
   const cur = ((rbPeople[k] || {}).noGo || []).slice(), i = cur.indexOf(h);
   if (i >= 0) cur.splice(i, 1); else cur.push(h);
