@@ -1209,7 +1209,7 @@ function rbCutoff(I) {
   const dates = Array.from({ length: 7 }, (_, d) => roAdd(I.week, d));
   I.noOff = I.noOff || {};
   I.people.forEach(p => {
-    if (p.post || rbIsManager(p.key) || ((rbPeople[p.key] || {}).staticOff || []).length) return;
+    if (rbIsManager(p.key) || ((rbPeople[p.key] || {}).staticOff || []).length) return;   // (bell boys too)
     const pre = (I.pre || {})[p.key] || {}, weekly = p.offs == null ? 1 : p.offs;
     const parts = [...new Set(dates.map(dt => rbCutPeriod(dt, C.day).id))].map(id => {
       const P = rbCutPeriod(dates.find(dt => rbCutPeriod(dt, C.day).id === id), C.day), days = dates.filter(dt => dt >= P.start && dt <= P.end);
@@ -1240,7 +1240,7 @@ function rbFreeze(I) {
   const dates = Array.from({ length: 7 }, (_, d) => roAdd(I.week, d));
   I.noOff = I.noOff || {}; I.freezeNotes = [];
   I.people.forEach(p => {
-    if (p.post || (typeof rbIsManager === 'function' && rbIsManager(p.key))) return;
+    if (typeof rbIsManager === 'function' && rbIsManager(p.key)) return;   // (bell boys too: only managers keep their days off as usual)
     const pre = (I.pre || {})[p.key] || {}, no = dt => { if (!pre[dt]) (I.noOff[p.key] = I.noOff[p.key] || {})[dt] = true; };
     F.forEach(f => {
       const inside = dates.filter(dt => dt >= f.from && dt <= f.to); if (!inside.length) return;

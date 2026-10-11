@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 247, items: [
+    '🛎 Bell boys now follow the 🚫 day-off freeze and the ✂️ HR cut-off like everyone else: no day off before the cut-off unless you picked them. Only managers (and anyone with a 📌 fixed day off) keep their days off as usual.',
+  ] },
   { v: 246, items: [
     '🛠 Days off fixed: with a 🚫 day-off freeze and the ✂️ HR cut-off both on, people outside the freeze could end up with no day off at all that week. Now the freeze comes first and their one day off moves to after the cut-off. Nobody gets two in a week, and nobody gets none.',
     '✂️ The cut-off card now says when there is no roster in the app for part of the half (like 1–4 Oct), because days off taken then cannot be counted. Set what each person has LEFT directly with − / +, or "Everyone left: 0 1 2" in one tap.',

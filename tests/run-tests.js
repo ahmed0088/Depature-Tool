@@ -315,6 +315,15 @@ console.log('\nRoster scenarios');
     sb.rbFreeze(I2);
     check('day-off freeze: never two days off in one week (one, after the freeze)', [I2.people[0].offs, sb.rbOffsDue(I2, I2.people[0], dates), !!(I2.noOff.A || {})[dates[2]], !!(I2.noOff.A || {})[dates[3]]].join(), '1,1,true,false');
   }
+  // 0g2. bell boys follow the freeze and the cut-off too (only managers keep their days off as usual)
+  {
+    const BG = 'Ibis DD · Bell', G = { 'Ibis DD': { shifts: [M, E], need: { [M]: day(1), [E]: day(1) } }, [BG]: { shifts: [D9], need: { [D9]: day(1) }, post: 'Bell' } };
+    const ppl = ['A', 'B', 'C'].map(k => P(k)).concat(['BB1', 'BB2'].map(k => P(k, { group: BG, post: 'Bell', title: 'Bell Boy' })));
+    const I = { week: W, groups: G, people: ppl, pre: {}, rules: { minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, givePh: false, lend: false, offFreeze: [{ from: dates[0], to: dates[3], allow: ['A'] }] }, seed: 1 };
+    sb.rbFreeze(I);
+    const r = sb.rbSolve(I), offDays = k => dates.map((dt, d) => sb.rbKind(r.cells[k][dt] || '') === 'off' ? d : -1).filter(d => d >= 0);
+    check('day-off freeze: bell boys too, their day off only after it', ['BB1', 'BB2'].map(k => offDays(k).length === 1 && offDays(k)[0] >= 4).join(), 'true,true');
+  }
   // 0h. ✂️ HR cut-off on the 15th, 2 days off each half. Week Mon 12 – Sun 18: the first half ends Thursday.
   //     X took both already (none left: no day off Mon–Thu, the usual one Fri–Sun); Y took none (both before Friday);
   //     Z took one (one before Friday, none after). A 📌 fixed day off stays as it is.
