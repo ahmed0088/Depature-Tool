@@ -120,7 +120,8 @@ function rtCoverOptions(I, cells, group, date, shift, opt) {
     const away = p.group !== group, label = away ? `${shift} - ${rbShortU(rbBaseGroup(group))}` : shift;
     const from = away ? ` from ${p.group}` : '';
     const extra = (mgr ? 40 : 0) + (away && !rbFloats(p) ? 35 : away ? 15 : 0) + (away && rbFloatsLast(p) ? 60 : 0)   // a Supervisor from another hotel: only when nobody else
-      - (away && p.alt && p.alt === rbBaseGroup(group) ? 6 : 0);   // the hotel they'd rather go to when moved
+      - (away && p.alt && p.alt === rbBaseGroup(group) ? 6 : 0)   // the hotel they'd rather go to when moved
+      + (away && rbSoftGo(p, group) ? 400 : 0);   // ⚠ a hotel they should not go to unless there is no other way
     if (rbKind(v) === 'off') {
       // works that day; their day off moves to a day with spare cover
       dates.forEach((e, i) => {
@@ -810,7 +811,7 @@ function rtPerson(k) {
       <label>PH owed<input type="number" min="0" max="30" value="${ph.owed}" onchange="rbSetPh(${q},+this.value)"></label>
     </div>
     <div class="rt-cant"><span>Locks:</span><button class="rb-opt${p.lock ? ' on' : ''}" onclick="rtSet(${q},'lockShift',${!p.lock});rtPerson(${q})">${p.lock ? '🔒' : '🔓'} ${p.lock ? 'Keeps ' + escapeHtml(p.fixed || 'their shift') : 'Shift can change'}</button><button class="rb-opt${c.home ? ' on' : ''}" onclick="rtSet(${q},'home',${c.home ? 'undefined' : 'true'});rtPerson(${q})">🏨 ${c.home ? 'Stays at ' + escapeHtml(g || 'their hotel') : 'Can help other hotels'}</button></div>
-    ${c.home ? '' : `<div class="rt-cant"><span>Never to:</span>${groups.filter(x => x !== g && !/·/.test(x)).map(x => { const on = (c.noGo || []).includes(x); return `<button class="rb-opt${on ? ' on' : ''}" onclick="rtNoGo(${q},${_rtQ(x)})" title="${on ? 'Tap to allow again' : 'Tap: never sent to ' + escapeHtml(x)}">${on ? '🚫 ' : ''}${escapeHtml(x)}</button>`; }).join('')}<small class="ro-hint">Tap a hotel they must never be sent to</small></div>`}
+    ${c.home ? '' : `<div class="rt-cant"><span>Other hotels:</span>${groups.filter(x => x !== g && !/·/.test(x)).map(x => { const no = (c.noGo || []).includes(x), soft = (c.softGo || []).includes(x); return `<button class="rb-opt${no ? ' on' : soft ? ' soft' : ''}" onclick="rtGoCycle(${q},${_rtQ(x)})" title="Tap to change: OK → only if no other option → never">${no ? '🚫 ' : soft ? '⚠️ ' : '✓ '}${escapeHtml(x)}${no ? ' · never' : soft ? ' · only if no option' : ''}</button>`; }).join('')}<small class="ro-hint">Tap a hotel: ✓ fine → ⚠️ only if there is no other option → 🚫 never</small></div>`}
     <div class="rt-cant"><span>📌 Fixed day off:</span>${RB_DAYS.map((x, i) => { const on = (c.staticOff || []).includes(i); return `<button class="rb-opt${on ? ' on' : ''}" onclick="rtStaticOff(${q},${i})" title="${on ? 'Tap to free this day again' : 'Always off on ' + x}">${on ? '📌 ' : ''}${x.slice(0, 2)}</button>`; }).join('')}<small class="ro-hint">Always off that day, every week (like a manager)</small></div>
     <div class="rt-cant"><span>Works:</span><button class="rb-opt ro-t-night" onclick="rtOnly(${q},'night')">🌙 Nights only</button><button class="rb-opt ro-t-morning" onclick="rtOnly(${q},'day')">☀️ Days only</button><button class="rb-opt" onclick="rtOnly(${q},'all')">All shifts</button></div>
     <div class="rt-cant"><span>Shifts:</span>${shifts.map(x => { const no = (c.allowed && c.allowed.length && !c.allowed.includes(x)), soft = (c.soft || []).includes(x), like = (c.likes || []).includes(x); return `<button class="rb-opt ro-t-${(roInfo(x) || {}).type}${no ? ' on' : soft ? ' soft' : like ? ' like' : ''}" onclick="rtToggleShift(${q},${_rtQ(x)})" title="Tap: 💛 likes → ⚠ prefer not → 🚫 can't work → fine">${no ? '🚫 ' : soft ? '⚠ ' : like ? '💛 ' : ''}${escapeHtml(x)}</button>`; }).join('')}<small class="ro-hint">Tap: 💛 likes → ⚠ prefer not → 🚫 can't</small></div>
@@ -836,6 +837,13 @@ function rtStaticOff(k, d) {
   if (i >= 0) cur.splice(i, 1); else cur.push(d);
   rtSet(k, 'staticOff', cur.length ? cur.sort() : undefined); rtPerson(k);
   showToast(cur.length ? `📌 ${rtName(k).split(' ')[0]}: always off on ${cur.map(x => RB_DAYS[x]).join(' and ')}` : `${rtName(k).split(' ')[0]}: no fixed day off`, 'ok');
+}
+function rtGoCycle(k, h) {
+  const c = rbPeople[k] || {}, no = (c.noGo || []).filter(x => x !== h), soft = (c.softGo || []).filter(x => x !== h), nm = rtName(k).split(' ')[0];
+  const was = (c.noGo || []).includes(h) ? 'no' : (c.softGo || []).includes(h) ? 'soft' : 'ok';
+  if (was === 'ok') soft.push(h); else if (was === 'soft') no.push(h);
+  rtSet(k, 'softGo', soft.length ? soft : undefined); rtSet(k, 'noGo', no.length ? no : undefined); rtPerson(k);
+  showToast(was === 'ok' ? `⚠️ ${nm} goes to ${h} only if there is no other option` : was === 'soft' ? `🚫 ${nm} will never be sent to ${h}` : `✓ ${nm} can go to ${h} again`, 'ok');
 }
 function rtNoGo(k, h) {
   const cur = ((rbPeople[k] || {}).noGo || []).slice(), i = cur.indexOf(h);

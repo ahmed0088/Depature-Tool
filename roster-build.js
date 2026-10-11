@@ -280,8 +280,8 @@ function rbSolve(I) {
     rbOneOff(I, res);
     rbSoftLanding(I, res);
     if (I.noOff) { const nm = k => typeof roStaff !== 'undefined' && roStaff[k] ? roStaff[k].name.split(' ')[0] : k;
-      rbFreezes(I.rules).filter(f => f.to >= I.week && f.from <= roAdd(I.week, 6)).forEach(f => res.notes.push({ key: '', date: f.from > I.week ? f.from : I.week, auto: true, text: `🚫 Day-off freeze ${roDayLbl(f.from)} → ${roDayLbl(f.to)}: only ${(f.allow || []).length ? f.allow.map(nm).join(', ') : 'nobody'} may be off. Everyone else works through and takes their day off after; managers as usual.` }));
-      I.people.filter(p => p.offOwed).forEach(p => res.notes.push({ key: p.key, date: I.week, auto: true, text: `🛋 ${nm(p.key)} gets ${p.offOwed + 1} days off this week: the one missed during the freeze comes back.` })); }
+      rbFreezes(I.rules).filter(f => f.to >= I.week && f.from <= roAdd(I.week, 6)).forEach(f => res.notes.push({ key: '', date: f.from > I.week ? f.from : I.week, auto: true, text: `🚫 Day-off freeze ${roDayLbl(f.from)} → ${roDayLbl(f.to)}: ${(f.allow || []).length ? f.allow.map(nm).join(', ') + ' take their day off inside it' : 'nobody is off'}; everyone else works through and takes their day off after. Managers as usual.` }));
+      I.people.filter(p => (p.cut || []).some(x => x.owed)).forEach(p => { const x = p.cut.find(y => y.owed); res.notes.push({ key: p.key, date: x.ends, auto: true, text: `✂️ ${nm(p.key)} still has ${x.owed} day${x.owed === 1 ? '' : 's'} off from before the cut-off (${roDayLbl(x.ends)}): never two in one week, so give it after the cut-off or as a PH.` }); }); }
     res.notes = (res.notes || []).filter(n => !n.care && !n.like);
     (I.likeBefore || []).forEach(t => { const nm = typeof roStaff !== 'undefined' && roStaff[t.key] ? roStaff[t.key].name.split(' ')[0] : t.key; res.notes.push({ key: t.key, date: I.week, like: true, text: `📋 ${nm} is away ${t.days.map(d => RB_DAYS[d]).join(', ')}: ${t.hotel} runs like the week of ${roDayLbl(t.week)}, when ${nm} was away too: the same cover, the same people on the same shifts and days off where it fits${Object.keys((I.lendPref || {})[t.hotel] || {}).length ? ', and the same colleagues borrowed first' : ''}.` }); });
   I.people.filter(p => p.care && rbCareW(I, p) > 0).forEach(p => { const nm = typeof roStaff !== 'undefined' && roStaff[p.key] ? roStaff[p.key].name.split(' ')[0] : p.key; res.notes.push({ key: p.key, date: I.week, care: true, text: `💚 Extra care for ${nm} this week (Team Health ${p.careScore}${p.careWhy ? ': ' + p.careWhy : ''}): fewer nights, their wishes first, days off together, one steady shift.` }); });
@@ -358,7 +358,8 @@ function rbPlanNights(I) {
           const cand = (byDay[d] || []).filter(x => !u2.has(x.i + ':' + x.d) && rbMayWork(I, hotels[x.i].g, f, hotels[x.i].ns));
           if (!cand.length) { ok = false; break; }
           // their own hotel first, then the hotel they'd rather go to when moved
-          const own = cand.find(x => hotels[x.i].g === homeOf(f)) || (f.alt && cand.find(x => rbBaseGroup(hotels[x.i].g) === f.alt)) || cand[0];
+          const own = cand.find(x => hotels[x.i].g === homeOf(f)) || (f.alt && cand.find(x => rbBaseGroup(hotels[x.i].g) === f.alt)) || cand.find(x => !rbSoftGo(f, hotels[x.i].g)) || cand[0];
+          if (rbSoftGo(f, hotels[own.i].g)) c += 400;   // ⚠ only if no other way
           if (hotels[own.i].g !== homeOf(f)) { if (f.home || (!R.lend && !rbFloats(f) && !rbFloatsLast(f))) { ok = false; break; } c += (f.alt && rbBaseGroup(hotels[own.i].g) === f.alt ? 50 : 60) * Math.max(0.2, rbW(R, 'home')); }   // working at another hotel: only when there's no way at their own hotel
           u2.add(own.i + ':' + own.d); pick.push({ d, i: own.i });
         }
@@ -471,7 +472,7 @@ function rbUpset(I, a, b) {
   let c = 0;
   I.people.forEach(p => dates.forEach(dt => {
     const u = (a[p.key] || {})[dt], v = (b[p.key] || {})[dt]; if (u === v) return;
-    c += 10; if (away(p, v) && !away(p, u)) c += (rbLentBefore(I, p, rbAt(I, p, rbParse(v)), dates.indexOf(dt), v) ? 60 : 200) * Math.max(0.2, rbW(I.rules, 'home'));   // borrowed like management did: much lighter
+    c += 10; if (away(p, v) && !away(p, u)) c += (rbLentBefore(I, p, rbAt(I, p, rbParse(v)), dates.indexOf(dt), v) ? 60 : 200) * Math.max(0.2, rbW(I.rules, 'home')) + (rbSoftGo(p, rbAt(I, p, rbParse(v))) ? 700 : 0);   // ⚠ only if no other way   // borrowed like management did: much lighter
   }));
   const thin = x => rbProblems(I, x).filter(q => q.kind === 'thin').length;
   const hotels = x => rbMoveHotels(I, x).size;   // never all three hotels in one week if it can be helped
@@ -551,7 +552,7 @@ function _rbFinish(I, cells, o) {
         if (cover[g][s][d] === 0 && !G[g].post && R.allowOne !== false && rbHoursCovered(rbDeskGrid(G[g].shifts, (e, x) => (cover[g][x] || [])[e] || 0), d, s)) break;
         if (cover[g][s][d] >= 1 && R.allowOne !== false && !R.lendIdeal && (G[g].post || rbRelieved(rbDeskGrid(G[g].shifts, (e, x) => (cover[g][x] || [])[e] || 0), d, s, R))) break;
         const dt = dates[d];
-        const cand = I.people.filter(q => q.group !== g && !q.home && !q.lock && (R.lend || rbFloats(q) || rbFloatsLast(q)) && !((I.pre || {})[q.key] || {})[dt] && G[q.group] && cells[q.key][dt] === s && cover[q.group][s] && cover[q.group][s][d] > need(q.group, s, d) && rbMayWork(I, g, q, s)).sort((a, b) => (rbLentBefore(I, b, g, d, s) ? 1 : 0) - (rbLentBefore(I, a, g, d, s) ? 1 : 0) || (rbFloatsLast(a) ? 1 : 0) - (rbFloatsLast(b) ? 1 : 0) || (rbFloats(b) ? 1 : 0) - (rbFloats(a) ? 1 : 0) || (b.alt === rbBaseGroup(g) ? 1 : 0) - (a.alt === rbBaseGroup(g) ? 1 : 0));   // (then whoever would rather come to this hotel)
+        const cand = I.people.filter(q => q.group !== g && !q.home && !q.lock && (R.lend || rbFloats(q) || rbFloatsLast(q)) && !((I.pre || {})[q.key] || {})[dt] && G[q.group] && cells[q.key][dt] === s && cover[q.group][s] && cover[q.group][s][d] > need(q.group, s, d) && rbMayWork(I, g, q, s)).sort((a, b) => (rbSoftGo(a, g) ? 1 : 0) - (rbSoftGo(b, g) ? 1 : 0) || (rbLentBefore(I, b, g, d, s) ? 1 : 0) - (rbLentBefore(I, a, g, d, s) ? 1 : 0) || (rbFloatsLast(a) ? 1 : 0) - (rbFloatsLast(b) ? 1 : 0) || (rbFloats(b) ? 1 : 0) - (rbFloats(a) ? 1 : 0) || (b.alt === rbBaseGroup(g) ? 1 : 0) - (a.alt === rbBaseGroup(g) ? 1 : 0));   // (then whoever would rather come to this hotel)
         const used = rbMoveHotels(I, cells), inPair = q => used.size === 0 || (used.has(rbBaseGroup(g)) && used.has(rbBaseGroup(q.group)) ) || (used.size < 2 && (used.has(rbBaseGroup(g)) || used.has(rbBaseGroup(q.group))));
         const donor = cand.find(inPair) || cand[0];   // one pair of hotels a week; a third hotel only when there's no other way
         if (!donor) break;
@@ -670,6 +671,8 @@ function rbMatchDay(I, g, cells, dates, d, R, rnd) {
 
 /** Days off someone should get this week: fewer if they join or leave mid-week, or are on leave most of it. */
 /** 🚫 A day-off freeze covers this day for them: they work it (their day off comes outside the freeze, or after it). */
+/** ⚠ A hotel they should not be sent to, unless there is no other way (on their card). */
+function rbSoftGo(p, g) { return !!p && (p.softGo || []).includes(rbBaseGroup(g)); }
 function rbNoOff(I, k, dt) { return !!(((I.noOff || {})[k] || {})[dt]); }
 function rbOffsDue(I, p, dates) {
   const want = p.offs == null ? 1 : p.offs, pre = (I.pre || {})[p.key] || {};
@@ -891,7 +894,7 @@ function rbProblems(I, cells, cover) {
     });
     const offs = dates.filter(dt => rbKind((cells[p.key] || {})[dt]) === 'off').length, due = rbOffsDue(I, p, dates);
     if (offs < due) out.push({ kind: 'offs', key: p.key, have: offs, need: due });
-    else (p.cut || []).forEach(x => { const have = x.days.filter(dt => rbKind(((cells[p.key] || {})[dt]) || '') === 'off').length; if (x.ends && have < x.due) out.push({ kind: 'cutshort', key: p.key, have, need: x.due, date: x.ends }); });   // ✂️ days off still owed when the half ends
+    else (p.cut || []).forEach(x => { const have = x.days.filter(dt => rbKind(((cells[p.key] || {})[dt]) || '') === 'off').length; if (have < x.due) out.push({ kind: 'cutshort', key: p.key, have, need: x.due, date: x.days[x.days.length - 1] }); });   // ✂️ days off still owed when the half ends
   });
   return out;
 }
@@ -1108,7 +1111,7 @@ function rbPersonCfg(k) {
   const mode = c.mode || (c.fixed ? 'static' : c.fixed === '' && !lock ? 'any' : (L.fixedGuess || ((mgr || lock) && L.usual)) ? 'static' : L.rotates ? 'rotate' : 'any');   // (rotates week to week, as the posted rosters show)
   const fixed = mode === 'static' || lock ? (c.fixed || L.fixedGuess || L.usual || '') : '';
   return {
-    key: k, group: rbPGroup(k), post: rbPost(k), title: c.title || '', mode, lock: lock && !!fixed, home: !!c.home, noGo: (c.noGo || []).slice(), alt: c.alt || '',
+    key: k, group: rbPGroup(k), post: rbPost(k), title: c.title || '', mode, lock: lock && !!fixed, home: !!c.home, noGo: (c.noGo || []).slice(), softGo: (c.softGo || []).slice(), alt: c.alt || '',
     offs: c.offs != null ? +c.offs : Math.min(1, L.offs),   // one day off a week (4 a month); two only when set on their card
     fixed, fixedLearned: !c.fixed && !!fixed,
     fixedCost: mgr ? 400 : /supervisor|leader|duty/i.test(c.title || '') ? 60 : 30,   // managers move only to stop a shift being empty
@@ -1212,14 +1215,14 @@ function rbCutoff(I) {
       const P = rbCutPeriod(dates.find(dt => rbCutPeriod(dt, C.day).id === id), C.day), days = dates.filter(dt => dt >= P.start && dt <= P.end);
       const quota = rbCutQuota(C, P, p.key), taken = rbCutTaken(p.key, P, I.week), left = Math.max(0, quota - taken);
       const open = days.filter(dt => !pre[dt] || rbKind(pre[dt]) === 'off').length, asked = days.filter(dt => pre[dt] && rbKind(pre[dt]) === 'off').length;
-      return { id, days, quota, taken, left, open, asked, ends: P.end <= dates[6] ? P.end : '', due: 0 };
+      return { id, days, quota, taken, left, open, asked, ends: P.end <= dates[6] ? P.end : '', due: asked };
     });
-    // a half that ends this week: everything left is taken before it ends. Otherwise the usual day off a week,
-    // in the half that still has days off left (the later one first). Nothing left: no day off in that half.
-    parts.forEach(x => { if (x.ends) x.due = Math.min(x.left, x.open); });
-    let extra = Math.max(0, weekly - parts.reduce((t, x) => t + x.due, 0));
-    parts.slice().reverse().forEach(x => { if (!x.ends && extra > 0) { const n = Math.min(extra, x.left - x.due, x.open - x.due); if (n > 0) { x.due += n; extra -= n; } } });
-    parts.forEach(x => { x.due = Math.max(x.due, x.asked); if (x.due <= x.asked) x.days.forEach(dt => { if (!pre[dt]) (I.noOff[p.key] = I.noOff[p.key] || {})[dt] = true; }); });
+    // never more than their usual days off in one week: those go to the half that still owes days off, the half
+    // that ends first first (so by the cut-off they have had them all). A half with none left: no day off in it.
+    let free = Math.max(0, weekly - parts.reduce((t, x) => t + x.asked, 0));
+    parts.forEach(x => { const n = Math.min(free, Math.max(0, x.left - x.asked), x.open - x.asked); if (n > 0) { x.due += n; free -= n; } });
+    parts.forEach(x => { if (x.due <= x.asked) x.days.forEach(dt => { if (!pre[dt]) (I.noOff[p.key] = I.noOff[p.key] || {})[dt] = true; }); });
+    parts.forEach(x => { x.owed = x.ends ? Math.max(0, x.left - x.due) : 0; });   // more left than one week allows: told, not forced
     p.cut = parts; p.offs = parts.reduce((t, x) => t + x.due, 0);
   });
 }
@@ -1232,20 +1235,16 @@ function rbCutMiss(p, cells) { return (p.cut || []).map(x => ({ id: x.id, have: 
 function rbFreezes(R) { return (((R || {}).offFreeze) || []).filter(f => f && f.from && f.to && f.from <= f.to); }
 function rbFreeze(I) {
   const F = rbFreezes(I.rules); if (!F.length) return;
-  const dates = Array.from({ length: 7 }, (_, d) => roAdd(I.week, d)), wk = w => Array.from({ length: 7 }, (_, d) => roAdd(w, d));
-  I.noOff = {}; I.freezeNotes = [];
+  const dates = Array.from({ length: 7 }, (_, d) => roAdd(I.week, d));
+  I.noOff = I.noOff || {}; I.freezeNotes = [];
   I.people.forEach(p => {
     if (p.post || (typeof rbIsManager === 'function' && rbIsManager(p.key))) return;
-    let owed = 0;
+    const pre = (I.pre || {})[p.key] || {}, no = dt => { if (!pre[dt]) (I.noOff[p.key] = I.noOff[p.key] || {})[dt] = true; };
     F.forEach(f => {
-      if ((f.allow || []).includes(p.key)) return;
-      dates.forEach(dt => { if (dt >= f.from && dt <= f.to) (I.noOff[p.key] = I.noOff[p.key] || {})[dt] = true; });
-      // the day after the freeze falls in this week, or the week after a freeze ending on a Sunday: missed days off come back
-      const after = roAdd(f.to, 1), back = after >= I.week && after <= dates[6] && dates.some(dt => dt > f.to);
-      if (back) for (let w = roMonday(roDate(f.from)); w < I.week; w = roAdd(w, 7)) if (wk(w).every(x => x >= f.from && x <= f.to)) owed++;
-      if (back && f.to >= I.week && wk(I.week).every(x => x <= f.to)) owed = 0;
+      const inside = dates.filter(dt => dt >= f.from && dt <= f.to); if (!inside.length) return;
+      // picked: their day off must be inside the freeze; everyone else: no day off inside it
+      if ((f.allow || []).includes(p.key)) dates.filter(dt => !inside.includes(dt)).forEach(no); else inside.forEach(no);
     });
-    if (owed) { p.offs = Math.min(3, (p.offs == null ? 1 : p.offs) + owed); p.offOwed = owed; }
   });
 }
 

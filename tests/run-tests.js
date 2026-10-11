@@ -310,10 +310,10 @@ console.log('\nRoster scenarios');
     sb.rbFreeze(I);
     const r = sb.rbSolve(I);
     const offDays = k => dates.map((dt, d) => sb.rbKind(r.cells[k][dt] || '') === 'off' ? d : -1).filter(d => d >= 0);
-    check('day-off freeze: nobody but A is off Mon–Thu; everyone still gets a day off', ['B', 'C', 'D'].every(k => offDays(k).length === 1 && offDays(k)[0] >= 4) && offDays('A').length === 1, true);
+    check('day-off freeze: nobody but A is off Mon–Thu, A must be off inside it; everyone still gets one day off', ['B', 'C', 'D'].every(k => offDays(k).length === 1 && offDays(k)[0] >= 4) && offDays('A').length === 1 && offDays('A')[0] <= 3, true);
     const I2 = { week: W, groups: G, people: ['A', 'B'].map(k => P(k)), pre: {}, rules: { offFreeze: [{ from: sb.roAdd(W, -7), to: dates[2], allow: [] }] } };
     sb.rbFreeze(I2);
-    check('day-off freeze: a whole week missed comes back when it ends (2 days off that week, none before Thursday)', [I2.people[0].offs, sb.rbOffsDue(I2, I2.people[0], dates), !!(I2.noOff.A || {})[dates[2]], !!(I2.noOff.A || {})[dates[3]]].join(), '2,2,true,false');
+    check('day-off freeze: never two days off in one week (one, after the freeze)', [I2.people[0].offs, sb.rbOffsDue(I2, I2.people[0], dates), !!(I2.noOff.A || {})[dates[2]], !!(I2.noOff.A || {})[dates[3]]].join(), '1,1,true,false');
   }
   // 0h. ✂️ HR cut-off on the 15th, 2 days off each half. Week Mon 12 – Sun 18: the first half ends Thursday.
   //     X took both already (none left: no day off Mon–Thu, the usual one Fri–Sun); Y took none (both before Friday);
@@ -325,10 +325,22 @@ console.log('\nRoster scenarios');
     const ppl = ['X', 'Y', 'Z', 'Q'].map(k => P(k));
     const I = { week: WK, groups: G, people: ppl, pre: {}, rules: { minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, givePh: false, lend: false, cutoff: { on: true, day: 15, per: 2 } }, seed: 1 };
     sb.rbCutoff(I);
-    check('cut-off: days off due in each half (X 0+1, Y 2+0, Z 1+0)', ['X', 'Y', 'Z'].map(k => ppl.find(p => p.key === k).cut.map(x => x.due).join('+')).join(' '), '0+1 2+0 1+0');
+    check('cut-off: one day off a week, in the half that still owes one (X 0+1, Y 1+0 with 1 still owed, Z 1+0)', ['X', 'Y', 'Z'].map(k => ppl.find(p => p.key === k).cut.map(x => x.due).join('+')).join(' ') + ' ' + ppl.find(p => p.key === 'Y').cut[0].owed, '0+1 1+0 1+0 1');
     const r = sb.rbSolve(I), offIdx = k => ds.map((dt, d) => sb.rbKind(r.cells[k][dt] || '') === 'off' ? d : -1).filter(d => d >= 0);
-    check('cut-off: the week follows it (X off only Fri–Sun, Y twice Mon–Thu, Z once Mon–Thu)', [offIdx('X').every(d => d >= 4) && offIdx('X').length === 1, offIdx('Y').length === 2 && offIdx('Y').every(d => d <= 3), offIdx('Z').length === 1 && offIdx('Z')[0] <= 3].join(), 'true,true,true');
+    check('cut-off: the week follows it (X off Fri–Sun, Y and Z off Mon–Thu, nobody twice)', [offIdx('X').every(d => d >= 4) && offIdx('X').length === 1, offIdx('Y').length === 1 && offIdx('Y')[0] <= 3, offIdx('Z').length === 1 && offIdx('Z')[0] <= 3].join(), 'true,true,true');
     vm.runInContext(`if (_cutSave.a) roDays['2026-10-03'] = _cutSave.a; else delete roDays['2026-10-03']; if (_cutSave.b) roDays['2026-10-08'] = _cutSave.b; else delete roDays['2026-10-08'];`, sb);
+  }
+  // 0i. ⚠️ "only if no other option" for a hotel: someone else is borrowed first; alone, they still go
+  {
+    const G = { 'Ibis DD': { shifts: [M], need: { [M]: day(1) } }, 'Mercure DD': { shifts: [M], need: { [M]: day(1) } } };
+    const mk = soft => [P('A', { softGo: soft ? ['Mercure DD'] : [] }), P('B'), P('C'), P('Z', { group: 'Mercure DD' })];
+    const pre = { Z: Object.fromEntries(dates.map(dt => [dt, 'AL'])) };
+    const away = (r, k) => dates.filter(dt => /Mercure/i.test(r.cells[k][dt] || '')).length;
+    const r1 = solve(G, mk(true), pre), r2 = solve(G, mk(false), pre);
+    check('hotel "only if no option": the others go to Mercure first', [away(r1, 'A'), away(r1, 'B') + away(r1, 'C') >= 6, r1.problems.filter(p => p.kind === 'short').length].join(), '0,true,0');
+    const sh = r => r.problems.filter(p => p.kind === 'short').length;
+    const r3 = solve(G, [P('A', { softGo: ['Mercure DD'] }), P('B'), P('Z', { group: 'Mercure DD' })], pre), r4 = solve(G, [P('A'), P('B'), P('Z', { group: 'Mercure DD' })], pre);
+    check('hotel "only if no option": still goes when nobody else can (cover as good as without it)', [sh(r3) === sh(r4), away(r3, 'A') + away(r3, 'B') > 0].join(), 'true,true');
   }
   // 1. ideal two per shift, too few people: never an empty shift, some one-person shifts
   {

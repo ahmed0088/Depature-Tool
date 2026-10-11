@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 245, items: [
+    '✂️ HR cut-off is a must, every week, and never two days off in one week: each week gives one day off, in the half of the month that still owes one (the half ending first first), so 2 before the 15th and 2 after are done in time. If someone has more left than the weeks allow, the draft says so instead of giving two in one week.',
+    '🚫 Day-off freeze: the people you pick now MUST take their day off inside those dates (not just "may"); nobody else is off. A missed day off is no longer given back as a second day off in one week.',
+    '⚠️ Hotels a person should not go to: on their card, tap a hotel: ✓ fine → ⚠️ only if there is no other option → 🚫 never. With ⚠️ the builder sends someone else first and only sends them when nobody else can.',
+  ] },
   { v: 244, items: [
     '📱 Person card on iPhone: it no longer slides sideways and cuts off the left side (names, titles). A long shift choice like "Static: always 00:00 – 09:00" now shortens to fit, and the week table scrolls inside its own box.',
   ] },

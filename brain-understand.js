@@ -195,7 +195,7 @@ function buFreeze(c) {
   const from = (mFrom && day(mFrom[1])) || roToday(), to = mTo && day(mTo[1]);
   if (!to || to < from) { _bxOutSafe('<div class="br-kind">🚫 Day-off freeze</div><div class="br-title">Until which day?</div><div class="br-body">Say it with an end date, like <i>only Sandrine and Turab can be off until 15</i>, or set it in ⚖️ Rules → 🚫 Day-off freeze.</div>'); return true; }
   rbSetRule('offFreeze', rbFreezes(rbRules()).concat([{ from, to, allow: c.n.slice() }]));
-  _bxOutSafe(`<div class="br-kind">🚫 Day-off freeze</div><div class="br-title">${escapeHtml(roDayLbl(from))} → ${escapeHtml(roDayLbl(to))}: only ${escapeHtml(c.N.map(x => x.split(' ')[0]).join(', '))} may be off</div><div class="br-body">Everyone else works through and gets their day off after it; managers keep theirs as usual. Build the week to apply it. Change or remove it in ⚖️ Rules → 🚫 Day-off freeze.</div>`);
+  _bxOutSafe(`<div class="br-kind">🚫 Day-off freeze</div><div class="br-title">${escapeHtml(roDayLbl(from))} → ${escapeHtml(roDayLbl(to))}: ${escapeHtml(c.N.map(x => x.split(' ')[0]).join(', '))} take their day off in it</div><div class="br-body">Nobody else is off: everyone else works through and gets their day off after it; managers keep theirs as usual. Build the week to apply it. Change or remove it in ⚖️ Rules → 🚫 Day-off freeze.</div>`);
   return true;
 }
 function buWeekday(t) { const m = String(t).match(/\b(mon|tue|wed|thu|fri|sat|sun)/); return m ? ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].indexOf(m[1]) : -1; }
@@ -213,7 +213,7 @@ function buCutoff(c) {
   if (typeof roCanEdit === 'function' && !roCanEdit()) { _bxOutSafe('<div class="br-title">Only supervisors, managers and owners can change this.</div>'); return true; }
   const m = c.t.match(/\b(\d)\s*(?:days? )?offs?\b/), d = c.t.match(/\b(?:before|cut ?off|cutoff)\s+(?:the\s+)?(\d{1,2})/), per = m ? +m[1] : 2, day = d ? +d[1] : 15;
   rbSetRule('cutoff', Object.assign({}, rbRules().cutoff, { on: true, per, day }));
-  _bxOutSafe(`<div class="br-kind">✂️ HR cut-off</div><div class="br-title">Everyone: ${per} days off before the ${day}th and ${per} after</div><div class="br-body">The builder counts what each person already took in that half and gives the rest before the cut-off; none left means no day off until it. Managers and fixed days off stay as they are. Change anyone's number in ⚖️ Rules → ✂️ HR cut-off.</div>`);
+  _bxOutSafe(`<div class="br-kind">✂️ HR cut-off</div><div class="br-title">Everyone: ${per} days off before the ${day}th and ${per} after</div><div class="br-body">A must, every week: the builder counts what each person already took in that half and gives one day off a week (never two) in the half that still owes one, so it is done by the cut-off; none left means no day off until it. Managers and fixed days off stay as they are. Change anyone's number in ⚖️ Rules → ✂️ HR cut-off.</div>`);
   return true;
 }
 function buNoGo(k, h) {

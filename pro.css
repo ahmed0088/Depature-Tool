@@ -2004,3 +2004,4 @@ html.ho-lang-ar body { font-family: var(--font), 'Segoe UI', 'Noto Sans Arabic',
 .rt-form input, .rt-form select { width: 100%; min-width: 0; max-width: 100%; text-overflow: ellipsis; }
 .rt-sheet .ro-scroll { max-width: 100%; overflow-x: auto; }
 .rt-sheet .rb-opt { max-width: 100%; white-space: normal; }
+.rt-sheet .rb-opt.soft { border-color: #f59e0b; background: rgba(245,158,11,.12); color: #b45309; }
