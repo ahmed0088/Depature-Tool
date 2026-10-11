@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 248, items: [
+    '🔄 A draft now tells you when it is out of date: if the rules (day-off freeze, cut-off…) or someone\'s card changed after it was built, or it was built by an older version of the app, a yellow note says so with a "Build it again" button. Old drafts keep their old days off until rebuilt, which is why Judith and Uzoma still showed Monday off.',
+  ] },
   { v: 247, items: [
     '🛎 Bell boys now follow the 🚫 day-off freeze and the ✂️ HR cut-off like everyone else: no day off before the cut-off unless you picked them. Only managers (and anyone with a 📌 fixed day off) keep their days off as usual.',
   ] },

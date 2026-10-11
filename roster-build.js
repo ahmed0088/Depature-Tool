@@ -1548,7 +1548,7 @@ async function _rbBuildNow() {
   const wait = 2200 - (Date.now() - t0); if (wait > 0) await new Promise(r => setTimeout(r, wait));   // long enough to see it build
   _rbReveal = true;
   if (rbWeek !== week) rbWeek = week;   // (the week built is the week saved, even if someone switched meanwhile)
-  rbDrafts[rbWeek] = Object.assign({ cells: res.cells, at: Date.now(), by: (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '' }, res.notes && res.notes.length ? { notes: res.notes } : {});
+  rbDrafts[rbWeek] = Object.assign({ cells: res.cells, at: Date.now(), by: (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '', sig: rbRulesSig(), ver: typeof APP_VERSION !== 'undefined' ? APP_VERSION : '' }, res.notes && res.notes.length ? { notes: res.notes } : {});
   rbSaveDraft();
   rbRender();
   const short = res.problems.filter(p => p.kind === 'short').length, bent = (res.notes || []).filter(n => n.auto).length;
@@ -1560,6 +1560,19 @@ async function _rbBuildNow() {
 const _rbSaving = {}, _rbBase = {};
 const _rbClone = v => (v == null ? null : JSON.parse(JSON.stringify(v)));
 /** What changed from base to cur, as paths: { 'cells/KEY/2026-10-12': '09:00 - 18:00', 'notes': [...] }. */
+/** What the builder was told when a draft was built: the rules and what is set on people's cards. A draft built
+ *  under other rules (or by an older app) says so, with a button to build it again. */
+function rbRulesSig() {
+  const P = Object.keys(rbPeople || {}).sort().map(k => { const c = rbPeople[k] || {}; return [k, c.staticOff, c.softGo, c.noGo, c.offs, c.title, c.home, c.lockShift, c.fixed, c.mode]; });
+  const t = JSON.stringify([rbRules(), P]); let h = 2166136261; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0).toString(36);
+}
+function rbStaleHtml() {
+  const D = rbDrafts[rbWeek]; if (!D || !D.at) return '';
+  const old = !D.sig, changed = D.sig && D.sig !== rbRulesSig();
+  if (!old && !changed) return '';
+  return `<div class="rb-stale">⚠️ ${changed ? 'The rules or someone\'s card changed since this draft was built' : 'This draft was built by an older version of the app'}, so it may not follow them (day-off freeze, cut-off, fixed days off…). <button class="btn sm gold" onclick="rbBuild(true)">🔄 Build it again</button></div>`;
+}
 function rbDraftDiff(base, cur) {
   const up = {}, bc = (base && base.cells) || {}, cc = (cur && cur.cells) || {};
   new Set([...Object.keys(bc), ...Object.keys(cc)]).forEach(k => {
@@ -2065,6 +2078,7 @@ function rbOutHtml(shown, dates) {
     : `${escapeHtml(name(p.key))}: ${p.have} day${p.have === 1 ? '' : 's'} off (should have ${p.need})`;
   return `<div class="card rb-draft">
     <div class="ro-card-hd"><b>📋 Draft roster · ${escapeHtml(rbWeekLabel(rbWeek))}</b><span>built ${escapeHtml(new Date(rbDrafts[rbWeek].at || Date.now()).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' }))} · tap a cell to change it</span></div>
+    ${rbStaleHtml()}
     ${rbHealthHtml(I, cells, cover, P, shown, dates)}
     ${P.some(p => p.kind !== 'short' && p.kind !== 'thin') ? `<div class="rb-probs">${P.filter(p => p.kind !== 'short' && p.kind !== 'thin').map(p => { const agreed = rbNoted(p); return `<div class="rb-prob ${p.kind}${agreed ? ' agreed' : ''}">${agreed ? '⚠ Bent on purpose (see Decisions):' : '⛔'} ${ptxt(p)}</div>`; }).join('')}</div>` : ''}
     ${rbDecisionsHtml(I, cells, shown, dates)}
