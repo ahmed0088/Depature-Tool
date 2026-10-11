@@ -873,9 +873,10 @@ function rbProblems(I, cells, cover) {
     if (h >= n) return;
     let kind = (h === 0 || R.allowOne === false) && !I.groups[g].post ? 'short' : 'thin';
     // nobody on it, but its hours are covered by the other shifts that day: not run, like management does — fine
-    if (h === 0 && !I.groups[g].post && R.allowOne !== false && rbHoursCovered(grid = grid || rbDeskGrid(I.groups[g].shifts, (e, x) => (cover[g][x] || [])[e] || 0), d, s)) return;
+    // (the hours of every shift worked there count, also one the hotel doesn't usually run, like a 19:00 – 04:00)
+    if (h === 0 && !I.groups[g].post && R.allowOne !== false && rbHoursCovered(grid = grid || rbDesk(I, cells, g) || rbDeskGrid(I.groups[g].shifts, (e, x) => (cover[g][x] || [])[e] || 0), d, s)) return;
     // one person, but someone else is on the desk with them for a few hours (a break): fine, not a problem
-    if (kind === 'thin' && h > 0 && !I.groups[g].post && rbRelieved(grid = grid || rbDeskGrid(I.groups[g].shifts, (e, x) => (cover[g][x] || [])[e] || 0), d, s, R)) return;
+    if (kind === 'thin' && h > 0 && !I.groups[g].post && rbRelieved(grid = grid || rbDesk(I, cells, g) || rbDeskGrid(I.groups[g].shifts, (e, x) => (cover[g][x] || [])[e] || 0), d, s, R)) return;
     out.push({ kind, group: g, shift: s, date: dt, need: n, have: h });
   })); });
   I.people.forEach(p => {
@@ -894,7 +895,7 @@ function rbProblems(I, cells, cover) {
       } else if (v) run = 0;
       prev = v;
     });
-    const offs = dates.filter(dt => rbKind((cells[p.key] || {})[dt]) === 'off').length, due = rbOffsDue(I, p, dates);
+    const offs = dates.filter(dt => rbKind((cells[p.key] || {})[dt]) === 'off').length, due = Math.min(rbOffsDue(I, p, dates), dates.filter(dt => !/^(leave|other)$/.test(rbKind((cells[p.key] || {})[dt] || ''))).length);   // (on leave all week: no day off due)
     if (offs < due) out.push({ kind: 'offs', key: p.key, have: offs, need: due });
     else (p.cut || []).forEach(x => { const have = x.days.filter(dt => rbKind(((cells[p.key] || {})[dt]) || '') === 'off').length; if (have < x.due && !x.frozen) out.push({ kind: 'cutshort', key: p.key, have, need: x.due, date: x.days[x.days.length - 1] }); });   // ✂️ days off still owed when the half ends
   });
@@ -1574,6 +1575,50 @@ function rbStaleHtml() {
   const old = !D.sig, changed = D.sig && D.sig !== rbRulesSig();
   if (!old && !changed) return '';
   return `<div class="rb-stale">⚠️ ${changed ? 'The rules or someone\'s card changed since this draft was built' : 'This draft was built by an older version of the app'}, so it may not follow them (day-off freeze, cut-off, fixed days off…). <button class="btn sm gold" onclick="rbBuild(true)">🔄 Build it again</button></div>`;
+}
+/** 💡 Kinder-week ideas for a roster (posted or draft): for each hard spot (an earlier start without a day off, a
+ *  night → one day off → morning, short rest, a night next to a day) the smallest trade of shifts between two people
+ *  of the same hotel that removes it. The same shifts are worked every day, so the cover stays exactly as it is, and
+ *  an idea is only offered when nothing new goes wrong. [{ text, why, changes: [{ k, dt, from, to }], gain }] */
+function rbIdeas(I, cells) {
+  const dates = Array.from({ length: 7 }, (_, d) => roAdd(I.week, d)), nm = k => String((roStaff[k] || {}).name || k).split(' ')[0];
+  const work = v => !!rbParse(v), offish = v => rbKind(v || '') === 'off';
+  const hard = c => {
+    const P = rbProblems(I, c).filter(x => !/^(thin|short)$/.test(x.kind)), spots = [];
+    P.forEach(x => { if (x.key && /^(back|switch|rest|run)$/.test(x.kind)) spots.push({ k: x.key, dt: x.date, w: x.kind === 'back' ? 3 : 6, what: x.kind === 'back' ? `an earlier start without a day off (${String(x.from).slice(0, 5)} → ${String(x.to).slice(0, 5)})` : x.kind === 'rest' ? `only ${Math.round(x.hours)} h rest` : x.kind === 'run' ? 'too many days in a row' : 'a night next to a day shift' }); });
+    I.people.forEach(p => rbNightToMorning(c, p, dates).forEach(dt => spots.push({ k: p.key, dt, w: 2, what: 'a night, one day off, then a morning' })));
+    return { P, spots, bad: P.length * 10 + spots.reduce((t, x) => t + x.w, 0), short: rbProblems(I, c).filter(x => x.kind === 'short').length };
+  };
+  const base = hard(cells), out = [], seen = new Set();
+  base.spots.forEach(t => {
+    const p = I.people.find(x => x.key === t.k); if (!p || p.post) return;
+    const d = dates.indexOf(t.dt); if (d < 0) return;
+    let best = null;
+    I.people.forEach(q => {
+      if (q === p || q.post || rbBaseGroup(q.group) !== rbBaseGroup(p.group)) return;
+      for (let a = Math.max(0, d - 3); a <= d; a++) for (let b = d; b <= Math.min(6, d + 3); b++) {
+        const days = dates.slice(a, b + 1);
+        if (days.some(dt => { const x = (cells[p.key] || {})[dt] || '', y = (cells[q.key] || {})[dt] || ''; return x === y || !(work(x) || offish(x)) || !(work(y) || offish(y)) || ((I.pre || {})[p.key] || {})[dt] || ((I.pre || {})[q.key] || {})[dt]; })) continue;
+        const c2 = Object.assign({}, cells, { [p.key]: Object.assign({}, cells[p.key]), [q.key]: Object.assign({}, cells[q.key]) });
+        days.forEach(dt => { c2[p.key][dt] = (cells[q.key] || {})[dt]; c2[q.key][dt] = (cells[p.key] || {})[dt]; });
+        const offs = (c, k) => dates.filter(dt => offish((c[k] || {})[dt])).length;
+        if (offs(c2, p.key) !== offs(cells, p.key) || offs(c2, q.key) !== offs(cells, q.key)) continue;   // nobody gains or loses a day off
+        const h = hard(c2), was = new Set(base.P.map(x => x.kind + '|' + (x.key || x.group) + '|' + (x.date || '')));
+        if (h.short > base.short || h.bad >= base.bad || h.P.some(x => !was.has(x.kind + '|' + (x.key || x.group) + '|' + (x.date || '')))) continue;   // nothing new goes wrong
+        if (h.spots.some(x => x.k === t.k && x.dt === t.dt)) continue;   // it must fix this one
+        const score = base.bad - h.bad - days.length * 0.5;
+        if (!best || score > best.score) best = { score, q, days, c2, gain: base.bad - h.bad };
+      }
+    });
+    if (!best) return;
+    const sig = best.days.map(dt => [p.key, best.q.key].sort().join('|') + dt).join(','); if (seen.has(sig)) return; seen.add(sig);
+    const changes = []; best.days.forEach(dt => { [p.key, best.q.key].forEach(k => changes.push({ k, dt, from: (cells[k] || {})[dt] || '', to: best.c2[k][dt] })); });
+    const t2 = v => roCellTxt(roInfo(v)) || v;
+    const dl = best.days.length === 1 ? RB_DAYS[dates.indexOf(best.days[0])] : `${RB_DAYS[dates.indexOf(best.days[0])]}–${RB_DAYS[dates.indexOf(best.days[best.days.length - 1])]}`;
+    out.push({ gain: best.gain, changes, why: `${nm(t.k)} has ${t.what} on ${RB_DAYS[d]}`,
+      text: `${nm(t.k)} and ${nm(best.q.key)} trade ${dl}: ${nm(t.k)} ${best.days.map(dt => t2(best.c2[t.k][dt])).join(', ')} · ${nm(best.q.key)} ${best.days.map(dt => t2(best.c2[best.q.key][dt])).join(', ')}` });
+  });
+  return out.sort((a, b) => b.gain - a.gain).slice(0, 6);
 }
 function rbDraftDiff(base, cur) {
   const up = {}, bc = (base && base.cells) || {}, cc = (cur && cur.cells) || {};

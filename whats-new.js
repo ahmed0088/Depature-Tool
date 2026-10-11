@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 254, items: [
+    '💡 Roster page → "Ideas to make this week kinder": for a posted week it finds small trades between two colleagues of the same hotel that remove a hard spot (an earlier start without a day off, a night → one day off → morning, short rest). The cover stays exactly the same, nobody gains or loses a day off, nothing new goes wrong. Tap Apply, or ignore it.',
+    '✅ Roster checks: a shift the hotel doesn\'t usually run (like a 19:00 – 04:00 at Adagio) now counts for the desk hours, so its hours are no longer reported as empty, and someone on vacation all week (V) is no longer asked for a day off. "V" is now read as vacation.',
+  ] },
   { v: 253, items: [
     '🩹 Tap a red cell in the draft (like a day off before the cut-off) and "Fix this for me" is right at the top. It re-plans only that hotel and keeps everything else as you left it. For Judith it keeps her on the 19:00 nights she was already on (a 12:00 start after Sunday\'s night is too little rest), with her day off after the 15th.',
   ] },

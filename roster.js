@@ -36,6 +36,7 @@ const RO_DEFAULT_CODES = {
   LWP: { label: 'Leave without pay', type: 'leave' },
   BL:  { label: 'Bereavement leave', type: 'leave' },
   VAC: { label: 'Vacation', type: 'leave' },
+  V:   { label: 'Vacation', type: 'leave' },
   CO:  { label: 'Compensatory off', type: 'off' },
   COFF:{ label: 'Compensatory off', type: 'off' },
   SB:  { label: 'Standby', type: 'other' },
@@ -705,8 +706,28 @@ function roRender() {
     ${rows.length || roEdit ? _roTable(rows, dates, (r, d) => roCode(r.key, d), roEdit) : pic ? `<div class="ro-empty ro-big">Only the picture is posted for this week. <button class="btn sm gold" onclick="riOpen('${pic[0]}')">📷 Open the roster picture</button>${ed ? '<br><small>Set up AI reading and add the picture again to get My shifts and the timeline, or type the shifts with Edit.</small>' : ''}</div>`
       : `<div class="ro-empty ro-big">No roster for this week yet.${ed ? ' Press <b>Add roster</b> to paste it, or <b>Edit</b> → <b>Copy last week</b>.' : ''}</div>`}
     ${roEdit ? `<div class="ro-add"><input id="roNewName" placeholder="Add a person to this week…" onkeydown="if(event.key==='Enter')roAddPerson()"><button class="btn sm" onclick="roAddPerson()">+ Add</button><small>Type a code in each day: M, A, N, OFF, AL, or hours like 07-15.</small></div>` : ''}
+    ${rows.length && ed && typeof rbIdeas === 'function' ? `<div class="ro-ideas" id="roIdeas"><button class="btn sm" onclick="roIdeasShow()">💡 Ideas to make this week kinder</button><small>Small trades between colleagues of the same hotel: the same cover, fewer hard spots</small></div>` : ''}
     <div class="ro-legend">${['morning', 'afternoon', 'night', 'off', 'leave', 'other'].map(k => `<span class="ro-t-${k}">${RO_TYPES[k]}</span>`).join('')}</div>
     ${roCodesHtml()}`;
+}
+/** 💡 The week as posted, with small trades that make it kinder (Apply changes the posted roster). */
+let _roIdeas = [];
+function roIdeasShow() {
+  const box = document.getElementById('roIdeas'); if (!box || typeof rbIdeas !== 'function') return;
+  box.innerHTML = '<small>Looking for kinder trades…</small>';
+  setTimeout(() => {
+    let L = [];
+    try { const I = rtCtx(roWeek), cells = rtPublished(roWeek); I.pre = {}; L = rbIdeas(I, cells); } catch (e) { console.warn('ideas', e); }
+    _roIdeas = L;
+    box.innerHTML = `<div class="ro-card-hd"><b>💡 Ideas to make this week kinder</b><span>${L.length ? 'Same cover, fewer hard spots. Apply changes the posted roster' : ''}</span></div>` + (L.length ? L.map((x, i) => `<div class="ro-idea"><div><b>${escapeHtml(x.why)}</b><span>${escapeHtml(x.text)}</span></div><button class="btn sm gold" onclick="roIdeaApply(${i})">Apply</button></div>`).join('') : '<div class="ro-empty">Nothing to improve with a simple trade: every hard spot here would need a bigger change.</div>');
+  }, 30);
+}
+function roIdeaApply(i) {
+  const x = _roIdeas[i]; if (!x || !roCanEdit()) return;
+  if (!confirm(`${x.text}\n\nChange the posted roster like this?`)) return;
+  x.changes.forEach(c => roSetCell(c.k, c.dt, c.to));
+  if (typeof logActivity === 'function') try { logActivity('roster_edit', '💡 ' + x.text); } catch (_) {}
+  showToast('💡 Done: ' + x.text, 'ok'); roRender(); setTimeout(roIdeasShow, 50);
 }
 function roGo(n) { roWeek = n === 0 ? roMonday(new Date()) : roAdd(roWeek, n); roRender(); }
 function roToggleEdit() { roEdit = !roEdit; roRender(); }

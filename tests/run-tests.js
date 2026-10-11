@@ -333,6 +333,15 @@ console.log('\nRoster scenarios');
     const moved = ['BI', 'BM'].some(k => dates.some(dt => /Ibis|Mercure/i.test(r.cells[k][dt] || '')));
     check('bell boys: each takes his day off at home, nobody borrowed to cover it, no problem shown', [moved, ['BI', 'BM'].every(k => dates.filter(dt => sb.rbKind(r.cells[k][dt] || '') === 'off').length === 1), r.problems.filter(p => p.kind === 'short').length].join(), 'false,true,0');
   }
+  // 0j. 💡 kinder-week ideas: an earlier start without a day off is removed by a one-day trade, same cover, same days off
+  {
+    const A2 = '12:00 - 21:00', G = { 'Ibis DD': { shifts: [M, A2], need: { [M]: day(1), [A2]: day(1) } } };
+    const ppl = [P('X'), P('Y')], cells = { X: {}, Y: {} };
+    dates.forEach((dt, d) => { cells.X[dt] = [A2, M, 'OFF', M, M, M, M][d]; cells.Y[dt] = [M, A2, A2, 'OFF', A2, A2, A2][d]; });
+    const I = { week: W, groups: G, people: ppl, pre: {}, rules: { minRest: 11, maxRun: 12, maxHours: 9 } };
+    const L = sb.rbIdeas(I, cells);
+    check('ideas: a one-day trade fixes an earlier start (12–21 → 08–17), keeping cover and days off', [L.length >= 1, L[0] && L[0].changes.length, L[0] && /earlier start/.test(L[0].why)].join(), 'true,2,true');
+  }
   // 0h. ✂️ HR cut-off on the 15th, 2 days off each half. Week Mon 12 – Sun 18: the first half ends Thursday.
   //     X took both already (none left: no day off Mon–Thu, the usual one Fri–Sun); Y took none (both before Friday);
   //     Z took one (one before Friday, none after). A 📌 fixed day off stays as it is.
