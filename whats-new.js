@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 259, items: [
+    '📌 A posted week in the builder is always the posted roster, whoever posted it and whatever draft the builder had, even one made later. You see what was posted, with its problems and the "What we noticed" check. Changes you make to it in the builder are kept until you publish them; if the posted roster changes meanwhile, the posted one wins.',
+  ] },
   { v: 258, items: [
     '🏖 A PH in a posted roster is management\'s decision: it is added to that person\'s balance and taken in the same step, so it evens out. It is never a problem, never a "balance not set" note, and never a debt that cancels the next holiday they work. The week check just lists the PH days given; 🏖 PH balances stays there (folded) if you want to look.',
     '📌 Management\'s posted roster is final: the builder takes it as it is (even when it differs from the builder\'s own draft), learns from it, and builds the next week on top of it.',

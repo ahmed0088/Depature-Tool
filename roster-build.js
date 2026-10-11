@@ -1647,6 +1647,7 @@ function rbPutDraft(w) {
 }
 function rbSaveDraft() {
   const w = rbWeek;   // the week edited, even if another week is open when the save runs
+  if (rbDrafts[w] && rbDrafts[w].fromPublished) rbDrafts[w].edited = true;   // changes to the posted week, until published
   _rbUndoMark(w);
   clearTimeout(_rbSaving[w]);
   _rbSaving[w] = setTimeout(() => { delete _rbSaving[w]; rbPutDraft(w); }, 400);
@@ -1861,13 +1862,16 @@ function rbPhBalHtml() {
 function rbSyncPosted(w) {
   if (!w || !rbPostedWeek(w) || typeof rtPublished !== 'function') return;
   const posted = {}; Object.entries(rtPublished(w)).forEach(([k, row]) => { if (Object.keys(row).length) posted[k] = row; });
-  const D = rbDrafts[w], same = D && D.cells && JSON.stringify(Object.keys(posted).sort().map(k => [k, posted[k]])) === JSON.stringify(Object.keys(D.cells).filter(k => Object.keys(D.cells[k] || {}).length).sort().map(k => [k, Object.fromEntries(Object.entries(D.cells[k]).filter(([, v]) => v))]));
-  if (same) return;
-  const P = typeof roPosted !== 'undefined' && roPosted, postedAt = P && P.from <= roAdd(w, 6) && P.to >= w ? P.at || 0 : 0;
-  if (D && D.cells && !D.fromPublished && (D.at || 0) > postedAt) return;   // a draft newer than the posting: someone is working on it
-  rbDrafts[w] = { cells: JSON.parse(JSON.stringify(posted)), at: Date.now(), by: (P && P.by) || 'posted', fromPublished: true, sig: rbRulesSig(), ver: typeof APP_VERSION !== 'undefined' ? APP_VERSION : '' };
+  const sig = JSON.stringify(Object.keys(posted).sort().map(k => [k, posted[k]]));
+  const D = rbDrafts[w], mine = D && D.cells ? JSON.stringify(Object.keys(D.cells).filter(k => Object.keys(D.cells[k] || {}).length).sort().map(k => [k, Object.fromEntries(Object.entries(D.cells[k]).filter(([, v]) => v))])) : '';
+  if (mine === sig) { if (D && (!D.fromPublished || D.postedSig !== rbHashStr(sig))) { D.fromPublished = true; D.postedSig = rbHashStr(sig); D.edited = false; } return; }
+  // changes made here to the posted week, not published yet, and the posted roster hasn't changed since: kept
+  if (D && D.fromPublished && D.edited && D.postedSig === rbHashStr(sig)) return;
+  const P = typeof roPosted !== 'undefined' && roPosted;
+  rbDrafts[w] = { cells: JSON.parse(JSON.stringify(posted)), at: Date.now(), by: (P && P.by) || 'posted', fromPublished: true, postedSig: rbHashStr(sig), edited: false, sig: rbRulesSig(), ver: typeof APP_VERSION !== 'undefined' ? APP_VERSION : '' };
   if (typeof rbPutDraft === 'function') try { rbPutDraft(w); } catch (_) {}
 }
+function rbHashStr(t) { let h = 2166136261; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
 function rbBaseHtml() {
   if (!rbWeek) return '';
   const prev = roAdd(rbWeek, -7), lbl = w => rbWeekLabel(w).replace(/ \d{4}$/, '');
