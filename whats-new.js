@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 260, items: [
+    '📖 The project guide (README) is rewritten and up to date: every page, the roster and builder, Ops Brain, themes and languages, how to set up and ship, plus a security checklist. A sample guest email shown in an input box is now a made-up one.',
+  ] },
   { v: 259, items: [
     '📌 A posted week in the builder is always the posted roster, whoever posted it and whatever draft the builder had, even one made later. You see what was posted, with its problems and the "What we noticed" check. Changes you make to it in the builder are kept until you publish them; if the posted roster changes meanwhile, the posted one wins.',
   ] },

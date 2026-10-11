@@ -1,153 +1,170 @@
 # 🏨 HotelOps
 
-A front-office operations web app built for daily hotel shift work — departures, arrivals, night audit, shift tasks, and guest tracking, all synced in real time across every device on the team via Firebase.
+A front-office operations app for daily hotel shift work. It covers departures, arrivals, night audit, shift tasks, guest tracking, and a full **staff roster** with an automatic **roster builder**. Data syncs live between colleagues through Firebase, and the app keeps working offline.
 
-No build step, no framework. Plain HTML/CSS/JS, deployable by dropping the files on any static host.
+It has no build step and no framework. It is plain HTML, CSS and JavaScript, installable as a PWA, and served from GitHub Pages.
+
+> **Privacy rule for this repo:** it is public. Never commit real staff names, guest names, emails, phone numbers or rosters. Real data lives only in the app (Firebase / the browser), never in Git. Test fixtures use made-up names.
 
 ---
 
 ## What it does
 
+### Front office
+
 | Module | File(s) | What it's for |
 |---|---|---|
-| 🚪 **Departures** | `departures.js` | Follow-up board for today's checkouts — status tracking (due/late/extended/DND/no-answer), balance flags, VIP badges, guest intent, HK copy formats, overdue alerts, swipe actions, trend history |
-| 🛎️ **Arrivals** | `arrivals-purpose.js` | Arrivals list and Purpose-of-Stay report, nationality/origin tracking. Every guest's booking source is auto-categorised (Walk-in / ALL App / OTA / Corporate / Other) with a filter row and a live color-coded badge — a blank source is treated as a direct ALL App booking, not a walk-in |
-| 🔗 **Arr vs Dep** | `arr-dep-xref.js` | Cross-references arrivals against the departure board to instantly verdict "can this guest extend?" |
-| 📊 **Arrivals Processor** | `arrivals-proc.js` | Opera export → package-code mapping → day-by-day F&B/upsell breakdown → Excel export |
-| ✅ **Night Checklist** | `checklist.js` | Night audit steps with photos, notes, timestamps, phase grouping |
-| 🕐 **Shift Tasks** | `shifts.js` | Per-shift (Morning/Afternoon/Mid/Night) task lists with drag-reorder (or ↑/↓ buttons on mobile) and an activity log that records who did what and syncs across devices |
-| 🚫 **No-Show Tracker** | `noshow.js` | No-show guest list with rebooking/confirmation tracking |
-| 🌍 **Nationality Report** | `reports.js` | Opera `stat_countrybymon` delimited export → normalised country names → arrivals/room-nights/guest-nights breakdown |
-| 🛏️ **Rented Rooms & Beds** | `reports.js` | Opera vs. Excel PM-room comparison for the night audit rented-room count |
-| 🌙 **Night Audit · PM Rooms** | `reports.js` | Compares Opera and Excel pseudo-room exports and flags mismatches before the audit runs |
-| 🛂 **Immigration Check** | `reports.js` | Cross-checks in-house guests against the Inhouse/Vicas XML and arrivals list to flag anyone missing from immigration reporting |
-| ⏳ **TD 30-Day Audit** | `td-audit.js` | Tracks Tourism Dirham posting compliance over a rolling 30-day window |
-| 🧮 **Inhouse Tally** | `inhouse-tally.js` | Reconciles Opera's in-house guest count/names against an XML export |
-| ⬡ **Adagio Pro** | inline in `index.html` | Long-stay collections — upload a tracking sheet to flag high balances, cheque due-dates, and departure risk |
-| 🏛️ **Tourism Tax** | `tourism-tax.js` | Flags guests needing a TD Portal date correction |
-| 🧠 **Guest Memory** | `guest-memory.js` | Password-locked profile store — remembers nationality, email, purpose, origin per guest name for auto-fill on future stays. Owners bypass the password entirely (their account login already proves who they are); everyone else unlocks it once per 30-minute session |
-| 👥 **Auth & Roles** | `auth.js` | Firebase Authentication, role-based panel access, admin user management, activity log |
-| 💾 **Data layer** | `db.js` | Firebase Realtime Database read/write with automatic localStorage fallback when offline |
+| 🏠 **Home** | `home.js` | Today at a glance: what's due, alerts and shortcuts |
+| 🚪 **Departures** | `departures.js` | Checkout follow-up board: due, late, extended, DND, balance and VIP flags, swipe gestures, overdue beeps, 7-day trend |
+| 🛎️ **Arrivals / Purpose of stay** | `arrivals-purpose.js`, `guest-pipeline.js` | Arrivals list, booking-source grouping, nationality and origin |
+| 🔗 **Arr vs Dep** | `arr-dep-xref.js` | "Can this guest extend?" check against the departure board |
+| 📊 **Arrivals processor** | `arrivals-proc.js`, `package-audit.js` | Opera export → package codes → daily F&B / upsell breakdown → Excel |
+| ✅ **Night checklist** | `checklist.js` | Night audit steps with photos, notes and timestamps |
+| 🕐 **Shift tasks** | `shifts.js` | Morning / Afternoon / Mid / Night task lists and an activity log |
+| ⏰ **Wake-up calls** | `wakeup.js` | Wake-up call list and reminders |
+| 🚫 **No-shows** | `noshow.js` | No-show tracking |
+| 🌍 **Reports** | `reports.js`, `month-end.js`, `trends.js` | Nationality, rented rooms, PM-room compare, immigration check, month end |
+| 🏛️ **Tourism Dirham / DTCM** | `tourism-tax.js`, `td-audit.js`, `dtcm*.js` | TD portal corrections, 30-day audit, DTCM reconciliation and long stays |
+| 🧮 **In-house tally** | `inhouse-tally.js` | Opera in-house list vs. XML export |
+| 💲 **Rates** | `rates.js` | Rate lookup |
+| 🧠 **Guest memory** | `guest-memory.js`, `natguess.js` | Remembers returning guests' details for auto-fill (locked) |
+| 📚 **Standards / Learn** | `accor-standards.js`, `learn.js` | Brand standards and training |
 
-Shared utilities live in `utils.js`, `state.js`, and `natguess.js` (name-based nationality guesser). `escapeHtml()`/`escapeJsAttr()` in `utils.js` are the single canonical helpers for safely rendering guest-entered text — every panel that injects free text into the page routes through them.
+### Roster (staff schedule)
+
+| Part | File(s) | What it's for |
+|---|---|---|
+| 📅 **Roster page** | `roster.js` | The posted week for every hotel, swaps, ideas to make a week kinder |
+| 👥 **Team** | `roster-team.js` | Each person: hotels they can work (✓ / ⚠️ only if no other option / 🚫 never), shifts, static day off, rest floor, Team Leader night tier |
+| 📏 **Rules** | `roster-rules.js` | Desk cover per hotel, the **HR cut-off** (2 days off before the 15th and 2 after, never 2 in one week), **freeze** dates |
+| 🏗️ **Builder** | `roster-build.js`, `roster-worker.js` | Builds next week automatically, checks a posted week ("📋 What we noticed"), fixes one person, PH balances |
+| 🏖 **Holidays & vacation** | `roster-holidays.js`, `roster-vacation.js` | Public holidays, PH owed / taken, vacation (V) |
+| 🔁 **Swaps / events / health** | `roster-swap.js`, `roster-events.js`, `roster-health.js` | Shift trades, roster history, fairness and rest checks |
+| 📷 **Import** | `roster-image.js`, `roster-ocr.js` | Read a roster from Excel or a photo |
+| 🎮 **Live desk & Rush Hour** | `roster-live.js`, `roster-game.js` | Live lobby view of who is on shift, plus a small mini-game with badges |
+
+**How the roster reads times**
+- A shift that starts before 04:00 belongs to the **night of that date**. For example, "00:00–09:00 on Saturday" is Saturday night, ending Sunday at 09:00.
+- A **posted** roster (including one written by management outside the app) is final. The builder shows it exactly as posted and builds the next week on top of it.
+- A PH in a posted roster is added to that person's balance and taken at once, so the balance stays even.
+
+### Ops Brain (assistant)
+
+`brain*.js` is an on-device assistant. It answers hotel questions (pool, gym, bar…), understands plain requests like "freeze days off from the 1st to the 15th", and takes you to the right page. It runs locally and calls **no paid AI services**.
+
+### Across the whole app
+
+- 🔍 **Global search**: `Ctrl+K` (`global-search.js`)
+- 📋 **Shift handover digest** (`handover.js`), 📒 team log (`team-log.js`)
+- ↺ **Undo toasts** for destructive actions
+- ⌨️ **Keyboard**: `1`–`0` to switch panels, `?` for the cheat sheet, `/` to search, `T` to change theme, **`Esc` to close anything**
+- 🎨 **19 themes** (Night Ops, iPhone, Opera, Midnight, Nord, Dracula, Sakura…), available on the login screen too
+- 🌐 **7 languages** (English, العربية, Français, हिन्दी, Русский, 中文, Tagalog) and **12 fonts** (`i18n.js`, under Settings)
+- ✨ **What's new** after every update (`whats-new.js`)
+- 📱 **PWA**: installable, and the app shell works offline (`manifest.json`, `sw.js`)
 
 ---
 
-## Cross-cutting features
+## Roles
 
-These aren't tied to one panel — they work across the whole app:
-
-- **🔍 Global Search** (`global-search.js`) — press `Ctrl+K` or tap the search icon to jump straight to a room, guest, checklist step, or shift task from anywhere.
-- **📋 Shift Handover Digest** (`handover.js`) — one tap builds a copy/print-ready handover note combining a live status snapshot with the shared activity log.
-- **↺ Undo toasts** (`utils.js`) — destructive actions (deleting a task, resetting the checklist) happen instantly but leave a 6–8 second window to undo instead of a blocking confirm popup.
-- **📱 PWA / offline install** (`manifest.json`, `sw.js`, `icons/`) — installable to a phone/tablet home screen; the app shell loads even with no signal (live data still needs a connection). See [Updating after a deploy](#updating-after-a-deploy) — this is the one file every code change needs to touch.
-- **⌨️ Keyboard shortcuts** — `1`–`0` to jump between panels, `?` for the full cheat sheet, `/` to focus search, `T` to cycle themes. See the in-app shortcut sheet for the complete list.
-- **🎨 Three themes** — Night Ops (dark gold), Opera Cloud (light red), Midnight (deep blue) — synced per user profile. The login screen keeps its own dark, glassy look in all three (a deliberate choice) and only re-tints its accent color to match, with a staggered entrance animation and a real loading spinner on sign-in.
-- **📊 Every data table is mobile-friendly** — tables in Arrivals, Purpose of Stay, Nationality, Reports, etc. share one component (`.tbl-wrap`) that keeps the first column (room/name) pinned while the rest of a wide row scrolls sideways, so you never lose track of which guest you're looking at on a phone.
-
-### Departures — the deep end
-
-Because it's the highest-traffic panel, Departures got extra investment:
-
-- Status auto-promotion (due → late past checkout time), LCO time picker, extension workflow with Opera-sync confirmation tracking
-- Balance-owing and VIP flags, guest intent banners (may extend / coming back / returning)
-- Bulk select with smart time-window selection, multiple copy formats for housekeeping handoff
-- **🔁 Returning-guest badge** — pulls from Guest Memory automatically, no extra lookup needed
-- **🔔 Overdue alerts** — a background check every 60s beeps (Web Audio, works offline) and fires a browser notification the moment a room crosses into overdue, so you don't have to be staring at the screen
-- **👆 Swipe gestures** — on mobile, swipe a card right to check out, left to mark DND
-- **📈 7-day trend chart** — average late checkouts, extensions, and balance-owing rooms per day, tracked automatically in the background
-- Full Excel export, undo log, print view
-
----
-
-## Roles & permissions
-
-Defined in `auth.js` (`ROLES` object):
-
-| Role | Panels | Manage users | Export | Import | Clear data |
-|---|---|:---:|:---:|:---:|:---:|
-| 👑 Owner | Everything, including Adagio Pro — owner bypasses panel gating entirely, so any panel added later is visible automatically | ✓ | ✓ | ✓ | ✓ |
-| 🏅 Manager | Same as Owner *except* Adagio Pro | ✓ | ✓ | — | — |
-| ⭐ Supervisor | Same as Manager | — | ✓ | — | — |
-| 🛎️ Agent | Departures, Arrivals, Arr vs Dep, Shifts, Checklist, No-Show | — | — | — | — |
-| 👁️ Read Only | Departures, Arrivals, Arr vs Dep, Shifts | — | — | — | — |
-
-Owner also skips Guest Memory's panel password automatically (see above) and every other per-capability check (`canExport`, `canDelete`, `canForceLogout`, etc.) in `applyRole()` — adding a new gated feature never needs an owner-specific carve-out.
-
-Every action (checkouts, checklist ticks, shift task changes, user management) writes to a shared `activityLog` in Firebase — this is what powers the admin activity panel and the Shift Handover Digest.
+Roles are defined in `auth.js` (`ROLES`): 👑 Owner, 🏅 Manager, ⭐ Supervisor, 🛎️ Agent and 👁️ Read only. Each role decides which panels a person sees and whether they can export, import, delete or manage users. Every action is written to a shared activity log.
 
 ---
 
 ## Tech stack
 
-- **Frontend:** Vanilla JavaScript, HTML, CSS — no build tools, no bundler
-- **Backend:** Firebase Realtime Database (data sync) + Firebase Authentication (login/roles)
-- **Offline:** `localStorage` fallback baked into every read/write in `db.js`; service worker caches the app shell for full offline install
-- **Libraries (via CDN):** SheetJS/XLSX (Excel export), PDF.js (PDF parsing)
+- **Frontend:** vanilla JavaScript, HTML and CSS (`styles.css`, `pro.css`, `themes.css`)
+- **Backend:** Firebase Realtime Database and Firebase Authentication
+- **Offline:** `localStorage` fallback in `db.js`; the service worker caches the app shell
+- **Libraries (CDN):** SheetJS (Excel), PDF.js (PDF), Tesseract (photo OCR)
 
 ---
 
 ## Setup
 
-1. **Firebase project** — create one at [console.firebase.google.com](https://console.firebase.google.com), enable **Realtime Database** and **Authentication** (Email/Password).
-2. **`firebase-config.js`** — not included in this repo (keeps credentials out of version control). Create it yourself:
-   ```js
-   const firebaseConfig = {
-     apiKey: "...",
-     authDomain: "...",
-     databaseURL: "...",
-     projectId: "...",
-     // ...
-   };
-   firebase.initializeApp(firebaseConfig);
-   const HOTEL_ID = "your-hotel-id"; // scopes all data under hotels/{HOTEL_ID}
-   ```
-3. **Host it** — any static host works (Firebase Hosting, GitHub Pages, Netlify). Just make sure the whole folder — including `icons/`, `manifest.json`, and `sw.js` — sits together at the same level as `index.html`.
-4. **First login** creates an Owner account automatically (see `auth.js` master-bypass logic) — from there, use the admin panel (👥 icon, Owner/Manager only) to add your team.
+1. Create a Firebase project and enable **Realtime Database** and **Authentication (Email/Password)**. `SETUP.md` has step-by-step instructions.
+2. Put your project's web config in **`firebase-config.js`**, which is committed in this repo. A Firebase *web* API key is not a secret: it only identifies the project. Your data is protected by the **database rules** below, not by hiding the key.
+3. Create the first Owner account with `setup-account.html`. After that, add users from the 👥 admin panel.
+4. Host the folder on any static host. This repo is served by GitHub Pages from `main`.
 
-### Updating after a deploy
+### Recommended Realtime Database rules
 
-The service worker caches app files **cache-first** for offline use — a returning browser gets the old cached copy instantly, with a network refresh only landing in the cache for *next* time. That means a code change with no version bump can sit invisible to existing users indefinitely. **Every time any cached file changes** (that's `index.html`, `styles.css`, and every `.js` file in `SHELL_FILES`), bump `CACHE_NAME` in `sw.js` (e.g. `ibis-ops-shell-v5` → `v6`) so returning devices pick up the new version instead of a stale one. After deploying, existing users need one full close-and-reopen (or hard refresh) for the new service worker to take over.
+```json
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "hotels": {
+      "$hotel": {
+        ".read":  "auth != null && root.child('hotels').child($hotel).child('users').child(auth.uid).exists()",
+        ".write": "auth != null && root.child('hotels').child($hotel).child('users').child(auth.uid).exists()"
+      }
+    }
+  }
+}
+```
+
+Change the path to match where your users are stored, then test it with the Rules Playground in the Firebase console before you publish it.
+
+---
+
+## Development
+
+```bash
+python3 -m http.server 8765        # then open http://localhost:8765
+node tests/run-tests.js            # regression tests (also run by GitHub Actions)
+```
+
+**Shipping a version**
+1. Bump `APP_VERSION` in `utils.js`.
+2. Add an entry at the top of `WHATS_NEW` in `whats-new.js`, written in plain words.
+3. Run the tests, then commit and push to `main`.
+
+The service worker sees the new version and refreshes users' cached files.
 
 ---
 
 ## File map
 
 ```
-index.html              Shell — nav, panels, modals, keyboard shortcuts, Adagio Pro
-styles.css               All styling, 3 themes
-manifest.json / sw.js     PWA install + offline app-shell caching
-icons/                    App icons for home-screen install
-setup-account.html        Standalone first-time owner account creation page
+index.html            Shell: nav, panels, modals, login
+styles.css pro.css themes.css   Styling and the 19 themes
+manifest.json sw.js   PWA install and offline cache
+setup-account.html    First Owner account
+firebase-config.js    Firebase web config (public by design; rules protect data)
 
-db.js                     Firebase read/write + localStorage fallback
-state.js                  Shared global state (arrays, checklist steps, shift defaults)
-utils.js                  Clipboard, toasts, undo-toast, date/name parsing, theme
-                          switching, escapeHtml()/escapeJsAttr() (safe HTML rendering)
-auth.js                   Login, roles, admin panel, activity log
-global-search.js          Ctrl+K command palette
-handover.js               Shift handover digest
+db.js state.js utils.js tenant.js hotel-settings.js brand.js   Core: data, state, helpers, hotels, logos
+auth.js               Login, roles, admin, activity log
+i18n.js settings.js   Languages, fonts, user settings
+global-search.js handover.js team-log.js whats-new.js install-prompt.js file-router.js
 
-departures.js             Departure board (see "deep end" above)
-arrivals-purpose.js       Arrivals / purpose of stay, booking-source categorisation
-arr-dep-xref.js           Arrivals ↔ Departures extension cross-reference
-arrivals-proc.js          Opera arrivals report processor
-noshow.js                 No-show tracker
-tourism-tax.js            TD Portal date-correction flagging
-checklist.js              Night audit checklist
-shifts.js                 Per-shift task lists + synced activity log
-guest-memory.js           Returning-guest profile store, owner password bypass
-natguess.js               Nationality guesser from guest names
-reports.js                Nationality report, rented rooms, night audit PM-room
-                          compare, immigration check
-td-audit.js               TD 30-day compliance audit
-inhouse-tally.js          Opera vs. XML in-house guest count reconciliation
+home.js departures.js arrivals-*.js arr-dep-xref.js guest-*.js noshow.js wakeup.js
+checklist.js shifts.js reports.js month-end.js trends.js history.js rates.js
+tourism-tax.js td-audit.js dtcm*.js inhouse-tally.js package-audit.js smart-fill.js
+natguess.js nat-extra.js accor-standards.js learn.js skip-clean.js neorcha-scraper.js
+
+roster.js roster-*.js  Roster, team, rules, builder, holidays, swaps, import, live desk, game
+brain*.js             Ops Brain assistant (on device)
+
+tests/                run-tests.js + anonymised fixtures
+scripts/              Helper scripts
+.github/workflows/    CI: syntax check and tests on every push
 ```
+
+---
+
+## Security checklist (for the repo owner)
+
+- Turn on **2FA** (or a passkey) for the GitHub account.
+- **Settings → Code security**: enable *Secret scanning*, *Push protection* and *Dependabot alerts*.
+- **Settings → Branches / Rules**: protect `main` by blocking force-pushes and deletion, and requiring the *Tests* check.
+- **Settings → Collaborators / Deploy keys / GitHub Apps**: remove anything you don't recognise.
+- **Firebase**: use the database rules above; never leave them in *test mode*. In Google Cloud → Credentials, restrict the web API key to your site (`https://<user>.github.io/*`).
+- Keep real people's data out of commits. If something private was committed, removing it in a new commit is not enough, because it stays in history. Rotate any leaked secret first, then clean history.
 
 ---
 
 ## Known limitations
 
-- Live data (Firebase) still needs a connection — the offline install covers the app shell only, not real-time sync.
-- Trend history (`depTrends`) starts accumulating from first use; there's no way to backfill past days.
-- `firebase-config.js` must be supplied separately — it's intentionally excluded from this bundle to avoid leaking credentials.
+- Live sync needs a connection; offline mode covers the app shell and local data only.
+- Trend history starts from first use and cannot be backfilled.
