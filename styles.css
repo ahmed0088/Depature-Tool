@@ -3022,6 +3022,9 @@ kbd {
 .login-theme-pick:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.24); }
 .login-theme-pick .theme-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
 .login-theme-pick .ltp-caret { opacity: 0.6; font-size: 11px; }
+/* the phone menu uses the same button, in the theme's own colours */
+.mob-theme-pick { color: var(--text); border-color: var(--border2); background: var(--surface); padding: 6px 11px; font-size: 12.5px; }
+.mob-drawer-themes { min-width: 0; max-width: 100%; }
 
 /* ── Remember me row ── */
 .login-remember {

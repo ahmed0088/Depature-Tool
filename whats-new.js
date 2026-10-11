@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 235, items: [
+    '🎨 Phone menu (More): the long row of theme icons made the menu wider than the screen, so the whole page slid sideways and cut off Roster, No-Shows and the rest. It is now one button showing your theme ("● Night Ops ▾") that opens the list of every theme, like the sign-in screen and the top bar.',
+  ] },
   { v: 234, items: [
     '🎨 Sign-in screen: the row of theme buttons that ran off the screen on phones (and was hard to read) is now one button, "🎨 Night Ops ▾", that opens the list of every theme, the same list as the top bar inside the app. All 18 themes, not just 7.',
   ] },

@@ -5099,24 +5099,7 @@ async function appInit() {
       <span id="mobVersionLabel" class="mob-fb-label" onclick="appForceUpdate()" style="cursor:pointer;text-decoration:underline;">—</span>
     </div>
     <div class="mob-drawer-themes">
-      <button class="mob-theme-btn" data-t="night-ops" onclick="setTheme('night-ops',this)" title="Night Ops">🌙</button>
-      <button class="mob-theme-btn" data-t="opera"     onclick="setTheme('opera',this)"     title="Opera">🔴</button>
-      <button class="mob-theme-btn" data-t="midnight"  onclick="setTheme('midnight',this)"  title="Midnight">🌌</button>
-      <button class="mob-theme-btn" data-t="ios" onclick="setTheme('ios',this)" title="iPhone">📱</button>
-      <button class="mob-theme-btn" data-t="ios-dark" onclick="setTheme('ios-dark',this)" title="iPhone Dark">🖤</button>
-      <button class="mob-theme-btn" data-t="titanium" onclick="setTheme('titanium',this)" title="Titanium">🪨</button>
-      <button class="mob-theme-btn" data-t="ocean" onclick="setTheme('ocean',this)" title="Ocean">🌊</button>
-      <button class="mob-theme-btn" data-t="catppuccin" onclick="setTheme('catppuccin',this)" title="Catppuccin">🐱</button>
-      <button class="mob-theme-btn" data-t="latte" onclick="setTheme('latte',this)" title="Latte">🥛</button>
-      <button class="mob-theme-btn" data-t="paper" onclick="setTheme('paper',this)" title="Paper">📄</button>
-      <button class="mob-theme-btn" data-t="sky" onclick="setTheme('sky',this)" title="Sky">🌤</button>
-      <button class="mob-theme-btn" data-t="mint" onclick="setTheme('mint',this)" title="Mint">🌿</button>
-      <button class="mob-theme-btn" data-t="sakura" onclick="setTheme('sakura',this)" title="Sakura">🌸</button>
-      <button class="mob-theme-btn" data-t="sand" onclick="setTheme('sand',this)" title="Desert">🏜</button>
-      <button class="mob-theme-btn" data-t="nord" onclick="setTheme('nord',this)" title="Nord">🧊</button>
-      <button class="mob-theme-btn" data-t="dracula" onclick="setTheme('dracula',this)" title="Dracula">🧛</button>
-      <button class="mob-theme-btn" data-t="tokyo" onclick="setTheme('tokyo',this)" title="Tokyo Night">🌃</button>
-      <button class="mob-theme-btn" data-t="rosepine" onclick="setTheme('rosepine',this)" title="Rosé Pine">🌹</button>
+      <button type="button" id="mobThemeBtn" class="login-theme-pick mob-theme-pick" onclick="hoThemeMenu(this)" aria-haspopup="menu" title="Change theme">🎨 Theme</button>
     </div>
   </div>
 
