@@ -1041,7 +1041,7 @@ function rbPhOwed(key, skipWeek) {
   const adj = +(((rbPeople[key]) || {}).phAdj) || 0;
   const owed = Math.max(0, worked.length - taken + adj);
   const labels = Array.from({ length: owed }, (_, i) => worked[taken + i] ? rbPhLabel(worked[taken + i]) : '');
-  return { owed, label: labels[0] || '', labels };
+  return { owed, label: labels[0] || '', labels, raw: worked.length - taken };   // raw: before what was set by hand (can be below 0 when PH was given before any holiday was recorded)
 }
 
 /** The PH label to use next for someone in the draft: skips the ones this week already has. */
@@ -1829,6 +1829,14 @@ function rbWeekCheck(week) {
     else if (x.kind === 'long') out.push({ ico: '⏱', bad: true, text: `${nm(x.key)}: a shift over ${rbRules().maxHours} h (${day})` });
   });
   I.people.forEach(p => rbNightToMorning(cells, p, dates).forEach(dt => out.push({ ico: '🌗', text: `${nm(p.key)}: night, one day off, then a morning (${RB_DAYS[dates.indexOf(dt)]} ${dt.slice(8)})` })));
+  // 🏖 a PH is fine when they had one to take: balance set (PH owed on their card) or earned on holidays they worked
+  I.people.forEach(p => {
+    const ph = dates.filter(dt => /^PH\b/i.test(String(cells[p.key][dt] || ''))); if (!ph.length) return;
+    const bal = rbPhOwed(p.key, week).owed, known = ((rbPeople[p.key] || {}).phAdj != null) || bal > 0, days = ph.map(dt => RB_DAYS[dates.indexOf(dt)]).join(', ');
+    if (bal >= ph.length) return;
+    if (!known) out.push({ ico: '🏖', ph: true, text: `${nm(p.key)}: PH on ${days}, but no PH balance is set for them yet. Set it below so the builder knows what is owed` });
+    else out.push({ ico: '🏖', bad: true, ph: true, text: `${nm(p.key)}: PH on ${days}, but only ${bal} PH day${bal === 1 ? '' : 's'} owed` });
+  });
   _rbWkC = { [st]: out };
   return out;
 }
@@ -1837,7 +1845,14 @@ function rbWeekCheckHtml(week) {
   if (!L.length) return `<div class="rb-wkcheck ok">📋 <b>${escapeHtml(lbl)}</b> as posted: desk covered every hour, no hard spots. PH days and vacation are fine.</div>`;
   return `<details class="rb-wkcheck"${L.some(x => x.bad) ? ' open' : ''}><summary>📋 What we noticed in <b>${escapeHtml(lbl)}</b> as posted <span>${L.filter(x => x.bad).length} to look at · ${L.filter(x => !x.bad).length} small</span></summary>
     <div>${L.sort((a, b) => (b.bad ? 1 : 0) - (a.bad ? 1 : 0)).map(x => `<div class="rb-wk-i${x.bad ? ' bad' : ''}">${x.ico} ${escapeHtml(x.text)}</div>`).join('')}</div>
-    <small>PH days owed and vacation are not problems. The builder learns from this week (the moves, how nights were covered) for the weeks after it. Kinder trades for it: Roster page → 💡 Ideas.</small></details>`;
+    ${L.some(x => x.ph) ? rbPhBalHtml() : ''}
+    <small>A PH someone is owed and vacation are not problems. The builder learns from this week (the moves, how nights were covered) for the weeks after it. Kinder trades for it: Roster page → 💡 Ideas.</small></details>`;
+}
+/** 🏖 PH balances for the whole team in one place: how many PH days each person is owed right now. */
+function rbPhBalHtml() {
+  const ks = [...new Set(rbGroups().flatMap(g => rbMembers(g)))].filter(k => roStaff[k]).sort((a, b) => String(roStaff[a].name).localeCompare(roStaff[b].name));
+  return `<details class="rb-phbal" open><summary>🏖 PH balances <small>days owed today, per person. Set them once; after that the app keeps count (PH given −1, a public holiday worked +1)</small></summary>
+    <div class="rb-phbal-list">${ks.map(k => { const o = rbPhOwed(k).owed, q = _rbQ(k); return `<div class="rr-cut-row"><span>${escapeHtml(String(roStaff[k].name).split(' ')[0])}</span><small>${(rbPeople[k] || {}).phAdj != null || o ? '' : 'not set'}</small><span class="rr-cut-q"><button class="rr-pm" onclick="rbSetPh(${q},${Math.max(0, o - 1)});_rbWkC={};rbRender()">−</button><b>${o}</b><button class="rr-pm" onclick="rbSetPh(${q},${o + 1});_rbWkC={};rbRender()">+</button></span><em>PH owed</em></div>`; }).join('')}</div></details>`;
 }
 function rbBaseHtml() {
   if (!rbWeek) return '';
@@ -2103,7 +2118,7 @@ function rbTeamHtml(g) {
     </div>`; }).join('') || '<div class="ro-empty">Nobody in this hotel yet.</div>'}</div>`;
 }
 function rbSetPerson(k, f, v) { const c = Object.assign({}, rbPeople[k]); if (v === undefined) delete c[f]; else c[f] = v; rbPeople[k] = c; fbSet('roster/builder/people/' + k, c); if (f === 'inactive') rbRender(); }
-function rbSetPh(k, v) { const base = rbPhOwed(k).owed - (+((rbPeople[k] || {}).phAdj) || 0); rbSetPerson(k, 'phAdj', v - base); }
+function rbSetPh(k, v) { rbSetPerson(k, 'phAdj', v - rbPhOwed(k).raw); if (typeof _rbStampC !== 'undefined' && _rbStampC) _rbStampC.live = false; }
 
 function rbRulesHtml() {
   const R = rbRules(), hol = rbSettings.holidays || [];

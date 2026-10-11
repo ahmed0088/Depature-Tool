@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 256, items: [
+    '🏖 PH only counts as someone\'s rest when they had a PH to take. In the builder\'s "What we noticed" check, a PH given to someone with no balance set shows a note, plus a 🏖 PH balances list for the whole team with − / +. Set each person\'s PH owed once; after that the app keeps count (a PH given −1, a public holiday worked +1). Setting a balance now works even when PH days were already given before the app knew any holidays.',
+  ] },
   { v: 255, items: [
     '📋 Give the builder a roster (📥 Give this week\'s roster, or post it on the Roster page): it learns from it, and the builder now shows "What we noticed" for that week in plain words. Hours with nobody on a hotel\'s desk come first, then the small things (earlier starts, night → day off → morning). PH days owed and vacation (V) are never counted as problems: a PH counts as that week\'s rest.',
   ] },
