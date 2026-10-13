@@ -226,7 +226,7 @@ function _wkLists(root) {
     w.tries ? `<span class="wk-tag bad">${w.tries}× no answer</span>` : '',
     !w.done && _wkCheckedOut(w.room) ? '<span class="wk-tag bad">checked out?</span>' : '',
   ].join('');
-  const row = (w, kind) => `<div class="wk-row wk-${kind}">
+  const row = (w, kind) => `<div class="wk-row wk-k-${kind}">
       <div class="wk-tm"><b>${escapeHtml(w.time)}</b>${kind === 'next' ? `<small>in ${_wkLeft(w.at)}</small>` : kind === 'due' ? '<small>now</small>' : ''}</div>
       <div class="wk-rm">${escapeHtml(w.room)}</div>
       <div class="wk-main">

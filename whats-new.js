@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 265, items: [
+    '⏰ Wake-up calls: the Coming up list is tidy again. Each call is a clean row (time, room, guest, buttons) instead of a half-coloured box with the time stuck to its edge.',
+  ] },
   { v: 263, items: [
     '✅ Package Audit: copying a package marks it done, so you always know which ones you fixed. Tap a confirmation number (or use Copy rows to update / Copy rows to remove) and the row shows ✅ with the time and who copied it, fades and moves to the bottom. Needs action counts only what\'s left. The whole team sees it; the new ✅ Done chip lists them, and ↩ (or Undo) puts one back.',
   ] },
