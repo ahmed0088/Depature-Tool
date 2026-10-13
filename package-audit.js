@@ -1343,7 +1343,8 @@ function pkgRender() {
     // "Needs action" is the default: everything a person can actually do
     // something about. Rows the log simply doesn't reach are excluded —
     // they aren't decisions waiting to be made.
-    if (pkgFilter_ === 'pinned') { if (!r.pin) return false; }
+    if (pkgFilter_ === 'done') { if (!pkgIsDone(r)) return false; }
+    else if (pkgFilter_ === 'pinned') { if (!r.pin) return false; }
     else if (r.pinSkip && pkgFilter_ !== 'all') return false;
     const needsAction = !r.pinSkip && (r.verdict === 'deny' ||
                         (r.verdict === 'credit' && !r.alreadyComplete) ||
@@ -1369,8 +1370,12 @@ function pkgRender() {
   const reviewCount    = live.filter(r => r.verdict === 'review').length;
   const pinnedCount    = pkgResults.filter(r => r.pin).length;
   const outsideCount   = pkgResults.filter(r => r.verdict === 'outside').length;
-  const actionCount    = fixedCount + denyCount + reviewCount;
+  const actionAll      = fixedCount + denyCount + reviewCount;
+  const isAct          = r => r.verdict === 'deny' || r.verdict === 'review' || (r.verdict === 'credit' && !r.alreadyComplete);
+  const doneCount      = pkgResults.filter(pkgIsDone).length;
+  const actionCount    = actionAll - live.filter(r => isAct(r) && pkgIsDone(r)).length;   // still to do
   [['pkgfc-action', actionCount],
+   ['pkgfc-done', doneCount],
    ['pkgfc-outside', outsideCount],
    ['pkgfc-all', pkgResults.length],
    ['pkgfc-complete', completeCount],
@@ -1391,7 +1396,7 @@ function pkgRender() {
     tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:36px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">No rows match.</td></tr>`;
     return;
   }
-  const rowHtml = (r, sub) => _pkgSubMark(_pkgRowHtmlInner(r), sub);
+  const rowHtml = (r, sub) => _pkgSubMark(_pkgDoneMark(_pkgRowHtmlInner(r), pkgIsDone(r)), sub);
   // IN-Gauge bills a package night by night, so one 6-night breakfast is six
   // lines. Group them per confirmation + package: one line with the nights
   // and total, the single nights one tap away.
@@ -1401,8 +1406,10 @@ function pkgRender() {
     if (!gmap.has(k)) { const g = { key: k, rows: [] }; gmap.set(k, g); groups.push(g); }
     gmap.get(k).rows.push(r);
   });
+  // done ones go to the bottom, so what is left to fix is on top
+  if (pkgFilter_ !== 'done') { const und = groups.filter(g => !g.rows.every(pkgIsDone)), dn = groups.filter(g => g.rows.every(pkgIsDone)); groups.length = 0; groups.push(...und, ...dn); }
   tbody.innerHTML = groups.map(g => g.rows.length === 1 ? rowHtml(g.rows[0], '')
-    : _pkgGroupHtml(g) + g.rows.map(r => rowHtml(r, g.key)).join('')).join('');
+    : _pkgDoneMark(_pkgGroupHtml(g), g.rows.every(pkgIsDone)) + g.rows.map(r => rowHtml(r, g.key)).join('')).join('');
 }
 
 const pkgOpenGroups = new Set();
@@ -1435,7 +1442,7 @@ function _pkgGroupHtml(g) {
   const color = rows.some(r => r.verdict === 'deny') ? 'var(--rose)' : needs ? 'var(--amber)' : 'var(--text3)';
   return `<tr class="pkg-group" onclick="if(!event.target.closest('select,.pkg-conf')&&!String(window.getSelection()))pkgToggleGroup('${escapeHtml(g.key)}')" style="cursor:pointer;">
     <td><span class="tt-room-pill">${escapeHtml(r0.room)}</span></td>
-    ${_pkgConfCell(r0.conf)}
+    ${_pkgConfCell(r0.conf, r0)}
     <td style="font-family:var(--mono);font-size:0.76rem;font-weight:700;">${open ? '▾' : '▸'} ${escapeHtml(_pkgFamilyName(r0))} <span class="pkg-nights">× ${rows.length} nights</span></td>
     <td style="font-family:var(--mono);font-size:0.72rem;">AED ${escapeHtml(String(Math.round(total * 100) / 100))}</td>
     <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text2);">${dates.length ? escapeHtml(dates[0]) + ' → ' + escapeHtml(dates[dates.length - 1]) : '—'}</td>
@@ -1447,22 +1454,72 @@ function _pkgGroupHtml(g) {
 }
 
 /** A confirmation number: tap to copy it (and still selectable); never opens or closes the row. */
-function _pkgConfCell(conf) {
+function _pkgConfCell(conf, r) {
   const c = String(conf || '');
   if (!c) return '<td>—</td>';
-  return `<td><button type="button" class="pkg-conf" title="Copy ${escapeHtml(c)}" onclick="event.stopPropagation();pkgCopyConf(this,${escapeHtml(JSON.stringify(c))})">${escapeHtml(c)}<i aria-hidden="true">⧉</i></button></td>`;
+  const key = r ? _pkgPinKey(r) : '', d = key && pkgDone[key];
+  const tag = d ? `<span class="pkg-done-tag" title="Marked done when it was copied${d.by ? ' by ' + escapeHtml(d.by) : ''}">✅ ${escapeHtml(_pkgDoneWhen(d))}${d.by ? ' · ' + escapeHtml(String(d.by).split(' ')[0]) : ''}<button type="button" title="Not done yet: put it back" onclick="event.stopPropagation();pkgUndone(${escapeHtml(JSON.stringify(key))})">↩</button></span>` : '';
+  return `<td><button type="button" class="pkg-conf" title="Copy ${escapeHtml(c)} (marks it ✅ done)" onclick="event.stopPropagation();pkgCopyConf(this,${escapeHtml(JSON.stringify(c))},${escapeHtml(JSON.stringify(key))})">${escapeHtml(c)}<i aria-hidden="true">⧉</i></button>${tag}</td>`;
 }
-function pkgCopyConf(btn, conf) {
+function pkgCopyConf(btn, conf, key) {
   copyToClipboard(conf);
   btn.classList.add('copied'); setTimeout(() => btn.classList.remove('copied'), 1400);
-  if (typeof showToast === 'function') showToast(`Copied ${conf}`, 'ok');
+  const was = key && pkgDone[key];
+  if (key && !was) { _pkgMarkDone([key]); pkgRender(); }
+  if (typeof showUndoToast === 'function' && key && !was) showUndoToast(`Copied ${conf} · marked ✅ done`, () => pkgUndone(key));
+  else if (typeof showToast === 'function') showToast(`Copied ${conf}`, 'ok');
 }
+
+// ── Done marks ────────────────────────────────────────────
+// Copying a package (its confirmation number, or the rows in a bulk copy) is
+// how it gets fixed in IN-Gauge, so a copy marks it ✅ done for the whole
+// team: who, and when. Done rows stay in the list, faded and at the bottom,
+// so nobody fixes the same one twice. ↩ puts one back.
+let pkgDone = {};
+const PKG_DONE_KEY = 'pkg_done_v1', PKG_DONE_DAYS = 45;
+try { pkgDone = JSON.parse(localStorage.getItem(PKG_DONE_KEY) || '{}') || {}; } catch (_) { pkgDone = {}; }
+function _pkgDoneWhen(d) {
+  const t = new Date(d.at || 0); if (isNaN(t)) return '';
+  const today = new Date().toDateString() === t.toDateString();
+  return today ? t.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : t.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+function _pkgSaveDone() {
+  const cut = Date.now() - PKG_DONE_DAYS * 86400e3;
+  Object.keys(pkgDone).forEach(k => { if (!(new Date(pkgDone[k].at).getTime() > cut)) delete pkgDone[k]; });
+  try { localStorage.setItem(PKG_DONE_KEY, JSON.stringify(pkgDone)); } catch (_) {}
+  if (typeof fbSet === 'function') fbSet('pkgDone', Object.keys(pkgDone).length ? pkgDone : null);
+}
+function _pkgMarkDone(keys) {
+  const by = (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '', at = new Date().toISOString();
+  let n = 0;
+  keys.forEach(k => { if (k && !pkgDone[k]) { pkgDone[k] = { by, at }; n++; } });
+  if (n) _pkgSaveDone();
+  return n;
+}
+function pkgUndone(key) {
+  if (!pkgDone[key]) return;
+  delete pkgDone[key];
+  _pkgSaveDone();
+  pkgRender();
+}
+function pkgIsDone(r) { return !!pkgDone[_pkgPinKey(r)]; }
+function pkgLoadDone() {
+  if (typeof fbListen !== 'function') return;
+  fbListen('pkgDone', v => {
+    pkgDone = v && typeof v === 'object' ? v : {};
+    try { localStorage.setItem(PKG_DONE_KEY, JSON.stringify(pkgDone)); } catch (_) {}
+    if (pkgResults.length && document.getElementById('pkgResultsWrap')?.style.display !== 'none') pkgRender();
+  });
+}
+document.addEventListener('DOMContentLoaded', () => setTimeout(pkgLoadDone, 1500));
+/** Marks a done row so it shows faded (the <tr> gets data-done) */
+function _pkgDoneMark(html, done) { return done ? html.replace(/^\s*<tr/, '<tr data-done="1"') : html; }
 function _pkgRowHtmlInner(r) {
     const gapCell = _pkgActionCell(r);
     if (r.verdict === 'deny') {
       return `<tr style="opacity:0.8;">
         <td><span class="tt-room-pill">${escapeHtml(r.room)}</span></td>
-        ${_pkgConfCell(r.conf)}
+        ${_pkgConfCell(r.conf, r)}
         <td style="font-family:var(--mono);font-size:0.76rem;color:var(--text2);text-decoration:line-through;">${escapeHtml(r.family || r.code)}</td>
         <td style="font-family:var(--mono);font-size:0.72rem;color:var(--text3);">AED ${escapeHtml(String(r.charge))}</td>
         <td colspan="2" style="font-size:0.68rem;color:var(--rose);">${escapeHtml(r.denyReason)}</td>
@@ -1477,7 +1534,7 @@ function _pkgRowHtmlInner(r) {
         : `<span style="color:var(--mint);">✏️ Update</span>`;
       return `<tr>
         <td><span class="tt-room-pill">${escapeHtml(r.room)}</span></td>
-        ${_pkgConfCell(r.conf)}
+        ${_pkgConfCell(r.conf, r)}
         <td style="font-family:var(--mono);font-size:0.76rem;font-weight:700;color:${r.alreadyComplete ? 'var(--text2)' : 'var(--mint)'};">${escapeHtml(r.code)}</td>
         <td style="font-family:var(--mono);font-size:0.72rem;">AED ${escapeHtml(r.price)}</td>
         <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text2);">${escapeHtml(r.from) || '—'} → ${escapeHtml(r.to) || '—'}</td>
@@ -1508,7 +1565,7 @@ function _pkgRowHtmlInner(r) {
       : `<span style="color:var(--amber);">⚠ Check</span>`;
     return `<tr${r.verdict === 'outside' ? ' style="opacity:0.75;"' : ''}>
       <td><span class="tt-room-pill">${escapeHtml(r.room)}</span></td>
-      ${_pkgConfCell(r.conf)}
+      ${_pkgConfCell(r.conf, r)}
       <td style="font-family:var(--mono);font-size:0.76rem;">${productCell}</td>
       <td style="font-family:var(--mono);font-size:0.72rem;color:var(--text3);">AED ${escapeHtml(String(r.charge))}</td>
       <td style="font-size:0.66rem;color:var(--text3);">${candText}</td>
@@ -1561,6 +1618,7 @@ function pkgCopyResolved() {
       .map(v => String(v ?? '').replace(/[\t\r\n]+/g, ' ')).join('\t')))
     .join('\n');
   copyToClipboard(tsv, document.getElementById('pkgCopyBtn'), '📋 Copy rows to update');
+  _pkgCopiedMany(resolved);
 }
 
 // ── Copy the deny list — the charges that should NOT be credited ──
@@ -1575,6 +1633,13 @@ function pkgCopyDeny() {
       .map(v => String(v ?? '').replace(/[\t\r\n]+/g, ' ')).join('\t')))
     .join('\n');
   copyToClipboard(tsv, document.getElementById('pkgDenyBtn'), '⛔ Copy Deny List');
+  _pkgCopiedMany(denied);
+}
+function _pkgCopiedMany(rows) {
+  const keys = [...new Set(rows.map(_pkgPinKey))].filter(k => !pkgDone[k]);
+  if (!_pkgMarkDone(keys)) return;
+  pkgRender();
+  if (typeof showUndoToast === 'function') showUndoToast(`${keys.length} package${keys.length > 1 ? 's' : ''} marked ✅ done`, () => { keys.forEach(k => delete pkgDone[k]); _pkgSaveDone(); pkgRender(); });
 }
 
 function pkgClear() {

@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 263, items: [
+    '✅ Package Audit: copying a package marks it done, so you always know which ones you fixed. Tap a confirmation number (or use Copy rows to update / Copy rows to remove) and the row shows ✅ with the time and who copied it, fades and moves to the bottom. Needs action counts only what\'s left. The whole team sees it; the new ✅ Done chip lists them, and ↩ (or Undo) puts one back.',
+  ] },
   { v: 262, items: [
     '🔒 Safety: sample emails in the sign-up and add-user boxes are now neutral ones, the project blocks report and roster files (Excel, CSV, backups) from ever being uploaded to GitHub by mistake, CI runs with read-only access, and ready-made Firebase rules (database.rules.json) let only your hotel\'s signed-in team read its data.',
   ] },

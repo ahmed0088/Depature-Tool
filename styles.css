@@ -5910,3 +5910,11 @@ body.fr-dragging::after {
 .st-quiet { margin: 4px 0 10px; padding: 8px 12px; border-radius: var(--r); background: rgba(62, 207, 142, .1); border: 1px solid rgba(62, 207, 142, .3); font-size: 0.78rem; color: var(--text2); }
 .st-quiet small { display: block; opacity: .7; margin-top: 2px; }
 @media (max-width: 600px) { .st-add-hint { width: auto; flex: 1 1 140px; } }
+
+/* package audit: copied = done */
+#pkgTable tr[data-done] > td { opacity: .5; }
+#pkgTable tr[data-done] > td:nth-child(2) { opacity: 1; }
+#pkgTable tr[data-done] .pkg-conf { opacity: .55; }
+.pkg-done-tag { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 1px 4px 1px 7px; border-radius: 999px; background: rgba(62, 207, 142, .14); color: var(--mint, #3ecf8e); font: 600 .62rem var(--mono); white-space: nowrap; vertical-align: middle; }
+.pkg-done-tag button { border: 0; background: none; color: var(--text3); cursor: pointer; font-size: .7rem; padding: 0 3px; line-height: 1; }
+.pkg-done-tag button:hover { color: var(--text); }
