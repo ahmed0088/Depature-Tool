@@ -41,6 +41,7 @@ const PKG_EXTENSION_GAP = 0;
 function pkgLoadExcel(input) {
   const file = input?.files?.[0];
   if (!file) return;
+  pkgReportAt = file.lastModified || Date.now();   // when this IN-Gauge export was saved
   const reader = new FileReader();
   reader.onload = async e => {
     try {
@@ -1343,8 +1344,7 @@ function pkgRender() {
     // "Needs action" is the default: everything a person can actually do
     // something about. Rows the log simply doesn't reach are excluded —
     // they aren't decisions waiting to be made.
-    if (pkgFilter_ === 'done') { if (!pkgIsDone(r)) return false; }
-    else if (pkgFilter_ === 'pinned') { if (!r.pin) return false; }
+    if (pkgFilter_ === 'pinned') { if (!r.pin) return false; }
     else if (r.pinSkip && pkgFilter_ !== 'all') return false;
     const needsAction = !r.pinSkip && (r.verdict === 'deny' ||
                         (r.verdict === 'credit' && !r.alreadyComplete) ||
@@ -1372,10 +1372,8 @@ function pkgRender() {
   const outsideCount   = pkgResults.filter(r => r.verdict === 'outside').length;
   const actionAll      = fixedCount + denyCount + reviewCount;
   const isAct          = r => r.verdict === 'deny' || r.verdict === 'review' || (r.verdict === 'credit' && !r.alreadyComplete);
-  const doneCount      = pkgResults.filter(pkgIsDone).length;
-  const actionCount    = actionAll - live.filter(r => isAct(r) && pkgIsDone(r)).length;   // still to do
+  const actionCount    = actionAll - live.filter(r => isAct(r) && pkgNightDone(r) && !pkgBackWrong(r)).length;   // still to do
   [['pkgfc-action', actionCount],
-   ['pkgfc-done', doneCount],
    ['pkgfc-outside', outsideCount],
    ['pkgfc-all', pkgResults.length],
    ['pkgfc-complete', completeCount],
@@ -1391,12 +1389,10 @@ function pkgRender() {
     <div class="kpi ${denyCount ? 'rose' : ''}"><div class="kpi-accent"></div><div class="kpi-label">Remove</div><div class="kpi-val">${denyCount}</div></div>
     <div class="kpi ${reviewCount ? 'amber' : ''}"><div class="kpi-accent"></div><div class="kpi-label">Check by Hand</div><div class="kpi-val">${reviewCount}</div></div>`;
 
-  const tbody = document.getElementById('pkgTable');
-  if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:36px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">No rows match.</td></tr>`;
-    return;
-  }
-  const rowHtml = (r, sub) => _pkgSubMark(_pkgDoneMark(_pkgRowHtmlInner(r), pkgIsDone(r)), sub);
+  const tbody = document.getElementById('pkgTable'), dbody = document.getElementById('pkgDoneTable');
+  const dwrap = document.getElementById('pkgDoneWrap'), warn = document.getElementById('pkgDoneWarn');
+  const empty = t => `<tr><td colspan="9" style="text-align:center;padding:36px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">${t}</td></tr>`;
+  const rowHtml = (r, sub) => _pkgSubMark(_pkgDoneMark(_pkgRowHtmlInner(r), pkgNightDone(r) && !pkgBackWrong(r)), sub);
   // IN-Gauge bills a package night by night, so one 6-night breakfast is six
   // lines. Group them per confirmation + package: one line with the nights
   // and total, the single nights one tap away.
@@ -1406,10 +1402,24 @@ function pkgRender() {
     if (!gmap.has(k)) { const g = { key: k, rows: [] }; gmap.set(k, g); groups.push(g); }
     gmap.get(k).rows.push(r);
   });
-  // done ones go to the bottom, so what is left to fix is on top
-  if (pkgFilter_ !== 'done') { const und = groups.filter(g => !g.rows.every(pkgIsDone)), dn = groups.filter(g => g.rows.every(pkgIsDone)); groups.length = 0; groups.push(...und, ...dn); }
-  tbody.innerHTML = groups.map(g => g.rows.length === 1 ? rowHtml(g.rows[0], '')
-    : _pkgDoneMark(_pkgGroupHtml(g), g.rows.every(pkgIsDone)) + g.rows.map(r => rowHtml(r, g.key)).join('')).join('');
+  const html = list => list.map(g => g.rows.length === 1 ? rowHtml(g.rows[0], '')
+    : _pkgDoneMark(_pkgGroupHtml(g), g.rows.every(x => pkgNightDone(x) && !pkgBackWrong(x))) + g.rows.map(r => rowHtml(r, g.key)).join('')).join('');
+  // two windows: what is still to fix, and what was copied (not every day ticked first)
+  const isBack = g => g.rows.some(pkgBackWrong);
+  const todo = groups.filter(g => !pkgDone[g.key] || isBack(g)).sort((a, b) => isBack(b) - isBack(a));
+  const part = g => _pkgLeft(g.key).length > 0;
+  const copied = groups.filter(g => pkgDone[g.key] && !isBack(g)).sort((a, b) => part(b) - part(a));
+  const backs = todo.filter(isBack), bw = document.getElementById('pkgBackWarn');
+  if (bw) bw.innerHTML = backs.length ? `<div class="pkg-left-warn bad"><b>↺ ${backs.length} package${backs.length > 1 ? 's' : ''} came back wrong.</b> They were ticked fixed, but this IN-Gauge report, saved after that, still shows them wrong (the change didn't save, or only some days were changed). They are back on top of To fix.</div>` : '';
+  tbody.innerHTML = todo.length ? html(todo) : empty(filtered.length ? '✅ Nothing left to fix here: everything is in Copied' : 'No rows match.');
+  const tc = document.getElementById('pkgTodoCount'); if (tc) tc.textContent = todo.length;
+  if (dbody) dbody.innerHTML = html(copied);
+  if (dwrap) dwrap.hidden = !copied.length;
+  const open = copied.filter(part);
+  const dc = document.getElementById('pkgDoneCount'); if (dc) dc.textContent = copied.length;
+  if (warn) warn.innerHTML = open.length ? `<div class="pkg-left-warn"><b>⚠ ${open.length} package${open.length > 1 ? 's' : ''} copied but not every day fixed yet.</b>
+      IN-Gauge charges a package day by day and each day keeps the old seller until you change it. Fix every day, then tick it:
+      <ul>${open.map(g => { const r0 = g.rows[0], left = _pkgLeft(g.key); return `<li>Room ${escapeHtml(r0.room || '?')} · ${escapeHtml(_pkgFamilyName(r0))} · conf ${escapeHtml(r0.conf)}: <b>${left.length} of ${_pkgGroupRows(g.key).length} days left</b> (${escapeHtml(left.map(x => x.daily || x.from || '?').join(', '))})</li>`; }).join('')}</ul></div>` : '';
 }
 
 const pkgOpenGroups = new Set();
@@ -1420,7 +1430,7 @@ function pkgToggleGroup(key) {
 // Marks a single-night row as belonging to a group (hidden until the group is opened)
 function _pkgSubMark(html, key) {
   if (!key) return html;
-  const hide = pkgOpenGroups.has(key) ? '' : 'display:none;';
+  const hide = _pkgIsOpen(key) ? '' : 'display:none;';
   return html.replace(/^\s*<tr([^>]*)>/, (m, attrs) => {
     if (/style="/.test(attrs)) attrs = attrs.replace(/style="/, `style="${hide}`);
     else attrs += ` style="${hide}"`;
@@ -1430,7 +1440,7 @@ function _pkgSubMark(html, key) {
 
 function _pkgGroupHtml(g) {
   const rows = g.rows, r0 = rows[0];
-  const open = pkgOpenGroups.has(g.key);
+  const open = _pkgIsOpen(g.key);
   const total = rows.reduce((s, r) => s + (parseFloat(r.price ?? r.charge) || 0), 0);
   const dates = rows.flatMap(r => [r.from, r.to, r.arr, r.dep]).filter(Boolean);
   const uniq = a => [...new Set(a.filter(Boolean))];
@@ -1442,7 +1452,7 @@ function _pkgGroupHtml(g) {
   const color = rows.some(r => r.verdict === 'deny') ? 'var(--rose)' : needs ? 'var(--amber)' : 'var(--text3)';
   return `<tr class="pkg-group" onclick="if(!event.target.closest('select,.pkg-conf')&&!String(window.getSelection()))pkgToggleGroup('${escapeHtml(g.key)}')" style="cursor:pointer;">
     <td><span class="tt-room-pill">${escapeHtml(r0.room)}</span></td>
-    ${_pkgConfCell(r0.conf, r0)}
+    ${_pkgConfCell(r0.conf, r0, true)}
     <td style="font-family:var(--mono);font-size:0.76rem;font-weight:700;">${open ? '▾' : '▸'} ${escapeHtml(_pkgFamilyName(r0))} <span class="pkg-nights">× ${rows.length} nights</span></td>
     <td style="font-family:var(--mono);font-size:0.72rem;">AED ${escapeHtml(String(Math.round(total * 100) / 100))}</td>
     <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text2);">${dates.length ? escapeHtml(dates[0]) + ' → ' + escapeHtml(dates[dates.length - 1]) : '—'}</td>
@@ -1453,31 +1463,93 @@ function _pkgGroupHtml(g) {
   </tr>`;
 }
 
-/** A confirmation number: tap to copy it (and still selectable); never opens or closes the row. */
-function _pkgConfCell(conf, r) {
+/** A confirmation number: tap to copy it (and still selectable); never opens or closes the row.
+ *  Once copied: the package line shows how many of its days are ticked fixed, each night line a tick box. */
+function _pkgConfCell(conf, r, isGroup) {
   const c = String(conf || '');
   if (!c) return '<td>—</td>';
-  const key = r ? _pkgPinKey(r) : '', d = key && pkgDone[key];
-  const tag = d ? `<span class="pkg-done-tag" title="Marked done when it was copied${d.by ? ' by ' + escapeHtml(d.by) : ''}">✅ ${escapeHtml(_pkgDoneWhen(d))}${d.by ? ' · ' + escapeHtml(String(d.by).split(' ')[0]) : ''}<button type="button" title="Not done yet: put it back" onclick="event.stopPropagation();pkgUndone(${escapeHtml(JSON.stringify(key))})">↩</button></span>` : '';
-  return `<td><button type="button" class="pkg-conf" title="Copy ${escapeHtml(c)} (marks it ✅ done)" onclick="event.stopPropagation();pkgCopyConf(this,${escapeHtml(JSON.stringify(c))},${escapeHtml(JSON.stringify(key))})">${escapeHtml(c)}<i aria-hidden="true">⧉</i></button>${tag}</td>`;
+  const key = r ? _pkgPinKey(r) : '', d = key && pkgDone[key], J = v => escapeHtml(JSON.stringify(v));
+  let tag = '';
+  const back = d && (isGroup ? _pkgGroupRows(key).filter(pkgBackWrong) : (pkgBackWrong(r) ? [r] : []));
+  if (back && back.length) {
+    const fx = _pkgNightAt(back[0]), when = fx ? new Date(fx).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
+    return `<td><button type="button" class="pkg-conf" title="Copy ${escapeHtml(c)} again" onclick="event.stopPropagation();pkgCopyConf(this,${J(c)},${J(key)})">${escapeHtml(c)}<i aria-hidden="true">⧉</i></button><span class="pkg-back-tag" title="Ticked fixed ${escapeHtml(when)}, but this IN-Gauge report (saved later) still shows it wrong">↺ Still wrong after the fix of ${escapeHtml(when)}${isGroup && back.length > 1 ? ` · ${back.length} days` : ''}</span></td>`;
+  }
+  if (d) {
+    const rows = _pkgGroupRows(key), n = rows.length || 1, who = d.by ? ' · ' + String(d.by).split(' ')[0] : '';
+    const undo = `<button type="button" title="Not copied: back to To fix" onclick="event.stopPropagation();pkgUndone(${J(key)})">↩</button>`;
+    if (isGroup || n === 1) {
+      const ok = rows.filter(pkgNightDone).length;
+      tag = isGroup
+        ? `<span class="pkg-done-tag${ok < n ? ' part' : ''}" title="Copied ${escapeHtml(_pkgDoneWhen(d))}${escapeHtml(who)}">${ok < n ? '⚠' : '✅'} ${ok}/${n} days fixed${undo}</span>`
+        : `<span class="pkg-done-tag" title="Copied ${escapeHtml(_pkgDoneWhen(d))}${escapeHtml(who)}">✅ ${escapeHtml(_pkgDoneWhen(d))}${escapeHtml(who)}${undo}</span>`;
+    }
+    if (!isGroup && n > 1) {
+      const ok = pkgNightDone(r), day = r.daily || r.from || '';
+      tag += `<label class="pkg-day-tick${ok ? ' on' : ''}" onclick="event.stopPropagation()" title="Tick when this day shows the right seller in IN-Gauge"><input type="checkbox"${ok ? ' checked' : ''} onchange="pkgTickNight(${J(key)},${J(_pkgNightKey(r))})"> ${ok ? 'Fixed' : 'Fix'} ${escapeHtml(day)}</label>`;
+    }
+  }
+  return `<td><button type="button" class="pkg-conf" title="Copy ${escapeHtml(c)} (moves it to Copied)" onclick="event.stopPropagation();pkgCopyConf(this,${J(c)},${J(key)})">${escapeHtml(c)}<i aria-hidden="true">⧉</i></button>${tag}</td>`;
 }
 function pkgCopyConf(btn, conf, key) {
   copyToClipboard(conf);
   btn.classList.add('copied'); setTimeout(() => btn.classList.remove('copied'), 1400);
-  const was = key && pkgDone[key];
-  if (key && !was) { _pkgMarkDone([key]); pkgRender(); }
-  if (typeof showUndoToast === 'function' && key && !was) showUndoToast(`Copied ${conf} · marked ✅ done`, () => pkgUndone(key));
-  else if (typeof showToast === 'function') showToast(`Copied ${conf}`, 'ok');
+  const rows = _pkgGroupRows(key), snap = JSON.stringify(pkgDone);
+  const back = key && pkgDone[key] ? rows.filter(pkgBackWrong) : [];
+  if (back.length) {
+    // came back wrong: those days are not fixed after all, tick them again once they really are
+    const d = _pkgToNights(pkgDone[key], key);
+    back.forEach(x => { delete d.days[_pkgNightKey(x)]; });
+    d.at = new Date().toISOString(); d.by = _pkgMe();
+    if (rows.length === 1) d.days[_pkgNightKey(rows[0])] = { by: d.by, at: d.at };
+    _pkgSaveDone(); pkgRender();
+    const msg = rows.length === 1 ? `Copied ${conf} again · back in Copied` : `Copied ${conf} again: ${back.length} day${back.length > 1 ? 's' : ''} still wrong (${back.map(x => x.daily || x.from).join(', ')}). Fix ${back.length > 1 ? 'them' : 'it'}, then tick in Copied`;
+    if (typeof showUndoToast === 'function') showUndoToast(msg, () => { pkgDone = JSON.parse(snap); _pkgSaveDone(); pkgRender(); }); else showToast(msg, 'warn');
+    return;
+  }
+  if (!key || pkgDone[key]) { if (typeof showToast === 'function') showToast(`Copied ${conf}`, 'ok'); return; }
+  _pkgMarkCopied(key, rows.length === 1 ? [_pkgNightKey(rows[0])] : []);   // one night: copying it is fixing it
+  pkgRender();
+  const days = rows.map(x => x.daily || x.from).filter(Boolean);
+  const msg = rows.length > 1
+    ? `Copied ${conf}: ${rows.length} days (${days.join(', ')}). IN-Gauge charges it day by day, so fix every day, then tick each one in Copied`
+    : `Copied ${conf} · moved to Copied`;
+  if (typeof showUndoToast === 'function') showUndoToast(msg, () => { pkgDone = JSON.parse(snap); _pkgSaveDone(); pkgRender(); });
+  else if (typeof showToast === 'function') showToast(msg, rows.length > 1 ? 'warn' : 'ok');
 }
 
-// ── Done marks ────────────────────────────────────────────
-// Copying a package (its confirmation number, or the rows in a bulk copy) is
-// how it gets fixed in IN-Gauge, so a copy marks it ✅ done for the whole
-// team: who, and when. Done rows stay in the list, faded and at the bottom,
-// so nobody fixes the same one twice. ↩ puts one back.
+// ── Copied (done) marks ───────────────────────────────────
+// Copying a package is how it gets fixed in IN-Gauge, so a copied package
+// moves to the Copied window for the whole team: who, and when. IN-Gauge
+// charges a package night by night, and each night keeps the old seller
+// until it is changed, so a package of 4 nights is fixed only when all 4 are
+// ticked. Until then it stays open in Copied with a reminder. ↩ puts it back.
+// pkgDone[key] = { by, at, nights: true, days: { nightKey: { by, at } } }
+// (an entry without "nights" is from before days were ticked: all fixed)
 let pkgDone = {};
 const PKG_DONE_KEY = 'pkg_done_v1', PKG_DONE_DAYS = 45;
 try { pkgDone = JSON.parse(localStorage.getItem(PKG_DONE_KEY) || '{}') || {}; } catch (_) { pkgDone = {}; }
+function _pkgNightKey(r) { return String(r.daily || r.from || r.arr || 'stay').replace(/[.#$\[\]\/\s]/g, '_'); }
+function _pkgGroupRows(key) { return pkgResults.filter(x => _pkgPinKey(x) === key); }
+function pkgIsCopied(r) { return !!pkgDone[_pkgPinKey(r)]; }
+/** This night was copied and ticked fixed */
+function pkgNightDone(r) { const d = pkgDone[_pkgPinKey(r)]; return !!d && (!d.nights || !!(d.days || {})[_pkgNightKey(r)]); }
+function pkgIsDone(r) { return pkgNightDone(r); }
+// A fix that didn't stick: the night was ticked fixed, but an IN-Gauge export saved after
+// that still shows it wrong. It goes back to To fix, marked, instead of hiding in Copied.
+let pkgReportAt = 0;
+function _pkgNeeds(r) { return !r.pinSkip && (r.verdict === 'deny' || r.verdict === 'review' || (r.verdict === 'credit' && !r.alreadyComplete)); }
+function _pkgNightAt(r) { const d = pkgDone[_pkgPinKey(r)]; if (!d) return 0; const n = d.nights ? (d.days || {})[_pkgNightKey(r)] : d; return n ? Date.parse(n.at) || 0 : 0; }
+function pkgBackWrong(r) { return pkgReportAt > 0 && pkgNightDone(r) && _pkgNeeds(r) && pkgReportAt > _pkgNightAt(r) + 60e3; }
+/** an old-style entry (whole package, no days) becomes one with every day ticked */
+function _pkgToNights(d, key) {
+  if (d.nights) { d.days = d.days || {}; return d; }
+  d.nights = true; d.days = {};
+  _pkgGroupRows(key).forEach(x => { d.days[_pkgNightKey(x)] = { by: d.by || '', at: d.at }; });
+  return d;
+}
+/** The nights of a copied package not ticked yet */
+function _pkgLeft(key) { const d = pkgDone[key]; return d && d.nights ? _pkgGroupRows(key).filter(x => !(d.days || {})[_pkgNightKey(x)]) : []; }
 function _pkgDoneWhen(d) {
   const t = new Date(d.at || 0); if (isNaN(t)) return '';
   const today = new Date().toDateString() === t.toDateString();
@@ -1489,12 +1561,24 @@ function _pkgSaveDone() {
   try { localStorage.setItem(PKG_DONE_KEY, JSON.stringify(pkgDone)); } catch (_) {}
   if (typeof fbSet === 'function') fbSet('pkgDone', Object.keys(pkgDone).length ? pkgDone : null);
 }
-function _pkgMarkDone(keys) {
-  const by = (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '', at = new Date().toISOString();
-  let n = 0;
-  keys.forEach(k => { if (k && !pkgDone[k]) { pkgDone[k] = { by, at }; n++; } });
-  if (n) _pkgSaveDone();
-  return n;
+const _pkgMe = () => (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '';
+/** Mark a package copied, and these nights of it fixed. Saves. */
+function _pkgMarkCopied(key, nights, force) {
+  const by = _pkgMe(), at = new Date().toISOString();
+  if (!pkgDone[key]) pkgDone[key] = { by, at, nights: true, days: {} };
+  const d = force ? _pkgToNights(pkgDone[key], key) : pkgDone[key];
+  if (d.nights) { d.days = d.days || {}; (nights || []).forEach(nk => { if (force || !d.days[nk]) d.days[nk] = { by, at }; }); }
+  _pkgSaveDone();
+}
+function pkgTickNight(key, nk) {
+  const d = pkgDone[key]; if (!d) return;
+  if (!d.nights) { d.nights = true; d.days = {}; _pkgGroupRows(key).forEach(x => { d.days[_pkgNightKey(x)] = { by: d.by || '', at: d.at }; }); }
+  d.days = d.days || {};
+  if (d.days[nk]) delete d.days[nk]; else d.days[nk] = { by: _pkgMe(), at: new Date().toISOString() };
+  _pkgSaveDone();
+  pkgRender();
+  const rows = _pkgGroupRows(key), left = _pkgLeft(key).length;
+  if (!left && typeof showToast === 'function') showToast(`✅ All ${rows.length} days fixed`, 'ok');
 }
 function pkgUndone(key) {
   if (!pkgDone[key]) return;
@@ -1502,7 +1586,6 @@ function pkgUndone(key) {
   _pkgSaveDone();
   pkgRender();
 }
-function pkgIsDone(r) { return !!pkgDone[_pkgPinKey(r)]; }
 function pkgLoadDone() {
   if (typeof fbListen !== 'function') return;
   fbListen('pkgDone', v => {
@@ -1512,8 +1595,10 @@ function pkgLoadDone() {
   });
 }
 document.addEventListener('DOMContentLoaded', () => setTimeout(pkgLoadDone, 1500));
-/** Marks a done row so it shows faded (the <tr> gets data-done) */
+/** Marks a fixed row so it shows faded (the <tr> gets data-done) */
 function _pkgDoneMark(html, done) { return done ? html.replace(/^\s*<tr/, '<tr data-done="1"') : html; }
+/** A package's nights show by themselves while some are copied but not ticked: that is the reminder */
+function _pkgIsOpen(key) { return pkgOpenGroups.has(key) || _pkgLeft(key).length > 0; }
 function _pkgRowHtmlInner(r) {
     const gapCell = _pkgActionCell(r);
     if (r.verdict === 'deny') {
@@ -1636,10 +1721,15 @@ function pkgCopyDeny() {
   _pkgCopiedMany(denied);
 }
 function _pkgCopiedMany(rows) {
-  const keys = [...new Set(rows.map(_pkgPinKey))].filter(k => !pkgDone[k]);
-  if (!_pkgMarkDone(keys)) return;
+  // a bulk copy holds every night of each package, so every copied night counts as fixed
+  const fresh = rows.filter(r => !pkgNightDone(r) || pkgBackWrong(r));
+  if (!fresh.length) return;
+  const snap = JSON.stringify(pkgDone), byKey = new Map();
+  fresh.forEach(r => { const k = _pkgPinKey(r); if (!byKey.has(k)) byKey.set(k, []); byKey.get(k).push(_pkgNightKey(r)); });
+  byKey.forEach((nights, k) => _pkgMarkCopied(k, nights, true));
   pkgRender();
-  if (typeof showUndoToast === 'function') showUndoToast(`${keys.length} package${keys.length > 1 ? 's' : ''} marked ✅ done`, () => { keys.forEach(k => delete pkgDone[k]); _pkgSaveDone(); pkgRender(); });
+  const n = byKey.size;
+  if (typeof showUndoToast === 'function') showUndoToast(`${n} package${n > 1 ? 's' : ''} moved to Copied, every day ticked`, () => { pkgDone = JSON.parse(snap); _pkgSaveDone(); pkgRender(); });
 }
 
 function pkgClear() {

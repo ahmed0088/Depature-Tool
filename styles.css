@@ -5918,3 +5918,18 @@ body.fr-dragging::after {
 .pkg-done-tag { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 1px 4px 1px 7px; border-radius: 999px; background: rgba(62, 207, 142, .14); color: var(--mint, #3ecf8e); font: 600 .62rem var(--mono); white-space: nowrap; vertical-align: middle; }
 .pkg-done-tag button { border: 0; background: none; color: var(--text3); cursor: pointer; font-size: .7rem; padding: 0 3px; line-height: 1; }
 .pkg-done-tag button:hover { color: var(--text); }
+.pkg-win-hd { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin: 6px 0 8px; font-size: .9rem; }
+.pkg-win-hd > span { font: 600 .7rem var(--mono); padding: 1px 8px; border-radius: 999px; background: var(--card2, rgba(127,127,127,.12)); color: var(--text2); }
+.pkg-win-hd small { font-size: .7rem; color: var(--text3); }
+.pkg-done-wrap { margin-top: 22px; padding-top: 14px; border-top: 1px dashed var(--border2); }
+.pkg-done-tag.part { background: rgba(240, 164, 58, .16); color: var(--amber, #f0a43a); }
+.pkg-day-tick { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(240, 164, 58, .5); color: var(--amber, #f0a43a); font: 600 .62rem var(--mono); cursor: pointer; white-space: nowrap; vertical-align: middle; }
+.pkg-day-tick input { margin: 0; width: 13px; height: 13px; accent-color: var(--mint, #3ecf8e); }
+.pkg-day-tick.on { border-color: rgba(62, 207, 142, .45); color: var(--mint, #3ecf8e); background: rgba(62, 207, 142, .1); }
+.pkg-back-tag { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 999px; background: rgba(240, 82, 82, .14); color: var(--red, #f05252); font: 600 .62rem var(--mono); white-space: nowrap; vertical-align: middle; }
+.pkg-left-warn { margin: 0 0 10px; padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(240, 164, 58, .45); background: rgba(240, 164, 58, .1); font-size: .76rem; color: var(--text2); line-height: 1.5; }
+.pkg-left-warn.bad { border-color: rgba(240, 82, 82, .45); background: rgba(240, 82, 82, .08); }
+.pkg-left-warn b { color: var(--text); }
+.pkg-left-warn ul { margin: 6px 0 0; padding-left: 18px; }
+#pkgDoneTable tr[data-done] > td { opacity: .55; }
+#pkgDoneTable tr[data-done] > td:nth-child(2) { opacity: 1; }

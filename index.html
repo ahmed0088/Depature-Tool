@@ -1777,7 +1777,6 @@
         <div class="fchip"    data-pkgf="resolved" onclick="pkgSetFilter('resolved',this)">✏️ Update in IN-Gauge <span id="pkgfc-resolved">0</span></div>
         <div class="fchip"    data-pkgf="deny"     onclick="pkgSetFilter('deny',this)">⛔ Remove <span id="pkgfc-deny">0</span></div>
         <div class="fchip"    data-pkgf="review"   onclick="pkgSetFilter('review',this)">⚠ Check by hand <span id="pkgfc-review">0</span></div>
-        <div class="fchip"    data-pkgf="done"     onclick="pkgSetFilter('done',this)" title="Copied = fixed: who did it and when">✅ Done <span id="pkgfc-done">0</span></div>
         <div class="fchip"    data-pkgf="pinned"   onclick="pkgSetFilter('pinned',this)" title="Packages you pinned to a seller or skipped">📌 Pinned <span id="pkgfc-pinned">0</span></div>
         <div class="fchip"    data-pkgf="outside"  onclick="pkgSetFilter('outside',this)">⏳ Not in this log <span id="pkgfc-outside">0</span></div>
         <div class="fchip"    data-pkgf="complete" onclick="pkgSetFilter('complete',this)">✓ Nothing to do <span id="pkgfc-complete">0</span></div>
@@ -1787,6 +1786,8 @@
         </div>
       </div>
 
+      <div class="pkg-win-hd"><b>🛠 To fix</b> <span id="pkgTodoCount">0</span><small>Tap a confirmation number to copy it: the package moves to Copied</small></div>
+      <div id="pkgBackWarn"></div>
       <div class="tbl-wrap">
         <table>
           <thead>
@@ -1804,6 +1805,29 @@
           </thead>
           <tbody id="pkgTable"></tbody>
         </table>
+      </div>
+
+      <div id="pkgDoneWrap" class="pkg-done-wrap" hidden>
+        <div class="pkg-win-hd"><b>📋 Copied</b> <span id="pkgDoneCount">0</span><small>Who copied it and when · tick each day once it shows the right seller in IN-Gauge · ↩ puts it back</small></div>
+        <div id="pkgDoneWarn"></div>
+        <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:70px;">Room</th>
+              <th>Confirmation No.</th>
+              <th>Package</th>
+              <th>Price</th>
+              <th>Dates</th>
+              <th>Sold By</th>
+              <th style="width:190px;">What to do</th>
+              <th style="width:110px;">Status</th>
+              <th style="width:120px;" title="Pin the seller or skip a package — remembered on every load">📌 Pin</th>
+            </tr>
+          </thead>
+          <tbody id="pkgDoneTable"></tbody>
+        </table>
+        </div>
       </div>
 
       <div style="margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">

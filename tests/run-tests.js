@@ -16,6 +16,16 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+// Every sandbox runs on a fixed clock (11 Oct 2026, noon), so tests written for the week of 12 Oct don't
+// start failing once that week is in the past ("already started" shifts get no cover options).
+const _vmCreate = vm.createContext;
+vm.createContext = (sb, ...a) => {
+  const c = _vmCreate(sb, ...a);
+  vm.runInContext(`(() => { const R = Date, FIX = new R(2026, 9, 11, 12, 0, 0).getTime();
+    class D extends R { constructor(...a) { if (a.length) super(...a); else super(FIX); } static now() { return FIX; } }
+    globalThis.Date = D; })()`, c);
+  return c;
+};
 
 const ROOT = path.join(__dirname, '..');
 const FIX = path.join(__dirname, 'fixtures');
@@ -394,10 +404,7 @@ console.log('\nRoster scenarios');
     check('three staff, 21 shifts, 18 working days: one gap closed by someone working their day off (written down), the rest left', [gaps.length, r.problems.filter(p => p.kind === 'offs').length, (r.notes || []).some(n => /works their day off/.test(n.text))].join(), '2,1,true');
     check('no rest rule broken to close them, and only one day off given up a week', r.problems.filter(p => p.kind === 'rest').length, 0);
     const I = { week: W, groups: G, people: ppl, pre: {}, rules: { minRest: 11, maxHours: 9, allowOne: true } };
-    // the test week is fixed, so pretend it hasn't started yet: past shifts get no cover options
-    const _t = [sb.roToday, sb.rbShiftStarted]; sb.roToday = () => '2026-10-11'; sb.rbShiftStarted = () => false;
     const o = sb.rtCoverOptions(I, r.cells, 'Ibis DD', gaps[0].date, gaps[0].shift);
-    [sb.roToday, sb.rbShiftStarted] = _t;
     check('a gap nobody can fill → "bring in a staff member"', o.length === 1 && o[0].kind === 'bring', true);
   }
   // 3. managers hold a shift only when it would be empty

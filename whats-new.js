@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 266, items: [
+    '📦 Package Audit has two windows now: 🛠 To fix (not copied yet) and 📋 Copied (who copied it and when). Copying a confirmation number moves the package to Copied.',
+    '📅 A package of several days is charged day by day in IN-Gauge, and each day keeps the old seller until you change it. When you copy one, the app lists its days, and in Copied each day has its own tick. Until every day is ticked, the package stays open with an orange reminder saying which days are left. Copy rows to update ticks every day it copies.',
+    '↺ A fix that didn\'t stick comes back: if you load an IN-Gauge report saved after your fix and it still shows the package wrong, it moves back to the top of To fix in red: "Still wrong after the fix of 13 Oct". Copy it again, fix those days, tick them.',
+  ] },
   { v: 265, items: [
     '⏰ Wake-up calls: the Coming up list is tidy again. Each call is a clean row (time, room, guest, buttons) instead of a half-coloured box with the time stuck to its edge.',
   ] },
