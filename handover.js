@@ -56,8 +56,9 @@ function _hoSnapshot() {
     lines.push(`✅ Night Checklist — ${done}/${total} done${skipped ? `, ${skipped} skipped` : ''}`);
   }
   if (typeof SHIFTS !== 'undefined') {
-    const totalTasks = Object.values(SHIFTS).reduce((s, sh) => s + sh.tasks.length, 0);
-    const doneTasks  = Object.values(SHIFTS).reduce((s, sh) => s + sh.done.length,  0);
+    const _c = Object.keys(SHIFTS).map(k => typeof stCount === 'function' ? stCount(k) : { done: SHIFTS[k].done.length, total: SHIFTS[k].tasks.length });
+    const totalTasks = _c.reduce((s, x) => s + x.total, 0);
+    const doneTasks  = _c.reduce((s, x) => s + x.done, 0);
     if (totalTasks) lines.push(`🕐 Shift Tasks — ${doneTasks}/${totalTasks} done across all shifts`);
   }
   if (typeof nsGuests !== 'undefined' && nsGuests.length) {

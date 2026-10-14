@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 269, items: [
+    '📅 Shift tasks can have a date: a one-off for that day ("Sat 17 Oct: send the group rooming list"). Pick it next to the time when you add a task, or ✏️ edit one. Until then it waits in 📅 Coming up (not counted). On the day it is on that shift\'s list and reminds you, at its time, or when the shift starts if it has no time. If nobody ticks it that day, it stays on the list in red as "missed" until it\'s done. Its tick is never cleared by the fresh start of the next shift.',
+  ] },
   { v: 268, items: [
     '✅ Shift tasks: ticking a task (on the page, or ✓ Done in an Ops Brain reminder) now adds only that tick to what the team already ticked. Before, a phone whose list was behind saved its whole old list and wiped everyone else\'s ticks, so it looked like a reset with only your task done.',
     '🔄 The fresh list at the start of each shift checks what is saved first: if a colleague already started the shift, it keeps their ticks instead of clearing them again, and it never clears while offline.',

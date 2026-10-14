@@ -4032,6 +4032,10 @@ ${actionList?`<div class="action"><h2>Act on these first</h2><ul>${actionList}</
         <label class="mf-label-task">Time <span style="opacity:0.45;font-weight:400;">(optional: I remind you then, on this shift)</span></label>
         <input id="et-at" type="time" class="mf-input-task"/>
       </div>
+      <div class="mf mf-task">
+        <label class="mf-label-task">Date <span style="opacity:0.45;font-weight:400;">(optional: a one-off for that day only)</span></label>
+        <input id="et-on" type="date" class="mf-input-task"/>
+      </div>
     </div>
     <div class="modal-task-actions">
       <button class="btn-task-cancel" onclick="document.getElementById('editTaskModal').classList.remove('open')">Cancel</button>

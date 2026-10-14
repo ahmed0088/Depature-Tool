@@ -85,8 +85,9 @@ function homeTiles() {
     const key = typeof hoShiftNow === 'function' ? hoShiftNow().key : 'morning';
     const sh = SHIFTS[key];
     if (!sh) return;
-    const pct = sh.tasks.length ? Math.round(sh.done.length / sh.tasks.length * 100) : 0;
-    add({ panel: 'shifts', icon: '⏰', title: 'Shift Tasks', big: `${sh.done.length}/${sh.tasks.length}`, sub: sh.label || key, tone: pct === 100 ? 'ok' : 'warn', pct });
+    const c = typeof stCount === 'function' ? stCount(key) : { done: sh.done.length, total: sh.tasks.length };
+    const pct = c.total ? Math.round(c.done / c.total * 100) : 0;
+    add({ panel: 'shifts', icon: '⏰', title: 'Shift Tasks', big: `${c.done}/${c.total}`, sub: sh.label || key, tone: pct === 100 ? 'ok' : 'warn', pct });
   });
 
   // ALL enrollment

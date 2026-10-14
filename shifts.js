@@ -59,9 +59,11 @@ function renderShift(key) {
 // ── Content render (safe — never resets active tab) ──────
 function _renderShiftContent(key) {
   const shift     = SHIFTS[key];
-  const done      = new Set(shift.done);
-  const total     = shift.tasks.length;
-  const doneCount = done.size;
+  const day       = stDayOf(key);
+  const active    = shift.tasks.filter(t => stTaskState(t, day, key) === 'on');
+  const soon      = shift.tasks.filter(t => stTaskState(t, day) === 'soon').sort((a, b) => a.on < b.on ? -1 : 1);
+  const total     = active.length;
+  const doneCount = active.filter(t => stIsDone(key, t)).length;
   const pct       = total ? Math.round(doneCount / total * 100) : 0;
 
   const html = `
@@ -87,13 +89,15 @@ function _renderShiftContent(key) {
     </div>` : ''}
     ${stQuietHtml()}
     <div id="stList-${key}" class="st-sortable">
-      ${total ? shift.tasks.map((t, i) => stItemHTML(key, t, done.has(t.id), i, total)).join('')
+      ${total ? active.map(t => stItemHTML(key, t, stIsDone(key, t), shift.tasks.indexOf(t), shift.tasks.length)).join('')
               : '<div class="st-empty">No tasks on this shift yet — add one below.</div>'}
     </div>
+    ${soon.length ? `<div class="st-soon"><div class="st-soon-hd">📅 Coming up <span>${soon.length}</span></div>${soon.map(t => `<div class="st-soon-row"><b>${escapeHtml(_stDateLbl(t.on))}</b>${t.at ? `<span class="st-at">⏰ ${escapeHtml(t.at)}</span>` : ''}<span class="st-soon-n">${escapeHtml(t.name)}</span><button class="cl-step-btn edit-btn" onclick="openEditTask('${key}','${t.id}')" title="Edit">✏️</button><button class="cl-step-btn del" onclick="stDelete('${key}','${t.id}')" title="Delete">✕</button></div>`).join('')}</div>` : ''}
     <div class="st-add-wrap">
       <input class="st-add-in"   id="stIn-${key}"   placeholder="Add new task…" onkeydown="if(event.key==='Enter')stAddTask('${key}')"/>
       <input class="st-add-hint" id="stHint-${key}" placeholder="Hint (optional)" onkeydown="if(event.key==='Enter')stAddTask('${key}')"/>
       <input class="st-add-at" id="stAt-${key}" type="time" title="Time (optional): I remind you then, on this shift" aria-label="Time"/>
+      <input class="st-add-at" id="stOn-${key}" type="date" title="Date (optional): a one-off task for that day only. It waits in Coming up and reminds you on the day" aria-label="Date"/>
       <button class="btn gold sm" onclick="stAddTask('${key}')">+ Add</button>
     </div>
     ${shift.resetAt ? `<div style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);margin-top:6px;">Last reset: ${shift.resetAt}</div>` : ''}
@@ -121,7 +125,7 @@ function stItemHTML(key, t, isDone, index, total) {
     <div class="st-drag-handle" title="Drag to reorder">⠿</div>
     <div class="st-check" onclick="stToggle('${key}','${t.id}')"></div>
     <div class="st-text">
-      <div class="st-name">${t.at ? `<span class="st-at${!isDone && stIsLate(key, t) ? ' late' : ''}" title="${stIsLate(key, t) && !isDone ? 'Time passed, not done yet' : 'Reminder at this time'}">⏰ ${escapeHtml(t.at)}</span>` : ''}${escapeHtml(t.name)}</div>
+      <div class="st-name">${t.on ? _stOnChip(key, t, isDone) : ''}${t.at ? `<span class="st-at${!isDone && stIsLate(key, t) ? ' late' : ''}" title="${stIsLate(key, t) && !isDone ? 'Time passed, not done yet' : 'Reminder at this time'}">⏰ ${escapeHtml(t.at)}</span>` : ''}${escapeHtml(t.name)}</div>
       ${t.hint ? `<div class="st-hint">${escapeHtml(t.hint)}</div>` : ''}
     </div>
     <div class="st-actions">
@@ -139,6 +143,7 @@ function stItemHTML(key, t, isDone, index, total) {
 function stToggle(key, id) {
   const shift = SHIFTS[key];
   const task  = shift.tasks.find(t => t.id === id);
+  if (task && task.on) return _stToggleDated(key, task);
   const idx   = shift.done.indexOf(id);
   if (idx >= 0) { shift.done.splice(idx, 1); stLog(key, 'undone', task?.name || id); logActivity('shift_task_undone', `[${SHIFTS[key].label}] ${task?.name || id}`); }
   else          { shift.done.push(id);        stLog(key, 'done',   task?.name || id); logActivity('shift_task_done',  `[${SHIFTS[key].label}] ${task?.name || id}`); }
@@ -227,10 +232,14 @@ function stAddTask(key) {
   if (!name) return;
   const task = { id: 't' + Date.now(), name, hint: (hEl?.value || '').trim() };
   if (aEl?.value) task.at = aEl.value;
+  const oEl = document.getElementById('stOn-' + key);
+  if (oEl?.value) task.on = oEl.value;
   SHIFTS[key].tasks.push(task);
   if (nEl) nEl.value = '';
   if (hEl) hEl.value = '';
   if (aEl) aEl.value = '';
+  if (oEl) oEl.value = '';
+  if (task.on && task.on > stDayOf(key) && typeof showToast === 'function') showToast(`📅 Saved for ${_stDateLbl(task.on)}: it waits in Coming up and reminds you on the day`, 'ok');
   stLog(key, 'added', name);
   logActivity('shift_task_added', `[${SHIFTS[key].label}] ${name}`);
   _renderShiftContent(key);
@@ -272,6 +281,7 @@ function openEditTask(key, id) {
   document.getElementById('et-name').value  = task.name;
   document.getElementById('et-hint').value  = task.hint || '';
   const at = document.getElementById('et-at'); if (at) at.value = task.at || '';
+  const on = document.getElementById('et-on'); if (on) on.value = task.on || '';
   document.getElementById('editTaskModal').classList.add('open');
 }
 
@@ -284,6 +294,8 @@ function saveEditTask() {
   task.hint = document.getElementById('et-hint').value.trim();
   const at = document.getElementById('et-at')?.value || '';
   if (at) task.at = at; else delete task.at;
+  const on = document.getElementById('et-on')?.value || '';
+  if (on) task.on = on; else delete task.on;
   document.getElementById('editTaskModal').classList.remove('open');
   _renderShiftContent(key);
   persistShifts();
@@ -306,9 +318,11 @@ function resetShift(key) {
 function updateShiftBadge(key) {
   const shift = SHIFTS[key];
   const spEl  = document.getElementById('sp-' + key);
-  if (spEl) spEl.textContent = shift.done.length + '/' + shift.tasks.length;
-  const total = Object.values(SHIFTS).reduce((s, sh) => s + sh.tasks.length, 0);
-  const done  = Object.values(SHIFTS).reduce((s, sh) => s + sh.done.length,  0);
+  const c = stCount(key);
+  if (spEl) spEl.textContent = c.done + '/' + c.total;
+  const all = Object.keys(SHIFTS).map(stCount);
+  const total = all.reduce((s, x) => s + x.total, 0);
+  const done  = all.reduce((s, x) => s + x.done, 0);
   const badge = document.getElementById('badge-shifts');
   if (badge) badge.textContent = total ? done + '/' + total : '—';
 }
@@ -366,6 +380,7 @@ function applyShiftData(saved, heardFromDb = true) {
       SHIFTS[k].done    = Array.isArray(s.done) ? s.done.filter(Boolean) : (s.done && typeof s.done === 'object') ? Object.values(s.done) : [];
       SHIFTS[k].resetAt = s.resetAt || '';
       SHIFTS[k].autoDay = s.autoDay || '';
+      SHIFTS[k].doneDated = s.doneDated && typeof s.doneDated === 'object' ? s.doneDated : {};
     }
   });
   initShifts();   // fills in any shift left with nothing, and repaints the badges
@@ -472,8 +487,16 @@ function stRemindTick() {
   Object.keys(SHIFTS).forEach(key => {
     const sh = SHIFTS[key];
     (sh.tasks || []).forEach(t => {
-      if (!t.at || (sh.done || []).includes(t.id) || !stIsLate(key, t, now)) return;
       const day = key === 'mid' ? _stDay(now) : _stDay(hoShiftNow(now).start);
+      if (stIsDone(key, t)) return;
+      if (t.on && t.on !== day) return;                       // a dated task rings only on its day
+      if (t.on && !t.at) {                                    // no time: once, when its shift is on
+        if (!_stIsNow(key, now)) return;
+        const id = `${day}|${key}|${t.id}`;
+        if (seen[id] != null && !(seen[id] > 0 && seen[id] <= nowMs)) return;
+        seen[id] = 0; _stRing(key, t, id); return;
+      }
+      if (!t.at || !stIsLate(key, t, now)) return;
       const id = `${day}|${key}|${t.id}`, v = seen[id];
       if (v === 0 || (v && v > nowMs)) return;           // done with it, or "later" not due yet
       const due = _stMin(t.at), late = (now.getHours() * 60 + now.getMinutes() - due + 1440) % 1440;
@@ -490,12 +513,75 @@ function _stLater(id, min) {
   try { localStorage.setItem(ST_REM_KEY, JSON.stringify(seen)); } catch (_) {}
 }
 function _stRing(key, t, id) {
-  const text = `⏰ ${t.at} · ${t.name}`, why = `${SHIFTS[key].label}${t.hint ? ' · ' + t.hint : ''}`;
+  const text = `${t.at ? '⏰ ' + t.at : '📅 Today'} · ${t.name}`, why = `${SHIFTS[key].label}${t.hint ? ' · ' + t.hint : ''}`;
   if (typeof hoAlert === 'function') hoAlert(text, true);
-  if (typeof blSay === 'function') blSay({ id: 'st:' + id, type: 'heal', tone: 'warn', icon: '⏰', text: `${t.at} · ${t.name}`, why,
-    acts: [['✓ Done', () => { if (!SHIFTS[key].done.includes(t.id)) stToggle(key, t.id); }], ['In 10 min', () => _stLater(id, 10)]] }, true);
+  if (typeof blSay === 'function') blSay({ id: 'st:' + id, type: 'heal', tone: 'warn', icon: '⏰', text: `${t.at || '📅 Today'} · ${t.name}`, why,
+    acts: [['✓ Done', () => { if (!stIsDone(key, t)) stToggle(key, t.id); }], ['In 10 min', () => _stLater(id, 10)]] }, true);
   else if (typeof showToast === 'function') showToast(text, 'warn');
   if (typeof activeShift !== 'undefined' && activeShift === key && document.getElementById('panel-shifts')?.classList.contains('active')) _renderShiftContent(key);
 }
 setInterval(stRemindTick, 30000);
 document.addEventListener('DOMContentLoaded', () => setTimeout(stRemindTick, 8000));
+
+// ── Dated tasks ───────────────────────────────────────────
+// A task can have a date ("15 Oct: send the group rooming list"): a one-off for that day.
+// Before it, it waits in 📅 Coming up (not counted). On the day it is on that shift's list and
+// reminds you (at its time, or when the shift starts). Not ticked by the end of its day, it
+// stays on the list as "missed" until someone ticks or deletes it. Its tick is kept apart
+// (doneDated), so the fresh start of each shift doesn't clear it.
+const _stIso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+/** The date a shift's list is for: the running shift's own day (a night started yesterday), else today */
+function stDayOf(key, now) {
+  now = now || new Date();
+  try { if (key !== 'mid' && hoShiftNow(now).key === key) return _stIso(hoShiftNow(now).start); } catch (_) {}
+  return _stIso(now);
+}
+function stIsDone(key, t) { const sh = SHIFTS[key]; return t.on ? !!(sh.doneDated || {})[t.id] : (sh.done || []).includes(t.id); }
+/** 'on' (on the list), 'soon' (a later date), 'gone' (its day passed and it was ticked) */
+function stTaskState(t, day, key) {
+  if (!t.on) return 'on';
+  if (t.on > day) return 'soon';
+  if (t.on < day && key && stIsDone(key, t)) return 'gone';
+  return 'on';
+}
+function stCount(key) {
+  const sh = SHIFTS[key]; if (!sh) return { done: 0, total: 0 };
+  const day = stDayOf(key);
+  const act = (sh.tasks || []).filter(t => stTaskState(t, day, key) === 'on');
+  return { done: act.filter(t => stIsDone(key, t)).length, total: act.length };
+}
+function _stDateLbl(iso) {
+  const d = new Date(iso + 'T12:00:00'), t = new Date(), tm = new Date(); tm.setDate(t.getDate() + 1);
+  if (_stIso(d) === _stIso(t)) return 'Today';
+  if (_stIso(d) === _stIso(tm)) return 'Tomorrow';
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+function _stOnChip(key, t, isDone) {
+  const day = stDayOf(key);
+  if (t.on < day && !isDone) return `<span class="st-on late" title="Its day passed and it wasn't ticked">📅 missed ${escapeHtml(_stDateLbl(t.on))}</span>`;
+  return `<span class="st-on" title="A one-off task for this day">📅 ${escapeHtml(_stDateLbl(t.on))}</span>`;
+}
+function _stToggleDated(key, task) {
+  const sh = SHIFTS[key]; sh.doneDated = sh.doneDated || {};
+  const was = !!sh.doneDated[task.id];
+  if (was) delete sh.doneDated[task.id]; else sh.doneDated[task.id] = { by: (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '', at: new Date().toISOString() };
+  stLog(key, was ? 'undone' : 'done', task.name);
+  if (typeof logActivity === 'function') logActivity(was ? 'shift_task_undone' : 'shift_task_done', `[${sh.label}] ${task.name} (${task.on})`);
+  _renderShiftContent(key); updateShiftBadge(key);
+  if (!_shiftsLoaded) return;
+  if (typeof fbSet === 'function') { fbSet(`shifts/data/${key}/doneDated/${task.id}`, was ? null : sh.doneDated[task.id]); fbSet('shifts/updatedAt', new Date().toISOString()); }
+  else persistShifts();
+}
+/** Dated tasks ticked more than 2 weeks after their day are tidied away (once a day, on one device is enough) */
+function _stTidyDated() {
+  if (!_shiftsLoaded || typeof SHIFTS === 'undefined') return;
+  const cut = _stIso(new Date(Date.now() - 14 * 864e5));
+  Object.keys(SHIFTS).forEach(k => {
+    const sh = SHIFTS[k], old = (sh.tasks || []).filter(t => t.on && t.on < cut && stIsDone(k, t));
+    if (!old.length) return;
+    sh.tasks = sh.tasks.filter(t => !old.includes(t));
+    old.forEach(t => { delete (sh.doneDated || {})[t.id]; });
+    persistShifts();
+  });
+}
+setTimeout(() => setInterval(_stTidyDated, 6 * 3600e3), 60e3);
