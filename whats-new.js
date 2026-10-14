@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 267, items: [
+    '🏛️ DTCM Recon reads a month-to-date report properly (e.g. 1–14 Oct). Before, a report longer than a week was counted night by night from each guest\'s check-in, so guests who arrived in September made hundreds of false "to add" and "to verify" items. Your 1–13 Oct files went from 565 corrections to 31 real ones, and the 30 AED is fully explained.',
+    '🛑 The 30-night limit is counted in that window too: for a long stay the free nights are the ones after night 30, not the first days of the month. A night 31 posted in Opera shows as one to reverse.',
+  ] },
   { v: 266, items: [
     '📦 Package Audit has two windows now: 🛠 To fix (not copied yet) and 📋 Copied (who copied it and when). Copying a confirmation number moves the package to Copied.',
     '📅 A package of several days is charged day by day in IN-Gauge, and each day keeps the old seller until you change it. When you copy one, the app lists its days, and in Copied each day has its own tick. Until every day is ticked, the package stays open with an orange reminder saying which days are left. Copy rows to update ticks every day it copies.',

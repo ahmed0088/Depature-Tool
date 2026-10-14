@@ -110,6 +110,30 @@ console.log('\nDTCM Recon · 1-4 Oct (after fixes: 423 and 313 corrected)');
 }
 
 // ── 3. Hotel settings: another code, another rate ────────
+console.log('\nDTCM Recon · month-to-date report (made-up guests)');
+{
+  const sb = makeSandbox(), R = sb.Reconciler, C = sb.DtcmCore;
+  const days = Array.from({ length: 13 }, (_, i) => `2026-10-${String(i + 1).padStart(2, '0')}`);
+  const seg = (room, ci, co, n, extra) => Object.assign({ room, roomRaw: room, guest: 'Guest ' + room, guestNorm: 'guest ' + room, storedNights: n, storedTdFees: n * 10,
+    checkIn: new Date(ci + 'T00:00:00Z'), checkOut: co ? new Date(co + 'T00:00:00Z') : null, checkInISO: ci, checkOutISO: co, checkInTime: '02:00 PM', checkOutTime: co ? '11:00 AM' : '',
+    status: co ? 'Checked Out' : 'Checked In', bedrooms: 1, houseUse: false, earlyCheckin: false, lateCheckout: false }, extra);
+  const post = (room, d, amt) => ({ code: '7510', desc: 'Tourism Dirham', room, guest: 'Guest ' + room, guestNorm: 'guest ' + room, businessDate: d, amount: amt, debit: amt, credit: 0,
+    kind: 'nightly', isRoomMove: false, isPackage: false, isAdjustment: false, isReversal: false, remark: '', ref: '', trxNo: room + d, time: '23:30' });
+  // a long stay from 12 Sep: night 30 is 11 Oct, so DTCM charges only 1 - 11 Oct
+  const long = seg('619', '2026-09-12', '', 11);
+  check('30-night cap: a long stay\'s charged nights are the first in the window', C.buildExpected([long], { windowDates: days }).map(e => e.businessDate.slice(8)).join(), '01,02,03,04,05,06,07,08,09,10,11');
+  // a guest in since September and gone on 5 Oct: DTCM counts only the October nights
+  const segs = [long, seg('224', '2026-09-28', '2026-10-05', 4), seg('305', '2026-10-02', '2026-10-10', 8)];
+  const rows = [].concat(
+    days.map(d => post('619', d, d <= '2026-10-11' ? 10 : 0)),
+    ['01', '02', '03', '04'].map(x => post('224', '2026-10-' + x, 10)),
+    ['02', '03', '04', '05', '06', '07', '08', '09'].map(x => post('305', '2026-10-' + x, 10)));
+  const total = rows.reduce((a, r) => a + r.amount, 0);
+  const rc = R.reconcile({ segments: segs, finalFees: 230 }, rows, total);
+  check('13 days of postings are read as one window (not expanded from September check-ins)', [rc.mode, rc.windowStart, rc.windowEnd].join(), 'window,2026-10-01,2026-10-13');
+  check('nothing to fix when both sides agree', rc.fixPlan.length, 0);
+}
+
 console.log('\nHotel TD settings');
 {
   // same Opera file with code 7510 → 7600 and a different description

@@ -71,7 +71,7 @@
     const winDates = [];
     if (!isDaily && operaDates.length >= 2){
       let d = operaDates[0];
-      while (d <= operaDates[operaDates.length - 1] && winDates.length < 15){ winDates.push(d); d = addDays(d, 1); }
+      while (d <= operaDates[operaDates.length - 1] && winDates.length < 32){ winDates.push(d); d = addDays(d, 1); }
     }
     const maxNights = dtcmSegments.reduce((m, s) => Math.max(m, s.storedNights || 0), 0);
     /* A few rooms can legitimately show MORE nights than the Opera file covers (a night before
@@ -80,7 +80,7 @@
     const nightsList = dtcmSegments.map(s => s.storedNights || 0).filter(n => n > 0);
     const fitCount   = nightsList.filter(n => n <= winDates.length).length;
     const outlierSegs = dtcmSegments.filter(s => (s.storedNights || 0) > winDates.length);
-    const isWindow  = !isDaily && winDates.length >= 2 && winDates.length <= 7 &&
+    const isWindow  = !isDaily && winDates.length >= 2 && winDates.length <= 31 &&
                       nightsList.length > 0 && (fitCount / nightsList.length) >= 0.9;
     const earlyHr = t => {
       const m = String(t || '').match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);

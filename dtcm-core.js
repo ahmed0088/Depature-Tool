@@ -474,6 +474,12 @@
         let set = isDayUse
           ? windowDates.filter(d => d === ci)
           : windowDates.filter(d => d >= ci && (!coEff || d < coEff));
+        /* TD stops after night 30 of a stay: for a long stay that started before the file, the nights
+           DTCM charged are the first ones in the window, the ones after the cap are free. */
+        if (!isDayUse && ci){
+          const night = d => Math.round((Date.parse(d + 'T00:00:00Z') - Date.parse(ci + 'T00:00:00Z')) / 864e5) + 1 + (earlyArrival ? 1 : 0);
+          set = set.filter(d => night(d) <= tdCap());
+        }
         if (set.length > n) set = set.slice(set.length - n);
         if (earlyArrival && set.length && set.length <= n){
           /* the early-arrival night: the one business date before the check-in date */
