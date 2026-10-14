@@ -144,8 +144,27 @@ function stToggle(key, id) {
   else          { shift.done.push(id);        stLog(key, 'done',   task?.name || id); logActivity('shift_task_done',  `[${SHIFTS[key].label}] ${task?.name || id}`); }
   _renderShiftContent(key);
   updateShiftBadge(key);
-  persistShifts();
+  _stSaveTick(key, id, idx < 0);
   if (typeof isOnline === 'function' && !isOnline()) showToast('Saved locally — offline', 'info');
+}
+
+// A tick changes only that one task, on top of what the team has ticked: the
+// saved list is read fresh and this tick is added to (or taken from) it. Saving
+// this device's whole list instead wiped the ticks of a colleague whenever this
+// copy was behind (a phone waking up, a bubble tapped minutes later).
+async function _stSaveTick(key, id, add) {
+  if (!_shiftsLoaded) { console.warn('[shifts] not saving — the saved tasks have not loaded yet'); return; }
+  const path = 'shifts/data/' + key + '/done';
+  let cur = null;
+  try { cur = typeof fbGet === 'function' ? await fbGet(path) : null; } catch (_) {}
+  const list = Array.isArray(cur) ? cur : (cur && typeof cur === 'object') ? Object.values(cur) : SHIFTS[key].done.slice();
+  const set = new Set(list.filter(Boolean));
+  if (add) set.add(id); else set.delete(id);
+  SHIFTS[key].done = [...set].filter(x => SHIFTS[key].tasks.some(t => t.id === x));
+  if (typeof fbSet === 'function') { fbSet(path, SHIFTS[key].done); fbSet('shifts/updatedAt', new Date().toISOString()); }
+  else persistShifts();
+  updateShiftBadge(key);
+  if (typeof activeShift !== 'undefined' && activeShift === key && document.getElementById('panel-shifts')?.classList.contains('active')) _renderShiftContent(key);
 }
 
 // ── Move up/down ──────────────────────────────────────────
@@ -344,7 +363,7 @@ function applyShiftData(saved, heardFromDb = true) {
     const s = saved && saved[k];
     if (s) {
       SHIFTS[k].tasks   = Array.isArray(s.tasks) && s.tasks.length ? s.tasks : [];
-      SHIFTS[k].done    = Array.isArray(s.done) ? s.done : [];
+      SHIFTS[k].done    = Array.isArray(s.done) ? s.done.filter(Boolean) : (s.done && typeof s.done === 'object') ? Object.values(s.done) : [];
       SHIFTS[k].resetAt = s.resetAt || '';
       SHIFTS[k].autoDay = s.autoDay || '';
     }
@@ -378,21 +397,36 @@ function _stCurrentInstance() {
   const pad = n => String(n).padStart(2, '0');   // local date, not UTC
   return { key, day: `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}` };
 }
-function stAutoFreshStart() {
+let _stFreshBusy = false;
+async function stAutoFreshStart() {
   if (typeof hoPref === 'function' && hoPref('autoResetShifts') === false) return;
   if (typeof _shiftsLoaded === 'undefined' || !_shiftsLoaded || typeof SHIFTS === 'undefined') return;
   if (typeof currentUser === 'undefined' || !currentUser) return;
+  if (typeof isOnline === 'function' && !isOnline()) return;   // offline: can't see what the team did, so never clear
   const { key, day } = _stCurrentInstance();
   const sh = SHIFTS[key];
-  if (!sh || sh.autoDay === day) return;
+  if (!sh || sh.autoDay === day || _stFreshBusy) return;
+  // another device may have started this shift fresh already, and the team may have ticked since:
+  // read the saved state first and only clear when nobody has started this shift yet
+  _stFreshBusy = true;
+  try {
+    const saved = typeof fbGet === 'function' ? await fbGet('shifts/data/' + key) : null;
+    if (saved && saved.autoDay === day) {
+      sh.autoDay = day;
+      sh.done = Array.isArray(saved.done) ? saved.done : (saved.done && typeof saved.done === 'object') ? Object.values(saved.done) : [];
+      updateShiftBadge(key);
+      return;
+    }
+  } catch (_) { return; } finally { _stFreshBusy = false; }
   // first time ever (just after this update): keep what is ticked, start counting from now
-  if (!sh.autoDay) { sh.autoDay = day; persistShifts(); return; }
+  const saveThis = patch => { if (typeof fbUpdate === 'function') { fbUpdate('shifts/data/' + key, patch); fbSet('shifts/updatedAt', new Date().toISOString()); } else persistShifts(); };
+  if (!sh.autoDay) { sh.autoDay = day; saveThis({ autoDay: day }); return; }
   const hadTicks = (sh.done || []).length;
   sh.done = [];
   sh.autoDay = day;
   sh.resetAt = new Date().toLocaleString('en-GB');
   if (hadTicks) { try { stLog(key, 'reset', 'New shift — started fresh automatically'); } catch (_) {} }
-  persistShifts();
+  saveThis({ done: null, autoDay: day, resetAt: sh.resetAt });   // only this shift's ticks, never the other lists
   updateShiftBadge(key);
   if (typeof activeShift !== 'undefined' && activeShift === key && document.getElementById('panel-shifts')?.classList.contains('active')) _renderShiftContent(key);
   if (hadTicks && typeof showToast === 'function' && !(typeof hoQuiet === 'function' && hoQuiet())) showToast(`⏰ New ${sh.label || key}: shift tasks start fresh`, 'ok');

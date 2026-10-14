@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 268, items: [
+    '✅ Shift tasks: ticking a task (on the page, or ✓ Done in an Ops Brain reminder) now adds only that tick to what the team already ticked. Before, a phone whose list was behind saved its whole old list and wiped everyone else\'s ticks, so it looked like a reset with only your task done.',
+    '🔄 The fresh list at the start of each shift checks what is saved first: if a colleague already started the shift, it keeps their ticks instead of clearing them again, and it never clears while offline.',
+  ] },
   { v: 267, items: [
     '🏛️ DTCM Recon reads a month-to-date report properly (e.g. 1–14 Oct). Before, a report longer than a week was counted night by night from each guest\'s check-in, so guests who arrived in September made hundreds of false "to add" and "to verify" items. Your 1–13 Oct files went from 565 corrections to 31 real ones, and the 30 AED is fully explained.',
     '🛑 The 30-night limit is counted in that window too: for a long stay the free nights are the ones after night 30, not the first days of the month. A night 31 posted in Opera shows as one to reverse.',
