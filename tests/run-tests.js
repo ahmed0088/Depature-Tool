@@ -1115,6 +1115,9 @@ console.log('\nQuiet when off · shift task times');
   check('nothing on the roster: unknown, alarms as before', duty('2026-10-20', 10), 'unknown');
   check('no name chosen: unknown', run(`(() => { const k = roMeKey; roMeKey = ''; const r = hoMyDuty(new Date(2026, 9, 11, 12)).state; roMeKey = k; return r; })()`), 'unknown');
   check('the reason says PH', run(`hoMyDuty(new Date(2026, 9, 11, 12)).why`), "you're on PH today");
+  check('next shift label: 00:00 dated today is tonight at midnight', run(`_roWhen({ date: '2026-10-11', info: roInfo('00:00 - 09:00'), span: {}, inDays: 0 })`), 'Tonight at midnight');
+  check('next shift label: 02:00 dated today starts tonight, not this morning', run(`_roWhen({ date: '2026-10-11', info: roInfo('02:00 - 10:00'), span: {}, inDays: 0 })`), 'Tonight at 02:00');
+  check('next shift label: 00:00 dated tomorrow is tomorrow night', run(`_roWhen({ date: '2026-10-12', info: roInfo('00:00 - 09:00'), span: {}, inDays: 1 })`), 'Tomorrow night at midnight');
   check('Quiet when I\'m off can be turned off', run(`(() => { globalThis.hoPref = k => k === 'quietOff' ? false : undefined; const r = hoQuiet(new Date(2026, 9, 11, 12)); delete globalThis.hoPref; return r; })()`), false);
 
   const sh = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} },

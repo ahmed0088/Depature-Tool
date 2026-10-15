@@ -126,7 +126,10 @@ async function fbUpdate(path, patch) {
 async function fbGet(path) {
   if (!_ref) return lsLoad(path);
   try {
-    const snap = await _ref.child(path).once('value');
+    // offline, once() waits until the connection is back: give up after 10 s and use this device's copy
+    // (noted as a read error, so nothing is saved over the team's data from it)
+    const snap = await Promise.race([_ref.child(path).once('value'),
+      new Promise((_, no) => setTimeout(() => no(new Error('no answer from the database (offline?)')), 10000))]);
     const val  = snap.val();
     if (val !== null) lsSave(path, val);
     _dbClearError();
@@ -136,8 +139,15 @@ async function fbGet(path) {
 
 // KEY FUNCTION: .on('value') fires immediately AND on every future change.
 // This is what makes real-time sync work without refresh.
+// A listener asked for before anyone is signed in waits until they are: started on the login
+// screen, the database refuses it and Firebase cancels it for good, so after a sign-out (which
+// reloads) and a slower sign-in, roster, wake-ups, notes and settings never updated that session.
+const _fbWaiting = [];
+function _fbSignedIn() { return typeof currentUser === 'undefined' || !!currentUser; }
+function fbSignedInNow() { _fbWaiting.splice(0).forEach(([p, c]) => fbListen(p, c)); }
 function fbListen(path, cb) {
   if (!_ref) { cb(lsLoad(path)); return; }
+  if (!_fbSignedIn()) { _fbWaiting.push([path, cb]); return; }
   _ref.child(path).on('value', snap => {
     const val = snap.val();
     if (val !== null) lsSave(path, val);
@@ -180,6 +190,21 @@ async function saveShiftLog(shiftLogsObj) {
 
 async function saveFeedback(log) {
   await fbSet('feedback', { log, updatedAt: new Date().toISOString() });
+}
+
+/** Add one entry to the top of a shared log, in one step on the server (a transaction), so two
+ *  people writing at once both keep theirs. Saving the whole array from this device instead wiped
+ *  every entry a colleague added since this device loaded. Resolves with the log as now saved. */
+async function fbPushLog(path, entry, max) {
+  const top = cur => [entry].concat(Array.isArray(cur) ? cur.filter(Boolean) : (cur && typeof cur === 'object') ? Object.values(cur) : []).slice(0, max || 100);
+  if (!_ref) { const v = top(lsLoad(path)); lsSave(path, v); return v; }
+  try {
+    const r = await _ref.child(path).transaction(top);
+    const v = r && r.snapshot ? r.snapshot.val() : null;
+    if (v) lsSave(path, v);
+    _dbClearError();
+    return Array.isArray(v) ? v : (v && typeof v === 'object') ? Object.values(v) : null;
+  } catch (e) { _dbNoteError('saving ' + path, e); return null; }
 }
 
 async function saveArrLog(log) {

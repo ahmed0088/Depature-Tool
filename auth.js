@@ -70,14 +70,17 @@ function authInit() {
     }
     currentUser    = user;
     currentProfile = profile;
+    if (typeof fbSignedInNow === 'function') setTimeout(fbSignedInNow, 0);   // live updates that waited for sign-in
 
     // Clear any stale forceLogout flag left from a previous disconnect
     if (profile.forceLogout) {
       try { await firebase.database().ref(`hotels/${HOTEL_ID}/users/${user.uid}`).update({ forceLogout: false }); } catch(e) {}
     }
 
-    await updateLastLogin(user.uid);
-    await logActivity('login');
+    // not awaited: a database write only settles when the server confirms, so offline these never
+    // finished and the app stayed on the login screen. They are sent when the connection is back.
+    updateLastLogin(user.uid);
+    logActivity('login');
     let myTheme = null; try { myTheme = localStorage.getItem('ho_theme_v1'); } catch (_) {}
     if (profile.theme && !myTheme) setTheme(profile.theme, null, true);   // this device's own choice wins
     applyRole(profile.role);
@@ -96,10 +99,15 @@ function authInit() {
 // as Guest Memory's own auto-relock (30 min) for a consistent convention.
 const IDLE_LOGOUT_MINS = 30;
 let _idleTimer = null;
+/** Minutes from Settings → Privacy → Sign out when idle (0 = never); 30 until someone chooses */
+function _idleMins() {
+  if (typeof hoPrefs === 'undefined' || !hoPrefs.autoLockChosen) return IDLE_LOGOUT_MINS;
+  const m = +hoPrefs.autoLock; return Number.isFinite(m) ? m : IDLE_LOGOUT_MINS;
+}
 function _resetIdleTimer() {
   clearTimeout(_idleTimer);
-  if (!currentUser) return;
-  _idleTimer = setTimeout(_idleLogout, IDLE_LOGOUT_MINS * 60000);
+  if (!currentUser || !_idleMins()) return;
+  _idleTimer = setTimeout(_idleLogout, _idleMins() * 60000);
 }
 async function _idleLogout() {
   if (!currentUser) return;
@@ -112,7 +120,7 @@ async function _idleLogout() {
   currentProfile = null;
   try { await firebase.auth().signOut(); } catch(e) {}
   _clearLocalGuestDataCache();
-  _afterSignOut(`Signed out after ${IDLE_LOGOUT_MINS} minutes of inactivity.`);
+  _afterSignOut(`Signed out after ${_idleMins()} minutes of inactivity.`);
 }
 ['mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt =>
   document.addEventListener(evt, _resetIdleTimer, { passive: true })
@@ -416,12 +424,12 @@ function updateAuthUI() {
     if (isMob) {
       el.innerHTML = `
         <span style="color:${def.color};font-size:0.9rem;flex-shrink:0;">${def.icon}</span>
-        <span class="pill-name" style="font-weight:600;font-size:0.65rem;overflow:hidden;text-overflow:ellipsis;max-width:90px;">${firstName}</span>
+        <span class="pill-name" style="font-weight:600;font-size:0.65rem;overflow:hidden;text-overflow:ellipsis;max-width:90px;">${escapeHtml(firstName)}</span>
       `;
     } else {
       el.innerHTML = `
         <span style="color:${def.color};font-size:0.85rem;flex-shrink:0;">${def.icon}</span>
-        <span class="pill-name" style="font-weight:600;overflow:hidden;text-overflow:ellipsis;">${p.name}</span>
+        <span class="pill-name" style="font-weight:600;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(p.name)}</span>
         <span class="pill-role" style="color:var(--text3);font-size:0.6rem;flex-shrink:0;">${def.label}</span>
         <button onclick="authLogout()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:0.8rem;padding:2px 0 0 2px;line-height:1;flex-shrink:0;" title="Sign out">⏻</button>
       `;

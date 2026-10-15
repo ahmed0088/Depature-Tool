@@ -35,7 +35,8 @@ const HO_PREF_DEFAULTS = {
   tbClock: true, tbVersion: true, tbConn: true, tbThemes: true, tbUser: true,
   clock12: false, clockSeconds: false, greetName: true,
   privacy: false,
-  autoLock: 0,            // minutes without activity before signing out (0 = never)
+  autoLockChosen: false,
+  autoLock: 30,           // minutes without activity before signing out (0 = never); 30 is what shared desk PCs always had
   soundAlerts: false,
   desktopNotify: false,
   haptics: true,
@@ -52,6 +53,7 @@ let hoPrefs = (() => { try { return Object.assign({}, HO_PREF_DEFAULTS, JSON.par
 function hoPref(k) { return hoPrefs[k]; }
 function hoSetPref(k, v) {
   hoPrefs[k] = v;
+  if (k === 'autoLock') hoPrefs.autoLockChosen = true;   // the old default (0) saved with other settings is not a choice
   try { localStorage.setItem(HO_PREFS_KEY, JSON.stringify(hoPrefs)); } catch (_) {}
   hoApplyPrefs();
   if (k === 'depSize' && typeof setDepSize === 'function') setDepSize(v, [...document.querySelectorAll('.vt-btn')].find(b => (b.getAttribute('onclick') || '').includes(`'${v}'`)));
@@ -338,6 +340,9 @@ async function hoSetNotify(on, el) {
 // ── Sign out when idle ───────────────────────────────────
 let _hoIdleT = null, _hoIdleArmed = false;
 function hoArmAutoLock() {
+  // one idle timer, in auth.js, that reads this setting and signs out without asking (a "Sign out?"
+  // question on an unattended desk PC waited forever and nobody was signed out)
+  if (typeof _resetIdleTimer === 'function') { _resetIdleTimer(); return; }
   clearTimeout(_hoIdleT);
   const m = +hoPrefs.autoLock || 0;
   if (!m) return;

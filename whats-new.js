@@ -9,6 +9,14 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 271, items: [
+    '🛡️ A full check of the app, with about 30 fixes. The big ones: saving no longer wipes what a colleague did meanwhile. Departures saves only the rooms you changed (a colleague\'s check-out typed while you wrote a note stays), the Arrivals, Purpose, Feedback and Shift logs add your line on top of everyone\'s, shift task edits touch only that shift, and Package Audit pins and copied marks save one at a time (Undo only puts back yours).',
+    '🔄 Clearing or resetting (the departure board, No Show, the night checklist) now reaches every device; before, another device kept the old data and brought it back. The Arrivals and Purpose activity logs load again after a reload.',
+    '📶 Sign-in no longer hangs with no signal, and roster, wake-ups, notes and settings stay live after signing out and in again.',
+    '⏰ Sign out when idle follows the setting (Never, 15 min… 4 hours) and never stops on a "Sign out?" question. Wake-up calls: changing 23:45 to 00:15 moves the call to the next morning, and missed calls stay in Call now until someone marks them. Late check-out typed as "1pm" or "1300" is understood.',
+    '🗓️ Roster: "Build again" on a posted week keeps the new build instead of snapping back to the posted one, approving a swap no longer deletes unpublished edits, "next shift" shows the right day for night shifts (00:00 on Saturday = Saturday night), a new shift code takes effect at once, and a scanned roster can\'t merge two people into one.',
+    '🔒 Names, notes and file names from the team or from reports can no longer run code on someone else\'s screen (No Show, checklist, undo messages, user name). The ready-made Firebase rules are stricter: a disabled account can\'t read anything, nobody can raise their own role, and a new hotel can be set up by the person who creates it.',
+  ] },
   { v: 270, items: [
     '🔄 Shift tasks start fresh every day by themselves: each list (morning, mid, afternoon, night) is cleared once when its shift begins, for the whole team, even a list nobody opened that day. The shift that just ended keeps its ticks for the handover, and dated tasks keep theirs. Settings → Helpers → Fresh shift tasks every day.',
     '🧹 The browser\'s own storage message ("database without an in-progress transaction", from the sign-in library) no longer counts as an app error in Ops Brain.',

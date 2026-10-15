@@ -137,6 +137,7 @@ function wkEditTime(id) {
   const v = prompt(`New time for room ${w.room}`, w.time); if (v == null) return;
   const t = _wkTime(v); if (!t) { showToast('Write the time like 6:30', 'warn'); return; }
   const d = new Date(w.at); d.setHours(t[0], t[1], 0, 0);
+  if (d.getTime() < Date.now() - 60e3) d.setDate(d.getDate() + 1);   // 23:45 → 00:15 is the next morning, not hours ago
   _wkPatch(id, { at: d.getTime(), time: _wkHM(d), alerts: 0, lastAlert: 0 });
 }
 function wkConfirmed(id) { _wkPatch(id, { confirmed: true }); }
@@ -215,7 +216,8 @@ function _wkLists(root) {
   const now = Date.now(), f = _wkFilter.toLowerCase();
   const match = w => !f || String(w.room).toLowerCase().includes(f) || String(w.name || '').toLowerCase().includes(f);
   const all = _wkAll().filter(match);
-  const due = all.filter(w => !w.done && w.at <= now && w.at > now - 6 * 3600e3).sort((a, b) => a.at - b.at);
+  // every open call whose time has come stays here until someone marks it (the menu count shows them too)
+  const due = all.filter(w => !w.done && w.at <= now).sort((a, b) => a.at - b.at);
   const next = all.filter(w => !w.done && w.at > now).sort((a, b) => a.at - b.at);
   const log = all.filter(w => w.done && (w.doneAt || w.at) > now - 24 * 3600e3).sort((a, b) => (b.doneAt || b.at) - (a.doneAt || a.at));
   const dayName = t => { const d = _wkDay(t), td = _wkDay(now); return d === td ? 'Today' : d === td + 864e5 ? 'Tomorrow' : new Date(t).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' }); };

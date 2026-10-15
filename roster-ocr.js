@@ -511,7 +511,12 @@ function _roOcrRes(people, dates, note) {
     const b = n; let i = 2; while (cells[n]) n = `${b} (${i++})`;
     names.push(n);
     // matched to someone in the team: saved under their own record, even if they were renamed since
-    if (p.nm.known && typeof roStaff !== 'undefined') { const k = Object.keys(roStaff).find(x => roStaff[x] === p.nm.known); if (k) keys[n] = k; }
+    // two rows that look like the same person: only the first is saved under that record, the other is marked "?" to check
+    if (p.nm.known && typeof roStaff !== 'undefined') {
+      const k = Object.keys(roStaff).find(x => roStaff[x] === p.nm.known);
+      if (k && !Object.values(keys).includes(k)) keys[n] = k;
+      else if (k && !/\?$/.test(n)) { names[names.length - 1] = n = n + ' ?'; unsureNames++; }
+    }
     cells[n] = {};
     p.day.forEach((v, i) => { if (v && dates[i]) cells[n][dates[i]] = v; });
     if (p.group) groups[n] = p.group;

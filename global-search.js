@@ -145,7 +145,7 @@ function gsRenderResults(q) {
   }
 
   box.innerHTML = _gsResults.map((r, i) => `
-    <div class="gs-result${i === _gsSelIdx ? ' sel' : ''}" onclick="gsJump(${i})" onmouseenter="_gsSelIdx=${i};gsRenderResults('${q.replace(/'/g, "\\'")}')">
+    <div class="gs-result${i === _gsSelIdx ? ' sel' : ''}" onclick="gsJump(${i})" onmouseenter="_gsSelIdx=${i};gsRenderResults('${escapeJsAttr(q)}')">
       <span class="gs-result-icon">${r.icon}</span>
       <div class="gs-result-body">
         <span class="gs-result-name">${r.room ? `<span class="gs-result-room">${escapeHtml(r.room)}</span> ` : ''}${escapeHtml(r.name || '—')}</span>

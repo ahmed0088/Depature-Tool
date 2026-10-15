@@ -256,10 +256,11 @@ function showUndoToast(msg, undoFn, timeoutMs = 6000) {
     document.body.appendChild(toast);
   }
   clearTimeout(_undoTimer);
+  clearInterval(showUndoToast._tick);   // a new toast replaces the old countdown
   let remaining = Math.round(timeoutMs / 1000);
   const render = () => {
     toast.innerHTML = `
-      <span class="undo-toast-msg">${msg}</span>
+      <span class="undo-toast-msg">${escapeHtml(String(msg))}</span>
       <button class="undo-toast-btn" id="undoToastBtn">↺ Undo</button>
       <span class="undo-toast-timer">${remaining}s</span>`;
     document.getElementById('undoToastBtn').onclick = () => {
@@ -270,7 +271,7 @@ function showUndoToast(msg, undoFn, timeoutMs = 6000) {
   };
   render();
   toast.classList.add('show');
-  const tick = setInterval(() => {
+  const tick = showUndoToast._tick = setInterval(() => {
     remaining -= 1;
     const t = toast.querySelector('.undo-toast-timer');
     if (t) t.textContent = remaining + 's';
@@ -516,7 +517,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v270';
+const APP_VERSION = 'v271';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;

@@ -91,7 +91,9 @@ Roles are defined in `auth.js` (`ROLES`): 👑 Owner, 🏅 Manager, ⭐ Supervis
 
 `database.rules.json` holds rules made for this app:
 - Only signed-in members of a hotel can read or change that hotel's data.
-- Only an Owner or Manager can add or change other people's accounts, and nobody can raise their own role.
+- Only an Owner or Manager can add or change other people's accounts. Nobody can raise their own role or switch their own account back on, and a Manager can't make anyone an Owner.
+- A disabled account (active = false) can't read or write anything.
+- The person who creates a new hotel can set it up (its settings and the new owner's link) once.
 - The very first account of a new hotel can still create itself as Owner.
 
 To use them, open Firebase console → Realtime Database → **Rules**. **Copy your current rules somewhere first** (to undo if needed), paste the file, then try it in the **Rules Playground** and click **Publish**. Then sign in to the app and check that pages load and saving works.

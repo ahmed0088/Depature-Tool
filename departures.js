@@ -1581,8 +1581,26 @@ function depAction(i, status, extraNights) {
   logActivity('departure_' + status, `Room ${r.roomStr} — ${r.name} (${_actionLabels[status] || status})`);
 }
 
+// The last copy heard from the server, so a save sends only what this device changed: a whole-board
+// save from a copy that was behind put a colleague's check-outs back to "due" and dropped their log lines.
+let _depBase = null;
+function depSetBase(rooms, log) { _depBase = { rooms: (rooms || []).map(r => JSON.stringify(r)), log: (log || []).map(e => JSON.stringify(e)) }; }
 function saveDeps() {
-  saveDepartures(depRooms, depLog);
+  const b = _depBase, srv = window._depPendingSnap;
+  const sameBoard = b && typeof fbUpdate === 'function' && b.rooms.length === depRooms.length &&
+    depRooms.every((r, i) => { try { return JSON.parse(b.rooms[i]).roomStr === r.roomStr; } catch (_) { return false; } });
+  if (!sameBoard) { saveDepartures(depRooms, depLog); depSetBase(depRooms, depLog); return; }   // a new upload or a clear: the whole board
+  const patch = {};
+  depRooms.forEach((r, i) => { if (JSON.stringify(r) !== b.rooms[i]) patch['rooms/' + i] = r; });
+  // the log: my new lines on top of the server's, minus the lines I removed (undo)
+  const js = e => JSON.stringify(e), local = depLog.map(js), baseSet = new Set(b.log), localSet = new Set(local);
+  const added = depLog.filter((e, i) => !baseSet.has(local[i]));
+  const removed = new Set(b.log.filter(x => !localSet.has(x)));
+  const server = (srv && Array.isArray(srv.log)) ? srv.log : b.log.map(x => JSON.parse(x));
+  const merged = added.concat(server.filter(e => !removed.has(js(e))));
+  if (!Object.keys(patch).length && merged.length === server.length && !added.length && !removed.size) return;
+  patch.log = merged; patch.date = typeof hoLocalISO === 'function' ? hoLocalISO() : new Date().toISOString().slice(0, 10); patch.updatedAt = new Date().toISOString();
+  fbUpdate('departures', patch);
 }
 
 // Public read-only check used by the Firebase listener and depRender
@@ -1765,6 +1783,10 @@ function depUndoLog(li) {
   const entry = depLog[li]; if (!entry) return;
   // Can't undo an undo — only forward actions
   if (entry.action === 'undo') { showToast('Cannot undo an undo entry', 'info'); return; }
+  // only the room's latest action can be undone: undoing an older line put a checked-out room back to "due"
+  if (depLog.slice(0, li).some(e => e && e.room === entry.room && e.action !== 'undo')) {
+    showToast(`Room ${entry.room} has a newer action — undo that one first`, 'info'); return;
+  }
   const t = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
   // Find room by string — roomIdx can be stale after reloads
   const r = depRooms.find(rm => rm.roomStr === entry.room) || depRooms[entry.roomIdx];
@@ -2459,7 +2481,7 @@ function depAskLCO(i) {
       <div id="lcoQuickBtns">
         ${QUICK.map(t => `<button data-t="${t}" onclick="lcoQuickPick('${t}')">${t}</button>`).join('')}
       </div>
-      <input id="lcoCustomInput" type="text" placeholder="or type e.g. 12:45" maxlength="5" value="${r.lateTime || ''}" />
+      <input id="lcoCustomInput" type="text" placeholder="or type e.g. 12:45" maxlength="5" value="${escapeHtml(r.lateTime || '')}" />
       <div style="display:flex;gap:8px;">
         <button id="lcoConfirmBtn" onclick="lcoConfirm(${i})">Set Late CO</button>
         <button id="lcoCancelBtn" onclick="document.getElementById('lcoPickerOverlay').remove();document.getElementById('lcoStyle')?.remove();">Cancel</button>
@@ -2477,9 +2499,18 @@ function depAskLCO(i) {
   window.lcoConfirm = function(idx) {
     const time = (document.getElementById('lcoCustomInput').value || '').trim();
     if (!time) { showToast('Pick or type a time first', 'err'); return; }
+    // "1pm", "1300", "13.30": written as 13:00 / 13:30, or the overdue alert could never read it
+    let lt = time;
+    if (_parseLcoTime(lt) == null) {
+      const m = lt.replace(/\s+/g, '').match(/^(\d{1,2})(?:[.h]?(\d{2}))?(am|pm)?$/i);
+      let h = m ? +m[1] : NaN, mi = m && m[2] ? +m[2] : 0;
+      if (m && m[3]) { const pm = /pm/i.test(m[3]); if (pm && h < 12) h += 12; if (!pm && h === 12) h = 0; }
+      if (!m || h > 23 || mi > 59) { showToast('Write the time like 12:45 or 1pm', 'err'); return; }
+      lt = `${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')}`;
+    }
     document.getElementById('lcoPickerOverlay').remove();
     document.getElementById('lcoStyle')?.remove();
-    depRooms[idx].lateTime = time;
+    depRooms[idx].lateTime = lt;
     depAction(idx, 'late');
   };
 

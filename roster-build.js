@@ -1557,6 +1557,7 @@ async function _rbBuildNow() {
   _rbReveal = true;
   if (rbWeek !== week) rbWeek = week;   // (the week built is the week saved, even if someone switched meanwhile)
   rbDrafts[rbWeek] = Object.assign({ cells: res.cells, at: Date.now(), by: (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '', sig: rbRulesSig(), ver: typeof APP_VERSION !== 'undefined' ? APP_VERSION : '' }, res.notes && res.notes.length ? { notes: res.notes } : {});
+  rbMarkPostedEdit(rbWeek);
   rbSaveDraft();
   rbRender();
   const short = res.problems.filter(p => p.kind === 'short').length, bent = (res.notes || []).filter(n => n.auto).length;
@@ -1693,7 +1694,7 @@ function rbRender() {
   const root = document.getElementById('rbRoot');
   if (!root) return;
   if (!rbWeek) rbWeek = rbDefaultWeek();
-  rbSyncPosted(rbWeek);
+  if (roCanEdit()) rbSyncPosted(rbWeek);   // only editors write drafts
   if (!roCanEdit()) { root.innerHTML = `<div class="page-hd"><div class="page-hd-left"><h1>Roster builder</h1><p>Supervisors, managers and owners build the roster here.</p></div></div>`; return; }
   const groups = rbGroups();
   if (rbGroup == null) rbGroup = (roStaff[roMeKey] || {}).group || '';
@@ -1859,6 +1860,14 @@ function rbPhBalHtml() {
 /** A posted week shows what was posted: when it was posted after the builder's draft (management's roster given
  *  as the week's roster), or the draft is only the posted copy and the posted roster changed since (an edit on the
  *  Roster page). A draft made after posting, still being worked on, is kept. */
+/** A build (or "same as last week") on a week that is already posted is an edit not published yet:
+ *  marked so, the posted roster no longer replaces it (it did, the moment the page redrew). */
+function rbMarkPostedEdit(w) {
+  const D = rbDrafts[w];
+  if (!D || !rbPostedWeek(w) || typeof rtPublished !== 'function') return;
+  const posted = {}; Object.entries(rtPublished(w)).forEach(([k, row]) => { if (Object.keys(row).length) posted[k] = row; });
+  Object.assign(D, { fromPublished: true, edited: true, postedSig: rbHashStr(JSON.stringify(Object.keys(posted).sort().map(k => [k, posted[k]]))) });
+}
 function rbSyncPosted(w) {
   if (!w || !rbPostedWeek(w) || typeof rtPublished !== 'function') return;
   const posted = {}; Object.entries(rtPublished(w)).forEach(([k, row]) => { if (Object.keys(row).length) posted[k] = row; });
@@ -1938,6 +1947,7 @@ function rbFromLastWeek() {
   const res = rbSolve(I);
   if (rbDrafts[rbWeek]) rbUndoPush();
   rbDrafts[rbWeek] = { cells: res.cells, at: Date.now(), by: (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '', from: prev };
+  rbMarkPostedEdit(rbWeek);
   rbSaveDraft(); rbRender();
   let same = 0, all = 0; Object.keys(keep).forEach(k => Object.keys(keep[k]).forEach(dt => { all++; if (rbNorm(res.cells[k][dt]) === keep[k][dt] || (keep[k][dt] === 'OFF' && rbKind(res.cells[k][dt]) === 'off')) same++; }));
   showToast(`Built from ${rbWeekLabel(prev)}: ${same} of ${all} days the same; the rest changed for requests, leave and the rules`, 'ok');
@@ -2028,7 +2038,7 @@ function rbDecisionsHtml(I, cells, shown, dates) {
   const n2m = []; I.people.forEach(p => { if (shown.includes(rbBaseGroup(p.group))) rbNightToMorning(cells, p, dates).forEach(dt => n2m.push({ p, dt })); });
   if (!notes.length && !moved.length && !soft.length && !n2m.length) return '';
   const fn = k => escapeHtml(((roStaff[k] || {}).name || k).split(' ')[0]);
-  const named = p => notes.some(n => new RegExp('\\b' + ((roStaff[p.key] || {}).name || '').split(' ')[0] + '\\b').test(n.text || ''));
+  const named = p => notes.some(n => new RegExp('\\b' + ((roStaff[p.key] || {}).name || '').split(' ')[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').test(n.text || ''));
   const why = p => named(p) ? 'part of the decision above' : rbFloats(p) ? 'Duty Manager: works wherever needed' : rbFloatsLast(p) ? 'Supervisor from another hotel: only because nobody else could' : I.rules.lend === false ? '' : 'spare at their own hotel that day';
   return `<div class="rb-decide"><div class="rb-sub">📝 Decisions this week <small>so you know what was done, and why</small></div>
     ${notes.map((n, i) => n.card ? `<div class="rb-dec warn rb-bent"><div><b class="rb-bent-hd">⚠ Rule bent · ${escapeHtml(n.card.day)}</b>

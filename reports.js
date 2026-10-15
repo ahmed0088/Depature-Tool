@@ -869,7 +869,7 @@ function saveFeedbackItem(){
   const text=(document.getElementById('fb-text').value||'').trim();if(!text){alert('Please describe your feedback.');return;}
   const entry={id:Date.now(),type:document.getElementById('fb-type').value,text,priority:document.getElementById('fb-priority').value,name:(document.getElementById('fb-name').value||'').trim()||'Anonymous',time:new Date().toLocaleString('en-GB')};
   feedbackLog.unshift(entry);
-  saveFeedback(feedbackLog);
+  fbPushLog('feedback/log', entry, 500).then(v => { if (v) feedbackLog = v; });
   closeFeedbackModal();
   showToast('Feedback saved to Firebase ✓');
 }

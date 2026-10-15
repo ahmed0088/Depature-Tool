@@ -152,11 +152,11 @@ function clRenderLog() {
   body.innerHTML = clLog.map(e => {
     const l  = labels[e.type] || { dot: 'done', text: e.type };
     const t  = new Date(e.ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-    const nm = e.stepName ? `<strong>${e.stepName}</strong>` : '<strong>—</strong>';
-    const ex = e.extra    ? `<span style="color:var(--text3);"> · ${e.extra}</span>` : '';
+    const nm = e.stepName ? `<strong>${escapeHtml(e.stepName)}</strong>` : '<strong>—</strong>';
+    const ex = e.extra    ? `<span style="color:var(--text3);"> · ${escapeHtml(e.extra)}</span>` : '';
     return `<div class="cl-log-entry">
       <div class="cl-log-dot ${l.dot}"></div>
-      <div class="cl-log-text">${l.text} ${nm}${ex}</div>
+      <div class="cl-log-text">${escapeHtml(l.text)} ${nm}${ex}</div>
       <div class="cl-log-time">${t}</div>
     </div>`;
   }).join('');
@@ -196,7 +196,7 @@ function clHandlePhotoUpload(evt, stepId) {
     const reader = new FileReader();
     reader.onload = e => {
       _compressImage(e.target.result, 1200, 0.82, compressed => {
-        clPhotos[stepId].push({ data: compressed, name: file.name, ts: new Date().toISOString() });
+        if (compressed) clPhotos[stepId].push({ data: compressed, name: file.name, ts: new Date().toISOString() });
         loaded++;
         if (loaded === files.length) {
           _renderModalPhotos(stepId);
@@ -221,6 +221,8 @@ function _compressImage(dataUrl, maxW, quality, cb) {
     canvas.getContext('2d').drawImage(img, 0, 0, w, h);
     cb(canvas.toDataURL('image/jpeg', quality));
   };
+  // a photo the browser can't open (e.g. HEIC on a computer) used to stop the whole batch saving
+  img.onerror = () => { if (typeof showToast === 'function') showToast('One photo could not be opened (try JPG or PNG)', 'warn'); cb(null); };
   img.src = dataUrl;
 }
 
@@ -244,9 +246,9 @@ function _renderModalPhotos(stepId) {
   }
   wrap.innerHTML = photos.map((p, i) => `
     <div class="cl-photo-thumb">
-      <img src="${p.data}" alt="${p.name}" onclick="clOpenLightbox(${stepId},${i})" title="Click to expand"/>
+      <img src="${escapeHtml(p.data)}" alt="${escapeHtml(p.name)}" onclick="clOpenLightbox(${stepId},${i})" title="Click to expand"/>
       <button class="cl-photo-del" onclick="clDeletePhoto(${stepId},${i})" title="Remove photo">✕</button>
-      <div class="cl-photo-name">${p.name.length > 18 ? p.name.slice(0,16)+'...' : p.name}</div>
+      <div class="cl-photo-name">${escapeHtml(p.name.length > 18 ? p.name.slice(0,16)+'...' : p.name)}</div>
     </div>
   `).join('');
 }
@@ -323,7 +325,7 @@ function clRender2() {
 
       const photoStrip = photos.length > 0 && !clEditMode ? `
         <div class="cl-photo-strip" onclick="event.stopPropagation()">
-          ${photos.map((p,idx) => `<img src="${p.data}" class="cl-strip-thumb" onclick="clOpenLightbox(${s.id},${idx})" title="${p.name}"/>`).join('')}
+          ${photos.map((p,idx) => `<img src="${escapeHtml(p.data)}" class="cl-strip-thumb" onclick="clOpenLightbox(${s.id},${idx})" title="${escapeHtml(p.name)}"/>`).join('')}
           <span class="cl-photo-count">📷 ${photos.length} photo${photos.length>1?'s':''}</span>
         </div>` : '';
 
@@ -333,7 +335,7 @@ function clRender2() {
         <div class="cl-note-wrap" onclick="event.stopPropagation()">
           <textarea class="cl-note-input" id="cl-note-${s.id}" rows="1" placeholder="Add a note…"
             onblur="clSaveNote(${s.id})"
-          >${note}</textarea>
+          >${escapeHtml(note)}</textarea>
         </div>` : '';
 
       html += `<div class="cl-step${done?' done':''}${skip?' skipped':''}"
@@ -349,8 +351,8 @@ function clRender2() {
               <span style="font-size:0.54rem;color:${tagColors[s.tag]||'var(--text3)'};">${s.tag.toUpperCase()}</span>
               ${photos.length > 0 ? `<span class="cl-has-photo" title="${photos.length} photo(s) attached" style="margin-left:4px;">📷</span>` : ''}
             </div>
-            <div class="cl-name">${s.name}</div>
-            ${s.hint ? `<div class="cl-hint">${s.hint}</div>` : ''}
+            <div class="cl-name">${escapeHtml(s.name)}</div>
+            ${s.hint ? `<div class="cl-hint">${escapeHtml(s.hint)}</div>` : ''}
             ${tsHtml}
             ${photoStrip}
             ${noteArea}

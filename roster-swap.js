@@ -25,7 +25,7 @@ function rsRestCheck(k, date, code) {
   const R = typeof rbRules === 'function' ? rbRules() : { minRest: 11 };
   const info = roInfo(code), sp = roSpan(date, info), out = [];
   if (!sp) return out;   // a day off or leave never breaks rest
-  const isNight = i => i && i.from && (+i.from.slice(0, 2) >= 19 || i.from === '00:00');
+  const isNight = i => i && i.from && (+i.from.slice(0, 2) >= 19 || (typeof roNightNext === 'function' ? roNightNext(i.from) : i.from === '00:00'));   // 01:00 – 03:59 starts are nights too
   const isDay = i => i && i.from && !isNight(i);
   [-1, 1].forEach(dir => {
     const d2 = roAdd(date, dir), i2 = roInfo(roCode(k, d2)), sp2 = roSpan(d2, i2);
@@ -90,7 +90,14 @@ function _rsApply(A, B, day, why) {
   if (a) cells[B][day] = a; else delete cells[B][day];
   const n = rtApplyPublished(week, cells, why);
   if (typeof tlLog === 'function') tlLog('swap', { keys: [A, B], date: day, text: `${(roStaff[A] || {}).name || A} (${a || '—'}) ↔ ${(roStaff[B] || {}).name || B} (${b || '—'}) on ${roDayLbl(day)}${why ? ' · ' + why : ''}` });
-  if (typeof rbDrafts !== 'undefined' && rbDrafts[week] && rbDrafts[week].fromPublished) { rbDrafts[week].cells = cells; if (typeof rbPutDraft === 'function') rbPutDraft(week); }
+  // the draft gets only the two swapped days: replacing it with the posted copy deleted a manager's unpublished edits
+  if (typeof rbDrafts !== 'undefined' && rbDrafts[week] && rbDrafts[week].fromPublished) {
+    const dc = rbDrafts[week].cells = rbDrafts[week].cells || {};
+    dc[A] = dc[A] || {}; dc[B] = dc[B] || {};
+    if (b) dc[A][day] = b; else delete dc[A][day];
+    if (a) dc[B][day] = a; else delete dc[B][day];
+    if (typeof rbPutDraft === 'function') rbPutDraft(week);
+  }
   return n;
 }
 function rsSwapNow() {

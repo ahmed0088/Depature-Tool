@@ -141,7 +141,7 @@ function rrFreezeHtml() {
     <details class="rr-fz-add"${F.length ? '' : ' open'}><summary>➕ Add a day-off freeze</summary>
       <div class="rr-fz-dates"><label>From<input type="date" id="rrFzFrom" value="${today}"></label><label>To<input type="date" id="rrFzTo" value="${roAdd(today, 4)}"></label></div>
       <div class="rr-fz-lbl">Who must take their day off in these dates (managers are always as usual):</div>
-      <div class="rr-fz-who">${_rrFzPeople().map(k => `<label><input type="checkbox" value="${escapeHtml(k)}"><span>${escapeHtml(nm(k))}</span></label>`).join('')}</div>
+      <div class="rr-fz-who" id="rrFzWho">${_rrFzPeople().map(k => `<label><input type="checkbox" value="${escapeHtml(k)}"><span>${escapeHtml(nm(k))}</span></label>`).join('')}</div>
       <button class="btn sm gold" onclick="rrFreezeAdd()">Save the freeze</button>
     </details></div>`;
 }
@@ -193,7 +193,7 @@ function rrCutAll(id, n) { const c = Object.assign({ day: 15, per: 2 }, rbRules(
 function rrFreezeAdd() {
   const from = (document.getElementById('rrFzFrom') || {}).value, to = (document.getElementById('rrFzTo') || {}).value;
   if (!from || !to || to < from) { if (typeof showToast === 'function') showToast('Pick a start and an end date (the end on or after the start)', 'warn'); return; }
-  const allow = [...document.querySelectorAll('.rr-fz-who input:checked')].map(x => x.value);
+  const allow = [...document.querySelectorAll('#rrFzWho input:checked')].map(x => x.value);   // not the cut-off list's ticks
   rbSetRule('offFreeze', rbFreezes(rbRules()).concat([{ from, to, allow }]));
   rrRefresh();
   if (typeof showToast === 'function') showToast(`🚫 ${roDayLbl(from)} → ${roDayLbl(to)}: ${allow.length} take their day off in it, nobody else. Build the week to apply it`, 'ok');

@@ -8,9 +8,16 @@ const SHIFT_LOGS = { morning:[], afternoon:[], mid:[], night:[] };
 function stLog(key, type, taskName) {
   const t  = new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
   const by = (typeof currentProfile !== 'undefined' && currentProfile?.name) || 'Front Desk';
-  SHIFT_LOGS[key].unshift({ t, type, taskName, by });
+  const entry = { t, type, taskName, by };
+  SHIFT_LOGS[key].unshift(entry);
   if (SHIFT_LOGS[key].length > 50) SHIFT_LOGS[key].pop();
-  if (typeof saveShiftLog === 'function') saveShiftLog(SHIFT_LOGS);
+  // one entry on top of the saved log (a colleague's entries stay), not this device's whole copy
+  if (typeof fbPushLog === 'function') fbPushLog(`shiftLog/data/${key}`, entry, 50).then(v => {
+    if (!v) return;
+    SHIFT_LOGS[key] = v;
+    const el = document.getElementById('stLog-' + key); if (el) el.innerHTML = _buildShiftLog(key);
+  });
+  else if (typeof saveShiftLog === 'function') saveShiftLog(SHIFT_LOGS);
 }
 
 function _buildShiftLog(key) {
@@ -37,7 +44,8 @@ function stClearLog(key) {
   if (!confirm(`Clear the ${SHIFTS[key].label} activity log? This can't be undone.`)) return;
   SHIFT_LOGS[key] = [];
   _renderShiftContent(key);
-  if (typeof saveShiftLog === 'function') saveShiftLog(SHIFT_LOGS);
+  if (typeof fbSet === 'function') fbSet(`shiftLog/data/${key}`, null);   // only this shift's log
+  else if (typeof saveShiftLog === 'function') saveShiftLog(SHIFT_LOGS);
 }
 
 // ── Tab switch ────────────────────────────────────────────
@@ -180,7 +188,7 @@ function stMove(key, id, dir) {
   if (to < 0 || to >= tasks.length) return;
   [tasks[idx], tasks[to]] = [tasks[to], tasks[idx]];
   _renderShiftContent(key);
-  persistShifts();
+  persistShifts(key);
 }
 
 // ── Drag-and-drop sort ────────────────────────────────────
@@ -218,7 +226,7 @@ function initDragSort(key) {
       const [moved] = tasks.splice(srcIdx, 1);
       tasks.splice(dstIdx, 0, moved);
       _renderShiftContent(key);
-      persistShifts();
+      persistShifts(key);
     });
   });
 }
@@ -243,7 +251,7 @@ function stAddTask(key) {
   stLog(key, 'added', name);
   logActivity('shift_task_added', `[${SHIFTS[key].label}] ${name}`);
   _renderShiftContent(key);
-  persistShifts();
+  persistShifts(key);
   // Re-render swaps the DOM out from under the old input — refocus the new
   // one so adding several tasks in a row doesn't need a re-click each time
   document.getElementById('stIn-' + key)?.focus();
@@ -260,7 +268,7 @@ function stDelete(key, id) {
   SHIFTS[key].tasks = SHIFTS[key].tasks.filter(t => t.id !== id);
   SHIFTS[key].done  = SHIFTS[key].done.filter(d => d !== id);
   _renderShiftContent(key);
-  persistShifts();
+  persistShifts(key);
 
   if (typeof showUndoToast === 'function') {
     showUndoToast(`Deleted "${task.name}"`, () => {
@@ -268,7 +276,8 @@ function stDelete(key, id) {
       if (wasDone) SHIFTS[key].done.push(id);
       stLog(key, 'added', task.name + ' (restored)');
       _renderShiftContent(key);
-      persistShifts();
+      persistShifts(key);
+      if (wasDone) _stSaveTick(key, id, true);
     });
   }
 }
@@ -298,7 +307,7 @@ function saveEditTask() {
   if (on) task.on = on; else delete task.on;
   document.getElementById('editTaskModal').classList.remove('open');
   _renderShiftContent(key);
-  persistShifts();
+  persistShifts(key);
 }
 
 // ── Reset shift ───────────────────────────────────────────
@@ -309,7 +318,7 @@ function resetShift(key) {
   stLog(key, 'reset', 'All tasks');
   logActivity('shift_reset', SHIFTS[key].label);
   _renderShiftContent(key);
-  persistShifts();
+  persistShifts(key, { done: null, resetAt: SHIFTS[key].resetAt });
   const isOffline = typeof isOnline === 'function' && !isOnline();
   showToast(isOffline ? 'Shift reset ✓ (offline — will sync when reconnected)' : 'Shift reset ✓', isOffline ? 'info' : 'ok');
 }
@@ -356,10 +365,17 @@ function shiftsLoaded() { return _shiftsLoaded; }
 
 // Every write goes through here. Nothing is sent until the database has
 // been heard from, so the app can only ever overwrite data it has seen.
-function persistShifts() {
+function persistShifts(key, extra) {
   if (!_shiftsLoaded) {
     console.warn('[shifts] not saving — the saved tasks have not loaded yet');
     return false;
+  }
+  // One shift's task list only (and what the caller says changed): saving all four lists from this
+  // device's copy undid a colleague's ticks and tasks on the other shifts whenever this copy was behind.
+  if (key && SHIFTS[key] && typeof fbUpdate === 'function') {
+    fbUpdate('shifts/data/' + key, Object.assign({ tasks: SHIFTS[key].tasks }, extra || {}));
+    fbSet('shifts/updatedAt', new Date().toISOString());
+    return true;
   }
   saveShifts(SHIFTS);
   return true;
@@ -601,7 +617,7 @@ function _stTidyDated() {
     if (!old.length) return;
     sh.tasks = sh.tasks.filter(t => !old.includes(t));
     old.forEach(t => { delete (sh.doneDated || {})[t.id]; });
-    persistShifts();
+    persistShifts(k, Object.fromEntries(old.map(t => ['doneDated/' + t.id, null])));
   });
 }
 setTimeout(() => setInterval(_stTidyDated, 6 * 3600e3), 60e3);

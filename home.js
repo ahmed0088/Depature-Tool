@@ -93,7 +93,7 @@ function homeTiles() {
   // ALL enrollment
   _homeSafe(() => {
     if (typeof gpLog === 'undefined') return;
-    const m = new Date().toISOString().slice(0, 7);
+    const m = (typeof hoLocalISO === 'function' ? hoLocalISO() : new Date().toISOString()).slice(0, 7);
     const sent = Object.values(gpLog).filter(x => x.status === 'submitted' && String(x.date || '').startsWith(m)).length;
     add({ panel: 'pipeline', icon: '💎', title: 'ALL enrollment', big: sent, sub: 'invitations sent this month', tone: 'idle' });
   });

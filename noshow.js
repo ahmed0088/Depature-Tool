@@ -51,7 +51,12 @@ function initNoShow() {
 // Called once on app boot with the saved snapshot, and again
 // every time a colleague's change comes in over listenNoShow().
 function nsApplyLoad(snap) {
-  if (!snap || !snap.guests || !snap.guests.length) { _nsBooted = true; return; }
+  if (!snap || !snap.guests || !snap.guests.length) {
+    // a colleague cleared the list: Firebase sends nothing for an empty list, so clear here too
+    // (before, this device kept the old list and its next save brought it back for everyone)
+    if (_nsBooted && nsGuests.length) { nsGuests = []; nsReportDate = ''; if (typeof nsRender === 'function') nsRender(); }
+    _nsBooted = true; return;
+  }
 
   // Don't yank the table out from under someone mid-edit
   // (typing a New Conf. No.) — same guard pattern used for
@@ -323,9 +328,11 @@ function nsUseSuggestedConf(idx) {
 }
 
 // ── New Conf. No. edit handler ─────────────────────────────
-function nsSetNewConf(idx, val) {
-  if (!nsGuests[idx]) return;
-  nsGuests[idx].newConf = val;
+function nsSetNewConf(idx, val, conf) {
+  // by the booking's own number: a colleague's new upload can reorder the list while this box is open
+  const g = (conf && nsGuests.find(x => String(x.confNo || '') === conf)) || (!conf ? nsGuests[idx] : null);
+  if (!g) return;
+  g.newConf = val;
   debounceSaveNoShow();
 }
 
@@ -417,26 +424,26 @@ function nsRender() {
     // Guest Memory: known-returning-guest badge (read-only lookup, no writes)
     const profile = (typeof gmLookup === 'function') ? gmLookup(cleanName ? cleanName(g.nameRaw) : name) : null;
     const memBadge = (g._fromMemory || profile)
-      ? `<div class="ns-mem-badge" title="${profile?.lastSeen ? 'Stayed with us before · last seen ' + profile.lastSeen : 'Returning guest'}">✦ Known guest${profile?.lastSeen ? ' · ' + profile.lastSeen : ''}</div>`
+      ? `<div class="ns-mem-badge" title="${profile?.lastSeen ? 'Stayed with us before · last seen ' + escapeHtml(profile.lastSeen) : 'Returning guest'}">✦ Known guest${profile?.lastSeen ? ' · ' + escapeHtml(profile.lastSeen) : ''}</div>`
       : '';
-    const natTag = g.nat ? `<span class="ns-nat-tag"${g._fromMemory ? ' style="border-color:var(--sky);color:var(--sky);"' : ''}>${g.nat}</span>` : '';
+    const natTag = g.nat ? `<span class="ns-nat-tag"${g._fromMemory ? ' style="border-color:var(--sky);color:var(--sky);"' : ''}>${escapeHtml(g.nat)}</span>` : '';
 
     const suggestHint = (g.suggestedConf && !g.newConf)
-      ? `<div class="ns-suggest-hint">🔗 Found in Arrivals: <strong>${g.suggestedConf}</strong>
+      ? `<div class="ns-suggest-hint">🔗 Found in Arrivals: <strong>${escapeHtml(g.suggestedConf)}</strong>
            <button class="ns-suggest-btn" onclick="nsUseSuggestedConf(${idx})">Use</button>
          </div>`
       : '';
 
     return `<tr>
-      <td style="font-family:var(--mono);font-size:0.7rem;color:var(--text3);">${g.arrDate}</td>
+      <td style="font-family:var(--mono);font-size:0.7rem;color:var(--text3);">${escapeHtml(g.arrDate)}</td>
       <td><span class="ns-status-pill">No Show</span></td>
       <td>
-        <div style="font-weight:600;color:var(--text);">${name} ${natTag}</div>
+        <div style="font-weight:600;color:var(--text);">${escapeHtml(name)} ${natTag}</div>
         ${memBadge}
       </td>
-      <td style="font-family:var(--mono);font-size:0.72rem;color:var(--text2);">${g.confNo || '—'}</td>
-      <td style="font-size:0.75rem;color:var(--text2);">${source}</td>
-      <td style="font-family:var(--mono);text-align:center;">${g.nights}</td>
+      <td style="font-family:var(--mono);font-size:0.72rem;color:var(--text2);">${escapeHtml(g.confNo || '—')}</td>
+      <td style="font-size:0.75rem;color:var(--text2);">${escapeHtml(source)}</td>
+      <td style="font-family:var(--mono);text-align:center;">${escapeHtml(g.nights)}</td>
       <td>
         <input
           class="ns-new-conf-input"
@@ -444,7 +451,7 @@ function nsRender() {
           placeholder="Enter new conf…"
           value="${escapeHtml(g.newConf || '')}"
           data-idx="${idx}"
-          oninput="nsSetNewConf(${idx}, this.value)"
+          oninput="nsSetNewConf(${idx}, this.value, '${escapeJsAttr(g.confNo || '')}')"
         />
         ${suggestHint}
       </td>
@@ -503,7 +510,6 @@ function nsCopyForExcel() {
     if (typeof _renderShiftContent === 'function' && document.getElementById('shiftContent')?.contains(document.getElementById('stLog-' + activeShift))) {
       _renderShiftContent(activeShift);
     }
-    if (typeof persistShifts === 'function') persistShifts();
   }
   if (typeof logActivity === 'function') logActivity('noshow_copied', `${rows.length} guest${rows.length !== 1 ? 's' : ''} · ${nsReportDate}`);
 }

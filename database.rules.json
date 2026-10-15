@@ -6,31 +6,31 @@
     "userHotels": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && (auth.uid === $uid || (newData.isString() && (root.child('hotels').child(newData.val()).child('users').child(auth.uid).child('role').val() === 'owner' || root.child('hotels').child(newData.val()).child('users').child(auth.uid).child('role').val() === 'manager')) || (!newData.exists() && data.isString() && (root.child('hotels').child(data.val()).child('users').child(auth.uid).child('role').val() === 'owner' || root.child('hotels').child(data.val()).child('users').child(auth.uid).child('role').val() === 'manager')))"
+        ".write": "auth != null && (auth.uid === $uid || (newData.isString() && (root.child('hotels').child(newData.val()).child('users').child(auth.uid).child('role').val() === 'owner' || root.child('hotels').child(newData.val()).child('users').child(auth.uid).child('role').val() === 'manager' || root.child('hotelsIndex').child(newData.val()).child('createdBy').val() === auth.uid)) || (!newData.exists() && data.isString() && (root.child('hotels').child(data.val()).child('users').child(auth.uid).child('role').val() === 'owner' || root.child('hotels').child(data.val()).child('users').child(auth.uid).child('role').val() === 'manager')))"
       }
     },
 
     "hotelsIndex": {
       ".read": "auth != null",
       "$hid": {
-        ".write": "auth != null && !data.exists() && newData.exists()"
+        ".write": "auth != null && !data.exists() && newData.child('createdBy').val() === auth.uid"
       }
     },
 
     "hotels": {
       "$hid": {
-        ".read": "auth != null && root.child('hotels').child($hid).child('users').child(auth.uid).exists()",
-        ".write": "auth != null && root.child('hotels').child($hid).child('users').child(auth.uid).child('role').val() === 'owner'",
+        ".read": "auth != null && root.child('hotels').child($hid).child('users').child(auth.uid).child('active').val() === true",
+        ".write": "auth != null && ((root.child('hotels').child($hid).child('users').child(auth.uid).child('role').val() === 'owner' && root.child('hotels').child($hid).child('users').child(auth.uid).child('active').val() === true) || root.child('hotelsIndex').child($hid).child('createdBy').val() === auth.uid && !root.child('hotels').child($hid).child('settings').exists())",
 
         "users": {
           "$uid": {
             ".read": "auth != null && auth.uid === $uid",
-            ".write": "auth != null && (!root.child('hotels').child($hid).child('users').exists() || root.child('hotels').child($hid).child('users').child(auth.uid).child('role').val() === 'manager' || (auth.uid === $uid && data.exists() && newData.exists() && newData.child('role').val() === data.child('role').val()))"
+            ".write": "auth != null && (!root.child('hotels').child($hid).child('users').exists() || (root.child('hotels').child($hid).child('users').child(auth.uid).child('role').val() === 'manager' && root.child('hotels').child($hid).child('users').child(auth.uid).child('active').val() === true && data.child('role').val() !== 'owner' && newData.child('role').val() !== 'owner') || (auth.uid === $uid && data.exists() && newData.exists() && newData.child('role').val() === data.child('role').val() && newData.child('active').val() === data.child('active').val() && newData.child('forceLogout').val() !== true))"
           }
         },
 
         "$node": {
-          ".write": "auth != null && root.child('hotels').child($hid).child('users').child(auth.uid).exists()"
+          ".write": "auth != null && root.child('hotels').child($hid).child('users').child(auth.uid).child('active').val() === true"
         }
       }
     }

@@ -526,9 +526,10 @@ function _renderXmlCoverage() {
 // ── Shared log helper ─────────────────────────────────────
 function addArrLog(action, detail) {
   const t = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
-  arrLog.unshift({ action, detail, time: t, ts: Date.now() });
+  const entry = { action, detail, time: t, ts: Date.now() };
+  arrLog.unshift(entry);
   if (arrLog.length > 100) arrLog.pop();
-  saveArrLog(arrLog);
+  fbPushLog('arrLog/log', entry, 100).then(v => { if (v) { arrLog = v; renderArrLog(); } });
   renderArrLog();
 }
 
@@ -609,6 +610,7 @@ function arrRender() {
         style="width:46px;"/></td>
       <td><input value="${escapeHtml(g.conf)}"
         oninput="arrGuests[${i}].conf=this.value"
+        onblur="debounceSaveArrivals()"
         style="width:86px;"/></td>
       <td><input value="${escapeHtml(g.name)}"
         oninput="arrGuests[${i}].name=this.value"
@@ -860,9 +862,10 @@ function exportArrivals() {
 
 function addPurposeLog(action, detail) {
   const t = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
-  purposeLog.unshift({ action, detail, time: t, ts: Date.now() });
+  const entry = { action, detail, time: t, ts: Date.now() };
+  purposeLog.unshift(entry);
   if (purposeLog.length > 100) purposeLog.pop();
-  savePurposeLog(purposeLog);
+  fbPushLog('purposeLog/log', entry, 100).then(v => { if (v) { purposeLog = v; renderPurposeLog(); } });
   renderPurposeLog();
 }
 

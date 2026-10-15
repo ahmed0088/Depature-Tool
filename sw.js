@@ -14,7 +14,7 @@
 //  clients pick up the new version instead of a stale cache.
 // ═══════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'ibis-ops-shell-v270';
+const CACHE_NAME = 'ibis-ops-shell-v271';
 
 const SHELL_FILES = [
   './',
@@ -125,6 +125,14 @@ self.addEventListener('fetch', event => {
   // Only handle same-origin GET requests for the app shell.
   // Firebase, Google APIs, CDN scripts, and anything cross-origin
   // pass straight through to the network untouched.
+  // The Firebase SDK files (fixed version in the URL) are kept too, so the app can open with no signal
+  if (req.method === 'GET' && url.hostname === 'www.gstatic.com' && url.pathname.startsWith('/firebasejs/')) {
+    event.respondWith(caches.match(req).then(hit => hit || fetch(req).then(res => {
+      if (res && (res.ok || res.type === 'opaque')) { const c = res.clone(); caches.open(CACHE_NAME).then(x => x.put(req, c)); }
+      return res;
+    })));
+    return;
+  }
   if (req.method !== 'GET' || url.origin !== self.location.origin) return;
 
   // "?panel=roster", "?v=…" open the app page itself; "sw.js?x=…" checks are never kept

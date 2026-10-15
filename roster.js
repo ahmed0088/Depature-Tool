@@ -564,7 +564,11 @@ function roNextShift() {
 function _roWhen(n) {
   if (n.now) return `Now, until ${n.info.to === '00:00' ? 'midnight' : n.info.to}`;
   if (!n.span) return n.inDays === 0 ? 'Today' : n.inDays === 1 ? 'Tomorrow' : roDayLbl(n.date, true);
-  if (n.info.from === '00:00') { const prev = roAdd(n.date, -1); return prev === roToday() ? 'Tonight at midnight' : `${roDayLbl(prev, true)}, at midnight`; }
+  // a shift starting before 04:00 is that date's night: it starts when the date ends ("00:00 on Saturday" = Saturday night)
+  if (roNightNext(n.info.from)) {
+    const at = n.info.from === '00:00' ? 'midnight' : n.info.from;
+    return n.date === roToday() ? `Tonight at ${at}` : n.date === roAdd(roToday(), 1) ? `Tomorrow night at ${at}` : `${roDayLbl(n.date, true)} night, at ${at}`;
+  }
   const d = n.date;
   return `${d === roToday() ? 'Today' : d === roAdd(roToday(), 1) ? 'Tomorrow' : roDayLbl(d, true)} at ${n.info.from}`;
 }
@@ -832,7 +836,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof fbListen !== 'function') return;
     fbListen('roster/days', v => { roDays = v || {}; _roRefresh(); });
     fbListen('roster/staff', v => { roStaff = v || {}; roLoadMe(); roGuessMe(); _roRefresh(); });
-    fbListen('roster/codes', v => { roCodes = v || {}; _roRefresh(); });
+    // a code defined or changed: forget what each cell text meant (a cached "unknown" muted alarms during a real shift)
+    fbListen('roster/codes', v => { roCodes = v || {}; if (typeof _rbPC !== 'undefined') { _rbPC.clear(); _rbKC.clear(); } _roRefresh(); });
     fbListen('roster/posted', roOnPosted);
   }, 1500);
   // the timeline's "now" line moves while the page is open

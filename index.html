@@ -4107,7 +4107,8 @@ async function saveFeedbackItem() {
   if (!text) { showToast('Please describe the issue or request.', 'err'); return; }
   const item = { type, text, priority, name, at: new Date().toISOString() };
   feedbackLog.unshift(item);
-  await saveFeedback(feedbackLog);
+  const savedFb = await fbPushLog('feedback/log', item, 500);
+  if (savedFb) feedbackLog = savedFb;
   document.getElementById('fb-text').value = '';
   document.getElementById('fb-name').value = '';
   closeFeedbackModal();
@@ -4733,6 +4734,7 @@ async function appInit() {
   if (data.departures && data.departures.rooms && data.departures.rooms.length) {
     depRooms = data.departures.rooms;
     depLog   = data.departures.log || [];
+    if (typeof depSetBase === 'function') depSetBase(depRooms, depLog);
     const uploadCard = document.getElementById('depUploadCard');
     const board = document.getElementById('depBoard');
     if (uploadCard) uploadCard.style.display = 'none';
@@ -4764,6 +4766,12 @@ async function appInit() {
 
   // 8 — Apply feedback
   if (data.feedback && data.feedback.log) feedbackLog = data.feedback.log;
+  // the arrivals and purpose activity logs: loaded but never applied before, so the first action after a reload saved a one-line log over the team's
+  const _asList = v => Array.isArray(v) ? v.filter(Boolean) : (v && typeof v === 'object') ? Object.values(v) : [];
+  if (data.arrLog)     arrLog     = _asList(data.arrLog.log);
+  if (data.purposeLog) purposeLog = _asList(data.purposeLog.log);
+  if (typeof renderArrLog === 'function') try { renderArrLog(); } catch (_) {}
+  if (typeof renderPurposeLog === 'function') try { renderPurposeLog(); } catch (_) {}
 
   // 9 — Apply settings
   if (data.settings) {
@@ -4778,16 +4786,39 @@ async function appInit() {
   }
 
   // 10 — Set up real-time listeners
-  listenDepartures(snap => {
-    if (!snap || !snap.rooms) return;
+  listenDepartures(function _depApply(snap) {
+    if (!snap) return;
+    if (!snap.rooms) {
+      // a colleague cleared the board (Firebase sends no rooms for an empty list): clear here too
+      if (depRooms.length && !(typeof depIsTyping === 'function' && depIsTyping())) {
+        depRooms = []; depLog = [];
+        if (typeof depSetBase === 'function') depSetBase([], []);
+        const uc = document.getElementById('depUploadCard'), bd = document.getElementById('depBoard');
+        if (uc) uc.style.display = 'block'; if (bd) bd.style.display = 'none';
+        updateDepBadge();
+      }
+      return;
+    }
     // Block the update entirely if the user is actively typing a note OR typed
     // within the last 3 seconds — prevents a colleague's Firebase update from
     // swapping out depRooms mid-sentence, which would orphan the in-progress
     // note object and cause the debounced save to silently drop it.
     // depIsTyping() is defined in departures.js and covers both cases.
-    if (typeof depIsTyping === 'function' && depIsTyping()) return;
+    // The update is kept and applied once typing stops: dropping it meant the next save wrote this
+    // device's old copy over a colleague's check-outs.
+    if (typeof depIsTyping === 'function' && depIsTyping()) {
+      window._depPendingSnap = snap;
+      clearTimeout(window._depPendingT);
+      window._depPendingT = setTimeout(function retry() {
+        if (depIsTyping()) { window._depPendingT = setTimeout(retry, 1000); return; }
+        const p = window._depPendingSnap; window._depPendingSnap = null; if (p) _depApply(p);
+      }, 1000);
+      return;
+    }
+    window._depPendingSnap = null;
     depRooms = snap.rooms;
     depLog = snap.log || [];
+    if (typeof depSetBase === 'function') depSetBase(depRooms, depLog);
     if (depRooms.length) {
       const uploadCard = document.getElementById('depUploadCard');
       const board = document.getElementById('depBoard');
@@ -4834,9 +4865,11 @@ async function appInit() {
     clState.skipped.clear();
     if (snap.done)      snap.done.forEach(i    => clState.done.add(i));
     if (snap.skipped)   snap.skipped.forEach(i => clState.skipped.add(i));
-    if (snap.photos)    clPhotos    = snap.photos;
-    if (snap.notes)     clNotes     = snap.notes;
-    if (snap.doneTimes) clDoneTimes = snap.doneTimes;
+    // Firebase sends nothing for an empty map, so a reset on another device arrives as "missing":
+    // treat missing as empty, or this device keeps last night's notes and saves them back
+    clPhotos    = snap.photos    || {};
+    clNotes     = snap.notes     || {};
+    clDoneTimes = snap.doneTimes || {};
     clRender2();
   });
   

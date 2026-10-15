@@ -1188,9 +1188,22 @@ function _pkgApplyPins(results) {
   });
 }
 
+/** Save only the entries that changed since the server's last copy (pkgPins/<key>), never the
+ *  whole map: two people pinning at once kept overwriting each other. Undo works the same way. */
+function _pkgSaveDiff(path, cur, last) {
+  if (typeof fbUpdate !== 'function') return;
+  const patch = {};
+  new Set([...Object.keys(cur), ...Object.keys(last)]).forEach(k => {
+    const a = cur[k] == null ? null : JSON.stringify(cur[k]);
+    if (a !== (last[k] == null ? null : last[k])) { patch[k] = cur[k] == null ? null : cur[k]; if (a == null) delete last[k]; else last[k] = a; }
+  });
+  if (Object.keys(patch).length) fbUpdate(path, patch);
+}
+const _pkgPinsLast = {}, _pkgDoneLast = {};
+const _pkgRemember = (last, v) => { Object.keys(last).forEach(k => delete last[k]); Object.keys(v || {}).forEach(k => { last[k] = JSON.stringify(v[k]); }); };
 function _pkgSavePins() {
   try { localStorage.setItem(PKG_PIN_KEY, JSON.stringify(pkgPins)); } catch (_) {}
-  if (typeof fbSet === 'function') fbSet('pkgPins', pkgPins);
+  _pkgSaveDiff('pkgPins', pkgPins, _pkgPinsLast);
 }
 
 function pkgPinChange(idx, val) {
@@ -1244,8 +1257,8 @@ function _pkgPinCell(r) {
 function pkgLoadPins() {
   if (typeof fbListen !== 'function') return;
   fbListen('pkgPins', v => {
-    if (!v || typeof v !== 'object') return;
-    pkgPins = v;
+    pkgPins = v && typeof v === 'object' ? v : {};   // nothing pinned arrives as null: empty, not "keep the old"
+    _pkgRemember(_pkgPinsLast, pkgPins);
     try { localStorage.setItem(PKG_PIN_KEY, JSON.stringify(pkgPins)); } catch (_) {}
   });
 }
@@ -1559,7 +1572,7 @@ function _pkgSaveDone() {
   const cut = Date.now() - PKG_DONE_DAYS * 86400e3;
   Object.keys(pkgDone).forEach(k => { if (!(new Date(pkgDone[k].at).getTime() > cut)) delete pkgDone[k]; });
   try { localStorage.setItem(PKG_DONE_KEY, JSON.stringify(pkgDone)); } catch (_) {}
-  if (typeof fbSet === 'function') fbSet('pkgDone', Object.keys(pkgDone).length ? pkgDone : null);
+  _pkgSaveDiff('pkgDone', pkgDone, _pkgDoneLast);
 }
 const _pkgMe = () => (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '';
 /** Mark a package copied, and these nights of it fixed. Saves. */
@@ -1590,6 +1603,7 @@ function pkgLoadDone() {
   if (typeof fbListen !== 'function') return;
   fbListen('pkgDone', v => {
     pkgDone = v && typeof v === 'object' ? v : {};
+    _pkgRemember(_pkgDoneLast, pkgDone);
     try { localStorage.setItem(PKG_DONE_KEY, JSON.stringify(pkgDone)); } catch (_) {}
     if (pkgResults.length && document.getElementById('pkgResultsWrap')?.style.display !== 'none') pkgRender();
   });

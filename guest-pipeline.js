@@ -254,7 +254,7 @@ function gpRenderTracker() {
   const box = document.getElementById('gpTracker');
   if (!box) return;
   const all = Object.values(gpLog);
-  const month = new Date().toISOString().slice(0, 7);
+  const month = (typeof hoLocalISO === 'function' ? hoLocalISO() : new Date().toISOString()).slice(0, 7);   // local month (UTC is still last month until 04:00 on the 1st)
   const m = all.filter(x => String(x.date || '').startsWith(month));
   const c = s => m.filter(x => x.status === s).length;
   const recent = all.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 15);
