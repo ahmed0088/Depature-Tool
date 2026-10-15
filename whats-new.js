@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 272, items: [
+    '✅ Shift tasks tick themselves when the app can see the work is done: "ALL enrollment" once an enrollment is sent today in Guest Pipeline, the night audit checklist when every step is done, "pending check-outs" when every departure is out or extended, today\'s arrivals, departure board, Purpose of Stay, No Show, DTCM corrections, Package Audit and wake-up calls. The shift log says why ("ticked by HotelOps: 3 ALL enrollments sent today"). Untick it and it stays unticked for that shift. Settings → Helpers to turn it off.',
+  ] },
   { v: 271, items: [
     '🛡️ A full check of the app, with about 30 fixes. The big ones: saving no longer wipes what a colleague did meanwhile. Departures saves only the rooms you changed (a colleague\'s check-out typed while you wrote a note stays), the Arrivals, Purpose, Feedback and Shift logs add your line on top of everyone\'s, shift task edits touch only that shift, and Package Audit pins and copied marks save one at a time (Undo only puts back yours).',
     '🔄 Clearing or resetting (the departure board, No Show, the night checklist) now reaches every device; before, another device kept the old data and brought it back. The Arrivals and Purpose activity logs load again after a reload.',

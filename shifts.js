@@ -153,6 +153,7 @@ function stToggle(key, id) {
   const task  = shift.tasks.find(t => t.id === id);
   if (task && task.on) return _stToggleDated(key, task);
   const idx   = shift.done.indexOf(id);
+  if (idx >= 0 && typeof _stAutoRefused === 'function') _stAutoRefused(key, id);
   if (idx >= 0) { shift.done.splice(idx, 1); stLog(key, 'undone', task?.name || id); logActivity('shift_task_undone', `[${SHIFTS[key].label}] ${task?.name || id}`); }
   else          { shift.done.push(id);        stLog(key, 'done',   task?.name || id); logActivity('shift_task_done',  `[${SHIFTS[key].label}] ${task?.name || id}`); }
   _renderShiftContent(key);
@@ -600,6 +601,7 @@ function _stOnChip(key, t, isDone) {
 function _stToggleDated(key, task) {
   const sh = SHIFTS[key]; sh.doneDated = sh.doneDated || {};
   const was = !!sh.doneDated[task.id];
+  if (was && typeof _stAutoRefused === 'function') _stAutoRefused(key, task.id);
   if (was) delete sh.doneDated[task.id]; else sh.doneDated[task.id] = { by: (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '', at: new Date().toISOString() };
   stLog(key, was ? 'undone' : 'done', task.name);
   if (typeof logActivity === 'function') logActivity(was ? 'shift_task_undone' : 'shift_task_done', `[${sh.label}] ${task.name} (${task.on})`);
@@ -621,3 +623,106 @@ function _stTidyDated() {
   });
 }
 setTimeout(() => setInterval(_stTidyDated, 6 * 3600e3), 60e3);
+
+// ── Ticked by the app ─────────────────────────────────────
+// When HotelOps can see that a task's work is done in its own pages (ALL enrollments sent today,
+// every checklist step done, every departure out…), it ticks the task on the running shift and
+// says why in the shift log. Untick it and it stays unticked for the rest of that shift.
+// Settings → Helpers → "Tick shift tasks the app can see are done".
+const _stTodayIso = () => typeof hoLocalISO === 'function' ? hoLocalISO() : _stIso(new Date());
+// another page's data, if that page's script is loaded
+const _ST_SRC = {
+  gpLog: () => typeof gpLog !== 'undefined' ? gpLog : undefined, CL_STEPS: () => typeof CL_STEPS !== 'undefined' ? CL_STEPS : undefined,
+  clState: () => typeof clState !== 'undefined' ? clState : undefined, clDoneTimes: () => typeof clDoneTimes !== 'undefined' ? clDoneTimes : undefined,
+  depRooms: () => typeof depRooms !== 'undefined' ? depRooms : undefined, arrGuests: () => typeof arrGuests !== 'undefined' ? arrGuests : undefined,
+  purposeGuests: () => typeof purposeGuests !== 'undefined' ? purposeGuests : undefined, nsGuests: () => typeof nsGuests !== 'undefined' ? nsGuests : undefined,
+  nsReportDate: () => typeof nsReportDate !== 'undefined' ? nsReportDate : undefined, dtcRecon: () => typeof dtcRecon !== 'undefined' ? dtcRecon : undefined,
+  dtcDone: () => typeof dtcDone !== 'undefined' ? dtcDone : undefined, pkgResults: () => typeof pkgResults !== 'undefined' ? pkgResults : undefined,
+  pkgReportAt: () => typeof pkgReportAt !== 'undefined' ? pkgReportAt : undefined, bxWakes: () => typeof bxWakes !== 'undefined' ? bxWakes : undefined,
+};
+const _stG = n => { try { return _ST_SRC[n](); } catch (_) { return undefined; } };
+const ST_AUTO = [
+  { re: /enrol|\bALL\b|loyalty/i, check() {
+      const gl = _stG('gpLog'); if (!gl) return '';
+      const n = Object.values(gl).filter(x => x && x.status === 'submitted' && x.date === _stTodayIso()).length;
+      return n ? `${n} ALL enrollment${n > 1 ? 's' : ''} sent today` : ''; } },
+  { re: /checklist|night audit/i, check(start) {
+      const steps = _stG('CL_STEPS'), st = _stG('clState'), times = _stG('clDoneTimes') || {};
+      if (!steps || !st) return '';
+      const a = steps.filter(s => !st.skipped.has(s.id));
+      if (!a.length || !a.every(s => st.done.has(s.id))) return '';
+      // ticked during this shift, not last night's left over
+      return Object.values(times).some(t => Date.parse(t) >= start) ? `all ${a.length} Night Checklist steps done` : ''; } },
+  { re: /pending check.?outs?|follow.*check.?outs?|check.?outs? (follow|done)/i, check() {
+      const r = _stG('depRooms');
+      return r && r.length && window._depDate === _stTodayIso() && r.every(x => ['out', 'extended'].includes(x.status)) ? `all ${r.length} departures out or extended` : ''; } },
+  { re: /departure board/i, check() {
+      const r = _stG('depRooms');
+      return r && r.length && window._depDate === _stTodayIso() ? `today's departure board is loaded (${r.length} rooms)` : ''; } },
+  { re: /review arrivals|arrivals? (list|report)|load.*arrivals/i, check() {
+      const g = _stG('arrGuests');
+      return g && g.length && window._arrDate === _stTodayIso() && !g.some(x => !x.nat) ? `today's ${g.length} arrivals loaded, nationalities filled` : ''; } },
+  { re: /purpose of stay/i, check() {
+      const g = _stG('purposeGuests');
+      return g && g.length && window._purDate === _stTodayIso() && !g.some(x => !x.originOfTravel) ? `Purpose of Stay done for ${g.length} guests` : ''; } },
+  { re: /no.?shows?|NA40/i, check() {
+      const g = _stG('nsGuests'), d = _stG('nsReportDate') || '', y = _stIso(new Date(Date.now() - 864e5));
+      return g && g.length && (d === _stTodayIso() || d === y) ? `${g.length} no-shows loaded` : ''; } },
+  { re: /dtcm|tourism dirham/i, check() {
+      const rc = _stG('dtcRecon'), done = _stG('dtcDone');
+      if (!rc || !done) return '';
+      const n = (rc.actions || []).length;
+      return n && done.size >= n ? `all ${n} DTCM corrections done` : ''; } },
+  { re: /package|upsell|in.?gauge/i, check() {
+      const r = _stG('pkgResults'); if (!r || !r.length || typeof pkgNightDone !== 'function') return '';
+      const at = _stG('pkgReportAt') || 0; if (at && _stIso(new Date(at)) !== _stTodayIso()) return '';
+      const left = r.filter(x => !x.pinSkip && (x.verdict === 'deny' || x.verdict === 'review' || (x.verdict === 'credit' && !x.alreadyComplete)) && !pkgNightDone(x)).length;
+      return left ? '' : 'Package Audit: nothing left to fix'; } },
+  { re: /wake.?up/i, check() {
+      const w = _stG('bxWakes'); if (!w) return '';
+      const t = _stTodayIso(), today = Object.values(w).filter(x => x && x.at && _stIso(new Date(x.at)) === t && x.at <= Date.now());
+      return today.length && today.every(x => x.done) ? `today's ${today.length} wake-up call${today.length > 1 ? 's' : ''} done` : ''; } },
+];
+const ST_AUTO_KEY = 'st_auto_v1';
+function _stAutoMem() { try { return JSON.parse(localStorage.getItem(ST_AUTO_KEY) || '{}') || {}; } catch (_) { return {}; } }
+function _stAutoSave(m) { try { localStorage.setItem(ST_AUTO_KEY, JSON.stringify(m)); } catch (_) {} }
+/** the rule that recognises this task's work, if any */
+function stAutoRule(t) { return ST_AUTO.find(r => r.re.test(t.name || '')) || null; }
+function stAutoTick() {
+  if (typeof hoPref === 'function' && hoPref('autoTick') === false) return;
+  if (!_shiftsLoaded || typeof currentUser === 'undefined' || !currentUser) return;
+  let cur; try { cur = hoShiftNow(); } catch (_) { return; }
+  const mem = _stAutoMem(), inst = cur.key + '|' + _stIso(cur.start);
+  Object.keys(mem).forEach(k => { if (k !== inst) delete mem[k]; });
+  const m = mem[inst] = mem[inst] || {};
+  for (const key of [cur.key, 'mid']) {
+    const sh = SHIFTS[key]; if (!sh) continue;
+    const day = stDayOf(key);
+    for (const t of sh.tasks || []) {
+      if (stTaskState(t, day, key) !== 'on' || stIsDone(key, t) || m[t.id]) continue;
+      const rule = stAutoRule(t); if (!rule) continue;
+      let why = ''; try { why = rule.check(cur.start.getTime()); } catch (_) {}
+      if (!why) continue;
+      m[t.id] = 'ticked';
+      if (t.on) stToggle(key, t.id);   // a dated task keeps its own tick
+      else {
+        sh.done.push(t.id);
+        try { stLog(key, 'done', `${t.name} — ticked by HotelOps: ${why}`); } catch (_) {}
+        if (typeof logActivity === 'function') logActivity('shift_task_done', `[${sh.label}] ${t.name} (by the app: ${why})`);
+        _stSaveTick(key, t.id, true);
+        updateShiftBadge(key);
+        if (typeof activeShift !== 'undefined' && activeShift === key && document.getElementById('panel-shifts')?.classList.contains('active')) _renderShiftContent(key);
+      }
+      if (typeof showToast === 'function') showToast(`✓ "${t.name}" ticked: ${why}`, 'ok');
+    }
+  }
+  _stAutoSave(mem);
+}
+/** someone unticked a task the app ticked: it stays unticked for the rest of this shift */
+function _stAutoRefused(key, id) {
+  const mem = _stAutoMem();
+  Object.keys(mem).forEach(k => { if (mem[k][id] === 'ticked') mem[k][id] = 'refused'; });
+  _stAutoSave(mem);
+}
+setInterval(stAutoTick, 30000);
+document.addEventListener('DOMContentLoaded', () => setTimeout(stAutoTick, 9000));

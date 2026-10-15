@@ -26,6 +26,7 @@ const HO_PREF_DEFAULTS = {
   confirmCheckout: true,
   autoResetShifts: true,
   taskReminders: true,
+  autoTick: true,
   quietOff: true,
   accent: 'theme',        // theme · gold · blue · green · teal · rose · purple
   corners: 'rounded',     // rounded · soft · sharp
@@ -209,6 +210,7 @@ function hoSettingsRender() {
       + _hoTog('dropAnywhere', 'Drop a report anywhere', 'Drag a file onto any page and it opens the right page')
       + _hoTog('confirmCheckout', 'Ask before checking out a room that owes money', 'Applies to Ops Brain commands like "check out 512"')
       + _hoTog('haptics', 'Vibration on phones', 'A light tap when you press buttons')
+      + _hoTog('autoTick', 'Tick shift tasks the app can see are done', 'e.g. ALL enrollments sent today, every checklist step done, every departure out: the task is ticked and the shift log says why. Untick it and it stays unticked that shift')
       + _hoTog('taskReminders', 'Shift task reminders', 'A task with a time rings at that time on its shift, until it is ticked')
       + _hoTog('autoResetShifts', 'Fresh shift tasks every day', 'Every list (morning, mid, afternoon, night) starts with nothing ticked each day, when its shift begins, for the whole team, even a list nobody opened. The shift that just ended keeps its ticks for handover. Dated tasks keep theirs')),
 

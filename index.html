@@ -4732,7 +4732,7 @@ async function appInit() {
 
   // 5 — Apply departures
   if (data.departures && data.departures.rooms && data.departures.rooms.length) {
-    depRooms = data.departures.rooms;
+    depRooms = data.departures.rooms; window._depDate = data.departures.date || '';
     depLog   = data.departures.log || [];
     if (typeof depSetBase === 'function') depSetBase(depRooms, depLog);
     const uploadCard = document.getElementById('depUploadCard');
@@ -4751,13 +4751,13 @@ async function appInit() {
 
   // 6 — Apply arrivals
   if (data.arrivals && data.arrivals.guests && data.arrivals.guests.length) {
-    arrGuests = data.arrivals.guests;
+    arrGuests = data.arrivals.guests; window._arrDate = data.arrivals.date || '';
     arrRender();
   }
 
   // 7 — Apply purpose
   if (data.purpose && data.purpose.guests && data.purpose.guests.length) {
-    purposeGuests = data.purpose.guests;
+    purposeGuests = data.purpose.guests; window._purDate = data.purpose.date || '';
     purposeRender();
   }
 
@@ -4816,7 +4816,7 @@ async function appInit() {
       return;
     }
     window._depPendingSnap = null;
-    depRooms = snap.rooms;
+    depRooms = snap.rooms; window._depDate = snap.date || '';
     depLog = snap.log || [];
     if (typeof depSetBase === 'function') depSetBase(depRooms, depLog);
     if (depRooms.length) {
@@ -4837,7 +4837,7 @@ async function appInit() {
     const arrTable = document.getElementById('arrTable');
     const editingArr = arrTable && arrTable.contains(document.activeElement);
     if (editingArr) return;
-    arrGuests = snap.guests;
+    arrGuests = snap.guests; window._arrDate = snap.date || '';
     arrRender();
   });
 
@@ -4847,7 +4847,7 @@ async function appInit() {
     const purTable = document.getElementById('purposeTable');
     const editingPur = purTable && purTable.contains(document.activeElement);
     if (editingPur) return;
-    purposeGuests = snap.guests;
+    window._purDate = snap.date || ''; purposeGuests = snap.guests;
     purposeRender();
   });
 
