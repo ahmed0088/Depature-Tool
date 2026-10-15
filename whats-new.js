@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 277, items: [
+    '🔎 Search finds options too (Ctrl+K or the search bar): type what you want, like "fixed day off", "12 hour", "freeze", "cut off", "avatar", "idle", "auto tick", "language". Tap the result and the app opens that page, unfolds the right section and lights the option up. Every setting is searchable, and words can be in any order ("day off fixed" works too). You only see options for pages you can open.',
+  ] },
   { v: 276, items: [
     '📌 Fixed days off for the whole team in one place: Roster builder → Rules → 📌 Fixed days off. Everyone is listed by hotel with their title, managers too; tap Sat (or any day) to make it their day off every week, tap again to free it. The builder always gives them that day off, unless leave or a request is already on it. It is the same setting as on each person\'s card.',
   ] },

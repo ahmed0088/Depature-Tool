@@ -2080,3 +2080,5 @@ html.ho-lang-ar body { font-family: var(--font), 'Segoe UI', 'Noto Sans Arabic',
 .rr-so-d { display: flex; gap: 4px; flex-wrap: wrap; }
 .rr-so-d .rb-opt { min-width: 42px; padding: 4px 6px; }
 .rr-so-d .rb-opt.on { background: var(--accent); border-color: var(--accent); color: #141414; font-weight: 800; }
+.gs-flash { animation: gsFlash 2.2s ease; border-radius: 8px; }
+@keyframes gsFlash { 0%, 60% { box-shadow: 0 0 0 3px var(--accent), 0 0 24px var(--accent-bg, rgba(234,185,74,.35)); } 100% { box-shadow: 0 0 0 0 transparent; } }

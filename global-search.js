@@ -17,6 +17,7 @@ const GS_SEARCH_INPUT = {
 };
 
 const GS_PANEL_LABEL = {
+  option:     'Option',
   departures: 'Departures',
   arrivals:   'Arrivals',
   purpose:    'Purpose of Stay',
@@ -113,6 +114,7 @@ function gsBuildIndex(q) {
   if (typeof rkHotels === 'function' && (typeof hoPanelAllowed !== 'function' || hoPanelAllowed('rates'))) rkHotels().filter(h => hit(h.name)).forEach(h => {
     out.push({ panel: 'rates', room: '', name: h.name, extra: 'rates vs the hotels around', icon: '💲', act: () => { rkHotel = h.id; showPanel('rates'); } });
   });
+  if (typeof gsFeatureHits === 'function' && q.length >= 2) out.push(...gsFeatureHits(q));
   document.querySelectorAll('.nav-item[data-panel]').forEach(n => {
     const label = n.textContent.replace(/\s+/g, ' ').replace(/\s[\d—–]+\s*$/, '').trim();
     if (hit(label) && (typeof hoPanelAllowed !== 'function' || hoPanelAllowed(n.dataset.panel))) out.push({ panel: 'page', room: '', name: label, extra: 'open the page', icon: '➡️', act: () => showPanel(n.dataset.panel) });
@@ -136,7 +138,7 @@ function gsRenderResults(q) {
   if (!box) return;
 
   if (!q) {
-    box.innerHTML = `<div class="gs-empty">Type a room, guest, staff member, meeting, hotel, page, checklist step or task…</div>`;
+    box.innerHTML = `<div class="gs-empty">Type a room, guest, staff member, page, task, or an option like "fixed day off", "12 hour", "freeze"…</div>`;
     return;
   }
   if (!_gsResults.length) {
@@ -189,4 +191,103 @@ function gsJump(i) {
       }
     }
   }
+}
+
+// ── Options and features: find a setting or a tool by what it does ─────
+// Typing "fixed day off", "12 hour" or "freeze" finds the option and takes you to it: the page opens,
+// the right section unfolds, and the option is scrolled to and lit up for a moment.
+function gsFlash(el) {
+  if (!el) return;
+  for (let d = el.closest('details'); d; d = d.parentElement && d.parentElement.closest('details')) if (!d.open) d.open = true;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.classList.remove('gs-flash'); void el.offsetWidth; el.classList.add('gs-flash');
+  setTimeout(() => el.classList.remove('gs-flash'), 2400);
+}
+/** the first heading, label or button on a page whose text contains t */
+function gsFindText(root, t) {
+  t = String(t).toLowerCase();
+  const els = (root || document).querySelectorAll('.rr-sec, .rr-hd, summary, h1, h2, h3, .rb-sub, .rr-l b, .hs-row b, button, label, .card-title, .page-hd p');
+  return [...els].find(e => e.offsetParent !== null && e.textContent.toLowerCase().includes(t)) || [...els].find(e => e.textContent.toLowerCase().includes(t)) || null;
+}
+/** open a page (and a builder section), then light up what has this text, or this selector */
+function gsGo(panel, opts) {
+  opts = opts || {};
+  showPanel(panel);
+  setTimeout(() => {
+    const root = document.getElementById('panel-' + panel) || document;
+    if (opts.sec) { const d = root.querySelector(`details[data-sec="${opts.sec}"]`); if (d && !d.open) d.open = true; }
+    if (opts.run) try { opts.run(); } catch (_) {}
+    setTimeout(() => gsFlash((opts.sel && root.querySelector(opts.sel)) || (opts.text && gsFindText(root, opts.text))), 250);
+  }, 350);
+}
+const GS_FEATURES = [
+  // roster builder
+  ['📌 Fixed days off', 'fixed static day off same day every week saturday sat friday managers', 'Roster builder → Rules', () => gsGo('roster-build', { sec: 'rules', text: 'Fixed days off' })],
+  ['🚫 Day-off freeze', 'freeze no days off busy dates exclude between two dates', 'Roster builder → Rules', () => gsGo('roster-build', { sec: 'rules', text: 'Day-off freeze' })],
+  ['✂️ HR cut-off (2 before the 15th, 2 after)', 'cut off cutoff 15th half month hr days off before after', 'Roster builder → Rules', () => gsGo('roster-build', { sec: 'rules', text: 'HR cut-off' })],
+  ['✍️ Your own rules', 'own rules never together always with trainee custom rule', 'Roster builder → Rules', () => gsGo('roster-build', { sec: 'rules', text: 'Your own rules' })],
+  ['⚖️ How much each rule counts', 'rule levels important very important must nice moving people own hotel same hours steady night morning', 'Roster builder → Rules', () => gsGo('roster-build', { sec: 'rules', text: 'Very important' })],
+  ['😴 Rest & hours', 'rest minimum hours 11 hours days in a row max hours', 'Roster builder → Rules', () => gsGo('roster-build', { sec: 'rules', text: 'Rest & hours' })],
+  ['🛎 Desk & cover rules', 'desk cover alone company team leader nights lend', 'Roster builder → Rules', () => gsGo('roster-build', { sec: 'rules', text: 'Desk & cover' })],
+  ['🏖 PH days', 'ph public holiday balance owed give ph', 'Roster builder → Rules', () => gsGo('roster-build', { sec: 'rules', text: 'PH days' })],
+  ['🏨 Hotels & managers', 'hotels managers lend move borrow other hotel', 'Roster builder → Rules', () => gsGo('roster-build', { sec: 'rules', text: 'Hotels & managers' })],
+  ['👥 Cover needed (shift hours)', 'cover needed shifts hours bus times how many people per shift', 'Roster builder', () => gsGo('roster-build', { sec: 'need' })],
+  ['🧑‍💼 Team: titles, hotels, locks, shifts', 'team staff card title hotel lock shift static rotating add staff remove left', 'Roster builder', () => gsGo('roster-build', { sec: 'team' })],
+  ['😀 Character look', 'avatar character look face hair skin outfit glasses cartoon', 'Team → a person\'s card', () => gsGo('roster-build', { sec: 'team' })],
+  ['🙋 Requests and wishes', 'requests wishes day off request prefer', 'Roster builder', () => gsGo('roster-build', { sec: 'req' })],
+  ['🌴 Vacation planner', 'vacation annual leave planner al', 'Roster builder', () => gsGo('roster-build', { sec: 'vac' })],
+  ['📅 Meetings & training', 'meeting training outlook event invite', 'Roster builder', () => gsGo('roster-build', { sec: 'plan' })],
+  // roster page
+  ['🕐 12-hour / 24-hour times', '12 hour 24 hour am pm time format clock roster times', 'Roster page', () => gsGo('roster', { sel: '.ro-12' })],
+  ['➕ Add the roster (picture, Excel)', 'add roster upload picture photo excel import posted roster', 'Roster page', () => gsGo('roster', { text: 'Add roster' })],
+  ['🤒 Sick / leave', 'sick leave absent cover call in sick', 'Roster page', () => gsGo('roster', { text: 'Sick / leave' })],
+  ['🔁 Swap shifts', 'swap trade change shift with colleague', 'Roster page', () => gsGo('roster', { text: 'Swap shifts' })],
+  ['🤔 What if…', 'what if scenario try', 'Roster page', () => gsGo('roster', { text: 'What if' })],
+  ['✏️ Change this week', 'change edit posted week', 'Roster page', () => gsGo('roster', { text: 'Change this week' })],
+  ['🙋 My shifts', 'my shifts my name which one is me next shift', 'Roster page', () => gsGo('roster', { text: 'My shifts' })],
+  ['🎮 Live desk', 'live desk game who is on shift lobby rush hour', 'Roster page', () => { showPanel('roster'); setTimeout(() => typeof lvOpen === 'function' && lvOpen(), 300); }],
+  // shift tasks
+  ['⏰ Shift task with a time (reminder)', 'task time reminder alarm ring shift task', 'Shift Tasks', () => gsGo('shifts', { sel: '[id^="stAt-"]' })],
+  ['📅 Shift task for a date (one-off)', 'task date one off coming up later day', 'Shift Tasks', () => gsGo('shifts', { sel: '[id^="stOn-"]' })],
+  // other pages
+  ['📦 Package Audit: To fix / Copied', 'package upsell in-gauge copied done to fix multi day seller', 'Package Audit', () => gsGo('package-audit')],
+  ['🏛️ DTCM Recon', 'dtcm tourism dirham recon month to date corrections', 'DTCM Recon', () => gsGo('dtcm')],
+  ['☎️ Wake-up calls', 'wake up call morning call', 'Wake-up Calls', () => gsGo('wakeups')],
+];
+/** open Settings filtered to one option, and light it up */
+function gsSet(name) {
+  showPanel('settings');
+  setTimeout(() => { const s = document.getElementById('hsSearch'); if (s) { s.value = name; hoSettingsFilter(name); } gsFlash([...document.querySelectorAll('#hsBody [data-s]')].find(r => (r.querySelector('b')?.textContent || '').trim() === name)); }, 300);
+}
+GS_FEATURES.push(
+  ['✅ Auto-tick shift tasks', 'auto tick automatic ticked by the app done enrollment checklist', 'Settings → Helpers', () => gsSet('Tick shift tasks the app can see are done')],
+  ['🌴 Quiet on my day off', 'quiet off day ph leave mute alarms notifications not working', 'Settings → Alerts & sounds', () => gsSet('Quiet when I\'m off')],
+  ['🔔 Notifications and sound', 'notifications notify sound chime alert desktop', 'Settings → Alerts & sounds', () => gsSet('Desktop notifications')],
+  ['🔒 Sign out when idle', 'auto logout sign out idle lock timeout', 'Settings → Privacy & security', () => gsSet('Sign out when idle')],
+  ['🔄 Fresh shift tasks every day', 'reset shift tasks daily fresh clear ticks', 'Settings → Helpers', () => gsSet('Fresh shift tasks every day')],
+);
+function gsFeatureHits(q) {
+  // every word you type, in any order, hyphens or not ("12 hour" finds "12-hour", "day off fixed" finds "Fixed days off")
+  const norm = x => String(x || '').toLowerCase().replace(/[-–_/]+/g, ' ');
+  const words = norm(q).split(/\s+/).filter(Boolean);
+  const out = [], hit = (...xs) => { const t = norm(xs.join(' ')); return words.every(w => t.includes(w)); };
+  const shortcut = new Set();   // settings already offered by a named shortcut above
+  const allowed = pn => typeof hoPanelAllowed !== 'function' || hoPanelAllowed(pn);
+  GS_FEATURES.forEach(([name, keys, where, act]) => {
+    const pn = (String(act).match(/(?:gsGo|showPanel)\('([a-z-]+)'/) || [])[1];
+    const sn = (String(act).match(/gsSet\('((?:[^'\\]|\\.)*)'/) || [])[1];
+    if (hit(name, keys, where) && sn) shortcut.add(sn.replace(/\\'/g, "'"));
+    if (hit(name, keys, where) && (!pn || allowed(pn))) out.push({ panel: 'option', room: '', name, extra: where, icon: '🧭', act });
+  });
+  // every Settings option, from the settings page itself
+  try {
+    if (typeof hoSettingsRender === 'function' && !document.querySelector('#hsBody [data-s]')) hoSettingsRender();
+    document.querySelectorAll('#hsBody [data-s]').forEach(row => {
+      const b = row.querySelector('b'), name = (b ? b.textContent : '').trim();
+      if (!name || !hit(name, row.dataset.s) || shortcut.has(name)) return;
+      const sec = row.closest('.hs-sec')?.querySelector('h2')?.textContent.trim() || 'Settings';
+      out.push({ panel: 'option', room: '', name, extra: 'Settings → ' + sec, icon: '⚙️', act: () => gsSet(name) });
+    });
+  } catch (_) {}
+  return out.slice(0, 12);
 }
