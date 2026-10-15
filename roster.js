@@ -117,8 +117,19 @@ function roInfo(code) {
     : /night|^ns$|^ng$/.test(l) ? 'night' : 'other';
   return { code: c, label: c, type };
 }
-function roTime(i) { return i && i.from ? `${i.from}–${i.to}` : ''; }
-function roShort(i) { const h = t => (t.endsWith(':00') ? t.slice(0, 2) : t); return i && i.from ? `${h(i.from)}–${h(i.to)}` : ''; }
+/** A time as people want to read it: 24-hour ("21:00") or, with Settings → Clock → 12-hour, "9:00 PM".
+ *  short: the roster grid's compact form, "21" / "9p" (minutes only when not on the hour). Only for showing: codes stay 24-hour. */
+function ro12() { return typeof hoPref === 'function' && !!hoPref('clock12'); }
+function roFmt(t, short) {
+  const m = String(t || '').match(/^(\d{1,2}):(\d{2})/); if (!m) return t || '';
+  if (!ro12()) return short && m[2] === '00' ? m[1].padStart(2, '0') : `${m[1].padStart(2, '0')}:${m[2]}`;
+  const h = +m[1], ap = h < 12 || h === 24 ? 'AM' : 'PM', h12 = h % 12 || 12;
+  return short ? `${h12}${m[2] === '00' ? '' : ':' + m[2]}${ap[0].toLowerCase()}` : `${h12}:${m[2]} ${ap}`;
+}
+function roTime(i) { return i && i.from ? `${roFmt(i.from)}–${roFmt(i.to)}` : ''; }
+function roShort(i) { return i && i.from ? `${roFmt(i.from, true)}–${roFmt(i.to, true)}` : ''; }
+/** the 24h / 12h switch on the Roster page (the same setting as the top bar clock) */
+function roToggle12() { if (typeof hoSetPref === 'function') hoSetPref('clock12', !ro12()); roRender(); if (typeof rbRender === 'function' && document.getElementById('panel-roster-build')?.classList.contains('active')) rbRender(); }
 
 // ── Who can change it ─────────────────────────────────────
 function roCanEdit() {
@@ -562,15 +573,15 @@ function roNextShift() {
   return null;
 }
 function _roWhen(n) {
-  if (n.now) return `Now, until ${n.info.to === '00:00' ? 'midnight' : n.info.to}`;
+  if (n.now) return `Now, until ${n.info.to === '00:00' ? 'midnight' : roFmt(n.info.to)}`;
   if (!n.span) return n.inDays === 0 ? 'Today' : n.inDays === 1 ? 'Tomorrow' : roDayLbl(n.date, true);
   // a shift starting before 04:00 is that date's night: it starts when the date ends ("00:00 on Saturday" = Saturday night)
   if (roNightNext(n.info.from)) {
-    const at = n.info.from === '00:00' ? 'midnight' : n.info.from;
+    const at = n.info.from === '00:00' ? 'midnight' : roFmt(n.info.from);
     return n.date === roToday() ? `Tonight at ${at}` : n.date === roAdd(roToday(), 1) ? `Tomorrow night at ${at}` : `${roDayLbl(n.date, true)} night, at ${at}`;
   }
   const d = n.date;
-  return `${d === roToday() ? 'Today' : d === roAdd(roToday(), 1) ? 'Tomorrow' : roDayLbl(d, true)} at ${n.info.from}`;
+  return `${d === roToday() ? 'Today' : d === roAdd(roToday(), 1) ? 'Tomorrow' : roDayLbl(d, true)} at ${roFmt(n.info.from)}`;
 }
 
 // ── Page ──────────────────────────────────────────────────
@@ -687,7 +698,7 @@ function roOnPosted(v) {
   let al = 0; try { al = +localStorage.getItem('roster_alerted_v1') || 0; } catch (_) {}
   if (v.at <= al) return;
   try { localStorage.setItem('roster_alerted_v1', String(v.at)); } catch (_) {}
-  const span = `${roDate(v.from).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${roDate(v.to).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`;
+  const span = `${roDate(v.from).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })} – ${roDate(v.to).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}`;
   if (v.update) {
     // a change to a posted week: only the people whose shifts changed are told
     const mine = (v.changes || []).filter(c => c.k === roMeKey);
@@ -726,9 +737,10 @@ function roRender() {
   box.innerHTML = `
     <div class="ro-weeknav">
       <button class="btn sm" onclick="roGo(-7)" title="Previous week">‹</button>
-      <b>${escapeHtml(roDate(dates[0]).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }))} – ${escapeHtml(roDate(dates[6]).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }))}</b>
+      <b>${escapeHtml(roDate(dates[0]).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }))} – ${escapeHtml(roDate(dates[6]).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }))}</b>
       <button class="btn sm" onclick="roGo(7)" title="Next week">›</button>
       ${isNow ? '<span class="ro-tag">This week</span>' : '<button class="btn sm" onclick="roGo(0)">This week</button>'}
+      <button class="btn sm ghost ro-12" onclick="roToggle12()" title="Show times as 24-hour or 12-hour (AM/PM)">🕐 ${ro12() ? '12h' : '24h'}</button>
       ${roEdit ? '<button class="btn sm" onclick="roCopyLastWeek()">⧉ Copy last week</button>' : ''}
       ${pic ? `<button class="btn sm" onclick="riOpen('${pic[0]}')" title="The roster picture management sent">📷 Original picture</button>` : ''}
     </div>

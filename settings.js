@@ -172,7 +172,7 @@ function hoSettingsRender() {
       + _hoTog('tbUser', 'Your name', 'Who is signed in')),
 
     _hoSec('time', 'shifts', 'Date & time', 'How times are shown',
-      _hoSeg('clock12', 'Clock', '24-hour like Opera, or 12-hour with AM/PM', [[false, '24-hour'], [true, '12-hour']])
+      _hoSeg('clock12', 'Clock and roster times', '24-hour like Opera (21:00), or 12-hour with AM/PM (9:00 PM): the top bar clock and every roster time', [[false, '24-hour'], [true, '12-hour']])
       + _hoTog('clockSeconds', 'Show seconds', 'In the top bar clock')
       + _hoTog('greetName', 'Greet me by name', '"Good evening, Ahmed" on Home')),
 

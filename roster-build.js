@@ -1693,7 +1693,7 @@ function rbDefaultWeek() {
   return last && last >= w ? roAdd(last, 7) : roAdd(w, 7);
 }
 function rbGo(n) { rbWeek = n === 0 ? rbDefaultWeek() : roAdd(rbWeek, n); rbRender(); }
-function rbWeekLabel(w) { return `${roDate(w).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${roDate(roAdd(w, 6)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`; }
+function rbWeekLabel(w) { return `${roDate(w).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })} – ${roDate(roAdd(w, 6)).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}`; }
 const _rbQ = s => JSON.stringify(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
 function rbRender() {

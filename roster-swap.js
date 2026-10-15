@@ -211,7 +211,7 @@ function rsWeekCanvas(name, group, days) {
   x.fillStyle = accent; x.font = font(700, 30); x.fillText('MY WEEK', 80, 120);
   x.fillStyle = '#ffffff'; x.font = font(800, 66); x.fillText(String(name).slice(0, 26), 80, 200);
   x.fillStyle = '#9aa6b8'; x.font = font(500, 32);
-  x.fillText(`${group ? group + ' · ' : ''}${roDate(days[0].date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${roDate(days[days.length - 1].date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`, 80, 252);
+  x.fillText(`${group ? group + ' · ' : ''}${roDate(days[0].date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })} – ${roDate(days[days.length - 1].date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}`, 80, 252);
   const COL = { morning: '#f5b84a', afternoon: '#5ab4e8', night: '#a78bfa', other: '#8fa3b8', leave: '#f06b7a', off: '#3a4352' };
   const round = (X, Y, w, h, r) => { x.beginPath(); x.moveTo(X + r, Y); x.arcTo(X + w, Y, X + w, Y + h, r); x.arcTo(X + w, Y + h, X, Y + h, r); x.arcTo(X, Y + h, X, Y, r); x.arcTo(X, Y, X + w, Y, r); x.closePath(); };
   let y = 310;

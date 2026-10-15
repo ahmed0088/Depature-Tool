@@ -785,7 +785,7 @@ function rtPerson(k) {
   const groups = rbGroups().filter(Boolean);
   // history: the last 6 weeks
   const weeks = []; for (let i = 5; i >= -1; i--) weeks.push(roAdd(roMonday(new Date()), -7 * i));
-  const hist = weeks.map(w => `<tr><td class="ro-name">${escapeHtml(roDate(w).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }))}</td>${rtDates(w).map(dt => { const v = (roDays[dt] || {})[k] || ''; const i = roInfo(v); return `<td class="ro-cell ${i ? 'ro-t-' + i.type : ''}${dt === roToday() ? ' ro-today' : ''}" title="${escapeHtml(v)}">${escapeHtml(roCellTxt(i)) || '·'}</td>`; }).join('')}</tr>`).join('');
+  const hist = weeks.map(w => `<tr><td class="ro-name">${escapeHtml(roDate(w).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }))}</td>${rtDates(w).map(dt => { const v = (roDays[dt] || {})[k] || ''; const i = roInfo(v); return `<td class="ro-cell ${i ? 'ro-t-' + i.type : ''}${dt === roToday() ? ' ro-today' : ''}" title="${escapeHtml(v)}">${escapeHtml(roCellTxt(i)) || '·'}</td>`; }).join('')}</tr>`).join('');
   const since = roAdd(roToday(), -30), tally = {};
   Object.keys(roDays).filter(dt => dt >= since && dt <= roToday()).forEach(dt => { const v = (roDays[dt] || {})[k]; if (!v) return; const key = rbNorm(v) || (/^PH/i.test(v) ? 'PH' : v.toUpperCase()); tally[key] = (tally[key] || 0) + 1; });
   const absences = Object.entries(c.absences || {}).sort((a, b) => b[1].from.localeCompare(a[1].from));

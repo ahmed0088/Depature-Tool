@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 275, items: [
+    '📅 Roster weeks show their days: "Mon, 5 Oct – Sun, 11 Oct 2026" on the Roster page, in the builder, in roster notifications, on the person card\'s history and on the "My week" picture.',
+    '🕐 Roster times in 24-hour or 12-hour: tap 🕐 24h / 12h next to "This week" (or Settings → Clock and roster times). 12-hour shows the grid as 9a–6p, 12a–9a and other places as 9:00 AM – 6:00 PM. The roster itself is unchanged.',
+  ] },
   { v: 274, items: [
     '😀 Each person\'s character is far more customisable (Team → their card → Their look): a big preview that changes as you tap, every option shown as a little picture of them, 18 hair styles (afro, braids, ponytail, mohawk, beanie…), 15 hair colours, 10 skin tones, eyes, eyebrows, blush or freckles, beard or moustache, glasses, extras (earrings, necklace, flower…), outfits (uniform, suit & tie, polo, hoodie, blazer), outfit colour and a background colour. 🎲 Surprise me (keeps the skin they chose) and ↺ Start again. Looks already chosen stay as they were.',
     '🎮 The live desk shows everyone bigger, and a crowded desk shrinks them a little so nobody is cut off.',
