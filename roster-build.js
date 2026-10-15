@@ -192,6 +192,13 @@ function rbDeepNight(code) { const x = rbParse(code); return !!x && x.type === '
 /** Who may work a shift: the titles set for it (e.g. nights: Supervisor, Duty Manager), else everyone. */
 /** Never sent to this hotel (set on their card: "🚫 not to Ibis"). */
 function rbNoGo(p, g) { return !!(p && p.noGo && p.noGo.length && g != null && rbBaseGroup(g) !== rbBaseGroup(p.group || '') && p.noGo.includes(rbBaseGroup(g))); }
+/** Rule "Home Team Leader for night gaps" (rules.tlHome, off unless set): a Team Leader may take a Supervisors' night
+ *  at their own hotel, before a Supervisor is lent from another hotel. Never at another hotel. */
+function rbTlHome(I, g, p, s) {
+  if (!I || !I.rules || I.rules.tlHome !== true || !p || !/team\s*leader/i.test(p.title || '') || rbNoGo(p, g)) return false;
+  const G = (I.groups || {})[g] || {}; if ((G.post || '') !== (p.post || '') || rbBaseGroup(g) !== rbBaseGroup(p.group || '')) return false;
+  const who = (G.who || {})[rbNorm(s) || s]; return !!(who && who.length && rbIsNight(rbNorm(s) || s));
+}
 function rbMayWork(I, g, p, s) { if (rbNoGo(p, g)) return false; if (p && (((I.groups || {})[g] || {}).post || '') !== (p.post || '')) return false; const who = (((I.groups || {})[g] || {}).who || {})[rbNorm(s) || s]; return !who || !who.length || who.includes((p && p.title) || ''); }
 /** Shift types people ask for: morning, day (morning + 12:00), evening, night. */
 const RB_BANDS = {
@@ -327,7 +334,10 @@ function rbPlanNights(I) {
   if (!hotels.length) return null;
   const isReg = new Set(hotels.map(h => h.reg.key));
   const floaters = I.people.filter(p => !isReg.has(p.key) && !p.post && !p.lock && hotels.some(h => rbMayWork(I, h.g, p, h.ns)));
-  if (!floaters.length) return null;
+  // ⚙ rule "Home Team Leader for night gaps": the hotel's own Team Leaders may cover its night gaps too (never another hotel's)
+  const tls = R.tlHome === true ? I.people.filter(p => !isReg.has(p.key) && !p.post && !p.lock && !floaters.includes(p) && hotels.some(h => rbTlHome(I, h.g, p, h.ns))) : [];
+  const mayNight = (f, h) => rbMayWork(I, h.g, f, h.ns) || (tls.includes(f) && rbTlHome(I, h.g, f, h.ns));
+  if (!floaters.length && !tls.length) return null;
   // each regular: the days their day off could go (nothing fixed that day), or none if leave already covers it
   const offOpts = hotels.map(h => {
     const p = h.reg, taken = dates.filter((_, d) => has(p.key, d) && rbKind(pre[p.key][dates[d]]) === 'off').length;
@@ -352,7 +362,7 @@ function rbPlanNights(I) {
       //  someone who has two days off a week anyway; everyone else keeps their one day off)
       if ((f.offs || 1) >= 2) for (let st = 1; st <= 5; st++) for (let k = 1; k <= 2 && st + k <= 6; k++) { const days = Array.from({ length: k }, (_, j) => st + j); if (days.every(d => byDay[d])) out.push({ days, off: st + k, start: true, mid: true }); }
       return out.filter(b => b.days.every(d => !has(f.key, d)) && (b.off == null || b.off > 6 || b.off < 0 || (!has(f.key, b.off) && !rbNoOff(I, f.key, dates[b.off]))) && (!b.start || b.mid || !rbParse(f.lastShift) || (rbIsNight(rbNorm(f.lastShift)) || rbParse(f.lastShift).e <= 1440 - 11 * 60 + 0))); };
-    const fl = floaters.slice(0, 4), opts = fl.map(blocks);
+    const fl = floaters.slice(0, 4).concat(tls.slice(0, 2)), opts = fl.map(blocks);
     const walk = (fi, used, plan, cost) => {
       if (fi === fl.length) {
         if (gaps.some(x => !used.has(x.i + ':' + x.d))) return;
@@ -368,8 +378,9 @@ function rbPlanNights(I) {
         if (!b.days.length) { walk(fi + 1, used, plan, cost); continue; }
         // every night of the block covers a gap that day: their own hotel first
         const pick = [], u2 = new Set(used); let ok = true, c = cost + 4 + (rbFloats(f) ? 0 : 3) * b.days.length;   // a Duty Manager before a Supervisor
+        if (tls.includes(f)) c += 8 * b.days.length;   // a home Team Leader: after the hotel's own Supervisors, before lending one (that costs 12+ a night)
         for (const d of b.days) {
-          const cand = (byDay[d] || []).filter(x => !u2.has(x.i + ':' + x.d) && rbMayWork(I, hotels[x.i].g, f, hotels[x.i].ns));
+          const cand = (byDay[d] || []).filter(x => !u2.has(x.i + ':' + x.d) && mayNight(f, hotels[x.i]));
           if (!cand.length) { ok = false; break; }
           // their own hotel first, then the hotel they'd rather go to when moved
           const own = cand.find(x => hotels[x.i].g === homeOf(f)) || (f.alt && cand.find(x => rbBaseGroup(hotels[x.i].g) === f.alt)) || cand.find(x => !rbSoftGo(f, hotels[x.i].g)) || cand[0];
@@ -393,7 +404,7 @@ function rbPlanNights(I) {
     if (b.off >= 0 && b.off <= 6) row[dates[b.off]] = 'OFF';
     const nm = typeof roStaff !== 'undefined' && roStaff[f.key] ? roStaff[f.key].name.split(' ')[0] : f.key;
     const where = pick.map(({ d, i }) => `${RB_DAYS[d]}${hotels[i].g !== homeOf(f) ? ' at ' + hotels[i].g : ''}`).join(', ');
-    notes.push({ key: f.key, date: dates[pick[0].d], plan: true, text: `Nights: ${nm} covers the night supervisor's days off (${where}), ${b.off >= 0 && b.off <= 6 ? (b.start ? 'then their day off ' + RB_DAYS[b.off] : 'with their day off just before, ' + RB_DAYS[b.off]) : ''}${pick.some(({ i }) => hotels[i].g !== homeOf(f)) ? '. Working at another hotel only because nobody there could' : ''}.` });
+    notes.push({ key: f.key, date: dates[pick[0].d], plan: true, text: `Nights: ${nm}${tls.includes(f) ? ' (Team Leader, own hotel: your rule says before lending a Supervisor)' : ''} covers the night supervisor's days off (${where}), ${b.off >= 0 && b.off <= 6 ? (b.start ? 'then their day off ' + RB_DAYS[b.off] : 'with their day off just before, ' + RB_DAYS[b.off]) : ''}${pick.some(({ i }) => hotels[i].g !== homeOf(f)) ? '. Working at another hotel only because nobody there could' : ''}.` });
   });
   return { pre, notes };
 }
@@ -904,7 +915,7 @@ function rbProblems(I, cells, cover) {
         if (prev && rbParse(prev) && rbRest(prev, v) < R.minRest) out.push({ kind: 'rest', key: p.key, date: dt, hours: rbRest(prev, v), from: prev, to: v });
         else if (prev && !rbSwitchOk(prev, v, R)) out.push({ kind: rbIsNight(prev) === rbIsNight(v) ? 'back' : 'switch', key: p.key, date: dt, from: prev, to: v });
         { const tg = rbAt(I, p, rbParse(v));
-          if (!rbMayWork(I, tg, p, v)) out.push({ kind: 'who', key: p.key, date: dt, code: v, who: rbNoGo(p, tg) ? ['staff allowed at ' + rbBaseGroup(tg) + ' (their card says not there)'] : ((I.groups[tg] || {}).post || '') !== (p.post || '') ? [p.post ? 'front desk staff (not ' + p.post.toLowerCase() + ')' : 'the ' + ((I.groups[tg] || {}).post || '').toLowerCase() + ' team'] : ((I.groups[tg] || {}).who || {})[rbNorm(v)] }); }
+          if (!rbMayWork(I, tg, p, v) && !rbTlHome(I, tg, p, v)) out.push({ kind: 'who', key: p.key, date: dt, code: v, who: rbNoGo(p, tg) ? ['staff allowed at ' + rbBaseGroup(tg) + ' (their card says not there)'] : ((I.groups[tg] || {}).post || '') !== (p.post || '') ? [p.post ? 'front desk staff (not ' + p.post.toLowerCase() + ')' : 'the ' + ((I.groups[tg] || {}).post || '').toLowerCase() + ' team'] : ((I.groups[tg] || {}).who || {})[rbNorm(v)] }); }
         if (run === R.maxRun + 1) out.push({ kind: 'run', key: p.key, date: dt, days: run });
       } else if (v) run = 0;
       prev = v;
@@ -2195,6 +2206,7 @@ function rbRulesHtml() {
       row('Vacation days a year', 'earned a little every day; change one person on their card', step(R.vacDays || 30, 0, 60, "rbSetRule('vacDays',Math.max(0,Math.min(60,+this.value||30)))", 'days')))}
     ${card('🏨', 'Hotels & managers',
       row('Keep everyone in their own hotel', R.lend === false ? 'nobody is moved, by the builder or in suggestions' : 'off: moved only when a shift would be empty, one pair of hotels a week', sw(R.lend === false, "rbSetRule('lend',!this.checked);rbRender()"))
+      + row('Own Team Leader for night gaps', 'a night the Supervisor is off: the hotel\'s own Team Leader before a Supervisor from another hotel', sw(R.tlHome === true, "rbSetRule('tlHome',this.checked)"))
       + row('Managers keep their own shift', 'never moved to cover; unlock one on their card', sw(R.lockMgr !== false, "rbSetRule('lockMgr',this.checked);rbRender()"))
       + row('Managers on duty each day', `all hotels together; 0 = off · ${mgrs.length ? 'now: ' + escapeHtml(mgrs.join(', ')) : 'nobody has the title yet (their card in 🧑‍💼 Team)'}`, step(R.mgrMin, 0, 3, "rbSetRule('mgrMin',Math.max(0,Math.min(3,+this.value||0)))", '')))}
     </div>

@@ -313,6 +313,65 @@ function exportXlsx(){const all=rows(),wb=XLSX.utils.book_new();
   const s2=XLSX.utils.aoa_to_sheet(b);s2['!cols']=[14,30,7,11,9,40,16].map(w=>({wch:w}));XLSX.utils.book_append_sheet(wb,s2,'Day Detail');
   XLSX.writeFile(wb,'Skip_The_Clean_Credit_List.xlsx')}
 
+// ── Month summary (print / save as PDF) ────────────────────────────────
+// Reads the same rows() the screen shows; nothing is re-calculated or saved.
+const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+function monthOf(){
+  const cnt = {};
+  (R ? R.res : []).forEach(o => (o.detail || []).forEach(d => { const k = String(d.date || '').slice(0, 7); if (/^\d{4}-\d{2}$/.test(k)) cnt[k] = (cnt[k] || 0) + 1; }));
+  const ks = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a] || (a < b ? -1 : 1));
+  if (!ks.length) return '';
+  const lab = k => MONTHS[+k.slice(5) - 1] + ' ' + k.slice(0, 4);
+  const extra = ks.slice(1).sort();
+  return lab(ks[0]) + (extra.length ? ' (also ' + extra.map(lab).join(', ') + ')' : '');
+}
+function hotelName(){
+  if (typeof _meHotel === 'function') return _meHotel();
+  const el = document.getElementById('hotelName'); return (el && el.textContent.trim()) || 'Hotel';
+}
+function summaryPdf(){
+  if (!R) { toast('Add the files first'); return; }
+  if (typeof mePrintPage !== 'function') { toast('The print helper did not load. Reload the page.'); return; }
+  const all = rows(), cnt = t => all.filter(r => r.st === t), rd = cnt('Ready');
+  const p = +$('pts').value || 0, lim = +$('lim').value || 0, card = $('sel').selectedOptions[0]?.textContent || '';
+  const credPts = cnt('Credited').reduce((a, r) => a + ((credited[r.o.key] || {}).pts || 0), 0);
+  const month = monthOf() || 'This month';
+  const now = new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const kpi = (l, v, sub, cls) => `<div class="kpi"><small>${l}</small><b${cls ? ` class="${cls}"` : ''}>${v}</b>${sub ? `<i>${sub}</i>` : ''}</div>`;
+  const stCls = { 'Ready': 'ok', 'Credited': 'ok', 'Check first': 'warn', 'No PMID': 'bad' };
+  const stTxt = { 'No PMID': 'Not a member' };
+  const tr = all.map((r, i) => `<tr><td class="r">${i + 1}</td><td class="nw">${esc(r.o.room || '–')}</td><td>${esc(r.o.name)}</td>
+    <td class="r">${r.n}</td><td class="mono nw">${esc(r.pm || '–')}</td><td class="r">${r.pt && (r.st === 'Ready' || r.st === 'Check first') ? r.pt.toLocaleString('en-GB') : (r.st === 'Credited' ? esc(((credited[r.o.key] || {}).pts || 0).toLocaleString('en-GB')) + ' ✓' : '–')}</td>
+    <td class="nw"><span class="${stCls[r.st] || ''}">${esc(stTxt[r.st] || r.st)}</span></td><td>${r.yes.length ? esc(fmtDates(r.yes)) : '–'}</td></tr>`).join('');
+  const body = `
+    <div class="hd"><div><div class="hotel">${esc(hotelName())}</div><h1>Skip The Clean · month summary</h1><div class="sub"><b>${esc(month)}</b> · loyalty points for guests who skipped housekeeping</div></div>
+      <div class="meta">Made ${esc(now)}<br>by ${esc(who())}</div></div>
+    <h2>1 · Totals</h2>
+    <div class="kpis">
+      ${kpi('Guests ready', rd.length, 'to credit now', 'ok')}
+      ${kpi('Points to enter', rd.reduce((a, r) => a + r.pt, 0).toLocaleString('en-GB'), 'for the ready guests', 'ok')}
+      ${kpi('To check', cnt('Check first').length, 'check before crediting', cnt('Check first').length ? 'warn' : '')}
+      ${kpi('Already credited', cnt('Credited').length, credPts.toLocaleString('en-GB') + ' points (saved)')}
+      ${kpi('Not members', cnt('No PMID').length, 'no card in Opera')}
+      ${kpi('Guests on sheets', all.length, cnt('No credit days').length + ' no credit days · ' + cnt('Long stay').length + ' long stay')}
+    </div>
+    <h2>2 · Guests (${all.length})</h2>
+    <div class="tw"><table><thead><tr><th class="r">#</th><th>Room</th><th>Guest</th><th class="r">Nights counted</th><th>PMID</th><th class="r">Points</th><th>Status</th><th>Skipped dates counted</th></tr></thead>
+      <tbody>${tr || '<tr><td colspan="8" class="muted">No guests on the sheets.</td></tr>'}</tbody></table></div>
+    <h2>3 · Rules used</h2>
+    <div class="note"><ul>
+      <li><b>${p.toLocaleString('en-GB')} points</b> for each skipped day that counts. Card used: ${esc(card)}.</li>
+      <li>A day counts only when the guest asked to skip it (it is on the housekeeping sheet). Arrival and departure days never count.</li>
+      <li>Every 3rd day is a mandatory clean: after 2 skipped days in a row the next one is cleaned, not credited.</li>
+      <li>${lim > 0 ? `Stays over <b>${lim} nights</b> get no credit.` : 'No long-stay limit was set.'}</li>
+      <li>PMID = the card number without its last character, then its last 8 characters. <b>Not a member</b>: not in the Opera Membership Stays report.</li>
+      <li>Already credited days (ticked Done in the app) are never counted twice.</li>
+    </ul></div>`;
+  if (typeof logActivity === 'function') logActivity('stc_month_summary', month + ' · ' + rd.length + ' ready');
+  mePrintPage('Skip The Clean ' + month, body, { sign: ['Prepared by', 'Checked by'], signName: who() });
+}
+
 function clearAll(){X=[];T=[];R=null;tab='Ready';$('err').textContent='';list();$('out').hidden=true;badge('—')}
 
 // ───────────────────────── mounting into the app ─────────────────────────
@@ -498,7 +557,7 @@ const PANEL_HTML = `
     <p class="stc-sum"><span class="stc-prog" id="stc-prog"></span></p>
     <div class="stc-card stc-copybar">
       <div class="stc-grp"><span class="stc-lbl">Copy every Ready guest:</span><button class="btn gold" type="button" id="stc-cpC">📋 PMID + points</button><button class="btn" type="button" id="stc-cpA">PMIDs only</button><button class="btn" type="button" id="stc-cpB">Points only</button></div>
-      <button class="btn mint" type="button" id="stc-xl">📥 Download Excel</button>
+      <div class="stc-grp"><button class="btn mint" type="button" id="stc-xl">📥 Download Excel</button><button class="btn" type="button" id="stc-pdf" title="A clean page with the totals and every guest: print it or save it as a PDF">📄 Month summary (PDF)</button></div>
     </div>
     <div class="stc-filters">
       <div class="stc-tabs" id="stc-tabs"></div>
@@ -576,6 +635,7 @@ function mount() {
   $('cpA').onclick = () => { const a = ready(); copy(a.map(r => r.pm).join('\n'), a.length + ' PMIDs', $('cpA')); };
   $('cpB').onclick = () => { const a = ready(); copy(a.map(r => r.pt).join('\n'), a.length + ' point values', $('cpB')); };
   $('xl').onclick = exportXlsx;
+  $('pdf').onclick = summaryPdf;
   $('clear').onclick = clearAll;
   histNote(); startSync();
 }

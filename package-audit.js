@@ -1433,6 +1433,7 @@ function pkgRender() {
   if (warn) warn.innerHTML = open.length ? `<div class="pkg-left-warn"><b>⚠ ${open.length} package${open.length > 1 ? 's' : ''} copied but not every day fixed yet.</b>
       IN-Gauge charges a package day by day and each day keeps the old seller until you change it. Fix every day, then tick it:
       <ul>${open.map(g => { const r0 = g.rows[0], left = _pkgLeft(g.key); return `<li>Room ${escapeHtml(r0.room || '?')} · ${escapeHtml(_pkgFamilyName(r0))} · conf ${escapeHtml(r0.conf)}: <b>${left.length} of ${_pkgGroupRows(g.key).length} days left</b> (${escapeHtml(left.map(x => x.daily || x.from || '?').join(', '))})</li>`; }).join('')}</ul></div>` : '';
+  try { pkgBoardRender(); } catch (e) { console.warn('[pkg board]', e); }
 }
 
 const pkgOpenGroups = new Set();
@@ -1755,4 +1756,243 @@ function pkgClear() {
   const search = document.getElementById('pkgSearch'); if (search) search.value = '';
   document.getElementById('pkgResultsWrap').style.display = 'none';
   document.getElementById('pkgError').classList.remove('show');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Seller board — packages, value and commission per seller per month
+//
+//  Reads pkgResults only (nothing is re-calculated): the same rows the
+//  Commission report counts — credited charges, not skipped, not a system
+//  (TARS) booking — under the seller the audit settled on (pins and the
+//  extension rule included). A package billed over several nights counts
+//  once under Packages and once per night under Nights. Rows whose seller
+//  still has to be changed in IN-Gauge (not ticked Copied yet) are counted
+//  and flagged, so the board matches what should be paid.
+//  The month is the IN-Gauge charge date (Daily Date).
+//  The commission rate is shared with the team at packageAudit/board/rate.
+// ═══════════════════════════════════════════════════════════
+let pkgBoardMonth = '';
+let pkgBoardRate = (() => { try { const v = parseFloat(localStorage.getItem('pkg_board_rate_v1')); return v >= 0 ? v : 0; } catch (_) { return 0; } })();
+let pkgBoardSync = false;
+const _PKGB_MON = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const _pkgbE = s => (typeof escapeHtml === 'function' ? escapeHtml(String(s ?? '')) : String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
+const _pkgbN = v => (Math.round((+v || 0) * 100) / 100).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const _pkgbMonthLabel = k => k === 'all' ? 'All months' : k === 'nodate' ? 'No charge date' : `${_PKGB_MON[+k.slice(4, 6) - 1] || '?'} ${k.slice(0, 4)}`;
+function _pkgbMonthOf(r) {
+  const n = _pkgDayNum(r.daily) || _pkgDayNum(r.from) || _pkgDayNum(r.arr);
+  return n ? String(n).slice(0, 6) : 'nodate';
+}
+
+/** { months: ['202610', ...], by: {month: {seller: {...}}} } built from the audit result. */
+function pkgBoardData() {
+  const label = u => (_pkgUserLabel(u) || 'Unassigned');
+  const by = {};
+  (pkgResults || []).forEach(r => {
+    if (r.verdict !== 'credit' || r.pinSkip || r.noSeller) return;
+    const fam = _pkgFamilyName(r), who = label(r.user || r.employee);
+    const amt = parseFloat(r.price ?? r.charge) || 0;
+    const pending = !r.alreadyComplete && (!pkgNightDone(r) || pkgBackWrong(r));
+    [_pkgbMonthOf(r), 'all'].forEach(m => {
+      const s = ((by[m] = by[m] || {})[who] = by[m][who] || { seller: who, pk: new Set(), nights: 0, aed: 0, fam: {}, pend: new Set() });
+      s.pk.add(r.conf + '|' + fam); s.nights++; s.aed += amt;
+      s.fam[fam] = (s.fam[fam] || 0) + 1;
+      if (pending) s.pend.add(r.conf + '|' + fam);
+    });
+  });
+  const months = Object.keys(by).filter(k => k !== 'all').sort().reverse();
+  return { months, by };
+}
+
+/** The ranked rows for one month, with commission at the current rate. */
+function pkgBoardRows(month) {
+  const D = pkgBoardData();
+  const m = month && D.by[month] ? month : (D.months[0] || 'all');
+  const list = Object.values(D.by[m] || {}).map(s => ({
+    seller: s.seller, packages: s.pk.size, nights: s.nights, aed: Math.round(s.aed * 100) / 100,
+    commission: Math.round(s.aed * pkgBoardRate) / 100, pending: s.pend.size,
+    what: Object.entries(s.fam).sort((a, b) => b[1] - a[1]).map(([f, n]) => `${f} ×${n}`).join(', ')
+  })).sort((a, b) => b.aed - a.aed || b.packages - a.packages || a.seller.localeCompare(b.seller));
+  const tot = list.reduce((t, r) => ({ packages: t.packages + r.packages, nights: t.nights + r.nights, aed: t.aed + r.aed, commission: t.commission + r.commission, pending: t.pending + r.pending }),
+    { packages: 0, nights: 0, aed: 0, commission: 0, pending: 0 });
+  return { month: m, months: D.months, list, tot };
+}
+
+function _pkgbStyle() {
+  if (document.getElementById('pkgb-style')) return;
+  const st = document.createElement('style'); st.id = 'pkgb-style';
+  st.textContent = `
+#pkgBoard{margin-top:22px;background:var(--card);border:1px solid var(--border);border-radius:var(--r,12px);padding:16px}
+#pkgBoard .pkgb-hd{display:flex;gap:10px 16px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;margin-bottom:12px}
+#pkgBoard .pkgb-t{font-weight:700;font-size:1rem} #pkgBoard .pkgb-s{font-size:.72rem;color:var(--text2);margin-top:2px;max-width:560px;line-height:1.5}
+#pkgBoard .pkgb-ctl{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+#pkgBoard label{display:flex;flex-direction:column;gap:3px;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3)}
+#pkgBoard select,#pkgBoard input{font:inherit;font-size:.8rem;padding:6px 8px;border-radius:8px;border:1px solid var(--border2,var(--border));background:var(--bg2,var(--card2));color:var(--text);min-width:0}
+#pkgBoard input{width:84px}
+#pkgBoard .pkgb-k{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:12px}
+#pkgBoard .pkgb-k div{background:var(--card2,var(--bg2));border:1px solid var(--border);border-radius:10px;padding:9px 11px;min-width:0}
+#pkgBoard .pkgb-k small{display:block;font-family:var(--mono);font-size:.58rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600}
+#pkgBoard .pkgb-k b{display:block;font-size:1.25rem;font-variant-numeric:tabular-nums;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#pkgBoard .pkgb-k .g b{color:var(--accent,#e8b84b)}
+#pkgBoard .pkgb-row{display:grid;grid-template-columns:30px minmax(120px,1.3fr) minmax(90px,2fr) 70px 60px 100px 100px;gap:10px;align-items:center;padding:8px 6px;border-top:1px solid var(--border)}
+#pkgBoard .pkgb-row.h{border-top:0;font-family:var(--mono);font-size:.58rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600;padding-top:0}
+#pkgBoard .pkgb-row.tot{font-weight:700;border-top:2px solid var(--border2,var(--border))}
+#pkgBoard .pkgb-n{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono);font-size:.8rem}
+#pkgBoard .pkgb-rk{font-weight:800;color:var(--text3);text-align:center}
+
+#pkgBoard .pkgb-nm{font-weight:600;min-width:0;overflow-wrap:anywhere}
+#pkgBoard .pkgb-nm small{display:block;font-weight:400;font-size:.66rem;color:var(--text3);line-height:1.35}
+#pkgBoard .pkgb-pend{display:inline-block;margin-top:2px;font-size:.62rem;font-weight:700;color:var(--amber,#d97706)}
+#pkgBoard .pkgb-bar{height:10px;border-radius:5px;background:var(--bg2,var(--card2));overflow:hidden}
+#pkgBoard .pkgb-bar i{display:block;height:100%;border-radius:5px;background:var(--accent,#e8b84b)}
+#pkgBoard .pkgb-row.h>div{font-family:var(--mono);font-size:.58rem}
+#pkgBoard .pkgb-empty{padding:22px;text-align:center;color:var(--text3);font-size:.8rem}
+#pkgBoard .pkgb-foot{font-size:.66rem;color:var(--text3);margin-top:10px;line-height:1.5}
+@media(max-width:760px){
+  #pkgBoard{padding:12px}
+  #pkgBoard .pkgb-k{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #pkgBoard .pkgb-k div:last-child{grid-column:1/-1}
+  #pkgBoard .pkgb-row{grid-template-columns:26px minmax(0,1fr) auto;grid-template-areas:"rk nm aed" "rk bar bar" "rk st st";gap:4px 10px}
+  #pkgBoard .pkgb-row.h{display:none}
+  #pkgBoard .pkgb-row>.pkgb-rk{grid-area:rk} #pkgBoard .pkgb-row>.pkgb-nm{grid-area:nm} #pkgBoard .pkgb-row>.pkgb-bw{grid-area:bar}
+  #pkgBoard .pkgb-row>.c-aed{grid-area:aed}
+  #pkgBoard .pkgb-row>.c-pk,#pkgBoard .pkgb-row>.c-nt,#pkgBoard .pkgb-row>.c-cm{display:none}
+  #pkgBoard .pkgb-row>.pkgb-st{grid-area:st;display:block;font-size:.68rem;color:var(--text2);font-family:var(--mono)}
+}
+@media(min-width:761px){#pkgBoard .pkgb-st{display:none}}`;
+  document.head.appendChild(st);
+}
+
+function _pkgbStartSync() {
+  if (pkgBoardSync || typeof fbListen !== 'function') return;
+  pkgBoardSync = true;
+  try {
+    fbListen('packageAudit/board/rate', v => {
+      const n = parseFloat(v);
+      if (v == null || !(n >= 0) || n === pkgBoardRate) return;
+      pkgBoardRate = n;
+      try { localStorage.setItem('pkg_board_rate_v1', String(n)); } catch (_) {}
+      if (pkgResults.length) pkgBoardRender();
+    });
+  } catch (_) { pkgBoardSync = false; }
+}
+
+function pkgBoardSetMonth(v) { pkgBoardMonth = v; pkgBoardRender(); }
+function pkgBoardSetRate(v) {
+  const n = Math.max(0, Math.min(100, parseFloat(v) || 0));
+  pkgBoardRate = n;
+  try { localStorage.setItem('pkg_board_rate_v1', String(n)); } catch (_) {}
+  try { if (typeof fbSet === 'function') fbSet('packageAudit/board/rate', n); } catch (_) {}
+  pkgBoardRender();
+}
+
+function pkgBoardRender() {
+  const wrap = document.getElementById('pkgResultsWrap');
+  if (!wrap) return;
+  _pkgbStyle(); _pkgbStartSync();
+  let box = document.getElementById('pkgBoard');
+  if (!box) { box = document.createElement('section'); box.id = 'pkgBoard'; wrap.appendChild(box); }
+  const B = pkgBoardRows(pkgBoardMonth);
+  const top = B.list.length ? Math.max(...B.list.map(r => r.aed), 0.01) : 1;
+  const opts = [...B.months, ...(B.months.length > 1 ? ['all'] : [])]
+    .map(k => `<option value="${_pkgbE(k)}"${k === B.month ? ' selected' : ''}>${_pkgbE(_pkgbMonthLabel(k))}</option>`).join('');
+  const rate = pkgBoardRate;
+  const comm = v => rate > 0 ? _pkgbN(v) : '—';
+  const rows = B.list.map((r, i) => `
+    <div class="pkgb-row">
+      <div class="pkgb-rk">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}</div>
+      <div class="pkgb-nm">${_pkgbE(r.seller)}<small>${_pkgbE(r.what)}</small>${r.pending ? `<span class="pkgb-pend" title="The audit credits this seller, but IN-Gauge still shows someone else or a blank. Fix it in IN-Gauge and tick it in the list above.">⚠ ${r.pending} not fixed in IN-Gauge yet</span>` : ''}</div>
+      <div class="pkgb-bw"><div class="pkgb-bar" title="${_pkgbE(_pkgbN(r.aed))} AED"><i style="width:${Math.max(2, Math.round(r.aed / top * 100))}%"></i></div></div>
+      <div class="pkgb-n c-pk">${r.packages}</div>
+      <div class="pkgb-n c-nt">${r.nights}</div>
+      <div class="pkgb-n c-aed">${_pkgbN(r.aed)}</div>
+      <div class="pkgb-n c-cm">${comm(r.commission)}</div>
+      <div class="pkgb-st">${r.packages} package${r.packages === 1 ? '' : 's'} · ${r.nights} night${r.nights === 1 ? '' : 's'}${rate > 0 ? ' · commission ' + _pkgbN(r.commission) : ''}</div>
+    </div>`).join('');
+  const T = B.tot;
+  box.innerHTML = `
+    <div class="pkgb-hd">
+      <div><div class="pkgb-t">🏆 Seller board</div>
+        <div class="pkgb-s">Packages sold per person, by the month they were charged. Counts the same sales as the Commission report: credited charges under the right seller (your pins included). Removed, skipped and system (TARS) charges are not counted.</div></div>
+      <div class="pkgb-ctl">
+        <label>Month<select id="pkgbMonth" onchange="pkgBoardSetMonth(this.value)">${opts || '<option>No sales</option>'}</select></label>
+        <label title="Shared with the team">Commission %<input id="pkgbRate" type="number" min="0" max="100" step="0.5" inputmode="decimal" value="${rate}" onchange="pkgBoardSetRate(this.value)"></label>
+        <button class="btn sm" type="button" onclick="pkgBoardCopy()">📋 Copy</button>
+        <button class="btn sm" type="button" onclick="pkgBoardCsv()">📥 CSV</button>
+        <button class="btn gold sm" type="button" onclick="pkgBoardPrint()">📄 Print / PDF</button>
+      </div>
+    </div>
+    <div class="pkgb-k">
+      <div><small>Packages</small><b>${T.packages}</b></div>
+      <div><small>Nights</small><b>${T.nights}</b></div>
+      <div><small>Value (AED)</small><b>${_pkgbN(T.aed)}</b></div>
+      <div class="g"><small>Commission${rate > 0 ? ' · ' + _pkgbE(rate) + '%' : ''}</small><b>${rate > 0 ? _pkgbN(T.commission) : 'Set %'}</b></div>
+      <div><small>Sellers</small><b>${B.list.length}</b></div>
+    </div>
+    ${B.list.length ? `<div class="pkgb-list">
+      <div class="pkgb-row h"><div>#</div><div>Seller</div><div>Value</div><div class="pkgb-n">Packages</div><div class="pkgb-n">Nights</div><div class="pkgb-n">AED</div><div class="pkgb-n">Commission</div></div>
+      ${rows}
+      <div class="pkgb-row tot"><div></div><div class="pkgb-nm">Total</div><div class="pkgb-bw"></div><div class="pkgb-n c-pk">${T.packages}</div><div class="pkgb-n c-nt">${T.nights}</div><div class="pkgb-n c-aed">${_pkgbN(T.aed)}</div><div class="pkgb-n c-cm">${comm(T.commission)}</div>
+        <div class="pkgb-st">${T.packages} packages · ${T.nights} nights${rate > 0 ? ' · commission ' + _pkgbN(T.commission) : ''}</div></div>
+    </div>` : '<div class="pkgb-empty">No credited sales in this audit yet.</div>'}
+    <div class="pkgb-foot">A package billed over several nights counts once under Packages and once per night under Nights. Commission = value × the rate you set (shared with the team).
+      ${T.pending ? `<b>${T.pending}</b> package${T.pending === 1 ? ' is' : 's are'} credited here but not fixed in IN-Gauge yet: fix them in the list above so IN-Gauge matches.` : ''}
+      For the whole month, run the audit with the IN-Gauge export from the 1st of the month.</div>`;
+}
+
+function _pkgbTable() {
+  const B = pkgBoardRows(pkgBoardMonth);
+  const head = ['Month', 'Rank', 'Seller', 'Packages', 'Nights', 'Value AED', 'Commission %', 'Commission AED', 'Not fixed in IN-Gauge', 'What'];
+  const m = _pkgbMonthLabel(B.month), f = v => (Math.round((+v || 0) * 100) / 100).toFixed(2);
+  const body = B.list.map((r, i) => [m, i + 1, r.seller, r.packages, r.nights, f(r.aed), pkgBoardRate, f(r.commission), r.pending, r.what]);
+  body.push([m, '', 'Total', B.tot.packages, B.tot.nights, f(B.tot.aed), pkgBoardRate, f(B.tot.commission), B.tot.pending, '']);
+  return { B, head, body };
+}
+
+async function pkgBoardCopy() {
+  if (!pkgResults.length) { showToast('Run Package Audit first', 'err'); return; }
+  const { head, body } = _pkgbTable();
+  const tsv = [head, ...body].map(r => r.map(c => String(c).replace(/[\t\n]/g, ' ')).join('\t')).join('\n');
+  try { await navigator.clipboard.writeText(tsv); showToast('Seller board copied: paste into Excel', 'ok'); }
+  catch (_) { showToast('Copy was blocked by the browser', 'err'); }
+}
+
+function pkgBoardCsv() {
+  if (!pkgResults.length) { showToast('Run Package Audit first', 'err'); return; }
+  const { B, head, body } = _pkgbTable();
+  const q = v => { const s = String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const csv = '﻿' + [head, ...body].map(r => r.map(q).join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = `Seller_board_${B.month}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+function pkgBoardPrint() {
+  if (!pkgResults.length) { showToast('Run Package Audit first', 'err'); return; }
+  if (typeof mePrintPage !== 'function') { showToast('The print helper did not load. Reload the page.', 'err'); return; }
+  const B = pkgBoardRows(pkgBoardMonth), T = B.tot, rate = pkgBoardRate, f = _pkgbN;
+  const top = B.list.length ? Math.max(...B.list.map(r => r.aed), 0.01) : 1;
+  const month = _pkgbMonthLabel(B.month);
+  if (typeof logActivity === 'function') logActivity('pkg_board_print', `${month} · ${B.list.length} sellers`);
+  const rows = B.list.map((r, i) => `<tr><td class="r">${i + 1}</td><td><b>${_pkgbE(r.seller)}</b><br><span class="muted">${_pkgbE(r.what)}</span>${r.pending ? `<br><span class="warn">${r.pending} not fixed in IN-Gauge yet</span>` : ''}</td>
+    <td style="width:22%"><span class="barc" style="width:${Math.max(2, Math.round(r.aed / top * 100))}%"></span></td>
+    <td class="r">${r.packages}</td><td class="r">${r.nights}</td><td class="r">${f(r.aed)}</td><td class="r">${rate > 0 ? f(r.commission) : '—'}</td></tr>`).join('');
+  const sub = `<b>${_pkgbE(month)}</b> · by the month the package was charged in IN-Gauge${rate > 0 ? ` · commission ${_pkgbE(rate)}% of value` : ''}`;
+  const head = typeof mePrintHead === 'function' ? mePrintHead('Package seller board', sub) : `<h1>Package seller board</h1><div class="sub">${sub}</div>`;
+  const body = `${head}
+    <div class="kpis">
+      <div class="kpi"><small>Packages</small><b>${T.packages}</b></div>
+      <div class="kpi"><small>Nights</small><b>${T.nights}</b></div>
+      <div class="kpi"><small>Value (AED)</small><b>${f(T.aed)}</b></div>
+      <div class="kpi"><small>Commission (AED)</small><b>${rate > 0 ? f(T.commission) : '—'}</b>${rate > 0 ? '' : '<i>no rate set</i>'}</div>
+      <div class="kpi"><small>Sellers</small><b>${B.list.length}</b></div>
+    </div>
+    <h2>Ranking</h2>
+    <div class="tw"><table><thead><tr><th class="r">#</th><th>Seller</th><th>Value</th><th class="r">Packages</th><th class="r">Nights</th><th class="r">AED</th><th class="r">Commission</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="7" class="muted">No credited sales.</td></tr>'}
+    <tr class="tot"><td></td><td>Total</td><td></td><td class="r">${T.packages}</td><td class="r">${T.nights}</td><td class="r">${f(T.aed)}</td><td class="r">${rate > 0 ? f(T.commission) : '—'}</td></tr></tbody></table></div>
+    <div class="note">Credited charges only, under the seller the audit settled on (pinned decisions included). Removed, skipped and system (TARS) charges are not counted.
+      A package billed over several nights counts once under Packages and once per night under Nights.${T.pending ? ` ${T.pending} package${T.pending === 1 ? ' is' : 's are'} credited here but not fixed in IN-Gauge yet.` : ''}</div>`;
+  mePrintPage(`Seller board ${month}`, body, { sign: ['Prepared by', 'Checked by (Front Office Manager / Finance)'], signName: _pkgMe() });
 }

@@ -552,6 +552,19 @@ console.log('\nRoster scenarios');
     check('nights: no rule broken to do it', r.problems.filter(p => p.kind !== 'thin').length, 0);
     check('nights: the plan is written down', (r.notes || []).some(n => /covers the night supervisor's days off/.test(n.text)), true);
   }
+  // 7d2. rule "Own Team Leader for night gaps" (tlHome): off, a Supervisor is lent from another hotel as before; on, the hotel's own Team Leader covers
+  {
+    const H = ['Ibis DD', 'Mercure DD'], G = {}, ppl = [];
+    H.forEach((h, i) => { G[h] = { shifts: [N, M], need: { [N]: day(1), [M]: day(1) }, who: { [N]: ['Supervisor', 'Duty Manager'] } };
+      ppl.push(P('DM' + i, { group: h, title: 'Duty Manager', fixed: N, usual: N, lastShift: N }), P('A' + i, { group: h, usual: M, lastShift: M }), P('B' + i, { group: h, usual: M, lastShift: M })); });
+    ppl.push(P('SUP', { group: 'Mercure DD', title: 'Supervisor', usual: M, lastShift: 'OFF' }), P('TL', { group: 'Ibis DD', title: 'Team Leader', usual: M, lastShift: 'OFF' }));
+    const run = tlHome => sb.rbSolve({ week: W, groups: G, people: ppl, pre: {}, rules: Object.assign({ minRest: 11, maxRun: 12, maxHours: 9, allowOne: true, nightSwitch: true, lend: true, givePh: false }, tlHome == null ? {} : { tlHome }), seed: 1 });
+    const lent = r => dates.filter(dt => /^00:00 - 09:00 - /.test(r.cells.SUP[dt] || '')).length, tlN = r => dates.filter(dt => sb.rbIsNight(r.cells.TL[dt])).length;
+    const covered = r => H.every(h => dates.every(dt => ppl.some(p => { const x = sb.rbParse(r.cells[p.key][dt]); return x && x.type === 'night' && sb.rbAt({ groups: G }, p, x) === h; })));
+    const r0 = run(null), r1 = run(false), r2 = run(true);
+    check('own TL rule off (default): a Supervisor is lent to the other hotel\'s night, the Team Leader stays on days', [lent(r0) > 0, tlN(r0), JSON.stringify(r0.cells) === JSON.stringify(r1.cells)].join(), 'true,0,true');
+    check('own TL rule on: the hotel\'s own Team Leader covers its night gap, nobody lent, every night covered, no problem flagged', [lent(r2), tlN(r2) > 0, covered(r2), r2.problems.filter(p => p.kind !== 'thin').length].join(), '0,true,true,0');
+  }
   // 7e. "prefer not": kept off a shift when someone else can do it, still used when it's the only way
   {
     const G = { 'Ibis DD': { shifts: [M, E], need: { [M]: day(1), [E]: day(1) } } };

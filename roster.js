@@ -612,6 +612,42 @@ function roWeekRows() {
   return out;
 }
 
+/** 🧾 My balances (under My shifts): only the signed-in person's own numbers. PH owed (roster-build.js),
+ *  vacation left (roster-vacation.js, when it is loaded), days off and nights in this month's roster. */
+function roMyMonth(key, month) {
+  const m = month || roToday().slice(0, 7), today = roToday(), o = { off: 0, offSoFar: 0, nights: 0, nightsSoFar: 0, days: 0 };
+  Object.keys(roDays).forEach(dt => {
+    if (dt.slice(0, 7) !== m) return;
+    const i = roInfo((roDays[dt] || {})[key]); if (!i) return;
+    o.days++;
+    if (i.type === 'off') { o.off++; if (dt <= today) o.offSoFar++; }
+    if (i.type === 'night') { o.nights++; if (dt <= today) o.nightsSoFar++; }
+  });
+  return o;
+}
+function roBalHtml() {
+  if (!roMeKey) return '';
+  if (!document.getElementById('roBalCss')) { const st = document.createElement('style'); st.id = 'roBalCss'; st.textContent = `
+    .ro-bal{margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
+    .ro-bal-hd{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+    .ro-bal-hd b{font-size:13px;font-weight:650;color:var(--text)}.ro-bal-hd span{font-size:11px;color:var(--text3)}
+    .ro-bal-g{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    .ro-bal-i{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:9px 10px;min-width:0}
+    .ro-bal-i small{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .ro-bal-i b{display:block;font:650 20px var(--mono);color:var(--text);margin:2px 0 1px}
+    .ro-bal-i span{display:block;font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .ro-bal-i.gold b{color:var(--gold,var(--amber,#d97706))}.ro-bal-i.green b{color:var(--green)}.ro-bal-i.red b{color:var(--red)}
+    @media(max-width:600px){.ro-bal-g{grid-template-columns:repeat(2,minmax(0,1fr))}}`; document.head.appendChild(st); }
+  const k = roMeKey, mon = roDate(roToday()).toLocaleDateString('en-GB', { month: 'long' }), items = [];
+  try { if (typeof rbPhOwed === 'function') { const ph = rbPhOwed(k); items.push(['PH owed', ph.owed, ph.owed ? (ph.label ? 'oldest: ' + ph.label : 'to take') : 'all taken', ph.owed ? 'gold' : '']); } } catch (_) {}
+  try { if (typeof vcBalance === 'function') { const v = vcBalance(k), n = x => (x % 1 ? x.toFixed(1) : String(x)); items.push(['Vacation left', n(v.now), v.booked ? `${v.booked} booked → ${n(v.after)}` : `${v.rate} days a year`, v.after < 0 ? 'red' : 'green']); } } catch (_) {}
+  const M = roMyMonth(k);
+  items.push(['Days off', M.off, M.days ? `in ${mon} · ${M.offSoFar} so far` : `none in ${mon} yet`, '']);
+  items.push(['Nights', M.nights, M.days ? `in ${mon} · ${M.nightsSoFar} so far` : `none in ${mon} yet`, '']);
+  return `<div class="ro-bal" id="roBal"><div class="ro-bal-hd"><b>🧾 My balances</b><span>your own numbers</span></div>
+    <div class="ro-bal-g">${items.map(([t, v, sub, tone]) => `<div class="ro-bal-i ${tone}"><small>${escapeHtml(t)}</small><b>${escapeHtml(String(v))}</b><span title="${escapeHtml(sub)}">${escapeHtml(sub)}</span></div>`).join('')}</div></div>`;
+}
+
 function roRenderSide() {
   // My shifts
   const me = document.getElementById('roMine');
@@ -625,7 +661,7 @@ function roRenderSide() {
       const nx = roNextShift(), st = roStaff[roMeKey] || {};
       me.innerHTML = `<div class="ro-card-hd"><b>My shifts</b><span>${escapeHtml(st.name || roMeKey)}${st.group ? ' · ' + escapeHtml(st.group) : ''} · <a href="javascript:void 0" onclick="roSetMe('')">not you?</a></span></div>
         ${nx ? `<div class="ro-next ro-t-${nx.info.type}${nx.now ? ' is-now' : ''}"><small>${nx.now ? 'On shift now' : 'Next shift'}</small><b>${escapeHtml(_roWhen(nx))}</b><span>${escapeHtml(nx.info.from ? roTime(nx.info) + (nx.info.note ? ' · ' + nx.info.note : '') : nx.info.label)}</span></div>` : '<div class="ro-empty">No shift in the roster for the next three weeks.</div>'}
-        <div class="ro-days">${roMine(7).map(x => `<div class="ro-day ${x.info ? 'ro-t-' + x.info.type : 'ro-t-none'}${x.date === roToday() ? ' is-today' : ''}" title="${escapeHtml(x.info ? x.info.label : '')}"><small>${escapeHtml(x.date === roToday() ? 'Today' : roDate(x.date).toLocaleDateString('en-GB', { weekday: 'short' }))}</small><b>${escapeHtml(x.info ? roCellTxt(x.info) : '—')}</b><span>${escapeHtml(x.info ? (x.info.note || (x.info.from ? RO_TYPES[x.info.type] : x.info.label)) : '—')}</span></div>`).join('')}</div>`;
+        <div class="ro-days">${roMine(7).map(x => `<div class="ro-day ${x.info ? 'ro-t-' + x.info.type : 'ro-t-none'}${x.date === roToday() ? ' is-today' : ''}" title="${escapeHtml(x.info ? x.info.label : '')}"><small>${escapeHtml(x.date === roToday() ? 'Today' : roDate(x.date).toLocaleDateString('en-GB', { weekday: 'short' }))}</small><b>${escapeHtml(x.info ? roCellTxt(x.info) : '—')}</b><span>${escapeHtml(x.info ? (x.info.note || (x.info.from ? RO_TYPES[x.info.type] : x.info.label)) : '—')}</span></div>`).join('')}</div>${roBalHtml()}`;
     }
   }
   // Today: everyone's hours on one timeline, with a line at the time now
@@ -727,6 +763,7 @@ function roRender() {
   document.getElementById('roSickBtn')?.toggleAttribute('hidden', !ed);
   document.getElementById('roWhatBtn')?.toggleAttribute('hidden', !ed);
   document.getElementById('roSwapBtn')?.toggleAttribute('hidden', !ed);
+  document.getElementById('roFairBtn')?.toggleAttribute('hidden', !ed);
   document.getElementById('roChangeBtn')?.toggleAttribute('hidden', !ed || !Object.keys(roStaff).length);
   const eb = document.getElementById('roEditBtn'); if (eb) { eb.textContent = roEdit ? '✓ Done' : '✏️ Edit'; eb.classList.toggle('gold', roEdit); }
   roRenderSide();

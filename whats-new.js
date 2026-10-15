@@ -9,6 +9,16 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 283, items: [
+    '☀️ Morning brief: the whole day on one screen. Who is on, departures and arrivals, wake-up calls, tasks, monthly reports and open items. Tap ☀️ Brief on Home, copy it or send it on WhatsApp. It opens by itself for managers each morning (untick "Open by itself" inside it to stop that).',
+    '🙋 Ask for a day off from your phone: Roster → My shifts → Ask for a day off (a day off, annual leave or a shift wish). Your manager approves or declines in one tap and you see the answer straight away. Approved days go into the roster builder for weeks not posted yet; for a posted week the manager can put OFF/AL on those days in one tap.',
+    '⚖️ Monthly fairness on the Roster page (managers): who did the nights, weekends and public holidays each month, with ▲▼ when someone is far above or below others with the same title. Copy as text or CSV.',
+    '🧾 My balances under My shifts: your PH owed, vacation left, and days off and nights this month. Only you see your own numbers.',
+    '👥 New roster rule (off until you turn it on): Rules → Hotels & managers → "Own Team Leader for night gaps". On a night the Supervisor is off, the hotel\'s own Team Leader covers it before a Supervisor is lent from another hotel.',
+    '🗂️ New Front Office Log page: 🧳 Lost & Found with photos and who it was returned to, 🔧 maintenance tickets followed until fixed, 💵 float count per shift (shows short or over), and 💰 an upsell list from today\'s arrivals with offered and sold.',
+    '📄 Skip The Clean month summary as a PDF, 🏆 a Seller board in Package Audit (packages, value and commission per person per month; set the commission % once), and a fuller 🗂 DTCM month-end pack for finance with open and fixed corrections and signature lines.',
+    '🎓 Standards quiz on the Learn page: 10 quick questions on the Standards and front-desk basics, with your score saved. Managers see everyone\'s best score and weak topics.',
+  ] },
   { v: 282, items: [
     '📆 New: Monthly reports, at the top of Shift Tasks. Add the reports you finish every month once (Monthly TD check, Revenue data by accounts, Statistics report, or your own). Each month they come back for the month that ended: October\'s are due 1 to 4 November (you can change the last day). Everyone sees the same list; tick one and it shows who did it and when. From the 1st, Ops Brain reminds whoever is on shift every day until they are all done; on the last day and after it, it rings. Search "monthly report" to jump there.',
     '🔁 Shift tasks can repeat: pick "Every week" or "Every month" next to the date. The task comes back on the same weekday or the same day of the month (the 31st becomes the last day in shorter months) and reminds you on the day. Tick it and it moves on to the next time; miss it and it stays as "missed" until the next time comes.',

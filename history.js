@@ -8,6 +8,9 @@
 
 // action → [page, icon, words]
 const HIST_ACTIONS = {
+  stc_month_summary: ['Skip The Clean', '📄', 'made the month summary'], pkg_board_print: ['Package Audit', '🏆', 'printed the seller board'],
+  monthly_report_done: ['Monthly reports', '📆', 'ticked a monthly report'], monthly_report_undone: ['Monthly reports', '↩', 'unticked a monthly report'],
+  monthly_report_added: ['Monthly reports', '➕', 'added a monthly report'], monthly_report_removed: ['Monthly reports', '🗑️', 'removed a monthly report'],
   login: ['Sign-in', '🔓', 'signed in'], logout: ['Sign-in', '🔒', 'signed out'],
   create_user: ['Team', '➕', 'added a user'], edit_user: ['Team', '✏️', 'edited a user'], disable_user: ['Team', '🔒', 'disabled a user'],
   enable_user: ['Team', '✓', 'enabled a user'], delete_user: ['Team', '🗑️', 'deleted a user'], disconnect_user: ['Team', '⏏', 'signed a user out'],
