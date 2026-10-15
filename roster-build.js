@@ -64,7 +64,14 @@ function rbMineBroken(I, cells, dates, R, g) {
   const P = I.people.filter(p => g == null || p.group === g), byKey = {}; I.people.forEach(p => { byKey[p.key] = p; });
   const at = (p, v) => { const x = rbParse(v); return x ? rbBaseGroup(rbAt(I, p, x)) + '|' + rbNorm(v) : ''; };
   rules.forEach(r => {
-    if (r.t === 'apart' || r.t === 'with') {
+    if (r.t === 'apartHotel') {
+      // never at the same hotel on the same day, whatever the shifts (not only "not on the same shift")
+      const A = byKey[r.a], B = byKey[r.b]; if (!A || !B || !P.includes(A)) return;
+      dates.forEach(dt => {
+        const a = at(A, (cells[A.key] || {})[dt]), b = at(B, (cells[B.key] || {})[dt]);
+        if (a && b && a.split('|')[0] === b.split('|')[0]) out.push({ r, keys: [A.key, B.key], date: dt });
+      });
+    } else if (r.t === 'apart' || r.t === 'with') {
       const A = byKey[r.a], B = byKey[r.b]; if (!A || !B || !P.includes(A)) return;
       dates.forEach(dt => {
         const a = at(A, (cells[A.key] || {})[dt]), b = at(B, (cells[B.key] || {})[dt]);

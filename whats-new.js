@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 279, items: [
+    '🏨 A new kind of own rule: "never at the same hotel on the same day". Before, "never on duty together" only kept two people off the same (or an overlapping) shift; now you can choose that they are never at the same property on the same day, whatever their shifts. Rules → Your own rules → pick "never at the same hotel (the same day) as", or tell Ops Brain "Sam and Lina never in the same hotel".',
+  ] },
   { v: 278, items: [
     '🔎 Search results open again when you tap them: moving the mouse over a result redrew the list and swallowed the click. Now the option\'s page opens, the section unfolds and the option lights up, also on big pages that take a moment to draw.',
   ] },

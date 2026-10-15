@@ -126,7 +126,7 @@ function rrHtml() {
       <div class="rr-list">${hard.map(([ico, t, id, on, set]) => rrRuleRow(ico, t, rrExample(id), always(on, set), 'hard' + (set && !on ? ' off' : ''))).join('')}</div></details>
     ${rrHabitsHtml()}
     <div class="rr-sec">✍️ Your own rules</div>
-    <div class="rr-list">${mine.map((r, i) => rrRuleRow(r.t === 'apart' ? '↔️' : r.t === 'with' ? '🤝' : '🚫', escapeHtml(rrMineText(r)), rrMineLeft(r), `<div class="rr-mine-ctl">${rrMineLvCtl(i, r.level == null ? 2 : +r.level)}<button class="ro-x" title="Remove" onclick="rrDelMine(${i})">✕</button></div>`, 'mine')).join('') || '<div class="ro-empty">None yet. Make one below, or tell Ops Brain: "Sam and Lina never on the same shift".</div>'}</div>
+    <div class="rr-list">${mine.map((r, i) => rrRuleRow(r.t === 'apart' ? '↔️' : r.t === 'apartHotel' ? '🏨' : r.t === 'with' ? '🤝' : '🚫', escapeHtml(rrMineText(r)), rrMineLeft(r), `<div class="rr-mine-ctl">${rrMineLvCtl(i, r.level == null ? 2 : +r.level)}<button class="ro-x" title="Remove" onclick="rrDelMine(${i})">✕</button></div>`, 'mine')).join('') || '<div class="ro-empty">None yet. Make one below, or tell Ops Brain: "Sam and Lina never on the same shift".</div>'}</div>
     ${rrMakeHtml()}
     ${rrQuizHtml()}
   </div>`;
@@ -255,6 +255,7 @@ function rrHabitsHtml() {
 const RR_BANDN = { night: 'nights', morning: 'mornings', evening: 'evenings', day: 'day shifts' };
 function rrMineText(r) {
   if (r.t === 'apart') return `${_rrFirst(r.a)} and ${_rrFirst(r.b)} never on duty together`;
+  if (r.t === 'apartHotel') return `${_rrFirst(r.a)} and ${_rrFirst(r.b)} never at the same hotel on the same day`;
   if (r.t === 'with') return `${_rrFirst(r.a)} always on the same shift as ${_rrFirst(r.b)}`;
   if (r.t === 'titleNo') return `${r.title}s never on ${RR_BANDN[r.shift] || r.shift}`;
   return '';
@@ -273,7 +274,7 @@ function rrMineLv(i, lv) { const L = rrCustom(); if (!L[i]) return; L[i] = Objec
 function rrDelMine(i) { const L = rrCustom(); L.splice(i, 1); rrSetCustom(L); }
 function rrAddMine(r) {
   if (!r) return false;
-  const L = rrCustom(), same = x => x.t === r.t && ((x.a === r.a && x.b === r.b) || (x.a === r.b && x.b === r.a && r.t === 'apart') || (r.t === 'titleNo' && x.title === r.title && x.shift === r.shift));
+  const L = rrCustom(), same = x => x.t === r.t && ((x.a === r.a && x.b === r.b) || (x.a === r.b && x.b === r.a && (r.t === 'apart' || r.t === 'apartHotel')) || (r.t === 'titleNo' && x.title === r.title && x.shift === r.shift));
   if (L.some(same)) { showToast('You already have that rule', 'warn'); return false; }
   L.push(Object.assign({ level: 3 }, r)); rrSetCustom(L);
   if (typeof tlLog === 'function') tlLog('note', { keys: [r.a, r.b].filter(Boolean), text: 'New rule: ' + rrMineText(r) });
@@ -284,7 +285,7 @@ function rrMakeHtml() {
   const ks = Object.keys(roStaff).filter(k => !(rbPeople[k] || {}).deleted).sort((a, b) => (roStaff[a].name || '').localeCompare(roStaff[b].name || ''));
   const ppl = `<option value="">someone…</option>${ks.map(k => `<option value="${escapeHtml(k)}">${escapeHtml(roStaff[k].name)}</option>`).join('')}`;
   return `<div class="rr-make">
-    <div class="rr-make-row"><select id="rrA">${ppl}</select><select id="rrT" onchange="document.getElementById('rrB').style.display=this.value==='never'?'none':'';document.getElementById('rrTi').style.display=this.value==='never'?'':'none'"><option value="apart">never on duty together with</option><option value="with">always on the same shift as</option><option value="never">— or: a title never on —</option></select><select id="rrB">${ppl}</select>
+    <div class="rr-make-row"><select id="rrA">${ppl}</select><select id="rrT" onchange="document.getElementById('rrB').style.display=this.value==='never'?'none':'';document.getElementById('rrTi').style.display=this.value==='never'?'':'none'"><option value="apart">never on duty together with</option><option value="apartHotel">never at the same hotel (the same day) as</option><option value="with">always on the same shift as</option><option value="never">— or: a title never on —</option></select><select id="rrB">${ppl}</select>
       <span id="rrTi" style="display:none"><select id="rrTitle">${RB_TITLES.map(t => `<option>${t}</option>`).join('')}</select><select id="rrSh">${Object.keys(RR_BANDN).map(b => `<option value="${b}">${RR_BANDN[b]}</option>`).join('')}</select></span>
       <button class="btn sm gold" onclick="rrMakeAdd()">＋ Add rule</button></div>
     <small class="ro-hint">New rules start as Very important; tap another level any time.</small></div>`;
@@ -369,6 +370,8 @@ function rrSuggestHtml() {
 
 // ── Ops Brain: say a rule in your own words ───────────────
 const RR_SAY = [
+  [/^(.+?)\s+and\s+(.+?)\s+(?:should\s+)?(?:never|not|can'?t|cannot|must not|mustn'?t)\s+(?:be\s+|work\s+)?(?:in|at)\s+(?:the\s+)?same\s+(?:hotel|property|building|place)(?:\s+(?:on the same day|same day|at all))?\s*\.?$/i, 'apartHotel'],
+  [/^(.+?)\s+(?:should\s+)?(?:never|not|can'?t|cannot|shouldn'?t|mustn'?t)\s+(?:work|be)\s+(?:in|at)\s+(?:the\s+)?same\s+(?:hotel|property|building|place)\s+(?:as|with)\s+(.+?)\s*\.?$/i, 'apartHotel'],
   [/^(?:avoid|keep|separate)\s+(.+?)\s+(?:and|from|with|away from)\s+(.+?)(?:\s+apart)?(?:\s+(?:on the same shift|together|at the same time))?\s*\.?$/i, 'apart'],
   [/^(.+?)\s+and\s+(.+?)\s+(?:should\s+)?(?:never|not|can'?t|cannot)\s+(?:be\s+|work\s+)?together\s*\.?$/i, 'apart'],
   [/^(.+?)\s+(?:should\s+)?(?:never|not|can'?t|cannot|shouldn'?t|mustn'?t)\s+(?:work|be)\s+(?:on duty\s+)?with\s+(.+?)\s*\.?$/i, 'apart'],
