@@ -133,7 +133,7 @@ function blHeal(err) {
   }, 400);
 }
 window.addEventListener('error', e => { if (e.message && !/ResizeObserver|Script error/.test(e.message)) blHeal(e.error || e); });
-window.addEventListener('unhandledrejection', e => { const r = e.reason; if (r && !/network|fetch|Failed to fetch|permission_denied/i.test(String(r.message || r))) blHeal(r); });
+window.addEventListener('unhandledrejection', e => { const r = e.reason; if (r && !/network|fetch|Failed to fetch|permission_denied/i.test(String(r.message || r)) && !(typeof BR_NOISE !== 'undefined' && BR_NOISE.test(String(r.message || r)))) blHeal(r); });
 
 // ── Thinking ──────────────────────────────────────────────
 function blThink() {

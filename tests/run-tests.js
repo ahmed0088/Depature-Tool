@@ -1127,6 +1127,11 @@ console.log('\nQuiet when off · shift task times');
   check('night task at 02:00: late at 02:05 (the night that started yesterday)', late('night', '02:00', '2026,9,12,2,5'), true);
   check('morning task at 10:00: not rung during the night', late('morning', '10:00', '2026,9,12,2,5'), false);
   check('morning task at 10:00: late at 10:01', late('morning', '10:00', '2026,9,12,10,1'), true);
+  const lastDay = (key, d) => vm.runInContext(`_stLastStartDay('${key}', new Date(${d}))`, sh);
+  check('daily fresh start: morning list before 07:00 is still yesterday\'s', lastDay('morning', '2026,9,15,6,30'), '2026-10-14');
+  check('daily fresh start: morning list from 07:00 is today\'s', lastDay('morning', '2026,9,15,7,0'), '2026-10-15');
+  check('daily fresh start: night list at 02:00 belongs to the night that began yesterday', lastDay('night', '2026,9,15,2,0'), '2026-10-14');
+  check('daily fresh start: an afternoon list nobody opened still starts fresh the next day', lastDay('afternoon', '2026,9,16,16,0') > '2026-10-15', true);
 }
 
 console.log(`\n${pass} passed · ${fail} failed`);

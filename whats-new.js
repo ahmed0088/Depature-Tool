@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 270, items: [
+    '🔄 Shift tasks start fresh every day by themselves: each list (morning, mid, afternoon, night) is cleared once when its shift begins, for the whole team, even a list nobody opened that day. The shift that just ended keeps its ticks for the handover, and dated tasks keep theirs. Settings → Helpers → Fresh shift tasks every day.',
+    '🧹 The browser\'s own storage message ("database without an in-progress transaction", from the sign-in library) no longer counts as an app error in Ops Brain.',
+  ] },
   { v: 269, items: [
     '📅 Shift tasks can have a date: a one-off for that day ("Sat 17 Oct: send the group rooming list"). Pick it next to the time when you add a task, or ✏️ edit one. Until then it waits in 📅 Coming up (not counted). On the day it is on that shift\'s list and reminds you, at its time, or when the shift starts if it has no time. If nobody ticks it that day, it stays on the list in red as "missed" until it\'s done. Its tick is never cleared by the fresh start of the next shift.',
   ] },

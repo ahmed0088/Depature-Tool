@@ -301,7 +301,12 @@ function brForget(id) {
 }
 
 // ── 4. Fixing itself ──────────────────────────────────────
+// Messages from the browser or its libraries, not from HotelOps: the sign-in library's own browser
+// storage closing (private window, phone low on space, tab woken from sleep), the layout observer
+// and errors from another site's script. Harmless to the data, so they don't count as app errors.
+const BR_NOISE = /without an in-progress transaction|IDBDatabase|IndexedDB|database connection is closing|The transaction (was aborted|has finished)|ResizeObserver loop|^Script error\.?$/i;
 function _brNoteError(msg, src) {
+  if (BR_NOISE.test(String(msg || '').replace(/^Promise: /, ''))) return;
   const errs = _brLS.get(BR_ERR_KEY, []);
   const page = document.querySelector('.panel.active')?.id.slice(6) || '?';
   const m = String(msg || '').slice(0, 200);

@@ -208,7 +208,7 @@ function hoSettingsRender() {
       + _hoTog('confirmCheckout', 'Ask before checking out a room that owes money', 'Applies to Ops Brain commands like "check out 512"')
       + _hoTog('haptics', 'Vibration on phones', 'A light tap when you press buttons')
       + _hoTog('taskReminders', 'Shift task reminders', 'A task with a time rings at that time on its shift, until it is ticked')
-      + _hoTog('autoResetShifts', 'Fresh shift tasks every shift', 'Each new morning, afternoon and night shift starts with nothing ticked, for the whole team. The shift that just ended keeps its ticks for handover')),
+      + _hoTog('autoResetShifts', 'Fresh shift tasks every day', 'Every list (morning, mid, afternoon, night) starts with nothing ticked each day, when its shift begins, for the whole team, even a list nobody opened. The shift that just ended keeps its ticks for handover. Dated tasks keep theirs')),
 
     _hoSec('alerts', 'feedback', 'Alerts & sounds', 'How HotelOps gets your attention',
       `<label class="hs-row" data-s="overdue late checkout alerts departures">
