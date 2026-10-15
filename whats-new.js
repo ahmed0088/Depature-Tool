@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 281, items: [
+    '🔧 Behind the scenes: the automatic test checks on GitHub now use the newest tools (checkout v7, setup-node v7). Nothing changes in the app.',
+  ] },
   { v: 280, items: [
     '🧹 Skip The Clean is redesigned and explains itself: three steps on the page, each ticking green when its file is in. 1) the housekeeping "SKIP THE CLEAN" email\'s Excel files, 2) Opera Reports → Manage Reports → "Membership Stays" (loyalty_member_stay), all 5 statuses, Download As → Delimited Data → Tab, 3) credit the points. Big tiles show who is ready, the points, who to check, who is already credited and who is not a member; a rules card with a worked example shows which days count (no arrival or departure day, every 3rd day a mandatory clean). Downloading the Opera file in the wrong format now tells you exactly what to pick.',
   ] },
