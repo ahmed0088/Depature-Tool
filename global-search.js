@@ -147,7 +147,7 @@ function gsRenderResults(q) {
   }
 
   box.innerHTML = _gsResults.map((r, i) => `
-    <div class="gs-result${i === _gsSelIdx ? ' sel' : ''}" onclick="gsJump(${i})" onmouseenter="_gsSelIdx=${i};gsRenderResults('${escapeJsAttr(q)}')">
+    <div class="gs-result${i === _gsSelIdx ? ' sel' : ''}" onclick="gsJump(${i})" onmouseenter="gsHover(${i}, this)">
       <span class="gs-result-icon">${r.icon}</span>
       <div class="gs-result-body">
         <span class="gs-result-name">${r.room ? `<span class="gs-result-room">${escapeHtml(r.room)}</span> ` : ''}${escapeHtml(r.name || '—')}</span>
@@ -157,6 +157,12 @@ function gsRenderResults(q) {
     </div>`).join('');
 }
 
+/** hover only moves the highlight: redrawing the list here replaced the row under the mouse, so the click was lost */
+function gsHover(i, el) {
+  _gsSelIdx = i;
+  el.parentElement?.querySelectorAll('.gs-result.sel').forEach(x => x.classList.remove('sel'));
+  el.classList.add('sel');
+}
 function gsKeyNav(e) {
   if (e.key === 'ArrowDown') { e.preventDefault(); _gsSelIdx = Math.min(_gsSelIdx + 1, _gsResults.length - 1); gsRenderResults(document.getElementById('gsInput').value.toLowerCase()); }
   else if (e.key === 'ArrowUp') { e.preventDefault(); _gsSelIdx = Math.max(_gsSelIdx - 1, 0); gsRenderResults(document.getElementById('gsInput').value.toLowerCase()); }
@@ -213,12 +219,17 @@ function gsFindText(root, t) {
 function gsGo(panel, opts) {
   opts = opts || {};
   showPanel(panel);
-  setTimeout(() => {
+  if (opts.run) setTimeout(() => { try { opts.run(); } catch (_) {} }, 200);
+  // wait for the page (and a folded section) to be drawn, then light the option up: a big page takes a moment
+  let n = 0;
+  const tick = () => {
     const root = document.getElementById('panel-' + panel) || document;
     if (opts.sec) { const d = root.querySelector(`details[data-sec="${opts.sec}"]`); if (d && !d.open) d.open = true; }
-    if (opts.run) try { opts.run(); } catch (_) {}
-    setTimeout(() => gsFlash((opts.sel && root.querySelector(opts.sel)) || (opts.text && gsFindText(root, opts.text))), 250);
-  }, 350);
+    const el = (opts.sel && root.querySelector(opts.sel)) || (opts.text && gsFindText(root, opts.text)) || (!opts.sel && !opts.text && opts.sec && root.querySelector(`details[data-sec="${opts.sec}"] > summary`));
+    if (el) { setTimeout(() => gsFlash(el), 120); return; }
+    if (++n < 34) setTimeout(tick, 150);
+  };
+  setTimeout(tick, 150);
 }
 const GS_FEATURES = [
   // roster builder
@@ -257,7 +268,14 @@ const GS_FEATURES = [
 /** open Settings filtered to one option, and light it up */
 function gsSet(name) {
   showPanel('settings');
-  setTimeout(() => { const s = document.getElementById('hsSearch'); if (s) { s.value = name; hoSettingsFilter(name); } gsFlash([...document.querySelectorAll('#hsBody [data-s]')].find(r => (r.querySelector('b')?.textContent || '').trim() === name)); }, 300);
+  let n = 0;
+  const tick = () => {
+    const s = document.getElementById('hsSearch'), row = [...document.querySelectorAll('#hsBody [data-s]')].find(r => (r.querySelector('b')?.textContent || '').trim() === name);
+    if (!row) { if (++n < 34) setTimeout(tick, 150); return; }
+    if (s) { s.value = name; hoSettingsFilter(name); }
+    setTimeout(() => gsFlash(row), 120);
+  };
+  setTimeout(tick, 150);
 }
 GS_FEATURES.push(
   ['✅ Auto-tick shift tasks', 'auto tick automatic ticked by the app done enrollment checklist', 'Settings → Helpers', () => gsSet('Tick shift tasks the app can see are done')],

@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 278, items: [
+    '🔎 Search results open again when you tap them: moving the mouse over a result redrew the list and swallowed the click. Now the option\'s page opens, the section unfolds and the option lights up, also on big pages that take a moment to draw.',
+  ] },
   { v: 277, items: [
     '🔎 Search finds options too (Ctrl+K or the search bar): type what you want, like "fixed day off", "12 hour", "freeze", "cut off", "avatar", "idle", "auto tick", "language". Tap the result and the app opens that page, unfolds the right section and lights the option up. Every setting is searchable, and words can be in any order ("day off fixed" works too). You only see options for pages you can open.',
   ] },
