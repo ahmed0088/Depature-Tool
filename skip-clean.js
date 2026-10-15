@@ -65,8 +65,11 @@ function readEntries(XLSX,files){
 function readLoyalty(texts){
   const map=new Map();
   for(const t of texts){
-    const lines=t.split(/\r?\n/).filter(Boolean),H=lines[0].split('\t'),ix=Object.fromEntries(H.map((h,i)=>[h,i]));
-    if(ix.MEMBERSHIP_CARD_NO==null)throw new Error('This Opera file has no MEMBERSHIP_CARD_NO column – use the Loyalty Member Stay report.');
+    const lines=t.split(/\r?\n/).filter(Boolean),H=(lines[0]||'').split('\t').map(x=>x.trim()),ix=Object.fromEntries(H.map((h,i)=>[h,i]));
+    if(ix.MEMBERSHIP_CARD_NO==null){
+      if(H.length<3)throw new Error('The Opera file is not tab-separated. In Opera: Download As… → File Format "Delimited Data" → Delimiter "Tab" (not HTML, RTF, XML or plain "Delimited").');
+      throw new Error('This Opera file has no MEMBERSHIP_CARD_NO column. Use the report "Membership Stays" (internal name loyalty_member_stay, in the Reservation group), downloaded as Delimited Data with a Tab delimiter.');
+    }
     const cd=s=>{const m=(s||'').match(/^(\d\d)-(\d\d)-(\d\d)$/);return m?iso(2000+ +m[3],+m[2],+m[1]):null};
     for(const l of lines.slice(1)){
       const c=l.split('\t'),g=n=>(c[ix[n]]||'').trim();
@@ -212,7 +215,8 @@ async function load(fs,k){$('err').textContent='';
   try{for(const f of fs){if(k===1)X.push({name:f.name,wb:XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:true})});else T.push({name:f.name,text:await f.text()})}}
   catch(e){$('err').textContent='Could not read '+e.message}
   list();run()}
-function list(){for(const[k,a]of[[1,X],[2,T]]){const l=$('l'+k);l.innerHTML='';a.forEach((x,i)=>{const li=h('li',null,'✓ '+x.name);li.title='Click to remove';li.onclick=e=>{e.stopPropagation();a.splice(i,1);list();run()};l.appendChild(li)});$('d'+k).classList.toggle('has',a.length>0)}}
+function list(){for(const[k,a]of[[1,X],[2,T]]){const l=$('l'+k);l.innerHTML='';a.forEach((x,i)=>{const li=h('li',null,x.name);li.title='Click to remove this file';li.onclick=e=>{e.stopPropagation();a.splice(i,1);list();run()};l.appendChild(li)});$('d'+k).classList.toggle('has',a.length>0);const s=$('st'+k);if(s)s.classList.toggle('done',a.length>0)}
+  const s3=$('st3');if(s3)s3.classList.toggle('ready',X.length>0&&T.length>0)}
 function run(){R=null;$('out').hidden=true;badge('—');if(!X.length||!T.length)return;
   try{R=compute(readEntries(XLSX,X),readLoyalty(T.map(t=>t.text)))}catch(e){$('err').textContent=e.message;return}
   $('out').hidden=false;autoTab=true;draw()}
@@ -253,6 +257,8 @@ function draw(){const all=rows(),q=$('q').value.toLowerCase().trim(),rd=all.filt
     note.hidden=false;
   }else note.hidden=true;
   $('s1').textContent=rd.length;$('s2').textContent=rd.reduce((a,r)=>a+r.pt,0).toLocaleString();progress();badge(rd.length);
+  [['k3','Check first'],['k4','Credited'],['k5','No PMID']].forEach(([id,t])=>{const e=$(id);if(e)e.textContent=cnt(t)});
+  const kg=$('k6');if(kg)kg.textContent=all.length;
   ['cpA','cpB','cpC'].forEach(i=>$(i).disabled=!rd.length);
   $('meta').textContent=R.entries+' sheet entries read, '+R.dups+' duplicates removed.';
   const tabs=$('tabs');tabs.innerHTML='';
@@ -379,46 +385,150 @@ const CSS = `
 #panel-skip-clean .stc-how{margin-top:18px;font-size:.8rem;color:var(--text2)}
 #panel-skip-clean .stc-how summary{cursor:pointer;font-weight:600}
 #stc-toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);background:var(--text,#111);color:var(--bg,#fff);padding:10px 18px;border-radius:8px;font-weight:600;opacity:0;pointer-events:none;transition:opacity .15s,transform .15s;max-width:90vw;z-index:10000}
-#stc-toast.show{opacity:1;transform:translate(-50%,0)}`;
+#stc-toast.show{opacity:1;transform:translate(-50%,0)}
+/* ── v280 look ── */
+#panel-skip-clean .stc-hero{position:relative;overflow:hidden;border-radius:18px;padding:22px 24px;margin-bottom:16px;background:radial-gradient(120% 140% at 0% 0%,rgba(45,212,191,.22),transparent 55%),radial-gradient(120% 140% at 100% 0%,rgba(129,140,248,.22),transparent 55%),var(--card);border:1px solid var(--stc-line);display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+#panel-skip-clean .stc-hero-ic{width:62px;height:62px;border-radius:18px;display:grid;place-items:center;font-size:32px;background:linear-gradient(135deg,#2dd4bf,#818cf8);box-shadow:0 10px 28px rgba(45,212,191,.35);flex:none;animation:stcFloat 4s ease-in-out infinite}
+@keyframes stcFloat{50%{transform:translateY(-4px) rotate(-4deg)}}
+#panel-skip-clean .stc-hero h1{margin:0;font-size:1.6rem;letter-spacing:-.01em}
+#panel-skip-clean .stc-hero p{margin:4px 0 0;color:var(--text2);font-size:.86rem;max-width:720px;line-height:1.5}
+#panel-skip-clean .stc-hero .stc-hero-act{margin-left:auto;display:flex;gap:8px}
+#panel-skip-clean .stc-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px}
+@media(max-width:980px){#panel-skip-clean .stc-steps{grid-template-columns:1fr}}
+#panel-skip-clean .stc-step{position:relative;background:var(--card);border:1px solid var(--stc-line);border-radius:16px;padding:16px 16px 14px;display:flex;flex-direction:column;gap:10px;transition:border-color .2s,box-shadow .2s}
+#panel-skip-clean .stc-step.done{border-color:var(--stc-ok);box-shadow:0 0 0 1px var(--stc-ok),0 10px 26px var(--stc-okbg)}
+#panel-skip-clean .stc-step.ready{border-color:var(--stc-acc);box-shadow:0 0 0 1px var(--stc-acc),0 10px 26px var(--stc-accbg)}
+#panel-skip-clean .stc-step-hd{display:flex;align-items:center;gap:10px}
+#panel-skip-clean .stc-step-n{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:800;background:var(--stc-accbg);color:var(--stc-acc);flex:none}
+#panel-skip-clean .stc-step.done .stc-step-n{background:var(--stc-ok);color:#06281c}
+#panel-skip-clean .stc-step.done .stc-step-n::before{content:'✓'}
+#panel-skip-clean .stc-step.done .stc-step-n span{display:none}
+#panel-skip-clean .stc-step-t{font-weight:750;font-size:.95rem}
+#panel-skip-clean .stc-step-t small{display:block;font-weight:500;color:var(--text3);font-size:.72rem}
+#panel-skip-clean .stc-step ol{margin:0;padding-left:18px;font-size:.8rem;color:var(--text2);line-height:1.6}
+#panel-skip-clean .stc-step ol b{color:var(--text)}
+#panel-skip-clean .stc-step code{font-size:.74rem;padding:1px 6px;border-radius:5px;background:var(--bg2,rgba(127,127,127,.12));color:var(--text)}
+#panel-skip-clean .stc-step .stc-drop{min-height:86px;border-radius:12px;padding:12px;align-items:center;justify-content:center;text-align:center;background:var(--bg2,transparent)}
+#panel-skip-clean .stc-step .stc-drop b{font-size:.86rem}
+#panel-skip-clean .stc-step .stc-drop ul{display:flex;flex-wrap:wrap;gap:4px;justify-content:center}
+#panel-skip-clean .stc-step .stc-drop li{background:var(--stc-okbg);border-radius:999px;padding:2px 10px;font-size:.72rem}
+#panel-skip-clean .stc-step .stc-drop li::before{content:'📄 '}
+#panel-skip-clean .stc-mock{border:1px solid var(--stc-line);border-radius:10px;padding:8px 10px;font-size:.74rem;background:var(--bg2,transparent);display:grid;gap:3px}
+#panel-skip-clean .stc-mock i{font-style:normal;color:var(--text3)}
+#panel-skip-clean .stc-mock .on{color:var(--stc-acc);font-weight:700}
+#panel-skip-clean .stc-kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin:16px 0 12px}
+@media(max-width:980px){#panel-skip-clean .stc-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:520px){#panel-skip-clean .stc-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+#panel-skip-clean .stc-kpi{border-radius:14px;padding:12px 14px;background:var(--card);border:1px solid var(--stc-line);position:relative;overflow:hidden}
+#panel-skip-clean .stc-kpi::after{content:'';position:absolute;inset:auto 0 0 0;height:3px;background:var(--k,var(--stc-acc))}
+#panel-skip-clean .stc-kpi small{display:block;font-size:.66rem;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);font-weight:700}
+#panel-skip-clean .stc-kpi strong{display:block;font-size:1.7rem;font-variant-numeric:tabular-nums;margin-top:2px;color:var(--k,var(--text))}
+#panel-skip-clean .stc-kpi.big{background:linear-gradient(135deg,var(--stc-okbg),transparent),var(--card)}
+#panel-skip-clean .stc-rules{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:14px;margin-top:16px}
+@media(max-width:860px){#panel-skip-clean .stc-rules{grid-template-columns:1fr}}
+#panel-skip-clean .stc-rules ul{margin:6px 0 0;padding-left:18px;font-size:.8rem;color:var(--text2);line-height:1.65}
+#panel-skip-clean .stc-rules ul b{color:var(--text)}
+#panel-skip-clean .stc-tl{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;margin-top:8px}
+#panel-skip-clean .stc-tl div{border-radius:10px;padding:8px 4px;text-align:center;font-size:.68rem;line-height:1.35;background:var(--stc-idlebg);color:var(--text2)}
+#panel-skip-clean .stc-tl div b{display:block;font-size:.78rem;color:var(--text)}
+#panel-skip-clean .stc-tl div.y{background:var(--stc-okbg);color:var(--stc-ok)}
+#panel-skip-clean .stc-tl div.m{background:var(--stc-warnbg);color:var(--stc-warn)}
+#panel-skip-clean .stc-sec-t{font-weight:750;font-size:.9rem;display:flex;align-items:center;gap:8px}
+#panel-skip-clean .stc-sum{display:none}
+`;
 
 const PANEL_HTML = `
 <div class="stc-wrapper">
-  <div class="page-hd">
-    <div class="page-hd-left">
+  <div class="stc-hero">
+    <div class="stc-hero-ic">🧹</div>
+    <div>
       <h1>Skip The Clean</h1>
-      <p>Loyalty point credits for skipped housekeeping · your files stay in this browser</p>
+      <p>Guests who skip housekeeping earn ALL points. Give it the housekeeping sheets and the Opera Membership Stays report: it finds each member, works out which days count, and gives you the PMID and points to enter. Your files stay in this browser; only what you tick as credited is saved for the team.</p>
     </div>
-    <div class="page-hd-actions">
-      <button class="btn rose" type="button" id="stc-clear">✕ Clear</button>
-    </div>
+    <div class="stc-hero-act"><button class="btn rose" type="button" id="stc-clear">✕ Start over</button></div>
   </div>
-  <section class="stc-setup">
-    <div class="stc-card stc-drop" id="stc-d1" tabindex="0" role="button"><b>1. Skip The Clean Excel files</b><span>Drop the monthly .xlsx files here, or click to choose</span><ul id="stc-l1"></ul><input id="stc-f1" type="file" accept=".xlsx,.xls" multiple hidden></div>
-    <div class="stc-card stc-drop" id="stc-d2" tabindex="0" role="button"><b>2. Opera “Loyalty Member Stay” export</b><span>Drop the .txt file(s) here, or click to choose</span><ul id="stc-l2"></ul><input id="stc-f2" type="file" accept=".txt,.csv,.tsv" multiple hidden></div>
-    <div class="stc-card stc-settings">
-      <label>Points per skipped day<input id="stc-pts" type="number" min="0" value="100"></label>
-      <label>Long stay limit (nights)<input id="stc-lim" type="number" min="0" value="15"></label>
-      <label>Card to use<select id="stc-sel"><option value="ANY">Any (ID, else A1, else A2–A5)</option><option value="ID">ID number</option><option value="A1">ALL card (A1)</option></select></label>
-      <p class="stc-hint">Stays over the limit are long stays and get no credit (0 = no limit). PMID = last 8 characters of the card number, after dropping its final character.</p>
+
+  <section class="stc-steps">
+    <div class="stc-step" id="stc-st1">
+      <div class="stc-step-hd"><div class="stc-step-n"><span>1</span></div><div class="stc-step-t">Housekeeping sheets<small>from the daily "SKIP THE CLEAN" email</small></div></div>
+      <ol>
+        <li>Housekeeping sends <b>SKIP THE CLEAN</b> every day, with the Excel file attached (e.g. <code>SKIP THE CLEAN OCT-2026.xlsx</code>).</li>
+        <li>Save the attachments of the month (one file, or several: the app removes duplicate days).</li>
+        <li>Drop them here.</li>
+      </ol>
+      <div class="stc-card stc-drop" id="stc-d1" tabindex="0" role="button"><b>📥 Drop the Excel files</b><span>.xlsx · several at once is fine · or tap to choose</span><ul id="stc-l1"></ul><input id="stc-f1" type="file" accept=".xlsx,.xls" multiple hidden></div>
+    </div>
+    <div class="stc-step" id="stc-st2">
+      <div class="stc-step-hd"><div class="stc-step-n"><span>2</span></div><div class="stc-step-t">Opera: Membership Stays<small>who is a member, and their card number</small></div></div>
+      <ol>
+        <li>Opera → <b>Reports</b> → <b>Manage Reports</b> → search <b>Membership Stays</b> (internal name <code>loyalty_member_stay</code>, group Reservation).</li>
+        <li><b>Edit Report Parameters</b>: From / To date covering the stays on the sheets (e.g. the 1st of the month to today); keep all 5 statuses ticked: Arrivals, Checked In, In House, Departures, Checked Out.</li>
+        <li><b>Download As…</b> → File Format <b>Delimited Data</b> → Delimiter <b>Tab</b> → Download, then drop the .txt here.</li>
+      </ol>
+      <div class="stc-mock"><i>Download As…</i><span>○ HTML ○ RTF ○ XML ○ Delimited</span><span class="on">◉ Delimited Data · Delimiter: Tab</span></div>
+      <div class="stc-card stc-drop" id="stc-d2" tabindex="0" role="button"><b>📥 Drop the Opera .txt</b><span>Delimited Data (Tab) · or tap to choose</span><ul id="stc-l2"></ul><input id="stc-f2" type="file" accept=".txt,.csv,.tsv" multiple hidden></div>
+    </div>
+    <div class="stc-step" id="stc-st3">
+      <div class="stc-step-hd"><div class="stc-step-n"><span>3</span></div><div class="stc-step-t">Credit the points<small>in the ALL loyalty portal</small></div></div>
+      <ol>
+        <li>The list below shows who is <b>Ready</b>: their <b>PMID</b> and the <b>points</b>.</li>
+        <li>Tap a PMID or points to copy, or <b>Copy PMID + points</b> for all at once (paste straight into Excel or the portal).</li>
+        <li>Tick <b>Done</b> once entered: it is saved for the whole team, so nobody credits the same guest twice, even next month.</li>
+      </ol>
+      <div class="stc-settings">
+        <label>Points per skipped day<input id="stc-pts" type="number" min="0" value="100"></label>
+        <label>No credit for stays over (nights)<input id="stc-lim" type="number" min="0" value="15"></label>
+        <label>Card to use<select id="stc-sel"><option value="ANY">Any (ID, else A1, else A2–A5)</option><option value="ID">ID number</option><option value="A1">ALL card (A1)</option></select></label>
+      </div>
     </div>
   </section>
   <div id="stc-err" class="stc-err" role="alert"></div>
+
   <div id="stc-out" hidden>
+    <div class="stc-kpis">
+      <div class="stc-kpi big" style="--k:var(--stc-ok)"><small>Ready to credit</small><strong id="stc-s1">0</strong></div>
+      <div class="stc-kpi big" style="--k:var(--stc-ok)"><small>Points to enter</small><strong id="stc-s2">0</strong></div>
+      <div class="stc-kpi" style="--k:var(--stc-warn)"><small>Check first</small><strong id="stc-k3">0</strong></div>
+      <div class="stc-kpi" style="--k:var(--stc-acc)"><small>Already credited</small><strong id="stc-k4">0</strong></div>
+      <div class="stc-kpi" style="--k:var(--stc-bad)"><small>Not a member</small><strong id="stc-k5">0</strong></div>
+      <div class="stc-kpi" style="--k:var(--stc-idle)"><small>Guests on sheets</small><strong id="stc-k6">0</strong></div>
+    </div>
     <div class="stc-note" id="stc-note" hidden></div>
-    <p class="stc-hint" id="stc-hist" style="margin:14px 0 0"></p>
-    <p class="stc-sum"><strong id="stc-s1">0</strong> guests ready, <strong id="stc-s2">0</strong> points<span class="stc-prog" id="stc-prog"></span></p>
+    <p class="stc-hint" id="stc-hist" style="margin:0 0 10px"></p>
+    <p class="stc-sum"><span class="stc-prog" id="stc-prog"></span></p>
     <div class="stc-card stc-copybar">
-      <div class="stc-grp"><span class="stc-lbl">Copy all ready guests:</span><button class="btn gold" type="button" id="stc-cpC">PMID + points</button><button class="btn" type="button" id="stc-cpA">PMIDs only</button><button class="btn" type="button" id="stc-cpB">Points only</button></div>
+      <div class="stc-grp"><span class="stc-lbl">Copy every Ready guest:</span><button class="btn gold" type="button" id="stc-cpC">📋 PMID + points</button><button class="btn" type="button" id="stc-cpA">PMIDs only</button><button class="btn" type="button" id="stc-cpB">Points only</button></div>
       <button class="btn mint" type="button" id="stc-xl">📥 Download Excel</button>
     </div>
     <div class="stc-filters">
       <div class="stc-tabs" id="stc-tabs"></div>
       <label>Search<input id="stc-q" placeholder="Guest, room, PMID or conf #"></label>
     </div>
-    <div class="stc-wrap"><table><thead><tr><th>Done</th><th>PMID (click to copy)</th><th class="stc-num">Points</th><th>Guest</th><th>Room</th><th>Conf #</th><th>Check-out</th><th>Skipped dates</th><th class="stc-num">Days</th><th>Status</th><th></th></tr></thead><tbody id="stc-tb"></tbody></table></div>
+    <div class="stc-wrap"><table><thead><tr><th>Done</th><th>PMID (tap to copy)</th><th class="stc-num">Points</th><th>Guest</th><th>Room</th><th>Conf #</th><th>Check-out</th><th>Skipped dates</th><th class="stc-num">Days</th><th>Status</th><th></th></tr></thead><tbody id="stc-tb"></tbody></table></div>
     <p class="stc-hint" id="stc-meta" style="margin-top:8px"></p>
-    <details class="stc-how"><summary>How credits are counted</summary><p>Arrival and departure days never count. A day counts only if the guest asked for the skip. After 2 skipped days the 3rd day is a mandatory clean (not credited) and the count restarts. Stay dates come from Opera when the guest is matched, otherwise from the sheet. Guests are matched to Opera by name and room. Stays longer than the long stay limit get no credit. Click a row to see its days.</p></details>
   </div>
+
+  <section class="stc-rules">
+    <div class="stc-card">
+      <div class="stc-sec-t">📏 How the credit is worked out</div>
+      <ul>
+        <li><b>A day counts</b> only when the guest asked to skip it (it is on the housekeeping sheet).</li>
+        <li><b>Arrival and departure days never count.</b> Stay dates come from Opera (else from the sheet).</li>
+        <li><b>Every 3rd day is a mandatory clean:</b> after 2 skipped days in a row the next one is cleaned, not credited, and the count starts again.</li>
+        <li><b>Long stays</b> over the limit (15 nights unless you change it) get no credit.</li>
+        <li><b>PMID</b> = the member's card number without its last character, then its last 8 characters (00000009270152Z4 → 9270152Z). The ID card is used first, then the ALL card (A1), then a tier card (A2–A5, shown as Check first).</li>
+        <li><b>Check first</b> means the name, room or dates don't match Opera exactly: open the row to see why.</li>
+        <li><b>Not a member</b>: the guest is not in the Membership Stays report, so there is no card to credit.</li>
+      </ul>
+    </div>
+    <div class="stc-card">
+      <div class="stc-sec-t">🗓 Example: a 6-night stay, guest skips every day</div>
+      <div class="stc-tl">
+        <div><b>Mon</b>Arrival<br>✗</div><div class="y"><b>Tue</b>Skip<br>✓ 100</div><div class="y"><b>Wed</b>Skip<br>✓ 100</div><div class="m"><b>Thu</b>Must clean<br>✗</div><div class="y"><b>Fri</b>Skip<br>✓ 100</div><div class="y"><b>Sat</b>Skip<br>✓ 100</div><div><b>Sun</b>Departure<br>✗</div>
+      </div>
+      <p class="stc-hint" style="margin-top:8px">4 days credited = 400 points (at 100 a day). Tap any guest in the list to see their own days like this.</p>
+    </div>
+  </section>
 </div>`;
 
 function mount() {

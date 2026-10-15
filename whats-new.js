@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 280, items: [
+    '🧹 Skip The Clean is redesigned and explains itself: three steps on the page, each ticking green when its file is in. 1) the housekeeping "SKIP THE CLEAN" email\'s Excel files, 2) Opera Reports → Manage Reports → "Membership Stays" (loyalty_member_stay), all 5 statuses, Download As → Delimited Data → Tab, 3) credit the points. Big tiles show who is ready, the points, who to check, who is already credited and who is not a member; a rules card with a worked example shows which days count (no arrival or departure day, every 3rd day a mandatory clean). Downloading the Opera file in the wrong format now tells you exactly what to pick.',
+  ] },
   { v: 279, items: [
     '🏨 A new kind of own rule: "never at the same hotel on the same day". Before, "never on duty together" only kept two people off the same (or an overlapping) shift; now you can choose that they are never at the same property on the same day, whatever their shifts. Rules → Your own rules → pick "never at the same hotel (the same day) as", or tell Ops Brain "Sam and Lina never in the same hotel".',
   ] },
