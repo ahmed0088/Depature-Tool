@@ -5,76 +5,165 @@
 //  next and who just went home. ▶ plays the whole day in 20 seconds.
 //  Looks: a cartoon for everyone. We never guess anyone's looks from their
 //  name: each person picks their own (skin, hair, extras) on their card.
-//  Stored on the person: rbPeople[k].look = { skin, hair, acc, shirt }
+//  Stored on the person: rbPeople[k].look = { skin, hair, hc, eyes, brows, face, facial, glasses, acc, outfit, shirt, bg }
 // ═══════════════════════════════════════════════════════════
 
-const AV_SKIN = ['#f9dcc4', '#efc39a', '#d9a273', '#b07548', '#7a4a2b', '#4f2f1c'];
-const AV_HAIR = [['short', 'Short'], ['long', 'Long'], ['curly', 'Curly'], ['bun', 'Bun'], ['spiky', 'Spiky'], ['hijab', 'Hijab'], ['turban', 'Turban'], ['cap', 'Cap'], ['bald', 'None']];
-const AV_ACC = [['none', 'Nothing'], ['glasses', '👓 Glasses'], ['shades', '🕶 Shades'], ['headset', '🎧 Headset'], ['beard', 'Beard'], ['bowtie', '🎀 Bow tie']];
-const AV_SHIRT = ['#3b6fd8', '#2f9e74', '#c2410c', '#7c3aed', '#be185d', '#0e7490', '#4b5563', '#a16207'];
-const AV_HAIRCOL = ['#2b1d14', '#3d2a1c', '#5a3a22', '#1c1c1c', '#7b4a22', '#4a3b2f'];
+// Colours: the first ones of each list are the original ones (saved looks keep their meaning), more added after.
+const AV_SKIN = ['#f9dcc4', '#efc39a', '#d9a273', '#b07548', '#7a4a2b', '#4f2f1c', '#fde4cf', '#e3b088', '#c68a5a', '#8d5a36'];
+const AV_SKIN_ORDER = [6, 0, 1, 7, 2, 8, 3, 9, 4, 5];   // light to dark, for the picker
+const AV_HAIRCOL = ['#2b1d14', '#3d2a1c', '#5a3a22', '#1c1c1c', '#7b4a22', '#4a3b2f', '#9a4a2c', '#c4652f', '#e2bd63', '#f1e3b5', '#9ca3af', '#eef0f3', '#2563eb', '#ec4899', '#8b5cf6'];
 const AV_SCARF = ['#1f2937', '#6b2140', '#1e3a5f', '#3f4a2a', '#5b3b74', '#2a4a4a'];
+const AV_SHIRT = ['#3b6fd8', '#2f9e74', '#c2410c', '#7c3aed', '#be185d', '#0e7490', '#4b5563', '#a16207', '#111827', '#f1f5f9', '#b91c1c', '#eab308'];
+const AV_BG = ['#e0e7ff', '#dcfce7', '#fef3c7', '#fce7f3', '#e0f2fe', '#f3e8ff', '#fee2e2', '#e5e7eb', '#1f2937', '#0f3d3e'];
+const AV_HAIR = [['short', 'Short'], ['side', 'Side part'], ['buzz', 'Buzz'], ['wavy', 'Wavy'], ['curly', 'Curly'], ['afro', 'Afro'], ['spiky', 'Spiky'], ['mohawk', 'Mohawk'],
+  ['long', 'Long'], ['ponytail', 'Ponytail'], ['pigtails', 'Pigtails'], ['braids', 'Braids'], ['bun', 'Bun'], ['hijab', 'Hijab'], ['turban', 'Turban'], ['cap', 'Cap'], ['beanie', 'Beanie'], ['bald', 'None']];
+const AV_EYES = [['dot', 'Classic'], ['big', 'Big'], ['lashes', 'Lashes'], ['happy', 'Smiley']];
+const AV_BROWS = [['none', 'None'], ['thin', 'Thin'], ['thick', 'Thick'], ['arched', 'Arched']];
+const AV_FACIAL = [['none', 'None'], ['stubble', 'Stubble'], ['moustache', 'Moustache'], ['goatee', 'Goatee'], ['beard', 'Beard']];
+const AV_GLASSES = [['none', 'None'], ['round', 'Round'], ['square', 'Square'], ['shades', 'Shades']];
+const AV_ACC = [['none', 'Nothing'], ['headset', 'Headset'], ['earrings', 'Earrings'], ['necklace', 'Necklace'], ['bowtie', 'Bow tie'], ['flower', 'Flower']];
+const AV_OUTFIT = [['tee', 'T-shirt'], ['uniform', 'Uniform'], ['suit', 'Suit & tie'], ['polo', 'Polo'], ['hoodie', 'Hoodie'], ['blazer', 'Blazer']];
+const AV_FACE = [['none', 'Nothing'], ['blush', 'Blush'], ['freckles', 'Freckles']];
 
 function _avHash(s) { let h = 2166136261; for (const c of String(s)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
 /** Their look: what they picked, else a playful start (hair and colours from their name's letters, nothing guessed). */
 function avLook(k) {
   const c = ((typeof rbPeople !== 'undefined' && rbPeople[k]) || {}).look || {}, h = _avHash(k + ((roStaff[k] || {}).name || ''));
+  const old = c.acc || '';   // before v274 one "extra" held glasses and beards too
   return {
-    skin: c.skin != null ? c.skin : String(k).startsWith('~g') ? h % AV_SKIN.length : 2,   // (~g…: a made-up guest)
+    skin: c.skin != null ? c.skin : String(k).startsWith('~g') ? h % 6 : 2,   // (~g…: a made-up guest)
     hair: c.hair || ['short', 'long', 'curly', 'bun', 'spiky'][h % 5],
-    acc: c.acc || (h % 7 === 0 ? 'glasses' : h % 11 === 0 ? 'headset' : 'none'),
-    shirt: c.shirt != null ? c.shirt : (h >> 3) % AV_SHIRT.length,
-    hc: (h >> 7) % AV_HAIRCOL.length,
+    hc: c.hc != null ? c.hc : (h >> 7) % 6,
+    eyes: c.eyes || 'dot', brows: c.brows || 'none', face: c.face || 'none',
+    facial: c.facial || (old === 'beard' ? 'beard' : 'none'),
+    glasses: c.glasses || (old === 'glasses' ? 'round' : old === 'shades' ? 'shades' : c.acc ? 'none' : (h % 7 === 0 ? 'round' : 'none')),
+    acc: ['glasses', 'shades', 'beard'].includes(old) ? 'none' : (old || (h % 11 === 0 ? 'headset' : 'none')),
+    outfit: c.outfit || 'tee',
+    shirt: c.shirt != null ? c.shirt : (h >> 3) % 8,
+    bg: c.bg != null ? c.bg : (h >> 5) % 8,
   };
 }
-/** A cartoon face (SVG). mood: happy · busy · tired · sleepy · cheer. */
-function avSvg(k, size, mood) {
-  const L = avLook(k), skin = AV_SKIN[L.skin] || AV_SKIN[2], hc = AV_HAIRCOL[L.hc], sh = AV_SHIRT[L.shirt] || AV_SHIRT[0], sc = AV_SCARF[L.hc % AV_SCARF.length];
-  const hair = {
+/** A cartoon (SVG). mood: happy · busy · tired · sleepy · cheer. opts.look: try a change; opts.bg: draw the round background. */
+function avSvg(k, size, mood, opts) {
+  opts = opts || {};
+  const L = Object.assign(avLook(k), opts.look || {});
+  const skin = AV_SKIN[L.skin] || AV_SKIN[2], hc = AV_HAIRCOL[L.hc] || AV_HAIRCOL[0], sh = AV_SHIRT[L.shirt] || AV_SHIRT[0], sc = AV_SCARF[L.hc % AV_SCARF.length];
+  const dark = (L.hc >= 8 && L.hc <= 11) ? '#6b4b2a' : hc;   // eyebrows for very light hair
+  // behind the head
+  const back = {
+    long: `<path d="M15 30c0-12 7-18 17-18s17 6 17 18v18c-3 0-5-3-5-7V29H20v12c0 4-2 7-5 7z" fill="${hc}"/>`,
+    braids: `<g fill="${hc}"><path d="M15 30c0-12 7-18 17-18s17 6 17 18v6H15z"/><g stroke="rgba(0,0,0,.18)" stroke-width="1"><rect x="14" y="34" width="6" height="18" rx="3"/><rect x="44" y="34" width="6" height="18" rx="3"/><path d="M14 40h6M14 46h6M44 40h6M44 46h6"/></g></g>`,
+    ponytail: `<path d="M43 20c9 2 11 15 7 26-2-7-5-11-9-15z" fill="${hc}"/>`,
+    pigtails: `<g fill="${hc}"><circle cx="14" cy="33" r="6"/><circle cx="50" cy="33" r="6"/><circle cx="13" cy="41" r="4.5"/><circle cx="51" cy="41" r="4.5"/></g>`,
+    afro: `<circle cx="32" cy="27" r="21" fill="${hc}"/>`,
+    hijab: `<path d="M12 36c0-15 8-25 20-25s20 10 20 25v20H12z" fill="${sc}"/>`,
+  }[L.hair] || '';
+  const front = {
     short: `<path d="M17 27c0-10 7-15 15-15s15 5 15 15c-3-5-8-7-15-7s-12 2-15 7z" fill="${hc}"/>`,
-    long: `<path d="M15 30c0-12 7-18 17-18s17 6 17 18v16c-3 0-4-3-4-6V28c-3-4-7-6-13-6s-10 2-13 6v12c0 3-1 6-4 6z" fill="${hc}"/>`,
+    side: `<path d="M17 28c0-10 7-16 15-16s15 5 15 14c-7-1-13-4-17-9-3 5-7 9-13 11z" fill="${hc}"/>`,
+    buzz: `<path d="M18 26c1-8 7-12 14-12s13 4 14 12c-4-3-9-4-14-4s-10 1-14 4z" fill="${hc}" opacity=".8"/>`,
+    wavy: `<path d="M16 29c-1-11 7-17 16-17s17 6 16 17c-2-3-4-2-5-5-2 3-5 2-7-1-2 3-5 3-8 0-2 3-5 3-7 1-2 3-4 3-5 5z" fill="${hc}"/>`,
+    long: `<path d="M17 27c0-9 7-14 15-14s15 5 15 14c-3-4-8-6-15-6s-12 2-15 6z" fill="${hc}"/>`,
+    braids: `<path d="M17 27c0-9 7-14 15-14s15 5 15 14c-4-3-9-5-15-5s-11 2-15 5z" fill="${hc}"/>`,
+    ponytail: `<path d="M17 27c0-10 7-15 15-15s15 5 15 15c-3-5-8-7-15-7s-12 2-15 7z" fill="${hc}"/>`,
+    pigtails: `<path d="M17 28c0-10 7-15 15-15s15 5 15 15c-4-5-9-6-15-6s-11 1-15 6z" fill="${hc}"/>`,
     curly: `<g fill="${hc}"><circle cx="20" cy="22" r="6"/><circle cx="27" cy="16" r="6"/><circle cx="35" cy="15" r="6"/><circle cx="42" cy="19" r="6"/><circle cx="45" cy="26" r="5"/><circle cx="18" cy="28" r="4"/></g>`,
+    afro: `<path d="M18 26c2-6 8-9 14-9s12 3 14 9c-4-2-9-3-14-3s-10 1-14 3z" fill="${hc}"/>`,
     bun: `<g fill="${hc}"><circle cx="32" cy="9" r="6"/><path d="M17 28c0-10 7-16 15-16s15 6 15 16c-3-6-8-8-15-8s-12 2-15 8z"/></g>`,
     spiky: `<path d="M17 27l2-9 4 4 3-9 4 6 3-8 3 7 4-6 2 8 4-3 1 10c-4-5-9-7-15-7s-11 2-15 7z" fill="${hc}"/>`,
-    hijab: `<path d="M13 34c0-14 8-23 19-23s19 9 19 23v18H13z" fill="${sc}"/>`,
+    mohawk: `<path d="M27 21l2-12 3 6 3-6 2 12c-3-1-7-1-10 0z" fill="${hc}"/>`,
     turban: `<g><path d="M15 26c0-10 8-15 17-15s17 5 17 15c0 2-1 3-2 3H17c-1 0-2-1-2-3z" fill="${sc}"/><path d="M18 21c6-4 22-4 28 0" stroke="rgba(255,255,255,.25)" stroke-width="2" fill="none"/></g>`,
     cap: `<g><path d="M16 26c0-9 7-14 16-14s16 5 16 14z" fill="${sh}"/><path d="M30 25h22c0 2-2 3-4 3H30z" fill="${sh}" opacity=".85"/></g>`,
-    bald: '',
+    beanie: `<g><path d="M16 27c0-10 7-16 16-16s16 6 16 16z" fill="${sc}"/><rect x="15" y="24" width="34" height="5" rx="2.5" fill="${sc}" opacity=".8"/><circle cx="32" cy="10" r="3.5" fill="${sc}"/></g>`,
   }[L.hair] || '';
-  const face = L.hair === 'hijab' ? `<ellipse cx="32" cy="33" rx="12" ry="13" fill="${skin}"/>` : `<ellipse cx="32" cy="32" rx="14" ry="15" fill="${skin}"/>`;
+  // clothes
+  const outfit = {
+    tee: '',
+    uniform: '<path d="M27 49l5 5 5-5" stroke="#fff" stroke-width="2" fill="none"/><rect x="38" y="54" width="9" height="4" rx="1" fill="#f6d77e"/>',
+    suit: `<path d="M12 57c0-5 4-9 9-9h3l8 14 8-14h3c5 0 9 4 9 9v9H12z" fill="#1f2937"/><path d="M30 49h4l1 4-3 9-3-9z" fill="${sh === '#1f2937' || sh === '#111827' ? '#b91c1c' : sh}"/>`,
+    polo: '<path d="M26 48l6 6 6-6" fill="none" stroke="rgba(255,255,255,.65)" stroke-width="2"/><circle cx="32" cy="57" r="1" fill="rgba(255,255,255,.75)"/><circle cx="32" cy="61" r="1" fill="rgba(255,255,255,.75)"/>',
+    hoodie: '<path d="M20 49c3 5 7 7 12 7s9-2 12-7" fill="none" stroke="rgba(0,0,0,.25)" stroke-width="2"/><path d="M28 55v6M36 55v6" stroke="rgba(255,255,255,.7)" stroke-width="1.5"/>',
+    blazer: `<path d="M12 57c0-5 4-9 9-9h4l7 16 7-16h4c5 0 9 4 9 9v9H12z" fill="${sh}"/><path d="M25 48l7 16 7-16" fill="#f8fafc"/>`,
+  }[L.outfit] || '';
+  const body = `<rect x="12" y="48" width="40" height="18" rx="9" fill="${L.outfit === 'suit' || L.outfit === 'blazer' ? '#f8fafc' : sh}"/>${outfit}`;
+  const covered = L.hair === 'hijab';
+  const ears = covered ? '' : `<circle cx="18" cy="33" r="3" fill="${skin}"/><circle cx="46" cy="33" r="3" fill="${skin}"/>`;
+  const face = covered ? `<ellipse cx="32" cy="33" rx="12" ry="13" fill="${skin}"/>` : `<ellipse cx="32" cy="32" rx="14" ry="15" fill="${skin}"/>`;
+  const cheeks = { blush: '<g fill="#f472b6" opacity=".35"><ellipse cx="23" cy="37" rx="3" ry="2"/><ellipse cx="41" cy="37" rx="3" ry="2"/></g>',
+    freckles: '<g fill="#a0522d" opacity=".55"><circle cx="23" cy="36" r=".8"/><circle cx="25.5" cy="37.5" r=".8"/><circle cx="22" cy="38.5" r=".8"/><circle cx="41" cy="36" r=".8"/><circle cx="38.5" cy="37.5" r=".8"/><circle cx="42" cy="38.5" r=".8"/></g>' }[L.face] || '';
+  const brows = { thin: `<path d="M23 26h6M35 26h6" stroke="${dark}" stroke-width="1.2" stroke-linecap="round"/>`,
+    thick: `<path d="M22.5 26h7M34.5 26h7" stroke="${dark}" stroke-width="2.4" stroke-linecap="round"/>`,
+    arched: `<path d="M23 27c2-2 4-2 6 0M35 27c2-2 4-2 6 0" stroke="${dark}" stroke-width="1.6" fill="none" stroke-linecap="round"/>` }[L.brows] || '';
   const eyes = mood === 'sleepy' ? '<path d="M24 31h5M35 31h5" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"/>'
-    : `<g class="av-eyes"><circle cx="26.5" cy="31" r="2.2" fill="#2b2b2b"/><circle cx="37.5" cy="31" r="2.2" fill="#2b2b2b"/></g>`;
+    : L.eyes === 'happy' ? '<g class="av-eyes" stroke="#2b2b2b" stroke-width="2" fill="none" stroke-linecap="round"><path d="M24 32c1-2 4-2 5 0M35 32c1-2 4-2 5 0"/></g>'
+    : L.eyes === 'big' ? '<g class="av-eyes"><circle cx="26.5" cy="31" r="3.6" fill="#fff"/><circle cx="37.5" cy="31" r="3.6" fill="#fff"/><circle cx="27" cy="31.5" r="2" fill="#2b2b2b"/><circle cx="38" cy="31.5" r="2" fill="#2b2b2b"/><circle cx="27.6" cy="30.8" r=".6" fill="#fff"/><circle cx="38.6" cy="30.8" r=".6" fill="#fff"/></g>'
+    : L.eyes === 'lashes' ? '<g class="av-eyes"><circle cx="26.5" cy="31" r="2.2" fill="#2b2b2b"/><circle cx="37.5" cy="31" r="2.2" fill="#2b2b2b"/><path d="M23.5 29l-1.5-1.5M25 28.3l-.6-1.8M40.5 29l1.5-1.5M39 28.3l.6-1.8" stroke="#2b2b2b" stroke-width="1" stroke-linecap="round"/></g>'
+    : '<g class="av-eyes"><circle cx="26.5" cy="31" r="2.2" fill="#2b2b2b"/><circle cx="37.5" cy="31" r="2.2" fill="#2b2b2b"/></g>';
   const mouth = mood === 'tired' ? '<path d="M27 40h10" stroke="#7a3b2e" stroke-width="2" stroke-linecap="round"/>'
     : mood === 'sleepy' ? '<ellipse cx="32" cy="40.5" rx="2.5" ry="2" fill="#7a3b2e"/>'
     : mood === 'cheer' ? '<path d="M26 38c2 5 10 5 12 0z" fill="#7a3b2e"/>'
     : '<path d="M26.5 38.5c2 3 9 3 11 0" stroke="#7a3b2e" stroke-width="2" fill="none" stroke-linecap="round"/>';
-  const acc = {
-    glasses: '<g stroke="#222" stroke-width="1.6" fill="rgba(255,255,255,.18)"><circle cx="26.5" cy="31" r="4.3"/><circle cx="37.5" cy="31" r="4.3"/><path d="M30.8 31h2.4"/></g>',
-    shades: '<g fill="#111"><rect x="21.5" y="28" width="9" height="6" rx="2.5"/><rect x="33.5" y="28" width="9" height="6" rx="2.5"/><path d="M30.5 30h3" stroke="#111" stroke-width="1.6"/></g>',
-    headset: '<g fill="none" stroke="#333" stroke-width="2.4"><path d="M17 32c0-10 7-16 15-16s15 6 15 16"/></g><rect x="14" y="29" width="5" height="8" rx="2" fill="#333"/><rect x="45" y="29" width="5" height="8" rx="2" fill="#333"/><path d="M47 37c0 5-5 7-10 7" stroke="#333" stroke-width="1.6" fill="none"/>',
-    beard: `<path d="M19 34c1 10 6 14 13 14s12-4 13-14c-2 4-6 6-13 6s-11-2-13-6z" fill="${hc}"/>`,
+  const facial = { stubble: `<path d="M20 36c1 8 6 12 12 12s11-4 12-12c-2 5-6 7-12 7s-10-2-12-7z" fill="${hc}" opacity=".28"/>`,
+    moustache: `<path d="M25 37c2-2 5-2 7 0 2-2 5-2 7 0-2 1-5 1-7 0-2 1-5 1-7 0z" fill="${hc}"/>`,
+    goatee: `<path d="M28 43c1 3 2 5 4 5s3-2 4-5c-2 1-6 1-8 0z" fill="${hc}"/><path d="M26 37c2-1.5 4-1.5 6 0 2-1.5 4-1.5 6 0-2 .8-4 .8-6 0-2 .8-4 .8-6 0z" fill="${hc}"/>`,
+    beard: `<path d="M19 34c1 10 6 14 13 14s12-4 13-14c-2 4-6 6-13 6s-11-2-13-6z" fill="${hc}"/>` }[L.facial] || '';
+  const glasses = { round: '<g stroke="#222" stroke-width="1.6" fill="rgba(255,255,255,.18)"><circle cx="26.5" cy="31" r="4.3"/><circle cx="37.5" cy="31" r="4.3"/><path d="M30.8 31h2.4"/></g>',
+    square: '<g stroke="#222" stroke-width="1.6" fill="rgba(255,255,255,.18)"><rect x="21.8" y="27.5" width="9.4" height="7" rx="1.5"/><rect x="32.8" y="27.5" width="9.4" height="7" rx="1.5"/><path d="M31.2 30h1.6"/></g>',
+    shades: '<g fill="#111"><rect x="21.5" y="28" width="9" height="6" rx="2.5"/><rect x="33.5" y="28" width="9" height="6" rx="2.5"/><path d="M30.5 30h3" stroke="#111" stroke-width="1.6"/></g>' }[L.glasses] || '';
+  const acc = { headset: '<g fill="none" stroke="#333" stroke-width="2.4"><path d="M17 32c0-10 7-16 15-16s15 6 15 16"/></g><rect x="14" y="29" width="5" height="8" rx="2" fill="#333"/><rect x="45" y="29" width="5" height="8" rx="2" fill="#333"/><path d="M47 37c0 5-5 7-10 7" stroke="#333" stroke-width="1.6" fill="none"/>',
+    earrings: covered ? '' : '<g fill="#f6c84c"><circle cx="18" cy="38" r="1.6"/><circle cx="46" cy="38" r="1.6"/></g>',
+    necklace: '<path d="M25 48c2 4 5 6 7 6s5-2 7-6" stroke="#f6c84c" stroke-width="1.4" fill="none"/><circle cx="32" cy="54.5" r="1.6" fill="#f6c84c"/>',
     bowtie: '<path d="M26 56l6 3 6-3v6l-6-3-6 3z" fill="#e11d48"/>',
-  }[L.acc] || '';
-  return `<svg class="av" viewBox="0 0 64 64" width="${size || 40}" height="${size || 40}" aria-hidden="true"><rect x="12" y="48" width="40" height="18" rx="9" fill="${sh}"/>${L.hair === 'hijab' ? hair : ''}<rect x="28" y="43" width="8" height="7" fill="${skin}"/>${face}${L.hair !== 'hijab' ? hair : ''}${eyes}${mouth}${acc}</svg>`;
+    flower: '<g transform="translate(44 18)"><circle r="2.6" cx="0" cy="-3" fill="#f472b6"/><circle r="2.6" cx="3" cy="0" fill="#f472b6"/><circle r="2.6" cx="0" cy="3" fill="#f472b6"/><circle r="2.6" cx="-3" cy="0" fill="#f472b6"/><circle r="2" fill="#fde047"/></g>' }[L.acc] || '';
+  const bg = opts.bg ? `<circle cx="32" cy="32" r="32" fill="${AV_BG[L.bg] || AV_BG[0]}"/>` : '';
+  return `<svg class="av" viewBox="0 0 64 64" width="${size || 40}" height="${size || 40}" aria-hidden="true">${bg}${back}${body}<rect x="28" y="43" width="8" height="7" fill="${skin}"/>${ears}${face}${cheeks}${front}${brows}${eyes}${mouth}${facial}${glasses}${acc}</svg>`;
 }
 
 // ── The look, on their card ───────────────────────────────
-function avCardHtml(k) {
+// A big preview that changes as you tap, every option shown as a little picture of them.
+function avCardHtml(k, open) {
   const L = avLook(k), q = typeof _rtQ === 'function' ? _rtQ(k) : JSON.stringify(k);
-  const chip = (f, v, label, on) => `<button class="av-chip${on ? ' on' : ''}" onclick="avSet(${q},'${f}',${typeof v === 'number' ? v : `'${v}'`})">${label}</button>`;
-  return `<details class="av-card"><summary><span class="av-prev">${avSvg(k, 34, 'happy')}</span>😀 Their look <small>for the live desk · they choose</small></summary>
-    <div class="av-row"><span>Skin</span>${AV_SKIN.map((c, i) => `<button class="av-dot${L.skin === i ? ' on' : ''}" style="background:${c}" onclick="avSet(${q},'skin',${i})" aria-label="Skin tone ${i + 1}"></button>`).join('')}</div>
-    <div class="av-row"><span>Hair</span>${AV_HAIR.map(([v, t]) => chip('hair', v, t, L.hair === v)).join('')}</div>
-    <div class="av-row"><span>Extra</span>${AV_ACC.map(([v, t]) => chip('acc', v, t, L.acc === v)).join('')}</div>
-    <div class="av-row"><span>Shirt</span>${AV_SHIRT.map((c, i) => `<button class="av-dot${L.shirt === i ? ' on' : ''}" style="background:${c}" onclick="avSet(${q},'shirt',${i})" aria-label="Shirt colour ${i + 1}"></button>`).join('')}</div>
+  const pick = (f, list) => `<div class="av-opts">${list.map(([v, t]) => `<button class="av-opt${L[f] === v ? ' on' : ''}" onclick="avSet(${q},'${f}','${v}')" title="${escapeHtml(t)}">${avSvg(k, 46, 'happy', { look: { [f]: v } })}<small>${escapeHtml(t)}</small></button>`).join('')}</div>`;
+  const dots = (f, cols, order) => `<div class="av-dots">${(order || cols.map((_, i) => i)).map(i => `<button class="av-dot${L[f] === i ? ' on' : ''}" style="background:${cols[i]}" onclick="avSet(${q},'${f}',${i})" aria-label="${f} ${i + 1}"></button>`).join('')}</div>`;
+  const sec = (t, html) => `<div class="av-sec"><div class="av-sec-t">${t}</div>${html}</div>`;
+  return `<details class="av-card"${open ? ' open' : ''}><summary><span class="av-prev">${avSvg(k, 44, 'happy', { bg: true })}</span>😀 Their look <small>for the live desk · they choose</small></summary>
+    <div class="av-ed">
+      <div class="av-stage">
+        <div class="av-big">${avSvg(k, 168, 'cheer', { bg: true })}</div>
+        <div class="av-stage-acts"><button class="btn sm" onclick="avRandom(${q})">🎲 Surprise me</button><button class="btn sm ghost" onclick="avReset(${q})">↺ Start again</button></div>
+        ${sec('Background', dots('bg', AV_BG))}
+      </div>
+      <div class="av-pane">
+        ${sec('Skin', dots('skin', AV_SKIN, AV_SKIN_ORDER))}
+        ${sec('Hair', pick('hair', AV_HAIR))}
+        ${sec('Hair colour', dots('hc', AV_HAIRCOL))}
+        ${sec('Eyes', pick('eyes', AV_EYES))}
+        ${sec('Eyebrows', pick('brows', AV_BROWS))}
+        ${sec('Cheeks', pick('face', AV_FACE))}
+        ${sec('Beard', pick('facial', AV_FACIAL))}
+        ${sec('Glasses', pick('glasses', AV_GLASSES))}
+        ${sec('Extra', pick('acc', AV_ACC))}
+        ${sec('Outfit', pick('outfit', AV_OUTFIT))}
+        ${sec('Colour', dots('shirt', AV_SHIRT))}
+      </div>
+    </div>
   </details>`;
 }
-function avSet(k, f, v) {
-  const look = Object.assign({}, (rbPeople[k] || {}).look, { [f]: v });
+function _avSave(k, look) {
   if (typeof rtSet === 'function') rtSet(k, 'look', look);
-  const el = document.querySelector('#rtSheet .av-card'); if (el) { const open = el.open; el.outerHTML = avCardHtml(k); const n = document.querySelector('#rtSheet .av-card'); if (n) n.open = open; }
+  const el = document.querySelector('#rtSheet .av-card');
+  if (el) { const open = el.open, pane = el.querySelector('.av-pane'), top = pane ? pane.scrollTop : 0; el.outerHTML = avCardHtml(k, open); const n = document.querySelector('#rtSheet .av-card .av-pane'); if (n) n.scrollTop = top; }
   if (document.getElementById('lvView')) lvRender();
 }
+function avSet(k, f, v) { _avSave(k, Object.assign({}, avLook(k), (rbPeople[k] || {}).look, { [f]: v })); }
+function avRandom(k) {
+  const r = a => a[Math.floor(Math.random() * a.length)], L = avLook(k);
+  _avSave(k, Object.assign({}, L, {   // skin stays as they chose it
+    hair: r(AV_HAIR)[0], hc: Math.floor(Math.random() * AV_HAIRCOL.length), eyes: r(AV_EYES)[0], brows: r(AV_BROWS)[0], face: r(AV_FACE)[0],
+    facial: Math.random() < .3 ? r(AV_FACIAL)[0] : 'none', glasses: Math.random() < .35 ? r(AV_GLASSES)[0] : 'none', acc: Math.random() < .5 ? r(AV_ACC)[0] : 'none',
+    outfit: r(AV_OUTFIT)[0], shirt: Math.floor(Math.random() * AV_SHIRT.length), bg: Math.floor(Math.random() * AV_BG.length) }));
+}
+function avReset(k) { _avSave(k, { skin: avLook(k).skin }); }
 
 // ── 🎮 The live desk ──────────────────────────────────────
 let _lvT = null, _lvAt = null, _lvPlay = null;   // _lvAt: a time picked on the slider (null = now)
@@ -141,7 +230,7 @@ function lvHotelHtml(S, t, idx) {
     return `<div class="lv-st ${kind}${x.key === roMeKey ? ' me' : ''}" data-k="${escapeHtml(x.key)}" style="--d:${(_avHash(x.key) % 9) / 10}s" title="${escapeHtml(x.name)} · ${escapeHtml(roTime(x.info))} · tap me!" onclick="lvPoke(this)">${mood === 'sleepy' ? '<span class="lv-zzz"><i>z</i><i>z</i><i>Z</i></span>' : ''}${kind === 'on' && p > 0.93 ? '<span class="lv-party">🎉</span>' : ''}
       <div class="lv-bub">${escapeHtml(bubble)}</div>
       <div class="lv-tag"><b>${escapeHtml(String(x.name).split(' ')[0])}</b>${kind === 'on' ? `<span class="lv-en" title="Energy: ${en}% of the shift left"><i style="width:${en}%"></i></span><small>⚡ ${lh ? lh + 'h ' : ''}${lm}m</small>` : `<small>${escapeHtml(roTime(x.info))}</small>`}</div>
-      <div class="lv-body">${avSvg(x.key, 62, mood)}</div>
+      <div class="lv-body">${avSvg(x.key, 84, mood)}</div>
     </div>`;
   };
   const g = _lvGuests(h), seed = _avHash(S.g + now.getHours());

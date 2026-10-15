@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 274, items: [
+    '😀 Each person\'s character is far more customisable (Team → their card → Their look): a big preview that changes as you tap, every option shown as a little picture of them, 18 hair styles (afro, braids, ponytail, mohawk, beanie…), 15 hair colours, 10 skin tones, eyes, eyebrows, blush or freckles, beard or moustache, glasses, extras (earrings, necklace, flower…), outfits (uniform, suit & tie, polo, hoodie, blazer), outfit colour and a background colour. 🎲 Surprise me (keeps the skin they chose) and ↺ Start again. Looks already chosen stay as they were.',
+    '🎮 The live desk shows everyone bigger, and a crowded desk shrinks them a little so nobody is cut off.',
+  ] },
   { v: 273, items: [
     '🧭 The roster builder moves people as little as it can: "Work at your own hotel" and "Same hours" are now Very important by default, and "No morning straight after nights" Important. On your team: fewer shift changes in a week (10 → 7 over 8 test weeks, and no more earlier starts after a later shift), fewer night → morning (9 → 4 in the hard weeks with sick leave), the same cover, rest never cut, a few more wishes granted. You can lower any of them in Rules.',
   ] },
