@@ -259,6 +259,8 @@ const GS_FEATURES = [
   ['🎮 Live desk', 'live desk game who is on shift lobby rush hour', 'Roster page', () => { showPanel('roster'); setTimeout(() => typeof lvOpen === 'function' && lvOpen(), 300); }],
   // shift tasks
   ['⏰ Shift task with a time (reminder)', 'task time reminder alarm ring shift task', 'Shift Tasks', () => gsGo('shifts', { sel: '[id^="stAt-"]' })],
+  ['📆 Monthly reports (TD check, revenue by accounts, statistics)', 'monthly report reports month end td revenue accounts statistics statics due 1 4 remind every month', 'Shift Tasks', () => gsGo('shifts', { sel: '#mrCard' })],
+  ['🔁 Repeat a shift task every week or every month', 'repeat recurring every week weekly every month monthly task', 'Shift Tasks', () => gsGo('shifts', { sel: '[id^="stRep-"]' })],
   ['📅 Shift task for a date (one-off)', 'task date one off coming up later day', 'Shift Tasks', () => gsGo('shifts', { sel: '[id^="stOn-"]' })],
   // other pages
   ['📦 Package Audit: To fix / Copied', 'package upsell in-gauge copied done to fix multi day seller', 'Package Audit', () => gsGo('package-audit')],

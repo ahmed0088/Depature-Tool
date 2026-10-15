@@ -4033,8 +4033,12 @@ ${actionList?`<div class="action"><h2>Act on these first</h2><ul>${actionList}</
         <input id="et-at" type="time" class="mf-input-task"/>
       </div>
       <div class="mf mf-task">
-        <label class="mf-label-task">Date <span style="opacity:0.45;font-weight:400;">(optional: a one-off for that day only)</span></label>
+        <label class="mf-label-task">Date <span style="opacity:0.45;font-weight:400;">(optional: a one-off for that day, or the first day of a repeat)</span></label>
         <input id="et-on" type="date" class="mf-input-task"/>
+      </div>
+      <div class="mf mf-task">
+        <label class="mf-label-task">Repeat <span style="opacity:0.45;font-weight:400;">(optional: e.g. a monthly report. Comes back on the same day and reminds you)</span></label>
+        <select id="et-rep" class="mf-input-task"><option value="">Once (no repeat)</option><option value="week">🔁 Every week (same weekday as the date)</option><option value="month">🔁 Every month (same day as the date)</option></select>
       </div>
     </div>
     <div class="modal-task-actions">
@@ -4054,6 +4058,7 @@ ${actionList?`<div class="action"><h2>Act on these first</h2><ul>${actionList}</
 <script src="departures.js"></script>
 <script src="arrivals-purpose.js"></script>
 <script src="shifts.js"></script>
+<script src="monthly-reports.js"></script>
 <script src="checklist.js"></script>
 <script src="reports.js"></script>
 <script src="arr-dep-xref.js"></script>
@@ -5061,6 +5066,7 @@ async function appInit() {
       <button class="btn sm" onclick="hoGenerate()">↺ Refresh</button>
       <button class="btn sm gold" onclick="hoCopy()">📋 Copy</button>
       <button class="btn sm" onclick="hoPrint()">🖨 Print</button>
+      <button class="btn sm mint" onclick="hoWhatsApp()" title="Send the handover on WhatsApp (or share on a phone)">💬 WhatsApp</button>
     </div>
     <div class="ho-body" id="hoBody"></div>
   </div>

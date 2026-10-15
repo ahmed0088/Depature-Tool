@@ -75,6 +75,71 @@ function _hoSnapshot() {
   return lines;
 }
 
+/** What the next shift has to do: rooms, times and tasks by name, not only counts. */
+function _hoTodo() {
+  const L = [], add = (icon, head, items) => { if (items && items.length) L.push({ icon, head, items }); };
+  const now = Date.now(), hm = t => new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  try {
+    if (typeof depRooms !== 'undefined' && depRooms.length) {
+      add('🕐', 'Late check-outs', depRooms.filter(r => r.status === 'late').map(r => `Room ${r.roomStr}${r.lateTime ? ' until ' + r.lateTime : ''}${r.name ? ' · ' + r.name : ''}`));
+      add('🚪', 'Still due to check out', depRooms.filter(r => r.status === 'due').map(r => `Room ${r.roomStr}${r.name ? ' · ' + r.name : ''}${r.balance ? ' · balance' : ''}`));
+      add('📞', 'No answer yet', depRooms.filter(r => r.status === 'na').map(r => `Room ${r.roomStr}${r.naTime ? ' (tried ' + r.naTime + ')' : ''}`));
+    }
+  } catch (_) {}
+  try {
+    if (typeof bxWakes !== 'undefined') {
+      const w = Object.values(bxWakes).filter(x => x && !x.done && x.at < now + 14 * 3600e3).sort((a, b) => a.at - b.at);
+      add('⏰', 'Wake-up calls', w.map(x => `Room ${x.room} at ${x.time}${x.at < now ? ' — MISSED, call now' : ''}${x.name ? ' · ' + x.name : ''}`));
+    }
+  } catch (_) {}
+  try {
+    if (typeof SHIFTS !== 'undefined' && typeof hoShiftNow === 'function') {
+      const k = hoShiftNow().key, sh = SHIFTS[k], day = typeof stDayOf === 'function' ? stDayOf(k) : '';
+      const open = (sh.tasks || []).filter(t => (typeof stTaskState !== 'function' || stTaskState(t, day, k) === 'on') && !(typeof stIsDone === 'function' ? stIsDone(k, t) : sh.done.includes(t.id)));
+      add('✅', `${sh.label}: tasks not done`, open.map(t => (t.at ? t.at + ' · ' : '') + t.name));
+    }
+  } catch (_) {}
+  try {
+    if (typeof CL_STEPS !== 'undefined' && typeof hoShiftNow === 'function' && hoShiftNow().key === 'night') {
+      const left = CL_STEPS.filter(x => !clState.done.has(x.id) && !clState.skipped.has(x.id));
+      if (left.length && clState.done.size) add('🌙', 'Night checklist still open', left.slice(0, 8).map(x => x.name).concat(left.length > 8 ? [`…and ${left.length - 8} more`] : []));
+    }
+  } catch (_) {}
+  try {
+    if (typeof dtcRecon !== 'undefined' && dtcRecon && typeof dtcDone !== 'undefined') {
+      const n = (dtcRecon.actions || []).length - dtcDone.size;
+      if (n > 0) add('🏛️', 'DTCM', [`${n} correction${n > 1 ? 's' : ''} still to do (DTCM Recon)`]);
+    }
+  } catch (_) {}
+  try {
+    if (typeof pkgResults !== 'undefined' && pkgResults.length && typeof pkgNightDone === 'function') {
+      const n = pkgResults.filter(x => !x.pinSkip && (x.verdict === 'deny' || x.verdict === 'review' || (x.verdict === 'credit' && !x.alreadyComplete)) && !pkgNightDone(x)).length;
+      if (n) add('📦', 'Package Audit', [`${n} line${n > 1 ? 's' : ''} still to fix in IN-Gauge`]);
+    }
+  } catch (_) {}
+  try {
+    if (typeof nsGuests !== 'undefined' && nsGuests.length) {
+      const n = nsGuests.filter(g => !g.newConf).length;
+      if (n) add('🚫', 'No-shows', [`${n} still without a new confirmation number`]);
+    }
+  } catch (_) {}
+  try {
+    if (typeof mrOpen === 'function' && typeof mrPeriod === 'function') {
+      const p = mrPeriod(), o = mrOpen();
+      if (o.length && (p.late || p.left < 4)) add('📆', `Monthly reports ${p.late ? 'late' : 'due by the ' + p.by + 'th'}`, o.map(r => r.name));
+    }
+  } catch (_) {}
+  try {
+    if (typeof bxNotesList === 'function') add('📝', 'Notes from the shift', bxNotesList().slice(0, 8).map(n => `${n.text} (${n.by}, ${n.time})`));
+  } catch (_) {}
+  return L;
+}
+function hoWhatsApp() {
+  const t = _hoBuildText();
+  if (navigator.share && /Mobi|Android|iPhone/i.test(navigator.userAgent)) { navigator.share({ text: t }).catch(() => {}); return; }
+  window.open('https://wa.me/?text=' + encodeURIComponent(t), '_blank', 'noopener');
+}
+
 async function hoGenerate() {
   const body = document.getElementById('hoBody');
   if (!body) return;
@@ -109,7 +174,12 @@ async function hoGenerate() {
         </div>`).join('')
     : `<div class="gs-empty">No logged activity in this window</div>`;
 
+  const todo = _hoTodo();
   body.innerHTML = `
+    <div class="ho-section ho-todo">
+      <div class="ho-section-title">➡️ For the next shift</div>
+      ${todo.length ? todo.map(g => `<div class="ho-todo-g"><b>${g.icon} ${escapeHtml(g.head)}</b><ul>${g.items.map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul></div>`).join('') : '<div class="gs-empty">🎉 Nothing open: a clean handover.</div>'}
+    </div>
     <div class="ho-section">
       <div class="ho-section-title">📋 Current Status</div>
       ${snapshotLines.length ? snapshotLines.map(l => `<div class="ho-snap-row">${l}</div>`).join('') : '<div class="gs-empty">No data loaded yet</div>'}
@@ -139,6 +209,9 @@ function _hoBuildText() {
     `Generated by ${generatedBy} · ${now}`,
     `${'─'.repeat(50)}`,
     ``,
+    `FOR THE NEXT SHIFT`,
+    ...(() => { const T = _hoTodo(); return T.length ? T.flatMap(g => [`  ${g.icon} ${g.head}:`, ...g.items.map(i => `     • ${i}`)]) : ['  Nothing open.']; })(),
+    ``,
     `CURRENT STATUS`,
     ...snapshotLines.map(l => '  ' + l.replace(/^[^\s]+\s/, '')),
     ``,
@@ -164,3 +237,16 @@ function hoPrint() {
   win.document.close();
   win.print();
 }
+
+// ── A nudge 30 minutes before your shift ends: the handover is ready ──
+(window.BL_THINKERS = window.BL_THINKERS || []).push(add => {
+  try {
+    if (typeof hoShiftNow !== 'function' || typeof hoMyDuty !== 'function') return;
+    const d = hoMyDuty(); if (d.state !== 'on' || !d.code || typeof rbParse !== 'function') return;
+    const p = rbParse(d.code); if (!p) return;
+    const end = roDate(d.date).getTime() + p.e * 60e3, left = end - Date.now();
+    if (left > 0 && left <= 30 * 60e3) add({ id: 'handover:' + d.date + ':' + d.code, type: 'handover', icon: '📋', tone: 'idle',
+      text: `Your shift ends at ${p.to}: the handover is ready`, why: 'Late rooms, wake-up calls, tasks not done and notes, written for the next shift. Copy it or send it on WhatsApp.',
+      acts: [['Open the handover', () => hoOpen()]] });
+  } catch (_) {}
+});

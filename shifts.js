@@ -69,7 +69,7 @@ function _renderShiftContent(key) {
   const shift     = SHIFTS[key];
   const day       = stDayOf(key);
   const active    = shift.tasks.filter(t => stTaskState(t, day, key) === 'on');
-  const soon      = shift.tasks.filter(t => stTaskState(t, day) === 'soon').sort((a, b) => a.on < b.on ? -1 : 1);
+  const soon      = shift.tasks.filter(t => stTaskState(t, day, key) === 'soon').sort((a, b) => stOn(a, day, key) < stOn(b, day, key) ? -1 : 1);
   const total     = active.length;
   const doneCount = active.filter(t => stIsDone(key, t)).length;
   const pct       = total ? Math.round(doneCount / total * 100) : 0;
@@ -100,12 +100,13 @@ function _renderShiftContent(key) {
       ${total ? active.map(t => stItemHTML(key, t, stIsDone(key, t), shift.tasks.indexOf(t), shift.tasks.length)).join('')
               : '<div class="st-empty">No tasks on this shift yet — add one below.</div>'}
     </div>
-    ${soon.length ? `<div class="st-soon"><div class="st-soon-hd">📅 Coming up <span>${soon.length}</span></div>${soon.map(t => `<div class="st-soon-row"><b>${escapeHtml(_stDateLbl(t.on))}</b>${t.at ? `<span class="st-at">⏰ ${escapeHtml(t.at)}</span>` : ''}<span class="st-soon-n">${escapeHtml(t.name)}</span><button class="cl-step-btn edit-btn" onclick="openEditTask('${key}','${t.id}')" title="Edit">✏️</button><button class="cl-step-btn del" onclick="stDelete('${key}','${t.id}')" title="Delete">✕</button></div>`).join('')}</div>` : ''}
+    ${soon.length ? `<div class="st-soon"><div class="st-soon-hd">📅 Coming up <span>${soon.length}</span></div>${soon.map(t => `<div class="st-soon-row"><b>${escapeHtml(_stDateLbl(stOn(t, day, key)))}</b>${t.rep ? `<span class="st-rep" title="${escapeHtml(_stRepLbl(t))}">🔁</span>` : ''}${t.at ? `<span class="st-at">⏰ ${escapeHtml(t.at)}</span>` : ''}<span class="st-soon-n">${escapeHtml(t.name)}</span><button class="cl-step-btn edit-btn" onclick="openEditTask('${key}','${t.id}')" title="Edit">✏️</button><button class="cl-step-btn del" onclick="stDelete('${key}','${t.id}')" title="Delete">✕</button></div>`).join('')}</div>` : ''}
     <div class="st-add-wrap">
       <input class="st-add-in"   id="stIn-${key}"   placeholder="Add new task…" onkeydown="if(event.key==='Enter')stAddTask('${key}')"/>
       <input class="st-add-hint" id="stHint-${key}" placeholder="Hint (optional)" onkeydown="if(event.key==='Enter')stAddTask('${key}')"/>
       <input class="st-add-at" id="stAt-${key}" type="time" title="Time (optional): I remind you then, on this shift" aria-label="Time"/>
-      <input class="st-add-at" id="stOn-${key}" type="date" title="Date (optional): a one-off task for that day only. It waits in Coming up and reminds you on the day" aria-label="Date"/>
+      <input class="st-add-at" id="stOn-${key}" type="date" title="Date (optional): a one-off task for that day, or the first day of a repeating one. It waits in Coming up and reminds you on the day" aria-label="Date"/>
+      <select class="st-add-at st-add-rep" id="stRep-${key}" title="Repeat (optional): every week or every month, e.g. a monthly report. It comes back on the same day each time and reminds you" aria-label="Repeat"><option value="">Once</option><option value="week">🔁 Every week</option><option value="month">🔁 Every month</option></select>
       <button class="btn gold sm" onclick="stAddTask('${key}')">+ Add</button>
     </div>
     ${shift.resetAt ? `<div style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);margin-top:6px;">Last reset: ${shift.resetAt}</div>` : ''}
@@ -248,7 +249,11 @@ function stAddTask(key) {
   if (hEl) hEl.value = '';
   if (aEl) aEl.value = '';
   if (oEl) oEl.value = '';
-  if (task.on && task.on > stDayOf(key) && typeof showToast === 'function') showToast(`📅 Saved for ${_stDateLbl(task.on)}: it waits in Coming up and reminds you on the day`, 'ok');
+  const rEl = document.getElementById('stRep-' + key);
+  if (rEl?.value) { task.rep = rEl.value; if (!task.on) task.on = stDayOf(key); }
+  if (rEl) rEl.value = '';
+  if (task.rep && typeof showToast === 'function') showToast(`🔁 ${_stRepLbl(task)}: it comes back on its day and reminds you, every time`, 'ok');
+  else if (task.on && task.on > stDayOf(key) && typeof showToast === 'function') showToast(`📅 Saved for ${_stDateLbl(task.on)}: it waits in Coming up and reminds you on the day`, 'ok');
   stLog(key, 'added', name);
   logActivity('shift_task_added', `[${SHIFTS[key].label}] ${name}`);
   _renderShiftContent(key);
@@ -292,6 +297,7 @@ function openEditTask(key, id) {
   document.getElementById('et-hint').value  = task.hint || '';
   const at = document.getElementById('et-at'); if (at) at.value = task.at || '';
   const on = document.getElementById('et-on'); if (on) on.value = task.on || '';
+  const rp = document.getElementById('et-rep'); if (rp) rp.value = task.rep || '';
   document.getElementById('editTaskModal').classList.add('open');
 }
 
@@ -306,6 +312,8 @@ function saveEditTask() {
   if (at) task.at = at; else delete task.at;
   const on = document.getElementById('et-on')?.value || '';
   if (on) task.on = on; else delete task.on;
+  const rp = document.getElementById('et-rep')?.value || '';
+  if (rp) { task.rep = rp; if (!task.on) task.on = stDayOf(key); } else delete task.rep;
   document.getElementById('editTaskModal').classList.remove('open');
   _renderShiftContent(key);
   persistShifts(key);
@@ -526,7 +534,7 @@ function stRemindTick() {
     (sh.tasks || []).forEach(t => {
       const day = key === 'mid' ? _stDay(now) : _stDay(hoShiftNow(now).start);
       if (stIsDone(key, t)) return;
-      if (t.on && t.on !== day) return;                       // a dated task rings only on its day
+      if (t.on && stOn(t, day, key) !== day) return;          // a dated task rings only on its day
       if (t.on && !t.at) {                                    // no time: once, when its shift is on
         if (!_stIsNow(key, now)) return;
         const id = `${day}|${key}|${t.id}`;
@@ -573,12 +581,48 @@ function stDayOf(key, now) {
   try { if (key !== 'mid' && hoShiftNow(now).key === key) return _stIso(hoShiftNow(now).start); } catch (_) {}
   return _stIso(now);
 }
-function stIsDone(key, t) { const sh = SHIFTS[key]; return t.on ? !!(sh.doneDated || {})[t.id] : (sh.done || []).includes(t.id); }
+// A repeating task (t.rep 'week' or 'month', e.g. a monthly report) starts on t.on and comes
+// back on the same weekday / day of the month (31st → the month's last day). Each time has its
+// own tick in doneDated under "<id>_<date>". Ticked, it moves on to the next time (Coming up);
+// not ticked, it stays on the list as missed until the next time comes.
+const _stDim = (y, m) => new Date(y, m + 1, 0).getDate();
+function _stMonthOcc(t, y, m) { const dom = +t.on.slice(8, 10); return _stIso(new Date(y, m, Math.min(dom, _stDim(y, m)), 12)); }
+function _stAddDays(iso, n) { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return _stIso(d); }
+function _stTickKey(t, occ) { return t.rep ? `${t.id}_${occ}` : t.id; }
+/** The date a dated task stands for right now (for a repeating one: this time's date) */
+function stOn(t, day, key) {
+  if (!t.on || !t.rep || !day || day <= t.on) return t.on;
+  let cur, next;
+  if (t.rep === 'week') {
+    const k = Math.floor((new Date(day + 'T12:00:00') - new Date(t.on + 'T12:00:00')) / (7 * 864e5));
+    cur = _stAddDays(t.on, 7 * k); next = _stAddDays(cur, 7);
+  } else {
+    const d = new Date(day + 'T12:00:00'); let y = d.getFullYear(), m = d.getMonth();
+    cur = _stMonthOcc(t, y, m);
+    if (cur > day) { m--; if (m < 0) { m = 11; y--; } cur = _stMonthOcc(t, y, m); }
+    const nm = (m + 1) % 12, ny = m === 11 ? y + 1 : y; next = _stMonthOcc(t, ny, nm);
+  }
+  if (cur < day && key && SHIFTS[key] && (SHIFTS[key].doneDated || {})[_stTickKey(t, cur)]) return next;
+  return cur;
+}
+function _stRepLbl(t) {
+  if (!t.rep || !t.on) return '';
+  const d = new Date(t.on + 'T12:00:00');
+  if (t.rep === 'week') return 'Every ' + d.toLocaleDateString('en-GB', { weekday: 'long' });
+  const n = d.getDate(), sfx = n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th';
+  return `Every month on the ${n}${sfx}`;
+}
+function stIsDone(key, t) {
+  const sh = SHIFTS[key];
+  if (!t.on) return (sh.done || []).includes(t.id);
+  return !!(sh.doneDated || {})[_stTickKey(t, stOn(t, stDayOf(key), key))];
+}
 /** 'on' (on the list), 'soon' (a later date), 'gone' (its day passed and it was ticked) */
 function stTaskState(t, day, key) {
   if (!t.on) return 'on';
-  if (t.on > day) return 'soon';
-  if (t.on < day && key && stIsDone(key, t)) return 'gone';
+  const on = stOn(t, day, key);
+  if (on > day) return 'soon';
+  if (on < day && key && stIsDone(key, t)) return 'gone';
   return 'on';
 }
 function stCount(key) {
@@ -594,20 +638,21 @@ function _stDateLbl(iso) {
   return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 function _stOnChip(key, t, isDone) {
-  const day = stDayOf(key);
-  if (t.on < day && !isDone) return `<span class="st-on late" title="Its day passed and it wasn't ticked">📅 missed ${escapeHtml(_stDateLbl(t.on))}</span>`;
-  return `<span class="st-on" title="A one-off task for this day">📅 ${escapeHtml(_stDateLbl(t.on))}</span>`;
+  const day = stDayOf(key), on = stOn(t, day, key), r = t.rep ? '🔁' : '📅', why = t.rep ? _stRepLbl(t) : 'A one-off task for this day';
+  if (on < day && !isDone) return `<span class="st-on late" title="Its day passed and it wasn't ticked. ${escapeHtml(why)}">${r} missed ${escapeHtml(_stDateLbl(on))}</span>`;
+  return `<span class="st-on${t.rep ? ' rep' : ''}" title="${escapeHtml(why)}">${r} ${escapeHtml(t.rep ? (on === day ? 'Today' : _stDateLbl(on)) + ' · ' + (t.rep === 'week' ? 'weekly' : 'monthly') : _stDateLbl(on))}</span>`;
 }
 function _stToggleDated(key, task) {
   const sh = SHIFTS[key]; sh.doneDated = sh.doneDated || {};
-  const was = !!sh.doneDated[task.id];
+  const occ = stOn(task, stDayOf(key), key), tk = _stTickKey(task, occ);
+  const was = !!sh.doneDated[tk];
   if (was && typeof _stAutoRefused === 'function') _stAutoRefused(key, task.id);
-  if (was) delete sh.doneDated[task.id]; else sh.doneDated[task.id] = { by: (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '', at: new Date().toISOString() };
+  if (was) delete sh.doneDated[tk]; else sh.doneDated[tk] = { by: (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '', at: new Date().toISOString() };
   stLog(key, was ? 'undone' : 'done', task.name);
-  if (typeof logActivity === 'function') logActivity(was ? 'shift_task_undone' : 'shift_task_done', `[${sh.label}] ${task.name} (${task.on})`);
+  if (typeof logActivity === 'function') logActivity(was ? 'shift_task_undone' : 'shift_task_done', `[${sh.label}] ${task.name} (${occ})`);
   _renderShiftContent(key); updateShiftBadge(key);
   if (!_shiftsLoaded) return;
-  if (typeof fbSet === 'function') { fbSet(`shifts/data/${key}/doneDated/${task.id}`, was ? null : sh.doneDated[task.id]); fbSet('shifts/updatedAt', new Date().toISOString()); }
+  if (typeof fbSet === 'function') { fbSet(`shifts/data/${key}/doneDated/${tk}`, was ? null : sh.doneDated[tk]); fbSet('shifts/updatedAt', new Date().toISOString()); }
   else persistShifts();
 }
 /** Dated tasks ticked more than 2 weeks after their day are tidied away (once a day, on one device is enough) */
@@ -615,11 +660,15 @@ function _stTidyDated() {
   if (!_shiftsLoaded || typeof SHIFTS === 'undefined') return;
   const cut = _stIso(new Date(Date.now() - 14 * 864e5));
   Object.keys(SHIFTS).forEach(k => {
-    const sh = SHIFTS[k], old = (sh.tasks || []).filter(t => t.on && t.on < cut && stIsDone(k, t));
-    if (!old.length) return;
+    const sh = SHIFTS[k], old = (sh.tasks || []).filter(t => t.on && !t.rep && t.on < cut && stIsDone(k, t));
+    // old ticks of repeating tasks (kept 3 months), and ticks whose task was deleted
+    const ids = new Set((sh.tasks || []).map(t => t.id)), cut3 = _stIso(new Date(Date.now() - 92 * 864e5));
+    const stale = Object.keys(sh.doneDated || {}).filter(x => { const m = /^(.+)_(\d{4}-\d{2}-\d{2})$/.exec(x); return m && (m[2] < cut3 || !ids.has(m[1])); });
+    if (!old.length && !stale.length) return;
     sh.tasks = sh.tasks.filter(t => !old.includes(t));
     old.forEach(t => { delete (sh.doneDated || {})[t.id]; });
-    persistShifts(k, Object.fromEntries(old.map(t => ['doneDated/' + t.id, null])));
+    stale.forEach(x => { delete sh.doneDated[x]; });
+    persistShifts(k, Object.fromEntries([...old.map(t => t.id), ...stale].map(x => ['doneDated/' + x, null])));
   });
 }
 setTimeout(() => setInterval(_stTidyDated, 6 * 3600e3), 60e3);

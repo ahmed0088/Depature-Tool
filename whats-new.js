@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 282, items: [
+    '📆 New: Monthly reports, at the top of Shift Tasks. Add the reports you finish every month once (Monthly TD check, Revenue data by accounts, Statistics report, or your own). Each month they come back for the month that ended: October\'s are due 1 to 4 November (you can change the last day). Everyone sees the same list; tick one and it shows who did it and when. From the 1st, Ops Brain reminds whoever is on shift every day until they are all done; on the last day and after it, it rings. Search "monthly report" to jump there.',
+    '🔁 Shift tasks can repeat: pick "Every week" or "Every month" next to the date. The task comes back on the same weekday or the same day of the month (the 31st becomes the last day in shorter months) and reminds you on the day. Tick it and it moves on to the next time; miss it and it stays as "missed" until the next time comes.',
+    '📋 The handover now writes "For the next shift" first: late check-outs, wake-up calls coming up, the shift\'s tasks not done, monthly reports due, DTCM and package lines, no-shows and notes, by name. Send it on WhatsApp with one tap, and 30 minutes before your shift ends Ops Brain tells you it is ready.',
+  ] },
   { v: 281, items: [
     '🔧 Behind the scenes: the automatic test checks on GitHub now use the newest tools (checkout v7, setup-node v7). Nothing changes in the app.',
   ] },
