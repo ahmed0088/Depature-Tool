@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 273, items: [
+    '🧭 The roster builder moves people as little as it can: "Work at your own hotel" and "Same hours" are now Very important by default, and "No morning straight after nights" Important. On your team: fewer shift changes in a week (10 → 7 over 8 test weeks, and no more earlier starts after a later shift), fewer night → morning (9 → 4 in the hard weeks with sick leave), the same cover, rest never cut, a few more wishes granted. You can lower any of them in Rules.',
+  ] },
   { v: 272, items: [
     '✅ Shift tasks tick themselves when the app can see the work is done: "ALL enrollment" once an enrollment is sent today in Guest Pipeline, the night audit checklist when every step is done, "pending check-outs" when every departure is out or extended, today\'s arrivals, departure board, Purpose of Stay, No Show, DTCM corrections, Package Audit and wake-up calls. The shift log says why ("ticked by HotelOps: 3 ALL enrollments sent today"). Untick it and it stays unticked for that shift. Settings → Helpers to turn it off.',
   ] },

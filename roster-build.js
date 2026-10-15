@@ -46,9 +46,16 @@ function rbRest(prev, next) { const a = rbParse(prev), b = rbParse(next); return
 // "Two in the shift" means two people at the desk at the same time: 08–17 and 12–21 overlap 12:00–17:00.
 // ── Rule levels: how much each rule counts, set in ⚖️ Rules (the defaults are how it always worked) ──
 const RB_LEVELS = ['Off', 'Nice', 'Important', 'Very important', 'Must'], RB_LF = [0, 0.3, 1, 2.5, 6];
-const RB_RULE_DEF = { care: 2, alone: 2, home: 2, steady: 2, meet: 3, senior: 3, mgr: 3, nm: 1, preferNot: 1, wishes: 1, together: 1, desk: 1, fair: 1 };
+// RB_RULE_BASE: the level each rule's numbers were tuned at. RB_RULE_DEF: the level a rule has until
+// someone changes it. "Work at your own hotel" and "same hours" are Very important by default: move people as little as possible.
+const RB_RULE_BASE = { care: 2, alone: 2, home: 2, steady: 2, meet: 3, senior: 3, mgr: 3, nm: 1, preferNot: 1, wishes: 1, together: 1, desk: 1, fair: 1 };
+const RB_RULE_DEF = Object.assign({}, RB_RULE_BASE, { home: 3, steady: 3, nm: 2 });
 /** How much a rule counts now, against how it counts by default (1 = as always, 0 = off). */
-function rbW(R, id) { const L = R && R.levels && R.levels[id]; if (L == null || RB_RULE_DEF[id] == null || isNaN(+L)) return 1; return RB_LF[Math.max(0, Math.min(4, +L))] / RB_LF[RB_RULE_DEF[id]]; }
+function rbW(R, id) {
+  if (RB_RULE_BASE[id] == null) return 1;
+  let L = R && R.levels && R.levels[id]; if (L == null || isNaN(+L)) L = RB_RULE_DEF[id];
+  return RB_LF[Math.max(0, Math.min(4, +L))] / RB_LF[RB_RULE_BASE[id]];
+}
 /** Your own rules: "Sam and Lina never on the same shift", "Rita always with Lina", "Trainees never on nights".
  *  Returns what a week breaks: [{ r, keys, date }]. g: only the people of that hotel (each counted once). */
 function rbMineBroken(I, cells, dates, R, g) {
@@ -1430,7 +1437,7 @@ function rbSoftLanding(I, res) {
       const row = res.cells[p.key];
       if (!rbLanding(res.cells, p, dates).some(l => l.d === d)) return;   // fixed already by an earlier trade
       let e = d; while (e + 1 < 7 && rbParse(row[dates[e + 1]])) e++;
-      const land = c => I.people.filter(x => x.group === p.group).reduce((t, x) => t + rbLanding(c, x, dates).reduce((u, l) => u + l.w, 0), 0) * 120;
+      const land = c => I.people.filter(x => x.group === p.group).reduce((t, x) => t + rbLanding(c, x, dates).reduce((u, l) => u + l.w, 0), 0) * 120 * Math.max(1, rbW(R, 'steady'));   // never weaker than keeping the same hours
       const sc0 = rbScore(I, p.group, res.cells, dates, R) + land(res.cells);
       let best = null;
       I.people.forEach(q => {

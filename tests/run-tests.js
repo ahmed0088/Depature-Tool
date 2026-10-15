@@ -833,7 +833,8 @@ console.log('\nRoster scenarios');
       people: ['V', 'Y', 'Z'].map(k => ({ key: k, group: 'Adagio GD', title: '' })), pre: { V: { '2026-10-12': 'AL', '2026-10-13': 'AL', '2026-10-14': 'AL' } }, rules: {} };
     rbLikeBefore(Ilb);`);
   check('like before: cover on those days is what management ran (12–21 had 1, and 0 on the day it was off), the same people, the same days off', run(`[Ilb.groups['Adagio GD'].need['12:00 - 21:00'].join(''), Ilb.keep.Y['2026-10-12'], Ilb.keep.Y['2026-10-14'], !!Ilb.likeBefore].join('|')`), '1102222|12:00 - 21:00|OFF|true');
-  check('levels: as always by default, Off = 0, Must counts more', run(`[rbW({}, 'home'), rbW({ levels: { home: 0 } }, 'home'), rbW({ levels: { home: 4 } }, 'home') > 2].join()`), '1,0,true');
+  check('levels: as always by default, Off = 0, Must counts more', run(`[rbW({}, 'fair'), rbW({ levels: { fair: 0 } }, 'fair'), rbW({ levels: { fair: 4 } }, 'fair') > 2].join()`), '1,0,true');
+  check('levels: own hotel and same hours are Very important by default (move people as little as possible)', run(`[rbW({}, 'home'), rbW({}, 'steady'), rbW({ levels: { steady: 2 } }, 'steady')].join()`), '2.5,2.5,1');
   run(`
     var W = '2026-10-12', M = '07:00 - 15:00', E = '15:00 - 23:00', dates = [0,1,2,3,4,5,6].map(d => roAdd(W, d)), day = n => Array(7).fill(n);
     var P = (key, x) => Object.assign({ key, group: 'Ibis DD', offs: 1, fixed: '', usual: '', allowed: null, prefOff: [], lastShift: '', run: 0, lastOffs: [], phOwed: 0, title: '' }, x);
