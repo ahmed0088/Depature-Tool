@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 276, items: [
+    '📌 Fixed days off for the whole team in one place: Roster builder → Rules → 📌 Fixed days off. Everyone is listed by hotel with their title, managers too; tap Sat (or any day) to make it their day off every week, tap again to free it. The builder always gives them that day off, unless leave or a request is already on it. It is the same setting as on each person\'s card.',
+  ] },
   { v: 275, items: [
     '📅 Roster weeks show their days: "Mon, 5 Oct – Sun, 11 Oct 2026" on the Roster page, in the builder, in roster notifications, on the person card\'s history and on the "My week" picture.',
     '🕐 Roster times in 24-hour or 12-hour: tap 🕐 24h / 12h next to "This week" (or Settings → Clock and roster times). 12-hour shows the grid as 9a–6p, 12a–9a and other places as 9:00 AM – 6:00 PM. The roster itself is unchanged.',

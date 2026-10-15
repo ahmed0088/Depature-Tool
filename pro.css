@@ -2067,3 +2067,16 @@ html.ho-lang-ar body { font-family: var(--font), 'Segoe UI', 'Noto Sans Arabic',
 .lv-st .lv-body { width: 100%; display: flex; justify-content: center; }
 .lv-st .lv-body .av { width: 100%; max-width: 84px; height: auto; }
 .lv-st .lv-tag, .lv-st .lv-bub { max-width: 100%; }
+
+/* 📌 Fixed days off, the whole team on the Rules page */
+.rr-so > summary { cursor: pointer; list-style: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.rr-so > summary::-webkit-details-marker { display: none; }
+.rr-so > summary small { font-weight: 500; color: var(--text3); text-transform: none; letter-spacing: 0; }
+.rr-so-help { font-size: .76rem; color: var(--text3); margin: 2px 0 8px; }
+.rr-so-g { font: 700 11px var(--font); letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin: 10px 0 4px; }
+.rr-so-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 0; border-top: 1px solid var(--border); flex-wrap: wrap; }
+.rr-so-n { font-weight: 600; font-size: .84rem; min-width: 150px; }
+.rr-so-n small { display: block; font-weight: 500; font-size: .66rem; color: var(--text3); }
+.rr-so-d { display: flex; gap: 4px; flex-wrap: wrap; }
+.rr-so-d .rb-opt { min-width: 42px; padding: 4px 6px; }
+.rr-so-d .rb-opt.on { background: var(--accent); border-color: var(--accent); color: #141414; font-weight: 800; }

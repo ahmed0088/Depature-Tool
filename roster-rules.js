@@ -117,6 +117,7 @@ function rrHtml() {
   return `<div class="rr-box" id="rrBox">
     <div class="rr-intro">Tell the builder what matters. Every rule has an example from your team; tap how much it counts. <b>Must</b> comes first, <b>Off</b> is ignored.</div>
     ${rrSuggestHtml()}
+    ${rrStaticHtml()}
     ${rrCutHtml()}
     ${rrFreezeHtml()}
     ${groups.map(g => `<div class="rr-sec">${['⚪ Off', '🟢 Nice to have', '🟡 Important', '🟠 Very important', '🔴 Must'][g.L]}</div>
@@ -133,6 +134,33 @@ function rrHtml() {
 /** 🚫 Day-off freeze: from one date to another only the people picked may be off; everyone else works through
  *  and takes the day off after it. Managers keep their days off as usual. */
 function _rrFzPeople() { const seen = new Set(); return rbGroups().flatMap(g => rbMembers(g)).filter(k => !seen.has(k) && seen.add(k) && roStaff[k] && !rbIsManager(k)).sort((a, b) => String(roStaff[a].name).localeCompare(roStaff[b].name)); }
+/** 📌 Fixed days off for the whole team in one place: anyone (managers too), any weekday, one tap. */
+function rrStaticHtml() {
+  const groups = typeof roGroups === 'function' ? roGroups() : [...new Set(Object.values(roStaff).map(x => x.group || ''))];
+  const q = k => typeof _rtQ === 'function' ? _rtQ(k) : JSON.stringify(k).replace(/"/g, '&quot;');
+  const set = Object.keys(roStaff).filter(k => ((rbPeople[k] || {}).staticOff || []).length);
+  const rows = groups.map(g => {
+    const ks = rbMembers(g); if (!ks.length) return '';
+    return `<div class="rr-so-g">${escapeHtml(g || 'Team')}</div>` + ks.map(k => {
+      const so = (rbPeople[k] || {}).staticOff || [], t = (rbPeople[k] || {}).title || '';
+      return `<div class="rr-so-row"><span class="rr-so-n">${escapeHtml(roStaff[k].name)}${t ? `<small>${escapeHtml(t)}</small>` : ''}</span><span class="rr-so-d">${RB_DAYS.map((x, i) =>
+        `<button class="rb-opt${so.includes(i) ? ' on' : ''}" onclick="rrStaticSet(${q(k)},${i})" title="${so.includes(i) ? 'Tap to free ' + x + ' again' : 'Always off on ' + x}">${x}</button>`).join('')}</span></div>`;
+    }).join('');
+  }).join('');
+  return `<details class="rr-so"><summary class="rr-sec">📌 Fixed days off <small>${set.length ? `${set.length} ${set.length === 1 ? 'person has' : 'people have'} one: ${escapeHtml(set.slice(0, 4).map(k => String(roStaff[k].name).split(' ')[0] + ' ' + (rbPeople[k].staticOff || []).map(d => RB_DAYS[d]).join('+')).join(', '))}${set.length > 4 ? '…' : ''}` : 'tap a day to make it someone\'s day off every week'}</small></summary>
+    <div class="rr-so-help">Anyone, managers too: the builder always gives them that day off (leave or a request on that day comes first). Tap again to free it.</div>
+    ${rows}</details>`;
+}
+function rrStaticSet(k, d) {
+  const cur = ((rbPeople[k] || {}).staticOff || []).slice(), i = cur.indexOf(d);
+  if (i >= 0) cur.splice(i, 1); else cur.push(d);
+  if (cur.length > ((rbPeople[k] || {}).offs || 1) && i < 0 && !confirm(`${String(roStaff[k].name).split(' ')[0]} has ${(rbPeople[k] || {}).offs || 1} day${((rbPeople[k] || {}).offs || 1) > 1 ? 's' : ''} off a week. Give them ${cur.length} fixed days off anyway?`)) return;
+  rtSet(k, 'staticOff', cur.length ? cur.sort() : undefined);
+  const open = document.querySelector('.rr-so')?.open;
+  rrRefresh();
+  if (open) { const el = document.querySelector('.rr-so'); if (el) el.open = true; }
+  showToast(cur.length ? `📌 ${String(roStaff[k].name).split(' ')[0]}: always off on ${cur.map(x => RB_DAYS[x]).join(' and ')}` : `${String(roStaff[k].name).split(' ')[0]}: no fixed day off`, 'ok');
+}
 function rrFreezeHtml() {
   const F = rbFreezes(rbRules()), nm = k => roStaff[k] ? String(roStaff[k].name).split(' ')[0] : k, today = roToday();
   const list = F.map((f, i) => `<div class="rr-fz${f.to < today ? ' past' : ''}"><div><b>🚫 ${escapeHtml(roDayLbl(f.from))} → ${escapeHtml(roDayLbl(f.to))}</b><small>${f.allow && f.allow.length ? `<b>${escapeHtml(f.allow.map(nm).join(', '))}</b> must take their day off inside these dates.` : 'Nobody is off.'} Everyone else works through and gets their day off after; managers as usual.${f.to < today ? ' (over)' : ''}</small></div><button class="btn sm ghost" onclick="rrFreezeDel(${i})" title="Remove">🗑</button></div>`).join('');
