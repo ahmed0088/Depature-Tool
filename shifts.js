@@ -100,13 +100,14 @@ function _renderShiftContent(key) {
       ${total ? active.map(t => stItemHTML(key, t, stIsDone(key, t), shift.tasks.indexOf(t), shift.tasks.length)).join('')
               : '<div class="st-empty">No tasks on this shift yet — add one below.</div>'}
     </div>
-    ${soon.length ? `<div class="st-soon"><div class="st-soon-hd">📅 Coming up <span>${soon.length}</span></div>${soon.map(t => `<div class="st-soon-row"><b>${escapeHtml(_stDateLbl(stOn(t, day, key)))}</b>${t.rep ? `<span class="st-rep" title="${escapeHtml(_stRepLbl(t))}">🔁</span>` : ''}${t.at ? `<span class="st-at">⏰ ${escapeHtml(t.at)}</span>` : ''}<span class="st-soon-n">${escapeHtml(t.name)}</span><button class="cl-step-btn edit-btn" onclick="openEditTask('${key}','${t.id}')" title="Edit">✏️</button><button class="cl-step-btn del" onclick="stDelete('${key}','${t.id}')" title="Delete">✕</button></div>`).join('')}</div>` : ''}
+    ${soon.length ? `<div class="st-soon"><div class="st-soon-hd">📅 Coming up <span>${soon.length}</span></div>${soon.map(t => `<div class="st-soon-row"><b>${escapeHtml(_stDateLbl(stOn(t, day, key)))}</b>${t.rep ? `<span class="st-rep" title="${escapeHtml(_stRepLbl(t))}">🔁</span>` : ''}${t.at ? `<span class="st-at">⏰ ${escapeHtml(t.at)}</span>` : ''}<span class="st-soon-n">${t.imp ? '<span class="st-imp sm"><i>!</i></span>' : ''}${escapeHtml(t.name)}</span><button class="cl-step-btn edit-btn" onclick="openEditTask('${key}','${t.id}')" title="Edit">✏️</button><button class="cl-step-btn del" onclick="stDelete('${key}','${t.id}')" title="Delete">✕</button></div>`).join('')}</div>` : ''}
     <div class="st-add-wrap">
       <input class="st-add-in"   id="stIn-${key}"   placeholder="Add new task…" onkeydown="if(event.key==='Enter')stAddTask('${key}')"/>
       <input class="st-add-hint" id="stHint-${key}" placeholder="Hint (optional)" onkeydown="if(event.key==='Enter')stAddTask('${key}')"/>
       <input class="st-add-at" id="stAt-${key}" type="time" title="Time (optional): I remind you then, on this shift" aria-label="Time"/>
       <input class="st-add-at" id="stOn-${key}" type="date" title="Date (optional): a one-off task for that day, or the first day of a repeating one. It waits in Coming up and reminds you on the day" aria-label="Date"/>
       <select class="st-add-at st-add-rep" id="stRep-${key}" title="Repeat (optional): every week or every month, e.g. a monthly report. It comes back on the same day each time and reminds you" aria-label="Repeat"><option value="">Once</option><option value="week">🔁 Every week</option><option value="month">🔁 Every month</option></select>
+      <button type="button" class="st-add-imp" id="stImp-${key}" aria-pressed="false" onclick="this.classList.toggle('on');this.setAttribute('aria-pressed',this.classList.contains('on'))" title="Important: shows with a red tag and its reminder rings">❗ Important</button>
       <button class="btn gold sm" onclick="stAddTask('${key}')">+ Add</button>
     </div>
     ${shift.resetAt ? `<div style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);margin-top:6px;">Last reset: ${shift.resetAt}</div>` : ''}
@@ -130,11 +131,11 @@ function _renderShiftContent(key) {
 function stItemHTML(key, t, isDone, index, total) {
   const isFirst = index === 0;
   const isLast  = index === total - 1;
-  return `<div class="st-item${isDone ? ' done' : ''}" draggable="true" data-id="${t.id}" data-key="${key}">
+  return `<div class="st-item${isDone ? ' done' : ''}${t.imp ? ' imp' : ''}" draggable="true" data-id="${t.id}" data-key="${key}">
     <div class="st-drag-handle" title="Drag to reorder">⠿</div>
     <div class="st-check" onclick="stToggle('${key}','${t.id}')"></div>
     <div class="st-text">
-      <div class="st-name">${t.on ? _stOnChip(key, t, isDone) : ''}${t.at ? `<span class="st-at${!isDone && stIsLate(key, t) ? ' late' : ''}" title="${stIsLate(key, t) && !isDone ? 'Time passed, not done yet' : 'Reminder at this time'}">⏰ ${escapeHtml(t.at)}</span>` : ''}${escapeHtml(t.name)}</div>
+      <div class="st-name">${t.imp ? '<span class="st-imp" title="Important"><i>!</i>Important</span>' : ''}${t.on ? _stOnChip(key, t, isDone) : ''}${t.at ? `<span class="st-at${!isDone && stIsLate(key, t) ? ' late' : ''}" title="${stIsLate(key, t) && !isDone ? 'Time passed, not done yet' : 'Reminder at this time'}">⏰ ${escapeHtml(t.at)}</span>` : ''}${escapeHtml(t.name)}</div>
       ${t.hint ? `<div class="st-hint">${escapeHtml(t.hint)}</div>` : ''}
     </div>
     <div class="st-actions">
@@ -142,6 +143,7 @@ function stItemHTML(key, t, isDone, index, total) {
         <button class="cl-step-btn move-btn" onclick="stMove('${key}','${t.id}',-1)" ${isFirst ? 'disabled' : ''} title="Move up">↑</button>
         <button class="cl-step-btn move-btn" onclick="stMove('${key}','${t.id}', 1)" ${isLast  ? 'disabled' : ''} title="Move down">↓</button>
       </div>
+      <button class="cl-step-btn st-imp-btn${t.imp ? ' on' : ''}" onclick="stToggleImp('${key}','${t.id}')" title="${t.imp ? 'Important: tap to unmark' : 'Mark as important'}" aria-pressed="${t.imp ? 'true' : 'false'}">❗</button>
       <button class="cl-step-btn edit-btn" onclick="openEditTask('${key}','${t.id}')">✏️</button>
       <button class="cl-step-btn del"      onclick="stDelete('${key}','${t.id}')">✕</button>
     </div>
@@ -249,6 +251,8 @@ function stAddTask(key) {
   if (hEl) hEl.value = '';
   if (aEl) aEl.value = '';
   if (oEl) oEl.value = '';
+  const iEl = document.getElementById('stImp-' + key);
+  if (iEl && iEl.classList.contains('on')) task.imp = true;
   const rEl = document.getElementById('stRep-' + key);
   if (rEl?.value) { task.rep = rEl.value; if (!task.on) task.on = stDayOf(key); }
   if (rEl) rEl.value = '';
@@ -298,6 +302,7 @@ function openEditTask(key, id) {
   const at = document.getElementById('et-at'); if (at) at.value = task.at || '';
   const on = document.getElementById('et-on'); if (on) on.value = task.on || '';
   const rp = document.getElementById('et-rep'); if (rp) rp.value = task.rep || '';
+  const im = _stImpField(); if (im) im.checked = !!task.imp;
   document.getElementById('editTaskModal').classList.add('open');
 }
 
@@ -314,6 +319,7 @@ function saveEditTask() {
   if (on) task.on = on; else delete task.on;
   const rp = document.getElementById('et-rep')?.value || '';
   if (rp) { task.rep = rp; if (!task.on) task.on = stDayOf(key); } else delete task.rep;
+  if (document.getElementById('et-imp')?.checked) task.imp = true; else delete task.imp;
   document.getElementById('editTaskModal').classList.remove('open');
   _renderShiftContent(key);
   persistShifts(key);
@@ -558,9 +564,9 @@ function _stLater(id, min) {
   try { localStorage.setItem(ST_REM_KEY, JSON.stringify(seen)); } catch (_) {}
 }
 function _stRing(key, t, id) {
-  const text = `${t.at ? '⏰ ' + t.at : '📅 Today'} · ${t.name}`, why = `${SHIFTS[key].label}${t.hint ? ' · ' + t.hint : ''}`;
+  const text = `${t.imp ? '❗ ' : ''}${t.at ? '⏰ ' + t.at : '📅 Today'} · ${t.name}`, why = `${SHIFTS[key].label}${t.hint ? ' · ' + t.hint : ''}`;
   if (typeof hoAlert === 'function') hoAlert(text, true);
-  if (typeof blSay === 'function') blSay({ id: 'st:' + id, type: 'heal', tone: 'warn', icon: '⏰', text: `${t.at || '📅 Today'} · ${t.name}`, why,
+  if (typeof blSay === 'function') blSay({ id: 'st:' + id, type: 'heal', tone: 'warn', icon: t.imp ? '❗' : '⏰', text: `${t.at || '📅 Today'} · ${t.name}`, why,
     acts: [['✓ Done', () => { if (!stIsDone(key, t)) stToggle(key, t.id); }], ['In 10 min', () => _stLater(id, 10)]] }, true);
   else if (typeof showToast === 'function') showToast(text, 'warn');
   if (typeof activeShift !== 'undefined' && activeShift === key && document.getElementById('panel-shifts')?.classList.contains('active')) _renderShiftContent(key);
@@ -776,3 +782,26 @@ function _stAutoRefused(key, id) {
 }
 setInterval(stAutoTick, 30000);
 document.addEventListener('DOMContentLoaded', () => setTimeout(stAutoTick, 9000));
+
+// ── Important tasks ───────────────────────────────────────
+// A task can be marked ❗ Important: a red tag and accent on the list, first in the handover,
+// and its reminder rings even when other reminders would wait.
+function stToggleImp(key, id) {
+  const t = (SHIFTS[key]?.tasks || []).find(x => x.id === id); if (!t) return;
+  if (t.imp) delete t.imp; else t.imp = true;
+  stLog(key, t.imp ? 'marked important' : 'unmarked important', t.name);
+  _renderShiftContent(key);
+  persistShifts(key);
+}
+/** the "Important" box in the edit-task window (added once, after the Repeat field) */
+function _stImpField() {
+  let cb = document.getElementById('et-imp');
+  if (cb) return cb;
+  const after = document.getElementById('et-rep')?.closest('.mf') || document.getElementById('et-on')?.closest('.mf');
+  if (!after) return null;
+  const box = document.createElement('div');
+  box.className = 'mf mf-task';
+  box.innerHTML = '<label class="st-imp-field"><input type="checkbox" id="et-imp"/> <span class="st-imp"><i>!</i>Important</span> <span style="opacity:.6;font-weight:400;font-size:.78rem;">red tag on the list, first in the handover</span></label>';
+  after.after(box);
+  return document.getElementById('et-imp');
+}

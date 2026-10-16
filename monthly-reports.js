@@ -138,7 +138,7 @@ function mrHtml() {
   const sugg = MR_SUGGEST.filter(n => !items.some(r => r.name.toLowerCase() === n.toLowerCase()));
   return `<div class="mr-card ${st.cls}" id="mrCard">
     <div class="mr-hd" onclick="mrToggleOpen()" role="button" tabindex="0" onkeydown="if(event.key==='Enter')mrToggleOpen()">
-      <div class="mr-ttl">📆 Monthly reports <span class="mr-for">${esc(mName(cnt.length || !items.length ? p.key : p.month))}</span></div>
+      <div class="mr-ttl">📆 Monthly reports ${items.length ? `<span class="mr-for">${esc(mName(cnt.length ? p.key : p.month))}</span>` : ''}</div>
       ${cnt.length ? `<div class="mr-prog"><div class="mr-bar"><i style="width:${pct}%"></i></div><b>${doneN}/${cnt.length}</b></div>` : ''}
       <span class="mr-chev">${open ? '▾' : '▸'}</span>
       <div class="mr-st">${esc(st.text)}</div>

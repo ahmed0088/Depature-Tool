@@ -96,7 +96,7 @@ function _hoTodo() {
     if (typeof SHIFTS !== 'undefined' && typeof hoShiftNow === 'function') {
       const k = hoShiftNow().key, sh = SHIFTS[k], day = typeof stDayOf === 'function' ? stDayOf(k) : '';
       const open = (sh.tasks || []).filter(t => (typeof stTaskState !== 'function' || stTaskState(t, day, k) === 'on') && !(typeof stIsDone === 'function' ? stIsDone(k, t) : sh.done.includes(t.id)));
-      add('✅', `${sh.label}: tasks not done`, open.map(t => (t.at ? t.at + ' · ' : '') + t.name));
+      add('✅', `${sh.label}: tasks not done`, open.slice().sort((a, b) => (b.imp ? 1 : 0) - (a.imp ? 1 : 0)).map(t => (t.imp ? '❗ IMPORTANT: ' : '') + (t.at ? t.at + ' · ' : '') + t.name));
     }
   } catch (_) {}
   try {

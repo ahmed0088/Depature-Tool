@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 288, items: [
+    '❗ Important shift tasks: tap ❗ next to a task (or "❗ Important" when adding one, or in Edit) and it gets a red IMPORTANT tag and a red edge on the list. Its reminder shows ❗ too, and the handover lists important tasks first.',
+  ] },
   { v: 287, items: [
     '📦 Package Audit follows one simple rule: the package belongs to the first one who put it on the guest\'s stay. A guest staying on with new confirmations (same guest, back to back) keeps that first seller for the same package, even if someone re-adds it on a later booking, and even when the stay\'s very first booking had no package at all. A different package (breakfast vs a room upgrade) belongs to whoever first put that one.',
   ] },
