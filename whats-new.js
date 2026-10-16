@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 287, items: [
+    '📦 Package Audit follows one simple rule: the package belongs to the first one who put it on the guest\'s stay. A guest staying on with new confirmations (same guest, back to back) keeps that first seller for the same package, even if someone re-adds it on a later booking, and even when the stay\'s very first booking had no package at all. A different package (breakfast vs a room upgrade) belongs to whoever first put that one.',
+  ] },
   { v: 286, items: [
     '📦 Package Audit: a guest who stays on with a new confirmation (an extension) only keeps the first seller for the SAME kind of package. If the first booking had breakfast and someone sells a room upgrade on the new booking, that upgrade is their sale, not the first seller\'s (and the other way round). Before, every package on the extension went to whoever sold the first booking.',
   ] },

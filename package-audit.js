@@ -957,12 +957,18 @@ function _pkgApplyExtensionCredit(results) {
   if (!Object.keys(pkgGuests).length) return;   // no guest list loaded: rule is inactive
   const head = _pkgBuildChains();
   const arrOf = c => _pkgDayNum((pkgGuests[c] || {}).arr) || 0;
-  // The kinds of package the bookings of a stay before this one carried (from Opera's log, or their own rows).
+  // The kinds of package the bookings of a stay before this one carried, each with the first
+  // Opera entry that put it there (who and when). Rows of those bookings count too, when Opera's
+  // log doesn't reach back that far.
   function earlierKinds(h, conf) {
-    const kinds = new Set();
+    const kinds = new Map();   // kind -> { user, ts } of the first entry, or null when only a row shows it
     Object.keys(head).filter(c => head[c] === h && c !== conf && arrOf(c) < arrOf(conf)).forEach(c => {
-      (pkgEvents[c] || []).forEach(e => { const k = _pkgKindOfCode(e.code); if (k) kinds.add(k); });
-      results.forEach(x => { if (x.conf === c) { const k = _pkgKindOfRow(x); if (k) kinds.add(k); } });
+      (pkgEvents[c] || []).forEach(e => {
+        const k = _pkgKindOfCode(e.code); if (!k) return;
+        const cur = kinds.get(k);
+        if (!cur || e.ts < cur.ts) kinds.set(k, { user: e.user, ts: e.ts });
+      });
+      results.forEach(x => { if (x.conf === c) { const k = _pkgKindOfRow(x); if (k && !kinds.has(k)) kinds.set(k, null); } });
     });
     return kinds;
   }
@@ -992,9 +998,19 @@ function _pkgApplyExtensionCredit(results) {
     // Only the same kind of package continues the stay's sale. A kind the earlier bookings never
     // had (a room upgrade sold on the extension of a breakfast stay) is a new sale on this booking,
     // and stays with whoever sold it.
+    // The sale belongs to the first one who put THIS package on the stay: the stay's seller when that
+    // is who added it, otherwise whoever's entry for it comes first.
     const kind = _pkgKindOfRow(r);
-    if (kind) { const before = earlierKinds(h, r.conf); if (before.size && !before.has(kind)) return; }
-    const own = owner[h] || _pkgOwnerFromOpera(h);
+    let own = owner[h] || _pkgOwnerFromOpera(h);
+    if (kind) {
+      const before = earlierKinds(h, r.conf);
+      if (before.size && !before.has(kind)) return;
+      const first = before.get(kind);
+      if (first && first.user) {
+        if (_pkgIsSystemUser(first.user)) return;   // it came with an online booking: nobody at the desk sold it
+        if (!own || !_pkgSameUser(own.user, first.user)) own = { user: first.user, confirmed: true, viaOpera: true };
+      }
+    }
     if (!own || !own.user) return;
     // A stay that started on a TARS or interface booking has no seller to
     // hand the credit to, and moving a real person's sale onto a system

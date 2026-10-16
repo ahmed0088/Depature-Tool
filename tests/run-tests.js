@@ -1186,6 +1186,19 @@ console.log('\nQuiet when off · shift task times');
   })()`, sb);
   check('package extension: a room upgrade sold on the extension of a breakfast stay stays with its seller', run('USS50'), 'ACCOREN-SSELLER@ACCOREN|');
   check('package extension: breakfast continuing on the extension still goes to the first seller', run('UPS30BB'), 'ACCOREN-LSTAFF@ACCOREN|A1');
+  // A stay whose first booking had no package: the first one who put breakfast on a LATER booking owns it.
+  const run3 = () => vm.runInContext(`(() => {
+    pkgGuests = { H0: { name: 'TEST,TWO', norm: 'test two', room: '413', arr: '16-SEP-26', dep: '02-OCT-26' },
+                  M1: { name: 'TEST,TWO', norm: 'test two', room: '413', arr: '02-OCT-26', dep: '08-OCT-26' },
+                  E2: { name: 'TEST,TWO', norm: 'test two', room: '413', arr: '08-OCT-26', dep: '09-OCT-26' } };
+    pkgEvents = { M1: [{ action: 'ADDED', code: 'UPS30BB', ts: 202610021007, user: 'ACCOREN-MFIRST@ACCOREN' }],
+                  E2: [{ action: 'ADDED', code: 'UPS30BB', ts: 202610090013, user: 'ACCOREN-SLATER@ACCOREN' }] };
+    const ev = pkgEvents.E2[0];
+    const rows = [{ conf: 'E2', verdict: 'credit', user: 'ACCOREN-SLATER@ACCOREN', employee: 'ACCOREN-SLATER@ACCOREN', matchedEvent: ev, originEvent: ev, product: 'Breakfast' }];
+    _pkgApplyExtensionCredit(rows);
+    return rows[0].user;
+  })()`, sb);
+  check('package extension: the first one who put the package on the stay keeps it, even after a no-package first booking', run3(), 'ACCOREN-MFIRST@ACCOREN');
 }
 
 console.log(`\n${pass} passed · ${fail} failed`);
