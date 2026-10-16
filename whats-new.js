@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 289, items: [
+    '🧹 Skip The Clean: a guest who stays on with a new confirmation number now shows as ONE line, with the points added up (e.g. 2 skipped days = 200 points), so you enter the points once per member. Both confirmation numbers are shown; tap "2 stays merged" to see each stay. Ticking Done marks every stay on the line as credited.',
+  ] },
   { v: 288, items: [
     '❗ Important shift tasks: tap ❗ next to a task (or "❗ Important" when adding one, or in Edit) and it gets a red IMPORTANT tag and a red edge on the list. Its reminder shows ❗ too, and the handover lists important tasks first.',
   ] },
