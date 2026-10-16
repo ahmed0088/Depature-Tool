@@ -1947,43 +1947,58 @@ function pkgClear() {
 //  Staff: packageAudit/staff/<id> = { name, logins: [] }.
 //  Owner, manager and supervisor may change them; everyone can read them.
 // ═══════════════════════════════════════════════════════════
+// Each rule is one yes/no question. "Yes" = the rule is on (for chainGap: 1 day).
+// ex: a tiny example of what "Yes" does, as chips: '→' and '+' join, '⇒' leads to the result.
+// more: shown under "More options". parent: only works when that rule is on.
 const PKG_RULE_INFO = [
   { k: 'firstPerson', ico: '🥇', short: 'first person', t: 'The first person who put the package on gets it',
-    d: 'Opera can show several people touching one package: who added it, who changed its dates or its price. The sale goes to the earliest real person.',
-    ex: 'Sam adds breakfast on 3 Oct at 10:05. Lina changes its dates on 5 Oct. → Sam gets it.',
-    off: 'Off: whoever\'s Opera entry matches the price charged gets it.',
-    subs: [{ k: 'familyMatch', t: 'The same kind at another price is the same package', d: 'Breakfast (…BB, BBSUM, BBWIN, MBREAK), dinner (…DIN), early check-in (…EC), late check-out (…LC), room upgrade (USS + number): when it changes price or season, it stays with whoever started it.' }] },
+    q: 'Many people touched the package in Opera. Give it to the first person?',
+    ex: ['Sam adds 🥐 · 3 Oct', '→', 'Lina changes dates · 5 Oct', '⇒', '🏆 Sam'],
+    off: 'Now: whoever\'s Opera entry matches the price gets it.' },
+  { k: 'familyMatch', ico: '🥐', short: 'same kind, new price', t: 'The same kind at another price is the same package', parent: 'firstPerson',
+    q: 'Breakfast changes 30BB → 60BB. Still the same package?',
+    ex: ['Sam · 🥐 30BB', '→', 'Lina · 🥐 60BB', '⇒', '🏆 Sam'],
+    off: 'Now: a new price or season counts as a new package.' },
   { k: 'chain', ico: '🔗', short: 'extension (same stay)', t: 'Back-to-back bookings are one stay', needs: 'guests',
-    d: 'A guest who extends gets a new confirmation number. When the new booking starts the day the last one ends, it is the same stay, so the package stays with the first seller.',
-    ex: 'Booking A 5–13 Oct, Sam sold breakfast. Booking B 13–17 Oct, same guest; Lina adds breakfast again on B. → Still Sam\'s.',
-    off: 'Off: every confirmation number is its own sale.',
-    subs: [{ k: 'chainSameRoom', t: 'Only when it is the same room', d: 'A guest who moves to another room starts a new stay.' },
-           { k: 'chainGap', type: 'seg', opts: [[0, 'Same day'], [1, '1 day gap']], t: 'Gap allowed between the bookings', d: 'Same day: B must start the day A ends. 1 day gap: a one-night break still counts as one stay.' }] },
+    q: 'Guest extends with a new confirmation number. Keep the first seller?',
+    ex: ['Booking A · Sam · 🥐', '→', 'Booking B · Lina · 🥐', '⇒', '🏆 Sam'],
+    off: 'Now: every confirmation number is its own sale.' },
   { k: 'sameKind', ico: '🧩', short: 'same kind only', t: 'Only the same kind of package carries over', parent: 'chain',
-    d: 'On an extension only the same kind (breakfast, early check-in, late check-out, room upgrade…) stays with the first seller. A different kind is a new sale.',
-    ex: 'Sam sold breakfast on booking A. On the extension B, Lina sells a room upgrade (USS…). → The upgrade is Lina\'s.',
-    off: 'Off: every package on the extension goes to the stay\'s first seller.',
-    subs: [{ k: 'exactCode', t: 'Each package code is its own package', d: 'Off (normal): every …BB is breakfast, so whoever started the breakfast keeps it even when it changes to 60BB or 80BB, also after an extension. On: UPS30BB and UPS60BB count as two different packages.' }] },
+    q: 'On the extension, a different kind of package is sold. Is it a new sale?',
+    ex: ['Booking A · Sam · 🥐', '→', 'Booking B · Lina · ⬆️ Upgrade', '⇒', '🏆 Lina'],
+    off: 'Now: every package on the extension goes to the first seller of the stay.' },
   { k: 'systemNoSeller', ico: '🌐', short: 'online / TARS = no seller', t: 'Online / TARS / system bookings have no desk seller',
-    d: 'A package that came with a booking made online, through TARS or another interface was not sold at the desk: nobody gets it.',
-    ex: 'Breakfast added by *TARS* with the booking → no seller. If Sam adds late check-out later, that one is Sam\'s.',
-    off: 'Off: the system account is credited like a person.' },
+    q: 'Booking came online (TARS). Give it to nobody?',
+    ex: ['🌐 TARS · 🥐 with the booking', '⇒', '🚫 Nobody'],
+    off: 'Now: the system account gets it like a person.' },
   { k: 'oneTime', ico: '⏰', short: 'once per stay', t: 'Early check-in and late check-out count once per stay',
-    d: 'IN-Gauge sometimes repeats them on every night. Only one night counts; the others are marked Remove.',
-    ex: 'Early check-in charged on 12, 13 and 14 Oct → keep 12 Oct, remove 13 and 14.',
-    off: 'Off: every night is kept.' },
+    q: 'Early check-in charged on many nights. Count it once?',
+    ex: ['⏰ Early check-in · 12, 13, 14 Oct', '⇒', '✓ 12 Oct · ⛔ 13, 14'],
+    off: 'Now: every night is kept.' },
   { k: 'denyNoOpera', ico: '⛔', short: 'no such package in Opera', t: 'Remove a charge Opera does not show',
-    d: 'Opera logged packages for this booking, but none of this kind. The charge has nothing behind it.',
-    ex: 'IN-Gauge charges Late Check Out; Opera shows only breakfast (UPS30BB) → Remove.',
-    off: 'Off: these go to Check by hand instead.' },
-  { k: 'splitFlag', ico: '✂️', short: 'split sellers', t: 'One package with two sellers is flagged',
-    d: 'IN-Gauge bills night by night, and each night can carry a different seller. One package, one stay should have one seller.',
-    ex: 'Breakfast 12–14 Oct: 12 under Sam, 13 and 14 under Lina → Check by hand.',
-    off: 'Off: not flagged.' },
-  { k: 'reviewedStops', ico: '✅', short: 'REVIEWED stops it', t: 'REVIEWED in IN-Gauge stops it being work',
-    d: 'Someone marked the row REVIEWED, so the seller they chose stands. A blank, a duplicate or a missing Opera record still shows.',
-    ex: 'Lina reviewed booking 123 and left the seller as it is → it does not come back.',
-    off: 'Off: reviewed rows are checked like any other.' },
+    q: 'Opera has no such package. Remove the charge?',
+    ex: ['IN-Gauge · 🌙 Late check-out', '+', 'Opera · 🥐 only', '⇒', '⛔ Remove'],
+    off: 'Now: these go to Check by hand.' },
+  { k: 'chainSameRoom', ico: '🚪', short: 'same room only', t: 'Only when it is the same room', parent: 'chain', more: true,
+    q: 'Guest moves to another room. Is it a new stay?',
+    ex: ['Room 101 · Booking A', '→', 'Room 205 · Booking B', '⇒', '🆕 New stay'],
+    off: 'Now: a room move is still the same stay.' },
+  { k: 'chainGap', ico: '📅', short: 'one-night gap', t: 'Gap allowed between the bookings', parent: 'chain', more: true, opts: [[0, 'Same day'], [1, '1 day gap']],
+    q: 'One night between the two bookings. Still the same stay?',
+    ex: ['A ends 13 Oct', '→', '1 night away', '→', 'B starts 14 Oct', '⇒', '🔗 Same stay'],
+    off: 'Now: booking B must start the day booking A ends.' },
+  { k: 'exactCode', ico: '🏷️', short: 'exact code', t: 'Each package code is its own package', parent: 'sameKind', more: true,
+    q: 'On an extension, are 30BB and 60BB two different packages?',
+    ex: ['Booking A · Sam · 🥐 30BB', '→', 'Booking B · Lina · 🥐 60BB', '⇒', '🏆 Lina'],
+    off: 'Now: every …BB is breakfast, so the first seller keeps it.' },
+  { k: 'splitFlag', ico: '✂️', short: 'split sellers', t: 'One package with two sellers is flagged', more: true,
+    q: 'One package has two sellers on different nights. Flag it?',
+    ex: ['🥐 12 Oct · Sam', '+', '🥐 13–14 Oct · Lina', '⇒', '🔎 Check by hand'],
+    off: 'Now: not flagged.' },
+  { k: 'reviewedStops', ico: '✅', short: 'REVIEWED stops it', t: 'REVIEWED in IN-Gauge stops it being work', more: true,
+    q: 'Row marked REVIEWED in IN-Gauge. Leave it alone?',
+    ex: ['✅ REVIEWED by Lina', '⇒', '🙈 Not on the list again'],
+    off: 'Now: reviewed rows are checked like any other.' },
 ];
 let _pkgView = 'audit';
 let pkgLastDiff = null;    // { label, list: [{key, conf, room, fam, nights, before, after}], at }
@@ -2041,9 +2056,9 @@ function pkgSetRule(k, v) {
   if (!_pkgCanEdit()) { showToast('Only a manager, supervisor or owner can change the rules', 'warn'); pkgRulesRender(); return; }
   if (!(k in PKG_RULE_DEFAULTS)) return;
   if (typeof PKG_RULE_DEFAULTS[k] === 'boolean') v = !!v; else v = +v || 0;
-  const info = PKG_RULE_INFO.find(x => x.k === k) || PKG_RULE_INFO.find(x => (x.subs || []).some(s => s.k === k));
-  const sub = info && (info.subs || []).find(s => s.k === k);
-  const name = sub ? sub.t : info ? info.t : k;
+  const info = PKG_RULE_INFO.find(x => x.k === k);
+  const sub = info && info.opts ? info : null;
+  const name = info ? info.t : k;
   pkgRules[k] = v;
   try { localStorage.setItem('pkg_rules_v1', JSON.stringify(_pkgRulesStored())); } catch (_) {}
   if (typeof fbSet === 'function') fbSet('packageAudit/rules/' + k, v === PKG_RULE_DEFAULTS[k] ? null : v);
@@ -2188,8 +2203,8 @@ function _pkgSuggestions() {
   if (ch) S.push({ tone: 'warn', text: `${ch} package${ch > 1 ? 's were' : ' was'} decided by the extension rule: the seller moved to whoever started the stay. Check ${ch > 1 ? 'them' : 'it'} once.`, act: ['Show them', "pkgShowView('audit');pkgSetFilter('rule:chain')"] });
   if (loaded) {
     const unk = _pkgUnknownLogins();
-    if (!PKG_STAFF.length && !_pkgReportNames().length) S.push({ tone: 'warn', text: `Your team list is empty, so Opera logins show as they are (like ACCOREN-SALVAREZ). Add your team in Staff names below.`, act: ['Add names', "document.getElementById('pkgStaffCard')?.scrollIntoView({behavior:'smooth'})"] });
-    else if (unk.length) S.push({ tone: 'warn', text: `${unk.length} Opera login${unk.length > 1 ? 's don\'t' : ' doesn\'t'} match any staff name: ${unk.slice(0, 3).map(x => x.login).join(', ')}${unk.length > 3 ? '…' : ''}. Add ${unk.length > 1 ? 'them' : 'it'}.`, act: ['Add', "document.getElementById('pkgStaffCard')?.scrollIntoView({behavior:'smooth'})"] });
+    if (!PKG_STAFF.length && !_pkgReportNames().length) S.push({ tone: 'warn', text: `Your team list is empty, so Opera logins show as they are (like ACCOREN-SALVAREZ). Add your team in Team names below.`, act: ['Add names', "pkgOpenStaff()"] });
+    else if (unk.length) S.push({ tone: 'warn', text: `${unk.length} Opera login${unk.length > 1 ? 's don\'t' : ' doesn\'t'} match any staff name: ${unk.slice(0, 3).map(x => x.login).join(', ')}${unk.length > 3 ? '…' : ''}. Add ${unk.length > 1 ? 'them' : 'it'}.`, act: ['Add', "pkgOpenStaff()"] });
   }
   if (loaded && pkgLogRange.max) {
     const days = pkgUnknowns.map(u => _pkgDayNum(u.daily)).filter(Boolean);
@@ -2218,10 +2233,107 @@ function pkgUnfreezeMany(keys) {
   showToast(`${(keys || []).length} unfrozen`, 'ok');
 }
 
-function _pkgRuleCtl(k, can, dis) {
-  const v = _pkgRule(k);
-  return `<label class="pa-sw${can && !dis ? '' : ' ro'}" title="${can ? '' : 'Only a manager, supervisor or owner can change this'}"><input type="checkbox" ${v ? 'checked' : ''} ${can && !dis ? '' : 'disabled'} onchange="pkgSetRule('${k}',this.checked)" aria-label="On or off"><i></i></label>`;
+// ── Rules view: questions, examples, try-a-confirmation ──────
+const _pkgRulesOpen = new Set();   // which collapsible sections are open (kept across re-renders)
+let _pkgSugAll = false;
+let _pkgTryQ = '';
+function _pkgSecToggle(id, open) { if (open) _pkgRulesOpen.add(id); else _pkgRulesOpen.delete(id); }
+function _pkgRuleOn(k) { return k === 'chainGap' ? +_pkgRule(k) === 1 : !!_pkgRule(k); }
+function _pkgRuleDefOn(k) { return k === 'chainGap' ? +PKG_RULE_DEFAULTS[k] === 1 : !!PKG_RULE_DEFAULTS[k]; }
+/** Answer a question: Yes / No. Saves through pkgSetRule (same save + instant re-run), then offers Undo. */
+function pkgRuleAnswer(k, yes) {
+  if (!_pkgCanEdit()) { showToast('Only managers can change rules', 'warn'); pkgRulesRender(); return; }
+  if (_pkgRuleOn(k) === !!yes) return;
+  const prev = _pkgRule(k);
+  pkgSetRule(k, k === 'chainGap' ? (yes ? 1 : 0) : !!yes);
+  const R = PKG_RULE_INFO.find(x => x.k === k);
+  const label = `${R ? R.q : k} → ${yes ? 'Yes' : 'No'}`;
+  pkgLastDiff = pkgLastDiff ? Object.assign(pkgLastDiff, { label }) : { label, list: null, at: Date.now() };
+  pkgLastDiff.undo = { k, prev };
+  pkgRulesRender();
 }
+function pkgRuleUndo() {
+  const u = pkgLastDiff && pkgLastDiff.undo;
+  if (!u || !_pkgCanEdit()) return;
+  pkgSetRule(u.k, u.prev);
+  if (pkgLastDiff) { pkgLastDiff.label = 'Undone: back to how it was'; delete pkgLastDiff.undo; }
+  else pkgLastDiff = { label: 'Undone: back to how it was', list: null, at: Date.now() };
+  pkgRulesRender();
+}
+function pkgOpenStaff() {
+  _pkgRulesOpen.add('staff');
+  const d = document.getElementById('pkgStaffCard');
+  if (d) { d.open = true; if (d.scrollIntoView) d.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+}
+function pkgSugMore() { _pkgSugAll = !_pkgSugAll; pkgRulesRender(); }
+
+/** The tiny example: chips joined by arrows, ending in the result. */
+function _pkgExHtml(ex) {
+  let res = false;
+  return (ex || []).map(t => {
+    if (t === '→' || t === '+') return `<span class="pr-arw" aria-hidden="true">${t}</span>`;
+    if (t === '⇒') { res = true; return '<span class="pr-arw res" aria-hidden="true">⇒</span>'; }
+    return `<span class="pr-tok${res ? ' win' : ''}">${escapeHtml(t)}</span>`;
+  }).join('');
+}
+
+function _pkgQHtml(R, can, groups) {
+  const on = _pkgRuleOn(R.k), def = _pkgRuleDefOn(R.k);
+  const parentOff = R.parent && !_pkgRuleOn(R.parent);
+  const pr = parentOff && PKG_RULE_INFO.find(x => x.k === R.parent);
+  const dis = !can || parentOff;
+  const n = groups.length ? groups.filter(g => g.rows.some(r => (r.ruleHits || []).includes(R.k))).length : 0;
+  const needsGuests = R.needs === 'guests' && pkgResults.length && !Object.keys(pkgGuests).length;
+  const btn = yes => {
+    const sel = on === yes, rec = def === yes;
+    return `<button type="button" class="pr-yn ${yes ? 'y' : 'n'}${sel ? ' on' : ''}" aria-pressed="${sel}" ${dis ? 'disabled' : ''} onclick="pkgRuleAnswer('${R.k}',${yes})">${yes ? 'Yes' : 'No'}${rec ? '<small>Recommended</small>' : ''}</button>`;
+  };
+  const notes = [];
+  if (on !== def && R.off && !on) notes.push(R.off);
+  if (parentOff) notes.push(`Works only when "${pr ? pr.q : R.parent}" is Yes.`);
+  if (needsGuests) notes.push('Needs the guest list (Reservation Detail) loaded.');
+  return `<article class="pr-q${parentOff ? ' dim' : ''}${on !== def ? ' changed' : ''}" data-k="${R.k}">
+    <span class="pr-badge" aria-hidden="true">${R.ico}</span>
+    <div class="pr-q-main">
+      <h4>${escapeHtml(R.q)}</h4>
+      <div class="pr-ex"><span class="pr-if">If yes</span>${_pkgExHtml(R.ex)}${n ? `<button type="button" class="pr-aff" onclick="pkgShowView('audit');pkgSetFilter('rule:${R.k}')" title="Show the packages this rule decided">affects <b>${n}</b> · see ›</button>` : ''}</div>
+      ${notes.map(t => `<div class="pr-note">${escapeHtml(t)}</div>`).join('')}
+    </div>
+    <div class="pr-yns" role="group" aria-label="Answer">${btn(true)}${btn(false)}</div>
+  </article>`;
+}
+
+/** 🔍 Try a confirmation: who gets it and why, in plain words. */
+function pkgTryConf(v) {
+  _pkgTryQ = String(v == null ? '' : v);
+  const out = document.getElementById('pkgTryOut');
+  if (out) out.innerHTML = _pkgTryHtml();
+}
+function _pkgTryHtml() {
+  const q = _pkgTryQ.replace(/\s+/g, '');
+  if (!q) return '';
+  if (!pkgResults.length) return '<div class="pr-try-msg">Load the reports and check the charges first (📋 Audit), then try a number here.</div>';
+  if (q.length < 4) return '';
+  const groups = _pkgAllGroups().filter(g => g.rows.some(r => String(r.conf) === q));
+  const near = groups.length ? groups : _pkgAllGroups().filter(g => g.rows.some(r => String(r.conf).includes(q))).slice(0, 3);
+  if (!near.length) return `<div class="pr-try-msg">No package for <b>${escapeHtml(q)}</b> in this audit.</div>`;
+  return near.map(g => {
+    const rows = g.rows, need = rows.filter(_pkgNeeds), r0 = need[0] || rows[0];
+    const fam = _pkgFamilyName(r0) || r0.code || 'Package';
+    const who = _pkgOutcome(r0);
+    const isPerson = !/^(⛔|🔎|skipped|denied|not in log|no seller|nobody)/.test(who);
+    const head = isPerson ? `🏆 <b>${escapeHtml(who)}</b> gets it` : r0.noSeller ? '🚫 <b>Nobody</b> gets it (online / TARS)' : `<b>${escapeHtml(who)}</b>`;
+    const why = _pkgShortWhy(r0);
+    const open = pkgWhyOpen.has('try|' + g.key);
+    return `<div class="pr-try-res">
+      <div class="pr-try-top"><span class="pa-room sm">${escapeHtml(r0.room || '—')}</span><div><div class="pr-try-who">${head}</div><small>${escapeHtml(fam)} · <code>${escapeHtml(r0.conf)}</code> · ${escapeHtml(_pkgNightsText(rows))}</small></div></div>
+      ${why ? `<div class="pr-try-why">Why: ${escapeHtml(why)}</div>` : ''}
+      <button type="button" class="pr-link" aria-expanded="${open}" onclick="pkgWhyOpen.${open ? 'delete' : 'add'}(${escapeHtml(JSON.stringify('try|' + g.key))});pkgTryConf(_pkgTryQ)">${open ? 'Hide the steps' : 'Show every step'}</button>
+      ${open ? `<div class="pa-whybox">${_pkgWhyHtml(g)}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
 function pkgRulesRender() {
   const box = document.getElementById('pkgRulesView');
   if (!box) return;
@@ -2230,62 +2342,67 @@ function pkgRulesRender() {
   const groups = pkgResults.length ? _pkgAllGroups() : [];
   const changed = Object.keys(PKG_RULE_DEFAULTS).filter(k => pkgRules[k] !== PKG_RULE_DEFAULTS[k]);
   const J = v => escapeHtml(JSON.stringify(v));
+  const det = (id, title, count, body, extra) => `<details class="pr-sec" id="${id === 'staff' ? 'pkgStaffCard' : 'pkgSec_' + id}" ${_pkgRulesOpen.has(id) ? 'open' : ''} ontoggle="_pkgSecToggle('${id}',this.open)"${extra || ''}><summary><span class="pr-sec-t">${title}${count != null ? ` <em>${count}</em>` : ''}</span><span class="pr-chev" aria-hidden="true"></span></summary><div class="pr-sec-b">${body}</div></details>`;
 
-  const sug = _pkgSuggestions();
-  const sugHtml = `<section class="pa-sugg"><h3>💡 Suggestions</h3>${sug.map(s => `<div class="pa-sg ${s.tone}"><span>${escapeHtml(s.text)}</span>${s.act ? `<button type="button" class="pa-btn" onclick="${s.act[1]}">${escapeHtml(s.act[0])}</button>` : ''}</div>`).join('')}</section>`;
+  // keep focus + caret in the try box across re-renders
+  const ae = document.activeElement, tryFocus = ae && ae.id === 'pkgTryIn', caret = tryFocus ? ae.selectionStart : 0;
+
+  const steps = [['🧾', 'Opera', 'Who put the package on first'], ['🔗', 'Same stay', 'Guest stays on? Still one stay'], ['🥐', 'Same kind', 'Same kind = same package (30BB = 60BB)']];
+  const stepHtml = `<ol class="pr-steps" aria-label="How it decides">${steps.map(([i, t, d], ix) => `<li><span class="pr-step-ico">${i}<em>${ix + 1}</em></span><div><b>${t}</b><small>${d}</small></div></li>`).join('')}</ol>`;
 
   const D = pkgLastDiff;
-  const diffHtml = D ? `<section class="pa-diff"><div class="pa-diff-hd"><b>What changed</b><small>${escapeHtml(D.label)} · ${D.list.length ? `${D.list.length} package${D.list.length !== 1 ? 's' : ''} changed` : 'no package changed'}</small><button type="button" class="pa-x" onclick="pkgLastDiff=null;pkgRulesRender()" aria-label="Close">✕</button></div>
-    ${D.list.length ? `<div class="pa-diff-list">${D.list.slice(0, 60).map(x => `<div class="pa-diff-row"><span class="pa-room sm">${escapeHtml(x.room || '—')}</span><div><b>${escapeHtml(x.fam)}</b> <code>${escapeHtml(x.conf)}</code><small>${escapeHtml(x.nights)}</small></div><span class="pa-chg">${escapeHtml(x.change)}</span></div>`).join('')}${D.list.length > 60 ? `<div class="pa-more">and ${D.list.length - 60} more</div>` : ''}</div>`
-      : '<div class="pa-more">The results are the same as before this change.</div>'}</section>` : '';
+  let diffHtml = '';
+  if (D) {
+    const n = D.list ? D.list.length : 0;
+    const title = !D.list ? 'Saved for the team' : n ? `${n} package${n !== 1 ? 's' : ''} changed` : 'No package changed';
+    const sub = !D.list ? 'Load an audit to see which packages it changes.' : n ? 'The audit ran again with your answer.' : 'The results are the same as before.';
+    diffHtml = `<section class="pr-diff${n ? '' : ' calm'}" role="status">
+      <div class="pr-diff-hd"><span class="pr-badge sm" aria-hidden="true">${n ? '✨' : '✓'}</span><div class="pr-diff-t"><b>${title}</b><small>${escapeHtml(D.label)}</small><small class="m">${sub}</small></div>
+        <div class="pr-diff-acts">${D.undo && can ? '<button type="button" class="pr-btn" onclick="pkgRuleUndo()">↶ Undo</button>' : ''}<button type="button" class="pr-x" onclick="pkgLastDiff=null;pkgRulesRender()" aria-label="Close">✕</button></div></div>
+      ${n ? `<div class="pr-diff-list">${D.list.slice(0, 60).map(x => `<div class="pr-diff-row"><span class="pa-room sm">${escapeHtml(x.room || '—')}</span><div><b>${escapeHtml(x.fam)}</b> <code>${escapeHtml(x.conf)}</code><small>${escapeHtml(x.nights)}</small></div><span class="pr-chg">${escapeHtml(x.change)}</span></div>`).join('')}${D.list.length > 60 ? `<div class="pa-more">and ${D.list.length - 60} more</div>` : ''}</div>` : ''}
+    </section>`;
+  }
 
-  const cards = PKG_RULE_INFO.map(R => {
-    const on = !!_pkgRule(R.k);
-    const parentOff = R.parent && !_pkgRule(R.parent);
-    const n = groups.filter(g => g.rows.some(r => (r.ruleHits || []).includes(R.k))).length;
-    const needsGuests = R.needs === 'guests' && pkgResults.length && !Object.keys(pkgGuests).length;
-    const subs = (R.subs || []).map(s => {
-      const ctl = s.type === 'seg'
-        ? `<div class="pa-seg" role="group">${s.opts.map(([val, t]) => `<button type="button" class="${+_pkgRule(s.k) === val ? 'on' : ''}" ${can && on ? '' : 'disabled'} onclick="pkgSetRule('${s.k}',${val})">${t}</button>`).join('')}</div>`
-        : _pkgRuleCtl(s.k, can, !on);
-      return `<div class="pa-sub${on ? '' : ' dim'}"><div><b>${escapeHtml(s.t)}</b><small>${escapeHtml(s.d)}</small></div>${ctl}</div>`;
-    }).join('');
-    return `<article class="pa-rule${on && !parentOff ? '' : ' off'}">
-      <div class="pa-rule-hd"><span class="pa-ico">${R.ico}</span><div class="pa-rule-t"><b>${escapeHtml(R.t)}</b><small>${escapeHtml(R.d)}</small></div>${_pkgRuleCtl(R.k, can, parentOff)}</div>
-      <div class="pa-ex"><span>Example</span>${escapeHtml(R.ex)}</div>
-      ${!on ? `<div class="pa-offnote">${escapeHtml(R.off)}</div>` : ''}
-      ${parentOff ? '<div class="pa-offnote">Works only with "Back-to-back bookings are one stay" on.</div>' : ''}
-      ${needsGuests ? '<div class="pa-offnote">Needs the guest list (Reservation Detail) loaded.</div>' : ''}
-      ${subs}
-      ${pkgResults.length ? `<div class="pa-stat">${n ? `Decided <b>${n}</b> package${n > 1 ? 's' : ''} in this audit · <button type="button" class="pa-link" onclick="pkgShowView('audit');pkgSetFilter('rule:${R.k}')">show them</button>` : 'Not used in this audit'}</div>` : ''}
-    </article>`;
-  }).join('');
+  const sug = _pkgSuggestions();
+  const sugShown = _pkgSugAll ? sug : sug.slice(0, 3);
+  const sugHtml = sug.length ? `<section class="pr-card pr-sugg"><h3><span>💡</span> Tips from this audit</h3>${sugShown.map(s => `<div class="pr-sg ${s.tone}"><span>${escapeHtml(s.text)}</span>${s.act ? `<button type="button" class="pr-btn sm" onclick="${s.act[1]}">${escapeHtml(s.act[0])}</button>` : ''}</div>`).join('')}${sug.length > 3 ? `<button type="button" class="pr-link" onclick="pkgSugMore()">${_pkgSugAll ? 'Show less' : `${sug.length - 3} more`}</button>` : ''}</section>` : '';
+
+  const main = PKG_RULE_INFO.filter(R => !R.more), more = PKG_RULE_INFO.filter(R => R.more);
+  const moreChanged = more.filter(R => _pkgRuleOn(R.k) !== _pkgRuleDefOn(R.k)).length;
 
   const pins = Object.entries(pkgPins || {}).filter(([, p]) => p && typeof p === 'object').sort((a, b) => String(b[1].at || '').localeCompare(String(a[1].at || '')));
-  const pinHtml = `<section class="pa-card2"><h3>📌 Frozen packages <small>${pins.length}</small></h3>
-    <p class="pa-help">A frozen package keeps the seller a person chose, whatever the rules say. Freeze one from its card in the list (📌 Freeze seller).</p>
-    ${pins.length ? `<div class="pa-pins">${pins.map(([k, p]) => { const [conf, fam] = k.split('|'); const rows = _pkgGroupRows(k); return `<div class="pa-pinrow"><span class="pa-room sm">${escapeHtml((rows[0] || {}).room || '—')}</span><div><b>${escapeHtml(fam || '')}</b> <code>${escapeHtml(conf)}</code><small>${p.skip ? '🙈 Skipped' : p.manual ? '✍️ Manual sale' + (p.seller ? ': ' + escapeHtml(p.seller) : '') : '→ ' + escapeHtml(p.seller || '')} · by ${escapeHtml(p.by || 'someone')}${p.at ? ' · ' + escapeHtml(String(p.at).slice(0, 10)) : ''}</small></div><button type="button" class="pa-btn" onclick="pkgPinChange(${J(k)},'__clear')">Unfreeze</button></div>`; }).join('')}</div>` : '<div class="pa-more">Nothing frozen.</div>'}</section>`;
+  const pinBody = `<p class="pr-help">A frozen package keeps the seller a person chose, whatever the rules say. Freeze one from its card in the list (📌).</p>
+    ${pins.length ? `<div class="pr-list">${pins.map(([k, p]) => { const [conf, fam] = k.split('|'); const rows = _pkgGroupRows(k); return `<div class="pr-row"><span class="pa-room sm">${escapeHtml((rows[0] || {}).room || '—')}</span><div><b>${escapeHtml(fam || '')}</b> <code>${escapeHtml(conf)}</code><small>${p.skip ? '🙈 Skipped' : p.manual ? '✍️ Manual sale' + (p.seller ? ': ' + escapeHtml(p.seller) : '') : '→ ' + escapeHtml(p.seller || '')} · by ${escapeHtml(p.by || 'someone')}${p.at ? ' · ' + escapeHtml(String(p.at).slice(0, 10)) : ''}</small></div><button type="button" class="pr-btn sm" onclick="pkgPinChange(${J(k)},'__clear')">Unfreeze</button></div>`; }).join('')}</div>` : '<div class="pa-more">Nothing frozen.</div>'}`;
 
   const staff = Object.entries(pkgStaffDb || {}).filter(([, s]) => s && s.name).sort((a, b) => String(a[1].name).localeCompare(String(b[1].name)));
   const unk = pkgResults.length ? _pkgUnknownLogins() : [];
-  const staffHtml = `<section class="pa-card2" id="pkgStaffCard"><h3>👤 Staff names <small>${staff.length}</small></h3>
-    <p class="pa-help">Opera's log shows logins (ACCOREN-SALVAREZ); IN-Gauge shows names (Sam ALVAREZ). This list joins them, for the whole team. A login that is not here simply shows as itself.</p>
+  const staffBody = `<p class="pr-help">Opera shows logins (ACCOREN-SALVAREZ), IN-Gauge shows names (Sam ALVAREZ). This list joins them for the whole team.</p>
     ${!staff.length ? (can ? `<div class="pa-seed"><label for="pkgStaffSeed"><b>Start the list:</b> paste your team, one per line. Add logins after "=" when they are not simply initials + family name.</label>
         <textarea id="pkgStaffSeed" rows="5" placeholder="Sam ALVAREZ&#10;Lina MORENO = ACCOREN-LMORENO2&#10;Test Person = ACCOREN-TPERSON, TPERS"></textarea>
         <button type="button" class="btn gold sm" onclick="pkgStaffSeed()">Save the team list</button></div>` : '<div class="pa-more">No names yet. A manager can add the team here.</div>') : `
-      <div class="pa-staff">${staff.map(([id, s]) => `<div class="pa-staffrow"><b>${escapeHtml(s.name)}</b><span>${(s.logins || []).map(l => `<code>${escapeHtml(l)}</code>`).join(' ') || '<small>matched by family name</small>'}</span>${can ? `<button type="button" class="pa-x" title="Remove" aria-label="Remove ${escapeHtml(s.name)}" onclick="pkgStaffDel(${J(id)})">✕</button>` : ''}</div>`).join('')}</div>
+      <div class="pr-list">${staff.map(([id, s]) => `<div class="pr-row staff"><b>${escapeHtml(s.name)}</b><span>${(s.logins || []).map(l => `<code>${escapeHtml(l)}</code>`).join(' ') || '<small>matched by family name</small>'}</span>${can ? `<button type="button" class="pr-x" title="Remove" aria-label="Remove ${escapeHtml(s.name)}" onclick="pkgStaffDel(${J(id)})">✕</button>` : ''}</div>`).join('')}</div>
       ${can ? `<div class="pa-addstaff"><input id="pkgStaffName" placeholder="Name, as in IN-Gauge" autocomplete="off"><input id="pkgStaffLogins" placeholder="Opera login(s), optional" autocomplete="off"><button type="button" class="btn gold sm" onclick="pkgStaffAdd()">Add</button></div>` : ''}`}
-    ${unk.length ? `<div class="pa-unk"><small>Logins in this log with no name${can && staff.length ? ' (tap to add)' : ''}:</small>${unk.slice(0, 20).map(u => can && staff.length ? `<button type="button" class="pa-chip btn-like" onclick="pkgStaffPick(${J(u.login)})">${escapeHtml(u.login)} <em>${u.n}</em></button>` : `<span class="pa-chip">${escapeHtml(u.login)} <em>${u.n}</em></span>`).join('')}</div>` : ''}
-  </section>`;
+    ${unk.length ? `<div class="pa-unk"><small>Logins in this log with no name${can && staff.length ? ' (tap to add)' : ''}:</small>${unk.slice(0, 20).map(u => can && staff.length ? `<button type="button" class="pa-chip btn-like" onclick="pkgStaffPick(${J(u.login)})">${escapeHtml(u.login)} <em>${u.n}</em></button>` : `<span class="pa-chip">${escapeHtml(u.login)} <em>${u.n}</em></span>`).join('')}</div>` : ''}`;
 
-  box.innerHTML = `<div class="pa-rules">
-    <div class="pa-rules-hd"><div><h2>⚙️ Package rules</h2><p>How the audit decides who sold each package. Switch a rule and the audit runs again at once; "What changed" shows every package that moved. ${can ? 'Changes are saved for the whole team.' : '<b>Read only:</b> a manager, supervisor or owner can change them.'}</p></div>
-      ${can ? `<button type="button" class="btn sm" ${changed.length ? '' : 'disabled'} onclick="pkgRulesReset()" title="Put every rule back to how the audit normally works">↺ Reset to default${changed.length ? ` (${changed.length})` : ''}</button>` : ''}</div>
+  box.innerHTML = `<div class="pr-rules">
+    <div class="pr-head">
+      <div class="pr-head-row">
+        <div class="pr-title"><h2>⚙️ Package rules</h2><p>Answer each question. The audit runs again at once.</p></div>
+        ${can ? `<button type="button" class="pr-btn" ${changed.length ? '' : 'disabled'} onclick="pkgRulesReset()" title="Put every answer back to Recommended">↺ Reset${changed.length ? ` (${changed.length})` : ''}</button>` : ''}
+      </div>
+      <label class="pr-try" for="pkgTryIn"><span class="pr-try-ico" aria-hidden="true">🔍</span><input id="pkgTryIn" type="search" inputmode="numeric" autocomplete="off" placeholder="Try a confirmation number: who gets it?" value="${escapeHtml(_pkgTryQ)}" oninput="pkgTryConf(this.value)"></label>
+      <div id="pkgTryOut" class="pr-try-out" aria-live="polite">${_pkgTryHtml()}</div>
+    </div>
+    ${!can ? '<div class="pr-ro">🔒 Only managers can change rules. You can read them and try a number.</div>' : ''}
     ${diffHtml}
+    <section class="pr-card pr-how"><h3>How it decides</h3>${stepHtml}</section>
+    <section class="pr-qs" aria-label="Rules">${main.map(R => _pkgQHtml(R, can, groups)).join('')}</section>
+    ${det('more', '⚙️ More options', moreChanged ? `${moreChanged} changed` : null, `<div class="pr-qs in">${more.map(R => _pkgQHtml(R, can, groups)).join('')}</div>`)}
     ${sugHtml}
-    <div class="pa-rule-grid">${cards}</div>
-    <div class="pa-two">${pinHtml}${staffHtml}</div>
+    ${det('pins', '📌 Frozen sellers', pins.length, pinBody)}
+    ${det('staff', '👥 Team names', staff.length, staffBody)}
   </div>`;
+  if (tryFocus) { const i = document.getElementById('pkgTryIn'); if (i) { i.focus(); try { i.setSelectionRange(caret, caret); } catch (_) {} } }
 }
 
 // ── Styles (self-contained; theme variables only) ────────────
@@ -2372,53 +2489,11 @@ function _pkgStyle2() {
 .pa-empty b{color:var(--text);font-size:.95rem}
 .pa-more{padding:8px 12px;font-size:.72rem;color:var(--text3)}
 /* rules view */
-.pa-rules{display:flex;flex-direction:column;gap:14px;margin-top:6px}
-.pa-rules-hd{display:flex;gap:12px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap}
-.pa-rules-hd h2{margin:0;font-size:1.1rem;color:var(--text)} .pa-rules-hd p{margin:4px 0 0;font-size:.78rem;color:var(--text2);max-width:640px;line-height:1.5}
-.pa-sugg,.pa-diff,.pa-card2{border:1px solid var(--border);border-radius:var(--r,12px);background:var(--card);padding:12px 14px;min-width:0}
-.pa-sugg h3,.pa-card2 h3{margin:0 0 8px;font-size:.9rem;color:var(--text)} .pa-card2 h3 small{font:600 .7rem var(--mono);color:var(--text3);margin-left:4px}
-.pa-sg{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:8px 10px;margin-top:6px;border-radius:10px;background:var(--bg2);font-size:.78rem;color:var(--text2);line-height:1.45;border-left:3px solid var(--border2)}
-.pa-sg span{min-width:0;overflow-wrap:anywhere} .pa-sg .pa-btn{flex:none;min-height:32px;padding:4px 10px}
-.pa-sg.warn{border-left-color:var(--gold,var(--accent))} .pa-sg.bad{border-left-color:var(--red)} .pa-sg.ok{border-left-color:var(--green)}
-.pa-diff{border-color:color-mix(in srgb,var(--gold,#e8b84b) 55%,var(--border))}
-.pa-diff-hd{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap} .pa-diff-hd small{color:var(--text3);font-size:.74rem;flex:1}
-.pa-x{border:0;background:none;color:var(--text3);cursor:pointer;font-size:.85rem;padding:2px 6px}
-.pa-diff-list{margin-top:8px;border:1px solid var(--border);border-radius:10px;max-height:340px;overflow:auto}
-.pa-chg{flex:none;max-width:52%;text-align:right;font:600 .72rem var(--font,inherit);color:var(--text)}
-.pa-rule-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-.pa-rule{border:1px solid var(--border);border-radius:var(--r,12px);background:var(--card);padding:12px;display:flex;flex-direction:column;gap:8px;min-width:0}
-.pa-rule.off{background:var(--card2,var(--bg2))} .pa-rule.off .pa-rule-t b{color:var(--text2)}
-.pa-rule-hd{display:flex;gap:10px;align-items:flex-start}
-.pa-ico{flex:none;width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:var(--bg2);font-size:16px}
-.pa-rule-t{flex:1;min-width:0} .pa-rule-t b{display:block;font-size:.86rem;color:var(--text)} .pa-rule-t small{display:block;font-size:.74rem;color:var(--text3);line-height:1.45;margin-top:2px}
-.pa-ex{font-size:.74rem;color:var(--text2);line-height:1.45;padding:7px 10px;border-radius:9px;background:var(--bg2)}
-.pa-ex span{display:inline-block;margin-right:6px;font:700 .58rem var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--gold,var(--accent))}
-.pa-offnote{font-size:.72rem;color:var(--amber,#d97706)}
-.pa-sub{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:7px 0 0;border-top:1px dashed var(--border)}
-.pa-sub>div{min-width:0} .pa-sub b{display:block;font-size:.78rem;color:var(--text)} .pa-sub small{display:block;font-size:.7rem;color:var(--text3);line-height:1.4}
-.pa-sub.dim{opacity:.55}
-.pa-stat{font-size:.72rem;color:var(--text3);margin-top:auto}
-.pa-sw{position:relative;flex:none;display:inline-block;width:42px;height:24px;cursor:pointer}
-.pa-sw input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
-.pa-sw i{position:absolute;inset:0;border-radius:99px;background:var(--border2);transition:background .2s;pointer-events:none}
-.pa-sw i::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .2s}
-.pa-sw input:checked+i{background:var(--green)} .pa-sw input:checked+i::after{transform:translateX(18px)}
-.pa-sw input:focus-visible+i{box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 30%,transparent)}
-.pa-sw.ro{opacity:.6;cursor:not-allowed} .pa-sw.ro input{cursor:not-allowed}
-.pa-seg{flex:none;display:inline-flex;border:1px solid var(--border2);border-radius:9px;overflow:hidden}
-.pa-seg button{border:0;background:var(--card);color:var(--text2);padding:6px 10px;font:600 .72rem var(--font,inherit);cursor:pointer;white-space:nowrap}
-.pa-seg button.on{background:var(--text);color:var(--bg2)} .pa-seg button:disabled{cursor:not-allowed;opacity:.7}
-.pa-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:start}
-.pa-help{margin:0 0 8px;font-size:.74rem;color:var(--text3);line-height:1.45}
-.pa-pins,.pa-staff{border:1px solid var(--border);border-radius:10px;overflow:hidden}
-.pa-staffrow{display:flex;gap:8px;align-items:center;padding:7px 10px;border-top:1px solid var(--border);font-size:.8rem;min-width:0}
-.pa-staffrow:first-child{border-top:0} .pa-staffrow b{flex:none;max-width:45%;overflow-wrap:anywhere;color:var(--text)} .pa-staffrow span{flex:1;min-width:0;overflow-wrap:anywhere} .pa-staffrow small{color:var(--text3)}
 .pa-addstaff{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .pa-addstaff input,.pa-seed textarea{flex:1 1 150px;min-width:0;border:1px solid var(--border2);background:var(--bg2);color:var(--text);border-radius:9px;padding:8px 10px;font-size:16px;font-family:inherit}
 .pa-seed{display:flex;flex-direction:column;gap:8px} .pa-seed label{font-size:.76rem;color:var(--text2);line-height:1.45} .pa-seed .btn{align-self:flex-start}
 .pa-unk{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px;align-items:center} .pa-unk small{width:100%;color:var(--text3);font-size:.72rem}
 @media (max-width:760px){
-  .pa-rule-grid,.pa-two{grid-template-columns:minmax(0,1fr)}
   .pa-act{max-width:40%}
 }
 @media (max-width:600px){
@@ -2429,10 +2504,123 @@ function _pkgStyle2() {
   .pa-top{flex-wrap:wrap} .pa-act{order:3;flex-basis:100%;max-width:none;text-align:left;margin-left:54px}
   .pa-who{grid-template-columns:minmax(0,1fr);gap:4px} .pa-arrow{display:none}
   .pa-foot>*{flex:1 1 auto} .pa-copy{flex-basis:100%;justify-content:space-between}
-  .pa-sg{flex-direction:column;align-items:flex-start}
-  .pa-chg{max-width:45%}
   .pa-done-row{flex-wrap:wrap} .pa-done-main{flex-basis:calc(100% - 60px)}
 }
+/* ── Rules view (pr-*) ── */
+.pr-rules{--pr-acc:var(--gold,var(--accent,#e8b84b));--pr-sh:0 1px 2px rgba(0,0,0,.06),0 4px 14px rgba(0,0,0,.05);display:flex;flex-direction:column;gap:16px;margin-top:8px;min-width:0}
+.pr-rules code{font:500 .72rem var(--mono);color:var(--text2)}
+.pr-head{display:flex;flex-direction:column;gap:8px;min-width:0}
+.pr-head-row{display:flex;gap:12px;align-items:center;justify-content:space-between}
+.pr-title{min-width:0} .pr-title h2{margin:0;font-size:1.08rem;font-weight:700;color:var(--text);letter-spacing:-.01em} .pr-title p{margin:2px 0 0;font-size:.8rem;color:var(--text3)}
+.pr-try{display:flex;align-items:center;gap:8px;min-height:48px;padding:0 14px;border:1px solid var(--border2);border-radius:var(--r,12px);background:var(--card);box-shadow:var(--pr-sh);cursor:text;transition:border-color .15s,box-shadow .15s}
+.pr-try:focus-within{border-color:var(--pr-acc);box-shadow:0 0 0 3px color-mix(in srgb,var(--pr-acc) 22%,transparent)}
+.pr-try-ico{font-size:1rem;opacity:.75}
+.pr-try input{flex:1;min-width:0;border:0;outline:0;background:none;color:var(--text);font:500 16px var(--font,inherit);padding:12px 0}
+.pr-try input::placeholder{color:var(--text3)}
+.pr-try-out:empty{display:none}
+.pr-try-out{display:flex;flex-direction:column;gap:8px}
+.pr-try-msg{padding:10px 14px;border-radius:var(--r,12px);background:var(--bg2);font-size:.8rem;color:var(--text2)}
+.pr-try-res{padding:12px 14px;border:1px solid color-mix(in srgb,var(--pr-acc) 45%,var(--border));border-radius:var(--r,12px);background:var(--card);box-shadow:var(--pr-sh);min-width:0}
+.pr-try-top{display:flex;gap:10px;align-items:center;min-width:0} .pr-try-top>div{min-width:0}
+.pr-try-who{font-size:.95rem;color:var(--text)} .pr-try-top small{display:block;font-size:.72rem;color:var(--text3);overflow-wrap:anywhere}
+.pr-try-why{margin-top:8px;font-size:.8rem;color:var(--text2);line-height:1.5;overflow-wrap:anywhere}
+.pr-try-res .pa-whybox{margin-top:8px}
+.pr-ro{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:var(--r,12px);background:var(--bg2);border:1px dashed var(--border2);font-size:.8rem;color:var(--text2)}
+.pr-card{border:1px solid var(--border);border-radius:var(--r,12px);background:var(--card);padding:16px;box-shadow:var(--pr-sh);min-width:0}
+.pr-card h3{margin:0 0 12px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text3)}
+.pr-steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.pr-steps li{display:flex;flex-direction:column;gap:8px;align-items:flex-start;min-width:0;position:relative}
+.pr-steps li:not(:last-child)::after{content:'';position:absolute;left:60px;right:-4px;top:23px;height:2px;border-radius:2px;background:linear-gradient(90deg,color-mix(in srgb,var(--pr-acc) 60%,transparent),color-mix(in srgb,var(--pr-acc) 15%,transparent))}
+.pr-steps li>div{min-width:0}
+.pr-steps b{display:block;font-size:.86rem;color:var(--text)} .pr-steps small{display:block;font-size:.78rem;color:var(--text2);line-height:1.4;margin-top:2px}
+.pr-step-ico{flex:none;position:relative;width:48px;height:48px;border-radius:50%;display:grid;place-items:center;font-size:1.35rem;background:color-mix(in srgb,var(--pr-acc) 14%,var(--card));border:1px solid color-mix(in srgb,var(--pr-acc) 35%,transparent)}
+.pr-step-ico em{position:absolute;right:-3px;top:-3px;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font:700 .62rem var(--font,inherit);font-style:normal;background:var(--pr-acc);color:#111;box-shadow:0 0 0 2px var(--card)}
+.pr-qs{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--r,12px);background:var(--card);box-shadow:var(--pr-sh);overflow:hidden;min-width:0}
+.pr-qs.in{box-shadow:none;border-radius:10px}
+.pr-q{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:8px 16px;align-items:start;padding:16px;border-top:1px solid var(--border);transition:background .2s}
+.pr-q:first-child{border-top:0}
+.pr-q.changed{background:color-mix(in srgb,var(--pr-acc) 6%,var(--card))}
+.pr-q.dim .pr-q-main{opacity:.55}
+.pr-badge{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-size:1.1rem;background:color-mix(in srgb,var(--pr-acc) 13%,var(--card));border:1px solid color-mix(in srgb,var(--pr-acc) 28%,transparent)}
+.pr-badge.sm{width:32px;height:32px;font-size:.95rem;flex:none}
+.pr-q-main{min-width:0;display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.pr-q h4{margin:0;font-size:.95rem;font-weight:600;line-height:1.4;color:var(--text)}
+.pr-ex{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;min-width:0;max-width:100%}
+.pr-if{font:700 .58rem var(--mono);text-transform:uppercase;letter-spacing:.07em;color:var(--text3);margin-right:2px}
+.pr-tok{display:inline-flex;align-items:center;max-width:100%;padding:3px 9px;border-radius:7px;background:var(--bg2);border:1px solid var(--border);font:500 .72rem var(--font,inherit);color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pr-tok.win{background:color-mix(in srgb,var(--green) 13%,var(--card));border-color:color-mix(in srgb,var(--green) 40%,transparent);color:var(--text);font-weight:700}
+.pr-arw{color:var(--text3);font-size:.8rem} .pr-arw.res{color:var(--green);font-weight:700}
+.pr-note{font-size:.76rem;color:var(--amber,#d97706);line-height:1.4}
+.pr-aff{margin-left:6px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);border-radius:999px;padding:4px 11px;min-height:28px;font:500 .72rem var(--font,inherit);cursor:pointer;transition:border-color .15s,color .15s}
+.pr-aff b{color:var(--text)} .pr-aff:hover{border-color:var(--pr-acc);color:var(--text)}
+.pr-yns{display:inline-flex;padding:3px;gap:3px;border-radius:12px;background:var(--bg2);border:1px solid var(--border);align-self:center}
+.pr-yn{position:relative;min-width:76px;min-height:44px;border:0;border-radius:9px;background:none;color:var(--text2);font:600 .86rem var(--font,inherit);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:4px 12px;transition:background .2s,color .2s,box-shadow .2s}
+.pr-yn small{font:600 .56rem var(--font,inherit);text-transform:uppercase;letter-spacing:.05em;color:var(--text3)}
+.pr-yn:hover:not(:disabled):not(.on){color:var(--text);background:color-mix(in srgb,var(--text) 6%,transparent)}
+.pr-yn.on{background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.18)}
+.pr-yn.y.on{background:var(--green);color:#fff} .pr-yn.y.on small{color:rgba(255,255,255,.85)}
+.pr-yn.n.on{background:var(--text2);color:var(--card)} .pr-yn.n.on small{color:color-mix(in srgb,var(--card) 80%,transparent)}
+.pr-yn:focus-visible{outline:2px solid var(--pr-acc);outline-offset:1px}
+.pr-yn:disabled{cursor:not-allowed} .pr-yn:disabled:not(.on){opacity:.55} .pr-yn.on:disabled{opacity:.8}
+.pr-diff{border:1px solid color-mix(in srgb,var(--pr-acc) 55%,var(--border));border-radius:var(--r,12px);background:linear-gradient(180deg,color-mix(in srgb,var(--pr-acc) 10%,var(--card)),var(--card) 70%);box-shadow:var(--pr-sh);padding:14px 16px;min-width:0;animation:pr-in .25s ease-out}
+.pr-diff.calm{border-color:color-mix(in srgb,var(--green) 45%,var(--border));background:linear-gradient(180deg,color-mix(in srgb,var(--green) 8%,var(--card)),var(--card) 70%)}
+@keyframes pr-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.pr-diff-hd{display:flex;gap:12px;align-items:flex-start}
+.pr-diff-t{flex:1;min-width:0} .pr-diff-t b{display:block;font-size:.95rem;color:var(--text)} .pr-diff-t small{display:block;font-size:.76rem;color:var(--text2);line-height:1.4;overflow-wrap:anywhere} .pr-diff-t small.m{color:var(--text3)}
+.pr-diff-acts{display:flex;gap:4px;align-items:center;flex:none}
+.pr-diff-list{margin-top:12px;border:1px solid var(--border);border-radius:10px;max-height:320px;overflow:auto;background:var(--card)}
+.pr-diff-row,.pr-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid var(--border);min-width:0}
+.pr-diff-row:first-child,.pr-row:first-child{border-top:0}
+.pr-diff-row>div,.pr-row>div{flex:1;min-width:0;font-size:.8rem;overflow-wrap:anywhere;color:var(--text)}
+.pr-diff-row small,.pr-row small{display:block;color:var(--text3);font-size:.7rem;margin-top:1px}
+.pr-chg{flex:none;max-width:50%;text-align:right;font:600 .74rem var(--font,inherit);color:var(--text);overflow-wrap:anywhere}
+.pr-btn{border:1px solid var(--border2);background:var(--card);color:var(--text);border-radius:10px;padding:8px 14px;min-height:40px;font:600 .8rem var(--font,inherit);cursor:pointer;white-space:nowrap;transition:border-color .15s,background .15s}
+.pr-btn:hover:not(:disabled){border-color:var(--text3)} .pr-btn:disabled{opacity:.45;cursor:default}
+.pr-btn.sm{min-height:34px;padding:5px 11px;font-size:.74rem}
+.pr-x{border:0;background:none;color:var(--text3);cursor:pointer;font-size:.9rem;min-width:36px;min-height:36px;border-radius:8px}
+.pr-x:hover{background:var(--bg2);color:var(--text)}
+.pr-link{align-self:flex-start;border:0;background:none;color:var(--pr-acc);font:600 .76rem var(--font,inherit);cursor:pointer;padding:6px 0 0;text-decoration:underline;text-underline-offset:3px}
+.pr-sugg{display:flex;flex-direction:column;gap:6px;padding:14px 16px}
+.pr-sugg h3{margin:0 0 4px}
+.pr-sg{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:8px 10px 8px 12px;border-radius:10px;background:var(--bg2);font-size:.78rem;color:var(--text2);line-height:1.45;border-left:3px solid var(--border2)}
+.pr-sg span{min-width:0;overflow-wrap:anywhere}
+.pr-sg.warn{border-left-color:var(--pr-acc)} .pr-sg.bad{border-left-color:var(--red)} .pr-sg.ok{border-left-color:var(--green)}
+.pr-sec{border:1px solid var(--border);border-radius:var(--r,12px);background:var(--card);box-shadow:var(--pr-sh);min-width:0}
+.pr-sec>summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:52px;padding:0 16px;cursor:pointer;border-radius:var(--r,12px)}
+.pr-sec>summary::-webkit-details-marker{display:none}
+.pr-sec>summary:focus-visible{outline:2px solid var(--pr-acc);outline-offset:-2px}
+.pr-sec-t{font-size:.9rem;font-weight:600;color:var(--text)} .pr-sec-t em{font:600 .7rem var(--mono);font-style:normal;color:var(--text3);background:var(--bg2);border-radius:999px;padding:2px 8px;margin-left:4px}
+.pr-chev{width:8px;height:8px;border-right:2px solid var(--text3);border-bottom:2px solid var(--text3);transform:rotate(45deg) translateY(-2px);transition:transform .2s}
+.pr-sec[open]>summary .pr-chev{transform:rotate(225deg) translateY(-2px)}
+.pr-sec-b{padding:0 16px 16px;display:flex;flex-direction:column;gap:8px}
+.pr-help{margin:0;font-size:.76rem;color:var(--text3);line-height:1.45}
+.pr-list{border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.pr-row.staff b{flex:none;max-width:45%;overflow-wrap:anywhere;color:var(--text);font-size:.8rem} .pr-row.staff span{flex:1;min-width:0;overflow-wrap:anywhere;font-size:.8rem}
+@media (min-width:761px){
+  .pr-head{position:sticky;top:0;z-index:6;margin:0 -4px;padding:10px 4px 12px;background:var(--bg);border-bottom:1px solid var(--border)}
+  .pr-try-out{max-height:52vh;overflow:auto}
+  .pr-head-row{order:0}
+}
+@media (max-width:760px){
+  .pr-steps{grid-template-columns:minmax(0,1fr);gap:12px}
+  .pr-steps li{flex-direction:row;align-items:center;gap:12px}
+  .pr-steps li:not(:last-child)::after{left:22px;right:auto;top:46px;width:2px;height:14px;background:color-mix(in srgb,var(--pr-acc) 45%,transparent)}
+  .pr-step-ico{width:44px;height:44px;font-size:1.2rem}
+  .pr-q{grid-template-columns:36px minmax(0,1fr);padding:14px}
+  .pr-badge{width:36px;height:36px;font-size:1rem}
+  .pr-yns{grid-column:1 / -1;display:flex;width:100%}
+  .pr-yn{flex:1}
+  .pr-card,.pr-sugg{padding:14px}
+}
+@media (max-width:480px){
+  .pr-sg{flex-direction:column;align-items:flex-start}
+  .pr-chg{max-width:45%}
+  .pr-tok{white-space:normal}
+  .pr-diff{padding:12px}
+  .pr-diff-hd{flex-wrap:wrap} .pr-diff-t{flex-basis:calc(100% - 92px)} .pr-diff-acts{order:3;width:100%;justify-content:flex-end}
+  .pr-diff-acts .pr-btn{flex:1}
+}
+@media (prefers-reduced-motion:reduce){.pr-rules *{transition:none!important;animation:none!important}}
 @media (prefers-reduced-motion:reduce){.pa-card{transition:none}}`;
   document.head.appendChild(st);
 }

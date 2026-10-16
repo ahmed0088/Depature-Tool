@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 296, items: [
+    '⚙️ Package Audit rules, redesigned: each rule is now one simple Yes/No question with a tiny example (Sam → Lina ⇒ 🏆 Sam) and the recommended answer marked. A "How it decides" guide at the top in 3 steps, a 🔍 box to type any confirmation number and see who gets it and why, Undo after every change, and the fine-tuning tucked under "More options".',
+  ] },
   { v: 295, items: [
     '⏎ Enter saves: in any window (edit a task, add something, settings…), press Enter in a field and it clicks the window\'s main button (Save / Add / OK). In a big text box Enter still makes a new line; Shift+Enter never saves.',
   ] },
