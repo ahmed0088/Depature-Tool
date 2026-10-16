@@ -2675,3 +2675,7 @@ function pkgBoardPrint() {
       A package billed over several nights counts once under Packages and once per night under Nights.${T.pending ? ` ${T.pending} package${T.pending === 1 ? ' is' : 's are'} credited here but not fixed in IN-Gauge yet.` : ''}</div>`;
   mePrintPage(`Seller board ${month}`, body, { sign: ['Prepared by', 'Checked by (Front Office Manager / Finance)'], signName: _pkgMe() });
 }
+
+// The Package Audit styles (tabs, list, rules) are needed before any file is loaded too.
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { try { _pkgStyle2(); } catch (_) {} });
+else { try { _pkgStyle2(); } catch (_) {} }
