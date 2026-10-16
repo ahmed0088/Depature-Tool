@@ -1162,5 +1162,31 @@ console.log('\nQuiet when off · shift task times');
   check('daily fresh start: an afternoon list nobody opened still starts fresh the next day', lastDay('afternoon', '2026,9,16,16,0') > '2026-10-15', true);
 }
 
+// ── Package Audit: the extension rule only carries the SAME kind of package ──
+{
+  const noop = () => {}, el = () => ({ style: {}, classList: { add: noop, remove: noop, toggle: noop }, addEventListener: noop, appendChild: noop, querySelector: () => null, querySelectorAll: () => [] });
+  const sb = { console, setTimeout, clearTimeout, setInterval: () => 0, Date, JSON, Math,
+    localStorage: { getItem: () => null, setItem: noop, removeItem: noop },
+    document: { getElementById: () => null, querySelector: () => null, querySelectorAll: () => [], addEventListener: noop, createElement: el, body: el(), readyState: 'complete' },
+    addEventListener: noop, navigator: { onLine: true } };
+  sb.window = sb; sb.globalThis = sb;
+  vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'package-audit.js'), 'utf8'), sb, { filename: 'package-audit.js' });
+  // Same guest, same room: booking A 05-13 Oct (Lina sold breakfast), booking B 13-17 Oct starting the day A ends.
+  const run = codeB => vm.runInContext(`(() => {
+    pkgGuests = { A1: { name: 'TEST,GUEST', norm: 'test guest', room: '410', arr: '05-OCT-26', dep: '13-OCT-26' },
+                  B1: { name: 'TEST,GUEST', norm: 'test guest', room: '410', arr: '13-OCT-26', dep: '17-OCT-26' } };
+    pkgEvents = { A1: [{ action: 'ADDED', code: 'UPS40BB', ts: 202610051553, user: 'ACCOREN-LSTAFF@ACCOREN' }],
+                  B1: [{ action: 'ADDED', code: '${codeB}', ts: 202610100142, user: 'ACCOREN-SSELLER@ACCOREN' }] };
+    const ev = pkgEvents.B1[0];
+    const rows = [{ conf: 'A1', verdict: 'credit', user: 'ACCOREN-LSTAFF@ACCOREN', employee: 'ACCOREN-LSTAFF@ACCOREN', matchedEvent: pkgEvents.A1[0], product: 'Breakfast' },
+                  { conf: 'B1', verdict: 'credit', user: 'ACCOREN-SSELLER@ACCOREN', employee: 'ACCOREN-SSELLER@ACCOREN', matchedEvent: ev, originEvent: ev, product: '' }];
+    _pkgApplyExtensionCredit(rows);
+    return rows[1].user + '|' + (rows[1].extendedFrom || '');
+  })()`, sb);
+  check('package extension: a room upgrade sold on the extension of a breakfast stay stays with its seller', run('USS50'), 'ACCOREN-SSELLER@ACCOREN|');
+  check('package extension: breakfast continuing on the extension still goes to the first seller', run('UPS30BB'), 'ACCOREN-LSTAFF@ACCOREN|A1');
+}
+
 console.log(`\n${pass} passed · ${fail} failed`);
 process.exit(fail ? 1 : 0);

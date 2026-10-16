@@ -934,9 +934,38 @@ function _pkgOwnerFromOpera(conf) {
   return first ? { user: first.user, confirmed: true, viaOpera: true } : null;
 }
 
+// The kind of package a code is: EC / LC / BB by the reliable suffix, else its letter prefix
+// (USS50 and USS100 are both room upgrades: "USS"). Used so the extension rule only carries a
+// sale over to the SAME kind of package: a guest extending a breakfast stay who is then sold a
+// room upgrade on the new booking bought something new, from whoever sold it.
+function _pkgKindOfCode(code) {
+  code = String(code || '').toUpperCase();
+  if (/EC$/.test(code)) return 'EC';
+  if (/LC$/.test(code)) return 'LC';
+  if (/BB$/.test(code)) return 'BB';
+  const m = code.match(/^[A-Z]+/);
+  return m ? m[0] : '';
+}
+function _pkgKindOfRow(r) {
+  const c = (r.matchedEvent && r.matchedEvent.code) || (r.originEvent && r.originEvent.code) || '';
+  if (c) return _pkgKindOfCode(c);
+  const n = _pkgFamilyName(r);
+  return n === 'Early Check In' ? 'EC' : n === 'Late Check Out' ? 'LC' : n === 'Breakfast' ? 'BB' : '';
+}
+
 function _pkgApplyExtensionCredit(results) {
   if (!Object.keys(pkgGuests).length) return;   // no guest list loaded: rule is inactive
   const head = _pkgBuildChains();
+  const arrOf = c => _pkgDayNum((pkgGuests[c] || {}).arr) || 0;
+  // The kinds of package the bookings of a stay before this one carried (from Opera's log, or their own rows).
+  function earlierKinds(h, conf) {
+    const kinds = new Set();
+    Object.keys(head).filter(c => head[c] === h && c !== conf && arrOf(c) < arrOf(conf)).forEach(c => {
+      (pkgEvents[c] || []).forEach(e => { const k = _pkgKindOfCode(e.code); if (k) kinds.add(k); });
+      results.forEach(x => { if (x.conf === c) { const k = _pkgKindOfRow(x); if (k) kinds.add(k); } });
+    });
+    return kinds;
+  }
 
   // Who owns each stay: the seller on its first booking, preferring one
   // Opera actually confirms over IN-Gauge's unverified word.
@@ -960,6 +989,11 @@ function _pkgApplyExtensionCredit(results) {
     // reaches back further than the export does, so fall back to whoever
     // Opera shows starting that booking's packages. Without this the whole
     // rule goes quiet for anyone not auditing a full month in one go.
+    // Only the same kind of package continues the stay's sale. A kind the earlier bookings never
+    // had (a room upgrade sold on the extension of a breakfast stay) is a new sale on this booking,
+    // and stays with whoever sold it.
+    const kind = _pkgKindOfRow(r);
+    if (kind) { const before = earlierKinds(h, r.conf); if (before.size && !before.has(kind)) return; }
     const own = owner[h] || _pkgOwnerFromOpera(h);
     if (!own || !own.user) return;
     // A stay that started on a TARS or interface booking has no seller to

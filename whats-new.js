@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 286, items: [
+    '📦 Package Audit: a guest who stays on with a new confirmation (an extension) only keeps the first seller for the SAME kind of package. If the first booking had breakfast and someone sells a room upgrade on the new booking, that upgrade is their sale, not the first seller\'s (and the other way round). Before, every package on the extension went to whoever sold the first booking.',
+  ] },
   { v: 285, items: [
     '🏛️ DTCM Recon remembers what you fixed. Copying a correction\'s DTCM ID (or ticking it, or tapping ✓ Fixed) marks it as fixed for good: when the next day\'s files still show the same correction (same room and night), it no longer comes back as a to-do. It sits under "✓ Fixed already" with who and when; if it is still in the files 3 days later you get a gentle note, and Undo puts it back on the list. Home, the handover, the morning brief and Ops Brain count only what is still open.',
   ] },
