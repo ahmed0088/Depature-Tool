@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 292, items: [
+    '🥐 Package Audit: every package ending in BB is breakfast. Whoever started the breakfast keeps it, even when it changes to 30BB, 60BB or 80BB, and also when the guest extends on a new confirmation. (The "each code is its own package" switch in Rules is now off; turn it on only if you want 30BB and 60BB counted separately.)',
+  ] },
   { v: 291, items: [
     '📦 Package Audit: each package code is its own package. UPS30BB and UPS60BB are different upsells, so whoever first put UPS60BB on the stay gets it, even if someone else sold UPS30BB before on the same guest. When a booking\'s package was swapped (UPS30BB → UPS60BB), the code it ended up with is the one that counts. Switch: Rules → "Each package code is its own package".',
   ] },

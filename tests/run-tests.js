@@ -1186,7 +1186,7 @@ console.log('\nQuiet when off · shift task times');
   })()`, sb);
   check('package extension: a room upgrade sold on the extension of a breakfast stay stays with its seller', run('USS50'), 'ACCOREN-SSELLER@ACCOREN|');
   check('package extension: the same breakfast continuing on the extension still goes to the first seller', run('UPS40BB'), 'ACCOREN-LSTAFF@ACCOREN|A1');
-  check('package extension: a different breakfast code (UPS40BB vs UPS60BB) is a new sale', run('UPS60BB'), 'ACCOREN-SSELLER@ACCOREN|');
+  check('package extension: any …BB is breakfast, so 40BB → 60BB on the extension stays with whoever started the breakfast', run('UPS60BB'), 'ACCOREN-LSTAFF@ACCOREN|A1');
   // A stay whose first booking had no package: the first one who put breakfast on a LATER booking owns it.
   const run3 = () => vm.runInContext(`(() => {
     pkgGuests = { H0: { name: 'TEST,TWO', norm: 'test two', room: '413', arr: '16-SEP-26', dep: '02-OCT-26' },

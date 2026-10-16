@@ -48,7 +48,7 @@ const PKG_RULE_DEFAULTS = {
   chainSameRoom: false,  // ...only when they are in the same room
   chainGap: PKG_EXTENSION_GAP,   // days allowed between the two bookings (0 or 1)
   sameKind: true,        // only the same kind of package carries over an extension
-  exactCode: true,       // ...and each package code is its own package there (UPS30BB is not UPS60BB)
+  exactCode: false,      // ...on: each package code is its own package (UPS30BB is not UPS60BB); off: all …BB is breakfast
   systemNoSeller: true,  // online / TARS / system bookings have no desk seller
   oneTime: true,         // early check-in / late check-out are counted once per stay
   denyNoOpera: true,     // remove a charge when Opera shows no such package on the booking
@@ -1953,7 +1953,7 @@ const PKG_RULE_INFO = [
     d: 'On an extension only the same kind (breakfast, early check-in, late check-out, room upgrade…) stays with the first seller. A different kind is a new sale.',
     ex: 'Sam sold breakfast on booking A. On the extension B, Lina sells a room upgrade (USS…). → The upgrade is Lina\'s.',
     off: 'Off: every package on the extension goes to the stay\'s first seller.',
-    subs: [{ k: 'exactCode', t: 'Each package code is its own package', d: 'UPS30BB and UPS60BB are different packages: Lina sold UPS30BB first, Sam sold UPS60BB first → each keeps their own. Off: all breakfasts (…BB) count as one kind.' }] },
+    subs: [{ k: 'exactCode', t: 'Each package code is its own package', d: 'Off (normal): every …BB is breakfast, so whoever started the breakfast keeps it even when it changes to 60BB or 80BB, also after an extension. On: UPS30BB and UPS60BB count as two different packages.' }] },
   { k: 'systemNoSeller', ico: '🌐', short: 'online / TARS = no seller', t: 'Online / TARS / system bookings have no desk seller',
     d: 'A package that came with a booking made online, through TARS or another interface was not sold at the desk: nobody gets it.',
     ex: 'Breakfast added by *TARS* with the booking → no seller. If Sam adds late check-out later, that one is Sam\'s.',
