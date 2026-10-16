@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 284, items: [
+    '🔐 Safer accounts: when someone signs in from a phone or browser their account never used before, the owner and managers see it in Ops Brain ("Sam signed in on a new device: Chrome on Android"), and the person\'s own other devices are told too. Not you? Change your password; a manager can sign that person out everywhere (Team → Disconnect).',
+    '💾 Owners get a weekly reminder to download a backup of everything to their own computer.',
+    '🛡️ Ready for Firebase App Check: once switched on, only this app (not a copy or a script) can use the database. Guest Memory now loads after sign-in, ready for the stricter database rules.',
+  ] },
   { v: 283, items: [
     '☀️ Morning brief: the whole day on one screen. Who is on, departures and arrivals, wake-up calls, tasks, monthly reports and open items. Tap ☀️ Brief on Home, copy it or send it on WhatsApp. It opens by itself for managers each morning (untick "Open by itself" inside it to stop that).',
     '🙋 Ask for a day off from your phone: Roster → My shifts → Ask for a day off (a day off, annual leave or a shift wish). Your manager approves or declines in one tap and you see the answer straight away. Approved days go into the roster builder for weeks not posted yet; for a posted week the manager can put OFF/AL on those days in one tap.',

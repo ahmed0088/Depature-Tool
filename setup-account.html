@@ -4,10 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>HotelOps · Account Setup</title>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebaseio.com wss://*.firebasedatabase.app https://apis.google.com; frame-src https://*.firebaseapp.com https://accounts.google.com; object-src 'none'; base-uri 'self'; form-action 'self';"/>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.google.com https://www.recaptcha.net 'unsafe-inline' https://cdnjs.cloudflare.com https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' https://www.google.com https://www.recaptcha.net https://*.googleapis.com https://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebaseio.com wss://*.firebasedatabase.app https://apis.google.com; frame-src https://www.google.com https://www.recaptcha.net https://*.firebaseapp.com https://accounts.google.com; object-src 'none'; base-uri 'self'; form-action 'self';"/>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Serif+Display:ital@0;1&display=swap');
 
@@ -412,6 +413,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "707337551887",
   appId:             "1:707337551887:web:aaba944d6f1ae9c05ca37a"
 };
+const APP_CHECK_SITE_KEY = '';   // keep the same as firebase-config.js
 const HOTEL_ID   = "ibis_dubai";
 const GATE_PASS  = "Kazokuyktsha@31";
 
@@ -452,6 +454,7 @@ function initFirebase() {
   try {
     if (!firebase.apps.length) {
       _app = firebase.initializeApp(FIREBASE_CONFIG);
+      try { if (typeof APP_CHECK_SITE_KEY === 'string' && APP_CHECK_SITE_KEY && firebase.appCheck) firebase.appCheck(_app).activate(APP_CHECK_SITE_KEY, true); } catch (e) { console.warn('App Check:', e); }
     } else {
       _app = firebase.app();
     }

@@ -274,6 +274,8 @@ const GS_FEATURES = [
   ['🔧 Maintenance tickets', 'maintenance ticket repair broken engineering ac leak fix', 'Front Office Log', () => gsGo('ops-logs', { run: () => olTab('mt'), sel: '#ol-tab-mt' })],
   ['💵 Float count', 'float cash count drawer denominations short over shift', 'Front Office Log', () => gsGo('ops-logs', { run: () => olTab('cash'), sel: '#ol-tab-cash' })],
   ['💰 Upsell list', 'upsell early check-in late check-out breakfast upgrade offer sold', 'Front Office Log', () => gsGo('ops-logs', { run: () => olTab('up'), sel: '#ol-tab-up' })],
+  ['🔐 New-device sign-in alerts', 'security new device sign in login alert phone stolen hacked account', 'Team', () => { if (typeof openAdminPanel === 'function') openAdminPanel(); }],
+  ['💾 Download a backup', 'backup download export save everything file restore', 'Settings', () => gsSet('Download a backup')],
   ['📆 Monthly reports (TD check, revenue by accounts, statistics)', 'monthly report reports month end td revenue accounts statistics statics due 1 4 remind every month', 'Shift Tasks', () => gsGo('shifts', { sel: '#mrCard' })],
   ['🔁 Repeat a shift task every week or every month', 'repeat recurring every week weekly every month monthly task', 'Shift Tasks', () => gsGo('shifts', { sel: '[id^="stRep-"]' })],
   ['📅 Shift task for a date (one-off)', 'task date one off coming up later day', 'Shift Tasks', () => gsGo('shifts', { sel: '[id^="stOn-"]' })],

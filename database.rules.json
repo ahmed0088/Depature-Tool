@@ -10,6 +10,11 @@
       }
     },
 
+    "guestMemoryShared": {
+      ".read": "auth != null && root.child('userHotels').child(auth.uid).isString() && root.child('hotels').child(root.child('userHotels').child(auth.uid).val()).child('users').child(auth.uid).child('active').val() === true",
+      ".write": "auth != null && root.child('userHotels').child(auth.uid).isString() && root.child('hotels').child(root.child('userHotels').child(auth.uid).val()).child('users').child(auth.uid).child('active').val() === true"
+    },
+
     "hotelsIndex": {
       ".read": "auth != null",
       "$hid": {

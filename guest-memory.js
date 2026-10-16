@@ -304,8 +304,9 @@ function gmInit() {
   // behavior gmAutoFill() depends on, but keeps the data in memory only.
   if (typeof firebase !== 'undefined' && firebase.database) {
     // bring this hotel's old separate memory in, once someone is signed in
-    const _gmWaitLogin = setInterval(() => { if (typeof currentUser !== 'undefined' && currentUser) { clearInterval(_gmWaitLogin); _gmMigrateToShared(); } }, 1500);
-    firebase.database().ref(GM_SHARED_PATH).on('value', snap => {
+    // (the shared memory is only readable once signed in: a listener started on the login screen is refused and cancelled for good)
+    const _gmWaitLogin = setInterval(() => { if (typeof currentUser !== 'undefined' && currentUser) { clearInterval(_gmWaitLogin); _gmMigrateToShared(); _gmListen(); } }, 1500);
+    const _gmListen = () => firebase.database().ref(GM_SHARED_PATH).on('value', snap => {
       // an edit still waiting to be saved (3 s) stays on top of what another hotel just saved
       const mine = {};
       if (_gmSaveTimer) { Object.keys(_gmStore).forEach(k => { if (JSON.stringify(_gmStore[k]) !== JSON.stringify(_gmServer[k])) mine[k] = _gmStore[k]; }); Object.keys(_gmServer).forEach(k => { if (!(k in _gmStore)) mine[k] = null; }); }

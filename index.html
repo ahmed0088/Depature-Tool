@@ -19,7 +19,7 @@
      onclick="" handlers and <style> blocks throughout — this policy's real
      value is blocking any OTHER origin from ever being loaded or contacted,
      not blocking inline handlers. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://www.gstatic.com https://apis.google.com https://*.firebasedatabase.app https://*.firebaseio.com https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' blob: https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com https://en.wikipedia.org https://cdn.jsdelivr.net data: blob: https://*.googleapis.com https://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebaseio.com wss://*.firebasedatabase.app https://apis.google.com; frame-src https://*.firebaseapp.com https://accounts.google.com; object-src 'none'; base-uri 'self'; form-action 'self';"/>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.google.com https://www.recaptcha.net 'unsafe-inline' https://cdnjs.cloudflare.com https://www.gstatic.com https://apis.google.com https://*.firebasedatabase.app https://*.firebaseio.com https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' blob: https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' https://www.google.com https://www.recaptcha.net https://api.anthropic.com https://en.wikipedia.org https://cdn.jsdelivr.net data: blob: https://*.googleapis.com https://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebaseio.com wss://*.firebasedatabase.app https://apis.google.com; frame-src https://www.google.com https://www.recaptcha.net https://*.firebaseapp.com https://accounts.google.com; object-src 'none'; base-uri 'self'; form-action 'self';"/>
 <!-- fonts and the Excel/PDF readers load without holding up the first screen -->
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'"/>
@@ -31,6 +31,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
 <link rel="stylesheet" href="styles.css"/>
@@ -5462,6 +5463,7 @@ async function appInit() {
 <script src="roster-asks.js"></script>
 <script src="roster-fair.js"></script>
 <script src="ops-logs.js"></script>
+<script src="security.js"></script>
 <script src="standards-quiz.js"></script>
 <script src="accor-standards.js"></script>
 <script src="guest-pipeline.js"></script>
@@ -5535,6 +5537,7 @@ async function appInit() {
 (function boot() {
   try {
     firebase.initializeApp(FIREBASE_CONFIG);
+    hoAppCheck();
     dbInit();
     gmInit();
   } catch(e) {
