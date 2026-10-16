@@ -107,7 +107,7 @@ function _hoTodo() {
   } catch (_) {}
   try {
     if (typeof dtcRecon !== 'undefined' && dtcRecon && typeof dtcDone !== 'undefined') {
-      const n = (dtcRecon.actions || []).length - dtcDone.size;
+      const n = typeof dtcOpenCount === 'function' ? dtcOpenCount() : (dtcRecon.actions || []).length - dtcDone.size;
       if (n > 0) add('🏛️', 'DTCM', [`${n} correction${n > 1 ? 's' : ''} still to do (DTCM Recon)`]);
     }
   } catch (_) {}

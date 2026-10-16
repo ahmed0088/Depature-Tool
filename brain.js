@@ -101,7 +101,7 @@ function brSuggestions() {
   });
   safe(() => {
     if (typeof dtcRecon === 'undefined' || !dtcRecon) return;
-    const n = (dtcRecon.actions || []).length - (typeof dtcDone !== 'undefined' ? dtcDone.size || [...dtcDone].length : 0);
+    const n = typeof dtcOpenCount === 'function' ? dtcOpenCount() : (dtcRecon.actions || []).length - (typeof dtcDone !== 'undefined' ? dtcDone.size || [...dtcDone].length : 0);
     const me = dtcRecon.gap && dtcRecon.gap.monthEnd;
     if (me && !me.equal) add('🏦', `DTCM month-end does not tally (${me.dtcm} vs ${me.opera})`, 'dtcm', 'Work through Step B on DTCM Recon', 'bad');
     else if (n > 0) add('🏦', `${n} DTCM item${n > 1 ? 's' : ''} not ticked yet`, 'dtcm', 'Tick each one when it is fixed in Opera or the TD portal');

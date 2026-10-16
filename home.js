@@ -53,7 +53,7 @@ function homeTiles() {
       return;
     }
     const n = (dtcRecon.actions || []).length;
-    const done = typeof dtcDone !== 'undefined' ? [...dtcDone].length : 0;
+    const done = typeof dtcOpenCount === 'function' ? n - dtcOpenCount() : typeof dtcDone !== 'undefined' ? [...dtcDone].length : 0;
     const me = dtcRecon.gap && dtcRecon.gap.monthEnd;
     add({ panel: 'dtcm', icon: '🏦', title: 'DTCM Recon', big: Math.max(0, n - done),
       sub: `items open of ${n}${me ? ` · month-end ${me.equal ? 'tallies' : 'does NOT tally'}` : ''}`, tone: n - done > 0 ? 'warn' : 'ok' });

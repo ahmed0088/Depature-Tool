@@ -721,6 +721,7 @@ const ST_AUTO = [
       const rc = _stG('dtcRecon'), done = _stG('dtcDone');
       if (!rc || !done) return '';
       const n = (rc.actions || []).length;
+      if (n && typeof dtcOpenCount === 'function') return dtcOpenCount() === 0 ? `all ${n} DTCM corrections done` : '';
       return n && done.size >= n ? `all ${n} DTCM corrections done` : ''; } },
   { re: /package|upsell|in.?gauge/i, check() {
       const r = _stG('pkgResults'); if (!r || !r.length || typeof pkgNightDone !== 'function') return '';

@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 285, items: [
+    '🏛️ DTCM Recon remembers what you fixed. Copying a correction\'s DTCM ID (or ticking it, or tapping ✓ Fixed) marks it as fixed for good: when the next day\'s files still show the same correction (same room and night), it no longer comes back as a to-do. It sits under "✓ Fixed already" with who and when; if it is still in the files 3 days later you get a gentle note, and Undo puts it back on the list. Home, the handover, the morning brief and Ops Brain count only what is still open.',
+  ] },
   { v: 284, items: [
     '🔐 Safer accounts: when someone signs in from a phone or browser their account never used before, the owner and managers see it in Ops Brain ("Sam signed in on a new device: Chrome on Android"), and the person\'s own other devices are told too. Not you? Change your password; a manager can sign that person out everywhere (Team → Disconnect).',
     '💾 Owners get a weekly reminder to download a backup of everything to their own computer.',

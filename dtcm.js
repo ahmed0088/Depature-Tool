@@ -25,6 +25,36 @@ let dtcDoneDoc = null;
 let dtcBusy    = false;
 let dtcWork    = [];
 let dtcFixes   = [];
+// Corrections marked fixed for good (copying the DTCM ID, ticking it, or "✓ Fixed"). Unlike the
+// ticks above, these are NOT cleared when the next day's files are analysed: the same correction
+// (same action, room and night) found again stays under "Fixed already" instead of coming back
+// as a to-do. Shared: hotels/{HOTEL_ID}/dtcm/fixed/{action|room|night} = { by, at, uid, amount }
+let dtcFixed   = {};
+const dtcFxKey = (action, room, date) => `${action}|${room}|${date}`.replace(/[.#$/\[\]]/g, '_');
+const dtcActKey = a => dtcFxKey(a.action, a.room, a.date);
+const dtcPlanKeys = p => (p.dates || []).map(d => dtcFxKey(p.action, p.room, d));
+/** done: marked fixed, or ticked on today's sheet */
+function dtcActDone(a) {
+  return !!dtcFixed[dtcActKey(a)] || dtcDone.has(a.action === 'Add' ? a.room + '|' + a.date : 'fix|' + a.action + '|' + a.room + '|' + a.date);
+}
+/** corrections still to do in the current result (for Home, handover, brief, Ops Brain) */
+function dtcOpenCount() { return dtcRecon ? (dtcRecon.actions || []).filter(a => !dtcActDone(a)).length : 0; }
+function dtcSetFixed(keys, on, extra) {
+  keys = (keys || []).filter(Boolean); if (!keys.length) return;
+  const by = (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '', at = new Date().toISOString();
+  keys.forEach(k => {
+    if (on) { if (dtcFixed[k]) return; dtcFixed[k] = Object.assign({ by, at }, extra || {}); }
+    else if (!dtcFixed[k]) return; else delete dtcFixed[k];
+    if (typeof fbSet === 'function') fbSet('dtcm/fixed/' + k, on ? dtcFixed[k] : null);
+  });
+  if (typeof logActivity === 'function') logActivity(on ? 'dtcm_item_done' : 'dtcm_item_undone', keys.map(k => k.split('|').join(' · ')).join(', '));
+  if (dtcRecon) dtcRenderAll();
+}
+/** fixed more than 70 days ago: forget it (the month is long closed) */
+function dtcTidyFixed() {
+  const cut = new Date(Date.now() - 70 * 864e5).toISOString();
+  Object.keys(dtcFixed).forEach(k => { const v = dtcFixed[k]; if (!v || !v.at || v.at < cut) { delete dtcFixed[k]; if (typeof fbSet === 'function') fbSet('dtcm/fixed/' + k, null); } });
+}
 
 const dtcNum = (n, dp = 2) => (typeof n === 'number' && isFinite(n) ? n : 0).toFixed(dp);
 const dtcR2  = n => Math.round((Number(n) || 0) * 100) / 100;
@@ -53,7 +83,9 @@ function dtcInit() {
   });
   panel.addEventListener('click', e => {
     const c = e.target.closest('[data-dtc-copy]');
-    if (c) dtcCopyChip(c);
+    if (c) { dtcCopyChip(c); return; }
+    const f = e.target.closest('[data-dtc-fixbtn]');
+    if (f) { e.preventDefault(); dtcSetFixed(f.getAttribute('data-dtc-fixbtn').split(','), f.getAttribute('data-on') !== '0', {}); }
   });
 }
 
@@ -238,6 +270,14 @@ function dtcListen() {
     dtcApplyState(doc);
   });
   fbListen('dtcm/done', doc => { dtcDoneDoc = doc || null; dtcSyncDone(); });
+  let tidied = false;
+  fbListen('dtcm/fixed', v => {
+    v = v && typeof v === 'object' ? v : {};
+    if (JSON.stringify(v) === JSON.stringify(dtcFixed)) return;
+    dtcFixed = v;
+    if (!tidied && Object.keys(v).length) { tidied = true; dtcTidyFixed(); }
+    if (dtcRecon) dtcRenderAll();
+  });
 }
 
 function dtcApplyState(doc) {
@@ -287,8 +327,9 @@ function dtcRenderAll() {
   set('dtcCnt-summary', acts.length);
   set('dtcCnt-sheet', dtcPostings(RC).length + acts.filter(a => a.action !== 'Add').length);
   set('dtcCnt-longstay', dtcLS ? (dtcLS.longStays || []).length : 0);
-  set('badge-dtcm', acts.length);
-  const mob = document.getElementById('mob-badge-dtcm'); if (mob) mob.textContent = acts.length || '';
+  const open = dtcOpenCount();
+  set('badge-dtcm', open);
+  const mob = document.getElementById('mob-badge-dtcm'); if (mob) mob.textContent = open || '';
   dtcSwitch(dtcTab);
 }
 
@@ -317,7 +358,7 @@ function dtcClear() { dtcReset(true); }
 
 // ── Summary tab ───────────────────────────────────────────
 function dtcActionCounts(RC) {
-  const acts = RC.actions || [];
+  const acts = (RC.actions || []).filter(a => !dtcFixed[dtcActKey(a)]);   // fixed before: not counted again
   const n = k => acts.filter(a => a.action === k).length;
   return { add: n('Add'), reverse: n('Reverse'), verify: n('Verify'), dtcm: n('DTCM'),
            abs: acts.reduce((s, a) => s + (a.abs || 0), 0) };
@@ -410,7 +451,7 @@ function dtcRenderFixPlan(RC) {
     box.id = 'dtcFixPlan';
     anchor.insertAdjacentElement('afterend', box);
   }
-  const G = RC.gap, plan = RC.fixPlan || [];
+  const G = RC.gap; let plan = RC.fixPlan || [];
   if (!G) { box.innerHTML = ''; return; }          // result saved before this feature existed
   const n = v => dtcNum(v), sg = v => (v > 0 ? '+' : (v < 0 ? '−' : '')) + dtcNum(Math.abs(v));
   const row = (label, val, note, strong) => `
@@ -430,6 +471,10 @@ function dtcRenderFixPlan(RC) {
       ${row('Difference between the two totals', sg(G.adjGap) + ' AED', G.adjGap === 0 ? 'The totals agree, but the room lines below are still wrong (the errors cancel each other).' : 'This is the gap the corrections below must close.', true)}
     </table>`;
 
+  const allPlan = plan;
+  const isFx = p => { const ks = dtcPlanKeys(p); return ks.length && ks.every(k => dtcFixed[k]); };
+  const fixedPlan = allPlan.filter(isFx);
+  plan = allPlan.filter(p => !isFx(p));
   const cardColor = a => a === 'Add' ? 'var(--green)' : (a === 'Reverse' ? 'var(--red)' : (a === 'DTCM' ? 'var(--blue)' : 'var(--amber, #f0a43a)'));
   const cards = plan.map((p, i) => `
     <details class="dtc-fp" ${i === 0 ? 'open' : ''} style="border:1px solid var(--border, rgba(128,128,128,.3));border-left:4px solid ${cardColor(p.action)};border-radius:8px;margin:8px 0;padding:8px 12px;">
@@ -443,11 +488,27 @@ function dtcRenderFixPlan(RC) {
         ${(p.steps || []).map(t => `<li style="margin:3px 0;">${escapeHtml(t)}</li>`).join('')}
       </ol>
       ${p.monthEnd ? `<div style="font-size:.72rem;margin:2px 0 6px;"><b>Month-end:</b> close this ${p.monthEnd.side === 'DTCM' ? 'in the TD portal' : 'in Opera'} (${p.monthEnd.side} ${p.monthEnd.delta > 0 ? '+' : '−'}${n(Math.abs(p.monthEnd.delta))}).</div>` : ''}
-      ${p.uid ? `<div style="font-size:.64rem;color:var(--text3);">DTCM ID ${dtcChip(p.uid)}</div>` : ''}
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:4px;">
+        ${p.uid ? `<div style="font-size:.64rem;color:var(--text3);">DTCM ID ${dtcChip(p.uid, dtcPlanKeys(p))}</div>` : ''}
+        <button class="btn sm" data-dtc-fixbtn="${escapeHtml(dtcPlanKeys(p).join(','))}" title="Done in Opera / the TD portal: it won't come back as a to-do">✓ Fixed</button>
+      </div>
     </details>`).join('');
+  const ago = iso => { const d = Math.floor((Date.now() - new Date(iso)) / 864e5); return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d + ' days ago'; };
+  const fixedHtml = !fixedPlan.length ? '' : `
+    <details class="dtc-fixed-list" style="margin:10px 0;border:1px dashed var(--border, rgba(128,128,128,.35));border-radius:8px;padding:8px 12px;">
+      <summary style="cursor:pointer;font-weight:600;font-size:.82rem;">✓ Fixed already <span style="color:var(--text3);font-weight:500;">(${fixedPlan.length}): marked fixed, so not a to-do even though today's files still show them</span></summary>
+      ${fixedPlan.map(p => { const f = dtcFixed[dtcPlanKeys(p)[0]] || {}, old = f.at && Date.now() - new Date(f.at) > 3 * 864e5;
+        return `<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-top:1px solid var(--border, rgba(128,128,128,.2));font-size:.78rem;">
+          <span style="color:var(--green);">✓</span>
+          <div style="flex:1;min-width:0;"><span class="dtc-act ${escapeHtml(p.action.toLowerCase())}">${escapeHtml(p.action)}</span> ${escapeHtml(p.title)}
+            <div style="font-size:.7rem;color:var(--text3);">Fixed ${escapeHtml(ago(f.at))}${f.by ? ' by ' + escapeHtml(f.by) : ''}${f.uid ? ' · DTCM ID ' + escapeHtml(f.uid) : ''}</div>
+            ${old ? `<div style="font-size:.7rem;color:var(--amber, #f0a43a);">Still in the files ${escapeHtml(ago(f.at).replace(' ago', ''))} later: if the fix was saved, ignore this; if not, undo and fix it.</div>` : ''}</div>
+          <button class="btn ghost sm" data-dtc-fixbtn="${escapeHtml(dtcPlanKeys(p).join(','))}" data-on="0" title="Not fixed after all: back to the to-do list">Undo</button>
+        </div>`; }).join('')}
+    </details>`;
 
   let after;
-  if (!plan.length) {
+  if (!allPlan.length) {
     after = `<div style="font-size:.8rem;">Nothing to do for the room lines.</div>`;
   } else if (G.leftover === 0) {
     const sure = plan.map((p, i) => (p.action === 'Add' || p.action === 'Reverse') ? i + 1 : 0).filter(Boolean).join(', ');
@@ -469,8 +530,9 @@ function dtcRenderFixPlan(RC) {
       <div style="font-weight:700;font-size:.95rem;margin-bottom:4px;">🧭 How to close the gap between DTCM and Opera</div>
       <div style="font-size:.72rem;color:var(--text2);margin-bottom:8px;">Step A: what explains the difference between the two totals</div>
       ${bridge}
-      <div style="font-size:.72rem;color:var(--text2);margin:14px 0 2px;">Step B: what to do, in this order${plan.length ? '' : ' (nothing)'}</div>
-      ${cards}
+      <div style="font-size:.72rem;color:var(--text2);margin:14px 0 2px;">Step B: what to do, in this order${allPlan.length ? '' : ' (nothing)'}. Copying a DTCM ID (or ✓ Fixed) marks that one as done, and it stays done on the next days' files.</div>
+      ${cards}${!plan.length && fixedPlan.length ? '<div style="font-size:.8rem;">All corrections are marked fixed ✓</div>' : ''}
+      ${fixedHtml}
       <div style="font-size:.72rem;color:var(--text2);margin:12px 0 4px;">Step C: result</div>
       ${after}
     </div>`;
@@ -485,18 +547,18 @@ function dtcRenderActions(RC) {
     meta.textContent = 'Nothing to do';
     return;
   }
-  const totalAbs = actions.reduce((s, a) => s + (a.abs || 0), 0);
-  meta.textContent = `${actions.length} correction${actions.length === 1 ? '' : 's'} · ±${dtcNum(totalAbs, 0)} AED`;
-  body.innerHTML = actions.map((a, i) => `
-    <tr>
-      <td>${i + 1}</td>
+  const totalAbs = actions.reduce((s, a) => s + (a.abs || 0), 0), open = actions.filter(a => !dtcActDone(a)).length;
+  meta.textContent = `${open} to do${open < actions.length ? ` · ${actions.length - open} fixed already` : ''} · ±${dtcNum(totalAbs, 0)} AED`;
+  body.innerHTML = actions.map((a, i) => { const fx = dtcActKey(a), done = dtcActDone(a); return `
+    <tr${done ? ' class="dtc-fixed-row" title="Fixed already"' : ''}>
+      <td>${done ? '✓' : i + 1}</td>
       <td><span class="dtc-act ${escapeHtml(a.action.toLowerCase())}">${escapeHtml(a.action)}</span></td>
-      <td><b>${escapeHtml(a.room)}</b>${a.uid ? `<div style="font-size:.64rem;color:var(--text3);margin-top:3px;white-space:nowrap;">DTCM ID ${dtcChip(a.uid)}</div>` : ''}</td>
+      <td><b>${escapeHtml(a.room)}</b>${a.uid ? `<div style="font-size:.64rem;color:var(--text3);margin-top:3px;white-space:nowrap;">DTCM ID ${dtcChip(a.uid, [fx])}</div>` : ''}</td>
       <td style="font-family:var(--mono);white-space:nowrap;">${escapeHtml(a.date)}</td>
       <td style="text-align:right;font-family:var(--mono);font-weight:700;color:${a.amount < 0 ? 'var(--red)' : 'var(--green)'};">${a.amount > 0 ? '+' : ''}${dtcNum(a.amount)} AED</td>
       <td>${escapeHtml(a.where)}</td>
       <td style="font-size:.72rem;color:var(--text2);">${escapeHtml(a.why || '')}</td>
-    </tr>`).join('');
+    </tr>`; }).join('');
 }
 
 function dtcCard(rows, fix) {
@@ -728,9 +790,11 @@ function dtcGroupByRoom(list) {
   });
 }
 
-function dtcChip(value) {
+/** keys: the corrections this value belongs to; copying it (the DTCM ID) marks them fixed */
+function dtcChip(value, keys) {
   if (!value) return '—';
-  return `<code>${escapeHtml(value)}</code><button class="dtc-copy" data-dtc-copy="${escapeHtml(value)}">copy</button>`;
+  const fx = keys && keys.length ? ` data-dtc-fx="${escapeHtml(keys.join(','))}" title="Copy. Copying the DTCM ID marks this correction as fixed"` : '';
+  return `<code>${escapeHtml(value)}</code><button class="dtc-copy" data-dtc-copy="${escapeHtml(value)}"${fx}>copy</button>`;
 }
 
 /* Postings to add = the 'missing' nights that still have an Add action. A missing night that was
@@ -766,10 +830,10 @@ function dtcRenderSheet() {
       <table class="dtc-sheet-table">
         <thead><tr><th class="chk"></th><th>Action</th><th>Room</th><th>Date</th><th style="text-align:right;">Amount</th><th>Why</th></tr></thead>
         <tbody>${dtcFixes.map(f => {
-          const key = 'fix|' + f.action + '|' + f.room + '|' + f.date;
-          const on = dtcDone.has(key);
+          const key = 'fix|' + f.action + '|' + f.room + '|' + f.date, fx = dtcFxKey(f.action, f.room, f.date);
+          const on = dtcDone.has(key) || !!dtcFixed[fx];
           return `<tr class="${on ? 'done' : ''}">
-            <td class="chk"><input type="checkbox" data-dtc-key="${escapeHtml(key)}"${on ? ' checked' : ''}></td>
+            <td class="chk"><input type="checkbox" data-dtc-key="${escapeHtml(key)}" data-dtc-fxk="${escapeHtml(fx)}"${on ? ' checked' : ''}></td>
             <td><span class="dtc-act ${escapeHtml(f.action.toLowerCase())}">${escapeHtml(f.action)}</span></td>
             <td><b>${escapeHtml(f.room)}</b></td>
             <td style="font-family:var(--mono);white-space:nowrap;">${escapeHtml(f.date)}</td>
@@ -790,7 +854,7 @@ function dtcRenderSheet() {
       ['Search room', dtcChip(g.room)], ['Guest name', dtcChip(g.guest)], ['Stay dates', dtcChip(stay)],
       ['Nights', escapeHtml(g.nights || '—')],
       g.reservation ? ['Reservation #', dtcChip(g.reservation)] : null,
-      g.transactionuid ? ['DTCM UID', dtcChip(g.transactionuid)] : null,
+      g.transactionuid ? ['DTCM UID', dtcChip(g.transactionuid, g.items.map(it => dtcFxKey('Add', it.room, it.date)))] : null,
       g.status ? ['Stay status', escapeHtml(g.status)] : null
     ].filter(Boolean).map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('');
     return `
@@ -803,10 +867,10 @@ function dtcRenderSheet() {
       <table class="dtc-sheet-table">
         <thead><tr><th class="chk"></th><th>Date to post</th><th>Guest</th><th style="text-align:right;">Amount</th></tr></thead>
         <tbody>${g.items.map(it => {
-          const key = it.room + '|' + it.date;
-          const on = dtcDone.has(key);
+          const key = it.room + '|' + it.date, fx = dtcFxKey('Add', it.room, it.date);
+          const on = dtcDone.has(key) || !!dtcFixed[fx];
           return `<tr class="${on ? 'done' : ''}">
-            <td class="chk"><input type="checkbox" data-dtc-key="${escapeHtml(key)}"${on ? ' checked' : ''}></td>
+            <td class="chk"><input type="checkbox" data-dtc-key="${escapeHtml(key)}" data-dtc-fxk="${escapeHtml(fx)}"${on ? ' checked' : ''}></td>
             <td style="font-family:var(--mono);">${escapeHtml(it.date)}</td>
             <td>${escapeHtml(it.guest)}</td>
             <td class="amt">${dtcNum(it.amount)} AED</td></tr>`;
@@ -825,9 +889,11 @@ function dtcToggleDone(cb) {
   const tr = cb.closest('tr');
   if (tr) tr.classList.toggle('done', cb.checked);
   if (cb.checked) dtcDone.add(key); else dtcDone.delete(key);
-  if (typeof logActivity === 'function') logActivity(cb.checked ? 'dtcm_item_done' : 'dtcm_item_undone', String(key).split('|').slice(1).join(' · '));
   dtcUpdateProgress();
   dtcPersistDone();
+  // a tick is remembered for good too, so the next day's files don't bring it back
+  const fx = cb.getAttribute('data-dtc-fxk');
+  if (fx) dtcSetFixed([fx], cb.checked, {});
 }
 
 function dtcUpdateProgress() {
@@ -848,6 +914,13 @@ function dtcClearTicks() {
 
 async function dtcCopyChip(btn) {
   copyToClipboard(btn.getAttribute('data-dtc-copy') || '', null, '');
+  const keys = (btn.getAttribute('data-dtc-fx') || '').split(',').filter(Boolean), fresh = keys.filter(k => !dtcFixed[k]);
+  if (fresh.length) {
+    dtcSetFixed(fresh, true, { uid: btn.getAttribute('data-dtc-copy') || '' });
+    const msg = '✓ Copied, and marked as fixed: it won\'t come back as a to-do';
+    if (typeof showUndoToast === 'function') showUndoToast(msg, () => dtcSetFixed(fresh, false)); else showToast(msg, 'ok');
+    return;
+  }
   const old = btn.textContent;
   btn.textContent = 'copied'; btn.classList.add('copied');
   setTimeout(() => { btn.textContent = old; btn.classList.remove('copied'); }, 1200);

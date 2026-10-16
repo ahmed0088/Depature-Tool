@@ -2128,3 +2128,6 @@ html.ho-lang-ar body { font-family: var(--font), 'Segoe UI', 'Noto Sans Arabic',
 .st-rep { margin: 0 4px; font-size: .78rem; }
 .st-on.rep { background: rgba(120,150,255,.12); }
 @media (max-width: 600px) { .mr-hd { grid-template-columns: 1fr auto; } .mr-chev { display: none; } .mr-bar { width: 60px; } }
+/* DTCM: corrections already fixed */
+.dtc-fixed-row td { opacity: .5; }
+.dtc-fixed-row td:first-child { color: var(--green); opacity: 1; font-weight: 700; }

@@ -150,7 +150,7 @@ function _open() {
   const rows = [];
   safe(() => {
     if (typeof dtcRecon === 'undefined' || !dtcRecon) return;
-    const n = (dtcRecon.actions || []).length, done = typeof dtcDone !== 'undefined' ? [...dtcDone].length : 0, left = Math.max(0, n - done);
+    const n = (dtcRecon.actions || []).length, done = typeof dtcDone !== 'undefined' ? [...dtcDone].length : 0, left = typeof dtcOpenCount === 'function' ? dtcOpenCount() : Math.max(0, n - done);
     if (left) rows.push({ k: '🏦 DTCM', t: `${plural(left, 'correction')} to make`, tone: 'warn', panel: 'dtcm' });
   });
   safe(() => {
