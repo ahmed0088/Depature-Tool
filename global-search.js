@@ -279,6 +279,7 @@ const GS_FEATURES = [
   ['❗ Important shift task', 'important urgent priority red tag shift task flag', 'Shift Tasks', () => gsGo('shifts', { sel: '[id^="stImp-"]' })],
   ['📦 Package Audit: to fix', 'package upsell in-gauge fix list copy fixed confirmed came back seller', 'Package Audit', () => gsGo('package-audit', { sel: '#pkgList' })],
   ['⚙️ Package Audit rules', 'package rules extension same stay first person tars freeze seller staff names logins why', 'Package Audit', () => { gsGo('package-audit'); setTimeout(() => pkgShowView('rules'), 300); }],
+  ['⏎ Enter to save', 'enter key save keyboard shortcut submit ok', 'Keyboard', () => showToast('Press Enter in any window field to save it', 'ok')],
   ['📆 Monthly reports (TD check, revenue by accounts, statistics)', 'monthly report reports month end td revenue accounts statistics statics due 1 4 remind every month', 'Shift Tasks', () => gsGo('shifts', { sel: '#mrCard' })],
   ['🔁 Repeat a shift task every week or every month', 'repeat recurring every week weekly every month monthly task', 'Shift Tasks', () => gsGo('shifts', { sel: '[id^="stRep-"]' })],
   ['📅 Shift task for a date (one-off)', 'task date one off coming up later day', 'Shift Tasks', () => gsGo('shifts', { sel: '[id^="stOn-"]' })],

@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 295, items: [
+    '⏎ Enter saves: in any window (edit a task, add something, settings…), press Enter in a field and it clicks the window\'s main button (Save / Add / OK). In a big text box Enter still makes a new line; Shift+Enter never saves.',
+  ] },
   { v: 293, items: [
     '📦 Package Audit: the same kind of package at a different price is the same package, and stays with whoever started it, also after an extension. Breakfast = any …BB, BBSUM, BBWIN, MBREAK; dinner = …DIN; early check-in = …EC; late check-out = …LC; room upgrade = USS + a number (USS50, USS75…). Half board and full board are their own kinds.',
   ] },

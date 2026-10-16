@@ -248,6 +248,8 @@ function showToast(msg, type = 'ok') {
 //   showUndoToast('Task deleted', () => { restore the item });
 let _undoTimer = null;
 function showUndoToast(msg, undoFn, timeoutMs = 6000) {
+  // an undo / redo that is running right now does not offer its own Undo
+  if (typeof hoUndo !== 'undefined' && hoUndo.busy()) return;
   let toast = document.getElementById('undoToast');
   if (!toast) {
     toast = document.createElement('div');
@@ -258,6 +260,14 @@ function showUndoToast(msg, undoFn, timeoutMs = 6000) {
   clearTimeout(_undoTimer);
   clearInterval(showUndoToast._tick);   // a new toast replaces the old countdown
   let remaining = Math.round(timeoutMs / 1000);
+  // Runs once only: from this toast's button or from Ctrl+Z (undo.js), whichever comes first.
+  let undone = false;
+  const runUndo = () => { if (undone) return; undone = true; if (typeof undoFn === 'function') return undoFn(); };
+  const entry = typeof hoUndo !== 'undefined' ? hoUndo.push(String(msg), () => {
+    if (toast._undoEntry === entry) { clearTimeout(_undoTimer); toast.classList.remove('show'); }
+    return runUndo();
+  }, { quiet: true }) : null;
+  toast._undoEntry = entry;
   const render = () => {
     toast.innerHTML = `
       <span class="undo-toast-msg">${escapeHtml(String(msg))}</span>
@@ -266,7 +276,8 @@ function showUndoToast(msg, undoFn, timeoutMs = 6000) {
     document.getElementById('undoToastBtn').onclick = () => {
       clearTimeout(_undoTimer);
       toast.classList.remove('show');
-      if (typeof undoFn === 'function') undoFn();
+      if (entry) hoUndo.remove(entry);
+      runUndo();
     };
   };
   render();
@@ -517,7 +528,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v294';
+const APP_VERSION = 'v295';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;
