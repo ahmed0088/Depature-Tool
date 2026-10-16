@@ -1187,6 +1187,9 @@ console.log('\nQuiet when off · shift task times');
   check('package extension: a room upgrade sold on the extension of a breakfast stay stays with its seller', run('USS50'), 'ACCOREN-SSELLER@ACCOREN|');
   check('package extension: the same breakfast continuing on the extension still goes to the first seller', run('UPS40BB'), 'ACCOREN-LSTAFF@ACCOREN|A1');
   check('package extension: any …BB is breakfast, so 40BB → 60BB on the extension stays with whoever started the breakfast', run('UPS60BB'), 'ACCOREN-LSTAFF@ACCOREN|A1');
+  check('package extension: BBWIN (winter breakfast) on the extension is still the breakfast the first seller started', run('BBWIN'), 'ACCOREN-LSTAFF@ACCOREN|A1');
+  check('package extension: dinner (UPS59DIN) is a different package from breakfast', run('UPS59DIN'), 'ACCOREN-SSELLER@ACCOREN|');
+  check('package kinds: the same kind at another price is one package', ['UPS30BB','UPS80BB','BBSUM','BBWIN','MBREAK','USS100EC','USS225EC','USS100LC','UPS59DIN','UPS118DIN','USS50','USS75','HBWIN','FBSUM'].map(c => vm.runInContext('_pkgKindOfCode(' + JSON.stringify(c) + ')', sb)).join(' '), 'BB BB BB BB BB EC EC LC DIN DIN USS USS HB FB');
   // A stay whose first booking had no package: the first one who put breakfast on a LATER booking owns it.
   const run3 = () => vm.runInContext(`(() => {
     pkgGuests = { H0: { name: 'TEST,TWO', norm: 'test two', room: '413', arr: '16-SEP-26', dep: '02-OCT-26' },

@@ -254,7 +254,7 @@ function _pkgDayLabel(n) {
 function _pkgCodeFamilyFor(product) {
   if (product === 'Early Check In')  return /EC$/i;
   if (product === 'Late Check Out')  return /LC$/i;
-  if (product === 'Breakfast')       return /BB$/i;
+  if (product === 'Breakfast')       return /(BB$|^BB|BREAK)/i;   // UPS30BB, BBSUM, BBWIN, MBREAK…
   return null;
 }
 
@@ -733,11 +733,22 @@ function _pkgUserLabel(u) {
 // take the whole sale off whoever booked the breakfast. Codes outside the
 // three known families (half board, dinner) have no upgrade ladder to
 // follow, so those stay matched on the exact code.
+// Kinds of package: the same kind at another price (UPS30BB / UPS60BB, BBSUM / BBWIN,
+// USS100EC / USS225EC, UPS59DIN / UPS118DIN, USS50 / USS75…) is the same package, and stays with
+// whoever started it. Checked in this order (USS100EC is early check-in, not an upgrade).
+const PKG_KINDS = [
+  ['EC',  'Early check-in',  /EC$/i],
+  ['LC',  'Late check-out',  /LC$/i],
+  ['BB',  'Breakfast',       /(BB$|^BB|BREAK)/i],
+  ['DIN', 'Dinner',          /DIN$/i],
+  ['HB',  'Half board',      /^HB/i],
+  ['FB',  'Full board',      /^FB/i],
+  ['USS', 'Room upgrade',    /^USS\d+$/i],
+];
+const _pkgKindEntry = code => PKG_KINDS.find(k => k[2].test(String(code || '').replace(/\s+/g, ''))) || null;
 function _pkgFamilyOfCode(code) {
-  if (/EC$/i.test(code)) return /EC$/i;
-  if (/LC$/i.test(code)) return /LC$/i;
-  if (/BB$/i.test(code)) return /BB$/i;
-  return null;
+  const k = _pkgKindEntry(code);
+  return k ? k[2] : null;
 }
 
 // A booking that arrives through TARS or another interface writes its
@@ -991,9 +1002,8 @@ function _pkgOwnerFromOpera(conf) {
 function _pkgKindOfCode(code) {
   code = String(code || '').toUpperCase().replace(/\s+/g, '');
   if (_pkgRule('exactCode') && code) return code;   // UPS30BB and UPS60BB are two different packages
-  if (/EC$/.test(code)) return 'EC';
-  if (/LC$/.test(code)) return 'LC';
-  if (/BB$/.test(code)) return 'BB';
+  const k = _pkgKindEntry(code);
+  if (k) return k[0];
   const m = code.match(/^[A-Z]+/);
   return m ? m[0] : '';
 }
@@ -1942,7 +1952,7 @@ const PKG_RULE_INFO = [
     d: 'Opera can show several people touching one package: who added it, who changed its dates or its price. The sale goes to the earliest real person.',
     ex: 'Sam adds breakfast on 3 Oct at 10:05. Lina changes its dates on 5 Oct. → Sam gets it.',
     off: 'Off: whoever\'s Opera entry matches the price charged gets it.',
-    subs: [{ k: 'familyMatch', t: 'An upgrade is still the same package', d: 'Breakfast for 1 (UPS30BB) changed to breakfast for 2 (UPS60BB) stays with whoever started the breakfast.' }] },
+    subs: [{ k: 'familyMatch', t: 'The same kind at another price is the same package', d: 'Breakfast (…BB, BBSUM, BBWIN, MBREAK), dinner (…DIN), early check-in (…EC), late check-out (…LC), room upgrade (USS + number): when it changes price or season, it stays with whoever started it.' }] },
   { k: 'chain', ico: '🔗', short: 'extension (same stay)', t: 'Back-to-back bookings are one stay', needs: 'guests',
     d: 'A guest who extends gets a new confirmation number. When the new booking starts the day the last one ends, it is the same stay, so the package stays with the first seller.',
     ex: 'Booking A 5–13 Oct, Sam sold breakfast. Booking B 13–17 Oct, same guest; Lina adds breakfast again on B. → Still Sam\'s.',

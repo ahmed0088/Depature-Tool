@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 293, items: [
+    '📦 Package Audit: the same kind of package at a different price is the same package, and stays with whoever started it, also after an extension. Breakfast = any …BB, BBSUM, BBWIN, MBREAK; dinner = …DIN; early check-in = …EC; late check-out = …LC; room upgrade = USS + a number (USS50, USS75…). Half board and full board are their own kinds.',
+  ] },
   { v: 292, items: [
     '🥐 Package Audit: every package ending in BB is breakfast. Whoever started the breakfast keeps it, even when it changes to 30BB, 60BB or 80BB, and also when the guest extends on a new confirmation. (The "each code is its own package" switch in Rules is now off; turn it on only if you want 30BB and 60BB counted separately.)',
   ] },
