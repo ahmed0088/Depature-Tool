@@ -911,18 +911,18 @@ console.log('\nRoster scenarios');
   vm.createContext(sb);
   for (const f of ['roster.js', 'roster-build.js', 'roster-team.js', 'brain-understand.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sb, { filename: f });
   const run = js => vm.runInContext(js, sb);
-  run(`[['S', 'Souptik Bhadra', 'Adagio GD'], ['A', 'Ali Zama Mirza', 'Adagio GD'], ['H', 'Ahmed Saleh', 'Ibis DD'], ['M', 'Manisha Rai', 'Ibis DD'], ['L', 'Lina Park', 'Mercure DD']].forEach(([k, n, g]) => { roStaff[k] = { name: n, group: g }; });`);
+  run(`[['S', 'Tariq Benson', 'Adagio GD'], ['A', 'Omar Zaki Malik', 'Adagio GD'], ['H', 'Hadi Saleh', 'Ibis DD'], ['M', 'Maya Rai', 'Ibis DD'], ['L', 'Lina Park', 'Mercure DD']].forEach(([k, n, g]) => { roStaff[k] = { name: n, group: g }; });`);
   const say = q => run(`(u => (u.sure ? 'DO ' : 'ASK ') + (u.cmd || u.options.map(o => o.cmd).join(' / ')))(buUnderstand(${JSON.stringify(q)}))`);
-  check('plain talk: "can u keep souptik away from mr ali pls"', say('can u keep souptik away from mr ali pls'), 'DO avoid Souptik Bhadra with Ali Zama Mirza');
-  check('plain talk: "ahmed not coming tmrw" (typo)', say('ahmed not coming tmrw'), 'DO Ahmed Saleh is sick tomorrow');
-  check('plain talk: "manisha dont want nights anymore"', say('manisha dont want nights anymore'), 'DO Manisha Rai prefers not nights');
+  check('plain talk: "can u keep tariq away from mr omar pls"', say('can u keep tariq away from mr omar pls'), 'DO avoid Tariq Benson with Omar Zaki Malik');
+  check('plain talk: "hadi not coming tmrw" (typo)', say('hadi not coming tmrw'), 'DO Hadi Saleh is sick tomorrow');
+  check('plain talk: "maya dont want nights anymore"', say('maya dont want nights anymore'), 'DO Maya Rai prefers not nights');
   check('plain talk: "how many vacation days left for lina"', say('how many vacation days left for lina'), 'DO vacation balance of Lina Park');
   check('plain talk: "who is working now"', say('who is working now'), 'DO who is on now');
   check('plain talk: "make next week roster"', say('make next week roster'), 'DO build the roster');
-  check('plain talk: a misspelt name ("souptk and ali never together")', say('souptk and ali never together'), 'DO avoid Souptik Bhadra with Ali Zama Mirza');
+  check('plain talk: a misspelt name ("tarq and omar never together")', say('tarq and omar never together'), 'DO avoid Tariq Benson with Omar Zaki Malik');
   check('plain talk: "dont send lina to ibis"', say('dont send lina to ibis'), 'DO never send Lina Park to Ibis DD');
-  check('plain talk: a guest or a room is never a change to the team ("Mr Ahmed in 512 is sick")', run(`buUnderstand('Mr Ahmed in 512 is sick').options.length`), 0);
-  check('plain talk: "Mr Ahmed is sick" asks first (could be a guest)', say('Mr Ahmed is sick'), 'ASK Ahmed Saleh is sick today');
+  check('plain talk: a guest or a room is never a change to the team ("Mr Hadi in 512 is sick")', run(`buUnderstand('Mr Hadi in 512 is sick').options.length`), 0);
+  check('plain talk: "Mr Hadi is sick" asks first (could be a guest)', say('Mr Hadi is sick'), 'ASK Hadi Saleh is sick today');
   check('plain talk: a plain question is left to Ops Brain ("how do I post TD")', run(`buUnderstand('how do I post TD').options.length`), 0);
   run(`roStaff.SB = { name: 'Sandrine Berinyuy', group: 'Adagio GD' }; roToday = () => '2026-10-10'; roCanEdit = () => true; _rtOut = () => {};`);
   check('dates: "15" and "the 15th" are the next 15th', run(`[rtDay('15'), rtDay('the 15th'), rtDay('until 5')].join()`), '2026-10-15,2026-10-15,2026-11-05');
@@ -931,7 +931,7 @@ console.log('\nRoster scenarios');
   check('leave: a day off or leave already posted stays as it is; only working days change', run(`const t = rtMarkAbsent('SB', '2026-10-08', '2026-10-15', 'AL', true); [t.changed.join(' '), t.kept.join(' ')].join(' | ')`), '2026-10-08 | 2026-10-09 2026-10-10 2026-10-11');
   check('plain talk: "until 15 oct" is the end date, not the start', say('sandrine is on vacation until 15 oct'), 'DO Sandrine Berinyuy is on vacation today until 15 oct');
   check('plain talk: "how to …" shows how and asks before doing it', say('how to keep sandrine on vaction until 15 ?'), 'ASK Sandrine Berinyuy is on vacation today until 15');
-  check('plain talk: learns what you meant', run(`const c = buRead('put souptik far from ali'); buLearn(c, 'apart'); buUnderstand('put lina far from manisha').cmd`), 'avoid Lina Park with Manisha Rai');
+  check('plain talk: learns what you meant', run(`const c = buRead('put tariq far from omar'); buLearn(c, 'apart'); buUnderstand('put lina far from maya').cmd`), 'avoid Lina Park with Maya Rai');
 }
 
 // ── What if… (roster-team.js) ─────────────────────────────
@@ -1199,6 +1199,83 @@ console.log('\nQuiet when off · shift task times');
     return rows[0].user;
   })()`, sb);
   check('package extension: the first one who put the package on the stay keeps it, even after a no-package first booking', run3(), 'ACCOREN-MFIRST@ACCOREN');
+
+  // ── Package Audit rules: each switch changes the outcome it names, and the defaults change nothing ──
+  const R = (code, js) => vm.runInContext(`(() => { pkgRules = Object.assign({}, PKG_RULE_DEFAULTS); ${js}; return (${code})(); })()`, sb);
+  const ext = `() => run2()`;
+  vm.runInContext(`function run2(roomB, arrB, codeB) {
+    pkgGuests = { A1: { name: 'TEST,GUEST', norm: 'test guest', room: '410', arr: '05-OCT-26', dep: '13-OCT-26' },
+                  B1: { name: 'TEST,GUEST', norm: 'test guest', room: roomB || '410', arr: arrB || '13-OCT-26', dep: '17-OCT-26' } };
+    pkgEvents = { A1: [{ action: 'ADDED', code: 'UPS40BB', ts: 202610051553, user: 'ACCOREN-LSTAFF@ACCOREN' }],
+                  B1: [{ action: 'ADDED', code: codeB || 'UPS30BB', ts: 202610100142, user: 'ACCOREN-SSELLER@ACCOREN' }] };
+    const ev = pkgEvents.B1[0];
+    const rows = [{ conf: 'A1', verdict: 'credit', user: 'ACCOREN-LSTAFF@ACCOREN', employee: 'ACCOREN-LSTAFF@ACCOREN', matchedEvent: pkgEvents.A1[0], product: 'Breakfast' },
+                  { conf: 'B1', verdict: 'credit', user: 'ACCOREN-SSELLER@ACCOREN', employee: 'ACCOREN-SSELLER@ACCOREN', matchedEvent: ev, originEvent: ev, product: '' }];
+    _pkgApplyExtensionCredit(rows);
+    return rows[1].user.split('@')[0].split('-').pop();
+  }`, sb);
+  check('package rules: default — the extension keeps breakfast with the first seller', R(ext, ''), 'LSTAFF');
+  check('package rules: extension rule off — every booking is its own sale', R(ext, `pkgRules.chain = false`), 'SSELLER');
+  check('package rules: "same room only" — a move to another room starts a new stay', R(`() => run2('411')`, `pkgRules.chainSameRoom = true`), 'SSELLER');
+  check('package rules: "same room only" off — a room move is still the same stay', R(`() => run2('411')`, ''), 'LSTAFF');
+  check('package rules: "same room only" — the same room still chains', R(`() => run2('410')`, `pkgRules.chainSameRoom = true`), 'LSTAFF');
+  check('package rules: a one-day gap is a new stay by default', R(`() => run2('410', '14-OCT-26')`, ''), 'SSELLER');
+  check('package rules: gap 1 day — a one-night break is still one stay', R(`() => run2('410', '14-OCT-26')`, `pkgRules.chainGap = 1`), 'LSTAFF');
+  check('package rules: same kind only — an upgrade on the extension stays with its seller', R(`() => run2('410', '', 'USS50')`, ''), 'SSELLER');
+  check('package rules: same kind off — everything on the extension goes to the first seller', R(`() => run2('410', '', 'USS50')`, `pkgRules.sameKind = false`), 'LSTAFF');
+
+  // The whole audit on a small made-up month: who gets what, rule by rule.
+  vm.runInContext(`function auditOf() {
+    const U = (conf, product, employee, charge, daily) => ({ conf, room: '101', charge, days: '', arr: '09-Oct-2026', dep: '13-Oct-2026', daily, status: 'APPROVED',
+      product, employee, needsProduct: /unknown/i.test(product), needsEmployee: !employee || employee === '-' });
+    pkgGuests = {};
+    pkgUnknowns = [U('C1', 'Breakfast', 'Lina MORENO', 48.98, '10-Oct-2026'), U('C1', 'Breakfast', 'Lina MORENO', 48.98, '11-Oct-2026'),
+                   U('C2', 'Breakfast', '-', 24.48, '10-Oct-2026'),
+                   U('C3', 'Early Check In', 'ACCOREN-SALVAREZ', 50, '10-Oct-2026'), U('C3', 'Early Check In', 'ACCOREN-SALVAREZ', 50, '11-Oct-2026'), U('C3', 'Early Check In', 'ACCOREN-SALVAREZ', 50, '12-Oct-2026'),
+                   U('C4', 'Late Check Out', 'ACCOREN-SALVAREZ', 50, '11-Oct-2026')];
+    pkgEvents = {
+      C1: [{ action: 'ADDED', code: 'UPS60BB', ts: 202610050900, user: 'ACCOREN-LMORENO@ACCOREN', price: '48.98' },
+           { action: 'ADDED', code: 'UPS30BB', ts: 202610010900, user: 'ACCOREN-SALVAREZ@ACCOREN', price: '24.48' }],
+      C2: [{ action: 'ADDED', code: 'UPS30BB', ts: 202610010800, user: '*TARS*', price: '24.48' }],
+      C3: [{ action: 'ADDED', code: 'USS100EC', ts: 202610090800, user: 'ACCOREN-SALVAREZ@ACCOREN', price: '50', from: '10-OCT-26', to: '10-OCT-26' }],
+      C4: [{ action: 'ADDED', code: 'UPS30BB', ts: 202610090800, user: 'ACCOREN-SALVAREZ@ACCOREN', price: '24.48' }] };
+    _pkgRecomputeLogRange();
+    return _pkgCompute().map(r => r.conf + ':' + r.verdict + ':' + (r.noSeller ? 'SYS' : String(r.user || '').split('@')[0].split('-').pop())).join(' ');
+  }`, sb);
+  const base = 'C1:credit:SALVAREZ C1:credit:SALVAREZ C2:credit:SYS C3:credit:SALVAREZ C3:deny:SALVAREZ C3:deny:SALVAREZ C4:deny:SALVAREZ';
+  check('package rules: default rules decide exactly as before', R(`auditOf`, ''), base);
+  check('package rules: nothing stored = the defaults', R(`() => JSON.stringify(_pkgRulesStored())`, ''), '{}');
+  check('package rules: switching a rule off and back gives the identical result', R(`auditOf`, `pkgRules.firstPerson = false; auditOf(); pkgRules.firstPerson = true`), base);
+  // (IN-Gauge already credits Lina MORENO, the login LMORENO, so she then stays)
+  check('package rules: first person off — the entry matching the price wins', R(`auditOf`, `pkgRules.firstPerson = false`).split(' ').slice(0, 2).join(' '), 'C1:credit:Lina MORENO');
+  check('package rules: upgrade-is-same-package off — the upgrade is its own sale', R(`auditOf`, `pkgRules.familyMatch = false`).split(' ').slice(0, 2).join(' '), 'C1:credit:Lina MORENO');
+  check('package rules: system bookings off — the TARS account is credited', R(`auditOf`, `pkgRules.systemNoSeller = false`).split(' ')[2], 'C2:credit:*TARS*');
+  check('package rules: once-per-stay off — every early check-in night is kept', R(`auditOf`, `pkgRules.oneTime = false`).split(' ').slice(3, 6).join(' '), 'C3:credit:SALVAREZ C3:credit:SALVAREZ C3:credit:SALVAREZ');
+  check('package rules: remove-when-Opera-has-none off — it goes to Check by hand', R(`auditOf`, `pkgRules.denyNoOpera = false`).split(' ')[6], 'C4:review:SALVAREZ');
+
+  // The smart "done": a fix stays away until a NEWER IN-Gauge report says otherwise.
+  const done = js => vm.runInContext(`(() => { pkgRules = Object.assign({}, PKG_RULE_DEFAULTS); auditOf(); pkgResults = _pkgCompute(); ${js} })()`, sb);
+  const T = Date.parse('2026-10-11T08:00:00Z');
+  check('package done: fixed, same old report loaded again → stays away (waiting)',
+    done(`pkgDone = { 'C1|Breakfast': { by: 'Sam', at: new Date(${T}).toISOString() } }; pkgReportAt = ${T} - 3600e3;
+      return _pkgDoneState('C1|Breakfast') + ':' + pkgResults.filter(r => r.conf === 'C1').map(pkgNightDone).join(',') + ':' + _pkgAllGroups().filter(g => _pkgInView(g, 'action')).map(g => g.key).includes('C1|Breakfast')`),
+    'waiting:true,true:false');
+  check('package done: a newer report still wrong → it comes back, with its nights',
+    done(`pkgDone = { 'C1|Breakfast': { by: 'Sam', at: new Date(${T}).toISOString() } }; pkgReportAt = ${T} + 3600e3;
+      return _pkgDoneState('C1|Breakfast') + ':' + _pkgAllGroups().filter(g => _pkgInView(g, 'action')).map(g => g.key).includes('C1|Breakfast') + ':' + _pkgNightsText(pkgResults.filter(pkgBackWrong), true)`),
+    'back:true:10 & 11 Oct');
+  check('package done: a newer report that shows it right → confirmed',
+    done(`pkgResults.forEach(r => { if (r.conf === 'C1') { r.reassign = false; r.alreadyComplete = true; } });
+      pkgDone = { 'C1|Breakfast': { by: 'Sam', at: new Date(${T}).toISOString() } }; pkgReportAt = ${T} + 3600e3;
+      const n = _pkgConfirmSweep(); return _pkgDoneState('C1|Breakfast') + ':' + n + ':' + !!pkgDone['C1|Breakfast'].ok`),
+    'confirmed:1:true');
+  check('package done: an old per-day entry is kept and read as fixed at its latest tick',
+    done(`pkgDone = { 'C1|Breakfast': { by: 'Sam', at: new Date(${T}).toISOString(), nights: true, days: { '10-Oct-2026': { by: 'Sam', at: new Date(${T} + 7200e3).toISOString() } } } };
+      pkgReportAt = ${T} + 3600e3; return _pkgFixedAt(pkgDone['C1|Breakfast']) === ${T} + 7200e3 ? _pkgDoneState('C1|Breakfast') : 'wrong time'`),
+    'waiting');
+  check('package staff: a pasted "LOGIN = Name" line is read the right way round',
+    vm.runInContext(`JSON.stringify(_pkgParseStaffLine('ACCOREN-SALVAREZ2 = Sam ALVAREZ'))`, sb), JSON.stringify({ name: 'Sam ALVAREZ', logins: ['ACCOREN-SALVAREZ2'] }));
+  check('package staff: the code ships with no staff names', vm.runInContext(`PKG_STAFF.length + Object.keys(PKG_STAFF_ALIASES).length`, sb), 0);
 }
 
 console.log(`\n${pass} passed · ${fail} failed`);

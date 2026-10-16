@@ -277,12 +277,13 @@ const GS_FEATURES = [
   ['🔐 New-device sign-in alerts', 'security new device sign in login alert phone stolen hacked account', 'Team', () => { if (typeof openAdminPanel === 'function') openAdminPanel(); }],
   ['💾 Download a backup', 'backup download export save everything file restore', 'Settings', () => gsSet('Download a backup')],
   ['❗ Important shift task', 'important urgent priority red tag shift task flag', 'Shift Tasks', () => gsGo('shifts', { sel: '[id^="stImp-"]' })],
+  ['📦 Package Audit: to fix', 'package upsell in-gauge fix list copy fixed confirmed came back seller', 'Package Audit', () => gsGo('package-audit', { sel: '#pkgList' })],
+  ['⚙️ Package Audit rules', 'package rules extension same stay first person tars freeze seller staff names logins why', 'Package Audit', () => { gsGo('package-audit'); setTimeout(() => pkgShowView('rules'), 300); }],
   ['📆 Monthly reports (TD check, revenue by accounts, statistics)', 'monthly report reports month end td revenue accounts statistics statics due 1 4 remind every month', 'Shift Tasks', () => gsGo('shifts', { sel: '#mrCard' })],
   ['🔁 Repeat a shift task every week or every month', 'repeat recurring every week weekly every month monthly task', 'Shift Tasks', () => gsGo('shifts', { sel: '[id^="stRep-"]' })],
   ['📅 Shift task for a date (one-off)', 'task date one off coming up later day', 'Shift Tasks', () => gsGo('shifts', { sel: '[id^="stOn-"]' })],
   // other pages
-  ['📦 Package Audit: To fix / Copied', 'package upsell in-gauge copied done to fix multi day seller', 'Package Audit', () => gsGo('package-audit')],
-  ['🏛️ DTCM Recon', 'dtcm tourism dirham recon month to date corrections', 'DTCM Recon', () => gsGo('dtcm')],
+    ['🏛️ DTCM Recon', 'dtcm tourism dirham recon month to date corrections', 'DTCM Recon', () => gsGo('dtcm')],
   ['☎️ Wake-up calls', 'wake up call morning call', 'Wake-up Calls', () => gsGo('wakeups')],
 ];
 /** open Settings filtered to one option, and light it up */

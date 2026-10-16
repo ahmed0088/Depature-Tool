@@ -37,6 +37,27 @@ let pkgGuests   = {};   // confirmation no. -> { name, norm, room, arr, dep } fr
 // one stay, and the sale stays with whoever made it first.
 const PKG_EXTENSION_GAP = 0;
 
+// ── Rules: every real decision point of the audit, with a switch ──────────
+// Shared with the team at packageAudit/rules/<key> (only the keys that differ
+// from the default are stored). The defaults are the audit's normal behaviour:
+// with nothing stored, every result is exactly what it always was.
+const PKG_RULE_DEFAULTS = {
+  firstPerson: true,     // the first person who put the package on gets it (off: the entry matching the price)
+  familyMatch: true,     // an upgrade on the same kind (UPS30BB -> UPS60BB) is still the same package
+  chain: true,           // back-to-back bookings of the same guest are one stay
+  chainSameRoom: false,  // ...only when they are in the same room
+  chainGap: PKG_EXTENSION_GAP,   // days allowed between the two bookings (0 or 1)
+  sameKind: true,        // only the same kind of package carries over an extension
+  systemNoSeller: true,  // online / TARS / system bookings have no desk seller
+  oneTime: true,         // early check-in / late check-out are counted once per stay
+  denyNoOpera: true,     // remove a charge when Opera shows no such package on the booking
+  splitFlag: true,       // one package credited to two people is flagged
+  reviewedStops: true,   // a REVIEWED row in IN-Gauge stops being work
+};
+let pkgRules = Object.assign({}, PKG_RULE_DEFAULTS);
+try { Object.assign(pkgRules, JSON.parse(localStorage.getItem('pkg_rules_v1') || '{}') || {}); } catch (_) {}
+function _pkgRule(k) { return pkgRules[k] == null ? PKG_RULE_DEFAULTS[k] : pkgRules[k]; }
+
 // ── IN-Gauge export upload (.xlsx) ──────────────────────────
 function pkgLoadExcel(input) {
   const file = input?.files?.[0];
@@ -428,7 +449,7 @@ async function _pkgParsePdfEvents(pdf, onPage) {
       });
       rowLines.user.sort((a, b) => b.y - a.y);
       rowLines.desc.sort((a, b) => b.y - a.y);
-      // User email wraps mid-word across lines ("ACCOREN-" / "AHELSAFTY@" /
+      // User email wraps mid-word across lines ("ACCOREN-" / "SALVAREZ@" /
       // "ACCOREN") — no separator. Description wraps at word boundaries —
       // join with a space, then collapse any doubled whitespace.
       rows.push({
@@ -620,13 +641,13 @@ function _pkgMatchEvent(u, cands) {
 }
 
 // The same person is written several ways across the two systems:
-// Opera's log always has the login ("ACCOREN-CNONIS@ACCOREN"), while
-// IN-Gauge may carry the login ("ACCOREN-CNONIS") or the display name
-// ("Chethmi NONIS") depending on the column and the export.
+// Opera's log always has the login ("ACCOREN-SALVAREZ@ACCOREN"), while
+// IN-Gauge may carry the login ("ACCOREN-SALVAREZ") or the display name
+// ("Sam ALVAREZ") depending on the column and the export.
 function _pkgUserKey(u) { return String(u || '').split('@')[0].trim().toUpperCase(); }
 
-// Last word of either form: "ACCOREN-CNONIS" -> CNONIS, "Chethmi NONIS"
-// -> NONIS. Digits and separators in a tenant prefix (HA7N5-HNAVED) are
+// Last word of either form: "ACCOREN-SALVAREZ" -> SALVAREZ, "Sam ALVAREZ"
+// -> ALVAREZ. Digits and separators in a tenant prefix (HA7N5-LMORENO) are
 // treated as breaks, so the family part is what's left at the end.
 function _pkgFamilyPart(key) {
   const w = String(key).replace(/[^A-Z]+/g, ' ').trim().split(/\s+/).filter(Boolean);
@@ -642,7 +663,7 @@ function _pkgSameUser(a, b) {
     if (is(x) && is(y)) return true;
   }
   // A login is the family name with the person's initials stuck on the
-  // front — CNONIS/NONIS, MADAS/DAS, AHELSAFTY/ELSAFTY, HNAVED/NAVED —
+  // front — SALVAREZ/ALVAREZ, LMORENO/MORENO, TKHAN/KHAN —
   // so the longer form ends with the shorter one. Requiring at least
   // three letters and no more than a couple of extra keeps that from
   // matching two different people who happen to share an ending.
@@ -653,22 +674,20 @@ function _pkgSameUser(a, b) {
 }
 
 // IN-Gauge's screens name people the way the dropdown does; Opera's log
-// only ever carries the login. Showing "ACCOREN-CNONIS" next to a
-// dropdown that says "Chethmi NONIS" leaves the reader translating between
+// only ever carries the login. Showing "ACCOREN-SALVAREZ" next to a
+// dropdown that says "Sam ALVAREZ" leaves the reader translating between
 // the two, so the login is resolved back to the name wherever it's known.
 //
-// Add a line when someone joins — an unrecognised login simply displays
-// as itself, so nothing breaks if this list falls behind.
-const PKG_STAFF = [
-  'AhmedHassan ELSAFTY', 'Bhadra SOUPTIK', 'Chethmi NONIS', 'Hassan NAVED',
-  'HninWut YEEOO', 'Irene RUNTU', 'Manisha DAS', 'Syed Turrab Bukhari',
-];
+// The team list lives in the database (packageAudit/staff, edited in
+// ⚙️ Rules → Staff names), never in this public file. It starts EMPTY: an
+// unrecognised login simply displays as itself, so nothing breaks while the
+// list is empty or falls behind.
+let PKG_STAFF = [];
 
 // Extra spellings a login can carry for someone, when it is not simply
-// initials + family name (e.g. Turrab's login may use TURAB or TURRAB).
-const PKG_STAFF_ALIASES = {
-  'Syed Turrab Bukhari': ['TURRAB', 'TURAB', 'BUKHARI', 'STBUKHARI', 'SBUKHARI', 'STURRAB', 'STURAB'],
-};
+// initials + family name (e.g. "Sam ALVAREZ" logging in as ACCOREN-SALVAREZ2).
+// Filled from the same staff list: { 'Sam ALVAREZ': ['SALVAREZ2', ...] }.
+let PKG_STAFF_ALIASES = {};
 
 function _pkgStaffFor(u) {
   const key = _pkgUserKey(u);
@@ -676,13 +695,25 @@ function _pkgStaffFor(u) {
   const login = key.split('-').pop();
   return PKG_STAFF.find(name => _pkgSameUser(name, key)) ||
     Object.keys(PKG_STAFF_ALIASES).find(name => PKG_STAFF_ALIASES[name].some(a => login === a || login.endsWith(a) || key.includes(a))) ||
+    _pkgReportNames().find(name => _pkgSameUser(name, key)) ||
     null;
+}
+// The names IN-Gauge itself uses (its Employee column), so a login reads as a name even before
+// anyone fills in the team list. Nothing is saved: they come from the file loaded on this device.
+let _pkgNamesCache = { src: null, list: [] };
+function _pkgReportNames() {
+  if (typeof pkgUnknowns === 'undefined' || !Array.isArray(pkgUnknowns)) return [];
+  if (_pkgNamesCache.src === pkgUnknowns && _pkgNamesCache.n === pkgUnknowns.length) return _pkgNamesCache.list;
+  const set = new Set();
+  pkgUnknowns.forEach(r => { const e = String(r && r.employee || '').trim(); if (e && e !== '-' && /[a-z]/i.test(e) && !_pkgIsSystemUser(e)) set.add(e); });
+  _pkgNamesCache = { src: pkgUnknowns, n: pkgUnknowns.length, list: [...set] };
+  return _pkgNamesCache.list;
 }
 
 function _pkgUserLabel(u) {
   const key = _pkgUserKey(u);
   if (!key) return String(u || '');
-  // Reuses the login/display-name matching, so CNONIS finds Chethmi NONIS
+  // Reuses the login/display-name matching, so SALVAREZ finds Sam ALVAREZ
   // without needing the exact login spelled out here.
   return _pkgStaffFor(u) || key;
 }
@@ -690,9 +721,9 @@ function _pkgUserLabel(u) {
 // The matched event says WHICH package the charge is; it does not say who
 // sold it. A package added once and repriced later logs two entries under
 // the same code, and matching on the charged amount lands on the repricing
-// — conf 617204564 is UPS60BB added by AHELSAFTY at 32.66 on 11-Aug and
-// moved to 48.98 by CNONIS on 13-Aug, where the 48.98 charge would credit
-// CNONIS for a package Ahmed started. Same code is the same package, so
+// — conf 617204564 is UPS60BB added by one person at 32.66 on 11-Aug and
+// moved to 48.98 by a colleague on 13-Aug, where the 48.98 charge would credit
+// the colleague for a package the first person started. Same code is the same package, so
 // credit follows its earliest entry.
 //
 // Matched on the package FAMILY rather than the exact code, because an
@@ -721,19 +752,27 @@ function _pkgFamilyOfCode(code) {
 // recognised as a system account at all, and could be credited with a sale.
 const _PKG_SYSTEM_USER = /(^|[^A-Z0-9])(TARS|PRODUCTION|INTERFACE|WEBSERVICE|SYSTEM|IFC|ONLINE|CHANNEL|BOOKING|PMS)([^A-Z0-9]|$)/i;
 
-function _pkgIsSystemUser(u) {
+function _pkgIsSystemLogin(u) {
   const key = _pkgUserKey(u);
   if (!key) return true;
   if (_PKG_SYSTEM_USER.test(key)) return true;
   const login = key.split('-').pop() || key;
   return /\d/.test(login) && /^[0-9A-F]{6,}$/i.test(login);
 }
+// The rule "online / TARS / system bookings have no desk seller": switched off,
+// a system account is credited like anyone else.
+function _pkgIsSystemUser(u) {
+  if (!_pkgRule('systemNoSeller')) return !_pkgUserKey(u);
+  return _pkgIsSystemLogin(u);
+}
 
 // Returns null when every entry for the package is a system account —
 // nobody sold it, so there is nobody to credit.
 function _pkgOriginatorFor(ev, cands) {
   if (!ev) return null;
-  const family = _pkgFamilyOfCode(ev.code);
+  // Rule off: whoever's entry matches the charged price gets it (null for a system account).
+  if (!_pkgRule('firstPerson')) return _pkgIsSystemUser(ev.user) ? null : ev;
+  const family = _pkgRule('familyMatch') ? _pkgFamilyOfCode(ev.code) : null;
   const pool = family ? cands.filter(c => family.test(c.code))
                       : cands.filter(c => c.code === ev.code);
   return pool.slice().sort((a, b) => a.ts - b.ts).find(c => !_pkgIsSystemUser(c.user)) || null;
@@ -766,6 +805,7 @@ function _pkgFlagSplitSellers(results) {
     if (!/^(Breakfast|Early Check In|Late Check Out)$/i.test(fam)) return;
     (byPkg[`${r.conf}|${fam}`] = byPkg[`${r.conf}|${fam}`] || []).push(r);
   });
+  if (!_pkgRule('splitFlag')) return;
 
   Object.values(byPkg).forEach(rows => {
     if (rows.length < 2) return;
@@ -785,6 +825,7 @@ function _pkgFlagSplitSellers(results) {
       r.splitSeller = names;
       // Never downgrade a row that already needs a decision.
       if (r.verdict === 'credit' && r.alreadyComplete) {
+        _pkgHit(r, 'splitFlag');
         r.verdict = 'review';
         r.note = `Split between ${names.join(' and ')} — one package, one stay, credited to more than one person`;
       }
@@ -827,9 +868,10 @@ function _pkgApplyVerdicts(results) {
       return;
     }
     const family = _pkgCodeFamilyFor(r.family);
-    if (family && !r.candidates.some(c => family.test(c.code))) {
+    if (family && !r.candidates.some(c => family.test(c.code)) && _pkgRule('denyNoOpera')) {
       // Opera does have this reservation's package activity, and none of it
       // is this kind of package.
+      _pkgHit(r, 'denyNoOpera');
       r.verdict = 'deny';
       r.denyReason = `Opera shows no ${r.family} on this reservation (logged: ${r.candidates.map(c => c.code).filter((v, i, a) => a.indexOf(v) === i).join(', ')})`;
       return;
@@ -842,6 +884,7 @@ function _pkgApplyVerdicts(results) {
   // no Opera data at all — IN-Gauge's own rows are enough to prove it.
   const groups = {};
   results.forEach(r => {
+    if (!_pkgRule('oneTime')) return;
     if (r.verdict !== 'credit' || !_pkgIsOneTime(r.family)) return;
     const key = `${r.conf}|${r.family.toLowerCase()}`;
     (groups[key] = groups[key] || []).push(r);
@@ -855,6 +898,7 @@ function _pkgApplyVerdicts(results) {
     const keep = list.find(r => opera.has(_pkgDayNum(r.daily))) || list[0];
     list.forEach(r => {
       if (r === keep) return;
+      _pkgHit(r, 'oneTime');
       r.verdict = 'deny';
       r.denyReason = `${r.family} is charged once per stay — already counted on ${keep.daily || 'another row'}`;
     });
@@ -893,6 +937,8 @@ function _pkgBuildChains() {
                      || String(a.conf).localeCompare(String(b.conf)));
     let chainHead = list[0].conf;
     let prevEnd   = _pkgDayNum(list[0].dep) || _pkgDayNum(list[0].arr);
+    let prevRoom  = String(list[0].room || '').trim();
+    const gapMax  = +_pkgRule('chainGap') || 0, sameRoom = !!_pkgRule('chainSameRoom');
     head[list[0].conf] = chainHead;
     for (let i = 1; i < list.length; i++) {
       const arr = _pkgDayNum(list[i].arr);
@@ -907,9 +953,12 @@ function _pkgBuildChains() {
       // across a real month, 232 of 252 contiguous pairs are the same room,
       // against 1 of 6 at a one-day gap, where the guest checked out and came
       // back into a different room.
-      if (gap < 0 || gap > PKG_EXTENSION_GAP) chainHead = list[i].conf;
+      // "Only when same room" (a rule option): a move to another room starts a new stay.
+      const room = String(list[i].room || '').trim();
+      if (gap < 0 || gap > gapMax || (sameRoom && room && prevRoom && room !== prevRoom)) chainHead = list[i].conf;
       head[list[i].conf] = chainHead;
       prevEnd = _pkgDayNum(list[i].dep) || arr;
+      prevRoom = room;
     }
   });
   return head;
@@ -955,6 +1004,7 @@ function _pkgKindOfRow(r) {
 
 function _pkgApplyExtensionCredit(results) {
   if (!Object.keys(pkgGuests).length) return;   // no guest list loaded: rule is inactive
+  if (!_pkgRule('chain')) return;               // switched off in Rules
   const head = _pkgBuildChains();
   const arrOf = c => _pkgDayNum((pkgGuests[c] || {}).arr) || 0;
   // The kinds of package the bookings of a stay before this one carried, each with the first
@@ -1004,10 +1054,10 @@ function _pkgApplyExtensionCredit(results) {
     let own = owner[h] || _pkgOwnerFromOpera(h);
     if (kind) {
       const before = earlierKinds(h, r.conf);
-      if (before.size && !before.has(kind)) return;
+      if (before.size && !before.has(kind) && _pkgRule('sameKind')) { _pkgHit(r, 'sameKind'); r.newKindOnExt = h; return; }
       const first = before.get(kind);
       if (first && first.user) {
-        if (_pkgIsSystemUser(first.user)) return;   // it came with an online booking: nobody at the desk sold it
+        if (_pkgIsSystemUser(first.user)) { _pkgHit(r, 'systemNoSeller'); return; }   // it came with an online booking: nobody at the desk sold it
         if (!own || !_pkgSameUser(own.user, first.user)) own = { user: first.user, confirmed: true, viaOpera: true };
       }
     }
@@ -1017,6 +1067,7 @@ function _pkgApplyExtensionCredit(results) {
     // account would be worse than leaving it alone.
     if (_pkgIsSystemUser(own.user)) return;
 
+    _pkgHit(r, 'chain');
     r.extendedFrom = h;
     r.extendedName = (pkgGuests[r.conf] || {}).name || '';
     r.extendedVia  = own.viaOpera ? 'opera' : '';
@@ -1102,7 +1153,8 @@ function _pkgDropNoOpReassigns(results) {
     // Unlike DENIED this is not struck out: the charge stands, so it keeps
     // its credit and still counts towards the totals and the leaderboard.
     // It simply stops being work.
-    if (r.status === 'REVIEWED') {
+    if (r.status === 'REVIEWED' && _pkgRule('reviewedStops')) {
+      _pkgHit(r, 'reviewedStops');
       r.reviewed = true;
       r.reassign = false;
       r.wasUser  = '';
@@ -1138,6 +1190,22 @@ async function pkgRun() {
   busyStart('Checking the charges', `matching ${pkgUnknowns.length} against Opera…`);
   await busyPaint();
 
+  const results = _pkgCompute();
+  _pkgArchive(results);
+  pkgResults = results;
+  _pkgConfirmSweep();              // fixes this newer report proves right count as confirmed
+  if (typeof logActivity === 'function') logActivity('pkg_audit_run', `${results.length} package lines checked`);
+  _pkgRenderCoverage();
+  document.getElementById('pkgResultsWrap').style.display = 'block';
+  pkgRender();
+  busyDone();
+}
+
+/** Note which rule decided something on this row (for Why? and the Rules suggestions). */
+function _pkgHit(r, k) { (r.ruleHits = r.ruleHits || []).includes(k) || r.ruleHits.push(k); }
+
+/** The whole audit on what is loaded, under the current rules: no screen, no saving. */
+function _pkgCompute() {
   const results = pkgUnknowns.map(u => {
     const cands = pkgEvents[u.conf] || [];
     const ev = _pkgMatchEvent(u, cands);
@@ -1156,6 +1224,7 @@ async function pkgRun() {
     // and IN-Gauge's own value is left alone.
     const origin   = _pkgOriginatorFor(ev, cands);
     const noSeller = !origin;
+    const ruleHits = [noSeller ? 'systemNoSeller' : 'firstPerson'];
 
     // A seller already filled in isn't proof it's the right one. Opera says
     // who started the package, so a name that disagrees needs reassigning —
@@ -1168,7 +1237,7 @@ async function pkgRun() {
     // price/dates when the matched event is an ATTACHED entry, which is a
     // date-range change and carries no price of its own.
     return {
-      ...u,
+      ...u, ruleHits,
       resolved: true, alreadyComplete, reassign, noSeller,
       matchedEvent: ev, originEvent: origin, candidates: cands,
       code:  u.needsProduct ? ev.code : u.product,
@@ -1185,29 +1254,25 @@ async function pkgRun() {
   _pkgFlagSplitSellers(results);   // after credit is settled — it compares final sellers
   _pkgDropNoOpReassigns(results);  // nothing that needs no change stays on the list
   _pkgApplyPins(results);          // last: a person's pinned decision beats the log
-  _pkgArchive(results);
-  pkgResults = results;
-  if (typeof logActivity === 'function') logActivity('pkg_audit_run', `${results.length} package lines checked`);
-  _pkgRenderCoverage();
-  document.getElementById('pkgResultsWrap').style.display = 'block';
-  pkgRender();
-  busyDone();
+  return results;
 }
 
 // ── Pins: decisions a person made that the audit must remember ──────────
-// "This breakfast is Manisha's sale even though Hassan typed it into Opera",
+// "This breakfast is Lina's sale even though Sam typed it into Opera",
 // or "stop showing me this one". Saved per package (confirmation + package
 // family), shared with the team, applied on every load.
 let pkgPins = {};
 const PKG_PIN_KEY = 'pkg_pins_v1';
-try { pkgPins = JSON.parse(localStorage.getItem(PKG_PIN_KEY) || '{}') || {}; } catch (_) { pkgPins = {}; }
+try { pkgPins = _pkgClean(JSON.parse(localStorage.getItem(PKG_PIN_KEY) || '{}')); } catch (_) { pkgPins = {}; }
 function _pkgPinKey(r) { return `${String(r.conf || '').trim()}|${_pkgFamilyName(r)}`.replace(/[.#$\[\]\/]/g, '_'); }
 
 function _pkgApplyPins(results) {
   results.forEach(r => {
     const pin = pkgPins[_pkgPinKey(r)];
     r.pin = pin || null;
+    if (!('prePinUser' in r)) { r.prePinUser = r.user; r.prePinVerdict = r.verdict; }
     if (!pin) return;
+    _pkgHit(r, 'pin');
     if (pin.skip) { r.pinSkip = true; return; }
     if (pin.manual) {
       // Sold by hand in IN-Gauge (e.g. a 6 pm late checkout that cannot be
@@ -1256,66 +1321,78 @@ function _pkgSavePins() {
   _pkgSaveDiff('pkgPins', pkgPins, _pkgPinsLast);
 }
 
-function pkgPinChange(idx, val) {
-  const r = pkgResults[idx];
-  if (!r) return;
-  const key = _pkgPinKey(r);
-  const by = (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '';
+// ── Freeze seller (pins) ─────────────────────────────────────
+// A pin is a person's decision the audit must remember: "this package is
+// Sam's", "sold by hand in IN-Gauge" or "skip it". Saved per package
+// (confirmation + package family), shared with the team, applied on every run.
+function pkgPinChange(key, val) {
+  const rows = _pkgGroupRows(key), r = rows[0];
+  if (!r && val !== '__clear') return;
+  const by = _pkgMe(), at = new Date().toISOString();
   if (val === '__clear') delete pkgPins[key];
-  else if (val === '__skip') pkgPins[key] = { skip: true, by, at: new Date().toISOString() };
-  else if (val === '__manual') pkgPins[key] = { manual: true, by, at: new Date().toISOString() };
-  else if (val.startsWith('__manual:')) pkgPins[key] = { manual: true, seller: val.slice(9), by, at: new Date().toISOString() };
+  else if (val === '__skip') pkgPins[key] = { skip: true, by, at };
+  else if (val === '__manual') pkgPins[key] = { manual: true, by, at };
+  else if (val.startsWith('__manual:')) pkgPins[key] = { manual: true, seller: val.slice(9), by, at };
   else if (val === '__other') {
     const name = (prompt('Seller name (as in IN-Gauge):') || '').trim();
     if (!name) { pkgRender(); return; }
-    pkgPins[key] = { seller: name, by, at: new Date().toISOString() };
-  } else if (val) pkgPins[key] = { seller: val, by, at: new Date().toISOString() };
+    pkgPins[key] = { seller: name, by, at };
+  } else if (val) pkgPins[key] = { seller: val, by, at };
   else { pkgRender(); return; }
   _pkgSavePins();
   if (typeof logActivity === 'function') {
     const p = pkgPins[key];
-    const what = !p ? 'pin removed' : p.skip ? 'skipped' : p.manual ? `manual sale${p.seller ? ' · ' + p.seller : ''}` : `given to ${p.seller}`;
-    logActivity('pkg_pin', `Conf ${r.conf} · room ${r.room || '?'} · ${r.family || r.code || ''} → ${what}`);
+    const what = !p ? 'unfrozen' : p.skip ? 'skipped' : p.manual ? `manual sale${p.seller ? ' · ' + p.seller : ''}` : `frozen to ${p.seller}`;
+    logActivity('pkg_pin', `Conf ${String(key).split('|')[0]} · ${r ? 'room ' + (r.room || '?') + ' · ' : ''}${String(key).split('|')[1] || ''} → ${what}`);
   }
-  // re-apply on the current results without reloading the files
-  pkgResults.forEach(x => { if (_pkgPinKey(x) === key) { delete x.pinSkip; } });
-  _pkgApplyPins(pkgResults.filter(x => _pkgPinKey(x) === key));
-  pkgRender();
-  showToast(val === '__clear' ? 'Pin removed — reload the files to see the log\'s view again' : 'Saved — this will be remembered on every load', 'ok');
+  _pkgRecompute();
+  if (_pkgView === 'rules') pkgRulesRender();
+  showToast(val === '__clear' ? 'Unfrozen: the rules decide this package again' : 'Saved for the team: remembered on every run', 'ok');
 }
 
-function _pkgPinCell(r) {
-  const i = pkgResults.indexOf(r);
+/** The names a seller can be frozen to: the team list, plus everyone this audit already credits. */
+function _pkgSellerChoices(extra) {
+  const out = PKG_STAFF.slice();
+  const add = n => { n = String(n || '').trim(); if (n && n !== '-' && !out.some(x => x === n || _pkgSameUser(x, n))) out.push(n); };
+  (pkgResults || []).forEach(r => { [r.user, r.employee].forEach(u => { if (u && !_pkgIsSystemLogin(u)) add(_pkgUserLabel(u)); }); });
+  (extra || []).forEach(add);
+  return out.sort((a, b) => a.localeCompare(b));
+}
+
+function _pkgPinPicker(r, key) {
   const cur = r.pin ? (r.pin.skip ? '__skip' : r.pin.manual ? (r.pin.seller ? '__manual:' + r.pin.seller : '__manual') : r.pin.seller) : '';
-  const staff = PKG_STAFF.slice();
-  const curSeller = r.pin && r.pin.seller;
-  if (curSeller && !staff.includes(curSeller)) staff.push(curSeller);
-  const title = r.pin ? `Pinned by ${r.pin.by || 'someone'}${r.pin.at ? ' · ' + r.pin.at.slice(0, 10) : ''}` : 'Pin the seller or skip this package — remembered on every load';
-  return `<td><select class="pkg-pin${r.pin ? ' on' : ''}" title="${escapeHtml(title)}" onchange="pkgPinChange(${i}, this.value)">
-    <option value="">${r.pin ? (r.pin.manual ? '✍️' : '📌') : '📌 Pin…'}</option>
-    ${staff.map(n => `<option value="${escapeHtml(n)}"${cur === n ? ' selected' : ''}>Seller: ${escapeHtml(n)}</option>`).join('')}
-    <option value="__other">Seller: someone else…</option>
+  const staff = _pkgSellerChoices(r.pin && r.pin.seller ? [r.pin.seller] : []);
+  const J = v => escapeHtml(JSON.stringify(v));
+  const title = r.pin ? `Frozen by ${r.pin.by || 'someone'}${r.pin.at ? ' · ' + r.pin.at.slice(0, 10) : ''}` : 'Freeze the seller of this package: the rules will not change it again';
+  return `<label class="pa-pin${r.pin ? ' on' : ''}" title="${escapeHtml(title)}"><span>${r.pin ? (r.pin.skip ? '🙈 Skipped' : r.pin.manual ? '✍️ Manual' : '📌 Frozen') : '📌 Freeze seller'}</span>
+    <select aria-label="Freeze seller" onchange="pkgPinChange(${J(key)}, this.value)">
+    <option value="">${r.pin ? 'Frozen…' : 'Freeze seller…'}</option>
+    <optgroup label="Freeze the seller to">${staff.map(n => `<option value="${escapeHtml(n)}"${cur === n ? ' selected' : ''}>${escapeHtml(n)}</option>`).join('')}
+    <option value="__other">Someone else…</option></optgroup>
     <optgroup label="Sold by hand in IN-Gauge (not in Opera)">
-      <option value="__manual"${cur === '__manual' ? ' selected' : ''}>✍️ Manual sale — keep, IN-Gauge seller</option>
-      ${staff.map(n => `<option value="__manual:${escapeHtml(n)}"${cur === '__manual:' + n ? ' selected' : ''}>✍️ Manual sale — ${escapeHtml(n)}</option>`).join('')}
+      <option value="__manual"${cur === '__manual' ? ' selected' : ''}>✍️ Manual sale: keep the IN-Gauge seller</option>
+      ${staff.map(n => `<option value="__manual:${escapeHtml(n)}"${cur === '__manual:' + n ? ' selected' : ''}>✍️ Manual sale: ${escapeHtml(n)}</option>`).join('')}
     </optgroup>
-    <option value="__skip"${cur === '__skip' ? ' selected' : ''}>Skip this package</option>
-    ${r.pin ? '<option value="__clear">Remove pin</option>' : ''}
-  </select></td>`;
+    <option value="__skip"${cur === '__skip' ? ' selected' : ''}>🙈 Skip this package</option>
+    ${r.pin ? '<option value="__clear">Unfreeze</option>' : ''}
+  </select></label>`;
 }
 
+/** A map from the database with any null / broken entries left out. */
+function _pkgClean(v) { const o = {}; if (v && typeof v === 'object') Object.keys(v).forEach(k => { if (v[k] && typeof v[k] === 'object') o[k] = v[k]; }); return o; }
 function pkgLoadPins() {
   if (typeof fbListen !== 'function') return;
   fbListen('pkgPins', v => {
-    pkgPins = v && typeof v === 'object' ? v : {};   // nothing pinned arrives as null: empty, not "keep the old"
+    const next = _pkgClean(v);   // nothing pinned arrives as null: empty, not "keep the old"
+    const same = JSON.stringify(next) === JSON.stringify(pkgPins);
+    pkgPins = next;
     _pkgRemember(_pkgPinsLast, pkgPins);
     try { localStorage.setItem(PKG_PIN_KEY, JSON.stringify(pkgPins)); } catch (_) {}
+    if (!same && pkgResults.length) _pkgRecompute();   // a teammate froze or unfroze one
   });
 }
 document.addEventListener('DOMContentLoaded', () => setTimeout(pkgLoadPins, 1500));
 
-// Plain-language instruction for the row — what the person reading this
-// actually has to go and do, rather than which field happened to be blank.
 // The log is exported for a fixed span, so a charge dated after it can
 // never match — that is a stale report, not a missing record, and saying so
 // stops the reader hunting in Opera for something that was never exported.
@@ -1334,405 +1411,444 @@ function _pkgRenderCoverage() {
 
   const bits = [];
   if (early) bits.push(`<b>${early}</b> sold before it starts (${escapeHtml(_pkgDayLabel(pkgLogRange.min))})`);
-  if (late)  bits.push(`<b>${late}</b> charged after it ends (${escapeHtml(_pkgDayLabel(pkgLogRange.max))}) — the night audit hasn't reached those yet`);
+  if (late)  bits.push(`<b>${late}</b> charged after it ends (${escapeHtml(_pkgDayLabel(pkgLogRange.max))}): the night audit hasn't reached those yet`);
 
   box.style.display = 'block';
-  box.innerHTML = `⏳ <b>${outside.length} charge${outside.length !== 1 ? 's' : ''} sit outside this log</b> — ${bits.join(', and ')}.
-    They're hidden from Needs action because no amount of checking resolves them here.
+  box.innerHTML = `⏳ <b>${outside.length} charge${outside.length !== 1 ? 's' : ''} sit outside this log</b>: ${bits.join(', and ')}.
+    They're not in the list because no amount of checking resolves them here.
     ${early ? `A package is usually added when the booking is made, which can be weeks before the stay: the earliest arrival in this export is
-    <b>${escapeHtml(_pkgDayLabel(firstArr))}</b>, so run the Changes Log from before that date — not from the 1st — and include
+    <b>${escapeHtml(_pkgDayLabel(firstArr))}</b>, so run the Changes Log from before that date (not from the 1st) and include
     <b>New Reservation</b> as well as Update Reservation.` : ''}`;
 }
 
+// Plain-language instruction for the row: what the person reading this
+// actually has to go and do, rather than which field happened to be blank.
 function _pkgActionText(r) {
   // Reviewing settles who earned a sale, not whether the charge is sound.
   // So the factual checks run first and the stamp is added to whatever they
   // find — a decision made on bad information should be visible, not hidden.
   const seen = r.reviewed;
-  if (r.pinSkip) return 'Skipped (pinned)';
+  if (r.pinSkip) return 'Skipped (frozen)';
   if (r.manualSale) {
-    if (r.needsEmployee) return 'Manual sale — set the seller in IN-Gauge';
-    if (r.reassign) return `Manual sale — set the seller to ${_pkgUserLabel(r.user)}`;
-    return `Nothing — manual sale kept (${_pkgUserLabel(r.user)})`;
+    if (r.needsEmployee) return 'Manual sale: set the seller in IN-Gauge';
+    if (r.reassign) return `Manual sale: set the seller to ${_pkgUserLabel(r.user)}`;
+    return `Nothing: manual sale kept (${_pkgUserLabel(r.user)})`;
   }
   if (r.pin && r.pin.seller && r.verdict === 'credit') {
-    if (r.needsEmployee) return `Set the seller to ${_pkgUserLabel(r.pin.seller)} (pinned)`;
-    if (r.reassign) return `Set the seller to ${_pkgUserLabel(r.pin.seller)} (pinned)`;
-    if (r.needsProduct) return 'Set the package (seller pinned)';
-    return `Nothing — pinned to ${_pkgUserLabel(r.pin.seller)}`;
+    if (r.needsEmployee) return `Set the seller to ${_pkgUserLabel(r.pin.seller)} (frozen)`;
+    if (r.reassign) return `Set the seller to ${_pkgUserLabel(r.pin.seller)} (frozen)`;
+    if (r.needsProduct) return 'Set the package (seller frozen)';
+    return `Nothing: frozen to ${_pkgUserLabel(r.pin.seller)}`;
   }
-  if (r.verdict === 'settled') return 'Nothing — already denied';
+  if (r.verdict === 'settled') return 'Nothing: already denied';
   if (r.verdict === 'deny')    return seen ? 'Reviewed, but still remove this charge' : 'Remove this charge';
   if (r.verdict === 'outside') return 'Not in this log';
   if (r.verdict === 'review') {
-    if (r.splitSeller) return seen ? 'Reviewed, but still split between two sellers' : 'Split — pick one seller';
+    if (r.splitSeller) return seen ? 'Reviewed, but still split between two sellers' : 'Split: pick one seller';
     return seen ? 'Reviewed, but still needs checking in Opera' : 'Check in Opera';
   }
   // Came in through TARS or another interface — no one sold it.
-  if (r.noSeller) return r.needsEmployee ? 'No seller — booked by system' : 'Nothing — booked by system';
+  if (r.noSeller) return r.needsEmployee ? 'No seller: booked by system' : 'Nothing: booked by system';
   if (r.needsProduct && r.needsEmployee) return seen ? 'Reviewed, but package + seller still blank' : 'Set package + seller';
   if (r.needsProduct) return seen ? 'Reviewed, but package still blank' : 'Set the package';
   if (r.needsEmployee) return seen ? 'Reviewed, but seller still blank' : 'Set the seller';
-  if (seen) return 'Nothing — you already reviewed it';
-  if (r.reassign) return r.extendedFrom ? `Same stay as ${r.extendedFrom} — credit the first seller` : 'Reassign the seller';
-  return 'Nothing — already correct';
+  if (seen) return 'Nothing: you already reviewed it';
+  if (r.reassign) return r.extendedFrom ? `Same stay as ${r.extendedFrom}: credit the first seller` : 'Change the seller';
+  return 'Nothing: already correct';
 }
 
-function _pkgActionCell(r) {
-  const txt = _pkgActionText(r);
-  // Amber for anything still wrong after a review — it disagrees with a
-  // decision a person already made, so it should not look routine.
-  const color = (r.reviewed && txt.startsWith('Reviewed, but')) ? 'var(--amber)'
-    : r.verdict === 'settled' ? 'var(--text3)'
-    : r.verdict === 'deny' ? 'var(--rose)'
-    : r.verdict === 'outside' ? 'var(--text3)'
-    : r.verdict === 'review' ? 'var(--amber)'
-    : r.reassign ? 'var(--amber)'
-    : (r.needsProduct || r.needsEmployee) ? 'var(--sky)' : 'var(--text3)';
-  // Spell out the reason, so the change is checkable rather than asserted.
-  let why = '';
-  if (r.reassign && r.extendedFrom) {
-    why = ` title="Booking ${escapeHtml(r.extendedFrom)} is the same stay — ${escapeHtml(r.extendedName || 'this guest')} carried on into ${escapeHtml(r.conf)}. `
-        + `IN-Gauge credits ${escapeHtml(_pkgUserLabel(r.wasUser))}; the stay was started by ${escapeHtml(_pkgUserLabel(r.user))}`
-        + (r.extendedVia === 'opera' ? ', per the Opera log — that booking is not in this IN-Gauge export.' : '.') + `"`;
-  } else if (r.reassign) {
-    why = ` title="IN-Gauge credits ${escapeHtml(_pkgUserLabel(r.wasUser))} — Opera shows ${escapeHtml(_pkgUserLabel(r.user))} started this package"`;
-  }
-  return `<td style="font-size:0.68rem;color:${color};"${why}>${escapeHtml(txt)}</td>`;
-}
-
-function pkgRender() {
-  const q = pkgSearch_.toLowerCase().trim();
-  const filtered = pkgResults.filter(r => {
-    // "Needs action" is the default: everything a person can actually do
-    // something about. Rows the log simply doesn't reach are excluded —
-    // they aren't decisions waiting to be made.
-    if (pkgFilter_ === 'pinned') { if (!r.pin) return false; }
-    else if (r.pinSkip && pkgFilter_ !== 'all') return false;
-    const needsAction = !r.pinSkip && (r.verdict === 'deny' ||
-                        (r.verdict === 'credit' && !r.alreadyComplete) ||
-                        r.verdict === 'review');
-    if (pkgFilter_ === 'action'    && !needsAction) return false;
-    if (pkgFilter_ === 'complete'  && !((r.alreadyComplete && r.verdict === 'credit') || r.verdict === 'settled')) return false;
-    if (pkgFilter_ === 'resolved'  && !(r.verdict === 'credit' && !r.alreadyComplete)) return false;
-    if (pkgFilter_ === 'deny'      && r.verdict !== 'deny') return false;
-    if (pkgFilter_ === 'review'    && r.verdict !== 'review') return false;
-    if (pkgFilter_ === 'outside'   && r.verdict !== 'outside') return false;
-    if (q) {
-      const hay = [r.conf, r.room, r.code, r.family, r.user, _pkgActionText(r)].join(' ').toLowerCase();
-      if (!hay.includes(q)) return false;
-    }
-    return true;
-  });
-
-  const settledCount   = pkgResults.filter(r => r.verdict === 'settled').length;
-  const completeCount  = pkgResults.filter(r => (r.verdict === 'credit' && r.alreadyComplete) || r.verdict === 'settled').length;
-  const live           = pkgResults.filter(r => !r.pinSkip);
-  const fixedCount     = live.filter(r => r.verdict === 'credit' && !r.alreadyComplete).length;
-  const denyCount      = live.filter(r => r.verdict === 'deny').length;
-  const reviewCount    = live.filter(r => r.verdict === 'review').length;
-  const pinnedCount    = pkgResults.filter(r => r.pin).length;
-  const outsideCount   = pkgResults.filter(r => r.verdict === 'outside').length;
-  const actionAll      = fixedCount + denyCount + reviewCount;
-  const isAct          = r => r.verdict === 'deny' || r.verdict === 'review' || (r.verdict === 'credit' && !r.alreadyComplete);
-  const actionCount    = actionAll - live.filter(r => isAct(r) && pkgNightDone(r) && !pkgBackWrong(r)).length;   // still to do
-  [['pkgfc-action', actionCount],
-   ['pkgfc-outside', outsideCount],
-   ['pkgfc-all', pkgResults.length],
-   ['pkgfc-complete', completeCount],
-   ['pkgfc-resolved', fixedCount],
-   ['pkgfc-deny', denyCount],
-   ['pkgfc-review', reviewCount],
-   ['pkgfc-pinned', pinnedCount],
-  ].forEach(([id, v]) => { const el = document.getElementById(id); if (el) el.textContent = v; });
-
-  document.getElementById('pkgKpis').innerHTML = `
-    <div class="kpi sky"><div class="kpi-accent"></div><div class="kpi-label">Charges Checked</div><div class="kpi-val">${pkgResults.length}</div></div>
-    <div class="kpi ${actionCount ? 'gold' : 'mint'}"><div class="kpi-accent"></div><div class="kpi-label">Needs Action</div><div class="kpi-val">${actionCount}</div></div>
-    <div class="kpi ${denyCount ? 'rose' : ''}"><div class="kpi-accent"></div><div class="kpi-label">Remove</div><div class="kpi-val">${denyCount}</div></div>
-    <div class="kpi ${reviewCount ? 'amber' : ''}"><div class="kpi-accent"></div><div class="kpi-label">Check by Hand</div><div class="kpi-val">${reviewCount}</div></div>`;
-
-  const tbody = document.getElementById('pkgTable'), dbody = document.getElementById('pkgDoneTable');
-  const dwrap = document.getElementById('pkgDoneWrap'), warn = document.getElementById('pkgDoneWarn');
-  const empty = t => `<tr><td colspan="9" style="text-align:center;padding:36px;font-family:var(--mono);font-size:0.7rem;color:var(--text3);">${t}</td></tr>`;
-  const rowHtml = (r, sub) => _pkgSubMark(_pkgDoneMark(_pkgRowHtmlInner(r), pkgNightDone(r) && !pkgBackWrong(r)), sub);
-  // IN-Gauge bills a package night by night, so one 6-night breakfast is six
-  // lines. Group them per confirmation + package: one line with the nights
-  // and total, the single nights one tap away.
-  const groups = [], gmap = new Map();
-  filtered.forEach(r => {
-    const k = _pkgPinKey(r);
-    if (!gmap.has(k)) { const g = { key: k, rows: [] }; gmap.set(k, g); groups.push(g); }
-    gmap.get(k).rows.push(r);
-  });
-  const html = list => list.map(g => g.rows.length === 1 ? rowHtml(g.rows[0], '')
-    : _pkgDoneMark(_pkgGroupHtml(g), g.rows.every(x => pkgNightDone(x) && !pkgBackWrong(x))) + g.rows.map(r => rowHtml(r, g.key)).join('')).join('');
-  // two windows: what is still to fix, and what was copied (not every day ticked first)
-  const isBack = g => g.rows.some(pkgBackWrong);
-  const todo = groups.filter(g => !pkgDone[g.key] || isBack(g)).sort((a, b) => isBack(b) - isBack(a));
-  const part = g => _pkgLeft(g.key).length > 0;
-  const copied = groups.filter(g => pkgDone[g.key] && !isBack(g)).sort((a, b) => part(b) - part(a));
-  const backs = todo.filter(isBack), bw = document.getElementById('pkgBackWarn');
-  if (bw) bw.innerHTML = backs.length ? `<div class="pkg-left-warn bad"><b>↺ ${backs.length} package${backs.length > 1 ? 's' : ''} came back wrong.</b> They were ticked fixed, but this IN-Gauge report, saved after that, still shows them wrong (the change didn't save, or only some days were changed). They are back on top of To fix.</div>` : '';
-  tbody.innerHTML = todo.length ? html(todo) : empty(filtered.length ? '✅ Nothing left to fix here: everything is in Copied' : 'No rows match.');
-  const tc = document.getElementById('pkgTodoCount'); if (tc) tc.textContent = todo.length;
-  if (dbody) dbody.innerHTML = html(copied);
-  if (dwrap) dwrap.hidden = !copied.length;
-  const open = copied.filter(part);
-  const dc = document.getElementById('pkgDoneCount'); if (dc) dc.textContent = copied.length;
-  if (warn) warn.innerHTML = open.length ? `<div class="pkg-left-warn"><b>⚠ ${open.length} package${open.length > 1 ? 's' : ''} copied but not every day fixed yet.</b>
-      IN-Gauge charges a package day by day and each day keeps the old seller until you change it. Fix every day, then tick it:
-      <ul>${open.map(g => { const r0 = g.rows[0], left = _pkgLeft(g.key); return `<li>Room ${escapeHtml(r0.room || '?')} · ${escapeHtml(_pkgFamilyName(r0))} · conf ${escapeHtml(r0.conf)}: <b>${left.length} of ${_pkgGroupRows(g.key).length} days left</b> (${escapeHtml(left.map(x => x.daily || x.from || '?').join(', '))})</li>`; }).join('')}</ul></div>` : '';
-  try { pkgBoardRender(); } catch (e) { console.warn('[pkg board]', e); }
-}
-
-const pkgOpenGroups = new Set();
-function pkgToggleGroup(key) {
-  if (pkgOpenGroups.has(key)) pkgOpenGroups.delete(key); else pkgOpenGroups.add(key);
-  pkgRender();
-}
-// Marks a single-night row as belonging to a group (hidden until the group is opened)
-function _pkgSubMark(html, key) {
-  if (!key) return html;
-  const hide = _pkgIsOpen(key) ? '' : 'display:none;';
-  return html.replace(/^\s*<tr([^>]*)>/, (m, attrs) => {
-    if (/style="/.test(attrs)) attrs = attrs.replace(/style="/, `style="${hide}`);
-    else attrs += ` style="${hide}"`;
-    return `<tr${attrs} class="pkg-sub">`;
-  });
-}
-
-function _pkgGroupHtml(g) {
-  const rows = g.rows, r0 = rows[0];
-  const open = _pkgIsOpen(g.key);
-  const total = rows.reduce((s, r) => s + (parseFloat(r.price ?? r.charge) || 0), 0);
-  const dates = rows.flatMap(r => [r.from, r.to, r.arr, r.dep]).filter(Boolean);
-  const uniq = a => [...new Set(a.filter(Boolean))];
-  const sellers = uniq(rows.map(r => _pkgUserLabel(r.user || r.employee)));
-  const acts = {}; rows.forEach(r => { const t = _pkgActionText(r); acts[t] = (acts[t] || 0) + 1; });
-  const actKeys = Object.keys(acts);
-  const actTxt = actKeys.length === 1 ? actKeys[0] : actKeys.map(k => `${acts[k]}× ${k}`).join(' · ');
-  const needs = rows.some(r => !r.pinSkip && (r.verdict === 'deny' || r.verdict === 'review' || (r.verdict === 'credit' && !r.alreadyComplete)));
-  const color = rows.some(r => r.verdict === 'deny') ? 'var(--rose)' : needs ? 'var(--amber)' : 'var(--text3)';
-  return `<tr class="pkg-group" onclick="if(!event.target.closest('select,.pkg-conf')&&!String(window.getSelection()))pkgToggleGroup('${escapeHtml(g.key)}')" style="cursor:pointer;">
-    <td><span class="tt-room-pill">${escapeHtml(r0.room)}</span></td>
-    ${_pkgConfCell(r0.conf, r0, true)}
-    <td style="font-family:var(--mono);font-size:0.76rem;font-weight:700;">${open ? '▾' : '▸'} ${escapeHtml(_pkgFamilyName(r0))} <span class="pkg-nights">× ${rows.length} nights</span></td>
-    <td style="font-family:var(--mono);font-size:0.72rem;">AED ${escapeHtml(String(Math.round(total * 100) / 100))}</td>
-    <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text2);">${dates.length ? escapeHtml(dates[0]) + ' → ' + escapeHtml(dates[dates.length - 1]) : '—'}</td>
-    <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text2);">${escapeHtml(sellers.join(' / ') || '—')}</td>
-    <td style="font-size:0.68rem;color:${color};">${escapeHtml(actTxt)}</td>
-    <td style="font-size:0.66rem;color:var(--text3);">${open ? 'Hide nights' : 'Show nights'}</td>
-    ${_pkgPinCell(r0)}
-  </tr>`;
-}
-
-/** A confirmation number: tap to copy it (and still selectable); never opens or closes the row.
- *  Once copied: the package line shows how many of its days are ticked fixed, each night line a tick box. */
-function _pkgConfCell(conf, r, isGroup) {
-  const c = String(conf || '');
-  if (!c) return '<td>—</td>';
-  const key = r ? _pkgPinKey(r) : '', d = key && pkgDone[key], J = v => escapeHtml(JSON.stringify(v));
-  let tag = '';
-  const back = d && (isGroup ? _pkgGroupRows(key).filter(pkgBackWrong) : (pkgBackWrong(r) ? [r] : []));
-  if (back && back.length) {
-    const fx = _pkgNightAt(back[0]), when = fx ? new Date(fx).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
-    return `<td><button type="button" class="pkg-conf" title="Copy ${escapeHtml(c)} again" onclick="event.stopPropagation();pkgCopyConf(this,${J(c)},${J(key)})">${escapeHtml(c)}<i aria-hidden="true">⧉</i></button><span class="pkg-back-tag" title="Ticked fixed ${escapeHtml(when)}, but this IN-Gauge report (saved later) still shows it wrong">↺ Still wrong after the fix of ${escapeHtml(when)}${isGroup && back.length > 1 ? ` · ${back.length} days` : ''}</span></td>`;
-  }
-  if (d) {
-    const rows = _pkgGroupRows(key), n = rows.length || 1, who = d.by ? ' · ' + String(d.by).split(' ')[0] : '';
-    const undo = `<button type="button" title="Not copied: back to To fix" onclick="event.stopPropagation();pkgUndone(${J(key)})">↩</button>`;
-    if (isGroup || n === 1) {
-      const ok = rows.filter(pkgNightDone).length;
-      tag = isGroup
-        ? `<span class="pkg-done-tag${ok < n ? ' part' : ''}" title="Copied ${escapeHtml(_pkgDoneWhen(d))}${escapeHtml(who)}">${ok < n ? '⚠' : '✅'} ${ok}/${n} days fixed${undo}</span>`
-        : `<span class="pkg-done-tag" title="Copied ${escapeHtml(_pkgDoneWhen(d))}${escapeHtml(who)}">✅ ${escapeHtml(_pkgDoneWhen(d))}${escapeHtml(who)}${undo}</span>`;
-    }
-    if (!isGroup && n > 1) {
-      const ok = pkgNightDone(r), day = r.daily || r.from || '';
-      tag += `<label class="pkg-day-tick${ok ? ' on' : ''}" onclick="event.stopPropagation()" title="Tick when this day shows the right seller in IN-Gauge"><input type="checkbox"${ok ? ' checked' : ''} onchange="pkgTickNight(${J(key)},${J(_pkgNightKey(r))})"> ${ok ? 'Fixed' : 'Fix'} ${escapeHtml(day)}</label>`;
-    }
-  }
-  return `<td><button type="button" class="pkg-conf" title="Copy ${escapeHtml(c)} (moves it to Copied)" onclick="event.stopPropagation();pkgCopyConf(this,${J(c)},${J(key)})">${escapeHtml(c)}<i aria-hidden="true">⧉</i></button>${tag}</td>`;
-}
-function pkgCopyConf(btn, conf, key) {
-  copyToClipboard(conf);
-  btn.classList.add('copied'); setTimeout(() => btn.classList.remove('copied'), 1400);
-  const rows = _pkgGroupRows(key), snap = JSON.stringify(pkgDone);
-  const back = key && pkgDone[key] ? rows.filter(pkgBackWrong) : [];
-  if (back.length) {
-    // came back wrong: those days are not fixed after all, tick them again once they really are
-    const d = _pkgToNights(pkgDone[key], key);
-    back.forEach(x => { delete d.days[_pkgNightKey(x)]; });
-    d.at = new Date().toISOString(); d.by = _pkgMe();
-    if (rows.length === 1) d.days[_pkgNightKey(rows[0])] = { by: d.by, at: d.at };
-    _pkgSaveDone(); pkgRender();
-    const msg = rows.length === 1 ? `Copied ${conf} again · back in Copied` : `Copied ${conf} again: ${back.length} day${back.length > 1 ? 's' : ''} still wrong (${back.map(x => x.daily || x.from).join(', ')}). Fix ${back.length > 1 ? 'them' : 'it'}, then tick in Copied`;
-    if (typeof showUndoToast === 'function') showUndoToast(msg, () => { pkgDone = JSON.parse(snap); _pkgSaveDone(); pkgRender(); }); else showToast(msg, 'warn');
-    return;
-  }
-  if (!key || pkgDone[key]) { if (typeof showToast === 'function') showToast(`Copied ${conf}`, 'ok'); return; }
-  _pkgMarkCopied(key, rows.length === 1 ? [_pkgNightKey(rows[0])] : []);   // one night: copying it is fixing it
-  pkgRender();
-  const days = rows.map(x => x.daily || x.from).filter(Boolean);
-  const msg = rows.length > 1
-    ? `Copied ${conf}: ${rows.length} days (${days.join(', ')}). IN-Gauge charges it day by day, so fix every day, then tick each one in Copied`
-    : `Copied ${conf} · moved to Copied`;
-  if (typeof showUndoToast === 'function') showUndoToast(msg, () => { pkgDone = JSON.parse(snap); _pkgSaveDone(); pkgRender(); });
-  else if (typeof showToast === 'function') showToast(msg, rows.length > 1 ? 'warn' : 'ok');
-}
-
-// ── Copied (done) marks ───────────────────────────────────
-// Copying a package is how it gets fixed in IN-Gauge, so a copied package
-// moves to the Copied window for the whole team: who, and when. IN-Gauge
-// charges a package night by night, and each night keeps the old seller
-// until it is changed, so a package of 4 nights is fixed only when all 4 are
-// ticked. Until then it stays open in Copied with a reminder. ↩ puts it back.
-// pkgDone[key] = { by, at, nights: true, days: { nightKey: { by, at } } }
-// (an entry without "nights" is from before days were ticked: all fixed)
+// ═══════════════════════════════════════════════════════════
+//  Fixed packages — ONE list, a smart "done"
+//
+//  Copying a confirmation number is how a package gets fixed in IN-Gauge,
+//  so copying it IS "I fixed it", for every night of that package. It leaves
+//  the list at once (Undo for a few seconds) and waits for proof:
+//   • a newer IN-Gauge report shows it right   → confirmed ✓ (saved: ok)
+//   • a newer IN-Gauge report still shows it wrong → it comes back, on top,
+//     tagged with the nights still wrong
+//   • no newer report loaded yet (the same old file again) → it stays away.
+//  pkgDone[key] = { by, at, conf, room, fam, n, dl, seller, was, tries, ok }
+//  Older entries ({by, at, nights:true, days:{night:{by,at}}}) are read as
+//  "fixed at the latest of those times": nothing is rewritten or lost.
+// ═══════════════════════════════════════════════════════════
 let pkgDone = {};
 const PKG_DONE_KEY = 'pkg_done_v1', PKG_DONE_DAYS = 45;
-try { pkgDone = JSON.parse(localStorage.getItem(PKG_DONE_KEY) || '{}') || {}; } catch (_) { pkgDone = {}; }
-function _pkgNightKey(r) { return String(r.daily || r.from || r.arr || 'stay').replace(/[.#$\[\]\/\s]/g, '_'); }
-function _pkgGroupRows(key) { return pkgResults.filter(x => _pkgPinKey(x) === key); }
-function pkgIsCopied(r) { return !!pkgDone[_pkgPinKey(r)]; }
-/** This night was copied and ticked fixed */
-function pkgNightDone(r) { const d = pkgDone[_pkgPinKey(r)]; return !!d && (!d.nights || !!(d.days || {})[_pkgNightKey(r)]); }
-function pkgIsDone(r) { return pkgNightDone(r); }
-// A fix that didn't stick: the night was ticked fixed, but an IN-Gauge export saved after
-// that still shows it wrong. It goes back to To fix, marked, instead of hiding in Copied.
+try { pkgDone = _pkgClean(JSON.parse(localStorage.getItem(PKG_DONE_KEY) || '{}')); } catch (_) { pkgDone = {}; }
+// When the loaded IN-Gauge export was saved (its file time): a fix is only
+// proven or disproven by a report saved AFTER it.
 let pkgReportAt = 0;
-function _pkgNeeds(r) { return !r.pinSkip && (r.verdict === 'deny' || r.verdict === 'review' || (r.verdict === 'credit' && !r.alreadyComplete)); }
-function _pkgNightAt(r) { const d = pkgDone[_pkgPinKey(r)]; if (!d) return 0; const n = d.nights ? (d.days || {})[_pkgNightKey(r)] : d; return n ? Date.parse(n.at) || 0 : 0; }
-function pkgBackWrong(r) { return pkgReportAt > 0 && pkgNightDone(r) && _pkgNeeds(r) && pkgReportAt > _pkgNightAt(r) + 60e3; }
-/** an old-style entry (whole package, no days) becomes one with every day ticked */
-function _pkgToNights(d, key) {
-  if (d.nights) { d.days = d.days || {}; return d; }
-  d.nights = true; d.days = {};
-  _pkgGroupRows(key).forEach(x => { d.days[_pkgNightKey(x)] = { by: d.by || '', at: d.at }; });
-  return d;
+const _pkgMe = () => (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '';
+
+let _pkgKeyCache = { src: null, n: -1, map: new Map() };
+function _pkgGroupRows(key) {
+  const src = pkgResults;
+  if (_pkgKeyCache.src !== src || _pkgKeyCache.n !== src.length) {
+    const map = new Map();
+    src.forEach(x => { const k = _pkgPinKey(x); if (!map.has(k)) map.set(k, []); map.get(k).push(x); });
+    _pkgKeyCache = { src, n: src.length, map };
+  }
+  return _pkgKeyCache.map.get(key) || [];
 }
-/** The nights of a copied package not ticked yet */
-function _pkgLeft(key) { const d = pkgDone[key]; return d && d.nights ? _pkgGroupRows(key).filter(x => !(d.days || {})[_pkgNightKey(x)]) : []; }
-function _pkgDoneWhen(d) {
-  const t = new Date(d.at || 0); if (isNaN(t)) return '';
-  const today = new Date().toDateString() === t.toDateString();
-  return today ? t.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : t.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+function _pkgNeeds(r) { return !r.pinSkip && (r.verdict === 'deny' || r.verdict === 'review' || (r.verdict === 'credit' && !r.alreadyComplete)); }
+/** When this package was marked fixed (old entries: the latest tick). */
+function _pkgFixedAt(d) {
+  if (!d) return 0;
+  let t = Date.parse(d.at) || 0;
+  if (d.days && typeof d.days === 'object') Object.values(d.days).forEach(n => { const x = Date.parse(n && n.at) || 0; if (x > t) t = x; });
+  return t;
+}
+function _pkgNewerReport(d) { return pkgReportAt > 0 && pkgReportAt > _pkgFixedAt(d) + 60e3; }
+/** Marked fixed, but an IN-Gauge report saved after that still shows this night wrong. */
+function pkgBackWrong(r) { const d = pkgDone[_pkgPinKey(r)]; return !!d && _pkgNeeds(r) && _pkgNewerReport(d); }
+/** This night was fixed (copied) and nothing newer says otherwise. */
+function pkgNightDone(r) { return !!pkgDone[_pkgPinKey(r)] && !pkgBackWrong(r); }
+function pkgIsDone(r) { return pkgNightDone(r); }
+function pkgIsCopied(r) { return !!pkgDone[_pkgPinKey(r)]; }
+/** back · confirmed · waiting · gone (a newer report no longer has it) */
+function _pkgDoneState(key) {
+  const d = pkgDone[key]; if (!d) return '';
+  const rows = _pkgGroupRows(key);
+  if (_pkgNewerReport(d)) {
+    if (!rows.length) return d.ok ? 'confirmed' : 'gone';
+    return rows.some(_pkgNeeds) ? 'back' : 'confirmed';
+  }
+  return d.ok ? 'confirmed' : 'waiting';
 }
 function _pkgSaveDone() {
   const cut = Date.now() - PKG_DONE_DAYS * 86400e3;
-  Object.keys(pkgDone).forEach(k => { if (!(new Date(pkgDone[k].at).getTime() > cut)) delete pkgDone[k]; });
+  Object.keys(pkgDone).forEach(k => { if (!(_pkgFixedAt(pkgDone[k]) > cut)) delete pkgDone[k]; });
   try { localStorage.setItem(PKG_DONE_KEY, JSON.stringify(pkgDone)); } catch (_) {}
   _pkgSaveDiff('pkgDone', pkgDone, _pkgDoneLast);
-}
-const _pkgMe = () => (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '';
-/** Mark a package copied, and these nights of it fixed. Saves. */
-function _pkgMarkCopied(key, nights, force) {
-  const by = _pkgMe(), at = new Date().toISOString();
-  if (!pkgDone[key]) pkgDone[key] = { by, at, nights: true, days: {} };
-  const d = force ? _pkgToNights(pkgDone[key], key) : pkgDone[key];
-  if (d.nights) { d.days = d.days || {}; (nights || []).forEach(nk => { if (force || !d.days[nk]) d.days[nk] = { by, at }; }); }
-  _pkgSaveDone();
-}
-function pkgTickNight(key, nk) {
-  const d = pkgDone[key]; if (!d) return;
-  if (!d.nights) { d.nights = true; d.days = {}; _pkgGroupRows(key).forEach(x => { d.days[_pkgNightKey(x)] = { by: d.by || '', at: d.at }; }); }
-  d.days = d.days || {};
-  if (d.days[nk]) delete d.days[nk]; else d.days[nk] = { by: _pkgMe(), at: new Date().toISOString() };
-  _pkgSaveDone();
-  pkgRender();
-  const rows = _pkgGroupRows(key), left = _pkgLeft(key).length;
-  if (!left && typeof showToast === 'function') showToast(`✅ All ${rows.length} days fixed`, 'ok');
-}
-function pkgUndone(key) {
-  if (!pkgDone[key]) return;
-  delete pkgDone[key];
-  _pkgSaveDone();
-  pkgRender();
 }
 function pkgLoadDone() {
   if (typeof fbListen !== 'function') return;
   fbListen('pkgDone', v => {
-    pkgDone = v && typeof v === 'object' ? v : {};
+    pkgDone = _pkgClean(v);
     _pkgRemember(_pkgDoneLast, pkgDone);
     try { localStorage.setItem(PKG_DONE_KEY, JSON.stringify(pkgDone)); } catch (_) {}
     if (pkgResults.length && document.getElementById('pkgResultsWrap')?.style.display !== 'none') pkgRender();
   });
 }
 document.addEventListener('DOMContentLoaded', () => setTimeout(pkgLoadDone, 1500));
-/** Marks a fixed row so it shows faded (the <tr> gets data-done) */
-function _pkgDoneMark(html, done) { return done ? html.replace(/^\s*<tr/, '<tr data-done="1"') : html; }
-/** A package's nights show by themselves while some are copied but not ticked: that is the reminder */
-function _pkgIsOpen(key) { return pkgOpenGroups.has(key) || _pkgLeft(key).length > 0; }
-function _pkgRowHtmlInner(r) {
-    const gapCell = _pkgActionCell(r);
-    if (r.verdict === 'deny') {
-      return `<tr style="opacity:0.8;">
-        <td><span class="tt-room-pill">${escapeHtml(r.room)}</span></td>
-        ${_pkgConfCell(r.conf, r)}
-        <td style="font-family:var(--mono);font-size:0.76rem;color:var(--text2);text-decoration:line-through;">${escapeHtml(r.family || r.code)}</td>
-        <td style="font-family:var(--mono);font-size:0.72rem;color:var(--text3);">AED ${escapeHtml(String(r.charge))}</td>
-        <td colspan="2" style="font-size:0.68rem;color:var(--rose);">${escapeHtml(r.denyReason)}</td>
-        ${gapCell}
-        <td><span style="color:var(--rose);">⛔ Remove</span></td>
-        ${_pkgPinCell(r)}
-      </tr>`;
-    }
-    if (r.verdict === 'credit') {
-      const statusCell = r.alreadyComplete
-        ? `<span style="color:var(--text3);">✓ OK</span>`
-        : `<span style="color:var(--mint);">✏️ Update</span>`;
-      return `<tr>
-        <td><span class="tt-room-pill">${escapeHtml(r.room)}</span></td>
-        ${_pkgConfCell(r.conf, r)}
-        <td style="font-family:var(--mono);font-size:0.76rem;font-weight:700;color:${r.alreadyComplete ? 'var(--text2)' : 'var(--mint)'};">${escapeHtml(r.code)}</td>
-        <td style="font-family:var(--mono);font-size:0.72rem;">AED ${escapeHtml(r.price)}</td>
-        <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text2);">${escapeHtml(r.from) || '—'} → ${escapeHtml(r.to) || '—'}</td>
-        <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text2);">${escapeHtml(_pkgUserLabel(r.user))}</td>
-        ${gapCell}
-        <td>${statusCell}</td>
-        ${_pkgPinCell(r)}
-      </tr>`;
-    }
-    const candText = r.note ? escapeHtml(r.note)
-      : r.candidates.length
-      ? `${r.candidates.length} candidate${r.candidates.length !== 1 ? 's' : ''}, no exact price match — ${escapeHtml(r.candidates.map(c => `${c.code} (AED ${c.price ?? '?'})`).join(', '))}`
-      : 'No product events found for this confirmation';
-    const productCell = r.needsProduct
-      ? `<span style="color:var(--text3);">? unresolved</span>`
-      : escapeHtml(r.product);
-    // Opera can't confirm these, but IN-Gauge still names a seller — and
-    // that name is the whole point of the row, so it keeps its own column
-    // instead of being swallowed by the explanation next to it. Shown in
-    // the muted colour to mark it as IN-Gauge's word rather than Opera's.
-    const claimed = r.employee && r.employee !== '-'
-      ? `<span title="IN-Gauge credits this — not confirmed against Opera">${escapeHtml(_pkgUserLabel(r.employee))}</span>`
-      : `<span style="color:var(--rose);">nobody</span>`;
-    const statusCell = r.verdict === 'settled'
-      ? `<span style="color:var(--text3);">⛔ Denied</span>`
-      : r.verdict === 'outside'
-      ? `<span style="color:var(--text3);">⏳ Not in log</span>`
-      : `<span style="color:var(--amber);">⚠ Check</span>`;
-    return `<tr${r.verdict === 'outside' ? ' style="opacity:0.75;"' : ''}>
-      <td><span class="tt-room-pill">${escapeHtml(r.room)}</span></td>
-      ${_pkgConfCell(r.conf, r)}
-      <td style="font-family:var(--mono);font-size:0.76rem;">${productCell}</td>
-      <td style="font-family:var(--mono);font-size:0.72rem;color:var(--text3);">AED ${escapeHtml(String(r.charge))}</td>
-      <td style="font-size:0.66rem;color:var(--text3);">${candText}</td>
-      <td style="font-family:var(--mono);font-size:0.68rem;color:var(--text3);">${claimed}</td>
-      ${gapCell}
-      <td>${statusCell}</td>
-      ${_pkgPinCell(r)}
-    </tr>`;
+
+/** After a run: every fix this (newer) report shows right is confirmed, for the whole team. */
+function _pkgConfirmSweep() {
+  let n = 0;
+  Object.keys(pkgDone).forEach(k => {
+    const d = pkgDone[k];
+    if (d.ok || _pkgDoneState(k) !== 'confirmed') return;
+    pkgDone[k] = Object.assign({}, d, { ok: new Date(pkgReportAt).toISOString() });
+    n++;
+  });
+  if (n) _pkgSaveDone();
+  return n;
 }
 
-function pkgSetFilter(f, el) {
-  pkgFilter_ = f;
-  document.querySelectorAll('#pkgFilters .fchip').forEach(b => b.classList.remove('on'));
-  el.classList.add('on');
-  pkgRender();
+const _pkgD = n => { const s = String(n || ''); return s.length === 8 ? `${+s.slice(6, 8)} ${_PKG_MON[+s.slice(4, 6) - 1] || ''}` : ''; };
+/** "12–14 Oct, 18 Oct" for a set of nights. */
+function _pkgNightsText(rows, joinAnd) {
+  const days = [...new Set(rows.map(r => _pkgDayNum(r.daily) || _pkgDayNum(r.from)).filter(Boolean))].sort();
+  if (!days.length) return rows.length ? `${rows.length} night${rows.length > 1 ? 's' : ''}` : '';
+  if (joinAnd && days.length <= 3) {
+    const lbl = days.map(_pkgD);
+    const sameMon = days.every(d => String(d).slice(0, 6) === String(days[0]).slice(0, 6));
+    const parts = sameMon ? days.map(d => String(+String(d).slice(6, 8))) : lbl;
+    if (sameMon) parts[parts.length - 1] = lbl[lbl.length - 1];
+    return parts.length > 1 ? parts.slice(0, -1).join(', ') + ' & ' + parts[parts.length - 1] : parts[0];
+  }
+  const runs = [];
+  days.forEach(d => { const last = runs[runs.length - 1]; if (last && _pkgDaysBetween(last[1], d) === 1) last[1] = d; else runs.push([d, d]); });
+  return runs.map(([a, b]) => a === b ? _pkgD(a) : (String(a).slice(0, 6) === String(b).slice(0, 6) ? `${+String(a).slice(6, 8)}–${_pkgD(b)}` : `${_pkgD(a)} – ${_pkgD(b)}`)).join(', ');
 }
+function _pkgWhen(t) {
+  const d = new Date(t || 0); if (isNaN(d) || !t) return '';
+  const today = new Date().toDateString() === d.toDateString();
+  return today ? 'today ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+               : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+}
+
+/** Copy the confirmation number = "I fixed it" for every night of this package. */
+function pkgCopyConf(btn, conf, key) {
+  if (typeof copyToClipboard === 'function') copyToClipboard(conf);
+  if (btn) { btn.classList.add('copied'); setTimeout(() => btn.classList.remove('copied'), 1400); }
+  if (!key) return;
+  const rows = _pkgGroupRows(key), need = rows.filter(_pkgNeeds);
+  if (!need.length) { showToast(`Copied ${conf}`, 'ok'); return; }
+  const prev = pkgDone[key] ? JSON.parse(JSON.stringify(pkgDone[key])) : null;
+  const wasBack = prev && _pkgDoneState(key) === 'back';
+  const r0 = need[0];
+  pkgDone[key] = {
+    by: _pkgMe(), at: new Date().toISOString(), conf: String(conf), room: String(r0.room || ''), fam: _pkgFamilyName(r0),
+    n: need.length, dl: _pkgNightsText(need), act: _pkgActionText(r0),
+    seller: r0.verdict === 'credit' ? _pkgUserLabel(r0.user) : '', was: _pkgUserLabel(r0.employee),
+    tries: (prev && prev.tries || 0) + (wasBack ? 1 : 0),
+  };
+  _pkgSaveDone();
+  const card = btn && btn.closest && btn.closest('.pa-card');
+  const finish = () => pkgRender();
+  if (card && pkgFilter_ === 'action' && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    card.style.maxHeight = card.scrollHeight + 'px';
+    void card.offsetHeight;
+    card.classList.add('pa-leaving');
+    setTimeout(finish, 380);
+  } else finish();
+  const msg = `✓ ${conf} marked fixed (${need.length} night${need.length > 1 ? 's' : ''}). It comes back only if a newer IN-Gauge report still shows it wrong.`;
+  const undo = () => { if (prev) pkgDone[key] = prev; else delete pkgDone[key]; _pkgSaveDone(); pkgRender(); };
+  if (typeof showUndoToast === 'function') showUndoToast(msg, undo); else showToast(msg, 'ok');
+}
+function pkgUndone(key) {
+  if (!pkgDone[key]) return;
+  const prev = pkgDone[key];
+  delete pkgDone[key];
+  _pkgSaveDone();
+  pkgRender();
+  if (typeof showUndoToast === 'function') showUndoToast('Back in the list', () => { pkgDone[key] = prev; _pkgSaveDone(); pkgRender(); });
+}
+/** A bulk copy (rows to update / to remove) holds every night of each package: all of them count as fixed. */
+function _pkgCopiedMany(rows) {
+  const keys = [...new Set(rows.filter(r => !pkgNightDone(r)).map(_pkgPinKey))];
+  if (!keys.length) return;
+  const snap = {}; keys.forEach(k => { snap[k] = pkgDone[k] ? JSON.parse(JSON.stringify(pkgDone[k])) : null; });
+  keys.forEach(k => {
+    const need = _pkgGroupRows(k).filter(_pkgNeeds), r0 = need[0] || _pkgGroupRows(k)[0] || {};
+    pkgDone[k] = { by: _pkgMe(), at: new Date().toISOString(), conf: String(r0.conf || ''), room: String(r0.room || ''), fam: _pkgFamilyName(r0),
+      n: need.length, dl: _pkgNightsText(need), act: _pkgActionText(r0), seller: r0.verdict === 'credit' ? _pkgUserLabel(r0.user) : '', was: _pkgUserLabel(r0.employee),
+      tries: (snap[k] && snap[k].tries) || 0 };
+  });
+  _pkgSaveDone();
+  pkgRender();
+  const n = keys.length;
+  const undo = () => { keys.forEach(k => { if (snap[k]) pkgDone[k] = snap[k]; else delete pkgDone[k]; }); _pkgSaveDone(); pkgRender(); };
+  if (typeof showUndoToast === 'function') showUndoToast(`${n} package${n > 1 ? 's' : ''} marked fixed`, undo);
+}
+
+// ── The list ─────────────────────────────────────────────────
+let pkgDoneOpen = false;
+const pkgWhyOpen = new Set();
+function pkgToggleDoneList() { pkgDoneOpen = !pkgDoneOpen; pkgRender(); }
+function pkgWhy(key) { if (pkgWhyOpen.has(key)) pkgWhyOpen.delete(key); else pkgWhyOpen.add(key); pkgRender(); }
+
+const _PKG_VIEWS = [
+  ['action', '🛠 To fix'], ['deny', '⛔ Remove'], ['review', '🔎 Check by hand'], ['pinned', '📌 Frozen'],
+  ['outside', '⏳ Not in log'], ['complete', '✓ Nothing to do'], ['all', 'All'],
+];
+function _pkgInView(g, f) {
+  const rows = g.rows, need = rows.filter(_pkgNeeds);
+  if (f && f.startsWith('rule:')) return rows.some(r => (r.ruleHits || []).includes(f.slice(5)));
+  switch (f) {
+    case 'action':   return need.length > 0 && (!pkgDone[g.key] || rows.some(pkgBackWrong));
+    case 'deny':     return rows.some(r => r.verdict === 'deny' && !r.pinSkip);
+    case 'review':   return rows.some(r => r.verdict === 'review' && !r.pinSkip);
+    case 'pinned':   return rows.some(r => r.pin);
+    case 'outside':  return rows.some(r => r.verdict === 'outside');
+    case 'complete': return !need.length && rows.some(r => r.verdict !== 'outside');
+    default:         return true;
+  }
+}
+function _pkgAllGroups() {
+  const groups = [], gmap = new Map();
+  pkgResults.forEach(r => {
+    const k = _pkgPinKey(r);
+    if (!gmap.has(k)) { const g = { key: k, rows: [] }; gmap.set(k, g); groups.push(g); }
+    gmap.get(k).rows.push(r);
+  });
+  return groups;
+}
+function pkgSetFilter(f) { pkgFilter_ = f; pkgRender(); const l = document.getElementById('pkgList'); if (l && l.scrollIntoView && f.startsWith('rule:')) l.scrollIntoView({ block: 'start' }); }
 function pkgSetSearch(val) { pkgSearch_ = val; pkgRender(); }
+
+function pkgRender() {
+  _pkgStyle2();
+  const list = document.getElementById('pkgList');
+  if (!list) return;
+  const q = pkgSearch_.toLowerCase().trim();
+  const all = _pkgAllGroups();
+  const hay = g => g.rows.map(r => [r.conf, r.room, r.code, r.family, _pkgUserLabel(r.user), _pkgUserLabel(r.employee), _pkgActionText(r)].join(' ')).join(' ').toLowerCase();
+  const counts = {};
+  _PKG_VIEWS.forEach(([f]) => { counts[f] = all.filter(g => _pkgInView(g, f)).length; });
+  let shown = all.filter(g => _pkgInView(g, pkgFilter_) && (!q || hay(g).includes(q)));
+  const rank = g => { const n = g.rows.filter(_pkgNeeds); return g.rows.some(pkgBackWrong) ? 0 : n.some(r => r.verdict === 'deny') ? 1 : n.some(r => r.verdict === 'credit') ? 2 : n.length ? 3 : 4; };
+  shown.sort((a, b) => rank(a) - rank(b) || String(a.rows[0].room).localeCompare(String(b.rows[0].room), undefined, { numeric: true }));
+
+  // view chips
+  const views = document.getElementById('pkgFilters');
+  if (views) {
+    const ruleF = pkgFilter_.startsWith('rule:') ? pkgFilter_.slice(5) : '';
+    const ri = ruleF && PKG_RULE_INFO.find(x => x.k === ruleF);
+    views.innerHTML = _PKG_VIEWS.map(([f, t]) => `<button type="button" class="pa-view${pkgFilter_ === f ? ' on' : ''}" onclick="pkgSetFilter('${f}')">${t} <span>${counts[f]}</span></button>`).join('')
+      + (ruleF ? `<button type="button" class="pa-view on rule" onclick="pkgSetFilter('action')" title="Back to To fix">${ri ? ri.ico + ' ' : ''}Decided by: ${escapeHtml(ri ? ri.short : ruleF)} <span>${shown.length}</span> ✕</button>` : '');
+  }
+
+  // the done summary
+  const sum = document.getElementById('pkgSummary');
+  if (sum) sum.innerHTML = _pkgSummaryHtml();
+
+  const left = counts.action;
+  const head = document.getElementById('pkgListHead');
+  if (head) head.innerHTML = pkgFilter_ === 'action'
+    ? (left ? `<b>${left}</b> package${left > 1 ? 's' : ''} to fix in IN-Gauge <small>Tap the confirmation number to copy it: that marks it fixed.</small>` : '')
+    : `<b>${shown.length}</b> package${shown.length !== 1 ? 's' : ''} <small>${escapeHtml((_PKG_VIEWS.find(v => v[0] === pkgFilter_) || [0, ''])[1])}</small>`;
+
+  list.innerHTML = shown.length ? shown.map(_pkgCardHtml).join('')
+    : `<div class="pa-empty">${q ? 'No package matches your search.' : pkgFilter_ === 'action'
+        ? `<b>✅ All fixed.</b><span>Nothing else needs a change in IN-Gauge${Object.keys(pkgDone).length ? '. Load the next IN-Gauge report to confirm the fixes' : ''}.</span>` : 'Nothing here.'}</div>`;
+  try { pkgBoardRender(); } catch (e) { console.warn('[pkg board]', e); }
+  if (_pkgView === 'rules') { try { pkgRulesRender(); } catch (e) { console.warn('[pkg rules]', e); } }
+}
+
+function _pkgSummaryHtml() {
+  const keys = Object.keys(pkgDone);
+  if (!keys.length) return `<div class="pa-sum muted">Tip: tap a confirmation number to copy it. That marks the package fixed and takes it off the list.</div>`;
+  const st = {}; keys.forEach(k => { st[k] = _pkgDoneState(k); });
+  const today = new Date().toDateString();
+  const fixedToday = keys.filter(k => new Date(_pkgFixedAt(pkgDone[k])).toDateString() === today).length;
+  const waiting = keys.filter(k => st[k] === 'waiting').length;
+  const confirmed = keys.filter(k => st[k] === 'confirmed').length;
+  const back = keys.filter(k => st[k] === 'back').length;
+  const bits = [`<b class="ok">✓ ${fixedToday} fixed today</b>`];
+  if (waiting) bits.push(`<span title="They come back only if a newer IN-Gauge report still shows them wrong">${waiting} waiting to be confirmed by the next IN-Gauge report</span>`);
+  if (confirmed) bits.push(`<span class="ok">${confirmed} confirmed ✓</span>`);
+  if (back) bits.push(`<span class="bad">↺ ${back} came back</span>`);
+  let html = `<div class="pa-sum">${bits.join('<i>·</i>')}<button type="button" class="pa-link" onclick="pkgToggleDoneList()" aria-expanded="${pkgDoneOpen}">${pkgDoneOpen ? 'hide' : 'show'}</button></div>`;
+  if (pkgDoneOpen) {
+    const order = { back: 0, waiting: 1, confirmed: 2, gone: 3 };
+    const ks = keys.sort((a, b) => (order[st[a]] - order[st[b]]) || (_pkgFixedAt(pkgDone[b]) - _pkgFixedAt(pkgDone[a])));
+    const lbl = { back: ['bad', '↺ Came back'], waiting: ['wait', '⏳ Waiting'], confirmed: ['ok', '✓ Confirmed'], gone: ['muted', 'Not in this report'] };
+    const J = v => escapeHtml(JSON.stringify(v));
+    html += `<div class="pa-done-list">${ks.slice(0, 80).map(k => {
+      const d = pkgDone[k], [conf, fam] = k.split('|'), rows = _pkgGroupRows(k), r0 = rows[0] || {};
+      const [cls, txt] = lbl[st[k]] || ['muted', ''];
+      return `<div class="pa-done-row"><span class="pa-room sm">${escapeHtml(d.room || r0.room || '—')}</span>
+        <div class="pa-done-main"><b>${escapeHtml(d.fam || fam || '')}</b> <code>${escapeHtml(d.conf || conf)}</code>
+          <small>${escapeHtml(d.by ? String(d.by).split(' ')[0] : 'Someone')} · ${escapeHtml(_pkgWhen(_pkgFixedAt(d)))}${d.dl ? ' · ' + escapeHtml(d.dl) : ''}${d.seller ? ' · → ' + escapeHtml(d.seller) : ''}</small></div>
+        <span class="pa-chip ${cls}">${txt}</span>
+        <button type="button" class="pa-undo" title="Not fixed: put it back in the list" onclick="pkgUndone(${J(k)})">↩ Undo</button></div>`;
+    }).join('')}${ks.length > 80 ? `<div class="pa-more">and ${ks.length - 80} older</div>` : ''}</div>`;
+  }
+  return html;
+}
+
+/** The seller now (IN-Gauge) → the seller it should be, for a set of nights. */
+function _pkgSellerLine(need) {
+  const r0 = need[0];
+  const now = [...new Set(need.map(r => (r.employee && r.employee !== '-') ? _pkgUserLabel(r.employee) : ''))];
+  const nowTxt = now.map(n => n || 'nobody').join(' / ');
+  if (r0.verdict === 'deny') return `<div class="pa-who"><div><small>In IN-Gauge now</small><b>${escapeHtml(nowTxt)}</b></div><span class="pa-arrow">→</span><div><small>Should be</small><b class="bad">Removed (denied)</b></div></div>`;
+  if (r0.verdict === 'review') return `<div class="pa-who"><div><small>In IN-Gauge now</small><b>${escapeHtml(nowTxt)}</b></div><span class="pa-arrow">→</span><div><small>Should be</small><b class="warn">${r0.splitSeller ? 'One of: ' + escapeHtml(r0.splitSeller.join(' / ')) : 'Check by hand'}</b></div></div>`;
+  const should = [...new Set(need.map(r => r.noSeller ? 'no seller (system)' : _pkgUserLabel(r.user) || 'nobody'))].join(' / ');
+  const prod = need.some(r => r.needsProduct) ? `<div class="pa-prod">Package: set it to <b>${escapeHtml(_pkgFamilyName(r0) || r0.code || '?')}</b>${r0.code && r0.code !== _pkgFamilyName(r0) ? ` <code>${escapeHtml(r0.code)}</code>` : ''}</div>` : '';
+  if (!need.some(r => r.reassign || r.needsEmployee)) return prod || '';
+  return `<div class="pa-who"><div><small>In IN-Gauge now</small><b class="${now.every(n => !n) ? 'bad' : 'was'}">${escapeHtml(nowTxt)}</b></div><span class="pa-arrow">→</span><div><small>Should be</small><b class="ok">${escapeHtml(should)}</b></div></div>${prod}`;
+}
+
+/** One sentence: why this needs a change. The full story is under Why? */
+function _pkgShortWhy(r) {
+  if (r.pinSkip) return 'Skipped (frozen by ' + (r.pin && r.pin.by || 'someone') + ')';
+  if (r.pin && (r.pin.seller || r.pin.manual)) return `Frozen by ${r.pin.by || 'someone'}${r.pin.at ? ' on ' + _pkgWhen(r.pin.at).replace(/ \d\d:\d\d$/, '') : ''}`;
+  if (r.verdict === 'deny') return r.denyReason || '';
+  if (r.verdict === 'review') return r.splitSeller ? `Split between ${r.splitSeller.join(' and ')}: one package, one stay, credited to more than one person` : (r.note || 'Opera has no clear entry for this package');
+  if (r.verdict === 'outside') return r.note || '';
+  if (r.noSeller) return 'It came with an online / TARS booking: nobody at the desk sold it';
+  if (r.extendedFrom) return `Same stay as booking ${r.extendedFrom} (back-to-back): ${_pkgUserLabel(r.user)} put this package on first`;
+  const o = r.originEvent;
+  if (o && (r.reassign || r.needsEmployee)) return `Opera shows ${_pkgUserLabel(o.user)} put it on first (${_pkgTs(o.ts)})`;
+  if (r.needsProduct) return 'IN-Gauge did not recognise the package; Opera shows which one it is';
+  return '';
+}
+function _pkgTs(ts) { const s = String(ts || ''); return s.length >= 12 ? `${+s.slice(6, 8)} ${_PKG_MON[+s.slice(4, 6) - 1]} ${s.slice(8, 10)}:${s.slice(10, 12)}` : '—'; }
+
+function _pkgCardHtml(g) {
+  const rows = g.rows, need = rows.filter(_pkgNeeds), act = need.length ? need : rows, r0 = act[0];
+  const J = v => escapeHtml(JSON.stringify(v));
+  const back = rows.filter(pkgBackWrong), state = pkgDone[g.key] ? _pkgDoneState(g.key) : '';
+  const tone = back.length ? 'back' : r0.verdict === 'deny' ? 'deny' : r0.verdict === 'review' ? 'review' : need.length ? 'fix' : 'ok';
+  const total = act.reduce((s, r) => s + (parseFloat(r.verdict === 'credit' ? (r.price ?? r.charge) : r.charge) || 0), 0);
+  const acts = [...new Set(need.map(_pkgActionText))];
+  const actTxt = need.length ? acts[0] : _pkgActionText(r0);
+  const fam = _pkgFamilyName(r0) || r0.code || 'Package';
+  const backTag = back.length ? (() => {
+    const d = pkgDone[g.key];
+    return `<div class="pa-back">↺ Came back: still wrong on ${escapeHtml(_pkgNightsText(back, true))}<small>Marked fixed ${escapeHtml(_pkgWhen(_pkgFixedAt(d)))}${d.by ? ' by ' + escapeHtml(String(d.by).split(' ')[0]) : ''}, but this newer IN-Gauge report still shows it wrong.</small></div>`;
+  })() : '';
+  const doneTag = !back.length && state ? `<span class="pa-chip ${state === 'confirmed' ? 'ok' : 'wait'}">${state === 'confirmed' ? '✓ Confirmed' : '⏳ Fixed, waiting'}</span>` : '';
+  const whyOpen = pkgWhyOpen.has(g.key);
+  const short = _pkgShortWhy(r0);
+  return `<article class="pa-card t-${tone}" data-key="${escapeHtml(g.key)}">
+    ${backTag}
+    <div class="pa-top">
+      <span class="pa-room" title="Room">${escapeHtml(r0.room || '—')}</span>
+      <div class="pa-pk"><b>${escapeHtml(fam)}</b><small>${act.length} night${act.length !== 1 ? 's' : ''} · ${escapeHtml(_pkgNightsText(act))}${total ? ' · AED ' + escapeHtml(String(Math.round(total * 100) / 100)) : ''}</small></div>
+      <span class="pa-act">${escapeHtml(actTxt)}${acts.length > 1 ? ` <em>+${acts.length - 1}</em>` : ''}</span>${doneTag}
+    </div>
+    ${need.length ? _pkgSellerLine(need) : ''}
+    ${short ? `<div class="pa-short">${escapeHtml(short)}</div>` : ''}
+    <div class="pa-foot">
+      <button type="button" class="pa-copy" title="Copy ${escapeHtml(r0.conf)}${need.length ? ' and mark this package fixed' : ''}" onclick="pkgCopyConf(this,${J(String(r0.conf))},${J(g.key)})"><code>${escapeHtml(r0.conf)}</code><span>${need.length ? (back.length ? '⧉ Copy · fixed again' : '⧉ Copy · mark fixed') : '⧉ Copy'}</span></button>
+      <button type="button" class="pa-btn${whyOpen ? ' on' : ''}" aria-expanded="${whyOpen}" onclick="pkgWhy(${J(g.key)})">Why?</button>
+      ${_pkgPinPicker(r0, g.key)}
+    </div>
+    ${whyOpen ? `<div class="pa-whybox">${_pkgWhyHtml(g)}</div>` : ''}
+  </article>`;
+}
+
+// ── Why? A step-by-step account of one package ───────────────
+function _pkgWhyHtml(g) {
+  const rows = g.rows, need = rows.filter(_pkgNeeds), r0 = (need[0] || rows[0]);
+  const steps = [];
+  const emp = [...new Set(rows.map(r => (r.employee && r.employee !== '-') ? _pkgUserLabel(r.employee) : 'nobody'))].join(' / ');
+  steps.push(['📄', 'IN-Gauge', `${rows.length} night${rows.length > 1 ? 's' : ''} of ${_pkgFamilyName(r0) || r0.code} on booking ${r0.conf}, room ${r0.room || '?'}: ${_pkgNightsText(rows)}. Seller shown: <b>${escapeHtml(emp)}</b>${r0.status ? ` · status ${escapeHtml(r0.status)}` : ''}.`, true]);
+
+  const ev = (r0.candidates || []).slice().sort((a, b) => a.ts - b.ts);
+  if (!ev.length) {
+    steps.push(['🧾', 'Opera log', `Nothing logged for this booking in the loaded log${pkgLogRange.max ? ` (it covers ${_pkgDayLabel(pkgLogRange.min)} → ${_pkgDayLabel(pkgLogRange.max)})` : ''}.`]);
+  } else {
+    const li = ev.map(e => {
+      const tags = [];
+      if (r0.originEvent === e || (r0.originEvent && r0.originEvent.ts === e.ts && r0.originEvent.code === e.code && r0.originEvent.user === e.user)) tags.push('<b class="ok">★ first person: gets it</b>');
+      if (r0.matchedEvent && r0.matchedEvent.ts === e.ts && r0.matchedEvent.code === e.code && r0.matchedEvent.user === e.user) tags.push('matches the charge');
+      if (_pkgIsSystemLogin(e.user)) tags.push('<span class="muted">online / system</span>');
+      return `<li><span class="t">${escapeHtml(_pkgTs(e.ts))}</span> <b>${escapeHtml(_pkgUserLabel(e.user))}</b> ${escapeHtml(e.action === 'ADDED' ? 'added' : 'changed')} <code>${escapeHtml(e.code)}</code>${e.price ? ' · AED ' + escapeHtml(e.price) : ''}${tags.length ? ' · ' + tags.join(' · ') : ''}</li>`;
+    }).join('');
+    steps.push(['🧾', 'Opera log', `${ev.length} entr${ev.length > 1 ? 'ies' : 'y'} for this booking, oldest first:<ul>${li}</ul>`]);
+  }
+
+  if (r0.extendedFrom || r0.newKindOnExt) {
+    const h = r0.extendedFrom || r0.newKindOnExt, head = _pkgBuildChains();
+    const members = Object.keys(head).filter(c => head[c] === h)
+      .sort((a, b) => (_pkgDayNum((pkgGuests[a] || {}).arr) || 0) - (_pkgDayNum((pkgGuests[b] || {}).arr) || 0));
+    const li = members.map(c => {
+      const gg = pkgGuests[c] || {}, e = (pkgEvents[c] || []).slice().sort((a, b) => a.ts - b.ts).find(x => !_pkgKindOfRow(r0) || _pkgKindOfCode(x.code) === _pkgKindOfRow(r0));
+      return `<li${c === r0.conf ? ' class="me"' : ''}><code>${escapeHtml(c)}</code> room ${escapeHtml(gg.room || '?')} · ${escapeHtml(_pkgD(_pkgDayNum(gg.arr)))} → ${escapeHtml(_pkgD(_pkgDayNum(gg.dep)))}${e ? ` · ${escapeHtml(e.code)} first put by <b>${escapeHtml(_pkgUserLabel(e.user))}</b> (${escapeHtml(_pkgTs(e.ts))})` : ' · no such package'}${c === r0.conf ? ' · <i>this booking</i>' : ''}</li>`;
+    }).join('');
+    steps.push(['🔗', 'Same stay', r0.extendedFrom
+      ? `The guest's bookings run back to back, so they are one stay:<ul>${li}</ul>The first person who put this kind of package on the stay keeps it.`
+      : `This booking continues an earlier one, but this kind of package is new on it, so it is a new sale:<ul>${li}</ul>`]);
+  }
+
+  const hits = [...new Set(rows.flatMap(r => r.ruleHits || []))];
+  const ruleNames = hits.map(k => PKG_RULE_INFO.find(x => x.k === k)).filter(Boolean);
+  if (ruleNames.length) steps.push(['⚙️', 'Rules used', ruleNames.map(x => `<span class="pa-rtag">${x.ico} ${escapeHtml(x.short)}</span>`).join(' ') + (hits.includes('pin') ? ' <span class="pa-rtag">📌 Frozen by a person</span>' : '')]);
+  else if (hits.includes('pin')) steps.push(['⚙️', 'Rules used', '<span class="pa-rtag">📌 Frozen by a person</span>']);
+  if (r0.pin) steps.push(['📌', 'Frozen', `${r0.pin.skip ? 'Skipped' : r0.pin.manual ? 'Manual sale' : 'Seller frozen to <b>' + escapeHtml(_pkgUserLabel(r0.pin.seller)) + '</b>'} by ${escapeHtml(r0.pin.by || 'someone')}${r0.pin.at ? ' on ' + escapeHtml(r0.pin.at.slice(0, 10)) : ''}. This beats the rules.`]);
+  if (r0.reviewed) steps.push(['✅', 'Reviewed', 'Someone marked this REVIEWED in IN-Gauge, so the seller is left as it is.']);
+  const d = pkgDone[g.key];
+  if (d) steps.push(['🕓', 'Fixed', `Marked fixed by ${escapeHtml(d.by || 'someone')} ${escapeHtml(_pkgWhen(_pkgFixedAt(d)))}. ${{ back: 'This newer IN-Gauge report still shows it wrong.', confirmed: 'A newer IN-Gauge report confirms it ✓', waiting: 'Waiting for a newer IN-Gauge report to confirm it.', gone: 'The newer report no longer has it.' }[_pkgDoneState(g.key)] || ''}`]);
+
+  // what to do
+  const nights = _pkgNightsText(need.length ? need : rows);
+  let todo;
+  if (!need.length) todo = 'Nothing to change in IN-Gauge.';
+  else if (r0.verdict === 'deny') todo = `Open booking <b>${escapeHtml(r0.conf)}</b> in IN-Gauge and deny the charge on ${escapeHtml(nights)}.`;
+  else if (r0.verdict === 'review') todo = `Check booking <b>${escapeHtml(r0.conf)}</b> in Opera. When you know who sold it, freeze the seller here (📌), then fix IN-Gauge.`;
+  else {
+    const parts = [];
+    if (need.some(r => r.needsProduct)) parts.push(`set the package to <b>${escapeHtml(_pkgFamilyName(r0))}</b>`);
+    if (need.some(r => r.reassign || r.needsEmployee)) parts.push(`set the seller to <b>${escapeHtml(_pkgUserLabel(r0.user))}</b>`);
+    todo = `Open booking <b>${escapeHtml(r0.conf)}</b> in IN-Gauge and on every night (${escapeHtml(nights)}) ${parts.join(' and ') || 'check the line'}. Then copy the number here to mark it fixed.`;
+  }
+  steps.push(['👉', 'What to do', todo]);
+  return `<ol class="pa-steps">${steps.map(([i, t, b]) => `<li><span class="i">${i}</span><div><b>${t}</b><div>${b}</div></div></li>`).join('')}</ol>`;
+}
 
 // ── Copy resolved rows as TSV — Room / Conf / Product / Price / From / To / Sold By ──
 // Who ran the audit and when. A deny list is a decision about someone's
@@ -1774,7 +1890,7 @@ function pkgCopyResolved() {
 // ── Copy the deny list — the charges that should NOT be credited ──
 function pkgCopyDeny() {
   const denied = pkgResults.filter(r => r.verdict === 'deny' && !r.pinSkip);
-  if (!denied.length) { showToast('Nothing to deny — every charge is backed by Opera', 'ok'); return; }
+  if (!denied.length) { showToast('Nothing to deny: every charge is backed by Opera', 'ok'); return; }
   const s = _pkgAuditStamp();
   const tsv = ['Room\tConfirmation No.\tProduct\tCharge (AED)\tCharged Date\tWhy Deny\tWhat Opera Shows\tAudited On\tAudited By']
     .concat(denied.map(r => [r.room, r.conf, r.family || r.code, r.charge, r.daily || '',
@@ -1782,23 +1898,13 @@ function pkgCopyDeny() {
       // Tabs and newlines inside a reason would split the row into new columns.
       .map(v => String(v ?? '').replace(/[\t\r\n]+/g, ' ')).join('\t')))
     .join('\n');
-  copyToClipboard(tsv, document.getElementById('pkgDenyBtn'), '⛔ Copy Deny List');
+  copyToClipboard(tsv, document.getElementById('pkgDenyBtn'), '⛔ Copy rows to remove');
   _pkgCopiedMany(denied);
-}
-function _pkgCopiedMany(rows) {
-  // a bulk copy holds every night of each package, so every copied night counts as fixed
-  const fresh = rows.filter(r => !pkgNightDone(r) || pkgBackWrong(r));
-  if (!fresh.length) return;
-  const snap = JSON.stringify(pkgDone), byKey = new Map();
-  fresh.forEach(r => { const k = _pkgPinKey(r); if (!byKey.has(k)) byKey.set(k, []); byKey.get(k).push(_pkgNightKey(r)); });
-  byKey.forEach((nights, k) => _pkgMarkCopied(k, nights, true));
-  pkgRender();
-  const n = byKey.size;
-  if (typeof showUndoToast === 'function') showUndoToast(`${n} package${n > 1 ? 's' : ''} moved to Copied, every day ticked`, () => { pkgDone = JSON.parse(snap); _pkgSaveDone(); pkgRender(); });
 }
 
 function pkgClear() {
-  pkgUnknowns = []; pkgEvents = {}; pkgResults = []; pkgFilter_ = 'all'; pkgSearch_ = ''; pkgPdfFiles = []; pkgLogRange = { min: 0, max: 0 };
+  pkgUnknowns = []; pkgEvents = {}; pkgResults = []; pkgFilter_ = 'action'; pkgSearch_ = ''; pkgPdfFiles = []; pkgLogRange = { min: 0, max: 0 };
+  pkgLastDiff = null;
   const ei = document.getElementById('pkgExcelFileInput'); if (ei) ei.value = '';
   const pi = document.getElementById('pkgPdfFileInput');   if (pi) pi.value = '';
   const el = document.getElementById('pkgExcelLabel'); if (el) el.textContent = 'Click to upload';
@@ -1806,6 +1912,506 @@ function pkgClear() {
   const search = document.getElementById('pkgSearch'); if (search) search.value = '';
   document.getElementById('pkgResultsWrap').style.display = 'none';
   document.getElementById('pkgError').classList.remove('show');
+  if (_pkgView === 'rules') pkgRulesRender();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  ⚙️ Rules — how the audit decides, in plain words, yours to change
+//  • every rule as a card: what it does, a tiny example, a switch
+//  • change one and the audit re-runs at once: "What changed" lists every
+//    package that moved, before → after; Reset puts the defaults back
+//  • 💡 suggestions from the loaded data; 📌 frozen packages; 👤 staff names
+//  Rules: packageAudit/rules/<key> (only what differs from the default).
+//  Staff: packageAudit/staff/<id> = { name, logins: [] }.
+//  Owner, manager and supervisor may change them; everyone can read them.
+// ═══════════════════════════════════════════════════════════
+const PKG_RULE_INFO = [
+  { k: 'firstPerson', ico: '🥇', short: 'first person', t: 'The first person who put the package on gets it',
+    d: 'Opera can show several people touching one package: who added it, who changed its dates or its price. The sale goes to the earliest real person.',
+    ex: 'Sam adds breakfast on 3 Oct at 10:05. Lina changes its dates on 5 Oct. → Sam gets it.',
+    off: 'Off: whoever\'s Opera entry matches the price charged gets it.',
+    subs: [{ k: 'familyMatch', t: 'An upgrade is still the same package', d: 'Breakfast for 1 (UPS30BB) changed to breakfast for 2 (UPS60BB) stays with whoever started the breakfast.' }] },
+  { k: 'chain', ico: '🔗', short: 'extension (same stay)', t: 'Back-to-back bookings are one stay', needs: 'guests',
+    d: 'A guest who extends gets a new confirmation number. When the new booking starts the day the last one ends, it is the same stay, so the package stays with the first seller.',
+    ex: 'Booking A 5–13 Oct, Sam sold breakfast. Booking B 13–17 Oct, same guest; Lina adds breakfast again on B. → Still Sam\'s.',
+    off: 'Off: every confirmation number is its own sale.',
+    subs: [{ k: 'chainSameRoom', t: 'Only when it is the same room', d: 'A guest who moves to another room starts a new stay.' },
+           { k: 'chainGap', type: 'seg', opts: [[0, 'Same day'], [1, '1 day gap']], t: 'Gap allowed between the bookings', d: 'Same day: B must start the day A ends. 1 day gap: a one-night break still counts as one stay.' }] },
+  { k: 'sameKind', ico: '🧩', short: 'same kind only', t: 'Only the same kind of package carries over', parent: 'chain',
+    d: 'On an extension only the same kind (breakfast, early check-in, late check-out, room upgrade…) stays with the first seller. A different kind is a new sale.',
+    ex: 'Sam sold breakfast on booking A. On the extension B, Lina sells a room upgrade (USS…). → The upgrade is Lina\'s.',
+    off: 'Off: every package on the extension goes to the stay\'s first seller.' },
+  { k: 'systemNoSeller', ico: '🌐', short: 'online / TARS = no seller', t: 'Online / TARS / system bookings have no desk seller',
+    d: 'A package that came with a booking made online, through TARS or another interface was not sold at the desk: nobody gets it.',
+    ex: 'Breakfast added by *TARS* with the booking → no seller. If Sam adds late check-out later, that one is Sam\'s.',
+    off: 'Off: the system account is credited like a person.' },
+  { k: 'oneTime', ico: '⏰', short: 'once per stay', t: 'Early check-in and late check-out count once per stay',
+    d: 'IN-Gauge sometimes repeats them on every night. Only one night counts; the others are marked Remove.',
+    ex: 'Early check-in charged on 12, 13 and 14 Oct → keep 12 Oct, remove 13 and 14.',
+    off: 'Off: every night is kept.' },
+  { k: 'denyNoOpera', ico: '⛔', short: 'no such package in Opera', t: 'Remove a charge Opera does not show',
+    d: 'Opera logged packages for this booking, but none of this kind. The charge has nothing behind it.',
+    ex: 'IN-Gauge charges Late Check Out; Opera shows only breakfast (UPS30BB) → Remove.',
+    off: 'Off: these go to Check by hand instead.' },
+  { k: 'splitFlag', ico: '✂️', short: 'split sellers', t: 'One package with two sellers is flagged',
+    d: 'IN-Gauge bills night by night, and each night can carry a different seller. One package, one stay should have one seller.',
+    ex: 'Breakfast 12–14 Oct: 12 under Sam, 13 and 14 under Lina → Check by hand.',
+    off: 'Off: not flagged.' },
+  { k: 'reviewedStops', ico: '✅', short: 'REVIEWED stops it', t: 'REVIEWED in IN-Gauge stops it being work',
+    d: 'Someone marked the row REVIEWED, so the seller they chose stands. A blank, a duplicate or a missing Opera record still shows.',
+    ex: 'Lina reviewed booking 123 and left the seller as it is → it does not come back.',
+    off: 'Off: reviewed rows are checked like any other.' },
+];
+let _pkgView = 'audit';
+let pkgLastDiff = null;    // { label, list: [{key, conf, room, fam, nights, before, after}], at }
+let pkgStaffDb = {};       // id -> { name, logins: [] }
+
+function _pkgCanEdit() {
+  const r = typeof currentProfile !== 'undefined' && currentProfile && currentProfile.role;
+  return ['owner', 'manager', 'supervisor'].includes(r);
+}
+function pkgShowView(v) {
+  _pkgView = v === 'rules' ? 'rules' : 'audit';
+  const rv = document.getElementById('pkgRulesView'), mv = document.getElementById('pkgMainView');
+  if (rv) rv.hidden = _pkgView !== 'rules';
+  if (mv) mv.hidden = _pkgView === 'rules';
+  document.querySelectorAll('#pkgTabs [data-v]').forEach(b => { const on = b.dataset.v === _pkgView; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+  _pkgStyle2(); _pkgStartRulesSync();
+  if (_pkgView === 'rules') pkgRulesRender();
+}
+
+/** What each package comes out as: the seller, or Remove / Check by hand. */
+function _pkgOutcome(r) {
+  if (r.pinSkip) return 'skipped';
+  if (r.verdict === 'deny') return '⛔ Remove';
+  if (r.verdict === 'settled') return 'denied';
+  if (r.verdict === 'review') return '🔎 Check by hand';
+  if (r.verdict === 'outside') return 'not in log';
+  if (r.noSeller) return 'no seller (system)';
+  return _pkgUserLabel(r.user || r.employee) || 'nobody';
+}
+function _pkgDiff(before, after) {
+  const by = new Map();
+  after.forEach((r, i) => {
+    const b = before[i]; if (!b) return;
+    const x = _pkgOutcome(b), y = _pkgOutcome(r);
+    if (x === y) return;
+    const k = _pkgPinKey(r);
+    if (!by.has(k)) by.set(k, { key: k, conf: r.conf, room: r.room, fam: _pkgFamilyName(r), rows: [], pairs: new Set() });
+    const e = by.get(k); e.rows.push(r); e.pairs.add(x + ' → ' + y);
+  });
+  return [...by.values()].map(e => ({ key: e.key, conf: e.conf, room: e.room, fam: e.fam, nights: _pkgNightsText(e.rows), n: e.rows.length, change: [...e.pairs].join(' · ') }));
+}
+/** Re-run the audit on what is loaded (rules, pins or staff changed). Returns what changed. */
+function _pkgRecompute() {
+  if (!pkgUnknowns.length || !Object.keys(pkgEvents).length || !pkgResults.length) return null;
+  const before = pkgResults;
+  const after = _pkgCompute();
+  pkgResults = after;
+  const diff = _pkgDiff(before, after);
+  _pkgRenderCoverage();
+  pkgRender();
+  return diff;
+}
+
+function pkgSetRule(k, v) {
+  if (!_pkgCanEdit()) { showToast('Only a manager, supervisor or owner can change the rules', 'warn'); pkgRulesRender(); return; }
+  if (!(k in PKG_RULE_DEFAULTS)) return;
+  if (typeof PKG_RULE_DEFAULTS[k] === 'boolean') v = !!v; else v = +v || 0;
+  const info = PKG_RULE_INFO.find(x => x.k === k) || PKG_RULE_INFO.find(x => (x.subs || []).some(s => s.k === k));
+  const sub = info && (info.subs || []).find(s => s.k === k);
+  const name = sub ? sub.t : info ? info.t : k;
+  pkgRules[k] = v;
+  try { localStorage.setItem('pkg_rules_v1', JSON.stringify(_pkgRulesStored())); } catch (_) {}
+  if (typeof fbSet === 'function') fbSet('packageAudit/rules/' + k, v === PKG_RULE_DEFAULTS[k] ? null : v);
+  if (typeof logActivity === 'function') logActivity('pkg_rule', `${name}: ${typeof v === 'boolean' ? (v ? 'on' : 'off') : v}`);
+  const diff = _pkgRecompute();
+  pkgLastDiff = diff ? { label: `${name}: ${typeof v === 'boolean' ? (v ? 'on' : 'off') : (sub && sub.opts ? (sub.opts.find(o => o[0] === v) || [0, v])[1] : v)}`, list: diff, at: Date.now() } : null;
+  pkgRulesRender();
+  showToast(diff ? `${diff.length} package${diff.length !== 1 ? 's' : ''} changed` : 'Saved for the team', 'ok');
+}
+function _pkgRulesStored() { const o = {}; Object.keys(PKG_RULE_DEFAULTS).forEach(k => { if (pkgRules[k] !== PKG_RULE_DEFAULTS[k]) o[k] = pkgRules[k]; }); return o; }
+function pkgRulesReset() {
+  if (!_pkgCanEdit()) return;
+  const patch = {}; Object.keys(PKG_RULE_DEFAULTS).forEach(k => { patch[k] = null; });
+  pkgRules = Object.assign({}, PKG_RULE_DEFAULTS);
+  try { localStorage.setItem('pkg_rules_v1', '{}'); } catch (_) {}
+  if (typeof fbUpdate === 'function') fbUpdate('packageAudit/rules', patch);
+  if (typeof logActivity === 'function') logActivity('pkg_rule', 'Rules reset to default');
+  const diff = _pkgRecompute();
+  pkgLastDiff = diff ? { label: 'Reset to default', list: diff, at: Date.now() } : null;
+  pkgRulesRender();
+  showToast('Rules back to default', 'ok');
+}
+
+let _pkgRulesSync = false;
+function _pkgStartRulesSync() {
+  if (_pkgRulesSync || typeof fbListen !== 'function') return;
+  _pkgRulesSync = true;
+  fbListen('packageAudit/rules', v => {
+    const next = Object.assign({}, PKG_RULE_DEFAULTS);
+    if (v && typeof v === 'object') Object.keys(PKG_RULE_DEFAULTS).forEach(k => {
+      if (v[k] == null) return;
+      next[k] = typeof PKG_RULE_DEFAULTS[k] === 'boolean' ? !!v[k] : (+v[k] || 0);
+    });
+    if (JSON.stringify(next) === JSON.stringify(pkgRules)) return;
+    pkgRules = next;
+    try { localStorage.setItem('pkg_rules_v1', JSON.stringify(_pkgRulesStored())); } catch (_) {}
+    const diff = _pkgRecompute();
+    if (diff) pkgLastDiff = { label: 'The team changed the rules', list: diff, at: Date.now() };
+    if (_pkgView === 'rules') pkgRulesRender();
+  });
+  fbListen('packageAudit/staff', v => {
+    pkgStaffDb = _pkgClean(v);
+    _pkgApplyStaff();
+    if (pkgResults.length) _pkgRecompute();
+    if (_pkgView === 'rules') pkgRulesRender();
+  });
+}
+document.addEventListener('DOMContentLoaded', () => setTimeout(_pkgStartRulesSync, 1600));
+
+// ── Staff names ──────────────────────────────────────────────
+function _pkgLoginTok(l) { return _pkgUserKey(l).split('-').pop(); }
+function _pkgApplyStaff() {
+  const list = Object.values(pkgStaffDb || {}).filter(s => s && s.name);
+  PKG_STAFF = list.map(s => String(s.name)).sort((a, b) => a.localeCompare(b));
+  PKG_STAFF_ALIASES = {};
+  list.forEach(s => {
+    const al = (Array.isArray(s.logins) ? s.logins : []).map(_pkgLoginTok).filter(a => a.length >= 3);
+    if (al.length) PKG_STAFF_ALIASES[String(s.name)] = al;
+  });
+}
+const _pkgStaffId = name => String(name).trim().toLowerCase().replace(/[.#$\[\]\/\s]+/g, '_').slice(0, 60) || 'x';
+/** "Sam ALVAREZ" · "Sam ALVAREZ = ACCOREN-SALVAREZ, SALVAREZ2" · "ACCOREN-SALVAREZ = Sam ALVAREZ" */
+function _pkgParseStaffLine(line) {
+  const s = String(line || '').trim(); if (!s) return null;
+  let [a, b] = s.split(/\s*[=:→]\s*|\t/, 2).map(x => (x || '').trim());
+  const looksLogin = x => x && !/\s/.test(x) && (/[-@]/.test(x) || x === x.toUpperCase());
+  if (b && looksLogin(a) && !looksLogin(b)) [a, b] = [b, a];
+  if (!a) return null;
+  return { name: a, logins: (b || '').split(/[,;\s]+/).map(x => x.trim()).filter(Boolean) };
+}
+function pkgStaffSeed() {
+  if (!_pkgCanEdit()) return;
+  if (Object.keys(pkgStaffDb).length) { showToast('The team list already exists: add or remove names one by one', 'warn'); return; }
+  const ta = document.getElementById('pkgStaffSeed');
+  const items = String(ta && ta.value || '').split(/\r?\n/).map(_pkgParseStaffLine).filter(Boolean);
+  if (!items.length) { showToast('Type or paste at least one name', 'warn'); return; }
+  const patch = {}; items.forEach(it => { patch[_pkgStaffId(it.name)] = it; });
+  pkgStaffDb = Object.assign({}, patch);
+  _pkgApplyStaff();
+  if (typeof fbUpdate === 'function') fbUpdate('packageAudit/staff', patch);
+  if (pkgResults.length) _pkgRecompute();
+  pkgRulesRender();
+  showToast(`${items.length} name${items.length > 1 ? 's' : ''} saved for the team`, 'ok');
+}
+function pkgStaffAdd() {
+  if (!_pkgCanEdit()) return;
+  const n = document.getElementById('pkgStaffName'), l = document.getElementById('pkgStaffLogins');
+  const name = String(n && n.value || '').trim();
+  if (!name) { showToast('Type the name as IN-Gauge shows it', 'warn'); return; }
+  const id = _pkgStaffId(name), old = pkgStaffDb[id];
+  const logins = [...new Set([...(old && old.logins || []), ...String(l && l.value || '').split(/[,;\s]+/).map(x => x.trim()).filter(Boolean)])];
+  const item = { name, logins };
+  pkgStaffDb = Object.assign({}, pkgStaffDb, { [id]: item });
+  _pkgApplyStaff();
+  if (typeof fbSet === 'function') fbSet('packageAudit/staff/' + id, item);
+  if (pkgResults.length) _pkgRecompute();
+  pkgRulesRender();
+  showToast(`${name} saved`, 'ok');
+}
+function pkgStaffDel(id) {
+  if (!_pkgCanEdit() || !pkgStaffDb[id]) return;
+  const prev = pkgStaffDb[id];
+  const rest = Object.assign({}, pkgStaffDb); delete rest[id]; pkgStaffDb = rest;
+  _pkgApplyStaff();
+  if (typeof fbSet === 'function') fbSet('packageAudit/staff/' + id, null);
+  if (pkgResults.length) _pkgRecompute();
+  pkgRulesRender();
+  if (typeof showUndoToast === 'function') showUndoToast(`${prev.name} removed`, () => {
+    pkgStaffDb = Object.assign({}, pkgStaffDb, { [id]: prev }); _pkgApplyStaff();
+    if (typeof fbSet === 'function') fbSet('packageAudit/staff/' + id, prev);
+    if (pkgResults.length) _pkgRecompute(); pkgRulesRender();
+  });
+}
+function pkgStaffPick(login) {
+  const l = document.getElementById('pkgStaffLogins'), n = document.getElementById('pkgStaffName');
+  if (l) l.value = login;
+  if (n) { n.focus(); if (n.scrollIntoView) n.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+}
+/** Opera logins in the loaded log that are people, but match no name in the team list. */
+function _pkgUnknownLogins() {
+  const seen = new Map();
+  Object.values(pkgEvents || {}).forEach(list => list.forEach(e => {
+    if (!e.user || _pkgIsSystemLogin(e.user)) return;
+    const k = _pkgUserKey(e.user);
+    if (!seen.has(k)) seen.set(k, 0);
+    seen.set(k, seen.get(k) + 1);
+  }));
+  return [...seen.entries()].filter(([k]) => !_pkgStaffFor(k)).sort((a, b) => b[1] - a[1]).map(([k, n]) => ({ login: k, n }));
+}
+
+// ── Suggestions: what the loaded data says about the rules ───
+function _pkgSuggestions() {
+  const S = [];
+  const loaded = pkgResults.length > 0;
+  if (!loaded) S.push({ tone: 'idle', text: 'Load the three reports and check the charges to see how each rule decides your packages.', act: ['Go to the audit', "pkgShowView('audit')"] });
+  const groups = loaded ? _pkgAllGroups() : [];
+  const hit = k => groups.filter(g => g.rows.some(r => (r.ruleHits || []).includes(k))).length;
+  const back = groups.filter(g => g.rows.some(pkgBackWrong)).length;
+  if (back) S.push({ tone: 'bad', text: `${back} fixed package${back > 1 ? 's' : ''} came back: the newer IN-Gauge report still shows ${back > 1 ? 'them' : 'it'} wrong. They are on top of the list.`, act: ['Show them', "pkgShowView('audit');pkgSetFilter('action')"] });
+  if (loaded && !Object.keys(pkgGuests).length) S.push({ tone: 'warn', text: 'No guest list loaded, so the extension rule (back-to-back bookings) is not used. Load Opera\'s Reservation Detail export.', act: ['Load it', "pkgShowView('audit');document.getElementById('pkgGuestFileInput').click()"] });
+  const ch = hit('chain');
+  if (ch) S.push({ tone: 'warn', text: `${ch} package${ch > 1 ? 's were' : ' was'} decided by the extension rule: the seller moved to whoever started the stay. Check ${ch > 1 ? 'them' : 'it'} once.`, act: ['Show them', "pkgShowView('audit');pkgSetFilter('rule:chain')"] });
+  if (loaded) {
+    const unk = _pkgUnknownLogins();
+    if (!PKG_STAFF.length && !_pkgReportNames().length) S.push({ tone: 'warn', text: `Your team list is empty, so Opera logins show as they are (like ACCOREN-SALVAREZ). Add your team in Staff names below.`, act: ['Add names', "document.getElementById('pkgStaffCard')?.scrollIntoView({behavior:'smooth'})"] });
+    else if (unk.length) S.push({ tone: 'warn', text: `${unk.length} Opera login${unk.length > 1 ? 's don\'t' : ' doesn\'t'} match any staff name: ${unk.slice(0, 3).map(x => x.login).join(', ')}${unk.length > 3 ? '…' : ''}. Add ${unk.length > 1 ? 'them' : 'it'}.`, act: ['Add', "document.getElementById('pkgStaffCard')?.scrollIntoView({behavior:'smooth'})"] });
+  }
+  if (loaded && pkgLogRange.max) {
+    const days = pkgUnknowns.map(u => _pkgDayNum(u.daily)).filter(Boolean);
+    const last = days.length ? Math.max(...days) : 0;
+    if (last > pkgLogRange.max) S.push({ tone: 'warn', text: `The Opera log covers ${_pkgDayLabel(pkgLogRange.min)} → ${_pkgDayLabel(pkgLogRange.max)}, but IN-Gauge has charges until ${_pkgDayLabel(last)}. Load the newer log.`, act: ['Load log', "pkgShowView('audit');document.getElementById('pkgPdfFileInput').click()"] });
+    const arr = pkgUnknowns.map(u => _pkgDayNum(u.arr)).filter(Boolean);
+    const first = arr.length ? Math.min(...arr) : 0;
+    if (first && first < pkgLogRange.min && groups.some(g => g.rows.some(r => r.verdict === 'outside'))) S.push({ tone: 'idle', text: `Some stays began ${_pkgDayLabel(first)}, before the log starts (${_pkgDayLabel(pkgLogRange.min)}). Run the Changes Log from earlier to match them.` });
+  }
+  const rv = groups.filter(g => g.rows.some(r => r.verdict === 'review' && !r.pinSkip)).length;
+  if (rv) S.push({ tone: 'warn', text: `${rv} package${rv > 1 ? 's need' : ' needs'} checking by hand. When you know the seller, freeze it (📌) so it never asks again.`, act: ['Show them', "pkgShowView('audit');pkgSetFilter('review')"] });
+  const pinsOk = groups.filter(g => g.rows.some(r => r.pin && r.pin.seller && !r.pin.manual && r.prePinVerdict === 'credit' && _pkgSameUser(r.prePinUser, r.pin.seller)));
+  if (pinsOk.length) S.push({ tone: 'idle', text: `${pinsOk.length} frozen package${pinsOk.length > 1 ? 's' : ''} now match${pinsOk.length > 1 ? '' : 'es'} the rules anyway. You can unfreeze ${pinsOk.length > 1 ? 'them' : 'it'}.`, act: ['Unfreeze', `pkgUnfreezeMany(${escapeHtml(JSON.stringify(pinsOk.map(g => g.key)))})`] });
+  const sys = hit('systemNoSeller');
+  if (sys) S.push({ tone: 'idle', text: `${sys} package${sys > 1 ? 's' : ''} came with online / TARS bookings: no desk seller.`, act: ['Show them', "pkgShowView('audit');pkgSetFilter('rule:systemNoSeller')"] });
+  const waiting = Object.keys(pkgDone).filter(k => _pkgDoneState(k) === 'waiting').length;
+  if (waiting) S.push({ tone: 'idle', text: `${waiting} fixed package${waiting > 1 ? 's wait' : ' waits'} for a newer IN-Gauge report to confirm ${waiting > 1 ? 'them' : 'it'}.` });
+  if (loaded && S.length === 0) S.push({ tone: 'ok', text: 'All good: nothing in this audit needs a rule change.' });
+  return S;
+}
+function pkgUnfreezeMany(keys) {
+  (keys || []).forEach(k => { delete pkgPins[k]; });
+  _pkgSavePins();
+  _pkgRecompute();
+  pkgRulesRender();
+  showToast(`${(keys || []).length} unfrozen`, 'ok');
+}
+
+function _pkgRuleCtl(k, can, dis) {
+  const v = _pkgRule(k);
+  return `<label class="pa-sw${can && !dis ? '' : ' ro'}" title="${can ? '' : 'Only a manager, supervisor or owner can change this'}"><input type="checkbox" ${v ? 'checked' : ''} ${can && !dis ? '' : 'disabled'} onchange="pkgSetRule('${k}',this.checked)" aria-label="On or off"><i></i></label>`;
+}
+function pkgRulesRender() {
+  const box = document.getElementById('pkgRulesView');
+  if (!box) return;
+  _pkgStyle2();
+  const can = _pkgCanEdit();
+  const groups = pkgResults.length ? _pkgAllGroups() : [];
+  const changed = Object.keys(PKG_RULE_DEFAULTS).filter(k => pkgRules[k] !== PKG_RULE_DEFAULTS[k]);
+  const J = v => escapeHtml(JSON.stringify(v));
+
+  const sug = _pkgSuggestions();
+  const sugHtml = `<section class="pa-sugg"><h3>💡 Suggestions</h3>${sug.map(s => `<div class="pa-sg ${s.tone}"><span>${escapeHtml(s.text)}</span>${s.act ? `<button type="button" class="pa-btn" onclick="${s.act[1]}">${escapeHtml(s.act[0])}</button>` : ''}</div>`).join('')}</section>`;
+
+  const D = pkgLastDiff;
+  const diffHtml = D ? `<section class="pa-diff"><div class="pa-diff-hd"><b>What changed</b><small>${escapeHtml(D.label)} · ${D.list.length ? `${D.list.length} package${D.list.length !== 1 ? 's' : ''} changed` : 'no package changed'}</small><button type="button" class="pa-x" onclick="pkgLastDiff=null;pkgRulesRender()" aria-label="Close">✕</button></div>
+    ${D.list.length ? `<div class="pa-diff-list">${D.list.slice(0, 60).map(x => `<div class="pa-diff-row"><span class="pa-room sm">${escapeHtml(x.room || '—')}</span><div><b>${escapeHtml(x.fam)}</b> <code>${escapeHtml(x.conf)}</code><small>${escapeHtml(x.nights)}</small></div><span class="pa-chg">${escapeHtml(x.change)}</span></div>`).join('')}${D.list.length > 60 ? `<div class="pa-more">and ${D.list.length - 60} more</div>` : ''}</div>`
+      : '<div class="pa-more">The results are the same as before this change.</div>'}</section>` : '';
+
+  const cards = PKG_RULE_INFO.map(R => {
+    const on = !!_pkgRule(R.k);
+    const parentOff = R.parent && !_pkgRule(R.parent);
+    const n = groups.filter(g => g.rows.some(r => (r.ruleHits || []).includes(R.k))).length;
+    const needsGuests = R.needs === 'guests' && pkgResults.length && !Object.keys(pkgGuests).length;
+    const subs = (R.subs || []).map(s => {
+      const ctl = s.type === 'seg'
+        ? `<div class="pa-seg" role="group">${s.opts.map(([val, t]) => `<button type="button" class="${+_pkgRule(s.k) === val ? 'on' : ''}" ${can && on ? '' : 'disabled'} onclick="pkgSetRule('${s.k}',${val})">${t}</button>`).join('')}</div>`
+        : _pkgRuleCtl(s.k, can, !on);
+      return `<div class="pa-sub${on ? '' : ' dim'}"><div><b>${escapeHtml(s.t)}</b><small>${escapeHtml(s.d)}</small></div>${ctl}</div>`;
+    }).join('');
+    return `<article class="pa-rule${on && !parentOff ? '' : ' off'}">
+      <div class="pa-rule-hd"><span class="pa-ico">${R.ico}</span><div class="pa-rule-t"><b>${escapeHtml(R.t)}</b><small>${escapeHtml(R.d)}</small></div>${_pkgRuleCtl(R.k, can, parentOff)}</div>
+      <div class="pa-ex"><span>Example</span>${escapeHtml(R.ex)}</div>
+      ${!on ? `<div class="pa-offnote">${escapeHtml(R.off)}</div>` : ''}
+      ${parentOff ? '<div class="pa-offnote">Works only with "Back-to-back bookings are one stay" on.</div>' : ''}
+      ${needsGuests ? '<div class="pa-offnote">Needs the guest list (Reservation Detail) loaded.</div>' : ''}
+      ${subs}
+      ${pkgResults.length ? `<div class="pa-stat">${n ? `Decided <b>${n}</b> package${n > 1 ? 's' : ''} in this audit · <button type="button" class="pa-link" onclick="pkgShowView('audit');pkgSetFilter('rule:${R.k}')">show them</button>` : 'Not used in this audit'}</div>` : ''}
+    </article>`;
+  }).join('');
+
+  const pins = Object.entries(pkgPins || {}).filter(([, p]) => p && typeof p === 'object').sort((a, b) => String(b[1].at || '').localeCompare(String(a[1].at || '')));
+  const pinHtml = `<section class="pa-card2"><h3>📌 Frozen packages <small>${pins.length}</small></h3>
+    <p class="pa-help">A frozen package keeps the seller a person chose, whatever the rules say. Freeze one from its card in the list (📌 Freeze seller).</p>
+    ${pins.length ? `<div class="pa-pins">${pins.map(([k, p]) => { const [conf, fam] = k.split('|'); const rows = _pkgGroupRows(k); return `<div class="pa-pinrow"><span class="pa-room sm">${escapeHtml((rows[0] || {}).room || '—')}</span><div><b>${escapeHtml(fam || '')}</b> <code>${escapeHtml(conf)}</code><small>${p.skip ? '🙈 Skipped' : p.manual ? '✍️ Manual sale' + (p.seller ? ': ' + escapeHtml(p.seller) : '') : '→ ' + escapeHtml(p.seller || '')} · by ${escapeHtml(p.by || 'someone')}${p.at ? ' · ' + escapeHtml(String(p.at).slice(0, 10)) : ''}</small></div><button type="button" class="pa-btn" onclick="pkgPinChange(${J(k)},'__clear')">Unfreeze</button></div>`; }).join('')}</div>` : '<div class="pa-more">Nothing frozen.</div>'}</section>`;
+
+  const staff = Object.entries(pkgStaffDb || {}).filter(([, s]) => s && s.name).sort((a, b) => String(a[1].name).localeCompare(String(b[1].name)));
+  const unk = pkgResults.length ? _pkgUnknownLogins() : [];
+  const staffHtml = `<section class="pa-card2" id="pkgStaffCard"><h3>👤 Staff names <small>${staff.length}</small></h3>
+    <p class="pa-help">Opera's log shows logins (ACCOREN-SALVAREZ); IN-Gauge shows names (Sam ALVAREZ). This list joins them, for the whole team. A login that is not here simply shows as itself.</p>
+    ${!staff.length ? (can ? `<div class="pa-seed"><label for="pkgStaffSeed"><b>Start the list:</b> paste your team, one per line. Add logins after "=" when they are not simply initials + family name.</label>
+        <textarea id="pkgStaffSeed" rows="5" placeholder="Sam ALVAREZ&#10;Lina MORENO = ACCOREN-LMORENO2&#10;Test Person = ACCOREN-TPERSON, TPERS"></textarea>
+        <button type="button" class="btn gold sm" onclick="pkgStaffSeed()">Save the team list</button></div>` : '<div class="pa-more">No names yet. A manager can add the team here.</div>') : `
+      <div class="pa-staff">${staff.map(([id, s]) => `<div class="pa-staffrow"><b>${escapeHtml(s.name)}</b><span>${(s.logins || []).map(l => `<code>${escapeHtml(l)}</code>`).join(' ') || '<small>matched by family name</small>'}</span>${can ? `<button type="button" class="pa-x" title="Remove" aria-label="Remove ${escapeHtml(s.name)}" onclick="pkgStaffDel(${J(id)})">✕</button>` : ''}</div>`).join('')}</div>
+      ${can ? `<div class="pa-addstaff"><input id="pkgStaffName" placeholder="Name, as in IN-Gauge" autocomplete="off"><input id="pkgStaffLogins" placeholder="Opera login(s), optional" autocomplete="off"><button type="button" class="btn gold sm" onclick="pkgStaffAdd()">Add</button></div>` : ''}`}
+    ${unk.length ? `<div class="pa-unk"><small>Logins in this log with no name${can && staff.length ? ' (tap to add)' : ''}:</small>${unk.slice(0, 20).map(u => can && staff.length ? `<button type="button" class="pa-chip btn-like" onclick="pkgStaffPick(${J(u.login)})">${escapeHtml(u.login)} <em>${u.n}</em></button>` : `<span class="pa-chip">${escapeHtml(u.login)} <em>${u.n}</em></span>`).join('')}</div>` : ''}
+  </section>`;
+
+  box.innerHTML = `<div class="pa-rules">
+    <div class="pa-rules-hd"><div><h2>⚙️ Package rules</h2><p>How the audit decides who sold each package. Switch a rule and the audit runs again at once; "What changed" shows every package that moved. ${can ? 'Changes are saved for the whole team.' : '<b>Read only:</b> a manager, supervisor or owner can change them.'}</p></div>
+      ${can ? `<button type="button" class="btn sm" ${changed.length ? '' : 'disabled'} onclick="pkgRulesReset()" title="Put every rule back to how the audit normally works">↺ Reset to default${changed.length ? ` (${changed.length})` : ''}</button>` : ''}</div>
+    ${diffHtml}
+    ${sugHtml}
+    <div class="pa-rule-grid">${cards}</div>
+    <div class="pa-two">${pinHtml}${staffHtml}</div>
+  </div>`;
+}
+
+// ── Styles (self-contained; theme variables only) ────────────
+function _pkgStyle2() {
+  if (document.getElementById('pkgStyle2')) return;
+  const st = document.createElement('style'); st.id = 'pkgStyle2';
+  st.textContent = `
+#panel-package-audit .pa-tabs{display:inline-flex;gap:2px;padding:3px;border-radius:12px;background:var(--bg2);border:1px solid var(--border)}
+#panel-package-audit .pa-tabs button{border:0;background:none;color:var(--text2);font:600 .8rem var(--font,inherit);padding:7px 14px;border-radius:9px;cursor:pointer;white-space:nowrap}
+#panel-package-audit .pa-tabs button.on{background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.pa-sum{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin:14px 0 10px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r,12px);background:var(--card);font-size:.78rem;color:var(--text2);line-height:1.5}
+.pa-sum.muted{color:var(--text3);font-size:.74rem}
+.pa-sum i{font-style:normal;color:var(--text3)}
+.pa-sum .ok{color:var(--green)} .pa-sum .bad{color:var(--red);font-weight:700}
+.pa-link{border:0;background:none;color:var(--gold,var(--accent));font:600 .76rem var(--font,inherit);cursor:pointer;padding:2px 4px;text-decoration:underline;text-underline-offset:2px}
+.pa-done-list{margin:-4px 0 12px;border:1px solid var(--border);border-radius:var(--r,12px);background:var(--card);overflow:hidden}
+.pa-done-row,.pa-diff-row,.pa-pinrow{display:flex;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid var(--border);min-width:0}
+.pa-done-row:first-child,.pa-diff-row:first-child,.pa-pinrow:first-child{border-top:0}
+.pa-done-main,.pa-diff-row>div,.pa-pinrow>div{flex:1;min-width:0;font-size:.78rem;overflow-wrap:anywhere}
+.pa-done-main small,.pa-diff-row small,.pa-pinrow small{display:block;color:var(--text3);font-size:.7rem;margin-top:1px}
+.pa-done-list code,.pa-card code,.pa-diff code,.pa-pins code,.pa-staff code,.pa-whybox code{font:500 .72rem var(--mono);color:var(--text2)}
+.pa-undo{flex:none;border:1px solid var(--border2);background:var(--bg2);color:var(--text2);border-radius:8px;padding:4px 8px;font-size:.7rem;cursor:pointer}
+.pa-undo:hover{color:var(--text)}
+.pa-chip{flex:none;display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font:600 .64rem var(--mono);background:var(--bg2);color:var(--text2);white-space:nowrap;border:1px solid transparent}
+.pa-chip.ok{background:color-mix(in srgb,var(--green) 14%,transparent);color:var(--green)}
+.pa-chip.bad{background:color-mix(in srgb,var(--red) 14%,transparent);color:var(--red)}
+.pa-chip.wait{background:color-mix(in srgb,var(--gold,#e8b84b) 16%,transparent);color:var(--text2)}
+.pa-chip.muted{color:var(--text3)} .pa-chip em{font-style:normal;opacity:.6}
+.pa-chip.btn-like{cursor:pointer;border-color:var(--border2)}
+.pa-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0 10px}
+.pa-views{display:flex;flex-wrap:wrap;gap:6px;max-width:100%;flex:1 1 100%;padding:2px 0}
+.pa-views::-webkit-scrollbar{display:none}
+.pa-view{flex:none;border:1px solid var(--border);background:var(--card);color:var(--text2);border-radius:999px;padding:6px 11px;font:600 .74rem var(--font,inherit);cursor:pointer;white-space:nowrap}
+.pa-view span{font:600 .66rem var(--mono);color:var(--text3);margin-left:2px}
+.pa-view.on{background:var(--text);color:var(--bg2);border-color:var(--text)} .pa-view.on span{color:inherit;opacity:.75}
+.pa-view.rule{background:var(--gold,var(--accent));border-color:var(--gold,var(--accent));color:#111}
+.pa-search{flex:1 1 100%;max-width:420px;min-width:0;display:flex;align-items:center;gap:6px;border:1px solid var(--border);background:var(--card);border-radius:10px;padding:0 10px}
+.pa-search input{flex:1;min-width:0;border:0;background:none;color:var(--text);font-size:.8rem;padding:8px 0;outline:none}
+.pa-listhd{font-size:.86rem;color:var(--text);margin:2px 0 8px;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline}
+.pa-listhd small{color:var(--text3);font-size:.72rem}
+.pa-list{display:flex;flex-direction:column;gap:8px}
+.pa-card{position:relative;border:1px solid var(--border);border-left:4px solid var(--border2);border-radius:var(--r,12px);background:var(--card);padding:11px 12px 10px;overflow:hidden;transition:max-height .35s ease,opacity .3s ease,transform .35s ease,padding .35s ease,margin .35s ease,border-width .35s}
+.pa-card.t-fix{border-left-color:var(--gold,var(--accent))} .pa-card.t-deny{border-left-color:var(--red)} .pa-card.t-review{border-left-color:var(--amber,#d97706)}
+.pa-card.t-back{border-left-color:var(--red);box-shadow:0 0 0 1px color-mix(in srgb,var(--red) 35%,transparent)} .pa-card.t-ok{border-left-color:var(--green);opacity:.85}
+.pa-card.pa-leaving{max-height:0!important;opacity:0;transform:translateX(24px);padding-top:0;padding-bottom:0;margin-top:-8px;border-width:0}
+.pa-back{margin:-2px 0 8px;padding:6px 10px;border-radius:9px;background:color-mix(in srgb,var(--red) 12%,transparent);color:var(--red);font:700 .76rem var(--font,inherit)}
+.pa-back small{display:block;font-weight:500;color:var(--text2);font-size:.7rem;margin-top:1px}
+.pa-top{display:flex;gap:10px;align-items:flex-start;min-width:0}
+.pa-room{flex:none;min-width:44px;text-align:center;padding:5px 6px;border-radius:9px;background:var(--bg2);border:1px solid var(--border);font:700 .82rem var(--mono);color:var(--text)}
+.pa-room.sm{min-width:38px;padding:3px 5px;font-size:.72rem}
+.pa-pk{flex:1;min-width:0} .pa-pk b{display:block;font-size:.9rem;color:var(--text)} .pa-pk small{display:block;font-size:.72rem;color:var(--text3);margin-top:1px;overflow-wrap:anywhere}
+.pa-act{flex:none;max-width:46%;text-align:right;font:700 .72rem var(--font,inherit);color:var(--gold,var(--accent));line-height:1.35}
+.pa-act em{font-style:normal;font-weight:600;color:var(--text3)}
+.t-deny .pa-act{color:var(--red)} .t-review .pa-act{color:var(--amber,#d97706)} .t-back .pa-act{color:var(--red)} .t-ok .pa-act{color:var(--text3)}
+.pa-who{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:center;margin:9px 0 0;max-width:620px;padding:8px 10px;border-radius:10px;background:var(--bg2)}
+.pa-who small{display:block;font:600 .58rem var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--text3)}
+.pa-who b{display:block;font-size:.82rem;color:var(--text);overflow-wrap:anywhere;margin-top:1px}
+.pa-who b.was{color:var(--text2);text-decoration:line-through;text-decoration-color:color-mix(in srgb,var(--red) 60%,transparent)}
+.pa-who b.ok{color:var(--green)} .pa-who b.bad{color:var(--red)} .pa-who b.warn{color:var(--amber,#d97706)}
+.pa-arrow{color:var(--text3);font-weight:700}
+.pa-prod{margin-top:6px;font-size:.76rem;color:var(--text2)}
+.pa-short{margin-top:7px;font-size:.74rem;color:var(--text2);line-height:1.45}
+.pa-foot{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:9px}
+.pa-copy{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border2);background:var(--bg2);color:var(--text);border-radius:10px;padding:6px 10px;cursor:copy;font:inherit;min-height:36px}
+.pa-copy code{font:700 .84rem var(--mono)!important;color:var(--text)!important;user-select:text;-webkit-user-select:text}
+.pa-copy span{font-size:.7rem;color:var(--text3);font-weight:600;white-space:nowrap}
+.pa-copy:hover{border-color:var(--gold,var(--accent))} .pa-copy:hover span{color:var(--gold,var(--accent))}
+.pa-copy.copied{border-color:var(--green)} .pa-copy.copied span{color:var(--green)}
+.pa-btn{border:1px solid var(--border2);background:var(--card);color:var(--text2);border-radius:10px;padding:6px 11px;font:600 .74rem var(--font,inherit);cursor:pointer;min-height:36px;white-space:nowrap}
+.pa-btn:hover,.pa-btn.on{color:var(--text);border-color:var(--text3)}
+.pa-pin{position:relative;display:inline-flex;align-items:center;border:1px dashed var(--border2);border-radius:10px;padding:6px 10px;font:600 .72rem var(--font,inherit);color:var(--text3);min-height:36px;cursor:pointer}
+.pa-pin.on{border-style:solid;border-color:var(--gold,var(--accent));color:var(--gold,var(--accent))}
+.pa-pin select{position:absolute;inset:0;opacity:0;width:100%;cursor:pointer;font-size:16px}
+.pa-whybox{margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--bg2);border:1px solid var(--border)}
+.pa-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
+.pa-steps>li{display:flex;gap:9px;font-size:.76rem;color:var(--text2);line-height:1.5;min-width:0}
+.pa-steps>li>div{min-width:0;overflow-wrap:anywhere}
+.pa-steps>li>div>b{color:var(--text);font-size:.74rem}
+.pa-steps .i{flex:none;width:24px;height:24px;border-radius:7px;display:grid;place-items:center;background:var(--card);font-size:.8rem}
+.pa-steps ul{margin:4px 0 0;padding-left:16px} .pa-steps ul li{margin:2px 0} .pa-steps ul li.me{color:var(--text)}
+.pa-steps .t{font-family:var(--mono);font-size:.7rem;color:var(--text3)} .pa-steps .ok{color:var(--green)} .pa-steps .muted{color:var(--text3)}
+.pa-rtag{display:inline-block;margin:2px 4px 0 0;padding:1px 8px;border-radius:999px;background:var(--card);border:1px solid var(--border2);font-size:.7rem;color:var(--text)}
+.pa-empty{padding:28px 16px;text-align:center;border:1px dashed var(--border2);border-radius:var(--r,12px);color:var(--text3);font-size:.8rem;display:flex;flex-direction:column;gap:4px}
+.pa-empty b{color:var(--text);font-size:.95rem}
+.pa-more{padding:8px 12px;font-size:.72rem;color:var(--text3)}
+/* rules view */
+.pa-rules{display:flex;flex-direction:column;gap:14px;margin-top:6px}
+.pa-rules-hd{display:flex;gap:12px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap}
+.pa-rules-hd h2{margin:0;font-size:1.1rem;color:var(--text)} .pa-rules-hd p{margin:4px 0 0;font-size:.78rem;color:var(--text2);max-width:640px;line-height:1.5}
+.pa-sugg,.pa-diff,.pa-card2{border:1px solid var(--border);border-radius:var(--r,12px);background:var(--card);padding:12px 14px;min-width:0}
+.pa-sugg h3,.pa-card2 h3{margin:0 0 8px;font-size:.9rem;color:var(--text)} .pa-card2 h3 small{font:600 .7rem var(--mono);color:var(--text3);margin-left:4px}
+.pa-sg{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:8px 10px;margin-top:6px;border-radius:10px;background:var(--bg2);font-size:.78rem;color:var(--text2);line-height:1.45;border-left:3px solid var(--border2)}
+.pa-sg span{min-width:0;overflow-wrap:anywhere} .pa-sg .pa-btn{flex:none;min-height:32px;padding:4px 10px}
+.pa-sg.warn{border-left-color:var(--gold,var(--accent))} .pa-sg.bad{border-left-color:var(--red)} .pa-sg.ok{border-left-color:var(--green)}
+.pa-diff{border-color:color-mix(in srgb,var(--gold,#e8b84b) 55%,var(--border))}
+.pa-diff-hd{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap} .pa-diff-hd small{color:var(--text3);font-size:.74rem;flex:1}
+.pa-x{border:0;background:none;color:var(--text3);cursor:pointer;font-size:.85rem;padding:2px 6px}
+.pa-diff-list{margin-top:8px;border:1px solid var(--border);border-radius:10px;max-height:340px;overflow:auto}
+.pa-chg{flex:none;max-width:52%;text-align:right;font:600 .72rem var(--font,inherit);color:var(--text)}
+.pa-rule-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.pa-rule{border:1px solid var(--border);border-radius:var(--r,12px);background:var(--card);padding:12px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.pa-rule.off{background:var(--card2,var(--bg2))} .pa-rule.off .pa-rule-t b{color:var(--text2)}
+.pa-rule-hd{display:flex;gap:10px;align-items:flex-start}
+.pa-ico{flex:none;width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:var(--bg2);font-size:16px}
+.pa-rule-t{flex:1;min-width:0} .pa-rule-t b{display:block;font-size:.86rem;color:var(--text)} .pa-rule-t small{display:block;font-size:.74rem;color:var(--text3);line-height:1.45;margin-top:2px}
+.pa-ex{font-size:.74rem;color:var(--text2);line-height:1.45;padding:7px 10px;border-radius:9px;background:var(--bg2)}
+.pa-ex span{display:inline-block;margin-right:6px;font:700 .58rem var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--gold,var(--accent))}
+.pa-offnote{font-size:.72rem;color:var(--amber,#d97706)}
+.pa-sub{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:7px 0 0;border-top:1px dashed var(--border)}
+.pa-sub>div{min-width:0} .pa-sub b{display:block;font-size:.78rem;color:var(--text)} .pa-sub small{display:block;font-size:.7rem;color:var(--text3);line-height:1.4}
+.pa-sub.dim{opacity:.55}
+.pa-stat{font-size:.72rem;color:var(--text3);margin-top:auto}
+.pa-sw{position:relative;flex:none;display:inline-block;width:42px;height:24px;cursor:pointer}
+.pa-sw input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+.pa-sw i{position:absolute;inset:0;border-radius:99px;background:var(--border2);transition:background .2s;pointer-events:none}
+.pa-sw i::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .2s}
+.pa-sw input:checked+i{background:var(--green)} .pa-sw input:checked+i::after{transform:translateX(18px)}
+.pa-sw input:focus-visible+i{box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 30%,transparent)}
+.pa-sw.ro{opacity:.6;cursor:not-allowed} .pa-sw.ro input{cursor:not-allowed}
+.pa-seg{flex:none;display:inline-flex;border:1px solid var(--border2);border-radius:9px;overflow:hidden}
+.pa-seg button{border:0;background:var(--card);color:var(--text2);padding:6px 10px;font:600 .72rem var(--font,inherit);cursor:pointer;white-space:nowrap}
+.pa-seg button.on{background:var(--text);color:var(--bg2)} .pa-seg button:disabled{cursor:not-allowed;opacity:.7}
+.pa-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:start}
+.pa-help{margin:0 0 8px;font-size:.74rem;color:var(--text3);line-height:1.45}
+.pa-pins,.pa-staff{border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.pa-staffrow{display:flex;gap:8px;align-items:center;padding:7px 10px;border-top:1px solid var(--border);font-size:.8rem;min-width:0}
+.pa-staffrow:first-child{border-top:0} .pa-staffrow b{flex:none;max-width:45%;overflow-wrap:anywhere;color:var(--text)} .pa-staffrow span{flex:1;min-width:0;overflow-wrap:anywhere} .pa-staffrow small{color:var(--text3)}
+.pa-addstaff{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.pa-addstaff input,.pa-seed textarea{flex:1 1 150px;min-width:0;border:1px solid var(--border2);background:var(--bg2);color:var(--text);border-radius:9px;padding:8px 10px;font-size:16px;font-family:inherit}
+.pa-seed{display:flex;flex-direction:column;gap:8px} .pa-seed label{font-size:.76rem;color:var(--text2);line-height:1.45} .pa-seed .btn{align-self:flex-start}
+.pa-unk{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px;align-items:center} .pa-unk small{width:100%;color:var(--text3);font-size:.72rem}
+@media (max-width:760px){
+  .pa-rule-grid,.pa-two{grid-template-columns:minmax(0,1fr)}
+  .pa-act{max-width:40%}
+}
+@media (max-width:600px){
+  .pa-views{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none} .pa-search{max-width:none}
+}
+@media (max-width:480px){
+  .pa-card{padding:10px}
+  .pa-top{flex-wrap:wrap} .pa-act{order:3;flex-basis:100%;max-width:none;text-align:left;margin-left:54px}
+  .pa-who{grid-template-columns:minmax(0,1fr);gap:4px} .pa-arrow{display:none}
+  .pa-foot>*{flex:1 1 auto} .pa-copy{flex-basis:100%;justify-content:space-between}
+  .pa-sg{flex-direction:column;align-items:flex-start}
+  .pa-chg{max-width:45%}
+  .pa-done-row{flex-wrap:wrap} .pa-done-main{flex-basis:calc(100% - 60px)}
+}
+@media (prefers-reduced-motion:reduce){.pa-card{transition:none}}`;
+  document.head.appendChild(st);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1816,7 +2422,7 @@ function pkgClear() {
 //  (TARS) booking — under the seller the audit settled on (pins and the
 //  extension rule included). A package billed over several nights counts
 //  once under Packages and once per night under Nights. Rows whose seller
-//  still has to be changed in IN-Gauge (not ticked Copied yet) are counted
+//  still has to be changed in IN-Gauge (not marked fixed yet) are counted
 //  and flagged, so the board matches what should be paid.
 //  The month is the IN-Gauge charge date (Daily Date).
 //  The commission rate is shared with the team at packageAudit/board/rate.
@@ -1841,7 +2447,7 @@ function pkgBoardData() {
     if (r.verdict !== 'credit' || r.pinSkip || r.noSeller) return;
     const fam = _pkgFamilyName(r), who = label(r.user || r.employee);
     const amt = parseFloat(r.price ?? r.charge) || 0;
-    const pending = !r.alreadyComplete && (!pkgNightDone(r) || pkgBackWrong(r));
+    const pending = !r.alreadyComplete && !pkgNightDone(r);
     [_pkgbMonthOf(r), 'all'].forEach(m => {
       const s = ((by[m] = by[m] || {})[who] = by[m][who] || { seller: who, pk: new Set(), nights: 0, aed: 0, fam: {}, pend: new Set() });
       s.pk.add(r.conf + '|' + fam); s.nights++; s.aed += amt;
@@ -1950,7 +2556,7 @@ function pkgBoardRender() {
   const rows = B.list.map((r, i) => `
     <div class="pkgb-row">
       <div class="pkgb-rk">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}</div>
-      <div class="pkgb-nm">${_pkgbE(r.seller)}<small>${_pkgbE(r.what)}</small>${r.pending ? `<span class="pkgb-pend" title="The audit credits this seller, but IN-Gauge still shows someone else or a blank. Fix it in IN-Gauge and tick it in the list above.">⚠ ${r.pending} not fixed in IN-Gauge yet</span>` : ''}</div>
+      <div class="pkgb-nm">${_pkgbE(r.seller)}<small>${_pkgbE(r.what)}</small>${r.pending ? `<span class="pkgb-pend" title="The audit credits this seller, but IN-Gauge still shows someone else or a blank. Fix it in IN-Gauge and copy its number in the list above.">⚠ ${r.pending} not fixed in IN-Gauge yet</span>` : ''}</div>
       <div class="pkgb-bw"><div class="pkgb-bar" title="${_pkgbE(_pkgbN(r.aed))} AED"><i style="width:${Math.max(2, Math.round(r.aed / top * 100))}%"></i></div></div>
       <div class="pkgb-n c-pk">${r.packages}</div>
       <div class="pkgb-n c-nt">${r.nights}</div>

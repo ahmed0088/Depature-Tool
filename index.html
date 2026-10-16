@@ -1675,27 +1675,28 @@
     <div class="page-hd">
       <div class="page-hd-left">
         <h1>Package Audit</h1>
-        <p>Checks every upsell charge in IN-Gauge against Opera · tells you which to credit, which to remove, and who sold it</p>
+        <p>Checks every upsell charge in IN-Gauge against Opera · shows only what still needs a change in IN-Gauge</p>
       </div>
       <div class="page-hd-actions">
+        <div class="pa-tabs" id="pkgTabs" role="tablist" aria-label="Package Audit views">
+          <button type="button" role="tab" data-v="audit" class="on" aria-selected="true" onclick="pkgShowView('audit')">📋 Audit</button>
+          <button type="button" role="tab" data-v="rules" aria-selected="false" onclick="pkgShowView('rules')">⚙️ Rules</button>
+        </div>
         <button class="btn rose" onclick="pkgClear()">✕ Clear</button>
       </div>
     </div>
 
-    <details class="howto"><summary>❔ What the audit does with IN-Gauge's status</summary><ul>
-      <li><b>APPROVED</b> — the charge stands and is checked normally.</li>
-      <li><b>REVIEWED</b> — you have already decided this one, so it is left alone whichever way you decided. It keeps its credit and still counts in Trends; it just stops appearing as work. <b>Mark a row REVIEWED in IN-Gauge once you have dealt with it</b> and it will not come back on the next run.</li>
-      <li><b>DENIED</b> — struck out entirely: no credit, and it takes no part in the duplicate or split checks.</li>
-    </ul>
-    <p style="margin:8px 0 0;"><b>When is it the same stay?</b> Only when the next booking starts <b>the day the last one ends</b> — the guest never left, so the sale is still the first seller's, however many times it is extended and whoever keys the extension. If the guest checks out and comes back <b>even a day later</b> on a new booking, that is a fresh sale and belongs to whoever made it. Two bookings running at the same time are two rooms, not an extension.</p>
-    <ul style="display:none;">
-    </ul>
-    <p style="margin:8px 0 0;"><b>Reviewing settles who earned it — not whether the charge is sound.</b>
-    A row stays on the list, marked <i>"Reviewed, but…"</i> in amber, if it is a duplicate of another night,
-    if Opera has no record of that package on the reservation, if the same package is split between two sellers,
-    or if the product or seller is blank. The same checks run on <b>APPROVED</b> rows.
-    Signing a row off never hides a real problem — only the question of who to credit.</p>
-    </details>
+    <div id="pkgRulesView" hidden></div>
+
+    <div id="pkgMainView">
+    <details class="howto"><summary>❔ How the list works</summary><ul>
+      <li><b>The list shows only packages that still need a change in IN-Gauge.</b> Each card says the room, the package, the nights, the seller in IN-Gauge now → who it should be, and why.</li>
+      <li><b>Tap the confirmation number</b> to copy it. That marks the package fixed for all its nights: it leaves the list (Undo for a few seconds).</li>
+      <li>A fixed package waits for the <b>next IN-Gauge report</b>. If that report shows it right, it is <b>confirmed ✓</b>. If it still shows it wrong, it <b>comes back on top</b> in red with the nights still wrong. Loading the same old report again never brings it back.</li>
+      <li><b>Why?</b> on a card shows step by step how the seller was decided. <b>📌 Freeze seller</b> keeps the seller you choose, whatever the rules say.</li>
+      <li><b>⚙️ Rules</b> (top right) shows every rule the audit uses, with an example. Managers can switch them and see at once what changes.</li>
+      <li>IN-Gauge status: <b>REVIEWED</b> rows keep their seller and stop being work; <b>DENIED</b> rows are left out.</li>
+    </ul></details>
 
     <details class="howto"><summary>❔ Which reports to pull</summary><ol>
       <li><b>IN-Gauge</b> → Reports → product list → Excel · <b>1st of the month → today</b></li>
@@ -1770,90 +1771,22 @@
 
     <div id="pkgResultsWrap" style="display:none;">
       <div id="pkgCoverageWarn" style="display:none;margin-top:18px;padding:11px 14px;border-radius:var(--r);background:var(--amber-bg,rgba(232,184,75,0.08));border:1px solid var(--accent-border);font-size:0.7rem;color:var(--text2);line-height:1.6;"></div>
-      <div class="kpi-row c4" style="margin-top:18px;" id="pkgKpis"></div>
-
-      <div class="filter-row" id="pkgFilters" style="margin-bottom:14px;">
-        <div class="fchip on" data-pkgf="action" onclick="pkgSetFilter('action',this)">⚡ Needs action <span id="pkgfc-action">0</span></div>
-        <div class="fchip"    data-pkgf="all"    onclick="pkgSetFilter('all',this)">All <span id="pkgfc-all">0</span></div>
-        <div class="fchip"    data-pkgf="resolved" onclick="pkgSetFilter('resolved',this)">✏️ Update in IN-Gauge <span id="pkgfc-resolved">0</span></div>
-        <div class="fchip"    data-pkgf="deny"     onclick="pkgSetFilter('deny',this)">⛔ Remove <span id="pkgfc-deny">0</span></div>
-        <div class="fchip"    data-pkgf="review"   onclick="pkgSetFilter('review',this)">⚠ Check by hand <span id="pkgfc-review">0</span></div>
-        <div class="fchip"    data-pkgf="pinned"   onclick="pkgSetFilter('pinned',this)" title="Packages you pinned to a seller or skipped">📌 Pinned <span id="pkgfc-pinned">0</span></div>
-        <div class="fchip"    data-pkgf="outside"  onclick="pkgSetFilter('outside',this)">⏳ Not in this log <span id="pkgfc-outside">0</span></div>
-        <div class="fchip"    data-pkgf="complete" onclick="pkgSetFilter('complete',this)">✓ Nothing to do <span id="pkgfc-complete">0</span></div>
-        <div class="search-wrap" style="margin-left:auto;">
-          <span style="padding:0 8px;color:var(--text3);">⌕</span>
-          <input type="text" id="pkgSearch" placeholder="Room, conf. no., package, staff, or what to do…" oninput="pkgSetSearch(this.value)"/>
-        </div>
+      <div id="pkgSummary" aria-live="polite"></div>
+      <div class="pa-bar">
+        <div class="pa-views" id="pkgFilters" role="toolbar" aria-label="Show"></div>
+        <label class="pa-search"><span aria-hidden="true" style="color:var(--text3);">⌕</span>
+          <input type="search" id="pkgSearch" placeholder="Room, conf. no., package or name" oninput="pkgSetSearch(this.value)" aria-label="Search packages"/></label>
       </div>
+      <div class="pa-listhd" id="pkgListHead"></div>
+      <div class="pa-list" id="pkgList"></div>
 
-      <div class="pkg-win-hd"><b>🛠 To fix</b> <span id="pkgTodoCount">0</span><small>Tap a confirmation number to copy it: the package moves to Copied</small></div>
-      <div id="pkgBackWarn"></div>
-      <div class="tbl-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th style="width:70px;">Room</th>
-              <th>Confirmation No.</th>
-              <th>Package</th>
-              <th>Price</th>
-              <th>Dates</th>
-              <th>Sold By</th>
-              <th style="width:190px;">What to do</th>
-              <th style="width:110px;">Status</th>
-              <th style="width:120px;" title="Pin the seller or skip a package — remembered on every load">📌 Pin</th>
-            </tr>
-          </thead>
-          <tbody id="pkgTable"></tbody>
-        </table>
-      </div>
-
-      <div id="pkgDoneWrap" class="pkg-done-wrap" hidden>
-        <div class="pkg-win-hd"><b>📋 Copied</b> <span id="pkgDoneCount">0</span><small>Who copied it and when · tick each day once it shows the right seller in IN-Gauge · ↩ puts it back</small></div>
-        <div id="pkgDoneWarn"></div>
-        <div class="tbl-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th style="width:70px;">Room</th>
-              <th>Confirmation No.</th>
-              <th>Package</th>
-              <th>Price</th>
-              <th>Dates</th>
-              <th>Sold By</th>
-              <th style="width:190px;">What to do</th>
-              <th style="width:110px;">Status</th>
-              <th style="width:120px;" title="Pin the seller or skip a package — remembered on every load">📌 Pin</th>
-            </tr>
-          </thead>
-          <tbody id="pkgDoneTable"></tbody>
-        </table>
-        </div>
-      </div>
-
-      <div style="margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-        <button class="btn gold sm" id="pkgCopyBtn" onclick="pkgCopyResolved()">📋 Copy rows to update</button>
-        <button class="btn sm" onclick="mePkgCommission()" title="Packages and AED per seller, with the pinned and manual decisions — print or save as PDF">💰 Commission report (PDF)</button>
+      <div style="margin-top:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <button class="btn gold sm" id="pkgCopyBtn" onclick="pkgCopyResolved()" title="Every package to update, as a table: marks them all fixed">📋 Copy rows to update</button>
+        <button class="btn sm" onclick="mePkgCommission()" title="Packages and AED per seller, with the frozen and manual decisions: print or save as PDF">💰 Commission report (PDF)</button>
         <button class="btn sm" onclick="mePkgCommissionCopy()" title="Seller · packages · nights · AED as a table for Excel">📋 Commission to Excel</button>
         <button class="btn rose sm" id="pkgDenyBtn" onclick="pkgCopyDeny()">⛔ Copy rows to remove</button>
       </div>
-
-      <details style="margin-top:14px;">
-        <summary style="cursor:pointer;font-size:0.68rem;color:var(--text2);">How each row is decided</summary>
-        <div style="margin-top:8px;font-size:0.65rem;color:var(--text3);line-height:1.7;">
-          <b style="color:var(--mint);">✓ Nothing to do</b> — IN-Gauge already has the right package and seller.<br>
-          <b style="color:var(--mint);">✏️ Update in IN-Gauge</b> — the charge is genuine, but the package or the seller is blank.
-          Opera says who sold it, so set that in IN-Gauge. Credit always goes to whoever <i>started</i> the package,
-          never to someone who only changed its dates later.<br>
-          <b style="color:var(--rose);">⛔ Remove</b> — this charge shouldn't be counted at all. Either an early check-in
-          or late checkout was billed on more than one night (those are charged once per stay, so IN-Gauge spreading
-          them across the stay creates duplicates), or Opera logged this reservation's packages and none of them are
-          this kind. Breakfast and board bill per night, so one row per night is normal there and never removed.<br>
-          <b style="color:var(--amber);">⚠ Check by hand</b> — Opera has nothing on this reservation, or more than one
-          package could match the amount. Often it just means the package was sold before the dates you exported —
-          re-run the Opera report with a wider range and it usually resolves.
-        </div>
-      </details>
+    </div>
     </div>
 
   </div>

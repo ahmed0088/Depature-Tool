@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 290, items: [
+    '📦 Package Audit is one simple list now: only what still needs fixing in IN-Gauge. Copy the confirmation number and it is done, it leaves the list (Undo if needed). It only comes back if a NEWER IN-Gauge report still shows it wrong, marked "Came back" with the nights still wrong. The line at the top shows what was fixed today and what is waiting to be confirmed.',
+    '⚙️ New Package Audit Rules: see every rule that decides the seller, with an example, switch rules on or off and see straight away which packages would change. Tap Why? on any package for the step-by-step story (who added what in Opera, the chain of bookings, which rule decided). 📌 Freeze a seller on any package. Smart suggestions tell you what to check.',
+    '👥 Team names for Package Audit are kept in the app now (Rules → Staff names), not in the code. Until you add them, names are taken from the IN-Gauge file.',
+  ] },
   { v: 289, items: [
     '🧹 Skip The Clean: a guest who stays on with a new confirmation number now shows as ONE line, with the points added up (e.g. 2 skipped days = 200 points), so you enter the points once per member. Both confirmation numbers are shown; tap "2 stays merged" to see each stay. Ticking Done marks every stay on the line as credited.',
   ] },
