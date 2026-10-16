@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 291, items: [
+    '📦 Package Audit: each package code is its own package. UPS30BB and UPS60BB are different upsells, so whoever first put UPS60BB on the stay gets it, even if someone else sold UPS30BB before on the same guest. When a booking\'s package was swapped (UPS30BB → UPS60BB), the code it ended up with is the one that counts. Switch: Rules → "Each package code is its own package".',
+  ] },
   { v: 290, items: [
     '📦 Package Audit is one simple list now: only what still needs fixing in IN-Gauge. Copy the confirmation number and it is done, it leaves the list (Undo if needed). It only comes back if a NEWER IN-Gauge report still shows it wrong, marked "Came back" with the nights still wrong. The line at the top shows what was fixed today and what is waiting to be confirmed.',
     '⚙️ New Package Audit Rules: see every rule that decides the seller, with an example, switch rules on or off and see straight away which packages would change. Tap Why? on any package for the step-by-step story (who added what in Opera, the chain of bookings, which rule decided). 📌 Freeze a seller on any package. Smart suggestions tell you what to check.',

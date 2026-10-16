@@ -48,6 +48,7 @@ const PKG_RULE_DEFAULTS = {
   chainSameRoom: false,  // ...only when they are in the same room
   chainGap: PKG_EXTENSION_GAP,   // days allowed between the two bookings (0 or 1)
   sameKind: true,        // only the same kind of package carries over an extension
+  exactCode: true,       // ...and each package code is its own package there (UPS30BB is not UPS60BB)
   systemNoSeller: true,  // online / TARS / system bookings have no desk seller
   oneTime: true,         // early check-in / late check-out are counted once per stay
   denyNoOpera: true,     // remove a charge when Opera shows no such package on the booking
@@ -988,7 +989,8 @@ function _pkgOwnerFromOpera(conf) {
 // sale over to the SAME kind of package: a guest extending a breakfast stay who is then sold a
 // room upgrade on the new booking bought something new, from whoever sold it.
 function _pkgKindOfCode(code) {
-  code = String(code || '').toUpperCase();
+  code = String(code || '').toUpperCase().replace(/\s+/g, '');
+  if (_pkgRule('exactCode') && code) return code;   // UPS30BB and UPS60BB are two different packages
   if (/EC$/.test(code)) return 'EC';
   if (/LC$/.test(code)) return 'LC';
   if (/BB$/.test(code)) return 'BB';
@@ -996,8 +998,18 @@ function _pkgKindOfCode(code) {
   return m ? m[0] : '';
 }
 function _pkgKindOfRow(r) {
-  const c = (r.matchedEvent && r.matchedEvent.code) || (r.originEvent && r.originEvent.code) || '';
+  let c = (r.matchedEvent && r.matchedEvent.code) || (r.originEvent && r.originEvent.code) || '';
+  // Exact codes: the package this booking ended up with. Swapping UPS30BB for UPS60BB logs the new
+  // code at the old price first, so the charge can match the old code; the latest code added to
+  // the booking in the same family is the one being charged.
+  if (c && _pkgRule('exactCode')) {
+    const fam = _pkgFamilyOfCode(c);
+    const last = (pkgEvents[r.conf] || []).filter(e => e.action === 'ADDED' && (fam ? fam.test(e.code) : e.code === c))
+      .sort((a, b) => b.ts - a.ts)[0];
+    if (last) c = last.code;
+  }
   if (c) return _pkgKindOfCode(c);
+  if (_pkgRule('exactCode')) return '';   // no Opera code for this row: can't tell which exact package
   const n = _pkgFamilyName(r);
   return n === 'Early Check In' ? 'EC' : n === 'Late Check Out' ? 'LC' : n === 'Breakfast' ? 'BB' : '';
 }
@@ -1940,7 +1952,8 @@ const PKG_RULE_INFO = [
   { k: 'sameKind', ico: '🧩', short: 'same kind only', t: 'Only the same kind of package carries over', parent: 'chain',
     d: 'On an extension only the same kind (breakfast, early check-in, late check-out, room upgrade…) stays with the first seller. A different kind is a new sale.',
     ex: 'Sam sold breakfast on booking A. On the extension B, Lina sells a room upgrade (USS…). → The upgrade is Lina\'s.',
-    off: 'Off: every package on the extension goes to the stay\'s first seller.' },
+    off: 'Off: every package on the extension goes to the stay\'s first seller.',
+    subs: [{ k: 'exactCode', t: 'Each package code is its own package', d: 'UPS30BB and UPS60BB are different packages: Lina sold UPS30BB first, Sam sold UPS60BB first → each keeps their own. Off: all breakfasts (…BB) count as one kind.' }] },
   { k: 'systemNoSeller', ico: '🌐', short: 'online / TARS = no seller', t: 'Online / TARS / system bookings have no desk seller',
     d: 'A package that came with a booking made online, through TARS or another interface was not sold at the desk: nobody gets it.',
     ex: 'Breakfast added by *TARS* with the booking → no seller. If Sam adds late check-out later, that one is Sam\'s.',

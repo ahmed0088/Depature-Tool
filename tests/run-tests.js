@@ -1185,7 +1185,8 @@ console.log('\nQuiet when off · shift task times');
     return rows[1].user + '|' + (rows[1].extendedFrom || '');
   })()`, sb);
   check('package extension: a room upgrade sold on the extension of a breakfast stay stays with its seller', run('USS50'), 'ACCOREN-SSELLER@ACCOREN|');
-  check('package extension: breakfast continuing on the extension still goes to the first seller', run('UPS30BB'), 'ACCOREN-LSTAFF@ACCOREN|A1');
+  check('package extension: the same breakfast continuing on the extension still goes to the first seller', run('UPS40BB'), 'ACCOREN-LSTAFF@ACCOREN|A1');
+  check('package extension: a different breakfast code (UPS40BB vs UPS60BB) is a new sale', run('UPS60BB'), 'ACCOREN-SSELLER@ACCOREN|');
   // A stay whose first booking had no package: the first one who put breakfast on a LATER booking owns it.
   const run3 = () => vm.runInContext(`(() => {
     pkgGuests = { H0: { name: 'TEST,TWO', norm: 'test two', room: '413', arr: '16-SEP-26', dep: '02-OCT-26' },
@@ -1207,7 +1208,7 @@ console.log('\nQuiet when off · shift task times');
     pkgGuests = { A1: { name: 'TEST,GUEST', norm: 'test guest', room: '410', arr: '05-OCT-26', dep: '13-OCT-26' },
                   B1: { name: 'TEST,GUEST', norm: 'test guest', room: roomB || '410', arr: arrB || '13-OCT-26', dep: '17-OCT-26' } };
     pkgEvents = { A1: [{ action: 'ADDED', code: 'UPS40BB', ts: 202610051553, user: 'ACCOREN-LSTAFF@ACCOREN' }],
-                  B1: [{ action: 'ADDED', code: codeB || 'UPS30BB', ts: 202610100142, user: 'ACCOREN-SSELLER@ACCOREN' }] };
+                  B1: [{ action: 'ADDED', code: codeB || 'UPS40BB', ts: 202610100142, user: 'ACCOREN-SSELLER@ACCOREN' }] };
     const ev = pkgEvents.B1[0];
     const rows = [{ conf: 'A1', verdict: 'credit', user: 'ACCOREN-LSTAFF@ACCOREN', employee: 'ACCOREN-LSTAFF@ACCOREN', matchedEvent: pkgEvents.A1[0], product: 'Breakfast' },
                   { conf: 'B1', verdict: 'credit', user: 'ACCOREN-SSELLER@ACCOREN', employee: 'ACCOREN-SSELLER@ACCOREN', matchedEvent: ev, originEvent: ev, product: '' }];
