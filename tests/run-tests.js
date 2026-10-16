@@ -1282,5 +1282,51 @@ console.log('\nQuiet when off · shift task times');
   check('package staff: the code ships with no staff names', vm.runInContext(`PKG_STAFF.length + Object.keys(PKG_STAFF_ALIASES).length`, sb), 0);
 }
 
+// ── Undo (undo.js): the Ctrl+Z stack ──────────────────────
+{
+  console.log('\nUndo stack');
+  const sb = { console: { log() {}, warn() {}, error() {}, info() {} } };
+  sb.window = sb; sb.globalThis = sb;
+  vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'undo.js'), 'utf8'), sb, { filename: 'undo.js' });
+  const U = sb.hoUndo, ran = [];
+  U.push('A', () => ran.push('A')); U.push('B', () => ran.push('B'), { redo: () => ran.push('B again') }); U.push('C', () => ran.push('C'));
+  check('undo: newest first in the list', U.list().map(e => e.label), ['C', 'B', 'A']);
+  U.undo(); U.undo();
+  check('undo: Ctrl+Z undoes the newest action first', ran, ['C', 'B']);
+  check('undo: an undone action leaves the list', U.list().map(e => e.label), ['A']);
+  U.redo();
+  check('undo: redo runs the redo and puts it back on the list', [ran[2], U.list()[0].label], ['B again', 'B']);
+  U.push('D', () => {});
+  check('undo: a new action clears what could be redone', U.redoList().length, 0);
+  U.clear(); ran.length = 0;
+  check('undo: empty list → nothing happens', U.undo(), false);
+  for (let i = 0; i < 40; i++) U.push('x' + i, () => {});
+  check('undo: keeps the last 30 only', [U.list().length, U.list()[0].label, U.list()[29].label], [30, 'x39', 'x10']);
+  U.clear(); U.push('old', () => ran.push('old'));
+  vm.runInContext('Date.now = (n => () => n + 2 * 3600e3 + 1000)(Date.now())', sb);
+  U.push('new', () => {});
+  check('undo: actions older than 2 hours are dropped', U.list().map(e => e.label), ['new']);
+  U.clear();
+  const e = U.push('once', () => ran.push('once'));
+  U.remove(e);
+  check('undo: undone from its toast → Ctrl+Z does not run it again', [U.undo(), ran.includes('once')], [false, false]);
+  U.push('broken', () => { throw new Error('gone'); });
+  check('undo: an undo that fails is reported and removed', [U.undo(), U.list().length], [false, 0]);
+  sb.__inner = 0;
+  U.push('outer', () => { U.push('inner', () => {}); sb.__inner = U.list().length; });
+  U.undo();
+  check('undo: what an undo does is not recorded again', sb.__inner, 0);
+  const key = (k, o) => Object.assign({ key: k, ctrlKey: false, metaKey: false, shiftKey: false, altKey: false }, o);
+  const inp = (tag, type, ce) => ({ tagName: tag, type, isContentEditable: !!ce });
+  check('undo keys: Ctrl+Z / Cmd+Z / Ctrl+Shift+Z / Ctrl+Y',
+    [U.keyAction(key('z', { ctrlKey: true }), null), U.keyAction(key('z', { metaKey: true }), null), U.keyAction(key('Z', { ctrlKey: true, shiftKey: true }), null), U.keyAction(key('y', { ctrlKey: true }), null), U.keyAction(key('z'), null)],
+    ['undo', 'undo', 'redo', 'redo', '']);
+  check('undo keys: left to the browser while typing (input, textarea, select, editable text)',
+    [inp('INPUT', 'text'), inp('INPUT', 'search'), inp('TEXTAREA'), inp('SELECT'), inp('DIV', undefined, true)].map(el => U.keyAction(key('z', { ctrlKey: true }), el)),
+    ['', '', '', '', '']);
+  check('undo keys: a ticked box or a button is not typing', [inp('INPUT', 'checkbox'), inp('BUTTON')].map(el => U.keyAction(key('z', { ctrlKey: true }), el)), ['undo', 'undo']);
+}
+
 console.log(`\n${pass} passed · ${fail} failed`);
 process.exit(fail ? 1 : 0);

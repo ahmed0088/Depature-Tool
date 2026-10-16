@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 297, items: [
+    '↩ Undo anything with Ctrl+Z (⌘Z on Mac): ticked a task, changed a room\'s status, answered a wake-up call, deleted something by mistake? Press Ctrl+Z, or tap ↩ Undo on the bar that shows for a few seconds. Ctrl+Shift+Z (or Ctrl+Y) puts it back. Inside a text box Ctrl+Z still undoes your typing. Your last actions are in ⌨ Shortcuts → Recent actions.',
+  ] },
   { v: 296, items: [
     '⚙️ Package Audit rules, redesigned: each rule is now one simple Yes/No question with a tiny example (Sam → Lina ⇒ 🏆 Sam) and the recommended answer marked. A "How it decides" guide at the top in 3 steps, a 🔍 box to type any confirmation number and see who gets it and why, Undo after every change, and the fine-tuning tucked under "More options".',
   ] },
