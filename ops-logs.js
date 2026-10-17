@@ -427,7 +427,7 @@ function render() {
 }
 function badge() {
   const n = vals(MT).filter(mtLive).length, over = vals(MT).some(mtOverdue);
-  const b = document.getElementById('badge-' + PANEL); if (b) { b.textContent = n || '—'; b.classList.toggle('ol-badge-bad', over); }
+  const b = document.getElementById('badge-' + PANEL); if (b) { b.textContent = n ? String(n) : ''; b.style.display = n ? '' : 'none'; b.classList.toggle('ol-badge-bad', over); }
   const mb = document.getElementById('mob-badge-' + PANEL); if (mb) mb.textContent = n ? String(n) : '';
 }
 function setTab(k) { if (!TABS.some(t => t[0] === k)) return; tab = k; try { localStorage.setItem('ol_tab', k); } catch (_) {} render(); }
@@ -664,7 +664,7 @@ function mount() {
   const item = document.createElement('div');
   item.className = 'nav-item'; item.id = 'nav-' + PANEL; item.dataset.panel = PANEL;
   item.setAttribute('onclick', "showPanel('" + PANEL + "')");
-  item.innerHTML = '<div class="nav-icon">🗂️</div>Front Office Log<span class="nav-badge" id="badge-' + PANEL + '">—</span>';
+  item.innerHTML = '<div class="nav-icon">🗂️</div>Front Office Log<span class="nav-badge" id="badge-' + PANEL + '" style="display:none"></span>';
   const anchor = document.getElementById('nav-shifts');
   if (anchor && anchor.parentNode === nav) anchor.after(item); else nav.appendChild(item);
 
@@ -677,6 +677,8 @@ function mount() {
     const after = grid.querySelector('.mob-more-item[data-panel="shifts"]');
     if (after) after.after(b); else grid.appendChild(b);
   }
+
+  if (typeof hoApplyIcons === 'function') hoApplyIcons();   // the same line icon as the other menu items
 
   // every role that sees Shift Tasks sees this page
   try {
