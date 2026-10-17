@@ -11,6 +11,7 @@
 // Every page that reads a file. sel = its <input type="file">;
 // ta/run = a paste box to fill and the function that reads it.
 const FR_DEST = {
+  departures:  { label: 'Departures',                 panel: 'departures',    ico: '🧳', ext: /\.(txt|tsv|csv|xls|xlsx|xml)$/i, sel: '#depFileInput' },
   dtcm:        { label: 'DTCM Recon',                 panel: 'dtcm',          ico: '🏦', ext: /\.(xml|txt|csv|tsv)$/i, sel: '#dtcFileInput', multi: true },
   tdaOpera:    { label: 'TD Audit · Opera file',      panel: 'td-audit',      ico: '🧮', ext: /\.(txt|tsv|csv)$/i, sel: '#tdaOperaFileInput' },
   tdaDtcm:     { label: 'TD Audit · DTCM XML',        panel: 'td-audit',      ico: '🧮', ext: /\.xml$/i, sel: '#tdaDtcmFileInput' },
@@ -49,6 +50,7 @@ function frDetect(name, head) {
   if (/finjrnlbytax/.test(n) || /\bTAX_TRX_CODE\b/.test(firstLine)) return { dest: 'dtcm', why: 'Opera journal by tax code (long stays)' };
   if (/finjrnlbytrans|finjrnl/.test(n) || (/\bTRX_CODE\b/.test(firstLine) && /GUEST_FULL_NAME/.test(firstLine))) return { dest: 'dtcm', why: 'Opera journal by transaction' };
 
+  if (/departure/.test(n) || (/(^|\t)ROOM(\t|$)/.test(firstLine) && /GUEST_NAME/.test(firstLine) && /DEPARTURE/.test(firstLine))) return { dest: 'departures', why: 'Opera departures report' };
   if (/stat_countrybymon|countrybymon/.test(n) || /COUNTRY/.test(firstLine) && /NATIONALITY|COUNTRY_DESC/.test(firstLine)) return { dest: 'nationality', why: 'Opera nationality statistics' };
   if (/history_forecast/.test(n) || /NO_ROOMS/.test(firstLine) && /CONSIDERED_DATE/.test(firstLine)) return { dest: 'rent1', why: 'History & Forecast' };
   if (/statroomtype/.test(n) || /STAY_ROOMS/.test(firstLine) && /ROOM_CATEGORY/.test(firstLine)) return { dest: 'rent2', why: 'Room type statistics' };

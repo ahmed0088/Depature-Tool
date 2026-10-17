@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 299, items: [
+    '🧳 Departures has a new look. Load the Opera file with 📂 Browse or drag it onto the page (txt, Excel, csv or xml; paste still works), or drop it on any page and it goes to Departures. See the day at a glance: a progress ring ("3 of 22 done") and tiles you tap to filter (Due out, Checked out, Late check-out, the new Overdue, No answer, DND, Extended, Open balance). Clean room cards with a big Check out button, sort by room / status / time / name / balance, and a compact view.',
+  ] },
   { v: 298, items: [
     '🔁 Arr vs Dep is now all about extensions: a big "Extensions today" count and one card per guest, with the room (old → new if they moved), the new booking number to copy, nights and new check-out date, ✓ Sure (same name and room) or ~ Check (only the surname matches), and a shared "Mark as checked". Guests extended on the same booking show too. Everything about arrivals is folded under "Other details".',
   ] },

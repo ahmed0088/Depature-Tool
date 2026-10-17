@@ -557,208 +557,242 @@
 </div>
 
 <div class="panel" id="panel-departures">
-  <div class="page-hd">
+  <div class="page-hd dp-hd">
     <div class="page-hd-left">
-      <h1>Departure Follow-Up</h1>
-      <p id="depDateLabel">Today's departures · Load Opera report to begin</p>
+      <h1>Departures</h1>
+      <p id="depDateLabel">Today's departures · Load the Opera report to begin</p>
     </div>
-    <div class="page-hd-actions">
-  <div class="view-toggle" id="depViewToggle" style="display:none;">
-    <button class="vt-btn" onclick="setDepSize('sm',this)">S</button>
-    <button class="vt-btn on" onclick="setDepSize('md',this)">M</button>
-    <button class="vt-btn" onclick="setDepSize('lg',this)">L</button>
-    <button class="vt-btn" onclick="setDepSize('list',this)">≡</button>
+    <div class="page-hd-actions dp-hd-actions">
+      <div class="view-toggle" id="depViewToggle" style="display:none;">
+        <button class="vt-btn" onclick="setDepSize('sm',this)">S</button>
+        <button class="vt-btn on" onclick="setDepSize('md',this)">M</button>
+        <button class="vt-btn" onclick="setDepSize('lg',this)">L</button>
+        <button class="vt-btn" onclick="setDepSize('list',this)">≡</button>
+      </div>
+      <button class="btn dp-hbtn" id="depReloadBtn" onclick="depBrowse()" style="display:none;" title="Load a newer Opera file: statuses and notes are kept">📂 <span class="btn-lbl">Load newer report</span></button>
+      <button class="icon-round dp-hbtn" id="depAlertToggle" onclick="depToggleAlerts()" title="Overdue alerts" style="display:none;">🔔</button>
+      <button class="btn dp-hbtn" onclick="depShowTrends()" style="display:none;" id="depTrendsBtn" title="7-day trend">📈 <span class="btn-lbl">Trends</span></button>
+      <button class="btn dp-hbtn" onclick="depPrintList()" style="display:none;" id="depPrintBtn" title="Print">🖨 <span class="btn-lbl">Print</span></button>
+      <button class="btn dp-hbtn" onclick="exportDepSummary()" style="display:none;" id="depExportBtn" title="Export to Excel">⬇ <span class="btn-lbl">Export</span></button>
+      <button class="btn dp-hbtn dp-hbtn-danger" onclick="clearDep()" id="depClearBtn" title="Clear the board">✕ <span class="btn-lbl">Clear</span></button>
+    </div>
   </div>
-   
-  <button class="btn sky" id="depReloadBtn" onclick="openReloadModal()" style="display:none;">
-    🔄 Reload Report
-  </button>
-  <button class="icon-round" id="depAlertToggle" onclick="depToggleAlerts()" title="Overdue alerts" style="display:none;">🔔</button>
-  <button class="btn" onclick="depShowTrends()" style="display:none;" id="depTrendsBtn">📈 <span class="btn-lbl">Trends</span></button>
 
-  <button class="btn mint" onclick="depPrintList()" style="display:none;" id="depPrintBtn">🖨 <span class="btn-lbl">Print</span></button>
-  <button class="btn gold" onclick="exportDepSummary()" style="display:none;" id="depExportBtn">⬇ <span class="btn-lbl">Export</span></button>
-  <button class="btn rose" onclick="clearDep()" id="depClearBtn">✕ <span class="btn-lbl">Clear</span></button>
-</div>
-  </div>
-    <details class="howto"><summary>❔ How to use this</summary><ol><li>In Opera, export the departure report as <b>Delimited Data</b></li><li>Upload the file here, or paste it into the box</li><li>Every departing room becomes a card — tap one to add a note, mark it followed up, or stamp it done</li></ol></details>
-  <div class="card" id="depUploadCard">
-    <div class="upload-zone">
-      <div class="upload-label-bar">
-        <div class="upload-dot gold"></div>
-        <span class="upload-lbl">Opera Departure Report · Delimited Data</span>
-        <span class="upload-sub">departure_all_….txt</span>
+  <!-- one hidden file input serves the empty state, the hero and drops -->
+  <input type="file" id="depFileInput" accept=".txt,.tsv,.csv,.xls,.xlsx,.xml,.htm,.html,.pdf" hidden onchange="depLoadFromInput(this)"/>
+
+  <!-- ── Empty state: Browse / drop / paste ── -->
+  <div class="card dp-empty" id="depUploadCard">
+    <div class="dp-drop" id="depDrop" role="button" tabindex="0" aria-label="Choose the Opera departures file"
+         onclick="depBrowse()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();depBrowse();}">
+      <div class="dp-drop-ico" aria-hidden="true">
+        <svg viewBox="0 0 48 48" width="48" height="48"><path d="M8 14a4 4 0 0 1 4-4h8l4 4h12a4 4 0 0 1 4 4v18a4 4 0 0 1-4 4H12a4 4 0 0 1-4-4z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/><path d="M24 34V21m0 0-5 5m5-5 5 5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
-      <textarea id="depInput" placeholder="Opera Cloud → Front Desk → Departures → Download as Delimited Data&#10;Open .txt → Ctrl+A → Ctrl+C → Paste here"></textarea>
+      <div class="dp-drop-title">Load today's departures</div>
+      <div class="dp-drop-sub">Drop the Opera file here, or</div>
+      <button type="button" class="dp-browse" onclick="event.stopPropagation();depBrowse()">📂 Browse…</button>
+      <div class="dp-drop-types">.txt · .csv · .xls · .xlsx · .xml</div>
     </div>
-    <div class="error-box" id="depError"><span>⚠</span><span id="depErrorMsg"></span></div>
-    <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
-      <button class="btn gold" onclick="processDep()">⚡ Load Report</button>
-      <span style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">Paste → Load → manage on the board → auto-saves to Firebase</span>
+    <div class="dp-empty-help">
+      <div class="dp-step"><span class="dp-step-n">1</span><span>In Opera, run the <b>Departures</b> report <code>departure_all</code>.</span></div>
+      <div class="dp-step"><span class="dp-step-n">2</span><span>Download it as <b>Delimited Data</b> (.txt) or Excel.</span></div>
+      <div class="dp-step"><span class="dp-step-n">3</span><span>Browse, drop or paste it here. Every room becomes a card and saves for the whole team.</span></div>
     </div>
+    <details class="dp-paste">
+      <summary>📋 Paste the report text instead</summary>
+      <textarea id="depInput" placeholder="Open the .txt file → Ctrl+A → Ctrl+C → paste here"></textarea>
+      <div class="error-box" id="depError"><span>⚠</span><span id="depErrorMsg"></span></div>
+      <div class="dp-paste-row">
+        <button class="btn gold" onclick="processDep()">⚡ Load report</button>
+        <button class="btn" onclick="depAddManualPrompt()">＋ Add a room by hand</button>
+      </div>
+    </details>
   </div>
+
   <div id="depBoard" style="display:none;">
-    <div class="dep-kpi-strip" id="depKpis"></div>
-    <div class="prog-wrap">
-      <div class="prog-info">
-        <span id="depProgLabel">0 checked out</span>
-        <span id="depProgPct" style="font-family:var(--mono);font-size:0.72rem;color:var(--mint);">0%</span>
-      </div>
-      <div class="prog-track"><div class="prog-fill" id="depProgFill" style="width:0%"></div></div>
-    </div>
-    <!-- Filter + search row -->
-    <div class="dep-filter-search-row">
-      <div class="dep-filter-scroll">
-        <div class="filter-row dep-filter-chips" style="margin-bottom:0;flex-wrap:nowrap;">
-          <button class="fchip on"   data-f="all"          onclick="depFilter('all',this)">All <span id="dfc-all">0</span></button>
-          <button class="fchip due"  data-f="due"          onclick="depFilter('due',this)">⏳ Due <span id="dfc-due">0</span></button>
-          <button class="fchip late" data-f="late"         onclick="depFilter('late',this)">🕐 Late CO <span id="dfc-late">0</span></button>
-          <button class="fchip na"   data-f="na"           onclick="depFilter('na',this)">📵 NA <span id="dfc-na">0</span></button>
-          <button class="fchip dnd"  data-f="dnd"          onclick="depFilter('dnd',this)">🚫 DND <span id="dfc-dnd">0</span></button>
-          <button class="fchip ext"  data-f="maybe_extend" onclick="depFilter('maybe_extend',this)">🤔 May Extend <span id="dfc-maybe_extend">0</span></button>
-          <button class="fchip bal"  data-f="balance"      onclick="depFilter('balance',this)">💳 Balance <span id="dfc-balance">0</span></button>
-          <button class="fchip ext"  data-f="extended"     onclick="depFilter('extended',this)">↪ Extended <span id="dfc-extended">0</span></button>
-          <button class="fchip out"  data-f="out"          onclick="depFilter('out',this)">✓ Out <span id="dfc-out">0</span></button>
+    <!-- ── Hero: date, progress ring, KPI tiles (tap to filter) ── -->
+    <section class="dp-hero" id="depHero">
+      <div class="dp-hero-main">
+        <div class="dp-ring" id="depRing" aria-hidden="true">
+          <svg viewBox="0 0 120 120"><circle class="dp-ring-track" cx="60" cy="60" r="52"/><circle class="dp-ring-fill" id="depRingFill" cx="60" cy="60" r="52"/></svg>
+          <div class="dp-ring-txt"><b id="depRingNum">0</b><span id="depRingOf">of 0</span></div>
+        </div>
+        <div class="dp-hero-txt">
+          <div class="dp-hero-kicker" id="depHeroKicker">Departures</div>
+          <div class="dp-hero-date" id="depHeroDate">—</div>
+          <div class="dp-hero-sub" id="depHeroSub"></div>
+          <div class="prog-wrap dp-prog">
+            <div class="prog-info">
+              <span id="depProgLabel">0 checked out</span>
+              <span id="depProgPct">0%</span>
+            </div>
+            <div class="prog-track"><div class="prog-fill" id="depProgFill" style="width:0%"></div></div>
+          </div>
+          <div class="dp-hero-acts">
+            <button class="dp-pill-btn" onclick="openReloadModal()" title="Paste a fresh report: statuses and notes are kept">📋 Paste update</button>
+            <button class="dp-pill-btn" onclick="depAddManualPrompt()" title="A room that is not on the report">＋ Add room</button>
+          </div>
         </div>
       </div>
-      <div class="search-wrap" id="depSearchWrap">
-        <span style="padding:0 8px;color:var(--text3);">⌕</span>
-        <input type="text" id="depSearch" placeholder="Room, name… or 610,613,615" oninput="depSearchInput()" onkeydown="depSearchKey(event)"/>
-        <button class="search-clear-btn" id="depSearchClear" onclick="depSearchClear()" style="display:none;" title="Clear search">✕</button>
+      <div class="dp-kpis" id="depKpis"></div>
+    </section>
+
+    <!-- ── Sticky toolbar: search · filters · sort · view ── -->
+    <div class="dp-toolbar" id="depToolbar">
+      <div class="dp-tb-row">
+        <div class="search-wrap dp-search" id="depSearchWrap">
+          <span class="dp-search-ico" aria-hidden="true">⌕</span>
+          <input type="text" id="depSearch" placeholder="Room, name… or 610,613,615" aria-label="Search rooms" oninput="depSearchInput()" onkeydown="depSearchKey(event)"/>
+          <button class="search-clear-btn" id="depSearchClear" onclick="depSearchClear()" style="display:none;" title="Clear search" aria-label="Clear search">✕</button>
+        </div>
+        <div class="dp-sort" role="group" aria-label="Sort">
+          <div class="dep-sort-wrap dp-seg">
+            <span class="dep-sort-lbl">Sort</span>
+            <button class="dep-sort-btn on" data-s="smart"   onclick="depSetSort('smart')">Smart<span class="sort-arrow"></span></button>
+            <button class="dep-sort-btn"    data-s="room"    onclick="depSetSort('room')">Room<span class="sort-arrow"></span></button>
+            <button class="dep-sort-btn"    data-s="status"  onclick="depSetSort('status')">Status<span class="sort-arrow"></span></button>
+            <button class="dep-sort-btn"    data-s="time"    onclick="depSetSort('time')">Time<span class="sort-arrow"></span></button>
+            <button class="dep-sort-btn"    data-s="name"    onclick="depSetSort('name')">Name<span class="sort-arrow"></span></button>
+            <button class="dep-sort-btn"    data-s="balance" onclick="depSetSort('balance')">Balance<span class="sort-arrow"></span></button>
+          </div>
+        </div>
+        <div class="dp-density" role="group" aria-label="View">
+          <button class="dp-dens-btn" data-d="comfy" onclick="depSetDensity('comfy')" title="Comfortable cards" aria-label="Comfortable cards">▦</button>
+          <button class="dp-dens-btn" data-d="compact" onclick="depSetDensity('compact')" title="Compact rows" aria-label="Compact rows">☰</button>
+        </div>
+        <button class="dep-jump-btn dp-jump" id="depJumpBtn" onclick="toggleDepJump()" title="Quick jump to a room">🎯 <span class="btn-lbl">Jump</span></button>
+      </div>
+      <div class="dp-chips" role="toolbar" aria-label="Filter">
+        <select class="dep-sort-select dp-sort-select" id="depSortSelect" onchange="depSetSort(this.value)" aria-label="Sort">
+          <option value="smart">⇅ Smart</option>
+          <option value="room">⇅ Room</option>
+          <option value="status">⇅ Status</option>
+          <option value="time">⇅ Time</option>
+          <option value="name">⇅ Name</option>
+          <option value="balance">⇅ Balance</option>
+        </select>
+        <button class="fchip on" data-f="all"          onclick="depFilter('all',this)">To do <span id="dfc-all">0</span></button>
+        <button class="fchip"    data-f="due"          onclick="depFilter('due',this)">Due <span id="dfc-due">0</span></button>
+        <button class="fchip"    data-f="overdue"      onclick="depFilter('overdue',this)">Overdue <span id="dfc-overdue">0</span></button>
+        <button class="fchip"    data-f="late"         onclick="depFilter('late',this)">Late CO <span id="dfc-late">0</span></button>
+        <button class="fchip"    data-f="na"           onclick="depFilter('na',this)">No answer <span id="dfc-na">0</span></button>
+        <button class="fchip"    data-f="dnd"          onclick="depFilter('dnd',this)">DND <span id="dfc-dnd">0</span></button>
+        <button class="fchip"    data-f="maybe_extend" onclick="depFilter('maybe_extend',this)">May extend <span id="dfc-maybe_extend">0</span></button>
+        <button class="fchip"    data-f="balance"      onclick="depFilter('balance',this)">Balance <span id="dfc-balance">0</span></button>
+        <button class="fchip"    data-f="extended"     onclick="depFilter('extended',this)">Extended <span id="dfc-extended">0</span></button>
+        <button class="fchip"    data-f="out"          onclick="depFilter('out',this)">Out <span id="dfc-out">0</span></button>
+        <span id="depSortLbl" class="dp-sort-hint"></span>
       </div>
       <div class="dep-search-pills" id="depSearchPills" style="display:none;"></div>
     </div>
-    <!-- ── Sort + Jump toolbar ── -->
-    <div class="dep-sort-jump-bar">
-      <div class="dep-sort-wrap">
-        <span class="dep-sort-lbl">Sort:</span>
-        <button class="dep-sort-btn on" data-s="smart"   onclick="depSetSort('smart')">⚡ Smart<span class="sort-arrow"></span></button>
-        <button class="dep-sort-btn"    data-s="room"    onclick="depSetSort('room')">🔢 Room<span class="sort-arrow"></span></button>
-        <button class="dep-sort-btn"    data-s="name"    onclick="depSetSort('name')">🔤 Name<span class="sort-arrow"></span></button>
-        <button class="dep-sort-btn"    data-s="time"    onclick="depSetSort('time')">🕐 Time<span class="sort-arrow"></span></button>
-        <button class="dep-sort-btn"    data-s="balance" onclick="depSetSort('balance')">💳 Balance<span class="sort-arrow"></span></button>
-        <button class="dep-sort-btn"    data-s="status"  onclick="depSetSort('status')">📊 Status<span class="sort-arrow"></span></button>
-        <span id="depSortLbl" style="font-family:var(--mono);font-size:0.6rem;color:var(--green);margin-left:4px;white-space:nowrap;"></span>
-      </div>
-      <!-- Mobile-only equivalent of the 6 sort buttons above — one dropdown
-           instead of a whole row. Hidden on desktop via CSS. -->
-      <select class="dep-sort-select" id="depSortSelect" onchange="depSetSort(this.value)">
-        <option value="smart">⚡ Sort: Smart</option>
-        <option value="room">🔢 Sort: Room</option>
-        <option value="name">🔤 Sort: Name</option>
-        <option value="time">🕐 Sort: Time</option>
-        <option value="balance">💳 Sort: Balance</option>
-        <option value="status">📊 Sort: Status</option>
-      </select>
-      <button class="dep-jump-btn" id="depJumpBtn" onclick="toggleDepJump()">🎯 Quick Jump</button>
-    </div>
+
     <!-- ── Quick Jump panel ── -->
     <div id="depJumpBar" class="dep-jump-bar" style="display:none;"></div>
-    <!-- ── HK Status Bar ── -->
-    <div id="depHKBar" class="dep-na-bar" style="display:none;background:linear-gradient(90deg,rgba(232,184,75,0.08),transparent);border-color:rgba(232,184,75,0.22);">
-      <div class="dep-na-bar-left">
-        <span class="dep-na-bar-icon">🏨</span>
-        <span class="dep-na-bar-text">Send status to housekeeping</span>
-      </div>
-      <div class="dep-na-bar-right">
-        <div class="dep-copy-split">
-          <button class="dep-copy-main" style="color:var(--accent);border-color:var(--accent-border);background:var(--accent-bg);" onclick="depCopyHKUpdate()">🏨 Remaining Rooms</button>
-          <button class="dep-copy-arrow" style="color:var(--accent);border-color:var(--accent-border);background:var(--accent-bg);" onclick="depToggleCopyMenu('hk')">▾</button>
-          <div class="dep-copy-menu" id="depCopyMenu-hk">
-            <button onclick="depCopyHKUpdate();depToggleCopyMenu('hk')">🏨 Remaining Rooms <span class="dcm-hint">pending checkout rooms</span></button>
-            <button onclick="depCopyHKRemaining();depToggleCopyMenu('hk')">📋 Full HK List <span class="dcm-hint">all rooms still on floor</span></button>
+
+    <!-- ── Copy for housekeeping ── -->
+    <div class="dp-bars">
+      <div id="depHKBar" class="dep-na-bar dp-bar dp-bar-hk" style="display:none;">
+        <div class="dep-na-bar-left">
+          <span class="dep-na-bar-icon">🏨</span>
+          <span class="dep-na-bar-text">Update housekeeping</span>
+        </div>
+        <div class="dep-na-bar-right">
+          <div class="dep-copy-split">
+            <button class="dep-copy-main" onclick="depCopyHKUpdate()">🏨 Remaining rooms</button>
+            <button class="dep-copy-arrow" onclick="depToggleCopyMenu('hk')" aria-label="More copy options">▾</button>
+            <div class="dep-copy-menu" id="depCopyMenu-hk">
+              <button onclick="depCopyHKUpdate();depToggleCopyMenu('hk')">🏨 Remaining Rooms <span class="dcm-hint">pending checkout rooms</span></button>
+              <button onclick="depCopyHKRemaining();depToggleCopyMenu('hk')">📋 Full HK List <span class="dcm-hint">all rooms still on floor</span></button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-    <!-- ── NA Action Bar ── -->
-    <div id="depNaBar" class="dep-na-bar" style="display:none;">
-      <div class="dep-na-bar-left">
-        <span class="dep-na-bar-icon">📵</span>
-        <span class="dep-na-bar-text"><span id="depNaCount">0 rooms</span> marked No Answer</span>
+      <div id="depNaBar" class="dep-na-bar dp-bar dp-bar-na" style="display:none;">
+        <div class="dep-na-bar-left">
+          <span class="dep-na-bar-icon">📵</span>
+          <span class="dep-na-bar-text"><span id="depNaCount">0 rooms</span> no answer</span>
+        </div>
+        <div class="dep-na-bar-right">
+          <div class="dep-copy-split">
+            <button class="dep-copy-main" onclick="depCopyNAList('all')">📋 Copy for HK</button>
+            <button class="dep-copy-arrow" onclick="depToggleCopyMenu('na')" aria-label="More copy options">▾</button>
+            <div class="dep-copy-menu" id="depCopyMenu-na">
+              <button onclick="depSmartSelect('na',30);depToggleCopyMenu('na')">⚡ Smart 30 min <span class="dcm-hint">auto-select recent NAs</span></button>
+              <button onclick="depSmartSelect('na',60);depToggleCopyMenu('na')">⚡ Smart 1 hour <span class="dcm-hint">auto-select recent NAs</span></button>
+              <button onclick="depStartSelect('na');depToggleCopyMenu('na')">☑ Pick Rooms <span class="dcm-hint">tap to choose</span></button>
+              <button onclick="depCopyNAList('all');depToggleCopyMenu('na')">📋 Copy All <span class="dcm-hint">all NA rooms</span></button>
+              <button onclick="depCopyNAList('summary');depToggleCopyMenu('na')">⚡ Copy Summary <span class="dcm-hint">room numbers only</span></button>
+            </div>
+          </div>
+          <button class="dep-na-filter-btn" onclick="depFilter('na')">View →</button>
+        </div>
       </div>
-      <div class="dep-na-bar-right">
-        <div class="dep-copy-split">
-          <button class="dep-copy-main" onclick="depCopyNAList('all')">📋 Copy for HK</button>
-          <button class="dep-copy-arrow" onclick="depToggleCopyMenu('na')">▾</button>
-          <div class="dep-copy-menu" id="depCopyMenu-na">
-            <button onclick="depSmartSelect('na',30);depToggleCopyMenu('na')">⚡ Smart 30 min <span class="dcm-hint">auto-select recent NAs</span></button>
-            <button onclick="depSmartSelect('na',60);depToggleCopyMenu('na')">⚡ Smart 1 hour <span class="dcm-hint">auto-select recent NAs</span></button>
-            <button onclick="depStartSelect('na');depToggleCopyMenu('na')">☑ Pick Rooms <span class="dcm-hint">tap to choose</span></button>
-            <button onclick="depCopyNAList('all');depToggleCopyMenu('na')">📋 Copy All <span class="dcm-hint">all NA rooms</span></button>
-            <button onclick="depCopyNAList('summary');depToggleCopyMenu('na')">⚡ Copy Summary <span class="dcm-hint">room numbers only</span></button>
+      <div id="depDndBar" class="dep-na-bar dp-bar dp-bar-dnd" style="display:none;">
+        <div class="dep-na-bar-left">
+          <span class="dep-na-bar-icon">🚫</span>
+          <span class="dep-na-bar-text"><span id="depDndCount">0 rooms</span> DND</span>
+        </div>
+        <div class="dep-na-bar-right">
+          <div class="dep-copy-split">
+            <button class="dep-copy-main" onclick="depCopyDNDList('all')">📋 Copy for HK</button>
+            <button class="dep-copy-arrow" onclick="depToggleCopyMenu('dnd')" aria-label="More copy options">▾</button>
+            <div class="dep-copy-menu" id="depCopyMenu-dnd">
+              <button onclick="depStartSelect('dnd');depToggleCopyMenu('dnd')">☑ Pick Rooms <span class="dcm-hint">tap to choose</span></button>
+              <button onclick="depCopyDNDList('all');depToggleCopyMenu('dnd')">📋 Copy All <span class="dcm-hint">all DND rooms</span></button>
+              <button onclick="depCopyDNDList('summary');depToggleCopyMenu('dnd')">⚡ Copy Summary <span class="dcm-hint">room numbers only</span></button>
+            </div>
+          </div>
+          <button class="dep-na-filter-btn" onclick="depFilter('dnd')">View →</button>
+        </div>
+      </div>
+      <div id="depExtBar" class="dep-na-bar dp-bar dp-bar-ext" style="display:none;">
+        <div class="dep-na-bar-left">
+          <span class="dep-na-bar-icon">↪</span>
+          <span class="dep-na-bar-text"><span id="depExtCount">0 rooms</span> extended</span>
+        </div>
+        <div class="dep-na-bar-right">
+          <div class="dep-copy-split">
+            <button class="dep-copy-main" onclick="depCopyExtList('all')">📋 Copy for HK</button>
+            <button class="dep-copy-arrow" onclick="depToggleCopyMenu('ext')" aria-label="More copy options">▾</button>
+            <div class="dep-copy-menu" id="depCopyMenu-ext">
+              <button onclick="depStartSelect('extended');depToggleCopyMenu('ext')">☑ Pick Rooms <span class="dcm-hint">tap to choose</span></button>
+              <button onclick="depCopyExtList('all');depToggleCopyMenu('ext')">📋 Copy All <span class="dcm-hint">full details</span></button>
+              <button onclick="depCopyExtList('summary');depToggleCopyMenu('ext')">⚡ Copy Simple <span class="dcm-hint">room + nights only</span></button>
+            </div>
+          </div>
+          <button class="dep-na-filter-btn" onclick="depFilter('extended')">View →</button>
+        </div>
+      </div>
+      <div id="depOutBar" class="dep-na-bar dp-bar dp-bar-out" style="display:none;">
+        <div class="dep-na-bar-left">
+          <span class="dep-na-bar-icon">✅</span>
+          <span class="dep-na-bar-text"><span id="depOutCount">0 rooms</span> checked out</span>
+          <div class="hk-reminder" id="hkReminder" style="display:none;">
+            <span class="hk-reminder-dot" id="hkReminderDot"></span>
+            <span class="hk-reminder-text" id="hkReminderText"></span>
           </div>
         </div>
-        <button class="dep-na-filter-btn" onclick="depFilter('na', document.querySelector('[data-f=na]'))">View All →</button>
-      </div>
-    </div>
-    <!-- ── Extension Action Bar ── -->
-    <!-- ── DND Action Bar ── -->
-    <div id="depDndBar" class="dep-na-bar" style="display:none;background:linear-gradient(90deg,rgba(233,94,94,0.07),transparent);border-color:rgba(233,94,94,0.25);">
-      <div class="dep-na-bar-left">
-        <span class="dep-na-bar-icon">🚫</span>
-        <span class="dep-na-bar-text" style="color:var(--rose);"><span id="depDndCount">0 rooms</span> marked DND</span>
-      </div>
-      <div class="dep-na-bar-right">
-        <div class="dep-copy-split">
-          <button class="dep-copy-main" style="color:var(--rose);border-color:rgba(233,94,94,0.4);background:rgba(233,94,94,0.10);" onclick="depCopyDNDList('all')">📋 Copy for HK</button>
-          <button class="dep-copy-arrow" style="color:var(--rose);border-color:rgba(233,94,94,0.4);background:rgba(233,94,94,0.10);" onclick="depToggleCopyMenu('dnd')">▾</button>
-          <div class="dep-copy-menu" id="depCopyMenu-dnd">
-            <button onclick="depStartSelect('dnd');depToggleCopyMenu('dnd')">☑ Pick Rooms <span class="dcm-hint">tap to choose</span></button>
-            <button onclick="depCopyDNDList('all');depToggleCopyMenu('dnd')">📋 Copy All <span class="dcm-hint">all DND rooms</span></button>
-            <button onclick="depCopyDNDList('summary');depToggleCopyMenu('dnd')">⚡ Copy Summary <span class="dcm-hint">room numbers only</span></button>
+        <div class="dep-na-bar-right">
+          <div class="dep-copy-split">
+            <button class="dep-copy-main" onclick="depCopyOutRecent(30)">✅ Copy new (30 min)</button>
+            <button class="dep-copy-arrow" onclick="depToggleCopyMenu('out')" aria-label="More copy options">▾</button>
+            <div class="dep-copy-menu" id="depCopyMenu-out">
+              <button onclick="depCopyLastOut();depToggleCopyMenu('out')">🕐 Last One Only <span class="dcm-hint">just the most recent checkout</span></button>
+              <button onclick="depCopyOutRecent(30);depToggleCopyMenu('out')">✅ New — Last 30 min <span class="dcm-hint">recent checkouts only</span></button>
+              <button onclick="depCopyOutRecent(60);depToggleCopyMenu('out')">✅ New — Last 1 hour <span class="dcm-hint">recent checkouts only</span></button>
+              <button onclick="depSmartSelect('out',30);depToggleCopyMenu('out')">⚡ Smart Select 30 min <span class="dcm-hint">pick then copy</span></button>
+              <button onclick="depStartSelect('out');depToggleCopyMenu('out')">☑ Pick Rooms <span class="dcm-hint">tap to choose</span></button>
+              <button onclick="depCopyOutList('summary');depToggleCopyMenu('out')">📋 All Rooms (numbers) <span class="dcm-hint">all checkouts today</span></button>
+              <button onclick="depCopyOutList('all');depToggleCopyMenu('out')">📋 Full List Today <span class="dcm-hint">every checkout with time</span></button>
+              <button onclick="depCopyHKUpdate();depToggleCopyMenu('out')" style="border-top:1px solid var(--border);margin-top:4px;padding-top:10px;">🏨 Remaining Rooms <span class="dcm-hint">still on floor · pending only</span></button>
+            </div>
           </div>
+          <button class="dep-na-filter-btn" onclick="depFilter('out')">View →</button>
         </div>
-        <button class="dep-na-filter-btn" onclick="depFilter('dnd', document.querySelector('[data-f=dnd]'))">View All →</button>
       </div>
     </div>
-    <div id="depExtBar" class="dep-na-bar" style="display:none;background:linear-gradient(90deg,rgba(90,180,232,0.08),transparent);border-color:rgba(90,180,232,0.25);">
-      <div class="dep-na-bar-left">
-        <span class="dep-na-bar-icon">↪</span>
-        <span class="dep-na-bar-text"><span id="depExtCount">0 rooms</span> extended today</span>
-      </div>
-      <div class="dep-na-bar-right">
-        <div class="dep-copy-split">
-          <button class="dep-copy-main" style="color:var(--sky);border-color:rgba(90,180,232,0.4);background:rgba(90,180,232,0.12);" onclick="depCopyExtList('all')">📋 Copy for HK</button>
-          <button class="dep-copy-arrow" style="color:var(--sky);border-color:rgba(90,180,232,0.4);background:rgba(90,180,232,0.12);" onclick="depToggleCopyMenu('ext')">▾</button>
-          <div class="dep-copy-menu" id="depCopyMenu-ext">
-            <button onclick="depStartSelect('extended');depToggleCopyMenu('ext')">☑ Pick Rooms <span class="dcm-hint">tap to choose</span></button>
-            <button onclick="depCopyExtList('all');depToggleCopyMenu('ext')">📋 Copy All <span class="dcm-hint">full details</span></button>
-            <button onclick="depCopyExtList('summary');depToggleCopyMenu('ext')">⚡ Copy Simple <span class="dcm-hint">room + nights only</span></button>
-          </div>
-        </div>
-        <button class="dep-na-filter-btn" onclick="depFilter('extended', document.querySelector('[data-f=extended]'))">View All →</button>
-      </div>
-    </div>
-    <!-- ── Checked-Out Action Bar ── -->
-    <div id="depOutBar" class="dep-na-bar" style="display:none;background:linear-gradient(90deg,rgba(62,207,142,0.08),transparent);border-color:rgba(62,207,142,0.25);">
-      <div class="dep-na-bar-left">
-        <span class="dep-na-bar-icon">✅</span>
-        <span class="dep-na-bar-text"><span id="depOutCount">0 rooms</span> checked out</span>
-        <div class="hk-reminder" id="hkReminder" style="display:none;">
-          <span class="hk-reminder-dot" id="hkReminderDot"></span>
-          <span class="hk-reminder-text" id="hkReminderText"></span>
-        </div>
-      </div>
-      <div class="dep-na-bar-right">
-        <div class="dep-copy-split">
-          <button class="dep-copy-main" style="color:var(--mint);border-color:rgba(62,207,142,0.4);background:rgba(62,207,142,0.12);" onclick="depCopyOutRecent(30)">✅ Copy New (30 min)</button>
-          <button class="dep-copy-arrow" style="color:var(--mint);border-color:rgba(62,207,142,0.4);background:rgba(62,207,142,0.12);" onclick="depToggleCopyMenu('out')">▾</button>
-          <div class="dep-copy-menu" id="depCopyMenu-out">
-            <button onclick="depCopyLastOut();depToggleCopyMenu('out')">🕐 Last One Only <span class="dcm-hint">just the most recent checkout</span></button>
-            <button onclick="depCopyOutRecent(30);depToggleCopyMenu('out')">✅ New — Last 30 min <span class="dcm-hint">recent checkouts only</span></button>
-            <button onclick="depCopyOutRecent(60);depToggleCopyMenu('out')">✅ New — Last 1 hour <span class="dcm-hint">recent checkouts only</span></button>
-            <button onclick="depSmartSelect('out',30);depToggleCopyMenu('out')">⚡ Smart Select 30 min <span class="dcm-hint">pick then copy</span></button>
-            <button onclick="depStartSelect('out');depToggleCopyMenu('out')">☑ Pick Rooms <span class="dcm-hint">tap to choose</span></button>
-            <button onclick="depCopyOutList('summary');depToggleCopyMenu('out')">📋 All Rooms (numbers) <span class="dcm-hint">all checkouts today</span></button>
-            <button onclick="depCopyOutList('all');depToggleCopyMenu('out')">📋 Full List Today <span class="dcm-hint">every checkout with time</span></button>
-            <button onclick="depCopyHKUpdate();depToggleCopyMenu('out')" style="border-top:1px solid var(--border);margin-top:4px;padding-top:10px;">🏨 Remaining Rooms <span class="dcm-hint">still on floor · pending only</span></button>
-          </div>
-        </div>
-        <button class="dep-na-filter-btn" onclick="depFilter('out', document.querySelector('[data-f=out]'))">View All →</button>
-      </div>
-    </div>
-    <!-- ── Select mode floating tray (fixed bottom, appears on selection) ── -->
+
+    <!-- ── Select mode floating tray ── -->
     <div id="depSelTray" class="dep-sel-tray">
       <div class="dep-sel-tray-left">
         <div class="dep-sel-tray-count" id="selTrayCount" style="display:none;"></div>
@@ -771,25 +805,32 @@
         <button class="dep-sel-tray-btn cancel"  onclick="depCancelSelect()">✕</button>
       </div>
     </div>
-    <div class="dep-grid size-md" id="depGrid"></div>
+
+    <div class="dp-grid dp-size-md" id="depGrid" aria-live="polite"></div>
+    <div class="dp-noresults" id="depNoResults" style="display:none;"></div>
+
     <!-- Inline bulk checkout — visible only on mobile -->
     <div class="dep-quick-bar-inline" id="depQuickBarInline" style="display:none;">
-      <button class="btn mint" style="width:100%;justify-content:center;padding:12px;" onclick="depBulkCheckout()">✓ Check Out All Due</button>
+      <button class="btn mint dp-bulk-btn" onclick="depBulkCheckout()">✓ Check out all due</button>
     </div>
-    <div class="dep-log-wrap" id="depLogWrap" style="display:none;">
-      <div class="dep-log-header" onclick="toggleLog()">
-        <span>📋</span>
-        <h3>Action Log</h3>
+
+    <!-- ── Action log (collapsible) ── -->
+    <div class="dep-log-wrap dp-log" id="depLogWrap" style="display:none;">
+      <button type="button" class="dep-log-header dp-log-hd" onclick="toggleLog()" aria-controls="depLogBody">
+        <span class="dp-log-ico" aria-hidden="true">🕘</span>
+        <span class="dp-log-title">Action log</span>
         <span id="depLogCount" class="nav-badge">0</span>
-        <span id="depLogToggleIcon" style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">▾ collapse</span>
-      </div>
+        <span class="dp-log-last" id="depLogLast"></span>
+        <span id="depLogToggleIcon" class="dp-log-tog">▾ collapse</span>
+      </button>
       <div class="dep-log-body" id="depLogBody"></div>
     </div>
   </div>
   <div class="dep-quick-bar" id="depQuickBar" style="display:none;">
-    <span id="depQuickLabel" style="font-family:var(--mono);font-size:0.68rem;color:var(--text2);"></span>
-    <button class="btn mint sm" onclick="depBulkCheckout()">✓ Check Out All Due</button>
+    <span id="depQuickLabel"></span>
+    <button class="btn mint sm" onclick="depBulkCheckout()">✓ Check out all due</button>
   </div>
+  <div class="dp-dropveil" id="depDropVeil" aria-hidden="true"><div>📂 Drop the departures file to load it</div></div>
 </div>
 
 <!-- ════════════════ ARRIVALS ════════════════ -->
