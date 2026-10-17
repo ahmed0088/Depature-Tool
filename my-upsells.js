@@ -627,72 +627,63 @@
     const wb = new EJ.Workbook();
     const who = cleanName(D.name);
     wb.creator = who; wb.lastModifiedBy = who; wb.company = ''; wb.title = `Upsells ${who}`; wb.created = new Date(); wb.modified = new Date();
-    const T = D.totals, R = sheetRows(D), anyEst = R.some(r => r.est);
+    const T = D.totals, R = sheetRows(D);
 
     // Sheet 1: Upsells
-    const ws = wb.addWorksheet('Upsells', { pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
-    const COLS = [['No.', 6], ['Date', 13], ['Confirmation No.', 17], ['Room', 8], ['Guest Name', 30], ['Package', 12], ['Type', 16], ['Amount (AED)', 14], ['Sold On', 18], ['Reason', 48]];
+    const ws = wb.addWorksheet('My Upsells', { views: [{ showGridLines: false }], pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, horizontalCentered: true, margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 } } });
+    const COLS = [['No.', 6], ['Date', 13], ['Confirmation No.', 17], ['Room', 8], ['Guest Name', 30], ['Package', 12], ['Type', 16], ['Amount (AED)', 14], ['Sold On', 18]];
     const N = COLS.length, lastCol = String.fromCharCode(64 + N);
     ws.columns = COLS.map(([, w]) => ({ width: w }));
     const titleRow = (row, text, font, h) => { ws.mergeCells(`A${row}:${lastCol}${row}`); const c = ws.getCell(`A${row}`); c.value = text; c.font = font; c.alignment = { horizontal: 'center', vertical: 'middle' }; if (h) ws.getRow(row).height = h; };
-    titleRow(1, 'Upsell Report', { size: 16, bold: true, color: { argb: NAVY } }, 26);
-    titleRow(2, `${who}   ·   ${dnLabel(D.from)} – ${dnLabel(D.to)}`, { size: 12, bold: true }, 20);
-    titleRow(3, `${T.upsells} upsells   ·   ${T.nights} nights   ·   AED ${money(T.aed)}`, { size: 11, color: { argb: 'FF374151' } }, 18);
+    titleRow(1, 'UPSELL REPORT', { size: 18, bold: true, color: { argb: 'FFFFFFFF' } }, 34);
+    ws.getCell('A1').fill = fillOf(NAVY);
+    titleRow(2, `${who}   |   ${dnLabel(D.from)} – ${dnLabel(D.to)}`, { size: 12, bold: true, color: { argb: NAVY } }, 24);
+    ws.getCell('A2').fill = fillOf('FFDCE3F0');
+    titleRow(3, `${T.upsells} Upsells   |   ${T.nights} Nights   |   Total AED ${money(T.aed)}`, { size: 12, bold: true, color: { argb: 'FF1B5E20' } }, 24);
+    ws.getCell('A3').fill = fillOf('FFE8F5E9');
     const HR = 5, hr = ws.getRow(HR);
     COLS.forEach(([h], k) => { const c = hr.getCell(k + 1); c.value = h; c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = fillOf(NAVY); c.alignment = center; c.border = box; });
     hr.height = 22;
     R.forEach((r, k) => {
       const row = ws.getRow(HR + 1 + k);
-      row.values = [r.n, r.date, r.conf, r.room, r.guest, r.code, r.type, r.amount, r.sold, r.reason];
+      row.values = [r.n, r.date, r.conf, r.room, r.guest, r.code, r.type, r.amount, r.sold];
       row.height = 20;
       row.eachCell({ includeEmpty: true }, (c, n) => {
         if (n > N) return;
-        c.border = box; c.alignment = (n === 5 || n === 10) ? left : center;
+        c.border = box; c.alignment = center;
         if (k % 2) c.fill = fillOf(ZEBRA);
       });
+      const kf = (KIND_STYLE[famOf(D.rows[k].kind)] || {}).fill;
+      if (kf) row.getCell(7).fill = fillOf(kf);
+      row.getCell(8).font = { bold: true };
       row.getCell(2).numFmt = 'dd-mmm-yyyy';
       row.getCell(8).numFmt = '#,##0.00';
     });
     const tr = ws.getRow(HR + 1 + R.length);
-    tr.values = ['', 'Total', '', '', `${T.upsells} upsells · ${T.nights} nights`, '', '', T.aed, '', ''];
+    tr.values = ['', 'Total', '', '', `${T.upsells} upsells · ${T.nights} nights`, '', '', T.aed, ''];
     tr.height = 22;
-    tr.eachCell({ includeEmpty: true }, (c, n) => { if (n > N) return; c.font = { bold: true }; c.fill = fillOf(TOT); c.border = { top: { style: 'medium', color: { argb: NAVY } }, bottom: thin, left: thin, right: thin }; c.alignment = n === 5 ? left : center; });
+    tr.eachCell({ includeEmpty: true }, (c, n) => { if (n > N) return; c.font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } }; c.fill = fillOf(NAVY); c.border = box; c.alignment = center; });
+    tr.height = 26;
     tr.getCell(8).numFmt = '#,##0.00';
-    if (anyEst) { const nr = HR + 3 + R.length; ws.mergeCells(`A${nr}:${lastCol}${nr}`); const c = ws.getCell(`A${nr}`); c.value = 'Amounts are the package prices from the Opera log for each night.'; c.font = { italic: true, size: 9, color: { argb: 'FF6B7280' } }; c.alignment = { horizontal: 'center' }; }
-    ws.views = [{ state: 'frozen', ySplit: HR, topLeftCell: 'A' + (HR + 1), activeCell: 'A' + (HR + 1) }];
+    ws.views = [{ state: 'frozen', ySplit: HR, topLeftCell: 'A' + (HR + 1), activeCell: 'A' + (HR + 1), showGridLines: false }];
 
-    // Sheet 2: Summary
-    const sm = wb.addWorksheet('Summary');
-    sm.columns = [{ width: 24 }, { width: 14 }, { width: 14 }, { width: 18 }];
-    let y = 1;
-    const line = (vals, style) => { const r = sm.getRow(y++); r.values = vals; r.height = 20; if (style) style(r); return r; };
-    const head = r => r.eachCell((c, n) => { if (n > 4) return; c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = fillOf(NAVY); c.alignment = center; c.border = box; });
-    const body = (r, k) => r.eachCell({ includeEmpty: true }, (c, n) => { if (n > r.values.length - 1) return; c.alignment = center; c.border = box; if (k % 2) c.fill = fillOf(ZEBRA); });
-    sm.mergeCells('A1:D1'); line(['Upsell Summary'], r => { r.getCell(1).font = { size: 16, bold: true, color: { argb: NAVY } }; r.getCell(1).alignment = center; r.height = 26; });
-    sm.mergeCells('A2:D2'); line([`${who}   ·   ${dnLabel(D.from)} – ${dnLabel(D.to)}`], r => { r.getCell(1).font = { bold: true }; r.getCell(1).alignment = center; });
-    y++;
-    line(['Upsells', 'Nights', 'Amount (AED)'], head);
-    line([T.upsells, T.nights, T.aed], r => { r.height = 28; [1, 2, 3].forEach(n => { const c = r.getCell(n); c.font = { size: 14, bold: true, color: { argb: NAVY } }; c.alignment = center; c.border = box; }); r.getCell(3).numFmt = '#,##0.00'; });
-    y++;
-    line(['Type', 'Upsells', 'Nights', 'Amount (AED)'], head);
-    Object.entries(T.byKind).sort((a, b) => b[1].aed - a[1].aed).forEach(([k, v], i) => line([k, v.pk.size, v.nights, r2(v.aed)], r => { body(r, i); r.getCell(4).numFmt = '#,##0.00'; }));
-    y++;
-    line(['Date', 'Nights', 'Amount (AED)'], head);
-    Object.keys(T.byDay).sort().forEach((d, i) => line([dnDate(+d), T.byDay[d].nights, r2(T.byDay[d].aed)], r => { body(r, i); r.getCell(1).numFmt = 'ddd dd-mmm-yyyy'; r.getCell(3).numFmt = '#,##0.00'; }));
-    line(['Total', T.nights, T.aed], r => { [1, 2, 3].forEach(n => { const c = r.getCell(n); c.font = { bold: true }; c.fill = fillOf(TOT); c.border = box; c.alignment = center; }); r.getCell(3).numFmt = '#,##0.00'; });
-
-    // Sheet 3: Opera Log (the lines behind each upsell)
-    const ev = wb.addWorksheet('Opera Log');
+    // Sheet 2: Evidence (the Opera log lines behind each upsell)
+    const ev = wb.addWorksheet('Evidence', { views: [{ showGridLines: false }], pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, horizontalCentered: true } });
     const EC = [['Confirmation No.', 17], ['Room', 8], ['Guest Name', 28], ['Action', 11], ['Package', 12], ['Type', 16], ['User', 20], ['Date / Time', 18], ['Price', 10], ['From', 12], ['To', 12]];
     ev.columns = EC.map(([, w]) => ({ width: w }));
-    const eh = ev.getRow(1); eh.height = 22;
+    ev.mergeCells(1, 1, 1, EC.length);
+    const et = ev.getCell('A1'); et.value = `EVIDENCE   |   ${who}   |   ${dnLabel(D.from)} – ${dnLabel(D.to)}`;
+    et.font = { size: 14, bold: true, color: { argb: 'FFFFFFFF' } }; et.fill = fillOf(NAVY); et.alignment = center; ev.getRow(1).height = 30;
+    ev.spliceRows(2, 0, []);
+    const eh = ev.getRow(3); eh.height = 22;
     EC.forEach(([h], k) => { const c = eh.getCell(k + 1); c.value = h; c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = fillOf(NAVY); c.alignment = center; c.border = box; });
-    ev.views = [{ state: 'frozen', ySplit: 1 }];
-    let ey = 2;
+    ev.views = [{ state: 'frozen', ySplit: 3, showGridLines: false }];
+    let ey = 4;
     D.evidence.forEach((e, k) => {
       const r = ev.getRow(ey++);
       r.values = [e.conf, e.room || '', e.guest || '', e.action, e.code, e.kind, cleanName(e.login || e.name), e.when, e.price, e.from, e.to];
-      r.eachCell({ includeEmpty: true }, (c, n) => { if (n > EC.length) return; c.border = box; c.alignment = n === 3 ? left : center; if (k % 2) c.fill = fillOf(ZEBRA); });
+      r.height = 18;
+      r.eachCell({ includeEmpty: true }, (c, n) => { if (n > EC.length) return; c.border = box; c.alignment = center; if (k % 2) c.fill = fillOf(ZEBRA); });
     });
     return wb;
   }
@@ -703,23 +694,18 @@
     wb.Props = { Title: `Upsells ${cleanName(D.name)}`, Author: cleanName(D.name), Company: '' };
     const T = D.totals, R = sheetRows(D), who = cleanName(D.name);
     const aoa = [['Upsell Report'], [`${who}   ·   ${dnLabel(D.from)} – ${dnLabel(D.to)}`], [`${T.upsells} upsells · ${T.nights} nights · AED ${money(T.aed)}`], [],
-      ['No.', 'Date', 'Confirmation No.', 'Room', 'Guest Name', 'Package', 'Type', 'Amount (AED)', 'Sold On', 'Reason'],
-      ...R.map(r => [r.n, r.date, r.conf, r.room, r.guest, r.code, r.type, r.amount, r.sold, r.reason]),
-      ['', 'Total', '', '', `${T.upsells} upsells · ${T.nights} nights`, '', '', T.aed, '', '']];
+      ['No.', 'Date', 'Confirmation No.', 'Room', 'Guest Name', 'Package', 'Type', 'Amount (AED)', 'Sold On'],
+      ...R.map(r => [r.n, r.date, r.conf, r.room, r.guest, r.code, r.type, r.amount, r.sold]),
+      ['', 'Total', '', '', `${T.upsells} upsells · ${T.nights} nights`, '', '', T.aed, '']];
     const ws = X.utils.aoa_to_sheet(aoa, { cellDates: true, dateNF: 'dd-mmm-yyyy' });
-    ws['!cols'] = [6, 13, 17, 8, 30, 12, 16, 14, 18, 48].map(w => ({ wch: w }));
-    ws['!merges'] = [0, 1, 2].map(r => ({ s: { r, c: 0 }, e: { r, c: 9 } }));
+    ws['!cols'] = [6, 13, 17, 8, 30, 12, 16, 14, 18].map(w => ({ wch: w }));
+    ws['!merges'] = [0, 1, 2].map(r => ({ s: { r, c: 0 }, e: { r, c: 8 } }));
     for (let i = 6; i <= aoa.length; i++) { const x = ws['H' + i]; if (x && x.t === 'n') x.z = '#,##0.00'; }
-    X.utils.book_append_sheet(wb, ws, 'Upsells');
-    const sum = [['Upsell Summary'], [`${who}   ·   ${dnLabel(D.from)} – ${dnLabel(D.to)}`], [], ['Upsells', 'Nights', 'Amount (AED)'], [T.upsells, T.nights, T.aed], [],
-      ['Type', 'Upsells', 'Nights', 'Amount (AED)'], ...Object.entries(T.byKind).map(([k, v]) => [k, v.pk.size, v.nights, r2(v.aed)]), [],
-      ['Date', 'Nights', 'Amount (AED)'], ...Object.keys(T.byDay).sort().map(d => [dnLabel(+d), T.byDay[d].nights, r2(T.byDay[d].aed)]), ['Total', T.nights, T.aed]];
-    const s2 = X.utils.aoa_to_sheet(sum); s2['!cols'] = [{ wch: 24 }, { wch: 14 }, { wch: 14 }, { wch: 18 }];
-    X.utils.book_append_sheet(wb, s2, 'Summary');
+    X.utils.book_append_sheet(wb, ws, 'My Upsells');
     const s3 = X.utils.aoa_to_sheet([['Confirmation No.', 'Room', 'Guest Name', 'Action', 'Package', 'Type', 'User', 'Date / Time', 'Price', 'From', 'To'],
       ...D.evidence.map(e => [e.conf, e.room || '', e.guest || '', e.action, e.code, e.kind, cleanName(e.login || e.name), e.when, e.price, e.from, e.to])]);
     s3['!cols'] = [17, 8, 28, 11, 12, 16, 20, 18, 10, 12, 12].map(w => ({ wch: w }));
-    X.utils.book_append_sheet(wb, s3, 'Opera Log');
+    X.utils.book_append_sheet(wb, s3, 'Evidence');
     return X.write(wb, { bookType: 'xlsx', type: 'array' });
   }
 

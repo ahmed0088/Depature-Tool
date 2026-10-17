@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 303, items: [
+    '🧾 My upsells Excel: just two sheets, "My Upsells" and "Evidence". A navy title band, your name, the period and the totals, then every upsell (No., Date, Confirmation No., Room, Guest Name, Package, Type, Amount, Sold On), all centred, with a soft colour per type and a total row. Evidence lists the Opera log lines. No rules, notes or anything about how it was made.',
+  ] },
   { v: 302, items: [
     '🧾 My upsells Excel, cleaner: a simple, centred report ready for your manager. "Upsell Report" with your name, the period and the totals at the top, then No. · Date · Confirmation No. · Room · Guest Name · Package · Type · Amount · Sold On · Reason ("Sold by me on 8 Oct 18:36 · extension of 617966995, same stay"). A Summary sheet (by type and by date) and an Opera Log sheet with the log lines behind each upsell. The file is named like "Upsells - Name - Oct 2026".',
     '🧾 My upsells estimate is closer to the truth: packages that were deleted later (e.g. breakfast swapped for an upgrade) are no longer counted, and only nights up to yesterday are counted (tonight is charged at night audit). With the journal that has the package codes loaded, the real posted amounts are used.',
