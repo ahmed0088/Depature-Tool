@@ -236,8 +236,12 @@
   }
 
   /** No journal: nights from each package's date range in the log × its price. */
-  function chargesFromLog(events, guests) {
+  function chargesFromLog(events, guests, deleted, today) {
     const out = [];
+    deleted = deleted || (typeof pkgDeleted !== 'undefined' ? pkgDeleted : {});
+    // only nights already charged: up to yesterday (tonight's posts at night audit)
+    if (!today) { const t = new Date(); today = t.getFullYear() * 10000 + (t.getMonth() + 1) * 100 + t.getDate(); }
+    const lastNight = addDays(today, -1);
     Object.entries(events || {}).forEach(([conf, evs]) => {
       const g = (guests || {})[conf] || {};
       const byKind = {};
@@ -247,12 +251,17 @@
         const ranged = sorted.find(e => e.from && e.to && dayNum(e.from) && dayNum(e.to));
         if (!ranged) return;
         const priced = sorted.find(e => e.action === 'ADDED' && e.price);
-        const code = (sorted.find(e => e.action === 'ADDED') || ranged).code;
+        const lastAdd = sorted.find(e => e.action === 'ADDED');
+        const code = (lastAdd || ranged).code;
+        // taken off the booking after it was last added (e.g. UPS45BB deleted, USS50 sold instead): not charged
+        const del = (deleted[conf] || []).filter(x => x.code === code && x.ts >= (lastAdd ? lastAdd.ts : 0));
+        if (del.length) return;
         let a = dayNum(ranged.from), b = dayNum(ranged.to);
         if (b < a) [a, b] = [b, a];
         const ga = dayNum(g.arr), gd = dayNum(g.dep);
         if (ga && a < ga) a = ga;
         if (gd && gd > ga && b >= gd) b = addDays(gd, -1);
+        if (b > lastNight) b = lastNight;
         if (b < a) return;
         const fam = famOf(k);
         const nights = fam === 'EC' ? [a] : fam === 'LC' ? [b] : [];
@@ -571,7 +580,12 @@
       totals: totals(rows), rules: rulesText(), saved: true,
     };
   }
-  const fileName = D => `Upsells_${String(D.name).replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'me'}_${dnIso(D.from)}_${dnIso(D.to)}.xlsx`;
+  const fileName = D => {
+    const who = String(D.name || '').replace(/^ACCOREN-/i, '').replace(/@.*$/, '').replace(/[^A-Za-z0-9 ]+/g, ' ').trim() || 'Me';
+    const f = String(D.from), t = String(D.to), mon = n => ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+n.slice(4, 6) - 1] + ' ' + n.slice(0, 4);
+    const wholeMonth = f.slice(0, 6) === t.slice(0, 6) && f.slice(6) === '01' && +t.slice(6) === new Date(+t.slice(0, 4), +t.slice(4, 6), 0).getDate();
+    return `Upsells - ${who} - ${wholeMonth ? mon(f) : dnLabel(D.from) + ' to ' + dnLabel(D.to)}.xlsx`;
+  };
 
   // ── Excel: ExcelJS (colours) with a plain SheetJS fallback ─
   let _ejs = null;
@@ -589,155 +603,123 @@
     return _ejs;
   }
 
-  const C = { dark: 'FF1F2937', white: 'FFFFFFFF', zebra: 'FFF6F7F9', line: 'FFD5DAE1', why: 'FFE8F5E9', whyText: 'FF1B5E20', muted: 'FF6B7280', title: 'FF111827', tot: 'FFEEF2F7', group: 'FF334155' };
+
+  // ── The Excel: a plain, tidy record to hand to a manager ──
+  // No app names anywhere (sheets, text or file properties): just the upsells, the reason for each
+  // in a short sentence, and the Opera log lines behind them.
+  const cleanName = n => String(n || '').replace(/^ACCOREN-/i, '').replace(/@.*$/, '').trim() || 'Me';
+  /** "Sold by me on 8 Oct 18:36" (+ "· extension of 617966995, same stay") */
+  function shortReason(r) {
+    const ext = String(r.why || '').match(/[Ee]xtension of conf (\d+)/);
+    const sold = r.soldOn ? `Sold by me on ${r.soldOn}` : 'Sold by me';
+    return ext ? `${sold} · extension of ${ext[1]} (same stay)` : sold;
+  }
+  const sheetRows = D => D.rows.map((r, i) => ({ n: i + 1, date: dnDate(r.date), conf: String(r.conf || ''), room: String(r.room || ''), guest: r.guest || '',
+    code: r.code || '', type: r.kindLabel || '', amount: r.amount, sold: r.soldOn || '', reason: shortReason(r), est: r.src === 'log' }));
+  const NAVY = 'FF1F3864', ZEBRA = 'FFF4F6FA', LINE = 'FFBFC7D5', TOT = 'FFE7ECF5';
   const fillOf = argb => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
-  const kindFill = k => (KIND_STYLE[famOf(k)] || {}).fill || 'FFEDEFF3';
-  const thin = { style: 'thin', color: { argb: C.line } };
+  const thin = { style: 'thin', color: { argb: LINE } };
   const box = { top: thin, left: thin, bottom: thin, right: thin };
-  const jsDate = n => dnDate(n);   // a real date cell (UTC midnight)
+  const center = { horizontal: 'center', vertical: 'middle', wrapText: true };
+  const left = { horizontal: 'left', vertical: 'middle', wrapText: true };
 
   function buildExcelJS(EJ, D) {
     const wb = new EJ.Workbook();
-    wb.creator = 'HotelOps'; wb.created = new Date();
-    const T = D.totals;
+    const who = cleanName(D.name);
+    wb.creator = who; wb.lastModifiedBy = who; wb.company = ''; wb.title = `Upsells ${who}`; wb.created = new Date(); wb.modified = new Date();
+    const T = D.totals, R = sheetRows(D), anyEst = R.some(r => r.est);
 
-    // My upsells
-    const ws = wb.addWorksheet('My upsells', { properties: { tabColor: { argb: 'FF2E7D32' } } });
-    const COLS = [['Night date', 13], ['Confirmation', 14], ['Room', 8], ['Guest', 26], ['Package', 12], ['Kind', 17], ['Amount (AED)', 14],
-      ['Sold on (date time)', 19], ['Sold by (login → name)', 28], ["Why it's mine", 64], ['Opera evidence', 58], ['Night total (AED)', 15], ['Source', 22]];
+    // Sheet 1: Upsells
+    const ws = wb.addWorksheet('Upsells', { pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
+    const COLS = [['No.', 6], ['Date', 13], ['Confirmation No.', 17], ['Room', 8], ['Guest Name', 30], ['Package', 12], ['Type', 16], ['Amount (AED)', 14], ['Sold On', 18], ['Reason', 48]];
+    const N = COLS.length, lastCol = String.fromCharCode(64 + N);
     ws.columns = COLS.map(([, w]) => ({ width: w }));
-    ws.mergeCells('A1:K1'); ws.getCell('A1').value = `My upsells: ${D.name}`;
-    ws.getCell('A1').font = { size: 18, bold: true, color: { argb: C.title } };
-    ws.mergeCells('A2:K2'); ws.getCell('A2').value = `Period ${dnLabel(D.from)} → ${dnLabel(D.to)}  ·  ${T.upsells} upsells  ·  ${T.nights} nights  ·  ${money(T.aed)} AED`;
-    ws.getCell('A2').font = { size: 12, bold: true, color: { argb: 'FF2E7D32' } };
-    ws.mergeCells('A3:K3'); ws.getCell('A3').value = `Report made by HotelOps on ${D.madeAt} for ${D.name}${D.madeBy && D.madeBy !== D.name ? ' (by ' + D.madeBy + ')' : ''}. Source: ${D.source}.`;
-    ws.getCell('A3').font = { size: 10, color: { argb: C.muted } };
-    ws.mergeCells('A4:K4'); ws.getCell('A4').value = 'Seller rules: the same as the HotelOps Package Audit (see the "Rules used" sheet). Keep the 3 Opera files: they are the original proof.';
-    ws.getCell('A4').font = { size: 10, italic: true, color: { argb: C.muted } };
-    const HR = 6;
-    const hr = ws.getRow(HR);
-    COLS.forEach(([h], i) => { const c = hr.getCell(i + 1); c.value = h; c.font = { bold: true, color: { argb: C.white } }; c.fill = fillOf(C.dark); c.alignment = { vertical: 'middle', wrapText: true }; c.border = box; });
+    const titleRow = (row, text, font, h) => { ws.mergeCells(`A${row}:${lastCol}${row}`); const c = ws.getCell(`A${row}`); c.value = text; c.font = font; c.alignment = { horizontal: 'center', vertical: 'middle' }; if (h) ws.getRow(row).height = h; };
+    titleRow(1, 'Upsell Report', { size: 16, bold: true, color: { argb: NAVY } }, 26);
+    titleRow(2, `${who}   ·   ${dnLabel(D.from)} – ${dnLabel(D.to)}`, { size: 12, bold: true }, 20);
+    titleRow(3, `${T.upsells} upsells   ·   ${T.nights} nights   ·   AED ${money(T.aed)}`, { size: 11, color: { argb: 'FF374151' } }, 18);
+    const HR = 5, hr = ws.getRow(HR);
+    COLS.forEach(([h], k) => { const c = hr.getCell(k + 1); c.value = h; c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = fillOf(NAVY); c.alignment = center; c.border = box; });
     hr.height = 22;
-    const nightTot = {};
-    D.rows.forEach(r => { nightTot[r.date] = r2((nightTot[r.date] || 0) + r.amount); });
-    const firstOfNight = new Set();
-    D.rows.forEach((r, i) => {
-      const row = ws.getRow(HR + 1 + i);
-      const lastOfNight = !D.rows[i + 1] || D.rows[i + 1].date !== r.date;
-      row.values = [jsDate(r.date), r.conf, r.room, r.guest, r.code, `${r.kindLabel}`, r.amount, r.soldOn, r.soldBy, '✓ ' + r.why, r.evidence, lastOfNight ? nightTot[r.date] : null, r.src];
+    R.forEach((r, k) => {
+      const row = ws.getRow(HR + 1 + k);
+      row.values = [r.n, r.date, r.conf, r.room, r.guest, r.code, r.type, r.amount, r.sold, r.reason];
+      row.height = 20;
       row.eachCell({ includeEmpty: true }, (c, n) => {
-        if (n > COLS.length) return;
-        c.border = box; c.alignment = { vertical: 'top', wrapText: n >= 9 };
-        if (i % 2) c.fill = fillOf(C.zebra);
+        if (n > N) return;
+        c.border = box; c.alignment = (n === 5 || n === 10) ? left : center;
+        if (k % 2) c.fill = fillOf(ZEBRA);
       });
-      row.getCell(1).numFmt = 'dd-mmm-yyyy';
-      row.getCell(7).numFmt = '#,##0.00'; row.getCell(12).numFmt = '#,##0.00';
-      row.getCell(12).font = { bold: true };
-      row.getCell(6).fill = fillOf(kindFill(r.kind));
-      row.getCell(10).fill = fillOf(C.why); row.getCell(10).font = { color: { argb: C.whyText } };
-      row.getCell(11).font = { name: 'Consolas', size: 9, color: { argb: 'FF374151' } };
-      firstOfNight.add(r.date);
+      row.getCell(2).numFmt = 'dd-mmm-yyyy';
+      row.getCell(8).numFmt = '#,##0.00';
     });
-    const tr = ws.getRow(HR + 1 + D.rows.length);
-    tr.values = ['TOTAL', '', '', `${T.upsells} upsells · ${T.nights} nights`, '', '', T.aed, '', '', '', '', T.aed, ''];
-    tr.eachCell({ includeEmpty: true }, (c, n) => { if (n > COLS.length) return; c.font = { bold: true, size: 12 }; c.fill = fillOf(C.tot); c.border = { top: { style: 'medium', color: { argb: C.dark } }, bottom: thin, left: thin, right: thin }; });
-    tr.getCell(7).numFmt = '#,##0.00'; tr.getCell(12).numFmt = '#,##0.00';
-    ws.views = [{ state: 'frozen', ySplit: HR, xSplit: 0, topLeftCell: 'A' + (HR + 1), activeCell: 'A' + (HR + 1) }];
-    ws.autoFilter = { from: { row: HR, column: 1 }, to: { row: HR + Math.max(D.rows.length, 1), column: COLS.length } };
+    const tr = ws.getRow(HR + 1 + R.length);
+    tr.values = ['', 'Total', '', '', `${T.upsells} upsells · ${T.nights} nights`, '', '', T.aed, '', ''];
+    tr.height = 22;
+    tr.eachCell({ includeEmpty: true }, (c, n) => { if (n > N) return; c.font = { bold: true }; c.fill = fillOf(TOT); c.border = { top: { style: 'medium', color: { argb: NAVY } }, bottom: thin, left: thin, right: thin }; c.alignment = n === 5 ? left : center; });
+    tr.getCell(8).numFmt = '#,##0.00';
+    if (anyEst) { const nr = HR + 3 + R.length; ws.mergeCells(`A${nr}:${lastCol}${nr}`); const c = ws.getCell(`A${nr}`); c.value = 'Amounts are the package prices from the Opera log for each night.'; c.font = { italic: true, size: 9, color: { argb: 'FF6B7280' } }; c.alignment = { horizontal: 'center' }; }
+    ws.views = [{ state: 'frozen', ySplit: HR, topLeftCell: 'A' + (HR + 1), activeCell: 'A' + (HR + 1) }];
 
-    // Summary
-    const sm = wb.addWorksheet('Summary', { properties: { tabColor: { argb: 'FF1565C0' } } });
-    sm.columns = [{ width: 30 }, { width: 22 }, { width: 18 }, { width: 18 }, { width: 30 }];
+    // Sheet 2: Summary
+    const sm = wb.addWorksheet('Summary');
+    sm.columns = [{ width: 24 }, { width: 14 }, { width: 14 }, { width: 18 }];
     let y = 1;
-    const put = (vals, style) => { const r = sm.getRow(y++); r.values = vals; if (style) style(r); return r; };
-    put([`Upsell record: ${D.name}`], r => { r.getCell(1).font = { size: 18, bold: true }; });
-    put([`Period ${dnLabel(D.from)} → ${dnLabel(D.to)}`], r => { r.getCell(1).font = { size: 12, color: { argb: C.muted } }; });
+    const line = (vals, style) => { const r = sm.getRow(y++); r.values = vals; r.height = 20; if (style) style(r); return r; };
+    const head = r => r.eachCell((c, n) => { if (n > 4) return; c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = fillOf(NAVY); c.alignment = center; c.border = box; });
+    const body = (r, k) => r.eachCell({ includeEmpty: true }, (c, n) => { if (n > r.values.length - 1) return; c.alignment = center; c.border = box; if (k % 2) c.fill = fillOf(ZEBRA); });
+    sm.mergeCells('A1:D1'); line(['Upsell Summary'], r => { r.getCell(1).font = { size: 16, bold: true, color: { argb: NAVY } }; r.getCell(1).alignment = center; r.height = 26; });
+    sm.mergeCells('A2:D2'); line([`${who}   ·   ${dnLabel(D.from)} – ${dnLabel(D.to)}`], r => { r.getCell(1).font = { bold: true }; r.getCell(1).alignment = center; });
     y++;
-    put(['Upsells', 'Nights', 'Total (AED)'], r => [1, 2, 3].forEach(n => { const c = r.getCell(n); c.font = { bold: true, color: { argb: C.white } }; c.fill = fillOf(C.dark); c.border = box; }));
-    put([T.upsells, T.nights, T.aed], r => { r.height = 30; [1, 2, 3].forEach(n => { const c = r.getCell(n); c.font = { size: 20, bold: true, color: { argb: 'FF2E7D32' } }; c.border = box; c.alignment = { vertical: 'middle', horizontal: 'left' }; }); r.getCell(3).numFmt = '#,##0.00'; });
+    line(['Upsells', 'Nights', 'Amount (AED)'], head);
+    line([T.upsells, T.nights, T.aed], r => { r.height = 28; [1, 2, 3].forEach(n => { const c = r.getCell(n); c.font = { size: 14, bold: true, color: { argb: NAVY } }; c.alignment = center; c.border = box; }); r.getCell(3).numFmt = '#,##0.00'; });
     y++;
-    put([`Report made by HotelOps on ${D.madeAt} for ${D.name}`], r => { r.getCell(1).font = { bold: true }; });
-    if (D.login) put([`Opera login: ${D.login}`]);
-    put([`Made by: ${D.madeBy}`]);
-    put([`Charges: ${D.source}`]);
-    put(['Source: Opera User Activity Log (hotel system) — the files used:'], r => { r.getCell(1).font = { bold: true }; });
-    (D.files || []).forEach(f => put([f[0], f[1], f[2]], r => { r.getCell(1).font = { color: { argb: C.muted } }; }));
-    put(['Keep the 3 Opera files too — they are the original proof.'], r => { r.getCell(1).font = { italic: true, color: { argb: 'FFB45309' } }; });
+    line(['Type', 'Upsells', 'Nights', 'Amount (AED)'], head);
+    Object.entries(T.byKind).sort((a, b) => b[1].aed - a[1].aed).forEach(([k, v], i) => line([k, v.pk.size, v.nights, r2(v.aed)], r => { body(r, i); r.getCell(4).numFmt = '#,##0.00'; }));
     y++;
-    put(['By kind', 'Upsells', 'Nights', 'AED'], r => [1, 2, 3, 4].forEach(n => { const c = r.getCell(n); c.font = { bold: true, color: { argb: C.white } }; c.fill = fillOf(C.dark); c.border = box; }));
-    Object.entries(T.byKind).sort((a, b) => b[1].aed - a[1].aed).forEach(([k, v]) => put([k, v.pk.size, v.nights, r2(v.aed)], r => {
-      r.getCell(1).fill = fillOf(kindFill(v.kind)); [1, 2, 3, 4].forEach(n => { r.getCell(n).border = box; }); r.getCell(4).numFmt = '#,##0.00';
-    }));
-    y++;
-    put(['By night', 'Nights', 'AED'], r => [1, 2, 3].forEach(n => { const c = r.getCell(n); c.font = { bold: true, color: { argb: C.white } }; c.fill = fillOf(C.dark); c.border = box; }));
-    Object.keys(T.byDay).sort().forEach((d, i) => put([jsDate(+d), T.byDay[d].nights, r2(T.byDay[d].aed)], r => {
-      r.getCell(1).numFmt = 'ddd dd-mmm-yyyy'; r.getCell(3).numFmt = '#,##0.00'; [1, 2, 3].forEach(n => { r.getCell(n).border = box; if (i % 2) r.getCell(n).fill = fillOf(C.zebra); });
-    }));
-    put(['Total', T.nights, T.aed], r => { [1, 2, 3].forEach(n => { r.getCell(n).font = { bold: true }; r.getCell(n).fill = fillOf(C.tot); r.getCell(n).border = box; }); r.getCell(3).numFmt = '#,##0.00'; });
-    if (D.close.length) {
-      y++;
-      put([`Not mine but close (${D.close.length}): you touched these packages but the rules give them to someone else`], r => { r.getCell(1).font = { bold: true }; });
-      put(['Night', 'Conf · Room', 'Package', 'Credited to', 'Why'], r => [1, 2, 3, 4, 5].forEach(n => { const c = r.getCell(n); c.font = { bold: true, color: { argb: C.white } }; c.fill = fillOf(C.group); }));
-      D.close.forEach(c => put([jsDate(c.date), `${c.conf} · ${c.room}`, `${c.code} ${c.kindLabel}`, c.owner || 'nobody', c.why], r => { r.getCell(1).numFmt = 'dd-mmm-yyyy'; r.getCell(5).alignment = { wrapText: true, vertical: 'top' }; }));
-    }
+    line(['Date', 'Nights', 'Amount (AED)'], head);
+    Object.keys(T.byDay).sort().forEach((d, i) => line([dnDate(+d), T.byDay[d].nights, r2(T.byDay[d].aed)], r => { body(r, i); r.getCell(1).numFmt = 'ddd dd-mmm-yyyy'; r.getCell(3).numFmt = '#,##0.00'; }));
+    line(['Total', T.nights, T.aed], r => { [1, 2, 3].forEach(n => { const c = r.getCell(n); c.font = { bold: true }; c.fill = fillOf(TOT); c.border = box; c.alignment = center; }); r.getCell(3).numFmt = '#,##0.00'; });
 
-    // Evidence: grouped by confirmation
-    const ev = wb.addWorksheet('Evidence', { properties: { tabColor: { argb: 'FF6D28D9' } } });
-    const EC = [['Confirmation', 14], ['Action', 11], ['Package code', 13], ['Kind', 16], ['Opera login', 24], ['Name', 22], ['Date / time', 19], ['Price', 10], ['From', 12], ['To', 12], ['Note', 40]];
+    // Sheet 3: Opera Log (the lines behind each upsell)
+    const ev = wb.addWorksheet('Opera Log');
+    const EC = [['Confirmation No.', 17], ['Room', 8], ['Guest Name', 28], ['Action', 11], ['Package', 12], ['Type', 16], ['User', 20], ['Date / Time', 18], ['Price', 10], ['From', 12], ['To', 12]];
     ev.columns = EC.map(([, w]) => ({ width: w }));
-    const eh = ev.getRow(1);
-    EC.forEach(([h], i) => { const c = eh.getCell(i + 1); c.value = h; c.font = { bold: true, color: { argb: C.white } }; c.fill = fillOf(C.dark); c.border = box; });
+    const eh = ev.getRow(1); eh.height = 22;
+    EC.forEach(([h], k) => { const c = eh.getCell(k + 1); c.value = h; c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = fillOf(NAVY); c.alignment = center; c.border = box; });
     ev.views = [{ state: 'frozen', ySplit: 1 }];
-    let ey = 2, cur = null;
-    D.evidence.forEach(e => {
-      if (e.conf !== cur) {
-        cur = e.conf;
-        const g = ev.getRow(ey++);
-        g.values = [`Conf ${e.conf}  ·  Room ${e.room || '?'}  ·  ${e.guest || ''}`];
-        ev.mergeCells(ey - 1, 1, ey - 1, EC.length);
-        g.getCell(1).font = { bold: true, color: { argb: C.white } }; g.getCell(1).fill = fillOf(C.group);
-      }
+    let ey = 2;
+    D.evidence.forEach((e, k) => {
       const r = ev.getRow(ey++);
-      r.values = [e.conf, e.action, e.code, e.kind, e.login, e.name, e.when, e.price, e.from, e.to, e.used];
-      r.eachCell({ includeEmpty: true }, (c, n) => { if (n <= EC.length) c.border = box; });
-      if (e.used === 'Decides the seller') r.getCell(11).font = { bold: true, color: { argb: C.whyText } };
-      if (D.saved) r.getCell(11).alignment = { wrapText: true };
+      r.values = [e.conf, e.room || '', e.guest || '', e.action, e.code, e.kind, cleanName(e.login || e.name), e.when, e.price, e.from, e.to];
+      r.eachCell({ includeEmpty: true }, (c, n) => { if (n > EC.length) return; c.border = box; c.alignment = n === 3 ? left : center; if (k % 2) c.fill = fillOf(ZEBRA); });
     });
-
-    // Rules used
-    const ru = wb.addWorksheet('Rules used', { properties: { tabColor: { argb: 'FF6B7280' } } });
-    ru.columns = [{ width: 130 }];
-    D.rules.forEach((t, i) => { const r = ru.getRow(i + 1); r.values = [t]; r.getCell(1).alignment = { wrapText: true }; if (i === 0) r.getCell(1).font = { bold: true, size: 13 }; });
     return wb;
   }
 
   function buildSheetJS(D) {
     const X = global.XLSX;
     const wb = X.utils.book_new();
-    const head = ['Night date', 'Confirmation', 'Room', 'Guest', 'Package', 'Kind', 'Amount (AED)', 'Sold on (date time)', 'Sold by (login → name)', "Why it's mine", 'Opera evidence', 'Night total (AED)', 'Source'];
-    const aoa = [head];
-    D.rows.forEach((r, i) => { const last = !D.rows[i + 1] || D.rows[i + 1].date !== r.date; aoa.push([dnDate(r.date), r.conf, r.room, r.guest, r.code, r.kindLabel, r.amount, r.soldOn, r.soldBy, '✓ ' + r.why, r.evidence, last ? r2(D.rows.filter(x => x.date === r.date).reduce((t, x) => t + x.amount, 0)) : '', r.src]); });
-    aoa.push(['TOTAL', '', '', `${D.totals.upsells} upsells · ${D.totals.nights} nights`, '', '', D.totals.aed, '', '', '', '', D.totals.aed, '']);
+    wb.Props = { Title: `Upsells ${cleanName(D.name)}`, Author: cleanName(D.name), Company: '' };
+    const T = D.totals, R = sheetRows(D), who = cleanName(D.name);
+    const aoa = [['Upsell Report'], [`${who}   ·   ${dnLabel(D.from)} – ${dnLabel(D.to)}`], [`${T.upsells} upsells · ${T.nights} nights · AED ${money(T.aed)}`], [],
+      ['No.', 'Date', 'Confirmation No.', 'Room', 'Guest Name', 'Package', 'Type', 'Amount (AED)', 'Sold On', 'Reason'],
+      ...R.map(r => [r.n, r.date, r.conf, r.room, r.guest, r.code, r.type, r.amount, r.sold, r.reason]),
+      ['', 'Total', '', '', `${T.upsells} upsells · ${T.nights} nights`, '', '', T.aed, '', '']];
     const ws = X.utils.aoa_to_sheet(aoa, { cellDates: true, dateNF: 'dd-mmm-yyyy' });
-    ws['!cols'] = [13, 14, 8, 26, 12, 17, 14, 19, 28, 64, 58, 15, 22].map(w => ({ wch: w }));
-    ws['!autofilter'] = { ref: `A1:M${aoa.length - 1}` };
-    for (let i = 2; i <= aoa.length; i++) ['G', 'L'].forEach(c => { const x = ws[c + i]; if (x && x.t === 'n') x.z = '#,##0.00'; });
-    X.utils.book_append_sheet(wb, ws, 'My upsells');
-    const T = D.totals;
-    const sum = [[`Upsell record: ${D.name}`], [`Period ${dnLabel(D.from)} → ${dnLabel(D.to)}`], [], ['Upsells', 'Nights', 'Total (AED)'], [T.upsells, T.nights, T.aed], [],
-      [`Report made by HotelOps on ${D.madeAt} for ${D.name}`], [`Made by: ${D.madeBy}`], [`Charges: ${D.source}`], ['Source: Opera User Activity Log (hotel system) — the files used:'],
-      ...(D.files || []).map(f => f.slice()), ['Keep the 3 Opera files too — they are the original proof.'], [], ['By kind', 'Upsells', 'Nights', 'AED'],
-      ...Object.entries(T.byKind).map(([k, v]) => [k, v.pk.size, v.nights, r2(v.aed)]), [], ['By night', 'Nights', 'AED'],
-      ...Object.keys(T.byDay).sort().map(d => [dnLabel(+d), T.byDay[d].nights, r2(T.byDay[d].aed)]), ['Total', T.nights, T.aed]];
-    if (D.close.length) { sum.push([], ['Not mine but close'], ['Night', 'Conf · Room', 'Package', 'Credited to', 'Why']); D.close.forEach(c => sum.push([dnLabel(c.date), `${c.conf} · ${c.room}`, `${c.code} ${c.kindLabel}`, c.owner || 'nobody', c.why])); }
-    const s2 = X.utils.aoa_to_sheet(sum); s2['!cols'] = [{ wch: 30 }, { wch: 22 }, { wch: 18 }, { wch: 18 }, { wch: 60 }];
+    ws['!cols'] = [6, 13, 17, 8, 30, 12, 16, 14, 18, 48].map(w => ({ wch: w }));
+    ws['!merges'] = [0, 1, 2].map(r => ({ s: { r, c: 0 }, e: { r, c: 9 } }));
+    for (let i = 6; i <= aoa.length; i++) { const x = ws['H' + i]; if (x && x.t === 'n') x.z = '#,##0.00'; }
+    X.utils.book_append_sheet(wb, ws, 'Upsells');
+    const sum = [['Upsell Summary'], [`${who}   ·   ${dnLabel(D.from)} – ${dnLabel(D.to)}`], [], ['Upsells', 'Nights', 'Amount (AED)'], [T.upsells, T.nights, T.aed], [],
+      ['Type', 'Upsells', 'Nights', 'Amount (AED)'], ...Object.entries(T.byKind).map(([k, v]) => [k, v.pk.size, v.nights, r2(v.aed)]), [],
+      ['Date', 'Nights', 'Amount (AED)'], ...Object.keys(T.byDay).sort().map(d => [dnLabel(+d), T.byDay[d].nights, r2(T.byDay[d].aed)]), ['Total', T.nights, T.aed]];
+    const s2 = X.utils.aoa_to_sheet(sum); s2['!cols'] = [{ wch: 24 }, { wch: 14 }, { wch: 14 }, { wch: 18 }];
     X.utils.book_append_sheet(wb, s2, 'Summary');
-    const s3 = X.utils.aoa_to_sheet([['Confirmation', 'Room', 'Guest', 'Action', 'Package code', 'Kind', 'Opera login', 'Name', 'Date / time', 'Price', 'From', 'To', 'Note'],
-      ...D.evidence.map(e => [e.conf, e.room, e.guest, e.action, e.code, e.kind, e.login, e.name, e.when, e.price, e.from, e.to, e.used])]);
-    s3['!cols'] = [14, 8, 24, 10, 13, 16, 24, 22, 19, 10, 12, 12, 40].map(w => ({ wch: w }));
-    X.utils.book_append_sheet(wb, s3, 'Evidence');
-    const s4 = X.utils.aoa_to_sheet(D.rules.map(t => [t])); s4['!cols'] = [{ wch: 130 }];
-    X.utils.book_append_sheet(wb, s4, 'Rules used');
+    const s3 = X.utils.aoa_to_sheet([['Confirmation No.', 'Room', 'Guest Name', 'Action', 'Package', 'Type', 'User', 'Date / Time', 'Price', 'From', 'To'],
+      ...D.evidence.map(e => [e.conf, e.room || '', e.guest || '', e.action, e.code, e.kind, cleanName(e.login || e.name), e.when, e.price, e.from, e.to])]);
+    s3['!cols'] = [17, 8, 28, 11, 12, 16, 20, 18, 10, 12, 12].map(w => ({ wch: w }));
+    X.utils.book_append_sheet(wb, s3, 'Opera Log');
     return X.write(wb, { bookType: 'xlsx', type: 'array' });
   }
 

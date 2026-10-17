@@ -1403,7 +1403,9 @@ console.log('\nQuiet when off · shift task times');
   check('my upsells: close reasons in plain words', [/online \/ TARS bookings have no desk seller/.test(M.whyNot(all.find(c => c.conf === 'E1'), 'ACCOREN-SSELLER')), /Extension of conf A1: Lina STAFF started/.test(M.whyNot(mine.close[0], 'ACCOREN-SSELLER'))], [true, true]);
   check('my upsells: the period filter', M.split(all, 'ACCOREN-LSTAFF', 20261011, 20261013).mine.length, 0);
   check('my upsells: the signed-in person is found by their team name', M.personFor('Lina STAFF', M.sellers(all)), 'ACCOREN-LSTAFF');
-  const est = M.own(M.chargesFromLog(E(), G()), E(), G());
+  const est = M.own(M.chargesFromLog(E(), G(), {}, 20261020), E(), G());
+  check('my upsells: the estimate counts only nights already charged (up to yesterday)', M.chargesFromLog(E(), G(), {}, 20261009).filter(c => c.conf === 'A1').map(c => c.date % 100).join(','), '5,6,7,8');
+  check('my upsells: a package deleted after it was added is not estimated', M.chargesFromLog(E(), G(), { A1: [{ code: 'UPS40BB', ts: 202610061000 }] }, 20261020).filter(c => c.conf === 'A1').length, 0);
   const estA = est.filter(c => c.conf === 'A1');
   check('my upsells: no journal → nights estimated from the log date range × price', [estA.length, estA[0].date, estA[estA.length - 1].date, estA[0].amount, estA[0].estimated], [8, 20261005, 20261012, 32.66, true]);
   check('my upsells: estimated early check-in is one night only', est.filter(c => c.conf === 'C1' && c.kind === 'EC').length, 1);
@@ -1421,7 +1423,8 @@ console.log('\nQuiet when off · shift task times');
   const twice = {}; snaps.forEach(s => { twice[s.id] = s.snap; }); M.snapshots(big, Date.now() + 1000).forEach(s => { twice[s.id] = s.snap; });
   const RL = M.recordList(twice);
   check('my upsells: two saves are two records, but the month total counts each night once', [RL.list.length, RL.list[0].rows.length, RL.months['202610'].nights, RL.months['202610'].aed], [2, 650, 650, 6500]);
-  check('my upsells: the file name', M.fileName({ name: 'Sam ALVAREZ', from: 20261001, to: 20261013 }), 'Upsells_Sam_ALVAREZ_2026-10-01_2026-10-13.xlsx');
+  check('my upsells: the file name', M.fileName({ name: 'Sam ALVAREZ', from: 20261001, to: 20261013 }), 'Upsells - Sam ALVAREZ - 1 Oct 2026 to 13 Oct 2026.xlsx');
+  check('my upsells: a whole month is named by the month', M.fileName({ name: 'ACCOREN-SALVAREZ@ACCOREN', from: 20261001, to: 20261031 }), 'Upsells - SALVAREZ - Oct 2026.xlsx');
 }
 
 console.log(`\n${pass} passed · ${fail} failed`);

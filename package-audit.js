@@ -22,6 +22,7 @@
 // ═══════════════════════════════════════════════════════════
 
 let pkgUnknowns = [];   // from the IN-Gauge export: rows with Product = "Unknown Product"
+let pkgDeleted  = {};   // conf No. -> [{code, ts}]: packages taken off a booking (only My upsells' estimate uses it)
 let pkgEvents   = {};   // conf No. -> [{code, price, from, to, user}], from the Opera Changes Log
 let pkgResults  = [];   // joined output after pkgRun()
 let pkgFilter_  = 'action';
@@ -523,6 +524,11 @@ function _pkgReadEvents(events, conf, row) {
   const NEXT = String.raw`(?=;|PRODUCT\s+[A-Z0-9]+\s+(?:ADDED|DELETED|ATTACHED|BETWEEN)|$)`;
 
   let m;
+  const delRe = /PRODUCT\s+([A-Z0-9]+)\s+DELETED\b/gi;
+  while ((m = delRe.exec(row.desc))) {
+    const l = (pkgDeleted[conf] = pkgDeleted[conf] || []);
+    if (!l.some(x => x.code === m[1] && x.ts === row.ts)) l.push({ code: m[1], ts: row.ts });
+  }
   const addedRe = /PRODUCT\s+([A-Z0-9]+)\s+ADDED\b/gi;
   while ((m = addedRe.exec(row.desc))) added.push(m[1]);
 
@@ -1926,7 +1932,7 @@ function pkgCopyDeny() {
 }
 
 function pkgClear() {
-  pkgUnknowns = []; pkgEvents = {}; pkgResults = []; pkgFilter_ = 'action'; pkgSearch_ = ''; pkgPdfFiles = []; pkgLogRange = { min: 0, max: 0 };
+  pkgUnknowns = []; pkgEvents = {}; pkgDeleted = {}; pkgResults = []; pkgFilter_ = 'action'; pkgSearch_ = ''; pkgPdfFiles = []; pkgLogRange = { min: 0, max: 0 };
   pkgLastDiff = null;
   const ei = document.getElementById('pkgExcelFileInput'); if (ei) ei.value = '';
   const pi = document.getElementById('pkgPdfFileInput');   if (pi) pi.value = '';

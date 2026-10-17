@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 302, items: [
+    '🧾 My upsells Excel, cleaner: a simple, centred report ready for your manager. "Upsell Report" with your name, the period and the totals at the top, then No. · Date · Confirmation No. · Room · Guest Name · Package · Type · Amount · Sold On · Reason ("Sold by me on 8 Oct 18:36 · extension of 617966995, same stay"). A Summary sheet (by type and by date) and an Opera Log sheet with the log lines behind each upsell. The file is named like "Upsells - Name - Oct 2026".',
+    '🧾 My upsells estimate is closer to the truth: packages that were deleted later (e.g. breakfast swapped for an upgrade) are no longer counted, and only nights up to yesterday are counted (tonight is charged at night audit). With the journal that has the package codes loaded, the real posted amounts are used.',
+  ] },
   { v: 301, items: [
     '🧾 My upsells fix: card and cash payments (Visa, Mastercard, cash, deposits… codes 9000+) are never counted as an upsell any more, even when their remark mentions breakfast. Only the line\'s own code and description decide what was sold, so the day totals are right again. A real package reversal (e.g. the upgrade fee taken back) still shows as a minus.',
     '📅 My upsells: one-tap period buttons next to From / To: This month, Last month, All loaded. Load older reports and only the nights in the period you pick are counted.',
