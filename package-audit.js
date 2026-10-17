@@ -931,9 +931,10 @@ function _pkgApplyVerdicts(results) {
 // 30% because it starts swallowing return visits.
 //
 // Returns confirmation -> the stay's first confirmation.
-function _pkgBuildChains() {
+// guests: optional, defaults to the loaded guest list (My upsells passes its own).
+function _pkgBuildChains(guests) {
   const byGuest = {};
-  Object.entries(pkgGuests).forEach(([conf, g]) => {
+  Object.entries(guests || pkgGuests).forEach(([conf, g]) => {
     const key = g.gid ? 'ID:' + g.gid : (g.norm ? 'NM:' + g.norm : '');
     if (!key) return;
     (byGuest[key] = byGuest[key] || []).push({ conf, ...g });
@@ -988,8 +989,8 @@ function _pkgDaysBetween(a, b) {
 // The seller of a booking that has no row in this IN-Gauge export, read
 // from the Opera log alone: the earliest package entry by a real person.
 // System accounts are skipped — a TARS booking sold nothing.
-function _pkgOwnerFromOpera(conf) {
-  const ev = pkgEvents[conf] || [];
+function _pkgOwnerFromOpera(conf, events) {
+  const ev = (events || pkgEvents)[conf] || [];
   if (!ev.length) return null;
   const first = ev.slice().sort((a, b) => a.ts - b.ts).find(c => !_pkgIsSystemUser(c.user));
   return first ? { user: first.user, confirmed: true, viaOpera: true } : null;

@@ -284,6 +284,7 @@ const GS_FEATURES = [
   ['🔁 Extensions today', 'extension extended stay new booking same guest arr vs dep rebook', 'Arr vs Dep', () => gsGo('xref', { sel: '#adHero' })],
   ['📂 Load departures file', 'departures browse upload drop opera departure_all txt excel csv xml load report', 'Departures', () => gsGo('departures', { sel: '#depUploadCard' })],
   ['⚠ Overdue departures', 'overdue late checkout past 12 still in room departures', 'Departures', () => { gsGo('departures', { sel: '#depKpis' }); if (typeof depFilter === 'function') depFilter('overdue'); }],
+  ['🧾 My upsells', 'my upsells my sales claim upsell record excel opera activity log journal finjrnlbytrans res_detail commission package seller proof', 'Package Audit', () => { gsGo('package-audit', { sel: '#muTab' }); setTimeout(() => window.MyUpsells && MyUpsells.show(), 50); }],
   ['📆 Monthly reports (TD check, revenue by accounts, statistics)', 'monthly report reports month end td revenue accounts statistics statics due 1 4 remind every month', 'Shift Tasks', () => gsGo('shifts', { sel: '#mrCard' })],
   ['🔁 Repeat a shift task every week or every month', 'repeat recurring every week weekly every month monthly task', 'Shift Tasks', () => gsGo('shifts', { sel: '[id^="stRep-"]' })],
   ['📅 Shift task for a date (one-off)', 'task date one off coming up later day', 'Shift Tasks', () => gsGo('shifts', { sel: '[id^="stOn-"]' })],

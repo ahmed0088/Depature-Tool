@@ -1328,5 +1328,91 @@ console.log('\nQuiet when off · shift task times');
   check('undo keys: a ticked box or a button is not typing', [inp('INPUT', 'checkbox'), inp('BUTTON')].map(el => U.keyAction(key('z', { ctrlKey: true }), el)), ['undo', 'undo']);
 }
 
+// ── My upsells: who owns each charged night (same rules as Package Audit) ──
+{
+  const noop = () => {}, el = () => ({ style: {}, classList: { add: noop, remove: noop, toggle: noop }, addEventListener: noop, appendChild: noop, querySelector: () => null, querySelectorAll: () => [] });
+  const sb = { console, setTimeout: () => 0, clearTimeout: noop, setInterval: () => 0, JSON, Math, TextDecoder,
+    localStorage: { getItem: () => null, setItem: noop, removeItem: noop },
+    document: { getElementById: () => null, querySelector: () => null, querySelectorAll: () => [], addEventListener: noop, createElement: el, head: el(), body: el(), readyState: 'complete' },
+    addEventListener: noop, navigator: { onLine: true } };
+  sb.window = sb; sb.globalThis = sb;
+  vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'package-audit.js'), 'utf8'), sb, { filename: 'package-audit.js' });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'my-upsells.js'), 'utf8'), sb, { filename: 'my-upsells.js' });
+  const M = sb.MyUpsells;
+  const L = 'ACCOREN-LSTAFF@ACCOREN', S2 = 'ACCOREN-SSELLER@ACCOREN';
+  vm.runInContext(`
+    pkgGuests = {
+      A1: { name: 'GUEST,TEST', norm: 'GUEST TEST', gid: 'G1', room: '0410', arr: '05-OCT-26', dep: '13-OCT-26' },
+      B1: { name: 'GUEST,TEST', norm: 'GUEST TEST', gid: 'G1', room: '0410', arr: '13-OCT-26', dep: '17-OCT-26' },
+      C1: { name: 'TWO,TEST',   norm: 'TEST TWO',   gid: 'G2', room: '0512', arr: '10-OCT-26', dep: '12-OCT-26' },
+      D1: { name: 'THREE,TEST', norm: 'TEST THREE', gid: 'G3', room: '0301', arr: '10-OCT-26', dep: '11-OCT-26' },
+      E1: { name: 'FOUR,TEST',  norm: 'FOUR TEST',  gid: 'G4', room: '0302', arr: '10-OCT-26', dep: '11-OCT-26' } };
+    pkgEvents = {
+      A1: [{ action: 'ADDED', code: 'UPS40BB', ts: 202610051553, user: '${L}', price: '32.66', from: '05-OCT-26', to: '12-OCT-26' }],
+      B1: [{ action: 'ADDED', code: 'UPS40BB', ts: 202610130900, user: '${S2}', price: '32.66', from: '13-OCT-26', to: '16-OCT-26' },
+           { action: 'ADDED', code: 'USS50', ts: 202610130905, user: '${S2}', price: '40.82', from: '13-OCT-26', to: '16-OCT-26' }],
+      C1: [{ action: 'ADDED', code: 'UPS30BB', ts: 202610090800, user: '${S2}', price: '24.48', from: '10-OCT-26', to: '11-OCT-26' },
+           { action: 'ADDED', code: 'UPS60BB', ts: 202610100900, user: '${L}', price: '48.98', from: '10-OCT-26', to: '11-OCT-26' },
+           { action: 'ADDED', code: 'USS100EC', ts: 202610100700, user: '${L}', price: '50', from: '10-OCT-26', to: '10-OCT-26' }],
+      D1: [{ action: 'ADDED', code: 'UPS30BB', ts: 202610010800, user: '*TARS*', price: '24.48', from: '10-OCT-26', to: '10-OCT-26' },
+           { action: 'ATTACHED', code: 'UPS30BB', ts: 202610100800, user: '${S2}', price: null, from: '10-OCT-26', to: '10-OCT-26' }],
+      E1: [{ action: 'ADDED', code: 'UPS30BB', ts: 202610010800, user: '*TARS*', price: '24.48', from: '10-OCT-26', to: '10-OCT-26' }] };
+    PKG_STAFF = ['Lina STAFF'];`, sb);
+  const H = ['GUEST_FULL_NAME', 'TRX_DESC', 'BUSINESS_DATE', 'ROOM', 'TRX_CODE', 'CASHIER_DEBIT', 'CASHIER_CREDIT', 'REFERENCE', 'REMARK', 'TRX_NO'];
+  const line = (g, d, date, room, code, amt) => [g, d, date, room, code, amt, 0, '', '', '9' + room].join('\t');
+  const journal = [H.join('\t'),
+    line('GUEST,TEST', 'Tourism Dirham', '10-OCT-26', '0410', '7510', 10),
+    line('GUEST,TEST', 'Accommodation', '10-OCT-26', '0410', '1000', 300),
+    line('GUEST,TEST', 'Breakfast Package', '10-OCT-26', '0410', '2010', 32.66),
+    line('GUEST,TEST', 'Breakfast Package', '14-OCT-26', '0410', '2010', 32.66),
+    line('GUEST,TEST', 'Room Upgrade', '14-OCT-26', '0410', '2050', 40.82),
+    line('TWO,TEST', 'Breakfast Package', '11-OCT-26', '0512', '2010', 48.98),
+    line('TWO,TEST', 'Early Check In', '10-OCT-26', '0512', '2070', 50),
+    line('TWO,TEST', 'Early Check In', '11-OCT-26', '0512', '2070', 50),
+    line('THREE,TEST', 'Breakfast Package', '10-OCT-26', '0301', '2010', 24.48),
+    line('FOUR,TEST', 'Breakfast Package', '10-OCT-26', '0302', '2010', 24.48),
+    line('GUEST,TEST', 'Mystery item', '11-OCT-26', '0410', '9999', 15)].join('\n');
+  const J = M.parseJournal(journal);
+  check('my upsells: the journal is read with every transaction code, not only 7510', [J.rows.length, J.min, J.max], [11, 20261010, 20261014]);
+  const E = () => vm.runInContext('pkgEvents', sb), G = () => vm.runInContext('pkgGuests', sb);
+  const ownAll = (trx) => M.own(M.chargesFromJournal(J, E(), G(), { trx }), E(), G());
+  const sum = list => list.map(c => `${c.date % 100}:${c.conf}:${c.kind}:${c.status}:${c.owner ? String(c.owner).split('@')[0].split('-').pop() : '-'}`).join(' ');
+  const all = ownAll('');
+  check('my upsells: package postings only, linked to the booking by room + night, owner by the audit rules', sum(all),
+    '10:A1:BB:owned:LSTAFF 14:B1:BB:owned:LSTAFF 14:B1:USS:owned:SSELLER 11:C1:BB:owned:SSELLER 10:C1:EC:owned:LSTAFF 11:C1:EC:dup:LSTAFF 10:D1:BB:owned:SSELLER 10:E1:BB:system:-');
+  check('my upsells: a configured transaction code (9999=BB) counts as a package line', ownAll('9999=BB').length, all.length + 1);
+  const mine = M.split(all, 'ACCOREN-SSELLER', 20261001, 20261031);
+  check('my upsells: mine = the first real person on the kind (a TARS entry is skipped); a new kind on an extension is a new sale', mine.mine.map(c => c.conf + ':' + c.kind), ['D1:BB', 'C1:BB', 'B1:USS']);
+  check('my upsells: "not mine but close" = touched by me, given to someone else', mine.close.map(c => c.conf + ':' + c.kind + ':' + c.status), ['B1:BB:owned']);
+  const lina = M.split(all, 'ACCOREN-LSTAFF', 20261001, 20261031);
+  const ext = lina.mine.find(c => c.conf === 'B1');
+  check('my upsells: the extension night says why it is mine', /Extension of conf A1/.test(M.whyMine(ext, 'ACCOREN-LSTAFF')) && /Opera journal/.test(M.whyMine(ext, 'ACCOREN-LSTAFF')), true);
+  check('my upsells: the first-seller night names the Opera entry', /You added UPS30BB on 9 Oct 08:00/.test(M.whyMine(mine.mine[1], 'ACCOREN-SSELLER')) && /Later changes by Lina STAFF/.test(M.whyMine(mine.mine[1], 'ACCOREN-SSELLER')), true);
+  check('my upsells: after an online booking, the first real person who touched the package gets it, and it says so', /You attached UPS30BB.*online \/ TARS entry is no seller/.test(M.whyMine(mine.mine[0], 'ACCOREN-SSELLER')), true);
+  check('my upsells: close reasons in plain words', [/online \/ TARS bookings have no desk seller/.test(M.whyNot(all.find(c => c.conf === 'E1'), 'ACCOREN-SSELLER')), /Extension of conf A1: Lina STAFF started/.test(M.whyNot(mine.close[0], 'ACCOREN-SSELLER'))], [true, true]);
+  check('my upsells: the period filter', M.split(all, 'ACCOREN-LSTAFF', 20261011, 20261013).mine.length, 0);
+  check('my upsells: the signed-in person is found by their team name', M.personFor('Lina STAFF', M.sellers(all)), 'ACCOREN-LSTAFF');
+  const est = M.own(M.chargesFromLog(E(), G()), E(), G());
+  const estA = est.filter(c => c.conf === 'A1');
+  check('my upsells: no journal → nights estimated from the log date range × price', [estA.length, estA[0].date, estA[estA.length - 1].date, estA[0].amount, estA[0].estimated], [8, 20261005, 20261012, 32.66, true]);
+  check('my upsells: estimated early check-in is one night only', est.filter(c => c.conf === 'C1' && c.kind === 'EC').length, 1);
+  vm.runInContext(`pkgUnknowns = [{ conf: 'C1', room: '512', charge: 48.98, daily: '11-Oct-2026', product: 'Unknown Product', employee: '-', status: '' }]`, sb);
+  const ig = M.own(M.chargesFromIngauge(vm.runInContext('pkgUnknowns', sb), E(), G()), E(), G());
+  check('my upsells: an IN-Gauge row can be the charge list too', sum(ig), '11:C1:BB:owned:SSELLER');
+  vm.runInContext(`pkgPins = { 'C1|Breakfast': { seller: 'Lina STAFF', by: 'Sam' } }`, sb);
+  check('my upsells: a seller pinned in Package Audit wins', sum(ownAll('').filter(c => c.conf === 'C1' && c.kind === 'BB')), '11:C1:BB:owned:Lina STAFF');
+  vm.runInContext(`pkgPins = {}`, sb);
+  const big = { name: 'Sam', login: 'ACCOREN-SSELLER', from: 20261001, to: 20261031, madeAt: 'x', madeBy: 'Sam', source: '', files: [],
+    rows: Array.from({ length: 650 }, (_, i) => ({ date: 20261001 + (i % 28), conf: 'C' + i, room: '1', guest: 'Test Guest', code: 'UPS30BB', kind: 'BB', kindLabel: 'Breakfast', amount: 10, soldOn: '', soldBy: '', why: 'w', evidence: 'e', src: '' })) };
+  big.totals = M.totals(big.rows);
+  const snaps = M.snapshots(big, Date.now());
+  check('my upsells: a big record is saved in parts of 300 rows, one group', [snaps.length, snaps.map(s => s.snap.rows.length), new Set(snaps.map(s => s.snap.group)).size, new Set(snaps.map(s => s.id)).size], [3, [300, 300, 50], 1, 3]);
+  const twice = {}; snaps.forEach(s => { twice[s.id] = s.snap; }); M.snapshots(big, Date.now() + 1000).forEach(s => { twice[s.id] = s.snap; });
+  const RL = M.recordList(twice);
+  check('my upsells: two saves are two records, but the month total counts each night once', [RL.list.length, RL.list[0].rows.length, RL.months['202610'].nights, RL.months['202610'].aed], [2, 650, 650, 6500]);
+  check('my upsells: the file name', M.fileName({ name: 'Sam ALVAREZ', from: 20261001, to: 20261013 }), 'Upsells_Sam_ALVAREZ_2026-10-01_2026-10-13.xlsx');
+}
+
 console.log(`\n${pass} passed · ${fail} failed`);
 process.exit(fail ? 1 : 0);
