@@ -1383,6 +1383,12 @@ console.log('\nQuiet when off · shift task times');
       ['GUEST,TEST', 'Upgrade / Upsell Fee', '10-OCT-26', '0410', '1010', 0, 40.82, '', '', '3'].join('\t')].join('\n'));
     const pc = M.chargesFromJournal(pj, vm.runInContext('pkgEvents', sb), vm.runInContext('pkgGuests', sb), {});
     check('my upsells: card / cash payments are never counted, a package reversal still is', pc.map(c => c.amount).join(' '), '-40.82');
+    const tj = M.parseJournal([PH.join('\t'),
+      ['GUEST,TEST', 'Breakfast Package', '11-OCT-26', '0410', '2010', 24.48, 0, '', '', '4'].join('\t'),
+      ['GUEST,TEST', 'Breakfast Service Charge', '11-OCT-26', '0410', '2011', 2.45, 0, '', '', '5'].join('\t'),
+      ['GUEST,TEST', 'Breakfast', '11-OCT-26', '0410', '2012', 2.45, 0, '', '', '6'].join('\t'),
+      ['GUEST,TEST', 'VAT on Breakfast', '11-OCT-26', '0410', '2013', 1.22, 0, '', '', '7'].join('\t')].join('\n'));
+    check('my upsells: tax / service lines next to a package are not counted as another sale', M.chargesFromJournal(tj, vm.runInContext('pkgEvents', sb), vm.runInContext('pkgGuests', sb), {}).map(c => c.amount).join(' '), '24.48');
   }
   check('my upsells: the journal is read with every transaction code, not only 7510', [J.rows.length, J.min, J.max], [11, 20261010, 20261014]);
   const E = () => vm.runInContext('pkgEvents', sb), G = () => vm.runInContext('pkgGuests', sb);

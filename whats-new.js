@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 308, items: [
+    '🧾 My upsells fix: tax and service-charge lines Opera posts next to a package (e.g. 2.45 service charge on a 24.48 breakfast, VAT, municipality fee) are no longer counted as a separate upsell. Only the package itself counts.',
+  ] },
   { v: 307, items: [
     '🧾 My upsells: when a guest stays on and a colleague makes a new confirmation and adds the package again, it stays yours, and the Excel says so on that line: "Extension. Original booking 617680069 (same guest), sold by me on 12 Sep 2026 13:25. Re-added by CNONIS on the new booking." The Evidence sheet shows the Opera lines of both bookings (your original sale and the re-add) as proof.',
   ] },

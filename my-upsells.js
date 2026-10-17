@@ -134,6 +134,10 @@
     const n = parseInt(String(r.code || '').replace(/\D/g, ''), 10);
     return (n >= 9000 && n <= 9999) || PAY_WORDS.test(String(r.desc || ''));
   }
+  // Tax / service-charge lines Opera posts next to a package ("Breakfast Service Charge", "VAT",
+  // "Municipality Fee"…) are not a sale. ("Upgrade / Upsell Fee" is the real upgrade, so a plain "fee" is kept.)
+  const TAX_WORDS = /service\s*charge|\bsvc\b|\bs\/c\b|\bvat\b|value\s*added|municipal|tourism|\btax(es)?\b|levy|\bgst\b|city\s*fee|govt|government/i;
+  const isTaxLine = r => TAX_WORDS.test(String(r.desc || ''));
   function isTd(r) {
     const DC = global.DtcmCore;
     if (DC && DC.isTdCode && DC.isTdCode(r.code)) return true;
@@ -190,7 +194,7 @@
     const out = [];
     ((J && J.rows) || []).forEach(r => {
       if (isTd(r) || !r.amount) return;
-      if (isPayment(r) && !trx.has(r.code)) return;   // a code you listed yourself always counts
+      if ((isPayment(r) || isTaxLine(r)) && !trx.has(r.code)) return;   // a code you listed yourself always counts
       // Only the line's own package column / transaction description says what was charged;
       // a remark or reference can mention a package on any kind of line.
       const text = [r.pkg, r.desc].join(' ');
@@ -214,7 +218,11 @@
         srcLine: `${r.code} ${r.desc}`.trim() + (r.trxNo ? ` · trx ${r.trxNo}` : ''),
       });
     });
-    return out;
+    // A line that is only a small part (≤ 22%) of another line of the same kind, room and night is the
+    // tax / service part of that package (e.g. 2.45 next to 24.48), not a second sale.
+    const big = {};
+    out.forEach(c => { const k = `${c.room}|${c.date}|${famOf(c.kind) || c.kind}`; big[k] = Math.max(big[k] || 0, Math.abs(c.amount)); });
+    return out.filter(c => { const b = big[`${c.room}|${c.date}|${famOf(c.kind) || c.kind}`] || 0; return !(Math.abs(c.amount) < b && Math.abs(c.amount) <= b * 0.22); });
   }
 
   /** IN-Gauge rows (when that export is loaded on the Audit tab), as charges. */
@@ -1205,7 +1213,7 @@
   global.MyUpsells = {
     parseJournal, chargesFromJournal, chargesFromIngauge, chargesFromLog, own, split, sellers, personFor,
     whyMine, whyNot, exportRows, evidenceRows, totals, snapshots, recordList, reportData, snapshotData, fileName,
-    xlsxBuffer, buildSheetJS, kindFromText, isPayment, trxCodes, linkConf, guestIndex, personKey,
+    xlsxBuffer, buildSheetJS, kindFromText, isPayment, isTaxLine, trxCodes, linkConf, guestIndex, personKey,
     show, refresh, download, saveRecord, state: S,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
