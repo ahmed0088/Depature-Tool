@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 315, items: [
+    '🎨 Front Office Log now has the same line icon as the rest of the menu.',
+  ] },
   { v: 313, items: [
     '🔑 A fresh sign-in page: it matches your theme, has clearer messages, a Stay signed in switch and smooth animations.',
     '✨ The app feels more alive: numbers count up, new tasks slide in, ticks pop, and you get a little celebration when a shift\'s tasks, all departures or the monthly reports are done. It turns off if your phone is set to reduce motion.',
