@@ -2777,3 +2777,37 @@ function _depInitUi() {
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _depInitUi);
 else _depInitUi();
+
+// ── Masonry: cards of different heights fit together with no empty gaps ──
+// Each card spans as many 4px grid rows as its height, so the next card moves up under it while the
+// order still reads left → right. Recomputed when cards change size (notes, extend form, status).
+(function () {
+  const ROW = 4, GAP = 10;
+  let ro = null, raf = 0;
+  function layout() {
+    raf = 0;
+    const grid = document.getElementById('depGrid');
+    if (!grid) return;
+    const cols = getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length;
+    const on = cols > 1 && !grid.closest('.dp-compact');
+    grid.classList.toggle('dp-masonry', on);
+    grid.querySelectorAll(':scope > .dp-card').forEach(c => {
+      if (!on) { c.style.gridRowEnd = ''; return; }
+      const h = c.getBoundingClientRect().height;
+      c.style.gridRowEnd = 'span ' + Math.max(1, Math.ceil((h + GAP) / ROW));
+    });
+  }
+  const queue = () => { if (!raf) raf = requestAnimationFrame(layout); };
+  function watch() {
+    const grid = document.getElementById('depGrid');
+    if (!grid || grid._dpMasonry) return;
+    grid._dpMasonry = true;
+    if ('ResizeObserver' in window) ro = new ResizeObserver(queue);
+    const observeCards = () => { if (ro) grid.querySelectorAll(':scope > .dp-card').forEach(c => ro.observe(c)); queue(); };
+    new MutationObserver(observeCards).observe(grid, { childList: true });
+    window.addEventListener('resize', queue);
+    observeCards();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watch); else watch();
+  window.depMasonryLayout = queue;
+})();

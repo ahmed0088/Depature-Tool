@@ -2551,3 +2551,16 @@ html.ho-lang-ar body { font-family: var(--font), 'Segoe UI', 'Noto Sans Arabic',
   #panel-departures .dp-card { break-inside: avoid; box-shadow: none; }
   #panel-departures .dp-toolbar { position: static; }
 }
+
+/* ── Departures: tighter cards, no gaps under short cards (masonry, see departures.js) ── */
+#panel-departures .dp-grid.dp-masonry { grid-auto-rows: 4px; row-gap: 0; align-items: start; }
+#panel-departures .dp-grid.dp-masonry > .dp-card { margin-bottom: 10px; }
+#panel-departures .dp-top { padding: 11px 12px 4px 16px; gap: 10px; }
+#panel-departures .dp-tags { padding: 2px 12px 7px 16px; gap: 4px; }
+#panel-departures .dp-body { padding: 0 12px 10px 16px; }
+#panel-departures .dp-alert, #panel-departures .dp-intent-banner, #panel-departures .dp-field, #panel-departures .dp-ext { margin-bottom: 6px; }
+#panel-departures .dp-intent-banner { padding: 5px 10px; }
+#panel-departures .dp-acts { gap: 5px; margin-bottom: 6px !important; }
+#panel-departures .dp-acts.g5 .dca-co { min-height: 38px; }
+#panel-departures .dp-acts.g5 .dca:not(.dca-co) { min-height: 44px; padding: 4px 2px; }
+#panel-departures .dp-card .dca { min-height: 36px; }

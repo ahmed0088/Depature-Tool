@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 309, items: [
+    '🧳 Departures: no more empty gaps between room cards. Cards of different heights now fit together (each moves up under the one above it, still in order left to right), and the spacing inside each card is tighter.',
+  ] },
   { v: 308, items: [
     '🧾 My upsells fix: tax and service-charge lines Opera posts next to a package (e.g. 2.45 service charge on a 24.48 breakfast, VAT, municipality fee) are no longer counted as a separate upsell. Only the package itself counts.',
   ] },
