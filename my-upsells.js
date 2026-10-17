@@ -439,7 +439,13 @@
   function factWhy(ch, person) {
     const d = ch.decider;
     if (ch.pinned && !(d && isPerson(d.user, person))) return 'My sale';
-    if (ch.extendedFrom) return `Extension of ${ch.extendedFrom} (same guest), sold by me`;
+    if (ch.extendedFrom) {
+      // who put it again on the new booking (they don't get it: the stay was already sold)
+      const fam = famOf(kindOf(ch.code || ch.kind));
+      const re = [...new Set(((evs() || {})[ch.conf] || []).filter(e => e.action === 'ADDED' && !isSys(e.user) && !isPerson(e.user, person)
+        && famOf(kindOf(e.code)) === fam).map(e => String(label(e.user)).replace(/^[A-Z0-9]+-/, '').replace(/@.*$/, '')))];
+      return `Extension. Original booking ${ch.extendedFrom} (same guest), sold by me${d ? ' on ' + tsLabel(d.ts) : ''}` + (re.length ? `. Re-added by ${re.join(', ')} on the new booking` : '') + '.';
+    }
     if (d && ch.code && d.code && d.code !== ch.code) return `Changed from ${d.code}, sold by me`;
     return 'Added by me';
   }
@@ -644,7 +650,7 @@
 
     // Sheet 1: Upsells
     const ws = wb.addWorksheet('My Upsells', { views: [{ showGridLines: false }], pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, horizontalCentered: true, margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 } } });
-    const COLS = [['No.', 6], ['Date', 13], ['Confirmation No.', 17], ['Room', 8], ['Guest Name', 30], ['Package', 12], ['Type', 16], ['Amount (AED)', 14], ['Sold On', 18], ['Reason', 40]];
+    const COLS = [['No.', 6], ['Date', 13], ['Confirmation No.', 17], ['Room', 8], ['Guest Name', 30], ['Package', 12], ['Type', 16], ['Amount (AED)', 14], ['Sold On', 18], ['Reason', 46]];
     const N = COLS.length, lastCol = String.fromCharCode(64 + N);
     ws.columns = COLS.map(([, w]) => ({ width: w }));
     const titleRow = (row, text, font, h) => { ws.mergeCells(`A${row}:${lastCol}${row}`); const c = ws.getCell(`A${row}`); c.value = text; c.font = font; c.alignment = { horizontal: 'center', vertical: 'middle' }; if (h) ws.getRow(row).height = h; };
@@ -660,7 +666,7 @@
     R.forEach((r, k) => {
       const row = ws.getRow(HR + 1 + k);
       row.values = [r.n, r.date, r.conf, r.room, r.guest, r.code, r.type, r.amount, r.sold, r.reason];
-      row.height = 22;
+      row.height = String(r.reason).length > 45 ? 36 : 22;
       row.eachCell({ includeEmpty: true }, (c, n) => {
         if (n > N) return;
         c.border = box; c.alignment = center;

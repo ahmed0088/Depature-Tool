@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 307, items: [
+    '🧾 My upsells: when a guest stays on and a colleague makes a new confirmation and adds the package again, it stays yours, and the Excel says so on that line: "Extension. Original booking 617680069 (same guest), sold by me on 12 Sep 2026 13:25. Re-added by CNONIS on the new booking." The Evidence sheet shows the Opera lines of both bookings (your original sale and the re-add) as proof.',
+  ] },
   { v: 306, items: [
     '🧾 My upsells Excel: a short "Reason" column on every line, e.g. "Added by me", "Extension of 617680069 (same guest), sold by me" or "Changed from UPS30BB, sold by me", so your manager sees at a glance why each upsell is yours.',
   ] },
