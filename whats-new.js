@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 306, items: [
+    '🧾 My upsells Excel: a short "Reason" column on every line, e.g. "Added by me", "Extension of 617680069 (same guest), sold by me" or "Changed from UPS30BB, sold by me", so your manager sees at a glance why each upsell is yours.',
+  ] },
   { v: 305, items: [
     '📌 Pin packages in My upsells: on any line in "Not mine but close" tap 📌 Mine and it counts as yours from then on (totals and Excel update at once). On your own lines, 📌 Pin locks them to you whatever later changes say; 📌 Pinned · unpin lets the rules decide again. These are the same pins as 📌 Freeze seller in Package Audit, saved for the team, with Undo / Ctrl+Z.',
   ] },

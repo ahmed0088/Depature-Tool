@@ -435,6 +435,14 @@
     if (ch.stayFromSystem) s += ` The stay began on an online booking (conf ${ch.stayFromSystem}), so this booking's own seller counts.`;
     return s + srcWords(ch);
   }
+  /** The reason for the manager, as plain facts in the first person (no app, no rules). */
+  function factWhy(ch, person) {
+    const d = ch.decider;
+    if (ch.pinned && !(d && isPerson(d.user, person))) return 'My sale';
+    if (ch.extendedFrom) return `Extension of ${ch.extendedFrom} (same guest), sold by me`;
+    if (d && ch.code && d.code && d.code !== ch.code) return `Changed from ${d.code}, sold by me`;
+    return 'Added by me';
+  }
   function whyNot(ch, person) {
     const kl = kindLabel(ch.kind, ch.code).toLowerCase(), d = ch.decider;
     const mineEv = ch.evidence.find(e => isPerson(e.user, person));
@@ -514,6 +522,7 @@
         kindLabel: kindLabel(ch.kind, ch.code), amount: r2(ch.amount),
         soldOn: d ? tsLabel(d.ts) : '', soldBy: d ? (label(d.user) !== String(d.user).split('@')[0] ? `${String(d.user).split('@')[0]} → ${label(d.user)}` : String(d.user).split('@')[0]) : '',
         why: mine ? whyMine(ch, person) : whyNot(ch, person),
+        reason: mine ? factWhy(ch, person) : '',
         evidence: d ? evLine(d) + (ch.evidence.length > 1 ? ` (+${ch.evidence.length - 1} more Opera entr${ch.evidence.length - 1 === 1 ? 'y' : 'ies'})` : '') : (ch.srcLine || ''),
         src: ch.src === 'log' ? 'Estimated from Opera log' : ch.src === 'ingauge' ? 'IN-Gauge export' : 'Opera journal',
         owner: ch.owner ? label(ch.owner) : '',
@@ -619,7 +628,7 @@
     return ext ? `${sold} · extension of ${ext[1]} (same stay)` : sold;
   }
   const sheetRows = D => D.rows.map((r, i) => ({ n: i + 1, date: dnDate(r.date), conf: String(r.conf || ''), room: String(r.room || ''), guest: r.guest || '',
-    code: r.code || '', type: r.kindLabel || '', amount: r.amount, sold: r.soldOn || '', reason: shortReason(r), est: r.src === 'log' }));
+    code: r.code || '', type: r.kindLabel || '', amount: r.amount, sold: r.soldOn || '', reason: r.reason || shortReason(r), est: r.src === 'log' }));
   const NAVY = 'FF1F3864', ZEBRA = 'FFF4F6FA', LINE = 'FFBFC7D5', TOT = 'FFE7ECF5';
   const fillOf = argb => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
   const thin = { style: 'thin', color: { argb: LINE } };
@@ -635,7 +644,7 @@
 
     // Sheet 1: Upsells
     const ws = wb.addWorksheet('My Upsells', { views: [{ showGridLines: false }], pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, horizontalCentered: true, margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 } } });
-    const COLS = [['No.', 6], ['Date', 13], ['Confirmation No.', 17], ['Room', 8], ['Guest Name', 30], ['Package', 12], ['Type', 16], ['Amount (AED)', 14], ['Sold On', 18]];
+    const COLS = [['No.', 6], ['Date', 13], ['Confirmation No.', 17], ['Room', 8], ['Guest Name', 30], ['Package', 12], ['Type', 16], ['Amount (AED)', 14], ['Sold On', 18], ['Reason', 40]];
     const N = COLS.length, lastCol = String.fromCharCode(64 + N);
     ws.columns = COLS.map(([, w]) => ({ width: w }));
     const titleRow = (row, text, font, h) => { ws.mergeCells(`A${row}:${lastCol}${row}`); const c = ws.getCell(`A${row}`); c.value = text; c.font = font; c.alignment = { horizontal: 'center', vertical: 'middle' }; if (h) ws.getRow(row).height = h; };
@@ -650,8 +659,8 @@
     hr.height = 22;
     R.forEach((r, k) => {
       const row = ws.getRow(HR + 1 + k);
-      row.values = [r.n, r.date, r.conf, r.room, r.guest, r.code, r.type, r.amount, r.sold];
-      row.height = 20;
+      row.values = [r.n, r.date, r.conf, r.room, r.guest, r.code, r.type, r.amount, r.sold, r.reason];
+      row.height = 22;
       row.eachCell({ includeEmpty: true }, (c, n) => {
         if (n > N) return;
         c.border = box; c.alignment = center;
@@ -664,7 +673,7 @@
       row.getCell(8).numFmt = '#,##0.00';
     });
     const tr = ws.getRow(HR + 1 + R.length);
-    tr.values = ['', 'Total', '', '', `${T.upsells} upsells · ${T.nights} nights`, '', '', T.aed, ''];
+    tr.values = ['', 'Total', '', '', `${T.upsells} upsells · ${T.nights} nights`, '', '', T.aed, '', ''];
     tr.height = 22;
     tr.eachCell({ includeEmpty: true }, (c, n) => { if (n > N) return; c.font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } }; c.fill = fillOf(NAVY); c.border = box; c.alignment = center; });
     tr.height = 26;
@@ -698,12 +707,12 @@
     wb.Props = { Title: `Upsells ${cleanName(D.name)}`, Author: cleanName(D.name), Company: '' };
     const T = D.totals, R = sheetRows(D), who = cleanName(D.name);
     const aoa = [['Upsell Report'], [`${who}   ·   ${dnLabel(D.from)} – ${dnLabel(D.to)}`], [`${T.upsells} upsells · ${T.nights} nights · AED ${money(T.aed)}`], [],
-      ['No.', 'Date', 'Confirmation No.', 'Room', 'Guest Name', 'Package', 'Type', 'Amount (AED)', 'Sold On'],
-      ...R.map(r => [r.n, r.date, r.conf, r.room, r.guest, r.code, r.type, r.amount, r.sold]),
-      ['', 'Total', '', '', `${T.upsells} upsells · ${T.nights} nights`, '', '', T.aed, '']];
+      ['No.', 'Date', 'Confirmation No.', 'Room', 'Guest Name', 'Package', 'Type', 'Amount (AED)', 'Sold On', 'Reason'],
+      ...R.map(r => [r.n, r.date, r.conf, r.room, r.guest, r.code, r.type, r.amount, r.sold, r.reason]),
+      ['', 'Total', '', '', `${T.upsells} upsells · ${T.nights} nights`, '', '', T.aed, '', '']];
     const ws = X.utils.aoa_to_sheet(aoa, { cellDates: true, dateNF: 'dd-mmm-yyyy' });
-    ws['!cols'] = [6, 13, 17, 8, 30, 12, 16, 14, 18].map(w => ({ wch: w }));
-    ws['!merges'] = [0, 1, 2].map(r => ({ s: { r, c: 0 }, e: { r, c: 8 } }));
+    ws['!cols'] = [6, 13, 17, 8, 30, 12, 16, 14, 18, 40].map(w => ({ wch: w }));
+    ws['!merges'] = [0, 1, 2].map(r => ({ s: { r, c: 0 }, e: { r, c: 9 } }));
     for (let i = 6; i <= aoa.length; i++) { const x = ws['H' + i]; if (x && x.t === 'n') x.z = '#,##0.00'; }
     X.utils.book_append_sheet(wb, ws, 'My Upsells');
     const s3 = X.utils.aoa_to_sheet([['Confirmation No.', 'Room', 'Guest Name', 'Action', 'Package', 'Type', 'User', 'Date / Time', 'Price', 'From', 'To'],
@@ -755,7 +764,7 @@
     const d = new Date(at), p = n => String(n).padStart(2, '0');
     const base = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}-${Math.random().toString(36).slice(2, 6)}`;
     const rows = D.rows.map(r => ({ date: r.date, room: String(r.room || ''), conf: String(r.conf || ''), guest: String(r.guest || '').slice(0, 60), code: r.code, kind: r.kind, amount: r.amount,
-      sold: r.soldOn, by: r.soldBy, why: String(r.why).slice(0, 400), evidence: String(r.evidence).slice(0, 300), src: r.src }));
+      sold: r.soldOn, by: r.soldBy, why: String(r.why).slice(0, 400), reason: String(r.reason || '').slice(0, 300), evidence: String(r.evidence).slice(0, 300), src: r.src }));
     const parts = Math.max(1, Math.ceil(rows.length / SNAP_MAX_ROWS));
     const T = D.totals;
     const byKind = {}; Object.entries(T.byKind).forEach(([k, v]) => { byKind[k.replace(/[.#$\[\]\/]/g, ' ')] = { nights: v.nights, aed: r2(v.aed), upsells: v.pk.size }; });
