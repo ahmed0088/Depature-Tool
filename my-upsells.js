@@ -517,6 +517,7 @@
         evidence: d ? evLine(d) + (ch.evidence.length > 1 ? ` (+${ch.evidence.length - 1} more Opera entr${ch.evidence.length - 1 === 1 ? 'y' : 'ies'})` : '') : (ch.srcLine || ''),
         src: ch.src === 'log' ? 'Estimated from Opera log' : ch.src === 'ingauge' ? 'IN-Gauge export' : 'Opera journal',
         owner: ch.owner ? label(ch.owner) : '',
+        pinKey: typeof _pkgPinKey === 'function' ? _pkgPinKey({ conf: ch.conf, product: '', code: ch.code || ch.kind }) : '', pinned: !!ch.pinned,
       };
     });
   }
@@ -926,7 +927,7 @@
 #muView .mu-ev{font:500 .66rem/1.45 var(--mono);color:var(--text3)}
 #muView .mu-est{display:inline-block;margin-left:4px;font:600 .58rem var(--mono);padding:1px 5px;border-radius:5px;background:color-mix(in srgb,var(--amber,#d97706) 15%,transparent);color:var(--text2)}
 #muView .mu-more{display:block;margin:10px auto 0}
-#muView .mu-close .mu-why:before{content:"✗ ";color:var(--text3)}
+#muView .mu-pin{display:inline-flex;align-items:center;gap:4px;margin:6px 0 0;padding:4px 10px;border-radius:999px;border:1px solid var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--text);font:600 .72rem inherit;cursor:pointer}#muView .mu-pin.on{background:var(--accent);color:#fff}#muView .mu-pin.ghost{border-color:var(--border);background:transparent;color:var(--text3)}#muView .mu-pin:hover{filter:brightness(1.08)}#muView .mu-close .mu-why:before{content:"✗ ";color:var(--text3)}
 #muView .mu-sub{font-weight:700;font-size:.9rem;margin:0 0 4px;color:var(--text)}
 #muView .mu-empty{padding:22px;text-align:center;color:var(--text3);font-size:.8rem}
 #muView .mu-rec{display:flex;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--border);font-size:.78rem}
@@ -1033,7 +1034,10 @@
         <div class="c-g">${esc(r.guest)}</div>
         <div class="c-p"><code>${esc(r.code || '—')}</code> <span class="mu-k">${kindIco(r.kind)} ${esc(r.kindLabel)}</span>${/Estimated/.test(r.src) ? '<span class="mu-est">estimated</span>' : ''}<span class="mu-m">${esc(r.guest)}</span></div>
         <div class="c-a mu-n">${money(r.amount)}</div>
-        <div class="c-w mu-why">${closeRow && r.owner ? `<b>${esc(r.owner)}</b> · ` : ''}${esc(r.why)}</div>
+        <div class="c-w mu-why">${closeRow && r.owner ? `<b>${esc(r.owner)}</b> · ` : ''}${esc(r.why)}
+          ${r.pinKey ? (closeRow ? `<button type="button" class="mu-pin" data-pin="${esc(r.pinKey)}" title="It's mine: pin this package to me (saved for the team, same as 📌 Freeze seller in Package Audit)">📌 Mine</button>`
+            : r.pinned ? `<button type="button" class="mu-pin on" data-unpin="${esc(r.pinKey)}" title="Pinned to you. Tap to unpin: the rules decide again">📌 Pinned · unpin</button>`
+            : `<button type="button" class="mu-pin ghost" data-pin="${esc(r.pinKey)}" title="Lock it to you, whatever the rules or later changes say">📌 Pin</button>`) : ''}</div>
         <div class="c-e mu-ev">${esc(r.evidence)}</div>
       </div>`;
     const head = `<div class="mu-row h"><div>Night</div><div>Room</div><div>Conf</div><div>Guest</div><div>Package</div><div class="mu-n">AED</div><div>Why it's mine</div><div>Opera evidence</div></div>`;
@@ -1107,7 +1111,28 @@
     renderRecords();
   }
 
+  // Pin a package to the selected person (or unpin): the same pins as Package Audit's 📌 Freeze seller.
+  function pinTo(key, seller) {
+    if (typeof pkgPins === 'undefined' || typeof _pkgSavePins !== 'function') { toast('Pins are not available', 'err'); return; }
+    const by = typeof _pkgMe === 'function' ? _pkgMe() : me(), at = new Date().toISOString();
+    const before = pkgPins[key] ? JSON.parse(JSON.stringify(pkgPins[key])) : null;
+    if (seller) pkgPins[key] = { seller, by, at }; else delete pkgPins[key];
+    _pkgSavePins();
+    if (typeof logActivity === 'function') logActivity('pkg_pin', `Conf ${String(key).split('|')[0]} · ${String(key).split('|')[1] || ''} → ${seller ? 'pinned to ' + label(seller) : 'unpinned'} (My upsells)`);
+    if (typeof _pkgRecompute === 'function' && typeof pkgResults !== 'undefined' && pkgResults.length) { try { _pkgRecompute(); } catch (_) {} }
+    refresh();
+    const undo = () => { if (before) pkgPins[key] = before; else delete pkgPins[key]; _pkgSavePins(); refresh(); };
+    const msg = seller ? `📌 Pinned to ${label(seller)}: it stays theirs, saved for the team` : 'Unpinned: the rules decide this package again';
+    if (typeof showUndoToast === 'function') showUndoToast(msg, undo); else toast(msg, 'ok');
+  }
+
   function bind(v) {
+    if (!v._muPinBound) v._muPinBound = true, v.addEventListener('click', e => {
+      const b = e.target.closest('[data-pin],[data-unpin]'); if (!b) return;
+      e.preventDefault();
+      if (b.dataset.unpin) pinTo(b.dataset.unpin, null);
+      else if (S.person) pinTo(b.dataset.pin, S.person);
+    });
     v.querySelectorAll('[data-drop]').forEach(z => {
       const id = z.dataset.drop, inp = z.querySelector('input[type=file]');
       inp.addEventListener('change', async () => { const f = [...inp.files]; inp.value = ''; if (!f.length) return; if (id === 'log') await loadLog(f); else await route(f, id); });

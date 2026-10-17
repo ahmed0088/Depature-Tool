@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 305, items: [
+    '📌 Pin packages in My upsells: on any line in "Not mine but close" tap 📌 Mine and it counts as yours from then on (totals and Excel update at once). On your own lines, 📌 Pin locks them to you whatever later changes say; 📌 Pinned · unpin lets the rules decide again. These are the same pins as 📌 Freeze seller in Package Audit, saved for the team, with Undo / Ctrl+Z.',
+  ] },
   { v: 304, items: [
     '🧾 My upsells counts more accurately: a package a colleague removed and put straight back (to change its price) is still counted for whoever sold it, at the price it was first sold for. On a long stay this had dropped a whole room upgrade from the total.',
   ] },
