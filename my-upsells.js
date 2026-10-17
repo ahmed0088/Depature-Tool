@@ -127,6 +127,13 @@
     }
     return { rows, codes, min, max, lines: rows.length, ok: true };
   }
+  // Payments and settlements are never an upsell, even when their remark mentions a package
+  // (a Visa payment "for breakfast" is money in, not a breakfast sold). Opera payment codes are 9000+.
+  const PAY_WORDS = /\b(visa|master\s*card|mastercard|amex|american\s*express|diners|card|cash|payment|deposit|settle(ment)?|transfer|city\s*ledger|paid\s*out|refund|cheque|check\s*payment|bank|wire|advance|credit\s*card|debit\s*card|union\s*pay|alipay|wechat)\b/i;
+  function isPayment(r) {
+    const n = parseInt(String(r.code || '').replace(/\D/g, ''), 10);
+    return (n >= 9000 && n <= 9999) || PAY_WORDS.test(String(r.desc || ''));
+  }
   function isTd(r) {
     const DC = global.DtcmCore;
     if (DC && DC.isTdCode && DC.isTdCode(r.code)) return true;
@@ -183,9 +190,12 @@
     const out = [];
     ((J && J.rows) || []).forEach(r => {
       if (isTd(r) || !r.amount) return;
-      const text = [r.pkg, r.desc, r.ref, r.remark].join(' ');
+      if (isPayment(r) && !trx.has(r.code)) return;   // a code you listed yourself always counts
+      // Only the line's own package column / transaction description says what was charged;
+      // a remark or reference can mention a package on any kind of line.
+      const text = [r.pkg, r.desc].join(' ');
       const inText = knownRe ? (text.match(knownRe) || [])[1] : '';
-      const word = kindFromText(r.desc) || kindFromText(r.ref + ' ' + r.remark);
+      const word = kindFromText(r.desc);
       const inTrx = trx.has(r.code);
       if (!inText && !word && !inTrx) return;
       const conf = r.conf || linkConf(r, idx);
@@ -918,7 +928,7 @@
 #muView .mu-trx{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px}
 #muView .mu-trx input{flex:1 1 200px;min-width:0}
 #muView .mu-ctl{display:grid;grid-template-columns:minmax(0,2fr) repeat(2,minmax(0,1fr)) minmax(0,1.4fr);gap:10px;align-items:end}
-#muView label.mu-f{display:flex;flex-direction:column;gap:4px;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);min-width:0}
+#muView .mu-presets{display:flex;flex-direction:column;gap:4px;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3)}#muView .mu-presets>div{display:flex;gap:4px;flex-wrap:wrap}#muView .mu-pre{border:1px solid var(--border);background:var(--bg2);color:var(--text2);border-radius:999px;padding:7px 11px;font:600 .74rem inherit;text-transform:none;letter-spacing:0;cursor:pointer}#muView .mu-pre:hover{border-color:var(--accent);color:var(--text)}#muView label.mu-f{display:flex;flex-direction:column;gap:4px;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);min-width:0}
 #muView select,#muView input[type=date],#muView input[type=text]{font:inherit;font-size:.82rem;padding:8px 9px;border-radius:9px;border:1px solid var(--border2,var(--border));background:var(--bg2,var(--card2));color:var(--text);min-width:0;width:100%;box-sizing:border-box}
 #muView .mu-note{margin:12px 0 0;padding:9px 12px;border-radius:10px;font-size:.74rem;line-height:1.5;background:color-mix(in srgb,var(--amber,#d97706) 10%,transparent);border:1px solid color-mix(in srgb,var(--amber,#d97706) 35%,transparent);color:var(--text)}
 #muView .mu-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:10px}
@@ -1087,6 +1097,7 @@
         <label class="mu-f mu-who">Whose upsells?<select id="muWho">${opts || '<option value="">Load the Activity Log first</option>'}</select></label>
         <label class="mu-f">From<input type="date" id="muFrom" value="${dnIso(S.from)}"></label>
         <label class="mu-f">To<input type="date" id="muTo" value="${dnIso(S.to)}"></label>
+        <div class="mu-f mu-presets"><span>Period</span><div>${[['this', 'This month'], ['last', 'Last month'], ['all', 'All loaded']].map(([k, t]) => `<button type="button" class="mu-pre" data-pre="${k}">${t}</button>`).join('')}</div></div>
         <label class="mu-f mu-src">Charges from<select id="muSrc">
           ${srcOpt('auto', 'Best available')}${srcOpt('journal', 'Opera journal (posted)', !J)}${srcOpt('ingauge', 'IN-Gauge export', !ig.length)}${srcOpt('log', 'Opera log (estimated)')}
         </select></label>
@@ -1135,6 +1146,14 @@
     });
     const on = (id, ev, fn) => { const e = v.querySelector('#' + id); if (e) e.addEventListener(ev, fn); };
     on('muWho', 'change', e => { S.person = e.target.value; S.showAll = false; refresh(); });
+    document.querySelectorAll('#muView [data-pre]').forEach(b => b.addEventListener('click', () => {
+      const d = new Date(), k = b.dataset.pre;
+      if (k === 'all') { S.userDates = true; S.from = 19000101; S.to = 29991231; refresh(); return; }   // every night in the loaded files
+      const m = k === 'last' ? new Date(d.getFullYear(), d.getMonth() - 1, 1) : new Date(d.getFullYear(), d.getMonth(), 1);
+      const end = new Date(m.getFullYear(), m.getMonth() + 1, 0), p2 = n => String(n).padStart(2, '0');
+      S.from = +`${m.getFullYear()}${p2(m.getMonth() + 1)}01`; S.to = +`${end.getFullYear()}${p2(end.getMonth() + 1)}${p2(end.getDate())}`;
+      S.userDates = true; refresh();
+    }));
     on('muFrom', 'change', e => { const n = isoDn(e.target.value); if (n) { S.from = n; S.userDates = true; if (S.to < n) S.to = n; refresh(); } });
     on('muTo', 'change', e => { const n = isoDn(e.target.value); if (n) { S.to = n; S.userDates = true; if (S.from > n) S.from = n; refresh(); } });
     on('muSrc', 'change', e => { S.source = e.target.value; refresh(); });
@@ -1175,7 +1194,7 @@
   global.MyUpsells = {
     parseJournal, chargesFromJournal, chargesFromIngauge, chargesFromLog, own, split, sellers, personFor,
     whyMine, whyNot, exportRows, evidenceRows, totals, snapshots, recordList, reportData, snapshotData, fileName,
-    xlsxBuffer, buildSheetJS, kindFromText, trxCodes, linkConf, guestIndex, personKey,
+    xlsxBuffer, buildSheetJS, kindFromText, isPayment, trxCodes, linkConf, guestIndex, personKey,
     show, refresh, download, saveRecord, state: S,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

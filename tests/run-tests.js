@@ -1374,6 +1374,16 @@ console.log('\nQuiet when off · shift task times');
     line('FOUR,TEST', 'Breakfast Package', '10-OCT-26', '0302', '2010', 24.48),
     line('GUEST,TEST', 'Mystery item', '11-OCT-26', '0410', '9999', 15)].join('\n');
   const J = M.parseJournal(journal);
+  // A payment whose remark mentions breakfast is never a breakfast sold
+  {
+    const PH = ['GUEST_FULL_NAME', 'TRX_DESC', 'BUSINESS_DATE', 'ROOM', 'TRX_CODE', 'CASHIER_DEBIT', 'CASHIER_CREDIT', 'REFERENCE', 'REMARK', 'TRX_NO'];
+    const pj = M.parseJournal([PH.join('\t'),
+      ['GUEST,TEST', 'Visa Card Manual', '10-OCT-26', '0410', '9101', 0, 180, '', 'breakfast UPS40BB', '1'].join('\t'),
+      ['GUEST,TEST', 'Cash', '10-OCT-26', '0410', '9000', 0, 50, 'breakfast', '', '2'].join('\t'),
+      ['GUEST,TEST', 'Upgrade / Upsell Fee', '10-OCT-26', '0410', '1010', 0, 40.82, '', '', '3'].join('\t')].join('\n'));
+    const pc = M.chargesFromJournal(pj, vm.runInContext('pkgEvents', sb), vm.runInContext('pkgGuests', sb), {});
+    check('my upsells: card / cash payments are never counted, a package reversal still is', pc.map(c => c.amount).join(' '), '-40.82');
+  }
   check('my upsells: the journal is read with every transaction code, not only 7510', [J.rows.length, J.min, J.max], [11, 20261010, 20261014]);
   const E = () => vm.runInContext('pkgEvents', sb), G = () => vm.runInContext('pkgGuests', sb);
   const ownAll = (trx) => M.own(M.chargesFromJournal(J, E(), G(), { trx }), E(), G());

@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 301, items: [
+    '🧾 My upsells fix: card and cash payments (Visa, Mastercard, cash, deposits… codes 9000+) are never counted as an upsell any more, even when their remark mentions breakfast. Only the line\'s own code and description decide what was sold, so the day totals are right again. A real package reversal (e.g. the upgrade fee taken back) still shows as a minus.',
+    '📅 My upsells: one-tap period buttons next to From / To: This month, Last month, All loaded. Load older reports and only the nights in the period you pick are counted.',
+  ] },
   { v: 300, items: [
     '🧾 New: My upsells (Package Audit → 🧾 My upsells), works without IN-Gauge. Load 3 Opera files: the User Activity Log PDF, the Reservation Detail (res_detail) and the Journal by Transaction Code (finjrnlbytrans). Pick whose upsells (you by default) and see every night you sold: date, confirmation, room, guest, package, amount, and in plain words WHY it is yours, with the exact Opera entry as proof. 📥 Download a colour Excel (My upsells, Summary, Evidence, Rules used), and 📌 Save today\'s record: every save is kept with its date and time, never overwritten. Keep the 3 Opera files too: they are the original proof.',
   ] },
