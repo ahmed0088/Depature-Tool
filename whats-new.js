@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 313, items: [
+    '🔑 A fresh sign-in page: it matches your theme, has clearer messages, a Stay signed in switch and smooth animations.',
+    '✨ The app feels more alive: numbers count up, new tasks slide in, ticks pop, and you get a little celebration when a shift\'s tasks, all departures or the monthly reports are done. It turns off if your phone is set to reduce motion.',
+  ] },
   { v: 311, items: [
     '🎨 Upload boxes look cleaner on every page: a neat card with a readable paste field. On Purpose of Stay the file inputs are now proper buttons ("📂 Opera Excel", "🌍 Origin XML") with the Load button next to the paste box.',
   ] },

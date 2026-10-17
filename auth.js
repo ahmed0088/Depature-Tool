@@ -60,7 +60,7 @@ function authInit() {
     const profile = await loadUserProfile(user.uid);
     if (!profile || !profile.active) {
       await firebase.auth().signOut();
-      showLoginScreen(navigator.onLine === false ? 'You\'re offline. Connect to the internet once to sign in on this device.' : 'Account disabled or not found. Contact your manager.');
+      showLoginScreen(navigator.onLine === false ? 'You\'re offline. Connect to the internet once to sign in on this device.' : 'We couldn\'t find an active account for you. Please ask your manager.');
       return;
     }
     // An unrecognised role gets the least access, never the most
@@ -120,7 +120,7 @@ async function _idleLogout() {
   currentProfile = null;
   try { await firebase.auth().signOut(); } catch(e) {}
   _clearLocalGuestDataCache();
-  _afterSignOut(`Signed out after ${_idleMins()} minutes of inactivity.`);
+  _afterSignOut(`You were signed out after ${_idleMins()} minutes without activity. Sign in again to carry on.`);
 }
 ['mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt =>
   document.addEventListener(evt, _resetIdleTimer, { passive: true })
@@ -139,18 +139,18 @@ function _startSelfListener(uid) {
     if (!currentUser) return; // already signed out, ignore
     if (!snap.exists()) {
       // Record deleted by owner
-      _forceSignOut('Your account has been deleted. Please contact your manager.');
+      _forceSignOut('Your account was removed. Please ask your manager if you still need access.');
       return;
     }
     const data = snap.val();
     if (data.active === false) {
       // Account disabled
-      _forceSignOut('Your account has been disabled. Please contact your manager.');
+      _forceSignOut('Your account is switched off. Please ask your manager to turn it back on.');
       return;
     }
     if (data.forceLogout === true) {
       // Admin used the Disconnect button
-      _forceSignOut('You have been disconnected by an administrator.');
+      _forceSignOut('A manager signed you out of this device. Sign in again to carry on.');
       return;
     }
   }, err => console.warn('[Auth] self-listener error:', err));
@@ -263,31 +263,80 @@ function applyRole(role) {
 }
 
 // ── Show / hide login ─────────────────────────────────────
+// Messages on the sign-in card are a soft callout (login.css): tone 'info' (blue, e.g. signed
+// out when idle), 'warn' (amber, offline / account problems) or 'err' (wrong password).
+let _lgSigningIn = false, _lgLeaveT = 0, _lgDoneT = 0;
+function _lgMsgTone(msg) {
+  const m = String(msg || '').toLowerCase();
+  if (/signed out|signed you out|disconnected/.test(m)) return 'info';
+  return 'warn';
+}
+function _lgShowMsg(msg, tone) {
+  const el = document.getElementById('loginError');
+  if (!el) return;
+  if (!msg) { el.style.display = 'none'; el.textContent = ''; return; }
+  el.textContent = msg;
+  el.dataset.tone = tone || _lgMsgTone(msg);
+  el.style.display = 'block';
+}
+function _lgBtn(state) {
+  const btn = document.getElementById('loginBtn');
+  if (!btn) return;
+  btn.classList.remove('is-busy', 'is-done');
+  btn.disabled = state !== 'idle';
+  btn.removeAttribute('aria-busy');
+  if (state === 'busy') {
+    btn.classList.add('is-busy'); btn.setAttribute('aria-busy', 'true');
+    btn.innerHTML = '<span class="login-btn-spinner" aria-hidden="true"></span><span class="lg-btn-label">Signing in…</span>';
+  } else if (state === 'done') {
+    btn.classList.add('is-done');
+    btn.innerHTML = '<svg class="lg-btn-check" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span class="lg-btn-label">Signed in</span>';
+  } else {
+    btn.innerHTML = '<span class="lg-btn-label">Sign in</span><svg class="lg-btn-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+  }
+}
+let _lgWired = false;
+function _lgWire() {
+  if (_lgWired) return; _lgWired = true;
+  // fields lose their red edge as soon as you start fixing them
+  ['loginEmail', 'loginPass'].forEach(id => document.getElementById(id)?.addEventListener('input', e => e.target.removeAttribute('aria-invalid')));
+  // the moving background rests while the tab is in the background
+  document.addEventListener('visibilitychange', () => document.getElementById('loginScreen')?.classList.toggle('lg-paused', document.hidden));
+  window.addEventListener('online', () => { const el = document.getElementById('loginError'); if (el && /offline/i.test(el.textContent)) _lgShowMsg(''); });
+}
 function showLoginScreen(errorMsg) {
-  document.getElementById('loginScreen').style.display = 'flex';
+  const scr = document.getElementById('loginScreen');
+  clearTimeout(_lgLeaveT); clearTimeout(_lgDoneT); _lgSigningIn = false;
+  scr.classList.remove('lg-leaving');
+  scr.style.display = 'flex';
   document.getElementById('appWrapper').style.display  = 'none';
+  _lgWire();
+  if (document.getElementById('loginBtn')?.disabled) _lgBtn('idle');   // back here mid sign-in (account switched off etc.)
   // Apply correct theme to login screen too
   const cur = typeof hoThemeName === 'function' ? hoThemeName() : (document.documentElement.getAttribute('data-theme') || 'night-ops');
   _applyLoginTheme(cur);
-  if (errorMsg) {
-    const el = document.getElementById('loginError');
-    if (el) { el.textContent = errorMsg; el.style.display = 'block'; }
-  }
+  if (errorMsg) _lgShowMsg(errorMsg);
 }
 
 function hideLoginScreen() {
-  document.getElementById('loginScreen').style.display = 'none';
+  const scr = document.getElementById('loginScreen');
   document.getElementById('appWrapper').style.display  = '';
+  const calm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Signed in just now from this card: a short "Signed in" moment, then the card steps back and
+  // the app (already drawn underneath) shows through. A saved sign-in on page load hides at once.
+  if (!_lgSigningIn || calm || scr.style.display === 'none') { _lgSigningIn = false; scr.style.display = 'none'; return; }
+  _lgSigningIn = false;
+  _lgBtn('done');
+  _lgShowMsg('');
+  clearTimeout(_lgLeaveT); clearTimeout(_lgDoneT);
+  _lgLeaveT = setTimeout(() => scr.classList.add('lg-leaving'), 420);
+  _lgDoneT  = setTimeout(() => { scr.style.display = 'none'; scr.classList.remove('lg-leaving'); _lgBtn('idle'); }, 420 + 560);
 }
 
 // ── Login theme sync ──────────────────────────────────────
-// The login screen always keeps its dark, glassy "ops console" background —
-// that's a deliberate design choice (#loginScreen locks --bg/--card/--text
-// etc. in styles.css). Flipping the whole card to each theme's real page
-// colors (e.g. Opera's flat white/red) looked like a completely different,
-// less premium product. Instead only the ACCENT flows through — the same
-// gold/red/indigo the user will see everywhere else once logged in — so the
-// theme choice is still visibly "real" without breaking the login mood.
+// The sign-in page follows the chosen theme (login.css): light themes get a clean white card on a
+// light page, dark themes a dark glass card. Here we only hand over the accent pair and the
+// colour that reads on the accent, for the Sign in button.
 function _applyLoginTheme(name) {
   const accents = {
     // Same accent/accent2 pairs as the real app theme (styles.css :root overrides)
@@ -311,18 +360,10 @@ function _applyLoginTheme(name) {
     'sand': { accent:'#b45309', accentDark:'#f59e0b', btnColor:'#ffffff' },
   };
   const t = accents[name] || accents['night-ops'];
+  const scr = document.getElementById('loginScreen');
+  if (scr) { scr.style.setProperty('--lg-a', t.accent); scr.style.setProperty('--lg-a2', t.accentDark); scr.style.setProperty('--lg-on', t.btnColor); }
   const s = document.getElementById('loginThemeStyle');
-  if (s) s.textContent = `
-    #loginScreen { --login-grid: ${t.accent}0d; --login-glow: ${t.accent}14; }
-    .login-title span { color: ${t.accent} !important; }
-    .login-input:focus { border-color: ${t.accent}88 !important; box-shadow: 0 0 0 3px ${t.accent}15 !important; }
-    .login-btn { background: linear-gradient(135deg,${t.accent},${t.accentDark}) !important; color: ${t.btnColor} !important; box-shadow: 0 8px 24px ${t.accent}40 !important; }
-    .login-btn:hover { box-shadow: 0 12px 32px ${t.accent}59 !important; }
-    .login-check-label a { color: ${t.accent} !important; }
-    .login-logo { border-color: ${t.accent}33 !important; --login-accent-glow-lo: ${t.accent}1a; --login-accent-glow-hi: ${t.accent}38; }
-    .login-theme-btn.active { border-color: ${t.accent} !important; color: ${t.accent} !important; background: ${t.accent}18 !important; }
-    #rememberMe { accent-color: ${t.accent} !important; }
-  `;
+  if (s) s.textContent = '';
 }
 
 // ── Login ─────────────────────────────────────────────────
@@ -330,13 +371,12 @@ async function authLogin() {
   const email  = document.getElementById('loginEmail').value.trim();
   const pass   = document.getElementById('loginPass').value;
   const remember = document.getElementById('rememberMe')?.checked;
-  const errEl  = document.getElementById('loginError');
   const btn    = document.getElementById('loginBtn');
+  if (btn && btn.disabled) return;   // already signing in
 
-  errEl.style.display = 'none';
-  errEl.classList.remove('shake');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="login-btn-spinner"></span>Signing in…';
+  _lgShowMsg('');
+  ['loginEmail', 'loginPass'].forEach(id => document.getElementById(id)?.removeAttribute('aria-invalid'));
+  _lgBtn('busy');
 
   // Save email if remember checked
   try { if (remember) localStorage.setItem('ibis_saved_email', email); else localStorage.removeItem('ibis_saved_email'); } catch (_) {}
@@ -347,37 +387,42 @@ async function authLogin() {
     : firebase.auth.Auth.Persistence.SESSION;
 
   try {
+    _lgSigningIn = true;
     await firebase.auth().setPersistence(persistence);
     await firebase.auth().signInWithEmailAndPassword(email, pass);
     // onAuthStateChanged handles the rest
   } catch(e) {
-    btn.disabled = false;
-    btn.textContent = 'Sign In →';
-    errEl.textContent = friendlyAuthError(e.code, e.message);
-    errEl.style.display = 'block';
+    _lgSigningIn = false;
+    _lgBtn('idle');
+    const offline = navigator.onLine === false || e.code === 'auth/network-request-failed';
+    _lgShowMsg(friendlyAuthError(e.code, e.message), offline ? 'warn' : 'err');
+    const errEl = document.getElementById('loginError');
+    if (errEl) errEl.title = e.code ? 'Code: ' + e.code : '';
+    // point at the field to fix
+    const bad = /email|user-not-found/.test(e.code || '') ? 'loginEmail' : /password|credential/.test(e.code || '') ? 'loginPass' : '';
+    if (bad) { const f = document.getElementById(bad); f.setAttribute('aria-invalid', 'true'); if (bad === 'loginPass') f.select(); else f.focus(); }
     // Restart the shake even on back-to-back failed attempts
-    errEl.classList.remove('shake');
-    void errEl.offsetWidth;
-    errEl.classList.add('shake');
+    const card = document.querySelector('#loginScreen .login-card');
+    if (card && !offline) { card.classList.remove('lg-shake'); void card.offsetWidth; card.classList.add('lg-shake'); }
     console.error('🔴 Auth error:', e.code, e.message);
   }
 }
 
 function friendlyAuthError(code, message) {
   console.error('🔴 Auth error code:', code, '| message:', message);
+  if (navigator.onLine === false) return 'You\'re offline. Connect to the internet once to sign in on this device.';
   const map = {
-    'auth/user-not-found':         'No account found with this email.',
-    'auth/wrong-password':         'Incorrect password.',
-    'auth/invalid-email':          'Invalid email address.',
-    'auth/too-many-requests':      'Too many attempts — wait 30 minutes or reset your password.',
-    'auth/user-disabled':          'This account has been disabled.',
-    'auth/invalid-credential':     'Incorrect email or password.',
-    'auth/missing-password':       'No password set — reset it in Firebase Console.',
-    'auth/operation-not-allowed':  'Email/Password sign-in is disabled in Firebase Console.',
-    'auth/network-request-failed': 'Network error — check your connection.',
+    'auth/user-not-found':         'We couldn\'t find an account with this email. Check it, or ask your manager to add you.',
+    'auth/wrong-password':         'That email and password don\'t match. Try again or ask your manager to reset it.',
+    'auth/invalid-email':          'That email doesn\'t look right. Check it and try again.',
+    'auth/too-many-requests':      'Too many tries in a row. Wait a few minutes and try again, or ask your manager to reset your password.',
+    'auth/user-disabled':          'This account is switched off. Please ask your manager.',
+    'auth/invalid-credential':     'That email and password don\'t match. Try again or ask your manager to reset it.',
+    'auth/missing-password':       'Please type your password.',
+    'auth/operation-not-allowed':  'Email sign-in is turned off for this hotel. Your manager can turn it on in Firebase.',
+    'auth/network-request-failed': 'Can\'t reach the sign-in service. Check your internet and try again.',
   };
-  const friendly = map[code];
-  return friendly ? `${friendly} [${code}]` : `Sign in failed: ${code || message || 'unknown error'}`;
+  return map[code] || 'Sign in didn\'t work this time. Please try again.' + (code ? ' (' + code.replace('auth/', '') + ')' : '');
 }
 
 // ── Logout ────────────────────────────────────────────────
@@ -865,7 +910,9 @@ function togglePassVis() {
   if (!input || !icon) return;
   const isHidden = input.type === 'password';
   input.type   = isHidden ? 'text' : 'password';
-  icon.innerHTML = isHidden ? _EYE_OPEN : _EYE_SHUT;
+  icon.innerHTML = isHidden ? _EYE_SHUT : _EYE_OPEN;   // shown → "hide" icon, hidden → "show" icon
+  const b = document.getElementById('loginEye');
+  if (b) { const l = isHidden ? 'Hide password' : 'Show password'; b.setAttribute('aria-label', l); b.title = l; b.setAttribute('aria-pressed', String(isHidden)); }
   input.focus();
 }
 
