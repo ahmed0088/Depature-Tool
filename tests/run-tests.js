@@ -1406,6 +1406,7 @@ console.log('\nQuiet when off · shift task times');
   const est = M.own(M.chargesFromLog(E(), G(), {}, 20261020), E(), G());
   check('my upsells: the estimate counts only nights already charged (up to yesterday)', M.chargesFromLog(E(), G(), {}, 20261009).filter(c => c.conf === 'A1').map(c => c.date % 100).join(','), '5,6,7,8');
   check('my upsells: a package deleted after it was added is not estimated', M.chargesFromLog(E(), G(), { A1: [{ code: 'UPS40BB', ts: 202610061000 }] }, 20261020).filter(c => c.conf === 'A1').length, 0);
+  check('my upsells: a package deleted and put back (price change) is still estimated', M.chargesFromLog(E(), G(), { A1: [{ code: 'UPS40BB', ts: 202610051553 }] }, 20261020).filter(c => c.conf === 'A1').length, 8);
   const estA = est.filter(c => c.conf === 'A1');
   check('my upsells: no journal → nights estimated from the log date range × price', [estA.length, estA[0].date, estA[estA.length - 1].date, estA[0].amount, estA[0].estimated], [8, 20261005, 20261012, 32.66, true]);
   check('my upsells: estimated early check-in is one night only', est.filter(c => c.conf === 'C1' && c.kind === 'EC').length, 1);

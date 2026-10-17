@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 304, items: [
+    '🧾 My upsells counts more accurately: a package a colleague removed and put straight back (to change its price) is still counted for whoever sold it, at the price it was first sold for. On a long stay this had dropped a whole room upgrade from the total.',
+  ] },
   { v: 303, items: [
     '🧾 My upsells Excel: just two sheets, "My Upsells" and "Evidence". A navy title band, your name, the period and the totals, then every upsell (No., Date, Confirmation No., Room, Guest Name, Package, Type, Amount, Sold On), all centred, with a soft colour per type and a total row. Evidence lists the Opera log lines. No rules, notes or anything about how it was made.',
   ] },

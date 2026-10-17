@@ -250,12 +250,15 @@
         const sorted = list.slice().sort((a, b) => b.ts - a.ts);
         const ranged = sorted.find(e => e.from && e.to && dayNum(e.from) && dayNum(e.to));
         if (!ranged) return;
-        const priced = sorted.find(e => e.action === 'ADDED' && e.price);
         const lastAdd = sorted.find(e => e.action === 'ADDED');
         const code = (lastAdd || ranged).code;
+        // the price it was first sold at (a colleague re-adding it later at another price doesn't change the sale)
+        const priced = sorted.slice().reverse().find(e => e.action === 'ADDED' && e.price && e.code === code && !isSys(e.user))
+          || sorted.find(e => e.action === 'ADDED' && e.price);
         // taken off the booking after it was last added (e.g. UPS45BB deleted, USS50 sold instead): not charged
-        const del = (deleted[conf] || []).filter(x => x.code === code && x.ts >= (lastAdd ? lastAdd.ts : 0));
-        if (del.length) return;
+        // (deleted and put back in the same entry or later, e.g. to change the price, is still on)
+        const lastOn = Math.max(0, ...list.filter(e => e.code === code).map(e => e.ts));
+        if ((deleted[conf] || []).some(x => x.code === code && x.ts > lastOn)) return;
         let a = dayNum(ranged.from), b = dayNum(ranged.to);
         if (b < a) [a, b] = [b, a];
         const ga = dayNum(g.arr), gd = dayNum(g.dep);
