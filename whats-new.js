@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 311, items: [
+    '🎨 Upload boxes look cleaner on every page: a neat card with a readable paste field. On Purpose of Stay the file inputs are now proper buttons ("📂 Opera Excel", "🌍 Origin XML") with the Load button next to the paste box.',
+  ] },
   { v: 310, items: [
     '🧳 Departures: 4 rooms per row in straight lines (3 on a smaller screen, 2 on a tablet, 1 on a phone). Cards in the same row are the same height and their Check out buttons line up.',
   ] },

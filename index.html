@@ -313,59 +313,79 @@
      LOGIN SCREEN
 ══════════════════════════════════════════════════════ -->
 <div id="loginScreen" style="display:none;">
-  <div class="login-bg">
-    <div class="login-card">
+  <!-- moving background: aurora glow, grid shimmer, a few drifting sparks (login.css) -->
+  <div class="lg-sky" aria-hidden="true">
+    <i class="lg-aurora lg-a1"></i><i class="lg-aurora lg-a2"></i><i class="lg-aurora lg-a3"></i>
+    <div class="lg-grid"></div>
+    <div class="lg-sparks"><i style="--x:6%;--d:19s;--w:0s;--s:3px"></i><i style="--x:14%;--d:23s;--w:-6s;--s:2px"></i><i style="--x:23%;--d:17s;--w:-11s;--s:4px"></i><i style="--x:31%;--d:26s;--w:-3s;--s:2px"></i><i style="--x:42%;--d:21s;--w:-15s;--s:3px"></i><i style="--x:51%;--d:28s;--w:-8s;--s:2px"></i><i style="--x:60%;--d:18s;--w:-13s;--s:3px"></i><i style="--x:68%;--d:24s;--w:-2s;--s:2px"></i><i style="--x:77%;--d:20s;--w:-17s;--s:4px"></i><i style="--x:85%;--d:27s;--w:-9s;--s:2px"></i><i style="--x:93%;--d:22s;--w:-5s;--s:3px"></i><i style="--x:37%;--d:30s;--w:-20s;--s:2px"></i></div>
+  </div>
 
-      <!-- Theme switcher -->
-      <div class="login-theme-row">
-        <button type="button" id="loginThemeBtn" class="login-theme-pick" onclick="hoThemeMenu(this)" aria-haspopup="menu" title="Change theme">🎨 Theme</button>
+  <div class="login-bg">
+    <!-- left: what HotelOps is (brand.js skips its own hero when this one is here) -->
+    <div id="hoHero" class="ho-hero lg-hero">
+      <div class="lg-brand">
+        <div class="ho-hero-logo lg-mark"><svg class="ho-logo" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="lgLogoG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--ho-a1,#f6d77e)"/><stop offset="1" style="stop-color:var(--ho-a2,#c38b26)"/></linearGradient></defs><rect width="64" height="64" rx="16" fill="url(#lgLogoG)"/><path d="M17 15h9v14h12V15h9v34h-9V37H26v12h-9z" style="fill:var(--ho-ink,#0b0f16)"/><circle cx="32" cy="21.5" r="3.2" style="fill:var(--ho-ink,#0b0f16)"/></svg></div>
+        <h1 class="lg-word">Hotel<b>Ops</b></h1>
+      </div>
+      <p class="lg-tag">Every shift in one place.</p>
+      <p class="lg-lead">Departures, arrivals, night audit, Tourism Dirham, packages and reports, with a smart assistant that keeps an eye on the details for you.</p>
+      <ul class="lg-points">
+        <li><span class="lg-tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span><b>DTCM and Opera match</b> to the dirham, every month</span></li>
+        <li><span class="lg-tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span><b>Ops Brain</b> spots what's missing and helps you fix it</span></li>
+        <li><span class="lg-tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span><b>Live for the whole team</b>, on desk PCs and phones</span></li>
+      </ul>
+    </div>
+
+    <div class="login-card" role="main">
+      <div class="login-theme-row lg-in" style="--i:0">
+        <button type="button" id="loginThemeBtn" class="login-theme-pick" onclick="hoThemeMenu(this)" aria-haspopup="menu" title="Change theme">Theme</button>
       </div>
 
-      <div class="login-logo">🏨</div>
-      <div class="login-title">Ibis Styles <span>Dubai</span></div>
-      <div class="login-sub">Front Desk Operations · 2026</div>
+      <h2 class="lg-title lg-in" style="--i:1">Welcome back</h2>
+      <p class="lg-sub lg-in" style="--i:2">Sign in to start your shift.</p>
 
-      <div class="login-divider"><span>Sign in to continue</span></div>
+      <div id="loginError" class="login-error" role="alert" aria-live="polite" style="display:none;"></div>
 
-      <form id="loginForm" onsubmit="event.preventDefault();authLogin();" style="width:100%;">
-        <div class="login-field">
-          <label class="login-label" for="loginEmail">Email Address</label>
-          <input id="loginEmail" name="email" type="email" class="login-input"
-            placeholder="you@hotel.com"
-            autocomplete="username email"
-            onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()"/>
+      <form id="loginForm" onsubmit="event.preventDefault();authLogin();" novalidate>
+        <div class="login-field lg-in" style="--i:3">
+          <label class="login-label" for="loginEmail">Work email</label>
+          <div class="lg-input-wrap">
+            <svg class="lg-input-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7 8 6 8-6"/></svg>
+            <input id="loginEmail" name="email" type="email" class="login-input"
+              placeholder="name@hotel.com" inputmode="email" autocapitalize="off" spellcheck="false"
+              autocomplete="username email"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('loginPass').focus()}"/>
+          </div>
         </div>
 
-        <div class="login-field">
+        <div class="login-field lg-in" style="--i:4">
           <label class="login-label" for="loginPass">Password</label>
-          <div class="login-pass-wrap">
+          <div class="login-pass-wrap lg-input-wrap">
+            <svg class="lg-input-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
             <input id="loginPass" name="password" type="password" class="login-input"
-              placeholder="••••••••"
-              autocomplete="current-password"
-              onkeydown="if(event.key==='Enter')authLogin()"/>
-            <button type="button" class="login-eye" onclick="togglePassVis()" title="Show/hide password" tabindex="-1">
+              placeholder="Your password"
+              autocomplete="current-password"/>
+            <button type="button" id="loginEye" class="login-eye" onclick="togglePassVis()" aria-label="Show password" aria-pressed="false" title="Show password">
               <span id="eyeIcon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>
             </button>
           </div>
         </div>
 
-        <div id="loginError" class="login-error" style="display:none;"></div>
-
-        <div class="login-remember">
-          <label class="login-check-label">
-            <input type="checkbox" id="rememberMe" style="accent-color:#e8b84b;margin-right:6px;"/>
-            Stay signed in
+        <div class="login-remember lg-in" style="--i:5">
+          <label class="login-check-label lg-switch" for="rememberMe">
+            <input type="checkbox" id="rememberMe" role="switch"/>
+            <span class="lg-switch-track" aria-hidden="true"><span class="lg-switch-dot"></span></span>
+            <span class="lg-switch-text">Stay signed in <small>on this device</small></span>
           </label>
         </div>
 
-        <button id="loginBtn" type="submit" class="login-btn">Sign In →</button>
+        <button id="loginBtn" type="submit" class="login-btn lg-in" style="--i:6"><span class="lg-btn-label">Sign in</span><svg class="lg-btn-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
       </form>
 
-      <div class="login-footer">Secured by Firebase Authentication</div>
-      <div class="login-setup-link" style="margin-top:10px;text-align:center;">
-        <a href="setup-account.html" style="font-family:'DM Mono',monospace;font-size:0.58rem;color:#374d68;text-decoration:none;letter-spacing:0.08em;" onmouseover="this.style.color='#e8b84b'" onmouseout="this.style.color='#374d68'">⚙ First time setup</a>
+      <div class="lg-foot lg-in" style="--i:7">
+        <a class="login-setup-link lg-setup" href="setup-account.html">First time here? <b>Set up your hotel</b></a>
+        <div class="login-footer lg-secure"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Secure sign-in</div>
       </div>
-
     </div>
   </div>
 </div>
@@ -1005,20 +1025,23 @@
   <div id="purposeXmlCoverage" class="xml-cov" style="display:none;"></div>
   <div class="card" id="purposeUploadCard">
     <div class="upload-zone">
-      <div class="upload-label-bar"><div class="upload-dot mint"></div><span class="upload-lbl">Upload or Paste</span><span class="upload-sub">Or sync from Arrivals ↑</span></div>
-      <div style="display:flex;align-items:center;gap:12px;padding:8px 14px;background:var(--surface);border-bottom:1px solid var(--border);flex-wrap:wrap;">
-        <span style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);">📂 Upload Excel:</span>
-        <input type="file" accept=".xlsx,.xls,.csv" onchange="loadOperaFile(this,'pur')" style="font-size:0.68rem;color:var(--text2);"/>
-        <span style="width:1px;height:18px;background:var(--border);flex-shrink:0;"></span>
-        <span style="font-family:var(--mono);font-size:0.6rem;color:var(--mint);">🌍 Origin XML (pick both at once):</span>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;" title="Vicas and Arrival Today Vicas: select both files together (Ctrl or Shift + click)">
-          <input type="file" accept=".xml" multiple onchange="loadOriginXML(this)" style="font-size:0.68rem;color:var(--text2);"/>
+      <div class="upload-label-bar"><div class="upload-dot mint"></div><span class="upload-lbl">Load today's arrivals</span><span class="upload-sub">Or it syncs from the Arrivals page by itself</span></div>
+      <div class="up-pickers">
+        <label class="up-pick">
+          <input type="file" accept=".xlsx,.xls,.csv" onchange="loadOperaFile(this,'pur')"/>
+          <span class="up-ico">📂</span><span class="up-txt"><b>Opera Excel</b><small>.xlsx · .xls · .csv</small></span>
         </label>
-        <span id="originXmlLabel" style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);white-space:nowrap;"></span>
+        <label class="up-pick mint" title="Vicas and Arrival Today Vicas: select both files together (Ctrl or Shift + click)">
+          <input type="file" accept=".xml" multiple onchange="loadOriginXML(this)"/>
+          <span class="up-ico">🌍</span><span class="up-txt"><b>Origin XML</b><small>pick both Vicas files at once</small></span>
+        </label>
+        <span id="originXmlLabel" class="up-status"></span>
       </div>
-      <textarea id="purposeInput" placeholder="Paste data here and click Load…" style="height:60px;"></textarea>
+      <div class="up-paste">
+        <textarea id="purposeInput" placeholder="…or paste the Opera arrivals here (copy the whole report, header row included)"></textarea>
+        <button class="btn gold up-load" onclick="loadPurpose()">⚡ Load</button>
+      </div>
     </div>
-    <div style="display:flex;gap:8px;margin-top:9px;"><button class="btn gold" onclick="loadPurpose()">⚡ Load</button></div>
   </div>
   <div class="kpi-row c3">
     <div class="kpi mint"><div class="kpi-accent"></div><div class="kpi-label">Total</div><div class="kpi-val" id="pk-total">0</div></div>
