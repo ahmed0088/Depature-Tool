@@ -241,94 +241,112 @@ function _xrefNormRoom(r) {
   return s || '0';
 }
 
-// ── Core logic: is this arrival an extension? ─────────────
+// ── Core logic: who extended? ─────────────────────────────
 //
-//  EXTENSION when ANY of:
-//   A) Same ROOM NUMBER on both dep board and arrivals list, AND the same
-//      guest — genuine same-room re-booking.
-//   B) Same LAST NAME found anywhere on dep board (any room) — guest made
-//      a new booking, possibly into a different room.
-//
-//  NEW ARRIVAL (routine turnover, not an extension) when:
-//   C) Room on dep board matches, but it's a DIFFERENT guest — the room is
-//      just being reused for someone unrelated, which is the NORMAL case
-//      for most departures (a room clears out and someone new checks in
-//      the same day) — not evidence of anything. Room reuse alone is not
-//      a meaningful signal on its own; only a name match is.
-//   D) No room match and no name match → brand new guest.
+//  Every departing room is paired with at most ONE arriving booking, and
+//  every arrival with at most one departure (best score wins first):
+//   100  same full name + same room          → ✓ sure
+//    85  same full name, new room not given   → ✓ sure
+//    80  same full name, moved to a new room  → ✓ sure (unless two guests share that name → check)
+//    60  same room + only the surname matches → ~ check
+//    40  only the surname matches             → ~ check
+//  A bare room-number coincidence with a different name is routine same-day
+//  turnover, not an extension; it is kept as `turnoverDep` for Other details.
+//  Departures marked "Extended" on the Departures page with no new booking
+//  become "Extended on the same booking" cards (see _adBuild).
 //
 //  result sets on arrRecord:
 //   isExtension  — true/false
-//   matchType    — 'room' | 'name' | null  (what triggered the match)
+//   matchType    — 'room' | 'name' | null
 //   depGuest     — matching depRooms entry (or null)
 //   extReason    — short reason string for UI
-function _xrefCheckExtension(arrRecord) {
-  if (!depRooms || !depRooms.length) {
-    arrRecord.isExtension = false;
-    arrRecord.matchType   = null;
-    arrRecord.depGuest    = null;
-    arrRecord.extReason   = 'Load dep board for verdict';
-    return;
-  }
+//   adScore / adSure / turnoverDep
 
-  // Use _xrefNormRoom so '0102' and '102' compare equal
-  const arrRoom = _xrefNormRoom(arrRecord.room);
-  // Use rawName (Opera format) for name matching — more reliable than parsed name
-  const nameForMatch = arrRecord.rawName || arrRecord.name;
+// Very common given names / particles: sharing one of these says nothing.
+const _AD_COMMON = new Set(['MOHAMMED','MOHAMMAD','MOHAMED','MUHAMMAD','MUHAMMED','MOHAMAD','AHMED','AHMAD','ABDUL','ABDULLAH','ABDULLA',
+  'ALI','KHAN','HASSAN','HUSSAIN','HUSSEIN','HUSAIN','KUMAR','SINGH','BIN','BINT','AL','EL','ABU','SYED','SAYED','SHEIKH','SHAIKH','DEVI','BEGUM']);
 
-  // ── A) ROOM NUMBER MATCH — only counts as an extension if it's also
-  // the SAME GUEST. A bare room-number coincidence with a different name
-  // is routine same-day turnover (see case C below), not an extension —
-  // nearly every departing room gets reused by someone unrelated the same
-  // day, so treating that alone as "extension, verify" buried real ones
-  // under false positives.
-  if (arrRoom) {
-    const depByRoom = depRooms.find(r =>
-      _xrefNormRoom(r.roomStr) === arrRoom ||
-      _xrefNormRoom(String(r.room)) === arrRoom
-    );
-
-    if (depByRoom && _namesMatch(nameForMatch, depByRoom.name)) {
-      arrRecord.depGuest    = depByRoom;
-      arrRecord.isExtension = true;
-      arrRecord.matchType   = 'room';
-      arrRecord.extReason   = `Room ${arrRoom} · same guest (${parseName(depByRoom.name)}) · ↪ Extension`;
-      return;
-    }
-    // Room matched but a different guest, or no room match at all — fall
-    // through to the name-match check below, since this guest might still
-    // be a genuine extension into a DIFFERENT room elsewhere on the board.
-  }
-
-  // ── B) NAME MATCH anywhere on dep board ──────────────────
-  // Guest booked a new reservation (possibly different room) — same last name found
-  const depByName = depRooms.find(r => _namesMatch(nameForMatch, r.name));
-  if (depByName) {
-    arrRecord.isExtension = true;
-    arrRecord.matchType   = 'name';
-    arrRecord.depGuest    = depByName;
-    const depRoom = _xrefNormRoom(depByName.roomStr || String(depByName.room || ''));
-    arrRecord.extReason = arrRoom
-      ? `Name match · in room ${depRoom} → new booking room ${arrRoom} · ↪ Extension`
-      : `Name match · in room ${depRoom} → ↪ Extension (room TBD)`;
-    return;
-  }
-
-  // ── C/D) No match → brand new guest, or routine same-room turnover ──
-  arrRecord.isExtension = false;
-  arrRecord.matchType   = null;
-  arrRecord.depGuest    = null;
-  arrRecord.extReason   = arrRoom
-    ? `Room ${arrRoom} becomes free · new guest checking in`
-    : 'New guest · room not assigned yet';
+function _adNameKey(raw) {
+  if (typeof _natNameKey === 'function') return _natNameKey(raw);   // arrivals-purpose.js: titles off, words sorted
+  return String(raw || '')
+    .replace(/\b(MR|MRS|MS|MISS|DR|MSTR|MASTER|PROF|SHEIKH|SHEIKHA)\b\.?/gi, ' ')
+    .replace(/[^A-Za-z ]/g, ' ')
+    .toUpperCase().split(/\s+/).filter(w => w.length > 1).sort().join(' ');
 }
 
+// 2 = same full name (word order and titles ignored), 1 = surname-level, 0 = no
+function _adNameLevel(a, b) {
+  const wa = _adNameKey(a).split(' ').filter(Boolean);
+  const wb = _adNameKey(b).split(' ').filter(Boolean);
+  if (!wa.length || !wb.length) return { lvl: 0 };
+  const [sm, bg] = wa.length <= wb.length ? [wa, wb] : [wb, wa];
+  if (sm.length >= 2 && sm.every(w => bg.includes(w))) return { lvl: 2 };
+  const shared = wa.filter(w => wb.includes(w) && w.length >= 3 && !_AD_COMMON.has(w));
+  if (shared.length >= 2) return { lvl: 2 };
+  if (wa.join(' ') === wb.join(' ')) return { lvl: 1, word: wa[0] };          // single-word names
+  if (shared.length === 1 && shared[0].length >= 4) return { lvl: 1, word: shared[0] };
+  return { lvl: 0 };
+}
+
+function _adDepRoom(d) { return _xrefNormRoom(d.roomStr || String(d.room || '')); }
+function _adCap(w) { w = String(w || '').toLowerCase(); return w.charAt(0).toUpperCase() + w.slice(1); }
+
+function _xrefCheckExtension(arrRecord) { _xrefEnrichAll(); return arrRecord; }
+
+let _adPairs = [];   // [{arr, dep, score, sure, reason}]
 function _xrefEnrichAll() {
-  [..._xrefArrRooms, ..._xrefArrNoRoom].forEach(a => {
-    a.isExtension = false;
-    a.depGuest    = null;
-    a.extReason   = '';
-    _xrefCheckExtension(a);
+  const arrs = [..._xrefArrRooms, ..._xrefArrNoRoom];
+  const deps = (typeof depRooms !== 'undefined' && Array.isArray(depRooms)) ? depRooms : [];
+  arrs.forEach(a => { a.isExtension = false; a.matchType = null; a.depGuest = null; a.extReason = ''; a.adScore = 0; a.adSure = false; a.turnoverDep = null; });
+  _adPairs = [];
+  if (!deps.length) {
+    arrs.forEach(a => { a.extReason = 'Load departures for a verdict'; });
+    return;
+  }
+  const cand = [];
+  const fullA = new Map(), fullD = new Map();
+  arrs.forEach(a => {
+    const ar = a.room ? _xrefNormRoom(a.room) : '';
+    deps.forEach(d => {
+      const m = _adNameLevel(a.rawName || a.name, d.name);
+      const sameRoom = !!ar && ar === _adDepRoom(d);
+      if (sameRoom && !m.lvl) { a.turnoverDep = a.turnoverDep || d; return; }
+      if (!m.lvl) return;
+      let score;
+      if (m.lvl === 2) score = sameRoom ? 100 : (!ar ? 85 : 80);
+      else score = sameRoom ? 60 : 40;
+      if (m.lvl === 2) { fullA.set(a, (fullA.get(a) || 0) + 1); fullD.set(d, (fullD.get(d) || 0) + 1); }
+      cand.push({ a, d, score, sameRoom, lvl: m.lvl, word: m.word });
+    });
+  });
+  cand.sort((x, y) => y.score - x.score);
+  const usedA = new Set(), usedD = new Set();
+  cand.forEach(c => {
+    if (usedA.has(c.a) || usedD.has(c.d)) return;
+    usedA.add(c.a); usedD.add(c.d);
+    const a = c.a, d = c.d, dr = _adDepRoom(d), ar = a.room ? _xrefNormRoom(a.room) : '';
+    const twins = c.lvl === 2 && !c.sameRoom && ((fullA.get(a) || 0) > 1 || (fullD.get(d) || 0) > 1);
+    let sure = c.score >= 80 && !twins, reason;
+    if (c.score === 100)      reason = 'Same name and same room on both lists.';
+    else if (twins)           reason = 'Same name, but more than one guest has this name today. Check the right room.';
+    else if (c.score === 85)  reason = `Same full name. New booking has no room yet (now in ${dr}).`;
+    else if (c.score === 80)  reason = `Same full name. Moves from room ${dr} to ${ar}.`;
+    else if (c.score === 60)  reason = `Same room and surname (${_adCap(c.word)}), but the first name is different. Check it is the same guest.`;
+    else                      reason = `Only the surname (${_adCap(c.word)}) matches, in a different room. Could be a different guest — check.`;
+    a.isExtension = true;
+    a.matchType   = c.sameRoom ? 'room' : 'name';
+    a.depGuest    = d;
+    a.adScore     = c.score;
+    a.adSure      = sure;
+    a.extReason   = (sure ? '✓ ' : '~ Check · ') + reason;
+    _adPairs.push({ arr: a, dep: d, score: c.score, sure, reason });
+  });
+  arrs.forEach(a => {
+    if (a.isExtension) return;
+    const ar = a.room ? _xrefNormRoom(a.room) : '';
+    a.extReason = a.turnoverDep
+      ? `Room ${ar} is leaving today (${parseName(a.turnoverDep.name)}) · new guest`
+      : ar ? `Room ${ar} · new guest checking in` : 'New guest · room not assigned yet';
   });
 }
 
@@ -346,13 +364,14 @@ function _xrefApplyLoad(result) {
 
   const total = _xrefArrRooms.length + _xrefArrNoRoom.length;
   const lbl   = document.getElementById('xrefDateLabel');
-  if (lbl) lbl.textContent = `${total} arrivals loaded · ${new Date().toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' })}`;
+  if (lbl) lbl.textContent = `Arrivals report pasted (${total}) · ${new Date().toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' })}`;
 
   _xrefEnrichAll();
   xrefRender();
   if (typeof depRender === 'function' && !(typeof depIsTyping === 'function' && depIsTyping())) depRender();
+  adRender();
 
-  const ext = [..._xrefArrRooms, ..._xrefArrNoRoom].filter(a => a.isExtension).length;
+  const ext = _adCards.length;
   let msg = `${total} arrivals loaded`;
   if (ext) msg += ` · ↪ ${ext} extension${ext > 1 ? 's' : ''} found`;
   showToast(msg, 'ok');
@@ -428,6 +447,9 @@ function xrefSetFilter(f, el) {
 function xrefSetSearch(val) {
   _xrefSearch = (val || '').toLowerCase().trim();
   xrefRender();
+  // Global search fills this box: make the extension cards follow it too.
+  const ad = document.getElementById('adSearch');
+  if (ad && document.activeElement !== ad && typeof adSetSearch === 'function') { ad.value = val || ''; adSetSearch(val); }
 }
 
 function _xrefApplyFilters(records, type) {
@@ -463,8 +485,6 @@ function xrefRender() {
   set('xref-kpi-assigned',   _xrefArrRooms.length); // Total with room assigned
   set('xref-kpi-unassigned', unassigned);           // No room yet (new guests)
 
-  const badge = document.getElementById('badge-xref');
-  if (badge) badge.textContent = extensions || total || '0';
 
   set('xref-fc-all',        total);
   set('xref-fc-conflicts',  extensions);
@@ -478,7 +498,7 @@ function xrefRender() {
   if (btnNew) btnNew.childNodes[0].textContent = '🛎 New Arrivals ';
 
   const noDep = document.getElementById('xrefNoteNoDep');
-  if (noDep) noDep.style.display = (!depRooms || !depRooms.length) ? '' : 'none';
+  if (noDep) noDep.style.display = (typeof depRooms === 'undefined' || !depRooms || !depRooms.length) ? '' : 'none';
 
   const tbody = document.getElementById('xrefTable');
   if (!tbody) return;
@@ -520,7 +540,7 @@ function xrefRender() {
   }
 
   tbody.innerHTML = html;
-  xrefInjectDepStrips();
+  if (_xrefLoaded) xrefInjectDepStrips();
 }
 
 // ── Section header ────────────────────────────────────────
@@ -548,10 +568,10 @@ function _xrefRow(a, rowType) {
     `;
   } else if (isExt) {
     depInfo = `<span style="font-family:var(--mono);font-size:0.65rem;color:var(--sky);">Same guest · matched by name</span>`;
-  } else if (a.depGuest) {
+  } else if (a.turnoverDep) {
     depInfo = `
       <div style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);">Departing today</div>
-      <div style="font-weight:500;color:var(--amber);font-size:0.72rem;">${escapeHtml(a.depGuest.name)}</div>
+      <div style="font-weight:500;color:var(--amber);font-size:0.72rem;">${escapeHtml(a.turnoverDep.name)}</div>
       <span class="xref-dep-status dep-due" style="margin-top:2px;">DUE OUT · DIFFERENT GUEST</span>
     `;
   } else {
@@ -630,7 +650,7 @@ function xrefQuickAssign(btn, key) {
   _xrefArrNoRoom = _xrefArrNoRoom.filter(a => a !== rec);
   _xrefArrRooms.push(rec);
   _xrefCheckExtension(rec);
-  xrefRender();
+  xrefRender(); adRender();
   showToast(`Room ${roomNum} assigned${rec.isExtension ? ' — ↪ Extension detected!' : ''}`, rec.isExtension ? 'ok' : 'info');
 }
 
@@ -650,12 +670,12 @@ function xrefDeleteRow(key, listType) {
     _xrefArrNoRoom = _xrefArrNoRoom.filter(a => (a.conf || a.name) !== key);
   }
   document.querySelectorAll('.xref-dep-strip').forEach(s => s.remove());
-  xrefRender();
+  xrefRender(); adRender();
 }
 
 // ── Copy extensions list ──────────────────────────────────
 function xrefCopyConflicts() {
-  const list = _xrefArrRooms.filter(a => a.isExtension);
+  const list = [..._xrefArrRooms, ..._xrefArrNoRoom].filter(a => a.isExtension);
   if (!list.length) { showToast('No extensions found', 'info'); return; }
   const time = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
   const lines = [
@@ -663,7 +683,7 @@ function xrefCopyConflicts() {
     `${'─'.repeat(55)}`,
     `Room    Guest                    Nights  Source`,
     `${'─'.repeat(55)}`,
-    ...list.map(a => `${a.room.padEnd(8)}${a.name.substring(0,24).padEnd(24)} ${String(a.nights+'N').padEnd(8)}${a.source}`),
+    ...list.map(a => `${(a.room || 'TBA').padEnd(8)}${a.name.substring(0,24).padEnd(24)} ${String(a.nights+'N').padEnd(8)}${a.source}`),
     `${'─'.repeat(55)}`,
     `${list.length} room${list.length > 1 ? 's' : ''} with extension bookings`,
   ];
@@ -673,14 +693,14 @@ function xrefCopyConflicts() {
 
 // ── Copy HK priority (extensions need priority turnover) ──
 function xrefCopyHKPriority() {
-  const list = _xrefArrRooms.filter(a => a.isExtension);
+  const list = [..._xrefArrRooms, ..._xrefArrNoRoom].filter(a => a.isExtension);
   if (!list.length) { showToast('No extension rooms', 'info'); return; }
   const time = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
   const lines = [
     `🏨 *Extension Rooms — ${time}*`,
     `_Guest made new booking — same room_`,
     ``,
-    ...list.map(a => `↪ Room ${a.room} · ${a.name} · ${a.nights}N · ${a.source}`),
+    ...list.map(a => `↪ Room ${a.room || 'TBA'} · ${a.name} · ${a.nights}N · ${a.source}`),
     ``,
     `${list.length} room${list.length > 1 ? 's' : ''} with extensions`,
   ];
@@ -707,6 +727,7 @@ function xrefCopyCanExtend() {
 // ── Inject strips into dep board cards ───────────────────
 function xrefInjectDepWarnings() { xrefInjectDepStrips(); }
 function xrefInjectDepStrips() {
+  adSchedule();                       // departures changed → refresh the Extensions list
   if (!_xrefLoaded) return;
   _xrefEnrichAll();
 
@@ -754,7 +775,7 @@ function xrefClear() {
   const reloadBtn = document.getElementById('xrefReloadBtn');
   if (reloadBtn) reloadBtn.style.display = 'none';
   const lbl = document.getElementById('xrefDateLabel');
-  if (lbl) lbl.textContent = 'Same guest on arrivals + departures = extension booked · Load dep board first';
+  if (lbl) lbl.textContent = 'Guests leaving today who booked again — found for you';
   const ta = document.getElementById('xrefInput');
   if (ta) ta.value = '';
   document.querySelectorAll('.xref-dep-strip').forEach(s => s.remove());
@@ -762,6 +783,8 @@ function xrefClear() {
   if (badge) badge.textContent = '0';
   const search = document.getElementById('xrefSearch');
   if (search) search.value = '';
+  _adArrSig = '';
+  adRender();
 }
 
 // ── CSS ───────────────────────────────────────────────────
@@ -890,4 +913,450 @@ function xrefClear() {
   .xref-strip-badge-new { background:rgba(62,207,142,0.15); border:1px solid var(--mint); color:var(--mint); }
   `;
   document.head.appendChild(style);
+})();
+
+// ═══════════════════════════════════════════════════════════
+//  EXTENSIONS VIEW (top of the Arr vs Dep page)
+//  Big count + one card per extension. Arrivals come from the pasted
+//  report on this page, or — when none is pasted — from the Arrivals page
+//  (arrGuests, shared through Firebase). "Mark as checked" is shared per
+//  day, per item: arrdep/checked/{date}/{key}.
+// ═══════════════════════════════════════════════════════════
+let _adArrSig   = '';
+let _adSrc      = '';        // 'paste' | 'arrivals' | ''
+let _adQ        = '';
+let _adChecked  = {};
+let _adListenOn = '';
+let _adBusy     = false;
+let _adRaf      = 0;
+let _adShowPaste = false;
+let _adCards    = [];
+
+const _adToday = () => typeof hoLocalISO === 'function' ? hoLocalISO() : new Date().toISOString().slice(0, 10);
+const _AD_MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const _AD_DAY = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function _adFmt(d) { return d && !isNaN(d) ? `${_AD_DAY[d.getDay()]} ${d.getDate()} ${_AD_MON[d.getMonth()]}` : ''; }
+function _adIsoFmt(iso) { const m = /^(\d{4})-(\d\d)-(\d\d)$/.exec(iso || ''); return m ? _adFmt(new Date(+m[1], m[2] - 1, +m[3])) : (iso || ''); }
+function _adParse(s) { try { return typeof parseOperaDate === 'function' ? parseOperaDate(s) : null; } catch (e) { return null; } }
+function _adAddDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+
+// When nothing is pasted here, use today's list from the Arrivals page.
+function _adSyncArrivals() {
+  if (_xrefLoaded) { _adSrc = 'paste'; return; }
+  const g = (typeof arrGuests !== 'undefined' && Array.isArray(arrGuests)) ? arrGuests : [];
+  if (!g.length) {
+    if (_adSrc === 'arrivals') { _xrefArrRooms = []; _xrefArrNoRoom = []; }
+    _adSrc = ''; _adArrSig = ''; return;
+  }
+  _adSrc = 'arrivals';
+  const sig = g.length + '|' + g.map(x => `${x.room}~${x.name}~${x.conf}~${x.nights}`).join('|');
+  if (sig === _adArrSig) return;
+  _adArrSig = sig;
+  const withRoom = [], withoutRoom = [];
+  g.forEach(x => {
+    const roomRaw = String(x.room || '').trim().replace(/^0+/, '');
+    const room = /\d/.test(roomRaw) ? roomRaw : '';
+    const name = String(x.name || '').trim();
+    if (!name) return;
+    const rec = { room, name: name.replace(/\b\w+/g, w => _adCap(w)), rawName: name, conf: String(x.conf || '').trim(),
+      arrDate: '', depDate: '', nights: parseInt(x.nights) || 1, adults: 1, source: x.source || 'Direct', arrTime: '',
+      isExtension: false, depGuest: null, _fromArr: true };
+    (room ? withRoom : withoutRoom).push(rec);
+  });
+  _xrefArrRooms = withRoom; _xrefArrNoRoom = withoutRoom;
+}
+
+function _adKeyOf(c) {
+  return (c.kind + '_' + (c.oldRoom || 'x') + '_' + (c.newConf || c.newRoom || _adNameKey(c.name).replace(/ /g, '-') || 'x'))
+    .replace(/[.#$\[\]\/\s]/g, '_').slice(0, 120);
+}
+
+function _adBuild() {
+  const cards = [];
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  _adPairs.forEach(p => {
+    const a = p.arr, d = p.dep;
+    let out = _adParse(a.depDate);
+    if (!out && a.nights) out = _adAddDays(today, a.nights);
+    const st = d.status || 'due';
+    const c = {
+      kind: 'new', sure: p.sure, score: p.score, reason: p.reason,
+      name: a.name || parseName(d.name), depName: parseName(d.name),
+      oldRoom: _adDepRoom(d), newRoom: a.room ? _xrefNormRoom(a.room) : '',
+      oldConf: String(d.conf || d.confNo || d.confirmation || '').trim(), newConf: a.conf || '',
+      nights: a.nights || 0, out: _adFmt(out), source: a.source || '',
+      note: st === 'out' ? 'Marked checked out on Departures' : st === 'extended' ? 'Also marked Extended on Departures' : '',
+    };
+    cards.push(c);
+  });
+  const paired = new Set(_adPairs.map(p => p.dep));
+  const deps = (typeof depRooms !== 'undefined' && Array.isArray(depRooms)) ? depRooms : [];
+  deps.forEach(d => {
+    if (d.status !== 'extended' || paired.has(d)) return;
+    const base = _adParse(d.departure);
+    const n = parseInt(d.extensionNights) || 0;
+    cards.push({
+      kind: 'same', sure: true, score: 90,
+      reason: 'Marked Extended on the Departures page. Same booking — no new confirmation.',
+      name: parseName(d.name), depName: parseName(d.name), oldRoom: _adDepRoom(d), newRoom: _adDepRoom(d),
+      oldConf: String(d.conf || d.confNo || d.confirmation || '').trim(), newConf: '',
+      nights: n, out: base && n ? _adFmt(_adAddDays(base, n)) : '', source: d.source || '',
+      note: d.extConfirmed ? '✓ Opera updated' : '⚠ Opera not updated yet',
+    });
+  });
+  cards.forEach(c => { c.key = _adKeyOf(c); c.checked = _adChecked[c.key] || null; });
+  cards.sort((x, y) => (!!x.checked - !!y.checked) || (y.sure - x.sure) || (y.score - x.score) ||
+    String(x.oldRoom).localeCompare(String(y.oldRoom), undefined, { numeric: true }));
+  return cards;
+}
+
+function _adListen() {
+  const date = _adToday();
+  if (_adListenOn === date || typeof fbListen !== 'function') return;
+  _adListenOn = date;
+  try {
+    fbListen('arrdep/checked/' + date, v => {
+      if (_adListenOn !== date) return;
+      _adChecked = (v && typeof v === 'object') ? v : {};
+      adSchedule();
+    });
+  } catch (e) { /* offline: checks stay local */ }
+}
+
+function adSchedule() {
+  if (_adBusy || _adRaf) return;
+  _adRaf = requestAnimationFrame(() => { _adRaf = 0; adRender(); });
+}
+
+function _adMount() {
+  const host = document.getElementById('adHero');
+  if (!host || host.dataset.ready) return host;
+  host.dataset.ready = '1';
+  host.innerHTML = `
+    <section class="ad-hero card">
+      <div class="ad-hero-row">
+        <div class="ad-hero-ico" aria-hidden="true">🔁</div>
+        <div class="ad-hero-main">
+          <div class="ad-hero-k">Extensions today</div>
+          <div class="ad-hero-n"><span id="adCount">0</span><span class="ad-hero-date" id="adDate"></span></div>
+        </div>
+        <div class="ad-hero-acts">
+          <button class="ad-btn" onclick="adCopyAll()" id="adCopyAllBtn">📋 Copy list</button>
+        </div>
+      </div>
+      <div class="ad-chips" id="adChips"></div>
+      <div class="ad-src" id="adSrc"></div>
+      <div class="ad-search">
+        <span class="ad-search-ico" aria-hidden="true">🔍</span>
+        <input id="adSearch" type="search" autocomplete="off" placeholder="Search room, name or confirmation" oninput="adSetSearch(this.value)"/>
+      </div>
+    </section>
+    <div class="ad-list" id="adList"></div>`;
+  return host;
+}
+
+function _adSrcHtml(nDep, nArr) {
+  const dDate = window._depDate || '';
+  const aDate = window._arrDate || '';
+  const today = _adToday();
+  const depTxt = nDep ? `🚪 Departures: <b>${nDep}</b> room${nDep > 1 ? 's' : ''}${dDate && dDate !== today ? ` <em class="ad-warn">for ${escapeHtml(_adIsoFmt(dDate))}, not today</em>` : ''}`
+                      : `🚪 Departures: <b class="ad-miss">not loaded</b>`;
+  const arrFrom = _adSrc === 'paste' ? 'pasted here' : _adSrc === 'arrivals' ? 'from the Arrivals page' : '';
+  const arrTxt = nArr ? `🛎 Arrivals: <b>${nArr}</b> ${arrFrom}${_adSrc === 'arrivals' && aDate && aDate !== today ? ` <em class="ad-warn">for ${escapeHtml(_adIsoFmt(aDate))}, not today</em>` : ''}`
+                      : `🛎 Arrivals: <b class="ad-miss">not loaded</b>`;
+  const paste = _adSrc === 'arrivals'
+    ? `<button class="ad-link" onclick="adTogglePaste()">${_adShowPaste ? 'Hide paste box' : 'Paste a different report'}</button>` : '';
+  return `<span>${depTxt}</span><span>${arrTxt}</span>${paste}`;
+}
+
+function _adEmptyHtml(nDep, nArr) {
+  const steps = [];
+  if (!nDep) steps.push(`<li><b>Load today's departures.</b> Open <button class="ad-link" onclick="showPanel('departures')">🚪 Departures</button> and paste the Opera departures report (Delimited Data).</li>`);
+  if (!nArr) steps.push(`<li><b>Load today's arrivals.</b> Paste the Opera arrivals report in the box below, or load it on the <button class="ad-link" onclick="showPanel('arrivals')">🛎 Arrivals</button> page.</li>`);
+  if (steps.length) {
+    const what = !nDep && !nArr ? 'departures and arrivals' : !nDep ? 'departures' : 'arrivals';
+    return `<div class="ad-empty"><div class="ad-empty-ico">🧩</div><div class="ad-empty-t">To find extensions, load today's ${what}</div><ol>${steps.join('')}</ol>
+      ${nDep && !nArr ? '<div class="ad-empty-s">Rooms marked “Extended” on Departures still show here.</div>' : ''}</div>`;
+  }
+  return `<div class="ad-empty"><div class="ad-empty-ico">✨</div><div class="ad-empty-t">No extensions found today</div>
+    <div class="ad-empty-s">No guest leaving today has a new booking on today's arrivals. Arrivals and departures are in “Other details” below.</div></div>`;
+}
+
+function _adConf(label, val, missing) {
+  if (!val) return `<div class="ad-conf none"><span class="ad-conf-l">${label}</span><span class="ad-conf-v">${missing}</span></div>`;
+  return `<div class="ad-conf"><span class="ad-conf-l">${label}</span><span class="ad-conf-v">${escapeHtml(val)}</span>
+    <button class="ad-ico-btn" title="Copy ${label.toLowerCase()}" aria-label="Copy ${label.toLowerCase()}" onclick="adCopy(this,'${escapeJsAttr(val)}')">⧉</button></div>`;
+}
+
+function _adCardHtml(c) {
+  const moved = c.newRoom && c.oldRoom && c.newRoom !== c.oldRoom;
+  const room = moved
+    ? `<span class="ad-room">${escapeHtml(c.oldRoom)}</span><span class="ad-arrow">→</span><span class="ad-room new">${escapeHtml(c.newRoom)}</span>`
+    : `<span class="ad-room">${escapeHtml(c.oldRoom || c.newRoom || '—')}</span>${c.kind === 'new' && !c.newRoom ? '<span class="ad-arrow">→</span><span class="ad-room tba">New room TBA</span>' : ''}`;
+  const verdict = c.sure ? `<span class="ad-chip sure">✓ Sure</span>` : `<span class="ad-chip check">~ Check</span>`;
+  const kind = c.kind === 'same' ? `<span class="ad-chip same">Same booking</span>` : `<span class="ad-chip kind">New booking</span>`;
+  const other = c.depName && _adNameKey(c.depName) !== _adNameKey(c.name) ? `<div class="ad-was">Leaving guest: ${escapeHtml(c.depName)}</div>` : '';
+  const stay = c.kind === 'same'
+    ? (c.nights ? `<b>+${c.nights} night${c.nights > 1 ? 's' : ''}</b>${c.out ? ` · new check-out <b>${escapeHtml(c.out)}</b>` : ''}` : 'Extra nights not set yet on Departures')
+    : `${c.nights ? `<b>${c.nights} night${c.nights > 1 ? 's' : ''}</b>` : ''}${c.out ? ` · new check-out <b>${escapeHtml(c.out)}</b>` : ''}`;
+  const confs = c.kind === 'same'
+    ? _adConf('Booking', c.oldConf, 'Same as now')
+    : c.oldConf
+      ? `${_adConf('Old booking', c.oldConf, '')}<span class="ad-conf-arrow" aria-hidden="true">→</span>${_adConf('New booking', c.newConf, 'Not in arrivals report')}`
+      : _adConf('New booking', c.newConf, 'Not in arrivals report');
+  const ck = c.checked;
+  const ckTxt = ck ? `Checked${ck.by ? ' by ' + escapeHtml(ck.by) : ''}${ck.at ? ' · ' + escapeHtml(String(ck.at).slice(11, 16)) : ''}` : '';
+  const k = escapeJsAttr(c.key);
+  return `<article class="ad-card ${c.sure ? 'is-sure' : 'is-check'}${ck ? ' is-done' : ''}" data-key="${escapeHtml(c.key)}">
+    <div class="ad-card-top">
+      <div class="ad-rooms">${room}</div>
+      <div class="ad-badges">${verdict}${kind}</div>
+    </div>
+    <div class="ad-name">${escapeHtml(c.name)}</div>${other}
+    <div class="ad-why">${escapeHtml(c.reason)}${c.note ? ` <span class="ad-note">${escapeHtml(c.note)}</span>` : ''}</div>
+    <div class="ad-confs">${confs}</div>
+    ${stay || c.source ? `<div class="ad-stay">${stay}${c.source ? `<span class="ad-src-chip">${escapeHtml(c.source)}</span>` : ''}</div>` : ''}
+    <div class="ad-acts">
+      <button class="ad-btn" onclick="adCopyBoth('${k}',this)" title="Copy room, name and confirmation numbers">📋 ${c.oldConf && c.newConf ? 'Copy both' : 'Copy'}</button>
+      <button class="ad-btn ${ck ? 'on' : 'primary'}" onclick="adToggleChecked('${k}')">${ck ? '↺ Undo check' : '☑ Mark as checked'}</button>
+      ${c.oldRoom ? `<button class="ad-btn ghost" onclick="adOpenDep('${escapeJsAttr(c.oldRoom)}')">🚪 Room ${escapeHtml(c.oldRoom)} on Departures</button>` : ''}
+      ${ckTxt ? `<span class="ad-done">✓ ${ckTxt}</span>` : ''}
+    </div>
+  </article>`;
+}
+
+function adRender() {
+  if (_adBusy) return;
+  _adBusy = true;
+  try {
+    const host = _adMount();
+    if (!host) return;
+    _adListen();
+    _adSyncArrivals();
+    _xrefEnrichAll();
+    const deps = (typeof depRooms !== 'undefined' && Array.isArray(depRooms)) ? depRooms : [];
+    const nArr = _xrefArrRooms.length + _xrefArrNoRoom.length;
+    const cards = _adCards = _adBuild();
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.innerHTML = v; };
+    set('adCount', String(cards.length));
+    set('adDate', escapeHtml(_adFmt(new Date())));
+    const nSure = cards.filter(c => c.sure).length, nChk = cards.length - nSure, nDone = cards.filter(c => c.checked).length;
+    set('adChips', cards.length ? `<span class="ad-chip sure">✓ ${nSure} sure</span>${nChk ? `<span class="ad-chip check">~ ${nChk} to check</span>` : ''}<span class="ad-chip done">☑ ${nDone} of ${cards.length} checked</span>` : '');
+    set('adSrc', _adSrcHtml(deps.length, nArr));
+    const btn = document.getElementById('adCopyAllBtn'); if (btn) btn.style.display = cards.length ? '' : 'none';
+    const sw = document.querySelector('#adHero .ad-search'); if (sw) sw.style.display = cards.length ? '' : 'none';
+
+    const q = _adQ;
+    const vis = q ? cards.filter(c => [c.oldRoom, c.newRoom, c.name, c.depName, c.oldConf, c.newConf].join(' ').toLowerCase().includes(q)) : cards;
+    set('adList', !cards.length ? _adEmptyHtml(deps.length, nArr)
+      : vis.length ? vis.map(_adCardHtml).join('')
+      : `<div class="ad-empty small">No extension matches “${escapeHtml(q)}”.</div>`);
+
+    const badge = document.getElementById('badge-xref');
+    if (badge) badge.textContent = String(cards.filter(c => !c.checked).length);
+
+    // Paste box: needed when there are no arrivals, optional when the Arrivals page has them.
+    const paste = document.getElementById('xrefPasteCard');
+    if (paste) paste.style.display = (_adSrc === '' || (_adSrc === 'arrivals' && _adShowPaste)) ? 'block' : 'none';
+    const res = document.getElementById('xrefResultCard');
+    if (res) res.style.display = nArr ? 'block' : 'none';
+    const rel = document.getElementById('xrefReloadBtn');
+    if (rel) rel.style.display = _adSrc === 'paste' ? '' : 'none';
+    if (nArr) xrefRender();
+    _adRenderOther(deps);
+  } finally { _adBusy = false; }
+}
+
+function _adRenderOther(deps) {
+  const box = document.getElementById('adDepOnly');
+  const paired = new Set(_adPairs.map(p => p.dep));
+  const left = deps.filter(d => !paired.has(d) && d.status !== 'extended');
+  const turn = [..._xrefArrRooms].filter(a => !a.isExtension && a.turnoverDep);
+  const sum = document.getElementById('adOtherSum');
+  const nArr = _xrefArrRooms.length + _xrefArrNoRoom.length;
+  if (sum) sum.innerHTML = `<span>Other details</span><span class="ad-other-meta">${nArr} arrivals · ${left.length} leaving with no new booking · ${turn.length} same-day room change${turn.length === 1 ? '' : 's'}</span>`;
+  if (!box) return;
+  const chip = (room, name) => `<span class="ad-mini"><b>${escapeHtml(room)}</b> ${escapeHtml(name)}</span>`;
+  box.innerHTML = `
+    <div class="ad-sub">
+      <div class="ad-sub-h">🚪 Leaving today, no new booking found <span>${left.length}</span></div>
+      <div class="ad-mini-wrap">${left.length ? left.map(d => chip(_adDepRoom(d), parseName(d.name))).join('') : '<span class="ad-none">' + (deps.length ? 'None' : 'Departures not loaded') + '</span>'}</div>
+    </div>
+    <div class="ad-sub">
+      <div class="ad-sub-h">🔄 Same room, new guest today (room change-over) <span>${turn.length}</span></div>
+      <div class="ad-mini-wrap">${turn.length ? turn.map(a => chip(_xrefNormRoom(a.room), `${parseName(a.turnoverDep.name)} → ${a.name}`)).join('') : '<span class="ad-none">None</span>'}</div>
+    </div>`;
+}
+
+function adSetSearch(v) { _adQ = String(v || '').toLowerCase().trim(); adRender(); }
+function adTogglePaste() { _adShowPaste = !_adShowPaste; adRender(); if (_adShowPaste) setTimeout(() => document.getElementById('xrefInput')?.focus(), 50); }
+
+function adCopy(btn, text) {
+  copyToClipboard(String(text), null, '');
+  if (btn) { const t = btn.textContent; btn.textContent = '✓'; btn.classList.add('ok'); setTimeout(() => { btn.textContent = t; btn.classList.remove('ok'); }, 1500); }
+  if (typeof showToast === 'function') showToast('Copied ' + text, 'ok');
+}
+function _adLine(c) {
+  const room = c.newRoom && c.newRoom !== c.oldRoom ? `${c.oldRoom || '?'} → ${c.newRoom}` : (c.oldRoom || c.newRoom || 'TBA');
+  if (c.kind === 'same') return `Room ${room} · ${c.name} · extended on same booking${c.oldConf ? ' ' + c.oldConf : ''}${c.nights ? ' · +' + c.nights + 'N' : ''}${c.out ? ' · out ' + c.out : ''}`;
+  return `Room ${room} · ${c.name} · ${c.oldConf ? `old ${c.oldConf} → new ${c.newConf || '—'}` : `new conf ${c.newConf || '—'}`}${c.nights ? ' · ' + c.nights + 'N' : ''}${c.out ? ' · out ' + c.out : ''}${c.sure ? '' : ' · CHECK'}`;
+}
+function adCopyBoth(key, btn) {
+  const c = _adCards.find(x => x.key === key); if (!c) return;
+  copyToClipboard(_adLine(c), null, '');
+  if (btn) { const t = btn.textContent; btn.textContent = '✓ Copied'; setTimeout(() => { btn.textContent = t; }, 1500); }
+}
+function adCopyAll() {
+  if (!_adCards.length) { showToast('No extensions to copy', 'warn'); return; }
+  const lines = [`🔁 Extensions today — ${_adFmt(new Date())} (${_adCards.length})`, ..._adCards.map(c => `${c.sure ? '✓' : '~'} ${_adLine(c)}`)];
+  copyToClipboard(lines.join('\n'), null, '');
+  showToast(`${_adCards.length} extension${_adCards.length > 1 ? 's' : ''} copied`, 'ok');
+}
+function adToggleChecked(key) {
+  const c = _adCards.find(x => x.key === key); if (!c) return;
+  const path = 'arrdep/checked/' + _adToday() + '/' + key;
+  const val = c.checked ? null : { by: (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '', at: _adToday() + 'T' + new Date().toTimeString().slice(0, 5), room: c.oldRoom || c.newRoom || '' };
+  // local first so the tick shows at once; Firebase listener confirms
+  if (val) _adChecked[key] = val; else delete _adChecked[key];
+  try { if (typeof fbSet === 'function') fbSet(path, val); } catch (e) {}
+  if (val && typeof logActivity === 'function') { try { logActivity('extension_checked', `Room ${c.oldRoom || c.newRoom} · ${c.name}`); } catch (e) {} }
+  adRender();
+}
+function adOpenDep(room) {
+  showPanel('departures');
+  const s = document.getElementById('depSearch');
+  if (s) { s.value = room; if (typeof depSearchInput === 'function') depSearchInput(); }
+}
+
+// Re-draw when the page is opened, and when Arrivals/Departures data changes while it's open.
+(function adBoot() {
+  const start = () => {
+    const panel = document.getElementById('panel-xref');
+    if (!panel) return;
+    adRender();
+    try {
+      new MutationObserver(() => { if (panel.classList.contains('active')) adRender(); })
+        .observe(panel, { attributes: true, attributeFilter: ['class'] });
+    } catch (e) {}
+    let last = '';
+    setInterval(() => {
+      if (!panel.classList.contains('active')) return;
+      const d = (typeof depRooms !== 'undefined' && Array.isArray(depRooms)) ? depRooms : [];
+      const g = (typeof arrGuests !== 'undefined' && Array.isArray(arrGuests)) ? arrGuests : [];
+      const sig = d.length + ':' + d.map(r => r.roomStr + r.status + (r.extensionNights || '')).join(',') + '|' + g.length + ':' + g.map(x => x.room + x.name + x.conf).join(',') + ':' + _adToday();
+      if (sig !== last) { last = sig; adRender(); }
+    }, 2500);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+})();
+
+// ── Extensions view styles ────────────────────────────────
+(function adStyles() {
+  if (document.getElementById('adStyle')) return;
+  const st = document.createElement('style');
+  st.id = 'adStyle';
+  st.textContent = `
+  #panel-xref { --ad-ok: var(--green, #16a34a); --ad-chk: var(--amber, #d97706); }
+  #panel-xref .ad-hero { position:relative; overflow:hidden; padding:18px 18px 14px; margin-bottom:14px; border-radius:var(--r2, 14px);
+    background:linear-gradient(135deg, color-mix(in srgb, var(--accent) 14%, var(--card)) 0%, var(--card) 62%); border:1px solid var(--border2); }
+  #panel-xref .ad-hero::after { content:''; position:absolute; right:-60px; top:-60px; width:180px; height:180px; border-radius:50%;
+    background:radial-gradient(circle, color-mix(in srgb, var(--accent) 22%, transparent), transparent 70%); pointer-events:none; }
+  .ad-hero-row { display:flex; align-items:center; gap:14px; position:relative; z-index:1; }
+  .ad-hero-ico { width:52px; height:52px; flex:0 0 52px; border-radius:14px; display:grid; place-items:center; font-size:1.55rem;
+    background:color-mix(in srgb, var(--accent) 16%, var(--card2)); border:1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+  .ad-hero-main { flex:1; min-width:0; }
+  .ad-hero-k { font-size:.72rem; letter-spacing:.12em; text-transform:uppercase; font-weight:700; color:var(--text2); }
+  .ad-hero-n { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  #adCount { font-size:2.6rem; line-height:1.05; font-weight:800; color:var(--text); font-variant-numeric:tabular-nums; letter-spacing:-.02em; }
+  .ad-hero-date { font-size:.8rem; color:var(--text3); font-weight:600; }
+  .ad-hero-acts { display:flex; gap:8px; flex-shrink:0; }
+  .ad-chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:12px; position:relative; z-index:1; }
+  .ad-chip { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:999px; font-size:.7rem; font-weight:700; white-space:nowrap;
+    border:1px solid var(--border2); background:var(--card2); color:var(--text2); }
+  .ad-chip.sure { color:var(--ad-ok); background:color-mix(in srgb, var(--ad-ok) 12%, var(--card)); border-color:color-mix(in srgb, var(--ad-ok) 35%, transparent); }
+  .ad-chip.check { color:var(--ad-chk); background:color-mix(in srgb, var(--ad-chk) 12%, var(--card)); border-color:color-mix(in srgb, var(--ad-chk) 38%, transparent); }
+  .ad-chip.same { color:var(--accent); background:color-mix(in srgb, var(--accent) 10%, var(--card)); border-color:color-mix(in srgb, var(--accent) 32%, transparent); }
+  .ad-chip.kind, .ad-chip.done { font-weight:600; }
+  .ad-src { display:flex; gap:6px 16px; flex-wrap:wrap; align-items:center; margin-top:10px; font-size:.75rem; color:var(--text2); position:relative; z-index:1; }
+  .ad-src b { color:var(--text); } .ad-src b.ad-miss { color:var(--red, #dc2626); }
+  .ad-warn { font-style:normal; color:var(--ad-chk); font-weight:600; }
+  .ad-link { background:none; border:0; padding:0; font:inherit; color:var(--accent); font-weight:700; cursor:pointer; text-decoration:underline; text-underline-offset:2px; }
+  .ad-search { position:relative; margin-top:12px; z-index:1; }
+  .ad-search input { width:100%; box-sizing:border-box; padding:11px 12px 11px 36px; border-radius:var(--r, 10px); font-size:.9rem;
+    background:var(--bg2); border:1px solid var(--border2); color:var(--text); outline:none; }
+  .ad-search input:focus { border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
+  .ad-search-ico { position:absolute; left:12px; top:50%; transform:translateY(-50%); font-size:.85rem; opacity:.7; pointer-events:none; }
+
+  .ad-list { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap:12px; margin-bottom:18px; }
+  .ad-card { position:relative; background:var(--card); border:1px solid var(--border2); border-radius:var(--r2, 14px); padding:14px 14px 12px 18px;
+    box-shadow:var(--ho-shadow, 0 1px 2px rgba(0,0,0,.08)); min-width:0; transition:opacity .2s, border-color .2s; }
+  .ad-card::before { content:''; position:absolute; left:0; top:12px; bottom:12px; width:4px; border-radius:0 4px 4px 0; background:var(--ad-ok); }
+  .ad-card.is-check::before { background:var(--ad-chk); }
+  .ad-card.is-check { border-color:color-mix(in srgb, var(--ad-chk) 30%, var(--border2)); }
+  .ad-card.is-done { opacity:.62; } .ad-card.is-done::before { background:var(--text3); }
+  .ad-card-top { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; flex-wrap:wrap; }
+  .ad-rooms { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .ad-room { font-family:var(--mono); font-weight:800; font-size:1.15rem; padding:2px 10px; border-radius:8px; color:var(--text);
+    background:var(--card2); border:1px solid var(--border2); font-variant-numeric:tabular-nums; }
+  .ad-room.new { color:var(--accent); border-color:color-mix(in srgb, var(--accent) 45%, transparent); background:color-mix(in srgb, var(--accent) 10%, var(--card)); }
+  .ad-room.tba { font-family:inherit; font-size:.72rem; font-weight:700; color:var(--text3); border-style:dashed; }
+  .ad-arrow, .ad-conf-arrow { color:var(--text3); font-weight:700; }
+  .ad-badges { display:flex; gap:5px; flex-wrap:wrap; }
+  .ad-name { margin-top:9px; font-size:1.05rem; font-weight:700; color:var(--text); overflow-wrap:anywhere; }
+  .ad-was { font-size:.75rem; color:var(--text3); margin-top:1px; }
+  .ad-why { margin-top:5px; font-size:.8rem; color:var(--text2); line-height:1.4; }
+  .ad-note { display:inline-block; margin-left:4px; font-size:.7rem; font-weight:700; color:var(--text3); }
+  .ad-confs { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .ad-conf { display:inline-flex; align-items:center; gap:6px; padding:5px 6px 5px 10px; border-radius:9px; background:var(--bg2); border:1px solid var(--border); min-width:0; max-width:100%; }
+  .ad-conf.none { padding-right:10px; }
+  .ad-conf-l { font-size:.62rem; text-transform:uppercase; letter-spacing:.08em; font-weight:700; color:var(--text3); white-space:nowrap; }
+  .ad-conf-v { font-family:var(--mono); font-size:.85rem; font-weight:700; color:var(--text); overflow-wrap:anywhere; }
+  .ad-conf.none .ad-conf-v { font-family:inherit; font-size:.72rem; font-weight:500; color:var(--text3); }
+  .ad-ico-btn { border:1px solid var(--border2); background:var(--card); color:var(--text2); border-radius:7px; width:28px; height:26px; cursor:pointer; font-size:.85rem; line-height:1; flex-shrink:0; }
+  .ad-ico-btn:hover { color:var(--accent); border-color:var(--accent); } .ad-ico-btn.ok { color:var(--ad-ok); border-color:var(--ad-ok); }
+  .ad-stay { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:9px; font-size:.8rem; color:var(--text2); }
+  .ad-stay b { color:var(--text); }
+  .ad-src-chip { font-size:.68rem; font-weight:600; padding:2px 8px; border-radius:999px; background:var(--card2); border:1px solid var(--border); color:var(--text3); }
+  .ad-acts { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:12px; padding-top:10px; border-top:1px solid var(--border); }
+  .ad-btn { display:inline-flex; align-items:center; gap:5px; padding:7px 11px; border-radius:9px; font-size:.75rem; font-weight:700; cursor:pointer;
+    background:var(--card2); border:1px solid var(--border2); color:var(--text); white-space:nowrap; font-family:inherit; }
+  .ad-btn:hover { border-color:var(--accent); }
+  .ad-btn.primary { background:color-mix(in srgb, var(--accent) 16%, var(--card)); border-color:color-mix(in srgb, var(--accent) 45%, transparent); color:var(--text); }
+  .ad-btn.on { color:var(--ad-ok); border-color:color-mix(in srgb, var(--ad-ok) 40%, transparent); }
+  .ad-btn.ghost { background:transparent; color:var(--text2); }
+  .ad-done { font-size:.72rem; font-weight:700; color:var(--ad-ok); margin-left:auto; }
+  .ad-empty { grid-column:1/-1; text-align:center; padding:28px 18px; border:1px dashed var(--border2); border-radius:var(--r2, 14px); background:var(--card); color:var(--text2); }
+  .ad-empty.small { padding:16px; font-size:.85rem; }
+  .ad-empty-ico { font-size:1.8rem; } .ad-empty-t { font-weight:800; color:var(--text); margin:6px 0 8px; font-size:1rem; }
+  .ad-empty ol { text-align:left; max-width:520px; margin:0 auto; padding-left:20px; font-size:.85rem; line-height:1.55; }
+  .ad-empty li { margin:4px 0; } .ad-empty-s { font-size:.8rem; color:var(--text3); margin-top:8px; }
+
+  .ad-other { margin-top:6px; border:1px solid var(--border2); border-radius:var(--r2, 14px); background:var(--card); }
+  .ad-other > summary { list-style:none; cursor:pointer; padding:13px 16px; display:flex; flex-wrap:wrap; gap:4px 12px; align-items:baseline; font-weight:800; color:var(--text); }
+  .ad-other > summary::-webkit-details-marker { display:none; }
+  .ad-other > summary::before { content:'▸'; color:var(--text3); transition:transform .15s; display:inline-block; }
+  .ad-other[open] > summary::before { transform:rotate(90deg); }
+  .ad-other-meta { font-size:.72rem; font-weight:500; color:var(--text3); }
+  .ad-other-body { padding:0 14px 14px; min-width:0; }
+  .ad-sub { margin-bottom:12px; } .ad-sub-h { font-size:.78rem; font-weight:700; color:var(--text2); margin-bottom:6px; }
+  .ad-sub-h span { font-weight:600; color:var(--text3); margin-left:4px; }
+  .ad-mini-wrap { display:flex; flex-wrap:wrap; gap:5px; }
+  .ad-mini { font-size:.72rem; padding:3px 9px; border-radius:7px; background:var(--bg2); border:1px solid var(--border); color:var(--text2); max-width:100%; overflow-wrap:anywhere; }
+  .ad-mini b { font-family:var(--mono); color:var(--text); margin-right:3px; }
+  .ad-none { font-size:.75rem; color:var(--text3); }
+  #panel-xref .ad-other .xref-kpi-row { margin-top:4px; }
+
+  @media (max-width: 600px) {
+    #panel-xref .ad-hero { padding:14px 14px 12px; }
+    .ad-hero-ico { width:44px; height:44px; flex-basis:44px; font-size:1.3rem; }
+    #adCount { font-size:2.2rem; }
+    .ad-hero-acts .ad-btn { padding:7px 9px; }
+    .ad-card { padding:12px 12px 10px 15px; }
+    .ad-conf-arrow { display:none; }
+    .ad-conf { width:100%; box-sizing:border-box; }
+    .ad-conf-v { margin-right:auto; }
+    .ad-done { margin-left:0; width:100%; }
+    #panel-xref .xref-kpi { min-width:calc(33% - 8px); }
+  }`;
+  document.head.appendChild(st);
 })();

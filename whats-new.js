@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 298, items: [
+    '🔁 Arr vs Dep is now all about extensions: a big "Extensions today" count and one card per guest, with the room (old → new if they moved), the new booking number to copy, nights and new check-out date, ✓ Sure (same name and room) or ~ Check (only the surname matches), and a shared "Mark as checked". Guests extended on the same booking show too. Everything about arrivals is folded under "Other details".',
+  ] },
   { v: 297, items: [
     '↩ Undo anything with Ctrl+Z (⌘Z on Mac): ticked a task, changed a room\'s status, answered a wake-up call, deleted something by mistake? Press Ctrl+Z, or tap ↩ Undo on the bar that shows for a few seconds. Ctrl+Shift+Z (or Ctrl+Y) puts it back. Inside a text box Ctrl+Z still undoes your typing. Your last actions are in ⌨ Shortcuts → Recent actions.',
   ] },

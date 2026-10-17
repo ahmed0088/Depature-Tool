@@ -856,15 +856,17 @@
 <div class="panel" id="panel-xref">
   <div class="page-hd">
     <div class="page-hd-left">
-      <h1>Arrivals ↔ Departures</h1>
-      <p id="xrefDateLabel">Same guest on arrivals + departures = extension booked · Load dep board first</p>
+      <h1>Extensions</h1>
+      <p id="xrefDateLabel">Guests leaving today who booked again — found for you</p>
     </div>
     <div class="page-hd-actions">
       <button class="btn sky" id="xrefReloadBtn" onclick="openXrefReloadModal()" style="display:none;">🔄 Reload Report</button>
       <button class="btn rose" onclick="xrefClear()">✕ Clear</button>
     </div>
   </div>
-    <details class="howto"><summary>❔ How to use this</summary><ol><li>Load the <b>Departures</b> board first — this checks against it</li><li>Upload today's Opera arrivals report here</li><li>Press <b>🔗 Load &amp; Check Extensions</b> — a guest on both lists has extended their stay</li></ol></details>
+    <details class="howto"><summary>❔ How to use this</summary><ol><li>Load today's <b>Departures</b> board</li><li>Load today's arrivals: on the <b>Arrivals</b> page, or paste the Opera arrivals report here</li><li>Every guest leaving today who has a new booking shows as a card. <b>✓ Sure</b> = same name and room. <b>~ Check</b> = only part matches, look in Opera</li><li>Press <b>☑ Mark as checked</b> when done — the whole team sees it</li></ol></details>
+
+  <div id="adHero"></div>
 
   <div id="xrefPasteCard" class="card" style="margin-bottom:16px;">
     <div class="upload-zone">
@@ -883,6 +885,8 @@
     </div>
   </div>
 
+  <details class="ad-other" id="adOther"><summary id="adOtherSum">Other details</summary><div class="ad-other-body">
+  <div id="adDepOnly"></div>
   <div id="xrefResultCard" style="display:none;">
     <div class="xref-kpi-row">
       <div class="xref-kpi"><div class="xref-kpi-val" id="xref-kpi-total">0</div><div class="xref-kpi-label">Total Arrivals</div></div>
@@ -935,6 +939,7 @@
       </table>
     </div>
   </div>
+  </div></details>
 </div>
 
 <!-- ════════════════ PURPOSE OF STAY ════════════════ -->
