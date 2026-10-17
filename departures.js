@@ -2789,7 +2789,7 @@ else _depInitUi();
     const grid = document.getElementById('depGrid');
     if (!grid) return;
     const cols = getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length;
-    const on = cols > 1 && !grid.closest('.dp-compact');
+    const on = false;   // rows stay straight (4 per line); the old masonry stagger is off
     grid.classList.toggle('dp-masonry', on);
     grid.querySelectorAll(':scope > .dp-card').forEach(c => {
       if (!on) { c.style.gridRowEnd = ''; return; }

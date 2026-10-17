@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 310, items: [
+    '🧳 Departures: 4 rooms per row in straight lines (3 on a smaller screen, 2 on a tablet, 1 on a phone). Cards in the same row are the same height and their Check out buttons line up.',
+  ] },
   { v: 309, items: [
     '🧳 Departures: no more empty gaps between room cards. Cards of different heights now fit together (each moves up under the one above it, still in order left to right), and the spacing inside each card is tighter.',
   ] },

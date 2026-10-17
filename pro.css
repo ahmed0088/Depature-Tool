@@ -2564,3 +2564,13 @@ html.ho-lang-ar body { font-family: var(--font), 'Segoe UI', 'Noto Sans Arabic',
 #panel-departures .dp-acts.g5 .dca-co { min-height: 38px; }
 #panel-departures .dp-acts.g5 .dca:not(.dca-co) { min-height: 44px; padding: 4px 2px; }
 #panel-departures .dp-card .dca { min-height: 36px; }
+
+/* ── Departures: 4 rooms per row, straight lines, equal-height cards (buttons line up) ── */
+#panel-departures .dp-grid:not(.dp-size-list) { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; align-items: stretch; grid-auto-rows: auto; row-gap: 10px; }
+@media (max-width: 1400px) { #panel-departures .dp-grid:not(.dp-size-list) { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; } }
+@media (max-width: 1050px) { #panel-departures .dp-grid:not(.dp-size-list) { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
+@media (max-width: 680px)  { #panel-departures .dp-grid:not(.dp-size-list) { grid-template-columns: 1fr !important; } }
+#panel-departures .dp-compact .dp-grid { grid-template-columns: 1fr !important; }
+#panel-departures .dp-grid:not(.dp-size-list) > .dp-card { display: flex; flex-direction: column; margin-bottom: 0; grid-row-end: auto !important; }
+#panel-departures .dp-grid:not(.dp-size-list) > .dp-card > .dp-body { flex: 1; display: flex; flex-direction: column; }
+#panel-departures .dp-grid:not(.dp-size-list) > .dp-card > .dp-body > .dp-acts { margin-top: auto !important; }
