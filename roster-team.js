@@ -1150,6 +1150,21 @@ function rtCoverParse(q) {
   if (typeof rbBaseGroup === 'function' && typeof roStaff !== 'undefined' && rbBaseGroup((roStaff[a] || {}).group || '') !== rbBaseGroup((roStaff[b] || {}).group || '')) return null;   // only colleagues from the same hotel cover each other
   return { who: a, covers: b, undo };
 }
+/** "Ali always 09:00 - 18:00", "Souptik always works 00-09", "Sam always on 12pm": a fixed (static) shift on their card.
+ *  "Ali any shift" / "Ali rotates" undoes it. The shift must be one of their hotel's shifts. */
+function rtStaticShiftParse(q) {
+  q = String(q || '').trim().replace(/[.!]+$/, '');
+  let m = q.match(/^(.+?)\s+(?:can do |on )?(?:any shift|rotates?|is flexible)$/i);
+  if (m) { const k = rtFind(m[1]); return k && !Array.isArray(k) ? { k, shift: '' } : null; }
+  m = q.match(/^(.+?)\s+(?:always|only|fixed(?: on)?)\s+(?:works?\s+|does\s+|on\s+)?(?:the\s+)?(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)?(?:\s*(?:-|to|–)\s*(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)?)?(?:\s+shifts?)?$/i);
+  if (!m) return null;
+  const k = rtFind(m[1]); if (!k || Array.isArray(k)) return null;
+  const hh = (h, mi, ap) => { h = +h; if (ap && /pm/i.test(ap) && h < 12) h += 12; if (ap && /am/i.test(ap) && h === 12) h = 0; return String(h).padStart(2, '0') + ':' + (mi || '00'); };
+  const from = hh(m[2], m[3], m[4]), to = m[5] != null ? hh(m[5], m[6], m[7]) : '';
+  const g = (roStaff[k] || {}).group || '', shifts = (typeof rbGroupCfg === 'function' ? rbGroupCfg(rbPGroup ? rbPGroup(k) : g).shifts : []) || [];
+  const shift = shifts.find(x => String(x).startsWith(from) && (!to || String(x).replace(/\s/g, '').includes('-' + to))) || '';
+  return shift ? { k, shift } : null;
+}
 /** Words people use for a title → the title in the app. */
 /** "lock Ayoub in Adagio", "keep Saad on his shift", "Ali stays at his hotel", "unlock Ayoub": only with real names and a hotel. */
 function rtLockParse(q) {
@@ -1261,6 +1276,13 @@ const RT_COMMANDS = [
       const on = !/^(allow|let|start|unlock)/i.test(q);
       rbSetRule('lend', !on);
       _rtOut(`<div class="br-kind">🏨 Roster rules</div><div class="br-title">${on ? 'Everyone stays in their own hotel' : 'Hotels can borrow from each other again'}</div><div class="br-body">${on ? 'The builder and every suggestion keep people at their own hotel. Say "allow moving between hotels" to undo.' : 'A short hotel can borrow someone spare from another. People locked on their card still stay.'}</div>`);
+      return true; } },
+  { re: { test: q => !!rtStaticShiftParse(q) }, ex: 'Ali always 09:00 - 18:00', does: '📌 always that shift (Static) on their card ("Ali any shift" to undo)', run: q => {
+      const L = rtStaticShiftParse(q); if (!L) return false;
+      if (!roCanEdit()) { _rtOut('<div class="br-title">Only supervisors, managers and owners can change this.</div>'); return true; }
+      if (L.shift) { rtSet(L.k, 'mode', 'static'); rtSet(L.k, 'fixed', L.shift); } else { rtSet(L.k, 'mode', 'any'); rtSet(L.k, 'fixed', ''); }
+      if (document.getElementById('panel-roster-build')?.classList.contains('active')) rbRender();
+      _rtOut(`<div class="br-kind">📌 Team</div><div class="br-title">${escapeHtml(rtName(L.k))}: ${L.shift ? 'always ' + escapeHtml(L.shift) : 'any shift'}</div>`);
       return true; } },
   { re: { test: q => !!rtCoverParse(q) }, ex: 'Sam will cover Alex when he is off', does: '🔁 on the days Alex is off, Sam (same hotel) takes his shift (rules may bend for this). "Sam stops covering Alex" undoes it', run: q => {
       const L = rtCoverParse(q); if (!L) return false;

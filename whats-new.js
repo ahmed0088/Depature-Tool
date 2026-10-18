@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 339, items: [
+    '📌 Set a fixed shift by typing in Ask the roster: "Sam always 09:00 - 18:00", "Sam always 00-09", "Sam always on 12pm". "Sam any shift" frees it again.',
+  ] },
   { v: 338, items: [
     '✍️ Two new roster rules (⚖️ Rules → Your own rules, or tell Ops Brain): "Sam and Lina never off on the same day" (days off and leave), and "Sam never on 12:00" / "avoid Sam on nights" (one person kept off a shift or a type of shift). Each has a level like your other rules.',
   ] },
