@@ -202,9 +202,35 @@ console.log('\nRoster builder');
   // a short hotel borrows from one with spare
   const N = '12:00 - 21:00', two = [2, 2, 2, 2, 2, 2, 2];
   const I2 = { week: W, groups: { 'Adagio GD': { shifts: [N], need: { [N]: two } }, 'Mercure DD': { shifts: [N], need: { [N]: one } } },
-    people: [person('A ONE', { group: 'Adagio GD' }), person('M ONE', { group: 'Mercure DD' }), person('M TWO', { group: 'Mercure DD' }), person('M THREE', { group: 'Mercure DD' })],
+    people: [person('A ONE', { group: 'Adagio GD' }), person('M ONE', { group: 'Mercure DD', title: 'Supervisor' }), person('M TWO', { group: 'Mercure DD', title: 'Supervisor' }), person('M THREE', { group: 'Mercure DD', title: 'Supervisor' })],
     pre: {}, rules: { minRest: 11, maxRun: 6, givePh: false, lend: true, lendIdeal: true }, seed: 3 };
   const r2 = sb.rbSolve(I2);
+  { // only Duty Managers and Supervisors are ever moved to another hotel: the same week with agents, nobody moves
+    const Ia = Object.assign({}, I2, { people: I2.people.map(p => Object.assign({}, p, { title: '' })) });
+    const ra = sb.rbSolve(Ia), movedA = Object.values(ra.cells).reduce((t, row) => t + Object.values(row).filter(v => / - Adagio$/.test(v)).length, 0);
+    { // 🔁 "Covers for": on the days X is off, Y works X's shift at X's hotel (even an agent, even another hotel)
+      const Mx = '08:00 - 17:00', one7 = [1, 1, 1, 1, 1, 1, 1];
+      const Ex = '15:00 - 00:00';
+      const Ic = { week: W, groups: { 'Adagio GD': { shifts: [Mx, Ex], need: { [Mx]: one7, [Ex]: one7 } } },
+        people: [person('X SUP', { group: 'Adagio GD', title: 'Supervisor', usual: Mx, likes: [Mx] }), person('Y AG', { group: 'Adagio GD', covers: 'X SUP', usual: Ex, likes: [Ex] }), person('A2', { group: 'Adagio GD' }), person('A3', { group: 'Adagio GD' })],
+        pre: {}, rules: { minRest: 11, maxRun: 6, givePh: false, lend: true }, seed: 4 };
+      const rc = sb.rbSolve(Ic), dts = dates.filter(dt => !sb.rbParse(rc.cells['X SUP'][dt]));
+      check('covers: on X\'s days off, Y (same hotel) works X\'s shift', [dts.length > 0, dts.every(dt => rc.cells['Y AG'][dt] === '08:00 - 17:00'), rc.notes.some(n => /covers/.test(n.text))].join(), 'true,true,true');
+    }
+    { // covering a night: even with a morning request that day, then a day off, then back to mornings
+      const Mx = '07:00 - 15:00', Nx = '23:00 - 07:00', one7 = [1, 1, 1, 1, 1, 1, 1], d3 = W ? null : null;
+      const Ic = { week: W, groups: { 'Ibis DD': { shifts: [Mx, Nx], need: { [Mx]: one7, [Nx]: one7 } } },
+        people: [person('NS', { title: 'Supervisor', usual: Nx, likes: [Nx], fixed: Nx }), person('TM', { covers: 'NS', usual: Mx, likes: [Mx] }), person('B1'), person('B2'), person('B3')],
+        pre: {}, rules: { minRest: 11, maxRun: 6, givePh: false, lend: true }, seed: 6 };
+      const r0 = sb.rbSolve(Object.assign({}, Ic, { people: Ic.people.map(p => Object.assign({}, p, { covers: '' })) }));
+      const off0 = dates.filter(dt => !sb.rbParse(r0.cells['NS'][dt]));
+      Ic.pre = { TM: Object.fromEntries(off0.map(dt => [dt, Mx])) };   // TM asked for mornings on exactly those days
+      const rc = sb.rbSolve(Ic), offN = dates.filter(dt => !sb.rbParse(rc.cells['NS'][dt]));
+      const ok = offN.length > 0 && offN.every(dt => rc.cells['TM'][dt] === Nx) && offN.every(dt => { const d = dates.indexOf(dt), nx = dates[d + 1]; return !nx || offN.includes(nx) || sb.rbKind(rc.cells['TM'][nx]) === 'off'; });
+      check('covers a night: the deputy takes the night even over a morning request, then a day off', ok, true);
+    }
+    check('agents are never moved to another hotel (only Duty Managers and Supervisors)', [movedA, sb.rbMayWork(Ia, 'Adagio GD', Ia.people[1], N), sb.rbMayWork(I2, 'Adagio GD', I2.people[1], N)].join(), '0,false,true');
+  }
   check('moves: the hotels touched by moves are counted (from and to)', [...sb.rbMoveHotels(I2, { 'M ONE': { [dates[0]]: '12:00 - 21:00 - Adagio' }, 'A ONE': {}, 'M TWO': {}, 'M THREE': {} })].sort().join(), 'Adagio GD,Mercure DD');
   { // a Duty Manager and a Supervisor never on the same shift together
     const Mx = '08:00 - 17:00', Ex = '15:00 - 00:00', twoD = [2, 2, 2, 2, 2, 2, 2];
@@ -294,7 +320,7 @@ console.log('\nRoster scenarios');
   }
   // 0c. "never to Ibis" on someone's card: never sent there, other hotels still fine
   {
-    const p = P('Z', { group: 'Mercure DD', noGo: ['Ibis DD'] }), I = { groups: { 'Ibis DD': { shifts: [M] }, 'Adagio GD': { shifts: [M] }, 'Mercure DD': { shifts: [M] } } };
+    const p = P('Z', { group: 'Mercure DD', noGo: ['Ibis DD'], title: 'Supervisor' }), I = { groups: { 'Ibis DD': { shifts: [M] }, 'Adagio GD': { shifts: [M] }, 'Mercure DD': { shifts: [M] } } };
     check('never to a hotel: not to Ibis, Adagio and home still fine', [sb.rbMayWork(I, 'Ibis DD', p, M), sb.rbMayWork(I, 'Adagio GD', p, M), sb.rbMayWork(I, 'Mercure DD', p, M)].join(), 'false,true,true');
     const G = { 'Ibis DD': { shifts: [M, E], need: { [M]: day(1), [E]: day(1) } }, 'Mercure DD': { shifts: [M, E], need: { [M]: day(1), [E]: day(1) } } };
     const ppl = [P('A'), P('Y', { group: 'Mercure DD', noGo: ['Ibis DD'] }), P('Z', { group: 'Mercure DD', noGo: ['Ibis DD'] }), P('X', { group: 'Mercure DD', noGo: ['Ibis DD'] })];
@@ -400,13 +426,13 @@ console.log('\nRoster scenarios');
   // 0i. ⚠️ "only if no other option" for a hotel: someone else is borrowed first; alone, they still go
   {
     const G = { 'Ibis DD': { shifts: [M], need: { [M]: day(1) } }, 'Mercure DD': { shifts: [M], need: { [M]: day(1) } } };
-    const mk = soft => [P('A', { softGo: soft ? ['Mercure DD'] : [] }), P('B'), P('C'), P('Z', { group: 'Mercure DD' })];
+    const mk = soft => [P('A', { softGo: soft ? ['Mercure DD'] : [], title: 'Supervisor' }), P('B', { title: 'Supervisor' }), P('C', { title: 'Supervisor' }), P('Z', { group: 'Mercure DD' })];
     const pre = { Z: Object.fromEntries(dates.map(dt => [dt, 'AL'])) };
     const away = (r, k) => dates.filter(dt => /Mercure/i.test(r.cells[k][dt] || '')).length;
     const r1 = solve(G, mk(true), pre), r2 = solve(G, mk(false), pre);
     check('hotel "only if no option": the others go to Mercure first', [away(r1, 'A'), away(r1, 'B') + away(r1, 'C') >= 6, r1.problems.filter(p => p.kind === 'short').length].join(), '0,true,0');
     const sh = r => r.problems.filter(p => p.kind === 'short').length;
-    const r3 = solve(G, [P('A', { softGo: ['Mercure DD'] }), P('B'), P('Z', { group: 'Mercure DD' })], pre), r4 = solve(G, [P('A'), P('B'), P('Z', { group: 'Mercure DD' })], pre);
+    const r3 = solve(G, [P('A', { softGo: ['Mercure DD'], title: 'Supervisor' }), P('B', { title: 'Supervisor' }), P('Z', { group: 'Mercure DD' })], pre), r4 = solve(G, [P('A', { title: 'Supervisor' }), P('B', { title: 'Supervisor' }), P('Z', { group: 'Mercure DD' })], pre);
     check('hotel "only if no option": still goes when nobody else can (cover as good as without it)', [sh(r3) === sh(r4), away(r3, 'A') + away(r3, 'B') > 0].join(), 'true,true');
   }
   // 1. ideal two per shift, too few people: never an empty shift, some one-person shifts
@@ -992,7 +1018,7 @@ console.log('\nRoster scenarios');
   // 🔒 managers keep their shift; 🏨 people (or everyone) stay at their hotel
   run(`roStaff.G = { name: 'Gina Morales', group: 'Mercure DD', order: 9 }; roStaff.H = { name: 'Hugo Brandt', group: 'Mercure DD', order: 10 };
        for (const base of [roAdd(W, -7), W]) for (let d = 0; d < 7; d++) { const dt = roAdd(base, d); roDays[dt].G = d === 6 ? 'OFF' : '09:00 - 18:00'; roDays[dt].H = d === 5 ? 'OFF' : '09:00 - 18:00'; }
-       rbSetPerson('A', 'title', 'Manager');`);
+       rbSetPerson('A', 'title', 'Manager'); rbSetPerson('G', 'title', 'Supervisor');`);
   const lk = run(`(() => { rbWeek = W; const I = rbInput(1), A = I.people.find(p => p.key === 'A'), res = rbSolve(I), dates = [0, 1, 2, 3, 4, 5, 6].map(d => roAdd(W, d));
     const moved = dates.some(dt => rbParse(res.cells.A[dt]) && rbNorm(res.cells.A[dt]) !== A.fixed);
     const gap = { date: dates[3], shift: '15:00 - 00:00' };
@@ -1001,13 +1027,13 @@ console.log('\nRoster scenarios');
     rbSetPerson('G', 'home', true);
     const I2 = rbInput(1), homeG = rtCoverOptions(I2, res.cells, 'Ibis DD', gap.date, '08:00 - 17:00').some(o => o.key === 'G');
     rbSetPerson('G', 'home', undefined); rbSetRule('lend', false);
-    const I3 = rbInput(1), allHome = rtCoverOptions(I3, res.cells, 'Ibis DD', gap.date, '08:00 - 17:00').some(o => o.key === 'G' || o.key === 'H');
+    const I3 = rbInput(1), allHome = rtCoverOptions(I3, res.cells, 'Ibis DD', gap.date, '08:00 - 17:00').some(o => o.key === 'H');   // H is an agent: never borrowed (G is a Supervisor: may still go where nobody else can)
     rbSetRule('lend', true);
     return { lock: A.lock, fixed: A.fixed, moved, optA, borrowG, homeG, allHome }; })()`);
   check('lock: a manager keeps their shift by default', [lk.lock, lk.fixed].join(), 'true,08:00 - 17:00');
   check('lock: the builder never moves a manager off it', lk.moved, false);
   check('lock: a manager is never suggested to cover', lk.optA, false);
-  check('lock: someone from another hotel can be borrowed normally', lk.borrowG, true);
+  check('lock: a Supervisor from another hotel can be borrowed normally', lk.borrowG, true);
   check('lock: 🏨 someone who stays at their hotel is never borrowed', lk.homeG, false);
   check('lock: "keep everyone in their own hotel" stops all borrowing', lk.allHome, false);
   const lp = q => { const r = run(`rtLockParse(${JSON.stringify(q)})`); return r ? r.mode + ':' + r.keys.join('') : 'none'; };

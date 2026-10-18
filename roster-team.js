@@ -18,7 +18,7 @@
 //    • Shift Tasks follow the roster's real hours.
 // ═══════════════════════════════════════════════════════════
 
-const RT_LEAVE = ['SL', 'AL', 'ALA', 'EL', 'ML', 'UL', 'CL', 'PH', 'TRN'];
+const RT_LEAVE = ['SL', 'AL', 'V', 'ALA', 'EL', 'ML', 'UL', 'CL', 'PH', 'TRN'];   // V = Vacation
 const rtDates = w => Array.from({ length: 7 }, (_, d) => roAdd(w, d));
 const rtName = k => (roStaff[k] || {}).name || k;
 const _rtQ = s => JSON.stringify(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -98,7 +98,7 @@ function rtWhyNot(I, cells, group, date, shift, skip) {
 function rtStays(I, p, group) {
   if (p.lock) return true;
   const away = rbBaseGroup(p.group) !== rbBaseGroup(group);
-  return away && (p.home || rbNoGo(p, group) || ((I.rules || {}).lend === false && !rbFloats(p) && !rbFloatsLast(p)));   // Duty Managers work anywhere; Supervisors too, last
+  return away && (p.home || rbNoGo(p, group) || (!rbFloats(p) && !rbFloatsLast(p)));   // Duty Managers work anywhere; Supervisors too, last
 }
 function rtCoverOptions(I, cells, group, date, shift, opt) {
   const allowEmpty = !!(opt && opt.allowEmpty);   // a plan of several moves may empty a shift that a later move fills
@@ -803,6 +803,7 @@ function rtPerson(k) {
       <label>Employee no.<input value="${escapeHtml(s.id || '')}" onchange="rtSetStaff(${q},'id',this.value.trim())"></label>
       <label>Title<select onchange="rtSet(${q},'title',this.value||undefined)"><option value="">—</option>${RB_TITLES.map(t => `<option${c.title === t ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
       <label>Hotel<select onchange="if(this.value==='~'){const n=prompt('New hotel name');if(n)rtSetStaff(${q},'group',n.trim());}else rtSetStaff(${q},'group',this.value);rtPerson(${q})">${groups.map(x => `<option${x === g ? ' selected' : ''}>${escapeHtml(x)}</option>`).join('')}${!g ? '<option selected value="">—</option>' : ''}<option value="~">＋ New hotel…</option></select></label>
+      <label>Covers for<select onchange="rtSet(${q},'covers',this.value||undefined);rtPerson(${q})" title="Someone from the same hotel: on the days they are off or away, this person takes their shift, even if a usual rule bends"><option value="">Nobody</option>${Object.keys(roStaff || {}).filter(x => x !== k && !(rbPeople[x] || {}).deleted && rbBaseGroup((roStaff[x] || {}).group || '') === rbBaseGroup(g || '')).sort((a, b) => String(roStaff[a].name || a).localeCompare(String(roStaff[b].name || b))).map(x => `<option value="${escapeHtml(x)}"${c.covers === x ? ' selected' : ''}>${escapeHtml(roStaff[x].name || x)}</option>`).join('')}</select></label>
       <label>If moved, prefers<select onchange="rtSet(${q},'alt',this.value||undefined);rtPerson(${q})" title="When they have to work at another hotel, this one is tried first"><option value="">No preference</option>${groups.filter(x => x !== g && !/·/.test(x)).map(x => `<option${c.alt === x ? ' selected' : ''}>${escapeHtml(x)}</option>`).join('')}</select></label>
       <label>Shift<select onchange="const v=this.value;if(v==='rotate'||v==='any'){rtSet(${q},'mode',v);rtSet(${q},'fixed',v==='any'?'':undefined);}else{rtSet(${q},'mode','static');rtSet(${q},'fixed',v);}rtPerson(${q})">
         ${shifts.map(x => `<option value="${escapeHtml(x)}"${p.mode === 'static' && p.fixed === x ? ' selected' : ''}>Static: always ${escapeHtml(x)}</option>`).join('')}
@@ -1136,6 +1137,19 @@ function rtSoftParse(q) {
   const band = /^morning/.test(t) ? 'morning' : /^day/.test(t) ? 'day' : /^(evening|afternoon)/.test(t) ? 'evening' : /^night/.test(t) ? 'night' : '';
   return { keys, band, shift: band ? '' : rbNorm(sh), undo };
 }
+/** "Sam will cover Alex when he is off", "Sam handles when Alex is not in Adagio", "Sam covers Alex", "Sam stops covering Alex" */
+function rtCoverParse(q) {
+  q = String(q || '').trim().replace(/[.!]+$/, '');
+  let m, undo = false;
+  if ((m = q.match(/^(.+?)\s+(?:no longer covers?|stops? covering|doesn'?t cover|does not cover)\s+(.+)$/i))) undo = true;
+  else m = q.match(/^(.+?)\s+(?:will\s+|can\s+|should\s+)?(?:covers?|cover for|takes? (?:the )?place of|replaces?|handles?|handle for|is (?:the )?(?:backup|cover) for)\s+(.+?)(?:\s+(?:when|if|whenever|on (?:the )?days?)\b.*)?$/i)
+    || ((m = q.match(/^(.+?)\s+(?:will\s+|can\s+)?handles?\s+(?:it\s+)?(?:when|if|whenever)\s+(.+?)\s+(?:is|isn'?t|is not|are|'s)\b.*$/i)) ? m : null);
+  if (!m) return null;
+  const a = rtFind(m[1].trim()), b = rtFind(m[2].trim().replace(/\s+(?:is|isn'?t|is not)\b.*$/i, ''));
+  if (!a || !b || Array.isArray(a) || Array.isArray(b) || a === b) return null;
+  if (typeof rbBaseGroup === 'function' && typeof roStaff !== 'undefined' && rbBaseGroup((roStaff[a] || {}).group || '') !== rbBaseGroup((roStaff[b] || {}).group || '')) return null;   // only colleagues from the same hotel cover each other
+  return { who: a, covers: b, undo };
+}
 /** Words people use for a title → the title in the app. */
 /** "lock Ayoub in Adagio", "keep Saad on his shift", "Ali stays at his hotel", "unlock Ayoub": only with real names and a hotel. */
 function rtLockParse(q) {
@@ -1247,6 +1261,13 @@ const RT_COMMANDS = [
       const on = !/^(allow|let|start|unlock)/i.test(q);
       rbSetRule('lend', !on);
       _rtOut(`<div class="br-kind">🏨 Roster rules</div><div class="br-title">${on ? 'Everyone stays in their own hotel' : 'Hotels can borrow from each other again'}</div><div class="br-body">${on ? 'The builder and every suggestion keep people at their own hotel. Say "allow moving between hotels" to undo.' : 'A short hotel can borrow someone spare from another. People locked on their card still stay.'}</div>`);
+      return true; } },
+  { re: { test: q => !!rtCoverParse(q) }, ex: 'Sam will cover Alex when he is off', does: '🔁 on the days Alex is off, Sam (same hotel) takes his shift (rules may bend for this). "Sam stops covering Alex" undoes it', run: q => {
+      const L = rtCoverParse(q); if (!L) return false;
+      if (!roCanEdit()) { _rtOut('<div class="br-title">Only supervisors, managers and owners can change this.</div>'); return true; }
+      rbSetPerson(L.who, 'covers', L.undo ? undefined : L.covers);
+      if (document.getElementById('panel-roster-build')?.classList.contains('active')) rbRender();
+      _rtOut(`<div class="br-kind">🔁 Team</div><div class="br-title">${L.undo ? escapeHtml(rtName(L.who)) + ' no longer covers ' + escapeHtml(rtName(L.covers)) : escapeHtml(rtName(L.who)) + ' covers ' + escapeHtml(rtName(L.covers)) + ' on the days ' + escapeHtml(rtName(L.covers).split(' ')[0]) + ' is off'}</div><div class="br-sub">${L.undo ? '' : 'The builder puts ' + escapeHtml(rtName(L.who).split(' ')[0]) + ' on ' + escapeHtml(rtName(L.covers).split(' ')[0]) + "'s shift at their hotel on those days, even if a usual rule bends. The other days, any shift that fits."}</div>`);
       return true; } },
   { re: { test: q => !!rtLockParse(q) }, ex: 'lock Sam in his hotel', does: '🏨 never moved to another hotel (or "keep Sam on his shift" 🔒, "unlock Sam")', run: q => {
       const L = rtLockParse(q); if (!L) return false;

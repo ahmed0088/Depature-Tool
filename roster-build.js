@@ -199,7 +199,7 @@ function rbTlHome(I, g, p, s) {
   const G = (I.groups || {})[g] || {}; if ((G.post || '') !== (p.post || '') || rbBaseGroup(g) !== rbBaseGroup(p.group || '')) return false;
   const who = (G.who || {})[rbNorm(s) || s]; return !!(who && who.length && rbIsNight(rbNorm(s) || s));
 }
-function rbMayWork(I, g, p, s) { if (rbNoGo(p, g)) return false; if (p && (((I.groups || {})[g] || {}).post || '') !== (p.post || '')) return false; const who = (((I.groups || {})[g] || {}).who || {})[rbNorm(s) || s]; return !who || !who.length || who.includes((p && p.title) || ''); }
+function rbMayWork(I, g, p, s) { if (rbNoGo(p, g)) return false; if (p && p.group && g && rbBaseGroup(p.group) !== rbBaseGroup(g) && !rbFloats(p) && !rbFloatsLast(p)) return false; /* only Duty Managers and Supervisors ever work at another hotel */ if (p && (((I.groups || {})[g] || {}).post || '') !== (p.post || '')) return false; const who = (((I.groups || {})[g] || {}).who || {})[rbNorm(s) || s]; return !who || !who.length || who.includes((p && p.title) || ''); }
 /** Shift types people ask for: morning, day (morning + 12:00), evening, night. */
 const RB_BANDS = {
   morning: { label: 'Morning', test: x => x.type !== 'night' && x.s >= 300 && x.s < 660 },
@@ -265,6 +265,44 @@ function rbMoveHotels(I, cells) {
  * → { cells:{ [key]:{ [date]:value } }, problems:[…], cover:{ [group]:{ [code]:[have×7] } } }
  */
 function rbSolve(I) {
+  // 🔁 "Covers for": plan once, then fix the deputy on the colleague's shift (at the colleague's hotel) on every day
+  // the colleague is off or away, keep those days off as they are, and plan the rest of the week around it
+  if (!I._cover && !I._plain && !I._strict && (I.people || []).some(p => p.covers)) {
+    const first = rbSolve(Object.assign({}, I, { _cover: true }));
+    const pre = JSON.parse(JSON.stringify(I.pre || {})), notes = [], dates = Array.from({ length: 7 }, (_, d) => roAdd(I.week, d));
+    I.people.filter(p => p.covers).forEach(p => {
+      const x = I.people.find(q => q.key === p.covers); if (!x || rbBaseGroup(x.group) !== rbBaseGroup(p.group)) return;   // colleagues of the same hotel only: nobody is moved
+      const xc = first.cells[x.key] || {}, worked = dates.map(dt => xc[dt]).filter(v => rbParse(v) && !rbParse(v).note);
+      const usual = x.fixed || worked.sort((a, b) => worked.filter(v => v === b).length - worked.filter(v => v === a).length)[0];
+      if (!usual) return;
+      const days = [];
+      dates.forEach(dt => {
+        const v = xc[dt] || '';
+        if (rbParse(v) && !rbParse(v).note) return;                      // they work that day: nothing to cover
+        const own = ((I.pre || {})[p.key] || {})[dt];
+        if (own && rbKind(own) !== 'work') return;                     // the deputy's own leave or day off comes first (a shift wish does not)
+        if (/^(AL|ALA|SL|EL|ML|UL|CL|V|VAC|BL|LWP|TRN)$/i.test(String((first.cells[p.key] || {})[dt] || '').trim())) return;
+        (pre[x.key] = pre[x.key] || {})[dt] = v || 'OFF';
+        const sh = rbNorm(usual) || usual, away = rbBaseGroup(p.group) !== rbBaseGroup(x.group);
+        (pre[p.key] = pre[p.key] || {})[dt] = away ? `${sh} - ${rbShortU(rbBaseGroup(x.group), Object.keys(I.groups))}` : sh;
+        days.push(dt);
+      });
+      // after covering a night, the deputy rests the next day, then goes back to their usual shift
+      const nightCover = (rbParse(rbNorm(usual) || usual) || {}).type === 'night';
+      if (nightCover) days.forEach(dt => {
+        const d = dates.indexOf(dt), nx = dates[d + 1];
+        if (!nx || days.includes(nx)) return;                          // the next night is covered too: the rest comes after the last one
+        const own = ((I.pre || {})[p.key] || {})[nx];
+        if (own && rbKind(own) !== 'work') return;
+        (pre[p.key] = pre[p.key] || {})[nx] = 'OFF';
+      });
+      const nm = k => (typeof roStaff !== 'undefined' && roStaff[k] ? roStaff[k].name.split(' ')[0] : k);
+      if (days.length) notes.push({ key: p.key, date: days[0], plan: true, text: `🔁 ${nm(p.key)} covers ${nm(x.key)} (${days.map(dt => RB_DAYS[dates.indexOf(dt)]).join(', ')}): ${usual}${rbBaseGroup(p.group) !== rbBaseGroup(x.group) ? ' at ' + rbBaseGroup(x.group) : ''}, as set on the team card.` });
+    });
+    const res = rbSolve(Object.assign({}, I, { pre, _cover: true }));
+    res.notes = notes.concat(res.notes || []);
+    return res;
+  }
   const t0 = Date.now();
   _rbPC.clear(); _rbKC.clear();   // codes may have been renamed since last time
   const plan = I.noNightPlan ? null : rbPlanNights(I);
@@ -385,7 +423,7 @@ function rbPlanNights(I) {
           // their own hotel first, then the hotel they'd rather go to when moved
           const own = cand.find(x => hotels[x.i].g === homeOf(f)) || (f.alt && cand.find(x => rbBaseGroup(hotels[x.i].g) === f.alt)) || cand.find(x => !rbSoftGo(f, hotels[x.i].g)) || cand[0];
           if (rbSoftGo(f, hotels[own.i].g)) c += 400;   // ⚠ only if no other way
-          if (hotels[own.i].g !== homeOf(f)) { if (f.home || (!R.lend && !rbFloats(f) && !rbFloatsLast(f))) { ok = false; break; } c += (f.alt && rbBaseGroup(hotels[own.i].g) === f.alt ? 50 : 60) * Math.max(0.2, rbW(R, 'home')); }   // working at another hotel: only when there's no way at their own hotel
+          if (hotels[own.i].g !== homeOf(f)) { if (f.home || (!rbFloats(f) && !rbFloatsLast(f))) { ok = false; break; } c += (f.alt && rbBaseGroup(hotels[own.i].g) === f.alt ? 50 : 60) * Math.max(0.2, rbW(R, 'home')); }   // working at another hotel: only when there's no way at their own hotel
           u2.add(own.i + ':' + own.d); pick.push({ d, i: own.i });
         }
         if (ok) walk(fi + 1, u2, plan.concat([{ f, b, pick }]), c);
@@ -578,7 +616,7 @@ function _rbFinish(I, cells, o) {
         if (cover[g][s][d] === 0 && !G[g].post && R.allowOne !== false && rbHoursCovered(rbDeskGrid(G[g].shifts, (e, x) => (cover[g][x] || [])[e] || 0), d, s)) break;
         if (cover[g][s][d] >= 1 && R.allowOne !== false && !R.lendIdeal && (G[g].post || rbRelieved(rbDeskGrid(G[g].shifts, (e, x) => (cover[g][x] || [])[e] || 0), d, s, R))) break;
         const dt = dates[d];
-        const cand = I.people.filter(q => q.group !== g && !q.home && !q.lock && (R.lend || rbFloats(q) || rbFloatsLast(q)) && !((I.pre || {})[q.key] || {})[dt] && G[q.group] && cells[q.key][dt] === s && cover[q.group][s] && cover[q.group][s][d] > need(q.group, s, d) && rbMayWork(I, g, q, s)).sort((a, b) => (rbSoftGo(a, g) ? 1 : 0) - (rbSoftGo(b, g) ? 1 : 0) || (rbLentBefore(I, b, g, d, s) ? 1 : 0) - (rbLentBefore(I, a, g, d, s) ? 1 : 0) || (rbFloatsLast(a) ? 1 : 0) - (rbFloatsLast(b) ? 1 : 0) || (rbFloats(b) ? 1 : 0) - (rbFloats(a) ? 1 : 0) || (b.alt === rbBaseGroup(g) ? 1 : 0) - (a.alt === rbBaseGroup(g) ? 1 : 0));   // (then whoever would rather come to this hotel)
+        const cand = I.people.filter(q => q.group !== g && !q.home && !q.lock && (rbFloats(q) || rbFloatsLast(q)) && !((I.pre || {})[q.key] || {})[dt] && G[q.group] && cells[q.key][dt] === s && cover[q.group][s] && cover[q.group][s][d] > need(q.group, s, d) && rbMayWork(I, g, q, s)).sort((a, b) => (rbSoftGo(a, g) ? 1 : 0) - (rbSoftGo(b, g) ? 1 : 0) || (rbLentBefore(I, b, g, d, s) ? 1 : 0) - (rbLentBefore(I, a, g, d, s) ? 1 : 0) || (rbFloatsLast(a) ? 1 : 0) - (rbFloatsLast(b) ? 1 : 0) || (rbFloats(b) ? 1 : 0) - (rbFloats(a) ? 1 : 0) || (b.alt === rbBaseGroup(g) ? 1 : 0) - (a.alt === rbBaseGroup(g) ? 1 : 0));   // (then whoever would rather come to this hotel)
         const used = rbMoveHotels(I, cells), inPair = q => used.size === 0 || (used.has(rbBaseGroup(g)) && used.has(rbBaseGroup(q.group)) ) || (used.size < 2 && (used.has(rbBaseGroup(g)) || used.has(rbBaseGroup(q.group))));
         const donor = cand.find(inPair) || cand[0];   // one pair of hotels a week; a third hotel only when there's no other way
         if (!donor) break;
@@ -1099,6 +1137,8 @@ function rbActive(k, week) {
 }
 function rbTitle(k) { return (rbPeople[k] || {}).title || ''; }
 /** Duty Managers float: any hotel, any shift, even when everyone else stays at their own hotel. */
+/** title of a person for the hotel-move rule (only Duty Managers and Supervisors move) */
+function rbInputPerson(k) { return { title: typeof rbTitle === 'function' ? rbTitle(k) : '' }; }
 function rbFloats(p) { return /^duty manager$/i.test((p && p.title) || ''); }
 /** Supervisors can go anywhere too, but only when nobody else can: they come after everyone else. */
 function rbFloatsLast(p) { return /^supervisor$/i.test((p && p.title) || ''); }
@@ -1144,7 +1184,7 @@ function rbPersonCfg(k) {
   const mode = c.mode || (c.fixed ? 'static' : c.fixed === '' && !lock ? 'any' : (L.fixedGuess || ((mgr || lock) && L.usual)) ? 'static' : L.rotates ? 'rotate' : 'any');   // (rotates week to week, as the posted rosters show)
   const fixed = mode === 'static' || lock ? (c.fixed || L.fixedGuess || L.usual || '') : '';
   return {
-    key: k, group: rbPGroup(k), post: rbPost(k), title: c.title || '', mode, lock: lock && !!fixed, home: !!c.home, noGo: (c.noGo || []).slice(), softGo: (c.softGo || []).slice(), alt: c.alt || '',
+    key: k, group: rbPGroup(k), post: rbPost(k), title: c.title || '', mode, lock: lock && !!fixed, home: !!c.home, covers: c.covers || '', noGo: (c.noGo || []).slice(), softGo: (c.softGo || []).slice(), alt: c.alt || '',
     offs: c.offs != null ? +c.offs : Math.min(1, L.offs),   // one day off a week (4 a month); two only when set on their card
     fixed, fixedLearned: !c.fixed && !!fixed,
     fixedCost: mgr ? 400 : /supervisor|leader|duty/i.test(c.title || '') ? 60 : 30,   // managers move only to stop a shift being empty
@@ -2624,7 +2664,8 @@ function rbPick(td, k, dt) {
   document.getElementById('rbMenu')?.remove();
   const g = (roStaff[k] || {}).group || '', shifts = rbGroupCfg(g).shifts;
   const others = rbGroups().filter(x => x !== g);
-  const leave = Object.entries(roAllCodes()).filter(([c, v]) => v.type === 'leave' && c !== 'PH').map(([c]) => c);
+  const _lf = ['AL', 'V', 'SL', 'EL'];   // the ones used most come first (V = Vacation)
+  const leave = Object.entries(roAllCodes()).filter(([c, v]) => v.type === 'leave' && c !== 'PH').map(([c]) => c).sort((a, b) => ((_lf.indexOf(a) + 1) || 99) - ((_lf.indexOf(b) + 1) || 99));
   const cur = (rbDrafts[rbWeek].cells[k] || {})[dt] || '';
   const opt = (v, label, cls) => `<button class="rb-opt ${cls || ''}${v === cur ? ' on' : ''}" onclick="rbSetCell(${_rbQ(k)},'${dt}',${_rbQ(v)})">${escapeHtml(label || v)}</button>`;
   const m = document.createElement('div');
@@ -2635,8 +2676,8 @@ function rbPick(td, k, dt) {
     <div class="rb-opts">${shifts.map(s => opt(s, s, 'ro-t-' + ((roInfo(s) || {}).type || 'other'))).join('')}</div>
     <div class="rb-opts">${opt('OFF', 'OFF', 'ro-t-off')}${(() => { const L = rbPhNext(k); return opt(L ? 'PH - ' + L : 'PH', 'PH', 'ro-t-leave'); })()}${leave.slice(0, 8).map(c => opt(c, c, 'ro-t-leave')).join('')}</div>
     ${rbSwapMenuHtml(k, dt)}
-    <div class="rb-opts"><small>Sick or leave from this day:</small>${['SL', 'AL', 'EL'].map(c => `<button class="rb-opt ro-t-leave" onclick="rbLeaveFrom(${_rbQ(k)},'${dt}','${c}')">${c} …</button>`).join('')}</div>
-    ${others.length ? `<details class="rb-opts-more"><summary>Lend to another hotel…</summary><div class="rb-opts">${others.map(o => shifts.map(s => opt(`${s} - ${rbShortU(o)}`, `${s.slice(0, 5)} at ${rbShortU(o)}`, 'ro-t-other')).join('')).join('')}</div></details>` : ''}
+    <div class="rb-opts"><small>Sick or leave from this day:</small>${['SL', 'AL', 'V', 'EL'].map(c => `<button class="rb-opt ro-t-leave" title="${c === 'V' ? 'Vacation' : ''}" onclick="rbLeaveFrom(${_rbQ(k)},'${dt}','${c}')">${c} …</button>`).join('')}</div>
+    ${others.length && (rbFloats(rbInputPerson(k)) || rbFloatsLast(rbInputPerson(k))) ? `<details class="rb-opts-more"><summary>Lend to another hotel…</summary><div class="rb-opts">${others.map(o => shifts.map(s => opt(`${s} - ${rbShortU(o)}`, `${s.slice(0, 5)} at ${rbShortU(o)}`, 'ro-t-other')).join('')).join('')}</div></details>` : ''}
     <div class="rb-inline"><input id="rbOther" placeholder="Other (e.g. TRN, 10:00 - 19:00)" value=""><button class="btn sm" onclick="rbSetCell(${_rbQ(k)},'${dt}',document.getElementById('rbOther').value)">Set</button><button class="btn sm" onclick="rbSetCell(${_rbQ(k)},'${dt}','')">Clear</button></div>`;
   document.body.appendChild(m);
   const r = td.getBoundingClientRect(), mw = Math.min(340, window.innerWidth - 16);

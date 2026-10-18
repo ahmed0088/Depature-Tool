@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 335, items: [
+    '🏨 Roster: the builder no longer moves agents to another hotel. Only Duty Managers and Supervisors are ever moved, and only when nobody at the hotel can do it ("Lend to another hotel…" only shows for them too).',
+    '🔁 New "Covers for" on each team card (same hotel only): on the days that colleague is off or away, this person takes their shift, even over their own shift request; after covering a night they get the next day off, then back to their usual shift. Or type it in Ask the roster, e.g. "Sam will cover Alex when he is off" ("Sam stops covering Alex" to undo).',
+    '🌴 V (Vacation) is now in the roster menus next to AL, SL and EL.',
+  ] },
   { v: 334, items: [
     '✉️ WhatsApp → Send: a "Send automatically" switch next to Send to WhatsApp. On (default): your message goes straight into the group. Off: it is typed for you and you press Enter. The same switch is still in the reader\'s Settings on WhatsApp Web.',
     '⚡ The WhatsApp reader picks up new messages faster (within a quarter of a second) and only watches the chat and the chat list, so WhatsApp Web stays smooth.',
