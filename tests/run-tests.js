@@ -1434,5 +1434,64 @@ console.log('\nQuiet when off · shift task times');
   check('my upsells: a whole month is named by the month', M.fileName({ name: 'ACCOREN-SALVAREZ@ACCOREN', from: 20261001, to: 20261031 }), 'Upsells - SALVAREZ - Oct 2026.xlsx');
 }
 
+console.log('\nWhatsApp HK bridge · message reader');
+{
+  const sb = { console: { log() {}, warn() {}, error() {} } }; sb.window = sb; sb.globalThis = sb;
+  vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'wa-bridge.js'), 'utf8'), sb, { filename: 'wa-bridge.js' });
+  const P = t => JSON.parse(JSON.stringify(sb.hoWaParse(t)));
+  const A = t => P(t).actions.map(a => [a.room, a.act, a.time || a.note || ''].filter(Boolean).join(' ')).join(' | ');
+  check('wa: "324 CO" checks out 324', A('324 CO'), '324 co');
+  check('wa: "407 CO" checks out 407', A('407 CO'), '407 co');
+  check('wa: "415 change bedsheet" is a note', A('415 change bedsheet'), '415 note change bedsheet');
+  check('wa: "503 Cleaning." is a note without the dot', A('503 Cleaning.'), '503 note Cleaning');
+  check('wa: an edited cleaning message is one note', A('201 Clean the room, add also toliet paper and towels..'), '201 note Clean the room, add also toliet paper and towels');
+  check('wa: no room → nothing to do', [P('Hk please come asap..').kind, P('Update').kind], ['none', 'none']);
+  check('wa: the app\'s own extension post is ignored', P('🔁 Extensions — 09:07\n🔁 0113 · +4N → 22 Oct\n🔁 0425 · +1N → 19 Oct'), { kind: 'ignore', actions: [] });
+  check('wa: one extension line on its own is ignored', P('🔁 0113 · +4N → 22 Oct').kind, 'ignore');
+  check('wa: CO words', ['202 C/O', '202 checked out', '202 check out', '202 checkout', '202 out', '202 co ✅', '202 CO.'].map(A), Array(7).fill('202 co'));
+  check('wa: LCO times', ['202 LCO 6PM', '202 lco 6 pm', '202 LCO 6:30 pm', '202 LCO 18:00', '202 LCO 1800', '202 late check out 2pm', '202 late co 6.30 p.m.'].map(A),
+    ['202 lco 18:00', '202 lco 18:00', '202 lco 18:30', '202 lco 18:00', '202 lco 18:00', '202 lco 14:00', '202 lco 18:30']);
+  check('wa: LCO with no time', P('202 LCO').actions, [{ room: '202', act: 'lco', time: '' }]);
+  check('wa: Room / Rm / # before the number', ['Room 202 CO', 'Rm 202 CO', '#202 CO', 'rm. 1204 LCO 1800'].map(A), ['202 co', '202 co', '202 co', '1204 lco 18:00']);
+  check('wa: several rooms in one message', ['202 205 CO', '202, 205 CO', '202 & 205 CO', '202 CO\n205 CO', '202\n205\nCO'].map(A), Array(5).fill('202 co | 205 co'));
+  check('wa: different commands on one line', A('202 CO, 205 LCO 2pm'), '202 co | 205 lco 14:00');
+  check('wa: leading-zero rooms keep their digits, match by number', [A('0113 CO'), sb.hoWaPure.actionKey({ room: '0113', act: 'co' }) === sb.hoWaPure.actionKey({ room: '113', act: 'co' })], ['0113 co', true]);
+  check('wa: "out of order" and "checkout tomorrow" are notes, not check-outs', [A('324 out of order'), A('324 checkout tomorrow')], ['324 note out of order', '324 note checkout tomorrow']);
+  check('wa: a note\'s second line joins it', A('201 Clean the room\nalso towels'), '201 note Clean the room also towels');
+  check('wa: time labels', ['18:00', '18:30', '12:00', '09:05'].map(sb.hoWaPure.timeLabel), ['6 PM', '6:30 PM', '12 PM', '9:05 AM']);
+  const C = sb.hoWaParseCopied([
+    '#hotelops-wa',
+    '[9:01 AM, 11/10/2026] Sam: 324 CO',
+    '[9:05 AM, 11/10/2026] Alex: 201 Clean the room',
+    'also towels',
+    '11/10/2026, 9:10 am - Sam: 202 LCO 6PM',
+    '11/10/2026, 9:00 am - Messages and calls are end-to-end encrypted.',
+    '[11/10/2026, 10:01:05 AM] Lina: 415 change bedsheet',
+    '10/10/2026, 22:15 - Alex: 333 CO',
+  ].join('\n'));
+  check('wa copy: WhatsApp Web, Android and iPhone formats are read', C.map(m => [m.time, m.date, m.sender, m.text].join(' / ')), [
+    '9:01 AM / 11/10/2026 / Sam / 324 CO', '9:05 AM / 11/10/2026 / Alex / 201 Clean the room\nalso towels',
+    '9:10 am / 11/10/2026 / Sam / 202 LCO 6PM', '10:01:05 AM / 11/10/2026 / Lina / 415 change bedsheet', '22:15 / 10/10/2026 / Alex / 333 CO']);
+  const now = new Date(2026, 9, 11, 12);
+  check('wa copy: dates either way round, today wins', ['11/10/2026', '10/11/2026', '10/10/2026', '25/12/26', '2026-10-11'].map(d => sb.hoWaPure.waDateISO(d, now)),
+    ['2026-10-11', '2026-10-11', '2026-10-10', '2026-12-25', '2026-10-11']);
+  check('wa copy: times to 24 h', ['9:01 AM', '9:01 pm', '12:30 am', '21:05', '10:01:05 AM'].map(sb.hoWaPure.waTime24), ['09:01', '21:01', '00:30', '21:05', '10:01']);
+
+  // the WhatsApp Web console snippet's own helpers
+  const ws = { console: sb.console, module: { exports: {} } }; ws.globalThis = ws;
+  vm.createContext(ws);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'tools', 'hotelops-whatsapp.console.js'), 'utf8'), ws, { filename: 'hotelops-whatsapp.console.js' });
+  const H = ws.module.exports;
+  check('wa snippet: reads data-pre-plain-text', JSON.parse(JSON.stringify(H.parsePre('[9:35 AM, 10/11/2026] Sam: '))), { time: '9:35 AM', date: '10/11/2026', sender: 'Sam' });
+  check('wa snippet: a name with a colon-less suffix and narrow spaces', JSON.parse(JSON.stringify(H.parsePre('[9:35 PM, 11/10/2026] +971 50 000 0000: '))), { time: '9:35 PM', date: '11/10/2026', sender: '+971 50 000 0000' });
+  check('wa snippet: not a pre-text → null', H.parsePre('hello'), null);
+  check('wa snippet: today filter (US and UK dates)', ['10/11/2026', '11/10/2026', '10/10/2026', '12/10/2026', ''].map(d => H.isToday(d, now)), [true, true, false, false, false]);
+  check('wa snippet: sent by me from the data-id', [H.isMineId('true_120363@g.us_3EB0AB'), H.isMineId('false_120363@g.us_3EB0CD_971500@c.us')], [true, false]);
+  const txt = H.copyText([{ time: '9:01 AM', date: '11/10/2026', sender: 'Sam', text: '324 CO' }, { time: '9:02 AM', date: '11/10/2026', sender: 'Alex', text: '201 clean\nplease' }]);
+  check('wa snippet: copy format has the marker and WhatsApp\'s own lines', txt, '#hotelops-wa\n[9:01 AM, 11/10/2026] Sam: 324 CO\n[9:02 AM, 11/10/2026] Alex: 201 clean\nplease');
+  check('wa snippet → app: what the snippet copies, the app reads back', sb.hoWaParseCopied(txt).map(m => m.sender + ':' + m.text), ['Sam:324 CO', 'Alex:201 clean\nplease']);
+}
+
 console.log(`\n${pass} passed · ${fail} failed`);
 process.exit(fail ? 1 : 0);
