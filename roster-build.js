@@ -363,7 +363,7 @@ function rbPlanNights(I) {
     if (!ns) return;
     const regs = I.people.filter(p => p.group === g && (p.fixed === ns || p.usual === ns) && rbMayWork(I, g, p, ns) && !p.post);
     if (!regs.length || dates.some((_, d) => ((G.need[ns] || [])[d] || 0) !== 1)) return;   // one night person a night: the usual case
-    // two people who both do nights there (like Hassan and Turab): the one with the most nights is the regular,
+    // two people who both do nights there (like two night auditors): the one with the most nights is the regular,
     // the other covers his days off, as management did
     const nightsOf = p => { let n = 0; for (let i = 1; i <= 14; i++) if (rbNorm((roDays[roAdd(I.week, -i)] || {})[p.key]) === ns) n++; return n + (p.fixed === ns ? 20 : 0); };
     regs.sort((a, b) => nightsOf(b) - nightsOf(a));
@@ -394,7 +394,7 @@ function rbPlanNights(I) {
     const byDay = {}; gaps.forEach(x => { (byDay[x.d] = byDay[x.d] || []).push(x); });
     // blocks for floaters: the first k days or the last k days of the week
     const blocks = f => { const out = [{ days: [] }]; for (let k = 1; k <= 6; k++) { out.push({ days: Array.from({ length: k }, (_, j) => j), off: k, start: true }); out.push({ days: Array.from({ length: k }, (_, j) => 7 - k + j), off: 6 - k }); }
-      // also one or two nights in the middle of the week, with the day off right after (as management did: Hnin's Friday night),
+      // also one or two nights in the middle of the week, with the day off right after (as management did: one Friday night),
       // only on nights that need cover, so their own hotel can do it instead of borrowing someone
       // (a night in the middle needs a day off before it too, coming off day shifts: two days off that week, so only for
       //  someone who has two days off a week anyway; everyone else keeps their one day off)
