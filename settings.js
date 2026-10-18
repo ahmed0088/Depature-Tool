@@ -85,7 +85,7 @@ function hoApplyPrefs() {
     el.classList.toggle('ho-hidden', hidden.has(el.dataset.panel));
   });
   // icons-only menu: keep the page name as a tooltip
-  document.querySelectorAll('.sidenav .nav-item').forEach(n => { if (!n.title) n.title = n.textContent.replace(/\s*[\d—✓/]+\s*$/, '').trim(); });
+  document.querySelectorAll('.sidenav .nav-item').forEach(n => { if (!n.title) n.title = [...n.childNodes].filter(c => c.nodeType === 3).map(c => c.textContent).join(' ').replace(/\s+/g, ' ').trim(); });   // the name only, not the badge
   if (!hoPrefs.brainOn) document.getElementById('blBubble')?.remove();
   // accent colour, corners, font
   const R = document.documentElement.style;

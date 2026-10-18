@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 318, items: [
+    '🎨 Menu: "Night Audit · PM Rooms" is now just "PM Rooms" (it sits under Night Audit), so it fits on one line and its highlight no longer spills over. Menu names always stay on one line, and the hover tip shows only the page name.',
+  ] },
   { v: 317, items: [
     '🗂️ The side menu is tidier, in clear groups: Front Desk, Night Audit, Money & Tax, Guests & Sales, Team, Tools and System. A group you can\'t use for your role hides itself.',
   ] },

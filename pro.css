@@ -99,6 +99,7 @@ body { font-family: var(--font); font-size: 13.5px; letter-spacing: -0.006em; fo
 .nav-section-label { font: 600 10.5px var(--font) !important; letter-spacing: .08em; text-transform: uppercase; color: var(--text3); padding: 16px 12px 6px !important; }
 .nav-item { height: 36px; min-height: 36px; padding: 0 10px !important; gap: 10px; border-radius: 9px !important; border: 0 !important; font: 500 13px var(--font); color: var(--text2);
   position: relative; transition: background .15s var(--ho-ease), color .15s; }
+.sidenav .nav-item { white-space: nowrap; }   /* one line per page, so the highlight always fits */
 .nav-item:hover { background: var(--card); color: var(--text); }
 .nav-item .nav-icon { width: 22px; height: 22px; background: none !important; border: 0 !important; display: flex; align-items: center; justify-content: center; color: var(--text3); flex-shrink: 0; }
 .nav-item .nav-icon .ho-ic { width: 18px; height: 18px; }
