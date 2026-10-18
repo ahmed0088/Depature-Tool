@@ -3040,3 +3040,8 @@ html[data-skin="ios-dark"] .dpn-send, html[data-theme="midnight"] .dpn-send { co
   .dpn-ov.open, .dpn-ov.dpn-closing, .dpn-win, .dpn-ov.dpn-closing .dpn-win { animation: none !important; }
   .dpn-f, .dpn-cat, .dpn-hbtn, .dpn-e-main, .dpn-e-acts { transition: none !important; }
 }
+
+/* 🎓 training that day: a clear pill on the roster cell */
+.ev-mark.ev-trn { position: absolute; top: auto; bottom: 1px; left: 50%; right: auto; transform: translateX(-50%); font: 700 8.5px/1.4 var(--font); padding: 0 4px; border-radius: 999px;
+  background: color-mix(in srgb, var(--violet, #8b5cf6) 18%, var(--card)); color: var(--violet, #7c3aed); border: 1px solid color-mix(in srgb, var(--violet, #8b5cf6) 40%, transparent); white-space: nowrap; }
+td.ro-cell { position: relative; }

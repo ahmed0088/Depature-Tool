@@ -250,6 +250,31 @@ console.log('\nRoster builder');
       const q3eve = dates.filter(dt => ro.cells.Q3[dt] === Ex).length;
       check('own rules: two people never off the same day, and someone kept off a shift', [bothOff, q3eve].join(), '0,0');
     }
+    { // days off spread over the week: not three people of a small hotel off the same day (even if all like that day)
+      const Mx = '08:00 - 17:00', Dx = '12:00 - 21:00', Nx = '00:00 - 09:00', one7 = [1, 1, 1, 1, 1, 1, 1];
+      const ks = ['H1', 'H2', 'H3', 'H4', 'H5'];
+      const Io = { week: W, groups: { 'Ibis DD': { shifts: [Mx, Dx, Nx], need: { [Mx]: one7, [Dx]: one7, [Nx]: one7 } } },
+        people: ks.map(k => person(k, { prefOff: [6], learnedOff: [6] })), pre: {}, rules: { minRest: 11, maxRun: 6, givePh: false, lend: true }, seed: 11 };
+      const ro = sb.rbSolve(Io);
+      const most = Math.max(...dates.map(dt => ks.filter(k => sb.rbKind(ro.cells[k][dt]) === 'off').length));
+      check('days off are spread: never three of a small hotel off the same day', most <= 2, true);
+    }
+    { // a night kept for Supervisors: the deputy who covers the Supervisor may still do it (not flagged)
+      const Mx = '08:00 - 17:00', Nx = '00:00 - 09:00', one7 = [1, 1, 1, 1, 1, 1, 1];
+      const Iw = { week: W, groups: { 'Mercure DD': { shifts: [Mx, Nx], need: { [Mx]: one7, [Nx]: one7 }, who: { [Nx]: ['Supervisor', 'Duty Manager'] } } },
+        people: [person('SY', { group: 'Mercure DD', title: 'Duty Manager', fixed: Nx, usual: Nx }), person('HN', { group: 'Mercure DD', title: 'Team Leader', covers: 'SY', usual: Mx }), person('M2', { group: 'Mercure DD' }), person('M3', { group: 'Mercure DD' })],
+        pre: {}, rules: { minRest: 11, maxRun: 6, givePh: false, lend: true }, seed: 12 };
+      const rw = sb.rbSolve(Iw);
+      check('covers: the deputy may do the colleague\'s Supervisor-only night, not flagged', [dates.some(dt => rw.cells.HN[dt] === Nx), rw.problems.filter(p => p.kind === 'who' && p.key === 'HN').length].join(), 'true,0');
+    }
+    { // ☀️ two at the desk every morning, even when each shift only "needs" one
+      const Mx = '08:00 - 17:00', Dx = '12:00 - 21:00', Ex = '15:00 - 00:00', Nx = '00:00 - 09:00', one7 = [1, 1, 1, 1, 1, 1, 1];
+      const ks = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6'];
+      const Im = { week: W, groups: { 'Ibis DD': { shifts: [Nx, Mx, Dx, Ex], need: { [Nx]: one7, [Mx]: one7, [Dx]: one7, [Ex]: one7 } } },
+        people: ks.map(k => person(k, { likes: [Dx, Ex] })), pre: {}, rules: { minRest: 11, maxRun: 6, givePh: false, lend: true }, seed: 13 };
+      const rm = sb.rbSolve(Im), at = (dt, h) => ks.filter(k => { const x = sb.rbParse(rm.cells[k][dt]); return x && x.s <= h * 60 && x.e > h * 60; }).length;
+      check('morning: two at the desk 09:00 – 12:00 when people are free', dates.every(dt => at(dt, 10) >= 2), true);
+    }
     check('agents are never moved to another hotel (only Duty Managers and Supervisors)', [movedA, sb.rbMayWork(Ia, 'Adagio GD', Ia.people[1], N), sb.rbMayWork(I2, 'Adagio GD', I2.people[1], N)].join(), '0,false,true');
   }
   check('moves: the hotels touched by moves are counted (from and to)', [...sb.rbMoveHotels(I2, { 'M ONE': { [dates[0]]: '12:00 - 21:00 - Adagio' }, 'A ONE': {}, 'M TWO': {}, 'M THREE': {} })].sort().join(), 'Adagio GD,Mercure DD');
@@ -330,7 +355,8 @@ console.log('\nRoster scenarios');
   // 0b. an earlier start than the day before (12-21 then 09-18) needs a day off between; an hour earlier is fine
   {
     const R = { nightSwitch: true };
-    check('earlier start: 12-21 then 09-18 the next day is not allowed', sb.rbSwitchOk('12:00 - 21:00', '09:00 - 18:00', R), false);
+    check('earlier start: 12-21 then 08-17 the next day is not allowed (more than 3 h earlier)', sb.rbSwitchOk('12:00 - 21:00', '08:00 - 17:00', R), false);
+    check('earlier start: 15-00 then 12-21 the next day is fine (3 h earlier, rest kept)', sb.rbSwitchOk('15:00 - 00:00', '12:00 - 21:00', R), true);
     check('earlier start: an hour earlier (09-18 then 08-17) is fine; later is fine', [sb.rbSwitchOk('09:00 - 18:00', '08:00 - 17:00', R), sb.rbSwitchOk('09:00 - 18:00', '12:00 - 21:00', R)].join(), 'true,true');
     check('earlier start: can be switched off in Rules', sb.rbSwitchOk('12:00 - 21:00', '09:00 - 18:00', { noBack: false }), true);
     const D12 = '12:00 - 21:00';
@@ -470,10 +496,10 @@ console.log('\nRoster scenarios');
   // 2. three staff, three shifts of one (one-man shifts): the gaps that can't be filled say "bring in a staff member"
   {
     const G = { 'Ibis DD': { shifts: [N, M, E], need: { [N]: day(1), [M]: day(1), [E]: day(1) } } };
-    const ppl = ['A', 'B', 'C'].map(k => P(k)), r = solve(G, ppl, {}, { offWorked: true });
+    const ppl = ['A', 'B', 'C'].map(k => P(k)), r = solve(G, ppl, {}, { offWorked: true, morningTwo: false });
     const gaps = r.problems.filter(p => p.kind === 'short');
     check('three staff, 21 shifts, 18 working days: one gap closed by someone working their day off (written down), the rest left', [gaps.length, r.problems.filter(p => p.kind === 'offs').length, (r.notes || []).some(n => /works their day off/.test(n.text))].join(), '2,1,true');
-    const r0 = solve(G, ppl);   // the default: nobody loses their weekly day off, the gaps are left for the manager
+    const r0 = solve(G, ppl, {}, { morningTwo: false });   // the default: nobody loses their weekly day off, the gaps are left for the manager
     check('by default nobody works their day off to fill a shift (the gap is shown instead)', [r0.problems.filter(p => p.kind === 'offs').length, r0.problems.filter(p => p.kind === 'short').length].join(), '0,3');
     check('no rest rule broken to close them, and only one day off given up a week', r.problems.filter(p => p.kind === 'rest').length, 0);
     const I = { week: W, groups: G, people: ppl, pre: {}, rules: { minRest: 11, maxHours: 9, allowOne: true } };
@@ -979,7 +1005,7 @@ console.log('\nRoster scenarios');
   run(`for (let d = 0; d < 7; d++) { const dt = roAdd('2026-10-05', d); roDays[dt] = Object.assign({}, roDays[dt], { SB: d === 6 ? 'OFF' : d >= 4 ? 'ALA' : '12:00 - 21:00' }); } rbPeople.SB = {}; rtApplyPublished = () => true; rbStampReset();`);
   check('leave: a day off or leave already posted stays as it is; only working days change', run(`const t = rtMarkAbsent('SB', '2026-10-08', '2026-10-15', 'AL', true); [t.changed.join(' '), t.kept.join(' ')].join(' | ')`), '2026-10-08 | 2026-10-09 2026-10-10 2026-10-11');
   { const sh15 = run(`(rbGroupCfg('Adagio GD').shifts || []).find(s => s.startsWith('15:00')) || ''`);
-    check('fixed shift by typing: "samira always 15:00 - 00:00" / "always 3pm" / "any shift"', run(`JSON.stringify([rtStaticShiftParse('samira always 15:00 - 00:00'), rtStaticShiftParse('samira always on 3pm'), rtStaticShiftParse('samira any shift'), rtStaticShiftParse('samira always off on friday')].map(x => x && [x.k, x.shift]))`), JSON.stringify([sh15 ? ['SB', sh15] : null, sh15 ? ['SB', sh15] : null, ['SB', ''], null])); }
+    check('fixed shift by typing: "samira always 15:00" / "always 3pm" / "any shift"', run(`JSON.stringify([rtStaticShiftParse('samira always 15:00'), rtStaticShiftParse('samira always on 3pm'), rtStaticShiftParse('samira any shift'), rtStaticShiftParse('samira always off on friday')].map(x => x && [x.k, x.shift]))`), JSON.stringify([sh15 ? ['SB', sh15] : null, sh15 ? ['SB', sh15] : null, ['SB', ''], null])); }
   check('plain talk: "until 15 oct" is the end date, not the start', say('samira is on vacation until 15 oct'), 'DO Samira Testa is on vacation today until 15 oct');
   check('plain talk: "how to …" shows how and asks before doing it', say('how to keep samira on vaction until 15 ?'), 'ASK Samira Testa is on vacation today until 15');
   check('plain talk: learns what you meant', run(`const c = buRead('put tariq far from omar'); buLearn(c, 'apart'); buUnderstand('put lina far from maya').cmd`), 'avoid Lina Park with Maya Rai');

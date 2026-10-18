@@ -187,12 +187,14 @@ function rbSwitchOk(prev, next, R) {
 function rbBackOk(prev, next, R) {
   if (R && R.noBack === false) return true;
   if (rbIsNight(prev) || rbIsNight(next)) return true;
-  const a = rbParse(prev), b = rbParse(next), h = R && R.backH != null ? +R.backH : 1;
+  const a = rbParse(prev), b = rbParse(next), h = R && R.backH != null ? +R.backH : 3;   // up to 3 h earlier the next day is fine (15:00 - 00:00 then 12:00 - 21:00), as long as the rest is kept
   return b.s >= a.s - h * 60;
 }
 /** "Prefer not" a shift (on their card, or asked for that week): kept off it when there is another way. */
 function rbSoftNo(I, p, dt, s) { const c = rbNorm(s) || s; return ((p && p.soft) || []).includes(c) || ((((I.soft || {})[p && p.key] || {})[dt]) || []).includes(c); }
-const RB_DOUBLE_W = 45;   // more people on a shift than it needs: spread them over the other shifts as much as we can (above a liked shift)
+const RB_DOUBLE_W = 45;
+const RB_OFFSAME_W = 90;
+const RB_MORN_W = 140;   // each hour of the morning (09:00 – 12:00) with only one person at the desk: close to an empty shift   // each extra person off the same day at one hotel (squared: 3 off counts 4×)   // more people on a shift than it needs: spread them over the other shifts as much as we can (above a liked shift)
 const RB_SOFT_W = 80;   // above steady-hours costs, far below an empty shift: used when it's the only way
 const RB_EV_W = 500;    // 📅 a shift that misses their meeting or training: well above wishes, below an empty shift
 function rbEvNear(I, p, dt, s) { const L = (((I.evNear || {})[p && p.key] || {})[dt]); return !!L && L.includes(rbNorm(s) || s); }
@@ -209,7 +211,13 @@ function rbTlHome(I, g, p, s) {
   const G = (I.groups || {})[g] || {}; if ((G.post || '') !== (p.post || '') || rbBaseGroup(g) !== rbBaseGroup(p.group || '')) return false;
   const who = (G.who || {})[rbNorm(s) || s]; return !!(who && who.length && rbIsNight(rbNorm(s) || s));
 }
-function rbMayWork(I, g, p, s) { if (rbNoGo(p, g)) return false; if (p && p.group && g && rbBaseGroup(p.group) !== rbBaseGroup(g) && !rbFloats(p) && !rbFloatsLast(p)) return false; /* only Duty Managers and Supervisors ever work at another hotel */ if (p && (((I.groups || {})[g] || {}).post || '') !== (p.post || '')) return false; const who = (((I.groups || {})[g] || {}).who || {})[rbNorm(s) || s]; return !who || !who.length || who.includes((p && p.title) || ''); }
+function rbMayWork(I, g, p, s) { if (rbNoGo(p, g)) return false; if (rbCoversShift(I, g, p, s)) return true; /* 🔁 a deputy may always do the colleague's shift they cover */ if (p && p.group && g && rbBaseGroup(p.group) !== rbBaseGroup(g) && !rbFloats(p) && !rbFloatsLast(p)) return false; /* only Duty Managers and Supervisors ever work at another hotel */ if (p && (((I.groups || {})[g] || {}).post || '') !== (p.post || '')) return false; const who = (((I.groups || {})[g] || {}).who || {})[rbNorm(s) || s]; return !who || !who.length || who.includes((p && p.title) || ''); }
+/** 🔁 "Covers for": the colleague's own shift (their fixed or usual one) at the same hotel. */
+function rbCoversShift(I, g, p, s) {
+  if (!p || !p.covers || !I || !I.people) return false;
+  const x = I.people.find(q => q.key === p.covers); if (!x || rbBaseGroup(x.group) !== rbBaseGroup(g) || rbBaseGroup(p.group) !== rbBaseGroup(g)) return false;
+  const n = rbNorm(s) || s; return !!n && (rbNorm(x.fixed || '') === n || rbNorm(x.usual || '') === n);
+}
 /** Shift types people ask for: morning, day (morning + 12:00), evening, night. */
 const RB_BANDS = {
   morning: { label: 'Morning', test: x => x.type !== 'night' && x.s >= 300 && x.s < 660 },
@@ -772,7 +780,13 @@ function rbScore(I, g, cells, dates, R) {
     else if (h < n) sc += R.allowOne === false ? 1000 * (n - h) : (h === 0 ? (!G.post && rbHoursCovered(grid, d, s) ? 450 : 1000) : 0) + (h && !G.post && rbRelieved(grid, d, s, R) ? 25 : 300 * rbW(R, 'alone')) * (n - Math.max(h, 1));
     else { const x = h - n; sc += 0.5 * x + (x > 0 && !G.post ? RB_DOUBLE_W * x * x : 0); }   // two on a shift that needs one: only when there is no other shift for them
   });
-  if (rbDeskOn(R)) sc += RB_DESK_W * rbW(R, 'desk') * rbDeskShort(grid, R).gap;   // two on the desk at once, when it can be done
+  if (rbDeskOn(R)) sc += RB_DESK_W * rbW(R, 'desk') * rbDeskShort(grid, R).gap;
+  // ☀️ the morning is the busiest: two at the front desk (bell boys don't count) — set in ⚖️ Rules, on unless switched off
+  if (!G.post && R.morningTwo !== false) { const Rm = { deskMin: 2, deskFrom: R.morningFrom != null ? +R.morningFrom : 9, deskTo: R.morningTo != null ? +R.morningTo : 12 }; sc += RB_MORN_W * rbDeskShort(grid, Rm).gap; }
+  if (!G.post) for (let d = 0; d < 7; d++) {   // two or more off on the same day at one hotel (days off only, not leave): spread them over the week
+    const n = P.filter(p => rbKind((cells[p.key] || {})[dates[d]] || '') === 'off' && !(((I.pre || {})[p.key] || {})[dates[d]])).length;
+    if (n > 1) sc += RB_OFFSAME_W * (n - 1) * (n - 1);
+  }   // two on the desk at once, when it can be done
   rbMineBroken(I, cells, dates, R, g).forEach(b => { sc += rbMineW(b.r); });   // your own rules
   P.forEach(p => {
     let run = p.run || 0, prev = p.lastShift || '', offs = 0, nights = 0;
@@ -1178,7 +1192,30 @@ function rbMgrGap(I, cells, dates, R) {
 function rbIsManager(k) { return /^(manager|asst\. manager)$/i.test(rbTitle(k)); }   // duty managers rotate like supervisors
 function rbMembers(g, week) { return Object.keys(roStaff).filter(k => ((roStaff[k] || {}).group || '') === g && rbActive(k, week)).sort((a, b) => ((roStaff[a].order ?? 999) - (roStaff[b].order ?? 999)) || roStaff[a].name.localeCompare(roStaff[b].name)); }
 /** Cover needed for a hotel: what was set by hand, else what past rosters show. */
+/** Every hotel offers the same shifts (a 09:00 - 18:00 in one hotel is possible in the others too): the shifts
+ *  another hotel has are added with no cover needed, so spare people can go there instead of doubling up.
+ *  ⚖️ Rules → "Same shifts in every hotel" (on unless switched off). Bell teams keep their own. */
+let _rbGcC = { t: 0, m: {} };
 function rbGroupCfg(g) {
+  g = g || '';
+  if (Date.now() - _rbGcC.t > 1500) _rbGcC = { t: Date.now(), m: {} };
+  const ck = (typeof rbWeek !== 'undefined' ? rbWeek : '') + '|' + g;
+  if (_rbGcC.m[ck]) return JSON.parse(JSON.stringify(_rbGcC.m[ck]));
+  const base = _rbGroupCfgBase(g);
+  if (!/ · /.test(g) && g && rbRules().sameShifts !== false) {
+    const others = rbGroups().filter(x => x && x !== g && rbBaseGroup(x) === x);
+    const extra = [...new Set(others.flatMap(x => _rbGroupCfgBase(x).shifts || []))].filter(s => !base.shifts.includes(s) && !base.shifts.some(t => rbNorm(t) === rbNorm(s)));
+    if (extra.length) {
+      const st = s => { const x = rbParse(s); return x ? x.s : 9999; };
+      base.shifts = base.shifts.concat(extra).sort((a, b) => st(a) - st(b));
+      base.need = Object.assign({}, base.need); extra.forEach(s => { if (!base.need[s]) base.need[s] = [0, 0, 0, 0, 0, 0, 0]; });
+      base.added = extra;
+    }
+  }
+  _rbGcC.m[ck] = base;
+  return JSON.parse(JSON.stringify(base));
+}
+function _rbGroupCfgBase(g) {
   const set = ((rbSettings.groups || {})[g.replace(/[.#$\[\]\/]/g, '_')]) || null;
   if (set && set.shifts && set.shifts.length) return { shifts: set.shifts.slice(), need: Object.assign({}, set.need), who: Object.assign({}, set.who), set: true };
   const L = rbLearnGroup(g, rbWeek || rbDefaultWeek());
@@ -2247,6 +2284,8 @@ function rbRulesHtml() {
       + row('From', 'e.g. one on 08–17 and one on 12–21 = two at once 12–17', step(R.deskFrom, 0, 23, "rbSetRule('deskFrom',+this.value)", ':00'))
       + row('To', R.deskTo % 24 < R.deskFrom % 24 ? 'the next day (runs past midnight)' : hh(R.deskFrom) + ' – ' + hh(R.deskTo), step(R.deskTo, 0, 24, "rbSetRule('deskTo',+this.value)", ':00'))
       + row('One person on a shift', 'only when there\'s no other way', sw(R.allowOne !== false, "rbSetRule('allowOne',this.checked)"))
+      + row('Two at the desk every morning', 'the morning (09:00 – 12:00) is the busiest: always two front desk people then, bell boys don\'t count', sw(R.morningTwo !== false, "rbSetRule('morningTwo',this.checked);rbRender()"))
+      + row('Same shifts in every hotel', 'a shift one hotel has (like 09:00 - 18:00) can be used in the others too, so spare people go there instead of doubling up', sw(R.sameShifts !== false, "rbSetRule('sameShifts',this.checked);rbRender()"))
       + row('Alone is fine with company for', 'someone else on the desk with them this long (a break); 0 = two the whole shift', step(R.overlapMin == null ? 2 : R.overlapMin, 0, 9, "rbSetRule('overlapMin',Math.max(0,Math.min(9,+this.value||0)))", 'h'), R.allowOne === false))}
     ${card('🏖', 'PH days',
       row('Work a day off to fill a shift', 'off: nobody loses their weekly day off; a shift nobody can cover shows as a problem for you to decide', sw(R.offWorked === true, "rbSetRule('offWorked',this.checked);rbRender()")) +

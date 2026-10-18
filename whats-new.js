@@ -9,6 +9,14 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 340, items: [
+    '☀️ Roster: two at the front desk every morning (09:00 – 12:00), the busiest time. Bell boys don\'t count. (⚖️ Rules → "Two at the desk every morning".)',
+    '🏨 Every hotel can use every hotel\'s shifts (a 09:00 - 18:00 at Mercure is possible at Ibis and Adagio too), so spare people go on another shift instead of doubling up. (⚖️ Rules → "Same shifts in every hotel".)',
+    '🛌 Days off are spread over the week: the builder avoids several people of the same hotel off on the same day.',
+    '🔁 A deputy may always do the shift they cover (like a Supervisor-only night): no more "is for Supervisor, Duty Manager only" problem for Charlene or Hnin when they cover.',
+    '⏰ Starting up to 3 hours earlier the next day is fine now (15:00 - 00:00 then 12:00 - 21:00), as long as the rest between is kept. Night to day still needs a day off.',
+    '🎓 Training shows clearly on the roster: a "🎓 Training" tag on the person\'s day (from 📅 Meetings & training).',
+  ] },
   { v: 339, items: [
     '📌 Set a fixed shift by typing in Ask the roster: "Sam always 09:00 - 18:00", "Sam always 00-09", "Sam always on 12pm". "Sam any shift" frees it again.',
   ] },

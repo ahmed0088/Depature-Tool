@@ -49,7 +49,12 @@ function evPre(dates, pre, soft, busy, near) {
   })));
 }
 /** A little 📅 on the roster cell. */
-function evMark(k, dt) { const L = evOn(k, dt); return L.length ? `<i class="ev-mark" title="${escapeHtml(L.map(e => `${e.title} · ${evTime(e)}`).join('\n'))}">📅</i>` : ''; }
+function evMark(k, dt) {
+  const L = evOn(k, dt); if (!L.length) return '';
+  const tip = escapeHtml(L.map(e => `${e.kind === 'training' ? '🎓 Training: ' : ''}${e.title} · ${evTime(e)}`).join('\n'));
+  const trn = L.some(e => e.kind === 'training' || /train|course|induction|workshop/i.test(e.title || ''));
+  return trn ? `<i class="ev-mark ev-trn" title="${tip}">🎓 Training</i>` : `<i class="ev-mark" title="${tip}">📅</i>`;
+}
 
 /** Does the roster fit the event? (posted roster, or the draft for the week being built) */
 function evCheck(e) {
