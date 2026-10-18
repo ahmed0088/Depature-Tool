@@ -2818,3 +2818,18 @@ html[data-theme="opera"] #panel-departures .dp-room { background: linear-gradien
   #xrefPasteCard .dp-empty-help { grid-template-columns: 1fr; }
   #xrefPasteCard .dp-drop { min-height: 220px; margin: 10px; }
 }
+
+/* Balance that is fine to leave (Expedia / agent / company pays): calm green, tap to change */
+#panel-departures .dp-bal[role="button"] { cursor: pointer; }
+#panel-departures .dp-bal.dp-bal-okpay { --i: var(--dpi-coin); height: 26px; font-weight: 700; font-size: 12px; background: color-mix(in srgb, var(--green, #22c55e) 12%, transparent); color: var(--green, #16a34a);
+  border: 1px solid color-mix(in srgb, var(--green, #22c55e) 32%, transparent); box-shadow: none; }
+#panel-departures .dp-bal.dp-bal-okpay small { opacity: .85; }
+.dp-balpop { position: fixed; z-index: 9500; width: 280px; max-width: calc(100vw - 16px); padding: 6px; border-radius: 12px;
+  background: var(--card); color: var(--text); border: 1px solid var(--border2, var(--border)); box-shadow: 0 16px 40px -12px rgba(0,0,0,.45);
+  display: flex; flex-direction: column; gap: 2px; font: 500 13px var(--font, inherit); animation: dpBalPop .14s ease; }
+.dp-balpop-h { padding: 6px 10px 8px; font-size: 11.5px; color: var(--text3); border-bottom: 1px solid var(--border); margin-bottom: 2px; }
+.dp-balpop button { text-align: left; padding: 9px 10px; border-radius: 8px; border: 0; background: transparent; color: var(--text); font: inherit; cursor: pointer; }
+.dp-balpop button:hover, .dp-balpop button:focus-visible { background: var(--card2, var(--bg2)); outline: none; }
+.dp-balpop .dp-balpop-x { color: var(--text3); }
+@keyframes dpBalPop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .dp-balpop { animation: none; } }

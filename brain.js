@@ -95,7 +95,7 @@ function brSuggestions() {
     if (typeof depRooms === 'undefined' || !depRooms.length) return;
     const late = depRooms.filter(r => typeof isLcoOverdue === 'function' && isLcoOverdue(r)).length;
     if (late) add('🚪', `${late} late check-out${late > 1 ? 's' : ''} past their time`, 'departures:overdue', 'Call the room or extend in Opera', 'bad');
-    const owe = depRooms.filter(r => r.balance > 0 && r.status !== 'out' && r.status !== 'extended').length;
+    const owe = depRooms.filter(r => (typeof depOwes === 'function' ? depOwes(r) : r.balance > 0) && r.status !== 'out' && r.status !== 'extended').length;
     if (owe) add('💳', `${owe} departing room${owe > 1 ? 's' : ''} still owe a balance`, 'departures:balance', 'Settle before check-out');
   });
   safe(() => {

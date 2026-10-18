@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 329, items: [
+    '💳 Balance that\'s fine to leave: tap the red "AED … owing" chip on a departure and choose "OK for this room" or "Always OK for Expedia bookings" (works for any agent or company). The chip turns green ("Expedia pays ✓") and the room no longer counts as owing: no warning at check-out, not in the Balance filter, the Ops Brain tip or the morning brief. Tap it again to undo. "Always OK" is shared with the whole team.',
+  ] },
   { v: 328, items: [
     '🛠 WhatsApp reader: "Copy today\'s chat" works even when WhatsApp blocks copying (if it still can\'t, it shows the text selected so you just press Ctrl+C). It also finds the HK group even if the name has emoji or extra words, and fills in the open chat\'s name for you.',
   ] },

@@ -512,7 +512,7 @@ function depCounts() {
     out,
     na,
     dnd,
-    balance:      depRooms.filter(r => r.balance > 0 && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended').length,
+    balance:      depRooms.filter(r => depOwes(r) && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended').length,
     maybe_extend: depRooms.filter(r => r.intent === 'maybe_extend').length,
     pending:      depRooms.filter(r => r.intent && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended').length,
   };
@@ -805,6 +805,63 @@ function _depApplyDensity() {
 // KPI tile tap: filter, tap again to go back to the to-do list
 function depKpiTap(key) { depFilter(depFilter_ === key ? 'all' : key); }
 
+// ── Balance that is fine to leave (Expedia / agent / company pays) ──
+// Per room: r.balOk = 'Expedia'. For a whole source: settings/depBalanceOk = ['expedia', …] (shared).
+let depBalOkSources = [];
+function _depSrcKey(r) { return String((r && (r.source || r.company)) || '').trim().toLowerCase(); }
+function depBalOk(r) {
+  if (!r || !(r.balance > 0)) return false;
+  if (r.balOk) return true;
+  const k = _depSrcKey(r);
+  return !!k && depBalOkSources.some(s => s && k.includes(s));
+}
+/** Still owes money that someone at the desk has to collect */
+function depOwes(r) { return !!r && r.balance > 0 && !depBalOk(r); }
+function _depBalWho(r) { return r.balOk && r.balOk !== true ? r.balOk : (r.source || r.company || 'Billed'); }
+function depBalListen() {
+  if (typeof fbListen !== 'function') return;
+  fbListen('settings/depBalanceOk', v => {
+    depBalOkSources = (Array.isArray(v) ? v : v && typeof v === 'object' ? Object.values(v) : []).map(x => String(x || '').toLowerCase()).filter(Boolean);
+    if (typeof depRender === 'function' && depRooms.length) depRender();
+  });
+}
+function depBalMenu(i, ev) {
+  if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  const r = depRooms[i]; if (!r) return;
+  document.getElementById('depBalPop')?.remove();
+  const src = (r.source || r.company || '').trim(), key = _depSrcKey(r);
+  const rule = !!key && depBalOkSources.some(s => key.includes(s));
+  const pop = document.createElement('div'); pop.id = 'depBalPop'; pop.className = 'dp-balpop'; pop.setAttribute('role', 'menu');
+  const opts = depBalOk(r)
+    ? [r.balOk ? ['↩ Show as owing again', () => { delete r.balOk; }] : null,
+       rule ? [`Stop treating ${src} balances as OK`, () => { depBalSetRule(key, false); }] : null]
+    : [[`✓ OK for room ${r.roomStr} (${src || 'billed'} pays)`, () => { r.balOk = src || 'Billed'; }],
+       src ? [`✓ Always OK for ${src} bookings`, () => { depBalSetRule(key, true); }] : null];
+  pop.innerHTML = `<div class="dp-balpop-h">AED ${Number(r.balance).toFixed(2)} on room ${escapeHtml(r.roomStr)}</div>` +
+    opts.filter(Boolean).map((o, k) => `<button type="button" data-k="${k}">${escapeHtml(o[0])}</button>`).join('') +
+    `<button type="button" class="dp-balpop-x" data-x="1">Cancel</button>`;
+  document.body.appendChild(pop);
+  const list = opts.filter(Boolean);
+  pop.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    pop.remove(); if (b.dataset.x) return;
+    const o = list[+b.dataset.k]; if (!o) return;
+    o[1](); saveDeps(); depRender();
+    if (typeof showToast === 'function') showToast(depBalOk(r) ? `Room ${r.roomStr}: balance marked OK` : `Room ${r.roomStr}: balance shows as owing again`, 'ok');
+  });
+  const at = (ev && ev.currentTarget && ev.currentTarget.getBoundingClientRect) ? ev.currentTarget.getBoundingClientRect() : { left: innerWidth / 2 - 130, bottom: innerHeight / 2 };
+  pop.style.left = Math.max(8, Math.min(innerWidth - 288, at.left)) + 'px';
+  pop.style.top = Math.min(innerHeight - pop.offsetHeight - 8, at.bottom + 6) + 'px';
+  setTimeout(() => document.addEventListener('pointerdown', function off(e) { if (!pop.contains(e.target)) { pop.remove(); document.removeEventListener('pointerdown', off, true); } }, true), 0);
+}
+function depBalSetRule(key, on) {
+  const set = new Set(depBalOkSources);
+  if (on) set.add(key); else [...set].forEach(s => { if (key.includes(s)) set.delete(s); });
+  depBalOkSources = [...set];
+  if (typeof fbSet === 'function') fbSet('settings/depBalanceOk', depBalOkSources.length ? depBalOkSources : null);
+}
+if (typeof document !== 'undefined') { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', depBalListen); else setTimeout(depBalListen, 0); }
+
 let _depLastSt = null;      // room → status at the last render (for the change flash)
 const _depFlashAt = {};     // room → when its status last changed on screen
 let _depLastKpi = {};
@@ -832,7 +889,7 @@ function depRender() {
 
   // Balance outstanding total
   const totalOwing = depRooms
-    .filter(r => r.balance > 0 && r.status !== 'out' && r.status !== 'extended')
+        .filter(r => depOwes(r) && r.status !== 'out' && r.status !== 'extended')
     .reduce((s, r) => s + r.balance, 0);
   const balKpiVal = totalOwing > 0
     ? `${totalOwing.toLocaleString('en', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
@@ -925,7 +982,7 @@ function depRender() {
     let mf;
     switch (depFilter_) {
       case 'all':          mf = es === 'due' || es === 'late' || es === 'na' || es === 'dnd'; break; // extended excluded — done
-      case 'balance':      mf = r.balance > 0 && es !== 'out' && es !== 'extended'; break;
+      case 'balance':      mf = depOwes(r) && es !== 'out' && es !== 'extended'; break;
       case 'pending':      mf = !!r.intent && es !== 'out' && es !== 'extended'; break;
       case 'maybe_extend': mf = r.intent === 'maybe_extend'; break;
       case 'overdue':      mf = _depIsOverdue(r); break;
@@ -1103,7 +1160,7 @@ function renderDepQuickJump() {
       icon:  '💳',
       label: 'Balance Owing',
       cls:   'jump-bal',
-      rooms: depRooms.filter(r => r.balance > 0 && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended'),
+      rooms: depRooms.filter(r => depOwes(r) && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended'),
     },
     {
       key:   'extended',
@@ -1216,7 +1273,7 @@ function depCardHTML(r) {
 
   let sClass = 'dp-s-' + (es || 'due');
   if (overdue) sClass += ' dp-overdue';
-  if (bal > 0 && active) sClass += ' dp-owing';
+  if (depOwes(r) && active) sClass += ' dp-owing';
   if (r.intent && active && es !== 'na') sClass += ' dp-intent';
 
   // Chips: VIP · returning · company · balance · note
@@ -1226,8 +1283,10 @@ function depCardHTML(r) {
   if (gmProfile) chips.push(`<span class="dp-chip dp-chip-ret" title="Stayed before${gmProfile.lastSeen ? ' · last seen ' + escapeHtml(gmProfile.lastSeen) : ''}${gmProfile.nat ? ' · ' + escapeHtml(gmProfile.nat) : ''}">Returning</span>`);
   if (r.manual) chips.push(`<span class="dp-chip">✍ Added by hand</span>`);
   if (r.company) chips.push(`<span class="dp-chip dp-chip-co" title="${escapeHtml(r.company)}">${escapeHtml(r.company.substring(0, 26))}${r.company.length > 26 ? '…' : ''}</span>`);
-  const balChip = bal > 0
-    ? `<span class="dp-bal dp-bal-owe${active ? '' : ' dp-bal-muted'}" title="Balance owing">AED ${money(bal)} <small>owing</small></span>`
+  const balChip = bal > 0 && depBalOk(r)
+    ? `<span class="dp-bal dp-bal-okpay" role="button" tabindex="0" onclick="depBalMenu(${i},event)" title="Balance is fine: ${escapeHtml(_depBalWho(r))} pays. Tap to change.">AED ${money(bal)} <small>${escapeHtml(String(_depBalWho(r)).slice(0, 16))} pays ✓</small></span>`
+    : bal > 0
+    ? `<span class="dp-bal dp-bal-owe${active ? '' : ' dp-bal-muted'}" role="button" tabindex="0" onclick="depBalMenu(${i},event)" title="Balance owing. Tap if it is fine (e.g. Expedia or the company pays)">AED ${money(bal)} <small>owing</small></span>`
     : bal < 0
       ? `<span class="dp-bal dp-bal-cr" title="Credit">AED ${money(bal)} <small>credit</small></span>`
       : `<span class="dp-bal dp-bal-ok" title="No balance">Settled</span>`;
@@ -1451,7 +1510,7 @@ function depToggleNote(roomStr) {
 // ── Check Out with balance warning ─────────────────────────
 function depCheckOut(i) {
   const r = depRooms[i];
-  if (r.balance > 0) {
+  if (depOwes(r)) {
     if (!confirm(`⚠ Room ${r.roomStr} has AED ${r.balance.toLocaleString('en',{minimumFractionDigits:2})} owing.\n\nAre you sure you want to check them out?`)) return;
   }
   depAction(i, 'out');
@@ -1571,7 +1630,7 @@ function depEditName(i) {
     const es = effectiveStatus(r);
     switch (depFilter_) {
       case 'all':          return es === 'due' || es === 'late' || es === 'na' || es === 'dnd';
-      case 'balance':      return r.balance > 0 && es !== 'out' && es !== 'extended';
+      case 'balance':      return depOwes(r) && es !== 'out' && es !== 'extended';
       case 'pending':      return !!r.intent && es !== 'out' && es !== 'extended';
       case 'maybe_extend': return r.intent === 'maybe_extend';
       case 'due':          return es === 'due';
@@ -2342,7 +2401,7 @@ function depCopyHKUpdate() {
     if (r.status === 'extended' && r.extensionNights) label += ` +${r.extensionNights}n`;
     if (es === 'late' && r.lateTime)                  label += ` ${r.lateTime}`;
     if (r.intent === 'maybe_extend' && es !== 'extended') label = `⏳ Extending`;
-    if (r.balance > 0 && es !== 'extended')           label += ` 💳`;
+    if (depOwes(r) && es !== 'extended')              label += ` 💳`;
     return `${r.roomStr.padEnd(5)} ${label}`;
   });
 
@@ -2412,7 +2471,7 @@ function updateDepBadge() {
 // ── Bulk checkout ──────────────────────────────────────────
 function depBulkCheckout() {
   const dueRooms   = depRooms.filter(r => effectiveStatus(r) === 'due');
-  const withBalance = dueRooms.filter(r => r.balance > 0);
+  const withBalance = dueRooms.filter(r => depOwes(r));
   if (withBalance.length) {
     if (!confirm(`${withBalance.length} due-out room(s) have an outstanding balance.\n\nCheck out ALL due-out rooms anyway?`)) return;
   } else {

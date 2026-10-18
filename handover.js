@@ -82,7 +82,7 @@ function _hoTodo() {
   try {
     if (typeof depRooms !== 'undefined' && depRooms.length) {
       add('🕐', 'Late check-outs', depRooms.filter(r => r.status === 'late').map(r => `Room ${r.roomStr}${r.lateTime ? ' until ' + r.lateTime : ''}${r.name ? ' · ' + r.name : ''}`));
-      add('🚪', 'Still due to check out', depRooms.filter(r => r.status === 'due').map(r => `Room ${r.roomStr}${r.name ? ' · ' + r.name : ''}${r.balance ? ' · balance' : ''}`));
+      add('🚪', 'Still due to check out', depRooms.filter(r => r.status === 'due').map(r => `Room ${r.roomStr}${r.name ? ' · ' + r.name : ''}${(typeof depOwes === 'function' ? depOwes(r) : r.balance > 0) ? ' · balance' : ''}`));
       add('📞', 'No answer yet', depRooms.filter(r => r.status === 'na').map(r => `Room ${r.roomStr}${r.naTime ? ' (tried ' + r.naTime + ')' : ''}`));
     }
   } catch (_) {}
