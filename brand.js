@@ -45,6 +45,7 @@ const HOX_ICONS = {
   search: _hoI('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>'),
   handover: _hoI('<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="m9 14 2 2 4-4"/>'),
   sparkle: _hoI('<path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7-4.7-1.8 4.7-1.8z"/><path d="M19 3v4M17 5h4"/>'),
+  whatsapp: _hoI('<path d="M3.5 20.5l1.3-4.2A8.5 8.5 0 1 1 8 19.4z"/><path d="M9 8.5c0 3.5 2.6 6.5 6.5 6.5l.9-1.6-2-1-1 1c-1.2-.5-2.3-1.6-2.8-2.8l1-1-1-2z"/>'),
   feedback: _hoI('<path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'),
   keyboard: _hoI('<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>'),
   save: _hoI('<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>'),
@@ -72,7 +73,7 @@ function hoApplyIcons(root = document) {
     if (k) { el.dataset.hoIc = '1'; el.innerHTML = HOX_ICONS[k]; }
   });
   // top bar buttons, matched by their tooltip
-  const TB = [[/^roster/i, 'roster'], [/^search/i, 'search'], [/handover/i, 'handover'], [/what's new/i, 'sparkle'], [/feedback/i, 'feedback'], [/keyboard/i, 'keyboard'], [/export/i, 'save'], [/import/i, 'open'], [/team/i, 'team'], [/^settings/i, 'settings'], [/hide menu|menu/i, 'menu']];
+  const TB = [[/^roster/i, 'roster'], [/^search/i, 'search'], [/^whatsapp/i, 'whatsapp'], [/handover/i, 'handover'], [/what's new/i, 'sparkle'], [/feedback/i, 'feedback'], [/keyboard/i, 'keyboard'], [/export/i, 'save'], [/import/i, 'open'], [/team/i, 'team'], [/^settings/i, 'settings'], [/hide menu|menu/i, 'menu']];
   root.querySelectorAll('.topbar .icon-round').forEach(el => {
     if (el.dataset.hoIc) return;
     const hit = TB.find(([re]) => re.test(el.title || ''));

@@ -365,6 +365,20 @@ W.addEventListener('message', e => {
 
 // ══ The card on Departures ══════════════════════════════════
 const CSS = `
+#tbWhatsApp{color:#25d366}
+#tbWhatsApp:hover{color:#2fe076}
+#waOv{position:fixed;inset:0;z-index:9000;display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px 16px;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);animation:waFade .16s ease}
+#waOv[hidden]{display:none}
+#waOv #waCard{margin:0;width:min(760px,100%);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 24px 60px -20px rgba(0,0,0,.6);animation:waUp .2s ease}
+#waOv #waCard>summary{cursor:default;flex:none}
+#waOv #waCard>summary:hover{background:transparent}
+#waOv #waCard .wa-body{overflow-y:auto}
+#waCard .wa-x{margin-left:auto;flex:none;width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--card2,var(--bg2));color:var(--text2);cursor:pointer;font-size:14px}
+#waCard .wa-x:hover{color:var(--text);border-color:var(--accent-border,var(--border))}
+@keyframes waFade{from{opacity:0}to{opacity:1}}
+@keyframes waUp{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){#waOv,#waOv #waCard{animation:none}}
+@media (max-width:600px){#waOv{padding:10px}#waOv #waCard{max-height:calc(100vh - 20px)}}
 #waCard{margin-top:16px;background:var(--card);border:1px solid var(--border);border-radius:var(--r,12px);overflow:hidden;color:var(--text)}
 #waCard>summary{list-style:none;display:flex;align-items:center;gap:10px;min-height:52px;padding:0 16px;cursor:pointer;font:700 14px var(--font,inherit)}
 #waCard>summary::-webkit-details-marker{display:none}
@@ -418,8 +432,8 @@ function mount() {
   const panel = doc.getElementById('panel-departures'); if (!panel) return false;
   const st = doc.createElement('style'); st.id = 'waCss'; st.textContent = CSS; doc.head.appendChild(st);
   const card = doc.createElement('details'); card.id = 'waCard';
-  try { if (localStorage.getItem('ho_wa_open') === '1' || /wa-bridge/.test(location.hash)) card.open = true; } catch (_) {}
-  card.innerHTML = `<summary><span aria-hidden="true">💬</span><span>WhatsApp HK group</span><span class="wa-n" id="waCount">0</span><span class="wa-last" id="waLast"></span><span class="wa-tog" aria-hidden="true">▾</span></summary>
+  card.open = true;   // it lives in its own window (top bar 🟢 button), always open
+  card.innerHTML = `<summary><span aria-hidden="true">💬</span><span>WhatsApp HK group</span><span class="wa-n" id="waCount">0</span><span class="wa-last" id="waLast"></span><button type="button" class="wa-x" id="waClose" aria-label="Close" title="Close (Esc)">✕</button></summary>
   <div class="wa-body">
     <div class="wa-st" id="waStatus"></div>
     <div class="wa-list" id="waList" aria-live="polite"></div>
@@ -456,9 +470,14 @@ function mount() {
       <p><b>From the phone:</b> open the chat → ⋮ → More → Export chat → Without media. Send the .txt to this computer and use <b>📂 Upload exported chat</b>.</p>
     </details>
   </div>`;
-  const anchor = doc.getElementById('depBoard');
-  if (anchor && anchor.parentNode === panel) anchor.after(card); else panel.appendChild(card);
-  card.addEventListener('toggle', () => { try { localStorage.setItem('ho_wa_open', card.open ? '1' : '0'); } catch (_) {} });
+  // its own window over the app, opened from the top bar
+  const ov = doc.createElement('div'); ov.id = 'waOv'; ov.className = 'wa-ov'; ov.hidden = true;
+  ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'WhatsApp HK group');
+  ov.appendChild(card); doc.body.appendChild(ov);
+  card.querySelector('summary').addEventListener('click', e => { e.preventDefault(); if (e.target.closest('#waClose')) waClose(); });
+  ov.addEventListener('mousedown', e => { if (e.target === ov) waClose(); });
+  doc.addEventListener('keydown', e => { if (e.key === 'Escape' && !ov.hidden) { e.preventDefault(); waClose(); } });
+  if (/wa-bridge/.test(location.hash)) setTimeout(() => window.waOpenFromTop && window.waOpenFromTop(), 400);
   const ta = doc.getElementById('waPaste');
   doc.getElementById('waRead').onclick = () => { const v = ta.value; if (!v.trim()) { showToast('Paste the WhatsApp messages first', 'warn'); ta.focus(); return; } if (readPasted(v)) ta.value = ''; };
   doc.getElementById('waClip').onclick = async () => {
@@ -522,3 +541,12 @@ function start() {
 W.hoWaBridge = { handle, readPasted, parse: hoWaParse, parseCopied: hoWaParseCopied, log: () => LOG.slice(), origins: ORIGINS, render: renderCard };
 if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start); else start();
 })();
+
+// Top bar button: the WhatsApp window over the app, paste box ready
+function waOpenFromTop() {
+  const ov = document.getElementById('waOv'); if (!ov) return;
+  ov.hidden = false;
+  const ta = document.getElementById('waPaste'); if (ta) setTimeout(() => ta.focus({ preventScroll: true }), 120);
+}
+function waClose() { const ov = document.getElementById('waOv'); if (ov) ov.hidden = true; }
+window.waOpenFromTop = waOpenFromTop; window.waClose = waClose;

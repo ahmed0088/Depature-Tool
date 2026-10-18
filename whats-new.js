@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 322, items: [
+    '🟢 WhatsApp is now a button at the top of the app (green icon, on every page). It opens a window with the paste box ready: paste the HK chat, Read messages, done. Esc or ✕ closes it.',
+  ] },
   { v: 321, items: [
     '💬 WhatsApp → Departures: when the HK group writes "324 CO" HotelOps checks room 324 out, "202 LCO 6PM" sets a 6 PM late check-out, and "415 change bedsheet" becomes a note on the room. Every change has an Undo.',
     '📋 Paste a whole day of the HK chat at once (Departures → WhatsApp HK group): select the messages in WhatsApp Web, Ctrl+C, paste, Read messages. One summary and one "Undo all". Messages already done are skipped. You can also upload a chat exported from your phone, or use the automatic console line (see How to set up).',
