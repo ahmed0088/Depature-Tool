@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 330, items: [
+    '⏳ New "Extending" button on Departures cards: the guest is staying on but the paperwork isn\'t done yet. Tick ✓ Booking (made by the guest or by us), ✓ Signature, ✓ TD and ✓ Payment (full payment taken) as they come in, then press ↪ Mark extended. Ops Brain reminds you about extending rooms still missing a booking, signature, TD or payment, and they show under the "May extend" filter.',
+  ] },
   { v: 329, items: [
     '💳 Balance that\'s fine to leave: tap the red "AED … owing" chip on a departure and choose "OK for this room" or "Always OK for Expedia bookings" (works for any agent or company). The chip turns green ("Expedia pays ✓") and the room no longer counts as owing: no warning at check-out, not in the Balance filter, the Ops Brain tip or the morning brief. Tap it again to undo. "Always OK" is shared with the whole team.',
   ] },

@@ -96,6 +96,9 @@ function brSuggestions() {
     const late = depRooms.filter(r => typeof isLcoOverdue === 'function' && isLcoOverdue(r)).length;
     if (late) add('🚪', `${late} late check-out${late > 1 ? 's' : ''} past their time`, 'departures:overdue', 'Call the room or extend in Opera', 'bad');
     const owe = depRooms.filter(r => (typeof depOwes === 'function' ? depOwes(r) : r.balance > 0) && r.status !== 'out' && r.status !== 'extended').length;
+    const extg = depRooms.filter(r => r.intent === 'extending' && r.status !== 'out' && r.status !== 'extended' && !(r.extBook && r.extSign && r.extTd && r.extPay));
+    const need = [extg.some(r => !r.extBook) && 'a booking', extg.some(r => !r.extSign) && 'a signature', extg.some(r => !r.extTd) && 'the TD', extg.some(r => !r.extPay) && 'the payment'].filter(Boolean);
+    if (extg.length) add('⏳', `${extg.length} extending room${extg.length > 1 ? 's' : ''} still need${extg.length > 1 ? '' : 's'} ${need.slice(0, -1).join(', ')}${need.length > 1 ? ' and ' : ''}${need[need.length - 1]}`, 'departures:maybe_extend', 'Collect them before the shift ends, then mark the room extended');
     if (owe) add('💳', `${owe} departing room${owe > 1 ? 's' : ''} still owe a balance`, 'departures:balance', 'Settle before check-out');
   });
   safe(() => {

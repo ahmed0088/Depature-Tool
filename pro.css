@@ -2455,7 +2455,7 @@ html[data-theme="opera"] #panel-departures .dp-room { background: linear-gradien
 
 /* action buttons: a rich primary "Check out" and four even icon tiles */
 #panel-departures .dp-acts { display: grid !important; gap: 6px; margin: 0 0 10px !important; }
-#panel-departures .dp-acts.g5 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+#panel-departures .dp-acts.g5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 #panel-departures .dp-acts.g5 .dca:nth-child(4), #panel-departures .dp-acts.g5 .dca:nth-child(5) { grid-column: auto; }
 #panel-departures .dp-acts.g5 .dca-co { grid-column: 1 / -1; min-height: 44px; margin-bottom: 2px; }
 #panel-departures .dp-acts.g2 { grid-template-columns: 1.5fr 1fr; }
@@ -2489,8 +2489,8 @@ html[data-theme="opera"] #panel-departures .dp-room { background: linear-gradien
   color: var(--text2) !important; background: var(--dp-tile) !important; border: 1px solid var(--dp-line) !important; }
 #panel-departures .dp-acts.g5 .dca:not(.dca-co):hover { color: var(--b) !important; background: color-mix(in srgb, var(--b) 11%, var(--card)) !important; border-color: color-mix(in srgb, var(--b) 45%, transparent) !important; box-shadow: 0 6px 14px -10px var(--b); }
 #panel-departures .dp-acts.g5 .dca:not(.dca-co):active { background: color-mix(in srgb, var(--b) 18%, var(--card)) !important; transform: scale(.95); }
-#panel-departures .dp-card .dca:is(.dca-ext, .dca-late, .dca-na, .dca-dnd) .dca-i { display: grid; place-items: center; width: 28px; height: 24px; border-radius: 8px; font-size: 0; color: var(--b); background: color-mix(in srgb, var(--b) 15%, transparent); }
-#panel-departures .dp-card .dca:is(.dca-ext, .dca-late, .dca-na, .dca-dnd) .dca-i::before { content: ''; width: 15px; height: 15px; background: currentColor; -webkit-mask: var(--i) center / contain no-repeat; mask: var(--i) center / contain no-repeat; }
+#panel-departures .dp-card .dca:is(.dca-ext, .dca-extg, .dca-late, .dca-na, .dca-dnd) .dca-i { display: grid; place-items: center; width: 28px; height: 24px; border-radius: 8px; font-size: 0; color: var(--b); background: color-mix(in srgb, var(--b) 15%, transparent); }
+#panel-departures .dp-card .dca:is(.dca-ext, .dca-extg, .dca-late, .dca-na, .dca-dnd) .dca-i::before { content: ''; width: 15px; height: 15px; background: currentColor; -webkit-mask: var(--i) center / contain no-repeat; mask: var(--i) center / contain no-repeat; }
 #panel-departures .dp-card .dca-undo { --b: var(--text2); background: transparent !important; border-style: dashed !important; border-color: color-mix(in srgb, var(--text2) 35%, transparent) !important; }
 #panel-departures .dp-card .dca-undo:hover { color: var(--text) !important; background: var(--dp-tile) !important; }
 
@@ -2634,7 +2634,7 @@ html[data-theme="opera"] #panel-departures .dp-room { background: linear-gradien
   #panel-departures .dp-tags, #panel-departures .dp-body { padding-left: 12px; padding-right: 12px; }
   #panel-departures .dp-card .dca { min-height: 44px; }
   #panel-departures .dp-acts.g5 .dca-co { min-height: 48px; }
-  #panel-departures .dp-acts.g5 { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+  #panel-departures .dp-acts.g5 { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; }
   #panel-departures .dp-acts.g5 .dca:not(.dca-co) { min-height: 60px; }
   #panel-departures .dp-said, #panel-departures .dp-note-btn, #panel-departures .dp-icon-btn { height: 42px; }
   #panel-departures .dp-said { font-size: 16px; }
@@ -2833,3 +2833,21 @@ html[data-theme="opera"] #panel-departures .dp-room { background: linear-gradien
 .dp-balpop .dp-balpop-x { color: var(--text3); }
 @keyframes dpBalPop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .dp-balpop { animation: none; } }
+
+/* Extending: the guest stays on, the paperwork (booking, signature, TD) is still coming */
+#panel-departures { --dpi-hour: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3h12M6 21h12M7 3c0 5 10 5 10 9s-10 4-10 9M17 3c0 5-10 5-10 9s10 4 10 9'/%3E%3C/svg%3E"); }
+#panel-departures .dp-card .dca-extg { --b: var(--dp-ext); --i: var(--dpi-hour); }
+#panel-departures .dp-card .dca-extg.on { color: var(--b) !important; background: color-mix(in srgb, var(--b) 14%, var(--card)) !important; border-color: color-mix(in srgb, var(--b) 50%, transparent) !important; }
+#panel-departures .dp-acts.g5 { gap: 5px; }
+#panel-departures .dp-acts.g5 .dca:not(.dca-co) { padding-left: 1px !important; padding-right: 1px !important; }
+#panel-departures .dp-acts.g5 .dca:not(.dca-co) .dca-t { white-space: normal; line-height: 1.1; text-align: center; max-width: 100%; overflow-wrap: normal; }
+@media (max-width: 1500px) { #panel-departures .dp-acts.g5 .dca:not(.dca-co) { font-size: 10.5px !important; letter-spacing: -.02em; } }
+#depBoard:not(.dp-compact) .dp-size-list .dp-intent-banner.dp-extg { order: 10; flex: 1 1 100%; max-width: none; height: auto; min-height: 36px; padding: 5px 6px 5px 10px; white-space: normal; }
+#panel-departures .dp-extg { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+#panel-departures .dp-extg-t { font-weight: 700; }
+#panel-departures .dp-extg-ck { display: inline-flex; gap: 5px; flex-wrap: wrap; }
+#panel-departures .dp-extg-b { height: 26px; padding: 0 9px; border-radius: 999px; border: 1px dashed color-mix(in srgb, var(--dp-ic) 55%, transparent); background: transparent; color: var(--text2); font: 600 11.5px var(--font); cursor: pointer; }
+#panel-departures .dp-extg-b.on { border-style: solid; color: var(--dp-ic); background: color-mix(in srgb, var(--dp-ic) 14%, transparent); }
+#panel-departures .dp-extg-acts { display: inline-flex; gap: 4px; margin-left: auto; align-items: center; }
+#panel-departures .dp-extg-go { height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--dp-ic) 45%, transparent); background: transparent; color: var(--dp-ic); font: 700 11.5px var(--font); cursor: pointer; }
+#panel-departures .dp-extg-go.ready { background: var(--dp-ic); color: #fff; border-color: transparent; box-shadow: 0 4px 12px -6px var(--dp-ic); }

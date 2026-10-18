@@ -513,7 +513,8 @@ function depCounts() {
     na,
     dnd,
     balance:      depRooms.filter(r => depOwes(r) && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended').length,
-    maybe_extend: depRooms.filter(r => r.intent === 'maybe_extend').length,
+    maybe_extend: depRooms.filter(r => (r.intent === 'maybe_extend' || r.intent === 'extending') && effectiveStatus(r) !== 'extended').length,
+    extending:    depRooms.filter(r => r.intent === 'extending' && effectiveStatus(r) !== 'extended' && effectiveStatus(r) !== 'out').length,
     pending:      depRooms.filter(r => r.intent && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended').length,
   };
 }
@@ -984,7 +985,7 @@ function depRender() {
       case 'all':          mf = es === 'due' || es === 'late' || es === 'na' || es === 'dnd'; break; // extended excluded — done
       case 'balance':      mf = depOwes(r) && es !== 'out' && es !== 'extended'; break;
       case 'pending':      mf = !!r.intent && es !== 'out' && es !== 'extended'; break;
-      case 'maybe_extend': mf = r.intent === 'maybe_extend'; break;
+      case 'maybe_extend': mf = r.intent === 'maybe_extend' || r.intent === 'extending'; break;
       case 'overdue':      mf = _depIsOverdue(r); break;
       case 'due':          mf = es === 'due'; break;
       case 'late':         mf = es === 'late'; break;
@@ -1213,6 +1214,7 @@ function depJumpTo(roomStr, filterKey, targetRoom) {
   });
 }
 const INTENT_CONFIG = {
+  extending:     { icon:'⏳', label:'Extending',          color:'var(--teal)',   autoNote:'Extending: waiting for the booking, signature, TD and payment.' },
   maybe_extend:  { icon:'🤔', label:'May Extend Stay',   color:'var(--violet)', autoNote:'Guest may extend — confirm with Opera before releasing room.' },
   coming_back:   { icon:'↩️', label:'Coming Back Later', color:'var(--amber)',  autoNote:'Guest coming back later today — hold key and luggage if needed.' },
   returning:     { icon:'🔁', label:'Returning Guest',    color:'var(--sky)',    autoNote:'Returning guest — check if new reservation is linked.' },
@@ -1298,7 +1300,21 @@ function depCardHTML(r) {
   const intentLabel = (r.intent === 'checkout_soon' && r.intentMinutes)
     ? `Checking Out in ${r.intentMinutes} min`
     : ic?.label;
-  const intentBanner = ic && r.status !== 'out' && r.status !== 'extended'
+  const intentBanner = r.intent === 'extending' && r.status !== 'out' && r.status !== 'extended'
+    ? `<div class="dc-intent-banner dp-intent-banner dp-extg" style="--dp-ic:${ic.color};">
+         <span class="dp-extg-t">⏳ Extending · waiting for</span>
+         <span class="dp-extg-ck">
+           <button type="button" class="dp-extg-b${r.extBook ? ' on' : ''}" aria-pressed="${!!r.extBook}" onclick="depExtPaper(${i},'extBook');event.stopPropagation()" title="The new booking is made (by the guest or by us)">${r.extBook ? '✓' : '○'} Booking</button>
+           <button type="button" class="dp-extg-b${r.extSign ? ' on' : ''}" aria-pressed="${!!r.extSign}" onclick="depExtPaper(${i},'extSign');event.stopPropagation()">${r.extSign ? '✓' : '○'} Signature</button>
+           <button type="button" class="dp-extg-b${r.extTd ? ' on' : ''}" aria-pressed="${!!r.extTd}" onclick="depExtPaper(${i},'extTd');event.stopPropagation()">${r.extTd ? '✓' : '○'} TD</button>
+           <button type="button" class="dp-extg-b${r.extPay ? ' on' : ''}" aria-pressed="${!!r.extPay}" onclick="depExtPaper(${i},'extPay');event.stopPropagation()" title="The full payment for the extra nights is taken">${r.extPay ? '✓' : '○'} Payment</button>
+         </span>
+         <span class="dp-extg-acts">
+           <button type="button" class="dp-extg-go${r.extBook && r.extSign && r.extTd && r.extPay ? ' ready' : ''}" onclick="depAskExtend(${i});event.stopPropagation()" title="Mark the room as extended">↪ Mark extended</button>
+           <button class="dc-intent-clear" onclick="depSetIntent(${i},'');event.stopPropagation()" title="Not extending after all">✕</button>
+         </span>
+       </div>`
+    : ic && r.status !== 'out' && r.status !== 'extended'
     ? `<div class="dc-intent-banner dp-intent-banner" style="--dp-ic:${ic.color};">
          <span>${ic.icon} ${intentLabel}</span>
          <button class="dc-intent-clear" onclick="depSetIntent(${i},'');event.stopPropagation()">✕ Clear</button>
@@ -1413,6 +1429,7 @@ function depCardHTML(r) {
     actHTML = `<div class="dc-actions dp-acts g5">
       ${B('dca-co', `depCheckOut(${i})`, '✓', 'Check out')}
       ${B('dca-ext', `depAskExtend(${i})`, '↪', 'Extend')}
+      ${B('dca-extg' + (r.intent === 'extending' ? ' on' : ''), `depSetIntent(${i},'extending')`, '⏳', 'Extending', 'Guest is extending: tick the booking, signature, TD and payment as they are done')}
       ${B('dca-late', `depAskLCO(${i})`, '🕐', 'Late CO')}
       ${B('dca-na', `depAction(${i},'na')`, '📵', 'No answer')}
       ${B('dca-dnd', `depAction(${i},'dnd')`, '🚫', 'DND')}
@@ -1560,6 +1577,17 @@ function depStampNote(i) {
 // ── Guest intent ───────────────────────────────────────────
 // Toggle: tap same intent again to clear it.
 // Auto-stamps the note with context when set.
+// Extending: tick the paperwork (signature, TD) as it comes in
+function depExtPaper(i, key) {
+  const r = depRooms[i]; if (!r) return;
+  r[key] = !r[key];
+  const t = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const what = { extBook: 'New booking made', extSign: 'Signature collected', extTd: 'TD collected', extPay: 'Full payment taken' }[key] || key;
+  if (r[key]) r.note = (r.note ? r.note + '\n' : '') + `[${t}] ${what} for the extension.`;
+  depRender(); saveDeps();
+  if (r.extBook && r.extSign && r.extTd && r.extPay && typeof showToast === 'function') showToast(`Room ${r.roomStr}: booking, signature, TD and payment done. Press ↪ Mark extended.`, 'ok');
+}
+
 function depSetIntent(i, intent) {
   const r       = depRooms[i];
   const isToggle = r.intent === intent;
@@ -1632,7 +1660,7 @@ function depEditName(i) {
       case 'all':          return es === 'due' || es === 'late' || es === 'na' || es === 'dnd';
       case 'balance':      return depOwes(r) && es !== 'out' && es !== 'extended';
       case 'pending':      return !!r.intent && es !== 'out' && es !== 'extended';
-      case 'maybe_extend': return r.intent === 'maybe_extend';
+      case 'maybe_extend': return r.intent === 'maybe_extend' || r.intent === 'extending';
       case 'due':          return es === 'due';
       case 'late':         return es === 'late';
       case 'na':           return es === 'na';
@@ -2400,7 +2428,7 @@ function depCopyHKUpdate() {
     let label = HK_LABEL[es] || '⏳ DUE';
     if (r.status === 'extended' && r.extensionNights) label += ` +${r.extensionNights}n`;
     if (es === 'late' && r.lateTime)                  label += ` ${r.lateTime}`;
-    if (r.intent === 'maybe_extend' && es !== 'extended') label = `⏳ Extending`;
+    if ((r.intent === 'maybe_extend' || r.intent === 'extending') && es !== 'extended') label = `⏳ Extending`;
     if (depOwes(r) && es !== 'extended')              label += ` 💳`;
     return `${r.roomStr.padEnd(5)} ${label}`;
   });
