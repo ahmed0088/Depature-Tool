@@ -73,7 +73,7 @@
     set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} }
   };
   var group = LS.get('ho_wa_group', '');
-  if (!group) { group = (prompt('HotelOps: what is the exact name of the HK WhatsApp group?', '') || '').trim(); if (group) LS.set('ho_wa_group', group); }
+  if (!group) { group = (prompt('HotelOps: the name of the HK WhatsApp group (open the group first and it is filled in for you)', chatTitle()) || '').trim(); if (group) LS.set('ho_wa_group', group); }
   var seen = LS.get('ho_wa_seen', {});          // data-id → text already handed over
   var queue = LS.get('ho_wa_q', []);            // waiting for HotelOps to say "got it"
   var day = LS.get('ho_wa_day', null);          // today's counters {date, read, sent}
@@ -92,10 +92,18 @@
   // ── reading WhatsApp (several fallbacks; any miss just reads nothing) ──
   function chatTitle() {
     var h = document.querySelector('#main header'); if (!h) return '';
-    var el = h.querySelector('span[dir="auto"][title]') || h.querySelector('[title]') || h.querySelector('span[dir="auto"]');
-    return el ? (el.getAttribute('title') || el.textContent || '') : '';
+    var el = h.querySelector('span[dir="auto"][title]') || h.querySelector('span[dir="auto"]') || h.querySelector('[title]');
+    var t = el ? (el.getAttribute('title') || el.textContent || '') : '';
+    return t || String(h.textContent || '').split('\n')[0];
   }
-  function inGroup() { return !!group && norm(chatTitle()) === norm(group); }
+  // the same group even if WhatsApp shows the name a bit differently (emoji, extra words, spacing)
+  function inGroup() {
+    if (!group) return false;
+    var g = norm(group).replace(/[^\p{L}\p{N} ]/gu, '').trim();
+    var a = norm(chatTitle()).replace(/[^\p{L}\p{N} ]/gu, '').trim();
+    var h = document.querySelector('#main header'), all = h ? norm(h.textContent || '').replace(/[^\p{L}\p{N} ]/gu, '') : '';
+    return !!g && (a === g || (!!a && (a.indexOf(g) >= 0 || g.indexOf(a) >= 0)) || all.indexOf(g) >= 0);
+  }
   function textOf(el) {
     var out = '';
     (function walk(n) {
@@ -172,12 +180,34 @@
 
   // ── copying ───────────────────────────────────────────────
   function toClipboard(text) {
+    // WhatsApp listens to "copy" itself and can replace what we copy, so we answer the copy event first
     var fallback = function () {
-      var ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
-      document.body.appendChild(ta); ta.select(); var ok = false; try { ok = document.execCommand('copy'); } catch (_) {} ta.remove(); return ok;
+      var ok = false;
+      var grab = function (e) { try { e.clipboardData.setData('text/plain', text); e.preventDefault(); e.stopImmediatePropagation(); ok = true; } catch (_) {} };
+      window.addEventListener('copy', grab, true);
+      var ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      try { if (document.execCommand('copy')) ok = true; } catch (_) {}
+      window.removeEventListener('copy', grab, true); ta.remove();
+      if (!ok) manualCopy(text);
+      return ok;
     };
     try { if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text).then(function () { return true; }, fallback); } catch (_) {}
     return Promise.resolve(fallback());
+  }
+  // last resort: the text selected in a box, press Ctrl+C yourself
+  function manualCopy(text) {
+    var old = document.getElementById('ho-wa-manual'); if (old) old.remove();
+    var box = document.createElement('div'); box.id = 'ho-wa-manual';
+    box.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;font:13px/1.4 system-ui,sans-serif';
+    var card = document.createElement('div'); card.style.cssText = 'width:min(560px,92vw);background:#111827;color:#e5e7eb;border:1px solid #374151;border-radius:14px;padding:16px;box-shadow:0 20px 60px rgba(0,0,0,.6)';
+    var h = document.createElement('div'); h.textContent = 'Press Ctrl+C now, then paste in HotelOps'; h.style.cssText = 'font-weight:700;font-size:14px;margin-bottom:8px;color:#e0b24f';
+    var ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'width:100%;height:220px;box-sizing:border-box;background:#0b1220;color:#e5e7eb;border:1px solid #374151;border-radius:8px;padding:8px;font:12px/1.4 ui-monospace,monospace';
+    var b = document.createElement('button'); b.textContent = 'Done'; b.type = 'button'; b.style.cssText = 'margin-top:10px;padding:8px 16px;border-radius:8px;border:0;background:#e0b24f;color:#111;font-weight:700;cursor:pointer';
+    b.onclick = function () { box.remove(); };
+    ta.addEventListener('keydown', function (e) { if ((e.ctrlKey || e.metaKey) && /c/i.test(e.key)) setTimeout(function () { box.remove(); say('✓ Copied · paste them in HotelOps', 'ok'); }, 150); });
+    card.appendChild(h); card.appendChild(ta); card.appendChild(b); box.appendChild(card); document.body.appendChild(box);
+    ta.focus(); ta.select();
   }
   function scroller() {
     var r = rows()[0]; var el = r && r.parentElement;
@@ -413,7 +443,7 @@
 
   connB.onclick = function () { note = ''; if (mode === 'copy') copyNew(); else connect(); };
   cpB.onclick = function () { note = ''; copyToday(); };
-  gearB.onclick = function () { var g = (prompt('HotelOps: the exact name of the HK WhatsApp group', group) || '').trim(); if (g) { group = g; LS.set('ho_wa_group', g); firstScan = true; scan(); } };
+  gearB.onclick = function () { var g = (prompt('HotelOps: the name of the HK WhatsApp group (the open chat is filled in)', chatTitle() || group) || '').trim(); if (g) { group = g; LS.set('ho_wa_group', g); firstScan = true; scan(); } };
   xB.onclick = function () { stop(); };
 
   document.body.appendChild(root); document.body.appendChild(mini);

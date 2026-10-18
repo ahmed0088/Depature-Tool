@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 328, items: [
+    '🛠 WhatsApp reader: "Copy today\'s chat" works even when WhatsApp blocks copying (if it still can\'t, it shows the text selected so you just press Ctrl+C). It also finds the HK group even if the name has emoji or extra words, and fills in the open chat\'s name for you.',
+  ] },
   { v: 327, items: [
     '💬 WhatsApp understands more words: "checked out", "checkedout", "left", "C/O", "324co", "CO 324". Extensions work too ("ext", "extended 2 nights", "ext till 22 Oct", "+2N"): the room is marked extended, with Undo. "Out of order" and "checkout tomorrow" stay as notes.',
     '🔎 Every HK message HotelOps receives is now kept as a backup. Search it in the WhatsApp window by room (324 also finds 0324), word or name, for today, 7 days, 30 days or any dates, then download it as .txt or CSV.',
