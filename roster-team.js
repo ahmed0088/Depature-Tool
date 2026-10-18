@@ -1118,11 +1118,11 @@ function rtFind(text) {
   if (hit.length > 1) return hit.map(h => h.k);
   return null;
 }
-/** Every name in "Ahmed or Manisha" is someone on the team (or could be one of a few: then we ask which). */
+/** Every name in "Ahmed or Lina" is someone on the team (or could be one of a few: then we ask which). */
 function rtNamesOk(s) { const parts = String(s || '').split(/\s*(?:,|\bor\b|\band\b|&|\/)\s*/i).filter(Boolean); return parts.length > 0 && parts.every(x => !!rtFind(x)); }
 /** A command pattern that only matches when the names it captures are staff: guests' and rooms' questions go to the rest of Ops Brain. */
 function rtNamed(re, pick) { return { test: q => { const m = String(q).trim().match(re); return !!m && pick(m).filter(x => x != null).every(rtNamesOk); }, source: re.source }; }
-/** "Manisha prefers not nights", "try to avoid nights for Manisha", "avoid 19-04 for Ahmed", "Manisha can do nights again" */
+/** "Lina prefers not nights", "try to avoid nights for Lina", "avoid 19-04 for Ahmed", "Lina can do nights again" */
 function rtSoftParse(q) {
   q = String(q || '').trim();
   const SH = '(mornings?|days?|day shifts?|evenings?|afternoons?|nights?|\\d{1,2}[:.]?\\d{0,2}\\s*(?:-|–|to)\\s*\\d{1,2}[:.]?\\d{0,2})';

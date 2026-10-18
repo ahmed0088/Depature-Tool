@@ -408,13 +408,13 @@ const WHATS_NEW = [
     '❓ "How do I…" questions show how to say it, with a button to do it now, instead of doing it straight away.',
   ] },
   { v: 219, items: [
-    '🧠 Ops Brain understands plain talk, no commands to remember: "can u keep souptik away from mr ali pls", "ahmed not coming tmrw", "manisha dont want nights anymore", "how many vacation days left for lina". It finds the names (even misspelt), the day and the shift, says "I understood: …" and does it. "Not this?" shows the other choices.',
-    '❓ Not sure what you mean? It shows "Did you mean…" buttons, and learns the one you tap, for everyone, next time. Only names ("ali and souptik")? It asks: keep apart, together or swap?',
+    '🧠 Ops Brain understands plain talk, no commands to remember: "can u keep alex away from mr ali pls", "ahmed not coming tmrw", "lina dont want nights anymore", "how many vacation days left for lina". It finds the names (even misspelt), the day and the shift, says "I understood: …" and does it. "Not this?" shows the other choices.',
+    '❓ Not sure what you mean? It shows "Did you mean…" buttons, and learns the one you tap, for everyone, next time. Only names ("ali and alex")? It asks: keep apart, together or swap?',
     '👆 Quick buttons under the Ops Brain box: Someone is sick · Day off · Vacation · Keep two apart · Always together · Swap · Prefers not a shift · What if… · Vacation balance · Who is on · Build next week. Pick the names and the day, tap Do it.',
     '🛡 Anything about a guest or a room ("Mr Ahmed in 512 is sick") never changes the team; "Mr …" alone asks first.',
   ] },
   { v: 218, items: [
-    '↔️ Keep two people apart: "never on duty together" now also counts shifts that overlap 2 hours or more at the same hotel (09–18 and 12–21), not only the exact same shift. A handover (00–09 then 09–18) is fine. Tell Ops Brain "avoid Souptik with Ali", "Sam and Lina never together" or "Sam can\'t work with Lina", or add it in ⚖️ Rules → Your own rules.',
+    '↔️ Keep two people apart: "never on duty together" now also counts shifts that overlap 2 hours or more at the same hotel (09–18 and 12–21), not only the exact same shift. A handover (00–09 then 09–18) is fine. Tell Ops Brain "avoid Alex with Ali", "Sam and Lina never together" or "Sam can\'t work with Lina", or add it in ⚖️ Rules → Your own rules.',
   ] },
   { v: 217, items: [
     '📌 The builder carries on from the posted roster: the one management gave (5 Oct) and then each week you post. It now says so at the top ("Builds on the posted roster: 5 Oct – 11 Oct"). A draft counts only once it is posted; if last week isn\'t posted yet, it warns you and offers to go there first.',
@@ -623,7 +623,7 @@ const WHATS_NEW = [
     '📷 Roster photos read better: a photo taken a little tilted or at an angle is straightened first, then read. Blurry or small photos get a second try at each cell, and anything it isn\'t sure of is marked to check (never silently guessed). A screenshot still reads best; for a photo, hold the phone straight above the roster in good light.',
   ] },
   { v: 168, items: [
-    '⚠ "Prefer not" a shift: on someone\'s card tap a shift once for ⚠ prefer not (they\'re kept off it unless it\'s the only way to cover), twice for 🚫 can\'t work. Also a request for one week ("Prefer not a shift"), or tell Ops Brain "Manisha prefers not nights" / "Manisha can do nights again". When it has to be used, it\'s listed under Decisions this week.',
+    '⚠ "Prefer not" a shift: on someone\'s card tap a shift once for ⚠ prefer not (they\'re kept off it unless it\'s the only way to cover), twice for 🚫 can\'t work. Also a request for one week ("Prefer not a shift"), or tell Ops Brain "Lina prefers not nights" / "Lina can do nights again". When it has to be used, it\'s listed under Decisions this week.',
     '🖼 The roster picture options look like the rest of the app.',
   ] },
   { v: 167, items: [

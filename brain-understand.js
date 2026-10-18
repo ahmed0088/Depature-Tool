@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════
 //  brain-understand.js — Ops Brain understands plain talk
-//  No commands to remember: "can u keep souptik away from mr ali pls",
-//  "ahmed not coming tmrw", "manisha dont want nights anymore". It finds
+//  No commands to remember: "can u keep alex away from mr ali pls",
+//  "ahmed not coming tmrw", "lina dont want nights anymore". It finds
 //  the names (even misspelt), the day, the shift and what you want, says
 //  "I understood: …" and does it. Not sure? "Did you mean…" buttons, and
 //  the one you tap is learnt for next time. Quick buttons under the box
@@ -33,7 +33,7 @@ function _buLev(a, b) {
   for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) m[i][j] = Math.min(m[i - 1][j] + 1, m[i][j - 1] + 1, m[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
   return m[a.length][b.length];
 }
-/** The team members named in the text (also misspelt: "souptk" → Souptik), in the order they come. */
+/** The team members named in the text (also misspelt: "alexx" → Alex), in the order they come. */
 function buNames(t) {
   if (typeof roStaff === 'undefined') return [];
   const staff = Object.keys(roStaff).filter(k => !((typeof rbPeople !== 'undefined' && rbPeople[k]) || {}).deleted).map(k => ({ k, parts: String(roStaff[k].name || '').toLowerCase().replace(/[^a-z\s'-]/g, ' ').split(/\s+/).filter(Boolean) }));
@@ -128,7 +128,7 @@ function buUnderstand(q) {
     a.any.slice(0, 3).forEach(k => { const c2 = Object.assign({}, c, { n: c.n.concat([k]), N: c.N.concat([_buN(k)]) }); const it = options[0].it; if (it.test(c2)) alt.push({ it, cmd: it.make(c2) }); });
     return { sure: false, c, options: alt.length ? alt : options, which: a.word };
   }
-  // only names, no request ("ali and souptik"): offer what is usually meant, with those names
+  // only names, no request ("ali and alex"): offer what is usually meant, with those names
   if (!options.length && c.n.length && c.t.split(' ').length <= c.n.length * 3 + 2) {
     const ids = c.n.length >= 2 ? ['apart', 'with', 'swap'] : ['sick', 'dayoff', 'leave', 'lastweek', 'balance'];
     const c2 = Object.assign({}, c, { day: c.day || 'tomorrow' });
@@ -288,7 +288,7 @@ document.addEventListener('DOMContentLoaded', () => {
         build.apply(this, arguments);
         const f = document.querySelector('#brSheet .br-ask');
         if (f && !document.querySelector('#brSheet .bu-quick')) f.insertAdjacentHTML('afterend', buQuickHtml());
-        const q = document.getElementById('brQ'); if (q) q.placeholder = 'Just say it: "Ahmed is not coming tomorrow", "keep Souptik away from Ali"…';
+        const q = document.getElementById('brQ'); if (q) q.placeholder = 'Just say it: "Ahmed is not coming tomorrow", "keep Alex away from Ali"…';
       };
       window.brBuild.__bu = true;
     }
