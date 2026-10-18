@@ -266,11 +266,76 @@ function waTime24(t) {
 }
 
 W.hoWaParse = hoWaParse; W.hoWaParseCopied = hoWaParseCopied; W.hoWaTime = hoWaTime;
+// ══ Chat backup + search (pure) ═════════════════════════════
+// The hotel keeps every HK message it receives: waChat/{YYYY-MM-DD}/{key} = {t:'09:01', s:'Sam', x:'324 CO', r:'co 324', m?:1, e?:1}
+// (r = what HotelOps did: "co 324 · lco 202 6 PM · ext 0113 +2N → 22 Oct · note 415", "none", "ignore", "skip 324", "notlist 999"; no r = not acted on)
+/** a Firebase-safe key for a WhatsApp message id (no . # $ [ ] / or control characters) */
+function safeKey(id) { return String(id == null ? '' : id).replace(/[.#$\[\]\/\x00-\x1f\x7f]/g, '_').slice(0, 140) || '_'; }
+/** a short key for a message with no WhatsApp id (pasted text): a hash of day|time|sender|text */
+function hashKey(s) { s = String(s); let h = 5381, g = 7; for (let i = 0; i < s.length; i++) { h = ((h << 5) + h + s.charCodeAt(i)) | 0; g = (g * 31 + s.charCodeAt(i)) | 0; } return 'p' + (h >>> 0).toString(36) + (g >>> 0).toString(36); }
+/** results of one message → the compact r string */
+function archR(res) { return res.map(r => [r.st, r.room || '', r.d || ''].filter(Boolean).join(' ')).join(' · '); }
+const R_LABEL = { co: '✓ CO', lco: '⏰ LCO', ext: '↪ EXT', note: '📝 note', notlist: '⚠ not on list', skip: '· skipped', none: '— no room', ignore: '— HotelOps post' };
+/** r → chips [{st, label}] */
+function archChips(r) {
+  if (!r) return [{ st: 'none', label: '— not acted on (not from that day)' }];
+  return String(r).split(' · ').map(p => { const st = p.split(' ')[0], rest = p.slice(st.length).trim(); return { st, label: (R_LABEL[st] || st) + (rest ? ' ' + rest : '') }; });
+}
+function searchTokens(q) { return sp(q).toLowerCase().split(/\s+/).filter(Boolean).slice(0, 8); }
+/** "324" finds room 324 and 0324, not 1324; other words are found anywhere (case-insensitive) */
+function tokenRe(t, flags) {
+  if (/^\d{3,4}$/.test(t)) return new RegExp('(?<!\\d)0*' + parseInt(t, 10) + '(?!\\d)', flags || '');
+  return new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), (flags || '') + 'i');
+}
+/** does one record match every word of the search? */
+function hoWaMatch(rec, q) {
+  const toks = Array.isArray(q) ? q : searchTokens(q);
+  if (!toks.length) return true;
+  const hay = [rec.x || '', rec.s || '', rec.r || ''].join('\n');
+  return toks.every(t => tokenRe(t).test(hay));
+}
+/** {day: {key: rec}} → [{day, key, rec}] matching q, newest day first, in chat order within a day */
+function hoWaSearch(days, q) {
+  const toks = searchTokens(q), out = [];
+  Object.keys(days || {}).sort().reverse().forEach(day => {
+    const recs = days[day] || {};
+    Object.keys(recs).map(key => ({ day, key, rec: recs[key] })).filter(o => o.rec && typeof o.rec === 'object' && hoWaMatch(o.rec, toks))
+      .sort((a, b) => String(a.rec.t || '').localeCompare(String(b.rec.t || '')) || a.key.localeCompare(b.key)).forEach(o => out.push(o));
+  });
+  return out;
+}
+const escH = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+/** text → safe HTML with the searched words in <mark> */
+function hoWaHi(text, q) {
+  text = String(text == null ? '' : text);
+  const toks = Array.isArray(q) ? q : searchTokens(q), spans = [];
+  toks.forEach(t => { const re = tokenRe(t, 'g'); let m; while ((m = re.exec(text))) { if (!m[0].length) { re.lastIndex++; continue; } spans.push([m.index, m.index + m[0].length]); } });
+  spans.sort((a, b) => a[0] - b[0]);
+  let out = '', at = 0;
+  spans.forEach(([a, b]) => { if (b <= at) return; a = Math.max(a, at); out += escH(text.slice(at, a)) + '<mark>' + escH(text.slice(a, b)) + '</mark>'; at = b; });
+  return out + escH(text.slice(at));
+}
+/** "09:01" → "9:01 AM"; "2026-10-18" → "18/10/2026" */
+const t12 = t => { const m = String(t || '').match(/^(\d{1,2}):(\d{2})$/); if (!m) return t || ''; const h = +m[1]; return (h % 12 || 12) + ':' + m[2] + (h >= 12 ? ' PM' : ' AM'); };
+const dmy = d => String(d).split('-').reverse().join('/');
+/** results → WhatsApp's own text format (HotelOps can read it back with Paste) */
+const chrono = list => list.slice().sort((a, b) => a.day.localeCompare(b.day) || String(a.rec.t || '').localeCompare(String(b.rec.t || '')));
+function hoWaExportTxt(list) { return chrono(list).map(o => `[${t12(o.rec.t)}, ${dmy(o.day)}] ${o.rec.s || ''}: ${o.rec.x || ''}`).join('\n') + '\n'; }
+/** results → CSV for Excel (with a BOM so Arabic and emoji show right) */
+function hoWaExportCsv(list) {
+  const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const rows = [['Date', 'Time', 'Sender', 'Message', 'What HotelOps did']].concat(chrono(list).map(o => [dmy(o.day), t12(o.rec.t), o.rec.s || '', o.rec.x || '', archChips(o.rec.r).map(c => c.label).join(' · ') + (o.rec.u ? ' (undone)' : '')]));
+  return '\ufeff' + rows.map(r => r.map(q).join(',')).join('\r\n') + '\r\n';
+}
+/** the backup file name: "HK chat 2026-10-01 to 2026-10-18.txt" */
+function hoWaExportName(from, to, ext) { return 'HK chat ' + (from === to || !to ? from : from + ' to ' + to) + '.' + ext; }
+
 /** the console snippet, ready to paste: this app's address and the parser filled in */
 function snippet(raw, appUrl) {
   return String(raw).replace("'__HO_APP_URL__'", () => JSON.stringify(appUrl)).replace('/*__HO_PARSER__*/null', () => '(' + hoWaParser.toString() + ')()');
 }
-W.hoWaPure = { hoWaParse, hoWaParseCopied, hoWaTime, timeLabel, waDateISO, waTime24, actionKey, extNights: HP.extNights, chip: HP.chip, snippet };
+W.hoWaPure = { hoWaParse, hoWaParseCopied, hoWaTime, timeLabel, waDateISO, waTime24, actionKey, extNights: HP.extNights, chip: HP.chip, snippet,
+  safeKey, hashKey, archR, archChips, hoWaMatch, hoWaSearch, hoWaHi, hoWaExportTxt, hoWaExportCsv, hoWaExportName };
 if (!doc) return;
 
 // ══ Storage ═════════════════════════════════════════════════
@@ -283,6 +348,47 @@ function saveDone(d) { const ks = Object.keys(d); if (ks.length > 1000) ks.slice
 let LOG = (() => { const l = lsGet(LS_LOG, null); return l && l.date === today() && Array.isArray(l.items) ? l.items : []; })();
 function saveLog() { if (LOG.length > 300) LOG = LOG.slice(0, 300); lsSet(LS_LOG, { date: today(), items: LOG }); }
 const undoFns = {};        // log key → undo (this session only)
+
+// ══ Chat backup (hotel database) ════════════════════════════
+const ARCH = {};           // day → {key: rec}, loaded (fbGet) or written this session
+let IDX = null, IDX_AT = 0; // waChatIdx: {day: true}, loaded for "All"
+let archQ = {}, archT = null;
+const isDay = d => /^\d{4}-\d{2}-\d{2}$/.test(d);
+/** queue one message for waChat/{day}; partial: only text fields (keeps what was done on an earlier save) */
+function archive(day, key, rec, partial) {
+  if (!isDay(day)) return;
+  const q = archQ[day] = archQ[day] || {};
+  if (partial) {
+    if (q[key]) Object.assign(q[key], rec);
+    else Object.keys(rec).forEach(f => { q[key + '/' + f] = rec[f]; });
+    if (ARCH[day]) ARCH[day][key] = Object.assign({}, ARCH[day][key], rec);
+  } else {
+    Object.keys(q).forEach(k => { if (k.indexOf(key + '/') === 0) delete q[k]; });
+    q[key] = rec; if (ARCH[day]) ARCH[day][key] = rec;
+  }
+  if (IDX) IDX[day] = true;
+  clearTimeout(archT); archT = setTimeout(flushArch, 400);
+}
+function flushArch() {
+  const q = archQ; archQ = {}; clearTimeout(archT);
+  const ds = Object.keys(q); if (!ds.length) return;
+  if (typeof fbUpdate === 'function') {
+    ds.forEach(day => { try { Promise.resolve(fbUpdate('waChat/' + day, q[day])).catch(() => {}); } catch (_) {} });
+    const idx = {}; ds.forEach(d => { idx[d] = true; });
+    try { Promise.resolve(fbUpdate('waChatIdx', idx)).catch(() => {}); } catch (_) {}
+  }
+  if (doc.getElementById('waQ')) runSearch(true);
+}
+/** one received message → its backup record */
+function archiveMsg(msg, day, text, sender, r, partial) {
+  const t = waTime24(msg.time) || (day === today() ? hhmm() : '');
+  const key = msg.id ? safeKey(msg.id) : hashKey(day + '|' + t + '|' + sender.toLowerCase() + '|' + normS(text));
+  const rec = { t, s: sender, x: text.slice(0, 2000) };
+  if (!partial) { if (r) rec.r = r; if (msg.mine) rec.m = 1; }
+  if (msg.edited) rec.e = 1;
+  archive(day, key, rec, partial);
+  return key;
+}
 
 // ══ Acting on the board ═════════════════════════════════════
 const FIELDS = ['status', 'checkoutAt', 'naTime', 'dndTime', 'lateTime', 'extensionNights', 'extCheckoutTime', 'extRate', 'extReason', 'extConfirmed', 'intent', 'intentMinutes', 'lcoAcknowledged', 'note'];
@@ -346,7 +452,7 @@ function applyOne(a, who, board) {
     addNoteLine(r, line);
     if (st === 'late') { if (a.time) r.lateTime = a.time; paint(); saveDeps(); }
     else { r.lateTime = a.time || ''; setStatus = 'late'; quiet(() => depAction(i, 'late')); }
-    res.st = 'lco'; res.text = `${room} late check-out ${a.time ? timeLabel(a.time) : '(no time)'}`;
+    res.st = 'lco'; res.d = a.time ? timeLabel(a.time) : ''; res.text = `${room} late check-out ${a.time ? timeLabel(a.time) : '(no time)'}`;
   } else if (a.act === 'ext') {
     if (st === 'out') return Object.assign(res, { st: 'skip', text: `${room}: already checked out — not extended` });
     let base = null; try { base = typeof parseOperaDate === 'function' ? parseOperaDate(r.departure) : null; } catch (_) {}
@@ -365,7 +471,7 @@ function applyOne(a, who, board) {
       addNoteLine(r, line); setStatus = 'extended';
       quiet(() => depAction(i, 'extended', x.nights));
     }
-    res.st = 'ext'; res.text = `Extended ${room} (${what})` + (x.guessed ? ' · nights not said, check the card' : '');
+    res.st = 'ext'; res.d = what; res.text = `Extended ${room} (${what})` + (x.guessed ? ' · nights not said, check the card' : '');
   } else {
     line = `[${hhmm()}] ${who}: ${a.note}`;
     addNoteLine(r, line); paint(); saveDeps();
@@ -397,7 +503,7 @@ function handle(msg, via, opt) {
   const sender = normS(msg && msg.sender || '').slice(0, 60) || (msg && msg.mine ? 'Me' : 'WhatsApp');
   const tIso = today();
   const dIso = msg.date ? waDateISO(msg.date, new Date()) : tIso;
-  if (dIso !== tIso) return 'old';
+  if (dIso !== tIso) { if (text.trim()) archiveMsg(msg, dIso, text, sender, '', true); return 'old'; }
   if (via === 'link' && !ready()) return 'wait';
   if (!text.trim()) return 'dup';
   const t24 = waTime24(msg.time) || hhmm();
@@ -411,7 +517,7 @@ function handle(msg, via, opt) {
   if (prev !== undefined) {
     const old = new Set(String(prev).split('|').filter(Boolean));
     actions = actions.filter(a => !old.has(actionKey(a)));
-    if (!actions.length) { done[id] = P.actions.map(actionKey).join('|'); done[ck] = ''; saveDone(done); return 'dup'; }
+    if (!actions.length) { done[id] = P.actions.map(actionKey).join('|'); done[ck] = ''; saveDone(done); archiveMsg(msg, dIso, text, sender, '', true); return 'dup'; }
     edited = true;
   }
   const tl = timeLabel(t24);
@@ -426,9 +532,10 @@ function handle(msg, via, opt) {
   const undos = res.filter(r => r.undo).map(r => r.undo);
   const entry = { key, at: Date.now(), time: t24, sender, text: text.slice(0, 500), mine: !!msg.mine, edited, via, res: res.map(r => ({ st: r.st, room: r.room || '', text: r.text })) };
   LOG.unshift(entry); saveLog();
+  const akey = archiveMsg(Object.assign({}, msg, { edited }), dIso, text, sender, archR(res));
   let undoAll = null;
   if (undos.length) {
-    undoAll = once(() => { let ok = false; undos.slice().reverse().forEach(u => { try { if (u()) ok = true; } catch (_) {} }); if (ok) { entry.undone = true; saveLog(); renderCard(); } return ok; });
+    undoAll = once(() => { let ok = false; undos.slice().reverse().forEach(u => { try { if (u()) ok = true; } catch (_) {} }); if (ok) { entry.undone = true; saveLog(); archive(dIso, akey, { u: 1 }, true); renderCard(); } return ok; });
     undoFns[key] = undoAll;
   }
   if (opt.batch) { opt.batch.undos.push(undoAll); res.forEach(r => { opt.batch.n[r.st] = (opt.batch.n[r.st] || 0) + 1; }); }
@@ -547,6 +654,29 @@ const CSS = `
 #waCard .wa-help p{font-size:12.5px;color:var(--text2);margin:6px 0}
 #waCard .wa-help code{font:12px var(--mono,monospace);background:var(--bg2);padding:1px 5px;border-radius:5px;color:var(--text)}
 #waCard .wa-help textarea{min-height:70px;font-size:11px}
+#waCard .wa-find{display:grid;gap:8px}
+#waCard .wa-q{display:flex;align-items:center;gap:8px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:0 11px;transition:border-color .15s}
+#waCard .wa-q:focus-within{border-color:var(--accent)}
+#waCard .wa-q span{font-size:13px;opacity:.7}
+#waCard .wa-q input{flex:1;min-width:0;width:auto;height:auto;margin:0;background:transparent!important;border:0!important;border-radius:0;outline:0!important;box-shadow:none!important;color:var(--text);font:13px var(--font,inherit);padding:10px 0}
+#waCard .wa-pick[hidden],#waCard .wa-list[hidden]{display:none}
+#waCard .wa-rng{display:flex;flex-wrap:wrap;gap:6px}
+#waCard .wa-rng button{all:unset;box-sizing:border-box;cursor:pointer;padding:5px 11px;border-radius:99px;border:1px solid var(--border);background:var(--card2,var(--bg2));color:var(--text2);font:600 12px var(--font,inherit);white-space:nowrap}
+#waCard .wa-rng button:hover{color:var(--text);border-color:var(--border2,var(--border))}
+#waCard .wa-rng button.on{background:var(--accent);border-color:var(--accent);color:var(--bg,#111)}
+#waCard .wa-rng button:focus-visible,#waCard .wa-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#waCard .wa-pick{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--text3)}
+#waCard .wa-pick input{background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 8px;font:12.5px var(--font,inherit);color-scheme:light dark;min-width:0}
+#waCard .wa-sbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#waCard .wa-scount{flex:1;min-width:0;font:600 12px var(--font,inherit);color:var(--text3)}
+#waCard .wa-dl{display:flex;gap:6px}
+#waCard .wa-btn.sm{padding:6px 11px;font-size:12px}
+#waCard .wa-sres{max-height:440px}
+#waCard .wa-day{position:sticky;top:0;z-index:1;display:flex;justify-content:space-between;gap:8px;padding:6px 10px;font:700 11.5px var(--font,inherit);color:var(--text2);background:var(--card);border-bottom:1px solid var(--border);box-shadow:0 1px 0 var(--border)}
+#waCard .wa-day span{font-weight:500;color:var(--text3)}
+#waCard .wa-sres mark{background:color-mix(in srgb,var(--gold,#e0b24f) 35%,transparent);color:inherit;border-radius:3px;padding:0 1px}
+#waCard .wa-more{all:unset;box-sizing:border-box;display:block;width:100%;cursor:pointer;text-align:center;padding:10px;font:600 12.5px var(--font,inherit);color:var(--accent)}
+#waCard .wa-more:hover{background:var(--bg2)}
 @media (max-width:600px){#waCard>summary{padding:0 12px}#waCard .wa-body{padding:10px 12px 14px}#waCard .wa-last{display:none}#waCard .wa-btn{flex:1 1 auto;text-align:center}}
 `;
 const esc = s => (typeof escapeHtml === 'function' ? escapeHtml(s) : String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
@@ -562,7 +692,16 @@ function mount() {
   card.innerHTML = `<summary><span aria-hidden="true">💬</span><span>WhatsApp HK group</span><span class="wa-n" id="waCount">0</span><span class="wa-last" id="waLast"></span><button type="button" class="wa-x" id="waClose" aria-label="Close" title="Close (Esc)">✕</button></summary>
   <div class="wa-body">
     <div class="wa-st" id="waStatus"></div>
+    <div class="wa-find" id="waFind">
+      <div class="wa-q"><span aria-hidden="true">🔍</span><input type="search" id="waQ" placeholder="Search the HK chat… room, word or name" aria-label="Search the HK chat" autocomplete="off" spellcheck="false"></div>
+      <div class="wa-rng" id="waRng" role="group" aria-label="Which days">
+        <button type="button" data-r="today" class="on" aria-pressed="true">Today</button><button type="button" data-r="7" aria-pressed="false">7 days</button><button type="button" data-r="30" aria-pressed="false">30 days</button><button type="button" data-r="all" aria-pressed="false">All</button><button type="button" data-r="pick" aria-pressed="false">📅 Pick dates</button>
+      </div>
+      <div class="wa-pick" id="waPick" hidden><input type="date" id="waFrom" aria-label="From"><span>to</span><input type="date" id="waTo" aria-label="To"></div>
+      <div class="wa-sbar"><span class="wa-scount" id="waSCount"></span><span class="wa-dl"><button type="button" class="wa-btn sm" id="waDlTxt" title="Saves the messages shown as a .txt in WhatsApp's own format">⬇ Download backup</button><button type="button" class="wa-btn sm" id="waDlCsv" title="For Excel">CSV</button></span></div>
+    </div>
     <div class="wa-list" id="waList" aria-live="polite"></div>
+    <div class="wa-list wa-sres" id="waSRes" hidden aria-live="polite"></div>
     <div>
       <h4>Paste from WhatsApp</h4>
       <textarea id="waPaste" placeholder="[9:01 AM, 18/10/2026] Sam: 324 CO&#10;[9:05 AM, 18/10/2026] Lina: 202 LCO 6PM" aria-label="Paste WhatsApp messages"></textarea>
@@ -574,7 +713,7 @@ function mount() {
       </div>
     </div>
     <details class="wa-help" id="waHelp"><summary>❔ How to set up</summary>
-      <p><b>What it does:</b> when someone writes <code>324 CO</code> in the HK group, room 324 is checked out here. <code>202 LCO 6PM</code> sets a 6 PM late check-out. <code>0113 EXT 2N</code> (or <code>extended till 22 Oct</code>) marks an extension. Other messages with a room (like <code>415 change bedsheet</code>) become a note. Every change has an Undo. Only today's messages and only rooms on today's list.</p>
+      <p><b>What it does:</b> when someone writes <code>324 CO</code> in the HK group, room 324 is checked out here. <code>202 LCO 6PM</code> sets a 6 PM late check-out. <code>0113 EXT 2N</code> (or <code>extended till 22 Oct</code>) marks an extension. Other messages with a room (like <code>415 change bedsheet</code>) become a note. Every change has an Undo. Only today's messages and only rooms on today's list. Every message is also kept in HotelOps as a backup: search it above and download it any time.</p>
       <p><b>Option A — automatic</b></p>
       <ol>
         <li>Open WhatsApp Web on this computer.</li>
@@ -624,8 +763,105 @@ function mount() {
     const b = e.target.closest('[data-wa-undo]'); if (!b) return;
     const f = undoFns[b.getAttribute('data-wa-undo')]; if (f) f();
   });
+  // search the chat backup
+  const qEl = doc.getElementById('waQ');
+  let qt = null;
+  qEl.addEventListener('input', () => { clearTimeout(qt); qt = setTimeout(() => { shown = PAGE; runSearch(); }, 160); });
+  qEl.addEventListener('keydown', e => { if (e.key === 'Escape' && qEl.value) { e.stopPropagation(); qEl.value = ''; runSearch(); } });
+  doc.getElementById('waRng').addEventListener('click', e => {
+    const b = e.target.closest('[data-r]'); if (!b) return;
+    RNG = b.getAttribute('data-r');
+    doc.querySelectorAll('#waRng [data-r]').forEach(x => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+    const pk = doc.getElementById('waPick'); pk.hidden = RNG !== 'pick';
+    if (RNG === 'pick') { const f = doc.getElementById('waFrom'), t = doc.getElementById('waTo'); if (!t.value) t.value = today(); if (!f.value) f.value = dayAdd(today(), -6); }
+    shown = PAGE; runSearch();
+  });
+  ['waFrom', 'waTo'].forEach(id => doc.getElementById(id).addEventListener('change', () => { shown = PAGE; runSearch(); }));
+  doc.getElementById('waSRes').addEventListener('click', e => { if (e.target.closest('.wa-more')) { shown += PAGE; drawResults(); } });
+  doc.getElementById('waDlTxt').onclick = () => download('txt');
+  doc.getElementById('waDlCsv').onclick = () => download('csv');
   renderCard();
+  runSearch();
   return true;
+}
+
+// ══ Search + download the backup ════════════════════════════
+const PAGE = 300;
+let RNG = 'today', shown = PAGE, RES = [], RANGE = null, seq = 0;
+const dayAdd = (d, n) => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); return isoDay(x); };
+/** the days of the chosen range (null = every day in the index) */
+function rangeDays() {
+  const t = today();
+  if (RNG === 'all') return null;
+  let from = t, to = t;
+  if (RNG === '7') from = dayAdd(t, -6);
+  else if (RNG === '30') from = dayAdd(t, -29);
+  else if (RNG === 'pick') {
+    from = doc.getElementById('waFrom').value || t; to = doc.getElementById('waTo').value || t;
+    if (from > to) { const x = from; from = to; to = x; }
+  }
+  const out = []; for (let d = from; d <= to && out.length < 400; d = dayAdd(d, 1)) out.push(d);
+  return out;
+}
+const ARCH_AT = {};       // day → when it was read (read again after 30 s: other desks write too)
+async function loadDays(days) {
+  const now = Date.now(), need = days.filter(d => !ARCH[d] || now - (ARCH_AT[d] || 0) > 30000);
+  await Promise.all(need.map(async d => {
+    let v = null; try { v = typeof fbGet === 'function' ? await fbGet('waChat/' + d) : null; } catch (_) {}
+    ARCH[d] = Object.assign(v && typeof v === 'object' ? v : {}, pendingRecs(d)); ARCH_AT[d] = Date.now();
+  }));
+}
+async function runSearch(keepScroll) {
+  const qEl = doc.getElementById('waQ'); if (!qEl) return;
+  const q = qEl.value, my = ++seq;
+  const active = !!q.trim() || RNG !== 'today';
+  doc.getElementById('waList').hidden = active; doc.getElementById('waSRes').hidden = !active;
+  const cnt = doc.getElementById('waSCount');
+  let days = rangeDays();
+  if (!days) {
+    cnt.textContent = 'Loading all days…';
+    if (!IDX || Date.now() - IDX_AT > 30000) { let v = null; try { v = typeof fbGet === 'function' ? await fbGet('waChatIdx') : null; } catch (_) {} IDX = Object.assign(v && typeof v === 'object' ? v : {}, IDX || {}); IDX_AT = Date.now(); }
+    days = Object.keys(IDX).filter(isDay).concat(Object.keys(ARCH)).concat([today()]).filter((d, i, a) => a.indexOf(d) === i).sort();
+  } else if (days.some(d => !ARCH[d])) cnt.textContent = 'Loading…';
+  if (!days.length) days = [today()];
+  await loadDays(days);
+  if (my !== seq) return;
+  const src = {}; days.forEach(d => { src[d] = Object.assign({}, ARCH[d], (archQ[d] && pendingRecs(d)) || {}); });
+  RES = hoWaSearch(src, q);
+  RANGE = { from: days[0] || today(), to: days[days.length - 1] || today() };
+  const n = RES.length, rl = { today: 'today', '7': 'in the last 7 days', '30': 'in the last 30 days', all: 'in all days', pick: RANGE.from === RANGE.to ? 'on ' + dmy(RANGE.from) : dmy(RANGE.from) + ' to ' + dmy(RANGE.to) }[RNG];
+  cnt.textContent = (q.trim() ? `${n} result${n === 1 ? '' : 's'}` : `${n} message${n === 1 ? '' : 's'} kept`) + ' ' + rl;
+  doc.getElementById('waDlTxt').disabled = doc.getElementById('waDlCsv').disabled = !n;
+  if (active) { if (!keepScroll) doc.getElementById('waSRes').scrollTop = 0; drawResults(); }
+}
+/** records still waiting to be saved (whole ones only) */
+function pendingRecs(d) { const o = {}; Object.keys(archQ[d] || {}).forEach(k => { if (k.indexOf('/') < 0) o[k] = archQ[d][k]; }); return o; }
+const fmtDay = d => new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+function drawResults() {
+  const box = doc.getElementById('waSRes'); if (!box) return;
+  const q = searchTokens(doc.getElementById('waQ').value);
+  if (!RES.length) { box.innerHTML = `<div class="wa-empty">${q.length ? 'Nothing found. Try a room number, a word or a name.' : 'No messages kept for these days yet.'}</div>`; return; }
+  const per = {}; RES.forEach(o => { per[o.day] = (per[o.day] || 0) + 1; });
+  let html = '', last = '';
+  RES.slice(0, shown).forEach(o => {
+    if (o.day !== last) { last = o.day; html += `<div class="wa-day">${esc(fmtDay(o.day))}<span>${per[o.day]}</span></div>`; }
+    const r = o.rec, ch = archChips(r.r);
+    html += `<div class="wa-row${r.u ? ' undone' : ''}"><span class="wa-t">${esc(t12(r.t))}</span><span class="wa-m"><span class="wa-who">${hoWaHi(r.s || '', q)}${r.e ? ' ✎' : ''}</span><span class="wa-txt">${hoWaHi(String(r.x || '').length > 400 ? String(r.x).slice(0, 400) + '…' : r.x, q)}</span></span><span></span>`
+      + `<span class="wa-res">${ch.map(c => `<span class="wa-chip ${esc(c.st)}">${hoWaHi(c.label, q)}${r.u && /co|lco|ext|note/.test(c.st) ? ' — undone' : ''}</span>`).join('')}</span></div>`;
+  });
+  if (RES.length > shown) html += `<button type="button" class="wa-more">Show more (${RES.length - shown} left)</button>`;
+  box.innerHTML = html;
+}
+function download(kind) {
+  if (!RES.length) { showToast('Nothing to download for these days', 'warn'); return; }
+  const body = kind === 'csv' ? hoWaExportCsv(RES) : hoWaExportTxt(RES);
+  const name = hoWaExportName(RANGE.from, RANGE.to, kind);
+  try {
+    const url = URL.createObjectURL(new Blob([body], { type: kind === 'csv' ? 'text/csv;charset=utf-8' : 'text/plain;charset=utf-8' }));
+    const a = doc.createElement('a'); a.href = url; a.download = name; doc.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    showToast(`Saved ${RES.length} message${RES.length === 1 ? '' : 's'} · ${name}`, 'ok');
+  } catch (_) { showToast('Could not save the file', 'err'); }
 }
 let snipLoaded = false;
 function loadSnippet() {
@@ -664,7 +900,7 @@ function start() {
   }
   setInterval(() => { if (doc.getElementById('waStatus')) renderStatus(); }, 15000);
 }
-W.hoWaBridge = { handle, readPasted, parse: hoWaParse, parseCopied: hoWaParseCopied, log: () => LOG.slice(), origins: ORIGINS, render: renderCard };
+W.hoWaBridge = { handle, readPasted, parse: hoWaParse, parseCopied: hoWaParseCopied, log: () => LOG.slice(), origins: ORIGINS, render: renderCard, search: runSearch, flushBackup: flushArch, results: () => RES.slice() };
 if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start); else start();
 })();
 

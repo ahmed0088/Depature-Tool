@@ -1460,6 +1460,48 @@ console.log('\nWhatsApp HK bridge · message reader');
   check('wa: "out of order" and "checkout tomorrow" are notes, not check-outs', [A('324 out of order'), A('324 checkout tomorrow')], ['324 note out of order', '324 note checkout tomorrow']);
   check('wa: a note\'s second line joins it', A('201 Clean the room\nalso towels'), '201 note Clean the room also towels');
   check('wa: time labels', ['18:00', '18:30', '12:00', '09:05'].map(sb.hoWaPure.timeLabel), ['6 PM', '6:30 PM', '12 PM', '9:05 AM']);
+  // more words: check-out synonyms, extensions, late check-out, typos
+  check('wa: more check-out words', ['202 C.O', '202 checkedout', '202 chkout', '202 chk out', '202 checked-out', '202 left', '202 vacated', '202 departed', '202 has checked out', '202 guest checked out', '202 CO done ✅'].map(A), Array(11).fill('202 co'));
+  check('wa: typos and order', ['324co', '324-CO', 'CO 324', '324 co.', 'Rm324 c/o', '#324 C/O', 'C/O 324.', 'Checked out: 324'].map(A), Array(8).fill('324 co'));
+  check('wa: "CO 324, 325" and "Checked out 324 & 325"', [A('CO 324, 325'), A('Checked out 324 & 325')], ['324 co | 325 co', '324 co | 325 co']);
+  check('wa: not a check-out → a note', ['324 out of order', '324 OOO', '324 CO tmrw', '324 checkout tomorrow', '324 left luggage', '324 out for lunch', '324 CO?', '324 not checked out'].map(A),
+    ['324 note out of order', '324 note OOO', '324 note CO tmrw', '324 note checkout tomorrow', '324 note left luggage', '324 note out for lunch', '324 note CO?', '324 note not checked out']);
+  check('wa: late check-out words', ['202 late co 6pm', '202 late checkout 6pm', '202 late check out 6 pm', '202 L/C 6pm', '202 late till 6pm', '202 late until 18:00', 'LCO 202 6PM', '202-lco 6pm'].map(A), Array(8).fill('202 lco 18:00'));
+  check('wa: "late" alone or LCO tomorrow → a note', [A('202 late'), A('202 LCO tomorrow 2pm')], ['202 note late', '202 note LCO tomorrow 2pm']);
+  const E = t => P(t).actions.map(a => [a.room, a.act, a.nights ? '+' + a.nights + 'N' : '', a.until ? '→' + a.until : '', a.note || ''].filter(Boolean).join(' ')).join(' | ');
+  check('wa: extension words', ['0113 ext', '0113 extend', '0113 extended', '0113 extension', '0113 EXT.'].map(E), Array(5).fill('0113 ext'));
+  check('wa: extension nights', ['0113 EXT 2N', '0113 extended 2 nights', '0113 +2N', '0113 ext +2', '0113 extend 2', 'EXT 0113 2N', '0113 ext 2 more nights', '0113 extended two nights', 'Extended 0113 for 2 nights'].map(E), Array(9).fill('0113 ext +2N'));
+  check('wa: extension to a date', ['0113 ext till 22', '0113 ext to 22 Oct', '0113 extended until 22nd', '0113 ext 22/10', '0113 ext till Oct 22', '0113 ext 22'].map(E),
+    ['0113 ext →22', '0113 ext →22/10', '0113 ext →22', '0113 ext →22/10', '0113 ext →22/10', '0113 ext →22']);
+  check('wa: ext till tomorrow = 1 night', E('0113 ext till tomorrow'), '0113 ext +1N');
+  check('wa: not sure → a note', ['0113 ext?', '0113 wants to extend', '0113 extension request', '0113 ext maybe', '0113 extension not confirmed', '0113 ext pending'].map(E),
+    ['0113 note ext?', '0113 note wants to extend', '0113 note extension request', '0113 note ext maybe', '0113 note extension not confirmed', '0113 note ext pending']);
+  check('wa: the app\'s own posts stay ignored', ['🔁 0113 · +4N → 22 Oct', '0113 · +4N → 22 Oct', 'Extensions — 09:07\n0113 · +4N → 22 Oct'].map(t => P(t).kind), ['ignore', 'ignore', 'ignore']);
+  check('wa: mixed message', E('202 CO, 0113 EXT 2N\n415 late till 4pm'), '202 co | 0113 ext +2N | 415 lco');
+  const XN = (a, b) => { const r = sb.hoWaPure.extNights(a, b); return r && [r.nights, r.label, r.guessed].join(' '); };
+  const base = new Date(2026, 9, 18);
+  check('wa: extension → nights from the departure day', [XN({ nights: 2 }, base), XN({ until: '22' }, base), XN({ until: '22/10' }, base), XN({ until: '5' }, base), XN({}, base), XN({ until: '10/10' }, base), XN({ until: '2/1' }, new Date(2026, 11, 30))],
+    ['2 20 Oct false', '4 22 Oct false', '4 22 Oct false', '18 5 Nov false', '1 19 Oct true', null, '3 2 Jan false']);
+  check('wa: action keys tell extensions apart', [sb.hoWaPure.actionKey({ room: '0113', act: 'ext', nights: 2 }), sb.hoWaPure.actionKey({ room: '113', act: 'ext', until: '22/10' })], ['113:ext:2n:', '113:ext:22/10:']);
+  check('wa: chips', [{ room: '324', act: 'co' }, { room: '202', act: 'lco', time: '18:00' }, { room: '0113', act: 'ext', nights: 2 }, { room: '0113', act: 'ext', until: '22/10' }, { room: '415', act: 'note', note: 'x' }].map(sb.hoWaPure.chip),
+    ['✓ CO 324', '⏰ LCO 202 6 PM', '↪ EXT 0113 +2N', '↪ EXT 0113 → 22 Oct', '📝 note 415']);
+  // the chat backup + search
+  const W2 = sb.hoWaPure;
+  check('wa backup: ids are made safe for the database', [W2.safeKey('false_1203@g.us_3EB0.A#B$C[D]/E'), W2.safeKey(''), W2.safeKey('a\nb')], ['false_1203@g_us_3EB0_A_B_C_D__E', '_', 'a_b']);
+  check('wa backup: a pasted message (no id) gets the same short key each time', [W2.hashKey('2026-10-18|09:01|sam|324 CO') === W2.hashKey('2026-10-18|09:01|sam|324 CO'), W2.hashKey('a') !== W2.hashKey('b'), /^[a-z0-9]+$/.test(W2.hashKey('x.y#z'))], [true, true, true]);
+  check('wa backup: what was done, compact', W2.archR([{ st: 'co', room: '324' }, { st: 'lco', room: '202', d: '6 PM' }, { st: 'ext', room: '0113', d: '+2N → 20 Oct' }, { st: 'none' }]), 'co 324 · lco 202 6 PM · ext 0113 +2N → 20 Oct · none');
+  check('wa backup: chips from it', W2.archChips('co 324 · ext 0113 +2N → 20 Oct').map(c => c.label), ['✓ CO 324', '↪ EXT 0113 +2N → 20 Oct']);
+  const days = { '2026-10-17': { a: { t: '20:00', s: 'Alex', x: '0324 CO', r: 'co 0324' } }, '2026-10-18': { b: { t: '09:01', s: 'Sam', x: '324 CO', r: 'co 324' }, c: { t: '08:00', s: 'Lina', x: '1324 towels', r: 'note 1324' }, d: { t: '10:00', s: 'Sam', x: 'Hello team' } } };
+  const K = q => W2.hoWaSearch(days, q).map(o => o.key).join();
+  check('wa search: a room finds 324 and 0324, not 1324', [K('324'), K('0324')], ['b,a', 'b,a']);
+  check('wa search: names, words, two words, case', [K('sam'), K('TOWELS'), K('lina towels'), K('sam towels'), K('')], ['b,d', 'c', 'c', '', 'c,b,d,a']);
+  check('wa search: what was done is searchable', K('co'), 'b,a');
+  check('wa search: highlight is safe HTML', W2.hoWaHi('Room 0324 <b>CO</b> 1324', '324 co'), 'Room <mark>0324</mark> &lt;b&gt;<mark>CO</mark>&lt;/b&gt; 1324');
+  const L = W2.hoWaSearch(days, '324');
+  check('wa backup: .txt in WhatsApp\'s own format, oldest first, and the app reads it back', [W2.hoWaExportTxt(L), sb.hoWaParseCopied(W2.hoWaExportTxt(L)).map(m => m.sender + ':' + m.text).join()],
+    ['[8:00 PM, 17/10/2026] Alex: 0324 CO\n[9:01 AM, 18/10/2026] Sam: 324 CO\n', 'Alex:0324 CO,Sam:324 CO']);
+  check('wa backup: CSV for Excel', W2.hoWaExportCsv(L).split('\r\n')[1], '"17/10/2026","8:00 PM","Alex","0324 CO","✓ CO 0324"');
+  check('wa backup: file names', [W2.hoWaExportName('2026-10-01', '2026-10-18', 'txt'), W2.hoWaExportName('2026-10-18', '2026-10-18', 'csv')], ['HK chat 2026-10-01 to 2026-10-18.txt', 'HK chat 2026-10-18.csv']);
   const C = sb.hoWaParseCopied([
     '#hotelops-wa',
     '[9:01 AM, 11/10/2026] Sam: 324 CO',
@@ -1491,6 +1533,18 @@ console.log('\nWhatsApp HK bridge · message reader');
   const txt = H.copyText([{ time: '9:01 AM', date: '11/10/2026', sender: 'Sam', text: '324 CO' }, { time: '9:02 AM', date: '11/10/2026', sender: 'Alex', text: '201 clean\nplease' }]);
   check('wa snippet: copy format has the marker and WhatsApp\'s own lines', txt, '#hotelops-wa\n[9:01 AM, 11/10/2026] Sam: 324 CO\n[9:02 AM, 11/10/2026] Alex: 201 clean\nplease');
   check('wa snippet → app: what the snippet copies, the app reads back', sb.hoWaParseCopied(txt).map(m => m.sender + ':' + m.text), ['Sam:324 CO', 'Alex:201 clean\nplease']);
+  // the snippet HotelOps hands out has the same reader baked in
+  const raw = fs.readFileSync(path.join(ROOT, 'tools', 'hotelops-whatsapp.console.js'), 'utf8');
+  const built = sb.hoWaPure.snippet(raw, 'https://example.test/app/index.html?x=$&');
+  const ws2 = { console: sb.console, module: { exports: {} } }; ws2.globalThis = ws2;
+  vm.createContext(ws2); vm.runInContext(built, ws2, { filename: 'built-snippet.js' });
+  const H2 = ws2.module.exports;
+  check('wa snippet: address and reader filled in', [built.includes('var APP_URL = "https://example.test/app/index.html?x=$&"'), !!H2.parser, H.parser], [true, true, null]);
+  check('wa snippet: never uses innerHTML', /\.innerHTML|insertAdjacentHTML|outerHTML/.test(raw), false);
+  const corpus = ['324 CO', 'CO 324, 325', '0113 EXT 2N', '0113 ext till 22 Oct', '202 late till 6pm', '324 out of order', '🔁 0113 · +4N → 22 Oct', 'Hk please come', '201 Clean the room\nalso towels', 'Rm324 c/o', '202 CO, 205 LCO 2pm'];
+  check('wa snippet: reads every message exactly like the app', corpus.map(t => JSON.stringify(H2.parser.hoWaParse(t))), corpus.map(t => JSON.stringify(sb.hoWaParse(t))));
+  check('wa snippet: chips in the window', ['324 CO', '202 LCO 6PM', '0113 extended 2 nights', '415 change bedsheet', 'Hk please come', '🔁 0113 · +4N → 22 Oct'].map(t => JSON.parse(JSON.stringify(H2.chips(t))).map(c => c.tone + ' ' + c.label).join(' / ')),
+    ['co ✓ CO 324', 'lco ⏰ LCO 202 6 PM', 'ext ↪ EXT 0113 +2N', 'note 📝 note 415', 'off — ignored', 'off — ignored (HotelOps post)']);
 }
 
 console.log(`\n${pass} passed · ${fail} failed`);
