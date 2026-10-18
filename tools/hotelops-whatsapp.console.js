@@ -416,7 +416,7 @@
     var text = String(s.text || '').slice(0, 3000);
     if (!text.replace(/[⁣\s]/g, '')) return;
     var g = s.group ? groups.filter(function (x) { return groupMatch(x.name, s.group); })[0] : null;
-    var o = { id: String(s.id).slice(0, 60), group: g ? g.name : (s.group || curKey || (groups[0] && groups[0].name) || ''), text: text, st: 'new', at: Date.now() };
+    var o = { id: String(s.id).slice(0, 60), group: g ? g.name : (s.group || curKey || (groups[0] && groups[0].name) || ''), text: text, st: 'new', at: Date.now(), auto: !!s.auto };
     out.push(o); save();
     trySend();
     if (o.st === 'new') report(o, 'queued', 'Open ' + (o.group || 'the group') + ' to send');
@@ -433,9 +433,10 @@
     o.mine0 = mineIds();
     if (!insert(b, o.text)) { report(o, 'failed', 'WhatsApp did not take the text · check the message box'); return; }
     o.typedAt = Date.now();
-    report(o, 'typed', auto ? '' : 'Press Enter in WhatsApp to send');
-    toast(auto ? '✉ Sending to ' + o.group + '…' : '⌨ Typed in ' + o.group + ' · press Enter to send', 'info');
-    if (auto) timers.push(setTimeout(function () { if (stopped || o.st !== 'typed') return; var sb = sendButton(); if (sb) { try { sb.click(); } catch (_) {} } else report(o, 'failed', 'No send button found · press Enter'); timers.push(setTimeout(checkTyped, 600)); }, 350));
+    var go = auto || o.auto;   // the WhatsApp window's switch, or "Send automatically" ticked in HotelOps for this message
+    report(o, 'typed', go ? '' : 'Press Enter in WhatsApp to send');
+    toast(go ? '✉ Sending to ' + o.group + '…' : '⌨ Typed in ' + o.group + ' · press Enter to send', 'info');
+    if (go) timers.push(setTimeout(function () { if (stopped || o.st !== 'typed') return; var sb = sendButton(); if (sb) { try { sb.click(); } catch (_) {} } else report(o, 'failed', 'No send button found · press Enter'); timers.push(setTimeout(checkTyped, 600)); }, 350));
   }
   function checkTyped() {
     out.forEach(function (o) {
@@ -956,9 +957,10 @@
     setTimeout(function () { root.remove(); }, 900);
   }
   obs = new MutationObserver(function (recs) {
-    // our own window changing is not news
-    if (recs.every(function (r) { return root.contains(r.target) || mini.contains(r.target); })) return;
-    clearTimeout(deb); deb = setTimeout(scan, 700);
+    // our own window changing is not news; only the open chat and the chat list matter
+    if (!recs.some(function (r) { var t = r.target; if (!t || root.contains(t) || mini.contains(t)) return false; var e = t.nodeType === 1 ? t : t.parentElement; return !!(e && e.closest && e.closest('#main, #pane-side')); })) return;
+    if (deb) return;                                  // already planned: read within 250 ms, never pushed back by more changes
+    deb = setTimeout(function () { deb = 0; scan(); }, 250);
   });
   obs.observe(document.body, { childList: true, subtree: true, characterData: true });
   window.addEventListener('message', onMsg);

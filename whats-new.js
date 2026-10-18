@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 334, items: [
+    '✉️ WhatsApp → Send: a "Send automatically" switch next to Send to WhatsApp. On (default): your message goes straight into the group. Off: it is typed for you and you press Enter. The same switch is still in the reader\'s Settings on WhatsApp Web.',
+    '⚡ The WhatsApp reader picks up new messages faster (within a quarter of a second) and only watches the chat and the chat list, so WhatsApp Web stays smooth.',
+    '🧺 HK requests are housekeeping\'s to close: no more pop-ups or Ops Brain alerts telling you to finish them, and no "open requests" card on Home. They are still logged on the HK Requests page.',
+  ] },
   { v: 333, items: [
     '📝 Room notes open in their own window: a timeline with a type for each note (WhatsApp, Late CO, Luggage, Taxi, Payment, Finance…), filters, search, quick templates, pin a note to the card, edit or delete any line. "Left · waiting" is now also on No answer and DND cards.',
     '💬 WhatsApp got a big upgrade: a new look for the HotelOps window and the reader on WhatsApp Web (live chart, counters, Feed / Send / Groups / Settings), send messages and the checkout list to the group from HotelOps (it is typed for you, you press Enter), read more than one group, full lists ("CO 101 102 103", "212.319.504 all VD"), replies, deleted messages undone, "507 extending, waiting TD + RC", "507 left, waiting finance", and HotelOps asks you when it doesn\'t know a word.',

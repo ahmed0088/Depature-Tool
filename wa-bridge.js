@@ -1134,6 +1134,8 @@ function groupNames() {
   LOG.forEach(l => { if (l.group && !n.some(x => gKey(x) === gKey(l.group))) n.push(l.group); });
   return n;
 }
+// "Send automatically" switch in the app: on = the reader presses Send in WhatsApp for you (default on; remembered on this device)
+function waAutoOn() { try { return localStorage.getItem('ho_wa_autosend') !== '0'; } catch (_) { return true; } }
 function waSend(text, group) {
   text = String(text || '').trim();
   if (!text) { showToast('Type a message first', 'warn'); return null; }
@@ -1142,7 +1144,7 @@ function waSend(text, group) {
   const item = { id, group: group || (LINK && LINK.open) || groupNames()[0] || '', text: text.slice(0, 3000), at: Date.now(), st: 'wait' };
   OUT.unshift(item); saveOut();
   // the invisible mark: read back from the group, HotelOps knows it wrote this and never acts on it
-  postLink({ source: 'ho-wa', send: { id, group: item.group, text: HP.HO_MARK + item.text } });
+  postLink({ source: 'ho-wa', send: { id, group: item.group, text: HP.HO_MARK + item.text, auto: waAutoOn() } });
   setTimeout(() => { if (item.st === 'wait') { item.st = 'failed'; item.why = 'No answer from WhatsApp · is the reader running?'; saveOut(); renderOut(); } }, 7000);
   renderOut();
   return item;
@@ -1235,6 +1237,8 @@ const CSS = `
 #waCard .wa-chipb.on{background:var(--accent);border-color:var(--accent);color:var(--bg,#111)}
 #waCard .wa-chipb i{font-style:normal;font:600 11px var(--mono,monospace);opacity:.75}
 #waCard .wa-hint{font-size:12px;color:var(--text3);line-height:1.45}
+#waCard .wa-auto{display:inline-flex;align-items:center;gap:6px;font:600 12.5px var(--font,inherit);color:var(--text2);cursor:pointer;padding:6px 10px;border-radius:999px;border:1px solid var(--border);background:var(--card2,var(--bg2))}
+#waCard .wa-auto input{width:16px;height:16px;accent-color:#25d366;margin:0}
 #waCard .wa-out{display:grid;gap:6px}
 #waCard .wa-o{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:var(--card2,var(--bg2));font-size:12.5px}
 #waCard .wa-o .wa-ot{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
@@ -1352,7 +1356,7 @@ function mount() {
         <div class="wa-tpl" id="waTpl">${TEMPLATES.map(t => `<button type="button" class="wa-chipb" data-tpl="${t.k}">${esc(t.label)}</button>`).join('')}<button type="button" class="wa-chipb" id="waCoList" title="Builds today's list from Departures in the box. Check it, then press Send.">📋 Checkout list</button></div>
         <div class="wa-cmp"><input class="wa-in" id="waRoom" placeholder="Room" inputmode="numeric" autocomplete="off" aria-label="Room for the template"><input class="wa-in" id="waTime" placeholder="Time (2 PM)" autocomplete="off" aria-label="Time for the template"><select class="wa-in wa-gsel" id="waGrp" aria-label="Group"></select></div>
         <textarea id="waMsg" placeholder="Type a message for the group…" aria-label="Message to send to WhatsApp"></textarea>
-        <div class="wa-btns"><button type="button" class="wa-btn go" id="waSendBtn">Send to WhatsApp</button><span class="wa-hint" id="waSendHint">It is typed in WhatsApp for you. You press Enter there to send it.</span></div>
+        <div class="wa-btns"><button type="button" class="wa-btn go" id="waSendBtn">Send to WhatsApp</button><label class="wa-auto" title="On: HotelOps sends the message for you. Off: it is typed in WhatsApp and you press Enter."><input type="checkbox" id="waAutoSend"> Send automatically</label><span class="wa-hint" id="waSendHint">It is typed in WhatsApp for you. You press Enter there to send it.</span></div>
         <div class="wa-out" id="waOut"></div>
       </div>
     </section>
@@ -1463,6 +1467,8 @@ function mount() {
     msgEl.value = checkoutListText(rooms(), new Date()); msgEl.focus();
     showToast('Check the list, then press Send to WhatsApp', 'info');
   };
+  const au = $('waAutoSend');
+  if (au) { au.checked = waAutoOn(); au.onchange = () => { try { localStorage.setItem('ho_wa_autosend', au.checked ? '1' : '0'); } catch (_) {} showToast(au.checked ? 'Messages are sent straight away' : 'Messages are typed in WhatsApp; you press Enter', 'ok'); renderStatus(); }; }
   $('waSendBtn').onclick = () => { const it = waSend(msgEl.value, $('waGrp').value); if (it) msgEl.value = ''; };
   msgEl.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $('waSendBtn').click(); } });
   $('waOut').addEventListener('click', e => {
@@ -1602,7 +1608,7 @@ function renderStatus() {
   el.innerHTML = on ? `<i class="wa-dot on"></i><span>Linked to WhatsApp${g ? ' · reading ' + esc(g) : ''}${LINK && LINK.rtt ? ' · ' + Math.round(LINK.rtt) + ' ms' : ''}</span>`
     : `<i class="wa-dot"></i><span>${LOG.length ? 'Not linked right now · ' : 'Not linked · '}set up once with ❔ How to set up, or paste below</span>`;
   const hint = doc.getElementById('waSendHint');
-  if (hint) hint.textContent = !on ? 'Link WhatsApp Web first (❔ How to set up). Nothing is sent until you press Send.' : LINK && LINK.auto ? 'Sent straight away (automatic sending is on in the WhatsApp window).' : 'It is typed in WhatsApp for you. You press Enter there to send it.';
+  if (hint) hint.textContent = !on ? 'Link WhatsApp Web first (❔ How to set up). Nothing is sent until you press Send.' : (waAutoOn() || (LINK && LINK.auto)) ? 'Sent straight away to the group.' : 'It is typed in WhatsApp for you. You press Enter there to send it.';
   const wb = doc.getElementById('waWords'); if (wb) wb.hidden = typeof W.hoWaWordsOpen !== 'function';
 }
 function renderKpis() {

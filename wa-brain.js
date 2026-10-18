@@ -917,7 +917,7 @@ function wrapAsk() {
 // ── 2. Live thoughts ──
 (W.BL_THINKERS = W.BL_THINKERS || []).push(add => {
   const C = compute();
-  safe(() => C.open.slice(0, 3).forEach(o => {
+  if (false) safe(() => C.open.slice(0, 3).forEach(o => {   // HK requests are housekeeping's to close: no alerts, the Requests log keeps them
     const n = (remState().nudge || {})[o.id] || 0;
     add({ id: 'wabReq:' + o.id + ':' + (o.age >= 75 ? 2 : 1), type: 'waReq', icon: '🧺', tone: o.age >= 75 ? 'bad' : 'warn',
       text: `Room ${o.room} asked for ${wbWhat(o.cats)} ${o.age} min ago — no reply in the group`,
@@ -1000,7 +1000,7 @@ function tick() {
       S.nudge[r.id] = n + 1; S.nudge[r.id + '@'] = Date.now(); changed = true;
       popAlert({ id: r.id, text: r.text, why: r.why, tone: r.tone, icon: r.kind === 'lco' ? '⏰' : '📌', acts: remActs(r) });
     });
-    C.open.forEach(o => {
+    if (false) C.open.forEach(o => {   // no pop-ups for HK requests (housekeeping closes them)
       const n = S.nudge[o.id] || 0, need = o.age >= 75 ? 2 : 1;
       if (n >= need || snoozed(o.id) || nm - (toMin(o.t) || 0) > 240) return;
       S.nudge[o.id] = need; changed = true;
@@ -1129,10 +1129,10 @@ function paintChips() {
       if (!n || !tags) { if (b) b.remove(); return; }
       const open = CUR.open.some(o => o.key === k);
       if (!b) { b = doc.createElement('button'); b.type = 'button'; b.className = 'dp-chip wab-chip'; tags.appendChild(b); }
-      const txt = '💬 ' + n, ttl = `${plural(n, 'message')} about room ${card.dataset.room} in the HK chat today${open ? ' · a request has no reply yet' : ''} — tap to read`;
+      const txt = '💬 ' + n, ttl = `${plural(n, 'message')} about room ${card.dataset.room} in the HK chat today — tap to read`;
       if (b.textContent !== txt) b.textContent = txt;
       if (b.title !== ttl) { b.title = ttl; b.setAttribute('aria-label', ttl); }
-      b.classList.toggle('wab-open', open);
+      b.classList.toggle('wab-open', false);
     });
   });
 }
@@ -1162,6 +1162,7 @@ function handoverGroup() {
   }, null);
 }
 function wrapHome() {
+  return;   // no "open requests" card on Home: HK requests are housekeeping's, see the HK Requests page
   const o = W.homeRender;
   if (typeof o !== 'function' || o.__wab) return;
   const f = function () { const r = o.apply(this, arguments); setTimeout(paintHomeReq, 0); return r; };
@@ -1179,7 +1180,7 @@ function pinsHtml() {
   const C = compute(), L = [];
   dueRems(C).forEach(r => L.push({ icon: r.kind === 'lco' ? '⏰' : '📌', tone: r.tone, text: r.text, why: r.why, acts: remActs(r).slice(0, 3).concat(r.room ? [['Open chat', null, r.room]] : []), id: r.id }));
   C.rems.filter(r => r.at > nowMin() && !isDone(r.id) && remCondOk(r)).slice(0, 4).forEach(r => L.push({ icon: '🕒', text: `${clock(r.at)} · ${r.text}`, why: r.why, id: r.id, acts: [['Done', () => markDone(r.id, 'Done ✓')]] }));
-  C.open.forEach(o => L.push({ icon: '🧺', tone: o.age >= 75 ? 'bad' : '', text: `Room ${o.room}: ${wbWhat(o.cats)} — ${o.age} min, no reply`, why: `${o.s} at ${t12(o.t)}: "${qMark(o.x, 80)}"`, id: o.id,
+  if (false) C.open.forEach(o => L.push({ icon: '🧺', tone: o.age >= 75 ? 'bad' : '', text: `Room ${o.room}: ${wbWhat(o.cats)} — ${o.age} min, no reply`, why: `${o.s} at ${t12(o.t)}: "${qMark(o.x, 80)}"`, id: o.id,
     acts: [['Done', () => markDone(o.id, `Room ${o.room}: marked handled`)], ['Snooze 15 min', () => snooze(o.id, 15)], ['Snooze 1 h', () => snooze(o.id, 60)], ['Open chat', null, o.room]] }));
   waiting().slice(0, 3).forEach(q => L.push({ icon: '❓', text: `What does "${q.word}" mean? (${q.sender || 'HK'}: "${qMark(q.text || q.word, 40)}")`, why: q.guess ? 'My guess: ' + MEAN[q.guess] : '', id: q.key, acts: askActs(q) }));
   PIN_ACTS = [];
@@ -1642,6 +1643,8 @@ function start() {
   const bo = W.brOpen;
   if (typeof bo === 'function' && !bo.__wab) { W.brOpen = function () { safe(hook); const r = bo.apply(this, arguments); ensure30(); setTimeout(() => extendPanel(), 30); return r; }; W.brOpen.__wab = true; }
   // new messages: watch the bridge's log (cheap), think every minute
+  let msgT = 0;
+  doc.addEventListener('ho-wa-msg', () => { clearTimeout(msgT); msgT = setTimeout(() => safe(() => { lastLogSig = ''; compute(true); paintChips(); scanAsk(); }), 150); });
   setInterval(() => safe(() => {
     const L = logEntries(), sig = L.length + '|' + ((L[0] || {}).key || '') + '|' + ((L[0] || {}).undone ? 1 : 0);
     if (sig !== lastLogSig) { lastLogSig = sig; compute(true); paintChips(); scanAsk(); if (typeof blSoon === 'function') safe(() => blSoon()); }
