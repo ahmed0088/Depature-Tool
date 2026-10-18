@@ -239,6 +239,17 @@ console.log('\nRoster builder');
       const stacked = dates.filter(dt => [Mx, Dx, Ex].some(s => ks.filter(k => rd.cells[k][dt] === s).length >= 3)).length;
       check('extra people are spread over the shifts, never piled on one (even if they all like it)', stacked, 0);
     }
+    { // your own rules: two people never off on the same day; someone never on a shift
+      const Mx = '07:00 - 15:00', Ex = '15:00 - 00:00', one7 = [1, 1, 1, 1, 1, 1, 1];
+      const ks = ['Q1', 'Q2', 'Q3', 'Q4'];
+      const base = { week: W, groups: { 'Ibis DD': { shifts: [Mx, Ex], need: { [Mx]: one7, [Ex]: one7 } } },
+        people: ks.map(k => person(k, { prefOff: [5] })), pre: {}, seed: 9 };
+      const rules = { minRest: 11, maxRun: 6, givePh: false, lend: true, custom: [{ t: 'offApart', a: 'Q1', b: 'Q2', level: 3 }, { t: 'personNo', a: 'Q3', shift: Ex, level: 3 }] };
+      const ro = sb.rbSolve(Object.assign({}, base, { rules }));
+      const bothOff = dates.filter(dt => sb.rbKind(ro.cells.Q1[dt]) === 'off' && sb.rbKind(ro.cells.Q2[dt]) === 'off').length;
+      const q3eve = dates.filter(dt => ro.cells.Q3[dt] === Ex).length;
+      check('own rules: two people never off the same day, and someone kept off a shift', [bothOff, q3eve].join(), '0,0');
+    }
     check('agents are never moved to another hotel (only Duty Managers and Supervisors)', [movedA, sb.rbMayWork(Ia, 'Adagio GD', Ia.people[1], N), sb.rbMayWork(I2, 'Adagio GD', I2.people[1], N)].join(), '0,false,true');
   }
   check('moves: the hotels touched by moves are counted (from and to)', [...sb.rbMoveHotels(I2, { 'M ONE': { [dates[0]]: '12:00 - 21:00 - Adagio' }, 'A ONE': {}, 'M TWO': {}, 'M THREE': {} })].sort().join(), 'Adagio GD,Mercure DD');

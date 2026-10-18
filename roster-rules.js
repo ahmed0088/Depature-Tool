@@ -126,7 +126,7 @@ function rrHtml() {
       <div class="rr-list">${hard.map(([ico, t, id, on, set]) => rrRuleRow(ico, t, rrExample(id), always(on, set), 'hard' + (set && !on ? ' off' : ''))).join('')}</div></details>
     ${rrHabitsHtml()}
     <div class="rr-sec">✍️ Your own rules</div>
-    <div class="rr-list">${mine.map((r, i) => rrRuleRow(r.t === 'apart' ? '↔️' : r.t === 'apartHotel' ? '🏨' : r.t === 'with' ? '🤝' : '🚫', escapeHtml(rrMineText(r)), rrMineLeft(r), `<div class="rr-mine-ctl">${rrMineLvCtl(i, r.level == null ? 2 : +r.level)}<button class="ro-x" title="Remove" onclick="rrDelMine(${i})">✕</button></div>`, 'mine')).join('') || '<div class="ro-empty">None yet. Make one below, or tell Ops Brain: "Sam and Lina never on the same shift".</div>'}</div>
+    <div class="rr-list">${mine.map((r, i) => rrRuleRow(r.t === 'apart' ? '↔️' : r.t === 'apartHotel' ? '🏨' : r.t === 'with' ? '🤝' : r.t === 'offApart' ? '🛌' : r.t === 'personNo' ? '⛔' : '🚫', escapeHtml(rrMineText(r)), rrMineLeft(r), `<div class="rr-mine-ctl">${rrMineLvCtl(i, r.level == null ? 2 : +r.level)}<button class="ro-x" title="Remove" onclick="rrDelMine(${i})">✕</button></div>`, 'mine')).join('') || '<div class="ro-empty">None yet. Make one below, or tell Ops Brain: "Sam and Lina never on the same shift".</div>'}</div>
     ${rrMakeHtml()}
     ${rrQuizHtml()}
   </div>`;
@@ -258,6 +258,8 @@ function rrMineText(r) {
   if (r.t === 'apartHotel') return `${_rrFirst(r.a)} and ${_rrFirst(r.b)} never at the same hotel on the same day`;
   if (r.t === 'with') return `${_rrFirst(r.a)} always on the same shift as ${_rrFirst(r.b)}`;
   if (r.t === 'titleNo') return `${r.title}s never on ${RR_BANDN[r.shift] || r.shift}`;
+  if (r.t === 'offApart') return `${_rrFirst(r.a)} and ${_rrFirst(r.b)} never off on the same day`;
+  if (r.t === 'personNo') return `${_rrFirst(r.a)} never on ${RR_BANDN[r.shift] || r.shift}`;
   return '';
 }
 /** Is it kept in this week's draft? */
@@ -274,7 +276,7 @@ function rrMineLv(i, lv) { const L = rrCustom(); if (!L[i]) return; L[i] = Objec
 function rrDelMine(i) { const L = rrCustom(); L.splice(i, 1); rrSetCustom(L); }
 function rrAddMine(r) {
   if (!r) return false;
-  const L = rrCustom(), same = x => x.t === r.t && ((x.a === r.a && x.b === r.b) || (x.a === r.b && x.b === r.a && (r.t === 'apart' || r.t === 'apartHotel')) || (r.t === 'titleNo' && x.title === r.title && x.shift === r.shift));
+  const L = rrCustom(), same = x => x.t === r.t && ((x.a === r.a && x.b === r.b) || (x.a === r.b && x.b === r.a && (r.t === 'apart' || r.t === 'apartHotel' || r.t === 'offApart')) || (r.t === 'personNo' && x.a === r.a && x.shift === r.shift && x.b === r.b) || (r.t === 'titleNo' && x.title === r.title && x.shift === r.shift));
   if (L.some(same)) { showToast('You already have that rule', 'warn'); return false; }
   L.push(Object.assign({ level: 3 }, r)); rrSetCustom(L);
   if (typeof tlLog === 'function') tlLog('note', { keys: [r.a, r.b].filter(Boolean), text: 'New rule: ' + rrMineText(r) });
@@ -285,7 +287,7 @@ function rrMakeHtml() {
   const ks = Object.keys(roStaff).filter(k => !(rbPeople[k] || {}).deleted).sort((a, b) => (roStaff[a].name || '').localeCompare(roStaff[b].name || ''));
   const ppl = `<option value="">someone…</option>${ks.map(k => `<option value="${escapeHtml(k)}">${escapeHtml(roStaff[k].name)}</option>`).join('')}`;
   return `<div class="rr-make">
-    <div class="rr-make-row"><select id="rrA">${ppl}</select><select id="rrT" onchange="document.getElementById('rrB').style.display=this.value==='never'?'none':'';document.getElementById('rrTi').style.display=this.value==='never'?'':'none'"><option value="apart">never on duty together with</option><option value="apartHotel">never at the same hotel (the same day) as</option><option value="with">always on the same shift as</option><option value="never">— or: a title never on —</option></select><select id="rrB">${ppl}</select>
+    <div class="rr-make-row"><select id="rrA">${ppl}</select><select id="rrT" onchange="const v=this.value;document.getElementById('rrB').style.display=(v==='never'||v==='personNo')?'none':'';document.getElementById('rrTi').style.display=v==='never'?'':'none';document.getElementById('rrPs').style.display=v==='personNo'?'':'none'"><option value="apart">never on duty together with</option><option value="apartHotel">never at the same hotel (the same day) as</option><option value="offApart">never off on the same day as</option><option value="with">always on the same shift as</option><option value="personNo">never on this shift…</option><option value="never">— or: a title never on —</option></select><span id="rrPs" style="display:none"><select id="rrPsh">${Object.keys(RR_BANDN).map(b => `<option value="${b}">${RR_BANDN[b]}</option>`).join('')}${[...new Set(rbGroups().flatMap(g => (rbGroupCfg(g).shifts || [])))].map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')}</select></span><select id="rrB">${ppl}</select>
       <span id="rrTi" style="display:none"><select id="rrTitle">${RB_TITLES.map(t => `<option>${t}</option>`).join('')}</select><select id="rrSh">${Object.keys(RR_BANDN).map(b => `<option value="${b}">${RR_BANDN[b]}</option>`).join('')}</select></span>
       <button class="btn sm gold" onclick="rrMakeAdd()">＋ Add rule</button></div>
     <small class="ro-hint">New rules start as Very important; tap another level any time.</small></div>`;
@@ -293,6 +295,7 @@ function rrMakeHtml() {
 function rrMakeAdd() {
   const t = document.getElementById('rrT').value;
   if (t === 'never') { rrAddMine({ t: 'titleNo', title: document.getElementById('rrTitle').value, shift: document.getElementById('rrSh').value }); return; }
+  if (t === 'personNo') { const a = document.getElementById('rrA').value; if (!a) { showToast('Pick someone', 'warn'); return; } rrAddMine({ t: 'personNo', a, shift: document.getElementById('rrPsh').value }); return; }
   const a = document.getElementById('rrA').value, b = document.getElementById('rrB').value;
   if (!a || !b || a === b) { showToast('Pick two different people', 'warn'); return; }
   rrAddMine({ t, a, b });
@@ -378,12 +381,30 @@ const RR_SAY = [
   [/^(.+?)\s+and\s+(.+?)\s+(?:should\s+)?(?:never|not|can'?t|cannot|must not|mustn'?t)\s+(?:be\s+|work\s+)?(?:on\s+|in\s+)?(?:the\s+)?same\s+shift\s*\.?$/i, 'apart'],
   [/^(.+?)\s+(?:always\s+(?:works?\s+)?(?:with|together with|on the same shift as)|(?:works?\s+)?on the same shift as)\s+(.+?)(?:\s+always)?\s*\.?$/i, 'with'],
   [/^(.+?)\s+and\s+(.+?)\s+(?:always\s+)?(?:on|in)\s+(?:the\s+)?same\s+shift(?:\s+always)?\s*\.?$/i, 'with'],
+  [/^(.+?)\s+and\s+(.+?)\s+(?:should\s+)?(?:never|not|can'?t|cannot|must not|mustn'?t|shouldn'?t)\s+(?:be\s+|have\s+(?:a\s+|their\s+)?(?:days?\s+)?)?off\s+(?:on\s+)?(?:the\s+)?same\s+day\s*\.?$/i, 'offApart'],
+  [/^(?:avoid|no)\s+(.+?)\s+and\s+(.+?)\s+(?:being\s+)?off\s+(?:on\s+)?(?:the\s+)?same\s+day\s*\.?$/i, 'offApart'],
+  [/^(?:avoid|keep)\s+(.+?)\s+(?:on|off|away from|from)\s+(?:the\s+)?(nights?|mornings?|evenings?|day shifts?|\d{1,2}[:.]?\d{0,2}\s*(?:am|pm)?(?:\s*-\s*\d{1,2}[:.]?\d{0,2}\s*(?:am|pm)?)?)(?:\s+shifts?)?\s*\.?$/i, 'personNo'],
+  [/^(.+?)\s+(?:should\s+)?(?:never|not|can'?t|cannot|shouldn'?t)\s+(?:be\s+|work\s+|do\s+)?(?:on\s+)?(?:the\s+)?(nights?|mornings?|evenings?|day shifts?|\d{1,2}[:.]?\d{0,2}\s*(?:am|pm)?(?:\s*-\s*\d{1,2}[:.]?\d{0,2}\s*(?:am|pm)?)?)(?:\s+shifts?)?\s*\.?$/i, 'personNo'],
   [/^(?:all\s+|the\s+)?(.+?)s?\s+(?:never|not|can'?t|cannot)\s+(?:do\s+|work\s+)?(?:on\s+)?(nights?|mornings?|evenings?|days?|day shifts?)\s*\.?$/i, 'titleNo'],
 ];
 function rrParseSay(q) {
   q = String(q || '').trim();
   for (const [re, t] of RR_SAY) {
     const m = q.match(re); if (!m) continue;
+    if (t === 'personNo') {
+      if (typeof rtFind !== 'function') continue;
+      const a = rtFind(m[1]); if (!a || Array.isArray(a)) continue;
+      const w = m[2].toLowerCase().trim(), b = w.replace(/s$/, '').replace(' shift', '');
+      let shift = RR_BANDN[b] ? b : '';
+      if (!shift) {   // a time: the team's shift that starts then ("12", "12pm", "12:00")
+        const mm = w.match(/^(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)?/); if (!mm) continue;
+        let h = +mm[1]; if (mm[3] === 'pm' && h < 12) h += 12; if (mm[3] === 'am' && h === 12) h = 0;
+        const start = String(h).padStart(2, '0') + ':' + (mm[2] || '00');
+        shift = [...new Set(rbGroups().flatMap(g => (rbGroupCfg(g).shifts || [])))].find(s => String(s).startsWith(start)) || '';
+        if (!shift) continue;
+      }
+      return { t, a, shift };
+    }
     if (t === 'titleNo') {
       const T = typeof rtTitleWord === 'function' ? rtTitleWord(m[1]) : null; if (!T) continue;
       const b = m[2].toLowerCase().replace(/s$/, '').replace(' shift', ''); return { t, title: T, shift: b === 'day' ? 'day' : b };

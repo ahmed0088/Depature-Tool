@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 338, items: [
+    '✍️ Two new roster rules (⚖️ Rules → Your own rules, or tell Ops Brain): "Sam and Lina never off on the same day" (days off and leave), and "Sam never on 12:00" / "avoid Sam on nights" (one person kept off a shift or a type of shift). Each has a level like your other rules.',
+  ] },
   { v: 337, items: [
     '🛌 Roster: nobody loses their weekly day off any more to fill a shift. If a shift can\'t be covered, it shows as a problem for you to decide (Fix suggests who could take it). To allow it again: ⚖️ Rules → PH days → "Work a day off to fill a shift".',
   ] },

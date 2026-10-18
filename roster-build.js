@@ -80,6 +80,15 @@ function rbMineBroken(I, cells, dates, R, g) {
           const x = rbParse((cells[A.key] || {})[dt]), y = rbParse((cells[B.key] || {})[dt]); return Math.min(x.e, y.e) - Math.max(x.s, y.s) >= 120; };
         if (r.t === 'apart' ? together() : a && b && a !== b) out.push({ r, keys: [A.key, B.key], date: dt });
       });
+    } else if (r.t === 'offApart') {
+      // never off on the same day (days off and leave both count)
+      const A = byKey[r.a], B = byKey[r.b]; if (!A || !B || !P.includes(A)) return;
+      const off = v => { const k = rbKind(v || ''); return k === 'off' || k === 'leave'; };
+      dates.forEach(dt => { if (off((cells[A.key] || {})[dt]) && off((cells[B.key] || {})[dt])) out.push({ r, keys: [A.key, B.key], date: dt }); });
+    } else if (r.t === 'personNo') {
+      // this person never on that shift (a type: nights, mornings… or one exact shift)
+      const A = byKey[r.a]; if (!A || !P.includes(A)) return;
+      dates.forEach(dt => { if (rbMineShiftHit(r, (cells[A.key] || {})[dt])) out.push({ r, keys: [A.key], date: dt }); });
     } else if (r.t === 'titleNo') {
       P.filter(p => (p.title || '') === r.title).forEach(p => dates.forEach(dt => { if (rbMineShiftHit(r, (cells[p.key] || {})[dt])) out.push({ r, keys: [p.key], date: dt }); }));
     }
