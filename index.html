@@ -930,21 +930,31 @@
 
   <div id="adHero"></div>
 
-  <div id="xrefPasteCard" class="card" style="margin-bottom:16px;">
-    <div class="upload-zone">
-      <div class="upload-label-bar">
-        <div class="upload-dot gold"></div>
-        <span class="upload-lbl">Opera Arrivals Report · Delimited Data</span>
-        <span class="upload-sub">From Reservations → Arrivals → Export Delimited Data</span>
+  <div id="xrefPasteCard" class="card dp-empty" style="margin-bottom:16px;">
+    <input type="file" id="xrefFileInput" accept=".txt,.tsv,.csv" hidden onchange="xrefLoadFile(this)"/>
+    <div class="dp-drop" id="xrefDrop" role="button" tabindex="0" aria-label="Choose the Opera arrivals file"
+         onclick="document.getElementById('xrefFileInput').click()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
+      <div class="dp-drop-ico" aria-hidden="true">
+        <svg viewBox="0 0 48 48" width="48" height="48"><path d="M8 14a4 4 0 0 1 4-4h8l4 4h12a4 4 0 0 1 4 4v18a4 4 0 0 1-4 4H12a4 4 0 0 1-4-4z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/><path d="M24 34V21m0 0-5 5m5-5 5 5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
-      <textarea id="xrefInput" placeholder="Opera Cloud → Reservations → Arrivals → Export Delimited Data&#10;Open .txt → Ctrl+A → Ctrl+C → Paste here"></textarea>
+      <div class="dp-drop-title">Load today's arrivals</div>
+      <div class="dp-drop-sub">Drop the Opera file here, or</div>
+      <button type="button" class="dp-browse" onclick="event.stopPropagation();document.getElementById('xrefFileInput').click()">📂 Browse…</button>
+      <div class="dp-drop-types">.txt · .csv</div>
     </div>
-    <div class="error-box" id="xrefError" style="display:none;"><span>⚠</span><span id="xrefErrorMsg"></span></div>
-    <div style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap;">
-      <button class="btn gold" onclick="xrefLoad()">🔗 Load &amp; Check Extensions</button>
-      <label class="btn" style="cursor:pointer;">📂 Upload File<input type="file" accept=".txt,.tsv,.csv" style="display:none;" onchange="xrefLoadFile(this)"/></label>
-      <span style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);"><strong style="color:var(--text);">Load Dep board first</strong> for full extension verdicts</span>
+    <div class="dp-empty-help">
+      <div class="dp-step"><span class="dp-step-n">1</span><span>Load today's <b>Departures</b> board first, so every extension can be checked.</span></div>
+      <div class="dp-step"><span class="dp-step-n">2</span><span>In Opera: <b>Reservations → Arrivals</b>, export as <b>Delimited Data</b> (.txt).</span></div>
+      <div class="dp-step"><span class="dp-step-n">3</span><span>Browse, drop or paste it here. Every guest leaving today who booked again shows as a card.</span></div>
     </div>
+    <details class="dp-paste">
+      <summary>📋 Paste the report text instead</summary>
+      <textarea id="xrefInput" placeholder="Open the .txt file → Ctrl+A → Ctrl+C → paste here"></textarea>
+      <div class="error-box" id="xrefError" style="display:none;"><span>⚠</span><span id="xrefErrorMsg"></span></div>
+      <div class="dp-paste-row">
+        <button class="btn gold" onclick="xrefLoad()">🔗 Load &amp; Check Extensions</button>
+      </div>
+    </details>
   </div>
 
   <details class="ad-other" id="adOther"><summary id="adOtherSum">Other details</summary><div class="ad-other-body">

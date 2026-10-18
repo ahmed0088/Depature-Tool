@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 316, items: [
+    '🎨 Arr vs Dep: the arrivals upload box now looks like the Departures one. Drop the file or press Browse, with 3 short steps underneath. Pasting the text is still there under "Paste the report text instead".',
+  ] },
   { v: 315, items: [
     '🎨 Front Office Log now has the same line icon as the rest of the menu.',
   ] },

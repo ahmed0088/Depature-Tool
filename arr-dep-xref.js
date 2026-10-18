@@ -391,6 +391,7 @@ function xrefLoad() {
 function xrefLoadFile(input) {
   const file = input?.files?.[0];
   if (!file) return;
+  if (input.value !== undefined) setTimeout(() => { try { input.value = ''; } catch (_) {} }, 0);  // the same file can be picked again
   const reader = new FileReader();
   reader.onload = e => {
     const ta = document.getElementById('xrefInput');
@@ -1359,4 +1360,25 @@ function adOpenDep(room) {
     #panel-xref .xref-kpi { min-width:calc(33% - 8px); }
   }`;
   document.head.appendChild(st);
+})();
+
+// Drop the arrivals file on the upload box
+(function () {
+  const hook = () => {
+    const box = document.getElementById('xrefPasteCard');
+    if (!box || box._xrefDrop) return;
+    box._xrefDrop = true;
+    const hasFiles = e => e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files');
+    let depth = 0;
+    box.addEventListener('dragenter', e => { if (!hasFiles(e)) return; e.preventDefault(); depth++; box.classList.add('dp-dragging'); });
+    box.addEventListener('dragleave', () => { if (--depth <= 0) { depth = 0; box.classList.remove('dp-dragging'); } });
+    box.addEventListener('dragover', e => { if (!hasFiles(e)) return; e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'; });
+    box.addEventListener('drop', e => {
+      if (!hasFiles(e)) return;
+      e.preventDefault(); e.stopPropagation(); depth = 0; box.classList.remove('dp-dragging');
+      const f = e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) xrefLoadFile({ files: [f] });
+    });
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', hook); else hook();
 })();
