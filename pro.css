@@ -2851,3 +2851,18 @@ html[data-theme="opera"] #panel-departures .dp-room { background: linear-gradien
 #panel-departures .dp-extg-acts { display: inline-flex; gap: 4px; margin-left: auto; align-items: center; }
 #panel-departures .dp-extg-go { height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--dp-ic) 45%, transparent); background: transparent; color: var(--dp-ic); font: 700 11.5px var(--font); cursor: pointer; }
 #panel-departures .dp-extg-go.ready { background: var(--dp-ic); color: #fff; border-color: transparent; box-shadow: 0 4px 12px -6px var(--dp-ic); }
+
+/* Guest left, waiting for finance: a small amber button beside Check out, and a banner while it waits */
+#panel-departures .dp-acts.g5 .dca-co:has(+ .dca-fin) { grid-column: 1 / 4; }
+#panel-departures .dp-acts.g5 .dca-fin { grid-column: 4 / -1; }
+#panel-departures .dp-acts.g2:has(.dca-fin) { grid-template-columns: 1.4fr 1fr 1fr; }
+#panel-departures .dp-card .dp-acts .dca.dca-fin { --b: var(--amber); flex-direction: row !important; gap: 6px; min-height: 44px; margin-bottom: 2px; font: 700 12px var(--font) !important;
+  color: var(--b) !important; background: color-mix(in srgb, var(--b) 9%, var(--card)) !important; border: 1px solid color-mix(in srgb, var(--b) 40%, transparent) !important; border-radius: 12px; }
+#panel-departures .dp-card .dp-acts .dca.dca-fin:hover { background: color-mix(in srgb, var(--b) 16%, var(--card)) !important; }
+#panel-departures .dp-card .dca.dca-fin .dca-i { font-size: 14px; }
+#panel-departures .dp-card .dca.dca-fin .dca-t { white-space: nowrap; }
+#panel-departures .dp-fin { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+#panel-departures .dp-fin > span:first-child { font-weight: 700; }
+#panel-departures .dp-fin-ago { font-weight: 600; opacity: .75; margin-left: 4px; }
+#depBoard:not(.dp-compact) .dp-size-list .dp-intent-banner.dp-fin { order: 10; flex: 1 1 100%; max-width: none; height: auto; min-height: 36px; padding: 5px 6px 5px 10px; white-space: normal; }
+#depBoard:not(.dp-compact) .dp-size-list .dca.dca-fin { min-height: 40px; margin: 0; padding: 0 10px; }

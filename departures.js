@@ -557,6 +557,7 @@ function effectiveStatus(r) {
 // · Manually-set LCO with agreed lateTime → overdue when past that time
 // · Manually-set LCO with no lateTime     → not considered overdue yet
 function isLcoOverdue(r) {
+  if (r && r.intent === 'finance_hold') return false;          // the guest has already left
   if (effectiveStatus(r) !== 'late') return false;
   if (r.status === 'due') return true;                       // auto-promoted
   if (r.status === 'late' && r.lateTime) {
@@ -770,6 +771,7 @@ function _depRestoreOpenState({ expanded, noteOpen, noteValues }) {
 function _depIsOverdue(r) {
   const es = effectiveStatus(r);
   if (es === 'out' || es === 'extended') return false;
+  if (r.intent === 'finance_hold') return false;                  // left already; only finance is pending
   if (es === 'late') return isLcoOverdue(r);
   if (r.lcoAcknowledged) return false;
   const dd = r.departure ? parseOperaDate(r.departure) : null;   // a list for a later day is not late yet
@@ -1214,6 +1216,7 @@ function depJumpTo(roomStr, filterKey, targetRoom) {
   });
 }
 const INTENT_CONFIG = {
+  finance_hold:  { icon:'🧾', label:'Left · waiting', color:'var(--amber)', autoNote:'' },
   extending:     { icon:'⏳', label:'Extending',          color:'var(--teal)',   autoNote:'Extending: waiting for the booking, signature, TD and payment.' },
   maybe_extend:  { icon:'🤔', label:'May Extend Stay',   color:'var(--violet)', autoNote:'Guest may extend — confirm with Opera before releasing room.' },
   coming_back:   { icon:'↩️', label:'Coming Back Later', color:'var(--amber)',  autoNote:'Guest coming back later today — hold key and luggage if needed.' },
@@ -1300,7 +1303,16 @@ function depCardHTML(r) {
   const intentLabel = (r.intent === 'checkout_soon' && r.intentMinutes)
     ? `Checking Out in ${r.intentMinutes} min`
     : ic?.label;
-  const intentBanner = r.intent === 'extending' && r.status !== 'out' && r.status !== 'extended'
+  const finBanner = r.intent === 'finance_hold' && r.status !== 'out' && r.status !== 'extended'
+    ? `<div class="dc-intent-banner dp-intent-banner dp-fin" style="--dp-ic:var(--amber);">
+         <span>🧾 Guest left${r.finAt ? ' at ' + escapeHtml(r.finAt) : ''} · waiting for ${escapeHtml(r.finWho || 'Finance')}${r.finAt ? ` <small class="dp-fin-ago">${escapeHtml(_depFinAgo(r))}</small>` : ''}</span>
+         <span class="dp-extg-acts">
+           <button type="button" class="dp-extg-go ready" onclick="depFinanceDone(${i});event.stopPropagation()" title="${escapeHtml(r.finWho || 'Finance')} fixed the room: check it out">✓ Fixed · check out</button>
+           <button class="dc-intent-clear" onclick="depSetIntent(${i},'');event.stopPropagation()" title="Guest has not left after all">✕</button>
+         </span>
+       </div>`
+    : '';
+  const intentBanner = finBanner ? finBanner : r.intent === 'extending' && r.status !== 'out' && r.status !== 'extended'
     ? `<div class="dc-intent-banner dp-intent-banner dp-extg" style="--dp-ic:${ic.color};">
          <span class="dp-extg-t">⏳ Extending · waiting for</span>
          <span class="dp-extg-ck">
@@ -1424,10 +1436,11 @@ function depCardHTML(r) {
   } else if (es === 'dnd') {
     actHTML = `<div class="dc-actions dp-acts g2">${B('dca-co', `depAction(${i},'out')`, '✓', 'Check out')}${B('dca-undo', `depAction(${i},'due')`, '↺', 'Undo DND')}</div>`;
   } else if (es === 'late') {
-    actHTML = `<div class="dc-actions dp-acts g2">${B('dca-co', `depAction(${i},'out')`, '✓', 'Check out')}${B('dca-undo', `depAction(${i},'due')`, '↺', 'Undo LCO')}</div>`;
+    actHTML = `<div class="dc-actions dp-acts g2">${B('dca-co', `depAction(${i},'out')`, '✓', 'Check out')}${r.intent === 'finance_hold' ? '' : B('dca-fin', `depFinanceHold(${i},event)`, '🧾', 'Left · waiting', 'Guest has physically left; Finance or Reservations still has to fix the room')}${B('dca-undo', `depAction(${i},'due')`, '↺', 'Undo LCO')}</div>`;
   } else {
     actHTML = `<div class="dc-actions dp-acts g5">
-      ${B('dca-co', `depCheckOut(${i})`, '✓', 'Check out')}
+      ${r.intent === 'finance_hold' ? '' : B('dca-co', `depCheckOut(${i})`, '✓', 'Check out')}
+      ${r.intent === 'finance_hold' ? '' : B('dca-fin', `depFinanceHold(${i},event)`, '🧾', 'Left · waiting', 'Guest has physically left; Finance or Reservations still has to fix the room')}
       ${B('dca-ext', `depAskExtend(${i})`, '↪', 'Extend')}
       ${B('dca-extg' + (r.intent === 'extending' ? ' on' : ''), `depSetIntent(${i},'extending')`, '⏳', 'Extending', 'Guest is extending: tick the booking, signature, TD and payment as they are done')}
       ${B('dca-late', `depAskLCO(${i})`, '🕐', 'Late CO')}
@@ -1577,6 +1590,47 @@ function depStampNote(i) {
 // ── Guest intent ───────────────────────────────────────────
 // Toggle: tap same intent again to clear it.
 // Auto-stamps the note with context when set.
+// Guest has physically left but finance still has to fix the room before the Opera check-out
+function _depFinAgo(r) {
+  if (!r.finAt) return '';
+  const [h, m] = String(r.finAt).split(':').map(Number), d = new Date(); d.setHours(h, m, 0, 0);
+  const min = Math.max(0, Math.round((Date.now() - d) / 60000));
+  return min < 1 ? 'just now' : min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${min % 60} min`;
+}
+const DEP_FIN_WHO = ['Finance', 'Reservations'];
+function depFinanceHold(i, ev, who) {
+  const r = depRooms[i]; if (!r) return;
+  if (r.intent === 'finance_hold') { depSetIntent(i, ''); return; }
+  if (!who) {   // ask who has to fix it
+    if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+    document.getElementById('depBalPop')?.remove();
+    const pop = document.createElement('div'); pop.id = 'depBalPop'; pop.className = 'dp-balpop'; pop.setAttribute('role', 'menu');
+    pop.innerHTML = `<div class="dp-balpop-h">Room ${escapeHtml(r.roomStr)}: guest left. Waiting for…</div>` +
+      DEP_FIN_WHO.map(w => `<button type="button" data-w="${w}">${w === 'Finance' ? '🧾' : '📅'} ${w}</button>`).join('') +
+      `<button type="button" class="dp-balpop-x" data-x="1">Cancel</button>`;
+    document.body.appendChild(pop);
+    pop.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; pop.remove(); if (b.dataset.w) depFinanceHold(i, null, b.dataset.w); });
+    const at = (ev && ev.currentTarget && ev.currentTarget.getBoundingClientRect) ? ev.currentTarget.getBoundingClientRect() : { left: innerWidth / 2 - 140, bottom: innerHeight / 2 };
+    pop.style.left = Math.max(8, Math.min(innerWidth - 288, at.left)) + 'px';
+    pop.style.top = Math.min(innerHeight - pop.offsetHeight - 8, at.bottom + 6) + 'px';
+    setTimeout(() => document.addEventListener('pointerdown', function off(e) { if (!pop.contains(e.target)) { pop.remove(); document.removeEventListener('pointerdown', off, true); } }, true), 0);
+    return;
+  }
+  r.finAt = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  r.finWho = who;
+  r.note = (r.note ? r.note + '\n' : '') + `[${r.finAt}] Guest has physically left. Waiting for ${who} to fix the room before checking out in Opera.`;
+  r.intent = 'finance_hold'; r.intentMinutes = null;
+  depRender(); saveDeps();
+  if (typeof showToast === 'function') showToast(`Room ${r.roomStr}: guest left, waiting for ${who}`, 'ok');
+}
+function depFinanceDone(i) {
+  const r = depRooms[i]; if (!r) return;
+  const t = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  r.note = (r.note ? r.note + '\n' : '') + `[${t}] ${r.finWho || 'Finance'} fixed the room${r.finAt ? ' (guest left at ' + r.finAt + ')' : ''}.`;
+  r.intent = '';
+  depAction(i, 'out');
+}
+
 // Extending: tick the paperwork (signature, TD) as it comes in
 function depExtPaper(i, key) {
   const r = depRooms[i]; if (!r) return;
@@ -2429,6 +2483,7 @@ function depCopyHKUpdate() {
     if (r.status === 'extended' && r.extensionNights) label += ` +${r.extensionNights}n`;
     if (es === 'late' && r.lateTime)                  label += ` ${r.lateTime}`;
     if ((r.intent === 'maybe_extend' || r.intent === 'extending') && es !== 'extended') label = `⏳ Extending`;
+    if (r.intent === 'finance_hold' && es !== 'out' && es !== 'extended') label = `🧾 LEFT (${String(r.finWho || 'finance').toLowerCase()})`;
     if (depOwes(r) && es !== 'extended')              label += ` 💳`;
     return `${r.roomStr.padEnd(5)} ${label}`;
   });

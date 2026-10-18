@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 331, items: [
+    '🧾 New "Left · waiting" button next to Check out: the guest has physically left but Finance or Reservations still has to fix the room (you pick which). The card shows "Guest left at 11:18 · waiting for Reservations" with how long it has waited, it stops counting as overdue, the housekeeping list shows it as LEFT, and Ops Brain reminds you. When it is fixed, press ✓ Fixed · check out.',
+  ] },
   { v: 330, items: [
     '⏳ New "Extending" button on Departures cards: the guest is staying on but the paperwork isn\'t done yet. Tick ✓ Booking (made by the guest or by us), ✓ Signature, ✓ TD and ✓ Payment (full payment taken) as they come in, then press ↪ Mark extended. Ops Brain reminds you about extending rooms still missing a booking, signature, TD or payment, and they show under the "May extend" filter.',
   ] },
