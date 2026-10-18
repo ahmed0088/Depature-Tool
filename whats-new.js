@@ -298,7 +298,7 @@ const WHATS_NEW = [
     '🩹 Fix one person without rebuilding: next to a problem in the draft (a day off before the cut-off, short rest, too many days in a row…) tap 🩹 Fix. Only that person\'s hotel is re-planned, changing as little as possible; every other hotel and the bell teams stay exactly as you left them, hand changes included. It is kept only if the week gets better, it lists every cell it changed, and ↶ Undo puts it back.',
   ] },
   { v: 249, items: [
-    '✅ "Everyone took their days off, except…": tell Ops Brain "from 1 to 15 all took 2 days else Sandrine, Ahmed and Turab", or in ⚖️ Rules → ✂️ HR cut-off tap "Everyone took theirs, except…" and pick them. Only those people get a day off before the cut-off; everyone else (bell boys too) gets theirs after it. Then build the week again.',
+    '✅ "Everyone took their days off, except…": tell Ops Brain "from 1 to 15 all took 2 days else Sam, Alex and Lina", or in ⚖️ Rules → ✂️ HR cut-off tap "Everyone took theirs, except…" and pick them. Only those people get a day off before the cut-off; everyone else (bell boys too) gets theirs after it. Then build the week again.',
   ] },
   { v: 248, items: [
     '🔄 A draft now tells you when it is out of date: if the rules (day-off freeze, cut-off…) or someone\'s card changed after it was built, or it was built by an older version of the app, a yellow note says so with a "Build it again" button. Old drafts keep their old days off until rebuilt, which is why Judith and Uzoma still showed Monday off.',
@@ -323,7 +323,7 @@ const WHATS_NEW = [
     '📌 Fixed day off: on a person\'s card in 🧑‍💼 Team (or "Saad always off on Thursday"). That weekday is their day off every week; leave and requests still come first.',
   ] },
   { v: 242, items: [
-    '🚫 Day-off freeze: pick a from-date, a to-date and who may still be off (⚖️ Rules → 🚫 Day-off freeze, or tell Ops Brain "only Sandrine, Ahmed and Turab can be off until 15"). Everyone else works through and takes their day off after it ends; managers keep their days off as usual. If someone misses a whole week\'s day off, they get it back the week the freeze ends. The draft notes say so, and a day off inside a freeze shows as a problem.',
+    '🚫 Day-off freeze: pick a from-date, a to-date and who may still be off (⚖️ Rules → 🚫 Day-off freeze, or tell Ops Brain "only Sam, Alex and Lina can be off until 15"). Everyone else works through and takes their day off after it ends; managers keep their days off as usual. If someone misses a whole week\'s day off, they get it back the week the freeze ends. The draft notes say so, and a day off inside a freeze shows as a problem.',
   ] },
   { v: 241, items: [
     '🌐 Languages: ⚙️ Settings → Appearance → Language. English, العربية, Français, हिन्दी, Русский, 中文 and Filipino. The menus, page names, Home tiles, main buttons, settings and sign-in screen change; guest names, rooms and everything typed stay exactly as they are. Works offline, nothing is sent anywhere. Words not translated yet stay in English.',
