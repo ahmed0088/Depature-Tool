@@ -229,6 +229,16 @@ console.log('\nRoster builder');
       const ok = offN.length > 0 && offN.every(dt => rc.cells['TM'][dt] === Nx) && offN.every(dt => { const d = dates.indexOf(dt), nx = dates[d + 1]; return !nx || offN.includes(nx) || sb.rbKind(rc.cells['TM'][nx]) === 'off'; });
       check('covers a night: the deputy takes the night even over a morning request, then a day off', ok, true);
     }
+    { // more people than needed: spread them over the shifts, not all on the one they like (no 3 on a shift that needs 1)
+      const Mx = '07:00 - 15:00', Dx = '12:00 - 21:00', Ex = '15:00 - 00:00', one7 = [1, 1, 1, 1, 1, 1, 1];
+      const ks = ['P1', 'P2', 'P3', 'P4', 'P5'];
+      const Id = { week: W, groups: { 'Ibis DD': { shifts: [Mx, Dx, Ex], need: { [Mx]: one7, [Dx]: one7, [Ex]: one7 } } },
+        people: ks.map((k, i) => person(k, { likes: i < 3 ? [Dx] : [], usual: i < 3 ? Dx : '' })),
+        pre: {}, rules: { minRest: 11, maxRun: 6, givePh: false, lend: true }, seed: 8 };
+      const rd = sb.rbSolve(Id);
+      const stacked = dates.filter(dt => [Mx, Dx, Ex].some(s => ks.filter(k => rd.cells[k][dt] === s).length >= 3)).length;
+      check('extra people are spread over the shifts, never piled on one (even if they all like it)', stacked, 0);
+    }
     check('agents are never moved to another hotel (only Duty Managers and Supervisors)', [movedA, sb.rbMayWork(Ia, 'Adagio GD', Ia.people[1], N), sb.rbMayWork(I2, 'Adagio GD', I2.people[1], N)].join(), '0,false,true');
   }
   check('moves: the hotels touched by moves are counted (from and to)', [...sb.rbMoveHotels(I2, { 'M ONE': { [dates[0]]: '12:00 - 21:00 - Adagio' }, 'A ONE': {}, 'M TWO': {}, 'M THREE': {} })].sort().join(), 'Adagio GD,Mercure DD');

@@ -183,6 +183,7 @@ function rbBackOk(prev, next, R) {
 }
 /** "Prefer not" a shift (on their card, or asked for that week): kept off it when there is another way. */
 function rbSoftNo(I, p, dt, s) { const c = rbNorm(s) || s; return ((p && p.soft) || []).includes(c) || ((((I.soft || {})[p && p.key] || {})[dt]) || []).includes(c); }
+const RB_DOUBLE_W = 45;   // more people on a shift than it needs: spread them over the other shifts as much as we can (above a liked shift)
 const RB_SOFT_W = 80;   // above steady-hours costs, far below an empty shift: used when it's the only way
 const RB_EV_W = 500;    // 📅 a shift that misses their meeting or training: well above wishes, below an empty shift
 function rbEvNear(I, p, dt, s) { const L = (((I.evNear || {})[p && p.key] || {})[dt]); return !!L && L.includes(rbNorm(s) || s); }
@@ -760,7 +761,7 @@ function rbScore(I, g, cells, dates, R) {
     // else is on the desk with them for a few hours (a break): they can handle that
     if (h < n && G.post) sc += 15 * (n - h);   // 🛎 a bell boy off: fine, the team works without him
     else if (h < n) sc += R.allowOne === false ? 1000 * (n - h) : (h === 0 ? (!G.post && rbHoursCovered(grid, d, s) ? 450 : 1000) : 0) + (h && !G.post && rbRelieved(grid, d, s, R) ? 25 : 300 * rbW(R, 'alone')) * (n - Math.max(h, 1));
-    else sc += 0.5 * (h - n);
+    else { const x = h - n; sc += 0.5 * x + (x > 0 && !G.post ? RB_DOUBLE_W * x * x : 0); }   // two on a shift that needs one: only when there is no other shift for them
   });
   if (rbDeskOn(R)) sc += RB_DESK_W * rbW(R, 'desk') * rbDeskShort(grid, R).gap;   // two on the desk at once, when it can be done
   rbMineBroken(I, cells, dates, R, g).forEach(b => { sc += rbMineW(b.r); });   // your own rules

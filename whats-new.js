@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 336, items: [
+    '👥 Roster: the builder tries much harder not to put two people on the same shift when that shift needs one (like two on 12:00 the same day). Extra people go on another shift where it fits; two together only when there is no other way.',
+  ] },
   { v: 335, items: [
     '🏨 Roster: the builder no longer moves agents to another hotel. Only Duty Managers and Supervisors are ever moved, and only when nobody at the hotel can do it ("Lend to another hotel…" only shows for them too).',
     '🔁 New "Covers for" on each team card (same hotel only): on the days that colleague is off or away, this person takes their shift, even over their own shift request; after covering a night they get the next day off, then back to their usual shift. Or type it in Ask the roster, e.g. "Sam will cover Alex when he is off" ("Sam stops covering Alex" to undo).',
