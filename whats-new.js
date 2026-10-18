@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 324, items: [
+    '💳 Tapping "rooms still owe a balance" now opens Departures showing only those rooms. "Late check-outs past their time" opens just the overdue rooms.',
+  ] },
   { v: 323, items: [
     '🛠 WhatsApp window: you can now scroll down to the paste box and the help. The title and ✕ stay at the top.',
   ] },

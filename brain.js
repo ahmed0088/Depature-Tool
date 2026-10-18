@@ -68,6 +68,17 @@ function brHabits() {
   return { atHour, next: nx, cur, total: u.total };
 }
 
+/** Open a page; 'departures:balance' also shows only those rooms, so a tip lands on the rooms it is about. */
+function brGo(go) {
+  const [page, filter] = String(go || '').split(':');
+  if (typeof showPanel === 'function') showPanel(page);
+  if (page === 'departures' && filter && typeof depFilter === 'function') setTimeout(() => {
+    try { depFilter(filter); } catch (_) {}
+    const at = document.getElementById('depBoard');
+    if (at && at.offsetParent) at.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, 60);
+}
+
 // ── 2. Thinking with you: suggestions ─────────────────────
 function brSuggestions() {
   const out = [];
@@ -83,9 +94,9 @@ function brSuggestions() {
   safe(() => {
     if (typeof depRooms === 'undefined' || !depRooms.length) return;
     const late = depRooms.filter(r => typeof isLcoOverdue === 'function' && isLcoOverdue(r)).length;
-    if (late) add('🚪', `${late} late check-out${late > 1 ? 's' : ''} past their time`, 'departures', 'Call the room or extend in Opera', 'bad');
+    if (late) add('🚪', `${late} late check-out${late > 1 ? 's' : ''} past their time`, 'departures:overdue', 'Call the room or extend in Opera', 'bad');
     const owe = depRooms.filter(r => r.balance > 0 && r.status !== 'out' && r.status !== 'extended').length;
-    if (owe) add('💳', `${owe} departing room${owe > 1 ? 's' : ''} still owe a balance`, 'departures', 'Settle before check-out');
+    if (owe) add('💳', `${owe} departing room${owe > 1 ? 's' : ''} still owe a balance`, 'departures:balance', 'Settle before check-out');
   });
   safe(() => {
     if (typeof arrGuests === 'undefined' || !arrGuests.length) return;
@@ -122,7 +133,7 @@ function brSuggestions() {
 
   // habits
   const hb = brHabits();
-  const have = new Set(out.map(o => o.go));
+  const have = new Set(out.map(o => String(o.go).split(':')[0]));
   hb.atHour.slice(0, 2).forEach(([p, n]) => {
     if (p !== hb.cur && !have.has(p)) { add('🕘', `Around this time you usually open ${_brPanelName(p)}`, p, `You did it ${n} times at this hour`, 'idle'); have.add(p); }
   });
@@ -454,7 +465,7 @@ function brRenderThink() {
   const box = document.getElementById('brThink');
   if (!box) return;
   const s = brSuggestions();
-  box.innerHTML = s.length ? s.map(x => `<button class="br-sug ${x.tone}" onclick="${x.go.startsWith('tab:') ? `brTabShow('${x.go.slice(4)}')` : `brClose();showPanel('${x.go}')`}">
+  box.innerHTML = s.length ? s.map(x => `<button class="br-sug ${x.tone}" onclick="${x.go.startsWith('tab:') ? `brTabShow('${x.go.slice(4)}')` : `brClose();brGo('${x.go}')`}">
       <span class="br-sug-i">${x.icon}</span><span class="br-sug-t"><b>${escapeHtml(x.text)}</b><small>${escapeHtml(x.why || '')}</small></span><span class="br-sug-go">›</span></button>`).join('')
     : '<div class="br-empty">Nothing needs you right now. 👌 Load today\'s reports and I\'ll keep an eye on them.</div>';
 }
@@ -521,7 +532,7 @@ function brHomeStrip() {
   if (!box) return;
   if (typeof hoPref === 'function' && (!hoPref('brainOn') || !hoPref('brainHome'))) { box.innerHTML = ''; return; }
   const s = brSuggestions().slice(0, 3);
-  box.innerHTML = s.length ? `<div class="home-brain-h">🧠 Ops Brain suggests</div>` + s.map(x => `<button class="br-sug ${x.tone}" onclick="${x.go.startsWith('tab:') ? `brOpen('${x.go.slice(4)}')` : `showPanel('${x.go}')`}"><span class="br-sug-i">${x.icon}</span><span class="br-sug-t"><b>${escapeHtml(x.text)}</b><small>${escapeHtml(x.why || '')}</small></span><span class="br-sug-go">›</span></button>`).join('') : '';
+  box.innerHTML = s.length ? `<div class="home-brain-h">🧠 Ops Brain suggests</div>` + s.map(x => `<button class="br-sug ${x.tone}" onclick="${x.go.startsWith('tab:') ? `brOpen('${x.go.slice(4)}')` : `brGo('${x.go}')`}"><span class="br-sug-i">${x.icon}</span><span class="br-sug-t"><b>${escapeHtml(x.text)}</b><small>${escapeHtml(x.why || '')}</small></span><span class="br-sug-go">›</span></button>`).join('') : '';
 }
 
 document.addEventListener('DOMContentLoaded', () => {
