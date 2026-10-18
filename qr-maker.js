@@ -308,10 +308,33 @@ function drawPreview() {
 /* ───────────────────────── render ───────────────────────── */
 const CSS = `
 #panel-qr .qr-wrap{max-width:1040px;margin:0 auto}
-#panel-qr .qr-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,420px);grid-template-areas:"form prev" "recent prev";gap:16px;align-items:start}
+#panel-qr .qr-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,420px);grid-template-areas:"form prev" "saved prev" "recent prev";gap:16px;align-items:start}
 #panel-qr .qr-form{grid-area:form}
 #panel-qr .qr-prev{grid-area:prev}
 #panel-qr .qr-recent{grid-area:recent}
+#panel-qr .qr-saved{grid-area:saved}
+#panel-qr .qr-sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:10px}
+#panel-qr .qr-tile{position:relative;display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px 10px 10px;border-radius:14px;background:var(--card2);border:1px solid var(--border);cursor:pointer;text-align:center;font-family:var(--font);color:var(--text);transition:border-color .15s,transform .15s,box-shadow .15s;min-width:0}
+#panel-qr .qr-tile:hover{border-color:var(--accent-border);transform:translateY(-2px);box-shadow:0 8px 22px -12px rgba(0,0,0,.45)}
+#panel-qr .qr-tile:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#panel-qr .qr-tile.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+#panel-qr .qr-thumb{width:88px;height:88px;border-radius:10px;background:#fff;padding:4px;box-sizing:border-box;box-shadow:0 1px 0 rgba(0,0,0,.05),0 4px 14px -6px rgba(0,0,0,.35)}
+#panel-qr .qr-thumb img{width:100%;height:100%;display:block;image-rendering:pixelated}
+#panel-qr .qr-tname{font-size:.8rem;font-weight:700;line-height:1.25;max-width:100%;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere}
+#panel-qr .qr-tsub{font-family:var(--mono);font-size:.6rem;color:var(--text3);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#panel-qr .qr-tkind{position:absolute;top:8px;left:8px;font-size:.7rem;line-height:1}
+#panel-qr .qr-tdel{position:absolute;top:4px;right:4px;width:26px;height:26px;border-radius:8px;border:0;background:transparent;color:var(--text3);cursor:pointer;font-size:.75rem;opacity:0;transition:opacity .15s,background .15s}
+#panel-qr .qr-tile:hover .qr-tdel,#panel-qr .qr-tdel:focus-visible{opacity:1}
+@media (hover:none){#panel-qr .qr-tdel{opacity:.8}}
+#panel-qr .qr-tdel:hover{background:var(--card);color:var(--red,#e5484d)}
+#panel-qr .qr-snone{display:flex;align-items:center;gap:12px;padding:14px;border:1.5px dashed var(--border);border-radius:12px;font-size:.75rem;color:var(--text3);line-height:1.45}
+#panel-qr .qr-snone b{display:block;color:var(--text2);font-size:.8rem;margin-bottom:2px}
+#panel-qr .qr-snone .qr-ghost{font-size:1.6rem;opacity:.7}
+#panel-qr .qr-count{font-family:var(--mono);font-size:.62rem;color:var(--accent);background:var(--accent-bg);border:1px solid var(--accent-border);border-radius:999px;padding:1px 7px;margin-left:6px;font-weight:600}
+#panel-qr .qr-savebar{width:100%;display:flex;gap:8px;align-items:center;padding:10px;border-radius:12px;background:var(--card2);border:1px solid var(--accent-border);box-sizing:border-box;animation:qrPop .18s ease}
+#panel-qr .qr-savebar[hidden]{display:none}
+#panel-qr .qr-savebar .qr-in{flex:1;min-width:0;height:40px}
+#panel-qr .qr-savebar .btn{flex:0 0 auto}
 #panel-qr .qr-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r2,14px);padding:16px;min-width:0}
 #panel-qr .qr-tabs{display:inline-flex;gap:4px;padding:3px;background:var(--card2);border:1px solid var(--border);border-radius:999px;margin-bottom:14px}
 #panel-qr .qr-tab{font-family:var(--font);font-size:.8rem;font-weight:600;padding:6px 14px;border-radius:999px;border:0;background:transparent;color:var(--text2);cursor:pointer}
@@ -343,7 +366,8 @@ const CSS = `
 #panel-qr .qr-empty b{color:var(--text2);font-size:.9rem}
 #panel-qr .qr-empty span{font-size:.75rem;line-height:1.4}
 #panel-qr .qr-empty .qr-ghost{font-size:2.4rem;opacity:.6;line-height:1}
-#panel-qr .qr-acts{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;width:100%}
+#panel-qr .qr-acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:340px}
+#panel-qr .qr-acts .btn{justify-content:center}
 #panel-qr .qr-acts .btn{flex:0 1 auto}
 #panel-qr .qr-acts .btn[disabled]{opacity:.45;cursor:not-allowed}
 #panel-qr .qr-sizes{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;font-size:.72rem;color:var(--text3)}
@@ -362,7 +386,7 @@ const CSS = `
 @keyframes qrPop{from{opacity:.4;transform:scale(.985)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){#panel-qr .qr-pop{animation:none}#panel-qr .qr-in{transition:none}}
 @media (max-width:820px){
-  #panel-qr .qr-grid{grid-template-columns:minmax(0,1fr);grid-template-areas:"form" "prev" "recent"}
+  #panel-qr .qr-grid{grid-template-columns:minmax(0,1fr);grid-template-areas:"form" "prev" "saved" "recent"}
   #panel-qr .qr-prev{position:static}
 }
 @media (max-width:480px){
@@ -424,7 +448,17 @@ const PANEL_HTML = `<div class="qr-wrap" data-no-enter>
         <button type="button" class="btn gold" id="qr-dl" disabled>⬇ Download PNG</button>
         <button type="button" class="btn" id="qr-print-btn" disabled>🖨 Print</button>
         <button type="button" class="btn" id="qr-copy" disabled>📋 Copy image</button>
+        <button type="button" class="btn" id="qr-save" disabled>⭐ Save</button>
       </div>
+      <div class="qr-savebar" id="qr-savebar" hidden>
+        <input id="qr-sname" class="qr-in" type="text" maxlength="60" placeholder="Name, e.g. Breakfast menu" autocomplete="off" enterkeyhint="done" aria-label="Name for this QR code">
+        <button type="button" class="btn gold" id="qr-sok">Save</button>
+        <button type="button" class="btn" id="qr-scancel" aria-label="Cancel">✕</button>
+      </div>
+    </div>
+    <div class="qr-card qr-recent qr-saved">
+      <h3><span>⭐ Saved codes<span class="qr-count" id="qr-scount" hidden></span></span><small>shared with your team</small></h3>
+      <div class="qr-rlist" id="qr-saved"></div>
     </div>
     <div class="qr-card qr-recent">
       <h3>Recent <small>on this device</small></h3>
@@ -436,7 +470,7 @@ const PANEL_HTML = `<div class="qr-wrap" data-no-enter>
 function renderStage(animate) {
   const st = $('qr-stage'); if (!st) return;
   const has = !!state.qr;
-  ['qr-dl', 'qr-print-btn', 'qr-copy'].forEach(id => { const b = $(id); if (b) b.disabled = !has; });
+  ['qr-dl', 'qr-print-btn', 'qr-copy', 'qr-save'].forEach(id => { const b = $(id); if (b) b.disabled = !has; });
   if (!has) {
     const wifi = state.mode === 'wifi';
     st.innerHTML = `<div class="qr-empty" style="width:${SIZES[state.size].px}px"><div class="qr-ghost">${wifi ? '📶' : '🔳'}</div><b>${state.err ? 'Can\'t make this code' : 'Your QR code shows here'}</b><span>${esc(state.err || (wifi ? 'Type the network name and password. Guests scan it to join the Wi-Fi.' : 'Paste a link or type any text. The code appears here as you type.'))}</span></div>`;
@@ -472,7 +506,7 @@ function update(animate) {
     const q = QR.encodeText(p, 1);
     if (q) state.qr = q; else state.err = 'This is too long for one QR code (max about 2,300 characters). Try a shorter link.';
   }
-  renderMeta(); renderStage(animate);
+  renderMeta(); renderStage(animate); renderSaved();
   clearTimeout(tSave);
   if (state.qr && p.trim().length >= 3) tSave = setTimeout(() => addRecent(), 2500);
 }
@@ -509,6 +543,80 @@ function useRecent(i) {
   syncInputs(); update(true);
 }
 function removeRecent(i) { const list = lsGet(); list.splice(i, 1); lsSet(list); renderRecent(); }
+
+/* ───────────────────────── saved (the team's, in the database) ───────────────────────── */
+const SAVED = 'qrSaved';
+let saved = {};
+const savedList = () => Object.entries(saved || {}).filter(([, x]) => x && x.t).sort((a, b) => String(a[1].name || '').localeCompare(String(b[1].name || '')));
+function listenSaved() {
+  if (typeof fbListen !== 'function') return;
+  fbListen(SAVED, v => { saved = v && typeof v === 'object' ? v : {}; renderSaved(); });
+}
+const _thumbs = {};
+function thumb(t) {
+  if (_thumbs[t]) return _thumbs[t];
+  const q = QR.encodeText(t, 1); if (!q) return '';
+  const n = q.size + QUIET * 2, sc = Math.max(2, Math.ceil(176 / n));
+  const cv = document.createElement('canvas'); cv.width = cv.height = n * sc;
+  const ctx = cv.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height); ctx.fillStyle = '#000';
+  drawQR(ctx, q, 0, 0, sc);
+  return (_thumbs[t] = cv.toDataURL('image/png'));
+}
+function renderSaved() {
+  const box = $('qr-saved'); if (!box) return;
+  const list = savedList(), cnt = $('qr-scount');
+  if (cnt) { cnt.hidden = !list.length; cnt.textContent = list.length; }
+  if (!list.length) { box.innerHTML = '<div class="qr-snone"><div class="qr-ghost">⭐</div><div><b>No saved codes yet</b>Make a code and press ⭐ Save. It stays here for the whole team on every device: menu, Wi-Fi, review page…</div></div>'; return; }
+  const cur = payload();
+  box.innerHTML = '<div class="qr-sgrid">' + list.map(([id, x]) => {
+    const w = wifiParse(x.t);
+    const sub = w ? (w.name || 'Wi-Fi') : x.t.replace(/^https?:\/\/(www\.)?/i, '');
+    return `<div class="qr-tile${x.t === cur ? ' on' : ''}" role="button" tabindex="0" data-si="${esc(id)}" title="Open “${esc(x.name || '')}”${x.by ? ' · saved by ' + esc(x.by) : ''}">
+      <span class="qr-tkind" aria-hidden="true">${w ? '📶' : '🔗'}</span>
+      <button type="button" class="qr-tdel" data-sx="${esc(id)}" aria-label="Delete saved code" title="Delete">✕</button>
+      <div class="qr-thumb"><img alt="" src="${thumb(x.t)}"></div>
+      <div class="qr-tname">${esc(x.name || sub)}</div>
+      <div class="qr-tsub">${esc(sub)}</div>
+    </div>`;
+  }).join('') + '</div>';
+}
+function saveCode() {
+  const t = payload(); if (!t || !state.qr) return;
+  const w = wifiParse(t), same = savedList().find(([, x]) => x.t === t);
+  const guess = (same && same[1].name) || state.caption.trim() || (w ? 'Wi-Fi: ' + (w.name || '') : (t.replace(/^https?:\/\/(www\.)?/i, '').split(/[/?#]/)[0] || t).slice(0, 40));
+  const bar = $('qr-savebar'), inp = $('qr-sname');
+  if (!bar || !inp) return;
+  bar.hidden = false; inp.value = guess; inp.focus(); inp.select();
+}
+function closeSaveBar() { const bar = $('qr-savebar'); if (bar) bar.hidden = true; }
+function confirmSave() {
+  const t = payload(); const inp = $('qr-sname');
+  const name = (inp && inp.value || '').trim();
+  if (!t || !state.qr) return closeSaveBar();
+  if (!name) { if (inp) inp.focus(); return; }
+  const same = savedList().find(([, x]) => x.t === t);
+  const id = same ? same[0] : 'q' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const by = (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '';
+  const rec = { t, c: state.caption.trim(), name: name.slice(0, 60), by, at: new Date().toISOString() };
+  saved = Object.assign({}, saved, { [id]: rec }); renderSaved(); closeSaveBar();
+  if (typeof fbSet === 'function') fbSet(SAVED + '/' + id, rec);
+  toast((same ? 'Updated ' : 'Saved ') + '“' + rec.name + '” for the team', 'ok');
+}
+function useSaved(id) {
+  const x = saved[id]; if (!x) return;
+  const w = wifiParse(x.t);
+  if (w) { state.wifi = { name: w.name, pass: w.pass, type: w.type }; setMode('wifi', true); }
+  else { state.text = x.t; setMode('link', true); }
+  state.caption = x.c || ''; state.captionTouched = !!x.c;
+  syncInputs(); update(true);
+  const st = $('qr-stage'); if (st && st.scrollIntoView) st.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+function deleteSaved(id) {
+  const x = saved[id]; if (!x) return;
+  if (!window.confirm('Delete the saved code “' + (x.name || x.t) + '” for everyone?')) return;
+  saved = Object.assign({}, saved); delete saved[id]; renderSaved();
+  if (typeof fbSet === 'function') fbSet(SAVED + '/' + id, null);
+}
 
 /* ───────────────────────── actions ───────────────────────── */
 function download() {
@@ -574,8 +682,11 @@ function onInput(e) {
   else if (t.id === 'qr-caption') { state.caption = t.value; state.captionTouched = t.value.length > 0; const c = $('qr-cap'); if (c) c.textContent = captionNow(); }
 }
 function onKey(e) {
-  if (e.key !== 'Enter' || e.isComposing) return;
   const t = e.target;
+  if (t.id === 'qr-sname' && e.key === 'Escape') { e.preventDefault(); return closeSaveBar(); }
+  if (e.key !== 'Enter' || e.isComposing) return;
+  if (t.id === 'qr-sname') { e.preventDefault(); e.stopPropagation(); return confirmSave(); }
+  if (t.classList && t.classList.contains('qr-tile')) { e.preventDefault(); return useSaved(t.dataset.si); }
   if (t.id === 'qr-text' && e.shiftKey) return;                    // Shift+Enter = new line in text
   if (/^qr-(text|ssid|pass|caption)$/.test(t.id || '')) {
     e.preventDefault(); e.stopPropagation();
@@ -584,6 +695,8 @@ function onKey(e) {
   }
 }
 function onClick(e) {
+  const del = e.target.closest('[data-sx]'); if (del) return deleteSaved(del.dataset.sx);
+  const tile = e.target.closest('.qr-tile[data-si]'); if (tile) return useSaved(tile.dataset.si);
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.mode) return setMode(b.dataset.mode);
   if (b.dataset.wt) { state.wifi.type = b.dataset.wt; syncInputs(); return update(true); }
@@ -594,6 +707,9 @@ function onClick(e) {
     case 'qr-dl': return download();
     case 'qr-print-btn': return print();
     case 'qr-copy': return copyImage();
+    case 'qr-save': return saveCode();
+    case 'qr-sok': return confirmSave();
+    case 'qr-scancel': return closeSaveBar();
     case 'qr-eye': { const p = $('qr-pass'); if (p) { const show = p.type === 'password'; p.type = show ? 'text' : 'password'; b.textContent = show ? 'Hide' : 'Show'; } return; }
     case 'qr-addhttps': { state.text = 'https://' + state.text.trim(); syncInputs(); update(true); const ta = $('qr-text'); if (ta) ta.focus(); return; }
   }
@@ -634,7 +750,7 @@ function mount() {
   if (typeof hoApplyIcons === 'function') hoApplyIcons();
 
   try { const s = localStorage.getItem('ho_qr_size'); if (SIZES[s]) state.size = s; } catch (_) {}
-  syncInputs(); renderRecent(); update(false);
+  syncInputs(); renderRecent(); renderSaved(); listenSaved(); update(false);
 }
 
 // for tests and other modules

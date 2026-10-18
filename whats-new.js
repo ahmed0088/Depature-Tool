@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 320, items: [
+    '⭐ QR Code Maker: press ⭐ Save to keep a code for the whole team (menu, Wi-Fi, review page…). Saved codes show as tiles with a small preview on every device: tap one to open it, ✕ to delete.',
+  ] },
   { v: 319, items: [
     '🔳 New QR Code Maker (menu → Tools): paste a link or text and the QR code appears straight away, ready to scan with a phone. Add a caption, pick a size, then Download, Print or Copy it. There is also a Wi-Fi mode so guests can scan to join the network. Your recent codes are kept on this device.',
   ] },
