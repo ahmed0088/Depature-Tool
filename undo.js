@@ -20,7 +20,7 @@
 // ═══════════════════════════════════════════════════════════
 (function () {
 'use strict';
-const MAX = 30, TTL = 2 * 3600e3, BAR_MS = 10000;
+const MAX = 30, TTL = 2 * 3600e3, BAR_MS = 6000;
 const W = typeof window !== 'undefined' ? window : globalThis;
 const doc = typeof document !== 'undefined' ? document : null;
 
@@ -120,10 +120,10 @@ function mount() {
   if (!doc || doc.getElementById('hoUndoCss')) return;
   const st = doc.createElement('style'); st.id = 'hoUndoCss';
   st.textContent = `
-#hoUndoBar{position:fixed;left:50%;bottom:calc(132px + env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(16px);z-index:9998;
-  display:flex;align-items:center;gap:8px;max-width:calc(100vw - 32px);box-sizing:border-box;padding:8px 8px 8px 14px;
-  background:var(--card);color:var(--text);border:1px solid var(--border2);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.35);
-  opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;font-size:.78rem}
+#hoUndoBar{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(16px);z-index:9998;
+  display:flex;align-items:center;gap:8px;max-width:min(460px,calc(100vw - 32px));box-sizing:border-box;padding:5px 5px 5px 12px;
+  background:var(--card);color:var(--text);border:1px solid var(--border2);border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.3);
+  opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;font-size:.74rem}
 #hoUndoBar.show{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0)}
 #hoUndoBar .hu-msg{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #hoUndoBar .hu-key{font-family:var(--mono);font-size:.62rem;color:var(--text3);white-space:nowrap}
@@ -132,7 +132,9 @@ function mount() {
 #hoUndoBar button.hu-main{background:var(--accent-bg,var(--card2));color:var(--accent,var(--gold));border-color:var(--accent-border,var(--border2))}
 #hoUndoBar button.hu-main:hover{background:var(--accent,var(--gold));color:var(--bg,#111)}
 #hoUndoBar button.hu-ico{padding:5px 8px;font-weight:400}
-@media (max-width:480px){#hoUndoBar .hu-key{display:none}#hoUndoBar{font-size:.74rem}}
+#hoUndoBar button{border-radius:999px}
+@media (max-width:768px){#hoUndoBar{bottom:calc(92px + env(safe-area-inset-bottom,0px))}}
+@media (max-width:480px){#hoUndoBar .hu-key{display:none}#hoUndoBar{font-size:.72rem}}
 #hoUndoList .modal{max-width:440px;width:calc(100vw - 32px);box-sizing:border-box}
 #hoUndoList .hu-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
 #hoUndoList .hu-head h3{margin:0;font-size:1rem}
@@ -154,11 +156,21 @@ function bar(html, ms) {
   if (!b) { b = doc.createElement('div'); b.id = 'hoUndoBar'; b.setAttribute('role', 'status'); b.setAttribute('aria-live', 'polite'); doc.body.appendChild(b); }
   b.innerHTML = html;
   doc.getElementById('undoToast')?.classList.remove('show');   // one bar at a time (its undo stays on Ctrl+Z)
-  b.classList.add('show');
+  b.classList.add('show'); barAt = Date.now();
   clearTimeout(barTimer); barTimer = setTimeout(() => b.classList.remove('show'), ms);
   return b;
 }
 function hideBar() { const b = doc && doc.getElementById('hoUndoBar'); if (b) b.classList.remove('show'); }
+// out of the way: it goes as soon as you click somewhere else, scroll or keep typing (Ctrl+Z still undoes)
+let barAt = 0;
+function hideIfAway(e) {
+  const b = doc && doc.getElementById('hoUndoBar');
+  if (!b || !b.classList.contains('show') || Date.now() - barAt < 700) return;
+  if (e && e.target && b.contains(e.target)) return;
+  if (e && e.type === 'keydown' && (e.ctrlKey || e.metaKey || e.key === 'Shift' || e.key === 'Control' || e.key === 'Meta')) return;
+  hideBar();
+}
+if (doc) { doc.addEventListener('pointerdown', hideIfAway, true); doc.addEventListener('keydown', hideIfAway, true); doc.addEventListener('wheel', hideIfAway, { capture: true, passive: true }); }
 
 function ui(kind, a, b) {
   if (!doc || !doc.body) return;

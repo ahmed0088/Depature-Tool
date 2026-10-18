@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 325, items: [
+    '✨ Departures cards have a fresh look: a room badge, a countdown ring to checkout (red when overdue), names in normal capitals, clearer buttons, and a ✓ DONE stamp on checked-out rooms. Works in every theme and on phones.',
+    '↩ The Undo bar is now a small pill at the very bottom. It disappears as soon as you click, scroll or type somewhere else, so it never covers your work. Ctrl+Z still undoes.',
+  ] },
   { v: 324, items: [
     '💳 Tapping "rooms still owe a balance" now opens Departures showing only those rooms. "Late check-outs past their time" opens just the overdue rooms.',
   ] },

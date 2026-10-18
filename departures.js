@@ -1167,6 +1167,14 @@ const INTENT_CONFIG = {
 // One room. Hook classes other code relies on are kept: .dep-card[data-room],
 // .dc-room, .dc-sbadge (patched in place), .dca/.dca-* (ripple, tests), .dc-body
 // (arrivals cross-check strips), .dc-note / .dc-note-body (notes), .dc-ext-*.
+// Display only: "SAM TEST" → "Sam Test" (names typed in mixed case are left alone)
+function _dpNice(s) {
+  s = String(s || '');
+  return s && s === s.toUpperCase() && /[A-Z]/.test(s)
+    ? s.toLowerCase().replace(/(^|[\s\-'’(\/])(\p{L})/gu, (m, a, b) => a + b.toUpperCase())
+    : s;
+}
+
 function depCardHTML(r) {
   const i   = depRooms.indexOf(r);
   const bal = r.balance;
@@ -1213,16 +1221,16 @@ function depCardHTML(r) {
 
   // Chips: VIP · returning · company · balance · note
   const chips = [];
-  if (r.isVip) chips.push(`<span class="dp-chip dp-chip-vip">★ VIP</span>`);
+  if (r.isVip) chips.push(`<span class="dp-chip dp-chip-vip">VIP</span>`);
   const gmProfile = typeof gmLookup === 'function' ? gmLookup(r.name) : null;
-  if (gmProfile) chips.push(`<span class="dp-chip dp-chip-ret" title="Stayed before${gmProfile.lastSeen ? ' · last seen ' + escapeHtml(gmProfile.lastSeen) : ''}${gmProfile.nat ? ' · ' + escapeHtml(gmProfile.nat) : ''}">🔁 Returning</span>`);
+  if (gmProfile) chips.push(`<span class="dp-chip dp-chip-ret" title="Stayed before${gmProfile.lastSeen ? ' · last seen ' + escapeHtml(gmProfile.lastSeen) : ''}${gmProfile.nat ? ' · ' + escapeHtml(gmProfile.nat) : ''}">Returning</span>`);
   if (r.manual) chips.push(`<span class="dp-chip">✍ Added by hand</span>`);
-  if (r.company) chips.push(`<span class="dp-chip dp-chip-co" title="${escapeHtml(r.company)}">🏢 ${escapeHtml(r.company.substring(0, 26))}${r.company.length > 26 ? '…' : ''}</span>`);
+  if (r.company) chips.push(`<span class="dp-chip dp-chip-co" title="${escapeHtml(r.company)}">${escapeHtml(r.company.substring(0, 26))}${r.company.length > 26 ? '…' : ''}</span>`);
   const balChip = bal > 0
     ? `<span class="dp-bal dp-bal-owe${active ? '' : ' dp-bal-muted'}" title="Balance owing">AED ${money(bal)} <small>owing</small></span>`
     : bal < 0
       ? `<span class="dp-bal dp-bal-cr" title="Credit">AED ${money(bal)} <small>credit</small></span>`
-      : `<span class="dp-bal dp-bal-ok" title="No balance">✓ Settled</span>`;
+      : `<span class="dp-bal dp-bal-ok" title="No balance">Settled</span>`;
 
   const timeTag = depTimeTag(r);
 
@@ -1359,11 +1367,31 @@ function depCardHTML(r) {
 
   const shortDate = s => { const d = parseOperaDate(s); return d && !isNaN(d) ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : (s || ''); };
   const srcClean  = r.source ? r.source.substring(0, 22) + (r.source.length > 22 ? '…' : '') : '';
-  const metaLine  = [
-    r.arrival || r.departure ? `${shortDate(r.arrival)} → ${shortDate(r.departure)}` : '',
-    r.nights ? r.nights + (r.nights === 1 ? ' night' : ' nights') : '',
-    srcClean,
-  ].filter(Boolean).join(' · ');
+  // meta line: each part gets a small icon (CSS mask, .dp-mi-*); text stays plain
+  const metaParts = [
+    r.arrival || r.departure ? ['cal', `${shortDate(r.arrival)} → ${shortDate(r.departure)}`] : null,
+    r.nights ? ['moon', r.nights + (r.nights === 1 ? ' night' : ' nights')] : null,
+    srcClean ? ['src', srcClean] : null,
+  ].filter(Boolean);
+  const metaHTML = metaParts.map(([k, t]) => `<span class="dp-mi dp-mi-${k}">${escapeHtml(t)}</span>`).join('');
+
+  // Time left: a small ring that fills as checkout time gets close (6 h window); red and full when overdue
+  let timeHTML = '';
+  if (active) {
+    const nowD = new Date(), nowM = nowD.getHours() * 60 + nowD.getMinutes();
+    const fmtM = m => { const h = Math.floor(m / 60), mm = m % 60; return h ? `${h}h ${mm}m` : `${mm}m`; };
+    const agreed = es === 'late' && r.status === 'late' ? _parseLcoTime(r.lateTime) : null;
+    const limit  = agreed !== null ? agreed : (_depTimeMins(r) !== null ? _depTimeMins(r) : (overdue ? 12 * 60 : null));
+    if (limit !== null) {
+      const diff = limit - nowM;
+      if (overdue && diff < 0) {
+        timeHTML = `<span class="dp-time dp-time-over" style="--p:1" title="Past checkout time"><i class="dp-tring" aria-hidden="true"></i><span class="dc-time-tag over">${fmtM(-diff)} over</span></span>`;
+      } else if (diff > 0 && (timeTag || agreed !== null)) {
+        const pct = Math.max(.04, Math.min(1, 1 - diff / 360)).toFixed(3);
+        timeHTML = `<span class="dp-time${diff <= 30 ? ' dp-time-soon' : ''}" style="--p:${pct}" title="Time left to check out"><i class="dp-tring" aria-hidden="true"></i><span class="dc-time-tag ${diff <= 30 ? 'soon' : 'ok'}">${fmtM(diff)} left</span></span>`;
+      }
+    }
+  }
 
   const notePrev = r.note ? escapeHtml(r.note.split('\n').filter(Boolean).pop().substring(0, 70)) : '';
 
@@ -1374,17 +1402,17 @@ function depCardHTML(r) {
     <div class="dp-top">
       <div class="dc-room dp-room">${escapeHtml(r.roomStr)}</div>
       <div class="dp-id">
-        <div class="dp-name dc-name" ondblclick="event.stopPropagation();depEditName(${i})" title="Double-click to edit">${escapeHtml(r.name)}</div>
-        <div class="dp-meta">${escapeHtml(metaLine)}</div>
+        <div class="dp-name dc-name" ondblclick="event.stopPropagation();depEditName(${i})" title="${escapeHtml(r.name)} · double-click to edit">${escapeHtml(_dpNice(r.name))}</div>
+        <div class="dp-meta">${metaHTML}</div>
       </div>
       <div class="dp-side">
         <span class="dc-sbadge dp-pill">${badgeText}</span>
-        ${timeTag}
+        ${timeHTML}
       </div>
     </div>
     <div class="dp-tags">
       ${balChip}${chips.join('')}
-      ${r.note ? `<button class="dp-chip dp-chip-note" onclick="event.stopPropagation();depToggleNote('${r.roomStr}')" title="${escapeHtml(r.note.substring(0, 200))}">📝 <span>${notePrev}</span></button>` : ''}
+      ${r.note ? `<button class="dp-chip dp-chip-note" onclick="event.stopPropagation();depToggleNote('${r.roomStr}')" title="${escapeHtml(r.note.substring(0, 200))}"><span>${notePrev}</span></button>` : ''}
     </div>
     <div class="dc-body dp-body">
       ${overdueStrip}
@@ -1395,8 +1423,8 @@ function depCardHTML(r) {
       ${actHTML}
       <div class="dp-foot">
         ${intentRowHTML}
-        <button class="dp-note-btn" onclick="event.stopPropagation();depToggleNote('${r.roomStr}')" aria-label="Notes for room ${escapeHtml(r.roomStr)}">📝 Note</button>
-        <button class="dc-copy-card-btn dp-icon-btn" title="Copy room summary" aria-label="Copy room summary" onclick="event.stopPropagation();depCopyCard(${i})">📋</button>
+        <button class="dp-note-btn" onclick="event.stopPropagation();depToggleNote('${r.roomStr}')" aria-label="Notes for room ${escapeHtml(r.roomStr)}"><i class="dp-ic dp-ic-note" aria-hidden="true"></i>Note</button>
+        <button class="dc-copy-card-btn dp-icon-btn" title="Copy room summary" aria-label="Copy room summary" onclick="event.stopPropagation();depCopyCard(${i})"><i class="dp-ic dp-ic-copy" aria-hidden="true"></i></button>
       </div>
       <div class="dc-note-body dp-note" style="display:none;">
         <div class="dc-note-header">
