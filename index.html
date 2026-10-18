@@ -419,7 +419,7 @@
     <div class="tb-pill" id="topbarTime">—</div>
     <div class="tb-pill" id="appVersionPill" onclick="appForceUpdate()" title="App version — tap to force an update if it looks out of date" style="cursor:pointer;">—</div>
     <div class="icon-round mob-hide" onclick="gsOpen()" title="Search — room / guest / task (Ctrl+K)">🔍</div>
-    <div class="icon-round" id="tbWhatsApp" onclick="waOpenFromTop()" title="WhatsApp HK group: paste the chat">🟢</div>
+    <div class="icon-round" id="tbWhatsApp" onclick="waOpenFromTop()" title="WhatsApp: read groups, send messages">🟢</div>
     <div class="icon-round mob-hide" onclick="hoOpen()" title="Shift Handover">📋</div>
     <div class="icon-round" id="tbRoster" onclick="showPanel('roster')" title="Roster: the team's shifts">🗓️</div>
     <div class="icon-round" onclick="showPanel('settings')" title="Settings">⚙️</div>
@@ -5482,6 +5482,7 @@ async function appInit() {
 <script src="my-upsells.js"></script>
 <script src="undo.js"></script>
 <script src="wa-bridge.js"></script>
+<script src="wa-brain.js"></script>
 <script src="motion.js"></script>
 <script src="qr-maker.js"></script>
 <script src="nav-order.js"></script>

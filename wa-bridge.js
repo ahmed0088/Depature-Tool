@@ -116,12 +116,83 @@ function hoWaParser() {
     if ((m = t.match(/\b(?:till|until|untill|til|to|upto|up\s*to|on|→|->)\s*(\d{1,2})(?:st|nd|rd|th)?\b/))) { const d2 = okDay(+m[1], 0); return d2 ? { until: d2 } : null; }
     return FILLER.test(t) || /^(?:stay|the\s+stay|booking|confirmed|paid|ok)?\s*$/.test(t.trim()) ? {} : null;
   }
+  // the hotel's own word list (window.hoWaWords, made in HotelOps: "VD" = Vacant Dirty → checked out, …), asked first
+  let WORDS = null;
+  function dictOf(opt) {
+    if (opt && typeof opt.words === 'function') return opt.words;
+    try { const g = typeof globalThis !== 'undefined' ? globalThis : null; const d = g && g.hoWaWords; if (d && typeof d.lookup === 'function') return w => d.lookup(w); } catch (_) {}
+    return null;
+  }
+  // housekeeping room statuses everyone uses, until the hotel's own list says otherwise
+  const HK_BUILTIN = { vd: ['co', 'Vacant Dirty'], vc: ['co', 'Vacant Clean'], vr: ['co', 'Vacant Ready'], vci: ['co', 'Vacant Clean Inspected'], ed: ['co', 'Early Departure'],
+    od: ['hk', 'Occupied Dirty'], oc: ['hk', 'Occupied Clean'], ooo: ['hk', 'Out of Order'], oos: ['hk', 'Out of Service'], dnd: ['hk', 'Do Not Disturb'], so: ['hk', 'Sleep Out'], dl: ['hk', 'Double Lock'], ns: ['hk', 'No Show'], rc: ['hk', 'Registration card (signature)'] };
+  function lookup(w) {
+    if (!w) return null;
+    if (WORDS) { try { const x = WORDS(w); if (x && typeof x === 'object' && /^(?:co|lco|ext|note|hk|ignore)$/.test(x.m)) return x; } catch (_) {} }
+    const b = HK_BUILTIN[String(w).toLowerCase()];
+    return b ? { m: b[0], label: b[1] } : null;
+  }
+  /** the word (or two words) right after the room, in the hotel's list → an action, or null */
+  function dictClassify(low, r) {
+    const ws = low.split(/[\s:,;!?]+/).filter(Boolean); if (!ws.length) return null;
+    const two = ws.length > 1 ? ws[0] + ' ' + ws[1] : '';
+    let hit = two && lookup(two), used = two;
+    if (!hit) { hit = lookup(ws[0]); used = ws[0]; }
+    if (!hit) return null;
+    const tail = low.split(/\s+/).slice(used.split(' ').length).join(' ').replace(/^[\s:\-–—]+/, '');
+    const tag = { word: used.replace(/[:,;.!?]+$/, ''), label: String(hit.label || '') };
+    if (hit.m === 'ignore') return Object.assign({ act: 'ignore' }, tag);
+    if (hit.m === 'co') return Object.assign({ act: 'co' }, tag);
+    if (hit.m === 'lco') return Object.assign({ act: 'lco', time: hoWaTime(tail) }, tag);
+    if (hit.m === 'ext') { const x = extDetail(tail); return Object.assign({ act: 'ext' }, x || {}, tag); }
+    // 'note' and 'hk' (a housekeeping status) are written on the room: "VC (Vacant Clean)"
+    return Object.assign({ act: 'note', note: tag.label && low === used ? r + ' (' + tag.label + ')' : r }, tag);
+  }
+  // ⏳ Extending: the paperwork for an extension. Each item is done (true), still to do (false) or not said (left as it is).
+  const PAPER = [['book', /\b(?:booking|bkg|reservation|new\s+res|res)\b/], ['sign', /\b(?:rc(?:\s*sign(?:ed|ature)?)?|reg(?:istration)?\.?\s*card|sign(?:ed|ature|ing)?)\b/],
+    ['td', /\btd\b/], ['pay', /\b(?:full\s+payment|paid\s+(?:in\s+)?full|payment|pay|balance)\b/]];
+  const P_DONE = /\b(?:done|paid|collected|taken|signed|received|created|made|ok|okay|completed|complete)\b|[✓✔✅]/u;
+  const P_WAIT = /\b(?:waiting|wait|pending|left|missing|needs?|needed|still|not\s+yet|remaining|to\s+do)\b/;
+  /** "waiting for TD and RC sign" → {td:false, sign:false, book:true, pay:true}; "TD done" → {td:true}; "all done" → all true */
+  function paperOf(t) {
+    t = String(t || '').toLowerCase();
+    if (/\ball\s+(?:done|ok|okay|complete|completed|ready|collected)\b/.test(t)) return { book: true, sign: true, td: true, pay: true, all: 1 };
+    const hits = [];
+    PAPER.forEach(([k, re]) => { const g = new RegExp(re.source, 'g'); let m; while ((m = g.exec(t))) { if (k === 'sign' && /^sign/.test(m[0]) && hits.some(h => h.k === 'sign')) continue; hits.push({ k, i: m.index }); } });
+    if (!hits.length) return null;
+    hits.sort((a, b) => a.i - b.i);
+    const wait = P_WAIT.test(t), only = wait || /\b(?:only|just)\b/.test(t);
+    const segs = hits.map((h, n) => t.slice(h.i, n + 1 < hits.length ? hits[n + 1].i : t.length));
+    const anyDone = segs.some(x => P_DONE.test(x));
+    const o = {};
+    hits.forEach((h, n) => {
+      const v = wait ? (P_DONE.test(segs[n]) && !P_WAIT.test(segs[n])) : anyDone;
+      if (o[h.k] === undefined || v === false) o[h.k] = v;
+    });
+    if (only && Object.keys(o).some(k => o[k] === false)) PAPER.forEach(([k]) => { if (o[k] === undefined) o[k] = true; });
+    return o;
+  }
+  /** ⏳ Extending + what the message says about the paperwork */
+  function extending(t) { const p = paperOf(t) || {}; const a = { act: 'extending' }; PAPER.forEach(([k]) => { if (p[k] !== undefined) a[k] = p[k]; }); return a; }
   function classify(rest) {
     let r = sp(rest).trim().replace(/^[\s:\-–—=>.,]+/, '').replace(/[\s.!,;]+$/, '').trim();
     if (!r) return null;
     const note = { act: 'note', note: r };
     let low = r.toLowerCase(), m;
     while (LEAD.test(low)) low = low.replace(LEAD, '');
+    // "507 left, waiting finance", "507 guest left, folio with finance", "507 res to fix" → 🧾 waiting for Finance / Reservations
+    const FIN = /\b(?:finance|accounts?|folio|reservations?|res)\b/;
+    if (FIN.test(low) && /\b(?:done|fixed|ok|okay|cleared|sorted|settled|closed)\b/.test(low) && !/\b(?:wait\w*|pending|to\s+fix)\b/.test(low)) return { act: 'findone' };
+    if (FIN.test(low) && (/\b(?:wait\w*|pending|to\s+fix|hold|check(?:ing)?)\b/.test(low) || /\bwith\s+(?:the\s+)?(?:finance|accounts?|reservations?|res)\b/.test(low) || /^(?:left|out|gone)\b/.test(low))) {
+      return { act: 'fin', who: /\b(?:reservations?|res)\b/.test(low) && !/\b(?:finance|accounts?|folio)\b/.test(low) ? 'Reservations' : 'Finance' };
+    }
+    if (/^fixed\s*[.!✓✔✅]*$/u.test(low)) return { act: 'findone', weak: true };
+    // "507 TD + RC", "507 TD done", "507 waiting for TD", "507 only TD left", "507 all done": the extension's paperwork
+    if (!/\bext\w*|\bextend/.test(low) && (PAPER.some(([, re]) => new RegExp('^' + re.source).test(low)) || /^(?:waiting|wait|pending|only|just|still)\b/.test(low) && paperOf(low))) {
+      const pp = extending(low); if (Object.keys(pp).length > 1) return pp;
+    }
+    if (/^all\s+(?:done|ok|okay|complete|completed|ready)\s*[.!✓✔✅]*$/u.test(r.toLowerCase())) return Object.assign(extending(r.toLowerCase()), { weak: true });   // only for a room that is extending
+    const dc = dictClassify(low, r); if (dc) return dc;
     if ((m = low.match(new RegExp('^' + LCO_W + '(?![a-z])\\s*(.*)$')))) {
       if (/\?|\b(?:cancel\w*|tomorrow|tomm?orr?ow|tmrw|tmr|tmw)\b/.test(m[1])) return note;
       return { act: 'lco', time: hoWaTime(m[1]) };
@@ -129,8 +200,13 @@ function hoWaParser() {
     if ((m = low.match(/^late\s*(?:till|until|untill|til|to|up\s*to|upto|by|at)\s*(.+)$/)) || ((m = low.match(/^late\s+(.+)$/)) && timeStrict(m[1]))) {
       const tm = hoWaTime(m[1]); if (tm) return { act: 'lco', time: tm };
     }
+    // "extending", "will extend", "wants to extend", "ext pending", "extension request": on its way (⏳ Extending), not extended yet
+    if ((m = low.match(/^(?:wants?|wanted|would\s+like|will|is\s+going|going|plans?|planning|asking|asked|requests?|requested|requesting)\s+(?:to\s+)?(?:ext|extend|extension|extending|stay\s+longer)\b(.*)$/))) return extending(m[1]);
     if ((m = low.match(new RegExp('^' + EXT_W + '(?![a-z])\\.?\\s*(.*)$')))) {
-      const x = extDetail(m[1]); return x ? Object.assign({ act: 'ext' }, x) : note;
+      const w = low.match(/^[a-z]+/)[0], tail = m[1];
+      if (/\?|\b(?:maybe|might|not|cancel(?:led|ed)?|no)\b/.test(tail)) return note;
+      if (w === 'extending' || /\b(?:pending|request(?:ed)?|req|wants?|will|planning|soon|waiting|booking|sign(?:ed|ature)?|td|rc|payment)\b/.test(tail)) return extending(tail);
+      const x = extDetail(tail); return x ? Object.assign({ act: 'ext' }, x) : note;
     }
     if ((m = low.match(/^\+\s*(\d{1,2})\s*(?:n|nt|nts|nights?)\b\s*(.*)$/))) {
       const n = +m[1]; return n >= 1 && n <= 90 && !WHEN_NOT.test(m[2]) ? { act: 'ext', nights: n } : note;
@@ -143,6 +219,15 @@ function hoWaParser() {
     }
     // words that mean "gone" only when nothing else follows ("324 out of order", "324 left luggage" are notes)
     if ((m = low.match(/^(?:out|left|vacated|vacated\s+the\s+room|departed)(?![a-z])\s*(.*)$/)) && FILLER.test(m[1].trim())) return { act: 'co' };
+    // a typo of a command ("chekout", "lcoo"): Ops Brain's matcher (wa-brain.js), when it is there
+    const fz = fuzzyOf(r);
+    if (fz && fz.m && /^(?:co|lco|ext)$/.test(fz.m) && (fz.conf === 'exact' || fz.conf === 'likely')) {
+      const g = fz.conf === 'likely' ? { guess: fz.word } : {};
+      if (fz.m === 'co') return Object.assign({ act: 'co' }, g);
+      if (fz.m === 'lco') return Object.assign({ act: 'lco', time: hoWaTime(fz.tail || '') }, g);
+      const x = extDetail(fz.tail || ''); if (x) return Object.assign({ act: 'ext' }, x, g);
+    }
+    if (fz && fz.conf === 'unsure') return Object.assign(note, { askWord: fz.word });
     return note;
   }
 
@@ -150,40 +235,113 @@ function hoWaParser() {
    * One WhatsApp message → { kind: 'ignore'|'none'|'act', actions: [{room, act:'co'|'lco'|'ext'|'note', time?, nights?, until?, note?}] }
    * room keeps the digits as written ("0113"); match rooms with parseInt (0113 == 113).
    */
-  function hoWaParse(text) {
+  // what HotelOps itself posts in the group starts with "✅ HotelOps ·" or carries an invisible mark (U+2063):
+  // read back, it is never a command
+  const HO_MARK = '⁣';
+  const isHoText = t => { t = String(t == null ? '' : t); return t.indexOf(HO_MARK) >= 0 || /^[\s⁣]*✅\s*HotelOps\b/u.test(t); };
+  // a list's first line, said many ways → one command word ("Checkout list:", "Departures done", "Checked out: 101, 102")
+  const HEADS = [
+    [/^\s*(?:today'?s\s+)?departures?\s+(?:done|completed|finished|checked[\s-]*out|out|vacated)\b\s*[:\-–—]?\s*/i, 'CO '],
+    [/^\s*(?:today'?s\s+)?(?:check[\s-]*outs?|checkouts?|c\/o|co)\s+(?:list|done|completed|finished|so\s+far|update)\b\s*[:\-–—]?\s*/i, 'CO '],
+    [/^\s*(?:checked[\s-]*out|check[\s-]*outs|checkouts)\s*[:\-–—]\s*/i, 'CO '],
+    [/^\s*(?:late\s*(?:check[\s-]*outs?|checkouts?|c\/?o'?s?)|lcos?)\s*(?:list)?\s*[:\-–—]\s*/i, 'LCO '],
+    [/^\s*(?:extensions?|extended)\s*:\s*/i, 'EXT '],
+  ];
+  // "1. 101 CO", "2) 102", "- 103", "• 104"
+  const BULLET = /^\s*(?:\d{1,2}[.)]|[-•*·▪●◦–])\s+/;
+  // nothing but a tick after the room: "101 ✓", "102 ✅", "103 done" (a list line, or nothing on its own)
+  const TICK = /^[\s✓✔✅☑👍.,;:!*\-–—]*(?:done|ok|okay)?[\s✓✔✅☑👍.!]*$/iu;
+  // "212.319.504" is a list of rooms only when every part has 3-4 digits (not "12.30", "29.02", "18.10.2026", "AED 50.00")
+  const DOT_ROOMS = /(?<![\d.,])\d{3,4}(?:\.\d{3,4})+(?![\d]|[.,]\d)/g;
+  function headLine(l) {
+    l = l.replace(BULLET, '').replace(DOT_ROOMS, m => m.split('.').join(', '));
+    for (const [re, w] of HEADS) if (re.test(l)) return l.replace(re, w);
+    return l;
+  }
+  /** a list line under a heading: "101" under "CO", "202 2pm" under "Late check-outs:", "0113 2N" under "Extended:" */
+  function underHead(head, rest) {
+    if (TICK.test(rest)) return Object.assign({}, head);
+    if (head.act === 'lco' && timeStrict(rest) && !WHEN_NOT.test(rest)) { const tm = hoWaTime(rest); if (tm) return { act: 'lco', time: tm }; }
+    if (head.act === 'ext') { const x = extDetail(rest); if (x && (x.nights || x.until)) return Object.assign({ act: 'ext' }, x); }
+    return null;
+  }
+  const DICT_LEAD = new RegExp('^([a-z][a-z0-9\\/.&-]{0,15})\\s*[:\\-–—]?\\s*(?=' + ROOM_NC + '(?!\\s*(?:am|pm|hrs?|h)\\b))', 'i');
+  function dictLead(seg) { const m = seg.match(DICT_LEAD); return m && lookup(m[1].toLowerCase().replace(/[.:]+$/, '')) ? m : null; }
+  // a short word after a room that we do not know ("415 ckd"): HotelOps asks the team what it means instead of guessing.
+  // Common words, hotel words and the parser's own words are never asked about.
+  const ASK_STOP = new Set(('please pls plz pl room rm guest gst check chk done ok okay oki thanks thank thx ty asap clean cleaning ' +
+    'dirty ready wait hold late early now later soon here there gone yes no not sir maam team hk fo mgr help fix fixed leak smell ' +
+    'lost found food paid cash card bill key keys safe iron sofa cot crib bed beds towel towels soap water mini bar minibar ac tv wifi ' +
+    'noise sick vip dnd ooo oos oor na td rc res bkg pay hi hello call msg sleep bath tub lamp light door lock bags bag pax kid kids baby baggage luggage ' +
+    'urgent pending update info noted inform sure fine good bad issue new old open close closed sent send pick drop taxi cab car ' +
+    'and the a an is are was has have had it its in on at to of for by up down off all any one two more less too also just still ' +
+    'yet again then than this that these those what when where who why how which with from into over under after before').split(' '));
+  function askWord(rest, words) {
+    const w = String(rest || '').trim().replace(/[\s.!,;:]+$/, '').toLowerCase();
+    if (!/^[a-z][a-z\/.\-]{1,5}$/.test(w)) return '';
+    const bare = w.replace(/[\/.\-]/g, '');
+    if (bare.length < 2 || ASK_STOP.has(bare) || ASK_STOP.has(w)) return '';
+    if (lookup(w) || lookup(bare)) return '';
+    return w;
+  }
+  let FUZZY = null;
+  function fuzzyOf(r) {
+    const f = FUZZY; if (typeof f !== 'function') return null;
+    try { const x = f(r, {}); return x && typeof x === 'object' ? x : null; } catch (_) { return null; }
+  }
+  /** opt.words: a lookup(word) → {m, label} to use instead of window.hoWaWords (the WhatsApp window passes the list HotelOps sent it) */
+  function hoWaParse(text, opt) {
+    WORDS = dictOf(opt);
+    FUZZY = opt && typeof opt.fuzzy === 'function' ? opt.fuzzy : (() => { try { const b = globalThis.hoWaBrainPure; return b && typeof b.wbReadCmd === 'function' ? b.wbReadCmd : null; } catch (_) { return null; } })();
+    if (isHoText(text)) return { kind: 'ignore', actions: [], ho: true };
     const lines = sp(text).split(/\r?\n/);
     const kept = lines.filter(l => l.trim() && !IGNORE_LINE(l));
     if (lines.some(l => l.trim()) && !kept.length) return { kind: 'ignore', actions: [] };
     if (lines.some(l => /Extensions\s*[—–-]\s*\d{1,2}:\d{2}/.test(l))) return { kind: 'ignore', actions: [] };   // the app's own post
     const actions = [], seen = new Set();
-    let pending = [], lastNote = null;
+    let pending = [], lastNote = null, head = null, ask = null;
     const add = (rooms, c) => rooms.forEach(room => {
+      if (c.act === 'ignore') return;                      // a word the hotel marked "ignore"
       const a = Object.assign({ room }, c), k = actionKey(a);
       if (!seen.has(k)) { seen.add(k); actions.push(a); }
     });
     kept.forEach(line => {
       let lineCmd = null;
       // "202 CO, 205 LCO 2pm": a comma before another room starts a new part
-      line.trim().split(SPLIT).forEach(seg => {
+      headLine(line).trim().split(SPLIT).forEach(seg => {
         seg = seg.trim();
         let cmd = '';
-        const cm = seg.match(CMD_LEAD);                       // the command first: "CO 324", "EXT 0113 2N"
+        const cm = seg.match(CMD_LEAD) || dictLead(seg);   // the command first: "CO 324", "EXT 0113 2N", "VD: 315"
         if (cm) { cmd = cm[1]; seg = seg.slice(cm[0].length); }
         const { rooms, rest } = takeRooms(seg);
-        let c = classify(cmd ? cmd + ' ' + rest : rest);
+        const bare = !cmd && rooms.length && TICK.test(rest);
+        let c = bare ? null : classify(cmd ? cmd + ' ' + rest : rest);
         if (cmd) lineCmd = c;
         else if (!c && rooms.length && lineCmd) c = lineCmd;  // "CO 324, 325"
+        if (!cmd && rooms.length && head && !lineCmd && (bare || (c && c.act === 'note'))) { const h = underHead(head, rest); if (h) c = h; }   // a list under its heading
         if (rooms.length && !c) { pending = pending.concat(rooms); return; }
         if (!c) return;
         const target = pending.concat(rooms); pending = [];
+        // "415 ckd": a word we do not know → ask, do nothing with it
+        const aw = !cmd && target.length && c.act === 'note' && !c.word ? (c.askWord || askWord(rest, true)) : '';
+        if (aw) { if (!ask) ask = { word: aw, room: target[0], rooms: target.slice(), text: sp(text).trim().slice(0, 300) }; lastNote = null; return; }
         if (target.length) { add(target, c); lastNote = c.act === 'note' ? actions.filter(a => a.act === 'note' && target.includes(a.room)) : null; }
+        else if (c.act !== 'note') { head = c; lastNote = null; }   // "CO" / "Checkout list:" on its own line: the rooms below
         else if (lastNote && lastNote.length) lastNote.forEach(a => { a.note += ' ' + seg.replace(/[\s.!,;]+$/, ''); });   // a note's next line
       });
     });
-    return { kind: actions.length ? 'act' : 'none', actions };
+    // a reply to HotelOps' own no-answer list ("🚫 NA Rooms"): "guest inside" for one of those rooms says what changed
+    const q = opt && opt.quote ? sp(opt.quote) : '';
+    if (q && /NA\s*Rooms|no\s*answer|🚫/iu.test(q)) {
+      const qr = new Set((q.match(/\b\d{3,4}\b/g) || []).map(x => String(parseInt(x, 10))));
+      actions.forEach(a => { if (a.act === 'note' && (!qr.size || qr.has(String(parseInt(a.room, 10))))) a.note = a.note.replace(/^./, c => c.toUpperCase()) + ' (was No answer)'; });
+    }
+    const out = { kind: actions.length ? 'act' : 'none', actions };
+    if (ask) out.ask = ask;
+    return out;
   }
   function actionKey(a) {
-    const x = a.act === 'ext' ? (a.nights ? a.nights + 'n' : a.until || '') : (a.time || '');
+    const x = a.act === 'fin' ? (a.who || '') : a.act === 'ext' ? (a.nights ? a.nights + 'n' : a.until || '') : a.act === 'extending' ? ['book', 'sign', 'td', 'pay'].map(k => a[k] === undefined ? '' : k[0] + (a[k] ? 1 : 0)).join('') : (a.time || '');
     return [String(parseInt(a.room, 10)), a.act, x, a.note || ''].join(':');
   }
   const dayLabel = d => d.getDate() + ' ' + MON[d.getMonth()].replace(/^./, c => c.toUpperCase());
@@ -205,13 +363,33 @@ function hoWaParser() {
     return { nights: n, date: d, label: dayLabel(d), guessed };
   }
   /** a short chip for one action: "✓ CO 324", "⏰ LCO 202 6 PM", "↪ EXT 0113 +2N", "📝 note 415" */
-  function chip(a) {
-    if (a.act === 'co') return '✓ CO ' + a.room;
-    if (a.act === 'lco') return '⏰ LCO ' + a.room + (a.time ? ' ' + timeLabel(a.time) : '');
-    if (a.act === 'ext') return '↪ EXT ' + a.room + (a.nights ? ' +' + a.nights + 'N' : '') + (a.until ? ' → ' + untilLabel(a.until) : '');
-    return '📝 note ' + a.room;
+  const P_NAME = { book: 'booking', sign: 'RC', td: 'TD', pay: 'payment' }, P_DONE_NAME = { book: 'booking made', sign: 'RC signed', td: 'TD collected', pay: 'paid in full' };
+  /** "⏳ Extending 507 · waiting TD, RC" · "✓ 507 TD collected" · "⏳ 507 ready → mark extended" (f: {book, sign, td, pay}) */
+  function paperChip(room, f) {
+    const ks = ['td', 'sign', 'pay', 'book'];
+    if (ks.every(k => f[k] === true)) return '⏳ ' + room + ' ready → mark extended';
+    const wait = ks.filter(k => f[k] === false), done = ks.filter(k => f[k] === true);
+    if (wait.length) return '⏳ Extending ' + room + ' · waiting ' + wait.map(k => P_NAME[k]).join(', ');
+    if (done.length) return '✓ ' + room + ' ' + done.map(k => P_DONE_NAME[k]).join(', ');
+    return '⏳ Extending ' + room;
   }
-  return { sp, hoWaTime, timeLabel, hoWaParse, actionKey, extNights, chip, dayLabel, untilLabel };
+  /** the hotel word that made it: " · VD Vacant Dirty" */
+  function wordTag(a) {
+    if (!a || !a.word) return '';
+    const w = String(a.word).toUpperCase(), l = String(a.label || '').trim();
+    return ' · ' + (l && l.toUpperCase().indexOf(w) !== 0 ? w + ' ' + l : l || w);
+  }
+  function chip(a) {
+    if (a.guess) return chip(Object.assign({}, a, { guess: '' })) + ' · 🤔 guessed';
+    if (a.act === 'fin') return '🧾 ' + a.room + ' guest left · waiting for ' + (a.who || 'Finance');
+    if (a.act === 'findone') return '✓ ' + a.room + ' fixed → check out';
+    if (a.act === 'co') return '✓ CO ' + a.room + wordTag(a);
+    if (a.act === 'lco') return '⏰ LCO ' + a.room + (a.time ? ' ' + timeLabel(a.time) : '') + wordTag(a);
+    if (a.act === 'extending') return paperChip(a.room, a) + wordTag(a);
+    if (a.act === 'ext') return '↪ EXT ' + a.room + (a.nights ? ' +' + a.nights + 'N' : '') + (a.until ? ' → ' + untilLabel(a.until) : '') + wordTag(a);
+    return '📝 note ' + a.room + wordTag(a);
+  }
+  return { sp, hoWaTime, timeLabel, hoWaParse, actionKey, extNights, chip, paperChip, paperOf, wordTag, dayLabel, untilLabel, isHoText, HO_MARK, askWord };
 }
 const HP = hoWaParser();
 const { sp, hoWaTime, timeLabel, hoWaParse, actionKey } = HP;
@@ -275,7 +453,7 @@ function safeKey(id) { return String(id == null ? '' : id).replace(/[.#$\[\]\/\x
 function hashKey(s) { s = String(s); let h = 5381, g = 7; for (let i = 0; i < s.length; i++) { h = ((h << 5) + h + s.charCodeAt(i)) | 0; g = (g * 31 + s.charCodeAt(i)) | 0; } return 'p' + (h >>> 0).toString(36) + (g >>> 0).toString(36); }
 /** results of one message → the compact r string */
 function archR(res) { return res.map(r => [r.st, r.room || '', r.d || ''].filter(Boolean).join(' ')).join(' · '); }
-const R_LABEL = { co: '✓ CO', lco: '⏰ LCO', ext: '↪ EXT', note: '📝 note', notlist: '⚠ not on list', skip: '· skipped', none: '— no room', ignore: '— HotelOps post' };
+const R_LABEL = { fin: '🧾 waiting for', extending: '⏳ Extending', deleted: '🗑 deleted', co: '✓ CO', lco: '⏰ LCO', ext: '↪ EXT', note: '📝 note', req: '📝 Request · room', notlist: '⚠ not on list', skip: '· skipped', none: '— no room', ignore: '— HotelOps post', log: '🗂 log only', preview: '👁 preview', ask: '❓ asked' };
 /** r → chips [{st, label}] */
 function archChips(r) {
   if (!r) return [{ st: 'none', label: '— not acted on (not from that day)' }];
@@ -291,7 +469,7 @@ function tokenRe(t, flags) {
 function hoWaMatch(rec, q) {
   const toks = Array.isArray(q) ? q : searchTokens(q);
   if (!toks.length) return true;
-  const hay = [rec.x || '', rec.s || '', rec.r || ''].join('\n');
+  const hay = [rec.x || '', rec.s || '', rec.r || '', rec.g || ''].join('\n');
   return toks.every(t => tokenRe(t).test(hay));
 }
 /** {day: {key: rec}} → [{day, key, rec}] matching q, newest day first, in chat order within a day */
@@ -330,12 +508,73 @@ function hoWaExportCsv(list) {
 /** the backup file name: "HK chat 2026-10-01 to 2026-10-18.txt" */
 function hoWaExportName(from, to, ext) { return 'HK chat ' + (from === to || !to ? from : from + ' to ' + to) + '.' + ext; }
 
+// ══ The window's helpers (pure) ═════════════════════════════
+/** "Sam Test" → "ST", "+971 50 000 0000" → '' (a phone number gets a phone icon) */
+const isPhone = s => /^[+\d][\d\s()\-]{6,}$/.test(String(s || '').trim());
+function initials(s) {
+  s = String(s || '').trim(); if (!s || isPhone(s)) return '';
+  const w = s.replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
+  return ((w[0] || '')[0] || '?').toUpperCase() + (w[1] ? w[1][0].toUpperCase() : '');
+}
+/** a steady colour for a name (hue 0-359) */
+function hueOf(s) { let h = 7; s = String(s || ''); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i) * 97) % 3600; return Math.floor(h / 10); }
+/** the balance a check-out left: under AED 1 is "tiny" (not a warning) */
+function balInfo(r) {
+  let b = r && typeof r.bal === 'number' ? r.bal : null;
+  if (b == null && r && r.text) { const m = String(r.text).match(/balance AED ([\d.,]+)/); if (m) b = parseFloat(m[1].replace(/,/g, '')); }
+  if (!(b > 0)) return null;
+  const amt = b.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return b < 1 ? { tone: 'tiny', label: 'balance AED ' + amt + ' (tiny)' } : { tone: 'warn', label: '⚠ balance AED ' + amt };
+}
+/** one log entry → which filters it is in: actions, notes, attention, ignored */
+function entryKinds(l) {
+  const k = new Set(), res = (l && l.res) || [];
+  res.forEach(r => {
+    if (/^(?:co|lco|ext|extending|fin)$/.test(r.st)) k.add('actions');
+    if (r.guess) k.add('attention');
+    if (r.st === 'note' || r.st === 'req') k.add('notes');
+    if (r.st === 'notlist' || r.st === 'ask' || (r.st === 'deleted' && / check/.test(r.text || '')) || /nights not said|could not read/.test(r.text || '') || (balInfo(r) || {}).tone === 'warn') k.add('attention');
+    if (/^(?:none|ignore|log|preview)$/.test(r.st)) k.add('ignored');
+  });
+  if (l && l.undone) { k.delete('actions'); k.add('ignored'); }
+  return k;
+}
+/** "09:41" → "9 AM" (the timeline's hour heading) */
+function hourLabel(t) { const m = String(t || '').match(/^(\d{1,2}):/); if (!m) return 'Earlier'; const h = +m[1]; return (h % 12 || 12) + (h >= 12 ? ' PM' : ' AM'); }
+/**
+ * Today's checkout list for the group (HotelOps' own post: it starts with "✅ HotelOps ·", so it is never read back as commands)
+ * rooms: [{roomStr, status, lateTime?, extensionNights?}]
+ */
+function checkoutListText(list, now) {
+  now = now || new Date();
+  const hm = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+  const by = st => (list || []).filter(r => r && r.status === st).map(r => r.roomStr).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+  const out = by('out'), late = (list || []).filter(r => r && r.status === 'late').sort((a, b) => parseInt(a.roomStr, 10) - parseInt(b.roomStr, 10));
+  const ext = (list || []).filter(r => r && r.status === 'extended').sort((a, b) => parseInt(a.roomStr, 10) - parseInt(b.roomStr, 10));
+  const due = (list || []).filter(r => r && !/^(?:out|late|extended)$/.test(r.status)).map(r => r.roomStr).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+  const L = ['✅ HotelOps · Checkout list · ' + hm];
+  L.push(`Checked out (${out.length}): ${out.join(', ') || '—'}`);
+  if (late.length) L.push(`Late check-out (${late.length}): ${late.map(r => r.roomStr + (r.lateTime ? ' (' + timeLabel(r.lateTime) + ')' : '')).join(', ')}`);
+  if (ext.length) L.push(`Extended (${ext.length}): ${ext.map(r => r.roomStr + (r.extensionNights ? ' (+' + r.extensionNights + 'N)' : '')).join(', ')}`);
+  L.push(`Still due (${due.length}): ${due.join(', ') || '—'}`);
+  return L.join('\n');
+}
+/** the quick templates: {room} and {time} filled in */
+const TEMPLATES = [
+  { k: 'co', label: '✓ CO done', t: '{room} CO done ✓', need: 'room' },
+  { k: 'clean', label: '🧹 Please clean', t: '{room} please clean', need: 'room' },
+  { k: 'lco', label: '⏰ LCO approved', t: '{room} LCO {time} approved', need: 'room time' },
+  { k: 'ext', label: '↪ Extensions', t: 'Extensions — {time}: {ext}', need: '' },
+];
+function fillTemplate(t, v) { return String(t).replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null && v[k] !== '' ? v[k] : m)); }
+
 /** the console snippet, ready to paste: this app's address and the parser filled in */
 function snippet(raw, appUrl) {
   return String(raw).replace("'__HO_APP_URL__'", () => JSON.stringify(appUrl)).replace('/*__HO_PARSER__*/null', () => '(' + hoWaParser.toString() + ')()');
 }
 W.hoWaPure = { hoWaParse, hoWaParseCopied, hoWaTime, timeLabel, waDateISO, waTime24, actionKey, extNights: HP.extNights, chip: HP.chip, snippet,
-  safeKey, hashKey, archR, archChips, hoWaMatch, hoWaSearch, hoWaHi, hoWaExportTxt, hoWaExportCsv, hoWaExportName };
+  safeKey, hashKey, archR, archChips, hoWaMatch, hoWaSearch, hoWaHi, hoWaExportTxt, hoWaExportCsv, hoWaExportName,
+  isHoText: HP.isHoText, HO_MARK: HP.HO_MARK, askWord: HP.askWord, wordTag: HP.wordTag, isPhone, initials, hueOf, balInfo, entryKinds, hourLabel, checkoutListText, TEMPLATES, fillTemplate };
 if (!doc) return;
 
 // ══ Storage ═════════════════════════════════════════════════
@@ -348,6 +587,7 @@ function saveDone(d) { const ks = Object.keys(d); if (ks.length > 1000) ks.slice
 let LOG = (() => { const l = lsGet(LS_LOG, null); return l && l.date === today() && Array.isArray(l.items) ? l.items : []; })();
 function saveLog() { if (LOG.length > 300) LOG = LOG.slice(0, 300); lsSet(LS_LOG, { date: today(), items: LOG }); }
 const undoFns = {};        // log key → undo (this session only)
+const undoParts = {};      // log key → [{room, st, fn(quiet)}], to undo one message when it is deleted in WhatsApp
 
 // ══ Chat backup (hotel database) ════════════════════════════
 const ARCH = {};           // day → {key: rec}, loaded (fbGet) or written this session
@@ -384,14 +624,16 @@ function archiveMsg(msg, day, text, sender, r, partial) {
   const t = waTime24(msg.time) || (day === today() ? hhmm() : '');
   const key = msg.id ? safeKey(msg.id) : hashKey(day + '|' + t + '|' + sender.toLowerCase() + '|' + normS(text));
   const rec = { t, s: sender, x: text.slice(0, 2000) };
-  if (!partial) { if (r) rec.r = r; if (msg.mine) rec.m = 1; }
+  if (msg.group) rec.g = String(msg.group).slice(0, 80);
+  if (msg.quote) rec.q = String(msg.quote).slice(0, 300);
+  if (!partial) { if (r) rec.r = r; if (msg.mine) rec.m = 1; if (msg.preview) rec.pv = 1; }
   if (msg.edited) rec.e = 1;
   archive(day, key, rec, partial);
   return key;
 }
 
 // ══ Acting on the board ═════════════════════════════════════
-const FIELDS = ['status', 'checkoutAt', 'naTime', 'dndTime', 'lateTime', 'extensionNights', 'extCheckoutTime', 'extRate', 'extReason', 'extConfirmed', 'intent', 'intentMinutes', 'lcoAcknowledged', 'note'];
+const FIELDS = ['status', 'checkoutAt', 'naTime', 'dndTime', 'lateTime', 'extensionNights', 'extCheckoutTime', 'extRate', 'extReason', 'extConfirmed', 'intent', 'intentMinutes', 'lcoAcknowledged', 'extBook', 'extSign', 'extTd', 'extPay', 'finWho', 'finAt', 'note'];
 const J = o => JSON.stringify(o === undefined ? null : o);
 const clone = o => JSON.parse(J(o));
 const pick = r => { const o = {}; FIELDS.forEach(k => { o[k] = r[k] === undefined ? null : clone(r[k]); }); return o; };
@@ -411,10 +653,10 @@ function addNoteLine(r, line) { r.note = r.note ? r.note + '\n' + line : line; }
 function dropLine(note, line) { const L = String(note || '').split('\n'); const i = L.lastIndexOf(line); if (i >= 0) L.splice(i, 1); return L.join('\n'); }
 
 /** put a room back as it was before our change (status: the depAction status we set, or null) */
-function restore(roomStr, before, after, line, topJ, status) {
+function restore(roomStr, before, after, line, topJ, status, quiet) {
   const z = rooms().find(q => q.roomStr === roomStr);
-  if (!z) { showToast(`Room ${roomStr} is no longer on the board`, 'warn'); return false; }
-  if (z.status !== after.status) { showToast(`Room ${roomStr} changed since — not undone`, 'warn'); return false; }
+  if (!z) { if (!quiet) showToast(`Room ${roomStr} is no longer on the board`, 'warn'); return false; }
+  if (z.status !== after.status) { if (!quiet) showToast(`Room ${roomStr} changed since — not undone`, 'warn'); return false; }
   FIELDS.forEach(k => {
     if (k === 'note') { z.note = z.note === after.note ? (before.note === null ? '' : before.note) : dropLine(z.note, line); return; }
     if (before[k] === null) delete z[k]; else z[k] = clone(before[k]);
@@ -433,8 +675,12 @@ function restore(roomStr, before, after, line, topJ, status) {
 /** one action → {room, act, time, st, text, undo?} */
 function applyOne(a, who, board) {
   const res = { room: a.room, act: a.act, time: a.time || '', note: a.note || '' };
+  const tag = HP.wordTag(a); if (tag) res.w = tag;
+  if (a.guess) { res.guess = a.guess; res.w = (res.w || '') + ' · 🤔 guessed from "' + a.guess + '"'; }
+  const i = board.ok ? roomIdx(a.room) : -1;
+  // a note or request for a room that is not leaving today is normal (an in-house guest): logged, no warning
+  if (i < 0 && a.act === 'note') return Object.assign(res, { st: 'req', text: `Request · room ${a.room}: ${a.note}` });
   if (!board.ok) return Object.assign(res, { st: 'notlist', text: `${a.room}: not on today's list (${board.why})` });
-  const i = roomIdx(a.room);
   if (i < 0) return Object.assign(res, { st: 'notlist', text: `${a.room}: not on today's departures` });
   const r = rooms()[i], room = r.roomStr, st = r.status, before = pick(r);
   let line, setStatus = null;
@@ -444,7 +690,9 @@ function applyOne(a, who, board) {
     line = `[${hhmm()}] Checked out — ${who}`;
     addNoteLine(r, line); setStatus = 'out';
     quiet(() => depAction(i, 'out'));
-    res.st = 'co'; res.text = `${room} checked out` + (r.balance > 0 ? ` · ⚠ balance AED ${r.balance}` : '');
+    res.st = 'co'; res.text = `${room} checked out`;
+    // a balance marked fine (per room or for its source, departures.js depOwes) is no warning
+    if (r.balance > 0 && (typeof depOwes === 'function' ? depOwes(r) : true)) res.bal = r.balance;
   } else if (a.act === 'lco') {
     if (st === 'out') return Object.assign(res, { st: 'skip', text: `${room}: already checked out` });
     if (st === 'extended') return Object.assign(res, { st: 'skip', text: `${room}: marked extended — not changed` });
@@ -453,6 +701,55 @@ function applyOne(a, who, board) {
     if (st === 'late') { if (a.time) r.lateTime = a.time; paint(); saveDeps(); }
     else { r.lateTime = a.time || ''; setStatus = 'late'; quiet(() => depAction(i, 'late')); }
     res.st = 'lco'; res.d = a.time ? timeLabel(a.time) : ''; res.text = `${room} late check-out ${a.time ? timeLabel(a.time) : '(no time)'}`;
+  } else if (a.act === 'fin') {
+    // 🧾 the guest has left, Finance / Reservations must fix the room before it is checked out in Opera (departures.js)
+    if (st === 'out') return Object.assign(res, { st: 'skip', text: `${room}: already checked out` });
+    if (r.intent === 'finance_hold' && r.finWho === a.who) return Object.assign(res, { st: 'skip', text: `${room}: already waiting for ${a.who}` });
+    const at = hhmm();
+    line = `[${at}] Guest has physically left. Waiting for ${a.who} to fix the room — ${who}`;
+    addNoteLine(r, line);
+    r.intent = 'finance_hold'; r.intentMinutes = null; r.finWho = a.who; r.finAt = at;
+    paint(); saveDeps();
+    res.st = 'fin'; res.d = a.who; res.text = `🧾 ${room} guest left · waiting for ${a.who}`;
+  } else if (a.act === 'findone' && r.intent === 'extending' && !a.weak) {
+    // "507 res done" on an extending room is the new booking
+    return applyOne(Object.assign({}, a, { act: 'extending', book: true }), who, board);
+  } else if (a.act === 'findone') {
+    if (r.intent !== 'finance_hold') {
+      if (a.weak) { line = `[${hhmm()}] ${who}: fixed`; addNoteLine(r, line); paint(); saveDeps(); res.st = 'note'; res.text = `${room} note: fixed`; }
+      else return Object.assign(res, { st: 'skip', text: `${room}: was not waiting for Finance` });
+    } else {
+      const w = r.finWho || 'Finance';
+      line = `[${hhmm()}] ${w} fixed the room → checked out — ${who}`;
+      addNoteLine(r, line); setStatus = 'out';
+      r.intent = '';
+      quiet(() => depAction(i, 'out'));
+      res.st = 'co'; res.text = `${room} fixed by ${w} → checked out`;
+    }
+  } else if (a.act === 'extending') {
+    // ⏳ Extending (departures.js): the guest stays on, the paperwork is on its way — not extended yet
+    if (st === 'out') return Object.assign(res, { st: 'skip', text: `${room}: already checked out` });
+    if (st === 'extended') return Object.assign(res, { st: 'skip', text: `${room}: already extended` });
+    if (a.weak && r.intent !== 'extending') { a = { room: a.room, act: 'note', note: a.note || 'all done' }; line = `[${hhmm()}] ${who}: all done`; addNoteLine(r, line); paint(); saveDeps(); res.st = 'note'; res.act = 'note'; res.text = `${room} note: all done`; }
+    else {
+      const F = { book: 'extBook', sign: 'extSign', td: 'extTd', pay: 'extPay' };
+      const ch = Object.keys(F).filter(k => a[k] !== undefined && r[F[k]] !== a[k]);
+      if (r.intent === 'extending' && !ch.length) return Object.assign(res, { st: 'skip', text: `${room}: already marked extending` });
+      const said = {}; Object.keys(F).forEach(k => { if (a[k] !== undefined) said[k] = a[k]; });
+      line = `[${hhmm()}] ${HP.paperChip(room, said).replace(/^\S+\s/, '')} — ${who}`;
+      addNoteLine(r, line);
+      if (r.intent !== 'extending') { r.intent = 'extending'; r.intentMinutes = null; }
+      ch.forEach(k => { r[F[k]] = a[k]; });
+      paint(); saveDeps();
+      const now = {}; Object.keys(F).forEach(k => { now[k] = !!r[F[k]]; });
+      const ready = Object.keys(F).every(k => now[k]);
+      res.st = 'extending'; res.d = ready ? 'ready' : '';
+      const sk = Object.keys(said), waitNow = {}; Object.keys(F).forEach(k => { if (!now[k]) waitNow[k] = false; });
+      res.text = ready ? HP.paperChip(room, now)                                        // "⏳ 507 ready → mark extended"
+        : sk.length && sk.every(k => said[k]) ? HP.paperChip(room, said)                 // "✓ 507 TD collected"
+        : sk.length ? HP.paperChip(room, waitNow)                                         // "⏳ Extending 507 · waiting TD, RC"
+        : HP.paperChip(room, {});                                                         // "⏳ Extending 507"
+    }
   } else if (a.act === 'ext') {
     if (st === 'out') return Object.assign(res, { st: 'skip', text: `${room}: already checked out — not extended` });
     let base = null; try { base = typeof parseOperaDate === 'function' ? parseOperaDate(r.departure) : null; } catch (_) {}
@@ -478,7 +775,7 @@ function applyOne(a, who, board) {
     res.st = 'note'; res.text = `${room} note: ${a.note}`;
   }
   const z = rooms().find(q => q.roomStr === room) || r, after = pick(z), topJ = setStatus ? J(dlog()[0]) : null;
-  res.undo = () => restore(room, before, after, line, topJ, setStatus);
+  res.undo = quiet => restore(room, before, after, line, topJ, setStatus, quiet === true);
   return res;
 }
 
@@ -493,14 +790,42 @@ function ready() {
 const normS = s => sp(s).replace(/\s+/g, ' ').trim();
 function once(fn) { let done = false; return () => { if (done) return false; done = true; return fn(); }; }
 
+// ══ Groups, previews, the hotel's words ═════════════════════
+// A group can be "log only" (its messages are kept, no room is changed): set in the WhatsApp window here or in the reader.
+const LS_GRP = 'ho_wa_grp_v1', LS_PV = 'ho_wa_pv_v1', LS_ASK = 'ho_wa_ask_v1', LS_KNOWN = 'ho_wa_known_v1', LS_WORDS = 'ho_wa_words_v1', LS_OUT = 'ho_wa_out_v1';
+const gKey = g => normS(g).toLowerCase();
+let GRP = (() => { const g = lsGet(LS_GRP, {}); return g && typeof g === 'object' ? g : {}; })();
+function groupActs(msg) { if (msg && msg.act === false) return false; const g = GRP[gKey(msg && msg.group || '')]; return !(g && g.act === false); }
+function setGroupAct(name, on) { GRP[gKey(name)] = { name, act: !!on }; lsSet(LS_GRP, GRP); renderCard(); }
+function loadPv() { const v = lsGet(LS_PV, null); return v && v.date === today() && v.map ? v.map : {}; }
+function savePv(map) { const ks = Object.keys(map); if (ks.length > 300) ks.slice(0, ks.length - 300).forEach(k => delete map[k]); lsSet(LS_PV, { date: today(), map }); }
+/** a chat-list preview is acted on only when it is a short, complete command */
+function previewOk(text, msg, P) {
+  const t = String(text || '').trim();
+  return !msg.truncated && !/(?:…|\.\.\.)$/.test(t) && t.length <= 40 && !/\n/.test(t) && P.actions.length > 0 && P.actions.length <= 3 && P.actions.every(a => a.act !== 'note');
+}
+// words the team taught HotelOps here, when the shared word list (wa-brain.js: window.hoWaWords) is not loaded
+let LOCALW = (() => { const v = lsGet(LS_WORDS, {}); return v && typeof v === 'object' ? v : {}; })();
+let KNOWN = (() => { const v = lsGet(LS_KNOWN, {}); return v && typeof v === 'object' ? v : {}; })();
+function appLookup(w) {
+  w = String(w || '').toLowerCase();
+  try { if (W.hoWaWords && typeof W.hoWaWords.lookup === 'function') { const x = W.hoWaWords.lookup(w); if (x) return x; } } catch (_) {}
+  return LOCALW[w] || null;
+}
+const parse = (text, quote) => hoWaParse(text, { words: appLookup, quote: quote || '' });
+
+
 /**
- * Handle one message {id?, text, sender, mine, time, date, edited}.
- * opt.batch: collect undo + counts instead of toasting. Returns 'wait' | 'old' | 'dup' | 'done'.
+ * Handle one message {id?, text, sender, mine, time, date, edited, group?, act?, preview?, truncated?}.
+ * opt.batch: collect undo + counts instead of toasting. opt.rerun: read again after a word was explained.
+ * Returns 'wait' | 'old' | 'dup' | 'done'.
  */
 function handle(msg, via, opt) {
   opt = opt || {};
+  if (msg && msg.deleted) return onDeleted(msg);
   const text = String(msg && msg.text || '').slice(0, 4000);
   const sender = normS(msg && msg.sender || '').slice(0, 60) || (msg && msg.mine ? 'Me' : 'WhatsApp');
+  const group = normS(msg && msg.group || '').slice(0, 80);
   const tIso = today();
   const dIso = msg.date ? waDateISO(msg.date, new Date()) : tIso;
   if (dIso !== tIso) { if (text.trim()) archiveMsg(msg, dIso, text, sender, '', true); return 'old'; }
@@ -510,45 +835,137 @@ function handle(msg, via, opt) {
   const ck = 'c:' + dIso + '|' + t24 + '|' + sender.toLowerCase() + '|' + normS(text);
   const id = msg.id ? 'i:' + String(msg.id).slice(0, 200) : ck;
   const done = loadDone();
-  const prev = done[id];
-  if (done[ck] !== undefined && (prev === undefined || id === ck)) return 'dup';   // the same message seen before (linked or pasted)
-  const P = hoWaParse(text);
+  let prev = done[id];
+  // a chat-list preview, and later the same message read in full when the group is opened: never twice
+  const PV = loadPv(), ptxt = normS(text).toLowerCase(), pvk = dIso + '|' + t24 + '|' + ptxt;
+  if (msg.preview && (PV[pvk] || done[id] !== undefined)) return 'dup';
+  let caught = null;
+  if (!msg.preview && prev === undefined && !opt.rerun) {
+    const k = Object.keys(PV).find(x => { const v = PV[x]; return v && !v.done && x.indexOf(dIso + '|' + t24 + '|') === 0 && (x === pvk || (v.cut && v.t && ptxt.indexOf(v.t) === 0)); });
+    if (k) { caught = PV[k]; caught.done = 1; savePv(PV); prev = caught.a; }
+  }
+  if (!caught && !opt.rerun && done[ck] !== undefined && (prev === undefined || id === ck)) return 'dup';   // the same message seen before (linked or pasted)
+  if (opt.rerun && prev === undefined) prev = done[ck];
+  const quote = String(msg && msg.quote || '').slice(0, 400);
+  const P = parse(text, quote);
   let actions = P.actions, edited = !!msg.edited;
   if (prev !== undefined) {
     const old = new Set(String(prev).split('|').filter(Boolean));
     actions = actions.filter(a => !old.has(actionKey(a)));
-    if (!actions.length) { done[id] = P.actions.map(actionKey).join('|'); done[ck] = ''; saveDone(done); archiveMsg(msg, dIso, text, sender, '', true); return 'dup'; }
-    edited = true;
+    if (!actions.length) {
+      done[id] = P.actions.map(actionKey).join('|'); done[ck] = ''; saveDone(done);
+      if (caught) upgradePreview(caught, Object.assign({}, msg, { group }), dIso, text, sender);
+      else archiveMsg(Object.assign({}, msg, { group }), dIso, text, sender, '', true);
+      if (P.ask && !opt.rerun) askAbout(P.ask, msg, sender, group);
+      return 'dup';
+    }
+    if (!caught && !opt.rerun) edited = true;
   }
   const tl = timeLabel(t24);
-  const who = `WhatsApp · ${sender} ${tl}${edited ? ' (edited)' : ''}`;
+  const who = `WhatsApp · ${sender} ${tl}${edited ? ' (edited)' : ''}${opt.rerun ? (via === 'redo' ? ' (redo)' : ' (word explained)') : ''}`;
   const board = boardIsToday();
-  const res = P.kind === 'ignore' ? [{ st: 'ignore', text: 'HotelOps post — ignored' }]
-    : !actions.length ? [{ st: 'none', text: 'no room — just logged' }]
+  const acts = groupActs(msg);
+  const pvOnly = !!msg.preview && P.kind !== 'ignore' && !previewOk(text, msg, P);
+  const res = P.kind === 'ignore' ? [{ st: 'ignore', text: P.ho ? 'Sent from HotelOps — not read as a command' : 'HotelOps post — ignored' }]
+    : pvOnly ? [{ st: 'preview', text: 'Only the preview was seen · open the group in WhatsApp to read it in full' }]
+    : !actions.length ? [P.ask ? { st: 'ask', room: P.ask.room, text: `What does "${P.ask.word}" mean? Answer at the top` } : { st: 'none', text: 'no room — just logged' }]
+    : !acts ? [{ st: 'log', text: 'Log only' + (group ? ' · ' + group : '') + ' — rooms not changed' }]
     : actions.map(a => applyOne(a, who, board));
-  done[id] = P.actions.map(actionKey).join('|'); done[ck] = ''; saveDone(done);
+  if (P.ask && actions.length && acts && !pvOnly) res.push({ st: 'ask', room: P.ask.room, text: `What does "${P.ask.word}" mean? Answer at the top` });
+  done[id] = (pvOnly ? (prev || '') : P.actions.map(actionKey).join('|')); done[ck] = ''; saveDone(done);
 
-  const key = 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  let key = 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const undos = res.filter(r => r.undo).map(r => r.undo);
-  const entry = { key, at: Date.now(), time: t24, sender, text: text.slice(0, 500), mine: !!msg.mine, edited, via, res: res.map(r => ({ st: r.st, room: r.room || '', text: r.text })) };
-  LOG.unshift(entry); saveLog();
-  const akey = archiveMsg(Object.assign({}, msg, { edited }), dIso, text, sender, archR(res));
+  const entry = { key, at: Date.now(), time: t24, sender, text: text.slice(0, 500), mine: !!msg.mine, edited, via, res: res.map(r => { const o = { st: r.st, room: r.room || '', text: r.text }; if (r.bal) o.bal = r.bal; if (r.w) o.w = r.w; if (r.guess) { o.guess = r.guess; o.m = r.act; } return o; }) };
+  if (group) entry.group = group;
+  if (msg.id) entry.mid = String(msg.id).slice(0, 200);
+  if (quote) entry.quote = quote.slice(0, 200);
+  if (msg.preview) entry.preview = true;
+  if (caught) { dropPreview(caught, dIso); }
+  // a message read again after its word was explained: its own line in the log gets the new result
+  const orig = opt.rerun ? LOG.find(l => l.time === t24 && l.text === entry.text && l.sender === sender) : null;
+  if (orig) {
+    orig.res = orig.res.filter(r => r.st !== 'ask' && r.st !== 'none' && r.st !== 'deleted' && !(r.st === 'skip' && / explained: /.test(r.text))).concat(entry.res);
+    delete orig.undone; delete orig.deleted;
+  } else LOG.unshift(entry);
+  const tgt = orig || entry; key = tgt.key;
+  saveLog();
+  const akey = archiveMsg(Object.assign({}, msg, { edited, group }), dIso, text, sender, archR(res));
+  if (msg.preview) { const cut = !!msg.truncated || /(?:…|\.\.\.)$/.test(text.trim()); PV[pvk] = { a: done[id], ak: akey, lk: key, cut, t: cut ? ptxt.replace(/(?:…|\.\.\.)$/, '').trim() : '' }; savePv(PV); }
+  if (P.ask && !opt.rerun) askAbout(P.ask, msg, sender, group);
   let undoAll = null;
   if (undos.length) {
-    undoAll = once(() => { let ok = false; undos.slice().reverse().forEach(u => { try { if (u()) ok = true; } catch (_) {} }); if (ok) { entry.undone = true; saveLog(); archive(dIso, akey, { u: 1 }, true); renderCard(); } return ok; });
+    undoAll = once(() => { let ok = false; undos.slice().reverse().forEach(u => { try { if (u()) ok = true; } catch (_) {} }); if (ok) { tgt.undone = true; saveLog(); archive(dIso, akey, { u: 1 }, true); renderCard(); } return ok; });
     undoFns[key] = undoAll;
+    undoParts[key] = res.filter(r => r.undo).map(r => ({ room: r.room, st: r.st, fn: r.undo }));
   }
   if (opt.batch) { opt.batch.undos.push(undoAll); res.forEach(r => { opt.batch.n[r.st] = (opt.batch.n[r.st] || 0) + 1; }); }
   else {
     const acted = res.filter(r => r.undo);
     if (acted.length && typeof showUndoToast === 'function') {
       const lbl = acted.length === 1 ? acted[0].text.replace(/ · (?:⚠|nights not said).*/, '').replace(/^(\d+)/, 'Room $1') : acted.map(r => r.text.replace(/ · ⚠.*/, '')).join(' · ');
-      showUndoToast(`${lbl} (WhatsApp · ${sender} ${tl})`, undoAll, 10000);
+      const bw = acted.map(balInfo).filter(b => b && b.tone === 'warn').map(b => b.label);
+      showUndoToast(`${lbl} (WhatsApp · ${sender} ${tl})${bw.length ? ' · ' + bw.join(' · ') : ''}`, undoAll, 10000);
     }
     const nl = res.filter(r => r.st === 'notlist');
     if (nl.length && !acted.length && typeof showToast === 'function') showToast(`WhatsApp: ${nl.map(r => r.room).join(', ')} not on today's departures`, 'warn');
   }
   renderCard();
+  tell(tgt);
+  return 'done';
+}
+/** Ops Brain (wa-brain.js) and others hear about each message at once */
+function tell(entry) { try { doc.dispatchEvent(new CustomEvent('ho-wa-msg', { detail: JSON.parse(JSON.stringify(entry)) })); } catch (_) {} }
+/** "🤔 guessed" was right: the word goes in the hotel's list */
+function confirmGuess(word, m) { if (!word || !/^(?:co|lco|ext)$/.test(m)) return; answerAsk(word, m, '', null); LOG.forEach(l => l.res.forEach(r => { if (r.guess === word) { r.w = String(r.w || '').replace(/ · 🤔 guessed from "[^"]*"/, ' · ✓ ' + word); delete r.guess; } })); saveLog(); renderCard(); }
+/** the preview's log line and backup record give way to the message read in full */
+function dropPreview(pv, day) {
+  if (pv.lk) { const i = LOG.findIndex(l => l.key === pv.lk); if (i >= 0) { LOG.splice(i, 1); saveLog(); } }
+  if (pv.ak) archive(day, pv.ak, null);
+}
+/** the preview already did everything: keep its line, now with the full message */
+function upgradePreview(pv, msg, day, text, sender) {
+  const l = pv.lk && LOG.find(x => x.key === pv.lk);
+  if (l) { l.text = text.slice(0, 500); l.preview = false; l.sender = sender || l.sender; saveLog(); }
+  if (pv.ak) archive(day, pv.ak, null);
+  archiveMsg(msg, day, text, sender, l ? archR(l.res) : '', false);
+  pv.lk = ''; pv.ak = '';
+  renderCard();
+}
+
+/**
+ * A message deleted in WhatsApp ("This message was deleted"): what it did is undone, when nobody changed the room since.
+ * Its line in the log says so; the backup gets d:1; the toast has a Redo.
+ */
+function onDeleted(msg) {
+  const l = LOG.find(x => x.mid && x.mid === String(msg.id));
+  if (!l) return 'dup';                                   // never acted on here (or another day): nothing to undo
+  if (l.deleted) return 'dup';
+  const day = today(), akey = safeKey(msg.id);
+  const parts = (!l.undone && undoParts[l.key]) || [];
+  const back = [], changed = [];
+  parts.forEach(p => { let okk = false; try { okk = p.fn(true); } catch (_) {} (okk ? back : changed).push(p); });
+  const acted = l.res.filter(r => /^(?:co|lco|ext|extending|fin|note)$/.test(r.st));
+  const lost = !l.undone && !parts.length && acted.length;   // done before a reload: cannot undo from here
+  const BACK = { fin: 'finance hold removed', co: 'back to due out', lco: 'late check-out removed', ext: 'extension removed', extending: 'extending removed', note: 'note removed' };
+  let text = '🗑 Message deleted in WhatsApp';
+  if (back.length) text += ' → undone (' + back.map(p => p.room + ' ' + (BACK[p.st] || 'undone')).join(', ') + ')';
+  if (changed.length) text += ' · ' + changed.map(p => p.room).join(', ') + ' was changed after that message; check it';
+  if (lost) text += ' · check ' + acted.map(r => r.room).filter(Boolean).join(', ') + ' (done before HotelOps was reloaded)';
+  l.deleted = true; if (back.length) l.undone = true;
+  l.res.push({ st: 'deleted', room: '', text });
+  delete undoFns[l.key]; delete undoParts[l.key];
+  saveLog();
+  const done = loadDone(); done['i:' + String(msg.id).slice(0, 200)] = ''; saveDone(done);   // a Redo applies it again
+  archive(day, akey, back.length ? { d: 1, u: 1 } : { d: 1 }, true);
+  const redo = once(() => {
+    const m = { id: l.mid, text: l.text, sender: l.sender, mine: l.mine, time: l.time, date: dmy(day), group: l.group || '' };
+    l.res = l.res.filter(r => !/^(?:co|lco|ext|extending|fin|note|deleted)$/.test(r.st)); delete l.deleted; delete l.undone;
+    handle(m, 'redo', { rerun: true }); archive(day, akey, { d: null, u: null }, true); renderCard(); return true;
+  });
+  if (back.length && typeof showUndoToast === 'function') { showUndoToast(text.replace(/^🗑 /, '🗑 '), redo, 12000); const b = doc.getElementById('undoToastBtn'); if (b) b.textContent = '↻ Redo'; }
+  else if (typeof showToast === 'function') showToast(text, changed.length || lost ? 'warn' : 'info');
+  renderCard(); tell(l);
   return 'done';
 }
 
@@ -562,10 +979,13 @@ function readPasted(text) {
   const n = batch.n, parts = [`Read ${read} message${read === 1 ? '' : 's'}`];
   if (n.co) parts.push(`${n.co} checked out`);
   if (n.ext) parts.push(`${n.ext} extended`);
+  if (n.extending) parts.push(`${n.extending} extending`);
   if (n.lco) parts.push(`${n.lco} late checkout${n.lco === 1 ? '' : 's'}`);
   if (n.note) parts.push(`${n.note} note${n.note === 1 ? '' : 's'}`);
+  if (n.req) parts.push(`${n.req} request${n.req === 1 ? '' : 's'}`);
   if (n.notlist) parts.push(`${n.notlist} not on today's list`);
-  const ign = (n.none || 0) + (n.ignore || 0) + (n.skip || 0); if (ign) parts.push(`${ign} ignored`);
+  if (n.ask) parts.push(`${n.ask} word${n.ask === 1 ? '' : 's'} to explain`);
+  const ign = (n.none || 0) + (n.ignore || 0) + (n.skip || 0) + (n.log || 0); if (ign) parts.push(`${ign} ignored`);
   if (dup) parts.push(`${dup} already done`);
   if (old) parts.push(`${old} not from today`);
   const msg = parts.join(' · ');
@@ -578,208 +998,502 @@ function readPasted(text) {
   return { read, old, dup, counts: n, msg };
 }
 
-// ══ Messages from the WhatsApp tab ══════════════════════════
+// ══ "What does this word mean?" ═════════════════════════════
+// A short word after a room that nobody taught HotelOps ("415 ckd") is not guessed: the team is asked once,
+// here and in the WhatsApp window. The answer goes in the hotel's word list and the waiting messages are read again.
+let ASKS = (() => { const v = lsGet(LS_ASK, {}); return v && typeof v === 'object' ? v : {}; })();
+const MEANINGS = { co: '✓ Checked out', ext: '↪ Extension', lco: '⏰ Late CO', note: '📝 Note / request', hk: '🧹 HK status (note)', ignore: 'Ignore this word' };
+function saveAsks() { lsSet(LS_ASK, ASKS); }
+function askAbout(ask, msg, sender, group) {
+  const w = String(ask.word || '').toLowerCase(); if (!w || KNOWN[w] || appLookup(w)) return;
+  const k = safeKey(w), q = ASKS[k] || { word: w, room: ask.room, text: ask.text, sender, group: group || '', at: Date.now(), msgs: [] };
+  const m = { id: msg.id || '', text: String(msg.text || '').slice(0, 1000), sender, mine: !!msg.mine, time: msg.time || '', date: msg.date || '', group: group || '' };
+  if (msg.quote) m.quote = String(msg.quote).slice(0, 400);
+  if (!q.msgs.some(x => (x.id && x.id === m.id) || (x.text === m.text && x.time === m.time))) q.msgs.push(m);
+  if (q.msgs.length > 20) q.msgs = q.msgs.slice(-20);
+  ASKS[k] = q; saveAsks();
+  if (typeof fbUpdate === 'function') try { Promise.resolve(fbUpdate('waAsk', { [k]: q })).catch(() => {}); } catch (_) {}
+  renderAsks();
+}
+/** the answer: into the word list, never asked again, waiting messages read again (with Undo) */
+function answerAsk(word, meaning, note, by) {
+  const w = String(word || '').toLowerCase().trim(); if (!w || !MEANINGS[meaning]) return false;
+  note = String(note || '').trim().slice(0, 60);
+  const k = safeKey(w), q = ASKS[k];
+  const who = by || (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || 'HotelOps';
+  let saved = false;
+  try { if (W.hoWaWords && typeof W.hoWaWords.add === 'function') { W.hoWaWords.add(w, meaning, note); saved = true; } } catch (_) {}
+  LOCALW[w] = { m: meaning, label: note }; lsSet(LS_WORDS, LOCALW);
+  if (!saved && typeof fbSet === 'function') try { Promise.resolve(fbSet('waWords/' + k, { m: meaning, label: note, by: who, at: Date.now() })).catch(() => {}); } catch (_) {}
+  KNOWN[w] = meaning; lsSet(LS_KNOWN, KNOWN);
+  LOG.forEach(l => l.res.forEach(r => { if (r.st === 'ask' && r.text.indexOf('"' + w + '"') >= 0) { r.st = 'skip'; r.text = `"${w}" explained: ${MEANINGS[meaning].replace(/^\S+\s/, '')}`; } }));
+  saveLog();
+  delete ASKS[k]; saveAsks();
+  if (typeof fbUpdate === 'function') try { Promise.resolve(fbUpdate('waAsk', { [k]: null })).catch(() => {}); } catch (_) {}
+  wordsSent = '';
+  pushWords();
+  const batch = { undos: [], n: {} };
+  (q && q.msgs || []).forEach(m => { try { handle(m, 'ask', { rerun: true, batch }); } catch (_) {} });
+  const undos = batch.undos.filter(Boolean), n = batch.n;
+  const did = ['co', 'lco', 'ext', 'extending', 'note'].reduce((s, x) => s + (n[x] || 0), 0);
+  const msg = `"${w}" = ${MEANINGS[meaning].replace(/^\S+\s/, '')}${note ? ' (' + note + ')' : ''}` + (did ? ` · ${did} room${did === 1 ? '' : 's'} updated` : '');
+  if (undos.length && typeof showUndoToast === 'function') showUndoToast(msg, once(() => { undos.slice().reverse().forEach(u => { try { u(); } catch (_) {} }); renderCard(); }), 10000);
+  else if (typeof showToast === 'function') showToast(msg, 'ok');
+  renderCard();
+  return true;
+}
+function listenAsks() {
+  if (typeof fbListen !== 'function') return;
+  try {
+    fbListen('waAsk', v => {
+      const o = v && typeof v === 'object' ? v : {};
+      const next = {};
+      Object.keys(o).forEach(k => { const q = o[k]; if (q && typeof q === 'object' && q.word && !KNOWN[String(q.word).toLowerCase()]) next[k] = Object.assign({ msgs: [] }, q, { msgs: Array.isArray(q.msgs) ? q.msgs : Object.values(q.msgs || {}) }); });
+      // a question answered on another desk is gone from the database: gone here too (one asked here a moment ago stays)
+      Object.keys(ASKS).forEach(k => { if (!next[k] && ASKS[k] && Date.now() - (ASKS[k].at || 0) < 120000 && !KNOWN[ASKS[k].word]) next[k] = ASKS[k]; });
+      ASKS = next; saveAsks(); renderAsks();
+    });
+  } catch (_) {}
+}
+
+// ══ The link with the WhatsApp tab ══════════════════════════
 const ORIGINS = ['https://web.whatsapp.com'];
-let linkSeen = 0;
+let linkSeen = 0, LINK = null, wordsSent = '';
+const linked = () => !!(LINK && Date.now() - LINK.at < 20000);
+function postLink(o) { try { if (LINK && LINK.win) { LINK.win.postMessage(o, LINK.origin); return true; } } catch (_) {} return false; }
+/** the hotel's word list for the WhatsApp window: [{w, m, label}] */
+function wordsList() {
+  const out = [], seen = new Set();
+  const push = (w, e) => {
+    if (!w || !e || typeof e !== 'object') return; const m = e.m || e.means || e.act; if (!/^(?:co|lco|ext|note|hk|ignore)$/.test(m)) return;
+    const k = String(w).toLowerCase().slice(0, 40); if (seen.has(k)) return; seen.add(k); out.push({ w: k, m, label: String(e.label || '').slice(0, 60) });
+  };
+  try {
+    const a = W.hoWaWords && typeof W.hoWaWords.all === 'function' ? W.hoWaWords.all() : null;
+    if (Array.isArray(a)) a.forEach(e => { if (Array.isArray(e)) push(e[0], e[1]); else if (e && typeof e === 'object') push(e.w || e.word || e.key, e); });
+    else if (a && typeof a === 'object') Object.keys(a).forEach(k => push(k, a[k]));
+  } catch (_) {}
+  Object.keys(LOCALW).forEach(k => push(k, LOCALW[k]));
+  return out.slice(0, 500);
+}
+function pushWords() {
+  if (!linked()) return;
+  const list = wordsList(), j = JSON.stringify(list);
+  if (j === wordsSent) return;
+  if (postLink({ source: 'ho-wa', words: list })) wordsSent = j;
+}
+let wordsHooked = false;
+function hookWords() {
+  if (wordsHooked || !W.hoWaWords || typeof W.hoWaWords.onChange !== 'function') return;
+  wordsHooked = true;
+  try { W.hoWaWords.onChange(() => { wordsSent = ''; pushWords(); renderCard(); }); } catch (_) {}
+}
 W.addEventListener('message', e => {
   const d = e.data;
-  if (!d || typeof d !== 'object' || d.source !== 'ho-wa') return;
+  if (!d || typeof d !== 'object') return;
   const same = e.source === W && e.origin === location.origin;
   if (!same && !ORIGINS.includes(e.origin)) return;
+  if (d.source === 'ho-wa-sent') { onSent(d); return; }
+  if (d.source !== 'ho-wa') return;
+  if (d.send || d.words) return;                                        // what this app sends to the WhatsApp tab (same window in tests)
   const reply = o => { try { if (same) W.postMessage(o, location.origin); else if (e.source) e.source.postMessage(o, e.origin); } catch (_) {} };
-  if (!same) { const was = linkSeen; linkSeen = Date.now(); if (!was || Date.now() - was > 20000) renderStatus(); }
-  if (d.ping) { reply({ source: 'ho-wa-pong', ready: ready() }); return; }
+  if (!same || d.ping) {
+    const was = linkSeen; linkSeen = Date.now();
+    const fresh = !LINK || LINK.win !== e.source;
+    LINK = Object.assign(LINK && !fresh ? LINK : {}, { win: same ? W : e.source, origin: same ? location.origin : e.origin, at: Date.now() });
+    if (fresh) wordsSent = '';
+    if (!was || Date.now() - was > 20000) renderStatus();
+  }
+  if (d.answer && typeof d.answer === 'object') { answerAsk(d.answer.word, d.answer.meaning, d.answer.note, d.answer.by || 'WhatsApp window'); return; }
+  if (d.ping) {
+    if (Array.isArray(d.groups)) LINK.groups = d.groups.filter(g => g && g.name).slice(0, 12).map(g => ({ name: String(g.name).slice(0, 80), act: g.act !== false }));
+    if (typeof d.open === 'string') LINK.open = d.open.slice(0, 80);
+    if (typeof d.rtt === 'number') LINK.rtt = d.rtt;
+    LINK.auto = !!d.auto;
+    reply({ source: 'ho-wa-pong', ready: ready(), t: d.t });
+    pushWords();
+    renderStatus(); renderGroups();
+    return;
+  }
   const m = d.msg;
   if (!m || typeof m !== 'object' || !m.id) return;
   const r = handle(m, same ? 'page' : 'link');
   if (r !== 'wait') reply({ source: 'ho-wa-ack', id: m.id });
 });
 
-// ══ The card on Departures ══════════════════════════════════
+// ══ Sending to the group (only what someone types or picks here, and presses Send) ══
+let OUT = (() => { const v = lsGet(LS_OUT, null); return v && v.date === today() && Array.isArray(v.items) ? v.items : []; })();
+function saveOut() { if (OUT.length > 50) OUT = OUT.slice(0, 50); lsSet(LS_OUT, { date: today(), items: OUT }); }
+const OUT_ST = {
+  wait: ['…', 'Sending to WhatsApp…'], queued: ['⏳', 'Waiting · open the group in WhatsApp'], typed: ['⌨', 'Typed — press Enter in WhatsApp'],
+  sent: ['✓', 'Sent'], failed: ['✗', 'Not sent'], cancelled: ['—', 'Cancelled'],
+};
+function groupNames() {
+  const n = [];
+  ((LINK && LINK.groups) || []).forEach(g => { if (!n.some(x => gKey(x) === gKey(g.name))) n.push(g.name); });
+  LOG.forEach(l => { if (l.group && !n.some(x => gKey(x) === gKey(l.group))) n.push(l.group); });
+  return n;
+}
+function waSend(text, group) {
+  text = String(text || '').trim();
+  if (!text) { showToast('Type a message first', 'warn'); return null; }
+  if (!linked()) { showToast('Not linked to WhatsApp. Start the reader on WhatsApp Web first (❔ How to set up), then try again.', 'warn'); return null; }
+  const id = 'o' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const item = { id, group: group || (LINK && LINK.open) || groupNames()[0] || '', text: text.slice(0, 3000), at: Date.now(), st: 'wait' };
+  OUT.unshift(item); saveOut();
+  // the invisible mark: read back from the group, HotelOps knows it wrote this and never acts on it
+  postLink({ source: 'ho-wa', send: { id, group: item.group, text: HP.HO_MARK + item.text } });
+  setTimeout(() => { if (item.st === 'wait') { item.st = 'failed'; item.why = 'No answer from WhatsApp · is the reader running?'; saveOut(); renderOut(); } }, 7000);
+  renderOut();
+  return item;
+}
+function onSent(d) {
+  const it = OUT.find(o => o.id === d.id); if (!it || !OUT_ST[d.status]) return;
+  const was = it.st; it.st = d.status; it.why = String(d.why || '').slice(0, 120); if (d.group) it.group = String(d.group).slice(0, 80);
+  saveOut(); renderOut();
+  if (was !== it.st && typeof showToast === 'function') {
+    if (it.st === 'typed') showToast('Typed in WhatsApp · press Enter there to send', 'info');
+    else if (it.st === 'sent') showToast('✓ Sent to ' + (it.group || 'WhatsApp'), 'ok');
+    else if (it.st === 'queued') showToast('Open ' + (it.group || 'the group') + ' in WhatsApp to send it', 'info');
+    else if (it.st === 'failed') showToast('Not sent' + (it.why ? ': ' + it.why : ''), 'warn');
+  }
+}
+function cancelOut(id) { const it = OUT.find(o => o.id === id); if (!it) return; postLink({ source: 'ho-wa', send: { id, cancel: true } }); it.st = 'cancelled'; saveOut(); renderOut(); }
+
+// ══ The window ══════════════════════════════════════════════
 const CSS = `
 #tbWhatsApp{color:#25d366}
 #tbWhatsApp:hover{color:#2fe076}
-#waOv{position:fixed;inset:0;z-index:9000;display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px 6vh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);animation:waFade .16s ease}
+#waOv{position:fixed;inset:0;z-index:9000;display:flex;align-items:flex-start;justify-content:center;padding:5vh 16px;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);animation:waFade .16s ease}
 #waOv[hidden]{display:none}
-#waOv #waCard{margin:0 auto auto;width:min(760px,100%);flex:none;overflow:visible;box-shadow:0 24px 60px -20px rgba(0,0,0,.6);animation:waUp .2s ease}
-#waOv #waCard>summary{cursor:default;flex:none}
-#waOv #waCard>summary:hover{background:transparent}
-#waOv #waCard>summary{position:sticky;top:-6vh;z-index:2;background:var(--card);border-radius:var(--r,12px) var(--r,12px) 0 0;border-bottom:1px solid var(--border)}
-#waCard .wa-x{margin-left:auto;flex:none;width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--card2,var(--bg2));color:var(--text2);cursor:pointer;font-size:14px}
-#waCard .wa-x:hover{color:var(--text);border-color:var(--accent-border,var(--border))}
+#waOv #waCard{margin:0 auto auto;width:min(880px,100%);flex:none;overflow:visible;box-shadow:0 30px 80px -24px rgba(0,0,0,.6);animation:waUp .2s ease}
 @keyframes waFade{from{opacity:0}to{opacity:1}}
 @keyframes waUp{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
-@media (prefers-reduced-motion:reduce){#waOv,#waOv #waCard{animation:none}}
-@media (max-width:600px){#waOv{padding:10px}#waOv #waCard>summary{top:-10px}}
-#waCard{margin-top:16px;background:var(--card);border:1px solid var(--border);border-radius:var(--r,12px);overflow:hidden;color:var(--text)}
-#waCard>summary{list-style:none;display:flex;align-items:center;gap:10px;min-height:52px;padding:0 16px;cursor:pointer;font:700 14px var(--font,inherit)}
-#waCard>summary::-webkit-details-marker{display:none}
-#waCard>summary:hover{background:var(--bg2)}
-#waCard .wa-n{font:600 11px var(--mono,monospace);padding:2px 7px;border-radius:99px;background:var(--bg2);color:var(--text2);border:1px solid var(--border)}
-#waCard .wa-last{flex:1;min-width:0;font-weight:500;font-size:12px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#waCard .wa-tog{font:600 11.5px var(--font,inherit);color:var(--text3);white-space:nowrap}
-#waCard[open] .wa-tog{transform:rotate(180deg)}
-#waCard .wa-body{border-top:1px solid var(--border);padding:12px 16px 16px;display:grid;gap:12px}
-#waCard .wa-st{font-size:12.5px;color:var(--text2);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-#waCard .wa-dot{width:8px;height:8px;border-radius:50%;background:var(--text3);flex:none}
-#waCard .wa-dot.on{background:var(--green)}
-#waCard .wa-list{max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;background:var(--card2,var(--bg2))}
-#waCard .wa-row{display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;padding:8px 10px;border-bottom:1px solid var(--border);font-size:12.5px;align-items:start}
-#waCard .wa-row:last-child{border-bottom:0}
-#waCard .wa-t{font:500 11.5px var(--mono,monospace);color:var(--text3);padding-top:1px}
-#waCard .wa-m{min-width:0}
-#waCard .wa-who{font-weight:700;color:var(--text2);margin-right:4px}
-#waCard .wa-txt{color:var(--text);overflow-wrap:anywhere;white-space:pre-wrap}
-#waCard .wa-res{grid-column:2/4;display:flex;flex-wrap:wrap;gap:4px}
-#waCard .wa-chip{font-size:11.5px;padding:2px 8px;border-radius:99px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);overflow-wrap:anywhere}
-#waCard .wa-chip.co{color:var(--green);border-color:color-mix(in srgb,var(--green) 40%,transparent)}
-#waCard .wa-chip.lco{color:var(--amber,var(--accent));border-color:color-mix(in srgb,var(--amber,var(--accent)) 40%,transparent)}
-#waCard .wa-chip.ext{color:var(--sky,#38bdf8);border-color:color-mix(in srgb,var(--sky,#38bdf8) 40%,transparent)}
-#waCard .wa-chip.notlist{color:var(--red);border-color:color-mix(in srgb,var(--red) 40%,transparent)}
-#waCard .wa-row.undone .wa-res{opacity:.55;text-decoration:line-through}
-#waCard .wa-u{all:unset;cursor:pointer;font:600 11.5px var(--font,inherit);color:var(--text2);padding:3px 9px;border:1px solid var(--border2,var(--border));border-radius:7px;white-space:nowrap}
-#waCard .wa-u:hover{color:var(--text);background:var(--bg2)}
-#waCard .wa-empty{padding:14px;color:var(--text3);font-size:12.5px;text-align:center}
-#waCard h4{margin:0 0 6px;font:700 12.5px var(--font,inherit);color:var(--text2);text-transform:none}
-#waCard textarea{box-sizing:border-box;width:100%;min-height:84px;resize:vertical;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:9px 11px;font:12.5px/1.45 var(--mono,monospace)}
-#waCard .wa-btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
-#waCard .wa-btn{all:unset;box-sizing:border-box;cursor:pointer;padding:8px 13px;border-radius:9px;border:1px solid var(--border2,var(--border));background:var(--bg2);color:var(--text);font:600 12.5px var(--font,inherit)}
+@keyframes waPulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--green) 55%,transparent)}70%{box-shadow:0 0 0 8px transparent}100%{box-shadow:0 0 0 0 transparent}}
+@keyframes waIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+#waCard{--wa-g:#25d366;--wa-co:var(--green);--wa-lco:var(--amber,#d97706);--wa-ext:var(--teal,#0d9488);--wa-note:var(--purple,#7c3aed);--wa-bad:var(--red);
+  background:var(--card);border:1px solid var(--border);border-radius:var(--r2,14px);color:var(--text);font-family:var(--font,inherit);position:relative}
+#waCard *{box-sizing:border-box}
+#waCard:focus{outline:none}
+#waCard .wa-hd{position:sticky;top:-5vh;z-index:3;display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--card);border-bottom:1px solid var(--border);border-radius:var(--r2,14px) var(--r2,14px) 0 0}
+#waCard .wa-hd::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--wa-g) 60%,transparent),transparent)}
+#waCard .wa-logo{flex:none;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,#25d366,#128c7e);color:#fff;box-shadow:0 6px 18px -6px rgba(37,211,102,.6)}
+#waCard .wa-logo svg{width:22px;height:22px}
+#waCard .wa-ttl{flex:1;min-width:0;display:grid;gap:3px}
+#waCard .wa-ttl b{font:700 16px/1.2 var(--font,inherit);letter-spacing:-.01em}
+#waCard .wa-live{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--text2);min-width:0}
+#waCard .wa-live span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+#waCard .wa-dot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--text3)}
+#waCard .wa-dot.on{background:var(--green);animation:waPulse 1.8s infinite}
+#waCard .wa-ib{all:unset;box-sizing:border-box;flex:none;cursor:pointer;height:34px;min-width:34px;padding:0 10px;border-radius:10px;border:1px solid var(--border);background:var(--card2,var(--bg2));color:var(--text2);font:600 12.5px var(--font,inherit);display:inline-flex;align-items:center;justify-content:center;gap:6px}
+#waCard .wa-ib:hover{color:var(--text);border-color:var(--border2,var(--border))}
+#waCard .wa-ib[hidden]{display:none}
+#waCard .wa-body{padding:16px;display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+#waCard .wa-body>*{min-width:0}
+#waCard .wa-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+#waCard .wa-kpi{position:relative;overflow:hidden;border:1px solid var(--border);border-radius:12px;padding:10px 12px;background:var(--card2,var(--bg2))}
+#waCard .wa-kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--c)}
+#waCard .wa-kpi b{display:block;font:700 22px/1.1 var(--mono,monospace);color:var(--text);font-variant-numeric:tabular-nums}
+#waCard .wa-kpi span{display:block;margin-top:3px;font-size:11.5px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#waCard .wa-kpi.zero b{color:var(--text3)}
+#waCard .wa-kpi .wa-ks{display:none}
+#waCard .wa-sec{border:1px solid var(--border);border-radius:12px;background:var(--card)}
+#waCard .wa-sech{display:flex;align-items:center;gap:8px;padding:11px 14px;font:700 13px var(--font,inherit);color:var(--text)}
+#waCard .wa-sech .wa-sub{font-weight:500;font-size:12px;color:var(--text3);margin-left:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+#waCard .wa-secb{padding:0 14px 14px;display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+#waCard .wa-secb>*{min-width:0}
+#waCard details.wa-sec>summary{list-style:none;cursor:pointer}
+#waCard details.wa-sec>summary::-webkit-details-marker{display:none}
+#waCard details.wa-sec>summary::after{content:"▾";margin-left:auto;padding-left:10px;color:var(--text3);transition:transform .15s}
+#waCard details.wa-sec>summary .wa-sub+*{margin-left:0}
+#waCard details.wa-sec>summary:has(.wa-sub)::after{margin-left:0}
+#waCard details.wa-sec[open]>summary::after{transform:rotate(180deg)}
+#waCard .wa-asks{display:grid;gap:10px}
+#waCard .wa-ask{border:1px solid color-mix(in srgb,var(--wa-lco) 45%,var(--border));background:color-mix(in srgb,var(--wa-lco) 8%,var(--card));border-radius:12px;padding:12px 14px;display:grid;gap:9px;animation:waIn .2s ease}
+#waCard .wa-ask p{margin:0;font-size:13px;line-height:1.45;color:var(--text)}
+#waCard .wa-ask p q{font-weight:700}
+#waCard .wa-ask .wa-aw{display:flex;flex-wrap:wrap;gap:6px}
+#waCard .wa-ask input{flex:1 1 180px;min-width:0}
+#waCard .wa-tpl{display:flex;flex-wrap:wrap;gap:6px}
+#waCard .wa-cmp{display:grid;grid-template-columns:110px 130px 1fr;gap:8px}
+#waCard .wa-cmp .wa-gsel{min-width:0}
+#waCard input.wa-in,#waCard select.wa-in{width:100%;height:36px;margin:0;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:0 10px;font:13px var(--font,inherit);color-scheme:light dark}
+#waCard input.wa-in:focus,#waCard select.wa-in:focus,#waCard textarea:focus{outline:0;border-color:var(--wa-g)}
+#waCard textarea{width:100%;min-height:58px;resize:vertical;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:9px 11px;font:13px/1.45 var(--font,inherit);margin:0}
+#waCard .wa-paste textarea,#waCard .wa-help textarea{font:12px/1.45 var(--mono,monospace)}
+#waCard .wa-btns{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#waCard .wa-btn{all:unset;box-sizing:border-box;cursor:pointer;padding:8px 13px;border-radius:9px;border:1px solid var(--border2,var(--border));background:var(--bg2);color:var(--text);font:600 12.5px var(--font,inherit);white-space:nowrap;text-align:center}
 #waCard .wa-btn:hover{border-color:var(--accent)}
 #waCard .wa-btn.pri{background:var(--accent);border-color:var(--accent);color:var(--bg,#111)}
-#waCard .wa-row.quiet{opacity:.6;padding-top:6px;padding-bottom:6px}
-#waCard .wa-row.quiet .wa-res{display:none}
-#waCard details.wa-help{border:1px solid var(--border);border-radius:10px;padding:0 12px}
-#waCard details.wa-help>summary{cursor:pointer;padding:10px 0;font:700 12.5px var(--font,inherit);color:var(--text2)}
-#waCard .wa-help ol{margin:4px 0 10px;padding-left:20px;font-size:12.5px;line-height:1.55;color:var(--text2)}
-#waCard .wa-help p{font-size:12.5px;color:var(--text2);margin:6px 0}
-#waCard .wa-help code{font:12px var(--mono,monospace);background:var(--bg2);padding:1px 5px;border-radius:5px;color:var(--text)}
-#waCard .wa-help textarea{min-height:70px;font-size:11px}
-#waCard .wa-find{display:grid;gap:8px}
+#waCard .wa-btn.go{background:linear-gradient(135deg,#25d366,#128c7e);border-color:transparent;color:#fff;box-shadow:0 6px 16px -8px rgba(18,140,126,.8)}
+#waCard .wa-btn.go:hover{filter:brightness(1.06)}
+#waCard .wa-btn.sm{padding:6px 11px;font-size:12px}
+#waCard .wa-btn:disabled{opacity:.5;cursor:default}
+#waCard .wa-btn:focus-visible,#waCard .wa-ib:focus-visible,#waCard .wa-chipb:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#waCard .wa-chipb{all:unset;box-sizing:border-box;cursor:pointer;padding:6px 11px;border-radius:99px;border:1px solid var(--border);background:var(--card2,var(--bg2));color:var(--text2);font:600 12px var(--font,inherit);white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+#waCard .wa-chipb:hover{color:var(--text);border-color:var(--border2,var(--border))}
+#waCard .wa-chipb.on{background:var(--accent);border-color:var(--accent);color:var(--bg,#111)}
+#waCard .wa-chipb i{font-style:normal;font:600 11px var(--mono,monospace);opacity:.75}
+#waCard .wa-hint{font-size:12px;color:var(--text3);line-height:1.45}
+#waCard .wa-out{display:grid;gap:6px}
+#waCard .wa-o{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:var(--card2,var(--bg2));font-size:12.5px}
+#waCard .wa-o .wa-ot{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+#waCard .wa-o .wa-os{font-weight:600;color:var(--text2);text-align:right}
+#waCard .wa-o.sent .wa-os{color:var(--green)}
+#waCard .wa-o.typed .wa-os{color:var(--wa-lco)}
+#waCard .wa-o.failed .wa-os{color:var(--red)}
+#waCard .wa-o time{font:500 11.5px var(--mono,monospace);color:var(--text3)}
+#waCard .wa-tools{display:grid;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border)}
+#waCard .wa-frow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+#waCard .wa-frow select.wa-in{width:auto;max-width:100%;height:30px;font-size:12px;border-radius:99px}
 #waCard .wa-q{display:flex;align-items:center;gap:8px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:0 11px;transition:border-color .15s}
-#waCard .wa-q:focus-within{border-color:var(--accent)}
+#waCard .wa-q:focus-within{border-color:var(--wa-g)}
 #waCard .wa-q span{font-size:13px;opacity:.7}
 #waCard .wa-q input{flex:1;min-width:0;width:auto;height:auto;margin:0;background:transparent!important;border:0!important;border-radius:0;outline:0!important;box-shadow:none!important;color:var(--text);font:13px var(--font,inherit);padding:10px 0}
 #waCard .wa-pick[hidden],#waCard .wa-list[hidden]{display:none}
 #waCard .wa-rng{display:flex;flex-wrap:wrap;gap:6px}
 #waCard .wa-rng button{all:unset;box-sizing:border-box;cursor:pointer;padding:5px 11px;border-radius:99px;border:1px solid var(--border);background:var(--card2,var(--bg2));color:var(--text2);font:600 12px var(--font,inherit);white-space:nowrap}
-#waCard .wa-rng button:hover{color:var(--text);border-color:var(--border2,var(--border))}
-#waCard .wa-rng button.on{background:var(--accent);border-color:var(--accent);color:var(--bg,#111)}
-#waCard .wa-rng button:focus-visible,#waCard .wa-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#waCard .wa-rng button:hover{color:var(--text)}
+#waCard .wa-rng button.on{background:var(--text);border-color:var(--text);color:var(--card)}
 #waCard .wa-pick{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--text3)}
 #waCard .wa-pick input{background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 8px;font:12.5px var(--font,inherit);color-scheme:light dark;min-width:0}
 #waCard .wa-sbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 #waCard .wa-scount{flex:1;min-width:0;font:600 12px var(--font,inherit);color:var(--text3)}
 #waCard .wa-dl{display:flex;gap:6px}
-#waCard .wa-btn.sm{padding:6px 11px;font-size:12px}
-#waCard .wa-sres{max-height:440px}
-#waCard .wa-day{position:sticky;top:0;z-index:1;display:flex;justify-content:space-between;gap:8px;padding:6px 10px;font:700 11.5px var(--font,inherit);color:var(--text2);background:var(--card);border-bottom:1px solid var(--border);box-shadow:0 1px 0 var(--border)}
+#waCard .wa-list{max-height:520px;overflow-y:auto;overflow-x:hidden;padding:4px 14px 14px}
+#waCard .wa-hr{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:10px;padding:10px 0 6px;font:700 11px var(--font,inherit);letter-spacing:.06em;text-transform:uppercase;color:var(--text3);background:var(--card)}
+#waCard .wa-hr::after{content:"";flex:1;height:1px;background:var(--border)}
+#waCard .wa-hr span{order:2;font:600 11px var(--mono,monospace);letter-spacing:0}
+#waCard .wa-msg,#waCard .wa-row{position:relative;display:grid;grid-template-columns:36px 1fr auto;gap:2px 10px;padding:10px 4px 10px 0;align-items:start;animation:waIn .18s ease}
+#waCard .wa-msg+.wa-msg,#waCard .wa-row+.wa-row{border-top:1px dashed color-mix(in srgb,var(--border) 80%,transparent)}
+#waCard .wa-av{grid-row:1/4;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font:700 13px var(--font,inherit);color:#fff;background:hsl(var(--h,210) 55% 46%);box-shadow:inset 0 0 0 2px color-mix(in srgb,#fff 18%,transparent)}
+#waCard .wa-av.ph{background:var(--bg2);color:var(--text2);box-shadow:inset 0 0 0 1px var(--border)}
+#waCard .wa-av.ph svg{width:16px;height:16px}
+#waCard .wa-av.me{background:linear-gradient(135deg,#25d366,#128c7e)}
+#waCard .wa-mh{display:flex;align-items:baseline;gap:8px;min-width:0;flex-wrap:wrap}
+#waCard .wa-who{font-weight:700;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+#waCard .wa-tm{font:500 11.5px var(--mono,monospace);color:var(--text3)}
+#waCard .wa-tag{font:600 10.5px var(--font,inherit);padding:2px 7px;border-radius:99px;background:var(--bg2);color:var(--text2);border:1px solid var(--border);max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#waCard .wa-tag.pv{color:var(--wa-lco);border-color:color-mix(in srgb,var(--wa-lco) 40%,transparent)}
+#waCard .wa-quote{grid-column:2;margin-top:4px;padding:4px 9px;border-left:3px solid var(--border2,var(--border));border-radius:4px 8px 8px 4px;background:var(--bg2);color:var(--text3);font-size:12px;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#waCard .wa-txt{grid-column:2;color:var(--text);font-size:13.5px;line-height:1.45;overflow-wrap:anywhere;white-space:pre-wrap;margin-top:2px}
+#waCard .wa-res{grid-column:2/4;display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+#waCard .wa-chip{display:inline-flex;align-items:center;gap:5px;font:600 11.5px/1.3 var(--font,inherit);padding:3px 9px;border-radius:99px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);overflow-wrap:anywhere}
+#waCard .wa-chip.co{color:var(--wa-co);background:color-mix(in srgb,var(--wa-co) 10%,transparent);border-color:color-mix(in srgb,var(--wa-co) 35%,transparent)}
+#waCard .wa-chip.lco{color:var(--wa-lco);background:color-mix(in srgb,var(--wa-lco) 10%,transparent);border-color:color-mix(in srgb,var(--wa-lco) 35%,transparent)}
+#waCard .wa-chip.fin{color:var(--wa-lco);border-color:color-mix(in srgb,var(--wa-lco) 40%,transparent)}
+#waCard .wa-chip.extending{color:var(--wa-ext);border-style:dashed;border-color:color-mix(in srgb,var(--wa-ext) 45%,transparent)}
+#waCard .wa-chip.ext{color:var(--wa-ext);background:color-mix(in srgb,var(--wa-ext) 10%,transparent);border-color:color-mix(in srgb,var(--wa-ext) 35%,transparent)}
+#waCard .wa-chip.note{color:var(--wa-note);background:color-mix(in srgb,var(--wa-note) 9%,transparent);border-color:color-mix(in srgb,var(--wa-note) 32%,transparent)}
+#waCard .wa-chip.req{color:var(--text2)}
+#waCard .wa-chip.notlist,#waCard .wa-chip.warn{color:var(--wa-bad);background:color-mix(in srgb,var(--wa-bad) 9%,transparent);border-color:color-mix(in srgb,var(--wa-bad) 35%,transparent)}
+#waCard .wa-chip.ask{color:var(--wa-lco);border-style:dashed}
+#waCard .wa-chip.deleted{color:var(--text2);border-style:dashed;text-decoration:none!important}
+#waCard .wa-msg.del .wa-txt{text-decoration:line-through;color:var(--text3)}
+#waCard .wa-chip.tiny,#waCard .wa-chip.skip,#waCard .wa-chip.none,#waCard .wa-chip.ignore,#waCard .wa-chip.log,#waCard .wa-chip.preview{color:var(--text3);background:transparent;font-weight:500}
+#waCard .wa-msg::before{content:"";position:absolute;left:-14px;top:12px;bottom:12px;width:3px;border-radius:0 3px 3px 0;background:var(--bar,transparent)}
+#waCard .wa-msg.t-co{--bar:var(--wa-co)}#waCard .wa-msg.t-lco{--bar:var(--wa-lco)}#waCard .wa-msg.t-ext{--bar:var(--wa-ext)}#waCard .wa-msg.t-note{--bar:var(--wa-note)}#waCard .wa-msg.t-bad{--bar:var(--wa-bad)}
+#waCard .wa-msg.quiet .wa-txt{color:var(--text2)}
+#waCard .wa-msg.quiet .wa-av{opacity:.6}
+#waCard .wa-msg.undone .wa-res .wa-chip:not(.deleted){opacity:.55;text-decoration:line-through}
+#waCard .wa-u{all:unset;cursor:pointer;grid-column:3;grid-row:1;font:600 11.5px var(--font,inherit);color:var(--text2);padding:4px 9px;border:1px solid var(--border2,var(--border));border-radius:8px;white-space:nowrap}
+#waCard .wa-u:hover{color:var(--text);background:var(--bg2)}
+#waCard .wa-empty{padding:26px 14px;color:var(--text3);font-size:13px;text-align:center;line-height:1.5}
+#waCard .wa-empty b{display:block;font-size:22px;margin-bottom:4px}
+#waCard .wa-row .wa-t{grid-row:1/3;font:500 11.5px var(--mono,monospace);color:var(--text3);padding-top:2px}
+#waCard .wa-row .wa-m{min-width:0}
+#waCard .wa-row .wa-m .wa-who{margin-right:6px}
+#waCard .wa-row.undone .wa-res{opacity:.55;text-decoration:line-through}
+#waCard .wa-day{position:sticky;top:0;z-index:1;display:flex;justify-content:space-between;gap:8px;padding:8px 0;font:700 11.5px var(--font,inherit);color:var(--text2);background:var(--card);border-bottom:1px solid var(--border)}
 #waCard .wa-day span{font-weight:500;color:var(--text3)}
 #waCard .wa-sres mark{background:color-mix(in srgb,var(--gold,#e0b24f) 35%,transparent);color:inherit;border-radius:3px;padding:0 1px}
 #waCard .wa-more{all:unset;box-sizing:border-box;display:block;width:100%;cursor:pointer;text-align:center;padding:10px;font:600 12.5px var(--font,inherit);color:var(--accent)}
-#waCard .wa-more:hover{background:var(--bg2)}
-@media (max-width:600px){#waCard>summary{padding:0 12px}#waCard .wa-body{padding:10px 12px 14px}#waCard .wa-last{display:none}#waCard .wa-btn{flex:1 1 auto;text-align:center}}
+#waCard .wa-grps{display:grid;gap:6px}
+#waCard .wa-g{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:12.5px;padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:var(--card2,var(--bg2))}
+#waCard .wa-g b{flex:1 1 140px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#waCard .wa-g label{display:inline-flex;align-items:center;gap:6px;color:var(--text2);white-space:nowrap;cursor:pointer}
+#waCard .wa-help p{font-size:12.5px;color:var(--text2);margin:0;line-height:1.55}
+#waCard .wa-help ol{margin:0;padding-left:20px;font-size:12.5px;line-height:1.55;color:var(--text2)}
+#waCard .wa-help code{font:12px var(--mono,monospace);background:var(--bg2);padding:1px 5px;border-radius:5px;color:var(--text)}
+@media (prefers-reduced-motion:reduce){#waOv,#waOv #waCard,#waCard .wa-msg,#waCard .wa-row,#waCard .wa-ask{animation:none}#waCard .wa-dot.on{animation:none}}
+@media (max-width:640px){
+  #waOv{padding:8px}#waCard .wa-hd{top:-8px;padding:12px;gap:10px}#waCard .wa-logo{width:34px;height:34px;border-radius:10px}
+  #waCard .wa-body{padding:12px;gap:12px}#waCard .wa-kpis{gap:6px}#waCard .wa-kpi{padding:8px 6px 8px 9px}#waCard .wa-kpi b{font-size:18px}#waCard .wa-kpi span{font-size:10.5px}
+  #waCard .wa-kpi .wa-kl{display:none}#waCard .wa-kpi .wa-ks{display:block}
+  #waCard .wa-tpl{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -12px;padding:0 12px}#waCard .wa-tpl::-webkit-scrollbar{display:none}
+  #waCard .wa-o{grid-template-columns:auto minmax(0,1fr)}#waCard .wa-o .wa-os{grid-column:1/-1;text-align:left}
+  #waCard .wa-cmp{grid-template-columns:1fr 1fr}#waCard .wa-cmp .wa-gsel{grid-column:1/-1}
+  #waCard .wa-ib .wa-ibl{display:none}#waCard .wa-list{padding:4px 12px 12px;max-height:none}#waCard .wa-msg::before{left:-12px}
+  #waCard .wa-btn{flex:1 1 auto}#waCard .wa-tools{padding:12px}#waCard .wa-sech{padding:11px 12px}#waCard .wa-secb{padding:0 12px 12px}
+}
 `;
 const esc = s => (typeof escapeHtml === 'function' ? escapeHtml(s) : String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
 const clock = t => { const m = String(t || '').match(/^(\d{1,2}):(\d{2})$/); if (!m) return t || ''; const h = +m[1]; return (h % 12 || 12) + ':' + m[2] + (h >= 12 ? ' PM' : ' AM'); };
-const ICON = { co: '✓', lco: '⏰', ext: '↪', note: '📝', notlist: '⚠', skip: '·', none: '—', ignore: '—' };
+const ICON = { fin: '', extending: '', co: '✓', lco: '⏰', ext: '↪', note: '📝', req: '📝', notlist: '⚠', skip: '·', none: '—', ignore: '—', log: '🗂', preview: '👁', ask: '❓', deleted: '' };
+const SVG_WA = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2s.2-1.1.2-1.2-.2-.2-.5-.3Z"/></svg>';
+const SVG_PH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2Z"/></svg>';
+let FILT = 'all', GFILT = '';
 
 function mount() {
   if (doc.getElementById('waCard')) return true;
   const panel = doc.getElementById('panel-departures'); if (!panel) return false;
   const st = doc.createElement('style'); st.id = 'waCss'; st.textContent = CSS; doc.head.appendChild(st);
-  const card = doc.createElement('details'); card.id = 'waCard';
-  card.open = true;   // it lives in its own window (top bar 🟢 button), always open
-  card.innerHTML = `<summary><span aria-hidden="true">💬</span><span>WhatsApp HK group</span><span class="wa-n" id="waCount">0</span><span class="wa-last" id="waLast"></span><button type="button" class="wa-x" id="waClose" aria-label="Close" title="Close (Esc)">✕</button></summary>
+  const card = doc.createElement('div'); card.id = 'waCard'; card.tabIndex = -1;
+  card.innerHTML = `<div class="wa-hd"><span class="wa-logo">${SVG_WA}</span>
+    <span class="wa-ttl"><b>WhatsApp</b><span class="wa-live" id="waStatus"></span></span>
+    <button type="button" class="wa-ib" id="waWords" hidden title="The hotel's WhatsApp words (VD, OOO…)">📖<span class="wa-ibl"> Words</span></button>
+    <button type="button" class="wa-ib" id="waClose" aria-label="Close" title="Close (Esc)">✕</button></div>
   <div class="wa-body">
-    <div class="wa-st" id="waStatus"></div>
-    <div class="wa-find" id="waFind">
-      <div class="wa-q"><span aria-hidden="true">🔍</span><input type="search" id="waQ" placeholder="Search the HK chat… room, word or name" aria-label="Search the HK chat" autocomplete="off" spellcheck="false"></div>
-      <div class="wa-rng" id="waRng" role="group" aria-label="Which days">
-        <button type="button" data-r="today" class="on" aria-pressed="true">Today</button><button type="button" data-r="7" aria-pressed="false">7 days</button><button type="button" data-r="30" aria-pressed="false">30 days</button><button type="button" data-r="all" aria-pressed="false">All</button><button type="button" data-r="pick" aria-pressed="false">📅 Pick dates</button>
+    <div class="wa-asks" id="waAsks"></div>
+    <div class="wa-kpis" id="waKpis" aria-label="Today"></div>
+    <section class="wa-sec" id="waSendBox">
+      <div class="wa-sech">✉️ Send to WhatsApp<span class="wa-sub" id="waSendTo"></span></div>
+      <div class="wa-secb">
+        <div class="wa-tpl" id="waTpl">${TEMPLATES.map(t => `<button type="button" class="wa-chipb" data-tpl="${t.k}">${esc(t.label)}</button>`).join('')}<button type="button" class="wa-chipb" id="waCoList" title="Builds today's list from Departures in the box. Check it, then press Send.">📋 Checkout list</button></div>
+        <div class="wa-cmp"><input class="wa-in" id="waRoom" placeholder="Room" inputmode="numeric" autocomplete="off" aria-label="Room for the template"><input class="wa-in" id="waTime" placeholder="Time (2 PM)" autocomplete="off" aria-label="Time for the template"><select class="wa-in wa-gsel" id="waGrp" aria-label="Group"></select></div>
+        <textarea id="waMsg" placeholder="Type a message for the group…" aria-label="Message to send to WhatsApp"></textarea>
+        <div class="wa-btns"><button type="button" class="wa-btn go" id="waSendBtn">Send to WhatsApp</button><span class="wa-hint" id="waSendHint">It is typed in WhatsApp for you. You press Enter there to send it.</span></div>
+        <div class="wa-out" id="waOut"></div>
       </div>
-      <div class="wa-pick" id="waPick" hidden><input type="date" id="waFrom" aria-label="From"><span>to</span><input type="date" id="waTo" aria-label="To"></div>
-      <div class="wa-sbar"><span class="wa-scount" id="waSCount"></span><span class="wa-dl"><button type="button" class="wa-btn sm" id="waDlTxt" title="Saves the messages shown as a .txt in WhatsApp's own format">⬇ Download backup</button><button type="button" class="wa-btn sm" id="waDlCsv" title="For Excel">CSV</button></span></div>
-    </div>
-    <div class="wa-list" id="waList" aria-live="polite"></div>
-    <div class="wa-list wa-sres" id="waSRes" hidden aria-live="polite"></div>
-    <div>
-      <h4>Paste from WhatsApp</h4>
-      <textarea id="waPaste" placeholder="[9:01 AM, 18/10/2026] Sam: 324 CO&#10;[9:05 AM, 18/10/2026] Lina: 202 LCO 6PM" aria-label="Paste WhatsApp messages"></textarea>
-      <div class="wa-btns">
-        <button type="button" class="wa-btn pri" id="waRead">Read messages</button>
-        <button type="button" class="wa-btn" id="waClip">📋 Paste</button>
-        <button type="button" class="wa-btn" id="waUpBtn">📂 Upload exported chat (.txt)</button>
-        <input type="file" id="waFile" accept=".txt,text/plain" hidden>
+    </section>
+    <section class="wa-sec">
+      <div class="wa-tools">
+        <div class="wa-q"><span aria-hidden="true">🔍</span><input type="search" id="waQ" placeholder="Search the chat… room, word or name" aria-label="Search the WhatsApp chat" autocomplete="off" spellcheck="false"></div>
+        <div class="wa-frow" id="waFilt" role="group" aria-label="Show">
+          <button type="button" class="wa-chipb on" data-f="all">All <i data-n="all"></i></button><button type="button" class="wa-chipb" data-f="actions">Actions <i data-n="actions"></i></button><button type="button" class="wa-chipb" data-f="notes">Notes <i data-n="notes"></i></button><button type="button" class="wa-chipb" data-f="attention">Needs attention <i data-n="attention"></i></button><button type="button" class="wa-chipb" data-f="ignored">Ignored <i data-n="ignored"></i></button>
+          <select class="wa-in" id="waGF" aria-label="Group" hidden></select>
+        </div>
+        <div class="wa-rng" id="waRng" role="group" aria-label="Which days">
+          <button type="button" data-r="today" class="on" aria-pressed="true">Today</button><button type="button" data-r="7" aria-pressed="false">7 days</button><button type="button" data-r="30" aria-pressed="false">30 days</button><button type="button" data-r="all" aria-pressed="false">All</button><button type="button" data-r="pick" aria-pressed="false">📅 Pick dates</button>
+        </div>
+        <div class="wa-pick" id="waPick" hidden><input type="date" id="waFrom" aria-label="From"><span>to</span><input type="date" id="waTo" aria-label="To"></div>
+        <div class="wa-sbar"><span class="wa-scount" id="waSCount"></span><span class="wa-n" id="waCount" hidden>0</span><span class="wa-dl"><button type="button" class="wa-btn sm" id="waDlTxt" title="Saves the messages shown as a .txt in WhatsApp's own format">⬇ Backup .txt</button><button type="button" class="wa-btn sm" id="waDlCsv" title="For Excel">CSV</button></span></div>
       </div>
-    </div>
-    <details class="wa-help" id="waHelp"><summary>❔ How to set up</summary>
-      <p><b>What it does:</b> when someone writes <code>324 CO</code> in the HK group, room 324 is checked out here. <code>202 LCO 6PM</code> sets a 6 PM late check-out. <code>0113 EXT 2N</code> (or <code>extended till 22 Oct</code>) marks an extension. Other messages with a room (like <code>415 change bedsheet</code>) become a note. Every change has an Undo. Only today's messages and only rooms on today's list. Every message is also kept in HotelOps as a backup: search it above and download it any time.</p>
+      <div class="wa-list" id="waList" aria-live="polite"></div>
+      <div class="wa-list wa-sres" id="waSRes" hidden aria-live="polite"></div>
+    </section>
+    <details class="wa-sec wa-paste" id="waPasteBox"><summary class="wa-sech">📋 Paste or upload<span class="wa-sub">when the link is off</span></summary>
+      <div class="wa-secb">
+        <textarea id="waPaste" placeholder="[9:01 AM, 18/10/2026] Sam: 324 CO&#10;[9:05 AM, 18/10/2026] Lina: 202 LCO 6PM" aria-label="Paste WhatsApp messages"></textarea>
+        <div class="wa-btns"><button type="button" class="wa-btn pri" id="waRead">Read messages</button><button type="button" class="wa-btn" id="waClip">📋 Paste</button><button type="button" class="wa-btn" id="waUpBtn">📂 Upload exported chat (.txt)</button><input type="file" id="waFile" accept=".txt,text/plain" hidden></div>
+      </div>
+    </details>
+    <details class="wa-sec" id="waGrpBox"><summary class="wa-sech">👥 Groups<span class="wa-sub" id="waGrpSub"></span></summary>
+      <div class="wa-secb"><div class="wa-grps" id="waGrps"></div>
+        <p class="wa-hint">The open group in WhatsApp is read fully. For other groups only the latest message (the preview in the chat list) is seen: open them now and then to catch up. To read a second group fully all day, link WhatsApp Web in a second browser (for example Edge) as another device and run the reader there too.</p></div>
+    </details>
+    <details class="wa-sec wa-help" id="waHelp"><summary class="wa-sech">❔ How to set up</summary>
+      <div class="wa-secb">
+      <p><b>What it does:</b> it reads your WhatsApp groups and only sends what you send from HotelOps. When someone writes <code>324 CO</code>, room 324 is checked out here. <code>202 LCO 6PM</code> sets a 6 PM late check-out. <code>0113 EXT 2N</code> (or <code>extended till 22 Oct</code>) marks an extension. Lists work too (<code>Checkout list:</code> then one room per line). Other messages with a room (like <code>415 change bedsheet</code>) become a note, or a request when the guest is not leaving today. Every change has an Undo. Every message is kept as a backup: search it above and download it any time.</p>
       <p><b>Option A — automatic</b></p>
       <ol>
         <li>Open WhatsApp Web on this computer.</li>
         <li>Press <b>F12</b> and click <b>Console</b>.</li>
         <li>If Chrome asks, type <code>allow pasting</code> and press Enter.</li>
         <li>Copy the line below (<b>Copy</b> button), paste it in the Console and press Enter. Close F12.</li>
-        <li>Type the HK group name when asked, then open the HK group.</li>
-        <li>A small HotelOps window shows at the bottom left of WhatsApp. Click <b>Connect HotelOps</b> once. A HotelOps tab opens — keep it open.</li>
+        <li>Type the group name when asked, then open the group. Add more groups in the reader's <b>Groups</b> tab.</li>
+        <li>A HotelOps window shows at the bottom left of WhatsApp. Click <b>Connect HotelOps</b> once. A HotelOps tab opens — keep it open.</li>
       </ol>
-      <p>Do this again each time you reload WhatsApp. If the window turns amber, use its <b>📋 Copy today's chat</b> button and paste here.</p>
+      <p>Do this again each time you reload WhatsApp. If the window turns amber, use its <b>📋 Copy today's chat</b> button (Settings tab) and paste here.</p>
       <textarea id="waSnippet" readonly aria-label="Line to paste in the WhatsApp Console">Loading…</textarea>
       <div class="wa-btns"><button type="button" class="wa-btn" id="waCopySnip">Copy</button></div>
       <p><b>Option B — no setup, always works</b></p>
       <ol>
         <li>In WhatsApp Web, with the mouse, click and drag from the first message of today down to the last one.</li>
         <li>Press <b>Ctrl+C</b>. (WhatsApp copies the time and name with each message.)</li>
-        <li>Paste in the box above and press <b>Read messages</b>. Messages already done are skipped, so you can paste the whole day again later.</li>
+        <li>Open <b>📋 Paste or upload</b> above, paste and press <b>Read messages</b>. Messages already done are skipped.</li>
       </ol>
       <p><b>From the phone:</b> open the chat → ⋮ → More → Export chat → Without media. Send the .txt to this computer and use <b>📂 Upload exported chat</b>.</p>
+      </div>
     </details>
   </div>`;
   // its own window over the app, opened from the top bar
   const ov = doc.createElement('div'); ov.id = 'waOv'; ov.className = 'wa-ov'; ov.hidden = true;
-  ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'WhatsApp HK group');
+  ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'WhatsApp');
   ov.appendChild(card); doc.body.appendChild(ov);
-  card.querySelector('summary').addEventListener('click', e => { e.preventDefault(); if (e.target.closest('#waClose')) waClose(); });
+  const $ = id => doc.getElementById(id);
+  $('waClose').onclick = () => waClose();
+  $('waWords').onclick = () => { if (typeof W.hoWaWordsOpen === 'function') W.hoWaWordsOpen(); };
   ov.addEventListener('mousedown', e => { if (e.target === ov) waClose(); });
   doc.addEventListener('keydown', e => { if (e.key === 'Escape' && !ov.hidden) { e.preventDefault(); waClose(); } });
   if (/wa-bridge/.test(location.hash)) setTimeout(() => window.waOpenFromTop && window.waOpenFromTop(), 400);
-  const ta = doc.getElementById('waPaste');
-  doc.getElementById('waRead').onclick = () => { const v = ta.value; if (!v.trim()) { showToast('Paste the WhatsApp messages first', 'warn'); ta.focus(); return; } if (readPasted(v)) ta.value = ''; };
-  doc.getElementById('waClip').onclick = async () => {
+  const ta = $('waPaste');
+  $('waRead').onclick = () => { const v = ta.value; if (!v.trim()) { showToast('Paste the WhatsApp messages first', 'warn'); ta.focus(); return; } if (readPasted(v)) ta.value = ''; };
+  $('waClip').onclick = async () => {
     try { const t = await navigator.clipboard.readText(); if (!t || !t.trim()) { showToast('The clipboard is empty', 'warn'); return; } ta.value = t; if (readPasted(t)) ta.value = ''; }
     catch (_) { showToast('Press Ctrl+V in the box, then Read messages', 'info'); ta.focus(); }
   };
-  const fi = doc.getElementById('waFile');
-  doc.getElementById('waUpBtn').onclick = () => fi.click();
+  const fi = $('waFile');
+  $('waUpBtn').onclick = () => fi.click();
   fi.onchange = () => { const f = fi.files && fi.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { readPasted(String(rd.result || '')); fi.value = ''; }; rd.readAsText(f); };
-  doc.getElementById('waHelp').addEventListener('toggle', loadSnippet);
-  doc.getElementById('waCopySnip').onclick = () => {
-    const s = doc.getElementById('waSnippet'); const v = s.value;
+  $('waHelp').addEventListener('toggle', loadSnippet);
+  $('waCopySnip').onclick = () => {
+    const s = $('waSnippet'); const v = s.value;
     if (!v || /^Loading|^Could not/.test(v)) return;
     const done = () => showToast('Copied · paste it in the WhatsApp Web Console', 'ok');
     try { navigator.clipboard.writeText(v).then(done, () => { s.select(); doc.execCommand('copy'); done(); }); } catch (_) { s.select(); try { doc.execCommand('copy'); done(); } catch (__) {} }
   };
-  doc.getElementById('waList').addEventListener('click', e => {
+  $('waList').addEventListener('click', e => {
+    const g = e.target.closest('[data-wa-ok]'); if (g) { confirmGuess(g.getAttribute('data-wa-ok'), g.getAttribute('data-m')); return; }
     const b = e.target.closest('[data-wa-undo]'); if (!b) return;
     const f = undoFns[b.getAttribute('data-wa-undo')]; if (f) f();
   });
+  // filters
+  $('waFilt').addEventListener('click', e => {
+    const b = e.target.closest('[data-f]'); if (!b) return;
+    FILT = b.getAttribute('data-f');
+    doc.querySelectorAll('#waFilt [data-f]').forEach(x => x.classList.toggle('on', x === b));
+    renderCard();
+  });
+  $('waGF').onchange = () => { GFILT = $('waGF').value; renderCard(); shown = PAGE; runSearch(); };
+  // the composer
+  const msgEl = $('waMsg');
+  $('waTpl').addEventListener('click', e => {
+    const b = e.target.closest('[data-tpl]'); if (!b) return;
+    const t = TEMPLATES.find(x => x.k === b.getAttribute('data-tpl')); if (!t) return;
+    const room = $('waRoom').value.trim(), time = $('waTime').value.trim();
+    if (/room/.test(t.need) && !/^\d{3,4}$/.test(room)) { showToast('Type the room number first', 'warn'); $('waRoom').focus(); return; }
+    if (/time/.test(t.need) && !time) { showToast('Type the time first (for example 2 PM)', 'warn'); $('waTime').focus(); return; }
+    const ext = rooms().filter(r => r.status === 'extended').map(r => r.roomStr + (r.extensionNights ? ' +' + r.extensionNights + 'N' : '')).join(', ') || 'none';
+    msgEl.value = fillTemplate(t.t, { room, time: t.k === 'ext' ? hhmm() : time, ext });
+    msgEl.focus();
+  });
+  $('waCoList').onclick = () => {
+    if (!rooms().length) { showToast('Load today\'s departures first', 'warn'); return; }
+    msgEl.value = checkoutListText(rooms(), new Date()); msgEl.focus();
+    showToast('Check the list, then press Send to WhatsApp', 'info');
+  };
+  $('waSendBtn').onclick = () => { const it = waSend(msgEl.value, $('waGrp').value); if (it) msgEl.value = ''; };
+  msgEl.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $('waSendBtn').click(); } });
+  $('waOut').addEventListener('click', e => {
+    const c = e.target.closest('[data-out-cancel]'); if (c) { cancelOut(c.getAttribute('data-out-cancel')); return; }
+    const r = e.target.closest('[data-out-again]'); if (r) { const it = OUT.find(o => o.id === r.getAttribute('data-out-again')); if (it) waSend(it.text, it.group); }
+  });
+  // groups (log only here too)
+  $('waGrps').addEventListener('change', e => { const c = e.target.closest('[data-g]'); if (c) setGroupAct(c.getAttribute('data-g'), c.checked); });
+  // questions
+  $('waAsks').addEventListener('click', e => {
+    const b = e.target.closest('[data-ans]'); if (!b) return;
+    const box = b.closest('[data-ask]'), w = box.getAttribute('data-ask'), note = (box.querySelector('input') || {}).value || '';
+    answerAsk(w, b.getAttribute('data-ans'), note);
+  });
   // search the chat backup
-  const qEl = doc.getElementById('waQ');
+  const qEl = $('waQ');
   let qt = null;
   qEl.addEventListener('input', () => { clearTimeout(qt); qt = setTimeout(() => { shown = PAGE; runSearch(); }, 160); });
   qEl.addEventListener('keydown', e => { if (e.key === 'Escape' && qEl.value) { e.stopPropagation(); qEl.value = ''; runSearch(); } });
-  doc.getElementById('waRng').addEventListener('click', e => {
+  $('waRng').addEventListener('click', e => {
     const b = e.target.closest('[data-r]'); if (!b) return;
     RNG = b.getAttribute('data-r');
     doc.querySelectorAll('#waRng [data-r]').forEach(x => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-pressed', on ? 'true' : 'false'); });
-    const pk = doc.getElementById('waPick'); pk.hidden = RNG !== 'pick';
-    if (RNG === 'pick') { const f = doc.getElementById('waFrom'), t = doc.getElementById('waTo'); if (!t.value) t.value = today(); if (!f.value) f.value = dayAdd(today(), -6); }
+    const pk = $('waPick'); pk.hidden = RNG !== 'pick';
+    if (RNG === 'pick') { const f = $('waFrom'), t = $('waTo'); if (!t.value) t.value = today(); if (!f.value) f.value = dayAdd(today(), -6); }
     shown = PAGE; runSearch();
   });
-  ['waFrom', 'waTo'].forEach(id => doc.getElementById(id).addEventListener('change', () => { shown = PAGE; runSearch(); }));
-  doc.getElementById('waSRes').addEventListener('click', e => { if (e.target.closest('.wa-more')) { shown += PAGE; drawResults(); } });
-  doc.getElementById('waDlTxt').onclick = () => download('txt');
-  doc.getElementById('waDlCsv').onclick = () => download('csv');
+  ['waFrom', 'waTo'].forEach(id => $(id).addEventListener('change', () => { shown = PAGE; runSearch(); }));
+  $('waSRes').addEventListener('click', e => { if (e.target.closest('.wa-more')) { shown += PAGE; drawResults(); } });
+  $('waDlTxt').onclick = () => download('txt');
+  $('waDlCsv').onclick = () => download('csv');
   renderCard();
   runSearch();
   return true;
@@ -816,6 +1530,7 @@ async function runSearch(keepScroll) {
   const q = qEl.value, my = ++seq;
   const active = !!q.trim() || RNG !== 'today';
   doc.getElementById('waList').hidden = active; doc.getElementById('waSRes').hidden = !active;
+  doc.getElementById('waFilt').style.display = active ? 'none' : '';
   const cnt = doc.getElementById('waSCount');
   let days = rangeDays();
   if (!days) {
@@ -828,6 +1543,7 @@ async function runSearch(keepScroll) {
   if (my !== seq) return;
   const src = {}; days.forEach(d => { src[d] = Object.assign({}, ARCH[d], (archQ[d] && pendingRecs(d)) || {}); });
   RES = hoWaSearch(src, q);
+  if (GFILT) RES = RES.filter(o => gKey(o.rec.g || '') === gKey(GFILT));
   RANGE = { from: days[0] || today(), to: days[days.length - 1] || today() };
   const n = RES.length, rl = { today: 'today', '7': 'in the last 7 days', '30': 'in the last 30 days', all: 'in all days', pick: RANGE.from === RANGE.to ? 'on ' + dmy(RANGE.from) : dmy(RANGE.from) + ' to ' + dmy(RANGE.to) }[RNG];
   cnt.textContent = (q.trim() ? `${n} result${n === 1 ? '' : 's'}` : `${n} message${n === 1 ? '' : 's'} kept`) + ' ' + rl;
@@ -835,18 +1551,23 @@ async function runSearch(keepScroll) {
   if (active) { if (!keepScroll) doc.getElementById('waSRes').scrollTop = 0; drawResults(); }
 }
 /** records still waiting to be saved (whole ones only) */
-function pendingRecs(d) { const o = {}; Object.keys(archQ[d] || {}).forEach(k => { if (k.indexOf('/') < 0) o[k] = archQ[d][k]; }); return o; }
+function pendingRecs(d) { const o = {}; Object.keys(archQ[d] || {}).forEach(k => { if (k.indexOf('/') < 0 && archQ[d][k]) o[k] = archQ[d][k]; }); return o; }
 const fmtDay = d => new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+function avatar(sender, mine) {
+  if (mine || /^me$/i.test(sender)) return '<span class="wa-av me" aria-hidden="true">Me</span>';
+  if (isPhone(sender)) return `<span class="wa-av ph" aria-hidden="true">${SVG_PH}</span>`;
+  return `<span class="wa-av" style="--h:${hueOf(sender)}" aria-hidden="true">${esc(initials(sender) || '?')}</span>`;
+}
 function drawResults() {
   const box = doc.getElementById('waSRes'); if (!box) return;
   const q = searchTokens(doc.getElementById('waQ').value);
-  if (!RES.length) { box.innerHTML = `<div class="wa-empty">${q.length ? 'Nothing found. Try a room number, a word or a name.' : 'No messages kept for these days yet.'}</div>`; return; }
+  if (!RES.length) { box.innerHTML = `<div class="wa-empty"><b>🔍</b>${q.length ? 'Nothing found. Try a room number, a word or a name.' : 'No messages kept for these days yet.'}</div>`; return; }
   const per = {}; RES.forEach(o => { per[o.day] = (per[o.day] || 0) + 1; });
   let html = '', last = '';
   RES.slice(0, shown).forEach(o => {
     if (o.day !== last) { last = o.day; html += `<div class="wa-day">${esc(fmtDay(o.day))}<span>${per[o.day]}</span></div>`; }
     const r = o.rec, ch = archChips(r.r);
-    html += `<div class="wa-row${r.u ? ' undone' : ''}"><span class="wa-t">${esc(t12(r.t))}</span><span class="wa-m"><span class="wa-who">${hoWaHi(r.s || '', q)}${r.e ? ' ✎' : ''}</span><span class="wa-txt">${hoWaHi(String(r.x || '').length > 400 ? String(r.x).slice(0, 400) + '…' : r.x, q)}</span></span><span></span>`
+    html += `<div class="wa-row${r.u ? ' undone' : ''}">${avatar(r.s, r.m)}<span class="wa-m"><span class="wa-mh"><span class="wa-who">${hoWaHi(r.s || '', q)}${r.e ? ' ✎' : ''}</span><span class="wa-tm">${esc(t12(r.t))}</span>${r.g ? `<span class="wa-tag">${esc(r.g)}</span>` : ''}</span>${r.q ? `<span class="wa-quote" style="display:block">↩ ${esc(String(r.q).replace(/\s*\n\s*/g, ' · ').slice(0, 140))}</span>` : ''}<span class="wa-txt" style="display:block">${hoWaHi(String(r.x || '').length > 400 ? String(r.x).slice(0, 400) + '…' : r.x, q)}</span></span><span></span>`
       + `<span class="wa-res">${ch.map(c => `<span class="wa-chip ${esc(c.st)}">${hoWaHi(c.label, q)}${r.u && /co|lco|ext|note/.test(c.st) ? ' — undone' : ''}</span>`).join('')}</span></div>`;
   });
   if (RES.length > shown) html += `<button type="button" class="wa-more">Show more (${RES.length - shown} left)</button>`;
@@ -872,24 +1593,94 @@ function loadSnippet() {
     .then(t => { box.value = snippet(t, app); })
     .catch(() => { snipLoaded = false; box.value = 'Could not load it (offline?). Try again when online, or use Option B.'; });
 }
+
+// ── drawing ─────────────────────────────────────────────────
 function renderStatus() {
   const el = doc.getElementById('waStatus'); if (!el) return;
   const on = linkSeen && Date.now() - linkSeen < 20000;
-  el.innerHTML = on ? '<span class="wa-dot on"></span><span>Linked to WhatsApp Web ✓ — keep this tab open.</span>'
-    : `<span class="wa-dot"></span><span>${LOG.length ? 'Not linked right now. ' : ''}New HK messages show here. Set up once with <b>❔ How to set up</b>, or paste messages below.</span>`;
+  const g = LINK && (LINK.open || (LINK.groups && LINK.groups.map(x => x.name).join(', ')));
+  el.innerHTML = on ? `<i class="wa-dot on"></i><span>Linked to WhatsApp${g ? ' · reading ' + esc(g) : ''}${LINK && LINK.rtt ? ' · ' + Math.round(LINK.rtt) + ' ms' : ''}</span>`
+    : `<i class="wa-dot"></i><span>${LOG.length ? 'Not linked right now · ' : 'Not linked · '}set up once with ❔ How to set up, or paste below</span>`;
+  const hint = doc.getElementById('waSendHint');
+  if (hint) hint.textContent = !on ? 'Link WhatsApp Web first (❔ How to set up). Nothing is sent until you press Send.' : LINK && LINK.auto ? 'Sent straight away (automatic sending is on in the WhatsApp window).' : 'It is typed in WhatsApp for you. You press Enter there to send it.';
+  const wb = doc.getElementById('waWords'); if (wb) wb.hidden = typeof W.hoWaWordsOpen !== 'function';
+}
+function renderKpis() {
+  const el = doc.getElementById('waKpis'); if (!el) return;
+  const n = { co: 0, lco: 0, ext: 0, note: 0, req: 0 };
+  LOG.forEach(l => { if (l.undone) return; l.res.forEach(r => { if (n[r.st] !== undefined) n[r.st]++; }); });
+  el.innerHTML = [['co', 'Checked out', 'var(--wa-co)', 'Out'], ['lco', 'Late check-out', 'var(--wa-lco)', 'LCO'], ['ext', 'Extended', 'var(--wa-ext)', 'Ext.'], ['note', 'Notes', 'var(--wa-note)', 'Notes'], ['req', 'Requests', 'var(--text3)', 'Req.']]
+    .map(([k, l, c, sh]) => `<div class="wa-kpi${n[k] ? '' : ' zero'}" style="--c:${c}" title="${l} today"><b>${n[k]}</b><span class="wa-kl">${l}</span><span class="wa-ks">${sh}</span></div>`).join('');
+}
+function renderAsks() {
+  const el = doc.getElementById('waAsks'); if (!el) return;
+  const list = Object.keys(ASKS).map(k => ASKS[k]).filter(q => q && q.word && !KNOWN[q.word]).sort((a, b) => (a.at || 0) - (b.at || 0)).slice(0, 4);
+  el.innerHTML = list.map(q => `<div class="wa-ask" data-ask="${esc(q.word)}"><p>❓ <b>${esc(q.sender || 'Someone')}</b> wrote <q>${esc(String(q.text || '').slice(0, 120))}</q>. What does <q>${esc(q.word)}</q> mean?${q.msgs && q.msgs.length > 1 ? ` <span class="wa-hint">(${q.msgs.length} messages wait for it)</span>` : ''}</p>
+    <div class="wa-aw">${Object.keys(MEANINGS).map(m => `<button type="button" class="wa-chipb" data-ans="${m}">${esc(MEANINGS[m])}</button>`).join('')}</div>
+    <div class="wa-aw"><input class="wa-in" placeholder="What it stands for (optional), e.g. Vacant Dirty" aria-label="What the word stands for" maxlength="60"></div></div>`).join('');
+}
+function renderGroups() {
+  const names = groupNames();
+  const sel = doc.getElementById('waGrp'), gf = doc.getElementById('waGF'), box = doc.getElementById('waGrps'), sub = doc.getElementById('waGrpSub');
+  const to = doc.getElementById('waSendTo');
+  if (sel) {
+    const cur = sel.value || (LINK && LINK.open) || '';
+    sel.innerHTML = names.length ? names.map(n => `<option value="${esc(n)}"${gKey(n) === gKey(cur) ? ' selected' : ''}>${esc(n)}</option>`).join('') : '<option value="">The open group</option>';
+    sel.hidden = names.length < 2;
+    if (to) to.textContent = names.length === 1 ? '→ ' + names[0] : names.length ? names.length + ' groups' : '';
+  }
+  if (gf) {
+    gf.hidden = names.length < 2;
+    gf.innerHTML = '<option value="">All groups</option>' + names.map(n => `<option value="${esc(n)}"${gKey(n) === gKey(GFILT) ? ' selected' : ''}>${esc(n)}</option>`).join('');
+  }
+  if (box) box.innerHTML = names.length ? names.map(n => { const g = GRP[gKey(n)], rg = LINK && LINK.groups && LINK.groups.find(x => gKey(x.name) === gKey(n)); const on = !(g && g.act === false) && !(rg && rg.act === false);
+    return `<div class="wa-g"><b title="${esc(n)}">${esc(n)}</b>${LINK && gKey(LINK.open || '') === gKey(n) ? '<span class="wa-tag">open</span>' : ''}<label><input type="checkbox" data-g="${esc(n)}"${on ? ' checked' : ''}${rg && rg.act === false ? ' disabled title="Set to Log only in the WhatsApp window"' : ''}> Can change rooms</label></div>`; }).join('')
+    : '<div class="wa-hint">No groups yet. Groups show here once the reader on WhatsApp Web is linked.</div>';
+  if (sub) sub.textContent = names.length ? names.length + (names.length === 1 ? ' group' : ' groups') : '';
+}
+function renderOut() {
+  const el = doc.getElementById('waOut'); if (!el) return;
+  el.innerHTML = OUT.slice(0, 5).map(o => { const s = OUT_ST[o.st] || OUT_ST.wait;
+    const lbl = o.st === 'queued' ? `Waiting · open ${o.group || 'the group'} in WhatsApp` : o.st === 'failed' && o.why ? 'Not sent: ' + o.why : s[1];
+    return `<div class="wa-o ${esc(o.st)}"><time>${esc(clock(new Date(o.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })))}</time><span class="wa-ot" title="${esc(o.text)}">${esc(o.text.replace(/\s*\n\s*/g, ' · '))}</span><span class="wa-os">${s[0]} ${esc(lbl)}${o.st === 'queued' || o.st === 'typed' ? ` <button type="button" class="wa-btn sm" data-out-cancel="${esc(o.id)}">Cancel</button>` : o.st === 'failed' ? ` <button type="button" class="wa-btn sm" data-out-again="${esc(o.id)}">Try again</button>` : ''}</span></div>`; }).join('');
+}
+function chipsOf(l) {
+  const out = [];
+  l.res.forEach(r => {
+    let label = r.text;
+    if (r.st === 'note') label = `Note on ${r.room}`;
+    else if (r.st === 'req') label = `Request · room ${r.room}`;
+    else if (r.st === 'co') label = String(r.text).replace(/ · ⚠ balance.*$/, '');
+    if (l.undone && /^(?:co|lco|ext|extending|fin|note)$/.test(r.st)) label += ' — undone';
+    out.push(`<span class="wa-chip ${esc(r.st)}">${ICON[r.st] || ''} ${esc(label)}${r.w ? esc(r.w) : ''}</span>`);
+    const b = r.st === 'co' && balInfo(r); if (b) out.push(`<span class="wa-chip ${b.tone}">${esc(b.label)}</span>`);
+    if (r.guess && !l.undone) out.push(`<button type="button" class="wa-u" style="grid-column:auto" data-wa-ok="${esc(r.guess)}" data-m="${esc(r.m || r.st)}" title="Yes, &quot;${esc(r.guess)}&quot; means this: remember it">✓ Right</button>`);
+  });
+  return out.join('');
 }
 function renderCard() {
   const list = doc.getElementById('waList'); if (!list) return;
   const cnt = doc.getElementById('waCount'); if (cnt) cnt.textContent = LOG.length;
-  const last = doc.getElementById('waLast');
-  if (last) { const l = LOG.find(x => x.res.some(r => /co|lco|ext|note/.test(r.st))); last.textContent = l ? `Last: ${l.res.find(r => /co|lco|ext|note/.test(r.st)).text} · ${timeLabel(l.time)}` : ''; }
-  list.innerHTML = LOG.length ? LOG.map(l => `<div class="wa-row${l.undone ? ' undone' : ''}${l.res.every(r => r.st === 'none' || r.st === 'ignore') ? ' quiet' : ''}" title="${esc(l.res.map(r => r.text).join(' · '))}">
-      <span class="wa-t">${esc(clock(l.time))}</span>
-      <span class="wa-m"><span class="wa-who">${esc(l.sender)}${l.edited ? ' ✎' : ''}</span><span class="wa-txt">${esc(l.text.length > 160 ? l.text.slice(0, 160) + '…' : l.text)}</span></span>
-      ${undoFns[l.key] && !l.undone ? `<button type="button" class="wa-u" data-wa-undo="${esc(l.key)}">↺ Undo</button>` : '<span></span>'}
-      <span class="wa-res">${l.res.map(r => `<span class="wa-chip ${esc(r.st)}">${ICON[r.st] || ''} ${esc(l.undone && r.st !== 'none' && r.st !== 'ignore' && r.st !== 'notlist' && r.st !== 'skip' ? r.text + ' — undone' : r.text)}</span>`).join('')}</span>
-    </div>`).join('') : '<div class="wa-empty">No WhatsApp messages yet today.</div>';
-  renderStatus();
+  const counts = { all: 0, actions: 0, notes: 0, attention: 0, ignored: 0 };
+  const shownL = LOG.slice().sort((a, b) => String(b.time || '').localeCompare(String(a.time || '')) || (b.at || 0) - (a.at || 0)).filter(l => !GFILT || gKey(l.group || '') === gKey(GFILT)).filter(l => { const k = entryKinds(l); counts.all++; k.forEach(x => { counts[x]++; }); return FILT === 'all' || k.has(FILT); });
+  doc.querySelectorAll('#waFilt [data-n]').forEach(x => { const n = counts[x.getAttribute('data-n')]; x.textContent = n ? n : ''; });
+  let html = '', lastH = '';
+  const multi = groupNames().length > 1;
+  shownL.forEach(l => {
+    const h = hourLabel(l.time);
+    if (h !== lastH) { lastH = h; html += `<div class="wa-hr">${esc(h)}<span>${shownL.filter(x => hourLabel(x.time) === h).length}</span></div>`; }
+    const k = entryKinds(l), st = l.res.map(r => r.st);
+    const tone = k.has('attention') ? 't-bad' : st.includes('co') ? 't-co' : st.includes('lco') ? 't-lco' : (st.includes('ext') || st.includes('extending')) ? 't-ext' : (st.includes('note') || st.includes('req')) ? 't-note' : '';
+    const quiet = l.res.every(r => /^(?:none|ignore|log|preview)$/.test(r.st));
+    html += `<article class="wa-msg ${tone}${l.undone ? ' undone' : ''}${l.deleted ? ' del' : ''}${quiet ? ' quiet' : ''}" title="${esc(l.res.map(r => r.text).join(' · '))}">${avatar(l.sender, l.mine)}
+      <div class="wa-mh"><span class="wa-who">${esc(l.sender)}${l.edited ? ' ✎' : ''}</span><span class="wa-tm">${esc(clock(l.time))}</span>${l.group && multi ? `<span class="wa-tag">${esc(l.group)}</span>` : ''}${l.preview ? '<span class="wa-tag pv">preview</span>' : ''}</div>
+      ${undoFns[l.key] && !l.undone ? `<button type="button" class="wa-u" data-wa-undo="${esc(l.key)}">↺ Undo</button>` : ''}
+      ${l.quote ? `<div class="wa-quote" title="Reply to">↩ ${esc(l.quote.replace(/\s*\n\s*/g, ' · ').slice(0, 140))}</div>` : ''}
+      <div class="wa-txt">${esc(l.text.length > 220 ? l.text.slice(0, 220) + '…' : l.text)}</div>
+      <div class="wa-res">${chipsOf(l)}</div></article>`;
+  });
+  list.innerHTML = html || `<div class="wa-empty"><b>💬</b>${LOG.length ? 'Nothing here with this filter.' : 'No WhatsApp messages yet today.<br>New messages from the group show here as they come in.'}</div>`;
+  renderKpis(); renderAsks(); renderGroups(); renderOut(); renderStatus();
 }
 
 function start() {
@@ -898,18 +1689,22 @@ function start() {
     // opened by the WhatsApp snippet: show Departures, and keep the address clean
     setTimeout(() => { try { if (typeof showPanel === 'function') showPanel('departures'); } catch (_) {} }, 1500);
   }
-  setInterval(() => { if (doc.getElementById('waStatus')) renderStatus(); }, 15000);
+  listenAsks(); hookWords();
+  setInterval(() => { hookWords(); pushWords(); if (doc.getElementById('waStatus')) renderStatus(); }, 15000);
 }
-W.hoWaBridge = { handle, readPasted, parse: hoWaParse, parseCopied: hoWaParseCopied, log: () => LOG.slice(), origins: ORIGINS, render: renderCard, search: runSearch, flushBackup: flushArch, results: () => RES.slice() };
+W.hoWaBridge = { handle, readPasted, parse, parseCopied: hoWaParseCopied, log: () => LOG.slice(), origins: ORIGINS, render: renderCard, search: runSearch, flushBackup: flushArch, results: () => RES.slice(),
+  send: waSend, outbox: () => OUT.slice(), link: () => (LINK ? { at: LINK.at, groups: LINK.groups || [], open: LINK.open || '', rtt: LINK.rtt || 0, auto: !!LINK.auto, linked: linked() } : null),
+  asks: () => Object.keys(ASKS).map(k => ASKS[k]), answer: answerAsk, confirmGuess, words: wordsList, setGroupAct, checkoutList: () => checkoutListText(rooms(), new Date()) };
 if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start); else start();
 })();
 
-// Top bar button: the WhatsApp window over the app, paste box ready
+// Top bar button: the WhatsApp window over the app
 function waOpenFromTop() {
   const ov = document.getElementById('waOv'); if (!ov) return;
   ov.hidden = false; ov.scrollTop = 0;
   document.documentElement.style.overflow = 'hidden';   // the page behind stays still; the window scrolls
-  const ta = document.getElementById('waPaste'); if (ta) setTimeout(() => ta.focus({ preventScroll: true }), 120);
+  if (window.hoWaBridge) try { window.hoWaBridge.render(); } catch (_) {}
+  const c = document.getElementById('waCard'); if (c) setTimeout(() => c.focus({ preventScroll: true }), 60);
 }
 function waClose() { const ov = document.getElementById('waOv'); if (ov) ov.hidden = true; document.documentElement.style.overflow = ''; }
 window.waOpenFromTop = waOpenFromTop; window.waClose = waClose;

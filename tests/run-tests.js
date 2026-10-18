@@ -1465,7 +1465,7 @@ console.log('\nWhatsApp HK bridge · message reader');
   check('wa: typos and order', ['324co', '324-CO', 'CO 324', '324 co.', 'Rm324 c/o', '#324 C/O', 'C/O 324.', 'Checked out: 324'].map(A), Array(8).fill('324 co'));
   check('wa: "CO 324, 325" and "Checked out 324 & 325"', [A('CO 324, 325'), A('Checked out 324 & 325')], ['324 co | 325 co', '324 co | 325 co']);
   check('wa: not a check-out → a note', ['324 out of order', '324 OOO', '324 CO tmrw', '324 checkout tomorrow', '324 left luggage', '324 out for lunch', '324 CO?', '324 not checked out'].map(A),
-    ['324 note out of order', '324 note OOO', '324 note CO tmrw', '324 note checkout tomorrow', '324 note left luggage', '324 note out for lunch', '324 note CO?', '324 note not checked out']);
+    ['324 note out of order', '324 note OOO (Out of Order)', '324 note CO tmrw', '324 note checkout tomorrow', '324 note left luggage', '324 note out for lunch', '324 note CO?', '324 note not checked out']);
   check('wa: late check-out words', ['202 late co 6pm', '202 late checkout 6pm', '202 late check out 6 pm', '202 L/C 6pm', '202 late till 6pm', '202 late until 18:00', 'LCO 202 6PM', '202-lco 6pm'].map(A), Array(8).fill('202 lco 18:00'));
   check('wa: "late" alone or LCO tomorrow → a note', [A('202 late'), A('202 LCO tomorrow 2pm')], ['202 note late', '202 note LCO tomorrow 2pm']);
   const E = t => P(t).actions.map(a => [a.room, a.act, a.nights ? '+' + a.nights + 'N' : '', a.until ? '→' + a.until : '', a.note || ''].filter(Boolean).join(' ')).join(' | ');
@@ -1474,8 +1474,8 @@ console.log('\nWhatsApp HK bridge · message reader');
   check('wa: extension to a date', ['0113 ext till 22', '0113 ext to 22 Oct', '0113 extended until 22nd', '0113 ext 22/10', '0113 ext till Oct 22', '0113 ext 22'].map(E),
     ['0113 ext →22', '0113 ext →22/10', '0113 ext →22', '0113 ext →22/10', '0113 ext →22/10', '0113 ext →22']);
   check('wa: ext till tomorrow = 1 night', E('0113 ext till tomorrow'), '0113 ext +1N');
-  check('wa: not sure → a note', ['0113 ext?', '0113 wants to extend', '0113 extension request', '0113 ext maybe', '0113 extension not confirmed', '0113 ext pending'].map(E),
-    ['0113 note ext?', '0113 note wants to extend', '0113 note extension request', '0113 note ext maybe', '0113 note extension not confirmed', '0113 note ext pending']);
+  check('wa: not sure → a note; on its way → ⏳ extending', ['0113 ext?', '0113 wants to extend', '0113 extension request', '0113 ext maybe', '0113 extension not confirmed', '0113 ext pending'].map(E),
+    ['0113 note ext?', '0113 extending', '0113 extending', '0113 note ext maybe', '0113 note extension not confirmed', '0113 extending']);
   check('wa: the app\'s own posts stay ignored', ['🔁 0113 · +4N → 22 Oct', '0113 · +4N → 22 Oct', 'Extensions — 09:07\n0113 · +4N → 22 Oct'].map(t => P(t).kind), ['ignore', 'ignore', 'ignore']);
   check('wa: mixed message', E('202 CO, 0113 EXT 2N\n415 late till 4pm'), '202 co | 0113 ext +2N | 415 lco');
   const XN = (a, b) => { const r = sb.hoWaPure.extNights(a, b); return r && [r.nights, r.label, r.guessed].join(' '); };
@@ -1545,6 +1545,232 @@ console.log('\nWhatsApp HK bridge · message reader');
   check('wa snippet: reads every message exactly like the app', corpus.map(t => JSON.stringify(H2.parser.hoWaParse(t))), corpus.map(t => JSON.stringify(sb.hoWaParse(t))));
   check('wa snippet: chips in the window', ['324 CO', '202 LCO 6PM', '0113 extended 2 nights', '415 change bedsheet', 'Hk please come', '🔁 0113 · +4N → 22 Oct'].map(t => JSON.parse(JSON.stringify(H2.chips(t))).map(c => c.tone + ' ' + c.label).join(' / ')),
     ['co ✓ CO 324', 'lco ⏰ LCO 202 6 PM', 'ext ↪ EXT 0113 +2N', 'note 📝 note 415', 'off — ignored', 'off — ignored (HotelOps post)']);
+  // ── lists, HotelOps' own posts, separators ──
+  check('wa lists: one message, many rooms', ['CO\n101\n102\n103', 'Checkout list:\n101 ✓\n102 ✓', 'Checked out: 101, 102, 103', 'Departures done 101 102 103', '1. 101 CO\n2. 102 CO', '- 101\n- 102\nCO'].map(A),
+    ['101 co | 102 co | 103 co', '101 co | 102 co', '101 co | 102 co | 103 co', '101 co | 102 co | 103 co', '101 co | 102 co', '101 co | 102 co']);
+  check('wa lists: a command per line', A('101 CO\n102 LCO 2PM\n103 ext 1N'), '101 co | 102 lco 14:00 | 103 ext');
+  check('wa lists: under a late check-out / extended heading', [A('Late check-outs:\n202 2pm\n205 4 pm'), E('Extended:\n0113 2N\n0425 +1')], ['202 lco 14:00 | 205 lco 16:00', '0113 ext +2N | 0425 ext +1N']);
+  check('wa lists: "Departures:" alone is not a check-out, a bare "101 ✓" is nothing', [P('Departures:\n101\n102').kind, P('101 ✓').kind, P('324 done').kind], ['none', 'none', 'none']);
+  const LIST = W2.checkoutListText([{ roomStr: '0113', status: 'out' }, { roomStr: '201', status: 'due' }, { roomStr: '202', status: 'late', lateTime: '18:00' }, { roomStr: '0425', status: 'extended', extensionNights: 2 }, { roomStr: '324', status: 'out' }], new Date(2026, 9, 18, 10, 30));
+  check('wa send: the checkout list HotelOps posts', LIST, '✅ HotelOps · Checkout list · 10:30\nChecked out (2): 0113, 324\nLate check-out (1): 202 (6 PM)\nExtended (1): 0425 (+2N)\nStill due (1): 201');
+  check('wa send: read back, HotelOps\' own posts never act (header or invisible mark)', [P(LIST).kind, P(LIST).ho, P('⁣324 CO done ✓').kind, P('324 CO done ✓').kind], ['ignore', true, 'ignore', 'act']);
+  check('wa send: templates', [W2.fillTemplate('{room} LCO {time} approved', { room: '202', time: '2 PM' }), W2.fillTemplate('{room} please clean', {})], ['202 LCO 2 PM approved', '{room} please clean']);
+  check('wa: room lists with dots, commas, slashes, dashes, spaces', ['212.319.504 VD', '212,319,504 VD', '212/319/504 VD', '212 - 319 - 504 VD', '212 319 504 VD', '212.319 CO'].map(A),
+    ['212 co | 319 co | 504 co', '212 co | 319 co | 504 co', '212 co | 319 co | 504 co', '212 co | 319 co | 504 co', '212 co | 319 co | 504 co', '212 co | 319 co']);
+  check('wa: prices, times and dates are not rooms', ['AED 50.00 for 324', '324 LCO 12.30', 'paid 29.02 room 324', '18.10.2026 324 CO', '324 CO 18.10.2026', '1200.1300'].map(A), ['', '324 lco 12:30', '', '', '324 co', '']);
+  // the user's live message (a reply to HotelOps' "🚫 NA Rooms" post)
+  const LIVE = '212.319.504.509.416 all VD\n507 guest inside', Q = 'You · 🚫 NA Rooms — 12:01\n🚫 0212 · 11:54\n🚫 0507 · 11:55…';
+  check('wa live: "212.319.504.509.416 all VD / 507 guest inside"', A(LIVE), '212 co | 319 co | 504 co | 509 co | 416 co | 507 note guest inside');
+  check('wa live: as a reply to the no-answer list → "Guest inside (was No answer)"', JSON.parse(JSON.stringify(sb.hoWaParse(LIVE, { quote: Q }))).actions.map(a => a.room + ' ' + a.act + (a.note ? ' ' + a.note : '')).join(' | '),
+    '212 co | 319 co | 504 co | 509 co | 416 co | 507 note Guest inside (was No answer)');
+  check('wa: "all CO" for the rooms above; "all clean" is a note', [A('212\n319\nall CO'), A('212 319 all clean')], ['212 co | 319 co', '212 note all clean | 319 note all clean']);
+  check('wa: housekeeping words built in', ['315 VD', '315 VC', '315 VR', '315 ED', '315 OD', '315 DND', '315 RC'].map(t => P(t).actions.map(a => a.act).join()), ['co', 'co', 'co', 'co', 'note', 'note', 'extending']);
+  check('wa: the HK word in the chip', W2.chip(P('315 VD').actions[0]), '✓ CO 315 · VD Vacant Dirty');
+  // the hotel's own word list (wa-brain.js: window.hoWaWords) comes first
+  const DW = { vd: { m: 'note', label: 'Very dusty' }, kk: { m: 'co', label: 'Kay Kay' }, zz: { m: 'ignore', label: '' }, 'late out': { m: 'lco', label: 'Late out' } };
+  sb.hoWaWords = { lookup: w => DW[String(w).toLowerCase()] || null };
+  check('wa words: hoWaWords.lookup wins over the built-in list', ['315 VD', '315 kk', 'KK: 315, 402', '315 kk\n402 kk', 'kk\n315\n402', '315 zz', '202 late out 4pm'].map(A),
+    ['315 note VD (Very dusty)', '315 co', '315 co | 402 co', '315 co | 402 co', '315 co | 402 co', '', '202 lco 16:00']);
+  check('wa words: the label in the chip', W2.chip(P('315 kk').actions[0]), '✓ CO 315 · KK Kay Kay');
+  delete sb.hoWaWords;
+  check('wa words: a lookup can be passed in (the WhatsApp window)', A.call(null, '315 kk') + '/' + sb.hoWaParse('315 kk', { words: w => DW[w] }).actions.map(a => a.act).join(), '/co');
+  // ask the team about a word nobody taught HotelOps
+  const ASK = t => { const r = sb.hoWaParse(t); return r.ask ? r.ask.word + '@' + r.ask.room : ''; };
+  check('wa ask: short unknown words after a room are asked', ['415 ckd', '415 CKD.', '101 chkd', '202 CO, 415 ckd', '510 xq'].map(ASK), ['ckd@415', 'ckd@415', 'chkd@101', 'ckd@415', 'xq@510']);
+  check('wa ask: common words, hotel words, longer notes and questions are not', ['324 OOO', '202 late', '503 Cleaning.', '324 CO?', '415 change bedsheet', '324 please', '201 dirty', '324 ok', '415 ckd please', '315 VD', '507 TD', '324 asap', '415 towels'].map(ASK), Array(13).fill(''));
+  check('wa ask: nothing is done with the asked room, the rest still is', [P('415 ckd').kind, A('202 CO, 415 ckd')], ['none', '202 co']);
+  check('wa ask: once answered (in the word list), it acts', sb.hoWaParse('415 ckd', { words: w => (w === 'ckd' ? { m: 'co', label: 'Checked' } : null) }).actions.map(a => W2.chip(a)).join(), '✓ CO 415 · CKD Checked');
+  // ⏳ Extending: on its way vs done
+  const X = t => sb.hoWaParse(t).actions.map(a => W2.chip(a) + (['book', 'sign', 'td', 'pay'].filter(k => a[k] !== undefined).length ? ' ' + ['book', 'sign', 'td', 'pay'].filter(k => a[k] !== undefined).map(k => k + '=' + (a[k] ? 1 : 0)).join(',') : '')).join(' | ');
+  check('wa extending: bare / progressive / future', ['507 Extending', 'Extending 507', '507 extending', '112 will extend', '112 wants to extend', '0113 ext pending', '0113 extension request'].map(X),
+    ['⏳ Extending 507', '⏳ Extending 507', '⏳ Extending 507', '⏳ Extending 112', '⏳ Extending 112', '⏳ Extending 0113', '⏳ Extending 0113']);
+  check('wa extending: what is still to do', ['extending 507 waiting for TD and RC Sign', '507 extending, waiting TD + RC', '507 TD + RC', '507 ext pending TD RC payment', '507 extending, only TD left', '507 TD done, RC pending'].map(X), [
+    '⏳ Extending 507 · waiting TD, RC book=1,sign=0,td=0,pay=1', '⏳ Extending 507 · waiting TD, RC book=1,sign=0,td=0,pay=1', '⏳ Extending 507 · waiting TD, RC sign=0,td=0',
+    '⏳ Extending 507 · waiting TD, RC, payment book=1,sign=0,td=0,pay=0', '⏳ Extending 507 · waiting TD book=1,sign=1,td=0,pay=1', '⏳ Extending 507 · waiting RC book=1,sign=0,td=1,pay=1']);
+  check('wa extending: done wording', ['507 TD done', '507 RC signed', '507 TD paid', '507 paid full', '507 booking done', '507 booking created', '507 TD ✓ RC ✓', '507 all done', '112 extending, booking done'].map(X), [
+    '✓ 507 TD collected td=1', '✓ 507 RC signed sign=1', '✓ 507 TD collected td=1', '✓ 507 paid in full pay=1', '✓ 507 booking made book=1', '✓ 507 booking made book=1', '✓ 507 TD collected, RC signed sign=1,td=1',
+    '⏳ 507 ready → mark extended book=1,sign=1,td=1,pay=1', '✓ 112 booking made book=1']);
+  check('wa extending: only confirmed wording marks it extended', ['507 extended', '507 ext 2N', '507 +2N', '507 extended till 22'].map(E), ['507 ext', '507 ext +2N', '507 ext +2N', '507 ext →22']);
+  // the window's helpers
+  check('wa window: tiny balances are not a warning', [W2.balInfo({ bal: 0.02 }), W2.balInfo({ bal: 120.5 }), W2.balInfo({ text: '0318 checked out · ⚠ balance AED 0.02' }), W2.balInfo({ bal: 0 })].map(b => b && b.tone + ' ' + b.label),
+    ['tiny balance AED 0.02 (tiny)', 'warn ⚠ balance AED 120.50', 'tiny balance AED 0.02 (tiny)', null]);
+  check('wa window: filters', [{ res: [{ st: 'co' }] }, { res: [{ st: 'req' }] }, { res: [{ st: 'notlist' }] }, { res: [{ st: 'co', bal: 5 }] }, { res: [{ st: 'none' }] }, { res: [{ st: 'co' }], undone: true }, { res: [{ st: 'extending' }] }].map(l => [...W2.entryKinds(l)].sort().join('+')),
+    ['actions', 'notes', 'attention', 'actions+attention', 'ignored', 'ignored', 'actions']);
+  check('wa window: avatars, hours', [W2.initials('Sam Test'), W2.initials('Lina'), W2.initials('+971 50 000 0000'), W2.isPhone('+971 50 000 0000'), W2.hourLabel('09:41'), W2.hourLabel('13:05'), W2.hourLabel('')], ['ST', 'L', '', true, '9 AM', '1 PM', 'Earlier']);
+  // the WhatsApp window: groups, previews, signal, typing check
+  check('wa reader: group names match with emoji / spacing / extra words', [H2.groupMatch('IBIS FO,HK and Security', 'IBIS FO, HK and Security 🏨'), H2.groupMatch('Night Team', 'night  team'), H2.groupMatch('Night Team', 'Day Team'), H2.groupMatch('HK', '')], [true, true, false, false]);
+  check('wa reader: chat-list previews', [H2.splitPreview('Sam: 324 CO'), H2.splitPreview('You: 324 CO'), H2.splitPreview('324 CO'), H2.splitPreview('324 CO', 'Lina'), H2.splitPreview('10:30: x')].map(p => [p.sender, p.text, p.mine].join('|')),
+    ['Sam|324 CO|false', 'Me|324 CO|true', '|324 CO|false', 'Lina|324 CO|false', '|10:30: x|false']);
+  check('wa reader: only today\'s times in the chat list', ['10:31', '10:31 AM', '9.05 pm', 'Yesterday', 'Mon', '17/10/2026'].map(H2.listTime), ['10:31', '10:31 AM', '9.05 pm', '', '', '']);
+  const T0 = new Date(2026, 9, 18, 10, 30).getTime();
+  check('wa reader: relative times', [H2.relTime(T0 - 10000, T0), H2.relTime(T0 - 125000, T0), H2.relTime(T0 - 2 * 3600e3, T0)], ['just now', '2 min ago', '2 h ago']);
+  check('wa reader: messages per 10 minutes', H2.bins([T0 - 60e3, T0 - 120e3, T0 - 11 * 60e3, T0 - 3 * 3600e3], T0, 4), [0, 0, 1, 2]);
+  check('wa reader: the box holds what we typed', [H2.sameText('⁣324 CO\ndone ', '324 CO done'), H2.sameText('324 CO', '325 CO')], [true, false]);
+  check('wa reader: chips with an ask and with HotelOps\' words', [H2.chips('415 ckd').map(c => c.tone + ' ' + c.label).join(' / '), H2.chips('416 zz', H2.wordsLookup([{ w: 'zz', m: 'co', label: 'Zed' }])).map(c => c.label).join(), H2.chips('⁣324 CO done').map(c => c.label).join()],
+    ['ask ❓ what is "ckd"?', '✓ CO 416 · ZZ Zed', '↗ sent from HotelOps']);
+  // 🧾 guest left, waiting for Finance / Reservations
+  check('wa finance hold', ['507 left, waiting finance', '507 left, waiting reservations', '507 guest left, folio with finance', '507 res to fix', '507 finance done', '507 fixed', '507 left'].map(t => P(t).actions.map(W2.chip).join()),
+    ['🧾 507 guest left · waiting for Finance', '🧾 507 guest left · waiting for Reservations', '🧾 507 guest left · waiting for Finance', '🧾 507 guest left · waiting for Reservations', '✓ 507 fixed → check out', '✓ 507 fixed → check out', '✓ CO 507']);
+  // typos: Ops Brain's matcher (wa-brain.js: hoWaBrainPure.wbReadCmd) — exact/likely act, unsure asks
+  const FZ = r => { const w = String(r).toLowerCase().split(/\s+/)[0]; return { chekout: { m: 'co', conf: 'likely', word: 'chekout', tail: '' }, lcoo: { m: 'lco', conf: 'likely', word: 'lcoo', tail: r.split(/\s+/).slice(1).join(' ') }, cht: { m: 'co', conf: 'unsure', word: 'cht', tail: '' } }[w] || null; };
+  const FX = t => { const r = sb.hoWaParse(t, { fuzzy: FZ }); return r.actions.map(W2.chip).join() + (r.ask ? ' ask ' + r.ask.word : ''); };
+  check('wa typos: likely → done and marked guessed, unsure → asked, none → as before', ['415 chekout', '202 lcoo 6pm', '415 cht', '415 change bedsheet'].map(FX),
+    ['✓ CO 415 · 🤔 guessed', '⏰ LCO 202 6 PM · 🤔 guessed', ' ask cht', '📝 note 415']);
+  sb.hoWaBrainPure = { wbReadCmd: FZ };
+  check('wa typos: picked up from window.hoWaBrainPure', A('415 chekout'), '415 co');
+  delete sb.hoWaBrainPure;
+  const corpus2 = ['CO\n101\n102', 'Checkout list:\n101 ✓', '212.319.504 all VD\n507 guest inside', '415 ckd', '507 extending, only TD left', '507 TD ✓ RC ✓', '⁣✅ HotelOps · Checkout list'];
+  check('wa snippet: the new rules read the same in the WhatsApp window', corpus2.map(t => JSON.stringify(H2.parser.hoWaParse(t))), corpus2.map(t => JSON.stringify(sb.hoWaParse(t))));
+}
+
+console.log('\nWhatsApp × Ops Brain');
+{
+  const sb = { console: { log() {}, warn() {}, error() {} } }; sb.window = sb; sb.globalThis = sb;
+  vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'wa-bridge.js'), 'utf8'), sb, { filename: 'wa-bridge.js' });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'wa-brain.js'), 'utf8'), sb, { filename: 'wa-brain.js' });
+  const B = sb.hoWaBrainPure, J = x => JSON.parse(JSON.stringify(x)), P = sb.hoWaParse;
+  const cat = t => B.wbCategorize(t).map(c => c.id).join(',');
+  // rooms and categories
+  check('wab rooms: rooms, not times, money, phone extensions or dates', [B.wbRooms('Rm 324 towels at 4pm, ext 2245, AED 1200, 0113 and 405'), B.wbRooms('202 LCO 1800'), B.wbRooms('18/10/2026 9:01 call 201')].map(J), [['324', '0113', '405'], ['202'], ['201']]);
+  check('wab categories: requests', ['305 towels and toliet paper pls', '201 bedsheet change', '410 make up room please', '512 2 water bottles', '602 baby cot', '603 extra bed', '604 iron pls', '605 shampoo and slippers', '606 luggage pick up'].map(cat),
+    ['towel,tp', 'linen', 'clean', 'water', 'cot', 'xbed', 'iron', 'amen', 'luggage']);
+  check('wab categories: maintenance (water problems are plumbing, not a water request)', ['201 no hot water and AC not working', '503 shower leaking', '711 TV remote broken', '712 light not working', '713 smell of smoke', '714 cockroach', '715 door lock', '716 wifi', '717 something broken'].map(cat),
+    ['ac,plumb', 'plumb', 'tv', 'elec', 'smell', 'pest', 'door', 'wifi', 'fix']);
+  const rq = t => !!B.wbRequestOf({ x: t }, P);
+  check('wab request detection: room + request words; status reports, commands and answers are not requests',
+    ['201 towels please', '305 AC not working', '410 come asap', '201 clean', '201 ready ✅', '324 CO', '202 LCO 6PM', 'towels please', '201 towels given ✅'].map(rq), [true, true, true, false, false, false, false, false, false]);
+  // unanswered requests
+  const recs = [{ t: '09:00', s: 'Sam', x: '201 towels please' }, { t: '09:10', s: 'Lina', x: '305 AC not working asap' }, { t: '09:20', s: 'Alex', x: '305 done ✅' }, { t: '09:30', s: 'Sam', x: '324 CO' },
+    { t: '09:35', s: 'Sam', x: '201 still waiting towels' }, { t: '09:40', s: 'Lina', x: '510 water pls' }, { t: '09:45', s: 'Alex', x: '510 sent' }, { t: '10:05', s: 'Sam', x: '407 bedsheet pls' }];
+  const OR = (n, o) => B.wbOpenRequests(recs, n, Object.assign({ parse: P }, o)).map(o => o.room + ' ' + o.age + ' ' + B.wbWhat(o.cats));
+  check('wab unanswered: a reply about the room closes it; a second ask by the same person does not', OR(600), ['201 60 towels']);
+  check('wab unanswered: not before 30 min', [OR(629).length, OR(640)], [1, ['201 100 towels', '407 35 bedsheets']]);
+  const one = B.wbOpenRequests(recs, 640, { parse: P })[0];
+  check('wab unanswered: "Mark handled" hides it', OR(640, { handled: new Set([one.id]) }), ['407 35 bedsheets']);
+  check('wab unanswered: ids stay the same between devices', B.wbOpenRequests(recs, 640, { parse: P })[0].id === one.id, true);
+  // repeats
+  const day = d => '2026-10-' + d;
+  check('wab repeats: a room 3+ times today', J(B.wbRepeatsToday([{ x: '503 AC' }, { x: '503 still hot' }, { x: 'room 503 guest calling' }, { x: '201 towels' }, { x: '201 ok' }])), [{ room: '503', key: '503', n: 3 }]);
+  const byDay = { [day(18)]: [{ x: '503 AC not cold' }], [day(16)]: [{ x: '503 aircon noise' }], [day(14)]: [{ x: 'rm 503 a/c' }, { x: '201 tv' }], [day(10)]: [{ x: '201 tv' }] };
+  check('wab repeats: the same problem on 3 days in a week', J(B.wbRepeatIssues(byDay, day(18)).map(i => [i.room, i.cat.id, i.days])), [['503', 'ac', 3]]);
+  // stats and tips
+  const L = [];
+  for (let i = 0; i < 6; i++) L.push({ day: day(18), rec: { t: '09:' + (10 + i), s: 'Sam', x: (301 + i) + ' towels pls' } });
+  L.push({ day: day(18), rec: { t: '10:30', s: 'Lina', x: '503 AC not working' } }, { day: day(18), rec: { t: '10:40', s: 'Lina', x: '503 AC still not working' } }, { day: day(18), rec: { t: '11:00', s: 'Lina', x: '503 AC again' } },
+    { day: day(18), rec: { t: '15:00', s: 'Alex', x: '302 water please' } }, { day: day(18), rec: { t: '16:00', s: 'Alex', x: '302 CO' } });
+  const S = B.wbStats(L, P);
+  check('wab stats: messages, requests, most requested, busiest hour, rooms', [S.msgs, S.reqs, B.topOf(S.cats, 2), S.byHour[9], B.topOf(S.rooms, 1)], [11, 10, [['towel', 6], ['ac', 3]], 6, [['503', 3]]]);
+  const Sp = B.wbStats([{ day: day(10), rec: { t: '10:00', s: 'Sam', x: '503 AC not working' } }], P);
+  check('wab tips: share with the busy hours, and a trend', B.wbTips(S, Sp, null).slice(0, 2), ['Towels are 60% of requests, most between 9–11 AM — stock the HK trolley before 9 AM.', 'AC complaints more than doubled (1 → 3) compared with the period before.']);
+  // room moves
+  check('wab moves: from / to', ['move 302 to 405', '302 → 405', '302 moved to 405 because AC', 'RM 302 to 405', 'guest shifted from 503 to 711 noise', 'morning shift to start', 'upgrade 410 to 1201', '302 room change', 'Rm324 c/o', '201 towels'].map(t => { const m = B.wbMoveOf(t); return m ? m.from + '>' + m.to : null; }),
+    ['302>405', '302>405', '302>405', '302>405', '503>711', null, '410>1201', '302>', null, null]);
+  const ML = [{ day: day(18), rec: { t: '09:00', s: 'Sam', x: '503 AC not cooling' } }, { day: day(18), rec: { t: '10:00', s: 'Lina', x: 'move 503 to 711' } }, { day: day(17), rec: { t: '10:00', s: 'Lina', x: '503 → 712 noise' } },
+    { day: day(17), rec: { t: '12:00', s: 'Lina', x: '410 upgraded to 1201' } }, { day: day(16), rec: { t: '08:00', s: 'Sam', x: '205 dirty' } }, { day: day(16), rec: { t: '13:00', s: 'Sam', x: '205 move to 206' } }];
+  const MV = B.wbMoves(ML);
+  check('wab moves: reason from the same message, or from the room\'s messages in the 2 h before', MV.map(m => [m.from, m.to, m.reason.id, m.reason.src]), [['205', '206', 'unknown', ''], ['503', '712', 'noise', 'same'], ['410', '1201', 'upgrade', 'same'], ['503', '711', 'ac', 'before']]);
+  const MS = B.wbMoveSummary(MV);
+  check('wab moves: why rooms move and the rooms that keep causing them', [MS.total, MS.reasons.length, J(MS.repeat.map(r => [r.room, r.n, r.tip]))], [4, 4, [['503', 2, 'Ask maintenance to check 503\'s AC']]]);
+  check('wab problem rooms', J(B.wbProblemRooms(ML, MV).slice(0, 2).map(o => [o.room, o.issues, o.moves, o.top[0][0]])), [['503', 1, 2, 'AC / cooling'], ['205', 0, 1, 'Not said']].slice(0, 1).concat([J(B.wbProblemRooms(ML, MV).slice(1, 2).map(o => [o.room, o.issues, o.moves, (o.top[0] || [''])[0]]))[0]]));
+  check('wab tips: moves', B.wbTips(B.wbStats(ML, P), null, MS).filter(t => /moves?\b/.test(t)), ['Room 503 caused 2 of 4 moves.', 'Ask maintenance to check 503\'s AC (2 moves).']);
+  // reminders
+  const RM = (t, x) => B.wbRemindersOf({ t, s: 'Sam', x }, P).map(r => [B.clock(r.at), r.text, r.day]);
+  check('wab reminders: a late check-out at 6 PM → 5:45 PM and 6:05 PM', RM('09:05', '202 LCO 6PM'), [['5:45 PM', 'Room 202 late check-out at 6 PM — check if they\'re ready', 0], ['6:05 PM', 'Room 202 is past its 6 PM late check-out', 0]]);
+  check('wab reminders: "remind 305 taxi at 4" → 3:55 PM', RM('14:10', 'remind 305 taxi at 4'), [['3:55 PM', 'Room 305 taxi at 4 PM', 0]]);
+  check('wab reminders: in 30 min, no time (+30 min), tomorrow morning', [RM('09:05', 'call 201 in 30 min'), RM('09:05', 'follow up 415 laundry'), RM('22:00', 'remind 0113 tomorrow morning breakfast')],
+    [[['9:35 AM', 'Room 201 call', 0]], [['9:35 AM', 'Room 415 follow up laundry', 0]], [['8:30 AM', 'Room 0113 breakfast (this morning)', 1]]]);
+  check('wab reminders: plain messages and commands make none', [RM('09:00', '324 CO'), RM('09:00', '201 towels please'), RM('09:00', 'ok')], [[], [], []]);
+  check('wab when: times', [B.wbParseWhen('at 4', 600), B.wbParseWhen('by 10:30am', 600), B.wbParseWhen('in 2 hours', 600), B.wbParseWhen('room 405 ok', 600)].map(w => w && [w.min, w.label]), [[960, '4 PM'], [630, '10:30 AM'], [720, 'in 2 hours'], null]);
+  check('wab shift end (default hours)', [600, 1000, 1400, 120].map(B.wbShiftEndDefault), [900, 1380, 1860, 420]);
+  // words colleagues type
+  const fz = w => { const t = w.split(' '), f = B.wbFuzzyWord(t[0], t[1]); return f ? f.m + '/' + f.conf : '-'; };
+  check('wab words: typos read as commands', ['ckod', 'chkd', 'chkout', 'cheked out', 'chked', 'c.o.', 'cout', 'ckd', 'extn', 'exnd', 'xtnd', 'extd', 'extnd', 'lco', 'l.c.o', 'latco', 'late c/o', 'lt co'].map(fz),
+    ['co/likely', 'co/likely', 'co/exact', 'co/likely', 'co/likely', 'co/exact', 'co/likely', 'co/unsure', 'ext/exact', 'ext/likely', 'ext/likely', 'ext/exact', 'ext/exact', 'lco/exact', 'lco/exact', 'lco/likely', 'lco/exact', 'lco/likely']);
+  check('wab words: safe words stay words', ['ok', 'cold', 'code', 'co-worker', 'cool', 'out', 'exit', 'extra', 'lock', 'check', 'clean'].map(fz), Array(11).fill('-'));
+  check('wab words: phone extensions, "out of order" and long sentences are not commands', ['ext. 2245', 'call him on ext 2245', 'out of order', 'co-worker is here', 'ckod guest left luggage'].map(t => B.wbReadCmd(t, {})), [null, null, null, null, null]);
+  check('wab words: a typo with nights or a time', [J(B.wbReadCmd('xtnd 2n', {})), J(B.wbReadCmd('latco 6pm', {}))].map(x => x.m + ' ' + x.conf + ' ' + x.tail), ['ext likely 2n', 'lco likely 6pm']);
+  const store = {}, puts = {};
+  const Wd = B.wbMakeWords({ load: () => null, save: v => { store.v = v; } }, (k, e) => { puts[k] = e; }, () => 'Sam');
+  check('wab dictionary: built-in housekeeping codes', ['VD', 'v.d', 'VC', 'VCI', 'ED', 'OD', 'OOO', 'DND', 'SO', 'NS', 'C/O', 'LC', 'EXT', 'XYZ'].map(w => { const e = Wd.lookup(w); return e ? e.m : null; }),
+    ['co', 'co', 'co', 'co', 'co', 'hk', 'note', 'hk', 'hk', 'note', 'co', 'lco', 'ext', null]);
+  check('wab dictionary: status lists', J(Wd.read('VD: 315, 402, 518\n320 VD\n330, 331 OD\n340 OD guest wants towels\n350 VD, 351 OD').map(s => s.room + ' ' + s.word + ' ' + s.m)), ['315 vd co', '402 vd co', '518 vd co', '320 vd co', '330 od hk', '331 od hk', '350 vd co', '351 od hk']);
+  let changes = 0; Wd.onChange(() => changes++);
+  Wd.add('VD', 'note', 'Our VD means something else');
+  check('wab dictionary: a word the team added wins over the built-in one, saved with who and when', [Wd.lookup('vd').m, Wd.lookup('vd').note, puts.vd.by, puts.vd.m, !!puts.vd.at, changes], ['note', 'Our VD means something else', 'Sam', 'note', true, 1]);
+  Wd.remove('vd'); const off = Wd.lookup('vd'), offAll = Wd.all().some(e => e.key === 'vd'), offList = Wd.allWithOff().find(e => e.key === 'vd').off; Wd.restore('vd');
+  check('wab dictionary: a built-in word can be turned off and back on', [off, offAll, offList, Wd.lookup('vd').m, Wd.lookup('vd').label, puts.vd], [null, false, true, 'co', 'Vacant Dirty — the guest has left', null]);
+  Wd.add('ckd', 'co'); Wd.remove('ckd');
+  check('wab dictionary: a team word is deleted', [Wd.lookup('ckd'), puts.ckd, Wd.all().some(e => e.key === 'ckd')], [null, null, false]);
+  Wd.setRemote({ zz: { m: 'ext', by: 'Lina', at: 1 }, bad: { m: 'nonsense' } });
+  check('wab dictionary: the team\'s words from the database', [Wd.lookup('zz').m, Wd.lookup('bad'), Wd.lookup('vd').m], ['ext', null, 'co']);
+  check('wab dictionary: learned words come before typo guesses', [J(B.wbReadCmd('zz', Wd.dict())).conf, J(B.wbReadCmd('VD', Wd.dict())).m, J(B.wbReadCmd('ckod', Wd.dict())).conf], ['learned', 'co', 'likely']);
+  const A = B.wbMakeAsk({ load: () => null, save: () => {} }, Wd, () => 'Sam');
+  check('wab questions: unknown words in a message', J(B.wbAskCandidates('415 ckd\n416 ckod\n417 VD\n418 change bed\n419 OD', Wd.dict())).map(c => c.room + ' ' + c.word + ' ' + c.m + ' ' + c.conf), ['415 ckd co unsure', '416 ckod co likely', '417 vd co learned']);
+  const q1 = A.add({ word: 'ckd', room: '415', text: '415 ckd', sender: 'Sam', key: 'k1' }), q2 = A.add({ word: 'CKD', room: '420', text: '420 ckd', sender: 'Lina', key: 'k2' });
+  check('wab questions: one per message, none for a known word', [A.list().length, A.add({ word: 'ckd', room: '415', text: '415 ckd', key: 'k1' }).id === q1.id, A.add({ word: 'VD', room: '1', text: 'x', key: 'k3' })], [2, true, null]);
+  let heard = null; A.onAnswer(x => { heard = x; });
+  const hit = A.answer('ckd', 'co');
+  check('wab questions: an answer applies to every waiting message with that word and teaches the dictionary', [hit.map(h => h.room), heard.meaning, A.list().length, Wd.lookup('ckd').m, J(B.wbReadCmd('ckd', Wd.dict())).conf], [['415', '420'], 'co', 0, 'co', 'learned']);
+  check('wab questions: a bad meaning is refused', A.answer('xx', 'maybe'), []);
+  // the requests log (every room, in-house or departing)
+  check('wab requests log: what closes a request', ['206 cleaned', '206 ✓', 'towels sent 201', '201 not done yet?', '201 towels pls', '206 done, 207 please clean', '305 still not cleaned', '410 ok'].map(t => B.wbDoneOf({ x: t })),
+    [['206'], ['206'], ['201'], [], [], ['206'], [], ['410']]);
+  const R2 = [{ t: '09:10', s: 'Sam', x: '206 cleaning please', g: 'HK' }, { t: '09:20', s: 'Lina', x: '201 towels pls' }, { t: '09:35', s: 'Alex', x: '206 cleaned ✅' }, { t: '13:02', s: 'Sam', x: '206 towels please' },
+    { t: '13:10', s: 'Lina', x: '201 not done yet?' }, { t: '13:20', s: 'Lina', x: '305 ✓' }];
+  const RL = B.wbRequestLog(R2, 800, {}, [{ id: 'm1', room: '410', what: 'Iron', t: '12:00', by: 'Sam' }], { parse: P, day: '2026-10-18' });
+  check('wab requests log: status by itself from the chat, open time, overdue, added by hand', RL.map(i => [i.room, i.what, i.st, i.doneT, i.open, i.overdue]),
+    [['206', 'towels', 'open', '', 18, false], ['410', 'Iron', 'open', '', 80, true], ['201', 'towels', 'open', '', 240, true], ['206', 'cleaning', 'done', '09:35', 25, false]]);
+  const tow = RL.find(i => i.room === '201');
+  const RL2 = B.wbRequestLog(R2, 800, { [tow.id]: { st: 'done', by: 'Lina', at: new Date(2026, 9, 18, 13, 30).getTime() } }, [], { parse: P, day: '2026-10-18' });
+  check('wab requests log: "Done" tapped by the team', (x => [x.st, x.doneBy, x.how, x.doneT, x.open])(RL2.find(i => i.room === '201')), ['done', 'Lina', 'tap', '13:30', 250]);
+  check('wab requests log: asked again = the same request', B.wbRequestLog([{ t: '09:00', s: 'Lina', x: '503 AC not working' }, { t: '09:05', s: 'Lina', x: '503 AC still not cold' }, { t: '09:30', s: 'Sam', x: '503 fixed' }], 600, {}, [], { parse: P }).map(i => [i.room, i.again, i.st, i.doneT]), [['503', 1, 'done', '09:30']]);
+  check('wab requests log: per-room history', B.wbRoomHistory(RL, '206'), '206: cleaning 9:10 AM ✅ 9:35 AM · towels 1:02 PM 🟡');
+  check('wab requests log: any room, even one not departing, and a past day is not overdue', B.wbRequestLog([{ t: '09:00', s: 'Sam', x: '1205 water please' }], 0, {}, [], { parse: P, past: true }).map(i => [i.room, i.st, i.overdue]), [['1205', 'open', false]]);
+  // Brain questions about the chat
+  const CQ = q => { const x = B.wbChatQuery(q); return x && [x.room, x.act, x.words.join('+'), x.day, x.q].join('|'); };
+  check('wab brain search: what to look for', ['324', 'room 324', 'what happened with 0113', 'towels', 'who checked out 407', 'late checkouts today', 'how do I post TD for a day use guest', 'fix: the board'].map(CQ),
+    ['324||||324', '324||||324', '0113||||0113', '||towel||towel', '407|co|||407', '|lco||today|lco', null, null]);
+  const rec = { t: '09:01', s: 'Sam', x: '0113 EXT 2N', r: 'ext 0113 +2N → 20 Oct' };
+  check('wab brain search: matches', [B.wbChatMatch(rec, B.wbChatQuery('what happened with 113'), P), B.wbChatMatch(rec, B.wbChatQuery('who checked out 0113'), P), B.wbChatMatch({ t: '09:00', s: 'Lina', x: '201 Towels pls' }, B.wbChatQuery('towels'), P), B.wbChatMatch({ x: '202 LCO 6PM' }, B.wbChatQuery('late checkouts today'), P)],
+    [true, false, true, true]);
+}
+
+// ── Room notes (departures.js): the note text → timeline entries, types, edit and delete ──
+{
+  console.log('\nRoom notes');
+  const src = fs.readFileSync(path.join(ROOT, 'departures.js'), 'utf8');
+  const code = src.slice(src.indexOf('// ── Room notes: parser (pure'), src.indexOf('// ── end room notes parser'));
+  const sb = {}; vm.createContext(sb);
+  vm.runInContext(code + '\nthis.N = { DPN_CAT, dpnParse, dpnCat, dpnTagCat, dpnVia, dpnBody, dpnLine, dpnReplace, dpnPreview, dpnPart };', sb);
+  const N = sb.N;
+  const NOTE = ['Guest asked for a quiet room next time',
+    '[09:05] Late check-out 2 PM — WhatsApp · Sam 9:05 AM',
+    '[09:20] WhatsApp · Lina 9:20 AM: 101 change bedsheet and towels',
+    '[9:40] Luggage in store, 3 bags',
+    'tag 4471, behind the desk',
+    '',
+    'Untimed line after a gap',
+    '[10:02] 🧾 Guest left · waiting for Finance',
+    '[10:10] Called, no answer',
+    '[10:12] [Taxi] Car at 4 PM please',
+    '[10:15] ',
+    '[13:52] Checked out — WhatsApp · Sam 1:52 PM (edited)'].join('\n');
+  const E = N.dpnParse(NOTE);
+  check('room notes: entries (empty stamps dropped), times padded, continuation kept', E.map(e => [e.time, e.cat, e.count]),
+    [['', 'vip', 1], ['09:05', 'lco', 1], ['09:20', 'hk', 1], ['09:40', 'lug', 2], ['', 'gen', 1], ['10:02', 'fin', 1], ['10:10', 'call', 1], ['10:12', 'taxi', 1], ['13:52', 'co', 1]]);
+  check('room notes: a [Category] tag wins and is taken off the text', [E[7].tag, E[7].text, E[7].cat], ['Taxi', 'Car at 4 PM please', 'taxi']);
+  check('room notes: WhatsApp sender and the plain text', [E[1].via, E[1].body, E[2].via.who, E[2].body, E[8].via.edited],
+    [{ src: 'WhatsApp', who: 'Sam', at: '9:05 AM', edited: '' }, 'Late check-out 2 PM', 'Lina', '101 change bedsheet and towels', 'edited']);
+  check('room notes: types from words', ['Paid by card', 'TD paid', 'AC not working', 'Taxi to the airport at 5', 'Guest may extend 2 nights', 'Opera updated — Extended 2N, AED 300/night', 'DND sign on the door', 'Waiting for reservations', 'VIP: welcome amenity', 'hello', 'WhatsApp · Sam 9:01 AM: ok'].map(N.dpnCat),
+    ['pay', 'pay', 'mnt', 'taxi', 'ext', 'ext', 'call', 'fin', 'vip', 'gen', 'wa']);
+  check('room notes: tags by name or short word', ['Luggage', 'late co', 'Housekeeping', 'Call / DND', 'td', 'Nope'].map(N.dpnTagCat), ['lug', 'lco', 'hk', 'call', 'pay', null]);
+  check('room notes: a new line', [N.dpnLine('10:28', 'lug', ' Luggage in store, 2 bags ', true), N.dpnLine('10:28', 'gen', 'Hi', true), N.dpnLine('', 'pay', 'Paid', false)],
+    ['[10:28] [Luggage] Luggage in store, 2 bags', '[10:28] Hi', 'Paid']);
+  check('room notes: edit replaces just that entry (both of its lines)', N.dpnReplace(NOTE, E[3], '[09:40] [Luggage] 2 bags').split('\n').slice(3, 6), ['[09:40] [Luggage] 2 bags', '', 'Untimed line after a gap']);
+  check('room notes: delete removes the entry and tidies blank lines', N.dpnReplace('[09:00] a\n\n[10:00] b\n\n[11:00] c', N.dpnParse('[09:00] a\n\n[10:00] b\n\n[11:00] c')[1], null), '[09:00] a\n\n[11:00] c');
+  check('room notes: card preview = pinned, else newest', [N.dpnPreview(NOTE, '[10:10] Called, no answer').text, N.dpnPreview(NOTE, 'gone').time, N.dpnPreview('', '')], ['Called, no answer', '13:52', null]);
+  check('room notes: parts of the day', ['04:10', '09:00', '12:00', '18:30', '22:00', ''].map(N.dpnPart), ['Night', 'Morning', 'Afternoon', 'Evening', 'Night', 'No time']);
 }
 
 console.log(`\n${pass} passed · ${fail} failed`);

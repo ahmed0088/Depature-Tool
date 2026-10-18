@@ -1102,6 +1102,7 @@ function depRender() {
   _depInitRipple();
   _depCheckOverdueAlerts();
   _depQueueTrendSnapshot();
+  _dpnRefresh();   // an open Room notes window follows live changes
 }
 
 // ── Quick Jump bar ─────────────────────────────────────────
@@ -1432,9 +1433,9 @@ function depCardHTML(r) {
   } else if (es === 'out') {
     actHTML = `<div class="dc-actions dp-acts g1">${B('dca-undo', `depAction(${i},'due')`, '↺', 'Undo check-out')}</div>`;
   } else if (es === 'na') {
-    actHTML = `<div class="dc-actions dp-acts g2">${B('dca-co', `depAction(${i},'out')`, '✓', 'Check out')}${B('dca-undo', `depAction(${i},'due')`, '↺', 'Undo NA')}</div>`;
+    actHTML = `<div class="dc-actions dp-acts g2">${B('dca-co', `depAction(${i},'out')`, '✓', 'Check out')}${r.intent === 'finance_hold' ? '' : B('dca-fin', `depFinanceHold(${i},event)`, '🧾', 'Left · waiting', 'Guest has physically left; Finance or Reservations still has to fix the room')}${B('dca-undo', `depAction(${i},'due')`, '↺', 'Undo NA')}</div>`;
   } else if (es === 'dnd') {
-    actHTML = `<div class="dc-actions dp-acts g2">${B('dca-co', `depAction(${i},'out')`, '✓', 'Check out')}${B('dca-undo', `depAction(${i},'due')`, '↺', 'Undo DND')}</div>`;
+    actHTML = `<div class="dc-actions dp-acts g2">${B('dca-co', `depAction(${i},'out')`, '✓', 'Check out')}${r.intent === 'finance_hold' ? '' : B('dca-fin', `depFinanceHold(${i},event)`, '🧾', 'Left · waiting', 'Guest has physically left; Finance or Reservations still has to fix the room')}${B('dca-undo', `depAction(${i},'due')`, '↺', 'Undo DND')}</div>`;
   } else if (es === 'late') {
     actHTML = `<div class="dc-actions dp-acts g2">${B('dca-co', `depAction(${i},'out')`, '✓', 'Check out')}${r.intent === 'finance_hold' ? '' : B('dca-fin', `depFinanceHold(${i},event)`, '🧾', 'Left · waiting', 'Guest has physically left; Finance or Reservations still has to fix the room')}${B('dca-undo', `depAction(${i},'due')`, '↺', 'Undo LCO')}</div>`;
   } else {
@@ -1482,7 +1483,11 @@ function depCardHTML(r) {
     }
   }
 
-  const notePrev = r.note ? escapeHtml(r.note.split('\n').filter(Boolean).pop().substring(0, 70)) : '';
+  // note chip: the pinned note (else the newest) with its type icon; the Note button shows how many
+  const noteE = r.note ? dpnPreview(r.note, r.notePin) : null;
+  const noteN = r.note ? dpnParse(r.note).length : 0;
+  const noteCat = noteE ? (DPN_CAT[noteE.cat] || DPN_CAT.gen) : null;
+  const notePrev = noteE ? escapeHtml(noteE.body.replace(/\s+/g, ' ').substring(0, 70)) : '';
 
   return `<div class="dep-card dp-card ${sClass}${isSelected ? ' dep-sel-active' : ''}"
     data-room="${escapeHtml(r.roomStr)}" data-st="${es}"
@@ -1501,7 +1506,7 @@ function depCardHTML(r) {
     </div>
     <div class="dp-tags">
       ${balChip}${chips.join('')}
-      ${r.note ? `<button class="dp-chip dp-chip-note" onclick="event.stopPropagation();depToggleNote('${r.roomStr}')" title="${escapeHtml(r.note.substring(0, 200))}"><span>${notePrev}</span></button>` : ''}
+      ${noteE ? `<button class="dp-chip dp-chip-note${r.notePin && noteE.key === r.notePin ? ' dp-chip-pinned' : ''}" style="--k:${noteCat.c}" onclick="event.stopPropagation();depOpenNotes('${r.roomStr}')" title="${escapeHtml((noteE.time ? noteE.time + ' · ' : '') + noteCat.l + ': ' + noteE.text.substring(0, 200))}"><i class="dp-chip-ni" aria-hidden="true">${noteCat.i}</i><span>${notePrev}</span></button>` : ''}
     </div>
     <div class="dc-body dp-body">
       ${overdueStrip}
@@ -1512,31 +1517,360 @@ function depCardHTML(r) {
       ${actHTML}
       <div class="dp-foot">
         ${intentRowHTML}
-        <button class="dp-note-btn" onclick="event.stopPropagation();depToggleNote('${r.roomStr}')" aria-label="Notes for room ${escapeHtml(r.roomStr)}"><i class="dp-ic dp-ic-note" aria-hidden="true"></i>Note</button>
+        <button class="dp-note-btn" onclick="event.stopPropagation();depOpenNotes('${r.roomStr}')" aria-label="Notes for room ${escapeHtml(r.roomStr)}${noteN ? ' (' + noteN + ')' : ''}"><i class="dp-ic dp-ic-note" aria-hidden="true"></i>${noteN ? 'Notes' : 'Note'}${noteN ? `<b class="dp-note-n">${noteN}</b>` : ''}</button>
         <button class="dc-copy-card-btn dp-icon-btn" title="Copy room summary" aria-label="Copy room summary" onclick="event.stopPropagation();depCopyCard(${i})"><i class="dp-ic dp-ic-copy" aria-hidden="true"></i></button>
-      </div>
-      <div class="dc-note-body dp-note" style="display:none;">
-        <div class="dc-note-header">
-          <span class="dc-note-lbl">Notes</span>
-          <button class="dc-stamp-btn" onclick="event.stopPropagation();depStampNote(${i})" title="Add the time">🕐 Stamp time</button>
-        </div>
-        <textarea class="dc-note" placeholder="Notes, luggage, special requests…"
-          oninput="depNoteInput(${i},this.value)">${escapeHtml(r.note)}</textarea>
       </div>
     </div>
   </div>`;
 }
 
-// Open / close one card's notes without a re-render
-function depToggleNote(roomStr) {
-  const card = [...document.querySelectorAll('#depGrid .dep-card')].find(c => c.dataset.room === String(roomStr));
-  const nb = card && card.querySelector('.dc-note-body');
-  if (!nb) return;
-  const open = nb.style.display === 'none';
-  nb.style.display = open ? 'block' : 'none';
-  card.classList.toggle('dp-note-open', open);
-  if (open) { const ta = nb.querySelector('textarea'); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }
+// ══════════════════════════════════════════════════════════════
+// Room notes window. r.note stays plain text ("[HH:MM] [Category] text" lines),
+// so WhatsApp, undo, copy and every other reader keep working.
+// ══════════════════════════════════════════════════════════════
+// ── Room notes: parser (pure, tested in tests/run-tests.js) ──
+const DPN_CATS = [
+  // key, label, icon, colour, words that pick it (the first match wins, in this order)
+  { k: 'lco',  l: 'Late CO',      i: '⏰', c: 'var(--amber)',  re: /\blate\s*(check[\s-]?out|c\.?o\b)|\blco\b/i },
+  { k: 'co',   l: 'Check-out',    i: '✓',  c: 'var(--green)',  re: /\bchecked[\s-]?out\b|\bcheck[\s-]?out (done|complete)|\bleft the hotel\b|\bkey(s)? returned\b/i },
+  { k: 'fin',  l: 'Finance',      i: '🧾', c: 'var(--blue)',   re: /\bfinance\b|\breservations\b|\binvoice\b|\bcity ledger\b|🧾/i },
+  { k: 'ext',  l: 'Extension',    i: '↪',  c: 'var(--teal)',   re: /\bextend|\bextension|\bextending\b|⏳|\bext\b|\bmore nights?\b/i },
+  { k: 'pay',  l: 'Payment',      i: '💳', c: 'var(--purple)', re: /\bpaid\b|\bpay(ing|ment|s)?\b|\bbalance\b|\btd\b|tourism dirham|\bcard\b|\bcash\b|\bdeposit\b|\brefund|\baed\b|\bsettled\b/i },
+  { k: 'lug',  l: 'Luggage',      i: '🧳', c: 'var(--sky)',    re: /\bluggage\b|\bbags?\b|\bsuitcases?\b|\bbaggage\b/i },
+  { k: 'taxi', l: 'Taxi',         i: '🚕', c: 'var(--amber)',  re: /\btaxi\b|\bcab\b|\btransport|\bairport\b|\bpick[\s-]?up\b|\btransfer\b|\bcareem\b|\buber\b|\blimo\b/i },
+  { k: 'vip',  l: 'VIP / Prefs',  i: '⭐', c: 'var(--amber)',  re: /\bvip\b|\bprefer|\ballerg|\bbirthday\b|\banniversary\b|\bloyal|\breturning guest\b|\bhoneymoon\b|\bquiet room\b|\bhigh floor\b|\bnext time\b/i },
+  { k: 'hk',   l: 'Housekeeping', i: '🧹', c: 'var(--mint)',   re: /\bhousekeeping\b|\bhk\b|\btowels?\b|\bclean|\bbed\s?sheets?\b|\blinen\b|\btoilet paper\b|\btoliet\b|\bamenit|\brequest|\bminibar\b|\bpillows?\b/i },
+  { k: 'mnt',  l: 'Maintenance',  i: '🔧', c: 'var(--red)',    re: /\bmaintenance\b|\brepair|\bbroken\b|\bleak|\bac\b|\bair ?con|\bnot working\b|\bengineer/i },
+  { k: 'call', l: 'Call / DND',   i: '📞', c: 'var(--rose)',   re: /\bno answer\b|\bdnd\b|\bdo not disturb\b|\bcalled\b|\bcall(ed|ing)?\b|\bphone\b|\bknock/i },
+  { k: 'wa',   l: 'WhatsApp',     i: '💬', c: 'var(--green)',  re: /whatsapp/i },
+  { k: 'gen',  l: 'General',      i: '📝', c: 'var(--text2)',  re: null },
+];
+const DPN_CAT = Object.fromEntries(DPN_CATS.map(c => [c.k, c]));
+// "[Luggage]" / "[Late CO]" / "[Housekeeping]"… at the start of a line's text → that category
+function dpnTagCat(tag) {
+  const t = String(tag || '').trim().toLowerCase();
+  if (!t) return null;
+  const hit = DPN_CATS.find(c => c.l.toLowerCase() === t || c.k === t);
+  if (hit) return hit.k;
+  const syn = { 'checkout': 'co', 'check out': 'co', 'late checkout': 'lco', 'late check-out': 'lco', 'extend': 'ext', 'extending': 'ext', 'balance': 'pay', 'td': 'pay', 'transport': 'taxi', 'request': 'hk', 'requests': 'hk', 'call': 'call', 'dnd': 'call', 'no answer': 'call', 'reservations': 'fin', 'vip': 'vip', 'preference': 'vip', 'note': 'gen', 'general': 'gen' };
+  return syn[t] || null;
 }
+function dpnCat(text) {
+  const s = String(text || '');
+  for (const c of DPN_CATS) if (c.re && c.k !== 'wa' && c.re.test(s.replace(/WhatsApp\s*·[^:—]*?\d{1,2}:\d{2}\s*(AM|PM)?(\s*\(edited\))?/gi, ''))) return c.k;
+  return /whatsapp/i.test(s) ? 'wa' : 'gen';
+}
+// who / where a line came from: "… — WhatsApp · Sam 1:52 PM (edited)" or "WhatsApp · Sam 9:01 AM: text"
+function dpnVia(text) {
+  const m = String(text || '').match(/WhatsApp\s*·\s*([^\d:—]+?)\s+(\d{1,2}:\d{2}\s*(?:AM|PM)?)(?:\s*\((edited|redo|word explained)\))?/i);
+  if (!m) return null;
+  return { src: 'WhatsApp', who: m[1].trim(), at: m[2].trim(), edited: m[3] || '' };
+}
+// the text without the WhatsApp signature
+function dpnBody(text) {
+  return String(text || '')
+    .replace(/^\s*WhatsApp\s*·\s*[^\d:—]+?\s+\d{1,2}:\d{2}\s*(?:AM|PM)?(?:\s*\([^)]*\))*\s*:\s*/i, '')
+    .replace(/\s*—\s*WhatsApp\s*·\s*[^\d:—]+?\s+\d{1,2}:\d{2}\s*(?:AM|PM)?(?:\s*\([^)]*\))*\s*$/i, '')
+    .trim();
+}
+// r.note → entries, in line order. A "[HH:MM]" line starts an entry; the lines under it belong to it
+// until a blank line. Lines with no time (before any time, or after a blank line) are untimed entries.
+function dpnParse(note) {
+  const lines = String(note || '').split('\n'), out = [];
+  let cur = null;
+  lines.forEach((ln, idx) => {
+    const m = ln.match(/^\s*\[(\d{1,2}):(\d{2})\]\s?(.*)$/);
+    if (m) {
+      cur = { start: idx, count: 1, time: m[1].padStart(2, '0') + ':' + m[2], rest: m[3] };
+      out.push(cur);
+    } else if (!ln.trim()) {
+      cur = null;
+    } else if (cur) {
+      cur.count = idx - cur.start + 1; cur.rest += '\n' + ln;
+    } else {
+      cur = { start: idx, count: 1, time: '', rest: ln };
+      out.push(cur);
+    }
+  });
+  return out.map((e, n) => {
+    const tm = e.rest.match(/^\s*\[([A-Za-z][A-Za-z /&-]{1,20})\]\s*/), tagK = tm ? dpnTagCat(tm[1]) : null;
+    const text = tagK ? e.rest.slice(tm[0].length) : e.rest;
+    const via = dpnVia(text);
+    return { n, start: e.start, count: e.count, time: e.time, tag: tagK ? tm[1] : '', cat: tagK || dpnCat(text), text: text.trim(), body: dpnBody(text) || text.trim(), via, key: lines.slice(e.start, e.start + e.count).join('\n') };
+  }).filter(e => e.text);
+}
+// one entry back to text: "[HH:MM] [Category] text"
+function dpnLine(time, catK, text, tagIt) {
+  const c = DPN_CAT[catK];
+  return (time ? `[${time}] ` : '') + (tagIt && c && catK !== 'gen' && catK !== 'wa' ? `[${c.l}] ` : '') + String(text || '').trim();
+}
+// replace (or with text === null delete) one entry inside the note
+function dpnReplace(note, e, newText) {
+  const L = String(note || '').split('\n');
+  if (newText === null) L.splice(e.start, e.count); else L.splice(e.start, e.count, ...String(newText).split('\n'));
+  return L.join('\n').replace(/\n{3,}/g, '\n\n').replace(/^\n+|\n+$/g, '');
+}
+// the entry shown on the card: the pinned one, else the newest
+function dpnPreview(note, pin) {
+  const E = dpnParse(note);
+  if (!E.length) return null;
+  return (pin && E.find(e => e.key === pin || e.key.split('\n')[0] === pin)) || E[E.length - 1];
+}
+function dpnPart(time) {
+  if (!time) return 'No time';
+  const h = parseInt(time, 10);
+  return h < 5 ? 'Night' : h < 12 ? 'Morning' : h < 17 ? 'Afternoon' : h < 21 ? 'Evening' : 'Night';
+}
+// ── end room notes parser ──
+
+// ── Room notes window (UI) ──
+const DPN_TPL = {
+  gen:  ['Spoke to the guest', 'Guest will come to the desk', 'Guest asked for a receipt'],
+  lug:  ['Luggage in store, {n} bags', 'Luggage collected', 'Bags to the lobby at {time}'],
+  taxi: ['Taxi booked for {time}', 'Airport drop at {time}', 'Guest has own transport'],
+  pay:  ['Paid by card', 'Paid cash', 'TD paid', 'Balance settled'],
+  hk:   ['Room ready to clean', 'Towels sent', 'Extra amenities requested'],
+  mnt:  ['AC not working, maintenance told', 'Fixed by maintenance'],
+  call: ['Called, no answer', 'DND sign on the door', 'Spoke to the guest on the phone'],
+  fin:  ['Waiting for finance', 'Waiting for reservations', 'Finance done'],
+  vip:  ['VIP: welcome amenity', 'Guest prefers a high floor', 'Allergy: {what}'],
+  lco:  ['Late check-out until {time}', 'Late check-out approved by DM'],
+  ext:  ['Guest wants to extend {n} nights', 'Extension rate agreed'],
+};
+const DPN_PICK = ['gen', 'lug', 'taxi', 'pay', 'hk', 'mnt', 'call', 'fin', 'vip', 'lco', 'ext'];
+const _dpn = { room: null, filter: 'all', q: '', cat: 'gen', raw: false, edit: -1, del: -1 };
+function _dpnRoom() { return depRooms.find(r => r.roomStr === _dpn.room) || null; }
+function _dpnIdx() { const r = _dpnRoom(); return r ? depRooms.indexOf(r) : -1; }
+function _dpnNow() { return new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); }
+function _dpnSave() { saveDeps(); depRender(); }   // the board is behind the window: re-rendering it never touches what is typed here
+function _dpnEsc(s) { return escapeHtml(String(s == null ? '' : s)); }
+
+// Opens the window for a room (the card's "Note" button and note chip call this)
+function depOpenNotes(roomStr) {
+  const r = depRooms.find(x => x.roomStr === String(roomStr));
+  if (!r) return;
+  Object.assign(_dpn, { room: r.roomStr, filter: 'all', q: '', cat: 'gen', raw: false, edit: -1, del: -1 });
+  let ov = document.getElementById('dpnOv');
+  if (!ov) {
+    ov = document.createElement('div'); ov.id = 'dpnOv'; ov.className = 'dpn-ov';
+    ov.addEventListener('mousedown', e => { if (e.target === ov) depCloseNotes(); });
+    document.body.appendChild(ov);
+    document.addEventListener('keydown', _dpnKey, true);
+  }
+  ov.innerHTML = `<div class="dpn-win" role="dialog" aria-modal="true" aria-labelledby="dpnTitle">
+    <header class="dpn-hd" id="dpnHd"></header>
+    <div class="dpn-tools">
+      <label class="dpn-search"><span aria-hidden="true">⌕</span><input id="dpnQ" type="search" placeholder="Search notes…" autocomplete="off" oninput="_dpn.q=this.value;_dpnPaint()"></label>
+      <div class="dpn-filters" id="dpnFilters" role="tablist" aria-label="Note types"></div>
+    </div>
+    <div class="dpn-body" id="dpnBody"></div>
+    <footer class="dpn-comp" id="dpnComp">
+      <div class="dpn-cats" id="dpnCats" role="radiogroup" aria-label="Note type"></div>
+      <div class="dpn-tpls" id="dpnTpls"></div>
+      <div class="dpn-write">
+        <textarea id="dpnText" rows="1" placeholder="Write a note…" aria-label="New note" onkeydown="_dpnComposeKey(event)" oninput="_dpnGrow(this)"></textarea>
+        <button type="button" class="dpn-send" onclick="_dpnAdd()" aria-label="Save note">Add</button>
+      </div>
+      <div class="dpn-hint">Enter saves · Shift+Enter for a new line · the time is added for you</div>
+    </footer>
+  </div>`;
+  document.documentElement.classList.add('dpn-lock');
+  ov.classList.remove('dpn-closing');
+  ov.classList.add('open');
+  _dpnPaintAll();
+  if (window.matchMedia && matchMedia('(hover: hover) and (pointer: fine)').matches) setTimeout(() => document.getElementById('dpnText')?.focus(), 60);
+}
+// kept for older callers: the card buttons used to open an inline editor
+function depToggleNote(roomStr) { depOpenNotes(roomStr); }
+
+function depCloseNotes() {
+  const ov = document.getElementById('dpnOv');
+  if (!ov || !ov.classList.contains('open')) return;
+  const draft = document.getElementById('dpnText');
+  if (draft && draft.value.trim() && !confirm('Close without saving the note you are writing?')) return;
+  _dpn.room = null;
+  ov.classList.add('dpn-closing');
+  document.documentElement.classList.remove('dpn-lock');
+  const fin = () => { ov.classList.remove('open', 'dpn-closing'); ov.innerHTML = ''; };
+  const rm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  rm ? fin() : setTimeout(fin, 190);
+  if (ov.contains(document.activeElement)) document.activeElement.blur();
+  depRender();
+}
+function _dpnKey(e) {
+  const ov = document.getElementById('dpnOv');
+  if (!ov || !ov.classList.contains('open') || ov.classList.contains('dpn-closing')) return;
+  if (e.key === 'Escape') {
+    e.stopPropagation(); e.preventDefault();
+    if (_dpn.edit >= 0 || _dpn.del >= 0) { _dpn.edit = _dpn.del = -1; _dpnPaint(); return; }
+    depCloseNotes();
+  } else if (e.key === 'Tab') {   // keep focus inside the window
+    const f = [...ov.querySelectorAll('button, input, textarea, select, [tabindex="0"]')].filter(x => x.offsetParent && !x.disabled);
+    if (!f.length) return;
+    const a = f[0], z = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === a) { e.preventDefault(); z.focus(); }
+    else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); }
+  }
+}
+function _dpnGrow(t) { t.style.height = 'auto'; t.style.height = Math.min(140, t.scrollHeight) + 'px'; }
+function _dpnComposeKey(e) { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); _dpnAdd(); } }
+
+function _dpnPaintAll() { _dpnHead(); _dpnCats(); _dpnPaint(); }
+function _dpnHead() {
+  const r = _dpnRoom(), hd = document.getElementById('dpnHd');
+  if (!r || !hd) return;
+  const es = effectiveStatus(r);
+  const st = { due: 'Due out', late: 'Late CO' + (r.lateTime ? ' · ' + r.lateTime : ''), out: 'Checked out' + (r.checkoutAt ? ' · ' + r.checkoutAt : ''), extended: 'Extended +' + (r.extensionNights || 0) + 'N', na: 'No answer', dnd: 'DND' }[es] || 'Due out';
+  const d = s => { const x = parseOperaDate(s); return x && !isNaN(x) ? x.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : (s || ''); };
+  const n = dpnParse(r.note).length;
+  hd.className = 'dpn-hd dp-s-' + (es || 'due') + (_depIsOverdue(r) ? ' dp-overdue' : '');
+  hd.innerHTML = `<div class="dpn-room" aria-hidden="true">${_dpnEsc(r.roomStr)}</div>
+    <div class="dpn-who">
+      <div class="dpn-title" id="dpnTitle">${_dpnEsc(_dpNice(r.name))} <span class="dpn-pill">${_dpnEsc(st)}</span></div>
+      <div class="dpn-sub">Room ${_dpnEsc(r.roomStr)} · ${_dpnEsc(d(r.arrival))} → ${_dpnEsc(d(r.departure))}${r.nights ? ' · ' + r.nights + (r.nights === 1 ? ' night' : ' nights') : ''} · ${n} note${n === 1 ? '' : 's'}</div>
+    </div>
+    <div class="dpn-hd-acts">
+      <button type="button" class="dpn-hbtn${_dpn.raw ? ' on' : ''}" onclick="_dpnRaw()" aria-pressed="${_dpn.raw}" title="Edit all notes as plain text">${_dpn.raw ? '☰ Timeline' : '✎ Raw text'}</button>
+      <button type="button" class="dpn-hbtn" onclick="_dpnCopy()" title="Copy all notes">⧉ Copy</button>
+      <button type="button" class="dpn-x" onclick="depCloseNotes()" aria-label="Close notes">✕</button>
+    </div>`;
+}
+function _dpnCats() {
+  const el = document.getElementById('dpnCats'); if (!el) return;
+  el.innerHTML = DPN_PICK.map(k => { const c = DPN_CAT[k]; return `<button type="button" role="radio" aria-checked="${_dpn.cat === k}" class="dpn-cat${_dpn.cat === k ? ' on' : ''}" style="--k:${c.c}" onclick="_dpn.cat='${k}';_dpnCats()"><i aria-hidden="true">${c.i}</i>${_dpnEsc(c.l)}</button>`; }).join('');
+  const t = document.getElementById('dpnTpls');
+  if (t) t.innerHTML = (DPN_TPL[_dpn.cat] || []).map((s, j) => `<button type="button" class="dpn-tpl" onclick="_dpnTpl(${j})">${_dpnEsc(s)}</button>`).join('');
+}
+function _dpnTpl(j) {
+  const s = (DPN_TPL[_dpn.cat] || [])[j], ta = document.getElementById('dpnText');
+  if (!s || !ta) return;
+  ta.value = ta.value.trim() ? ta.value.trim() + ' ' + s : s;
+  _dpnGrow(ta); ta.focus();
+  const a = ta.value.indexOf('{'), b = ta.value.indexOf('}', a);
+  if (a >= 0 && b > a) ta.setSelectionRange(a, b + 1); else ta.setSelectionRange(ta.value.length, ta.value.length);
+}
+function _dpnPaint() {
+  const r = _dpnRoom(), body = document.getElementById('dpnBody'), fl = document.getElementById('dpnFilters');
+  if (!r || !body) return;
+  const ov = document.getElementById('dpnOv'); if (ov) ov.classList.toggle('dpn-israw', _dpn.raw);
+  if (_dpn.raw) {
+    if (fl) fl.innerHTML = '';
+    body.innerHTML = `<div class="dpn-raw"><div class="dpn-raw-hint">Plain text, one note per line. Lines starting with a time like <code>[09:30]</code> become timeline entries.</div>
+      <textarea id="dpnRaw" class="dc-note" spellcheck="false" oninput="depNoteInput(${depRooms.indexOf(r)},this.value)">${_dpnEsc(r.note)}</textarea></div>`;
+    return;
+  }
+  const E = dpnParse(r.note);
+  // filter chips: All, WhatsApp (where it came from), then each type that is used
+  const counts = {}; E.forEach(e => { counts[e.cat] = (counts[e.cat] || 0) + 1; });
+  const waN = E.filter(e => e.via).length;
+  const chips = [['all', 'All', '', E.length, 'var(--accent)']];
+  if (waN) chips.push(['src:wa', 'WhatsApp', '💬', waN, 'var(--green)']);
+  DPN_CATS.forEach(c => { if (counts[c.k] && !(c.k === 'wa' && waN)) chips.push([c.k, c.l, c.i, counts[c.k], c.c]); });
+  if (!chips.some(c => c[0] === _dpn.filter)) _dpn.filter = 'all';
+  if (fl) fl.innerHTML = chips.map(([k, l, i, n, col]) => `<button type="button" role="tab" aria-selected="${_dpn.filter === k}" class="dpn-f${_dpn.filter === k ? ' on' : ''}" style="--k:${col}" onclick="_dpn.filter='${k}';_dpnPaint()">${i ? `<i aria-hidden="true">${i}</i>` : ''}${_dpnEsc(l)}<b>${n}</b></button>`).join('');
+  const q = _dpn.q.trim().toLowerCase();
+  let V = E.filter(e => _dpn.filter === 'all' || (_dpn.filter === 'src:wa' ? !!e.via : e.cat === _dpn.filter));
+  if (q) V = V.filter(e => (e.text + ' ' + (DPN_CAT[e.cat] || {}).l + ' ' + e.time).toLowerCase().includes(q));
+  // newest first: timed entries by time (later line wins a tie), untimed at the end
+  V.sort((a, b) => (b.time ? 1 : 0) - (a.time ? 1 : 0) || b.time.localeCompare(a.time) || b.start - a.start);
+  if (!E.length) { body.innerHTML = `<div class="dpn-empty"><div class="dpn-empty-ico">🗒️</div><b>No notes yet</b><span>Pick a type below and write the first note. The time is added for you.</span></div>`; return; }
+  if (!V.length) { body.innerHTML = `<div class="dpn-empty"><div class="dpn-empty-ico">🔎</div><b>Nothing matches</b><span>Try another word or type.</span><button type="button" class="dpn-hbtn" onclick="_dpn.filter='all';_dpn.q='';document.getElementById('dpnQ').value='';_dpnPaint()">Show all notes</button></div>`; return; }
+  const pinKey = r.notePin || '';
+  let html = '', part = null;
+  V.forEach(e => {
+    const p = dpnPart(e.time);
+    if (p !== part) { part = p; html += `<div class="dpn-part">${p}</div>`; }
+    const c = DPN_CAT[e.cat] || DPN_CAT.gen, pinned = pinKey && (e.key === pinKey || e.key.split('\n')[0] === pinKey);
+    const via = e.via ? `<span class="dpn-via">via ${_dpnEsc(e.via.src)} · ${_dpnEsc(e.via.who)}${e.via.at ? ' · ' + _dpnEsc(e.via.at) : ''}${e.via.edited ? ' · ' + _dpnEsc(e.via.edited) : ''}</span>` : '';
+    let main;
+    if (_dpn.edit === e.n) {
+      main = `<div class="dpn-editbox">
+        <select id="dpnEditCat" aria-label="Note type">${DPN_CATS.filter(x => x.k !== 'wa').map(x => `<option value="${x.k}"${x.k === e.cat ? ' selected' : ''}>${x.i} ${_dpnEsc(x.l)}</option>`).join('')}</select>
+        <textarea id="dpnEditText" rows="2" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();_dpnSaveEdit(${e.n})}">${_dpnEsc(e.text)}</textarea>
+        <div class="dpn-editacts"><button type="button" class="dpn-hbtn" onclick="_dpn.edit=-1;_dpnPaint()">Cancel</button><button type="button" class="dpn-send" onclick="_dpnSaveEdit(${e.n})">Save</button></div></div>`;
+    } else {
+      main = `<div class="dpn-text">${_dpnEsc(e.body).replace(/\n/g, '<br>')}</div>${via}`;
+    }
+    const delBar = _dpn.del === e.n ? `<div class="dpn-delq" role="alert">Delete this note? <button type="button" class="dpn-hbtn" onclick="_dpn.del=-1;_dpnPaint()">Keep</button><button type="button" class="dpn-hbtn dpn-danger" onclick="_dpnDelete(${e.n})">Delete</button></div>` : '';
+    html += `<article class="dpn-e${pinned ? ' pinned' : ''}" style="--k:${c.c}">
+      <div class="dpn-e-time">${e.time ? _dpnEsc(e.time) : '—'}</div>
+      <div class="dpn-e-dot" aria-hidden="true">${c.i}</div>
+      <div class="dpn-e-main">
+        <div class="dpn-e-top"><span class="dpn-chip">${_dpnEsc(c.l)}</span>${pinned ? '<span class="dpn-pinned">★ On the card</span>' : ''}
+          <span class="dpn-e-acts">
+            <button type="button" class="dpn-ib${pinned ? ' on' : ''}" onclick="_dpnPin(${e.n})" title="${pinned ? 'Unpin' : 'Show this note on the card'}" aria-label="${pinned ? 'Unpin note' : 'Pin note to the card'}" aria-pressed="${!!pinned}">${pinned ? '★' : '☆'}</button>
+            <button type="button" class="dpn-ib" onclick="_dpn.edit=${e.n};_dpn.del=-1;_dpnPaint();setTimeout(()=>{const t=document.getElementById('dpnEditText');if(t){t.focus();t.setSelectionRange(t.value.length,t.value.length);}},0)" title="Edit" aria-label="Edit note">✎</button>
+            <button type="button" class="dpn-ib" onclick="_dpn.del=${e.n};_dpn.edit=-1;_dpnPaint();document.querySelector('.dpn-delq')?.scrollIntoView({block:'nearest'})" title="Delete" aria-label="Delete note">🗑</button>
+          </span></div>
+        ${main}${delBar}
+      </div>
+    </article>`;
+  });
+  body.innerHTML = html;
+}
+function _dpnAdd() {
+  const r = _dpnRoom(), ta = document.getElementById('dpnText');
+  if (!r || !ta) return;
+  const txt = ta.value.replace(/\{[^}]*\}/g, '').replace(/[ \t]+/g, ' ').trim();
+  if (!txt) { ta.focus(); return; }
+  const line = dpnLine(_dpnNow(), _dpn.cat, txt, true);
+  r.note = r.note ? r.note.replace(/\s+$/, '') + '\n' + line : line;
+  ta.value = ''; _dpnGrow(ta);
+  if (_dpn.filter !== 'all' && _dpn.filter !== _dpn.cat) _dpn.filter = 'all';
+  _dpnHead(); _dpnPaint(); _dpnSave(); ta.focus();
+  const b = document.getElementById('dpnBody'); if (b) b.scrollTop = 0;
+  if (typeof showToast === 'function') showToast(`Note added to room ${r.roomStr}`, 'ok');
+}
+function _dpnFind(n) { const r = _dpnRoom(); return r ? dpnParse(r.note).find(e => e.n === n) : null; }
+function _dpnSaveEdit(n) {
+  const r = _dpnRoom(), e = _dpnFind(n);
+  const t = document.getElementById('dpnEditText'), c = document.getElementById('dpnEditCat');
+  if (!r || !e || !t) return;
+  const txt = t.value.trim();
+  if (!txt) { _dpn.del = n; _dpn.edit = -1; _dpnPaint(); return; }
+  const cat = c ? c.value : e.cat, tagIt = !!e.tag || cat !== dpnCat(txt);
+  const was = e.key, now = dpnLine(e.time, cat, txt, tagIt);
+  r.note = dpnReplace(r.note, e, now);
+  if (r.notePin && (r.notePin === was || r.notePin === was.split('\n')[0])) r.notePin = now;
+  _dpn.edit = -1; _dpnHead(); _dpnPaint(); _dpnSave();
+}
+function _dpnDelete(n) {
+  const r = _dpnRoom(), e = _dpnFind(n);
+  if (!r || !e) return;
+  if (r.notePin && (r.notePin === e.key || r.notePin === e.key.split('\n')[0])) r.notePin = '';
+  r.note = dpnReplace(r.note, e, null);
+  _dpn.del = -1; _dpnHead(); _dpnPaint(); _dpnSave();
+  if (typeof showToast === 'function') showToast('Note deleted', 'ok');
+}
+function _dpnPin(n) {
+  const r = _dpnRoom(), e = _dpnFind(n);
+  if (!r || !e) return;
+  r.notePin = (r.notePin === e.key || r.notePin === e.key.split('\n')[0]) ? '' : e.key;
+  _dpnPaint(); _dpnSave();
+}
+function _dpnRaw() {
+  _dpn.raw = !_dpn.raw; _dpn.edit = _dpn.del = -1;
+  _dpnHead(); _dpnPaint();
+  if (_dpn.raw) { const t = document.getElementById('dpnRaw'); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } }
+  else _dpnSave();
+}
+function _dpnCopy() {
+  const r = _dpnRoom(); if (!r) return;
+  const E = dpnParse(r.note);
+  const txt = `Room ${r.roomStr} · ${_dpNice(r.name)}\n` + (E.length ? E.map(e => `${e.time ? e.time + ' ' : ''}${(DPN_CAT[e.cat] || DPN_CAT.gen).i} ${e.text}`).join('\n') : '(no notes)');
+  const ok = () => typeof showToast === 'function' && showToast('Notes copied', 'ok');
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(ok, () => {});
+}
+// after the board re-renders (a colleague's change, WhatsApp…): refresh an open window unless someone is editing in it
+function _dpnRefresh() {
+  const ov = document.getElementById('dpnOv');
+  if (!ov || !ov.classList.contains('open') || !_dpn.room) return;
+  if (!_dpnRoom()) { depCloseNotes(); return; }
+  _dpnHead();
+  const busy = _dpn.edit >= 0 || _dpn.raw || (ov.contains(document.activeElement) && document.activeElement.closest('#dpnBody'));
+  if (!busy) _dpnPaint();
+}
+
 // ── Check Out with balance warning ─────────────────────────
 function depCheckOut(i) {
   const r = depRooms[i];

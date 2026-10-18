@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 333, items: [
+    '📝 Room notes open in their own window: a timeline with a type for each note (WhatsApp, Late CO, Luggage, Taxi, Payment, Finance…), filters, search, quick templates, pin a note to the card, edit or delete any line. "Left · waiting" is now also on No answer and DND cards.',
+    '💬 WhatsApp got a big upgrade: a new look for the HotelOps window and the reader on WhatsApp Web (live chart, counters, Feed / Send / Groups / Settings), send messages and the checkout list to the group from HotelOps (it is typed for you, you press Enter), read more than one group, full lists ("CO 101 102 103", "212.319.504 all VD"), replies, deleted messages undone, "507 extending, waiting TD + RC", "507 left, waiting finance", and HotelOps asks you when it doesn\'t know a word.',
+    '🧺 New HK Requests page (Front Desk): a log of every room request with open/done, what is asked most, why rooms move, problem rooms, tips, and the 📖 WhatsApp words dictionary (VD = Vacant Dirty and more, add your own).',
+    '🧠 Ops Brain now learns from the HK chat: search it ("324", "towels"), reminders for late check-outs and requests nobody answered, 💬 chips on room cards, and an "HK chat this shift" part in the handover.',
+  ] },
   { v: 332, items: [
     '🛠 Late check-out cards: "Left · waiting" now sits on its own neat line under Check out and Undo, with a clean receipt icon.',
   ] },
