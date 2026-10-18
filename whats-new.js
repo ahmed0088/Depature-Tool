@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 332, items: [
+    '🛠 Late check-out cards: "Left · waiting" now sits on its own neat line under Check out and Undo, with a clean receipt icon.',
+  ] },
   { v: 331, items: [
     '🧾 New "Left · waiting" button next to Check out: the guest has physically left but Finance or Reservations still has to fix the room (you pick which). The card shows "Guest left at 11:18 · waiting for Reservations" with how long it has waited, it stops counting as overdue, the housekeeping list shows it as LEFT, and Ops Brain reminds you. When it is fixed, press ✓ Fixed · check out.',
   ] },

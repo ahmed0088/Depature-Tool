@@ -2866,3 +2866,10 @@ html[data-theme="opera"] #panel-departures .dp-room { background: linear-gradien
 #panel-departures .dp-fin-ago { font-weight: 600; opacity: .75; margin-left: 4px; }
 #depBoard:not(.dp-compact) .dp-size-list .dp-intent-banner.dp-fin { order: 10; flex: 1 1 100%; max-width: none; height: auto; min-height: 36px; padding: 5px 6px 5px 10px; white-space: normal; }
 #depBoard:not(.dp-compact) .dp-size-list .dca.dca-fin { min-height: 40px; margin: 0; padding: 0 10px; }
+
+/* "Left · waiting" in the 2-button rows (late / no answer / DND): its own full-width line under the pair, same height */
+#panel-departures .dp-acts.g2:has(.dca-fin) { grid-template-columns: 1fr 1fr !important; }
+#panel-departures .dp-acts.g2 .dca.dca-fin { grid-column: 1 / -1; grid-row: 2; min-height: 38px; margin: 0; }
+#panel-departures .dp-acts .dca.dca-fin .dca-i { font-size: 0 !important; width: 16px; height: 16px; display: inline-block; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 2h12v20l-3-2-3 2-3-2-3 2z'/%3E%3Cpath d='M9 7h6M9 11h6M9 15h4'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 2h12v20l-3-2-3 2-3-2-3 2z'/%3E%3Cpath d='M9 7h6M9 11h6M9 15h4'/%3E%3C/svg%3E") center / contain no-repeat; }
