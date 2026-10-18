@@ -394,17 +394,17 @@ const WHATS_NEW = [
     '🛎 Reception is never empty: if hours are still uncovered after everything else, as the very last way one person on their day off works it (at most one a week per hotel, never a manager or a locked shift, no other rule broken), written under Decisions with "give them a day back (PH) later".',
   ] },
   { v: 222, items: [
-    '📋 Someone away? The builder copies how management ran it the last time they were away: with Sandrine on leave, Adagio runs like the week of 5 Oct — the same cover on those days (not an average guess), the same people on the same shifts and days off, and the same colleagues borrowed first. It says so in the draft.',
+    '📋 Someone away? The builder copies how management ran it the last time they were away: with Sam on leave, Adagio runs like the week of 5 Oct — the same cover on those days (not an average guess), the same people on the same shifts and days off, and the same colleagues borrowed first. It says so in the draft.',
     '🌙 Night cover inside the hotel: when two people do nights at a hotel (like two night auditors), the one with fewer nights covers the other\'s night off, as management did, instead of leaving it to a last resort. A single night in the middle of the week (with the day off after) is possible too, so nobody has to come from another hotel for one night.',
   ] },
   { v: 221, items: [
-    '🌴 Leave never overwrites the posted roster: a day already OFF or on leave (like Sandrine\'s ALA from management) stays as it is; only working days become AL / SL.',
+    '🌴 Leave never overwrites the posted roster: a day already OFF or on leave (like an ALA from management) stays as it is; only working days become AL / SL.',
     '🩹 After marking sick or leave, Ops Brain offers cover only for gaps that this caused. A shift that was already short is mentioned apart ("already short before this, not because of …"), and days in a week not built yet are saved for the builder.',
     '✓ A two-step cover fix no longer shows a wrong "drops to 0" note when its second step fills that shift.',
     '🔴 The red "places filled" tile in the draft is tappable: it jumps to the empty shift and why each person can\'t take it.',
   ] },
   { v: 220, items: [
-    '🌴 "Sandrine on vacation until 15" now books today to the 15th (a day number alone, "the 15th" or "15 Oct" all work as the end date).',
+    '🌴 "Sam on vacation until 15" now books today to the 15th (a day number alone, "the 15th" or "15 Oct" all work as the end date).',
     '❓ "How do I…" questions show how to say it, with a button to do it now, instead of doing it straight away.',
   ] },
   { v: 219, items: [
