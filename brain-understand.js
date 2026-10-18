@@ -187,14 +187,14 @@ function buPick(i) {
 }
 function _bxOutSafe(html) { const b = document.getElementById('brAnswers'); if (b) b.innerHTML = `<div class="br-card ba-res">${html}</div>`; }
 /** Never send someone to a hotel (same as "🚫" on their card). */
-/** "only Sandrine, Ahmed and Turab can be off until 15": a day-off freeze from today (or "from 12") to that day. */
+/** "only Sam, Alex and Lina can be off until 15": a day-off freeze from today (or "from 12") to that day. */
 function buFreeze(c) {
   if (typeof rbSetRule !== 'function' || typeof rbFreezes !== 'function') return false;
   if (typeof roCanEdit === 'function' && !roCanEdit()) { _bxOutSafe('<div class="br-title">Only supervisors, managers and owners can change this.</div>'); return true; }
   const day = w => typeof rtDay === 'function' ? rtDay(w) : null, t = c.t;
   const mTo = t.match(/\b(?:until|till|til|to|up to|through)\s+(?:the\s+)?([a-z0-9]+(?:st|nd|rd|th)?)/), mFrom = t.match(/\bfrom\s+(?:the\s+)?([a-z0-9]+(?:st|nd|rd|th)?)/);
   const from = (mFrom && day(mFrom[1])) || roToday(), to = mTo && day(mTo[1]);
-  if (!to || to < from) { _bxOutSafe('<div class="br-kind">🚫 Day-off freeze</div><div class="br-title">Until which day?</div><div class="br-body">Say it with an end date, like <i>only Sandrine and Turab can be off until 15</i>, or set it in ⚖️ Rules → 🚫 Day-off freeze.</div>'); return true; }
+  if (!to || to < from) { _bxOutSafe('<div class="br-kind">🚫 Day-off freeze</div><div class="br-title">Until which day?</div><div class="br-body">Say it with an end date, like <i>only Sam and Lina can be off until 15</i>, or set it in ⚖️ Rules → 🚫 Day-off freeze.</div>'); return true; }
   rbSetRule('offFreeze', rbFreezes(rbRules()).concat([{ from, to, allow: c.n.slice() }]));
   _bxOutSafe(`<div class="br-kind">🚫 Day-off freeze</div><div class="br-title">${escapeHtml(roDayLbl(from))} → ${escapeHtml(roDayLbl(to))}: ${escapeHtml(c.N.map(x => x.split(' ')[0]).join(', '))} take their day off in it</div><div class="br-body">Nobody else is off: everyone else works through and gets their day off after it; managers keep theirs as usual. Build the week to apply it. Change or remove it in ⚖️ Rules → 🚫 Day-off freeze.</div>`);
   return true;
@@ -217,7 +217,7 @@ function buCutoff(c) {
   _bxOutSafe(`<div class="br-kind">✂️ HR cut-off</div><div class="br-title">Everyone: ${per} days off before the ${day}th and ${per} after</div><div class="br-body">A must, every week: the builder counts what each person already took in that half and gives one day off a week (never two) in the half that still owes one, so it is done by the cut-off; none left means no day off until it. Managers and fixed days off stay as they are. Change anyone's number in ⚖️ Rules → ✂️ HR cut-off.</div>`);
   return true;
 }
-/** "from 1 to 15 everyone took 2 days off except Sandrine, Ahmed and Turab": only they have a day off left in that half. */
+/** "from 1 to 15 everyone took 2 days off except Sam, Alex and Lina": only they have a day off left in that half. */
 function buCutDone(c) {
   if (typeof rbCutExcept !== 'function') return false;
   if (typeof roCanEdit === 'function' && !roCanEdit()) { _bxOutSafe('<div class="br-title">Only supervisors, managers and owners can change this.</div>'); return true; }
