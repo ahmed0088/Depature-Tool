@@ -269,6 +269,7 @@ const GS_FEATURES = [
   ['⚖️ Monthly fairness', 'fairness fair nights weekends weekend public holiday ph worked days off mornings afternoons monthly report roster balance team', 'Roster', () => { showPanel('roster'); setTimeout(() => rfOpen(), 200); }],
   ['🧾 My balances', 'my balances ph owed vacation left annual leave days off nights this month', 'Roster', () => gsGo('roster', { sel: '#roBal' })],
   ['👥 Own Team Leader for night gaps', 'team leader night gap tl cover lend supervisor own hotel rule', 'Roster builder → Rules', () => gsGo('roster-build', { sec: 'rules', text: 'Own Team Leader' })],
+  ['🔳 QR Code Maker', 'qr code link barcode scan wifi password print', 'QR Code Maker', () => gsGo('qr', { sel: '#qr-text' })],
   ['🗂️ Front Office Log', 'front office log lost found maintenance float cash count upsell', 'Front Office Log', () => gsGo('ops-logs', { sel: '#ol-tabs' })],
   ['🧳 Lost & Found', 'lost found item left behind returned guest dispose', 'Front Office Log', () => gsGo('ops-logs', { run: () => olTab('lf'), sel: '#ol-tab-lf' })],
   ['🔧 Maintenance tickets', 'maintenance ticket repair broken engineering ac leak fix', 'Front Office Log', () => gsGo('ops-logs', { run: () => olTab('mt'), sel: '#ol-tab-mt' })],

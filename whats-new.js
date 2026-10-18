@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 319, items: [
+    '🔳 New QR Code Maker (menu → Tools): paste a link or text and the QR code appears straight away, ready to scan with a phone. Add a caption, pick a size, then Download, Print or Copy it. There is also a Wi-Fi mode so guests can scan to join the network. Your recent codes are kept on this device.',
+  ] },
   { v: 318, items: [
     '🎨 Menu: "Night Audit · PM Rooms" is now just "PM Rooms" (it sits under Night Audit), so it fits on one line and its highlight no longer spills over. Menu names always stay on one line, and the hover tip shows only the page name.',
   ] },
