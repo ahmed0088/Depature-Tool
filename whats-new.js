@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 317, items: [
+    '🗂️ The side menu is tidier, in clear groups: Front Desk, Night Audit, Money & Tax, Guests & Sales, Team, Tools and System. A group you can\'t use for your role hides itself.',
+  ] },
   { v: 316, items: [
     '🎨 Arr vs Dep: the arrivals upload box now looks like the Departures one. Drop the file or press Browse, with 3 short steps underneath. Pasting the text is still there under "Paste the report text instead".',
   ] },
