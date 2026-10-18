@@ -503,7 +503,7 @@ function rbRepair(I, res, o) {
   // hotel first, else a colleague from another hotel even when everyone is kept home. Never a manager, a locked shift,
   // a request or leave, or a hotel they must never go to.
   const offWorked = new Set();   // at most one person a week per hotel gives up a day off: an emergency, not a habit
-  for (let gaps = shorts(cells), n = 0; gaps.length && n < 6 && !I.noBend && !o.homeOnly; n++) {
+  for (let gaps = shorts(cells), n = 0; gaps.length && n < 6 && !I.noBend && !o.homeOnly && (I.rules || {}).offWorked === true; n++) {   // ⚙ off by default: nobody loses their weekly day off
     const g = gaps.find(x => !offWorked.has(rbBaseGroup(x.group))); if (!g) break;
     const G = I.groups[g.group] || {}, was = breaks(cells); let best = null;
     I.people.forEach(p => {
@@ -2240,6 +2240,7 @@ function rbRulesHtml() {
       + row('One person on a shift', 'only when there\'s no other way', sw(R.allowOne !== false, "rbSetRule('allowOne',this.checked)"))
       + row('Alone is fine with company for', 'someone else on the desk with them this long (a break); 0 = two the whole shift', step(R.overlapMin == null ? 2 : R.overlapMin, 0, 9, "rbSetRule('overlapMin',Math.max(0,Math.min(9,+this.value||0)))", 'h'), R.allowOne === false))}
     ${card('🏖', 'PH days',
+      row('Work a day off to fill a shift', 'off: nobody loses their weekly day off; a shift nobody can cover shows as a problem for you to decide', sw(R.offWorked === true, "rbSetRule('offWorked',this.checked);rbRender()")) +
       row('Give PH owed', 'the last option: only when a shift has someone spare anyway', sw(R.givePh, "rbSetRule('givePh',this.checked);rbRender()"))
       + row('People a week, per hotel', 'the biggest balance first', step(R.phPeople == null ? 1 : R.phPeople, 0, 9, "rbSetRule('phPeople',Math.max(0,Math.min(9,+this.value||0)))", ''), !R.givePh)
       + row('PH each', 'a week normally has one day off (4 a month)', step(R.phMax == null ? 1 : R.phMax, 0, 3, "rbSetRule('phMax',Math.max(0,Math.min(3,+this.value||0)))", ''), !R.givePh))}

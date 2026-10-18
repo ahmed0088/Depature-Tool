@@ -459,9 +459,11 @@ console.log('\nRoster scenarios');
   // 2. three staff, three shifts of one (one-man shifts): the gaps that can't be filled say "bring in a staff member"
   {
     const G = { 'Ibis DD': { shifts: [N, M, E], need: { [N]: day(1), [M]: day(1), [E]: day(1) } } };
-    const ppl = ['A', 'B', 'C'].map(k => P(k)), r = solve(G, ppl);
+    const ppl = ['A', 'B', 'C'].map(k => P(k)), r = solve(G, ppl, {}, { offWorked: true });
     const gaps = r.problems.filter(p => p.kind === 'short');
     check('three staff, 21 shifts, 18 working days: one gap closed by someone working their day off (written down), the rest left', [gaps.length, r.problems.filter(p => p.kind === 'offs').length, (r.notes || []).some(n => /works their day off/.test(n.text))].join(), '2,1,true');
+    const r0 = solve(G, ppl);   // the default: nobody loses their weekly day off, the gaps are left for the manager
+    check('by default nobody works their day off to fill a shift (the gap is shown instead)', [r0.problems.filter(p => p.kind === 'offs').length, r0.problems.filter(p => p.kind === 'short').length].join(), '0,3');
     check('no rest rule broken to close them, and only one day off given up a week', r.problems.filter(p => p.kind === 'rest').length, 0);
     const I = { week: W, groups: G, people: ppl, pre: {}, rules: { minRest: 11, maxHours: 9, allowOne: true } };
     const o = sb.rtCoverOptions(I, r.cells, 'Ibis DD', gaps[0].date, gaps[0].shift);

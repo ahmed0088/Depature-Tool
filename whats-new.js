@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 337, items: [
+    '🛌 Roster: nobody loses their weekly day off any more to fill a shift. If a shift can\'t be covered, it shows as a problem for you to decide (Fix suggests who could take it). To allow it again: ⚖️ Rules → PH days → "Work a day off to fill a shift".',
+  ] },
   { v: 336, items: [
     '👥 Roster: the builder tries much harder not to put two people on the same shift when that shift needs one (like two on 12:00 the same day). Extra people go on another shift where it fits; two together only when there is no other way.',
   ] },
