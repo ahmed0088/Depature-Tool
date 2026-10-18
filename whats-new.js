@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 326, items: [
+    '🛠 Departures list view (≡) fixed: each room is one neat line (room, name, status, time left, owing, buttons on the right). Notes and extensions open as a full-width strip under the row.',
+  ] },
   { v: 325, items: [
     '✨ Departures cards have a fresh look: a room badge, a countdown ring to checkout (red when overdue), names in normal capitals, clearer buttons, and a ✓ DONE stamp on checked-out rooms. Works in every theme and on phones.',
     '↩ The Undo bar is now a small pill at the very bottom. It disappears as soon as you click, scroll or type somewhere else, so it never covers your work. Ctrl+Z still undoes.',

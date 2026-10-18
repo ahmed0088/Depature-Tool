@@ -1385,10 +1385,10 @@ function depCardHTML(r) {
     if (limit !== null) {
       const diff = limit - nowM;
       if (overdue && diff < 0) {
-        timeHTML = `<span class="dp-time dp-time-over" style="--p:1" title="Past checkout time"><i class="dp-tring" aria-hidden="true"></i><span class="dc-time-tag over">${fmtM(-diff)} over</span></span>`;
+        timeHTML = `<span class="dp-time dp-time-over" style="--p:1" title="${fmtM(-diff)} past checkout time"><i class="dp-tring" aria-hidden="true"></i><span class="dc-time-tag over">${fmtM(-diff)} over</span></span>`;
       } else if (diff > 0 && (timeTag || agreed !== null)) {
         const pct = Math.max(.04, Math.min(1, 1 - diff / 360)).toFixed(3);
-        timeHTML = `<span class="dp-time${diff <= 30 ? ' dp-time-soon' : ''}" style="--p:${pct}" title="Time left to check out"><i class="dp-tring" aria-hidden="true"></i><span class="dc-time-tag ${diff <= 30 ? 'soon' : 'ok'}">${fmtM(diff)} left</span></span>`;
+        timeHTML = `<span class="dp-time${diff <= 30 ? ' dp-time-soon' : ''}" style="--p:${pct}" title="${fmtM(diff)} left to check out"><i class="dp-tring" aria-hidden="true"></i><span class="dc-time-tag ${diff <= 30 ? 'soon' : 'ok'}">${fmtM(diff)} left</span></span>`;
       }
     }
   }
