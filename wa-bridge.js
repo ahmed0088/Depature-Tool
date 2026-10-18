@@ -2,8 +2,11 @@
 //  wa-bridge.js — WhatsApp HK group → Departures
 //
 //  "324 CO"          → room 324 checked out (as the card's Check out button)
-//  "202 LCO 6PM"     → room 202 late check-out at 18:00
-//  "415 change bed"  → a note on room 415
+//                       (also C/O, checkout, checked out, chkout, out, left, vacated, departed, "CO 324")
+//  "202 LCO 6PM"     → room 202 late check-out at 18:00 (also late co, late checkout, L/C, "late till 6pm")
+//  "0113 EXT 2N"     → room 0113 extended 2 nights (as the card's Extend button); also
+//                       ext/extend/extended/extension, "+2N", "ext till 22", "ext to 22 Oct"
+//  "415 change bed"  → a note on room 415 ("324 out of order", "324 CO tomorrow" are notes too)
 //  Every automatic change shows an Undo (also Ctrl+Z) and is written in the
 //  room's note ("WhatsApp · Sam 9:01"), so the team sees where it came from.
 //
@@ -17,7 +20,8 @@
 //
 //  Only today's messages, only rooms on today's departures board. Each message
 //  is applied once (localStorage ho_wa_done); an edited one only for what changed.
-//  Pure helpers: hoWaParse(text), hoWaParseCopied(text), hoWaTime(s).
+//  Pure helpers: hoWaParse(text), hoWaParseCopied(text), hoWaTime(s), hoWaPure.*.
+//  The parser (hoWaParser) is also baked into the console snippet, so both read alike.
 //  Load after departures.js (best after undo.js).
 // ═══════════════════════════════════════════════════════════
 (function () {
@@ -26,95 +30,191 @@ const W = typeof window !== 'undefined' ? window : globalThis;
 const doc = typeof document !== 'undefined' ? document : null;
 
 // ══ Parser (pure) ═══════════════════════════════════════════
-const sp = s => String(s == null ? '' : s).replace(/[\u00a0\u202f\u2007]/g, ' ').replace(/[\u200e\u200f\u2066-\u2069]/g, '');
+// Self-contained on purpose: HotelOps puts this function's own source into the WhatsApp console
+// snippet (hoWaPure.snippet), so the window on WhatsApp Web reads messages exactly like the app.
+function hoWaParser() {
+  'use strict';
+  const sp = s => String(s == null ? '' : s).replace(/[\u00a0\u202f\u2007]/g, ' ').replace(/[\u200e\u200f\u2066-\u2069]/g, '');
 
-/** "6PM", "6 pm", "6:30pm", "18:00", "1800", "6.30 p.m.", "noon" → "18:00" (an hour 1-9 with no am/pm is afternoon) */
-function hoWaTime(s) {
-  let t = sp(s).toLowerCase().replace(/\b([ap])\.\s*m\.?/g, '$1m').replace(/(\d)\.(\d{2})\b/g, '$1:$2');
-  if (/\bnoon\b/.test(t)) return '12:00';
-  let h, mi = 0, ap = '', m;
-  if ((m = t.match(/\b(\d{1,2})(?::?(\d{2}))?\s*(am|pm)\b/))) { h = +m[1]; mi = m[2] ? +m[2] : 0; ap = m[3]; }
-  else if ((m = t.match(/\b(\d{1,2}):(\d{2})\b/))) { h = +m[1]; mi = +m[2]; }
-  else if ((m = t.match(/\b(\d{3,4})\s*(?:hrs?|h)?\b/))) { const d = m[1]; h = +d.slice(0, d.length - 2); mi = +d.slice(-2); }
-  else if ((m = t.match(/\b(\d{1,2})\s*(?:o'?clock|hrs?|h)?\b/))) { h = +m[1]; }
-  else return '';
-  if (ap === 'pm' && h < 12) h += 12;
-  if (ap === 'am' && h === 12) h = 0;
-  if (!ap && h >= 1 && h <= 9) h += 12;
-  if (!(h >= 0 && h <= 23 && mi >= 0 && mi <= 59)) return '';
-  return String(h).padStart(2, '0') + ':' + String(mi).padStart(2, '0');
-}
-/** "18:00" → "6 PM", "18:30" → "6:30 PM" */
-function timeLabel(t) {
-  const m = String(t || '').match(/^(\d{1,2}):(\d{2})$/); if (!m) return t || '';
-  let h = +m[1]; const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12;
-  return h + (m[2] === '00' ? '' : ':' + m[2]) + ' ' + ap;
-}
-
-const IGNORE_LINE = l => /^\s*🔁/u.test(l) || /Extensions\s*[—–-]/.test(l) || /\d{3,4}\s*·\s*\+\d+\s*N\s*→/.test(l);
-const ROOM_AT = /^(?:(?:rooms?|rms?|rn)\.?\s*(?:no\.?\s*)?|#\s*)?(\d{3,4})(?![\d]|[:.]\d)/i;
-const SEP = /^\s*(?:,|&|\+|\/|-|\band\b|\s)\s*/i;
-const FILLER = /^(?:done|now|already|ok|okay|pls|please|plz|thanks?|thank\s*you|thx|sir|maam|ma'am|guys|team|hk|fo|room|rooms|is|are|the|guest|guests|[✅👍✔☑🙏.!,;:\s\u{1F3FB}-\u{1F3FF}])*$/iu;
-const CO_NOT = /^(?:of|time|at|tomorrow|tmrw|tmr|later|by|after|before|pending|soon|in\s)/i;
-
-function takeRooms(s) {
-  const rooms = []; let m;
-  while ((m = s.match(ROOM_AT))) {
-    rooms.push(m[1]); s = s.slice(m[0].length);
-    const sepM = s.match(SEP);
-    if (sepM && ROOM_AT.test(s.slice(sepM[0].length))) { s = s.slice(sepM[0].length); continue; }
-    break;
+  /** "6PM", "6 pm", "6:30pm", "18:00", "1800", "6.30 p.m.", "noon" → "18:00" (an hour 1-9 with no am/pm is afternoon) */
+  function hoWaTime(s) {
+    let t = sp(s).toLowerCase().replace(/\b([ap])\.\s*m\.?/g, '$1m').replace(/(\d)\.(\d{2})\b/g, '$1:$2');
+    if (/\bnoon\b/.test(t)) return '12:00';
+    let h, mi = 0, ap = '', m;
+    if ((m = t.match(/\b(\d{1,2})(?::?(\d{2}))?\s*(am|pm)\b/))) { h = +m[1]; mi = m[2] ? +m[2] : 0; ap = m[3]; }
+    else if ((m = t.match(/\b(\d{1,2}):(\d{2})\b/))) { h = +m[1]; mi = +m[2]; }
+    else if ((m = t.match(/\b(\d{3,4})\s*(?:hrs?|h)?\b/))) { const d = m[1]; h = +d.slice(0, d.length - 2); mi = +d.slice(-2); }
+    else if ((m = t.match(/\b(\d{1,2})\s*(?:o'?clock|hrs?|h)?\b/))) { h = +m[1]; }
+    else return '';
+    if (ap === 'pm' && h < 12) h += 12;
+    if (ap === 'am' && h === 12) h = 0;
+    if (!ap && h >= 1 && h <= 9) h += 12;
+    if (!(h >= 0 && h <= 23 && mi >= 0 && mi <= 59)) return '';
+    return String(h).padStart(2, '0') + ':' + String(mi).padStart(2, '0');
   }
-  return { rooms, rest: s };
-}
-function classify(rest) {
-  const r = sp(rest).trim().replace(/^[\s:\-–—=>.,]+/, '').replace(/[\s.!,;]+$/, '').trim();
-  const low = r.toLowerCase();
-  if (!r) return null;
-  let m;
-  if ((m = low.match(/^(?:lco|l\.c\.o\.?|l\/co|late\s*(?:check[\s-]*out|checkout|c\/o|c\.o\.?|co))(?![a-z])\s*(.*)$/))) {
-    return { act: 'lco', time: hoWaTime(m[1]) };
+  /** "18:00" → "6 PM", "18:30" → "6:30 PM" */
+  function timeLabel(t) {
+    const m = String(t || '').match(/^(\d{1,2}):(\d{2})$/); if (!m) return t || '';
+    let h = +m[1]; const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12;
+    return h + (m[2] === '00' ? '' : ':' + m[2]) + ' ' + ap;
   }
-  if ((m = low.match(/^(?:co|c\/o|c\.o\.?|check(?:ed)?[\s-]*out|checkout|out)(?![a-z])\s*(.*)$/))) {
-    const tail = m[1].trim();
-    if (!tail || (FILLER.test(tail))) return { act: 'co' };
-    if (!CO_NOT.test(tail) && !hoWaTimeStrict(tail)) return { act: 'co' };
-  }
-  return { act: 'note', note: r };
-}
-// a time written clearly (so "324 CO 2 pax" stays a check-out, "324 checkout 2pm" becomes a note)
-function hoWaTimeStrict(s) { return /\b\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m|p\.m)\b|\b\d{1,2}:\d{2}\b/i.test(sp(s)); }
+  // a time written clearly (so "324 CO 2 pax" stays a check-out, "324 checkout 2pm" becomes a note)
+  const timeStrict = s => /\b\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m|p\.m)\b|\b\d{1,2}:\d{2}\b/i.test(sp(s));
 
-/**
- * One WhatsApp message → { kind: 'ignore'|'none'|'act', actions: [{room, act:'co'|'lco'|'note', time?, note?}] }
- * room keeps the digits as written ("0113"); match rooms with parseInt (0113 == 113).
- */
-function hoWaParse(text) {
-  const lines = sp(text).split(/\r?\n/);
-  const kept = lines.filter(l => l.trim() && !IGNORE_LINE(l));
-  if (lines.some(l => l.trim()) && !kept.length) return { kind: 'ignore', actions: [] };
-  if (lines.some(l => /Extensions\s*[—–-]\s*\d{1,2}:\d{2}/.test(l))) return { kind: 'ignore', actions: [] };   // the app's own post
-  const actions = [], seen = new Set();
-  let pending = [], lastNote = null;
-  const add = (rooms, c) => rooms.forEach(room => {
-    const a = Object.assign({ room }, c), k = actionKey(a);
-    if (!seen.has(k)) { seen.add(k); actions.push(a); }
-  });
-  kept.forEach(line => {
-    // "202 CO, 205 LCO 2pm": a comma before another room starts a new part
-    line.trim().split(/[,;]\s*(?=(?:(?:rooms?|rms?|rn)\.?\s*|#\s*)?\d{3,4}(?![\d]|[:.]\d))/i).forEach(seg => {
-      const { rooms, rest } = takeRooms(seg.trim());
-      const c = classify(rest);
-      if (rooms.length && !c) { pending = pending.concat(rooms); return; }
-      if (!c) return;
-      const target = pending.concat(rooms); pending = [];
-      if (target.length) { add(target, c); lastNote = c.act === 'note' ? actions.filter(a => a.act === 'note' && target.includes(a.room)) : null; }
-      else if (lastNote && lastNote.length) lastNote.forEach(a => { a.note += ' ' + seg.trim().replace(/[\s.!,;]+$/, ''); });   // a note's next line
+  const MON = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  const NUMW = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+  // the app's own posts (summaries, not commands)
+  const IGNORE_LINE = l => /^\s*🔁/u.test(l) || /Extensions\s*[—–-]/.test(l) || /\d{3,4}\s*·\s*\+\d+\s*N\s*→/.test(l);
+  const ROOM = '(?:(?:rooms?|rms?|rn)\\.?\\s*(?:no\\.?\\s*)?|#\\s*)?(\\d{3,4})(?![\\d]|[:.]\\d)';
+  const ROOM_AT = new RegExp('^' + ROOM, 'i');
+  const ROOM_NC = ROOM.replace('(\\d{3,4})', '(?:\\d{3,4})');
+  const SPLIT = new RegExp('[,;]\\s*(?=' + ROOM_NC + ')', 'i');
+  const SEP = /^\s*(?:,|&|\+|\/|-|\band\b|\s)\s*/i;
+  const FILLER = /^(?:done|now|already|just|also|ok|okay|pls|please|plz|thanks?|thank\s*you|thx|sir|maam|ma'am|guys|team|hk|fo|room|rooms|hotel|is|are|has|have|the|guest|guests|[✅👍✔☑🙏.!,;:\s\u{1F3FB}-\u{1F3FF}])*$/iu;
+  // words before the command: "324 guest has checked out", "324 already CO"
+  const LEAD = /^(?:(?:the\s+)?guests?|gst|has|have|is|was|already|just|now|been|all)\s+/i;
+  const CO_NOT = /^(?:of\b|time|at\b|by\b|after|before|in\s|on\s|date|day\b|plan|req)/i;
+  const WHEN_NOT = /\?|\b(?:tomorrow|tomm?orr?ow|tmrw|tmr|tmw|tmrow|tomoro|later|pending|maybe|might|wants?|wanted|asking|asks?|asked|requests?|requested|requesting|req|not|cancel(?:led|ed)?|planning|plans?|will|soon|expected|possible|next)\b/i;
+  const LCO_W = '(?:lco|l\\.c\\.o\\.?|l\\/co|l\\/c|l\\.c\\.?|lc|late\\s*(?:ch(?:ec)?k[\\s-]*out|checkout|c\\/o|c\\.o\\.?|co))';
+  const CO_W = '(?:co|c\\/o|c\\.o\\.?|c-o|ch(?:ec)?k(?:e?d)?[\\s-]*out)';
+  const EXT_W = '(?:ext|extd|extn|extnd|exten|extend|extended|extending|extension|extention)';
+  const CMD_LEAD = new RegExp('^(' + LCO_W + '|' + EXT_W + '|' + CO_W + ')(?![a-z])\\.?\\s*[:\\-–—]?\\s*(?=' + ROOM_NC + '(?!\\s*(?:am|pm|hrs?|h)\\b))', 'i');
+
+  function takeRooms(s) {
+    const rooms = []; let m;
+    while ((m = s.match(ROOM_AT))) {
+      rooms.push(m[1]); s = s.slice(m[0].length);
+      const sepM = s.match(SEP);
+      if (sepM && ROOM_AT.test(s.slice(sepM[0].length))) { s = s.slice(sepM[0].length); continue; }
+      break;
+    }
+    return { rooms, rest: s };
+  }
+  /** "22", "22nd", "22/10", "22-10", "22 Oct", "Oct 22" → "22" | "22/10" | '' */
+  function dayOf(s) {
+    let m;
+    if ((m = s.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s*[\/.\-]\s*(\d{1,2})\b/))) return okDay(+m[1], +m[2]);
+    if ((m = s.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s*(?:of\s+)?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b/))) return okDay(+m[1], MON.indexOf(m[2]) + 1);
+    if ((m = s.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s*(\d{1,2})(?:st|nd|rd|th)?\b/))) return okDay(+m[2], MON.indexOf(m[1]) + 1);
+    return '';
+  }
+  const okDay = (d, mo) => (d >= 1 && d <= 31 && (!mo || (mo >= 1 && mo <= 12)) ? d + (mo ? '/' + mo : '') : '');
+  /** what comes after "ext": nights or a new date. null = not an extension we can trust (a note) */
+  function extDetail(tail) {
+    const t = tail.replace(/^[\s:\-–—=>.,+]+/, ' ').replace(/[\s.!,;]+$/, '').toLowerCase();
+    if (/\b(?:till|until|untill|til|to|upto|up\s*to)\s+(?:tomorrow|tomm?orr?ow|tmrw|tmr|tmw)\b/.test(t)) return { nights: 1 };
+    if (WHEN_NOT.test(t)) return null;
+    let m;
+    const nw = '(\\d{1,2}|' + Object.keys(NUMW).join('|') + ')';
+    if ((m = t.match(new RegExp('(?:^|[\\s+])' + nw + '\\s*(?:more\\s+|extra\\s+)?(?:n|nt|nts|ngt|ngts|nite|nites|nights?|days?)\\b')))) { const n = NUMW[m[1]] || +m[1]; return n >= 1 && n <= 90 ? { nights: n } : null; }
+    if ((m = t.match(/^\s*(?:for\s+)?(\d{1,2})\s*$/)) || (m = t.match(/^\s*\+\s*(\d{1,2})\b/))) {
+      const n = +m[1]; if (n >= 1 && n <= 14) return { nights: n };
+      const d = okDay(n, 0); return d ? { until: d } : null;
+    }
+    const d = dayOf(t);
+    if (d) return { until: d };
+    if ((m = t.match(/\b(?:till|until|untill|til|to|upto|up\s*to|on|→|->)\s*(\d{1,2})(?:st|nd|rd|th)?\b/))) { const d2 = okDay(+m[1], 0); return d2 ? { until: d2 } : null; }
+    return FILLER.test(t) || /^(?:stay|the\s+stay|booking|confirmed|paid|ok)?\s*$/.test(t.trim()) ? {} : null;
+  }
+  function classify(rest) {
+    let r = sp(rest).trim().replace(/^[\s:\-–—=>.,]+/, '').replace(/[\s.!,;]+$/, '').trim();
+    if (!r) return null;
+    const note = { act: 'note', note: r };
+    let low = r.toLowerCase(), m;
+    while (LEAD.test(low)) low = low.replace(LEAD, '');
+    if ((m = low.match(new RegExp('^' + LCO_W + '(?![a-z])\\s*(.*)$')))) {
+      if (/\?|\b(?:cancel\w*|tomorrow|tomm?orr?ow|tmrw|tmr|tmw)\b/.test(m[1])) return note;
+      return { act: 'lco', time: hoWaTime(m[1]) };
+    }
+    if ((m = low.match(/^late\s*(?:till|until|untill|til|to|up\s*to|upto|by|at)\s*(.+)$/)) || ((m = low.match(/^late\s+(.+)$/)) && timeStrict(m[1]))) {
+      const tm = hoWaTime(m[1]); if (tm) return { act: 'lco', time: tm };
+    }
+    if ((m = low.match(new RegExp('^' + EXT_W + '(?![a-z])\\.?\\s*(.*)$')))) {
+      const x = extDetail(m[1]); return x ? Object.assign({ act: 'ext' }, x) : note;
+    }
+    if ((m = low.match(/^\+\s*(\d{1,2})\s*(?:n|nt|nts|nights?)\b\s*(.*)$/))) {
+      const n = +m[1]; return n >= 1 && n <= 90 && !WHEN_NOT.test(m[2]) ? { act: 'ext', nights: n } : note;
+    }
+    if ((m = low.match(new RegExp('^' + CO_W + '(?![a-z])\\s*(.*)$')))) {
+      const tail = m[1].trim();
+      if (!tail || FILLER.test(tail)) return { act: 'co' };
+      if (!CO_NOT.test(tail) && !WHEN_NOT.test(tail) && !timeStrict(tail)) return { act: 'co' };
+      return note;
+    }
+    // words that mean "gone" only when nothing else follows ("324 out of order", "324 left luggage" are notes)
+    if ((m = low.match(/^(?:out|left|vacated|vacated\s+the\s+room|departed)(?![a-z])\s*(.*)$/)) && FILLER.test(m[1].trim())) return { act: 'co' };
+    return note;
+  }
+
+  /**
+   * One WhatsApp message → { kind: 'ignore'|'none'|'act', actions: [{room, act:'co'|'lco'|'ext'|'note', time?, nights?, until?, note?}] }
+   * room keeps the digits as written ("0113"); match rooms with parseInt (0113 == 113).
+   */
+  function hoWaParse(text) {
+    const lines = sp(text).split(/\r?\n/);
+    const kept = lines.filter(l => l.trim() && !IGNORE_LINE(l));
+    if (lines.some(l => l.trim()) && !kept.length) return { kind: 'ignore', actions: [] };
+    if (lines.some(l => /Extensions\s*[—–-]\s*\d{1,2}:\d{2}/.test(l))) return { kind: 'ignore', actions: [] };   // the app's own post
+    const actions = [], seen = new Set();
+    let pending = [], lastNote = null;
+    const add = (rooms, c) => rooms.forEach(room => {
+      const a = Object.assign({ room }, c), k = actionKey(a);
+      if (!seen.has(k)) { seen.add(k); actions.push(a); }
     });
-  });
-  return { kind: actions.length ? 'act' : 'none', actions };
+    kept.forEach(line => {
+      let lineCmd = null;
+      // "202 CO, 205 LCO 2pm": a comma before another room starts a new part
+      line.trim().split(SPLIT).forEach(seg => {
+        seg = seg.trim();
+        let cmd = '';
+        const cm = seg.match(CMD_LEAD);                       // the command first: "CO 324", "EXT 0113 2N"
+        if (cm) { cmd = cm[1]; seg = seg.slice(cm[0].length); }
+        const { rooms, rest } = takeRooms(seg);
+        let c = classify(cmd ? cmd + ' ' + rest : rest);
+        if (cmd) lineCmd = c;
+        else if (!c && rooms.length && lineCmd) c = lineCmd;  // "CO 324, 325"
+        if (rooms.length && !c) { pending = pending.concat(rooms); return; }
+        if (!c) return;
+        const target = pending.concat(rooms); pending = [];
+        if (target.length) { add(target, c); lastNote = c.act === 'note' ? actions.filter(a => a.act === 'note' && target.includes(a.room)) : null; }
+        else if (lastNote && lastNote.length) lastNote.forEach(a => { a.note += ' ' + seg.replace(/[\s.!,;]+$/, ''); });   // a note's next line
+      });
+    });
+    return { kind: actions.length ? 'act' : 'none', actions };
+  }
+  function actionKey(a) {
+    const x = a.act === 'ext' ? (a.nights ? a.nights + 'n' : a.until || '') : (a.time || '');
+    return [String(parseInt(a.room, 10)), a.act, x, a.note || ''].join(':');
+  }
+  const dayLabel = d => d.getDate() + ' ' + MON[d.getMonth()].replace(/^./, c => c.toUpperCase());
+  const untilLabel = u => { const p = String(u || '').split('/'); return p[1] ? p[0] + ' ' + MON[+p[1] - 1].replace(/^./, c => c.toUpperCase()) : p[0]; };
+  /** an extension → {nights, date, guessed} from the room's departure day (base), or null when the date makes no sense */
+  function extNights(a, base) {
+    const b = new Date(base.getFullYear(), base.getMonth(), base.getDate());
+    let n = a.nights || 0, guessed = false;
+    if (!n && a.until) {
+      const p = String(a.until).split('/').map(Number);
+      let t = new Date(b.getFullYear(), p[1] ? p[1] - 1 : b.getMonth(), p[0]);
+      if (!p[1] && t <= b) t = new Date(b.getFullYear(), b.getMonth() + 1, p[0]);
+      if (p[1] && t < b && b - t > 60 * 864e5) t = new Date(b.getFullYear() + 1, p[1] - 1, p[0]);
+      n = Math.round((t - b) / 864e5);
+    }
+    if (!n && !a.until) { n = 1; guessed = true; }
+    if (!(n >= 1 && n <= 90)) return null;
+    const d = new Date(b); d.setDate(d.getDate() + n);
+    return { nights: n, date: d, label: dayLabel(d), guessed };
+  }
+  /** a short chip for one action: "✓ CO 324", "⏰ LCO 202 6 PM", "↪ EXT 0113 +2N", "📝 note 415" */
+  function chip(a) {
+    if (a.act === 'co') return '✓ CO ' + a.room;
+    if (a.act === 'lco') return '⏰ LCO ' + a.room + (a.time ? ' ' + timeLabel(a.time) : '');
+    if (a.act === 'ext') return '↪ EXT ' + a.room + (a.nights ? ' +' + a.nights + 'N' : '') + (a.until ? ' → ' + untilLabel(a.until) : '');
+    return '📝 note ' + a.room;
+  }
+  return { sp, hoWaTime, timeLabel, hoWaParse, actionKey, extNights, chip, dayLabel, untilLabel };
 }
-function actionKey(a) { return [String(parseInt(a.room, 10)), a.act, a.time || '', a.note || ''].join(':'); }
+const HP = hoWaParser();
+const { sp, hoWaTime, timeLabel, hoWaParse, actionKey } = HP;
 
 // ══ Copied / exported chat text (pure) ══════════════════════
 const DATE = '(\\d{1,4}[\\/.\\-]\\d{1,2}[\\/.\\-]\\d{1,4})';
@@ -166,7 +266,11 @@ function waTime24(t) {
 }
 
 W.hoWaParse = hoWaParse; W.hoWaParseCopied = hoWaParseCopied; W.hoWaTime = hoWaTime;
-W.hoWaPure = { hoWaParse, hoWaParseCopied, hoWaTime, timeLabel, waDateISO, waTime24, actionKey };
+/** the console snippet, ready to paste: this app's address and the parser filled in */
+function snippet(raw, appUrl) {
+  return String(raw).replace("'__HO_APP_URL__'", () => JSON.stringify(appUrl)).replace('/*__HO_PARSER__*/null', () => '(' + hoWaParser.toString() + ')()');
+}
+W.hoWaPure = { hoWaParse, hoWaParseCopied, hoWaTime, timeLabel, waDateISO, waTime24, actionKey, extNights: HP.extNights, chip: HP.chip, snippet };
 if (!doc) return;
 
 // ══ Storage ═════════════════════════════════════════════════
@@ -209,6 +313,7 @@ function restore(roomStr, before, after, line, topJ, status) {
     if (k === 'note') { z.note = z.note === after.note ? (before.note === null ? '' : before.note) : dropLine(z.note, line); return; }
     if (before[k] === null) delete z[k]; else z[k] = clone(before[k]);
   });
+  if (!status && z.status === 'extended' && typeof depSyncExtToLog === 'function') try { depSyncExtToLog(rooms().indexOf(z)); } catch (_) {}
   if (status) {
     const L = dlog(), li = L.findIndex(l => J(l) === topJ);
     const u = { room: roomStr, name: z.name, action: 'undo', undone: status, time: hhmm(), roomIdx: rooms().indexOf(z), prevStatus: status };
@@ -242,6 +347,25 @@ function applyOne(a, who, board) {
     if (st === 'late') { if (a.time) r.lateTime = a.time; paint(); saveDeps(); }
     else { r.lateTime = a.time || ''; setStatus = 'late'; quiet(() => depAction(i, 'late')); }
     res.st = 'lco'; res.text = `${room} late check-out ${a.time ? timeLabel(a.time) : '(no time)'}`;
+  } else if (a.act === 'ext') {
+    if (st === 'out') return Object.assign(res, { st: 'skip', text: `${room}: already checked out — not extended` });
+    let base = null; try { base = typeof parseOperaDate === 'function' ? parseOperaDate(r.departure) : null; } catch (_) {}
+    if (!base || isNaN(base)) { base = new Date(); }
+    const x = HP.extNights(a, base);
+    if (!x) return Object.assign(res, { st: 'skip', text: `${room}: could not read the new date — not changed` });
+    const what = `+${x.nights}N → ${x.label}`;
+    if (st === 'extended') {
+      if (x.guessed || (r.extensionNights || 1) === x.nights) return Object.assign(res, { st: 'skip', text: `${room}: already extended` });
+      line = `[${hhmm()}] Extension changed to ${what} — ${who}`;
+      addNoteLine(r, line); r.extensionNights = x.nights;
+      try { if (typeof depSyncExtToLog === 'function') depSyncExtToLog(i); } catch (_) {}
+      paint(); saveDeps();
+    } else {
+      line = `[${hhmm()}] Extended ${what}${x.guessed ? ' (nights not said)' : ''} — ${who}`;
+      addNoteLine(r, line); setStatus = 'extended';
+      quiet(() => depAction(i, 'extended', x.nights));
+    }
+    res.st = 'ext'; res.text = `Extended ${room} (${what})` + (x.guessed ? ' · nights not said, check the card' : '');
   } else {
     line = `[${hhmm()}] ${who}: ${a.note}`;
     addNoteLine(r, line); paint(); saveDeps();
@@ -311,7 +435,7 @@ function handle(msg, via, opt) {
   else {
     const acted = res.filter(r => r.undo);
     if (acted.length && typeof showUndoToast === 'function') {
-      const lbl = acted.length === 1 ? acted[0].text.replace(/ · ⚠.*/, '').replace(/^(\d+)/, 'Room $1') : acted.map(r => r.text.replace(/ · ⚠.*/, '')).join(' · ');
+      const lbl = acted.length === 1 ? acted[0].text.replace(/ · (?:⚠|nights not said).*/, '').replace(/^(\d+)/, 'Room $1') : acted.map(r => r.text.replace(/ · ⚠.*/, '')).join(' · ');
       showUndoToast(`${lbl} (WhatsApp · ${sender} ${tl})`, undoAll, 10000);
     }
     const nl = res.filter(r => r.st === 'notlist');
@@ -330,6 +454,7 @@ function readPasted(text) {
   list.forEach(m => { const r = handle(m, 'paste', { batch }); if (r === 'old') old++; else if (r === 'dup') dup++; else read++; });
   const n = batch.n, parts = [`Read ${read} message${read === 1 ? '' : 's'}`];
   if (n.co) parts.push(`${n.co} checked out`);
+  if (n.ext) parts.push(`${n.ext} extended`);
   if (n.lco) parts.push(`${n.lco} late checkout${n.lco === 1 ? '' : 's'}`);
   if (n.note) parts.push(`${n.note} note${n.note === 1 ? '' : 's'}`);
   if (n.notlist) parts.push(`${n.notlist} not on today's list`);
@@ -367,18 +492,18 @@ W.addEventListener('message', e => {
 const CSS = `
 #tbWhatsApp{color:#25d366}
 #tbWhatsApp:hover{color:#2fe076}
-#waOv{position:fixed;inset:0;z-index:9000;display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px 16px;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);animation:waFade .16s ease}
+#waOv{position:fixed;inset:0;z-index:9000;display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px 6vh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);animation:waFade .16s ease}
 #waOv[hidden]{display:none}
-#waOv #waCard{margin:0;width:min(760px,100%);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 24px 60px -20px rgba(0,0,0,.6);animation:waUp .2s ease}
+#waOv #waCard{margin:0 auto auto;width:min(760px,100%);flex:none;overflow:visible;box-shadow:0 24px 60px -20px rgba(0,0,0,.6);animation:waUp .2s ease}
 #waOv #waCard>summary{cursor:default;flex:none}
 #waOv #waCard>summary:hover{background:transparent}
-#waOv #waCard .wa-body{overflow-y:auto}
+#waOv #waCard>summary{position:sticky;top:-6vh;z-index:2;background:var(--card);border-radius:var(--r,12px) var(--r,12px) 0 0;border-bottom:1px solid var(--border)}
 #waCard .wa-x{margin-left:auto;flex:none;width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--card2,var(--bg2));color:var(--text2);cursor:pointer;font-size:14px}
 #waCard .wa-x:hover{color:var(--text);border-color:var(--accent-border,var(--border))}
 @keyframes waFade{from{opacity:0}to{opacity:1}}
 @keyframes waUp{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){#waOv,#waOv #waCard{animation:none}}
-@media (max-width:600px){#waOv{padding:10px}#waOv #waCard{max-height:calc(100vh - 20px)}}
+@media (max-width:600px){#waOv{padding:10px}#waOv #waCard>summary{top:-10px}}
 #waCard{margin-top:16px;background:var(--card);border:1px solid var(--border);border-radius:var(--r,12px);overflow:hidden;color:var(--text)}
 #waCard>summary{list-style:none;display:flex;align-items:center;gap:10px;min-height:52px;padding:0 16px;cursor:pointer;font:700 14px var(--font,inherit)}
 #waCard>summary::-webkit-details-marker{display:none}
@@ -402,6 +527,7 @@ const CSS = `
 #waCard .wa-chip{font-size:11.5px;padding:2px 8px;border-radius:99px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);overflow-wrap:anywhere}
 #waCard .wa-chip.co{color:var(--green);border-color:color-mix(in srgb,var(--green) 40%,transparent)}
 #waCard .wa-chip.lco{color:var(--amber,var(--accent));border-color:color-mix(in srgb,var(--amber,var(--accent)) 40%,transparent)}
+#waCard .wa-chip.ext{color:var(--sky,#38bdf8);border-color:color-mix(in srgb,var(--sky,#38bdf8) 40%,transparent)}
 #waCard .wa-chip.notlist{color:var(--red);border-color:color-mix(in srgb,var(--red) 40%,transparent)}
 #waCard .wa-row.undone .wa-res{opacity:.55;text-decoration:line-through}
 #waCard .wa-u{all:unset;cursor:pointer;font:600 11.5px var(--font,inherit);color:var(--text2);padding:3px 9px;border:1px solid var(--border2,var(--border));border-radius:7px;white-space:nowrap}
@@ -425,7 +551,7 @@ const CSS = `
 `;
 const esc = s => (typeof escapeHtml === 'function' ? escapeHtml(s) : String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
 const clock = t => { const m = String(t || '').match(/^(\d{1,2}):(\d{2})$/); if (!m) return t || ''; const h = +m[1]; return (h % 12 || 12) + ':' + m[2] + (h >= 12 ? ' PM' : ' AM'); };
-const ICON = { co: '✓', lco: '⏰', note: '📝', notlist: '⚠', skip: '·', none: '—', ignore: '—' };
+const ICON = { co: '✓', lco: '⏰', ext: '↪', note: '📝', notlist: '⚠', skip: '·', none: '—', ignore: '—' };
 
 function mount() {
   if (doc.getElementById('waCard')) return true;
@@ -448,7 +574,7 @@ function mount() {
       </div>
     </div>
     <details class="wa-help" id="waHelp"><summary>❔ How to set up</summary>
-      <p><b>What it does:</b> when someone writes <code>324 CO</code> in the HK group, room 324 is checked out here. <code>202 LCO 6PM</code> sets a 6 PM late check-out. Other messages with a room (like <code>415 change bedsheet</code>) become a note. Every change has an Undo. Only today's messages and only rooms on today's list.</p>
+      <p><b>What it does:</b> when someone writes <code>324 CO</code> in the HK group, room 324 is checked out here. <code>202 LCO 6PM</code> sets a 6 PM late check-out. <code>0113 EXT 2N</code> (or <code>extended till 22 Oct</code>) marks an extension. Other messages with a room (like <code>415 change bedsheet</code>) become a note. Every change has an Undo. Only today's messages and only rooms on today's list.</p>
       <p><b>Option A — automatic</b></p>
       <ol>
         <li>Open WhatsApp Web on this computer.</li>
@@ -456,9 +582,9 @@ function mount() {
         <li>If Chrome asks, type <code>allow pasting</code> and press Enter.</li>
         <li>Copy the line below (<b>Copy</b> button), paste it in the Console and press Enter. Close F12.</li>
         <li>Type the HK group name when asked, then open the HK group.</li>
-        <li>Click the small HotelOps badge (bottom left) once. A HotelOps tab opens — keep it open.</li>
+        <li>A small HotelOps window shows at the bottom left of WhatsApp. Click <b>Connect HotelOps</b> once. A HotelOps tab opens — keep it open.</li>
       </ol>
-      <p>Do this again each time you reload WhatsApp. If the badge turns amber, use its copy button and paste here.</p>
+      <p>Do this again each time you reload WhatsApp. If the window turns amber, use its <b>📋 Copy today's chat</b> button and paste here.</p>
       <textarea id="waSnippet" readonly aria-label="Line to paste in the WhatsApp Console">Loading…</textarea>
       <div class="wa-btns"><button type="button" class="wa-btn" id="waCopySnip">Copy</button></div>
       <p><b>Option B — no setup, always works</b></p>
@@ -507,7 +633,7 @@ function loadSnippet() {
   const box = doc.getElementById('waSnippet'); if (!box) return;
   const app = location.origin + location.pathname;
   fetch('tools/hotelops-whatsapp.console.js', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
-    .then(t => { box.value = t.replace("'__HO_APP_URL__'", JSON.stringify(app)); })
+    .then(t => { box.value = snippet(t, app); })
     .catch(() => { snipLoaded = false; box.value = 'Could not load it (offline?). Try again when online, or use Option B.'; });
 }
 function renderStatus() {
@@ -520,7 +646,7 @@ function renderCard() {
   const list = doc.getElementById('waList'); if (!list) return;
   const cnt = doc.getElementById('waCount'); if (cnt) cnt.textContent = LOG.length;
   const last = doc.getElementById('waLast');
-  if (last) { const l = LOG.find(x => x.res.some(r => /co|lco|note/.test(r.st))); last.textContent = l ? `Last: ${l.res.find(r => /co|lco|note/.test(r.st)).text} · ${timeLabel(l.time)}` : ''; }
+  if (last) { const l = LOG.find(x => x.res.some(r => /co|lco|ext|note/.test(r.st))); last.textContent = l ? `Last: ${l.res.find(r => /co|lco|ext|note/.test(r.st)).text} · ${timeLabel(l.time)}` : ''; }
   list.innerHTML = LOG.length ? LOG.map(l => `<div class="wa-row${l.undone ? ' undone' : ''}${l.res.every(r => r.st === 'none' || r.st === 'ignore') ? ' quiet' : ''}" title="${esc(l.res.map(r => r.text).join(' · '))}">
       <span class="wa-t">${esc(clock(l.time))}</span>
       <span class="wa-m"><span class="wa-who">${esc(l.sender)}${l.edited ? ' ✎' : ''}</span><span class="wa-txt">${esc(l.text.length > 160 ? l.text.slice(0, 160) + '…' : l.text)}</span></span>
@@ -545,8 +671,9 @@ if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start
 // Top bar button: the WhatsApp window over the app, paste box ready
 function waOpenFromTop() {
   const ov = document.getElementById('waOv'); if (!ov) return;
-  ov.hidden = false;
+  ov.hidden = false; ov.scrollTop = 0;
+  document.documentElement.style.overflow = 'hidden';   // the page behind stays still; the window scrolls
   const ta = document.getElementById('waPaste'); if (ta) setTimeout(() => ta.focus({ preventScroll: true }), 120);
 }
-function waClose() { const ov = document.getElementById('waOv'); if (ov) ov.hidden = true; }
+function waClose() { const ov = document.getElementById('waOv'); if (ov) ov.hidden = true; document.documentElement.style.overflow = ''; }
 window.waOpenFromTop = waOpenFromTop; window.waClose = waClose;

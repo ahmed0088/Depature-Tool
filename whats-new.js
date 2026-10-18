@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 323, items: [
+    '🛠 WhatsApp window: you can now scroll down to the paste box and the help. The title and ✕ stay at the top.',
+  ] },
   { v: 322, items: [
     '🟢 WhatsApp is now a button at the top of the app (green icon, on every page). It opens a window with the paste box ready: paste the HK chat, Read messages, done. Esc or ✕ closes it.',
   ] },
