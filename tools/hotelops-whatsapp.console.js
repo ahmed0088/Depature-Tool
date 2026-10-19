@@ -13,7 +13,9 @@
  *    unless "Send automatically" is on (Settings tab), YOU press Enter. It never opens other chats.
  *
  * The window (bottom left, drag it by its top bar, double-click to put it back) has tabs:
- *  Feed · Send · Groups · Settings, and a small pill when minimized (–). ✕ stops it (or reload WhatsApp).
+ *  Feed (search + filter chips) · Send · Groups · Settings, and a small pill when minimized (– or Alt+H;
+ *  the pill can be dragged too and keeps its place). Click the activity graph to switch 2 h / 12 h.
+ *  ✕ stops it (or reload WhatsApp).
  * Built with DOM calls and inline styles only (WhatsApp blocks innerHTML strings and may block <style>
  * tags); animations use element.animate() and respect "reduce motion".
  */
@@ -494,9 +496,9 @@
     var box = document.createElement('div'); box.id = 'ho-wa-manual';
     box.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;font:13px/1.4 system-ui,sans-serif';
     var card = document.createElement('div'); card.style.cssText = 'width:min(560px,92vw);background:#111827;color:#e5e7eb;border:1px solid #374151;border-radius:14px;padding:16px;box-shadow:0 20px 60px rgba(0,0,0,.6)';
-    var h = document.createElement('div'); h.textContent = 'Press Ctrl+C now, then paste in HotelOps'; h.style.cssText = 'font-weight:700;font-size:14px;margin-bottom:8px;color:#e0b24f';
+    var h = document.createElement('div'); h.textContent = 'Press Ctrl+C now, then paste in HotelOps'; h.style.cssText = 'font-weight:700;font-size:14px;margin-bottom:8px;color:#25d366';
     var ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'width:100%;height:220px;box-sizing:border-box;background:#0b1220;color:#e5e7eb;border:1px solid #374151;border-radius:8px;padding:8px;font:12px/1.4 ui-monospace,monospace';
-    var b = document.createElement('button'); b.textContent = 'Done'; b.type = 'button'; b.style.cssText = 'margin-top:10px;padding:8px 16px;border-radius:8px;border:0;background:#e0b24f;color:#111;font-weight:700;cursor:pointer';
+    var b = document.createElement('button'); b.textContent = 'Done'; b.type = 'button'; b.style.cssText = 'margin-top:10px;padding:8px 16px;border-radius:8px;border:0;background:#25d366;color:#04210f;font-weight:700;cursor:pointer';
     b.onclick = function () { box.remove(); };
     ta.addEventListener('keydown', function (e) { if ((e.ctrlKey || e.metaKey) && /c/i.test(e.key)) setTimeout(function () { box.remove(); toast('✓ Copied · paste them in HotelOps', 'ok'); }, 150); });
     card.appendChild(h); card.appendChild(ta); card.appendChild(b); box.appendChild(card); document.body.appendChild(box);
@@ -545,18 +547,24 @@
   }
 
   // ══ The window (DOM calls + inline styles only) ═════════════
+  // Everything is styled inline on our own elements (ids start with "hoWa"), so WhatsApp's page is never touched.
   var RM = false; try { RM = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) {}
   var SANS = '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif', MONO = 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
-  var GOLD = '#e0b24f';
+  var ACC = '#25d366', ACC_D = '#00a884', ACC_L = '#8af0b4', ACC_RGB = '37,211,102';   // WhatsApp green
+  var INK = '#04210f';                                                                 // text on green
+  var TXT = '#e9edef', TXT2 = '#aebac1', TXT3 = '#8696a0', LINE = 'rgba(255,255,255,.08)', CARD = 'rgba(255,255,255,.045)';
   var TONE = {            // dot, text, background
-    green: ['#22c55e', '#86efac', 'rgba(34,197,94,.14)'],
+    green: [ACC, ACC_L, 'rgba(' + ACC_RGB + ',.14)'],
     amber: ['#f59e0b', '#fcd34d', 'rgba(245,158,11,.14)'],
-    blue:  ['#60a5fa', '#bfdbfe', 'rgba(59,130,246,.15)'],
+    blue:  ['#53bdeb', '#b6e3f7', 'rgba(83,189,235,.14)'],
     red:   ['#ef4444', '#fca5a5', 'rgba(239,68,68,.15)']
   };
   // per action: bar/icon colour, chip text, chip background, icon
-  var ACT = { co: ['#22c55e', '#86efac', 'rgba(34,197,94,.14)', '✓'], lco: ['#f59e0b', '#fcd34d', 'rgba(245,158,11,.14)', '⏰'], ext: ['#2dd4bf', '#99f6e4', 'rgba(45,212,191,.14)', '↪'], extending: ['#2dd4bf', '#99f6e4', 'rgba(45,212,191,.10)', '⏳'],
-    note: ['#a78bfa', '#ddd6fe', 'rgba(139,92,246,.16)', '✎'], ask: ['#fbbf24', '#fde68a', 'rgba(251,191,36,.12)', '?'], off: ['#6b7280', '#9aa3b2', 'rgba(255,255,255,.05)', '·'] };
+  var ACT = { co: [ACC, ACC_L, 'rgba(' + ACC_RGB + ',.14)', '✓'], findone: [ACC, ACC_L, 'rgba(' + ACC_RGB + ',.12)', '✓'],
+    lco: ['#f59e0b', '#fcd34d', 'rgba(245,158,11,.14)', '⏰'], ext: ['#2dd4bf', '#99f6e4', 'rgba(45,212,191,.14)', '↪'], extending: ['#2dd4bf', '#99f6e4', 'rgba(45,212,191,.10)', '⏳'],
+    fin: ['#fb923c', '#fed7aa', 'rgba(251,146,60,.14)', '🧾'], note: ['#a78bfa', '#ddd6fe', 'rgba(139,92,246,.16)', '✎'],
+    ask: ['#fbbf24', '#fde68a', 'rgba(251,191,36,.12)', '?'], off: ['#6b7280', '#9aa3b2', 'rgba(255,255,255,.05)', '·'] };
+  var ROOM_TONES = /^(?:co|lco|ext|extending|fin|findone)$/;
   function el(tag, css, text, parent) {
     var e = document.createElement(tag);
     if (css) e.style.cssText = css;
@@ -567,16 +575,24 @@
   function setT(e, t) { t = String(t); if (e.textContent !== t) e.textContent = t; }
   function anim(e, frames, opt) { if (RM && !(opt && opt.always)) return null; try { if (e && e.animate) return e.animate(frames, opt); } catch (_) {} return null; }
   function hover(b, on, off) { b.addEventListener('mouseenter', function () { b.style.cssText += on; }); b.addEventListener('mouseleave', function () { b.style.cssText += off; }); }
-  var BTN = 'all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:10px;font:600 12px/1 ' + SANS + ';padding:8px 10px;white-space:nowrap;transition:background .15s,border-color .15s,transform .1s;';
-  var BTN2 = BTN + 'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#e8ecf3;';
-  var ICONB = 'all:unset;box-sizing:border-box;cursor:pointer;width:26px;height:26px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;color:#aab3c2;font:600 13px/1 ' + SANS + ';';
-  function btn2(label, parent, css) { var b = el('button', BTN2 + (css || ''), label, parent); b.type = 'button'; hover(b, 'background:rgba(255,255,255,.11);border-color:rgba(255,255,255,.22);', 'background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12);'); return b; }
+  /** a visible ring for keyboard users (all:unset removes the browser's own) */
+  function ring2(b) {
+    b.addEventListener('focus', function () { var v = false; try { v = b.matches(':focus-visible'); } catch (_) {} if (v) b.style.outline = '2px solid ' + ACC; b.style.outlineOffset = '1px'; });
+    b.addEventListener('blur', function () { b.style.outline = 'none'; });
+    return b;
+  }
+  /** keys typed in our inputs stay ours (WhatsApp moves stray typing into its message box) */
+  function keepKeys(i) { ['keydown', 'keypress', 'keyup', 'input', 'paste'].forEach(function (t) { i.addEventListener(t, function (e) { e.stopPropagation(); }); }); }
+  var BTN = 'all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:10px;font:600 12px/1 ' + SANS + ';padding:8px 10px;white-space:nowrap;transition:background .15s,border-color .15s,transform .1s,filter .15s;';
+  var BTN2 = BTN + 'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:' + TXT + ';';
+  var ICONB = 'all:unset;box-sizing:border-box;cursor:pointer;width:26px;height:26px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;color:' + TXT2 + ';font:600 13px/1 ' + SANS + ';transition:background .15s,color .15s;';
+  function btn2(label, parent, css) { var b = el('button', BTN2 + (css || ''), label, parent); b.type = 'button'; hover(b, 'background:rgba(255,255,255,.11);border-color:rgba(255,255,255,.22);', 'background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12);'); return ring2(b); }
   /** an on/off switch */
   function toggle(on, parent, onChange) {
     var b = el('button', 'all:unset;box-sizing:border-box;cursor:pointer;flex:none;position:relative;width:34px;height:20px;border-radius:99px;transition:background .2s', null, parent);
-    b.type = 'button'; b.setAttribute('role', 'switch');
+    b.type = 'button'; b.setAttribute('role', 'switch'); ring2(b);
     var k = el('span', 'position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.4);transition:transform .2s', null, b);
-    var set = function (v) { on = !!v; b.setAttribute('aria-checked', on ? 'true' : 'false'); b.style.background = on ? '#22c55e' : 'rgba(255,255,255,.18)'; k.style.transform = on ? 'translateX(14px)' : 'none'; };
+    var set = function (v) { on = !!v; b.setAttribute('aria-checked', on ? 'true' : 'false'); b.style.background = on ? ACC_D : 'rgba(255,255,255,.18)'; k.style.transform = on ? 'translateX(14px)' : 'none'; };
     set(on);
     b.onclick = function () { set(!on); onChange(on); };
     b.set = set;
@@ -584,90 +600,134 @@
   }
 
   var pos = LS.get('ho_wa_pos', null);
-  var W0 = 352;
-  var root = el('div', 'position:fixed;left:16px;bottom:16px;z-index:2147483646;width:' + W0 + 'px;max-width:calc(100vw - 32px);box-sizing:border-box;padding:1px;border-radius:19px;color:#e8ecf3;font:12.5px/1.4 ' + SANS + ';text-align:left;letter-spacing:0;' +
-    'box-shadow:0 26px 70px -14px rgba(0,0,0,.7),0 0 0 1px rgba(0,0,0,.3);overflow:hidden;user-select:none;-webkit-user-select:none;contain:layout paint');
-  root.id = 'hoWaWin'; root.setAttribute('role', 'dialog'); root.setAttribute('aria-label', 'HotelOps WhatsApp reader');
+  var W0 = 368;
+  var root = el('div', 'position:fixed;left:16px;bottom:16px;z-index:2147483646;width:' + W0 + 'px;max-width:calc(100vw - 32px);box-sizing:border-box;padding:1px;border-radius:20px;color:' + TXT + ';font:12.5px/1.4 ' + SANS + ';text-align:left;letter-spacing:0;' +
+    'box-shadow:0 30px 80px -18px rgba(0,0,0,.75),0 0 0 1px rgba(0,0,0,.35),0 0 40px -12px rgba(' + ACC_RGB + ',.35);overflow:hidden;user-select:none;-webkit-user-select:none;contain:layout paint');
+  root.id = 'hoWaWin'; root.setAttribute('role', 'dialog'); root.setAttribute('aria-label', 'HotelOps WhatsApp reader (Alt+H to hide)');
   if (pos && pos.left >= 0 && pos.top >= 0) { root.style.left = Math.min(pos.left, innerWidth - 120) + 'px'; root.style.top = Math.min(pos.top, innerHeight - 60) + 'px'; root.style.bottom = 'auto'; }
   // the animated border glow
-  var glow = el('div', 'position:absolute;inset:0;border-radius:19px;background:linear-gradient(115deg,rgba(224,178,79,.95),rgba(45,212,191,.55),rgba(139,92,246,.6),rgba(224,178,79,.95));background-size:300% 300%;opacity:.55', null, root);
-  var panel = el('div', 'position:relative;border-radius:18px;overflow:hidden;background:radial-gradient(120% 70% at 0% 0%,rgba(224,178,79,.13),transparent 55%),radial-gradient(90% 60% at 100% 100%,rgba(45,212,191,.08),transparent 60%),linear-gradient(180deg,rgba(19,23,33,.95),rgba(10,13,20,.97));-webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4)', null, root);
+  var glow = el('div', 'position:absolute;inset:0;border-radius:20px;background:linear-gradient(115deg,rgba(' + ACC_RGB + ',.95),rgba(83,189,235,.45),rgba(0,168,132,.75),rgba(45,212,191,.4),rgba(' + ACC_RGB + ',.95));background-size:300% 300%;opacity:.55', null, root);
+  var panel = el('div', 'position:relative;border-radius:19px;overflow:hidden;background:radial-gradient(120% 70% at 0% 0%,rgba(' + ACC_RGB + ',.12),transparent 55%),radial-gradient(90% 60% at 100% 100%,rgba(83,189,235,.07),transparent 60%),linear-gradient(180deg,rgba(17,27,33,.93),rgba(11,20,26,.97));-webkit-backdrop-filter:blur(20px) saturate(1.5);backdrop-filter:blur(20px) saturate(1.5)', null, root);
+  // a faint top sheen: the "glass"
+  el('div', 'position:absolute;left:0;right:0;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.28),transparent);pointer-events:none', null, panel);
 
   // header (drag handle)
-  var head = el('div', 'display:flex;align-items:center;gap:10px;padding:12px 10px 8px 12px;cursor:grab', null, panel);
-  var logo = el('div', 'flex:none;width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;font:800 17px/1 Georgia,"Times New Roman",serif;color:#1a1408;background:linear-gradient(135deg,#f6d27a,' + GOLD + ' 55%,#a97a22);box-shadow:0 4px 14px -3px rgba(224,178,79,.6),inset 0 1px 0 rgba(255,255,255,.45)', 'H', head);
+  var head = el('div', 'display:flex;align-items:center;gap:10px;padding:12px 10px 9px 12px;cursor:grab', null, panel);
+  head.title = 'Drag to move · double-click to put it back · Alt+H to hide';
+  var logo = el('div', 'flex:none;position:relative;width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;font:800 17px/1 Georgia,"Times New Roman",serif;color:' + INK + ';background:linear-gradient(135deg,#6af59b,' + ACC + ' 50%,' + ACC_D + ');box-shadow:0 6px 16px -4px rgba(' + ACC_RGB + ',.6),inset 0 1px 0 rgba(255,255,255,.5)', 'H', head);
   var titles = el('div', 'flex:1;min-width:0', null, head);
-  el('div', 'font:700 13.5px/1.2 ' + SANS + ';color:#f4f6fa;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.01em', 'HotelOps · WhatsApp', titles);
-  var subRow = el('div', 'display:flex;align-items:center;gap:6px;margin-top:3px;min-width:0', null, titles);
+  var tRow = el('div', 'display:flex;align-items:center;gap:6px;min-width:0', null, titles);
+  el('div', 'font:700 13.5px/1.2 ' + SANS + ';color:#f4f6fa;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.01em;min-width:0', 'HotelOps · WhatsApp', tRow);
+  var live = el('span', 'flex:none;display:none;font:800 8.5px/1 ' + SANS + ';letter-spacing:.12em;padding:3px 5px 3px 6px;border-radius:5px;color:' + INK + ';background:' + ACC, 'LIVE', tRow);
+  var subRow = el('div', 'display:flex;align-items:center;gap:6px;margin-top:4px;min-width:0', null, titles);
   var dotWrap = el('span', 'position:relative;flex:none;width:7px;height:7px', null, subRow);
   var dot = el('span', 'position:absolute;inset:0;border-radius:50%', null, dotWrap);
   var ring = el('span', 'position:absolute;inset:0;border-radius:50%;opacity:0', null, dotWrap);
-  var sub = el('span', 'font:500 11px/1.2 ' + MONO + ';color:#8b94a5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0', '', subRow);
-  var minB = el('button', ICONB, '–', head); minB.type = 'button'; minB.title = 'Make it small'; minB.setAttribute('aria-label', 'Minimize');
+  var sub = el('span', 'font:500 11px/1.2 ' + MONO + ';color:' + TXT3 + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0', '', subRow);
+  var minB = el('button', ICONB, '–', head); minB.type = 'button'; minB.title = 'Make it small (Alt+H)'; minB.setAttribute('aria-label', 'Minimize');
   var xB = el('button', ICONB, '✕', head); xB.type = 'button'; xB.title = 'Stop the reader'; xB.setAttribute('aria-label', 'Stop');
-  [minB, xB].forEach(function (b) { hover(b, 'background:rgba(255,255,255,.1);color:#fff;', 'background:transparent;color:#aab3c2;'); });
+  [minB, xB].forEach(function (b) { ring2(b); hover(b, 'background:rgba(255,255,255,.1);color:#fff;', 'background:transparent;color:' + TXT2 + ';'); });
+  hover(xB, 'background:rgba(239,68,68,.18);color:#fca5a5;', '');
 
   var body = el('div', 'padding:0 12px 12px', null, panel);
   // status line
   var stLine = el('div', 'display:flex;align-items:center;gap:8px;min-width:0', null, body);
-  var pill = el('div', 'display:inline-flex;align-items:center;gap:6px;max-width:100%;min-width:0;box-sizing:border-box;padding:4px 10px;border-radius:99px;font:600 11.5px/1.3 ' + SANS, null, stLine);
+  var pill = el('div', 'display:inline-flex;align-items:center;gap:6px;max-width:100%;min-width:0;box-sizing:border-box;padding:4px 10px;border-radius:99px;font:600 11.5px/1.3 ' + SANS + ';transition:background .3s,color .3s', null, stLine);
   var pillTxt = el('span', 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0', '', pill);
-
-  // the signal: messages per 10 minutes (last 2 hours) + a sweeping heartbeat
-  var sig = el('div', 'position:relative;height:40px;margin:10px 0 10px;border-radius:10px;background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.015));border:1px solid rgba(255,255,255,.07);overflow:hidden', null, body);
-  var cv = el('canvas', 'position:absolute;inset:0;width:100%;height:100%', null, sig);
-  var sweep = el('div', 'position:absolute;top:0;bottom:0;left:0;width:60px;background:linear-gradient(90deg,transparent,rgba(224,178,79,.22),transparent);opacity:0', null, sig);
-  var sigLbl = el('div', 'position:absolute;right:8px;top:4px;z-index:1;font:600 9.5px/1 ' + MONO + ';letter-spacing:.06em;color:#7d8696;text-transform:uppercase', '', sig);
-  sig.title = 'Messages per 10 minutes, last 2 hours';
+  var lastEl = el('span', 'margin-left:auto;flex:none;font:500 10px/1 ' + MONO + ';color:' + TXT3, '', stLine);
 
   // counters
-  var stats = el('div', 'display:grid;grid-template-columns:repeat(4,1fr);gap:6px', null, body);
-  function stat(label, color) {
-    var b = el('div', 'position:relative;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.075);border-radius:11px;padding:7px 8px 6px;min-width:0;overflow:hidden', null, stats);
-    el('div', 'position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,' + color + ',transparent);opacity:.8', null, b);
-    var n = el('div', 'font:700 17px/1.1 ' + MONO + ';color:#f4f6fa;font-variant-numeric:tabular-nums', '0', b);
-    el('div', 'font-size:10px;line-height:1.2;color:#8b94a5;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis', label, b);
+  var stats = el('div', 'display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px', null, body);
+  function stat(label, color, icon) {
+    var b = el('div', 'position:relative;background:' + CARD + ';border:1px solid rgba(255,255,255,.075);border-radius:12px;padding:7px 8px 6px;min-width:0;overflow:hidden', null, stats);
+    el('div', 'position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,' + color + ',transparent);opacity:.85', null, b);
+    el('div', 'position:absolute;right:6px;top:6px;font:600 10px/1 ' + SANS + ';color:' + color + ';opacity:.7', icon, b);
+    var n = el('div', 'font:700 18px/1.1 ' + MONO + ';color:#f4f6fa;font-variant-numeric:tabular-nums', '0', b);
+    el('div', 'font-size:10px;line-height:1.2;color:' + TXT3 + ';margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis', label, b);
     n.v = 0; return n;
   }
-  var nRead = stat('Read today', '#60a5fa'), nSent = stat('Sent in', '#22c55e'), nActs = stat('Rooms', GOLD), nWait = stat('Waiting', '#f59e0b');
-  nRead.parentNode.title = 'Messages read today'; nSent.parentNode.title = 'Messages HotelOps has received'; nActs.parentNode.title = 'Check-outs, late check-outs and extensions passed on'; nWait.parentNode.title = 'Waiting for HotelOps';
+  var nRead = stat('Read today', '#53bdeb', '◉'), nActs = stat('Acted', ACC, '⚡'), nSent = stat('Sent in', '#2dd4bf', '↗'), nWait = stat('Waiting', '#f59e0b', '⏳');
+  nRead.parentNode.title = 'Messages read today'; nSent.parentNode.title = 'Messages HotelOps has received'; nActs.parentNode.title = 'Check-outs, late check-outs and extensions passed on'; nWait.parentNode.title = 'Waiting for HotelOps to say "got it" (and answers to send)';
+
+  // the signal: messages per 10 minutes (last 2 h) or per hour (last 12 h) + a sweeping heartbeat; click to switch
+  var sigV = LS.get('ho_wa_sigv', '2h') === '12h' ? '12h' : '2h';
+  var sig = el('div', 'position:relative;height:42px;margin:8px 0 0;border-radius:11px;background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.012));border:1px solid rgba(255,255,255,.07);overflow:hidden;cursor:pointer', null, body);
+  var cv = el('canvas', 'position:absolute;inset:0;width:100%;height:100%', null, sig);
+  var sweep = el('div', 'position:absolute;top:0;bottom:0;left:0;width:60px;background:linear-gradient(90deg,transparent,rgba(' + ACC_RGB + ',.18),transparent);opacity:0;pointer-events:none', null, sig);
+  var sigLbl = el('div', 'position:absolute;right:8px;top:5px;z-index:1;font:600 9.5px/1 ' + MONO + ';letter-spacing:.06em;color:' + TXT3 + ';text-transform:uppercase;pointer-events:none', '', sig);
+  sig.setAttribute('role', 'button'); sig.tabIndex = 0; ring2(sig);
+  function sigTitle() { sig.title = (sigV === '2h' ? 'Messages per 10 minutes, last 2 hours' : 'Messages per hour, last 12 hours') + ' · click to switch'; }
+  sigTitle();
+  var flipSig = function () { sigV = sigV === '2h' ? '12h' : '2h'; LS.set('ho_wa_sigv', sigV); sigTitle(); sigKey = ''; drawSignal(); anim(cv, [{ opacity: 0.2 }, { opacity: 1 }], { duration: 220 }); };
+  sig.addEventListener('click', flipSig);
+  sig.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); flipSig(); } });
 
   // tabs
-  var tabsBar = el('div', 'position:relative;display:grid;grid-template-columns:repeat(4,1fr);margin:10px 0 8px;padding:3px;border-radius:11px;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.06)', null, body);
+  var tabsBar = el('div', 'position:relative;display:grid;grid-template-columns:repeat(4,1fr);margin:10px 0 8px;padding:3px;border-radius:12px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.06)', null, body);
   tabsBar.setAttribute('role', 'tablist');
-  var tabInd = el('div', 'position:absolute;top:3px;bottom:3px;left:3px;width:calc((100% - 6px) / 4);border-radius:8px;background:linear-gradient(180deg,rgba(255,255,255,.13),rgba(255,255,255,.07));box-shadow:0 1px 0 rgba(255,255,255,.08) inset,0 4px 10px -4px rgba(0,0,0,.5);transition:transform .25s cubic-bezier(.2,.8,.2,1)', null, tabsBar);
+  var tabInd = el('div', 'position:absolute;top:3px;bottom:3px;left:3px;width:calc((100% - 6px) / 4);border-radius:9px;background:linear-gradient(180deg,rgba(' + ACC_RGB + ',.22),rgba(' + ACC_RGB + ',.10));box-shadow:0 0 0 1px rgba(' + ACC_RGB + ',.28) inset,0 4px 12px -4px rgba(0,0,0,.5);transition:transform .28s cubic-bezier(.2,.8,.2,1)', null, tabsBar);
+  if (RM) tabInd.style.transition = 'none';
   var TABS = [['feed', 'Feed'], ['send', 'Send'], ['groups', 'Groups'], ['settings', 'Settings']], tabBtn = {}, tabBadge = {}, panes = {};
   var curTab = 'feed', sendBadge = 0;
   TABS.forEach(function (t, i) {
-    var b = el('button', 'all:unset;box-sizing:border-box;position:relative;z-index:1;cursor:pointer;text-align:center;padding:6px 2px;border-radius:8px;font:600 11.5px/1.2 ' + SANS + ';color:#8b94a5;display:flex;align-items:center;justify-content:center;gap:5px', null, tabsBar);
-    b.type = 'button'; b.setAttribute('role', 'tab'); el('span', '', t[1], b);
-    tabBadge[t[0]] = el('span', 'display:none;min-width:15px;height:15px;padding:0 4px;box-sizing:border-box;border-radius:99px;background:' + GOLD + ';color:#1a1408;font:700 9.5px/15px ' + SANS + ';text-align:center', '', b);
+    var b = el('button', 'all:unset;box-sizing:border-box;position:relative;z-index:1;cursor:pointer;text-align:center;padding:6px 2px;border-radius:9px;font:600 11.5px/1.2 ' + SANS + ';color:' + TXT3 + ';display:flex;align-items:center;justify-content:center;gap:5px;transition:color .2s', null, tabsBar);
+    b.type = 'button'; b.setAttribute('role', 'tab'); el('span', '', t[1], b); ring2(b);
+    tabBadge[t[0]] = el('span', 'display:none;min-width:15px;height:15px;padding:0 4px;box-sizing:border-box;border-radius:99px;background:' + ACC + ';color:' + INK + ';font:700 9.5px/15px ' + SANS + ';text-align:center', '', b);
     b.onclick = function () { setTab(t[0]); };
     tabBtn[t[0]] = b; b.idx = i;
   });
-  var paneWrap = el('div', 'position:relative;max-height:300px;min-height:120px;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;margin-right:-4px;padding-right:4px', null, body);
+  var paneWrap = el('div', 'position:relative;max-height:300px;min-height:120px;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.18) transparent;margin-right:-4px;padding-right:4px;overscroll-behavior:contain', null, body);
   TABS.forEach(function (t) { panes[t[0]] = el('div', 'display:none;flex-direction:column;gap:6px', null, paneWrap); });
   function setTab(k) {
+    var from = tabBtn[curTab] ? tabBtn[curTab].idx : 0;
     curTab = k;
-    TABS.forEach(function (t) { var on = t[0] === k; panes[t[0]].style.display = on ? 'flex' : 'none'; tabBtn[t[0]].style.color = on ? '#f4f6fa' : '#8b94a5'; tabBtn[t[0]].setAttribute('aria-selected', on ? 'true' : 'false'); });
+    TABS.forEach(function (t) { var on = t[0] === k; panes[t[0]].style.display = on ? 'flex' : 'none'; tabBtn[t[0]].style.color = on ? '#f4f6fa' : TXT3; tabBtn[t[0]].setAttribute('aria-selected', on ? 'true' : 'false'); });
     tabInd.style.transform = 'translateX(' + (tabBtn[k].idx * 100) + '%)';
     if (k === 'send') sendBadge = 0;
-    anim(panes[k], [{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 180, easing: 'ease-out' });
+    var dx = tabBtn[k].idx === from ? 0 : tabBtn[k].idx > from ? 14 : -14;
+    anim(panes[k], [{ opacity: 0, transform: 'translate(' + dx + 'px,4px)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: 'cubic-bezier(.2,.8,.2,1)' });
     LS.set('ho_wa_tab', k); render();
   }
 
-  // Feed pane
+  // Feed pane: search + filter chips, then the questions and the messages
+  var FILTERS = [['all', 'All'], ['rooms', 'Rooms'], ['notes', 'Notes'], ['asks', 'Asks'], ['other', 'Other']];
+  var fKind = LS.get('ho_wa_filter', 'all'); if (!FILTERS.some(function (f) { return f[0] === fKind; })) fKind = 'all';
+  var fQuery = '';
+  var tools = el('div', 'position:sticky;top:0;z-index:2;display:flex;flex-direction:column;gap:6px;padding:0 0 6px;background:linear-gradient(180deg,rgba(13,22,28,.98) 80%,rgba(13,22,28,0))', null, panes.feed);
+  var sWrap = el('div', 'position:relative;display:flex;align-items:center', null, tools);
+  el('span', 'position:absolute;left:9px;top:50%;transform:translateY(-50%);font:600 12px/1 ' + SANS + ';color:' + TXT3 + ';pointer-events:none', '⌕', sWrap);
+  var sIn = el('input', 'all:unset;box-sizing:border-box;width:100%;padding:7px 28px 7px 26px;border-radius:10px;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.1);color:' + TXT + ';font:12px/1.2 ' + SANS + ';user-select:text;-webkit-user-select:text;transition:border-color .15s,background .15s', null, sWrap);
+  sIn.type = 'search'; sIn.placeholder = 'Search room, name or word…'; sIn.setAttribute('aria-label', 'Search the feed'); sIn.maxLength = 60; sIn.spellcheck = false; sIn.autocomplete = 'off';
+  keepKeys(sIn);
+  sIn.addEventListener('focus', function () { sIn.style.borderColor = 'rgba(' + ACC_RGB + ',.55)'; sIn.style.background = 'rgba(0,0,0,.4)'; });
+  sIn.addEventListener('blur', function () { sIn.style.borderColor = 'rgba(255,255,255,.1)'; sIn.style.background = 'rgba(0,0,0,.28)'; });
+  var sClr = el('button', ICONB + 'position:absolute;right:3px;top:50%;transform:translateY(-50%);width:22px;height:22px;font-size:10px;display:none', '✕', sWrap);
+  sClr.type = 'button'; sClr.setAttribute('aria-label', 'Clear the search'); ring2(sClr);
+  sIn.addEventListener('input', function () { fQuery = sIn.value; sClr.style.display = fQuery ? 'inline-flex' : 'none'; applyFilter(); });
+  sIn.addEventListener('keydown', function (e) { if (e.key === 'Escape') { sIn.value = ''; fQuery = ''; sClr.style.display = 'none'; applyFilter(); sIn.blur(); } });
+  sClr.onclick = function () { sIn.value = ''; fQuery = ''; sClr.style.display = 'none'; applyFilter(); sIn.focus(); };
+  var fRow = el('div', 'display:flex;gap:4px;flex-wrap:wrap', null, tools);
+  fRow.setAttribute('role', 'radiogroup'); fRow.setAttribute('aria-label', 'Show');
+  var fBtn = {};
+  FILTERS.forEach(function (f) {
+    var b = el('button', 'all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:99px;font:600 10.5px/1.2 ' + SANS + ';border:1px solid rgba(255,255,255,.1);transition:background .15s,color .15s,border-color .15s', null, fRow);
+    b.type = 'button'; b.setAttribute('role', 'radio'); ring2(b);
+    el('span', '', f[1], b); b.n = el('span', 'font:600 9.5px/1 ' + MONO + ';opacity:.75', '', b);
+    b.onclick = function () { fKind = f[0]; LS.set('ho_wa_filter', fKind); applyFilter(); };
+    fBtn[f[0]] = b;
+  });
   var asksBox = el('div', 'display:flex;flex-direction:column;gap:6px', null, panes.feed);
   var list = el('div', 'display:flex;flex-direction:column;gap:6px', null, panes.feed);
   list.setAttribute('aria-live', 'polite');
-  var empty = el('div', 'padding:16px 10px;text-align:center;color:#7d8696;font-size:12px;border:1px dashed rgba(255,255,255,.1);border-radius:12px', '', list);
+  var empty = el('div', 'padding:16px 10px;text-align:center;color:' + TXT3 + ';font-size:12px;border:1px dashed rgba(255,255,255,.1);border-radius:12px', '', list);
+  var noMatch = el('div', 'display:none;padding:14px 10px;text-align:center;color:' + TXT3 + ';font-size:12px;border:1px dashed rgba(255,255,255,.1);border-radius:12px', 'Nothing matches · try another word or "All"', panes.feed);
 
   // Send pane
-  var sendHint = el('div', 'padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);color:#aab3c2;font-size:11.5px;line-height:1.45', '', panes.send);
+  var sendHint = el('div', 'padding:8px 10px;border-radius:10px;background:' + CARD + ';border:1px solid rgba(255,255,255,.07);color:' + TXT2 + ';font-size:11.5px;line-height:1.45', '', panes.send);
   var outList = el('div', 'display:flex;flex-direction:column;gap:6px', null, panes.send);
 
   // Groups pane
-  el('div', 'padding:8px 10px;border-radius:10px;background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.18);color:#bfdbfe;font-size:11.5px;line-height:1.45',
+  el('div', 'padding:8px 10px;border-radius:10px;background:rgba(83,189,235,.08);border:1px solid rgba(83,189,235,.2);color:#b6e3f7;font-size:11.5px;line-height:1.45',
     'Open groups are read fully. Closed groups: only the latest message is seen; open the group now and then to catch up. To read a second group fully all day, link WhatsApp Web in a second browser (for example Edge) as another device and run this reader there too.', panes.groups);
   var gList = el('div', 'display:flex;flex-direction:column;gap:6px', null, panes.groups);
   var gBtns = el('div', 'display:flex;gap:6px', null, panes.groups);
@@ -675,10 +735,10 @@
   var addNameB = btn2('＋ By name', gBtns);
 
   // Settings pane
-  function setRow(parent) { return el('div', 'display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07)', null, parent); }
+  function setRow(parent) { return el('div', 'display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;background:' + CARD + ';border:1px solid rgba(255,255,255,.07)', null, parent); }
   var sr1 = setRow(panes.settings);
   var sr1t = el('div', 'flex:1;min-width:0', null, sr1);
-  el('div', 'font-weight:600;font-size:12px;color:#e8ecf3', 'Send automatically (no Enter needed)', sr1t);
+  el('div', 'font-weight:600;font-size:12px;color:' + TXT, 'Send automatically (no Enter needed)', sr1t);
   el('div', 'font-size:11px;color:#fcd34d;margin-top:2px;line-height:1.35', '⚠ WhatsApp may flag automated sending; use at your own risk. Off: HotelOps types the message and you press Enter.', sr1t);
   var autoT = toggle(auto, sr1, function (v) { auto = v; LS.set('ho_wa_auto', v); toast(v ? 'Automatic sending is on' : 'Automatic sending is off · you press Enter', v ? 'warn' : 'ok'); render(); });
   autoT.setAttribute('aria-label', 'Send automatically');
@@ -686,27 +746,77 @@
   var cpB = btn2('📋 Copy today\'s chat', sr2, 'flex:1');
   cpB.title = 'Copies all of today\'s messages in the open group, for HotelOps → WhatsApp → Paste or upload.';
   var posB = btn2('⤢ Reset place', sr2);
-  el('div', 'font-size:11px;color:#7d8696;line-height:1.45;padding:2px 2px 0', 'This reader reads your groups and only sends what you send from HotelOps. It never opens other chats. Stop it with ✕ or by reloading WhatsApp.', panes.settings);
+  var keysRow = el('div', 'display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:2px 2px 0;font-size:11px;color:' + TXT3, null, panes.settings);
+  var kbd = function (t) { return el('span', 'font:600 10px/1 ' + MONO + ';padding:3px 6px;border-radius:5px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-bottom-width:2px;color:' + TXT, t, keysRow); };
+  kbd('Alt'); el('span', '', '+', keysRow); kbd('H'); el('span', 'flex:1 1 180px;min-width:0', 'show / hide · double-click the top bar to put it back · Esc clears the search', keysRow);
+  el('div', 'font-size:11px;color:' + TXT3 + ';line-height:1.45;padding:2px 2px 0', 'This reader reads your groups and only sends what you send from HotelOps. It never opens other chats. Stop it with ✕ or by reloading WhatsApp.', panes.settings);
 
-  // the main button + the toast
-  var connB = el('button', BTN + 'width:100%;margin-top:10px;padding:10px;font-size:12.5px;color:#1a1408;background:linear-gradient(135deg,#f6d27a,' + GOLD + ');border:1px solid rgba(255,255,255,.18);box-shadow:0 8px 18px -8px rgba(224,178,79,.7)', 'Connect HotelOps', body);
-  connB.type = 'button'; hover(connB, 'filter:brightness(1.07);', 'filter:none;');
-  var toastEl = el('div', 'position:absolute;left:12px;right:12px;bottom:12px;z-index:3;display:none;padding:9px 12px;border-radius:11px;font:600 12px/1.35 ' + SANS + ';box-shadow:0 10px 30px -8px rgba(0,0,0,.7);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)', '', panel);
-  toastEl.setAttribute('role', 'status');
+  // the main button
+  var connB = el('button', BTN + 'position:relative;overflow:hidden;width:100%;margin-top:10px;padding:10px;font-size:12.5px;color:' + INK + ';background:linear-gradient(135deg,#5ef08f,' + ACC + ' 45%,' + ACC_D + ');border:1px solid rgba(255,255,255,.18);box-shadow:0 10px 22px -10px rgba(' + ACC_RGB + ',.8),inset 0 1px 0 rgba(255,255,255,.35)', 'Connect HotelOps', body);
+  connB.type = 'button'; ring2(connB); hover(connB, 'filter:brightness(1.08);', 'filter:none;');
+  connB.addEventListener('pointerdown', function () { connB.style.transform = 'scale(.985)'; });
+  ['pointerup', 'pointerleave'].forEach(function (t) { connB.addEventListener(t, function () { connB.style.transform = 'none'; }); });
+
+  // toasts: a small stack beside whichever is showing (the window or the pill)
+  var toastHost = el('div', 'position:fixed;z-index:2147483647;display:flex;flex-direction:column;gap:6px;width:300px;max-width:calc(100vw - 24px);pointer-events:none;font:600 12px/1.35 ' + SANS);
+  toastHost.id = 'hoWaToasts'; toastHost.setAttribute('role', 'status'); toastHost.setAttribute('aria-live', 'polite');
 
   // the small pill when minimized
-  var mini = el('button', BTN + 'position:fixed;left:16px;bottom:16px;z-index:2147483646;display:none;max-width:calc(100vw - 32px);padding:6px 12px 6px 6px;border-radius:99px;color:#e8ecf3;background:rgba(16,19,27,.9);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid rgba(224,178,79,.35);box-shadow:0 12px 34px -10px rgba(0,0,0,.7),0 0 0 4px rgba(224,178,79,.06);touch-action:none');
-  mini.type = 'button'; mini.id = 'hoWaMini'; mini.title = 'Open the HotelOps window';
-  var mLogo = el('span', 'flex:none;width:22px;height:22px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font:800 12px/1 Georgia,serif;color:#1a1408;background:linear-gradient(135deg,#f6d27a,' + GOLD + ')', 'H', mini);
+  var mini = el('button', BTN + 'position:fixed;left:16px;bottom:16px;z-index:2147483646;display:none;max-width:calc(100vw - 32px);padding:6px 12px 6px 6px;border-radius:99px;color:' + TXT + ';background:rgba(17,27,33,.92);-webkit-backdrop-filter:blur(14px) saturate(1.4);backdrop-filter:blur(14px) saturate(1.4);border:1px solid rgba(' + ACC_RGB + ',.4);box-shadow:0 12px 34px -10px rgba(0,0,0,.7),0 0 0 4px rgba(' + ACC_RGB + ',.07);touch-action:none;cursor:grab');
+  mini.type = 'button'; mini.id = 'hoWaMini'; mini.title = 'Open the HotelOps window (Alt+H) · drag to move'; ring2(mini);
+  var mLogo = el('span', 'flex:none;width:22px;height:22px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font:800 12px/1 Georgia,serif;color:' + INK + ';background:linear-gradient(135deg,#6af59b,' + ACC + ')', 'H', mini);
   var mDotWrap = el('span', 'position:relative;flex:none;width:8px;height:8px', null, mini);
   var mDot = el('span', 'position:absolute;inset:0;border-radius:50%', null, mDotWrap);
   var mRing = el('span', 'position:absolute;inset:0;border-radius:50%;opacity:0', null, mDotWrap);
   var mTxt = el('span', 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0', '', mini);
-  var mBadge = el('span', 'display:none;min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:99px;background:' + GOLD + ';color:#1a1408;font:800 10.5px/18px ' + SANS + ';text-align:center', '', mini);
+  var mStats = el('span', 'flex:none;font:600 10.5px/1 ' + MONO + ';color:' + TXT3, '', mini);
+  var mBadge = el('span', 'display:none;min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:99px;background:' + ACC + ';color:' + INK + ';font:800 10.5px/18px ' + SANS + ';text-align:center', '', mini);
 
   // ── feed rows ─────────────────────────────────────────────
-  var FEED_MAX = 12;
+  var FEED_MAX = 40;
   function shortTime(t) { var m = String(t || '').match(/(\d{1,2})[:.](\d{2})(?:[:.]\d{2})?\s*([ap])?/i); return m ? m[1] + ':' + m[2] + (m[3] ? ' ' + m[3].toUpperCase() + 'M' : '') : ''; }
+  /** which filter chips a row belongs to */
+  function kindsOf(ch) {
+    var k = { all: true };
+    ch.forEach(function (c) { if (ROOM_TONES.test(c.tone)) k.rooms = true; else if (c.tone === 'note') k.notes = true; else if (c.tone === 'ask') k.asks = true; });
+    if (!k.rooms && !k.notes && !k.asks) k.other = true;
+    return k;
+  }
+  function qWords(q) { return norm(q).split(' ').filter(Boolean); }
+  /** a room "324" also finds "0324" */
+  function hayHas(hay, w) { return /^\d{3,4}$/.test(w) ? new RegExp('(?:^|\\D)0*' + w.replace(/^0+/, '') + '(?:\\D|$)').test(hay) : hay.indexOf(w) >= 0; }
+  /** the text with the searched words marked (DOM nodes, never HTML strings) */
+  function hiText(e, text, ws) {
+    while (e.firstChild) e.removeChild(e.firstChild);
+    if (!ws.length) { e.textContent = text; return; }
+    var rx = new RegExp('(' + ws.map(function (w) { return w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }).join('|') + ')', 'gi'), last = 0, m;
+    while ((m = rx.exec(text))) {
+      if (!m[0]) { rx.lastIndex++; continue; }
+      if (m.index > last) e.appendChild(document.createTextNode(text.slice(last, m.index)));
+      el('mark', 'background:rgba(' + ACC_RGB + ',.3);color:#fff;border-radius:3px;padding:0 1px', m[0], e);
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) e.appendChild(document.createTextNode(text.slice(last)));
+  }
+  function applyFilter() {
+    var ws = qWords(fQuery), shown = 0, cnt = { all: 0, rooms: 0, notes: 0, asks: 0, other: 0 }, hk = ws.join(' ');
+    feed.forEach(function (f) {
+      Object.keys(f.kinds).forEach(function (k) { if (cnt[k] != null) cnt[k]++; });
+      var ok = !!f.kinds[fKind] && ws.every(function (w) { return hayHas(f.hay, w); });
+      if (f.node) f.node.style.display = ok ? 'flex' : 'none';
+      if (ok) shown++;
+      if (f.txEl && f.hk !== hk) { f.hk = hk; hiText(f.txEl, f.disp, ws); }
+    });
+    FILTERS.forEach(function (x) {
+      var b = fBtn[x[0]], on = x[0] === fKind;
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
+      b.style.background = on ? 'rgba(' + ACC_RGB + ',.18)' : 'rgba(255,255,255,.035)';
+      b.style.borderColor = on ? 'rgba(' + ACC_RGB + ',.5)' : 'rgba(255,255,255,.1)';
+      b.style.color = on ? ACC_L : TXT2;
+      setT(b.n, cnt[x[0]] ? cnt[x[0]] : '');
+    });
+    noMatch.style.display = feed.length && !shown ? 'block' : 'none';
+  }
   function addFeed(m, opt) {
     opt = opt || {};
     var old = feed.filter(function (f) { return f.id === m.id || (!m.preview && f.preview && f.group === m.group && sameText(f.text, m.text) && Math.abs(msgTs(f.rawTime) - msgTs(m.time)) < 60000); });
@@ -714,35 +824,41 @@
     var ch = chips(m.text, words, m.quote);
     var f = { id: m.id, rawTime: m.time, at: msgTs(m.time), time: shortTime(m.time), sender: m.sender || (m.mine ? 'Me' : ''), text: m.text, edited: m.edited, chips: ch, state: 'wait', group: m.group || '', preview: !!m.preview, truncated: !!m.truncated, missed: opt.missed || 0,
       acts: ch.filter(function (c) { return /^(?:co|lco|ext|extending)$/.test(c.tone); }).length };
+    f.kinds = kindsOf(ch);
+    f.disp = f.text.replace(/\s*\n\s*/g, ' · ');
+    f.hay = norm([f.sender, f.text, f.group].concat(ch.map(function (c) { return c.label; })).join(' '));
     ch.forEach(function (c) { if (c.ask && !words(c.ask.word)) { asks[c.ask.word] = { word: c.ask.word, text: m.text, sender: f.sender, room: c.ask.room }; } });
     feed.unshift(f);
     if (empty.parentNode) empty.remove();
     var tone = ch[0] ? ch[0].tone : 'off'; var A = ACT[tone] || ACT.off;
     if (f.preview && f.truncated) A = ACT.off;
-    var r = el('div', 'flex:none;position:relative;display:flex;gap:9px;background:linear-gradient(90deg,' + A[2] + ',rgba(255,255,255,.03) 45%);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:8px 9px 8px 12px;overflow:hidden');
+    var r = el('div', 'flex:none;position:relative;display:flex;gap:9px;background:linear-gradient(90deg,' + A[2] + ',rgba(255,255,255,.028) 45%);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:8px 9px 8px 12px;overflow:hidden;transition:border-color .15s,background-color .15s');
+    hover(r, 'border-color:rgba(255,255,255,.16);background-color:rgba(255,255,255,.03);', 'border-color:rgba(255,255,255,.07);background-color:transparent;');
     el('div', 'position:absolute;left:0;top:0;bottom:0;width:3px;background:' + A[0] + ';box-shadow:0 0 12px ' + A[0], null, r);
     el('div', 'flex:none;width:24px;height:24px;border-radius:8px;display:flex;align-items:center;justify-content:center;font:700 12px/1 ' + SANS + ';color:' + A[0] + ';background:' + A[2] + ';border:1px solid ' + A[0] + '44', A[3], r);
     var bd = el('div', 'flex:1;min-width:0', null, r);
     var top = el('div', 'display:flex;align-items:baseline;gap:6px;min-width:0', null, bd);
-    el('span', 'flex:0 1 auto;min-width:0;font-weight:700;font-size:12px;color:#e8ecf3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis', f.sender + (f.edited ? ' ✎' : ''), top);
-    if (f.group && groups.length > 1) el('span', 'flex:0 1 auto;min-width:0;max-width:96px;font:600 9.5px/1.4 ' + SANS + ';padding:0 6px;border-radius:99px;color:#bfdbfe;background:rgba(96,165,250,.14);white-space:nowrap;overflow:hidden;text-overflow:ellipsis', f.group, top);
+    el('span', 'flex:0 1 auto;min-width:0;font-weight:700;font-size:12px;color:' + TXT + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis', f.sender + (f.edited ? ' ✎' : ''), top);
+    if (f.group && groups.length > 1) el('span', 'flex:0 1 auto;min-width:0;max-width:96px;font:600 9.5px/1.4 ' + SANS + ';padding:0 6px;border-radius:99px;color:#b6e3f7;background:rgba(83,189,235,.14);white-space:nowrap;overflow:hidden;text-overflow:ellipsis', f.group, top);
     if (f.preview) el('span', 'flex:none;font:600 9.5px/1.4 ' + SANS + ';padding:0 6px;border-radius:99px;color:#fcd34d;background:rgba(245,158,11,.14)', 'preview', top);
-    f.relEl = el('span', 'margin-left:auto;flex:none;font:500 10px/1 ' + MONO + ';color:#7d8696', relTime(f.at), top);
+    f.relEl = el('span', 'margin-left:auto;flex:none;font:500 10px/1 ' + MONO + ';color:' + TXT3, relTime(f.at), top);
     f.relEl.title = f.time;
-    var tx = el('div', 'margin-top:2px;font-size:12px;color:#cfd6e2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis', f.text.replace(/\s*\n\s*/g, ' · '), bd); tx.title = f.text; tx.setAttribute('data-t', '');
+    var tx = el('div', 'margin-top:2px;font-size:12px;color:#d1d7db;white-space:nowrap;overflow:hidden;text-overflow:ellipsis', f.disp, bd); tx.title = f.text; tx.setAttribute('data-t', '');
+    f.txEl = tx; f.hk = '';
     var cw = el('div', 'display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:5px', null, bd);
-    ch.forEach(function (c) { var k = ACT[c.tone] || ACT.off; el('span', 'font:600 10.5px/1.3 ' + SANS + ';padding:2px 7px;border-radius:99px;color:' + k[1] + ';background:' + k[2] + (c.tone === 'ask' ? ';border:1px dashed ' + k[0] + '88' : ''), c.label, cw); });
+    ch.forEach(function (c) { var k = ACT[c.tone] || ACT.off; el('span', 'font:600 10.5px/1.3 ' + SANS + ';padding:2px 7px;border-radius:99px;color:' + k[1] + ';background:' + k[2] + ';border:1px ' + (c.tone === 'ask' ? 'dashed ' + k[0] + '88' : 'solid ' + k[0] + '2e'), c.label, cw); });
     if (f.preview && (f.truncated || f.missed)) el('span', 'font-size:10.5px;color:#9aa3b2', f.truncated ? 'open the group to read in full' : '+' + f.missed + ' more · open the group to read all', cw);
-    f.stEl = el('span', 'margin-left:auto;font:600 10px/1 ' + SANS + ';color:#7d8696', '', cw);
+    f.stEl = el('span', 'margin-left:auto;font:600 10px/1 ' + SANS + ';color:' + TXT3, '', cw);
     f.node = r;
     list.insertBefore(r, list.firstChild);
     while (feed.length > FEED_MAX) { var x = feed.pop(); if (x.node) x.node.remove(); }
     stateText(f);
-    if (minimized) unread++;
-    anim(r, [{ opacity: 0, transform: 'translateY(-8px) scale(.98)', filter: 'brightness(1.6)' }, { opacity: 1, transform: 'none', filter: 'none' }], { duration: 420, easing: 'cubic-bezier(.2,.8,.2,1)' });
+    if (minimized) { unread++; anim(mini, [{ transform: 'scale(1)' }, { transform: 'scale(1.06)' }, { transform: 'scale(1)' }], { duration: 360, easing: 'ease-out' }); }
+    applyFilter();
+    if (r.style.display !== 'none') anim(r, [{ opacity: 0, transform: 'translateY(-8px) scale(.98)', filter: 'brightness(1.6)' }, { opacity: 1, transform: 'none', filter: 'none' }], { duration: 420, easing: 'cubic-bezier(.2,.8,.2,1)' });
     renderAsks();
   }
-  function stateText(f) { if (f.stEl && !f.deleted) { setT(f.stEl, f.state === 'sent' ? '✓ in HotelOps' : f.state === 'copied' ? '✓ copied' : 'waiting…'); f.stEl.style.color = f.state === 'wait' ? '#7d8696' : '#86efac'; } }
+  function stateText(f) { if (f.stEl && !f.deleted) { setT(f.stEl, f.state === 'sent' ? '✓ in HotelOps' : f.state === 'copied' ? '✓ copied' : 'waiting…'); f.stEl.style.color = f.state === 'wait' ? TXT3 : ACC_L; } }
   function markFeed(id, st) { feed.forEach(function (f) { if (f.id === id) { f.state = st; stateText(f); } }); }
   // question cards: "what does 'ckd' mean?" (answered here or in HotelOps)
   var MEAN = [['co', '✓ Checked out'], ['ext', '↪ Extension'], ['lco', '⏰ Late CO'], ['note', '📝 Note / request'], ['hk', '🧹 HK status (note)'], ['ignore', 'Ignore this word']];
@@ -757,8 +873,8 @@
       var p = el('div', 'font-size:12px;line-height:1.4;color:#fde68a', null, c);
       el('b', '', q.sender || 'Someone', p); p.appendChild(document.createTextNode(' wrote "' + String(q.text).slice(0, 60) + '". What does "' + w + '" mean?'));
       var bs = el('div', 'display:flex;flex-wrap:wrap;gap:4px', null, c);
-      var noteIn = el('input', 'all:unset;box-sizing:border-box;width:100%;padding:6px 9px;border-radius:8px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.12);color:#e8ecf3;font:12px ' + SANS + ';user-select:text;-webkit-user-select:text');
-      noteIn.placeholder = 'What it stands for (optional), e.g. Vacant Dirty'; noteIn.maxLength = 60;
+      var noteIn = el('input', 'all:unset;box-sizing:border-box;width:100%;padding:6px 9px;border-radius:8px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.12);color:' + TXT + ';font:12px ' + SANS + ';user-select:text;-webkit-user-select:text');
+      noteIn.placeholder = 'What it stands for (optional), e.g. Vacant Dirty'; noteIn.maxLength = 60; keepKeys(noteIn);
       MEAN.forEach(function (mn) {
         var b = btn2(mn[1], bs, 'padding:5px 8px;font-size:11px;border-radius:99px');
         b.onclick = function () {
@@ -769,28 +885,31 @@
         };
       });
       c.appendChild(noteIn);
+      anim(c, [{ opacity: 0, transform: 'translateY(-4px)' }, { opacity: 1, transform: 'none' }], { duration: 240, easing: 'ease-out' });
     });
   }
 
   // ── Send pane rows ────────────────────────────────────────
-  var OUT_ST = { new: ['…', '#9aa3b2', 'Waiting…'], queued: ['⏳', '#fcd34d', 'Waiting'], typed: ['⌨', '#fcd34d', 'Typed — press Enter in WhatsApp'], sent: ['✓', '#86efac', 'Sent'], failed: ['✗', '#fca5a5', 'Not sent'], cancelled: ['—', '#7d8696', 'Cancelled'] };
+  var OUT_ST = { new: ['…', '#9aa3b2', 'Waiting…'], queued: ['⏳', '#fcd34d', 'Waiting'], typed: ['⌨', '#fcd34d', 'Typed — press Enter in WhatsApp'], sent: ['✓', ACC_L, 'Sent'], failed: ['✗', '#fca5a5', 'Not sent'], cancelled: ['—', TXT3, 'Cancelled'] };
   var outSig = '';
   function renderOut() {
     var sig2 = out.map(function (o) { return o.id + o.st + o.why; }).join('|') + curKey + auto;
     if (sig2 === outSig) return; outSig = sig2;
     while (outList.firstChild) outList.removeChild(outList.firstChild);
     var ls = out.slice().reverse().slice(0, 8);
-    if (!ls.length) el('div', 'padding:14px 10px;text-align:center;color:#7d8696;font-size:12px;border:1px dashed rgba(255,255,255,.1);border-radius:12px', 'Nothing to send. Type a message in HotelOps → WhatsApp → Send to WhatsApp.', outList);
+    if (!ls.length) el('div', 'padding:14px 10px;text-align:center;color:' + TXT3 + ';font-size:12px;border:1px dashed rgba(255,255,255,.1);border-radius:12px', 'Nothing to send. Type a message in HotelOps → WhatsApp → Send to WhatsApp.', outList);
     ls.forEach(function (o) {
       var s = OUT_ST[o.st] || OUT_ST.new;
-      var r = el('div', 'display:flex;gap:9px;align-items:flex-start;padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07)', null, outList);
+      var r = el('div', 'position:relative;display:flex;gap:9px;align-items:flex-start;padding:8px 10px 8px 12px;border-radius:12px;background:' + CARD + ';border:1px solid rgba(255,255,255,.07);overflow:hidden', null, outList);
+      el('div', 'position:absolute;left:0;top:0;bottom:0;width:3px;background:' + s[1] + ';opacity:.8', null, r);
       el('div', 'flex:none;width:22px;height:22px;border-radius:7px;display:flex;align-items:center;justify-content:center;font:700 11px/1 ' + SANS + ';color:' + s[1] + ';background:rgba(255,255,255,.06)', s[0], r);
       var bd = el('div', 'flex:1;min-width:0', null, r);
-      el('div', 'font-size:12px;color:#e8ecf3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis', o.text.replace(/[⁣]/g, '').replace(/\s*\n\s*/g, ' · '), bd).title = o.text.replace(/[⁣]/g, '');
+      el('div', 'font-size:12px;color:' + TXT + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis', o.text.replace(/[⁣]/g, '').replace(/\s*\n\s*/g, ' · '), bd).title = o.text.replace(/[⁣]/g, '');
       var lbl = o.st === 'queued' ? (o.why && !/^Open /.test(o.why) ? o.why : 'Open ' + (o.group || 'the group') + ' to send') : o.st === 'failed' && o.why ? 'Not sent · ' + o.why : s[2];
       el('div', 'font-size:10.5px;color:' + s[1] + ';margin-top:2px', lbl + (o.group && groups.length > 1 ? ' · ' + o.group : ''), bd);
     });
-    sendHint.textContent = auto ? 'Automatic sending is ON: messages from HotelOps are sent in the open group straight away.' : 'Messages you send from HotelOps are typed in the open group\'s message box. Press Enter in WhatsApp to send them. Nothing is sent on its own.';
+    sendHint.textContent = auto ? '⚡ Automatic sending is ON: messages from HotelOps are sent in the open group straight away.' : 'Messages you send from HotelOps are typed in the open group\'s message box. Press Enter in WhatsApp to send them. Nothing is sent on its own.';
+    sendHint.style.color = auto ? '#fcd34d' : TXT2;
   }
 
   // ── Groups pane rows ──────────────────────────────────────
@@ -799,17 +918,18 @@
     var sig2 = JSON.stringify(groups) + curKey;
     if (sig2 === gSig) return; gSig = sig2;
     while (gList.firstChild) gList.removeChild(gList.firstChild);
-    if (!groups.length) el('div', 'padding:12px;text-align:center;color:#7d8696;font-size:12px;border:1px dashed rgba(255,255,255,.1);border-radius:12px', 'No groups yet. Open your group in WhatsApp, then click "Add the open chat".', gList);
+    if (!groups.length) el('div', 'padding:12px;text-align:center;color:' + TXT3 + ';font-size:12px;border:1px dashed rgba(255,255,255,.1);border-radius:12px', 'No groups yet. Open your group in WhatsApp, then click "Add the open chat".', gList);
     groups.forEach(function (g, i) {
       var isOpen = curKey && groupMatch(g.name, curKey);
-      var r = el('div', 'display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid ' + (isOpen ? 'rgba(34,197,94,.35)' : 'rgba(255,255,255,.07)'), null, gList);
+      var r = el('div', 'display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-radius:12px;background:' + (isOpen ? 'rgba(' + ACC_RGB + ',.06)' : CARD) + ';border:1px solid ' + (isOpen ? 'rgba(' + ACC_RGB + ',.38)' : 'rgba(255,255,255,.07)'), null, gList);
       var t1 = el('div', 'display:flex;align-items:center;gap:7px;min-width:0', null, r);
-      el('span', 'flex:none;width:7px;height:7px;border-radius:50%;background:' + (isOpen ? '#22c55e' : '#6b7280') + (isOpen ? ';box-shadow:0 0 8px #22c55e' : ''), null, t1);
+      el('span', 'flex:none;width:7px;height:7px;border-radius:50%;background:' + (isOpen ? ACC : '#6b7280') + (isOpen ? ';box-shadow:0 0 8px ' + ACC : ''), null, t1);
       el('span', 'flex:1;min-width:0;font-weight:700;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis', g.name, t1).title = g.name;
-      el('span', 'flex:none;font-size:10px;color:' + (isOpen ? '#86efac' : '#9aa3b2'), isOpen ? 'open · read fully' : 'closed · latest message', t1);
-      var rm = el('button', ICONB + 'width:22px;height:22px;font-size:11px', '✕', t1); rm.type = 'button'; rm.title = 'Remove this group'; rm.setAttribute('aria-label', 'Remove ' + g.name);
+      el('span', 'flex:none;font-size:10px;color:' + (isOpen ? ACC_L : '#9aa3b2'), isOpen ? 'open · read fully' : 'closed · latest message', t1);
+      var rm = el('button', ICONB + 'width:22px;height:22px;font-size:11px', '✕', t1); rm.type = 'button'; rm.title = 'Remove this group'; rm.setAttribute('aria-label', 'Remove ' + g.name); ring2(rm);
+      hover(rm, 'background:rgba(239,68,68,.18);color:#fca5a5;', 'background:transparent;color:' + TXT2 + ';');
       rm.onclick = function () { if (confirm('Stop reading "' + g.name + '"?')) { groups.splice(i, 1); saveGroups(); render(); } };
-      var t2 = el('div', 'display:flex;align-items:center;gap:8px;font-size:11.5px;color:#aab3c2', null, r);
+      var t2 = el('div', 'display:flex;align-items:center;gap:8px;font-size:11.5px;color:' + TXT2, null, r);
       var tg = toggle(g.act !== false, t2, function (v) { g.act = v; saveGroups(); toast(g.name + ': ' + (v ? 'can change rooms' : 'log only'), 'info'); gSig = ''; render(); });
       tg.setAttribute('aria-label', 'Can change rooms in ' + g.name);
       el('span', '', g.act !== false ? 'Can change rooms (CO / LCO / EXT)' : 'Log only · rooms are not changed', t2);
@@ -823,15 +943,30 @@
   addOpenB.onclick = function () { var t = chatTitle(); if (!t) { toast('Open the group in WhatsApp first', 'warn'); return; } addGroup(t); };
   addNameB.onclick = function () { addGroup(prompt('HotelOps: the name of the WhatsApp group', '') || ''); };
 
-  // ── toast inside the window ───────────────────────────────
-  var toastT = null;
+  // ── toasts ────────────────────────────────────────────────
+  function placeToasts() {
+    var t = minimized ? mini : root; if (!t.isConnected || t.style.display === 'none') return;
+    var r = { left: t.offsetLeft, top: t.offsetTop, bottom: t.offsetTop + t.offsetHeight }, w = Math.min(300, innerWidth - 24);   // offsets: not thrown off by a running animation
+    toastHost.style.left = Math.max(12, Math.min(r.left, innerWidth - w - 12)) + 'px';
+    if (r.top > 150) { toastHost.style.top = 'auto'; toastHost.style.bottom = (innerHeight - r.top + 8) + 'px'; toastHost.style.flexDirection = 'column-reverse'; }
+    else { toastHost.style.bottom = 'auto'; toastHost.style.top = (r.bottom + 8) + 'px'; toastHost.style.flexDirection = 'column'; }
+  }
   function toast(t, tone) {
     var c = tone === 'ok' ? TONE.green : tone === 'warn' ? TONE.amber : TONE.blue;
-    toastEl.textContent = t; toastEl.style.display = 'block';
-    toastEl.style.color = c[1]; toastEl.style.background = 'rgba(14,17,25,.94)'; toastEl.style.border = '1px solid ' + c[0] + '66';
-    anim(toastEl, [{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: 'cubic-bezier(.2,.8,.2,1)' });
-    clearTimeout(toastT); toastT = setTimeout(function () { var a = anim(toastEl, [{ opacity: 1 }, { opacity: 0, transform: 'translateY(6px)' }], { duration: 200 }); if (a) a.onfinish = function () { toastEl.style.display = 'none'; }; else toastEl.style.display = 'none'; }, 3200);
-    timers.push(toastT);
+    if (!toastHost.isConnected) return;
+    placeToasts();
+    while (toastHost.children.length >= 3) toastHost.removeChild(toastHost.firstChild);
+    var e = el('div', 'pointer-events:auto;cursor:pointer;display:flex;align-items:flex-start;gap:8px;padding:9px 12px;border-radius:12px;color:' + c[1] + ';background:rgba(17,27,33,.95);border:1px solid ' + c[0] + '66;box-shadow:0 12px 30px -8px rgba(0,0,0,.75),0 0 18px -8px ' + c[0] + ';-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)', null, toastHost);
+    el('span', 'flex:none;width:7px;height:7px;margin-top:5px;border-radius:50%;background:' + c[0] + ';box-shadow:0 0 8px ' + c[0], null, e);
+    el('span', 'flex:1;min-width:0', t, e);
+    var gone = false, done = function () {
+      if (gone) return; gone = true;
+      var a = anim(e, [{ opacity: 1 }, { opacity: 0, transform: 'translateY(6px) scale(.98)' }], { duration: 200, easing: 'ease-in' });
+      if (a) a.onfinish = function () { e.remove(); }; else e.remove();
+    };
+    e.onclick = done;
+    anim(e, [{ opacity: 0, transform: 'translateY(10px) scale(.97)' }, { opacity: 1, transform: 'none' }], { duration: 240, easing: 'cubic-bezier(.2,.8,.2,1)' });
+    timers.push(setTimeout(done, tone === 'warn' ? 4500 : 3200));
   }
 
   // ── status / render ───────────────────────────────────────
@@ -851,28 +986,31 @@
     pill.style.background = c[2]; pill.style.color = c[1]; pill.style.border = '1px solid ' + c[2].replace(/[\d.]+\)$/, '.35)');
     [dot, mDot].forEach(function (d) { d.style.background = c[0]; d.style.boxShadow = '0 0 8px ' + c[0]; });
     [ring, mRing].forEach(function (d) { d.style.background = c[0]; });
+    live.style.display = tone === 'green' ? 'inline-block' : 'none';
     pulses.forEach(function (a) { try { a.cancel(); } catch (_) {} }); pulses = [];
     if (tone !== 'red') [ring, mRing].forEach(function (r) { var a = anim(r, [{ transform: 'scale(1)', opacity: 0.7 }, { transform: 'scale(2.8)', opacity: 0 }], { duration: tone === 'green' ? 1400 : 1000, iterations: Infinity, easing: 'ease-out' }); if (a) pulses.push(a); });
-    // the gold H breathes while linked
+    // the green H breathes while linked
     if (logoPulse) { try { logoPulse.cancel(); } catch (_) {} logoPulse = null; }
-    if (tone === 'green') logoPulse = anim(logo, [{ boxShadow: '0 4px 14px -3px rgba(224,178,79,.6),0 0 0 0 rgba(224,178,79,.0)' }, { boxShadow: '0 4px 18px -2px rgba(224,178,79,.85),0 0 0 6px rgba(224,178,79,.12)' }, { boxShadow: '0 4px 14px -3px rgba(224,178,79,.6),0 0 0 0 rgba(224,178,79,.0)' }], { duration: 2400, iterations: Infinity, easing: 'ease-in-out' });
-    glow.style.opacity = tone === 'green' ? '.75' : tone === 'red' ? '.25' : '.5';
+    if (tone === 'green') logoPulse = anim(logo, [{ boxShadow: '0 6px 16px -4px rgba(' + ACC_RGB + ',.6),0 0 0 0 rgba(' + ACC_RGB + ',0)' }, { boxShadow: '0 6px 20px -2px rgba(' + ACC_RGB + ',.85),0 0 0 6px rgba(' + ACC_RGB + ',.13)' }, { boxShadow: '0 6px 16px -4px rgba(' + ACC_RGB + ',.6),0 0 0 0 rgba(' + ACC_RGB + ',0)' }], { duration: 2400, iterations: Infinity, easing: 'ease-in-out' });
+    glow.style.opacity = tone === 'green' ? '.8' : tone === 'red' ? '.2' : '.45';
+    mini.style.borderColor = tone === 'green' ? 'rgba(' + ACC_RGB + ',.5)' : c[0] + '66';
     if (sweepAnim) { try { sweepAnim.cancel(); } catch (_) {} sweepAnim = null; }
     sweep.style.opacity = tone === 'green' || tone === 'blue' ? '1' : '0';
     if (tone === 'green' || tone === 'blue') sweepAnim = anim(sweep, [{ transform: 'translateX(-70px)' }, { transform: 'translateX(' + (W0 + 10) + 'px)' }], { duration: tone === 'green' ? 2600 : 1600, iterations: Infinity, easing: 'ease-in-out' });
   }
-  // counters count up
+  // counters count up (and glow for a moment when they grow)
   function countTo(e, n) {
     if (e.v === n) return; var from = e.v; e.v = n;
+    if (n > from && !minimized) anim(e.parentNode, [{ boxShadow: '0 0 0 0 rgba(' + ACC_RGB + ',0)' }, { boxShadow: '0 0 0 1px rgba(' + ACC_RGB + ',.45),0 0 16px -4px rgba(' + ACC_RGB + ',.6)' }, { boxShadow: '0 0 0 0 rgba(' + ACC_RGB + ',0)' }], { duration: 700, easing: 'ease-out' });
     if (RM || minimized || Math.abs(n - from) > 400) { setT(e, n); return; }
     var t0 = performance.now();
     (function step(t) { var k = Math.min(1, (t - t0) / 450), v = Math.round(from + (n - from) * (1 - Math.pow(1 - k, 3))); setT(e, v); if (k < 1 && e.v === n) requestAnimationFrame(step); })(t0);
   }
   var sigKey = '';
   function drawSignal() {
-    var now = Date.now(), b = bins(day.times, now), k = b.join(',') + '|' + Math.floor(now / 60000);
+    var now = Date.now(), hourly = sigV === '12h', b = hourly ? bins(day.times, now, 12, 3600000) : bins(day.times, now), k = sigV + b.join(',') + '|' + Math.floor(now / 60000);
     if (k === sigKey || minimized) return; sigKey = k;
-    var w = sig.clientWidth || (W0 - 26), h = 40, dpr = window.devicePixelRatio || 1;
+    var w = sig.clientWidth || (W0 - 26), h = 42, dpr = window.devicePixelRatio || 1;
     if (cv.width !== Math.round(w * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
     var c = cv.getContext && cv.getContext('2d'); if (!c) return;
     c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
@@ -880,24 +1018,29 @@
     var pts = [];
     b.forEach(function (v, i) {
       var x = 8 + i * (bw + gap), bh = v ? Math.max(3, (h - 20) * v / max) : 2, y = h - 5 - bh;
-      var gr = c.createLinearGradient(0, y, 0, h); gr.addColorStop(0, i === n - 1 ? 'rgba(246,210,122,.95)' : 'rgba(224,178,79,.55)'); gr.addColorStop(1, 'rgba(224,178,79,.05)');
+      var gr = c.createLinearGradient(0, y, 0, h); gr.addColorStop(0, i === n - 1 ? 'rgba(106,245,155,.95)' : 'rgba(' + ACC_RGB + ',.55)'); gr.addColorStop(1, 'rgba(' + ACC_RGB + ',.04)');
       c.fillStyle = v ? gr : 'rgba(255,255,255,.07)';
       var r = Math.min(3, bw / 2); c.beginPath(); c.moveTo(x, h - 5); c.lineTo(x, y + r); c.quadraticCurveTo(x, y, x + r, y); c.lineTo(x + bw - r, y); c.quadraticCurveTo(x + bw, y, x + bw, y + r); c.lineTo(x + bw, h - 5); c.closePath(); c.fill();
       pts.push([x + bw / 2, y]);
     });
-    c.strokeStyle = 'rgba(45,212,191,.75)'; c.lineWidth = 1.4; c.beginPath();
-    pts.forEach(function (p, i) { if (i) c.lineTo(p[0], p[1]); else c.moveTo(p[0], p[1]); }); c.stroke();
+    // a smooth line over the bars, with a soft fill under it
+    c.beginPath();
+    pts.forEach(function (p, i) { if (!i) { c.moveTo(p[0], p[1]); return; } var q = pts[i - 1], mx = (q[0] + p[0]) / 2; c.bezierCurveTo(mx, q[1], mx, p[1], p[0], p[1]); });
+    c.strokeStyle = 'rgba(83,189,235,.8)'; c.lineWidth = 1.4; c.stroke();
+    if (pts.length) { var last = pts[pts.length - 1]; c.fillStyle = '#b6e3f7'; c.beginPath(); c.arc(last[0], last[1], 2.2, 0, Math.PI * 2); c.fill(); }
     var total = b.reduce(function (s, v) { return s + v; }, 0);
-    setT(sigLbl, total + ' msg · 2 h');
+    setT(sigLbl, total + ' msg · ' + (hourly ? '12 h' : '2 h') + ' ⇄');
   }
   function render() {
     if (stopped && !root.isConnected) return;
     var s = status();
     setPulse(s[0]); setT(pillTxt, s[1]); pill.title = s[1];
     setT(sub, stopped ? 'stopped' : mode === 'linked' ? 'linked · ' + (rtt ? rtt + ' ms' : '…') : mode === 'waiting' ? 'connecting…' : mode === 'copy' ? 'no link · copy mode' : 'not linked');
-    sub.style.color = mode === 'linked' ? '#86efac' : '#8b94a5';
-    countTo(nRead, day.read); countTo(nSent, day.sent); countTo(nActs, day.acts || 0); countTo(nWait, queue.length);
-    nWait.style.color = queue.length && mode !== 'linked' ? '#fcd34d' : '#f4f6fa';
+    sub.style.color = mode === 'linked' ? ACC_L : TXT3;
+    setT(lastEl, feed.length ? 'last ' + relTime(feed[0].at) : '');
+    var waitN = queue.length + answers.length;
+    countTo(nRead, day.read); countTo(nSent, day.sent); countTo(nActs, day.acts || 0); countTo(nWait, waitN);
+    nWait.style.color = waitN && mode !== 'linked' ? '#fcd34d' : '#f4f6fa';
     setT(empty, !groups.length ? 'Open your group in WhatsApp, then Groups → Add the open chat.' : !curKey ? 'Open "' + groups[0].name + '"' + (groups.length > 1 ? ' (or another listed group)' : '') + '. New messages show here.' : 'Watching… new messages show here.');
     if (mode === 'linked') { setT(connB, '✓ Connected · show HotelOps'); connB.title = 'Linked to HotelOps. Keep the HotelOps tab open.'; }
     else if (mode === 'waiting') { setT(connB, 'Connecting… (log in there if it asks)'); connB.title = 'Waiting for the HotelOps tab.'; }
@@ -908,12 +1051,13 @@
     badge('feed', nAsk); badge('send', out.filter(function (o) { return o.st === 'typed' || o.st === 'queued'; }).length || (sendBadge ? sendBadge : 0)); badge('groups', 0); badge('settings', 0);
     var mb = unread + nAsk; mBadge.style.display = mb ? 'inline-block' : 'none'; setT(mBadge, mb > 99 ? '99+' : mb);
     setT(mTxt, 'HotelOps · ' + (mode === 'linked' ? 'linked' : s[1].split(' · ')[0]) + (queue.length && mode !== 'linked' ? ' · ' + queue.length + ' waiting' : ''));
+    setT(mStats, '◉' + day.read + ' ⚡' + (day.acts || 0));
     renderOut(); renderGroups(); drawSignal();
   }
   function relTick() { var n = Date.now(); feed.forEach(function (f) { if (f.relEl) setT(f.relEl, relTime(f.at, n)); }); }
 
   // ── minimize / drag / stop ────────────────────────────────
-  function place(e) { var p = LS.get('ho_wa_pos', null); if (p && p.left >= 0 && p.top >= 0) { e.style.left = Math.max(4, Math.min(p.left, innerWidth - 120)) + 'px'; e.style.top = Math.max(4, Math.min(p.top, innerHeight - 50)) + 'px'; e.style.bottom = 'auto'; } else { e.style.left = '16px'; e.style.top = 'auto'; e.style.bottom = '16px'; } }
+  function place(e) { var p = LS.get('ho_wa_pos', null); if (p && p.left >= 0 && p.top >= 0) { var w = e.offsetWidth || 120, h = e.offsetHeight || 50; e.style.left = Math.max(4, Math.min(p.left, innerWidth - w - 4)) + 'px'; e.style.top = Math.max(4, Math.min(p.top, innerHeight - h - 4)) + 'px'; e.style.bottom = 'auto'; } else { e.style.left = '16px'; e.style.top = 'auto'; e.style.bottom = '16px'; } }
   function setMin(on, quick) {
     minimized = !!on; LS.set('ho_wa_min', minimized);
     if (!on) unread = 0;
@@ -921,7 +1065,7 @@
       root.style.display = on ? 'none' : 'block'; mini.style.display = on ? 'inline-flex' : 'none';
       place(on ? mini : root);
       if (!quick) anim(on ? mini : root, [{ opacity: 0, transform: 'translateY(8px) scale(' + (on ? '.8' : '.94') + ')' }, { opacity: 1, transform: 'none' }], { duration: on ? 260 : 300, easing: 'cubic-bezier(.2,.9,.25,1.15)' });
-      sigKey = ''; render();
+      sigKey = ''; render(); placeToasts();
     };
     var a = quick ? null : anim(on ? root : mini, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(6px) scale(.94)' }], { duration: 150, easing: 'ease-in' });
     if (a) a.onfinish = show; else show();
@@ -933,7 +1077,8 @@
       if (e.button !== 0 || (handle !== target && e.target.closest('button'))) return;
       var r = target.getBoundingClientRect(); d = { dx: e.clientX - r.left, dy: e.clientY - r.top, x0: e.clientX, y0: e.clientY, moved: false };
       try { handle.setPointerCapture(e.pointerId); } catch (_) {}
-      if (handle !== target) { handle.style.cursor = 'grabbing'; e.preventDefault(); }
+      if (handle !== target) e.preventDefault();
+      handle.style.cursor = 'grabbing';
     });
     handle.addEventListener('pointermove', function (e) {
       if (!d) return;
@@ -942,25 +1087,39 @@
       var w = target.offsetWidth, h = target.offsetHeight;
       var x = Math.max(4, Math.min(innerWidth - w - 4, e.clientX - d.dx)), y = Math.max(4, Math.min(innerHeight - Math.min(h, 80), e.clientY - d.dy));
       target.style.left = x + 'px'; target.style.top = y + 'px'; target.style.bottom = 'auto';
+      placeToasts();
     });
     var end = function () {
-      if (!d) return; var moved = d.moved; d = null; handle.style.cursor = handle === target ? 'pointer' : 'grab';
+      if (!d) return; var moved = d.moved; d = null; handle.style.cursor = 'grab';
       if (moved) { var r = target.getBoundingClientRect(); LS.set('ho_wa_pos', { left: Math.round(r.left), top: Math.round(r.top) }); }
       else if (onClick) onClick();
     };
-    handle.addEventListener('pointerup', end); handle.addEventListener('pointercancel', function () { d = null; });
+    handle.addEventListener('pointerup', end); handle.addEventListener('pointercancel', function () { d = null; handle.style.cursor = 'grab'; });
   }
   dragger(head, root, null);
   dragger(mini, mini, function () { setMin(false); });
-  function resetPos() { LS.set('ho_wa_pos', null); place(root); place(mini); }
+  mini.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setMin(false); } });
+  function resetPos() { LS.set('ho_wa_pos', null); place(root); place(mini); placeToasts(); }
   head.addEventListener('dblclick', function (e) { if (e.target.closest('button')) return; resetPos(); });
   posB.onclick = resetPos;
+  // Alt+H: show / hide (only with Alt alone, so WhatsApp's own shortcuts keep working)
+  function onKey(e) {
+    if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.repeat) return;
+    if (e.code !== 'KeyH' && !/^[hH˙]$/.test(e.key || '')) return;
+    e.preventDefault(); e.stopPropagation();
+    setMin(!minimized);
+    if (!minimized) { try { root.focus({ preventScroll: true }); } catch (_) {} }
+  }
+  root.tabIndex = -1; root.style.outline = 'none';
+  window.addEventListener('keydown', onKey, true);
+  var onResize = function () { placeToasts(); };
+  window.addEventListener('resize', onResize);
 
   connB.onclick = function () { if (mode === 'copy') copyNew(); else connect(); };
   cpB.onclick = function () { copyToday(); };
   xB.onclick = function () { stop(); };
 
-  document.body.appendChild(root); document.body.appendChild(mini);
+  document.body.appendChild(root); document.body.appendChild(mini); document.body.appendChild(toastHost);
 
   var deb = null, iv1 = 0, iv2 = 0, iv3 = 0;
   function stop(now) {
@@ -968,8 +1127,11 @@
     try { obs && obs.disconnect(); } catch (_) {}
     timers.forEach(clearTimeout); clearInterval(iv1); clearInterval(iv2); clearInterval(iv3); clearTimeout(deb);
     window.removeEventListener('message', onMsg);
+    window.removeEventListener('keydown', onKey, true);
+    window.removeEventListener('resize', onResize);
     window.__hoWa = null;
     [glowAnim, logoPulse, sweepAnim].concat(pulses).forEach(function (a) { try { a && a.cancel(); } catch (_) {} });
+    toastHost.remove();
     if (now === true || RM) { root.remove(); mini.remove(); return; }
     render(); mini.remove();
     var a = anim(root, [{ opacity: 1, transform: 'none' }, { opacity: 1, transform: 'none', offset: .6 }, { opacity: 0, transform: 'translateY(10px) scale(.96)' }], { duration: 700, easing: 'ease-in', fill: 'forwards' });
@@ -978,7 +1140,7 @@
   }
   obs = new MutationObserver(function (recs) {
     // our own window changing is not news; only the open chat and the chat list matter
-    if (!recs.some(function (r) { var t = r.target; if (!t || root.contains(t) || mini.contains(t)) return false; var e = t.nodeType === 1 ? t : t.parentElement; return !!(e && e.closest && e.closest('#main, #pane-side')); })) return;
+    if (!recs.some(function (r) { var t = r.target; if (!t || root.contains(t) || mini.contains(t) || toastHost.contains(t)) return false; var e = t.nodeType === 1 ? t : t.parentElement; return !!(e && e.closest && e.closest('#main, #pane-side')); })) return;
     if (deb) return;                                  // already planned: read within 250 ms, never pushed back by more changes
     deb = setTimeout(function () { deb = 0; scan(); }, 250);
   });
@@ -992,10 +1154,11 @@
 
   // ── hello ─────────────────────────────────────────────────
   try {
-    console.log('%c H %c HotelOps WhatsApp reader is running ✓ ', 'background:linear-gradient(135deg,#f6d27a,#e0b24f);color:#1a1408;font:800 14px Georgia,serif;padding:4px 7px;border-radius:6px 0 0 6px', 'background:#10131b;color:#86efac;font:700 13px system-ui,sans-serif;padding:5px 10px;border-radius:0 6px 6px 0');
-    console.log('%c1. Open your group in WhatsApp, then click "Connect HotelOps" in the window at the bottom left.\n2. Keep the HotelOps tab open. It reads your groups and only sends what you send from HotelOps. To stop, click ✕ in the window (or reload WhatsApp).', 'color:#9aa3b2;font:12px system-ui,sans-serif;line-height:1.6');
+    console.log('%c H %c HotelOps WhatsApp reader is running ✓ ', 'background:linear-gradient(135deg,#6af59b,#25d366);color:#04210f;font:800 14px Georgia,serif;padding:4px 7px;border-radius:6px 0 0 6px', 'background:#111b21;color:#8af0b4;font:700 13px system-ui,sans-serif;padding:5px 10px;border-radius:0 6px 6px 0');
+    console.log('%c1. Open your group in WhatsApp, then click "Connect HotelOps" in the window at the bottom left.\n2. Keep the HotelOps tab open. It reads your groups and only sends what you send from HotelOps. To stop, click ✕ in the window (or reload WhatsApp).\n3. Alt+H shows or hides the window.', 'color:#9aa3b2;font:12px system-ui,sans-serif;line-height:1.6');
   } catch (_) {}
   setTab(LS.get('ho_wa_tab', 'feed') || 'feed');
+  applyFilter();
   render(); scan();
   glowAnim = anim(glow, [{ backgroundPosition: '0% 50%' }, { backgroundPosition: '100% 50%' }, { backgroundPosition: '0% 50%' }], { duration: 9000, iterations: Infinity, easing: 'linear' });
   if (LS.get('ho_wa_min', false)) setMin(true, true);

@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 344, items: [
+    '💚 New WhatsApp reader look: a dark green glass window with a live "connected" light, counters (read today, acted, sent, waiting), an activity graph, search and filters in the feed, colour labels for CO / LCO / EXT / notes, a small pill you can drag anywhere, and Alt+H to show or hide it. Paste the console line again in WhatsApp Web to get it.',
+  ] },
   { v: 343, items: [
     '🔎 WhatsApp: "CO", "LCO" or "EXT" for a room that is not on today\'s Departures — HotelOps now looks for the room in Arrivals, the in-house list and the In-house tally. Found → it adds the room to Departures and does it (Undo takes it off again). Not found → it tells you "room not found".',
   ] },
