@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 341, items: [
+    '📷 Roster pictures: the reader now handles rosters that start with last week\'s Sunday before the names, the first hotel name in the title box, employee numbers before names, and white writing on red leave cells (AL, SL). A misread time is marked "?" for you to check.',
+  ] },
   { v: 340, items: [
     '☀️ Roster: two at the front desk every morning (09:00 – 12:00), the busiest time. Bell boys don\'t count. (⚖️ Rules → "Two at the desk every morning".)',
     '🏨 Every hotel can use every hotel\'s shifts (a 09:00 - 18:00 at Mercure is possible at Ibis and Adagio too), so spare people go on another shift instead of doubling up. (⚖️ Rules → "Same shifts in every hotel".)',

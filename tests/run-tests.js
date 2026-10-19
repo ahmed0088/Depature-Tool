@@ -1850,5 +1850,35 @@ console.log('\nWhatsApp × Ops Brain');
   check('room notes: parts of the day', ['04:10', '09:00', '12:00', '18:30', '22:00', ''].map(N.dpnPart), ['Night', 'Morning', 'Afternoon', 'Evening', 'Night', 'No time']);
 }
 
+// ── Roster picture (roster-ocr.js): the on-device reader's pure helpers ──
+{
+  console.log('\nRoster picture');
+  const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} }, fbSet() {}, showToast() {}, escapeHtml: x => String(x),
+               document: { addEventListener() {}, getElementById() { return null; }, querySelectorAll() { return []; }, querySelector() { return null; } }, window: {}, setTimeout: () => 0, setInterval: () => 0, clearTimeout() {}, navigator: {} };
+  vm.createContext(sb);
+  for (const f of ['roster.js', 'roster-ocr.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sb, { filename: f });
+  const run = js => vm.runInContext(js, sb);
+  // a made-up Excel roster: "18-Oct / Sun" (last week's Sunday) before "Employee Name", then 19–25 Oct
+  sb.H = [['18-Oct', 'Employee Name', '19-Oct', '20-Oct', '21-Oct', '22-Oct', '23-Oct', '24-Oct', '25-Oct'], ['Sun', '', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']];
+  check('picture: a day column before the names is last week, the names column after it, then 7 days', run('JSON.stringify(_roOcrLayout(H, 9))'), JSON.stringify({ name: 1, days: [2, 3, 4, 5, 6, 7, 8], prev: [0] }));
+  check('picture: "Employee Name" misread: the first column with no date holds the names', run(`JSON.stringify(_roOcrLayout([['18-Oct', 'Emp|oyee', '19-Oct', '20-Oct', '21-Oct'], ['Sun', '', 'Mon', 'Tue', 'Wed']], 5))`), JSON.stringify({ name: 1, days: [2, 3, 4], prev: [0] }));
+  check('picture: the usual layout (names first) is unchanged', run(`JSON.stringify(_roOcrLayout([['Employee Name', '5 Oct', '6 Oct', '7 Oct', '8 Oct']], 5))`), JSON.stringify({ name: 0, days: [1, 2, 3, 4], prev: [] }));
+  check('picture: no header read at all: names first', run('JSON.stringify(_roOcrLayout([], 8))'), JSON.stringify({ name: 0, days: [1, 2, 3, 4, 5, 6, 7], prev: [] }));
+  check('picture: a "Total" column after the days is not a day', run(`_roOcrLayout([['Staff', 'Mon', 'Tue', 'Wed', 'Thu', 'Total']], 6).days.join()`), '1,2,3,4');
+  check('picture: 8 day columns: the week starts on the Monday', run(`[_roOcrWeekStart(['2026-10-18','2026-10-19','2026-10-20','2026-10-21','2026-10-22','2026-10-23','2026-10-24','2026-10-25']), _roOcrWeekStart(['2026-10-19','2026-10-20'])].join()`), '1,0');
+  check('picture: hours written any way read as "HH:MM - HH:MM"', run(`['08:00 -17:00', '19:00-04:00', '00:00 - 09:00', '15:00 - 00:00', '9:00-18:00'].map(t => _roOcrTime(t).s + (_roOcrTime(t).ok ? '' : ' ?')).join(' | ')`),
+    '08:00 - 17:00 | 19:00 - 04:00 | 00:00 - 09:00 | 15:00 - 00:00 | 09:00 - 18:00');
+  check('picture: a note after the hours is kept', run(`_roOcrTail('12:00 - 21:00  ibis') + '|' + _roOcrTail('12:00 - 21:00 - Adagio') + '|' + _roOcrTail('19:00-04:00')`), 'ibis|Adagio|');
+  check('picture: OFF, V and Training; one letter read twice is that code', run(`['0FF', 'V', 'VV', 'Training', 'ALA'].map(w => _roOcrWord(w, roAllCodes())).join()`), 'OFF,V,V,Training,ALA');
+  check('picture: "employee number - name", 6 or 7 digits', run(`[_roOcrName('001032 - Sam Lee'), _roOcrName('0001051 - Lina Park Oo')].map(n => n.id + '|' + n.name).join(' / ')`), '001032|Sam Lee / 0001051|Lina Park Oo');
+  check('picture: a hotel title, never the roster title', run(`[_roOcrGroupName('Mercure DD'), _roOcrGroupName('Cluster Roster DD 2026 - Front Office')].join('|')`), 'Mercure DD|');
+  // a misread seen three times ("18:00 - 04:00" next to many "19:00 - 04:00") is marked to check
+  check('picture: a frequent misread of an odd length is marked to check', run(`
+    const N = '19:00 - 04:00', S = '09:00 - 18:00', people = [
+      { day: [N, N, N, N, N, 'OFF', N] }, { day: [S, S, S, S, 'OFF', S, S] }, { day: [N, N, 'OFF', N, N, N, N] },
+      { day: ['00:00 - 09:00', '00:00 - 09:00', '00:00 - 09:00', 'OFF', S, S, S] }, { day: ['OFF', '18:00 - 04:00', '18:00 - 04:00', '18:00 - 04:00', N, N, N] }];
+    _roOcrFix(people); people[4].day.slice(0, 5).join(' | ') + ' // ' + people[0].day[0]`), 'OFF | 18:00 - 04:00 ? | 18:00 - 04:00 ? | 18:00 - 04:00 ? | 19:00 - 04:00 // 19:00 - 04:00');
+}
+
 console.log(`\n${pass} passed · ${fail} failed`);
 process.exit(fail ? 1 : 0);

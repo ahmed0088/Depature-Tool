@@ -168,11 +168,13 @@ function _roOcrPrep(im) {
   const x = c.getContext('2d', { willReadFrequently: true });
   x.imageSmoothingQuality = 'high';
   x.drawImage(im, 0, 0, W, H);
-  const d = x.getImageData(0, 0, W, H), a = d.data, g = new Uint8ClampedArray(W * H);
+  const d = x.getImageData(0, 0, W, H), a = d.data, g = new Uint8ClampedArray(W * H), gm = new Uint8ClampedArray(W * H);
   // the brightest colour channel: any coloured fill turns light, black or dark text stays dark
+  // (and the darkest one, kept aside: white writing on a red or blue fill only shows there)
   for (let i = 0, j = 0; i < a.length; i += 4, j++) {
     let v = (Math.max(a[i], a[i + 1], a[i + 2]) - 80) * 255 / 110;
     v = v < 0 ? 0 : v > 255 ? 255 : v;
+    gm[j] = (Math.min(a[i], a[i + 1], a[i + 2]) - 80) * 255 / 110;
     g[j] = v; a[i] = a[i + 1] = a[i + 2] = v;
   }
   x.putImageData(d, 0, 0);
@@ -181,7 +183,7 @@ function _roOcrPrep(im) {
   const x0 = c0.getContext('2d', { willReadFrequently: true }); x0.drawImage(im, 0, 0);
   const a0 = x0.getImageData(0, 0, w0, h0).data, g0 = new Uint8ClampedArray(w0 * h0);
   for (let i = 0, j = 0; i < a0.length; i += 4, j++) g0[j] = Math.max(a0[i], a0[i + 1], a0[i + 2]);
-  return { c, g, W, H, g0, w0, h0, scale };
+  return { c, g, gm, W, H, g0, w0, h0, scale };
 }
 
 // ── 2. Table lines ────────────────────────────────────────
@@ -217,7 +219,12 @@ function _roOcrGrid(P) {
   return { hr: up(hr), vr: up(_roOcrRuns(cols, 0.5)) };
 }
 /** A cell as its own small canvas (dark cells turned light), plus where its ink is. */
-function _roOcrCrop(P, l, t, r, b) {
+function _roOcrCrop(P, l, t, r, b, light) {
+  // nothing dark in the cell: maybe white writing on a coloured fill ("ALA" on red); look at the darkest channel
+  if (!light && P.gm) {
+    const k = _roOcrCrop(P, l, t, r, b, true); if (!k.empty) return k;
+    const m = _roOcrCrop(Object.assign({}, P, { g: P.gm }), l, t, r, b, true); return m.empty ? k : m;
+  }
   const w = Math.max(1, r - l), h = Math.max(1, b - t);
   const c = document.createElement('canvas'); c.width = w + 16; c.height = h + 16;
   const x = c.getContext('2d');
@@ -262,10 +269,13 @@ function _roOcrTail(t) {
   const m = String(t || '').replace(/[Oo](?=\d)|(?<=\d)[Oo]/g, '0').match(_RO_TIME);
   return m ? String(t).slice(m.index + m[0].length).replace(/^[\s\-–|:.,]+/, '').replace(/[|\[\]{}]/g, '').trim() : '';
 }
-function _roOcrWord(t) {
+function _roOcrWord(t, codes) {
   let s = String(t || '').replace(/[|\[\]{}_]/g, ' ').replace(/\s+/g, ' ').trim();
   if (/^[0O]FF$/i.test(s)) return 'OFF';
   if (/^[A-Z0-9]{1,5}$/i.test(s)) s = s.toUpperCase().replace(/0/g, 'O');
+  // one big letter alone in a cell is often read twice ("V" → "VV"): the roster's one-letter code
+  const k = codes || {}, d = s.match(/^([A-Z])\1{1,2}$/);
+  if (d && k[d[1]] && !k[s]) return d[1];
   return s.replace(/\s*-\s*/g, ' - ');
 }
 /** The cell at half size (white border kept). */
@@ -304,7 +314,7 @@ async function _roOcrCell(wd, wf, crop) {
     const tail = _roOcrTail(B.text);
     return t.s + (tail ? ' - ' + tail : '') + (t.ok && !(_roOcrStrict && B.confidence < 75 && !(ta && ta.ok && A.confidence >= 75)) ? '' : ' ?');
   }
-  const w = _roOcrWord(B.text);
+  const w = _roOcrWord(B.text, roAllCodes());
   // in a photo a word must be a code the roster uses (OFF, SL, ALA…) or be read with confidence
   const known = _roOcrStrict && Object.keys(roAllCodes()).includes(w.toUpperCase());
   if (!/[a-z0-9]/i.test(w)) return '?';
@@ -332,6 +342,30 @@ function _roOcrDates(cells, hint) {
   }
   return null;
 }
+/** Which column holds the names and which hold the days, from the header rows (one array of cell
+ *  texts per header row, every column). Some rosters start with the last day of the week before
+ *  ("18-Oct / Sun | Employee Name | 19-Oct … 25-Oct"): a day column in front of the names is that
+ *  day, not part of this week. Returns { name, days: [column numbers], prev: [column numbers] }. */
+function _roOcrLayout(heads, n) {
+  const all = Array.from({ length: n }, (_, c) => (heads || []).map(h => String((h || [])[c] || '')));
+  const dayLike = all.map(v => v.some(_roOcrHeadLike));
+  let name = all.findIndex(v => v.some(t => /employee|name|staff|team member/i.test(t)));
+  // no "Name" read in the header: the first column with no date or day name in it
+  if (name < 0) name = dayLike.some(Boolean) ? dayLike.findIndex(d => !d) : 0;
+  if (name < 0 || name >= n - 1) name = 0;
+  let days = []; for (let c = name + 1; c < n; c++) days.push(c);
+  // a column after the last day ("Total hours"): not a day
+  if (days.filter(c => dayLike[c]).length >= 3) { let last = days.length - 1; while (last > 0 && !dayLike[days[last]]) last--; days = days.slice(0, last + 1); }
+  const prev = []; for (let c = 0; c < name; c++) if (dayLike[c]) prev.push(c);
+  return { name, days, prev };
+}
+/** More than 7 day columns: the week is the 7 days from a Monday (or the first 7).
+ *  dates: one ISO date per day column. Returns the index of the first day of the week. */
+function _roOcrWeekStart(dates) {
+  if (!dates || dates.length <= 7) return 0;
+  for (let i = 0; i + 7 <= dates.length; i++) if (roDate(dates[i]).getDay() === 1) return i;
+  return 0;
+}
 function _roOcrSim(a, b) {
   a = String(a).toLowerCase().replace(/[^a-z]/g, ''); b = String(b).toLowerCase().replace(/[^a-z]/g, '');
   if (!a || !b) return 0;
@@ -340,7 +374,7 @@ function _roOcrSim(a, b) {
   for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
   return 1 - d[a.length][b.length] / Math.max(a.length, b.length);
 }
-/** "001032 - Ali Zama Mirza" → { id, name }, spelled as the team already knows it. */
+/** "001032 - Sam Lee" → { id, name }, spelled as the team already knows it. */
 function _roOcrName(raw) {
   let s = String(raw || '').replace(/[|\[\]{}_]/g, ' ').replace(/\s+/g, ' ').trim(), id = '';
   // the employee number in front; letters a picture often mixes up with digits are read as those digits
@@ -414,33 +448,50 @@ async function roOcrRead(im, hint, onStep) {
     // a hotel name above the table (top-left), then each band
     const bandH = med(lines.filter(x => !x.bar).map(x => x.bot - x.top));
     let group = '';
-    if (G.hr[0][0] > bandH * 0.6) {
-      // above the first line: the hotel's name, maybe with "Employee Name" and the like under it
-      await wf.setParameters({ tessedit_pageseg_mode: '6' });
-      const top = await read(wf, cols[0].l, 0, cols[0].r, G.hr[0][0]);
-      await wf.setParameters({ tessedit_pageseg_mode: '7' });
-      group = top.split('\n').map(_roOcrGroupName).find(Boolean) || '';
-      group = _roOcrKnownGroup(group) || group;
-    }
+    const titleAbove = G.hr[0][0] > bandH * 0.6;
     step(++done, total, 'Reading the table…');
     const people = [], heads = [];
-    let seenPerson = false;
+    let seenPerson = false, lay = null;
+    const cell = (c, ln) => _roOcrCrop(P, cols[c].l + pad, ln.top + pad, cols[c].r - pad, ln.bot - pad);
+    // the columns, once the header is read; then the hotel's name above the table (top-left, over the names)
+    const layout = async () => {
+      if (lay) return;
+      lay = _roOcrLayout(heads, cols.length);
+      if (!titleAbove || group) return;
+      await wf.setParameters({ tessedit_pageseg_mode: '6' });
+      for (const [a, b] of [[lay.name, lay.name], [0, lay.name], [0, 0]]) {
+        const top = await read(wf, cols[a].l, 0, cols[b].r, G.hr[0][0]);
+        const g = top.split('\n').map(_roOcrGroupName).find(Boolean);
+        if (g) { group = _roOcrKnownGroup(g) || g; break; }
+      }
+      await wf.setParameters({ tessedit_pageseg_mode: '7' });
+    };
     for (const ln of lines) {
-      if (ln.bar) { const t = _roOcrGroupName(await read(wf, cols[0].l, ln.top - 2, Math.max(cols[0].r, cols[1] ? cols[1].r : cols[0].r), ln.bot + 2)); if (t) group = _roOcrKnownGroup(t) || t; step(++done, total); continue; }
-      const nameRaw = await read(wf, cols[0].l, ln.top, cols[0].r, ln.bot);
-      step(++done, total);
-      const day = [];
+      if (ln.bar) {
+        if (heads.length) await layout();
+        // the bar's title is written over the names (and maybe a little further)
+        const nc = lay ? lay.name : 0, right = cols[Math.min(cols.length - 1, nc + (lay ? 0 : 1))].r;
+        const t = _roOcrGroupName(await read(wf, cols[0].l, ln.top - 2, right, ln.bot + 2)); if (t) group = _roOcrKnownGroup(t) || t; step(++done, total); continue;
+      }
+      let nameRaw = '', day = [];
       if (!seenPerson) {
-        // header lines: read in full (dates, day names)
-        for (let c = 1; c < cols.length; c++) { day.push(await read(wf, cols[c].l, ln.top, cols[c].r, ln.bot)); step(++done, total); }
-        const looksHead = day.filter(_roOcrHeadLike).length >= Math.ceil(day.length / 2);
-        if (looksHead) { heads.push(day); continue; }
+        // header lines: every column read in full (dates, day names, "Employee Name")
+        const all = [];
+        for (let c = 0; c < cols.length; c++) { all.push(await read(wf, cols[c].l, ln.top, cols[c].r, ln.bot)); step(++done, total); }
+        if (all.filter(_roOcrHeadLike).length >= Math.max(2, Math.ceil((cols.length - 1) / 2))) { heads.push(all); continue; }
         // a title line above the dates ("Adagio GD | Cluster Roster …"): the hotel's name, no hours
-        if (!day.some(v => _roOcrTime(v)) && _roOcrGroupName(nameRaw) && !/\d{3}/.test(nameRaw)) { group = _roOcrGroupName(nameRaw); continue; }
+        // (a title spans the row: most of its cells are empty, unlike a person's week)
+        const tl = !all.some(v => _roOcrTime(v)) && !all.some(v => /\d{3}/.test(v)) && all.filter(Boolean).length <= Math.max(2, cols.length / 3) && all.map(_roOcrGroupName).find(Boolean);
+        if (tl) { group = _roOcrKnownGroup(tl) || tl; continue; }
+        // the first person: now we know which column has the names and which the days
+        await layout();
+        nameRaw = all[lay.name];
         // not a header after all: re-read its cells the careful way
-        for (let c = 1; c < cols.length; c++) { const cr = _roOcrCrop(P, cols[c].l + pad, ln.top + pad, cols[c].r - pad, ln.bot - pad); day[c - 1] = await _roOcrCell(wd, wf, cr); }
+        for (const c of lay.days) day.push(await _roOcrCell(wd, wf, cell(c, ln)));
       } else {
-        for (let c = 1; c < cols.length; c++) { const cr = _roOcrCrop(P, cols[c].l + pad, ln.top + pad, cols[c].r - pad, ln.bot - pad); day.push(await _roOcrCell(wd, wf, cr)); step(++done, total); }
+        nameRaw = await read(wf, cols[lay.name].l, ln.top, cols[lay.name].r, ln.bot);
+        step(++done, total);
+        for (const c of lay.days) { day.push(await _roOcrCell(wd, wf, cell(c, ln))); step(++done, total); }
       }
       const nm = _roOcrName(nameRaw);
       if (!nm.name || !/[a-z]{2,}/i.test(nm.name) || !day.some(Boolean)) { const gName = _roOcrGroupName(nameRaw); if (gName && !day.some(Boolean)) group = _roOcrKnownGroup(gName) || gName; continue; }
@@ -455,12 +506,17 @@ async function roOcrRead(im, hint, onStep) {
       const g = (group && (_roOcrKnownGroup(group) || (!_roOcrGroups().length && group))) || (nm.known && nm.known.group) || group;
       people.push({ nm, day, group: g });
     }
+    if (!lay) lay = _roOcrLayout(heads, cols.length);
     let dates = null;
-    for (const h of heads) { dates = _roOcrDates(h, hint); if (dates) break; }
-    if (!dates) dates = Array.from({ length: cols.length - 1 }, (_, k) => roAdd(hint, k));
+    for (const h of heads) { dates = _roOcrDates(lay.days.map(c => h[c]), hint); if (dates) break; }
+    if (!dates) dates = lay.days.map((_, k) => roAdd(hint, k));
+    // more than a week of day columns: keep the 7 days from the Monday
+    const w0 = _roOcrWeekStart(dates);
+    if (dates.length > 7) { dates = dates.slice(w0, w0 + 7); people.forEach(p => { p.day = p.day.slice(w0, w0 + 7); }); }
+    const extra = lay.prev.length || w0 > 0 ? ` The day column before the names (${roDayLbl(roAdd(dates[0], -1))}) is the last day of the week before, so it was left out.` : '';
     const small = im.naturalWidth < 900 ? ' The picture is small, so more cells may need checking; the original full-size picture reads best.' : '';
     const photo = st ? ' It was a photo taken at an angle, so it was straightened first; anything it wasn\'t sure of is marked to check.' : '';
-    return _roOcrRes(people, dates, 'Read on this device from the table lines. Check it against the picture before saving.' + photo + small);
+    return _roOcrRes(people, dates, 'Read on this device from the table lines. Check it against the picture before saving.' + extra + photo + small);
   } finally { wd.terminate(); wf.terminate(); }
 }
 
@@ -482,7 +538,11 @@ function _roOcrFix(people) {
     if (!v || v === '?') return v;
     const flagged = /\?$/.test(v), x = split(v);
     if (x.t) {
-      if (tCnt[x.t] >= 3 && x.ok && !(_roOcrStrict && !usualDur.has(dur(x.t)))) return v;   // (in a photo the same misread repeats: its length must be usual too)
+      if (tCnt[x.t] >= 3 && x.ok && !(_roOcrStrict && !usualDur.has(dur(x.t)))) {   // (in a photo the same misread repeats: its length must be usual too)
+        // seen often but an odd length, one digit away from a usual shift ("18:00 - 04:00" next to many "19:00 - 04:00"): check it
+        const odd = usualDur.size && !usualDur.has(dur(x.t)) && commonT.some(c => c !== x.t && lev(c, x.t) <= 1 && usualDur.has(dur(c)) && tCnt[c] > tCnt[x.t] * 2);
+        return odd && !flagged ? v + ' ?' : v;
+      }
       const near = commonT.filter(c => c !== x.t && lev(c, x.t) <= 1);
       const normal = usualDur.has(dur(x.t)) && x.ok;
       const usualNear = near.filter(c => usualDur.has(dur(c)));
@@ -546,17 +606,26 @@ async function _roOcrNoLines(P, wf, hint, step) {
   let head = null, best = 0;
   rows.slice(0, 8).forEach(r => { const k = r.w.filter(w => roParseDate(w.text, hint) || _RO_DAYNAME.test(w.text)).length; if (k > best) { best = k; head = r; } });
   if (!head || best < 3) throw new Error('Couldn\'t find the days in this picture. A screenshot of the roster table reads best.');
-  const hw = head.w.filter(w => roParseDate(w.text, hint) || _RO_DAYNAME.test(w.text));
+  let hw = head.w.filter(w => roParseDate(w.text, hint) || _RO_DAYNAME.test(w.text));
+  // a day written before the names ("18-Oct | Employee Name | 19-Oct …") is the last day of the week before
+  const nameW = rows.slice(0, 8).flatMap(r => r.w).find(w => /^(employee|name|staff)$/i.test(w.text.trim()));
+  let nameL = -1e9;   // names start right of that day
+  if (nameW && hw.filter(w => w.bbox.x0 > nameW.bbox.x1).length >= 3) { const pre = hw.filter(w => w.bbox.x1 < nameW.bbox.x0); if (pre.length) nameL = Math.max(...pre.map(w => w.bbox.x1)); hw = hw.filter(w => w.bbox.x0 > nameW.bbox.x1); }
+  let dates = _roOcrDates(hw.map(w => w.text), hint);
+  if (dates && dates.length > 7) { const i = _roOcrWeekStart(dates); hw = hw.slice(i, i + 7); dates = dates.slice(i, i + 7); }
   const centers = hw.map(w => (w.bbox.x0 + w.bbox.x1) / 2);
   const gap = (centers[centers.length - 1] - centers[0]) / Math.max(1, centers.length - 1);
-  const dates = _roOcrDates(hw.map(w => w.text), hint) || centers.map((_, k) => roAdd(hint, k));
+  if (!dates) dates = centers.map((_, k) => roAdd(hint, k));
   const people = [];
   let group = '';
   rows.filter(r => r.y > head.y + hMed).forEach(r => {
-    const name = r.w.filter(w => (w.bbox.x0 + w.bbox.x1) / 2 < centers[0] - gap / 2).map(w => w.text).join(' ');
+    const nw = r.w.filter(w => (w.bbox.x0 + w.bbox.x1) / 2 < centers[0] - gap / 2 && (w.bbox.x0 + w.bbox.x1) / 2 > nameL);
+    // the day before's own cell can run past its header: drop its hours or code in front of the name
+    if (nameL > -1e9) while (nw.length && (/^[\d.\-–]*:[\d:.\-–]*$|^[-–]+$/.test(nw[0].text) || roAllCodes()[nw[0].text.toUpperCase()])) nw.shift();
+    const name = nw.map(w => w.text).join(' ');
     const day = centers.map(() => []);
     r.w.forEach(w => { const cx = (w.bbox.x0 + w.bbox.x1) / 2; if (cx < centers[0] - gap / 2) return; let k = 0, d = 1e9; centers.forEach((c, i) => { if (Math.abs(c - cx) < d) { d = Math.abs(c - cx); k = i; } }); if (d < gap * 0.6) day[k].push(w); });
-    const vals = day.map(ws => { if (!ws.length) return ''; const t = ws.map(w => w.text).join(' '), conf = Math.min(...ws.map(w => w.confidence)); const tm = _roOcrTime(t); const v = tm ? tm.s + (_roOcrTail(t) ? ' - ' + _roOcrTail(t) : '') : _roOcrWord(t); return v + (conf < 70 || (tm && !tm.ok) ? ' ?' : ''); });
+    const vals = day.map(ws => { if (!ws.length) return ''; const t = ws.map(w => w.text).join(' '), conf = Math.min(...ws.map(w => w.confidence)); const tm = _roOcrTime(t); const v = tm ? tm.s + (_roOcrTail(t) ? ' - ' + _roOcrTail(t) : '') : _roOcrWord(t, roAllCodes()); return v + (conf < 70 || (tm && !tm.ok) ? ' ?' : ''); });
     if (!vals.some(Boolean)) { const g = _roOcrGroupName(name); if (g) group = g; return; }
     const nm = _roOcrName(name);
     if (nm.name) people.push({ nm, day: vals, group });
