@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 348, items: [
+    '🤔 WhatsApp: "301 luggage inside", "bags still in the room" or "301 occupied" now marks the room "May extend" on Departures (the guest has not gone). "Luggage in store" or at the lobby stays a normal note.',
+  ] },
   { v: 347, items: [
     '💬 WhatsApp: talk normally, not only codes. "514 checking out in 10 mins" (late check-out at that time, or "checking out soon" if it is still before checkout time), "will leave at 3pm", "wants late checkout till 2", "514 has left", "keys returned 514", "514 and 516 checked out", "staying 2 more nights", "extend till Friday", "thinking to extend". Housekeeping messages like "514 needs towels" or "cleaning after 2pm" stay requests.',
   ] },

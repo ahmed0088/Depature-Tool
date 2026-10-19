@@ -563,11 +563,11 @@
     red:   ['#ef4444', '#fca5a5', 'rgba(239,68,68,.15)']
   };
   // per action: bar/icon colour, chip text, chip background, icon
-  var ACT = { co: [ACC, ACC_L, 'rgba(' + ACC_RGB + ',.14)', '✓'], findone: [ACC, ACC_L, 'rgba(' + ACC_RGB + ',.12)', '✓'],
+  var ACT = { maybe: ['#a78bfa', '#ddd6fe', 'rgba(139,92,246,.12)', '🤔'], co: [ACC, ACC_L, 'rgba(' + ACC_RGB + ',.14)', '✓'], findone: [ACC, ACC_L, 'rgba(' + ACC_RGB + ',.12)', '✓'],
     lco: ['#f59e0b', '#fcd34d', 'rgba(245,158,11,.14)', '⏰'], ext: ['#2dd4bf', '#99f6e4', 'rgba(45,212,191,.14)', '↪'], extending: ['#2dd4bf', '#99f6e4', 'rgba(45,212,191,.10)', '⏳'],
     fin: ['#fb923c', '#fed7aa', 'rgba(251,146,60,.14)', '🧾'], note: ['#a78bfa', '#ddd6fe', 'rgba(139,92,246,.16)', '✎'],
     ask: ['#fbbf24', '#fde68a', 'rgba(251,191,36,.12)', '?'], req: ['#53bdeb', '#b6e3f7', 'rgba(83,189,235,.14)', '📝'], bad: ['#ef4444', '#fca5a5', 'rgba(239,68,68,.15)', '⚠'], off: ['#6b7280', '#9aa3b2', 'rgba(255,255,255,.05)', '·'] };
-  var ROOM_TONES = /^(?:co|lco|ext|extending|fin|findone|bad)$/;
+  var ROOM_TONES = /^(?:co|lco|ext|extending|maybe|fin|findone|bad)$/;
   function el(tag, css, text, parent) {
     var e = document.createElement(tag);
     if (css) e.style.cssText = css;

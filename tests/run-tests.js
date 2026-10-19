@@ -1704,6 +1704,8 @@ console.log('\nWhatsApp HK bridge · message reader');
   delete sb.hoWaBrainPure;
   // talking normally: what the team writes in full sentences
   const NA = (t, now) => sb.hoWaParse(t, { now: now || '10:02' }).actions.map(a => [a.room, a.act, a.time || '', a.soon ? 'in' + a.soon : '', a.plan ? 'plan' : '', a.nights ? '+' + a.nights + 'N' : '', a.until ? '→' + a.until : '', a.act === 'note' ? a.note : ''].filter(Boolean).join(' ')).join(' | ');
+  check('wa talk: "luggage inside" → the guest might extend; luggage in store is not', ['301 luggage inside', '301 bags still in the room', '301 room occupied', '301 occupied', '301 luggage in store', '301 luggage inside?', '301 needs towels'].map(t => P(t).actions.map(a => a.act).join()),
+    ['maybe', 'maybe', 'maybe', 'maybe', 'note', 'note', 'note']);
   check('wa talk: "checking out in N min" → leaving soon, from the message\'s time, rounded up to 5 min',
     ['514 Checking out in 10mins', '514 checking out in half an hour', '514 checking out in 1 hour', '514 leaving in 10 min', '514 coming down in 5 min', '514 checking out 15 min', '514 leaving after 30 mins', '514 leaving 1hr', '514 co in 20', '514 checking out in 10-15 mins', '514 leaving in an hour and a half'].map(t => NA(t)),
     ['514 lco 10:15 in10', '514 lco 10:35 in30', '514 lco 11:05 in60', '514 lco 10:15 in10', '514 lco 10:10 in5', '514 lco 10:20 in15', '514 lco 10:35 in30', '514 lco 11:05 in60', '514 lco 10:25 in20', '514 lco 10:20 in15', '514 lco 11:35 in90']);

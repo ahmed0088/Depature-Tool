@@ -319,6 +319,10 @@ function hoWaParser() {
       const pp = extending(low); if (Object.keys(pp).length > 1) return pp;
     }
     if (/^all\s+(?:done|ok|okay|complete|completed|ready)\s*[.!✓✔✅]*$/u.test(r.toLowerCase())) return Object.assign(extending(r.toLowerCase()), { weak: true });   // only for a room that is extending
+    // "301 luggage inside", "bags still in the room", "room occupied": the guest has not gone → 🤔 might extend
+    if (!/\?|\bnot\b|\bno\b/.test(low) && (
+      /^(?:(?:his|her|their|guest'?s?)\s+)?(?:luggage|lugage|lugguage|laggage|baggage|bags?|suitcases?|belongings|things|stuff|items)\s+(?:are\s+|is\s+)?(?:still\s+)?(?:inside|in\s+(?:the\s+)?room|in\s*side|in)\s*(?:the\s+room)?\s*$/.test(low) ||
+      /^(?:room\s+)?(?:still\s+)?occupied\b/.test(low))) return { act: 'maybe', note: r };
     const dc = dictClassify(low, r); if (dc) return dc;
     if ((m = low.match(new RegExp('^' + LCO_W + '(?![a-z])\\s*(.*)$')))) {
       if (/\?|\b(?:cancel\w*|tomorrow|tomm?orr?ow|tmrw|tmr|tmw)\b/.test(m[1])) return note;
@@ -535,6 +539,7 @@ function hoWaParser() {
     if (a.act === 'lco' && a.soon) return '⏱ ' + a.room + ' out in ' + a.soon + ' min' + (a.time ? ' (≈ ' + timeLabel(a.time) + ')' : '') + wordTag(a);
     if (a.act === 'lco') return '⏰ LCO ' + a.room + (a.time ? ' ' + timeLabel(a.time) : '') + wordTag(a);
     if (a.act === 'extending') return paperChip(a.room, a) + wordTag(a);
+    if (a.act === 'maybe') return '🤔 ' + a.room + ' might extend · ' + (a.note || 'guest still inside') + wordTag(a);
     if (a.act === 'ext') return '↪ EXT ' + a.room + (a.nights ? ' +' + a.nights + 'N' : '') + (a.until ? ' → ' + untilLabel(a.until) : '') + wordTag(a);
     return '📝 note ' + a.room + wordTag(a);
   }
@@ -602,7 +607,7 @@ function safeKey(id) { return String(id == null ? '' : id).replace(/[.#$\[\]\/\x
 function hashKey(s) { s = String(s); let h = 5381, g = 7; for (let i = 0; i < s.length; i++) { h = ((h << 5) + h + s.charCodeAt(i)) | 0; g = (g * 31 + s.charCodeAt(i)) | 0; } return 'p' + (h >>> 0).toString(36) + (g >>> 0).toString(36); }
 /** results of one message → the compact r string */
 function archR(res) { return res.map(r => [r.st, r.room || '', r.d || ''].filter(Boolean).join(' ')).join(' · '); }
-const R_LABEL = { fin: '🧾 waiting for', extending: '⏳ Extending', deleted: '🗑 deleted', co: '✓ CO', lco: '⏰ LCO', ext: '↪ EXT', note: '📝 note', req: '📝 Request · room', notlist: '⚠ not on list', skip: '· skipped', none: '— no room', ignore: '— HotelOps post', log: '🗂 log only', preview: '👁 preview', ask: '❓ asked' };
+const R_LABEL = { fin: '🧾 waiting for', extending: '⏳ Extending', deleted: '🗑 deleted', co: '✓ CO', lco: '⏰ LCO', ext: '↪ EXT', note: '📝 note', req: '📝 Request · room', maybe: '🤔 might extend', notlist: '⚠ not on list', skip: '· skipped', none: '— no room', ignore: '— HotelOps post', log: '🗂 log only', preview: '👁 preview', ask: '❓ asked' };
 /** r → chips [{st, label}] */
 function archChips(r) {
   if (!r) return [{ st: 'none', label: '— not acted on (not from that day)' }];
@@ -679,7 +684,7 @@ function balInfo(r) {
 function entryKinds(l) {
   const k = new Set(), res = (l && l.res) || [];
   res.forEach(r => {
-    if (/^(?:co|lco|ext|extending|fin)$/.test(r.st)) k.add('actions');
+    if (/^(?:co|lco|ext|extending|maybe|fin)$/.test(r.st)) k.add('actions');
     if (r.guess) k.add('attention');
     if (r.st === 'note' || r.st === 'req') k.add('notes');
     if (r.st === 'notlist' || r.st === 'ask' || (r.st === 'deleted' && / check/.test(r.text || '')) || /nights not said|could not read/.test(r.text || '') || (balInfo(r) || {}).tone === 'warn') k.add('attention');
@@ -849,7 +854,7 @@ function applyOne(a, who, board) {
   if (a.guess) { res.guess = a.guess; res.w = (res.w || '') + ' · 🤔 guessed from "' + a.guess + '"'; }
   const i = board.ok ? roomIdx(a.room) : -1;
   // a note or request for a room that is not leaving today is normal (an in-house guest): logged, no warning
-  if (i < 0 && a.act === 'note') return Object.assign(res, { st: 'req', text: `Request · room ${a.room}: ${a.note}` });
+  if (i < 0 && (a.act === 'note' || a.act === 'maybe')) return Object.assign(res, { st: 'req', text: `Request · room ${a.room}: ${a.note}` });
   // not on today's departures: is the room in the hotel at all? yes → put it on the board and act, no → say so
   if (i < 0 && (board.ok || !rooms().length)) {
     const f = findRoom(a.room);
@@ -951,6 +956,16 @@ function applyOne(a, who, board) {
         : sk.length ? HP.paperChip(room, waitNow)                                         // "⏳ Extending 507 · waiting TD, RC"
         : HP.paperChip(room, {});                                                         // "⏳ Extending 507"
     }
+  } else if (a.act === 'maybe') {
+    // 🤔 "301 luggage inside": the guest has not gone, he may stay on (departures.js maybe_extend)
+    if (st === 'out') return Object.assign(res, { st: 'skip', text: `${room}: checked out already — luggage inside? check the room` });
+    if (st === 'extended') return Object.assign(res, { st: 'skip', text: `${room}: already extended` });
+    line = `[${hhmm()}] ${a.note} — might extend — ${who}`;
+    addNoteLine(r, line);
+    const was = r.intent;
+    if (!was || was === 'checkout_soon') { r.intent = 'maybe_extend'; r.intentMinutes = null; }
+    paint(); saveDeps();
+    res.st = 'maybe'; res.text = was === 'extending' || was === 'finance_hold' ? `${room} note: ${a.note}` : `🤔 ${room} might extend (${a.note})`;
   } else if (a.act === 'ext') {
     if (st === 'out') return Object.assign(res, { st: 'skip', text: `${room}: already checked out — not extended` });
     let base = null; try { base = typeof parseOperaDate === 'function' ? parseOperaDate(r.departure) : null; } catch (_) {}
@@ -1491,6 +1506,7 @@ const CSS = `
 #waCard .wa-chip.lco{color:var(--wa-lco);background:color-mix(in srgb,var(--wa-lco) 10%,transparent);border-color:color-mix(in srgb,var(--wa-lco) 35%,transparent)}
 #waCard .wa-chip.fin{color:var(--wa-lco);border-color:color-mix(in srgb,var(--wa-lco) 40%,transparent)}
 #waCard .wa-chip.extending{color:var(--wa-ext);border-style:dashed;border-color:color-mix(in srgb,var(--wa-ext) 45%,transparent)}
+#waCard .wa-chip.maybe{color:var(--wa-note);border-style:dashed;border-color:color-mix(in srgb,var(--wa-note) 45%,transparent)}
 #waCard .wa-chip.ext{color:var(--wa-ext);background:color-mix(in srgb,var(--wa-ext) 10%,transparent);border-color:color-mix(in srgb,var(--wa-ext) 35%,transparent)}
 #waCard .wa-chip.note{color:var(--wa-note);background:color-mix(in srgb,var(--wa-note) 9%,transparent);border-color:color-mix(in srgb,var(--wa-note) 32%,transparent)}
 #waCard .wa-chip.req{color:var(--text2)}
@@ -1537,7 +1553,7 @@ const CSS = `
 `;
 const esc = s => (typeof escapeHtml === 'function' ? escapeHtml(s) : String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
 const clock = t => { const m = String(t || '').match(/^(\d{1,2}):(\d{2})$/); if (!m) return t || ''; const h = +m[1]; return (h % 12 || 12) + ':' + m[2] + (h >= 12 ? ' PM' : ' AM'); };
-const ICON = { fin: '', extending: '', co: '✓', lco: '⏰', ext: '↪', note: '📝', req: '📝', notlist: '⚠', skip: '·', none: '—', ignore: '—', log: '🗂', preview: '👁', ask: '❓', deleted: '' };
+const ICON = { maybe: '🤔', fin: '', extending: '', co: '✓', lco: '⏰', ext: '↪', note: '📝', req: '📝', notlist: '⚠', skip: '·', none: '—', ignore: '—', log: '🗂', preview: '👁', ask: '❓', deleted: '' };
 const SVG_WA = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2s.2-1.1.2-1.2-.2-.2-.5-.3Z"/></svg>';
 const SVG_PH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2Z"/></svg>';
 let FILT = 'all', GFILT = '';
