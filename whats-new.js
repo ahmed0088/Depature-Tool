@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 346, items: [
+    '⏳ Departures: a guest who is extending is no longer shown as "Due" or "overdue" — he is staying. The room shows "⏳ EXTENDING · BY 6 PM" with a countdown, and turns red only if the booking, signature, TD or payment is still not done at 6 PM.',
+    '🧾 A guest who left while Finance or Reservations fix the room shows "LEFT · FINANCE" (or Reservations) instead of Due or overdue.',
+  ] },
   { v: 345, items: [
     '🏷️ WhatsApp reader: each message now also shows what HotelOps did with it — "📝 Request · 206" for a room that is staying, "⚠ 999 not found" (red, with a "Room 999 is not there" pop-up), and "＋ 512 added from arrivals" when a room was put on Departures. Paste the console line again in WhatsApp Web to get it.',
   ] },

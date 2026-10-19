@@ -91,6 +91,7 @@ function _depCheckOverdueAlerts() {
 
   const overdueNow = depRooms.filter(r => {
     const es = effectiveStatus(r);
+    if (r.intent === 'extending') return es !== 'out' && es !== 'extended' && _depIsOverdue(r);   // ⏳ paperwork not done by 6 PM
     return isLcoOverdue(r) && es !== 'out' && es !== 'extended' && es !== 'na' && es !== 'dnd';
   });
   // Rooms that resolved since the last check can re-alert if they somehow
@@ -112,7 +113,9 @@ function _depCheckOverdueAlerts() {
       });
     } catch (e) {}
   }
-  showToast(`⚠ ${newlyOverdue.length} room${newlyOverdue.length > 1 ? 's' : ''} overdue for checkout`, 'err');
+  const nx = newlyOverdue.filter(r => r.intent === 'extending');
+  if (nx.length) showToast(`⏳ 6 PM passed: ${nx.map(r => r.roomStr).join(', ')} still not extended (${nx.map(r => depExtWaiting(r).join(', ') || 'mark extended').join(' · ')})`, 'err');
+  if (newlyOverdue.length > nx.length) showToast(`⚠ ${newlyOverdue.length - nx.length} room${newlyOverdue.length - nx.length > 1 ? 's' : ''} overdue for checkout`, 'err');
 }
 
 function _depStartAlertTicker() {
@@ -541,7 +544,7 @@ function _depTimeMins(r) {
 // is treated as Late CO automatically everywhere — counts,
 // filters, badges, actions. r.status stays 'due' so Undo works.
 function effectiveStatus(r) {
-  if (r.status === 'due' && r.depTime && !r.lcoAcknowledged) {
+  if (r.status === 'due' && r.depTime && !r.lcoAcknowledged && r.intent !== 'extending' && r.intent !== 'finance_hold') {   // ⏳ extending (stays on) or 🧾 left, waiting for Finance: never late
     const depMins = _depTimeMins(r);
     if (depMins !== null) {
       const now = new Date();
@@ -558,6 +561,7 @@ function effectiveStatus(r) {
 // · Manually-set LCO with no lateTime     → not considered overdue yet
 function isLcoOverdue(r) {
   if (r && r.intent === 'finance_hold') return false;          // the guest has already left
+  if (r && r.intent === 'extending') return false;             // staying on; only the paperwork is pending
   if (effectiveStatus(r) !== 'late') return false;
   if (r.status === 'due') return true;                       // auto-promoted
   if (r.status === 'late' && r.lateTime) {
@@ -772,6 +776,9 @@ function _depIsOverdue(r) {
   const es = effectiveStatus(r);
   if (es === 'out' || es === 'extended') return false;
   if (r.intent === 'finance_hold') return false;                  // left already; only finance is pending
+  if (r.intent === 'extending') {                                  // staying on; booking / TD / payment are due by 6 PM
+    const n = new Date(); return n.getHours() * 60 + n.getMinutes() > DEP_EXTG_BY;
+  }
   if (es === 'late') return isLcoOverdue(r);
   if (r.lcoAcknowledged) return false;
   const dd = r.departure ? parseOperaDate(r.departure) : null;   // a list for a later day is not late yet
@@ -1238,6 +1245,12 @@ function _dpNice(s) {
     : s;
 }
 
+const DEP_EXTG_BY = 18 * 60;   // ⏳ an extending guest has until 6 PM to finish the booking, signature, TD and payment
+/** what an extending room still waits for: ['Booking', 'RC sign', 'TD', 'Payment'] */
+function depExtWaiting(r) {
+  return [['extBook', 'Booking'], ['extSign', 'RC sign'], ['extTd', 'TD'], ['extPay', 'Payment']].filter(([k]) => !r[k]).map(([, l]) => l);
+}
+
 function depCardHTML(r) {
   const i   = depRooms.indexOf(r);
   const bal = r.balance;
@@ -1276,8 +1289,15 @@ function depCardHTML(r) {
   } else {
     badgeText = 'DUE OUT';
   }
+  // ⏳ extending: the guest stays, the paperwork is on its way — not due, not overdue
+  // 🧾 left, waiting for Finance / Reservations to fix the room — not due either
+  const extg = r.intent === 'extending' && active, finw = r.intent === 'finance_hold' && active;
+  // short on the pill (the box under it lists the paperwork); the full story on hover
+  let badgeTip = '';
+  if (extg) { badgeText = '⏳ EXTENDING · ' + (overdue ? 'PAST 6 PM' : 'BY 6 PM'); badgeTip = depExtWaiting(r).length ? 'Waiting for ' + depExtWaiting(r).join(', ') + ' — due by 6 PM' : 'All done: mark it extended'; }
+  if (finw) { badgeText = '🧾 LEFT · ' + String(r.finWho || 'Finance').toUpperCase(); badgeTip = `Guest left${r.finAt ? ' at ' + r.finAt : ''}; waiting for ${r.finWho || 'Finance'} to fix the room`; }
 
-  let sClass = 'dp-s-' + (es || 'due');
+  let sClass = extg ? 'dp-s-due dp-s-extg' : finw ? 'dp-s-due dp-s-fin' : 'dp-s-' + (es || 'due');
   if (overdue) sClass += ' dp-overdue';
   if (depOwes(r) && active) sClass += ' dp-owing';
   if (r.intent && active && es !== 'na') sClass += ' dp-intent';
@@ -1467,18 +1487,18 @@ function depCardHTML(r) {
 
   // Time left: a small ring that fills as checkout time gets close (6 h window); red and full when overdue
   let timeHTML = '';
-  if (active) {
+  if (active && !finw) {
     const nowD = new Date(), nowM = nowD.getHours() * 60 + nowD.getMinutes();
     const fmtM = m => { const h = Math.floor(m / 60), mm = m % 60; return h ? `${h}h ${mm}m` : `${mm}m`; };
     const agreed = es === 'late' && r.status === 'late' ? _parseLcoTime(r.lateTime) : null;
-    const limit  = agreed !== null ? agreed : (_depTimeMins(r) !== null ? _depTimeMins(r) : (overdue ? 12 * 60 : null));
+    const limit  = extg ? DEP_EXTG_BY : agreed !== null ? agreed : (_depTimeMins(r) !== null ? _depTimeMins(r) : (overdue ? 12 * 60 : null));
     if (limit !== null) {
       const diff = limit - nowM;
       if (overdue && diff < 0) {
-        timeHTML = `<span class="dp-time dp-time-over" style="--p:1" title="${fmtM(-diff)} past checkout time"><i class="dp-tring" aria-hidden="true"></i><span class="dc-time-tag over">${fmtM(-diff)} over</span></span>`;
-      } else if (diff > 0 && (timeTag || agreed !== null)) {
+        timeHTML = `<span class="dp-time dp-time-over" style="--p:1" title="${fmtM(-diff)} past ${extg ? 'the 6 PM limit for the extension' : 'checkout time'}"><i class="dp-tring" aria-hidden="true"></i><span class="dc-time-tag over">${fmtM(-diff)} over</span></span>`;
+      } else if (diff > 0 && (timeTag || agreed !== null || extg)) {
         const pct = Math.max(.04, Math.min(1, 1 - diff / 360)).toFixed(3);
-        timeHTML = `<span class="dp-time${diff <= 30 ? ' dp-time-soon' : ''}" style="--p:${pct}" title="${fmtM(diff)} left to check out"><i class="dp-tring" aria-hidden="true"></i><span class="dc-time-tag ${diff <= 30 ? 'soon' : 'ok'}">${fmtM(diff)} left</span></span>`;
+        timeHTML = `<span class="dp-time${diff <= 30 ? ' dp-time-soon' : ''}" style="--p:${pct}" title="${fmtM(diff)} left ${extg ? 'to finish the extension (6 PM)' : 'to check out'}"><i class="dp-tring" aria-hidden="true"></i><span class="dc-time-tag ${diff <= 30 ? 'soon' : 'ok'}">${fmtM(diff)} left</span></span>`;
       }
     }
   }
@@ -1500,7 +1520,7 @@ function depCardHTML(r) {
         <div class="dp-meta">${metaHTML}</div>
       </div>
       <div class="dp-side">
-        <span class="dc-sbadge dp-pill">${badgeText}</span>
+        <span class="dc-sbadge dp-pill"${badgeTip ? ` title="${escapeHtml(badgeTip)}"` : ''}>${badgeText}</span>
         ${timeHTML}
       </div>
     </div>

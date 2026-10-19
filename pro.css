@@ -2365,6 +2365,7 @@ html[data-theme="opera"] #panel-departures .dp-card { --dp-glow: 7%; border-colo
 #panel-departures .dp-s-late { --c: var(--dp-late); } #panel-departures .dp-s-na { --c: var(--dp-na); }
 #panel-departures .dp-s-dnd { --c: var(--dp-dnd); } #panel-departures .dp-s-out { --c: var(--dp-out); }
 #panel-departures .dp-s-extended { --c: var(--dp-ext); } #panel-departures .dp-overdue { --c: var(--dp-over); }
+#panel-departures .dp-s-extg { --c: var(--dp-ext); } #panel-departures .dp-s-fin { --c: var(--dp-late); }   /* staying on / left, waiting: never red */
 #panel-departures .dp-card.dp-overdue { --dp-glow: 18%; border-color: color-mix(in srgb, var(--dp-over) 45%, var(--border)); }
 html[data-theme="opera"] #panel-departures .dp-card.dp-overdue { --dp-glow: 10%; border-color: color-mix(in srgb, var(--dp-over) 35%, var(--border)); }
 /* done: calm and flat, faded identity, a "✓ Done" stamp */
