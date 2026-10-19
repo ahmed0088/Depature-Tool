@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 347, items: [
+    '💬 WhatsApp: talk normally, not only codes. "514 checking out in 10 mins" (late check-out at that time, or "checking out soon" if it is still before checkout time), "will leave at 3pm", "wants late checkout till 2", "514 has left", "keys returned 514", "514 and 516 checked out", "staying 2 more nights", "extend till Friday", "thinking to extend". Housekeeping messages like "514 needs towels" or "cleaning after 2pm" stay requests.',
+  ] },
   { v: 346, items: [
     '⏳ Departures: a guest who is extending is no longer shown as "Due" or "overdue" — he is staying. The room shows "⏳ EXTENDING · BY 6 PM" with a countdown, and turns red only if the booking, signature, TD or payment is still not done at 6 PM.',
     '🧾 A guest who left while Finance or Reservations fix the room shows "LEFT · FINANCE" (or Reservations) instead of Due or overdue.',

@@ -7,6 +7,10 @@
 //  "0113 EXT 2N"     → room 0113 extended 2 nights (as the card's Extend button); also
 //                       ext/extend/extended/extension, "+2N", "ext till 22", "ext to 22 Oct"
 //  "415 change bed"  → a note on room 415 ("324 out of order", "324 CO tomorrow" are notes too)
+//  Plain talk too: "514 checking out in 10 mins" (⏱ checking out soon, or a late check-out when that is
+//  after the room's check-out time), "514 will leave at 3pm", "514 gone", "keys returned 514",
+//  "guest in 514 left", "514 staying 2 more nights", "514 thinking to extend". Times count only next
+//  to leaving words ("514 cleaning after 2pm" stays a request).
 //  Every automatic change shows an Undo (also Ctrl+Z) and is written in the
 //  room's note ("WhatsApp · Sam 9:01"), so the team sees where it came from.
 //
@@ -70,9 +74,9 @@ function hoWaParser() {
   const ROOM_NC = ROOM.replace('(\\d{3,4})', '(?:\\d{3,4})');
   const SPLIT = new RegExp('[,;]\\s*(?=' + ROOM_NC + ')', 'i');
   const SEP = /^\s*(?:,|&|\+|\/|-|\band\b|\s)\s*/i;
-  const FILLER = /^(?:done|now|already|just|also|ok|okay|pls|please|plz|thanks?|thank\s*you|thx|sir|maam|ma'am|guys|team|hk|fo|room|rooms|hotel|is|are|has|have|the|guest|guests|[✅👍✔☑🙏.!,;:\s\u{1F3FB}-\u{1F3FF}])*$/iu;
+  const FILLER = /^(?:done|now|already|just|also|ok|okay|pls|please|plz|thanks?|thank\s*you|thx|khalas|tamam|yalla|shukran|sir|maam|ma'am|guys|team|hk|fo|room|rooms|hotel|is|are|has|have|the|guest|guests|[✅👍✔☑🙏.!,;:\s\u{1F3FB}-\u{1F3FF}])*$/iu;
   // words before the command: "324 guest has checked out", "324 already CO"
-  const LEAD = /^(?:(?:the\s+)?guests?|gst|has|have|is|was|already|just|now|been|all)\s+/i;
+  const LEAD = /^(?:(?:the\s+)?guests?|gst|has|have|is|was|already|just|now|been|all|khalas|yalla)\s+/i;
   const CO_NOT = /^(?:of\b|time|at\b|by\b|after|before|in\s|on\s|date|day\b|plan|req)/i;
   const WHEN_NOT = /\?|\b(?:tomorrow|tomm?orr?ow|tmrw|tmr|tmw|tmrow|tomoro|later|pending|maybe|might|wants?|wanted|asking|asks?|asked|requests?|requested|requesting|req|not|cancel(?:led|ed)?|planning|plans?|will|soon|expected|possible|next)\b/i;
   const LCO_W = '(?:lco|l\\.c\\.o\\.?|l\\/co|l\\/c|l\\.c\\.?|lc|late\\s*(?:ch(?:ec)?k[\\s-]*out|checkout|c\\/o|c\\.o\\.?|co))';
@@ -98,13 +102,35 @@ function hoWaParser() {
     if ((m = s.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s*(\d{1,2})(?:st|nd|rd|th)?\b/))) return okDay(+m[2], MON.indexOf(m[1]) + 1);
     return '';
   }
+  // "till Friday", "until Sat": the next such day after the message's day (a week on when it is today)
+  const WDAY = /(?:^|\s|→|->)(?:(?:till|until|untill|til|to|upto|up\s*to|on|for)\s+)?(?:this\s+|next\s+|coming\s+)?(sun|mon|tues?|wed(?:nes)?|thu(?:rs?)?|fri|sat(?:ur)?)(?:day)?\b/;
+  function weekdayOf(t) {
+    const m = String(t).match(WDAY); if (!m) return '';
+    const want = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'].indexOf(m[1].slice(0, 3));
+    const d = nowDate(), n = ((want - d.getDay() + 7) % 7) || 7;
+    const x = new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+    return x.getDate() + '/' + (x.getMonth() + 1);
+  }
+  const TMRW_TOO = /^\s*(?:for\s+)?(?:tomorrow|tomm?orr?ow|tmrw|tmr|tmw)\s*(?:night\s*)?(?:also|too|as\s+well|aswell)\b/;
+  // the message's own time (hoWaParse opt.now: a Date, ms or "HH:MM" today), for "in 10 mins" and "till Friday"
+  let NOW = null;
+  const nowDate = () => (NOW instanceof Date && !isNaN(NOW) ? NOW : new Date());
+  function nowOf(v) {
+    if (v && typeof v === 'object' && typeof v.getTime === 'function') { const d = new Date(v.getTime()); return isNaN(d) ? null : d; }
+    if (typeof v === 'number' && isFinite(v)) return new Date(v);
+    const m = String(v == null ? '' : v).match(/^\s*(\d{1,2}):(\d{2})/);
+    if (m) { const d = new Date(); d.setHours(+m[1], +m[2], 0, 0); return d; }
+    return null;
+  }
   const okDay = (d, mo) => (d >= 1 && d <= 31 && (!mo || (mo >= 1 && mo <= 12)) ? d + (mo ? '/' + mo : '') : '');
   /** what comes after "ext": nights or a new date. null = not an extension we can trust (a note) */
   function extDetail(tail) {
-    const t = tail.replace(/^[\s:\-–—=>.,+]+/, ' ').replace(/[\s.!,;]+$/, '').toLowerCase();
+    const t = tail.replace(/^[\s:\-–—=>.,+]+/, ' ').replace(/[\s.!,;]+$/, '').toLowerCase().replace(/\bnext\s+(?=(?:sun|mon|tue|wed|thu|fri|sat))/, '');
     if (/\b(?:till|until|untill|til|to|upto|up\s*to)\s+(?:tomorrow|tomm?orr?ow|tmrw|tmr|tmw)\b/.test(t)) return { nights: 1 };
+    if (TMRW_TOO.test(t)) return { nights: 1 };                                    // "ext tomorrow also"
     if (WHEN_NOT.test(t)) return null;
     let m;
+    if (/^\s*(?:for\s+)?(?:one\s+)?(?:another|1\s+more|one\s+more)\s+(?:n|nt|ngt|nite|night|day)\b/.test(t)) return { nights: 1 };
     const nw = '(\\d{1,2}|' + Object.keys(NUMW).join('|') + ')';
     if ((m = t.match(new RegExp('(?:^|[\\s+])' + nw + '\\s*(?:more\\s+|extra\\s+)?(?:n|nt|nts|ngt|ngts|nite|nites|nights?|days?)\\b')))) { const n = NUMW[m[1]] || +m[1]; return n >= 1 && n <= 90 ? { nights: n } : null; }
     if ((m = t.match(/^\s*(?:for\s+)?(\d{1,2})\s*$/)) || (m = t.match(/^\s*\+\s*(\d{1,2})\b/))) {
@@ -113,6 +139,7 @@ function hoWaParser() {
     }
     const d = dayOf(t);
     if (d) return { until: d };
+    const wd = weekdayOf(t); if (wd) return { until: wd };
     if ((m = t.match(/\b(?:till|until|untill|til|to|upto|up\s*to|on|→|->)\s*(\d{1,2})(?:st|nd|rd|th)?\b/))) { const d2 = okDay(+m[1], 0); return d2 ? { until: d2 } : null; }
     return FILLER.test(t) || /^(?:stay|the\s+stay|booking|confirmed|paid|ok)?\s*$/.test(t.trim()) ? {} : null;
   }
@@ -174,8 +201,107 @@ function hoWaParser() {
   }
   /** ⏳ Extending + what the message says about the paperwork */
   function extending(t) { const p = paperOf(t) || {}; const a = { act: 'extending' }; PAPER.forEach(([k]) => { if (p[k] !== undefined) a[k] = p[k]; }); return a; }
+  // ══ Talk: the team writing normally ═════════════════════════
+  // "514 checking out in 10 mins", "514 will leave around 1:30", "514 gone", "keys returned 514",
+  // "514 staying 2 more nights", "514 thinking to extend". Only time words tied to leaving count
+  // ("514 cleaning after 2pm" stays a request).
+  const NUM_T = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
+    fifteen: 15, twenty: 20, 'twenty five': 25, thirty: 30, forty: 40, 'forty five': 45, fifty: 50 };
+  const NUM_RX = '(\\d{1,3}(?:\\.\\d)?|' + Object.keys(NUM_T).sort((x, y) => y.length - x.length).map(k => k.replace(/ /g, '[\\s-]+')).join('|') + ')';
+  const numOf = s => { s = String(s).trim().replace(/[\s-]+/g, ' '); return NUM_T[s] != null ? NUM_T[s] : +s; };
+  const ABOUT = '(?:(?:about|around|approx\\.?|approximately|aprox|like|max|maximum|abt|arnd|roughly|~)\\s*)?';
+  const T_UNIT = '(m|mn|mns|min|mins|minute|minutes|minits?|h|hr|hrs|hour|hours)';
+  const REL_RX = new RegExp('^(?:(?:in|after|within|another)\\s+)?' + ABOUT + '(?:(?:in|after|within)\\s+)?' + NUM_RX + '(?:\\s*(?:-|to|or)\\s*' + NUM_RX + ')?\\s*' + T_UNIT + '(?![a-z])(\\s+and\\s+(?:a\\s+)?half)?');
+  /** "in 10 mins", "15 min", "in half an hour", "1hr", "in 10-15 min", "after 30 mins", "in 5" → minutes (0: none) */
+  function relMins(h) {
+    let m;
+    if (/^(?:(?:in|after|within)\s+)?(?:about\s+|around\s+|~\s*)?half\s+(?:an?\s+)?(?:hour|hr)\b/.test(h)) return 30;
+    if ((m = h.match(REL_RX))) {
+      const n = numOf(m[2] || m[1]), hour = /^h/.test(m[3]);
+      const v = Math.round(n * (hour ? 60 : 1) + (m[4] ? 30 : 0));
+      return v >= 1 && v <= 360 ? v : 0;
+    }
+    if ((m = h.match(/^(?:in|after|within)\s+(?:about\s+|around\s+|~\s*)?(\d{1,2})(?![\d:.\/]|\s*(?:am|pm|a\.m|p\.m|st|nd|rd|th|n\b|nights?|days?|hrs?|h\b|o'?clock))/))) { const v = +m[1]; return v >= 1 && v <= 60 ? v : 0; }
+    if (/^(?:in\s+)?(?:a\s+)?few\s+(?:mins?|minutes)\b/.test(h)) return 10;
+    if (/^(?:now|right\s+now|rn|asap|immediately|already\s+on\s+(?:the|his|her|their)\s+way|on\s+(?:the|his|her|their)\s+way)\b/.test(h)) return 5;
+    if (/^(?:soon|shortly|in\s+a\s+(?:bit|while|moment|min(?:ute)?))\b/.test(h)) return 15;
+    return 0;
+  }
+  /** "at 3pm", "by 2", "around 1:30", "till 3", "until 4pm", "@ 2", "3pm" → "15:00" ('': none). The time comes first. */
+  function absTime(h) {
+    const m = h.match(/^(?:(?:at|by|around|about|abt|arnd|before|till|until|untill|til|upto|up\s*to|@|~|approx\.?|max)\s*)*((?:\d{1,2}(?:[:.]\d{2})?|\d{3,4})\s*(?:am|pm|a\.m\.?|p\.m\.?|hrs?|h)?|noon|midday|12\s*noon)(?![\d:\/a-z])/);
+    if (!m) return '';
+    if (m[0] === m[1] && !timeStrict(m[1]) && !/noon|midday/.test(m[1])) return '';     // a bare "2" needs "at" / "by" / "till"
+    return hoWaTime(m[1]);
+  }
+  /** minutes from the message's time → "HH:MM", rounded up to the next 5 minutes ('' past midnight) */
+  function soonTime(n) {
+    const d = nowDate(), x = Math.ceil((d.getHours() * 60 + d.getMinutes() + n) / 5) * 5;
+    return x < 24 * 60 ? String(Math.floor(x / 60)).padStart(2, '0') + ':' + String(x % 60).padStart(2, '0') : '';
+  }
+  // words before what the guest does: "the guest will", "she is going to", "guest said he wants to"
+  const T_LEAD = /^(?:the|guests?|gst|pax|family|couple|lady|gentleman|mr\.?|mrs\.?|ms\.?|he|she|they|also|just|now|already|still|will|wil|wl|gonna|wanna|be|is|are|am|was|to|that|said|says|told|informed|confirmed|going\s+to|about\s+to|ready\s+to|planning\s+to|plans?\s+to|wants?\s+to|would\s+like\s+to|needs?\s+to|has\s+to|have\s+to|expected\s+to|expects?\s+to|(?:told|informed)\s+(?:us|me|fo|hk|reception)|khalas|yalla|ok|okay)\s+/;
+  const stripLead = t => { let x = t.replace(/^['’]s\b\s*/, ''), y; while ((y = x.replace(T_LEAD, '')) !== x) x = y; return x; };
+  const T_NOT = /\?|\b(?:tomorrow|tomm?orr?ow|tmrw|tmr|tmw|tmrow|tomoro|yesterday|maybe|may|might|perhaps|not|don'?t|doesn'?t|didn'?t|won'?t|wont|cancel\w*|no\s+need|if|unless|whether)\b/;
+  const GO_V = '(?:ch(?:e|a)?c?k(?:ing|s)?\\s*-?\\s*out|checkout|chkout|c\\/o|co|leav(?:e|es|ing)|lv|go(?:ing|es)?\\s+down|com(?:e|es|ing)\\s+down|depart(?:ing|s)?|vacat(?:e|es|ing)|head(?:ing|s)?\\s+(?:out|to\\s+(?:the\\s+)?airport)|go(?:ing|es)?\\s+to\\s+(?:the\\s+)?airport)';
+  const GO_RX = new RegExp('^(' + GO_V + ')(?![a-z])\\s*(?:(?:from\\s+)?(?:the\\s+)?(?:hotel|room)\\b\\s*)?(?:(?:today|tdy)\\b\\s*)?[,:\\-–—]?\\s*(.*)$');
+  // "gone", "left the hotel", "room free", "keys at desk", "dep done", "checked out": the guest has left
+  const GONE = /^(?:gone|left(?:\s+(?:the\s+)?(?:hotel|room|already|now))*|out|vacated|vacant|empty|free|(?:the\s+)?room\s+(?:is\s+)?(?:free|empty|vacant|vacated)|departed|dep(?:arture)?\s+(?:done|ok|okay|complete|completed|khalas)|c\/?o\s+(?:done|ok|okay|complete|completed|khalas)|check(?:ed)?\s*-?\s*out\s+(?:done|khalas)|checked\s*-?\s*out|chkd\s*out|keys?\s+(?:cards?\s+)?(?:returned|dropped|handed\s+(?:in|over|back)|received|back|left|at\s+(?:the\s+)?(?:desk|reception|fo|front\s*desk|counter))|(?:returned|dropped|handed\s+(?:in|over|back))\s+(?:the\s+)?keys?)(?![a-z])\s*(.*)$/;
+  const GONE_TAIL = /^(?:(?:the\s+)?(?:hotel|room)|already|now|today|just\s+now|khalas|tamam|done|ok|okay|thanks?|thx|pls|please|[✅👍✔☑🙏.!,;:\s])*$/iu;
+  /** a sentence about leaving → an action, or null */
+  function natural(low) {
+    let t = stripLead(low), m;
+    if (!t) return null;
+    if ((m = t.match(GONE)) && GONE_TAIL.test(m[1].trim()) && !/\?|\bnot\b/.test(t)) return { act: 'co' };
+    if (T_NOT.test(t)) return null;
+    // "wants late checkout till 2", "got LCO 3pm", "late check out approved 4pm"
+    if ((m = t.match(/^(?:(?:wants?|wanted|would\s+like|asking(?:\s+for)?|asked(?:\s+for)?|requests?|requested|requesting|needs?|got|gets|given|approved|giving|give|ok(?:ay)?|confirmed)\s+)?(?:an?\s+|the\s+)?(?:late\s*(?:ch(?:e)?c?k[\s-]*out|checkout|c\/?o|co)|lco)(?![a-z])\s*(?:(?:is\s+)?(?:approved|ok(?:ay)?|confirmed|given)\s*)?(.*)$/))) {
+      const tm = m[1].trim() ? (absTime(m[1].trim()) || hoWaTime(m[1])) : '';
+      return m[1].trim() && !tm ? null : { act: 'lco', time: tm };
+    }
+    // "needs till 4pm", "keeping the room until 3", "staying till 2pm"
+    if ((m = t.match(/^(?:needs?|need|wants?|asking(?:\s+for)?|asked\s+for|requests?(?:ed)?|keep(?:ing|s)?|stay(?:ing|s)?|holding|using)\s+(?:(?:the\s+)?room\s+)?((?:till|until|untill|til|upto|up\s*to)\s+.+)$/))) {
+      const tm = absTime(m[1]); if (tm) return { act: 'lco', time: tm };
+      return null;
+    }
+    // "checking out in 10 mins", "leaving now", "will check out at 3pm", "coming down in 5"
+    if ((m = t.match(GO_RX))) {
+      const head = m[2].split(/[,;]|\s+(?:and(?!\s+(?:a\s+)?half)|but|pls|please|plz|then|so|kindly)\b/)[0].trim().replace(/[\s.!]+$/, '');
+      const n = relMins(head);
+      if (n) { const tm = soonTime(n); return tm ? { act: 'lco', time: tm, soon: n } : null; }
+      const tm = absTime(head); if (tm) return { act: 'lco', time: tm, plan: 1 };
+      if (!head && /ing(?:\s*out)?$/.test(m[1])) { const t5 = soonTime(5); return t5 ? { act: 'lco', time: t5, soon: 5 } : null; }   // "514 checking out", "leaving"
+    }
+    return null;
+  }
+  // "staying 2 more nights", "will stay one more night", "wants to extend till Friday", "thinking to extend"
+  const EXT_UNSURE = /\?|\b(?:thinking|think|thinks|considering|consider|may|might|maybe|possibly|probably|perhaps|not\s+sure|unsure|interested|enquir\w*|inquir\w*|if|asking\s+(?:about|for)|checking\s+(?:about|if))\b/;
+  const EXT_WAIT = /\b(?:but|no|not|yet|waiting|wait|pending|booking|bkg|reservation|td|rc|sign\w*|payment|pay|balance|confirm(?:ation)?)\b/;
+  function naturalExt(low) {
+    const t0 = low.replace(/^['’]s\b\s*/, '');
+    if (new RegExp('^' + EXT_W + '(?![a-z])').test(t0)) return null;            // "ext 2N", "extending": the command words, read as before
+    const t = stripLead(t0);
+    // "one more night", "2 more nights", "another night": nothing before it
+    if (/^(?:for\s+)?(?:another\s+(?=\d))?(?:\d{1,2}|one|two|three|four|five|six|seven|another)\s+(?:more|extra|additional|another)?\s*(?:n|nts?|nights?|nites?|days?)\b/.test(t) && /\b(?:more|extra|additional|another)\b/.test(t) && !EXT_UNSURE.test(t) && !T_NOT.test(t)) {
+      const x = /^(?:for\s+)?another\s+(?:n|nt|night|nite|day)\b/.test(t) ? { nights: 1 } : extDetail(t.replace(/\badditional\b/, 'extra').replace(/\banother\s+(?=\d)/, ''));
+      if (x && x.nights) return { act: 'ext', nights: x.nights };
+    }
+    const m = t.match(/^(?:to\s+)?(stay(?:ing|s)?|extend(?:ing|ed|s)?|extension|ext)(?![a-z])\s*(?:(?:the\s+)?stay\b\s*|longer\b\s*)?(.*)$/);
+    if (!m && EXT_UNSURE.test(t0) && /\b(?:ext\w*|extend\w*|stay(?:ing)?\s+(?:longer|more|another|extra|\d|one|two))/.test(t0) && !T_NOT.test(t0.replace(/\b(?:may|might|maybe|perhaps|if)\b|\?/g, ''))) return extending('');
+    if (!m) return null;
+    const verb = m[1], tail = m[2].trim();
+    if (TMRW_TOO.test(tail)) return { act: 'ext', nights: 1 };
+    if (/^stay/.test(verb) && /^(?:till|until|untill|til|upto|up\s*to)\b/.test(tail)) { const tm = absTime(tail); if (tm) return { act: 'lco', time: tm }; }
+    if (EXT_UNSURE.test(t0)) return extending('');
+    if (/\bnot\b|\bcancel\w*|\bno\s+(?:more|longer)\b/.test(t0)) return null;
+    if (EXT_WAIT.test(tail)) return /^stay/.test(verb) && !/^\s*$/.test(tail) && !paperOf(tail) && !/\b(?:but|no|yet|waiting|wait|pending)\b/.test(tail) ? null : extending(tail);
+    const x = extDetail(tail);
+    if (x && (x.nights || x.until)) return Object.assign({ act: 'ext' }, x);
+    if (/^stay/.test(verb) && /^longer\b/.test(m[0].slice(verb.length).trim())) return extending('');
+    return null;
+  }
   function classify(rest) {
-    let r = sp(rest).trim().replace(/^[\s:\-–—=>.,]+/, '').replace(/[\s.!,;]+$/, '').trim();
+    let r = sp(rest).trim().replace(/^['’]s\b/, '').replace(/^[\s:\-–—=>.,]+/, '').replace(/[\s.!,;]+$/, '').trim();
     if (!r) return null;
     const note = { act: 'note', note: r };
     let low = r.toLowerCase(), m;
@@ -183,7 +309,8 @@ function hoWaParser() {
     // "507 left, waiting finance", "507 guest left, folio with finance", "507 res to fix" → 🧾 waiting for Finance / Reservations
     const FIN = /\b(?:finance|accounts?|folio|reservations?|res)\b/;
     if (FIN.test(low) && /\b(?:done|fixed|ok|okay|cleared|sorted|settled|closed)\b/.test(low) && !/\b(?:wait\w*|pending|to\s+fix)\b/.test(low)) return { act: 'findone' };
-    if (FIN.test(low) && (/\b(?:wait\w*|pending|to\s+fix|hold|check(?:ing)?)\b/.test(low) || /\bwith\s+(?:the\s+)?(?:finance|accounts?|reservations?|res)\b/.test(low) || /^(?:left|out|gone)\b/.test(low))) {
+    if (/^(?:left|out|gone|checked\s*-?\s*out|c\/?o)\b/.test(low) && /\b(?:balance|bill|billing|city\s*ledger|payment)\b/.test(low) && /\b(?:pending|open|due|wait\w*|outstanding|unpaid|not\s+(?:paid|settled))\b/.test(low)) return { act: 'fin', who: 'Finance' };   // "514 left, balance pending"
+    if (FIN.test(low) && (/\b(?:wait\w*|pending|to\s+(?:fix|correct|check|update|amend|adjust|close)|hold|check(?:ing)?)\b/.test(low) || /\bwith\s+(?:the\s+)?(?:finance|accounts?|reservations?|res)\b/.test(low) || /^(?:left|out|gone)\b/.test(low))) {
       return { act: 'fin', who: /\b(?:reservations?|res)\b/.test(low) && !/\b(?:finance|accounts?|folio)\b/.test(low) ? 'Reservations' : 'Finance' };
     }
     if (/^fixed\s*[.!✓✔✅]*$/u.test(low)) return { act: 'findone', weak: true };
@@ -200,10 +327,13 @@ function hoWaParser() {
     if ((m = low.match(/^late\s*(?:till|until|untill|til|to|up\s*to|upto|by|at)\s*(.+)$/)) || ((m = low.match(/^late\s+(.+)$/)) && timeStrict(m[1]))) {
       const tm = hoWaTime(m[1]); if (tm) return { act: 'lco', time: tm };
     }
+    // "staying 2 more nights", "wants to extend till Friday", "thinking to extend": said in words
+    const nx = naturalExt(low); if (nx) return nx;
     // "extending", "will extend", "wants to extend", "ext pending", "extension request": on its way (⏳ Extending), not extended yet
     if ((m = low.match(/^(?:wants?|wanted|would\s+like|will|is\s+going|going|plans?|planning|asking|asked|requests?|requested|requesting)\s+(?:to\s+)?(?:ext|extend|extension|extending|stay\s+longer)\b(.*)$/))) return extending(m[1]);
     if ((m = low.match(new RegExp('^' + EXT_W + '(?![a-z])\\.?\\s*(.*)$')))) {
       const w = low.match(/^[a-z]+/)[0], tail = m[1];
+      if (TMRW_TOO.test(tail)) return { act: 'ext', nights: 1 };                  // "extending tomorrow also"
       if (/\?|\b(?:maybe|might|not|cancel(?:led|ed)?|no)\b/.test(tail)) return note;
       if (w === 'extending' || /\b(?:pending|request(?:ed)?|req|wants?|will|planning|soon|waiting|booking|sign(?:ed|ature)?|td|rc|payment)\b/.test(tail)) return extending(tail);
       const x = extDetail(tail); return x ? Object.assign({ act: 'ext' }, x) : note;
@@ -215,10 +345,12 @@ function hoWaParser() {
       const tail = m[1].trim();
       if (!tail || FILLER.test(tail)) return { act: 'co' };
       if (!CO_NOT.test(tail) && !WHEN_NOT.test(tail) && !timeStrict(tail)) return { act: 'co' };
-      return note;
+      return natural(low) || note;                                                 // "check out at 2", "co in 10 min"
     }
     // words that mean "gone" only when nothing else follows ("324 out of order", "324 left luggage" are notes)
     if ((m = low.match(/^(?:out|left|vacated|vacated\s+the\s+room|departed)(?![a-z])\s*(.*)$/)) && FILLER.test(m[1].trim())) return { act: 'co' };
+    // said in words: "checking out in 10 mins", "514 gone", "will leave around 1:30"
+    const nat = natural(low); if (nat) return nat;
     // a typo of a command ("chekout", "lcoo"): Ops Brain's matcher (wa-brain.js), when it is there
     const fz = fuzzyOf(r);
     if (fz && fz.m && /^(?:co|lco|ext)$/.test(fz.m) && (fz.conf === 'exact' || fz.conf === 'likely')) {
@@ -275,7 +407,9 @@ function hoWaParser() {
     'noise sick vip dnd ooo oos oor na td rc res bkg pay hi hello call msg sleep bath tub lamp light door lock bags bag pax kid kids baby baggage luggage ' +
     'urgent pending update info noted inform sure fine good bad issue new old open close closed sent send pick drop taxi cab car ' +
     'and the a an is are was has have had it its in on at to of for by up down off all any one two more less too also just still ' +
-    'yet again then than this that these those what when where who why how which with from into over under after before').split(' '));
+    'yet again then than this that these those what when where who why how which with from into over under after before ' +
+    'khalas tamam yalla shukran habibi inshallah insha mafi free empty vacant leaving going coming left out stay min mins hour hours half noon lunch ' +
+    'shortly quick fast will wants want needs need asked asking says said told dep exit desk lobby bell').split(' '));
   function askWord(rest, words) {
     const w = String(rest || '').trim().replace(/[\s.!,;:]+$/, '').toLowerCase();
     if (!/^[a-z][a-z\/.\-]{1,5}$/.test(w)) return '';
@@ -283,6 +417,17 @@ function hoWaParser() {
     if (bare.length < 2 || ASK_STOP.has(bare) || ASK_STOP.has(w)) return '';
     if (lookup(w) || lookup(bare)) return '';
     return w;
+  }
+  // rooms said inside a sentence (not first): only taken when the words around them are a clear action
+  const ROOM_G = '(?<![\\d:.\\/,$+-]|(?:aed|dhs?|ext|extn|tel|phone|call|mob|mobile|x)\\.?\\s*)' + ROOM_NC + '(?!\\s*(?:am|pm|a\\.m|p\\.m|hrs?|h|aed|dhs?|n|nts?|nights?|mins?|minutes|days?)\\b|\\s*[\\/-]\\s*\\d)';
+  const ROOM_LIST = new RegExp('(?:\\b(?:in|of|from|for|at)\\s+)?' + ROOM_G + '(?:\\s*(?:,|&|\\+|\\/|\\band\\b)\\s*' + ROOM_G + ')*(?:[\'’]s\\b)?', 'gi');
+  function roomInside(seg) {
+    if (/\d{5,}|\+\s*\d{3}/.test(seg)) return null;                             // a phone number, not rooms
+    const L = seg.match(ROOM_LIST); if (!L || L.length !== 1) return null;
+    const rooms = L[0].match(/\d{3,4}/g) || []; if (!rooms.length || rooms.length > 8) return null;
+    const rest = seg.replace(ROOM_LIST, ' ').replace(/\s+/g, ' ').trim();
+    const c = classify(rest);
+    return c && c.act !== 'note' && c.act !== 'ignore' && !c.weak ? { rooms, rest, c } : null;
   }
   let FUZZY = null;
   function fuzzyOf(r) {
@@ -292,6 +437,7 @@ function hoWaParser() {
   /** opt.words: a lookup(word) → {m, label} to use instead of window.hoWaWords (the WhatsApp window passes the list HotelOps sent it) */
   function hoWaParse(text, opt) {
     WORDS = dictOf(opt);
+    NOW = nowOf(opt && opt.now);
     FUZZY = opt && typeof opt.fuzzy === 'function' ? opt.fuzzy : (() => { try { const b = globalThis.hoWaBrainPure; return b && typeof b.wbReadCmd === 'function' ? b.wbReadCmd : null; } catch (_) { return null; } })();
     if (isHoText(text)) return { kind: 'ignore', actions: [], ho: true };
     const lines = sp(text).split(/\r?\n/);
@@ -313,10 +459,12 @@ function hoWaParser() {
         let cmd = '';
         const cm = seg.match(CMD_LEAD) || dictLead(seg);   // the command first: "CO 324", "EXT 0113 2N", "VD: 315"
         if (cm) { cmd = cm[1]; seg = seg.slice(cm[0].length); }
-        const { rooms, rest } = takeRooms(seg);
+        let { rooms, rest } = takeRooms(seg), inner = null;
+        // the room inside the sentence: "guest in 514 left", "keys returned 514", "checked out 514 and 516"
+        if (!cmd && !rooms.length && (inner = roomInside(seg))) { rooms = inner.rooms; rest = inner.rest; }
         const bare = !cmd && rooms.length && TICK.test(rest);
-        let c = bare ? null : classify(cmd ? cmd + ' ' + rest : rest);
-        if (cmd) lineCmd = c;
+        let c = inner ? inner.c : bare ? null : classify(cmd ? cmd + ' ' + rest : rest);
+        if (cmd || inner) lineCmd = c;
         else if (!c && rooms.length && lineCmd) c = lineCmd;  // "CO 324, 325"
         if (!cmd && rooms.length && head && !lineCmd && (bare || (c && c.act === 'note'))) { const h = underHead(head, rest); if (h) c = h; }   // a list under its heading
         if (rooms.length && !c) { pending = pending.concat(rooms); return; }
@@ -341,7 +489,7 @@ function hoWaParser() {
     return out;
   }
   function actionKey(a) {
-    const x = a.act === 'fin' ? (a.who || '') : a.act === 'ext' ? (a.nights ? a.nights + 'n' : a.until || '') : a.act === 'extending' ? ['book', 'sign', 'td', 'pay'].map(k => a[k] === undefined ? '' : k[0] + (a[k] ? 1 : 0)).join('') : (a.time || '');
+    const x = a.act === 'fin' ? (a.who || '') : a.act === 'lco' && a.soon ? 'in' + a.soon : a.act === 'ext' ? (a.nights ? a.nights + 'n' : a.until || '') : a.act === 'extending' ? ['book', 'sign', 'td', 'pay'].map(k => a[k] === undefined ? '' : k[0] + (a[k] ? 1 : 0)).join('') : (a.time || '');
     return [String(parseInt(a.room, 10)), a.act, x, a.note || ''].join(':');
   }
   const dayLabel = d => d.getDate() + ' ' + MON[d.getMonth()].replace(/^./, c => c.toUpperCase());
@@ -384,6 +532,7 @@ function hoWaParser() {
     if (a.act === 'fin') return '🧾 ' + a.room + ' guest left · waiting for ' + (a.who || 'Finance');
     if (a.act === 'findone') return '✓ ' + a.room + ' fixed → check out';
     if (a.act === 'co') return '✓ CO ' + a.room + wordTag(a);
+    if (a.act === 'lco' && a.soon) return '⏱ ' + a.room + ' out in ' + a.soon + ' min' + (a.time ? ' (≈ ' + timeLabel(a.time) + ')' : '') + wordTag(a);
     if (a.act === 'lco') return '⏰ LCO ' + a.room + (a.time ? ' ' + timeLabel(a.time) : '') + wordTag(a);
     if (a.act === 'extending') return paperChip(a.room, a) + wordTag(a);
     if (a.act === 'ext') return '↪ EXT ' + a.room + (a.nights ? ' +' + a.nights + 'N' : '') + (a.until ? ' → ' + untilLabel(a.until) : '') + wordTag(a);
@@ -686,6 +835,13 @@ function restore(roomStr, before, after, line, topJ, status, quiet) {
   return true;
 }
 
+/** is "HH:MM" after the room's own check-out time (Opera's departure time, else 12:00)? */
+function pastLimit(r, t) {
+  let lim = null; try { lim = typeof _depTimeMins === 'function' ? _depTimeMins(r) : null; } catch (_) {}
+  if (lim == null || isNaN(lim)) lim = 12 * 60;
+  const m = String(t).match(/^(\d{1,2}):(\d{2})$/); if (!m) return true;
+  return +m[1] * 60 + +m[2] > lim;
+}
 /** one action → {room, act, time, st, text, undo?} */
 function applyOne(a, who, board) {
   const res = { room: a.room, act: a.act, time: a.time || '', note: a.note || '' };
@@ -722,11 +878,27 @@ function applyOne(a, who, board) {
     res.st = 'co'; res.text = `${room} checked out`;
     // a balance marked fine (per room or for its source, departures.js depOwes) is no warning
     if (r.balance > 0 && (typeof depOwes === 'function' ? depOwes(r) : true)) res.bal = r.balance;
+  } else if (a.act === 'lco' && (a.soon || a.plan) && a.time && !pastLimit(r, a.time)) {
+    // "514 checking out in 10 mins" before the room's check-out time: ⏱ Checking Out Soon, not a late check-out
+    if (st === 'out') return Object.assign(res, { st: 'skip', text: `${room}: already checked out` });
+    if (st === 'extended') return Object.assign(res, { st: 'skip', text: `${room}: marked extended — not changed` });
+    if (a.soon) {
+      line = `[${hhmm()}] Checking out in ${a.soon} min (≈ ${timeLabel(a.time)}) — ${who}`;
+      r.intent = 'checkout_soon'; r.intentMinutes = a.soon;
+      res.text = `${room} checking out in ${a.soon} min`;
+    } else {
+      line = `[${hhmm()}] Checking out at ${timeLabel(a.time)} — ${who}`;
+      res.text = `${room} checking out at ${timeLabel(a.time)}`;
+    }
+    addNoteLine(r, line); paint(); saveDeps();
+    res.st = 'note';
   } else if (a.act === 'lco') {
     if (st === 'out') return Object.assign(res, { st: 'skip', text: `${room}: already checked out` });
     if (st === 'extended') return Object.assign(res, { st: 'skip', text: `${room}: marked extended — not changed` });
-    line = `[${hhmm()}] Late check-out ${a.time ? timeLabel(a.time) : '(no time given)'} — ${who}`;
+    line = a.soon && a.time ? `[${hhmm()}] Checking out in ${a.soon} min (≈ ${timeLabel(a.time)}) — ${who}`
+      : `[${hhmm()}] Late check-out ${a.time ? timeLabel(a.time) : '(no time given)'} — ${who}`;
     addNoteLine(r, line);
+    if (r.intent === 'checkout_soon') { r.intent = ''; r.intentMinutes = null; }   // a new time replaces "checking out in 10 min"
     if (st === 'late') { if (a.time) r.lateTime = a.time; paint(); saveDeps(); }
     else { r.lateTime = a.time || ''; setStatus = 'late'; quiet(() => depAction(i, 'late')); }
     res.st = 'lco'; res.d = a.time ? timeLabel(a.time) : ''; res.text = `${room} late check-out ${a.time ? timeLabel(a.time) : '(no time)'}`;
@@ -841,7 +1013,7 @@ function appLookup(w) {
   try { if (W.hoWaWords && typeof W.hoWaWords.lookup === 'function') { const x = W.hoWaWords.lookup(w); if (x) return x; } } catch (_) {}
   return LOCALW[w] || null;
 }
-const parse = (text, quote) => hoWaParse(text, { words: appLookup, quote: quote || '' });
+const parse = (text, quote, now) => hoWaParse(text, { words: appLookup, quote: quote || '', now: now || '' });
 
 
 /**
@@ -878,7 +1050,7 @@ function handle(msg, via, opt) {
   if (!caught && !opt.rerun && done[ck] !== undefined && (prev === undefined || id === ck)) return 'dup';   // the same message seen before (linked or pasted)
   if (opt.rerun && prev === undefined) prev = done[ck];
   const quote = String(msg && msg.quote || '').slice(0, 400);
-  const P = parse(text, quote);
+  const P = parse(text, quote, t24);   // "in 10 mins" counts from the message's own time
   let actions = P.actions, edited = !!msg.edited;
   if (prev !== undefined) {
     const old = new Set(String(prev).split('|').filter(Boolean));

@@ -1702,7 +1702,38 @@ console.log('\nWhatsApp HK bridge · message reader');
   sb.hoWaBrainPure = { wbReadCmd: FZ };
   check('wa typos: picked up from window.hoWaBrainPure', A('415 chekout'), '415 co');
   delete sb.hoWaBrainPure;
-  const corpus2 = ['CO\n101\n102', 'Checkout list:\n101 ✓', '212.319.504 all VD\n507 guest inside', '415 ckd', '507 extending, only TD left', '507 TD ✓ RC ✓', '⁣✅ HotelOps · Checkout list'];
+  // talking normally: what the team writes in full sentences
+  const NA = (t, now) => sb.hoWaParse(t, { now: now || '10:02' }).actions.map(a => [a.room, a.act, a.time || '', a.soon ? 'in' + a.soon : '', a.plan ? 'plan' : '', a.nights ? '+' + a.nights + 'N' : '', a.until ? '→' + a.until : '', a.act === 'note' ? a.note : ''].filter(Boolean).join(' ')).join(' | ');
+  check('wa talk: "checking out in N min" → leaving soon, from the message\'s time, rounded up to 5 min',
+    ['514 Checking out in 10mins', '514 checking out in half an hour', '514 checking out in 1 hour', '514 leaving in 10 min', '514 coming down in 5 min', '514 checking out 15 min', '514 leaving after 30 mins', '514 leaving 1hr', '514 co in 20', '514 checking out in 10-15 mins', '514 leaving in an hour and a half'].map(t => NA(t)),
+    ['514 lco 10:15 in10', '514 lco 10:35 in30', '514 lco 11:05 in60', '514 lco 10:15 in10', '514 lco 10:10 in5', '514 lco 10:20 in15', '514 lco 10:35 in30', '514 lco 11:05 in60', '514 lco 10:25 in20', '514 lco 10:20 in15', '514 lco 11:35 in90']);
+  check('wa talk: "now", "shortly", "checking out" with no time', ['514 going down now', '514 leaving now', '#514 leaving now', '514 coming down shortly', '514 checkingout'].map(t => NA(t, '13:50')),
+    ['514 lco 13:55 in5', '514 lco 13:55 in5', '514 lco 13:55 in5', '514 lco 14:05 in15', '514 lco 13:55 in5']);
+  check('wa talk: a time to leave at', ['514 will check out at 3pm', '514 check out at 2', '514 will leave around 1:30', '514 leaving by 2', '514 checkout around 2:30', '514 leaving until 4pm', '514 guest said she will check out at 3pm'].map(t => NA(t)),
+    ['514 lco 15:00 plan', '514 lco 14:00 plan', '514 lco 13:30 plan', '514 lco 14:00 plan', '514 lco 14:30 plan', '514 lco 16:00 plan', '514 lco 15:00 plan']);
+  check('wa talk: late check-out in words', ['514 wants late checkout till 2', '514 late check out 3pm', '514 needs till 4pm', '514 guest asked for late checkout until 3pm', '514 got LCO 4pm', '514 keeping the room till 3pm', '514 staying till 2pm'].map(t => NA(t)),
+    ['514 lco 14:00', '514 lco 15:00', '514 lco 16:00', '514 lco 15:00', '514 lco 16:00', '514 lco 15:00', '514 lco 14:00']);
+  check('wa talk: no clear time, or not sure → a note', ['514 checkout after lunch', '514 checking out tomorrow', '514 might leave at 3', '514 not leaving at 2pm', '514 leaving at 3?'].map(t => NA(t)),
+    ['514 note checkout after lunch', '514 note checking out tomorrow', '514 note might leave at 3', '514 note not leaving at 2pm', '514 note leaving at 3?']);
+  check('wa talk: housekeeping talk with a time stays a note', ['514 needs towels', '514 cleaning after 2pm', '514 guest going out at 3pm', '514 coming down to pay TD', '514 leaving luggage till 4pm', '514 DND till 2pm', '514 make up room at 3pm', '514 free upgrade', '514 staying', '514 khalas', '514 extra towels for 2 nights'].map(t => NA(t)),
+    ['514 note needs towels', '514 note cleaning after 2pm', '514 note guest going out at 3pm', '514 note coming down to pay TD', '514 note leaving luggage till 4pm', '514 note DND till 2pm', '514 note make up room at 3pm', '514 note free upgrade', '514 note staying', '514 note khalas', '514 note extra towels for 2 nights']);
+  check('wa talk: a room inside a sentence that is not a clear action → nothing, as before', ['please clean 514 after 2pm', 'call ext 2245', 'guest from 514 called reception'].map(t => P(t).kind), ['none', 'none', 'none']);
+  check('wa talk: the guest has left', ['514 checked out', '514 has left', '514 is out', '514 gone', '514 vacated', '514 guest left the room', '514 room free', '514 keys at desk', '514 dep done', '514 departure done', '514 co khalas', '514 c/o done', '514 left the hotel already', '514\'s guest left', 'rm 514 gone', 'room 514 has left'].map(A), Array(16).fill('514 co'));
+  check('wa talk: the room after the words', ['guest in 514 left', 'keys returned 514', 'checked out 514', 'the guest of room 514 checked out', 'guests in 514 and 516 left', 'keys returned 514, 516', 'dep done 514'].map(A),
+    ['514 co', '514 co', '514 co', '514 co', '514 co | 516 co', '514 co | 516 co', '514 co']);
+  check('wa talk: several rooms in one sentence', ['514 and 516 checked out', '514, 516, 520 left', '514 & 516 gone'].map(A), ['514 co | 516 co', '514 co | 516 co | 520 co', '514 co | 516 co']);
+  check('wa talk: staying on (dates from the message\'s day: Mon 19 Oct 2026)',
+    ['514 staying 2 more nights', '514 will stay one more night', '514 one more night', '514 another night', '514 another 2 nights', '514 wants to extend till Friday', '514 wants to extend until 25th', '514 staying till Sat', '514 ext till next friday', '514 extended 3 nights', '514 ext till 25/10', '514 extending tomorrow also', '514 staying tomorrow too', '514 extend 2n', '514 +2 nights', 'ext till 25/10 514'].map(t => NA(t, new Date(2026, 9, 19, 10, 0))),
+    ['514 ext +2N', '514 ext +1N', '514 ext +1N', '514 ext +1N', '514 ext +2N', '514 ext →23/10', '514 ext →25', '514 ext →24/10', '514 ext →23/10', '514 ext +3N', '514 ext →25/10', '514 ext +1N', '514 ext +1N', '514 ext +2N', '514 ext +2N', '514 ext →25/10']);
+  check('wa talk: may stay on → ⏳ extending', ['514 wants to extend but no booking yet', '514 thinking to extend', '514 may extend', '514 staying longer', '514 guest considering extending', '514 wants to extend'].map(t => NA(t)),
+    ['514 extending', '514 extending', '514 extending', '514 extending', '514 extending', '514 extending']);
+  check('wa talk: left, waiting for Finance / Reservations', ['514 left, waiting for finance', '514 left, balance pending', '514 left, res to correct rate', '514 guest left, bill not settled'].map(t => P(t).actions.map(W2.chip).join()),
+    ['🧾 514 guest left · waiting for Finance', '🧾 514 guest left · waiting for Finance', '🧾 514 guest left · waiting for Reservations', '🧾 514 guest left · waiting for Finance']);
+  check('wa talk: chips and keys for "checking out in 10 min"', [W2.chip({ room: '514', act: 'lco', time: '10:15', soon: 10 }), sb.hoWaPure.actionKey({ room: '514', act: 'lco', time: '10:15', soon: 10 })], ['⏱ 514 out in 10 min (≈ 10:15 AM)', '514:lco:in10:']);
+  const ASKT = t => { const r = sb.hoWaParse(t, { now: '10:00' }); return r.ask ? r.ask.word : ''; };
+  check('wa talk: everyday words are never asked about', ['514 khalas', '514 tamam', '514 yalla', '514 free', '514 empty', '514 leaving', '514 going', '514 soon', '514 dep', '514 mins', '514 checking out in 10 mins'].map(ASKT), Array(11).fill(''));
+  check('wa talk: HotelOps\' own posts stay ignored', ['✅ HotelOps · 514 checking out in 10 min', '✅ HotelOps · 514 gone'].map(t => P(t).kind), ['ignore', 'ignore']);
+  const corpus2 = ['CO\n101\n102', 'Checkout list:\n101 ✓', '212.319.504 all VD\n507 guest inside', '415 ckd', '507 extending, only TD left', '507 TD ✓ RC ✓', '⁣✅ HotelOps · Checkout list', '514 gone', 'guests in 514 and 516 left', '514 staying 2 more nights', '514 thinking to extend', '514 will check out at 3pm', '514 cleaning after 2pm'];
   check('wa snippet: the new rules read the same in the WhatsApp window', corpus2.map(t => JSON.stringify(H2.parser.hoWaParse(t))), corpus2.map(t => JSON.stringify(sb.hoWaParse(t))));
 }
 
