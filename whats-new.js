@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 343, items: [
+    '🔎 WhatsApp: "CO", "LCO" or "EXT" for a room that is not on today\'s Departures — HotelOps now looks for the room in Arrivals, the in-house list and the In-house tally. Found → it adds the room to Departures and does it (Undo takes it off again). Not found → it tells you "room not found".',
+  ] },
   { v: 342, items: [
     '✉️ WhatsApp "Send automatically" now finds WhatsApp\'s new Send button and presses it like a finger; if it still can\'t, it presses Enter in the message box. Paste the console line again in WhatsApp Web to get it.',
   ] },

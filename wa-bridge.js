@@ -572,7 +572,7 @@ function fillTemplate(t, v) { return String(t).replace(/\{(\w+)\}/g, (m, k) => (
 function snippet(raw, appUrl) {
   return String(raw).replace("'__HO_APP_URL__'", () => JSON.stringify(appUrl)).replace('/*__HO_PARSER__*/null', () => '(' + hoWaParser.toString() + ')()');
 }
-W.hoWaPure = { hoWaParse, hoWaParseCopied, hoWaTime, timeLabel, waDateISO, waTime24, actionKey, extNights: HP.extNights, chip: HP.chip, snippet,
+W.hoWaPure = { hoWaParse, findRoom, hoWaParseCopied, hoWaTime, timeLabel, waDateISO, waTime24, actionKey, extNights: HP.extNights, chip: HP.chip, snippet,
   safeKey, hashKey, archR, archChips, hoWaMatch, hoWaSearch, hoWaHi, hoWaExportTxt, hoWaExportCsv, hoWaExportName,
   isHoText: HP.isHoText, HO_MARK: HP.HO_MARK, askWord: HP.askWord, wordTag: HP.wordTag, isPhone, initials, hueOf, balInfo, entryKinds, hourLabel, checkoutListText, TEMPLATES, fillTemplate };
 if (!doc) return;
@@ -649,6 +649,20 @@ function boardIsToday() {
   if (d && isoDay(d) !== today()) return { ok: false, why: 'the board is for ' + d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) };
   return { ok: true };
 }
+/** is this room in the hotel? looks in Arrivals, Purpose of Stay and the In-house tally → {src, name} or null */
+function findRoom(room) {
+  const n = parseInt(room, 10); if (!n) return null;
+  const same = x => parseInt(String(x == null ? '' : x).replace(/\D/g, ''), 10) === n;
+  const nm = g => String(g.name || g.guest || [g.last, g.first].filter(Boolean).join(' ') || '').trim();
+  const lists = [['in-house list', typeof purposeGuests !== 'undefined' ? purposeGuests : []], ['arrivals', typeof arrGuests !== 'undefined' ? arrGuests : []]];
+  for (const [src, L] of lists) { const g = (L || []).find(x => x && same(x.room)); if (g) return { src, name: nm(g) }; }
+  const maps = [typeof itGibyRooms !== 'undefined' ? itGibyRooms : null, typeof itXmlRooms !== 'undefined' ? itXmlRooms : null];
+  for (const M of maps) {
+    const k = M && Object.keys(M).find(same);
+    if (k) { const v = M[k] || {}; return { src: 'in-house tally', name: (v.names && v.names[0]) || ((v.guests || [])[0] || {}).name || '' }; }
+  }
+  return null;
+}
 function addNoteLine(r, line) { r.note = r.note ? r.note + '\n' + line : line; }
 function dropLine(note, line) { const L = String(note || '').split('\n'); const i = L.lastIndexOf(line); if (i >= 0) L.splice(i, 1); return L.join('\n'); }
 
@@ -680,6 +694,21 @@ function applyOne(a, who, board) {
   const i = board.ok ? roomIdx(a.room) : -1;
   // a note or request for a room that is not leaving today is normal (an in-house guest): logged, no warning
   if (i < 0 && a.act === 'note') return Object.assign(res, { st: 'req', text: `Request · room ${a.room}: ${a.note}` });
+  // not on today's departures: is the room in the hotel at all? yes → put it on the board and act, no → say so
+  if (i < 0 && (board.ok || !rooms().length)) {
+    const f = findRoom(a.room);
+    if (!f) return Object.assign(res, { st: 'notlist', text: `${a.room}: room not found — not on departures, arrivals or in-house` });
+    if (typeof depAddManualRoom !== 'function' || !quiet(() => depAddManualRoom(a.room, f.name))) return Object.assign(res, { st: 'notlist', text: `${a.room}: could not add it to the board` });
+    const out = applyOne(a, who, { ok: true });
+    const added = rooms().find(q => q.roomStr === String(a.room).trim());
+    if (added) {
+      out.text = (out.text || '') + ` · added from ${f.src}`;
+      const u = out.undo;
+      // undo takes the room off the board again (only if nobody touched it since)
+      out.undo = q => { const ok = u ? u(q) : true; const k = rooms().findIndex(z => z === added && z.manual && z.status === 'due' && !z.intent); if (ok && k >= 0) { rooms().splice(k, 1); paint(); saveDeps(); } return ok; };
+    }
+    return out;
+  }
   if (!board.ok) return Object.assign(res, { st: 'notlist', text: `${a.room}: not on today's list (${board.why})` });
   if (i < 0) return Object.assign(res, { st: 'notlist', text: `${a.room}: not on today's departures` });
   const r = rooms()[i], room = r.roomStr, st = r.status, before = pick(r);
@@ -908,7 +937,7 @@ function handle(msg, via, opt) {
       showUndoToast(`${lbl} (WhatsApp · ${sender} ${tl})${bw.length ? ' · ' + bw.join(' · ') : ''}`, undoAll, 10000);
     }
     const nl = res.filter(r => r.st === 'notlist');
-    if (nl.length && !acted.length && typeof showToast === 'function') showToast(`WhatsApp: ${nl.map(r => r.room).join(', ')} not on today's departures`, 'warn');
+    if (nl.length && !acted.length && typeof showToast === 'function') showToast(`WhatsApp: room ${nl.map(r => r.room).join(', ')} is not there — ${nl[0].text.replace(/^\S+:\s*/, '')}`, 'warn');
   }
   renderCard();
   tell(tgt);
@@ -1698,7 +1727,7 @@ function start() {
   listenAsks(); hookWords();
   setInterval(() => { hookWords(); pushWords(); if (doc.getElementById('waStatus')) renderStatus(); }, 15000);
 }
-W.hoWaBridge = { handle, readPasted, parse, parseCopied: hoWaParseCopied, log: () => LOG.slice(), origins: ORIGINS, render: renderCard, search: runSearch, flushBackup: flushArch, results: () => RES.slice(),
+W.hoWaBridge = { handle, findRoom, readPasted, parse, parseCopied: hoWaParseCopied, log: () => LOG.slice(), origins: ORIGINS, render: renderCard, search: runSearch, flushBackup: flushArch, results: () => RES.slice(),
   send: waSend, outbox: () => OUT.slice(), link: () => (LINK ? { at: LINK.at, groups: LINK.groups || [], open: LINK.open || '', rtt: LINK.rtt || 0, auto: !!LINK.auto, linked: linked() } : null),
   asks: () => Object.keys(ASKS).map(k => ASKS[k]), answer: answerAsk, confirmGuess, words: wordsList, setGroupAct, checkoutList: () => checkoutListText(rooms(), new Date()) };
 if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start); else start();

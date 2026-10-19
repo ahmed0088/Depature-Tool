@@ -1563,6 +1563,12 @@ console.log('\nWhatsApp HK bridge · message reader');
   check('wa: chips', [{ room: '324', act: 'co' }, { room: '202', act: 'lco', time: '18:00' }, { room: '0113', act: 'ext', nights: 2 }, { room: '0113', act: 'ext', until: '22/10' }, { room: '415', act: 'note', note: 'x' }].map(sb.hoWaPure.chip),
     ['✓ CO 324', '⏰ LCO 202 6 PM', '↪ EXT 0113 +2N', '↪ EXT 0113 → 22 Oct', '📝 note 415']);
   // the chat backup + search
+  if (sb.hoWaPure.findRoom) {
+    sb.purposeGuests = [{ room: '0206', name: 'TEST GUEST' }]; sb.arrGuests = [{ room: '512', name: 'ARR GUEST' }]; sb.itGibyRooms = { '733': { pax: 1, names: ['TALLY GUEST'] } };
+    const F = r => { const f = sb.hoWaPure.findRoom(r); return f ? f.src + ':' + f.name : 'none'; };
+    check('wa: room lookup off the departures', ['206', '512', '0733', '999'].map(F), ['in-house list:TEST GUEST', 'arrivals:ARR GUEST', 'in-house tally:TALLY GUEST', 'none']);
+    sb.purposeGuests = []; sb.arrGuests = []; sb.itGibyRooms = {};
+  }
   const W2 = sb.hoWaPure;
   check('wa backup: ids are made safe for the database', [W2.safeKey('false_1203@g.us_3EB0.A#B$C[D]/E'), W2.safeKey(''), W2.safeKey('a\nb')], ['false_1203@g_us_3EB0_A_B_C_D__E', '_', 'a_b']);
   check('wa backup: a pasted message (no id) gets the same short key each time', [W2.hashKey('2026-10-18|09:01|sam|324 CO') === W2.hashKey('2026-10-18|09:01|sam|324 CO'), W2.hashKey('a') !== W2.hashKey('b'), /^[a-z0-9]+$/.test(W2.hashKey('x.y#z'))], [true, true, true]);
