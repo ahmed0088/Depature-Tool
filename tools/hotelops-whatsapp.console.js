@@ -353,9 +353,12 @@
       if (queue.length < n && it && !it.deleted) {
         day.sent++; markFeed(d.id, 'sent');
         var f = feed.filter(function (x) { return x.id === d.id; })[0];
-        if (f && f.acts) { day.acts += f.acts; toast(f.chips.filter(function (c) { return /^(?:co|lco|ext|extending)$/.test(c.tone); }).map(function (c) { return c.label.replace(/ · .*$/, ''); }).join(', ') + ' → HotelOps', 'ok'); }
+        var nf = Array.isArray(d.res) ? d.res.filter(function (r) { return r && r.st === 'notlist'; }).map(function (r) { return String(r.room); }) : [];
+        var okL = f ? f.chips.filter(function (c) { return /^(?:co|lco|ext|extending)$/.test(c.tone) && !nf.some(function (rm) { return rm && (' ' + c.label + ' ').indexOf(' ' + rm + ' ') >= 0; }); }).map(function (c) { return c.label.replace(/ · .*$/, ''); }) : [];
+        if (f && f.acts) { day.acts += f.acts; if (okL.length) toast(okL.join(', ') + ' → HotelOps', 'ok'); }
         else if (it && it.preview && f && f.state === 'sent') { /* quiet */ }
       }
+      if (Array.isArray(d.res)) gotRes(d.id, d.res);
       save(); render();
     }
     if (d.source === 'ho-wa' && d.words && Array.isArray(d.words)) {
@@ -563,8 +566,8 @@
   var ACT = { co: [ACC, ACC_L, 'rgba(' + ACC_RGB + ',.14)', '✓'], findone: [ACC, ACC_L, 'rgba(' + ACC_RGB + ',.12)', '✓'],
     lco: ['#f59e0b', '#fcd34d', 'rgba(245,158,11,.14)', '⏰'], ext: ['#2dd4bf', '#99f6e4', 'rgba(45,212,191,.14)', '↪'], extending: ['#2dd4bf', '#99f6e4', 'rgba(45,212,191,.10)', '⏳'],
     fin: ['#fb923c', '#fed7aa', 'rgba(251,146,60,.14)', '🧾'], note: ['#a78bfa', '#ddd6fe', 'rgba(139,92,246,.16)', '✎'],
-    ask: ['#fbbf24', '#fde68a', 'rgba(251,191,36,.12)', '?'], off: ['#6b7280', '#9aa3b2', 'rgba(255,255,255,.05)', '·'] };
-  var ROOM_TONES = /^(?:co|lco|ext|extending|fin|findone)$/;
+    ask: ['#fbbf24', '#fde68a', 'rgba(251,191,36,.12)', '?'], req: ['#53bdeb', '#b6e3f7', 'rgba(83,189,235,.14)', '📝'], bad: ['#ef4444', '#fca5a5', 'rgba(239,68,68,.15)', '⚠'], off: ['#6b7280', '#9aa3b2', 'rgba(255,255,255,.05)', '·'] };
+  var ROOM_TONES = /^(?:co|lco|ext|extending|fin|findone|bad)$/;
   function el(tag, css, text, parent) {
     var e = document.createElement(tag);
     if (css) e.style.cssText = css;
@@ -778,7 +781,7 @@
   /** which filter chips a row belongs to */
   function kindsOf(ch) {
     var k = { all: true };
-    ch.forEach(function (c) { if (ROOM_TONES.test(c.tone)) k.rooms = true; else if (c.tone === 'note') k.notes = true; else if (c.tone === 'ask') k.asks = true; });
+    ch.forEach(function (c) { if (ROOM_TONES.test(c.tone)) k.rooms = true; else if (c.tone === 'note' || c.tone === 'req') k.notes = true; else if (c.tone === 'ask') k.asks = true; });
     if (!k.rooms && !k.notes && !k.asks) k.other = true;
     return k;
   }
@@ -848,6 +851,7 @@
     var cw = el('div', 'display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:5px', null, bd);
     ch.forEach(function (c) { var k = ACT[c.tone] || ACT.off; el('span', 'font:600 10.5px/1.3 ' + SANS + ';padding:2px 7px;border-radius:99px;color:' + k[1] + ';background:' + k[2] + ';border:1px ' + (c.tone === 'ask' ? 'dashed ' + k[0] + '88' : 'solid ' + k[0] + '2e'), c.label, cw); });
     if (f.preview && (f.truncated || f.missed)) el('span', 'font-size:10.5px;color:#9aa3b2', f.truncated ? 'open the group to read in full' : '+' + f.missed + ' more · open the group to read all', cw);
+    f.cwEl = cw;
     f.stEl = el('span', 'margin-left:auto;font:600 10px/1 ' + SANS + ';color:' + TXT3, '', cw);
     f.node = r;
     list.insertBefore(r, list.firstChild);
@@ -859,6 +863,30 @@
     renderAsks();
   }
   function stateText(f) { if (f.stEl && !f.deleted) { setT(f.stEl, f.state === 'sent' ? '✓ in HotelOps' : f.state === 'copied' ? '✓ copied' : 'waiting…'); f.stEl.style.color = f.state === 'wait' ? TXT3 : ACC_L; } }
+  // what HotelOps did with a message: a request for an in-house room, a room that is not there…
+  function chipEl(c, f) { var k = ACT[c.tone] || ACT.off; var e = el('span', 'font:600 10.5px/1.3 ' + SANS + ';padding:2px 7px;border-radius:99px;color:' + k[1] + ';background:' + k[2] + ';border:1px ' + (c.tone === 'ask' ? 'dashed ' + k[0] + '88' : 'solid ' + k[0] + '2e'), c.label); if (f.stEl) f.cwEl.insertBefore(e, f.stEl); else f.cwEl.appendChild(e); return e; }
+  function gotRes(id, res) {
+    var f = feed.filter(function (x) { return x.id === id; })[0];
+    if (!f || f.gotRes || !f.cwEl) return; f.gotRes = true;
+    var add = [], bad = [];
+    res.slice(0, 12).forEach(function (r) {
+      if (!r || typeof r !== 'object') return;
+      var room = String(r.room || '').slice(0, 8), t = String(r.text || '');
+      if (r.st === 'req') add.push({ tone: 'req', label: '📝 Request · ' + room });
+      else if (r.st === 'notlist') { bad.push(room); add.push({ tone: 'bad', label: '⚠ ' + room + (/not found/.test(t) ? ' not found' : ' not on list') }); }
+      else if (/ · added from /.test(t)) add.push({ tone: 'req', label: '＋ ' + room + ' added from ' + t.split(' · added from ')[1] });
+    });
+    if (!add.length) return;
+    add.forEach(function (c) { f.chips.push(c); var e = chipEl(c, f); anim(e, [{ opacity: 0, transform: 'scale(.8)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'ease-out' }); });
+    f.hay = norm([f.hay].concat(add.map(function (c) { return c.label; })).join(' '));
+    f.kinds = kindsOf(f.chips);
+    if (bad.length) {
+      day.acts = Math.max(0, (day.acts || 0) - Math.min(bad.length, f.acts || 0));
+      if (f.node) { f.node.firstChild.style.background = ACT.bad[0]; f.node.firstChild.style.boxShadow = '0 0 12px ' + ACT.bad[0]; }
+      toast('⚠ Room ' + bad.join(', ') + ' is not there', 'warn');
+    }
+    save(); applyFilter(); render();
+  }
   function markFeed(id, st) { feed.forEach(function (f) { if (f.id === id) { f.state = st; stateText(f); } }); }
   // question cards: "what does 'ckd' mean?" (answered here or in HotelOps)
   var MEAN = [['co', '✓ Checked out'], ['ext', '↪ Extension'], ['lco', '⏰ Late CO'], ['note', '📝 Note / request'], ['hk', '🧹 HK status (note)'], ['ignore', 'Ignore this word']];

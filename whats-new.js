@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 345, items: [
+    '🏷️ WhatsApp reader: each message now also shows what HotelOps did with it — "📝 Request · 206" for a room that is staying, "⚠ 999 not found" (red, with a "Room 999 is not there" pop-up), and "＋ 512 added from arrivals" when a room was put on Departures. Paste the console line again in WhatsApp Web to get it.',
+  ] },
   { v: 344, items: [
     '💚 New WhatsApp reader look: a dark green glass window with a live "connected" light, counters (read today, acted, sent, waiting), an activity graph, search and filters in the feed, colour labels for CO / LCO / EXT / notes, a small pill you can drag anywhere, and Alt+H to show or hide it. Paste the console line again in WhatsApp Web to get it.',
   ] },

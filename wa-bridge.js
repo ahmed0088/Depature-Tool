@@ -13,7 +13,7 @@
 //  Messages arrive two ways:
 //   1. Linked: the console snippet (tools/hotelops-whatsapp.console.js) on
 //      WhatsApp Web opens this app in a tab and postMessages each new message
-//      ({source:'ho-wa', msg}); we answer {source:'ho-wa-ack', id}. Accepted only
+//      ({source:'ho-wa', msg}); we answer {source:'ho-wa-ack', id, res?} (res: what HotelOps did — request, not found…). Accepted only
 //      from https://web.whatsapp.com (or this same window).
 //   2. Pasted: text copied from WhatsApp Web ([9:01 AM, 18/10/2026] Sam: 324 CO)
 //      or a phone "Export chat" .txt (18/10/2026, 9:01 am - Sam: 324 CO).
@@ -849,8 +849,10 @@ const parse = (text, quote) => hoWaParse(text, { words: appLookup, quote: quote 
  * opt.batch: collect undo + counts instead of toasting. opt.rerun: read again after a word was explained.
  * Returns 'wait' | 'old' | 'dup' | 'done'.
  */
+let ACK_RES = null;   // what the last message did, sent back with the "got it" so the WhatsApp window can show it
 function handle(msg, via, opt) {
   opt = opt || {};
+  ACK_RES = null;
   if (msg && msg.deleted) return onDeleted(msg);
   const text = String(msg && msg.text || '').slice(0, 4000);
   const sender = normS(msg && msg.sender || '').slice(0, 60) || (msg && msg.mine ? 'Me' : 'WhatsApp');
@@ -907,6 +909,7 @@ function handle(msg, via, opt) {
   const undos = res.filter(r => r.undo).map(r => r.undo);
   const entry = { key, at: Date.now(), time: t24, sender, text: text.slice(0, 500), mine: !!msg.mine, edited, via, res: res.map(r => { const o = { st: r.st, room: r.room || '', text: r.text }; if (r.bal) o.bal = r.bal; if (r.w) o.w = r.w; if (r.guess) { o.guess = r.guess; o.m = r.act; } return o; }) };
   if (group) entry.group = group;
+  ACK_RES = entry.res.map(r => ({ st: r.st, room: r.room || '', text: String(r.text || '').slice(0, 140) }));
   if (msg.id) entry.mid = String(msg.id).slice(0, 200);
   if (quote) entry.quote = quote.slice(0, 200);
   if (msg.preview) entry.preview = true;
@@ -1147,7 +1150,7 @@ W.addEventListener('message', e => {
   const m = d.msg;
   if (!m || typeof m !== 'object' || !m.id) return;
   const r = handle(m, same ? 'page' : 'link');
-  if (r !== 'wait') reply({ source: 'ho-wa-ack', id: m.id });
+  if (r !== 'wait') reply(Object.assign({ source: 'ho-wa-ack', id: m.id }, r === 'done' && ACK_RES ? { res: ACK_RES } : {}));
 });
 
 // ══ Sending to the group (only what someone types or picks here, and presses Send) ══
