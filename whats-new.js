@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 342, items: [
+    '✉️ WhatsApp "Send automatically" now finds WhatsApp\'s new Send button and presses it like a finger; if it still can\'t, it presses Enter in the message box. Paste the console line again in WhatsApp Web to get it.',
+  ] },
   { v: 341, items: [
     '📷 Roster pictures: the reader now handles rosters that start with last week\'s Sunday before the names, the first hotel name in the title box, employee numbers before names, and white writing on red leave cells (AL, SL). A misread time is marked "?" for you to check.',
   ] },

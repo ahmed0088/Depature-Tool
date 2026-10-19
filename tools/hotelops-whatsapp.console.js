@@ -379,10 +379,30 @@
       document.querySelector('#main div[contenteditable="true"][data-tab]') || null;
   }
   function sendButton() {
-    var f = document.querySelector('#main footer'); if (!f) return null;
-    var b = f.querySelector('button[aria-label="Send"]') || f.querySelector('[role="button"][aria-label="Send"]') || f.querySelector('[data-testid="compose-btn-send"]');
-    if (!b) { var ic = f.querySelector('span[data-icon="send"]') || f.querySelector('[data-icon*="send"]'); if (ic) b = ic.closest('button') || ic.closest('[role="button"]') || ic; }
-    return b || null;
+    // WhatsApp renames this often: "send", "wds-ic-send-filled", data-testid "compose-btn-send", aria-label "Send"
+    var roots = [document.querySelector('#main footer'), document.querySelector('#main'), document].filter(Boolean);
+    for (var i = 0; i < roots.length; i++) {
+      var f = roots[i];
+      var b = f.querySelector('button[aria-label="Send"]') || f.querySelector('[role="button"][aria-label="Send"]') || f.querySelector('[data-testid="compose-btn-send"]') || f.querySelector('[data-testid*="send"]');
+      if (!b) { var ic = f.querySelector('[data-icon="send"]') || f.querySelector('[data-icon="wds-ic-send-filled"]') || f.querySelector('[data-icon*="send"]'); if (ic) b = ic.closest('button') || ic.closest('[role="button"]') || ic.parentElement || ic; }
+      if (b) return b;
+    }
+    return null;
+  }
+  /** press it the way a finger does (some WhatsApp buttons only listen to pointer/mouse events), else Enter in the box */
+  function pressSend(box) {
+    var b = sendButton();
+    if (b) {
+      try {
+        ['pointerdown', 'mousedown', 'pointerup', 'mouseup'].forEach(function (t) { b.dispatchEvent(new (t.indexOf('pointer') === 0 && window.PointerEvent ? PointerEvent : MouseEvent)(t, { bubbles: true, cancelable: true, view: window })); });
+        b.click(); return true;
+      } catch (_) {}
+    }
+    try {
+      box = box || composeBox(); if (!box) return false; box.focus();
+      ['keydown', 'keypress', 'keyup'].forEach(function (t) { box.dispatchEvent(new KeyboardEvent(t, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true })); });
+      return true;
+    } catch (_) { return false; }
   }
   var boxText = function (b) { return b ? String(b.innerText || b.textContent || '').replace(/[⁣​]/g, '').trim() : ''; };
   function clearBox(b) { try { b.focus(); document.execCommand('selectAll', false, null); document.execCommand('delete', false, null); } catch (_) {} }
@@ -436,7 +456,7 @@
     var go = auto || o.auto;   // the WhatsApp window's switch, or "Send automatically" ticked in HotelOps for this message
     report(o, 'typed', go ? '' : 'Press Enter in WhatsApp to send');
     toast(go ? '✉ Sending to ' + o.group + '…' : '⌨ Typed in ' + o.group + ' · press Enter to send', 'info');
-    if (go) timers.push(setTimeout(function () { if (stopped || o.st !== 'typed') return; var sb = sendButton(); if (sb) { try { sb.click(); } catch (_) {} } else report(o, 'failed', 'No send button found · press Enter'); timers.push(setTimeout(checkTyped, 600)); }, 350));
+    if (go) timers.push(setTimeout(function () { if (stopped || o.st !== 'typed') return; if (!pressSend(b)) report(o, 'failed', 'Could not press Send · press Enter'); timers.push(setTimeout(checkTyped, 700)); timers.push(setTimeout(function () { if (!stopped && o.st === 'typed' && boxText(composeBox())) { pressSend(composeBox()); timers.push(setTimeout(checkTyped, 700)); } }, 1500)); }, 350));
   }
   function checkTyped() {
     out.forEach(function (o) {
