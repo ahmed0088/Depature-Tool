@@ -93,6 +93,61 @@ function rosterShiftOf(people, sender, mine) {
   return p ? { id: SHIFT_OF_TYPE[p.info.type], hours: p.info.from && p.info.to ? p.info.from + '–' + p.info.to : '', who: p.name } : null;
 }
 
+// ══ Learning: what you remove (or add back) teaches the book ══
+const LEARN_STOP = new Set('the and for with from that this have has had was were are is will would please pls plz kindly also just only need needs needed room rooms guest guests today tomorrow tonight now asap ok okay thanks thank you your our his her their him she he they them sir madam mam dear team all any not yes'.split(' '));
+/** the words that carry the meaning (no numbers, rooms, times or filler) */
+function learnToks(text) {
+  const w = sp(text).toLowerCase().replace(/\b\d+(?:[:.]\d+)?\s*(?:am|pm)?\b/g, ' ').replace(/[^a-z\u0600-\u06ff ]+/g, ' ').split(/\s+/).filter(x => x.length >= 3 && !LEARN_STOP.has(x));
+  return [...new Set(w)].slice(0, 30);
+}
+/** how alike two word lists are (0…1) */
+function simOf(a, b) {
+  const A = new Set(a || []), B = new Set(b || []); if (!A.size || !B.size) return 0;
+  let n = 0; A.forEach(x => { if (B.has(x)) n++; });
+  return n / (A.size + B.size - n);
+}
+/** what was learned about text like this: {v:'no'|'yes', sim} (sure), {v:'ask', like, sim} (not sure), or null.
+ *  examples: [{t:[words], v:'no'|'yes'}] */
+function learnedVerdict(text, examples) {
+  const t = learnToks(text); if (!t.length) return null;
+  let best = null;
+  (examples || []).forEach(e => { if (!e || !Array.isArray(e.t) || (e.v !== 'yes' && e.v !== 'no')) return; const s = simOf(t, e.t); if (!best || s > best.sim) best = { v: e.v, sim: s }; });
+  if (!best || best.sim < 0.4) return null;
+  return best.sim >= 0.6 ? best : { v: 'ask', like: best.v, sim: best.sim };
+}
+
+/** a field you set by hand on messages like this one ('cat:res' → 'res', 'st:open' → 'open'), or '' */
+function learnedField(text, examples, kind) {
+  const t = learnToks(text); if (!t.length) return '';
+  let best = null;
+  (examples || []).forEach(e => { if (!e || !Array.isArray(e.t) || String(e.v || '').indexOf(kind + ':') !== 0) return; const s = simOf(t, e.t); if (s >= 0.6 && (!best || s > best.sim || (s === best.sim && (e.at || 0) > (best.at || 0)))) best = { v: e.v.slice(kind.length + 1), sim: s, at: e.at }; });
+  return best ? best.v : '';
+}
+/** the words you changed when editing: "Room 512 has bad smel." → "Room 512 has a bad smell." gives [['smel', 'smell']] (one word for one word only) */
+function wordSwaps(before, after) {
+  const A = sp(before).split(/\s+/).filter(Boolean), B = sp(after).split(/\s+/).filter(Boolean);
+  const clean = w => w.replace(/^[^\w\u0600-\u06ff]+|[^\w\u0600-\u06ff]+$/g, '');
+  const out = [];
+  // line the two up by the words they share, then a single word between two shared ones is a swap
+  let i = 0, j = 0;
+  while (i < A.length && j < B.length) {
+    if (clean(A[i]).toLowerCase() === clean(B[j]).toLowerCase()) { i++; j++; continue; }
+    const a1 = clean(A[i]), b1 = clean(B[j]);
+    const nextA = A[i + 1] && clean(A[i + 1]).toLowerCase(), nextB = B[j + 1] && clean(B[j + 1]).toLowerCase();
+    if (nextA === nextB || (!A[i + 1] && !B[j + 1])) { if (a1 && b1 && /[a-z]/i.test(a1) && !/\d/.test(a1 + b1) && a1.length >= 2) out.push([a1.toLowerCase(), b1]); i++; j++; continue; }
+    if (B[j + 1] && clean(B[j + 1]).toLowerCase() === clean(A[i]).toLowerCase()) { j++; continue; }   // a word added
+    if (A[i + 1] && clean(A[i + 1]).toLowerCase() === clean(B[j]).toLowerCase()) { i++; continue; }   // a word removed
+    i++; j++;
+  }
+  return out.slice(0, 5);
+}
+/** your own word fixes on a new text (whole words, any case) */
+function applySwaps(text, swaps) {
+  let t = String(text || '');
+  (swaps || []).forEach(([a, b]) => { if (!a || !b) return; t = t.replace(new RegExp('(^|[^\\w])' + a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\w])', 'gi'), (m, pre) => pre + b); });
+  return t;
+}
+
 // ══ Categories ══════════════════════════════════════════════
 const CATS = [
   ['guest', 'Guest / complaint', '🙋'], ['pay', 'Payment & billing', '💳'], ['res', 'Reservations', '📅'], ['move', 'Room move', '🔀'],
@@ -641,7 +696,7 @@ function pdfHtml(m) {
   <div class="tw">${open}</div>`;
 }
 
-W.hoHandoverPure = { hoursOf, sameName, rosterShiftOf, pdfHtml, cssOf, isUrgent, XL, XL_KPI, statusStyle, catStyle, argbOf, rowHeight, shiftsCovered, reportModel, writtenSummary, HO_GROUP_RX, isHandoverGroup, HO_PREFIX_RX, hoPrefix, isChat, pasteItems, suggestFrom, HO_COPY_MIN, handoverScore, looksLikeHandover, SHIFT_BOUNDS, shiftOf, CATS, CAT, categorize, statusOf, roomsOf, tagsOf, splitItems, tidy, buildItems, filterItems, summaryOf,
+W.hoHandoverPure = { learnedField, wordSwaps, applySwaps, learnToks, simOf, learnedVerdict, hoursOf, sameName, rosterShiftOf, pdfHtml, cssOf, isUrgent, XL, XL_KPI, statusStyle, catStyle, argbOf, rowHeight, shiftsCovered, reportModel, writtenSummary, HO_GROUP_RX, isHandoverGroup, HO_PREFIX_RX, hoPrefix, isChat, pasteItems, suggestFrom, HO_COPY_MIN, handoverScore, looksLikeHandover, SHIFT_BOUNDS, shiftOf, CATS, CAT, categorize, statusOf, roomsOf, tagsOf, splitItems, tidy, buildItems, filterItems, summaryOf,
   excelRows, summaryRows, fileName, polishStyles, polishSheet, dLong, t12, COL_W, byTime };
 if (!doc) return;
 
@@ -715,8 +770,10 @@ async function fromWa(p) {
   const day = p.date || today();
   if (day !== today()) await load(day); else listenToday();
   let items = buildItems({ base: p.base, mid: p.mid || '', date: day, time: p.time, sender: p.sender, group: p.group, text: p.text, at: p.at || Date.now(), src: p.copy ? 'copy' : p.src || 'wa' }, { parse, ho: !p.copy && p.src !== 'prefix' });
-  // copied from another group (HK…): only the lines that read like handover items
-  if (p.copy) items = items.length > 1 ? items.filter(it => looksLikeHandover(it.orig, { parse })) : items.filter(() => looksLikeHandover(p.text, { parse }));
+  // what the book learned from your removals and additions (a "HO -" mark is always kept)
+  items = items.map(it => p.src !== 'prefix' ? applyLearned(it) : applyLearnedFields(it));
+  // copied from another group (HK…): only the lines that read like handover items (or that you taught it to keep); nothing learned as "not handover"
+  if (p.copy) items = items.filter(it => it.learn !== 'no' && (it.learn === 'yes' || (items.length > 1 ? looksLikeHandover(it.orig, { parse }) : looksLikeHandover(p.text, { parse }))));
   const old = itemsOf(day).filter(i => i.msg === p.base), patch = {};
   items.forEach(it => {
     const k = fbSafe(it.key), was = old.find(o => o.key === it.key);
@@ -735,6 +792,65 @@ async function fromWa(p) {
   safe(() => { if (typeof logActivity === 'function' && !old.length) logActivity('handover_item', `${p.sender || 'WhatsApp'}: ${items.length} handover item${items.length === 1 ? '' : 's'}`); });
   return items.length;
 }
+// ── what the book has learned (shared by the team): handoverLearn/{key} = {t, v, ex, by, at} ──
+let LEARN = {};
+function listenLearn() {
+  if (typeof fbListen === 'function') safe(() => fbListen('handoverLearn', v => { LEARN = v && typeof v === 'object' ? v : {}; }));
+  else LEARN = LS.get('hb_learn', {});
+}
+const learnList = () => Object.keys(LEARN).map(k => LEARN[k]).filter(Boolean);
+/** remember: text like this is ('yes') / is not ('no') a handover item → returns the key (to forget it on Undo) */
+function learn(text, v) {
+  const t = learnToks(text); if (!t.length) return '';
+  const key = 'l' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  // the same words learned the other way before: that lesson is replaced
+  Object.keys(LEARN).forEach(k => { const e = LEARN[k]; if (e && simOf(e.t, t) >= 0.85) forget(k); });
+  const e = { t, v, ex: sp(text).slice(0, 120), by: me(), at: Date.now() };
+  LEARN[key] = e;
+  if (typeof fbSet === 'function') safe(() => Promise.resolve(fbSet('handoverLearn/' + key, e)).catch(() => {})); else LS.set('hb_learn', LEARN);
+  const ks = Object.keys(LEARN); if (ks.length > 500) ks.sort((a, b) => (LEARN[a].at || 0) - (LEARN[b].at || 0)).slice(0, ks.length - 500).forEach(forget);
+  return key;
+}
+/** remember a choice you made on an item (topic, pending / info) for messages like it */
+function learnField(text, kind, val) {
+  const t = learnToks(text); if (!t.length || !val) return '';
+  Object.keys(LEARN).forEach(k => { const e = LEARN[k]; if (e && String(e.v || '').indexOf(kind + ':') === 0 && simOf(e.t, t) >= 0.85) forget(k); });
+  const key = 'l' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), e = { t, v: kind + ':' + val, ex: sp(text).slice(0, 120), by: me(), at: Date.now() };
+  LEARN[key] = e;
+  if (typeof fbSet === 'function') safe(() => Promise.resolve(fbSet('handoverLearn/' + key, e)).catch(() => {})); else LS.set('hb_learn', LEARN);
+  return key;
+}
+/** the words you fixed by hand → fixed for you next time (handoverLearn/w_<word>) */
+function learnWords(before, after) {
+  wordSwaps(before, after).forEach(([a, b]) => {
+    const key = 'w_' + a.replace(/[^a-z0-9\u0600-\u06ff]/gi, '_').slice(0, 40), e = { w: [a, b], v: 'word', by: me(), at: Date.now() };
+    LEARN[key] = e;
+    if (typeof fbSet === 'function') safe(() => Promise.resolve(fbSet('handoverLearn/' + key, e)).catch(() => {})); else LS.set('hb_learn', LEARN);
+  });
+}
+const learnedSwaps = () => learnList().filter(e => e.v === 'word' && Array.isArray(e.w)).map(e => e.w);
+function forget(key) {
+  if (!key || !LEARN[key]) return; delete LEARN[key];
+  if (typeof fbSet === 'function') safe(() => Promise.resolve(fbSet('handoverLearn/' + key, null)).catch(() => {})); else LS.set('hb_learn', LEARN);
+}
+/** a new item, as learned: like one you removed → team chat; like one you kept → in; in between → ask */
+/** your word fixes, topics and pending / info choices, on a new item */
+function applyLearnedFields(it) {
+  const L = learnList(), src = it.orig || it.text;
+  const sw = learnedSwaps(); if (sw.length && it.text) it.text = applySwaps(it.text, sw);
+  const c = learnedField(src, L, 'cat'); if (c && CAT[c]) it.cat = c;
+  const st = learnedField(src, L, 'st'); if (st === 'open' || st === 'info') it.status = st;
+  return it;
+}
+function applyLearned(it) {
+  applyLearnedFields(it);
+  const r = learnedVerdict(it.orig || it.text, learnList()); if (!r) return it;
+  if (r.v === 'no') { it.chat = 1; it.learn = 'no'; }
+  else if (r.v === 'yes') { it.chat = null; it.learn = 'yes'; }
+  else { it.ask = 1; it.learn = 'ask:' + r.like; }
+  return it;
+}
+
 // messages that came before this file was ready (wa-bridge.js keeps them in hb_queue_v1)
 function drain() { const q = LS.get('hb_queue_v1', []); if (!Array.isArray(q) || !q.length) return; LS.set('hb_queue_v1', []); q.reduce((pr, p) => pr.then(() => fromWa(p)).catch(() => {}), Promise.resolve()); }
 
@@ -749,6 +865,7 @@ function addItems(list, day) {
     const d = /^\d{4}-\d{2}-\d{2}$/.test(x.date || '') ? x.date : day || today();
     const items = buildItems({ base: 'h' + Date.now().toString(36) + i + Math.random().toString(36).slice(2, 5), date: d, time: x.time || t, sender: x.sender || me(), group: '', text: x.text, at: Date.now() + i, src: x.src || 'hand' }, { parse });
     items.forEach(it => {
+      safe(() => applyLearnedFields(it));
       if (x.cat) { it.cat = x.cat; it.catBy = me(); it.status = statusOf(it.orig, x.cat, it.head); }
       if (x.from) it.from = x.from;
       const p = byDay[d] = byDay[d] || {}; const k = fbSafe(it.key); delete it.key; p[k] = it; n++;
@@ -880,6 +997,7 @@ const PCSS = `
 #hbRoot .hb-note{font-size:13.5px;color:var(--text2);background:var(--hb-fill);border-radius:10px;padding:7px 10px;overflow-wrap:anywhere}
 #hbRoot .hb-orig{font-size:13px;color:var(--text2);background:var(--hb-soft);border:1px dashed var(--hb-hair);border-radius:10px;padding:8px 10px;white-space:pre-wrap;overflow-wrap:anywhere}
 #hbRoot .hb-orig b{display:block;font-size:11.5px;color:var(--text3);margin-bottom:2px}
+#hbRoot .hb-askl{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px;padding:7px 10px;border-radius:10px;font-size:12px;background:color-mix(in srgb,var(--hb-info) 10%,transparent);color:var(--text)}
 #hbRoot .hb-sts{display:inline-flex;border-radius:999px;background:color-mix(in srgb,var(--text3) 12%,transparent);padding:2px;gap:2px}
 #hbRoot .hb-sts button{all:unset;box-sizing:border-box;cursor:pointer;font:600 11px/1 var(--hb-font);padding:5px 10px;border-radius:999px;color:var(--text2);transition:background .18s,color .18s,box-shadow .18s}
 #hbRoot .hb-sts button:hover{color:var(--text)}
@@ -940,7 +1058,7 @@ function itemHtml(i, day, opt) {
   opt = opt || {};
   const id = idOf(day, i.key), k = esc(i.key), d = esc(day), c = catOf(i.cat), st = i.status || 'info', q = HB.q;
   const a = (act, label, title, cls) => `<button type="button" class="${cls || 'hb-ib'}" data-hb="${act}" data-k="${k}" data-d="${d}"${title ? ` title="${esc(title)}" aria-label="${esc(title)}"` : ''}>${label}</button>`;
-  if (opt.chat) return `<div class="hb-it" data-key="${k}"><span class="hb-av" style="--h:${hueOf(i.sender)};width:22px;height:22px;font-size:9px;margin-top:1px">${esc(initials(i.sender))}</span><div class="hb-bd"><div class="hb-tx">${hi(i.orig || i.text, q)}</div><div class="hb-meta"><span class="hb-who">${esc(i.sender || '—')}</span><span>${esc(t12(i.time))}</span></div></div><div class="hb-acts" style="opacity:1">${a('unchat', 'Add to handover', 'Add this to the handover', 'hb-q sm')}</div></div>`;
+  if (opt.chat) return `<div class="hb-it" data-key="${k}"><span class="hb-av" style="--h:${hueOf(i.sender)};width:22px;height:22px;font-size:9px;margin-top:1px">${esc(initials(i.sender))}</span><div class="hb-bd"><div class="hb-tx">${hi(i.orig || i.text, q)}</div><div class="hb-meta"><span class="hb-who">${esc(i.sender || '—')}</span><span>${esc(t12(i.time))}</span>${i.learn === 'no' ? '<span title="Left out because it is like a message you removed before">🧠 learned</span>' : ''}</div></div><div class="hb-acts" style="opacity:1">${a('unchat', 'Add to handover', 'Add this to the handover', 'hb-q sm')}</div></div>`;
   const editing = HB.edit === id, menu = HB.menu === id, noting = HB.note === id, orig = HB.orig === id;
   const diff = i.orig && sp(i.orig).trim() !== sp(i.text).trim();
   const ckTitle = st === 'done' ? 'Done — tap to reopen' : 'Mark as done';
@@ -966,7 +1084,7 @@ function itemHtml(i, day, opt) {
   const origHtml = orig ? `<div class="hb-orig"><b>WhatsApp${i.parts > 1 ? ` · line ${i.part} of ${i.parts}` : ''}</b>${esc(i.orig || '')}${i.parts > 1 && i.full ? `<b style="margin-top:8px">The whole message</b>${esc(i.full)}` : ''}</div>` : '';
   return `<div class="hb-it ${esc(st)}${menu ? ' menu' : ''}" data-key="${k}">
     <button type="button" class="hb-ck" data-hb="check" data-k="${k}" data-d="${d}" title="${ckTitle}" aria-label="${ckTitle}" aria-pressed="${st === 'done'}">✓</button>
-    <div class="hb-bd">${tx}<div class="hb-meta">${meta}</div>${noteHtml}${origHtml}${menuHtml}</div>
+    <div class="hb-bd">${tx}<div class="hb-meta">${meta}</div>${i.ask ? `<div class="hb-askl">🧠 Is this a handover item? ${a('askyes', 'Yes, keep', '', 'hb-chip')}${a('askno', 'No, leave out', '', 'hb-chip warn')}</div>` : ''}${noteHtml}${origHtml}${menuHtml}</div>
     <div class="hb-acts">${a('edit', '✎', 'Edit the text')}${a('del', '🗑', 'Delete (you can undo)', 'hb-ib hb-del')}${a('menu', '⋯', 'More: category, note, info, original')}</div></div>`;
 }
 function shell() {
@@ -1011,6 +1129,7 @@ function moreHtml(all) {
       <div><label for="hbSender">From</label><select class="hb-in" id="hbSender"><option value="">Everyone</option>${senders.map(n => `<option value="${esc(n)}"${n === HB.sender ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></div>
       <div><label for="hbGroup">Group</label><select class="hb-in" id="hbGroup"><option value="">All groups</option>${groups.map(g => `<option value="${esc(g)}"${g === HB.group ? ' selected' : ''}>${esc(g === '—' ? 'Added here' : g)}</option>`).join('')}</select></div>
       <div><label>Source</label><div class="hb-seg">${[['all', 'All'], ['marked', 'Marked HO'], ['auto', 'Auto-picked']].map(([k, l]) => `<button type="button" data-hb="src" data-v="${k}" class="${HB.src === k ? 'on' : ''}">${l} <em>${cnt({ src: k })}</em></button>`).join('')}</div></div>
+      <div><label>🧠 Learned</label><div class="hb-hint">${learnList().length ? `${learnList().filter(e => e.v === 'no').length} left out · ${learnList().filter(e => e.v === 'yes').length} kept <button type="button" class="hb-q sm" data-hb="forgetall">Forget all</button>` : 'Nothing yet. Remove what is not handover and I learn from it.'}</div></div>
       <div><label>Group by</label><div class="hb-seg">${[['time', 'Shift'], ['cat', 'Topic'], ['room', 'Room']].map(([k, l]) => `<button type="button" data-hb="by" data-v="${k}" class="${HB.by === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
     </div></div>`;
 }
@@ -1291,14 +1410,16 @@ function exportPdf() {
 function saveEdit(el) {
   const k = el.dataset.k, d = el.dataset.d, v = sp(el.value).trim().slice(0, 1000), it = itemsOf(d).find(i => i.key === k);
   HB.edit = '';
-  if (it && v && v !== it.text) setField(d, k, { text: v, textBy: me() }); else body();
+  if (it && v && v !== it.text) { learnWords(it.text, v); setField(d, k, { text: v, textBy: me() }); } else body();
 }
 function removeItem(d, k, how) {
   const it = itemsOf(d).find(i => i.key === k); if (!it) return;
   if (how === 'reject') setField(d, k, { chat: 1, chatBy: me() });
   else setField(d, k, { del: 1, delBy: me(), delAt: Date.now() });
-  const back = () => { setField(d, k, how === 'reject' ? { chat: null, chatBy: me() } : { del: null, delBy: null, delAt: null }); return true; };
-  const msg = how === 'reject' ? 'Moved to team chat' : 'Item deleted';
+  // 🧠 an item that came by itself (WhatsApp, auto-picked) and is removed: messages like it are not handover
+  const lk = it.src !== 'hand' && it.status !== 'done' ? learn(it.orig || it.text, 'no') : '';
+  const back = () => { forget(lk); setField(d, k, how === 'reject' ? { chat: null, chatBy: me() } : { del: null, delBy: null, delAt: null }); return true; };
+  const msg = (how === 'reject' ? 'Moved to team chat' : 'Item deleted') + (lk ? ' · 🧠 I\'ll leave out messages like this' : '');
   if (typeof showUndoToast === 'function') safe(() => showUndoToast(msg, back, 7000)); else toast(msg, 'info');
 }
 function onClick(e) {
@@ -1335,6 +1456,7 @@ function onClick(e) {
       case 'menu': HB.menu = HB.menu === id ? '' : id; body(); return;
       case 'note': HB.note = HB.note === id ? '' : id; HB.menu = ''; body(); return;
       case 'orig': HB.orig = HB.orig === id ? '' : id; body(); return;
+      case 'forgetall': if (confirm('Forget everything the Handover Book learned from your removals?')) { Object.keys(LEARN).forEach(forget); toast('Forgotten', 'ok'); body(); } return;
     }
     if (!item) return;
     if (a === 'check') {
@@ -1343,12 +1465,15 @@ function onClick(e) {
     } else if (a === 'setst') {
       const v = b.dataset.v, nv = item.status === v ? 'info' : v;      // tap the lit one again: back to plain info
       setField(d, k, nv === 'done' ? { status: 'done', doneBy: me(), doneAt: Date.now() } : { status: nv, doneBy: null, doneAt: null });
+      if (nv !== 'done' && item.status !== 'done' && nv !== item.status) learnField(item.orig || item.text, 'st', nv);   // pending ↔ info: how things like this start
       HB.menu = '';
     } else if (a === 'todo') { setField(d, k, { status: 'open', doneBy: null, doneAt: null }); HB.menu = ''; }
-    else if (a === 'info') { setField(d, k, { status: 'info', doneBy: null, doneAt: null }); HB.menu = ''; }
-    else if (a === 'setcat') { setField(d, k, { cat: b.dataset.c, catBy: me() }); HB.menu = ''; }
+    else if (a === 'info') { setField(d, k, { status: 'info', doneBy: null, doneAt: null }); learnField(item.orig || item.text, 'st', 'info'); HB.menu = ''; }
+    else if (a === 'setcat') { setField(d, k, { cat: b.dataset.c, catBy: me() }); if (b.dataset.c !== item.cat) learnField(item.orig || item.text, 'cat', b.dataset.c); HB.menu = ''; }
     else if (a === 'retidy') { const el = doc.getElementById('hbEdit'); if (el) { el.value = tidy(item.orig || el.value); autosize(el); el.focus(); } return; }
-    else if (a === 'unchat') { setField(d, k, { chat: null, chatBy: me() }); toast('Added to the handover', 'ok'); }
+    else if (a === 'unchat') { setField(d, k, { chat: null, chatBy: me(), learn: null }); learn(item.orig || item.text, 'yes'); toast('Added to the handover · 🧠 I\'ll keep messages like this', 'ok'); }
+    else if (a === 'askyes') { setField(d, k, { ask: null, learn: 'yes' }); learn(item.orig || item.text, 'yes'); toast('🧠 Got it — messages like this are handover', 'ok'); }
+    else if (a === 'askno') { setField(d, k, { ask: null, chat: 1, chatBy: me(), learn: 'no' }); learn(item.orig || item.text, 'no'); toast('🧠 Got it — I\'ll leave out messages like this', 'ok'); }
     else if (a === 'reject' || a === 'del') { HB.menu = ''; removeItem(d, k, a); }
     body();
   });
@@ -1446,7 +1571,7 @@ function wrapHandover() {
 }
 function start() {
   safe(mountPage);
-  listenToday();
+  listenToday(); safe(listenLearn);
   setTimeout(() => safe(drain), 1500);
   [700, 2500, 6000].forEach(t => setTimeout(() => safe(wrapHandover), t));
   setInterval(() => safe(() => { if (listenDay !== today()) listenToday(); }), 60e3);

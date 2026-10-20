@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 355, items: [
+    '🧠 The Handover Book now learns from what you do: delete (or "Not handover") something that came from WhatsApp and similar messages are left out next time (they wait in "Team chat — not added"). Add one back and similar ones are kept. Change a topic, set Pending or Info, or fix a word, and it does the same for you next time.',
+    '❓ When it is not sure, it asks on the item: "Is this a handover item? Yes / No", and learns from your answer. Undo also undoes the lesson. See or forget what it learned under Filters → 🧠 Learned. The whole team shares what it learns.',
+  ] },
   { v: 354, items: [
     '✅ Handover Book: every item now has a clear ⏳ Pending / ✓ Done switch (tap the lit one again to make it plain info). "Open" is now called "Pending" everywhere, also in the Excel and PDF.',
     '🗑 Faster editing: ✎ edits the text, 🗑 deletes straight away (with Undo), ⋯ has the rest (topic, note, info, original).',
