@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 356, items: [
+    '🔍 Departures check-up, 18 fixes. A board for tomorrow no longer shows rooms as late or overdue. "Check out all due" skips rooms that are extending, may extend or waiting for Finance. The Due count only counts rooms that are really due out. Check out on No answer, DND and Late rooms now warns about an owing balance. Picking an agreed time on an overdue room now sets the late check-out.',
+    '🔍 More Departures fixes: a report for a different day starts a fresh board instead of mixing into today. Pasting a report no longer drops the last room. Undo keeps the late check-out, No answer and DND times. "Checking out in 15 min" shows the time it means. On a phone, list and compact views no longer cut the Check out button.',
+    '🔍 Handover Book check-up, 12 fixes: two-line chat like "Thanks" / "Noted" and "ok will check" stay out of the handover. A "Handover morning shift" title line is kept as a title. "Ho gaya" is no longer read as an HO mark. After midnight gets its own night section (e.g. Night 19–20 Oct). An item you deleted stays deleted when the message is edited in WhatsApp. Undo brings back the lesson it replaced, and search no longer shows odd symbols.',
+  ] },
   { v: 355, items: [
     '🧠 The Handover Book now learns from what you do: delete (or "Not handover") something that came from WhatsApp and similar messages are left out next time (they wait in "Team chat — not added"). Add one back and similar ones are kept. Change a topic, set Pending or Info, or fix a word, and it does the same for you next time.',
     '❓ When it is not sure, it asks on the item: "Is this a handover item? Yes / No", and learns from your answer. Undo also undoes the lesson. See or forget what it learned under Filters → 🧠 Learned. The whole team shares what it learns.',
