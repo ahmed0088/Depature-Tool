@@ -55,7 +55,10 @@ const HO_PREFIX_RX = /^\s*(?:\*\s*)?(?:HO|H\/O|hand\s*-?\s*over)(?![A-Za-z0-9])\
 function hoPrefix(text) {
   const s = sp(text), m = s.match(HO_PREFIX_RX); if (!m) return null;
   const rest = s.slice(m[0].length).trim();
-  return rest ? rest : null;
+  if (!rest) return null;
+  // a plain "ho" / "Ho" (not "HO", no "-" or ":") only before a room or a number: "ho 512 ED" yes, "Ho gaya" / "ho jayega" no
+  if (/^(?:\*\s*)?(?:ho|Ho|hO)$/.test(m[0].trim()) && !/^(?:\d|r(?:oo)?ms?\b)/i.test(rest)) return null;
+  return rest;
 }
 
 // ══ Shifts ══════════════════════════════════════════════════
@@ -111,9 +114,9 @@ function simOf(a, b) {
 function learnedVerdict(text, examples) {
   const t = learnToks(text); if (!t.length) return null;
   let best = null;
-  (examples || []).forEach(e => { if (!e || !Array.isArray(e.t) || (e.v !== 'yes' && e.v !== 'no')) return; const s = simOf(t, e.t); if (!best || s > best.sim) best = { v: e.v, sim: s }; });
+  (examples || []).forEach(e => { if (!e || !Array.isArray(e.t) || (e.v !== 'yes' && e.v !== 'no')) return; const s = simOf(t, e.t); if (!best || s > best.sim || (s === best.sim && (e.at || 0) > best.at)) best = { v: e.v, sim: s, at: e.at || 0 }; });   // the same match: the newer lesson wins
   if (!best || best.sim < 0.4) return null;
-  return best.sim >= 0.6 ? best : { v: 'ask', like: best.v, sim: best.sim };
+  return best.sim >= 0.6 ? { v: best.v, sim: best.sim } : { v: 'ask', like: best.v, sim: best.sim };
 }
 
 /** a field you set by hand on messages like this one ('cat:res' → 'res', 'st:open' → 'open'), or '' */
@@ -273,10 +276,18 @@ function tagsOf(text, parse) {
 }
 
 // ══ Splitting a message into items ══════════════════════════
-const BULLET_RX = /^\s*(?:[-–—•·*▪►▶➤➢→◦○●▫️✔️✅☑️🔸🔹🔺🔻⭐👉]+\s*|\(?\d{1,2}[.)]\s+|\(?[a-h][)]\s+)/u;
+const BULLET_RX = /^\s*(?:[-–—•·*▪►▶➤➢→◦○●▫️✔️✅☑️🔸🔹🔺🔻⭐👉⚠❗‼📌🔴🟠🟡🟢🔵]+\s*|\(?\d{1,2}[.)]\s+|\(?[a-h][)]\s+)/u;
 const GREET_RX = /^(?:good\s*(?:morning|afternoon|evening|night|day)|hi+|hello|hey|dear\b|salam|assalam\w*|greetings|morning|evening)\b[\s\w,!.]*$/i;
 const SIGN_RX = /^(?:thanks?|thank\s*you|thx|thnx|ty|regards|best regards|kind regards|br|cheers|have a (?:good|nice|great|safe)\b.*|good luck.*|that'?s all.*|end of (?:handover|report).*)[\s!.🙏👍]*$/i;
 const TITLE_RX = /\b(?:hand\s*-?\s*over|h\/o)\b/i;
+/** a title line ("Handover morning shift 20/10", "H/O night"): no item of its own */
+const isTitle = t => t.split(/\s+/).length <= 8 && TITLE_RX.test(t) && !roomsOf(t).length;
+/** the text of a handover message to split into items: without its "HO -" mark, but a title line ("Handover morning shift\n- …") is kept whole (splitItems drops it) */
+function hoBody(text) {
+  const rest = hoPrefix(text); if (rest == null) return text;
+  const L = sp(text).trim().split('\n');
+  return L.length > 1 && isTitle(L[0].trim()) ? text : rest;
+}
 /** a WhatsApp message → its handover items [{text, head}] (one per line or bullet when the lines are separate items) */
 function splitItems(text) {
   const raw = sp(text).replace(/\r/g, '');
@@ -288,9 +299,9 @@ function splitItems(text) {
     const words = t.split(/\s+/).length;
     const bullet = BULLET_RX.test(t);
     if (!bullet && words <= 7 && (GREET_RX.test(t) || SIGN_RX.test(t))) return;
+    if (!bullet && isTitle(t)) { head = ''; return; }   // "Handover morning shift 20/10"
+    if (!bullet && /[:：]\s*$/.test(t) && t.length <= 40 && !roomsOf(t).length) { head = t.replace(/[:：]\s*$/, '').replace(/^[*_~]+|[*_~]+$/g, '').trim(); return; }   // "Pending:", "Done:"
     if (!bullet && words <= 3 && lines.filter(x => x.trim()).length > 1 && isChat(t)) return;   // "ok" under a list
-    if (!bullet && words <= 8 && TITLE_RX.test(t) && !roomsOf(t).length) { head = ''; return; }   // "Handover morning shift 20/10"
-    if (!bullet && /[:：]\s*$/.test(t) && t.length <= 40 && !roomsOf(t).length) { head = t.replace(/[:：]\s*$/, '').replace(/^[*_~]+|[*_~]+$/g, '').trim(); return; }   // "Pending:"
     kept.push({ t, bullet, head });
   });
   if (!kept.length) { const one = raw.trim(); return one ? [{ text: one, head: '' }] : []; }
@@ -306,7 +317,7 @@ function splitItems(text) {
 }
 
 // ══ Team chat in a handover group ═══════════════════════════
-const CHAT_RX = /^(?:ok+(?:ay)?|k+|kk+|okie|noted|note|thanks?(?: a lot| so much)?|thank\s*you(?: so much| all| team)?|thx|thnx|tnx|ty|tq|welcome|you'?re welcome|np|no problem|no worries|yes|yeah|yep|yup|ya|no|nope|sure|done|received|recieved|got it|copy(?: that)?|roger|alright|all right|fine|great|perfect|good|nice|cool|super|amazing|wow|haha+|lol|on my way|omw|coming|i'?m coming|will do|will check|ok will do|ok noted|noted with thanks|well noted|good (?:morning|afternoon|evening|night|day)(?: (?:all|team|guys|everyone))?|morning|hi+|hello|hey|salam|ok thanks?|ok thank you|thank u|tc|take care|bye|see you|see u|inshallah|insha'?allah|mashallah|alhamdulillah|same|me too|agreed|correct|right|true|exactly|ok sure|sure thing|why|what|when|where|who)$/i;
+const CHAT_RX = /^(?:ok+(?:ay)?|k+|kk+|okie|noted|note|thanks?(?: a lot| so much)?|thank\s*you(?: so much| all| team)?|thx|thnx|tnx|ty|tq|welcome|you'?re welcome|np|no problem|no worries|yes|yeah|yep|yup|ya|no|nope|sure|done|received|recieved|got it|copy(?: that)?|roger|alright|all right|fine|great|perfect|good|nice|cool|super|amazing|wow|haha+|lol|on my way|omw|coming|i'?m coming|(?:(?:ok(?:ay)?|sure|yes|noted) )?(?:i )?will (?:do|check|see|update)(?: it| and (?:update|revert|inform))?|ok noted|noted with thanks|well noted|good (?:morning|afternoon|evening|night|day)(?: (?:all|team|guys|everyone))?|morning|hi+|hello|hey|salam|ok thanks?|ok thank you|thank u|tc|take care|bye|see you|see u|inshallah|insha'?allah|mashallah|alhamdulillah|same|me too|agreed|correct|right|true|exactly|ok sure|sure thing|why|what|when|where|who)$/i;
 const MEDIA_RX = /^(?:<?\s*(?:media|image|video|audio|sticker|gif|document|contact card|voice (?:message|note))\s+omitted\s*>?|this message was deleted|you deleted this message|null|\(file attached\)|‎?(?:image|photo|video|sticker|gif|audio|voice message)\b.{0,20})$/i;
 /** is this line in a handover group just team chat ("ok", "noted 👍", "thanks Sam", "who is on shift?")? Anything with substance — a room,
  *  a number or time, a task word or a handover topic — is not. */
@@ -314,6 +325,7 @@ function isChat(text) {
   const raw = sp(text).trim();
   if (!raw) return true;
   if (MEDIA_RX.test(raw)) return true;
+  const ls = raw.split('\n').filter(l => l.trim()); if (ls.length > 1) return ls.every(isChat);   // "Thanks Sam\nNoted": chat on every line
   const t = raw.replace(/[\p{Extended_Pictographic}\u{1F3FB}-\u{1F3FF}\u200d\ufe0f]/gu, ' ').replace(/[.!?,;:~*_\-]+/g, ' ').replace(/\s+/g, ' ').trim();
   if (!t) return true;                                                                 // emoji only
   const low = t.toLowerCase(), words = low.split(' ');
@@ -417,7 +429,7 @@ function tidy(input) {
     .replace(/([,;])(?=[A-Za-z])/g, '$1 ').replace(/([!?])\1+/g, '$1').replace(/\.{2,}/g, '.').replace(/,{2,}/g, ',').replace(/([.!?])(?=[A-Z][a-z])/g, '$1 ')
     .replace(/:(?=[A-Za-z])/g, ': ').replace(/\s{2,}/g, ' ').trim();
   // capitals: the first letter and after a full stop
-  s = s.replace(/^([^A-Za-z\u0001]*)([a-z])/, (m, p, c) => p + c.toUpperCase()).replace(/([.!?]\s+)([a-z])/g, (m, p, c) => p + c.toUpperCase());
+  s = s.replace(/^([^A-Za-z0-9\u0001]*)([a-z])/, (m, p, c) => p + c.toUpperCase()).replace(/([.!?]\s+)([a-z])/g, (m, p, c) => p + c.toUpperCase());
   if (/[A-Za-z0-9)\]"'%\u0002]$/.test(s)) s += '.';
   s = s.replace(/\u0001(\d+)\u0002/g, (m, k) => keep[+k]);
   return s;
@@ -428,7 +440,7 @@ function tidy(input) {
  *  msg: {base, mid?, date, time, sender, group, text, at?, src?} · opt.parse: hoWaParse */
 function buildItems(msg, opt) {
   opt = opt || {};
-  const parts = splitItems(hoPrefix(msg.text) || msg.text), n = parts.length, base = msg.base || ('p' + hash((msg.date || '') + '|' + (msg.time || '') + '|' + (msg.sender || '') + '|' + msg.text));
+  const parts = splitItems(hoBody(msg.text)), n = parts.length, base = msg.base || ('p' + hash((msg.date || '') + '|' + (msg.time || '') + '|' + (msg.sender || '') + '|' + msg.text));
   return parts.map((p, i) => {
     const cat = categorize(p.text, p.head), it = {
       key: n > 1 ? base + '_' + (i + 1) : base, msg: base, at: msg.at || 0, date: msg.date || '', time: msg.time || '', shift: shiftOf(msg.time),
@@ -455,7 +467,7 @@ function pasteItems(text, opt) {
   let msgs = [];
   if (typeof opt.parseCopied === 'function') { try { msgs = opt.parseCopied(raw) || []; } catch (_) { msgs = []; } }
   if (msgs.length) {
-    msgs.forEach(m => { const body = hoPrefix(m.text) || m.text; if (!sp(body).trim()) return; push(body, { sender: sp(m.sender).trim(), time: t24of(m.time), date: isoOf(m.date), marked: !!hoPrefix(m.text) }); });
+    msgs.forEach(m => { const body = hoBody(m.text); if (!sp(body).trim()) return; push(body, { sender: sp(m.sender).trim(), time: t24of(m.time), date: isoOf(m.date), marked: !!hoPrefix(m.text) }); });
     return out;
   }
   // an e-mail: no quoted reply, no headers, nothing after the signature
@@ -535,7 +547,7 @@ function writtenSummary(items, opt) {
   s += '.';
   if (open.length) {
     const what = open.slice(0, max).map(i => String(i.text || i.orig || '').replace(/[.!]+$/, '')).map(t => (t.length > 70 ? t.slice(0, 68).replace(/\s+\S*$/, '') + '…' : t));
-    s += ' Still to do: ' + what.join('; ') + (open.length > max ? `; and ${open.length - max} more` : '') + '.';
+    s += (' Still to do: ' + what.join('; ') + (open.length > max ? `; and ${open.length - max} more` : '') + '.').replace(/…\.$/, '…');
   } else s += ' A clean handover.';
   return s;
 }
@@ -627,6 +639,15 @@ function rowHeight(texts, widths, base) {
 }
 /** "Morning, Afternoon" — the shifts the items cover */
 const shiftsCovered = items => SHIFT_BOUNDS.map(s => s.id).filter(id => (items || []).some(i => i && !i.del && !i.chat && i.shift === id)).join(', ');
+/** an item's shift section on its day → {k, label}: the Night after midnight is last night ("Night 19–20 Oct"), kept apart from tonight's ("Night 20–21 Oct") */
+function sectionOf(i) {
+  const id = (i && i.shift) || '', m = toMin(i && i.time);
+  if (id !== 'Night' || !/^\d{4}-\d{2}-\d{2}$/.test(i.date || '')) return { k: id, label: id || 'No time' };
+  const a = m != null && m < 12 * 60 ? dayAdd(i.date, -1) : i.date, A = a.split('-'), B = dayAdd(a, 1).split('-');
+  return { k: a === i.date ? 'Night' : 'Night0', label: 'Night ' + +A[2] + (A[1] !== B[1] ? ' ' + MON[+A[1] - 1] : '') + '–' + +B[2] + ' ' + MON[+B[1] - 1] };
+}
+/** the sections of a day in order: last night, Morning, Afternoon, tonight */
+const SECTION_ORDER = ['Night0', 'Morning', 'Afternoon', 'Night', ''];
 const XL_COLS = [['Date', 11], ['Shift', 11], ['Time', 9], ['From', 16], ['Category', 20], ['Rooms', 10], ['Item', 60], ['Status', 10], ['Done by', 18], ['Note', 30], ['Original', 44]];
 /** everything the report shows, ready to draw. opt: {hotel, date, user, exportedAt (ms), orig} */
 function reportModel(items, opt) {
@@ -643,10 +664,10 @@ function reportModel(items, opt) {
       statusStyle(i.status).label, i.status === 'done' ? [i.doneBy, t12(hhmmOf(i.doneAt))].filter(Boolean).join(' · ') : '', i.note || ''].concat(opt.orig ? [i.orig || ''] : []),
     status: i.status || 'info', cat: i.cat || 'info', urgent: isUrgent(i), done: i.status === 'done',
   });
-  const order = SHIFT_BOUNDS.map(s => s.id).concat(['']);
-  const sections = order.map(id => { const R = L.filter(i => (i.shift || '') === id); return R.length ? { id, label: id || 'No time', hours: hoursOf(R), count: R.length, open: R.filter(i => i.status === 'open').length, rows: R.map(row) } : null; }).filter(Boolean);
+  const inSec = k => L.filter(i => sectionOf(i).k === k);
+  const sections = SECTION_ORDER.map(id => { const R = inSec(id); return R.length ? { id, label: sectionOf(R[0]).label, hours: hoursOf(R), count: R.length, open: R.filter(i => i.status === 'open').length, rows: R.map(row) } : null; }).filter(Boolean);
   const byCat = CATS.filter(c => S.byCat[c[0]]).map(c => { const R = L.filter(i => i.cat === c[0]); return { cat: c[0], label: c[1], items: R.length, open: R.filter(i => i.status === 'open').length, done: R.filter(i => i.status === 'done').length }; });
-  const byShift = order.filter(id => L.some(i => (i.shift || '') === id)).map(id => { const R = L.filter(i => (i.shift || '') === id); return { label: id || 'No time', items: R.length, open: R.filter(i => i.status === 'open').length, done: R.filter(i => i.status === 'done').length }; });
+  const byShift = SECTION_ORDER.filter(id => inSec(id).length).map(id => { const R = inSec(id); return { label: sectionOf(R[0]).label, items: R.length, open: R.filter(i => i.status === 'open').length, done: R.filter(i => i.status === 'done').length }; });
   const open = L.filter(i => i.status === 'open').sort((a, b) => (isUrgent(b) - isUrgent(a)) || byTime(a, b))
     .map(i => ({ cells: [(CAT[i.cat] || CAT.info).label, t12(i.time), (i.rooms || []).join(', '), i.text || i.orig || '', i.sender || ''], cat: i.cat || 'info', urgent: isUrgent(i) }));
   return {
@@ -696,7 +717,7 @@ function pdfHtml(m) {
   <div class="tw">${open}</div>`;
 }
 
-W.hoHandoverPure = { learnedField, wordSwaps, applySwaps, learnToks, simOf, learnedVerdict, hoursOf, sameName, rosterShiftOf, pdfHtml, cssOf, isUrgent, XL, XL_KPI, statusStyle, catStyle, argbOf, rowHeight, shiftsCovered, reportModel, writtenSummary, HO_GROUP_RX, isHandoverGroup, HO_PREFIX_RX, hoPrefix, isChat, pasteItems, suggestFrom, HO_COPY_MIN, handoverScore, looksLikeHandover, SHIFT_BOUNDS, shiftOf, CATS, CAT, categorize, statusOf, roomsOf, tagsOf, splitItems, tidy, buildItems, filterItems, summaryOf,
+W.hoHandoverPure = { sectionOf, hoBody, learnedField, wordSwaps, applySwaps, learnToks, simOf, learnedVerdict, hoursOf, sameName, rosterShiftOf, pdfHtml, cssOf, isUrgent, XL, XL_KPI, statusStyle, catStyle, argbOf, rowHeight, shiftsCovered, reportModel, writtenSummary, HO_GROUP_RX, isHandoverGroup, HO_PREFIX_RX, hoPrefix, isChat, pasteItems, suggestFrom, HO_COPY_MIN, handoverScore, looksLikeHandover, SHIFT_BOUNDS, shiftOf, CATS, CAT, categorize, statusOf, roomsOf, tagsOf, splitItems, tidy, buildItems, filterItems, summaryOf,
   excelRows, summaryRows, fileName, polishStyles, polishSheet, dLong, t12, COL_W, byTime };
 if (!doc) return;
 
@@ -767,7 +788,7 @@ async function fromWa(p) {
     const patch = {}; itemsOf(day).filter(i => i.msg === p.base && !i.del).forEach(i => { patch[fbSafe(i.key) + '/del'] = 1; patch[fbSafe(i.key) + '/delAt'] = Date.now(); });
     write(day, patch); return Object.keys(patch).length / 2;
   }
-  const day = p.date || today();
+  const day = midDay(p.base) || p.date || today();         // an edit stays on the day the message was saved (an edit after midnight, no date)
   if (day !== today()) await load(day); else listenToday();
   let items = buildItems({ base: p.base, mid: p.mid || '', date: day, time: p.time, sender: p.sender, group: p.group, text: p.text, at: p.at || Date.now(), src: p.copy ? 'copy' : p.src || 'wa' }, { parse, ho: !p.copy && p.src !== 'prefix' });
   // what the book learned from your removals and additions (a "HO -" mark is always kept)
@@ -779,7 +800,7 @@ async function fromWa(p) {
     const k = fbSafe(it.key), was = old.find(o => o.key === it.key);
     if (!was) { delete it.key; patch[k] = it; return; }
     const ch = { orig: it.orig, rooms: it.rooms, tags: it.tags, full: it.full || null, part: it.part || null, parts: it.parts || null, head: it.head || null, src: it.src };
-    ch.del = null;
+    if (!was.delBy) ch.del = null;                                                // deleted here by hand: an edit in WhatsApp does not bring it back
     if (!was.chatBy) ch.chat = it.chat || null;                                   // "Add to handover" / "Not handover" taps stay
     if (!was.textBy) ch.text = it.text;
     if (!was.catBy) ch.cat = it.cat;
@@ -798,13 +819,22 @@ function listenLearn() {
   if (typeof fbListen === 'function') safe(() => fbListen('handoverLearn', v => { LEARN = v && typeof v === 'object' ? v : {}; }));
   else LEARN = LS.get('hb_learn', {});
 }
+const REPLACED = {};   // lesson key → the lessons it replaced
+/** Undo of a lesson: it is forgotten and the lessons it replaced come back */
+function unlearn(key) {
+  forget(key);
+  (REPLACED[key] || []).forEach(([k, e]) => { LEARN[k] = e; if (typeof fbSet === 'function') safe(() => Promise.resolve(fbSet('handoverLearn/' + k, e)).catch(() => {})); else LS.set('hb_learn', LEARN); });
+  delete REPLACED[key];
+}
 const learnList = () => Object.keys(LEARN).map(k => LEARN[k]).filter(Boolean);
 /** remember: text like this is ('yes') / is not ('no') a handover item → returns the key (to forget it on Undo) */
 function learn(text, v) {
   const t = learnToks(text); if (!t.length) return '';
   const key = 'l' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-  // the same words learned the other way before: that lesson is replaced
-  Object.keys(LEARN).forEach(k => { const e = LEARN[k]; if (e && simOf(e.t, t) >= 0.85) forget(k); });
+  // the same words learned the other way before: that lesson is replaced (and comes back with Undo, see unlearn)
+  const was = [];
+  Object.keys(LEARN).forEach(k => { const e = LEARN[k]; if (e && (e.v === 'yes' || e.v === 'no') && Array.isArray(e.t) && simOf(e.t, t) >= 0.85) { was.push([k, e]); forget(k); } });
+  if (was.length) REPLACED[key] = was;
   const e = { t, v, ex: sp(text).slice(0, 120), by: me(), at: Date.now() };
   LEARN[key] = e;
   if (typeof fbSet === 'function') safe(() => Promise.resolve(fbSet('handoverLearn/' + key, e)).catch(() => {})); else LS.set('hb_learn', LEARN);
@@ -1048,8 +1078,10 @@ const initials = s => { const w = String(s || '').replace(/[^\p{L}\p{N}\s]/gu, '
 const hueOf = s => { let h = 7; s = String(s || ''); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i) * 97) % 3600; return Math.floor(h / 10); };
 const longDate = d => { const x = new Date(d + 'T12:00:00'); return x.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }) + (x.getFullYear() !== new Date().getFullYear() ? ' ' + x.getFullYear() : ''); };
 function hi(text, q) {
-  const e = esc(text), ws = sp(q).trim().split(/\s+/).filter(Boolean).map(w => esc(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  return ws.length ? e.replace(new RegExp('(' + ws.join('|') + ')', 'gi'), '<mark>$1</mark>') : e;
+  const ws = sp(q).trim().split(/\s+/).filter(Boolean).map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (!ws.length) return esc(text);
+  // matched on the text itself, then escaped piece by piece (never inside "&#39;")
+  return String(text == null ? '' : text).split(new RegExp('(' + ws.join('|') + ')', 'gi')).map((x, n) => (n % 2 ? '<mark>' + esc(x) + '</mark>' : esc(x))).join('');
 }
 const view = () => ({ shift: HB.shift, cat: HB.cat, st: HB.st === 'urgent' ? 'all' : HB.st, sender: HB.sender, room: HB.room, q: HB.q, src: HB.src, group: HB.group });
 const shown = list => (HB.st === 'urgent' ? list.filter(isUrgent) : list);
@@ -1163,13 +1195,14 @@ function body() {
     if (!L.length) html = `<div class="hb-empty"><b>${all.length ? '🔍' : '📒'}</b>${all.length ? 'Nothing matches these filters.' : d === today() ? '<strong>No handover yet today.</strong><br>Messages from your WhatsApp handover group (named like “HO - Hotel”), messages starting with “HO -” in any group, and handover-like messages from other groups land here by themselves. Or type one above.' : 'No handover saved for this day.'}</div>`;
     else {
       const groups = [];
-      const gkey = i => HB.by === 'cat' ? i.cat : HB.by === 'room' ? ((i.rooms || [])[0] ? 'Room ' + String(parseInt(i.rooms[0], 10)) : 'No room') : (i.shift || 'No time');
+      const gkey = i => HB.by === 'cat' ? i.cat : HB.by === 'room' ? ((i.rooms || [])[0] ? 'Room ' + String(parseInt(i.rooms[0], 10)) : 'No room') : (sectionOf(i).k || 'No time');
       L.forEach(i => { const g = gkey(i); let G = groups.find(x => x.k === g); if (!G) { G = { k: g, items: [] }; groups.push(G); } G.items.push(i); });
       if (HB.by === 'cat') groups.sort((a, b) => CATS.findIndex(c => c[0] === a.k) - CATS.findIndex(c => c[0] === b.k));
+      if (HB.by === 'time') groups.sort((a, b) => SECTION_ORDER.indexOf(a.k === 'No time' ? '' : a.k) - SECTION_ORDER.indexOf(b.k === 'No time' ? '' : b.k));
       if (HB.by === 'room') groups.sort((a, b) => (a.k === 'No room') - (b.k === 'No room') || (parseInt(a.k.slice(5), 10) || 0) - (parseInt(b.k.slice(5), 10) || 0));
       html = groups.map(G => {
-        const fk = HB.by + ':' + G.k, open = !HB.fold[fk], sb = SHIFT_BOUNDS.find(s => s.id === G.k);
-        const label = HB.by === 'cat' ? catOf(G.k).icon + ' ' + catOf(G.k).label : sb ? sb.icon + ' ' + sb.id + (hoursOf(G.items) ? ' · ' + hoursOf(G.items) : '') : G.k;
+        const fk = HB.by + ':' + G.k, open = !HB.fold[fk], sb = SHIFT_BOUNDS.find(s => s.id === G.k.replace(/0$/, ''));
+        const label = HB.by === 'cat' ? catOf(G.k).icon + ' ' + catOf(G.k).label : sb ? sb.icon + ' ' + sectionOf(G.items[0]).label + (hoursOf(G.items) ? ' · ' + hoursOf(G.items) : '') : G.k;
         const no = G.items.filter(i => i.status === 'open').length;
         return `<section class="hb-sec"><button type="button" class="hb-gh" data-hb="fold" data-v="${esc(fk)}" aria-expanded="${open}">${esc(label)} <em>${G.items.length}${no ? ' · ' + no + ' pending' : ''}</em><span class="chev">▾</span></button>${open ? `<div class="hb-list">${G.items.map(i => itemHtml(i, d)).join('')}</div>` : ''}</section>`;
       }).join('');
@@ -1418,7 +1451,7 @@ function removeItem(d, k, how) {
   else setField(d, k, { del: 1, delBy: me(), delAt: Date.now() });
   // 🧠 an item that came by itself (WhatsApp, auto-picked) and is removed: messages like it are not handover
   const lk = it.src !== 'hand' && it.status !== 'done' ? learn(it.orig || it.text, 'no') : '';
-  const back = () => { forget(lk); setField(d, k, how === 'reject' ? { chat: null, chatBy: me() } : { del: null, delBy: null, delAt: null }); return true; };
+  const back = () => { unlearn(lk); setField(d, k, how === 'reject' ? { chat: null, chatBy: me() } : { del: null, delBy: null, delAt: null }); return true; };
   const msg = (how === 'reject' ? 'Moved to team chat' : 'Item deleted') + (lk ? ' · 🧠 I\'ll leave out messages like this' : '');
   if (typeof showUndoToast === 'function') safe(() => showUndoToast(msg, back, 7000)); else toast(msg, 'info');
 }

@@ -1102,7 +1102,8 @@ function hoCopy(msg, dIso, t24, sender, group, text, edited) {
 function hoMarked(text) {
   try { if (W.hoHandoverPure) return W.hoHandoverPure.hoPrefix(text) != null; } catch (_) {}
   const m = sp(text).match(/^\s*(?:\*\s*)?(?:HO|H\/O|hand\s*-?\s*over)(?![A-Za-z0-9])\s*\*?\s*[-–—:.,|>]*\s*/i);
-  return !!m && !!sp(text).slice(m[0].length).trim();
+  const rest = m ? sp(text).slice(m[0].length).trim() : '';
+  return !!rest && !(/^(?:\*\s*)?(?:ho|Ho|hO)$/.test(m[0].trim()) && !/^(?:\d|r(?:oo)?ms?\b)/i.test(rest));   // "Ho gaya" is not a mark
 }
 function handleHo(msg, via, text, sender, group, dIso, src) {
   if (via === 'link' && !ready()) return 'wait';
@@ -1116,7 +1117,7 @@ function handleHo(msg, via, text, sender, group, dIso, src) {
   done[dk] = seen.concat(sig).slice(-8).join('|'); saveDone(done);
   hoBook({ kind: 'msg', src: src || 'wa', base, mid, date: dIso, time: t24, sender, group, text, edited, at: Date.now() });
   let n = 1, chat = false;
-  try { const HP2 = W.hoHandoverPure; if (HP2) { const L = HP2.splitItems(HP2.hoPrefix(text) || text); n = L.length || 1; chat = src !== 'prefix' && L.length > 0 && L.every(p => HP2.isChat(p.text)); } } catch (_) {}
+  try { const HP2 = W.hoHandoverPure; if (HP2) { const L = HP2.splitItems(HP2.hoBody(text)); n = L.length || 1; chat = src !== 'prefix' && L.length > 0 && L.every(p => HP2.isChat(p.text)); } } catch (_) {}
   const r = { st: 'ho', room: '', text: chat ? '💬 Team chat · kept in the Handover Book, not added' : '📋 Saved to the Handover Book' + (n > 1 ? ' · ' + n + ' items' : '') + (src === 'prefix' ? ' · marked HO' : '') + (edited ? ' (edited)' : '') };
   ACK_RES = [{ st: 'ho', room: '', text: r.text }];
   if (dIso === today()) {

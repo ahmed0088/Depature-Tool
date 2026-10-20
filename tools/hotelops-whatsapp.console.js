@@ -81,7 +81,7 @@
   function isHoGroup(name) { return HO_GRP.test(sp(name || '')); }
   /** "HO - 512 to twin tomorrow", "HO: …", "H/O …", "Handover: …" (not "HOTEL…", "HOLD…"): a note for the next shift in any group */
   var HO_MARK = /^\s*(?:\*\s*)?(?:HO|H\/O|hand\s*-?\s*over)(?![A-Za-z0-9])\s*\*?\s*[-–—:.,|>]*\s*/i;
-  function hoMarked(text) { var s = sp(text), m = s.match(HO_MARK); return !!m && !!s.slice(m[0].length).trim(); }
+  function hoMarked(text) { var s = sp(text), m = s.match(HO_MARK), rest = m ? s.slice(m[0].length).trim() : ''; return !!rest && !(/^(?:\*\s*)?(?:ho|Ho|hO)$/.test(m[0].trim()) && !/^(?:\d|r(?:oo)?ms?\b)/i.test(rest)); }   // "Ho gaya" is not a mark
   /** a handover message's chips: one "📋 Handover" chip and its rooms (never CO / LCO / EXT) */
   function hoChips(text) {
     var rooms = [], m, re = /(?:^|[^\d:\/.,])(\d{3,4})(?![\d:\/]|\s*(?:aed|dhs?|am|pm|%))/gi, s = sp(hoMarked(text) ? String(text).replace(HO_MARK, '') : text);
