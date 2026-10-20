@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 360, items: [
+    '📋 DTCM: "copy" on a DTCM ID now only copies — the correction stays on the list. Press ✓ Fixed when it is done (now also on every row of the corrections table), and Undo if you pressed it by mistake.',
+  ] },
   { v: 359, items: [
     '🔐 Team panel redesigned: Users · Roles & access · Activity, with cards, switches and a phone-friendly sheet.',
     '🎚 New "Roles & access": the owner can switch each page and each power on or off for Managers, Supervisors, Agents and Read-only, see "Agents will see 17 pages", and reset to default. Changes apply to everyone straight away. A switched-off page is also blocked from search and Ops Brain. The owner always keeps everything; Home and Settings always stay on.',

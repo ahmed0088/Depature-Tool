@@ -25,7 +25,7 @@ let dtcDoneDoc = null;
 let dtcBusy    = false;
 let dtcWork    = [];
 let dtcFixes   = [];
-// Corrections marked fixed for good (copying the DTCM ID, ticking it, or "✓ Fixed"). Unlike the
+// Corrections marked fixed for good (ticking it, or "✓ Fixed"). Unlike the
 // ticks above, these are NOT cleared when the next day's files are analysed: the same correction
 // (same action, room and night) found again stays under "Fixed already" instead of coming back
 // as a to-do. Shared: hotels/{HOTEL_ID}/dtcm/fixed/{action|room|night} = { by, at, uid, amount }
@@ -530,7 +530,7 @@ function dtcRenderFixPlan(RC) {
       <div style="font-weight:700;font-size:.95rem;margin-bottom:4px;">🧭 How to close the gap between DTCM and Opera</div>
       <div style="font-size:.72rem;color:var(--text2);margin-bottom:8px;">Step A: what explains the difference between the two totals</div>
       ${bridge}
-      <div style="font-size:.72rem;color:var(--text2);margin:14px 0 2px;">Step B: what to do, in this order${allPlan.length ? '' : ' (nothing)'}. Copying a DTCM ID (or ✓ Fixed) marks that one as done, and it stays done on the next days' files.</div>
+      <div style="font-size:.72rem;color:var(--text2);margin:14px 0 2px;">Step B: what to do, in this order${allPlan.length ? '' : ' (nothing)'}. Copy the DTCM ID as often as you need; press ✓ Fixed when it is done, and it stays done on the next days' files.</div>
       ${cards}${!plan.length && fixedPlan.length ? '<div style="font-size:.8rem;">All corrections are marked fixed ✓</div>' : ''}
       ${fixedHtml}
       <div style="font-size:.72rem;color:var(--text2);margin:12px 0 4px;">Step C: result</div>
@@ -553,7 +553,8 @@ function dtcRenderActions(RC) {
     <tr${done ? ' class="dtc-fixed-row" title="Fixed already"' : ''}>
       <td>${done ? '✓' : i + 1}</td>
       <td><span class="dtc-act ${escapeHtml(a.action.toLowerCase())}">${escapeHtml(a.action)}</span></td>
-      <td><b>${escapeHtml(a.room)}</b>${a.uid ? `<div style="font-size:.64rem;color:var(--text3);margin-top:3px;white-space:nowrap;">DTCM ID ${dtcChip(a.uid, [fx])}</div>` : ''}</td>
+      <td><b>${escapeHtml(a.room)}</b>${a.uid ? `<div style="font-size:.64rem;color:var(--text3);margin-top:3px;white-space:nowrap;">DTCM ID ${dtcChip(a.uid, [fx])}</div>` : ''}
+        <div style="margin-top:4px;">${done ? `<button class="btn ghost sm" data-dtc-fixbtn="${escapeHtml(fx)}" data-on="0" title="Not fixed after all: back to the to-do list">Undo</button>` : `<button class="btn sm" data-dtc-fixbtn="${escapeHtml(fx)}" title="Done in Opera / the TD portal: it won't come back as a to-do">✓ Fixed</button>`}</div></td>
       <td style="font-family:var(--mono);white-space:nowrap;">${escapeHtml(a.date)}</td>
       <td style="text-align:right;font-family:var(--mono);font-weight:700;color:${a.amount < 0 ? 'var(--red)' : 'var(--green)'};">${a.amount > 0 ? '+' : ''}${dtcNum(a.amount)} AED</td>
       <td>${escapeHtml(a.where)}</td>
@@ -790,10 +791,10 @@ function dtcGroupByRoom(list) {
   });
 }
 
-/** keys: the corrections this value belongs to; copying it (the DTCM ID) marks them fixed */
+/** keys: the corrections this value belongs to (copying never marks them fixed: ✓ Fixed does) */
 function dtcChip(value, keys) {
   if (!value) return '—';
-  const fx = keys && keys.length ? ` data-dtc-fx="${escapeHtml(keys.join(','))}" title="Copy. Copying the DTCM ID marks this correction as fixed"` : '';
+  const fx = keys && keys.length ? ` data-dtc-fx="${escapeHtml(keys.join(','))}" title="Copy the DTCM ID (it stays on the list until you press ✓ Fixed)"` : '';
   return `<code>${escapeHtml(value)}</code><button class="dtc-copy" data-dtc-copy="${escapeHtml(value)}"${fx}>copy</button>`;
 }
 
@@ -912,15 +913,9 @@ function dtcClearTicks() {
   dtcPersistDone();
 }
 
+// Copy only copies: the correction stays on the list until you press ✓ Fixed (or tick it)
 async function dtcCopyChip(btn) {
   copyToClipboard(btn.getAttribute('data-dtc-copy') || '', null, '');
-  const keys = (btn.getAttribute('data-dtc-fx') || '').split(',').filter(Boolean), fresh = keys.filter(k => !dtcFixed[k]);
-  if (fresh.length) {
-    dtcSetFixed(fresh, true, { uid: btn.getAttribute('data-dtc-copy') || '' });
-    const msg = '✓ Copied, and marked as fixed: it won\'t come back as a to-do';
-    if (typeof showUndoToast === 'function') showUndoToast(msg, () => dtcSetFixed(fresh, false)); else showToast(msg, 'ok');
-    return;
-  }
   const old = btn.textContent;
   btn.textContent = 'copied'; btn.classList.add('copied');
   setTimeout(() => { btn.textContent = old; btn.classList.remove('copied'); }, 1200);
