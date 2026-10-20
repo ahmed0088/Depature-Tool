@@ -2651,6 +2651,15 @@ html[data-theme="opera"] #panel-departures .dp-room { background: linear-gradien
   #panel-departures .dp-compact .dp-acts .dca { flex: 1; min-height: 42px; }
   #panel-departures .dp-compact .dp-acts .dca:not(.dca-co):not(.dca-undo) { width: auto; min-height: 42px; }
   #panel-departures .dp-compact .dp-acts.g5 .dca-co { flex: 2.2; min-height: 42px; }
+  /* icon-only buttons stay icon-sized, so "Check out" / "Undo LCO" keep their words (they were cut on a phone) */
+  #panel-departures .dp-compact .dp-acts .dca:not(.dca-co):not(.dca-undo) { flex: 0 0 38px; }
+  #panel-departures .dp-compact .dp-acts .dca-co, #panel-departures .dp-compact .dp-acts .dca-undo { min-width: 0; padding: 0 8px; }
+  #panel-departures .dp-compact .dp-body:has(.dp-field) { flex-wrap: wrap; }   /* the late-time box on its own line: "Check out" / "Undo LCO" were cut */
+  #panel-departures .dp-compact .dp-field { flex: 1 1 100%; display: flex; }
+  #panel-departures .dp-compact .dp-field .dc-select { flex: 1; width: auto; }
+  #panel-departures .dp-compact .dp-acts.g5 { flex-wrap: wrap; }   /* 7 buttons do not fit one phone line: Check out on its own */
+  #panel-departures .dp-compact .dp-acts.g5 .dca-co { flex: 1 1 100%; }
+  #panel-departures .dp-compact .dp-acts.g5 .dca:not(.dca-co) { flex: 1 1 0; }
   #panel-departures .dp-compact .dp-note-btn { width: 42px; height: 42px; }
   #panel-departures .dp-log-last { display: none; }
 }
@@ -2741,6 +2750,10 @@ html[data-theme="opera"] #panel-departures .dp-room { background: linear-gradien
   #depBoard:not(.dp-compact) .dp-size-list .dp-acts .dca { flex: 1; height: 44px; min-height: 44px; }
   #depBoard:not(.dp-compact) .dp-size-list .dp-acts.g5 .dca:not(.dca-co) { flex: 0 0 44px; width: 44px; height: 44px; min-height: 44px; }
   #depBoard:not(.dp-compact) .dp-size-list .dp-acts .dca-co { min-width: 0; }
+  /* 7 buttons (with 🧾 Left · waiting) left "Check out" 37px wide and cut: it takes its own line, the icons go under it */
+  #depBoard:not(.dp-compact) .dp-size-list .dp-acts.g5 { flex-wrap: wrap; }
+  #depBoard:not(.dp-compact) .dp-size-list .dp-acts.g5 .dca-co { flex: 1 1 100%; }
+  #depBoard:not(.dp-compact) .dp-size-list .dp-acts.g5 .dca:not(.dca-co) { flex: 1 1 0; width: auto; }
   #depBoard:not(.dp-compact) .dp-size-list .dp-note-btn, #depBoard:not(.dp-compact) .dp-size-list .dp-icon-btn { width: 44px; height: 44px; }
   #depBoard:not(.dp-compact) .dp-size-list .dp-foot { flex: 1 1 100%; justify-content: flex-end; }
   #depBoard:not(.dp-compact) .dp-size-list .dp-time { padding: 0 9px 0 6px; }

@@ -192,6 +192,7 @@ function parseOperaDate(s) {
   if (!s) return null;
   const p = s.trim().split(/[-\/]/);
   if (p.length !== 3) return null;
+  if (/^\d{4}$/.test(p[0])) return new Date(+p[0], +p[1] - 1, +p[2]);   // "2026-10-20" (a room added by hand): read as 2020-Apr before
   const months = { JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11 };
   const day    = parseInt(p[0]);
   const yr     = parseInt(p[2]) + (parseInt(p[2]) < 100 ? 2000 : 0);
