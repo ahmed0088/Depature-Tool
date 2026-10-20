@@ -272,7 +272,7 @@ const GS_FEATURES = [
   ['💬 WhatsApp HK group', 'whatsapp hk housekeeping group chat co lco checkout paste messages', 'Departures', () => { if (typeof gsClose === 'function') gsClose(); waOpenFromTop(); }],
   ['🔎 WhatsApp HK chat search', 'whatsapp hk chat search backup download history extension checkout', 'Departures', () => { if (typeof gsClose === 'function') gsClose(); waOpenFromTop(); }],
   ['📒 Handover Book', 'handover book shift handover whatsapp ho group items open pending follow up carry over yesterday', 'Handover Book', () => gsGo('handover-book')],
-  ['📊 Handover Excel / email', 'handover excel email send sheet xlsx export day shift handover book mail', 'Handover Book', () => gsGo('handover-book', { sel: '#hbRoot [data-hb="xlsx"]' })],
+  ['📊 Handover Excel export', 'handover excel export sheet xlsx download report day shift handover book', 'Handover Book', () => gsGo('handover-book', { sel: '#hbRoot [data-hb="xp"]' })],
   ['🧺 HK Requests', 'hk requests log housekeeping towels cleaning room moves problem rooms whatsapp open requests', 'HK Requests', () => gsGo('hk-requests')],
   ['📖 WhatsApp words', 'whatsapp words dictionary codes vd vc ooo dnd', 'HK Requests', () => { if (typeof gsClose === 'function') gsClose(); hoWaWordsOpen(); }],
   ['✉️ Send to WhatsApp', 'whatsapp send message group checkout list template', 'Departures', () => { if (typeof gsClose === 'function') gsClose(); waOpenFromTop(); }],

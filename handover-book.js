@@ -17,7 +17,8 @@
 //     (fbListen / fbGet / fbUpdate; this device's copy when offline).
 //   • The page: date, shift / category / status / sender / room / text
 //     filters, a summary, "still open from yesterday", Done / note / edit,
-//     add by hand, Excel (SheetJS + bold frozen header) and Email (mailto).
+//     add by hand, and Export: a styled Excel report (ExcelJS, loaded only when
+//     exporting; a plain SheetJS file when it cannot load).
 //  Pure helpers: window.hoHandoverPure (tested in tests/run-tests.js).
 //  Load after wa-bridge.js and wa-brain.js.
 // ═══════════════════════════════════════════════════════════
@@ -498,36 +499,6 @@ function fileName(hotel, date) {
   const h = sp(hotel).replace(/[\\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
   return 'Handover - ' + (h ? h + ' - ' : '') + dLong(date) + '.xlsx';
 }
-const mailSubject = date => 'Shift handover – ' + dLong(date);
-/** the e-mail's plain-text body: counts and open items (kept short: mailto links have a length limit) */
-function mailBody(items, date, hotel, file) {
-  const S = summaryOf(items), L = [];
-  L.push('Shift handover – ' + dLong(date) + (hotel ? ' (' + hotel + ')' : ''), '');
-  L.push(writtenSummary(items, { max: 3 }), '');
-  L.push(`${S.items} item${S.items === 1 ? '' : 's'} · ${S.open} open · ${S.done} done · ${S.info} info · ${S.rooms} room${S.rooms === 1 ? '' : 's'} mentioned`);
-  const sh = SHIFT_BOUNDS.filter(s => S.byShift[s.id]).map(s => s.id + ' ' + S.byShift[s.id]);
-  if (sh.length) L.push(sh.join(' · '));
-  const open = (items || []).filter(i => i && !i.del && !i.chat && i.status === 'open').sort(byTime);
-  L.push('');
-  if (open.length) {
-    L.push('Open items:');
-    let len = L.join('\n').length;
-    for (let k = 0; k < open.length; k++) {
-      const i = open[k], line = (isUrgent(i) ? '❗ ' : '• ') + [t12(i.time), (i.rooms || []).length ? 'Room ' + i.rooms.join(', ') : '', i.text || i.orig].filter(Boolean).join(' · ') + (i.sender ? ' (' + i.sender + ')' : '');
-      if (len + line.length > 1500) { L.push(`…and ${open.length - k} more (see the Excel file)`); break; }
-      L.push(line); len += line.length + 1;
-    }
-  } else L.push('Nothing open — a clean handover.');
-  L.push('', file ? `Please find the handover attached: "${file}" (downloaded from HotelOps — attach it to this e-mail).` : 'The Excel file was downloaded from HotelOps — attach it to this e-mail.', '', 'Sent from HotelOps');
-  return L.join('\n');
-}
-/** "a@x.com; b@y.com, c" → ["a@x.com", "b@y.com"] */
-function recipients(s) { return sp(s).split(/[,;\s]+/).map(x => x.trim()).filter(x => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x)); }
-function mailtoUrl(to, subject, body, cc) {
-  const q = ['subject=' + encodeURIComponent(subject), 'body=' + encodeURIComponent(body)];
-  const c = recipients(cc); if (c.length) q.unshift('cc=' + c.map(encodeURIComponent).join(','));
-  return 'mailto:' + recipients(to).map(encodeURIComponent).join(',') + '?' + q.join('&');
-}
 // ── the .xlsx made by SheetJS (community build) has no styles or frozen panes: added to its XML ──
 /** styles.xml + a bold header style (with a light fill) and a wrapped-text style → {xml, head, wrap} (cellXfs indexes) */
 function polishStyles(xml) {
@@ -554,8 +525,68 @@ function polishSheet(xml, opt) {
   return x;
 }
 
-W.hoHandoverPure = { isUrgent, writtenSummary, HO_GROUP_RX, isHandoverGroup, HO_PREFIX_RX, hoPrefix, isChat, pasteItems, suggestFrom, HO_COPY_MIN, handoverScore, looksLikeHandover, SHIFT_BOUNDS, shiftOf, CATS, CAT, categorize, statusOf, roomsOf, tagsOf, splitItems, tidy, buildItems, filterItems, summaryOf,
-  excelRows, summaryRows, fileName, mailSubject, mailBody, mailtoUrl, recipients, polishStyles, polishSheet, dLong, t12, COL_W, byTime };
+// ══ The pro Excel report (ExcelJS) — the model and its styles are pure ══
+/** colours (ARGB) of the report */
+const XL = { ink: 'FF0F172A', slate: 'FF1E293B', sub: 'FF64748B', line: 'FFE2E8F0', zebra: 'FFF8FAFC', band: 'FFEEF2F7', white: 'FFFFFFFF', red: 'FFB91C1C', redFill: 'FFFEE2E2', accent: 'FFC2410C' };
+const XL_STATUS = { open: { fill: 'FFFEF3C7', font: 'FF92400E', label: 'Open' }, done: { fill: 'FFD1FAE5', font: 'FF065F46', label: 'Done' }, info: { fill: 'FFF1F5F9', font: 'FF475569', label: 'Info' } };
+const XL_CAT = { guest: ['FFFCE7F3', 'FF9D174D'], pay: ['FFDCFCE7', 'FF166534'], res: ['FFDBEAFE', 'FF1E40AF'], move: ['FFEDE9FE', 'FF5B21B6'], maint: ['FFFFEDD5', 'FF9A3412'], hk: ['FFCCFBF1', 'FF115E59'],
+  transport: ['FFFEF9C3', 'FF854D0E'], lost: ['FFFAE8FF', 'FF86198F'], desk: ['FFE0F2FE', 'FF075985'], fb: ['FFFFE4E6', 'FF9F1239'], follow: ['FFFEF3C7', 'FF92400E'], cash: ['FFECFCCB', 'FF3F6212'], info: ['FFF1F5F9', 'FF475569'] };
+/** the Status cell's colours: Open amber, Done green, Info grey */
+const statusStyle = st => XL_STATUS[st] || XL_STATUS.info;
+/** the Category cell's soft colours */
+const catStyle = c => { const x = XL_CAT[c] || XL_CAT.info; return { fill: x[0], font: x[1] }; };
+/** "#c2410c" / "#fa0" / "rgb(194, 65, 12)" → "FFC2410C" ('' when it cannot be read) */
+function argbOf(css) {
+  const s = sp(css).trim().toLowerCase(); let m;
+  if ((m = s.match(/^#([0-9a-f]{3})$/))) return 'FF' + m[1].split('').map(c => c + c).join('').toUpperCase();
+  if ((m = s.match(/^#([0-9a-f]{6})(?:[0-9a-f]{2})?$/))) return 'FF' + m[1].toUpperCase();
+  if ((m = s.match(/^rgba?\(\s*(\d{1,3})[\s,]+(\d{1,3})[\s,]+(\d{1,3})/))) return 'FF' + [m[1], m[2], m[3]].map(x => Math.min(255, +x).toString(16).padStart(2, '0')).join('').toUpperCase();
+  return '';
+}
+/** a row height (points) that shows wrapped text: texts[i] in a column of widths[i] characters */
+function rowHeight(texts, widths, base) {
+  let lines = 1;
+  (texts || []).forEach((t, i) => { const w = Math.max(4, (widths[i] || 10) - 2); String(t == null ? '' : t).split('\n').forEach((p, j) => { const n = Math.max(1, Math.ceil(p.length / w)); if (j === 0) lines = Math.max(lines, n); else lines = Math.max(lines, n + j); }); });
+  return Math.max(base || 20, Math.round(lines * 15 + 6));
+}
+/** "Morning, Afternoon" — the shifts the items cover */
+const shiftsCovered = items => SHIFT_BOUNDS.map(s => s.id).filter(id => (items || []).some(i => i && !i.del && !i.chat && i.shift === id)).join(', ');
+const XL_COLS = [['Date', 11], ['Shift', 11], ['Time', 9], ['From', 16], ['Category', 20], ['Rooms', 10], ['Item', 60], ['Status', 10], ['Done by', 18], ['Note', 30], ['Original', 44]];
+/** everything the report shows, ready to draw. opt: {hotel, date, user, exportedAt (ms), orig} */
+function reportModel(items, opt) {
+  opt = opt || {};
+  const L = (items || []).filter(i => i && !i.del && !i.chat).slice().sort(byTime), S = summaryOf(L), urgent = L.filter(isUrgent).length;
+  const cols = XL_COLS.slice(0, opt.orig ? 11 : 10);
+  const at = opt.exportedAt ? new Date(opt.exportedAt) : null;
+  const exported = at ? `${at.getDate()} ${MON[at.getMonth()]} ${at.getFullYear()}, ${pad(at.getHours())}:${pad(at.getMinutes())}` : '';
+  const day = opt.date ? new Date(opt.date + 'T12:00:00') : null;
+  const longD = day ? `${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][day.getDay()]} ${day.getDate()} ${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][day.getMonth()]} ${day.getFullYear()}` : '';
+  const row = i => ({
+    cells: [dmy(i.date), i.shift || '', t12(i.time), i.sender || '', (CAT[i.cat] || CAT.info).label, (i.rooms || []).join(', '),
+      (i.head ? i.head + ': ' : '') + (i.text || i.orig || '') + ((i.tags || []).length ? '  [' + i.tags.join(', ') + ']' : ''),
+      statusStyle(i.status).label, i.status === 'done' ? [i.doneBy, t12(hhmmOf(i.doneAt))].filter(Boolean).join(' · ') : '', i.note || ''].concat(opt.orig ? [i.orig || ''] : []),
+    status: i.status || 'info', cat: i.cat || 'info', urgent: isUrgent(i), done: i.status === 'done',
+  });
+  const order = SHIFT_BOUNDS.map(s => s.id).concat(['']);
+  const sections = order.map(id => { const R = L.filter(i => (i.shift || '') === id); return R.length ? { id, label: id || 'No time', count: R.length, open: R.filter(i => i.status === 'open').length, rows: R.map(row) } : null; }).filter(Boolean);
+  const byCat = CATS.filter(c => S.byCat[c[0]]).map(c => { const R = L.filter(i => i.cat === c[0]); return { cat: c[0], label: c[1], items: R.length, open: R.filter(i => i.status === 'open').length, done: R.filter(i => i.status === 'done').length }; });
+  const byShift = order.filter(id => L.some(i => (i.shift || '') === id)).map(id => { const R = L.filter(i => (i.shift || '') === id); return { label: id || 'No time', items: R.length, open: R.filter(i => i.status === 'open').length, done: R.filter(i => i.status === 'done').length }; });
+  const open = L.filter(i => i.status === 'open').sort((a, b) => (isUrgent(b) - isUrgent(a)) || byTime(a, b))
+    .map(i => ({ cells: [(CAT[i.cat] || CAT.info).label, t12(i.time), (i.rooms || []).join(', '), i.text || i.orig || '', i.sender || ''], cat: i.cat || 'info', urgent: isUrgent(i) }));
+  return {
+    title: (opt.hotel ? opt.hotel + ' — ' : '') + 'Shift Handover',
+    meta: [longD, shiftsCovered(L) ? 'Shifts: ' + shiftsCovered(L) : '', opt.user ? 'Prepared by ' + opt.user : '', exported ? 'Exported ' + exported : ''].filter(Boolean).join('   ·   '),
+    summary: writtenSummary(L),
+    kpis: [['Items', S.items, 'ink'], ['Open', S.open, 'open'], ['Done', S.done, 'done'], ['Urgent', urgent, 'urgent'], ['Rooms', S.rooms, 'rooms']],
+    head: cols.map(c => c[0]), widths: cols.map(c => c[1]), sections, byCat, byShift, open,
+    totals: { items: S.items, open: S.open, done: S.done },
+    footer: (opt.hotel ? opt.hotel + ' · ' : '') + 'Shift handover ' + dLong(opt.date || ''),
+  };
+}
+const XL_KPI = { ink: ['FFF1F5F9', 'FF0F172A'], open: ['FFFEF3C7', 'FF92400E'], done: ['FFD1FAE5', 'FF065F46'], urgent: ['FFFEE2E2', 'FFB91C1C'], rooms: ['FFDBEAFE', 'FF1E40AF'] };
+
+W.hoHandoverPure = { isUrgent, XL, XL_KPI, statusStyle, catStyle, argbOf, rowHeight, shiftsCovered, reportModel, writtenSummary, HO_GROUP_RX, isHandoverGroup, HO_PREFIX_RX, hoPrefix, isChat, pasteItems, suggestFrom, HO_COPY_MIN, handoverScore, looksLikeHandover, SHIFT_BOUNDS, shiftOf, CATS, CAT, categorize, statusOf, roomsOf, tagsOf, splitItems, tidy, buildItems, filterItems, summaryOf,
+  excelRows, summaryRows, fileName, polishStyles, polishSheet, dLong, t12, COL_W, byTime };
 if (!doc) return;
 
 // ═════════════════════════ In the app ═════════════════════════
@@ -664,10 +695,10 @@ const addByHand = (text, cat) => addItems(splitItems(text).map(p => ({ text: (p.
 // ═════════════════ The 📒 Handover Book page ═════════════════
 const PANEL = 'handover-book';
 const SET_KEY = 'hb_settings_v1', VIEW_KEY = 'hb_view_v1';
-const HB = { date: '', shift: 'all', cat: '', st: 'all', sender: '', src: 'all', group: '', room: '', q: '', by: 'time', more: false, settings: false,
+const HB = { date: '', shift: 'all', cat: '', st: 'all', sender: '', src: 'all', group: '', room: '', q: '', by: 'time', more: false, xp: false,
   edit: '', menu: '', note: '', orig: '', fold: {}, chat: false, draft: '', draftCat: '', rows: null, rowsKind: '', seq: 0 };
 safe(() => { const v = LS.get(VIEW_KEY, {}); if (v && /^(?:time|cat|room)$/.test(v.by)) HB.by = v.by; });
-const SETTINGS = () => Object.assign({ to: '', cc: '', exp: 'seen', orig: false }, LS.get(SET_KEY, {}));
+const SETTINGS = () => Object.assign({ exp: 'seen', orig: false }, LS.get(SET_KEY, {}));
 const PCSS = `
 #hbRoot{--hb-acc:var(--gold,var(--accent,#0a84ff));--hb-open:var(--amber,#d97706);--hb-done:var(--green,#16a34a);--hb-info:var(--blue,#2563eb);--hb-red:var(--red,#dc2626);
   --hb-r:16px;--hb-hair:color-mix(in srgb,var(--text) 10%,transparent);--hb-soft:color-mix(in srgb,var(--text) 4.5%,var(--card));--hb-fill:color-mix(in srgb,var(--text) 6%,transparent);
@@ -867,13 +898,12 @@ function shell() {
   root.innerHTML = `
     <header class="hb-hd"><div class="hb-ttl"><h1>Handover</h1>
       <div class="hb-sub"><button type="button" class="hb-arw" data-hb="prev" aria-label="Day before" title="Day before">‹</button><label class="hb-dl">${esc(isT ? 'Today · ' + longDate(d) : longDate(d))}<input type="date" id="hbDate" value="${esc(d)}" max="${esc(today())}" aria-label="Pick a day"></label><button type="button" class="hb-arw" data-hb="next" aria-label="Next day" title="Next day"${isT ? ' disabled' : ''}>›</button>${isT ? '' : '<button type="button" class="hb-q sm" data-hb="today">Today</button>'}</div></div>
-      <div class="hb-hda"><button type="button" class="hb-q" data-hb="xlsx" title="Download the Excel file">Excel</button><button type="button" class="hb-q" data-hb="settings" aria-expanded="${HB.settings}">Settings</button><button type="button" class="hb-pri" data-hb="mail" title="Download the Excel and write the e-mail">Export &amp; email</button></div></header>
-    ${HB.settings ? `<section class="hb-panel"><h3>E-mail &amp; Excel</h3>
-      <div><label class="hb-hint" for="hbTo">Send to · comma separated · saved on this device</label><input class="hb-in" id="hbTo" type="email" multiple autocomplete="email" placeholder="frontoffice@hotel.com, manager@hotel.com" value="${esc(S.to)}"></div>
-      <div><label class="hb-hint" for="hbCc">Cc (optional)</label><input class="hb-in" id="hbCc" type="email" multiple placeholder="gm@hotel.com" value="${esc(S.cc)}"></div>
-      <div class="hb-tbr"><span class="hb-hint">Export</span><div class="hb-seg" role="group" aria-label="What to export">${[['seen', 'What I see'], ['all', 'Whole day']].map(([k, l]) => `<button type="button" data-hb="exp" data-v="${k}" class="${S.exp === k ? 'on' : ''}" aria-pressed="${S.exp === k}">${l}</button>`).join('')}</div></div>
+      <div class="hb-hda"><button type="button" class="hb-pri" data-hb="xp" aria-expanded="${HB.xp}" aria-haspopup="true" title="Download the handover as Excel">Export ▾</button></div></header>
+    ${HB.xp ? `<section class="hb-panel hb-xp" aria-label="Export"><h3>Export to Excel</h3>
+      <div class="hb-tbr"><div class="hb-seg" role="group" aria-label="What to export">${[['seen', 'What I see'], ['all', 'Whole day']].map(([k, l]) => `<button type="button" data-hb="exp" data-v="${k}" class="${S.exp === k ? 'on' : ''}" aria-pressed="${S.exp === k}">${l}</button>`).join('')}</div>
+        <span class="hb-hint" id="hbXpN"></span></div>
       <label class="hb-lbl"><input type="checkbox" id="hbOrig"${S.orig ? ' checked' : ''}> Add the original WhatsApp text as a column</label>
-      <div class="hb-tbr"><button type="button" class="hb-pri sm" data-hb="saveset">Save</button><button type="button" class="hb-q sm" data-hb="settings">Close</button></div></section>` : ''}
+      <div class="hb-tbr"><button type="button" class="hb-pri sm" data-hb="xlsx">⬇ Download Excel</button><button type="button" class="hb-q sm" data-hb="xp">Close</button></div></section>` : ''}
     <section class="hb-new" aria-label="New handover item">
       <div class="hb-newrow"><span class="hb-plus" aria-hidden="true">+</span><textarea id="hbNew" rows="1" maxlength="6000" placeholder="New handover item…" aria-label="New handover item">${esc(HB.draft)}</textarea>
         <div class="hb-newact"><select class="hb-mini" id="hbNewCat" aria-label="Category"><option value="">Auto</option>${CATS.map(c => `<option value="${c[0]}"${HB.draftCat === c[0] ? ' selected' : ''}>${c[2]} ${esc(c[1])}</option>`).join('')}</select><button type="button" class="hb-pri sm" data-hb="addsave" id="hbAddBtn">Add</button></div></div>
@@ -949,6 +979,7 @@ function body() {
       }).join('');
     }
     set('hbList', html);
+    xpCount();
     // team chat in the handover group (not added)
     const C = raw.filter(i => i.chat && !i.del).sort(byTime);
     set('hbChat', C.length ? `<section class="hb-sec hb-chatl"><button type="button" class="hb-gh" data-hb="chat" aria-expanded="${HB.chat}">💬 Team chat — not added <em>${C.length}</em><span class="chev">▾</span></button>${HB.chat ? `<div class="hb-list">${C.map(i => itemHtml(i, d, { chat: true })).join('')}</div>` : ''}</section>` : '');
@@ -999,7 +1030,8 @@ function suggestions() {
   const have = new Set(itemsOf(today()).concat(itemsOf(HB.date)).map(i => sp(i.text).toLowerCase()));
   return suggestFrom({ rooms, hk, mt: ls('opslogs/mt') || {}, lf: ls('opslogs/lf') || {}, now: new Date() }).filter(s => !have.has(tidy(s.text).toLowerCase()));
 }
-// ── Excel and e-mail ──
+// ── Excel ──
+function xpCount() { const el = doc.getElementById('hbXpN'); if (!el) return; const n = exportList(SETTINGS().exp === 'all').length; el.textContent = n + ' item' + (n === 1 ? '' : 's'); }
 function exportList(all) { return all ? itemsOf(HB.date).filter(i => !i.del && !i.chat) : shown(filterItems(itemsOf(HB.date), view())); }
 /** the .xlsx as bytes (styled when the zip tools are there), or null when Excel is not loaded */
 function workbookBytes(list) {
@@ -1033,23 +1065,140 @@ function download(bytes, name) {
   const url = URL.createObjectURL(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
   const a = doc.createElement('a'); a.href = url; a.download = name; doc.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
-function exportExcel(silent) {
+// ── the pro report: ExcelJS, loaded from cdnjs only when exporting (SheetJS file when it cannot load) ──
+const EXCELJS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
+let exLoading = null;
+function loadExcelJS() {
+  if (W.ExcelJS && W.ExcelJS.Workbook) return Promise.resolve(W.ExcelJS);
+  if (exLoading) return exLoading;
+  exLoading = new Promise((ok, no) => {
+    const sc = doc.createElement('script'); sc.src = EXCELJS_URL; sc.async = true; sc.crossOrigin = 'anonymous';
+    const t = setTimeout(() => no(new Error('timeout')), 12000);
+    sc.onload = () => { clearTimeout(t); W.ExcelJS && W.ExcelJS.Workbook ? ok(W.ExcelJS) : no(new Error('no ExcelJS')); };
+    sc.onerror = () => { clearTimeout(t); no(new Error('not loaded')); };
+    doc.head.appendChild(sc);
+  }).catch(e => { exLoading = null; throw e; });
+  return exLoading;
+}
+const brandArgb = () => safe(() => { const cs = getComputedStyle(doc.documentElement); return argbOf(cs.getPropertyValue('--gold')) || argbOf(cs.getPropertyValue('--accent')); }, '') || XL.accent;
+/** the styled .xlsx (ExcelJS) → bytes */
+async function proWorkbook(list) {
+  const EJ = await loadExcelJS();
+  const S = SETTINGS(), M = reportModel(list, { hotel: hotel(), date: HB.date, user: me(), exportedAt: Date.now(), orig: S.orig }), brand = brandArgb();
+  const wb = new EJ.Workbook(); wb.creator = 'HotelOps'; wb.created = new Date(); wb.title = M.title;
+  const thin = { style: 'thin', color: { argb: XL.line } }, box = { top: thin, left: thin, bottom: thin, right: thin };
+  const fill = argb => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
+  const font = (o) => Object.assign({ name: 'Calibri', size: 11, color: { argb: XL.ink } }, o);
+  // the title block: title, date line, written summary, KPI tiles → returns the next free row
+  function titleBlock(ws, nCols) {
+    const last = ws.getColumn(nCols).letter;
+    ws.mergeCells(`A1:${last}1`); const t = ws.getCell('A1'); t.value = M.title; t.font = font({ size: 20, bold: true }); t.alignment = { vertical: 'middle' };
+    ws.getRow(1).height = 34;
+    ws.mergeCells(`A2:${last}2`); const m = ws.getCell('A2'); m.value = M.meta; m.font = font({ size: 10.5, color: { argb: XL.sub } }); m.alignment = { vertical: 'middle' };
+    ws.getRow(2).height = 18;
+    for (let c = 1; c <= nCols; c++) ws.getCell(2, c).border = { bottom: { style: 'medium', color: { argb: brand } } };
+    ws.mergeCells(`A3:${last}3`); const su = ws.getCell('A3'); su.value = M.summary; su.font = font({ size: 11, italic: true, color: { argb: 'FF334155' } }); su.alignment = { wrapText: true, vertical: 'middle' };
+    ws.getRow(3).height = rowHeight([M.summary], [M.head.length ? Math.max(60, ws.columns.slice(0, nCols).reduce((x, c) => x + (c.width || 10), 0)) : 100], 22);
+    // KPI tiles: value row + label row, each tile over a share of the columns
+    const per = Math.max(1, Math.floor(nCols / M.kpis.length));
+    M.kpis.forEach(([label, v, k], i) => {
+      const c1 = i * per + 1, c2 = i === M.kpis.length - 1 ? nCols : c1 + per - 1, col = XL_KPI[k] || XL_KPI.ink;
+      if (c2 > c1) { ws.mergeCells(5, c1, 5, c2); ws.mergeCells(6, c1, 6, c2); }
+      const vc = ws.getCell(5, c1), lc = ws.getCell(6, c1);
+      vc.value = v; vc.font = font({ size: 18, bold: true, color: { argb: col[1] } }); vc.alignment = { horizontal: 'center', vertical: 'middle' };
+      lc.value = label.toUpperCase(); lc.font = font({ size: 8.5, bold: true, color: { argb: XL.sub } }); lc.alignment = { horizontal: 'center', vertical: 'top' };
+      for (let c = c1; c <= c2; c++) { ws.getCell(5, c).fill = fill(col[0]); ws.getCell(6, c).fill = fill(col[0]); ws.getCell(5, c).border = { top: { style: 'thin', color: { argb: XL.white } }, left: { style: 'thick', color: { argb: XL.white } }, right: { style: 'thick', color: { argb: XL.white } } }; ws.getCell(6, c).border = { left: { style: 'thick', color: { argb: XL.white } }, right: { style: 'thick', color: { argb: XL.white } } }; }
+    });
+    ws.getRow(4).height = 8; ws.getRow(5).height = 28; ws.getRow(6).height = 15; ws.getRow(7).height = 10;
+    return 8;
+  }
+  function headRow(ws, r, labels) {
+    const row = ws.getRow(r); row.values = labels; row.height = 24;
+    labels.forEach((_, i) => { const c = row.getCell(i + 1); c.font = font({ bold: true, color: { argb: XL.white } }); c.fill = fill(XL.slate); c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; c.border = { top: { style: 'thin', color: { argb: XL.slate } }, bottom: { style: 'thin', color: { argb: XL.slate } }, left: { style: 'thin', color: { argb: 'FF334155' } }, right: { style: 'thin', color: { argb: 'FF334155' } } }; });
+  }
+  function page(ws, headR, land) {
+    ws.pageSetup = { paperSize: 9, orientation: land ? 'landscape' : 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, horizontalCentered: true,
+      margins: { left: 0.25, right: 0.25, top: 0.45, bottom: 0.55, header: 0.2, footer: 0.25 }, printTitlesRow: headR ? `${headR}:${headR}` : undefined };
+    ws.headerFooter = { oddFooter: `&L&8${M.footer.replace(/&/g, '&&')}&R&8Page &P of &N`, evenFooter: `&L&8${M.footer.replace(/&/g, '&&')}&R&8Page &P of &N` };
+  }
+  // ── sheet 1: the handover ──
+  const ws = wb.addWorksheet(('Handover ' + dLong(HB.date)).slice(0, 31), { properties: { tabColor: { argb: brand } }, views: [{ showGridLines: false }] });
+  const n = M.head.length;
+  ws.columns = M.widths.map(w => ({ width: w }));
+  const H = titleBlock(ws, n);
+  headRow(ws, H, M.head);
+  let r = H + 1, z = 0;
+  const C = { status: 8, cat: 5, rooms: 6, item: 7, note: 10, time: 3 };
+  M.sections.forEach(sec => {
+    ws.mergeCells(r, 1, r, n);
+    const sc = ws.getCell(r, 1); sc.value = `${sec.label.toUpperCase()}   ·   ${sec.count} item${sec.count === 1 ? '' : 's'}${sec.open ? ' · ' + sec.open + ' open' : ''}`;
+    sc.font = font({ bold: true, size: 10.5, color: { argb: 'FF334155' } }); sc.alignment = { vertical: 'middle', indent: 1 };
+    for (let c = 1; c <= n; c++) { const x = ws.getCell(r, c); x.fill = fill(XL.band); x.border = { top: thin, bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } } }; }
+    ws.getRow(r).height = 20; r++; z = 0;
+    sec.rows.forEach(R => {
+      const row = ws.getRow(r); row.values = R.cells;
+      const zebra = z++ % 2 === 1;
+      R.cells.forEach((_, i) => {
+        const c = row.getCell(i + 1);
+        c.border = box; c.alignment = { vertical: 'top', wrapText: i + 1 === C.item || i + 1 === C.note || i + 1 === 11, horizontal: [1, 2, 3, C.rooms, C.status].includes(i + 1) ? 'center' : 'left' };
+        c.font = font({ size: 10.5, color: { argb: R.done ? 'FF64748B' : XL.ink } });
+        if (zebra) c.fill = fill(XL.zebra);
+      });
+      const st = statusStyle(R.status), cs = catStyle(R.cat);
+      Object.assign(row.getCell(C.status), { fill: fill(st.fill), font: font({ size: 10, bold: true, color: { argb: st.font } }) });
+      Object.assign(row.getCell(C.cat), { fill: fill(cs.fill), font: font({ size: 10, color: { argb: cs.font } }) });
+      row.getCell(C.rooms).font = font({ size: 10.5, bold: true });
+      if (R.urgent) {
+        row.getCell(C.item).font = font({ size: 10.5, bold: true, color: { argb: XL.red } });
+        row.getCell(1).border = Object.assign({}, box, { left: { style: 'thick', color: { argb: 'FFDC2626' } } });
+      }
+      if (R.done) row.getCell(C.item).font = font({ size: 10.5, color: { argb: 'FF64748B' }, strike: false });
+      row.height = rowHeight([R.cells[C.item - 1], R.cells[C.note - 1], R.cells[10] || ''], [M.widths[C.item - 1], M.widths[C.note - 1], M.widths[10] || 40], 20);
+      r++;
+    });
+  });
+  if (!M.sections.length) { ws.mergeCells(r, 1, r, n); ws.getCell(r, 1).value = 'No handover items.'; ws.getCell(r, 1).font = font({ italic: true, color: { argb: XL.sub } }); r++; }
+  ws.autoFilter = { from: { row: H, column: 1 }, to: { row: Math.max(H, r - 1), column: n } };
+  ws.views = [{ state: 'frozen', ySplit: H, xSplit: 0, topLeftCell: `A${H + 1}`, activeCell: `A${H + 1}`, showGridLines: false }];
+  page(ws, H, true);
+  // ── sheet 2: the summary ──
+  const s2 = wb.addWorksheet('Summary', { properties: { tabColor: { argb: XL.slate } }, views: [{ showGridLines: false }] });
+  s2.columns = [{ width: 26 }, { width: 11 }, { width: 11 }, { width: 11 }, { width: 62 }, { width: 18 }];
+  let q = titleBlock(s2, 6);
+  const table = (title, head, rows, total, styleRow) => {
+    s2.mergeCells(q, 1, q, head.length); const tc = s2.getCell(q, 1); tc.value = title; tc.font = font({ bold: true, size: 13 }); s2.getRow(q).height = 22; q++;
+    headRow(s2, q, head); const first = q + 1; q++;
+    rows.forEach((cells, k) => {
+      const row = s2.getRow(q); row.values = cells;
+      cells.forEach((_, i) => { const c = row.getCell(i + 1); c.border = box; c.font = font({ size: 10.5 }); c.alignment = { vertical: 'top', wrapText: i === 4, horizontal: i >= 1 && i <= 3 ? 'center' : 'left' }; if (k % 2) c.fill = fill(XL.zebra); });
+      if (styleRow) styleRow(row, k); q++;
+    });
+    if (total) { const row = s2.getRow(q); row.values = total; total.forEach((_, i) => { const c = row.getCell(i + 1); c.font = font({ bold: true }); c.border = { top: { style: 'medium', color: { argb: XL.slate } }, bottom: thin }; c.alignment = { horizontal: i ? 'center' : 'left' }; }); q++; }
+    if (rows.length > 1) s2.addConditionalFormatting({ ref: `B${first}:B${first + rows.length - 1}`, rules: [{ type: 'dataBar', cfvo: [{ type: 'num', value: 0 }, { type: 'max' }], color: { argb: 'FF60A5FA' }, gradient: false }] });
+    q++;
+  };
+  table('By category', ['Category', 'Items', 'Open', 'Done'], M.byCat.map(x => [x.label, x.items, x.open, x.done]), ['Total', M.totals.items, M.totals.open, M.totals.done],
+    (row, k) => { const cs = catStyle(M.byCat[k].cat); row.getCell(1).fill = fill(cs.fill); row.getCell(1).font = font({ size: 10.5, color: { argb: cs.font } }); });
+  table('By shift', ['Shift', 'Items', 'Open', 'Done'], M.byShift.map(x => [x.label, x.items, x.open, x.done]), ['Total', M.totals.items, M.totals.open, M.totals.done]);
+  if (M.open.length) table('Open items', ['Category', 'Time', 'Rooms', '', 'Item', 'From'], M.open.map(o => [o.cells[0], o.cells[1], o.cells[2], o.urgent ? 'URGENT' : '', o.cells[3], o.cells[4]]), null,
+    (row, k) => { const o = M.open[k], cs = catStyle(o.cat); row.getCell(1).fill = fill(cs.fill); row.getCell(1).font = font({ size: 10.5, color: { argb: cs.font } }); row.getCell(3).font = font({ size: 10.5, bold: true });
+      if (o.urgent) { row.getCell(4).font = font({ size: 9, bold: true, color: { argb: XL.red } }); row.getCell(4).fill = fill(XL.redFill); row.getCell(5).font = font({ size: 10.5, bold: true, color: { argb: XL.red } }); }
+      row.height = rowHeight([o.cells[3]], [62], 18); });
+  else { s2.getCell(q, 1).value = 'Nothing open — a clean handover.'; s2.getCell(q, 1).font = font({ italic: true, color: { argb: 'FF065F46' } }); }
+  page(s2, 0, false);
+  return new Uint8Array(await wb.xlsx.writeBuffer());
+}
+async function exportExcel(silent) {
   const S = SETTINGS(), list = exportList(S.exp === 'all'), name = fileName(hotel(), HB.date);
   if (!list.length) { toast('Nothing to export for ' + (S.exp === 'all' ? 'this day' : 'these filters'), 'warn'); return null; }
-  const bytes = safe(() => workbookBytes(list), null);
+  let bytes = null, pro = false;
+  try { bytes = await proWorkbook(list); pro = true; } catch (e) { safe(() => console.warn('[handover-book] styled Excel not available, plain file instead:', e && e.message)); }
+  if (!bytes) bytes = safe(() => workbookBytes(list), null);
   if (!bytes) { toast('Excel is not loaded (offline?) — try again in a moment', 'warn'); return null; }
   download(bytes, name);
-  if (!silent) toast(`⬇ ${name} · ${list.length} item${list.length === 1 ? '' : 's'}`, 'ok');
+  if (!silent) toast(`⬇ ${name} · ${list.length} item${list.length === 1 ? '' : 's'}${pro ? '' : ' (simple layout — offline)'}`, 'ok');
   safe(() => { if (typeof logActivity === 'function') logActivity('handover_export', `${name} (${list.length})`); });
-  return { name, list };
-}
-function email() {
-  const S = SETTINGS();
-  if (!recipients(S.to).length) { HB.settings = true; shell(); setTimeout(() => { const t = doc.getElementById('hbTo'); if (t) t.focus(); }, 30); toast('Add who receives the handover first (saved on this device)', 'info'); return; }
-  const r = exportExcel(true); if (!r) return;
-  const url = mailtoUrl(S.to, mailSubject(HB.date), mailBody(r.list, HB.date, hotel(), r.name), S.cc);
-  setTimeout(() => { try { W.location.href = url; } catch (_) {} }, 400);
-  toast(`⬇ ${r.name} downloaded — attach it to the e-mail that opens`, 'info');
+  return { name, list, pro };
 }
 // ── taps ──
 function saveEdit(el) {
@@ -1087,15 +1236,9 @@ function onClick(e) {
       case 'fold': HB.fold[b.dataset.v] = !HB.fold[b.dataset.v]; body(); return;
       case 'chat': HB.chat = !HB.chat; body(); return;
       case 'room': HB.room = HB.room === b.dataset.r ? '' : b.dataset.r; body(); return;
-      case 'settings': HB.settings = !HB.settings; shell(); return;
-      case 'exp': { const S = SETTINGS(); S.exp = b.dataset.v; LS.set(SET_KEY, S); doc.querySelectorAll('#hbRoot [data-hb="exp"]').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); }); return; }
-      case 'saveset': {
-        const S = SETTINGS(); S.to = (doc.getElementById('hbTo') || {}).value || ''; S.cc = (doc.getElementById('hbCc') || {}).value || ''; S.orig = !!(doc.getElementById('hbOrig') || {}).checked;
-        const bad = sp(S.to + ',' + S.cc).split(/[,;\s]+/).filter(x => x && !recipients(x).length);
-        LS.set(SET_KEY, S); HB.settings = false; shell(); toast(bad.length ? `Saved · not an e-mail address: ${bad.slice(0, 3).join(', ')}` : 'Saved on this device', bad.length ? 'warn' : 'ok'); return;
-      }
+      case 'xp': HB.xp = !HB.xp; shell(); return;
+      case 'exp': { const S = SETTINGS(); S.exp = b.dataset.v; LS.set(SET_KEY, S); doc.querySelectorAll('#hbRoot [data-hb="exp"]').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); }); xpCount(); return; }
       case 'xlsx': exportExcel(); return;
-      case 'mail': email(); return;
       case 'addsave': addNow(); return;
       case 'sugg': { const L = suggestions(); HB.rows = L.map(s => ({ text: s.text, head: '', cat: s.cat, from: s.src, on: false })); HB.rowsKind = 'sugg'; preview(); return; }
       case 'rowsall': { const on = !(HB.rows || []).every(r => r.on); (HB.rows || []).forEach(r => { r.on = on; }); preview(); return; }
@@ -1139,6 +1282,7 @@ function mountPage() {
     else if (t.id === 'hbSender') { HB.sender = t.value; body(); }
     else if (t.id === 'hbGroup') { HB.group = t.value; body(); }
     else if (t.id === 'hbNewCat') { HB.draftCat = t.value; preview(); }
+    else if (t.id === 'hbOrig') { const S = SETTINGS(); S.orig = !!t.checked; LS.set(SET_KEY, S); }
   }));
   panel.addEventListener('keydown', e => safe(() => {
     const t = e.target;
@@ -1215,6 +1359,6 @@ function start() {
   [700, 2500, 6000].forEach(t => setTimeout(() => safe(wrapHandover), t));
   setInterval(() => safe(() => { if (listenDay !== today()) listenToday(); }), 60e3);
 }
-W.hoHandoverBook = { fromWa, addByHand, addItems, suggestions: () => suggestions(), items: day => itemsOf(day || today()), load, render: () => render(), excel: () => exportExcel(), workbookBytes: list => workbookBytes(list || itemsOf(HB.date || today())), state: () => HB };
+W.hoHandoverBook = { fromWa, addByHand, addItems, suggestions: () => suggestions(), items: day => itemsOf(day || today()), load, render: () => render(), excel: () => exportExcel(), proBytes: list => proWorkbook(list || exportList(true)), workbookBytes: list => workbookBytes(list || itemsOf(HB.date || today())), state: () => HB };
 if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start); else start();
 })();

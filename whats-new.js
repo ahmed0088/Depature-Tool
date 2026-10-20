@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 352, items: [
+    '📊 Handover Book: the Excel export is now a proper report: a title block with hotel, date and who prepared it, coloured summary tiles, a dark header row, sections per shift, coloured status and topics, urgent items in red, and a Summary sheet with counts and open items. It prints on one page wide. The e-mail option is gone: just press Export and choose "What I see" or "Whole day".',
+  ] },
   { v: 351, items: [
     '📋 New: Handover Book (Front Desk menu). Everything for the next shift in one clean page: messages from your HO WhatsApp group, any message starting with "HO -" in any group, and handover-like messages from other groups (marked ✨ Auto). Team chat like "ok" or "thanks" is kept aside.',
     '✍️ The English is tidied for you: "room 512 have bad smell" → "Room 512 has a bad smell." Tap any item to edit it; the original is one tap away. Items get a topic (Reservations, Payment, Room move, Complaint…), a shift, rooms, and Open / Done.',
