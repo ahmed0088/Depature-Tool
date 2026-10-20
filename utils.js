@@ -17,12 +17,12 @@ function updateClock() {
  *  Ops Brain, home tiles and links from opening them anyway). */
 function hoPanelAllowed(name) {
   if (typeof currentProfile === 'undefined' || !currentProfile || typeof ROLES === 'undefined') return true;
-  const role = currentProfile.role, def = ROLES[role] || ROLES.readonly;
+  const role = currentProfile.role, def = typeof roleDef === 'function' ? roleDef(role) : (ROLES[role] || ROLES.readonly);   // with Team → Roles & access changes
   if (role === 'owner' || name === 'guestmem' || (def.panels || []).includes(name)) return true;
   return !document.querySelector(`.nav-item[data-panel="${name}"]`);   // pages without a menu entry are opened from allowed ones
 }
 function showPanel(name) {
-  if (!hoPanelAllowed(name)) { if (typeof showToast === 'function') showToast('Your role can\'t open that page. Ask a manager if you need it.', 'err'); return; }
+  if (!hoPanelAllowed(name)) { if (typeof showToast === 'function') showToast('Not available for your role', 'err'); return; }
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const panel = document.getElementById('panel-' + name);
@@ -529,7 +529,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v358';
+const APP_VERSION = 'v359';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;

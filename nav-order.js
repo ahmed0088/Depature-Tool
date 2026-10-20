@@ -83,4 +83,5 @@ function start() {
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 window.hoNavOrder = order;
+window.hoNavGroups = GROUPS;   // Team → Roles & access lists pages in these groups
 })();

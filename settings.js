@@ -141,7 +141,7 @@ function hoSettingsRender() {
   const tiles = [['departures', 'Departures'], ['arrivals', 'Arrivals'], ['purpose', 'Purpose of Stay'], ['dtcm', 'DTCM Recon'], ['package-audit', 'Package Audit'], ['checklist', 'Night Checklist'], ['shifts', 'Shift Tasks'], ['pipeline', 'ALL enrollment']];
   const hiddenT = new Set(hoPrefs.hiddenTiles || []);
   const me = (typeof currentProfile !== 'undefined' && currentProfile) || {};
-  const role = (typeof ROLES !== 'undefined' && ROLES[me.role]) || null;
+  const role = me.role && typeof roleDef === 'function' && typeof ROLES !== 'undefined' && ROLES[me.role] ? roleDef(me.role) : ((typeof ROLES !== 'undefined' && ROLES[me.role]) || null);
   const td = typeof HotelCfg !== 'undefined' ? HotelCfg.get() : null;
   const hotel = document.getElementById('hotelName')?.textContent || '';
 

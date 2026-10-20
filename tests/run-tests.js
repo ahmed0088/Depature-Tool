@@ -2177,5 +2177,56 @@ console.log('\nWhatsApp bridge · acting on the board');
   check('after midnight: yesterday\'s message never runs on the new board, log starts empty', [st(951), sb.hoWaBridge.log().length], ['due  0', 0]);
 }
 
+// ── Team → Roles & access (role-rules.js): defaults + saved changes → what each role gets ──
+console.log('\nRoles & access');
+{
+  const sb = { console: { log() {}, warn() {}, error() {} } };
+  sb.window = sb; sb.globalThis = sb;
+  vm.createContext(sb);
+  const au = fs.readFileSync(path.join(ROOT, 'auth.js'), 'utf8');
+  const i = au.indexOf('const ROLES = {'), j = au.indexOf('\n};\n', i) + 3;
+  vm.runInContext(au.slice(i, j).replace('const ROLES', 'var ROLES'), sb, { filename: 'auth.js (ROLES)' });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'role-rules.js'), 'utf8'), sb, { filename: 'role-rules.js' });
+  const RR = sb.hoRoleRules, ROLES = JSON.parse(JSON.stringify(sb.ROLES));
+  ROLES.agent.panels.push('ops-logs');   // a module adding its page at load (after the defaults)
+  const J = x => JSON.parse(JSON.stringify(x));
+  const E = (rules, r, all) => RR.effective(ROLES, rules, r, all);
+  const has = (rules, r, p) => E(rules, r).panels.includes(p);
+  const ALL = ['home', 'departures', 'rates', 'settings', 'qr', 'ops-logs'];
+
+  check('no changes: each role gets its defaults (and pages modules added), Home and Settings on',
+    [has({}, 'agent', 'handover-book'), has({}, 'agent', 'ops-logs'), has({}, 'agent', 'rates'), has({}, 'readonly', 'settings'), E({}, 'agent').caps.canExport, E({}, 'manager').caps.canManageUsers, E({}, 'supervisor').caps.canDelete],
+    [true, true, false, true, false, true, false]);
+  const rules = { agent: { panels: { rates: true, 'handover-book': false, home: false, settings: false }, caps: { canExport: true, canManageUsers: true } } };
+  check('changes on top: a page on, a page off, a power on; Home/Settings can\'t be switched off; agents never manage the team',
+    [has(rules, 'agent', 'rates'), has(rules, 'agent', 'handover-book'), has(rules, 'agent', 'home'), has(rules, 'agent', 'settings'), E(rules, 'agent').caps.canExport, E(rules, 'agent').caps.canManageUsers, has(rules, 'readonly', 'rates')],
+    [true, false, true, true, true, false, false]);
+  check('owner: always everything, whatever is saved for it',
+    [E({ owner: { panels: { departures: false, home: false }, caps: { canManageUsers: false } } }, 'owner', ALL).panels.includes('departures'), E({ owner: { caps: { canManageUsers: false } } }, 'owner').caps.canManageUsers, ALL.every(p => E({}, 'owner', ALL).panels.includes(p)), RR.CAP_IDS.every(c => E({}, 'owner').caps[c])],
+    [true, true, true, true]);
+  check('unknown role is read only; junk in the database is ignored',
+    [J(E({}, 'nobody')).panels.join() === J(E({}, 'readonly')).panels.join(), J(RR.cleanAll({ agent: { panels: { rates: 'yes', 'x y': true, ok: false }, caps: 5 }, owner: { caps: { canExport: false } }, supervisor: null }))],
+    [true, { agent: { panels: { ok: false } } }]);
+  check('who can edit which role: owner all but owner; manager only supervisor/agent/read only; others none',
+    [['owner', 'manager', 'supervisor', 'agent', 'readonly'].map(r => RR.canEditRole(ROLES, {}, 'owner', r)), ['owner', 'manager', 'supervisor', 'agent', 'readonly'].map(r => RR.canEditRole(ROLES, {}, 'manager', r)),
+      RR.canEditRole(ROLES, {}, 'supervisor', 'agent'), RR.canEditRole(ROLES, {}, 'agent', 'agent'), RR.canEditRole(ROLES, { manager: { caps: { canManageUsers: false } } }, 'manager', 'agent')],
+    [[false, true, true, true, true], [false, false, true, true, true], false, false, false]);
+  const noRates = { manager: { panels: { rates: false }, caps: { canExport: false } } };
+  check('manager limits: can\'t give more than they have; can always take away; owner can give anything',
+    [RR.canSet(ROLES, {}, 'manager', 'agent', 'panels', 'rates', true).ok, RR.canSet(ROLES, noRates, 'manager', 'agent', 'panels', 'rates', true).why, RR.canSet(ROLES, {}, 'manager', 'agent', 'caps', 'canImport', true).why,
+      RR.canSet(ROLES, noRates, 'manager', 'agent', 'caps', 'canExport', true).why, RR.canSet(ROLES, noRates, 'manager', 'agent', 'panels', 'departures', false).ok, RR.canSet(ROLES, {}, 'owner', 'agent', 'caps', 'canImport', true).ok,
+      RR.canSet(ROLES, {}, 'manager', 'manager', 'panels', 'rates', false).ok, RR.canSet(ROLES, {}, 'owner', 'agent', 'panels', 'home', false).why, RR.canSet(ROLES, {}, 'owner', 'supervisor', 'caps', 'canManageUsers', true).why, RR.canSet(ROLES, {}, 'owner', 'manager', 'caps', 'canManageUsers', false).ok],
+    [true, 'notYours', 'notYours', 'notYours', true, true, false, 'always', 'onlyFor', true]);
+  { let r = {};
+    r.agent = RR.setRule(ROLES, r, 'agent', 'panels', 'rates', true);
+    const a1 = J(r.agent);
+    r.agent = RR.setRule(ROLES, r, 'agent', 'caps', 'canExport', true);
+    const n1 = RR.changes(ROLES, r, 'agent').length;
+    r.agent = RR.setRule(ROLES, r, 'agent', 'panels', 'rates', false);
+    r.agent = RR.setRule(ROLES, r, 'agent', 'caps', 'canExport', false);
+    check('saving: only differences from default are kept; back to default stores nothing ("changed" dot goes)', [a1, n1, r.agent, RR.changes(ROLES, r, 'agent').length, RR.changes(ROLES, { owner: { panels: { home: false } } }, 'owner').length],
+      [{ panels: { rates: true } }, 2, null, 0, 0]); }
+}
+
 console.log(`\n${pass} passed · ${fail} failed`);
 process.exit(fail ? 1 : 0);

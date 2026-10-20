@@ -134,6 +134,7 @@ function roToggle12() { if (typeof hoSetPref === 'function') hoSetPref('clock12'
 // ── Who can change it ─────────────────────────────────────
 function roCanEdit() {
   const r = typeof currentProfile !== 'undefined' && currentProfile && currentProfile.role;
+  if (typeof roleDef === 'function' && r) return !!roleDef(r).canEditShifts;   // with Team → Roles & access changes
   return !!(typeof ROLES !== 'undefined' && ROLES[r] && ROLES[r].canEditShifts);
 }
 

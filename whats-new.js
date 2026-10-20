@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 359, items: [
+    '🔐 Team panel redesigned: Users · Roles & access · Activity, with cards, switches and a phone-friendly sheet.',
+    '🎚 New "Roles & access": the owner can switch each page and each power on or off for Managers, Supervisors, Agents and Read-only, see "Agents will see 17 pages", and reset to default. Changes apply to everyone straight away. A switched-off page is also blocked from search and Ops Brain. The owner always keeps everything; Home and Settings always stay on.',
+  ] },
   { v: 358, items: [
     '🔓 Handover Book: agents, supervisors, managers and read-only users can now open it too (it was hidden for everyone except the owner).',
   ] },

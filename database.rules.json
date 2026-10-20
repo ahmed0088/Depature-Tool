@@ -34,6 +34,12 @@
           }
         },
 
+        "roleRules": {
+          "$role": {
+            ".write": "auth != null && $role !== 'owner' && $role !== 'manager' && root.child('hotels').child($hid).child('users').child(auth.uid).child('role').val() === 'manager' && root.child('hotels').child($hid).child('users').child(auth.uid).child('active').val() === true"
+          }
+        },
+
         "$node": {
           ".write": "auth != null && root.child('hotels').child($hid).child('users').child(auth.uid).child('active').val() === true"
         }

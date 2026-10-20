@@ -5309,160 +5309,135 @@ async function appInit() {
 
 
 <!-- ══════════════════════════════════════════════════════
-     ADMIN PANEL MODAL
-══════════════════════════════════════════════════════ -->
-<!-- ══════════════════════════════════════════════════════
-     ADMIN PANEL — Team Management
+     TEAM — accounts, roles & access, activity (auth.js + role-rules.js)
 ══════════════════════════════════════════════════════ -->
 <div class="modal-bg" id="adminModal">
-  <div class="modal admin-modal">
+  <div class="modal adm" role="dialog" aria-modal="true" aria-labelledby="admTitle">
 
-    <!-- Header -->
-    <div class="admin-modal-head">
-      <div style="display:flex;align-items:center;gap:12px;">
-        <div class="admin-head-icon">👥</div>
-        <div>
-          <div style="font-size:1.05rem;font-weight:700;color:var(--text);letter-spacing:-0.01em;">Team Management</div>
-          <div style="font-size:0.62rem;color:var(--text3);font-family:var(--mono);margin-top:1px;">Ibis Styles Dubai · User Accounts &amp; Access</div>
+    <header class="adm-head">
+      <div class="adm-head-main">
+        <div class="adm-head-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <div class="adm-head-tx">
+          <h2 id="admTitle">Team</h2>
+          <div class="adm-sub" id="admSub">Accounts, access and activity</div>
         </div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <button class="btn gold sm" onclick="openCreateUser()" style="font-size:0.68rem;">＋ New Account</button>
-        <button class="kb-close" onclick="closeAdminPanel()">✕</button>
-      </div>
+      <button type="button" class="adm-x" onclick="closeAdminPanel()" aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </header>
+
+    <div class="adm-seg" role="tablist" aria-label="Team sections" data-on="users">
+      <button type="button" class="admin-tab-btn active" role="tab" aria-selected="true"  data-tab="users"    onclick="adminTab('users')">Users</button>
+      <button type="button" class="admin-tab-btn"        role="tab" aria-selected="false" data-tab="roles"    onclick="adminTab('roles')">Roles &amp; access</button>
+      <button type="button" class="admin-tab-btn"        role="tab" aria-selected="false" data-tab="activity" onclick="adminTab('activity');adminLoadActivity()">Activity</button>
     </div>
 
-    <!-- Tabs -->
-    <div class="admin-tabs">
-      <button class="admin-tab-btn active" data-tab="users"    onclick="adminTab('users')">👥 Users</button>
-      <button class="admin-tab-btn"        data-tab="activity" onclick="adminTab('activity');adminLoadActivity()">📋 Activity Log</button>
-    </div>
+    <div class="adm-body">
 
-    <!-- ── TAB: Users ───────────────────────────────────── -->
-    <div id="adminTab-users" class="admin-tab-pane">
+    <!-- ── Users ───────────────────────────────────── -->
+    <div id="adminTab-users" class="admin-tab-pane" role="tabpanel">
 
-      <!-- Stats strip -->
-      <div class="admin-stats-strip" id="adminStatsStrip">
-        <!-- filled by adminRenderUsers() -->
+      <div class="adm-toolbar">
+        <div class="adm-stats" id="adminStatsStrip"><!-- adminRenderUsers() --></div>
+        <button type="button" class="adm-btn primary" onclick="openCreateUser()">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New account
+        </button>
       </div>
 
-      <!-- ── Create form ── -->
-      <div id="adminCreateForm" style="display:none;" class="admin-form-card">
-        <div class="admin-form-title">➕ Create New Account</div>
-        <div class="admin-form-grid">
-          <div class="login-field">
-            <label class="login-label">Full Name</label>
-            <input id="newUserName" class="login-input" placeholder="Ahmed Al Mansouri" type="text" autocomplete="off"/>
-          </div>
-          <div class="login-field">
-            <label class="login-label">Email Address</label>
-            <input id="newUserEmail" class="login-input" placeholder="name@hotel.com" type="email" autocomplete="off"/>
-          </div>
-          <div class="login-field">
-            <label class="login-label">Password</label>
-            <div style="position:relative;">
-              <input id="newUserPass" class="login-input" placeholder="Min 6 characters" type="password" autocomplete="new-password" style="padding-right:38px;"/>
-              <button type="button" onclick="adminToggleVis('newUserPass','eyeNew')" class="admin-eye-btn" id="eyeNew">
+      <!-- Create -->
+      <section id="adminCreateForm" style="display:none;" class="adm-card adm-form">
+        <div class="adm-form-h"><h3>New account</h3><button type="button" class="adm-x sm" onclick="closeCreateUser()" aria-label="Cancel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
+        <div class="adm-form-grid">
+          <label class="adm-field"><span>Full name</span>
+            <input id="newUserName" class="adm-input" placeholder="First and last name" type="text" autocomplete="off"/></label>
+          <label class="adm-field"><span>Email</span>
+            <input id="newUserEmail" class="adm-input" placeholder="name@hotel.com" type="email" autocomplete="off"/></label>
+          <label class="adm-field"><span>Password</span>
+            <span class="adm-pass">
+              <input id="newUserPass" class="adm-input" placeholder="At least 6 characters" type="password" autocomplete="new-password"/>
+              <button type="button" onclick="adminToggleVis('newUserPass','eyeNew')" class="admin-eye-btn adm-eye" id="eyeNew" aria-label="Show password">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
               </button>
-            </div>
-          </div>
-          <div class="login-field">
-            <label class="login-label">Role</label>
-            <select id="newUserRole" class="login-input">
-              <option value="agent">🛎️ Agent — Ops only</option>
-              <option value="supervisor">⭐ Supervisor — All modules</option>
-              <option value="manager">🏅 Manager — All + manage agents</option>
-              <option value="owner">👑 Owner — Full control</option>
-              <option value="readonly">👁️ Read Only</option>
-            </select>
-          </div>
+            </span></label>
+          <label class="adm-field"><span>Role</span>
+            <select id="newUserRole" class="adm-input">
+              <option value="agent">🛎️ Agent — front desk</option>
+              <option value="supervisor">⭐ Supervisor — all desk pages</option>
+              <option value="manager">🏅 Manager — all pages + team</option>
+              <option value="owner">👑 Owner — full control</option>
+              <option value="readonly">👁️ Read only</option>
+            </select></label>
         </div>
-        <div id="adminCreateErr" class="admin-form-err" style="display:none;"></div>
-        <div style="display:flex;gap:8px;margin-top:14px;">
-          <button id="adminCreateBtn" class="btn gold" onclick="adminCreateUser()">Create Account</button>
-          <button class="btn" onclick="closeCreateUser()">Cancel</button>
+        <div id="adminCreateErr" class="adm-err" style="display:none;"></div>
+        <div class="adm-form-acts">
+          <button type="button" class="adm-btn ghost" onclick="closeCreateUser()">Cancel</button>
+          <button type="button" id="adminCreateBtn" class="adm-btn primary" onclick="adminCreateUser()">Create Account</button>
         </div>
-      </div>
+      </section>
 
-      <!-- ── Edit form (full: name + email + role + password) ── -->
-      <div id="adminEditForm" style="display:none;" class="admin-form-card">
+      <!-- Edit -->
+      <section id="adminEditForm" style="display:none;" class="adm-card adm-form">
         <input type="hidden" id="editUserId"/>
-        <div class="admin-form-title">✏️ Edit Account</div>
-        <div class="admin-form-grid">
-          <div class="login-field">
-            <label class="login-label">Full Name</label>
-            <input id="editUserName" class="login-input" type="text" autocomplete="off"/>
-          </div>
-          <div class="login-field">
-            <label class="login-label">
-              Email Address
-              <span class="admin-field-note">changing email re-links Firebase Auth</span>
-            </label>
-            <input id="editUserEmail" class="login-input" type="email" autocomplete="off"/>
-          </div>
-          <div class="login-field">
-            <label class="login-label">Role</label>
-            <select id="editUserRole" class="login-input">
+        <div class="adm-form-h"><h3>Edit account</h3><button type="button" class="adm-x sm" onclick="closeEditUser()" aria-label="Cancel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
+        <div class="adm-form-grid">
+          <label class="adm-field"><span>Full name</span>
+            <input id="editUserName" class="adm-input" type="text" autocomplete="off"/></label>
+          <label class="adm-field"><span>Email <small>changing it here doesn't change their sign-in</small></span>
+            <input id="editUserEmail" class="adm-input" type="email" autocomplete="off"/></label>
+          <label class="adm-field"><span>Role</span>
+            <select id="editUserRole" class="adm-input">
               <option value="agent">🛎️ Agent</option>
               <option value="supervisor">⭐ Supervisor</option>
               <option value="manager">🏅 Manager</option>
               <option value="owner">👑 Owner</option>
-              <option value="readonly">👁️ Read Only</option>
-            </select>
-          </div>
-          <div class="login-field">
-            <label class="login-label">
-              New Password
-              <span class="admin-field-note">leave blank to keep current</span>
-            </label>
-            <div style="position:relative;">
-              <input id="editUserPass" class="login-input" type="password" placeholder="Leave blank to keep" autocomplete="new-password" style="padding-right:38px;"/>
-              <button type="button" onclick="adminToggleVis('editUserPass','eyeEdit')" class="admin-eye-btn" id="eyeEdit">
+              <option value="readonly">👁️ Read only</option>
+            </select></label>
+          <label class="adm-field"><span>New password <small>leave blank to keep</small></span>
+            <span class="adm-pass">
+              <input id="editUserPass" class="adm-input" type="password" placeholder="Leave blank to keep" autocomplete="new-password"/>
+              <button type="button" onclick="adminToggleVis('editUserPass','eyeEdit')" class="admin-eye-btn adm-eye" id="eyeEdit" aria-label="Show password">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
               </button>
-            </div>
-          </div>
+            </span></label>
         </div>
-        <div id="adminEditErr" class="admin-form-err" style="display:none;"></div>
-        <div style="display:flex;gap:8px;margin-top:14px;">
-          <button id="adminSaveEditBtn" class="btn gold" onclick="adminSaveEdit()">Save Changes</button>
-          <button class="btn" onclick="closeEditUser()">Cancel</button>
+        <div id="adminEditErr" class="adm-err" style="display:none;"></div>
+        <div class="adm-form-acts">
+          <button type="button" class="adm-btn ghost" onclick="closeEditUser()">Cancel</button>
+          <button type="button" id="adminSaveEditBtn" class="adm-btn primary" onclick="adminSaveEdit()">Save Changes</button>
         </div>
-      </div>
+      </section>
 
-      <!-- User cards grid -->
-      <div id="adminUserCards" class="admin-user-cards">
-        <!-- populated by adminRenderUsers() -->
-        <div style="text-align:center;padding:36px;color:var(--text3);font-family:var(--mono);font-size:0.7rem;">Loading…</div>
+      <div id="adminUserCards" class="adm-users">
+        <div class="adm-empty"><span>Loading…</span></div>
       </div>
+      <p class="adm-foot">What each role can open and do is set in <button type="button" class="adm-link" onclick="adminTab('roles')">Roles &amp; access</button>.</p>
+    </div>
 
-      <!-- Role legend -->
-      <div class="admin-role-legend">
-        <div class="admin-legend-title">Role Permissions Quick Reference</div>
-        <div class="admin-legend-grid">
-          <div class="admin-legend-row"><span style="color:#f0a43a;">👑 Owner</span><span>Full access · manage all users · reset any password · import/export</span></div>
-          <div class="admin-legend-row"><span style="color:#8b7cf8;">🏅 Manager</span><span>All modules · manage agents &amp; supervisors · export data</span></div>
-          <div class="admin-legend-row"><span style="color:#5ab4e8;">⭐ Supervisor</span><span>All modules · no user management · export</span></div>
-          <div class="admin-legend-row"><span style="color:#3ecf8e;">🛎️ Agent</span><span>Departures · Arrivals · Shifts · Checklist only</span></div>
-          <div class="admin-legend-row"><span style="color:#888;">👁️ Read Only</span><span>View only — no actions permitted</span></div>
-        </div>
+    <!-- ── Roles & access (role-rules.js) ─────────── -->
+    <div id="adminTab-roles" class="admin-tab-pane" role="tabpanel" style="display:none;">
+      <div id="admRoles"></div>
+    </div>
+
+    <!-- ── Activity ────────────────────────────────── -->
+    <div id="adminTab-activity" class="admin-tab-pane" role="tabpanel" style="display:none;">
+      <div class="adm-toolbar">
+        <label class="adm-search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          <input id="adminActivitySearch" type="search" placeholder="Search name, action or detail" oninput="adminFilterActivity(this.value)" aria-label="Search activity"/>
+        </label>
+        <button type="button" class="adm-btn ghost" onclick="adminLoadActivity()">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>Refresh
+        </button>
+      </div>
+      <div id="adminActivityLog" class="adm-card adm-logs">
+        <div class="adm-empty"><span>Loading…</span></div>
       </div>
     </div>
 
-    <!-- ── TAB: Activity Log ─────────────────────────────── -->
-    <div id="adminTab-activity" class="admin-tab-pane" style="display:none;">
-      <div class="admin-activity-filter" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
-        <input id="adminActivitySearch" type="text" placeholder="Filter by name or action…"
-          oninput="adminFilterActivity(this.value)"
-          style="flex:1;min-width:180px;padding:7px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:0.68rem;outline:none;"/>
-        <button class="btn sm" onclick="adminLoadActivity()">↺ Refresh</button>
-      </div>
-      <div id="adminActivityLog" style="max-height:400px;overflow-y:auto;">
-        <div style="text-align:center;padding:24px;color:var(--text3);">Loading…</div>
-      </div>
     </div>
-
   </div>
 </div>
 
@@ -5470,6 +5445,7 @@ async function appInit() {
 <script src="neorcha-scraper.js"></script>
 <script src="tenant.js"></script>
 <script src="auth.js"></script>
+<script src="role-rules.js"></script>
 <script src="skip-clean.js"></script>
 <script src="global-search.js"></script>
 <script src="handover.js"></script>

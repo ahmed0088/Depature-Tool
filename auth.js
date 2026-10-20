@@ -37,6 +37,14 @@ const ROLES = {
   },
 };
 
+/** A role as it applies now: the built-in defaults above with the owner's changes from
+ *  Team → Roles & access laid on top (role-rules.js). Use this, not ROLES[role], for pages and powers. */
+function roleDef(role) {
+  if (typeof hoRoleRules !== 'undefined' && hoRoleRules && typeof hoRoleRules.def === 'function') return hoRoleRules.def(role);
+  return ROLES[role] || ROLES.readonly;
+}
+const ROLE_CAPS = ['canManageUsers','canExport','canImport','canClear','canEditChecklist','canEditShifts','canReports','canDelete','canViewAll','canForceLogout','canViewLogs'];
+
 let currentUser    = null;
 let currentProfile = null;
 
@@ -71,6 +79,7 @@ function authInit() {
     currentUser    = user;
     currentProfile = profile;
     if (typeof fbSignedInNow === 'function') setTimeout(fbSignedInNow, 0);   // live updates that waited for sign-in
+    if (typeof hoRoleRules !== 'undefined' && hoRoleRules.start) setTimeout(hoRoleRules.start, 0);   // Team → Roles & access changes, live
 
     // Clear any stale forceLogout flag left from a previous disconnect
     if (profile.forceLogout) {
@@ -227,7 +236,7 @@ async function loadUserProfile(uid) {
 
 // ── Apply role ────────────────────────────────────────────
 function applyRole(role) {
-  const def = ROLES[role] || ROLES.readonly;
+  const def = roleDef(role);
 
   // Owner sees everything — no panel hiding, no capability hiding
   const isOwner = role === 'owner';
@@ -248,7 +257,7 @@ function applyRole(role) {
   document.querySelectorAll('[data-panel="guestmem"]').forEach(el => { el.style.display = 'none'; });
 
   // All capability-gated elements: owner sees all
-  ['canExport','canImport','canClear','canReports','canEditChecklist','canDelete','canViewAll','canForceLogout','canViewLogs'].forEach(cap => {
+  ROLE_CAPS.forEach(cap => {
     document.querySelectorAll(`[data-require="${cap}"]`).forEach(el =>
       el.style.display = (isOwner || def[cap]) ? '' : 'none');
   });
@@ -460,7 +469,7 @@ async function authLogout() {
 // ── Update topbar ─────────────────────────────────────────
 function updateAuthUI() {
   const p      = currentProfile;
-  const def    = ROLES[p.role] || ROLES.readonly;
+  const def    = roleDef(p.role);
   const isMob  = window.innerWidth <= 768;
   const el     = document.getElementById('authUserPill');
   if (el) {
@@ -530,8 +539,12 @@ let _adminUsers    = {};
 let _adminActivity = [];
 
 async function openAdminPanel() {
-  if (!ROLES[currentProfile?.role]?.canManageUsers) { showToast('Access denied', 'err'); return; }
+  if (!currentProfile || !roleDef(currentProfile.role).canManageUsers) { showToast('Not available for your role', 'err'); return; }
   document.getElementById('adminModal').classList.add('open');
+  const sub = document.getElementById('admSub');
+  const hotel = (document.getElementById('hotelName')?.textContent || '').trim();
+  if (sub) sub.textContent = (hotel ? hotel + ' · ' : '') + 'Accounts, access and activity';
+  if (typeof hoRoleRules !== 'undefined' && hoRoleRules.render) hoRoleRules.render();
   await adminLoadUsers();
   await adminLoadActivity();
 }
@@ -546,12 +559,24 @@ async function adminLoadUsers() {
   adminRenderUsers();
 }
 
+const _ADM_IC = {
+  edit:  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
+  out:   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>',
+  lock:  '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+  ok:    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>',
+  bin:   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>',
+};
+function _admInitials(name) {
+  const w = String(name || '?').trim().split(/\s+/).filter(Boolean);
+  return ((w[0] || '?')[0] + (w.length > 1 ? w[w.length - 1][0] : '')).toUpperCase();
+}
+
 function adminRenderUsers() {
   const container = document.getElementById('adminUserCards');
   if (!container) return;
   const users = Object.entries(_adminUsers);
 
-  // Stats strip
+  // Summary chips
   const strip = document.getElementById('adminStatsStrip');
   if (strip) {
     const total    = users.length;
@@ -559,18 +584,19 @@ function adminRenderUsers() {
     const disabled = total - active;
     const roleCount = {};
     users.forEach(([,u]) => { roleCount[u.role] = (roleCount[u.role]||0)+1; });
+    const order = ['owner','manager','supervisor','agent','readonly'];
     strip.innerHTML = `
-      <div class="admin-stat"><span class="admin-stat-val">${total}</span><span class="admin-stat-lbl">Total</span></div>
-      <div class="admin-stat"><span class="admin-stat-val" style="color:var(--mint);">${active}</span><span class="admin-stat-lbl">Active</span></div>
-      <div class="admin-stat"><span class="admin-stat-val" style="color:var(--rose);">${disabled}</span><span class="admin-stat-lbl">Disabled</span></div>
-      ${Object.entries(roleCount).map(([role,cnt]) => {
+      <div class="adm-stat"><b>${total}</b><span>${total === 1 ? 'person' : 'people'}</span></div>
+      <div class="adm-stat ok"><b>${active}</b><span>active</span></div>
+      ${disabled ? `<div class="adm-stat off"><b>${disabled}</b><span>switched off</span></div>` : ''}
+      ${Object.entries(roleCount).sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0])).map(([role,cnt]) => {
         const d = ROLES[role]||ROLES.readonly;
-        return `<div class="admin-stat"><span class="admin-stat-val" style="color:${d.color};">${cnt}</span><span class="admin-stat-lbl">${d.label}</span></div>`;
+        return `<div class="adm-stat role" style="--rc:${d.color}"><b>${cnt}</b><span>${escapeHtml(d.label)}</span></div>`;
       }).join('')}`;
   }
 
   if (!users.length) {
-    container.innerHTML = `<div style="text-align:center;padding:36px;color:var(--text3);font-family:var(--mono);font-size:0.7rem;">No users yet. Click "New Account" to add the first one.</div>`;
+    container.innerHTML = `<div class="adm-empty"><b>No accounts yet</b><span>Tap “New account” to add the first person.</span></div>`;
     return;
   }
 
@@ -591,65 +617,33 @@ function adminRenderUsers() {
     const canEdit = (isOwner || (isMgr && u.role !== 'owner')) && !isMe;
     const lastLogin = u.lastLogin
       ? new Date(u.lastLogin).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})
-      : 'Never';
+      : 'never';
+    const created = u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : '';
+    const id = escapeHtml(uid);
 
     return `
-    <div class="admin-user-card${isMe ? ' admin-user-card-me' : ''}${!u.active ? ' admin-user-card-disabled' : ''}">
-      <div class="admin-user-card-top">
-        <div class="admin-user-avatar" style="background:${def.color}22;color:${def.color};border:1px solid ${def.color}44;">
-          ${def.icon}
-        </div>
-        <div class="admin-user-info">
-          <div class="admin-user-name">
-            ${escapeHtml(u.name || "")}
-            ${isMe ? '<span class="admin-you-badge">you</span>' : ''}
-          </div>
-          <div class="admin-user-email">${escapeHtml(u.email || "")}</div>
-          <div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap;">
-            <span class="admin-role-badge" style="background:${def.color}1a;color:${def.color};border:1px solid ${def.color}33;">
-              ${def.icon} ${def.label}
-            </span>
-            <span class="admin-status-pill" style="background:${u.active ? 'rgba(62,207,142,0.12)' : 'rgba(240,107,122,0.12)'};color:${u.active ? 'var(--mint)' : 'var(--rose)'};border:1px solid ${u.active ? 'rgba(62,207,142,0.25)' : 'rgba(240,107,122,0.25)'};">
-              ${u.active ? '● Active' : '● Disabled'}
-            </span>
-          </div>
-        </div>
-        <div class="admin-user-meta">
-          <div class="admin-user-meta-row">
-            <span style="color:var(--text3);">Last login</span>
-            <span>${lastLogin}</span>
-          </div>
-          <div class="admin-user-meta-row">
-            <span style="color:var(--text3);">Created</span>
-            <span>${u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : '—'}</span>
+    <article class="adm-user${isMe ? ' is-me' : ''}${!u.active ? ' is-off' : ''}" style="--rc:${def.color}">
+      <div class="adm-user-top">
+        <div class="adm-av" aria-hidden="true">${escapeHtml(_admInitials(u.name))}<span class="adm-av-ic">${def.icon}</span></div>
+        <div class="adm-user-main">
+          <div class="adm-user-name"><span>${escapeHtml(u.name || '')}</span>${isMe ? '<span class="adm-you">You</span>' : ''}</div>
+          <div class="adm-user-mail">${escapeHtml(u.email || '')}</div>
+          <div class="adm-user-tags">
+            <span class="adm-tag role">${def.icon} ${escapeHtml(def.label)}</span>
+            <span class="adm-tag ${u.active ? 'ok' : 'off'}"><i></i>${u.active ? 'Active' : 'Switched off'}</span>
           </div>
         </div>
       </div>
+      <div class="adm-user-meta"><span>Last sign-in <b>${lastLogin}</b></span>${created ? `<span>Added <b>${created}</b></span>` : ''}</div>
       ${canEdit ? `
-      <div class="admin-user-actions">
-        <button class="admin-action-btn primary" onclick="adminEditUser('${uid}')">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          Edit
-        </button>
-        <button class="admin-action-btn" onclick="adminDisconnectUser('${uid}')" title="Force sign out (can sign back in)">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-          Kick
-        </button>
-        <button class="admin-action-btn${u.active ? ' danger-soft' : ' success-soft'}" onclick="adminToggleActive('${uid}',${!u.active})">
-          ${u.active
-            ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Disable`
-            : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg> Enable`}
-        </button>
-        ${isOwner && u.role !== 'owner' ? `
-        <button class="admin-action-btn danger" onclick="adminDeleteUser('${uid}')" title="Permanently delete account">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-          Delete
-        </button>` : ''}
+      <div class="adm-user-acts">
+        <button type="button" class="adm-act primary" onclick="adminEditUser('${id}')">${_ADM_IC.edit}Edit</button>
+        <button type="button" class="adm-act" onclick="adminDisconnectUser('${id}')" title="Sign them out now (they can sign back in)">${_ADM_IC.out}Sign out</button>
+        <button type="button" class="adm-act ${u.active ? 'warn' : 'good'}" onclick="adminToggleActive('${id}',${!u.active})">${u.active ? _ADM_IC.lock + 'Switch off' : _ADM_IC.ok + 'Switch on'}</button>
+        ${isOwner && u.role !== 'owner' ? `<button type="button" class="adm-act danger" onclick="adminDeleteUser('${id}')" title="Permanently delete account">${_ADM_IC.bin}Delete</button>` : ''}
       </div>` : isMe ? `
-      <div class="admin-user-actions">
-        <span style="font-size:0.63rem;color:var(--text3);font-family:var(--mono);">Your account — changes via your profile settings</span>
-      </div>` : ''}
-    </div>`;
+      <div class="adm-user-acts"><span class="adm-hint">Your own account · change your theme and details in Settings</span></div>` : ''}
+    </article>`;
   }).join('');
 }
 
@@ -682,7 +676,7 @@ async function adminCreateUser() {
 
   if (!name || !email || !pass) { errEl.textContent = 'All fields required.'; errEl.style.display = 'block'; return; }
   if (pass.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; errEl.style.display = 'block'; return; }
-  if (currentProfile.role === 'manager' && role === 'owner') { errEl.textContent = 'Managers cannot create Owner accounts.'; errEl.style.display = 'block'; return; }
+  if (currentProfile.role !== 'owner' && role === 'owner') { errEl.textContent = 'Only the owner can create Owner accounts.'; errEl.style.display = 'block'; return; }
 
   const btn = document.getElementById('adminCreateBtn');
   btn.disabled = true; btn.textContent = 'Creating…';
@@ -736,7 +730,7 @@ async function adminSaveEdit() {
 
   if (!name) { errEl.textContent = 'Name is required.'; errEl.style.display = 'block'; return; }
   if (!newEmail || !newEmail.includes('@')) { errEl.textContent = 'A valid email is required.'; errEl.style.display = 'block'; return; }
-  if (currentProfile.role === 'manager' && role === 'owner') { errEl.textContent = 'Managers cannot assign Owner role.'; errEl.style.display = 'block'; return; }
+  if (currentProfile.role !== 'owner' && role === 'owner') { errEl.textContent = 'Only the owner can give the Owner role.'; errEl.style.display = 'block'; return; }
   if (newPass && newPass.length < 6) { errEl.textContent = 'New password must be at least 6 characters.'; errEl.style.display = 'block'; return; }
 
   const btn = document.getElementById('adminSaveEditBtn');
@@ -894,10 +888,14 @@ async function adminDeleteUser(uid) {
 }
 
 function adminTab(tab) {
-  document.querySelectorAll('.admin-tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.admin-tab-btn').forEach(b => { const on = b.dataset.tab === tab; b.classList.toggle('active', on); b.setAttribute('aria-selected', String(on)); });
   document.querySelectorAll('.admin-tab-pane').forEach(p => p.style.display = 'none');
-  document.querySelector(`.admin-tab-btn[data-tab="${tab}"]`).classList.add('active');
-  document.getElementById('adminTab-' + tab).style.display = 'block';
+  const pane = document.getElementById('adminTab-' + tab);
+  if (pane) pane.style.display = 'block';
+  const seg = document.querySelector('#adminModal .adm-seg');
+  if (seg) seg.dataset.on = tab;
+  if (tab === 'roles' && typeof hoRoleRules !== 'undefined' && hoRoleRules.render) hoRoleRules.render();
+  const body = document.querySelector('#adminModal .adm-body'); if (body) body.scrollTop = 0;
 }
 
 // ── Show / hide password ──────────────────────────────────
@@ -948,7 +946,7 @@ function adminFilterActivity(q) {
   const el = document.getElementById('adminActivityLog');
   if (!el) return;
   if (!filtered.length) {
-    el.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text3);font-family:var(--mono);font-size:0.7rem;">No matching entries</div>`;
+    el.innerHTML = `<div class="adm-empty"><b>Nothing matches</b><span>Try a name, a page or an action.</span></div>`;
     return;
   }
   _renderActivityEntries(el, filtered);
@@ -958,7 +956,7 @@ function adminRenderActivity() {
   const el = document.getElementById('adminActivityLog');
   if (!el) return;
   if (!_adminActivity.length) {
-    el.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text3);">No activity yet</div>`;
+    el.innerHTML = `<div class="adm-empty"><b>No activity yet</b><span>Sign-ins and team changes show up here.</span></div>`;
     return;
   }
   _adminActivityAll = _adminActivity;
@@ -969,24 +967,23 @@ function _renderActivityEntries(el, entries) {
   const icons = {
     login:'🔓', logout:'🔒',
     create_user:'➕', edit_user:'✏️', disable_user:'🔒', enable_user:'✓', delete_user:'🗑️',
-    disconnect_user:'⏏', password_reset_sent:'🔑',
+    disconnect_user:'⏏', password_reset_sent:'🔑', role_rules:'🛡️',
     shift_task_done:'✅', shift_task_undone:'↩', shift_task_added:'➕', shift_task_deleted:'🗑️', shift_reset:'↺',
     checklist_done:'✅', checklist_undone:'↩', checklist_skipped:'⏭', checklist_unskipped:'↩',
     departure_out:'🚪', departure_na:'—', departure_late:'🕐', departure_extended:'📅', departure_due:'↩',
     arrivals_loaded:'📥', arrivals_cleared:'🗑️',
   };
   el.innerHTML = entries.map(e => {
-    const roleColor = (ROLES[e.role] || ROLES.readonly).color;
+    const rd = ROLES[e.role] || ROLES.readonly;
+    const when = e.ts ? new Date(e.ts).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '';
     return `
-    <div class="admin-log-row">
-      <span class="admin-log-icon">${icons[e.action] || '•'}</span>
-      <div class="admin-log-body">
-        <span class="admin-log-name">${escapeHtml(e.name || '')}</span>
-        <span class="admin-log-role" style="color:${roleColor};font-size:0.58rem;font-family:var(--mono);background:${roleColor}18;padding:1px 5px;border-radius:4px;margin:0 4px;">${(ROLES[e.role]||ROLES.readonly).label}</span>
-        <span class="admin-log-action">${escapeHtml(String(e.action || '').replace(/_/g,' '))}</span>
-        ${e.detail ? `<span class="admin-log-detail">${escapeHtml(e.detail)}</span>` : ''}
+    <div class="adm-log" style="--rc:${rd.color}">
+      <span class="adm-log-ic" aria-hidden="true">${icons[e.action] || '•'}</span>
+      <div class="adm-log-body">
+        <div class="adm-log-line"><b>${escapeHtml(e.name || '')}</b><span class="adm-log-act">${escapeHtml(String(e.action || '').replace(/_/g,' '))}</span></div>
+        ${e.detail ? `<div class="adm-log-detail">${escapeHtml(e.detail)}</div>` : ''}
       </div>
-      <span class="admin-log-time">${new Date(e.ts).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</span>
+      <div class="adm-log-side"><span class="adm-log-role">${escapeHtml(rd.label)}</span><time>${when}</time></div>
     </div>`;
   }).join('');
 }
