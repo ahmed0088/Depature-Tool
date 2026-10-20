@@ -1,0 +1,1220 @@
+// ═══════════════════════════════════════════════════════════
+//  handover-book.js — 📒 Handover Book (Front Desk)
+//
+//  A WhatsApp group used only for the shift handover (its name has "HO" or
+//  "handover" in it, e.g. "HO - Ibis Styles", or it is switched to Handover
+//  in the WhatsApp window's Groups) is saved here instead of changing the
+//  Departures board. wa-bridge.js hands each message to hoHandoverBook.fromWa().
+//
+//   • A long message (lines, bullets, "1." / "-" / "•") becomes one item per
+//     line; each item keeps a link to the whole message (msg, full).
+//   • Each item gets a category (keyword based, changeable), the rooms and
+//     tags (from hoWaParse: "LCO 2 PM", "CO", "EXT +2N" and a few words like
+//     VIP, ED, TD…), a shift (SHIFT_BOUNDS) and a status: open / done / info.
+//   • A free, offline "tidy English" pass (rule based, no AI): "room 512 have
+//     bad smell" → "Room 512 has a bad smell." Both texts are kept.
+//   • Stored at handover/{YYYY-MM-DD}/{key} with the db.js helpers
+//     (fbListen / fbGet / fbUpdate; this device's copy when offline).
+//   • The page: date, shift / category / status / sender / room / text
+//     filters, a summary, "still open from yesterday", Done / note / edit,
+//     add by hand, Excel (SheetJS + bold frozen header) and Email (mailto).
+//  Pure helpers: window.hoHandoverPure (tested in tests/run-tests.js).
+//  Load after wa-bridge.js and wa-brain.js.
+// ═══════════════════════════════════════════════════════════
+(function () {
+'use strict';
+const W = typeof window !== 'undefined' ? window : globalThis;
+const doc = typeof document !== 'undefined' && document && document.createElement ? document : null;
+
+// ══ Small pure helpers ══════════════════════════════════════
+const sp = s => String(s == null ? '' : s).replace(/[   ]/g, ' ').replace(/[‎‏⁦-⁩⁣​]/g, '');
+const pad = n => String(n).padStart(2, '0');
+const isoDay = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const dayAdd = (d, n) => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); return isoDay(x); };
+const toMin = t => { const m = String(t || '').match(/^(\d{1,2}):(\d{2})/); return m ? +m[1] * 60 + +m[2] : null; };
+const t12 = t => { const m = toMin(t); return m == null ? String(t || '') : (Math.floor(m / 60) % 12 || 12) + ':' + pad(m % 60) + (m >= 720 ? ' PM' : ' AM'); };
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** "2026-10-20" → "20 Oct 2026" */
+const dLong = d => { const p = String(d || '').split('-'); return p.length === 3 ? +p[2] + ' ' + MON[+p[1] - 1] + ' ' + p[0] : String(d || ''); };
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const hash = s => { s = String(s); let h = 5381, g = 7; for (let i = 0; i < s.length; i++) { h = ((h << 5) + h + s.charCodeAt(i)) | 0; g = (g * 31 + s.charCodeAt(i)) | 0; } return (h >>> 0).toString(36) + (g >>> 0).toString(36); };
+const fbSafe = k => String(k == null ? '' : k).replace(/[.#$\[\]\/\x00-\x1f\x7f]/g, '_').slice(0, 140) || '_';
+
+// ══ Handover groups ═════════════════════════════════════════
+const HO_GROUP_RX = /\bHO\b|hand\s*-?\s*over/i;
+/** is this WhatsApp group a handover group? setting: true / false (set by hand) or undefined (by its name) */
+function isHandoverGroup(name, setting) {
+  if (setting === true || setting === false) return setting;
+  return HO_GROUP_RX.test(sp(name));
+}
+
+/** "HO - Room 512 to twin tomorrow", "HO: …", "ho …", "H/O …", "Handover: …" → the text after the mark (null: not marked).
+ *  "HOTEL…", "HOLD…" and "Hold on" do not count. */
+const HO_PREFIX_RX = /^\s*(?:\*\s*)?(?:HO|H\/O|hand\s*-?\s*over)(?![A-Za-z0-9])\s*\*?\s*[-–—:.,|>]*\s*/i;
+function hoPrefix(text) {
+  const s = sp(text), m = s.match(HO_PREFIX_RX); if (!m) return null;
+  const rest = s.slice(m[0].length).trim();
+  return rest ? rest : null;
+}
+
+// ══ Shifts ══════════════════════════════════════════════════
+/** the three shifts (minutes from midnight; Night goes past midnight) */
+const SHIFT_BOUNDS = [
+  { id: 'Morning', from: 7 * 60, to: 15 * 60, icon: '🌅' },
+  { id: 'Afternoon', from: 15 * 60, to: 23 * 60, icon: '🌇' },
+  { id: 'Night', from: 23 * 60, to: 7 * 60, icon: '🌙' },
+];
+/** "09:05" → "Morning", "15:00" → "Afternoon", "23:10" / "02:00" → "Night" ('' for no time) */
+function shiftOf(t) {
+  const m = toMin(t); if (m == null) return '';
+  const s = SHIFT_BOUNDS.find(b => (b.from < b.to ? m >= b.from && m < b.to : m >= b.from || m < b.to));
+  return s ? s.id : '';
+}
+
+// ══ Categories ══════════════════════════════════════════════
+const CATS = [
+  ['guest', 'Guest / complaint', '🙋'], ['pay', 'Payment & billing', '💳'], ['res', 'Reservations', '📅'], ['move', 'Room move', '🔀'],
+  ['maint', 'Room / maintenance', '🔧'], ['hk', 'Housekeeping', '🧹'], ['transport', 'Transport', '🚕'], ['lost', 'Lost & found', '🧳'],
+  ['desk', 'Front desk & ID', '🛎️'], ['fb', 'Breakfast / F&B', '🍳'], ['follow', 'Follow-up / pending', '⏳'], ['cash', 'Cash / float', '💵'],
+  ['info', 'Info / FYI', 'ℹ️'],
+];
+const CAT = {}; CATS.forEach(c => { CAT[c[0]] = { id: c[0], label: c[1], icon: c[2] }; });
+// first match wins (most specific first)
+const CAT_RULES = [
+  ['lost', /\blost\b|\bleft (?:behind|in the room)|\bforgot(?:ten)?\b|\bl\s*&\s*f\b|\blnf\b|\bitems? found\b|\bfound (?:an? |one |the |his |her |guest)/],
+  ['cash', /\bfloat\b|\bpetty cash|\bcash (?:count|short|over|handover|handed|in hand|box|drawer|drop)|\bdrawer\b|\bsafe (?:balance|count)\b|\bbanking\b|\bshort(?:age)? (?:of )?(?:aed|dhs?)\b/],
+  ['guest', /\bcomplain\w*|\bunhappy\b|\bangry\b|\bupset\b|\bnot happy\b|\brude\b|\bcompensat\w*|\bapologi[sz]\w*|\bnois[ey]\b|\bdisturb(?!\b)\w*|\bbad review|\bescalat\w*|\bnot satisfied|\bdissatisf\w*/],
+  ['pay', /\bbalance\b|\btd\b|\bdeposit\b|\brefund\w*|\bcity ledger|\bc\/l\b|\binvoice\w*|\bpayments?\b|\bpaid\b|\bunpaid\b|\bpay\b|\bbill(?:ing|ed)?\b|\bfolio\b|\bcharged?\b|\bcredit card|\bcc\b|\bpre-?auth\w*|\bauthori[sz]ation|\boutstanding\b|\bsettle\w*|\bvcc\b|\baed\b|\bdhs?\b|\breceipt|\bcheque|\bamount\b/],
+  ['guest', /\bvip\b|\bbirthday|\banniversary|\bhoneymoon/],
+  ['transport', /\btaxi|\bcab\b|\bairport\b|\bpick-?up\b|\bdrop(?:-| )?off\b|\blimo\w*|\bdriver\b|\bshuttle|\bcareem|\buber\b|\bflight\b|\bcar (?:booked|arranged|service)/],
+  ['res', /\bbooking\w*|\breservation\w*|\bres\b|\bamend\w*|\bcancel\w*|\bno-?\s?show|\bearly dep\w*|\bearly check-?\s?out|\bleaving early|\bcut short|\bshorten\w*|\bed\b|\bextension\b|\bextend\w*|\bext\b|\bwalk-?\s?in|\bguarantee\w*|\bconfirmation\b|\brate\b|\bgroup (?:block|booking|arrival)|\blate arrival|\beta\b|\barriv(?:al|als|ing)\b|\bpre-?reg\w*|\broom blocked|\bblocked for\b|\bblock(?:ed)? (?:room|rooms)\b|\bota\b|\bexpedia|\bstay\b/],
+  ['hk', /\bextra bed|\bbaby cot|\bcot\b|\brollaway|\bsofa bed/],
+  ['move', /\broom move|\bmov(?:e|ed|ing) (?:to|from|him|her|them|the guest|guest|room)\b|\bshift(?:ed|ing)? (?:to|from|room|him|her|them|the guest|guest)\b|\bchange (?:the )?room|\broom change|\bswap\b|\bupgrad\w*|\bdowngrad\w*|\btwin\b|\bdouble bed|\bking bed|\bqueen bed|\b(?:\d|two|one) ?beds?\b|\bbed type|\bseparate beds/],
+  ['maint', /\bac\b|\ba\/c\b|\baircon\w*|\bair ?con\w*|\bleak\w*|\bbroken\b|\bnot working|\bengineer\w*|\bmaintenance|\bmaint\b|\bplumb\w*|\btoilet|\bshower|\bflush|\bdrain|\blights? (?:not|off|out)|\bbulb|\btv\b|\bremote\b|\bdoor lock|\block (?:not|broken|issue)|\bsafe (?:not|locked|issue|problem)|\bwi-?fi|\binternet\b|\bsmell\w*|\bodou?r\b|\bhot water|\bno water|\bwater (?:heater|leak|pressure)|\btechnician|\brepair\w*|\bfix(?:ed)?\b|\bout of order|\booo\b|\bout of service|\boos\b|\bfridge|\bkettle|\bsocket|\bpower cut|\belectric\w*|\bpest|\bcockroach|\bbed ?bugs?|\bceiling|\bcurtain/],
+  ['guest', /\bvip\b|\bbirthday|\banniversary|\bhoneymoon|\bwelcome (?:amenity|drink|letter|card)|\bcake\b/],
+  ['hk', /\bhousekeeping|\bhk\b|\btowels?\b|\blinen|\bclean\w*|\bmake up room|\bmur\b|\bamenit\w*|\bturn ?down|\blaundry|\bdirty\b|\bminibar|\bbed ?sheets?|\bpillows?\b|\bblankets?\b|\btoiletr\w*|\bslippers|\bbathrobe|\bwater bottles?|\binspect\w*|\bvd\b|\bvc\b/],
+  ['fb', /\bbreakfast|\bbf\b|\bb\/f\b|\bf\s?&\s?b\b|\brestaurant|\broom service|\bin-?room dining|\bird\b|\bdinner\b|\blunch\b|\bmeals?\b|\bkitchen|\bbar\b/],
+  ['desk', /\bwake-?\s?up|\bmorning call|\bkeys?\b|\bkey ?cards?|\bparking|\bvalet|\bcar park|\bvisitors?\b|\bpassports?\b|\bemirates id|\bid\b|\bid copy|\bpolice|\bimmigration|\bdnd\b|\bdo not disturb|\bno answer|\bnot answering|\bn\/a\b|\bregistration card|\breg card|\brc\b|\bsecurity\b|\bcctv/],
+  ['guest', /\bguest (?:request\w*|asked|asks|wants|wanted|needs|called)|\bspecial request|\bfeedback|\breview\b|\bloyal\w*|\ball member|\bplatinum|\bgold member|\brepeat guest/],
+  ['follow', /\bpending\b|\bfollow[- ]?up|\bf\/u\b|\bcheck\b|\bchk\b|\bcall back|\bcallback|\bwaiting\b|\btomorrow|\btmrw?\b|\bremind\w*|\bto ?do\b|\bnot yet\b|\bstill\b|\bto be (?:done|checked|confirmed)/],
+];
+/** a handover line → its category id (Info / FYI when nothing matches) */
+function categorize(text, head) {
+  const t = sp((head ? head + ' : ' : '') + text).toLowerCase();
+  const r = CAT_RULES.find(([, re]) => re.test(t));
+  return r ? r[0] : 'info';
+}
+const OPEN_RX = /\bpending\b|\bto ?do\b|\bplease\b|\bpl[sz]\b|\bkindly\b|\bcheck\b|\bchk\b|\bfollow[- ]?up|\bf\/u\b|\bcall back|\bcallback|\bwaiting\b|\bneeds?\b|\bneeded\b|\bmust\b|\bhas to\b|\bhave to\b|\bshould\b|\btomorrow|\btmrw?\b|\bremind\w*|\bnot yet\b|\bstill\b|\bto be\b|\bamend\w*|\bcollect\b|\bchase\b|\barrange\b|\burgent\w*|\basap\b|\bmake sure|\bdon'?t forget|\bwill (?:arrive|come|check|call|pay|leave|collect|send)|\bexpected\b|\beta\b|\bnot (?:paid|done|fixed|collected|received|working|answering)|\bmissing\b|\bno answer\b|\barriv(?:ing|al)\b|\bearly dep\w*|\bearly check-?\s?out|\bleaving early|\bcut short|\bshorten\w*|\bed\b|\brequested\b|\bwants?\b|\basked\b|\?/;
+const DONE_RX = /\b(?:done|fixed|solved|resolved|completed|sorted|settled|handled|closed|informed|delivered|returned|handed (?:over|to)|picked up|collected|received|paid|refunded|checked out|approved)\b|✅|✔|☑/;
+/** a new item's status: 'open' (something to do) or 'info' */
+function statusOf(text, cat, head) {
+  const t = sp((head ? head + ' : ' : '') + text).toLowerCase();
+  if (OPEN_RX.test(t)) return 'open';
+  if (DONE_RX.test(t)) return 'info';
+  return cat === 'follow' || cat === 'move' || cat === 'maint' ? 'open' : 'info';
+}
+
+// ══ A handover item in another group? ═══════════════════════
+// In the HK group (and others) a message is ALSO copied to the book when it reads like a handover item:
+// early departure, room move, complaint, maintenance, payment pending, lost & found, VIP, taxi… —
+// never a plain room command ("324 CO", "202 LCO 6pm", "0113 EXT 2N", "VD: 402, 518") or chit-chat.
+const HO_COPY_MIN = 3;                                   // the score a message needs
+const CAT_WEIGHT = { lost: 3, cash: 3, guest: 3, move: 3, pay: 2, res: 2, maint: 2, transport: 2, desk: 2, follow: 1, fb: 1, hk: 0, info: 0 };
+// the words of plain room commands and housekeeping status codes (what is left decides)
+const CMD_WORDS = /\b(?:rooms?|rm|co|c\/o|lco|l\/c|late|check(?:ed|ing)?[\s-]*(?:out|in)|checkout|chkout|out|left|gone|vacated|departed|ext(?:end(?:ed|ing)?|ension)?|extn|xtnd|stay(?:ing)?|more|nights?|\d+\s*n|till|until|to|at|by|and|all|vd|vc|oc|od|ooo|dnd|ready|clean(?:ed)?|done|ok(?:ay)?|noted|inspected|occupied|vacant|dirty|guest|inside|luggage|in|the|is|are|pls|please|asap|now|soon|mins?|minutes?|hrs?|today|am|pm|noon|[✓✔✅👍])\b|[✓✔✅👍]/gi;
+/** how much a message reads like a handover item → {score, cat, rest} (score ≥ HO_COPY_MIN: copy it) */
+function handoverScore(text, opt) {
+  opt = opt || {};
+  const t = sp(text).trim();
+  if (!t || t.length < 6) return { score: 0, cat: 'info', rest: '' };
+  if (typeof opt.parse === 'function') { try { const P = opt.parse(t); if (P && P.kind === 'ignore') return { score: 0, cat: 'info', rest: '' }; } catch (_) {} }
+  if (/\b(?:hand\s*-?\s*over|h\/o)\b/i.test(t) && t.split(/\s+/).length >= 4) return { score: 9, cat: categorize(t), rest: t };   // "Handover: …"
+  const rooms = roomsOf(t);
+  const rest = t.replace(/\b\d{1,4}(?:[:.]\d{2})?\b/g, ' ').replace(/[\/:,.;!?+()#\-–—]+/g, ' ').replace(CMD_WORDS, ' ').replace(/\s+/g, ' ').trim();
+  const words = rest ? rest.split(' ').filter(w => /[a-z]{2,}/i.test(w)) : [];
+  if (words.length < 1 || (words.length < 2 && !rooms.length)) return { score: 0, cat: 'info', rest };
+  if (GREET_RX.test(t) || SIGN_RX.test(t)) return { score: 0, cat: 'info', rest };
+  const cat = categorize(rest);
+  let score = CAT_WEIGHT[cat] || 0;
+  if (score && rooms.length) score += 1;
+  if (score && OPEN_RX.test(rest.toLowerCase())) score += 1;
+  if (cat === 'follow' && !rooms.length) score -= 1;                           // "please check" alone is chat
+  return { score, cat, rest };
+}
+const looksLikeHandover = (text, opt) => handoverScore(text, opt).score >= ((opt && opt.min) || HO_COPY_MIN);
+
+// ══ Rooms and tags ══════════════════════════════════════════
+const ROOM_BEFORE = /^(?:aed|dhs?|usd|eur|ext|extension|tel|phone|mob|mobile|conf|confirmation|booking|res|reservation|id|ref|voucher|invoice|inv|folio|pin|code|flight|pax|amount|total|paid|balance|deposit|refund|of|x)$/i;
+const ROOM_AFTER = /^\s*(?:aed|dhs?|usd|eur|am\b|pm\b|a\.m|p\.m|hrs?\b|h\b|nights?\b|n\b|pax\b|%|km\b|mins?\b|minutes?\b|k\b|\$|guests\b|people\b|persons\b|adults?\b|kids\b|children\b)/i;
+/** room numbers in a handover line, as written ("rm 512", "0113", "512" — not money, times, phone extensions or dates) */
+function roomsOf(text) {
+  const s = sp(text), out = [], rk = r => String(parseInt(r, 10));
+  const add = r => { if (!out.some(x => rk(x) === rk(r))) out.push(r); };
+  const re = /(\d{3,4})/g; let m;
+  while ((m = re.exec(s))) {
+    const n = m[1], i = m.index, before = s.slice(0, i), after = s.slice(i + n.length);
+    if (/\d$/.test(before) || /^\d/.test(after)) continue;
+    if (/[\/.:,\-]$/.test(before) && /\d[\/.:,\-]$/.test(before)) continue;            // 20/10/2026, 1,200, 10:30
+    if (/^[\/:]\d|^\.\d|^,\d{3}|^-\d/.test(after)) continue;                              // 512/10, 1200.50, 2,500
+    const pw = (before.match(/([A-Za-z.#]+)\s*#?\s*$/) || [])[1] || '';
+    if (/^(?:room|rm|rm\.|rooms|rms|no|no\.|#)$/i.test(pw)) { add(n); continue; }
+    if (ROOM_BEFORE.test(pw.replace(/[.#]+$/, ''))) continue;
+    if (ROOM_AFTER.test(after)) continue;
+    if (n.length === 4 && /^(?:call|dial|tel|phone)$/i.test(pw)) continue;                   // "call 2245"
+    if (n.length === 4 && /^(?:at|till|until|by|before|after|around|lco|co|late|checkout|out)$/i.test(pw) && +n.slice(0, 2) < 24 && +n.slice(2) < 60) continue;   // "at 1800"
+    if (n.length === 4 && /^(?:19|20)\d\d$/.test(n) && /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s*$/i.test(before)) continue;   // "Oct 2026"
+    add(n);
+  }
+  return out;
+}
+const KW_TAGS = [
+  [/\bvip\b/i, 'VIP'], [/\bearly dep\w*|\bed\b|\bearly check-?\s?out|\bleaving early|\bcut short|\bshorten\w*/i, 'ED'], [/\bno-?\s?show/i, 'No-show'],
+  [/\booo\b|\bout of order/i, 'OOO'], [/\boos\b|\bout of service/i, 'OOS'], [/\bdnd\b|\bdo not disturb/i, 'DND'], [/\btd\b/i, 'TD'],
+  [/\brefund/i, 'Refund'], [/\bcity ledger|\bc\/l\b/i, 'City ledger'], [/\bupgrad/i, 'Upgrade'], [/\bdowngrad/i, 'Downgrade'],
+  [/\bwake-?\s?up|\bmorning call/i, 'Wake-up'], [/\bbirthday|\banniversary|\bhoneymoon/i, 'Celebration'], [/\beta\b|\blate arrival/i, 'Late arrival'],
+  [/\bairport\b/i, 'Airport'], [/\binvoice/i, 'Invoice'], [/\bpassport|\bemirates id|\bid copy/i, 'ID'],
+];
+/** "18:00" → "6 PM" */
+const tLabel = t => { const m = toMin(t); if (m == null) return ''; const h = Math.floor(m / 60), mi = m % 60; return (h % 12 || 12) + (mi ? ':' + pad(mi) : '') + ' ' + (h >= 12 ? 'PM' : 'AM'); };
+/** tags for a line: what hoWaParse reads (CO, "LCO 2 PM", "EXT +2N"…) and a few handover words (VIP, ED, TD…) */
+function tagsOf(text, parse) {
+  const out = [], add = t => { if (t && !out.includes(t)) out.push(t); };
+  if (typeof parse === 'function') {
+    try {
+      (parse(text).actions || []).forEach(a => {
+        if (a.act === 'co' || a.act === 'findone') add('CO');
+        else if (a.act === 'lco') add('LCO' + (a.time ? ' ' + tLabel(a.time) : ''));
+        else if (a.act === 'ext') add('EXT' + (a.nights ? ' +' + a.nights + 'N' : a.until ? ' → ' + a.until : ''));
+        else if (a.act === 'extending' && /\bext|extend/i.test(text)) add('Extending');
+        else if (a.act === 'fin') add('Finance hold');
+        else if (a.act === 'maybe') add('May extend');
+      });
+    } catch (_) {}
+  }
+  KW_TAGS.forEach(([re, t]) => { if (re.test(sp(text))) add(t); });
+  return out;
+}
+
+// ══ Splitting a message into items ══════════════════════════
+const BULLET_RX = /^\s*(?:[-–—•·*▪►▶➤➢→◦○●▫️✔️✅☑️🔸🔹🔺🔻⭐👉]+\s*|\(?\d{1,2}[.)]\s+|\(?[a-h][)]\s+)/u;
+const GREET_RX = /^(?:good\s*(?:morning|afternoon|evening|night|day)|hi+|hello|hey|dear\b|salam|assalam\w*|greetings|morning|evening)\b[\s\w,!.]*$/i;
+const SIGN_RX = /^(?:thanks?|thank\s*you|thx|thnx|ty|regards|best regards|kind regards|br|cheers|have a (?:good|nice|great|safe)\b.*|good luck.*|that'?s all.*|end of (?:handover|report).*)[\s!.🙏👍]*$/i;
+const TITLE_RX = /\b(?:hand\s*-?\s*over|h\/o)\b/i;
+/** a WhatsApp message → its handover items [{text, head}] (one per line or bullet when the lines are separate items) */
+function splitItems(text) {
+  const raw = sp(text).replace(/\r/g, '');
+  const lines = raw.split('\n').map(l => l.replace(/\s+$/, ''));
+  const kept = [];
+  let head = '';
+  lines.forEach(l => {
+    const t = l.trim(); if (!t) return;
+    const words = t.split(/\s+/).length;
+    const bullet = BULLET_RX.test(t);
+    if (!bullet && words <= 7 && (GREET_RX.test(t) || SIGN_RX.test(t))) return;
+    if (!bullet && words <= 3 && lines.filter(x => x.trim()).length > 1 && isChat(t)) return;   // "ok" under a list
+    if (!bullet && words <= 8 && TITLE_RX.test(t) && !roomsOf(t).length) { head = ''; return; }   // "Handover morning shift 20/10"
+    if (!bullet && /[:：]\s*$/.test(t) && t.length <= 40 && !roomsOf(t).length) { head = t.replace(/[:：]\s*$/, '').replace(/^[*_~]+|[*_~]+$/g, '').trim(); return; }   // "Pending:"
+    kept.push({ t, bullet, head });
+  });
+  if (!kept.length) { const one = raw.trim(); return one ? [{ text: one, head: '' }] : []; }
+  if (kept.length === 1) return [{ text: kept[0].t.replace(BULLET_RX, '').trim(), head: kept[0].head }];
+  const out = [];
+  kept.forEach((k, i) => {
+    const prev = out[out.length - 1], body = k.t.replace(BULLET_RX, '').trim();
+    // a sentence carried on to the next line: no bullet, starts in lower case, the line before did not end a sentence
+    const cont = prev && !k.bullet && /^[a-z(&+]/.test(body) && !/[.!?:]$/.test(prev.text) && prev.head === k.head;
+    if (cont) prev.text += ' ' + body; else out.push({ text: body, head: k.head });
+  });
+  return out;
+}
+
+// ══ Team chat in a handover group ═══════════════════════════
+const CHAT_RX = /^(?:ok+(?:ay)?|k+|kk+|okie|noted|note|thanks?(?: a lot| so much)?|thank\s*you(?: so much| all| team)?|thx|thnx|tnx|ty|tq|welcome|you'?re welcome|np|no problem|no worries|yes|yeah|yep|yup|ya|no|nope|sure|done|received|recieved|got it|copy(?: that)?|roger|alright|all right|fine|great|perfect|good|nice|cool|super|amazing|wow|haha+|lol|on my way|omw|coming|i'?m coming|will do|will check|ok will do|ok noted|noted with thanks|well noted|good (?:morning|afternoon|evening|night|day)(?: (?:all|team|guys|everyone))?|morning|hi+|hello|hey|salam|ok thanks?|ok thank you|thank u|tc|take care|bye|see you|see u|inshallah|insha'?allah|mashallah|alhamdulillah|same|me too|agreed|correct|right|true|exactly|ok sure|sure thing|why|what|when|where|who)$/i;
+const MEDIA_RX = /^(?:<?\s*(?:media|image|video|audio|sticker|gif|document|contact card|voice (?:message|note))\s+omitted\s*>?|this message was deleted|you deleted this message|null|\(file attached\)|‎?(?:image|photo|video|sticker|gif|audio|voice message)\b.{0,20})$/i;
+/** is this line in a handover group just team chat ("ok", "noted 👍", "thanks Sam", "who is on shift?")? Anything with substance — a room,
+ *  a number or time, a task word or a handover topic — is not. */
+function isChat(text) {
+  const raw = sp(text).trim();
+  if (!raw) return true;
+  if (MEDIA_RX.test(raw)) return true;
+  const t = raw.replace(/[\p{Extended_Pictographic}\u{1F3FB}-\u{1F3FF}\u200d\ufe0f]/gu, ' ').replace(/[.!?,;:~*_\-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!t) return true;                                                                 // emoji only
+  const low = t.toLowerCase(), words = low.split(' ');
+  if (/\d/.test(low)) return false;                                                    // rooms, amounts, times
+  if (CHAT_RX.test(low)) return true;
+  const named = words.length >= 2 && CHAT_RX.test(words.slice(0, -1).join(' ')) && /^[A-Z]/.test(t.split(' ').slice(-1)[0]);   // "thanks Sam", "ok Lina"
+  if (named) return true;
+  const topic = categorize(low) !== 'info' || OPEN_RX.test(low.replace(/\?/g, ''));
+  if (topic) return false;
+  if (/\?\s*$/.test(raw)) return true;                                               // a question with no task in it
+  return words.length < 3;
+}
+
+// ══ Tidy English (rule based, offline) ══════════════════════
+// abbreviations (lower case as typed; at the start of a sentence also capitalised)
+const ABBR = { pls: 'please', plz: 'please', plez: 'please', plse: 'please', msg: 'message', msgs: 'messages', chk: 'check', chkd: 'checked', tmrw: 'tomorrow', tmr: 'tomorrow', tmrow: 'tomorrow', tom: 'tomorrow',
+  u: 'you', ur: 'your', abt: 'about', ppl: 'people', coz: 'because', cuz: 'because', bcz: 'because', bcoz: 'because', b4: 'before', hv: 'have', nite: 'night', thx: 'thanks', thnx: 'thanks', rqst: 'request', reqst: 'request',
+  dont: "don't", cant: "can't", wont: "won't", didnt: "didn't", isnt: "isn't", doesnt: "doesn't", wasnt: "wasn't", werent: "weren't", couldnt: "couldn't", shouldnt: "shouldn't", havent: "haven't", hasnt: "hasn't", arent: "aren't",
+  im: "I'm", ive: "I've", ill: "I'll", i: 'I', rm: 'room', rms: 'rooms', info: 'info', approx: 'approx.', asap: 'ASAP', tho: 'though', yday: 'yesterday', ystd: 'yesterday' };
+// spelling mistakes seen in hotel chats
+const TYPO = { recieve: 'receive', recieved: 'received', recived: 'received', reciept: 'receipt', reciepts: 'receipts', guset: 'guest', gust: 'guest', gusets: 'guests', guests: 'guests', gest: 'guest',
+  luggae: 'luggage', lugage: 'luggage', laggage: 'luggage', luggege: 'luggage', maintanance: 'maintenance', maintainance: 'maintenance', maintenence: 'maintenance', maintanence: 'maintenance', mantainance: 'maintenance',
+  housekeepng: 'housekeeping', houskeeping: 'housekeeping', housekeping: 'housekeeping', housekeepig: 'housekeeping', payement: 'payment', paymnet: 'payment', paymet: 'payment', refnd: 'refund', refound: 'refund',
+  balanse: 'balance', balanc: 'balance', reservaton: 'reservation', resevation: 'reservation', reservtion: 'reservation', cancle: 'cancel', cancell: 'cancel', canceld: 'cancelled', adress: 'address', availble: 'available', avilable: 'available',
+  tommorow: 'tomorrow', tomorow: 'tomorrow', tommorrow: 'tomorrow', accomodation: 'accommodation', arival: 'arrival', arrivel: 'arrival', depature: 'departure', departue: 'departure', extention: 'extension', invoive: 'invoice', invoce: 'invoice',
+  deposite: 'deposit', amout: 'amount', alredy: 'already', allready: 'already', wich: 'which', untill: 'until', informd: 'informed', infromed: 'informed', complian: 'complain', complaine: 'complained', compalint: 'complaint', complient: 'complaint',
+  managment: 'management', manger: 'manager', resturant: 'restaurant', restuarant: 'restaurant', breakfest: 'breakfast', brekfast: 'breakfast', breakfat: 'breakfast', airpot: 'airport', aiport: 'airport', tranfer: 'transfer', trasfer: 'transfer',
+  passort: 'passport', pasport: 'passport', engeneering: 'engineering', enginering: 'engineering', technitian: 'technician', laundary: 'laundry', londry: 'laundry', towles: 'towels', towell: 'towel', blanket: 'blanket', pillo: 'pillow',
+  shoud: 'should', woud: 'would', coud: 'could', becuase: 'because', becasue: 'because', beacuse: 'because', recieving: 'receiving', occured: 'occurred', seperate: 'separate', definately: 'definitely', calender: 'calendar', remainder: 'reminder', remaining: 'remaining' };
+// short forms written in capitals
+const UP = { ac: 'AC', td: 'TD', vip: 'VIP', dnd: 'DND', hk: 'HK', ooo: 'OOO', oos: 'OOS', eta: 'ETA', etd: 'ETD', cc: 'CC', vcc: 'VCC', ota: 'OTA', id: 'ID', pos: 'POS', aed: 'AED', dhs: 'AED', usd: 'USD', cl: 'CL', fo: 'FO', mur: 'MUR', rc: 'RC', gm: 'GM', dm: 'DM', fom: 'FOM', am: 'AM', pm: 'PM', tv: 'TV', ed: 'ED', bf: 'BF', ird: 'IRD', pdf: 'PDF', mod: 'MOD' };
+// the hotel's codes spelled out (lower case or capitals as typed — "Co" stays: it can be a company)
+const EXPAND = { co: 'check-out', lco: 'late check-out', ci: 'check-in', eci: 'early check-in', ext: 'extension', ns: 'no-show', twc: 'twin', twn: 'twin', dbl: 'double', sgl: 'single' };
+const PHRASES = [
+  [/\bearly\s*dep(?:art(?:ure|ing|ed)?|\.)?(?=[\s.,;:!?)]|$)/gi, 'early departure'],
+  [/\blate\s*c\/o\b|\blate\s*check\s*-?\s*out\b/gi, 'late check-out'], [/\bearly\s*check\s*-?\s*in\b/gi, 'early check-in'],
+  [/\bcheckout\b/gi, 'check-out'], [/\bcheckin\b/gi, 'check-in'], [/\bno\s*-?\s*show\b/gi, 'no-show'], [/\bwake\s*-?\s*up\s*call/gi, 'wake-up call'],
+  [/\bwalk\s*-?\s*in\b/gi, 'walk-in'], [/\bwi\s*-?\s*fi\b/gi, 'Wi-Fi'], [/\bf\/u\b/gi, 'follow-up'], [/\bw\/o\b/gi, 'without'], [/\bw\/(?=\s|$)/gi, 'with'], [/\bw\/(?=[a-z])/gi, 'with '],
+  [/\bc\/o\b/gi, 'check-out'], [/\ba\/c\b/gi, 'AC'], [/\bb\/f\b/gi, 'breakfast'], [/\bc\/l\b/gi, 'city ledger'], [/\bn\/a\b/gi, 'N/A'], [/\bl\s*&\s*f\b/gi, 'lost & found'], [/\bf\s?&\s?b\b/gi, 'F&B'],
+];
+const ARTICLE_ADJ = /^(?:bad|strong|small|big|huge|minor|major|broken|new|loud|long|short|high|low|special|urgent|wet|dirty|damaged|serious|weird|strange|funny|terrible|horrible|bad|leaking|noisy|old|late|early|good|nice|great|quick|slow)$/i;
+const UNCOUNT = /^(?:luggage|baggage|water|money|cash|balance|payment|information|info|feedback|furniture|equipment|breakfast|lunch|dinner|laundry|power|electricity|internet|wifi|damage|noise|traffic|access|time|news|advice|food|parking|housekeeping|maintenance|pressure)$/i;
+const FUNC_W = /^(?:to|and|or|in|on|at|for|with|from|of|by|the|a|an|no|not|is|are|was|be|been|it|this|that|his|her|their|my|our|your|its|some|any)$/i;
+const LABEL_W = /^(?:early|late|extension|extended|check-out|check-in|balance|payment|refund|deposit|complaint|ac|maintenance|vip|ed|td|booking|amend|amendment|cancel|cancelled|cancellation|upgrade|upgraded|downgrade|no-show|dnd|ooo|oos|lost|taxi|airport|pickup|pick-up|wake-up|breakfast|laundry|invoice|keys?|parking|leak|leaking|smell|noise|city|ota|walk-in|transfer|police|passport|visitor|extra|baby|twin|king|double|move|moved|shift|shifted|group|eta|deposit|follow-up|pending|n\/a|no|urgent|guest|guests|refund|vip)$/i;
+const AN = w => (/^(?:[aeio]|u(?!n[iy]|s[eu]))/i.test(w) || /^(?:hour|honest)/i.test(w) ? 'an' : 'a');
+const capFirst = w => w.charAt(0).toUpperCase() + w.slice(1);
+/** clean, professional English, rule based: "room 512 have bad smell" → "Room 512 has a bad smell."
+ *  Numbers, times and names are never changed (only spacing, am/pm in capitals). */
+function tidy(input) {
+  let s = sp(input).replace(/\s+/g, ' ').trim().replace(BULLET_RX, '').trim();
+  if (!s) return '';
+  const keep = [];
+  const protect = re => { s = s.replace(re, m => '\u0001' + (keep.push(m) - 1) + '\u0002'); };
+  protect(/\bhttps?:\/\/\S+|\b[\w.+-]+@[\w-]+\.[\w.-]+\b|\+?\d[\d\s-]{8,}\d/g);   // links, e-mails, phone numbers
+  PHRASES.forEach(([re, rep]) => { s = s.replace(re, rep); });
+  // times: "3pm" / "3 pm" / "3.30p.m." → "3 PM" / "3.30 PM"
+  s = s.replace(/\b(\d{1,2}(?:[:.]\d{2})?)\s*([ap])\.?\s*m\b\.?/gi, (m, t, a) => t + ' ' + a.toUpperCase() + 'M');
+  // a number stuck to a word: "2beds" → "2 beds" (not 1st, 2N, 5kg)
+  s = s.replace(/\b(\d+)([A-Za-z]{2,})\b/g, (m, d, w) => (/^(?:st|nd|rd|th|kg|km|ml|am|pm|hrs|AM|PM)$/i.test(w) ? m : d + ' ' + w));
+  // "room 512", "rm 512", "rm#512", "room no 512" → "Room 512"
+  s = s.replace(/\b(?:room|rm)\.?\s*(?:no\.?|number|#)?\s*#?\s*(\d{3,4})\b/gi, 'Room $1');
+  // words
+  const atStart = i => i === 0 || /[.!?]\s*$/.test(s.slice(0, i)) || /^\s*(?:\u0001\d+\u0002\s*)?$/.test(s.slice(0, i));
+  s = s.replace(/[A-Za-z][A-Za-z']*/g, (t, i) => {
+    const low = t.toLowerCase(), isLow = t === low, isUp = t.length > 1 && t === t.toUpperCase(), isCap = !isLow && !isUp && t === capFirst(low);
+    const start = atStart(i), keepCase = r => (isCap ? capFirst(r) : r);
+    if (low === 'ext' && /^\.?\s*\d{4,}/.test(s.slice(i + t.length))) return t;                     // a phone extension
+    if (EXPAND[low] && (isLow || isUp)) return EXPAND[low];
+    if (UP[low] && isLow && !(low === 'am' || low === 'pm' || low === 'id' && !/\b(?:guest|copy|card|scan)/i.test(s))) return UP[low];
+    if (UP[low] && (low === 'am' || low === 'pm') && isLow && /\d\s*$/.test(s.slice(0, i))) return UP[low];
+    if (low === 'i' && isLow) return 'I';
+    if (ABBR[low] !== undefined && (isLow || ((isCap || isUp) && start && low.length >= 3))) return isLow ? ABBR[low] : capFirst(ABBR[low]);
+    if (TYPO[low] && (isLow || isUp || (isCap && start))) return keepCase(TYPO[low]);
+    return t;
+  });
+  // one room / guest / he / she → has, needs, wants, doesn't, is
+  const VERB = { have: 'has', need: 'needs', want: 'wants', "don't": "doesn't", dont: "doesn't", 'do not': 'does not', are: 'is', were: 'was' };
+  s = s.replace(/(\bRoom \d{3,4}|\b(?:[Tt]he |[Tt]his |[Tt]hat )?(?:guest|lady|gentleman|man|woman|room|client|customer|company|manager)|\b(?:[Hh]e|[Ss]he|[Ii]t))\s+(have|need|want|don't|dont|do not|are|were)\b/g, (m, subj, v, i) => {
+    const pre = s.slice(0, i);
+    if (/(?:\band|&|\bor)\s*$/i.test(pre) || /\d\s*,\s*$/.test(pre)) return m;                  // "511 and Room 512 have"
+    if (/\b(?:did|does|do|will|would|can|could|should|must|may|might|let|make|makes|to|not|doesn't|didn't|won't|can't)\s+$/i.test(pre)) return m;
+    if (/^(?:[Tt]he |[Tt]his |[Tt]hat )?(?:guest|room|client|customer)$/.test(subj) && /s$/.test(subj)) return m;
+    return subj + ' ' + VERB[v.toLowerCase()];
+  });
+  // "has bad smell" → "has a bad smell" (only has/have/had + a common adjective + one thing)
+  s = s.replace(/\b(has|have|had)\s+([A-Za-z]+)\s+([a-z]+)\b/g, (m, v, adj, noun) => {
+    if (!ARTICLE_ADJ.test(adj) || FUNC_W.test(noun) || UNCOUNT.test(noun) || (/s$/.test(noun) && !/ss$/.test(noun)) || ARTICLE_ADJ.test(noun)) return m;
+    return v + ' ' + AN(adj) + ' ' + adj + ' ' + noun;
+  });
+  // "Room 512 Early departure" / "512 - balance" → "Room 512: early departure" (a room and what it is about)
+  const lead = s.match(/^(\d{3,4})\b(?!\s*(?:[:.,\/]\d|AM|PM|aed|AED|dhs|nights?|pax|%|guests\b|people))/);
+  if (lead && roomsOf(s.slice(0, 12)).includes(lead[1])) s = 'Room ' + s;
+  s = s.replace(/^Room (\d{3,4})\s*(?:([-–—:,])\s*)?([A-Za-z][\w'\/-]*)/, (m, n, sep, w) => {
+    if (!sep && !LABEL_W.test(w)) return m;
+    if (sep && /^(?:is|has|was|will|needs?|wants?|have|are|guest)$/i.test(w) && sep === ',') return m;
+    const word = LABEL_W.test(w) && !(w.length > 1 && w === w.toUpperCase()) ? w.toLowerCase() : w;
+    return 'Room ' + n + ': ' + word;
+  });
+  // spacing and punctuation
+  s = s.replace(/\s+([,.;:!?)])/g, '$1').replace(/([(])\s+/g, '$1')
+    .replace(/([,;])(?=[A-Za-z])/g, '$1 ').replace(/([!?])\1+/g, '$1').replace(/\.{2,}/g, '.').replace(/,{2,}/g, ',').replace(/([.!?])(?=[A-Z][a-z])/g, '$1 ')
+    .replace(/:(?=[A-Za-z])/g, ': ').replace(/\s{2,}/g, ' ').trim();
+  // capitals: the first letter and after a full stop
+  s = s.replace(/^([^A-Za-z\u0001]*)([a-z])/, (m, p, c) => p + c.toUpperCase()).replace(/([.!?]\s+)([a-z])/g, (m, p, c) => p + c.toUpperCase());
+  if (/[A-Za-z0-9)\]"'%\u0002]$/.test(s)) s += '.';
+  s = s.replace(/\u0001(\d+)\u0002/g, (m, k) => keep[+k]);
+  return s;
+}
+
+// ══ Items ═══════════════════════════════════════════════════
+/** a WhatsApp message (or a line typed here) → its items
+ *  msg: {base, mid?, date, time, sender, group, text, at?, src?} · opt.parse: hoWaParse */
+function buildItems(msg, opt) {
+  opt = opt || {};
+  const parts = splitItems(hoPrefix(msg.text) || msg.text), n = parts.length, base = msg.base || ('p' + hash((msg.date || '') + '|' + (msg.time || '') + '|' + (msg.sender || '') + '|' + msg.text));
+  return parts.map((p, i) => {
+    const cat = categorize(p.text, p.head), it = {
+      key: n > 1 ? base + '_' + (i + 1) : base, msg: base, at: msg.at || 0, date: msg.date || '', time: msg.time || '', shift: shiftOf(msg.time),
+      sender: msg.sender || '', group: msg.group || '', orig: p.text, text: tidy(p.text), cat, rooms: roomsOf(p.text), tags: tagsOf(p.text, opt.parse),
+      status: statusOf(p.text, cat, p.head), doneBy: '', doneAt: 0, note: '', mid: msg.mid || '', src: msg.src || 'wa',
+    };
+    if (p.head) it.head = p.head;
+    if (opt.ho && !hoPrefix(msg.text) && isChat(p.text)) it.chat = 1;               // team chat in the handover group: kept aside
+    if (n > 1) { it.part = i + 1; it.parts = n; it.full = sp(msg.text).slice(0, 3000); }
+    return it;
+  });
+}
+// ══ Paste anything ══════════════════════════════════════════
+const t24of = t => { const m = sp(t).toLowerCase().match(/(\d{1,2})[:.](\d{2})(?:[:.]\d{2})?\s*([ap])?/); if (!m) return ''; let h = +m[1]; if (m[3] === 'p' && h < 12) h += 12; if (m[3] === 'a' && h === 12) h = 0; return h > 23 ? '' : pad(h) + ':' + m[2]; };
+const isoOf = d => { const p = sp(d).trim().split(/[\/.\-]/).map(x => parseInt(x, 10)); if (p.length !== 3 || p.some(isNaN)) return ''; let [a, b, c] = p; if (a > 31) return `${a}-${pad(b)}-${pad(c)}`; if (c < 100) c += 2000; if (b > 12 && a <= 12) { const x = a; a = b; b = x; } return b >= 1 && b <= 12 && a >= 1 && a <= 31 ? `${c}-${pad(b)}-${pad(a)}` : ''; };
+const OPERA_STAMP = /^\s*(\d{1,2}[-\/.](?:[A-Za-z]{3}|\d{1,2})[-\/.]\d{2,4})\s+(\d{1,2}:\d{2}(?:\s*[AaPp][Mm])?)?\s*(?:[A-Z][A-Z0-9_.]{2,15}\s+)?/;
+/** any pasted text → handover lines [{text, head, sender, time, date, chat}]:
+ *  a copied WhatsApp chat ("[1:07 PM, 20/10/2026] Sam: text", via opt.parseCopied), an e-mail (quotes, headers and signature dropped),
+ *  Opera trace notes ("20-OCT-26 14:05 JDOE Guest wants…") or a typed list. */
+function pasteItems(text, opt) {
+  opt = opt || {};
+  const out = [], push = (lines, base) => splitItems(lines).forEach(p => out.push(Object.assign({ text: p.text, head: p.head, sender: '', time: '', date: '' }, base, { chat: isChat(p.text) })));
+  const raw = sp(text).replace(/\r/g, '');
+  let msgs = [];
+  if (typeof opt.parseCopied === 'function') { try { msgs = opt.parseCopied(raw) || []; } catch (_) { msgs = []; } }
+  if (msgs.length) {
+    msgs.forEach(m => { const body = hoPrefix(m.text) || m.text; if (!sp(body).trim()) return; push(body, { sender: sp(m.sender).trim(), time: t24of(m.time), date: isoOf(m.date), marked: !!hoPrefix(m.text) }); });
+    return out;
+  }
+  // an e-mail: no quoted reply, no headers, nothing after the signature
+  const L = [];
+  for (const line of raw.split('\n')) {
+    if (/^\s*(?:--\s*|_{5,}|sent from my\b.*|get outlook\b.*|on .{4,80} wrote:)\s*$/i.test(line)) break;
+    if (/^\s*>/.test(line) || /^\s*(?:from|sent|to|cc|bcc|subject|date|importance)\s*:/i.test(line)) continue;
+    L.push(line);
+  }
+  // Opera trace notes: each stamped line is one item, its stamp gives the time
+  const stamped = L.filter(l => { const m = l.match(OPERA_STAMP); return m && /\d/.test(m[0]); });
+  if (stamped.length >= 1 && stamped.length >= L.filter(l => l.trim()).length / 2) {
+    let cur = null; const recs = [];
+    L.forEach(l => { const m = l.match(OPERA_STAMP); if (m && /\d/.test(m[0])) { cur = { time: m[2] ? t24of(m[2]) : '', date: isoOf(m[1]), text: l.slice(m[0].length).trim() }; recs.push(cur); } else if (cur && l.trim()) cur.text += ' ' + l.trim(); });
+    recs.forEach(r => { if (r.text) out.push({ text: r.text, head: '', sender: '', time: r.time, date: '', chat: isChat(r.text) }); });
+    return out;
+  }
+  push(L.join('\n'), {});
+  return out;
+}
+// ══ Suggestions from HotelOps' own data (nothing is added until ticked) ══
+/** {rooms: depRooms, hk: [open HK requests], mt: {id: ticket}, lf: {id: item}, now: Date} → [{text, cat, src}] */
+function suggestFrom(d) {
+  d = d || {}; const out = [], add = (text, cat, src) => { if (text && !out.some(o => o.text === text)) out.push({ text, cat, src }); };
+  const now = d.now || new Date(), nm = now.getHours() * 60 + now.getMinutes();
+  (d.rooms || []).forEach(r => {
+    if (!r || !r.roomStr) return; const R = 'Room ' + r.roomStr, nm2 = r.name ? ' (' + sp(r.name).trim() + ')' : '';
+    if (r.status === 'out' || r.status === 'extended') return;
+    if (r.intent === 'finance_hold') add(`${R}${nm2}: guest left — waiting for ${r.finWho || 'Finance'} before check-out.`, 'pay', 'Departures');
+    else if (r.intent === 'extending') add(`${R}${nm2}: extending — paperwork still to finish (booking, RC, TD, payment).`, 'res', 'Departures');
+    else if (r.intent === 'maybe_extend') add(`${R}${nm2}: may extend — confirm with the guest.`, 'res', 'Departures');
+    if (r.status === 'late' && r.lateTime) add(`${R}${nm2}: late check-out until ${tLabel(t24of(r.lateTime)) || r.lateTime}${toMin(t24of(r.lateTime)) != null && toMin(t24of(r.lateTime)) < nm ? ' — time has passed' : ''}.`, 'res', 'Departures');
+    if (r.status === 'na') add(`${R}${nm2}: no answer — still to check out.`, 'desk', 'Departures');
+    if (r.note && sp(r.note).trim()) add(`${R}: ${sp(r.note).split('\n').filter(l => l.trim() && !/^WhatsApp · /.test(l)).slice(-2).join(' · ') || sp(r.note).split('\n').slice(-1)[0]}`.replace(/:\s*$/, ''), 'follow', 'Departures note');
+  });
+  (d.hk || []).forEach(i => { if (i && i.room) add(`Room ${i.room}: ${i.what || 'HK request'} still open (asked by ${i.s || 'HK'}${i.t ? ' at ' + t12(i.t) : ''}).`, 'hk', 'HK Requests'); });
+  Object.keys(d.mt || {}).forEach(k => { const t = d.mt[k]; if (t && t.problem && t.status !== 'fixed' && t.status !== 'closed') add(`${t.area ? (/^\d{3,4}$/.test(String(t.area)) ? 'Room ' + t.area : t.area) + ': ' : ''}${t.problem} — maintenance ticket open${t.prio && t.prio !== 'normal' ? ' (' + t.prio + ')' : ''}.`, 'maint', 'Front Office Log'); });
+  Object.keys(d.lf || {}).forEach(k => { const t = d.lf[k]; if (t && t.what && t.status === 'found' && (!t.at || (now - t.at) < 3 * 864e5)) add(`Lost & found: ${t.what}${t.room ? ' from Room ' + t.room : t.where ? ' (' + t.where + ')' : ''}${t.storage ? ' — kept in ' + t.storage : ''}.`, 'lost', 'Front Office Log'); });
+  return out;
+}
+/** the items a filter shows. f: {shift, cat, st:'all'|'open'|'done', sender, room, q} */
+function filterItems(items, f) {
+  f = f || {};
+  const q = sp(f.q || '').toLowerCase().trim(), room = String(f.room || '').trim(), rk = r => String(parseInt(r, 10));
+  return (items || []).filter(i => i && !i.del && !i.chat
+    && (!f.src || f.src === 'all' || (f.src === 'auto' ? i.src === 'copy' : i.src !== 'copy'))
+    && (!f.group || (f.group === '—' ? !i.group : i.group === f.group))
+    && (!f.shift || f.shift === 'all' || i.shift === f.shift)
+    && (!f.cat || i.cat === f.cat)
+    && (!f.st || f.st === 'all' || i.status === f.st)
+    && (!f.sender || i.sender === f.sender)
+    && (!room || (i.rooms || []).some(r => rk(r) === rk(room) || String(r).indexOf(room) === 0))
+    && (!q || q.split(/\s+/).every(w => [i.text, i.orig, i.note, i.sender, (i.rooms || []).join(' '), (i.tags || []).join(' '), (CAT[i.cat] || {}).label].join(' ').toLowerCase().includes(w))));
+}
+const byTime = (a, b) => String(a.date || '').localeCompare(String(b.date || '')) || (shiftRank(a) - shiftRank(b)) || (toMin(a.time) || 0) - (toMin(b.time) || 0) || (a.at || 0) - (b.at || 0) || (a.part || 0) - (b.part || 0);
+/** the order of a day: Night after midnight first, then Morning, Afternoon, Night */
+function shiftRank(i) { const m = toMin(i.time); if (m == null) return 9; return m < 7 * 60 ? 0 : m < 15 * 60 ? 1 : m < 23 * 60 ? 2 : 3; }
+/** a summary of items: {items, open, done, info, rooms, byCat, byShift} */
+function summaryOf(items) {
+  const L = (items || []).filter(i => i && !i.del && !i.chat), rooms = new Set(), byCat = {}, byShift = {};
+  L.forEach(i => { (i.rooms || []).forEach(r => rooms.add(String(parseInt(r, 10)))); byCat[i.cat] = (byCat[i.cat] || 0) + 1; byShift[i.shift || '—'] = (byShift[i.shift || '—'] || 0) + 1; });
+  return { items: L.length, open: L.filter(i => i.status === 'open').length, done: L.filter(i => i.status === 'done').length, info: L.filter(i => i.status === 'info').length, rooms: rooms.size, byCat, byShift };
+}
+const ST_LBL = { open: 'Open', done: 'Done', info: 'Info' };
+const URGENT_RX = /\burgent\w*|\basap\b|\bimmediately\b|\bemergency\b|\bvip\b|\bcomplain\w*|\bpolice\b|\bangry\b|\bescalat\w*|\bsecurity\b|\bfire\b|\bflood\w*|\binjur\w*|\bambulance|\bdoctor\b|\bsick\b|\btheft|\bstolen\b/i;
+/** needs attention first (urgent / ASAP / VIP / complaint / police…) — only while it is not done */
+const isUrgent = i => !!i && i.status !== 'done' && (URGENT_RX.test(sp([i.orig, i.text, i.head, (i.tags || []).join(' ')].join(' '))) || i.cat === 'guest' && /complain/i.test(sp(i.orig)));
+/** a short written summary: "12 items · 3 open (1 urgent). Still to do: Room 512 early departure; …" */
+function writtenSummary(items, opt) {
+  opt = opt || {};
+  const L = (items || []).filter(i => i && !i.del && !i.chat), S = summaryOf(L), open = L.filter(i => i.status === 'open').sort((a, b) => (isUrgent(b) - isUrgent(a)) || byTime(a, b));
+  if (!L.length) return 'No handover items yet.';
+  const u = open.filter(isUrgent).length, max = opt.max || 4;
+  let s = `${S.items} item${S.items === 1 ? '' : 's'}`;
+  s += open.length ? ` · ${open.length} open${u ? ` (${u} urgent)` : ''}` : ' · nothing open';
+  if (S.done) s += ` · ${S.done} done`;
+  s += '.';
+  if (open.length) {
+    const what = open.slice(0, max).map(i => String(i.text || i.orig || '').replace(/[.!]+$/, '')).map(t => (t.length > 70 ? t.slice(0, 68).replace(/\s+\S*$/, '') + '…' : t));
+    s += ' Still to do: ' + what.join('; ') + (open.length > max ? `; and ${open.length - max} more` : '') + '.';
+  } else s += ' A clean handover.';
+  return s;
+}
+const hhmmOf = ms => { if (!ms) return ''; const d = new Date(ms); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+const dmy = d => String(d || '').split('-').reverse().join('/');
+/** the Excel rows (first row: the headings). opt.orig: add the "Original" column */
+function excelRows(items, opt) {
+  opt = opt || {};
+  const head = ['Date', 'Shift', 'Time', 'From', 'Category', 'Rooms', 'Item', 'Status', 'Done by', 'Note'].concat(opt.orig ? ['Original'] : []);
+  return [head].concat((items || []).filter(i => i && !i.del && !i.chat).slice().sort(byTime).map(i => [
+    dmy(i.date), i.shift || '', t12(i.time), i.sender || '', (CAT[i.cat] || CAT.info).label, (i.rooms || []).join(', '),
+    (i.head ? i.head + ': ' : '') + (i.text || i.orig || '') + ((i.tags || []).length ? ' [' + i.tags.join(', ') + ']' : ''),
+    ST_LBL[i.status] || 'Info', i.status === 'done' ? [i.doneBy, t12(hhmmOf(i.doneAt))].filter(Boolean).join(' · ') : '', i.note || '',
+  ].concat(opt.orig ? [i.orig || ''] : [])));
+}
+/** the "Summary" sheet: {rows, bold: [row numbers, 1-based]} */
+function summaryRows(items, date, hotel) {
+  const S = summaryOf(items), rows = [], bold = [];
+  const B = r => { rows.push(r); bold.push(rows.length); };
+  B(['Shift handover – ' + dLong(date) + (hotel ? ' – ' + hotel : '')]);
+  rows.push(['Items', S.items], ['Open', S.open], ['Done', S.done], ['Info', S.info], ['Rooms mentioned', S.rooms], []);
+  B(['By category', 'Items', 'Open']);
+  CATS.forEach(c => { if (S.byCat[c[0]]) rows.push([c[1], S.byCat[c[0]], (items || []).filter(i => !i.del && !i.chat && i.cat === c[0] && i.status === 'open').length]); });
+  rows.push([]);
+  B(['By shift', 'Items', 'Open']);
+  SHIFT_BOUNDS.forEach(s => { if (S.byShift[s.id]) rows.push([s.id, S.byShift[s.id], (items || []).filter(i => !i.del && !i.chat && i.shift === s.id && i.status === 'open').length]); });
+  rows.push([]);
+  const open = (items || []).filter(i => i && !i.del && !i.chat && i.status === 'open').sort(byTime);
+  B(['Open items', 'Time', 'Rooms', 'Item', 'From']);
+  open.forEach(i => rows.push([(CAT[i.cat] || CAT.info).label, t12(i.time), (i.rooms || []).join(', '), i.text || i.orig, i.sender || '']));
+  if (!open.length) rows.push(['Nothing open — a clean handover.']);
+  return { rows, bold };
+}
+const COL_W = [12, 11, 9, 16, 20, 12, 70, 9, 18, 34, 60];
+/** "Handover - Ibis Styles - 20 Oct 2026.xlsx" */
+function fileName(hotel, date) {
+  const h = sp(hotel).replace(/[\\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return 'Handover - ' + (h ? h + ' - ' : '') + dLong(date) + '.xlsx';
+}
+const mailSubject = date => 'Shift handover – ' + dLong(date);
+/** the e-mail's plain-text body: counts and open items (kept short: mailto links have a length limit) */
+function mailBody(items, date, hotel, file) {
+  const S = summaryOf(items), L = [];
+  L.push('Shift handover – ' + dLong(date) + (hotel ? ' (' + hotel + ')' : ''), '');
+  L.push(writtenSummary(items, { max: 3 }), '');
+  L.push(`${S.items} item${S.items === 1 ? '' : 's'} · ${S.open} open · ${S.done} done · ${S.info} info · ${S.rooms} room${S.rooms === 1 ? '' : 's'} mentioned`);
+  const sh = SHIFT_BOUNDS.filter(s => S.byShift[s.id]).map(s => s.id + ' ' + S.byShift[s.id]);
+  if (sh.length) L.push(sh.join(' · '));
+  const open = (items || []).filter(i => i && !i.del && !i.chat && i.status === 'open').sort(byTime);
+  L.push('');
+  if (open.length) {
+    L.push('Open items:');
+    let len = L.join('\n').length;
+    for (let k = 0; k < open.length; k++) {
+      const i = open[k], line = (isUrgent(i) ? '❗ ' : '• ') + [t12(i.time), (i.rooms || []).length ? 'Room ' + i.rooms.join(', ') : '', i.text || i.orig].filter(Boolean).join(' · ') + (i.sender ? ' (' + i.sender + ')' : '');
+      if (len + line.length > 1500) { L.push(`…and ${open.length - k} more (see the Excel file)`); break; }
+      L.push(line); len += line.length + 1;
+    }
+  } else L.push('Nothing open — a clean handover.');
+  L.push('', file ? `Please find the handover attached: "${file}" (downloaded from HotelOps — attach it to this e-mail).` : 'The Excel file was downloaded from HotelOps — attach it to this e-mail.', '', 'Sent from HotelOps');
+  return L.join('\n');
+}
+/** "a@x.com; b@y.com, c" → ["a@x.com", "b@y.com"] */
+function recipients(s) { return sp(s).split(/[,;\s]+/).map(x => x.trim()).filter(x => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x)); }
+function mailtoUrl(to, subject, body, cc) {
+  const q = ['subject=' + encodeURIComponent(subject), 'body=' + encodeURIComponent(body)];
+  const c = recipients(cc); if (c.length) q.unshift('cc=' + c.map(encodeURIComponent).join(','));
+  return 'mailto:' + recipients(to).map(encodeURIComponent).join(',') + '?' + q.join('&');
+}
+// ── the .xlsx made by SheetJS (community build) has no styles or frozen panes: added to its XML ──
+/** styles.xml + a bold header style (with a light fill) and a wrapped-text style → {xml, head, wrap} (cellXfs indexes) */
+function polishStyles(xml) {
+  let x = String(xml), head = -1, wrap = -1;
+  const fm = x.match(/<fonts count="(\d+)">/), fl = x.match(/<fills count="(\d+)">/), xf = x.match(/<cellXfs count="(\d+)">/);
+  if (!fm || !fl || !xf) return { xml: x, head, wrap };
+  const fontId = +fm[1], fillId = +fl[1];
+  x = x.replace(/<fonts count="\d+">([\s\S]*?)<\/fonts>/, (m, inner) => `<fonts count="${fontId + 1}">${inner}<font><b/><sz val="12"/><color rgb="FF1F2937"/><name val="Calibri"/><family val="2"/><scheme val="minor"/></font></fonts>`);
+  x = x.replace(/<fills count="\d+">([\s\S]*?)<\/fills>/, (m, inner) => `<fills count="${fillId + 1}">${inner}<fill><patternFill patternType="solid"><fgColor rgb="FFE8EEF6"/><bgColor indexed="64"/></patternFill></fill></fills>`);
+  const n = +xf[1]; head = n; wrap = n + 1;
+  x = x.replace(/<cellXfs count="\d+">([\s\S]*?)<\/cellXfs>/, (m, inner) => `<cellXfs count="${n + 2}">${inner}<xf numFmtId="0" fontId="${fontId}" fillId="${fillId}" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf></cellXfs>`);
+  return { xml: x, head, wrap };
+}
+/** a sheet's XML: bold rows, wrapped columns, the first row frozen. opt: {head, wrap, boldRows:[1], wrapCols:['G'], freeze:true} */
+function polishSheet(xml, opt) {
+  let x = String(xml); opt = opt || {};
+  const setS = (cell, s) => (/\ss="\d+"/.test(cell) ? cell.replace(/\ss="\d+"/, ' s="' + s + '"') : cell.replace(/^<c /, '<c s="' + s + '" '));
+  x = x.replace(/<c r="([A-Z]+)(\d+)"[^>]*?(?=\/?>)/g, (cell, col, row) => {
+    if (opt.head >= 0 && (opt.boldRows || []).includes(+row)) return setS(cell, opt.head);
+    if (opt.wrap >= 0 && +row > 1 && (opt.wrapCols || []).includes(col)) return setS(cell, opt.wrap);
+    return cell;
+  });
+  if (opt.freeze) x = x.replace(/<sheetView ([^>]*?)\/>/, '<sheetView $1><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A2" sqref="A2"/></sheetView>');
+  return x;
+}
+
+W.hoHandoverPure = { isUrgent, writtenSummary, HO_GROUP_RX, isHandoverGroup, HO_PREFIX_RX, hoPrefix, isChat, pasteItems, suggestFrom, HO_COPY_MIN, handoverScore, looksLikeHandover, SHIFT_BOUNDS, shiftOf, CATS, CAT, categorize, statusOf, roomsOf, tagsOf, splitItems, tidy, buildItems, filterItems, summaryOf,
+  excelRows, summaryRows, fileName, mailSubject, mailBody, mailtoUrl, recipients, polishStyles, polishSheet, dLong, t12, COL_W, byTime };
+if (!doc) return;
+
+// ═════════════════════════ In the app ═════════════════════════
+const safe = (f, d) => { try { return f(); } catch (e) { try { console.warn('[handover-book]', e); } catch (_) {} return d; } };
+const LS = { get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (_) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} } };
+const today = () => (typeof hoLocalISO === 'function' ? hoLocalISO() : isoDay(new Date()));
+const me = () => (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || 'Me';
+const parse = t => (typeof W.hoWaParse === 'function' ? W.hoWaParse(t) : { kind: 'none', actions: [] });
+const toast = (m, k) => safe(() => { if (typeof showToast === 'function') showToast(m, k || 'ok'); });
+const hotel = () => safe(() => { const el = doc.getElementById('hotelName'); const t = el && el.textContent.trim(); if (t) return t; const s = JSON.parse(localStorage.getItem('ibis_settings') || '{}'); return (s && s.hotelName) || ''; }, '') || '';
+const PATH = d => 'handover/' + d;
+
+// ── the book: handover/{date}/{key} (today live; other days read when shown) ──
+const BOOK = {}, GOT = {};
+let listenDay = '';
+function applyPatch(day, patch) {
+  const b = BOOK[day] = BOOK[day] || {};
+  Object.keys(patch).forEach(p => {
+    const parts = p.split('/'), k = parts[0];
+    if (parts.length === 1) { if (patch[p] == null) delete b[k]; else b[k] = JSON.parse(JSON.stringify(patch[p])); return; }
+    if (!b[k]) b[k] = {};
+    if (patch[p] == null) delete b[k][parts[1]]; else b[k][parts[1]] = JSON.parse(JSON.stringify(patch[p]));
+  });
+}
+function write(day, patch) {
+  if (!Object.keys(patch).length) return;
+  applyPatch(day, patch);
+  if (typeof fbUpdate === 'function') safe(() => Promise.resolve(fbUpdate(PATH(day), patch)).catch(() => {}));
+  else LS.set('hb_' + day, BOOK[day]);
+  soon();
+}
+function listenToday() {
+  const d = today(); if (listenDay === d) return; listenDay = d;
+  if (typeof fbListen === 'function') safe(() => fbListen(PATH(d), v => { BOOK[d] = Object.assign({}, v && typeof v === 'object' ? v : {}); GOT[d] = Date.now(); soon(); }));
+  else { BOOK[d] = LS.get('hb_' + d, {}); GOT[d] = Date.now(); }
+}
+async function load(day, force) {
+  if (day === today()) { listenToday(); if (GOT[day]) return; }
+  if (!force && GOT[day] && Date.now() - GOT[day] < 60e3) return;
+  let v = null;
+  try { v = typeof fbGet === 'function' ? await fbGet(PATH(day)) : LS.get('hb_' + day, null); } catch (_) {}
+  BOOK[day] = Object.assign({}, v && typeof v === 'object' ? v : {}, BOOK[day] && day === today() ? BOOK[day] : {}); GOT[day] = Date.now();
+}
+const itemsOf = day => Object.keys(BOOK[day] || {}).map(k => Object.assign({}, BOOK[day][k], { key: k, date: (BOOK[day][k] || {}).date || day })).filter(i => i && (i.text || i.orig));
+
+// ── from WhatsApp (wa-bridge.js) ──
+const LS_MID = 'hb_mid_v1';
+function midDay(mid, day) { const m = LS.get(LS_MID, {}); if (day) { m[mid] = day; const ks = Object.keys(m); if (ks.length > 600) ks.slice(0, ks.length - 600).forEach(k => delete m[k]); LS.set(LS_MID, m); } return m[mid] || ''; }
+/** p: {kind:'msg', base, mid, date, time, sender, group, text, edited, at} | {kind:'del', base, mid} → items saved / changed / removed; returns how many items */
+async function fromWa(p) {
+  if (!p || !p.base) return 0;
+  if (p.kind === 'del') {
+    const day = midDay(p.base); if (!day) return 0;            // never saved here: nothing to remove
+    await load(day, true);
+    const patch = {}; itemsOf(day).filter(i => i.msg === p.base && !i.del).forEach(i => { patch[fbSafe(i.key) + '/del'] = 1; patch[fbSafe(i.key) + '/delAt'] = Date.now(); });
+    write(day, patch); return Object.keys(patch).length / 2;
+  }
+  const day = p.date || today();
+  if (day !== today()) await load(day); else listenToday();
+  let items = buildItems({ base: p.base, mid: p.mid || '', date: day, time: p.time, sender: p.sender, group: p.group, text: p.text, at: p.at || Date.now(), src: p.copy ? 'copy' : p.src || 'wa' }, { parse, ho: !p.copy && p.src !== 'prefix' });
+  // copied from another group (HK…): only the lines that read like handover items
+  if (p.copy) items = items.length > 1 ? items.filter(it => looksLikeHandover(it.orig, { parse })) : items.filter(() => looksLikeHandover(p.text, { parse }));
+  const old = itemsOf(day).filter(i => i.msg === p.base), patch = {};
+  items.forEach(it => {
+    const k = fbSafe(it.key), was = old.find(o => o.key === it.key);
+    if (!was) { delete it.key; patch[k] = it; return; }
+    const ch = { orig: it.orig, rooms: it.rooms, tags: it.tags, full: it.full || null, part: it.part || null, parts: it.parts || null, head: it.head || null, src: it.src };
+    ch.del = null;
+    if (!was.chatBy) ch.chat = it.chat || null;                                   // "Add to handover" / "Not handover" taps stay
+    if (!was.textBy) ch.text = it.text;
+    if (!was.catBy) ch.cat = it.cat;
+    if (p.edited) ch.edited = 1;
+    Object.keys(ch).forEach(f => { patch[k + '/' + f] = ch[f]; });
+  });
+  old.forEach(o => { if (!items.some(i => i.key === o.key)) patch[fbSafe(o.key)] = null; });
+  midDay(p.base, day);
+  write(day, patch);
+  safe(() => { if (typeof logActivity === 'function' && !old.length) logActivity('handover_item', `${p.sender || 'WhatsApp'}: ${items.length} handover item${items.length === 1 ? '' : 's'}`); });
+  return items.length;
+}
+// messages that came before this file was ready (wa-bridge.js keeps them in hb_queue_v1)
+function drain() { const q = LS.get('hb_queue_v1', []); if (!Array.isArray(q) || !q.length) return; LS.set('hb_queue_v1', []); q.reduce((pr, p) => pr.then(() => fromWa(p)).catch(() => {}), Promise.resolve()); }
+
+// ── changes from the page ──
+function setField(day, key, fields) { const k = fbSafe(key), patch = {}; Object.keys(fields).forEach(f => { patch[k + '/' + f] = fields[f]; }); write(day, patch); }
+/** add lines typed, pasted or picked here: [{text, sender?, time?, date?, cat?, src?}] → how many items */
+function addItems(list, day) {
+  const now = new Date(), t = pad(now.getHours()) + ':' + pad(now.getMinutes()), byDay = {};
+  let n = 0;
+  (list || []).forEach((x, i) => {
+    if (!x || !sp(x.text).trim()) return;
+    const d = /^\d{4}-\d{2}-\d{2}$/.test(x.date || '') ? x.date : day || today();
+    const items = buildItems({ base: 'h' + Date.now().toString(36) + i + Math.random().toString(36).slice(2, 5), date: d, time: x.time || t, sender: x.sender || me(), group: '', text: x.text, at: Date.now() + i, src: x.src || 'hand' }, { parse });
+    items.forEach(it => {
+      if (x.cat) { it.cat = x.cat; it.catBy = me(); it.status = statusOf(it.orig, x.cat, it.head); }
+      if (x.from) it.from = x.from;
+      const p = byDay[d] = byDay[d] || {}; const k = fbSafe(it.key); delete it.key; p[k] = it; n++;
+    });
+  });
+  Object.keys(byDay).forEach(d => write(d, byDay[d]));
+  safe(() => { if (n && typeof logActivity === 'function') logActivity('handover_item', `${me()}: ${n} handover item${n === 1 ? '' : 's'} added`); });
+  return n;
+}
+const addByHand = (text, cat) => addItems(splitItems(text).map(p => ({ text: (p.head ? p.head + ': ' : '') + p.text, cat })));
+
+// ═════════════════ The 📒 Handover Book page ═════════════════
+const PANEL = 'handover-book';
+const SET_KEY = 'hb_settings_v1', VIEW_KEY = 'hb_view_v1';
+const HB = { date: '', shift: 'all', cat: '', st: 'all', sender: '', src: 'all', group: '', room: '', q: '', by: 'time', more: false, settings: false,
+  edit: '', menu: '', note: '', orig: '', fold: {}, chat: false, draft: '', draftCat: '', rows: null, rowsKind: '', seq: 0 };
+safe(() => { const v = LS.get(VIEW_KEY, {}); if (v && /^(?:time|cat|room)$/.test(v.by)) HB.by = v.by; });
+const SETTINGS = () => Object.assign({ to: '', cc: '', exp: 'seen', orig: false }, LS.get(SET_KEY, {}));
+const PCSS = `
+#hbRoot{--hb-acc:var(--gold,var(--accent,#0a84ff));--hb-open:var(--amber,#d97706);--hb-done:var(--green,#16a34a);--hb-info:var(--blue,#2563eb);--hb-red:var(--red,#dc2626);
+  --hb-r:16px;--hb-hair:color-mix(in srgb,var(--text) 10%,transparent);--hb-soft:color-mix(in srgb,var(--text) 4.5%,var(--card));--hb-fill:color-mix(in srgb,var(--text) 6%,transparent);
+  --hb-font:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display",Inter,system-ui,"Segoe UI",sans-serif;font-family:var(--hb-font);-webkit-font-smoothing:antialiased;
+  display:grid;gap:16px;min-width:0;max-width:980px;margin:0 auto;color:var(--text)}
+#hbRoot *{box-sizing:border-box}
+#hbRoot button,#hbRoot input,#hbRoot select,#hbRoot textarea{font-family:var(--hb-font)}
+#hbRoot .hb-chips:empty,#hbRoot #hbMore:empty,#hbRoot #hbCarry:empty,#hbRoot #hbChat:empty{display:none}
+#hbRoot :focus-visible{outline:2px solid var(--hb-acc);outline-offset:2px}
+#hbRoot .hb-hd{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px 16px;min-width:0}
+#hbRoot .hb-ttl{flex:1 1 260px;min-width:0}
+#hbRoot .hb-ttl h1{margin:0;font:700 34px/1.1 var(--hb-font);letter-spacing:-.025em;color:var(--text)}
+#hbRoot .hb-sub{display:flex;align-items:center;gap:2px;margin-top:4px;flex-wrap:wrap}
+#hbRoot .hb-dl{position:relative;display:inline-flex;align-items:center;font:600 15px var(--hb-font);color:var(--text2);padding:4px 6px;border-radius:8px;cursor:pointer}
+#hbRoot .hb-dl:hover{background:var(--hb-fill);color:var(--text)}
+#hbRoot .hb-dl input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;color-scheme:light dark}
+#hbRoot .hb-arw{all:unset;cursor:pointer;width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:var(--hb-acc);font:600 19px/1 var(--hb-font)}
+#hbRoot .hb-arw:hover{background:var(--hb-fill)}
+#hbRoot .hb-arw[disabled]{opacity:.3;cursor:default;background:none}
+#hbRoot .hb-hda{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+#hbRoot .hb-q{all:unset;box-sizing:border-box;cursor:pointer;padding:7px 11px;border-radius:10px;font:500 14px var(--hb-font);color:var(--hb-acc);white-space:nowrap}
+#hbRoot .hb-q:hover{background:var(--hb-fill)}
+#hbRoot .hb-q.sm{font-size:13px;padding:5px 9px}
+#hbRoot .hb-pri{all:unset;box-sizing:border-box;cursor:pointer;padding:9px 16px;border-radius:999px;background:var(--hb-acc);color:var(--bg,#fff);font:600 14px var(--hb-font);white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,.12),0 4px 14px -6px color-mix(in srgb,var(--hb-acc) 70%,transparent);transition:transform .18s cubic-bezier(.2,.9,.3,1.3),filter .15s}
+#hbRoot .hb-pri:hover{filter:brightness(1.06)}
+#hbRoot .hb-pri:active{transform:scale(.96)}
+#hbRoot .hb-pri.sm{padding:7px 14px;font-size:13.5px}
+#hbRoot .hb-pri[disabled]{opacity:.4;cursor:default;box-shadow:none}
+#hbRoot .hb-panel{background:var(--card);border:1px solid var(--hb-hair);border-radius:var(--hb-r);padding:16px;display:grid;gap:10px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+#hbRoot .hb-panel h3{margin:0;font:650 15px var(--hb-font)}
+#hbRoot .hb-hint{font-size:12.5px;color:var(--text3);line-height:1.45}
+#hbRoot .hb-in{width:100%;background:var(--hb-soft);color:var(--text);border:1px solid var(--hb-hair);border-radius:11px;padding:9px 12px;font:15px var(--hb-font);margin:0;min-width:0;color-scheme:light dark;transition:border-color .15s,box-shadow .15s}
+#hbRoot .hb-in:focus{outline:0;border-color:var(--hb-acc);box-shadow:0 0 0 3px color-mix(in srgb,var(--hb-acc) 22%,transparent)}
+#hbRoot .hb-new{background:var(--card);border:1px solid var(--hb-hair);border-radius:var(--hb-r);padding:6px 6px 6px 14px;display:grid;gap:0;box-shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px -18px rgba(0,0,0,.35)}
+#hbRoot .hb-newrow{display:flex;align-items:flex-start;gap:8px;min-width:0}
+#hbRoot .hb-plus{flex:none;width:24px;height:24px;margin-top:9px;border-radius:50%;border:1.6px solid var(--hb-acc);color:var(--hb-acc);display:inline-flex;align-items:center;justify-content:center;font:500 17px/1 var(--hb-font)}
+#hbRoot #hbNew{flex:1;min-width:0;border:0;background:transparent;color:var(--text);font:17px/1.4 var(--hb-font);padding:9px 2px;resize:none;outline:0;min-height:42px;max-height:220px;overflow-y:auto}
+#hbRoot #hbNew::placeholder{color:var(--text3)}
+#hbRoot .hb-newact{display:flex;align-items:center;gap:6px;flex:none;padding-top:4px}
+#hbRoot .hb-mini{all:unset;box-sizing:border-box;cursor:pointer;max-width:140px;padding:6px 8px;border-radius:9px;font:500 13px var(--hb-font);color:var(--text2);background:var(--hb-fill);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color-scheme:light dark}
+#hbRoot .hb-mini option{color:#111;background:#fff}
+#hbRoot .hb-prev{border-top:1px solid var(--hb-hair);margin:4px 6px 0 18px;padding:8px 0 6px;display:grid;gap:6px;animation:hbIn .22s cubic-bezier(.2,.9,.3,1.15)}
+#hbRoot .hb-prev:empty{display:none}
+#hbRoot .hb-pv{display:flex;align-items:flex-start;gap:8px;font-size:14px;line-height:1.4;color:var(--text);min-width:0}
+#hbRoot .hb-pv input{margin:3px 0 0;accent-color:var(--hb-acc);width:16px;height:16px;flex:none}
+#hbRoot .hb-pv .tx{flex:1;min-width:0;overflow-wrap:anywhere}
+#hbRoot .hb-pv .tx small{display:block;color:var(--text3);font-size:12px}
+#hbRoot .hb-pv.off .tx{color:var(--text3)}
+#hbRoot .hb-newft{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:2px 4px 2px 22px}
+#hbRoot .hb-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+#hbRoot .hb-stat{all:unset;box-sizing:border-box;cursor:pointer;background:var(--card);border:1px solid var(--hb-hair);border-radius:14px;padding:12px 14px;display:grid;gap:2px;transition:transform .18s cubic-bezier(.2,.9,.3,1.3),border-color .15s}
+#hbRoot .hb-stat:hover{border-color:color-mix(in srgb,var(--c) 45%,var(--hb-hair))}
+#hbRoot .hb-stat:active{transform:scale(.97)}
+#hbRoot .hb-stat.on{border-color:var(--c);box-shadow:inset 0 0 0 1px var(--c)}
+#hbRoot .hb-stat b{font:700 26px/1.1 var(--hb-font);color:var(--c);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+#hbRoot .hb-stat span{font:500 12.5px var(--hb-font);color:var(--text3)}
+#hbRoot .hb-sum{margin:0;font-size:14.5px;line-height:1.5;color:var(--text2);padding:0 2px}
+#hbRoot .hb-sum b{color:var(--text);font-weight:600}
+#hbRoot .hb-tb{position:sticky;top:0;z-index:20;display:grid;gap:8px;padding:10px;margin:0 -10px;border-radius:18px;background:color-mix(in srgb,var(--bg) 78%,transparent);-webkit-backdrop-filter:saturate(1.8) blur(18px);backdrop-filter:saturate(1.8) blur(18px);border:1px solid transparent}
+#hbRoot .hb-tb.stuck{border-color:var(--hb-hair);box-shadow:0 8px 28px -20px rgba(0,0,0,.45)}
+#hbRoot .hb-tbr{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0}
+#hbRoot .hb-seg{display:inline-flex;padding:2px;border-radius:10px;background:var(--hb-fill);gap:2px;max-width:100%;overflow-x:auto;scrollbar-width:none}
+#hbRoot .hb-seg::-webkit-scrollbar{display:none}
+#hbRoot .hb-seg button{all:unset;box-sizing:border-box;cursor:pointer;padding:6px 12px;border-radius:8px;font:500 13.5px var(--hb-font);color:var(--text2);white-space:nowrap;transition:background .18s,color .18s,box-shadow .18s}
+#hbRoot .hb-seg button em{font-style:normal;font-size:12px;color:var(--text3);margin-left:3px;font-variant-numeric:tabular-nums}
+#hbRoot .hb-seg button.on{background:var(--card);color:var(--text);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.14),0 0 0 .5px rgba(0,0,0,.05)}
+#hbRoot .hb-srch{flex:1 1 180px;min-width:0;position:relative}
+#hbRoot .hb-srch input{width:100%;background:var(--hb-fill);border:0;border-radius:10px;padding:8px 12px 8px 32px;font:15px var(--hb-font);color:var(--text);outline:0;color-scheme:light dark}
+#hbRoot .hb-srch input:focus{box-shadow:0 0 0 3px color-mix(in srgb,var(--hb-acc) 22%,transparent)}
+#hbRoot .hb-srch::before{content:"";position:absolute;left:11px;top:50%;width:11px;height:11px;margin-top:-7px;border:1.8px solid var(--text3);border-radius:50%}
+#hbRoot .hb-srch::after{content:"";position:absolute;left:21px;top:50%;width:6px;height:1.8px;margin-top:4px;background:var(--text3);transform:rotate(45deg);border-radius:2px}
+#hbRoot .hb-chips{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
+#hbRoot .hb-chip{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:999px;background:var(--hb-fill);color:var(--text2);font:500 13px var(--hb-font);white-space:nowrap;max-width:100%;transition:background .15s,color .15s}
+#hbRoot .hb-chip em{font-style:normal;font-size:12px;opacity:.65;font-variant-numeric:tabular-nums}
+#hbRoot .hb-chip.on{background:var(--hb-acc);color:var(--bg,#fff)}
+#hbRoot .hb-chip.x::after{content:"✕";font-size:10px;margin-left:3px;opacity:.7}
+#hbRoot .hb-more{display:grid;gap:10px;padding:10px 2px 2px;border-top:1px solid var(--hb-hair);animation:hbIn .22s cubic-bezier(.2,.9,.3,1.15)}
+#hbRoot .hb-more label{font:500 12px var(--hb-font);color:var(--text3);display:block;margin-bottom:4px}
+#hbRoot .hb-more .hb-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:10px}
+#hbRoot .hb-more select{width:100%}
+#hbRoot .hb-sec{display:grid;gap:0;min-width:0}
+#hbRoot .hb-gh{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:8px;padding:14px 4px 8px;font:650 13px var(--hb-font);color:var(--text2);text-transform:uppercase;letter-spacing:.04em;width:100%}
+#hbRoot .hb-gh em{font-style:normal;font-weight:500;color:var(--text3);letter-spacing:0;text-transform:none}
+#hbRoot .hb-gh .chev{margin-left:auto;transition:transform .25s cubic-bezier(.2,.9,.3,1.2);color:var(--text3)}
+#hbRoot .hb-gh[aria-expanded="false"] .chev{transform:rotate(-90deg)}
+#hbRoot .hb-list{background:var(--card);border:1px solid var(--hb-hair);border-radius:var(--hb-r);overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+#hbRoot .hb-it{position:relative;display:flex;gap:12px;padding:12px 12px 12px 14px;min-width:0;animation:hbIn .28s cubic-bezier(.2,.9,.3,1.15) both;transition:background .15s}
+#hbRoot .hb-it+.hb-it::before{content:"";position:absolute;top:0;left:50px;right:0;height:1px;background:var(--hb-hair)}
+#hbRoot .hb-it:hover{background:color-mix(in srgb,var(--text) 2.5%,transparent)}
+#hbRoot .hb-ck{all:unset;box-sizing:border-box;cursor:pointer;flex:none;width:24px;height:24px;margin-top:1px;border-radius:50%;border:1.8px solid color-mix(in srgb,var(--text3) 75%,transparent);display:inline-flex;align-items:center;justify-content:center;color:transparent;font:700 13px/1 var(--hb-font);transition:transform .2s cubic-bezier(.2,.9,.3,1.5),background .2s,border-color .2s}
+#hbRoot .hb-ck:active{transform:scale(.85)}
+#hbRoot .hb-it.open .hb-ck{border-color:var(--hb-open)}
+#hbRoot .hb-it.done .hb-ck{background:var(--hb-done);border-color:var(--hb-done);color:#fff}
+#hbRoot .hb-it.info .hb-ck{border-style:dashed}
+#hbRoot .hb-bd{flex:1;min-width:0;display:grid;gap:5px}
+#hbRoot .hb-tx{font-size:15.5px;line-height:1.45;color:var(--text);overflow-wrap:anywhere;cursor:text;border-radius:6px;margin:-2px -4px;padding:2px 4px}
+#hbRoot .hb-tx:hover{background:var(--hb-fill)}
+#hbRoot .hb-tx small{display:block;font-size:12px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+#hbRoot .hb-it.done .hb-tx{color:var(--text3);text-decoration:line-through;text-decoration-color:color-mix(in srgb,var(--text3) 60%,transparent)}
+#hbRoot .hb-ed{width:100%;font:15.5px/1.45 var(--hb-font);color:var(--text);background:var(--hb-soft);border:1px solid var(--hb-acc);border-radius:10px;padding:7px 10px;resize:none;outline:0;box-shadow:0 0 0 3px color-mix(in srgb,var(--hb-acc) 20%,transparent);overflow:hidden;min-height:40px}
+#hbRoot .hb-meta{display:flex;flex-wrap:wrap;align-items:center;gap:5px 8px;font-size:12.5px;color:var(--text3);min-width:0}
+#hbRoot .hb-av{flex:none;width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font:700 8.5px/1 var(--hb-font);color:#fff;background:hsl(var(--h,210) 52% 48%)}
+#hbRoot .hb-who{display:inline-flex;align-items:center;gap:5px;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text2)}
+#hbRoot .hb-pill{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font:500 12px var(--hb-font);background:color-mix(in srgb,hsl(var(--ch,210) 70% 50%) 13%,transparent);color:hsl(var(--ch,210) 55% 42%);white-space:nowrap}
+:root[data-theme="night-ops"] #hbRoot .hb-pill,:root[data-theme="midnight"] #hbRoot .hb-pill{color:hsl(var(--ch,210) 70% 70%)}
+#hbRoot .hb-rm{all:unset;cursor:pointer;font:600 12px var(--hb-font);padding:2px 7px;border-radius:6px;background:var(--hb-fill);color:var(--text);font-variant-numeric:tabular-nums}
+#hbRoot .hb-rm:hover{background:color-mix(in srgb,var(--hb-acc) 18%,transparent)}
+#hbRoot .hb-tag{font:500 11.5px var(--hb-font);padding:1px 7px;border-radius:6px;border:1px solid var(--hb-hair);color:var(--text2)}
+#hbRoot .hb-urg{display:inline-flex;align-items:center;gap:4px;font-weight:600;color:var(--hb-red)}
+#hbRoot .hb-urg::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--hb-red);box-shadow:0 0 0 3px color-mix(in srgb,var(--hb-red) 18%,transparent)}
+#hbRoot .hb-note{font-size:13.5px;color:var(--text2);background:var(--hb-fill);border-radius:10px;padding:7px 10px;overflow-wrap:anywhere}
+#hbRoot .hb-orig{font-size:13px;color:var(--text2);background:var(--hb-soft);border:1px dashed var(--hb-hair);border-radius:10px;padding:8px 10px;white-space:pre-wrap;overflow-wrap:anywhere}
+#hbRoot .hb-orig b{display:block;font-size:11.5px;color:var(--text3);margin-bottom:2px}
+#hbRoot .hb-acts{flex:none;display:flex;align-items:flex-start;gap:2px;opacity:0;transition:opacity .15s}
+#hbRoot .hb-it:hover .hb-acts,#hbRoot .hb-it:focus-within .hb-acts,#hbRoot .hb-it.menu .hb-acts{opacity:1}
+@media (hover:none){#hbRoot .hb-acts{opacity:1}}
+#hbRoot .hb-ib{all:unset;box-sizing:border-box;cursor:pointer;width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:var(--text3);font:600 15px/1 var(--hb-font)}
+#hbRoot .hb-ib:hover{background:var(--hb-fill);color:var(--text)}
+#hbRoot .hb-menu{display:flex;flex-wrap:wrap;gap:6px;padding:4px 0 2px;animation:hbIn .2s cubic-bezier(.2,.9,.3,1.15)}
+#hbRoot .hb-menu .lbl{width:100%;font:600 11.5px var(--hb-font);color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
+#hbRoot .hb-chip.warn{color:var(--hb-red)}
+#hbRoot .hb-carry .hb-list{border-color:color-mix(in srgb,var(--hb-open) 40%,var(--hb-hair))}
+#hbRoot .hb-empty{text-align:center;padding:40px 16px;color:var(--text3);font-size:14.5px;line-height:1.55}
+#hbRoot .hb-empty b{display:block;font-size:40px;margin-bottom:6px}
+#hbRoot .hb-empty strong{color:var(--text2)}
+#hbRoot .hb-chatl .hb-it{padding:9px 12px 9px 14px}
+#hbRoot .hb-chatl .hb-tx{font-size:14px;color:var(--text2);cursor:default}
+#hbRoot .hb-chatl .hb-tx:hover{background:none}
+#hbRoot .hb-lbl{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text2)}
+#hbRoot .hb-lbl input{accent-color:var(--hb-acc);width:16px;height:16px}
+@keyframes hbIn{from{opacity:0;transform:translateY(6px) scale(.985)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){#hbRoot *{animation:none!important;transition:none!important}}
+@media (max-width:700px){
+  #hbRoot{gap:12px}
+  #hbRoot .hb-ttl h1{font-size:28px}
+  #hbRoot .hb-hda{width:100%}
+  #hbRoot .hb-hda .hb-pri{margin-left:auto}
+  #hbRoot .hb-strip{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+  #hbRoot .hb-stat{padding:9px 8px;border-radius:12px;text-align:center}
+  #hbRoot .hb-stat b{font-size:21px}
+  #hbRoot .hb-stat span{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #hbRoot .hb-tb{margin:0 -6px;padding:8px 6px}
+  #hbRoot .hb-seg button{padding:6px 9px;font-size:13px}
+  #hbRoot .hb-newact .hb-mini{max-width:92px}
+  #hbRoot .hb-it{gap:10px;padding:11px 8px 11px 12px}
+  #hbRoot .hb-it+.hb-it::before{left:46px}
+  #hbRoot .hb-acts{flex-direction:column}
+  #hbRoot .hb-who{max-width:110px}
+}
+`;
+const catOf = c => CAT[c] || CAT.info;
+const CAT_HUE = { guest: 340, pay: 150, res: 220, move: 265, maint: 25, hk: 185, transport: 45, lost: 300, desk: 200, fb: 10, follow: 38, cash: 120, info: 215 };
+const initials = s => { const w = String(s || '').replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean); return w.length ? ((w[0][0] || '') + (w[1] ? w[1][0] : '')).toUpperCase() : '•'; };
+const hueOf = s => { let h = 7; s = String(s || ''); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i) * 97) % 3600; return Math.floor(h / 10); };
+const longDate = d => { const x = new Date(d + 'T12:00:00'); return x.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }) + (x.getFullYear() !== new Date().getFullYear() ? ' ' + x.getFullYear() : ''); };
+function hi(text, q) {
+  const e = esc(text), ws = sp(q).trim().split(/\s+/).filter(Boolean).map(w => esc(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  return ws.length ? e.replace(new RegExp('(' + ws.join('|') + ')', 'gi'), '<mark>$1</mark>') : e;
+}
+const view = () => ({ shift: HB.shift, cat: HB.cat, st: HB.st === 'urgent' ? 'all' : HB.st, sender: HB.sender, room: HB.room, q: HB.q, src: HB.src, group: HB.group });
+const shown = list => (HB.st === 'urgent' ? list.filter(isUrgent) : list);
+const idOf = (d, k) => d + '|' + k;
+function itemHtml(i, day, opt) {
+  opt = opt || {};
+  const id = idOf(day, i.key), k = esc(i.key), d = esc(day), c = catOf(i.cat), st = i.status || 'info', q = HB.q;
+  const a = (act, label, title, cls) => `<button type="button" class="${cls || 'hb-ib'}" data-hb="${act}" data-k="${k}" data-d="${d}"${title ? ` title="${esc(title)}" aria-label="${esc(title)}"` : ''}>${label}</button>`;
+  if (opt.chat) return `<div class="hb-it" data-key="${k}"><span class="hb-av" style="--h:${hueOf(i.sender)};width:22px;height:22px;font-size:9px;margin-top:1px">${esc(initials(i.sender))}</span><div class="hb-bd"><div class="hb-tx">${hi(i.orig || i.text, q)}</div><div class="hb-meta"><span class="hb-who">${esc(i.sender || '—')}</span><span>${esc(t12(i.time))}</span></div></div><div class="hb-acts" style="opacity:1">${a('unchat', 'Add to handover', 'Add this to the handover', 'hb-q sm')}</div></div>`;
+  const editing = HB.edit === id, menu = HB.menu === id, noting = HB.note === id, orig = HB.orig === id;
+  const diff = i.orig && sp(i.orig).trim() !== sp(i.text).trim();
+  const ckTitle = st === 'done' ? 'Done — tap to reopen' : 'Mark as done';
+  let tx = editing ? `<textarea class="hb-ed" id="hbEdit" rows="1" data-k="${k}" data-d="${d}" aria-label="Edit the item">${esc(i.text || i.orig || '')}</textarea><div class="hb-hint">Enter saves · Esc cancels${diff ? ' · <button type="button" class="hb-q sm" data-hb="retidy" data-k="' + k + '" data-d="' + d + '">✨ Tidy the original again</button>' : ''}</div>`
+    : `<div class="hb-tx" data-hb="edit" data-k="${k}" data-d="${d}" title="Tap to edit">${i.head ? `<small>${esc(i.head)}</small>` : ''}${hi(i.text || i.orig || '', q)}</div>`;
+  const meta = [
+    isUrgent(i) ? '<span class="hb-urg">Urgent</span>' : '',
+    `<button type="button" class="hb-pill" style="--ch:${CAT_HUE[c.id] || 215}" data-hb="menu" data-k="${k}" data-d="${d}" title="Change the category">${c.icon} ${esc(c.label)}</button>`,
+    (i.rooms || []).map(r => `<button type="button" class="hb-rm" data-hb="room" data-r="${esc(r)}" title="Only room ${esc(r)}">${hi(r, q)}</button>`).join(''),
+    (i.tags || []).map(t => `<span class="hb-tag">${esc(t)}</span>`).join(''),
+    `<span class="hb-who"><span class="hb-av" style="--h:${hueOf(i.sender)}" aria-hidden="true">${esc(initials(i.sender))}</span>${hi(i.sender || '—', q)}</span>`,
+    `<span>${opt.carry ? esc(dLong(i.date || day).replace(/ \d{4}$/, '')) + ', ' : ''}${esc(t12(i.time))}</span>`,
+    i.src === 'copy' ? `<span title="Picked from ${esc(i.group || 'another group')} automatically">✨ Auto${i.group ? ' · ' + esc(i.group) : ''}</span>` : i.src === 'prefix' ? '<span title="Marked HO in WhatsApp">📌 HO</span>' : i.src === 'hand' ? '<span>✍️</span>' : '',
+    i.edited ? '<span title="Edited in WhatsApp">✎</span>' : '',
+    st === 'done' && i.doneBy ? `<span style="color:var(--hb-done)">✓ ${esc(i.doneBy)}${i.doneAt ? ' · ' + esc(t12(hhmmOf(i.doneAt))) : ''}</span>` : '',
+  ].filter(Boolean).join('');
+  const menuHtml = menu ? `<div class="hb-menu"><span class="lbl">Category</span>${CATS.map(x => `<button type="button" class="hb-chip${x[0] === i.cat ? ' on' : ''}" data-hb="setcat" data-c="${x[0]}" data-k="${k}" data-d="${d}">${x[2]} ${esc(x[1])}</button>`).join('')}
+    <span class="lbl">Item</span>${st !== 'open' ? a('todo', '☐ Mark to do', '', 'hb-chip') : a('info', 'ℹ️ Just info', '', 'hb-chip')}${diff || i.parts > 1 ? a('orig', orig ? 'Hide original' : '💬 Original', '', 'hb-chip') : ''}${a('note', '📝 Note', '', 'hb-chip')}${i.src !== 'hand' ? a('reject', '✕ Not handover', 'Move it to team chat', 'hb-chip warn') : ''}${a('del', '🗑 Delete', '', 'hb-chip warn')}</div>` : '';
+  const noteHtml = noting ? `<input class="hb-in" id="hbNoteIn" data-k="${k}" data-d="${d}" maxlength="300" placeholder="Add a note — Enter saves" value="${esc(i.note || '')}" aria-label="Note">`
+    : i.note ? `<div class="hb-note" data-hb="note" data-k="${k}" data-d="${d}">📝 ${hi(i.note, q)}${i.noteBy ? ` <span style="color:var(--text3)">— ${esc(i.noteBy)}</span>` : ''}</div>` : '';
+  const origHtml = orig ? `<div class="hb-orig"><b>WhatsApp${i.parts > 1 ? ` · line ${i.part} of ${i.parts}` : ''}</b>${esc(i.orig || '')}${i.parts > 1 && i.full ? `<b style="margin-top:8px">The whole message</b>${esc(i.full)}` : ''}</div>` : '';
+  return `<div class="hb-it ${esc(st)}${menu ? ' menu' : ''}" data-key="${k}">
+    <button type="button" class="hb-ck" data-hb="check" data-k="${k}" data-d="${d}" title="${ckTitle}" aria-label="${ckTitle}" aria-pressed="${st === 'done'}">✓</button>
+    <div class="hb-bd">${tx}<div class="hb-meta">${meta}</div>${noteHtml}${origHtml}${menuHtml}</div>
+    <div class="hb-acts">${a('note', '✎', 'Add a note')}${a('menu', '⋯', 'More')}</div></div>`;
+}
+function shell() {
+  const root = doc.getElementById('hbRoot'); if (!root) return;
+  const S = SETTINGS(), d = HB.date, isT = d === today();
+  root.innerHTML = `
+    <header class="hb-hd"><div class="hb-ttl"><h1>Handover</h1>
+      <div class="hb-sub"><button type="button" class="hb-arw" data-hb="prev" aria-label="Day before" title="Day before">‹</button><label class="hb-dl">${esc(isT ? 'Today · ' + longDate(d) : longDate(d))}<input type="date" id="hbDate" value="${esc(d)}" max="${esc(today())}" aria-label="Pick a day"></label><button type="button" class="hb-arw" data-hb="next" aria-label="Next day" title="Next day"${isT ? ' disabled' : ''}>›</button>${isT ? '' : '<button type="button" class="hb-q sm" data-hb="today">Today</button>'}</div></div>
+      <div class="hb-hda"><button type="button" class="hb-q" data-hb="xlsx" title="Download the Excel file">Excel</button><button type="button" class="hb-q" data-hb="settings" aria-expanded="${HB.settings}">Settings</button><button type="button" class="hb-pri" data-hb="mail" title="Download the Excel and write the e-mail">Export &amp; email</button></div></header>
+    ${HB.settings ? `<section class="hb-panel"><h3>E-mail &amp; Excel</h3>
+      <div><label class="hb-hint" for="hbTo">Send to · comma separated · saved on this device</label><input class="hb-in" id="hbTo" type="email" multiple autocomplete="email" placeholder="frontoffice@hotel.com, manager@hotel.com" value="${esc(S.to)}"></div>
+      <div><label class="hb-hint" for="hbCc">Cc (optional)</label><input class="hb-in" id="hbCc" type="email" multiple placeholder="gm@hotel.com" value="${esc(S.cc)}"></div>
+      <div class="hb-tbr"><span class="hb-hint">Export</span><div class="hb-seg" role="group" aria-label="What to export">${[['seen', 'What I see'], ['all', 'Whole day']].map(([k, l]) => `<button type="button" data-hb="exp" data-v="${k}" class="${S.exp === k ? 'on' : ''}" aria-pressed="${S.exp === k}">${l}</button>`).join('')}</div></div>
+      <label class="hb-lbl"><input type="checkbox" id="hbOrig"${S.orig ? ' checked' : ''}> Add the original WhatsApp text as a column</label>
+      <div class="hb-tbr"><button type="button" class="hb-pri sm" data-hb="saveset">Save</button><button type="button" class="hb-q sm" data-hb="settings">Close</button></div></section>` : ''}
+    <section class="hb-new" aria-label="New handover item">
+      <div class="hb-newrow"><span class="hb-plus" aria-hidden="true">+</span><textarea id="hbNew" rows="1" maxlength="6000" placeholder="New handover item…" aria-label="New handover item">${esc(HB.draft)}</textarea>
+        <div class="hb-newact"><select class="hb-mini" id="hbNewCat" aria-label="Category"><option value="">Auto</option>${CATS.map(c => `<option value="${c[0]}"${HB.draftCat === c[0] ? ' selected' : ''}>${c[2]} ${esc(c[1])}</option>`).join('')}</select><button type="button" class="hb-pri sm" data-hb="addsave" id="hbAddBtn">Add</button></div></div>
+      <div class="hb-prev" id="hbNewPrev" aria-live="polite"></div>
+      <div class="hb-newft"><button type="button" class="hb-q sm" data-hb="sugg">✨ From HotelOps today</button><span class="hb-hint">Type “512 early departure”, or paste a WhatsApp chat, an e-mail or a list.</span></div>
+    </section>
+    <div class="hb-strip" id="hbStrip"></div>
+    <p class="hb-sum" id="hbSum"></p>
+    <div class="hb-tb" id="hbTb">
+      <div class="hb-tbr"><div class="hb-seg" id="hbShifts" role="group" aria-label="Shift"></div><div class="hb-seg" id="hbSt" role="group" aria-label="Status"></div></div>
+      <div class="hb-tbr"><div class="hb-srch"><input type="search" id="hbQ" placeholder="Search, or a room number" value="${esc(HB.q)}" aria-label="Search the handover"></div><button type="button" class="hb-q sm" data-hb="more" aria-expanded="${HB.more}" id="hbMoreBtn">Filters</button></div>
+      <div class="hb-chips" id="hbActive"></div>
+      <div id="hbMore"></div>
+    </div>
+    <div id="hbCarry"></div>
+    <div id="hbList"></div>
+    <div id="hbChat"></div>`;
+  autosize(doc.getElementById('hbNew'));
+  body(); preview();
+}
+function moreHtml(all) {
+  if (!HB.more) return '';
+  const f = view(), cnt = patch => shown(filterItems(all, Object.assign({}, f, patch))).length;
+  const senders = [...new Set(all.map(i => i.sender).filter(Boolean))].sort(), groups = [...new Set(all.map(i => i.group || '—'))].sort();
+  return `<div class="hb-more">
+    <div><label>Topic</label><div class="hb-chips"><button type="button" class="hb-chip${!HB.cat ? ' on' : ''}" data-hb="catf" data-v="">All <em>${cnt({ cat: '' })}</em></button>${CATS.filter(c => cnt({ cat: c[0] }) || HB.cat === c[0]).map(c => `<button type="button" class="hb-chip${HB.cat === c[0] ? ' on' : ''}" data-hb="catf" data-v="${c[0]}">${c[2]} ${esc(c[1])} <em>${cnt({ cat: c[0] })}</em></button>`).join('')}</div></div>
+    <div class="hb-grid">
+      <div><label for="hbSender">From</label><select class="hb-in" id="hbSender"><option value="">Everyone</option>${senders.map(n => `<option value="${esc(n)}"${n === HB.sender ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></div>
+      <div><label for="hbGroup">Group</label><select class="hb-in" id="hbGroup"><option value="">All groups</option>${groups.map(g => `<option value="${esc(g)}"${g === HB.group ? ' selected' : ''}>${esc(g === '—' ? 'Added here' : g)}</option>`).join('')}</select></div>
+      <div><label>Source</label><div class="hb-seg">${[['all', 'All'], ['marked', 'Marked HO'], ['auto', 'Auto-picked']].map(([k, l]) => `<button type="button" data-hb="src" data-v="${k}" class="${HB.src === k ? 'on' : ''}">${l} <em>${cnt({ src: k })}</em></button>`).join('')}</div></div>
+      <div><label>Group by</label><div class="hb-seg">${[['time', 'Shift'], ['cat', 'Topic'], ['room', 'Room']].map(([k, l]) => `<button type="button" data-hb="by" data-v="${k}" class="${HB.by === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+    </div></div>`;
+}
+function body() {
+  safe(() => {
+    const d = HB.date, raw = itemsOf(d), all = raw.filter(i => !i.del && !i.chat), f = view();
+    const cnt = patch => shown(filterItems(all, Object.assign({}, f, patch))).length;
+    const set = (id, h) => { const el = doc.getElementById(id); if (el && el.innerHTML !== h) el.innerHTML = h; };
+    set('hbShifts', [['all', 'All']].concat(SHIFT_BOUNDS.map(s => [s.id, s.id])).map(([k, l]) => `<button type="button" data-hb="shift" data-v="${k}" class="${HB.shift === k ? 'on' : ''}" aria-pressed="${HB.shift === k}">${esc(l)}<em>${cnt({ shift: k })}</em></button>`).join(''));
+    set('hbSt', [['all', 'All'], ['open', 'Open'], ['done', 'Done']].map(([k, l]) => `<button type="button" data-hb="st" data-v="${k}" class="${HB.st === k ? 'on' : ''}" aria-pressed="${HB.st === k}">${l}</button>`).join(''));
+    // the summary strip (taps filter) and the written summary
+    const base = filterItems(all, Object.assign({}, f, { st: 'all' })), S = summaryOf(base), urg = base.filter(isUrgent).length;
+    set('hbStrip', [['open', S.open, 'Open', 'var(--hb-open)'], ['done', S.done, 'Done', 'var(--hb-done)'], ['urgent', urg, 'Urgent', 'var(--hb-red)'], ['rooms', S.rooms, 'Rooms', 'var(--hb-info)']]
+      .map(([k, v, l, c]) => `<button type="button" class="hb-stat${HB.st === k ? ' on' : ''}" style="--c:${c}" data-hb="stat" data-v="${k}" aria-pressed="${HB.st === k}"><b>${v}</b><span>${l}</span></button>`).join(''));
+    set('hbSum', esc(writtenSummary(base)).replace(/^([^.]+\.)/, '<b>$1</b>'));
+    const act = [];
+    if (HB.room) act.push(`<button type="button" class="hb-chip on x" data-hb="clr" data-v="room">Room ${esc(HB.room)}</button>`);
+    if (HB.cat) act.push(`<button type="button" class="hb-chip on x" data-hb="clr" data-v="cat">${esc(catOf(HB.cat).label)}</button>`);
+    if (HB.sender) act.push(`<button type="button" class="hb-chip on x" data-hb="clr" data-v="sender">${esc(HB.sender)}</button>`);
+    if (HB.group) act.push(`<button type="button" class="hb-chip on x" data-hb="clr" data-v="group">${esc(HB.group === '—' ? 'Added here' : HB.group)}</button>`);
+    if (HB.src !== 'all') act.push(`<button type="button" class="hb-chip on x" data-hb="clr" data-v="src">${HB.src === 'auto' ? 'Auto-picked' : 'Marked HO'}</button>`);
+    set('hbActive', act.join(''));
+    const mb = doc.getElementById('hbMoreBtn'); if (mb) { mb.textContent = 'Filters' + (act.length ? ' · ' + act.length : ''); mb.setAttribute('aria-expanded', HB.more); }
+    set('hbMore', moreHtml(all));
+    // still open from the day before
+    const prev = dayAdd(d, -1), P = HB.st === 'done' ? [] : shown(filterItems(itemsOf(prev), Object.assign({}, f, { st: 'open', shift: 'all' }))).sort(byTime);
+    set('hbCarry', P.length ? `<section class="hb-sec hb-carry"><button type="button" class="hb-gh" data-hb="fold" data-v="carry" aria-expanded="${!HB.fold.carry}">⏳ Still open from ${prev === dayAdd(today(), -1) ? 'yesterday' : esc(dLong(prev))} <em>${P.length}</em><span class="chev">▾</span></button>${HB.fold.carry ? '' : `<div class="hb-list">${P.map(i => itemHtml(i, prev, { carry: true })).join('')}</div>`}</section>` : '');
+    // the day, grouped
+    const L = shown(filterItems(all, f)).sort((a, b) => (HB.by === 'time' ? 0 : (isUrgent(b) - isUrgent(a))) || byTime(a, b));
+    let html = '';
+    if (!L.length) html = `<div class="hb-empty"><b>${all.length ? '🔍' : '📒'}</b>${all.length ? 'Nothing matches these filters.' : d === today() ? '<strong>No handover yet today.</strong><br>Messages from your WhatsApp handover group (named like “HO - Hotel”), messages starting with “HO -” in any group, and handover-like messages from other groups land here by themselves. Or type one above.' : 'No handover saved for this day.'}</div>`;
+    else {
+      const groups = [];
+      const gkey = i => HB.by === 'cat' ? i.cat : HB.by === 'room' ? ((i.rooms || [])[0] ? 'Room ' + String(parseInt(i.rooms[0], 10)) : 'No room') : (i.shift || 'No time');
+      L.forEach(i => { const g = gkey(i); let G = groups.find(x => x.k === g); if (!G) { G = { k: g, items: [] }; groups.push(G); } G.items.push(i); });
+      if (HB.by === 'cat') groups.sort((a, b) => CATS.findIndex(c => c[0] === a.k) - CATS.findIndex(c => c[0] === b.k));
+      if (HB.by === 'room') groups.sort((a, b) => (a.k === 'No room') - (b.k === 'No room') || (parseInt(a.k.slice(5), 10) || 0) - (parseInt(b.k.slice(5), 10) || 0));
+      html = groups.map(G => {
+        const fk = HB.by + ':' + G.k, open = !HB.fold[fk], sb = SHIFT_BOUNDS.find(s => s.id === G.k);
+        const label = HB.by === 'cat' ? catOf(G.k).icon + ' ' + catOf(G.k).label : sb ? sb.icon + ' ' + sb.id : G.k;
+        const no = G.items.filter(i => i.status === 'open').length;
+        return `<section class="hb-sec"><button type="button" class="hb-gh" data-hb="fold" data-v="${esc(fk)}" aria-expanded="${open}">${esc(label)} <em>${G.items.length}${no ? ' · ' + no + ' open' : ''}</em><span class="chev">▾</span></button>${open ? `<div class="hb-list">${G.items.map(i => itemHtml(i, d)).join('')}</div>` : ''}</section>`;
+      }).join('');
+    }
+    set('hbList', html);
+    // team chat in the handover group (not added)
+    const C = raw.filter(i => i.chat && !i.del).sort(byTime);
+    set('hbChat', C.length ? `<section class="hb-sec hb-chatl"><button type="button" class="hb-gh" data-hb="chat" aria-expanded="${HB.chat}">💬 Team chat — not added <em>${C.length}</em><span class="chev">▾</span></button>${HB.chat ? `<div class="hb-list">${C.map(i => itemHtml(i, d, { chat: true })).join('')}</div>` : ''}</section>` : '');
+    const ed = doc.getElementById('hbEdit'); if (ed && doc.activeElement !== ed) { autosize(ed); ed.focus(); ed.setSelectionRange(ed.value.length, ed.value.length); }
+    const ni = doc.getElementById('hbNoteIn'); if (ni && doc.activeElement !== ni) ni.focus();
+  });
+}
+function autosize(t) { if (!t) return; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight + 2, 240) + 'px'; }
+// ── the "New handover item" field: live preview; several lines (a pasted chat, an e-mail) become a checklist ──
+function preview() {
+  safe(() => {
+    const box = doc.getElementById('hbNewPrev'); if (!box) return;
+    const t = HB.draft, c = HB.draftCat;
+    if (HB.rowsKind === 'sugg' && HB.rows) { box.innerHTML = rowsHtml('From HotelOps today — tick what goes in the handover'); syncAdd(); return; }
+    if (!t.trim()) { HB.rows = null; HB.rowsKind = ''; box.innerHTML = ''; syncAdd(); return; }
+    const rows = pasteItems(t, { parseCopied: typeof W.hoWaParseCopied === 'function' ? W.hoWaParseCopied : null });
+    const old = HB.rows || [];
+    HB.rows = rows.map(r => { const was = old.find(o => o.text === r.text); return Object.assign(r, { on: was ? was.on : !r.chat, cat: c || categorize(r.text, r.head) }); });
+    HB.rowsKind = 'paste';
+    if (HB.rows.length === 1) {
+      const r = HB.rows[0], C = catOf(r.cat), rooms = roomsOf(r.text);
+      box.innerHTML = `<div class="hb-pv"><span class="tx">✨ ${esc(tidy(r.text))} <span class="hb-pill" style="--ch:${CAT_HUE[C.id]}">${C.icon} ${esc(C.label)}</span>${rooms.map(x => ` <span class="hb-rm">${esc(x)}</span>`).join('')}${isUrgent({ orig: r.text, status: 'open' }) ? ' <span class="hb-urg">Urgent</span>' : ''}</span></div>`;
+    } else box.innerHTML = rowsHtml(`${HB.rows.length} items found — untick what should not go in`);
+    syncAdd();
+  });
+}
+function rowsHtml(title) {
+  const R = HB.rows || [];
+  if (!R.length) return `<div class="hb-hint">${HB.rowsKind === 'sugg' ? 'Nothing open in HotelOps right now. 👌' : 'Nothing to add.'}</div>`;
+  return `<div class="hb-hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${esc(title)}<button type="button" class="hb-q sm" data-hb="rowsall">${R.every(r => r.on) ? 'Untick all' : 'Tick all'}</button>${HB.rowsKind === 'sugg' ? '<button type="button" class="hb-q sm" data-hb="rowsclose">Close</button>' : ''}</div>`
+    + R.map((r, i) => { const C = catOf(r.cat); return `<label class="hb-pv${r.on ? '' : ' off'}"><input type="checkbox" data-hb-row="${i}"${r.on ? ' checked' : ''}><span class="tx">${esc(tidy(r.text))} <span class="hb-pill" style="--ch:${CAT_HUE[C.id]}">${C.icon} ${esc(C.label)}</span>${r.sender || r.time || r.from ? `<small>${esc([r.from, r.sender, r.time ? t12(r.time) : '', r.date && r.date !== HB.date ? dLong(r.date) : ''].filter(Boolean).join(' · '))}${r.chat ? ' · looks like chat' : ''}</small>` : r.chat ? '<small>looks like chat</small>' : ''}</span></label>`; }).join('');
+}
+function syncAdd() { const b = doc.getElementById('hbAddBtn'); if (!b) return; const n = HB.rows ? HB.rows.filter(r => r.on).length : 0; b.textContent = n > 1 ? `Add ${n}` : 'Add'; b.disabled = !n; }
+function addNow() {
+  const R = (HB.rows || []).filter(r => r.on);
+  if (!R.length) { const t = doc.getElementById('hbNew'); if (t) t.focus(); return; }
+  const day = HB.rowsKind === 'sugg' ? today() : HB.date;
+  const n = addItems(R.map(r => ({ text: (r.head ? r.head + ': ' : '') + r.text, sender: r.sender || '', time: r.time || '', date: HB.rowsKind === 'sugg' ? today() : r.date || day, cat: HB.draftCat || (HB.rowsKind === 'sugg' ? r.cat : ''), src: r.sender ? 'hand' : 'hand', from: r.from || '' })), day);
+  HB.draft = ''; HB.rows = null; HB.rowsKind = '';
+  const t = doc.getElementById('hbNew'); if (t) { t.value = ''; autosize(t); t.focus(); }
+  preview(); body();
+  toast(`Added ${n} item${n === 1 ? '' : 's'} to the handover`, 'ok');
+}
+function suggestions() {
+  const hk = safe(() => (W.hoWaBrain && typeof W.hoWaBrain.openRequests === 'function' ? W.hoWaBrain.openRequests() : []), []);
+  const ls = p => safe(() => (typeof lsLoad === 'function' ? lsLoad(p) : null), null);
+  const rooms = safe(() => (typeof depRooms !== 'undefined' && Array.isArray(depRooms) ? depRooms : []), []);
+  const have = new Set(itemsOf(today()).concat(itemsOf(HB.date)).map(i => sp(i.text).toLowerCase()));
+  return suggestFrom({ rooms, hk, mt: ls('opslogs/mt') || {}, lf: ls('opslogs/lf') || {}, now: new Date() }).filter(s => !have.has(tidy(s.text).toLowerCase()));
+}
+// ── Excel and e-mail ──
+function exportList(all) { return all ? itemsOf(HB.date).filter(i => !i.del && !i.chat) : shown(filterItems(itemsOf(HB.date), view())); }
+/** the .xlsx as bytes (styled when the zip tools are there), or null when Excel is not loaded */
+function workbookBytes(list) {
+  if (typeof XLSX === 'undefined' || !XLSX.utils) return null;
+  const S = SETTINGS(), rows = excelRows(list, { orig: S.orig }), sum = summaryRows(list, HB.date, hotel());
+  sum.rows.splice(1, 0, [writtenSummary(list)]);
+  sum.bold = sum.bold.map(n => (n > 1 ? n + 1 : n));
+  const wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = COL_W.slice(0, rows[0].length).map(w => ({ wch: w }));
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(0, rows.length - 1), c: rows[0].length - 1 } }) };
+  const ws2 = XLSX.utils.aoa_to_sheet(sum.rows); ws2['!cols'] = [{ wch: 26 }, { wch: 10 }, { wch: 12 }, { wch: 70 }, { wch: 16 }];
+  XLSX.utils.book_append_sheet(wb, ws, ('Handover ' + dLong(HB.date)).slice(0, 31));
+  XLSX.utils.book_append_sheet(wb, ws2, 'Summary');
+  let out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  // bold header with a light fill, the first row frozen, Item / Note wrapped (SheetJS community writes no styles)
+  safe(() => {
+    const C = XLSX.CFB; if (!C || typeof TextDecoder === 'undefined') return;
+    const z = C.read(new Uint8Array(out), { type: 'array' }), dec = new TextDecoder(), enc = new TextEncoder();
+    const get = p => C.find(z, '/' + p), txt = e => dec.decode(e.content), put = (e, s) => { e.content = enc.encode(s); e.size = e.content.length; };
+    const sty = get('xl/styles.xml'), s1 = get('xl/worksheets/sheet1.xml'), s2 = get('xl/worksheets/sheet2.xml');
+    if (!sty || !s1) return;
+    const P = polishStyles(txt(sty)); if (P.head < 0) return;
+    put(sty, P.xml);
+    put(s1, polishSheet(txt(s1), { head: P.head, wrap: P.wrap, boldRows: [1], wrapCols: ['G', 'J', 'K'], freeze: true }));
+    if (s2) put(s2, polishSheet(txt(s2), { head: P.head, wrap: P.wrap, boldRows: sum.bold, wrapCols: ['A', 'D'] }));
+    out = C.write(z, { fileType: 'zip', type: 'array' });
+  });
+  return out;
+}
+function download(bytes, name) {
+  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  const a = doc.createElement('a'); a.href = url; a.download = name; doc.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+function exportExcel(silent) {
+  const S = SETTINGS(), list = exportList(S.exp === 'all'), name = fileName(hotel(), HB.date);
+  if (!list.length) { toast('Nothing to export for ' + (S.exp === 'all' ? 'this day' : 'these filters'), 'warn'); return null; }
+  const bytes = safe(() => workbookBytes(list), null);
+  if (!bytes) { toast('Excel is not loaded (offline?) — try again in a moment', 'warn'); return null; }
+  download(bytes, name);
+  if (!silent) toast(`⬇ ${name} · ${list.length} item${list.length === 1 ? '' : 's'}`, 'ok');
+  safe(() => { if (typeof logActivity === 'function') logActivity('handover_export', `${name} (${list.length})`); });
+  return { name, list };
+}
+function email() {
+  const S = SETTINGS();
+  if (!recipients(S.to).length) { HB.settings = true; shell(); setTimeout(() => { const t = doc.getElementById('hbTo'); if (t) t.focus(); }, 30); toast('Add who receives the handover first (saved on this device)', 'info'); return; }
+  const r = exportExcel(true); if (!r) return;
+  const url = mailtoUrl(S.to, mailSubject(HB.date), mailBody(r.list, HB.date, hotel(), r.name), S.cc);
+  setTimeout(() => { try { W.location.href = url; } catch (_) {} }, 400);
+  toast(`⬇ ${r.name} downloaded — attach it to the e-mail that opens`, 'info');
+}
+// ── taps ──
+function saveEdit(el) {
+  const k = el.dataset.k, d = el.dataset.d, v = sp(el.value).trim().slice(0, 1000), it = itemsOf(d).find(i => i.key === k);
+  HB.edit = '';
+  if (it && v && v !== it.text) setField(d, k, { text: v, textBy: me() }); else body();
+}
+function removeItem(d, k, how) {
+  const it = itemsOf(d).find(i => i.key === k); if (!it) return;
+  if (how === 'reject') setField(d, k, { chat: 1, chatBy: me() });
+  else setField(d, k, { del: 1, delBy: me(), delAt: Date.now() });
+  const back = () => { setField(d, k, how === 'reject' ? { chat: null, chatBy: me() } : { del: null, delBy: null, delAt: null }); return true; };
+  const msg = how === 'reject' ? 'Moved to team chat' : 'Item deleted';
+  if (typeof showUndoToast === 'function') safe(() => showUndoToast(msg, back, 7000)); else toast(msg, 'info');
+}
+function onClick(e) {
+  safe(() => {
+    const rowCk = e.target.closest && e.target.closest('[data-hb-row]');
+    if (rowCk) { const r = (HB.rows || [])[+rowCk.dataset.hbRow]; if (r) { r.on = rowCk.checked; rowCk.closest('.hb-pv').classList.toggle('off', !r.on); syncAdd(); } return; }
+    const b = e.target.closest && e.target.closest('[data-hb]'); if (!b) { if (HB.menu && !e.target.closest('.hb-it')) { HB.menu = ''; body(); } return; }
+    const a = b.dataset.hb, k = b.dataset.k, d = b.dataset.d || HB.date, id = idOf(d, k);
+    const item = k ? itemsOf(d).find(i => i.key === k) : null;
+    switch (a) {
+      case 'prev': HB.date = dayAdd(HB.date, -1); HB.edit = HB.menu = HB.note = ''; render(); return;
+      case 'next': if (HB.date < today()) { HB.date = dayAdd(HB.date, 1); HB.edit = HB.menu = HB.note = ''; render(); } return;
+      case 'today': HB.date = today(); render(); return;
+      case 'shift': HB.shift = b.dataset.v; body(); return;
+      case 'st': HB.st = b.dataset.v; body(); return;
+      case 'stat': { const v = b.dataset.v; if (v === 'rooms') { HB.by = HB.by === 'room' ? 'time' : 'room'; LS.set(VIEW_KEY, { by: HB.by }); } else HB.st = HB.st === v ? 'all' : v; body(); return; }
+      case 'catf': HB.cat = b.dataset.v; body(); return;
+      case 'src': HB.src = b.dataset.v; body(); return;
+      case 'by': HB.by = b.dataset.v; LS.set(VIEW_KEY, { by: HB.by }); body(); return;
+      case 'more': HB.more = !HB.more; body(); return;
+      case 'clr': HB[b.dataset.v] = b.dataset.v === 'src' ? 'all' : ''; body(); return;
+      case 'fold': HB.fold[b.dataset.v] = !HB.fold[b.dataset.v]; body(); return;
+      case 'chat': HB.chat = !HB.chat; body(); return;
+      case 'room': HB.room = HB.room === b.dataset.r ? '' : b.dataset.r; body(); return;
+      case 'settings': HB.settings = !HB.settings; shell(); return;
+      case 'exp': { const S = SETTINGS(); S.exp = b.dataset.v; LS.set(SET_KEY, S); doc.querySelectorAll('#hbRoot [data-hb="exp"]').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); }); return; }
+      case 'saveset': {
+        const S = SETTINGS(); S.to = (doc.getElementById('hbTo') || {}).value || ''; S.cc = (doc.getElementById('hbCc') || {}).value || ''; S.orig = !!(doc.getElementById('hbOrig') || {}).checked;
+        const bad = sp(S.to + ',' + S.cc).split(/[,;\s]+/).filter(x => x && !recipients(x).length);
+        LS.set(SET_KEY, S); HB.settings = false; shell(); toast(bad.length ? `Saved · not an e-mail address: ${bad.slice(0, 3).join(', ')}` : 'Saved on this device', bad.length ? 'warn' : 'ok'); return;
+      }
+      case 'xlsx': exportExcel(); return;
+      case 'mail': email(); return;
+      case 'addsave': addNow(); return;
+      case 'sugg': { const L = suggestions(); HB.rows = L.map(s => ({ text: s.text, head: '', cat: s.cat, from: s.src, on: false })); HB.rowsKind = 'sugg'; preview(); return; }
+      case 'rowsall': { const on = !(HB.rows || []).every(r => r.on); (HB.rows || []).forEach(r => { r.on = on; }); preview(); return; }
+      case 'rowsclose': HB.rows = null; HB.rowsKind = ''; preview(); return;
+      case 'edit': if (item && !e.target.closest('a,button.hb-rm,mark')) { HB.edit = id; HB.menu = ''; body(); } return;
+      case 'menu': HB.menu = HB.menu === id ? '' : id; body(); return;
+      case 'note': HB.note = HB.note === id ? '' : id; HB.menu = ''; body(); return;
+      case 'orig': HB.orig = HB.orig === id ? '' : id; body(); return;
+    }
+    if (!item) return;
+    if (a === 'check') {
+      if (item.status === 'done') setField(d, k, { status: 'open', doneBy: null, doneAt: null });
+      else { setField(d, k, { status: 'done', doneBy: me(), doneAt: Date.now() }); safe(() => { const ck = b; if (ck.animate && !matchMedia('(prefers-reduced-motion: reduce)').matches) ck.animate([{ transform: 'scale(.6)' }, { transform: 'scale(1.18)' }, { transform: 'scale(1)' }], { duration: 320, easing: 'cubic-bezier(.2,.9,.3,1.4)' }); }); }
+    } else if (a === 'todo') { setField(d, k, { status: 'open', doneBy: null, doneAt: null }); HB.menu = ''; }
+    else if (a === 'info') { setField(d, k, { status: 'info', doneBy: null, doneAt: null }); HB.menu = ''; }
+    else if (a === 'setcat') { setField(d, k, { cat: b.dataset.c, catBy: me() }); HB.menu = ''; }
+    else if (a === 'retidy') { const el = doc.getElementById('hbEdit'); if (el) { el.value = tidy(item.orig || el.value); autosize(el); el.focus(); } return; }
+    else if (a === 'unchat') { setField(d, k, { chat: null, chatBy: me() }); toast('Added to the handover', 'ok'); }
+    else if (a === 'reject' || a === 'del') { HB.menu = ''; removeItem(d, k, a); }
+    body();
+  });
+}
+function mountPage() {
+  if (doc.getElementById('panel-' + PANEL)) return true;
+  const main = doc.querySelector('main.main') || doc.querySelector('main'), nav = doc.querySelector('nav.sidenav') || doc.querySelector('nav');
+  if (!main || !nav) return false;
+  const st = doc.createElement('style'); st.id = 'hb-page-style'; st.textContent = PCSS; doc.head.appendChild(st);
+  const panel = doc.createElement('div'); panel.className = 'panel'; panel.id = 'panel-' + PANEL;
+  panel.innerHTML = `<div id="hbRoot"></div>`;
+  main.appendChild(panel);
+  panel.addEventListener('click', onClick);
+  panel.addEventListener('input', e => safe(() => {
+    const t = e.target;
+    if (t.id === 'hbQ') { HB.q = t.value; clearTimeout(HB.qt); HB.qt = setTimeout(body, 110); }
+    else if (t.id === 'hbNew') { HB.draft = t.value; autosize(t); if (HB.rowsKind === 'sugg') { HB.rows = null; HB.rowsKind = ''; } clearTimeout(HB.pt); HB.pt = setTimeout(preview, 140); }
+    else if (t.id === 'hbEdit') autosize(t);
+  }));
+  panel.addEventListener('change', e => safe(() => {
+    const t = e.target;
+    if (t.id === 'hbDate') { const v = t.value; if (/^\d{4}-\d{2}-\d{2}$/.test(v)) { HB.date = v > today() ? today() : v; render(); } }
+    else if (t.id === 'hbSender') { HB.sender = t.value; body(); }
+    else if (t.id === 'hbGroup') { HB.group = t.value; body(); }
+    else if (t.id === 'hbNewCat') { HB.draftCat = t.value; preview(); }
+  }));
+  panel.addEventListener('keydown', e => safe(() => {
+    const t = e.target;
+    if (t.id === 'hbNew' && e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); addNow(); }
+    else if (t.id === 'hbNew' && e.key === 'Escape') { t.value = ''; HB.draft = ''; autosize(t); preview(); }
+    else if (t.id === 'hbEdit' && e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); saveEdit(t); }
+    else if (t.id === 'hbEdit' && e.key === 'Escape') { e.preventDefault(); HB.edit = ''; body(); }
+    else if (t.id === 'hbNoteIn' && e.key === 'Enter') { e.preventDefault(); const v = sp(t.value).trim().slice(0, 300); setField(t.dataset.d, t.dataset.k, { note: v || null, noteBy: v ? me() : null }); HB.note = ''; body(); }
+    else if (t.id === 'hbNoteIn' && e.key === 'Escape') { HB.note = ''; body(); }
+    else if (e.key === 'Escape' && HB.menu) { HB.menu = ''; body(); }
+  }));
+  panel.addEventListener('focusout', e => safe(() => { if (e.target.id === 'hbEdit' && HB.edit) setTimeout(() => { const el = doc.getElementById('hbEdit'); if (el && doc.activeElement !== el && !(doc.activeElement && doc.activeElement.dataset && doc.activeElement.dataset.hb === 'retidy')) saveEdit(el); }, 150); }));
+  // the frosted toolbar gets a hairline once it sticks
+  safe(() => { main.addEventListener('scroll', () => { const tb = doc.getElementById('hbTb'); if (tb && panel.classList.contains('active')) tb.classList.toggle('stuck', tb.getBoundingClientRect().top <= main.getBoundingClientRect().top + 1); }, { passive: true }); });
+  const item = doc.createElement('div');
+  item.className = 'nav-item'; item.id = 'nav-' + PANEL; item.dataset.panel = PANEL; item.setAttribute('onclick', "showPanel('" + PANEL + "')");
+  item.innerHTML = '<div class="nav-icon">📒</div>Handover Book';
+  const anchor = doc.getElementById('nav-ops-logs') || doc.getElementById('nav-shifts');
+  if (anchor && anchor.parentNode) anchor.after(item); else nav.appendChild(item);
+  const grid = doc.querySelector('.mob-more-grid');
+  if (grid) {
+    const b = doc.createElement('button'); b.className = 'mob-more-item'; b.dataset.panel = PANEL; b.type = 'button';
+    b.setAttribute('onclick', "showPanel('" + PANEL + "');(typeof closeMobMore==='function'?closeMobMore:typeof toggleMobMore==='function'?toggleMobMore:function(){})()");
+    b.innerHTML = '<span class="mob-item-icon">📒</span>Handover Book';
+    const after = grid.querySelector('.mob-more-item[data-panel="ops-logs"]') || grid.querySelector('.mob-more-item[data-panel="shifts"]');
+    if (after) after.after(b); else grid.appendChild(b);
+  }
+  if (typeof hoApplyIcons === 'function') safe(() => hoApplyIcons());
+  safe(() => {
+    if (typeof ROLES !== 'undefined') Object.keys(ROLES).forEach(r => { const p = ROLES[r] && ROLES[r].panels; if (p && p.includes('shifts') && !p.includes(PANEL)) p.push(PANEL); });
+    if (typeof currentProfile !== 'undefined' && currentProfile && typeof applyRole === 'function') applyRole(currentProfile.role);
+  });
+  let wasOn = false;
+  new MutationObserver(() => { const on = panel.classList.contains('active'); if (on && !wasOn) render(); wasOn = on; }).observe(panel, { attributes: true, attributeFilter: ['class'] });
+  return true;
+}
+let softT = 0;
+function soon() {
+  clearTimeout(softT);
+  softT = setTimeout(() => safe(() => {
+    if (!doc.getElementById('panel-' + PANEL)?.classList.contains('active')) return;
+    if (HB.edit || (doc.activeElement && doc.activeElement.id === 'hbNoteIn')) { clearTimeout(softT); softT = setTimeout(soon, 1500); return; }   // never redraw under a typing hand
+    body();
+  }), 120);
+}
+async function render() {
+  const my = ++HB.seq;
+  if (!HB.date) HB.date = today();
+  const root = doc.getElementById('hbRoot');
+  if (root && !root.firstChild) root.innerHTML = '<div class="hb-empty">Loading the handover…</div>';
+  await Promise.all([load(HB.date), load(dayAdd(HB.date, -1))]).catch(() => {});
+  if (my !== HB.seq) return;
+  if (doc.getElementById('hbNew')) { const t = doc.getElementById('hbNew'); HB.draft = t.value; }
+  shell();
+}
+// ── the shift handover (handover.js): open items from the Handover Book ──
+function wrapHandover() {
+  const o = W._hoTodo;
+  if (typeof o !== 'function' || o.__hb) return;
+  const f = function () {
+    const L = o.apply(this, arguments);
+    safe(() => {
+      const open = itemsOf(today()).concat(itemsOf(dayAdd(today(), -1))).filter(i => !i.del && i.status === 'open').sort(byTime);
+      if (open.length && Array.isArray(L)) L.push({ icon: '📒', head: `Handover Book: ${open.length} open`, items: open.slice(0, 10).map(i => `${t12(i.time)} · ${i.text || i.orig} (${i.sender || '—'})`).concat(open.length > 10 ? [`…and ${open.length - 10} more on the Handover Book page`] : []) });
+    });
+    return L;
+  };
+  f.__hb = true; f.__wab = o.__wab; W._hoTodo = f;
+}
+function start() {
+  safe(mountPage);
+  listenToday();
+  setTimeout(() => safe(drain), 1500);
+  [700, 2500, 6000].forEach(t => setTimeout(() => safe(wrapHandover), t));
+  setInterval(() => safe(() => { if (listenDay !== today()) listenToday(); }), 60e3);
+}
+W.hoHandoverBook = { fromWa, addByHand, addItems, suggestions: () => suggestions(), items: day => itemsOf(day || today()), load, render: () => render(), excel: () => exportExcel(), workbookBytes: list => workbookBytes(list || itemsOf(HB.date || today())), state: () => HB };
+if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start); else start();
+})();

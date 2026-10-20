@@ -1919,5 +1919,94 @@ console.log('\nWhatsApp × Ops Brain');
     _roOcrFix(people); people[4].day.slice(0, 5).join(' | ') + ' // ' + people[0].day[0]`), 'OFF | 18:00 - 04:00 ? | 18:00 - 04:00 ? | 18:00 - 04:00 ? | 19:00 - 04:00 // 19:00 - 04:00');
 }
 
+console.log('\nHandover Book');
+{
+  const sb = { console: { log() {}, warn() {}, error() {} } }; sb.window = sb; sb.globalThis = sb;
+  vm.createContext(sb);
+  for (const f of ['wa-bridge.js', 'wa-brain.js', 'handover-book.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sb, { filename: f });
+  const H = sb.hoHandoverPure, J = x => JSON.parse(JSON.stringify(x)), parse = sb.hoWaParse, opt = { parse };
+  // handover groups and the "HO -" mark
+  check('ho group: names with HO or handover', ['HO - Ibis Styles', 'Ibis HO', 'Shift Handover', 'hand-over FO', 'HK Ibis Styles', 'Hotel Ops', 'HOTEL TEAM', 'Housekeeping'].map(n => H.isHandoverGroup(n)), [true, true, true, true, false, false, false, false]);
+  check('ho group: switched on or off by hand wins', [H.isHandoverGroup('FO team', true), H.isHandoverGroup('HO - Ibis', false)], [true, false]);
+  check('ho mark: HO -, HO:, ho, H/O, Handover: start a handover item', ['HO - Room 512 to twin', 'HO: balance 300 412', 'ho 512 ED', 'H/O 305 refund', 'Handover: taxi 5am', 'HO-512 ok'].map(H.hoPrefix), ['Room 512 to twin', 'balance 300 412', '512 ED', '305 refund', 'taxi 5am', '512 ok']);
+  check('ho mark: HOTEL…, HOLD…, "Hold on", "Hotel 512 ok" and a bare "HO" do not', ['HOTEL guest in 512', 'HOLD 512', 'Hold on', 'Hotel 512 ok', 'HO', 'Housekeeping 512'].map(H.hoPrefix), [null, null, null, null, null, null]);
+  // shifts
+  check('shift: Morning 07–15, Afternoon 15–23, Night 23–07', ['07:00', '14:59', '15:00', '22:59', '23:00', '06:59', '00:30', ''].map(H.shiftOf), ['Morning', 'Morning', 'Afternoon', 'Afternoon', 'Night', 'Night', 'Night', '']);
+  check('shift: the boundaries are one constant', H.SHIFT_BOUNDS.map(s => s.id + ' ' + s.from / 60 + '-' + s.to / 60), ['Morning 7-15', 'Afternoon 15-23', 'Night 23-7']);
+  // splitting a message into items
+  check('split: bullets become items; greeting and thanks are dropped', J(H.splitItems('Good morning team\n- 305 balance AED 200 pending\n- 412 TD collected\n• 512 AC leaking, engineering informed\nThanks')).map(x => x.text),
+    ['305 balance AED 200 pending', '412 TD collected', '512 AC leaking, engineering informed']);
+  check('split: a heading "Pending:" goes with the lines under it', J(H.splitItems('Pending:\n305 refund\n412 invoice')), [{ text: '305 refund', head: 'Pending' }, { text: '412 invoice', head: 'Pending' }]);
+  check('split: a sentence carried on to the next line stays one item', J(H.splitItems('Guest in 305 asked for late checkout\nuntil 2pm, approved by manager')).map(x => x.text), ['Guest in 305 asked for late checkout until 2pm, approved by manager']);
+  check('split: numbered lines and "ok" under a list', J(H.splitItems('Handover morning shift\n1. 512 early depart\n2) 305 refund\nok')).map(x => x.text), ['512 early depart', '305 refund']);
+  check('split: one line is one item', J(H.splitItems('512 early departure')).length, 1);
+  // categories and status
+  const cs = t => H.categorize(t) + ' ' + H.statusOf(t, H.categorize(t));
+  check('category: front office topics', ['512 early depart', 'room 514 need to be shifted to 2beds', 'Upgrade 305 to suite', '305 balance AED 200 pending', 'Refund done 410', 'Invoice requested by company for 410', 'City ledger for 207',
+    '512 AC leaking', 'OOO 512 smell', 'Extra bed 305', 'Laundry for 512', 'Taxi booked to airport 5am room 210', 'Lost phone found in 310', 'Float 2000 handed over', 'Wake-up call 6am room 305', 'Passport copy missing 410',
+    'Police visit for 512', '305 DND no answer', 'VIP arriving 9pm room 701', 'Guest in 305 complained about noise', 'Breakfast for 305 at 6am', 'Late arrival 302 ETA 2am', 'Group arrival tomorrow 20 rooms pre-registered', 'No-show 214',
+    'Follow up tomorrow please', 'Printer in back office'].map(cs),
+    ['res open', 'move open', 'move open', 'pay open', 'pay info', 'pay open', 'pay info', 'maint open', 'maint open', 'hk info', 'hk info', 'transport info', 'lost info', 'cash info', 'desk info', 'desk open',
+     'desk info', 'desk open', 'guest open', 'guest info', 'fb info', 'res open', 'res open', 'res info', 'follow open', 'info info']);
+  // rooms and tags
+  check('rooms: rooms, not money, times, phone extensions or dates', ['Rm 324 towels at 4pm, ext 2245, AED 1200, 0113 and 405', '202 LCO 1800', '18/10/2026 call 201', 'pay 1,200 for 305', 'Oct 2026 room 512'].map(t => J(H.roomsOf(t))), [['324', '0113', '405'], ['202'], ['201'], ['305'], ['512']]);
+  check('tags: what the WhatsApp reader understands, and handover words', ['202 LCO 2pm', '324 CO', '0113 EXT 2N', 'VIP 701 birthday', '512 early depart', '512 balance pending'].map(t => H.tagsOf(t, parse).join(',')), ['LCO 2 PM', 'CO', 'EXT +2N', 'VIP,Celebration', 'ED', '']);
+  // tidy English
+  const TD = { 'room 512 have bad smell': 'Room 512 has a bad smell.', 'room 514 need to be shifted to 2beds': 'Room 514 needs to be shifted to 2 beds.', 'room 512 Early Depart': 'Room 512: early departure.',
+    'pls chk 305 balance tmrw': 'Please check 305 balance tomorrow.', 'Mr Gust called, he have TD pending': 'Mr Gust called, he has TD pending.', '324 CO': 'Room 324: check-out.', 'LCO 2pm for 202': 'Late check-out 2 PM for 202.',
+    'ac not working in 305 , engineering informed': 'AC not working in 305, engineering informed.', 'recieved payement from guset': 'Received payment from guest.', 'i will f/u w/ guest asap': 'I will follow-up with guest ASAP.',
+    'Room 512 has to be shifted to twc tomorrow': 'Room 512 has to be shifted to twin tomorrow.', 'the guest have to pay 200 aed before 6pm': 'The guest has to pay 200 AED before 6 PM.', '512 - balance AED 300 pending': 'Room 512: balance AED 300 pending.',
+    'Room 511 and Room 512 have no hot water': 'Room 511 and Room 512 have no hot water.', 'Did the guest have breakfast?': 'Did the guest have breakfast?', 'call ext 2245 for the guest': 'Call ext 2245 for the guest.', 'dont forget msg to u': "Don't forget message to you." };
+  check('tidy: clean, professional English', Object.keys(TD).map(H.tidy), Object.values(TD));
+  const digits = s => (s.match(/\d+/g) || []).join(' ');
+  const keepT = ['512 balance 1,200.50 AED, call +971 50 123 4567 at 18:30', 'Sam Lee in 0113 paid 300 on 20/10/2026 at 3.30pm', 'Mr Gust and Ms Pol in 214, conf 88213, 2N'];
+  check('tidy: never changes numbers, times or names', keepT.map(t => digits(H.tidy(t)) === digits(t) && ['Sam Lee', 'Gust', 'Pol'].every(n => !t.includes(n) || H.tidy(t).includes(n))), [true, true, true]);
+  // a message in another group: a handover item, or not?
+  const lk = t => H.looksLikeHandover(t, opt);
+  check('auto-pick: handover items from any group', ['512 early depart', 'room 514 need to be shifted to 2beds', '512 AC not working', 'Room 305 guest complained about noise', 'Taxi booked for 305 at 5am', 'Balance pending 412', 'Lost phone found in 310'].map(lk), [true, true, true, true, true, true, true]);
+  check('auto-pick: never room commands, HK requests or chat', ['324 CO', '202 LCO 6pm', '0113 EXT 2N', 'VD: 402, 518', '305 towels please', '201 cleaned', '514 checking out in 10 mins', 'guest in 514 left', 'Please check', 'ok noted', 'Good morning team'].map(lk), Array(11).fill(false));
+  // team chat in the handover group
+  check('ho group chat: kept aside', ['ok', 'Noted 👍', 'Thanks Sam', 'who is on shift?', 'on my way', '<Media omitted>', 'Good night team', 'done', '👍👍', 'yes'].map(H.isChat), Array(10).fill(true));
+  check('ho group chat: anything with substance is handover', ['512 balance 300', 'Mr Lee arriving 10 PM', 'Room 305 done', 'Please call the guest in the morning', 'who will collect the TD from 512?'].map(H.isChat), [false, false, false, false, false]);
+  const B = H.buildItems({ base: 'm1', date: '2026-10-20', time: '09:05', sender: 'Sam Test', group: 'HO - Test', text: 'Handover morning\n- 512 early depart\n- 305 balance AED 200 pending\nok' }, { parse, ho: true });
+  check('items: one per line, linked to the message, tidy + original kept', B.map(i => [i.key, i.msg, i.part + '/' + i.parts, i.text, i.orig, i.cat, i.status, i.shift, i.rooms.join()]),
+    [['m1_1', 'm1', '1/2', 'Room 512: early departure.', '512 early depart', 'res', 'open', 'Morning', '512'], ['m1_2', 'm1', '2/2', 'Room 305: balance AED 200 pending.', '305 balance AED 200 pending', 'pay', 'open', 'Morning', '305']]);
+  check('items: a lone "ok" in the handover group is team chat; "HO -" always counts', [H.buildItems({ base: 'a', time: '10:00', text: 'ok' }, { parse, ho: true })[0].chat, H.buildItems({ base: 'b', time: '10:00', text: 'HO - ok 512 moved to twin' }, { parse, ho: true })[0].chat, H.buildItems({ base: 'c', time: '10:00', text: 'HO - Room 512 to twc tomorrow' }, { parse })[0].text],
+    [1, undefined, 'Room 512 to twin tomorrow.']);
+  // paste anything
+  const PA = J(H.pasteItems('[1:07 PM, 20/10/2026] Sam Test: 512 early depart\n[1:09 PM, 20/10/2026] Lina Demo: ok\n[1:10 PM, 20/10/2026] Lina Demo: HO - 305 balance pending', { parseCopied: sb.hoWaParseCopied }));
+  check('paste: a copied WhatsApp chat keeps who and when; chat is marked', PA.map(x => [x.text, x.sender, x.time, x.date, x.chat]), [['512 early depart', 'Sam Test', '13:07', '2026-10-20', false], ['ok', 'Lina Demo', '13:09', '2026-10-20', true], ['305 balance pending', 'Lina Demo', '13:10', '2026-10-20', false]]);
+  check('paste: an e-mail without headers, greeting, signature or quotes', J(H.pasteItems('From: Front Office\nSubject: handover\n\nDear team,\n\n1. 512 early departure tomorrow\n2. 305 refund AED 200 pending\n\nRegards\n-- \nAlex Demo\n> old quoted')).map(x => x.text), ['512 early departure tomorrow', '305 refund AED 200 pending']);
+  check('paste: Opera trace notes, one per stamp with its time', J(H.pasteItems('20-OCT-26 14:05 JDOE Guest requests late c/o 2pm room 512\n20-OCT-26 15:10 ASMITH Airport pickup booked 6am 305')).map(x => x.time + ' ' + x.text), ['14:05 Guest requests late c/o 2pm room 512', '15:10 Airport pickup booked 6am 305']);
+  check('paste: a typed list', J(H.pasteItems('512 ED\n305 taxi 5am\n410 TD pending')).length, 3);
+  // suggestions from HotelOps' own data
+  const SG = J(H.suggestFrom({ rooms: [{ roomStr: '512', status: 'late', lateTime: '14:00' }, { roomStr: '305', intent: 'finance_hold', finWho: 'Accounts', status: 'due' }, { roomStr: '210', status: 'out', note: 'x' }], hk: [{ room: '201', what: 'towels', s: 'HK Ana', t: '09:00' }],
+    mt: { a: { area: '512', problem: 'AC leaking', status: 'open' }, b: { area: '601', problem: 'TV', status: 'fixed' } }, lf: { c: { what: 'black phone', room: '310', status: 'found', at: Date.now() } }, now: new Date(2026, 9, 20, 15, 0) }));
+  check('suggestions: late check-out past time, finance hold, open HK request, open ticket, lost & found (not checked-out rooms or fixed tickets)', SG.map(s => s.cat + ': ' + s.text), ['res: Room 512: late check-out until 2 PM — time has passed.', 'pay: Room 305: guest left — waiting for Accounts before check-out.', 'hk: Room 201: towels still open (asked by HK Ana at 9:00 AM).', 'maint: Room 512: AC leaking — maintenance ticket open.', 'lost: Lost & found: black phone from Room 310.']);
+  // filters, summary, Excel, e-mail
+  const day = B.concat([{ key: 'x', date: '2026-10-20', time: '16:10', shift: 'Afternoon', sender: 'Lina Demo', text: 'VIP in 701.', orig: 'VIP in 701', cat: 'guest', rooms: ['701'], tags: ['VIP'], status: 'done', doneBy: 'Lina Demo', doneAt: new Date(2026, 9, 20, 17, 5).getTime(), note: 'Amenity sent', src: 'copy', group: 'HK Ibis' },
+    { key: 'y', date: '2026-10-20', time: '10:00', text: 'ok', orig: 'ok', chat: 1, status: 'info' }, { key: 'z', date: '2026-10-20', time: '11:00', text: 'gone', del: 1, status: 'open' }]);
+  check('filter: shift, status, room, search, source; chat and deleted never show', [{ shift: 'Afternoon' }, { st: 'open' }, { room: '701' }, { q: 'balance' }, { src: 'auto' }, { src: 'marked' }, {}].map(f => H.filterItems(day, f).map(i => i.key).join()), ['x', 'm1_1,m1_2', 'x', 'm1_2', 'x', 'm1_1,m1_2', 'm1_1,m1_2,x']);
+  check('summary: items, open, done, rooms', (({ items, open, done, rooms }) => [items, open, done, rooms])(H.summaryOf(day)), [3, 2, 1, 3]);
+  check('urgent: VIP / complaint / ASAP while not done', [H.isUrgent({ orig: 'VIP 701 arriving', status: 'open' }), H.isUrgent({ orig: 'guest complained', status: 'info' }), H.isUrgent(day[2]), H.isUrgent({ orig: '512 ED', status: 'open' })], [true, true, false, false]);
+  const XR = H.excelRows(day);
+  check('excel: the columns', XR[0], ['Date', 'Shift', 'Time', 'From', 'Category', 'Rooms', 'Item', 'Status', 'Done by', 'Note']);
+  check('excel: rows in time order, tidy text, done by, note', XR.slice(1).map(r => r.join(' | ')), ['20/10/2026 | Morning | 9:05 AM | Sam Test | Reservations | 512 | Room 512: early departure. [ED] | Open |  | ', '20/10/2026 | Morning | 9:05 AM | Sam Test | Payment & billing | 305 | Room 305: balance AED 200 pending. | Open |  | ',
+    '20/10/2026 | Afternoon | 4:10 PM | Lina Demo | Guest / complaint | 701 | VIP in 701. [VIP] | Done | Lina Demo · 5:05 PM | Amenity sent']);
+  check('excel: the original text as an extra column', H.excelRows(day, { orig: true }).map(r => r[10]), ['Original', '512 early depart', '305 balance AED 200 pending', 'VIP in 701']);
+  const SR = H.summaryRows(day, '2026-10-20', 'Test Hotel');
+  check('excel summary: counts by category and shift, the open items', [SR.rows[0][0], SR.rows.find(r => r[0] === 'Payment & billing').join(), SR.rows.find(r => r[0] === 'Morning').join(), SR.rows.filter(r => r.length === 5 && r[1] !== 'Time').length, SR.bold.length], ['Shift handover – 20 Oct 2026 – Test Hotel', 'Payment & billing,1,1', 'Morning,2,2', 2, 4]);
+  check('excel: the file name', [H.fileName('Ibis Styles', '2026-10-20'), H.fileName('A/B: Hotel', '2026-01-05')], ['Handover - Ibis Styles - 20 Oct 2026.xlsx', 'Handover - A B Hotel - 5 Jan 2026.xlsx']);
+  const st = H.polishStyles('<styleSheet><fonts count="1"><font/></fonts><fills count="2"><fill/><fill/></fills><cellXfs count="1"><xf/></cellXfs></styleSheet>');
+  const sh = H.polishSheet('<worksheet><sheetViews><sheetView workbookViewId="0"/></sheetViews><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c></row><row r="2"><c r="G2" t="s"><v>1</v></c><c r="B2"/></row></sheetData></worksheet>', { head: st.head, wrap: st.wrap, boldRows: [1], wrapCols: ['G'], freeze: true });
+  check('excel: bold header style, wrapped column and frozen first row are written in the XML', [st.head, st.wrap, /<fonts count="2">.*<b\/>/.test(st.xml), /<cellXfs count="3">/.test(st.xml), /<c s="1" r="A1"/.test(sh), /<c s="2" r="G2"/.test(sh), /<c r="B2"\/>/.test(sh), /state="frozen"/.test(sh)], [1, 2, true, true, true, true, true, true]);
+  check('e-mail: subject and a body with the summary and open items', [H.mailSubject('2026-10-20'), /2 open/.test(H.mailBody(day, '2026-10-20', 'Test Hotel', 'f.xlsx')), /• 9:05 AM · Room 512 · Room 512: early departure\./.test(H.mailBody(day, '2026-10-20', '', '')), /attach/.test(H.mailBody(day, '2026-10-20', '', 'f.xlsx'))], ['Shift handover – 20 Oct 2026', true, true, true]);
+  check('e-mail: recipients and the mailto link', [J(H.recipients('a@x.com; b@y.org, nope')), H.mailtoUrl('a@x.com,b@y.org', 'S – 1', 'x y', 'c@z.com')], [['a@x.com', 'b@y.org'], 'mailto:a%40x.com,b%40y.org?cc=c%40z.com&subject=S%20%E2%80%93%201&body=x%20y']);
+  check('written summary', H.writtenSummary(day), '3 items · 2 open · 1 done. Still to do: Room 512: early departure; Room 305: balance AED 200 pending.');
+  // the WhatsApp reader shows handover groups as handover (never CO / LCO)
+  const RD = require(path.join(ROOT, 'tools/hotelops-whatsapp.console.js'));
+  check('reader: handover group and "HO -" mark', [RD.isHoGroup('HO - Ibis Styles'), RD.isHoGroup('HK Ibis'), RD.hoMarked('HO - 512 twin'), RD.hoMarked('HOTEL 512'), J(RD.hoChips('324 CO 512'))], [true, false, true, false, [{ tone: 'ho', label: '📋 Handover · 324, 512' }]]);
+}
+
 console.log(`\n${pass} passed · ${fail} failed`);
 process.exit(fail ? 1 : 0);

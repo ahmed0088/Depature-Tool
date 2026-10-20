@@ -76,6 +76,18 @@
     if (!out.length) return [{ tone: 'off', label: '— ignored' }];
     return out;
   }
+  /** a handover group ("HO - Ibis Styles", "Shift handover"): HotelOps saves it to the Handover Book, rooms are not changed */
+  var HO_GRP = /\bHO\b|hand\s*-?\s*over/i;
+  function isHoGroup(name) { return HO_GRP.test(sp(name || '')); }
+  /** "HO - 512 to twin tomorrow", "HO: …", "H/O …", "Handover: …" (not "HOTEL…", "HOLD…"): a note for the next shift in any group */
+  var HO_MARK = /^\s*(?:\*\s*)?(?:HO|H\/O|hand\s*-?\s*over)(?![A-Za-z0-9])\s*\*?\s*[-–—:.,|>]*\s*/i;
+  function hoMarked(text) { var s = sp(text), m = s.match(HO_MARK); return !!m && !!s.slice(m[0].length).trim(); }
+  /** a handover message's chips: one "📋 Handover" chip and its rooms (never CO / LCO / EXT) */
+  function hoChips(text) {
+    var rooms = [], m, re = /(?:^|[^\d:\/.,])(\d{3,4})(?![\d:\/]|\s*(?:aed|dhs?|am|pm|%))/gi, s = sp(hoMarked(text) ? String(text).replace(HO_MARK, '') : text);
+    while ((m = re.exec(s)) && rooms.length < 4) { if (rooms.indexOf(m[1]) < 0) rooms.push(m[1]); }
+    return [{ tone: 'ho', label: '📋 Handover' + (rooms.length ? ' · ' + rooms.join(', ') : '') }];
+  }
   /** a chat-list preview "Sam: 324 CO" → {sender, text, mine} */
   function splitPreview(s, sender) {
     s = sp(s).replace(/\s+/g, ' ').trim();
@@ -113,7 +125,7 @@
   var isHo = function (t) { return HP ? HP.isHoText(t) : /⁣|^\s*✅\s*HotelOps\b/.test(String(t || '')); };
 
   var H = { parsePre: parsePre, dateIso: dateIso, isToday: isToday, todayIso: todayIso, copyLine: copyLine, copyText: copyText, isMineId: isMineId, chips: chips, parser: HP, MARK: MARK,
-    groupMatch: groupMatch, wordsLookup: wordsLookup, splitPreview: splitPreview, listTime: listTime, msgTs: msgTs, relTime: relTime, bins: bins, hashId: hashId, sameText: sameText };
+    groupMatch: groupMatch, isHoGroup: isHoGroup, hoMarked: hoMarked, hoChips: hoChips, wordsLookup: wordsLookup, splitPreview: splitPreview, listTime: listTime, msgTs: msgTs, relTime: relTime, bins: bins, hashId: hashId, sameText: sameText };
   if (typeof module !== 'undefined' && module.exports) { module.exports = H; return; }
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
 
@@ -576,7 +588,7 @@
   var ACT = { maybe: ['#a78bfa', '#ddd6fe', 'rgba(139,92,246,.12)', '🤔'], co: [ACC, ACC_L, 'rgba(' + ACC_RGB + ',.14)', '✓'], findone: [ACC, ACC_L, 'rgba(' + ACC_RGB + ',.12)', '✓'],
     lco: ['#f59e0b', '#fcd34d', 'rgba(245,158,11,.14)', '⏰'], ext: ['#2dd4bf', '#99f6e4', 'rgba(45,212,191,.14)', '↪'], extending: ['#2dd4bf', '#99f6e4', 'rgba(45,212,191,.10)', '⏳'],
     fin: ['#fb923c', '#fed7aa', 'rgba(251,146,60,.14)', '🧾'], note: ['#a78bfa', '#ddd6fe', 'rgba(139,92,246,.16)', '✎'],
-    ask: ['#fbbf24', '#fde68a', 'rgba(251,191,36,.12)', '?'], req: ['#53bdeb', '#b6e3f7', 'rgba(83,189,235,.14)', '📝'], bad: ['#ef4444', '#fca5a5', 'rgba(239,68,68,.15)', '⚠'], off: ['#6b7280', '#9aa3b2', 'rgba(255,255,255,.05)', '·'] };
+    ho: ['#818cf8', '#c7d2fe', 'rgba(129,140,248,.14)', '📋'], ask: ['#fbbf24', '#fde68a', 'rgba(251,191,36,.12)', '?'], req: ['#53bdeb', '#b6e3f7', 'rgba(83,189,235,.14)', '📝'], bad: ['#ef4444', '#fca5a5', 'rgba(239,68,68,.15)', '⚠'], off: ['#6b7280', '#9aa3b2', 'rgba(255,255,255,.05)', '·'] };
   var ROOM_TONES = /^(?:co|lco|ext|extending|maybe|fin|findone|bad)$/;
   function el(tag, css, text, parent) {
     var e = document.createElement(tag);
@@ -791,7 +803,7 @@
   /** which filter chips a row belongs to */
   function kindsOf(ch) {
     var k = { all: true };
-    ch.forEach(function (c) { if (ROOM_TONES.test(c.tone)) k.rooms = true; else if (c.tone === 'note' || c.tone === 'req') k.notes = true; else if (c.tone === 'ask') k.asks = true; });
+    ch.forEach(function (c) { if (ROOM_TONES.test(c.tone)) k.rooms = true; else if (c.tone === 'note' || c.tone === 'req' || c.tone === 'ho') k.notes = true; else if (c.tone === 'ask') k.asks = true; });
     if (!k.rooms && !k.notes && !k.asks) k.other = true;
     return k;
   }
@@ -834,7 +846,7 @@
     opt = opt || {};
     var old = feed.filter(function (f) { return f.id === m.id || (!m.preview && f.preview && f.group === m.group && sameText(f.text, m.text) && Math.abs(msgTs(f.rawTime) - msgTs(m.time)) < 60000); });
     old.forEach(function (o) { feed = feed.filter(function (f) { return f !== o; }); if (o.node) o.node.remove(); });
-    var ch = chips(m.text, words, m.quote);
+    var ch = isHoGroup(m.group) || hoMarked(m.text) ? hoChips(m.text) : chips(m.text, words, m.quote);
     var f = { id: m.id, rawTime: m.time, at: msgTs(m.time), time: shortTime(m.time), sender: m.sender || (m.mine ? 'Me' : ''), text: m.text, edited: m.edited, chips: ch, state: 'wait', group: m.group || '', preview: !!m.preview, truncated: !!m.truncated, missed: opt.missed || 0,
       acts: ch.filter(function (c) { return /^(?:co|lco|ext|extending)$/.test(c.tone); }).length };
     f.kinds = kindsOf(ch);
@@ -852,6 +864,7 @@
     var bd = el('div', 'flex:1;min-width:0', null, r);
     var top = el('div', 'display:flex;align-items:baseline;gap:6px;min-width:0', null, bd);
     el('span', 'flex:0 1 auto;min-width:0;font-weight:700;font-size:12px;color:' + TXT + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis', f.sender + (f.edited ? ' ✎' : ''), top);
+    if (isHoGroup(f.group)) el('span', 'flex:none;font:600 9.5px/1.4 ' + SANS + ';padding:0 6px;border-radius:99px;color:#c7d2fe;background:rgba(129,140,248,.16)', '📋 Handover', top);
     if (f.group && groups.length > 1) el('span', 'flex:0 1 auto;min-width:0;max-width:96px;font:600 9.5px/1.4 ' + SANS + ';padding:0 6px;border-radius:99px;color:#b6e3f7;background:rgba(83,189,235,.14);white-space:nowrap;overflow:hidden;text-overflow:ellipsis', f.group, top);
     if (f.preview) el('span', 'flex:none;font:600 9.5px/1.4 ' + SANS + ';padding:0 6px;border-radius:99px;color:#fcd34d;background:rgba(245,158,11,.14)', 'preview', top);
     f.relEl = el('span', 'margin-left:auto;flex:none;font:500 10px/1 ' + MONO + ';color:' + TXT3, relTime(f.at), top);
@@ -883,6 +896,7 @@
       if (!r || typeof r !== 'object') return;
       var room = String(r.room || '').slice(0, 8), t = String(r.text || '');
       if (r.st === 'req') add.push({ tone: 'req', label: '📝 Request · ' + room });
+      else if (r.st === 'ho') add.push({ tone: 'ho', label: /team chat/i.test(t) ? '💬 team chat · not added' : /also in/i.test(t) ? '📋 also in the handover' : '📋 saved to handover' });
       else if (r.st === 'wait') add.push({ tone: 'req', label: '⏳ ' + room + ' waits for today\'s list' });
       else if (r.st === 'notlist') { bad.push(room); add.push({ tone: 'bad', label: '⚠ ' + room + (/not found/.test(t) ? ' not found' : ' not on list') }); }
       else if (/ · added from /.test(t)) add.push({ tone: 'req', label: '＋ ' + room + ' added from ' + t.split(' · added from ')[1] });
@@ -964,6 +978,7 @@
       var t1 = el('div', 'display:flex;align-items:center;gap:7px;min-width:0', null, r);
       el('span', 'flex:none;width:7px;height:7px;border-radius:50%;background:' + (isOpen ? ACC : '#6b7280') + (isOpen ? ';box-shadow:0 0 8px ' + ACC : ''), null, t1);
       el('span', 'flex:1;min-width:0;font-weight:700;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis', g.name, t1).title = g.name;
+      if (isHoGroup(g.name)) el('span', 'flex:none;font:600 9.5px/1.4 ' + SANS + ';padding:1px 7px;border-radius:99px;color:#c7d2fe;background:rgba(129,140,248,.16)', '📋 Handover', t1).title = 'Saved to the Handover Book in HotelOps · rooms are not changed';
       el('span', 'flex:none;font-size:10px;color:' + (isOpen ? ACC_L : '#9aa3b2'), isOpen ? 'open · read fully' : 'closed · latest message', t1);
       var rm = el('button', ICONB + 'width:22px;height:22px;font-size:11px', '✕', t1); rm.type = 'button'; rm.title = 'Remove this group'; rm.setAttribute('aria-label', 'Remove ' + g.name); ring2(rm);
       hover(rm, 'background:rgba(239,68,68,.18);color:#fca5a5;', 'background:transparent;color:' + TXT2 + ';');

@@ -689,9 +689,9 @@ const DAYS = {}, AT = {};
 let ver = 0, loading = null, lastLogSig = '';
 function logEntries() {
   const L = safe(() => (W.hoWaBridge && typeof W.hoWaBridge.log === 'function' ? W.hoWaBridge.log() : null), null);
-  if (Array.isArray(L)) return L;
+  if (Array.isArray(L)) return L.filter(e => e && !e.ho);   // handover-group messages live in the Handover Book
   const v = LS.get('ho_wa_log_v1', null);
-  return v && v.date === today() && Array.isArray(v.items) ? v.items : [];
+  return v && v.date === today() && Array.isArray(v.items) ? v.items.filter(e => e && !e.ho) : [];
 }
 const normX = s => sp(s).replace(/\s+/g, ' ').trim().slice(0, 200).toLowerCase();
 /** today's messages: the local log (newest first) and today's backup, one record each */
@@ -1652,6 +1652,8 @@ function start() {
   setInterval(tick, 60e3);
   setTimeout(tick, 6000);
   setTimeout(() => ensure30(), 8000);
+  // for the Handover Book's "From HotelOps today"
+  W.hoWaBrain = Object.assign(W.hoWaBrain || {}, { openRequests: () => safe(() => reqItems(today()).filter(i => i.st === 'open'), []) });
   setInterval(() => { if (Object.keys(DAYS).length) loadDays([today()]).then(ch => { if (ch) softRefresh(); }).catch(() => {}); }, 3 * 60e3);
 }
 if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start); else start();

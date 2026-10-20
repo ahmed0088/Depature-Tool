@@ -607,7 +607,7 @@ function safeKey(id) { return String(id == null ? '' : id).replace(/[.#$\[\]\/\x
 function hashKey(s) { s = String(s); let h = 5381, g = 7; for (let i = 0; i < s.length; i++) { h = ((h << 5) + h + s.charCodeAt(i)) | 0; g = (g * 31 + s.charCodeAt(i)) | 0; } return 'p' + (h >>> 0).toString(36) + (g >>> 0).toString(36); }
 /** results of one message → the compact r string */
 function archR(res) { return res.map(r => [r.st, r.room || '', r.d || ''].filter(Boolean).join(' ')).join(' · '); }
-const R_LABEL = { fin: '🧾 waiting for', extending: '⏳ Extending', deleted: '🗑 deleted', co: '✓ CO', lco: '⏰ LCO', ext: '↪ EXT', note: '📝 note', req: '📝 Request · room', maybe: '🤔 might extend', wait: '⏳ waiting for today\'s list', notlist: '⚠ not on list', skip: '· skipped', none: '— no room', ignore: '— HotelOps post', log: '🗂 log only', preview: '👁 preview', ask: '❓ asked' };
+const R_LABEL = { fin: '🧾 waiting for', extending: '⏳ Extending', deleted: '🗑 deleted', co: '✓ CO', lco: '⏰ LCO', ext: '↪ EXT', note: '📝 note', req: '📝 Request · room', maybe: '🤔 might extend', wait: '⏳ waiting for today\'s list', notlist: '⚠ not on list', skip: '· skipped', none: '— no room', ignore: '— HotelOps post', log: '🗂 log only', preview: '👁 preview', ask: '❓ asked', ho: '📋 handover' };
 /** r → chips [{st, label}] */
 function archChips(r) {
   if (!r) return [{ st: 'none', label: '— not acted on (not from that day)' }];
@@ -689,6 +689,7 @@ function entryKinds(l) {
     if (r.st === 'note' || r.st === 'req') k.add('notes');
     if (r.st === 'notlist' || r.st === 'ask' || (r.st === 'deleted' && / check/.test(r.text || '')) || /nights not said|could not read/.test(r.text || '') || (balInfo(r) || {}).tone === 'warn') k.add('attention');
     if (/^(?:none|ignore|log|preview)$/.test(r.st)) k.add('ignored');
+    if (r.st === 'ho') k.add('notes');
   });
   if (l && l.undone) { k.delete('actions'); k.add('ignored'); }
   return k;
@@ -1063,7 +1064,69 @@ const LS_GRP = 'ho_wa_grp_v1', LS_PV = 'ho_wa_pv_v1', LS_ASK = 'ho_wa_ask_v1', L
 const gKey = g => normS(g).toLowerCase();
 let GRP = (() => { const g = lsGet(LS_GRP, {}); return g && typeof g === 'object' ? g : {}; })();
 function groupActs(msg) { if (msg && msg.act === false) return false; const g = GRP[gKey(msg && msg.group || '')]; return !(g && g.act === false); }
-function setGroupAct(name, on) { GRP[gKey(name)] = { name, act: !!on }; lsSet(LS_GRP, GRP); renderCard(); }
+function setGroupAct(name, on) { GRP[gKey(name)] = Object.assign({}, GRP[gKey(name)], { name, act: !!on }); lsSet(LS_GRP, GRP); renderCard(); }
+// A handover group (its name has "HO" or "handover" in it, or switched on here): everything posted there goes to the
+// 📒 Handover Book (handover-book.js) and no room is changed. Other groups copy messages that read like handover items.
+const HO_RX = /\bHO\b|hand\s*-?\s*over/i;
+function groupIsHo(group) {
+  const g = GRP[gKey(group || '')], set = g && typeof g.ho === 'boolean' ? g.ho : undefined;
+  if (!normS(group) && set === undefined) return false;
+  try { if (W.hoHandoverPure) return W.hoHandoverPure.isHandoverGroup(group, set); } catch (_) {}
+  return set !== undefined ? set : HO_RX.test(normS(group));
+}
+function groupCopies(group) { const g = GRP[gKey(group || '')]; return !(g && g.copy === false); }
+function setGroupHo(name, on) { GRP[gKey(name)] = Object.assign({}, GRP[gKey(name)], { name, ho: !!on }); lsSet(LS_GRP, GRP); renderCard(); }
+function setGroupCopy(name, on) { GRP[gKey(name)] = Object.assign({}, GRP[gKey(name)], { name, copy: !!on }); lsSet(LS_GRP, GRP); renderCard(); }
+/** hand one message to the Handover Book (kept for later when the book is not loaded yet) */
+function hoBook(p) {
+  try { if (W.hoHandoverBook && typeof W.hoHandoverBook.fromWa === 'function') { Promise.resolve(W.hoHandoverBook.fromWa(p)).catch(() => {}); return; } } catch (_) {}
+  const q = lsGet('hb_queue_v1', []); (Array.isArray(q) ? q : []).push(p); lsSet('hb_queue_v1', (Array.isArray(q) ? q : [p]).slice(-200));
+}
+const hoBase = (msg, dIso, t24, sender, text) => (msg.id ? safeKey(msg.id) : hashKey(dIso + '|' + t24 + '|' + sender.toLowerCase() + '|' + normS(text)));
+/** a message from another group that reads like a handover item ("512 early departure", "move 514 to twin"…): also in the book */
+function hoCopy(msg, dIso, t24, sender, group, text, edited) {
+  try {
+    if (msg.preview || !groupCopies(group) || !W.hoHandoverPure) return false;
+    const HP2 = W.hoHandoverPure, opt = { parse: t => hoWaParse(t) };
+    const lines = String(text).split(/\n/).filter(l => l.trim());
+    if (!HP2.looksLikeHandover(text, opt) && !lines.some(l => HP2.looksLikeHandover(l, opt)) && !edited) return false;
+    const base0 = hoBase(msg, dIso, t24, sender, text), done = loadDone(), dk = 'hc:' + base0, sig = hashKey(normS(text)), seen = String(done[dk] || '').split('|').filter(Boolean);
+    if (seen.includes(sig)) return false;                                            // seen before: never twice, never an older version over a newer one
+    done[dk] = seen.concat(sig).slice(-8).join('|'); saveDone(done); edited = edited || seen.length > 0;
+    hoBook({ kind: 'msg', copy: true, base: hoBase(msg, dIso, t24, sender, text), mid: msg.id ? String(msg.id).slice(0, 200) : '', date: dIso, time: t24, sender, group, text, edited: !!edited, at: Date.now() });
+    return true;
+  } catch (_) { return false; }
+}
+/** a message in a handover group: saved to the book only (never changes the board) */
+/** "HO - …", "HO: …", "H/O …", "Handover: …" at the start of a message (not "HOTEL", "HOLD") */
+function hoMarked(text) {
+  try { if (W.hoHandoverPure) return W.hoHandoverPure.hoPrefix(text) != null; } catch (_) {}
+  const m = sp(text).match(/^\s*(?:\*\s*)?(?:HO|H\/O|hand\s*-?\s*over)(?![A-Za-z0-9])\s*\*?\s*[-–—:.,|>]*\s*/i);
+  return !!m && !!sp(text).slice(m[0].length).trim();
+}
+function handleHo(msg, via, text, sender, group, dIso, src) {
+  if (via === 'link' && !ready()) return 'wait';
+  if (!text.trim() || msg.preview) return 'dup';      // a chat-list preview: the handover is read in full when the group is open
+  const t24 = waTime24(msg.time) || (dIso === today() ? hhmm() : '');
+  const base = hoBase(msg, dIso, t24, sender, text), mid = msg.id ? String(msg.id).slice(0, 200) : '';
+  // the same message (id + text) is never saved twice; an older version read late (scrolling, searching) never undoes an edit
+  const done = loadDone(), dk = 'h:' + base, sig = hashKey(normS(text)), seen = String(done[dk] || '').split('|').filter(Boolean);
+  if (seen.includes(sig)) return 'dup';
+  const edited = seen.length > 0 || !!msg.edited;
+  done[dk] = seen.concat(sig).slice(-8).join('|'); saveDone(done);
+  hoBook({ kind: 'msg', src: src || 'wa', base, mid, date: dIso, time: t24, sender, group, text, edited, at: Date.now() });
+  let n = 1, chat = false;
+  try { const HP2 = W.hoHandoverPure; if (HP2) { const L = HP2.splitItems(HP2.hoPrefix(text) || text); n = L.length || 1; chat = src !== 'prefix' && L.length > 0 && L.every(p => HP2.isChat(p.text)); } } catch (_) {}
+  const r = { st: 'ho', room: '', text: chat ? '💬 Team chat · kept in the Handover Book, not added' : '📋 Saved to the Handover Book' + (n > 1 ? ' · ' + n + ' items' : '') + (src === 'prefix' ? ' · marked HO' : '') + (edited ? ' (edited)' : '') };
+  ACK_RES = [{ st: 'ho', room: '', text: r.text }];
+  if (dIso === today()) {
+    let l = mid ? LOG.find(x => x.mid === mid) : null;
+    if (l) { l.text = text.slice(0, 500); l.edited = true; l.res = [r]; delete l.deleted; }
+    else { l = { key: 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), at: Date.now(), time: t24, sender, text: text.slice(0, 500), mine: !!msg.mine, edited, via, ho: 1, res: [r] }; if (group) l.group = group; if (mid) l.mid = mid; LOG.unshift(l); }
+    saveLog(); renderCard(); tell(l);
+  }
+  return 'done';
+}
 function loadPv() { const v = lsGet(LS_PV, null); return v && v.date === today() && v.map ? v.map : {}; }
 function savePv(map) { const ks = Object.keys(map); if (ks.length > 300) ks.slice(0, ks.length - 300).forEach(k => delete map[k]); lsSet(LS_PV, { date: today(), map }); }
 /** a chat-list preview is acted on only when it is a short, complete command */
@@ -1091,12 +1154,14 @@ let ACK_RES = null;   // what the last message did, sent back with the "got it" 
 function handle(msg, via, opt) {
   opt = opt || {};
   ACK_RES = null;
-  if (msg && msg.deleted) return onDeleted(msg);
+  if (msg && msg.deleted) { if (msg.id) hoBook({ kind: 'del', base: safeKey(msg.id), mid: String(msg.id).slice(0, 200) }); return onDeleted(msg); }
   const text = String(msg && msg.text || '').slice(0, 4000);
   const sender = normS(msg && msg.sender || '').slice(0, 60) || (msg && msg.mine ? 'Me' : 'WhatsApp');
   const group = normS(msg && msg.group || '').slice(0, 80);
   const tIso = today();
   const dIso = msg.date ? waDateISO(msg.date, new Date()) : tIso;
+  if (groupIsHo(group)) return handleHo(msg, via, text, sender, group, dIso || tIso, 'wa');
+  if (hoMarked(text)) return handleHo(msg, via, text, sender, group, dIso || tIso, 'prefix');   // "HO - 512 to twin tomorrow": a note for the next shift, never a room command
   if (dIso !== tIso) { if (text.trim()) archiveMsg(msg, dIso, text, sender, '', true); return 'old'; }
   if (via === 'link' && !ready()) return 'wait';
   if (!text.trim()) return 'dup';
@@ -1126,6 +1191,7 @@ function handle(msg, via, opt) {
       if (caught) upgradePreview(caught, Object.assign({}, msg, { group }), dIso, text, sender);
       else archiveMsg(Object.assign({}, msg, { group }), dIso, text, sender, '', true);
       if (P.ask && !opt.rerun) askAbout(P.ask, msg, sender, group);
+      if (msg.edited && !opt.rerun && P.kind !== 'ignore') hoCopy(msg, dIso, t24, sender, group, text, true);
       return 'dup';
     }
     if (!caught && !opt.rerun) edited = true;
@@ -1181,6 +1247,7 @@ function handle(msg, via, opt) {
     const nl = res.filter(r => r.st === 'notlist');
     if (nl.length && !acted.length && typeof showToast === 'function') showToast(`WhatsApp: room ${nl.map(r => r.room).join(', ')} is not there — ${nl[0].text.replace(/^\S+:\s*/, '')}`, 'warn');
   }
+  if (!opt.rerun && P.kind !== 'ignore' && hoCopy(msg, dIso, t24, sender, group, text, edited)) { tgt.res.push({ st: 'ho', room: '', text: '📋 also in the Handover Book' }); saveLog(); if (ACK_RES) ACK_RES.push({ st: 'ho', room: '', text: '📋 also in the Handover Book' }); }
   renderCard();
   tell(tgt);
   return 'done';
@@ -1562,6 +1629,8 @@ const CSS = `
 #waCard .wa-chip.ext{color:var(--wa-ext);background:color-mix(in srgb,var(--wa-ext) 10%,transparent);border-color:color-mix(in srgb,var(--wa-ext) 35%,transparent)}
 #waCard .wa-chip.note{color:var(--wa-note);background:color-mix(in srgb,var(--wa-note) 9%,transparent);border-color:color-mix(in srgb,var(--wa-note) 32%,transparent)}
 #waCard .wa-chip.req{color:var(--text2)}
+#waCard .wa-chip.ho{color:var(--wa-ext);background:color-mix(in srgb,var(--wa-ext) 9%,transparent);border-color:color-mix(in srgb,var(--wa-ext) 32%,transparent)}
+#waCard .wa-g .wa-tag.ho{color:var(--wa-ext);border-color:color-mix(in srgb,var(--wa-ext) 40%,transparent)}
 #waCard .wa-chip.notlist,#waCard .wa-chip.warn{color:var(--wa-bad);background:color-mix(in srgb,var(--wa-bad) 9%,transparent);border-color:color-mix(in srgb,var(--wa-bad) 35%,transparent)}
 #waCard .wa-chip.ask{color:var(--wa-lco);border-style:dashed}
 #waCard .wa-chip.deleted{color:var(--text2);border-style:dashed;text-decoration:none!important}
@@ -1605,7 +1674,7 @@ const CSS = `
 `;
 const esc = s => (typeof escapeHtml === 'function' ? escapeHtml(s) : String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
 const clock = t => { const m = String(t || '').match(/^(\d{1,2}):(\d{2})$/); if (!m) return t || ''; const h = +m[1]; return (h % 12 || 12) + ':' + m[2] + (h >= 12 ? ' PM' : ' AM'); };
-const ICON = { wait: '⏳', maybe: '🤔', fin: '', extending: '', co: '✓', lco: '⏰', ext: '↪', note: '📝', req: '📝', notlist: '⚠', skip: '·', none: '—', ignore: '—', log: '🗂', preview: '👁', ask: '❓', deleted: '' };
+const ICON = { wait: '⏳', maybe: '🤔', fin: '', extending: '', co: '✓', lco: '⏰', ext: '↪', note: '📝', req: '📝', notlist: '⚠', skip: '·', none: '—', ignore: '—', log: '🗂', preview: '👁', ask: '❓', deleted: '', ho: '' };
 const SVG_WA = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2s.2-1.1.2-1.2-.2-.2-.5-.3Z"/></svg>';
 const SVG_PH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2Z"/></svg>';
 let FILT = 'all', GFILT = '';
@@ -1748,7 +1817,11 @@ function mount() {
     const r = e.target.closest('[data-out-again]'); if (r) { const it = OUT.find(o => o.id === r.getAttribute('data-out-again')); if (it) waSend(it.text, it.group); }
   });
   // groups (log only here too)
-  $('waGrps').addEventListener('change', e => { const c = e.target.closest('[data-g]'); if (c) setGroupAct(c.getAttribute('data-g'), c.checked); });
+  $('waGrps').addEventListener('change', e => {
+    const c = e.target.closest('[data-g]'); if (c) setGroupAct(c.getAttribute('data-g'), c.checked);
+    const h = e.target.closest('[data-gho]'); if (h) { setGroupHo(h.getAttribute('data-gho'), h.checked); showToast(h.getAttribute('data-gho') + (h.checked ? ': handover group · saved to the 📒 Handover Book, rooms are not changed' : ': not a handover group'), 'info'); }
+    const k = e.target.closest('[data-gcopy]'); if (k) setGroupCopy(k.getAttribute('data-gcopy'), k.checked);
+  });
   // questions
   $('waAsks').addEventListener('click', e => {
     const b = e.target.closest('[data-ans]'); if (!b) return;
@@ -1912,7 +1985,7 @@ function renderGroups() {
     gf.innerHTML = '<option value="">All groups</option>' + names.map(n => `<option value="${esc(n)}"${gKey(n) === gKey(GFILT) ? ' selected' : ''}>${esc(n)}</option>`).join('');
   }
   if (box) box.innerHTML = names.length ? names.map(n => { const g = GRP[gKey(n)], rg = LINK && LINK.groups && LINK.groups.find(x => gKey(x.name) === gKey(n)); const on = !(g && g.act === false) && !(rg && rg.act === false);
-    return `<div class="wa-g"><b title="${esc(n)}">${esc(n)}</b>${LINK && gKey(LINK.open || '') === gKey(n) ? '<span class="wa-tag">open</span>' : ''}<label><input type="checkbox" data-g="${esc(n)}"${on ? ' checked' : ''}${rg && rg.act === false ? ' disabled title="Set to Log only in the WhatsApp window"' : ''}> Can change rooms</label></div>`; }).join('')
+    return `<div class="wa-g"><b title="${esc(n)}">${esc(n)}</b>${LINK && gKey(LINK.open || '') === gKey(n) ? '<span class="wa-tag">open</span>' : ''}${groupIsHo(n) ? '<span class="wa-tag ho" title="Everything posted here is saved to the Handover Book; rooms are not changed">📋 Handover</span>' : `<label><input type="checkbox" data-g="${esc(n)}"${on ? ' checked' : ''}${rg && rg.act === false ? ' disabled title="Set to Log only in the WhatsApp window"' : ''}> Can change rooms</label><label title="Messages that read like handover items (early departure, room move, complaint…) are also copied to the Handover Book"><input type="checkbox" data-gcopy="${esc(n)}"${groupCopies(n) ? ' checked' : ''}> Copy handover items</label>`}<label title="A group used only for the shift handover: everything goes to the Handover Book"><input type="checkbox" data-gho="${esc(n)}"${groupIsHo(n) ? ' checked' : ''}> Handover group</label></div>`; }).join('')
     : '<div class="wa-hint">No groups yet. Groups show here once the reader on WhatsApp Web is linked.</div>';
   if (sub) sub.textContent = names.length ? names.length + (names.length === 1 ? ' group' : ' groups') : '';
 }
@@ -1973,7 +2046,7 @@ function start() {
 }
 W.hoWaBridge = { handle, findRoom, readPasted, parse, parseCopied: hoWaParseCopied, log: () => LOG.slice(), origins: ORIGINS, render: renderCard, search: runSearch, flushBackup: flushArch, results: () => RES.slice(),
   send: waSend, outbox: () => OUT.slice(), link: () => (LINK ? { at: LINK.at, groups: LINK.groups || [], open: LINK.open || '', rtt: LINK.rtt || 0, auto: !!LINK.auto, linked: linked() } : null),
-  asks: () => Object.keys(ASKS).map(k => ASKS[k]), answer: answerAsk, confirmGuess, words: wordsList, setGroupAct, checkoutList: () => checkoutListText(rooms(), new Date()) };
+  asks: () => Object.keys(ASKS).map(k => ASKS[k]), answer: answerAsk, confirmGuess, words: wordsList, setGroupAct, setGroupHo, setGroupCopy, isHandoverGroup: groupIsHo, checkoutList: () => checkoutListText(rooms(), new Date()) };
 if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start); else start();
 })();
 

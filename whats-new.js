@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 351, items: [
+    '📋 New: Handover Book (Front Desk menu). Everything for the next shift in one clean page: messages from your HO WhatsApp group, any message starting with "HO -" in any group, and handover-like messages from other groups (marked ✨ Auto). Team chat like "ok" or "thanks" is kept aside.',
+    '✍️ The English is tidied for you: "room 512 have bad smell" → "Room 512 has a bad smell." Tap any item to edit it; the original is one tap away. Items get a topic (Reservations, Payment, Room move, Complaint…), a shift, rooms, and Open / Done.',
+    '📤 End of shift: filter, tick things done, then "Export & email" makes an Excel sheet (with a summary sheet) and opens an e-mail with a short summary. Attach the downloaded file. You can also paste any text (a chat, an e-mail, Opera notes) or pick items "From HotelOps today".',
+  ] },
   { v: 350, items: [
     '🛡️ WhatsApp safety: an older message read late (when you scroll up or search in WhatsApp) never undoes a newer one. It says "older message — a newer one was already done" instead. While you search in WhatsApp, the reader pauses reading the chat list, so search results are never taken as new messages. Paste the console line again in WhatsApp Web to get it.',
   ] },
