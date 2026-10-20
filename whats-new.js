@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 353, items: [
+    '📄 Handover Book: Export now gives you both — ⬇ Excel or 📄 PDF (the same report, ready to print or save as PDF).',
+    '🗓 Shifts now follow the roster: an item goes under the shift of the person who wrote it (or yours), with the real hours, e.g. "Afternoon · 12:00–21:00". If the roster has nobody for that time, the clock is used as before.',
+  ] },
   { v: 352, items: [
     '📊 Handover Book: the Excel export is now a proper report: a title block with hotel, date and who prepared it, coloured summary tiles, a dark header row, sections per shift, coloured status and topics, urgent items in red, and a Summary sheet with counts and open items. It prints on one page wide. The e-mail option is gone: just press Export and choose "What I see" or "Whole day".',
   ] },

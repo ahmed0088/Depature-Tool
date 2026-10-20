@@ -72,6 +72,27 @@ function shiftOf(t) {
   return s ? s.id : '';
 }
 
+/** the roster's shift type (roster.js: morning / afternoon / night) → our shift name */
+const SHIFT_OF_TYPE = { morning: 'Morning', afternoon: 'Afternoon', evening: 'Afternoon', night: 'Night' };
+const nameToks = n => sp(n).toLowerCase().replace(/[^a-z\u0600-\u06ff ]+/g, ' ').split(/\s+/).filter(w => w.length >= 3);
+/** a WhatsApp name ("~ Sam Test", "Sam T") ↔ a roster name ("SAM TESTER"): the same first name, or a shared name part */
+function sameName(a, b) {
+  const A = nameToks(a), B = nameToks(b); if (!A.length || !B.length) return false;
+  return A[0] === B[0] || A.some(w => w.length >= 4 && B.includes(w));
+}
+/** the usual hours of a group of items ("12:00–21:00"), from the roster ('' when unknown) */
+function hoursOf(items) {
+  const n = {}; (items || []).forEach(i => { if (i && i.shiftHours) n[i.shiftHours] = (n[i.shiftHours] || 0) + 1; });
+  return Object.keys(n).sort((a, b) => n[b] - n[a])[0] || '';
+}
+/** the shift from the roster: whoever wrote it is working then → their shift (e.g. Afternoon 12:00–21:00).
+ *  people: [{name, info:{type, from, to}, me?}] working at that moment; sender: who wrote it; mine: written by me */
+function rosterShiftOf(people, sender, mine) {
+  const L = (people || []).filter(x => x && x.info && SHIFT_OF_TYPE[x.info.type]);
+  const p = (!mine && sender && L.find(x => sameName(sender, x.name))) || L.find(x => x.me);
+  return p ? { id: SHIFT_OF_TYPE[p.info.type], hours: p.info.from && p.info.to ? p.info.from + '–' + p.info.to : '', who: p.name } : null;
+}
+
 // ══ Categories ══════════════════════════════════════════════
 const CATS = [
   ['guest', 'Guest / complaint', '🙋'], ['pay', 'Payment & billing', '💳'], ['res', 'Reservations', '📅'], ['move', 'Room move', '🔀'],
@@ -568,7 +589,7 @@ function reportModel(items, opt) {
     status: i.status || 'info', cat: i.cat || 'info', urgent: isUrgent(i), done: i.status === 'done',
   });
   const order = SHIFT_BOUNDS.map(s => s.id).concat(['']);
-  const sections = order.map(id => { const R = L.filter(i => (i.shift || '') === id); return R.length ? { id, label: id || 'No time', count: R.length, open: R.filter(i => i.status === 'open').length, rows: R.map(row) } : null; }).filter(Boolean);
+  const sections = order.map(id => { const R = L.filter(i => (i.shift || '') === id); return R.length ? { id, label: id || 'No time', hours: hoursOf(R), count: R.length, open: R.filter(i => i.status === 'open').length, rows: R.map(row) } : null; }).filter(Boolean);
   const byCat = CATS.filter(c => S.byCat[c[0]]).map(c => { const R = L.filter(i => i.cat === c[0]); return { cat: c[0], label: c[1], items: R.length, open: R.filter(i => i.status === 'open').length, done: R.filter(i => i.status === 'done').length }; });
   const byShift = order.filter(id => L.some(i => (i.shift || '') === id)).map(id => { const R = L.filter(i => (i.shift || '') === id); return { label: id || 'No time', items: R.length, open: R.filter(i => i.status === 'open').length, done: R.filter(i => i.status === 'done').length }; });
   const open = L.filter(i => i.status === 'open').sort((a, b) => (isUrgent(b) - isUrgent(a)) || byTime(a, b))
@@ -585,7 +606,42 @@ function reportModel(items, opt) {
 }
 const XL_KPI = { ink: ['FFF1F5F9', 'FF0F172A'], open: ['FFFEF3C7', 'FF92400E'], done: ['FFD1FAE5', 'FF065F46'], urgent: ['FFFEE2E2', 'FFB91C1C'], rooms: ['FFDBEAFE', 'FF1E40AF'] };
 
-W.hoHandoverPure = { isUrgent, XL, XL_KPI, statusStyle, catStyle, argbOf, rowHeight, shiftsCovered, reportModel, writtenSummary, HO_GROUP_RX, isHandoverGroup, HO_PREFIX_RX, hoPrefix, isChat, pasteItems, suggestFrom, HO_COPY_MIN, handoverScore, looksLikeHandover, SHIFT_BOUNDS, shiftOf, CATS, CAT, categorize, statusOf, roomsOf, tagsOf, splitItems, tidy, buildItems, filterItems, summaryOf,
+// ══ The same report as a PDF: a print page (Save as PDF), same colours as the Excel ══
+const cssOf = argb => '#' + String(argb || 'FF000000').slice(2).toLowerCase();
+/** the report model → the print page's body (pure; the page shell is month-end.js mePrintPage) */
+function pdfHtml(m) {
+  const c = cssOf, e = esc;
+  const head = cols => `<thead><tr>${cols.map(h => `<th>${e(h)}</th>`).join('')}</tr></thead>`;
+  const catTd = (cat, label) => { const x = catStyle(cat); return `<td class="cat" style="background:${c(x.fill)};color:${c(x.font)}">${e(label)}</td>`; };
+  const stTd = st => { const x = statusStyle(st); return `<td class="st" style="background:${c(x.fill)};color:${c(x.font)}">${e(x.label)}</td>`; };
+  const kpis = `<div class="hbp-kpis">${m.kpis.map(([l, n, k]) => `<div style="background:${c(XL_KPI[k][0])};color:${c(XL_KPI[k][1])}"><b>${e(n)}</b><small>${e(l)}</small></div>`).join('')}</div>`;
+  const n = m.head.length;
+  const rows = m.sections.map(sec => `<tr class="band"><td colspan="${n}">${e(sec.label.toUpperCase())}${sec.hours ? ' (' + e(sec.hours) + ')' : ''} · ${sec.count} item${sec.count === 1 ? '' : 's'} · ${sec.open} open</td></tr>` +
+    sec.rows.map(r => `<tr class="${r.urgent ? 'urg' : ''}${r.done ? ' done' : ''}">${r.cells.map((v, i) => i === 4 ? catTd(r.cat, v) : i === 7 ? stTd(r.status) : `<td class="${i === 5 ? 'rm' : i === 6 || i === 9 || i === 10 ? 'tx' : 'nw'}">${e(v)}</td>`).join('')}</tr>`).join('')).join('');
+  const small = (title, list) => list.length ? `<h2>${e(title)}</h2><table class="hbp-s">${head([title.replace(/^By /, '').replace(/^./, x => x.toUpperCase()), 'Items', 'Open', 'Done'])}<tbody>${list.map(r => `<tr>${r.cat ? catTd(r.cat, r.label) : `<td>${e(r.label)}</td>`}<td class="r">${r.items}</td><td class="r">${r.open}</td><td class="r">${r.done}</td></tr>`).join('')}<tr class="tot"><td>Total</td><td class="r">${m.totals.items}</td><td class="r">${m.totals.open}</td><td class="r">${m.totals.done}</td></tr></tbody></table>` : '';
+  const open = m.open.length ? `<h2>Open items</h2><table class="hbp-t">${head(['Category', 'Time', 'Rooms', '', 'Item', 'From'])}<tbody>${m.open.map(o => `<tr class="${o.urgent ? 'urg' : ''}">${catTd(o.cat, o.cells[0])}<td class="nw">${e(o.cells[1])}</td><td class="rm">${e(o.cells[2])}</td><td class="nw">${o.urgent ? '<span class="ut">URGENT</span>' : ''}</td><td class="tx">${e(o.cells[3])}</td><td class="nw">${e(o.cells[4])}</td></tr>`).join('')}</tbody></table>` : '<p class="ok">Nothing open — a clean handover.</p>';
+  return `<style>
+    .hbp-h{border-bottom:3px solid ${c(XL.accent)};padding-bottom:8px;margin-bottom:10px} .hbp-h h1{font-size:22px;margin:0;color:${c(XL.ink)}} .hbp-h p{margin:3px 0 0;color:${c(XL.sub)};font-size:11px}
+    .hbp-sum{font-style:italic;color:#334155;margin:8px 0 10px}
+    .hbp-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:0 0 14px} .hbp-kpis div{border-radius:8px;padding:8px 10px;text-align:center;break-inside:avoid} .hbp-kpis b{display:block;font-size:22px;line-height:1.1} .hbp-kpis small{font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+    .hbp-t,.hbp-s{border-collapse:collapse;width:100%;font-size:10.5px} .hbp-s{width:auto;min-width:340px}
+    .hbp-t th,.hbp-s th{background:${c(XL.slate)};color:#fff;text-transform:none;letter-spacing:0;font-size:10.5px;text-align:center;border-color:${c(XL.slate)};padding:6px}
+    .hbp-t td,.hbp-s td{border:1px solid ${c(XL.line)};padding:4px 6px;vertical-align:top} .hbp-t tbody tr:nth-child(even) td{background-color:${c(XL.zebra)}}
+    .hbp-t tr.band td{background:${c(XL.band)};font-weight:700;color:${c(XL.ink)};font-size:10px;letter-spacing:.04em}
+    .hbp-t td.rm{font-weight:700;text-align:center} .hbp-t td.st{font-weight:700;text-align:center} .hbp-t td.tx{white-space:pre-wrap} .hbp-t td.nw{white-space:nowrap}
+    .hbp-t tr.urg td{color:${c(XL.red)};font-weight:700} .hbp-t tr.urg td:first-child{box-shadow:inset 3px 0 0 ${c(XL.red)}} .hbp-t tr.done td{color:#64748b}
+    .hbp-t .ut{background:${c(XL.redFill)};color:${c(XL.red)};font-weight:800;font-size:9px;padding:1px 5px;border-radius:4px}
+    .hbp-s .tot td{font-weight:700;border-top:2px solid ${c(XL.ink)}} .hbp-two{display:flex;gap:24px;flex-wrap:wrap;break-inside:avoid}
+  </style>
+  <div class="hbp-h"><h1>${e(m.title)}</h1><p>${e(m.meta)}</p></div>
+  ${m.summary ? `<p class="hbp-sum">${e(m.summary)}</p>` : ''}
+  ${kpis}
+  <div class="tw"><table class="hbp-t">${head(m.head)}<tbody>${rows}</tbody></table></div>
+  <div class="hbp-two"><div>${small('By category', m.byCat)}</div><div>${small('By shift', m.byShift)}</div></div>
+  <div class="tw">${open}</div>`;
+}
+
+W.hoHandoverPure = { hoursOf, sameName, rosterShiftOf, pdfHtml, cssOf, isUrgent, XL, XL_KPI, statusStyle, catStyle, argbOf, rowHeight, shiftsCovered, reportModel, writtenSummary, HO_GROUP_RX, isHandoverGroup, HO_PREFIX_RX, hoPrefix, isChat, pasteItems, suggestFrom, HO_COPY_MIN, handoverScore, looksLikeHandover, SHIFT_BOUNDS, shiftOf, CATS, CAT, categorize, statusOf, roomsOf, tagsOf, splitItems, tidy, buildItems, filterItems, summaryOf,
   excelRows, summaryRows, fileName, polishStyles, polishSheet, dLong, t12, COL_W, byTime };
 if (!doc) return;
 
@@ -630,7 +686,19 @@ async function load(day, force) {
   try { v = typeof fbGet === 'function' ? await fbGet(PATH(day)) : LS.get('hb_' + day, null); } catch (_) {}
   BOOK[day] = Object.assign({}, v && typeof v === 'object' ? v : {}, BOOK[day] && day === today() ? BOOK[day] : {}); GOT[day] = Date.now();
 }
-const itemsOf = day => Object.keys(BOOK[day] || {}).map(k => Object.assign({}, BOOK[day][k], { key: k, date: (BOOK[day][k] || {}).date || day })).filter(i => i && (i.text || i.orig));
+const itemsOf = day => Object.keys(BOOK[day] || {}).map(k => withShift(Object.assign({}, BOOK[day][k], { key: k, date: (BOOK[day][k] || {}).date || day }))).filter(i => i && (i.text || i.orig));
+/** the shift as on the roster (who wrote it, or you, working at that time), else by the clock */
+function withShift(i) {
+  if (!i || !i.time || typeof roWorkingAt !== 'function') return i;
+  return safe(() => {
+    const t = new Date((i.date || today()) + 'T' + String(i.time).slice(0, 5) + ':00'); if (isNaN(t)) return i;
+    const mk = typeof roMeKey !== 'undefined' ? roMeKey : '';
+    const people = roWorkingAt(t, true).map(x => Object.assign({}, x, { me: !!mk && x.key === mk }));
+    const r = rosterShiftOf(people, i.sender, !i.sender || i.sender === 'Me' || i.sender === me());
+    if (r) { i.shift = r.id; i.shiftHours = r.hours; }
+    return i;
+  }, i);
+}
 
 // ── from WhatsApp (wa-bridge.js) ──
 const LS_MID = 'hb_mid_v1';
@@ -898,12 +966,12 @@ function shell() {
   root.innerHTML = `
     <header class="hb-hd"><div class="hb-ttl"><h1>Handover</h1>
       <div class="hb-sub"><button type="button" class="hb-arw" data-hb="prev" aria-label="Day before" title="Day before">‹</button><label class="hb-dl">${esc(isT ? 'Today · ' + longDate(d) : longDate(d))}<input type="date" id="hbDate" value="${esc(d)}" max="${esc(today())}" aria-label="Pick a day"></label><button type="button" class="hb-arw" data-hb="next" aria-label="Next day" title="Next day"${isT ? ' disabled' : ''}>›</button>${isT ? '' : '<button type="button" class="hb-q sm" data-hb="today">Today</button>'}</div></div>
-      <div class="hb-hda"><button type="button" class="hb-pri" data-hb="xp" aria-expanded="${HB.xp}" aria-haspopup="true" title="Download the handover as Excel">Export ▾</button></div></header>
-    ${HB.xp ? `<section class="hb-panel hb-xp" aria-label="Export"><h3>Export to Excel</h3>
+      <div class="hb-hda"><button type="button" class="hb-pri" data-hb="xp" aria-expanded="${HB.xp}" aria-haspopup="true" title="Download the handover as Excel or PDF">Export ▾</button></div></header>
+    ${HB.xp ? `<section class="hb-panel hb-xp" aria-label="Export"><h3>Export</h3>
       <div class="hb-tbr"><div class="hb-seg" role="group" aria-label="What to export">${[['seen', 'What I see'], ['all', 'Whole day']].map(([k, l]) => `<button type="button" data-hb="exp" data-v="${k}" class="${S.exp === k ? 'on' : ''}" aria-pressed="${S.exp === k}">${l}</button>`).join('')}</div>
         <span class="hb-hint" id="hbXpN"></span></div>
       <label class="hb-lbl"><input type="checkbox" id="hbOrig"${S.orig ? ' checked' : ''}> Add the original WhatsApp text as a column</label>
-      <div class="hb-tbr"><button type="button" class="hb-pri sm" data-hb="xlsx">⬇ Download Excel</button><button type="button" class="hb-q sm" data-hb="xp">Close</button></div></section>` : ''}
+      <div class="hb-tbr"><button type="button" class="hb-pri sm" data-hb="xlsx">⬇ Excel</button><button type="button" class="hb-pri sm" data-hb="pdf">📄 PDF</button><button type="button" class="hb-q sm" data-hb="xp">Close</button></div></section>` : ''}
     <section class="hb-new" aria-label="New handover item">
       <div class="hb-newrow"><span class="hb-plus" aria-hidden="true">+</span><textarea id="hbNew" rows="1" maxlength="6000" placeholder="New handover item…" aria-label="New handover item">${esc(HB.draft)}</textarea>
         <div class="hb-newact"><select class="hb-mini" id="hbNewCat" aria-label="Category"><option value="">Auto</option>${CATS.map(c => `<option value="${c[0]}"${HB.draftCat === c[0] ? ' selected' : ''}>${c[2]} ${esc(c[1])}</option>`).join('')}</select><button type="button" class="hb-pri sm" data-hb="addsave" id="hbAddBtn">Add</button></div></div>
@@ -973,7 +1041,7 @@ function body() {
       if (HB.by === 'room') groups.sort((a, b) => (a.k === 'No room') - (b.k === 'No room') || (parseInt(a.k.slice(5), 10) || 0) - (parseInt(b.k.slice(5), 10) || 0));
       html = groups.map(G => {
         const fk = HB.by + ':' + G.k, open = !HB.fold[fk], sb = SHIFT_BOUNDS.find(s => s.id === G.k);
-        const label = HB.by === 'cat' ? catOf(G.k).icon + ' ' + catOf(G.k).label : sb ? sb.icon + ' ' + sb.id : G.k;
+        const label = HB.by === 'cat' ? catOf(G.k).icon + ' ' + catOf(G.k).label : sb ? sb.icon + ' ' + sb.id + (hoursOf(G.items) ? ' · ' + hoursOf(G.items) : '') : G.k;
         const no = G.items.filter(i => i.status === 'open').length;
         return `<section class="hb-sec"><button type="button" class="hb-gh" data-hb="fold" data-v="${esc(fk)}" aria-expanded="${open}">${esc(label)} <em>${G.items.length}${no ? ' · ' + no + ' open' : ''}</em><span class="chev">▾</span></button>${open ? `<div class="hb-list">${G.items.map(i => itemHtml(i, d)).join('')}</div>` : ''}</section>`;
       }).join('');
@@ -1131,7 +1199,7 @@ async function proWorkbook(list) {
   const C = { status: 8, cat: 5, rooms: 6, item: 7, note: 10, time: 3 };
   M.sections.forEach(sec => {
     ws.mergeCells(r, 1, r, n);
-    const sc = ws.getCell(r, 1); sc.value = `${sec.label.toUpperCase()}   ·   ${sec.count} item${sec.count === 1 ? '' : 's'}${sec.open ? ' · ' + sec.open + ' open' : ''}`;
+    const sc = ws.getCell(r, 1); sc.value = `${sec.label.toUpperCase()}${sec.hours ? ' (' + sec.hours + ')' : ''}   ·   ${sec.count} item${sec.count === 1 ? '' : 's'}${sec.open ? ' · ' + sec.open + ' open' : ''}`;
     sc.font = font({ bold: true, size: 10.5, color: { argb: 'FF334155' } }); sc.alignment = { vertical: 'middle', indent: 1 };
     for (let c = 1; c <= n; c++) { const x = ws.getCell(r, c); x.fill = fill(XL.band); x.border = { top: thin, bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } } }; }
     ws.getRow(r).height = 20; r++; z = 0;
@@ -1200,6 +1268,16 @@ async function exportExcel(silent) {
   safe(() => { if (typeof logActivity === 'function') logActivity('handover_export', `${name} (${list.length})`); });
   return { name, list, pro };
 }
+function exportPdf() {
+  const S = SETTINGS(), list = exportList(S.exp === 'all');
+  if (!list.length) { toast('Nothing to export for ' + (S.exp === 'all' ? 'this day' : 'these filters'), 'warn'); return null; }
+  if (typeof mePrintPage !== 'function') { toast('The PDF helper did not load. Reload the page.', 'warn'); return null; }
+  const m = reportModel(list, { hotel: hotel(), date: HB.date, user: me(), exportedAt: Date.now(), orig: !!S.orig });
+  const win = mePrintPage(fileName(hotel(), HB.date).replace(/\.xlsx$/i, ''), pdfHtml(m), { landscape: true });
+  if (win) { toast('📄 PDF page opened: press "Print / Save as PDF"', 'ok'); safe(() => { setTimeout(() => { try { win.print(); } catch (_) {} }, 600); }); }
+  safe(() => { if (typeof logActivity === 'function') logActivity('handover_export', `PDF (${list.length})`); });
+  return win;
+}
 // ── taps ──
 function saveEdit(el) {
   const k = el.dataset.k, d = el.dataset.d, v = sp(el.value).trim().slice(0, 1000), it = itemsOf(d).find(i => i.key === k);
@@ -1239,6 +1317,7 @@ function onClick(e) {
       case 'xp': HB.xp = !HB.xp; shell(); return;
       case 'exp': { const S = SETTINGS(); S.exp = b.dataset.v; LS.set(SET_KEY, S); doc.querySelectorAll('#hbRoot [data-hb="exp"]').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); }); xpCount(); return; }
       case 'xlsx': exportExcel(); return;
+      case 'pdf': exportPdf(); return;
       case 'addsave': addNow(); return;
       case 'sugg': { const L = suggestions(); HB.rows = L.map(s => ({ text: s.text, head: '', cat: s.cat, from: s.src, on: false })); HB.rowsKind = 'sugg'; preview(); return; }
       case 'rowsall': { const on = !(HB.rows || []).every(r => r.on); (HB.rows || []).forEach(r => { r.on = on; }); preview(); return; }
