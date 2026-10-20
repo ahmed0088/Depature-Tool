@@ -90,6 +90,7 @@ function _depCheckOverdueAlerts() {
   _renderAlertToggle();
 
   const overdueNow = depRooms.filter(r => {
+    if (_depDayRel(r) !== 0) return false;   // only today's list rings (a past list after midnight rang again at noon)
     const es = effectiveStatus(r);
     if (r.intent === 'extending') return es !== 'out' && es !== 'extended' && _depIsOverdue(r);   // ⏳ paperwork not done by 6 PM
     return isLcoOverdue(r) && es !== 'out' && es !== 'extended' && es !== 'na' && es !== 'dnd';
@@ -332,7 +333,7 @@ function processDep() {
   const showErr = msg => { document.getElementById('depErrorMsg').textContent = msg; errBox.classList.add('show'); };
 
   if (!raw) return showErr('Please paste the departure report first.');
-  const rooms = parseDepReport(raw);
+  const rooms = parseDepReport(document.getElementById('depInput').value);   // untrimmed: trim() cut the last room's empty end columns and dropped it
   if (!rooms) return showErr('No departure rooms found. Check ROOM column exists and use Delimited Data format.');
 
   depRooms = rooms;
@@ -363,7 +364,9 @@ function depAddManualRoom(room, name) {
   room = String(room || '').trim();
   if (!/^\d{1,5}[A-Za-z]?$/.test(room)) { showToast('Write the room number', 'warn'); return false; }
   if (depRooms.some(r => String(r.roomStr).trim() === room)) { showToast(`Room ${room} is already on the board`, 'warn'); return false; }
-  const today = hoLocalISO();
+  // the board's day ("17-OCT-26" like the report; today when nothing is loaded): a hand-added room on tomorrow's list departs tomorrow
+  const n = new Date(), M = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  const today = (depRooms.find(r => r.departure && !r.manual) || {}).departure || `${String(n.getDate()).padStart(2, '0')}-${M[n.getMonth()]}-${String(n.getFullYear()).slice(-2)}`;
   depRooms.push({
     room: parseInt(room), roomStr: room, name: String(name || '').trim().toUpperCase() || '—',
     arrival: '', departure: today, nights: 0, balance: 0, source: '', company: '', rateCode: '', isVip: false, depTime: '',
@@ -396,8 +399,24 @@ function processDepReload() {
   const showErr = msg => { document.getElementById('depReloadErrorMsg').textContent = msg; errBox.classList.add('show'); };
 
   if (!raw) return showErr('Paste the fresh Opera report first.');
-  const freshRooms = parseDepReport(raw);
+  const rawFull = document.getElementById('depReloadInput').value;
+  const freshRooms = parseDepReport(rawFull);   // untrimmed (see processDep)
   if (!freshRooms) return showErr('No rooms found — check the report format.');
+
+  // another day's report (tomorrow's list pasted here): a fresh board, not a merge — merging kept today's
+  // check-outs, notes and intents on tomorrow's different guests in the same rooms
+  const newDate = (freshRooms.find(r => r.departure) || {}).departure || '';
+  const curDate = (depRooms.find(r => r.departure && !r.manual) || {}).departure || '';
+  if (curDate && newDate && curDate !== newDate) {
+    if (depLog.length && !confirm(`This report is for ${newDate}; the board has the list for ${curDate} with ${depLog.length} action${depLog.length === 1 ? '' : 's'}.\n\nReplace it with the list for ${newDate}?`)) return;
+    const inp = document.getElementById('depInput');
+    if (!inp) return;
+    inp.value = rawFull;
+    document.getElementById('depReloadInput').value = '';
+    closeReloadModal();
+    processDep();
+    return;
+  }
 
   const existing = {};
   depRooms.forEach(r => { existing[r.room] = r; });
@@ -431,6 +450,7 @@ function processDepReload() {
         naTime:          old.naTime || '',
         photo:           old.photo  || '',
       });
+      delete merged[merged.length - 1].manual;   // added by hand earlier, now on Opera's report
       kept++;
     } else {
       // New room from Opera — check if it was previously extended/out/late
@@ -472,7 +492,7 @@ function processDepReload() {
   document.getElementById('depReloadInput').value = '';
   closeReloadModal();
   const sc2 = depCounts();
-  const active2 = sc2.due + sc2.late + sc2.na;
+  const active2 = sc2.due + sc2.late + sc2.na + sc2.dnd;
   document.getElementById('depDateLabel').textContent = `${active2} active · ${sc2.all} total · ${depRooms.find(r=>r.departure)?.departure || ''}`;
 
   depRender();
@@ -500,6 +520,10 @@ function closeReloadModal() {
 }
 
 // ── Counts ─────────────────────────────────────────────────
+/** a due room that is not leaving now: ⏳ extending, or 🧾 left and waiting for Finance / Reservations */
+function _depHeld(r) { return effectiveStatus(r) === 'due' && (r.intent === 'extending' || r.intent === 'finance_hold'); }
+/** "May extend" chip and filter: the same rooms (an extended or checked-out room is no longer a maybe) */
+function _depMayExt(r) { const es = effectiveStatus(r); return (r.intent === 'maybe_extend' || r.intent === 'extending') && es !== 'extended' && es !== 'out'; }
 function depCounts() {
   const due      = depRooms.filter(r => effectiveStatus(r) === 'due').length;
   const late     = depRooms.filter(r => effectiveStatus(r) === 'late').length;
@@ -516,7 +540,8 @@ function depCounts() {
     na,
     dnd,
     balance:      depRooms.filter(r => depOwes(r) && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended').length,
-    maybe_extend: depRooms.filter(r => (r.intent === 'maybe_extend' || r.intent === 'extending') && effectiveStatus(r) !== 'extended').length,
+    maybe_extend: depRooms.filter(_depMayExt).length,
+    held:         depRooms.filter(_depHeld).length,   // in the due count, but the card says ⏳ EXTENDING / 🧾 LEFT, not DUE OUT
     extending:    depRooms.filter(r => r.intent === 'extending' && effectiveStatus(r) !== 'extended' && effectiveStatus(r) !== 'out').length,
     pending:      depRooms.filter(r => r.intent && effectiveStatus(r) !== 'out' && effectiveStatus(r) !== 'extended').length,
   };
@@ -543,8 +568,16 @@ function _depTimeMins(r) {
 // A due room whose Opera departure time has already passed
 // is treated as Late CO automatically everywhere — counts,
 // filters, badges, actions. r.status stays 'due' so Undo works.
+// The room's departure day against today: 1 a later day (tomorrow's list), -1 an earlier day, 0 today / unknown
+function _depDayRel(r) {
+  const dd = r && r.departure ? parseOperaDate(r.departure) : null;
+  if (!dd || isNaN(dd)) return 0;
+  const a = _depIsoOf(dd), t = typeof hoLocalISO === 'function' ? hoLocalISO() : _depIsoOf(new Date());
+  return a > t ? 1 : a < t ? -1 : 0;
+}
+
 function effectiveStatus(r) {
-  if (r.status === 'due' && r.depTime && !r.lcoAcknowledged && r.intent !== 'extending' && r.intent !== 'finance_hold') {   // ⏳ extending (stays on) or 🧾 left, waiting for Finance: never late
+  if (r.status === 'due' && r.depTime && !r.lcoAcknowledged && r.intent !== 'extending' && r.intent !== 'finance_hold' && _depDayRel(r) <= 0) {   // tomorrow's list: not late today   // ⏳ extending (stays on) or 🧾 left, waiting for Finance: never late
     const depMins = _depTimeMins(r);
     if (depMins !== null) {
       const now = new Date();
@@ -563,6 +596,7 @@ function isLcoOverdue(r) {
   if (r && r.intent === 'finance_hold') return false;          // the guest has already left
   if (r && r.intent === 'extending') return false;             // staying on; only the paperwork is pending
   if (effectiveStatus(r) !== 'late') return false;
+  if (_depDayRel(r) > 0) return false;                       // a list for a later day is not late yet
   if (r.status === 'due') return true;                       // auto-promoted
   if (r.status === 'late' && r.lateTime) {
     const now     = new Date();
@@ -776,13 +810,14 @@ function _depIsOverdue(r) {
   const es = effectiveStatus(r);
   if (es === 'out' || es === 'extended') return false;
   if (r.intent === 'finance_hold') return false;                  // left already; only finance is pending
+  const day = _depDayRel(r);
+  if (day > 0) return false;                                       // a list for a later day is not late yet
+  if (day < 0) return !r.lcoAcknowledged;                          // still here from an earlier day's list: past every limit
   if (r.intent === 'extending') {                                  // staying on; booking / TD / payment are due by 6 PM
     const n = new Date(); return n.getHours() * 60 + n.getMinutes() > DEP_EXTG_BY;
   }
   if (es === 'late') return isLcoOverdue(r);
   if (r.lcoAcknowledged) return false;
-  const dd = r.departure ? parseOperaDate(r.departure) : null;   // a list for a later day is not late yet
-  if (dd && !isNaN(dd) && _depIsoOf(dd) > (typeof hoLocalISO === 'function' ? hoLocalISO() : _depIsoOf(new Date()))) return false;
   const now = new Date(), nowMins = now.getHours() * 60 + now.getMinutes();
   const limit = _depTimeMins(r);
   return nowMins > (limit !== null ? limit : 12 * 60);
@@ -886,9 +921,11 @@ function depRender() {
   Object.entries(sc).forEach(([k, v]) => {
     const el = document.getElementById('dfc-' + k); if (el) el.textContent = v;
   });
+  const dueOut = sc.due - sc.held;   // the Due tile / chip / filter: rooms whose card says DUE OUT
+  { const el = document.getElementById('dfc-due'); if (el) el.textContent = dueOut; }
   const ovChip = document.getElementById('dfc-overdue'); if (ovChip) ovChip.textContent = overdueCount;
-  // 'To do' chip shows active rooms (due + late + na — what staff still needs to action)
-  const activeCount = sc.due + sc.late + sc.na;
+  // 'To do' chip shows active rooms (due + late + na + dnd — the cards the To do list shows)
+  const activeCount = sc.due + sc.late + sc.na + sc.dnd;
   const allChipCount = document.getElementById('dfc-all');
   if (allChipCount) allChipCount.textContent = activeCount;
   document.querySelectorAll('.dp-chips .fchip').forEach(c => {
@@ -927,7 +964,7 @@ function depRender() {
 
   // ── KPI tiles (tap = filter) ──
   const tiles = [
-    ['due',      'Due out',        sc.due,        '⏳', ''],
+    ['due',      'Due out',        dueOut,        '⏳', ''],
     ['out',      'Checked out',    sc.out,        '✓',  ''],
     ['late',     'Late check-out', sc.late,       '🕐', ''],
     ['overdue',  'Overdue',        overdueCount,  '⚠',  'past check-out time'],
@@ -994,9 +1031,9 @@ function depRender() {
       case 'all':          mf = es === 'due' || es === 'late' || es === 'na' || es === 'dnd'; break; // extended excluded — done
       case 'balance':      mf = depOwes(r) && es !== 'out' && es !== 'extended'; break;
       case 'pending':      mf = !!r.intent && es !== 'out' && es !== 'extended'; break;
-      case 'maybe_extend': mf = r.intent === 'maybe_extend' || r.intent === 'extending'; break;
+      case 'maybe_extend': mf = _depMayExt(r); break;
       case 'overdue':      mf = _depIsOverdue(r); break;
-      case 'due':          mf = es === 'due'; break;
+      case 'due':          mf = es === 'due' && !_depHeld(r); break;
       case 'late':         mf = es === 'late'; break;
       case 'na':           mf = es === 'na'; break;
       case 'dnd':          mf = es === 'dnd'; break;
@@ -1093,10 +1130,10 @@ function depRender() {
 
   const qb   = document.getElementById('depQuickBar');
   const qbIn = document.getElementById('depQuickBarInline');
-  if (sc.due > 3) {
+  if (dueOut > 3) {
     if (qb) qb.style.display = 'flex';
     if (qbIn) qbIn.style.display = 'flex';
-    setTxt('depQuickLabel', `${sc.due} rooms still due out`);
+    setTxt('depQuickLabel', `${dueOut} rooms still due out`);
   } else {
     if (qb) qb.style.display = 'none';
     if (qbIn) qbIn.style.display = 'none';
@@ -1245,6 +1282,14 @@ function _dpNice(s) {
     : s;
 }
 
+/** "Checking out in 15 min" said at 10:30 → "10:45" ('' when the time it was said is not known) */
+function _depSoonBy(r) {
+  const a = r && r.intentAt ? _parseLcoTime(r.intentAt) : null;
+  if (a === null || !r.intentMinutes) return '';
+  const m = (a + Number(r.intentMinutes)) % 1440;
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+}
+
 const DEP_EXTG_BY = 18 * 60;   // ⏳ an extending guest has until 6 PM to finish the booking, signature, TD and payment
 /** what an extending room still waits for: ['Booking', 'RC sign', 'TD', 'Payment'] */
 function depExtWaiting(r) {
@@ -1294,7 +1339,8 @@ function depCardHTML(r) {
   const extg = r.intent === 'extending' && active, finw = r.intent === 'finance_hold' && active;
   // short on the pill (the box under it lists the paperwork); the full story on hover
   let badgeTip = '';
-  if (extg) { badgeText = '⏳ EXTENDING · ' + (overdue ? 'PAST 6 PM' : 'BY 6 PM'); badgeTip = depExtWaiting(r).length ? 'Waiting for ' + depExtWaiting(r).join(', ') + ' — due by 6 PM' : 'All done: mark it extended'; }
+  // (a room set to No answer / DND says so: "BY 6 PM" alone hid that nobody answers; the ring under it still counts to 6 PM)
+  if (extg) { badgeText = '⏳ EXTENDING · ' + (es === 'na' ? 'NA' : es === 'dnd' ? 'DND' : overdue ? 'PAST 6 PM' : 'BY 6 PM'); badgeTip = (es === 'na' ? 'No answer. ' : es === 'dnd' ? 'DND. ' : '') + (depExtWaiting(r).length ? 'Waiting for ' + depExtWaiting(r).join(', ') + ' — due by 6 PM' : 'All done: mark it extended'); }
   if (finw) { badgeText = '🧾 LEFT · ' + String(r.finWho || 'Finance').toUpperCase(); badgeTip = `Guest left${r.finAt ? ' at ' + r.finAt : ''}; waiting for ${r.finWho || 'Finance'} to fix the room`; }
 
   let sClass = extg ? 'dp-s-due dp-s-extg' : finw ? 'dp-s-due dp-s-fin' : 'dp-s-' + (es || 'due');
@@ -1322,7 +1368,7 @@ function depCardHTML(r) {
   // Intent banner
   const ic = INTENT_CONFIG[r.intent];
   const intentLabel = (r.intent === 'checkout_soon' && r.intentMinutes)
-    ? `Checking Out in ${r.intentMinutes} min`
+    ? (_depSoonBy(r) ? `Checking Out by ${_depSoonBy(r)} (said ${r.intentMinutes} min at ${r.intentAt})` : `Checking Out in ${r.intentMinutes} min`)
     : ic?.label;
   const finBanner = r.intent === 'finance_hold' && r.status !== 'out' && r.status !== 'extended'
     ? `<div class="dc-intent-banner dp-intent-banner dp-fin" style="--dp-ic:var(--amber);">
@@ -1453,11 +1499,11 @@ function depCardHTML(r) {
   } else if (es === 'out') {
     actHTML = `<div class="dc-actions dp-acts g1">${B('dca-undo', `depAction(${i},'due')`, '↺', 'Undo check-out')}</div>`;
   } else if (es === 'na') {
-    actHTML = `<div class="dc-actions dp-acts g2">${B('dca-co', `depAction(${i},'out')`, '✓', 'Check out')}${r.intent === 'finance_hold' ? '' : B('dca-fin', `depFinanceHold(${i},event)`, '🧾', 'Left · waiting', 'Guest has physically left; Finance or Reservations still has to fix the room')}${B('dca-undo', `depAction(${i},'due')`, '↺', 'Undo NA')}</div>`;
+    actHTML = `<div class="dc-actions dp-acts g2">${B('dca-co', `depCheckOut(${i})`, '✓', 'Check out')}${r.intent === 'finance_hold' ? '' : B('dca-fin', `depFinanceHold(${i},event)`, '🧾', 'Left · waiting', 'Guest has physically left; Finance or Reservations still has to fix the room')}${B('dca-undo', `depAction(${i},'due')`, '↺', 'Undo NA')}</div>`;
   } else if (es === 'dnd') {
-    actHTML = `<div class="dc-actions dp-acts g2">${B('dca-co', `depAction(${i},'out')`, '✓', 'Check out')}${r.intent === 'finance_hold' ? '' : B('dca-fin', `depFinanceHold(${i},event)`, '🧾', 'Left · waiting', 'Guest has physically left; Finance or Reservations still has to fix the room')}${B('dca-undo', `depAction(${i},'due')`, '↺', 'Undo DND')}</div>`;
+    actHTML = `<div class="dc-actions dp-acts g2">${B('dca-co', `depCheckOut(${i})`, '✓', 'Check out')}${r.intent === 'finance_hold' ? '' : B('dca-fin', `depFinanceHold(${i},event)`, '🧾', 'Left · waiting', 'Guest has physically left; Finance or Reservations still has to fix the room')}${B('dca-undo', `depAction(${i},'due')`, '↺', 'Undo DND')}</div>`;
   } else if (es === 'late') {
-    actHTML = `<div class="dc-actions dp-acts g2">${B('dca-co', `depAction(${i},'out')`, '✓', 'Check out')}${r.intent === 'finance_hold' ? '' : B('dca-fin', `depFinanceHold(${i},event)`, '🧾', 'Left · waiting', 'Guest has physically left; Finance or Reservations still has to fix the room')}${B('dca-undo', `depAction(${i},'due')`, '↺', 'Undo LCO')}</div>`;
+    actHTML = `<div class="dc-actions dp-acts g2">${B('dca-co', `depCheckOut(${i})`, '✓', 'Check out')}${r.intent === 'finance_hold' ? '' : B('dca-fin', `depFinanceHold(${i},event)`, '🧾', 'Left · waiting', 'Guest has physically left; Finance or Reservations still has to fix the room')}${B('dca-undo', `depAction(${i},'due')`, '↺', 'Undo LCO')}</div>`;
   } else {
     actHTML = `<div class="dc-actions dp-acts g5">
       ${r.intent === 'finance_hold' ? '' : B('dca-co', `depCheckOut(${i})`, '✓', 'Check out')}
@@ -1981,8 +2027,8 @@ function depFinanceDone(i) {
   const r = depRooms[i]; if (!r) return;
   const t = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   r.note = (r.note ? r.note + '\n' : '') + `[${t}] ${r.finWho || 'Finance'} fixed the room${r.finAt ? ' (guest left at ' + r.finAt + ')' : ''}.`;
-  r.intent = '';
-  depAction(i, 'out');
+  depAction(i, 'out');   // first, with the hold still on: Ctrl+Z (undo.js) then puts the room back to waiting for Finance
+  if (r.status === 'out' && r.intent === 'finance_hold') { r.intent = ''; saveDeps(); }
 }
 
 // Extending: tick the paperwork (signature, TD) as it comes in
@@ -2042,6 +2088,7 @@ function depSetCheckoutSoon(i) {
   r.intent = 'checkout_soon';
   r.intentMinutes = n;
   const t    = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  r.intentAt = t;   // so the banner can say "by 10:45" instead of "in 15 min" forever
   const line = `[${t}] Guest checking out in ${n} min.`;
   r.note = r.note ? r.note + '\n' + line : line;
 
@@ -2068,8 +2115,8 @@ function depEditName(i) {
       case 'all':          return es === 'due' || es === 'late' || es === 'na' || es === 'dnd';
       case 'balance':      return depOwes(r) && es !== 'out' && es !== 'extended';
       case 'pending':      return !!r.intent && es !== 'out' && es !== 'extended';
-      case 'maybe_extend': return r.intent === 'maybe_extend' || r.intent === 'extending';
-      case 'due':          return es === 'due';
+      case 'maybe_extend': return _depMayExt(r);
+      case 'due':          return es === 'due' && !_depHeld(r);
       case 'late':         return es === 'late';
       case 'na':           return es === 'na';
       case 'extended':     return es === 'extended';
@@ -2112,6 +2159,7 @@ function depAskExtend(i) {
 function depAction(i, status, extraNights) {
   const r    = depRooms[i];
   const prev = r.status;
+  const prevTimes = { lateTime: r.lateTime || '', naTime: r.naTime || '', dndTime: r.dndTime || '' };   // for ↺ in the log
   r.status   = status;
   const t    = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
 
@@ -2152,6 +2200,7 @@ function depAction(i, status, extraNights) {
       prevStatus:      prev,
       extensionNights: status === 'extended' ? (r.extensionNights || 1) : 0,
       lateTime:        status === 'late'     ? (r.lateTime || '')        : '',
+      prevTimes,
     });
   } else {
     // Undo — find what we're undoing and write an undo log entry
@@ -2210,14 +2259,12 @@ function depIsTyping() {
 
 // ── Late time setter — no re-render, patches badge directly ─
 function depSetLateTime(i, time) {
+  // a room that only turned late by itself (Opera time passed) becomes a real late check-out with this time;
+  // before, the time was kept but the room stayed "OVERDUE" and the time was never used
+  if (time && depRooms[i] && depRooms[i].status !== 'late') { depRooms[i].lateTime = time; depAction(i, 'late'); return; }
   depRooms[i].lateTime = time;
-  // Update the badge text in-place
-  const r    = depRooms[i];
-  const card = [...document.querySelectorAll('.dep-card')].find(c => c.dataset.room === r.roomStr);
-  if (card) {
-    const badge = card.querySelector('.dc-sbadge');
-    if (badge) badge.textContent = `LATE CO${time ? ' · ' + time : ''}`;
-  }
+  const le = depLog.find(l => l.room === depRooms[i].roomStr && l.action !== 'undo'); if (le && le.action === 'late') le.lateTime = time;
+  depRender();   // badge, overdue strip and counts follow the new time (a time already past is overdue at once)
   saveDeps();
 }
 
@@ -2393,12 +2440,15 @@ function depUndoLog(li) {
   // Find room by string — roomIdx can be stale after reloads
   const r = depRooms.find(rm => rm.roomStr === entry.room) || depRooms[entry.roomIdx];
   if (r) {
-    r.status          = entry.prevStatus || 'due';
+    // back to the status before, with its own time (an LCO came back without its agreed time, NA / DND without theirs)
+    const pt = entry.prevTimes || {}, ps = entry.prevStatus || 'due';
+    r.status          = ps;
     r.checkoutAt      = '';
-    r.lateTime        = '';
+    r.lateTime        = ps === 'late' ? (pt.lateTime || '') : '';
     r.extensionNights = 0;
     r.intent          = '';
-    r.naTime          = '';
+    r.naTime          = ps === 'na'  ? (pt.naTime  || '') : '';
+    r.dndTime         = ps === 'dnd' ? (pt.dndTime || '') : '';
   }
   // Replace the forward action with an undo entry — keep it in the log
   depLog.splice(li, 1, {
@@ -2900,14 +2950,16 @@ function setDepSize(size, el) {
 
 function updateDepBadge() {
   const sc  = depCounts();
-  const active = sc.due + sc.late + sc.na;
+  const active = sc.due + sc.late + sc.na + sc.dnd;   // same as the To do chip
   const el  = document.getElementById('badge-departures');
   if (el) el.textContent = active || '0';
 }
 
 // ── Bulk checkout ──────────────────────────────────────────
 function depBulkCheckout() {
-  const dueRooms   = depRooms.filter(r => effectiveStatus(r) === 'due');
+  // not the rooms that are staying on or must wait: ⏳ extending, 🤔 may extend, 🧾 left (Finance / Reservations first)
+  const dueRooms   = depRooms.filter(r => effectiveStatus(r) === 'due' && !_depHeld(r) && r.intent !== 'maybe_extend');
+  if (!dueRooms.length) { showToast('No rooms are due out', 'info'); return; }
   const withBalance = dueRooms.filter(r => depOwes(r));
   if (withBalance.length) {
     if (!confirm(`${withBalance.length} due-out room(s) have an outstanding balance.\n\nCheck out ALL due-out rooms anyway?`)) return;

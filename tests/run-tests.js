@@ -1889,6 +1889,75 @@ console.log('\nWhatsApp × Ops Brain');
   check('room notes: parts of the day', ['04:10', '09:00', '12:00', '18:30', '22:00', ''].map(N.dpnPart), ['Night', 'Morning', 'Afternoon', 'Evening', 'Night', 'No time']);
 }
 
+// ── Departures board (departures.js): states, counters, filters, undo, reload — on a set clock ──
+{
+  console.log('\nDepartures board');
+  const els = {}, el = id => els[id] || (els[id] = { id, style: {}, classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } }, textContent: '', innerHTML: '', value: '', querySelectorAll: () => [], querySelector: () => null, setAttribute() {}, appendChild() {}, addEventListener() {}, focus() {} });
+  const toasts = [];
+  const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    document: { readyState: 'complete', addEventListener() {}, getElementById: el, querySelectorAll: () => [], querySelector: () => null, createElement: () => el('x' + Math.random()), head: { appendChild() {} }, body: { appendChild() {} }, documentElement: { getAttribute: () => null } },
+    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {}, requestAnimationFrame: () => 0, navigator: {}, addEventListener() {}, MutationObserver: class { observe() {} },
+    showToast: m => toasts.push(m), saveDepartures: () => Promise.resolve(), fbUpdate() {}, fbSet() {}, fbListen() {}, logActivity() {}, confirm: () => true, prompt: () => null };
+  sb.window = sb; sb.globalThis = sb;
+  vm.createContext(sb);
+  vm.runInContext(`(() => { const R = Object.getPrototypeOf(Date); let FIX = new R(2026, 9, 20, 14, 0).getTime();
+    class D extends R { constructor(...a) { if (a.length) super(...a); else super(FIX); } static now() { return FIX; } }
+    globalThis.Date = D; globalThis.setNow = (h, m) => { FIX = new R(2026, 9, 20, h, m).getTime(); };
+    globalThis.hoLocalISO = d => { d = d || new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }; })()`, sb);
+  vm.runInContext(['utils.js', 'state.js', 'departures.js'].map(f => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n;\n') +
+    '\n;globalThis.DB = { set rooms(v) { depRooms = v; depLog = []; }, get rooms() { return depRooms; }, get log() { return depLog; }, filter(f) { depFilter_ = f; depRender(); return [...document.getElementById("depGrid").innerHTML.matchAll(/data-room="(\\w+)"/g)].map(m => m[1]); } };', sb, { filename: 'departures-bundle.js' });
+  const mk = (n, o) => Object.assign({ room: n, roomStr: String(n), name: 'TEST GUEST ' + n, arrival: '19-OCT-26', departure: '20-OCT-26', nights: 1, balance: 0, source: 'Booking.com', company: '', rateCode: '', isVip: false, depTime: '', status: 'due', lateTime: '', extensionNights: 0, intent: '', note: '', checkoutAt: '' }, o);
+  const st = o => { sb.DB.rooms = [mk(101, o)]; const r = sb.DB.rooms[0]; return [sb.effectiveStatus(r), sb._depIsOverdue(r)]; };
+  check('dep: due past 12:00 is overdue; its own Opera time makes it late', [st({}), st({ depTime: '11:00' }), st({ depTime: '15:00' })], [['due', true], ['late', true], ['due', false]]);
+  check('dep: tomorrow\'s list is never late or overdue today (it was, with a departure time)', [st({ departure: '21-OCT-26', depTime: '11:00' }), st({ departure: '21-OCT-26' }), st({ departure: '21-OCT-26', intent: 'extending' })], [['due', false], ['due', false], ['due', false]]);
+  check('dep: a room still due from an earlier day\'s list is overdue', st({ departure: '19-OCT-26' }), ['due', true]);
+  check('dep: extending / finance hold are not late or overdue before 6 PM; extending is after it', [st({ depTime: '11:00', intent: 'extending' }), st({ depTime: '11:00', intent: 'finance_hold' }), (sb.setNow(18, 30), st({ intent: 'extending' })), st({ intent: 'finance_hold' })], [['due', false], ['due', false], ['due', true], ['due', false]]);
+  sb.setNow(14, 0);
+  check('dep: a date like 2026-10-20 (a room added by hand) reads as that day', sb._depIsoOf(sb.parseOperaDate('2026-10-20')), '2026-10-20');
+  sb.DB.rooms = [mk(301, { departure: '21-OCT-26' })]; sb.depAddManualRoom('350', 'test');
+  check('dep: a room added by hand takes the board\'s day', sb.DB.rooms.find(r => r.manual).departure, '21-OCT-26');
+  // counters = the cards each filter shows
+  sb.DB.rooms = [mk(101), mk(102, { status: 'dnd' }), mk(103, { status: 'na' }), mk(104, { intent: 'extending' }), mk(105, { intent: 'finance_hold' }),
+    mk(106, { status: 'extended', extensionNights: 2, intent: 'extending' }), mk(107, { status: 'out', intent: 'maybe_extend' }), mk(108, { intent: 'maybe_extend' })];
+  const todo = sb.DB.filter('all');
+  check('dep: the To do chip counts the cards it shows (DND too)', [el('dfc-all').textContent, todo.length], [6, 6]);
+  const due = sb.DB.filter('due');
+  check('dep: Due = the cards that say DUE OUT (not ⏳ extending / 🧾 left)', [el('dfc-due').textContent, due], [2, ['101', '108']]);
+  const may = sb.DB.filter('maybe_extend');
+  check('dep: May extend chip = its list (not extended or checked-out rooms)', [el('dfc-maybe_extend').textContent, may], [2, ['104', '108']]);
+  sb.depBulkCheckout();
+  check('dep: check out all due leaves extending, may-extend and finance-hold rooms', sb.DB.rooms.map(r => r.status).join(' '), 'out dnd na due due extended out due');
+  // undo from the log brings the time back
+  sb.DB.rooms = [mk(201, { status: 'late', lateTime: '15:00' }), mk(202, { status: 'dnd', dndTime: '09:00' }), mk(203, { status: 'na', naTime: '10:30' })];
+  [0, 1, 2].forEach(i => sb.depAction(i, 'out'));
+  [2, 1, 0].forEach(() => sb.depUndoLog(sb.DB.log.findIndex(l => l.action === 'out')));
+  check('dep: ↺ in the log puts LCO / DND / NA back with their times', sb.DB.rooms.map(r => r.status + ' ' + (r.lateTime || r.dndTime || r.naTime)), ['late 15:00', 'dnd 09:00', 'na 10:30']);
+  // the agreed-time box on a room that turned late by itself
+  sb.DB.rooms = [mk(301, { depTime: '11:00' })]; sb.depSetLateTime(0, '16:00');
+  check('dep: an agreed time on an auto late room makes it a real late check-out', [sb.DB.rooms[0].status, sb.DB.rooms[0].lateTime, sb._depIsOverdue(sb.DB.rooms[0])], ['late', '16:00', false]);
+  // check out from a No answer card asks about the balance
+  sb.DB.rooms = [mk(401, { status: 'na', balance: 300 })]; sb.DB.filter('all');
+  check('dep: Check out on a No answer card warns about the balance', /onclick="depCheckOut\(0\)"/.test(el('depGrid').innerHTML), true);
+  sb.DB.rooms = [mk(402, { status: 'na', intent: 'extending' })]; sb.DB.filter('all');
+  check('dep: an extending room set to No answer says so on its badge', /⏳ EXTENDING · NA</.test(el('depGrid').innerHTML), true);
+  sb.DB.rooms = [mk(403, { intent: 'checkout_soon', intentMinutes: 15, intentAt: '13:40' })]; sb.DB.filter('all');
+  check('dep: checking out in 15 min shows the time it means', /Checking Out by 13:55/.test(el('depGrid').innerHTML), true);
+  // finance fixed → checked out: the hold stays on the record until the check-out is done (so undo gets it back)
+  sb.DB.rooms = [mk(501, { intent: 'finance_hold', finWho: 'Finance', finAt: '12:00' })];
+  let seen = null; const da = sb.depAction; sb.depAction = (...a) => { seen = sb.DB.rooms[0].intent; return da(...a); };
+  sb.depFinanceDone(0); sb.depAction = da;
+  check('dep: Fixed → check out: checked out, hold cleared after (undo sees the hold)', [sb.DB.rooms[0].status, sb.DB.rooms[0].intent, seen], ['out', '', 'finance_hold']);
+  // reload
+  const HDR = 'ROOM\tGUEST_NAME\tARRIVAL\tDEPARTURE\tNIGHTS\tBALANCE\tTRAVEL_AGENT_NAME\tCOMPANY_NAME\tSOURCE_NAME\tRATE_CODE\tVIP\tDEPARTURE_TIME\tA\tB\tC';
+  const row = (n, d) => `${n}\tTEST,GUEST\t19-OCT-26\t${d}\t1\t0\t\t\tWEB\tBAR\t\t\t\t\t`;
+  sb.DB.rooms = [mk(601, { status: 'out', checkoutAt: '10:00' }), mk(602, { intent: 'extending', extBook: true, note: '[09:00] hi' })]; sb.depAddManualRoom('650', '');
+  el('depReloadInput').value = [HDR, row(601, '20-OCT-26'), row(602, '20-OCT-26'), row(650, '20-OCT-26'), row(603, '20-OCT-26')].join('\n'); sb.processDepReload();
+  check('dep: same-day reload keeps tracking, adds new rooms (the last one too, with empty end columns), a hand-added room on the report is no longer "by hand"',
+    sb.DB.rooms.map(r => [r.roomStr, r.status, r.intent || '', !!r.extBook, !!r.manual]), [['601', 'out', '', false, false], ['602', 'due', 'extending', true, false], ['603', 'due', '', false, false], ['650', 'due', '', false, false]]);
+  el('depReloadInput').value = [HDR, row(601, '21-OCT-26'), row(604, '21-OCT-26')].join('\n'); el('depInput').value = ''; sb.processDepReload();
+  check('dep: another day\'s report in Reload is a fresh board, not merged into today\'s', sb.DB.rooms.map(r => r.roomStr + ' ' + r.status + ' ' + r.departure), ['601 due 21-OCT-26', '604 due 21-OCT-26']);
+}
+
 // ── Roster picture (roster-ocr.js): the on-device reader's pure helpers ──
 {
   console.log('\nRoster picture');
