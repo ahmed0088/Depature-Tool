@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 358, items: [
+    '🔓 Handover Book: agents, supervisors, managers and read-only users can now open it too (it was hidden for everyone except the owner).',
+  ] },
   { v: 357, items: [
     '↪ Extensions: the "Extra nights" list now goes every night up to 31, then 45, 60 and 90, plus "Other…" for any number up to 365. A 30-night extension (also from WhatsApp, e.g. "512 ext 30n") now shows as 30 nights instead of a wrong number.',
     '🔍 WhatsApp check-up, 6 fixes: "324 CO tomorrow", "LCO cancelled", "ext maybe" and "ED tomorrow" are no longer acted on (they become notes). Rooms added by hand no longer make WhatsApp commands wait forever. At midnight the WhatsApp log and waiting commands start fresh. The same message seen on two PCs no longer writes a note twice. Editing "324 CO" to "325 CO" now undoes 324. "LCO 12am" or "midnight" means 23:59, not straight away overdue.',
