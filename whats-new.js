@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 354, items: [
+    '✅ Handover Book: every item now has a clear ⏳ Pending / ✓ Done switch (tap the lit one again to make it plain info). "Open" is now called "Pending" everywhere, also in the Excel and PDF.',
+    '🗑 Faster editing: ✎ edits the text, 🗑 deletes straight away (with Undo), ⋯ has the rest (topic, note, info, original).',
+  ] },
   { v: 353, items: [
     '📄 Handover Book: Export now gives you both — ⬇ Excel or 📄 PDF (the same report, ready to print or save as PDF).',
     '🗓 Shifts now follow the roster: an item goes under the shift of the person who wrote it (or yours), with the real hours, e.g. "Afternoon · 12:00–21:00". If the roster has nobody for that time, the clock is used as before.',

@@ -464,7 +464,7 @@ function summaryOf(items) {
   L.forEach(i => { (i.rooms || []).forEach(r => rooms.add(String(parseInt(r, 10)))); byCat[i.cat] = (byCat[i.cat] || 0) + 1; byShift[i.shift || '—'] = (byShift[i.shift || '—'] || 0) + 1; });
   return { items: L.length, open: L.filter(i => i.status === 'open').length, done: L.filter(i => i.status === 'done').length, info: L.filter(i => i.status === 'info').length, rooms: rooms.size, byCat, byShift };
 }
-const ST_LBL = { open: 'Open', done: 'Done', info: 'Info' };
+const ST_LBL = { open: 'Pending', done: 'Done', info: 'Info' };
 const URGENT_RX = /\burgent\w*|\basap\b|\bimmediately\b|\bemergency\b|\bvip\b|\bcomplain\w*|\bpolice\b|\bangry\b|\bescalat\w*|\bsecurity\b|\bfire\b|\bflood\w*|\binjur\w*|\bambulance|\bdoctor\b|\bsick\b|\btheft|\bstolen\b/i;
 /** needs attention first (urgent / ASAP / VIP / complaint / police…) — only while it is not done */
 const isUrgent = i => !!i && i.status !== 'done' && (URGENT_RX.test(sp([i.orig, i.text, i.head, (i.tags || []).join(' ')].join(' '))) || i.cat === 'guest' && /complain/i.test(sp(i.orig)));
@@ -475,7 +475,7 @@ function writtenSummary(items, opt) {
   if (!L.length) return 'No handover items yet.';
   const u = open.filter(isUrgent).length, max = opt.max || 4;
   let s = `${S.items} item${S.items === 1 ? '' : 's'}`;
-  s += open.length ? ` · ${open.length} open${u ? ` (${u} urgent)` : ''}` : ' · nothing open';
+  s += open.length ? ` · ${open.length} pending${u ? ` (${u} urgent)` : ''}` : ' · nothing pending';
   if (S.done) s += ` · ${S.done} done`;
   s += '.';
   if (open.length) {
@@ -501,17 +501,17 @@ function summaryRows(items, date, hotel) {
   const S = summaryOf(items), rows = [], bold = [];
   const B = r => { rows.push(r); bold.push(rows.length); };
   B(['Shift handover – ' + dLong(date) + (hotel ? ' – ' + hotel : '')]);
-  rows.push(['Items', S.items], ['Open', S.open], ['Done', S.done], ['Info', S.info], ['Rooms mentioned', S.rooms], []);
-  B(['By category', 'Items', 'Open']);
+  rows.push(['Items', S.items], ['Pending', S.open], ['Done', S.done], ['Info', S.info], ['Rooms mentioned', S.rooms], []);
+  B(['By category', 'Items', 'Pending']);
   CATS.forEach(c => { if (S.byCat[c[0]]) rows.push([c[1], S.byCat[c[0]], (items || []).filter(i => !i.del && !i.chat && i.cat === c[0] && i.status === 'open').length]); });
   rows.push([]);
-  B(['By shift', 'Items', 'Open']);
+  B(['By shift', 'Items', 'Pending']);
   SHIFT_BOUNDS.forEach(s => { if (S.byShift[s.id]) rows.push([s.id, S.byShift[s.id], (items || []).filter(i => !i.del && !i.chat && i.shift === s.id && i.status === 'open').length]); });
   rows.push([]);
   const open = (items || []).filter(i => i && !i.del && !i.chat && i.status === 'open').sort(byTime);
-  B(['Open items', 'Time', 'Rooms', 'Item', 'From']);
+  B(['Pending items', 'Time', 'Rooms', 'Item', 'From']);
   open.forEach(i => rows.push([(CAT[i.cat] || CAT.info).label, t12(i.time), (i.rooms || []).join(', '), i.text || i.orig, i.sender || '']));
-  if (!open.length) rows.push(['Nothing open — a clean handover.']);
+  if (!open.length) rows.push(['Nothing pending — a clean handover.']);
   return { rows, bold };
 }
 const COL_W = [12, 11, 9, 16, 20, 12, 70, 9, 18, 34, 60];
@@ -549,7 +549,7 @@ function polishSheet(xml, opt) {
 // ══ The pro Excel report (ExcelJS) — the model and its styles are pure ══
 /** colours (ARGB) of the report */
 const XL = { ink: 'FF0F172A', slate: 'FF1E293B', sub: 'FF64748B', line: 'FFE2E8F0', zebra: 'FFF8FAFC', band: 'FFEEF2F7', white: 'FFFFFFFF', red: 'FFB91C1C', redFill: 'FFFEE2E2', accent: 'FFC2410C' };
-const XL_STATUS = { open: { fill: 'FFFEF3C7', font: 'FF92400E', label: 'Open' }, done: { fill: 'FFD1FAE5', font: 'FF065F46', label: 'Done' }, info: { fill: 'FFF1F5F9', font: 'FF475569', label: 'Info' } };
+const XL_STATUS = { open: { fill: 'FFFEF3C7', font: 'FF92400E', label: 'Pending' }, done: { fill: 'FFD1FAE5', font: 'FF065F46', label: 'Done' }, info: { fill: 'FFF1F5F9', font: 'FF475569', label: 'Info' } };
 const XL_CAT = { guest: ['FFFCE7F3', 'FF9D174D'], pay: ['FFDCFCE7', 'FF166534'], res: ['FFDBEAFE', 'FF1E40AF'], move: ['FFEDE9FE', 'FF5B21B6'], maint: ['FFFFEDD5', 'FF9A3412'], hk: ['FFCCFBF1', 'FF115E59'],
   transport: ['FFFEF9C3', 'FF854D0E'], lost: ['FFFAE8FF', 'FF86198F'], desk: ['FFE0F2FE', 'FF075985'], fb: ['FFFFE4E6', 'FF9F1239'], follow: ['FFFEF3C7', 'FF92400E'], cash: ['FFECFCCB', 'FF3F6212'], info: ['FFF1F5F9', 'FF475569'] };
 /** the Status cell's colours: Open amber, Done green, Info grey */
@@ -598,7 +598,7 @@ function reportModel(items, opt) {
     title: (opt.hotel ? opt.hotel + ' — ' : '') + 'Shift Handover',
     meta: [longD, shiftsCovered(L) ? 'Shifts: ' + shiftsCovered(L) : '', opt.user ? 'Prepared by ' + opt.user : '', exported ? 'Exported ' + exported : ''].filter(Boolean).join('   ·   '),
     summary: writtenSummary(L),
-    kpis: [['Items', S.items, 'ink'], ['Open', S.open, 'open'], ['Done', S.done, 'done'], ['Urgent', urgent, 'urgent'], ['Rooms', S.rooms, 'rooms']],
+    kpis: [['Items', S.items, 'ink'], ['Pending', S.open, 'open'], ['Done', S.done, 'done'], ['Urgent', urgent, 'urgent'], ['Rooms', S.rooms, 'rooms']],
     head: cols.map(c => c[0]), widths: cols.map(c => c[1]), sections, byCat, byShift, open,
     totals: { items: S.items, open: S.open, done: S.done },
     footer: (opt.hotel ? opt.hotel + ' · ' : '') + 'Shift handover ' + dLong(opt.date || ''),
@@ -616,10 +616,10 @@ function pdfHtml(m) {
   const stTd = st => { const x = statusStyle(st); return `<td class="st" style="background:${c(x.fill)};color:${c(x.font)}">${e(x.label)}</td>`; };
   const kpis = `<div class="hbp-kpis">${m.kpis.map(([l, n, k]) => `<div style="background:${c(XL_KPI[k][0])};color:${c(XL_KPI[k][1])}"><b>${e(n)}</b><small>${e(l)}</small></div>`).join('')}</div>`;
   const n = m.head.length;
-  const rows = m.sections.map(sec => `<tr class="band"><td colspan="${n}">${e(sec.label.toUpperCase())}${sec.hours ? ' (' + e(sec.hours) + ')' : ''} · ${sec.count} item${sec.count === 1 ? '' : 's'} · ${sec.open} open</td></tr>` +
+  const rows = m.sections.map(sec => `<tr class="band"><td colspan="${n}">${e(sec.label.toUpperCase())}${sec.hours ? ' (' + e(sec.hours) + ')' : ''} · ${sec.count} item${sec.count === 1 ? '' : 's'} · ${sec.open} pending</td></tr>` +
     sec.rows.map(r => `<tr class="${r.urgent ? 'urg' : ''}${r.done ? ' done' : ''}">${r.cells.map((v, i) => i === 4 ? catTd(r.cat, v) : i === 7 ? stTd(r.status) : `<td class="${i === 5 ? 'rm' : i === 6 || i === 9 || i === 10 ? 'tx' : 'nw'}">${e(v)}</td>`).join('')}</tr>`).join('')).join('');
-  const small = (title, list) => list.length ? `<h2>${e(title)}</h2><table class="hbp-s">${head([title.replace(/^By /, '').replace(/^./, x => x.toUpperCase()), 'Items', 'Open', 'Done'])}<tbody>${list.map(r => `<tr>${r.cat ? catTd(r.cat, r.label) : `<td>${e(r.label)}</td>`}<td class="r">${r.items}</td><td class="r">${r.open}</td><td class="r">${r.done}</td></tr>`).join('')}<tr class="tot"><td>Total</td><td class="r">${m.totals.items}</td><td class="r">${m.totals.open}</td><td class="r">${m.totals.done}</td></tr></tbody></table>` : '';
-  const open = m.open.length ? `<h2>Open items</h2><table class="hbp-t">${head(['Category', 'Time', 'Rooms', '', 'Item', 'From'])}<tbody>${m.open.map(o => `<tr class="${o.urgent ? 'urg' : ''}">${catTd(o.cat, o.cells[0])}<td class="nw">${e(o.cells[1])}</td><td class="rm">${e(o.cells[2])}</td><td class="nw">${o.urgent ? '<span class="ut">URGENT</span>' : ''}</td><td class="tx">${e(o.cells[3])}</td><td class="nw">${e(o.cells[4])}</td></tr>`).join('')}</tbody></table>` : '<p class="ok">Nothing open — a clean handover.</p>';
+  const small = (title, list) => list.length ? `<h2>${e(title)}</h2><table class="hbp-s">${head([title.replace(/^By /, '').replace(/^./, x => x.toUpperCase()), 'Items', 'Pending', 'Done'])}<tbody>${list.map(r => `<tr>${r.cat ? catTd(r.cat, r.label) : `<td>${e(r.label)}</td>`}<td class="r">${r.items}</td><td class="r">${r.open}</td><td class="r">${r.done}</td></tr>`).join('')}<tr class="tot"><td>Total</td><td class="r">${m.totals.items}</td><td class="r">${m.totals.open}</td><td class="r">${m.totals.done}</td></tr></tbody></table>` : '';
+  const open = m.open.length ? `<h2>Pending items</h2><table class="hbp-t">${head(['Category', 'Time', 'Rooms', '', 'Item', 'From'])}<tbody>${m.open.map(o => `<tr class="${o.urgent ? 'urg' : ''}">${catTd(o.cat, o.cells[0])}<td class="nw">${e(o.cells[1])}</td><td class="rm">${e(o.cells[2])}</td><td class="nw">${o.urgent ? '<span class="ut">URGENT</span>' : ''}</td><td class="tx">${e(o.cells[3])}</td><td class="nw">${e(o.cells[4])}</td></tr>`).join('')}</tbody></table>` : '<p class="ok">Nothing pending — a clean handover.</p>';
   return `<style>
     .hbp-h{border-bottom:3px solid ${c(XL.accent)};padding-bottom:8px;margin-bottom:10px} .hbp-h h1{font-size:22px;margin:0;color:${c(XL.ink)}} .hbp-h p{margin:3px 0 0;color:${c(XL.sub)};font-size:11px}
     .hbp-sum{font-style:italic;color:#334155;margin:8px 0 10px}
@@ -880,7 +880,14 @@ const PCSS = `
 #hbRoot .hb-note{font-size:13.5px;color:var(--text2);background:var(--hb-fill);border-radius:10px;padding:7px 10px;overflow-wrap:anywhere}
 #hbRoot .hb-orig{font-size:13px;color:var(--text2);background:var(--hb-soft);border:1px dashed var(--hb-hair);border-radius:10px;padding:8px 10px;white-space:pre-wrap;overflow-wrap:anywhere}
 #hbRoot .hb-orig b{display:block;font-size:11.5px;color:var(--text3);margin-bottom:2px}
-#hbRoot .hb-acts{flex:none;display:flex;align-items:flex-start;gap:2px;opacity:0;transition:opacity .15s}
+#hbRoot .hb-sts{display:inline-flex;border-radius:999px;background:color-mix(in srgb,var(--text3) 12%,transparent);padding:2px;gap:2px}
+#hbRoot .hb-sts button{all:unset;box-sizing:border-box;cursor:pointer;font:600 11px/1 var(--hb-font);padding:5px 10px;border-radius:999px;color:var(--text2);transition:background .18s,color .18s,box-shadow .18s}
+#hbRoot .hb-sts button:hover{color:var(--text)}
+#hbRoot .hb-sts button.on.open{background:var(--hb-open);color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.18)}
+#hbRoot .hb-sts button.on.done{background:var(--hb-done);color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.18)}
+#hbRoot .hb-sts button:focus-visible{outline:2px solid var(--hb-acc);outline-offset:1px}
+#hbRoot .hb-ib.hb-del:hover{color:var(--hb-red);background:color-mix(in srgb,var(--hb-red) 12%,transparent)}
+#hbRoot .hb-acts{flex:none;display:flex;align-items:flex-start;gap:2px;opacity:.45;transition:opacity .15s}
 #hbRoot .hb-it:hover .hb-acts,#hbRoot .hb-it:focus-within .hb-acts,#hbRoot .hb-it.menu .hb-acts{opacity:1}
 @media (hover:none){#hbRoot .hb-acts{opacity:1}}
 #hbRoot .hb-ib{all:unset;box-sizing:border-box;cursor:pointer;width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:var(--text3);font:600 15px/1 var(--hb-font)}
@@ -939,7 +946,9 @@ function itemHtml(i, day, opt) {
   const ckTitle = st === 'done' ? 'Done — tap to reopen' : 'Mark as done';
   let tx = editing ? `<textarea class="hb-ed" id="hbEdit" rows="1" data-k="${k}" data-d="${d}" aria-label="Edit the item">${esc(i.text || i.orig || '')}</textarea><div class="hb-hint">Enter saves · Esc cancels${diff ? ' · <button type="button" class="hb-q sm" data-hb="retidy" data-k="' + k + '" data-d="' + d + '">✨ Tidy the original again</button>' : ''}</div>`
     : `<div class="hb-tx" data-hb="edit" data-k="${k}" data-d="${d}" title="Tap to edit">${i.head ? `<small>${esc(i.head)}</small>` : ''}${hi(i.text || i.orig || '', q)}</div>`;
+  const stSeg = `<span class="hb-sts" role="group" aria-label="Status">${[['open', '⏳ Pending'], ['done', '✓ Done']].map(([v, l]) => `<button type="button" class="${st === v ? 'on ' + v : ''}" data-hb="setst" data-v="${v}" data-k="${k}" data-d="${d}" aria-pressed="${st === v}">${l}</button>`).join('')}</span>`;
   const meta = [
+    stSeg,
     isUrgent(i) ? '<span class="hb-urg">Urgent</span>' : '',
     `<button type="button" class="hb-pill" style="--ch:${CAT_HUE[c.id] || 215}" data-hb="menu" data-k="${k}" data-d="${d}" title="Change the category">${c.icon} ${esc(c.label)}</button>`,
     (i.rooms || []).map(r => `<button type="button" class="hb-rm" data-hb="room" data-r="${esc(r)}" title="Only room ${esc(r)}">${hi(r, q)}</button>`).join(''),
@@ -951,14 +960,14 @@ function itemHtml(i, day, opt) {
     st === 'done' && i.doneBy ? `<span style="color:var(--hb-done)">✓ ${esc(i.doneBy)}${i.doneAt ? ' · ' + esc(t12(hhmmOf(i.doneAt))) : ''}</span>` : '',
   ].filter(Boolean).join('');
   const menuHtml = menu ? `<div class="hb-menu"><span class="lbl">Category</span>${CATS.map(x => `<button type="button" class="hb-chip${x[0] === i.cat ? ' on' : ''}" data-hb="setcat" data-c="${x[0]}" data-k="${k}" data-d="${d}">${x[2]} ${esc(x[1])}</button>`).join('')}
-    <span class="lbl">Item</span>${st !== 'open' ? a('todo', '☐ Mark to do', '', 'hb-chip') : a('info', 'ℹ️ Just info', '', 'hb-chip')}${diff || i.parts > 1 ? a('orig', orig ? 'Hide original' : '💬 Original', '', 'hb-chip') : ''}${a('note', '📝 Note', '', 'hb-chip')}${i.src !== 'hand' ? a('reject', '✕ Not handover', 'Move it to team chat', 'hb-chip warn') : ''}${a('del', '🗑 Delete', '', 'hb-chip warn')}</div>` : '';
+    <span class="lbl">Item</span>${st !== 'info' ? a('info', 'ℹ️ Just info (no action)', '', 'hb-chip') : ''}${diff || i.parts > 1 ? a('orig', orig ? 'Hide original' : '💬 Original', '', 'hb-chip') : ''}${a('note', '📝 Note', '', 'hb-chip')}${i.src !== 'hand' ? a('reject', '✕ Not handover', 'Move it to team chat', 'hb-chip warn') : ''}${a('del', '🗑 Delete', '', 'hb-chip warn')}</div>` : '';
   const noteHtml = noting ? `<input class="hb-in" id="hbNoteIn" data-k="${k}" data-d="${d}" maxlength="300" placeholder="Add a note — Enter saves" value="${esc(i.note || '')}" aria-label="Note">`
     : i.note ? `<div class="hb-note" data-hb="note" data-k="${k}" data-d="${d}">📝 ${hi(i.note, q)}${i.noteBy ? ` <span style="color:var(--text3)">— ${esc(i.noteBy)}</span>` : ''}</div>` : '';
   const origHtml = orig ? `<div class="hb-orig"><b>WhatsApp${i.parts > 1 ? ` · line ${i.part} of ${i.parts}` : ''}</b>${esc(i.orig || '')}${i.parts > 1 && i.full ? `<b style="margin-top:8px">The whole message</b>${esc(i.full)}` : ''}</div>` : '';
   return `<div class="hb-it ${esc(st)}${menu ? ' menu' : ''}" data-key="${k}">
     <button type="button" class="hb-ck" data-hb="check" data-k="${k}" data-d="${d}" title="${ckTitle}" aria-label="${ckTitle}" aria-pressed="${st === 'done'}">✓</button>
     <div class="hb-bd">${tx}<div class="hb-meta">${meta}</div>${noteHtml}${origHtml}${menuHtml}</div>
-    <div class="hb-acts">${a('note', '✎', 'Add a note')}${a('menu', '⋯', 'More')}</div></div>`;
+    <div class="hb-acts">${a('edit', '✎', 'Edit the text')}${a('del', '🗑', 'Delete (you can undo)', 'hb-ib hb-del')}${a('menu', '⋯', 'More: category, note, info, original')}</div></div>`;
 }
 function shell() {
   const root = doc.getElementById('hbRoot'); if (!root) return;
@@ -1011,10 +1020,10 @@ function body() {
     const cnt = patch => shown(filterItems(all, Object.assign({}, f, patch))).length;
     const set = (id, h) => { const el = doc.getElementById(id); if (el && el.innerHTML !== h) el.innerHTML = h; };
     set('hbShifts', [['all', 'All']].concat(SHIFT_BOUNDS.map(s => [s.id, s.id])).map(([k, l]) => `<button type="button" data-hb="shift" data-v="${k}" class="${HB.shift === k ? 'on' : ''}" aria-pressed="${HB.shift === k}">${esc(l)}<em>${cnt({ shift: k })}</em></button>`).join(''));
-    set('hbSt', [['all', 'All'], ['open', 'Open'], ['done', 'Done']].map(([k, l]) => `<button type="button" data-hb="st" data-v="${k}" class="${HB.st === k ? 'on' : ''}" aria-pressed="${HB.st === k}">${l}</button>`).join(''));
+    set('hbSt', [['all', 'All'], ['open', 'Pending'], ['done', 'Done']].map(([k, l]) => `<button type="button" data-hb="st" data-v="${k}" class="${HB.st === k ? 'on' : ''}" aria-pressed="${HB.st === k}">${l}</button>`).join(''));
     // the summary strip (taps filter) and the written summary
     const base = filterItems(all, Object.assign({}, f, { st: 'all' })), S = summaryOf(base), urg = base.filter(isUrgent).length;
-    set('hbStrip', [['open', S.open, 'Open', 'var(--hb-open)'], ['done', S.done, 'Done', 'var(--hb-done)'], ['urgent', urg, 'Urgent', 'var(--hb-red)'], ['rooms', S.rooms, 'Rooms', 'var(--hb-info)']]
+    set('hbStrip', [['open', S.open, 'Pending', 'var(--hb-open)'], ['done', S.done, 'Done', 'var(--hb-done)'], ['urgent', urg, 'Urgent', 'var(--hb-red)'], ['rooms', S.rooms, 'Rooms', 'var(--hb-info)']]
       .map(([k, v, l, c]) => `<button type="button" class="hb-stat${HB.st === k ? ' on' : ''}" style="--c:${c}" data-hb="stat" data-v="${k}" aria-pressed="${HB.st === k}"><b>${v}</b><span>${l}</span></button>`).join(''));
     set('hbSum', esc(writtenSummary(base)).replace(/^([^.]+\.)/, '<b>$1</b>'));
     const act = [];
@@ -1043,7 +1052,7 @@ function body() {
         const fk = HB.by + ':' + G.k, open = !HB.fold[fk], sb = SHIFT_BOUNDS.find(s => s.id === G.k);
         const label = HB.by === 'cat' ? catOf(G.k).icon + ' ' + catOf(G.k).label : sb ? sb.icon + ' ' + sb.id + (hoursOf(G.items) ? ' · ' + hoursOf(G.items) : '') : G.k;
         const no = G.items.filter(i => i.status === 'open').length;
-        return `<section class="hb-sec"><button type="button" class="hb-gh" data-hb="fold" data-v="${esc(fk)}" aria-expanded="${open}">${esc(label)} <em>${G.items.length}${no ? ' · ' + no + ' open' : ''}</em><span class="chev">▾</span></button>${open ? `<div class="hb-list">${G.items.map(i => itemHtml(i, d)).join('')}</div>` : ''}</section>`;
+        return `<section class="hb-sec"><button type="button" class="hb-gh" data-hb="fold" data-v="${esc(fk)}" aria-expanded="${open}">${esc(label)} <em>${G.items.length}${no ? ' · ' + no + ' pending' : ''}</em><span class="chev">▾</span></button>${open ? `<div class="hb-list">${G.items.map(i => itemHtml(i, d)).join('')}</div>` : ''}</section>`;
       }).join('');
     }
     set('hbList', html);
@@ -1199,7 +1208,7 @@ async function proWorkbook(list) {
   const C = { status: 8, cat: 5, rooms: 6, item: 7, note: 10, time: 3 };
   M.sections.forEach(sec => {
     ws.mergeCells(r, 1, r, n);
-    const sc = ws.getCell(r, 1); sc.value = `${sec.label.toUpperCase()}${sec.hours ? ' (' + sec.hours + ')' : ''}   ·   ${sec.count} item${sec.count === 1 ? '' : 's'}${sec.open ? ' · ' + sec.open + ' open' : ''}`;
+    const sc = ws.getCell(r, 1); sc.value = `${sec.label.toUpperCase()}${sec.hours ? ' (' + sec.hours + ')' : ''}   ·   ${sec.count} item${sec.count === 1 ? '' : 's'}${sec.open ? ' · ' + sec.open + ' pending' : ''}`;
     sc.font = font({ bold: true, size: 10.5, color: { argb: 'FF334155' } }); sc.alignment = { vertical: 'middle', indent: 1 };
     for (let c = 1; c <= n; c++) { const x = ws.getCell(r, c); x.fill = fill(XL.band); x.border = { top: thin, bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } } }; }
     ws.getRow(r).height = 20; r++; z = 0;
@@ -1245,14 +1254,14 @@ async function proWorkbook(list) {
     if (rows.length > 1) s2.addConditionalFormatting({ ref: `B${first}:B${first + rows.length - 1}`, rules: [{ type: 'dataBar', cfvo: [{ type: 'num', value: 0 }, { type: 'max' }], color: { argb: 'FF60A5FA' }, gradient: false }] });
     q++;
   };
-  table('By category', ['Category', 'Items', 'Open', 'Done'], M.byCat.map(x => [x.label, x.items, x.open, x.done]), ['Total', M.totals.items, M.totals.open, M.totals.done],
+  table('By category', ['Category', 'Items', 'Pending', 'Done'], M.byCat.map(x => [x.label, x.items, x.open, x.done]), ['Total', M.totals.items, M.totals.open, M.totals.done],
     (row, k) => { const cs = catStyle(M.byCat[k].cat); row.getCell(1).fill = fill(cs.fill); row.getCell(1).font = font({ size: 10.5, color: { argb: cs.font } }); });
-  table('By shift', ['Shift', 'Items', 'Open', 'Done'], M.byShift.map(x => [x.label, x.items, x.open, x.done]), ['Total', M.totals.items, M.totals.open, M.totals.done]);
-  if (M.open.length) table('Open items', ['Category', 'Time', 'Rooms', '', 'Item', 'From'], M.open.map(o => [o.cells[0], o.cells[1], o.cells[2], o.urgent ? 'URGENT' : '', o.cells[3], o.cells[4]]), null,
+  table('By shift', ['Shift', 'Items', 'Pending', 'Done'], M.byShift.map(x => [x.label, x.items, x.open, x.done]), ['Total', M.totals.items, M.totals.open, M.totals.done]);
+  if (M.open.length) table('Pending items', ['Category', 'Time', 'Rooms', '', 'Item', 'From'], M.open.map(o => [o.cells[0], o.cells[1], o.cells[2], o.urgent ? 'URGENT' : '', o.cells[3], o.cells[4]]), null,
     (row, k) => { const o = M.open[k], cs = catStyle(o.cat); row.getCell(1).fill = fill(cs.fill); row.getCell(1).font = font({ size: 10.5, color: { argb: cs.font } }); row.getCell(3).font = font({ size: 10.5, bold: true });
       if (o.urgent) { row.getCell(4).font = font({ size: 9, bold: true, color: { argb: XL.red } }); row.getCell(4).fill = fill(XL.redFill); row.getCell(5).font = font({ size: 10.5, bold: true, color: { argb: XL.red } }); }
       row.height = rowHeight([o.cells[3]], [62], 18); });
-  else { s2.getCell(q, 1).value = 'Nothing open — a clean handover.'; s2.getCell(q, 1).font = font({ italic: true, color: { argb: 'FF065F46' } }); }
+  else { s2.getCell(q, 1).value = 'Nothing pending — a clean handover.'; s2.getCell(q, 1).font = font({ italic: true, color: { argb: 'FF065F46' } }); }
   page(s2, 0, false);
   return new Uint8Array(await wb.xlsx.writeBuffer());
 }
@@ -1322,7 +1331,7 @@ function onClick(e) {
       case 'sugg': { const L = suggestions(); HB.rows = L.map(s => ({ text: s.text, head: '', cat: s.cat, from: s.src, on: false })); HB.rowsKind = 'sugg'; preview(); return; }
       case 'rowsall': { const on = !(HB.rows || []).every(r => r.on); (HB.rows || []).forEach(r => { r.on = on; }); preview(); return; }
       case 'rowsclose': HB.rows = null; HB.rowsKind = ''; preview(); return;
-      case 'edit': if (item && !e.target.closest('a,button.hb-rm,mark')) { HB.edit = id; HB.menu = ''; body(); } return;
+      case 'edit': if (item && !e.target.closest('a,button.hb-rm,mark')) { HB.edit = id; HB.menu = ''; body(); safe(() => { const t = doc.getElementById('hbEdit'); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } }); } return;
       case 'menu': HB.menu = HB.menu === id ? '' : id; body(); return;
       case 'note': HB.note = HB.note === id ? '' : id; HB.menu = ''; body(); return;
       case 'orig': HB.orig = HB.orig === id ? '' : id; body(); return;
@@ -1331,6 +1340,10 @@ function onClick(e) {
     if (a === 'check') {
       if (item.status === 'done') setField(d, k, { status: 'open', doneBy: null, doneAt: null });
       else { setField(d, k, { status: 'done', doneBy: me(), doneAt: Date.now() }); safe(() => { const ck = b; if (ck.animate && !matchMedia('(prefers-reduced-motion: reduce)').matches) ck.animate([{ transform: 'scale(.6)' }, { transform: 'scale(1.18)' }, { transform: 'scale(1)' }], { duration: 320, easing: 'cubic-bezier(.2,.9,.3,1.4)' }); }); }
+    } else if (a === 'setst') {
+      const v = b.dataset.v, nv = item.status === v ? 'info' : v;      // tap the lit one again: back to plain info
+      setField(d, k, nv === 'done' ? { status: 'done', doneBy: me(), doneAt: Date.now() } : { status: nv, doneBy: null, doneAt: null });
+      HB.menu = '';
     } else if (a === 'todo') { setField(d, k, { status: 'open', doneBy: null, doneAt: null }); HB.menu = ''; }
     else if (a === 'info') { setField(d, k, { status: 'info', doneBy: null, doneAt: null }); HB.menu = ''; }
     else if (a === 'setcat') { setField(d, k, { cat: b.dataset.c, catBy: me() }); HB.menu = ''; }
