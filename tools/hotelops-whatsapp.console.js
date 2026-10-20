@@ -282,7 +282,17 @@
       } catch (_) { return null; }
     }).filter(Boolean);
   }
+  // WhatsApp search is open: the side list shows search results (old messages), not the chats — read nothing
+  function searching() {
+    var side = document.getElementById('side'); if (!side) return false;   // the left column only, never the message box
+    var box = side.querySelector('[contenteditable="true"], input[type="text"], input[type="search"], input:not([type])');
+    var t = box ? (box.value !== undefined && box.tagName === 'INPUT' ? box.value : box.textContent) : '';
+    return !!String(t || '').trim();
+  }
+  var wasSearching = false;
   function watchList() {
+    if (searching()) { wasSearching = true; return; }
+    if (wasSearching) { wasSearching = false; watch = {}; }       // back from a search: look again first, act only on what is new after
     var list = chatRows(); if (!list.length) return;
     groups.forEach(function (g) {
       if (curKey && groupMatch(g.name, curKey)) return;           // open: read fully

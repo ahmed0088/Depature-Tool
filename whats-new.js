@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 350, items: [
+    '🛡️ WhatsApp safety: an older message read late (when you scroll up or search in WhatsApp) never undoes a newer one. It says "older message — a newer one was already done" instead. While you search in WhatsApp, the reader pauses reading the chat list, so search results are never taken as new messages. Paste the console line again in WhatsApp Web to get it.',
+  ] },
   { v: 349, items: [
     '✅ WhatsApp: "107 - check out" before today\'s departures were loaded is no longer lost. The command waits (⏳) and is done as soon as you load today\'s list; messages skipped earlier today are done then too. A room that was already checked out shows "✓ already checked out — nothing to do".',
   ] },

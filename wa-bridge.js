@@ -787,7 +787,7 @@ function archiveMsg(msg, day, text, sender, r, partial) {
 }
 
 // ══ Acting on the board ═════════════════════════════════════
-const FIELDS = ['status', 'checkoutAt', 'naTime', 'dndTime', 'lateTime', 'extensionNights', 'extCheckoutTime', 'extRate', 'extReason', 'extConfirmed', 'intent', 'intentMinutes', 'lcoAcknowledged', 'extBook', 'extSign', 'extTd', 'extPay', 'finWho', 'finAt', 'note'];
+const FIELDS = ['status', 'checkoutAt', 'naTime', 'dndTime', 'lateTime', 'extensionNights', 'extCheckoutTime', 'extRate', 'extReason', 'extConfirmed', 'intent', 'intentMinutes', 'lcoAcknowledged', 'extBook', 'extSign', 'extTd', 'extPay', 'finWho', 'finAt', 'waAt', 'note'];
 const J = o => JSON.stringify(o === undefined ? null : o);
 const clone = o => JSON.parse(J(o));
 const pick = r => { const o = {}; FIELDS.forEach(k => { o[k] = r[k] === undefined ? null : clone(r[k]); }); return o; };
@@ -921,6 +921,8 @@ function applyOne(a, who, board) {
   if (!board.ok) return Object.assign(res, { st: 'notlist', text: `${a.room}: not on today's list (${board.why})` });
   if (i < 0) return Object.assign(res, { st: 'notlist', text: `${a.room}: not on today's departures` });
   const r = rooms()[i], room = r.roomStr, st = r.status, before = pick(r);
+  // a message older than the last one acted on for this room (read late: scrolling up, searching) changes nothing
+  if (a.t24 && r.waAt && a.t24 < r.waAt && a.act !== 'note') return Object.assign(res, { st: 'skip', text: `${room}: older message (${timeLabel(a.t24)}) — a newer one (${timeLabel(r.waAt)}) was already done` });
   let line, setStatus = null;
   if (a.act === 'co') {
     if (st === 'out') return Object.assign(res, { st: 'skip', text: `✓ ${room} already checked out${r.checkoutAt ? ' at ' + r.checkoutAt : ''} — nothing to do` });
@@ -1039,6 +1041,7 @@ function applyOne(a, who, board) {
     res.st = 'note'; res.text = `${room} note: ${a.note}`;
   }
   const z = rooms().find(q => q.roomStr === room) || r, after = pick(z), topJ = setStatus ? J(dlog()[0]) : null;
+  if (a.t24 && a.act !== 'note' && (!r.waAt || a.t24 > r.waAt)) { const z2 = rooms().find(q => q.roomStr === room); if (z2) { z2.waAt = a.t24; saveDeps(); } }
   res.undo = quiet => restore(room, before, after, line, topJ, setStatus, quiet === true);
   return res;
 }
@@ -1136,7 +1139,7 @@ function handle(msg, via, opt) {
     : pvOnly ? [{ st: 'preview', text: 'Only the preview was seen · open the group in WhatsApp to read it in full' }]
     : !actions.length ? [P.ask ? { st: 'ask', room: P.ask.room, text: `What does "${P.ask.word}" mean? Answer at the top` } : { st: 'none', text: 'no room — just logged' }]
     : !acts ? [{ st: 'log', text: 'Log only' + (group ? ' · ' + group : '') + ' — rooms not changed' }]
-    : actions.map(a => applyOne(a, who, board));
+    : actions.map(a => applyOne(Object.assign({}, a, { t24 }), who, board));   // t24: when it was written (older never undoes newer)
   if (P.ask && actions.length && acts && !pvOnly) res.push({ st: 'ask', room: P.ask.room, text: `What does "${P.ask.word}" mean? Answer at the top` });
   done[id] = (pvOnly ? (prev || '') : P.actions.map(actionKey).join('|')); done[ck] = ''; saveDone(done);
 
