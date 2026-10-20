@@ -2116,5 +2116,66 @@ console.log('\nHandover Book');
   check('reader: "Ho gaya" is not a handover mark (same rule as HotelOps)', [RD.hoMarked('Ho gaya sir'), RD.hoMarked('ho 512 ED')], [false, true]);
 }
 
+// ── WhatsApp bridge acting on a board (wa-bridge.js handle() with departures.js depAction, no browser) ──
+console.log('\nWhatsApp bridge · acting on the board');
+{
+  const store = {}, toasts = [];
+  const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } },
+    document: { readyState: 'complete', addEventListener() {}, dispatchEvent() {}, getElementById() { return null; }, querySelectorAll() { return []; }, querySelector() { return null; } },
+    addEventListener() {}, setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, CustomEvent: class { constructor(t, o) { this.type = t; this.detail = o && o.detail; } },
+    currentProfile: { name: 'Test User' }, depLog: [], depRooms: [], DAY: '2026-10-11',
+    depRender() {}, updateDepBadge() {}, saveDeps() {}, saveDepartures() {}, logActivity() {}, showToast: (m, t) => toasts.push(m), showUndoToast: (m, fn) => { toasts.push(m); sb.lastUndo = fn; } };
+  sb.window = sb; sb.globalThis = sb;
+  vm.createContext(sb);
+  const dep = fs.readFileSync(path.join(ROOT, 'departures.js'), 'utf8'), ut = fs.readFileSync(path.join(ROOT, 'utils.js'), 'utf8');
+  const fnSrc = (src, name) => { const i = src.indexOf('function ' + name + '('); return src.slice(i, src.indexOf('\n}\n', i) + 3); };
+  vm.runInContext(fnSrc(dep, 'depAction') + fnSrc(dep, 'depAddManualRoom') + fnSrc(dep, '_depBoardDate') + fnSrc(ut, 'parseOperaDate') + 'function hoLocalISO() { return DAY; }', sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'wa-bridge.js'), 'utf8'), sb, { filename: 'wa-bridge.js' });
+  const mk = (n, x) => Object.assign({ room: parseInt(n, 10), roomStr: String(n), name: 'TEST GUEST', arrival: '', departure: '11-OCT-26', nights: 1, balance: 0, depTime: '', status: 'due', lateTime: '', extensionNights: 0, intent: '', note: '', checkoutAt: '' }, x || {});
+  const board = list => { sb.depRooms.length = 0; sb.depLog.length = 0; list.forEach(r => sb.depRooms.push(typeof r === 'object' ? r : mk(r))); };
+  const room = n => sb.depRooms.find(r => parseInt(r.roomStr, 10) === n) || {};
+  const H = (id, text, x) => sb.hoWaBridge.handle(Object.assign({ id, text, sender: 'Sam Test', time: '10:05' }, x || {}), 'page');
+  const res = () => sb.hoWaBridge.log()[0].res.map(r => r.st + ' ' + (r.room || '')).join(', ');
+  const st = n => [room(n).status, room(n).lateTime || '', room(n).extensionNights || 0].join(' ');
+
+  // the built-in word list (wa-brain.js) has CO, checkout, LCO, EXT: those still go through the parser's own checks
+  const BW = { co: 'co', checkout: 'co', lco: 'lco', ext: 'ext', ed: 'co', vd: 'co' };
+  const words = w => { const m = BW[String(w).toLowerCase().replace(/[.\/\s]/g, '')]; return m ? { m, label: 'x' } : null; };
+  check('wa words: "CO tomorrow", "LCO cancelled", "ext maybe", "ED tomorrow" are notes even with CO/LCO/EXT/ED in the word list',
+    ['324 CO tomorrow', '202 LCO cancelled', '113 ext maybe', '113 ext pending', '512 ED tomorrow', '324 CO', '202 LCO 6pm', '113 ext 2n', '512 ED', '315 VD'].map(t => sb.hoWaParse(t, { words }).actions.map(a => a.act + (a.time ? ' ' + a.time : '') + (a.nights ? ' ' + a.nights : '')).join()),
+    ['note', 'note', 'note', 'extending', 'note', 'co', 'lco 18:00', 'ext 2', 'co', 'co']);
+
+  // a room added by hand (departure "2026-10-11"): the board is still today's, its extension counts from today
+  check('manual room: ISO departure read as that day', [sb.parseOperaDate('2026-10-11').toDateString(), sb.parseOperaDate('11-OCT-26').toDateString()], ['Sun Oct 11 2026', 'Sun Oct 11 2026']);
+  board([]); sb.depAddManualRoom('705', 'X');
+  check('manual room only on the board: WhatsApp acts at once (not "waiting for today\'s list")', [H('a1', '705 ext till 13'), res(), st(705)], ['done', 'ext 705', 'extended  2']);
+
+  // "LCO 12am" / "midnight": the end of the day, not overdue at once
+  board([201, 202]); H('a2', '201 LCO 12am'); H('a3', '202 LCO midnight');
+  check('LCO 12am / midnight → 23:59', [st(201), st(202)], ['late 23:59 0', 'late 23:59 0']);
+
+  // the same message read by a second HotelOps on the same board (its own done list): not twice
+  board([101, 102, mk(103, { depTime: '12:00' }), 104, 107]);
+  const M = [['b1', '101 CO'], ['b2', '102 LCO 2pm'], ['b3', '103 checking out in 10 min'], ['b4', '104 change towels'], ['b7', '107 luggage inside']];
+  M.forEach(([id, t]) => H(id, t)); const notes = [101, 102, 103, 104, 107].map(n => room(n).note);
+  delete store.ho_wa_done; toasts.length = 0;
+  const again = M.map(([id, t]) => (H(id, t), res()));
+  check('second PC: nothing done twice, no Undo offered', [again, [101, 102, 103, 104, 107].every((n, i) => room(n).note === notes[i]), toasts.length], [['skip 101', 'skip 102', 'skip 103', 'skip 104', 'skip 107'], true, 0]);
+
+  // edited in WhatsApp: what the old text no longer says is taken back
+  board([324, 325, 202, 501]);
+  H('e1', '324 CO'); H('e1', '325 CO', { edited: true });
+  H('e2', '202 LCO 2pm'); H('e2', '202 LCO 4pm', { edited: true });
+  H('e3', '501 CO'); H('e3', '501 sorry wrong room', { edited: true });
+  check('edit: "324 CO" → "325 CO" puts 324 back; LCO time changed; a CO edited away is undone', [st(324), st(325), st(202), st(501)], ['due  0', 'out  0', 'late 16:00 0', 'due  0']);
+
+  // past midnight: yesterday's log is not today's, and nothing from it runs on the new board
+  board([mk(951, { departure: '12-OCT-26' })]);
+  H('n1', '951 CO', { time: '23:50' });
+  check('tomorrow\'s board: not acted on', [res(), st(951)], ['notlist 951', 'due  0']);
+  sb.DAY = '2026-10-12'; sb.hoWaBridge.flushPending(); sb.hoWaBridge.flushPending();   // (every 4 s)
+  check('after midnight: yesterday\'s message never runs on the new board, log starts empty', [st(951), sb.hoWaBridge.log().length], ['due  0', 0]);
+}
+
 console.log(`\n${pass} passed · ${fail} failed`);
 process.exit(fail ? 1 : 0);

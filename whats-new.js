@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 357, items: [
+    '↪ Extensions: the "Extra nights" list now goes every night up to 31, then 45, 60 and 90, plus "Other…" for any number up to 365. A 30-night extension (also from WhatsApp, e.g. "512 ext 30n") now shows as 30 nights instead of a wrong number.',
+    '🔍 WhatsApp check-up, 6 fixes: "324 CO tomorrow", "LCO cancelled", "ext maybe" and "ED tomorrow" are no longer acted on (they become notes). Rooms added by hand no longer make WhatsApp commands wait forever. At midnight the WhatsApp log and waiting commands start fresh. The same message seen on two PCs no longer writes a note twice. Editing "324 CO" to "325 CO" now undoes 324. "LCO 12am" or "midnight" means 23:59, not straight away overdue.',
+  ] },
   { v: 356, items: [
     '🔍 Departures check-up, 18 fixes. A board for tomorrow no longer shows rooms as late or overdue. "Check out all due" skips rooms that are extending, may extend or waiting for Finance. The Due count only counts rooms that are really due out. Check out on No answer, DND and Late rooms now warns about an owing balance. Picking an agreed time on an overdue room now sets the late check-out.',
     '🔍 More Departures fixes: a report for a different day starts a fresh board instead of mixing into today. Pasting a report no longer drops the last room. Undo keeps the late check-out, No answer and DND times. "Checking out in 15 min" shows the time it means. On a phone, list and compact views no longer cut the Check out button.',

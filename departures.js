@@ -1296,6 +1296,20 @@ function depExtWaiting(r) {
   return [['extBook', 'Booking'], ['extSign', 'RC sign'], ['extTd', 'TD'], ['extPay', 'Payment']].filter(([k]) => !r[k]).map(([, l]) => l);
 }
 
+/** extra-night choices: every night up to a month, then longer stays, and the room's own number if it is not in the list */
+function depExtNightOpts(cur) {
+  const L = Array.from({ length: 31 }, (_, k) => k + 1).concat([45, 60, 90]);
+  if (cur > 0 && !L.includes(cur)) L.push(cur);
+  return L.sort((a, b) => a - b);
+}
+function depExtNightsPick(i, sel) {
+  if (sel.value !== 'other') { depExtUpdate(i, 'nights', parseInt(sel.value) || 1); return; }
+  const r = depRooms[i], raw = prompt(`Room ${r.roomStr} — how many extra nights?`, String(r.extensionNights || 1));
+  const n = parseInt(raw);
+  if (!n || n < 1 || n > 365) { if (raw !== null) showToast('Enter a number of nights from 1 to 365', 'err'); depRender(); return; }
+  depExtUpdate(i, 'nights', n);
+}
+
 function depCardHTML(r) {
   const i   = depRooms.indexOf(r);
   const bal = r.balance;
@@ -1435,8 +1449,9 @@ function depCardHTML(r) {
       <div class="dc-ext-grid">
         <div class="dc-ext-field">
           <label class="dc-ext-lbl">Extra nights</label>
-          <select class="dc-select ext dc-ext-sel" onchange="depExtUpdate(${i},'nights',parseInt(this.value)||1)">
-            ${[1,2,3,4,5,6,7,14,21,28].map(n => `<option value="${n}"${r.extensionNights===n?' selected':''}>${n} night${n>1?'s':''}</option>`).join('')}
+          <select class="dc-select ext dc-ext-sel" onchange="depExtNightsPick(${i},this)">
+            ${depExtNightOpts(r.extensionNights).map(n => `<option value="${n}"${r.extensionNights===n?' selected':''}>${n} night${n>1?'s':''}</option>`).join('')}
+            <option value="other">Other…</option>
           </select>
         </div>
         <div class="dc-ext-field">

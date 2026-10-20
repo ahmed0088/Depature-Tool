@@ -44,6 +44,7 @@ function hoWaParser() {
   function hoWaTime(s) {
     let t = sp(s).toLowerCase().replace(/\b([ap])\.\s*m\.?/g, '$1m').replace(/(\d)\.(\d{2})\b/g, '$1:$2');
     if (/\bnoon\b/.test(t)) return '12:00';
+    if (/\bmidnight\b/.test(t)) return '00:00';
     let h, mi = 0, ap = '', m;
     if ((m = t.match(/\b(\d{1,2})(?::?(\d{2}))?\s*(am|pm)\b/))) { h = +m[1]; mi = m[2] ? +m[2] : 0; ap = m[3]; }
     else if ((m = t.match(/\b(\d{1,2}):(\d{2})\b/))) { h = +m[1]; mi = +m[2]; }
@@ -166,12 +167,17 @@ function hoWaParser() {
     let hit = two && lookup(two), used = two;
     if (!hit) { hit = lookup(ws[0]); used = ws[0]; }
     if (!hit) return null;
+    // the parser's own command words in their usual meaning ("CO", "checkout", "LCO", "ext", in the built-in list too):
+    // the full rules below read them, so "324 CO tomorrow", "202 LCO cancelled", "113 ext pending" are not taken as done
+    const own = { co: CO_W, lco: LCO_W, ext: EXT_W }[hit.m];
+    if (own && new RegExp('^(?:' + own + ')$', 'i').test(used.replace(/[:,;.!?]+$/, ''))) return null;
     const tail = low.split(/\s+/).slice(used.split(' ').length).join(' ').replace(/^[\s:\-–—]+/, '');
     const tag = { word: used.replace(/[:,;.!?]+$/, ''), label: String(hit.label || '') };
+    const asNote = () => Object.assign({ act: 'note', note: r }, tag);
     if (hit.m === 'ignore') return Object.assign({ act: 'ignore' }, tag);
-    if (hit.m === 'co') return Object.assign({ act: 'co' }, tag);
-    if (hit.m === 'lco') return Object.assign({ act: 'lco', time: hoWaTime(tail) }, tag);
-    if (hit.m === 'ext') { const x = extDetail(tail); return Object.assign({ act: 'ext' }, x || {}, tag); }
+    if (hit.m === 'co') return tail && !FILLER.test(tail) && (CO_NOT.test(tail) || WHEN_NOT.test(tail) || timeStrict(tail)) ? asNote() : Object.assign({ act: 'co' }, tag);   // "512 ED tomorrow": a note
+    if (hit.m === 'lco') return /\?|\b(?:cancel\w*|tomorrow|tomm?orr?ow|tmrw|tmr|tmw)\b/.test(tail) ? asNote() : Object.assign({ act: 'lco', time: hoWaTime(tail) }, tag);
+    if (hit.m === 'ext') { const x = extDetail(tail); return x ? Object.assign({ act: 'ext' }, x, tag) : asNote(); }
     // 'note' and 'hk' (a housekeeping status) are written on the room: "VC (Vacant Clean)"
     return Object.assign({ act: 'note', note: tag.label && low === used ? r + ' (' + tag.label + ')' : r }, tag);
   }
@@ -820,6 +826,9 @@ function findRoom(room) {
   return null;
 }
 function addNoteLine(r, line) { r.note = r.note ? r.note + '\n' + line : line; }
+// the same line from the same message is already on the room (another HotelOps on this board read it first): not twice
+const noStamp = l => String(l).replace(/^\[\d{1,2}:\d{2}\]\s*/, '');
+function hasLine(r, line) { const b = noStamp(line); return String(r.note || '').split('\n').some(l => noStamp(l) === b); }
 function dropLine(note, line) { const L = String(note || '').split('\n'); const i = L.lastIndexOf(line); if (i >= 0) L.splice(i, 1); return L.join('\n'); }
 
 /** put a room back as it was before our change (status: the depAction status we set, or null) */
@@ -858,7 +867,15 @@ function addPending(a, who, key, sender, tl) {
   const k = actionKey(a); if (PEND.some(p => p.k === k)) return;
   PEND.push({ k, a: JSON.parse(J(a)), who, key, sender, tl }); savePend();
 }
+// past midnight: yesterday's log and waiting commands are not today's (never run on today's board)
+let DAY = today();
+function rollDay() {
+  if (today() === DAY) return;
+  DAY = today(); LOG = []; PEND = []; saveLog(); savePend();
+  try { renderCard(); } catch (_) {}
+}
 function flushPending() {
+  rollDay();
   if (PEND[0] && lsGet(LS_PEND, {}).date !== today()) { PEND = []; savePend(); return; }
   const board = boardIsToday(); if (!board.ok) return;
   // messages from earlier today that were skipped because the list was not loaded yet: run them now too
@@ -896,6 +913,7 @@ function flushPending() {
 
 /** one action → {room, act, time, st, text, undo?} */
 function applyOne(a, who, board) {
+  if (a.act === 'lco' && a.time === '00:00') a = Object.assign({}, a, { time: '23:59' });   // "LCO 12am / midnight": the end of today, not overdue at once
   const res = { room: a.room, act: a.act, time: a.time || '', note: a.note || '' };
   const tag = HP.wordTag(a); if (tag) res.w = tag;
   if (a.guess) { res.guess = a.guess; res.w = (res.w || '') + ' · 🤔 guessed from "' + a.guess + '"'; }
@@ -938,12 +956,12 @@ function applyOne(a, who, board) {
     // "514 checking out in 10 mins" before the room's check-out time: ⏱ Checking Out Soon, not a late check-out
     if (st === 'out') return Object.assign(res, { st: 'skip', text: `${room}: already checked out` });
     if (st === 'extended') return Object.assign(res, { st: 'skip', text: `${room}: marked extended — not changed` });
+    line = a.soon ? `[${hhmm()}] Checking out in ${a.soon} min (≈ ${timeLabel(a.time)}) — ${who}` : `[${hhmm()}] Checking out at ${timeLabel(a.time)} — ${who}`;
+    if (hasLine(r, line)) return Object.assign(res, { st: 'skip', text: `${room}: already noted` });
     if (a.soon) {
-      line = `[${hhmm()}] Checking out in ${a.soon} min (≈ ${timeLabel(a.time)}) — ${who}`;
       r.intent = 'checkout_soon'; r.intentMinutes = a.soon;
       res.text = `${room} checking out in ${a.soon} min`;
     } else {
-      line = `[${hhmm()}] Checking out at ${timeLabel(a.time)} — ${who}`;
       res.text = `${room} checking out at ${timeLabel(a.time)}`;
     }
     addNoteLine(r, line); paint(); saveDeps();
@@ -953,6 +971,7 @@ function applyOne(a, who, board) {
     if (st === 'extended') return Object.assign(res, { st: 'skip', text: `${room}: marked extended — not changed` });
     line = a.soon && a.time ? `[${hhmm()}] Checking out in ${a.soon} min (≈ ${timeLabel(a.time)}) — ${who}`
       : `[${hhmm()}] Late check-out ${a.time ? timeLabel(a.time) : '(no time given)'} — ${who}`;
+    if (hasLine(r, line)) return Object.assign(res, { st: 'skip', text: `${room}: already late check-out${r.lateTime ? ' ' + timeLabel(r.lateTime) : ''}` });
     addNoteLine(r, line);
     if (r.intent === 'checkout_soon') { r.intent = ''; r.intentMinutes = null; }   // a new time replaces "checking out in 10 min"
     if (st === 'late') { if (a.time) r.lateTime = a.time; paint(); saveDeps(); }
@@ -1012,6 +1031,7 @@ function applyOne(a, who, board) {
     if (st === 'out') return Object.assign(res, { st: 'skip', text: `${room}: checked out already — luggage inside? check the room` });
     if (st === 'extended') return Object.assign(res, { st: 'skip', text: `${room}: already extended` });
     line = `[${hhmm()}] ${a.note} — might extend — ${who}`;
+    if (hasLine(r, line)) return Object.assign(res, { st: 'skip', text: `${room}: already noted` });
     addNoteLine(r, line);
     const was = r.intent;
     if (!was || was === 'checkout_soon') { r.intent = 'maybe_extend'; r.intentMinutes = null; }
@@ -1038,6 +1058,7 @@ function applyOne(a, who, board) {
     res.st = 'ext'; res.d = what; res.text = `Extended ${room} (${what})` + (x.guessed ? ' · nights not said, check the card' : '');
   } else {
     line = `[${hhmm()}] ${who}: ${a.note}`;
+    if (hasLine(r, line)) return Object.assign(res, { st: 'skip', text: `${room}: already noted` });
     addNoteLine(r, line); paint(); saveDeps();
     res.st = 'note'; res.text = `${room} note: ${a.note}`;
   }
@@ -1155,6 +1176,7 @@ let ACK_RES = null;   // what the last message did, sent back with the "got it" 
 function handle(msg, via, opt) {
   opt = opt || {};
   ACK_RES = null;
+  rollDay();
   if (msg && msg.deleted) { if (msg.id) hoBook({ kind: 'del', base: safeKey(msg.id), mid: String(msg.id).slice(0, 200) }); return onDeleted(msg); }
   const text = String(msg && msg.text || '').slice(0, 4000);
   const sender = normS(msg && msg.sender || '').slice(0, 60) || (msg && msg.mine ? 'Me' : 'WhatsApp');
@@ -1183,11 +1205,14 @@ function handle(msg, via, opt) {
   if (opt.rerun && prev === undefined) prev = done[ck];
   const quote = String(msg && msg.quote || '').slice(0, 400);
   const P = parse(text, quote, t24);   // "in 10 mins" counts from the message's own time
-  let actions = P.actions, edited = !!msg.edited;
+  let actions = P.actions, edited = !!msg.edited, unEdit = [];
   if (prev !== undefined) {
     const old = new Set(String(prev).split('|').filter(Boolean));
+    // edited in WhatsApp: what the old text did and the new one no longer says is taken back ("324 CO" → "325 CO")
+    if (!caught && !opt.rerun && msg.id) { const now = new Set(P.actions.map(actionKey)); unEdit = undoRemoved(String(msg.id), [...old].filter(k => !now.has(k))); }
     actions = actions.filter(a => !old.has(actionKey(a)));
     if (!actions.length) {
+      if (unEdit.length) { const l = LOG.find(x => x.mid === String(msg.id).slice(0, 200)); if (l) { l.res = l.res.concat(unEdit); l.edited = true; l.text = text.slice(0, 500); saveLog(); renderCard(); tell(l); } editToast(unEdit, sender, timeLabel(t24)); }
       done[id] = P.actions.map(actionKey).join('|'); done[ck] = ''; saveDone(done);
       if (caught) upgradePreview(caught, Object.assign({}, msg, { group }), dIso, text, sender);
       else archiveMsg(Object.assign({}, msg, { group }), dIso, text, sender, '', true);
@@ -1206,7 +1231,8 @@ function handle(msg, via, opt) {
     : pvOnly ? [{ st: 'preview', text: 'Only the preview was seen · open the group in WhatsApp to read it in full' }]
     : !actions.length ? [P.ask ? { st: 'ask', room: P.ask.room, text: `What does "${P.ask.word}" mean? Answer at the top` } : { st: 'none', text: 'no room — just logged' }]
     : !acts ? [{ st: 'log', text: 'Log only' + (group ? ' · ' + group : '') + ' — rooms not changed' }]
-    : actions.map(a => applyOne(Object.assign({}, a, { t24 }), who, board));   // t24: when it was written (older never undoes newer)
+    : actions.map(a => Object.assign(applyOne(Object.assign({}, a, { t24 }), who, board), { k: actionKey(a) }));   // t24: when it was written (older never undoes newer)
+  if (unEdit.length) res.unshift(...unEdit);
   if (P.ask && actions.length && acts && !pvOnly) res.push({ st: 'ask', room: P.ask.room, text: `What does "${P.ask.word}" mean? Answer at the top` });
   done[id] = (pvOnly ? (prev || '') : P.actions.map(actionKey).join('|')); done[ck] = ''; saveDone(done);
 
@@ -1235,7 +1261,7 @@ function handle(msg, via, opt) {
   if (undos.length) {
     undoAll = once(() => { let ok = false; undos.slice().reverse().forEach(u => { try { if (u()) ok = true; } catch (_) {} }); if (ok) { tgt.undone = true; saveLog(); archive(dIso, akey, { u: 1 }, true); renderCard(); } return ok; });
     undoFns[key] = undoAll;
-    undoParts[key] = res.filter(r => r.undo).map(r => ({ room: r.room, st: r.st, fn: r.undo }));
+    undoParts[key] = res.filter(r => r.undo).map(r => ({ room: r.room, st: r.st, k: r.k, fn: r.undo }));
   }
   if (opt.batch) { opt.batch.undos.push(undoAll); res.forEach(r => { opt.batch.n[r.st] = (opt.batch.n[r.st] || 0) + 1; }); }
   else {
@@ -1245,6 +1271,7 @@ function handle(msg, via, opt) {
       const bw = acted.map(balInfo).filter(b => b && b.tone === 'warn').map(b => b.label);
       showUndoToast(`${lbl} (WhatsApp · ${sender} ${tl})${bw.length ? ' · ' + bw.join(' · ') : ''}`, undoAll, 10000);
     }
+    if (unEdit.length && !acted.length) editToast(unEdit, sender, tl);
     const nl = res.filter(r => r.st === 'notlist');
     if (nl.length && !acted.length && typeof showToast === 'function') showToast(`WhatsApp: room ${nl.map(r => r.room).join(', ')} is not there — ${nl[0].text.replace(/^\S+:\s*/, '')}`, 'warn');
   }
@@ -1270,6 +1297,36 @@ function upgradePreview(pv, msg, day, text, sender) {
   archiveMsg(msg, day, text, sender, l ? archR(l.res) : '', false);
   pv.lk = ''; pv.ak = '';
   renderCard();
+}
+
+/**
+ * A message edited in WhatsApp no longer says some of what it said ("324 CO" → "325 CO"): those changes are taken back,
+ * when nobody changed the room since. keys: the old text's action keys that are gone → results for its log line.
+ */
+const BACK = { fin: 'finance hold removed', co: 'back to due out', lco: 'late check-out removed', ext: 'extension removed', extending: 'extending removed', note: 'note removed', maybe: 'note removed' };
+function undoRemoved(mid, keys) {
+  if (!keys.length) return [];
+  const gone = new Set(keys), out = [];
+  LOG.filter(l => l.mid === mid.slice(0, 200) && !l.undone && !l.deleted).forEach(l => {
+    const parts = undoParts[l.key];
+    if (!parts) {                                          // done before HotelOps was reloaded: cannot take it back from here
+      l.res.filter(r => /^(?:co|lco|ext|extending|fin|maybe)$/.test(r.st) && !/after the list was loaded/.test(r.text || '') && keys.some(k => k.split(':')[0] === String(parseInt(r.room, 10))))
+        .forEach(r => out.push({ st: 'deleted', room: r.room, text: `✎ Edited in WhatsApp · check ${r.room} (done before HotelOps was reloaded)` }));
+      return;
+    }
+    undoParts[l.key] = parts.filter(p => {
+      if (!p.k || !gone.has(p.k)) return true;
+      let ok = false; try { ok = p.fn(true); } catch (_) {}
+      out.push(ok ? { st: 'skip', room: p.room, text: `✎ Edited in WhatsApp → ${p.room} ${BACK[p.st] || 'undone'}` }
+        : { st: 'deleted', room: p.room, text: `✎ Edited in WhatsApp · ${p.room} was changed after that message; check it` });
+      return false;
+    });
+  });
+  return out;
+}
+function editToast(list, sender, tl) {
+  if (!list.length || typeof showToast !== 'function') return;
+  showToast(list.map(r => r.text).join(' · ') + ` (${sender} ${tl})`, list.some(r => r.st === 'deleted') ? 'warn' : 'info');
 }
 
 /**
@@ -2045,7 +2102,7 @@ function start() {
   setInterval(() => { hookWords(); pushWords(); if (doc.getElementById('waStatus')) renderStatus(); }, 15000);
   setInterval(flushPending, 4000);
 }
-W.hoWaBridge = { handle, findRoom, readPasted, parse, parseCopied: hoWaParseCopied, log: () => LOG.slice(), origins: ORIGINS, render: renderCard, search: runSearch, flushBackup: flushArch, results: () => RES.slice(),
+W.hoWaBridge = { handle, flushPending, findRoom, readPasted, parse, parseCopied: hoWaParseCopied, log: () => LOG.slice(), origins: ORIGINS, render: renderCard, search: runSearch, flushBackup: flushArch, results: () => RES.slice(),
   send: waSend, outbox: () => OUT.slice(), link: () => (LINK ? { at: LINK.at, groups: LINK.groups || [], open: LINK.open || '', rtt: LINK.rtt || 0, auto: !!LINK.auto, linked: linked() } : null),
   asks: () => Object.keys(ASKS).map(k => ASKS[k]), answer: answerAsk, confirmGuess, words: wordsList, setGroupAct, setGroupHo, setGroupCopy, isHandoverGroup: groupIsHo, checkoutList: () => checkoutListText(rooms(), new Date()) };
 if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start); else start();
