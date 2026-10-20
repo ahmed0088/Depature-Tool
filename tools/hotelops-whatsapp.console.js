@@ -873,6 +873,7 @@
       if (!r || typeof r !== 'object') return;
       var room = String(r.room || '').slice(0, 8), t = String(r.text || '');
       if (r.st === 'req') add.push({ tone: 'req', label: '📝 Request · ' + room });
+      else if (r.st === 'wait') add.push({ tone: 'req', label: '⏳ ' + room + ' waits for today\'s list' });
       else if (r.st === 'notlist') { bad.push(room); add.push({ tone: 'bad', label: '⚠ ' + room + (/not found/.test(t) ? ' not found' : ' not on list') }); }
       else if (/ · added from /.test(t)) add.push({ tone: 'req', label: '＋ ' + room + ' added from ' + t.split(' · added from ')[1] });
     });

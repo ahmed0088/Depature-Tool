@@ -607,7 +607,7 @@ function safeKey(id) { return String(id == null ? '' : id).replace(/[.#$\[\]\/\x
 function hashKey(s) { s = String(s); let h = 5381, g = 7; for (let i = 0; i < s.length; i++) { h = ((h << 5) + h + s.charCodeAt(i)) | 0; g = (g * 31 + s.charCodeAt(i)) | 0; } return 'p' + (h >>> 0).toString(36) + (g >>> 0).toString(36); }
 /** results of one message → the compact r string */
 function archR(res) { return res.map(r => [r.st, r.room || '', r.d || ''].filter(Boolean).join(' ')).join(' · '); }
-const R_LABEL = { fin: '🧾 waiting for', extending: '⏳ Extending', deleted: '🗑 deleted', co: '✓ CO', lco: '⏰ LCO', ext: '↪ EXT', note: '📝 note', req: '📝 Request · room', maybe: '🤔 might extend', notlist: '⚠ not on list', skip: '· skipped', none: '— no room', ignore: '— HotelOps post', log: '🗂 log only', preview: '👁 preview', ask: '❓ asked' };
+const R_LABEL = { fin: '🧾 waiting for', extending: '⏳ Extending', deleted: '🗑 deleted', co: '✓ CO', lco: '⏰ LCO', ext: '↪ EXT', note: '📝 note', req: '📝 Request · room', maybe: '🤔 might extend', wait: '⏳ waiting for today\'s list', notlist: '⚠ not on list', skip: '· skipped', none: '— no room', ignore: '— HotelOps post', log: '🗂 log only', preview: '👁 preview', ask: '❓ asked' };
 /** r → chips [{st, label}] */
 function archChips(r) {
   if (!r) return [{ st: 'none', label: '— not acted on (not from that day)' }];
@@ -798,8 +798,9 @@ const hhmm = () => new Date().toLocaleTimeString('en-GB', { hour: '2-digit', min
 const paint = () => { try { depRender(); } catch (_) {} try { updateDepBadge(); } catch (_) {} };
 const roomIdx = room => { const n = parseInt(room, 10); return rooms().findIndex(r => parseInt(r.roomStr, 10) === n); };
 function boardIsToday() {
-  if (!rooms().length) return { ok: false, why: 'no departures loaded' };
+  if (!rooms().length) return { ok: false, today: false, why: 'no departures loaded' };
   let d = null; try { d = typeof _depBoardDate === 'function' ? _depBoardDate() : null; } catch (_) {}
+  if (d && isoDay(d) < today()) return { ok: false, today: false, why: 'the board is for ' + d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) };
   if (d && isoDay(d) !== today()) return { ok: false, why: 'the board is for ' + d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) };
   return { ok: true };
 }
@@ -847,6 +848,51 @@ function pastLimit(r, t) {
   const m = String(t).match(/^(\d{1,2}):(\d{2})$/); if (!m) return true;
   return +m[1] * 60 + +m[2] > lim;
 }
+// ── Commands that came before today's departures were loaded ──
+// kept for today only; run as soon as today's board is up (checked every few seconds)
+const LS_PEND = 'ho_wa_pend_v1';
+let PEND = (() => { const v = lsGet(LS_PEND, null); return v && v.date === today() && Array.isArray(v.items) ? v.items : []; })();
+function savePend() { lsSet(LS_PEND, { date: today(), items: PEND.slice(-200) }); }
+function addPending(a, who, key, sender, tl) {
+  const k = actionKey(a); if (PEND.some(p => p.k === k)) return;
+  PEND.push({ k, a: JSON.parse(J(a)), who, key, sender, tl }); savePend();
+}
+function flushPending() {
+  if (PEND[0] && lsGet(LS_PEND, {}).date !== today()) { PEND = []; savePend(); return; }
+  const board = boardIsToday(); if (!board.ok) return;
+  // messages from earlier today that were skipped because the list was not loaded yet: run them now too
+  LOG.forEach(l => {
+    if (l.undone || l.deleted || !Array.isArray(l.res)) return;
+    l.res.forEach(r => {
+      if (r.st !== 'notlist' || !/not on today's list|no departures loaded/.test(r.text || '')) return;
+      let acts = []; try { acts = parse(l.text, l.quote || '').actions.filter(a => parseInt(a.room, 10) === parseInt(r.room, 10)); } catch (_) {}
+      if (!acts.length) return;
+      r.st = 'wait';
+      acts.forEach(a => addPending(a, `WhatsApp · ${l.sender} ${timeLabel(l.time)}`, l.key, l.sender, timeLabel(l.time)));
+    });
+  });
+  if (!PEND.length) return;
+  const list = PEND; PEND = []; savePend();
+  const done = [], undos = [];
+  list.forEach(p => {
+    let r; try { r = applyOne(p.a, p.who + ' (waited for the list)', board); } catch (_) { return; }
+    if (r.undo) undos.push(r.undo);
+    done.push(r);
+    const l = LOG.find(x => x.key === p.key);
+    if (l) {
+      const j = l.res.findIndex(x => x.st === 'wait' && String(x.room) === String(p.a.room));
+      const o = { st: r.st, room: r.room || '', text: r.text + ' · after the list was loaded' }; if (r.bal) o.bal = r.bal;
+      if (j >= 0) l.res.splice(j, 1, o); else l.res.push(o);
+      tell(l);
+    }
+  });
+  saveLog(); try { renderCard(); } catch (_) {}
+  if (!done.length) return;
+  const msg = 'WhatsApp, done now that today\'s list is loaded: ' + done.map(r => r.text.replace(/ · .*$/, '')).join(' · ');
+  if (undos.length && typeof showUndoToast === 'function') showUndoToast(msg, () => { let ok = false; undos.slice().reverse().forEach(u => { try { if (u()) ok = true; } catch (_) {} }); return ok; }, 12000);
+  else if (typeof showToast === 'function') showToast(msg, 'ok');
+}
+
 /** one action → {room, act, time, st, text, undo?} */
 function applyOne(a, who, board) {
   const res = { room: a.room, act: a.act, time: a.time || '', note: a.note || '' };
@@ -856,7 +902,9 @@ function applyOne(a, who, board) {
   // a note or request for a room that is not leaving today is normal (an in-house guest): logged, no warning
   if (i < 0 && (a.act === 'note' || a.act === 'maybe')) return Object.assign(res, { st: 'req', text: `Request · room ${a.room}: ${a.note}` });
   // not on today's departures: is the room in the hotel at all? yes → put it on the board and act, no → say so
-  if (i < 0 && (board.ok || !rooms().length)) {
+  // today's departures not loaded yet (none, or yesterday's board): the command waits and runs when they are (flushPending)
+  if (!board.ok && board.today === false) return Object.assign(res, { st: 'wait', pending: a, text: `${a.room}: waiting for today's departures (${board.why}) — done as soon as you load them` });
+  if (i < 0 && board.ok) {
     const f = findRoom(a.room);
     if (!f) return Object.assign(res, { st: 'notlist', text: `${a.room}: room not found — not on departures, arrivals or in-house` });
     if (typeof depAddManualRoom !== 'function' || !quiet(() => depAddManualRoom(a.room, f.name))) return Object.assign(res, { st: 'notlist', text: `${a.room}: could not add it to the board` });
@@ -875,7 +923,7 @@ function applyOne(a, who, board) {
   const r = rooms()[i], room = r.roomStr, st = r.status, before = pick(r);
   let line, setStatus = null;
   if (a.act === 'co') {
-    if (st === 'out') return Object.assign(res, { st: 'skip', text: `${room}: already checked out` });
+    if (st === 'out') return Object.assign(res, { st: 'skip', text: `✓ ${room} already checked out${r.checkoutAt ? ' at ' + r.checkoutAt : ''} — nothing to do` });
     if (st === 'extended') return Object.assign(res, { st: 'skip', text: `${room}: marked extended — not changed` });
     line = `[${hhmm()}] Checked out — ${who}`;
     addNoteLine(r, line); setStatus = 'out';
@@ -1094,6 +1142,7 @@ function handle(msg, via, opt) {
 
   let key = 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const undos = res.filter(r => r.undo).map(r => r.undo);
+  res.filter(r => r.pending).forEach(r => addPending(r.pending, who, key, sender, tl));
   const entry = { key, at: Date.now(), time: t24, sender, text: text.slice(0, 500), mine: !!msg.mine, edited, via, res: res.map(r => { const o = { st: r.st, room: r.room || '', text: r.text }; if (r.bal) o.bal = r.bal; if (r.w) o.w = r.w; if (r.guess) { o.guess = r.guess; o.m = r.act; } return o; }) };
   if (group) entry.group = group;
   ACK_RES = entry.res.map(r => ({ st: r.st, room: r.room || '', text: String(r.text || '').slice(0, 140) }));
@@ -1553,7 +1602,7 @@ const CSS = `
 `;
 const esc = s => (typeof escapeHtml === 'function' ? escapeHtml(s) : String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
 const clock = t => { const m = String(t || '').match(/^(\d{1,2}):(\d{2})$/); if (!m) return t || ''; const h = +m[1]; return (h % 12 || 12) + ':' + m[2] + (h >= 12 ? ' PM' : ' AM'); };
-const ICON = { maybe: '🤔', fin: '', extending: '', co: '✓', lco: '⏰', ext: '↪', note: '📝', req: '📝', notlist: '⚠', skip: '·', none: '—', ignore: '—', log: '🗂', preview: '👁', ask: '❓', deleted: '' };
+const ICON = { wait: '⏳', maybe: '🤔', fin: '', extending: '', co: '✓', lco: '⏰', ext: '↪', note: '📝', req: '📝', notlist: '⚠', skip: '·', none: '—', ignore: '—', log: '🗂', preview: '👁', ask: '❓', deleted: '' };
 const SVG_WA = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2s.2-1.1.2-1.2-.2-.2-.5-.3Z"/></svg>';
 const SVG_PH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2Z"/></svg>';
 let FILT = 'all', GFILT = '';
@@ -1917,6 +1966,7 @@ function start() {
   }
   listenAsks(); hookWords();
   setInterval(() => { hookWords(); pushWords(); if (doc.getElementById('waStatus')) renderStatus(); }, 15000);
+  setInterval(flushPending, 4000);
 }
 W.hoWaBridge = { handle, findRoom, readPasted, parse, parseCopied: hoWaParseCopied, log: () => LOG.slice(), origins: ORIGINS, render: renderCard, search: runSearch, flushBackup: flushArch, results: () => RES.slice(),
   send: waSend, outbox: () => OUT.slice(), link: () => (LINK ? { at: LINK.at, groups: LINK.groups || [], open: LINK.open || '', rtt: LINK.rtt || 0, auto: !!LINK.auto, linked: linked() } : null),

@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 349, items: [
+    '✅ WhatsApp: "107 - check out" before today\'s departures were loaded is no longer lost. The command waits (⏳) and is done as soon as you load today\'s list; messages skipped earlier today are done then too. A room that was already checked out shows "✓ already checked out — nothing to do".',
+  ] },
   { v: 348, items: [
     '🤔 WhatsApp: "301 luggage inside", "bags still in the room" or "301 occupied" now marks the room "May extend" on Departures (the guest has not gone). "Luggage in store" or at the lobby stays a normal note.',
   ] },
