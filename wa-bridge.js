@@ -369,6 +369,14 @@ function hoWaParser() {
       if (fz.m === 'lco') return Object.assign({ act: 'lco', time: hoWaTime(fz.tail || '') }, g);
       const x = extDetail(fz.tail || ''); if (x) return Object.assign({ act: 'ext' }, x, g);
     }
+    // no Ops Brain matcher, or it was not sure: our own small typo check ("EXTENDE", "exended", "chekd out")
+    if (!fz || fz.conf === 'unsure') {
+      const ty = typoCmd(low);
+      if (ty) {
+        if (ty.m === 'co' && FILLER.test(ty.tail)) return { act: 'co', guess: ty.word };
+        if (ty.m === 'ext') { const x = extDetail(ty.tail); if (x || FILLER.test(ty.tail)) return Object.assign({ act: 'ext' }, x || {}, { guess: ty.word }); }
+      }
+    }
     if (fz && fz.conf === 'unsure') return Object.assign(note, { askWord: fz.word });
     return note;
   }
@@ -438,6 +446,31 @@ function hoWaParser() {
     const rest = seg.replace(ROOM_LIST, ' ').replace(/\s+/g, ' ').trim();
     const c = classify(rest);
     return c && c.act !== 'note' && c.act !== 'ignore' && !c.weak ? { rooms, rest, c } : null;
+  }
+  /** edit distance with swapped letters (Damerau), for short words only */
+  function dist(a, b) {
+    const m = a.length, n = b.length; if (Math.abs(m - n) > 2) return 9;
+    const d = Array.from({ length: m + 1 }, (_, i) => [i].concat(Array(n).fill(0))); for (let j = 1; j <= n; j++) d[0][j] = j;
+    for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) {
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+    return d[m][n];
+  }
+  const TYPO_W = [['ext', ['extended', 'extend', 'extension', 'extending', 'extnd']], ['co', ['checkedout', 'checkout', 'checkingout']]];
+  /** a mistyped command at the start: "extende 2n" → {m:'ext', word:'extende', tail:'2n'}; "chekd out" → {m:'co'} (one or two letters off) */
+  function typoCmd(low) {
+    const w = low.match(/^([a-z]+)(?:\s+([a-z]+))?/); if (!w) return null;
+    const tries = [[w[1], low.slice(w[1].length)]];
+    if (w[2]) tries.unshift([w[1] + w[2], low.slice(w[0].length)]);      // "chekd out" → "chekdout"
+    for (const [word, tail] of tries) {
+      if (word.length < 5) continue;
+      for (const [m, list] of TYPO_W) for (const good of list) {
+        const k = dist(word, good);
+        if (k && k <= (word.length <= 6 ? 1 : 2) && word[0] === good[0]) return { m, word, tail: tail.trim() };
+      }
+    }
+    return null;
   }
   let FUZZY = null;
   function fuzzyOf(r) {
@@ -1110,6 +1143,8 @@ function hoCopy(msg, dIso, t24, sender, group, text, edited) {
     if (msg.preview || !groupCopies(group) || !W.hoHandoverPure) return false;
     const HP2 = W.hoHandoverPure, opt = { parse: t => hoWaParse(t) };
     const lines = String(text).split(/\n/).filter(l => l.trim());
+    // "Done ✅" as a reply to a handover item (any group): the Handover Book ticks that item
+    if (msg.quote && typeof HP2.doneReply === 'function' && HP2.doneReply(text)) { hoBook({ kind: 'done', base: hoBase(msg, dIso, t24, sender, text), date: dIso, time: t24, sender, group, text, quote: String(msg.quote).slice(0, 400), at: Date.now() }); return false; }
     if (!HP2.looksLikeHandover(text, opt) && !lines.some(l => HP2.looksLikeHandover(l, opt)) && !edited) return false;
     const base0 = hoBase(msg, dIso, t24, sender, text), done = loadDone(), dk = 'hc:' + base0, sig = hashKey(normS(text)), seen = String(done[dk] || '').split('|').filter(Boolean);
     if (seen.includes(sig)) return false;                                            // seen before: never twice, never an older version over a newer one
@@ -1136,7 +1171,7 @@ function handleHo(msg, via, text, sender, group, dIso, src) {
   if (seen.includes(sig)) return 'dup';
   const edited = seen.length > 0 || !!msg.edited;
   done[dk] = seen.concat(sig).slice(-8).join('|'); saveDone(done);
-  hoBook({ kind: 'msg', src: src || 'wa', base, mid, date: dIso, time: t24, sender, group, text, edited, at: Date.now() });
+  hoBook({ kind: 'msg', src: src || 'wa', base, mid, date: dIso, time: t24, sender, group, text, edited, at: Date.now(), quote: String(msg.quote || '').slice(0, 400) });
   let n = 1, chat = false;
   try { const HP2 = W.hoHandoverPure; if (HP2) { const L = HP2.splitItems(HP2.hoBody(text)); n = L.length || 1; chat = src !== 'prefix' && L.length > 0 && L.every(p => HP2.isChat(p.text)); } } catch (_) {}
   const r = { st: 'ho', room: '', text: chat ? '💬 Team chat · kept in the Handover Book, not added' : '📋 Saved to the Handover Book' + (n > 1 ? ' · ' + n + ' items' : '') + (src === 'prefix' ? ' · marked HO' : '') + (edited ? ' (edited)' : '') };

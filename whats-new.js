@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 366, items: [
+    '✅ Handover Book: a "Done", "Done ✅", "collected", "moved" or "506 done" in WhatsApp now ticks the right handover item by itself. It looks at the message being replied to (even when WhatsApp cuts it short), the room number, what was done (collected → payment, moved → room move…) and which item came just before. When it still is not sure, it asks at the top of the Handover Book: "Which item is done?"',
+    '🔤 WhatsApp typos: "310 - EXTENDE", "exended", "extnded", "chekd out" are now read as extend / check out (marked 🤔 guessed, tap ✓ Right once and it remembers). Look-alike words such as "external", "exit" or "cheque" are left alone.',
+  ] },
   { v: 365, items: [
     '👆 Holding the HotelOps logo on a phone now works reliably: hold about 1–2 seconds and lift your finger — Guest Memory opens on release (Face ID then asks). A small wobble or the phone\'s own long-press no longer cancels it.',
   ] },

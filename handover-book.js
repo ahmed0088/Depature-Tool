@@ -151,6 +151,57 @@ function applySwaps(text, swaps) {
   return t;
 }
 
+// ══ "Done" replies: ticking an item from WhatsApp ══
+const REPLY_DONE_RX = /^(?:(?:ok|okay|yes|yeah|already|all|it'?s|its|has\s+been|been)\s+)*(?:done|completed?|finished|sorted|handled|fixed|resolved|settled|cleared|collected|paid|moved|shifted|changed|informed|updated|delivered|khalas|tamam|dn|dne)(?:\s+(?:already|now|thanks|thank\s+you|sir|madam|ma'?am|dear|bro|done))*$/;
+/** "Done ✅", "506 collected", "ok done", "✅" → {rooms:[…]} when it only says something is done; else null */
+function doneReply(text) {
+  const raw = sp(text).trim(); if (!raw || raw.length > 60 || /\n/.test(raw)) return null;
+  const rooms = (raw.match(/\b\d{3,4}[A-Za-z]?\b/g) || []).map(r => String(parseInt(r, 10)));
+  const t = raw.replace(/[✅✔☑]\ufe0f?/g, ' done ').replace(/👍(?:\p{Emoji_Modifier})?/gu, ' done ').replace(/[\p{Extended_Pictographic}\ufe0f\u200d]/gu, ' ')
+    .replace(/\b(?:room|rm)\b/gi, ' ').replace(/\b\d{3,4}[A-Za-z]?\b/g, ' ').replace(/[.!,;:\-–—]+/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+  return t && REPLY_DONE_RX.test(t) ? { rooms } : null;
+}
+/** what a "done" word says was done → the topics / words it fits ("collected" → payment) */
+const DONE_FITS = [
+  [/\b(?:collected|paid|settled|received|refunded|charged)\b/, ['pay', 'cash'], /collect|pay|balance|deposit|td|aed|refund|amount|cash/],
+  [/\b(?:moved|shifted|changed)\b/, ['move'], /move|shift|change|twin|king|double|upgrade|downgrade|bed/],
+  [/\b(?:fixed|repaired|resolved|working)\b/, ['maint', 'guest'], /fix|broken|leak|ac\b|not working|repair|smell|noise|wifi|tv/],
+  [/\b(?:informed|called|told|updated)\b/, ['follow', 'guest', 'res'], /inform|call|tell|update|let .* know|follow/],
+  [/\b(?:delivered|sent|given|handed)\b/, ['hk', 'lost', 'desk'], /deliver|send|give|hand|towel|amenit|cot|bed|key|item/],
+  [/\b(?:blocked|booked|amended|cancelled|canceled)\b/, ['res'], /block|book|amend|cancel|ooo|out of (?:order|service)/],
+];
+/** which open item a "Done" reply is about: [{key, date, score}] best first.
+ *  quote: the message it replied to; rooms: rooms in the reply; o: {text, group, at} of the reply (verb, same group, timing) */
+function doneTargets(items, quote, rooms, o) {
+  o = o || {};
+  const qt = learnToks(quote || ''), qn = sp(quote || '').toLowerCase().replace(/\s+/g, ' ').trim().replace(/[….]+$/, '');
+  const said = sp(o.text || '').toLowerCase(), fit = DONE_FITS.find(f => f[0].test(said));
+  const open = (items || []).filter(i => i && !i.del && !i.chat && i.status !== 'done');
+  // the open items of the same group written shortly before the reply (newest first)
+  // (by the WhatsApp time written on each message, not when HotelOps read it)
+  const ts = i => (i.date && /^\d{1,2}:\d{2}/.test(i.time || '') ? Date.parse(i.date + 'T' + String(i.time).padStart(5, '0').slice(0, 5) + ':00') : 0) || i.at || 0;
+  const recent = o.at ? open.filter(i => ts(i) && ts(i) <= o.at + 60e3 && o.at - ts(i) < 3 * 3600e3 && (!o.group || !i.group || i.group === o.group)).sort((a, b) => ts(b) - ts(a)) : [];
+  const fits = i => !!fit && (fit[1].includes(i.cat) || fit[2].test(sp(i.orig || i.text || '').toLowerCase()));
+  const nFit = open.filter(fits).length;
+  return open.map(i => {
+    const src = sp(i.full || i.orig || i.text || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    let score = 0;
+    if (qn) {
+      if (src && (src === qn || src.includes(qn) || qn.includes(src) || (qn.length >= 25 && src.startsWith(qn.slice(0, 25))))) score = 1;   // WhatsApp cuts long quotes
+      else score = simOf(qt, learnToks(i.orig || i.text));
+    }
+    if (rooms && rooms.length && (i.rooms || []).some(r => rooms.includes(String(parseInt(r, 10))))) score += qn ? 0.3 : 0.7;
+    if (fits(i)) score += nFit === 1 ? 0.8 : 0.4;                       // "collected" → the payment item (the only one: sure)
+    if (!qn && !(rooms && rooms.length) && (!fit || fits(i))) {
+      const R = recent.filter(x => !fit || fits(x)), k = R.indexOf(i);
+      // the item just before the reply: sure when it came within 30 min and the one before it is clearly older
+      if (k === 0) score += o.at - ts(i) <= 30 * 60e3 && (!R[1] || ts(i) - ts(R[1]) >= 3 * 60e3) ? 0.8 : 0.4;
+      else if (k > 0) score += 0.15;
+    }
+    return { key: i.key, date: i.date, score: Math.round(score * 100) / 100 };
+  }).filter(x => x.score > 0.15).sort((a, b) => b.score - a.score);
+}
+
 // ══ Categories ══════════════════════════════════════════════
 const CATS = [
   ['guest', 'Guest / complaint', '🙋'], ['pay', 'Payment & billing', '💳'], ['res', 'Reservations', '📅'], ['move', 'Room move', '🔀'],
@@ -717,7 +768,7 @@ function pdfHtml(m) {
   <div class="tw">${open}</div>`;
 }
 
-W.hoHandoverPure = { sectionOf, hoBody, learnedField, wordSwaps, applySwaps, learnToks, simOf, learnedVerdict, hoursOf, sameName, rosterShiftOf, pdfHtml, cssOf, isUrgent, XL, XL_KPI, statusStyle, catStyle, argbOf, rowHeight, shiftsCovered, reportModel, writtenSummary, HO_GROUP_RX, isHandoverGroup, HO_PREFIX_RX, hoPrefix, isChat, pasteItems, suggestFrom, HO_COPY_MIN, handoverScore, looksLikeHandover, SHIFT_BOUNDS, shiftOf, CATS, CAT, categorize, statusOf, roomsOf, tagsOf, splitItems, tidy, buildItems, filterItems, summaryOf,
+W.hoHandoverPure = { doneReply, doneTargets, sectionOf, hoBody, learnedField, wordSwaps, applySwaps, learnToks, simOf, learnedVerdict, hoursOf, sameName, rosterShiftOf, pdfHtml, cssOf, isUrgent, XL, XL_KPI, statusStyle, catStyle, argbOf, rowHeight, shiftsCovered, reportModel, writtenSummary, HO_GROUP_RX, isHandoverGroup, HO_PREFIX_RX, hoPrefix, isChat, pasteItems, suggestFrom, HO_COPY_MIN, handoverScore, looksLikeHandover, SHIFT_BOUNDS, shiftOf, CATS, CAT, categorize, statusOf, roomsOf, tagsOf, splitItems, tidy, buildItems, filterItems, summaryOf,
   excelRows, summaryRows, fileName, polishStyles, polishSheet, dLong, t12, COL_W, byTime };
 if (!doc) return;
 
@@ -780,8 +831,38 @@ function withShift(i) {
 const LS_MID = 'hb_mid_v1';
 function midDay(mid, day) { const m = LS.get(LS_MID, {}); if (day) { m[mid] = day; const ks = Object.keys(m); if (ks.length > 600) ks.slice(0, ks.length - 600).forEach(k => delete m[k]); LS.set(LS_MID, m); } return m[mid] || ''; }
 /** p: {kind:'msg', base, mid, date, time, sender, group, text, edited, at} | {kind:'del', base, mid} → items saved / changed / removed; returns how many items */
+/** a "Done" reply from WhatsApp: tick the item it answers; not sure which → ask on the page */
+async function doneFromWa(p) {
+  const day = p.date || today(), prev = isoDay(new Date(new Date(day + 'T12:00:00').getTime() - 864e5));
+  await load(day); await load(prev);
+  const pool = itemsOf(day).concat(itemsOf(prev)), d = doneReply(p.text) || { rooms: [] };
+  const at = (p.time && Date.parse(day + 'T' + String(p.time).padStart(5, '0').slice(0, 5) + ':00')) || p.at || Date.now();
+  const T = doneTargets(pool, p.quote, d.rooms, { text: p.text, group: p.group, at });
+  const sure = T[0] && ((T[0].score >= 0.75 && (!T[1] || T[0].score - T[1].score >= 0.2)) || (T.length === 1 && T[0].score >= 0.7));   // the only open item for that room counts too
+  if (sure) {
+    setField(T[0].date, T[0].key, { status: 'done', doneBy: p.sender || 'WhatsApp', doneAt: p.at || Date.now(), doneVia: 'WhatsApp reply' });
+    toast(`✓ Handover: ${p.sender || 'Someone'} replied "${sp(p.text).slice(0, 20)}" — marked done`, 'ok');
+    return 1;
+  }
+  if (!T.length) {                                           // no clue at all: offer the latest open items of that group
+    const open = pool.filter(i => !i.del && !i.chat && i.status !== 'done' && (!p.group || !i.group || i.group === p.group))
+      .sort((a, b) => String(b.date + b.time).localeCompare(String(a.date + a.time))).slice(0, 3);
+    if (!open.length) return 0;                              // nothing open: just chat
+    open.forEach(i => T.push({ key: i.key, date: i.date, score: 0.1 }));
+  }
+  // not sure: a question on the page, with the likely items to pick from
+  const key = 'dq_' + String(p.base).slice(-40), patch = {};
+  patch[fbSafe(key)] = { qmsg: p.base, date: day, time: p.time || '', sender: p.sender || '', group: p.group || '', text: sp(p.text).slice(0, 200), orig: sp(p.text).slice(0, 200), quote: sp(p.quote || '').slice(0, 200),
+    chat: 1, doneQ: T.slice(0, 3).map(x => x.date + '|' + x.key), at: p.at || Date.now(), src: 'wa', cat: 'info', status: 'info' };
+  write(day, patch);
+  toast(`🤔 ${p.sender || 'Someone'} said "${sp(p.text).slice(0, 20)}" — which handover item? (Handover Book)`, 'warn');
+  return 0;
+}
 async function fromWa(p) {
   if (!p || !p.base) return 0;
+  if (p.kind === 'done') return doneFromWa(p);
+  // a "Done" reply inside the handover group itself: tick it (the reply stays as team chat)
+  if (p.kind === 'msg' && doneReply(p.text) && (p.quote || !p.copy)) { await doneFromWa(p); }   // in the handover group a plain "Done" counts too
   if (p.kind === 'del') {
     const day = midDay(p.base); if (!day) return 0;            // never saved here: nothing to remove
     await load(day, true);
@@ -1188,7 +1269,15 @@ function body() {
     set('hbMore', moreHtml(all));
     // still open from the day before
     const prev = dayAdd(d, -1), P = HB.st === 'done' ? [] : shown(filterItems(itemsOf(prev), Object.assign({}, f, { st: 'open', shift: 'all' }))).sort(byTime);
-    set('hbCarry', P.length ? `<section class="hb-sec hb-carry"><button type="button" class="hb-gh" data-hb="fold" data-v="carry" aria-expanded="${!HB.fold.carry}">⏳ Still open from ${prev === dayAdd(today(), -1) ? 'yesterday' : esc(dLong(prev))} <em>${P.length}</em><span class="chev">▾</span></button>${HB.fold.carry ? '' : `<div class="hb-list">${P.map(i => itemHtml(i, prev, { carry: true })).join('')}</div>`}</section>` : '');
+    // 🤔 "Done" replies we could not place: ask which item they close
+    const Q = itemsOf(d).filter(i => Array.isArray(i.doneQ) && i.doneQ.length && !i.del && !i.doneQa);
+    const qHtml = Q.map(q => {
+      const opts = q.doneQ.map(ref => { const [dd, kk] = String(ref).split('|'); const it = itemsOf(dd).find(x => x.key === kk); return it && it.status !== 'done' ? { ref, it } : null; }).filter(Boolean);
+      if (!opts.length) return '';
+      return `<div class="hb-askl" style="flex-direction:column;align-items:stretch;margin:0 0 10px"><div>🤔 <b>${esc(q.sender || 'Someone')}</b> said “${esc(q.text)}”${q.quote ? ` replying to “${esc(String(q.quote).slice(0, 80))}”` : ''} — which item is done?</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">${opts.map(o => `<button type="button" class="hb-chip" data-hb="doneq" data-k="${esc(q.key)}" data-d="${esc(d)}" data-v="${esc(o.ref)}">✓ ${esc(String(o.it.text || o.it.orig).slice(0, 60))}</button>`).join('')}<button type="button" class="hb-chip warn" data-hb="doneq" data-k="${esc(q.key)}" data-d="${esc(d)}" data-v="">None of these</button></div></div>`;
+    }).join('');
+    set('hbCarry', qHtml + (P.length ? `<section class="hb-sec hb-carry"><button type="button" class="hb-gh" data-hb="fold" data-v="carry" aria-expanded="${!HB.fold.carry}">⏳ Still open from ${prev === dayAdd(today(), -1) ? 'yesterday' : esc(dLong(prev))} <em>${P.length}</em><span class="chev">▾</span></button>${HB.fold.carry ? '' : `<div class="hb-list">${P.map(i => itemHtml(i, prev, { carry: true })).join('')}</div>`}</section>` : ''));
     // the day, grouped
     const L = shown(filterItems(all, f)).sort((a, b) => (HB.by === 'time' ? 0 : (isUrgent(b) - isUrgent(a))) || byTime(a, b));
     let html = '';
@@ -1504,6 +1593,11 @@ function onClick(e) {
     else if (a === 'info') { setField(d, k, { status: 'info', doneBy: null, doneAt: null }); learnField(item.orig || item.text, 'st', 'info'); HB.menu = ''; }
     else if (a === 'setcat') { setField(d, k, { cat: b.dataset.c, catBy: me() }); if (b.dataset.c !== item.cat) learnField(item.orig || item.text, 'cat', b.dataset.c); HB.menu = ''; }
     else if (a === 'retidy') { const el = doc.getElementById('hbEdit'); if (el) { el.value = tidy(item.orig || el.value); autosize(el); el.focus(); } return; }
+    else if (a === 'doneq') {
+      const ref = b.dataset.v;
+      if (ref) { const [dd, kk] = ref.split('|'); setField(dd, kk, { status: 'done', doneBy: item.sender || me(), doneAt: item.at || Date.now(), doneVia: 'WhatsApp reply' }); toast('✓ Marked done', 'ok'); }
+      setField(d, k, { doneQa: ref || 'none' });
+    }
     else if (a === 'unchat') { setField(d, k, { chat: null, chatBy: me(), learn: null }); learn(item.orig || item.text, 'yes'); toast('Added to the handover · 🧠 I\'ll keep messages like this', 'ok'); }
     else if (a === 'askyes') { setField(d, k, { ask: null, learn: 'yes' }); learn(item.orig || item.text, 'yes'); toast('🧠 Got it — messages like this are handover', 'ok'); }
     else if (a === 'askno') { setField(d, k, { ask: null, chat: 1, chatBy: me(), learn: 'no' }); learn(item.orig || item.text, 'no'); toast('🧠 Got it — I\'ll leave out messages like this', 'ok'); }

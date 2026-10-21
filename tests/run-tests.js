@@ -1704,6 +1704,8 @@ console.log('\nWhatsApp HK bridge · message reader');
   delete sb.hoWaBrainPure;
   // talking normally: what the team writes in full sentences
   const NA = (t, now) => sb.hoWaParse(t, { now: now || '10:02' }).actions.map(a => [a.room, a.act, a.time || '', a.soon ? 'in' + a.soon : '', a.plan ? 'plan' : '', a.nights ? '+' + a.nights + 'N' : '', a.until ? '→' + a.until : '', a.act === 'note' ? a.note : ''].filter(Boolean).join(' ')).join(' | ');
+  check('wa typos: "EXTENDE", "exended", "chekd out" are read (as a guess to confirm); look-alike words are not', ['310 - EXTENDE', '310 exended', '310 extedned 2n', '310 chekd out', '310 external door broken', '310 exit sign broken', '310 cheque payment', '310 checkout tomorrow'].map(t => P(t).actions.map(a => a.act + (a.nights ? a.nights : '') + (a.guess ? '?' : '')).join()),
+    ['ext?', 'ext?', 'ext2?', 'co?', 'note', 'note', 'note', 'note']);
   check('wa talk: "luggage inside" → the guest might extend; luggage in store is not', ['301 luggage inside', '301 bags still in the room', '301 room occupied', '301 occupied', '301 luggage in store', '301 luggage inside?', '301 needs towels'].map(t => P(t).actions.map(a => a.act).join()),
     ['maybe', 'maybe', 'maybe', 'maybe', 'note', 'note', 'note']);
   check('wa talk: "checking out in N min" → leaving soon, from the message\'s time, rounded up to 5 min',
@@ -2093,6 +2095,16 @@ console.log('\nHandover Book');
     check('handover learning: your topic and pending/info choices, and your word fixes', [H.learnedField('Room 220 parking card lost again', EX, 'cat'), H.learnedField('Room 220 parking card lost again', EX, 'st'), H.learnedField('Room 305 balance pending', EX, 'cat'),
       J(H.wordSwaps('Room 512 has bad smel in bathroom.', 'Room 512 has bad smell in bathroom.')), J(H.wordSwaps('Guest in 220 left keys.', 'Guest in 220 left the keys.')), H.applySwaps('Bad smel in 610, smel strong.', [['smel', 'smell']]), J(H.wordSwaps('Room 512 at 2 PM.', 'Room 514 at 3 PM.'))],
       ['desk', 'info', '', [['smel', 'smell']], [], 'Bad smell in 610, smell strong.', []]); }
+  { const D = '2026-10-21', TT = t => Date.parse(D + 'T' + t + ':00');
+    const IT = [{ key: 'a', date: D, time: '13:50', group: 'HO', text: 'Room 401: blocked as out of service.', orig: '401 Blocked as out of service for a meeting today', rooms: ['401'], status: 'open', cat: 'res' },
+      { key: 'b', date: D, time: '14:52', group: 'HO', text: 'Room 506 to collect 90 AED.', orig: '506 to collect 90 /- AED', rooms: ['506'], status: 'open', cat: 'pay' },
+      { key: 'd', date: D, time: '20:22', group: 'HO', text: '606 needs to be shifted tomorrow.', orig: '606 need to be shifted to a twin tomorrow', rooms: ['606'], status: 'open', cat: 'move' }];
+    const top = (q, r, o) => (H.doneTargets(IT, q, r, o)[0] || {}).key || '';
+    check('handover "Done" replies: what counts as done, and which item it closes (quote, room, verb, timing)',
+      [!!H.doneReply('Done ✅'), !!H.doneReply('ok done'), J(H.doneReply('506 collected')), H.doneReply('Done, but the guest wants a receipt'), H.doneReply('who is on?'),
+       top('401 Blocked as out of service for a meeting today', [], { text: 'Done', group: 'HO', at: TT('23:12') }), top('', ['506'], { text: '506 done', at: TT('23:00') }),
+       top('', [], { text: 'collected', group: 'HO', at: TT('23:00') }), top('', [], { text: 'Done', group: 'HO', at: TT('20:25') }), H.doneTargets(IT, '', [], { text: 'Done', group: 'HO', at: TT('23:59') }).length],
+      [true, true, { rooms: ['506'] }, null, null, 'a', 'b', 'b', 'd', 0]); }
   check('excel report: urgent items first among the open ones, and the footer', [H.reportModel([{ key: 'a', time: '08:00', shift: 'Morning', text: 'Room 210: towels.', cat: 'hk', status: 'open', rooms: ['210'] }, { key: 'b', time: '09:00', shift: 'Morning', text: 'VIP 701 complaint.', orig: 'VIP 701 complaint', cat: 'guest', status: 'open', rooms: ['701'] }], { hotel: 'Test Hotel', date: '2026-10-20' }).open.map(o => o.urgent), RM.footer], [[true, false], 'Test Hotel · Shift handover 20 Oct 2026']);
   check('written summary', H.writtenSummary(day), '3 items · 2 pending · 1 done. Still to do: Room 512: early departure; Room 305: balance AED 200 pending.');
   // audit fixes: real-life messages
