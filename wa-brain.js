@@ -584,7 +584,7 @@ const BUILTIN_WORDS = {
   ooo: ['note', 'Out of Order (maintenance)'], oos: ['note', 'Out of Service'], ns: ['note', 'No Show'],
   lco: ['lco', 'Late check-out'], lc: ['lco', 'Late check-out'], ext: ['ext', 'Extension'],
   // how HK groups write it (kept as notes): "516 IP", "225 N/L", "526 OCC", "513 sleep out", "614 double lock", "209 NA", "406 ongoing"
-  ip: ['hk', 'Inspected — room ready'], nl: ['hk', 'No Luggage'], occ: ['hk', 'Occupied'], sleepout: ['hk', 'Sleep Out'], doublelock: ['hk', 'Double Lock'],
+  ip: ['hk', 'Inspected — room ready'], io: ['hk', 'Inspected — room ready'], nl: ['hk', 'No Luggage'], occ: ['hk', 'Occupied'], sleepout: ['hk', 'Sleep Out'], doublelock: ['hk', 'Double Lock'],
   na: ['hk', 'No Answer'], ongoing: ['hk', 'Cleaning in progress'],
 };
 /** the dictionary: built-in codes + what the team added (user words win). store = {load(), save(v)}, put(key, entry|null) → the hotel database */

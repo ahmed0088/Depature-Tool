@@ -1708,6 +1708,9 @@ console.log('\nWhatsApp HK bridge · message reader');
     ['ext?', 'ext?', 'ext2?', 'co?', 'note', 'note', 'note', 'note']);
   check('wa ask: an unknown word is asked with a best guess first ("xtendd" → extension, "ckd" → checked out, "vacnt" → HK); no guess when nothing is close', ['310 xtendd', '310 ckd', '310 vacnt', '310 lte', '310 blabla'].map(t => { const a = P(t).ask; return a ? a.word + ':' + (a.guess || '-') : 'none'; }),
     ['xtendd:ext', 'ckd:co', 'vacnt:hk', 'lte:lco', 'blabla:-']);
+  check('wa answers from the team: "Early Depart" and "please make check out" = checked out (not when it is for later or a question); a bare time = late check-out; "physical check out" = a request; "io" = IP',
+    ['421 Early Depart', '421 early departure tomorrow', '421 early dep?', '524 523 please make check out', '524 make checkout tomorrow', '626 4 pm', '315 - 3 pm', '512 14:00', '512 2', '514 cleaning after 2pm', '105 physical check out', '203 io'].map(t => P(t).actions.map(a => a.room + ' ' + a.act + (a.time ? ' ' + a.time : '')).join(', ')),
+    ['421 co', '421 note', '421 note', '524 co, 523 co', '524 note', '626 lco 16:00', '315 lco 15:00', '512 lco 14:00', '512 note', '514 note', '105 note', '203 note']);
   check('wa talk: "luggage inside" → the guest might extend; luggage in store is not', ['301 luggage inside', '301 bags still in the room', '301 room occupied', '301 occupied', '301 luggage in store', '301 luggage inside?', '301 needs towels'].map(t => P(t).actions.map(a => a.act).join()),
     ['maybe', 'maybe', 'maybe', 'maybe', 'note', 'note', 'note']);
   check('wa talk: "checking out in N min" → leaving soon, from the message\'s time, rounded up to 5 min',

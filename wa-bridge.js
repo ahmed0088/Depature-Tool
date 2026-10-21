@@ -169,7 +169,7 @@ function hoWaParser() {
   const HK_BUILTIN = { vd: ['co', 'Vacant Dirty'], vc: ['co', 'Vacant Clean'], vr: ['co', 'Vacant Ready'], vci: ['co', 'Vacant Clean Inspected'], ed: ['co', 'Early Departure'],
     od: ['hk', 'Occupied Dirty'], oc: ['hk', 'Occupied Clean'], ooo: ['hk', 'Out of Order'], oos: ['hk', 'Out of Service'], dnd: ['hk', 'Do Not Disturb'], so: ['hk', 'Sleep Out'], dl: ['hk', 'Double Lock'], ns: ['hk', 'No Show'], rc: ['hk', 'Registration card (signature)'],
     // how HK groups write it: "516 IP" (inspected, ready to sell), "225 N/L" (no luggage), "526 OCC" (occupied), "513 sleep out", "614 double lock", "209 NA" (no answer), "406 ongoing" (being cleaned)
-    ip: ['hk', 'Inspected — room ready'], 'n/l': ['hk', 'No Luggage'], nl: ['hk', 'No Luggage'], occ: ['hk', 'Occupied'], 'sleep out': ['hk', 'Sleep Out'], sleepout: ['hk', 'Sleep Out'],
+    ip: ['hk', 'Inspected — room ready'], io: ['hk', 'Inspected — room ready'], 'n/l': ['hk', 'No Luggage'], nl: ['hk', 'No Luggage'], occ: ['hk', 'Occupied'], 'sleep out': ['hk', 'Sleep Out'], sleepout: ['hk', 'Sleep Out'],
     'double lock': ['hk', 'Double Lock'], 'double locked': ['hk', 'Double Lock'], na: ['hk', 'No Answer'], ongoing: ['hk', 'Cleaning in progress'], 'on going': ['hk', 'Cleaning in progress'] };
   function lookup(w) {
     if (!w) return null;
@@ -365,6 +365,13 @@ function hoWaParser() {
       const pp = extending(low); if (Object.keys(pp).length > 1) return Object.keys(pp).join() === 'act,pay' ? Object.assign(pp, { weak: true }) : pp;   // "305 payment done" alone may be a dental kit: only for a room that is extending
     }
     if (/^all\s+(?:done|ok|okay|complete|completed|ready)\s*[.!✓✔✅]*$/u.test(r.toLowerCase())) return Object.assign(extending(r.toLowerCase()), { weak: true });   // only for a room that is extending
+    // "421 Early Depart": the guest already left, before the day's check-out time → checked out ("early departure tomorrow" stays a note)
+    // "524 523 516 please make check out": housekeeping saying the rooms are free → checked out
+    const NOT_YET = /\?|\b(?:tomorrow|tomm?orr?ow|tmrw?|tmr|tmw|will|might|maybe|may|plan\w*|request\w*|wants?|asking|cancel\w*|not|no|later|tonight|next)\b/;
+    if ((m = low.match(/^early\s*(?:depart(?:ure|ed|ing)?|dep|d\/o|check\s*-?\s*out|checkout|c\/?o)\b\.?\s*(.*)$/)) && !NOT_YET.test(m[1])) return { act: 'co', why: 'early departure' };
+    if ((m = low.match(/^(?:(?:please|pls|plz|pl|kindly)\s+)?make\s+(?:the\s+|it\s+)?(?:check\s*-?\s*out|checkout|c\/?o)\b\.?\s*(.*)$/)) && !NOT_YET.test(m[1])) return { act: 'co' };
+    // "626 4 pm", "315 - 3 pm", "512 14:00": a bare time after a room = late check-out at that time (needs am/pm or minutes)
+    if ((m = low.match(/^(?:at\s+|till\s+|until\s+|by\s+)?(\d{1,2}(?:\s*[:.;]\s*\d{2})?\s*(?:am|pm|a\.m\.?|p\.m\.?)|\d{1,2}\s*[:.;]\s*\d{2})\s*$/))) { const tm = hoWaTime(m[1].replace(/\s*([:.;])\s*/, ':').replace(/;/, ':')); if (tm && tm >= '12:00') return { act: 'lco', time: tm }; }   // a morning time is not a late check-out
     // "301 luggage inside", "bags still in the room", "room occupied": the guest has not gone → 🤔 might extend
     const lowE = low.replace(/[\p{Extended_Pictographic}\uFE0F]/gu, ' ').replace(/\s+/g, ' ').trim();
     if (!/\?|\bnot\b|\bno\b/.test(low) && (
@@ -1099,7 +1106,7 @@ function applyOne(a, who, board) {
   if (a.act === 'co') {
     if (st === 'out') return Object.assign(res, { st: 'skip', text: `✓ ${room} already checked out${r.checkoutAt ? ' at ' + r.checkoutAt : ''} — nothing to do` });
     if (st === 'extended') return Object.assign(res, { st: 'skip', text: `${room}: marked extended — not changed` });
-    line = `[${hhmm()}] Checked out — ${who}`;
+    line = `[${hhmm()}] Checked out${a.why ? ' (' + a.why + ')' : ''} — ${who}`;
     addNoteLine(r, line); setStatus = 'out';
     quiet(() => depAction(i, 'out'));
     res.st = 'co'; res.text = `${room} checked out`;

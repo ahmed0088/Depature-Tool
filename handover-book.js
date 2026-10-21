@@ -322,7 +322,7 @@ function tagsOf(text, parse) {
   if (typeof parse === 'function') {
     try {
       (parse(text).actions || []).forEach(a => {
-        if (a.act === 'co' || a.act === 'findone') add('CO');
+        if ((a.act === 'co' && a.why !== 'early departure') || a.act === 'findone') add('CO');   // an early departure has its own ED tag
         else if (a.act === 'lco') add('LCO' + (a.time ? ' ' + tLabel(a.time) : ''));
         else if (a.act === 'ext') add('EXT' + (a.nights ? ' +' + a.nights + 'N' : a.until ? ' → ' + a.until : ''));
         else if (a.act === 'extending' && /\bext|extend/i.test(text)) add('Extending');

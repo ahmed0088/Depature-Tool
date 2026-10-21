@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 372, items: [
+    '✅ WhatsApp, as your team uses it: "421 Early Depart" now checks the room out (noted "early departure"; "early departure tomorrow" stays a note). "524 523 516 please make check out" checks those rooms out. A time after a room ("626 4 pm", "315 - 3 pm", "512 14:00") is a late check-out at that time (a morning time is not). "io" means IP — inspected, room ready. "105 physical check out" stays a request for housekeeping to check the room.',
+  ] },
   { v: 371, items: [
     '🧠 The WhatsApp reader learned from months of your team\'s real chats: IP = inspected / room ready, N/L = no luggage, OCC = guest things still in the room (might extend), "- till 14:00" = late check-out, "Stay Extended", "on Extension", "C/out", sleep out, double lock, ongoing and more. Typos like "chekcout" are read too.',
     '🛡️ Safer: questions like "315/316 vd any updates?", "any update due out rooms" or "status?" never check a room out any more, and HotelOps\' own posts are never read back as commands. Pasting a WhatsApp chat export now reads US dates, forwarded messages, pictures, @mentions and edited / deleted messages correctly.',
