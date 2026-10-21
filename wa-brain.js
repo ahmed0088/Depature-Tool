@@ -79,17 +79,25 @@ const CATS = [
   ['water', 'Water', '💧', 'req', /\b(?:water|bottles?)\b/, 'water'],
   ['amen', 'Amenities / toiletries', '🧴', 'req', /\b(?:amenit\w*|toiletr\w*|shampoo|soap|conditioner|shower gel|lotion|tooth ?brush\w*|tooth ?paste|dental kit|shaving kit|slippers?|comb|cotton|coffee|tea|sugar|kettle)\b/, 'amenities'],
   ['tp', 'Toilet paper / tissue', '🧻', 'req', /\b(?:toilet (?:paper|roll)s?|tissues?|tp)\b/, 'tissue'],
-  ['pillow', 'Pillows / blanket', '🛌', 'req', /\b(?:pillows?|blankets?|quilt|comforter)\b/, 'pillow'],
+  ['pillow', 'Pillows', '🛌', 'req', /\bpillows?\b/, 'pillow'],
+  ['blanket', 'Blanket', '🛌', 'req', /\b(?:blankets?|quilt|comforter)\b/, 'blanket'],
   ['iron', 'Iron', '👔', 'req', /\b(?:iron(?:ing)?(?: board)?)\b/, 'iron'],
   ['cot', 'Baby cot', '👶', 'req', /\b(?:baby ?cot|cot|crib|baby bed)\b/, 'cot'],
   ['xbed', 'Extra bed', '➕', 'req', /\b(?:extra bed|rollaway|roll away|sofa ?bed|additional bed)\b/, 'extra bed'],
   ['minibar', 'Minibar / fridge', '🧃', 'req', /\b(?:mini ?bar|fridge)\b/, 'minibar'],
-  ['luggage', 'Luggage', '🧳', 'req', /\b(?:luggage|bags?|suitcases?|baggage|bell ?boy|porter)\b/, 'luggage'],
+  ['luggage', 'Luggage', '🧳', 'req', /\b(?:luggage|(?<!\b(?:tea|laundry|garbage|trash|plastic|shopping|sugar|coffee|dust|bin)\s)bags?|suitcases?|baggage|bell ?boy|porter)\b/, 'luggage'],
 ];
 const CAT = {}; CATS.forEach(c => { CAT[c[0]] = { id: c[0], label: c[1], icon: c[2], kind: c[3], q: c[5] }; });
 /** a message → the things it is about: [{id, label, icon, kind}] (maintenance first) */
+// "no need cleaning", "don't clean", "no luggage", "cleaning not needed": what is NOT wanted is not a request
+// (problems stay: "no water", "no hot water", "no power", "not working", "room not clean")
+const NEG_KEEP = /^(?:water|hot|power|electricity|light|lights|signal|internet|wifi|wi|tv|ac|cooling|cold|answer|response|reply|one|body|towels?)$/;
+function wbDropNeg(t) {
+  return t.replace(/\b(?:no\s+need(?:\s+(?:to|of|for|any))?|don'?t|dont|do\s+not|no|without)\s+((?:(?:any|more|the|room|to)\s+)*)([a-z]+)/g, (m, pre, w) => (NEG_KEEP.test(w) ? m : ' '))
+    .replace(/\b[a-z]+(?:\s+(?:room|service))?\s+(?:is\s+)?not\s+(?:needed|required|necessary)\b/g, ' ');
+}
 function wbCategorize(text) {
-  const t = low(text).replace(/toliet/g, 'toilet').replace(/towles?/g, 'towel'), hit = [];
+  const t = wbDropNeg(low(text).replace(/toliet/g, 'toilet').replace(/towles?/g, 'towel')), hit = [];
   CATS.forEach(c => { if (c[4].test(t)) hit.push(c[0]); });
   const has = id => hit.includes(id);
   let ids = hit;
@@ -102,20 +110,48 @@ function wbCategorize(text) {
 }
 const REQ_W = /\b(?:please|pls|plz|plez|need(?:s|ed)?|send|bring|want(?:s|ed)?|requests?|requested|asap|urgent\w*|come|can (?:you|u|someone|somebody)|kindly|required?|missing|more|extra|change|replace|give|provide|asking|asked|not clean|dirty|waiting|still)\b|🙏/i;
 const DONE_W = /\b(?:done|sent|delivered|given|ok(?:ay)?|noted|on (?:the|my) way|coming|going|will do|fixed|sorted|handled|completed?|finished|ready|attended|replaced|changed|cleaned)\b|✅|👍|✔|✓/i;
-const STATUS_ONLY = /^\s*(?:(?:rooms?|rm)\s*)?\d{3,4}\s*(?:is\s*)?(?:clean(?:ed)?|ready|done|inspected|ok|vc|vd|oc|od|vacant(?: clean)?|cleaned and ready|occupied)\s*[.!✅👍]*\s*$/i;
+const STATUS_ONLY = /^\s*(?:(?:rooms?|rm)\s*)?\d{3,4}[\s.…:,\-]*(?:is\s*)?(?:physically\s+)?(?:clean(?:ed)?|ready|done|inspected|ok|vc|vd|oc|od|ip|n\/l|occ|vacant(?: clean)?|cleaned and ready|occupied|dnd|double\s+lock(?:ed)?|guest\s+(?:inside|sleeping)|(?:still\s+)?luggages?\s*🧳?\s*inside|inside\s+luggages?|no\s+luggages?|sleep\s*out(?:\s+(?:with(?:out)?|no)\s+luggages?)?)\s*(?:room)?\s*[.!✅👍🧳]*\s*$/iu;
+// the team asking about rooms ("101 112 any update due out rooms plz", "please make check out 524"): not a job for HK
+const ASK_FO = /\b(?:any\s*-?\s*updat\w*|updat\w*\s+(?:pl[sz]|please|pls)|status\s+updat\w*|make\s+(?:the\s+)?check\s*-?\s*out)\b/i;
+// a front-office money note ("guest will pay the laundry bill at reception, collect payment"): not a job for HK
+const PAY_W = /\b(?:pay|paid|payment|bill|charged?|collect\w*\s+(?:the\s+)?(?:payment|money|cash|amount)|by\s+card|cash)\b/i;
+const GIVE_W = /\b(?:send|bring|give|provide|deliver|replace|change|fix|clean)\b/i;
+/** one message → its parts, each with its own rooms ("203 physically IP, smoke smell 206, 506 wall paint smell") */
+function wbParts(x) {
+  const parts = [];
+  sp(x).split(/[,;\n]+/).forEach(seg => { if (!seg.trim()) return; const rooms = wbRooms(seg); if (rooms.length || !parts.length) parts.push({ rooms, text: seg }); else parts[parts.length - 1].text += ', ' + seg; });
+  return parts;
+}
 /** is this message an HK request about a room? → {rooms, cats, maint} | null */
 function wbRequestOf(rec, parse) {
   const x = sp(rec && rec.x);
   if (!x.trim() || /^\s*🔁/u.test(x)) return null;
   const rooms = wbRooms(x); if (!rooms.length) return null;
-  if (STATUS_ONLY.test(x)) return null;
+  const noAt = t => t.replace(/@\S+[^\n]*/g, ' ').trim();                         // mentions say who, not what
+  if (STATUS_ONLY.test(noAt(x))) return null;
   if (typeof parse === 'function') {
     try { const P = parse(x); if (P && P.kind === 'ignore') return null; if (P && P.actions && P.actions.length && P.actions.every(a => a.act !== 'note')) return null; } catch (_) {}
   }
-  const cats = wbCategorize(x), maint = cats.some(c => c.kind === 'maint');
-  if (!cats.length && !REQ_W.test(x)) return null;
-  if (cats.length && !maint && !REQ_W.test(x) && DONE_W.test(x)) return null;   // "201 towels given ✅" is an answer
-  return { rooms, cats, maint };
+  const one = seg => {
+    const s2 = wbDropNeg(low(seg));                                                 // "no need cleaning", "do not clean" ask for nothing
+    const cats = wbCategorize(seg), maint = cats.some(c => c.kind === 'maint');
+    if (!cats.length && !REQ_W.test(s2)) return null;
+    if (cats.length && !maint && !REQ_W.test(s2) && DONE_W.test(seg)) return null;   // "201 towels given ✅" is an answer
+    if (!maint && PAY_W.test(seg) && !GIVE_W.test(seg)) return null;                // a payment note for the front office
+    if (!cats.length && ASK_FO.test(seg)) return null;
+    return { cats, maint };
+  };
+  const parts = wbParts(x).filter(p => p.rooms.length);
+  if (parts.length > 1) {                                                          // each room with its own words
+    const byRoom = {}, rs = [], all = [];
+    parts.forEach(p => {
+      if (STATUS_ONLY.test(noAt(p.text))) return;
+      if (typeof parse === 'function') { try { const P = parse(p.text); if (P && P.actions && P.actions.length && P.actions.every(a => a.act !== 'note')) return; } catch (_) {} }   // "305 co", "306 luggage inside" in a list
+      const q = one(p.text); if (!q) return; p.rooms.forEach(r => { if (!rs.includes(r)) rs.push(r); byRoom[rk(r)] = q.cats; }); q.cats.forEach(c => { if (!all.includes(c)) all.push(c); }); });
+    return rs.length ? { rooms: rs, cats: all, maint: all.some(c => c.kind === 'maint'), byRoom } : null;
+  }
+  const q = one(x); if (!q) return null;
+  return { rooms, cats: q.cats, maint: q.maint };
 }
 
 /** today's messages → open requests: a room with a request and no later message about it.
@@ -179,6 +215,13 @@ function wbDoneOf(rec) {
   });
   return out;
 }
+// "Done ✅", "ok done", "delivered", "✅": a reply that says the quoted request is done
+const DONE_REPLY = /^(?:(?:ok|okay|yes|already|all|it'?s|its|has\s+been|been|room)\s+)*(?:done|completed?|finished|sorted|handled|fixed|delivered|sent|given|cleaned|ready|khalas|tamam|dn)(?:\s+(?:already|now|sir|madam|ma'?am|dear|bro|thanks|thank\s+you|with\s+\w+(?:\s+\w+)?))*$/i;
+function wbDoneReply(text) {
+  const t = sp(text).replace(/@\S+(?:\s+[A-Z][\w.]*)*/g, ' ').replace(/[\p{Extended_Pictographic}\uFE0F]/gu, m => (/[✅✔☑👍]/u.test(m) ? ' done ' : ' ')).replace(/[.!,]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return !!t && DONE_REPLY.test(t.replace(/^(?:done\s+)+(?=done)/i, '').replace(/\bdone(?:\s+done)+\b/gi, 'done'));
+}
+const normQ = s => low(s).replace(/[\p{Extended_Pictographic}\uFE0F]/gu, '').replace(/@\S+/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 /** every room request of a day, with its status.
  *  recs: [{t, s, x, g?, key?}] in any order · nowMin · shared: {id: {st:'done'|'open', by, at}} (taps saved for the team)
  *  manual: [{id, room, what, note, t, by, st}] added by hand → [{id, room, t, cats, what, x, s, g, st, doneT, doneBy, how, open (min), overdue}] newest first */
@@ -190,12 +233,16 @@ function wbRequestLog(recs, nowMin, shared, manual, opt) {
   L.forEach(r => {
     const done = wbDoneOf(r).map(rk);
     done.forEach(k => (open[k] || []).forEach(it => { if (it.st === 'open') { it.st = 'done'; it.doneT = r.t; it.doneBy = r.s || ''; it.how = 'chat'; } }));
+    if (r.q && wbDoneReply(r.x)) {                                                  // "Done ✅" in reply to the request itself
+      const qn = normQ(r.q); if (qn) items.forEach(it => { const xn = normQ(it.x0 || ''); if (it.st === 'open' && xn && (xn === qn || xn.indexOf(qn) === 0 || qn.indexOf(xn) === 0)) { it.st = 'done'; it.doneT = r.t; it.doneBy = r.s || ''; it.how = 'chat'; } });
+      return;
+    }
     const q = wbRequestOf(r, opt.parse); if (!q) return;
     q.rooms.forEach(room => {
-      const k = rk(room), same = (open[k] || []).find(it => it.st === 'open' && !it.manual && (!q.cats.length || q.cats.some(c => it.cats.some(x => x.id === c.id))));
-      if (same) { same.again = (same.again || 0) + 1; same.x = qMark(same.x + ' · ' + r.x, 300); q.cats.forEach(c => { if (!same.cats.some(x => x.id === c.id)) same.cats.push(c); }); return; }   // asked again: the same request
+      const k = rk(room), qc = (q.byRoom && q.byRoom[k]) || q.cats, same = (open[k] || []).find(it => it.st === 'open' && !it.manual && (!qc.length || qc.some(c => it.cats.some(x => x.id === c.id))));
+      if (same) { same.again = (same.again || 0) + 1; same.x = qMark(same.x + ' · ' + r.x, 300); qc.forEach(c => { if (!same.cats.some(x => x.id === c.id)) same.cats.push(c); }); return; }   // asked again: the same request
       const id = 'r' + hash((opt.day || '') + '|' + (r.key || r.t + '|' + r.s + '|' + r.x) + '|' + k);
-      const it = { id, room, key: k, t: r.t, cats: q.cats, what: q.cats.length ? wbWhat(q.cats) : 'request', x: r.x, s: r.s || '', g: r.g || '', st: 'open', doneT: '', doneBy: '', how: '' };
+      const it = { id, room, key: k, t: r.t, cats: qc.slice(), what: qc.length ? wbWhat(qc) : 'request', x: r.x, x0: r.x, s: r.s || '', g: r.g || '', st: 'open', doneT: '', doneBy: '', how: '' };
       items.push(it); (open[k] = open[k] || []).push(it);
     });
   });
@@ -209,6 +256,15 @@ function wbRequestLog(recs, nowMin, shared, manual, opt) {
     it.overdue = it.st === 'open' && !past && it.open != null && it.open > OVER;
   });
   return items.sort((a, b) => (toMin(b.t) || 0) - (toMin(a.t) || 0));
+}
+/** how a request reads on the page. Calm (default): "📨 Sent to HK" / "✓ Done by HK 9:35" — housekeeping closes it, nobody ticks.
+ *  track: the old way, "🟡 Open · ⏱ 40 min" / "✅ Done" with buttons. → {text, sub, tone ('' | 'done' | 'over')} */
+function wbReqStatus(it, track) {
+  if (!it) return { text: '', sub: '', tone: '' };
+  if (!track) return it.st === 'done' ? { text: '✓ Done' + (it.how === 'tap' ? '' : ' by HK') + (it.doneT ? ' ' + t12(it.doneT) : ''), sub: it.doneBy || '', tone: 'done' } : { text: '📨 Sent to HK', sub: '', tone: '' };
+  const fm = m => m == null ? '' : m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + (m % 60 ? (m % 60) + ' min' : '');
+  return it.st === 'done' ? { text: '✅ Done' + (it.doneT ? ' ' + t12(it.doneT) : ''), sub: [it.open != null ? '⏱ ' + fm(it.open) : '', it.doneBy].filter(Boolean).join(' · '), tone: 'done' }
+    : { text: (it.overdue ? '🔴' : '🟡') + ' Open', sub: it.open != null ? '⏱ ' + fm(it.open) : '', tone: it.overdue ? 'over' : '' };
 }
 /** "206: cleaning 9:10 ✅ 9:35 · towels 1:02 PM 🟡" */
 function wbRoomHistory(items, room) {
@@ -527,6 +583,9 @@ const BUILTIN_WORDS = {
   so: ['hk', 'Sleep Out — bed not used'], dl: ['hk', 'Double Locked'],
   ooo: ['note', 'Out of Order (maintenance)'], oos: ['note', 'Out of Service'], ns: ['note', 'No Show'],
   lco: ['lco', 'Late check-out'], lc: ['lco', 'Late check-out'], ext: ['ext', 'Extension'],
+  // how HK groups write it (kept as notes): "516 IP", "225 N/L", "526 OCC", "513 sleep out", "614 double lock", "209 NA", "406 ongoing"
+  ip: ['hk', 'Inspected — room ready'], nl: ['hk', 'No Luggage'], occ: ['hk', 'Occupied'], sleepout: ['hk', 'Sleep Out'], doublelock: ['hk', 'Double Lock'],
+  na: ['hk', 'No Answer'], ongoing: ['hk', 'Cleaning in progress'],
 };
 /** the dictionary: built-in codes + what the team added (user words win). store = {load(), save(v)}, put(key, entry|null) → the hotel database */
 function wbMakeWords(store, put, me) {
@@ -667,7 +726,7 @@ function wbChatMatch(rec, Q, parse) {
 
 W.hoWaBrainPure = { wbRooms, wbCategorize, CATS: CAT, wbRequestOf, wbOpenRequests, wbWhat, wbRepeatsToday, wbRepeatIssues, wbStats, wbMoveOf, wbMoveReason, wbMoves,
   wbMoveSummary, wbProblemRooms, wbTips, wbParseWhen, wbRemindersOf, wbShiftEndDefault, wbNormWord, wbSkel, wbLev, wbFuzzyWord, wbReadCmd, wbAskCandidates, wbMakeAsk, wbWordKey, wbMakeWords, wbReadStatus, BUILTIN_WORDS, MEANINGS,
-  wbChatQuery, wbChatMatch, wbDoneOf, wbRequestLog, wbRoomHistory, topOf, peak2, clock, t12, toMin };
+  wbChatQuery, wbChatMatch, wbDoneOf, wbRequestLog, wbReqStatus, wbDoneReply, wbDropNeg, wbParts, wbRoomHistory, topOf, peak2, clock, t12, toMin };
 if (!doc) return;
 
 // ═════════════════════════ In the app ═════════════════════════
@@ -696,8 +755,8 @@ function logEntries() {
 const normX = s => sp(s).replace(/\s+/g, ' ').trim().slice(0, 200).toLowerCase();
 /** today's messages: the local log (newest first) and today's backup, one record each */
 function todayRecs() {
-  const seen = new Set(), out = [];
-  const push = (r, key) => { const k = r.t + '|' + low(r.s) + '|' + normX(r.x); if (seen.has(k)) return; seen.add(k); out.push(Object.assign({ key }, r)); };
+  const seen = new Map(), out = [];
+  const push = (r, key) => { const k = r.t + '|' + low(r.s) + '|' + normX(r.x); const was = seen.get(k); if (was) { if (r.q && !was.q) was.q = r.q; return; } const o = Object.assign({ key }, r); seen.set(k, o); out.push(o); };   // the backup keeps the quoted message (q)
   logEntries().slice().reverse().forEach(e => push({ t: e.time, s: e.sender, x: e.text, g: e.group || '', r: (e.res || []).map(r => [r.st, r.room || ''].filter(Boolean).join(' ')).join(' · '), u: e.undone ? 1 : 0, via: e.via, at: e.at }, e.key));
   const D = DAYS[today()] || {};
   Object.keys(D).forEach(k => { const r = D[k]; if (r && typeof r === 'object' && r.x) push(r, k); });
@@ -1153,8 +1212,8 @@ function handoverGroup() {
     if (!recs.length) return null;
     const n = { co: 0, lco: 0, ext: 0, note: 0 };
     recs.forEach(r => { if (r.u) return; String(r.r || '').split(' · ').forEach(p => { const st = p.split(' ')[0]; if (n[st] != null) n[st]++; }); });
-    const C = compute(true), open = C.open.filter(o => o.t && recs.some(r => r.t === o.t));
-    const items = [`${plural(recs.length, 'message')} · ${n.co} checked out · ${n.lco} late check-out${n.lco === 1 ? '' : 's'} · ${n.ext} extended · ${plural(n.note, 'note')} · ${open.length} open request${open.length === 1 ? '' : 's'}`];
+    const C = compute(true), open = reqTrack() ? C.open.filter(o => o.t && recs.some(r => r.t === o.t)) : [];
+    const items = [`${plural(recs.length, 'message')} · ${n.co} checked out · ${n.lco} late check-out${n.lco === 1 ? '' : 's'} · ${n.ext} extended · ${plural(n.note, 'note')}${reqTrack() ? ` · ${open.length} open request${open.length === 1 ? '' : 's'}` : ''}`];
     open.slice(0, 8).forEach(o => items.push(`Open: Room ${o.room} — ${wbWhat(o.cats)} (${o.s}, ${t12(o.t)}, no reply yet)`));
     dueRems(C).concat(C.rems.filter(r => r.at > nowMin() && !isDone(r.id) && remCondOk(r))).slice(0, 6).forEach(r => items.push(`Reminder ${clock(r.at)}: ${r.text}`));
     C.ext.filter(e => e.kind === 'opera').forEach(e => items.push(`Room ${e.room}: extended from WhatsApp — update Opera`));
@@ -1364,6 +1423,10 @@ function reqAdd(room, cat, what, note) {
   safe(() => showToast(`Room ${e.room}: ${e.what} — added to the requests log`, 'ok'));
 }
 const fmtOpen = m => m == null ? '' : m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + (m % 60 ? (m % 60) + ' min' : '');
+// the log is a calm record by default: housekeeping closes requests in WhatsApp, nobody ticks or follows up.
+// "Track requests" (off unless switched on, per device) brings back Open / Done, timers and the Done buttons.
+const reqTrack = () => { try { return localStorage.getItem('wab_hk_track') === '1'; } catch (_) { return false; } };
+function setReqTrack(on) { try { localStorage.setItem('wab_hk_track', on ? '1' : '0'); } catch (_) {} if (!on && HK.lf.st === 'open') HK.lf.st = 'all'; }
 function logFiltered(items) {
   const f = HK.lf, q = low(f.q).trim();
   return items.filter(i => (f.st === 'all' || i.st === f.st) && (!f.room || i.key === rk(f.room)) && (!f.cat || i.cats.some(c => c.id === f.cat) || (f.cat === 'other' && !i.cats.length))
@@ -1375,11 +1438,12 @@ function logRows() {
   doc.querySelectorAll('#wabHk [data-wab-lst]').forEach(b => { const k = b.dataset.wabLst; b.classList.toggle('on', f.st === k); b.setAttribute('aria-pressed', f.st === k); const em = b.querySelector('em'); if (em) em.textContent = cnt(k); });
   const hist = f.room ? wbRoomHistory(all, f.room) : '';
   const body = doc.getElementById('wabLogBody'); if (!body) return;
-  body.innerHTML = (hist ? `<div class="wab-hist">🛏️ ${esc(hist)}</div>` : '') + (L.length ? `<div class="wab-tw"><table class="wab-log"><thead><tr><th>Time</th><th>Room</th><th>What</th><th>Message</th><th>Who</th><th>Status</th><th></th></tr></thead><tbody>${L.map(i => `<tr class="${i.overdue ? 'wab-over' : ''}${i.st === 'done' ? ' wab-done' : ''}">
+  const track = reqTrack();
+  body.innerHTML = (hist ? `<div class="wab-hist">🛏️ ${esc(hist)}</div>` : '') + (L.length ? `<div class="wab-tw"><table class="wab-log"><thead><tr><th>Time</th><th>Room</th><th>What</th><th>Message</th><th>Who</th><th>Status</th>${track ? '<th></th>' : ''}</tr></thead><tbody>${L.map(i => { const S = wbReqStatus(i, track); return `<tr class="${S.tone === 'over' ? 'wab-over' : ''}${i.st === 'done' ? ' wab-done' : ''}">
       <td class="num">${esc(t12(i.t))}</td><td class="num"><button type="button" class="wab-room" data-wab-lroom="${esc(i.room)}" title="Only this room">${esc(i.room)}</button></td>
       <td>${i.cats.length ? i.cats.map(c => c.icon).join('') + ' ' : ''}${esc(i.what)}${i.again ? `<small>asked ${i.again + 1} times</small>` : ''}</td><td class="wab-lx">${esc(qMark(i.x || '', 140))}</td><td>${esc(i.s)}${i.g ? `<small>${esc(i.g)}</small>` : ''}</td>
-      <td class="wab-st">${i.st === 'done' ? `✅ Done${i.doneT ? ' ' + esc(t12(i.doneT)) : ''}<small>${i.open != null ? '⏱ ' + esc(fmtOpen(i.open)) : ''}${i.doneBy ? ' · ' + esc(i.doneBy) : ''}${i.how === 'chat' ? ' · in the chat' : ''}</small>` : `${i.overdue ? '🔴' : '🟡'} Open<small>${i.open != null ? '⏱ ' + esc(fmtOpen(i.open)) + (day < today() ? '' : '') : ''}</small>`}</td>
-      <td>${i.st === 'done' ? `<button class="wab-b" type="button" data-wab-lopen="${esc(i.id)}">Reopen</button>` : `<button class="wab-b pri" type="button" data-wab-ldone="${esc(i.id)}">✓ Done</button>`}</td></tr>`).join('')}</tbody></table></div>`
+      <td class="wab-st">${esc(S.text)}${S.sub || (track && i.how === 'chat') ? `<small>${esc(S.sub)}${track && i.how === 'chat' ? ' · in the chat' : ''}</small>` : ''}</td>
+      ${track ? `<td>${i.st === 'done' ? `<button class="wab-b" type="button" data-wab-lopen="${esc(i.id)}">Reopen</button>` : `<button class="wab-b pri" type="button" data-wab-ldone="${esc(i.id)}">✓ Done</button>`}</td>` : ''}</tr>`; }).join('')}</tbody></table></div>`
     : `<div class="wab-empty">${all.length ? 'Nothing matches these filters.' : day === today() ? 'No room requests in the HK chat today yet. They show here by themselves — for every room, in-house or departing.' : 'No room requests on this day.'}</div>`);
 }
 async function logRender() {
@@ -1388,8 +1452,11 @@ async function logRender() {
   if (f.day !== today()) { await loadDays([f.day], 10 * 60e3).catch(() => {}); await reqLoad(f.day); } else reqListen();
   safe(() => {
     const cats = CATS.map(c => `<option value="${c[0]}"${f.cat === c[0] ? ' selected' : ''}>${c[2]} ${esc(c[1])}</option>`).join('');
-    root.innerHTML = `<div class="wab-sec"><h3>📋 Requests log</h3><p>Every room request from the HK chat — in-house or departing rooms. It turns ✅ by itself when someone writes done / cleaned / sent / ✓ for that room, or when you tap Done. Open for more than 30 min shows in red.</p>
-      <div class="wab-bar"><div class="wab-per" role="group" aria-label="Status">${[['open', '🟡 Open'], ['done', '✅ Done'], ['all', 'All']].map(([k, l]) => `<button type="button" data-wab-lst="${k}" class="${f.st === k ? 'on' : ''}" aria-pressed="${f.st === k}">${l} <em>0</em></button>`).join('')}</div>
+    const track = reqTrack(); if (!track && f.st === 'open' && !f.stSet) f.st = 'all';
+    root.innerHTML = `<div class="wab-sec"><h3>📋 Requests log</h3><p>${track ? 'Every room request from the HK chat — in-house or departing rooms. It turns ✅ by itself when someone writes done / cleaned / sent / ✓ for that room, or when you tap Done. Open for more than 30 min shows in red.'
+        : 'A record of every room request sent to housekeeping in the HK chat. Housekeeping takes care of them — nothing to tick or follow up. It shows ✓ Done by HK by itself when they reply done / ✅.'}
+        <label style="display:inline-flex;gap:6px;align-items:center;margin-left:6px;white-space:nowrap"><input type="checkbox" data-wab-track="1"${track ? ' checked' : ''}> Track requests</label></p>
+      <div class="wab-bar"><div class="wab-per" role="group" aria-label="Status">${(track ? [['open', '🟡 Open'], ['done', '✅ Done'], ['all', 'All']] : [['all', 'All'], ['open', '📨 Sent to HK'], ['done', '✓ Done by HK']]).map(([k, l]) => `<button type="button" data-wab-lst="${k}" class="${f.st === k ? 'on' : ''}" aria-pressed="${f.st === k}">${l} <em>0</em></button>`).join('')}</div>
         <div class="wab-dl"><button class="btn gold sm" type="button" data-wab-ladd="1">＋ Add request</button><button class="btn sm" type="button" data-wab-ldl="xlsx">⬇ Excel</button><button class="btn sm" type="button" data-wab-ldl="csv">CSV</button></div></div>
       <div class="wab-lf"><input type="date" id="wabLDay" value="${esc(f.day)}" max="${esc(today())}" aria-label="Day"><input id="wabLRoom" inputmode="numeric" placeholder="Room" value="${esc(f.room)}" aria-label="Room"><select id="wabLCat" aria-label="What"><option value="">Everything</option>${cats}<option value="other"${f.cat === 'other' ? ' selected' : ''}>📝 Other</option></select><input id="wabLQ" type="search" placeholder="Search…" value="${esc(f.q)}" aria-label="Search"></div>
       ${HK.adding ? `<div class="wab-ladd"><b>Add a request (came by phone or at the desk)</b><div class="wab-lf"><input id="wabARoom" inputmode="numeric" maxlength="5" placeholder="Room *" aria-label="Room"><select id="wabACat" aria-label="What">${CATS.map(c => `<option value="${c[0]}">${c[2]} ${esc(c[1])}</option>`).join('')}<option value="">📝 Other</option></select><input id="wabANote" maxlength="200" placeholder="Note, e.g. 2 extra towels" aria-label="Note"></div><span class="wab-reasons"><button class="btn gold sm" type="button" data-wab-asave="1">Save</button><button class="btn ghost sm" type="button" data-wab-acancel="1">Cancel</button></span></div>` : ''}
@@ -1400,7 +1467,8 @@ async function logRender() {
 function logDownload(kind) {
   safe(() => {
     const day = HK.lf.day || today(), L = logFiltered(reqItems(day)).slice().reverse();
-    const rows = [['Date', 'Time', 'Room', 'What', 'Message', 'Who', 'Group', 'Status', 'Done at', 'Done by', 'Open (min)']].concat(L.map(i => [dmy(day), t12(i.t), i.room, i.what, i.x, i.s, i.g, i.st === 'done' ? 'Done' : 'Open', i.doneT ? t12(i.doneT) : '', i.doneBy, i.open == null ? '' : i.open]));
+    const track = reqTrack();
+    const rows = [['Date', 'Time', 'Room', 'What', 'Message', 'Who', 'Group', 'Status', 'Done at', 'Done by'].concat(track ? ['Open (min)'] : [])].concat(L.map(i => [dmy(day), t12(i.t), i.room, i.what, i.x, i.s, i.g, i.st === 'done' ? 'Done' : track ? 'Open' : 'Sent to HK', i.doneT ? t12(i.doneT) : '', i.doneBy].concat(track ? [i.open == null ? '' : i.open] : [])));
     exportRows({ 'Requests log': rows }, `HK requests log ${day}`, kind);
   });
 }
@@ -1414,6 +1482,7 @@ function exportRows(sheets, name, kind) {
 }
 /** the compact "Open requests" card (Home and Ops Brain) */
 function openReqCardHtml(max) {
+  if (!reqTrack()) return '';                                                   // calm by default: no "open requests" card to chase
   const L = reqItems(today()).filter(i => i.st === 'open').sort((a, b) => (b.open || 0) - (a.open || 0));
   if (!L.length) return '';
   return `<div class="wab-oreq"><div class="wab-oreq-h"><b>🧺 Open requests · ${L.length}</b><button type="button" class="wab-b" data-wab-golog="1">Open the log ›</button></div>
@@ -1433,7 +1502,7 @@ function goLog() { safe(() => { if (typeof brClose === 'function') brClose(); HK
 function hkTabs() {
   const t = doc.getElementById('wabHkTabs'); if (!t) return;
   const n = waiting().length;
-  const no = safe(() => reqItems(today()).filter(i => i.st === 'open').length, 0);
+  const no = reqTrack() ? safe(() => reqItems(today()).filter(i => i.st === 'open').length, 0) : 0;
   t.innerHTML = [['log', '📋 Requests log' + (no ? ` <em>${no}</em>` : '')], ['req', '📊 Requests & moves'], ['words', '📖 WhatsApp words' + (n ? ` <em>${n}</em>` : '')]].map(([k, l]) => `<button type="button" role="tab" data-wab-tab="${k}" class="${HK.tab === k ? 'on' : ''}" aria-selected="${HK.tab === k}">${l}</button>`).join('');
 }
 function hkRender() {
@@ -1570,7 +1639,8 @@ function mountPage() {
   panel.innerHTML = `<div class="page-hd"><div class="page-hd-left"><h1>🧺 HK Requests</h1><p>What housekeeping is asked for most, why rooms move and which rooms keep having problems — learned from the WhatsApp HK group.</p></div></div><div class="wab-tabs" id="wabHkTabs" role="tablist"></div><div class="wab-pg" id="wabHk"></div>`;
   main.appendChild(panel);
   panel.addEventListener('click', e => safe(() => {
-    const ls = e.target.closest('[data-wab-lst]'); if (ls) { HK.lf.st = ls.dataset.wabLst; logRows(); return; }
+    const ls = e.target.closest('[data-wab-lst]'); if (ls) { HK.lf.st = ls.dataset.wabLst; HK.lf.stSet = true; logRows(); return; }
+    const tr = e.target.closest('[data-wab-track]'); if (tr) { setReqTrack(tr.checked); HK.lf.stSet = false; logRender(); safe(() => { hkTabs(); paintHomeReq(); }); return; }
     const lr = e.target.closest('[data-wab-lroom]'); if (lr) { HK.lf.room = HK.lf.room === lr.dataset.wabLroom ? '' : lr.dataset.wabLroom; const i = doc.getElementById('wabLRoom'); if (i) i.value = HK.lf.room; logRows(); return; }
     if (e.target.closest('[data-wab-ladd]')) { HK.adding = !HK.adding; logRender().then(() => { const r = doc.getElementById('wabARoom'); if (r) r.focus(); }); return; }
     if (e.target.closest('[data-wab-acancel]')) { HK.adding = false; logRender(); return; }

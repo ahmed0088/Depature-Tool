@@ -217,13 +217,15 @@ const CAT_RULES = [
   ['guest', /\bcomplain\w*|\bunhappy\b|\bangry\b|\bupset\b|\bnot happy\b|\brude\b|\bcompensat\w*|\bapologi[sz]\w*|\bnois[ey]\b|\bdisturb(?!\b)\w*|\bbad review|\bescalat\w*|\bnot satisfied|\bdissatisf\w*/],
   ['pay', /\bbalance\b|\btd\b|\bdeposit\b|\brefund\w*|\bcity ledger|\bc\/l\b|\binvoice\w*|\bpayments?\b|\bpaid\b|\bunpaid\b|\bpay\b|\bbill(?:ing|ed)?\b|\bfolio\b|\bcharged?\b|\bcredit card|\bcc\b|\bpre-?auth\w*|\bauthori[sz]ation|\boutstanding\b|\bsettle\w*|\bvcc\b|\baed\b|\bdhs?\b|\breceipt|\bcheque|\bamount\b/],
   ['guest', /\bvip\b|\bbirthday|\banniversary|\bhoneymoon/],
-  ['transport', /\btaxi|\bcab\b|\bairport\b|\bpick-?up\b|\bdrop(?:-| )?off\b|\blimo\w*|\bdriver\b|\bshuttle|\bcareem|\buber\b|\bflight\b|\bcar (?:booked|arranged|service)/],
+  ['transport', /\btaxi|\bcab\b|\bairport\b|(?<!\b(?:laundry|garbage|trash|linen|tray)\s)\bpick-?\s?up\b(?!\s+(?:the\s+)?(?:laundry|garbage|trash|tray))|\bdrop(?:-| )?off\b|\blimo\w*|\bdriver\b|\bshuttle|\bcareem|\buber\b|\bflight\b|\bcar (?:booked|arranged|service)/],
   ['res', /\bbooking\w*|\breservation\w*|\bres\b|\bamend\w*|\bcancel\w*|\bno-?\s?show|\bearly dep\w*|\bearly check-?\s?out|\bleaving early|\bcut short|\bshorten\w*|\bed\b|\bextension\b|\bextend\w*|\bext\b|\bwalk-?\s?in|\bguarantee\w*|\bconfirmation\b|\brate\b|\bgroup (?:block|booking|arrival)|\blate arrival|\beta\b|\barriv(?:al|als|ing)\b|\bpre-?reg\w*|\broom blocked|\bblocked for\b|\bblock(?:ed)? (?:room|rooms)\b|\bota\b|\bexpedia|\bstay\b/],
   ['hk', /\bextra bed|\bbaby cot|\bcot\b|\brollaway|\bsofa bed/],
-  ['move', /\broom move|\bmov(?:e|ed|ing) (?:to|from|him|her|them|the guest|guest|room)\b|\bshift(?:ed|ing)? (?:to|from|room|him|her|them|the guest|guest)\b|\bchange (?:the )?room|\broom change|\bswap\b|\bupgrad\w*|\bdowngrad\w*|\btwin\b|\bdouble bed|\bking bed|\bqueen bed|\b(?:\d|two|one) ?beds?\b|\bbed type|\bseparate beds/],
-  ['maint', /\bac\b|\ba\/c\b|\baircon\w*|\bair ?con\w*|\bleak\w*|\bbroken\b|\bnot working|\bengineer\w*|\bmaintenance|\bmaint\b|\bplumb\w*|\btoilet|\bshower|\bflush|\bdrain|\blights? (?:not|off|out)|\bbulb|\btv\b|\bremote\b|\bdoor lock|\block (?:not|broken|issue)|\bsafe (?:not|locked|issue|problem)|\bwi-?fi|\binternet\b|\bsmell\w*|\bodou?r\b|\bhot water|\bno water|\bwater (?:heater|leak|pressure)|\btechnician|\brepair\w*|\bfix(?:ed)?\b|\bout of order|\booo\b|\bout of service|\boos\b|\bfridge|\bkettle|\bsocket|\bpower cut|\belectric\w*|\bpest|\bcockroach|\bbed ?bugs?|\bceiling|\bcurtain/],
+  ['move', /\broom move|\bmov(?:e|ed|ing) (?:to|from|him|her|them|the guest|guest|room)\b|\bshift(?:ed|ing)? (?:to|from|room|him|her|them|the guest|guest)\b|\bchange (?:the )?room|\broom change|\bswap\b|\bupgrad\w*|\bdowngrad\w*|\bto (?:a )?(?:twin|king|double|queen)\b|\bbed type/],
+  // "need king bed", "make it 2 beds", "separate the beds": how HK makes the room up, not a room move
+  ['hk', /\btwin\b|\bdouble bed|\bking bed|\bqueen bed|\b(?:\d|two|one) ?beds?\b|\bseparate (?:the )?beds/],
+  ['maint', /\bac\b|\ba\/c\b|\baircon\w*|\bair ?con\w*|\bleak\w*|\bbroken\b|\bnot working|\bengineer\w*|\bmaintenance|\bmaint\b|\bplumb\w*|\btoilet(?! (?:paper|roll|tissue))|\bshower(?! ?(?:gel|cap|caps|cream))|\bflush|\bdrain|\blights? (?:not|off|out)|\bbulb|\btv\b|\bremote\b|\bdoor lock|\block (?:not|broken|issue)|\bsafe (?:not|locked|issue|problem)|\bwi-?fi|\binternet\b|\bsmell\w*|\bodou?r\b|\bhot water|\bno water|\bwater (?:heater|leak|pressure)|\btechnician|\brepair\w*|\bfix(?:ed)?\b|\bout of order|\booo\b|\bout of service|\boos\b|\bfridge|\bkettle|\bsocket|\bpower cut|\belectric\w*|\bpest|\bcockroach|\bbed ?bugs?|\bceiling|\bcurtain/],
   ['guest', /\bvip\b|\bbirthday|\banniversary|\bhoneymoon|\bwelcome (?:amenity|drink|letter|card)|\bcake\b/],
-  ['hk', /\bhousekeeping|\bhk\b|\btowels?\b|\blinen|\bclean\w*|\bmake up room|\bmur\b|\bamenit\w*|\bturn ?down|\blaundry|\bdirty\b|\bminibar|\bbed ?sheets?|\bpillows?\b|\bblankets?\b|\btoiletr\w*|\bslippers|\bbathrobe|\bwater bottles?|\binspect\w*|\bvd\b|\bvc\b/],
+  ['hk', /\bhousekeeping|\bhk\b|\bshower gel|\brefill\w*|\btowels?\b|\blinen|\bclean\w*|\bmake up room|\bmur\b|\bamenit\w*|\bturn ?down|\blaundry|\bdirty\b|\bminibar|\bbed ?sheets?|\bpillows?\b|\bblankets?\b|\btoiletr\w*|\bslippers|\bbathrobe|\bwater bottles?|\binspect\w*|\bvd\b|\bvc\b/],
   ['fb', /\bbreakfast|\bbf\b|\bb\/f\b|\bf\s?&\s?b\b|\brestaurant|\broom service|\bin-?room dining|\bird\b|\bdinner\b|\blunch\b|\bmeals?\b|\bkitchen|\bbar\b/],
   ['desk', /\bwake-?\s?up|\bmorning call|\bkeys?\b|\bkey ?cards?|\bparking|\bvalet|\bcar park|\bvisitors?\b|\bpassports?\b|\bemirates id|\bid\b|\bid copy|\bpolice|\bimmigration|\bdnd\b|\bdo not disturb|\bno answer|\bnot answering|\bn\/a\b|\bregistration card|\breg card|\brc\b|\bsecurity\b|\bcctv/],
   ['guest', /\bguest (?:request\w*|asked|asks|wants|wanted|needs|called)|\bspecial request|\bfeedback|\breview\b|\bloyal\w*|\ball member|\bplatinum|\bgold member|\brepeat guest/],
@@ -253,15 +255,22 @@ const HO_COPY_MIN = 3;                                   // the score a message 
 const CAT_WEIGHT = { lost: 3, cash: 3, guest: 3, move: 3, pay: 2, res: 2, maint: 2, transport: 2, desk: 2, follow: 1, fb: 1, hk: 0, info: 0 };
 // the words of plain room commands and housekeeping status codes (what is left decides)
 const CMD_WORDS = /\b(?:rooms?|rm|co|c\/o|lco|l\/c|late|check(?:ed|ing)?[\s-]*(?:out|in)|checkout|chkout|out|left|gone|vacated|departed|ext(?:end(?:ed|ing)?|ension)?|extn|xtnd|stay(?:ing)?|more|nights?|\d+\s*n|till|until|to|at|by|and|all|vd|vc|oc|od|ooo|dnd|ready|clean(?:ed)?|done|ok(?:ay)?|noted|inspected|occupied|vacant|dirty|guest|inside|luggage|in|the|is|are|pls|please|asap|now|soon|mins?|minutes?|hrs?|today|am|pm|noon|[✓✔✅👍])\b|[✓✔✅👍]/gi;
+// "I handover to the reception", "handed over the keys to the guest": handing something over, not a shift handover
+const HANDED_RX = /\b(?:i|we|he|she|they|will|to|already|just|please|pls|kindly)\s+hand\s*-?\s*(?:over|overed)\b|\bhand\s*-?\s*over(?:ed)?\s+(?:to|it|the|them|him|her|this|that)\b|\bhanded\s+over\b/i;
+// the HK group's routine asks: "physical check 301, 304", "any update due out rooms", "403 IP", "on queue"
+const ROUTINE_RX = /\b(?:(?:please|pls|kindly)\s+)?(?:do\s+)?check\s+(?:the\s+)?physical(?:ly)?\s+(?:check|status)(?:\s+of)?\b|\bphysical(?:ly)?\s+(?:check(?:ed)?(?:\s*-?\s*out)?|status)(?:\s+of)?\b|\b(?:any\s+)?updat\w*\b|\bd(?:ue|uo)\s*-?\s*out\b|\bd\/o\b|\bip\b|\bon\s+queue\b|\bprepare(?:\s+(?:the\s+room\s+)?for\s+(?:the\s+)?arrival)?\b|\b(?:kindly|see|below|these|those|status|states|for|of|on)\b/gi;
+// "522 move to 202", "516 moved to 517 leakage", "407 shifted to 611": a room move, whatever else is said
+const MOVE_RX = /\b(?:mov(?:e|ed|ing)|shift(?:ed|ing)?|transfer(?:red)?|swap(?:ped)?)\s+(?:(?:the\s+)?guest\s+)?(?:(?:to|from|in(?:to)?)\s+)?(?:[a-z]+\s+){0,2}?(?:room\s*|rm\s*)?\d{3,4}\b/i;
 /** how much a message reads like a handover item → {score, cat, rest} (score ≥ HO_COPY_MIN: copy it) */
 function handoverScore(text, opt) {
   opt = opt || {};
   const t = sp(text).trim();
   if (!t || t.length < 6) return { score: 0, cat: 'info', rest: '' };
   if (typeof opt.parse === 'function') { try { const P = opt.parse(t); if (P && P.kind === 'ignore') return { score: 0, cat: 'info', rest: '' }; } catch (_) {} }
-  if (/\b(?:hand\s*-?\s*over|h\/o)\b/i.test(t) && t.split(/\s+/).length >= 4) return { score: 9, cat: categorize(t), rest: t };   // "Handover: …"
+  if (/\b(?:hand\s*-?\s*over|h\/o)\b/i.test(t) && t.split(/\s+/).length >= 4 && !HANDED_RX.test(t)) return { score: 9, cat: categorize(t), rest: t };   // "Handover: …"
   const rooms = roomsOf(t);
-  const rest = t.replace(/\b\d{1,4}(?:[:.]\d{2})?\b/g, ' ').replace(/[\/:,.;!?+()#\-–—]+/g, ' ').replace(CMD_WORDS, ' ').replace(/\s+/g, ' ').trim();
+  const rest = t.replace(/@\S+/g, ' ').replace(ROUTINE_RX, ' ').replace(/\b\d{1,4}(?:[:.]\d{2})?\b/g, ' ').replace(/[\/:,.;!?+()#\-–—]+/g, ' ').replace(CMD_WORDS, ' ').replace(/\s+/g, ' ').trim();
+  if ((MOVE_RX.test(t) || categorize(t.replace(/@\S+/g, ' ')) === 'move') && rooms.length) return { score: CAT_WEIGHT.move + 1, cat: 'move', rest };
   const words = rest ? rest.split(' ').filter(w => /[a-z]{2,}/i.test(w)) : [];
   if (words.length < 1 || (words.length < 2 && !rooms.length)) return { score: 0, cat: 'info', rest };
   if (GREET_RX.test(t) || SIGN_RX.test(t)) return { score: 0, cat: 'info', rest };
@@ -518,7 +527,7 @@ function pasteItems(text, opt) {
   let msgs = [];
   if (typeof opt.parseCopied === 'function') { try { msgs = opt.parseCopied(raw) || []; } catch (_) { msgs = []; } }
   if (msgs.length) {
-    msgs.forEach(m => { const body = hoBody(m.text); if (!sp(body).trim()) return; push(body, { sender: sp(m.sender).trim(), time: t24of(m.time), date: isoOf(m.date), marked: !!hoPrefix(m.text) }); });
+    msgs.forEach(m => { const body = hoBody(m.text); if (!sp(body).trim()) return; push(body, { sender: sp(m.sender).trim(), time: t24of(m.time), date: m.iso || isoOf(m.date), marked: !!hoPrefix(m.text) }); });
     return out;
   }
   // an e-mail: no quoted reply, no headers, nothing after the signature
@@ -768,7 +777,7 @@ function pdfHtml(m) {
   <div class="tw">${open}</div>`;
 }
 
-W.hoHandoverPure = { doneReply, doneTargets, sectionOf, hoBody, learnedField, wordSwaps, applySwaps, learnToks, simOf, learnedVerdict, hoursOf, sameName, rosterShiftOf, pdfHtml, cssOf, isUrgent, XL, XL_KPI, statusStyle, catStyle, argbOf, rowHeight, shiftsCovered, reportModel, writtenSummary, HO_GROUP_RX, isHandoverGroup, HO_PREFIX_RX, hoPrefix, isChat, pasteItems, suggestFrom, HO_COPY_MIN, handoverScore, looksLikeHandover, SHIFT_BOUNDS, shiftOf, CATS, CAT, categorize, statusOf, roomsOf, tagsOf, splitItems, tidy, buildItems, filterItems, summaryOf,
+W.hoHandoverPure = { doneReply, doneTargets, sectionOf, hoBody, learnedField, wordSwaps, applySwaps, learnToks, simOf, learnedVerdict, hoursOf, sameName, rosterShiftOf, pdfHtml, cssOf, isUrgent, XL, XL_KPI, statusStyle, catStyle, argbOf, rowHeight, shiftsCovered, reportModel, writtenSummary, HO_GROUP_RX, isHandoverGroup, HO_PREFIX_RX, hoPrefix, isChat, pasteItems, suggestFrom, HO_COPY_MIN, handoverScore, looksLikeHandover, MOVE_RX, HANDED_RX, SHIFT_BOUNDS, shiftOf, CATS, CAT, categorize, statusOf, roomsOf, tagsOf, splitItems, tidy, buildItems, filterItems, summaryOf,
   excelRows, summaryRows, fileName, polishStyles, polishSheet, dLong, t12, COL_W, byTime };
 if (!doc) return;
 

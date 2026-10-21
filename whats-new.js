@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 371, items: [
+    '🧠 The WhatsApp reader learned from months of your team\'s real chats: IP = inspected / room ready, N/L = no luggage, OCC = guest things still in the room (might extend), "- till 14:00" = late check-out, "Stay Extended", "on Extension", "C/out", sleep out, double lock, ongoing and more. Typos like "chekcout" are read too.',
+    '🛡️ Safer: questions like "315/316 vd any updates?", "any update due out rooms" or "status?" never check a room out any more, and HotelOps\' own posts are never read back as commands. Pasting a WhatsApp chat export now reads US dates, forwarded messages, pictures, @mentions and edited / deleted messages correctly.',
+    '🧺 HK Requests is a calm log now: each request shows "📨 Sent to HK", and "✓ Done by HK" by itself when housekeeping replies Done. No red Open, no timers, no Done buttons. Want them back? Switch on "Track requests".',
+    '🔎 Fixed readings: "send heavy blanket" is a blanket, "no need cleaning" / "do not clean" / "no luggage" are not requests, "collect payment at reception" is a front-desk note, and each smell in a message goes to the right room.',
+  ] },
   { v: 370, items: [
     '🏋️ New page: Gym & Pool (Guests & Sales). Every member with type, room or outside, dates, amount paid, car plate, mobile and ID (shown hidden, e.g. 784-XXXX-XXXXXXX-1). Each card shows Active / Ending soon / Expired with a countdown, and a banner reminds you when someone ends today or tomorrow.',
     '📎 Attach the ID copy, signed form or receipt (PDF or a photo from your phone camera) to each member. Extend in one tap (+30 days, +1/3/6/12 months) with the full history kept; check-ins are counted.',

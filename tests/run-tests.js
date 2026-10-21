@@ -1741,6 +1741,41 @@ console.log('\nWhatsApp HK bridge · message reader');
   check('wa talk: HotelOps\' own posts stay ignored', ['✅ HotelOps · 514 checking out in 10 min', '✅ HotelOps · 514 gone'].map(t => P(t).kind), ['ignore', 'ignore']);
   const corpus2 = ['CO\n101\n102', 'Checkout list:\n101 ✓', '212.319.504 all VD\n507 guest inside', '415 ckd', '507 extending, only TD left', '507 TD ✓ RC ✓', '⁣✅ HotelOps · Checkout list', '514 gone', 'guests in 514 and 516 left', '514 staying 2 more nights', '514 thinking to extend', '514 will check out at 3pm', '514 cleaning after 2pm'];
   check('wa snippet: the new rules read the same in the WhatsApp window', corpus2.map(t => JSON.stringify(H2.parser.hoWaParse(t))), corpus2.map(t => JSON.stringify(sb.hoWaParse(t))));
+  // learned from a real HK group export (rewritten, made-up examples)
+  const PC = t => J2(sb.hoWaParseCopied(t)), J2 = x => JSON.parse(JSON.stringify(x));
+  check('wa export: iPhone "[7/22/26, 12:40:30 PM]", month first, media and forward marks, edited, deleted, system lines',
+    PC('Messages and calls are end-to-end encrypted.\n[7/22/26, 12:40:30 PM] Sam Test: 516 ip\n[7/22/26, 1:00:07 PM] +971 50 000 0000: [Forwarded] <video omitted> 411 vd room\n[7/22/26, 1:02:00 PM] Lina Demo: 205 co <This message was edited>\n[7/22/26, 1:03:00 PM] Lina Demo: This message was deleted\n[7/22/26, 1:04:00 PM] Sam Test: <album message>\n[8/1/26, 9:10:00 AM] Sam Test: Physical check\n\n101\n102\n[8/1/26, 9:11:00 AM] - Sam Test added Lina Demo').map(m => [m.iso, m.time, m.text, !!m.edited, !!m.deleted]),
+    [['2026-07-22', '12:40:30 PM', '516 ip', false, false], ['2026-07-22', '1:00:07 PM', '411 vd room', false, false], ['2026-07-22', '1:02:00 PM', '205 co', true, false], ['2026-07-22', '1:03:00 PM', '', false, true],
+     ['2026-07-22', '1:04:00 PM', '', false, false], ['2026-08-01', '9:10:00 AM', 'Physical check\n\n101\n102', false, false]]);
+  check('wa export: day first when the paste shows it, no guess when it does not', [PC('[18/10/2026, 9:01:05 AM] Sam: 324 CO\n[3/10/2026, 9:02:00 AM] Sam: 325 CO').map(m => m.iso), PC('[3/10/2026, 9:02:00 AM] Sam: 325 CO')[0].iso], [['2026-10-18', '2026-10-03'], undefined]);
+  check('wa export: a Markdown export (day headings, bold names, quoted replies over several lines)',
+    PC('# WhatsApp Chat Export: Test group\n\n---\n\n## 22 July 2026\n\n[12:40 PM] **Sam Test:** 516 ip\n\n[1:00 PM] **+971 50 000 0000:** [Forwarded] [Video] 411 vd room\n\n[1:45 PM] **Lina Demo:**\n> _Sam Test: Physical check\n\n101\n102_\nDone ✅\n\n[1:46 PM] **Sam Test:** _This message was deleted_\n\n[1:50 PM] __Sam Test added Lina Demo__\n\n---\n\n## 1 August 2026\n\n[9:00 AM] **Lina Demo:** 214 co').map(m => [m.iso, m.time, m.sender, m.text, m.quote || '', !!m.deleted]),
+    [['2026-07-22', '12:40 PM', 'Sam Test', '516 ip', '', false], ['2026-07-22', '1:00 PM', '+971 50 000 0000', '411 vd room', '', false], ['2026-07-22', '1:45 PM', 'Lina Demo', 'Done ✅', 'Physical check\n\n101\n102', false],
+     ['2026-07-22', '1:46 PM', 'Sam Test', '', '', true], ['2026-08-01', '9:00 AM', 'Lina Demo', '214 co', '', false]]);
+  check('wa learned: HK status words are notes with their meaning, never a check-out', ['516 ip', '225 N/L', '513 sleep out', '614 double lock', '209 - NA', '406 ongoing', '617 IP @Sam Test'].map(A),
+    ['516 note ip (Inspected — room ready)', '225 note N/L (No Luggage)', '513 note sleep out (Sleep Out)', '614 note double lock (Double Lock)', '209 note NA (No Answer)', '406 note ongoing (Cleaning in progress)', '617 note IP (Inspected — room ready)']);
+  check('wa learned: IP and other HK words are not asked about any more', ['516 ip', '225 N/L', '405 sugar', '425 coffee', '219 tissue', '416 makeup', '509 staus', '310 cofee'].map(t => (P(t).ask || {}).word || ''), Array(8).fill(''));
+  check('wa learned: questions about rooms never act ("any update", "vd update plz", "status?") — nothing is written either',
+    ['101 112 204 207 any update Due out rooms plz@Sam Test', '214,321,325,303 any update due out room @Sam', '315/316/317 vd any updates', '106 vd update plz @Lina', '509 status?', '306 ready?', '412 any updated due out room'].map(t => P(t).actions.length), Array(7).fill(0));
+  check('wa learned: a question keeps a room from acting, even with a command word in it', ['what about 309? check out or extend', '424 any update today due out extend?', '214 vd any update'].map(A), ['', '424 note any update today due out extend?', '']);
+  check('wa learned: the room before the question still acts', A('417 co 322 any updates'), '417 co');
+  check('wa learned: "VD room is ready" tells (checked out), only "ready?" asks', [A('210 vd room is ready ✅'), A('210 room is ready ✅'), P('210 ready?').actions.length], ['210 co', '210 note room is ready ✅', 0]);
+  check('wa learned: "till 14:00 pm" and "2 PM check out" are late check-outs; a morning time is not', ['102 - till 14:00 pm', '412 - till 16: 00 pm', '108 - till 13;00 pm', '626 till 14:30 pm (gold member)', '517 5 pm check out', '218 - 2 PM CHECKOUT', '311 - till 10:00 am', '512 cleaning till 2pm'].map(A),
+    ['102 lco 14:00', '412 lco 16:00', '108 lco 13:00', '626 lco 14:30', '517 lco 17:00', '218 lco 14:00', '311 note till 10:00 am', '512 note cleaning till 2pm']);
+  check('wa learned: "Stay Extended", "extended room cleaning", "extended but no need clean" are extended', ['209 Stay Extended', '206 Stay Extended, room makeup, guest outside', '301 - extended room cleaning', '412 extended and request room cleaning', '310 extended but no need cleaning'].map(A),
+    ['209 ext', '206 ext', '301 ext', '412 ext', '310 ext']);
+  check('wa learned: "on extension" is on its way (⏳), not extended; "extended but not paid" stays a note', ['206 - on Extension', '310 extended but not paid'].map(A), ['206 extending', '310 note extended but not paid']);
+  check('wa learned: C/out, "Room : 205", forwarded and image lines, "physically checked out"', ['415 C/out', '415 c/out, please prepare asap', 'Room: 312 checkout.', '[Forwarded] 205 - co', '<image omitted> 525 - luggages inside', '206 physically checkedout', '105 physical check out'].map(A),
+    ['415 co', '415 co', '312 co', '205 co', '525 maybe luggages inside', '206 co', '105 note physical check out']);
+  check('wa learned: luggage and OCC rooms might extend; "no luggage" / "occ room no luggage" are notes', ['306 - luggages inside', '517 inside luggage', '303 luggage 🧳 inside', '526 OCC room @Sam', '320 occ room no luggage', '417 no luggage 🧳'].map(t => P(t).actions.map(a => a.act).join()),
+    ['maybe', 'maybe', 'maybe', 'maybe', 'note', 'note']);
+  check('wa learned: lists under "See the below …" headings', ['See the below extension\n\n223\n224', 'See the below late departure\n\n107 - till 14:00 pm\n315 - till 15:00 pm', 'Physical check\n\n101\n102', 'Please inspect the below rooms for DND\n\n510\n511\n\nThank you 🙏'].map(A),
+    ['223 extending | 224 extending', '107 lco 14:00 | 315 lco 15:00', '', '']);
+  check('wa learned: room moves and requests stay notes', ['522 move to 202 (twin bed )', '516 moved to 517 ceiling leakage', '513 - cleaning service', '522 - baby cot'].map(A),
+    ['522 note move to 202 (twin bed )', '516 note moved to 517 ceiling leakage', '513 note cleaning service', '522 note baby cot']);
+  check('wa learned: a mention is cut, the message is still read', ['@Sam Test 105 send towels', '325 - Extended @Lina Demo', '301 co plz@Sam'].map(A), ['105 note send towels', '325 ext', '301 co']);
+  check('wa learned: "305 payment done" alone may be an amenity: only for a room that is extending', P('305 payment done ✅').actions.map(a => a.act + (a.weak ? ' weak' : '')), ['extending weak']);
+  check('wa learned: HotelOps\' own summaries shared by hand are ignored', ['✅ *Checked Out — 12:31*\nRooms: 0210, 0218', '📵 NA Rooms — 13:25\n📵 0204 · 11:46', '🏨 HK Update — 14:20\n🕐 2 LCO\n\n0301  ⏳ Extending', '✅ Checked Out (last 30 min) — 11:58\n✓ 0308 · 11:48'].map(t => P(t).kind), Array(4).fill('ignore'));
 }
 
 console.log('\nWhatsApp × Ops Brain');
@@ -1854,6 +1889,23 @@ console.log('\nWhatsApp × Ops Brain');
   const rec = { t: '09:01', s: 'Sam', x: '0113 EXT 2N', r: 'ext 0113 +2N → 20 Oct' };
   check('wab brain search: matches', [B.wbChatMatch(rec, B.wbChatQuery('what happened with 113'), P), B.wbChatMatch(rec, B.wbChatQuery('who checked out 0113'), P), B.wbChatMatch({ t: '09:00', s: 'Lina', x: '201 Towels pls' }, B.wbChatQuery('towels'), P), B.wbChatMatch({ x: '202 LCO 6PM' }, B.wbChatQuery('late checkouts today'), P)],
     [true, false, true, true]);
+  // HK Requests: what is (not) a request, learned from a real HK group (made-up examples)
+  const RQ = x => { const q = B.wbRequestOf({ t: '10:00', s: 'Sam', x }, P); return q ? q.rooms.map(r => r + ':' + ((q.byRoom && q.byRoom[String(parseInt(r, 10))]) || q.cats).map(c => c.id).join('+')).join(' ') : '-'; };
+  check('wab requests: a blanket is a blanket, not pillows', [RQ('105 send heavy blanket'), RQ('108 pillow and blanket'), B.wbWhat(B.wbCategorize('105 send heavy blanket'))], ['105:blanket', '108:pillow+blanket', 'blanket']);
+  check('wab requests: what is not wanted is not a request ("no need cleaning", "do not clean", "no luggage"); problems still are',
+    ['310 - extended but no need cleaning', '624 - do not clean for today', '622 no luggage', '310 dont clean, guest sleeping', '412 no hot water', '202 room not clean please', '503 AC not working'].map(RQ),
+    ['-', '-', '-', '-', '412:plumb', '202:clean', '503:ac']);
+  check('wab requests: a payment note for the front office is not an HK job; giving something and taking payment still is',
+    [RQ('325 guest will pay the laundry bill by card at reception, pls dont forget to collect payment'), RQ('322 1 dental kit guest will pay at reception'), RQ('621 one slipper give to guest and take payment also')], ['-', '-', '621:amen']);
+  check('wab requests: each room with its own words; HK statuses (IP, OCC, luggage inside, sleep out) are not requests',
+    [RQ('203 physically IP, smoke smell 206, 506 physically IP wall paint smell'), RQ('516 ip'), RQ('526 OCC room @Lina Demo'), RQ('513 sleep out with luggage 🧳\n@Lina Demo'), RQ('102, 507 ..... VD\n410 ..... luggage inside\n104 ..... DND')], ['206:smell 506:smell', '-', '-', '-', '-']);
+  check('wab requests: asking for updates, or asking FO to check out, is not an HK job; tea bags are not luggage',
+    [RQ('101 112 204 any update due out rooms plz @Sam'), RQ('524 523 516 please make check out'), RQ('310 tea bags'), RQ('520 please assist with luggage down')], ['-', '-', '310:amen', '520:luggage']);
+  const RLc = B.wbRequestLog([{ t: '10:00', s: 'Sam', x: '513 - cleaning service' }, { t: '10:20', s: 'Lina', x: 'Done ✅', q: '513 - cleaning service' }, { t: '10:30', s: 'Sam', x: '522 - baby cot' }, { t: '10:40', s: 'Lina', x: 'ok' , q: '522 - baby cot' }], 660, {}, [], { parse: P });
+  check('wab requests log: "Done ✅" in reply to a request closes it by itself; a plain "ok" does not', RLc.map(i => i.room + ' ' + i.st + ' ' + i.doneBy), ['522 open ', '513 done Lina']);
+  check('wab requests log: calm by default — "Sent to HK" / "Done by HK", no timers; tracking brings Open / Done back',
+    [RLc.map(i => B.wbReqStatus(i, false).text + '|' + B.wbReqStatus(i, false).sub), RLc.map(i => B.wbReqStatus(i, true).text)], [['📨 Sent to HK|', '✓ Done by HK 10:20 AM|Lina'], ['🟡 Open', '✅ Done 10:20 AM']]);
+  check('wab done replies', ['Done ✅', 'done', 'ok done', '✅', 'Delivered', 'Done with Payment ✅', 'ok', 'not done yet', '305 done'].map(B.wbDoneReply), [true, true, true, true, true, true, false, false, false]);
 }
 
 // ── Room notes (departures.js): the note text → timeline entries, types, edit and delete ──
@@ -2128,6 +2180,12 @@ console.log('\nHandover Book');
   const RD = require(path.join(ROOT, 'tools/hotelops-whatsapp.console.js'));
   check('reader: handover group and "HO -" mark', [RD.isHoGroup('HO - Ibis Styles'), RD.isHoGroup('HK Ibis'), RD.hoMarked('HO - 512 twin'), RD.hoMarked('HOTEL 512'), J(RD.hoChips('324 CO 512'))], [true, false, true, false, [{ tone: 'ho', label: '📋 Handover · 324, 512' }]]);
   check('reader: "Ho gaya" is not a handover mark (same rule as HotelOps)', [RD.hoMarked('Ho gaya sir'), RD.hoMarked('ho 512 ED')], [false, true]);
+  // learned from a real HK group (made-up examples)
+  check('auto-pick: room moves are handover items, however they are written', ['522 move to 202 (twin bed )', '516 moved to 517 ceiling leakage and bad smell', '407 shifted to 611 guest complaining about noise', '510 guest has move 405 (twin bed)'].map(t => [lk(t), H.handoverScore(t, opt).cat]),
+    [[true, 'move'], [true, 'move'], [true, 'move'], [true, 'move']]);
+  check('auto-pick: the HK group\'s routine is not a handover item', ['Physical check\n\n101\n102\n103', 'Kindly check the physical status of 503, 407, 222', '101 112 any update due out rooms plz', '403 IP @Sam Test', '424 on queue', '220 - prepare for arrival', 'I handover to the reception @Sam Test', '202 laundry pickup', '508 shower gel refill', 'Need king bed'].map(lk), Array(10).fill(false));
+  check('category: laundry pick-up is housekeeping, shower gel is not plumbing, a bed set-up is not a room move', ['202 laundry pick up', 'Taxi pick up 5am room 210', '508 shower gel refill', '508 shower not working', 'Need king bed', 'room 514 need to be shifted to 2beds', 'Room 512 to twin tomorrow'].map(H.categorize),
+    ['hk', 'transport', 'hk', 'maint', 'hk', 'move', 'move']);
 }
 
 // ── WhatsApp bridge acting on a board (wa-bridge.js handle() with departures.js depAction, no browser) ──
@@ -2328,6 +2386,7 @@ console.log('\nShift tasks · linked tools');
   check('old saved tasks (no tool field) work as before', [L.toolOf(before[0]), L.asList(null), L.asList([null, { id: 'x' }]).length, L.applyTools(undefined, { a: 'x' }).length], ['', null, 1, 0]);
 }
 
+// ── Gym & Pool (gym.js): email reading, dates, status, extending, ID masking, files, import, report ──
 console.log('\nGym & Pool memberships');
 {
   const sb = { console: { log() {}, warn() {}, error() {} } };

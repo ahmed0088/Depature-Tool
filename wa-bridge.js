@@ -69,8 +69,22 @@ function hoWaParser() {
   const MON = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
   const NUMW = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
   // the app's own posts (summaries, not commands)
-  const IGNORE_LINE = l => /^\s*🔁/u.test(l) || /Extensions\s*[—–-]/.test(l) || /\d{3,4}\s*·\s*\+\d+\s*N\s*→/.test(l);
-  const ROOM = '(?:(?:rooms?|rms?|rn)\\.?\\s*(?:no\\.?\\s*)?|#\\s*)?(\\d{3,4})(?![\\d]|[:.]\\d)';
+  const IGNORE_LINE = l => /^\s*🔁/u.test(l) || /Extensions\s*[—–-]/.test(l) || /\d{3,4}\s*·\s*\+\d+\s*N\s*→/.test(l) || /^\s*[📵✓✅⏳🤔🕐]️?\s*\d{3,4}\s*·/u.test(l);
+  // the app's own summaries shared to the group by hand ("✅ *Checked Out — 12:31*", "📵 NA Rooms — 13:25", "🏨 HK Update — 14:20"):
+  // they carry no invisible mark, so they are known by their first line
+  const APP_POST = /^[\s*_]*(?:✅|📵|🏨|↪|🔁)️?[\s*_]*(?:Checked\s+Out(?:\s+Rooms)?(?:\s*\(last\s+\d+\s*min\))?|NA\s+Rooms|HK\s+Update|Extensions)[\s*_]*[—–]\s*\d{1,2}:\d{2}/iu;
+  // what a phone export puts in the text: "[Forwarded]", "<image omitted>", "[Image]", "<This message was edited>"
+  const MEDIA_LEAD = /^\s*(?:(?:\[Forwarded\]|<[^<>\n]{0,40}\b(?:omitted|album message|unknown message)>|\[(?:Image|Video|Voice message|Audio|Sticker|GIF|Document|Contact|album message|unknown message|View once[^\]]*)\])\s*)+/i;
+  const EDITED_TAIL = /\s*<This message was edited>\s*$/i;
+  /** "@Sam Lee please" / "516 ip @~Sam" / "ok plz@Sam": a mention says who is asked, not what happened → cut (to the line's end) */
+  const noMention = l => {
+    const m = l.match(/(?:^|[\s.,;:!?)(]|(?<=[a-z]))@(?=[~\p{L}\p{N}\p{Extended_Pictographic}])/u);
+    if (!m) return l;
+    const i = m.index + m[0].length - 1;
+    if (!l.slice(0, i).trim()) { const r = l.slice(i), n = r.replace(/^@~?\S+(?:\s+[\p{Lu}~][^\s\d@]*){0,3}\s+(?=\d{3,4}\b)/u, ''); return n !== r ? n : r.replace(/^@~?\S+\s*/u, ''); }   // "@Sam Lee 105 send towels", "@Sam send towels 105": only the name goes
+    return l.slice(0, i).replace(/\s+$/, '');
+  };
+  const ROOM = '(?:(?:rooms?|rms?|rn)\\.?\\s*:?\\s*(?:no\\.?\\s*)?|#\\s*)?(\\d{3,4})(?![\\d]|[:.]\\d)';
   const ROOM_AT = new RegExp('^' + ROOM, 'i');
   const ROOM_NC = ROOM.replace('(\\d{3,4})', '(?:\\d{3,4})');
   const SPLIT = new RegExp('[,;]\\s*(?=' + ROOM_NC + ')', 'i');
@@ -81,7 +95,7 @@ function hoWaParser() {
   const CO_NOT = /^(?:of\b|time|at\b|by\b|after|before|in\s|on\s|date|day\b|plan|req)/i;
   const WHEN_NOT = /\?|\b(?:tomorrow|tomm?orr?ow|tmrw|tmr|tmw|tmrow|tomoro|later|pending|maybe|might|wants?|wanted|asking|asks?|asked|requests?|requested|requesting|req|not|cancel(?:led|ed)?|planning|plans?|will|soon|expected|possible|next)\b/i;
   const LCO_W = '(?:lco|l\\.c\\.o\\.?|l\\/co|l\\/c|l\\.c\\.?|lc|late\\s*(?:ch(?:ec)?k[\\s-]*out|checkout|c\\/o|c\\.o\\.?|co))';
-  const CO_W = '(?:co|c\\/o|c\\.o\\.?|c-o|ch(?:ec)?k(?:e?d)?[\\s-]*out)';
+  const CO_W = '(?:co|c\\/o|c\\.o\\.?|c-o|c\\/out|c\\.out|ch(?:ec)?k(?:e?d)?[\\s-]*out)';
   const EXT_W = '(?:ext|extd|extn|extnd|exten|extend|extended|extending|extension|extention)';
   const CMD_LEAD = new RegExp('^(' + LCO_W + '|' + EXT_W + '|' + CO_W + ')(?![a-z])\\.?\\s*[:\\-–—]?\\s*(?=' + ROOM_NC + '(?!\\s*(?:am|pm|hrs?|h)\\b))', 'i');
 
@@ -153,7 +167,10 @@ function hoWaParser() {
   }
   // housekeeping room statuses everyone uses, until the hotel's own list says otherwise
   const HK_BUILTIN = { vd: ['co', 'Vacant Dirty'], vc: ['co', 'Vacant Clean'], vr: ['co', 'Vacant Ready'], vci: ['co', 'Vacant Clean Inspected'], ed: ['co', 'Early Departure'],
-    od: ['hk', 'Occupied Dirty'], oc: ['hk', 'Occupied Clean'], ooo: ['hk', 'Out of Order'], oos: ['hk', 'Out of Service'], dnd: ['hk', 'Do Not Disturb'], so: ['hk', 'Sleep Out'], dl: ['hk', 'Double Lock'], ns: ['hk', 'No Show'], rc: ['hk', 'Registration card (signature)'] };
+    od: ['hk', 'Occupied Dirty'], oc: ['hk', 'Occupied Clean'], ooo: ['hk', 'Out of Order'], oos: ['hk', 'Out of Service'], dnd: ['hk', 'Do Not Disturb'], so: ['hk', 'Sleep Out'], dl: ['hk', 'Double Lock'], ns: ['hk', 'No Show'], rc: ['hk', 'Registration card (signature)'],
+    // how HK groups write it: "516 IP" (inspected, ready to sell), "225 N/L" (no luggage), "526 OCC" (occupied), "513 sleep out", "614 double lock", "209 NA" (no answer), "406 ongoing" (being cleaned)
+    ip: ['hk', 'Inspected — room ready'], 'n/l': ['hk', 'No Luggage'], nl: ['hk', 'No Luggage'], occ: ['hk', 'Occupied'], 'sleep out': ['hk', 'Sleep Out'], sleepout: ['hk', 'Sleep Out'],
+    'double lock': ['hk', 'Double Lock'], 'double locked': ['hk', 'Double Lock'], na: ['hk', 'No Answer'], ongoing: ['hk', 'Cleaning in progress'], 'on going': ['hk', 'Cleaning in progress'] };
   function lookup(w) {
     if (!w) return null;
     if (WORDS) { try { const x = WORDS(w); if (x && typeof x === 'object' && /^(?:co|lco|ext|note|hk|ignore)$/.test(x.m)) return x; } catch (_) {} }
@@ -306,12 +323,35 @@ function hoWaParser() {
     if (/^stay/.test(verb) && /^longer\b/.test(m[0].slice(verb.length).trim())) return extending('');
     return null;
   }
+  // a question about a room ("314 vd any updates?", "what about 512, out or extend?") never changes it
+  const QUEST = /\?|\bany\s*-?\s*updat\w*|\bupdat\w*\s+(?:pl[sz]|please|pl)\b|\b(?:what|whats|which|whether)\b|\bstatus\b/i;
+  const ACTS = new Set(['co', 'lco', 'ext', 'extending', 'fin', 'findone', 'maybe']);
+  const cleanRest = rest => sp(rest).trim().replace(/^['’]s\b/, '').replace(/^[\s:\-–—=>.,…]+/, '').replace(/[\s.!,;…]+$/, '').trim();
   function classify(rest) {
-    let r = sp(rest).trim().replace(/^['’]s\b/, '').replace(/^[\s:\-–—=>.,]+/, '').replace(/[\s.!,;]+$/, '').trim();
+    const c = classify1(rest);
+    if (c && ACTS.has(c.act) && QUEST.test(String(rest).replace(/\b\d{3,4}\b[\s\S]*$/, ''))) return { act: 'note', note: cleanRest(rest) };   // the question is about this room (not one named after it)
+    return c;
+  }
+  /** "any update due out rooms", "vd update plz", "status?", "ready?": only asking → nothing to write on the room */
+  function askOnly(rest) {
+    const s = sp(rest).toLowerCase();
+    if (!/\b(?:updat\w*|status|states|staus)\b|\?/.test(s)) return false;          // "210 VD room is ready" tells, "210 ready?" asks
+    return !s.replace(/[?.!,:;…'’()\-–—]+/g, ' ').replace(/\b(?:any|updat\w*|status|states|staus|whats?|the|due|duo|d\/o|out|rooms?|rms?|vd|vc|today|tdy|on|of|for|is|it|ready|plz|pls|please|pl|kindly|ma'?am|maam|sir|dear|now|asap|again|yet|still|guys|team|hk|fo|ro|and|or|\d{3,4})\b/g, ' ').replace(/[\p{Extended_Pictographic}\uFE0F\s]+/gu, '');
+  }
+  // "14:00 pm", "14;00 pm", "14: 00 pm", "2.30pm" → one way of writing it
+  const fixT = s => String(s).replace(/(\d{1,2})\s*[:;.]\s*(\d{2})(?!\d)/, '$1:$2');
+  const afterNoon = tm => !!tm && tm >= '12:00';
+  // "extended room cleaning", "stay extended, room makeup", "extended and request room cleaning": the request comes with it
+  const CLEAN_REQ = /^[\s,.\-–—&+\/]*(?:and\s+)?(?:(?:please|pls|plz|kindly)\s+)?(?:(?:request(?:ed|ing)?|needs?|needed|give|do|provide)\s+)?(?:the\s+)?(?:room\s+)?(?:cleaning|clean|make\s*-?\s*up|makeup|mur|service|services)\b/;
+  const NO_CLEAN = /^[\s,.\-–—]*(?:but\s+)?(?:no|don'?t|do\s+not)\s+(?:need\s+(?:to\s+)?|needed\s+)?(?:room\s+)?(?:clean\w*|service|make\s*-?\s*up|makeup)\b[\s\w]*$/;
+  function classify1(rest) {
+    let r = cleanRest(rest);
     if (!r) return null;
     const note = { act: 'note', note: r };
     let low = r.toLowerCase(), m;
     while (LEAD.test(low)) low = low.replace(LEAD, '');
+    low = low.replace(/^physically\s+(?=(?:checked\s*-?\s*out|checkedout|vacated|left)\b)/, '');   // "physically checked out": HK saw it empty
+    low = low.replace(/^(?:the\s+)?(?:stay|booking)\s+(?:is\s+|has\s+been\s+)?(?=extended\b)/, '');   // "Stay Extended"
     // "507 left, waiting finance", "507 guest left, folio with finance", "507 res to fix" → 🧾 waiting for Finance / Reservations
     const FIN = /\b(?:finance|accounts?|folio|reservations?|res)\b/;
     if (FIN.test(low) && /\b(?:done|fixed|ok|okay|cleared|sorted|settled|closed)\b/.test(low) && !/\b(?:wait\w*|pending|to\s+fix)\b/.test(low)) return { act: 'findone' };
@@ -322,13 +362,25 @@ function hoWaParser() {
     if (/^fixed\s*[.!✓✔✅]*$/u.test(low)) return { act: 'findone', weak: true };
     // "507 TD + RC", "507 TD done", "507 waiting for TD", "507 only TD left", "507 all done": the extension's paperwork
     if (!/\bext\w*|\bextend/.test(low) && (PAPER.some(([, re]) => new RegExp('^' + re.source).test(low)) || /^(?:waiting|wait|pending|only|just|still)\b/.test(low) && paperOf(low))) {
-      const pp = extending(low); if (Object.keys(pp).length > 1) return pp;
+      const pp = extending(low); if (Object.keys(pp).length > 1) return Object.keys(pp).join() === 'act,pay' ? Object.assign(pp, { weak: true }) : pp;   // "305 payment done" alone may be a dental kit: only for a room that is extending
     }
     if (/^all\s+(?:done|ok|okay|complete|completed|ready)\s*[.!✓✔✅]*$/u.test(r.toLowerCase())) return Object.assign(extending(r.toLowerCase()), { weak: true });   // only for a room that is extending
     // "301 luggage inside", "bags still in the room", "room occupied": the guest has not gone → 🤔 might extend
+    const lowE = low.replace(/[\p{Extended_Pictographic}\uFE0F]/gu, ' ').replace(/\s+/g, ' ').trim();
     if (!/\?|\bnot\b|\bno\b/.test(low) && (
-      /^(?:(?:his|her|their|guest'?s?)\s+)?(?:luggage|lugage|lugguage|laggage|baggage|bags?|suitcases?|belongings|things|stuff|items)\s+(?:are\s+|is\s+)?(?:still\s+)?(?:inside|in\s+(?:the\s+)?room|in\s*side|in)\s*(?:the\s+room)?\s*$/.test(low) ||
-      /^(?:room\s+)?(?:still\s+)?occupied\b/.test(low))) return { act: 'maybe', note: r };
+      /^(?:still\s+)?(?:(?:his|her|their|guest'?s?)\s+)?(?:luggages?|lugages?|lugguages?|laggages?|baggages?|bags?|suitcases?|belongings|things|stuff|items)\s+(?:are\s+|is\s+)?(?:still\s+)?(?:inside|in\s+(?:the\s+)?room|in\s*side|in)\s*(?:the\s+room)?\s*$/.test(lowE) ||
+      /^(?:still\s+)?inside\s+(?:luggages?|baggages?|bags?)\s*$/.test(lowE) ||                     // "inside luggage"
+      /^(?:room\s+)?(?:still\s+)?occupied\b/.test(low) || /^occ(?:\s+room)?\s*$/.test(lowE))) return { act: 'maybe', note: r };   // "OCC room"
+    // "till 14:00 pm", "until 3pm (platinum member)": the guest keeps the room till then → late check-out
+    if ((m = lowE.match(/^(?:till|until|untill|til|upto|up\s*to)\s*(\d{1,2}(?:\s*[:;.]\s*\d{2})?\s*(?:am|pm|a\.m\.?|p\.m\.?|hrs?)?)\s*(?:\([^)]*\))?\s*$/))) {
+      const t = fixT(m[1]); if (timeStrict(t)) { const tm = hoWaTime(t); if (afterNoon(tm)) return { act: 'lco', time: tm }; }
+    }
+    // "2 PM check out", "5pm checkout": the time first → a late check-out at that time
+    if ((m = lowE.match(/^(\d{1,2}(?:\s*[:.]\s*\d{2})?\s*(?:am|pm|a\.m\.?|p\.m\.?))\s*(?:check\s*-?\s*out|checkout|c\/o|co|chk\s*out)\s*$/))) {
+      const tm = hoWaTime(fixT(m[1])); if (afterNoon(tm)) return { act: 'lco', time: tm };
+    }
+    // "on extension": the extension is on its way (⏳ Extending; "Extended" follows once it is done)
+    if (/^on\s+extension\b/.test(low) && !/\bnot\b|\bcancel\w*/.test(low)) return extending(low.replace(/^on\s+extension\b/, ''));
     const dc = dictClassify(low, r); if (dc) return dc;
     if ((m = low.match(new RegExp('^' + LCO_W + '(?![a-z])\\s*(.*)$')))) {
       if (/\?|\b(?:cancel\w*|tomorrow|tomm?orr?ow|tmrw|tmr|tmw)\b/.test(m[1])) return note;
@@ -344,7 +396,9 @@ function hoWaParser() {
     if ((m = low.match(new RegExp('^' + EXT_W + '(?![a-z])\\.?\\s*(.*)$')))) {
       const w = low.match(/^[a-z]+/)[0], tail = m[1];
       if (TMRW_TOO.test(tail)) return { act: 'ext', nights: 1 };                  // "extending tomorrow also"
+      if (w !== 'extending' && NO_CLEAN.test(tail)) return { act: 'ext' };                  // "extended but no need clean"
       if (/\?|\b(?:maybe|might|not|cancel(?:led|ed)?|no)\b/.test(tail)) return note;
+      if (w !== 'extending' && CLEAN_REQ.test(tail) && !WHEN_NOT.test(tail.replace(/\brequest(?:ed|ing)?\b/, ''))) return { act: 'ext' };   // "extended room cleaning"
       if (w === 'extending' || /\b(?:pending|request(?:ed)?|req|wants?|will|planning|soon|waiting|booking|sign(?:ed|ature)?|td|rc|payment)\b/.test(tail)) return extending(tail);
       const x = extDetail(tail); return x ? Object.assign({ act: 'ext' }, x) : note;
     }
@@ -396,6 +450,10 @@ function hoWaParser() {
     [/^\s*(?:checked[\s-]*out|check[\s-]*outs|checkouts)\s*[:\-–—]\s*/i, 'CO '],
     [/^\s*(?:late\s*(?:check[\s-]*outs?|checkouts?|c\/?o'?s?)|lcos?)\s*(?:list)?\s*[:\-–—]\s*/i, 'LCO '],
     [/^\s*(?:extensions?|extended)\s*:\s*/i, 'EXT '],
+    // "See the below extension", "Below rooms on extension:", "See the below late departure"
+    [/^\s*(?:please\s+)?(?:see\s+)?(?:the\s+)?below\s+(?:rooms?\s+)?(?:are\s+)?(?:on\s+)?(?:extensions?|extending)(?:\s+rooms?)?\s*[:\-–—]?\s*$/i, 'extending '],
+    [/^\s*(?:please\s+)?(?:see\s+)?(?:the\s+)?below\s+(?:rooms?\s+)?(?:are\s+)?extended(?:\s+rooms?)?\s*[:\-–—]?\s*$/i, 'EXT '],
+    [/^\s*(?:please\s+)?(?:see\s+)?(?:the\s+)?below\s+(?:rooms?\s+)?(?:are\s+)?(?:on\s+)?late\s+(?:departures?|check[\s-]*outs?|checkouts?)(?:\s+rooms?)?\s*[:\-–—]?\s*$/i, 'LCO '],
   ];
   // "1. 101 CO", "2) 102", "- 103", "• 104"
   const BULLET = /^\s*(?:\d{1,2}[.)]|[-•*·▪●◦–])\s+/;
@@ -427,7 +485,10 @@ function hoWaParser() {
     'and the a an is are was has have had it its in on at to of for by up down off all any one two more less too also just still ' +
     'yet again then than this that these those what when where who why how which with from into over under after before ' +
     'khalas tamam yalla shukran habibi inshallah insha mafi free empty vacant leaving going coming left out stay min mins hour hours half noon lunch ' +
-    'shortly quick fast will wants want needs need asked asking says said told dep exit desk lobby bell').split(' '));
+    'shortly quick fast will wants want needs need asked asking says said told dep exit desk lobby bell ' +
+    // what guests ask HK for, and how the team asks about a room ("405 sugar", "509 status", "416 makeup")
+    'tea cup cups milk sugar coffee spoon comb glass mat pen kit shaving dental tissue tissues pillow pillows slipper slippers hanger hangers ' +
+    'shampoo gel cap razor water bottle bottles kettle dryer adaptor adapter plug cable charger vase makeup mur status states update ok').split(' '));
   // the best guess for a word nobody taught us: what it is closest to (asked as "Did you mean …?")
   const GUESS_W = [['co', ['checkedout', 'checkout', 'checkingout', 'checked', 'departed', 'vacated', 'left']], ['ext', ['extended', 'extend', 'extension', 'extending', 'stay', 'staying']],
     ['lco', ['latecheckout', 'late', 'lateco']], ['hk', ['vacantdirty', 'vacantclean', 'vacant', 'dirty', 'clean', 'inspected', 'occupied', 'ready', 'cleaning']]];
@@ -450,6 +511,7 @@ function hoWaParser() {
     const bare = w.replace(/[\/.\-]/g, '');
     if (bare.length < 2 || ASK_STOP.has(bare) || ASK_STOP.has(w)) return '';
     if (bare.length > 6 && !guessOf(bare)) return '';                        // a longer word is only asked when it looks like a typo of one we know
+    if (bare.length >= 5 && !guessOf(bare) && [...ASK_STOP].some(x => x.length >= 5 && dist(bare, x) === 1)) return '';   // "cofee", "tisuue", "staus": a typo of an everyday word
     if (lookup(w) || lookup(bare)) return '';
     return w;
   }
@@ -500,7 +562,8 @@ function hoWaParser() {
     NOW = nowOf(opt && opt.now);
     FUZZY = opt && typeof opt.fuzzy === 'function' ? opt.fuzzy : (() => { try { const b = globalThis.hoWaBrainPure; return b && typeof b.wbReadCmd === 'function' ? b.wbReadCmd : null; } catch (_) { return null; } })();
     if (isHoText(text)) return { kind: 'ignore', actions: [], ho: true };
-    const lines = sp(text).split(/\r?\n/);
+    const lines = sp(text).replace(EDITED_TAIL, '').split(/\r?\n/).map(l => noMention(l.replace(MEDIA_LEAD, '')));
+    if (APP_POST.test((lines.find(l => l.trim()) || ''))) return { kind: 'ignore', actions: [] };   // HotelOps' own summary, shared by hand
     const kept = lines.filter(l => l.trim() && !IGNORE_LINE(l));
     if (lines.some(l => l.trim()) && !kept.length) return { kind: 'ignore', actions: [] };
     if (lines.some(l => /Extensions\s*[—–-]\s*\d{1,2}:\d{2}/.test(l))) return { kind: 'ignore', actions: [] };   // the app's own post
@@ -523,6 +586,8 @@ function hoWaParser() {
         // the room inside the sentence: "guest in 514 left", "keys returned 514", "checked out 514 and 516"
         if (!cmd && !rooms.length && (inner = roomInside(seg))) { rooms = inner.rooms; rest = inner.rest; }
         const bare = !cmd && rooms.length && TICK.test(rest);
+        if (!cmd && !rooms.length && !inner && FILLER.test(seg)) return;   // "Thank you 🙏" under a list of rooms is not about them
+        if (!cmd && !inner && rooms.length && askOnly(rest)) { pending = []; lastNote = null; return; }   // "101 112 any update due out rooms plz": asking, nothing to do
         let c = inner ? inner.c : bare ? null : classify(cmd ? cmd + ' ' + rest : rest);
         if (cmd || inner) lineCmd = c;
         else if (!c && rooms.length && lineCmd) c = lineCmd;  // "CO 324, 325"
@@ -613,21 +678,59 @@ const RX = [
   { re: new RegExp('^' + DATE + ',?\\s+' + TIME + '\\s+[-–]\\s+([^:]{1,80}?):\\s?([\\s\\S]*)$', 'i'), t: 2, d: 1 },         // 18/10/2026, 9:01 am - Sam: text (Android export)
 ];
 const SYSTEM = [
-  new RegExp('^\\[' + TIME + ',\\s*' + DATE + '\\]'), new RegExp('^\\[' + DATE + ',?\\s+' + TIME + '\\]'), new RegExp('^' + DATE + ',?\\s+' + TIME + '\\s+[-–]\\s'),
+  new RegExp('^\\[' + TIME + ',\\s*' + DATE + '\\]', 'i'), new RegExp('^\\[' + DATE + ',?\\s+' + TIME + '\\]', 'i'), new RegExp('^' + DATE + ',?\\s+' + TIME + '\\s+[-–]\\s', 'i'),
 ];
-/** WhatsApp text → [{date, time, sender, text}] (lines that are not a new message belong to the one above) */
+const MD_SYSTEM = new RegExp('^\\[' + TIME + '\\]\\s', 'i');   // "[11:03 PM] __Sam added Lina__" in a Markdown export
+// a chat saved as Markdown: "## 22 July 2026" then "[12:40 PM] **Sam:** 516 ip" ("> _Lina: 522 - baby cot_" = the message it answers)
+const MD_DAY = /^\s*#{1,4}\s+(?:[A-Za-z]+,?\s+)?(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})\s*$/;
+const MD_MSG = new RegExp('^\\[' + TIME + '\\]\\s*\\*\\*([^*]{1,80}?):?\\*\\*:?\\s?([\\s\\S]*)$', 'i');
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+// what an export writes instead of the text: deleted, or media ("<image omitted>", "[Image]") and forwarding marks
+const DELETED_RX = /^\s*_?\s*(?:this message was deleted|you deleted this message|this message was deleted by (?:the )?admin\b.*)\s*_?\s*$/i;
+const EDITED_RX = /\s*<this message was edited>\s*$/i;
+const MARK_RX = /^\s*(?:(?:\[Forwarded\]|<[^<>\n]{0,40}\b(?:omitted|album message|unknown message)>|\[(?:Image|Video|Voice message|Audio|Sticker|GIF|Document|Contact|album message|unknown message|View once[^\]]*)\])\s*)+/i;
+/** WhatsApp text → [{date, time, sender, text, iso?, edited?, deleted?, quote?}] (lines that are not a new message belong to the one above).
+ *  Reads WhatsApp Web copies, phone exports (iPhone "[7/22/26, 12:40:30 PM] Sam: …", Android "22/07/2026, 12:40 - Sam: …") and Markdown exports.
+ *  iso: the day for sure, when the paste itself shows the order of day and month (a "7/22/26" somewhere → month first for all). */
 function hoWaParseCopied(text) {
-  const out = []; let cur = null;
+  const out = []; let cur = null, mdDay = '', inQuote = false;
   sp(text).split(/\r?\n/).forEach(raw => {
     const line = raw.replace(/^\ufeff/, '');
     if (/^\s*#hotelops-wa\s*$/i.test(line)) { cur = null; return; }
-    let hit = null;
-    for (const x of RX) { const m = line.match(x.re); if (m) { hit = { time: m[x.t].trim(), date: m[x.d].trim(), sender: m[3].trim(), text: m[4] }; break; } }
-    if (hit) { cur = hit; out.push(cur); return; }
-    if (SYSTEM.some(re => re.test(line))) { cur = null; return; }   // "Messages are end-to-end encrypted", "Sam added Lina"…
-    if (cur) cur.text += '\n' + line;
+    let hit = null, m;
+    if ((m = line.match(MD_DAY)) && MONTHS.indexOf(m[2].slice(0, 3).toLowerCase()) >= 0) { mdDay = m[3] + '-' + String(MONTHS.indexOf(m[2].slice(0, 3).toLowerCase()) + 1).padStart(2, '0') + '-' + m[1].padStart(2, '0'); cur = null; return; }
+    if (mdDay && (m = line.match(MD_MSG))) hit = { time: m[1].trim(), date: mdDay, iso: mdDay, sender: m[2].trim(), text: m[3] };
+    else for (const x of RX) { if ((m = line.match(x.re))) { hit = { time: m[x.t].trim(), date: m[x.d].trim(), sender: m[3].trim(), text: m[4] }; break; } }
+    if (hit) { cur = hit; out.push(cur); inQuote = !!mdDay && !hit.text.trim(); return; }
+    if (SYSTEM.some(re => re.test(line)) || (mdDay && MD_SYSTEM.test(line))) { cur = null; return; }   // "Messages are end-to-end encrypted", "Sam added Lina"…
+    if (!cur) return;
+    if (mdDay && /^\s*---\s*$/.test(line)) return;
+    if (inQuote === 'more') { if (/_\s*$/.test(line)) inQuote = true; cur.quote += '\n' + line.replace(/_\s*$/, ''); return; }   // a quote over several lines ends with "_"
+    if (inQuote && (m = line.match(/^\s*>\s?(.*)$/))) {
+      const q = m[1].replace(/^_/, '').replace(/^[^:]{1,80}:\s*/, '');
+      cur.quote = (cur.quote ? cur.quote + '\n' : '') + q.replace(/_\s*$/, '');
+      if (/^_/.test(m[1]) && !/_\s*$/.test(m[1])) inQuote = 'more';
+      return;
+    }
+    inQuote = false;
+    cur.text += '\n' + line;
   });
-  out.forEach(m => { m.text = m.text.replace(/\s+$/, ''); });
+  // the order of day and month, when the paste shows it ("7/22/26" can only be month first)
+  let md = 0, dm = 0;
+  out.forEach(o => { if (o.iso) return; const p = o.date.split(/[\/.\-]/).map(Number); if (p.length === 3 && p[0] <= 31) { if (p[0] > 12 && p[1] <= 12) dm++; if (p[1] > 12 && p[0] <= 12) md++; } });
+  out.forEach(o => {
+    let t = o.text.replace(/\s+$/, '').replace(/^\n+/, '');
+    if (EDITED_RX.test(t)) { o.edited = true; t = t.replace(EDITED_RX, ''); }
+    if (DELETED_RX.test(t)) { o.deleted = true; t = ''; }
+    o.text = t.replace(MARK_RX, '');
+    if (!o.iso && (md && !dm || dm && !md)) {
+      const p = o.date.split(/[\/.\-]/).map(x => parseInt(x, 10)); if (p.length === 3 && p[0] <= 31) {
+        const [d, mo] = md ? [p[1], p[0]] : [p[0], p[1]], y = p[2] < 100 ? 2000 + p[2] : p[2];
+        if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) o.iso = y + '-' + String(mo).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+      }
+    }
+    if (o.quote) o.quote = o.quote.trim();
+  });
   return out;
 }
 const isoDay = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -1234,7 +1337,7 @@ function handle(msg, via, opt) {
   const sender = normS(msg && msg.sender || '').slice(0, 60) || (msg && msg.mine ? 'Me' : 'WhatsApp');
   const group = normS(msg && msg.group || '').slice(0, 80);
   const tIso = today();
-  const dIso = msg.date ? waDateISO(msg.date, new Date()) : tIso;
+  const dIso = (msg.iso && /^\d{4}-\d{2}-\d{2}$/.test(msg.iso) ? msg.iso : '') || (msg.date ? waDateISO(msg.date, new Date()) : tIso);
   if (groupIsHo(group)) return handleHo(msg, via, text, sender, group, dIso || tIso, 'wa');
   if (hoMarked(text)) return handleHo(msg, via, text, sender, group, dIso || tIso, 'prefix');   // "HO - 512 to twin tomorrow": a note for the next shift, never a room command
   if (dIso !== tIso) { if (text.trim()) archiveMsg(msg, dIso, text, sender, '', true); return 'old'; }
