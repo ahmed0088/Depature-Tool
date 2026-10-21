@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 362, items: [
+    '🧠 Guest Memory on a phone: press and hold the HotelOps logo (top left) for about 1.5 seconds. On a computer it is still Ctrl + Shift + M. It stays hidden from the menu and its password lock still applies.',
+  ] },
   { v: 361, items: [
     '👤 Per-person access: Team → Users → Access on anyone\'s card. For each page and power choose Role (what their role gives), Allow (extra for this person only) or Block (taken away from this person only). The card shows e.g. "Agent + 2 extra pages, 1 blocked". Reset to role undoes it.',
     '🔒 Powers now really work: Export (downloads), Import (restore a backup), Clear (clear the board / lists), Delete (wake-up calls, lost & found, tickets, reports, QR codes), Reports (Trends) and Activity logs (History). Nobody loses anything today: agents, supervisors and managers keep Export, Clear and Delete until you switch them off.',

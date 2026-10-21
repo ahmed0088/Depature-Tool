@@ -3059,3 +3059,4 @@ html[data-skin="ios-dark"] .dpn-send, html[data-theme="midnight"] .dpn-send { co
 .ev-mark.ev-trn { position: absolute; top: auto; bottom: 1px; left: 50%; right: auto; transform: translateX(-50%); font: 700 8.5px/1.4 var(--font); padding: 0 4px; border-radius: 999px;
   background: color-mix(in srgb, var(--violet, #8b5cf6) 18%, var(--card)); color: var(--violet, #7c3aed); border: 1px solid color-mix(in srgb, var(--violet, #8b5cf6) 40%, transparent); white-space: nowrap; }
 td.ro-cell { position: relative; }
+.topbar .logo { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }   /* hold the logo on a phone: Guest Memory (guest-memory.js) */

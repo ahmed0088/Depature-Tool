@@ -616,3 +616,26 @@ function gmImportFile(input) {
   };
   reader.readAsText(file);
 }
+
+// ── Phones (no keyboard for Ctrl+Shift+M): press and hold the HotelOps logo ~1.5 s.
+// Still hidden from the menu, and the panel's own password lock still applies.
+// A normal tap on the logo keeps doing what it did (rename the hotel).
+(function () {
+  let t = 0, held = false, sx = 0, sy = 0;
+  const logoOf = e => e.target && e.target.closest && e.target.closest('.topbar .logo');
+  const stop = () => { clearTimeout(t); t = 0; };
+  document.addEventListener('pointerdown', e => {
+    if (!logoOf(e)) return;
+    held = false; sx = e.clientX; sy = e.clientY; stop();
+    t = setTimeout(() => {
+      held = true;
+      try { if (navigator.vibrate) navigator.vibrate(30); } catch (_) {}
+      if (typeof showPanel === 'function') showPanel('guestmem');
+    }, 1500);
+  }, true);
+  document.addEventListener('pointermove', e => { if (t && Math.hypot(e.clientX - sx, e.clientY - sy) > 12) stop(); }, true);
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(n => document.addEventListener(n, stop, true));
+  // the tap that ends the hold must not also open "rename hotel"
+  document.addEventListener('click', e => { if (held && logoOf(e)) { held = false; e.stopPropagation(); e.preventDefault(); } }, true);
+  document.addEventListener('contextmenu', e => { if (logoOf(e)) e.preventDefault(); }, true);
+})();
