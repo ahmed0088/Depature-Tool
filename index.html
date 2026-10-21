@@ -4587,7 +4587,7 @@ function clearImmig() {
     // this shortcut (and its own password lock) is the only way in. ──
     if ((e.key || '').toLowerCase() === 'm' && (e.ctrlKey || e.metaKey) && e.shiftKey) {
       e.preventDefault();
-      showPanel('guestmem');
+      if (typeof gmOpen === 'function') gmOpen(); else showPanel('guestmem');
       return;
     }
 

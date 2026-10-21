@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 363, items: [
+    '🙂 Guest Memory with Face ID: open it, unlock, then press "Use Face ID on this phone". From then on, opening Guest Memory on that phone (holding the logo or Ctrl + Shift + M) asks for Face ID / fingerprint first — the owner too. The password still works as a backup. Turn it off with "Face ID: on".',
+  ] },
   { v: 362, items: [
     '🧠 Guest Memory on a phone: press and hold the HotelOps logo (top left) for about 1.5 seconds. On a computer it is still Ctrl + Shift + M. It stays hidden from the menu and its password lock still applies.',
   ] },
