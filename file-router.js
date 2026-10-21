@@ -11,6 +11,7 @@
 // Every page that reads a file. sel = its <input type="file">;
 // ta/run = a paste box to fill and the function that reads it.
 const FR_DEST = {
+  inhouse:     { label: 'In-House Guests',            panel: 'inhouse',       ico: '🛏️', ext: /\.(txt|tsv|csv|xls|xlsx)$/i, sel: '#ihFileInput' },
   departures:  { label: 'Departures',                 panel: 'departures',    ico: '🧳', ext: /\.(txt|tsv|csv|xls|xlsx|xml)$/i, sel: '#depFileInput' },
   dtcm:        { label: 'DTCM Recon',                 panel: 'dtcm',          ico: '🏦', ext: /\.(xml|txt|csv|tsv)$/i, sel: '#dtcFileInput', multi: true },
   tdaOpera:    { label: 'TD Audit · Opera file',      panel: 'td-audit',      ico: '🧮', ext: /\.(txt|tsv|csv)$/i, sel: '#tdaOperaFileInput' },
@@ -50,6 +51,9 @@ function frDetect(name, head) {
   if (/finjrnlbytax/.test(n) || /\bTAX_TRX_CODE\b/.test(firstLine)) return { dest: 'dtcm', why: 'Opera journal by tax code (long stays)' };
   if (/finjrnlbytrans|finjrnl/.test(n) || (/\bTRX_CODE\b/.test(firstLine) && /GUEST_FULL_NAME/.test(firstLine))) return { dest: 'dtcm', why: 'Opera journal by transaction' };
 
+  // Opera in-house guests report (inhouse.js): by its name, or a room list whose guests leave on different days
+  // (a departures report has one departure day)
+  if (!/departure|gibyroom|tally/.test(n) && !/\.(pdf|xml|json)$/.test(n) && (/in[\s_-]?house/.test(n) || _frLooksInHouse(h))) return { dest: 'inhouse', why: 'Opera in-house guests report' };
   if (/departure/.test(n) || (/(^|\t)ROOM(\t|$)/.test(firstLine) && /GUEST_NAME/.test(firstLine) && /DEPARTURE/.test(firstLine))) return { dest: 'departures', why: 'Opera departures report' };
   if (/stat_countrybymon|countrybymon/.test(n) || /COUNTRY/.test(firstLine) && /NATIONALITY|COUNTRY_DESC/.test(firstLine)) return { dest: 'nationality', why: 'Opera nationality statistics' };
   if (/history_forecast/.test(n) || /NO_ROOMS/.test(firstLine) && /CONSIDERED_DATE/.test(firstLine)) return { dest: 'rent1', why: 'History & Forecast' };
@@ -67,6 +71,19 @@ function frDetect(name, head) {
   if (/\.(xlsx|xls)$/.test(n) && /ingauge|in-gauge|upsell/.test(n)) return { dest: 'pkgExcel', why: 'IN-Gauge export' };
   if (/\.json$/.test(n)) return { dest: 'backup', why: 'app backup' };
   return { dest: null };
+}
+
+/** a head of a delimited file that lists the guests in the house on one night (inhouse.js reads it) */
+function _frLooksInHouse(head) {
+  const P = typeof hoInHousePure !== 'undefined' ? hoInHousePure : (typeof window !== 'undefined' && window.hoInHousePure);
+  if (!P || !head) return false;
+  try {
+    const rows = P.parseReport(String(head).split(/\r?\n/).slice(0, -1).join('\n')).rows;   // the last line of a cut head may be half a row
+    // everyone in the house on one night: guests arrived on different days, leave on different days, and nobody arrives after anybody leaves
+    // (an arrivals report has one arrival day; a reservations list over weeks has arrivals after other departures)
+    const arr = rows.map(r => r.arrival).filter(Boolean).sort(), dep = rows.map(r => r.departure).filter(Boolean).sort();
+    return rows.length >= 2 && new Set(arr).size >= 2 && new Set(dep).size >= 2 && arr[arr.length - 1] <= dep[0];
+  } catch (_) { return false; }
 }
 
 function _frReadHead(file) {

@@ -23,6 +23,7 @@ const GS_PANEL_LABEL = {
   purpose:    'Purpose of Stay',
   xref:       'Arr vs Dep',
   tourism:    'Tourism Tax',
+  inhouse:    'In-House Guests',
   'inhouse-tally': 'Inhouse Tally',
   noshow:     'No-Show',
   dtcm:       'DTCM Recon',
@@ -66,6 +67,10 @@ function gsBuildIndex(q) {
 
   (typeof depRooms !== 'undefined' ? depRooms : []).forEach(r => {
     if (hit(r.roomStr, r.name)) add('departures', r.roomStr, r.name, r.status, '🚪', r.roomStr);
+  });
+  // in-house guests (inhouse.js): every room in the hotel from the last Opera in-house report
+  if (window.hoInHouse && typeof hoInHouse.rooms === 'function' && (typeof hoPanelAllowed !== 'function' || hoPanelAllowed('inhouse'))) hoInHouse.rooms().forEach(r => {
+    if (hit(r.room, r.rk, ...r.names, r.company, r.conf)) out.push({ panel: 'inhouse', room: r.room, name: r.name, extra: 'in-house' + (r.departure ? ' · until ' + new Date(r.departure + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '') + (r.company ? ' · ' + r.company : ''), icon: '🛏️', act: () => hoInHouse.open(r.room) });
   });
   (typeof arrGuests !== 'undefined' ? arrGuests : []).forEach(g => {
     if (hit(g.room, g.name)) add('arrivals', g.room, g.name, g.purpose, '🛎️', g.room || g.name);
@@ -277,6 +282,10 @@ const GS_FEATURES = [
   ['🧺 HK Requests', 'hk requests log housekeeping towels cleaning room moves problem rooms whatsapp open requests', 'HK Requests', () => gsGo('hk-requests')],
   ['📖 WhatsApp words', 'whatsapp words dictionary codes vd vc ooo dnd', 'HK Requests', () => { if (typeof gsClose === 'function') gsClose(); hoWaWordsOpen(); }],
   ['✉️ Send to WhatsApp', 'whatsapp send message group checkout list template', 'Departures', () => { if (typeof gsClose === 'function') gsClose(); waOpenFromTop(); }],
+  ['🛏️ In-House Guests', 'in house inhouse in-house guests staying occupied rooms who is in room opera report long stay vip balance company', 'In-House Guests', () => gsGo('inhouse')],
+  ['⬆ Load in-house report', 'load in house inhouse report opera cloud delimited data txt csv paste upload', 'In-House Guests', () => gsGo('inhouse', { sel: '#ihLoadBtn' })],
+  ['🧳 Departing tomorrow list', 'departing tomorrow departures tomorrow list next day check out in house copy excel', 'In-House Guests', () => { gsGo('inhouse'); setTimeout(() => { const b = document.querySelector('#ihRoot .ih-chip[data-f="tomorrow"]'); if (b) b.click(); }, 250); }],
+  ['⬇ In-house report (Excel / PDF)', 'in house inhouse export excel pdf report guests rooms balances', 'In-House Guests', () => gsGo('inhouse', { sel: '#ihExport' })],
   ['🏋️ Gym & Pool memberships', 'gym pool membership members fitness swimming guest outside staff ending expire', 'Gym & Pool', () => gsGo('gym')],
   ['🔁 Extend a gym membership', 'gym pool membership extend renew extension additional 30 days month', 'Gym & Pool', () => gsGo('gym', { sel: '#gyList' })],
   ['✉️ Paste a gym email', 'gym pool membership email paste new extended starting today emirates id', 'Gym & Pool', () => { gsGo('gym'); setTimeout(() => window.hoGym && hoGym.paste(''), 250); }],

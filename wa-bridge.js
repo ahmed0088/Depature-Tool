@@ -971,9 +971,12 @@ function boardIsToday() {
   if (d && isoDay(d) !== today()) return { ok: false, why: 'the board is for ' + d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) };
   return { ok: true };
 }
-/** is this room in the hotel? looks in Arrivals, Purpose of Stay and the In-house tally → {src, name} or null */
+/** is this room in the hotel? looks in the In-House Guests list (inhouse.js) first, then Purpose of Stay, Arrivals and the In-house tally → {src, name} or null */
 function findRoom(room) {
   const n = parseInt(room, 10); if (!n) return null;
+  // a guest whose departure is already past has left: not "in the hotel" any more
+  const ih = W.hoInHouse && typeof W.hoInHouse.find === 'function' ? W.hoInHouse.find(room) : null;
+  if (ih && !(ih.departure && ih.departure < (typeof hoLocalISO === 'function' ? hoLocalISO() : isoDay(new Date())))) return { src: 'in-house list', name: ih.name || '' };
   const same = x => parseInt(String(x == null ? '' : x).replace(/\D/g, ''), 10) === n;
   const nm = g => String(g.name || g.guest || [g.last, g.first].filter(Boolean).join(' ') || '').trim();
   const lists = [['in-house list', typeof purposeGuests !== 'undefined' ? purposeGuests : []], ['arrivals', typeof arrGuests !== 'undefined' ? arrGuests : []]];

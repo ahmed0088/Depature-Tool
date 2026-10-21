@@ -2506,5 +2506,125 @@ console.log('\nGym & Pool memberships');
     [/784-XXXX-XXXXXXX-1/.test(P.cardHtml(M[0], { today: T })), /784-1990-1234567-1/.test(P.cardHtml(M[0], { today: T, fullId: true })), /own risk/.test(P.cardHtml(M[0], { today: T }))], [true, true, true]);
 }
 
+// ── In-House Guests (inhouse.js): Opera Cloud delimited report, counts, find(room), WhatsApp lookup, drop routing ──
+console.log('\nIn-House Guests');
+{
+  const sb = { console: { log() {}, warn() {}, error() {} } };
+  sb.window = sb; sb.globalThis = sb;
+  vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'inhouse.js'), 'utf8'), sb, { filename: 'inhouse.js' });
+  const P = sb.hoInHousePure, T = '2026-10-21', J = x => JSON.parse(JSON.stringify(x));
+  // made-up guests only
+  const TAB = ['In House Guests Report', 'Property: TEST', '',
+    'ROOM\tGUEST_NAME\tARRIVAL\tDEPARTURE\tNIGHTS\tADULTS\tCHILDREN\tRATE_CODE\tSHARE_AMOUNT\tCOMPANY_NAME\tTRAVEL_AGENT_NAME\tMARKET_CODE\tBALANCE\tVIP\tMEMBERSHIP\tCONFIRMATION_NO\tNATIONALITY\tPAYMENT_METHOD\tRESV_STATUS\tCOMMENTS\tFLOOR',
+    '0113\tTestperson, Alpha, Mr\t18-OCT-26\t21-OCT-26\t3\t2\t0\tBAR\t450.00\t\t\tTRN\t1,120.50\t\t\t111222\tGB\tCA\tCHECKED IN\tlate co asked\t1',
+    '0204\tExample, Beta\t14-OCT-26\t22-OCT-26\t\t1\t1\tCORP\t380\tTest Corp LLC\t\tCOR\t0\tVIP1\tALL1234567\t111333\tIN\tAX\tCHECKED IN\t\t2',
+    '0204\tExample, Gamma\t14-OCT-26\t22-OCT-26\t8\t1\t0\tCORP\t0\tTest Corp LLC\t\tCOR\t-50.00\t\t\t111334\tIN\tAX\tCHECKED IN\t\t2',
+    '0310\tSample, Zeta\t21-OCT-26\t04-NOV-26\t14\t2\t0\tLSTAY\t300\t\tTest Travel Ltd\tLEI\t0\t\t\t111335\tDE\tVI\tCHECKED IN\t\t3',
+    'Total Rooms: 3\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t'].join('\r\n');
+  const R = P.parseReport(TAB);
+  check('in-house: tab report with title lines → header found, columns by name, unknown column kept, totals line skipped',
+    [R.delim, R.cols.map(c => c.f).join(), R.extraCols, R.rows.length, R.skipped, R.errors],
+    ['tab', 'room,name,arrival,departure,nights,adults,children,rateCode,rate,company,agent,market,balance,vip,member,conf,nat,pay,status,notes', ['FLOOR'], 4, 1, []]);
+  check('in-house: a row read (name "Last, First, Mr" → First Last, Opera dates, money with commas, nights worked out when empty)',
+    [J(R.rows[0]).name, R.rows[0].arrival, R.rows[0].departure, R.rows[0].balance, R.rows[0].rate, J(R.rows[0].extra), R.rows[1].nights, R.rows[1].vip, R.rows[1].member, R.rows[2].balance],
+    ['Alpha Testperson', '2026-10-18', '2026-10-21', 1120.5, 450, { FLOOR: '1' }, 8, 'VIP1', 'ALL1234567', -50]);
+  const CSV = '"Room No.","Last Name","First Name","Arr.","Dep.","Pax","Rate Code","Rate","Travel Agent","Balance","Conf #","Notes"\n' +
+    '"421","Sample","Delta","2026-10-20","2026-10-27","2/1","OTA","1,250.00","Test OTA","(25.00)","9988","needs ""quiet"" room, high floor"\n' +
+    '"0007","Doe","Epsilon","20/10/2026","21/10/2026","1","BAR","300","","0","9989","two\nlines"\n';
+  const C = P.parseReport(CSV);
+  check('in-house: comma CSV with quotes (commas, "" and a line break inside), Room No. / Last / First / Arr. / Dep. / Pax 2/1 / Conf #',
+    [C.delim, C.cols.map(c => c.f).join(), J(C.rows.map(r => [r.room, r.name, r.arrival, r.departure, r.nights, r.adults, r.children, r.balance, r.conf, r.notes]))],
+    ['comma', 'room,last,first,arrival,departure,pax,rateCode,rate,agent,balance,conf,notes',
+      [['421', 'Delta Sample', '2026-10-20', '2026-10-27', 7, 2, 1, -25, '9988', 'needs "quiet" room, high floor'], ['0007', 'Epsilon Doe', '2026-10-20', '2026-10-21', 1, 1, 0, 0, '9989', 'two lines']]]);
+  check('in-house: pipe and semicolon files, Guest / Arrival Date / Departure Date / Adults / Children / Market Code / Membership Number',
+    [P.parseReport('Room|Guest|Arrival Date|Departure Date|Adults|Children\n512|Test Guest|20/10/26|23/10/26|2|0').rows.map(r => r.room + ' ' + r.name + ' ' + r.arrival + ' ' + r.departure + ' ' + r.adults).join(),
+      P.parseReport('Rm No;Full Name;Check In;Check Out;Market Code;Membership Number\n618;Placeholder Kim;2026-10-19;2026-10-25;COR;12345').rows.map(r => [r.room, r.name, r.departure, r.market, r.member].join(' ')).join()],
+    ['512 Test Guest 2026-10-20 2026-10-23 2', '618 Placeholder Kim 2026-10-25 COR 12345']);
+  check('in-house dates: 20-OCT-26, 20-Oct-2026, 2026-10-20, 20/10/2026, 20.10.26, Oct 20 2026, with a time, mm/dd when it must, Excel day; junk → empty',
+    ['20-OCT-26', '20-Oct-2026', '2026-10-20', '20/10/2026', '20.10.26', 'Oct 20, 2026', '20/10/2026 14:00', '10/20/2026', '46315', '31/02/2026', 'soon', ''].map(P.parseDate),
+    ['2026-10-20', '2026-10-20', '2026-10-20', '2026-10-20', '2026-10-20', '2026-10-20', '2026-10-20', '2026-10-20', '2026-10-20', '', '', '']);
+  check('in-house: no Room column / empty → a clear error, no rows',
+    [P.parseReport('Name\tArrival\nTest Guest\t20-OCT-26').errors[0], P.parseReport('').errors[0], P.parseReport('ROOM\tGUEST_NAME\nTOTAL\t3').errors[0].slice(0, 21)],
+    ['No header row with a Room column and a name or date column was found in the first lines.', 'The report is empty.', 'The header was found ']);
+  // counts (rooms, sharers, departing today / tomorrow, long stays, VIP, balances)
+  const rooms = P.groupRooms(R.rows.concat(C.rows));
+  const S = P.summary(rooms, T);
+  check('in-house counts: rooms (sharers in one room), guests, departing today / tomorrow, arrived today, long stays, VIP, open balances',
+    [S.rooms, S.guests, S.adults, S.children, S.depToday, S.depTomorrow, S.arrToday, S.long, S.vip, S.balance, S.balanceRooms, S.members],
+    [5, 11, 9, 2, 2, 1, 1, 3, 1, 1120.5, 1, 1]);
+  check('in-house filters and sort: departing today, tomorrow, long stay, balance owing, search by company / confirmation / name, sort by departure',
+    [rooms.filter(r => P.matches(r, 'today', T)).map(r => r.room), rooms.filter(r => P.matches(r, 'tomorrow', T)).map(r => r.room), rooms.filter(r => P.matches(r, 'long', T)).map(r => r.room),
+      rooms.filter(r => P.matches(r, 'balance', T)).map(r => r.room), rooms.filter(r => P.searchHit(r, 'test corp')).map(r => r.room), rooms.filter(r => P.searchHit(r, '9988')).map(r => r.room),
+      rooms.filter(r => P.searchHit(r, 'gamma')).map(r => r.room), rooms.filter(r => P.searchHit(r, '113')).map(r => r.room), rooms.filter(r => P.searchHit(r, '111334')).map(r => r.room), P.sortRooms(rooms, 'departure').map(r => r.room)],
+    [['0113', '0007'], ['0204'], ['0204', '0310', '421'], ['0113'], ['0204'], ['421'], ['0204'], ['0113'], ['0204'], ['0007', '0113', '0204', '421', '0310']]);
+  check('in-house: same-day reload preview (+ new, − gone, changed)',
+    J(P.diff(R.rows, R.rows.filter(r => r.room !== '0310').map(r => (r.room === '0113' ? Object.assign({}, r, { departure: '2026-10-23', balance: 0 }) : r)).concat(C.rows.slice(0, 1)))),
+    { added: [{ room: '421', name: 'Delta Sample' }], gone: [{ room: '0310', name: 'Zeta Sample' }], changed: [{ room: '0113', name: 'Alpha Testperson', what: ['departure 21 Oct → 23 Oct', 'balance 1,120.50 → 0.00'] }] });
+  check('in-house: departing tomorrow list to copy', P.tomorrowText(rooms, T, 'Test Hotel'), '🧳 Departing tomorrow 22 Oct · Test Hotel · 1 room\n0204 · Beta Example · 2+1 pax · VIP');
+  const RM = P.reportModel(rooms, rooms, T, { hotel: 'Test Hotel', user: 'Tester' });
+  check('in-house report: only columns the file had, rows by room, today / tomorrow marked, file name',
+    [RM.head.slice(0, 6), RM.head.includes('Payment'), RM.rows.map(r => r[0]), RM.flags, P.fileName('Test Hotel', T)],
+    [['Room', 'Guest', 'Arrival', 'Departure', 'Nights', 'Adults'], true, ['0007', '0113', '0204', '0310', '421'], ['today', 'today', 'tomorrow', '', ''], 'In-House Guests Test Hotel 21 Oct 2026.xlsx']);
+  // the API other modules use
+  sb.hoInHouse.setSnapshot({ date: T, at: '2026-10-21T05:00:00Z', by: 'Tester', rows: R.rows.concat(C.rows) });
+  const F = r => { const f = sb.hoInHouse.find(r); return f ? [f.room, f.name, f.departure].join(' ') : null; };
+  check('hoInHouse.find: 0113 and 113 are the same room, 7 finds 0007, sharers come with the room; unknown → null',
+    [F('113'), F('0113'), F(113), F('7'), J(sb.hoInHouse.find('204').names), F('999'), sb.hoInHouse.date, sb.hoInHouse.rooms().length],
+    ['0113 Alpha Testperson 2026-10-21', '0113 Alpha Testperson 2026-10-21', '0113 Alpha Testperson 2026-10-21', '0007 Epsilon Doe 2026-10-21', ['Beta Example', 'Gamma Example'], null, T, 5]);
+
+  // WhatsApp: findRoom looks in the in-house list first (then Purpose of Stay, Arrivals, the tally as before)
+  sb.hoLocalISO = () => T;
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'wa-bridge.js'), 'utf8'), sb, { filename: 'wa-bridge.js' });
+  sb.purposeGuests = [{ room: '421', name: 'PURPOSE GUEST' }, { room: '0206', name: 'OTHER GUEST' }];
+  const WF = r => { const f = sb.hoWaPure.findRoom(r); return f ? f.src + ':' + f.name : 'none'; };
+  check('wa findRoom: the in-house list first, other lists after it; a guest whose departure is past is not in the hotel',
+    [WF('421'), WF('0113'), WF('206'), WF('999')], ['in-house list:Delta Sample', 'in-house list:Alpha Testperson', 'in-house list:OTHER GUEST', 'none']);
+  sb.hoLocalISO = () => '2026-10-28';
+  check('wa findRoom: after the in-house guest\'s departure the next list answers', WF('421'), 'in-house list:PURPOSE GUEST');
+}
+// WhatsApp "421 Early Depart" for a room that is not on today's departures: found in-house → added to the board and checked out
+{
+  const store = {}, toasts = [];
+  const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } },
+    document: { readyState: 'complete', addEventListener() {}, dispatchEvent() {}, getElementById() { return null; }, querySelectorAll() { return []; }, querySelector() { return null; } },
+    addEventListener() {}, setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, CustomEvent: class { constructor(t, o) { this.type = t; this.detail = o && o.detail; } },
+    currentProfile: { name: 'Test User' }, depLog: [], depRooms: [], DAY: '2026-10-11',
+    depRender() {}, updateDepBadge() {}, saveDeps() {}, saveDepartures() {}, logActivity() {}, showToast: (m, t) => toasts.push(m), showUndoToast: (m, fn) => { toasts.push(m); sb.lastUndo = fn; } };
+  sb.window = sb; sb.globalThis = sb;
+  vm.createContext(sb);
+  const dep = fs.readFileSync(path.join(ROOT, 'departures.js'), 'utf8'), ut = fs.readFileSync(path.join(ROOT, 'utils.js'), 'utf8');
+  const fnSrc = (src, name) => { const i = src.indexOf('function ' + name + '('); return src.slice(i, src.indexOf('\n}\n', i) + 3); };
+  vm.runInContext(fnSrc(dep, 'depAction') + fnSrc(dep, 'depAddManualRoom') + fnSrc(dep, '_depBoardDate') + fnSrc(ut, 'parseOperaDate') + 'function hoLocalISO() { return DAY; }', sb);
+  // inhouse.js without a page (its panel needs a real document): only its data part
+  const ih = fs.readFileSync(path.join(ROOT, 'inhouse.js'), 'utf8').replace("const doc = typeof document", 'const doc = null && typeof document');
+  vm.runInContext(ih, sb, { filename: 'inhouse.js' });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'wa-bridge.js'), 'utf8'), sb, { filename: 'wa-bridge.js' });
+  sb.depRooms.push({ room: 101, roomStr: '101', name: 'TEST GUEST', arrival: '', departure: '11-OCT-26', nights: 1, balance: 0, depTime: '', status: 'due', lateTime: '', extensionNights: 0, intent: '', note: '', checkoutAt: '' });
+  sb.hoInHouse.setSnapshot({ date: '2026-10-11', rows: sb.hoInHousePure.parseReport('ROOM\tGUEST_NAME\tARRIVAL\tDEPARTURE\n0421\tSample, Delta\t09-OCT-26\t14-OCT-26\n0101\tGuest, Test\t10-OCT-26\t11-OCT-26').rows });
+  sb.hoWaBridge.handle({ id: 'ih1', text: '421 Early Depart', sender: 'Sam Test', time: '10:05' }, 'page');
+  const r421 = sb.depRooms.find(r => r.roomStr === '421') || {};
+  const res = sb.hoWaBridge.log()[0].res.map(r => r.st + ' ' + r.room + ' ' + (r.text || '')).join();
+  check('wa + in-house: "421 Early Depart" (not on departures) → found in the in-house list, added to Departures and checked out',
+    [r421.status, r421.name, r421.manual, /added from in-house list/.test(res), /^co 421/.test(res)], ['out', 'DELTA SAMPLE', true, true, true]);
+}
+
+// ── Dropping files: an Opera in-house report goes to In-House Guests, a departures report still to Departures ──
+{
+  const sb = { console: { log() {}, warn() {}, error() {} }, document: { addEventListener() {}, getElementById() { return null }, querySelector() { return null }, body: { classList: { toggle() {} } } }, setTimeout: () => 0 };
+  sb.window = sb; sb.globalThis = sb;
+  vm.createContext(sb);
+  const ih = fs.readFileSync(path.join(ROOT, 'inhouse.js'), 'utf8').replace("const doc = typeof document", 'const doc = null && typeof document');
+  vm.runInContext(ih, sb, { filename: 'inhouse.js' });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'file-router.js'), 'utf8'), sb, { filename: 'file-router.js' });
+  const d = (n, h) => (sb.frDetect(n, h) || {}).dest || null;
+  const IH = 'ROOM\tGUEST_NAME\tARRIVAL\tDEPARTURE\n0113\tA, B\t18-OCT-26\t21-OCT-26\n0204\tC, D\t14-OCT-26\t25-OCT-26\n0310\tE, F\t20-OCT-26\t22-OCT-26\n';
+  const DEP = 'ROOM\tGUEST_NAME\tARRIVAL\tDEPARTURE\n0113\tA, B\t18-OCT-26\t21-OCT-26\n0204\tC, D\t14-OCT-26\t21-OCT-26\n0310\tE, F\t20-OCT-26\t21-OCT-26\n';
+  const ARR = 'ROOM\tGUEST_NAME\tARRIVAL\tDEPARTURE\n0113\tA, B\t21-OCT-26\t23-OCT-26\n0204\tC, D\t21-OCT-26\t25-OCT-26\n0310\tE, F\t21-OCT-26\t22-OCT-26\n';
+  check('drop: in-house report by name or by its rows; departures and arrivals-like lists are not taken; Inhouse Tally files stay theirs',
+    [d('inhouse_guests.txt', ''), d('In House 21 Oct.csv', ''), d('report.txt', IH), d('report.txt', DEP), d('departure_all.txt', IH), d('report.txt', ARR) !== 'inhouse', d('gibyroom.txt', '') , d('Inhouse.xml', '')],
+    ['inhouse', 'inhouse', 'inhouse', 'departures', 'departures', true, 'itGiby', null]);
+}
+
 console.log(`\n${pass} passed · ${fail} failed`);
 process.exit(fail ? 1 : 0);

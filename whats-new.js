@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 373, items: [
+    '🛏️ New page: In-House Guests (Front Desk, after Arrivals). Load the Opera Cloud in-house report as Delimited Data (or paste it, or drop the file anywhere). You get rooms occupied, guests, departing today and tomorrow, long stays, VIPs and open balances at a glance, with filters, search (room, name, company, confirmation) and every guest\'s details.',
+    '🔄 Loading again the same day shows what changed first (new / gone / changed rooms). Export to a styled Excel or PDF, and copy the "departing tomorrow" list for WhatsApp.',
+    '💬 WhatsApp now checks the in-house list first when a room is not on today\'s Departures — so "421 Early Depart" finds 421, adds it to Departures and checks it out.',
+  ] },
   { v: 372, items: [
     '✅ WhatsApp, as your team uses it: "421 Early Depart" now checks the room out (noted "early departure"; "early departure tomorrow" stays a note). "524 523 516 please make check out" checks those rooms out. A time after a room ("626 4 pm", "315 - 3 pm", "512 14:00") is a late check-out at that time (a morning time is not). "io" means IP — inspected, room ready. "105 physical check out" stays a request for housekeeping to check the room.',
   ] },
