@@ -852,7 +852,7 @@
     f.kinds = kindsOf(ch);
     f.disp = f.text.replace(/\s*\n\s*/g, ' · ');
     f.hay = norm([f.sender, f.text, f.group].concat(ch.map(function (c) { return c.label; })).join(' '));
-    ch.forEach(function (c) { if (c.ask && !words(c.ask.word)) { asks[c.ask.word] = { word: c.ask.word, text: m.text, sender: f.sender, room: c.ask.room }; } });
+    ch.forEach(function (c) { if (c.ask && !words(c.ask.word)) { asks[c.ask.word] = { word: c.ask.word, text: m.text, sender: f.sender, room: c.ask.room, guess: c.ask.guess || '' }; } });
     feed.unshift(f);
     if (empty.parentNode) empty.remove();
     var tone = ch[0] ? ch[0].tone : 'off'; var A = ACT[tone] || ACT.off;
@@ -925,11 +925,13 @@
       var c = el('div', 'padding:9px 10px;border-radius:12px;background:rgba(251,191,36,.08);border:1px dashed rgba(251,191,36,.45);display:flex;flex-direction:column;gap:7px', null, asksBox);
       var p = el('div', 'font-size:12px;line-height:1.4;color:#fde68a', null, c);
       el('b', '', q.sender || 'Someone', p); p.appendChild(document.createTextNode(' wrote "' + String(q.text).slice(0, 60) + '". What does "' + w + '" mean?'));
+      var gm = q.guess && MEAN.filter(function (mn) { return mn[0] === q.guess; })[0];
+      if (gm) el('div', 'font-size:11.5px;color:#fde68a', '🤔 My guess: ' + gm[1].replace(/^\S+\s/, '') + '. Did I get it?', c);
       var bs = el('div', 'display:flex;flex-wrap:wrap;gap:4px', null, c);
       var noteIn = el('input', 'all:unset;box-sizing:border-box;width:100%;padding:6px 9px;border-radius:8px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.12);color:' + TXT + ';font:12px ' + SANS + ';user-select:text;-webkit-user-select:text');
       noteIn.placeholder = 'What it stands for (optional), e.g. Vacant Dirty'; noteIn.maxLength = 60; keepKeys(noteIn);
-      MEAN.forEach(function (mn) {
-        var b = btn2(mn[1], bs, 'padding:5px 8px;font-size:11px;border-radius:99px');
+      (gm ? [gm].concat(MEAN.filter(function (mn) { return mn !== gm; })) : MEAN).forEach(function (mn) {
+        var b = btn2(mn === gm ? '✓ Yes, ' + mn[1].replace(/^\S+\s/, '') : mn[1], bs, 'padding:5px 8px;font-size:11px;border-radius:99px' + (mn === gm ? ';font-weight:800;border-color:' + ACC + ';color:' + ACC_L : ''));
         b.onclick = function () {
           var a = { word: w, meaning: mn[0], note: noteIn.value.trim() };
           if (!post({ source: 'ho-wa', answer: a })) { answers.push(a); save(); toast('Saved · sent to HotelOps when linked', 'info'); } else toast('✓ "' + w + '" = ' + mn[1].replace(/^\S+\s/, ''), 'ok');

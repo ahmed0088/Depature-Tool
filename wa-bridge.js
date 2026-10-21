@@ -428,11 +428,28 @@ function hoWaParser() {
     'yet again then than this that these those what when where who why how which with from into over under after before ' +
     'khalas tamam yalla shukran habibi inshallah insha mafi free empty vacant leaving going coming left out stay min mins hour hours half noon lunch ' +
     'shortly quick fast will wants want needs need asked asking says said told dep exit desk lobby bell').split(' '));
+  // the best guess for a word nobody taught us: what it is closest to (asked as "Did you mean …?")
+  const GUESS_W = [['co', ['checkedout', 'checkout', 'checkingout', 'checked', 'departed', 'vacated', 'left']], ['ext', ['extended', 'extend', 'extension', 'extending', 'stay', 'staying']],
+    ['lco', ['latecheckout', 'late', 'lateco']], ['hk', ['vacantdirty', 'vacantclean', 'vacant', 'dirty', 'clean', 'inspected', 'occupied', 'ready', 'cleaning']]];
+  function guessOf(word) {
+    const w = String(word || '').toLowerCase().replace(/[^a-z]/g, ''); if (w.length < 3) return '';
+    let best = null;
+    GUESS_W.forEach(([m, list]) => list.forEach(g => {
+      const k = dist(w, g), lim = g.length >= 7 ? 3 : g.length >= 5 ? 2 : 1;
+      const pre = g.startsWith(w) && w.length >= 3 ? 0.5 : 9;                 // "exten" → extended
+      const sub = w.length >= 3 && w[0] === g[0] && (() => { let i = 0; for (const ch of g) if (ch === w[i]) i++; return i === w.length; })() ? 1.5 : 9;   // "ckd" → checked, "cln" → clean
+      if (k === 0) return;                                                     // a real word, not a typo
+      const sc = Math.min(k <= lim ? k : 9, pre, sub);
+      if (sc < 9 && (!best || sc < best.sc)) best = { m, sc };
+    }));
+    return best ? best.m : '';
+  }
   function askWord(rest, words) {
     const w = String(rest || '').trim().replace(/[\s.!,;:]+$/, '').toLowerCase();
-    if (!/^[a-z][a-z\/.\-]{1,5}$/.test(w)) return '';
+    if (!/^[a-z][a-z\/.\-]{1,13}$/.test(w)) return '';
     const bare = w.replace(/[\/.\-]/g, '');
     if (bare.length < 2 || ASK_STOP.has(bare) || ASK_STOP.has(w)) return '';
+    if (bare.length > 6 && !guessOf(bare)) return '';                        // a longer word is only asked when it looks like a typo of one we know
     if (lookup(w) || lookup(bare)) return '';
     return w;
   }
@@ -515,7 +532,7 @@ function hoWaParser() {
         const target = pending.concat(rooms); pending = [];
         // "415 ckd": a word we do not know → ask, do nothing with it
         const aw = !cmd && target.length && c.act === 'note' && !c.word ? (c.askWord || askWord(rest, true)) : '';
-        if (aw) { if (!ask) ask = { word: aw, room: target[0], rooms: target.slice(), text: sp(text).trim().slice(0, 300) }; lastNote = null; return; }
+        if (aw) { if (!ask) ask = { word: aw, room: target[0], rooms: target.slice(), text: sp(text).trim().slice(0, 300), guess: guessOf(aw) }; lastNote = null; return; }
         if (target.length) { add(target, c); lastNote = c.act === 'note' ? actions.filter(a => a.act === 'note' && target.includes(a.room)) : null; }
         else if (c.act !== 'note') { head = c; lastNote = null; }   // "CO" / "Checkout list:" on its own line: the rooms below
         else if (lastNote && lastNote.length) lastNote.forEach(a => { a.note += ' ' + seg.replace(/[\s.!,;]+$/, ''); });   // a note's next line
@@ -582,7 +599,7 @@ function hoWaParser() {
     if (a.act === 'ext') return '↪ EXT ' + a.room + (a.nights ? ' +' + a.nights + 'N' : '') + (a.until ? ' → ' + untilLabel(a.until) : '') + wordTag(a);
     return '📝 note ' + a.room + wordTag(a);
   }
-  return { sp, hoWaTime, timeLabel, hoWaParse, actionKey, extNights, chip, paperChip, paperOf, wordTag, dayLabel, untilLabel, isHoText, HO_MARK, askWord };
+  return { sp, hoWaTime, timeLabel, hoWaParse, actionKey, extNights, chip, paperChip, paperOf, wordTag, dayLabel, untilLabel, isHoText, HO_MARK, askWord, guessOf };
 }
 const HP = hoWaParser();
 const { sp, hoWaTime, timeLabel, hoWaParse, actionKey } = HP;
@@ -1437,7 +1454,7 @@ const MEANINGS = { co: '✓ Checked out', ext: '↪ Extension', lco: '⏰ Late C
 function saveAsks() { lsSet(LS_ASK, ASKS); }
 function askAbout(ask, msg, sender, group) {
   const w = String(ask.word || '').toLowerCase(); if (!w || KNOWN[w] || appLookup(w)) return;
-  const k = safeKey(w), q = ASKS[k] || { word: w, room: ask.room, text: ask.text, sender, group: group || '', at: Date.now(), msgs: [] };
+  const k = safeKey(w), q = ASKS[k] || { word: w, room: ask.room, text: ask.text, sender, group: group || '', at: Date.now(), msgs: [], guess: ask.guess || '' };
   const m = { id: msg.id || '', text: String(msg.text || '').slice(0, 1000), sender, mine: !!msg.mine, time: msg.time || '', date: msg.date || '', group: group || '' };
   if (msg.quote) m.quote = String(msg.quote).slice(0, 400);
   if (!q.msgs.some(x => (x.id && x.id === m.id) || (x.text === m.text && x.time === m.time))) q.msgs.push(m);
@@ -2060,7 +2077,8 @@ function renderAsks() {
   const el = doc.getElementById('waAsks'); if (!el) return;
   const list = Object.keys(ASKS).map(k => ASKS[k]).filter(q => q && q.word && !KNOWN[q.word]).sort((a, b) => (a.at || 0) - (b.at || 0)).slice(0, 4);
   el.innerHTML = list.map(q => `<div class="wa-ask" data-ask="${esc(q.word)}"><p>❓ <b>${esc(q.sender || 'Someone')}</b> wrote <q>${esc(String(q.text || '').slice(0, 120))}</q>. What does <q>${esc(q.word)}</q> mean?${q.msgs && q.msgs.length > 1 ? ` <span class="wa-hint">(${q.msgs.length} messages wait for it)</span>` : ''}</p>
-    <div class="wa-aw">${Object.keys(MEANINGS).map(m => `<button type="button" class="wa-chipb" data-ans="${m}">${esc(MEANINGS[m])}</button>`).join('')}</div>
+    ${q.guess && MEANINGS[q.guess] ? `<p class="wa-hint" style="margin:4px 0 6px">🤔 My guess: <b>${esc(MEANINGS[q.guess])}</b>. Did I get it?</p>` : ''}
+    <div class="wa-aw">${(q.guess && MEANINGS[q.guess] ? [q.guess].concat(Object.keys(MEANINGS).filter(m => m !== q.guess)) : Object.keys(MEANINGS)).map(m => `<button type="button" class="wa-chipb${m === q.guess ? ' on' : ''}" data-ans="${m}"${m === q.guess ? ' style="font-weight:800;outline:2px solid var(--wa-g,#25d366)"' : ''}>${m === q.guess ? '✓ Yes, ' : ''}${esc(MEANINGS[m])}</button>`).join('')}</div>
     <div class="wa-aw"><input class="wa-in" placeholder="What it stands for (optional), e.g. Vacant Dirty" aria-label="What the word stands for" maxlength="60"></div></div>`).join('');
 }
 function renderGroups() {

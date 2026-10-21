@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 367, items: [
+    '🤔 WhatsApp words: when a colleague writes a word HotelOps does not know ("xtendd", "ckd", "vacnt", "lte"), it now makes a best guess and asks you "My guess: Extension. Did I get it?" with ✓ Yes first. Your answer is saved for the whole team, and waiting messages are then done. Close typos ("EXTENDE") are still done straight away as 🤔 guessed.',
+  ] },
   { v: 366, items: [
     '✅ Handover Book: a "Done", "Done ✅", "collected", "moved" or "506 done" in WhatsApp now ticks the right handover item by itself. It looks at the message being replied to (even when WhatsApp cuts it short), the room number, what was done (collected → payment, moved → room move…) and which item came just before. When it still is not sure, it asks at the top of the Handover Book: "Which item is done?"',
     '🔤 WhatsApp typos: "310 - EXTENDE", "exended", "extnded", "chekd out" are now read as extend / check out (marked 🤔 guessed, tap ✓ Right once and it remembers). Look-alike words such as "external", "exit" or "cheque" are left alone.',

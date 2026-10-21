@@ -1706,6 +1706,8 @@ console.log('\nWhatsApp HK bridge · message reader');
   const NA = (t, now) => sb.hoWaParse(t, { now: now || '10:02' }).actions.map(a => [a.room, a.act, a.time || '', a.soon ? 'in' + a.soon : '', a.plan ? 'plan' : '', a.nights ? '+' + a.nights + 'N' : '', a.until ? '→' + a.until : '', a.act === 'note' ? a.note : ''].filter(Boolean).join(' ')).join(' | ');
   check('wa typos: "EXTENDE", "exended", "chekd out" are read (as a guess to confirm); look-alike words are not', ['310 - EXTENDE', '310 exended', '310 extedned 2n', '310 chekd out', '310 external door broken', '310 exit sign broken', '310 cheque payment', '310 checkout tomorrow'].map(t => P(t).actions.map(a => a.act + (a.nights ? a.nights : '') + (a.guess ? '?' : '')).join()),
     ['ext?', 'ext?', 'ext2?', 'co?', 'note', 'note', 'note', 'note']);
+  check('wa ask: an unknown word is asked with a best guess first ("xtendd" → extension, "ckd" → checked out, "vacnt" → HK); no guess when nothing is close', ['310 xtendd', '310 ckd', '310 vacnt', '310 lte', '310 blabla'].map(t => { const a = P(t).ask; return a ? a.word + ':' + (a.guess || '-') : 'none'; }),
+    ['xtendd:ext', 'ckd:co', 'vacnt:hk', 'lte:lco', 'blabla:-']);
   check('wa talk: "luggage inside" → the guest might extend; luggage in store is not', ['301 luggage inside', '301 bags still in the room', '301 room occupied', '301 occupied', '301 luggage in store', '301 luggage inside?', '301 needs towels'].map(t => P(t).actions.map(a => a.act).join()),
     ['maybe', 'maybe', 'maybe', 'maybe', 'note', 'note', 'note']);
   check('wa talk: "checking out in N min" → leaving soon, from the message\'s time, rounded up to 5 min',
