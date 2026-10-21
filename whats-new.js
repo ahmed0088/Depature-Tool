@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 369, items: [
+    '🔗 Shift tasks linked to tools: each task can open the page that does it, e.g. "Enrollment" → Open Guest Pipeline →. Pick it under ✏️ Edit → Linked tool (or 🔗 Tool when adding). HotelOps suggests the page from the task\'s name ("Suggested: Departures · Link it"), and "Link all suggestions" does the whole list in one tap.',
+    '✅ Back from the tool, Shift Tasks asks "Mark \'Enrollment\' done?" — one tap, nothing is ticked without you. A page your role cannot open shows greyed out.',
+  ] },
   { v: 368, items: [
     '📰 What\'s new is easier to read: newest update first, one card per update with the latest marked, bigger text, and each change with its own icon and a bold title. Older updates are one tap away.',
   ] },

@@ -2282,5 +2282,51 @@ console.log('\nRoles & access');
 
 }
 
+// ── Shift task → linked tool (shift-links.js): words → page, saving links on a list ──
+console.log('\nShift tasks · linked tools');
+{
+  const sb = { console: { log() {}, warn() {}, error() {} } };
+  sb.globalThis = sb;
+  vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'shift-links.js'), 'utf8'), sb, { filename: 'shift-links.js' });
+  const L = sb.hoShiftLinks, J = x => JSON.parse(JSON.stringify(x));
+  const sug = n => L.suggestFromText(n);
+  check('suggest: enrollment / ALL / members → Guest Pipeline',
+    ['Enrollment', 'ALL enrollments', 'Enroll walk-in guests', 'New members sign-up', 'Loyalty cards'].map(sug), ['pipeline', 'pipeline', 'pipeline', 'pipeline', 'pipeline']);
+  check('suggest: "all" in normal words, all-caps text and team members are not loyalty',
+    ['Check all rooms', 'CHECK ALL ROOMS', 'Brief team members'].map(sug), ['', '', '']);
+  check('suggest: front desk pages',
+    ['Follow up on pending checkouts', 'Update departure board', 'CO list', 'Handle late arrivals', 'Pre-reg tomorrow', 'Process remaining check-ins', 'Arr vs Dep', 'Wake up calls', 'Purpose of stay'].map(sug),
+    ['departures', 'departures', 'departures', 'arrivals', 'arrivals', 'arrivals', 'xref', 'wakeups', 'purpose']);
+  check('suggest: night audit pages',
+    ['Complete night audit checklist', 'PM Rooms', 'In-house tally', 'Rented rooms & beds', 'Passport scan', 'Immigration check', 'Nationality report'].map(sug),
+    ['checklist', 'audit', 'inhouse-tally', 'rent', 'immig', 'immig', 'nationality']);
+  check('suggest: money and tax pages (TD audit before Tourism, DTCM before Tourism)',
+    ['TD 30-day audit', 'Post TD', 'Tourism dirham', 'DTCM recon', 'Package audit', 'Skip the clean', 'STC report', 'No show report'].map(sug),
+    ['td-audit', 'tourism', 'tourism', 'dtcm', 'package-audit', 'skip-clean', 'skip-clean', 'noshow']);
+  check('suggest: logs, handover, housekeeping, rates, roster, QR',
+    ['Reconcile front desk float', 'Lost & found', 'Maintenance issues', 'Check overnight log', 'Receive handover from morning shift', 'Coordinate with housekeeping', 'HK requests', 'Rate shop', 'Check roster', 'Print QR'].map(sug),
+    ['ops-logs', 'ops-logs', 'ops-logs', 'ops-logs', 'handover-book', 'hk-requests', 'hk-requests', 'rates', 'roster', 'qr']);
+  check('suggest: nothing for words with no page ("5 pm" is not PM Rooms)', ['Update room status report', 'Call room 204 at 5 pm', '', null].map(sug), ['', '', '', '']);
+  check('suggest from a task: name first, then hint; none once linked or set to "no page"',
+    [L.suggest({ name: 'Update room status report', hint: 'Coordinate with housekeeping.' }), L.suggest({ name: 'Enrollment', hint: 'Coordinate with housekeeping.' }),
+      L.suggest({ name: 'Enrollment', tool: 'departures' }), L.suggest({ name: 'Enrollment', tool: 'none' })],
+    ['hk-requests', 'pipeline', '', '']);
+  check('linked page: none / Guest Memory / the list itself never count as a link',
+    [L.toolOf({ tool: 'pipeline' }), L.toolOf({ tool: 'none' }), L.toolOf({ tool: 'guestmem' }), L.toolOf({ tool: 'shifts' }), L.toolOf({}), L.toolOf(null)], ['pipeline', '', '', '', '', '']);
+  const tasks = [{ id: 'a', name: 'Enrollment' }, { id: 'b', name: 'Reconcile front desk float', imp: true }, { id: 'c', name: 'Update room status report' }, { id: 'd', name: 'Handle late arrivals', tool: 'none' }, { id: 'e', name: 'Departures', tool: 'xref' }];
+  check('link all: only unlinked tasks with a suggestion; "no page" and already-linked tasks are left alone',
+    J(L.linkAllChanges(tasks)), { a: 'pipeline', b: 'ops-logs' });
+  const before = J(tasks);
+  const out = L.applyTools(tasks, { a: 'pipeline', e: null, zz: 'rates', c: 'guestmem' });
+  check('saving links: only named tasks change, other fields kept, null removes, unknown ids ignored, Guest Memory never stored',
+    [J(out), J(tasks)], [[{ id: 'a', name: 'Enrollment', tool: 'pipeline' }, before[1], { id: 'c', name: 'Update room status report' }, before[3], { id: 'e', name: 'Departures' }], before]);
+  // a colleague added a task and renamed one since this device loaded: the link lands on the fresh list
+  const fresh = L.asList({ 0: { id: 'a', name: 'ALL enrollment (walk-ins too)' }, 1: { id: 'n', name: 'New task from a colleague' } });
+  check('saving on the fresh list: Firebase object → array, the colleague\'s task and rename stay, link added by id',
+    J(L.applyTools(fresh, { a: 'pipeline', b: 'ops-logs' })), [{ id: 'a', name: 'ALL enrollment (walk-ins too)', tool: 'pipeline' }, { id: 'n', name: 'New task from a colleague' }]);
+  check('old saved tasks (no tool field) work as before', [L.toolOf(before[0]), L.asList(null), L.asList([null, { id: 'x' }]).length, L.applyTools(undefined, { a: 'x' }).length], ['', null, 1, 0]);
+}
+
 console.log(`\n${pass} passed · ${fail} failed`);
 process.exit(fail ? 1 : 0);

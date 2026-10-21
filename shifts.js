@@ -96,6 +96,7 @@ function _renderShiftContent(key) {
       🎉 All caught up on the ${shift.label} — nice work.
     </div>` : ''}
     ${stQuietHtml()}
+    ${typeof stlTopHtml === 'function' ? stlTopHtml(key, active) : ''}
     <div id="stList-${key}" class="st-sortable">
       ${total ? active.map(t => stItemHTML(key, t, stIsDone(key, t), shift.tasks.indexOf(t), shift.tasks.length)).join('')
               : '<div class="st-empty">No tasks on this shift yet — add one below.</div>'}
@@ -108,6 +109,7 @@ function _renderShiftContent(key) {
       <input class="st-add-at" id="stOn-${key}" type="date" title="Date (optional): a one-off task for that day, or the first day of a repeating one. It waits in Coming up and reminds you on the day" aria-label="Date"/>
       <select class="st-add-at st-add-rep" id="stRep-${key}" title="Repeat (optional): every week or every month, e.g. a monthly report. It comes back on the same day each time and reminds you" aria-label="Repeat"><option value="">Once</option><option value="week">🔁 Every week</option><option value="month">🔁 Every month</option></select>
       <button type="button" class="st-add-imp" id="stImp-${key}" aria-pressed="false" onclick="this.classList.toggle('on');this.setAttribute('aria-pressed',this.classList.contains('on'))" title="Important: shows with a red tag and its reminder rings">❗ Important</button>
+      ${typeof stlAddBtnHtml === 'function' ? stlAddBtnHtml(key) : ''}
       <button class="btn gold sm" onclick="stAddTask('${key}')">+ Add</button>
     </div>
     ${shift.resetAt ? `<div style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);margin-top:6px;">Last reset: ${shift.resetAt}</div>` : ''}
@@ -137,6 +139,7 @@ function stItemHTML(key, t, isDone, index, total) {
     <div class="st-text">
       <div class="st-name">${t.imp ? '<span class="st-imp" title="Important"><i>!</i>Important</span>' : ''}${t.on ? _stOnChip(key, t, isDone) : ''}${t.at ? `<span class="st-at${!isDone && stIsLate(key, t) ? ' late' : ''}" title="${stIsLate(key, t) && !isDone ? 'Time passed, not done yet' : 'Reminder at this time'}">⏰ ${escapeHtml(t.at)}</span>` : ''}${escapeHtml(t.name)}</div>
       ${t.hint ? `<div class="st-hint">${escapeHtml(t.hint)}</div>` : ''}
+      ${typeof stlChipHtml === 'function' ? stlChipHtml(key, t) : ''}
     </div>
     <div class="st-actions">
       <div class="st-move-btns">
@@ -256,6 +259,7 @@ function stAddTask(key) {
   const rEl = document.getElementById('stRep-' + key);
   if (rEl?.value) { task.rep = rEl.value; if (!task.on) task.on = stDayOf(key); }
   if (rEl) rEl.value = '';
+  if (typeof stlAddRead === 'function') stlAddRead(key, task);   // the page it opens (shift-links.js)
   if (task.rep && typeof showToast === 'function') showToast(`🔁 ${_stRepLbl(task)}: it comes back on its day and reminds you, every time`, 'ok');
   else if (task.on && task.on > stDayOf(key) && typeof showToast === 'function') showToast(`📅 Saved for ${_stDateLbl(task.on)}: it waits in Coming up and reminds you on the day`, 'ok');
   stLog(key, 'added', name);
@@ -303,6 +307,7 @@ function openEditTask(key, id) {
   const on = document.getElementById('et-on'); if (on) on.value = task.on || '';
   const rp = document.getElementById('et-rep'); if (rp) rp.value = task.rep || '';
   const im = _stImpField(); if (im) im.checked = !!task.imp;
+  if (typeof stlEditOpen === 'function') stlEditOpen(task);   // Linked tool (shift-links.js)
   document.getElementById('editTaskModal').classList.add('open');
 }
 
@@ -320,6 +325,7 @@ function saveEditTask() {
   const rp = document.getElementById('et-rep')?.value || '';
   if (rp) { task.rep = rp; if (!task.on) task.on = stDayOf(key); } else delete task.rep;
   if (document.getElementById('et-imp')?.checked) task.imp = true; else delete task.imp;
+  if (typeof stlEditRead === 'function') stlEditRead(task);
   document.getElementById('editTaskModal').classList.remove('open');
   _renderShiftContent(key);
   persistShifts(key);
