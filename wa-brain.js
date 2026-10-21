@@ -1440,7 +1440,7 @@ function logRows() {
   const body = doc.getElementById('wabLogBody'); if (!body) return;
   const track = reqTrack();
   body.innerHTML = (hist ? `<div class="wab-hist">🛏️ ${esc(hist)}</div>` : '') + (L.length ? `<div class="wab-tw"><table class="wab-log"><thead><tr><th>Time</th><th>Room</th><th>What</th><th>Message</th><th>Who</th><th>Status</th>${track ? '<th></th>' : ''}</tr></thead><tbody>${L.map(i => { const S = wbReqStatus(i, track); return `<tr class="${S.tone === 'over' ? 'wab-over' : ''}${i.st === 'done' ? ' wab-done' : ''}">
-      <td class="num">${esc(t12(i.t))}</td><td class="num"><button type="button" class="wab-room" data-wab-lroom="${esc(i.room)}" title="Only this room">${esc(i.room)}</button></td>
+      <td class="num">${esc(t12(i.t))}</td><td class="num"><button type="button" class="wab-room" data-wab-lroom="${esc(i.room)}" title="Only this room">${esc(i.room)}</button>${W.hoRoom ? `<button type="button" class="rc-i" data-room-card="${esc(i.room)}" title="Room card ${esc(i.room)}" aria-label="Room card ${esc(i.room)}">i</button>` : ''}</td>
       <td>${i.cats.length ? i.cats.map(c => c.icon).join('') + ' ' : ''}${esc(i.what)}${i.again ? `<small>asked ${i.again + 1} times</small>` : ''}</td><td class="wab-lx">${esc(qMark(i.x || '', 140))}</td><td>${esc(i.s)}${i.g ? `<small>${esc(i.g)}</small>` : ''}</td>
       <td class="wab-st">${esc(S.text)}${S.sub || (track && i.how === 'chat') ? `<small>${esc(S.sub)}${track && i.how === 'chat' ? ' · in the chat' : ''}</small>` : ''}</td>
       ${track ? `<td>${i.st === 'done' ? `<button class="wab-b" type="button" data-wab-lopen="${esc(i.id)}">Reopen</button>` : `<button class="wab-b pri" type="button" data-wab-ldone="${esc(i.id)}">✓ Done</button>`}</td>` : ''}</tr>`; }).join('')}</tbody></table></div>`
@@ -1723,7 +1723,9 @@ function start() {
   setTimeout(tick, 6000);
   setTimeout(() => ensure30(), 8000);
   // for the Handover Book's "From HotelOps today"
-  W.hoWaBrain = Object.assign(W.hoWaBrain || {}, { openRequests: () => safe(() => reqItems(today()).filter(i => i.st === 'open'), []) });
+  W.hoWaBrain = Object.assign(W.hoWaBrain || {}, { openRequests: () => safe(() => reqItems(today()).filter(i => i.st === 'open'), []),
+    // for the room card (room-card.js): a day's requests, how each one shows, and "+ Add request" from the card
+    requests: day => safe(() => reqItems(day || today()), []), requestStatus: it => wbReqStatus(it, reqTrack()), addRequest: (room, cat, what, note) => safe(() => reqAdd(room, cat, what, note)) });
   setInterval(() => { if (Object.keys(DAYS).length) loadDays([today()]).then(ch => { if (ch) softRefresh(); }).catch(() => {}); }, 3 * 60e3);
 }
 if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start); else start();

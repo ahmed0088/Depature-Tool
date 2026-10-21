@@ -24,6 +24,7 @@ const GS_PANEL_LABEL = {
   xref:       'Arr vs Dep',
   tourism:    'Tourism Tax',
   inhouse:    'In-House Guests',
+  room:       'Room card',
   'inhouse-tally': 'Inhouse Tally',
   noshow:     'No-Show',
   dtcm:       'DTCM Recon',
@@ -64,6 +65,10 @@ function gsBuildIndex(q) {
     out.push({ panel, room: room || '', name: name || '', extra: extra || '', icon, jumpTerm: jumpTerm ?? (room || name) });
   };
   const hit = (...vals) => vals.some(v => (v || '').toString().toLowerCase().includes(q));
+
+  // a room number → its room card first (room-card.js): guest, notes and everything about the room
+  const rcm = window.hoRoom && q.match(/^(?:room\s*(?:card)?\s*|rm\s*|#)?([a-z]?\d{3,5}[a-z]?)$/i);
+  if (rcm) out.push({ panel: 'room', room: rcm[1], name: 'Room card', extra: hoRoom.known(rcm[1]) ? 'guest, notes, WhatsApp, HK, handover…' : 'notes and history', icon: '🛏️', act: () => hoRoom.open(rcm[1]) });
 
   (typeof depRooms !== 'undefined' ? depRooms : []).forEach(r => {
     if (hit(r.roomStr, r.name)) add('departures', r.roomStr, r.name, r.status, '🚪', r.roomStr);
@@ -282,6 +287,7 @@ const GS_FEATURES = [
   ['🧺 HK Requests', 'hk requests log housekeeping towels cleaning room moves problem rooms whatsapp open requests', 'HK Requests', () => gsGo('hk-requests')],
   ['📖 WhatsApp words', 'whatsapp words dictionary codes vd vc ooo dnd', 'HK Requests', () => { if (typeof gsClose === 'function') gsClose(); hoWaWordsOpen(); }],
   ['✉️ Send to WhatsApp', 'whatsapp send message group checkout list template', 'Departures', () => { if (typeof gsClose === 'function') gsClose(); waOpenFromTop(); }],
+  ['🛏️ Room card', 'room card room notes note on a room add note to room timeline everything about a room what happened in room guest stay history', 'Any room', () => { if (window.hoRoom) hoRoom.open(); }],
   ['🛏️ In-House Guests', 'in house inhouse in-house guests staying occupied rooms who is in room opera report long stay vip balance company', 'In-House Guests', () => gsGo('inhouse')],
   ['⬆ Load in-house report', 'load in house inhouse report opera cloud delimited data txt csv paste upload', 'In-House Guests', () => gsGo('inhouse', { sel: '#ihLoadBtn' })],
   ['🧳 Departing tomorrow list', 'departing tomorrow departures tomorrow list next day check out in house copy excel', 'In-House Guests', () => { gsGo('inhouse'); setTimeout(() => { const b = document.querySelector('#ihRoot .ih-chip[data-f="tomorrow"]'); if (b) b.click(); }, 250); }],

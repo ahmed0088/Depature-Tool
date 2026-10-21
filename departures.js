@@ -1566,7 +1566,9 @@ function depCardHTML(r) {
 
   // note chip: the pinned note (else the newest) with its type icon; the Note button shows how many
   const noteE = r.note ? dpnPreview(r.note, r.notePin) : null;
-  const noteN = r.note ? dpnParse(r.note).length : 0;
+  // the room's shared stay notes (room-card.js) count too; with no board note, the first one shows as the chip
+  const roomN = window.hoRoom ? hoRoom.notes(r.roomStr) : [];
+  const noteN = (r.note ? dpnParse(r.note).length : 0) + roomN.length;
   const noteCat = noteE ? (DPN_CAT[noteE.cat] || DPN_CAT.gen) : null;
   const notePrev = noteE ? escapeHtml(noteE.body.replace(/\s+/g, ' ').substring(0, 70)) : '';
 
@@ -1587,6 +1589,7 @@ function depCardHTML(r) {
     </div>
     <div class="dp-tags">
       ${balChip}${chips.join('')}
+      ${!noteE && roomN.length ? `<button class="dp-chip dp-chip-note${roomN[0].pin ? ' dp-chip-pinned' : ''}" style="--k:var(--accent)" onclick="event.stopPropagation();depOpenNotes('${r.roomStr}')" title="${escapeHtml('Room note: ' + String(roomN[0].text).substring(0, 200))}"><i class="dp-chip-ni" aria-hidden="true">🛏️</i><span>${escapeHtml(String(roomN[0].text).replace(/\s+/g, ' ').substring(0, 70))}</span></button>` : ''}
       ${noteE ? `<button class="dp-chip dp-chip-note${r.notePin && noteE.key === r.notePin ? ' dp-chip-pinned' : ''}" style="--k:${noteCat.c}" onclick="event.stopPropagation();depOpenNotes('${r.roomStr}')" title="${escapeHtml((noteE.time ? noteE.time + ' · ' : '') + noteCat.l + ': ' + noteE.text.substring(0, 200))}"><i class="dp-chip-ni" aria-hidden="true">${noteCat.i}</i><span>${notePrev}</span></button>` : ''}
     </div>
     <div class="dc-body dp-body">
@@ -1813,6 +1816,7 @@ function _dpnHead() {
     <div class="dpn-hd-acts">
       <button type="button" class="dpn-hbtn${_dpn.raw ? ' on' : ''}" onclick="_dpnRaw()" aria-pressed="${_dpn.raw}" title="Edit all notes as plain text">${_dpn.raw ? '☰ Timeline' : '✎ Raw text'}</button>
       <button type="button" class="dpn-hbtn" onclick="_dpnCopy()" title="Copy all notes">⧉ Copy</button>
+      ${window.hoRoom ? `<button type="button" class="dpn-hbtn" data-room-card="${_dpnEsc(r.roomStr)}" title="Guest, room notes and everything about this room">🛏️ Room card</button>` : ''}
       <button type="button" class="dpn-x" onclick="depCloseNotes()" aria-label="Close notes">✕</button>
     </div>`;
 }
@@ -1841,6 +1845,8 @@ function _dpnPaint() {
     return;
   }
   const E = dpnParse(r.note);
+  // the room's shared stay notes (room-card.js), read-only on top
+  const rn = window.hoRoom && typeof hoRoom.depNotesHtml === 'function' ? hoRoom.depNotesHtml(r.roomStr) : '';
   // filter chips: All, WhatsApp (where it came from), then each type that is used
   const counts = {}; E.forEach(e => { counts[e.cat] = (counts[e.cat] || 0) + 1; });
   const waN = E.filter(e => e.via).length;
@@ -1854,8 +1860,8 @@ function _dpnPaint() {
   if (q) V = V.filter(e => (e.text + ' ' + (DPN_CAT[e.cat] || {}).l + ' ' + e.time).toLowerCase().includes(q));
   // newest first: timed entries by time (later line wins a tie), untimed at the end
   V.sort((a, b) => (b.time ? 1 : 0) - (a.time ? 1 : 0) || b.time.localeCompare(a.time) || b.start - a.start);
-  if (!E.length) { body.innerHTML = `<div class="dpn-empty"><div class="dpn-empty-ico">🗒️</div><b>No notes yet</b><span>Pick a type below and write the first note. The time is added for you.</span></div>`; return; }
-  if (!V.length) { body.innerHTML = `<div class="dpn-empty"><div class="dpn-empty-ico">🔎</div><b>Nothing matches</b><span>Try another word or type.</span><button type="button" class="dpn-hbtn" onclick="_dpn.filter='all';_dpn.q='';document.getElementById('dpnQ').value='';_dpnPaint()">Show all notes</button></div>`; return; }
+  if (!E.length) { body.innerHTML = rn + `<div class="dpn-empty"><div class="dpn-empty-ico">🗒️</div><b>No notes yet</b><span>Pick a type below and write the first note. The time is added for you.</span></div>`; return; }
+  if (!V.length) { body.innerHTML = rn + `<div class="dpn-empty"><div class="dpn-empty-ico">🔎</div><b>Nothing matches</b><span>Try another word or type.</span><button type="button" class="dpn-hbtn" onclick="_dpn.filter='all';_dpn.q='';document.getElementById('dpnQ').value='';_dpnPaint()">Show all notes</button></div>`; return; }
   const pinKey = r.notePin || '';
   let html = '', part = null;
   V.forEach(e => {
@@ -1881,13 +1887,14 @@ function _dpnPaint() {
           <span class="dpn-e-acts">
             <button type="button" class="dpn-ib${pinned ? ' on' : ''}" onclick="_dpnPin(${e.n})" title="${pinned ? 'Unpin' : 'Show this note on the card'}" aria-label="${pinned ? 'Unpin note' : 'Pin note to the card'}" aria-pressed="${!!pinned}">${pinned ? '★' : '☆'}</button>
             <button type="button" class="dpn-ib" onclick="_dpn.edit=${e.n};_dpn.del=-1;_dpnPaint();setTimeout(()=>{const t=document.getElementById('dpnEditText');if(t){t.focus();t.setSelectionRange(t.value.length,t.value.length);}},0)" title="Edit" aria-label="Edit note">✎</button>
+            ${window.hoRoom ? `<button type="button" class="dpn-ib" onclick="_dpnToRoom(${e.n})" title="Keep as a room note for the whole stay" aria-label="Keep as a room note">⇪</button>` : ''}
             <button type="button" class="dpn-ib" onclick="_dpn.del=${e.n};_dpn.edit=-1;_dpnPaint();document.querySelector('.dpn-delq')?.scrollIntoView({block:'nearest'})" title="Delete" aria-label="Delete note">🗑</button>
           </span></div>
         ${main}${delBar}
       </div>
     </article>`;
   });
-  body.innerHTML = html;
+  body.innerHTML = rn + html;
 }
 function _dpnAdd() {
   const r = _dpnRoom(), ta = document.getElementById('dpnText');
@@ -1901,6 +1908,12 @@ function _dpnAdd() {
   _dpnHead(); _dpnPaint(); _dpnSave(); ta.focus();
   const b = document.getElementById('dpnBody'); if (b) b.scrollTop = 0;
   if (typeof showToast === 'function') showToast(`Note added to room ${r.roomStr}`, 'ok');
+}
+// ⇪ a Departures note kept as a room note (room-card.js): it then stays with the guest after today's board
+function _dpnToRoom(n) {
+  const r = _dpnRoom(), e = _dpnFind(n);
+  if (!r || !e || !window.hoRoom) return;
+  hoRoom.promote(r.roomStr, e.body || e.text, e.cat);
 }
 function _dpnFind(n) { const r = _dpnRoom(); return r ? dpnParse(r.note).find(e => e.n === n) : null; }
 function _dpnSaveEdit(n) {

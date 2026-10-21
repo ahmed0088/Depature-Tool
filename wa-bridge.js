@@ -2142,7 +2142,7 @@ function drawResults() {
     if (o.day !== last) { last = o.day; html += `<div class="wa-day">${esc(fmtDay(o.day))}<span>${per[o.day]}</span></div>`; }
     const r = o.rec, ch = archChips(r.r);
     html += `<div class="wa-row${r.u ? ' undone' : ''}">${avatar(r.s, r.m)}<span class="wa-m"><span class="wa-mh"><span class="wa-who">${hoWaHi(r.s || '', q)}${r.e ? ' ✎' : ''}</span><span class="wa-tm">${esc(t12(r.t))}</span>${r.g ? `<span class="wa-tag">${esc(r.g)}</span>` : ''}</span>${r.q ? `<span class="wa-quote" style="display:block">↩ ${esc(String(r.q).replace(/\s*\n\s*/g, ' · ').slice(0, 140))}</span>` : ''}<span class="wa-txt" style="display:block">${hoWaHi(String(r.x || '').length > 400 ? String(r.x).slice(0, 400) + '…' : r.x, q)}</span></span><span></span>`
-      + `<span class="wa-res">${ch.map(c => `<span class="wa-chip ${esc(c.st)}">${hoWaHi(c.label, q)}${r.u && /co|lco|ext|note/.test(c.st) ? ' — undone' : ''}</span>`).join('')}</span></div>`;
+      + `<span class="wa-res">${ch.map(c => { const rm = W.hoRoom && /^(?:co|lco|ext|extending|fin|note|req|maybe|notlist|skip)$/.test(c.st) ? (c.label.match(/(?<![\d:.])(\d{3,4}[A-Za-z]?)(?![\d:])/) || [])[1] : ''; return `<span class="wa-chip ${esc(c.st)}"${rm ? ` data-room-card="${esc(rm)}" title="Room card ${esc(rm)}"` : ''}>${hoWaHi(c.label, q)}${r.u && /co|lco|ext|note/.test(c.st) ? ' — undone' : ''}</span>`; }).join('')}</span></div>`;
   });
   if (RES.length > shown) html += `<button type="button" class="wa-more">Show more (${RES.length - shown} left)</button>`;
   box.innerHTML = html;
@@ -2227,7 +2227,8 @@ function chipsOf(l) {
     else if (r.st === 'req') label = `Request · room ${r.room}`;
     else if (r.st === 'co') label = String(r.text).replace(/ · ⚠ balance.*$/, '');
     if (l.undone && /^(?:co|lco|ext|extending|fin|note)$/.test(r.st)) label += ' — undone';
-    out.push(`<span class="wa-chip ${esc(r.st)}">${ICON[r.st] || ''} ${esc(label)}${r.w ? esc(r.w) : ''}</span>`);
+    // a chip with a room opens the room card (room-card.js)
+    out.push(`<span class="wa-chip ${esc(r.st)}"${r.room && W.hoRoom ? ` data-room-card="${esc(r.room)}" title="Room card ${esc(r.room)}"` : ''}>${ICON[r.st] || ''} ${esc(label)}${r.w ? esc(r.w) : ''}</span>`);
     const b = r.st === 'co' && balInfo(r); if (b) out.push(`<span class="wa-chip ${b.tone}">${esc(b.label)}</span>`);
     if (r.guess && !l.undone) out.push(`<button type="button" class="wa-u" style="grid-column:auto" data-wa-ok="${esc(r.guess)}" data-m="${esc(r.m || r.st)}" title="Yes, &quot;${esc(r.guess)}&quot; means this: remember it">✓ Right</button>`);
   });

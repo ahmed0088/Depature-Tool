@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 374, items: [
+    '🛏️ Room card: tap a room number almost anywhere (Departures, In-House, HK Requests, the WhatsApp window, search, or ask Ops Brain "what\'s up with 512") and see everything about that room in one place — who is in it, today\'s departure status, who is arriving, and one timeline of the stay: WhatsApp messages, HK requests, handover items, Front Office Log, wake-up calls, gym and departure actions. Tap any line to open it where it came from.',
+    '📝 Room notes, shared with the team: add a note to any room (request, VIP, payment, maintenance, luggage, taxi, follow-up…), pin it, keep it for the stay or just today. It goes away by itself when the guest leaves, stays when the guest extends, and shows on Departures too (⇪ keeps a Departures note as a room note).',
+  ] },
   { v: 373, items: [
     '🛏️ New page: In-House Guests (Front Desk, after Arrivals). Load the Opera Cloud in-house report as Delimited Data (or paste it, or drop the file anywhere). You get rooms occupied, guests, departing today and tomorrow, long stays, VIPs and open balances at a glance, with filters, search (room, name, company, confirmation) and every guest\'s details.',
     '🔄 Loading again the same day shows what changed first (new / gone / changed rooms). Export to a styled Excel or PDF, and copy the "departing tomorrow" list for WhatsApp.',

@@ -554,7 +554,7 @@ function rowHtml(r, t) {
   const leftTxt = left == null ? '' : left < 0 ? 'past departure' : left === 0 ? 'leaves today' : left === 1 ? '1 night left' : left + ' nights left';
   const tags = [r.vip ? `<span class="ih-tag vip">VIP ${esc(r.vip.length <= 4 ? r.vip : '')}</span>` : '', r.member ? '<span class="ih-tag all">ALL</span>' : '', r.nights >= LONG ? `<span class="ih-tag long">${r.nights} n</span>` : '', depTag(r, t), r.guests.length > 1 ? `<span class="ih-tag">+${r.guests.length - 1} sharer${r.guests.length > 2 ? 's' : ''}</span>` : ''].join('');
   return `<div class="ih-row${cls}" role="button" tabindex="0" data-ih="open" data-rk="${esc(r.rk)}">
-    <div class="ih-rmc"><button type="button" class="ih-rm${d ? ' dep' : ''}" data-ih="${d ? 'dep' : 'open'}" data-rk="${esc(r.rk)}" title="${d ? 'Open room ' + esc(r.room) + ' on Departures' : 'Room ' + esc(r.room)}" aria-label="${d ? 'Open room ' + esc(r.room) + ' on Departures' : 'Room ' + esc(r.room)}">${esc(r.room)}</button></div>
+    <div class="ih-rmc"><button type="button" class="ih-rm${d ? ' dep' : ''}" data-ih="${d ? 'dep' : W.hoRoom ? 'card' : 'open'}" data-rk="${esc(r.rk)}" title="${d ? 'Open room ' + esc(r.room) + ' on Departures' : W.hoRoom ? 'Room card ' + esc(r.room) : 'Room ' + esc(r.room)}" aria-label="${d ? 'Open room ' + esc(r.room) + ' on Departures' : W.hoRoom ? 'Room card ' + esc(r.room) : 'Room ' + esc(r.room)}">${esc(r.room)}</button></div>
     <div class="ih-c c1"><div class="ih-nm">${esc(r.name)}</div>${tags ? `<div class="ih-tags">${tags}</div>` : ''}</div>
     <div class="ih-c c2"><div class="ih-sub">${esc(fmtD(r.arrival, true) || r.guests[0].arrRaw || '—')} → <b>${esc(fmtD(r.departure, true) || r.guests[0].depRaw || '—')}</b>${r.nights ? ` · ${r.nights} n` : ''}</div><div class="ih-sub dim">${esc(leftTxt)}${pax ? ` · ${r.adults}${r.children ? '+' + r.children : ''} pax` : ''}${r.roomType ? ' · ' + esc(r.roomType) : ''}</div></div>
     <div class="ih-c c3"><div class="ih-sub">${esc(r.company || r.agent || r.source || '—')}</div><div class="ih-sub dim">${esc([r.rateCode, r.market, r.conf ? '#' + r.conf : ''].filter(Boolean).join(' · '))}</div></div>
@@ -650,7 +650,7 @@ function openRoom(rk) {
   dr.innerHTML = `<div class="ih-sh-hd"><b>Room ${esc(r.room)}</b><button type="button" class="ih-x" data-d="close" aria-label="Close">✕</button></div>
   <div class="ih-dr-bd">
     <div class="ih-hero"><span class="ih-rm${d ? ' dep' : ''}">${esc(r.room)}</span><div style="min-width:0"><h3>${esc(r.names.join(' · '))}</h3><div class="ih-tags" style="margin-top:4px">${depTag(r, t)}${r.vip ? '<span class="ih-tag vip">VIP</span>' : ''}${r.member ? '<span class="ih-tag all">ALL member</span>' : ''}${r.nights >= LONG ? `<span class="ih-tag long">Long stay · ${r.nights} n</span>` : ''}</div></div></div>
-    <div class="ih-dr-acts">${d ? `<button type="button" class="ih-btn sm pri" data-d="dep">🧳 Open on Departures</button>` : (canLoad() && typeof depAddManualRoom === 'function' ? '<button type="button" class="ih-btn sm" data-d="add">+ Add to today\'s departures</button>' : '')}<button type="button" class="ih-btn sm" data-d="copy">Copy</button></div>
+    <div class="ih-dr-acts">${d ? `<button type="button" class="ih-btn sm pri" data-d="dep">🧳 Open on Departures</button>` : (canLoad() && typeof depAddManualRoom === 'function' ? '<button type="button" class="ih-btn sm" data-d="add">+ Add to today\'s departures</button>' : '')}${W.hoRoom ? '<button type="button" class="ih-btn sm" data-d="card">🛏️ Room card</button>' : ''}<button type="button" class="ih-btn sm" data-d="copy">Copy</button></div>
     ${r.guests.map((g, i) => (r.guests.length > 1 ? `<div class="ih-sec">${i ? 'Sharer ' + i : 'Main guest'}</div>` : '') + guestDl(g)).join('')}
     <div class="ih-note">From the in-house report of ${esc(fmtD(I.snap && I.snap.date))}.</div>
   </div>`;
@@ -661,6 +661,7 @@ function drawerClick(e) {
     const r = I.idx.get(I.open);
     if (b.dataset.d === 'close') closeDrawer();
     else if (b.dataset.d === 'dep' && r) { closeDrawer(); goDeparture(r.rk); }
+    else if (b.dataset.d === 'card' && r && W.hoRoom) { closeDrawer(); W.hoRoom.open(r.room); }
     else if (b.dataset.d === 'add' && r) { if (depAddManualRoom(r.room, r.name)) { toast(`Room ${r.room} added to today's departures`); act('inhouse_to_departures', `Room ${r.room}`); openRoom(r.rk); render(); } }
     else if (b.dataset.d === 'copy' && r) copyText(`Room ${r.room} · ${r.names.join(' / ')} · ${fmtD(r.arrival, true)} → ${fmtD(r.departure, true)}${r.nights ? ' (' + r.nights + ' n)' : ''}${r.balance ? ' · balance AED ' + money(r.balance) : ''}${r.company ? ' · ' + r.company : ''}${r.conf ? ' · #' + r.conf : ''}`);
   });
@@ -905,6 +906,7 @@ function onClick(e) {
     else if (a === 'copyTmr') copyText(tomorrowText(I.rooms, today(), hotel()));
     else if (a === 'xlTmr') exportExcel('tomorrow');
     else if (a === 'dep') { e.stopPropagation(); goDeparture(b.dataset.rk); }
+    else if (a === 'card') { e.stopPropagation(); const r = I.idx.get(b.dataset.rk); W.hoRoom.open(r ? r.room : b.dataset.rk); }
     else if (a === 'open') openRoom(b.dataset.rk);
   });
 }

@@ -2626,5 +2626,51 @@ console.log('\nIn-House Guests');
     ['inhouse', 'inhouse', 'inhouse', 'departures', 'departures', true, 'itGiby', null]);
 }
 
+// ── Room card + shared room notes (room-card.js): room matching, stays, which notes show, the timeline ──
+{
+  const sb = { console: { log() {}, warn() {}, error() {} } };
+  sb.window = sb; sb.globalThis = sb;
+  vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'room-card.js'), 'utf8'), sb, { filename: 'room-card.js' });
+  const P = sb.hoRoomPure, T = '2026-10-21';
+  check('room card: 0113 and 113 are the same room; 1130, A113 are not',
+    [P.roomKey('0113'), P.roomKey(' 113 '), P.sameRoom('0113', '113'), P.sameRoom('113', '1130'), P.sameRoom('A113', '113'), P.sameRoom('', ''), P.roomKey('rm 113')], ['113', '113', true, false, false, false, '']);
+  check('room card: a room in a text — "0113" finds 113; not 1130, 11:30, AED 113.50, 2/113',
+    ['rm 0113 towels', '113 CO', 'room 1130 late', 'call at 11:30', 'paid 113.50', 'on 2/113', 'HO - 113, 204 ok'].map(t => P.mentionsRoom(t, '113')), [true, true, false, false, false, false, true]);
+  check('room card: dates from Opera / Excel / ISO', [P.isoDate('21-OCT-26'), P.isoDate('21/10/2026'), P.isoDate('2026-10-21'), P.isoDate('soon')], ['2026-10-21', '2026-10-21', '2026-10-21', '']);
+  const A = P.makeStay({ conf: '700001', name: 'Fakeworth, Xi, Mr', arrival: '19-OCT-26', departure: '2026-10-23' });
+  check('room card: a stay from the in-house list', A, { confs: ['700001'], name: 'Fakeworth, Xi, Mr', arrival: '2026-10-19', departure: '2026-10-23' });
+  check('room card: same stay — confirmation first, then arrival date, then name',
+    [P.sameStay(A, { confs: ['700001'], name: 'Other' }), P.sameStay(A, { confs: ['700002'] }), P.sameStay(A, { name: 'XI FAKEWORTH', arrival: '2026-10-19' }), P.sameStay(A, { name: 'XI FAKEWORTH', arrival: '2026-10-20' }),
+     P.sameStay(A, { name: 'Sample Delta' }), P.sameStay(A, null), P.sameStay({ arrival: '2026-10-19' }, { arrival: '2026-10-19' })], [true, false, true, false, false, null, true]);
+  check('room card: a new note lasts — just today / until departure / 7 days when nothing is known',
+    [P.untilFor('today', A, T), P.untilFor('stay', A, T), P.untilFor('stay', null, T), P.untilFor('stay', { departure: '2026-10-01' }, T)], [T, '2026-10-23', '2026-10-28', '2026-10-28']);
+  const at = h => new Date(2026, 9, 20, h, 0).getTime();
+  const notes = {
+    a: { text: 'Late taxi at 4', cat: 'taxi', at: at(9), scope: 'stay', stay: A, until: '2026-10-23' },
+    b: { text: 'Old guest note', at: at(8), scope: 'stay', stay: { confs: ['699999'], name: 'Example, Beta' }, until: '2026-10-20' },
+    c: { text: 'Pinned VIP', cat: 'vip', at: at(7), scope: 'stay', stay: A, until: '2026-10-23', pin: true },
+    d: { text: 'Just yesterday', at: at(10), scope: 'today', until: '2026-10-20' },
+    e: { text: 'Today only', at: at(11), scope: 'today', until: T },
+    f: { text: 'Nobody knew the guest', at: at(12), scope: 'stay', until: '2026-10-22' },
+    g: { text: '   ', at: at(13), scope: 'stay' },
+  };
+  const ids = (cur, day) => P.notesFor(notes, cur, day || T).map(n => n.id);
+  check('room card: notes for the same guest — pinned first, then newest; other guest and yesterday-only hidden', ids(A), ['c', 'f', 'e', 'a']);
+  check('room card: an extension keeps the stay notes after the departure date written', ids(Object.assign({}, A, { departure: '2026-10-26' }), '2026-10-25'), ['c', 'a']);
+  check('room card: a new guest in the room hides the old stay notes', ids(P.makeStay({ conf: '800123', name: 'Newcomer, Test', arrival: T })), ['f', 'e']);
+  check('room card: nobody known in the room → each note until its own date', ids(null), ['c', 'f', 'e', 'a']);
+  check('room card: who may change a note', [P.canEdit({ by: 'Sam Test' }, { name: 'Sam Test', role: 'agent' }), P.canEdit({ by: 'Sam Test' }, { name: 'Lee Test', role: 'agent' }), P.canEdit({ by: 'Sam Test' }, { name: 'Max Test', role: 'manager' }),
+    P.canEdit({ by: 'X', uid: 'u1' }, { name: 'X', uid: 'u2', role: 'supervisor' }), P.canEdit({ by: 'Sam Test' }, { name: 'Sam Test', role: 'readonly' })], [true, false, true, false, false]);
+  const day = new Date(2026, 9, 21).getTime();
+  const M = P.mergeTimeline([[{ src: 'wa', id: 'w1', at: day + 9 * 36e5, text: 'a' }, { src: 'wa', id: 'w1', at: day + 9 * 36e5, text: 'dup' }],
+    [{ src: 'dep', id: 'd1', at: day + 9 * 36e5, text: 'b' }, { src: 'ho', id: 'h1', at: day + 15 * 36e5, text: 'c' }],
+    [{ src: 'log', id: 'l1', at: day - 5 * 864e5, text: 'old' }, { src: 'log', id: 'l2', at: day - 5 * 864e5, text: 'old but open', keep: true }, { src: 'gym', id: 'g', at: NaN }]], { since: day - 864e5 });
+  check('room card: timeline — newest first, each item once, same time by source, before the stay only when still open', M.map(i => i.id), ['h1', 'd1', 'w1', 'l2']);
+  check('room card: Ops Brain words → the room', ['room 512', 'what\'s up with 512?', 'room card 0113', 'whats going on in room 204', 'notes for 305', 'late checkouts today', '512 towels'].map(P.brainRoom), ['512', '512', '0113', '204', '305', '', '']);
+  check('room card: summary for WhatsApp', P.summaryText({ room: '512', guest: 'Xi Fakeworth', dates: '19 Oct → 23 Oct', dep: '', notes: [{ cat: 'vip', text: 'Pinned  VIP' }, { cat: 'zzz', text: 'Late taxi' }] }),
+    '🛏️ Room 512 · Xi Fakeworth\n19 Oct → 23 Oct\n⭐ Pinned VIP\n📝 Late taxi');
+}
+
 console.log(`\n${pass} passed · ${fail} failed`);
 process.exit(fail ? 1 : 0);

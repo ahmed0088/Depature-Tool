@@ -698,5 +698,7 @@ function mount() {
 
 window.olTab = k => { if (typeof showPanel === 'function') showPanel(PANEL); setTab(k); };
 window.olShrinkPhoto = shrinkPhoto;   // for tests
+// read-only for the room card (room-card.js): lost & found, maintenance tickets, today's upsell answers
+window.hoOpsLogs = { lf: () => LF, mt: () => MT, upsell: () => UP, upKey: gKey };
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
 })();

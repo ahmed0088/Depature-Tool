@@ -1269,6 +1269,7 @@ function body() {
     set('hbSum', esc(writtenSummary(base)).replace(/^([^.]+\.)/, '<b>$1</b>'));
     const act = [];
     if (HB.room) act.push(`<button type="button" class="hb-chip on x" data-hb="clr" data-v="room">Room ${esc(HB.room)}</button>`);
+    if (HB.room && W.hoRoom) act.push(`<button type="button" class="hb-chip" data-room-card="${esc(HB.room)}" title="Guest, notes and everything about room ${esc(HB.room)}">🛏️ Room card</button>`);
     if (HB.cat) act.push(`<button type="button" class="hb-chip on x" data-hb="clr" data-v="cat">${esc(catOf(HB.cat).label)}</button>`);
     if (HB.sender) act.push(`<button type="button" class="hb-chip on x" data-hb="clr" data-v="sender">${esc(HB.sender)}</button>`);
     if (HB.group) act.push(`<button type="button" class="hb-chip on x" data-hb="clr" data-v="group">${esc(HB.group === '—' ? 'Added here' : HB.group)}</button>`);
