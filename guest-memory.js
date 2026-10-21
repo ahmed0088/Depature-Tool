@@ -580,27 +580,39 @@ function gmImportFile(input) {
 }
 
 // ── Phones (no keyboard for Ctrl+Shift+M): press and hold the HotelOps logo ~1.5 s.
-// Still hidden from the menu, and the panel's own password lock still applies.
+// Still hidden from the menu; only the owner's Face ID opens it (gmUnlock).
+// Measured from finger down to finger up (touch and pointer events), so a phone cancelling
+// its own long-press, a tiny wobble, or the finger sliding over the logo's parts never breaks it.
 // A normal tap on the logo keeps doing what it did (rename the hotel).
 (function () {
-  let t = 0, held = false, sx = 0, sy = 0;
-  const logoOf = e => e.target && e.target.closest && e.target.closest('.topbar .logo');
-  const stop = () => { clearTimeout(t); t = 0; };
-  document.addEventListener('pointerdown', e => {
-    if (!logoOf(e)) return;
-    held = false; sx = e.clientX; sy = e.clientY; stop();
-    t = setTimeout(() => {
-      held = true;
-      try { if (navigator.vibrate) navigator.vibrate(30); } catch (_) {}
-    }, 1500);
-  }, true);
-  document.addEventListener('pointermove', e => { if (t && Math.hypot(e.clientX - sx, e.clientY - sy) > 12) stop(); }, true);
-  // opened when the finger lifts: phones only show Face ID from a tap or release
-  document.addEventListener('pointerup', e => { stop(); if (held && logoOf(e)) gmOpen(); }, true);
-  ['pointercancel', 'pointerleave'].forEach(n => document.addEventListener(n, stop, true));
+  const HOLD = 1200;
+  let at = 0, sx = 0, sy = 0, buzz = 0, opened = 0, eatClick = false;
+  const logoOf = el => el && el.closest && el.closest('.topbar .logo');
+  const pt = e => (e.changedTouches && e.changedTouches[0]) || (e.touches && e.touches[0]) || e;
+  function down(e) {
+    if (!logoOf(e.target)) return;
+    const q = pt(e); at = Date.now(); sx = q.clientX; sy = q.clientY;
+    clearTimeout(buzz); buzz = setTimeout(() => { try { if (navigator.vibrate) navigator.vibrate(30); } catch (_) {} }, HOLD);
+  }
+  function up(e) {
+    clearTimeout(buzz);
+    if (!at) return;
+    const q = pt(e), held = Date.now() - at, moved = Math.hypot((q.clientX || sx) - sx, (q.clientY || sy) - sy);
+    at = 0;
+    if (held < HOLD || moved > 40 || Date.now() - opened < 800) return;
+    opened = Date.now(); eatClick = true;
+    if (e.cancelable) e.preventDefault();
+    gmOpen();   // from the finger lifting: phones show Face ID only from a real tap / release
+  }
+  document.addEventListener('touchstart', down, { capture: true, passive: true });
+  document.addEventListener('pointerdown', e => { if (e.pointerType !== 'touch') down(e); }, true);
+  document.addEventListener('touchend', up, { capture: true, passive: false });
+  document.addEventListener('pointerup', e => { if (e.pointerType !== 'touch') up(e); }, true);
+  document.addEventListener('touchcancel', e => up(e), { capture: true, passive: true });   // the phone took over the long press: still counts
   // the tap that ends the hold must not also open "rename hotel"
-  document.addEventListener('click', e => { if (held && logoOf(e)) { held = false; e.stopPropagation(); e.preventDefault(); } }, true);
-  document.addEventListener('contextmenu', e => { if (logoOf(e)) e.preventDefault(); }, true);
+  document.addEventListener('click', e => { if (eatClick && logoOf(e.target)) { eatClick = false; e.stopPropagation(); e.preventDefault(); } }, true);
+  document.addEventListener('contextmenu', e => { if (logoOf(e.target)) e.preventDefault(); }, true);
+  document.addEventListener('selectstart', e => { if (logoOf(e.target)) e.preventDefault(); }, true);
 })();
 
 

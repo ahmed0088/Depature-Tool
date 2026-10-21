@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 365, items: [
+    '👆 Holding the HotelOps logo on a phone now works reliably: hold about 1–2 seconds and lift your finger — Guest Memory opens on release (Face ID then asks). A small wobble or the phone\'s own long-press no longer cancels it.',
+  ] },
   { v: 364, items: [
     '🔐 Guest Memory: only the owner can open it now, with their own saved Face ID / fingerprint. The first time on a phone, press "Save my Face ID and open"; after that only that face opens it there. No password route, and other roles see "Only the owner can open Guest Memory". Filling in nationality and e-mail from memory on import still works for everyone.',
   ] },
