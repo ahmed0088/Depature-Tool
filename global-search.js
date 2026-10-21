@@ -33,6 +33,7 @@ const GS_PANEL_LABEL = {
   roster:     'Roster',
   wakeups:    'Wake-up Calls',
   rates:      'Rate Shop',
+  gym:        'Gym & Pool',
   page:       'Page',
 };
 
@@ -276,6 +277,10 @@ const GS_FEATURES = [
   ['🧺 HK Requests', 'hk requests log housekeeping towels cleaning room moves problem rooms whatsapp open requests', 'HK Requests', () => gsGo('hk-requests')],
   ['📖 WhatsApp words', 'whatsapp words dictionary codes vd vc ooo dnd', 'HK Requests', () => { if (typeof gsClose === 'function') gsClose(); hoWaWordsOpen(); }],
   ['✉️ Send to WhatsApp', 'whatsapp send message group checkout list template', 'Departures', () => { if (typeof gsClose === 'function') gsClose(); waOpenFromTop(); }],
+  ['🏋️ Gym & Pool memberships', 'gym pool membership members fitness swimming guest outside staff ending expire', 'Gym & Pool', () => gsGo('gym')],
+  ['🔁 Extend a gym membership', 'gym pool membership extend renew extension additional 30 days month', 'Gym & Pool', () => gsGo('gym', { sel: '#gyList' })],
+  ['✉️ Paste a gym email', 'gym pool membership email paste new extended starting today emirates id', 'Gym & Pool', () => { gsGo('gym'); setTimeout(() => window.hoGym && hoGym.paste(''), 250); }],
+  ['⬇ Gym & Pool report (Excel / PDF)', 'gym pool export excel pdf report manager members', 'Gym & Pool', () => gsGo('gym', { sel: '#gyExport' })],
   ['🔳 QR Code Maker', 'qr code link barcode scan wifi password print', 'QR Code Maker', () => gsGo('qr', { sel: '#qr-text' })],
   ['🗂️ Front Office Log', 'front office log lost found maintenance float cash count upsell', 'Front Office Log', () => gsGo('ops-logs', { sel: '#ol-tabs' })],
   ['🧳 Lost & Found', 'lost found item left behind returned guest dispose', 'Front Office Log', () => gsGo('ops-logs', { run: () => olTab('lf'), sel: '#ol-tab-lf' })],

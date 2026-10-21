@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 370, items: [
+    '🏋️ New page: Gym & Pool (Guests & Sales). Every member with type, room or outside, dates, amount paid, car plate, mobile and ID (shown hidden, e.g. 784-XXXX-XXXXXXX-1). Each card shows Active / Ending soon / Expired with a countdown, and a banner reminds you when someone ends today or tomorrow.',
+    '📎 Attach the ID copy, signed form or receipt (PDF or a photo from your phone camera) to each member. Extend in one tap (+30 days, +1/3/6/12 months) with the full history kept; check-ins are counted.',
+    '✉️ Paste a gym e-mail ("new gym and pool membership for one month, starting today", "extended for an additional 30 days") and the form fills itself. ⬆ Import loads your current Excel sheet (Guest Name, Mobile, Start, End, Car Plate, Amount) with a preview first.',
+    '📊 Export for your manager: a colourful Excel (title, coloured tiles, status colours, totals, filters, an "Ending soon & expired" sheet) and the same report as a PDF — All, Active only, Ending soon or This month.',
+  ] },
   { v: 369, items: [
     '🔗 Shift tasks linked to tools: each task can open the page that does it, e.g. "Enrollment" → Open Guest Pipeline →. Pick it under ✏️ Edit → Linked tool (or 🔗 Tool when adding). HotelOps suggests the page from the task\'s name ("Suggested: Departures · Link it"), and "Link all suggestions" does the whole list in one tap.',
     '✅ Back from the tool, Shift Tasks asks "Mark \'Enrollment\' done?" — one tap, nothing is ticked without you. A page your role cannot open shows greyed out.',

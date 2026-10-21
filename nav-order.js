@@ -14,7 +14,7 @@ const GROUPS = [
   ['Front Desk',     ['home', 'departures', 'arrivals', 'xref', 'purpose', 'wakeups', 'shifts', 'ops-logs', 'handover-book', 'hk-requests']],
   ['Night Audit',    ['checklist', 'audit', 'inhouse-tally', 'rent', 'immig', 'nationality']],
   ['Money & Tax',    ['tourism', 'td-audit', 'dtcm', 'package-audit', 'skip-clean', 'noshow']],
-  ['Guests & Sales', ['rates', 'pipeline', 'guestmem', 'arrivals-proc', 'trends', 'history']],
+  ['Guests & Sales', ['rates', 'pipeline', 'gym', 'guestmem', 'arrivals-proc', 'trends', 'history']],
   ['Team',           ['roster', 'standards', 'learn']],
   ['Tools',          ['qr', 'adagio']],
   ['System',         ['settings']],

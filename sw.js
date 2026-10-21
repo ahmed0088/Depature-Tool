@@ -14,7 +14,7 @@
 //  clients pick up the new version instead of a stale cache.
 // ═══════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'ibis-ops-shell-v369';
+const CACHE_NAME = 'ibis-ops-shell-v370';
 
 const SHELL_FILES = [
   './',
@@ -69,6 +69,7 @@ const SHELL_FILES = [
   './tools/hotelops-whatsapp.console.js',
   './motion.js',
   './qr-maker.js',
+  './gym.js',
   './nav-order.js',
   './standards-quiz.js',
   './accor-standards.js',

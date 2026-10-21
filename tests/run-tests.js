@@ -2328,5 +2328,121 @@ console.log('\nShift tasks · linked tools');
   check('old saved tasks (no tool field) work as before', [L.toolOf(before[0]), L.asList(null), L.asList([null, { id: 'x' }]).length, L.applyTools(undefined, { a: 'x' }).length], ['', null, 1, 0]);
 }
 
+console.log('\nGym & Pool memberships');
+{
+  const sb = { console: { log() {}, warn() {}, error() {} } };
+  sb.globalThis = sb;
+  vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'gym.js'), 'utf8'), sb, { filename: 'gym.js' });
+  const P = sb.hoGymPure, J = x => JSON.parse(JSON.stringify(x)), T = '2026-10-21';
+  // dates
+  check('end date: one month ends the day before the same date (3 Oct → 2 Nov; 13 Oct → 12 Nov); 6 months 6 Oct → 5 Apr',
+    [P.endFor('2026-10-03', '1m'), P.endFor('2026-10-13', '1m'), P.endFor('2026-10-06', '6m'), P.endFor('2026-12-15', '1m'), P.endFor('2026-10-21', '12m')],
+    ['2026-11-02', '2026-11-12', '2027-04-05', '2027-01-14', '2027-10-20']);
+  check('end date: month ends (31 Jan → 28/29 Feb, 30 Jan → 28 Feb, 31 Mar → 30 Apr); 30 days = start + 29; custom → none',
+    [P.endFor('2026-01-31', '1m'), P.endFor('2028-01-31', '1m'), P.endFor('2026-01-30', '1m'), P.endFor('2026-03-31', '1m'), P.endFor('2026-10-21', '30d'), P.endFor('2026-12-15', '30d'), P.endFor('2026-10-21', 'custom'), P.endFor('nope', '1m')],
+    ['2026-02-28', '2028-02-29', '2026-02-28', '2026-04-30', '2026-11-19', '2027-01-13', '', '']);
+  check('length from the dates: 1 month, 6 months, 30 days, else custom',
+    [P.lenOf('2026-10-13', '2026-11-12'), P.lenOf('2026-10-06', '2027-04-05'), P.lenOf('2026-10-21', '2026-11-19'), P.lenOf('2026-10-21', '2026-10-25'), P.lenLabel('45d'), P.lenLabel('1m')],
+    ['1m', '6m', '30d', 'custom', '45 days', '1 month']);
+  // status and countdown
+  const m = (start, end) => ({ name: 'Test', start, end });
+  check('status: active / ending soon (≤ 3 days, or the set number) / expired / not started',
+    [P.statusOf(m('2026-10-01', '2026-11-01'), T), P.statusOf(m('2026-10-01', '2026-10-24'), T), P.statusOf(m('2026-10-01', '2026-10-25'), T), P.statusOf(m('2026-10-01', '2026-10-25'), T, 5), P.statusOf(m('2026-10-01', '2026-10-21'), T), P.statusOf(m('2026-09-01', '2026-10-20'), T), P.statusOf(m('2026-10-22', '2026-11-21'), T)],
+    ['active', 'ending', 'active', 'ending', 'ending', 'expired', 'notstarted']);
+  check('countdown words',
+    [P.countdown(m('2026-10-01', '2026-11-02'), T), P.countdown(m('2026-10-01', '2026-10-22'), T), P.countdown(m('2026-10-01', '2026-10-21'), T), P.countdown(m('2026-09-01', '2026-10-20'), T), P.countdown(m('2026-09-01', '2026-10-19'), T), P.countdown(m('2026-10-22', '2026-11-21'), T), P.countdown(m('2026-10-24', '2026-11-23'), T)],
+    ['12 days left', '1 day left', 'ends today', 'ended yesterday', 'ended 2 days ago', 'starts tomorrow', 'starts in 3 days']);
+  // extending
+  const on = { start: '2026-10-03', end: '2026-11-02' }, off = { start: '2026-09-01', end: '2026-10-10' };
+  check('extend: still on → the day after the end; expired → today; or a date; +1 month / +30 days / custom',
+    [J(P.extendPlan(on, '30d', T)), J(P.extendPlan(on, '1m', T, 'after')), J(P.extendPlan(off, '1m', T)), J(P.extendPlan(on, '30d', T, 'today')), J(P.extendPlan(on, '1m', T, 'date', '2026-12-01')), J(P.extendPlan(on, 'custom', T, 'after', '', '2026-11-20')), P.extendPlan(on, 'custom', T, 'after', '', '2026-11-01').end],
+    [{ start: '2026-11-03', end: '2026-12-02', mode: 'after' }, { start: '2026-11-03', end: '2026-12-02', mode: 'after' }, { start: T, end: '2026-11-20', mode: 'today' }, { start: T, end: '2026-11-19', mode: 'today' }, { start: '2026-12-01', end: '2026-12-31', mode: 'date' }, { start: '2026-11-03', end: '2026-11-20', mode: 'after' }, '']);
+  check('extend: one unbroken membership keeps its first day; a gap starts again; never shortens the end',
+    [J(P.applyExtend(on, P.extendPlan(on, '30d', T))), J(P.applyExtend(off, P.extendPlan(off, '1m', T))), J(P.applyExtend(on, P.extendPlan(on, '1m', T, 'date', '2026-12-10'))), J(P.applyExtend(on, { start: T, end: '2026-10-30' })), P.applyExtend(on, { start: T, end: '' })],
+    [{ start: '2026-10-03', end: '2026-12-02' }, { start: T, end: '2026-11-20' }, { start: '2026-12-10', end: '2027-01-09' }, { start: '2026-10-03', end: '2026-11-02' }, null]);
+  // IDs
+  check('ID masking: Emirates ID shows only 784 and the last digit; passports the last 3; full number formatted',
+    [P.maskId('784-1990-1234567-1', 'eid'), P.maskId('784199012345671'), P.maskId('X1234567', 'passport'), P.maskId('AB1', 'passport'), P.maskId('', 'eid'), P.fmtEid('784 1990 1234567 1'), P.fmtEid('X1234567')],
+    ['784-XXXX-XXXXXXX-1', '784-XXXX-XXXXXXX-1', 'XXXXX567', 'XXX', '', '784-1990-1234567-1', 'X1234567']);
+  // emails (made-up people)
+  const e1 = P.parseEmail('Ms. Lina Testova, our guest, has extended her gym membership for an additional 30 days starting from today.', T);
+  check('email: an extension for an additional 30 days from today (name, Ms., gym, guest)',
+    [e1.title, e1.name, e1.action, e1.type, e1.kind, e1.len, e1.start, e1.end], ['Ms', 'Lina Testova', 'extend', 'gym', 'guest', '30d', T, '2026-11-19']);
+  const e2 = P.parseEmail('Dear team,\nMr. Karim Example has a new gym and pool membership for one month, starting today.\nMembership period: 03-10-2026 to 02-11-2026\nAttachment: EID_784199012345671 2.pdf', '2026-10-03');
+  check('email: new gym + pool for one month, the period and the Emirates ID from the file name',
+    [e2.title, e2.name, e2.action, e2.type, e2.len, e2.start, e2.end, e2.idType, e2.idNo], ['Mr', 'Karim Example', 'new', 'gympool', '1m', '2026-10-03', '2026-11-02', 'eid', '784-1990-1234567-1']);
+  const e3 = P.parseEmail('Mrs. Dana Sample (room 512) – pool membership for 3 months from 5 November 2026. Passport no: X1234567. Mobile: 050 123 4567. Car plate: E 16477. AED 750', T);
+  check('email: pool, room, 3 months from a written date, passport, mobile, car plate, amount',
+    [e3.name, e3.type, e3.room, e3.kind, e3.len, e3.start, e3.end, e3.idType, e3.idNo, e3.phone, e3.plate, e3.price], ['Dana Sample', 'pool', '512', 'guest', '3m', '2026-11-05', '2027-02-04', 'passport', 'X1234567', '050 123 4567', 'E16477', 750]);
+  const e4 = P.parseEmail('Mr. Sam Placeholder renewed his gym membership. Membership period: 21/10/2026 - 20/11/2026', T);
+  check('email: renewed = extension; dd/mm/yyyy range; nothing found in empty text',
+    [e4.action, e4.start, e4.end, e4.len, P.parseEmail('', T).name, P.parseEmail('Mr. Y has a new gym membership for one month, starting today.', T).name], ['extend', '2026-10-21', '2026-11-20', '1m', '', 'Y']);
+  check('dates in emails: 03-10-2026, 3.10.26, 2026-10-03, 3rd October 2026, Oct 3, 2026; 31-02-2026 is not a date',
+    ['03-10-2026', '3.10.26', '2026-10-03', '3rd October 2026', 'Oct 3, 2026', '31-02-2026'].map(P.parseDate), ['2026-10-03', '2026-10-03', '2026-10-03', '2026-10-03', '2026-10-03', '']);
+  const L = [{ id: 'a', name: 'Lina Testova', end: '2026-10-30' }, { id: 'b', name: 'Karim Example', end: '2026-11-02' }, { id: 'c', name: 'Karim Other', end: '2026-11-02', del: 1 }];
+  check('find the member a pasted name points to (titles and case ignored; deleted ones never)',
+    [(P.findMember(L, 'Ms. Lina Testova') || {}).id, (P.findMember(L, 'karim') || {}).id, P.findMember(L, 'Karim Other'), P.findMember(L, 'Nobody Here')], ['a', 'b', null, null]);
+  // summary, due, filter, sort
+  const M = [
+    { id: '1', name: 'Alpha Test', type: 'gym', kind: 'guest', room: '512', start: '2026-10-01', end: '2026-10-21', phone: '050 111 2222', idNo: '784199012345671', hist: { h: { start: '2026-10-01', end: '2026-10-21', price: 299, paid: 'paid' } } },
+    { id: '2', name: 'Beta Test', type: 'pool', kind: 'outside', start: '2026-10-05', end: '2026-10-22', plate: 'E16477', hist: { h: { start: '2026-10-05', end: '2026-10-22', price: 299, paid: 'topay' } } },
+    { id: '3', name: 'Gamma Test', type: 'gympool', kind: 'staff', start: '2026-09-01', end: '2026-10-10', hist: { h: { start: '2026-09-01', end: '2026-10-10', price: 1499, paid: 'paid' } } },
+    { id: '4', name: 'Delta Test', type: 'gym', kind: 'guest', start: '2026-10-15', end: '2026-11-14', hist: { h: { start: '2026-10-15', end: '2026-11-14', price: 299, paid: 'paid' } } },
+    { id: '5', name: 'Epsilon Test', type: 'gym', kind: 'guest', start: '2026-10-25', end: '2026-11-24' },
+    { id: '6', name: 'Gone Test', start: '2026-10-01', end: '2026-10-30', del: 1 }];
+  check('summary strip: active, ending this week, expired this month, revenue this month (paid periods starting this month)',
+    J(P.summary(M, T)), { active: 3, ending: 2, week: 2, expiredMonth: 1, notstarted: 1, revenue: 598, toCollect: 299, toCollectN: 1, total: 5 });
+  check('reminders: ending today, then tomorrow', P.dueSoon(M, T).map(d => d.m.id + ':' + d.when), ['1:today', '2:tomorrow']);
+  const ids = f => P.filterMembers(M, f, T).map(x => x.id);
+  check('filters: status (active includes ending), type, kind; search by name, room, ID last digits, phone, car plate',
+    [ids({ st: 'active' }), ids({ st: 'ending' }), ids({ st: 'expired' }), ids({ st: 'notstarted' }), ids({ type: 'pool' }), ids({ kind: 'guest' }), ids({ q: 'beta' }), ids({ q: '512' }), ids({ q: '5671' }), ids({ q: '1112222' }), ids({ q: 'e164' })],
+    [['1', '2', '4'], ['1', '2'], ['3'], ['5'], ['2'], ['1', '4', '5'], ['2'], ['1'], ['1'], ['1'], ['2']]);
+  check('sort by end date: running (soonest first), then not started, then expired', P.sortMembers(M.filter(x => !x.del), T).map(x => x.id), ['1', '2', '4', '5', '3']);
+  // files
+  const big = 'A'.repeat(P.CHUNK * 2 + 10);
+  check('files: split into 500 KB pieces and joined back (array or object from the database)',
+    [P.chunk(big).length, P.unchunk(P.chunk(big)) === big, P.unchunk({ 1: 'cd', 0: 'ab', 2: 'e' }), P.unchunk(null), P.chunk('').length], [3, true, 'abcde', '', 1]);
+  check('files: size guard (PDF ≤ 1.5 MB, pictures ≤ 1.2 MB after shrinking, nothing else), base64 sizes, shrinking to 1600 px',
+    [P.docCheck('application/pdf', 1.4 * 1048576), !!P.docCheck('application/pdf', 1.6 * 1048576), P.docCheck('image/jpeg', 500000), !!P.docCheck('image/jpeg', 1.3 * 1048576), !!P.docCheck('application/zip', 10), P.b64Len(3), P.b64Bytes('QUJD'), P.b64Bytes('QUI='), J(P.scaleTo(4000, 3000, 1600)), J(P.scaleTo(800, 600, 1600))],
+    ['', true, '', true, true, 4, 3, 2, { w: 1600, h: 1200 }, { w: 800, h: 600 }]);
+  check('files: what a file is from its name', ['EID_784199012345671 2.pdf', 'signed waiver.jpg', 'Receipt 123.pdf', 'IMG_0001.jpg'].map(P.guessLabel), ['ID copy', 'Signed form', 'Receipt', 'Other']);
+  // import of the team's sheet (made-up rows)
+  const sheet = [['Gym Membership Tracker'], [], ['Guest Name', 'Mobile number ', 'Start Date', 'End Date', 'Car Plate Number', 'Amount Paid'],
+    ['Test Person One', '0501234567', '13.10.2026', '12.11.2026', 'E16477', 299],
+    ['Test Person Two', 971500000000, 46301, 46482, 'No car', 'AED 1,499.00'],
+    ['Test Person Three', '', '21/10/2026', '', 'no', ''],
+    ['', '', '', '', '', ''], ['Bad Dates', '', 'soon', 'later', '', ''], ['Total', '', '', '', '', 2097]];
+  const R = P.importRows(sheet, T);
+  check('import: header found (spaces and case ignored), dd.mm.yyyy, Excel serial dates, dd/mm/yyyy, plates, amounts; bad rows listed, totals skipped',
+    [R.header, J(R.rows.map(r => [r.name, r.phone, r.start, r.end, r.len, r.plate, r.price])), J(R.skipped)],
+    [2, [['Test Person One', '0501234567', '2026-10-13', '2026-11-12', '1m', 'E16477', 299], ['Test Person Two', '971500000000', '2026-10-06', '2027-04-05', '6m', 'No car', 1499], ['Test Person Three', '', '2026-10-21', '2026-11-20', '1m', 'No car', 0]], [{ line: 8, name: 'Bad Dates', why: 'no dates' }]]);
+  check('import: date cells (serial, dd.mm.yyyy, dd/mm/yyyy, with a time, text) and a CSV with quotes / semicolons',
+    [P.cellDate(46308), P.cellDate('13.10.2026'), P.cellDate('13/10/2026'), P.cellDate('13/10/2026 00:00'), P.cellDate('46308'), P.cellDate('x'), J(P.parseCsv('Guest Name,Amount Paid\n"Doe, Test",299\n')), J(P.parseCsv('a;b\r\n1;2'))],
+    ['2026-10-13', '2026-10-13', '2026-10-13', '2026-10-13', '2026-10-13', '', [['Guest Name', 'Amount Paid'], ['Doe, Test', '299']], [['a', 'b'], ['1', '2']]]);
+  const have = [{ id: 'x1', name: 'Test Person One', phone: '+971 50 123 4567', start: '2026-10-13', end: '2026-11-12', plate: 'E16477', hist: { h: { start: '2026-10-13', end: '2026-11-12', price: 299 } } },
+    { id: 'x2', name: 'Test Person Two', phone: '0509999999', start: '2026-04-06', end: '2026-10-05' }];
+  const plan = P.mergePlan(have, R.rows.concat([{ line: 99, name: 'Test Person Three', phone: '', start: '2026-10-21', end: '2026-12-20', len: '2m', plate: '', price: 0 }]));
+  check('import merge: same name + mobile → same / update, another mobile → new, duplicates in the file → the latest end',
+    plan.map(p => `${p.row.name}:${p.act}:${p.changes.join('+')}:${p.row.end}`), ['Test Person One:same::2026-11-12', 'Test Person Two:new::2027-04-05', 'Test Person Three:new::2026-12-20']);
+  check('import merge: a later period is a new period; a changed plate shows',
+    P.mergePlan([{ id: 'y', name: 'Test Person One', phone: '0501234567', start: '2026-09-13', end: '2026-10-12', plate: 'No car' }], R.rows.slice(0, 1)).map(p => p.act + ':' + p.changes.join('+')), ['update:car plate+new period']);
+  check('price presets: 1 month 299, 6 months 1499, others none; settings win (0 = none)',
+    [P.pricePreset({}, '1m'), P.pricePreset(null, '6m'), P.pricePreset({}, '30d'), P.pricePreset({ prices: { '1m': 350, '6m': 0 } }, '1m'), P.pricePreset({ prices: { '6m': 0 } }, '6m')], [299, 1499, '', 350, '']);
+  // the manager's report
+  const RM = P.reportModel(M, M, T, { scope: 'all', hotel: 'Test Hotel', user: 'Tester' });
+  check('report: the team sheet\'s columns first, then status…; rows sorted by end; totals of the amounts',
+    [RM.head.slice(0, 6), RM.rows.map(r => r[0]), J(RM.rows[1]), RM.total[5], RM.meta], [['Guest Name', 'Mobile', 'Start', 'End', 'Car Plate', 'Amount Paid (AED)'], ['Alpha Test', 'Beta Test', 'Delta Test', 'Epsilon Test', 'Gamma Test'],
+      ['Beta Test', '', '2026-10-05', '2026-10-22', 'E16477', 299, 'Ending soon', 1, 'Pool', 'Outside', 'No'], 2396, 'Test Hotel · 21 Oct 2026 · All · Prepared by Tester']);
+  check('report scopes: active only, ending ≤ 7 days, this month; the second part lists ending soon & expired; KPIs',
+    [P.scopeFilter(M, 'active', T).map(x => x.id), P.scopeFilter(M, 'ending', T).map(x => x.id), P.scopeFilter(M, 'month', T).map(x => x.id), RM.attention.map(r => r[0]), J(RM.kpis.map(k => k[1]))],
+    [['1', '2', '4'], ['1', '2'], ['1', '2', '3', '4', '5'], ['Alpha Test', 'Beta Test', 'Gamma Test'], [3, 2, 1, 'AED 598']]);
+  check('report: Excel day numbers, dd.mm.yyyy for the PDF, file name, the PDF shows no ID number',
+    [P.xlSerial('2026-10-13'), P.xlSerial('x'), P.dDot('2026-10-13'), P.fileName('Test Hotel', T), /784/.test(P.reportHtml(RM)), /13\.10\.2026|05\.10\.2026/.test(P.reportHtml(RM))],
+    [46308, '', '13.10.2026', 'Gym - Pool Memberships Test Hotel 21 Oct 2026.xlsx', false, true]);
+  check('member card: masked ID unless asked, the period and the waiver line',
+    [/784-XXXX-XXXXXXX-1/.test(P.cardHtml(M[0], { today: T })), /784-1990-1234567-1/.test(P.cardHtml(M[0], { today: T, fullId: true })), /own risk/.test(P.cardHtml(M[0], { today: T }))], [true, true, true]);
+}
+
 console.log(`\n${pass} passed · ${fail} failed`);
 process.exit(fail ? 1 : 0);

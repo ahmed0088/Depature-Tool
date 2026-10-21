@@ -200,6 +200,8 @@ function brKnowledge() {
     if (sub) K.push({ id: 'page:' + id, kind: '📄 Page', title: h1, body: escapeHtml(sub), text: h1 + ' ' + h1 + ' ' + sub, go: id });
   });
   (typeof STD_ITEMS !== 'undefined' ? STD_ITEMS : []).forEach((it, i) => K.push({ id: 'std:' + i, kind: '📘 Accor Standards', title: it.title, body: '<ul>' + (it.points || []).map(x => `<li>${x}</li>`).join('') + '</ul>', text: it.title + ' ' + it.title + ' ' + (it.tags || '') + ' ' + (it.points || []).join(' '), go: 'standards' }));
+  // pages with live answers (Gym & Pool: who is ending…) add them here
+  (window.BR_EXTRA || []).forEach(f => { try { (f() || []).forEach(k => k && K.push(k)); } catch (_) {} });
   return K;
 }
 
