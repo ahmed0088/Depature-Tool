@@ -3061,3 +3061,19 @@ html[data-skin="ios-dark"] .dpn-send, html[data-theme="midnight"] .dpn-send { co
 td.ro-cell { position: relative; }
 .topbar .logo { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
 .topbar .logo * { -webkit-touch-callout: none; pointer-events: none; }   /* hold the logo on a phone: Guest Memory (guest-memory.js) */
+
+/* ── What's new: newest first, one card per update, readable ── */
+.wn-sheet { max-width: 640px !important; width: min(640px, 94vw) !important; }
+.wn-body { display: flex; flex-direction: column; gap: 12px; margin: 6px 0 14px; }
+.wn-card { border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px 6px; background: var(--surface, rgba(127,127,127,.05)); }
+.wn-card.latest { border-color: color-mix(in srgb, var(--accent, #c9a227) 55%, var(--border)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #c9a227) 12%, transparent); }
+.wn-chd { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.wn-v { font: 700 .78rem/1 var(--mono, monospace); color: var(--text2); letter-spacing: .02em; }
+.wn-new { font: 800 .66rem/1 system-ui, sans-serif; text-transform: uppercase; letter-spacing: .08em; padding: 4px 8px; border-radius: 99px; background: var(--accent, #c9a227); color: #1a1405; }
+.wn-item { display: flex; gap: 12px; align-items: flex-start; padding: 9px 0; border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent); }
+.wn-chd + .wn-item { border-top: 0; }
+.wn-ico { flex: none; width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.15rem; background: var(--surface2, rgba(127,127,127,.12)); }
+.wn-txt { flex: 1; min-width: 0; font-size: .95rem; line-height: 1.55; color: var(--text); overflow-wrap: anywhere; }
+.wn-txt b { display: block; font-size: 1rem; font-weight: 700; margin-bottom: 2px; color: var(--text); }
+.wn-txt span { color: var(--text2); }
+@media (max-width: 600px) { .wn-txt { font-size: .98rem; } .wn-ico { width: 30px; height: 30px; font-size: 1.05rem; } .wn-card { padding: 10px 12px 4px; } }

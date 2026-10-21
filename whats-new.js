@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 368, items: [
+    '📰 What\'s new is easier to read: newest update first, one card per update with the latest marked, bigger text, and each change with its own icon and a bold title. Older updates are one tap away.',
+  ] },
   { v: 367, items: [
     '🤔 WhatsApp words: when a colleague writes a word HotelOps does not know ("xtendd", "ckd", "vacnt", "lte"), it now makes a best guess and asks you "My guess: Extension. Did I get it?" with ✓ Yes first. Your answer is saved for the whole team, and waiting messages are then done. Close typos ("EXTENDE") are still done straight away as 🤔 guessed.',
   ] },
@@ -991,13 +994,29 @@ const WN_KEY = 'whats_new_seen_v1';
 const _wnNum = v => parseInt(String(v || '').replace(/\D/g, ''), 10) || 0;
 
 function wnEntriesSince(seen) {
-  return WHATS_NEW.filter(e => e.v > seen);
+  return WHATS_NEW.filter(e => e.v > seen).sort((a, b) => b.v - a.v);   // newest first, always
+}
+/** one line → {ico, title, body}: the leading emoji, the words before the first ":" (if short), the rest */
+function wnSplit(t) {
+  const s = String(t || '').trim();
+  const m = s.match(/^([\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}][\u{FE0F}\u{200D}\p{Extended_Pictographic}\u{1F3FB}-\u{1F3FF}]*)\s*/u);
+  const ico = m ? m[1] : '•', rest = m ? s.slice(m[0].length) : s;
+  const c = rest.indexOf(': ');
+  if (c > 0 && c <= 70) { const b = rest.slice(c + 2); return { ico, title: rest.slice(0, c), body: b.charAt(0).toUpperCase() + b.slice(1) }; }
+  const dot = rest.search(/[.!?](\s|$)/);
+  if (dot > 0 && dot <= 90 && dot < rest.length - 1) return { ico, title: rest.slice(0, dot + 1), body: rest.slice(dot + 1).trim() };
+  return { ico, title: '', body: rest };
+}
+function wnCard(e, latest) {
+  return `<section class="wn-card${latest ? ' latest' : ''}"><div class="wn-chd"><span class="wn-v">v${e.v}</span>${latest ? '<span class="wn-new">Latest</span>' : ''}</div>
+    ${e.items.map(i => { const x = wnSplit(i); return `<div class="wn-item"><span class="wn-ico" aria-hidden="true">${escapeHtml(x.ico)}</span><div class="wn-txt">${x.title ? `<b>${escapeHtml(x.title)}</b>` : ''}${x.body ? `<span>${escapeHtml(x.body)}</span>` : ''}</div></div>`; }).join('')}</section>`;
 }
 
 function wnOpen(all) {
   let seen = 0;
   try { seen = _wnNum(localStorage.getItem(WN_KEY)); } catch (_) {}
-  const list = all ? WHATS_NEW : wnEntriesSince(seen);
+  const list = (all ? WHATS_NEW.slice() : wnEntriesSince(seen)).sort((a, b) => b.v - a.v);
+  const FIRST = all ? 12 : 6;                                     // a few at a time, newest first; the rest one tap away
   if (!list.length) return false;
   document.getElementById('wnModal')?.remove();
   const m = document.createElement('div');
@@ -1007,12 +1026,15 @@ function wnOpen(all) {
     <div class="fr-sheet wn-sheet" role="dialog" aria-modal="true" aria-label="What's new">
       <div class="wn-top"><div class="fr-h">✨ What's new</div><button class="wn-x" type="button" aria-label="Close" title="Close">✕</button></div>
       <div class="fr-file">You are on ${escapeHtml(APP_VERSION)}</div>
-      ${list.map(e => `<div class="wn-ver">v${e.v}</div><ul class="wn-list">${e.items.map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul>`).join('')}
+      <div class="wn-body">${list.slice(0, FIRST).map((e, k) => wnCard(e, k === 0 && e.v === WHATS_NEW.reduce((mx, x) => Math.max(mx, x.v), 0))).join('')}
+      <div class="wn-more" hidden>${list.slice(FIRST).map(e => wnCard(e, false)).join('')}</div></div>
+      ${list.length > FIRST ? `<button class="btn ghost wn-more-btn" type="button" style="width:100%;margin-bottom:6px;">Show ${list.length - FIRST} more</button>` : ''}
       ${all ? '' : '<button class="btn ghost wn-all" style="width:100%;margin-bottom:6px;">Show older updates</button>'}
       <button class="btn gold fr-cancel">Got it</button>
     </div>`;
   m.addEventListener('click', e => {
     if (e.target.closest('.wn-all')) { wnOpen(true); return; }
+    if (e.target.closest('.wn-more-btn')) { const mo = m.querySelector('.wn-more'); if (mo) mo.hidden = false; e.target.closest('.wn-more-btn').remove(); return; }
     if (e.target === m || e.target.closest('.fr-cancel') || e.target.closest('.wn-x')) m.remove();
   });
   const back = document.activeElement;
@@ -1020,7 +1042,8 @@ function wnOpen(all) {
   document.addEventListener('keydown', esc);
   new MutationObserver((_, o) => { if (!m.isConnected) { document.removeEventListener('keydown', esc); o.disconnect(); if (back && back.focus) try { back.focus(); } catch (_) {} } }).observe(document.body, { childList: true });
   document.body.appendChild(m);
-  m.querySelector('.fr-cancel')?.focus();
+  try { m.querySelector('.fr-cancel')?.focus({ preventScroll: true }); } catch (_) {}
+  const sh = m.querySelector('.wn-sheet'); if (sh) sh.scrollTop = 0;   // open at the newest update
   try { localStorage.setItem(WN_KEY, APP_VERSION); } catch (_) {}
   return true;
 }
