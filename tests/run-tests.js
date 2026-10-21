@@ -2195,9 +2195,15 @@ console.log('\nRoles & access');
   const ALL = ['home', 'departures', 'rates', 'settings', 'qr', 'ops-logs'];
 
   check('no changes: each role gets its defaults (and pages modules added), Home and Settings on',
-    [has({}, 'agent', 'handover-book'), has({}, 'agent', 'ops-logs'), has({}, 'agent', 'rates'), has({}, 'readonly', 'settings'), E({}, 'agent').caps.canExport, E({}, 'manager').caps.canManageUsers, E({}, 'supervisor').caps.canDelete],
+    [has({}, 'agent', 'handover-book'), has({}, 'agent', 'ops-logs'), has({}, 'agent', 'rates'), has({}, 'readonly', 'settings'), E({}, 'agent').caps.canImport, E({}, 'manager').caps.canManageUsers, E({}, 'readonly').caps.canDelete],
     [true, true, false, true, false, true, false]);
+  check('powers the app now checks keep what each role could already do (export, clear, delete, logs)',
+    [['agent', 'supervisor', 'manager'].map(r => [E({}, r).caps.canExport, E({}, r).caps.canClear, E({}, r).caps.canDelete].join()), E({}, 'supervisor').caps.canViewLogs, E({}, 'agent').caps.canViewLogs, E({}, 'readonly').caps.canExport],
+    [['true,true,true', 'true,true,true', 'true,true,true'], true, false, false]);
   const rules = { agent: { panels: { rates: true, 'handover-book': false, home: false, settings: false }, caps: { canExport: true, canManageUsers: true } } };
+  check('a page that needs a power goes with it (History needs activity logs, Trends needs reports)',
+    [has({}, 'supervisor', 'history'), has({ supervisor: { caps: { canViewLogs: false } } }, 'supervisor', 'history'), has({ supervisor: { caps: { canReports: false } } }, 'supervisor', 'trends'), RR.effective(ROLES, { supervisor: { caps: { canViewLogs: false } } }, 'supervisor', null, { raw: true }).panels.includes('history')],
+    [true, false, false, true]);
   check('changes on top: a page on, a page off, a power on; Home/Settings can\'t be switched off; agents never manage the team',
     [has(rules, 'agent', 'rates'), has(rules, 'agent', 'handover-book'), has(rules, 'agent', 'home'), has(rules, 'agent', 'settings'), E(rules, 'agent').caps.canExport, E(rules, 'agent').caps.canManageUsers, has(rules, 'readonly', 'rates')],
     [true, false, true, true, true, false, false]);
@@ -2220,12 +2226,46 @@ console.log('\nRoles & access');
   { let r = {};
     r.agent = RR.setRule(ROLES, r, 'agent', 'panels', 'rates', true);
     const a1 = J(r.agent);
-    r.agent = RR.setRule(ROLES, r, 'agent', 'caps', 'canExport', true);
+    r.agent = RR.setRule(ROLES, r, 'agent', 'caps', 'canImport', true);
     const n1 = RR.changes(ROLES, r, 'agent').length;
     r.agent = RR.setRule(ROLES, r, 'agent', 'panels', 'rates', false);
-    r.agent = RR.setRule(ROLES, r, 'agent', 'caps', 'canExport', false);
+    r.agent = RR.setRule(ROLES, r, 'agent', 'caps', 'canImport', false);
     check('saving: only differences from default are kept; back to default stores nothing ("changed" dot goes)', [a1, n1, r.agent, RR.changes(ROLES, r, 'agent').length, RR.changes(ROLES, { owner: { panels: { home: false } } }, 'owner').length],
       [{ panels: { rates: true } }, 2, null, 0, 0]); }
+  // ── one person's own access on top (users → Access) ──
+  const EU = (rules, r, acc) => RR.effectiveUser(ROLES, rules, r, acc);
+  { const rr = { agent: { panels: { rates: true } } };
+    const acc = { panels: { audit: true, rates: false, home: false }, caps: { canDelete: false, canReports: true, canManageUsers: true } };
+    const u = EU(rr, 'agent', acc);
+    check('3 levels: built-in role → role rules → person (allow adds, block removes; Home stays; never team management)',
+      [EU(rr, 'agent', null).panels.includes('rates'), u.panels.includes('rates'), u.panels.includes('audit'), u.panels.includes('home'), u.caps.canDelete, u.caps.canReports, u.caps.canManageUsers, EU({}, 'agent', null).panels.sort().join() === E({}, 'agent').panels.sort().join()],
+      [true, false, true, true, false, true, false, true]);
+    check('3 levels: a person block wins over a role rule, a person allow wins over a role block',
+      [EU({ agent: { panels: { rates: true } } }, 'agent', { panels: { rates: false } }).panels.includes('rates'), EU({ agent: { panels: { departures: false } } }, 'agent', { panels: { departures: true } }).panels.includes('departures')], [false, true]);
+    check('owner accounts can\'t be restricted, whatever is saved for them',
+      [EU({}, 'owner', { panels: { departures: false }, caps: { canExport: false, canManageUsers: false } }).panels.includes('departures'), EU({}, 'owner', { caps: { canExport: false } }).caps.canExport, EU({}, 'owner', { caps: { canManageUsers: false } }).caps.canManageUsers], [true, true, true]);
+    const sum = RR.userSummary(ROLES, rr, 'agent', { panels: { audit: true, immig: true, departures: false } });
+    check('card summary: "Agent + 2 extra pages, 1 blocked"; nothing changed → just the role',
+      [sum.text, RR.userSummary(ROLES, rr, 'agent', null).text, RR.userSummary(ROLES, {}, 'agent', { panels: { departures: false } }).text, RR.userSummary(ROLES, {}, 'agent', { caps: { canReports: true } }).text, RR.userSummary(ROLES, {}, 'agent', { panels: { departures: true } }).changed],
+      ['Agent + 2 extra pages, 1 blocked', 'Agent', 'Agent · 1 page blocked', 'Agent + 1 power', false]); }
+  { const O = { role: 'owner', uid: 'o1' }, M = { role: 'manager', uid: 'm1' }, S = { role: 'supervisor', uid: 's1' };
+    const can = (ed, tg, kind, id, v, rules) => { const r = RR.canSetUser(ROLES, rules || {}, ed, tg, kind, id, v); return r.ok || r.why; };
+    check('who can change a person: not yourself, never an owner; managers only below manager; others no one',
+      [RR.canEditUser(ROLES, {}, O, { role: 'agent', uid: 'a1' }).ok, RR.canEditUser(ROLES, {}, O, { role: 'owner', uid: 'o2' }).why, RR.canEditUser(ROLES, {}, O, { role: 'owner', uid: 'o1' }).why,
+        RR.canEditUser(ROLES, {}, O, { role: 'manager', uid: 'm1' }).ok, RR.canEditUser(ROLES, {}, M, { role: 'manager', uid: 'm2' }).why, RR.canEditUser(ROLES, {}, M, { role: 'manager', uid: 'm1' }).why,
+        RR.canEditUser(ROLES, {}, M, { role: 'agent', uid: 'a1' }).ok, RR.canEditUser(ROLES, {}, S, { role: 'agent', uid: 'a1' }).why, RR.canEditUser(ROLES, {}, Object.assign({ access: { caps: { canManageUsers: false } } }, M), { role: 'agent', uid: 'a1' }).ok],
+      [true, 'owner', 'self', true, 'locked', 'self', true, 'locked', false]);
+    const A = { role: 'agent', uid: 'a1' };
+    check('person limits: Home/Settings can\'t be blocked; team management never for agents; managers can\'t allow beyond their own (rules or own access); back to role always ok',
+      [can(O, A, 'panels', 'home', false), can(O, A, 'panels', 'settings', 'role'), can(O, A, 'caps', 'canManageUsers', true), can(O, A, 'caps', 'canImport', true), can(M, A, 'caps', 'canImport', true),
+        can(M, A, 'panels', 'rates', true), can(Object.assign({ access: { panels: { rates: false } } }, M), A, 'panels', 'rates', true), can(M, A, 'panels', 'rates', true, { manager: { panels: { rates: false } } }), can(M, A, 'panels', 'departures', false), can(M, A, 'caps', 'canImport', 'role')],
+      [ 'always', true, 'onlyFor', true, 'notYours', true, 'notYours', 'notYours', true, true]);
+    let a = null;
+    a = RR.setAccess(a, 'panels', 'rates', true); a = RR.setAccess(a, 'caps', 'canDelete', false);
+    const a1 = J(a);
+    a = RR.setAccess(a, 'panels', 'rates', 'role'); a = RR.setAccess(a, 'caps', 'canDelete', 'role');
+    check('person saving: Allow/Block kept, "Role" removes it; nothing left → nothing stored', [a1, a], [{ panels: { rates: true }, caps: { canDelete: false } }, null]); }
+
 }
 
 console.log(`\n${pass} passed · ${fail} failed`);

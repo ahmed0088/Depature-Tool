@@ -3,6 +3,8 @@
 //  Ibis Styles Dubai · Front Desk Ops · 2026
 // ═══════════════════════════════════════════════════════════
 
+// Powers marked true are what each role could already do before the app checked them
+// (Export, Clear, Delete, See activity logs): the owner can take them away in Team → Roles & access.
 const ROLES = {
   owner: {
     label: 'Owner', color: '#f0a43a', icon: '👑',
@@ -14,20 +16,23 @@ const ROLES = {
   manager: {
     label: 'Manager', color: '#8b7cf8', icon: '🏅',
     panels: ['home','departures','arrivals','xref','purpose','shifts','checklist','nationality','rent','audit','immig','tourism','td-audit','dtcm','arrivals-proc','inhouse-tally','package-audit','noshow','standards','pipeline','history','settings','learn','roster','wakeups','rates','handover-book'],
-    canManageUsers: true, canExport: true, canImport: false, canClear: false,
+    canManageUsers: true, canExport: true, canImport: false, canClear: true,
     canEditChecklist: true, canEditShifts: true, canReports: true,
+    canDelete: true, canViewLogs: true,
   },
   supervisor: {
     label: 'Supervisor', color: '#5ab4e8', icon: '⭐',
     panels: ['home','departures','arrivals','xref','purpose','shifts','checklist','nationality','rent','audit','immig','tourism','td-audit','dtcm','arrivals-proc','inhouse-tally','package-audit','noshow','standards','pipeline','history','settings','learn','roster','wakeups','rates','handover-book'],
-    canManageUsers: false, canExport: true, canImport: false, canClear: false,
+    canManageUsers: false, canExport: true, canImport: false, canClear: true,
     canEditChecklist: true, canEditShifts: true, canReports: true,
+    canDelete: true, canViewLogs: true,
   },
   agent: {
     label: 'Agent', color: '#3ecf8e', icon: '🛎️',
     panels: ['home','departures','arrivals','xref','shifts','checklist','noshow','standards','settings','learn','roster','wakeups','handover-book'],
-    canManageUsers: false, canExport: false, canImport: false, canClear: false,
+    canManageUsers: false, canExport: true, canImport: false, canClear: true,
     canEditChecklist: false, canEditShifts: false, canReports: false,
+    canDelete: true,
   },
   readonly: {
     label: 'Read Only', color: '#888', icon: '👁️',
@@ -39,9 +44,14 @@ const ROLES = {
 
 /** A role as it applies now: the built-in defaults above with the owner's changes from
  *  Team → Roles & access laid on top (role-rules.js). Use this, not ROLES[role], for pages and powers. */
-function roleDef(role) {
-  if (typeof hoRoleRules !== 'undefined' && hoRoleRules && typeof hoRoleRules.def === 'function') return hoRoleRules.def(role);
+function roleDef(role, access) {
+  if (typeof hoRoleRules !== 'undefined' && hoRoleRules && typeof hoRoleRules.def === 'function') return hoRoleRules.def(role, access);
   return ROLES[role] || ROLES.readonly;
+}
+/** The signed-in person: role → role rules → their own access (Team → Users → Access). */
+function myRoleDef() {
+  if (typeof hoRoleRules !== 'undefined' && hoRoleRules && typeof hoRoleRules.myDef === 'function' && currentProfile) return hoRoleRules.myDef();
+  return roleDef(currentProfile ? currentProfile.role : 'readonly');
 }
 const ROLE_CAPS = ['canManageUsers','canExport','canImport','canClear','canEditChecklist','canEditShifts','canReports','canDelete','canViewAll','canForceLogout','canViewLogs'];
 
@@ -236,7 +246,7 @@ async function loadUserProfile(uid) {
 
 // ── Apply role ────────────────────────────────────────────
 function applyRole(role) {
-  const def = roleDef(role);
+  const def = currentProfile && currentProfile.role === role ? myRoleDef() : roleDef(role);
 
   // Owner sees everything — no panel hiding, no capability hiding
   const isOwner = role === 'owner';
@@ -266,6 +276,11 @@ function applyRole(role) {
   const mobAdminBtn = document.getElementById('mobAdminBtn');
   if (adminBtn)    adminBtn.style.display    = (isOwner || def.canManageUsers) ? '' : 'none';
   if (mobAdminBtn) mobAdminBtn.style.display = (isOwner || def.canManageUsers) ? '' : 'none';
+
+  // powers the app checks: buttons that need them hide (role-rules.js), owners keep everything
+  ROLE_CAPS.forEach(cap => document.body.classList.toggle('ho-no-' + cap, !isOwner && !def[cap]));
+  const actTab = document.querySelector('#adminModal .admin-tab-btn[data-tab="activity"]');
+  if (actTab) actTab.style.display = (isOwner || def.canViewLogs) ? '' : 'none';
 
   document.body.classList.toggle('role-readonly', role === 'readonly');
   document.body.classList.toggle('role-owner', isOwner);
@@ -469,7 +484,7 @@ async function authLogout() {
 // ── Update topbar ─────────────────────────────────────────
 function updateAuthUI() {
   const p      = currentProfile;
-  const def    = roleDef(p.role);
+  const def    = myRoleDef();
   const isMob  = window.innerWidth <= 768;
   const el     = document.getElementById('authUserPill');
   if (el) {
@@ -539,7 +554,7 @@ let _adminUsers    = {};
 let _adminActivity = [];
 
 async function openAdminPanel() {
-  if (!currentProfile || !roleDef(currentProfile.role).canManageUsers) { showToast('Not available for your role', 'err'); return; }
+  if (!currentProfile || !myRoleDef().canManageUsers) { showToast('Not available for your role', 'err'); return; }
   document.getElementById('adminModal').classList.add('open');
   const sub = document.getElementById('admSub');
   const hotel = (document.getElementById('hotelName')?.textContent || '').trim();
@@ -556,6 +571,7 @@ function closeAdminPanel() {
 async function adminLoadUsers() {
   const snap = await firebase.database().ref(`hotels/${HOTEL_ID}/users`).once('value');
   _adminUsers = snap.val() || {};
+  if (typeof hoRoleRules !== 'undefined' && hoRoleRules.loadAllAccess) await hoRoleRules.loadAllAccess();
   adminRenderUsers();
 }
 
@@ -564,6 +580,7 @@ const _ADM_IC = {
   out:   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>',
   lock:  '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
   ok:    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>',
+  key:   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
   bin:   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>',
 };
 function _admInitials(name) {
@@ -620,6 +637,9 @@ function adminRenderUsers() {
       : 'never';
     const created = u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : '';
     const id = escapeHtml(uid);
+    const hasRR = typeof hoRoleRules !== 'undefined' && hoRoleRules.summaryFor;
+    const accLine = hasRR ? hoRoleRules.summaryFor(uid, u) : null;
+    const canAcc = hasRR && hoRoleRules.canEditFor(uid, u);
 
     return `
     <article class="adm-user${isMe ? ' is-me' : ''}${!u.active ? ' is-off' : ''}" style="--rc:${def.color}">
@@ -632,15 +652,17 @@ function adminRenderUsers() {
             <span class="adm-tag role">${def.icon} ${escapeHtml(def.label)}</span>
             <span class="adm-tag ${u.active ? 'ok' : 'off'}"><i></i>${u.active ? 'Active' : 'Switched off'}</span>
           </div>
+          ${accLine ? `<div class="adm-user-acc"><i class="adm-dot"></i>${escapeHtml(accLine)}</div>` : ''}
         </div>
       </div>
       <div class="adm-user-meta"><span>Last sign-in <b>${lastLogin}</b></span>${created ? `<span>Added <b>${created}</b></span>` : ''}</div>
       ${canEdit ? `
       <div class="adm-user-acts">
         <button type="button" class="adm-act primary" onclick="adminEditUser('${id}')">${_ADM_IC.edit}Edit</button>
+        ${canAcc ? `<button type="button" class="adm-act" onclick="adminUserAccess('${id}')" title="Pages and powers for this person only">${_ADM_IC.key}Access</button>` : ''}
         <button type="button" class="adm-act" onclick="adminDisconnectUser('${id}')" title="Sign them out now (they can sign back in)">${_ADM_IC.out}Sign out</button>
         <button type="button" class="adm-act ${u.active ? 'warn' : 'good'}" onclick="adminToggleActive('${id}',${!u.active})">${u.active ? _ADM_IC.lock + 'Switch off' : _ADM_IC.ok + 'Switch on'}</button>
-        ${isOwner && u.role !== 'owner' ? `<button type="button" class="adm-act danger" onclick="adminDeleteUser('${id}')" title="Permanently delete account">${_ADM_IC.bin}Delete</button>` : ''}
+        ${isOwner && u.role !== 'owner' ? `<button type="button" class="adm-act danger" onclick="adminDeleteUser('${id}')" title="Delete account for good" aria-label="Delete account">${_ADM_IC.bin}</button>` : ''}
       </div>` : isMe ? `
       <div class="adm-user-acts"><span class="adm-hint">Your own account · change your theme and details in Settings</span></div>` : ''}
     </article>`;
@@ -648,6 +670,7 @@ function adminRenderUsers() {
 }
 
 async function adminLoadActivity() {
+  if (currentProfile && currentProfile.role !== 'owner' && !myRoleDef().canViewLogs) { _adminActivity = []; return; }
   const snap = await firebase.database().ref(`hotels/${HOTEL_ID}/activityLog`).limitToLast(200).once('value');
   _adminActivity = Object.values(snap.val() || {}).reverse();
   adminRenderActivity();
@@ -894,6 +917,7 @@ function adminTab(tab) {
   if (pane) pane.style.display = 'block';
   const seg = document.querySelector('#adminModal .adm-seg');
   if (seg) seg.dataset.on = tab;
+  if (typeof hoRoleRules !== 'undefined' && hoRoleRules.closeUser) hoRoleRules.closeUser();
   if (tab === 'roles' && typeof hoRoleRules !== 'undefined' && hoRoleRules.render) hoRoleRules.render();
   const body = document.querySelector('#adminModal .adm-body'); if (body) body.scrollTop = 0;
 }
@@ -967,7 +991,7 @@ function _renderActivityEntries(el, entries) {
   const icons = {
     login:'🔓', logout:'🔒',
     create_user:'➕', edit_user:'✏️', disable_user:'🔒', enable_user:'✓', delete_user:'🗑️',
-    disconnect_user:'⏏', password_reset_sent:'🔑', role_rules:'🛡️',
+    disconnect_user:'⏏', password_reset_sent:'🔑', role_rules:'🛡️', user_access:'🛡️',
     shift_task_done:'✅', shift_task_undone:'↩', shift_task_added:'➕', shift_task_deleted:'🗑️', shift_reset:'↺',
     checklist_done:'✅', checklist_undone:'↩', checklist_skipped:'⏭', checklist_unskipped:'↩',
     departure_out:'🚪', departure_na:'—', departure_late:'🕐', departure_extended:'📅', departure_due:'↩',

@@ -5563,7 +5563,7 @@ body.fr-dragging::after {
 #adminModal .adm-x svg { width: 15px; height: 15px; }
 
 /* segmented control */
-.adm-seg { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; margin: 0 24px 14px; padding: 3px;
+.adm-seg { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; margin: 0 24px 14px; padding: 3px;
   background: var(--bg2); border: 1px solid var(--border); border-radius: 11px; }
 #adminModal .adm-seg .admin-tab-btn { appearance: none; border: 0; background: transparent; color: var(--text2); cursor: pointer;
   font: 600 .8rem var(--font); padding: 8px 6px; border-radius: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -5647,14 +5647,14 @@ select.adm-input { cursor: pointer; }
 .adm-user-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .72rem; color: var(--text3); padding-left: 56px; }
 .adm-user-meta b { color: var(--text2); font-weight: 600; }
 .adm-user-acts { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 10px; border-top: 1px solid var(--border); }
-.adm-act { display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 11px; border-radius: 9px; border: 1px solid var(--border); background: var(--bg2);
+.adm-act { display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 8px; border-radius: 9px; border: 1px solid var(--border); background: var(--bg2);
   color: var(--text); font: 600 .74rem var(--font); cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
 #adminModal .adm-act svg { width: 14px; height: 14px; }
 .adm-act:hover { border-color: var(--border2); background: var(--card2); }
 .adm-act.primary { color: var(--accent); border-color: var(--accent-border); background: var(--accent-bg); }
 .adm-act.warn { color: var(--amber); }
 .adm-act.good { color: var(--green); }
-.adm-act.danger { color: var(--red); margin-left: auto; }
+.adm-act.danger { color: var(--red); margin-left: auto; padding: 0 8px; }
 .adm-act.danger:hover { background: var(--red-bg); border-color: var(--red-border); }
 
 /* roles & access */
@@ -5726,6 +5726,27 @@ select.adm-input { cursor: pointer; }
 .adm-log-role { font-size: .64rem; font-weight: 700; padding: 1px 7px; border-radius: 999px; color: var(--rc); background: color-mix(in srgb, var(--rc) 12%, transparent); }
 .adm-log-side time { font-size: .68rem; color: var(--text3); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
+/* one person's access: Role · Allow · Block */
+.adm-back { display: inline-flex; align-items: center; gap: 4px; margin: 0 0 12px -4px; padding: 6px 8px; border: 0; border-radius: 8px; background: none; color: var(--accent); font: 600 .84rem var(--font); cursor: pointer; }
+.adm-back:hover { background: var(--accent-bg); }
+.adm-user-acc { display: flex; align-items: center; gap: 6px; margin-top: 7px; font-size: .74rem; font-weight: 600; color: var(--text2); }
+.adm-user-acc .adm-dot { margin: 0; }
+.adm-role-head .adm-av { --rc: inherit; }
+.adm-row-tri { cursor: default; flex-wrap: wrap; row-gap: 8px; }
+.adm-row-tri:hover { background: transparent; }
+.adm-row-tri.is-set { background: var(--accent-bg); }
+.adm-state { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 999px; font-size: .64rem; font-weight: 700; letter-spacing: .02em; vertical-align: 1px; }
+.adm-state.on { color: var(--green); background: var(--green-bg); }
+.adm-state.off { color: var(--text3); background: var(--bg2); }
+.adm-tri { display: inline-grid; grid-template-columns: auto auto auto; gap: 2px; padding: 2px; margin-left: auto; border-radius: 9px; background: var(--bg2); border: 1px solid var(--border); flex-shrink: 0; }
+.adm-tri-b { appearance: none; border: 0; background: transparent; color: var(--text2); font: 600 .72rem var(--font); padding: 6px 10px; border-radius: 7px; cursor: pointer; white-space: nowrap; transition: background .15s, color .15s, box-shadow .15s; }
+.adm-tri-b:hover:not(:disabled) { color: var(--text); }
+.adm-tri-b:disabled { opacity: .35; cursor: not-allowed; }
+.adm-tri-b.on { background: var(--card); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.12), 0 0 0 1px var(--border2); }
+.adm-tri-b.a.on { background: var(--green); color: #fff; box-shadow: none; }
+.adm-tri-b.b.on { background: var(--red); color: #fff; box-shadow: none; }
+.adm-list.is-ro .adm-tri { opacity: .6; }
+
 /* phone: a sheet from the bottom */
 @media (max-width: 600px) {
   #adminModal { align-items: flex-end; }
@@ -5740,9 +5761,11 @@ select.adm-input { cursor: pointer; }
   .adm-form-acts .adm-btn { flex: 1; }
   .adm-user-meta { padding-left: 0; }
   .adm-act { flex: 1 1 auto; justify-content: center; }
-  .adm-act.danger { margin-left: 0; }
+  .adm-act.danger { flex: 0 0 auto; }
   .adm-roles { grid-template-columns: 1fr 1fr; }
   .adm-rh-top { flex-wrap: wrap; }
   .adm-rh-top > .adm-btn { width: 100%; }
   .adm-log { padding: 10px 12px; }
+  .adm-row-tri .adm-row-ic { display: none; }
+  .adm-tri-b { padding: 6px 8px; }
 }

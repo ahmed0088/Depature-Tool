@@ -426,7 +426,7 @@
     <div class="icon-round mob-hide" onclick="wnOpen(true)" title="What's new in this version">✨</div>
     <div class="icon-round mob-hide" onclick="openFeedback()"  title="Feedback">💬</div>
     <div class="icon-round mob-hide" onclick="document.getElementById('kbModal').classList.toggle('open')" title="Keyboard shortcuts (?)">⌨</div>
-    <div class="icon-round mob-hide" onclick="exportAllData()" title="Export backup">💾</div>
+    <div class="icon-round mob-hide" onclick="exportAllData()" title="Export backup" data-require="canExport">💾</div>
     <label class="icon-round mob-hide" title="Import backup" style="cursor:pointer;">📂<input type="file" accept=".json" onchange="handleImport(this)" style="display:none"/></label>
   </div>
 </header>
@@ -5339,6 +5339,7 @@ async function appInit() {
 
     <!-- ── Users ───────────────────────────────────── -->
     <div id="adminTab-users" class="admin-tab-pane" role="tabpanel">
+      <div id="admUsersMain">
 
       <div class="adm-toolbar">
         <div class="adm-stats" id="adminStatsStrip"><!-- adminRenderUsers() --></div>
@@ -5413,7 +5414,10 @@ async function appInit() {
       <div id="adminUserCards" class="adm-users">
         <div class="adm-empty"><span>Loading…</span></div>
       </div>
-      <p class="adm-foot">What each role can open and do is set in <button type="button" class="adm-link" onclick="adminTab('roles')">Roles &amp; access</button>.</p>
+      <p class="adm-foot">What each role can open and do is set in <button type="button" class="adm-link" onclick="adminTab('roles')">Roles &amp; access</button>. For one person only, use <b>Access</b> on their card.</p>
+      </div>
+      <!-- one person's access (role-rules.js) -->
+      <div id="admUserAccess" style="display:none;"></div>
     </div>
 
     <!-- ── Roles & access (role-rules.js) ─────────── -->

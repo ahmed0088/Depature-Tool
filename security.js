@@ -85,7 +85,7 @@ function secListen() {
       : `${others.length} sign-ins on new devices: ${[...new Set(others.map(e => e.name || '?'))].slice(0, 4).join(', ')}`;
     add({ id: 'sec:team:' + others[0].at, type: 'security', icon: '🔐', tone: 'warn', text: t,
       why: 'Usually a new phone or a cleared browser. If it looks wrong, Team → Disconnect signs that person out on every device.',
-      acts: [['OK, seen', secMarkSeen], ...(typeof openAdminPanel === 'function' && typeof roleDef === 'function' && roleDef(currentProfile.role).canManageUsers ? [['Open Team', () => { secMarkSeen(); openAdminPanel(); }]] : [])] });
+      acts: [['OK, seen', secMarkSeen], ...(typeof openAdminPanel === 'function' && typeof myRoleDef === 'function' && myRoleDef().canManageUsers ? [['Open Team', () => { secMarkSeen(); openAdminPanel(); }]] : [])] });
   } catch (_) {}
 });
 

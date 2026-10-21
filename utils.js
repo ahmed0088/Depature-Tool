@@ -17,7 +17,7 @@ function updateClock() {
  *  Ops Brain, home tiles and links from opening them anyway). */
 function hoPanelAllowed(name) {
   if (typeof currentProfile === 'undefined' || !currentProfile || typeof ROLES === 'undefined') return true;
-  const role = currentProfile.role, def = typeof roleDef === 'function' ? roleDef(role) : (ROLES[role] || ROLES.readonly);   // with Team → Roles & access changes
+  const role = currentProfile.role, def = typeof myRoleDef === 'function' ? myRoleDef() : (ROLES[role] || ROLES.readonly);   // role rules + this person's own access
   if (role === 'owner' || name === 'guestmem' || (def.panels || []).includes(name)) return true;
   return !document.querySelector(`.nav-item[data-panel="${name}"]`);   // pages without a menu entry are opened from allowed ones
 }
@@ -529,7 +529,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v360';
+const APP_VERSION = 'v361';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;

@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 361, items: [
+    '👤 Per-person access: Team → Users → Access on anyone\'s card. For each page and power choose Role (what their role gives), Allow (extra for this person only) or Block (taken away from this person only). The card shows e.g. "Agent + 2 extra pages, 1 blocked". Reset to role undoes it.',
+    '🔒 Powers now really work: Export (downloads), Import (restore a backup), Clear (clear the board / lists), Delete (wake-up calls, lost & found, tickets, reports, QR codes), Reports (Trends) and Activity logs (History). Nobody loses anything today: agents, supervisors and managers keep Export, Clear and Delete until you switch them off.',
+  ] },
   { v: 360, items: [
     '📋 DTCM: "copy" on a DTCM ID now only copies — the correction stays on the list. Press ✓ Fixed when it is done (now also on every row of the corrections table), and Undo if you pressed it by mistake.',
   ] },
