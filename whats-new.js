@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 364, items: [
+    '🔐 Guest Memory: only the owner can open it now, with their own saved Face ID / fingerprint. The first time on a phone, press "Save my Face ID and open"; after that only that face opens it there. No password route, and other roles see "Only the owner can open Guest Memory". Filling in nationality and e-mail from memory on import still works for everyone.',
+  ] },
   { v: 363, items: [
     '🙂 Guest Memory with Face ID: open it, unlock, then press "Use Face ID on this phone". From then on, opening Guest Memory on that phone (holding the logo or Ctrl + Shift + M) asks for Face ID / fingerprint first — the owner too. The password still works as a backup. Turn it off with "Face ID: on".',
   ] },

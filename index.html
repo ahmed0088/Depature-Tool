@@ -2599,7 +2599,7 @@
       </button>
 
       <!-- Set / Change password (owner + manager only) -->
-      <button class="btn sm" onclick="gmSetPassword()"
+      <button class="btn sm" style="display:none" onclick="gmSetPassword()"
               title="Set or change Guest Memory password">
         ⚙ Set Password
       </button>
@@ -2639,30 +2639,14 @@
     <div id="gmLockCard">
       <div class="gm-lock-icon">🔒</div>
       <div class="gm-lock-title">Guest Memory is locked</div>
-      <div class="gm-lock-sub">
-        This panel contains sensitive guest data.<br>
-        Enter the password to access it.
+      <div class="gm-lock-sub" id="gmLockSub">
+        Only the owner can open it, with Face ID on their own phone.
       </div>
-
-      <div class="gm-pw-row">
-        <input id="gmPwInput" type="password" class="gm-pw-inp"
-               placeholder="Enter password…"
-               onkeydown="if(event.key==='Enter')gmUnlock()"
-               autocomplete="current-password"/>
-        <button class="gm-pw-eye" onclick="
-          const i=document.getElementById('gmPwInput');
-          i.type=i.type==='password'?'text':'password';
-          this.textContent=i.type==='password'?'👁':'🙈';
-          i.focus();" title="Show / hide password">👁</button>
-      </div>
-
-      <button class="btn gold" style="width:100%;margin-top:14px;font-size:0.8rem;" onclick="gmUnlock()">
-        🔓 Unlock
+      <button class="btn gold" id="gmFaceMain" style="width:100%;margin-top:14px;font-size:0.85rem;" onclick="gmUnlock()">
+        🙂 Unlock with Face ID
       </button>
-
       <div style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);margin-top:16px;line-height:1.5;">
-        Unlocks for 30 minutes · auto-locks after inactivity<br>
-        Ask the owner / manager if you don't have the password
+        Unlocks for 30 minutes · auto-locks after inactivity
       </div>
     </div>
   </div>

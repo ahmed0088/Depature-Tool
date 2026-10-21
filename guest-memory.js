@@ -83,57 +83,18 @@ function _gmRenderLockState() {
 function _gmIsOwner() {
   return typeof currentProfile !== 'undefined' && currentProfile?.role === 'owner';
 }
-function _gmApplyOwnerAutoUnlock() {
-  if (!_gmIsOwner() || _gmUnlocked || _gmFaceOn()) return;   // Face ID on this phone: the owner confirms with it too
-  _gmUnlocked = true;
-  clearTimeout(_gmLockTimer);   // owners don't auto-relock after 30 min either
-  _gmRenderLockState();
-  if (_gmReady) _gmUpdateUI();
-}
+// called after sign-in (auth.js): only refreshes the lock card — the owner opens it with Face ID (gmUnlock)
+function _gmApplyOwnerAutoUnlock() { try { _gmFaceRender(); } catch (_) {} }
 
 // ── Try unlocking: prompt for password, verify, open ─────
 async function gmUnlock() {
-  // Face ID / fingerprint on this phone: tried first when no password was typed
-  if (_gmFaceOn() && !(document.getElementById('gmPwInput')?.value || '').trim()) { if (await gmFaceCheck()) return; if (!_gmIsOwner()) return; }
-  if (_gmIsOwner()) { if (_gmFaceOn()) { const typed = (document.getElementById('gmPwInput')?.value || '').trim(); if (!typed) { showToast('Confirm with Face ID, or type the Guest Memory password', 'warn'); return; } if (!(await _gmGetStoredHash())) return; } else { _gmApplyOwnerAutoUnlock(); return; } }
-
-  const storedHash = await _gmGetStoredHash();
-  if (!storedHash) {
-    // No password set yet — only owner/manager can create one
-    const role = (typeof currentProfile !== 'undefined' && currentProfile?.role) || '';
-    if (role === 'owner' || role === 'manager') {
-      gmSetPassword();
-    } else {
-      showToast('No password set. Ask an owner or manager to set one.', 'err');
-    }
-    return;
-  }
-
-  const input = document.getElementById('gmPwInput');
-  const val   = (input?.value || '').trim();
-  if (!val) { showToast('Enter the password first', 'err'); return; }
-
-  const hash = await _gmHash(val);
-  if (hash !== storedHash) {
-    showToast('Incorrect password', 'err');
-    if (input) { input.value = ''; input.focus(); }
-    // Shake the input to signal wrong password
-    const card = document.getElementById('gmLockCard');
-    if (card) {
-      card.style.animation = 'none';
-      card.offsetHeight;   // reflow
-      card.style.animation = 'gmShake 0.35s ease';
-    }
-    return;
-  }
-
-  // Correct — unlock session
-  _gmOpenSession('password');
-  if (input) input.value = '';
+  if (!_gmIsOwner()) { showToast('Only the owner can open Guest Memory (with Face ID)', 'err'); return; }
+  if (_gmFaceOn()) { await gmFaceCheck(); return; }
+  // the owner's first time on this phone: saving their Face ID is the unlock
+  await gmFaceEnable(true);
 }
-/** the panel is open for GM_LOCK_MINS (how: 'password' | 'Face ID') */
+/** the panel is open for GM_LOCK_MINS (how: 'Face ID') */
 function _gmOpenSession(how) {
-  const input = document.getElementById('gmPwInput');
   _gmUnlocked = true;
   clearTimeout(_gmLockTimer);
   _gmLockTimer = setTimeout(() => {
@@ -141,12 +102,10 @@ function _gmOpenSession(how) {
     _gmRenderLockState();
     showToast('Guest Memory locked (session expired)', 'info');
   }, GM_LOCK_MINS * 60 * 1000);
-
-  if (input) input.value = '';
   _gmRenderLockState();
   _gmUpdateUI();
-  showToast(`✓ Guest Memory unlocked${how === 'Face ID' ? ' with Face ID' : ''} · auto-locks in ${GM_LOCK_MINS} min`, 'ok');
-  if (typeof logActivity === 'function') logActivity('guestmem_unlock', how === 'Face ID' ? 'Face ID' : '');
+  showToast(`✓ Guest Memory unlocked with ${how} · auto-locks in ${GM_LOCK_MINS} min`, 'ok');
+  if (typeof logActivity === 'function') logActivity('guestmem_unlock', how);
   _gmFaceRender();
 }
 
@@ -297,12 +256,6 @@ function gmInit() {
     // panel password needed. (Also re-applied right after login in auth.js,
     // since currentProfile usually isn't populated yet this early at boot.)
     if (_gmIsOwner()) { _gmApplyOwnerAutoUnlock(); return; }
-    // If no password is set yet, auto-unlock so first-time use isn't confusing
-    const hash = await _gmGetStoredHash();
-    if (!hash && !_gmFaceOn()) {
-      _gmUnlocked = true;
-      _gmRenderLockState();
-    }
   }, 0);
 
   // Deliberately NOT using db.js's fbListen() here — it mirrors every path
@@ -679,8 +632,9 @@ async function gmFaceCheck() {
   }
 }
 /** turn Face ID on for this phone (only once unlocked) */
-async function gmFaceEnable() {
-  if (!_gmUnlocked) { showToast('Unlock Guest Memory first', 'warn'); return; }
+async function gmFaceEnable(andOpen) {
+  if (!_gmIsOwner()) { showToast('Only the owner can set up Face ID for Guest Memory', 'err'); return; }
+  if (!_gmUnlocked && !andOpen) { showToast('Unlock Guest Memory first', 'warn'); return; }
   if (!(await _gmFaceCan())) { showToast('This phone or browser has no Face ID / fingerprint for websites', 'err'); return; }
   try {
     const p = typeof currentProfile !== 'undefined' && currentProfile ? currentProfile : {};
@@ -692,25 +646,30 @@ async function gmFaceEnable() {
       authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'discouraged' },
       timeout: 60000, attestation: 'none' } });
     localStorage.setItem(GM_FACE_KEY, JSON.stringify({ id: _gmB64(cred.rawId), uid: _gmUid(), at: Date.now() }));
-    showToast('✓ Face ID is on: opening Guest Memory on this phone now asks for it', 'ok');
+    showToast('✓ Face ID saved: only your face opens Guest Memory on this phone', 'ok');
     if (typeof logActivity === 'function') logActivity('guestmem_password_change', 'Face ID on');
+    if (andOpen) _gmOpenSession('Face ID');
   } catch (e) { showToast(e && e.name === 'NotAllowedError' ? 'Face ID set-up cancelled' : 'Could not turn on Face ID', 'warn'); }
   _gmFaceRender();
 }
 function gmFaceDisable() {
-  if (!_gmUnlocked) { showToast('Unlock Guest Memory first', 'warn'); return; }
+  if (!_gmUnlocked || !_gmIsOwner()) { showToast('Unlock Guest Memory first', 'warn'); return; }
+  if (!confirm('Remove your Face ID from Guest Memory on this phone? It locks now, and you set it up again next time you open it.')) return;
   try { localStorage.removeItem(GM_FACE_KEY); } catch (_) {}
-  showToast('Face ID is off on this phone', 'info');
+  _gmUnlocked = false; clearTimeout(_gmLockTimer); _gmRenderLockState();
+  showToast('Face ID removed on this phone · Guest Memory locked', 'info');
   _gmFaceRender();
 }
 /** the Face ID buttons: "Use Face ID" on the lock card, and the on/off switch next to Lock */
 async function _gmFaceRender() {
-  const card = document.getElementById('gmLockCard'), lockBtn = document.getElementById('gmLockBtn');
-  if (card) {
-    let b = document.getElementById('gmFaceUnlock');
-    if (_gmFaceOn()) {
-      if (!b) { b = document.createElement('button'); b.id = 'gmFaceUnlock'; b.type = 'button'; b.className = 'btn amber'; b.style.cssText = 'margin:0 auto 12px;display:flex;gap:8px;align-items:center;justify-content:center;width:100%;max-width:280px'; b.textContent = '🙂 Unlock with Face ID'; b.onclick = () => gmFaceCheck(); const row = card.querySelector('.gm-pw-row'); card.insertBefore(b, row || null); }
-    } else if (b) b.remove();
+  const lockBtn = document.getElementById('gmLockBtn'), main = document.getElementById('gmFaceMain'), sub = document.getElementById('gmLockSub');
+  if (main && sub) {
+    const own = _gmIsOwner(), on = _gmFaceOn(), can = await _gmFaceCan();
+    main.style.display = own && can ? '' : 'none';
+    main.textContent = on ? '🙂 Unlock with Face ID' : '🙂 Save my Face ID and open';
+    sub.textContent = !own ? 'Only the owner can open Guest Memory.'
+      : !can ? 'This device has no Face ID / fingerprint for websites. Open Guest Memory on your phone.'
+      : on ? 'Confirm it is you with Face ID.' : 'First time on this phone: save your Face ID. After that, only your face opens it here.';
   }
   if (lockBtn && lockBtn.parentNode) {
     let t = document.getElementById('gmFaceToggle');
@@ -718,8 +677,9 @@ async function _gmFaceRender() {
     if (!can || !_gmUnlocked) { if (t) t.remove(); return; }
     if (!t) { t = document.createElement('button'); t.id = 'gmFaceToggle'; t.type = 'button'; t.className = 'btn sm'; lockBtn.parentNode.insertBefore(t, lockBtn); }
     const on = _gmFaceOn();
-    t.textContent = on ? '🙂 Face ID: on' : '🙂 Use Face ID on this phone';
-    t.title = on ? 'Turn Face ID off on this phone' : 'Ask for Face ID / fingerprint when Guest Memory is opened on this phone';
+    if (!_gmIsOwner()) { t.remove(); return; }
+    t.textContent = on ? '🙂 Face ID: on' : '🙂 Save my Face ID';
+    t.title = on ? 'Remove your Face ID on this phone (Guest Memory locks)' : 'Save your Face ID for this phone';
     t.onclick = () => (on ? gmFaceDisable() : gmFaceEnable());
   }
 }
@@ -727,6 +687,6 @@ async function _gmFaceRender() {
 function gmOpen() {
   if (typeof showPanel === 'function') showPanel('guestmem');
   _gmRenderLockState(); _gmFaceRender();
-  if (!_gmUnlocked && _gmFaceOn()) gmFaceCheck();
+  if (!_gmUnlocked && _gmIsOwner() && _gmFaceOn()) gmFaceCheck();
 }
 setTimeout(() => { try { _gmFaceRender(); } catch (_) {} }, 1500);
