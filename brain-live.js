@@ -247,7 +247,10 @@ function blTick() {
   }
   const sig = blThoughts.map(t => t.id).join('|');
   const fab = document.getElementById('brFab');
-  if (fab) { fab.classList.toggle('thinking', blThoughts.length > 0); fab.dataset.n = blThoughts.length || ''; }
+  // the 🧠 number = notes waiting for you (not the ones you closed for now); they are listed at the top of Ops Brain
+  const waiting = blThoughts.filter(t => !(snooze[t.id] > Date.now())).length;
+  if (fab) { fab.classList.toggle('thinking', waiting > 0); fab.dataset.n = waiting || ''; }
+  if (document.getElementById('brSheet')?.classList.contains('open')) blRenderNow();
   if (sig === blLastSig && document.getElementById('blBubble')) return;
   blLastSig = sig;
   if (document.getElementById('brSheet')?.classList.contains('open')) return;
@@ -297,7 +300,34 @@ function blDid(icon, text, undo) {
   if (typeof logActivity === 'function') try { logActivity('brain_did', text); } catch (_) {}
 }
 
+/** Ops Brain → Now: every note it is holding for you (the 🧠 number), each with its buttons */
+function blRenderNow() {
+  const pane = document.querySelector('.br-pane[data-t="think"]'); if (!pane) return;
+  let box = document.getElementById('blNow');
+  if (!box) { pane.insertAdjacentHTML('afterbegin', '<div id="blNow"></div>'); box = document.getElementById('blNow'); }
+  const sn = _blLS.get(BL_SNOOZE_KEY, {});
+  const list = blThoughts.filter(t => !(sn[t.id] > Date.now()));
+  if (!list.length) { box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="br-sec">Noticed for you <span class="bl-n">${list.length}</span></div>` + list.map((t, i) => `<div class="bl-now ${t.tone || ''}" data-i="${i}">
+    <span class="bl-now-i">${t.icon || '💡'}</span><div class="bl-now-t"><b>${escapeHtml(t.text)}</b>${t.why ? `<small>${escapeHtml(t.why)}</small>` : ''}
+    ${(t.acts || []).length ? `<div class="bl-now-a">${t.acts.map((a, j) => `<button class="btn sm ${j ? 'ghost' : 'gold'}" data-a="${j}">${escapeHtml(a[0])}</button>`).join('')}</div>` : ''}</div>
+    <button class="bl-now-x" title="Not now" aria-label="Not now">✕</button></div>`).join('');
+  box.onclick = e => {
+    const b = e.target.closest('button'), row = e.target.closest('.bl-now'); if (!b || !row) return;
+    const t = list[+row.dataset.i]; if (!t) return;
+    const s2 = _blLS.get(BL_SNOOZE_KEY, {});
+    if (b.dataset.a != null) {
+      _blNote(t.type, 'used');
+      if (t.type !== 'did' && t.type !== 'heal') { s2[t.id] = Date.now() + 30 * 60e3; _blLS.set(BL_SNOOZE_KEY, s2); }
+      try { t.acts[+b.dataset.a][1](); } catch (err) { showToast('That did not work: ' + err.message, 'err'); }
+    } else { _blNote(t.type, 'no'); s2[t.id] = Math.max(Date.now() + 2 * 3600e3, t.snoozeUntil || 0); _blLS.set(BL_SNOOZE_KEY, s2); }
+    if (blShown && blShown.id === t.id) { document.getElementById('blBubble')?.remove(); blShown = null; }
+    blRenderNow(); blLastSig = ''; setTimeout(blTick, 300);
+  };
+}
+
 function blRenderFeed() {
+  blRenderNow();
   const box = document.getElementById('blFeed');
   if (!box) return;
   box.innerHTML = blFeed.length ? blFeed.slice(0, 10).map(f => `<div class="bl-feed-row ${f.kind}"><span>${f.icon}</span><span>${escapeHtml(f.text)}</span><small>${new Date(f.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</small></div>`).join('')

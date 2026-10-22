@@ -471,6 +471,7 @@ function brRenderLearned() {
 function brRenderThink() {
   const box = document.getElementById('brThink');
   if (!box) return;
+  if (typeof blRenderNow === 'function') try { blRenderNow(); } catch (_) {}
   const s = brSuggestions();
   box.innerHTML = s.length ? s.map(x => `<button class="br-sug ${x.tone}" onclick="${x.go.startsWith('tab:') ? `brTabShow('${x.go.slice(4)}')` : `brClose();brGo('${x.go}')`}">
       <span class="br-sug-i">${x.icon}</span><span class="br-sug-t"><b>${escapeHtml(x.text)}</b><small>${escapeHtml(x.why || '')}</small></span><span class="br-sug-go">›</span></button>`).join('')

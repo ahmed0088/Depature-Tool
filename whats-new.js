@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 392, items: [
+    '🧠 The number on the Ops Brain bubble now matches what you see inside: open 🧠 and "Noticed for you" at the top lists every note it is holding, each with its buttons. ✕ puts one away for now and the number goes down.',
+  ] },
   { v: 391, items: [
     '✈️ Away guard alerts on Telegram — they always pop up on iPhone, even when the phone is locked. WhatsApp → 🛡 Away → Telegram: 1) open BotFather and send /newbot, 2) paste the token, 3) tap "Open my bot" and press Start — HotelOps connects by itself and your bot says hi. Alerts come with an "Open HotelOps" button. ntfy still works too; set up both if you like, and 🧪 Send a test checks them all.',
   ] },

@@ -3465,3 +3465,12 @@ html, body { background: var(--bg); }
 
 /* WhatsApp window: its sticky header (with 🛡 Away and ✕) stays below the clock */
 @media (display-mode: standalone) { #waCard .wa-hd { top: 0 !important; } }
+/* Ops Brain → Now: the notes behind the 🧠 number (brain-live.js blRenderNow) */
+.bl-n { background: var(--accent); color: #fff; border-radius: 99px; padding: 0 7px; margin-left: 6px; font-size: .7rem; }
+.bl-now { display: flex; gap: 10px; align-items: flex-start; padding: 11px 12px; margin-bottom: 8px; border-radius: 14px; background: var(--card); border: 1px solid var(--border); border-left: 4px solid var(--sky, #38bdf8); }
+.bl-now.warn { border-left-color: var(--amber, #f59e0b); } .bl-now.bad { border-left-color: var(--rose, #e11d48); } .bl-now.idle { border-left-color: var(--border3, #94a3b8); }
+.bl-now-i { font-size: 1.25rem; line-height: 1.3; }
+.bl-now-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; overflow-wrap: anywhere; }
+.bl-now-t b { font-size: .84rem; } .bl-now-t small { color: var(--text3); font-size: .74rem; }
+.bl-now-a { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
+.bl-now-x { flex: none; width: 30px; height: 30px; border-radius: 9px; border: 0; background: transparent; color: var(--text3); cursor: pointer; }
