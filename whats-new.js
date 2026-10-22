@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 384, items: [
+    '📈 Trends on the phone: "By product" and "Top nationalities" now sit one under the other and fit the screen — no more cut-off amounts. Long names shorten with … (tap-and-hold shows the full name).',
+  ] },
   { v: 383, items: [
     '✅ Lessons (Standards & help): the circle on each lesson now works — tap it to mark the lesson learned (it turns green ✓), tap again to undo. It doesn\'t open or close the lesson, and open lessons stay open.',
   ] },

@@ -69,11 +69,11 @@ function _trBars(entries, fmt, colour) {
   return entries.map(([label, value], i) => `
     <div style="display:flex;align-items:center;gap:9px;margin-bottom:7px;">
       <span style="width:16px;font-family:var(--mono);font-size:0.62rem;color:var(--text3);">${i + 1}</span>
-      <span style="flex:0 0 148px;font-size:0.74rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(label)}</span>
-      <span style="flex:1;height:9px;border-radius:5px;background:var(--bg2);overflow:hidden;">
+      <span style="flex:0 1 148px;min-width:0;font-size:0.74rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(label)}">${escapeHtml(label)}</span>
+      <span style="flex:1 1 40px;min-width:24px;height:9px;border-radius:5px;background:var(--bg2);overflow:hidden;">
         <span style="display:block;height:100%;width:${Math.max(2, Math.round(value / max * 100))}%;background:var(--${colour});"></span>
       </span>
-      <span style="flex:0 0 96px;text-align:right;font-family:var(--mono);font-size:0.7rem;font-weight:600;">${fmt(value)}</span>
+      <span style="flex:0 0 auto;text-align:right;font-family:var(--mono);font-size:0.7rem;font-weight:600;white-space:nowrap;">${fmt(value)}</span>
     </div>`).join('');
 }
 
