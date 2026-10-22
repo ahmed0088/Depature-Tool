@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 377, items: [
+    '📱 iPhone app: open HotelOps in Safari → Share → Add to Home Screen. It opens full screen like a real app (no browser bar), with its own icon. The top bar now sits below the clock, and the bottom menu clears the home bar.',
+  ] },
   { v: 376, items: [
     '🩺 New page: Room Health (Front Desk). It reads WhatsApp, HK requests, the Handover Book, maintenance tickets and room notes, and tells you who to send: "Send Engineering to 116 — AC not cooling reported 3× since yesterday", "Send HK to 206 — smoke smell; deodorise before today\'s arrival". Arrivals into a room with an open problem come first, then repeat problems. One tap sends a clear message to the right WhatsApp group and adds a room note and a handover item; a "done" reply marks it fixed. "Problem rooms" shows the rooms with the most issues in 30 / 90 days.',
     '📦 Package Audit: copy buttons and ✓ Fixed on every package (fixed ones move to "Fixed already", with Undo). The team can change every month (left / renamed people keep their old sales; import a team list). A 🧠 Memory remembers every package across months — "↪ continues from Sep" keeps the seller, and Unknown products are solved from memory. It learns your decisions as rules you accept. 🛠 Settings for package kinds, rules and report columns (drag & drop), and the seller board compares months.',
