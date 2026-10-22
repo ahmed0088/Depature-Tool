@@ -492,9 +492,9 @@ function apShowBanner() {
 }
 
 function apGetCodeCategory(code) {
-  if (apPkgData.upsell.includes(code)) return 'UP';
-  if (apPkgData.fo.includes(code))     return 'FO';
-  if (apPkgData.fb.includes(code))     return 'FB';
+  if (apPkgData.upsell.includes(code)) return 'upsell';   // keys of catLabel / catColor in apShowBanner
+  if (apPkgData.fo.includes(code))     return 'fo';
+  if (apPkgData.fb.includes(code))     return 'fb';
   return '';
 }
 

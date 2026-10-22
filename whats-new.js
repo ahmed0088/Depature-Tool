@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 386, items: [
+    '📱 Phone check with real-size data: In-House no longer runs off the screen; Departures "Open balance", Nationality, No-Show and Arrivals totals shrink to fit their tiles; the Nationality preview and copy box stack; the Arrivals processor column picker fits; long confirmation numbers show in full; the room card shows full facts instead of "…".',
+    '📱 More phone fixes: Night Audit and Rented Rooms side boxes go underneath (no more cut-off names and balances); DTCM long-stay dates stay on one line; Adagio filter fits; the enrolment tracker table scrolls inside its card; Package Audit view tabs and the "Remove this charge" line fit; Gym cards with long names; Skip The Clean steps fit.',
+    '🐞 Arrivals processor: assigned package codes showed "undefined" instead of UP / FO / FB — fixed.',
+  ] },
   { v: 385, items: [
     '🛡 WhatsApp Away guard: going on a break or DND with WhatsApp Web open on the desk PC? Tap the WhatsApp button → 🛡 Away → "I\'m away". If anyone uses your WhatsApp while you\'re gone, your phone gets an alert: the chat they opened, what was on the screen while they scrolled, what they searched, if they typed, and if they closed the reader or WhatsApp. Tap "I\'m back" when you return. Only real mouse / keyboard use counts, never the reader\'s own clicks, and it starts 45 seconds after you switch it on. Paste the WhatsApp reader again once to get it.',
   ] },

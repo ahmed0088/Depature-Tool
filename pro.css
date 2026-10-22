@@ -3302,3 +3302,83 @@ html, body { background: var(--bg); }
 .ln-check:active { transform: scale(.88); }
 .ln-check.pop { animation: lnPop .4s cubic-bezier(.34,1.56,.64,1); }
 @keyframes lnPop { 40% { transform: scale(1.3); } }
+
+/* ── Phone fixes: departures, in-house, arrivals, nationality, no-show, arrivals processor, room card ── */
+@media (max-width: 768px) {
+  /* Departures: a big open balance (e.g. 323,597) shrinks to fit its quarter-width tile instead of spilling out */
+  #panel-departures .dp-k-balance { container-type: inline-size; }
+  #panel-departures .dp-k-balance .dp-kpi-val { font-size: min(21px, 22cqi); max-width: 100%; overflow-wrap: anywhere; }
+  /* Departures card: the five small action labels ("Extending") fit their button on a 360px phone */
+  #panel-departures .dp-acts.g5 .dca:not(.dca-co) { container-type: inline-size; }
+  #panel-departures .dp-acts.g5 .dca:not(.dca-co) .dca-t { font-size: min(11.5px, 20cqi); }
+  /* KPI tiles on these pages: the number shrinks to its tile (16,095 in a third-width tile) */
+  :is(#panel-nationality, #panel-purpose, #panel-arrivals, #panel-inhouse-tally, #panel-noshow) .kpi { container-type: inline-size; min-width: 0; }
+  :is(#panel-nationality, #panel-purpose, #panel-arrivals, #panel-inhouse-tally, #panel-noshow) .kpi-val { font-size: min(26px, 25cqi) !important; overflow-wrap: anywhere; }
+  /* No-show: revenue gets a full-width tile (AED 225,653.50), count and date share the first row */
+  #panel-noshow .kpi-row.c3 { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: dense; }
+  #panel-noshow .kpi-row.c3 > .kpi:has(#ns-kpi-rev) { grid-column: 1 / -1; }
+  #panel-noshow #ns-kpi-rev { font-size: 22px !important; }
+  #panel-noshow #ns-kpi-date { font-size: min(22px, 16cqi) !important; }
+  /* No-show table: date and status stay on one line, the name gets room to breathe (table scrolls sideways) */
+  #panel-noshow .tbl-wrap tbody td:nth-child(-n+2), #panel-noshow .ns-status-pill { white-space: nowrap; }
+  #panel-noshow .tbl-wrap tbody td:nth-child(3) { min-width: 190px; }
+  /* Arrivals / Purpose tables: a 9-digit confirmation number is not cut off */
+  #panel-arrivals tbody td:nth-child(2) input, #panel-purpose tbody td:nth-child(4) input { width: 104px !important; }
+  /* In-House: the page column never grows wider than the screen (long file name, wide rows) */
+  #ihRoot { grid-template-columns: minmax(0, 1fr); }
+  #ihRoot > * { min-width: 0; }
+  #ihRoot .ih-meta span { min-width: 0; overflow-wrap: anywhere; }
+  /* Nationality: preview and the copy box stack instead of sitting side by side */
+  #natResults > div[style*="1fr 250px"] { grid-template-columns: minmax(0, 1fr) !important; }
+  #natPrevTitle { white-space: normal !important; }
+  /* Arrivals processor: a long file name wraps; the column mapper fits the screen */
+  #ap-drop-txt { overflow-wrap: anywhere; }
+  .ap-col-mapper-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .ap-col-map-row { min-width: 0; }
+  .ap-col-map-lbl { width: 112px; white-space: normal; }
+  select.ap-col-sel { min-width: 0; width: 100%; }
+  /* Room card: facts wrap instead of cutting the amount / company off (AED 12,76…) */
+  #rcSheet .rc-fact b { white-space: normal; overflow-wrap: anywhere; text-overflow: clip; }
+}
+
+/* ── Phone fixes: Night Audit, Rented Rooms, DTCM, Package Audit, Adagio, Pipeline, Gym, Skip The Clean ── */
+@media (max-width: 768px) {
+  /* side panels (Copy / Month / Changes) go under the list instead of squeezing it */
+  #panel-rent div[style*="grid-template-columns:1fr 210px"],
+  #panel-audit div[style*="grid-template-columns:1fr 250px"] { grid-template-columns: minmax(0, 1fr) !important; }
+  /* Night Audit compare rows: room + status · name · arrival / departure / balance */
+  #naCompareTable > div, #naCompareSection .card > div[style*="60px 1fr 1fr 1fr 1fr 80px"] { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; column-gap: 8px; row-gap: 3px; }
+  #naCompareTable > div > :nth-child(1), #naCompareSection .card > div[style*="60px 1fr 1fr 1fr 1fr 80px"] > :nth-child(1) { grid-column: 1 / 3; }
+  #naCompareTable > div > :nth-child(2), #naCompareSection .card > div[style*="60px 1fr 1fr 1fr 1fr 80px"] > :nth-child(2) { grid-column: 1 / -1; }
+  #naCompareTable > div > :nth-child(6), #naCompareSection .card > div[style*="60px 1fr 1fr 1fr 1fr 80px"] > :nth-child(6) { grid-column: 3; grid-row: 1; text-align: right; }
+  /* Night Audit corrected rows: room · name, then arrival / departure / balance */
+  #naFixedTable > div { grid-template-columns: 52px repeat(3, minmax(0, 1fr)) !important; row-gap: 2px; }
+  #naFixedTable > div > :nth-child(2) { grid-column: 2 / -1; }
+  #naFixedTable > div > :nth-child(3) { grid-column: 2; }
+  #naFixedTable > div > :nth-child(4) { grid-column: 3; }
+  #naFixedTable > div > :nth-child(5) { grid-column: 4; }
+  /* DTCM long stay: dates stay on one line (the table scrolls sideways) */
+  #dtcLongOut td[style*="var(--mono)"] { white-space: nowrap; }
+  /* Adagio: a long company name no longer widens its filter past the screen; table columns keep a readable width */
+  #panel-adagio .adg-controls-row2 .adg-select { max-width: 100%; min-width: 0; }
+  #panel-adagio .adg-table td:nth-child(2) { min-width: 130px; }
+  #panel-adagio .adg-table td:nth-child(3) { min-width: 160px; }
+  /* Pipeline tracker: the wide table scrolls sideways inside its card instead of pushing the page */
+  #gpTracker { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  #gpTracker .gp-table { min-width: 640px; }
+  /* Package Audit: the view tabs get their own full row that slides sideways, so no tab hides under Clear */
+  #panel-package-audit .page-hd-actions { flex-wrap: wrap !important; overflow: visible; }
+  #panel-package-audit .page-hd-actions .pa-tabs { display: flex; flex: 1 1 100%; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain; }
+  #panel-package-audit .page-hd-actions .pa-tabs::-webkit-scrollbar { display: none; }
+  #panel-package-audit .page-hd-actions .pa-tabs button { flex: 0 0 auto; }
+  /* Gym: a long name / details stay next to the round initials */
+  #panel-gym .gy-card .gy-main { flex: 1 1 calc(100% - 54px); }
+}
+@media (max-width: 480px) {
+  /* Package Audit: the "what to do" line sits under the package without running off the card */
+  #panel-package-audit .pa-act { flex-basis: calc(100% - 54px); }
+}
+@media (max-width: 980px) {
+  /* Skip The Clean: the three steps fit the screen whatever file names are in them */
+  #panel-skip-clean .stc-wrapper .stc-steps { grid-template-columns: minmax(0, 1fr); }
+}
