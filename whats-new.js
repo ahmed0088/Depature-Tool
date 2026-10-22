@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 391, items: [
+    '✈️ Away guard alerts on Telegram — they always pop up on iPhone, even when the phone is locked. WhatsApp → 🛡 Away → Telegram: 1) open BotFather and send /newbot, 2) paste the token, 3) tap "Open my bot" and press Start — HotelOps connects by itself and your bot says hi. Alerts come with an "Open HotelOps" button. ntfy still works too; set up both if you like, and 🧪 Send a test checks them all.',
+  ] },
   { v: 390, items: [
     '🧠 Smarter Away guard: every action gets a level — a private chat, a search, typing or closing the reader is 🚨 urgent; your work groups and a moved mouse are minor and don\'t buzz you alone. A visit is one story on your phone: "🚨 Someone is on your WhatsApp" → "⏱ Still on it · 3 min" (at most once a minute) → "✅ Stopped — Family, Mum · searched salary". A red live banner shows while someone is on it, and the history is grouped by visit with a short summary.',
     '🛡 Auto-away: WhatsApp → 🛡 Away → ⚙️ Smart alerts. Choose 5–30 minutes and the guard switches itself on when nobody has touched the WhatsApp PC that long. Also choose what reaches your phone: Urgent only, Important, or Everything. Paste the WhatsApp reader again once for these.',

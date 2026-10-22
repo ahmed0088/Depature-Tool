@@ -31,6 +31,7 @@
     touch: ['🖱', 'Clicking'], focus: ['🪟', 'Came to WhatsApp'], reader: ['⚙️', 'Touched the reader'], stop: ['⛔', 'Closed the reader'], link: ['🔌', 'Reader went offline'],
   };
   let NTFY = null;   // { topic } — lock-screen alerts through the free ntfy app
+  let TG = null;     // { token, bot, chat } — or through your own Telegram bot (most reliable on iPhone)
   let CFG = { level: 'important', auto: 0 };   // level: urgent | important | all · auto: minutes idle before auto-away (0 = off)
   const LEVELS = { urgent: 3, important: 2, all: 1 };
   const SESSION_GAP = 3 * 60e3;   // quiet this long = the visit is over
@@ -83,7 +84,7 @@
     ST = v;
     if (typeof fbSet === 'function') fbSet(P('on'), v.on), fbSet(P('since'), v.since), fbSet(P('by'), v.by);
     pushToReader();
-    if (auto) ntfy('🛡 Auto-away on', `Nobody touched the WhatsApp PC for ${CFG.auto} min, so the Away guard is now watching it. Tap "I'm back" in HotelOps when you return.`, 2, ['shield']);
+    if (auto) notify('🛡 Auto-away on', `Nobody touched the WhatsApp PC for ${CFG.auto} min, so the Away guard is now watching it. Tap "I'm back" in HotelOps when you return.`, 2, ['shield']);
     else toast(on ? '🛡 Away guard on — your phone will be told if someone uses your WhatsApp (starts in 45 s)' : '🛡 Away guard off — welcome back', on ? 'ok' : '');
     if (!on) endVisit(true);
     render();
@@ -139,6 +140,7 @@
       BEAT = v.beat || null;
       CFG = Object.assign({ level: 'important', auto: 0 }, v.cfg && typeof v.cfg === 'object' ? v.cfg : {});
       if (!LEVELS[CFG.level]) CFG.level = 'important';
+      TG = v.tg && /^\d+:[\w-]{30,}$/.test(v.tg.token || '') ? { token: v.tg.token, bot: v.tg.bot || '', chat: v.tg.chat || 0 } : null;
       NTFY = v.ntfy && /^hotelops-[a-z0-9]{12,40}$/.test(v.ntfy.topic || '') ? { topic: v.ntfy.topic } : null;
       LOG = v.log && typeof v.log === 'object' ? v.log : {};
       const ids = Object.keys(LOG);
@@ -187,7 +189,7 @@
         if (!V || V.told) return;
         V.told = true; vUpd = Date.now();
         const q = vQ.splice(0);
-        ntfy(V.top >= 3 ? '🚨 Someone is on your WhatsApp' : '⚠️ Someone touched your WhatsApp PC',
+        notify(V.top >= 3 ? '🚨 Someone is on your WhatsApp' : '⚠️ Someone touched your WhatsApp PC',
           q.slice(-5).map(evLine).join('\n') + (q.length > 5 ? `\n+${q.length - 5} more` : '') + '\n' + clock(V.start), V.top >= 3 ? 5 : 4, ['rotating_light']);
       }, 2500);
       return;
@@ -200,7 +202,7 @@
       const q = vQ.splice(0).filter(e => sev(e) >= need);
       if (!q.length) return;
       const long = V.end - V.start > 3 * 60e3;
-      ntfy(`⏱ Still on your WhatsApp · ${mins(Date.now() - V.start)}`, q.slice(-5).map(evLine).join('\n'), long ? 5 : 4, ['hourglass']);
+      notify(`⏱ Still on your WhatsApp · ${mins(Date.now() - V.start)}`, q.slice(-5).map(evLine).join('\n'), long ? 5 : 4, ['hourglass']);
     }, 2500);
   }
   /** the visit is over (quiet 3 min, or you're back): one summary of what they did */
@@ -209,28 +211,105 @@
     const v = V; V = null; vQ = [];
     if (!v || !v.told) return;
     const sum = visits(v.ev)[0]; if (!sum) return;
-    ntfy(back ? '✅ You\'re back — here\'s what happened' : '✅ Activity on your WhatsApp stopped',
+    notify(back ? '✅ You\'re back — here\'s what happened' : '✅ Activity on your WhatsApp stopped',
       [`${clock(v.start)}${clock(v.end) !== clock(v.start) ? '–' + clock(v.end) : ''} · ${mins(v.end - v.start)} · ${v.ev.length} action${v.ev.length === 1 ? '' : 's'}`].concat(storyOf(sum)).join('\n'), 3, ['white_check_mark']);
   }
+  // ── Telegram: your own bot (made in 1 minute with @BotFather) sends the alerts to your Telegram ──
+  const TGAPI = (tok, m) => 'https://api.telegram.org/bot' + tok + '/' + m;
+  function tgCall(tok, m, params) {   // a form body: no pre-flight check
+    return fetch(TGAPI(tok, m), { method: 'POST', body: new URLSearchParams(params || {}) }).then(r => r.json()).catch(() => ({ ok: false }));
+  }
+  function tgSend(title, message, priority) {
+    if (!TG || !TG.chat) return Promise.resolve(false);
+    const url = location.origin + location.pathname + '#wa-guard', p = { chat_id: TG.chat, parse_mode: 'HTML',
+      text: `<b>${esc(title)}</b>\n${esc(message)}`, disable_notification: (priority || 5) <= 2 ? 'true' : 'false' };
+    if (/^https:/.test(url)) p.reply_markup = JSON.stringify({ inline_keyboard: [[{ text: '🛡 Open HotelOps', url }]] });
+    return tgCall(TG.token, 'sendMessage', p).then(j => !!(j && j.ok));
+  }
+  /** every alert goes to every way you set up */
+  function notify(title, message, priority, tags) {
+    return Promise.all([ntfy(title, message, priority, tags), tgSend(title, message, priority)]).then(r => r.some(Boolean));
+  }
+  let tgWiz = null, tgPoll = 0;   // { step, token, bot, code, err }
+  function tgStart() { tgWiz = { step: 1 }; render(); }
+  async function tgToken() {
+    const inp = document.getElementById('wgTok'), tok = String(inp && inp.value || '').trim().replace(/\s+/g, '');
+    if (!/^\d+:[\w-]{30,}$/.test(tok)) { tgWiz.err = 'That doesn\'t look like a bot token. It looks like 123456789:AAH… — copy the whole line BotFather sent.'; return render(); }
+    tgWiz.err = ''; tgWiz.busy = true; render();
+    const j = await tgCall(tok, 'getMe');
+    tgWiz.busy = false;
+    if (!j || !j.ok) { tgWiz.err = 'Telegram didn\'t accept that token. Check you copied all of it, and that you\'re online.'; return render(); }
+    const r = crypto.getRandomValues(new Uint8Array(6));
+    Object.assign(tgWiz, { step: 3, token: tok, bot: j.result.username, code: 'ho' + [...r].map(x => x.toString(16).padStart(2, '0')).join('') });
+    render(); tgWait();
+  }
+  /** wait for you to press Start in Telegram: that message tells us your chat */
+  function tgWait() {
+    clearTimeout(tgPoll);
+    const w = tgWiz; if (!w || w.step !== 3) return;
+    const t0 = w.t0 || (w.t0 = Date.now());
+    tgCall(w.token, 'getUpdates', { offset: w.off || 0, timeout: 0, allowed_updates: '["message"]' }).then(j => {
+      if (tgWiz !== w) return;
+      (j && j.ok ? j.result : []).forEach(u => {
+        w.off = u.update_id + 1;
+        const m = u.message; if (!m || !m.chat) return;
+        if (String(m.text || '').trim() === '/start ' + w.code) tgDone(m.chat.id, m.from && m.from.first_name);
+      });
+      if (tgWiz === w && w.step === 3) { if (Date.now() - t0 < 5 * 60e3) tgPoll = setTimeout(tgWait, 2000); else { w.err = 'No Start seen yet — tap "Open my bot" and press Start.'; w.t0 = 0; render(); } }
+    });
+  }
+  function tgDone(chat, name) {
+    const w = tgWiz; tgWiz = { step: 4 };
+    TG = { token: w.token, bot: w.bot, chat };
+    if (typeof fbSet === 'function' && uid()) fbSet(P('tg'), { token: w.token, bot: w.bot, chat, at: Date.now() });
+    tgSend('✅ Connected to HotelOps', `Hi ${name || ''}! Away guard alerts will come here — even when your phone is locked.`, 4);
+    render(); setTimeout(() => { if (tgWiz && tgWiz.step === 4) { tgWiz = null; render(); } }, 6000);
+  }
+  function tgCancel() { clearTimeout(tgPoll); tgWiz = null; render(); }
+  function tgOff() { if (!confirm('Stop Telegram alerts?')) return; TG = null; if (typeof fbSet === 'function') fbSet(P('tg'), null); render(); }
+  function tgPaste() { try { navigator.clipboard.readText().then(t => { const i = document.getElementById('wgTok'); if (i) { i.value = t.trim(); tgToken(); } }, () => {}); } catch (_) {} }
+
   function pushSetup() {
     if (!uid() || typeof fbSet !== 'function') return toast('Sign in first', 'err');
     const r = crypto.getRandomValues(new Uint8Array(16)), topic = 'hotelops-' + [...r].map(b => 'abcdefghijkmnpqrstuvwxyz23456789'[b % 32]).join('');
     NTFY = { topic }; fbSet(P('ntfy'), { topic, at: Date.now() }); render();
   }
-  function pushOff() { if (!confirm('Stop lock-screen alerts?')) return; NTFY = null; if (typeof fbSet === 'function') fbSet(P('ntfy'), null); render(); }
+  function pushOff() { if (!confirm('Stop ntfy alerts?')) return; NTFY = null; if (typeof fbSet === 'function') fbSet(P('ntfy'), null); render(); }
   function pushCopy() { if (!NTFY) return; try { navigator.clipboard.writeText(NTFY.topic).then(() => toast('Copied ✓ — paste it in ntfy'), () => prompt('Copy this', NTFY.topic)); } catch (_) { prompt('Copy this', NTFY.topic); } }
   function pushTest() {
-    ntfy('✅ HotelOps Away guard', 'Lock-screen alerts work. You\'ll get one here if someone uses your WhatsApp while you\'re away.', 4, ['shield'])
-      .then(ok => toast(ok ? 'Test sent — it should pop up on your phone in a few seconds' : 'Could not reach ntfy.sh — check the internet and try again', ok ? 'ok' : 'err'));
+    notify('🧪 Test from HotelOps', 'Alerts work ✓ You\'ll get one here if someone uses your WhatsApp while you\'re away.', 4, ['shield'])
+      .then(ok => toast(ok ? 'Test sent — check your phone' : 'Could not send — check the internet and try again', ok ? 'ok' : 'err'));
   }
+  const TG_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#29a9eb"/><path d="M5.4 11.8l11.3-4.4c.5-.2 1 .1.8.9l-1.9 9c-.1.6-.5.8-1 .5l-2.9-2.1-1.4 1.3c-.2.2-.3.3-.6.3l.2-3 5.4-4.9c.2-.2 0-.3-.3-.1l-6.7 4.2-2.9-.9c-.6-.2-.6-.6.1-.9z" fill="#fff"/></svg>';
   function pushHtml() {
-    if (!NTFY) return `<div class="wg-push"><b>📲 Alerts on your lock screen</b><small>Get the alert even when your phone is locked and HotelOps is closed. Free, uses the ntfy app, about 1 minute to set up.</small><button class="btn primary" onclick="hoWaGuard.pushSetup()">Set up phone alerts</button></div>`;
-    return `<div class="wg-push on"><b>📲 Alerts on your lock screen</b>
-      <ol><li>Install <b>ntfy</b> from the App Store: <a href="https://apps.apple.com/app/ntfy/id1625396347" target="_blank" rel="noopener">open App Store</a></li>
-      <li>In ntfy tap <b>+</b>, paste this code as the topic, tap <b>Subscribe</b>, and allow notifications:</li></ol>
-      <div class="wg-topic"><code>${esc(NTFY.topic)}</code><button class="btn sm" onclick="hoWaGuard.pushCopy()">Copy</button></div>
-      <small>Keep this code private — anyone with it gets your alerts. Alerts say what happened and which chat, never the messages.</small>
-      <div class="wg-push-act"><button class="btn sm primary" onclick="hoWaGuard.pushTest()">Send a test</button><button class="btn sm ghost" onclick="hoWaGuard.pushOff()">Turn off</button></div></div>`;
+    const w = tgWiz;
+    if (w) {
+      const dots = `<div class="wg-steps">${[1, 2, 3].map(i => `<i class="${(w.step >= i ? 'on' : '') + (w.step === i ? ' cur' : '')}"></i>`).join('')}</div>`;
+      const err = w.err ? `<div class="wg-err">${esc(w.err)}</div>` : '';
+      let body = '';
+      if (w.step === 1) body = `<h4>Make your alert bot</h4><p>In Telegram, open <b>BotFather</b> and send <code>/newbot</code>. Give it any name, e.g. <i>My HotelOps Guard</i>, and a username ending in <i>bot</i>. BotFather replies with a <b>token</b> — copy it.</p>
+        <a class="wg-tgbtn" href="https://t.me/BotFather" target="_blank" rel="noopener">${TG_SVG}Open BotFather</a>
+        <button class="wg-next" onclick="hoWaGuard.tgStep(2)">I copied the token →</button>`;
+      else if (w.step === 2) body = `<h4>Paste the token</h4><p>The long line from BotFather, like <code>123456789:AAH…</code></p>
+        <div class="wg-tokrow"><input id="wgTok" class="input" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="123456789:AAH…" value="${esc(w.token || '')}"><button class="btn sm" onclick="hoWaGuard.tgPaste()">Paste</button></div>
+        ${err}<button class="wg-next" onclick="hoWaGuard.tgToken()" ${w.busy ? 'disabled' : ''}>${w.busy ? 'Checking…' : 'Check it →'}</button>`;
+      else if (w.step === 3) body = `<h4>Say hi to your bot</h4><p>Tap the button, then press <b>Start</b> in Telegram. HotelOps connects by itself.</p>
+        <a class="wg-tgbtn" href="https://t.me/${esc(w.bot)}?start=${esc(w.code)}" target="_blank" rel="noopener">${TG_SVG}Open @${esc(w.bot)}</a>
+        <div class="wg-wait"><span class="wg-spin"></span>Waiting for you to press Start…</div>${err}`;
+      else body = `<div class="wg-done"><span>✓</span><h4>Connected!</h4><p>Check Telegram — your bot just said hi. Alerts will pop up there, even when your phone is locked.</p></div>`;
+      return `<div class="wg-push wg-wiz">${w.step < 4 ? dots : ''}${body}${w.step < 4 ? '<button class="wg-cancel" onclick="hoWaGuard.tgCancel()">Cancel</button>' : ''}</div>`;
+    }
+    const on = [];
+    if (TG && TG.chat) on.push(`<div class="wg-ch on">${TG_SVG}<div><b>Telegram</b><small>@${esc(TG.bot)} · connected</small></div><button class="wg-chx" onclick="hoWaGuard.tgOff()" title="Turn off">✕</button></div>`);
+    if (NTFY) on.push(`<div class="wg-ch on"><span class="wg-chi">📳</span><div><b>ntfy</b><small><code>${esc(NTFY.topic)}</code> <button class="wg-link" onclick="hoWaGuard.pushCopy()">copy</button></small></div><button class="wg-chx" onclick="hoWaGuard.pushOff()" title="Turn off">✕</button></div>`);
+    const add = [];
+    if (!(TG && TG.chat)) add.push(`<button class="wg-ch add best" onclick="hoWaGuard.tgStart()">${TG_SVG}<div><b>Telegram <em>best</em></b><small>Always pops up on iPhone · 1 minute</small></div><span class="wg-arrow">›</span></button>`);
+    if (!NTFY) add.push(`<button class="wg-ch add" onclick="hoWaGuard.pushSetup()"><span class="wg-chi">📳</span><div><b>ntfy</b><small>No account · needs Background App Refresh</small></div><span class="wg-arrow">›</span></button>`);
+    return `<div class="wg-push"><b>📲 Alerts on your phone</b>
+      ${on.length ? on.join('') + `<button class="wg-test" onclick="hoWaGuard.pushTest()">🧪 Send a test</button>` : '<small>Get told even when your phone is locked and HotelOps is closed.</small>'}
+      ${add.length ? `<div class="wg-add">${on.length ? '<small>Add another</small>' : ''}${add.join('')}</div>` : ''}
+      ${NTFY && !(TG && TG.chat) ? '<small>ntfy: install it from the <a href="https://apps.apple.com/app/ntfy/id1625396347" target="_blank" rel="noopener">App Store</a>, tap +, paste the code. Alerts only in the list? Turn on Background App Refresh for ntfy and don\'t swipe it closed — or use Telegram.</small>' : ''}
+      <small class="wg-fine">Alerts say what happened and which chat — never the messages.</small></div>`;
   }
   /** someone is on it right now (something in the last 3 min while you're away) */
   function live() {
@@ -311,7 +390,7 @@
   // start once someone is signed in; the PC tab checks in every 30 s while you're away
   const boot = setInterval(() => { if (uid()) { clearInterval(boot); start(); } }, 1500);
   setInterval(beat, 30000);
-  setInterval(() => { if (ST.on && document.getElementById('wgOv') && !document.getElementById('wgOv').hidden && !document.querySelector('#wgOv details.wg-cfg[open]')) render(); }, 20000);   // live banner and times
+  setInterval(() => { if (ST.on && document.getElementById('wgOv') && !document.getElementById('wgOv').hidden && !document.querySelector('#wgOv details.wg-cfg[open]') && !tgWiz) render(); }, 20000);   // live banner and times
   setInterval(() => { if (ST.on) pushToReader(); }, 15000);   // a reader pasted again (or reloaded) learns it at once
   document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
 
@@ -350,6 +429,21 @@
 .wg-cfg{padding:12px 14px;border-radius:16px;background:var(--card);border:1px solid var(--border)}.wg-cfg summary{font-size:14px;color:var(--text);font-weight:700}
 .wg-cfg-row{display:flex;flex-direction:column;gap:6px;margin-top:12px;font-size:13px}.wg-cfg-row small{color:var(--text3);font-size:12px;line-height:1.45}
 .wg-seg{display:flex;gap:4px;padding:3px;border-radius:12px;background:var(--bg2);flex-wrap:wrap}.wg-seg button{flex:1 1 auto;min-width:0;padding:7px 8px;border:0;border-radius:9px;background:transparent;color:var(--text2);font:600 12.5px var(--font);cursor:pointer}.wg-seg button.on{background:var(--card);color:var(--accent);box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.wg-ch{display:flex;align-items:center;gap:12px;width:100%;padding:11px 12px;border-radius:14px;border:1px solid var(--border);background:var(--bg2);color:var(--text);text-align:left;font:inherit;cursor:pointer;box-sizing:border-box}
+.wg-ch svg,.wg-chi{width:34px;height:34px;flex:none;display:grid;place-items:center;font-size:24px}.wg-ch>div{flex:1;min-width:0;display:flex;flex-direction:column}.wg-ch b{font-size:14.5px}.wg-ch em{font-style:normal;font-size:10.5px;font-weight:800;color:#fff;background:#29a9eb;border-radius:99px;padding:1px 7px;margin-left:6px;vertical-align:2px}
+.wg-ch small{overflow-wrap:anywhere}.wg-ch.on{background:color-mix(in srgb,var(--mint,#22c55e) 10%,var(--card));border-color:color-mix(in srgb,var(--mint,#22c55e) 40%,transparent)}.wg-ch.add.best{border-color:#29a9eb;box-shadow:0 6px 18px -10px #29a9eb}
+.wg-ch.add:active{transform:scale(.985)}.wg-arrow{font-size:24px;color:var(--text3)}.wg-chx{width:32px;height:32px;border-radius:10px;border:0;background:transparent;color:var(--text3);cursor:pointer;font-size:14px}
+.wg-add{display:flex;flex-direction:column;gap:8px}.wg-link{border:0;background:none;color:var(--accent);font:inherit;cursor:pointer;padding:0}.wg-fine{opacity:.8}
+.wg-test{align-self:stretch;padding:11px;border-radius:12px;border:1px dashed var(--border2);background:transparent;color:var(--accent);font:700 14px var(--font);cursor:pointer}
+.wg-wiz{align-items:stretch;gap:10px;padding:16px}.wg-wiz h4{margin:0;font-size:17px}.wg-wiz p{margin:0;color:var(--text2);font-size:13.5px;line-height:1.5}.wg-wiz code{background:var(--bg2);padding:1px 5px;border-radius:6px;font-size:12.5px}
+.wg-steps{display:flex;gap:6px}.wg-steps i{flex:1;height:5px;border-radius:99px;background:var(--border)}.wg-steps i.on{background:#29a9eb}.wg-steps i.cur{box-shadow:0 0 0 3px color-mix(in srgb,#29a9eb 25%,transparent)}
+.wg-tgbtn{display:flex;align-items:center;justify-content:center;gap:10px;padding:13px;border-radius:14px;background:#29a9eb;color:#fff !important;font:700 15px var(--font);text-decoration:none;box-shadow:0 10px 24px -12px #29a9eb}.wg-tgbtn svg{width:24px;height:24px}.wg-tgbtn svg circle{fill:#fff}.wg-tgbtn svg path{fill:#29a9eb}
+.wg-next{padding:13px;border-radius:14px;border:0;background:var(--accent);color:#fff;font:700 15px var(--font);cursor:pointer}.wg-next:disabled{opacity:.6}
+.wg-cancel{align-self:center;border:0;background:none;color:var(--text3);font:600 13px var(--font);cursor:pointer}
+.wg-tokrow{display:flex;gap:8px}.wg-tokrow input{flex:1;min-width:0;font:500 15px var(--mono,monospace)}
+.wg-err{color:var(--rose,#e11d48);font-size:13px;line-height:1.4}
+.wg-wait{display:flex;align-items:center;gap:10px;justify-content:center;color:var(--text2);font-size:13.5px}.wg-spin{width:16px;height:16px;border-radius:50%;border:2.5px solid var(--border2);border-top-color:#29a9eb;animation:wgSpin .8s linear infinite}@keyframes wgSpin{to{transform:rotate(360deg)}}
+.wg-done{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;padding:8px 0}.wg-done span{width:56px;height:56px;border-radius:50%;display:grid;place-items:center;font-size:28px;color:#fff;background:linear-gradient(135deg,#22c55e,#16a34a);animation:wgPop .5s cubic-bezier(.34,1.56,.64,1)}@keyframes wgPop{from{transform:scale(.3)}}
 .wg-empty{padding:14px;text-align:center;color:var(--mint,#16a34a);font-weight:600;font-size:13.5px}
 .wg-how{margin-top:6px;font-size:12px;line-height:1.5;color:var(--text3)}.wg-how b{display:block;color:var(--text2);margin-bottom:2px}
 html.wg-away .topbar .logo::after{content:'🛡';margin-left:4px;font-size:13px}`;
@@ -357,5 +451,5 @@ html.wg-away .topbar .logo::after{content:'🛡';margin-left:4px;font-size:13px}
 
   if (/wa-guard/.test(location.hash)) setTimeout(() => { open(); try { history.replaceState(null, '', location.pathname + location.search); } catch (_) {} }, 1800);   // tapped a lock-screen alert
 
-  W.hoWaGuard = { open, close, set, setCfg, state, fromReader, clearLog, render, sev, visits, pushSetup, pushOff, pushCopy, pushTest, _st: () => ({ ST, LOG, BEAT }) };
+  W.hoWaGuard = { tgStart, tgToken, tgPaste, tgCancel, tgOff, tgStep: n => { if (tgWiz) { tgWiz.step = n; tgWiz.err = ''; render(); setTimeout(() => document.getElementById('wgTok')?.focus(), 50); } }, notify, open, close, set, setCfg, state, fromReader, clearLog, render, sev, visits, pushSetup, pushOff, pushCopy, pushTest, _st: () => ({ ST, LOG, BEAT }) };
 })(window);
