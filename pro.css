@@ -3252,3 +3252,15 @@ body.hsu-dragging, body.hsu-dragging * { cursor: grabbing !important; user-selec
 .fl-ask-card b { font-size: 17px; color: var(--text, #fff); }
 .fl-ask-card .input { width: 100%; box-sizing: border-box; font-size: 16px; }
 .fl-ask-err { min-height: 1em; color: var(--red, #f87171); font-size: 13px; }
+
+/* ── iPhone Home Screen app: the app fills the whole screen (black-translucent + viewport-fit=cover),
+   so the top bar grows down past the clock / Dynamic Island and the page fills to the very bottom ── */
+html, body { background: var(--bg); }
+@supports (padding: env(safe-area-inset-top)) {
+  #appWrapper > .topbar { padding-top: env(safe-area-inset-top) !important; height: calc(58px + env(safe-area-inset-top)) !important; }
+  #loginScreen .login-bg { padding-top: max(32px, env(safe-area-inset-top)); padding-bottom: max(32px, env(safe-area-inset-bottom)); }
+}
+@media (max-width: 768px) {
+  @supports (padding: env(safe-area-inset-top)) { #appWrapper > .topbar { height: calc(56px + env(safe-area-inset-top)) !important; } }
+}
+@media (display-mode: standalone) { #appWrapper { height: auto !important; max-height: none !important; top: 0; bottom: 0; } }   /* installed app: pin to all four screen edges */

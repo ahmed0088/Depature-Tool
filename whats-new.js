@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 379, items: [
+    '📱 iPhone app: fixed the bottom menu floating too high with a grey strip under it. The app now fills the whole screen; the top bar sits below the clock and the menu just above the home bar.',
+  ] },
   { v: 378, items: [
     '🙂 Sign in with Face ID (a passkey). After you sign in with your password, HotelOps asks "Sign in with Face ID next time?" — tap Turn on. From then on the sign-in card shows a big "Sign in with Face ID" button, and opening the app from your Home Screen asks for your face straight away. Your password stays locked on that device behind your face. Turn it on or off any time in Settings → Privacy & security. Changed your password? Sign in with the new one once and turn it on again.',
   ] },
