@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 382, items: [
+    '🧠 Ops Brain on the phone: a big Close button at the bottom, swipe right (or pull down from the top) to close, and the phone\'s back gesture closes it too — you never need to reach the ✕ at the top.',
+  ] },
   { v: 381, items: [
     '📱 iPhone app: Ops Brain and the pop-up windows no longer hide their top (title, ✕ close, Autopilot) under the clock, and their last buttons stay above the home bar.',
   ] },

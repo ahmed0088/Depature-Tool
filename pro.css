@@ -3289,3 +3289,10 @@ html, body { background: var(--bg); }
   .modal-bg, .fr-overlay, .dpn-ov, .adg-modal-overlay, .cl-lightbox, .ri-viewer, .fl-ask, .ln-spot-wrap {
     padding-top: max(16px, env(safe-area-inset-top)) !important; padding-bottom: max(16px, env(safe-area-inset-bottom)) !important; box-sizing: border-box; }
 }
+/* Ops Brain: a Close bar at the bottom on phones — always reachable with your thumb */
+.br-close-bar { display: none; }
+@media (max-width: 768px) {
+  .br-close-bar { display: block; flex: none; margin: 8px 16px 10px; height: 46px; border-radius: 14px; border: 1px solid var(--border2);
+    background: var(--card2, var(--card)); color: var(--text); font: 700 15px var(--font); cursor: pointer; }
+  .br-close-bar:active { transform: scale(.98); }
+}

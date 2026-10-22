@@ -488,12 +488,37 @@ function brTabShow(t) {
 }
 
 function brOpen(tab) {
-  if (!document.getElementById('brSheet')) brBuild();
+  if (!document.getElementById('brSheet')) { brBuild(); _brCloseWays(); }
+  const wasOpen = document.getElementById('brSheet').classList.contains('open');
   document.getElementById('brSheet').classList.add('open');
+  if (!wasOpen) try { history.pushState({ brOpen: 1 }, ''); } catch (_) {}   // the phone's back gesture closes Ops Brain
   brTabShow(tab || 'think');
   if (!tab || tab === 'think') setTimeout(() => document.getElementById('brQ')?.focus({ preventScroll: true }), 60);
 }
-function brClose() { document.getElementById('brSheet')?.classList.remove('open'); }
+function brClose(fromBack) {
+  const el = document.getElementById('brSheet');
+  if (!el || !el.classList.contains('open')) return;
+  el.classList.remove('open');
+  if (!fromBack) try { if (history.state && history.state.brOpen) history.back(); } catch (_) {}
+}
+/** Ways out that never depend on reaching the ✕ at the top: a Close bar at the bottom (phones),
+ *  swipe right or down, Escape, and the back gesture. */
+function _brCloseWays() {
+  const ov = document.getElementById('brSheet'), sheet = ov.querySelector('.br-sheet');
+  const bar = document.createElement('button');
+  bar.type = 'button'; bar.className = 'br-close-bar'; bar.textContent = 'Close'; bar.onclick = () => brClose();
+  sheet.appendChild(bar);
+  let x0 = 0, y0 = 0, t0 = 0, sc = 0;
+  sheet.addEventListener('touchstart', e => { const t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; t0 = Date.now(); sc = sheet.querySelector('.br-scroll')?.scrollTop || 0; }, { passive: true });
+  sheet.addEventListener('touchend', e => {
+    const t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0;
+    if (Date.now() - t0 > 700) return;
+    if (dx > 90 && Math.abs(dy) < 60 && !e.target.closest('.br-tabs,.bu-quick,input,textarea,select')) brClose();   // swipe right
+    else if (dy > 120 && Math.abs(dx) < 60 && sc <= 0 && y0 < 260) brClose();   // pull down from the top
+  }, { passive: true });
+  window.addEventListener('popstate', () => brClose(true));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') brClose(); });
+}
 
 function brBuild() {
   const pages = [...document.querySelectorAll('.nav-item[data-panel]')].map(n => `<option value="${n.dataset.panel}">${escapeHtml(n.textContent.replace(/[\d—✓]+\s*$/, '').trim())}</option>`).join('');
