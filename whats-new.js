@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 375, items: [
+    '🔗 In-House and Departures are linked live: a room checked out on Departures (by hand, by WhatsApp or "Check out all due") shows "✓ Checked out 11:02" on In-House and leaves the counts; Undo brings it back. An extension shows "↪ extended +2N → 23 Oct" with the new date and nights left. Extending, may extend, late check-out, NA and DND show as badges.',
+    '➕ In-House tells you which rooms leave today but are not on Departures — "Add them" in one tap. Guests on today\'s arrivals who are in-house get "🛎️ Arrived". The room card follows all of it live, and WhatsApp never re-adds a room already checked out today.',
+  ] },
   { v: 374, items: [
     '🛏️ Room card: tap a room number almost anywhere (Departures, In-House, HK Requests, the WhatsApp window, search, or ask Ops Brain "what\'s up with 512") and see everything about that room in one place — who is in it, today\'s departure status, who is arriving, and one timeline of the stay: WhatsApp messages, HK requests, handover items, Front Office Log, wake-up calls, gym and departure actions. Tap any line to open it where it came from.',
     '📝 Room notes, shared with the team: add a note to any room (request, VIP, payment, maintenance, luggage, taxi, follow-up…), pin it, keep it for the stay or just today. It goes away by itself when the guest leaves, stays when the guest extends, and shows on Departures too (⇪ keeps a Departures note as a room note).',

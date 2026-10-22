@@ -976,6 +976,8 @@ function findRoom(room) {
   const n = parseInt(room, 10); if (!n) return null;
   // a guest whose departure is already past has left: not "in the hotel" any more
   const ih = W.hoInHouse && typeof W.hoInHouse.find === 'function' ? W.hoInHouse.find(room) : null;
+  // checked out today on Departures (the board was loaded again since, without the room): not put back on the board
+  if (ih && ih.status === 'out') return { src: 'in-house list', name: ih.name || '', out: true, checkoutAt: ih.checkedOutAt || '' };
   if (ih && !(ih.departure && ih.departure < (typeof hoLocalISO === 'function' ? hoLocalISO() : isoDay(new Date())))) return { src: 'in-house list', name: ih.name || '' };
   const same = x => parseInt(String(x == null ? '' : x).replace(/\D/g, ''), 10) === n;
   const nm = g => String(g.name || g.guest || [g.last, g.first].filter(Boolean).join(' ') || '').trim();
@@ -1017,7 +1019,7 @@ function restore(roomStr, before, after, line, topJ, status, quiet) {
 /** is "HH:MM" after the room's own check-out time (Opera's departure time, else 12:00)? */
 function pastLimit(r, t) {
   let lim = null; try { lim = typeof _depTimeMins === 'function' ? _depTimeMins(r) : null; } catch (_) {}
-  if (lim == null || isNaN(lim)) lim = 12 * 60;
+  if (lim == null || isNaN(lim)) lim = 12 * 60;   // the hotel's check-out time (Settings → Hotel setup)
   const m = String(t).match(/^(\d{1,2}):(\d{2})$/); if (!m) return true;
   return +m[1] * 60 + +m[2] > lim;
 }
@@ -1089,6 +1091,7 @@ function applyOne(a, who, board) {
   if (i < 0 && board.ok) {
     const f = findRoom(a.room);
     if (!f) return Object.assign(res, { st: 'notlist', text: `${a.room}: room not found — not on departures, arrivals or in-house` });
+    if (f.out) return Object.assign(res, { st: 'skip', text: `✓ ${a.room} already checked out${f.checkoutAt ? ' at ' + f.checkoutAt : ''} — nothing to do` });
     if (typeof depAddManualRoom !== 'function' || !quiet(() => depAddManualRoom(a.room, f.name))) return Object.assign(res, { st: 'notlist', text: `${a.room}: could not add it to the board` });
     const out = applyOne(a, who, { ok: true });
     const added = rooms().find(q => q.roomStr === String(a.room).trim());

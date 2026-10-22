@@ -291,15 +291,25 @@ function stayDays(st) {
   return out;
 }
 const DEP_ACT = { out: '✓ Checked out', late: '⏰ Late check-out', extended: '↪ Extended', na: '📵 No answer', dnd: '🚫 DND', undo: '↺ Undone', due: 'Back to due', fin: '🧾 Left · waiting' };
+/** who did a Departures action at "HH:MM": the room's note line of that minute ("[10:05] Checked out — WhatsApp · Sam") */
+function depWho(d, time) {
+  if (!d || !time) return '';
+  const L = String(d.note || '').split('\n').filter(x => x.startsWith('[' + time + ']') && x.includes(' — '));
+  const w = L.length ? L[L.length - 1].split(' — ').pop().trim() : '';
+  return w.length <= 60 && /^WhatsApp\b|·/.test(w) ? w : '';   // "WhatsApp · Sam 10:42"; not the tail of a sentence
+}
 function timeline(room) {
   const rk = roomKey(room), t = today(), st = stayNow(room), days = stayDays(st), since = dayStart(days[0]);
   const lists = [];
   // Departures: actions today
   if (allowed('departures')) safe(() => {
     const L = safe(() => (typeof depLog !== 'undefined' && Array.isArray(depLog) ? depLog : []), []);
-    lists.push(L.filter(l => l && sameRoom(l.room, room) && l.action !== 'due').map((l, i) => ({ src: 'dep', id: 'dep' + i + l.time + l.action, at: atOf(t, l.time), who: '', icon: icon('departures', '🧳'),
-      text: (DEP_ACT[l.action] || l.action) + (l.action === 'late' && l.lateTime ? ' until ' + l.lateTime : '') + (l.action === 'extended' && l.extensionNights ? ' +' + l.extensionNights + ' N' : '') + (l.action === 'undo' && l.undone ? ' ' + (DEP_ACT[l.undone] || l.undone).replace(/^\S+\s/, '') : ''),
-      src2: 'Departures', go: () => goDeparture(room) })));
+    const d = depOf(room), bday = d ? isoDate(d.departure) : '';
+    lists.push(L.filter(l => l && sameRoom(l.room, room) && l.action !== 'due').map((l, i) => ({ src: 'dep', id: 'dep' + i + l.time + l.action, at: atOf(t, l.time), who: depWho(d, l.time), icon: icon('departures', '🧳'),
+      text: (DEP_ACT[l.action] || l.action) + (l.action === 'late' && l.lateTime ? ' until ' + l.lateTime : '') + (l.action === 'extended' && l.extensionNights ? ' +' + l.extensionNights + 'N' + (bday ? ' → ' + fmtD(addDays(bday, +l.extensionNights)) : '') : '') + (l.action === 'undo' && l.undone ? ' ' + (DEP_ACT[l.undone] || l.undone).replace(/^\S+\s/, '') : ''),
+      sub: l.action === 'out' ? 'Checked out on Departures' : '', src2: 'Departures', go: () => goDeparture(room) })));
+    // "left · waiting for Finance" is not in the log: from the room itself
+    if (d && d.intent === 'finance_hold' && d.finAt) lists.push([{ src: 'dep', id: 'depfin' + d.finAt, at: atOf(t, d.finAt), who: '', icon: icon('departures', '🧳'), text: DEP_ACT.fin + ' for ' + (d.finWho || 'Finance'), sub: 'Guest has left; the room is still open in Opera', src2: 'Departures', go: () => goDeparture(room) }]);
   });
   // WhatsApp: today's log + the backup of earlier days of the stay
   if (allowed('departures')) safe(() => {
@@ -556,7 +566,7 @@ function depStatus(d) {
   if (d.intent === 'finance_hold' && es !== 'out') { label = '🧾 Left · waiting for finance'; tone = 'warn'; }
   else if (es === 'out') { label = '✓ Checked out' + (d.checkoutAt ? ' ' + d.checkoutAt : ''); tone = 'ok'; }
   else if (es === 'late') { label = '⏰ Late check-out' + (d.lateTime ? ' until ' + d.lateTime : ''); tone = 'warn'; }
-  else if (es === 'extended') { label = '↪ Extended' + (d.extensionNights ? ' +' + d.extensionNights + ' N' : ''); tone = 'acc'; }
+  else if (es === 'extended') { const b = isoDate(d.departure); label = '↪ Extended' + (d.extensionNights ? ' +' + d.extensionNights + ' N' + (b ? ' → ' + fmtD(addDays(b, +d.extensionNights)) : '') : ''); tone = 'acc'; }
   else if (d.intent === 'extending') { label = '⏳ Extending (paperwork)'; tone = 'acc'; }
   else if (es === 'na') { label = '📵 No answer' + (d.naTime ? ' ' + d.naTime : ''); tone = 'bad'; }
   else if (es === 'dnd') { label = '🚫 DND' + (d.dndTime ? ' ' + d.dndTime : ''); tone = 'bad'; }
@@ -574,7 +584,8 @@ function model() {
   const notes = notesNow(room);
   const guest = ih ? ih.names.join(' · ') : d ? d.name : arr[0] ? arr[0].name : '';
   let dates = '';
-  if (ih) { const left = ih.departure ? diffDays(t, ih.departure) : null; dates = `${fmtD(ih.arrival) || '—'} → ${fmtD(ih.departure) || '—'}${ih.nights ? ' · ' + ih.nights + ' n' : ''}${left == null ? '' : left <= 0 ? ' · leaves today' : left === 1 ? ' · 1 night left' : ' · ' + left + ' nights left'}`; }
+  if (ih && ih.status === 'out') dates = `${fmtD(ih.arrival) || '—'} → ${fmtD(ih.departure) || '—'} · checked out${ih.checkedOutAt ? ' ' + ih.checkedOutAt : ''} (Departures)`;
+  else if (ih) { const left = ih.departure ? diffDays(t, ih.departure) : null; dates = `${fmtD(ih.arrival) || '—'} → ${fmtD(ih.departure) || '—'}${ih.nights ? ' · ' + ih.nights + ' n' : ''}${ih.extendedTo ? ' · ↪ extended +' + ih.extNights + 'N' : ''}${left == null ? '' : left <= 0 ? ' · leaves today' : left === 1 ? ' · 1 night left' : ' · ' + left + ' nights left'}`; }
   else if (d) { const a = isoDate(d.arrival), b = isoDate(d.departure); dates = `${fmtD(a) || '—'} → ${fmtD(b) || '—'}${d.nights ? ' · ' + d.nights + ' n' : ''}`; }
   return { room, ih, d, ds, arr, notes, guest, dates, dep: ds ? ds.label.replace(/^\S+\s/, '') : '', arrTxt: arr.map(g => g.name).join(', ') };
 }
@@ -596,8 +607,10 @@ function paint(first) {
   if (ih && ih.vip) tags.push(`<span class="rc-tag warn">⭐ VIP ${esc(ih.vip.length <= 4 ? ih.vip : '')}</span>`);
   if (ih && ih.member) tags.push('<span class="rc-tag acc">ALL</span>');
   if (M.ds) tags.push(`<span class="rc-tag ${M.ds.tone}">${esc(M.ds.label)}</span>`);
+  else if (ih && ih.status === 'out') tags.push(`<span class="rc-tag ok">✓ Checked out${ih.checkedOutAt ? ' ' + esc(ih.checkedOutAt) : ''}</span>`);
+  else if (ih && ih.status === 'extended') tags.push(`<span class="rc-tag acc">↪ Extended +${ih.extNights} N → ${esc(fmtD(ih.extendedTo))}</span>`);
   if (M.arr.length) tags.push('<span class="rc-tag acc">🛎️ Arriving today</span>');
-  if (ih && ih.departure === t && !M.ds) tags.push('<span class="rc-tag warn">Departs today</span>');
+  if (ih && ih.departure === t && !M.ds && ih.status !== 'out') tags.push('<span class="rc-tag warn">Departs today</span>');
   const head = `<div class="rc-grab" aria-hidden="true"></div><div class="rc-hd"><div class="rc-rm"><small>Room</small>${esc(M.room)}</div>
     <div class="rc-who"><h2 id="rcTitle">${esc(M.guest || 'Room ' + M.room)}</h2><div class="rc-sub">${esc(M.dates || (M.guest ? '' : 'No guest in the lists loaded today'))}</div>${tags.length ? `<div class="rc-tags">${tags.join('')}</div>` : ''}</div>
     <button type="button" class="rc-x" data-rc="close" aria-label="Close">✕</button></div>`;
@@ -607,7 +620,7 @@ function paint(first) {
   M.arr.forEach(g => today_.push(`<div class="rc-line"><span><b>Arriving today</b> · ${esc(g.name)}${g.nights ? ' · ' + g.nights + ' n' : ''}${g.source ? ` <span class="dim">· ${esc(g.source)}</span>` : ''}</span><button type="button" class="rc-btn sm" data-rc="arr">${icon('arrivals', '🛎️')} Arrivals</button></div>`));
   if (ih) {
     const pax = ih.adults + ih.children, left = ih.departure ? diffDays(t, ih.departure) : null;
-    const facts = [['Arrival', fmtD(ih.arrival) || '—'], ['Departure', fmtD(ih.departure) || '—'], ['Nights left', left == null ? '—' : Math.max(0, left)], ['Pax', pax ? ih.adults + (ih.children ? '+' + ih.children : '') : '—'],
+    const facts = [['Arrival', fmtD(ih.arrival) || '—'], ['Departure', (fmtD(ih.departure) || '—') + (ih.extendedTo ? ' ↪' : '')], ['Nights left', ih.status === 'out' ? 'out' : left == null ? '—' : Math.max(0, left)], ['Pax', pax ? ih.adults + (ih.children ? '+' + ih.children : '') : '—'],
       ['Company', ih.company || ih.agent || '—'], ['Rate', ih.rateCode || '—'], ['Balance', ih.balance ? 'AED ' + money(ih.balance) : '—', ih.balance > 0 ? 'owe' : ''], ['Conf.', ih.conf || '—'], ['Room type', ih.roomType || '—']];
     today_.push(`<div class="rc-facts">${facts.map(f => `<div class="rc-fact ${f[2] || ''}"><small>${esc(f[0])}</small><b title="${esc(f[1])}">${esc(f[1])}</b></div>`).join('')}</div>`);
     if (ih.names.length > 1) today_.push(`<div class="rc-note">Sharing: ${esc(ih.names.slice(1).join(' · '))}</div>`);
@@ -816,6 +829,12 @@ function mount() {
   doc.addEventListener('click', onDocClick, true);
   doc.addEventListener('keydown', onEsc, true);
   startSync();
+  // Departures / In-House changed (inhouse.js watches the board): the open card follows, unless a note is being edited
+  W.addEventListener('ho-inhouse-live', () => safe(() => {
+    if (!C.rk || !sheet()) return;
+    const a = doc.activeElement; if (a && (a.id === 'rcEdit' || a.id === 'rcFormIn')) return;
+    paint();
+  }));
   let n = 0; const iv = setInterval(() => { safe(wrapBrain); if (++n > 15) clearInterval(iv); }, 1000);
   safe(wrapBrain);
 }

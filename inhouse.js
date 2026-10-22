@@ -259,7 +259,7 @@ function groupRooms(rows) {
 }
 
 const LONG = 7;
-const FILTERS = [['all', 'All'], ['today', 'Departing today'], ['tomorrow', 'Tomorrow'], ['arriving', 'Arrived today'], ['long', 'Long stay'], ['vip', 'VIP'], ['balance', 'Balance owing'], ['company', 'Company']];
+const FILTERS = [['all', 'All'], ['today', 'Departing today'], ['tomorrow', 'Tomorrow'], ['arriving', 'Arrived today'], ['long', 'Long stay'], ['vip', 'VIP'], ['balance', 'Balance owing'], ['company', 'Company'], ['out', 'Checked out today']];
 /** does a room pass a filter (today = "YYYY-MM-DD") */
 function matches(r, f, today) {
   const tm = addDays(today, 1);
@@ -271,6 +271,7 @@ function matches(r, f, today) {
     case 'vip': return !!r.vip;
     case 'balance': return r.balance > 0;
     case 'company': return !!r.company;
+    case 'out': return !!(r.ov && r.ov.status === 'out');
     default: return true;
   }
 }
@@ -333,7 +334,10 @@ function diff(oldRows, newRows) {
 function publicRoom(r) {
   if (!r) return null;
   return { room: r.room, rk: r.rk, name: r.name, names: r.names.slice(), arrival: r.arrival, departure: r.departure, nights: r.nights, adults: r.adults, children: r.children,
-    balance: r.balance, vip: r.vip || '', member: r.member || '', company: r.company || '', agent: r.agent || '', rateCode: r.rateCode || '', conf: r.conf || '', nat: r.nat || '', roomType: r.roomType || '' };
+    balance: r.balance, vip: r.vip || '', member: r.member || '', company: r.company || '', agent: r.agent || '', rateCode: r.rateCode || '', conf: r.conf || '', nat: r.nat || '', roomType: r.roomType || '',
+    // laid over from Departures (liveRooms): '' when the room is not on the board
+    status: r.ov ? r.ov.status : '', es: r.ov ? r.ov.es : '', checkedOutAt: r.ov ? r.ov.checkedOutAt || '' : '', extendedTo: r.ov ? r.ov.extendedTo || '' : '', extNights: r.ov ? r.ov.extNights || 0 : 0,
+    lateTime: r.ov ? r.ov.lateTime || '' : '', intent: r.ov ? r.ov.intent || '' : '', finWho: r.ov ? r.ov.finWho || '' : '', finAt: r.ov ? r.ov.finAt || '' : '', onDepartures: !!(r.ov && r.ov.onBoard), operaDeparture: r.operaDeparture || r.departure };
 }
 /** "Departing tomorrow (22 Oct) · 3 rooms" + one line per room, for WhatsApp / email */
 function tomorrowText(rooms, today, hotel) {
@@ -386,10 +390,116 @@ function reportHtml(M, tomorrowM) {
   ${tomorrowM && tomorrowM.rows.length ? `<h2>Departing tomorrow · ${tomorrowM.rows.length}</h2>${table(tomorrowM)}` : ''}</div>`;
 }
 
-W.hoInHousePure = { parseDate, parseMoney, roomKey, normH, mapHeader, splitRows, detect, parseReport, groupRooms, matches, searchHit, sortRooms, summary, diff, publicRoom, tomorrowText, reportModel, reportHtml, fileName, guestName, addDays, FIELDS, FILTERS, LONG };
+// ══ Linked with Departures ══════════════════════════════════
+// The in-house list is one Opera snapshot a day; the Departures board (depRooms, live on every device) is what
+// happened since. These helpers lay the board over the list: a room checked out there is out here, an extension
+// moves the departure date, LCO / extending / may extend / left-waiting-for-Finance show as badges.
+// A board room only counts for the in-house stay that ends on the board's day (a room re-let to a new guest
+// that same day is not touched). Today's check-outs and extensions are also remembered on this device, so they
+// stay when the board is loaded again from a newer Opera report (which no longer has those rooms).
+/** the board's day ("21-OCT-26" on its rooms → "2026-10-21"; '' when none) */
+function boardDay(board) {
+  const L = Array.isArray(board) ? board : [];
+  const r = L.find(x => x && x.departure && !x.manual) || L.find(x => x && x.departure);
+  return r ? parseDate(r.departure) : '';
+}
+const brk = d => roomKey(d && (d.roomStr != null ? d.roomStr : d.room));
+/** one board room → what In-House needs from it */
+function depFacts(d, bday, es) {
+  const day = parseDate(d.departure) || bday || '';
+  const n = d.status === 'extended' ? Math.max(1, parseInt(d.extensionNights, 10) || 1) : 0;
+  return { roomStr: String(d.roomStr != null ? d.roomStr : d.room), name: d.name || '', day, status: d.status || 'due', es: es || d.status || 'due',
+    checkedOutAt: d.status === 'out' ? String(d.checkoutAt || '') : '', extNights: n, extendedTo: n && day ? addDays(day, n) : '',
+    lateTime: d.status === 'late' ? String(d.lateTime || '') : '', intent: d.intent || '', finAt: d.finAt || '', finWho: d.finWho || '', manual: !!d.manual, onBoard: true };
+}
+/** does this board room belong to this in-house stay? */
+function stayMatches(r, f) {
+  if (!f.day || !r.departure) return true;
+  if (r.departures.includes(f.day)) return true;
+  if (f.extendedTo && r.departures.includes(f.extendedTo)) return true;   // Opera already has the new date
+  if (f.manual) return !r.arrival || r.arrival <= f.day;                   // added by hand (an early departure)
+  return false;
+}
+const isOut = r => !!(r && r.ov && r.ov.status === 'out');
+/** grouped in-house rooms + the board (+ remembered facts {rk: facts}) → the same rooms, with .ov and the live departure */
+function liveRooms(rooms, board, opt) {
+  opt = opt || {};
+  const B = Array.isArray(board) ? board : [], bday = boardDay(B), F = new Map();
+  B.forEach(d => { if (!d) return; const k = brk(d); if (!k || F.has(k)) return; let es = d.status; try { if (opt.es) es = opt.es(d) || d.status; } catch (_) {} F.set(k, depFacts(d, bday, es)); });
+  const mem = opt.memory || {};
+  Object.keys(mem).forEach(k => { if (!F.has(k) && mem[k] && typeof mem[k] === 'object') F.set(k, Object.assign({}, mem[k], { onBoard: false })); });
+  return (rooms || []).map(r => {
+    const f = F.get(r.rk);
+    if (!f || !stayMatches(r, f)) return r;
+    const o = Object.assign({}, r, { ov: f });
+    if (f.extendedTo && !r.departures.includes(f.extendedTo)) {
+      const ds = r.departures.length ? r.departures.map(x => (x === f.day || x < f.extendedTo ? f.extendedTo : x)) : [f.extendedTo];
+      o.departures = [...new Set(ds)].sort();
+      o.departure = o.departures[o.departures.length - 1];
+      o.operaDeparture = r.departure;
+      if (r.arrival) o.nights = Math.max(r.nights, diffDays(r.arrival, o.departure));
+      else o.nights = r.nights + f.extNights;
+    }
+    return o;
+  });
+}
+/** the numbers on top, with the board laid over: checked-out rooms are not counted; guests who left (waiting for Finance) are not in the hotel */
+function liveSummary(live, today) {
+  const act = (live || []).filter(r => !isOut(r)), S = summary(act, today);
+  S.out = (live || []).length - act.length; S.left = 0; S.leftPax = 0; S.ext = 0; S.late = 0; S.extending = 0; S.maybe = 0;
+  act.forEach(r => {
+    const o = r.ov; if (!o) return;
+    if (o.intent === 'finance_hold') { S.left++; S.leftPax += (r.adults + r.children) || r.guests.length; }
+    if (o.status === 'extended') S.ext++;
+    else if (o.es === 'late' || o.status === 'late') S.late++;
+    if (o.status !== 'extended' && o.intent === 'extending') S.extending++;
+    if (o.status !== 'extended' && o.intent === 'maybe_extend') S.maybe++;
+  });
+  S.inHotel = S.guests - S.leftPax;
+  return S;
+}
+/** in-house rooms leaving today that are not on today's board (nothing when the board is not today's) */
+function missingFromBoard(live, board, today) {
+  const B = Array.isArray(board) ? board : [];
+  if (!B.length || boardDay(B) !== today) return [];
+  const on = new Set(B.map(brk));
+  return (live || []).filter(r => !on.has(r.rk) && !isOut(r) && r.departures.includes(today))
+    .sort(roomCmp).map(r => ({ room: r.room, rk: r.rk, name: r.name, departure: today }));
+}
+/** board rooms not in the in-house list (gone already per Opera), still open on the board */
+function boardNotInHouse(rooms, board) {
+  const have = new Set((rooms || []).map(r => r.rk));
+  return (Array.isArray(board) ? board : []).filter(d => d && brk(d) && !have.has(brk(d)) && d.status !== 'out')
+    .map(d => String(d.roomStr != null ? d.roomStr : d.room));
+}
+/** today's check-outs and extensions remembered on this device: {date, rooms: {rk: facts}}. A room on today's board
+ *  follows the board (undo there forgets it); a room no longer on it keeps what was seen. */
+function rememberBoard(mem, board, today) {
+  const rooms = mem && mem.date === today && mem.rooms && typeof mem.rooms === 'object' ? Object.assign({}, mem.rooms) : {};
+  const B = Array.isArray(board) ? board : [], bday = boardDay(B);
+  if (bday === today) B.forEach(d => {
+    const k = d && brk(d); if (!k) return;
+    if (d.status === 'out' || d.status === 'extended') { const f = depFacts(d, bday); delete f.onBoard; rooms[k] = f; } else delete rooms[k];
+  });
+  return { date: today, rooms };
+}
+/** "Opera day" for depAddManualRoom's room: 2026-10-21 → 21-OCT-26 */
+const operaDay = s => (isIso(s) ? s.slice(8, 10) + '-' + MON[+s.slice(5, 7) - 1].toUpperCase() + '-' + s.slice(2, 4) : '');
+
+W.hoInHousePure = { parseDate, parseMoney, roomKey, normH, mapHeader, splitRows, detect, parseReport, groupRooms, matches, searchHit, sortRooms, summary, diff, publicRoom, tomorrowText, reportModel, reportHtml, fileName, guestName, addDays, FIELDS, FILTERS, LONG,
+  boardDay, depFacts, stayMatches, liveRooms, liveSummary, missingFromBoard, boardNotInHouse, rememberBoard, isOut, operaDay };
 
 // ══ State + public API (works without a page too: tests, other modules) ══
-const I = { snap: null, rooms: [], idx: new Map(), f: 'all', q: '', by: 'room', open: '', loaded: false, err: null, lastLoad: null };
+const I = { snap: null, rooms: [], idx: new Map(), f: 'all', q: '', by: 'room', open: '', loaded: false, err: null, lastLoad: null, memory: null };
+/** today's Departures board (state.js) and its live status of a room (departures.js), when they are loaded */
+const boardNow = () => { try { return typeof depRooms !== 'undefined' && Array.isArray(depRooms) ? depRooms : []; } catch (_) { return []; } };
+const esNow = d => { try { return typeof effectiveStatus === 'function' ? effectiveStatus(d) : d.status; } catch (_) { return d.status; } };
+const todayNow = () => { try { if (typeof hoLocalISO === 'function') return hoLocalISO(); } catch (_) {} const d = new Date(); return isoOf(d.getFullYear(), d.getMonth() + 1, d.getDate()); };
+/** the in-house rooms with the board laid over (rooms: the grouped rooms, all of them by default) */
+function liveNow(rooms) {
+  const mem = I.memory && I.memory.date === todayNow() ? I.memory.rooms : null;
+  return liveRooms(rooms || I.rooms, boardNow(), { es: esNow, memory: mem || {} });
+}
 function setSnapshot(snap) {
   I.snap = snap && Array.isArray(snap.rows) ? snap : (snap && snap.rows && typeof snap.rows === 'object' ? Object.assign({}, snap, { rows: Object.values(snap.rows) }) : null);
   I.rooms = I.snap ? groupRooms(I.snap.rows) : [];
@@ -397,13 +507,17 @@ function setSnapshot(snap) {
 }
 W.hoInHouse = {
   /** every room in the hotel from the last loaded report */
-  rooms: () => I.rooms.map(publicRoom),
-  /** one room ("0113" and "113" are the same) → { room, name, arrival, departure, … } or null */
-  find: room => publicRoom(I.idx.get(roomKey(room)) || null),
+  rooms: () => liveNow().map(publicRoom),
+  /** one room ("0113" and "113" are the same) → { room, name, arrival, departure, … } or null.
+   *  With Departures laid over: status ('out', 'extended', 'late', 'due', 'na', 'dnd'; '' when not on the board),
+   *  checkedOutAt, extendedTo (departure is then that date; operaDeparture the report's), lateTime, intent. */
+  find: room => { const r = I.idx.get(roomKey(room)); return r ? publicRoom(liveNow([r])[0]) : null; },
   get date() { return I.snap ? I.snap.date || '' : ''; },
   get loadedAt() { return I.snap ? I.snap.at || '' : ''; },
   get by() { return I.snap ? I.snap.by || '' : ''; },
   setSnapshot,
+  /** today's remembered check-outs / extensions ({date, rooms}; the page keeps it per device) */
+  setMemory: m => { I.memory = m && typeof m === 'object' ? m : null; },
 };
 
 if (!doc) return;
@@ -523,6 +637,21 @@ const CSS = `
 .ih-dl dt:nth-last-of-type(1),.ih-dl dd:last-of-type{border-bottom:0}
 .ih-sec{font:700 12px var(--font,inherit);text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin:2px 0 -6px}
 .ih-dr-acts{display:flex;gap:8px;flex-wrap:wrap}
+.ih-tag.ok{background:color-mix(in srgb,var(--ih-ok) 14%,transparent);color:var(--ih-ok)}
+.ih-tag.warn{background:color-mix(in srgb,var(--ih-warn) 16%,transparent);color:var(--ih-warn)}
+.ih-tag.bad{background:color-mix(in srgb,var(--ih-bad) 13%,transparent);color:var(--ih-bad)}
+.ih-tag.ext{background:color-mix(in srgb,var(--ih-blue) 13%,transparent);color:var(--ih-blue)}
+.ih-tag.arr{background:color-mix(in srgb,var(--ih-ok) 12%,transparent);color:var(--ih-ok)}
+.ih-row.is-out{opacity:.62}.ih-row.is-out .ih-nm{text-decoration:line-through;text-decoration-thickness:1px;text-decoration-color:color-mix(in srgb,var(--text) 45%,transparent)}
+.ih-row.is-out:hover{opacity:.85}
+.ih-link{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;font-size:12.5px;color:var(--text2);min-width:0}
+.ih-link b{color:var(--text);font-weight:650}
+.ih-link .ih-tag{font-size:11px}
+.ih-miss{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;background:color-mix(in srgb,var(--ih-warn) 10%,var(--card));border:1px solid color-mix(in srgb,var(--ih-warn) 35%,transparent);border-radius:var(--ih-r);padding:10px 14px;font-size:13.5px;line-height:1.45;min-width:0}
+.ih-miss>span{min-width:0;flex:1 1 260px;overflow-wrap:anywhere}
+.ih-quiet{font-size:12.5px;color:var(--text3);line-height:1.45;overflow-wrap:anywhere}
+.ih-outhd{display:flex;justify-content:space-between;gap:8px;padding:9px 14px;font:700 12px/1.2 var(--font,inherit);letter-spacing:.04em;text-transform:uppercase;color:var(--ih-ok);background:color-mix(in srgb,var(--ih-ok) 7%,var(--card));border-bottom:1px solid var(--ih-hair)}
+.ih-ov{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:9px 11px;border-radius:12px;background:var(--ih-soft);font-size:12.5px;color:var(--text2)}
 @media (max-width:1100px){.ih-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media (max-width:760px){
   .ih-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
@@ -543,16 +672,36 @@ const CSS = `
 
 // ── drawing ──
 function depTag(r, t) {
+  if (isOut(r)) return '';
   if (r.departures.includes(t)) return '<span class="ih-tag today">Departs today</span>';
   if (r.departures.includes(addDays(t, 1))) return '<span class="ih-tag tmr">Departs tomorrow</span>';
   return '';
 }
-function rowHtml(r, t) {
-  const d = onDeps(r.rk), pax = r.adults + r.children;
-  const cls = r.departures.includes(t) ? ' dep-today' : r.departures.includes(addDays(t, 1)) ? ' dep-tomorrow' : '';
+/** badges from Departures: checked out, extended, extending, may extend, LCO, left waiting for Finance */
+function ovTags(r) {
+  const o = r.ov; if (!o) return '';
+  if (o.status === 'out') return `<span class="ih-tag ok">✓ Checked out${o.checkedOutAt ? ' ' + esc(o.checkedOutAt) : ''}</span>`;
+  const T = [];
+  if (o.intent === 'finance_hold') T.push(`<span class="ih-tag warn">🧾 Left · waiting for ${esc(o.finWho || 'Finance')}${o.finAt ? ' (' + esc(o.finAt) + ')' : ''}</span>`);
+  if (o.status === 'extended') T.push(`<span class="ih-tag ext">↪ extended +${o.extNights}N${o.extendedTo ? ' → ' + esc(fmtD(o.extendedTo, true)) : ''}</span>`);
+  else if (o.intent === 'extending') T.push('<span class="ih-tag ext">⏳ Extending · paperwork</span>');
+  else if (o.intent === 'maybe_extend') T.push('<span class="ih-tag ext">🤔 May extend</span>');
+  if (o.status === 'late') T.push(`<span class="ih-tag warn">🕐 Late check-out${o.lateTime ? ' ' + esc(o.lateTime) : ''}</span>`);
+  else if (o.es === 'late' && o.intent !== 'finance_hold') T.push('<span class="ih-tag bad">⏰ Past check-out time</span>');
+  if (o.status === 'na') T.push('<span class="ih-tag bad">📵 No answer</span>');
+  if (o.status === 'dnd') T.push('<span class="ih-tag bad">🚫 DND</span>');
+  if (o.intent === 'checkout_soon') T.push('<span class="ih-tag">🚪 Checking out soon</span>');
+  return T.join('');
+}
+/** rooms on today's Arrivals list (arrivals-purpose.js) */
+const arrKeys = () => safe(() => new Set((typeof arrGuests !== 'undefined' && Array.isArray(arrGuests) ? arrGuests : []).map(g => g && roomKey(g.room)).filter(Boolean)), new Set());
+function rowHtml(r, t, arrived) {
+  const d = onDeps(r.rk), pax = r.adults + r.children, out = isOut(r);
+  const cls = out ? ' is-out' : r.departures.includes(t) ? ' dep-today' : r.departures.includes(addDays(t, 1)) ? ' dep-tomorrow' : '';
   const left = r.departure ? diffDays(t, r.departure) : null;
-  const leftTxt = left == null ? '' : left < 0 ? 'past departure' : left === 0 ? 'leaves today' : left === 1 ? '1 night left' : left + ' nights left';
-  const tags = [r.vip ? `<span class="ih-tag vip">VIP ${esc(r.vip.length <= 4 ? r.vip : '')}</span>` : '', r.member ? '<span class="ih-tag all">ALL</span>' : '', r.nights >= LONG ? `<span class="ih-tag long">${r.nights} n</span>` : '', depTag(r, t), r.guests.length > 1 ? `<span class="ih-tag">+${r.guests.length - 1} sharer${r.guests.length > 2 ? 's' : ''}</span>` : ''].join('');
+  const leftTxt = out ? 'checked out' + (r.ov.checkedOutAt ? ' ' + r.ov.checkedOutAt : '') + ' · Departures' : left == null ? '' : left < 0 ? 'past departure' : left === 0 ? 'leaves today' : left === 1 ? '1 night left' : left + ' nights left';
+  const tags = [ovTags(r), r.vip ? `<span class="ih-tag vip">VIP ${esc(r.vip.length <= 4 ? r.vip : '')}</span>` : '', r.member ? '<span class="ih-tag all">ALL</span>' : '', r.nights >= LONG ? `<span class="ih-tag long">${r.nights} n</span>` : '', depTag(r, t),
+    !out && arrived && arrived.has(r.rk) && r.arrivals.includes(t) ? '<span class="ih-tag arr">🛎️ Arrived</span>' : '', r.guests.length > 1 ? `<span class="ih-tag">+${r.guests.length - 1} sharer${r.guests.length > 2 ? 's' : ''}</span>` : ''].join('');
   return `<div class="ih-row${cls}" role="button" tabindex="0" data-ih="open" data-rk="${esc(r.rk)}">
     <div class="ih-rmc"><button type="button" class="ih-rm${d ? ' dep' : ''}" data-ih="${d ? 'dep' : W.hoRoom ? 'card' : 'open'}" data-rk="${esc(r.rk)}" title="${d ? 'Open room ' + esc(r.room) + ' on Departures' : W.hoRoom ? 'Room card ' + esc(r.room) : 'Room ' + esc(r.room)}" aria-label="${d ? 'Open room ' + esc(r.room) + ' on Departures' : W.hoRoom ? 'Room card ' + esc(r.room) : 'Room ' + esc(r.room)}">${esc(r.room)}</button></div>
     <div class="ih-c c1"><div class="ih-nm">${esc(r.name)}</div>${tags ? `<div class="ih-tags">${tags}</div>` : ''}</div>
@@ -561,11 +710,48 @@ function rowHtml(r, t) {
     <div class="ih-bal${r.balance > 0 ? ' owe' : r.balance === 0 ? ' zero' : ''}">${r.balance ? 'AED ' + esc(money(r.balance)) : '—'}${r.balance < 0 ? '<small>credit</small>' : r.balance > 0 ? '<small>balance</small>' : ''}</div>
   </div>`;
 }
+/** the list as shown: in-house rooms with Departures laid over */
+function view() {
+  const t = today(), L = liveNow(), act = L.filter(r => !isOut(r)), gone = L.filter(isOut);
+  const base = I.f === 'out' ? gone : act;
+  const shown = sortRooms(base.filter(r => (I.f === 'out' || matches(r, I.f, t)) && searchHit(r, I.q)), I.by);
+  return { t, L, act, gone, shown, S: liveSummary(L, t) };
+}
+/** one line on what Departures changed + rooms missing on either side */
+function linkHtml(V) {
+  const B = boardNow(), t = V.t, S = V.S, snap = I.snap;
+  const bits = [];
+  if (B.length) {
+    const bd = boardDay(B);
+    const c = [[S.out, 'ok', '✓', 'checked out'], [S.ext, 'ext', '↪', 'extended'], [S.extending, 'ext', '⏳', 'extending'], [S.maybe, 'ext', '🤔', 'may extend'], [S.late, 'warn', '🕐', 'late'], [S.left, 'warn', '🧾', 'left · Finance']]
+      .filter(x => x[0]).map(x => `<span class="ih-tag ${x[1]}">${x[2]} ${x[0]} ${x[3]}</span>`).join('');
+    bits.push(`<div class="ih-link" id="ihLink"><span>🔗 Linked with <b>Departures</b>${bd ? ' · ' + esc(fmtD(bd, true)) : ''}</span>${c || '<span>no check-outs or extensions yet</span>'}${arrLine(V)}</div>`);
+    const miss = missingFromBoard(V.L, B, t);
+    if (miss.length) {
+      const names = miss.slice(0, 6).map(m => `<b>${esc(m.room)}</b> ${esc(m.name)}`).join(' · ') + (miss.length > 6 ? ` · +${miss.length - 6} more` : '');
+      const canAdd = canLoad() && typeof depAddManualRoom === 'function';
+      bits.push(`<div class="ih-miss" id="ihMiss" role="status"><span>🧳 <b>${miss.length} room${miss.length === 1 ? '' : 's'}</b> leave${miss.length === 1 ? 's' : ''} today but ${miss.length === 1 ? 'isn’t' : 'aren’t'} on Departures: ${names}</span>${canAdd ? `<button type="button" class="ih-btn sm pri" data-ih="addMissing">Add ${miss.length === 1 ? 'it' : 'them'}</button>` : ''}</div>`);
+    }
+    if (snap && snap.date === t) {
+      const gone = boardNotInHouse(I.rooms, B);
+      if (gone.length) bits.push(`<div class="ih-quiet" id="ihGone">On Departures but not in this in-house list (already gone per Opera?): ${gone.slice(0, 12).map(esc).join(' · ')}${gone.length > 12 ? ` · +${gone.length - 12} more` : ''}</div>`);
+    }
+  } else if (S.depToday) bits.push(`<div class="ih-quiet">Today’s Departures board is not loaded yet — check-outs and extensions show here once it is.${arrLine(V)}</div>`);
+  else { const a = arrLine(V); if (a) bits.push(`<div class="ih-link">${a}</div>`); }
+  return bits.join('');
+}
+/** "🛎️ 8 of 12 arrivals in-house" when today's Arrivals list is loaded */
+function arrLine(V) {
+  const A = arrKeys(); if (!A.size) return '';
+  const inn = V.act.filter(r => A.has(r.rk) && r.arrivals.includes(V.t)).length;
+  return `<span>🛎️ <b>${inn}</b> of ${A.size} arrival${A.size === 1 ? '' : 's'} in-house</span>`;
+}
 function render() {
   const root = doc.getElementById('ihRoot'); if (!root) return;
-  const t = today(), S = summary(I.rooms, t);
-  const shown = sortRooms(I.rooms.filter(r => matches(r, I.f, t) && searchHit(r, I.q)), I.by);
-  const cnt = f => I.rooms.filter(r => matches(r, f, t)).length;
+  const V = view(), t = V.t, S = V.S;
+  const shown = V.shown, arrived = arrKeys();
+  const cnt = f => (f === 'out' ? V.gone.length : V.act.filter(r => matches(r, f, t)).length);
+  const goneShown = I.f === 'all' || I.f === 'today' ? sortRooms(V.gone.filter(r => searchHit(r, I.q)), I.by) : [];
   const focus = doc.activeElement && doc.activeElement.id === 'ihQ' ? [doc.activeElement.selectionStart, doc.activeElement.selectionEnd] : null;
   const snap = I.snap, stale = snap && snap.date && snap.date < t;
   const loadBtns = canLoad() ? `<button type="button" class="ih-btn pri" data-ih="browse" id="ihLoadBtn">⬆ Load in-house report</button><button type="button" class="ih-btn" data-ih="paste">📋 Paste</button>` : '';
@@ -576,11 +762,12 @@ function render() {
   <input type="file" id="ihFileInput" accept=".txt,.csv,.tsv,.xls,.xlsx,text/plain,text/csv" hidden>
   ${I.err ? errHtml(I.err) : ''}
   ${snap ? `<div class="ih-meta"><span>Report of <b>${esc(fmtD(snap.date))}</b></span><span>loaded ${esc(timeOf(snap.at))}${snap.by ? ' by <b>' + esc(snap.by) + '</b>' : ''}</span>${snap.file ? `<span>${esc(snap.file)}</span>` : ''}<span>${S.firstArr ? `arrivals ${esc(fmtD(S.firstArr, true))} – departures ${esc(fmtD(S.lastDep, true))}` : ''}</span></div>` : ''}
+  ${snap ? linkHtml(V) : ''}
   ${stale ? `<div class="ih-stale" role="status"><span aria-hidden="true">⏳</span><div>This list is from <b>${esc(fmtD(snap.date))}</b>. Load today's in-house report so departures and balances are up to date.</div></div>` : ''}
   ${snap ? `<div class="ih-kpis" id="ihKpis">
-    ${kpi('all', '', 'Rooms occupied', S.rooms, `${S.guests} guest${S.guests === 1 ? '' : 's'}`)}
-    ${kpi('all', '', 'Guests', S.guests, S.adults || S.children ? `${S.adults} adult${S.adults === 1 ? '' : 's'} · ${S.children} child${S.children === 1 ? '' : 'ren'}` : 'from the rows')}
-    ${kpi('today', S.depToday ? 'warn' : '', 'Departing today', S.depToday, fmtD(t, true))}
+    ${kpi('all', '', 'Rooms occupied', S.rooms, S.out ? `${S.out} checked out today` : `${S.inHotel} guest${S.inHotel === 1 ? '' : 's'}`)}
+    ${kpi('all', '', 'Guests', S.inHotel, S.leftPax ? `${S.leftPax} left · waiting Finance` : S.adults || S.children ? `${S.adults} adult${S.adults === 1 ? '' : 's'} · ${S.children} child${S.children === 1 ? '' : 'ren'}` : 'from the rows')}
+    ${kpi('today', S.depToday ? 'warn' : '', 'Departing today', S.depToday, S.out ? `${S.out} out · ${fmtD(t, true)}` : fmtD(t, true))}
     ${kpi('tomorrow', S.depTomorrow ? 'blue' : '', 'Departing tomorrow', S.depTomorrow, fmtD(addDays(t, 1), true))}
     ${kpi('long', S.long ? 'ok' : '', 'Long stays', S.long, `${LONG}+ nights`)}
     ${kpi('vip', '', 'VIP', S.vip, S.members ? `${S.members} ALL member${S.members === 1 ? '' : 's'}` : 'rooms')}
@@ -590,10 +777,11 @@ function render() {
     <div class="ih-search"><input id="ihQ" class="ih-in" type="search" placeholder="Search room, name, company, confirmation…" value="${esc(I.q)}" autocomplete="off" aria-label="Search in-house guests"></div>
     <select id="ihBy" class="ih-sel" aria-label="Sort">${[['room', 'Sort: room'], ['departure', 'Sort: departure'], ['name', 'Sort: name'], ['balance', 'Sort: balance']].map(([k, l]) => `<option value="${k}"${I.by === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
   </div>
-  <div class="ih-seg" role="tablist" aria-label="Show">${FILTERS.map(([k, l]) => `<button type="button" role="tab" class="ih-chip${I.f === k ? ' on' : ''}" aria-selected="${I.f === k}" data-ih="f" data-f="${k}">${l}<i>${cnt(k)}</i></button>`).join('')}</div>
+  <div class="ih-seg" role="tablist" aria-label="Show">${FILTERS.filter(([k]) => k !== 'out' || V.gone.length || I.f === 'out').map(([k, l]) => `<button type="button" role="tab" class="ih-chip${I.f === k ? ' on' : ''}" aria-selected="${I.f === k}" data-ih="f" data-f="${k}">${l}<i>${cnt(k)}</i></button>`).join('')}</div>
   ${I.f === 'tomorrow' && cnt('tomorrow') ? `<div class="ih-tmr"><span>🧳 <b>${cnt('tomorrow')}</b> room${cnt('tomorrow') === 1 ? '' : 's'} depart tomorrow, ${esc(fmtD(addDays(t, 1)))}.</span><span class="ih-acts"><button type="button" class="ih-btn sm" data-ih="copyTmr">Copy list</button>${can('canExport') ? '<button type="button" class="ih-btn sm" data-ih="xlTmr">⬇ Excel</button>' : ''}</span></div>` : ''}
-  <div class="ih-table" id="ihList">${shown.length ? `<div class="ih-th" aria-hidden="true"><span>Room</span><span>Guest</span><span>Stay</span><span>Company · rate</span><span class="r">Balance</span></div>${shown.map(r => rowHtml(r, t)).join('')}`
-    : `<div class="ih-empty"><b>No room matches</b>Change the search or the filter.</div>`}</div>`
+  <div class="ih-table" id="ihList">${shown.length ? `<div class="ih-th" aria-hidden="true"><span>Room</span><span>Guest</span><span>Stay</span><span>Company · rate</span><span class="r">Balance</span></div>${shown.map(r => rowHtml(r, t, arrived)).join('')}`
+    : `<div class="ih-empty"><b>No room matches</b>${I.f === 'out' ? 'No room checked out on Departures today.' : 'Change the search or the filter.'}</div>`}</div>
+  ${goneShown.length ? `<div class="ih-table" id="ihOut" aria-label="Checked out today"><div class="ih-outhd"><span>✓ Checked out today · ${goneShown.length}</span><span>from Departures</span></div>${goneShown.map(r => rowHtml(r, t, arrived)).join('')}</div>` : ''}`
   : `<div class="ih-drop" id="ihDrop"><b>No in-house list yet</b>In Opera Cloud run the in-house guests report and choose <b style="display:inline;font-size:inherit">Delimited Data</b> (or CSV), then load the file here, drop it on this page, or paste it.${canLoad() ? '<div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button type="button" class="ih-btn pri" data-ih="browse">⬆ Load in-house report</button><button type="button" class="ih-btn" data-ih="paste">📋 Paste</button></div>' : ''}</div>`}`;
   if (focus) { const q = doc.getElementById('ihQ'); if (q) { q.focus(); try { q.setSelectionRange(focus[0], focus[1]); } catch (_) {} } }
   badge();
@@ -614,7 +802,7 @@ function soon() {
   }), 120);
 }
 function badge() {
-  const n = I.rooms.filter(r => matches(r, 'today', today())).length;
+  const t = today(), n = liveNow().filter(r => !isOut(r) && matches(r, 'today', t)).length;
   [doc.getElementById('badge-' + PANEL), doc.getElementById('mob-badge-' + PANEL)].forEach(b => { if (!b) return; b.textContent = n ? String(n) : ''; b.style.display = n ? '' : 'none'; b.title = n ? n + ' departing today' : ''; });
 }
 
@@ -630,7 +818,8 @@ function openModal(title, body, foot, onClick) {
 }
 function closeDrawer() { const d = doc.getElementById('ih-drawer'); if (d) d.remove(); I.open = ''; }
 function openRoom(rk) {
-  const r = I.idx.get(rk); if (!r) { closeDrawer(); return; }
+  const r0 = I.idx.get(rk); if (!r0) { closeDrawer(); return; }
+  const r = liveNow([r0])[0];
   I.open = rk;
   const t = today(), d = onDeps(rk);
   const row = (k, v) => (v === '' || v == null ? '' : `<dt>${esc(k)}</dt><dd>${v}</dd>`);
@@ -649,8 +838,9 @@ function openRoom(rk) {
   dr.setAttribute('aria-label', 'Room ' + r.room);
   dr.innerHTML = `<div class="ih-sh-hd"><b>Room ${esc(r.room)}</b><button type="button" class="ih-x" data-d="close" aria-label="Close">✕</button></div>
   <div class="ih-dr-bd">
-    <div class="ih-hero"><span class="ih-rm${d ? ' dep' : ''}">${esc(r.room)}</span><div style="min-width:0"><h3>${esc(r.names.join(' · '))}</h3><div class="ih-tags" style="margin-top:4px">${depTag(r, t)}${r.vip ? '<span class="ih-tag vip">VIP</span>' : ''}${r.member ? '<span class="ih-tag all">ALL member</span>' : ''}${r.nights >= LONG ? `<span class="ih-tag long">Long stay · ${r.nights} n</span>` : ''}</div></div></div>
+    <div class="ih-hero"><span class="ih-rm${d ? ' dep' : ''}">${esc(r.room)}</span><div style="min-width:0"><h3>${esc(r.names.join(' · '))}</h3><div class="ih-tags" style="margin-top:4px">${ovTags(r)}${depTag(r, t)}${r.vip ? '<span class="ih-tag vip">VIP</span>' : ''}${r.member ? '<span class="ih-tag all">ALL member</span>' : ''}${r.nights >= LONG ? `<span class="ih-tag long">Long stay · ${r.nights} n</span>` : ''}</div></div></div>
     <div class="ih-dr-acts">${d ? `<button type="button" class="ih-btn sm pri" data-d="dep">🧳 Open on Departures</button>` : (canLoad() && typeof depAddManualRoom === 'function' ? '<button type="button" class="ih-btn sm" data-d="add">+ Add to today\'s departures</button>' : '')}${W.hoRoom ? '<button type="button" class="ih-btn sm" data-d="card">🛏️ Room card</button>' : ''}<button type="button" class="ih-btn sm" data-d="copy">Copy</button></div>
+    ${r.ov ? `<div class="ih-ov">${r.ov.status === 'out' ? `Checked out on Departures${r.ov.checkedOutAt ? ' at <b>' + esc(r.ov.checkedOutAt) + '</b>' : ''}.` : r.ov.extendedTo ? `Extended on Departures: now leaves <b>${esc(fmtD(r.ov.extendedTo))}</b>${r.operaDeparture ? ' (report: ' + esc(fmtD(r.operaDeparture, true)) + ')' : ''}.` : `On today’s Departures: ${ovTags(r) || 'due out'}`}${r.ov.onBoard ? '' : ' <span class="ih-quiet">(seen earlier today on this device)</span>'}</div>` : ''}
     ${r.guests.map((g, i) => (r.guests.length > 1 ? `<div class="ih-sec">${i ? 'Sharer ' + i : 'Main guest'}</div>` : '') + guestDl(g)).join('')}
     <div class="ih-note">From the in-house report of ${esc(fmtD(I.snap && I.snap.date))}.</div>
   </div>`;
@@ -665,6 +855,36 @@ function drawerClick(e) {
     else if (b.dataset.d === 'add' && r) { if (depAddManualRoom(r.room, r.name)) { toast(`Room ${r.room} added to today's departures`); act('inhouse_to_departures', `Room ${r.room}`); openRoom(r.rk); render(); } }
     else if (b.dataset.d === 'copy' && r) copyText(`Room ${r.room} · ${r.names.join(' / ')} · ${fmtD(r.arrival, true)} → ${fmtD(r.departure, true)}${r.nights ? ' (' + r.nights + ' n)' : ''}${r.balance ? ' · balance AED ' + money(r.balance) : ''}${r.company ? ' · ' + r.company : ''}${r.conf ? ' · #' + r.conf : ''}`);
   });
+}
+/** "Add them": in-house rooms leaving today that are not on today's Departures board → onto it, with name, dates and balance */
+function addMissing() {
+  if (!canLoad()) return deny('Adding rooms to Departures');
+  if (typeof depAddManualRoom !== 'function') return;
+  const t = today(), L = missingFromBoard(liveNow(), boardNow(), t);
+  if (!L.length) { render(); return; }
+  const added = [];
+  L.forEach(m => {
+    const r = I.idx.get(m.rk); if (!r) return;
+    if (!safe(() => depAddManualRoom(String(r.room), r.name), false)) return;
+    const d = boardNow().find(x => x && roomKey(x.roomStr) === m.rk && x.manual); if (!d) return;
+    d.departure = operaDay(t) || d.departure;
+    if (r.arrival) d.arrival = operaDay(r.arrival);
+    if (r.nights) d.nights = r.nights;
+    if (r.balance) d.balance = r.balance;
+    if (r.vip) d.isVip = true;
+    const g = r.guests.find(x => x.depTime); if (g && !d.depTime) d.depTime = g.depTime;
+    if (r.company || r.agent || r.source) d.source = d.source || r.company || r.agent || r.source;
+    if (r.rateCode) d.rateCode = r.rateCode;
+    d.fromInHouse = true;
+    added.push(r.room);
+  });
+  if (added.length) {
+    safe(() => { if (typeof depRender === 'function') depRender(); if (typeof updateDepBadge === 'function') updateDepBadge(); if (typeof saveDeps === 'function') saveDeps(); });
+    toast(`🧳 ${added.length} room${added.length === 1 ? '' : 's'} added to today's departures: ${added.join(', ')}`);
+    act('inhouse_to_departures', `${added.length} rooms leaving today: ${added.join(', ')}`);
+  }
+  tick(true);
+  render();
 }
 function goDeparture(rk) {
   const d = onDeps(rk); if (!d) return;
@@ -739,7 +959,7 @@ function save(P, src, D) {
   if (typeof fbSet === 'function') {
     safe(() => Promise.resolve(fbSet(ROOT + '/' + t, snap)).then(() => fbSet(META, meta)).catch(() => toast('Could not save – check the connection', 'err')));
   } else LS.set('ih_snap_local', snap);
-  render();
+  render(); tick(true);
   toast(`✓ In-house list saved · ${S.rooms} rooms · ${S.guests} guests${D ? ` · +${D.added.length} −${D.gone.length} ~${D.changed.length}` : ''}`);
   act('inhouse_loaded', `${S.rooms} rooms, ${S.guests} guests${D ? ' (replaced)' : ''}`);
 }
@@ -755,14 +975,15 @@ function pasteDialog() {
 const SCOPES = { view: 'What is on screen', all: 'All rooms', today: 'Departing today', tomorrow: 'Departing tomorrow', balance: 'Balance owing', long: 'Long stays' };
 function scoped(scope) {
   const t = today();
-  if (scope === 'view') return I.rooms.filter(r => matches(r, I.f, t) && searchHit(r, I.q));
-  if (scope === 'all') return I.rooms.slice();
-  return I.rooms.filter(r => matches(r, scope, t));
+  const V = view();
+  if (scope === 'view') return V.shown;
+  if (scope === 'all') return V.act.slice();
+  return V.act.filter(r => matches(r, scope, t));
 }
 const modelFor = scope => {
   const t = today();
   const label = scope === 'view' ? ((FILTERS.find(f => f[0] === I.f) || [, 'All'])[1] + (I.q ? ` · “${I.q}”` : '')) : SCOPES[scope];
-  return reportModel(scoped(scope), I.rooms, t, { hotel: hotel(), user: me(), reportDate: I.snap && I.snap.date, scopeLabel: label, by: scope === 'view' ? I.by : 'room' });
+  return reportModel(scoped(scope), view().act, t, { hotel: hotel(), user: me(), reportDate: I.snap && I.snap.date, scopeLabel: label, by: scope === 'view' ? I.by : 'room' });
 };
 function exportDialog() {
   if (!can('canExport')) return deny('Downloading files');
@@ -903,7 +1124,8 @@ function onClick(e) {
     else if (a === 'export') exportDialog();
     else if (a === 'errx') { I.err = null; render(); }
     else if (a === 'f') { I.f = b.dataset.f || 'all'; saveView(); render(); }
-    else if (a === 'copyTmr') copyText(tomorrowText(I.rooms, today(), hotel()));
+    else if (a === 'copyTmr') copyText(tomorrowText(view().act, today(), hotel()));
+    else if (a === 'addMissing') addMissing();
     else if (a === 'xlTmr') exportExcel('tomorrow');
     else if (a === 'dep') { e.stopPropagation(); goDeparture(b.dataset.rk); }
     else if (a === 'card') { e.stopPropagation(); const r = I.idx.get(b.dataset.rk); W.hoRoom.open(r ? r.room : b.dataset.rk); }
@@ -912,13 +1134,34 @@ function onClick(e) {
 }
 
 // ── live data ──
+// Departures changes come from this device and from Firebase (departures.js rewrites depRooms): watched with a light
+// poll of the board (and the 'ho-dep-change' event, if a module sends one). On a change the page and the room card redraw.
+const MEMK = 'ih_dep_seen_v1';
+let depSigLast = '';
+function depSig() {
+  const B = boardNow();
+  const A = safe(() => (typeof arrGuests !== 'undefined' && Array.isArray(arrGuests) ? arrGuests.map(g => g && g.room).join(',') : ''), '');
+  return B.length + '#' + B.map(d => d ? [d.roomStr, d.status, esNow(d), d.checkoutAt, d.extensionNights, d.lateTime, d.intent, d.departure, d.finAt, d.finWho].join('|') : '').join(';') + '#' + A + '#' + today();
+}
+function syncMemory() {
+  const next = rememberBoard(I.memory || LS.get(MEMK, null), boardNow(), today());
+  const js = JSON.stringify(next);
+  if (js !== I.memJs) { I.memJs = js; I.memory = next; LS.set(MEMK, next); }
+}
+function tick(force) {
+  safe(() => {
+    const s = depSig(); if (s === depSigLast && !force) return;
+    depSigLast = s; syncMemory(); soon();
+    if (typeof CustomEvent === 'function') W.dispatchEvent(new CustomEvent('ho-inhouse-live'));
+  });
+}
 function applyMeta(meta) {
   const t = today();
   const want = meta && meta.date ? meta.date : t;
   if (I.snap && meta && I.snap.date === meta.date && I.snap.at === meta.at) return;
   Promise.resolve(typeof fbGet === 'function' ? fbGet(ROOT + '/' + want) : null).then(v => {
     if (v && v.rows) setSnapshot(v);
-    I.loaded = true; soon();
+    I.loaded = true; tick(true);
   }).catch(() => {});
 }
 function startSync() {
@@ -981,7 +1224,10 @@ function mount() {
   new MutationObserver(() => { const on = panel.classList.contains('active'); if (on && !wasOn) render(); if (!on && wasOn) closeDrawer(); wasOn = on; }).observe(panel, { attributes: true, attributeFilter: ['class'] });
   setInterval(() => safe(() => { badge(); if (panel.classList.contains('active') && !doc.getElementById('ih-modal') && !(doc.activeElement && panel.contains(doc.activeElement) && /INPUT|SELECT|TEXTAREA/.test(doc.activeElement.tagName))) render(); }), 5 * 60e3);
   doc.addEventListener('keydown', e => { if (e.key !== 'Escape') return; if (doc.getElementById('ih-modal')) closeModal(); else if (doc.getElementById('ih-drawer')) closeDrawer(); });
+  safe(() => { I.memory = LS.get(MEMK, null); });
   render(); startSync();
+  setInterval(() => tick(), 1500);
+  W.addEventListener('ho-dep-change', () => tick());
 }
 
 Object.assign(W.hoInHouse, { open: rk => { if (typeof showPanel === 'function') showPanel(PANEL); setTimeout(() => openRoom(roomKey(rk)), 80); }, loadText, loadFile, exportExcel, exportPdf, proBytes: scope => proWorkbook(modelFor(scope || 'all'), modelFor('tomorrow')), plainBytes: scope => plainWorkbook(modelFor(scope || 'all'), modelFor('tomorrow')), state: () => I, render: () => render() });

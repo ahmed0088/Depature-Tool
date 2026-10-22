@@ -2672,5 +2672,71 @@ console.log('\nIn-House Guests');
     '🛏️ Room 512 · Xi Fakeworth\n19 Oct → 23 Oct\n⭐ Pinned VIP\n📝 Late taxi');
 }
 
+console.log('\nIn-House linked with Departures');
+{
+  const sb = { console: { log() {}, warn() {}, error() {} } };
+  sb.window = sb; sb.globalThis = sb;
+  vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'inhouse.js'), 'utf8'), sb, { filename: 'inhouse.js' });
+  const P = sb.hoInHousePure, T = '2026-10-21', J = x => JSON.parse(JSON.stringify(x));
+  // made-up guests only
+  const IH = ['ROOM\tGUEST_NAME\tARRIVAL\tDEPARTURE\tADULTS\tCHILDREN',
+    '0113\tTestperson, Alpha\t18-OCT-26\t21-OCT-26\t2\t0',     // checked out on the board ("113")
+    '0204\tExample, Beta\t14-OCT-26\t21-OCT-26\t1\t1',          // extended +2
+    '0310\tSample, Zeta\t19-OCT-26\t21-OCT-26\t2\t0',           // late check-out 14:00
+    '0412\tDoe, Epsilon\t20-OCT-26\t21-OCT-26\t1\t0',           // left, waiting for Finance
+    '0507\tPlaceholder, Kim\t17-OCT-26\t21-OCT-26\t2\t0',       // not on the board
+    '0618\tFake, Omega\t19-OCT-26\t24-OCT-26\t1\t0',            // may extend… but stays anyway
+    '0720\tNewcomer, Test\t21-OCT-26\t23-OCT-26\t2\t0',         // re-let: the board's guest left this room today
+    '0809\tExample, Theta\t20-OCT-26\t22-OCT-26\t1\t0'].join('\n'); // departs tomorrow
+  const rooms = P.groupRooms(P.parseReport(IH).rows);
+  const D = (room, o) => Object.assign({ room: parseInt(room, 10), roomStr: room, name: 'X', departure: '21-OCT-26', status: 'due', lateTime: '', extensionNights: 0, intent: '', checkoutAt: '' }, o);
+  const board = [D('113', { status: 'out', checkoutAt: '11:02' }), D('204', { status: 'extended', extensionNights: 2 }), D('310', { status: 'late', lateTime: '14:00' }),
+    D('412', { intent: 'finance_hold', finAt: '10:40', finWho: 'Finance' }), D('720', { status: 'out', checkoutAt: '09:15' }), D('999', {})];
+  const L = P.liveRooms(rooms, board, {});
+  const by = k => L.find(r => r.rk === k);
+  check('overlay: "113" on Departures is in-house 0113 (leading zero) → checked out 11:02',
+    [P.isOut(by('113')), by('113').ov.checkedOutAt, P.isOut(by('507')), !!by('507').ov], [true, '11:02', false, false]);
+  check('overlay: extended +2 N on a 21 Oct departure → leaves 23 Oct, 9 nights, no longer departing today, departs 23 Oct',
+    [by('204').departure, by('204').operaDeparture, by('204').nights, by('204').ov.extendedTo, P.matches(by('204'), 'today', T), P.matches(by('204'), 'tomorrow', '2026-10-22')],
+    ['2026-10-23', '2026-10-21', 9, '2026-10-23', false, true]);
+  check('overlay: a room re-let today (the board\'s guest left, a new guest arrived) is not marked out', [!!by('720').ov, P.isOut(by('720'))], [false, false]);
+  check('overlay: LCO with time and left · waiting for Finance come through as facts', [by('310').ov.status, by('310').ov.lateTime, by('412').ov.intent, by('412').ov.finAt], ['late', '14:00', 'finance_hold', '10:40']);
+  const ext = (day, n) => P.liveRooms(P.groupRooms(P.parseReport('ROOM\tGUEST_NAME\tARRIVAL\tDEPARTURE\n0901\tSample, Month\t25-OCT-26\t' + day).rows),
+    [D('901', { departure: day, status: 'extended', extensionNights: n })], {})[0];
+  check('overlay: extension across month and year ends (30 Oct +3 → 2 Nov, 31 Dec +2 → 2 Jan, 28 Feb +1 → 1 Mar)',
+    [ext('30-OCT-26', 3).departure, ext('31-DEC-26', 2).departure, ext('28-FEB-27', 1).departure, ext('30-NOV-26', 1).departure], ['2026-11-02', '2027-01-02', '2027-03-01', '2026-12-01']);
+  check('overlay: Opera already has the new date (in-house loaded after the extension) → not added twice',
+    P.liveRooms(P.groupRooms(P.parseReport('ROOM\tGUEST_NAME\tARRIVAL\tDEPARTURE\n0204\tExample, Beta\t14-OCT-26\t23-OCT-26').rows), [D('204', { status: 'extended', extensionNights: 2 })], {}).map(r => [r.departure, r.nights, !!r.ov, r.operaDeparture || ''])[0],
+    ['2026-10-23', 9, true, '']);
+  const S = P.liveSummary(L, T);
+  check('counts: checked-out rooms not counted (rooms, guests, departing today); extended moves out of today; left-for-Finance still a room but not a guest in the hotel',
+    [S.rooms, S.out, S.guests, S.inHotel, S.depToday, S.depTomorrow, S.ext, S.late, S.left, S.leftPax], [7, 1, 11, 10, 3, 1, 1, 1, 1, 1]);
+  check('Departures missing: in-house rooms leaving today not on today\'s board (with name and today\'s date); none when the board is another day\'s',
+    [J(P.missingFromBoard(L, board, T)), P.missingFromBoard(L, board.map(d => Object.assign({}, d, { departure: '20-OCT-26' })), T).length, P.missingFromBoard(L, [], T).length],
+    [[{ room: '0507', rk: '507', name: 'Kim Placeholder', departure: T }], 0, 0]);
+  check('on Departures but not in-house (gone per Opera), checked-out ones left out', P.boardNotInHouse(rooms, board.concat([D('1001', { status: 'out' })])), ['999']);
+  const M1 = P.rememberBoard(null, board, T);
+  check('remembered today: check-outs and extensions only', Object.keys(M1.rooms).sort(), ['113', '204', '720']);
+  const M2 = P.rememberBoard(M1, [D('113', {}), D('310', {})], T);
+  check('remembered: Undo on the board forgets the room; a board loaded again without the room keeps it; another day starts empty',
+    [Object.keys(M2.rooms).sort(), Object.keys(P.rememberBoard(M2, [], '2026-10-22').rooms)], [['204', '720'], []]);
+  const L2 = P.liveRooms(rooms, [D('310', {})], { memory: M1.rooms });
+  check('remembered facts lay over when the board no longer has the room', [P.isOut(L2.find(r => r.rk === '113')), L2.find(r => r.rk === '204').departure, L2.find(r => r.rk === '113').ov.onBoard], [true, '2026-10-23', false]);
+  check('Opera day for a room added to Departures', [P.operaDay('2026-10-21'), P.operaDay('2027-01-02'), P.operaDay('')], ['21-OCT-26', '02-JAN-27', '']);
+  // the API: find(room) carries the overlay (status, checkedOutAt, extendedTo)
+  sb.hoLocalISO = () => T;
+  sb.depRooms = board;
+  sb.hoInHouse.setSnapshot({ date: T, rows: P.parseReport(IH).rows });
+  const F = r => { const f = sb.hoInHouse.find(r); return [f.status, f.checkedOutAt, f.extendedTo, f.departure, f.onDepartures]; };
+  check('hoInHouse.find: status out with time, extended with the new date, nothing for a room not on the board',
+    [F('113'), F('0204'), F('507')], [['out', '11:02', '', '2026-10-21', true], ['extended', '', '2026-10-23', '2026-10-23', true], ['', '', '', '2026-10-21', false]]);
+  // WhatsApp: a room checked out today and no longer on the board (loaded again since) is not put back
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'wa-bridge.js'), 'utf8'), sb, { filename: 'wa-bridge.js' });
+  sb.depRooms = [D('310', {})];
+  sb.hoInHouse.setMemory(M1);
+  const WF = r => { const f = sb.hoWaPure.findRoom(r); return f ? [f.src, !!f.out, f.checkoutAt || ''] : null; };
+  check('wa findRoom: checked out today (remembered) → found with out, not re-added; an in-house room still in → found', [WF('113'), WF('0507')], [['in-house list', true, '11:02'], ['in-house list', false, '']]);
+}
 console.log(`\n${pass} passed · ${fail} failed`);
 process.exit(fail ? 1 : 0);
