@@ -1659,7 +1659,7 @@ W.addEventListener('message', e => {
   if (!same && !ORIGINS.includes(e.origin)) return;
   if (d.source === 'ho-wa-sent') { onSent(d); return; }
   if (d.source !== 'ho-wa') return;
-  if (d.send || d.words || (d.guard && !d.guard.events)) return;      // what this app sends to the WhatsApp tab (same window in tests)
+  if (d.send || d.words || (d.guard && !d.guard.events && !d.guard.arm)) return;      // what this app sends to the WhatsApp tab (same window in tests)
   const reply = o => { try { if (same) W.postMessage(o, location.origin); else if (e.source) e.source.postMessage(o, e.origin); } catch (_) {} };
   if (!same || d.ping) {
     const was = linkSeen; linkSeen = Date.now();
@@ -1668,8 +1668,8 @@ W.addEventListener('message', e => {
     if (fresh) wordsSent = '';
     if (!was || Date.now() - was > 20000) renderStatus();
   }
-  if (d.guard && Array.isArray(d.guard.events)) {   // Away guard: someone used WhatsApp while you were away (wa-guard.js)
-    const ids = W.hoWaGuard ? W.hoWaGuard.fromReader(d.guard.events) : [];
+  if (d.guard && (Array.isArray(d.guard.events) || d.guard.arm)) {   // Away guard: someone used WhatsApp while you were away / auto-away (wa-guard.js)
+    const ids = W.hoWaGuard ? W.hoWaGuard.fromReader(d.guard.events || [], d.guard) : [];
     if (ids.length) reply({ source: 'ho-wa-gack', ids });
     return;
   }

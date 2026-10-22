@@ -338,13 +338,15 @@
   // While you've marked yourself away in HotelOps (phone or PC), anyone using this WhatsApp is reported:
   // which chat they open, what was on the screen while they scrolled, what they searched, if they typed.
   // Only real hands on the mouse / keyboard count (event.isTrusted) — what this reader does itself never does.
-  var guard = LS.get('ho_wa_guard', { on: false, since: 0 }), gq = LS.get('ho_wa_gq', []), gChat = '', gInput = 0, gBurst = {}, gSearchT = 0;
+  var guard = LS.get('ho_wa_guard', { on: false, since: 0, auto: 0 }), gq = LS.get('ho_wa_gq', []), gChat = '', gInput = 0, gBurst = {}, gSearchT = 0;
+  var gHuman = Date.now(), gArmAsked = 0;   // the last real mouse / keyboard use on this page (auto-away)
   var GUARD_GRACE = 45000;   // time to walk away after switching it on
   function guardOn() { return !!guard.on && Date.now() - (guard.since || 0) > GUARD_GRACE; }
   function setGuard(g) {
     var on = !!(g && g.on), since = (g && +g.since) || 0;
+    if (g && typeof g.auto === 'number' && g.auto !== guard.auto) { guard.auto = g.auto; LS.set('ho_wa_guard', guard); }
     if (on === !!guard.on && since === (guard.since || 0)) return;
-    guard = { on: on, since: since || Date.now() }; LS.set('ho_wa_guard', guard);
+    guard = { on: on, since: since || Date.now(), auto: guard.auto || 0 }; LS.set('ho_wa_guard', guard);
     gChat = sp(chatTitle()); gBurst = {};
   }
   function visibleLines() {
@@ -361,12 +363,14 @@
     var chat = sp(chatTitle()).slice(0, 80), t = Date.now(), k = kind + '|' + chat + (kind === 'search' ? '|' + detail : '');
     if (gBurst[k] && t - gBurst[k] < 20000) return;   // scrolling fires many times: one line per chat every 20 s
     gBurst[k] = t;
-    gq.push({ id: 'g' + t.toString(36) + Math.random().toString(36).slice(2, 6), at: t, kind: kind, chat: chat, detail: String(detail || '').slice(0, 140), lines: withLines === false ? [] : visibleLines() });
+    var work = !!chat && groups.some(function (g) { return groupMatch(g.name, chat); });   // one of your work groups: less serious
+    gq.push({ id: 'g' + t.toString(36) + Math.random().toString(36).slice(2, 6), at: t, kind: kind, chat: chat, work: work, detail: String(detail || '').slice(0, 140), lines: withLines === false ? [] : visibleLines() });
     if (gq.length > 80) gq = gq.slice(-80);
     LS.set('ho_wa_gq', gq); gFlush();
   }
   function gFlush() { if (gq.length) post({ source: 'ho-wa', guard: { events: gq.slice(0, 25) } }); }
   function gInputEv(e) {
+    if (e.isTrusted) gHuman = Date.now();
     if (!e.isTrusted || !guardOn()) return;
     gInput = Date.now();
     var tg = e.target && e.target.nodeType === 1 ? e.target : null;
@@ -387,6 +391,10 @@
     var c = sp(chatTitle());
     if (c !== gChat) { var was = gChat; gChat = c; if (c && guardOn() && Date.now() - gInput < 6000) setTimeout(function () { gEvent('chat', was ? 'opened this chat (was on "' + was.slice(0, 40) + '")' : 'opened this chat'); }, 900); }
     if (guard.on) gFlush();
+    // auto-away: nobody has touched this PC for the minutes you chose → ask HotelOps to switch the guard on
+    if (!guard.on && guard.auto > 0 && Date.now() - gHuman > guard.auto * 60e3 && Date.now() - gArmAsked > 60e3) {
+      gArmAsked = Date.now(); post({ source: 'ho-wa', guard: { arm: 'auto', idle: Date.now() - gHuman } });
+    }
   }
 
   // ── talking to HotelOps ───────────────────────────────────

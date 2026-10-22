@@ -11,8 +11,15 @@
 //  • 45 seconds to walk away after you switch it on.
 //  • If the reader or the HotelOps tab on that PC is closed while you're
 //    away, that is reported too (the PC stops checking in).
-//  • Saved under your own account: waGuard/{your uid} = { on, since, by,
-//    beat: {at, linked}, log: {id: {at, kind, chat, detail, lines}} }.
+//  • Smart alerts: every event gets a severity (a private chat, a search,
+//    typing or closing the reader is urgent; your work groups are low), a
+//    visit is one story — "someone is on it" → "still going" → "stopped,
+//    here's what they did" — and you choose what reaches the phone.
+//  • Auto-away: the guard switches itself on when the WhatsApp PC has had
+//    no mouse / keyboard for N minutes (you choose, or off).
+//  • Saved under your own account: waGuard/{your uid} = { on, since, by, auto,
+//    cfg: {level, auto}, beat: {at, linked}, ntfy: {topic},
+//    log: {id: {at, kind, chat, detail, lines, work}} }.
 // ═══════════════════════════════════════════════════════════
 
 (function (W) {
@@ -24,32 +31,82 @@
     touch: ['🖱', 'Clicking'], focus: ['🪟', 'Came to WhatsApp'], reader: ['⚙️', 'Touched the reader'], stop: ['⛔', 'Closed the reader'], link: ['🔌', 'Reader went offline'],
   };
   let NTFY = null;   // { topic } — lock-screen alerts through the free ntfy app
+  let CFG = { level: 'important', auto: 0 };   // level: urgent | important | all · auto: minutes idle before auto-away (0 = off)
+  const LEVELS = { urgent: 3, important: 2, all: 1 };
+  const SESSION_GAP = 3 * 60e3;   // quiet this long = the visit is over
+  /** how serious one thing is: 3 urgent · 2 worth knowing · 1 minor (also: anything in your work groups) */
+  function sev(e) {
+    if (!e) return 1;
+    if (e.kind === 'stop' || e.kind === 'link' || e.kind === 'type' || e.kind === 'search') return 3;
+    if (e.kind === 'chat' || e.kind === 'read') return e.work ? 1 : 3;
+    if (e.kind === 'reader') return 2;
+    return 1;   // a click, coming to the tab: could be someone moving the mouse aside
+  }
+  /** the log as visits: events less than 3 min apart belong together, newest visit first */
+  function visits(list) {
+    const out = []; let cur = null;
+    list.slice().sort((a, b) => a.at - b.at).forEach(e => {
+      if (!cur || e.at - cur.end > SESSION_GAP) { cur = { start: e.at, end: e.at, ev: [] }; out.push(cur); }
+      cur.ev.push(e); cur.end = e.at;
+    });
+    out.forEach(v => {
+      v.sev = Math.max(...v.ev.map(sev));
+      v.chats = [...new Set(v.ev.filter(e => (e.kind === 'chat' || e.kind === 'read' || e.kind === 'type') && e.chat).map(e => e.chat))];
+      v.priv = [...new Set(v.ev.filter(e => (e.kind === 'chat' || e.kind === 'read' || e.kind === 'type') && e.chat && !e.work).map(e => e.chat))];
+      v.searches = v.ev.filter(e => e.kind === 'search').map(e => (e.detail.match(/"(.*)"/) || [])[1] || e.detail);
+      v.typed = v.ev.some(e => e.kind === 'type'); v.stopped = v.ev.some(e => e.kind === 'stop' || e.kind === 'link');
+    });
+    return out.reverse();
+  }
+  const mins = ms => { const m = Math.round(ms / 60e3); return m < 1 ? 'under a minute' : m + ' min'; };
+  function storyOf(v) {
+    const bits = [];
+    if (v.priv.length) bits.push('💬 ' + v.priv.slice(0, 3).join(', ') + (v.priv.length > 3 ? ` +${v.priv.length - 3}` : ''));
+    else if (v.chats.length) bits.push('💬 work chats: ' + v.chats.slice(0, 2).join(', '));
+    if (v.searches.length) bits.push('🔎 searched ' + v.searches.slice(0, 3).map(q => '"' + q + '"').join(', '));
+    if (v.typed) bits.push('⌨️ typed a message');
+    if (v.stopped) bits.push('⛔ closed the reader / WhatsApp');
+    return bits;
+  }
   let ST = { on: false, since: 0 }, LOG = {}, BEAT = null, started = false, seenIds = null, lastLinked = 0, lostSaid = false;
 
-  function state() { return { on: !!ST.on, since: +ST.since || 0 }; }
+  function state() { return { on: !!ST.on, since: +ST.since || 0, auto: +CFG.auto || 0 }; }
   function bridge() { return W.hoWaBridge || null; }
   function linkedHere() { const b = bridge(); try { return !!(b && b.linked && b.linked()); } catch (_) { return false; } }
 
   // ── switch on / off (from any device signed in as you) ──
-  function set(on) {
+  function set(on, how) {
     if (!uid()) return toast('Sign in first', 'err');
-    const v = { on: !!on, since: Date.now(), by: (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '' };
+    const auto = how === 'auto';
+    // auto-away: the PC has been idle for minutes already, so it watches at once (no 45 s to walk away)
+    const v = { on: !!on, since: auto ? Date.now() - 46000 : Date.now(), by: auto ? 'auto' : ((typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '') };
     ST = v;
     if (typeof fbSet === 'function') fbSet(P('on'), v.on), fbSet(P('since'), v.since), fbSet(P('by'), v.by);
     pushToReader();
-    toast(on ? '🛡 Away guard on — your phone will be told if someone uses your WhatsApp (starts in 45 s)' : '🛡 Away guard off — welcome back', on ? 'ok' : '');
+    if (auto) ntfy('🛡 Auto-away on', `Nobody touched the WhatsApp PC for ${CFG.auto} min, so the Away guard is now watching it. Tap "I'm back" in HotelOps when you return.`, 2, ['shield']);
+    else toast(on ? '🛡 Away guard on — your phone will be told if someone uses your WhatsApp (starts in 45 s)' : '🛡 Away guard off — welcome back', on ? 'ok' : '');
+    if (!on) endVisit(true);
     render();
+  }
+  let cfgOpen = false;
+  function setCfg(k, v) {
+    cfgOpen = 'force';
+    CFG = Object.assign({}, CFG, { [k]: v });
+    if (typeof fbSet === 'function' && uid()) fbSet(P('cfg'), CFG);
+    pushToReader(); render(); cfgOpen = true;
   }
   function pushToReader() { const b = bridge(); if (b && b.post) try { b.post({ source: 'ho-wa', guard: state() }); } catch (_) {} }
 
   // ── the PC with the reader: save what it saw ──
-  function fromReader(events) {
+  function fromReader(events, msg) {
     if (!uid() || typeof fbSet !== 'function') return [];
+    if (msg && msg.arm === 'auto' && CFG.auto > 0 && !ST.on) set(true, 'auto');
     const ids = [];
     (events || []).slice(0, 40).forEach(e => {
       if (!e || typeof e !== 'object' || !/^g[a-z0-9]{4,20}$/.test(String(e.id || ''))) return;
       const rec = { at: +e.at || Date.now(), kind: KIND[e.kind] ? e.kind : 'touch', chat: String(e.chat || '').slice(0, 80), detail: String(e.detail || '').slice(0, 140),
         lines: (Array.isArray(e.lines) ? e.lines : []).slice(0, 4).map(l => String(l).slice(0, 110)) };
+      if (e.work) rec.work = true;
       try { fbSet(P('log/' + e.id), rec); } catch (_) {}
       if (!sentIds.has(e.id)) { sentIds.add(e.id); pushAlert(rec); }
       ids.push(e.id);
@@ -80,6 +137,8 @@
       const wasOn = ST.on;
       ST = { on: !!v.on, since: +v.since || 0, by: v.by || '' };
       BEAT = v.beat || null;
+      CFG = Object.assign({ level: 'important', auto: 0 }, v.cfg && typeof v.cfg === 'object' ? v.cfg : {});
+      if (!LEVELS[CFG.level]) CFG.level = 'important';
       NTFY = v.ntfy && /^hotelops-[a-z0-9]{12,40}$/.test(v.ntfy.topic || '') ? { topic: v.ntfy.topic } : null;
       LOG = v.log && typeof v.log === 'object' ? v.log : {};
       const ids = Object.keys(LOG);
@@ -93,6 +152,7 @@
     });
   }
   function alarm(list) {
+    list = list.filter(e => sev(e) >= LEVELS[CFG.level]); if (!list.length) return;
     const e = list[list.length - 1], k = KIND[e.kind] || KIND.touch;
     const msg = `🚨 Someone is using your WhatsApp: ${k[1].toLowerCase()}${e.chat ? ' in "' + e.chat + '"' : ''}${e.detail && e.kind === 'search' ? ' — ' + e.detail : ''}`;
     toast(msg, 'err');
@@ -104,25 +164,53 @@
   // ntfy app on your phone, subscribed to your own secret topic. Only what happened and the chat name are
   // sent — never the messages that were on the screen (those stay in HotelOps).
   const sentIds = new Set();
-  let pushQ = [], pushT = 0, pushLast = 0;
+  // one visit = one story on the phone: the first alert, "still going" updates (at most one a minute),
+  // and a summary when it has been quiet for 3 minutes. Minor things wait until something serious happens.
+  let V = null, vUpd = 0, vEndT = 0, vQ = [];
   function ntfy(title, message, priority, tags) {
     if (!NTFY) return Promise.resolve(false);
-    const body = JSON.stringify({ topic: NTFY.topic, title, message, priority: priority || 5, tags: tags || ['rotating_light'],
-      click: location.origin + location.pathname + '#wa-guard' });
+    const url = location.origin + location.pathname + '#wa-guard';
+    const body = JSON.stringify({ topic: NTFY.topic, title, message, priority: priority || 5, tags: tags || ['rotating_light'], click: url,
+      actions: [{ action: 'view', label: 'Open HotelOps', url }] });
     return fetch('https://ntfy.sh/', { method: 'POST', body }).then(r => r.ok).catch(() => false);   // plain-text body: no pre-flight check
   }
+  const evLine = e => (KIND[e.kind] || KIND.touch)[0] + ' ' + (e.kind === 'search' ? e.detail : (KIND[e.kind] || KIND.touch)[1] + (e.chat ? ' · ' + e.chat + (e.work ? ' (work)' : '') : ''));
   function pushAlert(rec) {
-    if (!NTFY || !ST.on || (rec.at || 0) < (ST.since || 0)) return;
-    pushQ.push(rec);
-    // several things at once (chat + scroll + search) become one alert; never more than one every 12 s
-    if (!pushT) pushT = setTimeout(() => {
-      pushT = 0; const q = pushQ.splice(0); if (!q.length) return;
-      const first = q[0];
-      const lines = q.slice(0, 5).map(e => (KIND[e.kind] || KIND.touch)[0] + ' ' + (e.kind === 'search' ? e.detail : (KIND[e.kind] || KIND.touch)[1] + (e.chat ? ' · ' + e.chat : '')));
-      ntfy(first.kind === 'link' ? 'WhatsApp reader stopped on the desk PC' : 'Someone is using your WhatsApp',
-        lines.join('\n') + (q.length > 5 ? `\n+${q.length - 5} more` : '') + '\n' + clock(first.at), 5, [first.kind === 'link' ? 'warning' : 'rotating_light']);
-      pushLast = Date.now();
-    }, Math.max(1500, 12000 - (Date.now() - pushLast)));
+    if (!ST.on || (rec.at || 0) < (ST.since || 0)) return;
+    const t = rec.at || Date.now(), need = LEVELS[CFG.level];
+    if (!V || t - V.end > SESSION_GAP) { if (V) endVisit(); V = { start: t, end: t, ev: [], told: false, top: 0 }; vQ = []; }
+    V.ev.push(rec); V.end = t; V.top = Math.max(V.top, sev(rec)); vQ.push(rec);
+    clearTimeout(vEndT); vEndT = setTimeout(() => endVisit(), SESSION_GAP);
+    if (!V.told) {
+      if (V.top < need) return;   // only minor things so far: wait
+      setTimeout(() => {   // a moment to gather what happens together (chat + scroll + search)
+        if (!V || V.told) return;
+        V.told = true; vUpd = Date.now();
+        const q = vQ.splice(0);
+        ntfy(V.top >= 3 ? '🚨 Someone is on your WhatsApp' : '⚠️ Someone touched your WhatsApp PC',
+          q.slice(-5).map(evLine).join('\n') + (q.length > 5 ? `\n+${q.length - 5} more` : '') + '\n' + clock(V.start), V.top >= 3 ? 5 : 4, ['rotating_light']);
+      }, 2500);
+      return;
+    }
+    // already told: an update at most once a minute, louder after 3 minutes
+    if (Date.now() - vUpd < 60e3 || sev(rec) < need) return;
+    setTimeout(() => {
+      if (!V || !vQ.length) return;
+      vUpd = Date.now();
+      const q = vQ.splice(0).filter(e => sev(e) >= need);
+      if (!q.length) return;
+      const long = V.end - V.start > 3 * 60e3;
+      ntfy(`⏱ Still on your WhatsApp · ${mins(Date.now() - V.start)}`, q.slice(-5).map(evLine).join('\n'), long ? 5 : 4, ['hourglass']);
+    }, 2500);
+  }
+  /** the visit is over (quiet 3 min, or you're back): one summary of what they did */
+  function endVisit(back) {
+    clearTimeout(vEndT);
+    const v = V; V = null; vQ = [];
+    if (!v || !v.told) return;
+    const sum = visits(v.ev)[0]; if (!sum) return;
+    ntfy(back ? '✅ You\'re back — here\'s what happened' : '✅ Activity on your WhatsApp stopped',
+      [`${clock(v.start)}${clock(v.end) !== clock(v.start) ? '–' + clock(v.end) : ''} · ${mins(v.end - v.start)} · ${v.ev.length} action${v.ev.length === 1 ? '' : 's'}`].concat(storyOf(sum)).join('\n'), 3, ['white_check_mark']);
   }
   function pushSetup() {
     if (!uid() || typeof fbSet !== 'function') return toast('Sign in first', 'err');
@@ -143,6 +231,23 @@
       <div class="wg-topic"><code>${esc(NTFY.topic)}</code><button class="btn sm" onclick="hoWaGuard.pushCopy()">Copy</button></div>
       <small>Keep this code private — anyone with it gets your alerts. Alerts say what happened and which chat, never the messages.</small>
       <div class="wg-push-act"><button class="btn sm primary" onclick="hoWaGuard.pushTest()">Send a test</button><button class="btn sm ghost" onclick="hoWaGuard.pushOff()">Turn off</button></div></div>`;
+  }
+  /** someone is on it right now (something in the last 3 min while you're away) */
+  function live() {
+    if (!ST.on) return '';
+    const recent = Object.values(LOG).filter(e => e && e.at >= ST.since && Date.now() - e.at < SESSION_GAP);
+    if (!recent.length) return '';
+    const v = visits(recent)[0];
+    return `<div class="wg-live"><span class="wg-dot"></span><div><b>Someone is on your WhatsApp now</b><small>${esc(mins(Date.now() - v.start))} · ${esc(storyOf(v).join(' · ') || v.ev.length + ' actions')}</small></div></div>`;
+  }
+  function cfgHtml() {
+    const seg = (k, opts) => `<div class="wg-seg">${opts.map(([v, l]) => `<button class="${String(CFG[k]) === String(v) ? 'on' : ''}" onclick="hoWaGuard.setCfg('${k}', ${typeof v === 'number' ? v : `'${v}'`})">${l}</button>`).join('')}</div>`;
+    return `<details class="wg-cfg"${cfgOpen ? ' open' : ''}><summary>⚙️ Smart alerts</summary>
+      <div class="wg-cfg-row"><b>What reaches your phone</b>${seg('level', [['urgent', '🚨 Urgent only'], ['important', '⚠️ Important'], ['all', 'Everything']])}
+        <small>${CFG.level === 'urgent' ? 'Only a private chat opened or read, a search, typing, or the reader closed.' : CFG.level === 'important' ? 'Urgent things, plus someone touching the reader window. A click or your work groups alone don\'t buzz you.' : 'Every touch, including your work groups and a moved mouse.'} One visit = one story: the first alert, "still going" (at most once a minute), and a summary when they stop.</small></div>
+      <div class="wg-cfg-row"><b>Auto-away</b>${seg('auto', [[0, 'Off'], [5, '5 min'], [10, '10 min'], [15, '15 min'], [30, '30 min']])}
+        <small>Turns the guard on by itself when nobody has touched the WhatsApp PC for this long — for when you forget. Needs the reader pasted again once.</small></div>
+    </details>`;
   }
   function clearLog() {
     if (!confirm('Clear the Away guard history?')) return;
@@ -173,10 +278,14 @@
   }
   function render() {
     const ov = document.getElementById('wgOv'); if (!ov || ov.hidden) return;
+    cfgOpen = !!ov.querySelector('details.wg-cfg[open]') || cfgOpen === 'force';
     const since = ST.on && ST.since ? ST.since : 0;
     const all = Object.keys(LOG).map(k => Object.assign({ id: k }, LOG[k])).filter(e => e && e.at).sort((a, b) => b.at - a.at);
     const now = since ? all.filter(e => e.at >= since) : [];
     const earlier = all.filter(e => !since || e.at < since).slice(0, 40);
+    const visitHtml = v => `<div class="wg-visit s${v.sev}"><div class="wg-vh"><b>${v.sev >= 3 ? '🚨' : v.sev === 2 ? '⚠️' : 'ℹ️'} ${esc(clock(v.start))}${v.end - v.start > 60e3 ? '–' + esc(clock(v.end)) : ''}</b><span>${esc(mins(v.end - v.start))} · ${v.ev.length} action${v.ev.length === 1 ? '' : 's'}</span></div>
+      ${storyOf(v).length ? `<div class="wg-story">${storyOf(v).map(x => `<div>${esc(x)}</div>`).join('')}</div>` : ''}
+      <details${v.sev >= 3 && Date.now() - v.end < 30 * 60e3 ? ' open' : ''}><summary>Step by step</summary>${v.ev.slice().reverse().map(row).join('')}</details></div>`;
     const row = e => { const k = KIND[e.kind] || KIND.touch; return `<div class="wg-ev wg-${esc(e.kind)}"><span class="wg-ic">${k[0]}</span><div class="wg-tx">
       <b>${esc(k[1])}${e.chat ? ` · <span class="wg-chat">${esc(e.chat)}</span>` : ''}</b><small>${esc(clock(e.at))} · ${esc(e.detail || '')}</small>
       ${(e.lines || []).length ? `<div class="wg-lines" title="What was on the screen">${e.lines.map(l => `<div>${esc(l)}</div>`).join('')}</div>` : ''}</div></div>`; };
@@ -184,9 +293,11 @@
       <div class="wg-hd"><span class="wg-shield ${ST.on ? 'on' : ''}">🛡</span><div><b>WhatsApp Away guard</b><small>Tells you if someone uses your WhatsApp while you're away</small></div><button class="wg-x" onclick="hoWaGuard.close()" aria-label="Close">✕</button></div>
       <button class="wg-big ${ST.on ? 'on' : ''}" onclick="hoWaGuard.set(${!ST.on})">${ST.on ? `<b>I'm back</b><small>Watching since ${esc(clock(since))} · tap to stop</small>` : `<b>I'm away</b><small>Going on a break / DND? Tap and walk away (starts in 45 s)</small>`}</button>
       <div class="wg-pc">${pcLine()}</div>
+      ${live()}
       ${pushHtml()}
-      ${ST.on ? `<div class="wg-sec">While you're away <span>${now.length}</span></div>${now.length ? now.map(row).join('') : '<div class="wg-empty">✓ Nobody has touched your WhatsApp.</div>'}` : ''}
-      ${earlier.length ? `<div class="wg-sec">Earlier <button class="wg-clear" onclick="hoWaGuard.clearLog()">Clear</button></div>${earlier.map(row).join('')}` : ''}
+      ${cfgHtml()}
+      ${ST.on ? `<div class="wg-sec">While you're away <span>${now.length}</span></div>${now.length ? visits(now).map(visitHtml).join('') : '<div class="wg-empty">✓ Nobody has touched your WhatsApp.</div>'}` : ''}
+      ${earlier.length ? `<div class="wg-sec">Earlier <button class="wg-clear" onclick="hoWaGuard.clearLog()">Clear</button></div>${visits(earlier).slice(0, 15).map(visitHtml).join('')}` : ''}
       <div class="wg-how"><b>How it works</b> The WhatsApp reader on the desk PC watches only real mouse and keyboard use, never its own. You see the chat they opened, what was on the screen while they scrolled, what they searched, and if they typed or closed the reader. Set up 📲 lock-screen alerts above to get them even when your phone is locked. Messages shown here are saved under your account only.</div>
     </div>`;
   }
@@ -200,6 +311,7 @@
   // start once someone is signed in; the PC tab checks in every 30 s while you're away
   const boot = setInterval(() => { if (uid()) { clearInterval(boot); start(); } }, 1500);
   setInterval(beat, 30000);
+  setInterval(() => { if (ST.on && document.getElementById('wgOv') && !document.getElementById('wgOv').hidden && !document.querySelector('#wgOv details.wg-cfg[open]')) render(); }, 20000);   // live banner and times
   setInterval(() => { if (ST.on) pushToReader(); }, 15000);   // a reader pasted again (or reloaded) learns it at once
   document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
 
@@ -229,6 +341,15 @@
 .wg-push ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}.wg-push a{color:var(--accent)}
 .wg-topic{display:flex;align-items:center;gap:8px}.wg-topic code{flex:1;min-width:0;overflow-wrap:anywhere;padding:8px 10px;border-radius:10px;background:var(--bg2);font:600 13px var(--mono,monospace);user-select:all}
 .wg-push-act{display:flex;gap:8px;flex-wrap:wrap}
+.wg-live{display:flex;gap:12px;align-items:center;padding:12px 14px;border-radius:16px;background:color-mix(in srgb,var(--rose,#e11d48) 14%,transparent);border:1px solid color-mix(in srgb,var(--rose,#e11d48) 45%,transparent)}.wg-live>div{display:flex;flex-direction:column;min-width:0}.wg-live b{color:var(--rose,#e11d48);font-size:14.5px}.wg-live small{font-size:12.5px;color:var(--text2);overflow-wrap:anywhere}
+.wg-dot{width:12px;height:12px;flex:none;border-radius:50%;background:var(--rose,#e11d48);box-shadow:0 0 0 0 var(--rose,#e11d48);animation:wgPulse 1.4s infinite}@keyframes wgPulse{70%{box-shadow:0 0 0 10px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.wg-visit{display:flex;flex-direction:column;gap:6px;padding:12px;border-radius:16px;background:var(--card);border:1px solid var(--border);border-left:4px solid var(--border2)}.wg-visit.s3{border-left-color:var(--rose,#e11d48)}.wg-visit.s2{border-left-color:var(--amber,#d97706)}
+.wg-vh{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}.wg-vh b{font-size:14.5px}.wg-vh span{color:var(--text3);font-size:12.5px}
+.wg-story{display:flex;flex-direction:column;gap:2px;font-size:13px;color:var(--text);overflow-wrap:anywhere}
+.wg-visit details summary,.wg-cfg summary{cursor:pointer;color:var(--accent);font-size:12.5px;font-weight:600}.wg-visit details[open]{display:flex;flex-direction:column;gap:6px}
+.wg-cfg{padding:12px 14px;border-radius:16px;background:var(--card);border:1px solid var(--border)}.wg-cfg summary{font-size:14px;color:var(--text);font-weight:700}
+.wg-cfg-row{display:flex;flex-direction:column;gap:6px;margin-top:12px;font-size:13px}.wg-cfg-row small{color:var(--text3);font-size:12px;line-height:1.45}
+.wg-seg{display:flex;gap:4px;padding:3px;border-radius:12px;background:var(--bg2);flex-wrap:wrap}.wg-seg button{flex:1 1 auto;min-width:0;padding:7px 8px;border:0;border-radius:9px;background:transparent;color:var(--text2);font:600 12.5px var(--font);cursor:pointer}.wg-seg button.on{background:var(--card);color:var(--accent);box-shadow:0 1px 4px rgba(0,0,0,.12)}
 .wg-empty{padding:14px;text-align:center;color:var(--mint,#16a34a);font-weight:600;font-size:13.5px}
 .wg-how{margin-top:6px;font-size:12px;line-height:1.5;color:var(--text3)}.wg-how b{display:block;color:var(--text2);margin-bottom:2px}
 html.wg-away .topbar .logo::after{content:'🛡';margin-left:4px;font-size:13px}`;
@@ -236,5 +357,5 @@ html.wg-away .topbar .logo::after{content:'🛡';margin-left:4px;font-size:13px}
 
   if (/wa-guard/.test(location.hash)) setTimeout(() => { open(); try { history.replaceState(null, '', location.pathname + location.search); } catch (_) {} }, 1800);   // tapped a lock-screen alert
 
-  W.hoWaGuard = { open, close, set, state, fromReader, clearLog, render, pushSetup, pushOff, pushCopy, pushTest, _st: () => ({ ST, LOG, BEAT }) };
+  W.hoWaGuard = { open, close, set, setCfg, state, fromReader, clearLog, render, sev, visits, pushSetup, pushOff, pushCopy, pushTest, _st: () => ({ ST, LOG, BEAT }) };
 })(window);

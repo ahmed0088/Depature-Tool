@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 390, items: [
+    '🧠 Smarter Away guard: every action gets a level — a private chat, a search, typing or closing the reader is 🚨 urgent; your work groups and a moved mouse are minor and don\'t buzz you alone. A visit is one story on your phone: "🚨 Someone is on your WhatsApp" → "⏱ Still on it · 3 min" (at most once a minute) → "✅ Stopped — Family, Mum · searched salary". A red live banner shows while someone is on it, and the history is grouped by visit with a short summary.',
+    '🛡 Auto-away: WhatsApp → 🛡 Away → ⚙️ Smart alerts. Choose 5–30 minutes and the guard switches itself on when nobody has touched the WhatsApp PC that long. Also choose what reaches your phone: Urgent only, Important, or Everything. Paste the WhatsApp reader again once for these.',
+  ] },
   { v: 389, items: [
     '📲 Away guard alerts on your lock screen: WhatsApp → 🛡 Away → "Set up phone alerts". Install the free ntfy app, paste your private code, tap Send a test. Now you\'re told even when your phone is locked and HotelOps is closed. Alerts say what happened and which chat — never the messages themselves.',
   ] },
