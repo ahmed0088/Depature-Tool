@@ -3264,3 +3264,21 @@ html, body { background: var(--bg); }
   @supports (padding: env(safe-area-inset-top)) { #appWrapper > .topbar { height: calc(56px + env(safe-area-inset-top)) !important; } }
 }
 @media (display-mode: standalone) { #appWrapper { height: auto !important; max-height: none !important; top: 0; bottom: 0; } }   /* installed app: pin to all four screen edges */
+
+/* ── Shift Tasks tabs on phones: a fixed 4-part switch that fits the width — no sideways / up-down
+   wobble (Safari made the old strip scroll both ways because the tabs hung 2px below it) ── */
+@media (max-width: 768px) {
+  #shiftTabs { display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 4px; overflow: hidden !important;
+    border: 0 !important; border-radius: 14px; background: color-mix(in srgb, var(--text) 7%, transparent); touch-action: manipulation; }
+  #shiftTabs .shift-tab { flex-direction: column; justify-content: center; gap: 3px; min-width: 0; margin: 0 !important; padding: 7px 2px !important;
+    border: 0 !important; border-radius: 10px; font-size: 12.5px; text-align: center; overflow: hidden; text-overflow: ellipsis; }
+  #shiftTabs .shift-tab:hover { background: transparent; }
+  #shiftTabs .shift-tab.active { background: var(--card, var(--surface)); color: var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+  #shiftTabs .shift-prog { font-size: 10px; padding: 1px 6px; }
+}
+/* sideways chip / tab strips only move sideways on a phone (no up-down wobble, no page bounce, no scrollbar) */
+@media (max-width: 768px) {
+  .filter-row, .br-tabs, .ba-chips, .rk-seg, #panel-departures .dp-chips, .dpn-filters {
+    overflow-y: hidden !important; overscroll-behavior-x: contain; touch-action: pan-x pan-y; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .filter-row::-webkit-scrollbar, .br-tabs::-webkit-scrollbar, .ba-chips::-webkit-scrollbar, .rk-seg::-webkit-scrollbar, #panel-departures .dp-chips::-webkit-scrollbar, .dpn-filters::-webkit-scrollbar { display: none; }
+}

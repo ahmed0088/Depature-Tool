@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 380, items: [
+    '📱 Shift Tasks on the phone: Morning / Afternoon / Mid / Night is now a fixed 4-part switch that fits the screen — it no longer slides around or gets cut off. Other chip rows (filters, Departures chips) only move sideways now.',
+  ] },
   { v: 379, items: [
     '📱 iPhone app: fixed the bottom menu floating too high with a grey strip under it. The app now fills the whole screen; the top bar sits below the clock and the menu just above the home bar.',
   ] },
