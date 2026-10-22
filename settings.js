@@ -234,7 +234,8 @@ function hoSettingsRender() {
 
     _hoSec('privacy', 'immig', 'Privacy & security', 'Protect guest details on a shared desk',
       _hoTog('privacy', 'Privacy screen', 'Blurs guest names and emails until you point at them. Use it when guests can see the screen')
-      + _hoSeg('autoLock', 'Sign out when idle', 'Signs out this device after no activity', [[0, 'Never'], [15, '15 min'], [30, '30 min'], [60, '1 hour'], [240, '4 hours']])),
+      + _hoSeg('autoLock', 'Sign out when idle', 'Signs out this device after no activity', [[0, 'Never'], [15, '15 min'], [30, '30 min'], [60, '1 hour'], [240, '4 hours']])
+      + (typeof hoFaceLogin !== 'undefined' ? hoFaceLogin.settingsRow() : '')),
 
     typeof hoSetupSections === 'function' ? hoSetupSections() : '',
 

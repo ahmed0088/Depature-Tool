@@ -261,3 +261,22 @@ html[data-theme="opera"] #loginScreen .login-btn:not(.is-done) { background: lin
   .lg-sparks { display: none; }
   .lg-tick svg, .lg-btn-check { stroke-dashoffset: 0; }
 }
+
+/* ── Sign in with Face ID (face-login.js) ── */
+#loginScreen .fl-box { margin: 0 0 6px; }
+#loginScreen .fl-btn { width: 100%; height: 56px; border-radius: 15px; border: 1px solid color-mix(in srgb, var(--lg-a) 45%, transparent); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 11px; font: 700 16px var(--font); letter-spacing: -0.01em; color: var(--lg-on);
+  background: linear-gradient(135deg, var(--lg-a), var(--lg-a2)); box-shadow: 0 10px 26px -8px color-mix(in srgb, var(--lg-a) 70%, transparent), 0 1px 0 rgba(255,255,255,.25) inset;
+  transition: transform .15s ease, filter .2s; }
+#loginScreen .fl-btn:active { transform: scale(.98); }
+#loginScreen .fl-btn.is-busy { filter: saturate(.7) brightness(.95); cursor: progress; }
+#loginScreen .fl-btn svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+#loginScreen .fl-btn.is-busy svg { animation: flPulse 1s ease-in-out infinite; }
+@keyframes flPulse { 50% { opacity: .35; } }
+#loginScreen .fl-who { margin: 9px 0 0; text-align: center; font-size: 13px; color: var(--lg-muted); }
+#loginScreen .fl-who b { color: var(--lg-text); }
+#loginScreen .fl-link { background: none; border: 0; padding: 0; font: inherit; color: var(--lg-a); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+#loginScreen .fl-or { display: flex; align-items: center; gap: 12px; margin: 18px 0 16px; font-size: 12.5px; color: var(--lg-muted); }
+#loginScreen .fl-or::before, #loginScreen .fl-or::after { content: ''; flex: 1; height: 1px; background: color-mix(in srgb, var(--lg-text) 14%, transparent); }
+/* with Face ID ready, the password sign-in steps back to a quiet second choice */
+#loginScreen .fl-box ~ #loginForm .login-btn { background: color-mix(in srgb, var(--lg-text) 9%, transparent) !important; color: var(--lg-text) !important; box-shadow: none !important; }

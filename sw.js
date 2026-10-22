@@ -14,7 +14,7 @@
 //  clients pick up the new version instead of a stale cache.
 // ═══════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'ibis-ops-shell-v377';
+const CACHE_NAME = 'ibis-ops-shell-v378';
 
 const SHELL_FILES = [
   './',
@@ -27,6 +27,7 @@ const SHELL_FILES = [
   './firebase-config.js',
   './hotel-settings.js',
   './hotel-setup.js',
+  './face-login.js',
   './db.js',
   './state.js',
   './utils.js',

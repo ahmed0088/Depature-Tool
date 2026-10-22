@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 378, items: [
+    '🙂 Sign in with Face ID (a passkey). After you sign in with your password, HotelOps asks "Sign in with Face ID next time?" — tap Turn on. From then on the sign-in card shows a big "Sign in with Face ID" button, and opening the app from your Home Screen asks for your face straight away. Your password stays locked on that device behind your face. Turn it on or off any time in Settings → Privacy & security. Changed your password? Sign in with the new one once and turn it on again.',
+  ] },
   { v: 377, items: [
     '📱 iPhone app: open HotelOps in Safari → Share → Add to Home Screen. It opens full screen like a real app (no browser bar), with its own icon. The top bar now sits below the clock, and the bottom menu clears the home bar.',
   ] },

@@ -340,6 +340,7 @@ function showLoginScreen(errorMsg) {
   const cur = typeof hoThemeName === 'function' ? hoThemeName() : (document.documentElement.getAttribute('data-theme') || 'night-ops');
   _applyLoginTheme(cur);
   if (errorMsg) _lgShowMsg(errorMsg);
+  if (typeof hoFaceLogin !== 'undefined') hoFaceLogin.renderLogin(errorMsg);   // "Sign in with Face ID" (face-login.js)
 }
 
 function hideLoginScreen() {
@@ -415,6 +416,7 @@ async function authLogin() {
     await firebase.auth().setPersistence(persistence);
     await firebase.auth().signInWithEmailAndPassword(email, pass);
     // onAuthStateChanged handles the rest
+    if (typeof hoFaceLogin !== 'undefined') hoFaceLogin.offer(email, pass);   // "Use Face ID next time?"
   } catch(e) {
     _lgSigningIn = false;
     _lgBtn('idle');
