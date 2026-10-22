@@ -3382,3 +3382,80 @@ html, body { background: var(--bg); }
   /* Skip The Clean: the three steps fit the screen whatever file names are in them */
   #panel-skip-clean .stc-wrapper .stc-steps { grid-template-columns: minmax(0, 1fr); }
 }
+/* ── Phone fixes: Shift Tasks ── */
+@media (max-width: 768px) {
+  #shiftTabs .shift-tab { font-size: clamp(10.5px, 2.9vw, 12.5px); letter-spacing: -.2px; }
+  /* long task names get the full card width: the buttons go on their own line under the text */
+  #panel-shifts .st-item { flex-wrap: wrap; }
+  #panel-shifts .st-text { flex: 1 1 calc(100% - 40px); }
+  #panel-shifts .st-actions { flex: 1 1 100%; justify-content: flex-end; }
+  #panel-shifts .st-name, #panel-shifts .st-hint { overflow-wrap: anywhere; }
+  /* Coming up: the task name on its own line, not a 1-word-wide column */
+  #panel-shifts .st-soon-row { flex-wrap: wrap; row-gap: 4px; }
+  #panel-shifts .st-soon-row .st-soon-n { order: 9; flex: 1 1 100%; white-space: normal; overflow-wrap: anywhere; }
+  #panel-shifts .st-soon-row .edit-btn { margin-left: auto; }
+  #panel-shifts .st-log-text { min-width: 0; overflow-wrap: anywhere; }
+}
+/* ── Phone fixes: Night Run Checklist ── */
+@media (max-width: 768px) {
+  /* one column whatever the step names: a long name pushed the whole page 50–80px past the screen */
+  .cl-layout { grid-template-columns: minmax(0, 1fr); }
+  .cl-log-col { min-width: 0; }
+  #panel-checklist .cl-name, #panel-checklist .cl-hint, #panel-checklist .cl-log-text { overflow-wrap: anywhere; }
+}
+/* ── Phone fixes: Roster ── */
+@media (max-width: 768px) {
+  /* My shifts: the shift times ("07–15") fit the 7 small day cards instead of showing "07…" */
+  .ro-day b { font-size: clamp(10.5px, 3.1vw, 14px); letter-spacing: -.3px; }
+}
+/* ── Phone fixes: Roster builder ── */
+@media (max-width: 768px) {
+  /* hour-by-hour grid: all 24 hours fit the card (it was 4–35px too wide, the last hours hidden) */
+  .rb-desk { min-width: 0; border-spacing: 1px; }
+  .rb-desk tbody th, .rb-desk thead th:first-child { width: 30px; }
+  .rb-dk { font-size: 9px; border-radius: 3px; }
+  /* the Fix button sits at the right of a problem instead of stretching its line */
+  .rb-prob { display: flow-root; }
+  .rb-prob .rb-fixone { float: right; margin: 2px 0 2px 8px; }
+}
+@media (max-width: 520px) {
+  /* vacation balances: full names; the bar goes under the name and "4 booked → -3.9" stays on one line */
+  .vc-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "nm n" "bar n"; row-gap: 5px; }
+  .vc-nm { grid-area: nm; } .vc-bar { grid-area: bar; } .vc-n { grid-area: n; white-space: nowrap; }
+}
+/* ── Phone fixes: Settings ── */
+@media (max-width: 520px) {
+  /* Font picker: fixed 2 columns. With auto-fill the box was sized as if it were 1 column
+     and left ~450px of empty space under the fonts */
+  .ho-fonts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+/* ── Phone fixes: Front Office Log ── */
+@media (max-width: 768px) {
+  /* long place / storage chips wrap instead of being cut off at the card edge */
+  #panel-ops-logs .ol-chips .ol-chip { white-space: normal; overflow-wrap: anywhere; text-align: left; }
+  #panel-ops-logs .ol-title, #panel-ops-logs .ol-text, #panel-ops-logs .ol-meta { overflow-wrap: anywhere; }
+}
+/* ── Phone fixes: HK Requests ── */
+@media (max-width: 768px) {
+  /* the messages under a tapped "Most requested" row span the whole wide table, so they ran off the
+     screen; keep them in view at the card's width (the table itself still scrolls sideways) */
+  .wab-pg .wab-tw { container-type: inline-size; }
+  .wab-pg .wab-msgs td > * { position: sticky; left: 12px; max-width: calc(100cqw - 26px); box-sizing: border-box; }
+}
+/* ── Phone fixes: Handover Book ── */
+@media (max-width: 700px) {
+  /* the "New handover item" box gets the full width; category + Add go on the line under it */
+  #panel-handover-book #hbRoot .hb-newrow { flex-wrap: wrap; }
+  #panel-handover-book #hbRoot #hbNew { flex: 1 1 calc(100% - 40px); }
+  #panel-handover-book #hbRoot .hb-newact { flex: 1 1 100%; justify-content: flex-end; padding-top: 0; }
+  #panel-handover-book #hbRoot .hb-newact .hb-mini { max-width: 60%; }
+  /* who wrote it: the whole name when it fits, else "…" (it was cut mid-letter) */
+  #panel-handover-book #hbRoot .hb-who { display: inline-block; max-width: min(100%, 220px); vertical-align: middle; }
+  #panel-handover-book #hbRoot .hb-who .hb-av { vertical-align: middle; margin-right: 5px; }
+  #panel-handover-book #hbRoot .hb-tx { overflow-wrap: anywhere; }
+}
+/* ── Phone fixes: top bar on small phones — the phone already shows the time, so the app's clock
+   steps aside and ⚙️ Settings stays on screen ── */
+@media (max-width: 380px) {
+  #topbarTime { display: none !important; }
+}

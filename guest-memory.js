@@ -500,14 +500,14 @@ function _gmRenderTable() {
     <tr>
       <td style="font-weight:500;color:var(--text);font-size:0.72rem;">${escapeHtml(key)}</td>
       <td>
-        <input class="gm-inline-inp" value="${escapeHtml(p.nat||'')}"
+        <input class="gm-inline-inp" value="${escapeHtml(p.nat||'')}" title="${escapeHtml(p.nat||'')}"
           onchange="gmOnEdit('${ek}','nat',this.value)"
           placeholder="—" style="width:90px;"/>
       </td>
       <td>
-        <input class="gm-inline-inp" value="${escapeHtml(p.email||'')}"
+        <input class="gm-inline-inp" value="${escapeHtml(p.email||'')}" title="${escapeHtml(p.email||'')}"
           onchange="gmOnEdit('${ek}','email',this.value)"
-          placeholder="—" style="width:160px;"/>
+          placeholder="—" style="width:160px;min-width:min(60vw,240px);"/>
       </td>
       <td>
         <select class="gm-inline-inp"
