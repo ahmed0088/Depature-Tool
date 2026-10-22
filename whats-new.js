@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 381, items: [
+    '📱 iPhone app: Ops Brain and the pop-up windows no longer hide their top (title, ✕ close, Autopilot) under the clock, and their last buttons stay above the home bar.',
+  ] },
   { v: 380, items: [
     '📱 Shift Tasks on the phone: Morning / Afternoon / Mid / Night is now a fixed 4-part switch that fits the screen — it no longer slides around or gets cut off. Other chip rows (filters, Departures chips) only move sideways now.',
   ] },

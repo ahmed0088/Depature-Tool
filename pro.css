@@ -3278,7 +3278,14 @@ html, body { background: var(--bg); }
 }
 /* sideways chip / tab strips only move sideways on a phone (no up-down wobble, no page bounce, no scrollbar) */
 @media (max-width: 768px) {
-  .filter-row, .br-tabs, .ba-chips, .rk-seg, #panel-departures .dp-chips, .dpn-filters {
+  .filter-row, .br-tabs, .bu-quick, .ba-chips, .rk-seg, #panel-departures .dp-chips, .dpn-filters {
     overflow-y: hidden !important; overscroll-behavior-x: contain; touch-action: pan-x pan-y; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
   .filter-row::-webkit-scrollbar, .br-tabs::-webkit-scrollbar, .ba-chips::-webkit-scrollbar, .rk-seg::-webkit-scrollbar, #panel-departures .dp-chips::-webkit-scrollbar, .dpn-filters::-webkit-scrollbar { display: none; }
+}
+/* full-screen windows (Ops Brain, pop-ups, viewers) keep their header below the clock and their
+   last buttons above the home bar on an iPhone; 0 everywhere else */
+.br-sheet { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); box-sizing: border-box; }
+@media (display-mode: standalone) {
+  .modal-bg, .fr-overlay, .dpn-ov, .adg-modal-overlay, .cl-lightbox, .ri-viewer, .fl-ask, .ln-spot-wrap {
+    padding-top: max(16px, env(safe-area-inset-top)) !important; padding-bottom: max(16px, env(safe-area-inset-bottom)) !important; box-sizing: border-box; }
 }
