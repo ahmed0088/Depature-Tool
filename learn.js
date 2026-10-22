@@ -184,7 +184,13 @@ function _lnSave() {
 function learnToggle(id, on) {
   if (on) learnDone.add(id); else learnDone.delete(id);
   _lnSave();
+  const open = [...document.querySelectorAll('.ln-lesson[open]')].map(d => d.id);   // keep open lessons open
+  const y = document.querySelector('.panel.active')?.scrollTop;
   learnRender();
+  open.forEach(i => { const d = document.getElementById(i); if (d) d.open = true; });
+  const pn = document.querySelector('.panel.active'); if (pn && y != null) pn.scrollTop = y;
+  const c = document.querySelector('#ln-' + id + ' .ln-check'); if (c && on) { c.classList.add('pop'); setTimeout(() => c.classList.remove('pop'), 400); }
+  if (typeof showToast === 'function') showToast(on ? '✓ Marked as learned' : 'Marked as not learned yet');
 }
 const _lnIc = n => (typeof hoIcon === 'function' && hoIcon(n)) || '';
 const _lnL = id => LEARN_LESSONS.find(l => l.id === id);
@@ -192,7 +198,7 @@ const _lnL = id => LEARN_LESSONS.find(l => l.id === id);
 function _lnLesson(l) {
   const done = learnDone.has(l.id);
   return `<details class="ln-lesson ${done ? 'done' : ''}" id="ln-${l.id}" data-s="${escapeHtml((l.title + ' ' + l.why + ' ' + (l.need || '') + ' ' + (l.steps || []).join(' ') + ' ' + (l.tips || []).join(' ')).toLowerCase())}">
-    <summary><span class="ln-ic">${_lnIc(l.icon)}</span><span class="ln-t"><b>${escapeHtml(l.title)}</b><small>${escapeHtml(l.why)}</small></span><span class="ln-check">${done ? '✓' : ''}</span></summary>
+    <summary><span class="ln-ic">${_lnIc(l.icon)}</span><span class="ln-t"><b>${escapeHtml(l.title)}</b><small>${escapeHtml(l.why)}</small></span><span class="ln-check" role="button" tabindex="0" aria-pressed="${done}" aria-label="${done ? 'Learned — tap to undo' : 'Mark as learned'}" title="${done ? 'Learned — tap to undo' : 'Mark as learned'}" onclick="event.preventDefault();event.stopPropagation();learnToggle('${l.id}', !learnDone.has('${l.id}'))" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();learnToggle('${l.id}', !learnDone.has('${l.id}'))}">${done ? '✓' : ''}</span></summary>
     <div class="ln-body">
       ${l.need ? `<div class="ln-need"><b>You need</b>${escapeHtml(l.need)}</div>` : ''}
       <ol class="ln-steps">${(l.steps || []).map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ol>

@@ -3296,3 +3296,9 @@ html, body { background: var(--bg); }
     background: var(--card2, var(--card)); color: var(--text); font: 700 15px var(--font); cursor: pointer; }
   .br-close-bar:active { transform: scale(.98); }
 }
+/* lessons: the circle is a real button — a bigger target, and a small pop when ticked */
+.ln-check { cursor: pointer; position: relative; transition: background .2s, border-color .2s, transform .15s; }
+.ln-check::before { content: ''; position: absolute; inset: -12px; }   /* easy to hit with a thumb */
+.ln-check:active { transform: scale(.88); }
+.ln-check.pop { animation: lnPop .4s cubic-bezier(.34,1.56,.64,1); }
+@keyframes lnPop { 40% { transform: scale(1.3); } }

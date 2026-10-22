@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 383, items: [
+    '✅ Lessons (Standards & help): the circle on each lesson now works — tap it to mark the lesson learned (it turns green ✓), tap again to undo. It doesn\'t open or close the lesson, and open lessons stay open.',
+  ] },
   { v: 382, items: [
     '🧠 Ops Brain on the phone: a big Close button at the bottom, swipe right (or pull down from the top) to close, and the phone\'s back gesture closes it too — you never need to reach the ✕ at the top.',
   ] },
