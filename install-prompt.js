@@ -77,3 +77,28 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => { if (!document.getElementById('wnModal')) ipOpen(false); }, 6000);
   }, 1500);
 });
+
+// ── iPhone app added to the Home Screen before v379: the phone draws the app under the clock but
+// doesn't say how tall the clock area is (env(safe-area-inset-top) = 0), and leaves a grey strip at the
+// bottom. Measure the clock area ourselves (--sat-fix, pro.css) and ask once to add the app again.
+(function () {
+  if (!_ipStandalone() || !_ipIos()) return;
+  const check = () => {
+    try {
+      const probe = document.createElement('div');
+      probe.style.cssText = 'position:fixed;top:0;height:env(safe-area-inset-top);visibility:hidden;pointer-events:none';
+      document.body.appendChild(probe);
+      const env = probe.getBoundingClientRect().height; probe.remove();
+      const portrait = innerHeight > innerWidth, gap = screen.height - innerHeight;
+      if (env > 0 || !portrait || gap < 20 || gap > 70) { document.documentElement.style.removeProperty('--sat-fix'); return; }
+      document.documentElement.style.setProperty('--sat-fix', gap + 'px');
+      let asked = null; try { asked = localStorage.getItem('ho_readd_asked_v1'); } catch (_) {}
+      if (!asked && typeof showToast === 'function') {
+        setTimeout(() => showToast('📱 Please update the Home Screen app once: delete the HotelOps icon, then Safari → Share → Add to Home Screen. It then fills the whole screen.', 'warn'), 4000);
+        try { localStorage.setItem('ho_readd_asked_v1', String(Date.now())); } catch (_) {}
+      }
+    } catch (_) {}
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', check); else check();
+  addEventListener('orientationchange', () => setTimeout(check, 400));
+})();

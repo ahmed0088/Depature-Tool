@@ -1917,7 +1917,7 @@ function mount() {
   const card = doc.createElement('div'); card.id = 'waCard'; card.tabIndex = -1;
   card.innerHTML = `<div class="wa-hd"><span class="wa-logo">${SVG_WA}</span>
     <span class="wa-ttl"><b>WhatsApp</b><span class="wa-live" id="waStatus"></span></span>
-    <button type="button" class="wa-ib" onclick="window.hoWaGuard&&hoWaGuard.open()" title="Away guard: tells your phone if someone uses this WhatsApp while you are away">🛡<span class="wa-ibl"> Away</span></button>
+    <button type="button" class="wa-ib" onclick="window.hoWaGuard&&hoWaGuard.open()" title="Away guard: tells your phone if someone uses this WhatsApp while you are away">🛡<span style="font-weight:700"> Away</span></button>
     <button type="button" class="wa-ib" id="waWords" hidden title="The hotel's WhatsApp words (VD, OOO…)">📖<span class="wa-ibl"> Words</span></button>
     <button type="button" class="wa-ib" id="waClose" aria-label="Close" title="Close (Esc)">✕</button></div>
   <div class="wa-body">

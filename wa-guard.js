@@ -162,7 +162,7 @@
 
   const css = document.createElement('style');
   css.textContent = `
-.wg-ov{position:fixed;inset:0;z-index:9996;background:rgba(0,0,0,.5);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:max(16px,env(safe-area-inset-top)) 12px max(16px,env(safe-area-inset-bottom));backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.wg-ov{position:fixed;inset:0;z-index:9996;background:rgba(0,0,0,.5);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:max(16px,var(--sat,env(safe-area-inset-top))) 12px max(16px,env(safe-area-inset-bottom));backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
 .wg-ov[hidden]{display:none}
 .wg-sheet{width:min(560px,100%);background:var(--bg);border:1px solid var(--border2);border-radius:22px;padding:18px;box-shadow:0 30px 80px rgba(0,0,0,.45);display:flex;flex-direction:column;gap:10px}
 .wg-hd{display:flex;align-items:center;gap:12px}.wg-hd>div{flex:1;min-width:0;display:flex;flex-direction:column}.wg-hd b{font-size:17px}.wg-hd small{color:var(--text3);font-size:12.5px}

@@ -3256,12 +3256,15 @@ body.hsu-dragging, body.hsu-dragging * { cursor: grabbing !important; user-selec
 /* ── iPhone Home Screen app: the app fills the whole screen (black-translucent + viewport-fit=cover),
    so the top bar grows down past the clock / Dynamic Island and the page fills to the very bottom ── */
 html, body { background: var(--bg); }
+/* --sat: the clock / Dynamic Island height. The phone tells us (env); an app added to the Home Screen
+   before v379 doesn't, so install-prompt.js measures it and sets --sat-fix */
+:root { --sat: max(env(safe-area-inset-top, 0px), var(--sat-fix, 0px)); }
 @supports (padding: env(safe-area-inset-top)) {
-  #appWrapper > .topbar { padding-top: env(safe-area-inset-top) !important; height: calc(58px + env(safe-area-inset-top)) !important; }
+  #appWrapper > .topbar { padding-top: var(--sat) !important; height: calc(58px + var(--sat)) !important; }
   #loginScreen .login-bg { padding-top: max(32px, env(safe-area-inset-top)); padding-bottom: max(32px, env(safe-area-inset-bottom)); }
 }
 @media (max-width: 768px) {
-  @supports (padding: env(safe-area-inset-top)) { #appWrapper > .topbar { height: calc(56px + env(safe-area-inset-top)) !important; } }
+  @supports (padding: env(safe-area-inset-top)) { #appWrapper > .topbar { height: calc(56px + var(--sat)) !important; } }
 }
 @media (display-mode: standalone) { #appWrapper { height: auto !important; max-height: none !important; top: 0; bottom: 0; } }   /* installed app: pin to all four screen edges */
 
@@ -3284,10 +3287,10 @@ html, body { background: var(--bg); }
 }
 /* full-screen windows (Ops Brain, pop-ups, viewers) keep their header below the clock and their
    last buttons above the home bar on an iPhone; 0 everywhere else */
-.br-sheet { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); box-sizing: border-box; }
+.br-sheet { padding-top: var(--sat); padding-bottom: env(safe-area-inset-bottom); box-sizing: border-box; }
 @media (display-mode: standalone) {
-  .modal-bg, .fr-overlay, .dpn-ov, .adg-modal-overlay, .cl-lightbox, .ri-viewer, .fl-ask, .ln-spot-wrap {
-    padding-top: max(16px, env(safe-area-inset-top)) !important; padding-bottom: max(16px, env(safe-area-inset-bottom)) !important; box-sizing: border-box; }
+  #waOv, .modal-bg, .fr-overlay, .dpn-ov, .adg-modal-overlay, .cl-lightbox, .ri-viewer, .fl-ask, .ln-spot-wrap {
+    padding-top: max(16px, var(--sat)) !important; padding-bottom: max(16px, env(safe-area-inset-bottom)) !important; box-sizing: border-box; }
 }
 /* Ops Brain: a Close bar at the bottom on phones — always reachable with your thumb */
 .br-close-bar { display: none; }
@@ -3459,3 +3462,6 @@ html, body { background: var(--bg); }
 @media (max-width: 380px) {
   #topbarTime { display: none !important; }
 }
+
+/* WhatsApp window: its sticky header (with 🛡 Away and ✕) stays below the clock */
+@media (display-mode: standalone) { #waCard .wa-hd { top: 0 !important; } }

@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 388, items: [
+    '📱 iPhone app: the WhatsApp window\'s top bar (🛡 Away, 📖 Words, ✕) now stays below the clock. Apps added to the Home Screen before v379 now also keep every top bar below the clock, and ask once to be added again (delete the icon → Safari → Share → Add to Home Screen) to remove the grey strip at the bottom.',
+  ] },
   { v: 387, items: [
     '📱 Last phone fixes from the full check: the Night Checklist no longer runs off the screen with long step names; Shift Tasks buttons go under long task names; Roster "My shifts" times fit; the Roster builder hour grid shows all 24 hours; vacation balances and Fix buttons fit; the Settings font picker is tidy; Lost & Found chips wrap; HK Requests details stay on screen; the Handover Book new-item box gets the full width.',
     '📱 Small phones: the app clock steps aside so ⚙️ Settings stays on screen (your phone already shows the time). Guest Memory email boxes are wider and show the full value when held.',
