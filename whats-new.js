@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 393, items: [
+    '💬 Room Health: "One message per team" — tap 🔧 Engineering, 🧹 HK, 💻 IT or 🛡 Security and get ONE ready WhatsApp message with every room that needs them (room in bold, the problem, arrival / VIP warnings, "reply done when fixed"). Edit it if you like, then ⧉ Copy message or 💬 Open WhatsApp with it already typed. The rooms are marked as sent.',
+  ] },
   { v: 392, items: [
     '🧠 The number on the Ops Brain bubble now matches what you see inside: open 🧠 and "Noticed for you" at the top lists every note it is holding, each with its buttons. ✕ puts one away for now and the number goes down.',
   ] },

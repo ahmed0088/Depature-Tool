@@ -762,6 +762,53 @@ async function send(id, deptId) {
   if (via === 'wa') toast(`📨 Sent ${what}`, 'ok');
   repaintCard(rec.room);
 }
+// ── one WhatsApp message per department: every room that needs them, ready to paste ──
+function deptRecs(deptId) { return R.recs.filter(r => r.dept === deptId); }
+function deptMsg(deptId) {
+  const d = deptOf(deptId), C = CC(), th = C.cfg.th, list = deptRecs(deptId);
+  const now = new Date(), day = now.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  const lines = list.map((r, i) => {
+    let x = `${i + 1}. *Room ${r.room}* — ${String(r.say || '').replace(/[.\s]+$/, '')}`;
+    if (r.cnt > 1) x += ` (${r.cnt}× ${r.since})`;
+    if (r.type === 'check') x += ' — vacant now, please do a full check';
+    if (r.arrival) x += ` — ⚠️ arrival today, before ${th.checkIn}`;
+    else if (r.vip) x += ' — ⭐ VIP in the room';
+    if (r.follow && r.sent) x += ` — reminder, first sent ${hm(r.sent.at)}`;
+    return x;
+  });
+  const text = `${d.emoji} *${d.name}* — ${list.length === 1 ? '1 room' : list.length + ' rooms'} to check · ${day} ${hm(Date.now())}\n\n${lines.join('\n')}\n\nPlease reply with the room number + "done" when fixed 🙏`;
+  return { text, list, d };
+}
+function waCopyBar() {
+  if (!canWrite()) return '';
+  const deps = CFG().depts.filter(d => !d.off).map(d => [d, deptRecs(d.id).length]).filter(x => x[1]);
+  if (!deps.length) return '';
+  return `<div class="rh-wa"><span class="rh-wa-t">💬 One message per team</span><div class="rh-wa-b">${deps.map(([d, n]) => `<button type="button" class="rh-wa-c" data-rh-act="wamsg" data-v="${esc(d.id)}"><span>${esc(d.emoji)}</span><b>${esc(d.short)}</b><i>${n}</i></button>`).join('')}</div></div>`;
+}
+function waMsgDialog(deptId) {
+  const m = deptMsg(deptId); if (!m.list.length) { toast('Nothing waiting for ' + m.d.name, 'info'); return; }
+  const sc = modal(`<div class="rh-mh"><h2>${esc(m.d.emoji)} Message for ${esc(m.d.name)}</h2><button type="button" class="rh-x" data-x aria-label="Close">✕</button></div>
+    <div class="rh-mb"><div class="rh-hint">${m.list.length} room${m.list.length === 1 ? '' : 's'}, ready for WhatsApp. You can change the text before copying.</div>
+    <textarea class="rh-wa-ta" id="rhWaTxt" spellcheck="false">${esc(m.text)}</textarea>
+    <div class="rh-wa-prev" id="rhWaPrev"></div></div>
+    <div class="rh-mf"><button type="button" class="rh-btn" data-x>Close</button><button type="button" class="rh-btn" data-open>💬 Open WhatsApp</button><button type="button" class="rh-btn pri" data-copy>⧉ Copy message</button></div>`);
+  const ta = sc.querySelector('#rhWaTxt'), prev = sc.querySelector('#rhWaPrev');
+  // how it will look in WhatsApp (*bold*)
+  const show = () => { prev.innerHTML = esc(ta.value).replace(/\*([^*\n]+)\*/g, '<b>$1</b>').replace(/\n/g, '<br>'); };
+  ta.addEventListener('input', show); show();
+  const mark = via => {
+    const sent = { at: Date.now(), by: me(), dept: m.d.id, via, group: m.d.group || '' };
+    m.list.forEach(r => setAct(r.id, r.follow ? { sent, chased: Date.now(), followed: r.followed || Date.now() } : { sent, followed: null }));
+    act('room_health_sent', `${m.d.name}: ${m.list.map(r => r.room).join(', ')}`);
+    refresh(true);
+  };
+  sc.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.hasAttribute('data-x')) closeModal();
+    else if (b.hasAttribute('data-copy')) copyText(ta.value).then(ok => { toast(ok ? `Copied — paste it in the ${m.d.name} group` : 'Could not copy — select the text and copy it', ok ? 'ok' : 'err'); if (ok) { mark('copy'); closeModal(); } });
+    else if (b.hasAttribute('data-open')) { copyText(ta.value); mark('copy'); W.open('https://wa.me/?text=' + encodeURIComponent(ta.value), '_blank'); closeModal(); }
+  });
+}
 function markFixed(id) {
   if (!canWrite()) { toast('Not available for your role', 'err'); return; }
   const rec = findRec(id) || (R.cases.find(c => c.id === id) ? recForCase(R.cases.find(c => c.id === id)) : null);
@@ -918,6 +965,12 @@ const CSS = `
 .rh-modal-sc{position:fixed;inset:0;z-index:10000;background:rgba(10,14,22,.42);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:16px;animation:rhFade .16s ease}
 .rh-modal{width:min(720px,100%);max-height:min(88vh,900px);display:flex;flex-direction:column;background:var(--card,#fff);color:var(--text);border-radius:20px;border:1px solid var(--rh-hair);box-shadow:0 30px 80px -20px rgba(0,0,0,.5);animation:rhUp .2s cubic-bezier(.2,.8,.2,1);overflow:hidden}
 .rh-modal.sm{width:min(440px,100%)}
+.rh-wa{display:flex;flex-direction:column;gap:8px;margin:0 0 12px;padding:12px 14px;border-radius:16px;background:linear-gradient(135deg,color-mix(in srgb,#25d366 12%,var(--card,#fff)),var(--card,#fff));border:1px solid color-mix(in srgb,#25d366 35%,transparent)}
+.rh-wa-t{font-weight:700;font-size:.86rem}.rh-wa-b{display:flex;flex-wrap:wrap;gap:8px}
+.rh-wa-c{display:inline-flex;align-items:center;gap:7px;padding:9px 12px;border-radius:12px;border:1px solid var(--rh-hair);background:var(--card,#fff);color:var(--text);cursor:pointer;font-size:.84rem;transition:transform .12s}.rh-wa-c:active{transform:scale(.96)}
+.rh-wa-c i{font-style:normal;font-weight:800;font-size:.72rem;color:#fff;background:#25d366;border-radius:99px;padding:1px 7px}
+.rh-wa-ta{width:100%;min-height:150px;padding:11px 12px;border-radius:12px;border:1px solid var(--rh-hair);background:var(--bg2,#f3f4f6);color:var(--text);font:500 14px/1.45 var(--rh-font);resize:vertical}
+.rh-wa-prev{margin-top:10px;padding:12px 14px;border-radius:14px 14px 14px 4px;background:color-mix(in srgb,#25d366 14%,var(--card,#fff));font-size:14px;line-height:1.45;overflow-wrap:anywhere;max-width:92%}
 @keyframes rhFade{from{opacity:0}to{opacity:1}}@keyframes rhUp{from{transform:translateY(16px);opacity:.5}to{transform:none;opacity:1}}
 .rh-mh{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 18px 12px;border-bottom:1px solid var(--rh-hair)}
 .rh-mh h2{margin:0;font:700 18px/1.25 var(--rh-font)}
@@ -1019,7 +1072,7 @@ function adviceHtml() {
     return `<div class="rh-empty"><b>${any ? 'Nothing matches' : 'No room problem waiting'}</b>${any ? 'Try another department, problem or floor.' : 'When the team writes about an AC, a leak, a smell, bugs, Wi-Fi or noise in a room, the advice shows here — with who to send.'}</div>`;
   }
   const lim = R.more ? 200 : 30;
-  return `<div class="rh-list">${L.slice(0, lim).map(r => cardHtml(r)).join('')}</div>${L.length > lim ? `<button type="button" class="rh-btn sm rh-more" data-rh-act="more">Show all ${L.length}</button>` : ''}`;
+  return waCopyBar() + `<div class="rh-list">${L.slice(0, lim).map(r => cardHtml(r)).join('')}</div>${L.length > lim ? `<button type="button" class="rh-btn sm rh-more" data-rh-act="more">Show all ${L.length}</button>` : ''}`;
 }
 function roomsHtml() {
   const C = CC(), now = Date.now();
@@ -1181,6 +1234,7 @@ function onDocClick(e) {
     else if (a === 'fixed') markFixed(id);
     else if (a === 'copy') { const r = findRec(id); if (r) copyText(compose(r, deptOf(r.dept), { cfg: CFG() })).then(ok => toast(ok ? 'Message copied' : 'Could not copy', ok ? 'ok' : 'err')); }
     else if (a === 'ticket') ticket(id);
+    else if (a === 'wamsg') waMsgDialog(t.dataset.v);
     else if (a === 'settings') settingsDialog();
     else if (a === 'reload') { R.todayAt = 0; COMPILED.clear(); toast('Reading the sources again…', 'info'); loadToday(true).then(() => ensureData(Math.max(30, R.range))); refresh(true); }
     else if (a === 'view') { R.view = t.dataset.v; R.more = false; saveView(); render(); }
