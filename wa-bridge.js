@@ -1659,7 +1659,7 @@ W.addEventListener('message', e => {
   if (!same && !ORIGINS.includes(e.origin)) return;
   if (d.source === 'ho-wa-sent') { onSent(d); return; }
   if (d.source !== 'ho-wa') return;
-  if (d.send || d.words) return;                                        // what this app sends to the WhatsApp tab (same window in tests)
+  if (d.send || d.words || (d.guard && !d.guard.events)) return;      // what this app sends to the WhatsApp tab (same window in tests)
   const reply = o => { try { if (same) W.postMessage(o, location.origin); else if (e.source) e.source.postMessage(o, e.origin); } catch (_) {} };
   if (!same || d.ping) {
     const was = linkSeen; linkSeen = Date.now();
@@ -1668,13 +1668,18 @@ W.addEventListener('message', e => {
     if (fresh) wordsSent = '';
     if (!was || Date.now() - was > 20000) renderStatus();
   }
+  if (d.guard && Array.isArray(d.guard.events)) {   // Away guard: someone used WhatsApp while you were away (wa-guard.js)
+    const ids = W.hoWaGuard ? W.hoWaGuard.fromReader(d.guard.events) : [];
+    if (ids.length) reply({ source: 'ho-wa-gack', ids });
+    return;
+  }
   if (d.answer && typeof d.answer === 'object') { answerAsk(d.answer.word, d.answer.meaning, d.answer.note, d.answer.by || 'WhatsApp window'); return; }
   if (d.ping) {
     if (Array.isArray(d.groups)) LINK.groups = d.groups.filter(g => g && g.name).slice(0, 12).map(g => ({ name: String(g.name).slice(0, 80), act: g.act !== false }));
     if (typeof d.open === 'string') LINK.open = d.open.slice(0, 80);
     if (typeof d.rtt === 'number') LINK.rtt = d.rtt;
     LINK.auto = !!d.auto;
-    reply({ source: 'ho-wa-pong', ready: ready(), t: d.t });
+    reply({ source: 'ho-wa-pong', ready: ready(), t: d.t, guard: W.hoWaGuard ? W.hoWaGuard.state() : null });
     pushWords();
     renderStatus(); renderGroups();
     return;
@@ -1912,6 +1917,7 @@ function mount() {
   const card = doc.createElement('div'); card.id = 'waCard'; card.tabIndex = -1;
   card.innerHTML = `<div class="wa-hd"><span class="wa-logo">${SVG_WA}</span>
     <span class="wa-ttl"><b>WhatsApp</b><span class="wa-live" id="waStatus"></span></span>
+    <button type="button" class="wa-ib" onclick="window.hoWaGuard&&hoWaGuard.open()" title="Away guard: tells your phone if someone uses this WhatsApp while you are away">🛡<span class="wa-ibl"> Away</span></button>
     <button type="button" class="wa-ib" id="waWords" hidden title="The hotel's WhatsApp words (VD, OOO…)">📖<span class="wa-ibl"> Words</span></button>
     <button type="button" class="wa-ib" id="waClose" aria-label="Close" title="Close (Esc)">✕</button></div>
   <div class="wa-body">
@@ -2273,7 +2279,7 @@ function start() {
   setInterval(flushPending, 4000);
 }
 W.hoWaBridge = { handle, flushPending, findRoom, readPasted, parse, parseCopied: hoWaParseCopied, log: () => LOG.slice(), origins: ORIGINS, render: renderCard, search: runSearch, flushBackup: flushArch, results: () => RES.slice(),
-  send: waSend, outbox: () => OUT.slice(), link: () => (LINK ? { at: LINK.at, groups: LINK.groups || [], open: LINK.open || '', rtt: LINK.rtt || 0, auto: !!LINK.auto, linked: linked() } : null),
+  send: waSend, outbox: () => OUT.slice(), post: postLink, linked, link: () => (LINK ? { at: LINK.at, groups: LINK.groups || [], open: LINK.open || '', rtt: LINK.rtt || 0, auto: !!LINK.auto, linked: linked() } : null),
   asks: () => Object.keys(ASKS).map(k => ASKS[k]), answer: answerAsk, confirmGuess, words: wordsList, setGroupAct, setGroupHo, setGroupCopy, isHandoverGroup: groupIsHo, checkoutList: () => checkoutListText(rooms(), new Date()) };
 if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start); else start();
 })();

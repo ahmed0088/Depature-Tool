@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 385, items: [
+    '🛡 WhatsApp Away guard: going on a break or DND with WhatsApp Web open on the desk PC? Tap the WhatsApp button → 🛡 Away → "I\'m away". If anyone uses your WhatsApp while you\'re gone, your phone gets an alert: the chat they opened, what was on the screen while they scrolled, what they searched, if they typed, and if they closed the reader or WhatsApp. Tap "I\'m back" when you return. Only real mouse / keyboard use counts, never the reader\'s own clicks, and it starts 45 seconds after you switch it on. Paste the WhatsApp reader again once to get it.',
+  ] },
   { v: 384, items: [
     '📈 Trends on the phone: "By product" and "Top nationalities" now sit one under the other and fit the screen — no more cut-off amounts. Long names shorten with … (tap-and-hold shows the full name).',
   ] },

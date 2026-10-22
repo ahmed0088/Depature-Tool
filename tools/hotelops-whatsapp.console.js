@@ -334,6 +334,61 @@
     save(); flush(); render();
   }
 
+  // ── Away guard ────────────────────────────────────────────
+  // While you've marked yourself away in HotelOps (phone or PC), anyone using this WhatsApp is reported:
+  // which chat they open, what was on the screen while they scrolled, what they searched, if they typed.
+  // Only real hands on the mouse / keyboard count (event.isTrusted) — what this reader does itself never does.
+  var guard = LS.get('ho_wa_guard', { on: false, since: 0 }), gq = LS.get('ho_wa_gq', []), gChat = '', gInput = 0, gBurst = {}, gSearchT = 0;
+  var GUARD_GRACE = 45000;   // time to walk away after switching it on
+  function guardOn() { return !!guard.on && Date.now() - (guard.since || 0) > GUARD_GRACE; }
+  function setGuard(g) {
+    var on = !!(g && g.on), since = (g && +g.since) || 0;
+    if (on === !!guard.on && since === (guard.since || 0)) return;
+    guard = { on: on, since: since || Date.now() }; LS.set('ho_wa_guard', guard);
+    gChat = sp(chatTitle()); gBurst = {};
+  }
+  function visibleLines() {
+    var vh = window.innerHeight || 800;
+    return rows().filter(function (r) { var b = r.getBoundingClientRect(); return b.bottom > 0 && b.top < vh; }).map(readRow).filter(Boolean).slice(-4)
+      .map(function (m) { return (m.sender ? m.sender + ': ' : '') + sp(m.text).replace(/\s+/g, ' ').slice(0, 100); });
+  }
+  function searchText() {
+    var side = document.getElementById('side'); if (!side) return '';
+    var box = side.querySelector('[contenteditable="true"], input[type="text"], input[type="search"], input:not([type])');
+    return sp(box ? (box.tagName === 'INPUT' ? box.value : box.textContent) : '').trim().slice(0, 60);
+  }
+  function gEvent(kind, detail, withLines) {
+    var chat = sp(chatTitle()).slice(0, 80), t = Date.now(), k = kind + '|' + chat + (kind === 'search' ? '|' + detail : '');
+    if (gBurst[k] && t - gBurst[k] < 20000) return;   // scrolling fires many times: one line per chat every 20 s
+    gBurst[k] = t;
+    gq.push({ id: 'g' + t.toString(36) + Math.random().toString(36).slice(2, 6), at: t, kind: kind, chat: chat, detail: String(detail || '').slice(0, 140), lines: withLines === false ? [] : visibleLines() });
+    if (gq.length > 80) gq = gq.slice(-80);
+    LS.set('ho_wa_gq', gq); gFlush();
+  }
+  function gFlush() { if (gq.length) post({ source: 'ho-wa', guard: { events: gq.slice(0, 25) } }); }
+  function gInputEv(e) {
+    if (!e.isTrusted || !guardOn()) return;
+    gInput = Date.now();
+    var tg = e.target && e.target.nodeType === 1 ? e.target : null;
+    if (tg && ((typeof root !== 'undefined' && root && root.contains(tg)) || (typeof mini !== 'undefined' && mini && mini.contains(tg)))) { gEvent('reader', 'used the HotelOps reader window', false); return; }
+    var side = document.getElementById('side'), foot = document.querySelector('#main footer');
+    if (e.type === 'keydown' || e.type === 'input') {
+      if (side && tg && side.contains(tg)) { clearTimeout(gSearchT); gSearchT = setTimeout(function () { var q = searchText(); if (q) gEvent('search', 'searched for "' + q + '"', false); }, 1500); return; }
+      if (foot && tg && foot.contains(tg)) { gEvent('type', 'typing a message in this chat'); return; }
+    }
+    if (e.type === 'wheel' || (e.type === 'keydown' && /^(?:PageUp|PageDown|ArrowUp|ArrowDown|Home|End)$/.test(e.key))) { setTimeout(function () { gEvent('read', 'scrolling and reading'); }, 600); return; }
+    if (e.type === 'pointerdown') gEvent('touch', 'clicking in WhatsApp', false);
+  }
+  function gFocus(e) { if (e.isTrusted && guardOn()) gEvent('focus', 'came to the WhatsApp tab', false); }
+  var G_EVS = ['pointerdown', 'keydown', 'wheel', 'input'];
+  G_EVS.forEach(function (t) { document.addEventListener(t, gInputEv, { capture: true, passive: true }); });
+  window.addEventListener('focus', gFocus, true);
+  function guardTick() {
+    var c = sp(chatTitle());
+    if (c !== gChat) { var was = gChat; gChat = c; if (c && guardOn() && Date.now() - gInput < 6000) setTimeout(function () { gEvent('chat', was ? 'opened this chat (was on "' + was.slice(0, 40) + '")' : 'opened this chat'); }, 900); }
+    if (guard.on) gFlush();
+  }
+
   // ── talking to HotelOps ───────────────────────────────────
   function post(o) { try { if (win && !win.closed) { win.postMessage(o, APP_ORIGIN); return true; } } catch (_) {} return false; }
   function flush() {
@@ -366,10 +421,13 @@
     if (e.origin !== APP_ORIGIN || !e.data || typeof e.data !== 'object') return;
     var d = e.data;
     if (d.source === 'ho-wa-pong') {
+      if (d.guard && typeof d.guard === 'object') setGuard(d.guard);
       lastPong = Date.now(); if (typeof d.t === 'number' && d.t > 0) rtt = Math.max(1, Date.now() - d.t);
       if (mode !== 'linked') { mode = 'linked'; toast('✓ Linked to HotelOps', 'ok'); }
       if (d.ready) flush(); render();
     }
+    if (d.source === 'ho-wa-gack' && Array.isArray(d.ids)) { gq = gq.filter(function (g) { return d.ids.indexOf(g.id) < 0; }); LS.set('ho_wa_gq', gq); return; }
+    if (d.source === 'ho-wa' && d.guard && typeof d.guard === 'object') { setGuard(d.guard); return; }
     if (d.source === 'ho-wa-ack' && d.id) {
       var n = queue.length, it = queue.filter(function (q) { return q.id === d.id; })[0]; queue = queue.filter(function (q) { return q.id !== d.id; });
       if (queue.length < n && it && !it.deleted) {
@@ -397,6 +455,7 @@
     if (mode === 'linked' && (!win || win.closed || t - lastPong > 15000)) mode = win && !win.closed ? 'waiting' : 'idle';
     if (mode === 'waiting' && lastPong && t - lastPong < 15000) mode = 'linked';
     if (t - lastScan > 4500) scan(); else { flush(); render(); }
+    try { guardTick(); } catch (_) {}
   }
 
   // ── sending what HotelOps asked for (only that) ───────────
@@ -1179,7 +1238,10 @@
 
   var deb = null, iv1 = 0, iv2 = 0, iv3 = 0;
   function stop(now) {
-    if (stopped) return; stopped = true;
+    if (stopped) return;
+    if (guard.on && now !== true) try { gEvent('stop', 'closed the HotelOps reader', false); gFlush(); } catch (_) {}
+    stopped = true;
+    G_EVS.forEach(function (t) { document.removeEventListener(t, gInputEv, true); }); window.removeEventListener('focus', gFocus, true);
     try { obs && obs.disconnect(); } catch (_) {}
     timers.forEach(clearTimeout); clearInterval(iv1); clearInterval(iv2); clearInterval(iv3); clearTimeout(deb);
     window.removeEventListener('message', onMsg);
