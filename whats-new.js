@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 389, items: [
+    '📲 Away guard alerts on your lock screen: WhatsApp → 🛡 Away → "Set up phone alerts". Install the free ntfy app, paste your private code, tap Send a test. Now you\'re told even when your phone is locked and HotelOps is closed. Alerts say what happened and which chat — never the messages themselves.',
+  ] },
   { v: 388, items: [
     '📱 iPhone app: the WhatsApp window\'s top bar (🛡 Away, 📖 Words, ✕) now stays below the clock. Apps added to the Home Screen before v379 now also keep every top bar below the clock, and ask once to be added again (delete the icon → Safari → Share → Add to Home Screen) to remove the grey strip at the bottom.',
   ] },
