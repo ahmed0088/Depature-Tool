@@ -88,6 +88,11 @@ const CATS = [
   ['luggage', 'Luggage', '🧳', 'req', /\b(?:luggage|(?<!\b(?:tea|laundry|garbage|trash|plastic|shopping|sugar|coffee|dust|bin)\s)bags?|suitcases?|baggage|bell ?boy|porter)\b/, 'luggage'],
 ];
 const CAT = {}; CATS.forEach(c => { CAT[c[0]] = { id: c[0], label: c[1], icon: c[2], kind: c[3], q: c[5] }; });
+// the hotel's own names, emoji, extra words, requests switched off or added (Settings → Hotel setup → Categories)
+const catSetup = W.hoCfg && typeof W.hoCfg.catHook === 'function'
+  ? W.hoCfg.catHook('hk', CATS, CAT, c => ({ id: c[0], label: c[1], icon: c[2], kind: c[3], q: c[5] }),
+    (id, x, re) => [id, String(x.label), x.icon || '📝', x.kind === 'maint' ? 'maint' : 'req', re || /(?!)/, String(x.label).toLowerCase().split(/[\s/]+/)[0]])
+  : () => null;
 /** a message → the things it is about: [{id, label, icon, kind}] (maintenance first) */
 // "no need cleaning", "don't clean", "no luggage", "cleaning not needed": what is NOT wanted is not a request
 // (problems stay: "no water", "no hot water", "no power", "not working", "room not clean")
@@ -99,6 +104,8 @@ function wbDropNeg(t) {
 function wbCategorize(text) {
   const t = wbDropNeg(low(text).replace(/toliet/g, 'toilet').replace(/towles?/g, 'towel')), hit = [];
   CATS.forEach(c => { if (c[4].test(t)) hit.push(c[0]); });
+  const X = catSetup();
+  if (X) X.words.forEach(([id, re]) => { if (!hit.includes(id) && CATS.some(c => c[0] === id) && re.test(t)) hit.push(id); });
   const has = id => hit.includes(id);
   let ids = hit;
   if (has('plumb')) ids = ids.filter(x => x !== 'water');                        // "no water", "water leak"

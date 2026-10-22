@@ -1019,7 +1019,7 @@ function restore(roomStr, before, after, line, topJ, status, quiet) {
 /** is "HH:MM" after the room's own check-out time (Opera's departure time, else 12:00)? */
 function pastLimit(r, t) {
   let lim = null; try { lim = typeof _depTimeMins === 'function' ? _depTimeMins(r) : null; } catch (_) {}
-  if (lim == null || isNaN(lim)) lim = 12 * 60;   // the hotel's check-out time (Settings → Hotel setup)
+  if (lim == null || isNaN(lim)) lim = typeof hoCheckoutMin === 'function' ? hoCheckoutMin() : 12 * 60;   // the hotel's check-out time (Settings → Hotel setup)
   const m = String(t).match(/^(\d{1,2}):(\d{2})$/); if (!m) return true;
   return +m[1] * 60 + +m[2] > lim;
 }

@@ -55,6 +55,7 @@ const PKG_RULE_DEFAULTS = {
   denyNoOpera: true,     // remove a charge when Opera shows no such package on the booking
   splitFlag: true,       // one package credited to two people is flagged
   reviewedStops: true,   // a REVIEWED row in IN-Gauge stops being work
+  memory: true,          // a package remembered from an earlier month (same booking or the guest's earlier booking) keeps its seller
 };
 let pkgRules = Object.assign({}, PKG_RULE_DEFAULTS);
 try { Object.assign(pkgRules, JSON.parse(localStorage.getItem('pkg_rules_v1') || '{}') || {}); } catch (_) {}
@@ -73,6 +74,7 @@ function pkgLoadExcel(input) {
       const wb  = XLSX.read(e.target.result, { type: 'array' });
       const ws  = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      _pkgLastRows.ig = rows;   // kept, so Settings → Report columns can read it again with a new mapping
       busyDetail(`sorting ${Math.max(rows.length - 1, 0)} charges…`);
       await busyPaint();
       pkgUnknowns = _pkgParseExcelUnknowns(rows);
@@ -81,9 +83,11 @@ function pkgLoadExcel(input) {
       if (lbl) lbl.textContent = pkgUnknowns.length
         ? `✓ ${pkgUnknowns.length} row${pkgUnknowns.length !== 1 ? 's' : ''} loaded, ${needsCount} need${needsCount === 1 ? 's' : ''} review`
         : 'Loaded — no rows found';
+      const miss = (pkgLastHeaders.ig && pkgLastHeaders.ig.missing) || [];
       showToast(pkgUnknowns.length
         ? `✦ ${pkgUnknowns.length} row${pkgUnknowns.length !== 1 ? 's' : ''} loaded (${needsCount} missing product or seller)`
-        : 'No rows found in this file', pkgUnknowns.length ? 'ok' : 'err');
+        : miss.length ? `No ${miss.join(' / ')} column found. Map it in Package Audit → 🛠 Settings → Report columns.` : 'No rows found in this file', pkgUnknowns.length ? 'ok' : 'err');
+      if (_pkgView === 'settings') pkgSettingsRender();
     } catch (err) {
       showToast('Failed to read the IN-Gauge Excel file: ' + err.message, 'err');
     } finally {
@@ -113,9 +117,10 @@ function pkgLoadGuests(input) {
       // link between bookings than a name ever is.
       pkgGuests = /CONFIRMATION_NO/.test(head) && head.includes('\t')
         ? _pkgParseResDetail(new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(buf)))
-        : _pkgParseGuestList(XLSX.utils.sheet_to_json(
-            XLSX.read(buf, { type: 'array' }).Sheets[XLSX.read(buf, { type: 'array' }).SheetNames[0]],
-            { header: 1, defval: '' }));
+        : (() => { const wb = XLSX.read(buf, { type: 'array' });
+            const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
+            _pkgLastRows.guest = rows;
+            return _pkgParseGuestList(rows); })();
       const n   = Object.keys(pkgGuests).length;
       const ids = Object.values(pkgGuests).filter(g => g.gid).length;
       const lbl = document.getElementById('pkgGuestLabel');
@@ -176,17 +181,15 @@ function _pkgParseResDetail(text) {
 
 function _pkgParseGuestList(rows) {
   if (!rows.length) return {};
-  const hdrs = rows[0].map(h => String(h || '').trim());
-  const iConf = _pkgFindCol(hdrs, 'Confirmation Number', 'Confirmation No', 'Confirmation no');
-  const iName = _pkgFindCol(hdrs, 'Name', 'Guest Name');
-  const iGid  = _pkgFindCol(hdrs, 'Guest Name Id', 'Guest Id', 'Client Id', 'Profile Id');
-  const iRoom = _pkgFindCol(hdrs, 'Room');
-  const iArr  = _pkgFindCol(hdrs, 'Arrival');
-  const iDep  = _pkgFindCol(hdrs, 'Departure');
+  const hi   = _pkgHeaderRow(rows, PKG_GUEST_FIELDS, 'guest');
+  const hdrs = (rows[hi] || []).map(h => String(h || '').trim());
+  const C = _pkgMapColumns(hdrs, PKG_GUEST_FIELDS, 'guest');
+  _pkgNoteParse('guest', rows, hi, C);
+  const iConf = C.conf, iName = C.name, iGid = C.gid, iRoom = C.room, iArr = C.arr, iDep = C.dep;
   if (iConf < 0 || iName < 0) return {};
 
   const out = {};
-  for (let i = 1; i < rows.length; i++) {
+  for (let i = hi + 1; i < rows.length; i++) {
     const r = rows[i];
     if (!r) continue;
     const conf = String(r[iConf] || '').trim().replace(/\.0+$/, '');
@@ -252,11 +255,12 @@ function _pkgDayLabel(n) {
 // Maps an IN-Gauge product label to the Opera internal code pattern for
 // that same package family (e.g. Opera logs Early Check In as USS100EC,
 // USS200EC, etc. — the trailing EC/LC/BB suffix is the reliable part).
+// Which kind carries which IN-Gauge name is part of the kinds list (PKG_KINDS, editable in Settings).
 function _pkgCodeFamilyFor(product) {
-  if (product === 'Early Check In')  return /EC$/i;
-  if (product === 'Late Check Out')  return /LC$/i;
-  if (product === 'Breakfast')       return /(BB$|^BB|BREAK)/i;   // UPS30BB, BBSUM, BBWIN, MBREAK…
-  return null;
+  const p = String(product || '').trim().toLowerCase();
+  if (!p) return null;
+  const k = PKG_KINDS.find(e => e.ig && e.ig.toLowerCase() === p);
+  return k ? k[2] : null;   // UPS30BB, BBSUM, BBWIN, MBREAK… for Breakfast
 }
 
 function _pkgFindCol(hdrs, ...names) {
@@ -265,23 +269,76 @@ function _pkgFindCol(hdrs, ...names) {
   return -1;
 }
 
+// ── Report columns: which header holds which value ─────────
+// The defaults are IN-Gauge's and Opera's own headers. If an export renames
+// one, Package Audit → Settings → Report columns maps it (shared per hotel):
+// settings.colMap = { ig: { product: 'Item' }, guest: { name: 'Guest' } }.
+// [field, label, header names tried in order, required]
+const PKG_IG_FIELDS = [
+  ['product',  'Product (package)',  ['Product'], true],
+  ['conf',     'Confirmation no.',   ['Confirmation no', 'Confirmation No'], true],
+  ['room',     'Room',               ['Room No']],
+  ['charge',   'Charge (AED)',       ['Product Charge']],
+  ['days',     'Charge days',        ['Charge Days']],
+  ['arr',      'Arrival',            ['Arrival Date']],
+  ['dep',      'Departure',          ['Departure Date']],
+  ['employee', 'Seller (employee)',  ['Employee']],
+  ['daily',    'Charge date',        ['Daily Date']],
+  ['status',   'Status',             ['Status']],
+];
+const PKG_GUEST_FIELDS = [
+  ['conf', 'Confirmation no.',   ['Confirmation Number', 'Confirmation No', 'Confirmation no'], true],
+  ['name', 'Guest name',         ['Name', 'Guest Name'], true],
+  ['gid',  'Guest / profile ID', ['Guest Name Id', 'Guest Id', 'Client Id', 'Profile Id']],
+  ['room', 'Room',               ['Room']],
+  ['arr',  'Arrival',            ['Arrival']],
+  ['dep',  'Departure',          ['Departure']],
+];
+/** { field: column index or -1 }: the mapped header first (exact, any case), else the usual names. */
+function _pkgMapColumns(hdrs, fields, which, map) {
+  map = map || ((typeof _pkgSetting === 'function' && _pkgSetting('colMap')) || {})[which] || {};
+  const low = hdrs.map(h => String(h || '').trim().toLowerCase());
+  const out = {};
+  fields.forEach(([f, , names]) => {
+    const want = String(map[f] || '').trim().toLowerCase();
+    const i = want ? low.indexOf(want) : -1;
+    out[f] = i >= 0 ? i : _pkgFindCol(hdrs, ...names);
+  });
+  return out;
+}
+/** The header row: the first of the top 15 rows where every required column is found (else row 1). */
+function _pkgHeaderRow(rows, fields, which, map) {
+  const need = fields.filter(x => x[3]).map(x => x[0]);
+  for (let i = 0; i < Math.min(rows.length, 15); i++) {
+    const hdrs = (rows[i] || []).map(h => String(h || '').trim());
+    const C = _pkgMapColumns(hdrs, fields, which, map);
+    if (need.every(f => C[f] >= 0)) return i;
+  }
+  return 0;
+}
+/** What the last file of each kind looked like, for Settings → Report columns (headers + 3 sample rows). */
+let pkgLastHeaders = {};
+function _pkgNoteParse(which, rows, hi, C) {
+  const fields = which === 'ig' ? PKG_IG_FIELDS : PKG_GUEST_FIELDS;
+  pkgLastHeaders[which] = {
+    hdrs: (rows[hi] || []).map(h => String(h || '').trim()), row: hi + 1,
+    sample: rows.slice(hi + 1, hi + 4).map(r => (r || []).map(v => String(v ?? ''))),
+    missing: fields.filter(x => x[3] && !(C[x[0]] >= 0)).map(x => x[1]),
+  };
+}
+
 function _pkgParseExcelUnknowns(rows) {
   if (!rows.length) return [];
-  const hdrs = rows[0].map(h => String(h || '').trim());
-  const iProduct = _pkgFindCol(hdrs, 'Product');
-  const iConf    = _pkgFindCol(hdrs, 'Confirmation no', 'Confirmation No');
-  const iRoom    = _pkgFindCol(hdrs, 'Room No');
-  const iCharge  = _pkgFindCol(hdrs, 'Product Charge');
-  const iDays    = _pkgFindCol(hdrs, 'Charge Days');
-  const iArr     = _pkgFindCol(hdrs, 'Arrival Date');
-  const iDep     = _pkgFindCol(hdrs, 'Departure Date');
-  const iEmp     = _pkgFindCol(hdrs, 'Employee');
-  const iDaily   = _pkgFindCol(hdrs, 'Daily Date');
-  const iStatus  = _pkgFindCol(hdrs, 'Status');
+  const hi   = _pkgHeaderRow(rows, PKG_IG_FIELDS, 'ig');
+  const hdrs = (rows[hi] || []).map(h => String(h || '').trim());
+  const C = _pkgMapColumns(hdrs, PKG_IG_FIELDS, 'ig');
+  _pkgNoteParse('ig', rows, hi, C);
+  const iProduct = C.product, iConf = C.conf, iRoom = C.room, iCharge = C.charge, iDays = C.days,
+        iArr = C.arr, iDep = C.dep, iEmp = C.employee, iDaily = C.daily, iStatus = C.status;
   if (iProduct < 0 || iConf < 0) return [];
 
   const out = [];
-  for (let i = 1; i < rows.length; i++) {
+  for (let i = hi + 1; i < rows.length; i++) {
     const r = rows[i];
     if (!r) continue;
     const product = String(r[iProduct] || '').trim();
@@ -385,7 +442,25 @@ function _pkgColOf(x) {
 // page). These land in the same X band as the User column and below the
 // last data row, so without this they get swallowed into the last row of
 // each page — corrupting that row's "sold by" and its description.
-const _PKG_CHROME = /^(?:Page \d+ of \d+|user_activity_log|Filter|For Activity |Activity by |Search Text |Sort Order|From Time |To Time |User Activity Log|Ibis Styles)/i;
+// The hotel's own name is printed in the footer too: it is read from this hotel's settings (the
+// name under the logo), never written here, plus any extra lines listed in Package Audit → Settings.
+const _PKG_CHROME = /^(?:Page \d+ of \d+|user_activity_log|Filter|For Activity |Activity by |Search Text |Sort Order|From Time |To Time |User Activity Log)/i;
+function _pkgChromeWords() {
+  const out = [];
+  try {
+    const el = typeof document !== 'undefined' && document.getElementById && document.getElementById('hotelName');
+    const name = String((el && el.textContent) || '').replace(/\s+/g, ' ').trim();
+    if (name) { const w = name.split(' '); out.push((w.length >= 2 ? w.slice(0, 2) : w).join(' ').toLowerCase()); }
+  } catch (_) {}
+  (typeof _pkgSetting === 'function' ? (_pkgSetting('chrome') || []) : []).forEach(x => { x = String(x || '').trim().toLowerCase(); if (x) out.push(x); });
+  return out;
+}
+function _pkgIsChrome(text, words) {
+  const t = String(text || '');
+  if (_PKG_CHROME.test(t)) return true;
+  const low = t.toLowerCase();
+  return (words || _pkgChromeWords()).some(w => w && low.startsWith(w));
+}
 
 // Crystal Reports draws each column as its own vertical band, so pdf.js's
 // extracted items come back grouped by COLUMN, not by row — a wrapped user
@@ -402,6 +477,7 @@ const _PKG_CHROME = /^(?:Page \d+ of \d+|user_activity_log|Filter|For Activity |
 // before any events are read out of them.
 async function _pkgParsePdfEvents(pdf, onPage) {
   const rows = []; // every data row, in reading order across all pages
+  const chromeWords = _pkgChromeWords();
 
   for (let p = 1; p <= pdf.numPages; p++) {
     if (onPage) onPage(p, pdf.numPages);
@@ -434,7 +510,7 @@ async function _pkgParsePdfEvents(pdf, onPage) {
     // title, print timestamp, filter block) — never data. Anything matching
     // the chrome pattern is the repeated footer. Drop both before banding.
     const headerY = lines.find(l => l.col === 'desc' && l.text === 'Action Description')?.y ?? Infinity;
-    const body    = lines.filter(l => l.y < headerY - 0.5 && !_PKG_CHROME.test(l.text));
+    const body    = lines.filter(l => l.y < headerY - 0.5 && !_pkgIsChrome(l.text, chromeWords));
 
     // PDF y increases upward — top-to-bottom reading order is DESCENDING y.
     const dateLines = body.filter(l => l.col === 'date');
@@ -603,18 +679,20 @@ function _pkgDayNum(s) {
 // the Opera code (USS100EC -> Early Check In).
 function _pkgFamilyName(r) {
   const p = String(r.product || '');
-  if (/^(Early Check In|Late Check Out|Breakfast)$/i.test(p)) return p;
+  const pl = p.trim().toLowerCase();
+  if (pl && PKG_KINDS.some(e => e.ig && e.ig.toLowerCase() === pl)) return p;
   const c = String(r.code || '');
-  if (/EC$/i.test(c)) return 'Early Check In';
-  if (/LC$/i.test(c)) return 'Late Check Out';
-  if (/BB$/i.test(c)) return 'Breakfast';
+  const k = c && PKG_KINDS.find(e => e.ig && e.nameTest(c));
+  if (k) return k.ig;
   return p || c;
 }
+/** The IN-Gauge names of the kinds that have one (Early Check In, Late Check Out, Breakfast…). */
+function _pkgKnownNames() { return PKG_KINDS.filter(e => e.ig).map(e => e.ig.toLowerCase()); }
 
 // Early check-in and late checkout are charged ONCE per stay. Breakfast and
 // the board packages are per-night, so IN-Gauge listing one row per day is
-// expected for those and only for those.
-function _pkgIsOneTime(name) { return /^(Early Check In|Late Check Out)$/i.test(String(name || '')); }
+// expected for those and only for those. ("Once per stay" is a switch per kind in Settings.)
+function _pkgIsOneTime(name) { const n = String(name || '').toLowerCase(); return !!n && PKG_KINDS.some(e => e.once && e.ig && e.ig.toLowerCase() === n); }
 
 // Find the Opera event backing this charge. Price identifies the exact
 // package when a stay has several (e.g. breakfast switched tiers mid-stay);
@@ -669,11 +747,25 @@ function _pkgSameUser(a, b) {
     const is = k => _pkgUserKey(name) === k || al.some(t => k.split('-').pop() === t || k.split('-').pop().endsWith(t) || k.includes(t));
     if (is(x) && is(y)) return true;
   }
+  // A renamed colleague: the old name (as IN-Gauge still shows it on old rows) is the same person.
+  if (typeof PKG_STAFF_FORMER !== 'undefined') for (const [name, olds] of Object.entries(PKG_STAFF_FORMER)) {
+    // One side must BE the person (their name now or before); the other may be any form of it.
+    const keys = [_pkgUserKey(name), ...olds];
+    const near = k => keys.some(q => q === k || _pkgSameUserPlain(q, k));
+    if ((keys.includes(x) && near(y)) || (keys.includes(y) && near(x))) return true;
+  }
   // A login is the family name with the person's initials stuck on the
   // front — SALVAREZ/ALVAREZ, LMORENO/MORENO, TKHAN/KHAN —
   // so the longer form ends with the shorter one. Requiring at least
   // three letters and no more than a couple of extra keeps that from
   // matching two different people who happen to share an ending.
+  return _pkgSameUserPlain(x, y);
+}
+/** Login vs display name by the family-name ending alone (no team list). */
+function _pkgSameUserPlain(x, y) {
+  x = _pkgUserKey(x); y = _pkgUserKey(y);
+  if (!x || !y) return false;
+  if (x === y) return true;
   const fx = _pkgFamilyPart(x), fy = _pkgFamilyPart(y);
   if (fx.length < 3 || fy.length < 3) return false;
   const [long, short] = fx.length >= fy.length ? [fx, fy] : [fy, fx];
@@ -695,11 +787,17 @@ let PKG_STAFF = [];
 // initials + family name (e.g. "Sam ALVAREZ" logging in as ACCOREN-SALVAREZ2).
 // Filled from the same staff list: { 'Sam ALVAREZ': ['SALVAREZ2', ...] }.
 let PKG_STAFF_ALIASES = {};
+// Names a colleague had before a rename: { 'New NAME': ['OLD NAME', ...] } (user keys, upper case).
+let PKG_STAFF_FORMER = {};
+// Who has left: { 'Name': 'YYYY-MM-DD' }. They keep the sales they made; they are not offered for new ones.
+let PKG_STAFF_LEFT = {};
 
 function _pkgStaffFor(u) {
   const key = _pkgUserKey(u);
   if (!key) return null;
   const login = key.split('-').pop();
+  const renamed = Object.keys(PKG_STAFF_FORMER).find(name => PKG_STAFF_FORMER[name].includes(key));
+  if (renamed) return renamed;
   return PKG_STAFF.find(name => _pkgSameUser(name, key)) ||
     Object.keys(PKG_STAFF_ALIASES).find(name => PKG_STAFF_ALIASES[name].some(a => login === a || login.endsWith(a) || key.includes(a))) ||
     _pkgReportNames().find(name => _pkgSameUser(name, key)) ||
@@ -742,16 +840,38 @@ function _pkgUserLabel(u) {
 // Kinds of package: the same kind at another price (UPS30BB / UPS60BB, BBSUM / BBWIN,
 // USS100EC / USS225EC, UPS59DIN / UPS118DIN, USS50 / USS75…) is the same package, and stays with
 // whoever started it. Checked in this order (USS100EC is early check-in, not an upgrade).
-const PKG_KINDS = [
-  ['EC',  'Early check-in',  /EC$/i],
-  ['LC',  'Late check-out',  /LC$/i],
-  ['BB',  'Breakfast',       /(BB$|^BB|BREAK)/i],
-  ['DIN', 'Dinner',          /DIN$/i],
-  ['HB',  'Half board',      /^HB/i],
-  ['FB',  'Full board',      /^FB/i],
-  ['USS', 'Room upgrade',    /^USS\d+$/i],
+// The list is data, editable per hotel in Package Audit → 🛠 Settings → Package kinds (shared at
+// packageAudit/settings/kinds). Each kind: key, label, a code pattern (regex) and/or exact codes,
+// the name IN-Gauge gives it (when it has one), once per stay, a price range, icon and colour.
+// nameRe: which codes are read back as the IN-Gauge name (kept from before kinds were editable).
+const PKG_KINDS_DEFAULT = [
+  { k: 'EC',  label: 'Early check-in', re: 'EC$',             ig: 'Early Check In', nameRe: 'EC$', once: true, ico: '🌅', color: '#d8f0d8' },
+  { k: 'LC',  label: 'Late check-out', re: 'LC$',             ig: 'Late Check Out', nameRe: 'LC$', once: true, ico: '🌙', color: '#e6daf5' },
+  { k: 'BB',  label: 'Breakfast',      re: '(BB$|^BB|BREAK)', ig: 'Breakfast',      nameRe: 'BB$', ico: '🥐', color: '#fce7b2' },
+  { k: 'DIN', label: 'Dinner',         re: 'DIN$',            ico: '🍽️', color: '#f8d3d3' },
+  { k: 'HB',  label: 'Half board',     re: '^HB',             ico: '🍲', color: '#fde2c8' },
+  { k: 'FB',  label: 'Full board',     re: '^FB',             ico: '🍱', color: '#e2e8f0' },
+  { k: 'USS', label: 'Room upgrade',   re: '^USS\\d+$',        ico: '⬆️', color: '#d6e6fb' },
 ];
-const _pkgKindEntry = code => PKG_KINDS.find(k => k[2].test(String(code || '').replace(/\s+/g, ''))) || null;
+const _pkgCodeNorm = c => String(c || '').toUpperCase().replace(/\s+/g, '');
+function _pkgSafeRe(src) { try { return src ? new RegExp(src, 'i') : null; } catch (_) { return null; } }
+/** One kind as the audit uses it: [key, label, matcher] (matcher.test(code)), plus its settings as properties. */
+function _pkgKindRow(d) {
+  const re = _pkgSafeRe(d.re), codes = (Array.isArray(d.codes) ? d.codes : []).map(_pkgCodeNorm).filter(Boolean);
+  const m = { test: c => { const x = _pkgCodeNorm(c); return !!x && (codes.includes(x) || (!!re && re.test(x))); }, source: d.re || '' };
+  const nre = _pkgSafeRe(d.nameRe);
+  const e = [String(d.k || '').toUpperCase(), String(d.label || d.k || ''), m];
+  Object.assign(e, { ig: String(d.ig || '').trim(), once: !!d.once, ico: d.ico || '🎁', color: d.color || '', min: +d.min || 0, max: +d.max || 0,
+    codes, re: d.re || '', nameTest: c => (nre ? nre.test(_pkgCodeNorm(c)) : m.test(c)) });
+  return e;
+}
+const PKG_KINDS = PKG_KINDS_DEFAULT.map(_pkgKindRow);
+/** Swap the kinds in place (other files keep their reference to PKG_KINDS). */
+function _pkgSetKinds(list) {
+  const rows = (Array.isArray(list) && list.length ? list : PKG_KINDS_DEFAULT).filter(d => d && d.k).map(_pkgKindRow);
+  PKG_KINDS.splice(0, PKG_KINDS.length, ...rows);
+}
+const _pkgKindEntry = code => PKG_KINDS.find(k => k[2].test(String(code || '').replace(/\s+/g, ''))) || PKG_KINDS.find(k => k[0] === String(code || '').toUpperCase()) || null;
 function _pkgFamilyOfCode(code) {
   const k = _pkgKindEntry(code);
   return k ? k[2] : null;
@@ -820,7 +940,7 @@ function _pkgFlagSplitSellers(results) {
     // Only group rows that are the same known package. "Unknown Product" is
     // the absence of a name, not a name — grouping on it would put a
     // breakfast and a late checkout in the same bucket and call them split.
-    if (!/^(Breakfast|Early Check In|Late Check Out)$/i.test(fam)) return;
+    if (!_pkgKnownNames().includes(String(fam).toLowerCase())) return;
     (byPkg[`${r.conf}|${fam}`] = byPkg[`${r.conf}|${fam}`] || []).push(r);
   });
   if (!_pkgRule('splitFlag')) return;
@@ -1027,8 +1147,9 @@ function _pkgKindOfRow(r) {
   }
   if (c) return _pkgKindOfCode(c);
   if (_pkgRule('exactCode')) return '';   // no Opera code for this row: can't tell which exact package
-  const n = _pkgFamilyName(r);
-  return n === 'Early Check In' ? 'EC' : n === 'Late Check Out' ? 'LC' : n === 'Breakfast' ? 'BB' : '';
+  const n = String(_pkgFamilyName(r) || '').toLowerCase();
+  const k = n && PKG_KINDS.find(e => e.ig && e.ig.toLowerCase() === n);
+  return k ? k[0] : '';
 }
 
 function _pkgApplyExtensionCredit(results) {
@@ -1058,8 +1179,9 @@ function _pkgApplyExtensionCredit(results) {
   results.forEach(r => {
     if (head[r.conf] !== r.conf) return;
     if (r.verdict === 'settled' || r.verdict === 'deny') return;
-    if (!owner[r.conf] || (r.matchedEvent && !owner[r.conf].confirmed)) {
-      owner[r.conf] = { user: r.user || r.employee, confirmed: !!r.matchedEvent };
+    const sure = !!r.matchedEvent || !!r.memoryUsed;   // Opera, or remembered from the month the sale was made
+    if (!owner[r.conf] || (sure && !owner[r.conf].confirmed)) {
+      owner[r.conf] = { user: r.user || r.employee, confirmed: sure };
     }
   });
 
@@ -1222,6 +1344,7 @@ async function pkgRun() {
   const results = _pkgCompute();
   _pkgArchive(results);
   pkgResults = results;
+  try { _pkgMemorize(results); } catch (e) { console.warn('[pkg memory]', e); }   // remember every package resolved, for next month
   _pkgConfirmSweep();              // fixes this newer report proves right count as confirmed
   if (typeof logActivity === 'function') logActivity('pkg_audit_run', `${results.length} package lines checked`);
   _pkgRenderCoverage();
@@ -1279,6 +1402,7 @@ function _pkgCompute() {
   });
 
   _pkgApplyVerdicts(results);
+  _pkgApplyMemory(results);        // a package continuing from an earlier month keeps its seller (before the extension rule, which builds on it)
   _pkgApplyExtensionCredit(results);
   _pkgFlagSplitSellers(results);   // after credit is settled — it compares final sellers
   _pkgDropNoOpReassigns(results);  // nothing that needs no change stays on the list
@@ -1297,7 +1421,9 @@ function _pkgPinKey(r) { return `${String(r.conf || '').trim()}|${_pkgFamilyName
 
 function _pkgApplyPins(results) {
   results.forEach(r => {
-    const pin = pkgPins[_pkgPinKey(r)];
+    let pin = pkgPins[_pkgPinKey(r)];
+    // No pin of its own: a rule learned from earlier decisions (accepted by a person) decides the same way.
+    if (!pin) { const L = typeof _pkgLearnedFor === 'function' ? _pkgLearnedFor(r) : null; if (L) { pin = L.pin; r.learned = L.rule; _pkgHit(r, 'learned'); } }
     r.pin = pin || null;
     if (!('prePinUser' in r)) { r.prePinUser = r.user; r.prePinVerdict = r.verdict; }
     if (!pin) return;
@@ -1358,6 +1484,8 @@ function pkgPinChange(key, val) {
   const rows = _pkgGroupRows(key), r = rows[0];
   if (!r && val !== '__clear') return;
   const by = _pkgMe(), at = new Date().toISOString();
+  // The package code and IN-Gauge product go with the pin, so the same decision can be learned for that code.
+  const tag = p => { if (p && r) { const c = (r.matchedEvent && r.matchedEvent.code) || (r.needsProduct ? '' : '') || r.code || ''; if (c) p.code = String(c); if (r.product) p.product = String(r.product); } return p; };
   if (val === '__clear') delete pkgPins[key];
   else if (val === '__skip') pkgPins[key] = { skip: true, by, at };
   else if (val === '__manual') pkgPins[key] = { manual: true, by, at };
@@ -1368,6 +1496,7 @@ function pkgPinChange(key, val) {
     pkgPins[key] = { seller: name, by, at };
   } else if (val) pkgPins[key] = { seller: val, by, at };
   else { pkgRender(); return; }
+  if (pkgPins[key]) tag(pkgPins[key]);
   _pkgSavePins();
   if (typeof logActivity === 'function') {
     const p = pkgPins[key];
@@ -1375,16 +1504,19 @@ function pkgPinChange(key, val) {
     logActivity('pkg_pin', `Conf ${String(key).split('|')[0]} · ${r ? 'room ' + (r.room || '?') + ' · ' : ''}${String(key).split('|')[1] || ''} → ${what}`);
   }
   _pkgRecompute();
+  try { if (pkgResults.length) _pkgMemorize(pkgResults); } catch (_) {}
   if (_pkgView === 'rules') pkgRulesRender();
   showToast(val === '__clear' ? 'Unfrozen: the rules decide this package again' : 'Saved for the team: remembered on every run', 'ok');
 }
 
 /** The names a seller can be frozen to: the team list, plus everyone this audit already credits. */
 function _pkgSellerChoices(extra) {
-  const out = PKG_STAFF.slice();
-  const add = n => { n = String(n || '').trim(); if (n && n !== '-' && !out.some(x => x === n || _pkgSameUser(x, n))) out.push(n); };
+  // People who have left keep their old sales, but are not offered for new ones.
+  const gone = n => !!PKG_STAFF_LEFT[n];
+  const out = PKG_STAFF.filter(n => !gone(n));
+  const add = n => { n = String(n || '').trim(); if (n && n !== '-' && !gone(n) && !out.some(x => x === n || _pkgSameUser(x, n))) out.push(n); };
   (pkgResults || []).forEach(r => { [r.user, r.employee].forEach(u => { if (u && !_pkgIsSystemLogin(u)) add(_pkgUserLabel(u)); }); });
-  (extra || []).forEach(add);
+  (extra || []).forEach(n => { n = String(n || '').trim(); if (n && !out.includes(n)) out.push(n); });   // the current pin, even for someone who left
   return out.sort((a, b) => a.localeCompare(b));
 }
 
@@ -1393,7 +1525,7 @@ function _pkgPinPicker(r, key) {
   const staff = _pkgSellerChoices(r.pin && r.pin.seller ? [r.pin.seller] : []);
   const J = v => escapeHtml(JSON.stringify(v));
   const title = r.pin ? `Frozen by ${r.pin.by || 'someone'}${r.pin.at ? ' · ' + r.pin.at.slice(0, 10) : ''}` : 'Freeze the seller of this package: the rules will not change it again';
-  return `<label class="pa-pin${r.pin ? ' on' : ''}" title="${escapeHtml(title)}"><span>${r.pin ? (r.pin.skip ? '🙈 Skipped' : r.pin.manual ? '✍️ Manual' : '📌 Frozen') : '📌 Freeze seller'}</span>
+  return `<label class="pa-pin${r.pin ? ' on' : ''}" title="${escapeHtml(title)}"><span>${r.pin ? (r.learned ? '🧠 ' : '') + (r.pin.skip ? '🙈 Skipped' : r.pin.manual ? '✍️ Manual' : '📌 Frozen') : '📌 Freeze seller'}</span>
     <select aria-label="Freeze seller" onchange="pkgPinChange(${J(key)}, this.value)">
     <option value="">${r.pin ? 'Frozen…' : 'Freeze seller…'}</option>
     <optgroup label="Freeze the seller to">${staff.map(n => `<option value="${escapeHtml(n)}"${cur === n ? ' selected' : ''}>${escapeHtml(n)}</option>`).join('')}
@@ -1403,7 +1535,7 @@ function _pkgPinPicker(r, key) {
       ${staff.map(n => `<option value="__manual:${escapeHtml(n)}"${cur === '__manual:' + n ? ' selected' : ''}>✍️ Manual sale: ${escapeHtml(n)}</option>`).join('')}
     </optgroup>
     <option value="__skip"${cur === '__skip' ? ' selected' : ''}>🙈 Skip this package</option>
-    ${r.pin ? '<option value="__clear">Unfreeze</option>' : ''}
+    ${r.pin && !r.learned ? '<option value="__clear">Unfreeze</option>' : ''}
   </select></label>`;
 }
 
@@ -1501,7 +1633,8 @@ function _pkgActionText(r) {
 //  "fixed at the latest of those times": nothing is rewritten or lost.
 // ═══════════════════════════════════════════════════════════
 let pkgDone = {};
-const PKG_DONE_KEY = 'pkg_done_v1', PKG_DONE_DAYS = 45;
+const PKG_DONE_KEY = 'pkg_done_v1', PKG_DONE_DAYS = 45;   // the default; Settings → Keep fixed packages for
+const _pkgDoneDays = () => Math.max(7, +(typeof _pkgSetting === 'function' && _pkgSetting('doneDays')) || PKG_DONE_DAYS);
 try { pkgDone = _pkgClean(JSON.parse(localStorage.getItem(PKG_DONE_KEY) || '{}')); } catch (_) { pkgDone = {}; }
 // When the loaded IN-Gauge export was saved (its file time): a fix is only
 // proven or disproven by a report saved AFTER it.
@@ -1544,7 +1677,7 @@ function _pkgDoneState(key) {
   return d.ok ? 'confirmed' : 'waiting';
 }
 function _pkgSaveDone() {
-  const cut = Date.now() - PKG_DONE_DAYS * 86400e3;
+  const cut = Date.now() - _pkgDoneDays() * 86400e3;
   Object.keys(pkgDone).forEach(k => { if (!(_pkgFixedAt(pkgDone[k]) > cut)) delete pkgDone[k]; });
   try { localStorage.setItem(PKG_DONE_KEY, JSON.stringify(pkgDone)); } catch (_) {}
   _pkgSaveDiff('pkgDone', pkgDone, _pkgDoneLast);
@@ -1596,13 +1729,27 @@ function _pkgWhen(t) {
                : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 
-/** Copy the confirmation number = "I fixed it" for every night of this package. */
-function pkgCopyConf(btn, conf, key) {
-  if (typeof copyToClipboard === 'function') copyToClipboard(conf);
+/** Copy only copies (like the TD page): the package stays on the list until ✓ Fixed is pressed. */
+function pkgCopyConf(btn, conf) {
+  if (typeof copyToClipboard === 'function') copyToClipboard(String(conf));
   if (btn) { btn.classList.add('copied'); setTimeout(() => btn.classList.remove('copied'), 1400); }
-  if (!key) return;
+}
+/** One value chip: copy it; nothing is hidden or marked. */
+function pkgCopyChip(btn) {
+  const v = btn && btn.getAttribute('data-pkg-copy');
+  if (v == null) return;
+  if (typeof copyToClipboard === 'function') copyToClipboard(v);
+  const old = btn.textContent;
+  btn.textContent = 'copied'; btn.classList.add('copied');
+  setTimeout(() => { btn.textContent = old; btn.classList.remove('copied'); }, 1200);
+}
+/** ✓ Fixed: done in IN-Gauge for every night of this package, for the whole team. It moves to
+ *  "Fixed already" and stays there on later reports unless a NEWER report still shows it wrong. */
+function pkgMarkFixed(btn, key) {
   const rows = _pkgGroupRows(key), need = rows.filter(_pkgNeeds);
-  if (!need.length) { showToast(`Copied ${conf}`, 'ok'); return; }
+  if (!rows.length) return;
+  const conf = String(rows[0].conf || '');
+  if (!need.length) { showToast('Nothing to fix on this package', 'ok'); return; }
   const prev = pkgDone[key] ? JSON.parse(JSON.stringify(pkgDone[key])) : null;
   const wasBack = prev && _pkgDoneState(key) === 'back';
   const r0 = need[0];
@@ -1621,7 +1768,9 @@ function pkgCopyConf(btn, conf, key) {
     card.classList.add('pa-leaving');
     setTimeout(finish, 380);
   } else finish();
-  const msg = `✓ ${conf} marked fixed (${need.length} night${need.length > 1 ? 's' : ''}). It comes back only if a newer IN-Gauge report still shows it wrong.`;
+  try { _pkgMemoryNoteFixed(key); } catch (_) {}
+  if (typeof logActivity === 'function') logActivity('pkg_fixed', `Conf ${conf} · ${_pkgFamilyName(r0)} · fixed in IN-Gauge`);
+  const msg = `✓ ${conf} fixed (${need.length} night${need.length > 1 ? 's' : ''}): moved to Fixed already`;
   const undo = () => { if (prev) pkgDone[key] = prev; else delete pkgDone[key]; _pkgSaveDone(); pkgRender(); };
   if (typeof showUndoToast === 'function') showUndoToast(msg, undo); else showToast(msg, 'ok');
 }
@@ -1653,6 +1802,14 @@ function _pkgCopiedMany(rows) {
 
 // ── The list ─────────────────────────────────────────────────
 let pkgDoneOpen = false;
+let pkgFixedOpen = false;
+/** ✓ Mark all fixed: every package in the To fix list (Undo for a few seconds). */
+function pkgMarkAllFixed() {
+  const groups = _pkgAllGroups().filter(g => _pkgInView(g, 'action'));
+  if (!groups.length) return;
+  _pkgCopiedMany(groups.flatMap(g => g.rows));
+  groups.forEach(g => { try { _pkgMemoryNoteFixed(g.key); } catch (_) {} });
+}
 const pkgWhyOpen = new Set();
 function pkgToggleDoneList() { pkgDoneOpen = !pkgDoneOpen; pkgRender(); }
 function pkgWhy(key) { if (pkgWhyOpen.has(key)) pkgWhyOpen.delete(key); else pkgWhyOpen.add(key); pkgRender(); }
@@ -1713,21 +1870,29 @@ function pkgRender() {
   if (sum) sum.innerHTML = _pkgSummaryHtml();
 
   const left = counts.action;
+  // Fixed packages stay visible (like the TD page): under "Fixed already", with Undo.
+  const fixedG = pkgFilter_ === 'action' ? all.filter(g => pkgDone[g.key] && !g.rows.some(pkgBackWrong) && (!q || hay(g).includes(q))) : [];
+  const fixedAll = all.filter(g => pkgDone[g.key] && !g.rows.some(pkgBackWrong)).length;
   const head = document.getElementById('pkgListHead');
   if (head) head.innerHTML = pkgFilter_ === 'action'
-    ? (left ? `<b>${left}</b> package${left > 1 ? 's' : ''} to fix in IN-Gauge <small>Tap the confirmation number to copy it: that marks it fixed.</small>` : '')
+    ? `<span class="pa-count"><b>${left}</b> to fix <i>·</i> <b class="ok">${fixedAll}</b> fixed</span>
+       <small>Copy the values you need with the small copy buttons, then press <b>✓ Fixed</b> when it is done in IN-Gauge.</small>
+       ${left > 1 ? `<button type="button" class="pa-link" onclick="pkgMarkAllFixed()" title="Mark every package in this list fixed (Undo for a few seconds)">✓ Mark all ${left} fixed</button>` : ''}`
     : `<b>${shown.length}</b> package${shown.length !== 1 ? 's' : ''} <small>${escapeHtml((_PKG_VIEWS.find(v => v[0] === pkgFilter_) || [0, ''])[1])}</small>`;
 
-  list.innerHTML = shown.length ? shown.map(_pkgCardHtml).join('')
+  const fixedHtml = fixedG.length ? `<details class="pa-fixed" ${pkgFixedOpen ? 'open' : ''} ontoggle="pkgFixedOpen=this.open">
+      <summary><span>✓ Fixed already <em>${fixedG.length}</em></span><small>marked fixed, so not a to-do even though this report may still show them. Undo puts one back.</small></summary>
+      <div class="pa-list">${fixedG.map(g => _pkgCardHtml(g, true)).join('')}</div></details>` : '';
+  list.innerHTML = (shown.length ? shown.map(g => _pkgCardHtml(g)).join('')
     : `<div class="pa-empty">${q ? 'No package matches your search.' : pkgFilter_ === 'action'
-        ? `<b>✅ All fixed.</b><span>Nothing else needs a change in IN-Gauge${Object.keys(pkgDone).length ? '. Load the next IN-Gauge report to confirm the fixes' : ''}.</span>` : 'Nothing here.'}</div>`;
+        ? `<b>✅ All fixed.</b><span>Nothing else needs a change in IN-Gauge${Object.keys(pkgDone).length ? '. Load the next IN-Gauge report to confirm the fixes' : ''}.</span>` : 'Nothing here.'}</div>`) + fixedHtml;
   try { pkgBoardRender(); } catch (e) { console.warn('[pkg board]', e); }
   if (_pkgView === 'rules') { try { pkgRulesRender(); } catch (e) { console.warn('[pkg rules]', e); } }
 }
 
 function _pkgSummaryHtml() {
   const keys = Object.keys(pkgDone);
-  if (!keys.length) return `<div class="pa-sum muted">Tip: tap a confirmation number to copy it. That marks the package fixed and takes it off the list.</div>`;
+  if (!keys.length) return `<div class="pa-sum muted">Tip: copy the values with their small copy buttons, then press ✓ Fixed when the package is done in IN-Gauge. It moves to Fixed already.</div>`;
   const st = {}; keys.forEach(k => { st[k] = _pkgDoneState(k); });
   const today = new Date().toDateString();
   const fixedToday = keys.filter(k => new Date(_pkgFixedAt(pkgDone[k])).toDateString() === today).length;
@@ -1778,6 +1943,7 @@ function _pkgShortWhy(r) {
   if (r.verdict === 'review') return r.splitSeller ? `Split between ${r.splitSeller.join(' and ')}: one package, one stay, credited to more than one person` : (r.note || 'Opera has no clear entry for this package');
   if (r.verdict === 'outside') return r.note || '';
   if (r.noSeller) return 'It came with an online / TARS booking: nobody at the desk sold it';
+  if (r.memoryNote) return r.memoryNote;
   if (r.extendedFrom) return `Same stay as booking ${r.extendedFrom} (back-to-back): ${_pkgUserLabel(r.user)} put this package on first`;
   const o = r.originEvent;
   if (o && (r.reassign || r.needsEmployee)) return `Opera shows ${_pkgUserLabel(o.user)} put it on first (${_pkgTs(o.ts)})`;
@@ -1786,7 +1952,39 @@ function _pkgShortWhy(r) {
 }
 function _pkgTs(ts) { const s = String(ts || ''); return s.length >= 12 ? `${+s.slice(6, 8)} ${_PKG_MON[+s.slice(4, 6) - 1]} ${s.slice(8, 10)}:${s.slice(10, 12)}` : '—'; }
 
-function _pkgCardHtml(g) {
+/** The values the fix needs, each with its own copy button (copying never hides or marks anything).
+ *  Which values and in which order is each person's own choice (Settings → My view). */
+const PKG_CHIP_FIELDS = [
+  ['conf', 'Conf. no.'], ['room', 'Room'], ['pkg', 'Package'], ['code', 'Code'], ['seller', 'Seller'],
+  ['price', 'Price'], ['dates', 'Nights'], ['guest', 'Guest'],
+];
+function _pkgChipValues(rows, need) {
+  const act = need.length ? need : rows, r0 = act[0] || {};
+  const g = (typeof pkgGuests !== 'undefined' && pkgGuests[r0.conf]) || {};
+  const sellerNeeded = need.some(r => r.reassign || r.needsEmployee) && r0.verdict === 'credit' && !r0.noSeller;
+  const productNeeded = need.some(r => r.needsProduct);
+  const price = r0.verdict === 'credit' ? (r0.price ?? r0.charge) : r0.charge;
+  const nights = [...new Set(act.map(r => r.daily).filter(Boolean))];
+  return {
+    conf: String(r0.conf || ''),
+    room: String(r0.room || ''),
+    pkg: productNeeded || !need.length ? String(_pkgFamilyName(r0) || '') : '',
+    code: (productNeeded || !need.length) && r0.code && r0.code !== _pkgFamilyName(r0) && !/unknown/i.test(r0.code) ? String(r0.code) : '',
+    seller: sellerNeeded ? String(_pkgUserLabel(r0.user) || '') : '',
+    price: price != null && price !== '' && +price ? String(Math.round(+price * 100) / 100) : '',
+    dates: nights.length === 1 ? nights[0] : nights.length ? `${nights[0]} – ${nights[nights.length - 1]}` : '',
+    guest: String(g.name || ''),
+  };
+}
+function _pkgChipsHtml(rows, need) {
+  const v = _pkgChipValues(rows, need), P = _pkgViewPrefs();
+  const items = P.chips.filter(f => !P.hidden.includes(f) && v[f]);
+  if (!items.length) return '';
+  const lbl = f => (PKG_CHIP_FIELDS.find(x => x[0] === f) || [0, f])[1];
+  return `<div class="pa-vals">${items.map(f => `<span class="pa-v${f === 'seller' ? ' em' : ''}"><small>${escapeHtml(lbl(f))}</small><code>${escapeHtml(v[f])}</code><button type="button" class="pa-cc" data-pkg-copy="${escapeHtml(v[f])}" title="Copy ${escapeHtml(lbl(f).toLowerCase())} (it stays on the list until you press ✓ Fixed)">copy</button></span>`).join('')}</div>`;
+}
+
+function _pkgCardHtml(g, inFixed) {
   const rows = g.rows, need = rows.filter(_pkgNeeds), act = need.length ? need : rows, r0 = act[0];
   const J = v => escapeHtml(JSON.stringify(v));
   const back = rows.filter(pkgBackWrong), state = pkgDone[g.key] ? _pkgDoneState(g.key) : '';
@@ -1802,17 +2000,25 @@ function _pkgCardHtml(g) {
   const doneTag = !back.length && state ? `<span class="pa-chip ${state === 'confirmed' ? 'ok' : 'wait'}">${state === 'confirmed' ? '✓ Confirmed' : '⏳ Fixed, waiting'}</span>` : '';
   const whyOpen = pkgWhyOpen.has(g.key);
   const short = _pkgShortWhy(r0);
-  return `<article class="pa-card t-${tone}" data-key="${escapeHtml(g.key)}">
+  const carry = rows.find(r => r.carriedFrom);
+  const carryTag = carry ? `<button type="button" class="pa-carry" onclick="pkgMemoryOpen(${J(String(carry.carriedFrom.conf))})" title="Remembered from an earlier report: open its record">↪ continues from ${escapeHtml(_pkgMonShort(carry.carriedFrom.month))}${carry.carriedFrom.conf !== r0.conf ? ' · ' + escapeHtml(carry.carriedFrom.conf) : ''}</button>` : '';
+  const learnTag = r0.learned ? `<span class="pa-chip">🧠 learned rule</span>` : '';
+  const fixBtn = !need.length ? '' : (inFixed || (pkgDone[g.key] && !back.length))
+    ? `<button type="button" class="pa-fix undo" onclick="pkgUndone(${J(g.key)})" title="Not fixed after all: back to the to-do list">↩ Undo</button>`
+    : `<button type="button" class="pa-fix" onclick="pkgMarkFixed(this,${J(g.key)})" title="Done in IN-Gauge: it moves to Fixed already, for the whole team">✓ Fixed</button>`;
+  return `<article class="pa-card t-${inFixed ? 'ok' : tone}${inFixed ? ' is-fixed' : ''}" data-key="${escapeHtml(g.key)}">
     ${backTag}
     <div class="pa-top">
       <span class="pa-room" title="Room">${escapeHtml(r0.room || '—')}</span>
       <div class="pa-pk"><b>${escapeHtml(fam)}</b><small>${act.length} night${act.length !== 1 ? 's' : ''} · ${escapeHtml(_pkgNightsText(act))}${total ? ' · AED ' + escapeHtml(String(Math.round(total * 100) / 100)) : ''}</small></div>
-      <span class="pa-act">${escapeHtml(actTxt)}${acts.length > 1 ? ` <em>+${acts.length - 1}</em>` : ''}</span>${doneTag}
+      <span class="pa-act">${escapeHtml(inFixed ? '✓ Fixed in IN-Gauge' : actTxt)}${!inFixed && acts.length > 1 ? ` <em>+${acts.length - 1}</em>` : ''}</span>${doneTag}
     </div>
-    ${need.length ? _pkgSellerLine(need) : ''}
-    ${short ? `<div class="pa-short">${escapeHtml(short)}</div>` : ''}
+    ${carryTag || learnTag ? `<div class="pa-tags">${carryTag}${learnTag}</div>` : ''}
+    ${need.length && !inFixed ? _pkgSellerLine(need) : ''}
+    ${short && !inFixed ? `<div class="pa-short">${escapeHtml(short)}</div>` : ''}
+    ${_pkgChipsHtml(rows, need)}
     <div class="pa-foot">
-      <button type="button" class="pa-copy" title="Copy ${escapeHtml(r0.conf)}${need.length ? ' and mark this package fixed' : ''}" onclick="pkgCopyConf(this,${J(String(r0.conf))},${J(g.key)})"><code>${escapeHtml(r0.conf)}</code><span>${need.length ? (back.length ? '⧉ Copy · fixed again' : '⧉ Copy · mark fixed') : '⧉ Copy'}</span></button>
+      ${fixBtn}
       <button type="button" class="pa-btn${whyOpen ? ' on' : ''}" aria-expanded="${whyOpen}" onclick="pkgWhy(${J(g.key)})">Why?</button>
       ${_pkgPinPicker(r0, g.key)}
     </div>
@@ -1854,6 +2060,14 @@ function _pkgWhyHtml(g) {
       : `This booking continues an earlier one, but this kind of package is new on it, so it is a new sale:<ul>${li}</ul>`]);
   }
 
+  const mem = rows.find(r => r.carriedFrom);
+  if (mem) {
+    const c = mem.carriedFrom, rec = (pkgMemory[c.conf] || {})[c.kind] || {};
+    const hist = Object.keys(rec.months || {}).sort().map(m => `${_pkgMonShort(m)}: ${escapeHtml((rec.months[m] || {}).seller || '?')} · ${(rec.months[m] || {}).n || 0} night${(rec.months[m] || {}).n === 1 ? '' : 's'}`).join(' · ');
+    steps.push(['🧠', 'Remembered', `${escapeHtml(mem.memoryNote || 'This package continues from an earlier report.')}<br><small>Booking <code>${escapeHtml(c.conf)}</code> · ${escapeHtml(rec.code || '')} · ${escapeHtml(_pkgD(rec.from))} → ${escapeHtml(_pkgD(rec.to))} · decided by ${escapeHtml(_PKG_HOW[rec.how] || rec.how || '?')}${hist ? ' · ' + hist : ''}</small>
+      <br><button type="button" class="pa-link" onclick="pkgMemoryOpen(${escapeHtml(JSON.stringify(String(c.conf)))})">Open the memory record ›</button>`]);
+  }
+  if (r0.learned) steps.push(['🧠', 'Learned rule', `${escapeHtml(_pkgLearnedText(r0.learned))}. Accepted by ${escapeHtml(r0.learned.by || 'someone')}.`]);
   const hits = [...new Set(rows.flatMap(r => r.ruleHits || []))];
   const ruleNames = hits.map(k => PKG_RULE_INFO.find(x => x.k === k)).filter(Boolean);
   if (ruleNames.length) steps.push(['⚙️', 'Rules used', ruleNames.map(x => `<span class="pa-rtag">${x.ico} ${escapeHtml(x.short)}</span>`).join(' ') + (hits.includes('pin') ? ' <span class="pa-rtag">📌 Frozen by a person</span>' : '')]);
@@ -1873,7 +2087,7 @@ function _pkgWhyHtml(g) {
     const parts = [];
     if (need.some(r => r.needsProduct)) parts.push(`set the package to <b>${escapeHtml(_pkgFamilyName(r0))}</b>`);
     if (need.some(r => r.reassign || r.needsEmployee)) parts.push(`set the seller to <b>${escapeHtml(_pkgUserLabel(r0.user))}</b>`);
-    todo = `Open booking <b>${escapeHtml(r0.conf)}</b> in IN-Gauge and on every night (${escapeHtml(nights)}) ${parts.join(' and ') || 'check the line'}. Then copy the number here to mark it fixed.`;
+    todo = `Open booking <b>${escapeHtml(r0.conf)}</b> in IN-Gauge and on every night (${escapeHtml(nights)}) ${parts.join(' and ') || 'check the line'}. Then press ✓ Fixed here.`;
   }
   steps.push(['👉', 'What to do', todo]);
   return `<ol class="pa-steps">${steps.map(([i, t, b]) => `<li><span class="i">${i}</span><div><b>${t}</b><div>${b}</div></div></li>`).join('')}</ol>`;
@@ -1913,7 +2127,7 @@ function pkgCopyResolved() {
       .map(v => String(v ?? '').replace(/[\t\r\n]+/g, ' ')).join('\t')))
     .join('\n');
   copyToClipboard(tsv, document.getElementById('pkgCopyBtn'), '📋 Copy rows to update');
-  _pkgCopiedMany(resolved);
+  showToast(`${resolved.length} rows copied. Press ✓ Fixed on each package when it is done (or ✓ Mark all fixed).`, 'ok');
 }
 
 // ── Copy the deny list — the charges that should NOT be credited ──
@@ -1928,7 +2142,7 @@ function pkgCopyDeny() {
       .map(v => String(v ?? '').replace(/[\t\r\n]+/g, ' ')).join('\t')))
     .join('\n');
   copyToClipboard(tsv, document.getElementById('pkgDenyBtn'), '⛔ Copy rows to remove');
-  _pkgCopiedMany(denied);
+  showToast(`${denied.length} rows copied. Press ✓ Fixed on each package when it is removed.`, 'ok');
 }
 
 function pkgClear() {
@@ -1974,6 +2188,10 @@ const PKG_RULE_INFO = [
     q: 'On the extension, a different kind of package is sold. Is it a new sale?',
     ex: ['Booking A · Sam · 🥐', '→', 'Booking B · Lina · ⬆️ Upgrade', '⇒', '🏆 Lina'],
     off: 'Now: every package on the extension goes to the first seller of the stay.' },
+  { k: 'memory', ico: '🧠', short: 'remembered from last month', t: 'A package continuing from an earlier month keeps its seller',
+    q: 'The package started last month and the guest is still here. Keep last month\'s seller?',
+    ex: ['Sep · Sam · 🥐', '→', 'Oct · same booking · 🥐', '⇒', '🏆 Sam'],
+    off: 'Now: every month is checked on its own (sold before the log starts = not in log).' },
   { k: 'systemNoSeller', ico: '🌐', short: 'online / TARS = no seller', t: 'Online / TARS / system bookings have no desk seller',
     q: 'Booking came online (TARS). Give it to nobody?',
     ex: ['🌐 TARS · 🥐 with the booking', '⇒', '🚫 Nobody'],
@@ -2011,18 +2229,31 @@ let _pkgView = 'audit';
 let pkgLastDiff = null;    // { label, list: [{key, conf, room, fam, nights, before, after}], at }
 let pkgStaffDb = {};       // id -> { name, logins: [] }
 
+// Shared settings (rules, team, kinds, report columns) are changed by an owner or manager, or by
+// anyone whose role holds the "Edit the night checklist" power (Team → Roles & access) — by default
+// supervisors too. Everyone can read them.
 function _pkgCanEdit() {
-  const r = typeof currentProfile !== 'undefined' && currentProfile && currentProfile.role;
-  return ['owner', 'manager', 'supervisor'].includes(r);
+  const p = typeof currentProfile !== 'undefined' && currentProfile;
+  const r = p && p.role;
+  if (r === 'owner' || r === 'manager') return true;
+  if (!r) return false;
+  try {
+    const RR = typeof hoRoleRules !== 'undefined' ? hoRoleRules : (typeof window !== 'undefined' ? window.hoRoleRules : null);
+    if (RR && typeof RR.can === 'function') return RR.can('canEditChecklist') === true;
+  } catch (_) {}
+  return r === 'supervisor';
 }
 function pkgShowView(v) {
-  _pkgView = v === 'rules' ? 'rules' : 'audit';
-  const rv = document.getElementById('pkgRulesView'), mv = document.getElementById('pkgMainView');
-  if (rv) rv.hidden = _pkgView !== 'rules';
-  if (mv) mv.hidden = _pkgView === 'rules';
+  _pkgMountViews();
+  _pkgView = ['rules', 'memory', 'settings'].includes(v) ? v : 'audit';
+  const ids = { rules: 'pkgRulesView', memory: 'pkgMemoryView', settings: 'pkgSettingsView', audit: 'pkgMainView' };
+  Object.entries(ids).forEach(([k, id]) => { const e = document.getElementById(id); if (e) e.hidden = k !== _pkgView; });
+  const mu = document.getElementById('muView'); if (mu) mu.hidden = true;
   document.querySelectorAll('#pkgTabs [data-v]').forEach(b => { const on = b.dataset.v === _pkgView; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
-  _pkgStyle2(); _pkgStartRulesSync();
+  _pkgStyle2(); _pkgStyle3(); _pkgStartRulesSync(); _pkgStartSettingsSync(); _pkgPrefsSync();
   if (_pkgView === 'rules') pkgRulesRender();
+  if (_pkgView === 'memory') pkgMemoryRender();
+  if (_pkgView === 'settings') pkgSettingsRender();
 }
 
 /** What each package comes out as: the seller, or Remove / Check by hand. */
@@ -2117,13 +2348,18 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(_pkgStartRulesSyn
 
 // ── Staff names ──────────────────────────────────────────────
 function _pkgLoginTok(l) { return _pkgUserKey(l).split('-').pop(); }
+// packageAudit/staff/<id> = { name, logins: [], status: 'active'|'left', since, left, former: [{ name, until, by }] }
+// (older entries are just { name, logins } and read as active).
 function _pkgApplyStaff() {
   const list = Object.values(pkgStaffDb || {}).filter(s => s && s.name);
   PKG_STAFF = list.map(s => String(s.name)).sort((a, b) => a.localeCompare(b));
-  PKG_STAFF_ALIASES = {};
+  PKG_STAFF_ALIASES = {}; PKG_STAFF_FORMER = {}; PKG_STAFF_LEFT = {};
   list.forEach(s => {
     const al = (Array.isArray(s.logins) ? s.logins : []).map(_pkgLoginTok).filter(a => a.length >= 3);
     if (al.length) PKG_STAFF_ALIASES[String(s.name)] = al;
+    const olds = (Array.isArray(s.former) ? s.former : []).map(f => _pkgUserKey(f && f.name)).filter(Boolean);
+    if (olds.length) PKG_STAFF_FORMER[String(s.name)] = olds;
+    if (s.status === 'left') PKG_STAFF_LEFT[String(s.name)] = s.left || 'yes';
   });
 }
 const _pkgStaffId = name => String(name).trim().toLowerCase().replace(/[.#$\[\]\/\s]+/g, '_').slice(0, 60) || 'x';
@@ -2210,7 +2446,7 @@ function _pkgSuggestions() {
   if (ch) S.push({ tone: 'warn', text: `${ch} package${ch > 1 ? 's were' : ' was'} decided by the extension rule: the seller moved to whoever started the stay. Check ${ch > 1 ? 'them' : 'it'} once.`, act: ['Show them', "pkgShowView('audit');pkgSetFilter('rule:chain')"] });
   if (loaded) {
     const unk = _pkgUnknownLogins();
-    if (!PKG_STAFF.length && !_pkgReportNames().length) S.push({ tone: 'warn', text: `Your team list is empty, so Opera logins show as they are (like ACCOREN-SALVAREZ). Add your team in Team names below.`, act: ['Add names', "pkgOpenStaff()"] });
+    if (!PKG_STAFF.length && !_pkgReportNames().length) S.push({ tone: 'warn', text: `Your team list is empty, so Opera logins show as they are (like CHAIN-SALVAREZ). Add your team in 🛠 Settings → Team.`, act: ['Add names', "pkgOpenStaff()"] });
     else if (unk.length) S.push({ tone: 'warn', text: `${unk.length} Opera login${unk.length > 1 ? 's don\'t' : ' doesn\'t'} match any staff name: ${unk.slice(0, 3).map(x => x.login).join(', ')}${unk.length > 3 ? '…' : ''}. Add ${unk.length > 1 ? 'them' : 'it'}.`, act: ['Add', "pkgOpenStaff()"] });
   }
   if (loaded && pkgLogRange.max) {
@@ -2223,8 +2459,11 @@ function _pkgSuggestions() {
   }
   const rv = groups.filter(g => g.rows.some(r => r.verdict === 'review' && !r.pinSkip)).length;
   if (rv) S.push({ tone: 'warn', text: `${rv} package${rv > 1 ? 's need' : ' needs'} checking by hand. When you know the seller, freeze it (📌) so it never asks again.`, act: ['Show them', "pkgShowView('audit');pkgSetFilter('review')"] });
-  const pinsOk = groups.filter(g => g.rows.some(r => r.pin && r.pin.seller && !r.pin.manual && r.prePinVerdict === 'credit' && _pkgSameUser(r.prePinUser, r.pin.seller)));
+  const pinsOk = groups.filter(g => g.rows.some(r => r.pin && !r.learned && r.pin.seller && !r.pin.manual && r.prePinVerdict === 'credit' && _pkgSameUser(r.prePinUser, r.pin.seller)));
   if (pinsOk.length) S.push({ tone: 'idle', text: `${pinsOk.length} frozen package${pinsOk.length > 1 ? 's' : ''} now match${pinsOk.length > 1 ? '' : 'es'} the rules anyway. You can unfreeze ${pinsOk.length > 1 ? 'them' : 'it'}.`, act: ['Unfreeze', `pkgUnfreezeMany(${escapeHtml(JSON.stringify(pinsOk.map(g => g.key)))})`] });
+  const mh = hit('memory');
+  if (mh) S.push({ tone: 'idle', text: `${mh} package${mh > 1 ? 's continue' : ' continues'} from an earlier month: the seller was carried over from memory.`, act: ['Show them', "pkgShowView('audit');pkgSetFilter('rule:memory')"] });
+  _pkgLearnSuggestions().slice(0, 3).forEach(L => S.push({ tone: 'warn', text: `🧠 ${L.text}. Do the same automatically next time?`, act: ['✓ Accept', `pkgLearnAccept(${escapeHtml(JSON.stringify(L.id))})`] }));
   const sys = hit('systemNoSeller');
   if (sys) S.push({ tone: 'idle', text: `${sys} package${sys > 1 ? 's' : ''} came with online / TARS bookings: no desk seller.`, act: ['Show them', "pkgShowView('audit');pkgSetFilter('rule:systemNoSeller')"] });
   const waiting = Object.keys(pkgDone).filter(k => _pkgDoneState(k) === 'waiting').length;
@@ -2245,7 +2484,7 @@ const _pkgRulesOpen = new Set();   // which collapsible sections are open (kept 
 let _pkgSugAll = false;
 let _pkgTryQ = '';
 function _pkgSecToggle(id, open) { if (open) _pkgRulesOpen.add(id); else _pkgRulesOpen.delete(id); }
-function _pkgRuleOn(k) { return k === 'chainGap' ? +_pkgRule(k) === 1 : !!_pkgRule(k); }
+function _pkgRuleOn(k) { return k === 'chainGap' ? +_pkgRule(k) >= 1 : !!_pkgRule(k); }
 function _pkgRuleDefOn(k) { return k === 'chainGap' ? +PKG_RULE_DEFAULTS[k] === 1 : !!PKG_RULE_DEFAULTS[k]; }
 /** Answer a question: Yes / No. Saves through pkgSetRule (same save + instant re-run), then offers Undo. */
 function pkgRuleAnswer(k, yes) {
@@ -2267,11 +2506,7 @@ function pkgRuleUndo() {
   else pkgLastDiff = { label: 'Undone: back to how it was', list: null, at: Date.now() };
   pkgRulesRender();
 }
-function pkgOpenStaff() {
-  _pkgRulesOpen.add('staff');
-  const d = document.getElementById('pkgStaffCard');
-  if (d) { d.open = true; if (d.scrollIntoView) d.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
-}
+function pkgOpenStaff() { pkgOpenSettings('team'); }
 function pkgSugMore() { _pkgSugAll = !_pkgSugAll; pkgRulesRender(); }
 
 /** The tiny example: chips joined by arrows, ending in the result. */
@@ -2383,9 +2618,10 @@ function pkgRulesRender() {
 
   const staff = Object.entries(pkgStaffDb || {}).filter(([, s]) => s && s.name).sort((a, b) => String(a[1].name).localeCompare(String(b[1].name)));
   const unk = pkgResults.length ? _pkgUnknownLogins() : [];
-  const staffBody = `<p class="pr-help">Opera shows logins (ACCOREN-SALVAREZ), IN-Gauge shows names (Sam ALVAREZ). This list joins them for the whole team.</p>
+  const staffBody = staff.length ? `<p class="pr-help">${staff.filter(([, s]) => s.status !== 'left').length} active, ${staff.filter(([, s]) => s.status === 'left').length} left${unk.length ? ` · <b>${unk.length}</b> login${unk.length > 1 ? 's' : ''} in this log with no name` : ''}. Rename, mark who left, add logins or import a list in 🛠 Settings → Team.</p>
+    <div class="ps-row"><button type="button" class="pr-btn sm" onclick="pkgOpenSettings('team')">👥 Manage the team</button></div>` : `<p class="pr-help">Opera shows logins (CHAIN-SALVAREZ), IN-Gauge shows names (Sam ALVAREZ). This list joins them for the whole team.</p>
     ${!staff.length ? (can ? `<div class="pa-seed"><label for="pkgStaffSeed"><b>Start the list:</b> paste your team, one per line. Add logins after "=" when they are not simply initials + family name.</label>
-        <textarea id="pkgStaffSeed" rows="5" placeholder="Sam ALVAREZ&#10;Lina MORENO = ACCOREN-LMORENO2&#10;Test Person = ACCOREN-TPERSON, TPERS"></textarea>
+        <textarea id="pkgStaffSeed" rows="5" placeholder="Sam ALVAREZ&#10;Lina MORENO = CHAIN-LMORENO2&#10;Test Person = CHAIN-TPERSON, TPERS"></textarea>
         <button type="button" class="btn gold sm" onclick="pkgStaffSeed()">Save the team list</button></div>` : '<div class="pa-more">No names yet. A manager can add the team here.</div>') : `
       <div class="pr-list">${staff.map(([id, s]) => `<div class="pr-row staff"><b>${escapeHtml(s.name)}</b><span>${(s.logins || []).map(l => `<code>${escapeHtml(l)}</code>`).join(' ') || '<small>matched by family name</small>'}</span>${can ? `<button type="button" class="pr-x" title="Remove" aria-label="Remove ${escapeHtml(s.name)}" onclick="pkgStaffDel(${J(id)})">✕</button>` : ''}</div>`).join('')}</div>
       ${can ? `<div class="pa-addstaff"><input id="pkgStaffName" placeholder="Name, as in IN-Gauge" autocomplete="off"><input id="pkgStaffLogins" placeholder="Opera login(s), optional" autocomplete="off"><button type="button" class="btn gold sm" onclick="pkgStaffAdd()">Add</button></div>` : ''}`}
@@ -2688,8 +2924,52 @@ function pkgBoardRows(month) {
   })).sort((a, b) => b.aed - a.aed || b.packages - a.packages || a.seller.localeCompare(b.seller));
   const tot = list.reduce((t, r) => ({ packages: t.packages + r.packages, nights: t.nights + r.nights, aed: t.aed + r.aed, commission: t.commission + r.commission, pending: t.pending + r.pending }),
     { packages: 0, nights: 0, aed: 0, commission: 0, pending: 0 });
-  return { month: m, months: D.months, list, tot };
+  // Month over month: the month before, from this audit when it covers it, else from the 🧠 memory.
+  const prev = m.length === 6 ? _pkgPrevMonth(m) : '';
+  const P = prev ? _pkgMonthTotals(prev, D) : null;
+  if (P) {
+    list.forEach(r => { const x = P.sellers[r.seller]; r.prevAed = x ? x.aed : 0; r.prevPk = x ? x.packages : 0; });
+    tot.prevAed = P.aed; tot.prevPk = P.packages;
+  }
+  return { month: m, months: D.months, list, tot, prev: P ? prev : '' };
 }
+function _pkgPrevMonth(m) { const y = +m.slice(0, 4), mo = +m.slice(4, 6); return mo === 1 ? `${y - 1}12` : `${y}${String(mo - 1).padStart(2, '0')}`; }
+/** One month per seller: { sellers: { name: { packages, nights, aed } }, aed, packages } or null when nothing is known. */
+function _pkgMonthTotals(m, D) {
+  D = D || pkgBoardData();
+  const out = { sellers: {}, aed: 0, packages: 0, src: '' };
+  if (D.by[m] && Object.keys(D.by[m]).length) {
+    Object.values(D.by[m]).forEach(s => { out.sellers[s.seller] = { packages: s.pk.size, nights: s.nights, aed: Math.round(s.aed * 100) / 100 }; });
+    out.src = 'audit';
+  } else {
+    Object.values(typeof pkgMemory !== 'undefined' ? pkgMemory : {}).forEach(o => Object.values(o).forEach(r => {
+      const x = r.months && r.months[m]; if (!x) return;
+      const name = x.seller || r.sellerName || 'Unassigned';
+      const s = out.sellers[name] = out.sellers[name] || { packages: 0, nights: 0, aed: 0 };
+      s.packages++; s.nights += +x.n || 0; s.aed = Math.round((s.aed + (+x.aed || 0)) * 100) / 100;
+    }));
+    out.src = 'memory';
+  }
+  if (!Object.keys(out.sellers).length) return null;
+  Object.values(out.sellers).forEach(s => { out.aed += s.aed; out.packages += s.packages; });
+  out.aed = Math.round(out.aed * 100) / 100;
+  return out;
+}
+/** The last (up to) 6 months, per seller: { months: [...], rows: [{ seller, by: {m: aed}, pk: {m: n} }] }. */
+function pkgBoardMonthly() {
+  const D = pkgBoardData();
+  const ms = new Set(D.months);
+  Object.values(typeof pkgMemory !== 'undefined' ? pkgMemory : {}).forEach(o => Object.values(o).forEach(r => Object.keys(r.months || {}).forEach(m => ms.add(m))));
+  const months = [...ms].filter(m => /^\d{6}$/.test(m)).sort().slice(-6);
+  const rows = {};
+  months.forEach(m => {
+    const T = _pkgMonthTotals(m, D); if (!T) return;
+    Object.entries(T.sellers).forEach(([name, x]) => { const r = rows[name] = rows[name] || { seller: name, by: {}, pk: {} }; r.by[m] = x.aed; r.pk[m] = x.packages; });
+  });
+  const last = months[months.length - 1];
+  return { months, rows: Object.values(rows).sort((a, b) => (b.by[last] || 0) - (a.by[last] || 0) || a.seller.localeCompare(b.seller)) };
+}
+const _pkgDelta = (now, before) => { const d = Math.round(((+now || 0) - (+before || 0)) * 100) / 100; return d > 0 ? `<span class="pkgb-up">▲ ${_pkgbN(d)}</span>` : d < 0 ? `<span class="pkgb-down">▼ ${_pkgbN(-d)}</span>` : '<span class="pkgb-eq">=</span>'; };
 
 function _pkgbStyle() {
   if (document.getElementById('pkgb-style')) return;
@@ -2707,7 +2987,7 @@ function _pkgbStyle() {
 #pkgBoard .pkgb-k small{display:block;font-family:var(--mono);font-size:.58rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600}
 #pkgBoard .pkgb-k b{display:block;font-size:1.25rem;font-variant-numeric:tabular-nums;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #pkgBoard .pkgb-k .g b{color:var(--accent,#e8b84b)}
-#pkgBoard .pkgb-row{display:grid;grid-template-columns:30px minmax(120px,1.3fr) minmax(90px,2fr) 70px 60px 100px 100px;gap:10px;align-items:center;padding:8px 6px;border-top:1px solid var(--border)}
+#pkgBoard .pkgb-row{display:grid;grid-template-columns:30px minmax(120px,1.3fr) minmax(90px,2fr) 70px 60px 100px 100px 104px;gap:10px;align-items:center;padding:8px 6px;border-top:1px solid var(--border)}
 #pkgBoard .pkgb-row.h{border-top:0;font-family:var(--mono);font-size:.58rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600;padding-top:0}
 #pkgBoard .pkgb-row.tot{font-weight:700;border-top:2px solid var(--border2,var(--border))}
 #pkgBoard .pkgb-n{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono);font-size:.8rem}
@@ -2729,10 +3009,18 @@ function _pkgbStyle() {
   #pkgBoard .pkgb-row.h{display:none}
   #pkgBoard .pkgb-row>.pkgb-rk{grid-area:rk} #pkgBoard .pkgb-row>.pkgb-nm{grid-area:nm} #pkgBoard .pkgb-row>.pkgb-bw{grid-area:bar}
   #pkgBoard .pkgb-row>.c-aed{grid-area:aed}
-  #pkgBoard .pkgb-row>.c-pk,#pkgBoard .pkgb-row>.c-nt,#pkgBoard .pkgb-row>.c-cm{display:none}
+  #pkgBoard .pkgb-row>.c-pk,#pkgBoard .pkgb-row>.c-nt,#pkgBoard .pkgb-row>.c-cm,#pkgBoard .pkgb-row>.c-dl{display:none}
   #pkgBoard .pkgb-row>.pkgb-st{grid-area:st;display:block;font-size:.68rem;color:var(--text2);font-family:var(--mono)}
 }
-@media(min-width:761px){#pkgBoard .pkgb-st{display:none}}`;
+@media(min-width:761px){#pkgBoard .pkgb-st{display:none}}
+#pkgBoard .pkgb-up{color:var(--green);font-weight:700} #pkgBoard .pkgb-down{color:var(--red);font-weight:700} #pkgBoard .pkgb-eq{color:var(--text3)}
+#pkgBoard .pkgb-mm{margin-top:16px;overflow-x:auto;border:1px solid var(--border);border-radius:10px}
+#pkgBoard .pkgb-mm table{border-collapse:collapse;width:100%;min-width:420px;font-size:.78rem}
+#pkgBoard .pkgb-mm th,#pkgBoard .pkgb-mm td{padding:7px 9px;border-top:1px solid var(--border);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+#pkgBoard .pkgb-mm th{border-top:0;font:600 .6rem var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--text3)}
+#pkgBoard .pkgb-mm th:first-child,#pkgBoard .pkgb-mm td:first-child{text-align:left;position:sticky;left:0;background:var(--card)}
+#pkgBoard .pkgb-mm small{display:block;font-size:.62rem}
+#pkgBoard .pkgb-mmt{font-weight:700;font-size:.86rem;margin:18px 0 6px}`;
   document.head.appendChild(st);
 }
 
@@ -2774,13 +3062,14 @@ function pkgBoardRender() {
   const rows = B.list.map((r, i) => `
     <div class="pkgb-row">
       <div class="pkgb-rk">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}</div>
-      <div class="pkgb-nm">${_pkgbE(r.seller)}<small>${_pkgbE(r.what)}</small>${r.pending ? `<span class="pkgb-pend" title="The audit credits this seller, but IN-Gauge still shows someone else or a blank. Fix it in IN-Gauge and copy its number in the list above.">⚠ ${r.pending} not fixed in IN-Gauge yet</span>` : ''}</div>
+      <div class="pkgb-nm">${_pkgbE(r.seller)}<small>${_pkgbE(r.what)}</small>${r.pending ? `<span class="pkgb-pend" title="The audit credits this seller, but IN-Gauge still shows someone else or a blank. Fix it in IN-Gauge and press ✓ Fixed in the list above.">⚠ ${r.pending} not fixed in IN-Gauge yet</span>` : ''}</div>
       <div class="pkgb-bw"><div class="pkgb-bar" title="${_pkgbE(_pkgbN(r.aed))} AED"><i style="width:${Math.max(2, Math.round(r.aed / top * 100))}%"></i></div></div>
       <div class="pkgb-n c-pk">${r.packages}</div>
       <div class="pkgb-n c-nt">${r.nights}</div>
       <div class="pkgb-n c-aed">${_pkgbN(r.aed)}</div>
       <div class="pkgb-n c-cm">${comm(r.commission)}</div>
-      <div class="pkgb-st">${r.packages} package${r.packages === 1 ? '' : 's'} · ${r.nights} night${r.nights === 1 ? '' : 's'}${rate > 0 ? ' · commission ' + _pkgbN(r.commission) : ''}</div>
+      <div class="pkgb-n c-dl">${B.prev ? _pkgDelta(r.aed, r.prevAed) : '—'}</div>
+      <div class="pkgb-st">${r.packages} package${r.packages === 1 ? '' : 's'} · ${r.nights} night${r.nights === 1 ? '' : 's'}${rate > 0 ? ' · commission ' + _pkgbN(r.commission) : ''}${B.prev ? ' · vs ' + _pkgMonShort(B.prev) + ' ' + _pkgDelta(r.aed, r.prevAed) : ''}</div>
     </div>`).join('');
   const T = B.tot;
   box.innerHTML = `
@@ -2792,6 +3081,7 @@ function pkgBoardRender() {
         <label title="Shared with the team">Commission %<input id="pkgbRate" type="number" min="0" max="100" step="0.5" inputmode="decimal" value="${rate}" onchange="pkgBoardSetRate(this.value)"></label>
         <button class="btn sm" type="button" onclick="pkgBoardCopy()">📋 Copy</button>
         <button class="btn sm" type="button" onclick="pkgBoardCsv()">📥 CSV</button>
+        <button class="btn sm" type="button" onclick="pkgBoardXlsx()">📊 Excel</button>
         <button class="btn gold sm" type="button" onclick="pkgBoardPrint()">📄 Print / PDF</button>
       </div>
     </div>
@@ -2803,14 +3093,44 @@ function pkgBoardRender() {
       <div><small>Sellers</small><b>${B.list.length}</b></div>
     </div>
     ${B.list.length ? `<div class="pkgb-list">
-      <div class="pkgb-row h"><div>#</div><div>Seller</div><div>Value</div><div class="pkgb-n">Packages</div><div class="pkgb-n">Nights</div><div class="pkgb-n">AED</div><div class="pkgb-n">Commission</div></div>
+      <div class="pkgb-row h"><div>#</div><div>Seller</div><div>Value</div><div class="pkgb-n">Packages</div><div class="pkgb-n">Nights</div><div class="pkgb-n">AED</div><div class="pkgb-n">Commission</div><div class="pkgb-n">${B.prev ? 'vs ' + _pkgbE(_pkgMonShort(B.prev)) : 'vs before'}</div></div>
       ${rows}
-      <div class="pkgb-row tot"><div></div><div class="pkgb-nm">Total</div><div class="pkgb-bw"></div><div class="pkgb-n c-pk">${T.packages}</div><div class="pkgb-n c-nt">${T.nights}</div><div class="pkgb-n c-aed">${_pkgbN(T.aed)}</div><div class="pkgb-n c-cm">${comm(T.commission)}</div>
+      <div class="pkgb-row tot"><div></div><div class="pkgb-nm">Total</div><div class="pkgb-bw"></div><div class="pkgb-n c-pk">${T.packages}</div><div class="pkgb-n c-nt">${T.nights}</div><div class="pkgb-n c-aed">${_pkgbN(T.aed)}</div><div class="pkgb-n c-cm">${comm(T.commission)}</div><div class="pkgb-n c-dl">${B.prev ? _pkgDelta(T.aed, T.prevAed) : '—'}</div>
         <div class="pkgb-st">${T.packages} packages · ${T.nights} nights${rate > 0 ? ' · commission ' + _pkgbN(T.commission) : ''}</div></div>
     </div>` : '<div class="pkgb-empty">No credited sales in this audit yet.</div>'}
     <div class="pkgb-foot">A package billed over several nights counts once under Packages and once per night under Nights. Commission = value × the rate you set (shared with the team).
       ${T.pending ? `<b>${T.pending}</b> package${T.pending === 1 ? ' is' : 's are'} credited here but not fixed in IN-Gauge yet: fix them in the list above so IN-Gauge matches.` : ''}
-      For the whole month, run the audit with the IN-Gauge export from the 1st of the month.</div>`;
+      For the whole month, run the audit with the IN-Gauge export from the 1st of the month.${B.prev ? ` "vs ${_pkgbE(_pkgMonShort(B.prev))}" compares with the month before (from this audit or the 🧠 memory).` : ''}</div>
+    ${_pkgMonthlyHtml()}`;
+}
+function _pkgMonthlyHtml() {
+  const M = pkgBoardMonthly();
+  if (M.months.length < 2 || !M.rows.length) return '';
+  const tot = m => M.rows.reduce((t, r) => t + (r.by[m] || 0), 0);
+  return `<div class="pkgb-mmt">📈 Month by month <small style="font-weight:400;color:var(--text3);font-size:.7rem">AED per seller · ▲▼ against the month before</small></div>
+    <div class="pkgb-mm"><table><thead><tr><th>Seller</th>${M.months.map(m => `<th>${_pkgbE(_pkgMonShort(m))}</th>`).join('')}</tr></thead><tbody>
+    ${M.rows.map(r => `<tr><td>${_pkgbE(r.seller)}</td>${M.months.map((m, i) => `<td>${r.by[m] != null ? _pkgbN(r.by[m]) : '—'}${i && (r.by[m] != null || r.by[M.months[i - 1]] != null) ? `<small>${_pkgDelta(r.by[m], r.by[M.months[i - 1]])}</small>` : ''}</td>`).join('')}</tr>`).join('')}
+    <tr><td><b>Total</b></td>${M.months.map((m, i) => `<td><b>${_pkgbN(tot(m))}</b>${i ? `<small>${_pkgDelta(tot(m), tot(M.months[i - 1]))}</small>` : ''}</td>`).join('')}</tr></tbody></table></div>`;
+}
+async function pkgBoardXlsx() {
+  if (!pkgResults.length) { showToast('Run Package Audit first', 'err'); return; }
+  const B = pkgBoardRows(pkgBoardMonth), T = B.tot, r2 = v => Math.round((+v || 0) * 100) / 100;
+  const prevL = B.prev ? _pkgMonShort(B.prev) : '';
+  const head = ['Rank', 'Seller', 'Packages', 'Nights', 'Value AED', 'Commission AED', ...(B.prev ? [`${prevL} AED`, `Change vs ${prevL}`] : []), 'Not fixed in IN-Gauge', 'What'];
+  const rows = B.list.map((r, i) => [i + 1, r.seller, r.packages, r.nights, r2(r.aed), r2(r.commission), ...(B.prev ? [r2(r.prevAed), r2(r.aed - r.prevAed)] : []), r.pending, r.what]);
+  const total = ['', 'Total', T.packages, T.nights, r2(T.aed), r2(T.commission), ...(B.prev ? [r2(T.prevAed), r2(T.aed - T.prevAed)] : []), T.pending, ''];
+  const sheets = [{ name: 'Ranking', head, rows, total, money: [4, 5, ...(B.prev ? [6] : [])], delta: B.prev ? [7] : [] }];
+  const M = pkgBoardMonthly();
+  if (M.months.length > 1) {
+    const mh = ['Seller', ...M.months.map(_pkgMonShort), `Change ${_pkgMonShort(M.months[M.months.length - 2])} → ${_pkgMonShort(M.months[M.months.length - 1])}`];
+    const last = M.months.length - 1;
+    const mr = M.rows.map(r => [r.seller, ...M.months.map(m => r2(r.by[m] || 0)), r2((r.by[M.months[last]] || 0) - (r.by[M.months[last - 1]] || 0))]);
+    const sum = i => r2(M.rows.reduce((t, r) => t + (r.by[M.months[i]] || 0), 0));
+    sheets.push({ name: 'Month by month', head: mh, rows: mr, total: ['Total', ...M.months.map((_, i) => sum(i)), r2(sum(last) - sum(last - 1))], money: M.months.map((_, i) => i + 1), delta: [M.months.length + 1] });
+  }
+  const month = _pkgbMonthLabel(B.month);
+  await _pkgXlsx(`Seller_board_${B.month}`, 'Package seller board', `${month}${pkgBoardRate > 0 ? ' · commission ' + pkgBoardRate + '%' : ''}`, sheets,
+    [['Packages', T.packages], ['Nights', T.nights], ['Value AED', r2(T.aed)], ['Sellers', B.list.length]]);
 }
 
 function _pkgbTable() {
@@ -2871,6 +3191,1177 @@ function pkgBoardPrint() {
   mePrintPage(`Seller board ${month}`, body, { sign: ['Prepared by', 'Checked by (Front Office Manager / Finance)'], signName: _pkgMe() });
 }
 
+
+// ═══════════════════════════════════════════════════════════
+//  🛠 Settings — everything the audit needs to know about THIS hotel,
+//  changed on screen, never in code.
+//   • shared per hotel (packageAudit/settings/<section>): package kinds,
+//     report columns, how long fixed packages and the memory are kept,
+//     extra report lines to ignore. Rules stay at packageAudit/rules.
+//   • per person (packageAudit/prefs/<uid> + this device): which values
+//     each card shows with a copy button, and in which order.
+//  Nothing stored = the defaults, so an empty hotel works as it always did.
+// ═══════════════════════════════════════════════════════════
+const PKG_SETTINGS_DEFAULTS = { kinds: null, colMap: { ig: {}, guest: {} }, doneDays: PKG_DONE_DAYS, memMonths: 13, chrome: [] };
+const PKG_SETTINGS_KEY = 'pkg_settings_v1';
+const _pkgClamp = (v, lo, hi, d) => { const n = Math.round(+v); return isFinite(n) && v !== '' && v != null ? Math.max(lo, Math.min(hi, n)) : d; };
+/** A list the database may hand back as an object ({0: …, 1: …}) or with holes. */
+const _pkgArr = v => Array.isArray(v) ? v.filter(x => x != null) : (v && typeof v === 'object') ? Object.keys(v).sort((a, b) => (+a) - (+b)).map(k => v[k]).filter(x => x != null) : [];
+
+/** Stored settings on top of the defaults: every section always present and valid (pure). */
+function _pkgMergeSettings(stored) {
+  const s = stored && typeof stored === 'object' ? stored : {};
+  const out = JSON.parse(JSON.stringify(PKG_SETTINGS_DEFAULTS));
+  const kinds = _pkgArr(s.kinds).filter(k => k && typeof k === 'object' && String(k.k || '').trim());
+  if (kinds.length) {
+    const seen = new Set();
+    out.kinds = kinds.map(k => ({
+      k: String(k.k).trim().toUpperCase().replace(/[^A-Z0-9_]/g, '').slice(0, 12), label: String(k.label || k.k).slice(0, 40),
+      re: String(k.re || ''), codes: _pkgArr(k.codes).map(_pkgCodeNorm).filter(Boolean), ig: String(k.ig || ''), nameRe: k.nameRe ? String(k.nameRe) : '',
+      once: !!k.once, ico: String(k.ico || '🎁').slice(0, 4), color: /^#[0-9a-f]{6}$/i.test(k.color || '') ? k.color : '',
+      min: Math.max(0, +k.min || 0), max: Math.max(0, +k.max || 0),
+    })).filter(k => k.k && !seen.has(k.k) && seen.add(k.k));
+    if (!out.kinds.length) out.kinds = null;
+  }
+  ['ig', 'guest'].forEach(w => {
+    const m = s.colMap && s.colMap[w];
+    if (m && typeof m === 'object') Object.keys(m).forEach(f => { const v = String(m[f] || '').trim(); if (v) out.colMap[w][f] = v; });
+  });
+  out.doneDays = _pkgClamp(s.doneDays, 7, 365, PKG_SETTINGS_DEFAULTS.doneDays);
+  out.memMonths = _pkgClamp(s.memMonths, 1, 36, PKG_SETTINGS_DEFAULTS.memMonths);
+  out.chrome = (typeof s.chrome === 'string' ? s.chrome.split(/[\n,]/) : _pkgArr(s.chrome)).map(x => String(x || '').trim()).filter(Boolean).slice(0, 20);
+  return out;
+}
+let pkgSettingsRaw = {};
+try { pkgSettingsRaw = JSON.parse(localStorage.getItem(PKG_SETTINGS_KEY) || '{}') || {}; } catch (_) { pkgSettingsRaw = {}; }
+let pkgSettings = _pkgMergeSettings(pkgSettingsRaw);
+function _pkgSetting(k) { return pkgSettings ? pkgSettings[k] : PKG_SETTINGS_DEFAULTS[k]; }
+_pkgSetKinds(pkgSettings.kinds);
+
+function _pkgApplySettings(raw, quiet) {
+  const next = _pkgMergeSettings(raw);
+  const same = JSON.stringify(next) === JSON.stringify(pkgSettings);
+  pkgSettingsRaw = raw && typeof raw === 'object' ? raw : {};
+  pkgSettings = next;
+  try { localStorage.setItem(PKG_SETTINGS_KEY, JSON.stringify(pkgSettingsRaw)); } catch (_) {}
+  _pkgSetKinds(pkgSettings.kinds);
+  if (same || quiet) return;
+  if (pkgResults.length) _pkgRecompute();
+  if (_pkgView === 'settings') pkgSettingsRender();
+}
+/** Save one shared section (null = back to default) and re-run at once. */
+function _pkgSaveSetting(section, value, label) {
+  if (!_pkgCanEdit()) { showToast('Only a manager (or someone allowed to edit the checklist) can change shared settings', 'warn'); pkgSettingsRender(); return false; }
+  const raw = Object.assign({}, pkgSettingsRaw);
+  if (value == null) delete raw[section]; else raw[section] = value;
+  if (typeof fbSet === 'function') fbSet('packageAudit/settings/' + section, value == null ? null : value);
+  if (typeof logActivity === 'function') logActivity('pkg_settings', `${label || section}${value == null ? ' · back to default' : ''}`);
+  const before = pkgResults.length ? pkgResults : null;
+  _pkgApplySettings(raw, true);
+  if (before) { const diff = _pkgRecompute(); if (diff && diff.length) showToast(`${diff.length} package${diff.length > 1 ? 's' : ''} changed`, 'ok'); }
+  pkgSettingsRender();
+  return true;
+}
+let _pkgSettingsSync = false;
+function _pkgStartSettingsSync() {
+  if (_pkgSettingsSync || typeof fbListen !== 'function') return;
+  _pkgSettingsSync = true;
+  fbListen('packageAudit/settings', v => _pkgApplySettings(v || {}));
+  fbListen('packageAudit/memory', v => {
+    const next = _pkgMemClean(v);
+    if (JSON.stringify(next) === JSON.stringify(pkgMemory)) return;
+    pkgMemory = next;
+    _pkgMemoryRecomputeSoon();
+    if (_pkgView === 'memory') pkgMemoryRender();
+  });
+  fbListen('packageAudit/learned', v => {
+    pkgLearned = _pkgClean(v);
+    if (pkgResults.length) _pkgRecompute();
+    if (_pkgView === 'memory' || _pkgView === 'rules') (_pkgView === 'memory' ? pkgMemoryRender : pkgRulesRender)();
+  });
+  _pkgPrefsSync();
+}
+let _pkgPrefsOn = false;
+function _pkgPrefsSync() {
+  const uid = _pkgUid();
+  if (_pkgPrefsOn || !uid || typeof fbListen !== 'function') return;
+  _pkgPrefsOn = true;
+  fbListen('packageAudit/prefs/' + uid, v => {
+    if (!v || typeof v !== 'object') return;
+    const cur = JSON.stringify(_pkgViewPrefs());
+    try { localStorage.setItem(PKG_VIEW_KEY, JSON.stringify(v)); } catch (_) {}
+    if (JSON.stringify(_pkgViewPrefs()) !== cur && pkgResults.length) pkgRender();
+  });
+}
+document.addEventListener('DOMContentLoaded', () => setTimeout(_pkgStartSettingsSync, 1500));
+
+// ── My view (per person) ─────────────────────────────────────
+const PKG_VIEW_KEY = 'pkg_view_v1';
+const _pkgUid = () => (typeof currentUser !== 'undefined' && currentUser && currentUser.uid) || '';
+/** This person's view: copy values in their order, hidden ones (pure merge with the defaults). */
+function _pkgMergeView(v) {
+  const all = PKG_CHIP_FIELDS.map(x => x[0]);
+  const o = v && typeof v === 'object' ? v : {};
+  const chips = _pkgArr(o.chips).filter((f, i, a) => all.includes(f) && a.indexOf(f) === i);
+  all.forEach(f => { if (!chips.includes(f)) chips.push(f); });
+  return { chips, hidden: _pkgArr(o.hidden).filter(f => all.includes(f)) };
+}
+function _pkgViewPrefs() {
+  let v = null;
+  try { v = JSON.parse(localStorage.getItem(PKG_VIEW_KEY) || 'null'); } catch (_) {}
+  return _pkgMergeView(v);
+}
+function _pkgSaveView(p) {
+  const v = _pkgMergeView(p);
+  try { localStorage.setItem(PKG_VIEW_KEY, JSON.stringify(v)); } catch (_) {}
+  const uid = _pkgUid();
+  if (uid && typeof fbSet === 'function') fbSet('packageAudit/prefs/' + uid, v);
+  if (pkgResults.length) pkgRender();
+  pkgSettingsRender();
+}
+function pkgViewMove(f, d) {
+  const p = _pkgViewPrefs(), i = p.chips.indexOf(f), j = i + d;
+  if (i < 0 || j < 0 || j >= p.chips.length) return;
+  [p.chips[i], p.chips[j]] = [p.chips[j], p.chips[i]];
+  _pkgSaveView(p);
+}
+function pkgViewToggle(f, on) {
+  const p = _pkgViewPrefs();
+  p.hidden = p.hidden.filter(x => x !== f);
+  if (!on) p.hidden.push(f);
+  _pkgSaveView(p);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  🧠 Memory — every package the audit resolves, kept month after month
+//  packageAudit/memory/<conf>/<kind> = { conf, kind, fam, code, price, ts,
+//    from, to, arr, dep, room, guest, gid, gnorm, seller, sellerName, how,
+//    first, last (YYYYMM), months: { YYYYMM: { n, aed, seller } }, at, by, fixed }
+//  When next month's report arrives, a package whose stay continues (the
+//  same booking, or the same guest's back-to-back booking) keeps the seller
+//  remembered from before, and an Unknown Product on a remembered booking at
+//  the remembered price is named. Only months BEFORE the row's month count,
+//  so a report never confirms itself.
+// ═══════════════════════════════════════════════════════════
+let pkgMemory = {};
+try { pkgMemory = _pkgMemClean(JSON.parse(localStorage.getItem('ibis_packageAudit_memory') || 'null')); } catch (_) { pkgMemory = {}; }
+let pkgLearned = {};
+const _PKG_HOW = { opera: 'Opera: the first person who put it on', extension: 'extension (same stay)', pin: 'frozen by a person', manual: 'manual sale',
+  memory: 'carried over from memory', learned: 'a learned rule', ingauge: 'IN-Gauge' };
+function _pkgMemClean(v) {
+  const o = {};
+  if (v && typeof v === 'object') Object.keys(v).forEach(c => {
+    const k = v[c]; if (!k || typeof k !== 'object') return;
+    Object.keys(k).forEach(kk => { if (k[kk] && typeof k[kk] === 'object' && k[kk].seller) (o[c] = o[c] || {})[kk] = k[kk]; });
+  });
+  return o;
+}
+const _pkgDbKey = v => String(v == null ? '' : v).replace(/[.#$\[\]\/\s]+/g, '_').slice(0, 60) || '_';
+/** "Sep" (this year) or "Sep 2025". */
+function _pkgMonShort(m) {
+  const s = String(m || ''); if (s.length !== 6) return s || '?';
+  const mon = _PKG_MON[+s.slice(4, 6) - 1] || '?';
+  return s.slice(0, 4) === String(new Date().getFullYear()) ? mon : `${mon} ${s.slice(0, 4)}`;
+}
+/** The memory key of a row's package: its kind (BB, EC…) or, without one, its name. */
+function _pkgMemKind(r) { return _pkgDbKey(_pkgKindOfRow(r) || _pkgFamilyName(r) || r.code || 'PKG'); }
+function _pkgHowOf(r) {
+  if (r.pin && !r.learned) return r.pin.manual ? 'manual' : 'pin';
+  if (r.learned) return 'learned';
+  if (r.memoryUsed) return 'memory';
+  if (r.extendedFrom) return 'extension';
+  if (r.matchedEvent) return 'opera';
+  return 'ingauge';
+}
+
+/** What the memory looks like after this audit: { next, patch } (pure: nothing is saved here).
+ *  Only credited packages with a real seller are remembered. */
+function _pkgMemoryBuild(results, mem, opt) {
+  opt = opt || {};
+  const next = JSON.parse(JSON.stringify(mem || {})), patch = {};
+  const guests = opt.guests || (typeof pkgGuests !== 'undefined' ? pkgGuests : {});
+  const groups = new Map();
+  (results || []).forEach(r => {
+    if (r.verdict !== 'credit' || r.pinSkip || r.noSeller) return;
+    const seller = String(r.user || r.employee || '').trim();
+    if (!seller || seller === '-' || _pkgIsSystemUser(seller)) return;
+    const k = _pkgDbKey(r.conf) + '|' + _pkgMemKind(r);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(r);
+  });
+  const now = opt.at || new Date().toISOString(), by = opt.by != null ? opt.by : _pkgMe();
+  groups.forEach((rows, k) => {
+    const [conf, kind] = k.split('|'), r0 = rows[0];
+    const old = (next[conf] || {})[kind] || null;
+    const g = guests[r0.conf] || {};
+    const ev = r0.originEvent || r0.matchedEvent || null;
+    const code = (r0.matchedEvent && r0.matchedEvent.code) || (ev && ev.code) || (!/unknown/i.test(r0.code || '') ? r0.code : '') || (old && old.code) || '';
+    const days = rows.map(r => _pkgDayNum(r.daily)).filter(Boolean);
+    const fa = [_pkgDayNum(ev && ev.from), ...days, old && old.from].filter(Boolean);
+    const from = fa.length ? Math.min(...fa) : 0;
+    const to = Math.max(0, ...[_pkgDayNum(ev && ev.to), ...days, old && old.to].filter(Boolean));
+    const months = Object.assign({}, old && old.months);
+    const byM = {};
+    rows.forEach(r => { const m = _pkgbMonthOf(r); if (m === 'nodate') return; const x = byM[m] = byM[m] || { n: 0, aed: 0 }; x.n++; x.aed += parseFloat(r.price ?? r.charge) || 0; });
+    const sellerName = _pkgUserLabel(r0.user || r0.employee);
+    Object.keys(byM).forEach(m => { months[m] = { n: byM[m].n, aed: Math.round(byM[m].aed * 100) / 100, seller: sellerName }; });
+    const ms = Object.keys(months).sort();
+    if (!ms.length) return;
+    const rec = {
+      conf: String(r0.conf), kind, fam: (_pkgKindEntry(code) || [''])[0] || kind, code: String(code || ''), price: String(r0.price ?? r0.charge ?? ''),
+      ts: (old && old.ts && ev && ev.ts ? Math.min(old.ts, ev.ts) : (ev && ev.ts) || (old && old.ts) || 0),
+      from, to, arr: String(g.arr || r0.arr || (old && old.arr) || ''), dep: String(g.dep || r0.dep || (old && old.dep) || ''),
+      room: String(r0.room || (old && old.room) || ''), guest: String(g.name || (old && old.guest) || ''), gid: String(g.gid || (old && old.gid) || ''),
+      gnorm: String(g.norm || (old && old.gnorm) || ''), seller: String(r0.user || r0.employee), sellerName, how: _pkgHowOf(r0),
+      first: ms[0], last: ms[ms.length - 1], months, at: old && old.at && _pkgSameMemo(old, months, r0) ? old.at : now, by: old && old.at && _pkgSameMemo(old, months, r0) ? (old.by || by) : by,
+    };
+    if (old && old.fixed) rec.fixed = old.fixed;
+    // A carried-over package keeps the decision it was carried from (how it was first decided).
+    if (rec.how === 'memory' && old && old.how) rec.how = old.how;
+    if (old && JSON.stringify(old) === JSON.stringify(rec)) return;
+    (next[conf] = next[conf] || {})[kind] = rec;
+    patch[conf + '/' + kind] = rec;
+  });
+  // Forget what is older than the months to keep (counted back from the newest month remembered).
+  const keep = opt.months || _pkgSetting('memMonths') || 13;
+  let newest = '';
+  Object.values(next).forEach(o => Object.values(o).forEach(r => { if (r.last > newest) newest = r.last; }));
+  if (newest) {
+    const y = +newest.slice(0, 4), m = +newest.slice(4, 6) - keep;
+    const cut = String((y + Math.floor((m - 1) / 12)) * 100 + (((m - 1) % 12 + 12) % 12) + 1);
+    Object.keys(next).forEach(c => Object.keys(next[c]).forEach(k => {
+      if (String(next[c][k].last) < cut) { delete next[c][k]; patch[c + '/' + k] = null; }
+    }));
+    Object.keys(next).forEach(c => { if (!Object.keys(next[c]).length) delete next[c]; });
+  }
+  return { next, patch };
+}
+function _pkgSameMemo(old, months, r0) { return old.seller === String(r0.user || r0.employee) && JSON.stringify(old.months) === JSON.stringify(months); }
+
+function _pkgMemorize(results) {
+  const { next, patch } = _pkgMemoryBuild(results, pkgMemory);
+  if (!Object.keys(patch).length) return 0;
+  pkgMemory = next;
+  if (typeof fbUpdate === 'function') fbUpdate('packageAudit/memory', patch);
+  return Object.keys(patch).length;
+}
+let _pkgMemT = 0;
+function _pkgMemoryRecomputeSoon() {
+  if (!pkgResults.length) return;
+  clearTimeout(_pkgMemT);
+  _pkgMemT = setTimeout(() => { try { _pkgRecompute(); } catch (_) {} }, 400);
+}
+/** ✓ Fixed is remembered on the package's memory record too. */
+function _pkgMemoryNoteFixed(key) {
+  const rows = _pkgGroupRows(key); if (!rows.length) return;
+  const conf = _pkgDbKey(rows[0].conf), kind = _pkgMemKind(rows[0]);
+  const rec = (pkgMemory[conf] || {})[kind]; if (!rec) return;
+  rec.fixed = { by: _pkgMe(), at: new Date().toISOString() };
+  if (typeof fbSet === 'function') fbSet(`packageAudit/memory/${conf}/${kind}/fixed`, rec.fixed);
+}
+
+/** Guest key → remembered packages, for the guest's earlier booking. */
+function _pkgMemGuestIndex(mem) {
+  const idx = {};
+  Object.values(mem || {}).forEach(o => Object.values(o).forEach(r => {
+    if (r.gid) (idx['ID:' + r.gid] = idx['ID:' + r.gid] || []).push(r);
+    if (r.gnorm) (idx['NM:' + r.gnorm] = idx['NM:' + r.gnorm] || []).push(r);
+  }));
+  return idx;
+}
+
+/** Packages continuing from an earlier month: the seller remembered from then (rule "memory"). */
+function _pkgApplyMemory(results, mem) {
+  mem = mem || pkgMemory;
+  if (!_pkgRule('memory') || !mem || !Object.keys(mem).length) return;
+  const gidx = _pkgMemGuestIndex(mem);
+  const gapMax = +_pkgRule('chainGap') || 0;
+  results.forEach(r => {
+    if (r.verdict === 'settled' || r.verdict === 'deny' || r.extendedFrom) return;
+    const month = _pkgbMonthOf(r);
+    if (month === 'nodate') return;
+    const earlier = x => x && x.first && String(x.first) < month && x.seller;
+    const kind = _pkgKindOfRow(r);
+    const recs = mem[_pkgDbKey(r.conf)] || {};
+    let rec = null, via = 'same';
+    if (kind) rec = earlier(recs[_pkgDbKey(kind)]) ? recs[_pkgDbKey(kind)] : null;
+    if (!rec && kind) rec = Object.values(recs).find(x => earlier(x) && x.code && _pkgKindOfCode(x.code) === kind) || null;
+    if (!rec && r.needsProduct && !r.matchedEvent) {
+      // Unknown Product with nothing in this month's log: the same booking's remembered package at this price.
+      const priced = Object.values(recs).filter(x => earlier(x) && x.price && Math.abs(parseFloat(x.price) - r.charge) < 0.02);
+      if (priced.length && new Set(priced.map(x => x.code)).size === 1) { rec = priced[0]; via = 'price'; }
+    }
+    if (!rec && kind && _pkgRule('chain')) {
+      // The guest's booking from an earlier month that ends the day this one starts: one stay.
+      const g = (typeof pkgGuests !== 'undefined' && pkgGuests[r.conf]) || null;
+      const arr = g && _pkgDayNum(g.arr);
+      if (g && arr) {
+        const list = (g.gid ? gidx['ID:' + g.gid] : null) || (g.norm ? gidx['NM:' + g.norm] : null) || [];
+        const famOf = c => (_pkgKindEntry(c) || [''])[0];
+        const cand = list.filter(x => earlier(x) && x.conf !== String(r.conf) && (!_pkgRule('sameKind') || x.kind === _pkgDbKey(kind) || (x.code && famOf(x.code) === famOf(kind))))
+          .filter(x => {
+            const end = _pkgDayNum(x.dep) || x.to; if (!end) return false;
+            const gap = _pkgDaysBetween(end, arr);
+            if (gap < 0 || gap > gapMax) return false;
+            return !(_pkgRule('chainSameRoom') && x.room && g.room && String(x.room).trim() !== String(g.room).trim());
+          }).sort((a, b) => (b.to || 0) - (a.to || 0));
+        if (cand.length) { rec = cand[0]; via = 'guest'; }
+      }
+    }
+    if (!rec) return;
+    r.carriedFrom = { conf: rec.conf, kind: rec.kind, month: rec.last && rec.last < month ? rec.last : rec.first };
+    if (_pkgIsSystemUser(rec.seller)) return;
+    const o = r.originEvent;
+    const apply = r.verdict === 'outside' || (r.verdict === 'review' && !r.matchedEvent) || via === 'guest' || via === 'price'
+      || (r.verdict === 'credit' && _pkgRule('firstPerson') && rec.ts && o && o.ts && rec.ts < o.ts && !_pkgSameUser(rec.seller, r.user));
+    if (!apply) return;
+    _pkgHit(r, 'memory');
+    r.memoryUsed = true;
+    if (r.needsProduct && rec.code && (!r.code || /unknown/i.test(r.code))) { r.code = rec.code; r.memProduct = true; }
+    const who = _pkgUserLabel(rec.seller), mon = _pkgMonShort(r.carriedFrom.month);
+    r.memoryNote = via === 'guest' ? `Same stay as booking ${rec.conf} (${mon}, back-to-back): ${who} sold this package first`
+      : via === 'price' ? `IN-Gauge did not name it; in ${mon} this booking had ${rec.code} at this price, sold by ${who}`
+      : `Continues from ${mon}: ${who} sold this package (${_PKG_HOW[rec.how] || rec.how || 'remembered'})`;
+    r.verdict = 'credit'; r.note = ''; r.noSeller = false; r.splitSeller = false;
+    r.user = rec.seller;
+    const same = _pkgSameUser(r.employee, rec.seller);
+    r.reassign = !r.needsEmployee && !same;
+    r.wasUser = r.reassign ? r.employee : '';
+    r.alreadyComplete = !r.needsProduct && !r.needsEmployee && !r.reassign;
+  });
+}
+
+// ── Learning from people's decisions ─────────────────────────
+// Freezing the same kind of decision on the same package code again and
+// again (skip it, a manual sale, always the same seller) is offered as a
+// rule: ✓ Accept, and from then on it is decided that way without a pin.
+// packageAudit/learned/<id> = { id, type, code | product, seller, by, at, n } or { id, dismissed: true }
+function _pkgPinCode(key, p) {
+  if (p && p.code) return { code: _pkgCodeNorm(p.code) };
+  const r = _pkgGroupRows(key)[0];
+  const c = r && ((r.matchedEvent && r.matchedEvent.code) || (!/unknown/i.test(r.code || '') ? r.code : ''));
+  if (c) return { code: _pkgCodeNorm(c) };
+  const prod = (p && p.product) || (r && r.product);
+  return prod && !/unknown/i.test(prod) ? { product: String(prod) } : null;
+}
+/** Suggestions from the pins (pure on pkgPins + pkgLearned): [{ id, type, code|product, seller, n, text }]. */
+function _pkgLearnSuggestions(pins, learned) {
+  pins = pins || pkgPins; learned = learned || pkgLearned;
+  const groups = {};
+  Object.entries(pins || {}).forEach(([key, p]) => {
+    if (!p || typeof p !== 'object') return;
+    const m = _pkgPinCode(key, p); if (!m) return;
+    const type = p.skip ? 'skip' : p.manual ? (p.seller ? '' : 'manual') : p.seller ? 'seller' : '';
+    if (!type) return;
+    const what = m.code || m.product;
+    const id = _pkgDbKey(type + '_' + what + (type === 'seller' ? '_' + p.seller : ''));
+    const g = groups[id] = groups[id] || Object.assign({ id, type, n: 0, seller: type === 'seller' ? p.seller : '' }, m);
+    g.n++;
+  });
+  // "Always the same seller" only when nobody else was ever frozen on that code.
+  const sellersByCode = {};
+  Object.values(groups).filter(g => g.type === 'seller').forEach(g => { const w = g.code || g.product; (sellersByCode[w] = sellersByCode[w] || new Set()).add(g.seller); });
+  return Object.values(groups).filter(g => !learned[g.id] && (g.type === 'seller' ? g.n >= 3 && sellersByCode[g.code || g.product].size === 1 : g.n >= 2))
+    .sort((a, b) => b.n - a.n)
+    .map(g => Object.assign(g, { text: `${g.type === 'skip' ? 'You skipped' : g.type === 'manual' ? 'You marked as a manual sale' : `You froze to ${g.seller}`} ${g.n} packages with ${g.code ? 'code ' + g.code : 'product ' + g.product}` }));
+}
+function _pkgLearnedText(L) {
+  const w = L.code ? 'code ' + L.code : 'product ' + L.product;
+  return L.type === 'skip' ? `Skip every package with ${w}` : L.type === 'manual' ? `Every package with ${w} that Opera does not show is a manual sale (IN-Gauge seller kept)` : `Every package with ${w} that Opera cannot decide goes to ${L.seller}`;
+}
+/** The accepted learned rule that decides this row, if any: { pin, rule }. */
+function _pkgLearnedFor(r) {
+  const list = Object.values(pkgLearned || {}).filter(L => L && !L.dismissed && !L.off && L.type);
+  if (!list.length) return null;
+  const code = _pkgCodeNorm((r.matchedEvent && r.matchedEvent.code) || (!/unknown/i.test(r.code || '') ? r.code : ''));
+  const L = list.find(x => (x.code && code && _pkgCodeNorm(x.code) === code) || (x.product && r.product && String(r.product).toLowerCase() === String(x.product).toLowerCase()));
+  if (!L) return null;
+  const undecided = !r.matchedEvent || r.verdict === 'review' || r.verdict === 'outside';
+  if (L.type === 'manual' && r.matchedEvent) return null;
+  if (L.type === 'seller' && !undecided) return null;
+  const pin = { by: '🧠 learned rule', at: L.at || '', learned: L.id };
+  if (L.type === 'skip') pin.skip = true; else if (L.type === 'manual') pin.manual = true; else pin.seller = L.seller;
+  return { pin, rule: L };
+}
+function pkgLearnAccept(id) {
+  const L = _pkgLearnSuggestions().find(x => x.id === id);
+  if (!L) return;
+  if (!_pkgCanEdit()) { showToast('Only a manager can accept a rule for the team', 'warn'); return; }
+  const rule = { id: L.id, type: L.type, n: L.n, by: _pkgMe(), at: new Date().toISOString() };
+  if (L.code) rule.code = L.code; if (L.product) rule.product = L.product; if (L.seller) rule.seller = L.seller;
+  pkgLearned = Object.assign({}, pkgLearned, { [id]: rule });
+  if (typeof fbSet === 'function') fbSet('packageAudit/learned/' + id, rule);
+  if (typeof logActivity === 'function') logActivity('pkg_learned', _pkgLearnedText(rule));
+  if (pkgResults.length) _pkgRecompute();
+  showToast('Learned: ' + _pkgLearnedText(rule), 'ok');
+  if (_pkgView === 'rules') pkgRulesRender(); if (_pkgView === 'memory') pkgMemoryRender();
+}
+function pkgLearnDismiss(id) {
+  if (!_pkgCanEdit()) return;
+  pkgLearned = Object.assign({}, pkgLearned, { [id]: { id, dismissed: true, by: _pkgMe(), at: new Date().toISOString() } });
+  if (typeof fbSet === 'function') fbSet('packageAudit/learned/' + id, pkgLearned[id]);
+  if (_pkgView === 'memory') pkgMemoryRender(); else pkgRulesRender();
+}
+function pkgLearnRemove(id) {
+  if (!_pkgCanEdit() || !pkgLearned[id]) return;
+  const prev = pkgLearned[id];
+  const rest = Object.assign({}, pkgLearned); delete rest[id]; pkgLearned = rest;
+  if (typeof fbSet === 'function') fbSet('packageAudit/learned/' + id, null);
+  if (pkgResults.length) _pkgRecompute();
+  pkgMemoryRender();
+  if (typeof showUndoToast === 'function') showUndoToast('Rule removed', () => { pkgLearned = Object.assign({}, pkgLearned, { [id]: prev }); if (typeof fbSet === 'function') fbSet('packageAudit/learned/' + id, prev); if (pkgResults.length) _pkgRecompute(); pkgMemoryRender(); });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  👥 Team per hotel — staff come and go every month
+//  packageAudit/staff/<id> = { name, logins, status, since, left, former: [{ name, until, by }] }
+//  • left: keeps every sale already made (old reports still credit them),
+//    but is no longer offered when freezing a seller
+//  • rename: the old name stays on as a former name, so last month's
+//    IN-Gauge rows still find the person under the new one
+//  • import a whole list by paste or file; another hotel starts empty
+// ═══════════════════════════════════════════════════════════
+const _pkgToday = () => (typeof hoLocalISO === 'function' ? hoLocalISO() : new Date().toISOString().slice(0, 10));
+/** Lines → [{ name, logins, status?, date? }] (pure). Accepts "Name", "Name = login, login",
+ *  "LOGIN = Name" and CSV "Name,login;login,left,2026-09-30" (a "Name" header row is skipped). */
+function _pkgParseTeamText(text) {
+  const out = [];
+  String(text || '').split(/\r?\n/).forEach((line, i) => {
+    const t = line.trim(); if (!t) return;
+    let it;
+    if (!/[=:→]/.test(t) && /[,;\t]/.test(t)) {
+      const c = t.split(/\t|,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(x => x.replace(/^"|"$/g, '').trim());
+      if (i === 0 && /^(name|staff|employee)$/i.test(c[0])) return;
+      it = { name: c[0], logins: String(c[1] || '').split(/[;\s|]+/).map(x => x.trim()).filter(Boolean) };
+      const st = String(c[2] || '').toLowerCase();
+      if (/left|gone|inactive|resigned/.test(st)) it.status = 'left'; else if (/active|current/.test(st)) it.status = 'active';
+      const d = String(c[3] || '').match(/\d{4}-\d{2}-\d{2}/); if (d) it.date = d[0];
+    } else it = _pkgParseStaffLine(t);
+    if (it && it.name) out.push(it);
+  });
+  return out;
+}
+/** Merge a pasted list into the team (pure): { patch, added, updated }. Matched by name, an
+ *  earlier name or a shared login; nobody is removed. */
+function _pkgTeamMerge(db, items) {
+  const cur = JSON.parse(JSON.stringify(db || {})), patch = {};
+  let added = 0, updated = 0;
+  const low = s => String(s || '').trim().toLowerCase();
+  (items || []).forEach(it => {
+    const logins = (it.logins || []).map(String);
+    const id = Object.keys(cur).find(k => { const s = cur[k] || {};
+      return low(s.name) === low(it.name) || (s.former || []).some(f => low(f && f.name) === low(it.name))
+        || logins.some(l => (s.logins || []).some(x => _pkgLoginTok(x) === _pkgLoginTok(l))); });
+    if (!id) {
+      const nid = _pkgStaffId(it.name);
+      const rec = { name: it.name, logins, status: it.status === 'left' ? 'left' : 'active', since: it.status !== 'left' && it.date ? it.date : _pkgToday() };
+      if (it.status === 'left') rec.left = it.date || _pkgToday();
+      cur[nid] = rec; patch[nid] = rec; added++;
+      return;
+    }
+    const s = Object.assign({}, cur[id]);
+    const before = JSON.stringify(s);
+    s.logins = [...new Set([...(s.logins || []), ...logins])];
+    if (it.status === 'left' && s.status !== 'left') { s.status = 'left'; s.left = it.date || _pkgToday(); }
+    if (it.status === 'active' && s.status === 'left') { s.status = 'active'; delete s.left; }
+    if (JSON.stringify(s) !== before) { cur[id] = s; patch[id] = s; updated++; }
+  });
+  return { patch, added, updated, next: cur };
+}
+function _pkgStaffSave(id, item, msg) {
+  pkgStaffDb = Object.assign({}, pkgStaffDb); if (item) pkgStaffDb[id] = item; else delete pkgStaffDb[id];
+  _pkgApplyStaff();
+  if (typeof fbSet === 'function') fbSet('packageAudit/staff/' + id, item || null);
+  if (pkgResults.length) _pkgRecompute();
+  pkgSettingsRender(); if (_pkgView === 'rules') pkgRulesRender();
+  if (msg) showToast(msg, 'ok');
+}
+function pkgTeamRename(id) {
+  if (!_pkgCanEdit() || !pkgStaffDb[id]) return;
+  const s = pkgStaffDb[id];
+  const name = (prompt(`New name for ${s.name} (as IN-Gauge shows it now).\nThe old name is kept, so their earlier sales still count for them.`, s.name) || '').trim();
+  if (!name || name === s.name) return;
+  const item = Object.assign({}, s, { name, former: [...(s.former || []), { name: s.name, until: _pkgToday(), by: _pkgMe() }] });
+  if (typeof logActivity === 'function') logActivity('pkg_staff', `Renamed ${s.name} → ${name}`);
+  _pkgStaffSave(id, item, `${s.name} is now ${name}: old sales still count for them`);
+}
+function pkgTeamLeft(id) {
+  if (!_pkgCanEdit() || !pkgStaffDb[id]) return;
+  const s = pkgStaffDb[id];
+  if (s.status === 'left') { const item = Object.assign({}, s, { status: 'active' }); delete item.left; _pkgStaffSave(id, item, `${s.name} is back on the team`); return; }
+  const d = (prompt(`Last day of ${s.name} (YYYY-MM-DD). Their sales up to then still count for them; they are no longer offered for new ones.`, _pkgToday()) || '').trim();
+  if (!d) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) { showToast('Write the date as YYYY-MM-DD', 'warn'); return; }
+  if (typeof logActivity === 'function') logActivity('pkg_staff', `${s.name} left · ${d}`);
+  _pkgStaffSave(id, Object.assign({}, s, { status: 'left', left: d }), `${s.name} marked as left (${d})`);
+}
+function pkgTeamAlias(id, el) {
+  if (!_pkgCanEdit() || !pkgStaffDb[id]) return;
+  const v = String(el && el.value || '').split(/[,;\s]+/).map(x => x.trim()).filter(Boolean);
+  if (!v.length) return;
+  const s = pkgStaffDb[id];
+  _pkgStaffSave(id, Object.assign({}, s, { logins: [...new Set([...(s.logins || []), ...v])] }), `Login added to ${s.name}`);
+}
+function pkgTeamAliasDel(id, i) {
+  if (!_pkgCanEdit() || !pkgStaffDb[id]) return;
+  const s = pkgStaffDb[id], logins = (s.logins || []).slice(); const gone = logins.splice(i, 1)[0];
+  _pkgStaffSave(id, Object.assign({}, s, { logins }));
+  if (typeof showUndoToast === 'function') showUndoToast(`${gone} removed from ${s.name}`, () => _pkgStaffSave(id, s));
+}
+/** Opera login with no name: add it to a colleague (or as a new person). */
+function pkgTeamAssign(login, sel) {
+  const id = sel && sel.value; if (!id) return;
+  if (id === '__new') { const n = document.getElementById('pkgStaffName'), l = document.getElementById('pkgStaffLogins'); if (l) l.value = login; if (n) n.focus(); return; }
+  if (!_pkgCanEdit() || !pkgStaffDb[id]) return;
+  const s = pkgStaffDb[id];
+  _pkgStaffSave(id, Object.assign({}, s, { logins: [...new Set([...(s.logins || []), login])] }), `${login} → ${s.name}`);
+}
+let _pkgTeamPreview = null;
+function pkgTeamPreview() {
+  const ta = document.getElementById('pkgTeamPaste');
+  const items = _pkgParseTeamText(ta && ta.value);
+  _pkgTeamPreview = items.length ? _pkgTeamMerge(pkgStaffDb, items) : null;
+  const o = document.getElementById('pkgTeamPrev');
+  if (o) o.innerHTML = !items.length ? '' : `<b>${_pkgTeamPreview.added}</b> new · <b>${_pkgTeamPreview.updated}</b> updated · ${items.length - _pkgTeamPreview.added - _pkgTeamPreview.updated} already the same`;
+}
+function pkgTeamImport() {
+  if (!_pkgCanEdit()) return;
+  pkgTeamPreview();
+  const P = _pkgTeamPreview;
+  if (!P || !Object.keys(P.patch).length) { showToast('Nothing new in that list', 'warn'); return; }
+  const prev = JSON.parse(JSON.stringify(pkgStaffDb));
+  pkgStaffDb = P.next; _pkgApplyStaff();
+  if (typeof fbUpdate === 'function') fbUpdate('packageAudit/staff', P.patch);
+  if (typeof logActivity === 'function') logActivity('pkg_staff', `Team list imported: ${P.added} new, ${P.updated} updated`);
+  if (pkgResults.length) _pkgRecompute();
+  const ta = document.getElementById('pkgTeamPaste'); if (ta) ta.value = '';
+  _pkgTeamPreview = null;
+  pkgSettingsRender();
+  const undo = () => { const back = {}; Object.keys(P.patch).forEach(k => { back[k] = prev[k] || null; }); pkgStaffDb = prev; _pkgApplyStaff(); if (typeof fbUpdate === 'function') fbUpdate('packageAudit/staff', back); if (pkgResults.length) _pkgRecompute(); pkgSettingsRender(); };
+  if (typeof showUndoToast === 'function') showUndoToast(`${P.added} added · ${P.updated} updated`, undo); else showToast(`${P.added} added · ${P.updated} updated`, 'ok');
+}
+function pkgTeamFile(input) {
+  const f = input && input.files && input.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = e => {
+    let text = '';
+    try {
+      if (/\.xlsx?$/i.test(f.name) && typeof XLSX !== 'undefined') {
+        const wb = XLSX.read(e.target.result, { type: 'array' });
+        text = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' }).map(r => r.map(c => String(c).replace(/,/g, ' ')).join(',')).join('\n');
+      } else text = new TextDecoder('utf-8').decode(new Uint8Array(e.target.result));
+    } catch (err) { showToast('Could not read that file: ' + err.message, 'err'); return; }
+    const ta = document.getElementById('pkgTeamPaste'); if (ta) ta.value = text;
+    pkgTeamPreview();
+    input.value = '';
+  };
+  rd.readAsArrayBuffer(f);
+}
+let _pkgTeamShowLeft = false;
+
+// ── 📦 Start for another hotel: the setup without the team ───
+/** This hotel's setup to copy (kinds, columns, keep times, rules, commission), never staff, memory or pins. */
+function _pkgKit() {
+  return { app: 'hotelops-package-audit', v: 1, at: new Date().toISOString(),
+    settings: JSON.parse(JSON.stringify(pkgSettingsRaw || {})), rules: _pkgRulesStored(), rate: pkgBoardRate };
+}
+async function pkgKitCopy() {
+  const txt = JSON.stringify(_pkgKit());
+  try { await navigator.clipboard.writeText(txt); } catch (_) { if (typeof copyToClipboard === 'function') copyToClipboard(txt); }
+  try {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(_pkgKit(), null, 2)], { type: 'application/json' }));
+    a.download = 'package-audit-setup.json'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  } catch (_) {}
+  showToast('Setup copied and saved as a file. At the other hotel: Package Audit → 🛠 Settings → Another hotel → paste it. The team list is not included.', 'ok');
+}
+/** Read a pasted setup (pure): { settings, rules, rate } or null. */
+function _pkgKitRead(text) {
+  let k; try { k = JSON.parse(String(text || '').trim()); } catch (_) { return null; }
+  if (!k || k.app !== 'hotelops-package-audit' || typeof k.settings !== 'object') return null;
+  const rules = {};
+  Object.keys(k.rules || {}).forEach(r => { if (r in PKG_RULE_DEFAULTS) rules[r] = typeof PKG_RULE_DEFAULTS[r] === 'boolean' ? !!k.rules[r] : (+k.rules[r] || 0); });
+  const s = k.settings || {}, settings = {};
+  ['kinds', 'colMap', 'doneDays', 'memMonths', 'chrome'].forEach(x => { if (s[x] != null) settings[x] = s[x]; });
+  return { settings, rules, rate: +k.rate >= 0 ? +k.rate : null };
+}
+function pkgKitImport() {
+  if (!_pkgCanEdit()) return;
+  const ta = document.getElementById('pkgKitIn');
+  const K = _pkgKitRead(ta && ta.value);
+  if (!K) { showToast('That is not a Package Audit setup (paste the whole text)', 'err'); return; }
+  if (!confirm('Use this setup here? Package kinds, report columns, keep times and rules are replaced. The team, memory and frozen sellers stay as they are.')) return;
+  Object.keys(PKG_SETTINGS_DEFAULTS).forEach(x => { if (typeof fbSet === 'function') fbSet('packageAudit/settings/' + x, K.settings[x] == null ? null : K.settings[x]); });
+  const patch = {}; Object.keys(PKG_RULE_DEFAULTS).forEach(r => { patch[r] = r in K.rules && K.rules[r] !== PKG_RULE_DEFAULTS[r] ? K.rules[r] : null; });
+  if (typeof fbUpdate === 'function') fbUpdate('packageAudit/rules', patch);
+  pkgRules = Object.assign({}, PKG_RULE_DEFAULTS, K.rules);
+  try { localStorage.setItem('pkg_rules_v1', JSON.stringify(_pkgRulesStored())); } catch (_) {}
+  if (K.rate != null) pkgBoardSetRate(K.rate);
+  _pkgApplySettings(K.settings, true);
+  if (pkgResults.length) _pkgRecompute();
+  if (ta) ta.value = '';
+  if (typeof logActivity === 'function') logActivity('pkg_settings', 'Setup imported from another hotel');
+  pkgSettingsRender();
+  showToast('Setup in use. Now add this hotel\'s team (👥 Team).', 'ok');
+}
+
+// ── Package kinds editor ─────────────────────────────────────
+function _pkgKindsList() { return JSON.parse(JSON.stringify(pkgSettings.kinds || PKG_KINDS_DEFAULT.map(k => Object.assign({ codes: [], min: 0, max: 0 }, k)))); }
+function _pkgSaveKinds(list, label) { return _pkgSaveSetting('kinds', list, label || 'Package kinds'); }
+function pkgKindSet(i, field, val) {
+  const L = _pkgKindsList(); if (!L[i]) return;
+  if (field === 'once') val = !!val;
+  else if (field === 'min' || field === 'max') val = Math.max(0, +val || 0);
+  else if (field === 're') { if (val && !_pkgSafeRe(val)) { showToast('That pattern is not valid', 'err'); pkgSettingsRender(); return; } }
+  else if (field === 'k') { val = String(val || '').toUpperCase().replace(/[^A-Z0-9_]/g, '').slice(0, 12); if (!val || L.some((k, j) => j !== i && k.k === val)) { showToast('Each kind needs its own short key', 'warn'); pkgSettingsRender(); return; } }
+  else val = String(val || '').trim();
+  L[i][field] = val;
+  _pkgSaveKinds(L, `Kind ${L[i].label}: ${field}`);
+}
+function pkgKindCode(i, el) {
+  const L = _pkgKindsList(); if (!L[i]) return;
+  const add = String(el && el.value || '').split(/[,;\s]+/).map(_pkgCodeNorm).filter(Boolean);
+  if (!add.length) return;
+  L[i].codes = [...new Set([...(L[i].codes || []), ...add])];
+  _pkgSaveKinds(L, `Kind ${L[i].label}: codes ${add.join(', ')}`);
+}
+function pkgKindCodeDel(i, j) { const L = _pkgKindsList(); if (!L[i]) return; (L[i].codes || []).splice(j, 1); _pkgSaveKinds(L); }
+function pkgKindMove(i, to) {
+  const L = _pkgKindsList(); if (!L[i] || to < 0 || to >= L.length || to === i) return;
+  const [x] = L.splice(i, 1); L.splice(to, 0, x);
+  _pkgSaveKinds(L, 'Kinds reordered');
+}
+function pkgKindAdd() {
+  if (!_pkgCanEdit()) return;
+  const label = (prompt('Name of the new kind (e.g. Spa, Parking, Airport transfer):') || '').trim(); if (!label) return;
+  const L = _pkgKindsList();
+  let k = label.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) || 'K'; let n = 2; const base = k;
+  while (L.some(x => x.k === k)) k = base + n++;
+  L.push({ k, label, re: '', codes: [], ig: '', once: false, ico: '🎁', color: '#e2e8f0', min: 0, max: 0 });
+  _pkgSaveKinds(L, 'Kind added: ' + label);
+  _pkgSetOpen.add('kinds');
+}
+function pkgKindDel(i) {
+  const L = _pkgKindsList(); if (!L[i] || !_pkgCanEdit()) return;
+  if (!confirm(`Remove the kind "${L[i].label}"? Its codes then count as their own package.`)) return;
+  const prev = _pkgKindsList(); L.splice(i, 1);
+  if (_pkgSaveKinds(L, 'Kind removed') && typeof showUndoToast === 'function') showUndoToast('Kind removed', () => _pkgSaveKinds(prev, 'Kind restored'));
+}
+/** Merge kind i into kind j: its codes and pattern join j, and i goes. */
+function pkgKindMerge(i, sel) {
+  const j = +(sel && sel.value); if (sel) sel.value = '';
+  const L = _pkgKindsList(); if (!L[i] || !L[j] || i === j) return;
+  const a = L[i], b = L[j];
+  b.codes = [...new Set([...(b.codes || []), ...(a.codes || [])])];
+  if (a.re) b.re = b.re ? `(?:${b.re})|(?:${a.re})` : a.re;
+  if (!b.ig && a.ig) b.ig = a.ig;
+  const prev = _pkgKindsList(); L.splice(i, 1);
+  if (_pkgSaveKinds(L, `Kind ${a.label} merged into ${b.label}`) && typeof showUndoToast === 'function') showUndoToast(`${a.label} merged into ${b.label}`, () => _pkgSaveKinds(prev, 'Merge undone'));
+}
+let _pkgKindTry = '';
+function pkgKindTry(v) {
+  _pkgKindTry = String(v || '');
+  const o = document.getElementById('pkgKindTryOut'); if (!o) return;
+  const c = _pkgCodeNorm(v);
+  if (!c) { o.textContent = ''; return; }
+  const k = _pkgKindEntry(c);
+  o.innerHTML = k ? `${escapeHtml(k.ico)} <b>${escapeHtml(k[1])}</b> <small>(${escapeHtml(k[0])}${k.ig ? ' · IN-Gauge: ' + escapeHtml(k.ig) : ''})</small>` : `No kind: <b>${escapeHtml(c)}</b> counts as its own package`;
+}
+/** A kind whose price range fits an amount (Settings → price range): a hint for an Unknown Product. */
+function _pkgKindByPrice(amount) {
+  const a = +amount; if (!(a > 0)) return null;
+  const list = PKG_KINDS.filter(k => k.max > 0 && a >= k.min && a <= k.max);
+  return list.length === 1 ? list[0] : null;
+}
+
+// ── Report columns ───────────────────────────────────────────
+let _pkgLastRows = {};
+function pkgColSet(which, field, val) {
+  const map = JSON.parse(JSON.stringify(pkgSettings.colMap || { ig: {}, guest: {} }));
+  map[which] = map[which] || {};
+  if (val) map[which][field] = val; else delete map[which][field];
+  const empty = !Object.keys(map.ig || {}).length && !Object.keys(map.guest || {}).length;
+  if (!_pkgSaveSetting('colMap', empty ? null : map, `Report column ${field}${val ? ' = ' + val : ' = auto'}`)) return;
+  _pkgReparse(which);
+}
+/** Read the last loaded file again with the new column map. */
+function _pkgReparse(which) {
+  const rows = _pkgLastRows[which]; if (!rows) return;
+  if (which === 'ig') {
+    pkgUnknowns = _pkgParseExcelUnknowns(rows);
+    const lbl = document.getElementById('pkgExcelLabel');
+    if (lbl) lbl.textContent = pkgUnknowns.length ? `✓ ${pkgUnknowns.length} rows loaded` : 'Loaded — no rows found';
+    if (pkgResults.length && pkgUnknowns.length) _pkgRecompute();
+  } else {
+    pkgGuests = _pkgParseGuestList(rows);
+    if (pkgResults.length) _pkgRecompute();
+  }
+  pkgSettingsRender();
+}
+function pkgColReset() { if (_pkgSaveSetting('colMap', null, 'Report columns')) { _pkgReparse('ig'); _pkgReparse('guest'); } }
+
+// ═══════════════════════════════════════════════════════════
+//  Views: 🧠 Memory and 🛠 Settings (tabs next to Audit / Rules)
+// ═══════════════════════════════════════════════════════════
+function _pkgMountViews() {
+  const tabs = document.getElementById('pkgTabs'), rules = document.getElementById('pkgRulesView');
+  if (!tabs || !rules) return;
+  const rb = tabs.querySelector('[data-v="rules"]');
+  [['memory', '🧠 Memory'], ['settings', '🛠 Settings']].reverse().forEach(([v, t]) => {
+    if (tabs.querySelector(`[data-v="${v}"]`)) return;
+    const b = document.createElement('button');
+    b.type = 'button'; b.setAttribute('role', 'tab'); b.dataset.v = v; b.setAttribute('aria-selected', 'false'); b.textContent = t;
+    b.addEventListener('click', () => pkgShowView(v));
+    if (rb && rb.nextSibling) tabs.insertBefore(b, rb.nextSibling); else tabs.appendChild(b);
+  });
+  ['pkgSettingsView', 'pkgMemoryView'].forEach(id => {
+    if (document.getElementById(id)) return;
+    const d = document.createElement('div'); d.id = id; d.hidden = true;
+    rules.parentNode.insertBefore(d, rules.nextSibling);
+  });
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { try { _pkgMountViews(); } catch (_) {} });
+else { try { _pkgMountViews(); } catch (_) {} }
+// One listener for every copy chip on the page (values are in data attributes, not inline code).
+try {
+  document.addEventListener('click', e => {
+    const b = e.target && e.target.closest && e.target.closest('[data-pkg-copy]');
+    if (b) { e.preventDefault(); pkgCopyChip(b); }
+  });
+} catch (_) {}
+
+/** Drag & drop (mouse) + the ↑ ↓ buttons (touch, keyboard) for an ordered list. */
+function _pkgDnd(box, onMove) {
+  if (!box) return;
+  let from = -1;
+  box.querySelectorAll('[data-dnd-i]').forEach(el => {
+    el.addEventListener('dragstart', e => { from = +el.dataset.dndI; el.classList.add('dragging'); try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(from)); } catch (_) {} });
+    el.addEventListener('dragend', () => el.classList.remove('dragging'));
+    el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('over'); });
+    el.addEventListener('dragleave', () => el.classList.remove('over'));
+    el.addEventListener('drop', e => { e.preventDefault(); el.classList.remove('over'); const to = +el.dataset.dndI; if (from >= 0 && to !== from) onMove(from, to); from = -1; });
+  });
+}
+
+const _pkgSetOpen = new Set(['kinds']);
+function _pkgSetToggle(id, open) { if (open) _pkgSetOpen.add(id); else _pkgSetOpen.delete(id); }
+function pkgOpenSettings(sec) {
+  _pkgSetOpen.add(sec);
+  pkgShowView('settings');
+  const d = document.getElementById('pkgSet_' + sec);
+  if (d) { d.open = true; if (d.scrollIntoView) d.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+}
+
+function pkgSettingsRender() {
+  const box = document.getElementById('pkgSettingsView');
+  if (!box || box.hidden) return;
+  _pkgStyle2(); _pkgStyle3();
+  const can = _pkgCanEdit(), E = escapeHtml, J = v => E(JSON.stringify(v)), dis = can ? '' : 'disabled';
+  const ae = document.activeElement, keep = ae && ae.id && box.contains(ae) ? { id: ae.id, s: ae.selectionStart } : null;
+  const sec = (id, title, sub, body, reset) => `<details class="pr-sec ps-sec" id="pkgSet_${id}" ${_pkgSetOpen.has(id) ? 'open' : ''} ontoggle="_pkgSetToggle('${id}',this.open)">
+    <summary><span class="pr-sec-t">${title}${sub ? ` <em>${sub}</em>` : ''}</span><span class="pr-chev" aria-hidden="true"></span></summary>
+    <div class="pr-sec-b">${body}${reset ? `<div class="ps-reset">${reset}</div>` : ''}</div></details>`;
+
+  // kinds
+  const L = _pkgKindsList();
+  const kindsChanged = !!pkgSettings.kinds;
+  const kindsBody = `<p class="pr-help">How package codes are grouped. The same kind at another price is the same package (UPS30BB = UPS60BB). Checked top to bottom: drag ⠿ to change the order. A code can match by pattern or be listed exactly.</p>
+    <div class="ps-kinds" id="pkgKindsBox">${L.map((k, i) => `<div class="ps-kind" data-dnd-i="${i}" ${can ? 'draggable="true"' : ''} style="--kc:${E(k.color || '#e2e8f0')}">
+      <div class="ps-kind-hd">
+        <span class="ps-grip" title="Drag to reorder" aria-hidden="true">⠿</span>
+        <input class="ps-ico" value="${E(k.ico || '🎁')}" aria-label="Icon" maxlength="4" ${dis} onchange="pkgKindSet(${i},'ico',this.value)">
+        <input class="ps-name" value="${E(k.label)}" aria-label="Name" ${dis} onchange="pkgKindSet(${i},'label',this.value)">
+        <input class="ps-key" value="${E(k.k)}" aria-label="Short key" title="Short key (BB, EC…)" ${dis} onchange="pkgKindSet(${i},'k',this.value)">
+        <input type="color" class="ps-col" value="${E(k.color || '#e2e8f0')}" aria-label="Colour" ${dis} onchange="pkgKindSet(${i},'color',this.value)">
+        <span class="ps-acts">
+          <button type="button" class="pr-x" title="Up" aria-label="Move up" ${dis || (i ? '' : 'disabled')} onclick="pkgKindMove(${i},${i - 1})">↑</button>
+          <button type="button" class="pr-x" title="Down" aria-label="Move down" ${dis || (i < L.length - 1 ? '' : 'disabled')} onclick="pkgKindMove(${i},${i + 1})">↓</button>
+          ${can ? `<select class="ps-merge" aria-label="Merge into" onchange="pkgKindMerge(${i},this)"><option value="">Merge into…</option>${L.map((x, j) => j === i ? '' : `<option value="${j}">${E(x.label)}</option>`).join('')}</select>
+          <button type="button" class="pr-x" title="Remove" aria-label="Remove ${E(k.label)}" onclick="pkgKindDel(${i})">✕</button>` : ''}
+        </span>
+      </div>
+      <div class="ps-kind-b">
+        <label>Code pattern<input value="${E(k.re || '')}" placeholder="e.g. BB$ (ends with BB)" ${dis} onchange="pkgKindSet(${i},'re',this.value)"></label>
+        <label>IN-Gauge name<input value="${E(k.ig || '')}" placeholder="as IN-Gauge names it (optional)" ${dis} onchange="pkgKindSet(${i},'ig',this.value)"></label>
+        <label class="ps-num">Price from<input type="number" min="0" step="0.5" inputmode="decimal" value="${+k.min || ''}" placeholder="—" ${dis} onchange="pkgKindSet(${i},'min',this.value)"></label>
+        <label class="ps-num">to<input type="number" min="0" step="0.5" inputmode="decimal" value="${+k.max || ''}" placeholder="—" ${dis} onchange="pkgKindSet(${i},'max',this.value)"></label>
+        <label class="ps-chk"><input type="checkbox" ${k.once ? 'checked' : ''} ${dis} onchange="pkgKindSet(${i},'once',this.checked)"> Once per stay</label>
+      </div>
+      <div class="ps-codes">${(k.codes || []).map((c, j) => `<span class="ps-chip"><code>${E(c)}</code>${can ? `<button type="button" aria-label="Remove ${E(c)}" onclick="pkgKindCodeDel(${i},${j})">✕</button>` : ''}</span>`).join('')}
+        ${can ? `<input class="ps-add" placeholder="+ exact code(s)" aria-label="Add codes to ${E(k.label)}" onkeydown="if(event.key==='Enter'){event.preventDefault();pkgKindCode(${i},this)}" onchange="pkgKindCode(${i},this)">` : (k.codes || []).length ? '' : '<small>no exact codes</small>'}</div>
+    </div>`).join('')}</div>
+    <div class="ps-row">${can ? '<button type="button" class="pr-btn sm" onclick="pkgKindAdd()">+ Add a kind</button>' : ''}
+      <label class="ps-try">Test a code <input id="pkgKindTryIn" value="${E(_pkgKindTry)}" placeholder="UPS30BB" oninput="pkgKindTry(this.value)"></label><span id="pkgKindTryOut" class="ps-tryout"></span></div>`;
+
+  // rules as switches
+  const ruleBody = `<p class="pr-help">The same rules as the ⚙️ Rules tab, as switches. The audit runs again at once.</p>
+    <div class="ps-rules">${PKG_RULE_INFO.filter(R => R.k !== 'chainGap').map(R => {
+      const on = !!_pkgRule(R.k), def = !!PKG_RULE_DEFAULTS[R.k];
+      return `<label class="ps-rule${on !== def ? ' changed' : ''}"><span class="ps-sw"><input type="checkbox" role="switch" ${on ? 'checked' : ''} ${dis} onchange="pkgSetRule('${R.k}',this.checked);pkgSettingsRender()"><i></i></span>
+        <span><b>${R.ico} ${E(R.t)}</b><small>${E(on ? (R.q || '') : (R.off || ''))}${on !== def ? ' · <em>changed</em>' : ''}</small></span></label>`;
+    }).join('')}
+    <label class="ps-rule slider"><span><b>📅 Days allowed between two bookings of one stay: <output id="pkgGapOut">${+_pkgRule('chainGap') || 0}</output></b>
+      <small>0 = the new booking starts the day the old one ends. More days also joins a short break (a return visit can then look like an extension).</small></span>
+      <input type="range" min="0" max="7" step="1" value="${+_pkgRule('chainGap') || 0}" ${dis} oninput="document.getElementById('pkgGapOut').textContent=this.value" onchange="pkgSetRule('chainGap',this.value);pkgSettingsRender()"></label></div>`;
+
+  // keep
+  const keepBody = `<div class="ps-rules">
+    <label class="ps-rule slider"><span><b>Keep "fixed" marks for <output id="pkgDoneOut">${_pkgDoneDays()}</output> days</b><small>A package marked ✓ Fixed stays fixed this long, on every later report (unless a newer report still shows it wrong).</small></span>
+      <input type="range" min="7" max="365" step="1" value="${_pkgDoneDays()}" ${dis} oninput="document.getElementById('pkgDoneOut').textContent=this.value" onchange="_pkgSaveSetting('doneDays',+this.value,'Keep fixed marks')"></label>
+    <label class="ps-rule slider"><span><b>Remember packages for <output id="pkgMemOut">${_pkgSetting('memMonths')}</output> months</b><small>How far back the 🧠 memory reaches to recognise a package continuing from an earlier month.</small></span>
+      <input type="range" min="1" max="36" step="1" value="${_pkgSetting('memMonths')}" ${dis} oninput="document.getElementById('pkgMemOut').textContent=this.value" onchange="_pkgSaveSetting('memMonths',+this.value,'Remember packages')"></label></div>`;
+
+  // columns
+  const colTable = (which, fields, title) => {
+    const H = pkgLastHeaders[which], map = (pkgSettings.colMap || {})[which] || {};
+    const C = H ? _pkgMapColumns(H.hdrs, fields, which) : null;
+    const auto = H ? _pkgMapColumns(H.hdrs, fields, which, {}) : null;
+    return `<div class="ps-cols"><h4>${title}${H ? ` <small>· header on row ${H.row} of the last file</small>` : ' <small>· load a file to pick from its headers</small>'}</h4>
+      ${H && H.missing.length ? `<div class="pr-note">Not found: ${E(H.missing.join(', '))}. Pick the right column below.</div>` : ''}
+      ${fields.map(([f, label, names, req]) => {
+        const ix = C ? C[f] : -1, prev = H && ix >= 0 ? H.sample.map(r => r[ix]).filter(v => v !== '').slice(0, 3) : [];
+        const sel = H ? `<select ${dis} aria-label="${E(label)} column" onchange="pkgColSet('${which}','${f}',this.value)">
+            <option value="">Auto${auto && auto[f] >= 0 ? ': ' + E(H.hdrs[auto[f]]) : ' (not found)'}</option>
+            ${H.hdrs.map(h => h ? `<option value="${E(h)}"${map[f] && map[f].toLowerCase() === h.toLowerCase() ? ' selected' : ''}>${E(h)}</option>` : '').join('')}
+            ${map[f] && !H.hdrs.some(h => h.toLowerCase() === map[f].toLowerCase()) ? `<option value="${E(map[f])}" selected>${E(map[f])} (not in this file)</option>` : ''}</select>`
+          : `<input ${dis} value="${E(map[f] || '')}" placeholder="${E(names[0])}" aria-label="${E(label)} header" onchange="pkgColSet('${which}','${f}',this.value.trim())">`;
+        return `<div class="ps-col-row${req ? ' req' : ''}"><span>${E(label)}${req ? ' *' : ''}</span>${sel}<small>${prev.length ? E(prev.join(' · ')) : H ? '—' : ''}</small></div>`;
+      }).join('')}</div>`;
+  };
+  const chromeTxt = (pkgSettings.chrome || []).join('\n');
+  const colBody = `<p class="pr-help">If an export renames a column, pick the right one here. Auto finds the usual names; * = needed. The preview shows the first values.</p>
+    ${colTable('ig', PKG_IG_FIELDS, '🎁 IN-Gauge export')}${colTable('guest', PKG_GUEST_FIELDS, '👤 Guest list (Arrivals / reservations export)')}
+    <label class="ps-area">Extra lines to ignore in the Opera Changes Log PDF (one per line; the hotel name under the logo is ignored already)
+      <textarea rows="2" ${dis} placeholder="e.g. Hotel name as printed in the report footer" onchange="_pkgSaveSetting('chrome',this.value.split('\\n').map(x=>x.trim()).filter(Boolean),'Report lines to ignore')">${E(chromeTxt)}</textarea></label>`;
+
+  // team
+  const all = Object.entries(pkgStaffDb || {}).filter(([, s]) => s && s.name).sort((a, b) => String(a[1].name).localeCompare(String(b[1].name)));
+  const active = all.filter(([, s]) => s.status !== 'left'), left = all.filter(([, s]) => s.status === 'left');
+  const unk = pkgResults.length ? _pkgUnknownLogins() : [];
+  const person = ([id, s]) => `<div class="ps-person${s.status === 'left' ? ' left' : ''}">
+      <div class="ps-p-hd"><b>${E(s.name)}</b>
+        <span class="pa-chip ${s.status === 'left' ? 'muted' : 'ok'}">${s.status === 'left' ? 'Left ' + E(s.left || '') : 'Active' + (s.since ? ' since ' + E(s.since) : '')}</span>
+        ${can ? `<span class="ps-acts"><button type="button" class="pr-btn sm" onclick="pkgTeamRename(${J(id)})">Rename</button>
+          <button type="button" class="pr-btn sm" onclick="pkgTeamLeft(${J(id)})">${s.status === 'left' ? 'Back on team' : 'Left'}</button>
+          <button type="button" class="pr-x" title="Delete" aria-label="Delete ${E(s.name)}" onclick="pkgStaffDel(${J(id)})">✕</button></span>` : ''}</div>
+      ${(s.former || []).length ? `<small class="ps-was">was ${s.former.map(f => `${E(f.name)}${f.until ? ' (until ' + E(f.until) + ')' : ''}`).join(', ')}</small>` : ''}
+      <div class="ps-codes">${(s.logins || []).map((l, j) => `<span class="ps-chip"><code>${E(l)}</code>${can ? `<button type="button" aria-label="Remove ${E(l)}" onclick="pkgTeamAliasDel(${J(id)},${j})">✕</button>` : ''}</span>`).join('') || '<small>matched by family name</small>'}
+        ${can ? `<input class="ps-add" placeholder="+ login / other spelling" aria-label="Add a login for ${E(s.name)}" onkeydown="if(event.key==='Enter'){event.preventDefault();pkgTeamAlias(${J(id)},this)}" onchange="pkgTeamAlias(${J(id)},this)">` : ''}</div>
+    </div>`;
+  const teamBody = `<p class="pr-help">This hotel's team. Opera shows logins (like CHAIN-SALVAREZ), IN-Gauge shows names: each person's logins and other spellings join them. Someone who <b>left</b> keeps the sales they made but is not offered for new ones. <b>Rename</b> keeps the old name, so earlier sales still count.</p>
+    ${active.map(person).join('') || '<div class="pa-more">No names yet.</div>'}
+    ${left.length ? `<button type="button" class="pr-link" onclick="_pkgTeamShowLeft=!_pkgTeamShowLeft;pkgSettingsRender()">${_pkgTeamShowLeft ? 'Hide' : 'Show'} ${left.length} who left</button>${_pkgTeamShowLeft ? left.map(person).join('') : ''}` : ''}
+    ${can ? `<div class="pa-addstaff"><input id="pkgStaffName" placeholder="Name, as in IN-Gauge" autocomplete="off"><input id="pkgStaffLogins" placeholder="Opera login(s), optional" autocomplete="off"><button type="button" class="btn gold sm" onclick="pkgStaffAdd()">Add</button></div>` : ''}
+    ${unk.length ? `<div class="pa-unk"><small>Logins in the loaded log with no name${can ? ': pick who it is' : ''}</small>${unk.slice(0, 20).map(u => can
+      ? `<label class="ps-unk"><code>${E(u.login)}</code> <em>${u.n}</em><select aria-label="Who is ${E(u.login)}" onchange="pkgTeamAssign(${J(u.login)},this)"><option value="">→ who?</option>${active.map(([id, s]) => `<option value="${E(id)}">${E(s.name)}</option>`).join('')}<option value="__new">New person…</option></select></label>`
+      : `<span class="pa-chip">${E(u.login)} <em>${u.n}</em></span>`).join('')}</div>` : ''}
+    ${can ? `<details class="ps-import"><summary>⤓ Import a team list (paste or file)</summary>
+      <p class="pr-help">One per line: <code>Name</code>, <code>Name = login, login</code>, or CSV <code>Name,login;login,left,2026-09-30</code>. Existing people are updated (logins added), nobody is removed.</p>
+      <textarea id="pkgTeamPaste" rows="5" placeholder="Sam ALVAREZ = CHAIN-SALVAREZ&#10;Lina MORENO,CHAIN-LMORENO2&#10;Test PERSON,CHAIN-TPERSON,left,2026-09-30" oninput="pkgTeamPreview()"></textarea>
+      <div class="ps-row"><label class="pr-btn sm ps-file">📂 From a file (.csv / .txt / .xlsx)<input type="file" accept=".csv,.txt,.tsv,.xlsx,.xls" hidden onchange="pkgTeamFile(this)"></label>
+        <span id="pkgTeamPrev" class="ps-tryout"></span><button type="button" class="btn gold sm" onclick="pkgTeamImport()">Import</button></div></details>` : ''}`;
+
+  // another hotel
+  const kitBody = `<p class="pr-help">Using Package Audit at another hotel? Copy this hotel's setup (package kinds, rules, report columns, keep times, commission %), then paste it there. <b>The team, memory and frozen sellers are not copied</b>: every hotel keeps its own.</p>
+    <div class="ps-row"><button type="button" class="btn gold sm" onclick="pkgKitCopy()">📦 Start for another hotel: copy this setup</button></div>
+    ${can ? `<label class="ps-area">Paste a setup from another hotel<textarea id="pkgKitIn" rows="3" placeholder='{"app":"hotelops-package-audit", …}'></textarea></label>
+    <div class="ps-row"><button type="button" class="pr-btn sm" onclick="pkgKitImport()">Use this setup here</button></div>` : ''}`;
+
+  // my view
+  const P = _pkgViewPrefs(), lbl = f => (PKG_CHIP_FIELDS.find(x => x[0] === f) || [0, f])[1];
+  const viewBody = `<p class="pr-help">Your own choice (only for you, on every device): which values each package card shows with a copy button, and their order. Drag ⠿ or use ↑ ↓.</p>
+    <div class="ps-chips" id="pkgViewBox">${P.chips.map((f, i) => `<div class="ps-vrow" data-dnd-i="${i}" draggable="true"><span class="ps-grip" aria-hidden="true">⠿</span>
+      <label class="ps-chk"><input type="checkbox" ${P.hidden.includes(f) ? '' : 'checked'} onchange="pkgViewToggle('${f}',this.checked)"> ${E(lbl(f))}</label>
+      <span class="ps-acts"><button type="button" class="pr-x" aria-label="Move ${E(lbl(f))} up" ${i ? '' : 'disabled'} onclick="pkgViewMove('${f}',-1)">↑</button><button type="button" class="pr-x" aria-label="Move ${E(lbl(f))} down" ${i < P.chips.length - 1 ? '' : 'disabled'} onclick="pkgViewMove('${f}',1)">↓</button></span></div>`).join('')}</div>`;
+
+  const resetBtn = (fn, txt) => can ? `<button type="button" class="pr-btn sm" onclick="${fn}">↺ ${txt || 'Reset to default'}</button>` : '';
+  const changedRules = Object.keys(PKG_RULE_DEFAULTS).filter(k => pkgRules[k] !== PKG_RULE_DEFAULTS[k]).length;
+  box.innerHTML = `<div class="pr-rules ps">
+    <div class="pr-head"><div class="pr-head-row"><div class="pr-title"><h2>🛠 Package Audit settings</h2><p>Everything here is changed on screen: no code. Shared settings are for the whole hotel${can ? '' : ' (read only for your role)'}; "My view" is yours.</p></div></div></div>
+    ${!can ? '<div class="pr-ro">🔒 Only a manager (or a role allowed to edit the checklist) can change the shared settings. You can change My view.</div>' : ''}
+    ${sec('kinds', '🎁 Package kinds', L.length + (kindsChanged ? ' · changed' : ''), kindsBody, kindsChanged ? resetBtn("_pkgSaveSetting('kinds',null,'Package kinds')") : '')}
+    ${sec('rules', '⚙️ Rule defaults', changedRules ? changedRules + ' changed' : null, ruleBody, changedRules ? resetBtn('pkgRulesReset();pkgSettingsRender()') : '')}
+    ${sec('team', '👥 Team', `${active.length} active${left.length ? ' · ' + left.length + ' left' : ''}`, teamBody)}
+    ${sec('cols', '📑 Report columns', Object.keys((pkgSettings.colMap || {}).ig || {}).length + Object.keys((pkgSettings.colMap || {}).guest || {}).length ? 'mapped' : null, colBody, pkgSettingsRaw.colMap || pkgSettingsRaw.chrome ? resetBtn("pkgColReset();_pkgSaveSetting('chrome',null)") : '')}
+    ${sec('keep', '🗓 Keep & remember', null, keepBody, pkgSettingsRaw.doneDays || pkgSettingsRaw.memMonths ? resetBtn("_pkgSaveSetting('doneDays',null);_pkgSaveSetting('memMonths',null)") : '')}
+    ${sec('view', '👁 My view', null, viewBody, `<button type="button" class="pr-btn sm" onclick="_pkgSaveView({})">↺ Reset my view</button>`)}
+    ${sec('hotel', '🏨 Another hotel', null, kitBody)}
+  </div>`;
+  if (can) _pkgDnd(document.getElementById('pkgKindsBox'), (a, b) => pkgKindMove(a, b));
+  _pkgDnd(document.getElementById('pkgViewBox'), (a, b) => { const p = _pkgViewPrefs(); const [x] = p.chips.splice(a, 1); p.chips.splice(b, 0, x); _pkgSaveView(p); });
+  if (_pkgKindTry) pkgKindTry(_pkgKindTry);
+  if (keep) { const el = document.getElementById(keep.id); if (el) { el.focus(); try { if (keep.s != null) el.setSelectionRange(keep.s, keep.s); } catch (_) {} } }
+}
+
+// ── 🧠 Memory view ───────────────────────────────────────────
+let _pkgMemQ = '', _pkgMemAll = false;
+function pkgMemoryOpen(conf) { _pkgMemQ = String(conf || ''); pkgShowView('memory'); }
+function pkgMemorySearch(v) { _pkgMemQ = String(v || ''); _pkgMemAll = false; pkgMemoryRender(); }
+function _pkgMemRecs() {
+  const out = [];
+  Object.values(pkgMemory || {}).forEach(o => Object.values(o).forEach(r => out.push(r)));
+  return out;
+}
+function _pkgMemMatch(r, q) {
+  if (!q) return true;
+  const hay = [r.conf, r.guest, r.code, r.kind, r.sellerName, r.room, (_pkgKindEntry(r.code || r.kind) || [, ''])[1]].join(' ').toLowerCase();
+  return q.toLowerCase().split(/\s+/).filter(Boolean).every(w => hay.includes(w));
+}
+function pkgMemoryForget(conf, kind) {
+  const rec = (pkgMemory[conf] || {})[kind]; if (!rec) return;
+  if (!_pkgCanEdit()) { showToast('Only a manager can forget a remembered package', 'warn'); return; }
+  const o = Object.assign({}, pkgMemory[conf]); delete o[kind];
+  pkgMemory = Object.assign({}, pkgMemory); if (Object.keys(o).length) pkgMemory[conf] = o; else delete pkgMemory[conf];
+  if (typeof fbSet === 'function') fbSet(`packageAudit/memory/${conf}/${kind}`, null);
+  if (typeof logActivity === 'function') logActivity('pkg_memory', `Forgot ${conf} · ${rec.code || kind}`);
+  pkgMemoryRender(); _pkgMemoryRecomputeSoon();
+  if (typeof showUndoToast === 'function') showUndoToast(`Forgot ${conf} · ${rec.code || kind}`, () => {
+    pkgMemory = Object.assign({}, pkgMemory, { [conf]: Object.assign({}, pkgMemory[conf], { [kind]: rec }) });
+    if (typeof fbSet === 'function') fbSet(`packageAudit/memory/${conf}/${kind}`, rec);
+    pkgMemoryRender(); _pkgMemoryRecomputeSoon();
+  });
+}
+function pkgMemoryRender() {
+  const box = document.getElementById('pkgMemoryView');
+  if (!box || box.hidden) return;
+  _pkgStyle2(); _pkgStyle3();
+  const E = escapeHtml, J = v => E(JSON.stringify(v)), can = _pkgCanEdit();
+  const ae = document.activeElement, focus = ae && ae.id === 'pkgMemIn', caret = focus ? ae.selectionStart : 0;
+  const all = _pkgMemRecs();
+  const months = [...new Set(all.flatMap(r => Object.keys(r.months || {})))].sort();
+  const hits = all.filter(r => _pkgMemMatch(r, _pkgMemQ.trim())).sort((a, b) => String(b.last).localeCompare(String(a.last)) || String(a.room).localeCompare(String(b.room), undefined, { numeric: true }));
+  const byConf = new Map(); hits.forEach(r => { if (!byConf.has(r.conf)) byConf.set(r.conf, []); byConf.get(r.conf).push(r); });
+  const confs = [...byConf.keys()], shown = _pkgMemAll ? confs : confs.slice(0, 60);
+  const gidx = _pkgMemGuestIndex(pkgMemory);
+  const card = conf => {
+    const recs = byConf.get(conf), r0 = recs[0];
+    const same = ((r0.gid && gidx['ID:' + r0.gid]) || (r0.gnorm && gidx['NM:' + r0.gnorm]) || []).filter(x => x.conf !== conf);
+    const sameConfs = [...new Set(same.map(x => x.conf))];
+    return `<article class="pm-card">
+      <div class="pa-top"><span class="pa-room sm">${E(r0.room || '—')}</span>
+        <div class="pa-pk"><b>${E(r0.guest || 'Guest not known')}</b><small><code>${E(conf)}</code>${r0.arr ? ' · ' + E(r0.arr) + ' → ' + E(r0.dep || '?') : ''}</small></div>
+        <span class="pa-chip">${E(_pkgMonShort(r0.first))}${r0.last !== r0.first ? ' → ' + E(_pkgMonShort(r0.last)) : ''}</span></div>
+      ${recs.map(r => { const k = _pkgKindEntry(r.code || r.kind);
+        return `<div class="pm-rec"><span class="pm-k" style="--kc:${E((k && k.color) || '#e2e8f0')}">${E((k && k.ico) || '🎁')} ${E((k && k[1]) || r.kind)}</span>
+          <div class="pm-main"><b>${E(r.sellerName || r.seller)}</b> <small>${E(r.code || '')}${r.price ? ' · AED ' + E(r.price) : ''} · ${E(_pkgD(r.from))}${r.to && r.to !== r.from ? ' → ' + E(_pkgD(r.to)) : ''} · ${E(_PKG_HOW[r.how] || r.how || '')}${r.fixed ? ' · ✓ fixed by ' + E(String(r.fixed.by || '').split(' ')[0] || 'someone') : ''}</small>
+            <div class="pm-months">${Object.keys(r.months || {}).sort().map(m => `<span class="pa-chip"><b>${E(_pkgMonShort(m))}</b> ${E(r.months[m].seller || '')} · ${r.months[m].n} night${r.months[m].n === 1 ? '' : 's'} · ${E(_pkgbN(r.months[m].aed))}</span>`).join('')}</div></div>
+          ${can ? `<button type="button" class="pa-undo" title="Forget this package" onclick="pkgMemoryForget(${J(conf)},${J(r.kind)})">Forget</button>` : ''}</div>`; }).join('')}
+      ${sameConfs.length ? `<div class="pm-link">↪ Same guest: ${sameConfs.map(c => `<button type="button" class="pa-link" onclick="pkgMemorySearch(${J(c)});document.getElementById('pkgMemIn').value=${J(c)}">${E(c)}</button>`).join(' ')}</div>` : ''}
+    </article>`;
+  };
+  const sug = _pkgLearnSuggestions();
+  const rules = Object.values(pkgLearned || {}).filter(L => L && L.type && !L.dismissed);
+  const learnHtml = (sug.length || rules.length) ? `<section class="pr-card pr-sugg"><h3><span>🧠</span> Learned from your decisions</h3>
+    ${sug.map(L => `<div class="pr-sg warn"><span>${E(L.text)}. Decide it the same way next time?</span><span class="ps-acts">${can ? `<button type="button" class="pr-btn sm" onclick="pkgLearnAccept(${J(L.id)})">✓ Accept</button><button type="button" class="pr-x" aria-label="Dismiss" onclick="pkgLearnDismiss(${J(L.id)})">✕</button>` : '<small>a manager can accept it</small>'}</span></div>`).join('')}
+    ${rules.map(L => `<div class="pr-sg ok"><span>✓ ${E(_pkgLearnedText(L))} <small>· by ${E(L.by || 'someone')}${L.at ? ' · ' + E(String(L.at).slice(0, 10)) : ''}</small></span>${can ? `<button type="button" class="pr-btn sm" onclick="pkgLearnRemove(${J(L.id)})">Remove</button>` : ''}</div>`).join('')}</section>` : '';
+  box.innerHTML = `<div class="pr-rules">
+    <div class="pr-head"><div class="pr-head-row"><div class="pr-title"><h2>🧠 Package memory</h2>
+      <p>Every package the audit has resolved: ${confs.length === all.length ? '' : ''}<b>${all.length}</b> package${all.length === 1 ? '' : 's'} on <b>${Object.keys(pkgMemory).length}</b> booking${Object.keys(pkgMemory).length === 1 ? '' : 's'}${months.length ? `, ${E(_pkgMonShort(months[0]))} → ${E(_pkgMonShort(months[months.length - 1]))}` : ''}. Next month, a package that continues keeps its seller.</p></div>
+      <button type="button" class="pr-btn" ${all.length ? '' : 'disabled'} onclick="pkgMemoryExport()">📊 Excel</button></div>
+      <label class="pr-try" for="pkgMemIn"><span class="pr-try-ico" aria-hidden="true">🔍</span><input id="pkgMemIn" type="search" autocomplete="off" placeholder="Confirmation no., guest, package code or seller" value="${E(_pkgMemQ)}" oninput="pkgMemorySearch(this.value)"></label></div>
+    ${learnHtml}
+    ${!all.length ? `<div class="pa-empty"><b>Nothing remembered yet.</b><span>Run the audit (📋 Audit → Check the charges): every package it resolves is remembered here for next month.</span></div>`
+      : !confs.length ? '<div class="pa-empty">No remembered package matches your search.</div>'
+      : `<div class="pa-list">${shown.map(card).join('')}</div>${confs.length > shown.length ? `<button type="button" class="pr-link" onclick="_pkgMemAll=true;pkgMemoryRender()">Show all ${confs.length}</button>` : ''}`}
+  </div>`;
+  if (focus) { const i = document.getElementById('pkgMemIn'); if (i) { i.focus(); try { i.setSelectionRange(caret, caret); } catch (_) {} } }
+}
+async function pkgMemoryExport() {
+  const recs = _pkgMemRecs().filter(r => _pkgMemMatch(r, _pkgMemQ.trim()));
+  if (!recs.length) return;
+  const months = [...new Set(recs.flatMap(r => Object.keys(r.months || {})))].sort();
+  const head = ['Confirmation', 'Room', 'Guest', 'Kind', 'Code', 'Price AED', 'From', 'To', 'Seller', 'Decided by', 'First month', 'Last month', ...months.map(m => _pkgMonShort(m) + ' AED')];
+  const rows = recs.sort((a, b) => String(a.conf).localeCompare(String(b.conf))).map(r => [r.conf, r.room, r.guest, (_pkgKindEntry(r.code || r.kind) || [, r.kind])[1], r.code, +r.price || 0, _pkgD(r.from), _pkgD(r.to), r.sellerName || r.seller, _PKG_HOW[r.how] || r.how, _pkgMonShort(r.first), _pkgMonShort(r.last), ...months.map(m => (r.months[m] || {}).aed || '')]);
+  await _pkgXlsx('Package_memory', 'Package memory', `${recs.length} packages · ${_pkgMonShort(months[0])} → ${_pkgMonShort(months[months.length - 1])}`,
+    [{ name: 'Memory', head, rows, money: [5, ...months.map((_, i) => 12 + i)] }], [['Packages', recs.length], ['Bookings', new Set(recs.map(r => r.conf)).size], ['Months', months.length]]);
+}
+
+// ── Styled Excel (ExcelJS, like the Gym / Handover reports; plain SheetJS offline) ──
+const _PKG_EXCELJS = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
+let _pkgExLoad = null;
+function _pkgLoadExcelJS() {
+  if (window.ExcelJS && window.ExcelJS.Workbook) return Promise.resolve(window.ExcelJS);
+  if (_pkgExLoad) return _pkgExLoad;
+  _pkgExLoad = new Promise((ok, no) => {
+    const sc = document.createElement('script'); sc.src = _PKG_EXCELJS; sc.async = true; sc.crossOrigin = 'anonymous';
+    const t = setTimeout(() => no(new Error('timeout')), 12000);
+    sc.onload = () => { clearTimeout(t); window.ExcelJS && window.ExcelJS.Workbook ? ok(window.ExcelJS) : no(new Error('no ExcelJS')); };
+    sc.onerror = () => { clearTimeout(t); no(new Error('not loaded')); };
+    document.head.appendChild(sc);
+  }).catch(e => { _pkgExLoad = null; throw e; });
+  return _pkgExLoad;
+}
+/** sheets: [{ name, head, rows, money: [col indexes], delta: [col indexes], total: row }] */
+async function _pkgXlsx(file, title, sub, sheets, kpis) {
+  if (typeof hoRoleRules !== 'undefined' && hoRoleRules.can && hoRoleRules.can('canExport') === false) { showToast('Downloading files is not available for your role', 'err'); return; }
+  const hotel = String((document.getElementById('hotelName') || {}).textContent || '').replace(/\s+/g, ' ').trim();
+  const stamp = new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const save = (buf, ext) => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    a.download = `${file}.${ext || 'xlsx'}`; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+  };
+  try {
+    const EJ = await _pkgLoadExcelJS();
+    const wb = new EJ.Workbook(); wb.creator = 'HotelOps'; wb.created = new Date(); wb.title = title;
+    const C = { band: 'FF1E293B', gold: 'FFC9A227', zebra: 'FFF8FAFC', line: 'FFE2E8F0', ink: 'FF0F172A', white: 'FFFFFFFF', total: 'FFFEF9E7', up: 'FF166534', down: 'FF991B1B', kpi: ['FFDBEAFE', 'FF1E40AF'] };
+    const fill = argb => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
+    const font = o => Object.assign({ name: 'Calibri', size: 11, color: { argb: C.ink } }, o);
+    const thin = { style: 'thin', color: { argb: C.line } }, box = { top: thin, left: thin, bottom: thin, right: thin };
+    sheets.forEach(S => {
+      const n = Math.max(S.head.length, 3);
+      const ws = wb.addWorksheet(S.name.slice(0, 31), { properties: { tabColor: { argb: C.gold } }, views: [{ showGridLines: false }] });
+      ws.columns = S.head.map((h, i) => ({ width: Math.min(40, Math.max(10, String(h).length + 2, ...S.rows.slice(0, 200).map(r => String(r[i] ?? '').length + 2))) }));
+      ws.mergeCells(1, 1, 1, n); Object.assign(ws.getCell(1, 1), { value: (hotel || 'HotelOps').toUpperCase() }); ws.getCell(1, 1).font = font({ size: 9.5, bold: true, color: { argb: 'FFF5D97A' } });
+      ws.mergeCells(2, 1, 2, n); ws.getCell(2, 1).value = title; ws.getCell(2, 1).font = font({ size: 20, bold: true, color: { argb: C.white } });
+      ws.mergeCells(3, 1, 3, n); ws.getCell(3, 1).value = `${sub} · ${stamp}${_pkgMe() ? ' · Prepared by ' + _pkgMe() : ''}`; ws.getCell(3, 1).font = font({ size: 10.5, color: { argb: 'FFCBD5E1' } });
+      for (let r = 1; r <= 3; r++) for (let c = 1; c <= n; c++) { ws.getCell(r, c).fill = fill(C.band); ws.getCell(r, c).alignment = { vertical: 'middle', indent: 1 }; }
+      for (let c = 1; c <= n; c++) ws.getCell(3, c).border = { bottom: { style: 'thick', color: { argb: C.gold } } };
+      ws.getRow(2).height = 32; ws.getRow(3).height = 20;
+      let H = 5;
+      if (kpis && kpis.length) {
+        const per = Math.max(1, Math.floor(n / kpis.length));
+        kpis.forEach(([label, v], i) => {
+          const c1 = i * per + 1, c2 = i === kpis.length - 1 ? n : Math.min(n, c1 + per - 1);
+          if (c1 > n) return;
+          if (c2 > c1) { ws.mergeCells(5, c1, 5, c2); ws.mergeCells(6, c1, 6, c2); }
+          const vc = ws.getCell(5, c1), lc = ws.getCell(6, c1);
+          vc.value = v; vc.font = font({ size: 18, bold: true, color: { argb: C.kpi[1] } }); vc.alignment = { horizontal: 'center' };
+          lc.value = String(label).toUpperCase(); lc.font = font({ size: 8.5, bold: true, color: { argb: C.kpi[1] } }); lc.alignment = { horizontal: 'center' };
+          for (let c = c1; c <= c2; c++) [5, 6].forEach(r => { ws.getCell(r, c).fill = fill(C.kpi[0]); });
+        });
+        ws.getRow(5).height = 30; H = 8;
+      }
+      const hr = ws.getRow(H); hr.values = S.head; hr.height = 24;
+      S.head.forEach((_, i) => { const c = hr.getCell(i + 1); c.font = font({ bold: true, color: { argb: C.white } }); c.fill = fill(C.band); c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; });
+      const all = S.total ? S.rows.concat([S.total]) : S.rows;
+      all.forEach((cells, k) => {
+        const row = ws.getRow(H + 1 + k); row.values = cells; row.height = 19;
+        const isTot = S.total && k === all.length - 1;
+        cells.forEach((v, i) => {
+          const c = row.getCell(i + 1); c.border = box; c.font = font({ size: 10.5, bold: isTot });
+          if (isTot) c.fill = fill(C.total); else if (k % 2) c.fill = fill(C.zebra);
+          if ((S.money || []).includes(i) && typeof v === 'number') { c.numFmt = '#,##0.00;-#,##0.00;"–"'; c.alignment = { horizontal: 'right' }; }
+          if ((S.delta || []).includes(i) && typeof v === 'number') { c.numFmt = '+#,##0.00;-#,##0.00;"="'; c.font = font({ size: 10.5, bold: true, color: { argb: v > 0 ? C.up : v < 0 ? C.down : C.ink } }); }
+        });
+      });
+      ws.autoFilter = { from: { row: H, column: 1 }, to: { row: H + Math.max(1, S.rows.length), column: S.head.length } };
+      ws.views = [{ state: 'frozen', ySplit: H, showGridLines: false }];
+      ws.pageSetup = { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
+    });
+    save(new Uint8Array(await wb.xlsx.writeBuffer()));
+    showToast('Excel saved', 'ok');
+  } catch (e) {
+    if (typeof XLSX === 'undefined') { showToast('Excel could not be made offline', 'err'); return; }
+    const wb = XLSX.utils.book_new();
+    sheets.forEach(S => { const ws = XLSX.utils.aoa_to_sheet([[title], [sub], [], S.head, ...S.rows, ...(S.total ? [S.total] : [])]); XLSX.utils.book_append_sheet(wb, ws, S.name.slice(0, 31)); });
+    save(XLSX.write(wb, { bookType: 'xlsx', type: 'array' }));
+    showToast('Excel saved (plain: the styled version needs a connection)', 'ok');
+  }
+  if (typeof logActivity === 'function') logActivity('pkg_export', title);
+}
+
+// ── Styles for the copy values, Fixed, Memory and Settings (theme variables only) ──
+function _pkgStyle3() {
+  if (document.getElementById('pkgStyle3')) return;
+  const st = document.createElement('style'); st.id = 'pkgStyle3';
+  st.textContent = `
+.pa-count{font-size:.9rem;color:var(--text)} .pa-count i{font-style:normal;color:var(--text3);margin:0 2px} .pa-count .ok{color:var(--green)}
+.pa-vals{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px;min-width:0}
+.pa-v{display:inline-flex;align-items:center;gap:6px;max-width:100%;min-width:0;padding:3px 4px 3px 9px;border:1px solid var(--border);border-radius:9px;background:var(--bg2)}
+.pa-v small{font:600 .56rem var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--text3);flex:none}
+.pa-v code{font:600 .78rem var(--mono)!important;color:var(--text)!important;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;user-select:all;-webkit-user-select:all}
+.pa-v.em{border-color:color-mix(in srgb,var(--green) 45%,var(--border))}
+.pa-cc{flex:none;border:1px solid var(--border2);background:var(--card);color:var(--text2);border-radius:7px;padding:3px 8px;min-height:28px;font:600 .66rem var(--font,inherit);cursor:copy}
+.pa-cc:hover{color:var(--text);border-color:var(--gold,var(--accent))} .pa-cc.copied{color:var(--green);border-color:var(--green)}
+.pa-fix{border:1px solid var(--green);background:color-mix(in srgb,var(--green) 14%,var(--card));color:var(--green);border-radius:10px;padding:6px 14px;min-height:36px;font:700 .78rem var(--font,inherit);cursor:pointer;white-space:nowrap}
+.pa-fix:hover{background:var(--green);color:#fff}
+.pa-fix.undo{border-color:var(--border2);background:var(--bg2);color:var(--text2);font-weight:600} .pa-fix.undo:hover{color:var(--text);background:var(--bg2)}
+.pa-card.is-fixed{opacity:.92} .pa-card.is-fixed .pa-act{color:var(--green)}
+.pa-fixed{margin-top:14px;border:1px solid var(--border);border-radius:var(--r,12px);background:color-mix(in srgb,var(--green) 4%,var(--card))}
+.pa-fixed>summary{cursor:pointer;list-style:none;display:flex;flex-wrap:wrap;gap:2px 10px;align-items:baseline;padding:12px 14px}
+.pa-fixed>summary::-webkit-details-marker{display:none}
+.pa-fixed>summary span{font-weight:700;font-size:.86rem;color:var(--text)} .pa-fixed>summary em{font:600 .7rem var(--mono);font-style:normal;color:var(--green);background:color-mix(in srgb,var(--green) 14%,transparent);border-radius:999px;padding:2px 8px;margin-left:4px}
+.pa-fixed>summary small{color:var(--text3);font-size:.7rem}
+.pa-fixed>.pa-list{padding:0 10px 10px}
+.pa-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.pa-carry{border:1px solid color-mix(in srgb,var(--gold,#e8b84b) 50%,var(--border));background:color-mix(in srgb,var(--gold,#e8b84b) 12%,var(--card));color:var(--text);border-radius:999px;padding:3px 10px;min-height:26px;font:600 .7rem var(--font,inherit);cursor:pointer}
+.pa-carry:hover{border-color:var(--gold,var(--accent))}
+.pm-card{border:1px solid var(--border);border-radius:var(--r,12px);background:var(--card);padding:11px 12px;min-width:0}
+.pm-rec{display:flex;gap:10px;align-items:flex-start;margin-top:9px;padding-top:9px;border-top:1px dashed var(--border);min-width:0}
+.pm-k{flex:none;padding:3px 8px;border-radius:8px;background:color-mix(in srgb,var(--kc) 55%,var(--card));color:var(--text);font:600 .72rem var(--font,inherit);white-space:nowrap}
+.pm-main{flex:1;min-width:0;font-size:.8rem;color:var(--text);overflow-wrap:anywhere} .pm-main small{color:var(--text3);font-size:.7rem}
+.pm-months{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px} .pm-months .pa-chip{white-space:normal}
+.pm-link{margin-top:8px;font-size:.74rem;color:var(--text2)}
+.ps .pr-sec-b{gap:10px}
+.ps-reset{display:flex;justify-content:flex-end;margin-top:4px}
+.ps-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ps-acts{display:inline-flex;gap:2px;align-items:center;margin-left:auto;flex-wrap:wrap}
+.ps-kinds{display:flex;flex-direction:column;gap:8px}
+.ps-kind{border:1px solid var(--border);border-left:5px solid var(--kc);border-radius:10px;background:var(--card);padding:8px 10px;min-width:0}
+.ps-kind.dragging,.ps-vrow.dragging{opacity:.5} .ps-kind.over,.ps-vrow.over{box-shadow:0 -3px 0 var(--gold,var(--accent))}
+.ps-kind-hd{display:flex;gap:6px;align-items:center;flex-wrap:wrap;min-width:0}
+.ps-grip{cursor:grab;color:var(--text3);font-size:1rem;user-select:none;padding:0 2px}
+.ps input:not([type=checkbox]):not([type=range]):not([type=color]),.ps select,.ps textarea{border:1px solid var(--border2);background:var(--bg2);color:var(--text);border-radius:8px;padding:6px 8px;font-size:16px;font-family:inherit;min-width:0;max-width:100%}
+.ps .ps-ico{width:46px;text-align:center} .ps .ps-name{flex:1 1 120px;font-weight:600} .ps .ps-key{width:70px;font-family:var(--mono)!important;text-transform:uppercase}
+.ps-col{width:36px;height:34px;padding:0;border:1px solid var(--border2);border-radius:8px;background:none}
+.ps .ps-merge{max-width:140px;font-size:.8rem}
+.ps-kind-b{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1.3fr) 90px 90px auto;gap:6px 8px;margin-top:8px;align-items:end}
+.ps-kind-b label,.ps-try,.ps-area{display:flex;flex-direction:column;gap:3px;font:600 .62rem var(--mono);text-transform:uppercase;letter-spacing:.04em;color:var(--text3);min-width:0}
+.ps-chk{display:inline-flex!important;flex-direction:row!important;align-items:center;gap:6px;font:500 .8rem var(--font,inherit)!important;text-transform:none!important;letter-spacing:0!important;color:var(--text)!important;min-height:36px}
+.ps-chk input{width:18px;height:18px}
+.ps-codes{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:7px} .ps-codes small{color:var(--text3);font-size:.7rem}
+.ps-chip{display:inline-flex;align-items:center;gap:2px;padding:1px 2px 1px 8px;border-radius:999px;background:var(--bg2);border:1px solid var(--border)}
+.ps-chip code{font:600 .7rem var(--mono);color:var(--text)}
+.ps-chip button{border:0;background:none;color:var(--text3);cursor:pointer;min-width:26px;min-height:26px;border-radius:50%} .ps-chip button:hover{color:var(--red)}
+.ps .ps-add{width:170px;font-size:16px;padding:4px 8px}
+.ps-try{flex-direction:row;align-items:center;gap:6px} .ps-try input{width:130px}
+.ps-tryout{font-size:.78rem;color:var(--text2)}
+.ps-rules{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.ps-rule{display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border-top:1px solid var(--border);cursor:pointer;min-width:0}
+.ps-rule:first-child{border-top:0} .ps-rule.changed{background:color-mix(in srgb,var(--gold,#e8b84b) 7%,var(--card))}
+.ps-rule>span{min-width:0} .ps-rule b{display:block;font-size:.82rem;color:var(--text)} .ps-rule small{display:block;font-size:.72rem;color:var(--text3);line-height:1.4;margin-top:2px} .ps-rule em{color:var(--gold,var(--accent));font-style:normal}
+.ps-rule.slider{flex-direction:column;gap:6px;cursor:default} .ps-rule.slider input{width:100%;accent-color:var(--gold,var(--accent))}
+.ps-sw{position:relative;flex:none;width:42px;height:24px;margin-top:2px}
+.ps-sw input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer}
+.ps-sw i{position:absolute;inset:0;border-radius:999px;background:var(--border2);transition:background .2s}
+.ps-sw i::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);transition:transform .2s}
+.ps-sw input:checked+i{background:var(--green)} .ps-sw input:checked+i::after{transform:translateX(18px)}
+.ps-sw input:focus-visible+i{outline:2px solid var(--gold,var(--accent));outline-offset:2px}
+.ps-sw input:disabled+i{opacity:.5}
+.ps-cols{border:1px solid var(--border);border-radius:10px;padding:10px 12px} .ps-cols h4{margin:0 0 6px;font-size:.82rem;color:var(--text)} .ps-cols h4 small{font-weight:400;color:var(--text3)}
+.ps-col-row{display:grid;grid-template-columns:150px minmax(0,220px) minmax(0,1fr);gap:8px;align-items:center;padding:5px 0;border-top:1px solid var(--border);font-size:.78rem;color:var(--text2)}
+.ps-col-row:first-of-type{border-top:0} .ps-col-row.req>span{color:var(--text);font-weight:600}
+.ps-col-row small{color:var(--text3);font-family:var(--mono);font-size:.68rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ps-area textarea{font:inherit;font-size:16px;text-transform:none;letter-spacing:0;resize:vertical}
+.ps-person{border:1px solid var(--border);border-radius:10px;padding:8px 10px;background:var(--card);min-width:0}
+.ps-person.left{opacity:.7;background:var(--bg2)}
+.ps-p-hd{display:flex;gap:8px;align-items:center;flex-wrap:wrap} .ps-p-hd b{font-size:.86rem;color:var(--text);overflow-wrap:anywhere}
+.ps-was{display:block;color:var(--text3);font-size:.7rem;margin-top:2px}
+.ps-unk{display:inline-flex;align-items:center;gap:4px;border:1px dashed var(--border2);border-radius:9px;padding:2px 4px 2px 8px;font-size:.72rem}
+.ps-unk select{font-size:.75rem!important;padding:3px 4px!important}
+.ps-import{border:1px dashed var(--border2);border-radius:10px;padding:8px 10px} .ps-import summary{cursor:pointer;font-weight:600;font-size:.8rem;color:var(--text)}
+.ps-import textarea{width:100%;margin:6px 0}
+.ps-file{cursor:pointer;display:inline-flex;align-items:center}
+.ps-chips{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:10px;overflow:hidden;max-width:460px}
+.ps-vrow{display:flex;align-items:center;gap:8px;padding:2px 8px;border-top:1px solid var(--border);background:var(--card)} .ps-vrow:first-child{border-top:0}
+@media (max-width:760px){
+  .ps-kind-b{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .ps-kind-b .ps-chk{grid-column:1/-1}
+  .ps-col-row{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr)} .ps-col-row small{grid-column:1/-1}
+  .ps-acts{margin-left:0}
+}
+@media (max-width:480px){
+  .pa-v{flex:1 1 auto;justify-content:space-between} .pa-v code{flex:1}
+  .pa-fix{flex:1 1 100%}
+  .pm-rec{flex-wrap:wrap} .pm-main{flex-basis:calc(100% - 4px)}
+  .ps .ps-add{width:100%}
+}`;
+  document.head.appendChild(st);
+}
+
 // The Package Audit styles (tabs, list, rules) are needed before any file is loaded too.
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { try { _pkgStyle2(); } catch (_) {} });
-else { try { _pkgStyle2(); } catch (_) {} }
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { try { _pkgStyle2(); _pkgStyle3(); } catch (_) {} });
+else { try { _pkgStyle2(); _pkgStyle3(); } catch (_) {} }

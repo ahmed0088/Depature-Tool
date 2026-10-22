@@ -138,10 +138,18 @@ function homeTiles() {
   return tiles;
 }
 
+/** tiles in the order you chose; the ones you never placed keep their own order, after them */
+function homeTileSort(tiles, order) {
+  if (!Array.isArray(order) || !order.length) return tiles;
+  const at = t => { const k = order.indexOf(t.panel); return k < 0 ? order.length : k; };
+  return tiles.map((t, i) => [t, i]).sort((a, b) => at(a[0]) - at(b[0]) || a[1] - b[1]).map(x => x[0]);
+}
+
 function homeGreeting() {
   const h = new Date().getHours();
   const sk = typeof hoShiftNow === 'function' ? hoShiftNow().key : (h >= 23 || h < 7 ? 'night' : h < 15 ? 'morning' : 'afternoon');
-  const shift = sk === 'night' ? 'Night shift' : sk === 'morning' ? 'Morning shift' : 'Afternoon shift';
+  const own = typeof hoCfg !== 'undefined' ? hoCfg.shiftLabel(sk) : '';   // the hotel's own shift names (Settings → Hotel setup → Shifts)
+  const shift = own ? own + ' shift' : sk === 'night' ? 'Night shift' : sk === 'morning' ? 'Morning shift' : 'Afternoon shift';
   const hi = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
   const name = (typeof hoPref === 'function' && !hoPref('greetName')) ? '' : (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) ? currentProfile.name.split(' ')[0] : '';
   return { hi: `${hi}${name ? ', ' + name : ''}`, shift };
@@ -156,7 +164,8 @@ function homeRender() {
   const sub = document.getElementById('homeSub');
   if (sub) sub.textContent = `${g.shift} · ${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}`;
   const hiddenT = typeof hoPref === 'function' ? new Set(hoPref('hiddenTiles') || []) : new Set();
-  const tiles = homeTiles().filter(t => !hiddenT.has(t.panel));
+  const order = typeof hoPref === 'function' ? (hoPref('tileOrder') || []) : [];   // your own order (Settings → Home, drag the tiles)
+  const tiles = homeTileSort(homeTiles().filter(t => !hiddenT.has(t.panel)), order);
   box.innerHTML = tiles.map(t => `
     <button class="home-tile ${t.tone}" onclick="showPanel('${t.panel}')">
       <div class="home-tile-top"><span class="home-ico">${(typeof hoIcon === 'function' && hoIcon(t.panel)) || t.icon}</span><span class="home-t">${escapeHtml(t.title)}</span></div>

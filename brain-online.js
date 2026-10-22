@@ -55,12 +55,27 @@ function _boFormat(t) {
   return lines.map(l => `<p>${md(l.replace(/^#+\s*/, ''))}</p>`).join('');
 }
 
+// where the hotel is (Settings → Hotel setup → Hotel profile); Dubai when it was not changed
+function _boProfile() { try { return typeof hoCfg !== 'undefined' ? hoCfg.get('profile') : null; } catch (_) { return null; } }
+function _boSystem() {
+  const P = _boProfile(); if (!P) return BO_SYSTEM;
+  const city = String(P.city || '').trim() || 'Dubai, UAE', grp = String(P.group || '').trim();
+  return BO_SYSTEM.replace('hotels in Dubai, UAE (Accor brands: ibis, Mercure, Adagio)', `hotels in ${city}${grp ? ` (${grp})` : ''}`);
+}
+function _boWhere() {
+  const P = _boProfile(), D = { type: 'approximate', city: 'Dubai', country: 'AE', timezone: 'Asia/Dubai' };
+  if (!P || (P.city === 'Dubai, UAE' && P.timezone === 'Asia/Dubai')) return D;
+  const o = { type: 'approximate', city: String(P.city || '').split(',')[0].trim() || 'Dubai' };
+  if (P.timezone) o.timezone = P.timezone;
+  return o;
+}
+
 async function _boAskClaude(q, cfg) {
   const model = cfg.model || 'claude-sonnet-5-5';
   const older = /haiku-4|sonnet-4-5|opus-4-5/.test(model);   // these take the basic web search tool
   const body = {
-    model, max_tokens: 4000, system: BO_SYSTEM,
-    tools: [{ type: older ? 'web_search_20250305' : 'web_search_20260209', name: 'web_search', max_uses: 3, user_location: { type: 'approximate', city: 'Dubai', country: 'AE', timezone: 'Asia/Dubai' } }],
+    model, max_tokens: 4000, system: _boSystem(),
+    tools: [{ type: older ? 'web_search_20250305' : 'web_search_20260209', name: 'web_search', max_uses: 3, user_location: _boWhere() }],
     messages: [{ role: 'user', content: q }],
   };
   const headers = { 'content-type': 'application/json', 'x-api-key': cfg.key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' };

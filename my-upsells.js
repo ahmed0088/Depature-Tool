@@ -70,7 +70,13 @@
     const e = kindEntry(code || k) || (typeof PKG_KINDS !== 'undefined' ? PKG_KINDS.find(x => x[0] === k) : null);
     return e ? e[1] : (k || code || 'Package');
   }
-  const kindIco = k => (KIND_STYLE[famOf(k)] || {}).ico || '🎁';
+  // The icon and colour set for the kind in Package Audit → Settings win over the built-in ones.
+  const kindStyle = k => {
+    const e = kindEntry(k), f = famOf(k), base = KIND_STYLE[f] || {};
+    const c = e && /^#[0-9a-f]{6}$/i.test(e.color || '') ? 'FF' + e.color.slice(1).toUpperCase() : '';
+    return { ico: (e && e.ico) || base.ico || '🎁', fill: c || base.fill };
+  };
+  const kindIco = k => kindStyle(k).ico;
 
   // Words a journal line uses for each kind, when the package code is not in it.
   const KIND_WORDS = [
@@ -680,7 +686,7 @@
         c.border = box; c.alignment = center;
         if (k % 2) c.fill = fillOf(ZEBRA);
       });
-      const kf = (KIND_STYLE[famOf(D.rows[k].kind)] || {}).fill;
+      const kf = kindStyle(D.rows[k].kind).fill;
       if (kf) row.getCell(7).fill = fillOf(kf);
       row.getCell(8).font = { bold: true };
       row.getCell(2).numFmt = 'dd-mmm-yyyy';
@@ -1004,7 +1010,7 @@
   }
   function show() {
     if (!mount()) return;
-    ['pkgRulesView', 'pkgMainView'].forEach(id => { const e = document.getElementById(id); if (e) e.hidden = true; });
+    ['pkgRulesView', 'pkgMainView', 'pkgMemoryView', 'pkgSettingsView'].forEach(id => { const e = document.getElementById(id); if (e) e.hidden = true; });
     document.querySelectorAll('#pkgTabs [data-v]').forEach(b => { const on = b.dataset.v === 'mine'; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
     document.getElementById('muView').hidden = false;
     try { if (typeof _pkgStyle2 === 'function') _pkgStyle2(); if (typeof _pkgStartRulesSync === 'function') _pkgStartRulesSync(); } catch (_) {}

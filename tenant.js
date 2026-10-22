@@ -93,7 +93,9 @@ async function tnCreateHotel(f) {
   const now = new Date().toISOString(), by = currentUser.uid;
   await _tnDb().ref(`hotelsIndex/${hid}`).set({ name, createdAt: now, createdBy: by });
   await _tnDb().ref(`hotels/${hid}/users/${uid}`).set({ uid, name: oName, email, role: 'owner', active: true, createdAt: now, createdBy: by });
-  await _tnDb().ref(`hotels/${hid}/settings`).set({ hotelName: name, updatedAt: now });
+  // "Start from this hotel's setup": shifts, menu, categories, Departures words and times, never staff or guests
+  const setup = f.copySetup && typeof hoCfg !== 'undefined' && typeof hoSetupPure !== 'undefined' ? hoSetupPure.forNewHotel(hoCfg.saved()) : null;
+  await _tnDb().ref(`hotels/${hid}/settings`).set(Object.assign({ hotelName: name, updatedAt: now }, setup && Object.keys(setup).length ? { setup } : {}));
   await _tnDb().ref(`hotels/${hid}/settings/td`).set(Object.assign({}, typeof HotelCfg !== 'undefined' ? HotelCfg.DEFAULTS : {},
     { tdCodes: String(f.tdCodes || '').trim() || '7510', tdRate: +f.tdRate > 0 ? +f.tdRate : 10 }));
   await _tnDb().ref('userHotels/' + uid).set(hid);
@@ -127,6 +129,7 @@ async function tnRenderSettings() {
         <label>Owner's email<input id="tnEmail" type="email" placeholder="name@hotel.com"></label>
         <label>Owner's password<input id="tnPass" type="password" placeholder="at least 6 characters"></label>
       </div>
+      <label class="hs-check"><input type="checkbox" id="tnCopy"> Start from this hotel's setup <small>Shifts, menu, categories, Departures times and words. No staff, guests or data are copied.</small></label>
       <div class="hs-acts"><button class="btn gold sm" id="tnBtn" onclick="tnCreateFromForm()">Create hotel</button><small>Give the owner their email and password; they can change the password after signing in.</small></div>
     </div>` : ''}`;
 }
@@ -136,7 +139,7 @@ async function tnCreateFromForm() {
   const v = id => document.getElementById(id)?.value || '';
   try {
     if (b) { b.disabled = true; b.textContent = 'Creating…'; }
-    await tnCreateHotel({ name: v('tnName'), tdCodes: v('tnCode'), tdRate: v('tnRate'), ownerName: v('tnOwner'), email: v('tnEmail'), pass: v('tnPass') });
+    await tnCreateHotel({ name: v('tnName'), tdCodes: v('tnCode'), tdRate: v('tnRate'), ownerName: v('tnOwner'), email: v('tnEmail'), pass: v('tnPass'), copySetup: !!document.getElementById('tnCopy')?.checked });
     showToast(`${v('tnName')} created — ${v('tnEmail')} can sign in now`, 'ok');
     ['tnName', 'tnOwner', 'tnEmail', 'tnPass'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     tnRenderSettings();

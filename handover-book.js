@@ -62,7 +62,8 @@ function hoPrefix(text) {
 }
 
 // ══ Shifts ══════════════════════════════════════════════════
-/** the three shifts (minutes from midnight; Night goes past midnight) */
+/** the three shifts (minutes from midnight; Night goes past midnight). The hotel's own hours and names
+ *  (Settings → Hotel setup → Shifts, hotel-setup.js) are written into these entries; the ids stay. */
 const SHIFT_BOUNDS = [
   { id: 'Morning', from: 7 * 60, to: 15 * 60, icon: '🌅' },
   { id: 'Afternoon', from: 15 * 60, to: 23 * 60, icon: '🌇' },
@@ -210,6 +211,10 @@ const CATS = [
   ['info', 'Info / FYI', 'ℹ️'],
 ];
 const CAT = {}; CATS.forEach(c => { CAT[c[0]] = { id: c[0], label: c[1], icon: c[2] }; });
+// the hotel's own names, emoji, colours, extra words, categories switched off or added (Settings → Hotel setup → Categories)
+const catSetup = W.hoCfg && typeof W.hoCfg.catHook === 'function'
+  ? W.hoCfg.catHook('ho', CATS, CAT, c => ({ id: c[0], label: c[1], icon: c[2] }), (id, x) => [id, String(x.label), x.icon || '🏷️'])
+  : () => null;
 // first match wins (most specific first)
 const CAT_RULES = [
   ['lost', /\blost\b|\bleft (?:behind|in the room)|\bforgot(?:ten)?\b|\bl\s*&\s*f\b|\blnf\b|\bitems? found\b|\bfound (?:an? |one |the |his |her |guest)/],
@@ -234,7 +239,10 @@ const CAT_RULES = [
 /** a handover line → its category id (Info / FYI when nothing matches) */
 function categorize(text, head) {
   const t = sp((head ? head + ' : ' : '') + text).toLowerCase();
-  const r = CAT_RULES.find(([, re]) => re.test(t));
+  const X = catSetup();
+  const w = X && X.words.find(([, re]) => re.test(t));
+  if (w) return w[0];
+  const r = CAT_RULES.find(([id, re]) => !(X && X.off.has(id)) && re.test(t));
   return r ? r[0] : 'info';
 }
 const OPEN_RX = /\bpending\b|\bto ?do\b|\bplease\b|\bpl[sz]\b|\bkindly\b|\bcheck\b|\bchk\b|\bfollow[- ]?up|\bf\/u\b|\bcall back|\bcallback|\bwaiting\b|\bneeds?\b|\bneeded\b|\bmust\b|\bhas to\b|\bhave to\b|\bshould\b|\btomorrow|\btmrw?\b|\bremind\w*|\bnot yet\b|\bstill\b|\bto be\b|\bamend\w*|\bcollect\b|\bchase\b|\barrange\b|\burgent\w*|\basap\b|\bmake sure|\bdon'?t forget|\bwill (?:arrive|come|check|call|pay|leave|collect|send)|\bexpected\b|\beta\b|\bnot (?:paid|done|fixed|collected|received|working|answering)|\bmissing\b|\bno answer\b|\barriv(?:ing|al)\b|\bearly dep\w*|\bearly check-?\s?out|\bleaving early|\bcut short|\bshorten\w*|\bed\b|\brequested\b|\bwants?\b|\basked\b|\?/;
@@ -1190,7 +1198,7 @@ function itemHtml(i, day, opt) {
   const meta = [
     stSeg,
     isUrgent(i) ? '<span class="hb-urg">Urgent</span>' : '',
-    `<button type="button" class="hb-pill" style="--ch:${CAT_HUE[c.id] || 215}" data-hb="menu" data-k="${k}" data-d="${d}" title="Change the category">${c.icon} ${esc(c.label)}</button>`,
+    `<button type="button" class="hb-pill" style="--ch:${c.hue ?? CAT_HUE[c.id] ?? 215}" data-hb="menu" data-k="${k}" data-d="${d}" title="Change the category">${c.icon} ${esc(c.label)}</button>`,
     (i.rooms || []).map(r => `<button type="button" class="hb-rm" data-hb="room" data-r="${esc(r)}" title="Only room ${esc(r)}">${hi(r, q)}</button>`).join(''),
     (i.tags || []).map(t => `<span class="hb-tag">${esc(t)}</span>`).join(''),
     `<span class="hb-who"><span class="hb-av" style="--h:${hueOf(i.sender)}" aria-hidden="true">${esc(initials(i.sender))}</span>${hi(i.sender || '—', q)}</span>`,
@@ -1260,7 +1268,7 @@ function body() {
     const d = HB.date, raw = itemsOf(d), all = raw.filter(i => !i.del && !i.chat), f = view();
     const cnt = patch => shown(filterItems(all, Object.assign({}, f, patch))).length;
     const set = (id, h) => { const el = doc.getElementById(id); if (el && el.innerHTML !== h) el.innerHTML = h; };
-    set('hbShifts', [['all', 'All']].concat(SHIFT_BOUNDS.map(s => [s.id, s.id])).map(([k, l]) => `<button type="button" data-hb="shift" data-v="${k}" class="${HB.shift === k ? 'on' : ''}" aria-pressed="${HB.shift === k}">${esc(l)}<em>${cnt({ shift: k })}</em></button>`).join(''));
+    set('hbShifts', [['all', 'All']].concat(SHIFT_BOUNDS.map(s => [s.id, s.label || s.id])).map(([k, l]) => `<button type="button" data-hb="shift" data-v="${k}" class="${HB.shift === k ? 'on' : ''}" aria-pressed="${HB.shift === k}">${esc(l)}<em>${cnt({ shift: k })}</em></button>`).join(''));
     set('hbSt', [['all', 'All'], ['open', 'Pending'], ['done', 'Done']].map(([k, l]) => `<button type="button" data-hb="st" data-v="${k}" class="${HB.st === k ? 'on' : ''}" aria-pressed="${HB.st === k}">${l}</button>`).join(''));
     // the summary strip (taps filter) and the written summary
     const base = filterItems(all, Object.assign({}, f, { st: 'all' })), S = summaryOf(base), urg = base.filter(isUrgent).length;
@@ -1329,7 +1337,7 @@ function preview() {
     HB.rowsKind = 'paste';
     if (HB.rows.length === 1) {
       const r = HB.rows[0], C = catOf(r.cat), rooms = roomsOf(r.text);
-      box.innerHTML = `<div class="hb-pv"><span class="tx">✨ ${esc(tidy(r.text))} <span class="hb-pill" style="--ch:${CAT_HUE[C.id]}">${C.icon} ${esc(C.label)}</span>${rooms.map(x => ` <span class="hb-rm">${esc(x)}</span>`).join('')}${isUrgent({ orig: r.text, status: 'open' }) ? ' <span class="hb-urg">Urgent</span>' : ''}</span></div>`;
+      box.innerHTML = `<div class="hb-pv"><span class="tx">✨ ${esc(tidy(r.text))} <span class="hb-pill" style="--ch:${C.hue ?? CAT_HUE[C.id] ?? 215}">${C.icon} ${esc(C.label)}</span>${rooms.map(x => ` <span class="hb-rm">${esc(x)}</span>`).join('')}${isUrgent({ orig: r.text, status: 'open' }) ? ' <span class="hb-urg">Urgent</span>' : ''}</span></div>`;
     } else box.innerHTML = rowsHtml(`${HB.rows.length} items found — untick what should not go in`);
     syncAdd();
   });
@@ -1338,7 +1346,7 @@ function rowsHtml(title) {
   const R = HB.rows || [];
   if (!R.length) return `<div class="hb-hint">${HB.rowsKind === 'sugg' ? 'Nothing open in HotelOps right now. 👌' : 'Nothing to add.'}</div>`;
   return `<div class="hb-hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${esc(title)}<button type="button" class="hb-q sm" data-hb="rowsall">${R.every(r => r.on) ? 'Untick all' : 'Tick all'}</button>${HB.rowsKind === 'sugg' ? '<button type="button" class="hb-q sm" data-hb="rowsclose">Close</button>' : ''}</div>`
-    + R.map((r, i) => { const C = catOf(r.cat); return `<label class="hb-pv${r.on ? '' : ' off'}"><input type="checkbox" data-hb-row="${i}"${r.on ? ' checked' : ''}><span class="tx">${esc(tidy(r.text))} <span class="hb-pill" style="--ch:${CAT_HUE[C.id]}">${C.icon} ${esc(C.label)}</span>${r.sender || r.time || r.from ? `<small>${esc([r.from, r.sender, r.time ? t12(r.time) : '', r.date && r.date !== HB.date ? dLong(r.date) : ''].filter(Boolean).join(' · '))}${r.chat ? ' · looks like chat' : ''}</small>` : r.chat ? '<small>looks like chat</small>' : ''}</span></label>`; }).join('');
+    + R.map((r, i) => { const C = catOf(r.cat); return `<label class="hb-pv${r.on ? '' : ' off'}"><input type="checkbox" data-hb-row="${i}"${r.on ? ' checked' : ''}><span class="tx">${esc(tidy(r.text))} <span class="hb-pill" style="--ch:${C.hue ?? CAT_HUE[C.id] ?? 215}">${C.icon} ${esc(C.label)}</span>${r.sender || r.time || r.from ? `<small>${esc([r.from, r.sender, r.time ? t12(r.time) : '', r.date && r.date !== HB.date ? dLong(r.date) : ''].filter(Boolean).join(' · '))}${r.chat ? ' · looks like chat' : ''}</small>` : r.chat ? '<small>looks like chat</small>' : ''}</span></label>`; }).join('');
 }
 function syncAdd() { const b = doc.getElementById('hbAddBtn'); if (!b) return; const n = HB.rows ? HB.rows.filter(r => r.on).length : 0; b.textContent = n > 1 ? `Add ${n}` : 'Add'; b.disabled = !n; }
 function addNow() {

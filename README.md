@@ -125,7 +125,7 @@ manifest.json sw.js   PWA install and offline cache
 setup-account.html    First Owner account
 firebase-config.js    Firebase web config (public by design; rules protect data)
 
-db.js state.js utils.js tenant.js hotel-settings.js brand.js   Core: data, state, helpers, hotels, logos
+db.js state.js utils.js tenant.js hotel-settings.js hotel-setup.js brand.js   Core: data, state, helpers, hotels, logos
 auth.js               Login, roles, admin, activity log
 i18n.js settings.js   Languages, fonts, user settings
 global-search.js handover.js team-log.js whats-new.js install-prompt.js file-router.js

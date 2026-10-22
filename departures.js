@@ -86,6 +86,7 @@ function _depBeep() {
 
 function _depCheckOverdueAlerts() {
   if (!depAlertsOn || typeof depRooms === 'undefined' || !depRooms.length) return;
+  if (typeof hoCfg !== 'undefined' && hoCfg.get('dep').overdueAlert === false) return;   // the hotel switched overdue alerts off
   if (typeof hoQuiet === 'function' && hoQuiet()) return;   // not on shift today
   _renderAlertToggle();
 
@@ -104,7 +105,7 @@ function _depCheckOverdueAlerts() {
   if (!newlyOverdue.length) return;
   newlyOverdue.forEach(r => _alertedRooms.add(r.roomStr));
 
-  _depBeep();
+  if (typeof hoCfg === 'undefined' || hoCfg.get('dep').overdueSound !== false) _depBeep();
   if ('Notification' in window && Notification.permission === 'granted') {
     const names = newlyOverdue.slice(0, 3).map(r => `${r.roomStr} (${r.name})`).join(', ');
     try {
@@ -115,7 +116,7 @@ function _depCheckOverdueAlerts() {
     } catch (e) {}
   }
   const nx = newlyOverdue.filter(r => r.intent === 'extending');
-  if (nx.length) showToast(`⏳ 6 PM passed: ${nx.map(r => r.roomStr).join(', ')} still not extended (${nx.map(r => depExtWaiting(r).join(', ') || 'mark extended').join(' · ')})`, 'err');
+  if (nx.length) showToast(`⏳ ${_depExtLbl()} passed: ${nx.map(r => r.roomStr).join(', ')} still not extended (${nx.map(r => depExtWaiting(r).join(', ') || 'mark extended').join(' · ')})`, 'err');
   if (newlyOverdue.length > nx.length) showToast(`⚠ ${newlyOverdue.length - nx.length} room${newlyOverdue.length - nx.length > 1 ? 's' : ''} overdue for checkout`, 'err');
 }
 
@@ -814,13 +815,13 @@ function _depIsOverdue(r) {
   if (day > 0) return false;                                       // a list for a later day is not late yet
   if (day < 0) return !r.lcoAcknowledged;                          // still here from an earlier day's list: past every limit
   if (r.intent === 'extending') {                                  // staying on; booking / TD / payment are due by 6 PM
-    const n = new Date(); return n.getHours() * 60 + n.getMinutes() > DEP_EXTG_BY;
+    const n = new Date(); return n.getHours() * 60 + n.getMinutes() > _depExtBy();
   }
   if (es === 'late') return isLcoOverdue(r);
   if (r.lcoAcknowledged) return false;
   const now = new Date(), nowMins = now.getHours() * 60 + now.getMinutes();
   const limit = _depTimeMins(r);
-  return nowMins > (limit !== null ? limit : 12 * 60);
+  return nowMins > (limit !== null ? limit : _depCoMin());
 }
 
 // The list's date: "17-OCT-26" on the rooms, else the saved date
@@ -1291,6 +1292,12 @@ function _depSoonBy(r) {
 }
 
 const DEP_EXTG_BY = 18 * 60;   // ⏳ an extending guest has until 6 PM to finish the booking, signature, TD and payment
+// This hotel's times (Settings → Hotel setup → Hotel profile); the defaults above when nothing is set
+function _depExtBy() { return typeof hoCfg !== 'undefined' ? hoCfg.extendByMin() : DEP_EXTG_BY; }
+function _depCoMin() { return typeof hoCfg !== 'undefined' ? hoCfg.checkoutMin() : 12 * 60; }
+const _depAmPm = (m, long) => { const h = Math.floor(m / 60) % 24, mm = m % 60; return (long || mm) ? `${h % 12 || 12}:${String(mm).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}` : `${h % 12 || 12} ${h < 12 ? 'AM' : 'PM'}`; };
+const _depHHMM = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+function _depExtLbl() { return _depAmPm(_depExtBy()); }
 /** what an extending room still waits for: ['Booking', 'RC sign', 'TD', 'Payment'] */
 function depExtWaiting(r) {
   return [['extBook', 'Booking'], ['extSign', 'RC sign'], ['extTd', 'TD'], ['extPay', 'Payment']].filter(([k]) => !r[k]).map(([, l]) => l);
@@ -1323,7 +1330,7 @@ function depCardHTML(r) {
   const autoPromoted = r.status === 'due' && es === 'late';
   let badgeText;
   if (es === 'due') {
-    badgeText = overdue ? 'DUE · PAST 12:00' : 'DUE OUT';
+    badgeText = overdue ? `DUE · PAST ${_depHHMM(_depCoMin())}` : 'DUE OUT';
   } else if (es === 'late') {
     badgeText = autoPromoted
       ? (lcoOverdue ? `OVERDUE · ${r.depTime}` : `LATE CO · ${r.depTime}`)
@@ -1354,7 +1361,7 @@ function depCardHTML(r) {
   // short on the pill (the box under it lists the paperwork); the full story on hover
   let badgeTip = '';
   // (a room set to No answer / DND says so: "BY 6 PM" alone hid that nobody answers; the ring under it still counts to 6 PM)
-  if (extg) { badgeText = '⏳ EXTENDING · ' + (es === 'na' ? 'NA' : es === 'dnd' ? 'DND' : overdue ? 'PAST 6 PM' : 'BY 6 PM'); badgeTip = (es === 'na' ? 'No answer. ' : es === 'dnd' ? 'DND. ' : '') + (depExtWaiting(r).length ? 'Waiting for ' + depExtWaiting(r).join(', ') + ' — due by 6 PM' : 'All done: mark it extended'); }
+  if (extg) { badgeText = '⏳ EXTENDING · ' + (es === 'na' ? 'NA' : es === 'dnd' ? 'DND' : overdue ? 'PAST ' + _depExtLbl() : 'BY ' + _depExtLbl()); badgeTip = (es === 'na' ? 'No answer. ' : es === 'dnd' ? 'DND. ' : '') + (depExtWaiting(r).length ? 'Waiting for ' + depExtWaiting(r).join(', ') + ' — due by ' + _depExtLbl() : 'All done: mark it extended'); }
   if (finw) { badgeText = '🧾 LEFT · ' + String(r.finWho || 'Finance').toUpperCase(); badgeTip = `Guest left${r.finAt ? ' at ' + r.finAt : ''}; waiting for ${r.finWho || 'Finance'} to fix the room`; }
 
   let sClass = extg ? 'dp-s-due dp-s-extg' : finw ? 'dp-s-due dp-s-fin' : 'dp-s-' + (es || 'due');
@@ -1461,7 +1468,7 @@ function depCardHTML(r) {
         <div class="dc-ext-field">
           <label class="dc-ext-lbl">Checkout time</label>
           <select class="dc-select ext dc-ext-sel" onchange="depExtUpdate(${i},'checkoutTime',this.value)">
-            <option value="">Standard (12:00 PM)</option>
+            <option value="">Standard (${_depAmPm(_depCoMin(), 1)})</option>
             ${['10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM','6:00 PM','7:00 PM','8:00 PM','9:00 PM','10:00 PM','11:00 PM']
               .map(t => `<option value="${t}"${r.extCheckoutTime===t?' selected':''}>${t}</option>`).join('')}
           </select>
@@ -1492,11 +1499,8 @@ function depCardHTML(r) {
       <select class="dc-intent-select dp-said" aria-label="Guest said" onclick="event.stopPropagation()"
         onchange="depIntentSelect(${i}, this.value, this); event.stopPropagation()">
         <option value="">💬 Guest said…</option>
-        <option value="maybe_extend">🤔 May Extend</option>
-        <option value="coming_back">↩️ Coming Back</option>
-        <option value="returning">🔁 Returning</option>
-        <option value="pay_td">💵 Paying TD</option>
-        <option value="checkout_soon">⏱ Checking Out In…</option>
+        ${[['maybe_extend', 'May Extend'], ['coming_back', 'Coming Back'], ['returning', 'Returning'], ['pay_td', 'Paying TD'], ['checkout_soon', 'Checking Out In…']]
+          .map(([k, d]) => `<option value="${k}">${escapeHtml((INTENT_CONFIG[k] || {}).icon || '')} ${escapeHtml((INTENT_CONFIG[k] || {}).short || d)}</option>`).join('')}
       </select>` : '';
 
   const B = (cls, fn, ico, txt, title) => `<button class="dca ${cls}" onclick="${fn}"${title ? ` title="${title}"` : ''}><span class="dca-i" aria-hidden="true">${ico}</span><span class="dca-t">${txt}</span></button>`;
@@ -1552,14 +1556,14 @@ function depCardHTML(r) {
     const nowD = new Date(), nowM = nowD.getHours() * 60 + nowD.getMinutes();
     const fmtM = m => { const h = Math.floor(m / 60), mm = m % 60; return h ? `${h}h ${mm}m` : `${mm}m`; };
     const agreed = es === 'late' && r.status === 'late' ? _parseLcoTime(r.lateTime) : null;
-    const limit  = extg ? DEP_EXTG_BY : agreed !== null ? agreed : (_depTimeMins(r) !== null ? _depTimeMins(r) : (overdue ? 12 * 60 : null));
+    const limit  = extg ? _depExtBy() : agreed !== null ? agreed : (_depTimeMins(r) !== null ? _depTimeMins(r) : (overdue ? _depCoMin() : null));
     if (limit !== null) {
       const diff = limit - nowM;
       if (overdue && diff < 0) {
-        timeHTML = `<span class="dp-time dp-time-over" style="--p:1" title="${fmtM(-diff)} past ${extg ? 'the 6 PM limit for the extension' : 'checkout time'}"><i class="dp-tring" aria-hidden="true"></i><span class="dc-time-tag over">${fmtM(-diff)} over</span></span>`;
+        timeHTML = `<span class="dp-time dp-time-over" style="--p:1" title="${fmtM(-diff)} past ${extg ? 'the ' + _depExtLbl() + ' limit for the extension' : 'checkout time'}"><i class="dp-tring" aria-hidden="true"></i><span class="dc-time-tag over">${fmtM(-diff)} over</span></span>`;
       } else if (diff > 0 && (timeTag || agreed !== null || extg)) {
         const pct = Math.max(.04, Math.min(1, 1 - diff / 360)).toFixed(3);
-        timeHTML = `<span class="dp-time${diff <= 30 ? ' dp-time-soon' : ''}" style="--p:${pct}" title="${fmtM(diff)} left ${extg ? 'to finish the extension (6 PM)' : 'to check out'}"><i class="dp-tring" aria-hidden="true"></i><span class="dc-time-tag ${diff <= 30 ? 'soon' : 'ok'}">${fmtM(diff)} left</span></span>`;
+        timeHTML = `<span class="dp-time${diff <= 30 ? ' dp-time-soon' : ''}" style="--p:${pct}" title="${fmtM(diff)} left ${extg ? 'to finish the extension (' + _depExtLbl() + ')' : 'to check out'}"><i class="dp-tring" aria-hidden="true"></i><span class="dc-time-tag ${diff <= 30 ? 'soon' : 'ok'}">${fmtM(diff)} left</span></span>`;
       }
     }
   }
@@ -3149,7 +3153,7 @@ function depAskLCO(i) {
   `;
   document.head.appendChild(style);
 
-  const QUICK = ['10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','15:00','16:00','18:00'];
+  const QUICK = (typeof hoCfg !== 'undefined' && hoCfg.get('dep').lcoTimes) || ['10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','15:00','16:00','18:00'];   // Settings → Hotel setup → Departures
 
   const overlay = document.createElement('div');
   overlay.id = 'lcoPickerOverlay';
@@ -3164,7 +3168,7 @@ function depAskLCO(i) {
       <div id="lcoQuickBtns">
         ${QUICK.map(t => `<button data-t="${t}" onclick="lcoQuickPick('${t}')">${t}</button>`).join('')}
       </div>
-      <input id="lcoCustomInput" type="text" placeholder="or type e.g. 12:45" maxlength="5" value="${escapeHtml(r.lateTime || '')}" />
+      <input id="lcoCustomInput" type="text" placeholder="or type e.g. 12:45" maxlength="5" value="${escapeHtml(r.lateTime || (typeof hoCfg !== 'undefined' && hoCfg.get('profile').lcoDefault) || '')}" />
       <div style="display:flex;gap:8px;">
         <button id="lcoConfirmBtn" onclick="lcoConfirm(${i})">Set Late CO</button>
         <button id="lcoCancelBtn" onclick="document.getElementById('lcoPickerOverlay').remove();document.getElementById('lcoStyle')?.remove();">Cancel</button>

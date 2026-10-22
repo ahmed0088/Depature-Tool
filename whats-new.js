@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 376, items: [
+    '🩺 New page: Room Health (Front Desk). It reads WhatsApp, HK requests, the Handover Book, maintenance tickets and room notes, and tells you who to send: "Send Engineering to 116 — AC not cooling reported 3× since yesterday", "Send HK to 206 — smoke smell; deodorise before today\'s arrival". Arrivals into a room with an open problem come first, then repeat problems. One tap sends a clear message to the right WhatsApp group and adds a room note and a handover item; a "done" reply marks it fixed. "Problem rooms" shows the rooms with the most issues in 30 / 90 days.',
+    '📦 Package Audit: copy buttons and ✓ Fixed on every package (fixed ones move to "Fixed already", with Undo). The team can change every month (left / renamed people keep their old sales; import a team list). A 🧠 Memory remembers every package across months — "↪ continues from Sep" keeps the seller, and Unknown products are solved from memory. It learns your decisions as rules you accept. 🛠 Settings for package kinds, rules and report columns (drag & drop), and the seller board compares months.',
+    '🏨 Settings → Hotel setup: your check-out time, extending deadline, shift names and hours, the menu order (drag & drop, rename groups, hide pages), Handover and HK categories, and Departures rules — all adjustable without code, with Reset to default. Copy the whole setup to another hotel. Nothing changes until you change it.',
+  ] },
   { v: 375, items: [
     '🔗 In-House and Departures are linked live: a room checked out on Departures (by hand, by WhatsApp or "Check out all due") shows "✓ Checked out 11:02" on In-House and leaves the counts; Undo brings it back. An extension shows "↪ extended +2N → 23 Oct" with the new date and nights left. Extending, may extend, late check-out, NA and DND show as badges.',
     '➕ In-House tells you which rooms leave today but are not on Departures — "Add them" in one tap. Guests on today\'s arrivals who are in-house get "🛎️ Arrived". The room card follows all of it live, and WhatsApp never re-adds a room already checked out today.',

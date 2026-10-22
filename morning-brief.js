@@ -83,7 +83,7 @@ function _guests() {
     const c = has('depCounts') ? depCounts() : {};
     const out = depRooms.filter(r => r.status === 'out').length, ext = depRooms.filter(r => r.status === 'extended').length;
     const left = (c.due || 0) + (c.late || 0) + (c.na || 0) + (c.dnd || 0);
-    const lco = depRooms.filter(r => { const m = safe(() => _parseLcoTime(r.depTime), null); return m != null && m > 12 * 60 && r.status !== 'out'; }).length;
+    const lco = depRooms.filter(r => { const m = safe(() => _parseLcoTime(r.depTime), null); return m != null && m > (typeof hoCheckoutMin === 'function' ? hoCheckoutMin() : 12 * 60) && r.status !== 'out'; }).length;
     const vip = depRooms.filter(r => r.isVip && r.status !== 'out').length;
     const old = window._depDate && window._depDate !== todayIso();
     stats.push({ k: 'Departures', v: `${out}/${depRooms.length}`, s: 'out' });

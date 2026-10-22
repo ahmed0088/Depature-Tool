@@ -2672,6 +2672,7 @@ console.log('\nIn-House Guests');
     '🛏️ Room 512 · Xi Fakeworth\n19 Oct → 23 Oct\n⭐ Pinned VIP\n📝 Late taxi');
 }
 
+// ── In-House ↔ Departures (inhouse.js overlay): check-outs, extensions, LCO, rooms missing on either side ──
 console.log('\nIn-House linked with Departures');
 {
   const sb = { console: { log() {}, warn() {}, error() {} } };
@@ -2738,5 +2739,317 @@ console.log('\nIn-House linked with Departures');
   const WF = r => { const f = sb.hoWaPure.findRoom(r); return f ? [f.src, !!f.out, f.checkoutAt || ''] : null; };
   check('wa findRoom: checked out today (remembered) → found with out, not re-added; an in-house room still in → found', [WF('113'), WF('0507')], [['in-house list', true, '11:02'], ['in-house list', false, '']]);
 }
+
+// ── Hotel setup (hotel-setup.js): defaults, merge, shifts, menu, categories, copy to another hotel ──
+{
+  console.log('\nHotel setup');
+  const mkSb = () => {
+    const store = {};
+    const sb = { console: { log() {}, warn() {}, error() {} }, setTimeout: () => 0,
+      localStorage: { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } } };
+    sb.window = sb; sb.globalThis = sb; vm.createContext(sb);
+    vm.runInContext(fs.readFileSync(path.join(ROOT, 'hotel-setup.js'), 'utf8'), sb, { filename: 'hotel-setup.js' });
+    return sb;
+  };
+  const sb = mkSb(), P = sb.hoSetupPure, C = sb.hoCfg, J = x => JSON.parse(JSON.stringify(x));
+  check('setup: nothing saved → the defaults (12:00 out, 15:00 in, extensions by 18:00)', [C.checkoutMin(), C.checkinMin(), C.extendByMin(), C.followRoster(), J(C.hiddenForAll())], [720, 900, 1080, true, []]);
+  const M = P.merge({ profile: { checkout: '11:00', checkin: 'noon', extendBy: 99 }, shifts: { morning: { from: '06:00' } }, dep: { lcoTimes: ['13:00', 'x'] }, junk: 1 });
+  check('setup: saved values over the defaults; a bad time or type keeps the default; unknown sections dropped',
+    [M.profile.checkout, M.profile.checkin, M.profile.extendBy, M.shifts.morning.from, M.shifts.morning.to, M.shifts.night.label, J(M.dep.lcoTimes), 'junk' in M], ['11:00', '15:00', '18:00', '06:00', '15:00', 'Night', ['13:00'], false]);
+  check('setup: time helpers', [P.toMin('7:05'), P.toMin('24:00'), P.toMin(''), P.ampm(1080), P.ampm(1110), P.ampm(720, 1), P.hhmm(425)], [425, null, null, '6 PM', '6:30 PM', '12:00 PM', '07:05']);
+  const B = P.shiftBounds({ morning: { label: 'Early', from: '06:00', to: '14:00' }, afternoon: { from: '14:00', to: '22:00' }, night: { from: '22:00', to: '06:00' } });
+  check('setup: shift bounds keep their ids, take the names and hours', B.map(b => [b.id, b.label, b.from, b.to]), [['Morning', 'Early', 360, 840], ['Afternoon', 'Afternoon', 840, 1320], ['Night', 'Night', 1320, 360]]);
+  check('setup: which shift a time is in (night goes past midnight)', [P.shiftAt(B, 359), P.shiftAt(B, 360), P.shiftAt(B, 1319), P.shiftAt(B, 1320), P.shiftAt(B, 0)], ['night', 'morning', 'afternoon', 'night', 'night']);
+  check('setup: hours with no shift and hours with two',
+    J(P.shiftCheck(P.shiftBounds({ morning: { from: '07:00', to: '16:00' }, afternoon: { from: '15:00', to: '22:00' }, night: { from: '23:00', to: '07:00' } }))), { gaps: [[1320, 1380]], overlaps: [[900, 960]] });
+  check('setup: the default shifts cover the day once', J(P.shiftCheck(P.shiftBounds())), { gaps: [], overlaps: [] });
+  const defs = [{ id: 'desk', title: 'Front Desk', pages: ['home', 'departures', 'arrivals'] }, { id: 'night', title: 'Night Audit', pages: ['checklist', 'audit'] }, { id: 'tools', title: 'Tools', pages: ['qr'] }];
+  check('menu: no setup → the default groups', J(P.navPlan(defs, { groups: null })), defs);
+  check('menu: saved order, renamed group, a page moved between groups; a page the setup does not name goes back to its own group',
+    J(P.navPlan(defs, { groups: [{ id: 'night', title: 'Nights', pages: ['audit', 'departures'] }, { id: 'desk', title: '', pages: ['home', 'audit'] }, { id: 'gx', title: 'Mine', pages: [] }] })),
+    [{ id: 'night', title: 'Nights', pages: ['audit', 'departures', 'checklist'] }, { id: 'desk', title: 'Front Desk', pages: ['home', 'arrivals'] }, { id: 'gx', title: 'Mine', pages: [] }, { id: 'tools', title: 'Tools', pages: ['qr'] }]);
+  check('cats: extra words → a whole-word pattern', [P.wordsRe('shuttle, bus to mall').test('the bus  to mall at 5'), P.wordsRe('shuttle').test('shuttles'), P.wordsRe(''), P.wordsRe('a')], [true, false, null, null]);
+  check('copy: a new hotel gets the setup without this hotel\'s name',
+    J(P.forNewHotel({ profile: { shortName: 'Sample Inn', checkout: '11:00' }, shifts: { followRoster: false } })), { profile: { checkout: '11:00' }, shifts: { followRoster: false } });
+  const F = P.readFile(JSON.stringify({ hotelops: 'setup', v: 1, setup: { profile: { shortName: 'Other Inn', checkout: '11:30' }, bogus: {} }, td: { tdRate: 15 }, balOk: ['Expedia', ''] }));
+  check('copy: a setup file → known sections only, the name dropped, sources tidied', [F.setup.profile.checkout, 'shortName' in F.setup.profile, 'bogus' in F.setup, F.td.tdRate, J(F.balOk)], ['11:30', false, false, 15, ['expedia']]);
+  let bad = ''; try { P.readFile('{"hotelops":"settings"}'); } catch (e) { bad = e.message; }
+  check('copy: another kind of file is refused', bad, 'not a HotelOps setup file');
+  C.set('profile', { checkout: '11:00', extendBy: '17:30' }); C.set('menu', { hidden: ['qr', 'settings'] });
+  check('setup: a saved section answers at once (Settings can never be hidden)', [C.checkoutMin(), C.extendByMin(), sb.hoCheckoutMin(), J(C.hiddenForAll()), C.shiftRanges().night], [660, 1050, 660, ['qr'], '23:00 - 07:00']);
+  C.set('profile', null);
+  check('setup: reset → the default again', C.checkoutMin(), 720);
+  // the Handover Book and HK requests use the categories through their own tables
+  const hb = mkSb();
+  for (const f of ['wa-bridge.js', 'wa-brain.js', 'handover-book.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), hb, { filename: f });
+  const H = hb.hoHandoverPure, WB = hb.hoWaBrainPure;
+  check('cats: built-in handover sorting before any setup', [H.categorize('taxi to airport 5am'), H.categorize('mall bus at 9'), H.categorize('valet key for 512')], ['transport', 'info', 'desk']);
+  hb.hoCfg.set('cats', { ho: { transport: { label: 'Cars', icon: '🚐', words: 'mall bus', hue: 90 }, lost: { off: true }, cz: { custom: true, label: 'Parking', icon: '🅿️', words: 'valet' } },
+    hk: { towel: { label: 'Bath towels' }, cot: { off: true }, ck: { custom: true, label: 'Umbrella', words: 'umbrella' } } });
+  check('cats: renamed, recoloured, extra words, switched off, added',
+    [H.categorize('mall bus at 9'), H.CAT.transport.label, H.CAT.transport.icon, H.CAT.transport.hue, H.categorize('lost and found: item found'), H.categorize('valet key for 512'), H.CATS.some(c => c[0] === 'lost'), (H.CATS.find(c => c[0] === 'cz') || [])[1]],
+    ['transport', 'Cars', '🚐', 90, 'info', 'cz', false, 'Parking']);
+  check('cats: HK requests follow it too', [WB.wbCategorize('need towels 512').map(c => c.label).join(), WB.wbCategorize('baby cot please').map(c => c.id).join(), WB.wbCategorize('umbrella for 301').map(c => c.id).join()], ['Bath towels', '', 'ck']);
+  hb.hoCfg.set('cats', null);
+  check('cats: reset → the built-in names and words', [H.CAT.transport.label, H.categorize('mall bus at 9'), H.CATS.some(c => c[0] === 'lost'), WB.wbCategorize('baby cot please').map(c => c.id).join(), WB.wbCategorize('need towels 512').map(c => c.label).join()],
+    ['Transport', 'info', true, 'cot', 'Towels']);
+  hb.hoCfg.set('shifts', { morning: { label: 'Early', from: '06:00', to: '14:00' }, afternoon: { from: '14:00', to: '22:00' }, night: { from: '22:00', to: '06:00' } });
+  check('shifts: the Handover Book takes the hotel\'s hours and names', [['06:30', '13:59', '14:00', '22:30', '05:59'].map(H.shiftOf), H.SHIFT_BOUNDS[0].label], [['Morning', 'Morning', 'Afternoon', 'Night', 'Night'], 'Early']);
+  hb.hoCfg.set('shifts', null);
+  check('shifts: reset → 07 / 15 / 23 again', ['06:59', '07:00', '15:00', '23:00'].map(H.shiftOf), ['Night', 'Morning', 'Afternoon', 'Night']);
+}
+
+
+// ── Package Audit: team changes, month-to-month memory, report columns, settings, ✓ Fixed ──
+{
+  console.log('\nPackage Audit · memory, team, columns, settings, fixed');
+  const noop = () => {}, el = () => ({ style: {}, classList: { add: noop, remove: noop, toggle: noop }, addEventListener: noop, appendChild: noop, querySelector: () => null, querySelectorAll: () => [] });
+  const saved = [];
+  const sb = { console: { log() {}, warn() {}, error() {}, info() {} }, setTimeout: () => 0, clearTimeout: noop, setInterval: () => 0, JSON, Math,
+    localStorage: { getItem: () => null, setItem: noop, removeItem: noop },
+    document: { getElementById: () => null, querySelector: () => null, querySelectorAll: () => [], addEventListener: noop, createElement: el, head: el(), body: el(), readyState: 'complete' },
+    addEventListener: noop, navigator: { onLine: true }, showToast: noop, showUndoToast: noop, logActivity: noop,
+    fbUpdate: (p, patch) => saved.push(['update', p, JSON.parse(JSON.stringify(patch))]), fbSet: (p, v) => saved.push(['set', p, v]) };
+  sb.window = sb; sb.globalThis = sb; sb.__saved = saved;
+  vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'package-audit.js'), 'utf8'), sb, { filename: 'package-audit.js' });
+  const run = js => vm.runInContext(`(() => { ${js} })()`, sb);
+  // A made-up hotel: September, then October. Guest Fakeworth stays 25 Sep → 5 Oct with breakfast
+  // sold by Sam (login CHAIN-SALVAREZ); the October log no longer reaches that sale.
+  vm.runInContext(`
+    var U = (conf, product, employee, charge, daily, room) => ({ conf, room: room || '101', charge, days: '', arr: '25-Sep-2026', dep: '05-Oct-2026', daily, status: 'APPROVED',
+      product, employee, needsProduct: /unknown/i.test(product), needsEmployee: !employee || employee === '-' });
+    function sepAudit() {
+      pkgRules = Object.assign({}, PKG_RULE_DEFAULTS); pkgMemory = {}; pkgPins = {}; pkgLearned = {};
+      pkgGuests = { M1: { name: 'FAKEWORTH, XI', norm: 'FAKEWORTH XI', gid: 'G77', room: '101', arr: '25-SEP-26', dep: '30-SEP-26' } };
+      pkgUnknowns = [U('M1', 'Breakfast', 'CHAIN-LMORENO', 24.48, '28-Sep-2026'), U('M1', 'Unknown Product', '-', 24.48, '29-Sep-2026'),
+                     U('M2', 'Late Check Out', 'Lina MORENO', 50, '29-Sep-2026', '102')];
+      pkgEvents = { M1: [{ action: 'ADDED', code: 'UPS30BB', ts: 202609200900, user: 'CHAIN-SALVAREZ@CHAIN', price: '24.48', from: '25-SEP-26', to: '29-SEP-26' }],
+                    M2: [{ action: 'ADDED', code: 'USS100LC', ts: 202609290800, user: 'CHAIN-LMORENO@CHAIN', price: '50' }] };
+      _pkgRecomputeLogRange();
+      return _pkgCompute();
+    }
+    function octAudit(js) {
+      pkgUnknowns = [U('M1', 'Breakfast', 'CHAIN-LMORENO', 24.48, '01-Oct-2026'), U('M1', 'Unknown Product', '-', 24.48, '02-Oct-2026')];
+      pkgEvents = { Z9: [{ action: 'ADDED', code: 'UPS30BB', ts: 202610010900, user: 'CHAIN-TKHAN@CHAIN', price: '24.48' }] };
+      if (js) js();
+      _pkgRecomputeLogRange();
+      return _pkgCompute();
+    }
+    var who = r => r.conf + ':' + r.verdict + ':' + _pkgUserLabel(r.user) + (r.carriedFrom ? ':↪' + r.carriedFrom.month : '');
+  `, sb);
+  const sepMem = run(`const res = sepAudit(); const b = _pkgMemoryBuild(res, {}, { at: 'T', by: 'Tester' }); return { keys: Object.keys(b.patch).sort(), rec: b.next.M1.BB };`);
+  check('memory: September remembers every credited package (booking/kind)', sepMem.keys, ['M1/BB', 'M2/LC']);
+  check('memory: the record keeps code, seller, dates, guest and how it was decided',
+    [sepMem.rec.code, sepMem.rec.seller, sepMem.rec.from, sepMem.rec.to, sepMem.rec.guest, sepMem.rec.gid, sepMem.rec.how, sepMem.rec.first, sepMem.rec.months['202609'].n],
+    ['UPS30BB', 'CHAIN-SALVAREZ@CHAIN', 20260925, 20260929, 'FAKEWORTH, XI', 'G77', 'opera', '202609', 2]);
+  check('memory: October without memory — the sale is before the log (not in log)',
+    run(`sepAudit(); pkgMemory = {}; return octAudit().map(who).join(' ');`), 'M1:outside:CHAIN-LMORENO M1:outside:-');
+  check('memory: October with September remembered — the stay continues, Sam keeps it, unknown night named',
+    run(`pkgMemory = _pkgMemoryBuild(sepAudit(), {}).next; return octAudit().map(who).join(' ');`),
+    'M1:credit:CHAIN-SALVAREZ:↪202609 M1:credit:CHAIN-SALVAREZ:↪202609');
+  check('memory: the Unknown Product night gets the remembered code and still asks for package + seller',
+    run(`pkgMemory = _pkgMemoryBuild(sepAudit(), {}).next; const r = octAudit()[1]; return [r.code, r.needsProduct, r.reassign, _pkgActionText(r), _pkgFamilyName(r)];`),
+    ['UPS30BB', true, false, 'Set package + seller', 'Breakfast']);
+  check('memory: a report never confirms itself (September memory does not touch September)',
+    run(`pkgMemory = _pkgMemoryBuild(sepAudit(), {}).next; pkgEvents = {}; _pkgRecomputeLogRange(); return _pkgCompute().filter(r => r.carriedFrom).length;`), 0);
+  check('memory: rule switched off — every month on its own again',
+    run(`pkgMemory = _pkgMemoryBuild(sepAudit(), {}).next; pkgRules.memory = false; return octAudit().map(r => r.verdict).join(' ');`), 'outside outside');
+  check('memory: a later colleague in October’s log does not take a package Sam started in September',
+    run(`pkgMemory = _pkgMemoryBuild(sepAudit(), {}).next; return octAudit(() => { pkgEvents.M1 = [{ action: 'ATTACHED', code: 'UPS30BB', ts: 202610010700, user: 'CHAIN-TKHAN@CHAIN', price: null }]; })[0].user;`),
+    'CHAIN-SALVAREZ@CHAIN');
+  check('memory: the same guest extending onto a new booking in October keeps the September seller (profile ID)',
+    run(`pkgMemory = _pkgMemoryBuild(sepAudit(), {}).next;
+      pkgGuests = { N5: { name: 'XI FAKEWORTH', norm: 'FAKEWORTH XI', gid: 'G77', room: '101', arr: '30-SEP-26', dep: '04-OCT-26' } };
+      pkgUnknowns = [U('N5', 'Breakfast', 'CHAIN-TKHAN', 24.48, '02-Oct-2026')];
+      pkgEvents = { N5: [{ action: 'ADDED', code: 'UPS30BB', ts: 202609301000, user: 'CHAIN-TKHAN@CHAIN', price: '24.48' }] };
+      _pkgRecomputeLogRange(); const r = _pkgCompute()[0]; return [r.user, r.reassign, r.carriedFrom.conf, /Same stay as booking M1/.test(r.memoryNote)];`),
+    ['CHAIN-SALVAREZ@CHAIN', true, 'M1', true]);
+  check('memory: both bookings in October\u2019s guest list — the extension still goes to the September seller, not IN-Gauge\u2019s guess',
+    run(`pkgMemory = _pkgMemoryBuild(sepAudit(), {}).next;
+      pkgGuests = { M1: { name: 'FAKEWORTH, XI', norm: 'FAKEWORTH XI', gid: 'G77', room: '101', arr: '25-SEP-26', dep: '30-SEP-26' },
+                    N5: { name: 'XI FAKEWORTH', norm: 'FAKEWORTH XI', gid: 'G77', room: '101', arr: '30-SEP-26', dep: '04-OCT-26' } };
+      pkgUnknowns = [U('M1', 'Breakfast', 'CHAIN-LMORENO', 24.48, '01-Oct-2026'), U('N5', 'Breakfast', 'CHAIN-TKHAN', 24.48, '02-Oct-2026')];
+      pkgEvents = { N5: [{ action: 'ADDED', code: 'UPS30BB', ts: 202609301000, user: 'CHAIN-TKHAN@CHAIN', price: '24.48' }] };
+      _pkgRecomputeLogRange(); return _pkgCompute().map(r => r.conf + ':' + r.user).join(' ');`), 'M1:CHAIN-SALVAREZ@CHAIN N5:CHAIN-SALVAREZ@CHAIN');
+  check('memory: a guest returning after a break is a new sale',
+    run(`pkgMemory = _pkgMemoryBuild(sepAudit(), {}).next;
+      pkgGuests = { N6: { name: 'XI FAKEWORTH', norm: 'FAKEWORTH XI', gid: 'G77', room: '305', arr: '10-OCT-26', dep: '12-OCT-26' } };
+      pkgUnknowns = [U('N6', 'Breakfast', 'CHAIN-TKHAN', 24.48, '11-Oct-2026')];
+      pkgEvents = { N6: [{ action: 'ADDED', code: 'UPS30BB', ts: 202610100900, user: 'CHAIN-TKHAN@CHAIN', price: '24.48' }] };
+      _pkgRecomputeLogRange(); const r = _pkgCompute()[0]; return [r.user, !!r.memoryUsed];`), ['CHAIN-TKHAN', false]);
+  check('memory: October adds its own month to the record; older than the months to keep is forgotten',
+    run(`const m1 = _pkgMemoryBuild(sepAudit(), {}).next; pkgMemory = m1; const oct = octAudit();
+      const b = _pkgMemoryBuild(oct, m1); const old = { X1: { BB: { conf: 'X1', seller: 'A', first: '202401', last: '202401', months: { '202401': { n: 1, aed: 1 } } } } };
+      const c = _pkgMemoryBuild([], Object.assign({}, b.next, old), { months: 13 });
+      return [Object.keys(b.next.M1.BB.months).join(','), b.next.M1.BB.how, c.patch['X1/BB'], !!c.next.M1];`),
+    ['202609,202610', 'opera', null, true]);
+
+  // Team: renamed and left colleagues
+  vm.runInContext(`function team() {
+    pkgStaffDb = {
+      sam: { name: 'Sam KHAN', logins: ['CHAIN-SALVAREZ'], status: 'active', former: [{ name: 'Sam ALVAREZ', until: '2026-09-30' }] },
+      lina: { name: 'Lina MORENO', logins: [], status: 'left', left: '2026-09-30' },
+      tom: { name: 'Tom KHANDI', logins: ['CHAIN-TKHANDI'], status: 'active' } };
+    _pkgApplyStaff(); pkgResults = [];
+  }`, sb);
+  check('team: a renamed colleague — old login and old IN-Gauge name both read as the new name',
+    run(`team(); return [_pkgUserLabel('CHAIN-SALVAREZ@CHAIN'), _pkgUserLabel('Sam ALVAREZ'), _pkgSameUser('Sam ALVAREZ', 'Sam KHAN'), _pkgSameUser('CHAIN-SALVAREZ', 'Sam KHAN')];`),
+    ['Sam KHAN', 'Sam KHAN', true, true]);
+  check('team: a rename does not join two different people', run(`team(); return [_pkgSameUser('CHAIN-TKHANDI', 'Sam ALVAREZ'), _pkgSameUser('Tom KHANDI', 'Sam KHAN')];`), [false, false]);
+  check('team: someone who left still gets their old sales, but is not offered for new ones',
+    run(`team(); sepAudit(); team(); const r = _pkgCompute().find(x => x.conf === 'M2');
+      return [_pkgUserLabel(r.user), r.verdict, _pkgSellerChoices().join('|'), _pkgSellerChoices(['Lina MORENO']).includes('Lina MORENO')];`),
+    ['Lina MORENO', 'credit', 'Sam KHAN|Tom KHANDI', true]);
+  check('team: a pasted list / CSV — names, logins, who left; header skipped',
+    run(`return JSON.stringify(_pkgParseTeamText('Name,Logins,Status\\nAna TEST,CHAIN-ATEST;ATEST2,active\\nBo SAMPLE,,left,2026-08-31\\nCy EXAMPLE = CHAIN-CEXAMPLE'));`),
+    JSON.stringify([{ name: 'Ana TEST', logins: ['CHAIN-ATEST', 'ATEST2'], status: 'active' }, { name: 'Bo SAMPLE', logins: [], status: 'left', date: '2026-08-31' }, { name: 'Cy EXAMPLE', logins: ['CHAIN-CEXAMPLE'] }]));
+  check('team: importing merges by name, old name or login and never removes anyone',
+    run(`team(); const m = _pkgTeamMerge(pkgStaffDb, [{ name: 'Sam ALVAREZ', logins: ['SALV2'] }, { name: 'New PERSON', logins: [] }, { name: 'Lina MORENO', logins: [], status: 'active' }]);
+      return [m.added, m.updated, m.next.sam.logins.join(','), m.next.lina.status, Object.keys(m.next).length];`),
+    [1, 2, 'CHAIN-SALVAREZ,SALV2', 'active', 4]);
+
+  // Report columns
+  const rows = [['IN-Gauge export'], [''], ['Item', 'Booking Ref', 'Room No', 'Product Charge', 'Seller', 'Daily Date'], ['Breakfast', '7001', '101', 24.48, 'Ana TEST', '01-Oct-2026']];
+  check('columns: renamed headers are not found until mapped', run(`pkgSettings = _pkgMergeSettings({}); return _pkgParseExcelUnknowns(${JSON.stringify(rows)}).length + ':' + pkgLastHeaders.ig.missing.join('/')`), '0:Product (package)/Confirmation no.');
+  check('columns: mapped in Settings — read from the right columns, header row found below a title',
+    run(`pkgSettings = _pkgMergeSettings({ colMap: { ig: { product: 'Item', conf: 'booking ref', employee: 'Seller' } } }); const r = _pkgParseExcelUnknowns(${JSON.stringify(rows)});
+      return [r.length, r[0].conf, r[0].product, r[0].employee, r[0].charge, pkgLastHeaders.ig.row];`), [1, '7001', 'Breakfast', 'Ana TEST', 24.48, 3]);
+  check('columns: the usual IN-Gauge headers still work with nothing mapped',
+    run(`pkgSettings = _pkgMergeSettings({}); const r = _pkgParseExcelUnknowns([['Product', 'Confirmation No', 'Employee'], ['Breakfast', '7002', '-']]); return [r[0].conf, r[0].needsEmployee];`), ['7002', true]);
+  check('columns: guest list mapped too', run(`pkgSettings = _pkgMergeSettings({ colMap: { guest: { name: 'Who' } } }); return Object.keys(_pkgParseGuestList([['Confirmation Number', 'Who'], ['7003', 'TEST, ANA']]));`), ['7003']);
+
+  // Settings merged with the defaults
+  check('settings: nothing stored = the defaults', run(`return JSON.stringify(_pkgMergeSettings(null)) === JSON.stringify(PKG_SETTINGS_DEFAULTS);`), true);
+  check('settings: bad values are clamped, lists from the database (objects) read back in order',
+    run(`const s = _pkgMergeSettings({ doneDays: 2, memMonths: 99, chrome: 'Line A, Line B', kinds: { 1: { k: 'lc', label: 'Late', re: 'LC$' }, 0: { k: 'bb', label: 'Breakfast', re: 'BB$', codes: { 0: 'mbreak ' } } } });
+      return [s.doneDays, s.memMonths, s.chrome.join('|'), s.kinds.map(k => k.k).join(','), s.kinds[0].codes[0]];`), [7, 36, 'Line A|Line B', 'BB,LC', 'MBREAK']);
+  check('settings: a hotel’s own kind (Spa) with an exact code, then back to default',
+    run(`const L = PKG_KINDS_DEFAULT.concat([{ k: 'SPA', label: 'Spa', re: '^SPA', codes: ['RELAX1'], once: true, ig: 'Spa Treatment' }]);
+      _pkgSetKinds(_pkgMergeSettings({ kinds: L }).kinds); const a = [_pkgKindOfCode('SPA60'), _pkgKindOfCode('relax1'), _pkgIsOneTime('Spa Treatment'), _pkgKindOfCode('UPS30BB')];
+      _pkgSetKinds(null); return a.concat([_pkgKindOfCode('RELAX1'), PKG_KINDS.length]);`), ['SPA', 'SPA', true, 'BB', 'RELAX', 7]);
+  check('settings: my view keeps my order, adds new values, drops unknown ones',
+    run(`return JSON.stringify(_pkgMergeView({ chips: ['seller', 'nope', 'conf', 'seller'], hidden: ['guest', 'x'] }));`),
+    JSON.stringify({ chips: ['seller', 'conf', 'room', 'pkg', 'code', 'price', 'dates', 'guest'], hidden: ['guest'] }));
+  check('settings: a setup for another hotel carries kinds and rules, never the team',
+    run(`pkgSettingsRaw = { doneDays: 60 }; pkgRules = Object.assign({}, PKG_RULE_DEFAULTS, { chainGap: 1 }); pkgStaffDb = { a: { name: 'Ana TEST' } };
+      const k = _pkgKitRead(JSON.stringify(_pkgKit())); pkgRules = Object.assign({}, PKG_RULE_DEFAULTS);
+      return [k.settings.doneDays, k.rules.chainGap, JSON.stringify(k).includes('Ana'), _pkgKitRead('{"app":"other"}')];`), [60, 1, false, null]);
+
+  // ✓ Fixed: copying never marks; Fixed is shared, stays fixed, and a teammate's fix merges in
+  vm.runInContext(`function fixedSetup() {
+    pkgStaffDb = {}; _pkgApplyStaff(); pkgSettings = _pkgMergeSettings({}); pkgDone = {}; pkgMemory = {}; pkgReportAt = Date.parse('2026-10-11T06:00:00Z');
+    sepAudit(); pkgResults = _pkgCompute(); _pkgRemember(_pkgDoneLast, {});
+  }`, sb);
+  check('fixed: copying a value only copies — the package stays to fix',
+    run(`fixedSetup(); pkgCopyConf(null, 'M1'); pkgCopyChip({ getAttribute: () => 'M1', textContent: '', classList: { add() {}, remove() {} } });
+      return [Object.keys(pkgDone).length, _pkgAllGroups().filter(g => _pkgInView(g, 'action')).map(g => g.key).join(',')];`),
+    [0, 'M1|Breakfast']);
+  saved.length = 0;
+  check('fixed: ✓ Fixed moves it to Fixed already, saved for the team (only that entry)',
+    run(`fixedSetup(); pkgMarkFixed(null, 'M1|Breakfast');
+      const g = _pkgAllGroups(); return [_pkgDoneState('M1|Breakfast'), g.filter(x => _pkgInView(x, 'action')).map(x => x.key).join(','), g.filter(x => pkgDone[x.key] && !x.rows.some(pkgBackWrong)).map(x => x.key).join(',')];`),
+    ['waiting', '', 'M1|Breakfast']);
+  check('fixed: the save is a patch of the one package, not the whole list', saved.filter(x => x[1] === 'pkgDone').map(x => Object.keys(x[2])), [['M1|Breakfast']]);
+  check('fixed: a teammate’s fix arriving from the database merges with mine; the next save sends nothing old',
+    run(`fixedSetup(); pkgMarkFixed(null, 'M1|Breakfast'); const mine = pkgDone['M1|Breakfast'];
+      const remote = { 'M1|Breakfast': mine, 'M2|Late Check Out': { by: 'Teammate', at: '2026-10-11T07:00:00.000Z', conf: 'M2' } };
+      pkgDone = _pkgClean(remote); _pkgRemember(_pkgDoneLast, pkgDone); const before = __saved.length; _pkgSaveDone();
+      return [Object.keys(pkgDone).sort().join(','), __saved.length - before];`), ['M1|Breakfast,M2|Late Check Out', 0]);
+  check('fixed: stays fixed on a later report that shows it right (confirmed), comes back only if still wrong',
+    run(`fixedSetup(); pkgMarkFixed(null, 'M1|Breakfast'); pkgReportAt = Date.now() + 3600e3;
+      const back = _pkgDoneState('M1|Breakfast');
+      pkgResults.forEach(r => { if (r.conf === 'M1') { r.reassign = false; r.alreadyComplete = true; } });
+      return [back, _pkgDoneState('M1|Breakfast')];`), ['back', 'confirmed']);
+  check('fixed: kept as long as Settings says (older marks are tidied away)',
+    run(`fixedSetup(); pkgSettings = _pkgMergeSettings({ doneDays: 10 }); pkgDone = { old: { at: new Date(Date.now() - 11 * 864e5).toISOString() }, recent: { at: new Date(Date.now() - 9 * 864e5).toISOString() } };
+      _pkgSaveDone(); return Object.keys(pkgDone);`), ['recent']);
+  check('fixed: the memory record remembers who fixed it',
+    run(`fixedSetup(); pkgMemory = {}; pkgResults = _pkgCompute(); _pkgMemorize(pkgResults); pkgMarkFixed(null, 'M1|Breakfast'); return !!(pkgMemory.M1.BB.fixed && pkgMemory.M1.BB.fixed.at);`), true);
+
+  // Learning from decisions
+  check('learning: the same decision on one code twice is offered as a rule, then applied without a pin',
+    run(`pkgLearned = {}; pkgPins = { 'A1|Spa': { skip: true, code: 'SPA60' }, 'A2|Spa': { skip: true, code: 'spa60' }, 'A3|Spa': { seller: 'Ana TEST', code: 'SPA60' } };
+      const s = _pkgLearnSuggestions(); pkgLearned = { [s[0].id]: { id: s[0].id, type: 'skip', code: 'SPA60', by: 'Tester' } }; pkgPins = {};
+      const L = _pkgLearnedFor({ code: 'SPA60', verdict: 'credit', matchedEvent: { code: 'SPA60' } });
+      return [s.length, s[0].type, s[0].n, !!(L && L.pin.skip), _pkgLearnSuggestions({ 'A1|Spa': { skip: true, code: 'SPA60' }, 'A2|Spa': { skip: true, code: 'SPA60' } }).length];`),
+    [1, 'skip', 2, true, 0]);
+}
+
+// ── Room Health (room-health.js): room problems → who to send, repeats, messages, fixed replies ──
+console.log('\nRoom Health');
+{
+  const sb = { console: { log() {}, warn() {}, error() {} } };
+  sb.globalThis = sb;
+  vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'room-health.js'), 'utf8'), sb, { filename: 'room-health.js' });
+  const P = sb.hoRoomHealthPure;
+  const K = t => P.classify(t).kinds.map(k => k.kind).join('+') || '-';
+  const phr = [
+    ['AC not cooling', 'ac'], ['a/c nt cooliing pls', 'ac'], ['aircon is too cold, guest freezing', 'ac'], ['room is very hot', 'ac'],
+    ['water leeking from the ceiling', 'leak'], ['dripping in bathroom', 'leak'], ['no hot water', 'hotwater'], ['water pressure very low in shower', 'hotwater'],
+    ['tolet not flushing', 'plumb'], ['sink blocked', 'plumb'], ['bulb fused', 'elec'], ['no power in the room', 'elec'], ['TV remote not working', 'tv'],
+    ['key card not working', 'lock'], ['safe box locked, guest cant open', 'lock'], ['fridge not cooling', 'fridge'], ['curtain motor not working', 'window'],
+    ['AC making loud noise', 'machnoise'], ['wifi not wrking', 'wifi'], ['internet very slow', 'wifi'],
+    ['smoke smell', 'smell'], ['smel in bathroom', 'smell'], ['cockroch in bathroom', 'pest'], ['bed bugs on the mattress', 'pest'],
+    ['stains on the carpet', 'stain'], ['dirty towels', 'linen'], ['no shampoo', 'amen'], ['room not clean, guest complained', 'clean'],
+    ['loud music next door', 'noise'], ['guest smoking in room', 'smoking'], ['broken chair', 'repair'],
+    ['2 towels please', '-'], ['please clean the toilet', '-'], ['please send hot water for tea', '-'], ['minibar refill', '-'], ['614 double lock', '-'], ['VD dirty', '-'], ['do not disturb', '-'], ['toilet paper missing', 'amen'],
+  ];
+  check('room health: classifier — many made-up phrasings with typos', phr.map(([t]) => K(t)), phr.map(p => p[1]));
+  check('room health: departments and severity', ['leak', 'AC not cooling', 'bulb fused', 'wifi down not working', 'cockroach', 'noise from next room'].map(t => { const k = P.classify(t).kinds[0]; return k.dept + ':' + k.severity; }),
+    ['eng:high', 'eng:med', 'eng:med', 'it:med', 'hk:high', 'sec:med']);
+  check('room health: negations and fixes', ['AC working now', 'no issue with the AC', 'leak fixed', 'still leaking', 'leak not fixed yet', 'AC is working?', 'done ✅', 'fixed ✅', 'AC not working now'].map(t => P.classify(t).fix || '-'),
+    ['strong', 'strong', 'strong', '-', '-', '-', 'weak', 'strong', '-']);
+  check('room health: rooms in a message (not times, money, nights)', [P.roomsIn('smoke smell 206, 506 paint smell'), P.roomsIn('0106 AC at 14:00'), P.roomsIn('paid AED 250 for 2 nights'), P.roomsIn('lco 1400')],
+    [['206', '506'], ['0106'], [], []]);
+  const ex = (text, at, extra) => P.extract(Object.assign({ text, at, source: 'wa', who: 'Sam Test' }, extra || {}));
+  check('room health: one message, two rooms, two problems', ex('203 physically IP, smoke smell 206, 418 leaking again', 1).map(e => e.room + ':' + e.kind), ['206:smell', '418:leak']);
+  check('room health: our own messages are never read back', [ex('Engineering: Room 512 — AC not cooling. Please check. — HotelOps', 1).length, ex('⁣512 AC not cooling', 1).length, ex('🩺 Sent Engineering for AC', 1).length], [0, 0, 0]);
+  const D = (d, h, m) => new Date(2026, 9, d, h, m || 0).getTime(), NOW = D(21, 12);
+  // repeats
+  const evA = [].concat(ex('512 AC not cooling', D(20, 9)), ex('512 AC not cooling pls send someone', D(20, 9, 30)), ex('512 AC working now', D(20, 11)), ex('512 AC not cooling again', D(21, 10)));
+  const cA = P.build(evA, { now: NOW });
+  check('room health: a chase is the same case, a fix closes it, the next time is a repeat', cA.map(c => [c.status, c.reports.length, c.n7, c.repeat]), [['open', 1, 2, true], ['fixed', 2, 2, true]]);
+  const evB = [].concat(ex('418 leak in bathroom', D(1, 9)), ex('418 leak fixed', D(1, 12)), ex('418 leaking from ceiling', D(10, 9)), ex('418 leak fixed', D(10, 15)), ex('418 water leak again', D(20, 8)), ex('418 leak fixed ✅', D(20, 13)));
+  const cB = P.build(evB, { now: NOW });
+  check('room health: 3× in 30 days is a repeat even when each was fixed', [cB.length, cB.every(c => c.status === 'fixed'), cB[0].n30, cB[0].repeat], [3, true, 3, true]);
+  check('room health: one report is not a repeat; old open ones go quiet', P.build(ex('305 no hot water', D(21, 11)).concat(ex('306 TV not working', D(15, 9))), { now: NOW }).map(c => c.rk + ':' + c.status + ':' + c.repeat), ['305:open:false', '306:stale:false']);
+  // done / fixed closing
+  const sentId = '206|smell|' + D(21, 9);
+  const evC = ex('206 smoke smell', D(21, 9)).concat(ex('206 done ✅', D(21, 10)));
+  check('room health: "206 done ✅" closes only what was sent', [P.build(evC, { now: NOW })[0].status, P.build(evC, { now: NOW, acts: { [sentId]: { sent: { at: D(21, 9, 30), dept: 'hk' } } } })[0].status], ['open', 'fixed']);
+  check('room health: "Done ✅" quoting the message closes it', P.build(ex('512 AC not cooling', D(21, 9)).concat(ex('Done ✅', D(21, 9, 40), { quote: '512 AC not cooling' })), { now: NOW }).map(c => c.status + ':' + c.fixedBy), ['fixed:Sam Test']);
+  check('room health: ✓ Fixed tapped in the app', P.build(ex('512 TV not working', D(21, 9)), { now: NOW, acts: { ['512|tv|' + D(21, 9)]: { fixedAt: D(21, 10), fixedBy: 'Lee Test' } } })[0].status, 'fixed');
+  // ranking: arrival at risk > repeat > single
+  const evR = [].concat(ex('206 bad smell', D(21, 8)), ex('512 AC not cooling', D(20, 9)), ex('512 AC fixed', D(20, 12)), ex('512 AC not cooling again', D(21, 9)), ex('305 no hot water', D(21, 11)));
+  const cR = P.build(evR, { now: NOW });
+  const recs = P.advise(cR, { now: NOW, ctx: { arr: { 206: true }, vacant: {}, vip: {} } });
+  check('room health: advice — arrival at risk, then repeat, then a single report', recs.map(r => r.rk + ':' + r.type), ['206:arrival', '512:repeat', '305:single']);
+  check('room health: advice titles', recs.map(r => r.title), [
+    'Send HK to 206 — bad smell; deodorise before the arrival today (check-in 14:00)',
+    'Send Engineering to 512 — AC not cooling reported 2× since yesterday',
+    'Send Engineering to 305 — no hot water']);
+  const chk = P.advise(cB, { now: NOW, ctx: { co: { 418: true } } });
+  check('room health: a room that keeps leaking gets a full check while it is vacant', chk.map(r => r.type + ':' + r.title), ['check:Room 418 had a leak 3× in 30 days — ask Engineering for a full check while it\'s vacant (guest checks out today)']);
+  check('room health: VIP and vacant rooms move up', P.advise(P.build(ex('101 TV not working', D(21, 9)).concat(ex('102 TV not working', D(21, 9))), { now: NOW }), { now: NOW, ctx: { vip: { 102: true } } }).map(r => r.rk), ['102', '101']);
+  // messages
+  check('room health: WhatsApp message for Engineering', P.compose(recs[1], null, {}), 'Engineering: Room 512 — AC not cooling (reported 2× since yesterday). Please check. — HotelOps');
+  check('room health: WhatsApp message for HK before an arrival', P.compose(recs[0], null, {}), 'Housekeeping: Room 206 — bad smell. Arrival today: please deodorise before check-in (14:00). — HotelOps');
+  check('room health: the message reads back as ours', P.isOurs(P.compose(recs[1], null, {})), true);
+  // follow-up once, only high severity
+  const cF = P.build(ex('305 no hot water', D(21, 7)), { now: NOW });
+  const fA = id => ({ [id]: { sent: { at: D(21, 8), dept: 'eng' } } });
+  check('room health: follow-up after 3 h only for a high problem, not after a chase', [P.advise(cF, { now: NOW, acts: fA(cF[0].id) })[0].follow, P.advise(cF, { now: D(21, 10), acts: fA(cF[0].id) })[0].follow,
+    P.advise(cF, { now: NOW, acts: { [cF[0].id]: { sent: { at: D(21, 8) }, chased: D(21, 11) } } })[0].follow], [true, false, false]);
+  // settings
+  const cfg = P.mergeCfg({ depts: { eng: { group: 'Eng Team Test' }, ga: { name: 'Guest Relations', emoji: '💐' } }, kinds: { ac: { kw: 'ac, aircon, klima' }, gx: { label: 'Balcony door', dept: 'ga', kw: 'balcony door' } }, th: { rep7: 3 } });
+  check('room health: settings — own words, a new department and problem type', [cfg.depts.find(d => d.id === 'eng').group, P.classify('klima kaputt', cfg).kinds.map(k => k.kind).join(), P.classify('balcony door broken', cfg).kinds.map(k => k.dept).join(), cfg.th.rep7, cfg.th.rep30],
+    ['Eng Team Test', 'ac', 'ga', 3, 3]);
+  const PR = P.problemRooms(cB.concat(cA), 30, NOW);
+  check('room health: problem rooms ranked with their kinds', PR.map(p => p.rk + ' ' + P.kindsLine(p.kinds, P.compile())), ['418 Water leak ×3', '512 AC ×2']);
+  check('room health: summary', (s => [s.open, s.repeatRooms, s.arrivals, s.fixedWeek])(P.summary(cR, recs, NOW)), [3, 1, 1, 1]);
+}
+
 console.log(`\n${pass} passed · ${fail} failed`);
 process.exit(fail ? 1 : 0);

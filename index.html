@@ -1625,7 +1625,7 @@
         <input id="hsSearch" type="search" placeholder="Search settings…" oninput="hoSettingsFilter(this.value)"/>
         <a href="#hs-look">Appearance</a><a href="#hs-topbar">Top bar</a><a href="#hs-time">Date &amp; time</a><a href="#hs-menu">Menu &amp; pages</a><a href="#hs-home">Home</a>
         <a href="#hs-brain">Ops Brain</a><a href="#hs-help">Helpers</a><a href="#hs-alerts">Alerts &amp; sounds</a><a href="#hs-deps">Departures</a><a href="#hs-privacy">Privacy &amp; security</a>
-        <a href="#hs-hotel">Hotel</a><a href="#hs-sync">Sync</a><a href="#hs-data">Data &amp; storage</a><a href="#hs-account">Account</a><a href="#hs-adv">Advanced</a><a href="#hs-about">About</a>
+        <a href="#hs-setup">Hotel setup</a><a href="#hs-setup-shifts">Shifts</a><a href="#hs-setup-menu">Team menu</a><a href="#hs-setup-cats">Categories</a><a href="#hs-setup-deps">Departures rules</a><a href="#hs-hotel">Hotel space</a><a href="#hs-sync">Sync</a><a href="#hs-data">Data &amp; storage</a><a href="#hs-account">Account</a><a href="#hs-adv">Advanced</a><a href="#hs-about">About</a>
       </aside>
       <div id="hsBody" class="hs-body"></div>
     </div>
@@ -1772,10 +1772,13 @@
     <div id="pkgMainView">
     <details class="howto"><summary>❔ How the list works</summary><ul>
       <li><b>The list shows only packages that still need a change in IN-Gauge.</b> Each card says the room, the package, the nights, the seller in IN-Gauge now → who it should be, and why.</li>
-      <li><b>Tap the confirmation number</b> to copy it. That marks the package fixed for all its nights: it leaves the list (Undo for a few seconds).</li>
+      <li>Each card shows the values to type (confirmation no., package, seller, price, nights, guest), each with a small <b>copy</b> button. Copying only copies.</li>
+      <li>When it is done in IN-Gauge, press <b>✓ Fixed</b>: the package moves to <b>Fixed already</b> for the whole team (Undo there).</li>
       <li>A fixed package waits for the <b>next IN-Gauge report</b>. If that report shows it right, it is <b>confirmed ✓</b>. If it still shows it wrong, it <b>comes back on top</b> in red with the nights still wrong. Loading the same old report again never brings it back.</li>
       <li><b>Why?</b> on a card shows step by step how the seller was decided. <b>📌 Freeze seller</b> keeps the seller you choose, whatever the rules say.</li>
       <li><b>⚙️ Rules</b> (top right) shows every rule the audit uses, with an example. Managers can switch them and see at once what changes.</li>
+      <li><b>🧠 Memory</b> keeps every package the audit resolves. Next month, a package that continues (same booking, or the guest's back-to-back booking) keeps its seller: "↪ continues from Sep".</li>
+      <li><b>🛠 Settings</b>: package kinds and codes, the team (who left, renames, logins), report columns, how long things are kept, which values your cards show. No code needed.</li>
       <li>IN-Gauge status: <b>REVIEWED</b> rows keep their seller and stop being work; <b>DENIED</b> rows are left out.</li>
     </ul></details>
 
@@ -4050,6 +4053,7 @@ ${actionList?`<div class="action"><h2>Act on these first</h2><ul>${actionList}</
 <!-- ════════ SCRIPTS — order matters ════════ -->
 <script src="firebase-config.js"></script>
 <script src="hotel-settings.js"></script>
+<script src="hotel-setup.js"></script>
 <script src="db.js"></script>
 <script src="state.js"></script>
 <script src="utils.js"></script>
@@ -5495,6 +5499,7 @@ async function appInit() {
 <script src="i18n.js"></script>
 <script src="settings.js"></script>
 <script src="room-card.js"></script>
+<script src="room-health.js"></script>
 <script>
   // ── PWA: register service worker for offline app-shell ──
   if ('serviceWorker' in navigator) {

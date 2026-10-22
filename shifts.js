@@ -434,9 +434,11 @@ function applyShiftData(saved, heardFromDb = true) {
  *  Falls back to 07:00 / 15:00 / 23:00 before any roster is in. */
 function hoShiftNow(now) {
   now = now || new Date();
-  const T = typeof rtTaskTimes === 'function' ? (() => { try { return rtTaskTimes(); } catch (_) { return null; } })() : null;
+  // the hotel's shift hours (Settings → Hotel setup → Shifts); the roster's own hours first unless it said not to
+  const C = typeof hoCfg !== 'undefined' ? hoCfg : null, H = C ? (() => { try { return C.shiftRanges(); } catch (_) { return null; } })() : null;
+  const T = (!C || C.followRoster()) && typeof rtTaskTimes === 'function' ? (() => { try { return rtTaskTimes(); } catch (_) { return null; } })() : H;
   const min = t => { const m = String(t || '').match(/(\d{1,2}):(\d{2})/); return m ? +m[1] * 60 + +m[2] : null; };
-  const starts = [['night', min(T && T.night) ?? 23 * 60], ['morning', min(T && T.morning) ?? 7 * 60], ['afternoon', min(T && T.afternoon) ?? 15 * 60]].sort((a, b) => a[1] - b[1]);
+  const starts = [['night', min(T && T.night) ?? min(H && H.night) ?? 23 * 60], ['morning', min(T && T.morning) ?? min(H && H.morning) ?? 7 * 60], ['afternoon', min(T && T.afternoon) ?? min(H && H.afternoon) ?? 15 * 60]].sort((a, b) => a[1] - b[1]);
   const m = now.getHours() * 60 + now.getMinutes();
   let cur = starts.filter(s => s[1] <= m).pop(), prevDay = false;
   if (!cur) { cur = starts[starts.length - 1]; prevDay = true; }   // before the first start: the last shift of yesterday

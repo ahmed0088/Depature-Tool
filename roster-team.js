@@ -1401,16 +1401,17 @@ function rtTaskTimes() {
   try { shifts = typeof rbGroupCfg === 'function' && Object.keys(roStaff).length ? rbGroupCfg(g).shifts : []; } catch (_) {}
   const of = t => shifts.filter(s => (roInfo(s) || {}).type === t).sort((a, b) => rbMin(a) - rbMin(b));
   const night = of('night'), morn = of('morning'), aft = of('afternoon');
+  const H = (typeof hoCfg !== 'undefined' && (() => { try { return hoCfg.shiftRanges(); } catch (_) { return null; } })()) || {};   // Settings → Hotel setup → Shifts
   return {
-    morning: set.morning || morn[0] || '07:00 - 15:00',
+    morning: set.morning || morn[0] || H.morning || '07:00 - 15:00',
     mid: set.mid || (aft.length > 1 ? aft[0] : '') || '12:00 - 20:00',
-    afternoon: set.afternoon || aft[aft.length - 1] || '15:00 - 23:00',
-    night: set.night || night.find(s => rbMin(s) < 300) || night[0] || '23:00 - 07:00',
+    afternoon: set.afternoon || aft[aft.length - 1] || H.afternoon || '15:00 - 23:00',
+    night: set.night || night.find(s => rbMin(s) < 300) || night[0] || H.night || '23:00 - 07:00',
   };
 }
 function rtApplyTaskTimes() {
   if (typeof SHIFTS === 'undefined') return;
-  const T = rtTaskTimes();
+  const T = typeof hoCfg !== 'undefined' && !hoCfg.followRoster() ? Object.assign(rtTaskTimes(), hoCfg.shiftRanges()) : rtTaskTimes();   // the hotel's fixed hours when it chose them over the roster's
   Object.keys(T).forEach(k => { if (SHIFTS[k]) SHIFTS[k].time = T[k].replace(' - ', ' – '); });
 }
 function rtTaskTimesHtml() {

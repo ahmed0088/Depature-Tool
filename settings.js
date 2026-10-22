@@ -16,6 +16,7 @@ const HO_PREF_DEFAULTS = {
   startPage: 'home',
   hiddenPages: [],
   hiddenTiles: [],
+  tileOrder: [],          // Home tiles in your own order (drag them in Settings → Home)
   homeTip: true,
   brainOn: true,
   brainBubbles: true,
@@ -66,7 +67,7 @@ function hoSetPref(k, v) {
 function _hoPages() {
   return [...document.querySelectorAll('.sidenav .nav-item[data-panel]')]
     .map(n => ({ id: n.dataset.panel, name: n.textContent.replace(/\s*[\d—✓/]+\s*$/, '').replace(/Compare|Upload/g, '').trim(), allowed: n.style.display !== 'none' }))
-    .filter(p => p.id !== 'home' && p.id !== 'settings' && p.allowed);
+    .filter(p => p.id !== 'home' && p.id !== 'settings' && p.allowed && !(typeof hoCfg !== 'undefined' && hoCfg.hiddenForAll().includes(p.id)));
 }
 
 function hoApplyPrefs() {
@@ -80,7 +81,8 @@ function hoApplyPrefs() {
   b.classList.toggle('ho-rail', hoPrefs.menuStyle === 'icons');
   b.classList.toggle('ho-no-brain', !hoPrefs.brainOn);
   b.classList.toggle('ho-no-hometip', !hoPrefs.homeTip);
-  const hidden = new Set(hoPrefs.hiddenPages || []);
+  // your own hidden pages, and the ones the hotel hides for everyone (Settings → Hotel setup → Menu)
+  const hidden = new Set((hoPrefs.hiddenPages || []).concat(typeof hoCfg !== 'undefined' ? hoCfg.hiddenForAll() : []));
   document.querySelectorAll('.nav-item[data-panel], .mob-more-item[data-panel], .mob-nav-btn[data-panel]').forEach(el => {
     el.classList.toggle('ho-hidden', hidden.has(el.dataset.panel));
   });
@@ -174,7 +176,7 @@ function hoSettingsRender() {
     _hoSec('time', 'shifts', 'Date & time', 'How times are shown',
       _hoSeg('clock12', 'Clock and roster times', '24-hour like Opera (21:00), or 12-hour with AM/PM (9:00 PM): the top bar clock and every roster time', [[false, '24-hour'], [true, '12-hour']])
       + _hoTog('clockSeconds', 'Show seconds', 'In the top bar clock')
-      + _hoTog('greetName', 'Greet me by name', '"Good evening, Ahmed" on Home')),
+      + _hoTog('greetName', 'Greet me by name', '"Good evening, Sam" on Home')),
 
     _hoSec('menu', 'more', 'Menu & pages', 'Show only the pages you use. Hidden pages can still be opened from search (Ctrl K)',
       `<div class="hs-row" data-s="start page open first launch">
@@ -187,10 +189,10 @@ function hoSettingsRender() {
        <div class="hs-row hs-mini"><span class="hs-txt"><small>${pages.length - hidden.size} of ${pages.length} pages shown</small></span>
          <span><button class="btn sm ghost" onclick="hoSetPref('hiddenPages',[]);hoSettingsRender()">Show all</button></span></div>`),
 
-    _hoSec('home', 'home', 'Home', 'What the Home page shows',
-      `<div class="hs-pages" data-s="home tiles cards dashboard">
+    _hoSec('home', 'home', 'Home', 'What the Home page shows, in your order',
+      (typeof hsuTilesHtml === 'function' ? hsuTilesHtml() : `<div class="hs-pages" data-s="home tiles cards dashboard">
          ${tiles.map(([v, t]) => `<label class="hs-page ${hiddenT.has(v) ? 'off' : ''}"><input type="checkbox" ${hiddenT.has(v) ? '' : 'checked'} onchange="hoToggleTile('${v}', this.checked)"><span class="hs-page-ic">${(typeof hoIcon === 'function' && hoIcon(v)) || ''}</span>${t}</label>`).join('')}
-       </div>`
+       </div>`)
       + _hoTog('brainHome', 'Ops Brain suggestions on Home', 'The 3 things it would do next, under the tiles')
       + _hoTog('homeTip', 'Drop-a-file tip', 'The reminder that you can drag reports onto the app')),
 
@@ -234,11 +236,13 @@ function hoSettingsRender() {
       _hoTog('privacy', 'Privacy screen', 'Blurs guest names and emails until you point at them. Use it when guests can see the screen')
       + _hoSeg('autoLock', 'Sign out when idle', 'Signs out this device after no activity', [[0, 'Never'], [15, '15 min'], [30, '30 min'], [60, '1 hour'], [240, '4 hours']])),
 
-    _hoSec('hotel', 'adagio', 'Hotel', 'Shared with the whole team',
-      `<div id="tnBox"></div><div class="hs-row" data-s="hotel name property">
+    typeof hoSetupSections === 'function' ? hoSetupSections() : '',
+
+    _hoSec('hotel', 'adagio', typeof hoSetupSections === 'function' ? 'Hotel space & Tourism Dirham' : 'Hotel', 'Shared with the whole team',
+      `<div id="tnBox"></div>${typeof hoSetupSections === 'function' ? '' : `<div class="hs-row" data-s="hotel name property">
          <span class="hs-txt"><b>Hotel name</b><small>Shown under the HotelOps logo and on reports</small></span>
          <span class="hs-inline"><input id="hsHotel" value="${escapeHtml(hotel)}"><button class="btn sm" onclick="hoSaveHotel()">Save</button></span>
-       </div>`
+       </div>`}`
       + (td ? `<div class="hs-row hs-col" data-s="tourism dirham td code rate cap night audit 7510 dtcm">
          <span class="hs-txt"><b>Tourism Dirham</b><small>Opera code, rate per night, night cap and audit time. Used by DTCM Recon, TD Audit and Long Stay</small></span>
          <div class="hs-grid">
