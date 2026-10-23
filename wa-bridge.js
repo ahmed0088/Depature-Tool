@@ -1962,7 +1962,8 @@ function mount() {
     <details class="wa-sec wa-help" id="waHelp"><summary class="wa-sech">❔ How to set up</summary>
       <div class="wa-secb">
       <p><b>What it does:</b> it reads your WhatsApp groups and only sends what you send from HotelOps. When someone writes <code>324 CO</code>, room 324 is checked out here. <code>202 LCO 6PM</code> sets a 6 PM late check-out. <code>0113 EXT 2N</code> (or <code>extended till 22 Oct</code>) marks an extension. Lists work too (<code>Checkout list:</code> then one room per line). Other messages with a room (like <code>415 change bedsheet</code>) become a note, or a request when the guest is not leaving today. Every change has an Undo. Every message is kept as a backup: search it above and download it any time.</p>
-      <p><b>Option A — automatic</b></p>
+      <p><b>Best — the one-click helper.</b> Add the small HotelOps helper to Chrome or Edge once (the green box at the top of this window: ⬇ Get the helper). After that, <b>🟢 Open WhatsApp Web</b> is the only click: the reader starts by itself and links to HotelOps — no F12, no paste, no Connect button, even after WhatsApp reloads.</p>
+      <p><b>Option A — paste it yourself</b></p>
       <ol>
         <li>Open WhatsApp Web on this computer.</li>
         <li>Press <b>F12</b> and click <b>Console</b>.</li>
@@ -2183,7 +2184,7 @@ function renderStatus() {
   const on = linkSeen && Date.now() - linkSeen < 20000;
   const g = LINK && (LINK.open || (LINK.groups && LINK.groups.map(x => x.name).join(', ')));
   el.innerHTML = on ? `<i class="wa-dot on"></i><span>Linked to WhatsApp${g ? ' · reading ' + esc(g) : ''}${LINK && LINK.rtt ? ' · ' + Math.round(LINK.rtt) + ' ms' : ''}</span>`
-    : `<i class="wa-dot"></i><span>${LOG.length ? 'Not linked right now · ' : 'Not linked · '}set up once with ❔ How to set up, or paste below</span>`;
+    : `<i class="wa-dot"></i><span>${LOG.length ? 'Not linked right now · ' : 'Not linked · '}press 🟢 Open WhatsApp Web (one-click helper) or see ❔ How to set up</span>`;
   const hint = doc.getElementById('waSendHint');
   if (hint) hint.textContent = !on ? 'Link WhatsApp Web first (❔ How to set up). Nothing is sent until you press Send.' : (waAutoOn() || (LINK && LINK.auto)) ? 'Sent straight away to the group.' : 'It is typed in WhatsApp for you. You press Enter there to send it.';
   const wb = doc.getElementById('waWords'); if (wb) wb.hidden = typeof W.hoWaWordsOpen !== 'function';

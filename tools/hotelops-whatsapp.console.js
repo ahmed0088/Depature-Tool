@@ -141,7 +141,9 @@
   // the groups: [{name, act}] (act false = "log only": messages are kept in HotelOps, no room is changed)
   var groups = LS.get('ho_wa_groups', null);
   if (!Array.isArray(groups)) { var old = LS.get('ho_wa_group', ''); groups = old ? [{ name: old, act: true }] : []; }
-  if (!groups.length) { var g0 = (prompt('HotelOps: the name of the WhatsApp group to read (open the group first and it is filled in for you)', chatTitle()) || '').trim(); if (g0) groups.push({ name: g0, act: true }); }
+  // run by the HotelOps helper (browser extension): no questions; groups are picked in the window (✎ Groups) or the first open group is offered
+  var EXT = window.__hoWaExt || null;
+  if (!groups.length && !EXT) { var g0 = (prompt('HotelOps: the name of the WhatsApp group to read (open the group first and it is filled in for you)', chatTitle()) || '').trim(); if (g0) groups.push({ name: g0, act: true }); }
   function saveGroups() { LS.set('ho_wa_groups', groups); }
   saveGroups();
   var seen = LS.get('ho_wa_seen', {});          // data-id → text already handed over
@@ -1273,6 +1275,11 @@
   obs.observe(document.body, { childList: true, subtree: true, characterData: true });
   window.addEventListener('message', onMsg);
   iv1 = setInterval(tick, 2000); iv2 = setInterval(scan, 5000); iv3 = setInterval(relTick, 30000);
+  // the HotelOps helper carries the messages between this tab and HotelOps: linked at once, no button, no new tab
+  if (EXT && typeof EXT.post === 'function') {
+    win = { closed: false, focus: function () {}, postMessage: function (o) { try { EXT.post(o); } catch (_) {} } };
+    openedAt = Date.now(); mode = 'waiting'; tick();
+  }
   window.__hoWa = { stop: stop, scan: scan, tab: setTab, min: setMin, toast: toast,
     state: function () { return { mode: mode, group: curKey, groups: groups.map(function (g) { return g.name + (g.act === false ? ' (log only)' : ''); }), queue: queue.length, sent: day.sent, read: day.read, rtt: rtt, auto: auto,
       out: out.map(function (o) { return o.id + ':' + o.st; }), asks: Object.keys(asks), unread: unread,

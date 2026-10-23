@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 398, items: [
+    '⚡ One-click WhatsApp: no more F12 and pasting. In the WhatsApp window press ⬇ Get the helper — HotelOps builds a small helper for Chrome / Edge. Add it once (chrome://extensions → Developer mode → Load unpacked). From then on 🟢 Open WhatsApp Web is the only click: the reader starts by itself and links to HotelOps on its own, even after WhatsApp reloads. When the reader changes, the window offers the new helper.',
+  ] },
   { v: 397, items: [
     '🔊 Style sounds: each App style has its own little sounds when you tap and when a message pops up — 🕹 Gaming bleeps, 💬 WhatsApp pops, ✈️ Telegram swish, 🎧 Discord blips, 📝 Notes ticks, 🗒 Notepad key clicks, 🏛 Classic wood, 📚 Study chimes, ⚡ Pro soft ticks. Quiet, and on only in Gaming until you choose: Settings → Appearance → Style sounds (Off · Gaming only · Every style).',
     '🚪 Departures dressed by your style: WhatsApp and Telegram show the rooms as a chat list with round avatars, Discord as server icons, Gaming as neon HUD frames, Notes as yellow stickies, Classic as brass room plates, Study as index tabs, Notepad and Pro as clean boxes.',
