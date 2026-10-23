@@ -3474,3 +3474,31 @@ html, body { background: var(--bg); }
 .bl-now-t b { font-size: .84rem; } .bl-now-t small { color: var(--text3); font-size: .74rem; }
 .bl-now-a { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
 .bl-now-x { flex: none; width: 30px; height: 30px; border-radius: 9px; border: 0; background: transparent; color: var(--text3); cursor: pointer; }
+
+/* ── Phone tab bar: a floating glass capsule (iOS style) with a pill that slides to the current tab ── */
+@media (max-width: 768px) {
+  #mobNav.mob-nav {
+    left: 14px !important; right: 14px !important; bottom: calc(10px + env(safe-area-inset-bottom)) !important;
+    height: 64px !important; padding: 5px !important; gap: 0; border-radius: 999px !important;
+    background: color-mix(in srgb, var(--bg2) 64%, transparent) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(1.9) !important; backdrop-filter: blur(22px) saturate(1.9) !important;
+    border: .5px solid color-mix(in srgb, var(--text) 13%, transparent) !important;
+    box-shadow: 0 14px 34px -12px rgba(0,0,0,.32), 0 2px 8px rgba(0,0,0,.06), inset 0 1px 0 rgba(255,255,255,.5), inset 0 -1px 0 rgba(0,0,0,.03) !important;
+  }
+  #mobNav .mob-nav-btn { position: relative; z-index: 1; padding: 0 !important; gap: 3px; border-radius: 999px !important; background: transparent !important;
+    color: color-mix(in srgb, var(--text) 52%, transparent) !important; transition: color .25s, transform .15s !important; }
+  #mobNav .mob-nav-btn.active { background: transparent !important; color: var(--accent) !important; }
+  #mobNav .mob-nav-btn:active { transform: scale(.9) !important; }
+  #mobNav .mob-nav-btn .mob-nav-icon, #mobNav .mob-nav-btn.active .mob-nav-icon { transform: none !important; color: inherit; }
+  #mobNav .mob-nav-icon .ho-ic { width: 23px; height: 23px; }
+  #mobNav .mob-nav-lbl { font: 600 10.5px var(--font) !important; letter-spacing: 0 !important; text-transform: none !important; color: inherit !important; }
+  #mobNav .mob-nav-btn.active .mob-nav-lbl { font-weight: 700 !important; }
+  .mob-nav-lens { position: absolute; z-index: 0; top: 5px; bottom: 5px; left: 0; width: 0; border-radius: 999px; pointer-events: none;
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.4), inset 0 0 0 .5px color-mix(in srgb, var(--accent) 22%, transparent);
+    transition: transform .5s cubic-bezier(.3,1.35,.5,1), width .5s cubic-bezier(.3,1.35,.5,1), opacity .2s; }
+  #mobNav .mob-nav-badge { top: 3px !important; left: calc(50% + 7px) !important; min-width: 17px !important; height: 17px !important; padding: 0 5px !important;
+    background: #ff3b30 !important; color: #fff !important; font: 700 10px/17px var(--font) !important; border: 0 !important;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--bg2) 90%, transparent), 0 2px 5px rgba(255,59,48,.35) !important; }
+}
+@media (max-width: 768px) and (prefers-reduced-motion: reduce) { .mob-nav-lens { transition: opacity .2s; } }

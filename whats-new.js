@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 395, items: [
+    '✨ New phone tab bar: a floating glass capsule like iPhone\'s own apps — frosted see-through background, a soft pill that slides to the tab you tap, cleaner icons and labels, and small iPhone-red badges.',
+  ] },
   { v: 394, items: [
     '🔓 No more Face ID every time you open the app: the 30-minute idle sign-out is for shared desk PCs. On your own device — the app on your Home Screen, "Stay signed in" ticked, or signed in with Face ID — you now stay signed in. Want it anyway? Settings → Privacy & security → Sign out when idle.',
   ] },

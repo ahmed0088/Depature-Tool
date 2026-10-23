@@ -4368,6 +4368,20 @@ function mobNavSwitch(btn) {
   document.querySelectorAll('.mob-nav-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
 }
+// the soft pill behind the current tab slides to whichever tab is active (pro.css .mob-nav-lens)
+document.addEventListener('DOMContentLoaded', () => {
+  const nav = document.getElementById('mobNav'); if (!nav || nav.querySelector('.mob-nav-lens')) return;
+  const lens = document.createElement('span'); lens.className = 'mob-nav-lens'; lens.setAttribute('aria-hidden', 'true'); nav.prepend(lens);
+  let first = true;
+  const place = () => {
+    const a = nav.querySelector('.mob-nav-btn.active');
+    if (!a || !a.offsetWidth) { lens.style.opacity = '0'; return; }
+    if (first) { lens.style.transition = 'none'; requestAnimationFrame(() => { lens.style.transition = ''; }); first = false; }
+    lens.style.opacity = '1'; lens.style.width = a.offsetWidth + 'px'; lens.style.transform = `translateX(${a.offsetLeft}px)`;
+  };
+  new MutationObserver(place).observe(nav, { subtree: true, attributes: true, attributeFilter: ['class'] });
+  addEventListener('resize', place); setTimeout(place, 400);
+});
 
 function closeMobMore() {
   const drawer  = document.getElementById('mobMoreDrawer');
