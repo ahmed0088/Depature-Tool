@@ -261,7 +261,8 @@ const _lvKeys = {};
 function lvRender() {
   const box = document.getElementById('lvBody'); if (!box) return;
   const t = _lvAt != null ? _lvAt : Date.now(), d0 = roDate(roToday()).getTime(), now = new Date(t), h = now.getHours() + now.getMinutes() / 60;
-  const scenes = lvScene(t);
+  const scenes = lvScene(t), mine = typeof roMeKey !== 'undefined' && roMeKey ? (roStaff[roMeKey] || {}).group : '';
+  _lvHome = Math.max(0, scenes.findIndex(S => S.g && S.g === mine));   // the app's live news goes to your own hotel
   if (!scenes.length) box.innerHTML = '<div class="ro-empty">No roster for today yet.</div>';
   scenes.forEach((S, i) => {
     const key = [S.g, S.on.map(x => x.key), S.coming.map(x => x.key), S.gone.map(x => x.key), now.getHours(), Math.floor(now.getMinutes() / 15), h < 6 || h >= 20].join('|');
@@ -283,6 +284,7 @@ function lvRender() {
   const sl = document.getElementById('lvSlider'); if (sl && document.activeElement !== sl) sl.value = Math.round((t - d0) / 6e4);
   const lb = document.getElementById('lvWhen'); if (lb) lb.textContent = _lvAt == null ? 'Live now' : _lvHM(now);
   if (!_lvPlay || now.getMinutes() % 20 < 4) lvStats();
+  _lvOpsPaint();
 }
 function lvOpen() {
   document.getElementById('lvView')?.remove();
@@ -291,6 +293,7 @@ function lvOpen() {
     <div class="ro-card-hd"><b>🎮 Live desk</b><button class="ro-x" onclick="lvClose()">✕</button></div>
     <div class="lv-ctl"><button class="btn sm" id="lvPlayB" onclick="lvPlay()">▶ Play the day</button><input type="range" id="lvSlider" min="0" max="1439" step="5" oninput="lvSeek(+this.value)"><span id="lvWhen">Live now</span><button class="btn sm ghost" onclick="lvSeek(null)">Now</button><button class="btn sm lv-gamebtn" onclick="lgOpen()">🎯 Rush Hour</button></div>
     <div class="lv-news"><b>📣 LOBBY NEWS</b><span id="lvNews">Welcome to the live desk! Tap anyone, or ring the 🛎</span></div>
+    <div class="lv-ops" id="lvOps"></div>
     <div id="lvBody" class="lv-body-wrap"></div>
     <div class="lv-stats" id="lvStats"></div>
     <div class="lv-badges" id="lvBadges"></div>
@@ -298,12 +301,13 @@ function lvOpen() {
   </div>`;
   d.addEventListener('click', e => { if (e.target === d) lvClose(); });
   document.body.appendChild(d);
-  _lvAt = null; Object.keys(_lvKeys).forEach(k => delete _lvKeys[k]); lvRender();
+  _lvAt = null; _lvOps = null; Object.keys(_lvKeys).forEach(k => delete _lvKeys[k]); lvOpsTick(); lvRender();
+  clearInterval(_lvOpsT); _lvOpsT = setInterval(lvOpsTick, 5000);
   clearInterval(_lvT); _lvT = setInterval(() => { if (!document.getElementById('lvView')) { clearInterval(_lvT); return; } if (_lvAt == null) lvRender(); }, 30000);
   if (typeof lvBadgesRender === 'function') { lvBadgesRender(); const hr = new Date().getHours(); if (hr < 5) lvBadge('night', '🦉 Night watch: checked the live desk in the small hours'); }
   clearTimeout(_lvFx); const fx = () => { if (!document.getElementById('lvView')) return; lvSurprise(); _lvFx = setTimeout(fx, _lvPlay ? 1800 : 5000 + Math.random() * 4000); }; _lvFx = setTimeout(fx, 2500);
 }
-function lvClose() { if (typeof lgStop === 'function') lgStop(); clearInterval(_lvT); clearInterval(_lvPlay); clearTimeout(_lvFx); _lvPlay = null; document.getElementById('lvView')?.remove(); }
+function lvClose() { if (typeof lgStop === 'function') lgStop(); clearInterval(_lvT); clearInterval(_lvOpsT); _lvOpsT = null; clearInterval(_lvPlay); clearTimeout(_lvFx); _lvPlay = null; document.getElementById('lvView')?.remove(); }
 
 // ── 🏷 Each hotel's own logo, uploaded once for the whole team ──
 function _lvLogoKey(g) { return String(typeof rbBaseGroup === 'function' ? rbBaseGroup(g) : g).replace(/[.#$\[\]\/\s]+/g, '_'); }
@@ -415,6 +419,8 @@ function lvDing(i) {
 function lvSurprise() {
   const hs = [...document.querySelectorAll('#lvBody .lv-hotel')]; if (!hs.length) return;
   if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (_lvAt == null && _lvOpsHold > Date.now()) return;              // real news just came in: let it be read
+  if (_lvAt == null && Math.random() < 0.45 && lvOpsReal()) return;   // half the time: something really going on in the hotel
   const h = hs[Math.floor(Math.random() * hs.length)], sc = h.querySelector('.lv-scene'), fx = h.querySelector('.lv-fx'); if (!fx) return;
   const L = h.classList.contains('night') ? LV_NIGHT_EV.concat(LV_EVENTS.slice(0, 6)) : LV_EVENTS, [e, kind, txt] = L[Math.floor(Math.random() * L.length)];
   const el = document.createElement('span'); el.className = 'lv-ev ' + kind; el.textContent = e;
@@ -444,4 +450,207 @@ function lvPlay() {
   if (b) b.textContent = '⏸ Pause';
   const d0 = roDate(roToday()).getTime(); let m = _lvAt != null && _lvAt - d0 < 1430 * 6e4 ? Math.round((_lvAt - d0) / 6e4) : 0;
   _lvPlay = setInterval(() => { m += 4; if (m >= 1440) { lvSeek(null); return; } _lvAt = d0 + m * 6e4; lvRender(); }, 60);   // smooth: small steps
+}
+
+// ── 📡 The desk lives with the app ────────────────────────
+// What HotelOps knows right now shows up in your own lobby (read only: nothing here changes any data):
+//   Departures (depRooms)          → the board OUT 12/34, a guest walks out with luggage for each new check-out,
+//                                    overdue guests wait by the door with ⏰ and their room
+//   Arrivals (arrGuests)           → ARR on the board, guests walk in when a list is loaded
+//   In-house (hoInHouse.rooms)     → 🛏 in house
+//   WhatsApp (hoWaBridge.log)      → the phone rings and says what it understood
+//   Handover Book (hoHandoverBook) → 📋 on the desk with what is still open
+//   Room Health (hoRoomHealth)     → 🧰 on the desk, an engineer / housekeeper heads to the room
+//   Shift Tasks (SHIFTS, stCount)  → ✅ progress, +1 for each tick, a party when all are done
+//   Ops Brain (blThoughts)         → a thought cloud over whoever is at the desk
+// A part whose page isn't loaded just stays quiet. Read every 5 s while the live desk is open.
+let _lvOpsT = null, _lvOps = null, _lvOpsHold = 0, _lvHome = 0, _lvInh = { at: 0, n: 0 };
+const _lvTry = f => { try { return f(); } catch (_) { return null; } };
+const LV_DEPT = { eng: ['🧑‍🔧', '🔧', 'Engineering'], hk: ['🧹', '🧹', 'Housekeeping'], it: ['🧑‍💻', '💻', 'IT'], sec: ['💂', '🛡', 'Security'] };
+const _lvCut = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+const _lvFirst = s => String(s || '').replace(/^[~+\s]+/, '').split(/[\s@]/)[0];
+const _lvCalm = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+/** One look at the app: plain numbers and short lists, null for what isn't loaded. */
+function lvOpsRead(now) {
+  const W = typeof window !== 'undefined' ? window : {}, O = {};
+  now = now || Date.now();
+  O.dep = _lvTry(() => {
+    if (typeof depRooms === 'undefined' || !depRooms.length || typeof depCounts !== 'function') return null;
+    const c = depCounts(), rm = r => String(r.roomStr || r.room);
+    return { out: c.out, total: c.all - c.extended, ext: c.extended, lco: depRooms.filter(r => r.status === 'late').length,
+      late: typeof isLcoOverdue === 'function' ? depRooms.filter(r => _lvTry(() => isLcoOverdue(r))).map(rm) : [],
+      outRooms: depRooms.filter(r => r.status === 'out').map(rm) };
+  });
+  O.arr = _lvTry(() => typeof arrGuests !== 'undefined' && arrGuests.length ? { n: arrGuests.length } : null);
+  O.inh = _lvTry(() => {
+    if (!W.hoInHouse || typeof W.hoInHouse.rooms !== 'function') return null;
+    if (now - _lvInh.at > 30000) _lvInh = { at: now, n: W.hoInHouse.rooms().filter(r => r && r.name && r.status !== 'out').length };   // the biggest list: every 30 s is plenty
+    return _lvInh.n ? { n: _lvInh.n } : null;
+  });
+  O.wa = _lvTry(() => {
+    if (!W.hoWaBridge || typeof W.hoWaBridge.log !== 'function') return null;
+    const L = W.hoWaBridge.log().filter(l => l && !l.mine && !l.preview && !l.deleted);
+    return L.length ? { n: L.length, last: L.reduce((a, l) => Math.max(a, l.at || 0), 0), list: L.slice(0, 12).map(l => ({ at: l.at || 0, sender: l.sender || '', text: l.text || '', r: (l.res || []).find(r => r && r.room && !/^(skip|none|ignore|log|preview)$/.test(r.st)) || null })) } : null;
+  });
+  O.hb = _lvTry(() => {
+    if (!W.hoHandoverBook || typeof W.hoHandoverBook.items !== 'function') return null;
+    const I = W.hoHandoverBook.items().filter(i => i && !i.del && !i.chat), open = I.filter(i => i.status === 'open');
+    return I.length ? { open: open.length, done: I.filter(i => i.status === 'done').length, keys: open.map(i => i.key), text: Object.fromEntries(open.slice(0, 40).map(i => [i.key, i.text || ''])) } : null;
+  });
+  O.rh = _lvTry(() => {
+    if (!W.hoRoomHealth || typeof W.hoRoomHealth.recs !== 'function') return null;
+    const R = W.hoRoomHealth.recs().filter(r => r && r.room);
+    return R.length ? { n: R.length, list: R.slice(0, 8).map(r => ({ id: r.id, room: String(r.room), dept: r.dept, say: r.say || '', sev: r.sev })) } : null;
+  });
+  O.st = _lvTry(() => {
+    if (typeof SHIFTS === 'undefined' || typeof hoShiftNow !== 'function' || typeof stCount !== 'function') return null;
+    const k = hoShiftNow(new Date(now)).key, c = stCount(k);
+    return c && c.total ? { key: k, label: String((SHIFTS[k] || {}).label || k).replace(/ Shift$/i, ''), done: c.done, total: c.total } : null;
+  });
+  O.brain = _lvTry(() => {
+    if (typeof blThoughts === 'undefined' || !blThoughts.length) return null;
+    const t = blThoughts.find(x => x && !x.silent && x.text); return t ? { id: t.id, icon: t.icon || '💭', text: t.text, tone: t.tone || '' } : null;
+  });
+  return O;
+}
+/** Every 5 s: read, show the numbers, and act out what changed since last time. */
+function lvOpsTick() {
+  if (!document.getElementById('lvView')) { clearInterval(_lvOpsT); _lvOpsT = null; return; }
+  const P = _lvOps, O = lvOpsRead(); _lvOps = O;
+  lvOpsStrip(O); _lvOpsPaint();
+  _lvOpsBadges(O);
+  if (P && _lvAt == null) _lvOpsReact(P, O);   // the first look only sets the scene; while ▶ plays the day nothing is acted out
+}
+/** The numbers above the lobby: tap one to go to that page. */
+function lvOpsStrip(O) {
+  const el = document.getElementById('lvOps'); if (!el) return;
+  const chip = (go, cls, html, title, pct) => `<button type="button" class="lv-op${cls ? ' ' + cls : ''}" onclick="lvGo('${go}')" title="${escapeHtml(title)}"><span>${html}</span>${pct != null ? `<i class="lv-opbar"><i style="width:${pct}%"></i></i>` : ''}</button>`;
+  const D = O.dep, out = [];
+  if (D) {
+    out.push(chip('departures', D.total && D.out >= D.total ? 'ok' : '', `🧳 <b>${D.out}/${D.total}</b> out`, `Departures: ${D.out} of ${D.total} checked out${D.ext ? `, ${D.ext} extended` : ''}`, D.total ? Math.round(D.out / D.total * 100) : 0));
+    if (D.late.length) out.push(chip('departures', 'bad', `⏰ <b>${D.late.length}</b> overdue`, 'Past their check-out time: ' + D.late.join(', ')));
+    else if (D.lco) out.push(chip('departures', '', `🕐 <b>${D.lco}</b> LCO`, 'Late check-outs agreed'));
+  }
+  if (O.arr) out.push(chip('arrivals', '', `🛎 <b>${O.arr.n}</b> arriving`, 'Arrivals expected today'));
+  if (O.inh) out.push(chip('inhouse', '', `🛏 <b>${O.inh.n}</b> in house`, 'Rooms in house'));
+  if (O.wa) out.push(chip('departures', '', `💬 <b>${O.wa.n}</b> read`, 'WhatsApp messages read today'));
+  if (O.hb) out.push(chip('handover-book', O.hb.open ? 'warn' : 'ok', `📋 <b>${O.hb.open}</b> open`, `Handover Book: ${O.hb.open} open, ${O.hb.done} done`));
+  if (O.rh) out.push(chip('room-health', 'warn', `🩺 <b>${O.rh.n}</b> to fix`, 'Room Health: rooms with a problem to send'));
+  if (O.st) out.push(chip('shifts', O.st.done >= O.st.total ? 'ok' : '', `✅ <b>${O.st.done}/${O.st.total}</b> ${escapeHtml(O.st.label)}`, `${O.st.label} tasks done`, Math.round(O.st.done / O.st.total * 100)));
+  const html = out.length ? '<span class="lv-ops-t">📡 LIVE</span>' + out.join('') : '<small class="lv-ops-none">📡 Load today\'s departures or arrivals and the lobby joins in: guests walk out with their bags, the phone rings for WhatsApp…</small>';
+  if (el.innerHTML !== html) el.innerHTML = html;
+}
+function lvGo(p) { lvClose(); if (typeof showPanel === 'function') showPanel(p); }
+function _lvHomeEl() { return document.getElementById('lvH' + _lvHome) || document.getElementById('lvH0'); }
+/** What stays in your lobby while it's true: the board, the guests waiting, 📋 and 🧰 on the desk, the thought cloud. */
+function _lvOpsPaint() {
+  const O = _lvOps, h = _lvHomeEl(), sc = h && h.querySelector('.lv-scene'); if (!O || !sc) return;
+  let L = sc.querySelector('.lv-opsl'); if (!L) { L = document.createElement('div'); L.className = 'lv-opsl'; sc.appendChild(L); }
+  const D = O.dep, live = _lvAt == null, parts = [];
+  if (live && (D || O.arr)) parts.push(`<div class="lv-board" onclick="lvGo('departures')" title="Today's departures"><b>${D && D.total && D.out >= D.total ? '🏆 ALL OUT' : 'TODAY'}</b>${D ? `<span>OUT <em>${D.out}/${D.total}</em></span><i class="lv-bbar"><i style="width:${D.total ? Math.round(D.out / D.total * 100) : 0}%"></i></i>${D.late.length ? `<span>LATE <em class="bad">${D.late.length}</em></span>` : ''}` : ''}${O.arr ? `<span>ARR <em>${O.arr.n}</em></span>` : ''}</div>`);
+  if (live && D) D.late.slice(0, 3).forEach((r, i) => parts.push(`<div class="lv-wait" style="right:${3 + i * 13}%;--d:${i * .4}s" onclick="_lvNews('⏰ Room ${escapeHtml(r)} is past its check-out time')" title="Room ${escapeHtml(r)}: past check-out"><small>⏰ ${escapeHtml(r)}</small>${avSvg('~g' + r, 30, 'tired')}<span>🧳</span></div>`));
+  if (live && O.hb && O.hb.open) parts.push(`<button type="button" class="lv-desko r" onclick="lvGo('handover-book')" title="Handover Book: ${O.hb.open} open">📋<b>${O.hb.open}</b></button>`);
+  if (live && O.rh) parts.push(`<button type="button" class="lv-desko l" onclick="lvGo('room-health')" title="Room Health: ${O.rh.n} to send">🧰<b>${O.rh.n}</b></button>`);
+  const sig = parts.join('');
+  if (L.dataset.sig !== sig) { L.innerHTML = sig; L.dataset.sig = sig; }
+  // 💭 Ops Brain thinks out loud over you (or whoever is at the desk)
+  const st = h.querySelector('.lv-st.on.me') || h.querySelector('.lv-st.on'), want = live && O.brain && st ? O.brain : null;
+  h.querySelectorAll('.lv-think').forEach(x => { if (!want || x.parentNode !== st || x.dataset.id !== want.id) x.remove(); });
+  if (want && !st.querySelector('.lv-think')) st.insertAdjacentHTML('afterbegin', `<div class="lv-think${want.tone === 'bad' ? ' bad' : ''}" data-id="${escapeHtml(want.id)}" title="Ops Brain">${escapeHtml(want.icon)} ${escapeHtml(_lvCut(want.text, 70))}</div>`);
+}
+/** Someone crossing the floor: a guest leaving or arriving, or an engineer on the way. */
+function _lvWalker(kind, key, tag, delay) {
+  const h = _lvHomeEl(), fx = h && h.querySelector('.lv-fx'); if (!fx || _lvCalm()) return;
+  const el = document.createElement('div'); el.className = 'lv-walk ' + kind; el.style.animationDelay = (delay || 0) + 's';
+  const who = kind === 'fix' ? `<span class="lv-wemo">${(LV_DEPT[key] || LV_DEPT.eng)[0]}</span>` : `<div class="lv-gav">${avSvg('~g' + key, 34, 'happy')}</div><i class="lv-legs"><b></b><b></b></i>`;
+  el.innerHTML = `${tag ? `<small>${escapeHtml(tag)}</small>` : ''}${who}${kind === 'fix' ? '' : '<span class="lv-bag">🧳</span>'}`;
+  fx.appendChild(el); setTimeout(() => el.remove(), 7000 + (delay || 0) * 1000);
+}
+/** The phone rings and says what came in. */
+function _lvPhone(text) {
+  const h = _lvHomeEl(); if (!h) return;
+  const ph = h.querySelector('.lv-phone'); if (ph) { ph.classList.remove('ring'); void ph.offsetWidth; ph.classList.add('ring'); }
+  _lvBeep(660, 0.08); setTimeout(() => _lvBeep(660, 0.08), 160);
+  const fx = h.querySelector('.lv-fx'); if (!fx) return;
+  fx.querySelectorAll('.lv-say').forEach(x => x.remove());
+  const b = document.createElement('div'); b.className = 'lv-say'; b.textContent = text; fx.appendChild(b); setTimeout(() => b.remove(), 4800);
+}
+function _lvParty(msg) {
+  const h = _lvHomeEl(), sc = h && h.querySelector('.lv-scene'); if (msg) _lvNews(msg);
+  [784, 988, 1175, 1568].forEach((f, i) => setTimeout(() => _lvBeep(f, 0.18, 'triangle'), i * 110));
+  if (!sc || _lvCalm()) return;
+  _lvBurst(sc, sc.clientWidth / 2, sc.clientHeight / 2, ['🎉', '✨', '🥳', '⭐', '🎊'], 16);
+  h.querySelectorAll('.lv-st.on').forEach((el, j) => setTimeout(() => { el.classList.remove('jump'); void el.offsetWidth; el.classList.add('jump'); }, j * 120));
+}
+const _lvSay = r => r ? ({ co: '✓ Check-out', lco: '⏰ Late check-out', ext: '↪ Extension', req: '📝 Request', note: '📝 Note', maybe: '🤔 Might extend', fin: '🧾 Finance', ho: '📋 Handover' }[r.st] || '💬') + ' · ' + r.room : '';
+/** What changed since the last look, acted out (and said in the lobby news). */
+function _lvOpsReact(P, O) {
+  const news = [], h = _lvHomeEl(), sc = h && h.querySelector('.lv-scene');
+  const D = O.dep, PD = P.dep;
+  if (D && PD) {
+    const was = new Set(PD.outRooms), fresh = D.outRooms.filter(r => !was.has(r));
+    fresh.slice(0, 3).forEach((r, i) => _lvWalker('out', r, '✓ ' + r, i * 1.4));
+    if (fresh.length) { news.push(`🧳 ${fresh.length > 1 ? fresh.length + ' rooms' : 'Room ' + fresh[0]} checked out · ${D.out}/${D.total} done`); _lvBeep(523, 0.1, 'triangle'); setTimeout(() => _lvBeep(784, 0.14, 'triangle'), 110); }
+    const lw = new Set(PD.late), nl = D.late.filter(r => !lw.has(r));
+    if (nl.length) { news.push(`⏰ ${nl.length > 1 ? nl.length + ' rooms are' : 'Room ' + nl[0] + ' is'} past check-out time`); _lvBeep(330, 0.25, 'sawtooth'); }
+    if (D.total && D.out >= D.total && PD.out < PD.total) { news.unshift('🎉 Every departure is checked out! Take a bow, team'); setTimeout(() => _lvParty(), 1200); }
+  }
+  if (O.arr && (!P.arr || O.arr.n > P.arr.n)) {
+    const n = O.arr.n - (P.arr ? P.arr.n : 0);
+    news.push(`🛎 ${P.arr ? '+' + n + ' arrival' + (n > 1 ? 's' : '') + ' · ' : ''}${O.arr.n} arriving today`);
+    [0, 1].slice(0, Math.min(2, n)).forEach(i => _lvWalker('in', 'a' + O.arr.n + i, '', i * 1.6));
+    const bell = h && h.querySelector('.lv-bell'); if (bell) { bell.classList.remove('ding'); void bell.offsetWidth; bell.classList.add('ding'); } _lvBeep(1320, 0.3);
+  }
+  if (O.wa && (!P.wa || O.wa.last > P.wa.last)) {
+    const since = P.wa ? P.wa.last : 0, nw = O.wa.list.filter(l => l.at > since);
+    const m = nw[0] || O.wa.list[0];
+    if (m) { _lvPhone(m.r ? _lvSay(m.r) : '💬 ' + _lvCut(m.text, 28)); news.push(`💬 ${_lvFirst(m.sender) || 'WhatsApp'}: ${_lvCut(m.text, 60)}${nw.length > 1 ? ` (+${nw.length - 1} more)` : ''}`); }
+  }
+  if (O.hb && P.hb) {
+    const was = new Set(P.hb.keys), nk = O.hb.keys.filter(k => !was.has(k));
+    if (nk.length) { news.push(`📋 Handover: ${_lvCut(O.hb.text[nk[0]] || 'new item', 60)}`); const c = h && h.querySelector('.lv-desko.r'); if (c) { c.classList.remove('hop'); void c.offsetWidth; c.classList.add('hop'); } }
+    if (O.hb.done > P.hb.done) { news.push(`✅ Handover item done · ${O.hb.open} still open`); if (sc && !_lvCalm()) _lvBurst(sc, sc.clientWidth * 0.85, sc.clientHeight - 90, ['✅', '✨'], 5); }
+  }
+  if (O.rh || P.rh) {
+    const was = new Set(((P.rh || {}).list || []).map(r => r.id)), now = new Set(((O.rh || {}).list || []).map(r => r.id));
+    ((O.rh || {}).list || []).filter(r => !was.has(r.id)).slice(0, 2).forEach((r, i) => { _lvWalker('fix', r.dept, (LV_DEPT[r.dept] || LV_DEPT.eng)[1] + ' ' + r.room, i * 1.5); news.push(`🩺 Room ${r.room}: ${_lvCut(r.say, 40)}. ${(LV_DEPT[r.dept] || LV_DEPT.eng)[2]} needed`); });
+    const fixed = ((P.rh || {}).list || []).filter(r => !now.has(r.id));
+    if (fixed.length && P.rh && (!O.rh || O.rh.n < P.rh.n)) { news.push(`🔧 Room ${fixed[0].room} sorted: ${_lvCut(fixed[0].say, 40)}`); if (sc && !_lvCalm()) _lvBurst(sc, 40, sc.clientHeight - 90, ['🔧', '✨', '👍'], 6); if (typeof lvBadge === 'function') lvBadge('fixer', '🔧 Fixer: a room problem sorted while you watched'); }
+  }
+  if (O.st && P.st && O.st.key === P.st.key && O.st.done !== P.st.done) {
+    if (O.st.done > P.st.done && sc && !_lvCalm()) { const st = h.querySelector('.lv-st.on.me') || h.querySelector('.lv-st.on'), r = st && st.getBoundingClientRect(), s = sc.getBoundingClientRect(); _lvBurst(sc, r ? r.left - s.left + r.width / 2 : sc.clientWidth / 2, r ? r.top - s.top + 30 : 120, ['+1 ✅'], 1); }
+    if (O.st.done >= O.st.total && P.st.done < P.st.total) { news.unshift(`🎉 All ${O.st.label} tasks done!`); setTimeout(() => _lvParty(), 600); }
+    else if (O.st.done > P.st.done) news.push(`✅ Task ticked · ${O.st.done}/${O.st.total} ${O.st.label}`);
+  }
+  if (news.length) { _lvNQ = _lvNQ.concat(news).slice(-6); if (!_lvNT) _lvNDrain(); lvStats(); }
+}
+/** The real news, one line at a time (3.5 s each) so each can be read; the made-up surprises wait. */
+let _lvNQ = [], _lvNT = null;
+function _lvNDrain() {
+  if (!_lvNQ.length || !document.getElementById('lvView')) { _lvNT = null; _lvNQ = []; return; }
+  _lvNews(_lvNQ.shift()); _lvOpsHold = Date.now() + 6000; _lvNT = setTimeout(_lvNDrain, 3500);
+}
+/** 🏅 The real-work badges (once each, on this device). */
+function _lvOpsBadges(O) {
+  if (typeof lvBadge !== 'function' || _lvAt != null) return;
+  const D = O.dep, hr = new Date().getHours();
+  if (D && D.total >= 3 && D.out >= D.total) lvBadge('allout', '🏁 All out: every departure checked out');
+  if (D && hr >= 13 && D.out >= 3 && !D.late.length) lvBadge('zerolate', '⏱ On time: nobody overdue after 1 PM');
+  if (O.st && O.st.total >= 3 && O.st.done >= O.st.total) lvBadge('tasks', '📝 Clean sheet: every shift task ticked');
+  if (O.wa && O.wa.n >= 25) lvBadge('wa25', '💬 Chatterbox: 25 WhatsApps read today');
+  if (O.hb && O.hb.done >= 5 && !O.hb.open) lvBadge('hbzero', '📋 Clear desk: nothing left open in the handover');
+}
+/** Now and then, instead of a made-up surprise, something really going on. */
+function lvOpsReal() {
+  const O = _lvOps; if (!O) return false;
+  const opts = [];
+  if (O.rh) opts.push(() => { const r = O.rh.list[Math.floor(Math.random() * O.rh.list.length)], d = LV_DEPT[r.dept] || LV_DEPT.eng; _lvWalker('fix', r.dept, d[1] + ' ' + r.room); _lvNews(`${d[0]} Room ${r.room}: ${_lvCut(r.say, 44)}. Has ${d[2]} been told?`); });
+  if (O.dep && O.dep.late.length) opts.push(() => _lvNews(`⏰ Room ${O.dep.late[Math.floor(Math.random() * O.dep.late.length)]} is still in, past check-out. A quick call?`));
+  if (O.dep && O.dep.total > O.dep.out) opts.push(() => _lvNews(`🧳 ${O.dep.out} of ${O.dep.total} checked out. ${O.dep.total - O.dep.out} to go!`));
+  if (O.st && O.st.done < O.st.total) opts.push(() => _lvNews(`✅ ${O.st.total - O.st.done} ${O.st.label} task${O.st.total - O.st.done > 1 ? 's' : ''} left on the list`));
+  if (O.hb && O.hb.open) opts.push(() => _lvNews(`📋 ${O.hb.open} handover item${O.hb.open > 1 ? 's' : ''} still open`));
+  if (O.wa && O.wa.list.length) opts.push(() => { const m = O.wa.list[0]; if (m.r) _lvPhone(_lvSay(m.r)); _lvNews(`💬 Last WhatsApp: ${_lvCut(m.text, 60)}`); });
+  if (O.arr && new Date().getHours() >= 13) opts.push(() => { _lvWalker('in', 'r' + Date.now() % 97, ''); _lvNews(`🛎 ${O.arr.n} arrivals today. Keys ready?`); });
+  if (!opts.length) return false;
+  opts[Math.floor(Math.random() * opts.length)](); return true;
 }

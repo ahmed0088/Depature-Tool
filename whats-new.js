@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 399, items: [
+    '🎮 The live desk game now plays what is really happening: a 📡 LIVE strip (rooms out, overdue, arriving, in house, WhatsApp, handover, room problems, your shift tasks — tap one to open that page). Checked-out guests walk out with their bags, overdue ones wait at the desk with a ⏰ tag, arrivals walk in and the bell rings, the desk phone shakes for each WhatsApp with a bubble saying what it understood, an engineer or housekeeper walks over for a room problem, +1 ✅ pops for each shift task, Ops Brain\'s thought floats over you, and the lobby news reads real events. All out = confetti and 🏆 on the board. 6 new badges: All out, On time, Clean sheet, Chatterbox, Clear desk, Fixer.',
+  ] },
   { v: 398, items: [
     '⚡ One-click WhatsApp: no more F12 and pasting. In the WhatsApp window press ⬇ Get the helper — HotelOps builds a small helper for Chrome / Edge. Add it once (chrome://extensions → Developer mode → Load unpacked). From then on 🟢 Open WhatsApp Web is the only click: the reader starts by itself and links to HotelOps on its own, even after WhatsApp reloads. When the reader changes, the window offers the new helper.',
   ] },

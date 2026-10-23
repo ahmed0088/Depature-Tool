@@ -977,6 +977,13 @@ console.log('\nRoster scenarios');
   check('live desk: a day at another hotel shows at that hotel', run(`lvScene(roDate(T).getTime() + 10 * 36e5).find(x => x.g === 'Ibis DD').on.map(x => x.key).join()`), 'C');
   check('live desk: coming in next', run(`lvScene(roDate(T).getTime() + 18 * 36e5).find(x => x.g === 'Ibis DD').coming.map(x => x.key).join()`), 'B');
   check('looks: picked on the card, never guessed; a cartoon for everyone', run(`rbPeople.A = { look: { hair: 'hijab', skin: 4 } }; [avLook('A').hair, avLook('A').skin, avLook('B').skin, /<svg/.test(avSvg('B', 40))].join()`), 'hijab,4,2,true');
+  check('live desk + app: nothing loaded, nothing to show', run(`JSON.stringify(lvOpsRead(Date.now()))`), '{"dep":null,"arr":null,"inh":null,"wa":null,"hb":null,"rh":null,"st":null,"brain":null}');
+  check('live desk + app: departures, WhatsApp and handover read as they are (read only)', run(`var depRooms = [{ room: 101, status: 'out' }, { room: 102, status: 'due' }, { room: 103, status: 'extended' }, { room: 104, status: 'late' }];
+    function depCounts() { return { all: 4, out: 1, extended: 1 }; } function isLcoOverdue(r) { return r.room === 104; }
+    window.hoWaBridge = { log: () => [{ at: 5, sender: 'Desk Bot', text: '104 lco 2pm', res: [{ st: 'lco', room: '104' }] }, { at: 6, mine: true, text: 'ok' }] };
+    window.hoHandoverBook = { items: () => [{ key: 'a', status: 'open', text: 'Iron for 233' }, { key: 'b', status: 'done' }, { key: 'c', status: 'open', chat: 1 }] };
+    const O = lvOpsRead(Date.now()); [O.dep.out + '/' + O.dep.total, O.dep.late.join(), O.dep.lco, O.wa.n, _lvSay(O.wa.list[0].r), O.hb.open + ' open ' + O.hb.done + ' done', depRooms.map(r => r.status).join()].join(' | ')`),
+    '1/3 | 104 | 1 | 1 | ⏰ Late check-out · 104 | 1 open 1 done | out,due,extended,late');
 }
 
 // ── Ops Brain understands plain talk (brain-understand.js) ──

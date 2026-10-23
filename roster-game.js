@@ -179,7 +179,9 @@ function lvBadge(id, text) {
   _lgSnd(784, 0.12, 'triangle'); setTimeout(() => _lgSnd(1175, 0.2, 'triangle'), 120);
   lvBadgesRender();
 }
-const LV_BADGES = [['poke', '👉', 'First poke'], ['poke10', '🤪', 'Poke master'], ['ding10', '🛎', 'Bell addict'], ['night', '🦉', 'Night watch'], ['disco', '🪩', 'Disco time'], ['combo5', '🔥', 'On fire'], ['sup', '⭐', 'Supervisor material'], ['legend', '👑', 'Legend'], ['cat', '🐈', 'Cat whisperer']];
+const LV_BADGES = [['poke', '👉', 'First poke'], ['poke10', '🤪', 'Poke master'], ['ding10', '🛎', 'Bell addict'], ['night', '🦉', 'Night watch'], ['disco', '🪩', 'Disco time'], ['combo5', '🔥', 'On fire'], ['sup', '⭐', 'Supervisor material'], ['legend', '👑', 'Legend'], ['cat', '🐈', 'Cat whisperer'],
+  // earned by the real day (roster-live.js, 📡 the desk lives with the app)
+  ['allout', '🏁', 'All out'], ['zerolate', '⏱', 'On time'], ['tasks', '📝', 'Clean sheet'], ['wa25', '💬', 'Chatterbox'], ['hbzero', '📋', 'Clear desk'], ['fixer', '🔧', 'Fixer']];
 function lvBadgesRender() {
   const el = document.getElementById('lvBadges'); if (!el) return;
   const B = _lvBadges();
