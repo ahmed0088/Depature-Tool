@@ -119,8 +119,15 @@ function authInit() {
 const IDLE_LOGOUT_MINS = 30;
 let _idleTimer = null;
 /** Minutes from Settings → Privacy → Sign out when idle (0 = never); 30 until someone chooses */
+/** your own device: you ticked "Stay signed in", signed in with Face ID, or it's the app on your Home Screen */
+function hoStaysSignedIn() {
+  let v = null; try { v = localStorage.getItem('ho_stay_signed_in_v1'); } catch (_) {}
+  const app = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  return v === '1' || app;
+}
 function _idleMins() {
-  if (typeof hoPrefs === 'undefined' || !hoPrefs.autoLockChosen) return IDLE_LOGOUT_MINS;
+  // the idle sign-out is for shared desk PCs: on your own device it stays off unless you chose a time in Settings
+  if (typeof hoPrefs === 'undefined' || !hoPrefs.autoLockChosen) return hoStaysSignedIn() ? 0 : IDLE_LOGOUT_MINS;
   const m = +hoPrefs.autoLock; return Number.isFinite(m) ? m : IDLE_LOGOUT_MINS;
 }
 function _resetIdleTimer() {
@@ -405,6 +412,7 @@ async function authLogin() {
 
   // Save email if remember checked
   try { if (remember) localStorage.setItem('ibis_saved_email', email); else localStorage.removeItem('ibis_saved_email'); } catch (_) {}
+  try { if (remember) localStorage.setItem('ho_stay_signed_in_v1', '1'); else localStorage.removeItem('ho_stay_signed_in_v1'); } catch (_) {}
 
   // ── Firebase persistence — stay logged in if remember checked ──
   const persistence = remember

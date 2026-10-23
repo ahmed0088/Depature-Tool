@@ -127,6 +127,7 @@
     try {
       if (typeof _lgSigningIn !== 'undefined') _lgSigningIn = true;
       try { localStorage.setItem('ibis_saved_email', creds.e); } catch (_) {}
+      try { localStorage.setItem('ho_stay_signed_in_v1', '1'); } catch (_) {}   // Face ID = your own phone: no idle sign-out
       await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
       await firebase.auth().signInWithEmailAndPassword(creds.e, creds.p);
       // onAuthStateChanged (auth.js) takes it from here

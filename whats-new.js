@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 394, items: [
+    '🔓 No more Face ID every time you open the app: the 30-minute idle sign-out is for shared desk PCs. On your own device — the app on your Home Screen, "Stay signed in" ticked, or signed in with Face ID — you now stay signed in. Want it anyway? Settings → Privacy & security → Sign out when idle.',
+  ] },
   { v: 393, items: [
     '💬 Room Health: "One message per team" — tap 🔧 Engineering, 🧹 HK, 💻 IT or 🛡 Security and get ONE ready WhatsApp message with every room that needs them (room in bold, the problem, arrival / VIP warnings, "reply done when fixed"). Edit it if you like, then ⧉ Copy message or 💬 Open WhatsApp with it already typed. The rooms are marked as sent.',
   ] },

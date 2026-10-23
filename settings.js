@@ -120,7 +120,7 @@ const _hoTog = (k, label, desc) => `
 const _hoSeg = (k, label, desc, opts) => `
   <div class="hs-row" data-s="${escapeHtml((label + ' ' + desc).toLowerCase())}">
     <span class="hs-txt"><b>${label}</b><small>${desc}</small></span>
-    <span class="hs-seg">${opts.map(([v, t]) => `<button class="${hoPrefs[k] === v ? 'on' : ''}" onclick="hoSetPref('${k}',${JSON.stringify(v).replace(/&/g, '&amp;').replace(/\"/g, '&quot;').replace(/</g, '&lt;')});hoSettingsRender()">${t}</button>`).join('')}</span>
+    <span class="hs-seg">${opts.map(([v, t]) => `<button class="${(k === 'autoLock' && !hoPrefs.autoLockChosen && typeof hoStaysSignedIn === 'function' && hoStaysSignedIn() ? v === 0 : hoPrefs[k] === v) ? 'on' : ''}" onclick="hoSetPref('${k}',${JSON.stringify(v).replace(/&/g, '&amp;').replace(/\"/g, '&quot;').replace(/</g, '&lt;')});hoSettingsRender()">${t}</button>`).join('')}</span>
   </div>`;
 const _hoBtn = (label, desc, btn, fn, cls = '') => `
   <div class="hs-row" data-s="${escapeHtml((label + ' ' + desc).toLowerCase())}">
@@ -234,7 +234,7 @@ function hoSettingsRender() {
 
     _hoSec('privacy', 'immig', 'Privacy & security', 'Protect guest details on a shared desk',
       _hoTog('privacy', 'Privacy screen', 'Blurs guest names and emails until you point at them. Use it when guests can see the screen')
-      + _hoSeg('autoLock', 'Sign out when idle', 'Signs out this device after no activity', [[0, 'Never'], [15, '15 min'], [30, '30 min'], [60, '1 hour'], [240, '4 hours']])
+      + _hoSeg('autoLock', 'Sign out when idle', (typeof hoStaysSignedIn === 'function' && hoStaysSignedIn() && !hoPrefs.autoLockChosen) ? 'Off on this device: you stay signed in (your own phone / "Stay signed in"). Pick a time to turn it on' : 'Signs out this device after no activity', [[0, 'Never'], [15, '15 min'], [30, '30 min'], [60, '1 hour'], [240, '4 hours']])
       + (typeof hoFaceLogin !== 'undefined' ? hoFaceLogin.settingsRow() : '')),
 
     typeof hoSetupSections === 'function' ? hoSetupSections() : '',
