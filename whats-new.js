@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 397, items: [
+    '🔊 Style sounds: each App style has its own little sounds when you tap and when a message pops up — 🕹 Gaming bleeps, 💬 WhatsApp pops, ✈️ Telegram swish, 🎧 Discord blips, 📝 Notes ticks, 🗒 Notepad key clicks, 🏛 Classic wood, 📚 Study chimes, ⚡ Pro soft ticks. Quiet, and on only in Gaming until you choose: Settings → Appearance → Style sounds (Off · Gaming only · Every style).',
+    '🚪 Departures dressed by your style: WhatsApp and Telegram show the rooms as a chat list with round avatars, Discord as server icons, Gaming as neon HUD frames, Notes as yellow stickies, Classic as brass room plates, Study as index tabs, Notepad and Pro as clean boxes.',
+  ] },
   { v: 396, items: [
     '🎨 9 new App styles — the whole app dressed like an app you know. Pick one from the theme button (top bar or ⋯ More), under "App styles": 📝 Apple Notes (warm paper, Notes yellow, ruled cards) · 💬 WhatsApp (teal bar, doodle wallpaper, chat-bubble cards) · ✈️ Telegram (Telegram blue on the green wallpaper) · 🎧 Discord (blurple and the dark greys, # titles) · 🕹 Gaming (neon cyan / magenta, RGB edges, game fonts) · 🏛 Classic (cream paper, navy and gold, serif) · ⚡ Pro (black, hairlines, sharp type) · 📚 Study (graph paper, highlighter titles, index-card tiles) · 🗒 Notepad (Windows 11, Consolas, square edges). Each is your own choice on your devices only.',
   ] },

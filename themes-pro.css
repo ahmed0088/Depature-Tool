@@ -291,3 +291,35 @@ html:is([data-skin="notes"], [data-skin="telegram"], [data-skin="study"], [data-
 html:is([data-skin="notes"], [data-skin="telegram"], [data-skin="study"], [data-skin="notepad"]) .topbar .icon-round:hover { background: rgba(118,118,128,.2) !important; }
 html:is([data-skin="notes"], [data-skin="telegram"], [data-skin="study"], [data-skin="notepad"]) .topbar { color: var(--text) !important; }
 html[data-skin="notepad"] .topbar :is(.icon-round, .tb-pill, #appVersionPill, .auth-user-pill) { border-radius: 4px !important; }
+
+/* ═════════ Each style's own touch on the Departures board ═════════ */
+/* 💬 WhatsApp: the rooms are a chat list — round avatars, rows with a hairline between, green "unread" pills */
+html[data-skin="whatsapp"] #depGrid { gap: 0 !important; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px .5px rgba(11,20,26,.13); }
+html[data-skin="whatsapp"] #depGrid .dp-card { border-radius: 0 !important; border: 0 !important; border-bottom: 1px solid #e9edef !important; box-shadow: none !important; background: #fff !important; margin: 0 !important; }
+html[data-skin="whatsapp"] #depGrid .dp-card:hover { background: #f5f6f6 !important; }
+html[data-skin="whatsapp"] #depGrid .dp-room { border-radius: 50% !important; width: 50px; min-width: 50px !important; height: 50px !important; padding: 0 !important; font-size: 15px !important;
+  background: color-mix(in srgb, var(--c, #00a884) 82%, #fff) !important; color: #fff !important; box-shadow: none !important; border: 0 !important; }
+html[data-skin="whatsapp"] #depGrid .dp-name { font-weight: 600 !important; color: #111b21 !important; }
+html[data-skin="whatsapp"] #depGrid .dp-meta { color: #667781 !important; }
+html[data-skin="whatsapp"] #depGrid .dp-pill { border-radius: 999px !important; }
+html[data-skin="whatsapp"] #depGrid .dc-time-tag { background: #25d366 !important; color: #fff !important; border-radius: 999px !important; }
+/* ✈️ Telegram: round avatars in Telegram's palette, bubble rows */
+html[data-skin="telegram"] #depGrid .dp-room { border-radius: 50% !important; width: 50px; min-width: 50px !important; height: 50px !important; padding: 0 !important; font-size: 15px !important; color: #fff !important; border: 0 !important; box-shadow: none !important;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--c, #3390ec) 70%, #fff), var(--c, #3390ec)) !important; }
+html[data-skin="telegram"] #depGrid .dc-time-tag { background: #3390ec !important; color: #fff !important; border-radius: 999px !important; }
+/* 🎧 Discord: rooms are server icons (rounded squares that get rounder) */
+html[data-skin="discord"] #depGrid .dp-room { border-radius: 16px !important; background: #5865f2 !important; color: #fff !important; border: 0 !important; box-shadow: none !important; transition: border-radius .2s; }
+html[data-skin="discord"] #depGrid .dp-card:hover .dp-room { border-radius: 12px !important; }
+/* 🕹 Gaming: neon room numbers in a HUD frame */
+html[data-skin="gaming"] #depGrid .dp-room { background: transparent !important; border: 1px solid var(--c, #00f0ff) !important; color: var(--c, #00f0ff) !important; font-family: 'Orbitron', sans-serif !important; text-shadow: 0 0 8px var(--c, #00f0ff);
+  box-shadow: inset 0 0 12px -4px var(--c, #00f0ff), 0 0 12px -6px var(--c, #00f0ff) !important; clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px); border-radius: 0 !important; }
+/* 📝 Notes: room numbers handwritten-bold on a yellow sticky */
+html[data-skin="notes"] #depGrid .dp-room { background: #ffe680 !important; color: #1c1c1e !important; border: 0 !important; border-radius: 4px !important; box-shadow: 0 3px 8px -4px rgba(0,0,0,.3) !important; transform: rotate(-2deg); }
+/* 🗒 Notepad: plain monospaced numbers in a box */
+html[data-skin="notepad"] #depGrid .dp-room { background: #fff !important; border: 1px solid #d1d1d1 !important; color: #1a1a1a !important; border-radius: 4px !important; box-shadow: none !important; font-family: var(--mono) !important; }
+/* 🏛 Classic: an engraved brass room plate */
+html[data-skin="classic"] #depGrid .dp-room { background: linear-gradient(180deg, #e4cf98, #c9a96a) !important; color: #1f3a5f !important; border: 1px solid #a8864a !important; border-radius: 3px !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.6), 0 2px 0 rgba(60,45,20,.2) !important; font-family: Georgia, serif !important; }
+/* 📚 Study: a coloured index tab */
+html[data-skin="study"] #depGrid .dp-room { border-radius: 12px !important; background: color-mix(in srgb, var(--c, #5b5bd6) 16%, #fff) !important; border: 2px solid color-mix(in srgb, var(--c, #5b5bd6) 50%, #fff) !important; box-shadow: 0 3px 0 color-mix(in srgb, var(--c, #5b5bd6) 35%, #fff) !important; }
+/* ⚡ Pro: a hairline box, white numbers */
+html[data-skin="pro"] #depGrid .dp-room { background: #0a0a0a !important; border: 1px solid #2e2e2e !important; color: #ededed !important; border-radius: 6px !important; box-shadow: none !important; font-variant-numeric: tabular-nums; }

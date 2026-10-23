@@ -40,6 +40,7 @@ const HO_PREF_DEFAULTS = {
   autoLockChosen: false,
   autoLock: 30,           // minutes without activity before signing out (0 = never); 30 is what shared desk PCs always had
   soundAlerts: false,
+  styleSounds: 'gaming',  // App style sounds: off · gaming (only the Gaming style) · all
   desktopNotify: false,
   haptics: true,
   depSize: 'md',
@@ -164,6 +165,7 @@ function hoSettingsRender() {
          </div>`
       + _hoSeg('corners', 'Corners', 'How round cards and buttons are', [['rounded', 'Rounded'], ['soft', 'Soft'], ['sharp', 'Sharp']])
       + (typeof hoLangFontHtml === 'function' ? hoLangFontHtml() : _hoSeg('font', 'Font', 'Inter, or your device\'s own font', [['inter', 'Inter'], ['system', 'System']]))
+      + _hoSeg('styleSounds', 'Style sounds', 'Little sounds that match your App style when you tap or a message pops up', [['off', 'Off'], ['gaming', 'Gaming only'], ['all', 'Every style']])
       + _hoTog('contrast', 'High contrast', 'Brighter secondary text and stronger lines, for bright rooms or tired eyes')),
 
     _hoSec('topbar', 'menu', 'Top bar', 'Choose what the bar at the top shows',
