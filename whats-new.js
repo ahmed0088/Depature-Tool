@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 401, items: [
+    '✨ New HotelOps logo: a bold rounded H with a small sparkle, on a glossy gold tile that takes your theme\'s colours. New icons for the Home Screen app, the browser tab and the sign-in screen too (re-add the app to your Home Screen to see the new icon there).',
+  ] },
   { v: 400, items: [
     '📊 New page: Reports (Guests & Sales menu, or ⋯ More on the phone) — an Opera-style report centre. Departures, Arrivals, In-House Guest List, Balances Due, Late Check-outs & Extensions, No-Shows, Room Problems, WhatsApp Activity Log and Shift Handover. Each one prints like Opera: hotel and report name, printed time and user, a clean table with totals, page numbers on paper. Filter, search, tap a column to sort, then 🖨 Print / PDF, ⬇ Excel, CSV or ⧉ Copy. It uses what HotelOps already has today — load the Opera reports on their pages first.',
   ] },
