@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 402, items: [
+    '💜 The new HotelOps logo you picked: a bold white H on a glowing indigo tile — the same in every theme, on the sign-in screen, the browser tab and the Home Screen icon (re-add the app to your Home Screen to see the new icon there).',
+  ] },
   { v: 401, items: [
     '✨ New HotelOps logo: a bold rounded H with a small sparkle, on a glossy gold tile that takes your theme\'s colours. New icons for the Home Screen app, the browser tab and the sign-in screen too (re-add the app to your Home Screen to see the new icon there).',
   ] },
