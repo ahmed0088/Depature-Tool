@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 396, items: [
+    '🎨 9 new App styles — the whole app dressed like an app you know. Pick one from the theme button (top bar or ⋯ More), under "App styles": 📝 Apple Notes (warm paper, Notes yellow, ruled cards) · 💬 WhatsApp (teal bar, doodle wallpaper, chat-bubble cards) · ✈️ Telegram (Telegram blue on the green wallpaper) · 🎧 Discord (blurple and the dark greys, # titles) · 🕹 Gaming (neon cyan / magenta, RGB edges, game fonts) · 🏛 Classic (cream paper, navy and gold, serif) · ⚡ Pro (black, hairlines, sharp type) · 📚 Study (graph paper, highlighter titles, index-card tiles) · 🗒 Notepad (Windows 11, Consolas, square edges). Each is your own choice on your devices only.',
+  ] },
   { v: 395, items: [
     '✨ New phone tab bar: a floating glass capsule like iPhone\'s own apps — frosted see-through background, a soft pill that slides to the tab you tap, cleaner icons and labels, and small iPhone-red badges.',
   ] },

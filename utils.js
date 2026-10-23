@@ -316,12 +316,30 @@ const HO_THEMES = {
   'mint': { label: 'Mint', emoji: '🌿', base: 'opera', skin: 'mint', bg: '#e2f2ea', a: '#059669', btn: '#ffffff' },
   'sakura': { label: 'Sakura', emoji: '🌸', base: 'opera', skin: 'sakura', bg: '#fae6ee', a: '#db2777', btn: '#ffffff' },
   'sand': { label: 'Desert', emoji: '🏜', base: 'opera', skin: 'sand', bg: '#f1e7d6', a: '#b45309', btn: '#ffffff' },
+  // App styles (themes-pro.css): the whole app dressed like an app people know
+  'notes':    { label: 'Apple Notes', emoji: '📝', group: 'style', base: 'opera', skin: 'notes', bg: '#f6f5f0', a: '#e0a800', btn: '#1c1c1e' },
+  'whatsapp': { label: 'WhatsApp', emoji: '💬', group: 'style', base: 'opera', skin: 'whatsapp', bg: '#efeae2', a: '#00a884', btn: '#ffffff' },
+  'telegram': { label: 'Telegram', emoji: '✈️', group: 'style', base: 'opera', skin: 'telegram', bg: '#dfe8cf', a: '#3390ec', btn: '#ffffff' },
+  'discord':  { label: 'Discord', emoji: '🎧', group: 'style', base: 'night-ops', skin: 'discord', bg: '#313338', a: '#5865f2', btn: '#ffffff' },
+  'gaming':   { label: 'Gaming', emoji: '🕹', group: 'style', base: 'night-ops', skin: 'gaming', bg: '#05060d', a: '#00f0ff', btn: '#05060d', font: 'Orbitron:wght@600;800&family=Rajdhani:wght@500;600;700' },
+  'classic':  { label: 'Classic', emoji: '🏛', group: 'style', base: 'opera', skin: 'classic', bg: '#f4efe4', a: '#1f3a5f', btn: '#fffdf8' },
+  'pro':      { label: 'Pro', emoji: '⚡', group: 'style', base: 'night-ops', skin: 'pro', bg: '#000000', a: '#ededed', btn: '#000000' },
+  'study':    { label: 'Study', emoji: '📚', group: 'style', base: 'opera', skin: 'study', bg: '#f7f8fc', a: '#5b5bd6', btn: '#ffffff', font: 'Nunito:wght@500;600;700;800' },
+  'notepad':  { label: 'Notepad', emoji: '🗒', group: 'style', base: 'opera', skin: 'notepad', bg: '#f3f3f3', a: '#005fb8', btn: '#ffffff' },
 };
+/** a style's own font, loaded only when someone picks it */
+function hoThemeFont(T) {
+  if (!T || !T.font || document.getElementById('hoFont-' + T.skin)) return;
+  const l = document.createElement('link'); l.id = 'hoFont-' + T.skin; l.rel = 'stylesheet';
+  l.href = 'https://fonts.googleapis.com/css2?family=' + T.font + '&display=swap'; document.head.appendChild(l);
+}
 function hoThemeName() { return document.documentElement.getAttribute('data-skin') || document.documentElement.getAttribute('data-theme') || 'night-ops'; }
 function setTheme(name, btn, noSave) {
   const T = HO_THEMES[name] || HO_THEMES['night-ops']; if (!HO_THEMES[name]) name = 'night-ops';
   document.documentElement.setAttribute('data-theme', T.base);
   if (T.skin) document.documentElement.setAttribute('data-skin', T.skin); else document.documentElement.removeAttribute('data-skin');
+  if (T.group) document.documentElement.setAttribute('data-skin-group', T.group); else document.documentElement.removeAttribute('data-skin-group');
+  hoThemeFont(T);
   const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.setAttribute('content', T.bg);
   hoThemeMenuSync();
   document.querySelectorAll('.theme-btn, .mob-theme-btn').forEach(b => b.classList.remove('active'));
@@ -354,7 +372,10 @@ function hoThemeMenuSync() {
 function hoThemeMenu(btn) {
   const old = document.getElementById('hoThemePop'); if (old) { old.remove(); return; }
   const cur = hoThemeName(), pop = document.createElement('div'); pop.id = 'hoThemePop'; pop.className = 'ho-theme-pop'; pop.setAttribute('role', 'menu');
-  pop.innerHTML = '<div class="ho-tp-hd">Theme</div>' + Object.entries(HO_THEMES).map(([k, t]) => `<button role="menuitemradio" aria-checked="${k === cur}" class="${k === cur ? 'on' : ''}" onclick="setTheme('${k}');document.getElementById('hoThemePop')?.remove()"><span class="ho-tp-sw" style="background:${t.bg}"><i style="background:${t.a}"></i></span>${t.label}${k === cur ? '<b>✓</b>' : ''}</button>`).join('');
+  const item = ([k, t]) => `<button role="menuitemradio" aria-checked="${k === cur}" class="${k === cur ? 'on' : ''}" onclick="setTheme('${k}');document.getElementById('hoThemePop')?.remove()"><span class="ho-tp-sw" style="background:${t.bg}"><i style="background:${t.a}"></i></span>${t.label}${k === cur ? '<b>✓</b>' : ''}</button>`;
+  const all = Object.entries(HO_THEMES);
+  pop.innerHTML = '<div class="ho-tp-hd">App styles</div>' + all.filter(x => x[1].group === 'style').map(item).join('')
+    + '<div class="ho-tp-hd">Colours</div>' + all.filter(x => x[1].group !== 'style').map(item).join('');
   document.body.appendChild(pop);
   const r = btn.getBoundingClientRect(), w = 220; pop.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w)) + 'px'; pop.style.top = (r.bottom + 8) + 'px';
   setTimeout(() => document.addEventListener('click', function off(e) { if (!pop.contains(e.target) && e.target !== btn && !btn.contains(e.target)) { pop.remove(); document.removeEventListener('click', off); } }), 0);
@@ -529,7 +550,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v395';
+const APP_VERSION = 'v396';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;

@@ -1,0 +1,293 @@
+/* ═══════════════════════════════════════════════════════════
+   themes-pro.css — "App styles": whole-app looks inspired by apps people know
+   Apple Notes · WhatsApp · Telegram · Discord · Gaming · Classic · Pro · Study · Notepad
+   Each sits on a base theme (light = opera, dark = night-ops) like themes.css, and changes
+   colours, type, corners, bars, menus, cards, buttons and fields. Fonts that aren't on the
+   device load only when the style is picked (utils.js HO_THEMES[].font).
+═══════════════════════════════════════════════════════════ */
+
+/* shared: every style keeps fields, cards and the phone bar in its own colours */
+html[data-skin-group="style"] .panel input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),
+html[data-skin-group="style"] .panel select, html[data-skin-group="style"] .panel textarea { background: var(--input-bg, var(--card)) !important; border-color: var(--border2) !important; color: var(--text) !important; }
+html[data-skin-group="style"] .panel input:focus, html[data-skin-group="style"] .panel select:focus, html[data-skin-group="style"] .panel textarea:focus { border-color: var(--accent) !important; box-shadow: 0 0 0 3px var(--accent-bg) !important; outline: none; }
+html[data-skin-group="style"] .nav-item.active .nav-badge { background: var(--accent) !important; color: var(--on-accent, #fff) !important; }
+html[data-skin-group="style"] .mob-nav-btn.active .mob-nav-icon, html[data-skin-group="style"] .mob-nav-btn.active .mob-nav-lbl { color: var(--accent) !important; }
+html[data-skin-group="style"] .btn.gold, html[data-skin-group="style"] .btn.primary { background: var(--accent) !important; color: var(--on-accent, #fff) !important; border-color: transparent !important; }
+html[data-skin-group="style"] .topbar::after { display: none; }
+
+/* ═════════ 📝 Apple Notes — warm paper, Notes yellow, SF type, ruled cards ═════════ */
+html[data-skin="notes"] {
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', 'Inter', system-ui, sans-serif; --mono: 'SF Mono', ui-monospace, Menlo, monospace;
+  --bg: #f2f2f7 !important; --bg2: #f6f5f0 !important; --surface: #fffdf7 !important; --card: #fffdf7 !important; --card2: #f4f2ea !important; --input-bg: #ffffff;
+  --border: rgba(60,60,67,.12) !important; --border2: rgba(60,60,67,.18) !important; --border3: rgba(60,60,67,.3) !important;
+  --text: #1c1c1e !important; --text2: rgba(60,60,67,.78) !important; --text3: rgba(60,60,67,.52) !important;
+  --accent: #e0a800 !important; --accent2: #c99600 !important; --accent-bg: rgba(224,168,0,.14) !important; --accent-border: rgba(224,168,0,.4) !important; --on-accent: #1c1c1e;
+  --green: #34c759; --red: #ff3b30; --rose: #ff3b30; --amber: #ff9500; --blue: #007aff; --mint: #34c759; --sky: #5ac8fa;
+  --topbar-bg: rgba(246,245,240,.82) !important; --topbar-border: rgba(0,0,0,.1) !important;
+  --r: 10px !important; --r2: 14px !important; --r3: 20px !important;
+  --ho-a1: #ffd84d; --ho-a2: #e0a800; --ho-ink: #1c1c1e;
+}
+html[data-skin="notes"] body { background: #f2f2f7; letter-spacing: -0.01em; -webkit-font-smoothing: antialiased; }
+html[data-skin="notes"] .topbar { background: rgba(246,245,240,.8) !important; border-bottom: .5px solid rgba(0,0,0,.12) !important; backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); }
+html[data-skin="notes"] .sidenav { background: #f6f5f0 !important; border-right: .5px solid rgba(0,0,0,.1); }
+html[data-skin="notes"] .nav-item { border-radius: 10px !important; border-left: 0 !important; }
+html[data-skin="notes"] .nav-item.active { background: #ffd84d !important; color: #1c1c1e !important; }
+html[data-skin="notes"] .nav-item.active::before { display: none !important; }
+html[data-skin="notes"] .page-hd h1, html[data-skin="notes"] .panel h1 { font-weight: 800 !important; letter-spacing: -0.03em; }
+html[data-skin="notes"] .page-hd h1::after { content: ''; display: block; width: 44px; height: 4px; margin-top: 8px; border-radius: 4px; background: #ffd84d; }
+/* a note: soft paper, faint ruled lines, a yellow margin line */
+html[data-skin="notes"] .card, html[data-skin="notes"] .home-tile {
+  background: #fffdf7 repeating-linear-gradient(180deg, transparent 0 27px, rgba(0,0,0,.035) 27px 28px) !important;
+  border: .5px solid rgba(60,60,67,.14) !important; box-shadow: 0 1px 1px rgba(0,0,0,.03), 0 10px 26px -18px rgba(0,0,0,.25) !important; }
+html[data-skin="notes"] .btn { border-radius: 999px !important; }
+html[data-skin="notes"] .btn.gold, html[data-skin="notes"] .btn.primary { background: #ffd84d !important; color: #1c1c1e !important; box-shadow: 0 6px 16px -8px rgba(224,168,0,.7) !important; }
+html[data-skin="notes"] input[type=checkbox] { accent-color: #e0a800; }
+
+/* ═════════ 💬 WhatsApp — teal bar, doodle wallpaper, chat-bubble cards, green buttons ═════════ */
+html[data-skin="whatsapp"] {
+  --font: 'Segoe UI', -apple-system, 'Helvetica Neue', Roboto, 'Inter', sans-serif;
+  --bg: #efeae2 !important; --bg2: #ffffff !important; --surface: #ffffff !important; --card: #ffffff !important; --card2: #f0f2f5 !important; --input-bg: #ffffff;
+  --border: rgba(11,20,26,.09) !important; --border2: rgba(11,20,26,.15) !important; --border3: rgba(11,20,26,.25) !important;
+  --text: #111b21 !important; --text2: #3b4a54 !important; --text3: #667781 !important;
+  --accent: #00a884 !important; --accent2: #008069 !important; --accent-bg: rgba(0,168,132,.12) !important; --accent-border: rgba(0,168,132,.38) !important;
+  --green: #00a884; --red: #ea0038; --rose: #ea0038; --amber: #ffb02e; --blue: #027eb5; --mint: #25d366;
+  --topbar-bg: #008069 !important; --topbar-border: transparent !important; --topbar-text: #ffffff !important;
+  --r: 8px !important; --r2: 12px !important; --r3: 18px !important;
+  --ho-a1: #25d366; --ho-a2: #008069; --ho-ink: #ffffff;
+}
+html[data-skin="whatsapp"] body, html[data-skin="whatsapp"] #appWrapper .main, html[data-skin="whatsapp"] .panel {
+  background-color: #efeae2;
+  background-image: radial-gradient(rgba(11,20,26,.045) 1.2px, transparent 1.4px), radial-gradient(rgba(11,20,26,.03) 1px, transparent 1.2px);
+  background-size: 22px 22px, 34px 34px; background-position: 0 0, 11px 17px; }
+html[data-skin="whatsapp"] .topbar { background: #008069 !important; border: 0 !important; box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+html[data-skin="whatsapp"] .topbar, html[data-skin="whatsapp"] .topbar .logo-name, html[data-skin="whatsapp"] .topbar b, html[data-skin="whatsapp"] #topbarTime, html[data-skin="whatsapp"] .ho-name b { color: #fff !important; }
+html[data-skin="whatsapp"] .topbar .icon-round, html[data-skin="whatsapp"] .topbar .tb-pill, html[data-skin="whatsapp"] .topbar #appVersionPill, html[data-skin="whatsapp"] .topbar .auth-user-pill { background: rgba(255,255,255,.14) !important; border-color: transparent !important; color: #fff !important; }
+html[data-skin="whatsapp"] .sidenav { background: #ffffff !important; border-right: 1px solid #e9edef; }
+html[data-skin="whatsapp"] .nav-item { border-radius: 0 !important; border-left: 0 !important; border-bottom: 1px solid #f0f2f5; }
+html[data-skin="whatsapp"] .nav-item.active { background: #f0f2f5 !important; color: #111b21 !important; }
+html[data-skin="whatsapp"] .nav-item.active::before { background: #00a884 !important; box-shadow: none !important; }
+/* cards are chat bubbles: white, a little tail, a soft shadow */
+html[data-skin="whatsapp"] .card, html[data-skin="whatsapp"] .home-tile { position: relative; border: 0 !important; border-radius: 0 10px 10px 10px !important; box-shadow: 0 1px .5px rgba(11,20,26,.13) !important; }
+html[data-skin="whatsapp"] .home-tile:nth-child(even) { background: #d9fdd3 !important; border-radius: 10px 0 10px 10px !important; }
+html[data-skin="whatsapp"] .btn { border-radius: 24px !important; }
+html[data-skin="whatsapp"] .btn.gold, html[data-skin="whatsapp"] .btn.primary { background: #00a884 !important; }
+html[data-skin="whatsapp"] .page-hd h1, html[data-skin="whatsapp"] .panel h1 { color: #111b21 !important; font-weight: 600 !important; }
+html[data-skin="whatsapp"] .page-hd { background: #f0f2f5; margin: -20px -16px 14px !important; padding: 14px 16px !important; border-bottom: 1px solid #e9edef; }
+@media (min-width: 769px) { html[data-skin="whatsapp"] .page-hd { margin: -24px -28px 16px !important; padding: 16px 28px !important; } }
+
+/* ═════════ ✈️ Telegram — Telegram blue, the soft green-blue wallpaper, rounded bubbles ═════════ */
+html[data-skin="telegram"] {
+  --font: -apple-system, 'Roboto', 'Segoe UI', 'Helvetica Neue', 'Inter', sans-serif;
+  --bg: #dfe8cf !important; --bg2: #ffffff !important; --surface: #ffffff !important; --card: #ffffff !important; --card2: #f4f4f5 !important; --input-bg: #ffffff;
+  --border: rgba(0,0,0,.08) !important; --border2: rgba(0,0,0,.13) !important; --border3: rgba(0,0,0,.22) !important;
+  --text: #000000 !important; --text2: #4a5560 !important; --text3: #707579 !important;
+  --accent: #3390ec !important; --accent2: #2481cc !important; --accent-bg: rgba(51,144,236,.12) !important; --accent-border: rgba(51,144,236,.38) !important;
+  --green: #4fae4e; --red: #e53935; --rose: #e53935; --amber: #f5a623; --blue: #3390ec; --mint: #4fae4e; --sky: #64b5f6;
+  --topbar-bg: rgba(255,255,255,.88) !important; --topbar-border: rgba(0,0,0,.08) !important;
+  --r: 12px !important; --r2: 16px !important; --r3: 22px !important;
+  --ho-a1: #5ac8fa; --ho-a2: #3390ec; --ho-ink: #ffffff;
+}
+html[data-skin="telegram"] body, html[data-skin="telegram"] .panel {
+  background: radial-gradient(circle at 15% 20%, rgba(255,255,255,.5), transparent 40%), radial-gradient(circle at 85% 70%, rgba(173,210,155,.7), transparent 45%),
+    linear-gradient(135deg, #d1e5b7 0%, #b9d9c3 35%, #c8dcaa 65%, #aed3c2 100%) fixed !important; }
+html[data-skin="telegram"] .topbar { backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); }
+html[data-skin="telegram"] .sidenav { background: #ffffff !important; border-right: 1px solid #dadce0; }
+html[data-skin="telegram"] .nav-item { border-radius: 12px !important; border-left: 0 !important; }
+html[data-skin="telegram"] .nav-item.active { background: #3390ec !important; color: #fff !important; }
+html[data-skin="telegram"] .nav-item.active .nav-icon { color: #fff !important; }
+html[data-skin="telegram"] .nav-item.active::before { display: none !important; }
+html[data-skin="telegram"] .nav-item.active .nav-badge { background: #fff !important; color: #3390ec !important; }
+html[data-skin="telegram"] .card, html[data-skin="telegram"] .home-tile { border: 0 !important; border-radius: 16px 16px 16px 6px !important; box-shadow: 0 1px 2px rgba(16,35,47,.15) !important; }
+html[data-skin="telegram"] .home-tile:nth-child(3n) { background: #effdde !important; border-radius: 16px 16px 6px 16px !important; }
+html[data-skin="telegram"] .btn { border-radius: 10px !important; }
+html[data-skin="telegram"] .btn.gold, html[data-skin="telegram"] .btn.primary { background: #3390ec !important; box-shadow: 0 6px 16px -8px rgba(51,144,236,.8) !important; }
+html[data-skin="telegram"] .page-hd h1, html[data-skin="telegram"] .panel h1 { color: #000 !important; }
+
+/* ═════════ 🎮 Discord — blurple, the dark greys, server-pill menu ═════════ */
+html[data-skin="discord"] {
+  --font: 'gg sans', 'Noto Sans', 'Segoe UI', -apple-system, 'Helvetica Neue', 'Inter', sans-serif;
+  --bg: #313338 !important; --bg2: #2b2d31 !important; --surface: #2b2d31 !important; --card: #2b2d31 !important; --card2: #383a40 !important; --input-bg: #1e1f22;
+  --border: rgba(255,255,255,.06) !important; --border2: rgba(255,255,255,.1) !important; --border3: rgba(255,255,255,.16) !important;
+  --text: #f2f3f5 !important; --text2: #b5bac1 !important; --text3: #949ba4 !important;
+  --accent: #5865f2 !important; --accent2: #4752c4 !important; --accent-bg: rgba(88,101,242,.18) !important; --accent-border: rgba(88,101,242,.45) !important;
+  --green: #23a55a; --red: #f23f43; --rose: #f23f43; --amber: #f0b232; --blue: #00a8fc; --mint: #23a55a; --purple: #a970ff;
+  --topbar-bg: #2b2d31 !important; --topbar-border: #1e1f22 !important;
+  --r: 8px !important; --r2: 10px !important; --r3: 16px !important;
+  --ho-a1: #7984f5; --ho-a2: #5865f2; --ho-ink: #ffffff;
+}
+html[data-skin="discord"] body { background: #313338; }
+html[data-skin="discord"] .topbar { box-shadow: 0 1px 0 rgba(4,4,5,.2), 0 1.5px 0 rgba(6,6,7,.05), 0 2px 0 rgba(4,4,5,.05) !important; }
+html[data-skin="discord"] .sidenav { background: #2b2d31 !important; border-right: 0; box-shadow: inset -1px 0 0 #1e1f22; }
+html[data-skin="discord"] .nav-item { border-radius: 6px !important; border-left: 0 !important; color: #949ba4 !important; position: relative; }
+html[data-skin="discord"] .nav-item:hover { background: rgba(78,80,88,.3) !important; color: #dbdee1 !important; }
+html[data-skin="discord"] .nav-item.active { background: rgba(78,80,88,.6) !important; color: #fff !important; }
+/* the white "selected server" pill on the left */
+html[data-skin="discord"] .nav-item.active::before { content: '' !important; display: block !important; position: absolute; left: -10px; top: 50%; width: 4px; height: 20px; margin-top: -10px; border-radius: 0 4px 4px 0; background: #fff !important; box-shadow: none !important; }
+html[data-skin="discord"] .nav-item.active .nav-badge, html[data-skin="discord"] .mob-nav-badge { background: #f23f43 !important; color: #fff !important; }
+html[data-skin="discord"] .card, html[data-skin="discord"] .home-tile { background: #2b2d31 !important; border: 0 !important; box-shadow: 0 1px 0 rgba(4,4,5,.2) !important; }
+html[data-skin="discord"] .card:hover, html[data-skin="discord"] .home-tile:hover { background: #2e3035 !important; }
+html[data-skin="discord"] .btn { border-radius: 4px !important; font-weight: 600 !important; }
+html[data-skin="discord"] .btn.gold, html[data-skin="discord"] .btn.primary { background: #5865f2 !important; }
+html[data-skin="discord"] .btn.gold:hover, html[data-skin="discord"] .btn.primary:hover { background: #4752c4 !important; }
+html[data-skin="discord"] .page-hd h1, html[data-skin="discord"] .panel h1 { color: #f2f3f5 !important; font-weight: 800 !important; }
+html[data-skin="discord"] .page-hd h1::before { content: '# '; color: #80848e; font-weight: 600; }
+
+/* ═════════ 🕹 Gaming — black glass, neon cyan / magenta, RGB edges, display type ═════════ */
+html[data-skin="gaming"] {
+  --font: 'Rajdhani', 'Segoe UI', 'Inter', system-ui, sans-serif; --mono: 'JetBrains Mono', ui-monospace, monospace;
+  --bg: #05060d !important; --bg2: #0a0c18 !important; --surface: #0d1020 !important; --card: rgba(14,17,34,.85) !important; --card2: #141833 !important; --input-bg: #0a0c18;
+  --border: rgba(0,240,255,.12) !important; --border2: rgba(0,240,255,.22) !important; --border3: rgba(255,43,214,.35) !important;
+  --text: #e8f7ff !important; --text2: #9fb4d8 !important; --text3: #6a7ba6 !important;
+  --accent: #00f0ff !important; --accent2: #ff2bd6 !important; --accent-bg: rgba(0,240,255,.12) !important; --accent-border: rgba(0,240,255,.5) !important; --on-accent: #05060d;
+  --green: #39ff88; --red: #ff3860; --rose: #ff3860; --amber: #ffd23f; --blue: #00b3ff; --mint: #39ff88; --purple: #b26bff;
+  --topbar-bg: rgba(5,6,13,.78) !important; --topbar-border: rgba(0,240,255,.25) !important;
+  --r: 6px !important; --r2: 10px !important; --r3: 14px !important;
+  --ho-a1: #00f0ff; --ho-a2: #ff2bd6; --ho-ink: #05060d;
+}
+html[data-skin="gaming"] body {
+  background: radial-gradient(1200px 600px at 10% -10%, rgba(255,43,214,.18), transparent 60%), radial-gradient(900px 500px at 110% 10%, rgba(0,240,255,.16), transparent 60%),
+    linear-gradient(rgba(0,240,255,.04) 1px, transparent 1px) 0 0 / 100% 32px, #05060d fixed !important; font-weight: 500; letter-spacing: .01em; }
+html[data-skin="gaming"] .topbar { backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 1px 0 rgba(0,240,255,.35), 0 8px 30px -10px rgba(0,240,255,.35) !important; }
+html[data-skin="gaming"] .page-hd h1, html[data-skin="gaming"] .panel h1, html[data-skin="gaming"] .kpi-val, html[data-skin="gaming"] .home-big {
+  font-family: 'Orbitron', 'Rajdhani', sans-serif !important; letter-spacing: .04em; text-transform: uppercase;
+  background: linear-gradient(90deg, #00f0ff, #b26bff 50%, #ff2bd6); -webkit-background-clip: text; background-clip: text; color: transparent !important; }
+html[data-skin="gaming"] .sidenav { background: rgba(10,12,24,.92) !important; border-right: 1px solid rgba(0,240,255,.2); }
+html[data-skin="gaming"] .nav-item { border-radius: 4px !important; text-transform: uppercase; letter-spacing: .06em; font-weight: 600 !important; }
+html[data-skin="gaming"] .nav-item.active { background: linear-gradient(90deg, rgba(0,240,255,.18), rgba(255,43,214,.08)) !important; color: #fff !important; }
+html[data-skin="gaming"] .nav-item.active::before { background: #00f0ff !important; box-shadow: 0 0 12px #00f0ff, 0 0 24px #00f0ff !important; }
+/* cards: dark glass with an RGB edge and corner brackets */
+html[data-skin="gaming"] .card, html[data-skin="gaming"] .home-tile {
+  border: 1px solid transparent !important; background: linear-gradient(rgba(14,17,34,.92), rgba(14,17,34,.92)) padding-box, linear-gradient(135deg, rgba(0,240,255,.6), rgba(178,107,255,.25) 50%, rgba(255,43,214,.6)) border-box !important;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,240,255,.45) !important; }
+html[data-skin="gaming"] .home-tile:hover { box-shadow: 0 0 22px -4px rgba(0,240,255,.6), 0 0 40px -10px rgba(255,43,214,.5) !important; transform: translateY(-1px); }
+html[data-skin="gaming"] .btn { border-radius: 4px !important; text-transform: uppercase; letter-spacing: .08em; font-weight: 700 !important; }
+html[data-skin="gaming"] .btn.gold, html[data-skin="gaming"] .btn.primary { background: linear-gradient(90deg, #00f0ff, #ff2bd6) !important; color: #05060d !important; box-shadow: 0 0 18px -2px rgba(0,240,255,.7) !important; }
+html[data-skin="gaming"] #mobNav.mob-nav { box-shadow: 0 0 0 1px rgba(0,240,255,.35), 0 0 24px -6px rgba(0,240,255,.6) !important; }
+
+/* ═════════ 🏛 Classic — cream paper, navy ink, serif headings, ruled tables ═════════ */
+html[data-skin="classic"] {
+  --font: 'Charter', 'Iowan Old Style', Georgia, 'Times New Roman', serif; --mono: 'Courier New', ui-monospace, monospace;
+  --bg: #f4efe4 !important; --bg2: #ebe4d3 !important; --surface: #fbf8f1 !important; --card: #fffdf8 !important; --card2: #f3ecdc !important; --input-bg: #fffdf8;
+  --border: rgba(60,45,20,.14) !important; --border2: rgba(60,45,20,.22) !important; --border3: rgba(60,45,20,.34) !important;
+  --text: #1f2a3a !important; --text2: #45505f !important; --text3: #7b7466 !important;
+  --accent: #1f3a5f !important; --accent2: #8b1e2d !important; --accent-bg: rgba(31,58,95,.1) !important; --accent-border: rgba(31,58,95,.35) !important;
+  --green: #2f6b3a; --red: #8b1e2d; --rose: #8b1e2d; --amber: #a36a00; --blue: #1f3a5f; --mint: #2f6b3a;
+  --topbar-bg: #1f3a5f !important; --topbar-border: #c9a96a !important;
+  --r: 3px !important; --r2: 4px !important; --r3: 6px !important;
+  --ho-a1: #c9a96a; --ho-a2: #1f3a5f; --ho-ink: #fffdf8;
+}
+html[data-skin="classic"] body { background: #f4efe4; }
+html[data-skin="classic"] .topbar { background: #1f3a5f !important; border-bottom: 3px double #c9a96a !important; }
+html[data-skin="classic"] .topbar, html[data-skin="classic"] .topbar .logo-name, html[data-skin="classic"] .topbar b, html[data-skin="classic"] #topbarTime { color: #fffdf8 !important; }
+html[data-skin="classic"] .topbar .icon-round, html[data-skin="classic"] .topbar .tb-pill, html[data-skin="classic"] .topbar .auth-user-pill, html[data-skin="classic"] .topbar #appVersionPill { background: rgba(255,255,255,.1) !important; border-color: rgba(201,169,106,.5) !important; color: #fffdf8 !important; }
+html[data-skin="classic"] .page-hd h1, html[data-skin="classic"] .panel h1 { font-weight: 700 !important; letter-spacing: 0; color: #1f3a5f !important; }
+html[data-skin="classic"] .page-hd { border-bottom: 1px solid rgba(60,45,20,.25); padding-bottom: 12px; }
+html[data-skin="classic"] .page-hd h1::after { content: ''; display: block; width: 64px; height: 2px; margin-top: 8px; background: #c9a96a; }
+html[data-skin="classic"] .sidenav { background: #ebe4d3 !important; border-right: 1px solid rgba(60,45,20,.2); }
+html[data-skin="classic"] .nav-item { border-radius: 2px !important; border-left: 0 !important; }
+html[data-skin="classic"] .nav-item.active { background: #fffdf8 !important; color: #1f3a5f !important; box-shadow: inset 3px 0 0 #8b1e2d; }
+html[data-skin="classic"] .nav-item.active::before { display: none !important; }
+html[data-skin="classic"] .card, html[data-skin="classic"] .home-tile { border: 1px solid rgba(60,45,20,.22) !important; box-shadow: 0 1px 0 rgba(60,45,20,.08), 3px 3px 0 rgba(60,45,20,.06) !important; }
+html[data-skin="classic"] .btn { border-radius: 2px !important; font-family: var(--font) !important; }
+html[data-skin="classic"] .btn.gold, html[data-skin="classic"] .btn.primary { background: #1f3a5f !important; color: #fffdf8 !important; box-shadow: inset 0 -2px 0 rgba(0,0,0,.25) !important; }
+html[data-skin="classic"] table th { font-variant: small-caps; letter-spacing: .05em; border-bottom: 2px solid #1f3a5f !important; }
+html[data-skin="classic"] #mobNav.mob-nav { border-radius: 6px !important; }
+
+/* ═════════ ⚡ Pro — near-black, hairlines, monochrome with one blue, tight type ═════════ */
+html[data-skin="pro"] {
+  --font: 'Inter', -apple-system, 'Segoe UI', system-ui, sans-serif; --mono: 'JetBrains Mono', ui-monospace, monospace;
+  --bg: #000000 !important; --bg2: #0a0a0a !important; --surface: #0a0a0a !important; --card: #0a0a0a !important; --card2: #111111 !important; --input-bg: #000000;
+  --border: #1f1f1f !important; --border2: #2e2e2e !important; --border3: #454545 !important;
+  --text: #ededed !important; --text2: #a1a1a1 !important; --text3: #6e6e6e !important;
+  --accent: #ededed !important; --accent2: #0a72ef !important; --accent-bg: rgba(255,255,255,.07) !important; --accent-border: rgba(255,255,255,.22) !important; --on-accent: #000000;
+  --green: #45d483; --red: #ff6166; --rose: #ff6166; --amber: #f5a524; --blue: #3b9eff; --mint: #45d483; --purple: #a57cff;
+  --topbar-bg: rgba(0,0,0,.72) !important; --topbar-border: #1f1f1f !important;
+  --r: 6px !important; --r2: 8px !important; --r3: 12px !important;
+  --ho-a1: #ffffff; --ho-a2: #a1a1a1; --ho-ink: #000000;
+}
+html[data-skin="pro"] body { background: #000; font-feature-settings: 'cv11', 'ss01', 'tnum'; letter-spacing: -0.011em; }
+html[data-skin="pro"] .topbar { backdrop-filter: saturate(180%) blur(14px); -webkit-backdrop-filter: saturate(180%) blur(14px); }
+html[data-skin="pro"] .page-hd h1, html[data-skin="pro"] .panel h1 { font-weight: 600 !important; letter-spacing: -0.04em; }
+html[data-skin="pro"] .sidenav { background: #000 !important; border-right: 1px solid #1f1f1f; }
+html[data-skin="pro"] .nav-item { border-radius: 6px !important; border-left: 0 !important; color: #a1a1a1 !important; }
+html[data-skin="pro"] .nav-item:hover { background: #111 !important; color: #ededed !important; }
+html[data-skin="pro"] .nav-item.active { background: #1a1a1a !important; color: #fff !important; box-shadow: inset 0 0 0 1px #2e2e2e; }
+html[data-skin="pro"] .nav-item.active::before { display: none !important; }
+html[data-skin="pro"] .card, html[data-skin="pro"] .home-tile { border: 1px solid #1f1f1f !important; box-shadow: none !important; background: #0a0a0a !important; }
+html[data-skin="pro"] .home-tile:hover, html[data-skin="pro"] .card:hover { border-color: #2e2e2e !important; }
+html[data-skin="pro"] .kpi-val, html[data-skin="pro"] .home-big { font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
+html[data-skin="pro"] .btn { border-radius: 6px !important; font-weight: 500 !important; }
+html[data-skin="pro"] .btn.gold, html[data-skin="pro"] .btn.primary { background: #ededed !important; color: #000 !important; }
+html[data-skin="pro"] .btn.gold:hover, html[data-skin="pro"] .btn.primary:hover { background: #fff !important; }
+html[data-skin="pro"] a { color: #3b9eff; }
+
+/* ═════════ 📚 Study — graph-paper page, calm indigo, highlighter yellow, friendly rounded type ═════════ */
+html[data-skin="study"] {
+  --font: 'Nunito', 'Quicksand', -apple-system, 'Segoe UI', 'Inter', sans-serif;
+  --bg: #f7f8fc !important; --bg2: #eef0fa !important; --surface: #ffffff !important; --card: #ffffff !important; --card2: #f3f4fb !important; --input-bg: #ffffff;
+  --border: rgba(55,65,140,.1) !important; --border2: rgba(55,65,140,.17) !important; --border3: rgba(55,65,140,.28) !important;
+  --text: #1e2340 !important; --text2: #4a5078 !important; --text3: #8287a8 !important;
+  --accent: #5b5bd6 !important; --accent2: #3e63dd !important; --accent-bg: rgba(91,91,214,.1) !important; --accent-border: rgba(91,91,214,.34) !important;
+  --green: #30a46c; --red: #e5484d; --rose: #e5484d; --amber: #f5a524; --blue: #3e63dd; --mint: #30a46c; --purple: #8e4ec6;
+  --topbar-bg: rgba(255,255,255,.85) !important; --topbar-border: rgba(55,65,140,.1) !important;
+  --r: 12px !important; --r2: 18px !important; --r3: 24px !important;
+  --ho-a1: #8b8bf0; --ho-a2: #5b5bd6; --ho-ink: #ffffff;
+}
+html[data-skin="study"] body, html[data-skin="study"] .panel {
+  background: linear-gradient(rgba(91,91,214,.07) 1px, transparent 1px) 0 0 / 24px 24px, linear-gradient(90deg, rgba(91,91,214,.07) 1px, transparent 1px) 0 0 / 24px 24px, #f7f8fc !important; }
+html[data-skin="study"] .topbar { backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+html[data-skin="study"] .page-hd h1, html[data-skin="study"] .panel h1 { font-weight: 800 !important;
+  background: linear-gradient(transparent 58%, #fff27a 58%, #fff27a 92%, transparent 92%) no-repeat; background-size: 100% 100%; display: inline; padding: 0 4px; }
+html[data-skin="study"] .sidenav { background: #ffffff !important; border-right: 1px solid rgba(55,65,140,.1); }
+html[data-skin="study"] .nav-item { border-radius: 12px !important; border-left: 0 !important; font-weight: 700 !important; }
+html[data-skin="study"] .nav-item.active { background: #5b5bd6 !important; color: #fff !important; box-shadow: 0 6px 16px -8px rgba(91,91,214,.7); }
+html[data-skin="study"] .nav-item.active .nav-icon { color: #fff !important; }
+html[data-skin="study"] .nav-item.active::before { display: none !important; }
+html[data-skin="study"] .card, html[data-skin="study"] .home-tile { border: 1px solid rgba(55,65,140,.1) !important; border-radius: 18px !important; box-shadow: 0 2px 0 rgba(55,65,140,.06), 0 14px 30px -20px rgba(55,65,140,.35) !important; }
+/* a coloured tab on each tile, like index cards */
+html[data-skin="study"] .home-tile { border-top: 5px solid #5b5bd6 !important; }
+html[data-skin="study"] .home-tile:nth-child(4n+2) { border-top-color: #30a46c !important; }
+html[data-skin="study"] .home-tile:nth-child(4n+3) { border-top-color: #f5a524 !important; }
+html[data-skin="study"] .home-tile:nth-child(4n+4) { border-top-color: #e5484d !important; }
+html[data-skin="study"] .btn { border-radius: 12px !important; font-weight: 700 !important; }
+html[data-skin="study"] .btn.gold, html[data-skin="study"] .btn.primary { background: #5b5bd6 !important; box-shadow: 0 4px 0 #3f3fb0 !important; }
+html[data-skin="study"] .btn.gold:active, html[data-skin="study"] .btn.primary:active { transform: translateY(3px); box-shadow: 0 1px 0 #3f3fb0 !important; }
+html[data-skin="study"] input[type=checkbox] { accent-color: #30a46c; }
+
+/* ═════════ 🗒 Notepad — Windows 11: Mica bar, Consolas, square edges, Windows blue ═════════ */
+html[data-skin="notepad"] {
+  --font: 'Segoe UI Variable Text', 'Segoe UI', -apple-system, 'Inter', sans-serif; --mono: 'Cascadia Mono', Consolas, 'Lucida Console', 'JetBrains Mono', monospace;
+  --bg: #f3f3f3 !important; --bg2: #eeeeee !important; --surface: #ffffff !important; --card: #ffffff !important; --card2: #f9f9f9 !important; --input-bg: #ffffff;
+  --border: #e5e5e5 !important; --border2: #d1d1d1 !important; --border3: #a7a7a7 !important;
+  --text: #1a1a1a !important; --text2: #3d3d3d !important; --text3: #6e6e6e !important;
+  --accent: #005fb8 !important; --accent2: #003d92 !important; --accent-bg: rgba(0,95,184,.09) !important; --accent-border: rgba(0,95,184,.4) !important;
+  --green: #0f7b0f; --red: #c42b1c; --rose: #c42b1c; --amber: #9d5d00; --blue: #005fb8; --mint: #0f7b0f;
+  --topbar-bg: #f3f3f3 !important; --topbar-border: #e5e5e5 !important;
+  --r: 4px !important; --r2: 6px !important; --r3: 8px !important;
+  --ho-a1: #4cc2ff; --ho-a2: #005fb8; --ho-ink: #ffffff;
+}
+html[data-skin="notepad"] body { background: #f3f3f3; }
+/* the whole page reads like a document: monospaced text, a thin blue caret line on focus */
+html[data-skin="notepad"] .panel, html[data-skin="notepad"] .card, html[data-skin="notepad"] .home-tile, html[data-skin="notepad"] .panel input, html[data-skin="notepad"] .panel textarea, html[data-skin="notepad"] .panel select { font-family: var(--mono) !important; }
+html[data-skin="notepad"] .page-hd h1, html[data-skin="notepad"] .panel h1 { font-family: 'Segoe UI Variable Display', 'Segoe UI', sans-serif !important; font-weight: 600 !important; }
+html[data-skin="notepad"] .topbar { background: #f3f3f3 !important; border-bottom: 1px solid #e5e5e5 !important; }
+html[data-skin="notepad"] .sidenav { background: #f3f3f3 !important; border-right: 1px solid #e5e5e5; }
+html[data-skin="notepad"] .nav-item { border-radius: 4px !important; border-left: 0 !important; font-family: var(--font) !important; position: relative; }
+html[data-skin="notepad"] .nav-item:hover { background: rgba(0,0,0,.04) !important; }
+html[data-skin="notepad"] .nav-item.active { background: rgba(0,0,0,.06) !important; color: #1a1a1a !important; }
+/* the Windows 11 selected-item stripe */
+html[data-skin="notepad"] .nav-item.active::before { content: '' !important; display: block !important; position: absolute; left: 0; top: 50%; width: 3px; height: 16px; margin-top: -8px; border-radius: 2px; background: #005fb8 !important; box-shadow: none !important; }
+html[data-skin="notepad"] .card, html[data-skin="notepad"] .home-tile { border: 1px solid #e5e5e5 !important; border-radius: 6px !important; box-shadow: 0 2px 4px rgba(0,0,0,.04) !important; }
+html[data-skin="notepad"] .btn { border-radius: 4px !important; font-family: var(--font) !important; border: 1px solid #d1d1d1 !important; box-shadow: inset 0 -1px 0 rgba(0,0,0,.08) !important; }
+html[data-skin="notepad"] .btn.gold, html[data-skin="notepad"] .btn.primary { background: #005fb8 !important; color: #fff !important; border-color: #005fb8 !important; box-shadow: inset 0 -1px 0 rgba(0,0,0,.25) !important; }
+html[data-skin="notepad"] #mobNav.mob-nav { border-radius: 8px !important; }
+html[data-skin="notepad"] .mob-nav-lens { border-radius: 6px !important; }
+
+/* light styles with a light top bar: dark writing and soft grey buttons in the bar (the light base theme's bar is red with white writing) */
+html:is([data-skin="notes"], [data-skin="telegram"], [data-skin="study"], [data-skin="notepad"]) .topbar :is(.ho-name, .ho-name b, .logo .logo-name, .logo-name, .topbar-center, #topbarTime, .ho-word, b) { color: var(--text) !important; }
+html:is([data-skin="notes"], [data-skin="telegram"], [data-skin="study"], [data-skin="notepad"]) .topbar .ho-name b { color: var(--accent) !important; }
+html:is([data-skin="notes"], [data-skin="telegram"], [data-skin="study"], [data-skin="notepad"]) .topbar :is(.icon-round, .tb-pill, .fb-status, #appVersionPill, .auth-user-pill, .theme-switcher, .ho-search) {
+  background: rgba(118,118,128,.12) !important; border-color: transparent !important; color: var(--text2) !important; }
+html:is([data-skin="notes"], [data-skin="telegram"], [data-skin="study"], [data-skin="notepad"]) .topbar .icon-round:hover { background: rgba(118,118,128,.2) !important; }
+html:is([data-skin="notes"], [data-skin="telegram"], [data-skin="study"], [data-skin="notepad"]) .topbar { color: var(--text) !important; }
+html[data-skin="notepad"] .topbar :is(.icon-round, .tb-pill, #appVersionPill, .auth-user-pill) { border-radius: 4px !important; }

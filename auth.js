@@ -390,6 +390,15 @@ function _applyLoginTheme(name) {
     'mint': { accent:'#059669', accentDark:'#34d399', btnColor:'#ffffff' },
     'sakura': { accent:'#db2777', accentDark:'#f472b6', btnColor:'#ffffff' },
     'sand': { accent:'#b45309', accentDark:'#f59e0b', btnColor:'#ffffff' },
+    'notes': { accent:'#ffd84d', accentDark:'#e0a800', btnColor:'#1c1c1e' },
+    'whatsapp': { accent:'#00a884', accentDark:'#008069', btnColor:'#ffffff' },
+    'telegram': { accent:'#3390ec', accentDark:'#2481cc', btnColor:'#ffffff' },
+    'discord': { accent:'#5865f2', accentDark:'#4752c4', btnColor:'#ffffff' },
+    'gaming': { accent:'#00f0ff', accentDark:'#ff2bd6', btnColor:'#05060d' },
+    'classic': { accent:'#1f3a5f', accentDark:'#8b1e2d', btnColor:'#fffdf8' },
+    'pro': { accent:'#ededed', accentDark:'#a1a1a1', btnColor:'#000000' },
+    'study': { accent:'#5b5bd6', accentDark:'#3e63dd', btnColor:'#ffffff' },
+    'notepad': { accent:'#005fb8', accentDark:'#003d92', btnColor:'#ffffff' },
   };
   const t = accents[name] || accents['night-ops'];
   const scr = document.getElementById('loginScreen');

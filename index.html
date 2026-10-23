@@ -37,6 +37,7 @@
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="themes.css"/>
+<link rel="stylesheet" href="themes-pro.css"/>
 <link rel="stylesheet" href="login.css"/>
 
 <!-- ⚡ Instant theme — reads localStorage before Firebase responds, kills the flash -->
@@ -51,9 +52,12 @@
         var s = mine ? { theme: mine } : JSON.parse(raw);
         if (s && s.theme) {
           // a skin sits on a base theme: iPhone on Opera, iPhone Dark and Titanium on Night Ops, Ocean on Midnight
-          var skins = { 'ios': 'opera', 'ios-dark': 'night-ops', 'titanium': 'night-ops', 'ocean': 'midnight', 'catppuccin': 'midnight', 'latte': 'opera', 'nord': 'midnight', 'dracula': 'midnight', 'tokyo': 'midnight', 'rosepine': 'midnight', 'paper': 'opera', 'sky': 'opera', 'mint': 'opera', 'sakura': 'opera', 'sand': 'opera' };
+          var skins = { 'ios': 'opera', 'ios-dark': 'night-ops', 'titanium': 'night-ops', 'ocean': 'midnight', 'catppuccin': 'midnight', 'latte': 'opera', 'nord': 'midnight', 'dracula': 'midnight', 'tokyo': 'midnight', 'rosepine': 'midnight', 'paper': 'opera', 'sky': 'opera', 'mint': 'opera', 'sakura': 'opera', 'sand': 'opera',
+            'notes': 'opera', 'whatsapp': 'opera', 'telegram': 'opera', 'discord': 'night-ops', 'gaming': 'night-ops', 'classic': 'opera', 'pro': 'night-ops', 'study': 'opera', 'notepad': 'opera' };
+          var styles = { notes: 1, whatsapp: 1, telegram: 1, discord: 1, gaming: 1, classic: 1, pro: 1, study: 1, notepad: 1 };   // App styles (themes-pro.css)
           document.documentElement.setAttribute('data-theme', skins[s.theme] || s.theme);
           if (skins[s.theme]) document.documentElement.setAttribute('data-skin', s.theme);
+          if (styles[s.theme]) document.documentElement.setAttribute('data-skin-group', 'style');
         }
       }
     } catch(e) {}
