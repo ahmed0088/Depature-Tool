@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 400, items: [
+    '📊 New page: Reports (Guests & Sales menu, or ⋯ More on the phone) — an Opera-style report centre. Departures, Arrivals, In-House Guest List, Balances Due, Late Check-outs & Extensions, No-Shows, Room Problems, WhatsApp Activity Log and Shift Handover. Each one prints like Opera: hotel and report name, printed time and user, a clean table with totals, page numbers on paper. Filter, search, tap a column to sort, then 🖨 Print / PDF, ⬇ Excel, CSV or ⧉ Copy. It uses what HotelOps already has today — load the Opera reports on their pages first.',
+  ] },
   { v: 399, items: [
     '🎮 The live desk game now plays what is really happening: a 📡 LIVE strip (rooms out, overdue, arriving, in house, WhatsApp, handover, room problems, your shift tasks — tap one to open that page). Checked-out guests walk out with their bags, overdue ones wait at the desk with a ⏰ tag, arrivals walk in and the bell rings, the desk phone shakes for each WhatsApp with a bubble saying what it understood, an engineer or housekeeper walks over for a room problem, +1 ✅ pops for each shift task, Ops Brain\'s thought floats over you, and the lobby news reads real events. All out = confetti and 🏆 on the board. 6 new badges: All out, On time, Clean sheet, Chatterbox, Clear desk, Fixer.',
   ] },
