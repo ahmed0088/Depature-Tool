@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 405, items: [
+    '🎤 Voice commands: press and hold 🧠 (or tap 🎤 in the Ops Brain ask bar, or Ctrl+Shift+Space on the PC) and say it — "312 checked out", "514 late check-out at 2", "extend 220 by two nights", "send towels to 418", "what\'s left to check out", "I\'m away" / "I\'m back". Room changes always show a confirm card first (✓ Do it / ✗ Cancel), then work exactly like a WhatsApp message — note on the room, log and Undo. Spoken numbers like "three twelve" are understood. Settings → Voice: on/off, language (English / Arabic), spoken replies. iPhone needs Siri & Dictation on and internet.',
+  ] },
   { v: 404, items: [
     '📂 Opera folder (desk PC, Chrome / Edge): Settings → Opera folder & auto backup → pick the folder your Opera exports go to. HotelOps checks it every 45 s and loads new Departures, Arrivals, In-House and other reports by itself — always the newest export of each, an older file never replaces a newer one. The card shows which file is loaded for each report.',
     '💾 Automatic daily backup: pick a backup folder and HotelOps saves HotelOps-backup-date.json there once a day (keeps the last 14). The weekly "download a backup" reminder stops.',
