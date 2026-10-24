@@ -96,7 +96,9 @@ let t = 0, obs = null;
 function soon() { clearTimeout(t); t = setTimeout(run, 60); }
 // our own moves and label changes are not news: drop those records
 function run() { order(); if (obs) obs.takeRecords(); try { window.dispatchEvent(new Event('resize')); } catch (_) {} }   // resize: the sliding marker finds the active page again
-function relabel(nav) { labels(nav); if (obs) obs.takeRecords(); }
+// many class/style changes arrive together (roles, badges, the active page): check the titles once per frame, not once per change
+let _rl = 0;
+function relabel(nav) { if (_rl) return; _rl = requestAnimationFrame(() => { _rl = 0; labels(nav); if (obs) obs.takeRecords(); }); }
 
 function start() {
   run();

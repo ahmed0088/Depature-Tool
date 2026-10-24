@@ -232,10 +232,14 @@ const esc = s => (typeof escapeHtml === 'function' ? escapeHtml(s == null ? '' :
   : String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
 
 /** Every page in the side menu, in menu groups: [{ id, label, icon, group }] */
+let _pgMemo = null;
 function pages() {
+  // asked many times in a row while roles are worked out: remember the answer for a moment (the menu rarely changes)
+  const items = document.querySelectorAll('nav.sidenav .nav-item[data-panel], .sidenav .nav-item[data-panel]');
+  if (_pgMemo && _pgMemo.n === items.length && Date.now() - _pgMemo.at < 1500) return _pgMemo.out.slice();
   const groups = (root.hoNavGroups || []);
   const out = [];
-  document.querySelectorAll('nav.sidenav .nav-item[data-panel], .sidenav .nav-item[data-panel]').forEach(el => {
+  items.forEach(el => {
     const id = el.dataset.panel;
     if (!id || NEVER_LISTED.includes(id) || out.some(p => p.id === id)) return;
     const label = [...el.childNodes].filter(c => c.nodeType === 3).map(c => c.textContent).join(' ').replace(/\s+/g, ' ').trim() || el.title || id;
@@ -243,7 +247,8 @@ function pages() {
     const g = groups.find(([, ps]) => ps.includes(id));
     out.push({ id, label, icon: ic ? ic.innerHTML : '', group: g ? g[0] : 'Tools' });
   });
-  return out;
+  _pgMemo = { n: items.length, at: Date.now(), out };
+  return out.slice();
 }
 const pageIds = () => pages().map(p => p.id);
 

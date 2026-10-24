@@ -178,12 +178,14 @@ function _hoTrTree(root, lang) {
   let n; while ((n = w.nextNode())) _hoTrNode(n, lang);
   root.querySelectorAll('[placeholder]').forEach(e => { const en = e.dataset.hoPh || e.placeholder, t = lang === 'en' ? null : hoT(en.trim(), lang); if (t) { e.dataset.hoPh = en; e.placeholder = t; } else if (e.dataset.hoPh) { e.placeholder = e.dataset.hoPh; delete e.dataset.hoPh; } });
 }
-let _hoTrObs = null, _hoTrQ = new Set(), _hoTrRaf = 0;
+let _hoTrObs = null, _hoTrQ = new Set(), _hoTrRaf = 0, _hoTrEver = false;
 /** The whole app in the chosen language, and everything drawn later too. */
 function hoI18nApply() {
   const lang = hoLang(), html = document.documentElement;
   html.lang = lang === 'zh' ? 'zh-Hans' : lang; html.classList.toggle('ho-lang-ar', lang === 'ar');
-  _hoTrBusy = true; try { _hoTrTree(document.body, lang); } finally { _hoTrBusy = false; }
+  // English with nothing ever translated on this page: there is nothing to put back, so don't walk the whole page (it cost ~0.3 s at every start)
+  if (lang !== 'en' || _hoTrEver) { _hoTrBusy = true; try { _hoTrTree(document.body, lang); } finally { _hoTrBusy = false; } }
+  if (lang !== 'en') _hoTrEver = true;
   if (lang === 'en') { if (_hoTrObs) { _hoTrObs.disconnect(); _hoTrObs = null; } return; }
   if (_hoTrObs) return;
   _hoTrObs = new MutationObserver(ms => {

@@ -509,8 +509,11 @@ function busyPaint() { return new Promise(r => requestAnimationFrame(() => setTi
 //  rewrite every one as a <button>, mark them up as buttons at boot
 //  and let a single delegated handler fire them on Enter/Space, the
 //  keys a real button responds to.
+const _A11Y_SEL = '.icon-round, .theme-btn, .fchip, .vt-btn';
 function _a11yUpgradeIconButtons(root) {
-  (root || document).querySelectorAll('.icon-round, .theme-btn, .fchip, .vt-btn').forEach(el => {
+  const r = root || document, list = [...r.querySelectorAll(_A11Y_SEL)];
+  if (r.nodeType === 1 && r.matches(_A11Y_SEL)) list.push(r);
+  list.forEach(el => {
     if (el.tagName === 'BUTTON' || el.dataset.a11y) return;
     el.dataset.a11y = '1';
     if (!el.hasAttribute('role'))     el.setAttribute('role', 'button');
@@ -534,11 +537,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // Filter chips and view toggles are re-rendered whenever a panel loads
   // data, so upgrade whatever appears later as well. Batched on a frame
   // to avoid doing this once per node during a big table render.
-  let queued = false;
-  new MutationObserver(() => {
-    if (queued) return;
+  // only the parts that were just added are looked at — not the whole page on every change (that was a big share of start-up time)
+  const added = new Set(); let queued = false;
+  new MutationObserver(ms => {
+    ms.forEach(m => m.addedNodes.forEach(n => { if (n.nodeType === 1) added.add(n); }));
+    if (queued || !added.size) return;
     queued = true;
-    requestAnimationFrame(() => { queued = false; _a11yUpgradeIconButtons(); });
+    requestAnimationFrame(() => { queued = false; const L = [...added]; added.clear(); L.forEach(n => { if (n.isConnected) _a11yUpgradeIconButtons(n); }); });
   }).observe(document.body, { childList: true, subtree: true });
 });
 
@@ -550,7 +555,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v402';
+const APP_VERSION = 'v403';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;

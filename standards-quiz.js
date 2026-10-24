@@ -544,8 +544,9 @@
       wrapped._qz = true;
       window.learnRender = wrapped;
     }
-    qzRender();
-    qzLoadMine();
+    // drawing the quiz builds every question (~0.1 s on a phone): do it when the phone is idle, not while the app opens
+    const later = window.requestIdleCallback || (f => setTimeout(f, 1500));
+    later(() => { try { qzRender(); qzLoadMine(); } catch (_) {} }, { timeout: 4000 });
     return true;
   }
 
