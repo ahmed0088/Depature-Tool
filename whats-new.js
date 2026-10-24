@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 407, items: [
+    "👤 Type a room number, get the guest: on Wake-up calls, Lost & found, Maintenance, HK requests, Gym guest members and the WhatsApp templates, the guest in that room shows right under the box — name, VIP, pax, dates and nights, company, room type, rate, nationality, balance, and today's status (departing, late check-out, checked out). It comes from In-House first (the whole hotel), then Departures and Arrivals.",
+    "⏰ Wake-up calls: the Guest box now fills itself from In-House too, so any room in the hotel works — not only rooms departing or arriving today. If you type a name yourself it is kept.",
+  ] },
   { v: 406, items: [
     "🎤 Voice is much more reliable: it no longer gets stuck after the first command (the phone sometimes never said it had finished listening, so the next try did nothing). If the mic gives up at once because it was still busy, it quietly starts again.",
     "⏸ Pause mid-sentence and it waits for the rest: “312 … checked out”, “send towels to … 418” or “checked out … 312” now become one command instead of opening Ops Brain.",
