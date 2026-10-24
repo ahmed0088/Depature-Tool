@@ -302,6 +302,8 @@ function roomsOf(text) {
   while ((m = re.exec(s))) {
     const n = m[1], i = m.index, before = s.slice(0, i), after = s.slice(i + n.length);
     if (/\d$/.test(before) || /^\d/.test(after)) continue;
+    if (/^[A-Za-z0-9._%+-]*@/.test(after) || /@[A-Za-z0-9.-]*$/.test(before)) continue;                  // part of an e-mail address
+    if (/[A-Za-z_]$/.test(before) && !/(?:^|[^A-Za-z])(?:r|rm|room|no)$/i.test(before)) continue;         // part of a word ("yasin2087"), not "rm512"
     if (/[\/.:,\-]$/.test(before) && /\d[\/.:,\-]$/.test(before)) continue;            // 20/10/2026, 1,200, 10:30
     if (/^[\/:]\d|^\.\d|^,\d{3}|^-\d/.test(after)) continue;                              // 512/10, 1200.50, 2,500
     const pw = (before.match(/([A-Za-z.#]+)\s*#?\s*$/) || [])[1] || '';
@@ -830,7 +832,39 @@ async function load(day, force) {
   try { v = typeof fbGet === 'function' ? await fbGet(PATH(day)) : LS.get('hb_' + day, null); } catch (_) {}
   BOOK[day] = Object.assign({}, v && typeof v === 'object' ? v : {}, BOOK[day] && day === today() ? BOOK[day] : {}); GOT[day] = Date.now();
 }
-const itemsOf = day => Object.keys(BOOK[day] || {}).map(k => withShift(Object.assign({}, BOOK[day][k], { key: k, date: (BOOK[day][k] || {}).date || day }))).filter(i => i && (i.text || i.orig));
+const itemsOf = day => Object.keys(BOOK[day] || {}).map(k => withShift(cleanRooms(Object.assign({}, BOOK[day][k], { key: k, date: (BOOK[day][k] || {}).date || day })))).filter(i => i && (i.text || i.orig));
+/** a room number read out of an e-mail address or a word by an older version ("…2087@hotmail.com") is not a room */
+function cleanRooms(i) {
+  if (!i || !Array.isArray(i.rooms) || !i.rooms.length) return i;
+  const t = sp([i.text, i.orig].join(' '));
+  i.rooms = i.rooms.filter(r => { const rx = new RegExp('(?:^|[^A-Za-z0-9])(?:r|rm|room|no)?\\s*#?\\s*' + String(r).replace(/\D/g, '') + '(?![0-9@])', 'i'); return rx.test(t.replace(/\S+@\S+/g, ' ')); });
+  return i;
+}
+/** a day as the team works it: its own items, plus the night shift that started the evening before
+ *  (a 19:00–04:00 night is one shift, even though midnight falls in the middle of it) */
+function dayItems(d) {
+  const P = itemsOf(dayAdd(d, -1)).filter(i => !i.del && lastNight(i, d));
+  return itemsOf(d).concat(P.map(i => Object.assign(i, { prevNight: true })));
+}
+/** when last night's shift began, in minutes: the roster's hours of the people on it ("19:00–04:00"), else the Night shift's hours */
+function nightStart(d) {
+  const L = itemsOf(d).concat(itemsOf(dayAdd(d, -1))).filter(i => i.shift === 'Night' && /^\d{1,2}:\d{2}/.test(i.shiftHours || ''));
+  const h = L.map(i => toMin(String(i.shiftHours).slice(0, 5))).filter(m => m != null && m >= 12 * 60);
+  if (h.length) return Math.min(...h);
+  const n = SHIFT_BOUNDS.find(b => b.id === 'Night');
+  return n ? n.from : 23 * 60;
+}
+/** an item of the day before d that was written during the night shift running into d */
+function lastNight(i, d) {
+  if (!i || i.date !== dayAdd(d, -1)) return false;
+  if (sectionOf(i).k === 'Night') return true;
+  const m = toMin(i.time); return m != null && m >= nightStart(d);
+}
+/** still open from the day before, apart from last night's items (those are in the day already) */
+function carryItems(d, f) {
+  if (HB.st === 'done') return [];
+  return shown(filterItems(itemsOf(dayAdd(d, -1)).filter(i => !lastNight(i, d)), Object.assign({}, f, { st: 'open', shift: 'all' }))).sort(byTime);
+}
 /** the shift as on the roster (who wrote it, or you, working at that time), else by the clock */
 function withShift(i) {
   if (!i || !i.time || typeof roWorkingAt !== 'function') return i;
@@ -1071,6 +1105,8 @@ const PCSS = `
 #hbRoot .hb-sum{margin:0;font-size:14.5px;line-height:1.5;color:var(--text2);padding:0 2px}
 #hbRoot .hb-sum b{color:var(--text);font-weight:600}
 #hbRoot .hb-tb{position:sticky;top:0;z-index:20;display:grid;gap:8px;padding:10px;margin:0 -10px;border-radius:18px;background:color-mix(in srgb,var(--bg) 78%,transparent);-webkit-backdrop-filter:saturate(1.8) blur(18px);backdrop-filter:saturate(1.8) blur(18px);border:1px solid transparent}
+#hbRoot .hb-tb:has(.hb-more){position:relative;top:auto}   /* filters open: scroll away with the page, never cover the list */
+#hbRoot .hb-carry .hb-gh{color:var(--hb-open)}
 #hbRoot .hb-tb.stuck{border-color:var(--hb-hair);box-shadow:0 8px 28px -20px rgba(0,0,0,.45)}
 #hbRoot .hb-tbr{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0}
 #hbRoot .hb-seg{display:inline-flex;padding:2px;border-radius:10px;background:var(--hb-fill);gap:2px;max-width:100%;overflow-x:auto;scrollbar-width:none}
@@ -1090,7 +1126,10 @@ const PCSS = `
 #hbRoot .hb-chip.x::after{content:"✕";font-size:10px;margin-left:3px;opacity:.7}
 #hbRoot .hb-more{display:grid;gap:10px;padding:10px 2px 2px;border-top:1px solid var(--hb-hair);animation:hbIn .22s cubic-bezier(.2,.9,.3,1.15)}
 #hbRoot .hb-more label{font:500 12px var(--hb-font);color:var(--text3);display:block;margin-bottom:4px}
-#hbRoot .hb-more .hb-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:10px}
+#hbRoot .hb-more .hb-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:14px 16px;align-items:start}
+#hbRoot .hb-more .hb-grid>div{min-width:0}
+#hbRoot .hb-more .hb-seg{display:flex;flex-wrap:wrap;overflow:visible;width:max-content;max-width:100%}
+#hbRoot .hb-more .hb-hint{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-height:36px}
 #hbRoot .hb-more select{width:100%}
 #hbRoot .hb-sec{display:grid;gap:0;min-width:0}
 #hbRoot .hb-gh{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:8px;padding:14px 4px 8px;font:650 13px var(--hb-font);color:var(--text2);text-transform:uppercase;letter-spacing:.04em;width:100%}
@@ -1265,7 +1304,7 @@ function moreHtml(all) {
 }
 function body() {
   safe(() => {
-    const d = HB.date, raw = itemsOf(d), all = raw.filter(i => !i.del && !i.chat), f = view();
+    const d = HB.date, raw = dayItems(d), all = raw.filter(i => !i.del && !i.chat), f = view();
     const cnt = patch => shown(filterItems(all, Object.assign({}, f, patch))).length;
     const set = (id, h) => { const el = doc.getElementById(id); if (el && el.innerHTML !== h) el.innerHTML = h; };
     set('hbShifts', [['all', 'All']].concat(SHIFT_BOUNDS.map(s => [s.id, s.label || s.id])).map(([k, l]) => `<button type="button" data-hb="shift" data-v="${k}" class="${HB.shift === k ? 'on' : ''}" aria-pressed="${HB.shift === k}">${esc(l)}<em>${cnt({ shift: k })}</em></button>`).join(''));
@@ -1286,7 +1325,7 @@ function body() {
     const mb = doc.getElementById('hbMoreBtn'); if (mb) { mb.textContent = 'Filters' + (act.length ? ' · ' + act.length : ''); mb.setAttribute('aria-expanded', HB.more); }
     set('hbMore', moreHtml(all));
     // still open from the day before
-    const prev = dayAdd(d, -1), P = HB.st === 'done' ? [] : shown(filterItems(itemsOf(prev), Object.assign({}, f, { st: 'open', shift: 'all' }))).sort(byTime);
+    const prev = dayAdd(d, -1), P = carryItems(d, f);
     // 🤔 "Done" replies we could not place: ask which item they close
     const Q = itemsOf(d).filter(i => Array.isArray(i.doneQ) && i.doneQ.length && !i.del && !i.doneQa);
     const qHtml = Q.map(q => {
@@ -1302,7 +1341,7 @@ function body() {
     if (!L.length) html = `<div class="hb-empty"><b>${all.length ? '🔍' : '📒'}</b>${all.length ? 'Nothing matches these filters.' : d === today() ? '<strong>No handover yet today.</strong><br>Messages from your WhatsApp handover group (named like “HO - Hotel”), messages starting with “HO -” in any group, and handover-like messages from other groups land here by themselves. Or type one above.' : 'No handover saved for this day.'}</div>`;
     else {
       const groups = [];
-      const gkey = i => HB.by === 'cat' ? i.cat : HB.by === 'room' ? ((i.rooms || [])[0] ? 'Room ' + String(parseInt(i.rooms[0], 10)) : 'No room') : (sectionOf(i).k || 'No time');
+      const gkey = i => HB.by === 'cat' ? i.cat : HB.by === 'room' ? ((i.rooms || [])[0] ? 'Room ' + String(parseInt(i.rooms[0], 10)) : 'No room') : (i.prevNight ? 'Night0' : sectionOf(i).k || 'No time');
       L.forEach(i => { const g = gkey(i); let G = groups.find(x => x.k === g); if (!G) { G = { k: g, items: [] }; groups.push(G); } G.items.push(i); });
       if (HB.by === 'cat') groups.sort((a, b) => CATS.findIndex(c => c[0] === a.k) - CATS.findIndex(c => c[0] === b.k));
       if (HB.by === 'time') groups.sort((a, b) => SECTION_ORDER.indexOf(a.k === 'No time' ? '' : a.k) - SECTION_ORDER.indexOf(b.k === 'No time' ? '' : b.k));
@@ -1311,13 +1350,13 @@ function body() {
         const fk = HB.by + ':' + G.k, open = !HB.fold[fk], sb = SHIFT_BOUNDS.find(s => s.id === G.k.replace(/0$/, ''));
         const label = HB.by === 'cat' ? catOf(G.k).icon + ' ' + catOf(G.k).label : sb ? sb.icon + ' ' + sectionOf(G.items[0]).label + (hoursOf(G.items) ? ' · ' + hoursOf(G.items) : '') : G.k;
         const no = G.items.filter(i => i.status === 'open').length;
-        return `<section class="hb-sec"><button type="button" class="hb-gh" data-hb="fold" data-v="${esc(fk)}" aria-expanded="${open}">${esc(label)} <em>${G.items.length}${no ? ' · ' + no + ' pending' : ''}</em><span class="chev">▾</span></button>${open ? `<div class="hb-list">${G.items.map(i => itemHtml(i, d)).join('')}</div>` : ''}</section>`;
+        return `<section class="hb-sec"><button type="button" class="hb-gh" data-hb="fold" data-v="${esc(fk)}" aria-expanded="${open}">${esc(label)} <em>${G.items.length}${no ? ' · ' + no + ' pending' : ''}</em><span class="chev">▾</span></button>${open ? `<div class="hb-list">${G.items.map(i => itemHtml(i, i.prevNight ? i.date : d, { carry: !!i.prevNight })).join('')}</div>` : ''}</section>`;
       }).join('');
     }
     set('hbList', html);
     xpCount();
     // team chat in the handover group (not added)
-    const C = raw.filter(i => i.chat && !i.del).sort(byTime);
+    const C = raw.filter(i => i.chat && !i.del && !i.prevNight).sort(byTime);
     set('hbChat', C.length ? `<section class="hb-sec hb-chatl"><button type="button" class="hb-gh" data-hb="chat" aria-expanded="${HB.chat}">💬 Team chat — not added <em>${C.length}</em><span class="chev">▾</span></button>${HB.chat ? `<div class="hb-list">${C.map(i => itemHtml(i, d, { chat: true })).join('')}</div>` : ''}</section>` : '');
     const ed = doc.getElementById('hbEdit'); if (ed && doc.activeElement !== ed) { autosize(ed); ed.focus(); ed.setSelectionRange(ed.value.length, ed.value.length); }
     const ni = doc.getElementById('hbNoteIn'); if (ni && doc.activeElement !== ni) ni.focus();
@@ -1368,7 +1407,13 @@ function suggestions() {
 }
 // ── Excel ──
 function xpCount() { const el = doc.getElementById('hbXpN'); if (!el) return; const n = exportList(SETTINGS().exp === 'all').length; el.textContent = n + ' item' + (n === 1 ? '' : 's'); }
-function exportList(all) { return all ? itemsOf(HB.date).filter(i => !i.del && !i.chat) : shown(filterItems(itemsOf(HB.date), view())); }
+function exportList(all) {
+  const d = HB.date, f = view();
+  const L = all ? dayItems(d).filter(i => !i.del && !i.chat) : shown(filterItems(dayItems(d), f));
+  // pending items from yesterday go with it, so nothing open is lost at the change of day
+  const C = carryItems(d, all ? {} : f).filter(c => !L.some(x => x.date === c.date && x.key === c.key));
+  return C.concat(L);
+}
 /** the .xlsx as bytes (styled when the zip tools are there), or null when Excel is not loaded */
 function workbookBytes(list) {
   if (typeof XLSX === 'undefined' || !XLSX.utils) return null;

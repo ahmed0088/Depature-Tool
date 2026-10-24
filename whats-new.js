@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 408, items: [
+    "🌙 Handover: the night shift stays one shift after midnight. Items written at 8 PM, 10 PM, 11 PM on a 19:00–04:00 night now sit in “Night 24–25 Oct” with the ones after midnight, and the counts include them. “Still open from yesterday” only shows what earlier shifts left open.",
+    "📤 Handover export (Excel / PDF) now includes everything still pending from yesterday, plus the whole night shift — nothing open gets lost at the change of day.",
+    "🔢 A number inside an e-mail address (name2087@…) is no longer taken as a room — fixed on saved items too.",
+    "🎨 Handover filters: the panel no longer sticks over the list while you scroll, and the Source switch is never cut off.",
+  ] },
   { v: 407, items: [
     "👤 Type a room number, get the guest: on Wake-up calls, Lost & found, Maintenance, HK requests, Gym guest members and the WhatsApp templates, the guest in that room shows right under the box — name, VIP, pax, dates and nights, company, room type, rate, nationality, balance, and today's status (departing, late check-out, checked out). It comes from In-House first (the whole hotel), then Departures and Arrivals.",
     "⏰ Wake-up calls: the Guest box now fills itself from In-House too, so any room in the hotel works — not only rooms departing or arriving today. If you type a name yourself it is kept.",
