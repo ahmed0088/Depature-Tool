@@ -9,6 +9,13 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 404, items: [
+    '📂 Opera folder (desk PC, Chrome / Edge): Settings → Opera folder & auto backup → pick the folder your Opera exports go to. HotelOps checks it every 45 s and loads new Departures, Arrivals, In-House and other reports by itself — always the newest export of each, an older file never replaces a newer one. The card shows which file is loaded for each report.',
+    '💾 Automatic daily backup: pick a backup folder and HotelOps saves HotelOps-backup-date.json there once a day (keeps the last 14). The weekly "download a backup" reminder stops.',
+    '📲 Shift alerts on Telegram (Settings → Shift alerts): rooms past check-out (every 30 min while it lasts), VIP arrivals, room problems nobody followed up, handover items still open 30 min before your shift ends — only during your shift on the roster, never twice, with quiet hours.',
+    '📋 End-of-shift summary: 10 min before your shift ends you get departures, overdue, LCO / extensions, arrivals, handover, room problems, WhatsApp and shift tasks on Telegram — and one tap to copy it or send it to the handover WhatsApp group.',
+    '💌 New page: Guest messages (Guests & Sales) — 10 ready messages in English and Arabic (welcome, check-out reminder, late check-out offer / approved, extension offer, thank you + review, payment reminder, lost & found, birthday…). Pick the guest from Departures, Arrivals or In-House and it fills in name, room, dates, Wi-Fi, breakfast and check-out time. Copy, WhatsApp, email or print. Edit the wording once for the whole hotel.',
+  ] },
   { v: 403, items: [
     '⚡ Faster start: the app no longer scans the whole page for translations in English, builds the standards quiz only when the phone is idle, stops re-checking the whole page on every change, and keeps 130 KB of old "What\'s new" notes aside until you ask for them (Show older updates). On a phone the first screen shows noticeably sooner.',
   ] },
