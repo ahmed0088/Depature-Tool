@@ -313,20 +313,30 @@ function setState(st, label, live) {
 }
 
 // ══ Recognition ════════════════════════════════════════════
-let hideT = null, rec = null, gotFinal = null, cancelled = false, safety = null, pending = null, lastFocus = null, fromBrain = false;
+let hideT = null, rec = null, sess = null, cancelled = false, safety = null, pending = null, lastFocus = null, fromBrain = false;
 const HINT = '<i>Say a room and what happened…</i><small>e.g. “312 checked out” · “514 late check-out at 2”</small>';
 
 function start(opt) {
   opt = opt || {};
   if (!supported) { toast('Voice is not available in this browser', 'err'); return false; }
   if (!cfg().on && !opt.force) { toast('Voice control is off — Settings → Voice', 'info'); return false; }
-  if (rec) return true;
+  if (rec) {
+    // the engine sometimes never says it has finished (iPhone, Android): a stuck listen must not block the next one
+    const s = sess, now = Date.now();
+    if (s && !s.done && ((s.stopAt && now - s.stopAt > 1200) || now - s.t0 > 15000)) dropSession(s);
+    else return true;
+  }
   if (!opt.keep) fromBrain = !!opt.brain;
   pending = null;
   show();
   setState('listen', 'Listening', HINT);
   try { if (W.speechSynthesis) W.speechSynthesis.cancel(); } catch (_) {}   // never hear ourselves
-  cancelled = false; gotFinal = null;
+  cancelled = false;
+  return begin(0, '');
+}
+/** one listening session. n: quiet retries after the engine gave up before hearing anything */
+function begin(n, prefix) {
+  prefix = prefix || '';
   let r;
   try {
     r = new SR();
@@ -335,54 +345,100 @@ function start(opt) {
     r.continuous = false;          // ends by itself after a pause
     r.maxAlternatives = 3;
   } catch (e) { setState('error', 'Voice unavailable', esc(e && e.message || 'Could not start')); return false; }
+  const s = { r, n, prefix, t0: Date.now(), heard: '', alts: null, err: null, stopAt: 0, done: false, wd: null };
   r.onresult = e => {
+    if (s.done) return;
     let fin = '', interim = '';
     for (let i = 0; i < e.results.length; i++) { const res = e.results[i]; if (res.isFinal) fin += res[0].transcript; else interim += res[0].transcript; }
     const last = e.results[e.results.length - 1];
     if (last && last.isFinal) {
       // the engine's other guesses for the last bit, each with what came before it
       const head = fin.slice(0, fin.length - last[0].transcript.length);
-      gotFinal = []; for (let k = 0; k < last.length; k++) gotFinal.push(head + last[k].transcript);
+      s.alts = []; for (let k = 0; k < last.length; k++) s.alts.push(head + last[k].transcript);
     }
-    $('hvLive').innerHTML = esc(fin) + (interim ? `<i>${fin ? ' ' : ''}${esc(interim)}</i>` : '');
+    // iPhone often ends without ever marking the words final: keep what was shown, so it is still used
+    s.heard = (fin + ' ' + interim).replace(/\s+/g, ' ').trim();
+    $('hvLive').innerHTML = (prefix ? esc(prefix) + ' ' : '') + esc(fin) + (interim ? `<i>${fin ? ' ' : ''}${esc(interim)}</i>` : '');
   };
-  r.onerror = e => {
-    const c = e && e.error;
-    if (cancelled || c === 'aborted') return;
+  r.onerror = e => { if (!s.done) s.err = (e && e.error) || 'error'; };
+  r.onend = () => finish(s);
+  if (sess && sess !== s && !sess.done) dropSession(sess);
+  sess = s;
+  try { r.start(); rec = r; }
+  catch (e) {
+    // iPhone needs a tap to start the mic: after a long press the sheet waits for one
+    s.done = true;
+    setState('idle', 'Tap the mic to talk', HINT);
+    return false;
+  }
+  if (!n) buzz(12);
+  clearTimeout(safety);
+  safety = setTimeout(() => { if (sess === s && !s.done) stop(); }, 12000);   // never listen forever
+  return true;
+}
+/** the engine finished (or went quiet and we stopped waiting): use what was heard */
+function finish(s) {
+  if (s.done) return;
+  s.done = true;
+  clearTimeout(s.wd);
+  if (sess !== s) return;
+  clearTimeout(safety);
+  if (rec === s.r) rec = null;
+  if (cancelled) return;
+  const alts = s.alts && s.alts.length ? s.alts : (s.heard ? [s.heard] : null);
+  if (alts) {
+    const full = alts.map(a => (s.prefix ? s.prefix + ' ' : '') + a);
+    // a pause in the middle ("312 … checked out"): the engine stops after "312" — keep listening for the rest
+    if (unfinished(full[0]) && (s.joins || 0) < 2 && !s.stopAt) {
+      setState('listen', 'Keep going…', `${esc(full[0])} <i>…</i>`);
+      const ok = begin(0, full[0]); if (ok) sess.joins = (s.joins || 0) + 1;
+      return;
+    }
+    return process(full);
+  }
+  if (s.prefix) {   // heard the start but not the rest
+    if (!s.stopAt && Date.now() - s.t0 < 2500 && s.n < 2) { const j = s.joins; begin(s.n + 1, s.prefix); sess.joins = j; return; }
+    setState('idle', 'Didn’t hear the rest', `<small>Heard “${esc(s.prefix)}” — tap the mic and say the whole thing, e.g. “${esc(/\d{3,4}/.test(s.prefix) ? s.prefix.match(/\d{3,4}/)[0] : '312')} checked out”.</small>`);
+    return;
+  }
+  const c = s.err;
+  if (c && c !== 'no-speech' && c !== 'aborted') {
     const msg = {
-      'no-speech': ['Didn’t hear anything', 'Tap the mic and try again.'],
-      'audio-capture': ['No microphone', 'No microphone was found on this device.'],
+      'audio-capture': ['No microphone', 'No microphone was found on this device — or another app is using it.'],
       'not-allowed': ['Microphone blocked', 'Allow the microphone for HotelOps (iPhone: Settings → Safari → Microphone; PC: the 🔒 in the address bar), then try again.'],
       // iPhone Home Screen apps on older iOS, or Siri & Dictation switched off
       'service-not-allowed': ['Voice not allowed here', 'On iPhone turn on Settings → General → Keyboard → Enable Dictation (and Siri). If it still fails in the Home Screen app, open HotelOps in Safari.'],
       'network': ['No connection', 'Speech is turned into text online — check the internet and try again.'],
       'language-not-supported': ['Language not supported', 'Pick another language in Settings → Voice.'],
     }[c] || ['Didn’t catch that', 'Tap the mic and try again.'];
-    gotFinal = null;
-    setState(c === 'no-speech' ? 'idle' : 'error', msg[0], `<small>${esc(msg[1])}</small>`);
+    setState('error', msg[0], `<small>${esc(msg[1])}</small>`);
     buzz(30);
-  };
-  r.onend = () => {
-    clearTimeout(safety);
-    const mine = rec === r; if (mine) rec = null;
-    if (cancelled || !mine) return;
-    if (gotFinal && gotFinal.length) { const alts = gotFinal; gotFinal = null; process(alts); }
-    else if (sheet().querySelector('.hv-sheet').dataset.st === 'listen') setState('idle', 'Didn’t catch that', '<small>Tap the mic and try again — or tap an example.</small>');
-  };
-  try { r.start(); rec = r; }
-  catch (e) {
-    // iPhone needs a tap to start the mic: after a long press the sheet waits for one
-    setState('idle', 'Tap the mic to talk', HINT);
-    return false;
+    return;
   }
-  buzz(12);
-  clearTimeout(safety);
-  safety = setTimeout(() => { if (rec === r) try { r.stop(); } catch (_) {} }, 12000);   // never listen forever
-  return true;
+  // gave up almost at once without hearing anything (the mic was still busy from the last command or the spoken reply): quietly listen again
+  if (!s.stopAt && Date.now() - s.t0 < 2500 && s.n < 2 && sheet().querySelector('.hv-sheet').dataset.st === 'listen') { begin(s.n + 1, ''); return; }
+  setState('idle', c === 'no-speech' ? 'Didn’t hear anything' : 'Didn’t catch that', '<small>Tap the mic and try again — or tap an example.</small>');
 }
+/** said only part of a command so far: a room with nothing done to it, a dangling "and / to / at", or what to do without a room */
+function unfinished(t) {
+  const x = norm(t).toLowerCase().replace(/[.,!?]+$/, '').trim();
+  if (!x) return false;
+  if (/^(?:room\s*)?\d{3,4}(?:\s*(?:,|and|&)\s*(?:room\s*)?\d{3,4})*$/.test(x)) return true;
+  if (/\b(?:and|to|at|till|until|by|for|room|is|has)$/.test(x)) return true;
+  if (/^(?:what|who|how|when|which|where|why|is|are|open|show|go|plan|cancel)\b/.test(x)) return false;
+  return !/\d{3,4}/.test(x) && classify(x).kind !== 'room' && /\b(?:check(?:ed)?[\s-]?out|left|late|extend\w*|send|bring|towels?|cot|water|fix)\b/.test(x);
+}
+/** forget a session whose engine never finished */
+function dropSession(s) { s.done = true; clearTimeout(s.wd); if (rec === s.r) rec = null; try { s.r.abort(); } catch (_) {} }
 /** finish listening now and use what was heard (push-to-talk release, hoVoice.stop) */
-function stop() { const r = rec; if (!r) return; try { r.stop(); } catch (_) { try { r.abort(); } catch (__) {} } }
-function abortRec() { const r = rec; if (!r) return; cancelled = true; rec = null; clearTimeout(safety); try { r.abort(); } catch (_) {} }
+function stop() {
+  const s = sess; if (!rec || !s || s.done) return;
+  if (!s.stopAt) s.stopAt = Date.now();
+  try { s.r.stop(); } catch (_) { try { s.r.abort(); } catch (__) {} }
+  // if the engine never reports back, carry on with what we have
+  clearTimeout(s.wd); s.wd = setTimeout(() => { if (!s.done) { try { s.r.abort(); } catch (_) {} finish(s); } }, 1500);
+}
+function abortRec() { const s = sess; cancelled = true; clearTimeout(safety); if (s && !s.done) dropSession(s); rec = null; }
 function cancel() { abortRec(); pending = null; hide(); }
 /** Esc from utils.js: gone at once (it removes a window that is still showing) */
 function escCancel() { abortRec(); pending = null; const ov = $('hvOv'); if (ov) { clearTimeout(hideT); ov.classList.remove('show'); ov.hidden = true; } }
@@ -508,7 +564,8 @@ function holdOff(e) {
   const fab = $('brFab'); if (fab) fab.classList.remove('hv-hold');
   if (holdT) { clearTimeout(holdT); holdT = null; return; }
   // a real walkie-talkie hold (kept pressed while talking): letting go ends it
-  if (held && e && e.type === 'pointerup' && Date.now() - holdStart > 1400) stop();
+  // (let go before saying anything: keep listening, it ends by itself after the words)
+  if (held && e && e.type === 'pointerup' && Date.now() - holdStart > 1400 && sess && (sess.heard || sess.prefix)) stop();
 }
 function holdMove(e) { if (holdT && Math.hypot(e.clientX - hx, e.clientY - hy) > 12) holdOff(); }
 

@@ -1369,7 +1369,8 @@ function handle(msg, via, opt) {
     const k = Object.keys(PV).find(x => { const v = PV[x]; return v && !v.done && x.indexOf(dIso + '|' + t24 + '|') === 0 && (x === pvk || (v.cut && v.t && ptxt.indexOf(v.t) === 0)); });
     if (k) { caught = PV[k]; caught.done = 1; savePv(PV); prev = caught.a; }
   }
-  if (!caught && !opt.rerun && done[ck] !== undefined && (prev === undefined || id === ck)) return 'dup';   // the same message seen before (linked or pasted)
+  // the same message seen before (linked or pasted). Voice never: each one was said and confirmed on purpose (again after an Undo)
+  if (!caught && !opt.rerun && via !== 'voice' && done[ck] !== undefined && (prev === undefined || id === ck)) return 'dup';
   if (opt.rerun && prev === undefined) prev = done[ck];
   const quote = String(msg && msg.quote || '').slice(0, 400);
   const P = parse(text, quote, t24);   // "in 10 mins" counts from the message's own time

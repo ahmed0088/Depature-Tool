@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 406, items: [
+    "🎤 Voice is much more reliable: it no longer gets stuck after the first command (the phone sometimes never said it had finished listening, so the next try did nothing). If the mic gives up at once because it was still busy, it quietly starts again.",
+    "⏸ Pause mid-sentence and it waits for the rest: “312 … checked out”, “send towels to … 418” or “checked out … 312” now become one command instead of opening Ops Brain.",
+    "📱 On iPhone, words you see on screen are always used, even if the phone never marks them final. Holding 🧠 and letting go before you speak keeps it listening.",
+    "↩ Say the same command again (for example after an Undo) and it works; before, a repeat within a minute was ignored.",
+  ] },
   { v: 405, items: [
     '🎤 Voice commands: press and hold 🧠 (or tap 🎤 in the Ops Brain ask bar, or Ctrl+Shift+Space on the PC) and say it — "312 checked out", "514 late check-out at 2", "extend 220 by two nights", "send towels to 418", "what\'s left to check out", "I\'m away" / "I\'m back". Room changes always show a confirm card first (✓ Do it / ✗ Cancel), then work exactly like a WhatsApp message — note on the room, log and Undo. Spoken numbers like "three twelve" are understood. Settings → Voice: on/off, language (English / Arabic), spoken replies. iPhone needs Siri & Dictation on and internet.',
   ] },
