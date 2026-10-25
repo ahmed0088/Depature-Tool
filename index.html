@@ -4728,6 +4728,8 @@ async function appInit() {
       CL_STEPS.length = 0;
       data.checklist.steps.forEach(s => CL_STEPS.push(s));
     }
+    // the night routine as the desk runs it: replaces the old "before" steps once, for everyone
+    if (typeof clApplyRoutine === 'function' && clApplyRoutine(CL_STEPS)) setTimeout(() => { try { clRender2(); clSaveAll(); } catch (_) {} }, 0);
     if (data.checklist.done)      data.checklist.done.forEach(i    => clState.done.add(i));
     if (data.checklist.skipped)   data.checklist.skipped.forEach(i => clState.skipped.add(i));
     if (data.checklist.photos)    clPhotos    = data.checklist.photos;
@@ -4888,6 +4890,7 @@ async function appInit() {
       CL_STEPS.length = 0;
       snap.steps.forEach(s => CL_STEPS.push(s));
     }
+    if (typeof clApplyRoutine === 'function') clApplyRoutine(CL_STEPS);
     clState.done.clear(); 
     clState.skipped.clear();
     if (snap.done)      snap.done.forEach(i    => clState.done.add(i));

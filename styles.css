@@ -1130,6 +1130,31 @@ td input:focus, td select:focus { outline: none; border-color: var(--accent); ba
 .cl-name { font-size: 0.84rem; font-weight: 600; color: var(--text); line-height: 1.4; }
 .cl-step.done .cl-name { color: var(--text3); text-decoration: line-through; }
 .cl-hint { font-size: 0.72rem; color: var(--text3); margin-top: 2px; line-height: 1.5; }
+.cl-warn { margin-top: 5px; font-size: 0.74rem; font-weight: 700; color: var(--rose); line-height: 1.45; }
+.cl-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.cl-due, .cl-rep { font-size: 0.66rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: rgba(127,127,127,.13); color: var(--text2); white-space: nowrap; }
+.cl-due { background: rgba(90,180,232,.14); color: var(--sky); }
+.cl-due.soon { background: rgba(240,164,58,.18); color: var(--amber); }
+.cl-due.late { background: rgba(240,90,110,.18); color: var(--rose); animation: clPulse 1.6s ease-in-out infinite; }
+.cl-rep.ok { background: rgba(62,207,142,.14); color: var(--mint); }
+@keyframes clPulse { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .cl-due.late { animation: none; } }
+.cl-how { margin-top: 7px; font-size: 0.74rem; color: var(--text2); }
+.cl-how summary { cursor: pointer; width: max-content; max-width: 100%; font-weight: 600; color: var(--sky); list-style: none; padding: 2px 0; }
+.cl-how summary::-webkit-details-marker { display: none; }
+.cl-how summary::before { content: '▸\00a0'; display: inline-block; transition: transform .15s; }
+.cl-how[open] summary::before { transform: rotate(90deg); }
+.cl-how ol, .cl-how ul { margin: 4px 0 0; padding-left: 18px; line-height: 1.55; }
+.cl-how li { overflow-wrap: anywhere; }
+.cl-look { margin-top: 6px; padding: 6px 9px; border-radius: 8px; background: rgba(240,164,58,.08); border-left: 2px solid var(--amber); }
+.cl-look b { font-size: 0.66rem; text-transform: uppercase; letter-spacing: .05em; color: var(--amber); }
+.cl-look ul { margin-top: 2px; }
+.cl-folder { margin: 0 0 12px; padding: 11px 13px; border: 1px solid var(--border); border-radius: var(--r2, 12px); background: var(--surface, rgba(127,127,127,.05)); }
+.cl-folder.full { border-color: rgba(62,207,142,.45); background: rgba(62,207,142,.06); }
+.cl-folder-hd { font-size: 0.8rem; color: var(--text2); }
+.cl-folder-hd b { color: var(--text); }
+.cl-folder-list { display: flex; flex-wrap: wrap; gap: 5px 12px; margin-top: 6px; font-size: 0.72rem; color: var(--text3); }
+.cl-folder-list .ok { color: var(--mint); }
 .cl-done-ts { font-family: var(--mono); font-size: 0.6rem; color: var(--green); font-weight: 600; margin-top: 2px; }
 .cl-has-photo { font-size: 0.7rem; opacity: 0.7; }
 
@@ -5769,3 +5794,75 @@ select.adm-input { cursor: pointer; }
   .adm-row-tri .adm-row-ic { display: none; }
   .adm-tri-b { padding: 6px 8px; }
 }
+
+/* ═══ Night Run Checklist — Apple-style (inset grouped lists, like iOS Settings / Reminders) ═══ */
+#panel-checklist { --cl-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif; --cl-ok: #30d158; --cl-tint: #0a84ff; --cl-r: 16px; }
+#panel-checklist .cl-steps-col, #panel-checklist .cl-log-col, #panel-checklist .prog-wrap { font-family: var(--cl-font); }
+#panel-checklist .prog-wrap { background: var(--card); border: 1px solid var(--border); border-radius: var(--cl-r); padding: 14px 16px; }
+#panel-checklist .prog-info span:first-child { font-size: 0.86rem; font-weight: 600; color: var(--text2); }
+#panel-checklist .prog-track { height: 8px; border-radius: 99px; background: color-mix(in srgb, var(--text3) 18%, transparent); overflow: hidden; }
+#panel-checklist .prog-fill { border-radius: 99px; background: linear-gradient(90deg, #34c759, #30d158); transition: width .5s cubic-bezier(.2,.9,.3,1); }
+/* up next */
+#panel-checklist .cl-next { display: flex; align-items: center; gap: 12px; margin: 0 0 6px; padding: 14px 14px 14px 16px; border-radius: 18px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--cl-tint) 16%, var(--card)), var(--card)); border: 1px solid color-mix(in srgb, var(--cl-tint) 30%, var(--border)); }
+#panel-checklist .cl-next-l { flex: 1; min-width: 0; display: grid; gap: 3px; }
+#panel-checklist .cl-next-k { font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--cl-tint); }
+#panel-checklist .cl-next-l b { font-size: 1.02rem; font-weight: 700; color: var(--text); line-height: 1.3; overflow-wrap: anywhere; }
+#panel-checklist .cl-next-l .cl-due { justify-self: start; }
+#panel-checklist .cl-next-btn { flex: none; border: 0; cursor: pointer; padding: 9px 18px; border-radius: 99px; background: var(--cl-tint); color: #fff; font: 600 0.86rem var(--cl-font); box-shadow: 0 4px 14px -6px var(--cl-tint); transition: transform .15s; }
+#panel-checklist .cl-next-btn:active { transform: scale(.95); }
+/* section headers */
+#panel-checklist .cl-phase-hd { margin: 22px 4px 7px; gap: 8px; }
+#panel-checklist .cl-phase-line { display: none; }
+#panel-checklist .cl-phase-lbl { font: 600 0.72rem var(--cl-font); letter-spacing: .05em; text-transform: uppercase; color: var(--text3); padding: 0; border: 0; background: none; }
+#panel-checklist .cl-phase-n { margin-left: auto; font: 500 0.74rem var(--cl-font); color: var(--text3); font-variant-numeric: tabular-nums; }
+#panel-checklist .cl-phase-n.all { color: var(--cl-ok); font-weight: 600; }
+/* the grouped list */
+#panel-checklist .cl-group { background: var(--card); border: 1px solid var(--border); border-radius: var(--cl-r); overflow: hidden; }
+#panel-checklist .cl-group .cl-step { position: relative; margin: 0; border: 0; border-radius: 0; background: transparent; }
+#panel-checklist .cl-group .cl-step + .cl-step::before { content: ''; position: absolute; top: 0; left: 52px; right: 0; height: 1px; background: var(--border); }
+#panel-checklist .cl-group .cl-step:hover { background: color-mix(in srgb, var(--text3) 5%, transparent); }
+#panel-checklist .cl-group .cl-step.done { background: transparent; }
+#panel-checklist .cl-step-main { gap: 12px; padding: 13px 14px 13px 14px; }
+#panel-checklist .cl-check { width: 24px; height: 24px; flex: none; margin-top: 1px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--text3) 70%, transparent); background: transparent; color: transparent; display: inline-flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 800; transition: background .2s, border-color .2s, transform .2s cubic-bezier(.2,.9,.3,1.6); }
+#panel-checklist .cl-step.done .cl-check { background: var(--cl-ok); border-color: var(--cl-ok); color: #fff; transform: scale(1.04); }
+#panel-checklist .cl-num { font: 600 0.62rem var(--cl-font); letter-spacing: .04em; color: var(--text3); margin-bottom: 2px; }
+#panel-checklist .cl-name { font: 600 0.95rem/1.35 var(--cl-font); letter-spacing: -.01em; }
+#panel-checklist .cl-step.done .cl-name { color: var(--text3); text-decoration: none; }
+#panel-checklist .cl-hint { font-size: 0.8rem; line-height: 1.45; color: var(--text3); margin-top: 3px; }
+#panel-checklist .cl-done-ts { font: 600 0.7rem var(--cl-font); color: var(--cl-ok); margin-top: 5px; }
+#panel-checklist .cl-due, #panel-checklist .cl-rep { font: 600 0.7rem var(--cl-font); padding: 3px 9px; }
+#panel-checklist .cl-how { font-size: 0.8rem; margin-top: 8px; }
+#panel-checklist .cl-how summary { color: var(--cl-tint); font-weight: 600; }
+#panel-checklist .cl-how ol { background: color-mix(in srgb, var(--text3) 7%, transparent); border-radius: 12px; padding: 8px 12px 8px 28px; margin-top: 6px; }
+#panel-checklist .cl-look { border-radius: 12px; border-left: 0; background: color-mix(in srgb, #ff9f0a 10%, transparent); padding: 8px 12px; }
+#panel-checklist .cl-look b { color: #ff9f0a; }
+#panel-checklist .cl-warn { color: #ff453a; font-size: 0.8rem; background: color-mix(in srgb, #ff453a 9%, transparent); border-radius: 10px; padding: 6px 10px; }
+/* buttons: small tinted capsules */
+#panel-checklist .cl-step-btns { gap: 6px; }
+#panel-checklist .cl-step-btn { font: 600 0.72rem var(--cl-font); padding: 5px 11px; border-radius: 99px; border: 0; background: color-mix(in srgb, var(--text3) 13%, transparent); color: var(--text2); }
+#panel-checklist .cl-step-btn:hover { background: color-mix(in srgb, var(--text3) 22%, transparent); color: var(--text); border: 0; }
+#panel-checklist .cl-step-btn.open-btn { background: color-mix(in srgb, var(--cl-tint) 15%, transparent); color: var(--cl-tint); }
+#panel-checklist .cl-step-btn.photo-btn { background: color-mix(in srgb, var(--text3) 13%, transparent); color: var(--text2); padding: 5px 9px; }
+#panel-checklist .cl-step-btn.del:hover { background: color-mix(in srgb, #ff453a 15%, transparent); color: #ff453a; }
+/* note + photos */
+#panel-checklist .cl-note-input { font-family: var(--cl-font); font-size: 0.8rem; border-radius: 10px; border: 1px solid transparent; background: color-mix(in srgb, var(--text3) 8%, transparent); padding: 7px 10px; }
+#panel-checklist .cl-note-input:focus { border-color: var(--cl-tint); background: var(--card); }
+#panel-checklist .cl-strip-thumb { width: 52px; height: 52px; border-radius: 10px; border: 0; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+#panel-checklist .cl-photo-count { font: 600 0.7rem var(--cl-font); color: var(--cl-tint); }
+/* report folders */
+#panel-checklist .cl-folder { margin: 0 0 10px; border-radius: var(--cl-r); padding: 12px 14px; background: var(--card); }
+#panel-checklist .cl-folder-hd { display: flex; align-items: center; gap: 8px; font: 600 0.86rem var(--cl-font); color: var(--text); }
+#panel-checklist .cl-folder-hd b { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--text2); }
+#panel-checklist .cl-folder.full .cl-folder-hd b { color: var(--cl-ok); }
+#panel-checklist .cl-folder-list { font: 500 0.74rem var(--cl-font); margin-top: 8px; }
+#panel-checklist .cl-folder-bar { height: 5px; border-radius: 99px; margin-top: 10px; background: color-mix(in srgb, var(--text3) 16%, transparent); overflow: hidden; }
+#panel-checklist .cl-folder-bar i { display: block; height: 100%; border-radius: 99px; background: var(--cl-ok); transition: width .5s cubic-bezier(.2,.9,.3,1); }
+/* side cards */
+#panel-checklist .cl-log-card { border-radius: var(--cl-r); }
+@media (max-width: 640px) {
+  #panel-checklist .cl-step-main { padding: 12px 12px; }
+  #panel-checklist .cl-group .cl-step + .cl-step::before { left: 48px; }
+  #panel-checklist .cl-next { padding: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { #panel-checklist .cl-check, #panel-checklist .prog-fill, #panel-checklist .cl-folder-bar i { transition: none; } }

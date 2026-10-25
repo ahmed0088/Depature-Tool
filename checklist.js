@@ -108,6 +108,133 @@ function saveEditStep() {
   clSaveAll();
 }
 
+
+// ══ The night routine, the way the desk runs it (v409) ══════════════
+//  Everything before the night, in order. "After Night Run" steps stay as the hotel set them.
+//  how: what to set in Opera · look: what to check · report: saved in tonight's night-run folder
+//  due: "03:45" — a countdown on the step · warn: shown in red
+const CL_ROUTINE_VER = 3;
+const CL_ROUTINE = [
+  { id:101, phase:'pre', tag:'save', name:'Zero Rate Rooms report', report:'Zero Rate Rooms',
+    hint:'Every room on a zero rate must have a reason (complimentary or house use).',
+    how:['Reports → Zero Rate Rooms', 'Room Class, Room Type, Room: All Codes', '☐ Include Pseudo Rooms · ☑ Exclude Zero Rate Shares', 'Preview / Download → save the PDF in tonight\'s folder'],
+    look:['A zero-rate room that is not comp or house use → fix the rate or ask the manager', 'Pseudo rooms should not show'] },
+  { id:102, phase:'pre', tag:'save', name:'Complimentary rooms report', report:'Guests INH Complimentary',
+    hint:'Guests INH Complimentary — every comp must be approved.',
+    how:['Reports → Guests INH Complimentary', 'Room Class: All Codes', 'Include: ☑ Complimentary (☐ House Use)', 'Sort order: Room Number', 'Preview / Download → save'],
+    look:['Each comp room has an approval / reason in the notes'] },
+  { id:103, phase:'pre', tag:'save', name:'Rate Change report — anything changed?', report:'Rate Change',
+    hint:'See every rate changed today: old vs new code and amount, and who did it.',
+    how:['Reports → Rate Change Report', 'Activity date: today\'s business date', 'Reservation status: CHECKED IN', 'Sort: Alphabetical (or Room Number)', 'Preview / Download → save'],
+    look:['Old Rate Amount vs New Rate Amount — a lower rate needs a reason / approval', 'Rate code changed (e.g. DAILY → RA1, PKGH1) — is it right?', 'User column: who changed it — ask them if it is not clear'] },
+  { id:104, phase:'pre', tag:'check', name:'In-House Rate Check — TZ rates & higher rates', report:'Guests In House Rate Check',
+    hint:'Fix TZ daily rates to the normal rate, and any rate higher than today\'s rate.',
+    how:['Reports → Guests In House Rate Check', 'From date: today', 'Display: ☑ Market Code ☑ Source Code ☑ Origin Code ☑ Discount Reasons', 'Sort order: Room Number', 'Preview, fix in Opera, then run it again and save'],
+    look:['TZ rates (daily) → change to the normal rate', 'Any rate higher than today\'s rate → correct it', 'Discounts have a reason'] },
+  { id:105, phase:'pre', tag:'scan', name:'Journal — refunds', report:'Journal — Refunds',
+    hint:'If there is a refund: print it, attach the slip to the main Opera report, scan and save.',
+    look:['No refund tonight → save it anyway, or skip with a note'] },
+  { id:106, phase:'pre', tag:'scan', name:'Journal — paid-outs + paid-out commission', report:'Journal — Paid-outs & commission',
+    hint:'From the same journal: paid-outs and paid-out commission. Attach the receipts, scan and save.' },
+  { id:107, phase:'pre', tag:'scan', name:'Expedia report', report:'Expedia',
+    hint:'Check if it has anything. Scan it with the Opera reports and save in the night-run folder.',
+    look:['Refunds, paid-outs and Expedia: all 3 scanned together with the Opera reports'] },
+  { id:108, phase:'pre', tag:'check', name:'Check manual postings',
+    hint:'Every manual posting is right — this must be OK before you settle the card machine.' },
+  { id:109, phase:'pre', tag:'charge', name:'Credit card reconciliation + settle the machine',
+    hint:'Get the recon ready and fix any difference. Settle the machine only when manual postings are OK.',
+    how:['Prepare the CC reconciliation and fix differences', 'Settle the card machine', 'Print the recon', 'Attach it with the other colleagues\' card reports and keep it aside'] },
+  { id:110, phase:'pre', tag:'save', name:'Housekeeping discrepancy report (email)', report:'HK Discrepancy',
+    hint:'Save the discrepancy report housekeeping sent by email.' },
+  { id:111, phase:'pre', tag:'check', name:'Cancel non-guaranteed bookings',
+    hint:'Today\'s arrivals with no guarantee that did not come → cancel per policy.' },
+  { id:112, phase:'pre', tag:'check', name:'Immigration — nationality & missing nationality', panel:'immig',
+    hint:'Every in-house guest has a nationality; fill the missing ones before the night.' },
+  { id:113, phase:'pre', tag:'check', name:'Move out-of-order & out-of-service rooms to the next day',
+    hint:'Extend OOO / OOS rooms so they stay blocked tomorrow.' },
+  { id:114, phase:'run', tag:'charge', name:'Tourism Dirham (TD)', due:'03:45', panel:'tourism',
+    hint:'At the latest, try at 3:45.' },
+  { id:115, phase:'run', tag:'run', name:'Run the night audit', due:'03:50',
+    hint:'Run it by 3:50 AM at the latest. Check everything while it runs.',
+    warn:'Do not click Back while it runs — it cancels the whole run.',
+    look:['8 reports ready in your night-run folder before you start'] },
+  // ── after the night ──
+  { id:201, phase:'post', tag:'save', name:'Negative Posting report', report:'Negative Posting',
+    hint:'From the End of Day reports — save it to the night folder.',
+    how:['Reports → End of Day reports → Negative Posting', 'Preview / Download → save'],
+    look:['Every negative posting has a reason and the right person behind it'] },
+  { id:202, phase:'post', tag:'save', name:'No-show report', report:'No-Show', panel:'noshow',
+    hint:'From the End of Day reports — save it to the night folder.',
+    how:['Reports → End of Day reports → No Show', 'Preview / Download → save', 'HotelOps → No-Shows: upload the PDF to get the list ready'] },
+  { id:203, phase:'post', tag:'send', name:'Email the no-shows to Reservations', panel:'noshow',
+    hint:'Send Reservations the no-show list so they can charge / follow up.',
+    how:['No-Shows page → copy the list', 'New email to Reservations, attach the No-Show report', 'Send'] },
+  { id:204, phase:'post', tag:'save', name:'Manager report', report:'Manager Report',
+    hint:'Save it — the flash report is filled from it.' },
+  { id:205, phase:'post', tag:'save', name:'Flash report', report:'Flash Report',
+    hint:'Fill the flash report from the Manager report, then save / send it.' },
+  { id:206, phase:'post', tag:'upload', name:'Upload everything to DocuWare',
+    hint:'When all is done: upload tonight\'s reports and scans to DocuWare.',
+    how:['Before-night folder: the 8 reports + the refund / paid-out / Expedia scans', 'After-night reports: Negative Posting, No-Show, Manager, Flash', 'Upload them all to DocuWare and check they are there'] },
+];
+/** the old built-in steps (their names): replaced by the routine; anything the hotel added itself is kept */
+const CL_OLD_DEFAULTS = ['Cancel non-guaranteed bookings', 'CC recancellations', 'Cancel OTA rooms + mark card invalid', 'Check immigration / nationality report', 'Charge VCCs for tomorrow arrivals', 'Update no-show sheet (pre-run)', 'Save Inhouse Guest Complimentary report', 'Zero rate room report — remove pseudo', 'Paidout report + attach commission docs', 'Refund report + attach documents', 'Rate check — select check-in & search', 'Run the night audit', 'Manager report', 'No-show report + post charges', 'Negative posting report', 'Room recancellations (post-night)', 'Flash report'];
+/** put the routine in place of the old "before" and "run" steps (once); the "after" steps are kept */
+function clApplyRoutine(list) {
+  if (!Array.isArray(list) || list.some(s => s && s.rv >= CL_ROUTINE_VER)) return false;
+  // what the hotel added or changed itself stays (at the end of its part of the night)
+  const own = list.filter(s => s && !s.rv && !CL_OLD_DEFAULTS.includes(s.name) && !CL_ROUTINE.some(r => r.id === s.id));
+  list.length = 0;
+  ['pre', 'run', 'post'].forEach(ph => {
+    CL_ROUTINE.filter(s => s.phase === ph).forEach(s => list.push(Object.assign({ rv: CL_ROUTINE_VER }, s)));
+    own.filter(s => s.phase === ph).forEach(s => list.push(s));
+  });
+  return true;
+}
+clApplyRoutine(CL_STEPS);
+
+/** "03:45" → minutes left tonight (negative once it has passed); null when not the night */
+function clDueLeft(due) {
+  const m = String(due || '').match(/^(\d{1,2}):(\d{2})$/); if (!m) return null;
+  const now = new Date(), t = new Date(now); t.setHours(+m[1], +m[2], 0, 0);
+  if (now.getHours() >= 12) t.setDate(t.getDate() + 1);   // the evening before: tonight's 3:45
+  return Math.round((t - now) / 60000);
+}
+function clDueChip(s, done) {
+  if (!s.due || done) return '';
+  const left = clDueLeft(s.due); if (left == null) return '';
+  const h = +s.due.slice(0, 2), lbl = `${h % 12 || 12}:${s.due.slice(3)} ${h < 12 ? 'AM' : 'PM'}`;
+  const txt = left < 0 ? `late by ${-left} min` : left < 60 ? `in ${left} min` : `in ${Math.floor(left / 60)} h ${left % 60} min`;
+  const cls = left < 0 ? 'late' : left <= 15 ? 'soon' : '';
+  return `<span class="cl-due ${cls}">⏰ by ${lbl} · ${txt}</span>`;
+}
+/** the night-run folder: which of tonight's reports are saved */
+function clFolderHtml(phase) {
+  const R = CL_STEPS.filter(s => s.report && s.phase === phase && !clState.skipped.has(s.id));
+  if (!R.length) return '';
+  const n = R.filter(s => clState.done.has(s.id)).length;
+  return `<div class="cl-folder${n === R.length ? ' full' : ''}"><div class="cl-folder-hd"><span class="cl-folder-ic">📁</span>${phase === 'post' ? 'End-of-day reports' : 'Night-run folder'}<b>${n}/${R.length}</b></div>
+    <div class="cl-folder-list">${R.map(s => `<span class="${clState.done.has(s.id) ? 'ok' : ''}">${clState.done.has(s.id) ? '✓' : '○'} ${escapeHtml(s.report)}</span>`).join('')}</div><div class="cl-folder-bar"><i style="width:${Math.round(n / R.length * 100)}%"></i></div></div>`;
+}
+/** the next step to do, big at the top */
+function clNextHtml() {
+  if (clEditMode) return '';
+  const order = ['pre', 'run', 'post'];
+  const L = order.flatMap(ph => CL_STEPS.filter(s => s.phase === ph)).filter(s => !clState.done.has(s.id) && !clState.skipped.has(s.id));
+  const s = L[0]; if (!s) return '';
+  const ph = { pre: 'Before the night', run: 'Night run', post: 'After the night' }[s.phase] || '';
+  return `<div class="cl-next"><div class="cl-next-l"><span class="cl-next-k">Up next · ${ph}</span><b>${escapeHtml(s.name)}</b>${clDueChip(s, false)}</div><button class="cl-next-btn" onclick="clToggle2(${s.id})">Done</button></div>`;
+}
+// keep the countdowns fresh while the page is open
+setInterval(() => {
+  try {
+    const p = document.getElementById('panel-checklist');
+    if (!p || !p.classList.contains('active') || clEditMode) return;
+    const a = document.activeElement; if (a && a.closest && a.closest('#panel-checklist') && /TEXTAREA|INPUT/.test(a.tagName)) return;
+    if (CL_STEPS.some(s => s.due && !clState.done.has(s.id))) clRender2();
+  } catch (_) {}
+}, 30000);
+
 // ── Unified save ─────────────────────────────────────────
 function clSaveAll() {
   saveChecklist(CL_STEPS, clState.done, clState.skipped, clPhotos, clNotes, clDoneTimes);
@@ -304,16 +431,21 @@ function clRender2() {
     { key:'run',  label:'Night Run' },
     { key:'post', label:'After Night Run' },
   ];
-  const tagColors = { check:'var(--mint)', save:'var(--gold)', scan:'var(--sky)', charge:'var(--amber)', run:'var(--rose)' };
+  const tagColors = { check:'var(--mint)', save:'var(--gold)', scan:'var(--sky)', charge:'var(--amber)', run:'var(--rose)', send:'#8b7cf8', upload:'#5ab4e8' };
   let html = '';
   phases.forEach(ph => {
     const steps = CL_STEPS.filter(s => s.phase === ph.key);
     if (!steps.length) return;
+    if (ph.key === 'pre') html += clNextHtml();
+    const live = steps.filter(x => !clState.skipped.has(x.id)), nd = live.filter(x => clState.done.has(x.id)).length;
     html += `<div class="cl-phase-hd">
       <div class="cl-phase-line"></div>
       <div class="cl-phase-lbl">${ph.label}</div>
+      <div class="cl-phase-n${nd === live.length ? ' all' : ''}">${nd} of ${live.length}</div>
       <div class="cl-phase-line"></div>
     </div>`;
+    if (!clEditMode) html += clFolderHtml(ph.key);
+    html += '<div class="cl-group">';
     steps.forEach((s, i) => {
       const done    = clState.done.has(s.id);
       const skip    = clState.skipped.has(s.id);
@@ -346,13 +478,16 @@ function clRender2() {
           ${clEditMode ? `<div class="st-drag-handle" title="Drag to reorder">⠿</div>` : ''}
           <div class="cl-check">✓</div>
           <div class="cl-content">
-            <div class="cl-num">STEP ${s.id} ·
+            <div class="cl-num">STEP ${CL_STEPS.indexOf(s) + 1} ·
               <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${tagColors[s.tag]||'var(--text3)'};margin-right:3px;vertical-align:middle;"></span>
               <span style="font-size:0.54rem;color:${tagColors[s.tag]||'var(--text3)'};">${s.tag.toUpperCase()}</span>
               ${photos.length > 0 ? `<span class="cl-has-photo" title="${photos.length} photo(s) attached" style="margin-left:4px;">📷</span>` : ''}
             </div>
             <div class="cl-name">${escapeHtml(s.name)}</div>
             ${s.hint ? `<div class="cl-hint">${escapeHtml(s.hint)}</div>` : ''}
+            ${s.warn ? `<div class="cl-warn">⚠ ${escapeHtml(s.warn)}</div>` : ''}
+            ${(s.due && !done) || s.report ? `<div class="cl-chips">${clDueChip(s, done)}${s.report ? `<span class="cl-rep${done ? ' ok' : ''}">📁 ${escapeHtml(s.report)}</span>` : ''}</div>` : ''}
+            ${!clEditMode && ((s.how && s.how.length) || (s.look && s.look.length)) ? `<details class="cl-how" onclick="event.stopPropagation()"><summary>${s.how && s.how.length ? 'How in Opera' : 'What to check'}</summary>${s.how && s.how.length ? `<ol>${s.how.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ol>` : ''}${s.look && s.look.length ? `<div class="cl-look"><b>Check</b><ul>${s.look.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul></div>` : ''}</details>` : ''}
             ${tsHtml}
             ${photoStrip}
             ${noteArea}
@@ -367,11 +502,12 @@ function clRender2() {
                  <input type="file" id="cl-upload-${s.id}" accept="image/*" multiple style="display:none" onchange="clHandlePhotoUpload(event,${s.id})"/>
                  <button class="cl-step-btn edit-btn" onclick="openEditStep(${s.id})">✏️</button>
                  <button class="cl-step-btn del"      onclick="clDeleteStep(${s.id})">✕</button>`
-              : `${s.panel ? `<button class="cl-step-btn" style="color:var(--sky);border-color:rgba(90,180,232,0.35);" onclick="showPanel('${s.panel}')" title="Open ${s.panel} panel">↗ Open</button>` : ''}<button class="cl-step-btn"          onclick="clSkip2(${s.id})">${skip ? '↩ Show' : 'Skip'}</button>`}
+              : `${s.panel ? `<button class="cl-step-btn open-btn" onclick="showPanel('${s.panel}')" title="Open the ${s.panel} page">Open ↗</button>` : ''}<button class="cl-step-btn photo-btn" onclick="document.getElementById('cl-upload-${s.id}').click()" title="Attach a photo — a note for yourself" aria-label="Attach a photo">📷</button><input type="file" id="cl-upload-${s.id}" accept="image/*" multiple style="display:none" onchange="clHandlePhotoUpload(event,${s.id})"/><button class="cl-step-btn"          onclick="clSkip2(${s.id})">${skip ? '↩ Show' : 'Skip'}</button>`}
           </div>
         </div>
       </div>`;
     });
+    html += '</div>';
   });
   const el = document.getElementById('clStepList2');
   if (el) el.innerHTML = html;

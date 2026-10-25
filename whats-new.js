@@ -9,6 +9,14 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 409, items: [
+    "🌙 Night Run Checklist rebuilt the way you run the night: Zero Rate Rooms → Complimentary → Rate Change → In-House Rate Check (TZ rates, higher rates) → Journal refunds → paid-outs + commission → Expedia → manual postings → CC recon + settle → HK discrepancy → cancel non-guaranteed → immigration → OOO / OOS to tomorrow → TD by 3:45 → run the night by 3:50.",
+    "🌅 After the night: Negative Posting and No-Show reports from End of Day, email the no-shows to Reservations, Manager report, Flash report, then upload everything to DocuWare.",
+    "📖 Each step has “How in Opera” (what to tick and pick) and “Check” (what to look for). TD and the night run show a live countdown that turns red when late, and the run step warns: never click Back while it runs.",
+    "📁 Report folders: “Night-run folder 3/8” and “End-of-day reports” show which reports are saved. “Up next” at the top shows the next step with one Done button.",
+    "📷 Attach photos to any step (no Edit needed) — your own notes and reminders, kept night after night.",
+    "🍎 New Apple-style look: clean grouped lists, round checkmarks, calm colours. Steps you added yourself are kept.",
+  ] },
   { v: 408, items: [
     "🌙 Handover: the night shift stays one shift after midnight. Items written at 8 PM, 10 PM, 11 PM on a 19:00–04:00 night now sit in “Night 24–25 Oct” with the ones after midnight, and the counts include them. “Still open from yesterday” only shows what earlier shifts left open.",
     "📤 Handover export (Excel / PDF) now includes everything still pending from yesterday, plus the whole night shift — nothing open gets lost at the change of day.",
