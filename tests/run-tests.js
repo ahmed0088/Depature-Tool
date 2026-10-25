@@ -205,6 +205,18 @@ console.log('\nRoster builder');
     people: [person('A ONE', { group: 'Adagio GD' }), person('M ONE', { group: 'Mercure DD', title: 'Supervisor' }), person('M TWO', { group: 'Mercure DD', title: 'Supervisor' }), person('M THREE', { group: 'Mercure DD', title: 'Supervisor' })],
     pre: {}, rules: { minRest: 11, maxRun: 6, givePh: false, lend: true, lendIdeal: true }, seed: 3 };
   const r2 = sb.rbSolve(I2);
+  { // 🚶 "Can be moved" on an agent's card: they may be borrowed, from the nearest hotel first (Ibis → Mercure → Adagio)
+    const Im = { week: W, groups: { 'Adagio GD': { shifts: [N], need: { [N]: two } }, 'Mercure DD': { shifts: [N], need: { [N]: one } }, 'Ibis DD': { shifts: [N], need: { [N]: one } } },
+      people: [person('A ONE', { group: 'Adagio GD' }), person('M ONE', { group: 'Mercure DD' }), person('M TWO', { group: 'Mercure DD', move: true }), person('M THREE', { group: 'Mercure DD', move: true }),
+        person('I ONE', { group: 'Ibis DD' }), person('I TWO', { group: 'Ibis DD', move: true }), person('I THREE', { group: 'Ibis DD', move: true })],
+      pre: {}, rules: { minRest: 11, maxRun: 6, givePh: false, lend: true, lendIdeal: true }, seed: 5 };
+    const rm = sb.rbSolve(Im), at = (k) => Object.values(rm.cells[k] || {}).filter(v => / - Adagio$/.test(v)).length;
+    check('a movable agent is borrowed for an empty shift', at('M TWO') + at('M THREE') + at('I TWO') + at('I THREE') > 0, true);
+    check('the nearest hotel (Mercure) lends to Adagio, not Ibis', at('I TWO') + at('I THREE'), 0);
+    check('an agent not marked movable stays home', at('M ONE') + at('I ONE'), 0);
+    check('walking distance: Ibis → Adagio is the far end', [sb.rbHotelDist('Ibis DD', 'Adagio GD'), sb.rbHotelDist('Mercure DD', 'Adagio GD'), sb.rbHotelDist('Ibis DD', 'Ibis DD')], [2, 1, 0]);
+    check('the hotel\'s own walking order wins', sb.rbHotelDist('Ibis DD', 'Adagio GD', { hotelOrder: ['Adagio GD', 'Ibis DD', 'Mercure DD'] }), 1);
+  }
   { // only Duty Managers and Supervisors are ever moved to another hotel: the same week with agents, nobody moves
     const Ia = Object.assign({}, I2, { people: I2.people.map(p => Object.assign({}, p, { title: '' })) });
     const ra = sb.rbSolve(Ia), movedA = Object.values(ra.cells).reduce((t, row) => t + Object.values(row).filter(v => / - Adagio$/.test(v)).length, 0);

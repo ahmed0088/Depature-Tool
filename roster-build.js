@@ -211,7 +211,7 @@ function rbTlHome(I, g, p, s) {
   const G = (I.groups || {})[g] || {}; if ((G.post || '') !== (p.post || '') || rbBaseGroup(g) !== rbBaseGroup(p.group || '')) return false;
   const who = (G.who || {})[rbNorm(s) || s]; return !!(who && who.length && rbIsNight(rbNorm(s) || s));
 }
-function rbMayWork(I, g, p, s) { if (rbNoGo(p, g)) return false; if (rbCoversShift(I, g, p, s)) return true; /* 🔁 a deputy may always do the colleague's shift they cover */ if (p && p.group && g && rbBaseGroup(p.group) !== rbBaseGroup(g) && !rbFloats(p) && !rbFloatsLast(p)) return false; /* only Duty Managers and Supervisors ever work at another hotel */ if (p && (((I.groups || {})[g] || {}).post || '') !== (p.post || '')) return false; const who = (((I.groups || {})[g] || {}).who || {})[rbNorm(s) || s]; return !who || !who.length || who.includes((p && p.title) || ''); }
+function rbMayWork(I, g, p, s) { if (rbNoGo(p, g)) return false; if (rbCoversShift(I, g, p, s)) return true; /* 🔁 a deputy may always do the colleague's shift they cover */ if (p && p.group && g && rbBaseGroup(p.group) !== rbBaseGroup(g) && !rbMovable(p)) return false; /* only Duty Managers, Supervisors and people marked "can be moved" ever work at another hotel */ if (p && (((I.groups || {})[g] || {}).post || '') !== (p.post || '')) return false; const who = (((I.groups || {})[g] || {}).who || {})[rbNorm(s) || s]; return !who || !who.length || who.includes((p && p.title) || ''); }
 /** 🔁 "Covers for": the colleague's own shift (their fixed or usual one) at the same hotel. */
 function rbCoversShift(I, g, p, s) {
   if (!p || !p.covers || !I || !I.people) return false;
@@ -439,9 +439,10 @@ function rbPlanNights(I) {
           const cand = (byDay[d] || []).filter(x => !u2.has(x.i + ':' + x.d) && mayNight(f, hotels[x.i]));
           if (!cand.length) { ok = false; break; }
           // their own hotel first, then the hotel they'd rather go to when moved
+          cand.sort((x, y) => rbHotelDist(homeOf(f), hotels[x.i].g, R) - rbHotelDist(homeOf(f), hotels[y.i].g, R));   // the nearest hotel first
           const own = cand.find(x => hotels[x.i].g === homeOf(f)) || (f.alt && cand.find(x => rbBaseGroup(hotels[x.i].g) === f.alt)) || cand.find(x => !rbSoftGo(f, hotels[x.i].g)) || cand[0];
           if (rbSoftGo(f, hotels[own.i].g)) c += 400;   // ⚠ only if no other way
-          if (hotels[own.i].g !== homeOf(f)) { if (f.home || (!rbFloats(f) && !rbFloatsLast(f))) { ok = false; break; } c += (f.alt && rbBaseGroup(hotels[own.i].g) === f.alt ? 50 : 60) * Math.max(0.2, rbW(R, 'home')); }   // working at another hotel: only when there's no way at their own hotel
+          if (hotels[own.i].g !== homeOf(f)) { if (f.home || !rbMovable(f)) { ok = false; break; } c += ((f.alt && rbBaseGroup(hotels[own.i].g) === f.alt ? 50 : 60) + 25 * (rbHotelDist(homeOf(f), hotels[own.i].g, R) - 1)) * Math.max(0.2, rbW(R, 'home')); }   // working at another hotel: only when there's no way at their own hotel
           u2.add(own.i + ':' + own.d); pick.push({ d, i: own.i });
         }
         if (ok) walk(fi + 1, u2, plan.concat([{ f, b, pick }]), c);
@@ -634,7 +635,7 @@ function _rbFinish(I, cells, o) {
         if (cover[g][s][d] === 0 && !G[g].post && R.allowOne !== false && rbHoursCovered(rbDeskGrid(G[g].shifts, (e, x) => (cover[g][x] || [])[e] || 0), d, s)) break;
         if (cover[g][s][d] >= 1 && R.allowOne !== false && !R.lendIdeal && (G[g].post || rbRelieved(rbDeskGrid(G[g].shifts, (e, x) => (cover[g][x] || [])[e] || 0), d, s, R))) break;
         const dt = dates[d];
-        const cand = I.people.filter(q => q.group !== g && !q.home && !q.lock && (rbFloats(q) || rbFloatsLast(q)) && !((I.pre || {})[q.key] || {})[dt] && G[q.group] && cells[q.key][dt] === s && cover[q.group][s] && cover[q.group][s][d] > need(q.group, s, d) && rbMayWork(I, g, q, s)).sort((a, b) => (rbSoftGo(a, g) ? 1 : 0) - (rbSoftGo(b, g) ? 1 : 0) || (rbLentBefore(I, b, g, d, s) ? 1 : 0) - (rbLentBefore(I, a, g, d, s) ? 1 : 0) || (rbFloatsLast(a) ? 1 : 0) - (rbFloatsLast(b) ? 1 : 0) || (rbFloats(b) ? 1 : 0) - (rbFloats(a) ? 1 : 0) || (b.alt === rbBaseGroup(g) ? 1 : 0) - (a.alt === rbBaseGroup(g) ? 1 : 0));   // (then whoever would rather come to this hotel)
+        const cand = I.people.filter(q => q.group !== g && !q.home && !q.lock && rbMovable(q) && !((I.pre || {})[q.key] || {})[dt] && G[q.group] && cells[q.key][dt] === s && cover[q.group][s] && cover[q.group][s][d] > need(q.group, s, d) && rbMayWork(I, g, q, s)).sort((a, b) => (rbSoftGo(a, g) ? 1 : 0) - (rbSoftGo(b, g) ? 1 : 0) || rbHotelDist(a.group, g, R) - rbHotelDist(b.group, g, R) || (rbLentBefore(I, b, g, d, s) ? 1 : 0) - (rbLentBefore(I, a, g, d, s) ? 1 : 0) || (rbFloatsLast(a) ? 1 : 0) - (rbFloatsLast(b) ? 1 : 0) || (rbFloats(b) ? 1 : 0) - (rbFloats(a) ? 1 : 0) || (b.alt === rbBaseGroup(g) ? 1 : 0) - (a.alt === rbBaseGroup(g) ? 1 : 0));   // (then whoever would rather come to this hotel)
         const used = rbMoveHotels(I, cells), inPair = q => used.size === 0 || (used.has(rbBaseGroup(g)) && used.has(rbBaseGroup(q.group)) ) || (used.size < 2 && (used.has(rbBaseGroup(g)) || used.has(rbBaseGroup(q.group))));
         const donor = cand.find(inPair) || cand[0];   // one pair of hotels a week; a third hotel only when there's no other way
         if (!donor) break;
@@ -1166,6 +1167,20 @@ function rbInputPerson(k) { return { title: typeof rbTitle === 'function' ? rbTi
 function rbFloats(p) { return /^duty manager$/i.test((p && p.title) || ''); }
 /** Supervisors can go anywhere too, but only when nobody else can: they come after everyone else. */
 function rbFloatsLast(p) { return /^supervisor$/i.test((p && p.title) || ''); }
+/** 🚶 can work at another hotel: Duty Managers and Supervisors, and anyone whose card says "Can be moved" */
+function rbMovable(p) { return rbFloats(p) || rbFloatsLast(p) || !!(p && p.move); }
+/** where a hotel sits on the walk between them (0 = first). The hotel's order (⚖️ Rules → Hotels: walking order),
+ *  else by name: Ibis first, Mercure in the middle, Adagio the farthest */
+function rbHotelPos(g, R) {
+  const b = rbBaseGroup(g || ''), order = ((R || (typeof rbSettings !== 'undefined' && rbSettings && rbSettings.rules) || {}).hotelOrder) || [];
+  const i = order.findIndex(x => String(x).toLowerCase() === b.toLowerCase());
+  if (i >= 0) return i;
+  return /ibis/i.test(b) ? 0 : /mercure/i.test(b) ? 1 : /adagio/i.test(b) ? 2 : 1;
+}
+/** how far apart two hotels are on the walk (0 = the same hotel, 1 = next door, 2 = the far end) */
+function rbHotelDist(a, b, R) { return rbBaseGroup(a || '') === rbBaseGroup(b || '') ? 0 : Math.max(1, Math.abs(rbHotelPos(a, R) - rbHotelPos(b, R))); }
+/** a hotel group's names in walking order */
+function rbWalkOrder(groups, R) { return (groups || []).filter(x => x && !/·/.test(x)).slice().sort((a, b) => rbHotelPos(a, R) - rbHotelPos(b, R) || String(a).localeCompare(String(b))); }
 /** A Duty Manager and a Supervisor are never on the same shift together in the same hotel (one of them is enough):
  *  every such day and shift, as { date, hotel, shift, keys }. */
 function rbSeniorClash(I, cells, dates) {
@@ -1231,7 +1246,7 @@ function rbPersonCfg(k) {
   const mode = c.mode || (c.fixed ? 'static' : c.fixed === '' && !lock ? 'any' : (L.fixedGuess || ((mgr || lock) && L.usual)) ? 'static' : L.rotates ? 'rotate' : 'any');   // (rotates week to week, as the posted rosters show)
   const fixed = mode === 'static' || lock ? (c.fixed || L.fixedGuess || L.usual || '') : '';
   return {
-    key: k, group: rbPGroup(k), post: rbPost(k), title: c.title || '', mode, lock: lock && !!fixed, home: !!c.home, covers: c.covers || '', noGo: (c.noGo || []).slice(), softGo: (c.softGo || []).slice(), alt: c.alt || '',
+    key: k, group: rbPGroup(k), post: rbPost(k), title: c.title || '', mode, lock: lock && !!fixed, home: !!c.home, move: !!c.move, covers: c.covers || '', noGo: (c.noGo || []).slice(), softGo: (c.softGo || []).slice(), alt: c.alt || '',
     offs: c.offs != null ? +c.offs : Math.min(1, L.offs),   // one day off a week (4 a month); two only when set on their card
     fixed, fixedLearned: !c.fixed && !!fixed,
     fixedCost: mgr ? 400 : /supervisor|leader|duty/i.test(c.title || '') ? 60 : 30,   // managers move only to stop a shift being empty
@@ -1684,7 +1699,7 @@ const _rbClone = v => (v == null ? null : JSON.parse(JSON.stringify(v)));
 /** What the builder was told when a draft was built: the rules and what is set on people's cards. A draft built
  *  under other rules (or by an older app) says so, with a button to build it again. */
 function rbRulesSig() {
-  const P = Object.keys(rbPeople || {}).sort().map(k => { const c = rbPeople[k] || {}; return [k, c.staticOff, c.softGo, c.noGo, c.offs, c.title, c.home, c.lockShift, c.fixed, c.mode]; });
+  const P = Object.keys(rbPeople || {}).sort().map(k => { const c = rbPeople[k] || {}; return [k, c.staticOff, c.softGo, c.noGo, c.offs, c.title, c.home, c.move, c.lockShift, c.fixed, c.mode]; });
   const t = JSON.stringify([rbRules(), P]); let h = 2166136261; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); }
   return (h >>> 0).toString(36);
 }
@@ -2151,7 +2166,7 @@ function rbDecisionsHtml(I, cells, shown, dates) {
   if (!notes.length && !moved.length && !soft.length && !n2m.length) return '';
   const fn = k => escapeHtml(((roStaff[k] || {}).name || k).split(' ')[0]);
   const named = p => notes.some(n => new RegExp('\\b' + ((roStaff[p.key] || {}).name || '').split(' ')[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').test(n.text || ''));
-  const why = p => named(p) ? 'part of the decision above' : rbFloats(p) ? 'Duty Manager: works wherever needed' : rbFloatsLast(p) ? 'Supervisor from another hotel: only because nobody else could' : I.rules.lend === false ? '' : 'spare at their own hotel that day';
+  const why = p => named(p) ? 'part of the decision above' : rbFloats(p) ? 'Duty Manager: works wherever needed' : rbFloatsLast(p) ? 'Supervisor from another hotel: only because nobody else could' : p.move ? 'can be moved (their card), from the nearest hotel with someone spare' : I.rules.lend === false ? '' : 'spare at their own hotel that day';
   return `<div class="rb-decide"><div class="rb-sub">📝 Decisions this week <small>so you know what was done, and why</small></div>
     ${notes.map((n, i) => n.card ? `<div class="rb-dec warn rb-bent"><div><b class="rb-bent-hd">⚠ Rule bent · ${escapeHtml(n.card.day)}</b>
         <div><b>${escapeHtml(n.card.who)}</b> takes ${escapeHtml(n.card.what)}.</div>
@@ -2295,7 +2310,8 @@ function rbRulesHtml() {
     ${card('🌴', 'Vacation',
       row('Vacation days a year', 'earned a little every day; change one person on their card', step(R.vacDays || 30, 0, 60, "rbSetRule('vacDays',Math.max(0,Math.min(60,+this.value||30)))", 'days')))}
     ${card('🏨', 'Hotels & managers',
-      row('Keep everyone in their own hotel', R.lend === false ? 'nobody is moved, by the builder or in suggestions' : 'off: moved only when a shift would be empty, one pair of hotels a week', sw(R.lend === false, "rbSetRule('lend',!this.checked);rbRender()"))
+      row('Walking order', 'people are moved from the nearest hotel first: ' + rbWalkOrder(rbGroupsAll(), R).map(x => escapeHtml(x)).join(' → '), `<span class="rb-walk">${rbWalkOrder(rbGroupsAll(), R).map((x, i, L) => `<button class="rb-opt" ${i ? '' : 'disabled'} onclick="rbWalkMove(${escapeHtml(JSON.stringify(x))},-1)" title="Move ${escapeHtml(x)} nearer the start">◀ ${escapeHtml(rbShortU ? x.split(' ')[0] : x)}</button>`).join('')}</span>`)
+      + row('Keep everyone in their own hotel', R.lend === false ? 'nobody is moved, by the builder or in suggestions' : 'off: moved only when a shift would be empty, one pair of hotels a week', sw(R.lend === false, "rbSetRule('lend',!this.checked);rbRender()"))
       + row('Own Team Leader for night gaps', 'a night the Supervisor is off: the hotel\'s own Team Leader before a Supervisor from another hotel', sw(R.tlHome === true, "rbSetRule('tlHome',this.checked)"))
       + row('Managers keep their own shift', 'never moved to cover; unlock one on their card', sw(R.lockMgr !== false, "rbSetRule('lockMgr',this.checked);rbRender()"))
       + row('Managers on duty each day', `all hotels together; 0 = off · ${mgrs.length ? 'now: ' + escapeHtml(mgrs.join(', ')) : 'nobody has the title yet (their card in 🧑‍💼 Team)'}`, step(R.mgrMin, 0, 3, "rbSetRule('mgrMin',Math.max(0,Math.min(3,+this.value||0)))", '')))}
@@ -2308,6 +2324,15 @@ function rbRulesHtml() {
 }
 /** − / + next to a number: change it and save it like typing it would. */
 function rbStep(btn, d) { const inp = btn.parentNode.querySelector('input'); if (!inp) return; const v = Math.max(+inp.min, Math.min(+inp.max, (+inp.value || 0) + d)); if (v === +inp.value) return; inp.value = v; inp.dispatchEvent(new Event('change')); }
+/** every hotel name used on the roster */
+function rbGroupsAll() { try { return [...new Set(Object.values(roStaff || {}).map(x => rbBaseGroup(x && x.group || '')).filter(Boolean))]; } catch (_) { return []; } }
+/** ◀ on Rules → Walking order: that hotel one place nearer the start */
+function rbWalkMove(g, dir) {
+  const L = rbWalkOrder(rbGroupsAll(), rbRules()), i = L.indexOf(g), j = i + dir;
+  if (i < 0 || j < 0 || j >= L.length) return;
+  [L[i], L[j]] = [L[j], L[i]];
+  rbSetRule('hotelOrder', L); rbRender();
+}
 function rbSetRule(k, v) { rbSettings.rules = Object.assign({}, rbSettings.rules, { [k]: v }); fbSet('roster/builder/settings/rules', rbSettings.rules); rbRefreshOut(); }
 function rbAddHol() { const d = document.getElementById('rbHd').value; if (!d) return; const h = (rbSettings.holidays || []).concat([{ date: d, name: document.getElementById('rbHn').value.trim() }]).sort((a, b) => a.date.localeCompare(b.date)); rbSettings.holidays = h; fbSet('roster/builder/settings/holidays', h); rbRender(); }
 function rbDelHol(i) { const h = (rbSettings.holidays || []).slice(); h.splice(i, 1); rbSettings.holidays = h; fbSet('roster/builder/settings/holidays', h); rbRender(); }
@@ -2727,7 +2752,7 @@ function rbPick(td, k, dt) {
     <div class="rb-opts">${opt('OFF', 'OFF', 'ro-t-off')}${(() => { const L = rbPhNext(k); return opt(L ? 'PH - ' + L : 'PH', 'PH', 'ro-t-leave'); })()}${leave.slice(0, 8).map(c => opt(c, c, 'ro-t-leave')).join('')}</div>
     ${rbSwapMenuHtml(k, dt)}
     <div class="rb-opts"><small>Sick or leave from this day:</small>${['SL', 'AL', 'V', 'EL'].map(c => `<button class="rb-opt ro-t-leave" title="${c === 'V' ? 'Vacation' : ''}" onclick="rbLeaveFrom(${_rbQ(k)},'${dt}','${c}')">${c} …</button>`).join('')}</div>
-    ${others.length && (rbFloats(rbInputPerson(k)) || rbFloatsLast(rbInputPerson(k))) ? `<details class="rb-opts-more"><summary>Lend to another hotel…</summary><div class="rb-opts">${others.map(o => shifts.map(s => opt(`${s} - ${rbShortU(o)}`, `${s.slice(0, 5)} at ${rbShortU(o)}`, 'ro-t-other')).join('')).join('')}</div></details>` : ''}
+    ${others.length && (rbFloats(rbInputPerson(k)) || rbFloatsLast(rbInputPerson(k)) || !!((rbPeople || {})[k] || {}).move) ? `<details class="rb-opts-more"><summary>Lend to another hotel…</summary><div class="rb-opts">${others.map(o => shifts.map(s => opt(`${s} - ${rbShortU(o)}`, `${s.slice(0, 5)} at ${rbShortU(o)}`, 'ro-t-other')).join('')).join('')}</div></details>` : ''}
     <div class="rb-inline"><input id="rbOther" placeholder="Other (e.g. TRN, 10:00 - 19:00)" value=""><button class="btn sm" onclick="rbSetCell(${_rbQ(k)},'${dt}',document.getElementById('rbOther').value)">Set</button><button class="btn sm" onclick="rbSetCell(${_rbQ(k)},'${dt}','')">Clear</button></div>`;
   document.body.appendChild(m);
   const r = td.getBoundingClientRect(), mw = Math.min(340, window.innerWidth - 16);

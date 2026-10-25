@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 411, items: [
+    "🚶 Roster → Team → a person's card: “🏨 Stays at their hotel” / “🚶 Can be moved to other hotels” — now for anyone, not only Duty Managers and Supervisors. Then pick where they can go: ✓ yes, ⚠️ only if there is no other option, 🚫 never.",
+    "🗺 Nearest hotel first: the builder and the suggestions borrow from the closest hotel on the walk — Ibis → Mercure → Adagio — so nobody walks to the far end when the hotel next door has someone spare. Change the order in ⚖️ Rules → Hotels → Walking order.",
+  ] },
   { v: 410, items: [
     "✏️ Night Run Checklist is fully yours to change: tap ✏️ on any step to edit everything — name, description, part of the night, type, the report it saves to the folder, a deadline, “How in Opera” lines, “What to check”, a red warning, a page to open, and photos.",
     "📁 Edit Steps → “＋ New report” adds a whole new report step (it goes in the folder count by itself), “＋ New step (full)” adds any step with all the details. Duplicate or delete from the editor.",
