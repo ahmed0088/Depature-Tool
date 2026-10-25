@@ -354,6 +354,7 @@ function rbSolve(I) {
     if (shorts(alt) < shorts(res)) res = alt;
   }
   if (!I._plain && !I._strict) {
+    rbDeskLast(I, res);
     rbEnsureOff(I, res);
     rbBreakRuns(I, res);
     rbOneOff(I, res);
@@ -368,6 +369,70 @@ function rbSolve(I) {
   return res;
 }
 
+/** 🛎 May this person stand in at another hotel's desk only because it would otherwise be empty? Never someone
+ *  set to "never moved" (move === false), 🏨 kept home, 🚫 not to that hotel, a manager, a locked shift, or another post. */
+function rbDeskStandIn(I, p, g) {
+  if (!p || !g || p.move === false || p.home || p.lock || rbNoGo(p, g) || rbMgrP(p)) return false;
+  if (rbBaseGroup(p.group || '') === rbBaseGroup(g)) return false;
+  return ((I.groups[g] || {}).post || '') === (p.post || '');
+}
+/** true when this cell (p at hotel g on dt) is what keeps that desk from being empty for some hour */
+function rbDeskSave(I, cells, p, dt, g, v) {
+  if (!rbDeskStandIn(I, p, g) || !I.groups[g]) return false;
+  const d = rbDates7(I).indexOf(dt), H = rbShiftHours(rbNorm(v) || v); if (d < 0 || !H) return false;
+  const c2 = Object.assign({}, cells, { [p.key]: Object.assign({}, cells[p.key], { [dt]: '' }) });
+  const grid = rbDesk(I, c2, g); if (!grid) return false;
+  return H[0].some(h => !grid[d][h]) || (d < 6 && H[1].some(h => !grid[d + 1][h]));
+}
+/** 🛎 The very last way, so a desk is never empty: someone working that day at the nearest hotel with a desk that
+ *  stays covered without them stands in (their own rest and rules kept). Written under Decisions. */
+function rbDeskLast(I, res) {
+  if (!res || !res.cells) return;   // (even with "keep everyone in their own hotel": a desk is never left empty)
+  const dates = rbDates7(I), hotels = Object.keys(I.groups);
+  const empt = x => x.kind === 'short' && (x.desk || !x.have) && !(I.groups[x.group] || {}).post;   // nobody at all on that desk then
+  const deskShort = (P, g) => P.filter(x => empt(x) && (!g || x.group === g)).length;
+  const own = (P, k) => P.filter(x => x.key === k && /^(rest|switch|back|run|long|offs)$/.test(x.kind)).length;
+  for (let guard = 0; guard < 20; guard++) {
+    const P = rbProblems(I, res.cells), gaps = P.filter(empt);
+    if (!gaps.length) return;
+    let best = null;
+    gaps.forEach(gap => {
+      const d = dates.indexOf(gap.date);
+      I.people.forEach(q => {
+        if (!rbDeskStandIn(I, q, gap.group)) return;
+        const v = (res.cells[q.key] || {})[gap.date], x = rbParse(v);
+        if (!x || x.note || ((I.pre || {})[q.key] || {})[gap.date]) return;           // working that day at home, not a shift they asked for
+        const c2 = _rbClone(res.cells); c2[q.key][gap.date] = `${gap.shift} - ${rbShortU(rbBaseGroup(gap.group), hotels)}`;
+        const tries = [c2];
+        // a late shift there, then an early one at home next morning would cut their rest: the next day moves to the same hours (at home)
+        // (and the days after, up to their next day off, when one day isn't enough)
+        if ((I.groups[q.group] || {}).shifts.includes(gap.shift)) {
+          let cx = c2;
+          for (let j = d + 1; j < 7; j++) {
+            const dj = dates[j], vj = (res.cells[q.key] || {})[dj];
+            if (!rbParse(vj) || rbParse(vj).note || ((I.pre || {})[q.key] || {})[dj]) break;
+            if (rbNorm(vj) === gap.shift) break;
+            cx = _rbClone(cx); cx[q.key][dj] = gap.shift; tries.push(cx);
+          }
+        }
+        tries.forEach((cx, ti) => {
+          const P2 = rbProblems(I, cx);
+          if (deskShort(P2, q.group) > deskShort(P, q.group)) return;                   // never empties their own desk
+          if (deskShort(P2) >= deskShort(P)) return;                                    // it has to help
+          if (own(P2, q.key) > own(P, q.key)) return;                                   // their rest and days kept
+          const cost = rbHotelDist(q.group, gap.group, I.rules) * 10 + (rbNorm(v) === gap.shift ? 0 : 3) + ti * 4 + P2.length;
+          if (!best || cost < best.cost) best = { cost, q, gap, d, cells: cx, next: ti };
+        });
+      });
+    });
+    if (!best) return;
+    res.cells = best.cells;
+    try { res.cover = rbCover(I, res.cells); } catch (_) {}
+    res.problems = rbProblems(I, res.cells, res.cover);
+    const nm = typeof roStaff !== 'undefined' && roStaff[best.q.key] ? roStaff[best.q.key].name.split(' ')[0] : best.q.key;
+    (res.notes = res.notes || []).push({ key: best.q.key, date: best.gap.date, auto: true, text: `🛎 ${nm} (${rbBaseGroup(best.q.group)}) covers the ${rbBaseGroup(best.gap.group)} desk on ${RB_DAYS[best.d]} (${best.gap.shift}): otherwise nobody would be on that desk. From the nearest hotel, their own desk stays covered${best.next ? `; ${best.next === 1 ? 'the next day' : 'the next ' + best.next + ' days'} they work ${best.gap.shift} at home, for their rest` : ''}.` });
+  }
+}
 function rbDates7(I) { return Array.from({ length: 7 }, (_, d) => roAdd(I.week, d)); }
 /** 🛋 Nobody works all 7 days: one day off a week is the law. The day with someone spare first; if no day has, still
  *  a day off (the shift left short shows as a problem to decide), never their only day off taken for cover. */
@@ -531,6 +596,16 @@ function rbPlanNights(I) {
 }
 /** Empty shifts left after building: fill each with the best fix a supervisor would make that keeps every rule
  *  (another hotel's Duty Manager, a day off moved, two people trading), never one that bends a rule. */
+/** 🛎 an empty desk hour is a missing shift even where "cover needed" says 0: for finding who can take it, that
+ *  shift needs one person that day */
+function rbDeskNeed(I, g) {
+  if (!g || !g.desk || !I.groups[g.group]) return I;
+  const d = Array.from({ length: 7 }, (_, i) => roAdd(I.week, i)).indexOf(g.date); if (d < 0) return I;
+  const G = I.groups[g.group], need = Object.assign({}, G.need), row = (need[g.shift] || [0, 0, 0, 0, 0, 0, 0]).slice();
+  if ((row[d] || 0) >= 1) return I;
+  row[d] = 1; need[g.shift] = row;
+  return Object.assign({}, I, { groups: Object.assign({}, I.groups, { [g.group]: Object.assign({}, G, { need }) }) });
+}
 function rbRepair(I, res, o) {
   if (I.noRepair || typeof rtCoverOptions !== 'function') return res;
   o = o || {};
@@ -545,7 +620,7 @@ function rbRepair(I, res, o) {
   for (let gaps = shorts(cells); gaps.length && guard < 12; guard++) {
     const before = breaks(cells); let best = null;
     for (const g of gaps) {
-      const I2 = Object.assign({}, I, { noRepair: true });
+      const I2 = rbDeskNeed(Object.assign({}, I, { noRepair: true }), g);
       let opts = rtCoverOptions(I2, cells, g.group, g.date, g.shift).filter(x => x.cells && (bendOk || !x.bend) && !(o.homeOnly && moves(x.cells)));
       // the only fixes found move someone for days: look further (two-step fixes that keep every rule, and the bends) and weigh them all
       const supOnly = !!(((I.groups[g.group] || {}).who || {})[g.shift]);   // (a Supervisors' night: a Team Leader at home may beat moving someone for days)
@@ -574,7 +649,7 @@ function rbRepair(I, res, o) {
   for (let gaps = shorts(cells), n = 0; gaps.length && n < 8 && !I.noBend && !o.homeOnly; n++) {
     let pick = null;
     for (const g of gaps) {
-      const o = rtCoverOptions(Object.assign({}, I, { noRepair: true }), cells, g.group, g.date, g.shift).filter(o => o.cells && o.bend && shorts(o.cells).length < gaps.length).sort((a, b) => a.cost - b.cost)[0];
+      const o = rtCoverOptions(rbDeskNeed(Object.assign({}, I, { noRepair: true }), g), cells, g.group, g.date, g.shift).filter(o => o.cells && o.bend && shorts(o.cells).length < gaps.length).sort((a, b) => a.cost - b.cost)[0];
       if (o && (!pick || o.cost < pick.cost)) pick = o;
     }
     if (!pick) break;
@@ -1033,6 +1108,25 @@ function rbProblems(I, cells, cover) {
     if (kind === 'thin' && h > 0 && !I.groups[g].post && rbRelieved(grid = grid || rbDesk(I, cells, g) || rbDeskGrid(I.groups[g].shifts, (e, x) => (cover[g][x] || [])[e] || 0), d, s, R)) return;
     out.push({ kind, group: g, shift: s, date: dt, need: n, have: h });
   })); });
+  // 🛎 someone on every front desk, every hour — before health, wishes or fairness. Hours with nobody (even where
+  // "cover needed" says 0) are missing shifts: the hotel's shifts that cover the most of them (a night started the
+  // day before covers the early hours), one by one until every hour a shift could cover is covered
+  Object.keys(I.groups).forEach(g => {
+    const G = I.groups[g]; if (G.post) return;
+    const grid = rbDesk(I, cells, g) || rbDeskGrid(G.shifts, (e, x) => (cover[g][x] || [])[e] || 0);
+    const empty = grid.map(row => row.map(c => !c));
+    const HS = G.shifts.map(s => [s, rbShiftHours(s)]).filter(x => x[1]);
+    const gain = (d, H) => H[0].filter(h => empty[d][h]).length + (d < 6 ? H[1].filter(h => empty[d + 1][h]).length : 0);
+    for (let k = 0; k < 14; k++) {
+      let best = null;
+      for (let d = 0; d < 7; d++) HS.forEach(([sh, H]) => { const n = gain(d, H); if (n && (!best || n > best.n)) best = { d, sh, H, n }; });
+      if (!best) break;
+      best.H[0].forEach(h => { empty[best.d][h] = false; }); if (best.d < 6) best.H[1].forEach(h => { empty[best.d + 1][h] = false; });
+      const dt = dates[best.d];
+      if (out.some(x => x.kind === 'short' && x.group === g && x.date === dt && x.shift === best.sh)) continue;
+      out.push({ kind: 'short', group: g, shift: best.sh, date: dt, need: Math.max(1, (G.need[best.sh] || [])[best.d] || 0), have: (cover[g][best.sh] || [])[best.d] || 0, desk: true, hours: best.n });
+    }
+  });
   I.people.forEach(p => {
     let run = p.run || 0, prev = p.lastShift || '';
     dates.forEach((dt, d) => {
@@ -1044,7 +1138,7 @@ function rbProblems(I, cells, cover) {
         if (prev && rbParse(prev) && rbRest(prev, v) < R.minRest) out.push({ kind: 'rest', key: p.key, date: dt, hours: rbRest(prev, v), from: prev, to: v });
         else if (prev && !rbSwitchOk(prev, v, R)) out.push({ kind: rbIsNight(prev) === rbIsNight(v) ? 'back' : 'switch', key: p.key, date: dt, from: prev, to: v });
         { const tg = rbAt(I, p, rbParse(v));
-          if (!rbMayWork(I, tg, p, v) && !rbTlHome(I, tg, p, v)) out.push({ kind: 'who', key: p.key, date: dt, code: v, who: rbNoGo(p, tg) ? ['staff allowed at ' + rbBaseGroup(tg) + ' (their card says not there)'] : ((I.groups[tg] || {}).post || '') !== (p.post || '') ? [p.post ? 'front desk staff (not ' + p.post.toLowerCase() + ')' : 'the ' + ((I.groups[tg] || {}).post || '').toLowerCase() + ' team'] : ((I.groups[tg] || {}).who || {})[rbNorm(v)] }); }
+          if (!rbMayWork(I, tg, p, v) && !rbTlHome(I, tg, p, v) && !rbDeskSave(I, cells, p, dt, tg, v)) out.push({ kind: 'who', key: p.key, date: dt, code: v, who: rbNoGo(p, tg) ? ['staff allowed at ' + rbBaseGroup(tg) + ' (their card says not there)'] : ((I.groups[tg] || {}).post || '') !== (p.post || '') ? [p.post ? 'front desk staff (not ' + p.post.toLowerCase() + ')' : 'the ' + ((I.groups[tg] || {}).post || '').toLowerCase() + ' team'] : ((I.groups[tg] || {}).who || {})[rbNorm(v)] }); }
         if (run === R.maxRun + 1) out.push({ kind: 'run', key: p.key, date: dt, days: run });
       } else if (v) run = 0;
       prev = v;
@@ -1312,7 +1406,7 @@ function rbPersonCfg(k) {
   const mode = c.mode || (c.fixed ? 'static' : c.fixed === '' && !lock ? 'any' : (L.fixedGuess || ((mgr || lock) && L.usual)) ? 'static' : L.rotates ? 'rotate' : 'any');   // (rotates week to week, as the posted rosters show)
   const fixed = mode === 'static' || lock ? (c.fixed || L.fixedGuess || L.usual || '') : '';
   return {
-    key: k, group: rbPGroup(k), post: rbPost(k), title: c.title || '', mode, lock: lock && !!fixed, home: !!c.home, move: !!c.move, covers: c.covers || '', noGo: (c.noGo || []).slice(), softGo: (c.softGo || []).slice(), alt: c.alt || '',
+    key: k, group: rbPGroup(k), post: rbPost(k), title: c.title || '', mode, lock: lock && !!fixed, home: !!c.home, move: c.move === true ? true : c.move === false ? false : undefined, covers: c.covers || '', noGo: (c.noGo || []).slice(), softGo: (c.softGo || []).slice(), alt: c.alt || '',
     offs: Math.max(1, c.offs != null ? +c.offs || 0 : Math.min(1, L.offs || 0)),   // never 0: a past roster with no day off logged doesn't teach none   // one day off a week (4 a month); two only when set on their card
     fixed, fixedLearned: !c.fixed && !!fixed,
     fixedCost: mgr ? 400 : /supervisor|leader|duty/i.test(c.title || '') ? 60 : 30,   // managers move only to stop a shift being empty

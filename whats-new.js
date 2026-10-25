@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 416, items: [
+    "🛎 Roster: someone is on every front desk, every hour — before health, wishes or fairness. Any hour with nobody on a hotel's desk now counts as a missing shift (even where “cover needed” says 0, and the early hours a night started the day before covers), and the builder fills it.",
+    "🚶 Last resort for an empty desk: a colleague from the nearest hotel stands in, only while their own desk stays covered and their rest is kept (their next days move to the same hours if needed). Written under Decisions.",
+    "👤 On a staff card, tap the hotel button to choose: 🏨 Stays (moved only if a desk would be empty) → 🚶 Can be moved → 🔒 Never moved. “Never moved” is always respected, and so are 🚫 hotels.",
+    "🛋 The weekly day off still always wins: if covering a desk would take someone's only day off, the gap shows as a problem for you to decide.",
+  ] },
   { v: 415, items: [
     "📱 Roster on the phone: the whole week fits the screen — Monday to Sunday and the week total, no sideways scrolling. Times sit on two lines (08 over –17), names wrap, the role shows small under the name. On the Roster page and in the builder.",
     "📱 The “My shifts” and “Today” cards on the Roster page no longer run past the right edge of the phone.",

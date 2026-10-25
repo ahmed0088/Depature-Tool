@@ -205,6 +205,16 @@ console.log('\nRoster builder');
     people: [person('A ONE', { group: 'Adagio GD' }), person('M ONE', { group: 'Mercure DD', title: 'Supervisor' }), person('M TWO', { group: 'Mercure DD', title: 'Supervisor' }), person('M THREE', { group: 'Mercure DD', title: 'Supervisor' })],
     pre: {}, rules: { minRest: 11, maxRun: 6, givePh: false, lend: true, lendIdeal: true }, seed: 3 };
   const r2 = sb.rbSolve(I2);
+  { // 🛎 a desk is never empty: a regular colleague from the nearest hotel stands in, never someone set to "never moved"
+    const M = '08:00 - 17:00', E = '15:00 - 00:00';
+    const Gd = { 'Mercure DD': { shifts: [M, E], need: { [M]: one, [E]: one } }, 'Ibis DD': { shifts: [M, E], need: { [M]: one, [E]: one } } };
+    const ppl = [person('ME A', { group: 'Mercure DD', fixed: M }), person('IB A', { group: 'Ibis DD' }), person('IB B', { group: 'Ibis DD' }), person('IB C', { group: 'Ibis DD' }), person('IB E', { group: 'Ibis DD' }), person('IB D', { group: 'Ibis DD', move: false })];
+    const r = sb.rbSolve({ week: W, groups: Gd, people: ppl, pre: {}, rules: { minRest: 11, maxRun: 6, givePh: false, lend: true }, seed: 4 });
+    const emptyHrs = sb.rbDesk({ week: W, groups: Gd, people: ppl }, r.cells, 'Mercure DD').slice(0, 6).reduce((t, row) => t + row.slice(8, 24).filter(c => !c).length, 0);
+    check('desk: Mercure (one person) is covered 08:00–00:00 by colleagues from Ibis', emptyHrs, 0);
+    check('desk: someone set to "never moved" is never sent', Object.values(r.cells['IB D']).some(v => / - /.test(String(v).replace(/^\d\d:\d\d - \d\d:\d\d/, ''))), false);
+    check('desk: the stand-in is written under Decisions', (r.notes || []).some(n => /covers the Mercure DD desk/.test(n.text)), true);
+  }
   { // 🛋 one day off a week, always: "0 days off" on a card, a freeze over the whole week, or no spare cover
     const M = '07:00 - 16:00';
     const base = { week: W, groups: { 'Ibis DD': { shifts: [M], need: { [M]: one } } }, pre: {}, rules: { minRest: 11, maxRun: 6, givePh: false, lend: false }, seed: 2 };
@@ -312,7 +322,9 @@ console.log('\nRoster builder');
       const rm = sb.rbSolve(Im), at = (dt, h) => ks.filter(k => { const x = sb.rbParse(rm.cells[k][dt]); return x && x.s <= h * 60 && x.e > h * 60; }).length;
       check('morning: two at the desk 09:00 – 12:00 when people are free', dates.every(dt => at(dt, 10) >= 2), true);
     }
-    check('agents are never moved to another hotel (only Duty Managers and Supervisors)', [movedA, sb.rbMayWork(Ia, 'Adagio GD', Ia.people[1], N), sb.rbMayWork(I2, 'Adagio GD', I2.people[1], N)].join(), '0,false,true');
+    // an agent goes to another hotel only to keep its desk from being empty (the day its only person is off), never to make it two
+    const agentDays = dates.filter(dt => Object.keys(ra.cells).some(k => / - Adagio$/.test(ra.cells[k][dt] || ''))), aOff = dates.filter(dt => !sb.rbParse(ra.cells['A ONE'][dt]));
+    check('agents move to another hotel only so its desk is never empty (not to make it two)', [agentDays.every(dt => aOff.includes(dt)), sb.rbMayWork(Ia, 'Adagio GD', Ia.people[1], N), sb.rbMayWork(I2, 'Adagio GD', I2.people[1], N)].join(), 'true,false,true');
   }
   check('moves: the hotels touched by moves are counted (from and to)', [...sb.rbMoveHotels(I2, { 'M ONE': { [dates[0]]: '12:00 - 21:00 - Adagio' }, 'A ONE': {}, 'M TWO': {}, 'M THREE': {} })].sort().join(), 'Adagio GD,Mercure DD');
   { // a Duty Manager and a Supervisor never on the same shift together
@@ -1120,17 +1132,21 @@ console.log('\nRoster scenarios');
     const moved = dates.some(dt => rbParse(res.cells.A[dt]) && rbNorm(res.cells.A[dt]) !== A.fixed);
     const gap = { date: dates[3], shift: '15:00 - 00:00' };
     const optA = rtCoverOptions(I, res.cells, 'Ibis DD', gap.date, gap.shift).some(o => o.key === 'A');
-    const borrowG = rtCoverOptions(I, res.cells, 'Ibis DD', gap.date, '08:00 - 17:00').some(o => o.key === 'G');
+    // (with Mercure's desk still covered without her: H on the same shift that day. Lending G when she is all Mercure has is never offered — a desk is never left empty)
+    const spare = JSON.parse(JSON.stringify(res.cells)), prevD = dates[2]; ['G', 'H'].forEach(k => { spare[k][prevD] = '09:00 - 18:00'; spare[k][gap.date] = '09:00 - 18:00'; });
+    const borrowG = rtCoverOptions(I, spare, 'Ibis DD', gap.date, '08:00 - 17:00').some(o => o.key === 'G');
+    const lastOne = rtCoverOptions(I, res.cells, 'Ibis DD', gap.date, '08:00 - 17:00').some(o => o.key === 'G' && rbDesk(I, Object.assign({}, res.cells, { G: Object.assign({}, res.cells.G, { [gap.date]: '' }) }), 'Mercure DD')[3].some((c, h) => !c && h >= 15));
     rbSetPerson('G', 'home', true);
     const I2 = rbInput(1), homeG = rtCoverOptions(I2, res.cells, 'Ibis DD', gap.date, '08:00 - 17:00').some(o => o.key === 'G');
     rbSetPerson('G', 'home', undefined); rbSetRule('lend', false);
     const I3 = rbInput(1), allHome = rtCoverOptions(I3, res.cells, 'Ibis DD', gap.date, '08:00 - 17:00').some(o => o.key === 'H');   // H is an agent: never borrowed (G is a Supervisor: may still go where nobody else can)
     rbSetRule('lend', true);
-    return { lock: A.lock, fixed: A.fixed, moved, optA, borrowG, homeG, allHome }; })()`);
+    return { lock: A.lock, fixed: A.fixed, moved, optA, borrowG, lastOne, homeG, allHome }; })()`);
   check('lock: a manager keeps their shift by default', [lk.lock, lk.fixed].join(), 'true,08:00 - 17:00');
   check('lock: the builder never moves a manager off it', lk.moved, false);
   check('lock: a manager is never suggested to cover', lk.optA, false);
-  check('lock: a Supervisor from another hotel can be borrowed normally', lk.borrowG, true);
+  check('lock: a Supervisor from another hotel can be borrowed normally (her own desk stays covered)', lk.borrowG, true);
+  check('desk: never lent away when she is the only one keeping her own desk covered', lk.lastOne, false);
   check('lock: 🏨 someone who stays at their hotel is never borrowed', lk.homeG, false);
   check('lock: "keep everyone in their own hotel" stops all borrowing', lk.allHome, false);
   const lp = q => { const r = run(`rtLockParse(${JSON.stringify(q)})`); return r ? r.mode + ':' + r.keys.join('') : 'none'; };
