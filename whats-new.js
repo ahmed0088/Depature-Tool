@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 414, items: [
+    "🛋 Roster: everyone gets at least one day off every week — no exceptions. Fixed the ways it could slip: days off learned as 0 from an older roster, “0 days off” on a card (no longer offered), a 🚫 day-off freeze over the whole week, the ✂️ monthly cut-off when the month's days off were used, and the emergency “work a day off” (now only someone with two days off that week).",
+    "If there's truly nobody to cover, the person still gets their day off and the empty shift shows as a problem for you to decide — the day off always wins.",
+  ] },
   { v: 413, items: [
     "📆 Roster builder fix: someone who worked the end of last week no longer ends up working 7 days in a row. An extra day off on a Monday was being taken back by mistake (last week's days weren't counted on Mondays) — fixed. And when a run is still too long, the builder gives an extra day off on a day their hotel has someone spare, and writes it under Decisions.",
     "✅ Your rules, cover, team cards, requests and history are untouched by the new 3-step builder — every setting and button is still there (Setup tab).",

@@ -354,6 +354,7 @@ function rbSolve(I) {
     if (shorts(alt) < shorts(res)) res = alt;
   }
   if (!I._plain && !I._strict) {
+    rbEnsureOff(I, res);
     rbBreakRuns(I, res);
     rbOneOff(I, res);
     rbSoftLanding(I, res);
@@ -367,6 +368,34 @@ function rbSolve(I) {
   return res;
 }
 
+function rbDates7(I) { return Array.from({ length: 7 }, (_, d) => roAdd(I.week, d)); }
+/** 🛋 Nobody works all 7 days: one day off a week is the law. The day with someone spare first; if no day has, still
+ *  a day off (the shift left short shows as a problem to decide), never their only day off taken for cover. */
+function rbEnsureOff(I, res) {
+  if (!res || !res.cells) return;
+  const dates = rbDates7(I);
+  let changed = false;
+  I.people.forEach(p => {
+    const row = res.cells[p.key]; if (!row) return;
+    const pre = (I.pre || {})[p.key] || {};
+    if (dates.some(dt => pre[dt] === '—')) return;                                   // not employed this week
+    if (dates.some(dt => !rbParse(row[dt]))) return;                                  // has a day off, leave or PH
+    const now = rbProblems(I, res.cells).filter(x => x.kind === 'short').length;
+    let best = null;
+    dates.forEach((dt, d) => {
+      if (pre[dt]) return;                                                            // a shift they asked for stays
+      const c2 = _rbClone(res.cells); c2[p.key][dt] = 'OFF';
+      const P = rbProblems(I, c2), short = P.filter(x => x.kind === 'short').length - now;
+      const cost = short * 100 + P.filter(x => x.kind === 'thin').length * 5 + P.length;
+      if (!best || cost < best.cost) best = { cost, dt, d, c2, short };
+    });
+    if (!best) return;
+    res.cells = best.c2; changed = true;
+    const nm = typeof roStaff !== 'undefined' && roStaff[p.key] ? roStaff[p.key].name.split(' ')[0] : p.key;
+    (res.notes = res.notes || []).push({ key: p.key, date: best.dt, auto: true, text: `🛋 ${nm} gets ${RB_DAYS[best.d]} off: everyone has at least one day off a week.${best.short > 0 ? ' That leaves a shift short — it shows as a problem to cover.' : ''}` });
+  });
+  if (changed) { try { res.cover = rbCover(I, res.cells); } catch (_) {} res.problems = rbProblems(I, res.cells, res.cover); }
+}
 /** 📆 Too many days in a row (often: worked the end of last week, and the day off they asked for is late in this
  *  week): an extra day off on a day their hotel has someone spare, so the rule holds and no shift is left short.
  *  Never on a day they asked for or are on leave, never if another rule breaks because of it. */
@@ -562,6 +591,7 @@ function rbRepair(I, res, o) {
     I.people.forEach(p => {
       if (rbMgrP(p) || p.lock || (p.post || '') !== (G.post || '')) return;
       const v = (cells[p.key] || {})[g.date] || ''; if (rbKind(v) !== 'off' || ((I.pre || {})[p.key] || {})[g.date]) return;
+      if (!rbDates7(I).some(dt => dt !== g.date && rbKind((cells[p.key] || {})[dt] || '') === 'off')) return;   // never their only day off of the week
       if (!rbMayWork(I, g.group, p, g.shift)) return;
       const away = rbBaseGroup(p.group) !== rbBaseGroup(g.group);
       const c2 = _rbClone(cells); c2[p.key][g.date] = away ? `${g.shift} - ${rbShortU(rbBaseGroup(g.group), Object.keys(I.groups))}` : g.shift;
@@ -793,10 +823,11 @@ function rbMatchDay(I, g, cells, dates, d, R, rnd) {
 function rbSoftGo(p, g) { return !!p && (p.softGo || []).includes(rbBaseGroup(g)); }
 function rbNoOff(I, k, dt) { return !!(((I.noOff || {})[k] || {})[dt]); }
 function rbOffsDue(I, p, dates) {
-  const want = p.offs == null ? 1 : p.offs, pre = (I.pre || {})[p.key] || {};
+  const want = Math.max(1, p.offs == null ? 1 : +p.offs || 0), pre = (I.pre || {})[p.key] || {};   // 🛋 one day off a week, always
   if (dates.some(dt => pre[dt] === '—')) return 0;
-  const open = dates.filter(dt => (!pre[dt] || rbKind(pre[dt]) === 'off') && !(rbNoOff(I, p.key, dt) && !pre[dt])).length;
-  return Math.min(want, open);
+  const free = dates.filter(dt => !pre[dt] || rbKind(pre[dt]) === 'off');
+  const open = free.filter(dt => !(rbNoOff(I, p.key, dt) && !pre[dt])).length;
+  return Math.min(want, Math.max(open, free.length ? 1 : 0));   // a 🚫 day-off freeze never takes the only day off of the week
 }
 /** How good a week is for one hotel: lower is better. Gaps in cover and broken rules weigh most. */
 function rbScore(I, g, cells, dates, R) {
@@ -1282,7 +1313,7 @@ function rbPersonCfg(k) {
   const fixed = mode === 'static' || lock ? (c.fixed || L.fixedGuess || L.usual || '') : '';
   return {
     key: k, group: rbPGroup(k), post: rbPost(k), title: c.title || '', mode, lock: lock && !!fixed, home: !!c.home, move: !!c.move, covers: c.covers || '', noGo: (c.noGo || []).slice(), softGo: (c.softGo || []).slice(), alt: c.alt || '',
-    offs: c.offs != null ? +c.offs : Math.min(1, L.offs),   // one day off a week (4 a month); two only when set on their card
+    offs: Math.max(1, c.offs != null ? +c.offs || 0 : Math.min(1, L.offs || 0)),   // never 0: a past roster with no day off logged doesn't teach none   // one day off a week (4 a month); two only when set on their card
     fixed, fixedLearned: !c.fixed && !!fixed,
     fixedCost: mgr ? 400 : /supervisor|leader|duty/i.test(c.title || '') ? 60 : 30,   // managers move only to stop a shift being empty
     lastMain: L.lastMain,
@@ -1393,6 +1424,8 @@ function rbCutoff(I) {
     let free = Math.max(0, weekly - parts.reduce((t, x) => t + x.asked, 0));
     parts.forEach(x => { const n = Math.min(free, Math.max(0, x.left - x.asked), x.open - x.asked); if (n > 0) { x.due += n; free -= n; } });
     if (free > 0 && parts.some(x => x.frozen)) parts.forEach(x => { const n = Math.min(free, x.open - x.due); if (!x.frozen && n > 0) { x.due += n; free -= n; } });   // frozen before the cut-off: their day off comes after it
+    // 🛋 one day off a week, always: even with the month's days off used up, the week keeps one (the part with open days, the later first)
+    if (!parts.reduce((t, x) => t + x.due, 0)) { const x = parts.slice().reverse().find(y => y.days.some(dt => !pre[dt])); if (x) x.due = x.asked + 1; }
     parts.forEach(x => { if (x.due <= x.asked) x.days.forEach(dt => { if (!pre[dt]) (I.noOff[p.key] = I.noOff[p.key] || {})[dt] = true; }); });
     parts.forEach(x => { x.owed = x.ends && !x.frozen ? Math.max(0, x.left - x.due) : 0; });   // more left than one week allows: told, not forced
     p.cut = parts; p.offs = parts.reduce((t, x) => t + x.due, 0);
@@ -2357,7 +2390,7 @@ function rbTeamHtml(g) {
     const p = rbPersonCfg(k), ph = rbPhOwed(k), c = rbPeople[k] || {}, q = _rbQ(k);
     return `<div class="rb-person">
       <b>${escapeHtml(roStaff[k].name)}</b>
-      <label>Days off <select onchange="rbSetPerson(${q},'offs',+this.value)">${[0, 1, 2, 3].map(n => `<option${n === p.offs ? ' selected' : ''}>${n}</option>`).join('')}</select></label>
+      <label>Days off <select onchange="rbSetPerson(${q},'offs',+this.value)">${[1, 2, 3].map(n => `<option${n === Math.max(1, p.offs || 0) ? ' selected' : ''}>${n}</option>`).join('')}</select></label>
       <label>Shift <select onchange="rbSetPerson(${q},'fixed',this.value==='~'?undefined:this.value)"><option value="~"${c.fixed === undefined ? ' selected' : ''}>${p.fixedLearned ? 'Always ' + escapeHtml(p.fixed) + ' (learned)' : 'Any (rotates)'}</option><option value=""${c.fixed === '' ? ' selected' : ''}>Any shift</option>${shifts.map(s => `<option value="${escapeHtml(s)}"${c.fixed === s ? ' selected' : ''}>Always ${escapeHtml(s)}</option>`).join('')}</select></label>
       <label>Prefers off <select onchange="rbSetPerson(${q},'prefOff',this.value===''?[]:[+this.value])"><option value="">no preference</option>${RB_DAYS.map((d, i) => `<option value="${i}"${(p.prefOff || []).includes(i) ? ' selected' : ''}>${d}</option>`).join('')}</select></label>
       <label>PH owed <input type="number" min="0" max="30" value="${ph.owed}" onchange="rbSetPh(${q},+this.value)" title="Public holidays worked and not yet given back${ph.label ? ' (next: ' + escapeHtml(ph.label) + ')' : ''}"></label>
@@ -2395,7 +2428,7 @@ function rbRulesHtml() {
       + row('Same shifts in every hotel', 'a shift one hotel has (like 09:00 - 18:00) can be used in the others too, so spare people go there instead of doubling up', sw(R.sameShifts !== false, "rbSetRule('sameShifts',this.checked);rbRender()"))
       + row('Alone is fine with company for', 'someone else on the desk with them this long (a break); 0 = two the whole shift', step(R.overlapMin == null ? 2 : R.overlapMin, 0, 9, "rbSetRule('overlapMin',Math.max(0,Math.min(9,+this.value||0)))", 'h'), R.allowOne === false))}
     ${card('🏖', 'PH days',
-      row('Work a day off to fill a shift', 'off: nobody loses their weekly day off; a shift nobody can cover shows as a problem for you to decide', sw(R.offWorked === true, "rbSetRule('offWorked',this.checked);rbRender()")) +
+      row('Work a day off to fill a shift', 'only someone with two days off that week, never their only one. Off: nobody loses a day off; a shift nobody can cover shows as a problem for you to decide', sw(R.offWorked === true, "rbSetRule('offWorked',this.checked);rbRender()")) +
       row('Give PH owed', 'the last option: only when a shift has someone spare anyway', sw(R.givePh, "rbSetRule('givePh',this.checked);rbRender()"))
       + row('People a week, per hotel', 'the biggest balance first', step(R.phPeople == null ? 1 : R.phPeople, 0, 9, "rbSetRule('phPeople',Math.max(0,Math.min(9,+this.value||0)))", ''), !R.givePh)
       + row('PH each', 'a week normally has one day off (4 a month)', step(R.phMax == null ? 1 : R.phMax, 0, 3, "rbSetRule('phMax',Math.max(0,Math.min(3,+this.value||0)))", ''), !R.givePh))}

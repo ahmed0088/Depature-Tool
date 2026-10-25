@@ -205,6 +205,18 @@ console.log('\nRoster builder');
     people: [person('A ONE', { group: 'Adagio GD' }), person('M ONE', { group: 'Mercure DD', title: 'Supervisor' }), person('M TWO', { group: 'Mercure DD', title: 'Supervisor' }), person('M THREE', { group: 'Mercure DD', title: 'Supervisor' })],
     pre: {}, rules: { minRest: 11, maxRun: 6, givePh: false, lend: true, lendIdeal: true }, seed: 3 };
   const r2 = sb.rbSolve(I2);
+  { // 🛋 one day off a week, always: "0 days off" on a card, a freeze over the whole week, or no spare cover
+    const M = '07:00 - 16:00';
+    const base = { week: W, groups: { 'Ibis DD': { shifts: [M], need: { [M]: one } } }, pre: {}, rules: { minRest: 11, maxRun: 6, givePh: false, lend: false }, seed: 2 };
+    const offOf = (r, k) => dates.filter(dt => !sb.rbParse(r.cells[k][dt])).length;
+    const r0 = sb.rbSolve(Object.assign({}, base, { people: [person('ZERO', { offs: 0 }), person('MATE2', {})] }));
+    check('"0 days off" on a card still gets one day off', offOf(r0, 'ZERO') >= 1, true);
+    const frz = {}; dates.forEach(dt => { frz[dt] = true; });
+    const r1 = sb.rbSolve(Object.assign({}, base, { people: [person('FROZEN', {}), person('MATE3', {})], noOff: { FROZEN: frz } }));
+    check('a freeze over the whole week still leaves one day off', offOf(r1, 'FROZEN') >= 1, true);
+    const r2 = sb.rbSolve(Object.assign({}, base, { people: [person('ALONE', {})] }));
+    check('alone on the shift: still one day off (the gap shows as a problem)', [offOf(r2, 'ALONE') >= 1, r2.problems.some(x => x.kind === 'short')], [true, true]);
+  }
   { // 📆 days worked at the end of last week count on a Monday too: an extra Monday off is not taken back into 7 days in a row
     const M = '07:00 - 16:00', Io = { week: W, groups: { 'Ibis DD': { shifts: [M], need: { [M]: one } } },
       people: [person('RUNNER', { run: 4, lastShift: M })], pre: { RUNNER: { [dates[3]]: 'OFF' } }, rules: { minRest: 11, maxRun: 6 } };
@@ -523,7 +535,7 @@ console.log('\nRoster scenarios');
     const G = { 'Ibis DD': { shifts: [N, M, E], need: { [N]: day(1), [M]: day(1), [E]: day(1) } } };
     const ppl = ['A', 'B', 'C'].map(k => P(k)), r = solve(G, ppl, {}, { offWorked: true, morningTwo: false });
     const gaps = r.problems.filter(p => p.kind === 'short');
-    check('three staff, 21 shifts, 18 working days: one gap closed by someone working their day off (written down), the rest left', [gaps.length, r.problems.filter(p => p.kind === 'offs').length, (r.notes || []).some(n => /works their day off/.test(n.text))].join(), '2,1,true');
+    check('three staff, 21 shifts, 18 working days: even with "work a day off" on, nobody gives up their only day off — the gaps are left to decide', [gaps.length, r.problems.filter(p => p.kind === 'offs').length, (r.notes || []).some(n => /works their day off/.test(n.text))].join(), '3,0,false');
     const r0 = solve(G, ppl, {}, { morningTwo: false });   // the default: nobody loses their weekly day off, the gaps are left for the manager
     check('by default nobody works their day off to fill a shift (the gap is shown instead)', [r0.problems.filter(p => p.kind === 'offs').length, r0.problems.filter(p => p.kind === 'short').length].join(), '0,3');
     check('no rest rule broken to close them, and only one day off given up a week', r.problems.filter(p => p.kind === 'rest').length, 0);
@@ -702,8 +714,10 @@ console.log('\nRoster scenarios');
     check('desk: the week starts with nobody before the first night', g[0][2], 0);
     const G = { 'Ibis DD': { shifts: [A, B], need: { [A]: day(1), [B]: day(1) } } };
     const r = sb.rbSolve({ week: W, groups: G, people: ['A', 'B', 'C'].map(k => P(k, { offs: 0 })), pre: {}, rules: { minRest: 11, maxHours: 9, allowOne: true, deskMin: 2, deskFrom: 6, deskTo: 18 }, seed: 1 });
-    const onA = dates.filter(d => ['A', 'B', 'C'].filter(k => r.cells[k][d] === A).length === 2).length;
-    check('desk: the spare person goes where someone would be alone (07–16 when the aim is 06:00–18:00)', onA >= 6, true);
+    // ("0 days off" is not allowed: each still has one, so 4 spare shifts a week, not 7)
+    const onA = dates.filter(d => ['A', 'B', 'C'].filter(k => r.cells[k][d] === A).length === 2).length, onB = dates.filter(d => ['A', 'B', 'C'].filter(k => r.cells[k][d] === B).length === 2).length;
+    check('desk: the spare person goes where someone would be alone (07–16 when the aim is 06:00–18:00)', [onA >= 3, onB].join(), 'true,0');
+    check('desk: everyone still has a day off', ['A', 'B', 'C'].every(k => dates.some(d => !sb.rbParse(r.cells[k][d]))), true);
   }
 
 }

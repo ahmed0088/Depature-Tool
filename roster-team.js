@@ -809,7 +809,7 @@ function rtPerson(k) {
       <label>Shift<select onchange="const v=this.value;if(v==='rotate'||v==='any'){rtSet(${q},'mode',v);rtSet(${q},'fixed',v==='any'?'':undefined);}else{rtSet(${q},'mode','static');rtSet(${q},'fixed',v);}rtPerson(${q})">
         ${shifts.map(x => `<option value="${escapeHtml(x)}"${p.mode === 'static' && p.fixed === x ? ' selected' : ''}>Static: always ${escapeHtml(x)}</option>`).join('')}
         <option value="rotate"${p.mode === 'rotate' ? ' selected' : ''}>Rotates week to week</option><option value="any"${p.mode === 'any' ? ' selected' : ''}>Any shift (flexible)</option></select></label>
-      <label>Days off a week<select onchange="rtSet(${q},'offs',+this.value)">${[0, 1, 2, 3].map(n => `<option${n === p.offs ? ' selected' : ''}>${n}</option>`).join('')}</select></label>
+      <label>Days off a week<select onchange="rtSet(${q},'offs',+this.value)">${[1, 2, 3].map(n => `<option${n === Math.max(1, p.offs || 0) ? ' selected' : ''}>${n}</option>`).join('')}</select></label>
       <label>PH owed<input type="number" min="0" max="30" value="${ph.owed}" onchange="rbSetPh(${q},+this.value)"></label>
     </div>
     <div class="rt-cant"><span>Locks:</span><button class="rb-opt${p.lock ? ' on' : ''}" onclick="rtSet(${q},'lockShift',${!p.lock});rtPerson(${q})">${p.lock ? '🔒' : '🔓'} ${p.lock ? 'Keeps ' + escapeHtml(p.fixed || 'their shift') : 'Shift can change'}</button>${rbFloats(c) || rbFloatsLast(c)
