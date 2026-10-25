@@ -84,28 +84,113 @@ function clMoveStep(id, dir) {
   clSaveAll();
 }
 
+let _clNew = null;   // a step being created in the editor (added on Save)
+const _clLines = v => String(v || '').split('\n').map(x => x.trim()).filter(Boolean);
+function _clPanelOptions(sel) {
+  const seen = new Set(), opts = ['<option value="">— none —</option>'];
+  document.querySelectorAll('nav.sidenav .nav-item[data-panel]').forEach(n => {
+    const id = n.dataset.panel; if (!id || seen.has(id) || id === 'checklist') return; seen.add(id);
+    const lbl = (n.querySelector('.nav-label, span:not(.nav-badge)') || n).textContent.replace(/\s+/g, ' ').trim() || id;
+    opts.push(`<option value="${escapeHtml(id)}"${id === sel ? ' selected' : ''}>${escapeHtml(lbl)}</option>`);
+  });
+  if (sel && !seen.has(sel)) opts.push(`<option value="${escapeHtml(sel)}" selected>${escapeHtml(sel)}</option>`);
+  return opts.join('');
+}
+function _clFill(s, isNew) {
+  const g = id => document.getElementById(id);
+  g('es-id').value = s.id;
+  g('es-title').textContent = isNew ? (s.tag === 'save' ? '📁 New report' : '＋ New step') : '✏️ Edit step';
+  g('es-name').value = s.name || '';
+  g('es-hint').value = s.hint || '';
+  g('es-phase').value = s.phase || 'pre';
+  g('es-tag').value = s.tag || 'check';
+  g('es-report').value = s.report || '';
+  g('es-due').value = s.due || '';
+  g('es-how').value = (s.how || []).join('\n');
+  g('es-look').value = (s.look || []).join('\n');
+  g('es-warn').value = s.warn || '';
+  g('es-panel').innerHTML = _clPanelOptions(s.panel || '');
+  g('es-del').hidden = !!isNew; g('es-dup').hidden = !!isNew;
+  _renderModalPhotos(s.id);
+  document.getElementById('editStepModal').classList.add('open');
+  setTimeout(() => { try { g(isNew ? 'es-name' : 'es-hint').focus(); } catch (_) {} }, 60);
+}
 function openEditStep(id) {
   const s = CL_STEPS.find(s => s.id === id); if (!s) return;
-  document.getElementById('es-id').value    = id;
-  document.getElementById('es-name').value  = s.name;
-  document.getElementById('es-hint').value  = s.hint  || '';
-  document.getElementById('es-phase').value = s.phase;
-  document.getElementById('es-tag').value   = s.tag;
-  _renderModalPhotos(id);
-  document.getElementById('editStepModal').classList.add('open');
+  _clNew = null;
+  _clFill(s, false);
 }
-function closeEditStep() { document.getElementById('editStepModal').classList.remove('open'); }
-
+/** + New step / + New report: the full editor, added when you press Save */
+function clNewStep(tag, phase) {
+  const id = Math.max(0, ...CL_STEPS.map(s => +s.id || 0), 300) + 1;
+  _clNew = { id, phase: phase || 'pre', tag: tag || 'check', name: '', hint: '' };
+  _clFill(_clNew, true);
+  if (tag === 'save') setTimeout(() => { try { document.getElementById('es-name').placeholder = 'e.g. Market Segment report'; } catch (_) {} }, 0);
+}
+function closeEditStep() {
+  if (_clNew) { delete clPhotos[_clNew.id]; _clNew = null; }
+  document.getElementById('editStepModal').classList.remove('open');
+}
 function saveEditStep() {
-  const id = parseInt(document.getElementById('es-id').value);
-  const s  = CL_STEPS.find(s => s.id === id); if (!s) return;
-  s.name  = document.getElementById('es-name').value.trim()  || s.name;
-  s.hint  = document.getElementById('es-hint').value.trim();
-  s.phase = document.getElementById('es-phase').value;
-  s.tag   = document.getElementById('es-tag').value;
-  closeEditStep();
+  const g = id => document.getElementById(id);
+  const id = parseInt(g('es-id').value);
+  const s = _clNew && _clNew.id === id ? _clNew : CL_STEPS.find(s => s.id === id); if (!s) return;
+  const name = g('es-name').value.trim();
+  if (!name) { showToast('Give the step a name', 'warn'); g('es-name').focus(); return; }
+  s.name = name;
+  s.hint = g('es-hint').value.trim();
+  s.phase = g('es-phase').value;
+  s.tag = g('es-tag').value;
+  const set = (k, v) => { if (v && (!Array.isArray(v) || v.length)) s[k] = v; else delete s[k]; };
+  // a "Save a report" step goes in the folder under its own name unless you named the report
+  set('report', g('es-report').value.trim() || (_clNew && s.tag === 'save' ? name : ''));
+  set('due', g('es-due').value);
+  set('how', _clLines(g('es-how').value));
+  set('look', _clLines(g('es-look').value));
+  set('warn', g('es-warn').value.trim());
+  set('panel', g('es-panel').value);
+  s.edited = true;
+  if (_clNew === s) {
+    // in its part of the night: after the last step of that part
+    let at = -1; CL_STEPS.forEach((x, i) => { if (x.phase === s.phase) at = i; });
+    if (at < 0) { const order = ['pre', 'run', 'post']; at = CL_STEPS.filter(x => order.indexOf(x.phase) <= order.indexOf(s.phase)).length - 1; }
+    CL_STEPS.splice(at + 1, 0, s);
+    _clNew = null;
+    showToast(`Added “${name}”`, 'ok');
+  }
+  document.getElementById('editStepModal').classList.remove('open');
   clRender2();
   clSaveAll();
+}
+function clDeleteFromModal() {
+  const id = parseInt(document.getElementById('es-id').value);
+  document.getElementById('editStepModal').classList.remove('open');
+  clDeleteStep(id);
+}
+function clDuplicateFromModal() {
+  const id = parseInt(document.getElementById('es-id').value);
+  const s = CL_STEPS.find(x => x.id === id); if (!s) return;
+  const copy = JSON.parse(JSON.stringify(s));
+  copy.id = Math.max(0, ...CL_STEPS.map(x => +x.id || 0), 300) + 1;
+  copy.name = s.name + ' (copy)'; copy.edited = true; delete copy.rv;
+  if (copy.report) copy.report += ' (copy)';
+  CL_STEPS.splice(CL_STEPS.indexOf(s) + 1, 0, copy);
+  clRender2(); clSaveAll();
+  _clNew = null; _clFill(copy, false);
+}
+/** bring back built-in steps that were deleted; your own steps and edits stay as they are */
+function clRestoreRoutine() {
+  const missing = CL_ROUTINE.filter(r => !CL_STEPS.some(s => s.id === r.id));
+  if (!missing.length) { showToast('All built-in steps are already there', 'info'); return; }
+  missing.forEach(r => {
+    const step = Object.assign({ rv: CL_ROUTINE_VER }, JSON.parse(JSON.stringify(r)));
+    // before the next built-in step of the same part that is still there
+    const after = CL_ROUTINE.slice(CL_ROUTINE.indexOf(r) + 1).map(x => CL_STEPS.findIndex(s => s.id === x.id)).find(i => i >= 0);
+    if (after !== undefined && CL_STEPS[after] && CL_STEPS[after].phase === r.phase) CL_STEPS.splice(after, 0, step);
+    else { let at = -1; CL_STEPS.forEach((x, i) => { if (x.phase === r.phase) at = i; }); CL_STEPS.splice(at + 1, 0, step); }
+  });
+  clRender2(); clSaveAll();
+  showToast(`Brought back ${missing.length} step${missing.length === 1 ? '' : 's'}`, 'ok');
 }
 
 
@@ -502,7 +587,7 @@ function clRender2() {
                  <input type="file" id="cl-upload-${s.id}" accept="image/*" multiple style="display:none" onchange="clHandlePhotoUpload(event,${s.id})"/>
                  <button class="cl-step-btn edit-btn" onclick="openEditStep(${s.id})">✏️</button>
                  <button class="cl-step-btn del"      onclick="clDeleteStep(${s.id})">✕</button>`
-              : `${s.panel ? `<button class="cl-step-btn open-btn" onclick="showPanel('${s.panel}')" title="Open the ${s.panel} page">Open ↗</button>` : ''}<button class="cl-step-btn photo-btn" onclick="document.getElementById('cl-upload-${s.id}').click()" title="Attach a photo — a note for yourself" aria-label="Attach a photo">📷</button><input type="file" id="cl-upload-${s.id}" accept="image/*" multiple style="display:none" onchange="clHandlePhotoUpload(event,${s.id})"/><button class="cl-step-btn"          onclick="clSkip2(${s.id})">${skip ? '↩ Show' : 'Skip'}</button>`}
+              : `${s.panel ? `<button class="cl-step-btn open-btn" onclick="showPanel('${s.panel}')" title="Open the ${s.panel} page">Open ↗</button>` : ''}<button class="cl-step-btn photo-btn" onclick="document.getElementById('cl-upload-${s.id}').click()" title="Attach a photo — a note for yourself" aria-label="Attach a photo">📷</button><input type="file" id="cl-upload-${s.id}" accept="image/*" multiple style="display:none" onchange="clHandlePhotoUpload(event,${s.id})"/><button class="cl-step-btn" onclick="openEditStep(${s.id})" title="Edit this step" aria-label="Edit this step">✏️</button><button class="cl-step-btn"          onclick="clSkip2(${s.id})">${skip ? '↩ Show' : 'Skip'}</button>`}
           </div>
         </div>
       </div>`;

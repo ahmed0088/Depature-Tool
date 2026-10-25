@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 410, items: [
+    "✏️ Night Run Checklist is fully yours to change: tap ✏️ on any step to edit everything — name, description, part of the night, type, the report it saves to the folder, a deadline, “How in Opera” lines, “What to check”, a red warning, a page to open, and photos.",
+    "📁 Edit Steps → “＋ New report” adds a whole new report step (it goes in the folder count by itself), “＋ New step (full)” adds any step with all the details. Duplicate or delete from the editor.",
+    "↺ “Restore built-in steps” brings back any built-in step you deleted, in its place — your own steps and edits stay as they are.",
+  ] },
   { v: 409, items: [
     "🌙 Night Run Checklist rebuilt the way you run the night: Zero Rate Rooms → Complimentary → Rate Change → In-House Rate Check (TZ rates, higher rates) → Journal refunds → paid-outs + commission → Expedia → manual postings → CC recon + settle → HK discrepancy → cancel non-guaranteed → immigration → OOO / OOS to tomorrow → TD by 3:45 → run the night by 3:50.",
     "🌅 After the night: Negative Posting and No-Show reports from End of Day, email the no-shows to Reservations, Manager report, Flash report, then upload everything to DocuWare.",

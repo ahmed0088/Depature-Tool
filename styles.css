@@ -5866,3 +5866,11 @@ select.adm-input { cursor: pointer; }
   #panel-checklist .cl-next { padding: 12px; }
 }
 @media (prefers-reduced-motion: reduce) { #panel-checklist .cl-check, #panel-checklist .prog-fill, #panel-checklist .cl-folder-bar i { transition: none; } }
+/* checklist step editor */
+.es-modal .es-opt { font-weight: 400; opacity: .6; text-transform: none; letter-spacing: 0; }
+.es-modal .two-col > .mf { min-width: 0; }
+.es-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.es-actions [hidden] { display: none !important; }
+#panel-checklist .cl-add-more { margin-top: 6px; }
+.es-modal input, .es-modal textarea, .es-modal select { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif !important; font-size: 0.9rem; line-height: 1.45; }
+.es-modal textarea { resize: vertical; }

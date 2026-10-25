@@ -1909,9 +1909,14 @@
         <option value="pre">Before Run</option><option value="run">Night Run</option><option value="post">After Run</option>
       </select>
       <select class="cl-phase-select" id="clNewTag">
-        <option value="check">Check</option><option value="save">Save</option><option value="scan">Scan</option><option value="charge">Charge</option><option value="run">Run</option>
+        <option value="check">Check</option><option value="save">Save</option><option value="scan">Scan</option><option value="charge">Charge</option><option value="send">Send</option><option value="upload">Upload</option><option value="run">Run</option>
       </select>
       <button class="btn gold sm" onclick="clAddStep()">+ Add</button>
+    </div>
+    <div class="cl-add-row cl-add-more">
+      <button class="btn sky sm" onclick="clNewStep('check')">＋ New step (full)</button>
+      <button class="btn gold sm" onclick="clNewStep('save')">📁 ＋ New report</button>
+      <button class="btn sm" onclick="clRestoreRoutine()" title="Bring back built-in steps you deleted (your own steps and edits stay)">↺ Restore built-in steps</button>
     </div>
   </div>
 
@@ -3988,30 +3993,44 @@ ${actionList?`<div class="action"><h2>Act on these first</h2><ul>${actionList}</
 </div>
 
 <div class="modal-bg" id="editStepModal">
-  <div class="modal" style="max-width:540px;">
-    <h3>✏️ Edit Checklist Step</h3>
+  <div class="modal es-modal" style="max-width:600px;">
+    <h3 id="es-title">✏️ Edit step</h3>
     <div class="modal-fields">
       <input type="hidden" id="es-id"/>
-      <div class="mf"><label>Step Name</label><input id="es-name"/></div>
-      <div class="mf"><label>Hint / Description</label><textarea id="es-hint" style="min-height:56px;"></textarea></div>
+      <div class="mf"><label>Step name</label><input id="es-name" placeholder="e.g. Rate Change report"/></div>
+      <div class="mf"><label>Short description</label><textarea id="es-hint" style="min-height:52px;" placeholder="One line: what this step is for"></textarea></div>
       <div class="two-col">
-        <div class="mf"><label>Phase</label><select id="es-phase"><option value="pre">Before Run</option><option value="run">Night Run</option><option value="post">After Run</option></select></div>
-        <div class="mf"><label>Tag</label><select id="es-tag"><option value="check">Check</option><option value="save">Save</option><option value="scan">Scan</option><option value="charge">Charge</option><option value="run">Run</option></select></div>
+        <div class="mf"><label>Part of the night</label><select id="es-phase"><option value="pre">Before the night</option><option value="run">Night run</option><option value="post">After the night</option></select></div>
+        <div class="mf"><label>Type</label><select id="es-tag"><option value="check">Check</option><option value="save">Save a report</option><option value="scan">Scan</option><option value="charge">Charge / settle</option><option value="send">Send / email</option><option value="upload">Upload</option><option value="run">Run</option></select></div>
+      </div>
+      <div class="two-col">
+        <div class="mf"><label>📁 Report saved in the folder <span class="es-opt">(optional)</span></label><input id="es-report" placeholder="e.g. Rate Change — leave empty if none"/></div>
+        <div class="mf"><label>⏰ Deadline <span class="es-opt">(optional)</span></label><input id="es-due" type="time"/></div>
+      </div>
+      <div class="mf"><label>How in Opera <span class="es-opt">— one line per step</span></label><textarea id="es-how" style="min-height:84px;" placeholder="Reports → Rate Change Report&#10;Reservation status: CHECKED IN&#10;Preview / Download → save"></textarea></div>
+      <div class="mf"><label>What to check <span class="es-opt">— one line each</span></label><textarea id="es-look" style="min-height:64px;" placeholder="A lower rate needs a reason&#10;Who changed it"></textarea></div>
+      <div class="two-col">
+        <div class="mf"><label>⚠ Warning <span class="es-opt">(optional, shown in red)</span></label><input id="es-warn" placeholder="e.g. Don't click Back while it runs"/></div>
+        <div class="mf"><label>↗ Open a page <span class="es-opt">(optional)</span></label><select id="es-panel"></select></div>
       </div>
       <div class="mf">
-        <label>📷 Reference Photos</label>
+        <label>📷 Photos — notes for yourself</label>
         <div class="cl-photo-grid" id="es-photos">
-          <div style="font-family:var(--mono);font-size:0.63rem;color:var(--text3);padding:6px 0;">No photos attached yet.</div>
+          <div style="font-size:0.7rem;color:var(--text3);padding:6px 0;">No photos attached yet.</div>
         </div>
         <label class="btn sky sm" style="cursor:pointer;margin-top:8px;display:inline-flex;align-items:center;gap:5px;">
-          📷 Add Photo(s)
+          📷 Add photo(s)
           <input type="file" accept="image/*" multiple style="display:none"
             onchange="clHandlePhotoUpload(event, parseInt(document.getElementById('es-id').value))"/>
         </label>
-        <span style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);margin-left:8px;">PNG, JPG, WEBP · auto-compressed</span>
       </div>
     </div>
-    <div class="modal-actions"><button class="btn" onclick="closeEditStep()">Cancel</button><button class="btn gold" onclick="saveEditStep()">Save</button></div>
+    <div class="modal-actions es-actions">
+      <button class="btn rose sm" id="es-del" onclick="clDeleteFromModal()">🗑 Delete</button>
+      <button class="btn sm" id="es-dup" onclick="clDuplicateFromModal()">⧉ Duplicate</button>
+      <span style="flex:1"></span>
+      <button class="btn" onclick="closeEditStep()">Cancel</button><button class="btn gold" onclick="saveEditStep()">Save</button>
+    </div>
   </div>
 </div>
 
