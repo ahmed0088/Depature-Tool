@@ -1650,6 +1650,7 @@ function rbBuild(again) {
   if (!Object.keys(roStaff).length) { showToast('Add one roster first (picture or Excel), so the builder knows the team', 'warn'); return; }
   const has = rbDrafts[rbWeek] && Object.keys(rbDrafts[rbWeek].cells || {}).length;
   if (has && !again && !confirm('Build the week again? Changes you made to the draft are replaced.')) return;
+  if (rbTab !== 'build') { rbTab = 'build'; rbTabWeek = rbWeek; rbRender(); }
   rbSeed = again ? (rbSeed * 7 + 13) % 100000 : 1;
   const out = document.getElementById('rbOut');
   if (out) { out.innerHTML = rbBuildShowHtml(); rbBuildShowStart(); out.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
@@ -1816,6 +1817,29 @@ function rbGo(n) { rbWeek = n === 0 ? rbDefaultWeek() : roAdd(rbWeek, n); rbRend
 function rbWeekLabel(w) { return `${roDate(w).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })} – ${roDate(roAdd(w, 6)).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}`; }
 const _rbQ = s => JSON.stringify(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
+let rbTab = '', rbTabAuto = true, rbTabWeek = '';
+/** ① Requests ② Build & check ③ Publish ⚙ Setup */
+function rbGoStep(k) { rbTab = k; rbTabWeek = rbWeek; rbTabAuto = false; rbRender(); try { document.getElementById('rbRoot')?.scrollIntoView({ block: 'start' }); } catch (_) {} }
+/** ③ Publish: what goes out, and the buttons */
+function rbPubHtml(D, pub, pending, h) {
+  const probs = h ? (h.bad || 0) : 0;
+  if (!D) return `<div class="rb-empty"><div class="rb-empty-ic">${pub ? '✅' : '📭'}</div><b>${pub ? 'This week is posted' : 'Nothing to publish yet'}</b>
+    <span>${pub ? 'The team has it. To change it, open it, change what you need, and publish again — only the people whose shifts change are told.' : 'Build the roster first.'}</span>
+    <div class="rb-empty-b">${pub ? '<button class="btn gold rb-big" onclick="rbLoadPublished(rbWeek);rbGoStep(\'build\')">✏️ Change the posted roster</button><button class="btn" onclick="rbDownloadPic()">🖼 Picture to share</button>' : '<button class="btn gold rb-big" onclick="rbGoStep(\'build\')">✨ Go to Build</button>'}</div></div>`;
+  const ch = pub && D.fromPublished && typeof rtDiff === 'function' ? rtDiff(rbWeek, D.cells) : [];
+  const nm = k => String((roStaff[k] || {}).name || k).split(' ')[0];
+  const list = ch.slice(0, 40).map(c => `<div class="rb-pub-ch"><b>${escapeHtml(nm(c.key))}</b><span>${escapeHtml(roDayLbl(c.date))}</span><s>${escapeHtml(c.from || '—')}</s><span>→</span><b>${escapeHtml(c.to || '—')}</b></div>`).join('');
+  return `<div class="card rb-pub">
+    <div class="rb-pub-hd">${pub && D.fromPublished ? (ch.length ? `<b>${ch.length} change${ch.length === 1 ? '' : 's'} to send</b><span>Only the people whose shifts change are told.</span>` : '<b>No changes yet</b><span>Change cells in step 2, then come back here.</span>') : `<b>Ready to publish ${escapeHtml(rbWeekLabel(rbWeek))}</b><span>It replaces those days for everyone and tells the team.</span>`}</div>
+    ${probs ? `<div class="rb-pub-warn">⚠ ${probs} problem${probs === 1 ? '' : 's'} still in the roster — <button class="btn sm" onclick="rbGoStep('build')">look at them</button> or publish anyway.</div>` : '<div class="rb-pub-ok">✓ Every shift covered and the rules kept</div>'}
+    ${list ? `<div class="rb-pub-list">${list}${ch.length > 40 ? `<small>and ${ch.length - 40} more</small>` : ''}</div>` : ''}
+    <div class="ro-acts rb-acts">
+      <button class="btn gold rb-big" onclick="rbPublish()"${pub && D.fromPublished && !ch.length ? ' disabled' : ''}>📤 ${pub ? 'Publish the changes' : 'Publish to the team'}</button>
+      <button class="btn" onclick="rbSharePic()">🖼 Picture to share</button>
+      <button class="btn" onclick="rbCopy(this)">📋 Copy for Excel</button>
+      <button class="btn" onclick="rbClearDraft()">🗑 ${pub && D.fromPublished ? 'Undo my changes' : 'Discard draft'}</button>
+    </div></div>`;
+}
 function rbRender() {
   rbStale = false;
   const root = document.getElementById('rbRoot');
@@ -1829,25 +1853,24 @@ function rbRender() {
   const dates = Array.from({ length: 7 }, (_, d) => roAdd(rbWeek, d));
   const reqs = Object.entries(rbReqs[rbWeek] || {});
   const draft = rbDrafts[rbWeek];
-  root.innerHTML = `
-    <div class="page-hd">
-      <div class="page-hd-left"><h1>Roster builder</h1><p>Add the week's requests, press Build, check it, publish. It learns the shifts, the cover each hotel needs and everyone's usual pattern from the rosters already in HotelOps.</p></div>
-      <div class="page-hd-actions"><button class="btn" onclick="showPanel('roster')">← Roster</button></div>
-    </div>
-    ${!Object.keys(roStaff).length ? '<div class="ro-warn">The builder needs one roster to learn from. Add this week\'s roster on the Roster page first (picture or Excel).</div>' : ''}
-    <div class="card rb-bar">
-      <div class="ro-weeknav"><button class="btn sm" onclick="rbGo(-7)">‹</button><b>${escapeHtml(rbWeekLabel(rbWeek))}</b><button class="btn sm" onclick="rbGo(7)">›</button>${rbWeek === rbDefaultWeek() ? '<span class="ro-tag">Next week</span>' : '<button class="btn sm" onclick="rbGo(0)">Next week</button>'}</div>
-      ${groups.length > 1 ? `<div class="ro-groups">${['', ...groups].map(g => `<button class="fchip${(rbGroup || '') === g ? ' on' : ''}" onclick="rbGroup=${_rbQ(g)};rbRender()">${escapeHtml(g || 'All hotels')}</button>`).join('')}</div>` : ''}
-      <div class="rb-status">${rbStatusHtml()}</div>
-      <div class="rb-steps" id="rbSteps">${rbStepsHtml()}</div>
-      <div id="rbBase">${rbBaseHtml()}</div>
-    </div>
-
-    ${rbQuickHtml(draft)}
-
+  const pub = typeof rtIsPublished === 'function' && rtIsPublished(rbWeek);
+  if (!rbTab || rbTabWeek !== rbWeek) { rbTab = draft || pub ? 'build' : 'req'; rbTabWeek = rbWeek; }
+  const pending = pub && draft && draft.fromPublished && typeof rtDiff === 'function' ? rtDiff(rbWeek, draft.cells).length : 0;
+  const h = draft && _rbHealth && _rbHealth.week === rbWeek ? _rbHealth : null;
+  const tabs = [
+    ['req', '1', 'Requests', reqs.length ? reqs.length + ' added' : 'optional'],
+    ['build', '2', pub && !draft ? 'Change' : 'Build & check', !draft ? (pub ? 'posted' : 'not built') : h && h.bad ? h.bad + ' to fix' : 'ready'],
+    ['pub', '3', 'Publish', pub ? (pending ? pending + ' to send' : draft && draft.fromPublished ? 'posted' : draft ? 'ready' : 'posted') : draft ? 'ready' : '—'],
+    ['setup', '⚙', 'Setup', 'team, cover, rules'],
+  ];
+  const stepper = `<div class="rb-stepper" role="tablist">${tabs.map(([k, n, t, sub]) => `<button role="tab" aria-selected="${rbTab === k}" class="rb-st${rbTab === k ? ' on' : ''}${k === 'pub' && pub && !pending && !(draft && !draft.fromPublished) ? ' ok' : ''}" onclick="rbGoStep('${k}')"><i>${n}</i><span><b>${t}</b><small>${escapeHtml(sub)}</small></span></button>`).join('')}</div>`;
+  const next = (k, label) => `<div class="rb-next"><button class="btn gold" onclick="rbGoStep('${k}')">${label} →</button></div>`;
+  let body = '';
+  if (rbTab === 'req') body = `
+    <div class="rb-lead"><b>Who needs what this week?</b><span>Days off, leave, PH, a shift someone must or can't do. Nothing to add? Go straight to Build.</span></div>
     <div class="rb-grid">
       ${typeof evBuilderHtml === 'function' ? evBuilderHtml(dates) : ''}
-      <details class="card rb-card"${rbSec('req', !draft)}>
+<details class="card rb-card"${rbSec('req', true)}>
         <summary class="ro-card-hd"><b>📝 Requests this week</b><span>${reqs.length ? `<i class="rb-count">${reqs.length}</i>` : 'none yet'}</span></summary>
         ${reqs.length ? `<div class="rb-reqs">${reqs.sort((a, b) => a[1].from.localeCompare(b[1].from)).map(([id, r]) => `<div class="rb-req"><b>${escapeHtml((roStaff[r.key] || {}).name || r.key)}</b><span>${escapeHtml(rbReqText(r))}</span>${r.type === 'off' && rbPhOwed(r.key, rbWeek).owed > 0 ? `<button class="btn sm ghost" title="They have PH owed: take it from the balance instead" onclick="rbReqToPh('${id}')">→ PH (${rbPhOwed(r.key, rbWeek).owed} owed)</button>` : ''}<button class="ro-x" title="Remove" onclick="rbDelReq('${id}')">✕</button></div>`).join('')}</div>` : '<div class="ro-empty">Day-off requests, leave, PH days, "must work" or "can\'t work" a shift. Everything else the builder decides.</div>'}
         <div class="rb-req-add">
@@ -1861,8 +1884,36 @@ function rbRender() {
           <button class="btn sm gold" onclick="rbAddReq()">+ Add</button>
         </div>
       </details>
-
       ${typeof rtPlanHtml === 'function' && Object.keys(roStaff).length ? rtPlanHtml(shown, dates) : ''}
+    </div>
+    ${draft ? next('build', 'Next: check the roster') : `<div class="rb-next rb-go"><button class="btn gold rb-big" onclick="rbBuild()">✨ Build the roster</button>${pub ? '<button class="btn" onclick="rbLoadPublished(rbWeek);rbGoStep(\'build\')">✏️ Change the posted roster</button>' : ''}</div>`}`;
+  else if (rbTab === 'build') body = `
+    <div id="rbBase">${rbBaseHtml()}</div>
+    ${draft ? `<div class="rb-go rb-go-row">
+      <button class="btn" onclick="rbBuild()">✨ Build again</button>
+      <button class="btn" onclick="rbBuild(true)">🔀 Try another way</button>
+      <button class="btn" onclick="rtWhatIfDialog()">🤔 What if…</button>
+      <small>Tap any cell to change it · drag to swap</small>
+    </div>` : `<div class="rb-empty">
+      <div class="rb-empty-ic">🗓️</div>
+      <b>${pub ? 'This week is posted' : 'No roster for this week yet'}</b>
+      <span>${pub ? 'Open it to change shifts, days off or who works where, then publish the changes.' : 'Build it in one tap — requests and rules come first, you can change any cell after.'}</span>
+      <div class="rb-empty-b rb-go">
+        ${pub ? '<button class="btn gold rb-big" onclick="rbLoadPublished(rbWeek)">✏️ Change the posted roster</button>' : '<button class="btn gold rb-big" onclick="rbBuild()">✨ Build the roster</button>'}
+        ${rbPrevWeek(rbWeek) ? `<button class="btn" onclick="rbFromLastWeek()">📋 Same as last week</button>` : ''}
+        <label class="btn">📥 From a picture / Excel<input type="file" accept="image/*,.xlsx,.xls,.csv" hidden onchange="rbStartFromFile(this)"></label>
+      </div>
+    </div>`}
+    <div id="rbOut">${draft ? rbOutHtml(shown, dates) : ''}</div>
+    ${draft ? next('pub', 'Next: publish') : ''}`;
+  else if (rbTab === 'pub') body = rbPubHtml(draft, pub, pending, h);
+  else body = `
+    <div class="rb-lead"><b>Setup</b><span>Set once, used every week: the cover each hotel needs, the team, vacation and the rules.</span></div>
+    <div class="rb-quick rb-quick-s">
+      <button class="rb-q" onclick="rtNewStaffDialog()"><b>＋ New staff</b><small>Someone joining: name, hotel, title, start date</small></button>
+      <label class="rb-q"><b>📥 Give this week's roster</b><small>Picture or Excel: it reads it, then builds the next week from it</small><input type="file" accept="image/*,.xlsx,.xls,.csv" hidden onchange="rbStartFromFile(this)"></label>
+    </div>
+    <div class="rb-grid">
       <details class="card rb-card"${rbSec('need', false)}>
         <summary class="ro-card-hd"><b>👥 Cover needed</b><span>people on each shift, each day</span></summary>
         ${rbLazy('need', false, () => rbWithPosts(shown).map(g => rbNeedHtml(g)).join(''))}
@@ -1887,15 +1938,20 @@ function rbRender() {
         <summary class="ro-card-hd"><b>⚖️ Rules & public holidays</b></summary>
         ${rbLazy('rules', false, () => rbRulesHtml())}
       </details>
+    </div>`;
+  root.innerHTML = `
+    <div class="page-hd">
+      <div class="page-hd-left"><h1>Roster builder</h1><p>Requests → Build → Publish. Change anything, even a week already posted.</p></div>
+      <div class="page-hd-actions"><button class="btn" onclick="showPanel('roster')">← Roster</button></div>
     </div>
-
-    <div class="rb-go">
-      <button class="btn gold rb-big" onclick="rbBuild()">✨ ${draft ? 'Build again from scratch' : 'Build the roster'}</button>
-      ${draft ? '<button class="btn" onclick="rbBuild(true)">🔀 Try another way</button>' : ''}
-      ${draft ? '<button class="btn" onclick="rtWhatIfDialog()">🤔 What if…</button>' : ''}
-      <small>Requests and rules come first; you can change any cell after.</small>
+    ${!Object.keys(roStaff).length ? '<div class="ro-warn">The builder needs one roster to learn from. Add this week\'s roster on the Roster page first (picture or Excel).</div>' : ''}
+    <div class="card rb-bar">
+      <div class="ro-weeknav"><button class="btn sm" onclick="rbGo(-7)">‹</button><b>${escapeHtml(rbWeekLabel(rbWeek))}</b><button class="btn sm" onclick="rbGo(7)">›</button>${rbWeek === rbDefaultWeek() ? '<span class="ro-tag">Next week</span>' : '<button class="btn sm" onclick="rbGo(0)">Next week</button>'}</div>
+${groups.length > 1 ? `<div class="ro-groups">${['', ...groups].map(g => `<button class="fchip${(rbGroup || '') === g ? ' on' : ''}" onclick="rbGroup=${_rbQ(g)};rbRender()">${escapeHtml(g || 'All hotels')}</button>`).join('')}</div>` : ''}
+      <div class="rb-status">${rbStatusHtml()}</div>
+      ${stepper}
     </div>
-    <div id="rbOut">${draft ? rbOutHtml(shown, dates) : ''}</div>`;
+    <div class="rb-body" data-step="${rbTab}">${body}</div>`;
   rbReqTypeChange();
   rbSecWire(root);
   const sp = document.getElementById('rbSteps'); if (sp) sp.innerHTML = rbStepsHtml();
@@ -2075,7 +2131,7 @@ function rbFromLastWeek() {
   if (rbDrafts[rbWeek]) rbUndoPush();
   rbDrafts[rbWeek] = { cells: res.cells, at: Date.now(), by: (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '', from: prev };
   rbMarkPostedEdit(rbWeek);
-  rbSaveDraft(); rbRender();
+  rbSaveDraft(); rbTab = 'build'; rbTabWeek = rbWeek; rbRender();
   let same = 0, all = 0; Object.keys(keep).forEach(k => Object.keys(keep[k]).forEach(dt => { all++; if (rbNorm(res.cells[k][dt]) === keep[k][dt] || (keep[k][dt] === 'OFF' && rbKind(res.cells[k][dt]) === 'off')) same++; }));
   showToast(`Built from ${rbWeekLabel(prev)}: ${same} of ${all} days the same; the rest changed for requests, leave and the rules`, 'ok');
   setTimeout(() => document.getElementById('rbOut')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
@@ -2100,6 +2156,7 @@ function rbLoadPublished(week, quiet) {
   rbDrafts[week] = { cells, at: Date.now(), by: (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '', fromPublished: true };
   rbWeek = week;
   rbPutDraft(week);
+  if (!quiet) { rbTab = 'build'; rbTabWeek = week; }
   rbRender();
 }
 // ↶ undo for changes made in the draft
@@ -2368,25 +2425,21 @@ function rbOutHtml(shown, dates) {
     ${rbStaleHtml()}
     ${rbHealthHtml(I, cells, cover, P, shown, dates)}
     ${P.some(p => p.kind !== 'short' && p.kind !== 'thin') ? `<div class="rb-probs">${P.filter(p => p.kind !== 'short' && p.kind !== 'thin').map(p => { const agreed = rbNoted(p); return `<div class="rb-prob ${p.kind}${agreed ? ' agreed' : ''}">${agreed ? '⚠ Bent on purpose (see Decisions):' : '⛔'} ${ptxt(p)}${p.key && !agreed && /^(freeze|cutoff|cutshort|offs|rest|switch|back|run)$/.test(p.kind) ? ` <button class="btn sm gold rb-fixone" onclick="rbFixPerson(${_rbQ(p.key)})" title="Re-plan only their hotel; everything else stays as it is">🩹 Fix</button>` : ''}</div>`; }).join('')}</div>` : ''}
-    ${rbDecisionsHtml(I, cells, shown, dates)}
-    ${typeof rrMineDraftHtml === 'function' ? rrMineDraftHtml(I, cells, dates) : ''}
     ${rbFixHtml(I, cells, shown, ptxt)}
-    ${chg.size ? rbChangesHtml(I, cells, shown, dates) : ''}
     <div class="rb-tools"><button class="btn sm" onclick="rbUndo()"${rbUndoStack.length ? '' : ' disabled'} title="Undo (Ctrl+Z)">↶ Undo</button>${rbLegendHtml()}</div>
     <small class="rb-hint">Tap a cell to change it · drag onto another to swap (long-press on a phone) · tap a name for their card</small>
     <div class="ro-scroll"><table class="ro-table rb-table${rbHi ? ' rb-hi rb-hi-' + rbHi : ''}" id="rbTable"><thead><tr><th class="ro-name">Name</th>${dates.map(dt => `<th>${escapeHtml(roDayLbl(dt))}</th>`).join('')}<th class="rb-tot" title="Days worked · hours this week">Week</th></tr></thead><tbody>${rows}</tbody></table></div>
-    ${rbDefer('rbDeskD', () => rbDeskHtml(I, cells, shown, dates))}
     <details class="rb-covers"${P.some(p => p.kind === 'short' || p.kind === 'thin') ? ' open' : ''}><summary>Cover: people on each shift (has / needs) · tap a number for who can take it</summary>${covers}</details>
+    <details class="rb-more"><summary>📊 More about this week <small>decisions, what changed, desk hours, happiness, PH, fairness</small></summary>
+    ${rbDecisionsHtml(I, cells, shown, dates)}
+    ${typeof rrMineDraftHtml === 'function' ? rrMineDraftHtml(I, cells, dates) : ''}
+    ${chg.size ? rbChangesHtml(I, cells, shown, dates) : ''}
+    ${rbDefer('rbDeskD', () => rbDeskHtml(I, cells, shown, dates))}
     ${(() => { const H = rbHappyHtml(I, cells, shown, dates); return `<details class="rb-covers"><summary>💛 Team happiness${H.sum ? ': ' + H.sum : ''}</summary>${H.html}</details>`; })()}
     ${(() => { const B = rbPhHtml(I, cells, shown, dates); return B ? `<details class="rb-covers"${B.open ? ' open' : ''}><summary>🏖 PH balance: ${B.sum}</summary>${B.html}</details>` : ''; })()}
     ${(() => { const L = rbLearnedHtml(I, shown); return `<details class="rb-covers"><summary>🧠 What I learned: ${L.sum}</summary>${L.html}</details>`; })()}
     <details class="rb-covers"><summary>📊 Fairness: nights, weekends and hours over the last 4 weeks and this one</summary>${rbFairHtml(I, cells, shown, dates)}</details>
-    <div class="ro-acts rb-acts">
-      <button class="btn gold" onclick="rbPublish()">📤 Publish to the team</button>
-      <button class="btn" onclick="rbSharePic()">🖼 Picture to share</button>
-      <button class="btn" onclick="rbCopy(this)">📋 Copy for Excel</button>
-      <button class="btn" onclick="rbClearDraft()">🗑 Discard draft</button>
-    </div>
+    </details>
   </div>`;
 }
 /** Hours that change from one working day to the next (people dislike it): marked and listed. */

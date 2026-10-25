@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 412, items: [
+    "🗓️ Roster builder redesigned in 3 simple steps: 1 Requests (who needs what) → 2 Build & check (the roster, problems and one-tap fixes) → 3 Publish (what goes out, then one button). Team, cover needed, vacation, history and rules moved to ⚙ Setup, so the main screens stay clean.",
+    "✏️ Change a posted roster any time: Roster page → “✏️ Change this week” (or the builder → “Change the posted roster”). Change cells, then Publish shows exactly what changed (who, which day, from → to) and only those people are told.",
+    "📊 The extra details (decisions, desk hours, happiness, PH, fairness) are under “More about this week”, one tap away.",
+  ] },
   { v: 411, items: [
     "🚶 Roster → Team → a person's card: “🏨 Stays at their hotel” / “🚶 Can be moved to other hotels” — now for anyone, not only Duty Managers and Supervisors. Then pick where they can go: ✓ yes, ⚠️ only if there is no other option, 🚫 never.",
     "🗺 Nearest hotel first: the builder and the suggestions borrow from the closest hotel on the walk — Ibis → Mercure → Adagio — so nobody walks to the far end when the hotel next door has someone spare. Change the order in ⚖️ Rules → Hotels → Walking order.",

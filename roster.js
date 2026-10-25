@@ -780,6 +780,7 @@ function roRender() {
       ${isNow ? '<span class="ro-tag">This week</span>' : '<button class="btn sm" onclick="roGo(0)">This week</button>'}
       <button class="btn sm ghost ro-12" onclick="roToggle12()" title="Show times as 24-hour or 12-hour (AM/PM)">🕐 ${ro12() ? '12h' : '24h'}</button>
       ${roEdit ? '<button class="btn sm" onclick="roCopyLastWeek()">⧉ Copy last week</button>' : ''}
+      ${ed && !roEdit && rows.length && typeof rbLoadPublished === 'function' ? `<button class="btn sm gold" onclick="roChangeInBuilder()" title="Open this week in the builder: change shifts, days off or who works where, see problems, then publish the changes">✏️ Change this week</button>` : ''}
       ${pic ? `<button class="btn sm" onclick="riOpen('${pic[0]}')" title="The roster picture management sent">📷 Original picture</button>` : ''}
     </div>
     ${roGroups().length > 1 ? `<div class="ro-groups">${['', ...roGroups()].map(g => `<button class="fchip${roCurGroup() === g ? ' on' : ''}" onclick="roSetGroup(${JSON.stringify(g || 'all').replace(/&/g, '&amp;').replace(/\"/g, '&quot;').replace(/</g, '&lt;')})">${escapeHtml(g || 'All hotels')}</button>`).join('')}</div>` : ''}
@@ -808,6 +809,12 @@ function roIdeaApply(i) {
   x.changes.forEach(c => roSetCell(c.k, c.dt, c.to));
   if (typeof logActivity === 'function') try { logActivity('roster_edit', '💡 ' + x.text); } catch (_) {}
   showToast('💡 Done: ' + x.text, 'ok'); roRender(); setTimeout(roIdeasShow, 50);
+}
+/** ✏️ Change this week: the posted week opens in the builder (step 2), ready to change and publish again */
+function roChangeInBuilder() {
+  if (!roCanEdit() || typeof rbLoadPublished !== 'function') return;
+  showPanel('roster-build');
+  setTimeout(() => { try { rbLoadPublished(roWeek, true); rbGoStep('build'); } catch (e) { console.warn(e); } }, 60);
 }
 function roGo(n) { roWeek = n === 0 ? roMonday(new Date()) : roAdd(roWeek, n); roRender(); }
 function roToggleEdit() { roEdit = !roEdit; roRender(); }
