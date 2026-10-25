@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 415, items: [
+    "📱 Roster on the phone: the whole week fits the screen — Monday to Sunday and the week total, no sideways scrolling. Times sit on two lines (08 over –17), names wrap, the role shows small under the name. On the Roster page and in the builder.",
+    "📱 The “My shifts” and “Today” cards on the Roster page no longer run past the right edge of the phone.",
+    "📋 Builder: the “What we noticed” list starts folded (the count shows on it), so the roster itself is right there.",
+  ] },
   { v: 414, items: [
     "🛋 Roster: everyone gets at least one day off every week — no exceptions. Fixed the ways it could slip: days off learned as 0 from an older roster, “0 days off” on a card (no longer offered), a 🚫 day-off freeze over the whole week, the ✂️ monthly cut-off when the month's days off were used, and the emergency “work a day off” (now only someone with two days off that week).",
     "If there's truly nobody to cover, the person still gets their day off and the empty shift shows as a problem for you to decide — the day off always wins.",

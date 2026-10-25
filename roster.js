@@ -510,6 +510,8 @@ function roSpan(date, info) {
   return { start: s, end: e };
 }
 /** Short text for a cell: 12–21, OFF, ALA, SL, PH… */
+/** a cell's text for the table: a time range may wrap after its start on a narrow phone ("08" over "–17") */
+function roCellHtml(i) { return escapeHtml(roCellTxt(i)).replace('–', '<wbr>–'); }
 function roCellTxt(i) {
   if (!i) return '';
   if (i.from) return roShort(i);
@@ -590,14 +592,14 @@ function _roTable(rows, dates, get, editable) {
   const today = roToday();
   const q = s => JSON.stringify(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
   const span = dates.length + 1 + (editable === true ? 1 : 0);
-  return `<div class="ro-scroll"><table class="ro-table">
+  return `<div class="ro-scroll"><table class="ro-table${editable ? ' ro-editing' : ''}">
     <thead><tr><th class="ro-name">Name</th>${dates.map(d => `<th class="${d === today ? 'ro-today' : ''}">${escapeHtml(roDayLbl(d))}</th>`).join('')}${editable === true ? '<th></th>' : ''}</tr></thead>
     <tbody>${rows.map(r => r.section ? `<tr class="ro-sec"><td colspan="${span}"><span>${escapeHtml(r.section)}</span></td></tr>` : `<tr class="${r.key === roMeKey ? 'ro-me' : ''}"><td class="ro-name${/\?$/.test(r.name) ? ' ro-unsure' : ''}" title="${escapeHtml(r.name)}">${editable === 'preview' ? `<button class="ro-tap" onclick="roPrevEditName(this,${q(r.key)})" title="Tap to correct">${escapeHtml(r.name)}</button>` : escapeHtml(r.name)}${r.key === roMeKey ? ' <span class="ro-you">you</span>' : ''}</td>${dates.map(d => {
       const v = get(r, d) || '', i = roInfo(v);
       if (editable === 'preview') return `<td class="ro-cell ${i ? 'ro-t-' + i.type : ''}${/\?/.test(v) ? ' ro-unsure' : ''}" data-k="${escapeHtml(r.key)}" data-d="${d}" title="${escapeHtml(v || 'empty')}: tap to correct" onclick="roPrevEdit(this)">${escapeHtml(v === '?' ? '?' : roCellTxt(i))}${i && i.note ? `<i class="ro-note">${escapeHtml(i.note.replace(/\s*\?$/, ''))}</i>` : ''}</td>`;
       return `<td class="ro-cell ${i ? 'ro-t-' + i.type : ''}${d === today ? ' ro-today' : ''}${/\?/.test(v) ? ' ro-unsure' : ''}" data-k="${escapeHtml(r.key)}" data-d="${d}" title="${escapeHtml(i ? i.label + (i.from && !i.label.startsWith(i.from) ? ' ' + roTime(i) : '') : '')}">${editable
         ? `<input value="${escapeHtml(v)}" maxlength="40" onchange="${editable === 'preview' ? 'roPrevSet' : 'roSetCell'}(${q(r.key)},'${d}',this.value)">`
-        : `${escapeHtml(roCellTxt(i))}${i && i.note ? `<i class="ro-note">${escapeHtml(i.note)}</i>` : ''}${typeof evMark === 'function' ? evMark(r.key, d) : ''}`}</td>`; }).join('')}${editable === true ? `<td><button class="ro-x" title="Clear this week" onclick="roClearPerson(${q(r.key)})">✕</button></td>` : ''}</tr>`).join('')}</tbody>
+        : `${roCellHtml(i)}${i && i.note ? `<i class="ro-note">${escapeHtml(i.note)}</i>` : ''}${typeof evMark === 'function' ? evMark(r.key, d) : ''}`}</td>`; }).join('')}${editable === true ? `<td><button class="ro-x" title="Clear this week" onclick="roClearPerson(${q(r.key)})">✕</button></td>` : ''}</tr>`).join('')}</tbody>
   </table></div>`;
 }
 
