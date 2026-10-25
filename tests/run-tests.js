@@ -205,6 +205,19 @@ console.log('\nRoster builder');
     people: [person('A ONE', { group: 'Adagio GD' }), person('M ONE', { group: 'Mercure DD', title: 'Supervisor' }), person('M TWO', { group: 'Mercure DD', title: 'Supervisor' }), person('M THREE', { group: 'Mercure DD', title: 'Supervisor' })],
     pre: {}, rules: { minRest: 11, maxRun: 6, givePh: false, lend: true, lendIdeal: true }, seed: 3 };
   const r2 = sb.rbSolve(I2);
+  { // 📆 days worked at the end of last week count on a Monday too: an extra Monday off is not taken back into 7 days in a row
+    const M = '07:00 - 16:00', Io = { week: W, groups: { 'Ibis DD': { shifts: [M], need: { [M]: one } } },
+      people: [person('RUNNER', { run: 4, lastShift: M })], pre: { RUNNER: { [dates[3]]: 'OFF' } }, rules: { minRest: 11, maxRun: 6 } };
+    const res = { cells: { RUNNER: { [dates[0]]: 'OFF', [dates[1]]: M, [dates[2]]: M, [dates[3]]: 'OFF', [dates[4]]: M, [dates[5]]: M, [dates[6]]: M } } };
+    sb.rbOneOff(Io, res);
+    check('an extra Monday off stays when last week ran long', res.cells.RUNNER[dates[0]], 'OFF');
+    const I2r = Object.assign({}, Io, { people: Io.people.concat([person('MATE', { lastShift: M })]) });
+    const res2 = { cells: { RUNNER: { [dates[0]]: M, [dates[1]]: M, [dates[2]]: M, [dates[3]]: 'OFF', [dates[4]]: M, [dates[5]]: M, [dates[6]]: M },
+      MATE: { [dates[0]]: M, [dates[1]]: M, [dates[2]]: M, [dates[3]]: M, [dates[4]]: M, [dates[5]]: 'OFF', [dates[6]]: M } } };
+    sb.rbBreakRuns(I2r, res2);
+    check('7 days in a row → an extra day off where there is cover', sb.rbProblems(I2r, res2.cells).some(x => x.kind === 'run' && x.key === 'RUNNER'), false);
+    check('…and no shift left empty for it', sb.rbProblems(I2r, res2.cells).some(x => x.kind === 'short'), false);
+  }
   { // 🚶 "Can be moved" on an agent's card: they may be borrowed, from the nearest hotel first (Ibis → Mercure → Adagio)
     const Im = { week: W, groups: { 'Adagio GD': { shifts: [N], need: { [N]: two } }, 'Mercure DD': { shifts: [N], need: { [N]: one } }, 'Ibis DD': { shifts: [N], need: { [N]: one } } },
       people: [person('A ONE', { group: 'Adagio GD' }), person('M ONE', { group: 'Mercure DD' }), person('M TWO', { group: 'Mercure DD', move: true }), person('M THREE', { group: 'Mercure DD', move: true }),

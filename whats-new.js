@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 413, items: [
+    "📆 Roster builder fix: someone who worked the end of last week no longer ends up working 7 days in a row. An extra day off on a Monday was being taken back by mistake (last week's days weren't counted on Mondays) — fixed. And when a run is still too long, the builder gives an extra day off on a day their hotel has someone spare, and writes it under Decisions.",
+    "✅ Your rules, cover, team cards, requests and history are untouched by the new 3-step builder — every setting and button is still there (Setup tab).",
+  ] },
   { v: 412, items: [
     "🗓️ Roster builder redesigned in 3 simple steps: 1 Requests (who needs what) → 2 Build & check (the roster, problems and one-tap fixes) → 3 Publish (what goes out, then one button). Team, cover needed, vacation, history and rules moved to ⚙ Setup, so the main screens stay clean.",
     "✏️ Change a posted roster any time: Roster page → “✏️ Change this week” (or the builder → “Change the posted roster”). Change cells, then Publish shows exactly what changed (who, which day, from → to) and only those people are told.",

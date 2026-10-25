@@ -354,6 +354,7 @@ function rbSolve(I) {
     if (shorts(alt) < shorts(res)) res = alt;
   }
   if (!I._plain && !I._strict) {
+    rbBreakRuns(I, res);
     rbOneOff(I, res);
     rbSoftLanding(I, res);
     if (I.noOff) { const nm = k => typeof roStaff !== 'undefined' && roStaff[k] ? roStaff[k].name.split(' ')[0] : k;
@@ -364,6 +365,40 @@ function rbSolve(I) {
   I.people.filter(p => p.care && rbCareW(I, p) > 0).forEach(p => { const nm = typeof roStaff !== 'undefined' && roStaff[p.key] ? roStaff[p.key].name.split(' ')[0] : p.key; res.notes.push({ key: p.key, date: I.week, care: true, text: `💚 Extra care for ${nm} this week (Team Health ${p.careScore}${p.careWhy ? ': ' + p.careWhy : ''}): fewer nights, their wishes first, days off together, one steady shift.` }); });
   }
   return res;
+}
+
+/** 📆 Too many days in a row (often: worked the end of last week, and the day off they asked for is late in this
+ *  week): an extra day off on a day their hotel has someone spare, so the rule holds and no shift is left short.
+ *  Never on a day they asked for or are on leave, never if another rule breaks because of it. */
+function rbBreakRuns(I, res) {
+  if (!res || !res.cells) return;
+  const dates = Array.from({ length: 7 }, (_, d) => roAdd(I.week, d));
+  const count = c => { const P = rbProblems(I, c); return { P, short: P.filter(x => x.kind === 'short').length, thin: P.filter(x => x.kind === 'thin').length, other: P.filter(x => x.kind !== 'short' && x.kind !== 'thin' && x.kind !== 'run').length }; };
+  for (let guard = 0; guard < 12; guard++) {
+    const now = count(res.cells), runs = now.P.filter(x => x.kind === 'run');
+    if (!runs.length) return;
+    let best = null;
+    runs.forEach(pr => {
+      const p = I.people.find(q => q.key === pr.key); if (!p) return;
+      const end = dates.indexOf(pr.date); if (end < 0) return;
+      for (let d = 0; d <= end; d++) {
+        const dt = dates[d], v = (res.cells[p.key] || {})[dt];
+        if (!rbParse(v) || ((I.pre || {})[p.key] || {})[dt]) continue;     // a working day they didn't ask for
+        const c2 = _rbClone(res.cells); c2[p.key][dt] = 'OFF';
+        const after = count(c2);
+        if (after.short > now.short || after.other > now.other) continue;  // no shift left empty, no other rule broken
+        if (after.P.some(x => x.kind === 'run' && x.key === p.key)) continue;
+        const cost = (after.thin - now.thin) * 10 + (end - d);               // keep two on a shift; the later the day, the less it moves
+        if (!best || cost < best.cost) best = { cost, p, dt, cells: c2, days: pr.days };
+      }
+    });
+    if (!best) return;
+    res.cells = best.cells;
+    try { res.cover = rbCover(I, res.cells); } catch (_) {}
+    res.problems = rbProblems(I, res.cells, res.cover);
+    const nm = typeof roStaff !== 'undefined' && roStaff[best.p.key] ? roStaff[best.p.key].name.split(' ')[0] : best.p.key;
+    (res.notes = res.notes || []).push({ key: best.p.key, date: best.dt, auto: true, text: `📆 ${nm} gets an extra day off on ${RB_DAYS[dates.indexOf(best.dt)]} so they don't work ${best.days} days in a row (they worked the end of last week). Their hotel had someone spare that day.` });
+  }
 }
 
 // ── Nights across the cluster ─────────────────────────────
@@ -1435,7 +1470,7 @@ function rbOneOff(I, res) {
         const x = rbParse(s); if (!x || x.e - x.s > R.maxHours * 60) return false;
         if (rbParse(pv) && (rbRest(pv, s) < R.minRest || !rbSwitchOk(pv, s, R))) return false;
         if (rbParse(nx) && (rbRest(s, nx) < R.minRest || !rbSwitchOk(s, nx, R))) return false;
-        let run = 1; for (let i = d - 1; i >= 0 && rbParse(row[dates[i]]); i--) run++; if (d > 0 && dates.slice(0, d).every(x2 => rbParse(row[x2]))) run += p.run || 0;
+        let run = 1; for (let i = d - 1; i >= 0 && rbParse(row[dates[i]]); i--) run++; if (dates.slice(0, d).every(x2 => rbParse(row[x2]))) run += p.run || 0;   // (a Monday too: the days worked at the end of last week count)
         for (let i = d + 1; i < 7 && rbParse(row[dates[i]]); i++) run++;
         return run <= R.maxRun;
       };
