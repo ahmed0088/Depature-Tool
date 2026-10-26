@@ -323,3 +323,12 @@ html[data-skin="classic"] #depGrid .dp-room { background: linear-gradient(180deg
 html[data-skin="study"] #depGrid .dp-room { border-radius: 12px !important; background: color-mix(in srgb, var(--c, #5b5bd6) 16%, #fff) !important; border: 2px solid color-mix(in srgb, var(--c, #5b5bd6) 50%, #fff) !important; box-shadow: 0 3px 0 color-mix(in srgb, var(--c, #5b5bd6) 35%, #fff) !important; }
 /* ⚡ Pro: a hairline box, white numbers */
 html[data-skin="pro"] #depGrid .dp-room { background: #0a0a0a !important; border: 1px solid #2e2e2e !important; color: #ededed !important; border-radius: 6px !important; box-shadow: none !important; font-variant-numeric: tabular-nums; }
+
+/* Handover composer: one clean field in every app style (the styles' boxed inputs made it a box inside a box) */
+html[data-skin-group="style"] #hbRoot #hbNew { background: transparent !important; border: 0 !important; box-shadow: none !important; padding: 9px 2px !important; }
+html[data-skin-group="style"] #hbRoot #hbNew:focus { border: 0 !important; box-shadow: none !important; }
+html[data-skin-group="style"] #hbRoot .hb-new:focus-within { border-color: var(--accent) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent) !important; }
+html[data-skin-group="style"] #hbRoot .hb-mini { background: color-mix(in srgb, var(--text3) 14%, transparent) !important; border: 0 !important; height: auto !important; padding: 6px 10px !important; border-radius: 999px !important; font-size: 12.5px !important; width: auto !important; }
+#hbRoot .hb-new:focus-within { border-color: color-mix(in srgb, var(--hb-acc) 55%, var(--hb-hair)); }
+#hbRoot .hb-newact { align-self: center; padding-top: 0; }
+#hbRoot .hb-plus { align-self: center; margin-top: 0; }

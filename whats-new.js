@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 424, items: [
+    "🎨 Handover: the “New handover item” box is one clean field again in every app style (Discord, Telegram, Notes…) — no box inside a box, a small “Auto” pill for the topic, and the field lights up when you type in it.",
+  ] },
   { v: 423, items: [
     "🛡️ Away guard — faster and sharper. When you've marked yourself away, an alert now reaches your phone in well under a second (it used to wait ~2.5 s). Urgent things (someone typing, searching, opening a chat) are instant; repeat updates come every ~20 s while it keeps happening.",
     "⌨️ It now tells you WHAT they are typing: the alert shows the words as they write them, e.g. ⌨️ typing: “send me the OTP code now” · Mom — plus which chat they opened and what they searched. Only what they do and the chat name leave the PC; the messages on the screen stay in HotelOps.",
