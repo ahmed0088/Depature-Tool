@@ -66,6 +66,7 @@ function renderShift(key) {
 
 // ── Content render (safe — never resets active tab) ──────
 function _renderShiftContent(key) {
+  _stDrawnAt = Date.now();
   const shift     = SHIFTS[key];
   const day       = stDayOf(key);
   const active    = shift.tasks.filter(t => stTaskState(t, day, key) === 'on');
@@ -135,10 +136,11 @@ function stItemHTML(key, t, isDone, index, total) {
   const isLast  = index === total - 1;
   return `<div class="st-item${isDone ? ' done' : ''}${t.imp ? ' imp' : ''}" draggable="true" data-id="${t.id}" data-key="${key}">
     <div class="st-drag-handle" title="Drag to reorder">⠿</div>
-    <div class="st-check" onclick="stToggle('${key}','${t.id}')"></div>
+    <div class="st-check" role="checkbox" aria-checked="${isDone ? 'true' : 'false'}" onclick="stTap(event,'${key}','${t.id}')"></div>
     <div class="st-text">
       <div class="st-name">${t.imp ? '<span class="st-imp" title="Important"><i>!</i>Important</span>' : ''}${t.on ? _stOnChip(key, t, isDone) : ''}${t.at ? `<span class="st-at${!isDone && stIsLate(key, t) ? ' late' : ''}" title="${stIsLate(key, t) && !isDone ? 'Time passed, not done yet' : 'Reminder at this time'}">⏰ ${escapeHtml(t.at)}</span>` : ''}${escapeHtml(t.name)}</div>
       ${t.hint ? `<div class="st-hint">${escapeHtml(t.hint)}</div>` : ''}
+      ${isDone ? _stAutoWhy(key, t) : ''}
       ${typeof stlChipHtml === 'function' ? stlChipHtml(key, t) : ''}
     </div>
     <div class="st-actions">
@@ -151,6 +153,35 @@ function stItemHTML(key, t, isDone, index, total) {
       <button class="cl-step-btn del"      onclick="stDelete('${key}','${t.id}')">✕</button>
     </div>
   </div>`;
+}
+
+/** 🤖 a task the app ticked this shift says so, and why (tap the tick to undo it) */
+function _stAutoWhy(key, t) {
+  try {
+    const cur = hoShiftNow(); if (cur.key !== key && key !== 'mid') return '';
+    const m = (_stAutoMem()[cur.key + '|' + _stIso(cur.start)] || {})[t.id];
+    if (!m || m === 'refused') return '';
+    return `<div class="st-auto" title="Ticked by HotelOps because it could see the work is done. Tap the ✓ to untick: it stays unticked for this shift. Settings → Helpers to turn this off.">🤖 Ticked by HotelOps${m !== 'ticked' ? ': ' + escapeHtml(m) : ''}</div>`;
+  } catch (_) { return ''; }
+}
+// ── A tick only from a real tap ───────────────────────────
+// Scrolling the list with a thumb on the left side, or the list being drawn again (a colleague's tick
+// arriving) right under the finger, must never tick a task: no tick while the page is moving, if the
+// finger slid, or just after the list changed under it.
+var _stScrollAt = 0, _stDrawnAt = 0, _stTouch = null;
+if (typeof document !== 'undefined') {
+  document.addEventListener('scroll', () => { _stScrollAt = Date.now(); }, { capture: true, passive: true });
+  document.addEventListener('touchstart', e => { const q = e.touches && e.touches[0]; _stTouch = q ? { x: q.clientX, y: q.clientY, at: Date.now(), moved: false } : null; }, { capture: true, passive: true });
+  document.addEventListener('touchmove', e => { const q = e.touches && e.touches[0]; if (_stTouch && q && Math.hypot(q.clientX - _stTouch.x, q.clientY - _stTouch.y) > 10) _stTouch.moved = true; }, { capture: true, passive: true });
+}
+function stTap(e, key, id) {
+  const now = Date.now(), t = _stTouch;
+  if (e && e.isTrusted !== false) {
+    if (now - _stScrollAt < 350) return;                         // the page was still moving
+    if (t && now - t.at < 1500 && t.moved) return;                 // the finger slid: a scroll, not a tap
+    if (now - _stDrawnAt < 450) return;                           // the list changed under the finger
+  }
+  stToggle(key, id);
 }
 
 // ── Toggle task done ──────────────────────────────────────
@@ -705,7 +736,7 @@ const _ST_SRC = {
 };
 const _stG = n => { try { return _ST_SRC[n](); } catch (_) { return undefined; } };
 const ST_AUTO = [
-  { re: /enrol|\bALL\b|loyalty/i, check() {
+  { re: /[Ee][Nn][Rr][Oo][Ll]|\bALL\b|[Ll][Oo][Yy][Aa][Ll][Tt][Yy]/, check() {   // ALL (Accor Live Limitless) in capitals only: "check all your check-ins" is not an enrollment
       const gl = _stG('gpLog'); if (!gl) return '';
       const n = Object.values(gl).filter(x => x && x.status === 'submitted' && x.date === _stTodayIso()).length;
       return n ? `${n} ALL enrollment${n > 1 ? 's' : ''} sent today` : ''; } },
@@ -767,7 +798,7 @@ function stAutoTick() {
       const rule = stAutoRule(t); if (!rule) continue;
       let why = ''; try { why = rule.check(cur.start.getTime()); } catch (_) {}
       if (!why) continue;
-      m[t.id] = 'ticked';
+      m[t.id] = why || 'ticked';   // (the reason shows on the task)
       if (t.on) stToggle(key, t.id);   // a dated task keeps its own tick
       else {
         sh.done.push(t.id);
@@ -785,7 +816,7 @@ function stAutoTick() {
 /** someone unticked a task the app ticked: it stays unticked for the rest of this shift */
 function _stAutoRefused(key, id) {
   const mem = _stAutoMem();
-  Object.keys(mem).forEach(k => { if (mem[k][id] === 'ticked') mem[k][id] = 'refused'; });
+  Object.keys(mem).forEach(k => { if (mem[k][id] && mem[k][id] !== 'refused') mem[k][id] = 'refused'; });
   _stAutoSave(mem);
 }
 setInterval(stAutoTick, 30000);

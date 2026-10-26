@@ -1289,6 +1289,8 @@ console.log('\nQuiet when off · shift task times');
   check('morning task at 10:00: late at 10:01', late('morning', '10:00', '2026,9,12,10,1'), true);
   const rule = n => vm.runInContext(`(() => { const r = stAutoRule({ name: ${JSON.stringify(n)} }); return r ? String(r.re) : ''; })()`, sh);
   check('auto tick: "ALL enrollment" is recognised', !!rule('ALL enrollment'), true);
+  check('auto tick: "Check all your Check-ins" is not an ALL enrollment', rule('Check all your Check-ins.'), '');
+  check('auto tick: "Give the in-house guest list" is left to people', rule('Give mounier Inhouse guest list'), '');
   check('auto tick: "Complete night audit checklist" is recognised', !!rule('Complete night audit checklist'), true);
   check('auto tick: "Follow up on pending checkouts" is recognised', !!rule('Follow up on pending checkouts'), true);
   check('auto tick: "Prepare departure list for tomorrow" is left to people', rule('Prepare departure list for tomorrow'), '');

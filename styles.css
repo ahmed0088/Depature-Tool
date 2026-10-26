@@ -5874,3 +5874,4 @@ select.adm-input { cursor: pointer; }
 #panel-checklist .cl-add-more { margin-top: 6px; }
 .es-modal input, .es-modal textarea, .es-modal select { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif !important; font-size: 0.9rem; line-height: 1.45; }
 .es-modal textarea { resize: vertical; }
+.st-auto { display: inline-block; margin-top: 4px; font-size: 0.7rem; font-weight: 600; color: var(--sky, #5ab4e8); background: color-mix(in srgb, var(--sky, #5ab4e8) 12%, transparent); padding: 2px 8px; border-radius: 99px; overflow-wrap: anywhere; }

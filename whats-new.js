@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 417, items: [
+    "✋ Shift tasks: no more ticks by accident. A task is ticked only by a real tap on its circle — not while the page is scrolling, not when your finger slides over it, and not when the list was just redrawn under your finger (a colleague's tick arriving).",
+    "🤖 When HotelOps ticks a task itself (it can see the work is done — e.g. Purpose of Stay filled for every guest), the task now says so: “🤖 Ticked by HotelOps: …”. Tap the tick to undo it; it stays unticked for that shift. Settings → Helpers turns this off.",
+    "🐛 “Check all your Check-ins” was being read as an ALL (loyalty) enrollment task and could tick itself — fixed: only ALL in capitals counts.",
+  ] },
   { v: 416, items: [
     "🛎 Roster: someone is on every front desk, every hour — before health, wishes or fairness. Any hour with nobody on a hotel's desk now counts as a missing shift (even where “cover needed” says 0, and the early hours a night started the day before covers), and the builder fills it.",
     "🚶 Last resort for an empty desk: a colleague from the nearest hotel stands in, only while their own desk stays covered and their rest is kept (their next days move to the same hours if needed). Written under Decisions.",
