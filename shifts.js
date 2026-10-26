@@ -140,7 +140,7 @@ function stItemHTML(key, t, isDone, index, total) {
     <div class="st-text">
       <div class="st-name">${t.imp ? '<span class="st-imp" title="Important"><i>!</i>Important</span>' : ''}${t.on ? _stOnChip(key, t, isDone) : ''}${t.at ? `<span class="st-at${!isDone && stIsLate(key, t) ? ' late' : ''}" title="${stIsLate(key, t) && !isDone ? 'Time passed, not done yet' : 'Reminder at this time'}">⏰ ${escapeHtml(t.at)}</span>` : ''}${escapeHtml(t.name)}</div>
       ${t.hint ? `<div class="st-hint">${escapeHtml(t.hint)}</div>` : ''}
-      ${isDone ? _stAutoWhy(key, t) : ''}
+      ${!isDone && _stSugg[key + '|' + t.id] ? `<div class="st-auto">🤖 Looks done: ${escapeHtml(_stSugg[key + '|' + t.id])} <button type="button" class="st-auto-yes" onclick="stToggle('${key}','${t.id}')">✓ Tick it</button><button type="button" class="st-auto-no" onclick="stSuggNo('${key}','${t.id}')" title="Not done — don't suggest it again this shift" aria-label="Not done">✕</button></div>` : ''}
       ${typeof stlChipHtml === 'function' ? stlChipHtml(key, t) : ''}
     </div>
     <div class="st-actions">
@@ -155,15 +155,6 @@ function stItemHTML(key, t, isDone, index, total) {
   </div>`;
 }
 
-/** 🤖 a task the app ticked this shift says so, and why (tap the tick to undo it) */
-function _stAutoWhy(key, t) {
-  try {
-    const cur = hoShiftNow(); if (cur.key !== key && key !== 'mid') return '';
-    const m = (_stAutoMem()[cur.key + '|' + _stIso(cur.start)] || {})[t.id];
-    if (!m || m === 'refused') return '';
-    return `<div class="st-auto" title="Ticked by HotelOps because it could see the work is done. Tap the ✓ to untick: it stays unticked for this shift. Settings → Helpers to turn this off.">🤖 Ticked by HotelOps${m !== 'ticked' ? ': ' + escapeHtml(m) : ''}</div>`;
-  } catch (_) { return ''; }
-}
 // ── A tick only from a real tap ───────────────────────────
 // Scrolling the list with a thumb on the left side, or the list being drawn again (a colleague's tick
 // arriving) right under the finger, must never tick a task: no tick while the page is moving, if the
@@ -783,8 +774,12 @@ function _stAutoMem() { try { return JSON.parse(localStorage.getItem(ST_AUTO_KEY
 function _stAutoSave(m) { try { localStorage.setItem(ST_AUTO_KEY, JSON.stringify(m)); } catch (_) {} }
 /** the rule that recognises this task's work, if any */
 function stAutoRule(t) { return ST_AUTO.find(r => r.re.test(t.name || '')) || null; }
+/** 🤖 HotelOps never ticks a task by itself: when it can see a task's work looks done, it only says so on
+ *  the task ("Looks done: … ✓ Tick it"). The person decides. (Hide one with ✕: not suggested again this shift.) */
+let _stSugg = {};
 function stAutoTick() {
-  if (typeof hoPref === 'function' && hoPref('autoTick') === false) return;
+  const was = JSON.stringify(_stSugg); _stSugg = {};
+  if (typeof hoPref === 'function' && hoPref('autoTick') === false) { if (was !== '{}') _stSuggRedraw(); return; }
   if (!_shiftsLoaded || typeof currentUser === 'undefined' || !currentUser) return;
   let cur; try { cur = hoShiftNow(); } catch (_) { return; }
   const mem = _stAutoMem(), inst = cur.key + '|' + _stIso(cur.start);
@@ -794,24 +789,22 @@ function stAutoTick() {
     const sh = SHIFTS[key]; if (!sh) continue;
     const day = stDayOf(key);
     for (const t of sh.tasks || []) {
-      if (stTaskState(t, day, key) !== 'on' || stIsDone(key, t) || m[t.id]) continue;
+      if (stTaskState(t, day, key) !== 'on' || stIsDone(key, t) || m[t.id] === 'refused') continue;
       const rule = stAutoRule(t); if (!rule) continue;
       let why = ''; try { why = rule.check(cur.start.getTime()); } catch (_) {}
-      if (!why) continue;
-      m[t.id] = why || 'ticked';   // (the reason shows on the task)
-      if (t.on) stToggle(key, t.id);   // a dated task keeps its own tick
-      else {
-        sh.done.push(t.id);
-        try { stLog(key, 'done', `${t.name} — ticked by HotelOps: ${why}`); } catch (_) {}
-        if (typeof logActivity === 'function') logActivity('shift_task_done', `[${sh.label}] ${t.name} (by the app: ${why})`);
-        _stSaveTick(key, t.id, true);
-        updateShiftBadge(key);
-        if (typeof activeShift !== 'undefined' && activeShift === key && document.getElementById('panel-shifts')?.classList.contains('active')) _renderShiftContent(key);
-      }
-      if (typeof showToast === 'function') showToast(`✓ "${t.name}" ticked: ${why}`, 'ok');
+      if (why) _stSugg[key + '|' + t.id] = why;
     }
   }
   _stAutoSave(mem);
+  if (JSON.stringify(_stSugg) !== was) _stSuggRedraw();
+}
+function _stSuggRedraw() {
+  try { if (typeof activeShift !== 'undefined' && document.getElementById('panel-shifts')?.classList.contains('active') && !document.querySelector('#panel-shifts input:focus, #panel-shifts textarea:focus')) _renderShiftContent(activeShift); } catch (_) {}
+}
+/** ✕ on a suggestion: not suggested again for this shift */
+function stSuggNo(key, id) {
+  try { const cur = hoShiftNow(), mem = _stAutoMem(), inst = cur.key + '|' + _stIso(cur.start); (mem[inst] = mem[inst] || {})[id] = 'refused'; _stAutoSave(mem); } catch (_) {}
+  delete _stSugg[key + '|' + id]; _renderShiftContent(key);
 }
 /** someone unticked a task the app ticked: it stays unticked for the rest of this shift */
 function _stAutoRefused(key, id) {

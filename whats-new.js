@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 418, items: [
+    "✋ Shift tasks: HotelOps never ticks a task by itself any more. When it can see the work looks done (e.g. Purpose of Stay filled for every guest), the task only shows “🤖 Looks done: … ✓ Tick it ✕” — you decide. ✕ means not done: it isn't suggested again that shift.",
+  ] },
   { v: 417, items: [
     "✋ Shift tasks: no more ticks by accident. A task is ticked only by a real tap on its circle — not while the page is scrolling, not when your finger slides over it, and not when the list was just redrawn under your finger (a colleague's tick arriving).",
     "🤖 When HotelOps ticks a task itself (it can see the work is done — e.g. Purpose of Stay filled for every guest), the task now says so: “🤖 Ticked by HotelOps: …”. Tap the tick to undo it; it stays unticked for that shift. Settings → Helpers turns this off.",

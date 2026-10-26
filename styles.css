@@ -5875,3 +5875,7 @@ select.adm-input { cursor: pointer; }
 .es-modal input, .es-modal textarea, .es-modal select { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif !important; font-size: 0.9rem; line-height: 1.45; }
 .es-modal textarea { resize: vertical; }
 .st-auto { display: inline-block; margin-top: 4px; font-size: 0.7rem; font-weight: 600; color: var(--sky, #5ab4e8); background: color-mix(in srgb, var(--sky, #5ab4e8) 12%, transparent); padding: 2px 8px; border-radius: 99px; overflow-wrap: anywhere; }
+.st-auto { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.st-auto-yes, .st-auto-no { border: 0; cursor: pointer; border-radius: 99px; font: 700 0.68rem inherit; padding: 3px 9px; }
+.st-auto-yes { background: var(--green, #30d158); color: #fff; }
+.st-auto-no { background: color-mix(in srgb, var(--text3) 18%, transparent); color: var(--text2); padding: 3px 7px; }
