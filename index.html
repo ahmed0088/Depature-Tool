@@ -5562,16 +5562,17 @@ async function appInit() {
     window.addEventListener('load', () => {
       const hadCtl = !!navigator.serviceWorker.controller, t0 = Date.now();
       navigator.serviceWorker.register('sw.js').then(reg => {
-        // look for a new version when the app comes back to the front, and every 30 minutes
-        const check = () => reg.update().catch(() => {});
+        // look for a new version now and then: when the app comes back to the front (at most every 10 minutes), and every 30 minutes
+        let lastCheck = Date.now();
+        const check = () => { if (Date.now() - lastCheck < 10 * 60000) return; lastCheck = Date.now(); reg.update().catch(() => {}); };
         document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
         setInterval(check, 30 * 60000);
       }).catch(err => console.warn('[SW] registration failed:', err));
-      // a new version took over: reload into it straight away if the app was just opened, else ask (work in progress stays safe)
+      // a new version took over: never reload by itself (the phone already restarted the app once when you came back —
+      // a second reload on top felt like the app refreshing non-stop). A bar offers it; the next start loads it anyway.
       let reloading = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (!hadCtl || reloading) return;
-        if (Date.now() - t0 < 15000) { reloading = true; location.reload(); return; }   // just opened: nothing to lose
         // a banner that stays until tapped (a toast fades and can't be tapped)
         if (document.getElementById('hoUpdBar')) return;
         const bar = document.createElement('button');
@@ -5583,6 +5584,40 @@ async function appInit() {
       });
     });
   }
+</script>
+<script>
+// ── Resume where you were ──────────────────────────────────
+// A phone clears an app it hasn't shown for a while; coming back starts it again from the top. The page you
+// were on and how far down you had scrolled are kept, and reopened when it starts within 30 minutes.
+(function () {
+  const KEY = 'ho_resume_v1';
+  const scroller = () => document.querySelector('.main') || document.scrollingElement || document.documentElement;
+  function save() {
+    try {
+      const p = document.querySelector('.panel.active'); if (!p || !p.id) return;
+      const el = scroller();
+      localStorage.setItem(KEY, JSON.stringify({ panel: p.id.replace(/^panel-/, ''), y: Math.round((el && el.scrollTop) || window.scrollY || 0), at: Date.now() }));
+    } catch (_) {}
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
+  window.addEventListener('pagehide', save);
+  let r = null; try { r = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (_) {}
+  if (!r || !r.panel || Date.now() - (r.at || 0) > 30 * 60000 || /[?&]panel=/.test(location.search)) return;   // a link to a page (a notification) wins
+  // after sign-in and the start page (settings.js), so this one wins
+  const t0 = Date.now(), t = setInterval(() => {
+    if (Date.now() - t0 > 20000) { clearInterval(t); return; }
+    const app = document.getElementById('appWrapper');
+    if (!app || app.style.display === 'none' || Date.now() - t0 < 1500) return;
+    // the menu shows the pages this person may open once their role is loaded: wait for it (gives up after 20 s)
+    const nav = document.getElementById('nav-' + r.panel);
+    if (r.panel === 'guestmem' || (r.panel !== 'home' && (!nav || nav.style.display === 'none' || !nav.offsetParent && getComputedStyle(nav).display === 'none'))) { if (r.panel === 'guestmem') clearInterval(t); return; }
+    clearInterval(t);
+    try {
+      if (typeof showPanel === 'function') showPanel(r.panel);
+      setTimeout(() => { try { const el = scroller(); if (el) el.scrollTop = r.y || 0; else window.scrollTo(0, r.y || 0); } catch (_) {} }, 400);
+    } catch (_) {}
+  }, 300);
+})();
 </script>
 <script>
 // ── Auth-gated boot ───────────────────────────────────────

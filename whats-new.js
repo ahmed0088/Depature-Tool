@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 425, items: [
+    "🔄 No more refreshing like crazy: when you come back to the app it no longer reloads itself because an update arrived — a small bar offers the update instead, and it also loads on its own the next time you open the app. Update checks are now at most every 10 minutes.",
+    "📍 Back where you were: if your phone closed the app in the background, it now reopens on the same page and the same spot you scrolled to (within 30 minutes). Opening it from a notification still goes to that notification's page.",
+  ] },
   { v: 424, items: [
     "🎨 Handover: the “New handover item” box is one clean field again in every app style (Discord, Telegram, Notes…) — no box inside a box, a small “Auto” pill for the topic, and the field lights up when you type in it.",
   ] },
