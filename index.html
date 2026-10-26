@@ -2657,6 +2657,11 @@
       <button class="btn gold" id="gmFaceMain" style="width:100%;margin-top:14px;font-size:0.85rem;" onclick="gmUnlock()">
         🙂 Unlock with Face ID
       </button>
+      <form id="gmPwForm" style="display:none;margin-top:12px;gap:8px;flex-direction:column;" onsubmit="event.preventDefault();gmPwUnlock()">
+        <div style="font-size:0.72rem;color:var(--text3);">or, on a computer: your HotelOps sign-in password</div>
+        <input type="password" id="gmPwIn" autocomplete="current-password" placeholder="Your HotelOps password" style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid var(--border2,var(--border));background:var(--bg2,var(--card));color:var(--text);font:inherit;font-size:0.85rem;">
+        <button type="submit" class="btn" style="width:100%;">🔑 Open with my password</button>
+      </form>
       <div style="font-family:var(--mono);font-size:0.58rem;color:var(--text3);margin-top:16px;line-height:1.5;">
         Unlocks for 30 minutes · auto-locks after inactivity
       </div>
@@ -4611,7 +4616,8 @@ function clearImmig() {
 
     // ── Ctrl/Cmd+Shift+M — Guest Memory. Not in the nav on purpose;
     // this shortcut (and its own password lock) is the only way in. ──
-    if ((e.key || '').toLowerCase() === 'm' && (e.ctrlKey || e.metaKey) && e.shiftKey) {
+    // (Ctrl+Shift+M is Chrome's own "switch profile" key, so Ctrl+Alt+M works too)
+    if (((e.key || '').toLowerCase() === 'm' || e.code === 'KeyM') && (e.ctrlKey || e.metaKey) && (e.shiftKey || e.altKey)) {
       e.preventDefault();
       if (typeof gmOpen === 'function') gmOpen(); else showPanel('guestmem');
       return;

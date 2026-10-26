@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 420, items: [
+    "🔒 Guest Memory on a computer: the owner can open it now. Before, it needed a Face ID / fingerprint built into the device, so a PC without Windows Hello could never open it. Now: Windows Hello / Touch ID if the PC has it, 📱 your phone (a QR code, confirm with Face ID), or 🔑 your HotelOps sign-in password.",
+    "⌨ New ways in on a PC: Ctrl+Alt+M (Ctrl+Shift+M is Chrome's own “switch profile” key, so Chrome swallowed it), a “🔒 Open” button in Settings (owner only), or hold the HotelOps logo.",
+  ] },
   { v: 419, items: [
     "⚡ WhatsApp Web is smooth again with the HotelOps reader running. It was re-reading the whole chat and saving several times a second while you typed (every letter changed the message box). Now it ignores the box you type in and the search box, waits until you pause typing, re-reads only the part that changed (the open chat or the chat list), skips messages it already read, and saves only when something changed. While typing 60 letters it went from about 5,000 page lookups and 85 saves to none.",
     "Every feature stays: new messages, edits, deleted messages, chat-list previews, sending from HotelOps, the Away guard — and a full check every 30 s as a safety net.",

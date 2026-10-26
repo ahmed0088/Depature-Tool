@@ -626,7 +626,24 @@ const _gmB64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(
 const _gmBuf = s => Uint8Array.from(atob(String(s).replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((String(s).length + 3) % 4)), c => c.charCodeAt(0));
 function _gmFaceRec() { try { const v = JSON.parse(localStorage.getItem(GM_FACE_KEY) || 'null'); return v && v.id && v.uid === _gmUid() ? v : null; } catch (_) { return null; } }
 function _gmFaceOn() { return !!(window.PublicKeyCredential && navigator.credentials && _gmFaceRec()); }
-async function _gmFaceCan() { try { return !!(window.PublicKeyCredential && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()); } catch (_) { return false; } }
+async function _gmFaceBuiltIn() { try { return !!(window.PublicKeyCredential && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()); } catch (_) { return false; } }
+/** a passkey can be used here: the device's own (Face ID, Windows Hello, Touch ID) or, on a computer without one, the phone (QR code) or a security key */
+async function _gmFaceCan() { return !!(window.PublicKeyCredential && navigator.credentials && window.isSecureContext !== false); }
+/** 🔑 the owner on a computer: their HotelOps sign-in password, checked by the sign-in server */
+async function gmPwUnlock() {
+  if (!_gmIsOwner()) { showToast('Only the owner can open Guest Memory', 'err'); return; }
+  const inp = document.getElementById('gmPwIn'), pw = inp ? inp.value : '';
+  if (!pw) { showToast('Type your HotelOps password', 'warn'); return; }
+  try {
+    const u = firebase.auth().currentUser; if (!u || !u.email) throw new Error('not signed in');
+    await u.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(u.email, pw));
+    if (inp) inp.value = '';
+    _gmOpenSession('your password');
+  } catch (e) {
+    const c = String(e && e.code || '');
+    showToast(/wrong-password|invalid-credential|invalid-login/.test(c) ? 'That is not your HotelOps password' : /too-many/.test(c) ? 'Too many tries — wait a few minutes' : 'Could not check the password (offline?)', 'err');
+  }
+}
 
 /** ask for Face ID; true when it passed and the panel is open */
 async function gmFaceCheck() {
@@ -655,7 +672,7 @@ async function gmFaceEnable(andOpen) {
       user: { id: crypto.getRandomValues(new Uint8Array(16)), name: p.email || 'hotelops', displayName: p.name || 'HotelOps' },
       challenge: crypto.getRandomValues(new Uint8Array(32)),
       pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
-      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'discouraged' },
+      authenticatorSelection: Object.assign({ userVerification: 'required', residentKey: 'discouraged' }, (await _gmFaceBuiltIn()) ? { authenticatorAttachment: 'platform' } : {}),   // no built-in one (a PC without Windows Hello): the phone by QR code, or a security key
       timeout: 60000, attestation: 'none' } });
     localStorage.setItem(GM_FACE_KEY, JSON.stringify({ id: _gmB64(cred.rawId), uid: _gmUid(), at: Date.now() }));
     showToast('✓ Face ID saved: only your face opens Guest Memory on this phone', 'ok');
@@ -679,9 +696,13 @@ async function _gmFaceRender() {
     const own = _gmIsOwner(), on = _gmFaceOn(), can = await _gmFaceCan();
     main.style.display = own && can ? '' : 'none';
     main.textContent = on ? '🙂 Unlock with Face ID' : '🙂 Save my Face ID and open';
+    const built = await _gmFaceBuiltIn();
+    main.textContent = on ? (built ? '🙂 Unlock with Face ID / fingerprint' : '📱 Unlock with my phone') : (built ? '🙂 Save my Face ID / fingerprint and open' : '📱 Use my phone (Face ID) and open');
     sub.textContent = !own ? 'Only the owner can open Guest Memory.'
-      : !can ? 'This device has no Face ID / fingerprint for websites. Open Guest Memory on your phone.'
-      : on ? 'Confirm it is you with Face ID.' : 'First time on this phone: save your Face ID. After that, only your face opens it here.';
+      : !can ? 'This browser has no passkeys. Use your password below, or open Guest Memory on your phone.'
+      : on ? 'Confirm it is you.' : built ? 'First time on this device: save your Face ID / fingerprint (Windows Hello on a PC). After that only you open it here.'
+      : 'This computer has no Windows Hello: a QR code shows — scan it with your phone and confirm with Face ID. Or use your password below.';
+    const pf = document.getElementById('gmPwForm'); if (pf) pf.style.display = own ? 'flex' : 'none';
   }
   if (lockBtn && lockBtn.parentNode) {
     let t = document.getElementById('gmFaceToggle');
