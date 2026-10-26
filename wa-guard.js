@@ -65,7 +65,9 @@
     if (v.priv.length) bits.push('💬 ' + v.priv.slice(0, 3).join(', ') + (v.priv.length > 3 ? ` +${v.priv.length - 3}` : ''));
     else if (v.chats.length) bits.push('💬 work chats: ' + v.chats.slice(0, 2).join(', '));
     if (v.searches.length) bits.push('🔎 searched ' + v.searches.slice(0, 3).map(q => '"' + q + '"').join(', '));
-    if (v.typed) bits.push('⌨️ typed a message');
+    const typedTxt = v.ev.filter(e => e.kind === 'type' && /typing:/.test(e.detail || '')).map(e => e.detail.replace(/^.*?typing:\s*/, '')).slice(-2);
+    if (typedTxt.length) bits.push('⌨️ typed ' + typedTxt.join(' · '));
+    else if (v.typed) bits.push('⌨️ typed a message');
     if (v.stopped) bits.push('⛔ closed the reader / WhatsApp');
     return bits;
   }
@@ -176,7 +178,7 @@
       actions: [{ action: 'view', label: 'Open HotelOps', url }] });
     return fetch('https://ntfy.sh/', { method: 'POST', body }).then(r => r.ok).catch(() => false);   // plain-text body: no pre-flight check
   }
-  const evLine = e => (KIND[e.kind] || KIND.touch)[0] + ' ' + (e.kind === 'search' ? e.detail : (KIND[e.kind] || KIND.touch)[1] + (e.chat ? ' · ' + e.chat + (e.work ? ' (work)' : '') : ''));
+  const evLine = e => (KIND[e.kind] || KIND.touch)[0] + ' ' + ((e.kind === 'search' || e.kind === 'type') && e.detail ? e.detail + (e.chat ? ' · ' + e.chat + (e.work ? ' (work)' : '') : '') : (KIND[e.kind] || KIND.touch)[1] + (e.chat ? ' · ' + e.chat + (e.work ? ' (work)' : '') : ''));
   function pushAlert(rec) {
     if (!ST.on || (rec.at || 0) < (ST.since || 0)) return;
     const t = rec.at || Date.now(), need = LEVELS[CFG.level];
@@ -185,17 +187,17 @@
     clearTimeout(vEndT); vEndT = setTimeout(() => endVisit(), SESSION_GAP);
     if (!V.told) {
       if (V.top < need) return;   // only minor things so far: wait
-      setTimeout(() => {   // a moment to gather what happens together (chat + scroll + search)
+      setTimeout(() => {   // urgent: almost instant · lower: a moment to gather what happens together
         if (!V || V.told) return;
         V.told = true; vUpd = Date.now();
         const q = vQ.splice(0);
         notify(V.top >= 3 ? '🚨 Someone is on your WhatsApp' : '⚠️ Someone touched your WhatsApp PC',
           q.slice(-5).map(evLine).join('\n') + (q.length > 5 ? `\n+${q.length - 5} more` : '') + '\n' + clock(V.start), V.top >= 3 ? 5 : 4, ['rotating_light']);
-      }, 2500);
+      }, V.top >= 3 ? 400 : 1800);
       return;
     }
     // already told: an update at most once a minute, louder after 3 minutes
-    if (Date.now() - vUpd < 60e3 || sev(rec) < need) return;
+    if (Date.now() - vUpd < (sev(rec) >= 3 ? 20e3 : 60e3) || sev(rec) < need) return;
     setTimeout(() => {
       if (!V || !vQ.length) return;
       vUpd = Date.now();
@@ -203,7 +205,7 @@
       if (!q.length) return;
       const long = V.end - V.start > 3 * 60e3;
       notify(`⏱ Still on your WhatsApp · ${mins(Date.now() - V.start)}`, q.slice(-5).map(evLine).join('\n'), long ? 5 : 4, ['hourglass']);
-    }, 2500);
+    }, 400);
   }
   /** the visit is over (quiet 3 min, or you're back): one summary of what they did */
   function endVisit(back) {

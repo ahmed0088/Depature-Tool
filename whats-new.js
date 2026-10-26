@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 423, items: [
+    "🛡️ Away guard — faster and sharper. When you've marked yourself away, an alert now reaches your phone in well under a second (it used to wait ~2.5 s). Urgent things (someone typing, searching, opening a chat) are instant; repeat updates come every ~20 s while it keeps happening.",
+    "⌨️ It now tells you WHAT they are typing: the alert shows the words as they write them, e.g. ⌨️ typing: “send me the OTP code now” · Mom — plus which chat they opened and what they searched. Only what they do and the chat name leave the PC; the messages on the screen stay in HotelOps.",
+    "👉 This lives in the WhatsApp reader, so update it once: one-click helper → HotelOps shows “a new version is ready”, download, unzip over the same folder, press ↻ in chrome://extensions. Console copy → copy it again from HotelOps.",
+  ] },
   { v: 422, items: [
     "🧠 Save to Memory is for owners and managers only: the button shows only for them, and the automatic save after importing emails runs only for them too. No unlock needed.",
   ] },

@@ -355,7 +355,7 @@
   // which chat they open, what was on the screen while they scrolled, what they searched, if they typed.
   // Only real hands on the mouse / keyboard count (event.isTrusted) — what this reader does itself never does.
   var guard = LS.get('ho_wa_guard', { on: false, since: 0, auto: 0 }), gq = LS.get('ho_wa_gq', []), gChat = '', gInput = 0, gBurst = {}, gSearchT = 0;
-  var gHuman = Date.now(), gArmAsked = 0;   // the last real mouse / keyboard use on this page (auto-away)
+  var gHuman = Date.now(), gArmAsked = 0, gTypeT = 0;   // the last real mouse / keyboard use on this page (auto-away)
   var GUARD_GRACE = 45000;   // time to walk away after switching it on
   function guardOn() { return !!guard.on && Date.now() - (guard.since || 0) > GUARD_GRACE; }
   function setGuard(g) {
@@ -377,7 +377,8 @@
   }
   function gEvent(kind, detail, withLines) {
     var chat = sp(chatTitle()).slice(0, 80), t = Date.now(), k = kind + '|' + chat + (kind === 'search' ? '|' + detail : '');
-    if (gBurst[k] && t - gBurst[k] < 20000) return;   // scrolling fires many times: one line per chat every 20 s
+    var win = (kind === 'type' || kind === 'search' || kind === 'chat') ? 6000 : 20000;   // the things that matter update sooner; noisy ones (scroll/click/focus) stay calm
+    if (gBurst[k] && t - gBurst[k] < win) return;
     gBurst[k] = t;
     var work = !!chat && groups.some(function (g) { return groupMatch(g.name, chat); });   // one of your work groups: less serious
     gq.push({ id: 'g' + t.toString(36) + Math.random().toString(36).slice(2, 6), at: t, kind: kind, chat: chat, work: work, detail: String(detail || '').slice(0, 140), lines: withLines === false ? [] : visibleLines() });
@@ -394,7 +395,16 @@
     var side = document.getElementById('side'), foot = document.querySelector('#main footer');
     if (e.type === 'keydown' || e.type === 'input') {
       if (side && tg && side.contains(tg)) { clearTimeout(gSearchT); gSearchT = setTimeout(function () { var q = searchText(); if (q) gEvent('search', 'searched for "' + q + '"', false); }, 1500); return; }
-      if (foot && tg && foot.contains(tg)) { gEvent('type', 'typing a message in this chat'); return; }
+      if (foot && tg && foot.contains(tg)) {
+        // read what is being typed on 'input' (the character is in the box by then), and wait a beat so the
+        // snapshot is what they've written so far, not the first letter; the newest text replaces an older line
+        clearTimeout(gTypeT); gTypeT = setTimeout(function () {
+          var cb = composeBox(), typed = cb ? sp(cb.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 120) : '';
+          delete gBurst['type|' + sp(chatTitle()).slice(0, 80)];   // let the fuller text through, not stuck on the first keystroke
+          gEvent('type', typed ? 'typing: “' + typed + '”' : 'typing a message in this chat');
+        }, 500);
+        return;
+      }
     }
     if (e.type === 'wheel' || (e.type === 'keydown' && /^(?:PageUp|PageDown|ArrowUp|ArrowDown|Home|End)$/.test(e.key))) { setTimeout(function () { gEvent('read', 'scrolling and reading'); }, 600); return; }
     if (e.type === 'pointerdown') gEvent('touch', 'clicking in WhatsApp', false);
