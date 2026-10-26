@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 421, items: [
+    "🧠 “Save to Memory” (Arrivals, Purpose of Stay) works straight away — no unlocking Guest Memory first. Saving only adds the loaded guests and shows nobody's data. Opening, reading, editing, exporting and deleting stay behind the lock.",
+  ] },
   { v: 420, items: [
     "🔒 Guest Memory on a computer: the owner can open it now. Before, it needed a Face ID / fingerprint built into the device, so a PC without Windows Hello could never open it. Now: Windows Hello / Touch ID if the PC has it, 📱 your phone (a QR code, confirm with Face ID), or 🔑 your HotelOps sign-in password.",
     "⌨ New ways in on a PC: Ctrl+Alt+M (Ctrl+Shift+M is Chrome's own “switch profile” key, so Chrome swallowed it), a “🔒 Open” button in Settings (owner only), or hold the HotelOps logo.",

@@ -367,7 +367,9 @@ function gmOnEdit(name, field, value) {
 
 // ── "Save to Memory" button ───────────────────────────────
 function gmScanAndSaveAll() {
-  if (!_gmUnlocked) { showToast('Unlock Guest Memory first 🔒', 'err'); return; }
+  // saving shows nobody's data (it only adds the loaded guests, like the automatic save after importing emails):
+  // no unlock needed. Reading, editing, exporting and deleting stay behind the lock.
+  if (!_gmReady) { showToast('Guest Memory is still loading — try again in a moment', 'warn'); return; }
   gmCancelAutoSave();
   const r = _gmMergeLoaded();
   if (!r) { showToast('No guests loaded — load Arrivals or Purpose first', 'err'); return; }
