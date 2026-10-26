@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 419, items: [
+    "⚡ WhatsApp Web is smooth again with the HotelOps reader running. It was re-reading the whole chat and saving several times a second while you typed (every letter changed the message box). Now it ignores the box you type in and the search box, waits until you pause typing, re-reads only the part that changed (the open chat or the chat list), skips messages it already read, and saves only when something changed. While typing 60 letters it went from about 5,000 page lookups and 85 saves to none.",
+    "Every feature stays: new messages, edits, deleted messages, chat-list previews, sending from HotelOps, the Away guard — and a full check every 30 s as a safety net.",
+    "👉 Using the one-click helper? HotelOps shows “a new version is ready” — download it again, unzip over the same folder and press ↻ on it in chrome://extensions. Using the console copy? Copy it again from HotelOps.",
+  ] },
   { v: 418, items: [
     "✋ Shift tasks: HotelOps never ticks a task by itself any more. When it can see the work looks done (e.g. Purpose of Stay filled for every guest), the task only shows “🤖 Looks done: … ✓ Tick it ✕” — you decide. ✕ means not done: it isn't suggested again that shift.",
   ] },

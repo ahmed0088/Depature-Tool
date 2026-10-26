@@ -169,8 +169,14 @@
     if (day.date !== todayIso()) day = { date: todayIso(), read: 0, sent: 0, acts: 0, times: [] };
     if (day.times.length > 600) day.times = day.times.slice(-600);
     out = out.filter(function (o) { return Date.now() - o.at < 864e5; }).slice(-40);
-    LS.set('ho_wa_seen', seen); LS.set('ho_wa_q', queue); LS.set('ho_wa_day', day); LS.set('ho_wa_out', out); LS.set('ho_wa_ans', answers);
+    // written only when it changed (writing the browser's storage on every look was part of what slowed WhatsApp)
+    [['ho_wa_seen', seen], ['ho_wa_q', queue], ['ho_wa_day', day], ['ho_wa_out', out], ['ho_wa_ans', answers]].forEach(function (x) {
+      var j; try { j = JSON.stringify(x[1]); } catch (_) { return; }
+      if (savedJ[x[0]] === j) return; savedJ[x[0]] = j;
+      try { localStorage.setItem(x[0], j); } catch (_) {}
+    });
   }
+  var savedJ = {};
 
   // ── reading WhatsApp (several fallbacks; any miss just reads nothing) ──
   function chatTitle() {
@@ -260,9 +266,14 @@
     toast('🗑 A message was deleted in WhatsApp · HotelOps undoes it', 'warn');
     return true;
   }
+  // a message row already read, unchanged since: nothing to do (an edit or a delete changes its text, so it is looked at again)
+  var rowSig = typeof WeakMap === 'function' ? new WeakMap() : null;
   function readOpen(g) {
     var now = new Date();
     rows().forEach(function (row) {
+      var id = row.getAttribute('data-id'), sig = id + '|' + row.childElementCount + '|' + (row.textContent || '');   // the whole text: an edit of the same length is still seen
+      if (rowSig && seen[id] !== undefined && !delWait[id] && rowSig.get(row) === sig) return;
+      if (rowSig) rowSig.set(row, sig);
       if (checkDeleted(row)) return;
       var m = readRow(row); if (!m) return;
       // first look at the group: today's messages on screen (the catch-up); later, new ones (a row with no date counts as today)
@@ -325,13 +336,16 @@
     });
   }
   var lastScan = 0;
+  // what changed since the last look (set by the page watcher): only that is read again; everything once every 30 s anyway
+  var dirtyMain = true, dirtyList = true, fullAt = 0;
   function scan() {
     if (stopped) return;
-    lastScan = Date.now();
+    var t0 = Date.now(), full = t0 - fullAt > 30000;
+    lastScan = t0; if (full) fullAt = t0;
     var g = openGroup(), key = g ? g.name : '';
-    if (key !== curKey) { firstScan = true; curKey = key; }
-    if (g) readOpen(g);
-    watchList();
+    if (key !== curKey) { firstScan = true; curKey = key; dirtyMain = true; }
+    if (g && (dirtyMain || firstScan || full)) { dirtyMain = false; readOpen(g); }
+    if (dirtyList || full) { dirtyList = false; watchList(); }
     trySend(); checkTyped();
     save(); flush(); render();
   }
@@ -464,7 +478,8 @@
     if (mode === 'waiting' && !lastPong && t - openedAt > 8000) mode = 'copy';     // WhatsApp cut the link to the tab (or it never loaded)
     if (mode === 'linked' && (!win || win.closed || t - lastPong > 15000)) mode = win && !win.closed ? 'waiting' : 'idle';
     if (mode === 'waiting' && lastPong && t - lastPong < 15000) mode = 'linked';
-    if (t - lastScan > 4500) scan(); else { flush(); render(); }
+    if (typing()) flush();                                   // ⌨ your fingers are on the keyboard: nothing heavy now
+    else if (t - lastScan > 4500) scan(); else { flush(); render(); }
     try { guardTick(); } catch (_) {}
   }
 
@@ -1266,15 +1281,29 @@
     if (a) a.onfinish = function () { root.remove(); }; else root.remove();
     setTimeout(function () { root.remove(); }, 900);
   }
+  // ⌨ while you type, WhatsApp changes the box you type in at every letter: that is not news, and reading the
+  // whole chat each time made typing heavy. The box (and the search box) are ignored, and while your fingers are
+  // on the keyboard the reader waits until you pause (at most 4 s), then reads once.
+  var typedAt = 0;
+  document.addEventListener('keydown', function (e) { if (e.isTrusted) typedAt = Date.now(); }, { capture: true, passive: true });
+  function typing() { return Date.now() - typedAt < 900; }
+  function laterScan(ms) { if (deb) return; deb = setTimeout(function () { deb = 0; if (typing() && Date.now() - lastScan < 4000) { laterScan(500); return; } scan(); }, ms); }
   obs = new MutationObserver(function (recs) {
-    // our own window changing is not news; only the open chat and the chat list matter
-    if (!recs.some(function (r) { var t = r.target; if (!t || root.contains(t) || mini.contains(t) || toastHost.contains(t)) return false; var e = t.nodeType === 1 ? t : t.parentElement; return !!(e && e.closest && e.closest('#main, #pane-side')); })) return;
-    if (deb) return;                                  // already planned: read within 250 ms, never pushed back by more changes
-    deb = setTimeout(function () { deb = 0; scan(); }, 250);
+    // our own window changing is not news; only the open chat and the chat list matter — not the box you type in
+    var hit = false;
+    for (var i = 0; i < recs.length; i++) {
+      var t = recs[i].target; if (!t || root.contains(t) || mini.contains(t) || toastHost.contains(t)) continue;
+      var e = t.nodeType === 1 ? t : t.parentElement; if (!e || !e.closest) continue;
+      if (e.closest('#main footer, [contenteditable="true"], #side header, #side [role="textbox"]')) continue;
+      if (e.closest('#main')) { dirtyMain = true; hit = true; } else if (e.closest('#pane-side')) { dirtyList = true; hit = true; }
+      if (dirtyMain && dirtyList) break;
+    }
+    if (!hit) return;
+    laterScan(250);                                   // already planned: read within 250 ms (later while you type)
   });
   obs.observe(document.body, { childList: true, subtree: true, characterData: true });
   window.addEventListener('message', onMsg);
-  iv1 = setInterval(tick, 2000); iv2 = setInterval(scan, 5000); iv3 = setInterval(relTick, 30000);
+  iv1 = setInterval(tick, 2000); iv2 = setInterval(function () { if (typing()) laterScan(500); else scan(); }, 5000); iv3 = setInterval(relTick, 30000);
   // the HotelOps helper carries the messages between this tab and HotelOps: linked at once, no button, no new tab
   if (EXT && typeof EXT.post === 'function') {
     win = { closed: false, focus: function () {}, postMessage: function (o) { try { EXT.post(o); } catch (_) {} } };
