@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 422, items: [
+    "🧠 Save to Memory is for owners and managers only: the button shows only for them, and the automatic save after importing emails runs only for them too. No unlock needed.",
+  ] },
   { v: 421, items: [
     "🧠 “Save to Memory” (Arrivals, Purpose of Stay) works straight away — no unlocking Guest Memory first. Saving only adds the loaded guests and shows nobody's data. Opening, reading, editing, exporting and deleting stay behind the lock.",
   ] },

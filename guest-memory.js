@@ -366,9 +366,12 @@ function gmOnEdit(name, field, value) {
 }
 
 // ── "Save to Memory" button ───────────────────────────────
+/** only an owner or a manager adds guests to Guest Memory (the button, and the automatic save after importing emails) */
+function _gmCanSave() { const r = typeof currentProfile !== 'undefined' && currentProfile ? currentProfile.role : ''; return r === 'owner' || r === 'manager'; }
 function gmScanAndSaveAll() {
-  // saving shows nobody's data (it only adds the loaded guests, like the automatic save after importing emails):
-  // no unlock needed. Reading, editing, exporting and deleting stay behind the lock.
+  // saving shows nobody's data (it only adds the loaded guests): no unlock needed — but only an owner or a manager may.
+  // Reading, editing, exporting and deleting stay behind the lock.
+  if (!_gmCanSave()) { showToast('Only an owner or a manager can save to Guest Memory', 'err'); return; }
   if (!_gmReady) { showToast('Guest Memory is still loading — try again in a moment', 'warn'); return; }
   gmCancelAutoSave();
   const r = _gmMergeLoaded();
@@ -385,6 +388,7 @@ function gmScanAndSaveAll() {
 const GM_AUTOSAVE_MS = 120000;
 let _gmAutoT = null;
 function gmScheduleAutoSave(quiet) {
+  if (!_gmCanSave()) return;   // only an owner or a manager adds to Guest Memory
   clearTimeout(_gmAutoT);
   _gmAutoT = setTimeout(() => gmAutoSaveNow(quiet ? 'quiet' : 'timer'), GM_AUTOSAVE_MS);
   if (!quiet) showToast('📧 Emails imported — they go into Guest Memory automatically in 2 minutes (or tap 🧠 Save to Memory now)', 'ok');
@@ -393,7 +397,7 @@ function gmCancelAutoSave() { clearTimeout(_gmAutoT); _gmAutoT = null; }
 function gmAutoSaveNow(why) {
   if (!_gmAutoT && why !== 'force') return;
   gmCancelAutoSave();
-  if (!_gmReady) return;
+  if (!_gmReady || !_gmCanSave()) return;
   const r = _gmMergeLoaded();
   if (!r) return;
   _gmPersistNow();
@@ -725,3 +729,9 @@ function gmOpen() {
   if (!_gmUnlocked && _gmIsOwner() && _gmFaceOn()) gmFaceCheck();
 }
 setTimeout(() => { try { _gmFaceRender(); } catch (_) {} }, 1500);
+
+// the "Save to Memory" buttons show only for an owner or a manager
+(function () {
+  function paint() { const ok = _gmCanSave(); document.querySelectorAll('[onclick="gmScanAndSaveAll()"]').forEach(b => { b.style.display = ok ? '' : 'none'; }); }
+  setInterval(paint, 2000); document.addEventListener('DOMContentLoaded', () => setTimeout(paint, 500));
+})();
