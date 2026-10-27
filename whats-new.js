@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 426, items: [
+    "🧩 The WhatsApp helper now updates itself. Download it one last time (WhatsApp window → “Get v426”), unzip over the same folder and press ↻ in chrome://extensions. Then click Details on the helper and turn on “Allow User Scripts”. From then on, every HotelOps update reaches the helper on its own — no more downloading and re-adding it.",
+    "🔁 When a new reader arrives, WhatsApp Web restarts into it only when nobody is using that window (it's in the background, or untouched for 2 minutes), so it never interrupts you mid-chat.",
+  ] },
   { v: 425, items: [
     "🔄 No more refreshing like crazy: when you come back to the app it no longer reloads itself because an update arrived — a small bar offers the update instead, and it also loads on its own the next time you open the app. Update checks are now at most every 10 minutes.",
     "📍 Back where you were: if your phone closed the app in the background, it now reopens on the same page and the same spot you scrolled to (within 30 minutes). Opening it from a notification still goes to that notification's page.",

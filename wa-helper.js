@@ -7,8 +7,9 @@
 //    • on HotelOps it listens, and a little relay in the middle carries the
 //      messages between the two tabs — so they link on their own, whichever
 //      opened first, with no "Connect" button and no extra tab.
-//  "🟢 Open WhatsApp Web" then is the only click. When HotelOps changes the
-//  reader, the WhatsApp window says so and offers the new helper.
+//  "🟢 Open WhatsApp Web" then is the only click. When HotelOps updates, it
+//  hands the helper the new reader by itself (Chrome's "Allow User Scripts"
+//  switch for the helper lets it run) — no new download.
 //  The helper reads nothing else and talks to nobody but these two sites.
 // ═══════════════════════════════════════════════════════════
 
@@ -38,35 +39,25 @@
   }
 
   // ── the extension's files ──
-  function files(reader, appOrigin) {
-    const v = ver();
-    const manifest = {
-      manifest_version: 3, name: 'HotelOps WhatsApp helper', version: String(v).replace(/[^\d.]/g, '') || '1',
-      description: 'Starts the HotelOps WhatsApp reader on WhatsApp Web and links it to HotelOps. Nothing else.',
-      background: { service_worker: 'relay.js' },
-      content_scripts: [
-        { matches: ['https://web.whatsapp.com/*'], js: ['whatsapp.js'], run_at: 'document_idle' },
-        { matches: [appOrigin + '/*'], js: ['hotelops.js'], run_at: 'document_start' },
-      ],
-    };
-    // the relay: every WhatsApp tab ↔ every HotelOps tab
-    const relay = `// HotelOps WhatsApp helper · relay between the WhatsApp Web tab and the HotelOps tab
-const ports = { wa: new Set(), app: new Set() };
-chrome.runtime.onConnect.addListener(p => {
-  const side = p.name === 'wa' ? 'wa' : 'app', other = side === 'wa' ? 'app' : 'wa';
-  ports[side].add(p);
-  p.onMessage.addListener(m => ports[other].forEach(q => { try { q.postMessage(m); } catch (_) {} }));
-  p.onDisconnect.addListener(() => ports[side].delete(p));
-});`;
-    // WhatsApp side: the link, then the reader itself
-    const wa = `// HotelOps WhatsApp helper ${v} · starts the reader on WhatsApp Web
+  // The WhatsApp side: the link to the relay, then the reader. The helper keeps a copy of this inside it, and
+  // (from v425) HotelOps hands it a fresh one whenever HotelOps itself updates — so the helper never needs
+  // downloading again. The fresh copy runs as a "user script"; the copy in the zip is only the fallback.
+  function waSide(reader, appOrigin, v, fresh) {
+    return `// HotelOps WhatsApp helper · reader ${v}${fresh ? ' (updated by itself)' : ''} · starts the reader on WhatsApp Web
+${fresh ? `try { document.documentElement.dataset.hoWaUs = ${JSON.stringify(v)}; } catch (_) {}` : `if (!document.documentElement.dataset.hoWaUs) {   // a newer reader (updated by itself) is running instead`}
 (function () {
   if (window.__hoWaExt) return;
   const ORIGIN = ${JSON.stringify(appOrigin)};
-  let port = null;
+  let port = null, act = Date.now(), again = null;
+  ['keydown', 'mousedown', 'touchstart'].forEach(t => addEventListener(t, () => { act = Date.now(); }, true));
+  // a newer reader arrived: restart WhatsApp Web into it when nobody is using this window (hidden, or 2 min untouched)
+  const restart = () => { if (document.hidden || Date.now() - act > 120000) location.reload(); else again = setTimeout(restart, 30000); };
   const open = () => {
     port = chrome.runtime.connect({ name: 'wa' });
-    port.onMessage.addListener(m => window.dispatchEvent(new MessageEvent('message', { data: m, origin: ORIGIN })));
+    port.onMessage.addListener(m => {
+      if (m && m.source === 'ho-wa-ext-new') { if (!again) again = setTimeout(restart, 5000); return; }
+      window.dispatchEvent(new MessageEvent('message', { data: m, origin: ORIGIN }));
+    });
     port.onDisconnect.addListener(() => { port = null; setTimeout(open, 1000); });   // the relay sleeps now and then: wake it
   };
   open();
@@ -79,17 +70,78 @@ chrome.runtime.onConnect.addListener(p => {
   setTimeout(() => { if (!window.__hoWa) {
 ${reader}
   } }, 1500);
-})(0);`;
+})(0);${fresh ? '' : '\n}'}`;
+  }
+  function files(reader, appOrigin) {
+    const v = ver();
+    const manifest = {
+      manifest_version: 3, name: 'HotelOps WhatsApp helper', version: String(v).replace(/[^\d.]/g, '') || '1',
+      description: 'Starts the HotelOps WhatsApp reader on WhatsApp Web and links it to HotelOps. Updates itself from HotelOps. Nothing else.',
+      background: { service_worker: 'relay.js' },
+      permissions: ['storage', 'userScripts'],
+      content_scripts: [
+        { matches: ['https://web.whatsapp.com/*'], js: ['whatsapp.js'], run_at: 'document_idle' },
+        { matches: [appOrigin + '/*'], js: ['hotelops.js'], run_at: 'document_start' },
+      ],
+    };
+    // the relay: every WhatsApp tab ↔ every HotelOps tab, and it keeps the newest reader HotelOps hands it
+    const relay = `// HotelOps WhatsApp helper · relay between the WhatsApp Web tab and the HotelOps tab
+const ports = { wa: new Set(), app: new Set() };
+const BUILT = chrome.runtime.getManifest().version, ID = 'hotelops-wa';
+const num = v => parseFloat(String(v || '').replace(/[^\\d.]/g, '')) || 0;
+// "Allow User Scripts" is on for this helper (chrome://extensions → Details): only then can a newer reader run
+const canRun = () => { try { chrome.userScripts.getScripts().catch(() => {}); return true; } catch (_) { return false; } };   // Chrome's own test: the call throws while it is off
+async function newest() { const s = await chrome.storage.local.get('reader'); return s.reader && num(s.reader.v) > num(BUILT) ? s.reader : null; }
+async function info() { const r = await newest(); return { source: 'ho-wa-ext-info', v: r ? r.v : BUILT, us: canRun() }; }
+let busy = Promise.resolve();
+function ensure() {
+  return busy = busy.then(async () => {
+    if (!canRun()) return false;
+    const r = await newest(), have = await chrome.userScripts.getScripts({ ids: [ID] }), { on } = await chrome.storage.local.get('on');
+    if (!r) { if (have.length) await chrome.userScripts.unregister({ ids: [ID] }); await chrome.storage.local.remove('on'); return true; }
+    if (have.length && on === r.v) return true;
+    try { await chrome.userScripts.configureWorld({ messaging: true }); } catch (_) {}
+    const def = { id: ID, matches: ['https://web.whatsapp.com/*'], js: [{ code: r.code }], runAt: 'document_start' };
+    if (have.length) await chrome.userScripts.update([def]); else await chrome.userScripts.register([def]);
+    await chrome.storage.local.set({ on: r.v });
+    return true;
+  }).catch(() => false);
+}
+const tell = async () => { const i = await info(); ports.app.forEach(q => { try { q.postMessage(i); } catch (_) {} }); };
+function link(p) {
+  const side = p.name === 'wa' ? 'wa' : 'app', other = side === 'wa' ? 'app' : 'wa';
+  ports[side].add(p);
+  if (side === 'app') ensure().then(tell);
+  p.onMessage.addListener(async m => {
+    if (m && m.source === 'ho-wa-ext-code') {   // HotelOps updated: keep its reader and run it from now on
+      if (side !== 'app' || typeof m.code !== 'string' || num(m.v) <= num((await info()).v)) return tell();
+      await chrome.storage.local.set({ reader: { v: String(m.v), code: m.code, at: Date.now() } });
+      const ok = await ensure(); await tell();
+      if (ok && canRun()) ports.wa.forEach(q => { try { q.postMessage({ source: 'ho-wa-ext-new', v: m.v }); } catch (_) {} });
+      return;
+    }
+    ports[other].forEach(q => { try { q.postMessage(m); } catch (_) {} });
+  });
+  p.onDisconnect.addListener(() => ports[side].delete(p));
+}
+chrome.runtime.onConnect.addListener(link);
+if (chrome.runtime.onUserScriptConnect) chrome.runtime.onUserScriptConnect.addListener(link);
+ensure();`;
+    const wa = waSide(reader, appOrigin, v, false);
     // HotelOps side: show that the helper is here, and carry the messages
     const app = `// HotelOps WhatsApp helper ${v} · links HotelOps to WhatsApp Web
 (function () {
-  document.documentElement.dataset.hoWaHelper = ${JSON.stringify(v)};
+  const D = document.documentElement.dataset;
+  D.hoWaHelper = ${JSON.stringify(v)}; D.hoWaAuto = '1';
   let port = null;
-  const BACK = d => d && typeof d === 'object' && (d.source === 'ho-wa-pong' || d.source === 'ho-wa-ack' || d.source === 'ho-wa-gack'
+  const BACK = d => d && typeof d === 'object' && (d.source === 'ho-wa-pong' || d.source === 'ho-wa-ack' || d.source === 'ho-wa-gack' || d.source === 'ho-wa-ext-code'
     || (d.source === 'ho-wa' && (d.send || d.words || (d.guard && !d.guard.events && !d.guard.arm))));
   const open = () => {
     port = chrome.runtime.connect({ name: 'app' });
-    port.onMessage.addListener(m => window.postMessage(m, location.origin));
+    port.onMessage.addListener(m => {
+      if (m && m.source === 'ho-wa-ext-info') { D.hoWaUs = m.us ? '1' : '0'; D.hoWaCode = String(m.v); }
+      window.postMessage(m, location.origin);
+    });
     port.onDisconnect.addListener(() => { port = null; setTimeout(open, 1000); });
   };
   open();
@@ -103,19 +155,36 @@ Add it once (Chrome or Edge on the desk PC):
 2. Open chrome://extensions  (Edge: edge://extensions)
 3. Turn on "Developer mode" (top right in Chrome, left in Edge).
 4. Click "Load unpacked" and pick the folder.
+5. For automatic updates: click "Details" on HotelOps WhatsApp helper and turn on "Allow User Scripts".
 That's it. Open WhatsApp Web: the HotelOps window starts by itself and links to HotelOps.
 
-New version? Download it again in HotelOps, unzip over the same folder, then press ↻ on the helper in chrome://extensions.
+Updates: nothing to do. When HotelOps updates, it hands the helper the new reader, and WhatsApp Web
+restarts into it the next time nobody is using that window. (Only if step 5 is off you would need to
+download again.)
 It only runs on web.whatsapp.com and ${appOrigin}.`;
     return [['manifest.json', JSON.stringify(manifest, null, 2)], ['relay.js', relay], ['whatsapp.js', wa], ['hotelops.js', app], ['README.txt', readme]];
   }
 
+  // the reader as it is in this version of HotelOps (the WhatsApp side of the helper)
+  async function reader() {
+    const raw = await fetch('tools/hotelops-whatsapp.console.js', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.text(); });
+    return W.hoWaPure.snippet(raw, location.origin + location.pathname);
+  }
+  // HotelOps updated and the helper still runs an older reader: hand it this one (once per open)
+  let handed = '';
+  async function autoUpdate() {
+    const d = doc.documentElement.dataset, v = ver();
+    if (!d.hoWaAuto || !d.hoWaCode || handed === v || !W.hoWaPure) return;
+    if (!(parseFloat(v) > parseFloat(d.hoWaCode))) return;
+    handed = v;
+    try { W.postMessage({ source: 'ho-wa-ext-code', v, code: waSide(await reader(), location.origin, v, true) }, location.origin); }
+    catch (_) { handed = ''; }
+  }
+  W.addEventListener('message', e => { if (e.source === W && e.data && e.data.source === 'ho-wa-ext-info') { setTimeout(autoUpdate, 1000); tick(); } });
+
   async function download() {
     try {
-      const raw = await fetch('tools/hotelops-whatsapp.console.js', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.text(); });
-      const app = location.origin + location.pathname;
-      const reader = W.hoWaPure.snippet(raw, app);
-      const blob = zip(files(reader, location.origin));
+      const blob = zip(files(await reader(), location.origin));
       const a = doc.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'HotelOps-WhatsApp-helper.zip';
       doc.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       try { localStorage.setItem('ho_wa_helper_dl', ver()); } catch (_) {}
@@ -135,16 +204,21 @@ It only runs on web.whatsapp.com and ${appOrigin}.`;
     const host = doc.querySelector('#waCard .wa-body'); if (!host) return;
     let el = doc.getElementById('waHelper');
     if (!el) { el = doc.createElement('section'); el.id = 'waHelper'; el.className = 'wa-sec wa-helper'; host.insertBefore(el, host.firstChild); }
-    const have = installed(), old = have && have !== ver();
+    const d = doc.documentElement.dataset, auto = !!d.hoWaAuto, us = d.hoWaUs === '1';
+    const have = installed() && (auto && d.hoWaCode || installed()), old = have && parseFloat(have) < parseFloat(ver());
     const linked = W.hoWaBridge && W.hoWaBridge.link && (W.hoWaBridge.link() || {}).linked;
     el.innerHTML = `<div class="wa-hp-row">
         <button type="button" class="wa-hp-go" onclick="hoWaHelper.openWa()">${linked ? '✓ Linked · open WhatsApp Web' : '🟢 Open WhatsApp Web'}</button>
-        <div class="wa-hp-st">${have ? (old ? `<b class="wa-hp-warn">Helper ${esc(have)} · a new version is ready</b><button type="button" class="wa-hp-lnk" onclick="hoWaHelper.download()">Get v${esc(ver())}</button>` : `<b class="wa-hp-ok">⚡ One-click helper on</b><span>WhatsApp links by itself</span>`)
+        <div class="wa-hp-st">${have ? (!auto ? `<b class="wa-hp-warn">Get the new helper once — then it updates by itself</b><button type="button" class="wa-hp-lnk" onclick="hoWaHelper.download()">⬇ Get v${esc(ver())} (last download)</button>`
+          : !us ? `<b class="wa-hp-${old ? 'warn' : 'ok'}">⚡ One-click helper on${old ? ' · reader ' + esc(have) + ' (older)' : ''}</b><span>Automatic updates: in <code>chrome://extensions</code> click <b>Details</b> on the HotelOps helper and turn on <b>Allow User Scripts</b>, then reload this page.</span>`
+          : old ? `<b class="wa-hp-ok">⚡ Updating the helper to ${esc(ver())}…</b><span>WhatsApp Web restarts into it when nobody is using it</span>`
+          : `<b class="wa-hp-ok">⚡ One-click helper on</b><span>Links by itself · updates by itself</span>`)
           : `<b>Link with one click</b><button type="button" class="wa-hp-lnk" onclick="hoWaHelper.download()">⬇ Get the helper</button>`}</div></div>
       ${!have ? `<details class="wa-hp-steps" id="waHelperSteps"><summary>How to add it (once, 1 minute)</summary><ol>
         <li><button type="button" class="wa-hp-lnk" onclick="hoWaHelper.download()">⬇ Download the helper</button> and unzip it into a folder you keep.</li>
         <li>Open <code>chrome://extensions</code> (Edge: <code>edge://extensions</code>) and turn on <b>Developer mode</b>.</li>
         <li>Click <b>Load unpacked</b> and pick the folder.</li>
+        <li>Click <b>Details</b> on the helper and turn on <b>Allow User Scripts</b> — then it updates by itself, you never download it again.</li>
         <li>Reload this page, then press <b>🟢 Open WhatsApp Web</b>. It starts and links by itself — no F12, no paste, no Connect button.</li></ol>
         <small>Works on Chrome and Edge on the desk PC (not on phones). It runs only on WhatsApp Web and HotelOps.</small></details>` : ''}`;
   }
@@ -164,7 +238,7 @@ It only runs on web.whatsapp.com and ${appOrigin}.`;
   // draw it when the WhatsApp window is there, and again when the helper or the link changes
   const tick = () => { try { card(); } catch (_) {} };
   setTimeout(tick, 1500); setInterval(() => { if (doc.getElementById('waCard')) tick(); }, 5000);
-  new MutationObserver(tick).observe(doc.documentElement, { attributes: true, attributeFilter: ['data-ho-wa-helper'] });
+  new MutationObserver(tick).observe(doc.documentElement, { attributes: true, attributeFilter: ['data-ho-wa-helper', 'data-ho-wa-code', 'data-ho-wa-us'] });
 
-  W.hoWaHelper = { download, openWa, installed, files, zip, card };
+  W.hoWaHelper = { download, openWa, installed, files, zip, card, waSide, autoUpdate };
 })(window);
