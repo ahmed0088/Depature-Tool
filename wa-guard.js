@@ -17,6 +17,9 @@
 //    here's what they did" — and you choose what reaches the phone.
 //  • Auto-away: the guard switches itself on when the WhatsApp PC has had
 //    no mouse / keyboard for N minutes (you choose, or off).
+//  • The 📲 phone setup here (ntfy / Telegram) is the one every HotelOps alert
+//    uses: notify-hub.js sends through it, and the guard's own alerts go
+//    through the hub too (instant, even in quiet hours) when it is loaded.
 //  • Saved under your own account: waGuard/{your uid} = { on, since, by, auto,
 //    cfg: {level, auto}, beat: {at, linked}, ntfy: {topic},
 //    log: {id: {at, kind, chat, detail, lines, work}} }.
@@ -228,8 +231,17 @@
     if (/^https:/.test(url)) p.reply_markup = JSON.stringify({ inline_keyboard: [[{ text: '🛡 Open HotelOps', url }]] });
     return tgCall(TG.token, 'sendMessage', p).then(j => !!(j && j.ok));
   }
-  /** every alert goes to every way you set up */
-  function notify(title, message, priority, tags) {
+  /** every alert goes to every way you set up — through the 📲 notification hub when it's loaded (category
+   *  "guard": instant, never batched, never held by quiet hours; its log and switch), else straight out.
+   *  opt.force: a test / a manual send (ignores the hub's switches) */
+  function notify(title, message, priority, tags, opt) {
+    const H = W.hoNotify;
+    if (H && typeof H.send === 'function' && H.ready && H.ready()) {
+      try {
+        return Promise.resolve(H.send({ cat: 'guard', title, body: message, prio: priority || 5, tags: tags || ['rotating_light'], url: '#wa-guard',
+          instant: true, ignoreQuiet: true, claimed: true, toast: false, force: !!(opt && opt.force) })).then(Boolean, () => false);
+      } catch (_) {}
+    }
     return Promise.all([ntfy(title, message, priority, tags), tgSend(title, message, priority)]).then(r => r.some(Boolean));
   }
   let tgWiz = null, tgPoll = 0;   // { step, token, bot, code, err }
@@ -279,7 +291,7 @@
   function pushOff() { if (!confirm('Stop ntfy alerts?')) return; NTFY = null; if (typeof fbSet === 'function') fbSet(P('ntfy'), null); render(); }
   function pushCopy() { if (!NTFY) return; try { navigator.clipboard.writeText(NTFY.topic).then(() => toast('Copied ✓ — paste it in ntfy'), () => prompt('Copy this', NTFY.topic)); } catch (_) { prompt('Copy this', NTFY.topic); } }
   function pushTest() {
-    notify('🧪 Test from HotelOps', 'Alerts work ✓ You\'ll get one here if someone uses your WhatsApp while you\'re away.', 4, ['shield'])
+    notify('🧪 Test from HotelOps', 'Alerts work ✓ You\'ll get one here if someone uses your WhatsApp while you\'re away.', 4, ['shield'], { force: true })
       .then(ok => toast(ok ? 'Test sent — check your phone' : 'Could not send — check the internet and try again', ok ? 'ok' : 'err'));
   }
   const TG_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#29a9eb"/><path d="M5.4 11.8l11.3-4.4c.5-.2 1 .1.8.9l-1.9 9c-.1.6-.5.8-1 .5l-2.9-2.1-1.4 1.3c-.2.2-.3.3-.6.3l.2-3 5.4-4.9c.2-.2 0-.3-.3-.1l-6.7 4.2-2.9-.9c-.6-.2-.6-.6.1-.9z" fill="#fff"/></svg>';
@@ -453,5 +465,7 @@ html.wg-away .topbar .logo::after{content:'🛡';margin-left:4px;font-size:13px}
 
   if (/wa-guard/.test(location.hash)) setTimeout(() => { open(); try { history.replaceState(null, '', location.pathname + location.search); } catch (_) {} }, 1800);   // tapped a lock-screen alert
 
-  W.hoWaGuard = { tgStart, tgToken, tgPaste, tgCancel, tgOff, tgStep: n => { if (tgWiz) { tgWiz.step = n; tgWiz.err = ''; render(); setTimeout(() => document.getElementById('wgTok')?.focus(), 50); } }, notify, open, close, set, setCfg, state, fromReader, clearLog, render, sev, visits, pushSetup, pushOff, pushCopy, pushTest, _st: () => ({ ST, LOG, BEAT }) };
+  W.hoWaGuard = { tgStart, tgToken, tgPaste, tgCancel, tgOff, tgStep: n => { if (tgWiz) { tgWiz.step = n; tgWiz.err = ''; render(); setTimeout(() => document.getElementById('wgTok')?.focus(), 50); } }, notify, open, close, set, setCfg, state, fromReader, clearLog, render, sev, visits, pushSetup, pushOff, pushCopy, pushTest, _st: () => ({ ST, LOG, BEAT }),
+    /** the ways to the phone you set up here (the notification hub sends through the same ones) */
+    channels: () => ({ tg: TG && TG.chat ? Object.assign({}, TG) : null, ntfy: NTFY ? Object.assign({}, NTFY) : null }) };
 })(window);

@@ -1306,6 +1306,8 @@ function mount() {
   setTimeout(() => ensureData(30), 6000);
 }
 
-W.hoRoomHealth = { render: () => render(), refresh: () => refresh(true), forRoom, cardHtml: roomCardHtml, recs: () => R.recs.slice(), cases: () => R.cases.slice(), summary: () => R.sum, send, fixed: markFixed, compose: id => { const r = findRec(id); return r ? compose(r, deptOf(r.dept), { cfg: CFG() }) : ''; }, load: d => ensureData(d || 30), state: () => R, settings: settingsDialog, cfg: CFG, pure: PURE };
+W.hoRoomHealth = { render: () => render(), refresh: () => refresh(true), forRoom, cardHtml: roomCardHtml, recs: () => R.recs.slice(), cases: () => R.cases.slice(), summary: () => R.sum, send, fixed: markFixed, compose: id => { const r = findRec(id); return r ? compose(r, deptOf(r.dept), { cfg: CFG() }) : ''; }, load: d => ensureData(d || 30), state: () => R, settings: settingsDialog, cfg: CFG, pure: PURE,
+  // the saved settings and saving them (the Words & phrases page edits the problem words here)
+  saved: () => JSON.parse(JSON.stringify(R.saved || {})), saveCfg: (next, what) => saveCfg(next, what) };
 if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', mount); else mount();
 })();

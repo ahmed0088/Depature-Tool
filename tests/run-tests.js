@@ -2863,6 +2863,40 @@ console.log('\nIn-House linked with Departures');
   check('shifts: reset → 07 / 15 / 23 again', ['06:59', '07:00', '15:00', '23:00'].map(H.shiftOf), ['Night', 'Morning', 'Afternoon', 'Night']);
 }
 
+// ── Words & phrases (words-page.js): built-in patterns → readable words; words added and built-in words removed ──
+{
+  console.log('\nWords & phrases');
+  const store = {};
+  const sb = { console: { log() {}, warn() {}, error() {} }, setTimeout: () => 0,
+    localStorage: { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } } };
+  sb.window = sb; sb.globalThis = sb; vm.createContext(sb);
+  for (const f of ['hotel-setup.js', 'wa-bridge.js', 'wa-brain.js', 'handover-book.js', 'room-health.js', 'words-page.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sb, { filename: f });
+  const P = sb.hoWordsPure, S = sb.hoSetupPure, WB = sb.hoWaBrainPure, H = sb.hoHandoverPure, C = sb.hoCfg, J = x => JSON.parse(JSON.stringify(x));
+  check('words: optional letters and spaces are written out', J([P.reWords(/\b(?:towels?|bath ?mat)\b/), P.reWords(/\b(?:a\/c|ac|aircon)\b/), P.reWords(/\b(?:iron(?:ing)?(?: board)?)\b/)]),
+    [['towel', 'towels', 'bath mat', 'bathmat'], ['a/c', 'ac', 'aircon'], ['iron', 'iron board', 'ironing', 'ironing board']]);
+  check('words: any ending is "…", a number "#", look-arounds left out, a word with no end boundary goes on',
+    J([P.reWords(/\b(?:leak\w*|drain\w*)\b/), P.reWords(/\b(?:\d) ?nights?\b/), P.reWords(/\b(?:(?<!\btea\s)bags?)\b/), P.reWords(/\btaxi|\bcab\b/), P.reWords(/\bair[\s-]?con\b/)]),
+    [['leak…', 'drain…'], ['# night', '# nights', '#night', '#nights'], ['bag', 'bags'], ['taxi…', 'cab'], ['air con', 'air-con', 'aircon']]);
+  check('words: too many combinations → one short form', J(P.reWords(/\b(?:a|b|c|d|e)(?:f|g|h|i|j)(?:k|l)\b/)), ['(a|b|c|d|e)(f|g|h|i|j)(k|l)']);
+  check('words: every built-in HK and handover pattern reads as words (no raw pattern left)',
+    Object.values(WB.CAT_RE).concat(H.CAT_RULES.map(r => r[1])).every(re => { const L = P.reWords(re); return L.length && L.every(w => !/[\\[\]?*+{}]|\(\?/.test(w)); }), true);
+  check('words: a removed word as a pattern (… any ending, a space or none, (a|b) one of them)',
+    [S.dropPat('leak…').test('leaking'), S.dropPat('leak…').test('leak'), S.dropPat('bath mat').test('bathmat'), S.dropPat('mov(e|ed) (to|from)').test('moved from'), S.dropPat('towel').test('towels'), S.dropPat('')], [true, true, true, true, false, null]);
+  check('words: keepHit skips removed words only', [S.keepHit(/\b(?:towels?|tissues?)\b/, 'towels and tissue', S.dropList(['towels'])), S.keepHit(/\b(?:towels?|tissues?)\b/, 'more towels', S.dropList({ 0: 'towels' })), S.keepHit(/\btowels?\b/, 'towels', [])], [true, false, true]);
+  check('words: a removed word shows as removed', [P.isDropped('bathmat', ['bath mat']), P.isDropped('towels', ['towel']), P.isDropped('leaking', ['leak…'])], [true, false, true]);
+  const cat = t => WB.wbCategorize(t).map(c => c.id).join();
+  check('words: before any change', [cat('512 kleenex please'), cat('need towels 512'), cat('512 bath mat'), H.categorize('booked a taxi'), H.categorize('taxi to airport')], ['', 'towel', 'towel', 'transport', 'transport']);
+  C.set('cats', { hk: { tp: { words: 'kleenex, tissue box' }, towel: { drop: ['towel', 'towels'] } }, ho: { transport: { drop: ['taxi…'] } } });
+  check('words: an added word sorts the message; a removed built-in word no longer counts (other words still do)',
+    [cat('512 kleenex please'), cat('512 tissue box please'), cat('need towels 512'), cat('512 bath mat'), cat('512 towel and bath mat'), H.categorize('booked a taxi'), H.categorize('taxi to airport')], ['tp', 'tp', '', 'towel', 'towel', 'info', 'transport']);
+  C.set('cats', { hk: { towel: { label: 'Bath towels', drop: ['towels'] } } });
+  check('words: renaming keeps the removed words', [WB.CATS.towel.label, cat('need towels 512'), cat('need a towel')], ['Bath towels', '', 'towel']);
+  C.set('cats', null);
+  check('words: restored → the built-in words count again', [cat('need towels 512'), H.categorize('booked a taxi')], ['towel', 'transport']);
+  check('words: what the WhatsApp reader made of a message', [P.parseLine(sb.hoWaParse('324 CO')), P.parseLine(sb.hoWaParse('0113 EXT 2N')), P.parseLine(sb.hoWaParse('415 change bed'))],
+    ['✓ 324 checked out', '↪ 0113 extended +2N', '📝 415 note']);
+}
+
 
 // ── Package Audit: team changes, month-to-month memory, report columns, settings, ✓ Fixed ──
 {
@@ -3115,5 +3149,89 @@ console.log('\nRoom Health');
   check('room health: summary', (s => [s.open, s.repeatRooms, s.arrivals, s.fixedWeek])(P.summary(cR, recs, NOW)), [3, 1, 1, 1]);
 }
 
-console.log(`\n${pass} passed · ${fail} failed`);
-process.exit(fail ? 1 : 0);
+// ── Phone notifications hub (notify-hub.js): quiet hours, shift gating, dedupe claims, batching, roster diff ──
+console.log('\nPhone notifications hub');
+{
+  const sb = { console: { log() {}, warn() {}, error() {} } };
+  sb.window = sb; sb.globalThis = sb;
+  vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'notify-hub.js'), 'utf8'), sb, { filename: 'notify-hub.js' });
+  const P = sb.hoNotifyPure, at = (h, m) => new Date(2026, 9, 11, h, m || 0);
+  const Q = { quiet: true, qFrom: '23:00', qTo: '07:00' };
+  check('notify: quiet hours over midnight (23:00–07:00)', [at(23, 30), at(2), at(6, 59), at(7), at(12), at(22, 59)].map(d => P.inQuiet(Q, d)), [true, true, true, false, false, false]);
+  check('notify: quiet hours in the day, off, or the same time twice', [P.inQuiet({ quiet: true, qFrom: '13:00', qTo: '14:00' }, at(13, 30)), P.inQuiet({ quiet: true, qFrom: '13:00', qTo: '14:00' }, at(14)), P.inQuiet(Object.assign({}, Q, { quiet: false }), at(2)), P.inQuiet({ quiet: true, qFrom: '08:00', qTo: '08:00' }, at(8))], [true, false, false, false]);
+  const cfg = JSON.parse(JSON.stringify(P.DEF)), ctx = (o, c) => Object.assign({ cfg, now: at(12), shift: 'on', openedAt: at(11).getTime() }, c || {});
+  const G = (o, c) => { const g = P.gate(Object.assign({ cat: 'wakeup', prio: 3 }, o), ctx(o, c)); return g.ok ? 'ok' : g.why; };
+  check('notify: on shift → goes; off shift / shift ended → waits; no roster name → goes', [G({}), G({}, { shift: 'off' }), G({}, { shift: 'ended' }), G({}, { shift: 'unknown' })], ['ok', 'off shift', 'off shift', 'ok']);
+  check('notify: the roster and requests reach you on your day off; "even off shift" lets shift alerts through', [G({ cat: 'roster' }, { shift: 'off' }), G({}, { shift: 'off', cfg: Object.assign({}, cfg, { offShift: true }) }), G({ shiftChecked: true }, { shift: 'off' })], ['ok', 'ok', 'ok']);
+  const qc = Object.assign({}, cfg, Q);
+  check('notify: quiet hours hold prio 1–4, never urgent (5) or the guard', [G({ prio: 4 }, { cfg: qc, now: at(2) }), G({ prio: 5 }, { cfg: qc, now: at(2) }), G({ cat: 'guard', prio: 3, ignoreQuiet: true }, { cfg: qc, now: at(2) }), G({ prio: 4 }, { cfg: qc, now: at(9) })], ['quiet hours', 'ok', 'ok', 'ok']);
+  check('notify: a category switched off; a test (force) always goes', [G({}, { cfg: Object.assign({}, cfg, { cats: Object.assign({}, cfg.cats, { wakeup: false }) }) }), G({ force: true }, { cfg: Object.assign({}, cfg, { cats: { wakeup: false } }), shift: 'off' }), P.catOn(cfg, 'hk'), P.catOn(cfg, 'guard')], ['switched off', 'ok', false, true]);
+  check('notify: no storm on start — an event from before the app opened is dropped, a state that is still true is not', [G({ at: at(10).getTime() }), G({ at: at(10).getTime(), state: true }), G({ at: at(11, 30).getTime() }), G({})], ['old', 'ok', 'ok', 'ok']);
+  // dedupe: the first device to claim a key sends it; the claim is kept for days
+  const T0 = at(12).getTime();
+  check('notify: claim — nobody had it → mine; someone has it → abort; an old claim → mine again', [P.claimNext(null, 'dA', T0, 864e5), P.claimNext({ at: T0 - 5000, by: 'dB' }, 'dA', T0, 864e5), P.claimNext({ at: T0 - 5000, by: 'dA' }, 'dA', T0, 864e5), P.claimNext({ at: T0 - 2 * 864e5, by: 'dB' }, 'dA', T0, 864e5)],
+    [{ at: T0, by: 'dA' }, undefined, undefined, { at: T0, by: 'dA' }]);
+  // batching
+  check('notify: low priority waits to be merged; urgent, the guard and "instant" never', [P.shouldBatch({ cat: 'tasks', prio: 3 }, [], T0), P.shouldBatch({ cat: 'tasks', prio: 2 }, [], T0), P.shouldBatch({ cat: 'tasks', prio: 4 }, [], T0), P.shouldBatch({ cat: 'wakeup', prio: 5 }, [], T0), P.shouldBatch({ cat: 'guard', prio: 3 }, [], T0), P.shouldBatch({ cat: 'tasks', prio: 3, instant: true }, [], T0)], [true, true, false, false, false, false]);
+  const burst = Array.from({ length: 8 }, (_, i) => T0 - i * 20e3);
+  check('notify: a burst (8 messages in 5 min) merges prio 4 too; old sends don\'t count', [P.storm(burst, T0), P.shouldBatch({ cat: 'departures', prio: 4 }, burst, T0), P.storm(burst.map(t => t - 6 * 60e3), T0), P.shouldBatch({ cat: 'wakeup', prio: 5 }, burst, T0)], [true, true, false, false]);
+  const M = P.mergeBatch([{ cat: 'departures', prio: 3, key: 'a', title: '🚪 Room 512 past check-out', body: 'Check-out was 12:00 PM — not out yet.' }, { cat: 'departures', prio: 4, key: 'b', title: '🚪 Room 610 past check-out', body: 'x' }]);
+  check('notify: two departures in a minute → one message, the louder priority, a line each', [M.title, M.prio, M.n, M.body.split('\n').length, M.body.split('\n')[0]], ['🚪 2 × Departures', 4, 2, 2, '• 🚪 Room 512 past check-out — Check-out was 12:00 PM — not out yet.']);
+  const M2 = P.mergeBatch(Array.from({ length: 10 }, (_, i) => ({ cat: i % 2 ? 'tasks' : 'notes', prio: 2, key: 'k' + i, title: 'T' + i })));
+  check('notify: mixed alerts merge as "N alerts" with "+N more"', [M2.title, M2.body.split('\n').length, M2.body.split('\n').pop(), P.mergeBatch([{ cat: 'tasks', title: 'one', key: 'x' }]).title], ['🔔 10 alerts', 9, '+2 more', 'one']);
+  // roster: what changed for me
+  const D1 = P.rosterDiff({ '2026-10-12': '07:00-15:00', '2026-10-13': 'OFF' }, { '2026-10-12': '15:00-23:00', '2026-10-13': 'off', '2026-10-14': '07:00-15:00' });
+  check('notify: roster diff — a changed shift, a new posted day; OFF vs off is no change', [D1.changed, D1.added], [[{ d: '2026-10-12', f: '07:00-15:00', t: '15:00-23:00' }], [{ d: '2026-10-14', t: '07:00-15:00' }]]);
+  check('notify: roster diff — nothing changed → nothing; the hash is stable', [P.rosterDiff({ a: 'X' }, { a: 'X' }), P.hash('abc') === P.hash('abc'), P.hash('abc') === P.hash('abd'), P.fbKey('wk_a.b/c#1')], [{ changed: [], added: [] }, true, false, 'wk_a_b_c_1']);
+}
+
+// The hub at work, on two devices that share one database: one sends, never twice, small ones merged
+function nhDevice(db, dev, sent) {
+  const store = { ho_sa_dev_v1: JSON.stringify(dev) }, timers = [];
+  const sb = {
+    console: { log() {}, warn() {}, error() {} },
+    localStorage: { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } },
+    document: { createElement: () => ({}), head: { appendChild() {} }, addEventListener() {}, getElementById: () => null, querySelector: () => null, visibilityState: 'hidden' },
+    location: { origin: 'https://hotelops.test', pathname: '/', search: '', hash: '' }, history: { replaceState() {} },
+    setTimeout: (f, ms) => { timers.push({ f, ms }); return timers.length; }, clearTimeout() {}, setInterval: f => { f(); return 0; }, clearInterval() {},
+    MutationObserver: class { observe() {} }, URLSearchParams,
+    currentUser: { uid: 'u1' }, isOnline: () => true,
+    fbListen: (p, cb) => cb(p === 'waGuard/u1/tg' ? { token: '123456:' + 'A'.repeat(34), bot: 'fake_test_bot', chat: 42 } : p === 'waGuard/u1/ntfy' ? { topic: 'hotelops-abcdefghijkmnop' } : null),
+    fbPushLog: async () => [], fbSet: async () => {}, fbGet: async () => null,
+    fetch: async (url, o) => { sent.push({ dev, url: url.replace(/bot\d+:\w+/, 'bot…'), body: typeof o.body === 'string' ? JSON.parse(o.body) : Object.fromEntries(o.body) }); return { ok: true, json: async () => ({ ok: true }) }; },
+  };
+  // the shared database: a claim is a transaction on notifyHub/u1/claims/{key}
+  sb._ref = { child: p => ({ transaction: async f => { const v = f(db[p]); if (v === undefined) return { committed: false, snapshot: { val: () => db[p] } }; db[p] = v; return { committed: true, snapshot: { val: () => v } }; } }) };
+  sb.window = sb; sb.globalThis = sb;
+  vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'notify-hub.js'), 'utf8'), sb, { filename: 'notify-hub.js' });
+  return { H: sb.hoNotify, timers, sb };
+}
+const nhAsync = (async () => {
+  const db = {}, sent = [];
+  const A = nhDevice(db, 'dphoneaa', sent), B = nhDevice(db, 'dpcbbbbb', sent);
+  const wk = { cat: 'wakeup', prio: 5, state: true, key: 'wk_w1_1760000000000', url: 'wakeups', title: '☎️ Wake-up call now: room 512', body: '06:30' };
+  const r = [await A.H.send(wk), await B.H.send(wk), await A.H.send(wk)];
+  check('notify (2 devices): the phone claims a wake-up first and sends it; the PC and a second try don\'t', [r, sent.length, [...new Set(sent.map(s => s.dev))]], [[true, false, false], 2, ['dphoneaa']]);
+  const nt = sent.find(s => /ntfy/.test(s.url)).body, tg = sent.find(s => /telegram/.test(s.url)).body;
+  check('notify: it goes to both ways set up — ntfy (priority 5, a tap opens Wake-up Calls) and Telegram (loud)', [sent.map(s => s.url).sort(), nt.priority, nt.click, tg.disable_notification],
+    [['https://api.telegram.org/bot…/sendMessage', 'https://ntfy.sh/'], 5, 'https://hotelops.test/#go=wakeups', 'false']);
+  sent.length = 0;
+  const p1 = A.H.send({ cat: 'departures', prio: 3, state: true, key: 'dep_od_x_512', title: '🚪 Room 512 past check-out' });
+  const p2 = A.H.send({ cat: 'departures', prio: 3, state: true, key: 'dep_od_x_610', title: '🚪 Room 610 past check-out' });
+  await new Promise(res => setImmediate(res));
+  const before = sent.length, flushT = A.timers.find(t => t.ms === 60e3);
+  await A.H.flush();
+  const ok = await Promise.all([p1, p2]);
+  check('notify: two low-priority alerts wait up to 60 s, then go as ONE message (per way)', [before, !!flushT, ok, sent.length, sent.find(s => /ntfy/.test(s.url)).body.title], [0, true, [true, true], 2, '🚪 2 × Departures']);
+  check('notify: the recent alerts log keeps what was sent, newest first', [A.H.state.log.map(e => e.title), A.H.state.log[0].n, A.H.state.log[0].ok], [['🚪 2 × Departures', '☎️ Wake-up call now: room 512'], 2, true]);
+  sent.length = 0;
+  const g = await B.H.send({ cat: 'guard', prio: 5, claimed: true, instant: true, ignoreQuiet: true, title: '🚨 Someone is on your WhatsApp' });
+  check('notify: the guard goes straight out from the PC that saw it (no claim, no wait)', [g, sent.length, sent.every(s => s.dev === 'dpcbbbbb')], [true, 2, true]);
+})().catch(e => { fail++; console.log('  ✗ notify (2 devices) threw: ' + (e && e.stack || e)); });
+
+nhAsync.then(() => {
+  console.log(`\n${pass} passed · ${fail} failed`);
+  process.exit(fail ? 1 : 0);
+});

@@ -17,6 +17,8 @@
 //     lasts until the departure date it was written for (7 days when even
 //     that was unknown). "Just today" lasts until midnight.
 //     Edit / delete your own notes (owner and manager: any), with Undo.
+//     A colleague's new request / VIP / follow-up / maintenance / call /
+//     late CO note can go to your phone (📲 notify-hub.js, "Room notes").
 //   • Departures bridge (light): the Departures "Room notes" window shows
 //     this room's stay notes read-only on top, and each Departures note
 //     can be kept as a room note (⇪). The card shows the room's lines on
@@ -208,6 +210,21 @@ function onNotes(v) {
   N.all = v && typeof v === 'object' ? v : {}; N.loaded = true;
   safe(() => { try { localStorage.setItem('ho_room_notes_v1', JSON.stringify(N.all)); } catch (_) {} });
   notesChanged();
+  safe(phoneNotes);
+}
+// 📲 a colleague's new note that someone has to act on → the phone (notify-hub.js, "Room notes", off until
+// switched on). Only notes written after the app opened, never your own; low priority, so several come as one.
+const PHONE_CATS = { req: 1, vip: 1, fup: 1, mnt: 1, call: 1, lco: 1 };
+function phoneNotes() {
+  const H = W.hoNotify, me = who().uid;
+  if (!H || typeof H.send !== 'function') return;
+  Object.keys(N.all).forEach(rk => Object.keys(N.all[rk] || {}).forEach(id => safe(() => {
+    const n = N.all[rk][id];
+    if (!n || typeof n !== 'object' || !PHONE_CATS[n.cat] || (me && n.uid === me) || !H.fresh(n.at)) return;
+    const c = CAT[n.cat];
+    H.send({ cat: 'notes', prio: n.cat === 'call' || n.cat === 'lco' ? 3 : 2, at: n.at, key: 'rn_' + fbKey(rk) + '_' + fbKey(id),
+      title: `${c.i} Room ${n.room || rk}: ${c.l}`, body: `${String(n.text || '').replace(/\s+/g, ' ').slice(0, 140)}${n.by ? ' — ' + String(n.by).split(' ')[0] : ''}` });
+  })));
 }
 function notesChanged() {
   if (C.rk && sheet()) paint();

@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 427, items: [
+    "📲 Phone notifications for everything: wake-up calls, overdue shift tasks, the night checklist (TD and night audit), late check-outs and rooms not out, swaps and day-off requests, roster changes, open HK requests, room notes and the away guard — all through your ntfy / Telegram, no new setup.",
+    "🧠 Smart, not noisy: only one of your devices sends each alert and never twice; small ones are bundled into one message; shift alerts only while you're on shift; quiet hours hold everything except urgent ones; things still not done get a louder reminder. Turn each kind on or off in Settings → 📲 Phone notifications, with a test button and your last 20 alerts.",
+    "📖 New “Words & phrases” page (Tools): every built-in word the app understands — HK & maintenance requests, handover topics, Room Health problems, WhatsApp commands, voice phrases and your team dictionary. Search them, try a message to see how it's read, and (owners and managers) add or remove words — removed ones can be brought back any time.",
+  ] },
   { v: 426, items: [
     "🧩 The WhatsApp helper now updates itself. Download it one last time (WhatsApp window → “Get v426”), unzip over the same folder and press ↻ in chrome://extensions. Then click Details on the helper and turn on “Allow User Scripts”. From then on, every HotelOps update reaches the helper on its own — no more downloading and re-adding it.",
     "🔁 When a new reader arrives, WhatsApp Web restarts into it only when nobody is using that window (it's in the background, or untouched for 2 minutes), so it never interrupts you mid-chat.",

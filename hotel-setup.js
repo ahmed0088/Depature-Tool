@@ -141,6 +141,41 @@ function wordsRe(words) {
   if (!L.length) return null;
   return new RegExp('(?:^|[^a-z0-9])(?:' + L.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+')).join('|') + ')(?![a-z0-9])', 'i');
 }
+/**
+ * A word the Words & phrases page shows for a built-in pattern ("towel", "bath mat", "leak…",
+ * "mov(e|ed) (to|from)") → a pattern for the whole matched text: "…" any ending, "#" a number,
+ * "(a|b|)" one of them, a space any spaces or none. null for nothing.
+ */
+function dropPat(w) {
+  const s = String(w == null ? '' : w).trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!s) return null;
+  let out = '', depth = 0;
+  for (const ch of s) {
+    if (ch === '…') out += '[a-z0-9\u0600-\u06ff]*';
+    else if (ch === '#') out += '\\d+';
+    else if (ch === '(') { out += '(?:'; depth++; }
+    else if (ch === ')') { if (depth) { out += ')'; depth--; } }
+    else if (ch === '|' && depth) out += '|';
+    else if (ch === ' ') out += '\\s*';
+    else out += ch.replace(/[.*+?^${}()|[\]\\\/-]/g, '\\$&');
+  }
+  while (depth-- > 0) out += ')';
+  try { return new RegExp('^(?:' + out + ')$', 'i'); } catch (_) { return null; }
+}
+/** the built-in words a hotel removed from a category (saved as an array; Firebase may give an object) → [RegExp] */
+const dropList = d => (Array.isArray(d) ? d : isObj(d) ? Object.values(d) : []).map(dropPat).filter(Boolean);
+/** does re find something in t that is not a removed word? (drops: [RegExp] from dropList) */
+function keepHit(re, t, drops) {
+  if (!drops || !drops.length) return re.test(t);
+  const g = new RegExp(re.source, re.flags.replace(/[gy]/g, '') + 'g');
+  let m;
+  while ((m = g.exec(t))) {
+    if (!m[0]) { g.lastIndex++; continue; }
+    const w = m[0].toLowerCase().replace(/\s+/g, ' ').replace(/^[^a-z0-9\u0600-\u06ff]+|[^a-z0-9\u0600-\u06ff]+$/g, '');
+    if (!drops.some(d => d.test(w))) return true;
+  }
+  return false;
+}
 /** what to copy to another hotel: everything but this hotel's own name */
 function forNewHotel(setup) {
   const s = clone(isObj(setup) ? setup : {});
@@ -227,7 +262,7 @@ const api = {
     const base = list.map(c => c.slice()), baseMap = {};
     Object.keys(map).forEach(k => { baseMap[k] = Object.assign({}, map[k]); });
     api._catDefaults[kind] = baseMap;                       // the built-in names, for Settings
-    let ver = -1, X = { words: [], off: new Set() };
+    let ver = -1, X = { words: [], off: new Set(), drop: {}, hit: (id, re, t) => re.test(t) };
     const apply = () => {
       ver = version;
       const o = (cur.cats && isObj(cur.cats[kind])) ? cur.cats[kind] : {};
@@ -242,17 +277,20 @@ const api = {
         if (s.icon) e.icon = String(s.icon);
         if (typeof s.hue === 'number') e.hue = s.hue;
       });
-      const words = [], off = new Set();
+      const words = [], off = new Set(), drop = {};
       Object.keys(o).forEach(id => {
         const s = o[id]; if (!isObj(s)) return;
         if (s.off) { off.add(id); return; }
+        const dl = baseMap[id] ? dropList(s.drop) : [];
+        if (dl.length) drop[id] = dl;
         const re = wordsRe(s.words);
         if (s.custom && !baseMap[id] && String(s.label || '').trim()) {
           const r = row(id, s, re); list.push(r); map[id] = Object.assign(toObj(r), typeof s.hue === 'number' ? { hue: s.hue } : {});
         }
         if (re && map[id]) words.push([id, re]);
       });
-      X = { words, off };
+      // hit(id, re, t): re finds t, but not only through built-in words the hotel removed (Words & phrases page)
+      X = { words, off, drop, hit: (id, re, t) => keepHit(re, t, drop[id]) };
     };
     hooks.push(apply);
     apply();
@@ -260,7 +298,7 @@ const api = {
   },
 };
 W.hoCfg = api;
-W.hoSetupPure = { DEFAULTS, SHIFT_KEYS, toMin, ampm, hhmm, mergeVal, merge, shiftBounds, shiftAt, shiftCheck, navPlan, wordsRe, forNewHotel, readFile };
+W.hoSetupPure = { DEFAULTS, SHIFT_KEYS, toMin, ampm, hhmm, mergeVal, merge, shiftBounds, shiftAt, shiftCheck, navPlan, wordsRe, dropPat, dropList, keepHit, forNewHotel, readFile };
 W.hoCheckoutMin = () => api.checkoutMin();
 W.hoExtendByMin = () => api.extendByMin();
 
@@ -550,6 +588,7 @@ function hsuCatsHtml() {
       <span class="hs-seg" role="tablist"><button type="button" class="${kind === 'ho' ? 'on' : ''}" onclick="hsuCatTab='ho';hoSettingsRender()">Handover Book</button><button type="button" class="${kind === 'hk' ? 'on' : ''}" onclick="hsuCatTab='hk';hoSettingsRender()">HK requests</button></span>
       <div class="hsu-cats" data-kind="${kind}">${rows || '<p class="hsu-prev">This page has not loaded yet: open it once, then come back.</p>'}</div>
       ${ed ? `<div class="hs-acts"><button type="button" class="btn sm ghost" onclick="hsuCatAdd()">＋ Add a category</button><small>Changes apply to new messages; ones already sorted keep their category.</small></div>` : ''}
+      ${typeof W.hoWordsOpen === 'function' ? `<div class="hs-acts"><button type="button" class="btn sm ghost" onclick="hoWordsOpen('${kind}')">See every built-in word →</button><small>All the words each category already understands${ed ? ', and remove the ones your team uses differently' : ''}.</small></div>` : ''}
     </div>
     ${_hsuReset('cats', 'Every category back to its built-in name, emoji and words; the ones you added are removed.')}`;
 }
@@ -559,6 +598,7 @@ function hsuCatChange(row) {
   const all = clone(api.get('cats') || {}), set = all[kind] = isObj(all[kind]) ? all[kind] : {};
   const prev = set[id] || {}, s = {}, def = (api._catDefaults[kind] || {})[id] || {};
   if (prev.custom) { s.custom = true; s.kind = prev.kind || 'req'; }
+  if (prev.drop) s.drop = prev.drop;                        // built-in words removed on the Words & phrases page stay removed
   row.querySelectorAll('[data-c]').forEach(el => {
     const f = el.dataset.c, v = el.type === 'checkbox' ? el.checked : String(el.value || '').trim();
     if (f === 'on') { if (!v) s.off = true; return; }

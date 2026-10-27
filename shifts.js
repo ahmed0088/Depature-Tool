@@ -532,7 +532,7 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(stAutoFreshStart,
 
 // ── Task times and reminders ──────────────────────────────
 // A task can have a time ("02:00 check the cash"). On its shift, at that time, it rings (chime, a
-// notification, a bubble with ✓ Done / Later) until it is ticked. Nothing rings when the roster says
+// notification, a bubble with ✓ Done / Later, 📲 the phone) until it is ticked. Nothing rings when the roster says
 // you're not working (day off, PH, leave, or outside your shift) — Settings → Alerts → Quiet when I'm off.
 const _stMin = t => { const m = String(t || '').match(/^(\d{1,2}):(\d{2})/); return m ? +m[1] * 60 + +m[2] : null; };
 const _stDay = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -600,6 +600,20 @@ function _stRing(key, t, id) {
     acts: [['✓ Done', () => { if (!stIsDone(key, t)) stToggle(key, t.id); }], ['In 10 min', () => _stLater(id, 10)]] }, true);
   else if (typeof showToast === 'function') showToast(text, 'warn');
   if (typeof activeShift !== 'undefined' && activeShift === key && document.getElementById('panel-shifts')?.classList.contains('active')) _renderShiftContent(key);
+  _stPhone(key, t, id);
+}
+/** 📲 the phone too (notify-hub.js): a time passed and the task isn't ticked — ❗ important ones louder and
+ *  straight away, and once more, louder, if it is still not ticked 15 minutes later. One device sends it, once. */
+function _stPhone(key, t, id) {
+  const H = window.hoNotify;
+  if (!H || typeof H.send !== 'function') return;
+  try {
+    const lbl = (SHIFTS[key] && SHIFTS[key].label) || key, prio = t.at ? (t.imp ? 4 : 3) : 2;
+    H.send({ cat: 'tasks', prio, state: true, url: 'shifts', key: 'st_' + id, toast: false, instant: !!t.imp,
+      title: `${t.imp ? '❗ ' : ''}${t.at ? '⏰ ' + t.at + ' · ' : '📅 Today · '}${t.name}`,
+      body: `${lbl}${t.at ? ' — time passed, not ticked yet' : ' — on today\'s list'}${t.hint ? ' · ' + String(t.hint).slice(0, 80) : ''}`,
+      repeat: t.at ? { after: 15 * 60e3, prio: t.imp ? 5 : 4, check: () => !stIsDone(key, t), title: `${t.imp ? '❗ ' : ''}Still not done: ${t.at} · ${t.name}` } : null });
+  } catch (_) {}
 }
 setInterval(stRemindTick, 30000);
 document.addEventListener('DOMContentLoaded', () => setTimeout(stRemindTick, 8000));

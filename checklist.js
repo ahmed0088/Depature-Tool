@@ -320,6 +320,28 @@ setInterval(() => {
   } catch (_) {}
 }, 30000);
 
+// 📲 the phone (notify-hub.js): a step with a time (TD by 03:45, the night audit by 03:50) — 15 min before,
+// 5 min before (louder), and late (urgent). Only while you're on shift; one device sends each, once a night.
+function clNotifyTick() {
+  const H = window.hoNotify;
+  if (!H || typeof H.send !== 'function' || typeof CL_STEPS === 'undefined' || typeof clState === 'undefined') return;
+  const now = new Date(), night = new Date(now);
+  if (now.getHours() < 12) night.setDate(night.getDate() - 1);   // 03:00 belongs to the night that started the evening before
+  const nid = `${night.getFullYear()}-${String(night.getMonth() + 1).padStart(2, '0')}-${String(night.getDate()).padStart(2, '0')}`;
+  CL_STEPS.forEach(s => {
+    try {
+      if (!s || !s.due || clState.done.has(s.id) || clState.skipped.has(s.id)) return;
+      const left = clDueLeft(s.due); if (left == null || left > 15 || left < -60) return;
+      const h = +s.due.slice(0, 2), lbl = `${h % 12 || 12}:${s.due.slice(3)} ${h < 12 ? 'AM' : 'PM'}`, k = `cl_${nid}_${s.id}`;
+      const base = { cat: 'checklist', state: true, url: 'checklist' };
+      if (left < 0) H.send(Object.assign(base, { prio: 5, key: k + '_late', title: `🚨 Late: ${s.name}`, body: `It was due by ${lbl} — ${-left} min ago, not ticked yet.${s.warn ? ' ' + s.warn : ''}` }));
+      else if (left <= 5) H.send(Object.assign(base, { prio: 4, instant: true, key: k + '_5', title: `⏰ In ${left} min: ${s.name}`, body: `Due by ${lbl}.${s.hint ? ' ' + s.hint : ''}` }));
+      else H.send(Object.assign(base, { prio: 3, key: k + '_15', title: `🌙 In ${left} min: ${s.name}`, body: `Due by ${lbl}.${s.hint ? ' ' + s.hint : ''}` }));
+    } catch (_) {}
+  });
+}
+setInterval(() => { try { clNotifyTick(); } catch (_) {} }, 60000);
+
 // ── Unified save ─────────────────────────────────────────
 function clSaveAll() {
   saveChecklist(CL_STEPS, clState.done, clState.skipped, clPhotos, clNotes, clDoneTimes);

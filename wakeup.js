@@ -6,7 +6,8 @@
 //      "read back to the guest" ticked when it was confirmed;
 //      several at once ("512 6:30, 610 7:15 tomorrow");
 //    • at the time: everyone on shift is alerted, again every 5 minutes
-//      until the call is marked;
+//      until the call is marked; on the phone too (📲 notify-hub.js),
+//      and louder when it still isn't ticked 5 minutes after its time;
 //    • the call: ✓ Answered (the backup call is booked by itself),
 //      📵 No answer (tries again in 5 minutes; after two, send someone up),
 //      🚶 Sent someone up, or Cancelled by the guest;
@@ -255,5 +256,23 @@ function _wkLists(root) {
   box.innerHTML = html;
   if (keepFocus) { const s = box.querySelector('.wk-search'); s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
 }
-// every 30 s: the countdowns, "Call now", and the menu badge
-document.addEventListener('DOMContentLoaded', () => { setInterval(wkRender, 30000); setTimeout(wkRender, 2500); });
+// ── 📲 Phone: a call due now (urgent), and louder when it still isn't ticked 5 min later ──
+// Through the notification hub (notify-hub.js): only while you're on shift, one of your devices
+// sends it, never twice (the key has the call's time: "No answer" moves it, so the retry rings again).
+// Room and time only — never the guest's name.
+function wkNotifyTick() {
+  const H = window.hoNotify;
+  if (!H || typeof H.send !== 'function') return;
+  const now = Date.now();
+  _wkOpen().filter(w => w.at <= now && w.at > now - 60 * 60e3).forEach(w => {
+    try {
+      const base = `wk_${w.id}_${w.at}`, note = w.note ? ` · ${String(w.note).slice(0, 60)}` : '';
+      H.send({ cat: 'wakeup', prio: 5, state: true, url: 'wakeups', key: base, toast: false,
+        title: `☎️ Wake-up call now: room ${w.room}`, body: `${w.time}${w.tries ? ` · try ${w.tries + 1}` : ''}${note} — tick it in Wake-up Calls when done` });
+      if (now - w.at >= 5 * 60e3) H.send({ cat: 'wakeup', prio: 5, state: true, url: 'wakeups', key: base + '_late', instant: true,
+        title: `🚨 Wake-up NOT done: room ${w.room} (${w.time})`, body: `${Math.round((now - w.at) / 60e3)} min late and not ticked — call now, or send someone up${note}` });
+    } catch (_) {}
+  });
+}
+// every 30 s: the countdowns, "Call now", the menu badge, and the phone
+document.addEventListener('DOMContentLoaded', () => { setInterval(() => { wkRender(); wkNotifyTick(); }, 30000); setTimeout(wkRender, 2500); setTimeout(wkNotifyTick, 20000); });

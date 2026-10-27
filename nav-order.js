@@ -16,7 +16,7 @@ const GROUPS = [
   ['Money & Tax',    ['tourism', 'td-audit', 'dtcm', 'package-audit', 'skip-clean', 'noshow']],
   ['Guests & Sales', ['rates', 'pipeline', 'gym', 'guestmem', 'guest-messages', 'arrivals-proc', 'reports', 'trends', 'history']],
   ['Team',           ['roster', 'standards', 'learn']],
-  ['Tools',          ['qr', 'adagio']],
+  ['Tools',          ['qr', 'adagio', 'vocab']],
   ['System',         ['settings']],
 ];
 const TOOLS = 'tools';

@@ -13,6 +13,8 @@
 //      told, and can put OFF / AL on those days in one tap
 //      (rtMarkAbsent, the same as 🤒 Sick / leave) or open the week.
 //  Swaps are roster-swap.js: the dialog links there.
+//  📲 Phone (notify-hub.js): managers when a request comes in, the asker
+//  when it's answered.
 //
 //  Firebase: roster/asks/{id} = { key, name, type: off | leave | band,
 //    from, to, code, note, at, status: waiting | yes | no, by,
@@ -373,6 +375,25 @@ function askPutOnRoster(id) {
   askRenderAll();
 }
 
+// ── 📲 The phone (notify-hub.js) ──────────────────────────
+// Managers: a new request waiting. The asker: theirs approved or declined. Once each, from one of your
+// devices, and only what happened after the app opened (what was waiting before is in Ops Brain).
+function askPhone() {
+  const H = window.hoNotify;
+  if (!H || typeof H.send !== 'function') return;
+  const ed = _askEd(), me = typeof roMeKey !== 'undefined' ? roMeKey : '';
+  Object.entries(askAll || {}).forEach(([id, a]) => {
+    try {
+      if (!a || !a.key || !a.from || !_askOk(id)) return;
+      if (ed && a.status === 'waiting' && a.key !== me && H.fresh(a.at)) H.send({ cat: 'roster', prio: 3, at: a.at, url: 'roster', key: `ask_${id}_new`,
+        title: `🙋 ${_askFirst(a.key)} asks for ${askTypeLbl(a).toLowerCase()}`, body: `${askWhen(a)}${a.note ? ' · “' + a.note + '”' : ''} — approve or decline on the Roster page.` });
+      if (me && a.key === me && (a.status === 'yes' || a.status === 'no') && H.fresh(a.decidedAt)) H.send({ cat: 'roster', prio: 4, at: a.decidedAt, url: 'roster', key: `ask_${id}_${a.status}`,
+        title: a.status === 'yes' ? `✅ Your ${askTypeLbl(a).toLowerCase()} was approved` : `✕ Your ${askTypeLbl(a).toLowerCase()} was declined`,
+        body: `${askWhen(a)}${a.by ? ' · by ' + String(a.by).split(' ')[0] : ''}${a.status === 'no' && a.why ? ' · Reason: ' + a.why : ''}` });
+    } catch (_) {}
+  });
+}
+
 // ── Style ─────────────────────────────────────────────────
 function askStyle() {
   if (document.getElementById('askStyle')) return;
@@ -440,6 +461,7 @@ function askStart() {
       });
       askRenderAll();
       if (typeof blSoon === 'function') try { blSoon(); } catch (_) {}
+      try { askPhone(); } catch (_) {}
     });
   }, 1800);
   // My shifts and the swaps list are drawn by roRenderSide; the builder by rbRender

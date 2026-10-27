@@ -120,9 +120,42 @@ function _depCheckOverdueAlerts() {
   if (newlyOverdue.length > nx.length) showToast(`⚠ ${newlyOverdue.length - nx.length} room${newlyOverdue.length - nx.length > 1 ? 's' : ''} overdue for checkout`, 'err');
 }
 
+// ── 📲 The phone (notify-hub.js): each room, once a day ──
+//  · a late check-out time agreed with the guest is reached and the room isn't out (prio 4, straight away)
+//  · a room past its check-out time and not out yet (prio 3: several in the same minute come as one message)
+//  · an extension still not done by the deadline (prio 3)
+// Its own switch (Settings → 📲 Phone notifications → Departures), separate from the 🔔 on this page; only
+// while you're on shift, and one of your devices sends it. These are states, so they count right after the
+// app opens too. Room numbers only, never guest names. Rooms still in 30 min later: Shift alerts' list.
+function _depNotifyHub() {
+  const H = window.hoNotify;
+  if (!H || typeof H.send !== 'function' || typeof depRooms === 'undefined' || !Array.isArray(depRooms) || !depRooms.length) return;
+  const day = typeof hoLocalISO === 'function' ? hoLocalISO() : new Date().toISOString().slice(0, 10);
+  const t12 = t => { const m = _parseLcoTime(t); return m == null ? String(t || '') : `${Math.floor(m / 60) % 12 || 12}:${String(m % 60).padStart(2, '0')} ${m >= 720 ? 'PM' : 'AM'}`; };
+  depRooms.forEach(r => {
+    try {
+      if (!r || _depDayRel(r) !== 0) return;
+      const es = effectiveStatus(r), room = String(r.roomStr || r.room || '').trim();
+      if (!room || es === 'out' || es === 'extended' || r.intent === 'finance_hold') return;
+      const base = { cat: 'departures', state: true, url: 'departures' };
+      if (r.intent === 'extending') {
+        if (_depIsOverdue(r)) H.send(Object.assign(base, { prio: 3, key: `dep_ext_${day}_${room}`, title: `↪ Room ${room}: extension not done yet`, body: `${typeof _depExtLbl === 'function' ? _depExtLbl() : 'The deadline'} passed — finish the extension or check the guest out.` }));
+        return;
+      }
+      if (!isLcoOverdue(r) || es === 'na' || es === 'dnd') return;
+      if (r.status === 'late' && r.lateTime) {
+        H.send(Object.assign(base, { prio: 4, key: `dep_lco_${day}_${room}_${r.lateTime}`, title: `⏰ Room ${room}: late check-out time ${t12(r.lateTime)} reached`, body: 'The room is not out yet — call or knock.' }));
+      } else {
+        H.send(Object.assign(base, { prio: 3, key: `dep_od_${day}_${room}`, title: `🚪 Room ${room} past check-out`, body: `Check-out was ${r.depTime ? t12(r.depTime) : 'due'} — not out yet.` }));
+      }
+    } catch (_) {}
+  });
+}
+
 function _depStartAlertTicker() {
   if (_depAlertTickerID) return;
-  _depAlertTickerID = setInterval(_depCheckOverdueAlerts, 60000);
+  _depAlertTickerID = setInterval(() => { _depCheckOverdueAlerts(); try { _depNotifyHub(); } catch (_) {} }, 60000);
+  setTimeout(() => { try { _depNotifyHub(); } catch (_) {} }, 25000);
 }
 _depStartAlertTicker();
 

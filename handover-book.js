@@ -242,7 +242,7 @@ function categorize(text, head) {
   const X = catSetup();
   const w = X && X.words.find(([, re]) => re.test(t));
   if (w) return w[0];
-  const r = CAT_RULES.find(([id, re]) => !(X && X.off.has(id)) && re.test(t));
+  const r = CAT_RULES.find(([id, re]) => !(X && X.off.has(id)) && (X ? X.hit(id, re, t) : re.test(t)));   // built-in words the hotel removed do not count
   return r ? r[0] : 'info';
 }
 const OPEN_RX = /\bpending\b|\bto ?do\b|\bplease\b|\bpl[sz]\b|\bkindly\b|\bcheck\b|\bchk\b|\bfollow[- ]?up|\bf\/u\b|\bcall back|\bcallback|\bwaiting\b|\bneeds?\b|\bneeded\b|\bmust\b|\bhas to\b|\bhave to\b|\bshould\b|\btomorrow|\btmrw?\b|\bremind\w*|\bnot yet\b|\bstill\b|\bto be\b|\bamend\w*|\bcollect\b|\bchase\b|\barrange\b|\burgent\w*|\basap\b|\bmake sure|\bdon'?t forget|\bwill (?:arrive|come|check|call|pay|leave|collect|send)|\bexpected\b|\beta\b|\bnot (?:paid|done|fixed|collected|received|working|answering)|\bmissing\b|\bno answer\b|\barriv(?:ing|al)\b|\bearly dep\w*|\bearly check-?\s?out|\bleaving early|\bcut short|\bshorten\w*|\bed\b|\brequested\b|\bwants?\b|\basked\b|\?/;
@@ -787,7 +787,7 @@ function pdfHtml(m) {
   <div class="tw">${open}</div>`;
 }
 
-W.hoHandoverPure = { doneReply, doneTargets, sectionOf, hoBody, learnedField, wordSwaps, applySwaps, learnToks, simOf, learnedVerdict, hoursOf, sameName, rosterShiftOf, pdfHtml, cssOf, isUrgent, XL, XL_KPI, statusStyle, catStyle, argbOf, rowHeight, shiftsCovered, reportModel, writtenSummary, HO_GROUP_RX, isHandoverGroup, HO_PREFIX_RX, hoPrefix, isChat, pasteItems, suggestFrom, HO_COPY_MIN, handoverScore, looksLikeHandover, MOVE_RX, HANDED_RX, SHIFT_BOUNDS, shiftOf, CATS, CAT, categorize, statusOf, roomsOf, tagsOf, splitItems, tidy, buildItems, filterItems, summaryOf,
+W.hoHandoverPure = { CAT_RULES, KW_TAGS, doneReply, doneTargets, sectionOf, hoBody, learnedField, wordSwaps, applySwaps, learnToks, simOf, learnedVerdict, hoursOf, sameName, rosterShiftOf, pdfHtml, cssOf, isUrgent, XL, XL_KPI, statusStyle, catStyle, argbOf, rowHeight, shiftsCovered, reportModel, writtenSummary, HO_GROUP_RX, isHandoverGroup, HO_PREFIX_RX, hoPrefix, isChat, pasteItems, suggestFrom, HO_COPY_MIN, handoverScore, looksLikeHandover, MOVE_RX, HANDED_RX, SHIFT_BOUNDS, shiftOf, CATS, CAT, categorize, statusOf, roomsOf, tagsOf, splitItems, tidy, buildItems, filterItems, summaryOf,
   excelRows, summaryRows, fileName, polishStyles, polishSheet, dLong, t12, COL_W, byTime };
 if (!doc) return;
 

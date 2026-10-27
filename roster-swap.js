@@ -11,6 +11,9 @@
 //  to answer. Firebase: roster/swaps/{id} = { from, to, date, a, b, note,
 //  by, at, status: asked | agreed | approved | declined, ... }
 //
+//  📲 The phone is told too (notify-hub.js): a swap asked of you, yours
+//  answered or approved, one waiting for your approval.
+//
 //  📷 My week: your next 7 days as a picture, to keep or send.
 // ═══════════════════════════════════════════════════════════
 
@@ -198,6 +201,27 @@ function rsRender() {
   box.innerHTML = `<div class="ro-card-hd"><b>🔁 Shift swaps</b><span>${list.length ? `${list.length} open` : 'recent'}</span></div>${list.map(row).join('')}${recent.length ? `<details class="rs-recent"><summary>Recent</summary>${recent.map(row).join('')}</details>` : ''}`;
 }
 
+// ── 📲 The phone (notify-hub.js) ──────────────────────────
+// A swap asked of you, your request answered, approved for you, or (supervisors) both agreed and it waits
+// for approval. Once per swap and step, from one of your devices; only what happened after the app opened.
+function rsPhone() {
+  const H = window.hoNotify;
+  if (!H || typeof H.send !== 'function' || typeof roMeKey === 'undefined') return;
+  const ed = typeof roCanEdit === 'function' && roCanEdit();
+  Object.entries(rsSwaps || {}).forEach(([id, s]) => {
+    try {
+      if (!s || !s.date || s.direct) return;
+      const cell = c => roCellTxt(roInfo(c)) || '—', day = roDayLbl(s.date, true);
+      const go = (step, prio, at, title, body) => { if (H.fresh(at)) H.send({ cat: 'roster', prio, at, url: 'roster', key: `rs_${id}_${step}`, title, body }); };
+      if (roMeKey && s.to === roMeKey && s.status === 'asked') go('ask', 4, s.at, `🔁 ${_rsFirst(s.from)} asks to swap ${day}`, `You'd work ${cell(s.a)} instead of ${cell(s.b)}.${s.note ? ' “' + s.note + '”' : ''} Agree or decline on the Roster page.`);
+      if (roMeKey && s.from === roMeKey && s.status === 'agreed') go('agreed', 3, s.agreedAt, `🔁 ${_rsFirst(s.to)} agreed to swap ${day}`, 'A supervisor approves it next.');
+      if (roMeKey && (s.from === roMeKey || s.to === roMeKey) && s.status === 'approved') go('ok', 4, s.closedAt, `✅ Swap approved: ${day}`, `You now work ${cell(s.from === roMeKey ? s.b : s.a)}${s.closedBy ? ' · approved by ' + String(s.closedBy).split(' ')[0] : ''}.`);
+      if (roMeKey && s.from === roMeKey && s.status === 'declined' && s.closedBy !== _rsMe()) go('no', 3, s.closedAt, `🔁 Swap for ${day} declined`, `${s.closedBy ? String(s.closedBy).split(' ')[0] + ' declined it.' : ''} Ask someone else, or talk to your supervisor.`);
+      if (ed && s.status === 'agreed' && s.from !== roMeKey && s.to !== roMeKey) go('approve', 3, s.agreedAt, `🔁 Swap to approve: ${_rsFirst(s.from)} ⇄ ${_rsFirst(s.to)}`, `${day}.${s.warn ? ' ⚠ ' + s.warn : ' Both agreed — approve it on the Roster page.'}`);
+    } catch (_) {}
+  });
+}
+
 // ── 📷 My week picture ────────────────────────────────────
 /** A person's week as one big, simple picture: days down the page, each shift in its colour. */
 function rsWeekCanvas(name, group, days) {
@@ -243,7 +267,7 @@ async function rsMyWeekPic() {
 
 // ── Start ─────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(() => { if (typeof fbListen === 'function') fbListen('roster/swaps', v => { rsSwaps = v || {}; rsRender(); }); }, 1700);
+  setTimeout(() => { if (typeof fbListen === 'function') fbListen('roster/swaps', v => { rsSwaps = v || {}; rsRender(); try { rsPhone(); } catch (_) {} }); }, 1700);
   // the buttons on My shifts, and the swaps list, every time the side of the Roster page is drawn
   if (typeof roRenderSide === 'function') {
     const orig = roRenderSide;

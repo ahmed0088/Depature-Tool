@@ -2,10 +2,13 @@
 //  shift-alerts.js — 🔔 Shift alerts + 📋 end-of-shift summary
 //
 //  Smart nudges to your phone while you are on shift, through the same
-//  Telegram bot (and ntfy) you connected for the WhatsApp Away guard
-//  (wa-guard.js: hoWaGuard.notify). Each one has its own switch:
+//  Telegram bot (and ntfy) you connected for the WhatsApp Away guard —
+//  via the 📲 notification hub (notify-hub.js, hoNotify.send) when it is
+//  loaded, else hoWaGuard.notify. Each one has its own switch:
 //   • ⏰ Rooms past check-out time and still not out — one message with the
 //     list ("+N more"), again at most every 30 min while it stays true.
+//     With the hub, Departures tells each room the moment it's overdue, so
+//     this list only has rooms overdue 30 min or more ("still not out").
 //   • ⭐ VIP arrivals today — once per guest per day.
 //   • 🩺 Room problems not followed up (room-health.js) — once per problem.
 //   • 📒 Handover Book items still open 30 min before your shift ends.
@@ -64,8 +67,15 @@ let started = false, busy = false, lastRun = 0, pill = null;
 
 // ══ Where to send ═══════════════════════════════════════════
 function connected() { return !!((TG && TG.chat) || NTFY); }
-function notify(title, msg, prio, tags) {
+/** through the 📲 notification hub when it's loaded (cat: departures for rooms past check-out, shift for the
+ *  rest; this file already chose the device and checked the shift, so the hub doesn't again), else the guard */
+function notify(title, msg, prio, tags, cat, manual) {
   try {
+    const H = W.hoNotify;
+    if (H && typeof H.send === 'function' && H.ready && H.ready()) {
+      return Promise.resolve(H.send({ cat: cat || 'shift', title, body: msg, prio: prio || 4, tags: tags || ['bell'], url: cat === 'departures' ? 'departures' : '',
+        claimed: true, shiftChecked: true, instant: true, toast: false, force: !!manual })).then(Boolean, () => false);
+    }
     const G = W.hoWaGuard;
     if (!G || typeof G.notify !== 'function') return Promise.resolve(false);
     return Promise.resolve(G.notify(title, msg, prio || 4, tags || ['bell'])).then(Boolean, () => false);
@@ -143,6 +153,13 @@ function overdueRooms(now) {
     if (es === 'na') tag += ' · no answer'; else if (es === 'dnd') tag += ' · DND';
     out.push({ room: String(r.roomStr || r.room || '?'), tag });
   }));
+  return out;
+}
+/** when each room was first seen overdue today (this device): {room: ms} — rooms no longer overdue drop out */
+function odSeen(day, list, t) {
+  const S = lsGet('ho_sa_odseen_v1', {}) || {}, cur = S.day === day && S.rooms && typeof S.rooms === 'object' ? S.rooms : {}, out = {};
+  (list || []).forEach(r => { out[r.room] = cur[r.room] || t; });
+  lsSet('ho_sa_odseen_v1', { day, rooms: out });
   return out;
 }
 function inHouse() { return safe(() => (W.hoInHouse && typeof W.hoInHouse.rooms === 'function' ? W.hoInHouse.rooms() || [] : []), []); }
@@ -283,8 +300,8 @@ function hist(title) {
   const h = lsGet(LS_HIST, []); const L = Array.isArray(h) ? h : [];
   L.unshift({ at: Date.now(), t: String(title).slice(0, 90) }); lsSet(LS_HIST, L.slice(0, 12));
 }
-async function send(keys, gap, title, msg, prio, tags) {
-  const ok = await notify(title, msg, prio, tags);
+async function send(keys, gap, title, msg, prio, tags, cat, manual) {
+  const ok = await notify(title, msg, prio, tags, cat, manual);
   if (ok) hist(title); else keys.forEach(k => retrySoon(k, gap));
   return ok;
 }
@@ -314,46 +331,54 @@ async function check(opt) {
     const onShift = si.state === 'on' || CFG.offShift;
     if (!opt.manual && inQuiet(now)) return sentNow;
     const t = now.getTime();
+    // the 📲 hub's own switches and quiet hours: nothing is claimed for an alert it would hold back anyway
+    const hubOk = cat => opt.manual || safe(() => !W.hoNotify || typeof W.hoNotify.allows !== 'function' || W.hoNotify.allows({ cat, prio: 4, shiftChecked: true }), true);
 
     if (opt.manual || onShift) {
       // ⏰ rooms past check-out
-      if (CFG.overdue) await guard(async () => {
-        const L = overdueRooms(now); if (!L.length) return;
+      if (CFG.overdue && hubOk('departures')) await guard(async () => {
+        let L = overdueRooms(now);
+        // with the 📲 hub, Departures tells each room the moment it is overdue: this list is the louder
+        // "still not out" for rooms overdue 30 min or more (a press of Check now shows them all)
+        const hub = !!(W.hoNotify && W.hoNotify.ready && W.hoNotify.ready());
+        const since = odSeen(day, L, t);
+        if (hub) L = L.filter(r => opt.manual || t - (since[r.room] || t) >= GAP.od);
+        if (!L.length) return;
         const k = 'od_' + day;
         if (!(await claim(k, GAP.od, opt.manual))) return;
         const shown = L.slice(0, 8).map(r => `${r.room} (${r.tag})`);
-        if (await send([k], GAP.od, `⏰ ${plural(L.length, 'room')} past check-out`, shown.join('\n') + (L.length > 8 ? `\n+${L.length - 8} more` : '') + '\nStill not out — call or knock.', 4, ['alarm_clock'])) sentNow.push('overdue');
+        if (await send([k], GAP.od, hub && !opt.manual ? `⏰ ${plural(L.length, 'room')} still not out (30+ min)` : `⏰ ${plural(L.length, 'room')} past check-out`, shown.join('\n') + (L.length > 8 ? `\n+${L.length - 8} more` : '') + '\nStill not out — call or knock.', 4, ['alarm_clock'], 'departures', opt.manual)) sentNow.push('overdue');
       });
       // ⭐ VIP arrivals: new ones in one message
-      if (CFG.vip) await guard(async () => {
+      if (CFG.vip && hubOk('shift')) await guard(async () => {
         const L = vipArrivals(), got = [];
         for (const g of L) { if (await claim(`vip_${day}_${g.id}`, GAP.vip, true)) got.push(g); }
         if (!got.length) return;
         const line = g => `${g.room ? 'Room ' + g.room : 'No room yet'}${g.vip ? ' · VIP ' + g.vip : ' · VIP'}${g.nights ? ' · ' + plural(g.nights, 'night') : ''}${g.arrived ? ' · ✓ arrived' : ''}`;
-        if (await send(got.map(g => `vip_${day}_${g.id}`), GAP.vip, `⭐ ${plural(got.length, 'VIP arrival')} today`, got.slice(0, 8).map(line).join('\n') + (got.length > 8 ? `\n+${got.length - 8} more` : ''), 4, ['star'])) sentNow.push('vip');
+        if (await send(got.map(g => `vip_${day}_${g.id}`), GAP.vip, `⭐ ${plural(got.length, 'VIP arrival')} today`, got.slice(0, 8).map(line).join('\n') + (got.length > 8 ? `\n+${got.length - 8} more` : ''), 4, ['star'], 'shift', opt.manual)) sentNow.push('vip');
       });
       // 🩺 room problems nobody followed up
-      if (CFG.health) await guard(async () => {
+      if (CFG.health && hubOk('shift')) await guard(async () => {
         const L = healthToChase(now), got = [];
         for (const r of L) { if (await claim('rh_' + r.id, GAP.rh, true)) got.push(r); }
         if (!got.length) return;
-        if (await send(got.map(r => 'rh_' + r.id), GAP.rh, `🩺 ${plural(got.length, 'room problem')} to follow up`, got.slice(0, 6).map(r => `${r.room} · ${r.say} — ${r.why}`).join('\n') + (got.length > 6 ? `\n+${got.length - 6} more` : ''), 4, ['wrench'])) sentNow.push('health');
+        if (await send(got.map(r => 'rh_' + r.id), GAP.rh, `🩺 ${plural(got.length, 'room problem')} to follow up`, got.slice(0, 6).map(r => `${r.room} · ${r.say} — ${r.why}`).join('\n') + (got.length > 6 ? `\n+${got.length - 6} more` : ''), 4, ['wrench'], 'shift', opt.manual)) sentNow.push('health');
       });
     }
     // 📒 handover items open 30 min before the end
-    if (CFG.handover && si.end && (onShift || opt.manual) && t >= si.end - 30 * MIN && t < si.end) await guard(async () => {
+    if (CFG.handover && hubOk('shift') && si.end && (onShift || opt.manual) && t >= si.end - 30 * MIN && t < si.end) await guard(async () => {
       const L = openHandover(si); if (!L.length) return;
       const k = 'ho_' + sid;
       if (!(await claim(k, GAP.ho, opt.manual))) return;
       const txt = i => String(i.text || i.orig || '').replace(/\s+/g, ' ').slice(0, 80);
-      if (await send([k], GAP.ho, `📒 ${plural(L.length, 'handover item')} still open`, L.slice(0, 5).map(i => '• ' + txt(i)).join('\n') + (L.length > 5 ? `\n+${L.length - 5} more` : '') + `\nYour shift ends at ${hhmm(si.end)}.`, 4, ['ledger'])) sentNow.push('handover');
+      if (await send([k], GAP.ho, `📒 ${plural(L.length, 'handover item')} still open`, L.slice(0, 5).map(i => '• ' + txt(i)).join('\n') + (L.length > 5 ? `\n+${L.length - 5} more` : '') + `\nYour shift ends at ${hhmm(si.end)}.`, 4, ['ledger'], 'shift', opt.manual)) sentNow.push('handover');
     });
     // 📋 summary ~10 min before the end (still sent if the app opens up to 20 min after)
-    if (CFG.summary && si.end && (si.state !== 'off' || CFG.offShift) && t >= si.end - 10 * MIN && t <= si.end + 20 * MIN) await guard(async () => {
+    if (CFG.summary && hubOk('shift') && si.end && (si.state !== 'off' || CFG.offShift) && t >= si.end - 10 * MIN && t <= si.end + 20 * MIN) await guard(async () => {
       const k = 'sum_' + sid;
       if (!(await claim(k, GAP.sum, opt.manual))) return;
       const text = summaryText(summaryData(si));
-      if (await send([k], GAP.sum, '📋 End-of-shift summary', text.split('\n').slice(1).join('\n'), 3, ['clipboard'])) { sentNow.push('summary'); showPill(text); }
+      if (await send([k], GAP.sum, '📋 End-of-shift summary', text.split('\n').slice(1).join('\n'), 3, ['clipboard'], 'shift', opt.manual)) { sentNow.push('summary'); showPill(text); }
     });
   } catch (_) {}
   finally { busy = false; renderSection(); }
@@ -366,7 +391,7 @@ async function sendSummary() {
     const si = shiftInfo(), text = summary();
     if (!connected()) { open(text); toast('Telegram isn\'t connected — copy it or send it to WhatsApp from here', 'warn'); return false; }
     mark('sum_' + shiftId(si));
-    const ok = await notify('📋 End-of-shift summary', text.split('\n').slice(1).join('\n'), 3, ['clipboard']);
+    const ok = await notify('📋 End-of-shift summary', text.split('\n').slice(1).join('\n'), 3, ['clipboard'], 'shift', true);
     if (ok) hist('📋 End-of-shift summary (sent by hand)');
     toast(ok ? '📋 Summary sent to Telegram' : 'Could not send to Telegram — check the internet', ok ? 'ok' : 'err');
     open(text);
@@ -427,7 +452,7 @@ function toWa() {
     if (it) { toast('💬 Sending to ' + (g || 'WhatsApp') + '…'); close(); }
   } catch (_) { toast('Could not send to WhatsApp', 'err'); }
 }
-function toTg() { notify('📋 End-of-shift summary', (SHEET_TEXT || summary()).split('\n').slice(1).join('\n'), 3, ['clipboard']).then(ok => toast(ok ? '📲 Sent to Telegram' : 'Could not send to Telegram', ok ? 'ok' : 'err')); }
+function toTg() { notify('📋 End-of-shift summary', (SHEET_TEXT || summary()).split('\n').slice(1).join('\n'), 3, ['clipboard'], 'shift', true).then(ok => toast(ok ? '📲 Sent to Telegram' : 'Could not send to Telegram', ok ? 'ok' : 'err')); }
 /** after the automatic summary: a small card, so Copy / WhatsApp is one tap away (never posts by itself) */
 function showPill(text) {
   try {

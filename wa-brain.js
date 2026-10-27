@@ -88,6 +88,7 @@ const CATS = [
   ['luggage', 'Luggage', '🧳', 'req', /\b(?:luggage|(?<!\b(?:tea|laundry|garbage|trash|plastic|shopping|sugar|coffee|dust|bin)\s)bags?|suitcases?|baggage|bell ?boy|porter)\b/, 'luggage'],
 ];
 const CAT = {}; CATS.forEach(c => { CAT[c[0]] = { id: c[0], label: c[1], icon: c[2], kind: c[3], q: c[5] }; });
+const CAT_RE = {}; CATS.forEach(c => { CAT_RE[c[0]] = c[4]; });                   // the built-in words (the Words & phrases page lists them)
 // the hotel's own names, emoji, extra words, requests switched off or added (Settings → Hotel setup → Categories)
 const catSetup = W.hoCfg && typeof W.hoCfg.catHook === 'function'
   ? W.hoCfg.catHook('hk', CATS, CAT, c => ({ id: c[0], label: c[1], icon: c[2], kind: c[3], q: c[5] }),
@@ -103,8 +104,8 @@ function wbDropNeg(t) {
 }
 function wbCategorize(text) {
   const t = wbDropNeg(low(text).replace(/toliet/g, 'toilet').replace(/towles?/g, 'towel')), hit = [];
-  CATS.forEach(c => { if (c[4].test(t)) hit.push(c[0]); });
   const X = catSetup();
+  CATS.forEach(c => { if (X ? X.hit(c[0], c[4], t) : c[4].test(t)) hit.push(c[0]); });   // built-in words the hotel removed do not count
   if (X) X.words.forEach(([id, re]) => { if (!hit.includes(id) && CATS.some(c => c[0] === id) && re.test(t)) hit.push(id); });
   const has = id => hit.includes(id);
   let ids = hit;
@@ -731,7 +732,7 @@ function wbChatMatch(rec, Q, parse) {
   return true;
 }
 
-W.hoWaBrainPure = { wbRooms, wbCategorize, CATS: CAT, wbRequestOf, wbOpenRequests, wbWhat, wbRepeatsToday, wbRepeatIssues, wbStats, wbMoveOf, wbMoveReason, wbMoves,
+W.hoWaBrainPure = { wbRooms, wbCategorize, CATS: CAT, CAT_RE, wbRequestOf, wbOpenRequests, wbWhat, wbRepeatsToday, wbRepeatIssues, wbStats, wbMoveOf, wbMoveReason, wbMoves,
   wbMoveSummary, wbProblemRooms, wbTips, wbParseWhen, wbRemindersOf, wbShiftEndDefault, wbNormWord, wbSkel, wbLev, wbFuzzyWord, wbReadCmd, wbAskCandidates, wbMakeAsk, wbWordKey, wbMakeWords, wbReadStatus, BUILTIN_WORDS, MEANINGS,
   wbChatQuery, wbChatMatch, wbDoneOf, wbRequestLog, wbReqStatus, wbDoneReply, wbDropNeg, wbParts, wbRoomHistory, topOf, peak2, clock, t12, toMin };
 if (!doc) return;
@@ -1089,7 +1090,7 @@ safe(() => {
     (k, e) => { if (typeof fbSet === 'function') safe(() => Promise.resolve(fbSet('waWords/' + fbKey(k), e)).catch(() => {})); }, me);
   /** for the WhatsApp parser and the question cards: lookup(word) → {m, label, note, builtin}|null, all(), add(word, meaning, note), remove(word), onChange(cb), read(text) */
   W.hoWaWords = {
-    lookup: w => WORDS.lookup(w), all: () => WORDS.all(), dict: () => WORDS.dict(), meanings: Object.assign({}, MEANINGS),
+    lookup: w => WORDS.lookup(w), all: () => WORDS.all(), allWithOff: () => WORDS.allWithOff(), dict: () => WORDS.dict(), meanings: Object.assign({}, MEANINGS),
     add: (w, m, note) => { const e = WORDS.add(w, m, note); if (e) { clearAsk(e.key); safe(() => logActivity('wa_word', `"${e.word}" = ${MEANINGS[m]}`)); } return e; },
     remove: w => WORDS.remove(w), restore: w => WORDS.restore(w), onChange: f => WORDS.onChange(f), read: t => WORDS.read(t), test: t => testMessage(t),
   };
@@ -1538,7 +1539,7 @@ function wordsRender() {
         <div class="wab-sec"><h3>🧪 Test a message</h3><p>Type a message the way HK writes it and see how HotelOps reads it.</p>
           <textarea id="wabWTest" rows="3" aria-label="Test a message">${esc(keepT)}</textarea><div class="wab-wout" id="wabWOut"></div></div>
       </div>
-      <div class="wab-sec"><h3>📖 Words HotelOps knows (${all.filter(e => !e.off).length})</h3><p>Built-in housekeeping codes are ready from day one; change or turn them off if your team uses them differently. Words added here are shared with everyone at this hotel.</p>
+      <div class="wab-sec"><h3>📖 Words HotelOps knows (${all.filter(e => !e.off).length})</h3><p>Built-in housekeeping codes are ready from day one; change or turn them off if your team uses them differently. Words added here are shared with everyone at this hotel.${typeof W.hoWordsOpen === 'function' ? ' <a href="#" data-wab-allwords="1">See every built-in word →</a>' : ''}</p>
         <input id="wabWQ" type="search" placeholder="Search words…" value="${esc(keepQ)}" aria-label="Search words" class="wab-wq">
         <div class="wab-tw"><table><thead><tr><th>Word</th><th>Meaning</th><th>Stands for</th><th>Added by</th><th></th></tr></thead><tbody>
         ${all.slice().sort((a, b) => (WSORT[a.m] - WSORT[b.m]) || a.key.localeCompare(b.key)).map(e => `<tr data-wab-wk="${esc(e.key + ' ' + e.word + ' ' + (e.note || '') + ' ' + MEANINGS[e.m]).toLowerCase()}"${e.off ? ' style="opacity:.55"' : ''}><td class="num"><b>${esc(e.word)}</b></td><td>${esc(e.off ? 'Turned off' : MEANINGS[e.m])}</td><td>${esc(e.note || '')}</td>
@@ -1655,6 +1656,7 @@ function mountPage() {
     const ldl = e.target.closest('[data-wab-ldl]'); if (ldl) { logDownload(ldl.dataset.wabLdl); return; }
     const tb = e.target.closest('[data-wab-tab]'); if (tb) { HK.tab = tb.dataset.wabTab; hkRender(); return; }
     const an = e.target.closest('[data-wab-ans]'); if (an) { answerWord(an.dataset.wabAns, an.dataset.m); setTimeout(() => { wordsRender(); hkTabs(); }, 50); return; }
+    if (e.target.closest('[data-wab-allwords]')) { e.preventDefault(); if (typeof W.hoWordsOpen === 'function') W.hoWordsOpen('wa'); return; }
     if (e.target.closest('[data-wab-wadd]')) { wordsAdd(); return; }
     if (e.target.closest('[data-wab-wcancel]')) { HK.edit = ''; wordsRender(); return; }
     const we = e.target.closest('[data-wab-wedit]'); if (we) { HK.edit = we.dataset.wabWedit; wordsRender(); const x = doc.getElementById('wabWMean'); if (x) x.focus(); return; }
