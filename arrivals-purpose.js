@@ -937,10 +937,10 @@ function purposeRender() {
     </td></tr>`;
     purposeKpiUpdate(); return;
   }
-  // Day/Date — the whole report is one day's arrivals, so every row is
-  // stamped with today's day name + date (matches the paper template).
-  const _dayName = new Date().toLocaleDateString('en-GB', { weekday: 'long' });
-  const _dateStr = new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+  // Day/Date — the whole report is one day's arrivals and goes out the next day,
+  // so every row is stamped with tomorrow's day name + date (matches the paper template).
+  const _dayName = _purposeDay().toLocaleDateString('en-GB', { weekday: 'long' });
+  const _dateStr = _purposeDay().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
   tbody.innerHTML = filtered.map(g => {
     const i      = purposeGuests.indexOf(g);
     const origin = g.originOfTravel || '';
@@ -1157,14 +1157,14 @@ function processImportEmails() {
     return;
   }
 
-  // The scraper completes what is missing; it never corrects what is there.
+  // Nationality order: Vicas first; if Vicas doesn't have the guest, the scraper
+  // (it replaces a name guess or a Guest Memory value, never Vicas or a hand edit).
   //
   // Its nationality is whatever was typed into a booking form, and picking
   // the hotel's own country from a dropdown is the common mistake — room 421
   // came through as UAE for a guest travelling on an Iraqi passport. Vicas is
   // the immigration desk reading the passport itself, so it always wins, and
-  // a value already filled from anywhere is left alone. Only an empty
-  // nationality gets one from here. Emails and names still always apply:
+  // a nationality typed in by hand is left alone too. Emails and names still always apply:
   // those are what the scraper is actually for.
   const _isUaeGuess = s => /^u\.?a\.?e\.?$/i.test(String(s).trim()) || /united arab emirates/i.test(s);
 
@@ -1194,8 +1194,8 @@ function processImportEmails() {
         // Vicas/Inhouse already gave us this guest's real nationality — don't
         // let the scraper's guess clobber it.
         natsSkippedXML++;
-      } else if (String(g.nat || '').trim()) {
-        // Already filled from somewhere else. The scraper only completes.
+      } else if (g._natUserEdited) {
+        // Typed in by hand on this screen: a person's choice stays.
         natsSkippedExisting++;
       } else {
         // A bare "UAE" from Neorcha is the single least trustworthy value in
@@ -1215,6 +1215,7 @@ function processImportEmails() {
         g._natFromXML = false;
         g._natFromAI  = !!corrected;
         g._natUserEdited = false;
+        g._fromMemory = false;
         g._natWasUae  = corrected;
         // Still worth a look unless the name positively agreed with UAE.
         g._natSuspect = _isUaeGuess(val) && !g._natConfirmed;
@@ -1291,7 +1292,7 @@ function purposeRandomizeSplit() {
 
 function syncFromArrivals() {
   if (!arrGuests.length) { alert('No arrivals loaded. Go to Arrivals tab first.'); return; }
-  purposeGuests = arrGuests.map(g => ({...g}));
+  purposeGuests = arrGuests.filter(g => !_isPmRoom(g.room)).map(g => ({...g}));
   _applyOriginToPurpose();
   purposeRender(); savePurpose(purposeGuests);
   showToast('Synced from Arrivals ✓');
@@ -1302,6 +1303,11 @@ function clearPurpose() {
   purposeGuests = []; purposeRender(); savePurpose([]);
   addPurposeLog('Cleared', 'All guests cleared');
 }
+
+// The Purpose of Stay report is sent the next day: every row carries tomorrow's day and date.
+function _purposeDay() { const d = new Date(); d.setDate(d.getDate() + 1); return d; }
+// PM rooms (9000 and up) are Opera's pseudo rooms, not guests: they never go on the report.
+function _isPmRoom(room) { const n = parseInt(String(room || '').replace(/\D/g, ''), 10); return n >= 9000; }
 
 function loadPurpose() {
   const raw = document.getElementById('purposeInput').value.trim();
@@ -1326,7 +1332,7 @@ function loadPurpose() {
     const p    = splitLine(lines[i]);
     const room = (p[rI]||'').replace(/"/g,'').trim();
     const rn   = (p[nI]||'').replace(/"/g,'').trim();
-    if (!room || !rn) continue;
+    if (!room || !rn || _isPmRoom(room)) continue;
     guests.push({ room, conf:cI>=0?(p[cI]||'').replace(/"/g,'').trim():'', name:cleanName(rn), purpose:'Business',
       nights:niI>=0?parseInt(p[niI])||1:1, nat:'', email: (eI>=0 && (p[eI]||'').trim()) ? (p[eI]||'').replace(/"/g,'').trim() : 'No@email.com',
       source:cleanSource(taI>=0?(p[taI]||'').replace(/"/g,'').trim():'', coI>=0?(p[coI]||'').replace(/"/g,'').trim():'', srcI>=0?(p[srcI]||'').replace(/"/g,'').trim():''),
@@ -1384,10 +1390,10 @@ function _purposeArchive() {
 }
 
 function exportPurpose() {
-  // Day/Date — same convention as the on-screen table: the whole export is
-  // one day's arrivals, so every row is stamped with today's day + date.
-  const dayName = new Date().toLocaleDateString('en-GB', { weekday: 'long' });
-  const dateStr = new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+  // Day/Date — same convention as the on-screen table: tomorrow's day + date (it is sent the next day)
+  const dayName = _purposeDay().toLocaleDateString('en-GB', { weekday: 'long' });
+  const dateStr = _purposeDay().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+  if (purposeGuests.some(g => _isPmRoom(g.room))) purposeGuests = purposeGuests.filter(g => !_isPmRoom(g.room));   // a list loaded before this rule
   const rows = [['Day','Date','Room','Confirmation No.','Name','Purpose of Stay','Night of Stay','Nationality','Origin of Travel','Email','Booking Source','Remarks']];
   purposeGuests.forEach(g => rows.push([dayName,dateStr,g.room,g.conf,g.name,g.purpose,g.nights,g.nat,g.originOfTravel||'',g.email,g.source,g.remarks]));
 

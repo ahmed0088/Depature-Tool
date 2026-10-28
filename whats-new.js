@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 428, items: [
+    "📅 Purpose of Stay: the Day and Date are now tomorrow's (the report is sent the next day) — on screen and in the Excel export.",
+    "🚫 PM rooms (9000 and up) are left out of Purpose of Stay — when you paste the report, sync from Arrivals, and in the export.",
+    "🌍 Nationality: Vicas first; if Vicas doesn't have the guest, the scraper's nationality is used (it now replaces a name guess or a memory value). A nationality you type in yourself is never changed.",
+  ] },
   { v: 427, items: [
     "📲 Phone notifications for everything: wake-up calls, overdue shift tasks, the night checklist (TD and night audit), late check-outs and rooms not out, swaps and day-off requests, roster changes, open HK requests, room notes and the away guard — all through your ntfy / Telegram, no new setup.",
     "🧠 Smart, not noisy: only one of your devices sends each alert and never twice; small ones are bundled into one message; shift alerts only while you're on shift; quiet hours hold everything except urgent ones; things still not done get a louder reminder. Turn each kind on or off in Settings → 📲 Phone notifications, with a test button and your last 20 alerts.",
