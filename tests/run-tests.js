@@ -2255,6 +2255,66 @@ console.log('\nHandover Book');
     ['hk', 'transport', 'hk', 'maint', 'hk', 'move', 'move']);
 }
 
+// ── Handover from WhatsApp: only the handover (HO) group and messages marked HO / #ho / handover (made-up text only) ──
+console.log('\nHandover from WhatsApp');
+{
+  const store = {}, got = [];
+  const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } },
+    document: { readyState: 'complete', addEventListener() {}, dispatchEvent() {}, getElementById() { return null; }, querySelectorAll() { return []; }, querySelector() { return null; },
+      createElement: () => ({ style: {}, setAttribute() {}, appendChild() {}, addEventListener() {} }), head: { appendChild() {} }, body: { appendChild() {} } },
+    addEventListener() {}, setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, CustomEvent: class { constructor(t, o) { this.type = t; this.detail = o && o.detail; } },
+    currentProfile: { name: 'Test User' }, depLog: [], depRooms: [], DAY: '2026-10-11',
+    depRender() {}, updateDepBadge() {}, saveDeps() {}, saveDepartures() {}, logActivity() {}, showToast() {}, showUndoToast() {} };
+  sb.window = sb; sb.globalThis = sb;
+  vm.createContext(sb);
+  const dep = fs.readFileSync(path.join(ROOT, 'departures.js'), 'utf8'), ut = fs.readFileSync(path.join(ROOT, 'utils.js'), 'utf8');
+  const fnSrc = (src, name) => { const i = src.indexOf('function ' + name + '('); return src.slice(i, src.indexOf('\n}\n', i) + 3); };
+  vm.runInContext(fnSrc(dep, 'depAction') + fnSrc(dep, 'depAddManualRoom') + fnSrc(dep, '_depBoardDate') + fnSrc(ut, 'parseOperaDate') + 'function hoLocalISO() { return DAY; }', sb);
+  for (const f of ['wa-bridge.js', 'handover-book.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sb, { filename: f });
+  const H = sb.hoHandoverPure, B = sb.hoHandoverBook;
+  sb.hoHandoverBook = { fromWa: p => { got.push(p); return 0; } };            // what the bridge hands to the book
+  ['512', '305', '410'].forEach(n => sb.depRooms.push({ room: +n, roomStr: n, name: 'TEST GUEST', departure: '11-OCT-26', nights: 1, balance: 0, status: 'due', lateTime: '', extensionNights: 0, note: '' }));
+  const send = (id, group, text, x) => { got.length = 0; sb.hoWaBridge.handle(Object.assign({ id, group, text, sender: 'Sam Test', time: '10:05' }, x || {}), 'page'); return got.map(p => p.kind + (p.src ? ':' + p.src : '') + (p.strict ? ':strict' : '')).join() || 'none'; };
+
+  check('rule: the HO group by its name (handover, a standalone HO), or switched on by hand', ['HO - Test Hotel', 'Test hotel ho', 'Shift Handover', 'Hand over FO', 'HK Test Team', 'Hotel Ops Test', 'Who is who', 'Showroom'].map(g => H.waToHandover(g, 'anything')).concat(H.waToHandover('FO Test', 'x', true)),
+    ['group', 'group', 'group', 'group', null, null, null, null, 'group']);
+  check('rule: a message that says HO / #ho / handover goes in, the mark taken off', ['HO: 512 waiting for transfer', '512 waiting for transfer #ho', '#HO 305 refund pending', '305 refund pending HO', '(HO) 410 taxi 5am', '410 taxi 5am - handover', 'ho 512 early departure', 'Handover: 305 key card not working'].map(H.hoStrip),
+    ['512 waiting for transfer', '512 waiting for transfer', '305 refund pending', '305 refund pending', '410 taxi 5am', '410 taxi 5am', '512 early departure', '305 key card not working']);
+  check('rule: never inside a word, and not Hindi / Tagalog "ho" or "hand over the keys"', ['hotel 512 ok', 'who is on shift', '512 shower not working', 'hold 512 for now', 'Ho gaya sir', 'HO GAYA', 'kya ho raha hai', 'salamat ho', 'I will hand over the keys to the guest', 'HO', '512 early departure'].map(t => H.waToHandover('HK Test Team', t)),
+    Array(11).fill(null));
+  check('bridge: another group is never picked from (no more "reads like a handover item")', [send('h1', 'HK Test Team', '512 early depart'), send('h2', 'HK Test Team', 'Room 305 guest complained about noise'), send('h3', 'HK Test Team', 'Lost phone found in 410')], ['none', 'none', 'none']);
+  check('bridge: marked HO in any group → the book (never a room command)', [send('h4', 'HK Test Team', 'HO: 512 waiting for transfer'), send('h5', 'HK Test Team', '305 CO #ho'), sb.depRooms.find(r => r.roomStr === '305').status], ['msg:prefix', 'msg:prefix', 'due']);
+  check('bridge: everything in the HO group → the book', [send('h6', 'HO - Test Hotel', '410 balance pending'), send('h7', 'HO - Test Hotel', 'ok noted')], ['msg:wa', 'msg:wa']);
+  check('bridge: a "Done" in another group only ticks when it quotes an item, and never asks', [send('h8', 'HK Test Team', 'Done ✅'), send('h9', 'HK Test Team', 'Done ✅', { quote: '512 waiting for transfer', time: '10:09' })], ['none', 'done:strict']);
+  check('"None of these": that message is never asked about again (kept on this device)', [B.noAsked('m-test-1'), (B.rememberNoAsk('m-test-1'), B.noAsked('m-test-1')), JSON.parse(store.hb_noask_v1 || '[]').includes('m-test-1'), B.noAsked('m-test-2')], [false, true, true, false]);
+  const RD = require(path.join(ROOT, 'tools/hotelops-whatsapp.console.js'));
+  check('reader: the same rule in the WhatsApp window', ['HO: 512 waiting', '512 waiting #ho', '512 waiting HO', 'hotel 512', 'who is there', 'shower 512', 'hold 512', 'kya ho raha'].map(RD.hoMarked), [true, true, true, false, false, false, false, false]);
+}
+
+// ── Ops Brain: calm by default (brain-live.js) ──
+console.log('\nOps Brain · calm hints');
+{
+  const store = {};
+  const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } },
+    document: { addEventListener() {}, getElementById() { return null; }, querySelectorAll() { return []; }, querySelector() { return null; } }, addEventListener() {}, setTimeout: () => 0, clearTimeout() {} };
+  sb.window = sb; sb.globalThis = sb;
+  vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'brain-live.js'), 'utf8'), sb, { filename: 'brain-live.js' });
+  const run = c => vm.runInContext(c, sb);
+  check('mode: Calm unless Normal or Off was chosen', [run('blMode()'), (sb.hoPref = k => (k === 'brainMode' ? 'off' : true), run('blMode()')), (sb.hoPref = () => 'normal', run('blMode()')), (sb.hoPref = () => undefined, run('blMode()'))], ['calm', 'off', 'normal', 'calm']);
+  const now = 50 * 60e3, R = (k, o) => run(`blRoute(${JSON.stringify(k)}, ${JSON.stringify(Object.assign({ now, last: 0 }, o))})`);
+  check('calm: a hint never pops up; Normal still does', [R('thought', { mode: 'calm' }), R('thought', { mode: 'off' }), R('thought', { mode: 'normal' })], ['hold', 'hold', 'bubble']);
+  check('calm: something it did by itself is one small toast at most every 10 minutes, none while typing', [R('result', { mode: 'calm' }), R('result', { mode: 'calm', last: now - 5 * 60e3 }), R('result', { mode: 'calm', typing: true }), R('result', { mode: 'off' }), R('result', { mode: 'calm', last: now - 11 * 60e3 })], ['toast', 'hold', 'hold', 'hold', 'toast']);
+  check('calm: what you tapped and the alarms you set (reminders, wake-up calls) still show', [R('result', { mode: 'calm', prompted: true }), R('alarm', { mode: 'calm', typing: true }), R('alarm', { mode: 'off' })], ['bubble', 'bubble', 'bubble']);
+  const T = [{ id: 'arrNat:3', tone: 'warn' }, { id: 'habit:arrivals:Sun Oct 11 2026:9', tone: 'idle' }, { id: 'lco:512', tone: 'bad' }];
+  check('calm: a tip seen once is not shown again (the 09:00 and 10:00 habit tip are one tip)', [run('blSeenKey({ id: "habit:arrivals:Sun Oct 11 2026:9" })') === run('blSeenKey({ id: "habit:arrivals:Sun Oct 11 2026:10" })'),
+    run(`blCalmFilter(${JSON.stringify(T)}, { 'habit:arrivals:Sun Oct 11 2026': 1 }, 'calm').map(t => t.id)`), run(`blCalmFilter(${JSON.stringify(T)}, { 'habit:arrivals:Sun Oct 11 2026': 1 }, 'normal').length`)],
+    [true, ['arrNat:3', 'lco:512'], 3]);
+  check('the 🧠 number: calm counts only what you have not seen; off shows none', [run(`blCountable(${JSON.stringify(T)}, [], {}, { 'arrNat:3': 1 }, 'calm', 0)`), run(`blCountable(${JSON.stringify(T)}, [{ id: 'heal:1' }], { 'lco:512': 9 }, {}, 'calm', 0)`), run(`blCountable(${JSON.stringify(T)}, [], {}, {}, 'off', 0)`), run(`blCountable(${JSON.stringify(T)}, [], {}, { 'arrNat:3': 1 }, 'normal', 0)`)],
+    [2, 3, 0, 3]);
+  check('a day off: the Brain stays silent (only what you tap answers)', [R('thought', { mode: 'normal', dayOff: true }), R('result', { mode: 'calm', dayOff: true, last: -1e9 }), R('alarm', { mode: 'normal', dayOff: true }), R('result', { mode: 'calm', prompted: true, dayOff: true })], ['hold', 'hold', 'hold', 'bubble']);
+}
+
 // ── WhatsApp bridge acting on a board (wa-bridge.js handle() with departures.js depAction, no browser) ──
 console.log('\nWhatsApp bridge · acting on the board');
 {
@@ -3232,6 +3292,117 @@ const nhAsync = (async () => {
   const g = await B.H.send({ cat: 'guard', prio: 5, claimed: true, instant: true, ignoreQuiet: true, title: '🚨 Someone is on your WhatsApp' });
   check('notify: the guard goes straight out from the PC that saw it (no claim, no wait)', [g, sent.length, sent.every(s => s.dev === 'dpcbbbbb')], [true, 2, true]);
 })().catch(e => { fail++; console.log('  ✗ notify (2 devices) threw: ' + (e && e.stack || e)); });
+
+// ── Opera reader: tools/hotelops-opera.console.js (reads Opera Cloud's screens) + opera-bridge.js (what the app does with them) ──
+console.log('\nOpera reader');
+{
+  const R = require(path.join(ROOT, 'tools/hotelops-opera.console.js'));
+  const J = o => JSON.parse(JSON.stringify(o));
+  // headers as Opera Cloud's grids show them (with sort hints, #, slashes)
+  const heads = ['Room', 'Name', 'Conf. #', 'Arrival', 'Departure', 'Nights', 'Reservation Status', 'Nationality', 'E-mail', 'Company', 'Travel Agent', 'Source', 'Rate Code', 'VIP', 'Adults/Children', 'Balance Sort ascending', 'Room Type', 'Arrival Time', 'Guest Count'];
+  check('opera: headers mapped by their words', heads.map(R.fieldOf), ['room', 'name', 'conf', 'arrival', 'departure', 'nights', 'status', 'nat', 'email', 'company', 'agent', 'source', 'rateCode', 'vip', 'pax', 'balance', 'roomType', 'eta', 'pax']);
+  check('opera: more spellings', ['Rm', 'Guest Name', 'Confirmation Number', 'Reservation #', 'Arr', 'Dep', 'Departure Date/Time', 'Country', 'Email Address', 'Rate Plan', 'Children', 'Adults', 'Open Balance', 'Last Name', 'Room Status', 'Something else'].map(R.fieldOf),
+    ['room', 'name', 'conf', 'conf', 'arrival', 'departure', 'departure', 'nat', 'email', 'rateCode', 'children', 'adults', 'balance', 'last', 'roomStatus', '']);
+  const M = R.mapHeaders(['', 'Room', 'Name', 'Status', 'Name']);
+  check('opera: a grid is read when it names a room / guest and one more thing (first column wins)', [J(M.map), R.usable(M), R.usable(R.mapHeaders(['Room', 'Foo'])), R.usable(R.mapHeaders(['Nights', 'Balance']))], [{ room: 1, name: 2, status: 3 }, true, false, false]);
+  check('opera: dates in en-GB, US, ISO and Opera style', ['2026-10-28', '28-OCT-26', '28-Oct-2026', '28 Oct 2026', 'Oct 28, 2026', 'Wed, 28 Oct 2026', 'Wednesday, October 28, 2026', '28/10/2026', '10/28/2026', '28.10.26', '20261028', '31-Feb-2026', 'soon'].map(d => R.parseDate(d)),
+    ['2026-10-28', '2026-10-28', '2026-10-28', '2026-10-28', '2026-10-28', '2026-10-28', '2026-10-28', '2026-10-28', '2026-10-28', '2026-10-28', '2026-10-28', '', '']);
+  check('opera: 05/10/2026 is 5 Oct the en-GB way, 10 May the US way', [R.parseDate('05/10/2026'), R.parseDate('05/10/2026', 'mdy')], ['2026-10-05', '2026-05-10']);
+  check('opera: which way round a list writes its dates (a day over 12, or the nights)', [R.dateOrder(['10/28/2026', '10/30/2026']), R.dateOrder(['28/10/2026']), R.dateOrder(['10/11/2026', '10/12/2026'], [['10/11/2026', '10/12/2026', 1]]), R.dateOrder(['10/11/2026'], [['10/11/2026', '11/11/2026', 1]]), R.dateOrder(['01/02/2026'])],
+    ['mdy', 'dmy', 'mdy', 'dmy', '']);
+  check('opera: the date shown on screen', [R.findDate('Business Date 28-Oct-2026'), R.findDate('Arrivals for Wed, 28 Oct 2026 (42)'), R.findDate('Departures 2026-10-29'), R.findDate('no date')], ['2026-10-28', '2026-10-28', '2026-10-29', '']);
+  check('opera: status words', ['Due In', 'Checked In', 'In House', 'Due Out', 'Checked Out', 'Departed', 'Cancelled', 'No Show', 'Reserved', 'DUE_OUT', 'Waitlist', 'Something'].map(R.normStatus),
+    ['due_in', 'in_house', 'in_house', 'due_out', 'checked_out', 'checked_out', 'cancelled', 'no_show', 'due_in', 'due_out', 'waitlist', '']);
+  check('opera: rooms, money, conf, email', [R.roomOf('0113 QKNG Clean'), R.roomOf('Rm 512'), R.roomOf('Assign Room'), R.roomKey('0113'), R.money('AED 1,234.50'), R.money('(120.00)'), R.money('—'), R.confOf('123456789\nGTD'), R.confOf('N/A'), R.emailOf('Mail: test.one@example.com ✉')],
+    ['0113', '512', '', '113', 1234.5, -120, null, '123456789', '', 'test.one@example.com']);
+  const hm = R.mapHeaders(heads).map;
+  const raw = [
+    R.rowFrom(['0101', 'Testperson, Alpha', '100001', '10/27/2026', '10/28/2026', '1', 'Due Out', 'GB', 'alpha.test@example.com', '', 'Made Up Travel', '', 'BAR', '', '2/1', 'AED 120.00', 'STD', ''], hm),
+    R.rowFrom(['0102', 'Sample, Bravo', '100002', '10/25/2026', '10/28/2026', '', 'Checked Out', 'IN', '—', 'Made Up Corp', '', '', 'CORP', 'VIP1', '1/0', '0.00'], hm),
+    R.rowFrom(['', 'Unassigned, Charlie', '100003', '10/28/2026', '10/30/2026', '2', 'Due In', '', '', '', '', '', 'BAR', 'N', '', ''], hm),
+  ];
+  const rows = R.finishRows(raw);
+  check('opera: a grid line → a guest line (US dates read from the list, nights from the dates, pax split)', J(rows[0]),
+    { room: '0101', name: 'Testperson, Alpha', conf: '100001', nights: 1, statusText: 'Due Out', status: 'due_out', roomType: 'STD', agent: 'Made Up Travel', rateCode: 'BAR', nat: 'GB', email: 'alpha.test@example.com', adults: 2, children: 1, balance: 120, arrival: '2026-10-27', departure: '2026-10-28' });
+  check('opera: empty values stay out, nights counted, VIP kept, "N" is not VIP', [J(rows[1]).nights, rows[1].vip, rows[1].email, rows[2].room, rows[2].vip, rows[2].status], [3, 'VIP1', undefined, undefined, undefined, 'due_in']);
+  check('opera: the same reservation read twice is one line (conf., else room + name)', [R.rowKey(rows[0]), R.rowKey({ room: '0113', name: 'Doe, Test' }), R.rowKey({ room: '113', name: 'TEST DOE' }), R.rowKey({})], ['c:100001', 'r:113|DOE TEST', 'r:113|DOE TEST', '']);
+  const m1 = R.mergeRows([{ room: '0101', name: 'Testperson, Alpha', balance: 50 }, { room: '0202', name: 'Other, Guest' }], [{ room: '0101', name: 'Testperson, Alpha', conf: '100001', balance: 120 }, { room: '0303', name: 'New, One', conf: '5555' }]);
+  check('opera: a long list read while scrolling: rows merged, a fresher value wins, nothing seen is dropped', J(m1), [{ room: '0101', name: 'Testperson, Alpha', balance: 120, conf: '100001' }, { room: '0202', name: 'Other, Guest' }, { room: '0303', name: 'New, One', conf: '5555' }]);
+  check('opera: reservation details (label → value) → one guest line', J(R.pairsToRow([['Confirmation Number', '200005'], ['Room', '0303'], ['Name', 'Known, Kilo'], ['Arrival', '28-Oct-2026'], ['Nationality', 'Portugal'], ['Phone', '000']])),
+    { room: '0303', name: 'Known, Kilo', conf: '200005', nat: 'Portugal', arrival: '2026-10-28' });
+  check('opera: label pairs that are not a reservation → nothing', R.pairsToRow([['Username', 'x'], ['Room', '0303']]), null);
+  check('opera: what the screen is (title / headings / address; else the statuses)', [R.pageKind(['OPERA Cloud', 'Arrivals']), R.pageKind(['Manage In House Guests']), R.pageKind(['', 'Departures (25)']), R.pageKind(['Look Up Reservations']), R.pageKind(['Reservation Overview']), R.pageKind(['OPERA Cloud', '/opera/frontdesk/ArrivalsTF']),
+    R.pageKind(['OPERA Cloud'], [{ status: 'due_out' }, { status: 'checked_out' }, { status: 'due_out' }]), R.pageKind(['x'], [{ room: '1' }]), R.pageKind([])], ['arrivals', 'inhouse', 'departures', 'search', 'details', 'arrivals', 'departures', 'list', '']);
+  check('opera: pill words and list totals', [R.summary('departures', 42), R.summary('arrivals', 1), R.summary('arrivals', 25, 42), R.totalOf('1-25 of 42'), R.totalOf('Total Records: 17'), R.totalOf('nothing')], ['read 42 departures', 'read 1 arrival', 'read 25 of 42 arrivals', 42, 17, 0]);
+  check('opera: the reader only reads (no clicks, no typing, no innerHTML) and is the same hash for the same rows', [/\.click\(\)|dispatchEvent\(new (?:Mouse|Keyboard)|\.innerHTML|\.value\s*=[^=]/.test(fs.readFileSync(path.join(ROOT, 'tools/hotelops-opera.console.js'), 'utf8')), R.hash([1, 'a']) === R.hash([1, 'a']), R.hash([1]) !== R.hash([2])], [false, true, true]);
+
+  // ── the app's side: what Opera's screen changes in the lists (opera-bridge.js, pure) ──
+  const sb = { console: { log() {}, warn() {}, error() {} } }; sb.globalThis = sb;
+  vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'opera-bridge.js'), 'utf8'), sb, { filename: 'opera-bridge.js' });
+  const O = sb.hoOperaPure, T = '2026-10-28';
+  check('bridge: dates and names the board way', [O.toIso('28-OCT-26'), O.toIso('2026-10-28'), O.operaDay('2026-10-28'), O.firstLast('Doe, Test Mr.'), O.sameGuest('Testperson, Alpha', 'Alpha Testperson'), O.sameGuest('Doe, Test', 'Other Person'), O.sameGuest('', 'X Y')],
+    ['2026-10-28', '2026-10-28', '28-OCT-26', 'Test Doe', true, false, true]);
+  check('bridge: nationality codes → names, UAE short; OTA relay emails are not real ones', [O.natName('AE'), O.natName('gb'), O.natName('India'), O.natName('United Arab Emirates'), O.goodEmail('a.b@example.com'), O.goodEmail('x123@guest.booking.com'), O.goodEmail('No@email.com'), O.goodEmail('—')],
+    ['UAE', 'United Kingdom', 'India', 'UAE', true, false, false, false]);
+  const clean = sb.hoOperaPure.sanitize({ kind: 'evil', date: 'x', rows: [{ room: '0101', name: 'A'.repeat(500), balance: '12.5', nights: 'abc', arrival: 'tomorrow', hack: '<b>', status: 'due_out' }, null, { foo: 1 }] });
+  check('bridge: what comes from another tab is made safe', [clean.kind, clean.date, clean.rows.length, clean.rows[0].name.length, clean.rows[0].balance, clean.rows[0].nights, clean.rows[0].arrival, clean.rows[0].hack], ['list', '', 1, 90, 12.5, undefined, undefined, undefined]);
+  const mk = (n, name, x) => Object.assign({ room: parseInt(n, 10), roomStr: n, name, arrival: '', departure: '28-OCT-26', nights: 1, balance: 0, rateCode: '', company: '', isVip: false, depTime: '', status: 'due', note: 'typed by hand' }, x || {});
+  const board = { day: T, rooms: [mk('0101', 'Alpha Testperson'), mk('0102', 'Bravo Sample'), mk('0104', 'Delta Demo'), mk('0105', 'Echo Fake', { status: 'out' }), mk('0106', 'Foxtrot Mock'), mk('0107', 'Golf Real')] };
+  const dep = { kind: 'departures', date: T, rows: [
+    { room: '0101', name: 'Testperson, Alpha', departure: T, status: 'due_out', balance: 120, rateCode: 'BAR', vip: 'VIP1' },
+    { room: '0102', name: 'Sample, Bravo', departure: T, status: 'checked_out' },
+    { room: '0103', name: 'Example, Charlie', departure: T, status: 'checked_out', arrival: '2026-10-25', nights: 3 },
+    { room: '0104', name: 'Demo, Delta', arrival: '2026-10-27', departure: '2026-10-30', status: 'in_house' },
+    { room: '0105', name: 'Fake, Echo', departure: T, status: 'checked_out' },
+    { room: '0106', name: 'Mock, Foxtrot', departure: T, status: 'cancelled' },
+    { room: '0107', name: 'Somebody, Else', departure: T, status: 'checked_out' },
+  ] };
+  const P = O.plan({ snap: dep, today: T, board, arr: [], pur: [], ih: null });
+  check('bridge departures: checked out in Opera → out; already out not again; another guest in the room not touched; cancelled ignored',
+    [P.dep.out.map(o => o.room), P.dep.add.map(a => a.row.room + (a.out ? ' out' : '')), P.dep.ext.map(e => e.room + ' +' + e.nights + ' → ' + e.to), J(P.dep.fill), P.notes.length, P.dep.create],
+    [['0102'], ['0103 out'], ['0104 +2 → 2026-10-30'], [{ room: '0101', set: { balance: 120, rateCode: 'BAR', isVip: true } }], 2, null]);
+  check('bridge: what it tells you', [O.summaryText(P), O.worthAlert(P)], ['1 room checked out, 1 room extended, 1 departure added, 1 departure updated', true]);
+  check('bridge departures: no board yet (or yesterday\'s) → made from Opera; tomorrow\'s board is left alone; a search screen never makes one',
+    [O.plan({ snap: dep, today: T, board: { rooms: [], day: '' }, arr: [], pur: [] }).dep.create.map(r => r.room), O.plan({ snap: dep, today: T, board: { rooms: [mk('0101', 'X')], day: '2026-10-27' }, arr: [], pur: [] }).dep.create.length,
+      O.plan({ snap: dep, today: T, board: { rooms: [mk('0101', 'X')], day: '2026-10-29' }, arr: [], pur: [] }).n, O.plan({ snap: Object.assign({}, dep, { kind: 'search' }), today: T, board: { rooms: [], day: '' }, arr: [], pur: [] }).dep.create],
+    [['0101', '0102', '0103', '0105', '0107'], 5, 0, null]);
+  const rep = O.depReport([{ room: '0101', name: 'Testperson, Alpha', arrival: '2026-10-27', departure: T, nights: 1, balance: 120, agent: 'Made Up Travel', rateCode: 'BAR', etd: '11:30' }]);
+  check('bridge: the board is made by the departures report parser (Opera\'s columns, 15+ of them)', [rep.split('\n')[0].split('\t').length >= 15, rep.split('\n')[1].split('\t').slice(0, 6), rep.split('\n')[1].split('\t')[11]],
+    [true, ['0101', 'Testperson, Alpha', '27-OCT-26', '28-OCT-26', '1', '120'], '11:30']);
+  // arrivals + purpose of stay
+  const arr = [{ room: '0303', conf: '200005', name: 'KILO KNOWN', purpose: 'Leisure', nights: 2, nat: 'Spain', _natFromAI: true, email: 'No@email.com', source: 'ALL App', remarks: 'typed' },
+    { room: 'ASSIGN', conf: '200007', name: 'MIKE WAITING', nat: 'Kenya', email: 'mike@example.com' }];
+  const pur = [{ room: '0303', conf: '200005', name: 'KILO KNOWN', nat: 'Brazil', _natUserEdited: true, email: 'No@email.com' },
+    { room: '0305', conf: '200008', name: 'NOVA XML', nat: 'Chile', _natFromXML: true, email: '' }, { room: '0306', conf: '200010', name: 'OSCAR SCRAPED', nat: 'Peru', email: 'oscar@example.com' }];
+  const arrSnap = { kind: 'arrivals', date: T, rows: [
+    { room: '0301', name: 'Newguest, Golf', conf: '200001', arrival: T, nights: 2, status: 'due_in', nat: 'AE', email: 'golf.new@example.com', agent: 'Agoda' },
+    { name: 'Unassigned, India', conf: '200003', arrival: T, status: 'due_in' },
+    { room: '9001', name: 'Pmroom, Juliet', conf: '200004', arrival: T, status: 'due_in' },
+    { room: '0303', name: 'Known, Kilo', conf: '200005', arrival: T, status: 'due_in', nat: 'PT', email: 'kilo.known@example.com' },
+    { room: '0304', name: 'Cancelled, Lima', conf: '200006', arrival: T, status: 'cancelled' },
+    { room: '0310', name: 'Waiting, Mike', conf: '200007', arrival: T, status: 'due_in', nat: 'KE' },
+    { room: '0305', name: 'Xml, Nova', conf: '200008', arrival: T, status: 'in_house', nat: 'AR', email: 'nova@guest.booking.com' },
+    { room: '0306', name: 'Scraped, Oscar', conf: '200010', arrival: T, status: 'due_in', nat: 'CO' },
+  ] };
+  const A = O.plan({ snap: arrSnap, today: T, board: { rooms: [], day: '' }, arr, pur, ih: null });
+  check('bridge arrivals: new ones added (with a room; PM rooms on Arrivals only), cancelled not',
+    [A.arr.add.map(g => g.room + ' ' + g.name + ' ' + g.nat + ' ' + g.email + ' ' + g.source + ' ' + g.purpose), A.pur.add.map(g => g.room + ' ' + g.originOfTravel)],
+    [['0301 GOLF NEWGUEST UAE golf.new@example.com Agoda Business', '9001 JULIET PMROOM  No@email.com ALL App Business', '0305 NOVA XML Argentina No@email.com ALL App Business', '0306 OSCAR SCRAPED Colombia No@email.com ALL App Business'], ['0301 ', '0305 ', '0306 ']]);
+  check('bridge arrivals: only empty things filled — room, email; a guessed nationality replaced; a hand-typed, Vicas or scraper one never',
+    [A.arr.fill.map(f => f.g.name + ' ' + JSON.stringify(f.set)), A.pur.fill.map(f => f.g.name + ' ' + JSON.stringify(f.set))],
+    [['KILO KNOWN {"email":"kilo.known@example.com","nat":"Portugal"}', 'MIKE WAITING {"room":"0310"}'], ['KILO KNOWN {"email":"kilo.known@example.com"}']]);
+  check('bridge arrivals: notes (cancelled, no room yet) and the words', [A.notes, O.summaryText(A)], [['1 cancelled / no-show in Opera (left as they are here)', '1 arrival without a room yet — added once Opera gives a room'], '4 new arrivals added, 3 arrivals filled in']);
+  check('bridge arrivals: another day\'s arrivals change nothing', [O.plan({ snap: Object.assign({}, arrSnap, { date: '2026-10-29', rows: arrSnap.rows.map(r => Object.assign({}, r, { arrival: '2026-10-29' })) }), today: T, board: { rooms: [], day: '' }, arr, pur }).n], [0]);
+  // in-house
+  const ihSnap = { kind: 'inhouse', date: T, rows: [{ room: '0104', name: 'Demo, Delta', conf: '100004', arrival: '2026-10-27', departure: '2026-10-30', status: 'in_house', balance: 55.5, adults: 2, children: 1 }, { room: '0401', name: 'Stayer, Mike', conf: '300001', arrival: '2026-10-23', departure: '2026-11-01', status: 'in_house' }] };
+  const I1 = O.plan({ snap: ihSnap, today: T, board: { rooms: [], day: '' }, arr: [], pur: [], ih: null });
+  const I2 = O.plan({ snap: ihSnap, today: T, board: { rooms: [], day: '' }, arr: [], pur: [], ih: { date: T, rows: [{ room: '104', rk: '104', name: 'Delta Demo', conf: '100004', departure: '2026-10-29', balance: 0, notes: 'typed' }] } });
+  check('bridge in-house: none today → made from the In House screen; one today → new rooms added, fresher values, nothing removed',
+    [I1.ih.mode, I1.ih.add.map(g => g.rk + ' ' + g.name + ' ' + g.nights), I2.ih.mode, I2.ih.add.map(g => g.room), I2.ih.upd.map(u => JSON.stringify(u.set))],
+    ['create', ['104 Delta Demo 3', '401 Mike Stayer 9'], 'merge', ['0401'], ['{"arrival":"2026-10-27","departure":"2026-10-30","nights":3,"adults":2,"children":1,"balance":55.5}']]);
+  check('bridge in-house: yesterday\'s list is not merged into; a search screen never makes one', [O.plan({ snap: ihSnap, today: T, board: { rooms: [], day: '' }, arr: [], pur: [], ih: { date: '2026-10-27', rows: [] } }).ih.mode, O.plan({ snap: Object.assign({}, ihSnap, { kind: 'search' }), today: T, board: { rooms: [], day: '' }, arr: [], pur: [], ih: null }).ih.mode], ['create', '']);
+}
 
 nhAsync.then(() => {
   console.log(`\n${pass} passed · ${fail} failed`);

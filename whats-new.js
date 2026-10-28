@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 431, items: [
+    "📒 Handover takes from WhatsApp only what's meant for it: a message in your Handover group (on by itself for a group named “handover” or “HO”), or one marked “HO: …”, “#ho” or “handover”. The marker is taken off. Everything else stays out — no more wrong picks and no more “None of these” questions from guesses; and if you do press “None of these”, that message is never asked about again.",
+    "🧠 The Brain is calm now: it no longer pops up or pulses by itself — a quiet number on 🧠 shows when it has something, and a tip you've seen isn't shown again. Settings → Ops Brain → Hints: Calm (default) / Normal / Off. Asking it works as always. On a 🌴 day off it stays completely quiet.",
+  ] },
   { v: 430, items: [
     "🌍 Purpose of Stay nationality: Vicas first; the Neorcha scraper now only fills a nationality that is empty — if there's already one, it's left as it is.",
   ] },

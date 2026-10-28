@@ -81,7 +81,22 @@
   function isHoGroup(name) { return HO_GRP.test(sp(name || '')); }
   /** "HO - 512 to twin tomorrow", "HO: …", "H/O …", "Handover: …" (not "HOTEL…", "HOLD…"): a note for the next shift in any group */
   var HO_MARK = /^\s*(?:\*\s*)?(?:HO|H\/O|hand\s*-?\s*over)(?![A-Za-z0-9])\s*\*?\s*[-–—:.,|>]*\s*/i;
-  function hoMarked(text) { var s = sp(text), m = s.match(HO_MARK), rest = m ? s.slice(m[0].length).trim() : ''; return !!rest && !(/^(?:\*\s*)?(?:ho|Ho|hO)$/.test(m[0].trim()) && !/^(?:\d|r(?:oo)?ms?\b)/i.test(rest)); }   // "Ho gaya" is not a mark
+  function hoAtStart(text) { var s = sp(text), m = s.match(HO_MARK), rest = m ? s.slice(m[0].length).trim() : ''; return !!rest && !(/^(?:\*\s*)?(?:ho|Ho|hO)$/.test(m[0].trim()) && !/^(?:\d|r(?:oo)?ms?\b)/i.test(rest)); }   // "Ho gaya" is not a mark
+  /** "… #ho", "(HO) …", "… waiting HO", "512 refund - handover" anywhere too (same rule as hoMark in HotelOps' handover-book.js) */
+  var HO_NEXT_CHAT = /^(?:gaya|gayi|gaye|gya|gyi|gye|jayega|jaega|jayegi|jaegi|jaye|jaaye|jaa|ja|jao|jata|jaata|jati|raha|rahi|rahe|rha|rhi|rhe|sakta|sakti|sakte|skta|skte|sake|chuka|chuki|chuke|na|naa|ga|gi|ge|to|tha|thi|the|kya|ki|hai|hain|he|kar|kr|ke|lo|le|po|kayo|ba|lang|naman)$/i;
+  var HO_PREV_CHAT = /^(?:kya|kaise|kese|kaisa|kahan|kaha|kidhar|jo|bhi|nahi|nahin|nhi|mat|tum|aap|ap|ready|free|busy|theek|thik|ok|okay|khush|salamat|po|opo|oo|sige|na|lang|ba|naman|kayo|ito|yan|yun|dito|diyan|saan|ano|paano)$/i;
+  function hoMarked(text) {
+    if (hoAtStart(text)) return true;
+    var s = sp(text), re = /(^|[^A-Za-z0-9\/#])(#\s?)?(hand\s*-?\s*over|h\/o|ho)(?![A-Za-z0-9])/gi, m;
+    while ((m = re.exec(s))) {
+      var start = m.index + m[1].length, w = m[3], end = start + (m[2] || '').length + w.length, after = s.slice(end), before = s.slice(0, start);
+      var punct = /^\s*[:\-–—|>]/.test(after), br = /^\s*[)\]]/.test(after) && /[(\[]\s*$/.test(before), atEnd = !/[A-Za-z0-9]/.test(after);
+      var next = (after.match(/^\s*([A-Za-z']+)/) || [])[1] || '', prev = (before.match(/([A-Za-z']+)[\s,]*$/) || [])[1] || '';
+      var ok = m[2] || br ? true : !/^ho$/i.test(w) ? true : w === 'HO' ? punct || !HO_NEXT_CHAT.test(next) : punct || (atEnd && !!prev && !HO_PREV_CHAT.test(prev));
+      if (ok) return /[A-Za-z0-9]/.test(before + after.replace(/^\s*[)\]]/, ''));
+    }
+    return false;
+  }
   /** a handover message's chips: one "📋 Handover" chip and its rooms (never CO / LCO / EXT) */
   function hoChips(text) {
     var rooms = [], m, re = /(?:^|[^\d:\/.,])(\d{3,4})(?![\d:\/]|\s*(?:aed|dhs?|am|pm|%))/gi, s = sp(hoMarked(text) ? String(text).replace(HO_MARK, '') : text);

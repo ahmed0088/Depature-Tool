@@ -58,7 +58,57 @@ function hoPrefix(text) {
   if (!rest) return null;
   // a plain "ho" / "Ho" (not "HO", no "-" or ":") only before a room or a number: "ho 512 ED" yes, "Ho gaya" / "ho jayega" no
   if (/^(?:\*\s*)?(?:ho|Ho|hO)$/.test(m[0].trim()) && !/^(?:\d|r(?:oo)?ms?\b)/i.test(rest)) return null;
+  if (/^(?:\*\s*)?hand\s*-?\s*over$/i.test(m[0].trim()) && HANDED_RX.test(s)) return null;   // "Hand over the keys to the guest"
+  if (/^(?:\*\s*)?HO$/.test(m[0].trim()) && HO_NEXT_CHAT.test((rest.match(/^([A-Za-z']+)/) || [])[1] || '')) return null;   // "HO GAYA" is Hindi
   return rest;
+}
+
+// ══ "Is this message meant for the handover?" ═══════════════
+// From WhatsApp only two things go to the Handover Book (wa-bridge.js):
+//   (a) everything posted in the handover group (Handover group switch, or a group name with "handover" / a standalone "HO"), and
+//   (b) a message that says it is for the handover: "HO: 512 waiting for transfer", "512 waiting for transfer #ho",
+//       "Handover - taxi 5am", "(HO) 305 refund", "305 refund pending HO".
+// Never inside a word ("hotel", "who", "shower", "hold"), and a lower-case "ho" in the middle of a sentence is Hindi or Tagalog
+// ("kya ho raha hai", "salamat ho"): a small "ho" counts only at the start (before a room or with "-" / ":"), at the end, with "#", or with ":" / "-" after it.
+const HO_NEXT_CHAT = /^(?:gaya|gayi|gaye|gya|gyi|gye|jayega|jaega|jayegi|jaegi|jaye|jaaye|jaa|ja|jao|jata|jaata|jati|raha|rahi|rahe|rha|rhi|rhe|sakta|sakti|sakte|skta|skte|sake|chuka|chuki|chuke|na|naa|ga|gi|ge|to|tha|thi|the|kya|ki|hai|hain|he|kar|kr|ke|lo|le|po|kayo|ba|lang|naman)$/i;
+const HO_PREV_CHAT = /^(?:kya|kaise|kese|kaisa|kahan|kaha|kidhar|jo|bhi|nahi|nahin|nhi|mat|tum|aap|ap|ready|free|busy|theek|thik|ok|okay|khush|salamat|po|opo|oo|sige|na|lang|ba|naman|kayo|ito|yan|yun|dito|diyan|saan|ano|paano)$/i;
+const HO_ANY_RX = /(^|[^A-Za-z0-9\/#])(#\s?)?(hand\s*-?\s*over|h\/o|ho)(?![A-Za-z0-9])/gi;
+/** the handover mark in a message → {rest, how} (rest: the text without "HO:" / "#ho"), or null when the message is not marked.
+ *  how: 'prefix' (at the start), 'tag' (#ho), 'word' (HO / handover elsewhere). A mark with nothing else ("HO") is no item. */
+function hoMark(text) {
+  const s = sp(text);
+  const pre = hoPrefix(s);
+  if (pre != null) return { rest: pre, how: 'prefix' };
+  let found = null, m;
+  HO_ANY_RX.lastIndex = 0;
+  while ((m = HO_ANY_RX.exec(s))) {
+    const start = m.index + m[1].length, tag = !!m[2], w = m[3], end = start + (m[2] || '').length + w.length;
+    const after = s.slice(end), before = s.slice(0, start);
+    const punct = /^\s*[:\-–—|>]/.test(after), closeB = /^\s*[)\]]/.test(after) && /[(\[]\s*$/.test(before);
+    const atEnd = !/[A-Za-z0-9]/.test(after), next = (after.match(/^\s*([A-Za-z']+)/) || [])[1] || '', prev = (before.match(/([A-Za-z']+)[\s,]*$/) || [])[1] || '';
+    let ok = false, strip = true;
+    if (tag || closeB) ok = true;
+    else if (!/^ho$/i.test(w)) { ok = punct || atEnd || !HANDED_RX.test(s); strip = punct || atEnd; }    // "handover", "hand over", "H/O" (not "I'll hand over the keys")
+    else if (w === 'HO') ok = punct || !HO_NEXT_CHAT.test(next);                                    // a capital HO anywhere ("HO GAYA" is Hindi)
+    else ok = punct || (atEnd && !!prev && !HO_PREV_CHAT.test(prev));                                // a small "ho": only "ho:" / "ho -" or the last word
+    if (!ok) continue;
+    found = { start, end, strip, how: tag ? 'tag' : 'word' };
+    break;
+  }
+  if (!found) return null;
+  let rest = s;
+  if (found.strip) {
+    rest = s.slice(0, found.start).replace(/[(\[]\s*$/, '') + ' ' + s.slice(found.end).replace(/^\s*[)\]]/, '').replace(/^\s*[:\-–—|>]+/, '');
+    rest = rest.replace(/[ \t]{2,}/g, ' ').replace(/^[\s:\-–—|>.,]+/, '').replace(/[\s:\-–—|>,]+$/, '').trim();
+  }
+  return rest && /[A-Za-z0-9\u0600-\u06ff]/.test(rest) ? { rest, how: found.how } : null;
+}
+/** the text of a WhatsApp message as it goes into the book: without its "HO:" / "#ho" mark */
+const hoStrip = text => { const r = hoMark(text); return r ? r.rest : sp(text); };
+/** where a WhatsApp message goes: 'group' (posted in the handover group), 'mark' (it says HO / #ho / handover) or null (not to the Handover Book at all) */
+function waToHandover(group, text, setting) {
+  if (isHandoverGroup(group || '', setting)) return 'group';
+  return hoMark(text) ? 'mark' : null;
 }
 
 // ══ Shifts ══════════════════════════════════════════════════
@@ -354,9 +404,9 @@ const TITLE_RX = /\b(?:hand\s*-?\s*over|h\/o)\b/i;
 const isTitle = t => t.split(/\s+/).length <= 8 && TITLE_RX.test(t) && !roomsOf(t).length;
 /** the text of a handover message to split into items: without its "HO -" mark, but a title line ("Handover morning shift\n- …") is kept whole (splitItems drops it) */
 function hoBody(text) {
-  const rest = hoPrefix(text); if (rest == null) return text;
+  const r = hoMark(text); if (!r) return text;
   const L = sp(text).trim().split('\n');
-  return L.length > 1 && isTitle(L[0].trim()) ? text : rest;
+  return r.how === 'prefix' && L.length > 1 && isTitle(L[0].trim()) ? text : r.rest;
 }
 /** a WhatsApp message → its handover items [{text, head}] (one per line or bullet when the lines are separate items) */
 function splitItems(text) {
@@ -518,7 +568,7 @@ function buildItems(msg, opt) {
       status: statusOf(p.text, cat, p.head), doneBy: '', doneAt: 0, note: '', mid: msg.mid || '', src: msg.src || 'wa',
     };
     if (p.head) it.head = p.head;
-    if (opt.ho && !hoPrefix(msg.text) && isChat(p.text)) it.chat = 1;               // team chat in the handover group: kept aside
+    if (opt.ho && !hoMark(msg.text) && isChat(p.text)) it.chat = 1;               // team chat in the handover group: kept aside
     if (n > 1) { it.part = i + 1; it.parts = n; it.full = sp(msg.text).slice(0, 3000); }
     return it;
   });
@@ -537,7 +587,7 @@ function pasteItems(text, opt) {
   let msgs = [];
   if (typeof opt.parseCopied === 'function') { try { msgs = opt.parseCopied(raw) || []; } catch (_) { msgs = []; } }
   if (msgs.length) {
-    msgs.forEach(m => { const body = hoBody(m.text); if (!sp(body).trim()) return; push(body, { sender: sp(m.sender).trim(), time: t24of(m.time), date: m.iso || isoOf(m.date), marked: !!hoPrefix(m.text) }); });
+    msgs.forEach(m => { const body = hoBody(m.text); if (!sp(body).trim()) return; push(body, { sender: sp(m.sender).trim(), time: t24of(m.time), date: m.iso || isoOf(m.date), marked: !!hoMark(m.text) }); });
     return out;
   }
   // an e-mail: no quoted reply, no headers, nothing after the signature
@@ -787,7 +837,7 @@ function pdfHtml(m) {
   <div class="tw">${open}</div>`;
 }
 
-W.hoHandoverPure = { CAT_RULES, KW_TAGS, doneReply, doneTargets, sectionOf, hoBody, learnedField, wordSwaps, applySwaps, learnToks, simOf, learnedVerdict, hoursOf, sameName, rosterShiftOf, pdfHtml, cssOf, isUrgent, XL, XL_KPI, statusStyle, catStyle, argbOf, rowHeight, shiftsCovered, reportModel, writtenSummary, HO_GROUP_RX, isHandoverGroup, HO_PREFIX_RX, hoPrefix, isChat, pasteItems, suggestFrom, HO_COPY_MIN, handoverScore, looksLikeHandover, MOVE_RX, HANDED_RX, SHIFT_BOUNDS, shiftOf, CATS, CAT, categorize, statusOf, roomsOf, tagsOf, splitItems, tidy, buildItems, filterItems, summaryOf,
+W.hoHandoverPure = { CAT_RULES, KW_TAGS, doneReply, doneTargets, sectionOf, hoBody, learnedField, wordSwaps, applySwaps, learnToks, simOf, learnedVerdict, hoursOf, sameName, rosterShiftOf, pdfHtml, cssOf, isUrgent, XL, XL_KPI, statusStyle, catStyle, argbOf, rowHeight, shiftsCovered, reportModel, writtenSummary, HO_GROUP_RX, isHandoverGroup, HO_PREFIX_RX, hoPrefix, hoMark, hoStrip, waToHandover, isChat, pasteItems, suggestFrom, HO_COPY_MIN, handoverScore, looksLikeHandover, MOVE_RX, HANDED_RX, SHIFT_BOUNDS, shiftOf, CATS, CAT, categorize, statusOf, roomsOf, tagsOf, splitItems, tidy, buildItems, filterItems, summaryOf,
   excelRows, summaryRows, fileName, polishStyles, polishSheet, dLong, t12, COL_W, byTime };
 if (!doc) return;
 
@@ -883,6 +933,23 @@ const LS_MID = 'hb_mid_v1';
 function midDay(mid, day) { const m = LS.get(LS_MID, {}); if (day) { m[mid] = day; const ks = Object.keys(m); if (ks.length > 600) ks.slice(0, ks.length - 600).forEach(k => delete m[k]); LS.set(LS_MID, m); } return m[mid] || ''; }
 /** p: {kind:'msg', base, mid, date, time, sender, group, text, edited, at} | {kind:'del', base, mid} → items saved / changed / removed; returns how many items */
 /** a "Done" reply from WhatsApp: tick the item it answers; not sure which → ask on the page */
+const DQ_MIN = 0.4;                                          // how clearly a "Done" reply must point at an item before the book asks which one
+// "None of these": that message is never asked about again (this device + the team: handoverLearn/nq_<message>)
+const LS_NOASK = 'hb_noask_v1';
+function noAsked(base) {
+  if (!base) return false;
+  const L = LS.get(LS_NOASK, []);
+  if (Array.isArray(L) && L.includes(String(base))) return true;
+  return learnList().some(e => e && e.v === 'noask' && e.b === String(base));
+}
+function rememberNoAsk(base) {
+  if (!base) return;
+  const L = LS.get(LS_NOASK, []), A = Array.isArray(L) ? L : [];
+  if (!A.includes(String(base))) LS.set(LS_NOASK, A.concat(String(base)).slice(-400));
+  const key = 'nq_' + fbSafe(base).slice(-60), e = { v: 'noask', b: String(base), by: me(), at: Date.now() };
+  LEARN[key] = e;
+  if (typeof fbSet === 'function') safe(() => Promise.resolve(fbSet('handoverLearn/' + key, e)).catch(() => {})); else LS.set('hb_learn', LEARN);
+}
 async function doneFromWa(p) {
   const day = p.date || today(), prev = isoDay(new Date(new Date(day + 'T12:00:00').getTime() - 864e5));
   await load(day); await load(prev);
@@ -895,14 +962,11 @@ async function doneFromWa(p) {
     toast(`✓ Handover: ${p.sender || 'Someone'} replied "${sp(p.text).slice(0, 20)}" — marked done`, 'ok');
     return 1;
   }
-  if (!T.length) {                                           // no clue at all: offer the latest open items of that group
-    const open = pool.filter(i => !i.del && !i.chat && i.status !== 'done' && (!p.group || !i.group || i.group === p.group))
-      .sort((a, b) => String(b.date + b.time).localeCompare(String(a.date + a.time))).slice(0, 3);
-    if (!open.length) return 0;                              // nothing open: just chat
-    open.forEach(i => T.push({ key: i.key, date: i.date, score: 0.1 }));
-  }
-  // not sure: a question on the page, with the likely items to pick from
+  // not sure: ask on the page, but only when the reply is clearly about a handover item — never a guess from the latest items
+  // ("none of these" picked the wrong messages), never from another group, and never again once you said "None of these"
+  if (p.strict || !T.length || T[0].score < DQ_MIN || noAsked(p.base)) return 0;
   const key = 'dq_' + String(p.base).slice(-40), patch = {};
+  if (itemsOf(day).some(i => i.key === key && (i.doneQa || i.del))) return 0;   // already answered: the same message read again asks nothing
   patch[fbSafe(key)] = { qmsg: p.base, date: day, time: p.time || '', sender: p.sender || '', group: p.group || '', text: sp(p.text).slice(0, 200), orig: sp(p.text).slice(0, 200), quote: sp(p.quote || '').slice(0, 200),
     chat: 1, doneQ: T.slice(0, 3).map(x => x.date + '|' + x.key), at: p.at || Date.now(), src: 'wa', cat: 'info', status: 'info' };
   write(day, patch);
@@ -912,6 +976,7 @@ async function doneFromWa(p) {
 async function fromWa(p) {
   if (!p || !p.base) return 0;
   if (p.kind === 'done') return doneFromWa(p);
+  if (p.kind === 'msg' && p.copy) return 0;                  // the old "auto-pick from other groups" (still queued on a device): no longer taken
   // a "Done" reply inside the handover group itself: tick it (the reply stays as team chat)
   if (p.kind === 'msg' && doneReply(p.text) && (p.quote || !p.copy)) { await doneFromWa(p); }   // in the handover group a plain "Done" counts too
   if (p.kind === 'del') {
@@ -1327,7 +1392,7 @@ function body() {
     // still open from the day before
     const prev = dayAdd(d, -1), P = carryItems(d, f);
     // 🤔 "Done" replies we could not place: ask which item they close
-    const Q = itemsOf(d).filter(i => Array.isArray(i.doneQ) && i.doneQ.length && !i.del && !i.doneQa);
+    const Q = itemsOf(d).filter(i => Array.isArray(i.doneQ) && i.doneQ.length && !i.del && !i.doneQa && !noAsked(i.qmsg));
     const qHtml = Q.map(q => {
       const opts = q.doneQ.map(ref => { const [dd, kk] = String(ref).split('|'); const it = itemsOf(dd).find(x => x.key === kk); return it && it.status !== 'done' ? { ref, it } : null; }).filter(Boolean);
       if (!opts.length) return '';
@@ -1660,6 +1725,7 @@ function onClick(e) {
       const ref = b.dataset.v;
       if (ref) { const [dd, kk] = ref.split('|'); setField(dd, kk, { status: 'done', doneBy: item.sender || me(), doneAt: item.at || Date.now(), doneVia: 'WhatsApp reply' }); toast('✓ Marked done', 'ok'); }
       setField(d, k, { doneQa: ref || 'none' });
+      if (!ref) { rememberNoAsk(item.qmsg); toast('🧠 Got it — I won\'t ask about that message again', 'ok'); }
     }
     else if (a === 'unchat') { setField(d, k, { chat: null, chatBy: me(), learn: null }); learn(item.orig || item.text, 'yes'); toast('Added to the handover · 🧠 I\'ll keep messages like this', 'ok'); }
     else if (a === 'askyes') { setField(d, k, { ask: null, learn: 'yes' }); learn(item.orig || item.text, 'yes'); toast('🧠 Got it — messages like this are handover', 'ok'); }
@@ -1766,6 +1832,6 @@ function start() {
   [700, 2500, 6000].forEach(t => setTimeout(() => safe(wrapHandover), t));
   setInterval(() => safe(() => { if (listenDay !== today()) listenToday(); }), 60e3);
 }
-W.hoHandoverBook = { fromWa, addByHand, addItems, suggestions: () => suggestions(), items: day => itemsOf(day || today()), load, render: () => render(), excel: () => exportExcel(), proBytes: list => proWorkbook(list || exportList(true)), workbookBytes: list => workbookBytes(list || itemsOf(HB.date || today())), state: () => HB };
+W.hoHandoverBook = { fromWa, noAsked, rememberNoAsk, addByHand, addItems, suggestions: () => suggestions(), items: day => itemsOf(day || today()), load, render: () => render(), excel: () => exportExcel(), proBytes: list => proWorkbook(list || exportList(true)), workbookBytes: list => workbookBytes(list || itemsOf(HB.date || today())), state: () => HB };
 if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start); else start();
 })();

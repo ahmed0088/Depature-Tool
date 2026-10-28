@@ -45,6 +45,91 @@ const _blLS = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} },
 };
 
+// ── How much it speaks up (Settings → Ops Brain → Hints) ───
+//   calm (default): nothing pops up by itself. What it notices waits behind a quiet number on 🧠; a tip you have
+//          seen is not counted again; something it did by itself (autopilot, a page it repaired) is at most one small
+//          toast every 10 minutes, never while you type. No chime for its hints.
+//   normal: as before: bubbles next to 🧠 (the "Speak up" switch), a pulsing 🧠.
+//   off:    no hints at all: no bubbles, no number, no toasts. Asking it (🧠, Ctrl+J, voice) works the same in every mode.
+// Reminders, wake-up calls and shift tasks you set yourself always ring: they are alarms, not hints.
+const BL_SEEN_KEY = 'brain_seen_v1';
+const BL_TOAST_GAP = 10 * 60e3;
+let blHeld = [];               // things it would have popped up (calm / off): listed in Ops Brain → Now
+let blLastToast = 0, blLastAct = 0;
+function blMode() {
+  let v; try { v = typeof hoPref === 'function' ? hoPref('brainMode') : _blLS.get('brain_mode_v1', ''); } catch (_) {}
+  return v === 'normal' || v === 'off' ? v : 'calm';
+}
+function blSetMode(v) {
+  v = v === 'normal' || v === 'off' ? v : 'calm';
+  if (typeof hoSetPref === 'function') hoSetPref('brainMode', v); else _blLS.set('brain_mode_v1', v);
+  blApplyMode();
+  if (v !== 'normal') { document.getElementById('blBubble')?.remove(); blShown = null; }
+  blLastSig = ''; blSoon();
+}
+function blApplyMode() {
+  const b = document.body; if (!b) return;
+  const m = blMode();
+  b.classList.toggle('bl-calm', m === 'calm'); b.classList.toggle('bl-hints-off', m === 'off');
+  document.querySelectorAll('.bl-mode-sel').forEach(x => { x.value = m; });
+}
+/** where something the Brain wants to say goes → 'bubble' | 'toast' | 'hold' (only in Ops Brain → Now and the 🧠 number).
+ *  kind: 'thought' (a hint it noticed), 'result' (something it did or saw by itself), 'alarm' (a reminder / wake-up / task you set).
+ *  o: {mode, prompted (you tapped just now), typing (in a text box), now, last (the last toast it showed by itself)} */
+function blRoute(kind, o) {
+  o = o || {};
+  if (o.dayOff) return kind === 'result' && o.prompted ? 'bubble' : 'hold';   // a day off (notify-hub.js): silent, it waits in 🧠 (only what you tap answers)
+  if (kind === 'alarm' || o.mode === 'normal') return 'bubble';
+  if (kind === 'result' && o.prompted) return 'bubble';            // the answer to what you just tapped
+  if (kind === 'thought' || o.mode === 'off') return 'hold';
+  if (o.typing || (o.now || 0) - (o.last || 0) < BL_TOAST_GAP) return 'hold';
+  return 'toast';
+}
+/** a tip is "the same item" across hours: the habit tip at 09:00 and 10:00 is one tip */
+const blSeenKey = t => { const id = String(t && t.id || ''); return /^habit:/.test(id) ? id.replace(/:\d{1,2}$/, '') : id; };
+function blSeen() { const v = _blLS.get(BL_SEEN_KEY, {}); return v && typeof v === 'object' ? v : {}; }
+function blMarkSeen(list) {
+  const v = blSeen(), now = Date.now();
+  (list || []).forEach(t => { v[blSeenKey(t)] = now; });
+  Object.keys(v).forEach(k => { if (now - v[k] > 7 * 864e5) delete v[k]; });
+  _blLS.set(BL_SEEN_KEY, v);
+}
+/** what still counts on the 🧠 number: not closed for now, not seen yet (calm), held results too */
+function blCountable(thoughts, held, snooze, seen, mode, now) {
+  if (mode === 'off') return 0;
+  const open = t => !((snooze || {})[t.id] > now);
+  if (mode === 'normal') return thoughts.filter(open).length;
+  return thoughts.filter(t => open(t) && !(seen || {})[blSeenKey(t)]).length + (held || []).filter(h => !h.seen).length;
+}
+/** in calm mode a tip (an "idle" note) you have seen once is not shown again */
+const blCalmFilter = (thoughts, seen, mode) => mode === 'normal' ? thoughts : thoughts.filter(t => t.tone !== 'idle' || !(seen || {})[blSeenKey(t)]);
+function blTyping() {
+  const a = document.activeElement; if (!a) return false;
+  return /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || !!a.isContentEditable;
+}
+const blPrompted = () => Date.now() - blLastAct < 4000;
+/** a day off (notify-hub.js day-off mode): the Brain stays silent */
+function blDayOff() { try { return !!(window.hoNotify && window.hoNotify.dayOffOn); } catch (_) { return false; } }
+function blHold(t, kind) {
+  const hk = id => String(id).replace(/:\d{10,}$/, '');                 // the same reminder again (a new time stamp): one line, the newest
+  if (t.type !== 'did') blHeld = blHeld.filter(h => hk(h.id) !== hk(t.id));
+  blHeld.unshift(Object.assign({}, t, { held: Date.now() }));
+  blHeld = blHeld.slice(0, 12);
+  blFeed.unshift({ at: Date.now(), icon: t.icon, text: t.text, kind: kind === 'result' ? 'did' : 'thought' });
+  blFeed = blFeed.slice(0, 25);
+  if (kind === 'result' && blRoute('result', { mode: blMode(), typing: blTyping(), now: Date.now(), last: blLastToast, dayOff: blDayOff() }) === 'toast' && typeof showToast === 'function') {
+    blLastToast = Date.now();
+    try { showToast(`${t.icon || '🧠'} ${t.text}`, 'info'); } catch (_) {}
+  }
+  blBadge();
+}
+function blBadge() {
+  const fab = document.getElementById('brFab'); if (!fab) return;
+  const mode = blMode(), n = blCountable(blThoughts, blHeld, _blLS.get(BL_SNOOZE_KEY, {}), blSeen(), mode, Date.now());
+  fab.classList.toggle('thinking', mode === 'normal' && n > 0);
+  fab.dataset.n = n || '';
+}
+
 // ── Learning from corrections ─────────────────────────────
 const _blWords = name => String(name || '').toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(w => w.length >= 3);
 
@@ -245,12 +330,13 @@ function blTick() {
       return;
     }
   }
+  const mode = blMode();
+  blThoughts = blCalmFilter(blThoughts, blSeen(), mode);
   const sig = blThoughts.map(t => t.id).join('|');
-  const fab = document.getElementById('brFab');
-  // the 🧠 number = notes waiting for you (not the ones you closed for now); they are listed at the top of Ops Brain
-  const waiting = blThoughts.filter(t => !(snooze[t.id] > Date.now())).length;
-  if (fab) { fab.classList.toggle('thinking', waiting > 0); fab.dataset.n = waiting || ''; }
+  // the 🧠 number = notes waiting for you (not the ones you closed for now; in calm mode not the ones you saw); listed at the top of Ops Brain
+  blBadge();
   if (document.getElementById('brSheet')?.classList.contains('open')) blRenderNow();
+  if (mode !== 'normal' || blDayOff()) return;                         // calm / off / a day off: nothing pops up by itself
   if (sig === blLastSig && document.getElementById('blBubble')) return;
   blLastSig = sig;
   if (document.getElementById('brSheet')?.classList.contains('open')) return;
@@ -261,6 +347,11 @@ function blTick() {
 
 // ── Speaking ──────────────────────────────────────────────
 function blSay(t, urgent) {
+  // calm / off: only alarms you set (reminders, wake-up calls, shift tasks) and the answer to what you just tapped pop up; a day off: nothing
+  if (blMode() !== 'normal' || blDayOff()) {
+    const kind = urgent && /^(?:bx|st):/.test(String(t.id)) ? 'alarm' : urgent ? 'result' : 'thought';
+    if (blRoute(kind, { mode: blMode(), prompted: blPrompted(), dayOff: blDayOff() }) !== 'bubble') { blHold(t, kind); return; }
+  }
   if (!urgent && typeof hoQuiet === 'function' && hoQuiet()) return;   // not on shift: it waits in 🧠
   if (t.tone === 'bad' && typeof hoAlert === 'function') { blSay._rung = blSay._rung || new Set(); if (!blSay._rung.has(t.id)) { blSay._rung.add(t.id); hoAlert(t.text); } }
   if (typeof hoPref === 'function' && (!hoPref('brainOn') || (!urgent && !hoPref('brainBubbles')))) return;
@@ -295,7 +386,10 @@ function blSay(t, urgent) {
 function blDid(icon, text, undo) {
   blFeed.unshift({ at: Date.now(), icon, text, kind: 'did' });
   blFeed = blFeed.slice(0, 25);
-  if (undo) blSay({ id: 'did:' + Date.now(), type: 'did', icon, tone: 'idle', text, why: blAutoRunning ? '🤖 Done by autopilot.' : '', acts: [['OK', () => {}], ['Undo', () => { undo(); blFeed.unshift({ at: Date.now(), icon: '↩', text: 'Undone: ' + text, kind: 'did' }); showToast('Undone', 'ok'); }]] }, true);
+  const quiet = blMode() !== 'normal' && (blAutoRunning || !blPrompted());   // done by itself, not because you tapped: no pop-up
+  const t = { id: 'did:' + Date.now(), type: 'did', icon, tone: 'idle', text, why: blAutoRunning ? '🤖 Done by autopilot.' : '', acts: [['OK', () => {}], ...(undo ? [['Undo', () => { undo(); blFeed.unshift({ at: Date.now(), icon: '↩', text: 'Undone: ' + text, kind: 'did' }); showToast('Undone', 'ok'); }]] : [])] };
+  if (quiet) { blFeed.shift(); blHold(t, 'result'); }
+  else if (undo) blSay(t, true);
   else showToast(text, 'ok');
   if (typeof logActivity === 'function') try { logActivity('brain_did', text); } catch (_) {}
 }
@@ -306,7 +400,10 @@ function blRenderNow() {
   let box = document.getElementById('blNow');
   if (!box) { pane.insertAdjacentHTML('afterbegin', '<div id="blNow"></div>'); box = document.getElementById('blNow'); }
   const sn = _blLS.get(BL_SNOOZE_KEY, {});
-  const list = blThoughts.filter(t => !(sn[t.id] > Date.now()));
+  const held = blHeld.filter(h => !h.gone);
+  const list = held.concat(blThoughts.filter(t => !(sn[t.id] > Date.now()) && !held.some(h => h.id === t.id)));
+  // opened = seen: in calm mode the 🧠 number stops counting these, and a tip is not shown again
+  if (document.getElementById('brSheet')?.classList.contains('open')) { blMarkSeen(list.filter(t => !t.held)); held.forEach(h => { h.seen = true; }); setTimeout(blBadge, 0); }
   if (!list.length) { box.innerHTML = ''; return; }
   box.innerHTML = `<div class="br-sec">Noticed for you <span class="bl-n">${list.length}</span></div>` + list.map((t, i) => `<div class="bl-now ${t.tone || ''}" data-i="${i}">
     <span class="bl-now-i">${t.icon || '💡'}</span><div class="bl-now-t"><b>${escapeHtml(t.text)}</b>${t.why ? `<small>${escapeHtml(t.why)}</small>` : ''}
@@ -316,6 +413,7 @@ function blRenderNow() {
     const b = e.target.closest('button'), row = e.target.closest('.bl-now'); if (!b || !row) return;
     const t = list[+row.dataset.i]; if (!t) return;
     const s2 = _blLS.get(BL_SNOOZE_KEY, {});
+    if (t.held) t.gone = true;
     if (b.dataset.a != null) {
       _blNote(t.type, 'used');
       if (t.type !== 'did' && t.type !== 'heal') { s2[t.id] = Date.now() + 30 * 60e3; _blLS.set(BL_SNOOZE_KEY, s2); }
@@ -366,13 +464,35 @@ function blExtendPanel() {
   blRenderFeed();
 }
 
+// ── Settings → Ops Brain: "Hints: Calm / Normal / Off" (added to the page settings.js builds) ──
+function blModeRowHtml() {
+  const m = blMode();
+  return `<label class="hs-row" id="blModeRow" data-s="brain hints calm quiet normal off disturb pop-ups bubbles">
+    <span class="hs-txt"><b>Hints</b><small>Calm: nothing pops up, a quiet number on 🧠 · Normal: bubbles next to 🧠 · Off: no hints. Asking it always works</small></span>
+    <span><select class="bl-mode-sel" onchange="blSetMode(this.value)">${[['calm', 'Calm (default)'], ['normal', 'Normal'], ['off', 'Off for hints']].map(([v, l]) => `<option value="${v}"${v === m ? ' selected' : ''}>${l}</option>`).join('')}</select></span>
+  </label>`;
+}
+function blModeIntoSettings() {
+  const card = document.querySelector('#hs-brain .hs-card');
+  if (card && !document.getElementById('blModeRow')) {
+    const first = card.querySelector('.hs-row');
+    if (first) first.insertAdjacentHTML('afterend', blModeRowHtml()); else card.insertAdjacentHTML('afterbegin', blModeRowHtml());
+  }
+}
+
+document.addEventListener('pointerdown', () => { blLastAct = Date.now(); }, true);
+document.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') blLastAct = Date.now(); }, true);
 document.addEventListener('DOMContentLoaded', () => {
+  blApplyMode();
   blNatLearn = _blLS.get(BL_NAT_KEY, {}) || {};
   setTimeout(() => {
     blHook();
     _blWrap('brTabShow', () => setTimeout(blExtendPanel, 0));
     _blWrap('brOpen', () => { document.getElementById('blBubble')?.remove(); blShown = null; });
     _blWrap('showPanel', () => blSoon());
+    { const r = window.hoSettingsRender;
+      if (typeof r === 'function' && !r.__blm) { window.hoSettingsRender = function () { const out = r.apply(this, arguments); try { blModeIntoSettings(); blApplyMode(); } catch (_) {} return out; }; window.hoSettingsRender.__blm = true; }
+      blModeIntoSettings(); }
     if (typeof fbListen === 'function') fbListen('brain/natLearn', v => { if (v && typeof v === 'object') { blNatLearn = v; _blLS.set(BL_NAT_KEY, v); } });
     blCheckVersion();
     setInterval(blCheckVersion, 30 * 60e3);

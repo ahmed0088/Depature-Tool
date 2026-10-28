@@ -1236,6 +1236,9 @@ function wrapHome() {
   f.__wab = true; W.homeRender = f;
 }
 function wrapHandover() {
+  // off: the shift handover takes from WhatsApp only what is meant for it (the handover group and messages marked HO / #ho),
+  // and those are in the 📒 Handover Book. A "HK chat this shift" summary of every message is not added any more.
+  if (!W.hoWaHandoverSummary) return;
   const o = W._hoTodo;
   if (typeof o !== 'function' || o.__wab) return;
   const f = function () { const L = o.apply(this, arguments); safe(() => { const g = handoverGroup(); if (g && Array.isArray(L)) L.push(g); }); return L; };

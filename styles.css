@@ -5472,6 +5472,10 @@ body.fr-dragging::after {
 .br-fab.thinking { box-shadow: 0 0 0 0 rgba(240,164,58,.6), 0 8px 26px rgba(0,0,0,.35); animation: blPulse 2.2s ease-out infinite; }
 .br-fab[data-n]:not([data-n=""])::before { content: attr(data-n); position: absolute; top: -4px; left: -4px; min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box;
   border-radius: 9px; background: var(--accent); color: #111; font-size: .62rem; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+/* Hints: Calm (default) / Off (Settings → Ops Brain): a still 🧠, a quiet number, no pulse */
+body.bl-calm .br-fab, body.bl-calm .br-fab.thinking, body.bl-hints-off .br-fab, body.bl-hints-off .br-fab.thinking { animation: none; }
+body.bl-calm .br-fab[data-n]:not([data-n=""])::before { background: var(--card2, #2a2f3a); color: var(--text); border: 1px solid var(--border2); font-weight: 700; }
+body.bl-hints-off .br-fab[data-n]::before { display: none; }
 @keyframes blBreathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.04); } }
 @keyframes blPulse { 0% { box-shadow: 0 0 0 0 rgba(240,164,58,.55), 0 8px 26px rgba(0,0,0,.35); } 70% { box-shadow: 0 0 0 14px rgba(240,164,58,0), 0 8px 26px rgba(0,0,0,.35); } 100% { box-shadow: 0 0 0 0 rgba(240,164,58,0), 0 8px 26px rgba(0,0,0,.35); } }
 .bl-bubble { position: fixed; right: 18px; bottom: 82px; z-index: 950; width: min(360px, calc(100vw - 32px)); background: var(--card); color: var(--text);

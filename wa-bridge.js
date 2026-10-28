@@ -1253,7 +1253,7 @@ let GRP = (() => { const g = lsGet(LS_GRP, {}); return g && typeof g === 'object
 function groupActs(msg) { if (msg && msg.act === false) return false; const g = GRP[gKey(msg && msg.group || '')]; return !(g && g.act === false); }
 function setGroupAct(name, on) { GRP[gKey(name)] = Object.assign({}, GRP[gKey(name)], { name, act: !!on }); lsSet(LS_GRP, GRP); renderCard(); }
 // A handover group (its name has "HO" or "handover" in it, or switched on here): everything posted there goes to the
-// 📒 Handover Book (handover-book.js) and no room is changed. Other groups copy messages that read like handover items.
+// 📒 Handover Book (handover-book.js) and no room is changed. From other groups only messages marked HO / #ho / handover go there.
 const HO_RX = /\bHO\b|hand\s*-?\s*over/i;
 function groupIsHo(group) {
   const g = GRP[gKey(group || '')], set = g && typeof g.ho === 'boolean' ? g.ho : undefined;
@@ -1270,26 +1270,21 @@ function hoBook(p) {
   const q = lsGet('hb_queue_v1', []); (Array.isArray(q) ? q : []).push(p); lsSet('hb_queue_v1', (Array.isArray(q) ? q : [p]).slice(-200));
 }
 const hoBase = (msg, dIso, t24, sender, text) => (msg.id ? safeKey(msg.id) : hashKey(dIso + '|' + t24 + '|' + sender.toLowerCase() + '|' + normS(text)));
-/** a message from another group that reads like a handover item ("512 early departure", "move 514 to twin"…): also in the book */
-function hoCopy(msg, dIso, t24, sender, group, text, edited) {
+// Only two things go to the Handover Book: everything in the handover group, and a message marked "HO" / "#ho" / "handover"
+// (handleHo). Other groups are NOT picked from any more ("it reads like a handover item" took the wrong messages).
+/** a "Done ✅" reply in another group that quotes a handover item: the book ticks it only when it is sure, and never asks */
+function hoCopy(msg, dIso, t24, sender, group, text) {
   try {
-    if (msg.preview || !groupCopies(group) || !W.hoHandoverPure) return false;
-    const HP2 = W.hoHandoverPure, opt = { parse: t => hoWaParse(t) };
-    const lines = String(text).split(/\n/).filter(l => l.trim());
-    // "Done ✅" as a reply to a handover item (any group): the Handover Book ticks that item
-    if (msg.quote && typeof HP2.doneReply === 'function' && HP2.doneReply(text)) { hoBook({ kind: 'done', base: hoBase(msg, dIso, t24, sender, text), date: dIso, time: t24, sender, group, text, quote: String(msg.quote).slice(0, 400), at: Date.now() }); return false; }
-    if (!HP2.looksLikeHandover(text, opt) && !lines.some(l => HP2.looksLikeHandover(l, opt)) && !edited) return false;
-    const base0 = hoBase(msg, dIso, t24, sender, text), done = loadDone(), dk = 'hc:' + base0, sig = hashKey(normS(text)), seen = String(done[dk] || '').split('|').filter(Boolean);
-    if (seen.includes(sig)) return false;                                            // seen before: never twice, never an older version over a newer one
-    done[dk] = seen.concat(sig).slice(-8).join('|'); saveDone(done); edited = edited || seen.length > 0;
-    hoBook({ kind: 'msg', copy: true, base: hoBase(msg, dIso, t24, sender, text), mid: msg.id ? String(msg.id).slice(0, 200) : '', date: dIso, time: t24, sender, group, text, edited: !!edited, at: Date.now() });
-    return true;
-  } catch (_) { return false; }
+    if (msg.preview || !msg.quote || !W.hoHandoverPure) return false;
+    const HP2 = W.hoHandoverPure;
+    if (typeof HP2.doneReply === 'function' && HP2.doneReply(text)) hoBook({ kind: 'done', strict: true, base: hoBase(msg, dIso, t24, sender, text), date: dIso, time: t24, sender, group, text, quote: String(msg.quote).slice(0, 400), at: Date.now() });
+  } catch (_) {}
+  return false;
 }
 /** a message in a handover group: saved to the book only (never changes the board) */
-/** "HO - …", "HO: …", "H/O …", "Handover: …" at the start of a message (not "HOTEL", "HOLD") */
+/** "HO - …", "HO: …", "H/O …", "Handover: …", "… #ho", "… HO" (not "HOTEL", "HOLD", "who", "shower"): see hoMark in handover-book.js */
 function hoMarked(text) {
-  try { if (W.hoHandoverPure) return W.hoHandoverPure.hoPrefix(text) != null; } catch (_) {}
+  try { if (W.hoHandoverPure && W.hoHandoverPure.hoMark) return !!W.hoHandoverPure.hoMark(text); } catch (_) {}
   const m = sp(text).match(/^\s*(?:\*\s*)?(?:HO|H\/O|hand\s*-?\s*over)(?![A-Za-z0-9])\s*\*?\s*[-–—:.,|>]*\s*/i);
   const rest = m ? sp(text).slice(m[0].length).trim() : '';
   return !!rest && !(/^(?:\*\s*)?(?:ho|Ho|hO)$/.test(m[0].trim()) && !/^(?:\d|r(?:oo)?ms?\b)/i.test(rest));   // "Ho gaya" is not a mark
@@ -2220,7 +2215,7 @@ function renderGroups() {
     gf.innerHTML = '<option value="">All groups</option>' + names.map(n => `<option value="${esc(n)}"${gKey(n) === gKey(GFILT) ? ' selected' : ''}>${esc(n)}</option>`).join('');
   }
   if (box) box.innerHTML = names.length ? names.map(n => { const g = GRP[gKey(n)], rg = LINK && LINK.groups && LINK.groups.find(x => gKey(x.name) === gKey(n)); const on = !(g && g.act === false) && !(rg && rg.act === false);
-    return `<div class="wa-g"><b title="${esc(n)}">${esc(n)}</b>${LINK && gKey(LINK.open || '') === gKey(n) ? '<span class="wa-tag">open</span>' : ''}${groupIsHo(n) ? '<span class="wa-tag ho" title="Everything posted here is saved to the Handover Book; rooms are not changed">📋 Handover</span>' : `<label><input type="checkbox" data-g="${esc(n)}"${on ? ' checked' : ''}${rg && rg.act === false ? ' disabled title="Set to Log only in the WhatsApp window"' : ''}> Can change rooms</label><label title="Messages that read like handover items (early departure, room move, complaint…) are also copied to the Handover Book"><input type="checkbox" data-gcopy="${esc(n)}"${groupCopies(n) ? ' checked' : ''}> Copy handover items</label>`}<label title="A group used only for the shift handover: everything goes to the Handover Book"><input type="checkbox" data-gho="${esc(n)}"${groupIsHo(n) ? ' checked' : ''}> Handover group</label></div>`; }).join('')
+    return `<div class="wa-g"><b title="${esc(n)}">${esc(n)}</b>${LINK && gKey(LINK.open || '') === gKey(n) ? '<span class="wa-tag">open</span>' : ''}${groupIsHo(n) ? '<span class="wa-tag ho" title="Everything posted here is saved to the Handover Book; rooms are not changed">📋 Handover</span>' : `<label><input type="checkbox" data-g="${esc(n)}"${on ? ' checked' : ''}${rg && rg.act === false ? ' disabled title="Set to Log only in the WhatsApp window"' : ''}> Can change rooms</label>`}<label title="The HO group: everything posted here goes to the Handover Book. Other groups only send messages marked HO / #ho / handover"><input type="checkbox" data-gho="${esc(n)}"${groupIsHo(n) ? ' checked' : ''}> Handover group</label></div>`; }).join('')
     : '<div class="wa-hint">No groups yet. Groups show here once the reader on WhatsApp Web is linked.</div>';
   if (sub) sub.textContent = names.length ? names.length + (names.length === 1 ? ' group' : ' groups') : '';
 }
