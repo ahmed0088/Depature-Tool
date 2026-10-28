@@ -11,11 +11,17 @@
 //  hands the helper the new reader by itself (Chrome's "Allow User Scripts"
 //  switch for the helper lets it run) — no new download.
 //  The helper reads nothing else and talks to nobody but these two sites.
+//  The same helper (downloaded once more) also runs the Opera Cloud reader
+//  (tools/hotelops-opera.console.js) on Opera Cloud (*.oraclecloud.com,
+//  *.oracleindustry.com, *.oraclehospitality.com): it only reads the screen
+//  and hands it to HotelOps (opera-bridge.js), and updates itself the same way.
 // ═══════════════════════════════════════════════════════════
 
 (function (W) {
   const doc = W.document;
   const WA = 'https://web.whatsapp.com/';
+  // Opera Cloud lives on Oracle's hosts (xxx.oraclehospitality.<region>.ocs.oraclecloud.com, …oracleindustry.com)
+  const OP_MATCHES = ['https://*.oraclecloud.com/*', 'https://*.oracleindustry.com/*', 'https://*.oraclehospitality.com/*'];
   const ver = () => (typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'v0').replace(/^v/, '');
   const installed = () => doc.documentElement.dataset.hoWaHelper || '';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -72,55 +78,97 @@ ${reader}
   } }, 1500);
 })(0);${fresh ? '' : '\n}'}`;
   }
-  function files(reader, appOrigin) {
+  // The Opera side: the link to the relay (port "opera"), then the Opera reader. Runs in every frame of Opera Cloud
+  // (its lists can sit in a frame); the reader itself stays quiet on Oracle pages that aren't Opera. Like the WhatsApp
+  // side, HotelOps hands it a fresh reader when it updates (a second user script); the copy in the zip is the fallback.
+  // It never reloads Opera (a form being filled must not be lost): a newer reader starts the next time Opera is opened.
+  function opSide(reader, appOrigin, v, fresh) {
+    return `// HotelOps helper · Opera reader ${v}${fresh ? ' (updated by itself)' : ''} · reads Opera Cloud, never changes it
+${fresh ? `try { document.documentElement.dataset.hoOpUs = ${JSON.stringify(v)}; } catch (_) {}` : `if (!document.documentElement.dataset.hoOpUs) {   // a newer reader (updated by itself) is running instead`}
+(function () {
+  if (window.__hoOpExt) return;
+  let port = null;
+  const L = [];
+  const open = () => {
+    try { port = chrome.runtime.connect({ name: 'opera' }); } catch (_) { port = null; return; }
+    port.onMessage.addListener(m => {
+      if (m && m.source === 'ho-op-ext-new') { window.__hoOpExt.newer = String(m.v); return; }
+      L.forEach(f => { try { f(m); } catch (_) {} });
+    });
+    port.onDisconnect.addListener(() => { port = null; setTimeout(open, 1500); });   // the relay sleeps now and then: wake it
+  };
+  window.__hoOpExt = { v: ${JSON.stringify(v)}, on: f => { L.push(f); if (!port) open(); }, post: o => { try { if (!port) open(); port.postMessage(o); } catch (_) {} } };
+})();
+// wait for the page to have a body, then start the reader once
+(function wait(n) {
+  if (window.__hoOp || n > 600) return;
+  if (!document.body) return setTimeout(() => wait(n + 1), 500);
+  setTimeout(() => { if (!window.__hoOp) {
+${reader}
+  } }, 800);
+})(0);${fresh ? '' : '\n}'}`;
+  }
+  function files(reader, appOrigin, opReader) {
     const v = ver();
     const manifest = {
       manifest_version: 3, name: 'HotelOps WhatsApp helper', version: String(v).replace(/[^\d.]/g, '') || '1',
-      description: 'Starts the HotelOps WhatsApp reader on WhatsApp Web and links it to HotelOps. Updates itself from HotelOps. Nothing else.',
+      description: 'Starts the HotelOps WhatsApp reader on WhatsApp Web and the Opera reader on Opera Cloud (read only), and links them to HotelOps. Updates itself from HotelOps. Nothing else.',
       background: { service_worker: 'relay.js' },
       permissions: ['storage', 'userScripts'],
       content_scripts: [
         { matches: ['https://web.whatsapp.com/*'], js: ['whatsapp.js'], run_at: 'document_idle' },
         { matches: [appOrigin + '/*'], js: ['hotelops.js'], run_at: 'document_start' },
-      ],
+      ].concat(opReader ? [{ matches: OP_MATCHES, js: ['opera.js'], run_at: 'document_idle', all_frames: true }] : []),
     };
     // the relay: every WhatsApp tab ↔ every HotelOps tab, and it keeps the newest reader HotelOps hands it
-    const relay = `// HotelOps WhatsApp helper · relay between the WhatsApp Web tab and the HotelOps tab
-const ports = { wa: new Set(), app: new Set() };
+    const relay = `// HotelOps WhatsApp helper · relay between the WhatsApp Web tab, the Opera Cloud tab and the HotelOps tab
+const ports = { wa: new Set(), app: new Set(), opera: new Set() };
 const BUILT = chrome.runtime.getManifest().version, ID = 'hotelops-wa';
+// the two readers HotelOps can hand over: WhatsApp (as before) and Opera (a second user script, every frame of Opera Cloud)
+const KIND = { wa: { id: ID, key: 'reader', on: 'on', matches: ['https://web.whatsapp.com/*'], side: 'wa', fresh: 'ho-wa-ext-new' },
+  op: { id: 'hotelops-op', key: 'opReader', on: 'opOn', matches: ${JSON.stringify(OP_MATCHES)}, all: true, side: 'opera', fresh: 'ho-op-ext-new' } };
 const num = v => parseFloat(String(v || '').replace(/[^\\d.]/g, '')) || 0;
 // "Allow User Scripts" is on for this helper (chrome://extensions → Details): only then can a newer reader run
 const canRun = () => { try { chrome.userScripts.getScripts().catch(() => {}); return true; } catch (_) { return false; } };   // Chrome's own test: the call throws while it is off
-async function newest() { const s = await chrome.storage.local.get('reader'); return s.reader && num(s.reader.v) > num(BUILT) ? s.reader : null; }
-async function info() { const r = await newest(); return { source: 'ho-wa-ext-info', v: r ? r.v : BUILT, us: canRun() }; }
+async function newest(k) { const K = KIND[k || 'wa'], s = await chrome.storage.local.get(K.key), r = s[K.key]; return r && num(r.v) > num(BUILT) ? r : null; }
+async function info() { const r = await newest('wa'), o = await newest('op'); return { source: 'ho-wa-ext-info', v: r ? r.v : BUILT, op: o ? o.v : BUILT, us: canRun() }; }
 let busy = Promise.resolve();
+async function ensureOne(k) {
+  const K = KIND[k], r = await newest(k), have = await chrome.userScripts.getScripts({ ids: [K.id] }), st = await chrome.storage.local.get(K.on), on = st[K.on];
+  if (!r) { if (have.length) await chrome.userScripts.unregister({ ids: [K.id] }); await chrome.storage.local.remove(K.on); return; }
+  if (have.length && on === r.v) return;
+  try { await chrome.userScripts.configureWorld({ messaging: true }); } catch (_) {}
+  const def = { id: K.id, matches: K.matches, js: [{ code: r.code }], runAt: 'document_start' };
+  if (K.all) def.allFrames = true;
+  if (have.length) await chrome.userScripts.update([def]); else await chrome.userScripts.register([def]);
+  await chrome.storage.local.set({ [K.on]: r.v });
+}
 function ensure() {
   return busy = busy.then(async () => {
     if (!canRun()) return false;
-    const r = await newest(), have = await chrome.userScripts.getScripts({ ids: [ID] }), { on } = await chrome.storage.local.get('on');
-    if (!r) { if (have.length) await chrome.userScripts.unregister({ ids: [ID] }); await chrome.storage.local.remove('on'); return true; }
-    if (have.length && on === r.v) return true;
-    try { await chrome.userScripts.configureWorld({ messaging: true }); } catch (_) {}
-    const def = { id: ID, matches: ['https://web.whatsapp.com/*'], js: [{ code: r.code }], runAt: 'document_start' };
-    if (have.length) await chrome.userScripts.update([def]); else await chrome.userScripts.register([def]);
-    await chrome.storage.local.set({ on: r.v });
+    await ensureOne('wa');
+    await ensureOne('op').catch(() => {});
     return true;
   }).catch(() => false);
 }
 const tell = async () => { const i = await info(); ports.app.forEach(q => { try { q.postMessage(i); } catch (_) {} }); };
 function link(p) {
-  const side = p.name === 'wa' ? 'wa' : 'app', other = side === 'wa' ? 'app' : 'wa';
+  const side = p.name === 'wa' ? 'wa' : p.name === 'opera' ? 'opera' : 'app';
   ports[side].add(p);
   if (side === 'app') ensure().then(tell);
   p.onMessage.addListener(async m => {
-    if (m && m.source === 'ho-wa-ext-code') {   // HotelOps updated: keep its reader and run it from now on
-      if (side !== 'app' || typeof m.code !== 'string' || num(m.v) <= num((await info()).v)) return tell();
-      await chrome.storage.local.set({ reader: { v: String(m.v), code: m.code, at: Date.now() } });
+    const k = m && (m.source === 'ho-wa-ext-code' ? 'wa' : m.source === 'ho-op-ext-code' ? 'op' : '');
+    if (k) {   // HotelOps updated: keep its reader and run it from now on (only HotelOps can hand one over)
+      const K = KIND[k], cur = (await info())[k === 'wa' ? 'v' : 'op'];
+      if (side !== 'app' || typeof m.code !== 'string' || num(m.v) <= num(cur)) return tell();
+      await chrome.storage.local.set({ [K.key]: { v: String(m.v), code: m.code, at: Date.now() } });
       const ok = await ensure(); await tell();
-      if (ok && canRun()) ports.wa.forEach(q => { try { q.postMessage({ source: 'ho-wa-ext-new', v: m.v }); } catch (_) {} });
+      if (ok && canRun()) ports[K.side].forEach(q => { try { q.postMessage({ source: K.fresh, v: m.v }); } catch (_) {} });
       return;
     }
-    ports[other].forEach(q => { try { q.postMessage(m); } catch (_) {} });
+    // WhatsApp and Opera talk to HotelOps; HotelOps' answers go to the reader they are for (Opera's start with "ho-op")
+    const to = side !== 'app' ? 'app' : (m && typeof m.source === 'string' && m.source.indexOf('ho-op') === 0 ? 'opera' : 'wa');
+    ports[to].forEach(q => { try { q.postMessage(m); } catch (_) {} });
   });
   p.onDisconnect.addListener(() => ports[side].delete(p));
 }
@@ -129,17 +177,18 @@ if (chrome.runtime.onUserScriptConnect) chrome.runtime.onUserScriptConnect.addLi
 ensure();`;
     const wa = waSide(reader, appOrigin, v, false);
     // HotelOps side: show that the helper is here, and carry the messages
-    const app = `// HotelOps WhatsApp helper ${v} · links HotelOps to WhatsApp Web
+    const app = `// HotelOps WhatsApp helper ${v} · links HotelOps to WhatsApp Web${opReader ? ' and Opera Cloud' : ''}
 (function () {
   const D = document.documentElement.dataset;
-  D.hoWaHelper = ${JSON.stringify(v)}; D.hoWaAuto = '1';
+  D.hoWaHelper = ${JSON.stringify(v)}; D.hoWaAuto = '1';${opReader ? ` D.hoOpHelper = ${JSON.stringify(v)};` : ''}
   let port = null;
   const BACK = d => d && typeof d === 'object' && (d.source === 'ho-wa-pong' || d.source === 'ho-wa-ack' || d.source === 'ho-wa-gack' || d.source === 'ho-wa-ext-code'
+    || d.source === 'ho-op-ack' || d.source === 'ho-op-ext-code'
     || (d.source === 'ho-wa' && (d.send || d.words || (d.guard && !d.guard.events && !d.guard.arm))));
   const open = () => {
     port = chrome.runtime.connect({ name: 'app' });
     port.onMessage.addListener(m => {
-      if (m && m.source === 'ho-wa-ext-info') { D.hoWaUs = m.us ? '1' : '0'; D.hoWaCode = String(m.v); }
+      if (m && m.source === 'ho-wa-ext-info') { D.hoWaUs = m.us ? '1' : '0'; D.hoWaCode = String(m.v); if (m.op) D.hoOpCode = String(m.op); }
       window.postMessage(m, location.origin);
     });
     port.onDisconnect.addListener(() => { port = null; setTimeout(open, 1000); });
@@ -156,13 +205,17 @@ Add it once (Chrome or Edge on the desk PC):
 3. Turn on "Developer mode" (top right in Chrome, left in Edge).
 4. Click "Load unpacked" and pick the folder.
 5. For automatic updates: click "Details" on HotelOps WhatsApp helper and turn on "Allow User Scripts".
-That's it. Open WhatsApp Web: the HotelOps window starts by itself and links to HotelOps.
+That's it. Open WhatsApp Web: the HotelOps window starts by itself and links to HotelOps.${opReader ? `
+Open Opera Cloud: a small "HotelOps" pill shows bottom right. It reads the screens you open
+(Arrivals, Departures, In House, a reservation) and HotelOps updates its lists by itself.
+It only reads Opera; it never clicks, types or changes anything there.` : ''}
 
 Updates: nothing to do. When HotelOps updates, it hands the helper the new reader, and WhatsApp Web
 restarts into it the next time nobody is using that window. (Only if step 5 is off you would need to
 download again.)
-It only runs on web.whatsapp.com and ${appOrigin}.`;
-    return [['manifest.json', JSON.stringify(manifest, null, 2)], ['relay.js', relay], ['whatsapp.js', wa], ['hotelops.js', app], ['README.txt', readme]];
+It only runs on web.whatsapp.com${opReader ? ', Opera Cloud (Oracle hosts)' : ''} and ${appOrigin}.`;
+    return [['manifest.json', JSON.stringify(manifest, null, 2)], ['relay.js', relay], ['whatsapp.js', wa], ['hotelops.js', app]]
+      .concat(opReader ? [['opera.js', opSide(opReader, appOrigin, v, false)]] : []).concat([['README.txt', readme]]);
   }
 
   // the reader as it is in this version of HotelOps (the WhatsApp side of the helper)
@@ -170,21 +223,34 @@ It only runs on web.whatsapp.com and ${appOrigin}.`;
     const raw = await fetch('tools/hotelops-whatsapp.console.js', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.text(); });
     return W.hoWaPure.snippet(raw, location.origin + location.pathname);
   }
+  // the Opera reader as it is in this version of HotelOps, with this app's address filled in (the console copy too)
+  async function opReader() {
+    const raw = await fetch('tools/hotelops-opera.console.js', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.text(); });
+    return opSnippet(raw, location.origin + location.pathname);
+  }
+  function opSnippet(raw, appUrl) { return String(raw).replace("'__HO_APP_URL__'", () => JSON.stringify(appUrl)).replace("var VERSION = '1';", () => 'var VERSION = ' + JSON.stringify(ver()) + ';'); }
   // HotelOps updated and the helper still runs an older reader: hand it this one (once per open)
-  let handed = '';
+  let handed = '', opHanded = '';
   async function autoUpdate() {
     const d = doc.documentElement.dataset, v = ver();
-    if (!d.hoWaAuto || !d.hoWaCode || handed === v || !W.hoWaPure) return;
-    if (!(parseFloat(v) > parseFloat(d.hoWaCode))) return;
-    handed = v;
-    try { W.postMessage({ source: 'ho-wa-ext-code', v, code: waSide(await reader(), location.origin, v, true) }, location.origin); }
-    catch (_) { handed = ''; }
+    if (d.hoWaAuto && d.hoWaCode && handed !== v && W.hoWaPure && parseFloat(v) > parseFloat(d.hoWaCode)) {
+      handed = v;
+      try { W.postMessage({ source: 'ho-wa-ext-code', v, code: waSide(await reader(), location.origin, v, true) }, location.origin); }
+      catch (_) { handed = ''; }
+    }
+    // the Opera reader: only a helper that has it (downloaded since the Opera reader came) says which one it runs
+    if (d.hoWaAuto && d.hoOpCode && opHanded !== v && parseFloat(v) > parseFloat(d.hoOpCode)) {
+      opHanded = v;
+      try { W.postMessage({ source: 'ho-op-ext-code', v, code: opSide(await opReader(), location.origin, v, true) }, location.origin); }
+      catch (_) { opHanded = ''; }
+    }
   }
   W.addEventListener('message', e => { if (e.source === W && e.data && e.data.source === 'ho-wa-ext-info') { setTimeout(autoUpdate, 1000); tick(); } });
 
   async function download() {
     try {
-      const blob = zip(files(await reader(), location.origin));
+      let op = ''; try { op = await opReader(); } catch (_) {}   // the Opera reader is a bonus: the helper is still built without it
+      const blob = zip(files(await reader(), location.origin, op));
       const a = doc.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'HotelOps-WhatsApp-helper.zip';
       doc.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       try { localStorage.setItem('ho_wa_helper_dl', ver()); } catch (_) {}
@@ -240,5 +306,5 @@ It only runs on web.whatsapp.com and ${appOrigin}.`;
   setTimeout(tick, 1500); setInterval(() => { if (doc.getElementById('waCard')) tick(); }, 5000);
   new MutationObserver(tick).observe(doc.documentElement, { attributes: true, attributeFilter: ['data-ho-wa-helper', 'data-ho-wa-code', 'data-ho-wa-us'] });
 
-  W.hoWaHelper = { download, openWa, installed, files, zip, card, waSide, autoUpdate };
+  W.hoWaHelper = { download, openWa, installed, files, zip, card, waSide, opSide, opReader, opSnippet, autoUpdate, OP_MATCHES };
 })(window);

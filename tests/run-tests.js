@@ -3388,10 +3388,12 @@ console.log('\nOpera reader');
   const A = O.plan({ snap: arrSnap, today: T, board: { rooms: [], day: '' }, arr, pur, ih: null });
   check('bridge arrivals: new ones added (with a room; PM rooms on Arrivals only), cancelled not',
     [A.arr.add.map(g => g.room + ' ' + g.name + ' ' + g.nat + ' ' + g.email + ' ' + g.source + ' ' + g.purpose), A.pur.add.map(g => g.room + ' ' + g.originOfTravel)],
-    [['0301 GOLF NEWGUEST UAE golf.new@example.com Agoda Business', '9001 JULIET PMROOM  No@email.com ALL App Business', '0305 NOVA XML Argentina No@email.com ALL App Business', '0306 OSCAR SCRAPED Colombia No@email.com ALL App Business'], ['0301 ', '0305 ', '0306 ']]);
-  check('bridge arrivals: only empty things filled — room, email; a guessed nationality replaced; a hand-typed, Vicas or scraper one never',
+    [['0301 GOLF NEWGUEST UAE golf.new@example.com Agoda Business', '9001 JULIET PMROOM  No@email.com ALL App Business', '0305 NOVA XML Argentina No@email.com ALL App Business', '0306 OSCAR SCRAPED Colombia No@email.com ALL App Business'], ['0301 ', '0310 ']]);
+  check('bridge arrivals: only empty things filled — room, email, nationality; a nationality already there (guess, hand-typed, Vicas, scraper) never changed',
     [A.arr.fill.map(f => f.g.name + ' ' + JSON.stringify(f.set)), A.pur.fill.map(f => f.g.name + ' ' + JSON.stringify(f.set))],
-    [['KILO KNOWN {"email":"kilo.known@example.com","nat":"Portugal"}', 'MIKE WAITING {"room":"0310"}'], ['KILO KNOWN {"email":"kilo.known@example.com"}']]);
+    [['KILO KNOWN {"email":"kilo.known@example.com"}', 'MIKE WAITING {"room":"0310"}'], ['KILO KNOWN {"email":"kilo.known@example.com"}']]);
+  check('bridge arrivals: an empty nationality gets Opera\'s', O.plan({ snap: arrSnap, today: T, board: { rooms: [], day: '' }, arr: [{ room: '0303', conf: '200005', name: 'KILO KNOWN', nat: '', email: '' }], pur: [] }).arr.fill.map(f => JSON.stringify(f.set)),
+    ['{"email":"kilo.known@example.com","nat":"Portugal"}']);
   check('bridge arrivals: notes (cancelled, no room yet) and the words', [A.notes, O.summaryText(A)], [['1 cancelled / no-show in Opera (left as they are here)', '1 arrival without a room yet — added once Opera gives a room'], '4 new arrivals added, 3 arrivals filled in']);
   check('bridge arrivals: another day\'s arrivals change nothing', [O.plan({ snap: Object.assign({}, arrSnap, { date: '2026-10-29', rows: arrSnap.rows.map(r => Object.assign({}, r, { arrival: '2026-10-29' })) }), today: T, board: { rooms: [], day: '' }, arr, pur }).n], [0]);
   // in-house

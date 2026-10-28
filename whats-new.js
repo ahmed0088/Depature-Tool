@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 432, items: [
+    "📡 New: the Opera reader — like the WhatsApp one, for Opera Cloud. While Opera is open on the desk PC it reads Arrivals, Departures, In House and reservation details as you look at them, and HotelOps updates itself: rooms checked out are marked out, extensions marked, missing departures and new arrivals added, In-House kept fresh. It tells you what it did (with Undo) and the Brain can answer from it. It only reads — it never clicks or types in Opera.",
+    "👉 Turn it on once: Settings → 📡 Opera reader → “Get the helper again (once)”, unzip over the same folder and press ↻ in chrome://extensions, then open Opera Cloud. From then on it updates itself. Don't want it to change things by itself? Switch on “Review before applying”.",
+    "🔒 Purpose of Stay rules still hold: PM rooms 9000+ are skipped, Vicas nationality wins, a nationality is only filled when empty, and names or anything you typed are never changed.",
+  ] },
   { v: 431, items: [
     "📒 Handover takes from WhatsApp only what's meant for it: a message in your Handover group (on by itself for a group named “handover” or “HO”), or one marked “HO: …”, “#ho” or “handover”. The marker is taken off. Everything else stays out — no more wrong picks and no more “None of these” questions from guesses; and if you do press “None of these”, that message is never asked about again.",
     "🧠 The Brain is calm now: it no longer pops up or pulses by itself — a quiet number on 🧠 shows when it has something, and a tip you've seen isn't shown again. Settings → Ops Brain → Hints: Calm (default) / Normal / Off. Asking it works as always. On a 🌴 day off it stays completely quiet.",
