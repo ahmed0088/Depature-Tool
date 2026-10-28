@@ -3404,7 +3404,88 @@ console.log('\nOpera reader');
   check('bridge in-house: none today → made from the In House screen; one today → new rooms added, fresher values, nothing removed',
     [I1.ih.mode, I1.ih.add.map(g => g.rk + ' ' + g.name + ' ' + g.nights), I2.ih.mode, I2.ih.add.map(g => g.room), I2.ih.upd.map(u => JSON.stringify(u.set))],
     ['create', ['104 Delta Demo 3', '401 Mike Stayer 9'], 'merge', ['0401'], ['{"arrival":"2026-10-27","departure":"2026-10-30","nights":3,"adults":2,"children":1,"balance":55.5}']]);
+  // ── more screens, privacy, learning ──
+  check('opera: new header words (room status, profile) and card / secret columns are never a field',
+    ['HK Status', 'FO Status', 'Discrepancy', 'Room Status', 'Membership Level', 'Preferences', 'Language', 'Credit Card Number', 'CVV', 'Card No.', 'Expiry Date'].map(R.fieldOf),
+    ['hkStatus', 'foStatus', 'disc', 'roomStatus', 'memberLevel', 'prefs', 'language', '', '', '', '']);
+  check('opera privacy: card numbers masked to the last 4 (spaces, dashes, a 16-digit run inside text, half-hidden); a conf. number stays',
+    [R.maskCards('4111 1111 1111 1111'), R.maskCards('4111-1111-1111-1111'), R.maskCards('Paid with 4111111111111111 at the desk'), R.maskCards('VA4111XXXXXXXX1111'), R.maskCards('Amex 3782 822463 10005'), R.maskCards('Conf 123456789, room 0101, AED 1,234.50')],
+    ['•••• 1111', '•••• 1111', 'Paid with •••• 1111 at the desk', 'VA•••• 1111', 'Amex •••• 0005', 'Conf 123456789, room 0101, AED 1,234.50']);
+  check('opera privacy: card / CC / PAN / CVV / CVC / expiry / auth code / password / PIN labels are secret; card TYPE and payment method are not',
+    ['Card Number', 'CC', 'Credit Card', 'PAN', 'CVV', 'CVC', 'Exp. Date', 'Expiry', 'Auth Code', 'Authorization Code', 'Password', 'PIN', 'Card Type', 'Payment Method', 'Exp. Departure', 'Room', 'Balance'].map(R.secretLabel),
+    [true, true, true, true, true, true, true, true, true, true, true, true, false, false, false, false, false]);
+  const tb = R.tableFrom(['Room', 'Card Number', 'Expiry', 'Amount', 'Notes'], [['0101', '4111 1111 1111 1111', '12/29', '120.00', 'card 4111-1111-1111-1111 on file']], 'Some screen');
+  check('opera privacy: a card column is dropped from a table, a card number in another column is masked', J(tb), { title: 'Some screen', heads: ['Room', 'Amount', 'Notes'], rows: [['0101', '120.00', 'card •••• 1111 on file']] });
+  check('opera privacy: the last net (every string of a snapshot, card-named keys dropped)', J(R.scrub({ rows: [{ room: '0101', notes: 'cc 4111 1111 1111 1111' }], cardNumber: '4111111111111111', extra: [['Phone', '+1 555 0100']] })),
+    { rows: [{ room: '0101', notes: 'cc •••• 1111' }], extra: [['Phone', '+1 555 0100']] });
+  check('opera billing: payment TYPE only', ['VA 4111 •••• 1111', 'Visa', 'MC', 'American Express', 'Cash AED', 'City Ledger', 'Direct Bill', 'Room Charge', 'Check Out'].map(R.payType), ['Visa', 'Visa', 'Mastercard', 'Amex', 'Cash', 'City Ledger', 'City Ledger', '', '']);
+  const ph = ['Date', 'Code', 'Description', 'Amount', 'Supplement', 'Reference', 'Card Number'];
+  const pm = R.mapHeaders(ph, R.postFieldOf);
+  check('opera billing: a postings grid is known by its words (code / description + amount), the card column is no field', [J(pm.map), R.usablePost(pm), R.usablePost(R.mapHeaders(['Room', 'Name'], R.postFieldOf))],
+    [{ date: 0, code: 1, desc: 2, amount: 3, ref: 4 }, true, false]);
+  const posts = R.postingsFrom([['27/10/2026', '1000', 'Accommodation', '120.00', 'Room 0101', 'BK-77', '4111111111111111'], ['28/10/2026', '2005', 'Minibar', '35.50', 'Water x2', '', ''],
+    ['28/10/2026', '9004', 'Visa 4111 1111 1111 1111', '-155.50', 'Auth 123456', 'XYZ', '']], pm.map, 'dmy', 1);
+  check('opera billing: postings read (date, code, description, amount, supplement); a payment keeps its type only — no card, no auth code, no reference', J(posts),
+    [{ code: '1000', amount: 120, date: '2026-10-27', desc: 'Accommodation', ref: 'Room 0101', window: 1 }, { code: '2005', amount: 35.5, date: '2026-10-28', desc: 'Minibar', ref: 'Water x2', window: 1 },
+      { code: '9004', amount: -155.5, date: '2026-10-28', pay: 'Visa', desc: 'Visa payment', window: 1 }]);
+  check('opera billing: debit / credit columns make the amount', J(R.postingsFrom([['Laundry', '20.00', ''], ['Cash', '', '20.00']], R.mapHeaders(['Description', 'Debit', 'Credit'], R.postFieldOf).map)),
+    [{ code: '', amount: 20, desc: 'Laundry' }, { code: '', amount: -20, pay: 'Cash', desc: 'Cash payment' }]);
+  const fo = R.folioFrom([{ n: 1, balance: 0 }, { n: 2, balance: 85 }], posts, [['Room', '0101'], ['Status', 'Checked In']]);
+  check('opera billing: the folio — windows, total, payment types, open', [J(fo.windows), fo.balance, fo.zero, fo.settled, J(fo.pays), fo.status], [[{ n: 1, balance: 0 }, { n: 2, balance: 85 }], 85, false, false, ['Visa'], 'in_house']);
+  const fz = R.folioFrom([], posts, [['Balance', '0.00']]);
+  check('opera billing: a zero balance is settled; "Window 1 Balance" labels are windows; no windows → the postings add up', [fz.balance, fz.zero, fz.settled, J(R.folioFrom([], [], [['Window 1 Balance', '10.00'], ['Window 3 Balance', '(5.00)']]).windows), R.folioFrom([], posts.slice(0, 2), []).balance],
+    [0, true, true, [{ n: 1, balance: 10 }, { n: 3, balance: -5 }], 155.5]);
+  check('opera: room status words', ['Clean', 'Dirty', 'Inspected', 'Pickup', 'Out of Order', 'OOS', 'VC', 'OD', 'Occupied'].map(R.normRoomStatus), ['clean', 'dirty', 'inspected', 'pickup', 'ooo', 'oos', 'clean', 'dirty', '']);
+  check('opera: the new screens', [R.pageKind(['OPERA Cloud', 'Billing']), R.pageKind(['Folio History']), R.pageKind(['Post Charges']), R.pageKind(['Room Management']), R.pageKind(['Housekeeping Board']), R.pageKind(['Manage Profile']),
+    R.pageKind(['Reservation Traces']), R.pageKind(['Rate Query']), R.pageKind(['Group Rooming List']), R.pageKind(['End of Day']), R.pageKind(['Arrivals'])],
+    ['billing', 'billing', 'billing', 'rooms', 'rooms', 'profile', 'traces', 'rates', 'group', 'audit', 'arrivals']);
+  const tm = R.mapHeaders(['Date', 'Department', 'Trace Text', 'Resolved On'], R.traceFieldOf);
+  check('opera traces: read (date, department, text, done)', [R.usableTrace(tm), J(R.tracesFrom([['28/10/2026 15:00', 'HK', 'Extra towels', ''], ['27/10/2026', 'FO', 'Call guest re card 4111 1111 1111 1111', '27/10/2026']], tm.map, 'dmy'))],
+    [true, [{ text: 'Extra towels', date: '2026-10-28', time: '15:00', dept: 'HK' }, { text: 'Call guest re card •••• 1111', date: '2026-10-27', dept: 'FO', done: true }]]);
+  check('opera profile: name + VIP / membership is enough (loose), the strict rule stays for reservations; every other detail kept as extra (no card / passport)',
+    [J(R.pairsToRow([['Name', 'Testperson, Alpha'], ['VIP', 'V2'], ['Membership Level', 'Gold'], ['Preferences', 'High floor']], '', true)), R.pairsToRow([['Name', 'Testperson, Alpha'], ['VIP', 'V2']]),
+      J(R.pairsExtra([['Phone', '+1 555 0100'], ['Credit Card', '4111 1111 1111 1111'], ['Passport No', 'X1234567'], ['Language', 'English']]))],
+    [{ name: 'Testperson, Alpha', memberLevel: 'Gold', prefs: 'High floor', vip: 'V2' }, null, [['Phone', '+1 555 0100'], ['Language', 'English']]]);
+  check('opera audit: state from its words', [R.auditState(['Final procedures', 'Completed']), R.auditState(['Posting room and tax', 'In progress']), R.auditState(['Print reports', 'Failed']), R.auditState([])], ['done', 'running', 'failed', '']);
+  check('opera learning: button labels only — names, numbers, amounts, emails are not kept', ['Post Charge', '✓ Settle', 'Window 2', 'Doe, John', 'AED 120.00', '0101', 'test@example.com', 'Room 512', 'A very long label with far too many words in it'].map(R.cleanLabel),
+    ['Post Charge', 'Settle', 'Window 2', '', '', '', '', '', '']);
+  check('opera learning: a screen title is cut before the guest', [R.safeTitle('Billing - Testperson, Alpha'), R.safeTitle('Reservation (100001)'), R.safeTitle('Folio History | Room 0101')], ['Billing', 'Reservation', 'Folio History']);
   check('bridge in-house: yesterday\'s list is not merged into; a search screen never makes one', [O.plan({ snap: ihSnap, today: T, board: { rooms: [], day: '' }, arr: [], pur: [], ih: { date: '2026-10-27', rows: [] } }).ih.mode, O.plan({ snap: Object.assign({}, ihSnap, { kind: 'search' }), today: T, board: { rooms: [], day: '' }, arr: [], pur: [], ih: null }).ih.mode], ['create', '']);
+  // ── bridge: folios, profiles, privacy, learning ──
+  const sn = O.sanitize({ kind: 'billing', rows: [{ room: '0101', name: 'Testperson, Alpha', balance: 85, payment: 'VA 4111111111111111', extra: [['Card Number', '4111'], ['Phone', '000']] }],
+    folio: { room: '0101', name: 'Testperson, Alpha', balance: 85, windows: [{ n: 1, balance: 0 }, { n: 9, balance: 1 }], pays: ['Visa', '4111'], postings: [{ code: '9004', desc: 'Visa 4111 1111 1111 1111', amount: -10, pay: 'Visa', ref: 'AUTH 99' }, { code: '1000', desc: 'Room', amount: 95, ref: 'card 4111111111111111' }] },
+    tables: [{ title: 'x', heads: ['Room', 'CVV'], rows: [['0101', '123']] }], traces: [{ text: 'call re 4111-1111-1111-1111', room: '0101' }] });
+  check('bridge privacy: the app\'s own net — a number as payment dropped, card labels / columns dropped, card numbers masked, a payment keeps its type only',
+    [sn.kind, sn.rows[0].payment, J(sn.rows[0].extra), J(sn.folio.windows), J(sn.folio.pays), J(sn.folio.postings), J(sn.tables), sn.traces[0].text],
+    ['billing', undefined, [['Phone', '000']], [{ n: 1, balance: 0 }], ['Visa'], [{ code: '9004', desc: 'Visa payment', amount: -10, pay: 'Visa' }, { code: '1000', desc: 'Room', amount: 95, ref: 'card •••• 1111' }], [{ title: 'x', heads: ['Room'], rows: [['0101']] }], 'call re •••• 1111']);
+  const bill = { kind: 'billing', date: '', rows: [{ room: '0101', name: 'Testperson, Alpha', balance: 85 }], folio: { room: '0101', name: 'Testperson, Alpha', conf: '100001', balance: 85, windows: [], pays: [], postings: [] } };
+  const ihT = { date: T, rows: [{ room: '0101', rk: '101', name: 'Alpha Testperson', conf: '100001', balance: 0 }] };
+  const PB = O.plan({ snap: bill, today: T, board, arr: [], pur: [], ih: ihT });
+  check('bridge billing: the folio balance goes onto today\'s departure and the in-house list (live), and says so',
+    [J(PB.dep.fill), PB.ih.mode, J(PB.ih.upd.map(u => u.set)), O.summaryText(PB), O.worthAlert(PB)],
+    [[{ room: '0101', set: { balance: 85 }, folio: true }], 'merge', [{ balance: 85 }], 'room 0101 balance AED 85.00 from its Opera folio, in-house list +0 ~1', false]);
+  const P0 = O.plan({ snap: Object.assign({}, bill, { folio: Object.assign({}, bill.folio, { balance: 0, zero: true, settled: true }) }), today: T, board: { day: T, rooms: [mk('0101', 'Alpha Testperson', { balance: 120, status: 'out' })] }, arr: [], pur: [], ih: null });
+  check('bridge billing: settled in Opera → 0.00 (the board shows Settled); another guest\'s folio for the room changes nothing',
+    [O.summaryText(P0), O.plan({ snap: Object.assign({}, bill, { folio: Object.assign({}, bill.folio, { name: 'Somebody, Else' }) }), today: T, board, arr: [], pur: [], ih: null }).n], ['room 0101 balance settled (0.00) from its Opera folio', 0]);
+  const prof = { kind: 'profile', date: '', rows: [{ name: 'Testperson, Alpha', vip: 'V2', memberLevel: 'Gold' }, { name: 'Demo, Delta', vip: 'V1', member: 'Silver' }] };
+  const PP = O.plan({ snap: prof, today: T, board, arr: [], pur: [], ih: { date: T, rows: [{ room: '0101', rk: '101', name: 'Alpha Testperson', vip: '', member: '' }, { room: '0104', rk: '104', name: 'Delta Demo', vip: 'typed', member: '' }] } });
+  check('bridge profiles: only an EMPTY VIP / membership is filled (a typed one stays); Departures VIP when not set',
+    [J(PP.ih.upd.map(u => [u.r.room, u.set])), J(PP.dep.fill)], [[['0101', { vip: 'V2', member: 'Gold' }], ['0104', { member: 'Silver' }]], [{ room: '0101', set: { isVip: true } }, { room: '0104', set: { isVip: true } }]]);
+  // learning: a week of made-up work in Opera
+  const t0 = new Date(2026, 9, 19, 10, 0).getTime(), lraw = [];
+  for (let d = 0; d < 5; d++) {
+    let tt = t0 + d * 864e5; const go = (k, x) => { tt += 45e3; lraw.push(Object.assign({ t: tt, k }, x)); };
+    go('s', { s: 'inhouse', l: 'Manage In House' }); go('r'); go('s', { s: 'billing', l: 'Billing - Testperson, Alpha' }); go('c', { l: 'Post Charge' }); go('c', { l: 'Settle' }); go('c', { l: 'Check Out' });
+    go('c', { l: 'Testperson Alpha' }); go('c', { l: 'AED 120.00' }); go('c', { l: '0101' }); go('c', { l: 'alpha.test@example.com' }); go('s', { s: 'other', l: 'Testperson' });
+  }
+  const ev = O.learnClean(lraw, new Set(['TESTPERSON', 'ALPHA'])), LM = O.learnModel(ev);
+  check('bridge learning: routines, what comes before a check-out, the usual hours, the next step',
+    [LM.routines.map(r => r.steps.join(' → ')), LM.routines[0].n, LM.routines[0].hours, LM.before.slice(0, 2).map(b => b.l), LM.billBeforeCO, O.learnNext(LM, ['s:billing', 'c:post charge']), O.learnNext(LM, ['s:arrivals'])],
+    [['In House → a line of a list → Billing → Post Charge → Settle → Check Out'], 5, '10:00–12:00', ['In House', 'a line of a list'], true, 'Settle', '']);
+  const tk = O.sessionsOf(O.learnClean([{ t: t0, k: 'c', l: 'Billing' }, { t: t0 + 2000, k: 's', s: 'billing' }, { t: t0 + 9000, k: 'c', l: 'Check Out' }, { t: t0 + 20000, k: 's', s: 'arrivals' }], new Set())).map(T2 => T2.map(x => x.k));
+  check('bridge learning: the menu click that opens a screen of the same name is one step; a check-out ends a task', tk, [['s:billing', 'c:check out'], ['s:arrivals']]);
+  const LS0 = JSON.stringify(O.learnSummary(LM)) + JSON.stringify(ev);
+  check('bridge learning: what it keeps carries no guest data (no name, room, amount or email)', [/testperson|alpha|0101|120|example\.com|4111/i.test(LS0), ev.every(e => ['s', 'c', 'r'].includes(e.k) && Object.keys(e).sort().join() === 'k,l,t,v')], [false, true]);
 }
 
 nhAsync.then(() => {

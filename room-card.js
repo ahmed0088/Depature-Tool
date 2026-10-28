@@ -36,6 +36,9 @@
 //     card"), Ops Brain ("room 512", "what's up with 512"). Any element
 //     with data-room-card="512" opens it.
 //
+//   • 📡 Opera (opera-bridge.js, window.hoOpera.cardHtml): the folio balance,
+//     room status, traces and profile Opera showed today for this room.
+//
 //  index.html only needs <script src="room-card.js"></script> after the
 //  modules it reads. Pure helpers: window.hoRoomPure (tested).
 // ═══════════════════════════════════════════════════════════
@@ -683,7 +686,7 @@ function paint(first) {
     ${T.length ? `<div class="rc-fl" role="tablist" aria-label="Show">${srcs.filter(([k]) => k === 'all' || cnt(k)).map(([k, l]) => `<button type="button" role="tab" aria-selected="${C.f === k}" class="rc-f${C.f === k ? ' on' : ''}" data-rc="f" data-v="${k}">${l}<i>${cnt(k)}</i></button>`).join('')}</div>` : ''}
     <div>${tl || '<div class="rc-empty">Nothing yet for this stay — WhatsApp messages, HK requests, handover items, logs and wake-up calls about this room show here.</div>'}</div>
     ${V.length > LIM ? `<button type="button" class="rc-btn sm" data-rc="more">Show all ${V.length}</button>` : ''}</section>`;
-  sh.innerHTML = head + `<div class="rc-bd">${todayHtml}${safe(() => (W.hoRoomHealth && W.hoRoomHealth.cardHtml ? W.hoRoomHealth.cardHtml(M.room) : ''), '')}${actsHtml}${notesHtml}${tlHtml}<div class="rc-note">Guest Memory is never shown here.</div></div>`;
+  sh.innerHTML = head + `<div class="rc-bd">${todayHtml}${safe(() => (W.hoRoomHealth && W.hoRoomHealth.cardHtml ? W.hoRoomHealth.cardHtml(M.room) : ''), '')}${safe(() => (W.hoOpera && W.hoOpera.cardHtml ? W.hoOpera.cardHtml(M.room) : ''), '')}${actsHtml}${notesHtml}${tlHtml}<div class="rc-note">Guest Memory is never shown here.</div></div>`;
   const bd = sh.querySelector('.rc-bd'); if (bd && keepScroll) bd.scrollTop = keepScroll;
   const ta = doc.getElementById('rcText'); if (ta && dv) { ta.value = dv; grow(ta); if (hadFocus) { ta.focus(); ta.setSelectionRange(dv.length, dv.length); } }
 }

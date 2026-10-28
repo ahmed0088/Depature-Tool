@@ -20,6 +20,25 @@
  * Opera loads long lists while you scroll: rows are collected as they come into view and merged by
  * confirmation number (or room + name). A snapshot goes to HotelOps only when something changed.
  *
+ * Also read:
+ *  · Billing / Folio / Cashiering (Billing, Folio, Post Charges, Settlement, Check Out, Cashier, Advance
+ *    Folio, Folio History): room, guest, conf., the folio windows 1–8 with their balance, the total, the
+ *    postings (date, code, description, amount, supplement / reference), the payment TYPE only ("Visa",
+ *    "Cash", "City Ledger") and whether the folio is settled / at zero;
+ *  · Room Management / Housekeeping / Room Status / Room Diary (room, room / FO / HK status, discrepancy),
+ *    Profiles (nationality, VIP, membership, preferences), Traces / Alerts / Messages, Rate query, Group /
+ *    Block rooming lists, End of Day / Night Audit;
+ *  · any other grid as a plain table (title, headers, up to 300 rows), and every label → value pair of a
+ *    reservation (as `extra`).
+ * Privacy, before anything leaves this tab: any run of 12–19 digits (spaces / dashes allowed) becomes
+ * "•••• 1234"; columns and labels named card / CC / PAN / CVV / CVC / expiry / auth code / password / PIN
+ * are dropped; password inputs are never read.
+ *
+ * Learning from you ("watch me", can be turned off in HotelOps): which screens you open and the visible
+ * label of the buttons, links, tabs and menu items you click (40 characters at most). Never what you type,
+ * never a key, never a line of a list (guest data). HotelOps turns that into your routines and may answer
+ * with a quiet "Usually next: Settle" on the pill.
+ *
  * A small pill sits bottom right ("📡 HotelOps · read 42 departures"); click – to make it a dot.
  * Built with DOM calls and inline styles only (no innerHTML, no <style>), so Opera's page rules don't
  * block it. Pure helpers are exported for the Node tests (tests/run-tests.js).
@@ -46,7 +65,10 @@
   var FIELDS = [
     ['room', ['ROOM', 'RM', 'ROOM NO', 'RM NO', 'ROOM NUMBER', 'ROOMS']],
     ['roomType', ['ROOM TYPE', 'RM TYPE', 'RTC', 'ROOM CLASS', 'ROOM CATEGORY']],
-    ['roomStatus', ['ROOM STATUS', 'HK STATUS', 'HOUSEKEEPING STATUS', 'FO STATUS']],
+    ['roomStatus', ['ROOM STATUS', 'RM STATUS', 'ROOM CONDITION', 'CONDITION', 'HOUSEKEEPING ROOM STATUS', 'CURRENT ROOM STATUS']],
+    ['hkStatus', ['HK STATUS', 'HOUSEKEEPING STATUS', 'HSK STATUS', 'HK']],
+    ['foStatus', ['FO STATUS', 'FRONT OFFICE STATUS', 'FRONT DESK STATUS', 'FO', 'OCCUPANCY STATUS']],
+    ['disc', ['DISCREPANCY', 'DISCREPANCIES', 'DISC', 'ROOM DISCREPANCY', 'SKIP SLEEP']],
     ['name', ['NAME', 'GUEST', 'GUEST NAME', 'GUEST NAMES', 'FULL NAME', 'PRIMARY GUEST', 'GUEST FULL NAME', 'DISPLAY NAME']],
     ['last', ['LAST NAME', 'SURNAME', 'FAMILY NAME']],
     ['first', ['FIRST NAME', 'GIVEN NAME']],
@@ -67,37 +89,112 @@
     ['rate', ['RATE', 'RATE AMOUNT', 'AMOUNT', 'DAILY RATE', 'AVG RATE', 'AVERAGE RATE', 'ROOM RATE']],
     ['market', ['MARKET', 'MARKET CODE', 'MARKET SEGMENT', 'SEGMENT']],
     ['vip', ['VIP', 'VIP CODE', 'VIP STATUS', 'VIP LEVEL', 'VIP GUEST']],
-    ['member', ['MEMBERSHIP', 'MEMBERSHIP NO', 'MEMBERSHIP LEVEL', 'MEMBERSHIP TYPE', 'LOYALTY', 'LOYALTY NO']],
+    ['member', ['MEMBERSHIP', 'MEMBERSHIP NO', 'MEMBERSHIP TYPE', 'LOYALTY', 'LOYALTY NO', 'MEMBERSHIPS', 'LOYALTY PROGRAM']],
+    ['memberLevel', ['MEMBERSHIP LEVEL', 'MEMBER LEVEL', 'LOYALTY LEVEL', 'TIER', 'MEMBERSHIP TIER', 'LOYALTY TIER']],
+    ['prefs', ['PREFERENCES', 'PREFERENCE', 'GUEST PREFERENCES', 'ROOM PREFERENCES', 'FEATURES']],
+    ['language', ['LANGUAGE', 'PREFERRED LANGUAGE']],
     ['adults', ['ADULTS', 'ADULT', 'ADL', 'ADLT', 'NO OF ADULTS']],
     ['children', ['CHILDREN', 'CHILD', 'CHD', 'CHILDS', 'KIDS', 'NO OF CHILDREN']],
     ['pax', ['PERSONS', 'PAX', 'ADULTS CHILDREN', 'A C', 'GUESTS', 'OCCUPANCY', 'NO OF GUESTS', 'GUEST COUNT', 'NO OF PERSONS']],
     ['balance', ['BALANCE', 'BAL', 'OPEN BALANCE', 'FOLIO BALANCE', 'CURRENT BALANCE', 'ACCOUNT BALANCE']],
     ['payment', ['PAYMENT', 'PAYMENT METHOD', 'METHOD OF PAYMENT', 'PAYMENT TYPE']],
-    ['notes', ['NOTES', 'NOTE', 'COMMENTS', 'COMMENT', 'REMARKS', 'SPECIALS', 'SPECIAL REQUESTS', 'PREFERENCES', 'ALERTS']],
+    ['notes', ['NOTES', 'NOTE', 'COMMENTS', 'COMMENT', 'REMARKS', 'SPECIALS', 'SPECIAL REQUESTS']],
+    ['alerts', ['ALERTS', 'ALERT', 'TRACES', 'GUEST ALERTS']],
   ];
-  var FIELD_OF = {}; FIELDS.forEach(function (f) { f[1].forEach(function (w) { FIELD_OF[w] = f[0]; }); });
+  // a folio's postings (Billing / Folio / Cashiering)
+  var POST_FIELDS = [
+    ['date', ['DATE', 'POSTING DATE', 'TRANSACTION DATE', 'TRX DATE', 'TRN DATE', 'BUSINESS DATE', 'POSTED', 'POSTED ON', 'POST DATE', 'DATE POSTED']],
+    ['code', ['CODE', 'TRX CODE', 'TRN CODE', 'TRANS CODE', 'TRANSACTION CODE', 'TC', 'TRX', 'ARTICLE CODE']],
+    ['desc', ['DESCRIPTION', 'DESC', 'TRANSACTION DESCRIPTION', 'TRANSACTION', 'ITEM', 'DETAILS', 'TEXT', 'CHARGE DESCRIPTION', 'ARTICLE', 'TRANSACTION TEXT']],
+    ['amount', ['AMOUNT', 'TOTAL', 'TOTAL AMOUNT', 'NET AMOUNT', 'GROSS AMOUNT', 'PRICE', 'VALUE', 'POSTED AMOUNT']],
+    ['debit', ['DEBIT', 'DEBITS', 'CHARGES', 'CHARGE', 'DR', 'CHARGE AMOUNT']],
+    ['credit', ['CREDIT', 'CREDITS', 'PAYMENTS', 'PAYMENT', 'CR', 'PAYMENT AMOUNT']],
+    ['ref', ['SUPPLEMENT', 'REFERENCE', 'REF', 'SUPPLEMENT REFERENCE', 'REFERENCE NO', 'SUPPLEMENT TEXT', 'CHECK NO', 'REMARK', 'REMARKS']],
+    ['window', ['WINDOW', 'WIN', 'FOLIO WINDOW', 'WINDOW NO', 'FOLIO']],
+    ['qty', ['QTY', 'QUANTITY']],
+  ];
+  // traces / alerts / messages
+  var TRACE_FIELDS = [
+    ['date', ['DATE', 'TRACE DATE', 'FROM DATE', 'BEGIN DATE', 'START DATE', 'CREATED', 'CREATED ON', 'ALERT DATE', 'MESSAGE DATE', 'DUE DATE']],
+    ['time', ['TIME', 'TRACE TIME', 'DUE TIME']],
+    ['dept', ['DEPARTMENT', 'DEPT', 'DEPARTMENT CODE', 'DEPARTMENTS', 'AREA', 'ALERT CODE', 'TYPE', 'ALERT AREA', 'CODE']],
+    ['text', ['TRACE TEXT', 'TRACE', 'TEXT', 'DESCRIPTION', 'MESSAGE', 'MESSAGE TEXT', 'ALERT', 'ALERT TEXT', 'ALERT DESCRIPTION', 'DETAILS', 'NOTE', 'NOTES', 'COMMENT', 'COMMENTS']],
+    ['done', ['RESOLVED', 'RESOLVED ON', 'RESOLVED BY', 'STATUS', 'COMPLETED', 'DONE', 'RECEIVED', 'RESOLVED DATE']],
+    ['room', ['ROOM', 'RM', 'ROOM NO']],
+    ['name', ['NAME', 'GUEST', 'GUEST NAME']],
+    ['conf', ['CONF', 'CONF NO', 'CONFIRMATION', 'CONFIRMATION NO', 'RESERVATION NO']],
+  ];
+  /** a field table → fieldOf for it: exact names first; then the longest phrase found inside a longer header (asked once per text) */
+  function mapper(table) {
+    var of = {}, keys; table.forEach(function (f) { f[1].forEach(function (w) { of[w] = f[0]; }); }); keys = Object.keys(of);
+    var memo = {}, memoN = 0;
+    function one(h) {
+      var n = normH(h); if (!n || n.length > 48 || secretLabel(h)) return '';   // a card / password column is never a field
+      if (of[n]) return of[n];
+      var best = '', len = 0, w = ' ' + n + ' ';
+      keys.forEach(function (k) { if (k.length > len && k.length >= 3 && w.indexOf(' ' + k + ' ') >= 0) { best = of[k]; len = k.length; } });
+      return best;
+    }
+    return function (h) {
+      h = String(h == null ? '' : h); if (h.length > 120) return '';
+      if (Object.prototype.hasOwnProperty.call(memo, h)) return memo[h];   // the same header text is asked about on every read: answer it once
+      if (++memoN > 5000) { memo = {}; memoN = 1; }
+      return (memo[h] = one(h));
+    };
+  }
   /** one header / label → the field it names, or '' */
-  var FIELD_MEMO = {}, FIELD_MEMO_N = 0;   // the same header text is asked about on every read: answer it once
-  function fieldOf(h) {
-    h = String(h == null ? '' : h); if (h.length > 120) return '';
-    if (Object.prototype.hasOwnProperty.call(FIELD_MEMO, h)) return FIELD_MEMO[h];
-    if (++FIELD_MEMO_N > 5000) { FIELD_MEMO = {}; FIELD_MEMO_N = 1; }
-    return (FIELD_MEMO[h] = fieldOf1(h));
-  }
-  function fieldOf1(h) {
-    var n = normH(h); if (!n || n.length > 48) return '';
-    if (FIELD_OF[n]) return FIELD_OF[n];
-    var best = '', len = 0, w = ' ' + n + ' ';
-    Object.keys(FIELD_OF).forEach(function (k) { if (k.length > len && k.length >= 3 && w.indexOf(' ' + k + ' ') >= 0) { best = FIELD_OF[k]; len = k.length; } });
-    // "Arrival Time" is a time, not the date; a "… Date" header for a time field is still the date
-    return best;
-  }
+  var fieldOf = mapper(FIELDS), postFieldOf = mapper(POST_FIELDS), traceFieldOf = mapper(TRACE_FIELDS);
   /** header cells → {map: {field: column}, n: fields found} (each field once, the first column that names it) */
-  function mapHeaders(cells) {
-    var map = {}, n = 0;
-    (cells || []).forEach(function (c, i) { var f = fieldOf(c); if (f && map[f] === undefined) { map[f] = i; n++; } });
+  function mapHeaders(cells, of) {
+    var map = {}, n = 0; of = of || fieldOf;
+    (cells || []).forEach(function (c, i) { var f = of(c); if (f && map[f] === undefined) { map[f] = i; n++; } });
     return { map: map, n: n };
   }
+  /** a folio's postings: what was charged or paid (a code or a description, and an amount) */
+  function usablePost(m) { return !!m && (m.map.code !== undefined || m.map.desc !== undefined) && (m.map.amount !== undefined || m.map.debit !== undefined || m.map.credit !== undefined); }
+  /** traces / alerts: a text and when / which department / done */
+  function usableTrace(m) { return !!m && m.map.text !== undefined && (m.map.dept !== undefined || m.map.date !== undefined || m.map.done !== undefined); }
+
+  // ── privacy: card numbers, card columns and passwords never leave the reader ──
+  /** any run of 12–19 digits (spaces or dashes between them allowed), or a card Opera shows half-hidden
+   *  ("4111XXXXXXXX1111"), → "•••• 1234" (the last 4 only) */
+  function maskCards(s) {
+    s = String(s == null ? '' : s);
+    if (s.length < 12) return s;
+    return s.replace(/(?<!\d)\d(?:[ \-]?\d){11,}(?!\d)/g, function (m) { return '•••• ' + m.replace(/\D/g, '').slice(-4); })
+      .replace(/(?<!\d)\d{0,6}[Xx*•]{4,}[ \-]?(?:[Xx*•]{4}[ \-]?){0,3}(\d{4})(?!\d)/g, function (m, l4) { return '•••• ' + l4; });
+  }
+  /** a column or label that holds card data or a secret (dropped, never read) */
+  function secretLabel(h) {
+    var n = normH(h); if (!n) return false;
+    if (/^(?:(?:CREDIT |PAYMENT )?CARD TYPE|PAYMENT TYPE|PAYMENT METHOD|METHOD OF PAYMENT)$/.test(n)) return false;
+    if (/^(?:EXP|EXP DATE|EXPIRY|EXPIRES|EXPIRATION|EXPIRATION DATE|EXPIRY DATE|VALID THRU|VALID UNTIL|PIN|PAN|CC|CC NO|AUTH|AUTH NO|CID|CVV2|CVC2|CV2)$/.test(n)) return true;
+    return /\b(?:CARD|CARDS|CARDHOLDER|CREDIT CARD|CC NUMBER|CVV|CVC|SECURITY CODE|PASSWORD|PASSWORDS|PASSCODE|PWD|PIN CODE|PIN NO|AUTH CODE|AUTHORI[SZ]ATION(?: CODE| NO)?|APPROVAL CODE|IBAN|SWIFT|PASSPORT|ID NO|ID NUMBER|DOCUMENT NO|DOCUMENT NUMBER)\b/.test(n);
+  }
+  /** an input that must never be read: a password, a PIN, a card field */
+  function secretInput(el) {
+    if (!el || !el.getAttribute) return false;
+    var t = String(el.getAttribute('type') || '').toLowerCase(), ac = String(el.getAttribute('autocomplete') || '').toLowerCase();
+    if (t === 'password' || /^cc-|password|one-time-code/.test(ac)) return true;
+    return /pass(?:word|code)?|pwd|\bpin\b|cvv|cvc|card|^cc[-_]|[-_]cc$/i.test(String(el.getAttribute('name') || '') + ' ' + String(el.id || ''));
+  }
+  /** every string inside a value made safe (the last net before anything is sent) */
+  function scrub(v, d) {
+    d = d || 0; if (d > 8) return null;
+    if (typeof v === 'string') return maskCards(v);
+    if (Array.isArray(v)) return v.map(function (x) { return scrub(x, d + 1); });
+    if (v && typeof v === 'object') { var o = {}; Object.keys(v).forEach(function (k) { if (!secretKey(k)) o[k] = scrub(v[k], d + 1); }); return o; }
+    return v;
+  }
+  var KEY_MEMO = {};
+  function secretKey(k) { return KEY_MEMO[k] != null ? KEY_MEMO[k] : (KEY_MEMO[k] = secretLabel(String(k).replace(/([a-z])([A-Z])/g, '$1 $2'))); }
+  // the TYPE of a payment, never its number
+  var PAY_TYPES = [['Visa', /\bvisa\b|^va\b/i], ['Mastercard', /master\s*card|^mc\b|\bmc\s*card/i], ['Amex', /\bamex\b|american\s*express|^ax\b/i], ['Diners', /\bdiners\b|^dc\b/i],
+    ['JCB', /\bjcb\b/i], ['UnionPay', /union\s*pay|^cup\b/i], ['Discover', /\bdiscover\b/i], ['City Ledger', /city\s*ledger|direct\s*bill|^cl\b|\bar\s*transfer/i], ['Cash', /\bcash\b|^ca\b/i],
+    ['Bank Transfer', /\bbank\b|\btransfer\b|\bwire\b/i], ['Cheque', /\bcheque\b|\bcheck\b(?!\s*-?\s*(?:out|in))/i], ['Debit card', /\bdebit\b/i], ['Voucher', /\bvoucher\b/i], ['Deposit', /\bdeposit\b/i],
+    ['Card', /\bcard\b|credit\s*card/i]];
+  /** "VA 4111 •••• 1111", "Visa xxxx1111" → "Visa"; "Cash AED" → "Cash"; '' when it says no type */
+  function payType(v) { var s = sp(v).trim(); if (!s) return ''; for (var i = 0; i < PAY_TYPES.length; i++) if (PAY_TYPES[i][1].test(s)) return PAY_TYPES[i][0]; return ''; }
   /** a grid worth reading: it names a room, a confirmation or a guest, and one more thing */
   function usable(m) { return !!m && m.n >= 2 && (m.map.room !== undefined || m.map.conf !== undefined || m.map.name !== undefined || m.map.last !== undefined); }
 
@@ -163,6 +260,18 @@
     return '';
   }
   var NO = /^(|-|–|—|0|n|no|none|false|null|n\/a|na)$/i;
+  /** a room's housekeeping state → 'clean' | 'dirty' | 'inspected' | 'pickup' | 'ooo' | 'oos' | '' (VC / VD / OC / OD too) */
+  function normRoomStatus(s) {
+    if (!s) return '';
+    var t = sp(s).toLowerCase().replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').trim(); if (!t) return '';
+    if (/out of order|^ooo\b/.test(t)) return 'ooo';
+    if (/out of service|^oos\b/.test(t)) return 'oos';
+    if (/inspect|^ip$|^i$/.test(t)) return 'inspected';
+    if (/pick ?up|^pu$/.test(t)) return 'pickup';
+    if (/dirty|^di$|^d$|^vd$|^od$/.test(t)) return 'dirty';
+    if (/clean|^cl$|^c$|^vc$|^oc$/.test(t)) return 'clean';
+    return '';
+  }
   /** "AED 1,234.50", "(120.00)", "-35" → a number */
   function money(v) {
     var s = sp(v).trim(); if (!s) return null;
@@ -198,7 +307,11 @@
     if (c('departure')) r._dep = c('departure');
     var nt = int(c('nights')); if (nt != null && nt >= 0 && nt < 400) r.nights = nt;
     var st = c('status'); if (st) { r.statusText = clip(st, 40); r.status = normStatus(st); }
-    ['roomType', 'roomStatus', 'company', 'agent', 'source', 'group', 'rateCode', 'market', 'member', 'payment', 'eta', 'etd'].forEach(function (f) { var v = c(f); if (v && !NO.test(v)) r[f] = clip(v, 80); });
+    ['roomType', 'roomStatus', 'hkStatus', 'foStatus', 'disc', 'company', 'agent', 'source', 'group', 'rateCode', 'market', 'member', 'memberLevel', 'language', 'eta', 'etd'].forEach(function (f) { var v = c(f); if (v && !NO.test(v)) r[f] = clip(v, 80); });
+    var pm = c('payment'); if (pm && !NO.test(pm)) { var pt = payType(pm) || (/\d/.test(pm) ? '' : clip(pm, 30)); if (pt) r.payment = pt; }   // the type only, never a number
+    var rs = normRoomStatus(r.roomStatus) || normRoomStatus(r.hkStatus); if (rs) r.rs = rs;
+    var pf = c('prefs'); if (pf && !NO.test(pf)) r.prefs = clip(pf, 200);
+    var al = c('alerts'); if (al && !NO.test(al)) r.alerts = clip(al, 200);
     var nat = c('nat'); if (nat && !NO.test(nat)) r.nat = clip(nat, 40);
     var em = emailOf(c('email')); if (em) r.email = em;
     var vip = c('vip'); if (vip && !NO.test(vip)) r.vip = clip(vip, 20);
@@ -246,22 +359,31 @@
     });
     return out;
   }
-  /** label → value pairs of a reservation's details → one guest line (or null when it isn't a reservation) */
-  function pairsToRow(pairs, order) {
+  /** label → value pairs of a reservation's details → one guest line (or null when it isn't a reservation).
+   *  loose: a profile or a folio — a name, a room or a conf. and one more thing is enough */
+  function pairsToRow(pairs, order, loose) {
     var cells = [], map = {}, n = 0;
     (pairs || []).forEach(function (p) {
       var f = fieldOf(p[0]); if (!f || map[f] !== undefined || !sp(p[1]).trim()) return;
       map[f] = cells.length; cells.push(String(p[1])); n++;
     });
-    if (n < 3 || !(map.conf !== undefined || (map.room !== undefined && (map.name !== undefined || map.last !== undefined)))) return null;
+    var who = map.conf !== undefined || map.room !== undefined || map.name !== undefined || map.last !== undefined;
+    if (loose ? !(n >= 2 && who) : (n < 3 || !(map.conf !== undefined || (map.room !== undefined && (map.name !== undefined || map.last !== undefined))))) return null;
     var rows = finishRows([rowFrom(cells, map)], order);
     return rows[0] || null;
   }
   // what a screen is, from its title, headings and address (most specific first)
   var KINDS = [
+    ['billing', /\bbilling\b|\bfolios?\b|post(?:ing)?\s*charges?|\bsettlement\b|\bsettle\b|\bcashier(?:ing)?\b|advance\s*(?:bill|folio)|\binvoices?\b/],
+    ['rooms', /room\s*(?:management|status|diary|maintenance|conditions?|rack|plan)|\bhousekeeping\b|\bhk\s*board\b|\bdiscrepanc(?:y|ies)\b|out\s*of\s*order|\btask\s*sheets?\b/],
+    ['audit', /end\s*of\s*day|night\s*audit|\beod\b|end-of-day|\bclose\s*(?:the\s*)?day\b/],
     ['inhouse', /\bin[\s\-]?house\b|\bstay\s*overs?\b/],
     ['departures', /\bdepartures?\b|\bdue\s*outs?\b|\bcheck[\s\-]?outs?\b/],
     ['arrivals', /\barrivals?\b|\bdue\s*ins?\b|\bcheck[\s\-]?ins?\b/],
+    ['traces', /\btraces?\b|\balerts?\b|\bmessages?\b|\blocators?\b/],
+    ['profile', /\bprofiles?\b|guest\s*(?:details|information|info)\b|\bclient\s*details\b/],
+    ['rates', /rate\s*(?:query|info(?:rmation)?|availability|grid|calendar|codes?|plans?|overview)|look\s*to\s*book|\bavailability\b|\brates\b/],
+    ['group', /rooming\s*lists?|\bblocks?\b|\bgroups?\b|\ballotments?\b|\bbusiness\s*blocks?\b/],
     ['details', /reservation\s*(?:details?|overview|presentation|summary|info)|stay\s*details|manage\s*reservation|edit\s*reservation/],
     ['search', /look\s*up\s*reservations?|lookup\s*reservations?|reservation\s*search|search\s*reservations?|find\s*reservations?|\breservations?\b/],
   ];
@@ -279,10 +401,16 @@
   }
   /** a short id of a value (snapshots are sent only when this changes) */
   function hash(v) { var s = typeof v === 'string' ? v : JSON.stringify(v); var h = 5381, g = 7; for (var i = 0; i < s.length; i++) { h = ((h << 5) + h + s.charCodeAt(i)) | 0; g = (g * 31 + s.charCodeAt(i)) | 0; } return (h >>> 0).toString(36) + (g >>> 0).toString(36); }
-  var KIND_WORD = { arrivals: 'arrivals', departures: 'departures', inhouse: 'in-house', search: 'reservations', details: 'reservation', list: 'reservations' };
+  var KIND_WORD = { arrivals: 'arrivals', departures: 'departures', inhouse: 'in-house', search: 'reservations', details: 'reservation', list: 'reservations',
+    billing: 'folio lines', rooms: 'rooms', profile: 'profile', traces: 'traces', rates: 'rate lines', group: 'rooming list lines', audit: 'night audit lines', other: 'table lines' };
   /** "read 42 departures" / "read 1 reservation" */
   function summary(kind, n, total) {
     var w = KIND_WORD[kind] || 'lines';
+    if (kind === 'billing') return 'read the folio' + (n ? ' (' + n + ' line' + (n === 1 ? '' : 's') + ')' : '');
+    if (kind === 'profile') return 'read ' + (n === 1 ? 'a profile' : n + ' profiles');
+    if (n === 1 && /s$/.test(w) && / /.test(w)) w = w.replace(/s$/, '');
+    if (n === 1 && kind === 'rooms') w = 'room';
+    if (n === 1 && kind === 'traces') w = 'trace';
     if (n === 1 && /s$/.test(w)) w = kind === 'arrivals' ? 'arrival' : kind === 'departures' ? 'departure' : kind === 'inhouse' ? 'in-house guest' : 'reservation';
     return 'read ' + n + (total && total > n ? ' of ' + total : '') + ' ' + w;
   }
@@ -292,7 +420,117 @@
     return m ? +m[1] : 0;
   }
 
-  var H = { normH: normH, fieldOf: fieldOf, mapHeaders: mapHeaders, usable: usable, parseDate: parseDate, dateOrder: dateOrder, findDate: findDate, normStatus: normStatus, money: money,
+  /** the lines of a postings grid → [{date, code, desc, amount, ref, window, pay}] (payments: the type only, no reference) */
+  function postingsFrom(rows, map, order, win) {
+    var out = [];
+    (rows || []).forEach(function (cells) {
+      var c = function (f) { return map[f] === undefined ? '' : sp(cells[map[f]] == null ? '' : cells[map[f]]).trim(); };
+      var code = clip(c('code'), 20), desc = clip(maskCards(c('desc')), 60);
+      if (!code && !desc) return;
+      var amt = money(c('amount')), dr = money(c('debit')), cr = money(c('credit'));
+      if (amt == null && dr == null && cr == null) return;
+      if (amt == null) amt = Math.round(((dr || 0) - (cr || 0)) * 100) / 100;
+      var pt = payType(desc) || payType(code);
+      var isPay = (cr != null && cr > 0) || (amt < 0 && (!!pt || /pay|paid|settle|refund|deposit/i.test(desc))) || (!!pt && /pay|paid|settle/i.test(desc + ' ' + code));
+      var p = { code: code, amount: amt };
+      var d = parseDate(c('date'), order); if (d) p.date = d;
+      if (isPay) { p.pay = pt || 'Payment'; p.desc = pt ? pt + ' payment' : 'Payment'; }   // never the card, the auth code or the reference of a payment
+      else { p.desc = desc; var ref = clip(maskCards(c('ref')), 40); if (ref && !NO.test(ref)) p.ref = ref; }
+      var w = int(c('window')); if (w >= 1 && w <= 8) p.window = w; else if (win) p.window = win;
+      var q = int(c('qty')); if (q != null && q > 1 && q < 1000) p.qty = q;
+      out.push(p);
+    });
+    return out.slice(0, 200);
+  }
+  /** windows read on screen + postings + label pairs → the folio {windows, balance, pays, settled, zero} */
+  function folioFrom(wins, posts, pairs) {
+    var W = {}, total = null, settledWord = false, status = '';
+    (wins || []).forEach(function (w) { if (w && w.n >= 1 && w.n <= 8) { W[w.n] = W[w.n] || { n: w.n }; if (w.balance != null && W[w.n].balance == null) W[w.n].balance = w.balance; } });
+    (pairs || []).forEach(function (p) {
+      var l = sp(p[0]), v = sp(p[1]), m = l.match(/\bwindow\s*#?\s*([1-8])\b/i);
+      if (m) { var n = +m[1], b = money(v); W[n] = W[n] || { n: n }; if (b != null && W[n].balance == null) W[n].balance = b; return; }
+      var f = fieldOf(l);
+      if (f === 'balance' && total == null) total = money(v);
+      else if (/^total\b|\btotal\s*(?:due|balance|amount)\b/i.test(l) && total == null) total = money(v);
+      if (/\bsettled\b|zero\s*balance|paid\s*in\s*full|\bclosed\b/i.test(v) && /status|folio|balance|state/i.test(l)) settledWord = true;
+      if (f === 'status' && !status) status = normStatus(v);
+    });
+    var windows = Object.keys(W).map(function (k) { return W[k]; }).sort(function (a, b) { return a.n - b.n; });
+    posts = posts || [];
+    if (total == null && windows.length && windows.every(function (w) { return w.balance != null; })) total = Math.round(windows.reduce(function (a, w) { return a + w.balance; }, 0) * 100) / 100;
+    if (total == null && posts.length) total = Math.round(posts.reduce(function (a, p) { return a + (p.amount || 0); }, 0) * 100) / 100;
+    if (windows.length === 1 && windows[0].balance == null && total != null) windows[0].balance = total;
+    var pays = []; posts.forEach(function (p) { if (p.pay && pays.indexOf(p.pay) < 0) pays.push(p.pay); });
+    var F = { windows: windows, postings: posts, pays: pays };
+    if (total != null) { F.balance = total; F.zero = Math.abs(total) < 0.005; }
+    F.settled = settledWord || (!!F.zero && (posts.length > 0 || windows.length > 0));
+    if (status) F.status = status;
+    return F;
+  }
+  /** the lines of a traces / alerts grid → [{date, time, dept, text, done, room, name, conf}] */
+  function tracesFrom(rows, map, order) {
+    var out = [];
+    (rows || []).forEach(function (cells) {
+      var c = function (f) { return map[f] === undefined ? '' : sp(cells[map[f]] == null ? '' : cells[map[f]]).trim(); };
+      var text = clip(maskCards(c('text')), 200); if (!text) return;
+      var t = { text: text };
+      var d = parseDate(c('date'), order); if (d) t.date = d;
+      var tm = c('time').match(/\b(\d{1,2}:\d{2})/) || c('date').match(/\b(\d{1,2}:\d{2})/); if (tm) t.time = tm[1];
+      var dp = clip(c('dept'), 30); if (dp && !NO.test(dp)) t.dept = dp;
+      var dn = c('done'); if (dn) t.done = !NO.test(dn) && !/^(?:open|new|pending|unresolved|not resolved|active)$/i.test(dn);
+      var rm = roomOf(c('room')); if (rm) t.room = rm;
+      var nm = clip(c('name').split('\n')[0], 80); if (nm) t.name = nm;
+      var cf = confOf(c('conf')); if (cf) t.conf = cf;
+      out.push(t);
+    });
+    return out.slice(0, 150);
+  }
+  /** any other grid → a plain table {title, heads, rows} (card / password columns dropped, 300 lines, 80 characters a cell) */
+  function tableFrom(head, rows, title) {
+    var keep = [];
+    (head || []).forEach(function (h, i) { if (sp(h).trim() && !secretLabel(h)) keep.push(i); });
+    if (!keep.length) return null;
+    var out = [];
+    for (var i = 0; i < (rows || []).length && out.length < 300; i++) {
+      var line = keep.map(function (k) { return clip(maskCards(rows[i][k] == null ? '' : rows[i][k]), 80); });
+      if (line.some(Boolean)) out.push(line);
+    }
+    if (!out.length) return null;
+    return { title: clip(title || '', 60), heads: keep.map(function (k) { return clip(head[k], 40); }), rows: out };
+  }
+  /** label → value pairs kept as they are (a reservation's every detail): no card / password / ID labels, 60 at most */
+  function pairsExtra(pairs) {
+    var out = [], seen = {};
+    (pairs || []).forEach(function (p) {
+      var l = clip(p[0], 40), v = clip(maskCards(p[1]), 120);
+      if (!l || !v || secretLabel(l) || seen[l] || out.length >= 60) return;
+      seen[l] = 1; out.push([l, v]);
+    });
+    return out;
+  }
+  /** night audit state from what its screen says → 'failed' | 'running' | 'done' | '' */
+  function auditState(texts) {
+    var t = (texts || []).join(' \n ').toLowerCase(); if (!t) return '';
+    if (/\bfail(?:ed|ure)?\b|\berror\b|\baborted\b/.test(t)) return 'failed';
+    if (/in\s*progress|\brunning\b|\bprocessing\b|\bstarted\b|\bpending\b/.test(t)) return 'running';
+    if (/\bcomplete(?:d)?\b|\bfinished\b|\bsuccess(?:ful)?\b|\bdone\b/.test(t)) return 'done';
+    return '';
+  }
+  // ── learning from you: the label of what you clicked, never guest data ──
+  /** a button / link label as it may be kept: short words only — no numbers of 3+ digits, amounts, emails, commas ("Doe, John") */
+  function cleanLabel(s) {
+    var t = sp(s).replace(/\s+/g, ' ').trim();
+    if (!t || t.length > 60 || /\d{3,}|@|,|\d[.,]\d|•/.test(t)) return '';
+    t = t.replace(/[^\p{L}\p{N}&\/+.'\- ]/gu, ' ').replace(/\s+/g, ' ').replace(/^[\s.\-]+|[\s.\-]+$/g, '').trim();
+    if (!t || /\d{3,}|@|,|\d[.,]\d|•/.test(t) || !/\p{L}{2,}/u.test(t) || t.split(' ').length > 6) return '';
+    return t.slice(0, 40).trim();
+  }
+  /** a screen's title as it may be kept: the part before " - ", "|", ":", "(" or a comma, cleaned like a label */
+  function safeTitle(s) { return cleanLabel(sp(s).split(/\s[-–—|:]\s|[,(|:]/)[0]); }
+
+  var H = { maskCards: maskCards, secretLabel: secretLabel, scrub: scrub, payType: payType, normRoomStatus: normRoomStatus, postFieldOf: postFieldOf, traceFieldOf: traceFieldOf, usablePost: usablePost, usableTrace: usableTrace,
+    postingsFrom: postingsFrom, folioFrom: folioFrom, tracesFrom: tracesFrom, tableFrom: tableFrom, pairsExtra: pairsExtra, auditState: auditState, cleanLabel: cleanLabel, safeTitle: safeTitle,
+    normH: normH, fieldOf: fieldOf, mapHeaders: mapHeaders, usable: usable, parseDate: parseDate, dateOrder: dateOrder, findDate: findDate, normStatus: normStatus, money: money,
     roomOf: roomOf, roomKey: roomKey, nameKey: nameKey, confOf: confOf, emailOf: emailOf, rowFrom: rowFrom, finishRows: finishRows, rowKey: rowKey, mergeRows: mergeRows, pairsToRow: pairsToRow,
     kindOfText: kindOfText, pageKind: pageKind, hash: hash, summary: summary, totalOf: totalOf, FIELDS: FIELDS, VERSION: VERSION };
   if (typeof module !== 'undefined' && module.exports) { module.exports = H; return; }
@@ -322,11 +560,14 @@
     var t = sp(el.textContent).replace(/[ \t]+/g, ' ').replace(/\s*\n\s*/g, '\n').trim();   // textContent: reading it never makes Opera lay the page out again
     if (!t && el.querySelector) {
       var a = el.getAttribute && (el.getAttribute('title') || el.getAttribute('aria-label'));
-      var b = el.querySelector('[title],[aria-label]'), inp = el.querySelector('input:not([type=checkbox]):not([type=radio]), textarea, select');
-      t = a || (inp && inp.value) || (b && (b.getAttribute('title') || b.getAttribute('aria-label'))) || '';
+      var b = el.querySelector('[title],[aria-label]'), inp = el.querySelector('input:not([type=checkbox]):not([type=radio]):not([type=password]), textarea, select');
+      t = a || (inp && !secretInput(inp) && inp.value) || (b && (b.getAttribute('title') || b.getAttribute('aria-label'))) || '';
     }
-    return sp(t).trim();
+    t = sp(t).trim();
+    return t.length >= 12 && /\d[\d \-]{10,}\d|[Xx*•]{4}/.test(t) ? maskCards(t) : t;   // a card number never leaves as it is
   }
+  /** an input's value, unless it is a password / PIN / card field */
+  function valOf(e) { return e && !secretInput(e) && e.value != null ? String(e.value) : ''; }
   function cellsOf(row) {
     if (row.tagName === 'TR' && row.cells) return Array.prototype.slice.call(row.cells);   // a plain table row: its cells, no search
     var out = [];
@@ -354,53 +595,80 @@
     return { el: g, head: head, rows: rows };
   }
   function depthTo(a, b) { var n = 0; for (var e = a; e && n < 8; e = e.parentElement, n++) if (e.contains(b)) return n; return 99; }
-  /** every grid on screen → guest lines (header-only grids are paired with the body grid next to them: split headers) */
-  function readGrids(doc) {
+  /** every grid on screen → guest lines (header-only grids are paired with the body grid next to them: split headers).
+   *  The grids that aren't guest lists come back too: a folio's postings, traces, and anything else as a plain table. */
+  function readGrids(doc, hint) {
     var gs = [];
     doc.querySelectorAll(GRID_SEL).forEach(function (g) { if (!mine(g)) gs.push(readGrid(g)); });
-    var heads = gs.filter(function (g) { return g.head && !g.rows.length && usable(mapHeaders(g.head)); });
-    var out = [], total = 0;
+    var kindOfHead = function (h) {
+      if (!h) return '';
+      var mg = mapHeaders(h), mt = mapHeaders(h, traceFieldOf);
+      if (hint === 'traces' && usableTrace(mt)) return 'trace';
+      if (usable(mg)) return 'guest';
+      if (usablePost(mapHeaders(h, postFieldOf))) return 'post';
+      if (usableTrace(mt)) return 'trace';
+      return h.filter(Boolean).length >= 2 ? 'other' : '';
+    };
+    var heads = gs.filter(function (g) { return g.head && !g.rows.length && (g.hk = kindOfHead(g.head)); });
+    var out = [], total = 0, post = [], trace = [], other = [];
     gs.forEach(function (g) {
       if (!g.rows.length) return;
-      var head = g.head;
-      if (!head || !usable(mapHeaders(head))) {
+      var head = g.head, k = head ? kindOfHead(head) : '';
+      if (!k || (k === 'other' && heads.length)) {
         var w = Math.max.apply(null, g.rows.map(function (r) { return r.length; })), best = null, bd = 99;
         heads.forEach(function (h) {
           if (h.el.compareDocumentPosition(g.el) & 4 && Math.abs(h.head.length - w) <= 1) { var d = depthTo(h.el, g.el); if (d < bd) { bd = d; best = h; } }
         });
-        if (!best || bd > 6) return;
-        head = best.head;
+        if (best && bd <= 6) { head = best.head; k = best.hk; }
       }
-      var m = mapHeaders(head); if (!usable(m)) return;
+      if (!k) return;
       var hk = head.map(normH).join('|'), h0 = normH(head[0] || '');
-      g.rows.forEach(function (cells) {
-        if (normH(cells[0] || '') === h0 && cells.map(normH).join('|') === hk) return;   // the header repeated as a line (checked fully only when it could be)
-        var r = rowFrom(cells, m.map); if (r.room || r.conf || r.name) out.push(r);
-      });
+      var body = g.rows.filter(function (cells) { return !(normH(cells[0] || '') === h0 && cells.map(normH).join('|') === hk); });   // the header repeated as a line (checked fully only when it could be)
+      if (k === 'post') { post.push({ head: head, rows: body, map: mapHeaders(head, postFieldOf).map, el: g.el }); return; }
+      if (k === 'trace') { trace.push({ head: head, rows: body, map: mapHeaders(head, traceFieldOf).map }); return; }
+      if (k === 'other') { if (other.length < 4) other.push({ head: head, rows: body }); return; }
+      var m = mapHeaders(head);
+      body.forEach(function (cells) { var r = rowFrom(cells, m.map); if (r.room || r.conf || r.name) out.push(r); });
       // "1–25 of 42" near the grid
       var box = g.el.parentElement; for (var i = 0; i < 3 && box && box.parentElement; i++) box = box.parentElement;
       if (box) box.querySelectorAll('[class*="pag" i], [class*="count" i], [class*="total" i], [role="status"]').forEach(function (e) { if (!mine(e) && !total) total = totalOf(txt(e).slice(0, 80)); });
     });
-    return { raw: out, total: total };
+    return { raw: out, total: total, post: post, trace: trace, other: other };
   }
-  /** label → value pairs on screen (reservation details), outside the grids */
+  /** label → value pairs on screen (reservation details), outside the grids. Never a password, PIN or card field. */
   function readPairs(doc) {
     var pairs = [], seen = new Set();
-    var add = function (l, v, el) { l = sp(l).replace(/[:*]\s*$/, '').trim(); v = sp(v).trim(); if (!l || !v || l.length > 40 || v.length > 200 || seen.has(l + '|' + v)) return; if (el && (el.closest(GRID_SEL) || mine(el))) return; seen.add(l + '|' + v); pairs.push([l, v]); };
+    var add = function (l, v, el) { l = sp(l).replace(/[:*]\s*$/, '').trim(); v = sp(v).trim(); if (!l || !v || l.length > 40 || v.length > 200 || seen.has(l + '|' + v) || secretLabel(l)) return; if (el && (el.closest(GRID_SEL) || mine(el))) return; seen.add(l + '|' + v); pairs.push([l, maskCards(v)]); };
+    var field = function (n) { return n && n.querySelector ? n.querySelector('input,textarea,select') : null; };
     doc.querySelectorAll('label').forEach(function (l) {
       var id = l.getAttribute('for'), t = id ? doc.getElementById(id) : null, v = '';
-      if (t) v = ('value' in t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) ? t.value : txt(t);
-      else { var n = l.nextElementSibling; if (n) v = n.querySelector && n.querySelector('input,textarea,select') ? n.querySelector('input,textarea,select').value : txt(n); }
+      if (t) { if (secretInput(t)) return; v = /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) ? valOf(t) : txt(t); }
+      else { var n = l.nextElementSibling; if (n) { var f = field(n); if (f && secretInput(f)) return; v = f ? valOf(f) : txt(n); } }
       add(txt(l), v, l);
     });
     doc.querySelectorAll('dt').forEach(function (d) { var n = d.nextElementSibling; if (n && n.tagName === 'DD') add(txt(d), txt(n), d); });
-    doc.querySelectorAll('[label-hint]').forEach(function (e) { add(e.getAttribute('label-hint'), e.value != null && e.value !== '' ? String(e.value) : (e.getAttribute('value') || txt(e)), e); });
+    doc.querySelectorAll('[label-hint]').forEach(function (e) { if (secretInput(e)) return; add(e.getAttribute('label-hint'), e.value != null && e.value !== '' ? String(e.value) : (e.getAttribute('value') || txt(e)), e); });
     doc.querySelectorAll('[class*="label" i]:not(label)').forEach(function (e) {
       if (e.children.length > 2) return;
       var n = e.nextElementSibling; if (!n) return;
-      add(txt(e), n.querySelector && n.querySelector('input,textarea') ? n.querySelector('input,textarea').value : txt(n), e);
+      var f = field(n); if (f && secretInput(f)) return;
+      add(txt(e), f ? valOf(f) : txt(n), e);
     });
     return pairs.slice(0, 200);
+  }
+  /** the folio windows shown (tabs "Window 1 · 120.00", "Window 2"…) → [{n, balance}] and the one open */
+  function readWindows(doc) {
+    var out = [], cur = 0;
+    doc.querySelectorAll('[role="tab"], [class*="window" i], [id*="window" i], [class*="folio" i]').forEach(function (e) {
+      if (mine(e) || e.closest(GRID_SEL)) return;
+      var t = txt(e); if (!t || t.length > 120) return;
+      var all = t.match(/\bwindow\b/gi); if (!all || all.length !== 1) return;   // a box holding all the windows: its tabs are read one by one
+      var m = t.match(/\bwindow\s*#?\s*([1-8])\b/i); if (!m) return;
+      var rest = t.slice(m.index + m[0].length), mm = rest.match(/\(?-?\s*(?:[A-Z]{3}\s*)?-?[\d,]+\.\d{2}\)?(?:\s*CR\b)?/);
+      out.push({ n: +m[1], balance: mm ? money(mm[0]) : null });
+      if (e.getAttribute('aria-selected') === 'true' || /\b(?:selected|active|current)\b/i.test(e.getAttribute('class') || '')) cur = +m[1];
+    });
+    return { wins: out, cur: cur };
   }
   function headings(doc) {
     var out = [];
@@ -423,24 +691,53 @@
   // browser is idle, and a screen that takes long to read is read less often.
   var lastUse = 0, cost = 0;
   ['keydown', 'pointerdown', 'input', 'compositionupdate'].forEach(function (t) { window.addEventListener(t, function () { lastUse = Date.now(); }, { capture: true, passive: true }); });
+  var SPECIAL = { billing: 1, rooms: 1, audit: 1, traces: 1, profile: 1, rates: 1, group: 1 };
+  var REPLACE = { details: 1, billing: 1, profile: 1, traces: 1 };   // one thing on screen: the newest read replaces the last one
   function scan() {
     if (stopped) return;
     var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
     try {
-      var g = readGrids(document);
       var order = (navigator.language || '').toLowerCase() === 'en-us' ? 'mdy' : '';
-      var rows = finishRows(g.raw, order);
       var heads = headings(document);
-      var det = rows.length ? null : pairsToRow(readPairs(document), order);
+      var parts = [document.title].concat(heads, [location.pathname + ' ' + location.hash]);
+      var hint = pageKind(parts, []);   // what the words on screen say it is
+      var g = readGrids(document, hint);
+      var rows = finishRows(g.raw, order);
+      // label → value pairs only where they matter (a long list with nothing else is read without them: fast)
+      var pairs = !rows.length || hint === 'billing' || hint === 'profile' || hint === 'details' || hint === 'traces' || g.post.length ? readPairs(document) : [];
+      var det = null;
+      if (!rows.length && pairs.length) det = pairsToRow(pairs, order) || (hint === 'billing' || hint === 'profile' || hint === 'traces' || g.post.length ? pairsToRow(pairs, order, true) : null);
       if (det) rows = [det];
-      var kind = pageKind([document.title].concat(heads, [location.pathname + ' ' + location.hash]), rows);
-      if (det && kind !== 'details' && !g.raw.length) kind = 'details';
+      var kind = pageKind(parts, rows);
+      if (g.post.length) kind = 'billing';   // a folio's postings: Billing / Check Out / Cashiering, whatever the title says
+      else if (g.trace.length && (!g.raw.length || hint === 'traces')) kind = 'traces';
+      else if (det && kind !== 'details' && !g.raw.length && !SPECIAL[kind]) kind = 'details';
+      if (!kind && g.other.length) kind = 'other';
+      var folio = null, traces = [], tables = [], audit = null;
+      if (kind === 'billing') {
+        var w = readWindows(document), posts = [];
+        g.post.forEach(function (p) { posts = posts.concat(postingsFrom(p.rows, p.map, order, w.cur)); });
+        folio = folioFrom(w.wins, posts.slice(0, 200), pairs);
+        var who = det || {}, hm = !who.room && heads.join(' ').match(/\broom\s*(?:no\.?|#)?\s*:?\s*([A-Z]?\d{1,5}[A-Z]?)\b/i);
+        if (hm) who = { room: roomOf(hm[1]), name: who.name, conf: who.conf, status: who.status };
+        ['room', 'name', 'conf'].forEach(function (f) { if (who[f]) folio[f] = who[f]; });
+        if (who.status && !folio.status) folio.status = who.status;
+        rows = [];
+        if (who.room || who.conf || who.name) { var fr = { balance: folio.balance }; ['room', 'name', 'conf', 'status', 'statusText', 'arrival', 'departure'].forEach(function (f) { if (who[f]) fr[f] = who[f]; }); if (fr.balance == null) delete fr.balance; rows = [fr]; }
+      }
+      g.trace.forEach(function (t) { traces = traces.concat(tracesFrom(t.rows, t.map, order)); });
+      if (det) traces.forEach(function (t) { ['room', 'name', 'conf'].forEach(function (f) { if (!t[f] && det[f]) t[f] = det[f]; }); });
+      if (det && (kind === 'details' || kind === 'profile' || kind === 'traces')) det.extra = pairsExtra(pairs);
+      if (kind === 'rooms') rows.forEach(function (r) { if (!r.rs && r.statusText) { var x = normRoomStatus(r.statusText); if (x) { r.rs = x; r.roomStatus = r.statusText; delete r.status; } } });
+      g.other.forEach(function (o) { var tb = tableFrom(o.head, o.rows, heads[0] || document.title); if (tb) tables.push(tb); });
+      if (kind === 'audit') { var tx = heads.slice(); tables.forEach(function (tb) { tb.rows.forEach(function (r) { tx.push(r.join(' ')); }); }); pairs.forEach(function (p) { tx.push(p[0] + ' ' + p[1]); }); audit = { state: auditState(tx) }; }
       var date = screenDate(document, order);
       var key = kind + '|' + date + '|' + (heads[0] || document.title || '').replace(/\d+/g, '#').slice(0, 60);   // "Arrivals (42)" while it loads is the same screen
-      if (key !== view.key) view = { key: key, kind: kind, date: date, rows: [], title: (heads[0] || document.title || '').slice(0, 90), total: 0 };
-      view.rows = kind === 'details' ? rows : mergeRows(view.rows, rows);
+      if (key !== view.key) { view = { key: key, kind: kind, date: date, rows: [], title: (heads[0] || document.title || '').slice(0, 90), total: 0 }; noteScreen(kind, view.title); }
+      view.rows = REPLACE[kind] ? rows : mergeRows(view.rows, rows);
       if (view.rows.length > 1500) view.rows = view.rows.slice(-1500);
       if (g.total) view.total = g.total;
+      view.folio = folio; view.traces = traces; view.tables = tables; view.audit = audit;
       send();
       render();
     } catch (e) { lastErr = String(e && e.message || e).slice(0, 120); }
@@ -460,6 +757,35 @@
     }, ms);
   }
 
+  // ── learning from you ("watch me"): the screens you open and the label of what you click ──
+  // One passive listener that only notes a label: nothing typed, no keys, no input values, never the words of a
+  // list's line (that is guest data — it is noted as "a line of the list"). Cleaned before it is sent.
+  var LEARN = LS.get('ho_op_learn', true) !== false, steps = [], flushT = 0, lastScreen = '', hintNow = null;
+  var CLICK_SEL = 'button, a, [role="button"], [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="tab"], [role="link"], [role="option"], [role="treeitem"], summary';
+  function onClickLearn(e) {
+    if (!LEARN || stopped) return;
+    var t = e.target; if (t && t.nodeType !== 1) t = t.parentElement;
+    var b = t && t.closest ? t.closest(CLICK_SEL) : null; if (!b || mine(b)) return;
+    if (b.closest(GRID_SEL)) steps.push({ t: Date.now(), k: 'r' });
+    else { var l = b.getAttribute('aria-label') || b.getAttribute('title') || b.textContent || ''; if (l.length > 120) return; steps.push({ t: Date.now(), k: 'c', l: l }); }
+    if (steps.length > 200) steps.splice(0, steps.length - 200);
+    if (!flushT) flushT = setTimeout(flushLearn, 1500);
+  }
+  function noteScreen(kind, title) {
+    if (!LEARN) return;
+    var s = kind || 'other', ti = safeTitle(title), k = s + '|' + ti;
+    if (k === lastScreen) return; lastScreen = k;
+    steps.push({ t: Date.now(), k: 's', s: s, l: ti });
+    if (!flushT) flushT = setTimeout(flushLearn, 1500);
+  }
+  function flushLearn() {
+    flushT = 0; if (!steps.length || stopped) return;
+    var out = [];
+    steps.forEach(function (x) { if (x.k === 'c') { var l = cleanLabel(x.l); if (l) out.push({ t: x.t, k: 'c', l: l }); } else out.push(x); });
+    if (!out.length || post({ source: 'ho-op', v: VERSION, learn: out, frame: FRAME })) steps = [];
+  }
+  window.addEventListener('click', onClickLearn, { capture: true, passive: true });
+
   // ── talking to HotelOps ───────────────────────────────────
   function post(o) {
     try {
@@ -469,12 +795,17 @@
     return false;
   }
   function send(force) {
-    if (!view.rows.length || !view.kind) return;
+    var more = view.folio || (view.traces && view.traces.length) || (view.tables && view.tables.length);
+    if ((!view.rows.length && !more) || !view.kind) return;
     var snap = { id: view.key, kind: view.kind, date: view.date, title: view.title, total: view.total || 0, rows: view.rows, frame: FRAME, url: location.hostname + location.pathname };
-    var h = hash([snap.kind, snap.date, snap.rows]);
+    if (view.folio) snap.folio = view.folio;
+    if (view.traces && view.traces.length) snap.traces = view.traces;
+    if (view.tables && view.tables.length) snap.tables = view.tables;
+    if (view.audit) snap.audit = view.audit;
+    var h = more ? hash([snap.kind, snap.date, snap.rows, snap.folio || 0, snap.traces || 0, snap.tables || 0, snap.audit || 0]) : hash([snap.kind, snap.date, snap.rows]);
     if (!force && h === sentHash) return;
     if (!force && Date.now() - sentAt < 2500) { laterScan(2600); return; }   // a list still loading: at most one snapshot every few seconds
-    if (post({ source: 'ho-op', v: VERSION, h: h, snap: snap, at: Date.now() })) { sentHash = h; sentAt = Date.now(); sentN = snap.rows.length; }
+    if (post({ source: 'ho-op', v: VERSION, h: h, snap: scrub(snap), at: Date.now() })) { sentHash = h; sentAt = Date.now(); sentN = snap.rows.length || (snap.folio ? snap.folio.postings.length : 0) || (snap.traces || snap.tables || []).length; }
     if (!TOP) try { window.top.postMessage({ __hoOpFrame: 1, id: FRAME, kind: view.kind, n: view.rows.length, total: view.total || 0 }, '*'); } catch (_) {}
   }
   function onMsg(d) {
@@ -482,6 +813,8 @@
     if (d.source !== 'ho-op-ack') return;
     linked = Date.now();
     if (d.h && d.text) lastAck = { text: String(d.text).slice(0, 140), at: Date.now() };
+    if (typeof d.learn === 'boolean' && d.learn !== LEARN) { LEARN = d.learn; LS.set('ho_op_learn', LEARN); if (!LEARN) steps = []; }   // "Learn from me in Opera" (HotelOps → Settings)
+    if (typeof d.hint === 'string') hintNow = d.hint ? { text: d.hint.slice(0, 60), at: Date.now() } : null;
     if (d.again && (!d.frame || d.frame === FRAME)) { sentHash = ''; send(true); }   // HotelOps (re)opened and hasn't got what is on screen
     render();
   }
@@ -497,6 +830,7 @@
     sentHash = ''; setTimeout(function () { tick(); send(true); }, 1500);
   }
   function tick() {
+    if (steps.length) flushLearn();
     post({ source: 'ho-op', ping: 1, t: Date.now(), v: VERSION, frame: FRAME, h: view.rows.length ? sentHash : '' });
     Object.keys(frames).forEach(function (k) { if (Date.now() - frames[k].at > 120000) delete frames[k]; });
     render();
@@ -535,6 +869,7 @@
     var what = n ? summary(kind, n, total) : 'watching Opera';
     line.textContent = '📡 HotelOps · ' + what;
     sub.textContent = !isLinked ? (EXT ? 'linking to HotelOps… (keep HotelOps open)' : 'not linked — press Connect (HotelOps opens)')
+      : hintNow && Date.now() - hintNow.at < 120000 ? '🧠 ' + hintNow.text
       : lastAck && Date.now() - lastAck.at < 600000 ? 'HotelOps: ' + lastAck.text : 'linked · only reads, never changes Opera';
     btn.style.display = !EXT && !isLinked ? 'inline-block' : 'none';
     dot.title = line.textContent + ' — ' + sub.textContent;
@@ -546,6 +881,8 @@
     try { if (obs) obs.disconnect(); } catch (_) {}
     clearInterval(iv); clearTimeout(deb);
     window.removeEventListener('message', onWinMsg);
+    window.removeEventListener('click', onClickLearn, { capture: true });
+    clearTimeout(flushT);
     try { if (pillHost) pillHost.remove(); } catch (_) {}
     window.__hoOp = null;
     if (!silent) try { console.log('HotelOps Opera reader stopped.'); } catch (_) {}
@@ -562,7 +899,8 @@
   window.addEventListener('hashchange', function () { laterScan(300); });
   iv = setInterval(tick, 15000);
   window.__hoOp = { stop: stop, scan: scan, connect: connect, min: setMin, v: VERSION,
-    state: function () { return { kind: view.kind, date: view.date, title: view.title, total: view.total, rows: view.rows.slice(), sent: sentN, sentAt: sentAt, linked: Date.now() - linked < 45000, ack: lastAck, err: lastErr, ext: !!EXT, frame: FRAME }; } };
+    state: function () { return { kind: view.kind, date: view.date, title: view.title, total: view.total, rows: view.rows.slice(), folio: view.folio || null, traces: (view.traces || []).slice(), tables: (view.tables || []).slice(), audit: view.audit || null,
+      sent: sentN, sentAt: sentAt, linked: Date.now() - linked < 45000, ack: lastAck, err: lastErr, ext: !!EXT, frame: FRAME, learn: LEARN, steps: steps.length, hint: hintNow, cost: Math.round(cost * 10) / 10 }; } };
   if (TOP && !EXT) try { console.log('%c 📡 HotelOps Opera reader is running ✓ %c Press "Connect" on the pill (bottom right). It only reads; it never changes anything in Opera.', 'background:#111827;color:#fbbf24;font:700 13px system-ui;padding:4px 8px;border-radius:6px', 'color:#9aa3b2;font:12px system-ui'); } catch (_) {}
   setTimeout(scan, 600);
   setTimeout(tick, 1200);

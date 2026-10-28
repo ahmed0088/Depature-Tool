@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 435, items: [
+    "📡 The Opera reader now reads much more: bills (folio windows, balances, charges and payments — payment type only), room status (clean / dirty / OOO), guest profiles (VIP, membership), traces and alerts, rates, group rooming lists, night audit, and any other table it sees.",
+    "💳 Departures shows each room's Opera balance live: a room due out with money still open gets “💳 balance open” (and one quiet phone reminder near check-out), a zero folio shows Settled, and the room's Opera status shows as a small chip. The room card gets an “📡 Opera” part with status and traces. VIP and membership fill only empty spots — nothing anyone typed is changed.",
+    "🧠 It learns from you in Opera: which screens and buttons you use and in what order (e.g. Billing → Post Charge → Settle → Check Out), at what times and how long. The pill quietly says “Usually next: …”, the Brain can tell you your routine, and Departures reminds you to open the bill first when that's your habit. See it, clear it or switch it off: Settings → 📡 Opera reader.",
+    "🔒 Card numbers are masked to the last 4 digits before anything leaves Opera; card, CVV, expiry, auth code, PIN, passport and ID columns are dropped; passwords and anything you type are never read. What it learns holds no guest names, rooms or amounts.",
+  ] },
   { v: 434, items: [
     "🌴 Day off now switches on by itself: on a day off, PH, vacation or leave on the posted roster (your name in Roster → My shifts), nothing is sent to your phone that day and the Brain stays quiet — no button needed. Need alerts after all? “I'm back” turns them on for the rest of that day. Don't want it automatic? Settings → 📲 Phone notifications → switch off “Day off by itself on my roster days off”. The manual Today / 2 days / More… buttons still work too.",
   ] },
