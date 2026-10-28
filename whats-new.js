@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 430, items: [
+    "🌍 Purpose of Stay nationality: Vicas first; the Neorcha scraper now only fills a nationality that is empty — if there's already one, it's left as it is.",
+  ] },
   { v: 429, items: [
     "🔄 Updates now install themselves, quietly: no bar, no question. The app switches to the new version only when you're not using it — it's in the background, or untouched for 3 minutes with nothing being typed and no window open — and comes back on the same page and spot.",
     "🌴 Day off: Settings → 📲 Phone notifications → 🌴 Day off → Today / 2 days / More… — nothing is sent to your phone (from any of your devices) until 06:00 the morning after. Home shows a small line while it's on, with “I'm back”. The Away guard stays silent too, unless you switch it to still come through.",

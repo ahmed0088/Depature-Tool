@@ -1157,14 +1157,15 @@ function processImportEmails() {
     return;
   }
 
-  // Nationality order: Vicas first; if Vicas doesn't have the guest, the scraper
-  // (it replaces a name guess or a Guest Memory value, never Vicas or a hand edit).
+  // Nationality order: Vicas first; if Vicas doesn't have the guest, the scraper —
+  // but only into an empty nationality. A value that is already there stays.
   //
   // Its nationality is whatever was typed into a booking form, and picking
   // the hotel's own country from a dropdown is the common mistake — room 421
   // came through as UAE for a guest travelling on an Iraqi passport. Vicas is
   // the immigration desk reading the passport itself, so it always wins, and
-  // a nationality typed in by hand is left alone too. Emails and names still always apply:
+  // a value already filled from anywhere is left alone. Only an empty
+  // nationality gets one from here. Emails and names still always apply:
   // those are what the scraper is actually for.
   const _isUaeGuess = s => /^u\.?a\.?e\.?$/i.test(String(s).trim()) || /united arab emirates/i.test(s);
 
@@ -1194,8 +1195,8 @@ function processImportEmails() {
         // Vicas/Inhouse already gave us this guest's real nationality — don't
         // let the scraper's guess clobber it.
         natsSkippedXML++;
-      } else if (g._natUserEdited) {
-        // Typed in by hand on this screen: a person's choice stays.
+      } else if (String(g.nat || '').trim()) {
+        // Already filled (from anywhere): left as it is. The scraper only fills an empty one.
         natsSkippedExisting++;
       } else {
         // A bare "UAE" from Neorcha is the single least trustworthy value in
