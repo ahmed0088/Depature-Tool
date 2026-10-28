@@ -271,7 +271,9 @@ const quiet = fn => (W.hoUndo && typeof W.hoUndo.quietly === 'function') ? W.hoU
 let CFG = Object.assign({ auto: true, review: false }, LS.get(LS_CFG, {}));
 let LOG = (() => { const v = LS.get(LS_LOG, null); return v && v.date === today() && Array.isArray(v.items) ? v.items : []; })();
 let LAST = (() => { const v = LS.get(LS_LAST, null); return v && v.date === today() && v.kinds && typeof v.kinds === 'object' ? v.kinds : {}; })();
-let LINK = null, WAIT = null, PENDING = {};
+const LS_PEND = 'ho_op_pending_v1';
+let LINK = null, WAIT = null, PENDING = LS.get(LS_PEND, {}) || {};
+const savePending = () => LS.set(LS_PEND, PENDING);
 const WAITING = 'waiting for HotelOps to load';
 const SEEN = new Map();   // hash → what we answered (a snapshot sent twice is done once)
 
@@ -296,7 +298,14 @@ function saveLast() { LS.set(LS_LAST, { date: today(), kinds: LAST }); }
 function addLog(e) { LOG.unshift(Object.assign({ at: Date.now() }, e)); saveLog(); paint(); }
 // another HotelOps tab on this PC may be the one applying: its log is this tab's log too
 function readLog() { const v = LS.get(LS_LOG, null); if (v && v.date === today() && Array.isArray(v.items)) LOG = v.items; return LOG; }
-W.addEventListener('storage', e => { if (e.key === LS_LOG) { readLog(); safe(paint); } });
+// the switches and the changes waiting for an OK are shared too: Apply works in whichever tab you're in
+W.addEventListener('storage', e => {
+  if (e.key === LS_LOG) readLog();
+  else if (e.key === LS_CFG) CFG = Object.assign({ auto: true, review: false }, LS.get(LS_CFG, {}));
+  else if (e.key === LS_PEND) PENDING = LS.get(LS_PEND, {}) || {};
+  else return;
+  safe(paint);
+});
 
 function boardNow() {
   const rooms = typeof depRooms !== 'undefined' ? depRooms : [];
@@ -442,7 +451,7 @@ function handle(snap, h, reply) {
   const P = planNow(snap);
   if (!P.n) return P.notes.length ? 'nothing to change · ' + P.notes[0] : 'up to date';
   if (CFG.review) {
-    PENDING[snap.kind] = { snap, at: Date.now(), text: summaryText(P), n: P.n };
+    PENDING[snap.kind] = { snap, at: Date.now(), text: summaryText(P), n: P.n }; savePending();
     toast(`📡 Opera: ${summaryText(P)} — waiting for you (Settings → Opera reader)`, 'info');
     paint();
     return 'waiting for your OK: ' + summaryText(P);
@@ -460,13 +469,14 @@ function retryWait() {
 }
 function applyPending(kind) {
   if (!canWrite()) { toast('Your role can\'t change lists', 'err'); return; }
+  PENDING = LS.get(LS_PEND, PENDING) || PENDING;
   const ks = kind ? [kind] : Object.keys(PENDING);
   let any = '';
-  ks.forEach(k => { const p = PENDING[k]; delete PENDING[k]; if (p) { const r = safe(() => apply(p.snap, 'reviewed'), null); if (r && r.text) any = r.text; } });
+  ks.forEach(k => { const p = PENDING[k]; delete PENDING[k]; savePending(); if (p) { const r = safe(() => apply(p.snap, 'reviewed'), null); if (r && r.text) any = r.text; } });
   if (!any) toast('Nothing left to change — the lists already match Opera', 'info');
   paint();
 }
-function discardPending() { PENDING = {}; paint(); }
+function discardPending() { PENDING = {}; savePending(); paint(); }
 
 W.addEventListener('message', e => {
   const d = e.data;

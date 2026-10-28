@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 433, items: [
+    "⚡ The Opera reader never slows Opera down: it waits while you type or click and reads only in the pause, only when the browser is idle, never makes Opera re-draw the page, and reads a busy screen less often. A full read of a 600-room list now takes about 30 ms.",
+    "🔧 Opera reader with two HotelOps tabs open: “Review before applying”, its switches and the changes waiting for your OK now work in whichever tab you're in.",
+  ] },
   { v: 432, items: [
     "📡 New: the Opera reader — like the WhatsApp one, for Opera Cloud. While Opera is open on the desk PC it reads Arrivals, Departures, In House and reservation details as you look at them, and HotelOps updates itself: rooms checked out are marked out, extensions marked, missing departures and new arrivals added, In-House kept fresh. It tells you what it did (with Undo) and the Brain can answer from it. It only reads — it never clicks or types in Opera.",
     "👉 Turn it on once: Settings → 📡 Opera reader → “Get the helper again (once)”, unzip over the same folder and press ↻ in chrome://extensions, then open Opera Cloud. From then on it updates itself. Don't want it to change things by itself? Switch on “Review before applying”.",

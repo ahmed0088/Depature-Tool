@@ -77,7 +77,14 @@
   ];
   var FIELD_OF = {}; FIELDS.forEach(function (f) { f[1].forEach(function (w) { FIELD_OF[w] = f[0]; }); });
   /** one header / label → the field it names, or '' */
+  var FIELD_MEMO = {}, FIELD_MEMO_N = 0;   // the same header text is asked about on every read: answer it once
   function fieldOf(h) {
+    h = String(h == null ? '' : h); if (h.length > 120) return '';
+    if (Object.prototype.hasOwnProperty.call(FIELD_MEMO, h)) return FIELD_MEMO[h];
+    if (++FIELD_MEMO_N > 5000) { FIELD_MEMO = {}; FIELD_MEMO_N = 1; }
+    return (FIELD_MEMO[h] = fieldOf1(h));
+  }
+  function fieldOf1(h) {
     var n = normH(h); if (!n || n.length > 48) return '';
     if (FIELD_OF[n]) return FIELD_OF[n];
     var best = '', len = 0, w = ' ' + n + ' ';
@@ -312,7 +319,7 @@
   var mine = function (el) { return pillHost && (el === pillHost || pillHost.contains(el)); };
   function txt(el) {
     if (!el) return '';
-    var t = sp(el.innerText != null ? el.innerText : el.textContent).replace(/[ \t]+/g, ' ').replace(/\s*\n\s*/g, '\n').trim();
+    var t = sp(el.textContent).replace(/[ \t]+/g, ' ').replace(/\s*\n\s*/g, '\n').trim();   // textContent: reading it never makes Opera lay the page out again
     if (!t && el.querySelector) {
       var a = el.getAttribute && (el.getAttribute('title') || el.getAttribute('aria-label'));
       var b = el.querySelector('[title],[aria-label]'), inp = el.querySelector('input:not([type=checkbox]):not([type=radio]), textarea, select');
@@ -321,6 +328,7 @@
     return sp(t).trim();
   }
   function cellsOf(row) {
+    if (row.tagName === 'TR' && row.cells) return Array.prototype.slice.call(row.cells);   // a plain table row: its cells, no search
     var out = [];
     row.querySelectorAll(CELL_SEL).forEach(function (c) { if (c.closest(ROW_SEL) === row) out.push(c); });
     return out;
@@ -364,8 +372,9 @@
         head = best.head;
       }
       var m = mapHeaders(head); if (!usable(m)) return;
+      var hk = head.map(normH).join('|'), h0 = normH(head[0] || '');
       g.rows.forEach(function (cells) {
-        if (cells.map(normH).join('|') === head.map(normH).join('|')) return;
+        if (normH(cells[0] || '') === h0 && cells.map(normH).join('|') === hk) return;   // the header repeated as a line (checked fully only when it could be)
         var r = rowFrom(cells, m.map); if (r.room || r.conf || r.name) out.push(r);
       });
       // "1–25 of 42" near the grid
@@ -410,8 +419,13 @@
     return '';
   }
 
+  // Never in Opera's way: no reading while you type or click (it waits until you pause), only when the
+  // browser is idle, and a screen that takes long to read is read less often.
+  var lastUse = 0, cost = 0;
+  ['keydown', 'pointerdown', 'input', 'compositionupdate'].forEach(function (t) { window.addEventListener(t, function () { lastUse = Date.now(); }, { capture: true, passive: true }); });
   function scan() {
     if (stopped) return;
+    var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
     try {
       var g = readGrids(document);
       var order = (navigator.language || '').toLowerCase() === 'en-us' ? 'mdy' : '';
@@ -430,12 +444,20 @@
       send();
       render();
     } catch (e) { lastErr = String(e && e.message || e).slice(0, 120); }
+    var took = ((window.performance && performance.now) ? performance.now() : Date.now()) - t0;
+    cost = cost ? cost * 0.7 + took * 0.3 : took;
   }
   var lastScan = 0;
+  var idle = window.requestIdleCallback ? function (f) { window.requestIdleCallback(f, { timeout: 3000 }); } : function (f) { setTimeout(f, 0); };
   function laterScan(ms) {
-    if (deb) return;
-    ms = Math.max(ms, lastScan + (document.hidden ? 5000 : 1500) - Date.now());   // a screen that keeps changing (a clock) is read at most every 1.5 s
-    deb = setTimeout(function () { deb = 0; lastScan = Date.now(); scan(); }, ms);
+    if (deb || stopped) return;
+    // at most every 2 s (10 s in the background); a heavy screen waits 40× what one read takes (a 50 ms read → every 2 s, 100 ms → 4 s)
+    var gap = Math.max(document.hidden ? 10000 : 2000, cost * 40);
+    ms = Math.max(ms, lastScan + gap - Date.now());
+    deb = setTimeout(function run() {
+      if (Date.now() - lastUse < 1200) { deb = setTimeout(run, 1200 - (Date.now() - lastUse) + 50); return; }   // you're typing or clicking: wait for the pause
+      idle(function () { deb = 0; lastScan = Date.now(); scan(); });
+    }, ms);
   }
 
   // ── talking to HotelOps ───────────────────────────────────
@@ -532,10 +554,11 @@
   // ── start ─────────────────────────────────────────────────
   build();
   obs = new MutationObserver(function (recs) {
+    if (deb) return;   // a read is already planned: nothing to do
     for (var i = 0; i < recs.length; i++) { var t = recs[i].target; if (t && !mine(t.nodeType === 1 ? t : t.parentElement)) { laterScan(800); return; } }
   });
   obs.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
-  window.addEventListener('scroll', function () { laterScan(500); }, { capture: true, passive: true });
+  window.addEventListener('scroll', function () { if (!deb) laterScan(700); }, { capture: true, passive: true });
   window.addEventListener('hashchange', function () { laterScan(300); });
   iv = setInterval(tick, 15000);
   window.__hoOp = { stop: stop, scan: scan, connect: connect, min: setMin, v: VERSION,
