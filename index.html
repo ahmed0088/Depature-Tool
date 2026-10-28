@@ -5562,7 +5562,7 @@ async function appInit() {
   // ── PWA: register service worker for offline app-shell ──
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      const hadCtl = !!navigator.serviceWorker.controller, t0 = Date.now();
+      const hadCtl = !!navigator.serviceWorker.controller;
       navigator.serviceWorker.register('sw.js').then(reg => {
         // look for a new version now and then: when the app comes back to the front (at most every 10 minutes), and every 30 minutes
         let lastCheck = Date.now();
@@ -5570,20 +5570,30 @@ async function appInit() {
         document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
         setInterval(check, 30 * 60000);
       }).catch(err => console.warn('[SW] registration failed:', err));
-      // a new version took over: never reload by itself (the phone already restarted the app once when you came back —
-      // a second reload on top felt like the app refreshing non-stop). A bar offers it; the next start loads it anyway.
-      let reloading = false;
+      // a new version took over: it is put in quietly, never in your face. The app restarts into it only when
+      // you are not using it — it's in the background, or untouched for 3 minutes with nothing being typed and
+      // no window open — and comes back on the same page and scroll spot (Resume, below). No bar, no question.
+      let reloading = false, pending = false, lastUse = Date.now();
+      ['pointerdown', 'keydown', 'touchstart', 'wheel', 'input'].forEach(t => addEventListener(t, () => { lastUse = Date.now(); }, { capture: true, passive: true }));
+      const busy = () => {
+        const a = document.activeElement;
+        if (a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return true;   // typing
+        return !![...document.querySelectorAll('.modal-overlay.open,.modal.open,.modal-overlay.show,.modal.show,[role="dialog"]')]
+          .find(m => m.offsetParent !== null || getComputedStyle(m).position === 'fixed' && getComputedStyle(m).display !== 'none' && m.getClientRects().length);
+      };
+      const apply = () => { if (reloading) return; reloading = true; location.reload(); };
+      const tryApply = () => {
+        if (!pending || reloading) return;
+        if (document.visibilityState === 'hidden') return apply();
+        if (Date.now() - lastUse > 3 * 60000 && !busy()) return apply();
+      };
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') tryApply(); });
+      setInterval(tryApply, 30000);
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (!hadCtl || reloading) return;
-        // a banner that stays until tapped (a toast fades and can't be tapped)
-        if (document.getElementById('hoUpdBar')) return;
-        const bar = document.createElement('button');
-        bar.id = 'hoUpdBar'; bar.type = 'button';
-        bar.textContent = '✨ HotelOps was updated · tap to load the new version';
-        bar.style.cssText = 'position:fixed;left:50%;bottom:calc(88px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:10000;max-width:calc(100% - 32px);padding:11px 18px;border:0;border-radius:12px;background:var(--gold,#e8b84a);color:#0a0c10;font:600 .8rem var(--sans,system-ui);box-shadow:0 6px 24px rgba(0,0,0,.35);cursor:pointer';
-        bar.onclick = () => { reloading = true; location.reload(); };
-        document.body.appendChild(bar);
+        pending = true; tryApply();
       });
+      window.hoUpdatePending = () => pending;
     });
   }
 </script>

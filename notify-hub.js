@@ -57,7 +57,7 @@ const CATS = {
   notes:      { i: '📝', l: 'Room notes', d: 'A colleague adds a guest request, VIP, follow-up, maintenance or call note', shift: true, def: false, tag: 'memo' },
   system:     { i: '⚙️', l: 'HotelOps', d: '', shift: false, def: true, hidden: true, tag: 'gear' },
 };
-const DEF = { cats: {}, quiet: false, qFrom: '23:00', qTo: '07:00', offShift: false };
+const DEF = { cats: {}, quiet: false, qFrom: '23:00', qTo: '07:00', offShift: false, offUntil: 0, offGuard: false };
 Object.keys(CATS).forEach(k => { DEF.cats[k] = CATS[k].def; });
 
 // ══ Pure rules (tested) ═════════════════════════════════════
@@ -78,6 +78,8 @@ function catOn(cfg, cat) {
 function gate(o, ctx) {
   if (o.force) return { ok: true };
   const cfg = ctx.cfg || DEF, c = CATS[o.cat] || CATS.system;
+  // day off: nothing at all (the guard only if you chose to keep it)
+  if (cfg.offUntil && +ctx.now < cfg.offUntil && !(o.cat === 'guard' && cfg.offGuard)) return { ok: false, why: 'day off' };
   if (!catOn(cfg, o.cat)) return { ok: false, why: 'switched off' };
   // an event from before the app opened is old news (a state that is still true is not)
   if (!o.state && o.at && o.at < (ctx.openedAt || 0) - MIN) return { ok: false, why: 'old' };
@@ -85,6 +87,8 @@ function gate(o, ctx) {
   if (!o.ignoreQuiet && (o.prio || 3) < 5 && inQuiet(cfg, ctx.now)) return { ok: false, why: 'quiet hours' };
   return { ok: true };
 }
+/** a day off of n days starting today ends the morning after, at 06:00 */
+function dayOffEnd(now, days) { const d = new Date(now); d.setHours(6, 0, 0, 0); d.setDate(d.getDate() + Math.max(1, days || 1)); return +d; }
 /** the transaction step for a claim: write mine, or keep someone's that is still fresh (undefined = abort) */
 function claimNext(cur, dev, now, keep) {
   if (cur && typeof cur === 'object' && cur.at && now - cur.at < (keep || KEEP)) return undefined;
@@ -126,7 +130,7 @@ function rosterDiff(prev, cur) {
 /** a short, stable id for a list of things (a roster change set) */
 function hash(s) { let h = 5381; s = String(s); for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
 
-W.hoNotifyPure = { inQuiet, catOn, gate, claimNext, storm, shouldBatch, mergeBatch, rosterDiff, hash, fbKey, CATS, DEF };
+W.hoNotifyPure = { dayOffEnd, inQuiet, catOn, gate, claimNext, storm, shouldBatch, mergeBatch, rosterDiff, hash, fbKey, CATS, DEF };
 if (!D || typeof D.createElement !== 'function') return;
 
 // ══ App helpers ═════════════════════════════════════════════
@@ -319,6 +323,22 @@ function saveCfg() {
   renderSection();
 }
 function setCfg(k, v) { if (!(k in DEF) || k === 'cats') return; CFG = Object.assign({}, CFG, { [k]: v }); saveCfg(); }
+function dayOff(days) {
+  CFG = Object.assign({}, CFG, { offUntil: days ? dayOffEnd(new Date(), days) : 0 }); saveCfg();
+  if (days) BUF.splice(0).forEach(b => safe(() => b.res(false)));   // what was waiting to go is dropped too
+  toast(days ? `🌴 Day off — no phone alerts until ${offLabel()}` : '👋 Welcome back — phone alerts are on again', 'ok');
+  safe(paintOff);
+}
+function offOn() { return !!(CFG.offUntil && Date.now() < CFG.offUntil); }
+function offLabel() { const d = new Date(CFG.offUntil); return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) + ' ' + hhmm(+d); }
+// while it's on: a slim line at the top of Home, so you know why your phone is quiet
+function paintOff() {
+  const home = D.getElementById('panel-home'); if (!home) return;
+  let el = D.getElementById('nhDayOff');
+  if (!offOn()) { if (el) el.remove(); return; }
+  if (!el) { el = D.createElement('div'); el.id = 'nhDayOff'; el.className = 'nh-off'; home.insertBefore(el, home.firstChild); }
+  el.innerHTML = `<span>🌴 <b>Day off</b> · no phone alerts until ${esc(offLabel())}</span><button type="button" onclick="hoNotify.dayOff(0)">I'm back</button>`;
+}
 function setCat(k, on) { if (!CATS[k]) return; CFG = Object.assign({}, CFG, { cats: Object.assign({}, CFG.cats, { [k]: !!on }) }); saveCfg(); }
 function clearLog() { if (!confirm('Clear the recent alerts list?')) return; LOG = []; lsSet(LS_LOG, LOG); safe(() => { if (uid() && fn('fbSet')) fbSet(P('log'), null); }); renderSection(); }
 
@@ -326,6 +346,7 @@ function clearLog() { if (!confirm('Clear the recent alerts list?')) return; LOG
 const TG_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#29a9eb"/><path d="M5.4 11.8l11.3-4.4c.5-.2 1 .1.8.9l-1.9 9c-.1.6-.5.8-1 .5l-2.9-2.1-1.4 1.3c-.2.2-.3.3-.6.3l.2-3 5.4-4.9c.2-.2 0-.3-.3-.1l-6.7 4.2-2.9-.9c-.6-.2-.6-.6.1-.9z" fill="#fff"/></svg>';
 function stateLine() {
   const c = ctxNow(), q = inQuiet(CFG, c.now);
+  if (offOn()) return '🌴 Day off — nothing is sent until ' + offLabel();
   const sh = c.shift === 'on' ? 'On shift now' : c.shift === 'unknown' ? 'Shift unknown (pick your name in Roster → My shifts)' : c.shift === 'soon' ? 'Your shift starts soon' : c.shift === 'ended' ? 'Your shift has ended' : 'Off shift by the roster';
   return `${sh}${c.shift !== 'on' && c.shift !== 'unknown' ? (CFG.offShift ? ' — alerting anyway' : ' — shift alerts wait') : ''}${q ? ' · 🌙 quiet hours now (urgent only)' : ''}`;
 }
@@ -345,6 +366,10 @@ function sectionHtml() {
     <div class="hs-card">${head}
       <div class="hs-row hs-mini" data-s="phone notifications status shift quiet"><span class="hs-txt"><small>${esc(stateLine())}. The same alert never comes twice, and only one of your devices sends it. Small things wait up to a minute and come together.</small></span></div>
       ${cats}
+      <div class="hs-row${offOn() ? ' nh-offrow' : ''}" data-s="day off holiday vacation leave mute silence pause phone notifications"><span class="hs-txt"><b>🌴 Day off</b><small>${offOn() ? `On — nothing is sent to your phone until ${esc(offLabel())}` : 'Silence every phone alert while you\'re off. It switches itself back on the morning after.'}</small></span>
+        <span class="hs-inline">${offOn() ? '<button class="btn sm gold" onclick="hoNotify.dayOff(0)">I\'m back</button>' : '<button class="btn sm gold" onclick="hoNotify.dayOff(1)">Today</button><button class="btn sm" onclick="hoNotify.dayOff(2)">2 days</button><button class="btn sm" onclick="hoNotify.dayOff(+prompt(\'How many days off?\', \'3\') || 0)">More…</button>'}</span></div>
+      <label class="hs-row" data-s="day off guard whatsapp away phone notifications"><span class="hs-txt"><b>On a day off, still let the 🛡 Away guard through</b><small>Off: a day off silences the guard too</small></span>
+        <span class="hs-switch"><input type="checkbox" ${CFG.offGuard ? 'checked' : ''} onchange="hoNotify.setCfg('offGuard', this.checked)"><i></i></span></label>
       <label class="hs-row" data-s="off shift day off roster phone notifications"><span class="hs-txt"><b>Alert me even off shift</b><small>Normally shift alerts (wake-ups, tasks, departures…) only come while you're on shift by the roster</small></span>
         <span class="hs-switch"><input type="checkbox" ${CFG.offShift ? 'checked' : ''} onchange="hoNotify.setCfg('offShift', this.checked)"><i></i></span></label>
       <div class="hs-row" data-s="quiet hours night mute phone notifications"><span class="hs-txt"><b>🌙 Quiet hours</b><small>Only urgent alerts (a wake-up call due, the guard) between these times</small></span>
@@ -426,7 +451,7 @@ function hkTick() {
 function start() {
   if (started || !uid() || !fn('fbListen')) return;
   started = true;
-  safe(() => fbListen(P('cfg'), v => { if (v && typeof v === 'object') { CFG = Object.assign({}, DEF, v); CFG.cats = Object.assign({}, DEF.cats, v.cats || {}); lsSet(LS_CFG, CFG); renderSection(); } }));
+  safe(() => fbListen(P('cfg'), v => { if (v && typeof v === 'object') { CFG = Object.assign({}, DEF, v); CFG.cats = Object.assign({}, DEF.cats, v.cats || {}); lsSet(LS_CFG, CFG); renderSection(); safe(paintOff); } }));
   safe(() => fbListen(P('log'), v => { const L = Array.isArray(v) ? v : v && typeof v === 'object' ? Object.values(v) : null; if (L) { LOG = L.filter(e => e && e.at).sort((a, b) => b.at - a.at).slice(0, 20); lsSet(LS_LOG, LOG); renderSection(); } }));
   // the guard's setup: read only (wa-guard.js owns these)
   safe(() => fbListen('waGuard/' + uid() + '/tg', v => { TG = v && /^\d+:[\w-]{30,}$/.test(v.token || '') && v.chat ? { token: v.token, bot: v.bot || '', chat: v.chat } : null; renderSection(); }));
@@ -438,7 +463,8 @@ function start() {
 const boot = setInterval(() => safe(() => { watchSettings(); if (uid()) start(); if (started && obs) clearInterval(boot); }), 1500);
 setInterval(() => { if (started) rosterTick(); }, 60e3);
 setInterval(() => { if (started) hkTick(); }, 2 * 60e3);
-setInterval(() => { const s = D.getElementById('hs-notify'); if (s && s.offsetParent) renderSection(); }, 60e3);   // "on shift now", quiet hours
+setInterval(() => { const s = D.getElementById('hs-notify'); if (s && s.offsetParent) renderSection(); safe(paintOff); }, 60e3);
+setTimeout(() => safe(paintOff), 3000);   // "on shift now", quiet hours
 // a batch waiting when the page is hidden or closed: send it now
 D.addEventListener('visibilitychange', () => { if (D.visibilityState === 'hidden' && BUF.length) flush(); });
 // tapped an alert: "#go=wakeups" opens that page
@@ -457,6 +483,8 @@ css.textContent = `
 .nh-ch>span{display:flex;flex-direction:column;min-width:0}.nh-ch b{font-size:13.5px}.nh-ch small{font-size:11.5px;color:var(--text3);overflow-wrap:anywhere}
 .nh-ch.on{border-color:color-mix(in srgb,var(--mint,#22c55e) 45%,transparent);background:color-mix(in srgb,var(--mint,#22c55e) 9%,var(--card))}.nh-ch.on small{color:var(--mint,#16a34a)}
 .nh-ch i{font-style:normal;width:26px;height:26px;flex:none;display:grid;place-items:center;font-size:19px}.nh-ch:not(.on) i{opacity:.55;filter:grayscale(1)}.nh-tg svg{width:24px;height:24px}
+.nh-off{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 0 12px;padding:9px 14px;border-radius:12px;font-size:13px;background:color-mix(in srgb,var(--mint,#22c55e) 12%,var(--card));border:1px solid color-mix(in srgb,var(--mint,#22c55e) 35%,transparent)}
+.nh-off button{border:0;background:none;color:var(--accent);font:600 13px var(--font);cursor:pointer;padding:2px 0}.nh-offrow{background:color-mix(in srgb,var(--mint,#22c55e) 9%,transparent)}
 .nh-need{background:color-mix(in srgb,var(--amber,#d97706) 9%,transparent)}
 .nh-q input[type=time]{min-width:0;width:132px}
 .hs-txt.nh-log-hd{display:flex;flex-direction:row;align-items:center;justify-content:space-between;width:100%;text-align:left}.nh-clear{border:0;background:none;color:var(--accent);font:600 12.5px var(--font);cursor:pointer}
@@ -470,7 +498,8 @@ css.textContent = `
 D.head.appendChild(css);
 
 W.hoNotify = {
-  send, test, setup, setCfg, setCat, clearLog, flush, connected, renderSection,
+  send, test, setup, setCfg, setCat, clearLog, flush, connected, renderSection, dayOff,
+  get dayOffOn() { return offOn(); },
   /** an event this recent counts (older ones were before the app opened) */
   fresh: t => !!t && t >= openedAt - MIN,
   /** would this alert pass the switches, shift and quiet hours right now? (before doing work for it) */
