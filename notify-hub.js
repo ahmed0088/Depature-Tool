@@ -57,7 +57,7 @@ const CATS = {
   notes:      { i: '📝', l: 'Room notes', d: 'A colleague adds a guest request, VIP, follow-up, maintenance or call note', shift: true, def: false, tag: 'memo' },
   system:     { i: '⚙️', l: 'HotelOps', d: '', shift: false, def: true, hidden: true, tag: 'gear' },
 };
-const DEF = { cats: {}, quiet: false, qFrom: '23:00', qTo: '07:00', offShift: false, offUntil: 0, offGuard: false };
+const DEF = { cats: {}, quiet: false, qFrom: '23:00', qTo: '07:00', offShift: false, offUntil: 0, offGuard: false, autoOff: true, workDay: '' };
 Object.keys(CATS).forEach(k => { DEF.cats[k] = CATS[k].def; });
 
 // ══ Pure rules (tested) ═════════════════════════════════════
@@ -78,8 +78,8 @@ function catOn(cfg, cat) {
 function gate(o, ctx) {
   if (o.force) return { ok: true };
   const cfg = ctx.cfg || DEF, c = CATS[o.cat] || CATS.system;
-  // day off: nothing at all (the guard only if you chose to keep it)
-  if (cfg.offUntil && +ctx.now < cfg.offUntil && !(o.cat === 'guard' && cfg.offGuard)) return { ok: false, why: 'day off' };
+  // day off (chosen, or a day off on the posted roster): nothing at all (the guard only if you chose to keep it)
+  if (isOff(cfg, ctx) && !(o.cat === 'guard' && cfg.offGuard)) return { ok: false, why: 'day off' };
   if (!catOn(cfg, o.cat)) return { ok: false, why: 'switched off' };
   // an event from before the app opened is old news (a state that is still true is not)
   if (!o.state && o.at && o.at < (ctx.openedAt || 0) - MIN) return { ok: false, why: 'old' };
@@ -87,6 +87,13 @@ function gate(o, ctx) {
   if (!o.ignoreQuiet && (o.prio || 3) < 5 && inQuiet(cfg, ctx.now)) return { ok: false, why: 'quiet hours' };
   return { ok: true };
 }
+/** off now? a day off you chose (until offUntil), or — unless switched off — a day off / PH / leave on the posted
+ *  roster today (ctx.rosterOff), except a day you said "alert me today anyway" (workDay) */
+function isOff(cfg, ctx) {
+  if (cfg.offUntil && +ctx.now < cfg.offUntil) return true;
+  return !!(cfg.autoOff !== false && ctx.rosterOff && cfg.workDay !== isoDay(ctx.now));
+}
+function isoDay(d) { d = new Date(d); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 /** a day off of n days starting today ends the morning after, at 06:00 */
 function dayOffEnd(now, days) { const d = new Date(now); d.setHours(6, 0, 0, 0); d.setDate(d.getDate() + Math.max(1, days || 1)); return +d; }
 /** the transaction step for a claim: write mine, or keep someone's that is still fresh (undefined = abort) */
@@ -130,7 +137,7 @@ function rosterDiff(prev, cur) {
 /** a short, stable id for a list of things (a roster change set) */
 function hash(s) { let h = 5381; s = String(s); for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
 
-W.hoNotifyPure = { dayOffEnd, inQuiet, catOn, gate, claimNext, storm, shouldBatch, mergeBatch, rosterDiff, hash, fbKey, CATS, DEF };
+W.hoNotifyPure = { dayOffEnd, isOff, inQuiet, catOn, gate, claimNext, storm, shouldBatch, mergeBatch, rosterDiff, hash, fbKey, CATS, DEF };
 if (!D || typeof D.createElement !== 'function') return;
 
 // ══ App helpers ═════════════════════════════════════════════
@@ -195,7 +202,9 @@ function shiftState(now) {
     return 'unknown';
   }, 'unknown');
 }
-const ctxNow = () => { const now = new Date(); return { cfg: CFG, now, shift: shiftState(now), openedAt }; };
+// a day off, PH, vacation or leave on the posted roster today (Roster → My shifts name); last night's shift still running is not
+const rosterOff = now => safe(() => fn('hoMyDuty') && hoMyDuty(now).dayOff === true, false);
+const ctxNow = () => { const now = new Date(); return { cfg: CFG, now, shift: shiftState(now), openedAt, rosterOff: rosterOff(now) }; };
 
 // ══ One device sends: the claim ═════════════════════════════
 /** true: sent from here · false: another device has it · null: can't ask the database (offline) */
@@ -324,20 +333,23 @@ function saveCfg() {
 }
 function setCfg(k, v) { if (!(k in DEF) || k === 'cats') return; CFG = Object.assign({}, CFG, { [k]: v }); saveCfg(); }
 function dayOff(days) {
-  CFG = Object.assign({}, CFG, { offUntil: days ? dayOffEnd(new Date(), days) : 0 }); saveCfg();
+  // "I'm back" on a roster day off: alerts on for the rest of today
+  CFG = Object.assign({}, CFG, { offUntil: days ? dayOffEnd(new Date(), days) : 0, workDay: days ? '' : (rosterOff(new Date()) ? isoDay(new Date()) : CFG.workDay) }); saveCfg();
   if (days) BUF.splice(0).forEach(b => safe(() => b.res(false)));   // what was waiting to go is dropped too
   toast(days ? `🌴 Day off — no phone alerts until ${offLabel()}` : '👋 Welcome back — phone alerts are on again', 'ok');
   safe(paintOff);
 }
-function offOn() { return !!(CFG.offUntil && Date.now() < CFG.offUntil); }
-function offLabel() { const d = new Date(CFG.offUntil); return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) + ' ' + hhmm(+d); }
+function offOn() { return isOff(CFG, { now: new Date(), rosterOff: rosterOff(new Date()) }); }
+const byRoster = () => !(CFG.offUntil && Date.now() < CFG.offUntil) && offOn();
+function offLabel() {
+  if (byRoster()) return 'tomorrow (day off on the roster)'; const d = new Date(CFG.offUntil); return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) + ' ' + hhmm(+d); }
 // while it's on: a slim line at the top of Home, so you know why your phone is quiet
 function paintOff() {
   const home = D.getElementById('panel-home'); if (!home) return;
   let el = D.getElementById('nhDayOff');
   if (!offOn()) { if (el) el.remove(); return; }
   if (!el) { el = D.createElement('div'); el.id = 'nhDayOff'; el.className = 'nh-off'; home.insertBefore(el, home.firstChild); }
-  el.innerHTML = `<span>🌴 <b>Day off</b> · no phone alerts until ${esc(offLabel())}</span><button type="button" onclick="hoNotify.dayOff(0)">I'm back</button>`;
+  el.innerHTML = `<span>🌴 <b>Day off</b>${byRoster() ? ' on the roster' : ''} · no phone alerts until ${esc(offLabel())}</span><button type="button" onclick="hoNotify.dayOff(0)">I'm back</button>`;
 }
 function setCat(k, on) { if (!CATS[k]) return; CFG = Object.assign({}, CFG, { cats: Object.assign({}, CFG.cats, { [k]: !!on }) }); saveCfg(); }
 function clearLog() { if (!confirm('Clear the recent alerts list?')) return; LOG = []; lsSet(LS_LOG, LOG); safe(() => { if (uid() && fn('fbSet')) fbSet(P('log'), null); }); renderSection(); }
@@ -368,6 +380,8 @@ function sectionHtml() {
       ${cats}
       <div class="hs-row${offOn() ? ' nh-offrow' : ''}" data-s="day off holiday vacation leave mute silence pause phone notifications"><span class="hs-txt"><b>🌴 Day off</b><small>${offOn() ? `On — nothing is sent to your phone until ${esc(offLabel())}` : 'Silence every phone alert while you\'re off. It switches itself back on the morning after.'}</small></span>
         <span class="hs-inline">${offOn() ? '<button class="btn sm gold" onclick="hoNotify.dayOff(0)">I\'m back</button>' : '<button class="btn sm gold" onclick="hoNotify.dayOff(1)">Today</button><button class="btn sm" onclick="hoNotify.dayOff(2)">2 days</button><button class="btn sm" onclick="hoNotify.dayOff(+prompt(\'How many days off?\', \'3\') || 0)">More…</button>'}</span></div>
+      <label class="hs-row" data-s="day off roster automatic auto phone notifications"><span class="hs-txt"><b>Day off by itself on my roster days off</b><small>A day off, PH, vacation or leave on the posted roster silences everything for that day — no button needed</small></span>
+        <span class="hs-switch"><input type="checkbox" ${CFG.autoOff !== false ? 'checked' : ''} onchange="hoNotify.setCfg('autoOff', this.checked)"><i></i></span></label>
       <label class="hs-row" data-s="day off guard whatsapp away phone notifications"><span class="hs-txt"><b>On a day off, still let the 🛡 Away guard through</b><small>Off: a day off silences the guard too</small></span>
         <span class="hs-switch"><input type="checkbox" ${CFG.offGuard ? 'checked' : ''} onchange="hoNotify.setCfg('offGuard', this.checked)"><i></i></span></label>
       <label class="hs-row" data-s="off shift day off roster phone notifications"><span class="hs-txt"><b>Alert me even off shift</b><small>Normally shift alerts (wake-ups, tasks, departures…) only come while you're on shift by the roster</small></span>

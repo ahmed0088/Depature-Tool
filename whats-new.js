@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 434, items: [
+    "🌴 Day off now switches on by itself: on a day off, PH, vacation or leave on the posted roster (your name in Roster → My shifts), nothing is sent to your phone that day and the Brain stays quiet — no button needed. Need alerts after all? “I'm back” turns them on for the rest of that day. Don't want it automatic? Settings → 📲 Phone notifications → switch off “Day off by itself on my roster days off”. The manual Today / 2 days / More… buttons still work too.",
+  ] },
   { v: 433, items: [
     "⚡ The Opera reader never slows Opera down: it waits while you type or click and reads only in the pause, only when the browser is idle, never makes Opera re-draw the page, and reads a busy screen less often. A full read of a 600-room list now takes about 30 ms.",
     "🔧 Opera reader with two HotelOps tabs open: “Review before applying”, its switches and the changes waiting for your OK now work in whichever tab you're in.",
