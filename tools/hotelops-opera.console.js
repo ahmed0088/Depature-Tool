@@ -1371,7 +1371,20 @@
   var host, winEl, badge, bDot, bNum, hDot, hTxt, tabB = {}, panes = {}, E = {};
   // the HotelOps logo (the same as in the app: a white H on a glowing indigo tile)
   var logoN = 0;
-  function logo(px) { var id = 'hoopG' + (++logoN); return '<svg viewBox="0 0 64 64" width="' + px + '" height="' + px + '" aria-hidden="true" style="display:block"><defs><radialGradient id="' + id + '" cx=".3" cy=".25" r=".9"><stop offset="0" stop-color="#7c8cff"/><stop offset=".55" stop-color="#4f46e5"/><stop offset="1" stop-color="#1e1b4b"/></radialGradient><linearGradient id="' + id + 'h" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient></defs><rect width="64" height="64" rx="14.5" fill="url(#' + id + ')"/><rect width="64" height="64" rx="14.5" fill="url(#' + id + 'h)"/><g fill="#fff"><rect x="18" y="16" width="8.5" height="32" rx="4.25"/><rect x="37.5" y="16" width="8.5" height="32" rx="4.25"/><rect x="22" y="28.5" width="20" height="7" rx="3.5"/></g><circle cx="47" cy="14" r="3.2" fill="#c7d2fe"/></svg>'; }
+  function logo(px) {
+    var NS = 'http://www.w3.org/2000/svg', id = 'hoopG' + (++logoN);
+    var mk = function (tag, at, parent) { var e = document.createElementNS(NS, tag); Object.keys(at).forEach(function (k) { e.setAttribute(k, at[k]); }); if (parent) parent.appendChild(e); return e; };
+    var svg = mk('svg', { viewBox: '0 0 64 64', width: px, height: px, 'aria-hidden': 'true', style: 'display:block' }), defs = mk('defs', {}, svg);
+    var rg = mk('radialGradient', { id: id, cx: '.3', cy: '.25', r: '.9' }, defs);
+    [['0', '#7c8cff'], ['.55', '#4f46e5'], ['1', '#1e1b4b']].forEach(function (s) { mk('stop', { offset: s[0], 'stop-color': s[1] }, rg); });
+    var lg = mk('linearGradient', { id: id + 'h', x1: '0', y1: '0', x2: '0', y2: '1' }, defs);
+    mk('stop', { offset: '0', 'stop-color': '#fff', 'stop-opacity': '.22' }, lg); mk('stop', { offset: '.5', 'stop-color': '#fff', 'stop-opacity': '0' }, lg);
+    mk('rect', { width: 64, height: 64, rx: 14.5, fill: 'url(#' + id + ')' }, svg); mk('rect', { width: 64, height: 64, rx: 14.5, fill: 'url(#' + id + 'h)' }, svg);
+    var g = mk('g', { fill: '#fff' }, svg);
+    mk('rect', { x: 18, y: 16, width: 8.5, height: 32, rx: 4.25 }, g); mk('rect', { x: 37.5, y: 16, width: 8.5, height: 32, rx: 4.25 }, g); mk('rect', { x: 22, y: 28.5, width: 20, height: 7, rx: 3.5 }, g);
+    mk('circle', { cx: 47, cy: 14, r: 3.2, fill: '#c7d2fe' }, svg);
+    return svg;
+  }
   var curTab = /^(?:now|today|help)$/.test(UI.tab || '') ? UI.tab : 'now';
   function el(tag, css, text, parent) { var e = document.createElement(tag); if (css) e.style.cssText = css; if (text != null) e.textContent = text; if (parent) parent.appendChild(e); return e; }
   var BTN = 'all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:10px;font:600 13px/1.2 ' + SANS + ';padding:8px 12px;white-space:nowrap;transition:filter .15s,background .15s,transform .1s;';
@@ -1402,7 +1415,7 @@
     winEl.setAttribute('role', 'dialog'); winEl.setAttribute('aria-label', 'HotelOps Opera reader');
     var head = el('div', 'display:flex;align-items:center;gap:10px;padding:11px 8px 10px 12px;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;border-bottom:1px solid rgba(255,255,255,.07);background:linear-gradient(180deg,rgba(255,255,255,.04),transparent)', null, winEl);
     head.title = 'Drag to move · double-click to put it back';
-    el('div', 'flex:none;width:32px;height:32px;border-radius:9px;overflow:hidden;box-shadow:0 4px 12px -4px rgba(79,70,229,.6)', null, head).innerHTML = logo(32);
+    el('div', 'flex:none;width:32px;height:32px;border-radius:9px;overflow:hidden;box-shadow:0 4px 12px -4px rgba(79,70,229,.6)', null, head).appendChild(logo(32));
     var tb = el('div', 'flex:1;min-width:0', null, head);
     el('div', 'font:700 14px/1.2 ' + SANS + ';color:#fff;letter-spacing:-.01em', 'Opera reader', tb);
     var st = el('div', 'display:flex;align-items:center;gap:6px;margin-top:3px;min-width:0', null, tb);
@@ -1459,7 +1472,7 @@
     // the badge when small
     badge = btn('', 'all:unset;box-sizing:border-box;position:relative;display:none;align-items:center;justify-content:center;width:38px;height:38px;border-radius:9px;cursor:grab;touch-action:none;background:transparent;box-shadow:0 6px 16px -6px rgba(30,27,75,.55)', wrap, 'badge');
     badge.setAttribute('aria-label', 'Open the HotelOps Opera reader');
-    el('span', 'pointer-events:none;display:block;width:38px;height:38px', null, badge).innerHTML = logo(38);
+    el('span', 'pointer-events:none;display:block;width:38px;height:38px', null, badge).appendChild(logo(38));
     bDot = el('span', 'position:absolute;right:-3px;bottom:-3px;width:11px;height:11px;border-radius:50%;box-sizing:border-box;border:2px solid #fff;background:' + COL.warn, null, badge);
     bNum = el('span', 'position:absolute;top:-6px;right:-8px;display:none;min-width:18px;height:17px;padding:0 5px;box-sizing:border-box;border-radius:99px;background:#1f2937;color:#fff;border:1.5px solid #fff;font:600 10px/14px ' + SANS + ';text-align:center', '', badge);
     badge.addEventListener('click', function () { if (badge.dragged) { badge.dragged = false; return; } touched = true; setMin(false); }, { passive: true });

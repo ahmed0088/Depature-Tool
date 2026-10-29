@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 443, items: [
+    "🔧 Opera reader: the new logo is now drawn without touching the page's HTML (keeps the reader strictly read-only).",
+  ] },
   { v: 442, items: [
     "✨ The Opera reader's badge and window now use the real HotelOps logo (the white H on the indigo tile) — no more dark circle with an emoji. A small dot shows if it's linked, a small number what it read.",
   ] },
