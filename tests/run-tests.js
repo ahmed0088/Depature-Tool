@@ -3604,7 +3604,14 @@ console.log('\nOpera reader');
   check('departures vs Opera: auto marks it extended only when it is clear; never removes; without the in-house read it only asks',
     [AU.map(d => d.room), J(AP.dep.ext.map(e => [e.room, e.nights, e.to])), AP.dep.rm.length, O.reconAuto(RC0).length, RC0.diffs[0].acts.join(','), /extended, moved, checked out earlier or cancelled/.test(RC0.diffs[0].reason),
       O.reconAuto({ state: 'ok', diffs: [{ type: 'missing', why: 'moved', sure: false }, { type: 'missing', why: '', sure: false }] }).length, O.summaryText(O.reconPlan([{ d: RC0.diffs[0], act: 'remove' }], T))],
-    [['0412'], [['0412', 3, '2026-10-31']], 0, 0, 'ext,remove,keep', true, 0, '1 room removed from today\'s departures']);
+    [['0412'], [['0412', 3, '2026-10-31']], 0, 0, 'out,ext,remove,keep', false, 0, '1 room removed from today\'s departures']);
+  // Opera's list holds only the guests still to leave: rooms already out here are not differences; a common name is not a room move
+  const bOut = { day: T, rooms: [mk('0401', 'GuestA Testperson', { conf: '100001' }), Object.assign(mk('0402', 'Mohamed Sampleone', { conf: '100002' }), { status: 'out' }), mk('0403', 'Mohamed Sampletwo', { conf: '' }), Object.assign(mk('0405', 'GuestE Testperson', { conf: '100005' }), { status: 'out' })] };
+  const opDue = { date: T, total: 2, rows: [{ room: '401', name: 'Testperson, GuestA', conf: '100001', departure: T, status: 'due_out' }, { room: '405', name: 'Testperson, GuestE', conf: '100005', departure: T, status: 'due_out' }] };
+  const RD = O.depRecon({ dep: opDue, board: bOut, today: T, reads: { search: { date: T, rows: [{ room: '0419', name: 'Mohamed, Otherguest', conf: '777777', departure: '2026-10-13', status: 'in_house' }] } } });
+  check('departures vs Opera: only guests still to leave in Opera → rooms out here are left out; a due room missing there → "probably left" + Mark out; "Mohamed" alone is no room move; out here but due in Opera → check out in Opera',
+    [RD.boardN, RD.outN, O.reconHead(RD), RD.diffs.map(d => [d.type, d.room, d.why, d.acts[0]])],
+    [2, 2, '📡 Opera: 2 departures still to leave · HotelOps: 2 still to leave — 2 differences', [['missing', '0403', 'gone', 'out'], ['opdue', '0405', 'opdue', 'keep']]]);
   const RI = O.depRecon({ dep: Object.assign({}, op15, { rows: op15.rows.slice(0, 12) }), board: b16, today: T, reads: {} });
   check('departures vs Opera: an incomplete read says how far it got instead of listing differences', [RI.state, RI.diffs.length, O.reconHead(RI)], ['incomplete', 0, '📡 Opera read 12 of 15 — scroll the Departures list in Opera to the end']);
   const op17 = Object.assign({}, op15, { total: 17, rows: op15.rows.concat([{ room: '0412', name: 'Testperson, GuestL', conf: '100012', departure: T, status: 'due_out' }, { room: '0417', name: 'Newcomer, Quinn', conf: '100017', departure: T, status: 'checked_out' }]) });

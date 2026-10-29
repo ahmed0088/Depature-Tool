@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 440, items: [
+    "📡 Opera vs Departures is right now: Opera's Departures list only shows guests still to leave, so rooms already out on your board are no longer counted as differences (no more “14 vs 32”). A room still due here but missing in Opera is shown as “probably left already” with Mark out first — and “Mark all out” for the whole group (asks first, with Undo).",
+    "🔁 “Moved to another room” only when it's really the same reservation (confirmation number, or the exact full name only one room has) — a common name like Mohamed no longer matches the wrong guest.",
+    "⏳ New: rooms you marked out here but still due out in Opera are flagged — “check the guest out in Opera too”.",
+    "🎨 The box is redesigned: grouped (probably left, stayed on, moved, only in Opera…), one clear button per room, long groups fold to 3 with “Show all”, and the normal app font in every style.",
+  ] },
   { v: 439, items: [
     "📡 Opera Departures vs HotelOps: open Departures in Opera and a box at the top of HotelOps Departures says e.g. “Opera: 15 departures · HotelOps: 16 — 1 difference”, names the room and the likely reason (extended, moved, cancelled, left early) with one-tap Mark extended / Remove / Keep / Add / Fix name. It never removes a room by itself, and if it hasn't seen the whole Opera list it asks you to scroll to the end first.",
     "🧭 The Opera reader now understands your real Opera Cloud screens: it ignores Opera's menus and page layout (no more false “couldn't read” reports), recognises a reservation, a guest profile, rates, Queue rooms and check-in by their headings, and reads the reservation and profile fields (arrival, departure, room, rate, nights, nationality, membership, VIP…). In House shown as cards is read one guest per card.",

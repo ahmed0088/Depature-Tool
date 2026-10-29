@@ -407,7 +407,11 @@ function depRecon(I) {
   const bk = b => roomKey(b.roomStr != null ? b.roomStr : b.room), keep = I.keep || {};
   const opBy = new Map();
   D.rows.forEach(r => { if (realRoom(r.room) && !isPm(r.room) && !BAD.has(r.status) && (!r.departure || r.departure === t) && !opBy.has(roomKey(r.room))) opBy.set(roomKey(r.room), r); });
-  const bd = B.filter(b => !isPm(b.roomStr != null ? b.roomStr : b.room)), bdBy = new Map();
+  // Opera's Departures list usually holds only the guests still due out; a guest who already left drops off it.
+  // Then the rooms already out on the board are not compared (they are not "missing" — they left).
+  const opAll = D.rows.some(r => r.status === 'checked_out');
+  const bdAll = B.filter(b => !isPm(b.roomStr != null ? b.roomStr : b.room)), outN = opAll ? 0 : bdAll.filter(b => b.status === 'out').length;
+  const bd = opAll ? bdAll : bdAll.filter(b => b.status !== 'out'), bdBy = new Map();
   bd.forEach(b => bdBy.set(bk(b), b));
   const others = [];
   Object.keys(I.reads || {}).forEach(k => { const L = I.reads[k]; if (k !== 'departures' && L && Array.isArray(L.rows) && (!L.date || L.date === t || k === 'inhouse' || k === 'details' || k === 'search' || k === 'list')) L.rows.forEach(r => { if (r && typeof r === 'object') others.push(Object.assign({ _k: k }, r)); }); });
@@ -425,7 +429,9 @@ function depRecon(I) {
     const conf = normConf(b.conf), mine = x => (conf && x.conf ? normConf(x.conf) === conf : !!x.name && !!b.name && sameGuest(b.name, x.name));
     const same = others.filter(mine), here = same.filter(x => realRoom(x.room) && roomKey(x.room) === k);
     const later = here.find(x => x.departure && x.departure > t && !BAD.has(x.status) && x.status !== 'checked_out');
-    const moved = same.find(x => realRoom(x.room) && roomKey(x.room) !== k && !BAD.has(x.status) && x.status !== 'checked_out' && (!x.departure || x.departure >= t));
+    // another room: only on the same confirmation, or the exact full name (2+ words) no other board room has — a shared word like a common first name is not enough
+    const strict = x => (conf && x.conf) ? normConf(x.conf) === conf : (!!x.name && !!b.name && nameKey(x.name) === nameKey(b.name) && nameKey(b.name).split(' ').length >= 2 && bd.filter(o => o !== b && o.name && nameKey(o.name) === nameKey(b.name)).length === 0);
+    const moved = same.filter(strict).find(x => realRoom(x.room) && roomKey(x.room) !== k && !BAD.has(x.status) && x.status !== 'checked_out' && (!x.departure || x.departure >= t) && !bdBy.has(roomKey(x.room)));
     const canc = here.find(x => BAD.has(x.status)), early = here.find(x => x.status === 'checked_out' && x.departure && x.departure < t);
     const other = here.find(x => x.departure && x.departure !== t);
     const d = { type: 'missing', room: b.roomStr, name: b.name, acts: ['ext', 'remove', 'keep'] };
@@ -435,14 +441,17 @@ function depRecon(I) {
     else if (canc) Object.assign(d, { why: 'cancelled', reason: 'cancelled / no-show in Opera', acts: ['remove', 'keep'] });
     else if (early) Object.assign(d, { why: 'early', reason: `checked out on ${fmt(early.departure)} in Opera → left earlier`, acts: ['remove', 'keep'] });
     else if (other) Object.assign(d, { why: 'date', reason: `its stay in Opera ends ${fmt(other.departure)} → stay date changed`, nights: other.departure > t ? dayDiff(t, other.departure) : 0, to: other.departure });
+    else if (!opAll) Object.assign(d, { why: 'gone', reason: 'not in Opera\'s list of guests still to leave → probably checked out in Opera already', acts: ['out', 'ext', 'remove', 'keep'] });
     else Object.assign(d, { why: '', reason: 'not in Opera\'s departures today: extended, moved, checked out earlier or cancelled? Open it in Opera to see' });
     diffs.push(d);
   });
-  opBy.forEach((r, k) => { if (!bdBy.has(k) && !keep[k]) diffs.push({ type: 'extra', room: r.room, name: r.name || '', row: r, reason: r.status === 'checked_out' ? 'in Opera\'s departures (already checked out), not on the board' : 'in Opera\'s departures, not on the board', why: 'add', sure: true, acts: ['add', 'keep'] }); });
-  const ord = { missing: 0, extra: 1, guest: 2, status: 3 };
+  const allBy = new Map(); bdAll.forEach(b => allBy.set(bk(b), b));
+  opBy.forEach((r, k) => { const b = allBy.get(k); if (!bdBy.has(k) && b && b.status === 'out' && !keep[k] && r.status !== 'checked_out') diffs.push({ type: 'opdue', room: b.roomStr, name: b.name, reason: 'out here, still due out in Opera → check the guest out in Opera too', why: 'opdue', acts: ['keep'] }); });
+  opBy.forEach((r, k) => { if (!allBy.has(k) && !keep[k]) diffs.push({ type: 'extra', room: r.room, name: r.name || '', row: r, reason: r.status === 'checked_out' ? 'in Opera\'s departures (already checked out), not on the board' : 'in Opera\'s departures, not on the board', why: 'add', sure: true, acts: ['add', 'keep'] }); });
+  const ord = { missing: 0, extra: 1, guest: 2, status: 3, opdue: 4 };
   diffs.sort((a, b) => ord[a.type] - ord[b.type] || roomKey(a.room).localeCompare(roomKey(b.room), 'en', { numeric: true }));
   const extN = bd.filter(b => b.status === 'extended').length;
-  return { state: 'ok', read, total, opN: opBy.size, boardN: bd.length - extN, extN, diffs };
+  return { state: 'ok', read, total, opN: opBy.size, boardN: bd.length - extN, extN, outN, opAll, diffs };
 }
 /** the differences HotelOps may fix by itself (auto on, review off): add a missing room, mark one checked out, mark one extended when
  *  Opera's in-house list or the reservation clearly shows a later departure. Never a removal. */
@@ -453,7 +462,8 @@ function reconHead(R) {
   if (R.state === 'incomplete') return `📡 Opera read ${R.read} of ${R.total} — scroll the Departures list in Opera to the end`;
   if (R.state !== 'ok') return '';
   const n = R.diffs.length;
-  return `📡 Opera: ${pl(R.opN, 'departure')} · HotelOps: ${R.boardN}${R.extN ? ` (+${R.extN} extended)` : ''} — ${n ? pl(n, 'difference') : 'all match ✓'}`;
+  const still = R.opAll === false && R.outN ? ' still to leave' : '';
+  return `📡 Opera: ${pl(R.opN, 'departure')}${still} · HotelOps: ${R.boardN}${still}${R.extN ? ` (+${R.extN} extended)` : ''} — ${n ? pl(n, 'difference') : 'all match ✓'}`;
 }
 /** the differences chosen → a plan apply() understands (removals in dep.rm) */
 function reconPlan(items, t) {
@@ -1206,7 +1216,13 @@ function reconAutoRun() {
 }
 /** a tap on a difference's button */
 function reconAct(act, room) {
+  if (act === 'more') { RC_OPEN[room] = 1; safe(paintRecon); safe(paintPage); return; }
   if (!canWrite()) { toast('Your role can\'t change lists', 'err'); return; }
+  if (act === 'allout') {
+    const L = (reconNow().diffs || []).filter(d => d.type === 'missing' && d.why === 'gone');
+    if (!L.length || (typeof confirm === 'function' && !confirm(`Mark ${pl(L.length, 'room')} out (not in Opera's list of guests still to leave)?`))) return;
+    safe(() => apply(null, 'tapped · Opera vs board', reconPlan(L.map(d => ({ d, act: 'out' })), today()))); paint(); return;
+  }
   const R = reconNow(), d = R.diffs && R.diffs.find(x => roomKey(x.room) === roomKey(room) && x.acts.includes(act));
   if (!d) { toast('That difference is gone already', 'info'); paint(); return; }
   if (act === 'keep') { const k = keepNow(); k[roomKey(room)] = 1; LS.set(LS_KEEP, { date: today(), rooms: k }); addLog({ kind: 'departures', text: `Room ${d.room}: kept as it is (Opera differs)`, how: 'tapped' }); paint(); return; }
@@ -1215,14 +1231,36 @@ function reconAct(act, room) {
   paint();
 }
 const RC_LABEL = { ext: d => (d.nights > 0 ? `Mark extended (+${d.nights})` : 'Mark extended'), remove: () => 'Remove from today', keep: () => 'Keep', add: () => 'Add', fixname: () => 'Fix name', out: () => 'Mark out' };
+const RC_GROUP = {
+  gone: ['🚪', 'Probably left already', 'Not in Opera\'s list of guests still to leave'],
+  extended: ['🌙', 'Stayed on', 'Opera shows a later departure'],
+  moved: ['🔁', 'Moved room', 'Same reservation, another room in Opera'],
+  other: ['❔', 'Not in Opera\'s departures', 'Open the reservation in Opera to see why'],
+  extra: ['➕', 'Only in Opera', 'Leaving today in Opera, not on this board'],
+  guest: ['👤', 'Another guest in the room', 'Opera has a different name'],
+  status: ['✅', 'Checked out in Opera', 'Still due here'],
+  opdue: ['⏳', 'Still due out in Opera', 'Out here: check the guest out in Opera too'],
+};
+const rcGroup = d => d.type === 'missing' ? (d.why === 'gone' ? 'gone' : d.why === 'extended' || d.why === 'date' ? 'extended' : d.why === 'moved' ? 'moved' : 'other') : d.type;
+let RC_OPEN = {};
 function reconHtml(R, page) {
   const head = reconHead(R); if (!head) return '';
-  const D = LAST.departures, when = D ? ` · read ${hhmm(D.at)}` : '';
-  const tone = R.state === 'incomplete' ? 'warn' : R.diffs.length ? 'bad' : 'ok';
-  const IC = { missing: '➖', extra: '➕', guest: '🔁', status: '🚪' };
-  const items = R.state === 'ok' ? R.diffs.slice(0, 30).map(d => `<div class="op-rc-item"><div class="op-rc-txt"><b>${IC[d.type]} ${esc(d.room)}</b> <span>${esc(firstLast(d.name || '') || d.name || '')}</span><small>${esc(d.reason)}</small></div>
-      <div class="op-rc-acts">${d.acts.map((a, i) => `<button type="button" class="btn sm ${i ? 'ghost' : 'gold'}" data-rc="${a}" data-room="${esc(d.room)}">${esc(RC_LABEL[a](d))}</button>`).join('')}</div></div>`).join('') : '';
-  return `<div class="op-rc op-rc-${tone}${page ? ' op-card' : ''}" data-s="opera departures difference compare board"><div class="op-rc-hd"><b>${esc(head)}</b><small>${R.state === 'ok' && R.diffs.length ? 'Not in Opera\'s list ➖ · only in Opera ➕ · other guest 🔁 · left in Opera 🚪' : ''}${when}</small></div>${items ? `<div class="op-rc-list">${items}</div>` : ''}</div>`;
+  const D = LAST.departures, when = D ? 'read ' + hhmm(D.at) : '';
+  const n = R.state === 'ok' ? R.diffs.length : 0, tone = R.state === 'incomplete' ? 'warn' : n ? 'bad' : 'ok';
+  const title = R.state === 'incomplete' ? `Opera read ${R.read} of ${R.total} departures` : n ? `${pl(n, 'difference')} with Opera` : 'Matches Opera ✓';
+  const sub = R.state === 'incomplete' ? 'Scroll the Departures list in Opera to the end, then it compares'
+    : `Opera ${R.opN}${R.opAll === false && R.outN ? ' still to leave' : ''} · HotelOps ${R.boardN}${R.extN ? ' · +' + R.extN + ' extended' : ''}${R.opAll === false && R.outN ? ' · ' + R.outN + ' already out' : ''}`;
+  const groups = {}; if (R.state === 'ok') R.diffs.forEach(d => { (groups[rcGroup(d)] = groups[rcGroup(d)] || []).push(d); });
+  const order = ['status', 'gone', 'extended', 'moved', 'guest', 'extra', 'other', 'opdue'].filter(g => groups[g]);
+  const chips = order.map(g => `<span class="op-rc-chip">${RC_GROUP[g][0]} ${groups[g].length} ${esc(RC_GROUP[g][1].toLowerCase())}</span>`).join('');
+  const row = d => `<div class="op-rc-row"><span class="op-rc-room">${esc(d.room)}</span><span class="op-rc-who"><b>${esc(firstLast(d.name || '') || d.name || '—')}</b><small>${esc(d.reason)}</small></span>
+      <span class="op-rc-acts">${d.acts.map((a, i) => `<button type="button" class="${i ? 'op-rc-lnk' : 'op-rc-btn'}" data-rc="${a}" data-room="${esc(d.room)}">${esc(RC_LABEL[a](d))}</button>`).join('')}</span></div>`;
+  const grp = g => { const L = groups[g], open = RC_OPEN[g] || L.length <= 4, shown = open ? L : L.slice(0, 3);
+    return `<div class="op-rc-grp"><div class="op-rc-ghd"><span>${RC_GROUP[g][0]}</span><b>${esc(RC_GROUP[g][1])}</b><small>${esc(RC_GROUP[g][2])}</small><em>${L.length}</em>${g === 'gone' && L.length > 1 ? `<button type="button" class="op-rc-btn sm" data-rc="allout" data-room="">Mark all ${L.length} out</button>` : ''}</div>
+      ${shown.map(row).join('')}${open ? '' : `<button type="button" class="op-rc-more" data-rc="more" data-room="${g}">Show all ${L.length}</button>`}</div>`; };
+  return `<div class="op-rc op-rc-${tone}${page ? ' op-card' : ''}" data-s="opera departures difference compare board">
+    <div class="op-rc-hd"><span class="op-rc-dot"></span><div><b>📡 ${esc(title)}</b><small>${esc(sub)}${when ? ' · ' + esc(when) : ''}</small></div></div>
+    ${chips ? `<div class="op-rc-chips">${chips}</div>` : ''}${order.map(grp).join('')}</div>`;
 }
 function paintRecon() {
   const pnl = doc.getElementById('panel-departures'); if (!pnl) return;
@@ -1955,14 +1993,24 @@ function css() {
 @media (prefers-reduced-motion:reduce){:is(#hs-opera,#opRoot) *,:is(#hs-opera,#opRoot) *::before,:is(#hs-opera,#opRoot) *::after{animation:none !important;transition:none !important}#opRoot .op-tile:hover{transform:none}}
 .op-go{flex:0 0 auto;padding:11px 16px;border-radius:12px;border:0;background:linear-gradient(135deg,#22c55e,#15803d);color:#fff;font:700 14px var(--font,system-ui);cursor:pointer;box-shadow:0 8px 20px -10px #15803d;white-space:nowrap}
 .op-go:active{transform:scale(.97)}.op-go.sm{padding:7px 12px;border-radius:10px;font-size:13px;box-shadow:none}
-.op-rc{box-sizing:border-box;max-width:100%;min-width:0;margin:-4px 0 14px;padding:10px 12px;border-radius:12px;border:1px solid var(--border,#333);background:var(--card,transparent)}
+.op-rc{box-sizing:border-box;max-width:100%;min-width:0;margin:-4px 0 14px;padding:14px 16px;border-radius:16px;border:1px solid var(--border,#333);background:var(--card,transparent);font-family:var(--font,system-ui);box-shadow:0 1px 2px rgba(0,0,0,.04)}
 .op-rc.op-card{margin:0}
-.op-rc-bad{border-color:rgba(248,113,113,.45)}.op-rc-warn{border-color:rgba(251,191,36,.5)}.op-rc-ok{border-color:rgba(52,211,153,.4)}
-.op-rc-hd{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;min-width:0}.op-rc-hd b{font-size:14px;overflow-wrap:anywhere}.op-rc-hd small{font-size:12px;color:var(--text2,#bbb)}
-.op-rc-list{display:flex;flex-direction:column;gap:8px;margin-top:10px}
-.op-rc-item{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;padding:8px 10px;border-radius:10px;background:rgba(127,127,127,.08);min-width:0}
-.op-rc-txt{min-width:0;flex:1 1 220px}.op-rc-txt span{color:var(--text2,#bbb);overflow-wrap:anywhere}.op-rc-txt small{display:block;font-size:12.5px;color:var(--text2,#bbb);overflow-wrap:anywhere}
-.op-rc-acts{display:flex;flex-wrap:wrap;gap:6px}
+.op-rc-hd{display:flex;align-items:center;gap:12px;min-width:0}.op-rc-hd>div{display:flex;flex-direction:column;gap:2px;min-width:0}.op-rc-hd b{font-size:15px;font-weight:700;color:var(--text,#eee)}.op-rc-hd small{font-size:12.5px;color:var(--text2,#bbb)}
+.op-rc-dot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--green,#16a34a);box-shadow:0 0 0 4px color-mix(in srgb,var(--green,#16a34a) 18%,transparent)}
+.op-rc-bad .op-rc-dot{background:var(--amber,#d97706);box-shadow:0 0 0 4px color-mix(in srgb,var(--amber,#d97706) 18%,transparent)}.op-rc-warn .op-rc-dot{background:var(--amber,#d97706)}
+.op-rc-chips{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 2px}.op-rc-chip{font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px;background:var(--bg2,rgba(127,127,127,.1));color:var(--text2,#bbb);border:1px solid var(--border,#333)}
+.op-rc-grp{margin-top:12px;border:1px solid var(--border,#333);border-radius:12px;overflow:hidden}
+.op-rc-ghd{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;padding:9px 12px;background:var(--bg2,rgba(127,127,127,.07));border-bottom:1px solid var(--border,#333)}.op-rc-ghd b{font-size:13.5px;color:var(--text,#eee)}.op-rc-ghd small{flex:1 1 160px;font-size:12px;color:var(--text3,#999)}
+.op-rc-ghd em{font-style:normal;font-size:11.5px;font-weight:700;min-width:22px;text-align:center;padding:1px 7px;border-radius:99px;background:var(--card,#222);border:1px solid var(--border,#333);color:var(--text2,#bbb)}
+.op-rc-row{display:grid;grid-template-columns:64px minmax(0,1fr) auto;align-items:center;gap:6px 12px;padding:9px 12px;border-top:1px solid color-mix(in srgb,var(--border,#333) 60%,transparent)}.op-rc-row:first-of-type{border-top:0}
+.op-rc-room{font:700 13px var(--mono,ui-monospace,monospace);padding:4px 0;text-align:center;border-radius:8px;background:var(--bg2,rgba(127,127,127,.1));color:var(--text,#eee)}
+.op-rc-who{display:flex;flex-direction:column;min-width:0}.op-rc-who b{font-size:13.5px;font-weight:600;color:var(--text,#eee);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.op-rc-who small{font-size:12px;color:var(--text3,#999);overflow-wrap:anywhere}
+.op-rc-acts{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:4px 10px}
+.op-rc-btn{border:0;border-radius:9px;padding:7px 12px;font:600 12.5px var(--font,system-ui);background:var(--accent,#2563eb);color:#fff;cursor:pointer;white-space:nowrap}.op-rc-btn.sm{padding:4px 10px;font-size:12px;margin-left:auto}
+.op-rc-btn:hover{filter:brightness(1.08)}.op-rc-btn:focus-visible,.op-rc-lnk:focus-visible,.op-rc-more:focus-visible{outline:2px solid var(--accent,#2563eb);outline-offset:2px}
+.op-rc-lnk{border:0;background:none;padding:2px 0;font:500 12.5px var(--font,system-ui);color:var(--text2,#bbb);cursor:pointer;white-space:nowrap}.op-rc-lnk:hover{color:var(--accent,#2563eb);text-decoration:underline}
+.op-rc-more{display:block;width:100%;border:0;border-top:1px solid color-mix(in srgb,var(--border,#333) 60%,transparent);background:none;padding:8px;font:600 12.5px var(--font,system-ui);color:var(--accent,#2563eb);cursor:pointer}
+@media (max-width:560px){.op-rc{padding:12px}.op-rc-row{grid-template-columns:52px minmax(0,1fr)}.op-rc-acts{grid-column:1/-1;justify-content:flex-start}}
 .op-strip{display:flex;align-items:center;gap:10px;margin:-8px 0 14px;padding:7px 10px;border-radius:12px;border:1px solid var(--border,#333);background:var(--card,transparent);min-width:0;max-width:100%;box-sizing:border-box}
 .op-strip-st{font-size:12.5px;color:var(--text2,#bbb);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (hover:none),(pointer:coarse),(max-width:760px){.op-strip{display:none !important}}
