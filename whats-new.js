@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 445, items: [
+    "🧭 Opera reader, taught from your reports: the Assign-Room list next to Arrivals is read as a room list (no more “nothing useful” report), “Manage Reservation” is known as the search form (not a reservation it can't read), and columns like Last Room, Reservation Type, I Want To…, Queue Priority, Display Color and Property are no longer mistaken for other fields. Opera's “Hello, …” greeting is no longer read as a table.",
+  ] },
   { v: 444, items: [
     "✨ Updates ask first now: when a new version is ready, a small bar says “New version ready · Update now / Later”. Tap Update now and it reloads straight away (back on the same page). Ignore it or tap Later and it updates by itself at a quiet moment — when the app is in the background, or nobody has touched it for 3 minutes.",
   ] },

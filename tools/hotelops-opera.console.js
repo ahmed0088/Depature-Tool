@@ -152,12 +152,17 @@
   /** a screen title / heading as the key a taught kind is kept under ("Front Desk Workspace (3)" → "front desk workspace (#)") */
   function screenKey(t) { return sp(t).replace(/\d+/g, '#').toLowerCase().replace(/[^a-z0-9#()]+/g, ' ').trim().slice(0, 60); }
   /** a field table → fieldOf for it: exact names first; then the longest phrase found inside a longer header (asked once per text) */
+  // Opera Cloud columns that are not what their words suggest ("Last Room" is not the room, "Reservation Type" is no trace's
+  // department): never a field, in any table
+  var SKIP_H = {}; ['LAST ROOM', 'PREVIOUS ROOM', 'RESERVATION TYPE', 'RES TYPE', 'QUEUE PRIORITY', 'I WANT TO', 'DISPLAY COLOR', 'DISPLAY COLOUR', 'SELECT ALL',
+    'PROPERTY', 'EXTERNAL REFERENCE', 'FLOOR', 'LAST STAY', 'VACANT DAYS', 'CONNECTING'].forEach(function (w) { SKIP_H[w] = 1; });
   function mapper(table, taught) {
     var of = {}, keys; table.forEach(function (f) { f[1].forEach(function (w) { of[w] = f[0]; }); }); keys = Object.keys(of);
     var memo = {}, memoN = 0, gen = taughtGen;
     function one(h) {
       var n = normH(h); if (!n || n.length > 48 || secretLabel(h)) return '';   // a card / password column is never a field
       if (taught && TAUGHT.h[n]) return TAUGHT.h[n] === '-' ? '' : TAUGHT.h[n];
+      if (SKIP_H[n]) return '';
       if (of[n]) return of[n];
       var best = '', len = 0, w = ' ' + n + ' ';
       keys.forEach(function (k) { if (k.length > len && k.length >= 3 && w.indexOf(' ' + k + ' ') >= 0) { best = of[k]; len = k.length; } });
@@ -447,6 +452,7 @@
     ['profile', function (t) { return /\bidentification\b/.test(t) && /\bpreferences?\b/.test(t); }],
     ['rates', function (t) { return /rate\s*availability|minimum\s*stay\s*availability|rate\s*query/.test(t); }],
     ['checkin', function (t) { return /verify\s*payment|select\s*guests?|report\s*destination/.test(t); }],   // the check-in dialogs: read like a reservation, no list changes
+    ['search', function (t) { return /manage\s+reservations?|reservation\s+search|look\s*up\s+reservations?/.test(t) && !/stay\s*details/.test(t); }],   // the reservation search form (its labels are empty filters)
     ['queue', function (t) { return /(?:^|\|)\s*(?:manage\s+)?queue(?:\s*rooms?)?\s*(?:\(#\))?\s*(?:\||$)/.test(t); }],   // arrivals waiting for their room
     ['inhouse', function (t) { return /(?:^|\|)\s*(?:manage\s+)?in[\s\-]?house(?:\s*guests?)?\s*(?:\(#\))?\s*(?:\||$)/.test(t); }],
     ['arrivals', function (t) { return /(?:^|\|)\s*(?:manage\s+)?arrivals?\s*(?:\(#\))?\s*(?:\||$)/.test(t); }],
@@ -865,6 +871,9 @@
       if (!h) return '';
       var mg = mapHeaders(h), mt = mapHeaders(h, traceFieldOf);
       if (hint === 'traces' && usableTrace(mt)) return 'trace';
+      // a room list (Opera's assign-room panel, room status): a room and its statuses, no guest → kept as a plain table, never "nothing useful"
+      if (mg.map.room !== undefined && mg.map.name === undefined && mg.map.conf === undefined && mg.map.last === undefined && mg.map.first === undefined
+        && (mg.map.foStatus !== undefined || mg.map.roomStatus !== undefined || mg.map.hkStatus !== undefined)) return 'other';
       if (usable(mg)) return 'guest';
       if (usablePost(mapHeaders(h, postFieldOf))) return 'post';
       if (usableTrace(mt)) return 'trace';
@@ -898,7 +907,7 @@
       s.n = body.length; s.rows = body;
       if (k === 'post') { post.push({ head: head, rows: body, map: mapHeaders(head, postFieldOf).map, el: g.el }); return; }
       if (k === 'trace') { trace.push({ head: head, rows: body, map: mapHeaders(head, traceFieldOf).map }); return; }
-      if (k === 'other') { if (other.length < 4) other.push({ head: head, rows: body }); return; }
+      if (k === 'other') { if (other.length < 4 && (body.length > 1 || /\d/.test((body[0] || []).join(' ')))) other.push({ head: head, rows: body }); return; }   // a lone line without a number ("Hello, …") is not a table
       var m = mapHeaders(head), n0 = out.length;
       body.forEach(function (cells) { var r = rowFrom(cells, m.map); if (r.room || r.conf || r.name) out.push(r); });
       s.out = out.length - n0;
@@ -1168,7 +1177,8 @@
     if (!c.hint && ((!c.kind || c.kind === 'other') && (dataN || pn >= 6) || (c.kind === 'list' && unread))) {
       why.push({ c: 'unknown-screen', t: 'the screen kind is ' + (c.kind ? 'only "' + c.kind + '"' : 'unknown') + ': its title and headings name no screen it knows, yet it shows ' + (dataN ? dataN + ' data list' + (dataN === 1 ? '' : 's') : pn + ' label/value pairs') });
     }
-    if ((c.kind === 'details' || c.kind === 'profile') && !c.rowsN && c.pairs) why.push({ c: 'unread-form', t: 'a ' + (c.kind === 'profile' ? 'profile' : 'reservation') + ' screen, but its fields could not be read (' + pn + ' label/value pair' + (pn === 1 ? '' : 's') + ' found)' });
+    var filters = (c.pairs || []).some(function (p) { return /^(?:arrival|departure)\s+(?:from|to)$/i.test(sp(p[0]).trim()); });   // "Arrival From / To": a search form, not a reservation
+    if ((c.kind === 'details' || c.kind === 'profile') && !c.rowsN && c.pairs && !filters) why.push({ c: 'unread-form', t: 'a ' + (c.kind === 'profile' ? 'profile' : 'reservation') + ' screen, but its fields could not be read (' + pn + ' label/value pair' + (pn === 1 ? '' : 's') + ' found)' });
     if ((c.kind === 'arrivals' || c.kind === 'departures') && !c.date && (c.rowsN || g.seen.length)) why.push({ c: 'no-date', t: 'a ' + c.kind + ' screen, but no date found on it (it needs one to know the day)' });
     return why.slice(0, 6);
   }
