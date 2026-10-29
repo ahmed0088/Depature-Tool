@@ -1353,8 +1353,11 @@ function sw(k, label, desc, on) {
 // the parts the Settings card and the 📡 Opera page share
 function helperRows() {
   const D = doc.documentElement.dataset, helper = !!D.hoOpHelper, anyHelper = !!D.hoWaHelper;
-  const get = helper ? '<span class="op-ok">✓ The helper has the Opera reader</span>'
-    : `<button class="btn sm gold" data-op="dl">⬇ ${anyHelper ? 'Get the helper again (once)' : 'Get the helper'}</button>`;
+  // the helper can always be downloaded again; one from before v436 links badly (stuck on "linking…") and must be
+  const hv = parseFloat(D.hoWaHelper || '0') || 0, old = anyHelper && hv < 436;
+  const get = helper && !old
+    ? '<span class="op-ok">✓ The helper has the Opera reader</span><button class="btn sm ghost" data-op="dl">⬇ Download again</button>'
+    : `<button class="btn sm gold" data-op="dl">⬇ ${anyHelper ? 'Get the new helper (once)' : 'Get the helper'}</button>`;
   return row('opera reader helper console reader', 'The helper', helper ? 'Starts the reader on Opera Cloud by itself and links it here. No helper on a PC? Copy the console reader and paste it in Opera\'s console (F12).' : 'Without it: copy the console reader, paste it in Opera\'s console (F12) and press Connect in its window.',
       `${get}<button class="btn sm ghost" data-op="copy" title="For a PC without the helper: paste it in Opera's console">Copy console reader</button>`)
     + (!helper ? row('opera reader how to add helper', 'How to turn it on', `${anyHelper ? 'Your helper is from before the Opera reader: download it once more, then in <code>chrome://extensions</code> press ↻ on the HotelOps helper (or remove it and <b>Load unpacked</b> the new folder).' : 'Download the helper, unzip it, open <code>chrome://extensions</code>, turn on Developer mode, <b>Load unpacked</b> the folder, and turn on <b>Allow User Scripts</b> in its Details.'} Then press 🟢 Open Opera: the HotelOps window shows bottom right in Opera. It only reads; it never clicks or types in Opera.`) : '');
@@ -1424,6 +1427,7 @@ function openCardHtml() {
   return `<div class="hs-row hs-col op-open" data-s="opera reader open opera cloud linked helper address"><div class="op-open-row">
       <button type="button" class="op-go" data-op="open">${esc(S.btn)}</button>
       <div class="op-open-st"><b class="${S.state === 'on' ? 'op-ok' : S.state === 'noscripts' ? 'op-warn' : ''}">${esc(S.b)}</b>${S.state === 'nohelper' ? '<button type="button" class="op-lnk" data-op="dl">⬇ Get the helper</button>' : `<span>${esc(S.s)}</span>`}
+        ${S.state !== 'nohelper' && (parseFloat(doc.documentElement.dataset.hoWaHelper || '0') || 0) < 436 ? '<span class="op-old">Your helper is older than v436 (old window, can get stuck on “linking…”): <button type="button" class="op-lnk" data-op="dl">⬇ Get the new helper (once)</button> → unzip over the same folder → ↻ in chrome://extensions</span>' : ''}
         <span class="op-url">${url ? `Opera: ${esc(host)} · <button type="button" class="op-lnk" data-op="url">change</button>` : 'Opera address: not known yet · <button type="button" class="op-lnk" data-op="url">set it</button> (or open Opera once: it is remembered)'}</span></div></div></div>`;
 }
 /** 🛟 Screens it couldn't read */
@@ -1569,6 +1573,7 @@ function css() {
 .op-go{flex:0 0 auto;padding:11px 16px;border-radius:12px;border:0;background:linear-gradient(135deg,#22c55e,#15803d);color:#fff;font:700 14px var(--font,system-ui);cursor:pointer;box-shadow:0 8px 20px -10px #15803d;white-space:nowrap}
 .op-go:active{transform:scale(.97)}.op-go.sm{padding:7px 12px;border-radius:10px;font-size:13px;box-shadow:none}
 .op-open-st{display:flex;flex-direction:column;gap:2px;font-size:12.5px;color:var(--text2,#bbb);min-width:0;flex:1 1 220px}.op-open-st b{color:var(--text,#eee);font-size:13.5px}
+.op-old{color:var(--amber,#d97706);font-size:12.5px}.op-old .op-lnk{font-weight:700}
 .op-open-st b.op-ok{color:var(--green,#16a34a)}.op-open-st b.op-warn{color:var(--amber,#d97706)}.op-url{color:var(--text3,#999);font-size:12px}
 .op-lnk{align-self:flex-start;padding:0;border:0;background:none;color:var(--accent,#c9a14a);font:600 12.5px var(--font,system-ui);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .op-url .op-lnk{display:inline;font-size:12px}

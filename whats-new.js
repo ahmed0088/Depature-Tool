@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 437, items: [
+    "⬇ The Opera page always shows the helper download now. If your helper is older than v436, a gold “Get the new helper (once)” button appears right under 🟢 Open Opera — you need it once for the new Opera window and the linking fix.",
+  ] },
   { v: 436, items: [
     "📡 Opera has its own page now (menu → Front Desk → 📡 Opera): a big 🟢 Open Opera button that opens Opera in its own window like WhatsApp Web, what Opera is showing right now, today's changes with Undo, open bills, what it learned from you, and its settings.",
     "🪟 A new Opera reader window inside Opera: a proper HotelOps panel with Now / Today / 🛟 Help tabs and a status light. Drag it anywhere, or shrink it to a small round badge (it does that by itself after a minute so it never covers Opera's buttons).",
