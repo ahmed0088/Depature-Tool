@@ -39,7 +39,17 @@
  * never a key, never a line of a list (guest data). HotelOps turns that into your routines and may answer
  * with a quiet "Usually next: Settle" on the pill.
  *
- * A small pill sits bottom right ("📡 HotelOps · read 42 departures"); click – to make it a dot.
+ * A small HotelOps window sits bottom right (a Shadow DOM, so Opera's styles can't touch it): drag it by its top bar,
+ * – makes it a round 📡 badge (place and size kept per host; the first time it turns into the badge after a minute).
+ * Tabs: Now (the screen, rows read, what HotelOps did, Undo hint, "Usually next"), Today (a timeline, kept in memory only)
+ * and 🛟 Help ("Not read right?", "Copy screen layout", how it links). Not linked after 10 s: a checklist that says which
+ * it is when it can tell (no HotelOps tab, HotelOps silent, the helper not answering), with 🔁 Retry link / Open HotelOps.
+ *
+ * When it can't read a screen (a grid whose headers it can't match, a screen it doesn't know, rows without a room / conf. /
+ * name, no date on Arrivals / Departures, the same error twice) it sends HotelOps a report of the screen's LAYOUT: headers,
+ * how each was mapped, value shapes ("Aaaa, Aaaa", "99/99/9999"), DOM hints. Never a value; refused when anything in it
+ * still looks like guest data. Once per screen and day, built inside the idle read. HotelOps → Settings → Opera reader →
+ * "📋 Copy for Claude". What the hotel taught it there (a column, a screen) is checked before its own words.
  * Built with DOM calls and inline styles only (no innerHTML, no <style>), so Opera's page rules don't
  * block it. Pure helpers are exported for the Node tests (tests/run-tests.js).
  */
@@ -124,12 +134,29 @@
     ['name', ['NAME', 'GUEST', 'GUEST NAME']],
     ['conf', ['CONF', 'CONF NO', 'CONFIRMATION', 'CONFIRMATION NO', 'RESERVATION NO']],
   ];
+  // what the hotel taught it (HotelOps → the Brain asked "this column 'Leaving On' — is it…?"): header words → field, screen title → kind.
+  // Checked before its own words. "-" = a column it should leave alone.
+  var TAUGHT = { h: {}, s: {} }, taughtGen = 0;
+  var GUEST_FIELDS = {}; 
+  /** set the taught mappings (from HotelOps); clears what the mappers remembered */
+  function setTaught(t) {
+    var o = { h: {}, s: {} };
+    if (t && typeof t === 'object') {
+      Object.keys(t.h || {}).slice(0, 300).forEach(function (k) { var f = String(t.h[k] || ''); if (f === '-' || GUEST_FIELDS[f]) o.h[normH(k)] = f; });
+      Object.keys(t.s || {}).slice(0, 100).forEach(function (k) { var v = String(t.s[k] || ''); if (/^(?:arrivals|departures|inhouse|billing|rooms|profile|traces|search|details|other)$/.test(v)) o.s[screenKey(k)] = v; });
+    }
+    TAUGHT = o; taughtGen++;
+    return o;
+  }
+  /** a screen title / heading as the key a taught kind is kept under ("Front Desk Workspace (3)" → "front desk workspace (#)") */
+  function screenKey(t) { return sp(t).replace(/\d+/g, '#').toLowerCase().replace(/[^a-z0-9#()]+/g, ' ').trim().slice(0, 60); }
   /** a field table → fieldOf for it: exact names first; then the longest phrase found inside a longer header (asked once per text) */
-  function mapper(table) {
+  function mapper(table, taught) {
     var of = {}, keys; table.forEach(function (f) { f[1].forEach(function (w) { of[w] = f[0]; }); }); keys = Object.keys(of);
-    var memo = {}, memoN = 0;
+    var memo = {}, memoN = 0, gen = taughtGen;
     function one(h) {
       var n = normH(h); if (!n || n.length > 48 || secretLabel(h)) return '';   // a card / password column is never a field
+      if (taught && TAUGHT.h[n]) return TAUGHT.h[n] === '-' ? '' : TAUGHT.h[n];
       if (of[n]) return of[n];
       var best = '', len = 0, w = ' ' + n + ' ';
       keys.forEach(function (k) { if (k.length > len && k.length >= 3 && w.indexOf(' ' + k + ' ') >= 0) { best = of[k]; len = k.length; } });
@@ -137,13 +164,15 @@
     }
     return function (h) {
       h = String(h == null ? '' : h); if (h.length > 120) return '';
+      if (gen !== taughtGen) { memo = {}; memoN = 0; gen = taughtGen; }
       if (Object.prototype.hasOwnProperty.call(memo, h)) return memo[h];   // the same header text is asked about on every read: answer it once
       if (++memoN > 5000) { memo = {}; memoN = 1; }
       return (memo[h] = one(h));
     };
   }
   /** one header / label → the field it names, or '' */
-  var fieldOf = mapper(FIELDS), postFieldOf = mapper(POST_FIELDS), traceFieldOf = mapper(TRACE_FIELDS);
+  FIELDS.forEach(function (f) { GUEST_FIELDS[f[0]] = 1; });
+  var fieldOf = mapper(FIELDS, true), postFieldOf = mapper(POST_FIELDS), traceFieldOf = mapper(TRACE_FIELDS);
   /** header cells → {map: {field: column}, n: fields found} (each field once, the first column that names it) */
   function mapHeaders(cells, of) {
     var map = {}, n = 0; of = of || fieldOf;
@@ -394,6 +423,7 @@
   }
   /** parts: [title, ...headings, url] (most trusted first) and the rows read → the kind of screen */
   function pageKind(parts, rows) {
+    for (var j = 0; j < (parts || []).length; j++) { var tk = TAUGHT.s[screenKey(structText(parts[j], 80))] || TAUGHT.s[screenKey(parts[j])]; if (tk) return tk; }   // what the hotel taught first
     for (var i = 0; i < (parts || []).length; i++) { var k = kindOfText(String(parts[i] || '').replace(/[\/_#?=&]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')); if (k) return k; }
     var c = {}; (rows || []).forEach(function (r) { if (r.status) c[r.status] = (c[r.status] || 0) + 1; });
     var top = Object.keys(c).sort(function (a, b) { return c[b] - c[a]; })[0];
@@ -528,7 +558,114 @@
   /** a screen's title as it may be kept: the part before " - ", "|", ":", "(" or a comma, cleaned like a label */
   function safeTitle(s) { return cleanLabel(sp(s).split(/\s[-–—|:]\s|[,(|:]/)[0]); }
 
-  var H = { maskCards: maskCards, secretLabel: secretLabel, scrub: scrub, payType: payType, normRoomStatus: normRoomStatus, postFieldOf: postFieldOf, traceFieldOf: traceFieldOf, usablePost: usablePost, usableTrace: usableTrace,
+  // ── "stuck" reports: a screen it could not read → its STRUCTURE for the developer, never its values ──
+  /** a value's shape: letters → a / A (case kept), digits → 9, a long number → "999999+", 24 characters at most.
+   *  "Testperson, Alpha" → "Aaaaaaaaaa, Aaaaa", "28/10/2026" → "99/99/9999". Shaping a shape changes nothing. */
+  function shapeOf(v) {
+    var s = sp(v).replace(/\s+/g, ' ').trim(); if (!s) return '';
+    s = s.replace(/\p{L}/gu, function (c) { return c.toLowerCase() !== c ? 'A' : 'a'; }).replace(/\p{N}/gu, '9').replace(/@/g, '＠').replace(/9{7,}/g, '999999+');
+    return s.length > 24 ? s.slice(0, 23) + '…' : s;
+  }
+  /** a header as shown (one line, 40 characters; number runs of 3+ → #, no email, no "Doe, John" comma) */
+  function headText(v) { return sp(v).split('\n')[0].replace(/\s+/g, ' ').trim().replace(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/g, '').replace(/\d{3,}/g, '#').replace(/,\s*/g, ' / ').slice(0, 40); }
+  /** a title / heading / label: the part before " - ", a comma or "(" (where a guest's name would be); number runs → # */
+  function structText(v, n) { return sp(v).replace(/\s+/g, ' ').trim().split(/\s[-–—|:]\s|[,(|]/)[0].replace(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/g, '').replace(/\d+/g, '#').trim().slice(0, n || 60); }
+  /** the address without query or IDs: digit runs → #, ID-like parts → :id, a hash only when it is words ("#departures") */
+  function pathShape(p, h) {
+    var out = String(p || '').split('/').map(function (x) { return x.length > 40 || (x.length >= 12 && /\d/.test(x) && /[A-Za-z]/.test(x)) ? ':id' : x.replace(/\d+/g, '#'); }).join('/').slice(0, 100);
+    var hh = String(h || '').replace(/\d+/g, '#');
+    return out + (/^#[A-Za-z#\/_\-]{1,40}$/.test(hh) ? ' ' + hh : '');
+  }
+  /** class names without digits (5 at most) */
+  function classShape(c) { var out = []; String(c || '').split(/\s+/).forEach(function (k) { k = k.replace(/\d+/g, '').replace(/[^A-Za-z_\-]/g, '').replace(/^-+|-+$/g, ''); if (k && k.length <= 40 && out.indexOf(k) < 0 && out.length < 5) out.push(k); }); return out; }
+  /** what a header maps to: a guest field, a folio posting field, a trace field, or "?" */
+  function mapName(h) { var f = fieldOf(h); if (f) return f; f = postFieldOf(h); if (f) return 'post.' + f; f = traceFieldOf(h); return f ? 'trace.' + f : '?'; }
+  var EMAIL_RX = /[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/;
+  /** guest data left in a report's text? an email, a 7+ digit number or "Lastname, Firstname" → what it is ('' when clean) */
+  function reportLeaks(text) {
+    var t = String(text || '');
+    if (EMAIL_RX.test(t)) return 'an email';
+    if (/\d{7,}/.test(t)) return 'a long number';
+    var m = t.match(/(?<!\p{L})\p{Lu}\p{Ll}+,[ \t]*\p{Lu}\p{Ll}+/gu) || [];
+    for (var i = 0; i < m.length; i++) if (m[i].replace(/[Aa,\s]/g, '')) return 'a name';
+    return '';
+  }
+  /** what the reader saw on a stuck screen (raw, from the page) → the report: structure and shapes only, or null when anything in it
+   *  still looks like guest data. I: {v, at, kind, hint, date, title, path, hash, heads, why:[{c,t}], grids:[{sel, cells, head, aria, anc, n, rows, stuck}], pairs, concl, err} */
+  function makeReport(I) {
+    var rw = {}, ok = {};
+    var words = function (set, v) { String(v == null ? '' : v).replace(/\p{L}{4,}/gu, function (w) { set[w.toLowerCase()] = 1; return w; }); };
+    (I.grids || []).forEach(function (g) { (g.head || []).forEach(function (h) { words(ok, h); }); (g.rows || []).forEach(function (r) { (r || []).forEach(function (c) { words(rw, c); }); }); });
+    (I.pairs || []).forEach(function (p) { words(ok, p[0]); words(rw, p[1]); });
+    Object.keys(ok).forEach(function (w) { delete rw[w]; });
+    var leaky = function (s) { var bad = false; String(s || '').replace(/\p{L}{4,}/gu, function (w) { if (rw[w.toLowerCase()]) bad = true; return w; }); return bad; };
+    var free = function (s) { return s && !leaky(s) && !reportLeaks(s) ? s : ''; };   // text from the page that could hold a guest's name: dropped when it does
+    var R = { v: String(I.v || ''), at: I.at || Date.now(), kind: I.kind || '', hint: I.hint || '', date: I.date ? 'found' : 'none',
+      title: free(structText(I.title, 80)), path: free(pathShape(I.path, I.hash)),
+      heads: (I.heads || []).map(function (h) { return free(structText(h, 60)); }).filter(Boolean).slice(0, 6),
+      why: (I.why || []).slice(0, 6).map(function (w) { return { c: String(w.c), t: clip(w.t, 200) }; }),
+      grids: (I.grids || []).slice(0, 4).map(function (g) {
+        return { sel: g.sel || '', cells: g.cells || '', n: g.n || 0, stuck: !!g.stuck,
+          head: (g.head || []).slice(0, 30).map(function (h) { return [headText(h), mapName(h)]; }),
+          aria: (g.aria || []).map(function (a) { return free(headText(a)); }).filter(Boolean).slice(0, 30),
+          anc: (g.anc || []).slice(0, 4).map(function (a) { return { t: (String(a.t || '').toLowerCase().match(/^[a-z][a-z0-9\-]*/) || [''])[0], r: String(a.r || '').replace(/[^a-z\-]/g, ''), c: classShape((a.c || []).join(' ')) }; }),
+          shapes: (g.rows || []).slice(0, 3).map(function (r) { return (r || []).slice(0, 16).map(shapeOf); }) };
+      }),
+      pairs: (I.pairs || []).map(function (p) { var l = free(cleanLabel(p[0])); return l ? [l, shapeOf(p[1])] : null; }).filter(Boolean).slice(0, 30),
+      concl: clip(I.concl || '', 240), err: free(clip(String(I.err || '').replace(/\d+/g, '#'), 160)) };
+    R = scrub(R);   // the existing masking, over everything
+    var txt = reportText(R);
+    if (reportLeaks(txt) || leaky(R.title + ' ' + R.path + ' ' + R.heads.join(' ') + ' ' + R.err + ' ' + R.pairs.map(function (p) { return p[0]; }).join(' ') + ' ' + R.grids.map(function (g) { return g.aria.join(' '); }).join(' '))) return null;
+    return R;
+  }
+  /** the report as plain text for the developer, with a fake page made from the shapes to test the reader on.
+   *  x: {n: times seen, app: what HotelOps answered}. (opera-bridge.js holds the same function: tests/run-tests.js keeps them equal.) */
+  function reportText(R, x) {
+    x = x || {};
+    var esc = function (s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
+    var two = function (n) { return (n < 10 ? '0' : '') + n; }, d = new Date(R.at || 0);
+    var L = ['HotelOps Opera reader report — please teach the reader this screen:'];
+    L.push('reader v' + (R.v || '?') + ' · ' + d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate()) + ' ' + two(d.getHours()) + ':' + two(d.getMinutes()) + (x.n > 1 ? ' · seen ' + x.n + ' times' : ''));
+    L.push('screen: kind guess "' + (R.kind || 'unknown') + '"' + (R.hint ? ' (its words say "' + R.hint + '")' : ' (its words name no screen it knows)') + ' · title "' + (R.title || '') + '" · path ' + (R.path || '—') + ' · screen date ' + R.date);
+    if ((R.heads || []).length) L.push('headings: ' + R.heads.join(' | '));
+    L.push('why:');
+    (R.why || []).forEach(function (w) { L.push('- ' + w.c + ': ' + w.t); });
+    if (R.concl) L.push('reader concluded: ' + R.concl);
+    if (R.err) L.push('error: ' + R.err);
+    if (x.app) L.push('HotelOps answered: ' + x.app);
+    (R.grids || []).forEach(function (g, i) {
+      L.push('grid ' + (i + 1) + (g.stuck ? ' (NOT READ)' : '') + ' — ' + g.sel + ' · ' + g.n + ' rows · header cells: ' + (g.cells || 'none'));
+      L.push('  headers → fields: ' + (g.head.length ? g.head.map(function (h) { return '"' + h[0] + '" → ' + h[1]; }).join(' | ') : 'no header line'));
+      if (g.aria.length) L.push('  header aria-labels: ' + g.aria.join(' | '));
+      if (g.anc.length) L.push('  dom (grid, then up): ' + g.anc.map(function (a) { return a.t + (a.r ? '[role=' + a.r + ']' : '') + a.c.map(function (c) { return '.' + c; }).join(''); }).join(' < '));
+      g.shapes.forEach(function (r, j) { L.push('  row ' + (j + 1) + ' shape: ' + r.join(' | ')); });
+    });
+    if ((R.pairs || []).length) L.push('label → value shape: ' + R.pairs.map(function (p) { return p[0] + ' = ' + p[1]; }).join(' | '));
+    L.push('--- fake page (letters → a/A, digits → 9) ---');
+    if ((R.heads || [])[0]) L.push('<h1>' + esc(R.heads[0]) + '</h1>');
+    (R.grids || []).forEach(function (g) {
+      var a1 = g.anc[1], open = a1 && a1.c.length ? '<div class="' + esc(a1.c.join(' ')) + '">' : '<div>';
+      if (/^table/.test(g.sel)) L.push(open + '<table>' + (g.head.length ? '<tr>' + g.head.map(function (h) { return '<th>' + esc(h[0]) + '</th>'; }).join('') + '</tr>' : '') + g.shapes.map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + esc(c) + '</td>'; }).join('') + '</tr>'; }).join('') + '</table></div>');
+      else L.push(open + '<div role="grid">' + (g.head.length ? '<div role="row">' + g.head.map(function (h, k) { return '<div role="columnheader" aria-colindex="' + (k + 1) + '">' + esc(h[0]) + '</div>'; }).join('') + '</div>' : '') + g.shapes.map(function (r) { return '<div role="row">' + r.map(function (c, k) { return '<div role="gridcell" aria-colindex="' + (k + 1) + '">' + esc(c) + '</div>'; }).join('') + '</div>'; }).join('') + '</div></div>');
+    });
+    (R.pairs || []).forEach(function (p, i) { L.push('<label for="f' + i + '">' + esc(p[0]) + '</label><input id="f' + i + '" readonly value="' + esc(p[1]) + '">'); });
+    L.push('--- end ---');
+    return L.join('\n');
+  }
+  /** why it isn't linked, in plain words (the "linking…" checklist). s: {ext, linked, since, relay: {apps, age}|null, relayEver, anyIn (ms, -1 = never), extErr} */
+  function linkDiag(s) {
+    if (s.linked) return { code: 'linked', text: 'Linked to HotelOps' };
+    if (!s.ext) return { code: 'console', text: 'Not linked: press Connect (HotelOps opens in a tab and links)' };
+    if (s.extErr) return { code: 'ext-error', text: 'The helper can\'t open its link here (' + String(s.extErr).slice(0, 60) + '): press ↻ on the HotelOps helper in chrome://extensions, then reload Opera' };
+    if (s.since < 10000) return { code: 'linking', text: 'Linking to HotelOps…' };
+    if (s.relay && s.relay.age < 40000) return s.relay.apps ? { code: 'app-silent', text: 'HotelOps is open but doesn\'t answer: reload the HotelOps tab (it may be an older version, or still loading)' }
+      : { code: 'no-app', text: 'HotelOps tab not found: open HotelOps in this same browser (the same Chrome / Edge profile)' };
+    if (s.relayEver) return { code: 'no-relay', text: 'The helper stopped answering: press ↻ on the HotelOps helper in chrome://extensions' };
+    return { code: 'no-answer', text: 'No answer yet: is HotelOps open in this same browser? Reload it; still nothing: press ↻ on the HotelOps helper in chrome://extensions' };
+  }
+
+  var H = { setTaught: setTaught, screenKey: screenKey, shapeOf: shapeOf, headText: headText, structText: structText, pathShape: pathShape, classShape: classShape, mapName: mapName, reportLeaks: reportLeaks, makeReport: makeReport, reportText: reportText, linkDiag: linkDiag,
+    maskCards: maskCards, secretLabel: secretLabel, scrub: scrub, payType: payType, normRoomStatus: normRoomStatus, postFieldOf: postFieldOf, traceFieldOf: traceFieldOf, usablePost: usablePost, usableTrace: usableTrace,
     postingsFrom: postingsFrom, folioFrom: folioFrom, tracesFrom: tracesFrom, tableFrom: tableFrom, pairsExtra: pairsExtra, auditState: auditState, cleanLabel: cleanLabel, safeTitle: safeTitle,
     normH: normH, fieldOf: fieldOf, mapHeaders: mapHeaders, usable: usable, parseDate: parseDate, dateOrder: dateOrder, findDate: findDate, normStatus: normStatus, money: money,
     roomOf: roomOf, roomKey: roomKey, nameKey: nameKey, confOf: confOf, emailOf: emailOf, rowFrom: rowFrom, finishRows: finishRows, rowKey: rowKey, mergeRows: mergeRows, pairsToRow: pairsToRow,
@@ -548,6 +685,7 @@
   var LS = { get: function (k, d) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (_) { return d; } }, set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} } };
   var stopped = false, win = null, linked = 0, lastAck = null, deb = 0, iv = 0, obs = null, pillHost = null;
   var view = { key: '', kind: '', date: '', rows: [], title: '', total: 0 }, sentHash = '', sentAt = 0, sentN = 0, lastErr = '';
+  var taughtH = ''; (function () { var t = LS.get('ho_op_teach', null); if (t) { setTaught(t); taughtH = hash(t); } })();
   var frames = {};   // other frames of this tab that read something (the pill in the top frame shows all)
 
   // ── reading the screen ────────────────────────────────────
@@ -610,30 +748,35 @@
       return h.filter(Boolean).length >= 2 ? 'other' : '';
     };
     var heads = gs.filter(function (g) { return g.head && !g.rows.length && (g.hk = kindOfHead(g.head)); });
-    var out = [], total = 0, post = [], trace = [], other = [];
+    var out = [], total = 0, post = [], trace = [], other = [], seen = [];
     gs.forEach(function (g) {
       if (!g.rows.length) return;
-      var head = g.head, k = head ? kindOfHead(head) : '';
+      var head = g.head, k = head ? kindOfHead(head) : '', hel = null;
+      var w = Math.max(g.rows[0].length, g.rows.length > 1 ? g.rows[1].length : 0);
       if (!k || (k === 'other' && heads.length)) {
-        var w = Math.max.apply(null, g.rows.map(function (r) { return r.length; })), best = null, bd = 99;
+        var best = null, bd = 99; w = Math.max.apply(null, g.rows.map(function (r) { return r.length; }));
         heads.forEach(function (h) {
           if (h.el.compareDocumentPosition(g.el) & 4 && Math.abs(h.head.length - w) <= 1) { var d = depthTo(h.el, g.el); if (d < bd) { bd = d; best = h; } }
         });
-        if (best && bd <= 6) { head = best.head; k = best.hk; }
+        if (best && bd <= 6) { head = best.head; k = best.hk; hel = best.el; }
       }
+      var s = { el: g.el, hel: hel, head: head, k: k, n: g.rows.length, w: w, out: 0, rows: g.rows };   // what was seen, for the stuck check (references only: no extra work)
+      seen.push(s);
       if (!k) return;
       var hk = head.map(normH).join('|'), h0 = normH(head[0] || '');
       var body = g.rows.filter(function (cells) { return !(normH(cells[0] || '') === h0 && cells.map(normH).join('|') === hk); });   // the header repeated as a line (checked fully only when it could be)
+      s.n = body.length; s.rows = body;
       if (k === 'post') { post.push({ head: head, rows: body, map: mapHeaders(head, postFieldOf).map, el: g.el }); return; }
       if (k === 'trace') { trace.push({ head: head, rows: body, map: mapHeaders(head, traceFieldOf).map }); return; }
       if (k === 'other') { if (other.length < 4) other.push({ head: head, rows: body }); return; }
-      var m = mapHeaders(head);
+      var m = mapHeaders(head), n0 = out.length;
       body.forEach(function (cells) { var r = rowFrom(cells, m.map); if (r.room || r.conf || r.name) out.push(r); });
+      s.out = out.length - n0;
       // "1–25 of 42" near the grid
       var box = g.el.parentElement; for (var i = 0; i < 3 && box && box.parentElement; i++) box = box.parentElement;
       if (box) box.querySelectorAll('[class*="pag" i], [class*="count" i], [class*="total" i], [role="status"]').forEach(function (e) { if (!mine(e) && !total) total = totalOf(txt(e).slice(0, 80)); });
     });
-    return { raw: out, total: total, post: post, trace: trace, other: other };
+    return { raw: out, total: total, post: post, trace: trace, other: other, seen: seen };
   }
   /** label → value pairs on screen (reservation details), outside the grids. Never a password, PIN or card field. */
   function readPairs(doc) {
@@ -704,7 +847,8 @@
       var g = readGrids(document, hint);
       var rows = finishRows(g.raw, order);
       // label → value pairs only where they matter (a long list with nothing else is read without them: fast)
-      var pairs = !rows.length || hint === 'billing' || hint === 'profile' || hint === 'details' || hint === 'traces' || g.post.length ? readPairs(document) : [];
+      var readP = !rows.length || hint === 'billing' || hint === 'profile' || hint === 'details' || hint === 'traces' || g.post.length;
+      var pairs = readP ? readPairs(document) : [];
       var det = null;
       if (!rows.length && pairs.length) det = pairsToRow(pairs, order) || (hint === 'billing' || hint === 'profile' || hint === 'traces' || g.post.length ? pairsToRow(pairs, order, true) : null);
       if (det) rows = [det];
@@ -733,14 +877,16 @@
       if (kind === 'audit') { var tx = heads.slice(); tables.forEach(function (tb) { tb.rows.forEach(function (r) { tx.push(r.join(' ')); }); }); pairs.forEach(function (p) { tx.push(p[0] + ' ' + p[1]); }); audit = { state: auditState(tx) }; }
       var date = screenDate(document, order);
       var key = kind + '|' + date + '|' + (heads[0] || document.title || '').replace(/\d+/g, '#').slice(0, 60);   // "Arrivals (42)" while it loads is the same screen
-      if (key !== view.key) { view = { key: key, kind: kind, date: date, rows: [], title: (heads[0] || document.title || '').slice(0, 90), total: 0 }; noteScreen(kind, view.title); }
+      if (key !== view.key) { view = { key: key, kind: kind, date: date, rows: [], title: (heads[0] || document.title || '').slice(0, 90), total: 0 }; noteScreen(kind, view.title); if (kind) tl('📺', (KLABEL[kind] || 'A screen') + ' on screen'); }
       view.rows = REPLACE[kind] ? rows : mergeRows(view.rows, rows);
       if (view.rows.length > 1500) view.rows = view.rows.slice(-1500);
       if (g.total) view.total = g.total;
       view.folio = folio; view.traces = traces; view.tables = tables; view.audit = audit;
+      lastCtx = { kind: kind, hint: hint, heads: heads, date: date, g: g, pairs: readP ? pairs : null, rowsN: rows.length, tables: tables.length };
+      checkStuck(lastCtx);
       send();
       render();
-    } catch (e) { lastErr = String(e && e.message || e).slice(0, 120); }
+    } catch (e) { lastErr = String(e && e.message || e).slice(0, 120); lastErrAt = Date.now(); stuckErr(lastErr); render(); }
     var took = ((window.performance && performance.now) ? performance.now() : Date.now()) - t0;
     cost = cost ? cost * 0.7 + took * 0.3 : took;
   }
@@ -755,6 +901,106 @@
       if (Date.now() - lastUse < 1200) { deb = setTimeout(run, 1200 - (Date.now() - lastUse) + 50); return; }   // you're typing or clicking: wait for the pause
       idle(function () { deb = 0; lastScan = Date.now(); scan(); });
     }, ms);
+  }
+
+  // ── when it can't read a screen: a report of the screen's layout (never its values) for the developer ──
+  // Checked on every read (cheap: what readGrids already saw). A report is built only when the same stuck screen shows on two reads
+  // in a row (not while it loads), once per screen and day, inside this idle read; it goes to HotelOps (Settings → Opera reader).
+  var GUEST_K = { arrivals: 1, departures: 1, inhouse: 1, search: 1, list: 1, details: 1 };
+  var lastCtx = null, stuckLast = '', stuckRun = 0, stuckQ = [], stuckAt = 0, errRun = {}, errN = 0;
+  var dayNow = function () { var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+  var stuckDone = LS.get('ho_op_stuck', null);
+  function doneToday() { if (!stuckDone || stuckDone.d !== dayNow() || !Array.isArray(stuckDone.h)) stuckDone = { d: dayNow(), h: [] }; return stuckDone.h; }
+  /** what is wrong on screen → [{c, t}] (the grids behind it get .bad) */
+  function stuckWhy(c) {
+    var why = [], g = c.g || { seen: [], raw: [] }, anyGuest = (g.raw || []).length > 0;
+    g.seen.forEach(function (s) {
+      s.bad = false;
+      if (!s.k) {
+        var r = s.el.getAttribute('role');   // a table without headers: only a data grid, not a layout table
+        if (s.n >= 2 && s.w >= 2 && ((r && /^(?:grid|table|treegrid)$/.test(r)) || (s.n >= 3 && s.w >= 3 && !s.el.querySelector('table, input, select, textarea, button, [role="grid"]')))) {
+          s.bad = true; why.push({ c: 'unread-grid', t: 'a grid with ' + s.n + ' rows has no header line it could read' });
+        }
+      } else if (s.k === 'other' && !anyGuest && GUEST_K[c.hint]) {
+        s.bad = true; why.push({ c: 'unread-grid', t: 'a grid with ' + s.n + ' rows on a "' + c.hint + '" screen: its headers could not be matched (' + (s.head || []).filter(Boolean).map(headText).join(' · ') + ')' });
+      } else if (s.k === 'guest' && s.n > 0 && !s.out) { s.bad = true; why.push({ c: 'nothing-useful', t: s.n + ' rows read, but none has a room, a conf. number or a name' }); }
+    });
+    var pn = c.pairs ? c.pairs.length : 0;
+    if (!c.hint && (!c.kind || c.kind === 'other' || c.kind === 'list') && (g.seen.length || pn >= 6)) {
+      why.push({ c: 'unknown-screen', t: 'the screen kind is ' + (c.kind ? 'only "' + c.kind + '"' : 'unknown') + ': its title and headings name no screen it knows, yet it shows ' + (g.seen.length ? g.seen.length + ' grid' + (g.seen.length === 1 ? '' : 's') : pn + ' label/value pairs') });
+    }
+    if ((c.kind === 'arrivals' || c.kind === 'departures') && !c.date && (c.rowsN || g.seen.length)) why.push({ c: 'no-date', t: 'a ' + c.kind + ' screen, but no date found on it (it needs one to know the day)' });
+    return why.slice(0, 6);
+  }
+  function stuckHash(c, why) {
+    return hash(['stuck', c.kind, c.hint, structText(document.title), pathShape(location.pathname, location.hash), why.map(function (w) { return w.c; }),
+      (c.g ? c.g.seen : []).filter(function (s) { return s.bad; }).map(function (s) { return (s.head || []).map(normH).join('|'); })]);
+  }
+  function checkStuck(c) {
+    var why = stuckWhy(c);
+    if (!why.length) { stuckLast = ''; stuckRun = 0; return; }
+    var h = stuckHash(c, why);
+    if (h !== stuckLast) { stuckLast = h; stuckRun = 0; }
+    if (++stuckRun < 2 || doneToday().indexOf(h) >= 0 || stuckQ.some(function (q) { return q.h === h; })) return;
+    var rep = buildReport(c, why);
+    if (!rep) { doneToday().push(h); LS.set('ho_op_stuck', stuckDone); return; }   // it still looked like guest data: not sent, not built again today
+    stuckQ.push({ h: h, rep: rep }); flushStuck();
+  }
+  function flushStuck() {
+    while (stuckQ.length) {
+      var q = stuckQ[0];
+      if (!post({ source: 'ho-op', v: VERSION, stuck: q.rep, h: q.h, frame: FRAME })) return;
+      stuckQ.shift(); var d = doneToday(); d.push(q.h); if (d.length > 300) d.splice(0, d.length - 300); LS.set('ho_op_stuck', stuckDone);
+      stuckAt = Date.now(); tl('🛟', 'Couldn\'t read this screen: its layout went to HotelOps');
+    }
+  }
+  /** the same error on the same screen twice → a report */
+  function stuckErr(msg) {
+    var k = hash([structText(document.title), location.pathname, msg]);
+    if (++errN > 200) { errRun = {}; errN = 1; }
+    errRun[k] = (errRun[k] || 0) + 1; if (errRun[k] !== 2) return;
+    tl('⚠', 'Reader error: ' + msg.slice(0, 80));
+    var c = { kind: '', hint: '', heads: [], date: '', g: { seen: [], raw: [] }, pairs: [], rowsN: 0, tables: 0, err: msg };
+    try { c.heads = headings(document); c.g = readGrids(document, ''); } catch (_) {}
+    var h = hash(['err', k]); if (doneToday().indexOf(h) >= 0) return;
+    var rep = buildReport(c, [{ c: 'error', t: 'the reader failed twice on this screen' }]);
+    if (rep) { stuckQ.push({ h: h, rep: rep }); flushStuck(); }
+  }
+  /** the page's side of a report: each grid's kind, header cells, aria-labels, ancestors; then makeReport keeps only shapes */
+  function buildReport(c, why) {
+    try {
+      var g = c.g || { seen: [] }, pairs = c.pairs || readPairs(document);
+      var grids = g.seen.slice(0, 4).map(function (s) {
+        var el = s.el, hel = s.hel || el, t = el.tagName.toLowerCase(), r = el.getAttribute('role');
+        var sel = t + (r ? '[role=' + r + ']' : '');
+        var oj = el.closest('oj-table, oj-data-grid, [class*="oj-table"], [class*="oj-datagrid"], [class*="oj-data-grid"]');
+        if (oj) sel += ' in ' + (oj.tagName.indexOf('-') > 0 ? oj.tagName.toLowerCase() : 'oj-table');
+        var hc = []; hel.querySelectorAll('th, [role="columnheader"]').forEach(function (x) { if (hc.length < 30 && x.closest(GRID_SEL) === hel) hc.push(x); });
+        var cells = hc.length ? (hc[0].tagName === 'TH' ? 'th' : 'role=columnheader') + (hel !== el ? ' (in a separate header grid)' : '') : s.head ? 'first row in thead' : 'none';
+        var anc = []; for (var e = el, i = 0; e && i < 4 && e !== document.body && e !== document.documentElement; e = e.parentElement, i++) anc.push({ t: e.tagName.toLowerCase(), r: e.getAttribute('role') || '', c: classShape(e.getAttribute('class')) });
+        return { sel: sel, cells: cells, head: s.head || [], aria: hc.map(function (x) { return x.getAttribute('aria-label') || x.getAttribute('title') || ''; }).filter(Boolean), anc: anc, n: s.n, rows: s.rows, stuck: !!s.bad };
+      });
+      var concl = 'kind ' + (c.kind || 'none') + ' · ' + (c.rowsN || 0) + ' guest line' + (c.rowsN === 1 ? '' : 's') + ' · ' + (c.tables || 0) + ' plain table' + (c.tables === 1 ? '' : 's') + ' · ' + g.seen.length + ' grid' + (g.seen.length === 1 ? '' : 's') + ' with rows · ' + pairs.length + ' label/value pairs · date ' + (c.date ? 'found' : 'not found');
+      return makeReport({ v: VERSION, at: Date.now(), kind: c.kind, hint: c.hint, date: c.date, title: document.title, path: location.pathname, hash: location.hash, heads: c.heads, why: why, grids: grids, pairs: pairs, concl: concl, err: c.err });
+    } catch (_) { return null; }
+  }
+  /** the 🛟 buttons: "Not read right?" sends a report of this screen to HotelOps; "Copy screen layout" copies it here */
+  function manualReport(copy) {
+    var c = lastCtx;
+    if (!c) { try { c = { kind: '', hint: '', heads: headings(document), date: '', g: readGrids(document, ''), pairs: null, rowsN: 0, tables: 0 }; } catch (_) { helpSay('Could not look at this screen'); return; } }
+    var why = stuckWhy(c);
+    why.unshift(copy ? { c: 'layout', t: 'the screen layout, asked for from the Opera window' } : { c: 'manual', t: 'you pressed "Not read right?" in the Opera window' });
+    var rep = buildReport(c, why);
+    if (!rep) { helpSay('This screen\'s titles look like guest data, so nothing was made. Send a screenshot instead.'); return; }
+    if (copy) {
+      var p = null; try { p = navigator.clipboard.writeText(reportText(rep)); } catch (_) {}
+      if (p && p.then) p.then(function () { helpSay('Copied ✓ Paste it to Claude (layout only, no guest data).'); }, function () { helpSay('This browser blocked copying here: press "Not read right?", then HotelOps → Settings → Opera reader → Copy for Claude.'); });
+      else helpSay('This browser blocked copying here: press "Not read right?", then HotelOps → Settings → Opera reader → Copy for Claude.');
+      return;
+    }
+    var ok = post({ source: 'ho-op', v: VERSION, stuck: rep, h: hash(['manual', c.kind, structText(document.title), pathShape(location.pathname, location.hash)]), frame: FRAME });
+    helpSay(ok ? 'Sent ✓ In HotelOps: Settings → 📡 Opera reader → 🛟 → Copy for Claude.' : 'Not linked to HotelOps yet: use "Copy screen layout" instead.');
+    if (ok) tl('🛟', 'You reported this screen to HotelOps');
   }
 
   // ── learning from you ("watch me"): the screens you open and the label of what you click ──
@@ -805,14 +1051,22 @@
     var h = more ? hash([snap.kind, snap.date, snap.rows, snap.folio || 0, snap.traces || 0, snap.tables || 0, snap.audit || 0]) : hash([snap.kind, snap.date, snap.rows]);
     if (!force && h === sentHash) return;
     if (!force && Date.now() - sentAt < 2500) { laterScan(2600); return; }   // a list still loading: at most one snapshot every few seconds
-    if (post({ source: 'ho-op', v: VERSION, h: h, snap: scrub(snap), at: Date.now() })) { sentHash = h; sentAt = Date.now(); sentN = snap.rows.length || (snap.folio ? snap.folio.postings.length : 0) || (snap.traces || snap.tables || []).length; }
+    if (post({ source: 'ho-op', v: VERSION, h: h, snap: scrub(snap), at: Date.now() })) {
+      sentHash = h; sentAt = Date.now(); sentN = snap.rows.length || (snap.folio ? snap.folio.postings.length : 0) || (snap.traces || snap.tables || []).length;
+      tl('📡', cap(summary(view.kind, sentN, view.total)) + ' → HotelOps');
+    }
     if (!TOP) try { window.top.postMessage({ __hoOpFrame: 1, id: FRAME, kind: view.kind, n: view.rows.length, total: view.total || 0 }, '*'); } catch (_) {}
   }
   function onMsg(d) {
     if (!d || typeof d !== 'object') return;
+    extIn = Date.now();   // the helper's link is alive
+    if (d.source === 'ho-op-relay') { relay = { apps: +d.apps || 0, v: String(d.v || '').slice(0, 12), at: Date.now() }; relayEver = true; render(); return; }   // the helper's relay (from v436): is a HotelOps tab there?
     if (d.source !== 'ho-op-ack') return;
+    if (Date.now() - linked > 45000) tl('🔗', 'Linked to HotelOps');
     linked = Date.now();
-    if (d.h && d.text) lastAck = { text: String(d.text).slice(0, 140), at: Date.now() };
+    if (d.app) appV = String(d.app).slice(0, 12);
+    if (d.teach && typeof d.teach === 'object') { var th = hash(d.teach); if (th !== taughtH) { taughtH = th; setTaught(d.teach); LS.set('ho_op_teach', d.teach); stuckLast = ''; lastCtx = null; laterScan(300); } }   // what the hotel taught: read the screen again with it
+    if (d.h && d.text) { var nt = String(d.text).slice(0, 140); if (!lastAck || lastAck.text !== nt || Date.now() - lastAck.at > 60000) tl('✓', 'HotelOps: ' + nt); lastAck = { text: nt, at: Date.now() }; }
     if (typeof d.learn === 'boolean' && d.learn !== LEARN) { LEARN = d.learn; LS.set('ho_op_learn', LEARN); if (!LEARN) steps = []; }   // "Learn from me in Opera" (HotelOps → Settings)
     if (typeof d.hint === 'string') hintNow = d.hint ? { text: d.hint.slice(0, 60), at: Date.now() } : null;
     if (d.again && (!d.frame || d.frame === FRAME)) { sentHash = ''; send(true); }   // HotelOps (re)opened and hasn't got what is on screen
@@ -831,55 +1085,239 @@
   }
   function tick() {
     if (steps.length) flushLearn();
-    post({ source: 'ho-op', ping: 1, t: Date.now(), v: VERSION, frame: FRAME, h: view.rows.length ? sentHash : '' });
+    if (stuckQ.length) flushStuck();
+    // the Opera Cloud address (origin + path, no query or hash): HotelOps' "Open Opera" button opens it
+    post({ source: 'ho-op', ping: 1, t: Date.now(), v: VERSION, frame: FRAME, h: view.rows.length ? sentHash : '', home: TOP ? location.origin + location.pathname : '' });
     Object.keys(frames).forEach(function (k) { if (Date.now() - frames[k].at > 120000) delete frames[k]; });
     render();
   }
 
-  // ── the pill (top frame only; another frame's reads show here too) ──
-  var pill, dot, line, sub, btn, minB, isMin = LS.get('ho_op_min', false);
-  function el(tag, css, text) { var e = document.createElement(tag); if (css) Object.assign(e.style, css); if (text != null) e.textContent = text; return e; }
+  // ── the window in Opera (top frame only; another frame's reads show here too) ──
+  // A Shadow DOM (Opera's CSS can't reach it), built with DOM calls and inline styles only (Opera's page rules may block <style>).
+  // It redraws only when what it shows changes; it reads no layout while Opera's screen is read.
+  var RM = false; try { RM = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (_) {}
+  var SANS = 'system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif';
+  var COL = { txt: '#eef2f8', txt2: '#b9c3d2', txt3: '#8e9bb0', ok: '#34d399', warn: '#fbbf24', bad: '#f87171' };
+  var KLABEL = { arrivals: 'Arrivals', departures: 'Departures', inhouse: 'In House', search: 'Reservation search', details: 'Reservation', list: 'Reservation list', billing: 'Billing / Folio',
+    rooms: 'Room status', profile: 'Profile', traces: 'Traces / Alerts', rates: 'Rates', group: 'Group / Block', audit: 'Night audit', other: 'Other screen' };
+  var cap = function (t) { t = String(t || ''); return t.charAt(0).toUpperCase() + t.slice(1); };
+  var UIK = 'ho_op_ui:' + location.host, UI = LS.get(UIK, null) || {};   // per host: {min, r, b, tab}
+  var saveUI = function () { LS.set(UIK, UI); };
+  var linkT0 = Date.now(), relay = null, relayEver = false, extIn = 0, appV = '', lastErrAt = 0, touched = false, helpTxt = '', helpAt = 0, lastSig = '', pulse = null;
+  var TL = [];   // this tab's timeline today (kept in memory only: it can name rooms)
+  function tl(icon, text) { TL.unshift({ at: Date.now(), i: icon, t: String(text).slice(0, 140) }); if (TL.length > 40) TL.length = 40; }
+  var host, winEl, badge, bDot, bNum, hDot, hTxt, tabB = {}, panes = {}, E = {};
+  var curTab = /^(?:now|today|help)$/.test(UI.tab || '') ? UI.tab : 'now';
+  function el(tag, css, text, parent) { var e = document.createElement(tag); if (css) e.style.cssText = css; if (text != null) e.textContent = text; if (parent) parent.appendChild(e); return e; }
+  var BTN = 'all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:10px;font:600 13px/1.2 ' + SANS + ';padding:8px 12px;white-space:nowrap;transition:filter .15s,background .15s,transform .1s;';
+  var BTN_GO = BTN + 'color:#1a1408;background:linear-gradient(135deg,#f1d184,#c9a14a 60%,#a8842f);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 6px 14px -8px rgba(201,161,74,.9);';
+  var BTN_2 = BTN + 'color:' + COL.txt + ';background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);';
+  var CARD = 'box-sizing:border-box;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);';
+  var LABEL = 'font:700 10.5px/1.2 ' + SANS + ';letter-spacing:.08em;text-transform:uppercase;color:' + COL.txt3 + ';';
+  function btn(label, css, parent, act, fn) {
+    var b = el('button', css, label, parent); b.type = 'button'; if (act) b.setAttribute('data-act', act);
+    b.addEventListener('mouseenter', function () { b.style.filter = 'brightness(1.12)'; }, { passive: true });
+    b.addEventListener('mouseleave', function () { b.style.filter = 'none'; }, { passive: true });
+    b.addEventListener('focus', function () { var v = false; try { v = b.matches(':focus-visible'); } catch (_) {} if (v) { b.style.outline = '2px solid #f1d184'; b.style.outlineOffset = '2px'; } }, { passive: true });
+    b.addEventListener('blur', function () { b.style.outline = 'none'; }, { passive: true });
+    if (fn) b.addEventListener('click', function (e) { touched = true; fn(e); }, { passive: true });
+    return b;
+  }
+  function anim(e, frames, opt) { if (RM || !e || !e.animate) return null; try { return e.animate(frames, opt); } catch (_) { return null; } }
+  function helpSay(t) { helpTxt = t; helpAt = Date.now(); render(); }
   function build() {
     if (!TOP || !document.body) return;
-    pillHost = el('div', { position: 'fixed', right: '14px', bottom: '14px', zIndex: '2147483646', font: '600 12px system-ui,-apple-system,Segoe UI,sans-serif', pointerEvents: 'auto' });
-    pillHost.setAttribute('data-hotelops', 'opera-reader');
-    var root = pillHost.attachShadow ? pillHost.attachShadow({ mode: 'open' }) : pillHost;
-    pill = el('div', { display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px 6px 11px', borderRadius: '999px', background: 'rgba(17,24,39,.92)', color: '#e5edf7', boxShadow: '0 6px 20px rgba(0,0,0,.28)', border: '1px solid rgba(255,255,255,.12)', maxWidth: '360px' });
-    var txtBox = el('div', { display: 'flex', flexDirection: 'column', minWidth: '0', lineHeight: '1.25' });
-    line = el('span', { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' });
-    sub = el('span', { font: '500 11px system-ui,sans-serif', color: '#9fb0c4', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' });
-    txtBox.appendChild(line); txtBox.appendChild(sub);
-    btn = el('button', { border: '0', borderRadius: '999px', padding: '5px 10px', background: '#c9a14a', color: '#111', font: '700 11.5px system-ui,sans-serif', cursor: 'pointer', display: 'none' }, 'Connect');
-    btn.addEventListener('click', connect);
-    minB = el('button', { border: '0', background: 'transparent', color: '#9fb0c4', font: '700 14px system-ui,sans-serif', cursor: 'pointer', padding: '0 4px' }, '–');
-    minB.title = 'Make it small'; minB.addEventListener('click', function () { setMin(true); });
-    pill.appendChild(txtBox); pill.appendChild(btn); pill.appendChild(minB);
-    dot = el('button', { width: '30px', height: '30px', borderRadius: '50%', border: '1px solid rgba(255,255,255,.15)', background: 'rgba(17,24,39,.85)', color: '#fff', cursor: 'pointer', fontSize: '14px', display: 'none', boxShadow: '0 4px 14px rgba(0,0,0,.25)' }, '📡');
-    dot.addEventListener('click', function () { setMin(false); });
-    root.appendChild(pill); root.appendChild(dot);
-    document.body.appendChild(pillHost);
-    setMin(isMin, true);
+    host = el('div', 'position:fixed;right:16px;bottom:16px;z-index:2147483646;');
+    host.setAttribute('data-hotelops', 'opera-reader');
+    pillHost = host;
+    var root = host.attachShadow ? host.attachShadow({ mode: 'open' }) : host;
+    var wrap = el('div', 'all:initial;display:flex;flex-direction:column;align-items:flex-end;gap:8px;font:13px/1.45 ' + SANS + ';color:' + COL.txt + ';-webkit-font-smoothing:antialiased', null, root);
+    // the window: dark glass with a clear edge, so it reads on Opera's white screens too
+    winEl = el('div', 'box-sizing:border-box;width:344px;max-width:calc(100vw - 24px);border-radius:16px;overflow:hidden;color:' + COL.txt + ';background:linear-gradient(180deg,rgba(24,30,43,.96),rgba(14,18,27,.97));-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.13);box-shadow:0 24px 60px -18px rgba(0,0,0,.6),0 3px 10px rgba(0,0,0,.22),0 0 0 1px rgba(0,0,0,.3)', null, wrap);
+    winEl.setAttribute('role', 'dialog'); winEl.setAttribute('aria-label', 'HotelOps Opera reader');
+    var head = el('div', 'display:flex;align-items:center;gap:10px;padding:11px 8px 10px 12px;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;border-bottom:1px solid rgba(255,255,255,.07);background:linear-gradient(180deg,rgba(255,255,255,.04),transparent)', null, winEl);
+    head.title = 'Drag to move · double-click to put it back';
+    el('div', 'flex:none;width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;font:800 17px/1 Georgia,"Times New Roman",serif;color:#1a1408;background:linear-gradient(135deg,#f3d48a,#c9a14a 55%,#9c7a2e);box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 4px 12px -4px rgba(201,161,74,.7)', 'H', head);
+    var tb = el('div', 'flex:1;min-width:0', null, head);
+    el('div', 'font:700 14px/1.2 ' + SANS + ';color:#fff;letter-spacing:-.01em', 'Opera reader', tb);
+    var st = el('div', 'display:flex;align-items:center;gap:6px;margin-top:3px;min-width:0', null, tb);
+    hDot = el('span', 'flex:none;width:8px;height:8px;border-radius:50%;background:' + COL.warn + ';box-shadow:0 0 0 3px rgba(251,191,36,.15)', null, st);
+    hTxt = el('span', 'font:500 12px/1.2 ' + SANS + ';color:' + COL.txt2 + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0', '', st);
+    var ICON = 'all:unset;box-sizing:border-box;cursor:pointer;flex:none;width:30px;height:30px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;color:' + COL.txt2 + ';font:600 16px/1 ' + SANS + ';';
+    var minB = btn('–', ICON, head, 'min', function () { setMin(true); }); minB.title = 'Make it small'; minB.setAttribute('aria-label', 'Minimise');
+    // tabs
+    var bar = el('div', 'display:flex;gap:4px;margin:10px 12px 0;padding:3px;border-radius:11px;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.06)', null, winEl);
+    bar.setAttribute('role', 'tablist');
+    [['now', 'Now'], ['today', 'Today'], ['help', '🛟 Help']].forEach(function (t) {
+      tabB[t[0]] = btn(t[1], 'all:unset;box-sizing:border-box;cursor:pointer;flex:1;text-align:center;padding:6px 4px;border-radius:8px;font:600 12.5px/1.2 ' + SANS + ';color:' + COL.txt3 + ';transition:background .2s,color .2s', bar, 'tab-' + t[0], function () { setTab(t[0]); });
+      tabB[t[0]].setAttribute('role', 'tab');
+    });
+    var body = el('div', 'padding:10px 12px 12px;max-height:min(380px,62vh);overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.2) transparent', null, winEl);
+    ['now', 'today', 'help'].forEach(function (k) { panes[k] = el('div', 'display:none;flex-direction:column;gap:8px', null, body); });
+    // Now
+    var P = panes.now;
+    E.link = el('div', CARD + 'display:none;border-color:rgba(251,191,36,.38);background:rgba(251,191,36,.09)', null, P);
+    E.linkT = el('div', 'font-weight:700;color:#fde68a', '', E.link);
+    E.linkD = el('div', 'margin-top:3px;color:' + COL.txt + ';font-size:12.5px', '', E.link);
+    E.linkL = el('ol', 'display:none;margin:8px 0 0;padding-left:18px;color:' + COL.txt2 + ';font-size:12.5px;flex-direction:column;gap:3px', null, E.link);
+    ['Is HotelOps open in this same browser (the same Chrome / Edge profile)?', 'Reload the HotelOps tab: an older HotelOps can\'t link.', 'Still nothing: chrome://extensions → ↻ on the HotelOps helper.'].forEach(function (t) { el('li', '', t, E.linkL); });
+    var lb = el('div', 'display:flex;gap:6px;flex-wrap:wrap;margin-top:9px', null, E.link);
+    E.retry = btn('🔁 Retry link', BTN_GO, lb, 'retry', retryLink);
+    E.conn = btn('Connect', BTN_GO, lb, 'connect', connect);
+    E.openApp = btn('Open HotelOps', BTN_2, lb, 'open-app', function () { try { window.open(APP_URL, '_blank'); } catch (_) {} });
+    var sc = el('div', CARD, null, P);
+    el('div', LABEL, 'On screen', sc);
+    E.scr = el('div', 'margin-top:3px;font:700 15px/1.25 ' + SANS + ';color:#fff', '', sc);
+    E.scr2 = el('div', 'margin-top:2px;color:' + COL.txt2 + ';font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis', '', sc);
+    var dc = el('div', CARD, null, P);
+    el('div', LABEL, 'HotelOps did', dc);
+    E.did = el('div', 'margin-top:3px;color:' + COL.txt + ';font-size:13px', '', dc);
+    E.undo = el('div', 'display:none;margin-top:6px;color:' + COL.txt3 + ';font-size:12px', '↩ Not right? Undo it in HotelOps: the toast there, or Settings → 📡 Opera reader.', dc);
+    E.next = el('div', CARD + 'display:none;color:#dfe3ff;border-color:rgba(129,140,248,.35);background:rgba(129,140,248,.12)', '', P);
+    E.stuck = el('div', CARD + 'display:none;color:#ffe1e1;border-color:rgba(248,113,113,.35);background:rgba(248,113,113,.10)', '', P);
+    el('div', 'color:' + COL.txt3 + ';font-size:11.5px;padding:0 2px', 'Only reads Opera: it never clicks or types here.', P);
+    // Today
+    E.today = el('div', 'display:flex;flex-direction:column;gap:2px', null, panes.today);
+    // Help
+    var Hp = panes.help;
+    el('div', 'color:' + COL.txt2 + ';font-size:12.5px', 'Screen not read right? Tell the developer: only the screen\'s layout goes (headers and shapes like "Aaaa 99"), never guest data.', Hp);
+    var hb = el('div', 'display:flex;gap:6px;flex-wrap:wrap', null, Hp);
+    btn('🛟 Not read right?', BTN_GO, hb, 'report', function () { manualReport(false); });
+    btn('📋 Copy screen layout', BTN_2, hb, 'copy-layout', function () { manualReport(true); });
+    E.help = el('div', CARD + 'display:none;color:#e9f7ef;border-color:rgba(52,211,153,.35);background:rgba(52,211,153,.10);font-size:12.5px', '', Hp);
+    var how = el('div', CARD, null, Hp);
+    el('div', LABEL, 'How it links', how);
+    el('div', 'margin-top:3px;color:' + COL.txt2 + ';font-size:12.5px', EXT ? 'The HotelOps helper links this tab to HotelOps by itself: keep HotelOps open in this same browser. HotelOps → Settings → 📡 Opera reader → "Open Opera" opens Opera already linked.'
+      : 'Press Connect: HotelOps opens in a tab and this window sends it what Opera shows. Keep that tab open. With the HotelOps helper it links by itself.', how);
+    E.diag = el('div', 'margin-top:6px;color:' + COL.txt3 + ';font:500 11.5px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace', '', how);
+    btn('⤢ Put it back in the corner', BTN_2, Hp, 'reset', function () { UI.r = UI.b = null; saveUI(); place(16, 16); });
+    // the badge when small
+    badge = btn('', 'all:unset;box-sizing:border-box;position:relative;display:none;align-items:center;justify-content:center;width:46px;height:46px;border-radius:50%;cursor:grab;touch-action:none;font:20px/1 ' + SANS + ';background:radial-gradient(circle at 30% 25%,rgba(52,62,84,.98),rgba(15,20,30,.97));border:1px solid rgba(255,255,255,.18);box-shadow:0 10px 26px -8px rgba(0,0,0,.6),0 0 0 3px rgba(201,161,74,.18)', wrap, 'badge');
+    badge.setAttribute('aria-label', 'Open the HotelOps Opera reader');
+    el('span', 'pointer-events:none', '📡', badge);
+    bDot = el('span', 'position:absolute;right:1px;bottom:1px;width:12px;height:12px;border-radius:50%;box-sizing:border-box;border:2px solid #111827;background:' + COL.warn, null, badge);
+    bNum = el('span', 'position:absolute;top:-5px;right:-6px;display:none;min-width:20px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:99px;background:#c9a14a;color:#1a1408;font:700 10.5px/18px ' + SANS + ';text-align:center', '', badge);
+    badge.addEventListener('click', function () { if (badge.dragged) { badge.dragged = false; return; } touched = true; setMin(false); }, { passive: true });
+    dragger(head); dragger(badge);
+    head.addEventListener('dblclick', function (e) { if (e.target.closest && e.target.closest('button')) return; UI.r = UI.b = null; saveUI(); place(16, 16); }, { passive: true });
+    document.body.appendChild(host);
+    if (UI.r != null && UI.b != null) place(UI.r, UI.b);
+    setTab(curTab, true);
+    // the first time: open for a minute, then a small badge in the corner (it never covers Opera's buttons for long)
+    if (typeof UI.min === 'boolean') setMin(UI.min, true);
+    else { setMin(false, true); setTimeout(function () { if (!touched && typeof UI.min !== 'boolean' && !stopped) setMin(true); }, 60000); }
   }
-  function setMin(on, quiet) { isMin = !!on; if (!quiet) LS.set('ho_op_min', isMin); if (pill) pill.style.display = isMin ? 'none' : 'flex'; if (dot) dot.style.display = isMin ? 'block' : 'none'; render(); }
+  function place(r, b) {
+    r = Math.max(4, Math.min(window.innerWidth - 56, r)); b = Math.max(4, Math.min(window.innerHeight - 56, b));
+    host.style.right = r + 'px'; host.style.bottom = b + 'px';
+  }
+  function dragger(handle) {
+    var d = null;
+    handle.addEventListener('pointerdown', function (e) {
+      if (e.button !== 0 || (handle !== badge && e.target.closest && e.target.closest('button'))) return;
+      d = { x: e.clientX, y: e.clientY, r: parseFloat(host.style.right) || 16, b: parseFloat(host.style.bottom) || 16, moved: false };
+      try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+    }, { passive: true });
+    handle.addEventListener('pointermove', function (e) {
+      if (!d) return;
+      var dx = e.clientX - d.x, dy = e.clientY - d.y;
+      if (!d.moved && Math.abs(dx) + Math.abs(dy) < 5) return;
+      d.moved = true; handle.style.cursor = 'grabbing';
+      place(d.r - dx, d.b - dy);
+    }, { passive: true });
+    var end = function () {
+      if (!d) return; var moved = d.moved; d = null; handle.style.cursor = 'grab';
+      if (moved) { UI.r = parseFloat(host.style.right); UI.b = parseFloat(host.style.bottom); saveUI(); touched = true; if (handle === badge) badge.dragged = true; }
+    };
+    handle.addEventListener('pointerup', end, { passive: true });
+    handle.addEventListener('pointercancel', function () { d = null; handle.style.cursor = 'grab'; }, { passive: true });
+  }
+  function setTab(k, quick) {
+    curTab = k; UI.tab = k; if (!quick) saveUI();
+    Object.keys(panes).forEach(function (t) {
+      var on = t === k; panes[t].style.display = on ? 'flex' : 'none';
+      tabB[t].style.background = on ? 'linear-gradient(180deg,rgba(201,161,74,.30),rgba(201,161,74,.14))' : 'transparent';
+      tabB[t].style.color = on ? '#fff' : COL.txt3; tabB[t].setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    if (!quick) anim(panes[k], [{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 180, easing: 'ease-out' });
+    lastSig = ''; render();
+  }
+  function setMin(on, quick) {
+    if (!winEl) return;
+    UI.min = !!on; isMin = UI.min; if (!quick) saveUI();
+    winEl.style.display = on ? 'none' : 'block'; badge.style.display = on ? 'inline-flex' : 'none';
+    if (!quick) anim(on ? badge : winEl, [{ opacity: 0, transform: 'translateY(6px) scale(' + (on ? '.85' : '.96') + ')' }, { opacity: 1, transform: 'none' }], { duration: 200, easing: 'cubic-bezier(.2,.9,.3,1.1)' });
+    lastSig = ''; render();
+  }
+  /** "🔁 Retry link": the helper's link opened afresh (a helper from v436 has retry), then a ping */
+  function retryLink() {
+    linkT0 = Date.now(); relay = null;
+    try { if (EXT && typeof EXT.retry === 'function') EXT.retry(); } catch (_) {}
+    if (!EXT) connect(); else setTimeout(tick, 300);
+    render();
+  }
+  var isMin = false;
+  function linkNow() {
+    return linkDiag({ ext: !!EXT, linked: Date.now() - linked < 45000, since: Date.now() - linkT0, relay: relay ? { apps: relay.apps, age: Date.now() - relay.at } : null, relayEver: relayEver,
+      anyIn: extIn ? Date.now() - extIn : -1, extErr: EXT && EXT.err ? String(EXT.err) : '' });
+  }
+  var hhmm = function (t) { var d = new Date(t); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
   function render() {
-    if (!TOP || !pillHost) return;
-    var isLinked = Date.now() - linked < 45000;
+    if (!TOP || !host) return;
+    var now = Date.now(), L = linkNow();
     var n = view.rows.length, kind = view.kind, total = view.total;
     Object.keys(frames).forEach(function (k) { if (frames[k].n > n) { n = frames[k].n; kind = frames[k].kind; total = frames[k].total; } });
-    var what = n ? summary(kind, n, total) : 'watching Opera';
-    line.textContent = '📡 HotelOps · ' + what;
-    sub.textContent = !isLinked ? (EXT ? 'linking to HotelOps… (keep HotelOps open)' : 'not linked — press Connect (HotelOps opens)')
-      : hintNow && Date.now() - hintNow.at < 120000 ? '🧠 ' + hintNow.text
-      : lastAck && Date.now() - lastAck.at < 600000 ? 'HotelOps: ' + lastAck.text : 'linked · only reads, never changes Opera';
-    btn.style.display = !EXT && !isLinked ? 'inline-block' : 'none';
-    dot.title = line.textContent + ' — ' + sub.textContent;
-    dot.style.borderColor = isLinked ? 'rgba(52,211,153,.8)' : 'rgba(251,191,36,.8)';
+    if (!n && sentN && view.kind) n = sentN;
+    var errOn = !!lastErr && now - lastErrAt < 60000, tone = errOn ? 'bad' : L.code === 'linked' ? 'ok' : 'warn';
+    var did = lastAck && now - lastAck.at < 600000 ? lastAck : null, hint = hintNow && now - hintNow.at < 120000 ? hintNow.text : '';
+    var stuckOn = stuckAt && now - stuckAt < 600000, helpOn = helpTxt && now - helpAt < 120000;
+    var sig = [tone, L.code, L.text, n, kind, total, view.title, did ? did.text + Math.floor((now - did.at) / 60000) : '', hint, stuckOn, TL.length, TL[0] ? TL[0].at : 0, curTab, isMin, helpOn ? helpTxt : '',
+      relay ? relay.apps : '-', appV, errOn ? lastErr : ''].join('|');
+    if (sig === lastSig) return;
+    lastSig = sig;
+    var col = COL[tone];
+    hDot.style.background = col; hDot.style.boxShadow = '0 0 0 3px ' + (tone === 'ok' ? 'rgba(52,211,153,.18)' : tone === 'bad' ? 'rgba(248,113,113,.2)' : 'rgba(251,191,36,.18)');
+    bDot.style.background = col;
+    if (tone === 'warn' && !pulse) pulse = anim(hDot, [{ opacity: 1 }, { opacity: 0.35 }, { opacity: 1 }], { duration: 1600, iterations: Infinity });
+    else if (tone !== 'warn' && pulse) { try { pulse.cancel(); } catch (_) {} pulse = null; }
+    hTxt.textContent = errOn ? 'reader error: ' + lastErr.slice(0, 50) : L.code === 'linked' ? 'Linked to HotelOps' + (appV ? ' ' + appV : '') : L.code === 'console' ? 'Not linked' : L.code === 'linking' ? 'Linking to HotelOps…' : 'Not linked yet';
+    hTxt.style.color = tone === 'bad' ? '#fecaca' : COL.txt2;
+    // linking: after 10 s a checklist that says what it is when it can tell
+    var showLink = L.code !== 'linked';
+    E.link.style.display = showLink ? 'block' : 'none';
+    if (showLink) {
+      E.linkT.textContent = L.code === 'linking' ? 'Linking to HotelOps…' : L.code === 'console' ? 'Not linked to HotelOps' : 'Not linked to HotelOps yet';
+      E.linkD.textContent = L.text;
+      E.linkL.style.display = L.code === 'linking' || L.code === 'console' ? 'none' : 'flex';
+      E.retry.style.display = EXT && L.code !== 'linking' ? 'inline-flex' : 'none';
+      E.conn.style.display = EXT ? 'none' : 'inline-flex';
+      E.openApp.style.display = EXT && L.code !== 'linking' ? 'inline-flex' : 'none';
+    }
+    E.scr.textContent = kind ? (KLABEL[kind] || cap(kind)) : 'Watching Opera';
+    E.scr2.textContent = n ? cap(summary(kind, n, total)) + (view.title && view.title.toLowerCase().indexOf(String(KLABEL[kind] || kind).toLowerCase()) < 0 ? ' · ' + view.title : '') : kind ? 'Nothing to read on it yet' : 'Open a screen in Opera: it reads it by itself';
+    E.did.textContent = did ? did.text + ' · ' + hhmm(did.at) : L.code === 'linked' ? 'Nothing to change yet' : 'Waiting for HotelOps';
+    E.undo.style.display = did && !/^(?:up to date|nothing|read ·|waiting)/i.test(did.text) ? 'block' : 'none';
+    E.next.style.display = hint ? 'block' : 'none'; E.next.textContent = '🧠 ' + hint;
+    E.stuck.style.display = stuckOn ? 'block' : 'none'; E.stuck.textContent = '🛟 Something on this screen couldn\'t be read: its layout (no guest data) went to HotelOps → Settings → Opera reader.';
+    E.help.style.display = helpOn ? 'block' : 'none'; E.help.textContent = helpTxt;
+    E.diag.textContent = 'reader ' + VERSION + (EXT ? ' · helper ' + (EXT.v || '?') + (EXT.us ? ' (self-updated)' : '') : ' · console') + ' · link: ' + L.code + (relay ? ' · relay sees ' + relay.apps + ' HotelOps tab' + (relay.apps === 1 ? '' : 's') : '') + (appV ? ' · HotelOps ' + appV : '');
+    // Today
+    while (E.today.firstChild) E.today.removeChild(E.today.firstChild);
+    if (!TL.length) el('div', 'color:' + COL.txt3 + ';font-size:12.5px;padding:6px 2px', 'Nothing yet: reads and what HotelOps did show here.', E.today);
+    TL.slice(0, 30).forEach(function (x) {
+      var r = el('div', 'display:flex;gap:8px;align-items:baseline;padding:5px 2px;border-bottom:1px solid rgba(255,255,255,.05);font-size:12.5px;min-width:0', null, E.today);
+      el('span', 'flex:none;font:600 11.5px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:' + COL.txt3, hhmm(x.at), r);
+      el('span', 'flex:none;width:18px;text-align:center', x.i, r);
+      el('span', 'min-width:0;color:' + COL.txt + ';overflow-wrap:anywhere', x.t, r);
+    });
+    bNum.style.display = n ? 'block' : 'none'; bNum.textContent = n > 999 ? '999+' : String(n);
+    badge.title = 'HotelOps · ' + (n ? summary(kind, n, total) : 'watching Opera') + ' · ' + hTxt.textContent;
   }
 
   function stop(silent) {
     stopped = true;
     try { if (obs) obs.disconnect(); } catch (_) {}
-    clearInterval(iv); clearTimeout(deb);
+    clearInterval(iv); clearInterval(uiIv); clearTimeout(deb);
     window.removeEventListener('message', onWinMsg);
     window.removeEventListener('click', onClickLearn, { capture: true });
     clearTimeout(flushT);
@@ -898,10 +1336,12 @@
   window.addEventListener('scroll', function () { if (!deb) laterScan(700); }, { capture: true, passive: true });
   window.addEventListener('hashchange', function () { laterScan(300); });
   iv = setInterval(tick, 15000);
-  window.__hoOp = { stop: stop, scan: scan, connect: connect, min: setMin, v: VERSION,
+  var uiIv = setInterval(function () { if (Date.now() - linked > 40000 || lastErr) render(); }, 2500);   // the linking checklist after 10 s (render returns at once when nothing changed)
+  window.__hoOp = { stop: stop, scan: scan, connect: connect, min: setMin, tab: function (k) { setTab(k); }, report: manualReport, v: VERSION,
     state: function () { return { kind: view.kind, date: view.date, title: view.title, total: view.total, rows: view.rows.slice(), folio: view.folio || null, traces: (view.traces || []).slice(), tables: (view.tables || []).slice(), audit: view.audit || null,
-      sent: sentN, sentAt: sentAt, linked: Date.now() - linked < 45000, ack: lastAck, err: lastErr, ext: !!EXT, frame: FRAME, learn: LEARN, steps: steps.length, hint: hintNow, cost: Math.round(cost * 10) / 10 }; } };
-  if (TOP && !EXT) try { console.log('%c 📡 HotelOps Opera reader is running ✓ %c Press "Connect" on the pill (bottom right). It only reads; it never changes anything in Opera.', 'background:#111827;color:#fbbf24;font:700 13px system-ui;padding:4px 8px;border-radius:6px', 'color:#9aa3b2;font:12px system-ui'); } catch (_) {}
+      sent: sentN, sentAt: sentAt, linked: Date.now() - linked < 45000, ack: lastAck, err: lastErr, ext: !!EXT, frame: FRAME, learn: LEARN, steps: steps.length, hint: hintNow, cost: Math.round(cost * 10) / 10,
+      link: linkNow(), relay: relay, stuckSent: doneToday().slice(), stuckQ: stuckQ.length, timeline: TL.slice() }; } };
+  if (TOP && !EXT) try { console.log('%c 📡 HotelOps Opera reader is running ✓ %c Press "Connect" in the HotelOps window (bottom right). It only reads; it never changes anything in Opera.', 'background:#111827;color:#fbbf24;font:700 13px system-ui;padding:4px 8px;border-radius:6px', 'color:#9aa3b2;font:12px system-ui'); } catch (_) {}
   setTimeout(scan, 600);
   setTimeout(tick, 1200);
 })();

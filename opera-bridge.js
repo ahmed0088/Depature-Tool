@@ -53,6 +53,20 @@
 //  and "my Opera routine" / "what do I usually do before a check-out";
 //  window.hoOpera.{last, rows, find, fresh, folio, roomStatus, traces, profile,
 //  learned} for other modules.
+//  🟢 Open Opera (the 📡 Opera page, Settings and a small strip on Departures /
+//  Arrivals, desk PCs only): opens the hotel's Opera Cloud in one reused window
+//  ("hotelops-opera"). The address is learned from the reader (its entry page)
+//  or pasted once; operaUrl per hotel (owners / managers write it).
+//  🛟 Screens it couldn't read: the reader's layout-only reports (and HotelOps'
+//  own: "nothing readable", a plan error, departures that match no room two days
+//  running), 20 kept here and under operaStuck/{hash}; "📋 Copy for Claude".
+//  One quiet toast an hour at most (never on a day off). The Brain asks about
+//  columns / screens it couldn't map (quiet Now items); the answers are taught
+//  to the reader (operaTeach/, operaScreens/). It also suggests: a room checked
+//  out in Opera still due here, open balances before check-out, Opera unread
+//  for 2 h, an old reader.
+//  The 📡 Opera page (menu → Front Desk): Open Opera, live read, changes with
+//  Undo, bills, learned routines, 🛟 reports, settings.
 //  Pure helpers: window.hoOperaPure (tests/run-tests.js "Opera reader").
 // ═══════════════════════════════════════════════════════════
 (function () {
@@ -198,7 +212,7 @@ function sanitize(snap) {
 function plan(inp) {
   const s = inp.snap, t = inp.today, kind = s.kind, date = s.date;
   const rows = (s.rows || []).filter(r => !BAD.has(r.status));
-  const P = { kind, date, read: (s.rows || []).length, dep: { create: null, out: [], ext: [], add: [], fill: [] }, arr: { add: [], fill: [] }, pur: { add: [], fill: [] }, ih: { mode: '', add: [], upd: [] }, notes: [], n: 0 };
+  const P = { kind, date, read: (s.rows || []).length, dep: { create: null, out: [], ext: [], add: [], fill: [], rows: 0, matched: 0 }, arr: { add: [], fill: [] }, pur: { add: [], fill: [] }, ih: { mode: '', add: [], upd: [] }, notes: [], n: 0 };
   const cancelled = (s.rows || []).filter(r => BAD.has(r.status));
   if (cancelled.length) P.notes.push(`${cancelled.length} cancelled / no-show in Opera (left as they are here)`);
   const screenToday = !date || date === t;
@@ -208,12 +222,14 @@ function plan(inp) {
   const bday = board.day || '';
   const depRows = rows.filter(r => realRoom(r.room) && (r.departure === t || (kind === 'departures' && !r.departure && screenToday)) && r.status !== 'due_in');
   const findB = r => B.find(b => roomKey(b.roomStr != null ? b.roomStr : b.room) === roomKey(r.room));
+  P.dep.rows = depRows.length;
   if ((!B.length || (bday && bday < t)) && (kind === 'departures' || kind === 'inhouse') && depRows.length) {
     P.dep.create = depRows.slice();
   } else if (B.length && (!bday || bday === t)) {
     depRows.forEach(r => {
       const b = findB(r);
       if (!b) { P.dep.add.push({ row: r, out: r.status === 'checked_out' }); return; }
+      P.dep.matched++;
       if (!sameGuest(b.name, r.name)) { P.notes.push(`Room ${b.roomStr}: Opera shows ${r.name || 'another guest'}, the board ${b.name} — not changed`); return; }
       if (r.status === 'checked_out' && b.status !== 'out' && b.status !== 'extended') P.dep.out.push({ room: b.roomStr, row: r });
       const set = {};
@@ -499,7 +515,159 @@ function learnSummary(M) {
 }
 const secTxt = s => (s >= 90 ? Math.round(s / 60) + ' min' : s + ' s');
 
-W.hoOperaPure = { maskCards, secretLabel, cleanFolio, cleanLabel, learnClean, learnModel, learnRecent, learnNext, learnSummary, sessionsOf, toIso, operaDay, roomKey, nameKey, sameGuest, isOtaEmail, goodEmail, natName, firstLast, sanitize, plan, summaryText, worthAlert, depReport, hashOf, isPm };
+// ══ Screens the reader couldn't read ("stuck" reports) — pure ══
+// The reader sends the LAYOUT of a screen it could not read (headers, how each was mapped, value shapes like "Aaaa 99", DOM hints),
+// never a value. The three functions below are the reader's own, word for word (tests/run-tests.js checks they stay the same).
+const sp = function (s) { return String(s == null ? '' : s).replace(/[   ]/g, ' ').replace(/[​-‏⁦-⁩﻿]/g, ''); };
+var EMAIL_RX = /[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/;
+function shapeOf(v) {
+  var s = sp(v).replace(/\s+/g, ' ').trim(); if (!s) return '';
+  s = s.replace(/\p{L}/gu, function (c) { return c.toLowerCase() !== c ? 'A' : 'a'; }).replace(/\p{N}/gu, '9').replace(/@/g, '＠').replace(/9{7,}/g, '999999+');
+  return s.length > 24 ? s.slice(0, 23) + '…' : s;
+}function reportLeaks(text) {
+  var t = String(text || '');
+  if (EMAIL_RX.test(t)) return 'an email';
+  if (/\d{7,}/.test(t)) return 'a long number';
+  var m = t.match(/(?<!\p{L})\p{Lu}\p{Ll}+,[ \t]*\p{Lu}\p{Ll}+/gu) || [];
+  for (var i = 0; i < m.length; i++) if (m[i].replace(/[Aa,\s]/g, '')) return 'a name';
+  return '';
+}function reportText(R, x) {
+  x = x || {};
+  var esc = function (s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
+  var two = function (n) { return (n < 10 ? '0' : '') + n; }, d = new Date(R.at || 0);
+  var L = ['HotelOps Opera reader report — please teach the reader this screen:'];
+  L.push('reader v' + (R.v || '?') + ' · ' + d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate()) + ' ' + two(d.getHours()) + ':' + two(d.getMinutes()) + (x.n > 1 ? ' · seen ' + x.n + ' times' : ''));
+  L.push('screen: kind guess "' + (R.kind || 'unknown') + '"' + (R.hint ? ' (its words say "' + R.hint + '")' : ' (its words name no screen it knows)') + ' · title "' + (R.title || '') + '" · path ' + (R.path || '—') + ' · screen date ' + R.date);
+  if ((R.heads || []).length) L.push('headings: ' + R.heads.join(' | '));
+  L.push('why:');
+  (R.why || []).forEach(function (w) { L.push('- ' + w.c + ': ' + w.t); });
+  if (R.concl) L.push('reader concluded: ' + R.concl);
+  if (R.err) L.push('error: ' + R.err);
+  if (x.app) L.push('HotelOps answered: ' + x.app);
+  (R.grids || []).forEach(function (g, i) {
+    L.push('grid ' + (i + 1) + (g.stuck ? ' (NOT READ)' : '') + ' — ' + g.sel + ' · ' + g.n + ' rows · header cells: ' + (g.cells || 'none'));
+    L.push('  headers → fields: ' + (g.head.length ? g.head.map(function (h) { return '"' + h[0] + '" → ' + h[1]; }).join(' | ') : 'no header line'));
+    if (g.aria.length) L.push('  header aria-labels: ' + g.aria.join(' | '));
+    if (g.anc.length) L.push('  dom (grid, then up): ' + g.anc.map(function (a) { return a.t + (a.r ? '[role=' + a.r + ']' : '') + a.c.map(function (c) { return '.' + c; }).join(''); }).join(' < '));
+    g.shapes.forEach(function (r, j) { L.push('  row ' + (j + 1) + ' shape: ' + r.join(' | ')); });
+  });
+  if ((R.pairs || []).length) L.push('label → value shape: ' + R.pairs.map(function (p) { return p[0] + ' = ' + p[1]; }).join(' | '));
+  L.push('--- fake page (letters → a/A, digits → 9) ---');
+  if ((R.heads || [])[0]) L.push('<h1>' + esc(R.heads[0]) + '</h1>');
+  (R.grids || []).forEach(function (g) {
+    var a1 = g.anc[1], open = a1 && a1.c.length ? '<div class="' + esc(a1.c.join(' ')) + '">' : '<div>';
+    if (/^table/.test(g.sel)) L.push(open + '<table>' + (g.head.length ? '<tr>' + g.head.map(function (h) { return '<th>' + esc(h[0]) + '</th>'; }).join('') + '</tr>' : '') + g.shapes.map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + esc(c) + '</td>'; }).join('') + '</tr>'; }).join('') + '</table></div>');
+    else L.push(open + '<div role="grid">' + (g.head.length ? '<div role="row">' + g.head.map(function (h, k) { return '<div role="columnheader" aria-colindex="' + (k + 1) + '">' + esc(h[0]) + '</div>'; }).join('') + '</div>' : '') + g.shapes.map(function (r) { return '<div role="row">' + r.map(function (c, k) { return '<div role="gridcell" aria-colindex="' + (k + 1) + '">' + esc(c) + '</div>'; }).join('') + '</div>'; }).join('') + '</div></div>');
+  });
+  (R.pairs || []).forEach(function (p, i) { L.push('<label for="f' + i + '">' + esc(p[0]) + '</label><input id="f' + i + '" readonly value="' + esc(p[1]) + '">'); });
+  L.push('--- end ---');
+  return L.join('\n');
+}const stuckText = reportText, stuckLeaks = reportLeaks;
+/** a report from the reader (or the database), made safe: known fields only, short strings, values re-shaped (a shape stays a shape) */
+function stuckClean(r) {
+  if (!r || typeof r !== 'object' || !Array.isArray(r.why)) return null;
+  const arr = (a, n) => (Array.isArray(a) ? a.slice(0, n) : (a && typeof a === 'object' ? Object.values(a).slice(0, n) : []));
+  const o = { v: cut(r.v, 12), at: +r.at > 1e12 && +r.at < 4e12 ? Math.round(+r.at) : Date.now(), kind: cut(r.kind, 20).replace(/[^a-z]/g, ''), hint: cut(r.hint, 20).replace(/[^a-z]/g, ''), date: r.date === 'found' ? 'found' : 'none',
+    title: cut(r.title, 80), path: cut(r.path, 120), heads: arr(r.heads, 6).map(x => cut(x, 60)).filter(Boolean),
+    why: arr(r.why, 6).map(w => (w && typeof w === 'object' ? { c: cut(w.c, 20).replace(/[^a-z\-]/g, ''), t: cut(w.t, 200) } : null)).filter(w => w && w.c),
+    grids: arr(r.grids, 4).map(g => (g && typeof g === 'object' ? { sel: cut(g.sel, 60), cells: cut(g.cells, 60), n: Math.max(0, Math.round(+g.n || 0)), stuck: !!g.stuck,
+      head: arr(g.head, 30).map(h => (Array.isArray(h) ? [cut(h[0], 40), cut(h[1], 24)] : null)).filter(Boolean),
+      aria: arr(g.aria, 30).map(x => cut(x, 40)).filter(Boolean),
+      anc: arr(g.anc, 4).map(a => (a && typeof a === 'object' ? { t: (cut(a.t, 20).toLowerCase().match(/^[a-z][a-z0-9\-]*/) || [''])[0], r: cut(a.r, 20).replace(/[^a-z\-]/g, ''), c: arr(a.c, 5).map(x => cut(x, 40).replace(/[^A-Za-z_\-]/g, '')).filter(Boolean) } : null)).filter(Boolean),
+      shapes: arr(g.shapes, 3).map(row => arr(row, 16).map(x => shapeOf(x))) } : null)).filter(Boolean),
+    pairs: arr(r.pairs, 30).map(p => (Array.isArray(p) ? [cut(p[0], 40), shapeOf(p[1])] : null)).filter(p => p && p[0]),
+    concl: cut(r.concl, 240), err: cut(r.err, 160) };
+  return o.why.length ? o : null;
+}
+// ══ The Opera Cloud address ("🟢 Open Opera") — pure ══
+const OP_HOST = /(^|\.)(oraclecloud|oracleindustry|oraclehospitality)\.com$/i;
+/** an Opera Cloud address as pasted → the same address, checked: https, an Oracle host (…oraclecloud.com, …oracleindustry.com,
+ *  …oraclehospitality.com), no login in it; only the query and the hash are dropped (the path is kept: it is Opera's entry page). '' when it isn't one. */
+function operaHome(u) {
+  let s = String(u == null ? '' : u).trim(); if (!s || s.length > 600) return '';
+  if (!/^[a-z][a-z0-9+.\-]*:/i.test(s)) s = 'https://' + s.replace(/^\/+/, '');
+  let x; try { x = new URL(s); } catch (_) { return ''; }
+  if (x.protocol !== 'https:' || !OP_HOST.test(x.hostname) || x.username || x.password || x.port) return '';
+  return x.origin + x.pathname;
+}
+/** the address the reader was on (any screen) → Opera's entry page: "…/<TENANT>/operacloud/faces/opera-cloud-index/OperaCloud"
+ *  when it is an Opera Cloud screen; else the address as it is (query and hash dropped) */
+function operaEntry(u) {
+  const h = operaHome(u); if (!h) return '';
+  const x = new URL(h), m = x.pathname.match(/^(.*?\/operacloud)(?:\/|$)/i);
+  return m ? x.origin + m[1] + '/faces/opera-cloud-index/OperaCloud' : h;
+}
+/** the "Open Opera" card: helper missing / user scripts off / on, linked or not → {btn, state, b, s} */
+function openState(o) {
+  const btn = o.linked ? '✓ Linked · open Opera' : '🟢 Open Opera';
+  if (!o.helper) return { btn, state: 'nohelper', b: 'Link with one click', s: 'Get the helper' };
+  if (!o.us) return { btn, state: 'noscripts', b: '⚡ Reader on · reads by itself', s: 'Automatic updates: in chrome://extensions click Details on the HotelOps helper and turn on Allow User Scripts, then reload this page.' };
+  return { btn, state: 'on', b: '⚡ Reader on · reads by itself · updates by itself', s: o.linked ? 'Linked to Opera now' : 'Links by itself when Opera opens' };
+}
+
+// ── the Brain's questions and suggestions about Opera (pure) ──
+const teachKey = h => String(h || '').toUpperCase().replace(/#/g, ' NO ').replace(/&/g, ' AND ').replace(/[^A-Z0-9]+/g, ' ').trim().slice(0, 48);
+const screenKey = t => String(t || '').replace(/\d+/g, '#').toLowerCase().replace(/[^a-z0-9#()]+/g, ' ').trim().slice(0, 60);
+const TEACH_FIELDS = { room: 'Room', name: 'Guest name', last: 'Last name', first: 'First name', conf: 'Conf. number', arrival: 'Arrival date', departure: 'Departure date', status: 'Status', balance: 'Balance', nights: 'Nights', nat: 'Nationality', email: 'Email', company: 'Company', agent: 'Travel agent', rateCode: 'Rate code', vip: 'VIP', roomType: 'Room type', roomStatus: 'Room status', '-': 'Something else' };
+const TEACH_KINDS = [['arrivals', 'Arrivals'], ['departures', 'Departures'], ['inhouse', 'In House'], ['billing', 'Billing'], ['rooms', 'Room status'], ['profile', 'Profile'], ['other', 'Other']];
+/** the choices for a column, from the shape of its values: a date → departure / arrival, a short number → room, a long one → conf., "Aaaa, Aaaa" → a name */
+function teachChoices(shape) {
+  const s = String(shape || '');
+  let f;
+  if (/^9{1,2}[\/.\- ](?:9{1,2}|Aaa|AAA)[\/.\- ]9{2,4}$|^9{4}-99-99$|^Aaa 9{1,2},? 9{4}$/.test(s)) f = ['departure', 'arrival'];
+  else if (/^A?9{1,5}A?$/.test(s)) f = ['room', 'conf', 'nights'];
+  else if (/^9{6}|^999999\+$/.test(s)) f = ['conf'];
+  else if (/^A[a]+,\s*A[a]+/.test(s) || /^A[a]+ A[a]+$/.test(s)) f = ['name', 'company'];
+  else if (/^-?9[9,]*\.99$/.test(s)) f = ['balance'];
+  else f = ['status', 'name', 'room'];
+  return f.map(k => [TEACH_FIELDS[k], k]).concat([['Something else', '-'], ['Ignore', 'x']]);
+}
+/** what the Brain could ask or suggest about Opera now (pure). I: {stuck, asked, taught, dayOff, cfg, board: {rooms, day}, last (LAST), folios, now, today, coMin, readerV, appV, linkAt}
+ *  → [{id, type, icon, tone, text, why, opts: [[label, action]]}] (action: 'teach:<field>' / 'screen:<kind>' / 'ask:x' / 'markout' / 'deps' / 'open' / 'page') */
+function operaThoughts(I) {
+  const T = []; if (I.dayOff) return T;   // a day off: it asks nothing
+  const asked = I.asked || {}, taught = I.taught || { h: {}, s: {} };
+  // 1) columns it couldn't map, and screens it didn't know (newest report first; two questions at a time)
+  let q = 0;
+  (I.stuck || []).forEach(e => {
+    const r = e.rep || {}; if (q >= 2) return;
+    const where = (r.heads && r.heads[0]) || r.title || 'an Opera';
+    (r.grids || []).filter(g => g.stuck).forEach(g => g.head.forEach((h, i) => {
+      const k = teachKey(h[0]); if (q >= 2 || !k || h[1] !== '?' || asked['col:' + k] || taught.h[k] != null) return;
+      if (T.some(t => t.id === 'opq:col:' + k)) return;
+      q++;
+      T.push({ id: 'opq:col:' + k, type: 'opQ', icon: '🧠', tone: 'warn', text: `In Opera's "${where}" list there's a column "${h[0]}" — is it:`, why: `So the reader reads it next time. Its values look like "${(g.shapes[0] || [])[i] || '…'}" (the shape only).`,
+        opts: teachChoices((g.shapes[0] || [])[i]).map(([l, f]) => [l, f === 'x' ? 'ask:x' : 'teach:' + f]) });
+    }));
+    if (q < 2 && (r.why || []).some(w => w.c === 'unknown-screen')) {
+      const name = (r.heads && r.heads[0]) || r.title, k = screenKey(name);
+      if (k && !asked['scr:' + k] && !taught.s[k] && !T.some(t => t.id === 'opq:scr:' + k)) { q++; T.push({ id: 'opq:scr:' + k, type: 'opQ', icon: '🧠', tone: 'warn', text: `What is this Opera screen: "${name}"?`, why: 'So the reader knows what it is reading there.', opts: TEACH_KINDS.map(([v, l]) => [l, 'screen:' + v]) }); }
+    }
+  });
+  // 2) suggestions from what Opera shows
+  const day = I.today, B = (I.board && I.board.rooms) || [], deps = I.last && I.last.departures;
+  if ((!I.cfg.auto || I.cfg.review) && deps && B.length && (!I.board.day || I.board.day === day)) {
+    const outs = (deps.rows || []).filter(r => r.status === 'checked_out' && B.some(b => roomKey(b.roomStr) === roomKey(r.room) && ['due', 'late', 'na', 'dnd'].includes(b.status) && sameGuest(b.name, r.name)));
+    if (outs.length) T.push({ id: 'ops:co:' + day + ':' + outs.map(r => roomKey(r.room)).join(','), type: 'opCo', icon: '🚪', tone: 'warn',
+      text: outs.length === 1 ? `Room ${outs[0].room} is checked out in Opera but still "due" here — mark it out?` : `${outs.length} rooms are checked out in Opera but still "due" here (${outs.slice(0, 5).map(r => r.room).join(', ')}) — mark them out?`,
+      why: '"Adjust by itself" is off or held for review, so nothing was changed.', opts: [[outs.length === 1 ? 'Mark out' : 'Mark them out', 'markout'], ['Show Departures', 'deps']] });
+  }
+  if (I.coMin != null) {
+    const m = new Date(I.now).getHours() * 60 + new Date(I.now).getMinutes();
+    const open = (I.folios || []).filter(f => f.balance > 0 && B.some(b => roomKey(b.roomStr) === roomKey(f.room) && ['due', 'late', 'na', 'dnd'].includes(b.status)));
+    if (open.length && m >= I.coMin - 30 && m < I.coMin) T.push({ id: 'ops:bal:' + day, type: 'opBal', icon: '💳', tone: 'warn', text: `${open.length} room${open.length === 1 ? ' has an open balance' : 's have open balances'} 30 min before check-out (${open.slice(0, 5).map(f => f.room).join(', ')})`,
+      why: 'Opera\'s folios as read today.', opts: [['Show Departures', 'deps']] });
+  }
+  const reads = Object.values(I.last || {}), newest = reads.reduce((a, k) => Math.max(a, k.at || 0), 0);
+  const hr = new Date(I.now).getHours();
+  if (newest && I.now - newest > 2 * 3600e3 && hr >= 7 && hr < 23 && new Date(newest).toDateString() === new Date(I.now).toDateString()) T.push({ id: 'ops:stale:' + day + ':' + Math.floor(I.now / (2 * 3600e3)), type: 'opStale', icon: '📡', tone: 'idle',
+    text: `Opera hasn't been read for ${Math.floor((I.now - newest) / 3600e3)} h — open Opera?`, why: 'The lists follow Opera only while it is open with the reader.', opts: [['Open Opera', 'open']] });
+  const rv = parseFloat(String(I.readerV || '').replace(/[^\d.]/g, '')), av = parseFloat(String(I.appV || '').replace(/[^\d.]/g, ''));
+  if (rv >= 100 && av >= 100 && rv < av && I.linkAt && I.now - I.linkAt < 120000) T.push({ id: 'ops:old:' + rv + ':' + av, type: 'opOld', icon: '✨', tone: 'warn', text: `The Opera reader is v${rv}, HotelOps is v${av}: reload the Opera tab (and HotelOps if it was just updated)`,
+    why: 'The helper hands Opera the new reader; it starts the next time Opera loads.', opts: [['Open the Opera page', 'page']] });
+  return T;
+}
+W.hoOperaPure = { teachKey, teachChoices, operaThoughts, operaEntry, shapeOf, reportText, reportLeaks, stuckText, stuckLeaks, stuckClean, operaHome, openState, maskCards, secretLabel, cleanFolio, cleanLabel, learnClean, learnModel, learnRecent, learnNext, learnSummary, sessionsOf, toIso, operaDay, roomKey, nameKey, sameGuest, isOtaEmail, goodEmail, natName, firstLast, sanitize, plan, summaryText, worthAlert, depReport, hashOf, isPm };
 if (!doc) return;
 
 // ══ State ═══════════════════════════════════════════════════
@@ -555,6 +723,226 @@ W.addEventListener('storage', e => {
   else return;
   safe(paint);
 });
+
+// ══ 🛟 Screens the reader couldn't read: kept here (20, newest first) and under operaStuck/{hash} for the managers' PCs ══
+const LS_STUCK = 'ho_op_stuck_v1', LS_STUCK_X = 'ho_op_stuck_x_v1', LS_STUCK_T = 'ho_op_stuck_toast', LS_UNPL = 'ho_op_unplaced_v1';
+const stuckLoad = () => { const v = LS.get(LS_STUCK, []); return Array.isArray(v) ? v.filter(e => e && e.h && e.rep) : []; };
+let STUCK = stuckLoad();
+const stuckSave = () => { STUCK = STUCK.sort((a, b) => b.last - a.last).slice(0, 20); LS.set(LS_STUCK, STUCK); };
+const fbOk = () => typeof fbSet === 'function';
+/** ONE quiet toast for a new screen it couldn't read: at most once an hour, never on a day off or with the Brain's hints off, never on the phone */
+function stuckToast() {
+  if (W.hoNotify && W.hoNotify.dayOffOn) return;
+  if (safe(() => (typeof blMode === 'function' ? blMode() : ''), '') === 'off') return;
+  const last = +LS.get(LS_STUCK_T, 0) || 0; if (Date.now() - last < 3600e3) return;
+  LS.set(LS_STUCK_T, Date.now());
+  toast('📡 Opera: one screen I couldn\'t read — Settings → Opera reader → Copy for Claude', 'info');
+}
+/** a report (from the reader, or made here) → kept; the same screen again counts up. false when refused (it still looks like guest data). */
+function stuckAdd(raw, h, src) {
+  const rep = stuckClean(raw); if (!rep) return false;
+  h = String(h || '').replace(/[^a-z0-9]/gi, '').slice(0, 24) || hashOf([rep.kind, rep.title, rep.path, rep.why.map(w => w.c), rep.grids.map(g => g.head.map(x => x[0]))]);
+  const L = LAST[rep.kind], app = src === 'reader' && L && Date.now() - L.at < 10 * 60e3 && L.res ? String(L.res).slice(0, 140) : '';
+  if (stuckLeaks(stuckText(rep, { app }))) return false;
+  STUCK = stuckLoad();
+  const i = STUCK.findIndex(x => x.h === h), now = Date.now(), isNew = i < 0;
+  const e = isNew ? { h, first: now, n: 0 } : STUCK.splice(i, 1)[0];
+  Object.assign(e, { last: now, n: (e.n || 0) + 1, src: src === 'app' ? 'app' : 'reader', rep, app: app || e.app || '' });
+  STUCK.unshift(e); stuckSave();
+  const X = LS.get(LS_STUCK_X, {}) || {}; if (X[h]) { delete X[h]; LS.set(LS_STUCK_X, X); }
+  if (canWrite() && fbOk()) safe(() => fbSet('operaStuck/' + h, { h, first: e.first, last: e.last, n: e.n, src: e.src, rep, app: e.app }));
+  if (isNew) stuckToast();
+  paint();
+  return true;
+}
+/** HotelOps' own side: a snapshot it couldn't use, or departures that match nothing on the board → a report (structure only: kind, field names, counts) */
+function stuckApp(s, code, text) {
+  const rows = s && Array.isArray(s.rows) ? s.rows : [];
+  const fields = [...new Set(rows.slice(0, 50).flatMap(r => (r && typeof r === 'object' ? Object.keys(r) : [])))].filter(k => /^[a-zA-Z]{1,20}$/.test(k)).slice(0, 30);
+  const title = cleanLabel(String((s && s.title) || '').split(/\s[-–—|:]\s|[,(|:]/)[0]);
+  const kind = s && KINDS.includes(s.kind) ? s.kind : '';
+  return stuckAdd({ v: LINK ? LINK.v : '', at: Date.now(), kind, hint: '', date: s && isIso(s.date) ? 'found' : 'none', title, path: '', heads: [], why: [{ c: code, t: text }], grids: [], pairs: [],
+    concl: `${rows.length} row${rows.length === 1 ? '' : 's'} came · fields: ${fields.join(' · ') || 'none'}`, err: '' }, hashOf(['app', kind, code, title]), 'app');
+}
+/** departures from Opera that match no room on today's board, two days (or more) → a report: the room column is probably read wrong */
+function unplacedCheck(snap, P) {
+  if (snap.kind !== 'departures' || P.dep.create || !(boardNow().rooms || []).length) return;
+  if (P.dep.matched) { LS.set(LS_UNPL, { days: [] }); return; }
+  if (P.dep.rows < 3) return;
+  const S = LS.get(LS_UNPL, null) || { days: [] }, t = today();
+  if (!Array.isArray(S.days)) S.days = [];
+  if (!S.days.includes(t)) { S.days = S.days.concat(t).slice(-5); LS.set(LS_UNPL, S); }
+  if (S.days.length >= 2) stuckApp(snap, 'not-placed', `${P.dep.rows} departures from Opera matched no room on the Departures board (${S.days.length} days running)`);
+}
+function stuckDismiss(h) {
+  STUCK = stuckLoad().filter(e => e.h !== h); stuckSave();
+  const X = LS.get(LS_STUCK_X, {}) || {}; X[h] = Date.now(); const ks = Object.keys(X); if (ks.length > 100) ks.sort((a, b) => X[a] - X[b]).slice(0, ks.length - 100).forEach(k => delete X[k]); LS.set(LS_STUCK_X, X);
+  if (canWrite() && fbOk()) safe(() => fbSet('operaStuck/' + h, null));
+  paint();
+}
+function stuckClear() {
+  if (typeof confirm === 'function' && STUCK.length > 1 && !confirm('Clear all the screens the Opera reader couldn\'t read?')) return;
+  stuckLoad().forEach(e => stuckDismiss(e.h));
+}
+/** the plain text for Claude ('' when it would carry guest data) */
+function stuckCopyText(h) {
+  const e = stuckLoad().find(x => x.h === h); if (!e) return '';
+  const rep = stuckClean(e.rep); if (!rep) return '';
+  const t = stuckText(rep, { n: e.n, app: e.app });
+  return stuckLeaks(t) ? '' : t;
+}
+async function stuckCopy(h) {
+  const t = stuckCopyText(h);
+  if (!t) { toast('This report looks like it holds guest data: not copied', 'err'); return; }
+  try { await navigator.clipboard.writeText(t); toast('Copied — paste it to Claude so the reader learns this screen', 'ok'); }
+  catch (_) { if (typeof fbCopy === 'function') fbCopy(t, ok => toast(ok ? 'Copied — paste it to Claude' : 'Could not copy', ok ? 'ok' : 'err')); else toast('Could not copy', 'err'); }
+}
+/** another PC's reports (the database) merged in: newer counts win; one dismissed here stays away until it is seen again */
+function stuckMerge(v) {
+  if (!v || typeof v !== 'object') return;
+  const X = LS.get(LS_STUCK_X, {}) || {};
+  let L = stuckLoad(), ch = false;
+  Object.values(v).forEach(r => {
+    if (!r || typeof r !== 'object') return;
+    const h = String(r.h || '').replace(/[^a-z0-9]/gi, '').slice(0, 24), last = +r.last || 0, rep = stuckClean(r.rep);
+    if (!h || !rep || (X[h] && X[h] >= last) || stuckLeaks(stuckText(rep, { app: cut(r.app, 140) }))) return;
+    const e = L.find(x => x.h === h);
+    if (e) { if (last > e.last || (+r.n || 0) > e.n) { e.last = Math.max(e.last, last); e.n = Math.max(e.n, +r.n || 0); ch = true; } return; }
+    L.push({ h, first: +r.first || last, last, n: +r.n || 1, src: r.src === 'app' ? 'app' : 'reader', rep, app: cut(r.app, 140) }); ch = true;
+  });
+  if (ch) { STUCK = L; stuckSave(); paint(); }
+}
+
+// ══ 🟢 Open Opera: the Opera Cloud address, remembered from the reader (or pasted once); operaUrl in the database, set by owners / managers ══
+const LS_URL = 'ho_op_url_v1';
+let OPURL = (() => { const v = LS.get(LS_URL, null); return v && operaHome(v.url) ? v : null; })();
+const operaUrl = () => (OPURL ? OPURL.url : '');
+const canAdmin = () => signedIn() && ['owner', 'manager'].includes(currentProfile.role);
+function setOperaUrl(u, src, fromDb) {
+  u = operaHome(u); if (!u) return false;
+  if (OPURL && OPURL.url === u) return true;
+  OPURL = { url: u, at: Date.now(), src: src || '' }; LS.set(LS_URL, OPURL);
+  if (!fromDb && canAdmin() && fbOk()) safe(() => fbSet('operaUrl', { url: u, at: OPURL.at, src: OPURL.src }));
+  paint();
+  return true;
+}
+/** the first time Opera links, its address is remembered (the reader's ping carries it; a snapshot's url too) */
+function rememberHome(u) { if (!u || operaUrl()) return; const e = operaEntry(u); if (e) setOperaUrl(e, 'reader'); }
+function askOperaUrl() {
+  const v = typeof prompt === 'function' ? prompt('Paste your Opera Cloud address (copy it from the address bar while Opera Cloud is open):', operaUrl() || 'https://') : null;
+  if (v == null || !String(v).trim() || String(v).trim() === 'https://') return '';
+  if (!setOperaUrl(v, 'typed')) { toast('That isn\'t an Opera Cloud address: it starts with https:// and ends in oraclecloud.com, oracleindustry.com or oraclehospitality.com', 'err'); return ''; }
+  toast('Opera Cloud address saved' + (canAdmin() ? ' for the hotel' : ' on this PC'), 'ok');
+  return operaUrl();
+}
+function openOpera() {
+  const url = operaUrl() || askOperaUrl(); if (!url) return;
+  const w = W.open(url, 'hotelops-opera');
+  if (!w) toast('Allow pop-ups for HotelOps, or open Opera Cloud yourself', 'warn');
+  else if (!doc.documentElement.dataset.hoOpHelper) toast('Opera opened — add the HotelOps helper (Settings → Opera reader) so it links by itself', 'info');
+}
+const opLinked45 = () => !!LINK && Date.now() - LINK.at < 45000;
+const openNow = () => { const D = doc.documentElement.dataset; return openState({ helper: !!D.hoOpHelper, us: D.hoWaUs === '1', linked: opLinked45() }); };
+// the database: the hotel's Opera address and the screens it couldn't read (a manager on another PC sees them too); started once someone is signed in
+let DB_ON = false;
+function dbStart() {
+  if (DB_ON || typeof fbListen !== 'function' || !signedIn() || typeof _ref === 'undefined' || !_ref) return;
+  DB_ON = true;
+  safe(() => fbListen('operaUrl', v => { if (v && v.url) setOperaUrl(v.url, v.src || 'hotel', true); }));
+  safe(() => fbListen('operaStuck', v => safe(() => stuckMerge(v))));
+  const taughtFrom = kind => v => safe(() => { const box = {}; Object.values(v || {}).forEach(x => { if (x && x.k && x.v) box[String(x.k).slice(0, 60)] = String(x.v).slice(0, 20); }); if (kind === 's') TEACH.s = Object.assign({}, box); else TEACH.h = Object.assign({}, box); LS.set(LS_TEACH, TEACH); });
+  safe(() => fbListen('operaTeach', taughtFrom('h')));
+  safe(() => fbListen('operaScreens', taughtFrom('s')));
+}
+
+// ══ 🧠 The Brain asks what the reader couldn't understand, and suggests fixes (quiet items in its Now list) ══
+// Answers teach the reader: header words → field (operaTeach/{header}), screen title → kind (operaScreens/{title}); per hotel, and on this PC.
+const LS_TEACH = 'ho_op_teach_v1', LS_ASKED = 'ho_op_asked_v1';
+let TEACH = (() => { const v = LS.get(LS_TEACH, null); return v && typeof v === 'object' ? { h: v.h || {}, s: v.s || {} } : { h: {}, s: {} }; })();
+const teachNow = () => ({ h: Object.assign({}, TEACH.h), s: Object.assign({}, TEACH.s) });
+function teachSet(kind, key, val, fromDb) {
+  if (!key) return;
+  const box = kind === 's' ? TEACH.s : TEACH.h;
+  if (val == null || val === '') delete box[key]; else box[key] = val;
+  LS.set(LS_TEACH, TEACH);
+  if (!fromDb && canWrite() && fbOk()) safe(() => fbSet((kind === 's' ? 'operaScreens/' : 'operaTeach/') + key.replace(/[.#$\[\]\/]/g, '_').replace(/ /g, '_'), val == null ? null : { k: key, v: val, at: Date.now() }));
+  // the reader gets it with its next answer (the ping's), and reads the screen again with it
+  safe(() => W.postMessage({ source: 'ho-op-ack', teach: teachNow() }, location.origin));
+}
+/** a Brain answer → taught (or just "asked", so it isn't asked again) */
+function opAnswer(id, act) {
+  const A = LS.get(LS_ASKED, {}) || {}, key = id.replace(/^opq:/, '');
+  A[key] = { a: act, at: Date.now() }; LS.set(LS_ASKED, A);
+  const k = key.replace(/^(?:col|scr):/, '');
+  if (act.indexOf('teach:') === 0) teachSet('h', k, act.slice(6));
+  else if (act.indexOf('screen:') === 0) teachSet('s', k, act.slice(7));
+  toast(act === 'ask:x' ? 'OK — I won\'t ask about it again' : '🧠 Thanks — the reader reads it that way from now on', 'ok');
+  paint();
+}
+function opAct(act, t) {
+  if (act === 'markout') {
+    const deps = LAST.departures; if (!deps || typeof depRooms === 'undefined') return;
+    let n = 0;
+    (deps.rows || []).filter(r => r.status === 'checked_out').forEach(r => { const i = depRooms.findIndex(b => roomKey(b.roomStr) === roomKey(r.room) && ['due', 'late', 'na', 'dnd'].includes(b.status) && sameGuest(b.name, r.name)); if (i >= 0) { depRooms[i].note = (depRooms[i].note ? depRooms[i].note + '\n' : '') + `[${hhmm(Date.now())}] Checked out in Opera`; safe(() => depAction(i, 'out')); n++; } });
+    if (n) { paintDeps(); safe(() => saveDeps()); addLog({ kind: 'departures', text: `${pl(n, 'room')} checked out (asked by the Brain)` }); }
+  } else if (act === 'deps') { if (typeof showPanel === 'function') showPanel('departures'); }
+  else if (act === 'open') openOpera();
+  else if (act === 'page') openPage();
+}
+(W.BL_THINKERS = W.BL_THINKERS || []).push(add => {
+  const T = operaThoughts({ stuck: stuckLoad(), asked: Object.fromEntries(Object.keys(LS.get(LS_ASKED, {}) || {}).map(k => [k, 1])), taught: TEACH, dayOff: !!(W.hoNotify && W.hoNotify.dayOffOn), cfg: CFG,
+    board: boardNow(), last: LAST, folios: Object.values(FOL.date === today() ? FOL.rooms : {}), now: Date.now(), today: today(), coMin: safe(() => (typeof _depCoMin === 'function' ? _depCoMin() : null), null),
+    readerV: LINK ? LINK.v : '', appV: typeof APP_VERSION !== 'undefined' ? APP_VERSION : '', linkAt: LINK ? LINK.at : 0 });
+  T.forEach(t => add({ id: t.id, type: t.type, icon: t.icon, tone: t.tone, text: t.text, why: t.why, silent: true,   // quiet: it waits in the Brain's Now list (the 🧠 number), never a pop-up
+    acts: t.opts.map(([l, a]) => [l, () => (t.type === 'opQ' ? opAnswer(t.id, a) : opAct(a, t))]) }));
+});
+
+// ══ The Opera address of each hotel you can see (the 📡 Opera page): owners edit any of theirs, managers their own ══
+let HOTELS = null, HOTELS_AT = 0;
+const myRole = () => (signedIn() ? currentProfile.role : '');
+async function loadHotels(force) {
+  if (!force && HOTELS && Date.now() - HOTELS_AT < 60000) return HOTELS;
+  HOTELS_AT = Date.now();
+  const hid = typeof HOTEL_ID !== 'undefined' ? HOTEL_ID : 'this';
+  const cur = { id: hid, name: ((doc.getElementById('hotelName') || {}).textContent || hid).trim(), url: operaUrl(), cur: true, edit: canAdmin() };
+  const out = [cur];
+  if (myRole() === 'owner' && typeof firebase !== 'undefined' && firebase.database) {
+    try {
+      const all = (await firebase.database().ref('hotelsIndex').once('value')).val() || {};
+      for (const [id, h] of Object.entries(all).slice(0, 12)) {
+        if (id === hid) continue;
+        try {   // only a hotel this person can read is listed (the database says who); an owner there can write it too
+          const v = (await Promise.race([firebase.database().ref(`hotels/${id}/operaUrl`).once('value'), new Promise((_, no) => setTimeout(() => no(new Error('slow')), 5000))])).val();
+          out.push({ id, name: (h && h.name) || id, url: v && operaHome(v.url) ? operaHome(v.url) : '', edit: true });
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }
+  HOTELS = out; paint();
+  return out;
+}
+async function editHotelUrl(id) {
+  const H = (HOTELS || []).find(h => h.id === id); if (!H || !H.edit) { toast('Only an owner (or this hotel\'s manager) can change it', 'err'); return; }
+  const v = typeof prompt === 'function' ? prompt(`Opera Cloud address for ${H.name} (copy it from the address bar while Opera Cloud is open):`, H.url || 'https://') : null;
+  if (v == null || !String(v).trim() || String(v).trim() === 'https://') return;
+  const u = operaHome(v);
+  if (!u) { toast('That isn\'t an Opera Cloud address: it starts with https:// and is on oraclecloud.com, oracleindustry.com or oraclehospitality.com', 'err'); return; }
+  if (H.cur) { OPURL = null; setOperaUrl(u, 'typed'); H.url = u; toast(`Opera address saved for ${H.name}`, 'ok'); paint(); return; }
+  try { await firebase.database().ref(`hotels/${id}/operaUrl`).set({ url: u, at: Date.now(), src: 'typed' }); H.url = u; toast(`Opera address saved for ${H.name}`, 'ok'); }
+  catch (_) { toast(`No access to change ${H.name}'s address`, 'err'); }
+  paint();
+}
+function openHotelUrl(id) {
+  const H = (HOTELS || []).find(h => h.id === id); if (!H || !H.url) return;
+  const w = W.open(H.url, 'hotelops-opera'); if (!w) toast('Allow pop-ups for HotelOps, or open Opera Cloud yourself', 'warn');
+}
+function hotelsHtml() {
+  const L = HOTELS || [{ id: 'this', name: ((doc.getElementById('hotelName') || {}).textContent || 'This hotel').trim(), url: operaUrl(), cur: true, edit: canAdmin() }];
+  const short = u => { try { const x = new URL(u); return x.hostname.split('.')[0] + ' · ' + x.pathname.split('/').filter(Boolean)[0]; } catch (_) { return ''; } };
+  return `<div class="hs-row hs-col"><span class="hs-txt"><b>Each hotel's Opera Cloud</b><small>🟢 Open Opera opens this hotel's address. ${myRole() === 'owner' ? 'You can change it for every hotel you own.' : myRole() === 'manager' ? 'You can change this hotel\'s.' : 'An owner or manager can change it.'}</small></span>
+    <div class="op-list">${L.map(h => `<div class="op-item op-hotel"><span>${esc(h.name)}${h.cur ? ' · this hotel' : ''}</span><span title="${esc(h.url)}">${h.url ? esc(short(h.url)) : 'not set yet'}</span>
+      <span class="hs-inline op-stuck-b">${h.url ? `<button type="button" class="btn sm ghost" data-op="hopen" data-hid="${esc(h.id)}">Open</button>` : ''}${h.edit ? `<button type="button" class="btn sm ghost" data-op="hedit" data-hid="${esc(h.id)}">Edit</button>` : ''}</span></div>`).join('')}</div></div>`;
+}
 
 function boardNow() {
   const rooms = typeof depRooms !== 'undefined' ? depRooms : [];
@@ -669,6 +1057,7 @@ function apply(snap, how) {
   const detail = []
     .concat(P.dep.out.map(o => `🚪 ${o.room} checked out`), P.dep.ext.map(e => `↪ ${e.room} extended to ${e.to}`), P.dep.add.map(a => `➕ ${a.row.room} added to departures`),
       P.arr.add.map(g => `🛎️ ${g.room} ${g.name}`), P.notes);
+  LAST_UNDO = { at: Date.now(), text, fn: undo, used: false };
   addLog({ kind: P.kind, text, detail: detail.slice(0, 30), how: how || 'auto' });
   const msg = '📡 Opera: ' + text;
   if (typeof showUndoToast === 'function') showUndoToast(msg, undo, 10000); else toast(msg);
@@ -683,7 +1072,8 @@ const KIND_LABEL = { arrivals: 'Arrivals', departures: 'Departures', inhouse: 'I
   billing: 'Billing / Folio', rooms: 'Room status', profile: 'Profile', traces: 'Traces / Alerts', rates: 'Rates', group: 'Group / Block', audit: 'Night audit', other: 'Other screen' };
 function receive(raw, h, reply) {
   const snap = sanitize(raw);
-  if (!snap) return 'nothing readable';
+  if (!snap) { safe(() => stuckApp(raw && typeof raw === 'object' ? raw : {}, 'not-applied', 'HotelOps answered "nothing readable": the snapshot had no list of rows it could use')); return 'nothing readable'; }
+  if (raw && raw.url) safe(() => rememberHome(raw.url));
   h = String(h || hashOf([snap.kind, snap.date, snap.rows]));
   if (SEEN.has(h) && SEEN.get(h) !== WAITING && LAST[snap.kind] && LAST[snap.kind].h === h) return SEEN.get(h);   // the same screen again: done (a folio back to an earlier state is read again)
   const n = snap.rows.length || (snap.folio ? snap.folio.postings.length : 0) || (snap.traces || []).length || (snap.tables || []).reduce((a, tb) => a + tb.rows.length, 0);
@@ -751,7 +1141,10 @@ function handle(snap, h, reply) {
   if (!canWrite()) return 'read · your role can\'t change lists';
   if (!CFG.auto) return 'read · "adjust by itself" is off';
   if (!haveLock()) return 'read · another HotelOps tab applies it';
-  const P = planNow(snap);
+  let P;
+  try { P = planNow(snap); }
+  catch (e) { const m = String(e && e.message || e).replace(/\d+/g, '#').slice(0, 100); safe(() => stuckApp(snap, 'plan-error', 'HotelOps could not work out the changes: ' + m)); return 'could not apply · ' + m.slice(0, 60); }
+  safe(() => unplacedCheck(snap, P));
   if (!P.n) return P.notes.length ? 'nothing to change · ' + P.notes[0] : 'up to date';
   if (CFG.review) {
     PENDING[snap.kind] = { snap, at: Date.now(), text: summaryText(P), n: P.n }; savePending();
@@ -789,9 +1182,13 @@ W.addEventListener('message', e => {
   const reply = o => { try { if (same) W.postMessage(o, location.origin); else if (e.source) e.source.postMessage(o, e.origin); } catch (_) {} };
   const was = LINK && Date.now() - LINK.at < 60000;
   LINK = { at: Date.now(), ext: same, v: String(d.v || '').slice(0, 12) };
+  if (!was) safe(paintOpen);
+  if (d.stuck && typeof d.stuck === 'object') { const ok = safe(() => stuckAdd(d.stuck, d.h, 'reader'), false); reply({ source: 'ho-op-ack', stuck: String(d.h || '').slice(0, 24), ok: !!ok }); return; }
   if (Array.isArray(d.learn)) { const hint = safe(() => learnAdd(d.learn), ''); reply({ source: 'ho-op-ack', hint: hint || '', learn: learnOn() }); return; }
   if (d.ping) {
-    reply({ source: 'ho-op-ack', pong: 1, frame: String(d.frame || ''), again: !!(d.h && !SEEN.has(String(d.h))), auto: CFG.auto, learn: learnOn() });
+    // answered at once, signed in or not (only applying waits): the reader shows "linked" as soon as this tab has loaded
+    reply({ source: 'ho-op-ack', pong: 1, frame: String(d.frame || ''), again: !!(d.h && !SEEN.has(String(d.h))), auto: CFG.auto, learn: learnOn(), app: typeof APP_VERSION !== 'undefined' ? APP_VERSION : '', teach: teachNow() });
+    if (d.home) safe(() => rememberHome(d.home));
     if (!was) paint();
     return;
   }
@@ -804,6 +1201,7 @@ setInterval(() => {
   safe(balanceAlerts);
   if (LINK && LS.get(LS_LOCK, {}).tab === TAB) LS.set(LS_LOCK, { tab: TAB, at: Date.now() });
   if (doc.getElementById('hs-opera')) paint();
+  safe(dbStart); safe(paintOpen);
 }, 20000);
 
 // ══ Learning from you in Opera — stored per user on this PC ══
@@ -952,28 +1350,107 @@ function sw(k, label, desc, on) {
   return `<label class="hs-row" data-s="${esc('opera reader ' + label + ' ' + desc).toLowerCase()}"><span class="hs-txt"><b>${label}</b><small>${desc}</small></span>
     <span class="hs-switch"><input type="checkbox" data-op="${k}" ${on ? 'checked' : ''}><i></i></span></label>`;
 }
-function cardHtml() {
+// the parts the Settings card and the 📡 Opera page share
+function helperRows() {
   const D = doc.documentElement.dataset, helper = !!D.hoOpHelper, anyHelper = !!D.hoWaHelper;
-  const kinds = Object.values(LAST).sort((a, b) => b.at - a.at);
-  const last = kinds[0];
-  const st = linkedNow() ? `🟢 Linked${LINK.ext ? ' through the helper' : ' (console reader)'}` : last ? '⚪ Not linked right now' : '⚪ Not linked yet';
-  const lastTxt = last ? ` · last read ${hhmm(last.at)}: ${last.n}${last.total > last.n ? ' of ' + last.total : ''} on ${esc(KIND_LABEL[last.kind] || last.kind)}${last.date && last.date !== today() ? ' (' + esc(last.date) + ')' : ''}` : '';
   const get = helper ? '<span class="op-ok">✓ The helper has the Opera reader</span>'
     : `<button class="btn sm gold" data-op="dl">⬇ ${anyHelper ? 'Get the helper again (once)' : 'Get the helper'}</button>`;
-  const pend = Object.values(PENDING);
-  const ro = !canWrite() && signedIn();
-  return row('opera reader linked status last read', '📡 Opera Cloud reader', `${st}${lastTxt}${ro ? '<br>Your role only sees what Opera shows — the lists are changed by colleagues who can edit.' : ''}`,
+  return row('opera reader helper console reader', 'The helper', helper ? 'Starts the reader on Opera Cloud by itself and links it here. No helper on a PC? Copy the console reader and paste it in Opera\'s console (F12).' : 'Without it: copy the console reader, paste it in Opera\'s console (F12) and press Connect in its window.',
       `${get}<button class="btn sm ghost" data-op="copy" title="For a PC without the helper: paste it in Opera's console">Copy console reader</button>`)
-    + (!helper ? row('opera reader how to add helper', 'How to turn it on', `${anyHelper ? 'Your helper is from before the Opera reader: download it once more, then in <code>chrome://extensions</code> press ↻ on the HotelOps helper (or remove it and <b>Load unpacked</b> the new folder).' : 'Download the helper, unzip it, open <code>chrome://extensions</code>, turn on Developer mode, <b>Load unpacked</b> the folder, and turn on <b>Allow User Scripts</b> in its Details.'} Then open Opera Cloud: a small 📡 HotelOps pill shows bottom right. It only reads; it never clicks or types in Opera.`) : '')
-    + sw('auto', 'Adjust by itself', 'Check out rooms Opera shows checked out, mark extensions, add new arrivals and fill empty details. Never changes what someone typed.', CFG.auto)
+    + (!helper ? row('opera reader how to add helper', 'How to turn it on', `${anyHelper ? 'Your helper is from before the Opera reader: download it once more, then in <code>chrome://extensions</code> press ↻ on the HotelOps helper (or remove it and <b>Load unpacked</b> the new folder).' : 'Download the helper, unzip it, open <code>chrome://extensions</code>, turn on Developer mode, <b>Load unpacked</b> the folder, and turn on <b>Allow User Scripts</b> in its Details.'} Then press 🟢 Open Opera: the HotelOps window shows bottom right in Opera. It only reads; it never clicks or types in Opera.`) : '');
+}
+function pendingHtml() {
+  const pend = Object.values(PENDING);
+  return pend.length ? `<div class="hs-row hs-col op-pend" data-s="opera reader waiting review apply"><span class="hs-txt"><b>Waiting for your OK</b><small>${pend.map(p => `${esc(KIND_LABEL[p.snap.kind] || p.snap.kind)} (${hhmm(p.at)}): ${esc(p.text)}`).join('<br>')}</small></span>
+        <span class="hs-inline"><button class="btn sm gold" data-op="apply">Apply</button><button class="btn sm ghost" data-op="discard">Discard</button></span></div>` : '';
+}
+function statusLine() {
+  const kinds = Object.values(LAST).sort((a, b) => b.at - a.at), last = kinds[0];
+  const st = linkedNow() ? `🟢 Linked${LINK.ext ? ' through the helper' : ' (console reader)'}` : last ? '⚪ Not linked right now' : '⚪ Not linked yet';
+  return `${st}${last ? ` · last read ${hhmm(last.at)}: ${last.n}${last.total > last.n ? ' of ' + last.total : ''} on ${esc(KIND_LABEL[last.kind] || last.kind)}${last.date && last.date !== today() ? ' (' + esc(last.date) + ')' : ''}` : ''}`;
+}
+/** Settings → 📡 Opera reader: the button, a short summary, what waits for an OK, the screens it couldn't read; the rest is on the 📡 Opera page */
+function cardHtml() {
+  const ro = !canWrite() && signedIn();
+  return openCardHtml()
+    + row('opera reader linked status last read page switches', '📡 Opera reader', `${statusLine()}${LOG.length ? ` · ${pl(LOG.length, 'change')} today` : ''}${ro ? '<br>Your role only sees what Opera shows — the lists are changed by colleagues who can edit.' : ''}<br>Switches, what it changed, bills, what it learned and the helper: on the 📡 Opera page.`,
+      '<button class="btn sm gold" data-op="page">Open the Opera page →</button>')
+    + pendingHtml() + stuckHtml();
+}
+const ST_LABEL = { due_in: 'arriving', in_house: 'in house', due_out: 'due out', checked_out: 'checked out', cancelled: 'cancelled', no_show: 'no show', waitlist: 'waitlist' };
+/** the 📡 Opera page */
+function pageHtml() {
+  const linked = opLinked45(), kinds = Object.values(LAST).sort((a, b) => b.at - a.at), last = kinds[0];
+  const sec = (id, title, sub, body) => `<section class="op-sec" id="op-${id}"><div class="op-sec-hd"><h2>${title}</h2>${sub ? `<p>${sub}</p>` : ''}</div><div class="hs-card op-card">${body}</div></section>`;
+  const S = openNow();
+  const check = linked ? '' : `<div class="hs-row hs-col op-check"><span class="hs-txt"><b>Not linked to Opera right now</b><small>Opera links by itself when it is open with the helper. If it doesn't:</small></span><ol>
+      <li>Press <b>🟢 Open Opera</b> above: it opens Opera Cloud in this same browser.</li>
+      <li>In Opera, the HotelOps window (bottom right) says what is missing: it checks this tab, the helper and its link.</li>
+      <li>Still “linking…”? Reload this HotelOps tab, then in <code>chrome://extensions</code> press ↻ on the HotelOps helper.</li>
+      ${S.state === 'nohelper' ? '<li>No helper on this PC: <b>Copy console reader</b> (Settings below), paste it in Opera\'s console (F12) and press <b>Connect</b> in its window.</li>' : ''}</ol></div>`;
+  const lr = last ? (last.rows || []) : [];
+  const live = last ? `<div class="hs-row hs-col"><span class="hs-txt"><b>${esc(KIND_LABEL[last.kind] || last.kind)}${last.title && String(last.title).toLowerCase().indexOf(String(KIND_LABEL[last.kind] || last.kind).toLowerCase()) < 0 ? ' · ' + esc(last.title) : ''}</b><small>${pl(last.n, 'line')}${last.total > last.n ? ' of ' + last.total : ''} read at ${hhmm(last.at)}${linked ? ' · live' : ''}${last.res ? ' · HotelOps: ' + esc(last.res) : ''}</small></span>
+      ${lr.length ? `<div class="op-tbl-wrap"><table class="op-tbl"><thead><tr><th>Room</th><th>Name</th><th>Status</th><th class="num">Balance</th></tr></thead><tbody>${lr.slice(0, 8).map(r => `<tr><td>${esc(r.room || '—')}</td><td>${esc(r.name || '')}</td><td>${esc(ST_LABEL[r.status] || r.statusText || r.rs || '')}</td><td class="num">${r.balance == null ? '' : esc(money2(r.balance))}</td></tr>`).join('')}</tbody></table>${lr.length > 8 ? `<small class="op-more">… ${lr.length - 8} more</small>` : ''}</div>` : ''}</div>`
+      + (kinds.length > 1 ? `<div class="hs-row hs-col"><span class="hs-txt"><b>Also read today</b></span><div class="op-list">${kinds.slice(1).map(k => `<div class="op-item"><span>${esc(KIND_LABEL[k.kind] || k.kind)}</span><span>${k.n}${k.total > k.n ? ' of ' + k.total : ''} · ${hhmm(k.at)}</span>${k.res ? `<small>${esc(k.res)}</small>` : ''}</div>`).join('')}</div></div>` : '')
+    : '<div class="hs-row"><span class="hs-txt"><b>Nothing read yet today</b><small>Open Opera with the button above: what it shows appears here.</small></span></div>';
+  const undo = LAST_UNDO && !LAST_UNDO.used && Date.now() - LAST_UNDO.at < 3 * 3600e3 ? `<div class="hs-row"><span class="hs-txt"><b>Last change · ${hhmm(LAST_UNDO.at)}</b><small>${esc(LAST_UNDO.text)}</small></span><span class="hs-inline"><button class="btn sm ghost" data-op="undo">↩ Undo</button></span></div>` : '';
+  const changes = pendingHtml() + undo + `<div class="hs-row hs-col"><span class="hs-txt"><b>${LOG.length ? pl(LOG.length, 'change') + ' today' : 'Nothing changed yet today'}</b><small>${LOG.length ? 'Newest first. Each change set had an Undo in its toast; the newest one also above.' : 'When Opera shows a check-out, an extension or a new arrival, the lists change by themselves and it shows here.'}</small></span>${LOG.length ? `<div class="op-list">${LOG.slice(0, 15).map(l =>
+      `<div class="op-item"><span>${hhmm(l.at)}</span><span>${esc(l.text)}</span>${l.detail && l.detail.length ? `<small>${esc(l.detail.slice(0, 6).join(' · '))}${l.detail.length > 6 ? ' …' : ''}</small>` : ''}</div>`).join('')}</div>` : ''}</div>`;
+  const fol = Object.values(FOL.date === today() ? FOL.rooms : {}), owe = fol.filter(f => f.balance > 0).sort((a, b) => b.balance - a.balance);
+  const bills = owe.length ? `<div class="hs-row hs-col"><div class="op-list" style="margin-top:0">${owe.slice(0, 40).map(f => `<div class="op-item"><span>${esc(f.room || f.conf || '—')}</span><span>AED ${esc(money2(f.balance))} open${(f.pays || []).length ? ' · ' + esc(f.pays.join(', ')) : ''}</span><small>${esc(firstLast(f.name || ''))} · read ${esc(hhmm(f.at))}${f.src === 'folio' ? ' on its bill' : ' on ' + esc(KIND_LABEL[f.src] || f.src || '')}</small></div>`).join('')}</div></div>`
+    : `<div class="hs-row"><span class="hs-txt"><b>${fol.length ? 'Every bill read today is settled' : 'No bill read yet today'}</b><small>Open a bill (Billing / Folio) or Departures in Opera: open balances show here and on the Departures cards.</small></span></div>`;
+  const ro = !canWrite() && signedIn();
+  const settings = sw('auto', 'Adjust by itself', 'Check out rooms Opera shows checked out, mark extensions, add new arrivals and fill empty details. Never changes what someone typed.', CFG.auto)
     + sw('review', 'Review before applying', 'Hold the changes here until you press Apply', CFG.review)
-    + (pend.length ? `<div class="hs-row hs-col" data-s="opera reader waiting review apply"><span class="hs-txt"><b>Waiting for your OK</b><small>${pend.map(p => `${esc(KIND_LABEL[p.snap.kind] || p.snap.kind)} (${hhmm(p.at)}): ${esc(p.text)}`).join('<br>')}</small></span>
-        <span class="hs-inline"><button class="btn sm gold" data-op="apply">Apply</button><button class="btn sm ghost" data-op="discard">Discard</button></span></div>` : '')
-    + (kinds.length ? `<div class="hs-row hs-col" data-s="opera reader screens read today"><span class="hs-txt"><b>Read today</b><small>The newest read of each screen</small></span><div class="op-list">${kinds.map(k =>
-        `<div class="op-item"><span>${esc(KIND_LABEL[k.kind] || k.kind)}</span><span>${k.n}${k.total > k.n ? ' of ' + k.total : ''} · ${hhmm(k.at)}</span><small>${esc(k.res || '')}</small></div>`).join('')}</div></div>` : '')
-    + `<div class="hs-row hs-col" data-s="opera reader what changed log"><span class="hs-txt"><b>What it changed</b><small>${LOG.length ? 'Today, newest first · each change also had an Undo' : 'Nothing yet today'}</small></span>${LOG.length ? `<div class="op-list">${LOG.slice(0, 10).map(l =>
-        `<div class="op-item"><span>${hhmm(l.at)}</span><span>${esc(l.text)}</span>${l.detail && l.detail.length ? `<small>${esc(l.detail.slice(0, 6).join(' · '))}${l.detail.length > 6 ? ' …' : ''}</small>` : ''}</div>`).join('')}</div>` : ''}</div>`
-    + learnCardHtml();
+    + helperRows()
+    + row('opera reader clear today', 'Clear today', 'Forget today\'s reads, bills and room statuses on this PC (the lists keep what was changed).', '<button class="btn sm ghost" data-op="clearday">Clear</button>');
+  return `<div class="page-hd"><div class="page-hd-left"><h1>📡 Opera</h1><p>Reads Opera Cloud while you work and keeps Departures, Arrivals and In-House up to date${ro ? ' · your role sees what Opera shows; colleagues who can edit apply it' : ''}</p></div></div>
+    <div class="op-wrap">
+      <div class="hs-card op-card op-top">${openCardHtml()}${check}</div>
+      ${sec('address', 'Opera address', 'Per hotel', hotelsHtml())}
+      ${sec('live', 'Live now', linked ? 'What Opera shows, as it is read' : 'The newest read', live)}
+      ${sec('changes', 'What it changed today', '', changes)}
+      ${sec('bills', 'Bills', 'Rooms with an open balance in Opera today', bills)}
+      ${sec('learn', '🧠 Learned from you', '', learnCardHtml())}
+      ${sec('stuck', '🛟 Screens it couldn\'t read', '', stuckHtml())}
+      ${sec('settings', 'Settings', '', settings)}
+    </div>`;
+}
+let LAST_UNDO = null;   // the newest change set's Undo (this tab, while the lists are as it left them)
+/** the big "🟢 Open Opera" button and the helper's state (like WhatsApp's card) */
+function openCardHtml() {
+  const S = openNow(), url = operaUrl();
+  let host = ''; try { host = url ? new URL(url).hostname : ''; } catch (_) {}
+  return `<div class="hs-row hs-col op-open" data-s="opera reader open opera cloud linked helper address"><div class="op-open-row">
+      <button type="button" class="op-go" data-op="open">${esc(S.btn)}</button>
+      <div class="op-open-st"><b class="${S.state === 'on' ? 'op-ok' : S.state === 'noscripts' ? 'op-warn' : ''}">${esc(S.b)}</b>${S.state === 'nohelper' ? '<button type="button" class="op-lnk" data-op="dl">⬇ Get the helper</button>' : `<span>${esc(S.s)}</span>`}
+        <span class="op-url">${url ? `Opera: ${esc(host)} · <button type="button" class="op-lnk" data-op="url">change</button>` : 'Opera address: not known yet · <button type="button" class="op-lnk" data-op="url">set it</button> (or open Opera once: it is remembered)'}</span></div></div></div>`;
+}
+/** 🛟 Screens it couldn't read */
+function stuckHtml() {
+  const L = stuckLoad(), t0 = today();
+  const when = t => { const d = new Date(t), iso = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; return (iso === t0 ? '' : iso.slice(5) + ' ') + hhmm(t); };
+  return `<div class="hs-row hs-col" data-s="opera reader screens it couldn't read stuck problems report copy for claude teach not read right"><span class="hs-txt"><b>🛟 Screens it couldn't read (${L.length})</b><small>${L.length
+      ? 'Press “📋 Copy for Claude” and paste it in the chat: the reader then learns that screen. It holds the screen’s layout only (headers and shapes like “Aaaa 99”), never guest data.'
+      : 'None — every screen it saw was read. If one isn’t read right, press 🛟 in the Opera window.'}</small></span>${L.length ? `<div class="op-list">${L.map(e => {
+        const r = e.rep || {}, why = (r.why || []).map(w => w.t).join(' · ');
+        return `<div class="op-item op-stuck"><span>${esc(when(e.last))}</span><span>${esc(r.title || KIND_LABEL[r.kind] || 'An Opera screen')}${r.kind ? ' · ' + esc(KIND_LABEL[r.kind] || r.kind) : ''}${e.n > 1 ? ` · seen ${e.n}×` : ''}${e.src === 'app' ? ' · HotelOps side' : ''}</span><small>${esc(why)}</small>
+          <span class="hs-inline op-stuck-b"><button type="button" class="btn sm gold" data-op="scopy" data-h="${esc(e.h)}">📋 Copy for Claude</button><button type="button" class="btn sm ghost" data-op="sdismiss" data-h="${esc(e.h)}">Dismiss</button></span></div>`;
+      }).join('')}</div><span class="hs-inline" style="margin-top:8px"><button type="button" class="btn sm ghost" data-op="sclear">Clear all</button></span>` : ''}</div>`;
+}
+/** the small strip at the top of Departures and Arrivals (desk PC only: hidden on phones and touch screens) */
+function stripHtml() {
+  const S = openNow();
+  const st = S.state === 'nohelper' ? 'Get the helper in Settings → Opera reader to link with one click' : S.btn.charAt(0) === '✓' ? 'Reads Opera by itself · this list stays up to date' : S.state === 'noscripts' ? '⚡ Reader on · reads by itself' : '⚡ Reader on · links by itself when Opera opens';
+  return `<button type="button" class="op-go sm" data-opx="open">${esc(S.btn)}</button><span class="op-strip-st">${esc(st)}</span>`;
+}
+function paintOpen() {
+  ['departures', 'arrivals'].forEach(k => {
+    const pnl = doc.getElementById('panel-' + k); if (!pnl) return;
+    let e = pnl.querySelector(':scope > .op-strip');
+    if (!e) { const hd = pnl.querySelector(':scope > .page-hd'); if (!hd) return; e = doc.createElement('div'); e.className = 'op-strip'; e.id = 'opStrip-' + k; hd.insertAdjacentElement('afterend', e); }
+    const h = stripHtml(); if (e.innerHTML !== h) e.innerHTML = h;
+  });
 }
 function learnCardHtml() {
   const on = learnOn(), M = learnModelNow();
@@ -993,8 +1470,59 @@ function sectionHtml() {
     <div class="hs-card">${cardHtml()}</div></section>`;
 }
 function paint() {
+  safe(paintOpen);
+  safe(paintPage);
   const c = doc.querySelector('#hs-opera .hs-card'); if (!c) return;
   c.innerHTML = cardHtml();
+}
+// ══ The 📡 Opera page (its own place in the menu, like WhatsApp) ══
+const PANEL = 'opera';
+const pageOn = () => { const p = doc.getElementById('panel-' + PANEL); return !!p && p.classList.contains('active'); };
+function paintPage() {
+  if (!pageOn()) return;
+  if (!HOTELS || Date.now() - HOTELS_AT > 60000) safe(() => loadHotels());
+  const r = doc.getElementById('opRoot'); if (!r) return;
+  const h = pageHtml(); if (r.__h !== h) { r.innerHTML = h; r.__h = h; }
+}
+function clearDay() {
+  if (typeof confirm === 'function' && !confirm('Forget today\'s Opera reads, bills and room statuses on this PC?')) return;
+  LOG = []; LAST = {}; saveLog(); saveLast();
+  FOL = { date: today(), rooms: {} }; RST = { date: today(), rooms: {} }; TRC = { date: today(), list: [] }; PRF = { date: today(), by: {} };
+  [LS_FOLIO, LS_RST, LS_TRC, LS_PRF].forEach(k => { try { localStorage.removeItem(k); } catch (_) {} });
+  safe(paintDepChips); paint();
+}
+const NAV_IC = '<svg class="ho-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.9 19.1a10 10 0 0 1 0-14.2"/><path d="M19.1 4.9a10 10 0 0 1 0 14.2"/><path d="M7.8 16.2a6 6 0 0 1 0-8.4"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4"/><circle cx="12" cy="12" r="2"/></svg>';
+function mountPage() {
+  if (doc.getElementById('panel-' + PANEL)) return true;
+  const main = doc.querySelector('#appWrapper .main') || doc.querySelector('.main') || doc.querySelector('main');
+  const nav = doc.querySelector('.sidenav'); if (!main || !nav) return false;
+  const panel = doc.createElement('div'); panel.className = 'panel'; panel.id = 'panel-' + PANEL;
+  const root = doc.createElement('div'); root.id = 'opRoot'; panel.appendChild(root); main.appendChild(panel);
+  panel.addEventListener('click', e => { const t = e.target.closest && e.target.closest('#opRoot [data-op]'); if (t && t.tagName !== 'INPUT') onAct(t); });
+  panel.addEventListener('change', e => { const t = e.target.closest && e.target.closest('#opRoot input[data-op]'); if (t) onSwitch(t); });
+  const item = doc.createElement('div'); item.className = 'nav-item'; item.id = 'nav-' + PANEL; item.dataset.panel = PANEL;
+  item.setAttribute('onclick', "showPanel('" + PANEL + "')");
+  item.innerHTML = '<div class="nav-icon" data-ho-ic="1" data-emoji="📡">' + NAV_IC + '</div>Opera';
+  nav.appendChild(item);
+  const grid = doc.querySelector('.mob-more-grid');
+  if (grid) {
+    const b = doc.createElement('button'); b.className = 'mob-more-item'; b.dataset.panel = PANEL; b.type = 'button';
+    b.setAttribute('onclick', "showPanel('" + PANEL + "');(typeof closeMobMore==='function'?closeMobMore:function(){})()");
+    b.innerHTML = '<span class="mob-item-icon" data-ho-ic="1" data-emoji="📡">' + NAV_IC + '</span>Opera'; grid.appendChild(b);
+  }
+  safe(() => {
+    if (typeof ROLES !== 'undefined') ['owner', 'manager', 'supervisor', 'agent', 'readonly'].forEach(r => { const p = ROLES[r] && ROLES[r].panels; if (p && !p.includes(PANEL)) p.push(PANEL); });
+    if (typeof currentProfile !== 'undefined' && currentProfile && typeof applyRole === 'function') applyRole(currentProfile.role);
+  });
+  safe(() => { if (typeof W.hoNavOrder === 'function') W.hoNavOrder(); });
+  let was = false;
+  new MutationObserver(() => { const on = pageOn(); if (on && !was) { root.__h = ''; paintPage(); } was = on; }).observe(panel, { attributes: true, attributeFilter: ['class'] });
+  return true;
+}
+function openPage(sec) {
+  if (typeof showPanel === 'function') showPanel(PANEL);
+  paintPage();
+  if (sec) setTimeout(() => { const e = doc.getElementById('op-' + sec); if (e && e.scrollIntoView) e.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 80);
 }
 function inject() {
   const box = doc.getElementById('hsBody');
@@ -1010,26 +1538,63 @@ function wire() {
   inject();
   box.addEventListener('click', e => {
     const t = e.target.closest && e.target.closest('#hs-opera [data-op]'); if (!t || t.tagName === 'INPUT') return;
+    onAct(t);
+  });
+  box.addEventListener('change', e => { const t = e.target.closest && e.target.closest('#hs-opera input[data-op]'); if (t) onSwitch(t); });
+  return true;
+}
+function onSwitch(t) { if (t.dataset.op === 'learn') setLearn(t.checked); else setCfg(t.dataset.op, t.checked); }
+function onAct(t) {
+  {
     const a = t.dataset.op;
     if (a === 'dl') { if (W.hoWaHelper) W.hoWaHelper.download(); } else if (a === 'copy') copyReader();
     else if (a === 'apply') applyPending(); else if (a === 'discard') discardPending();
     else if (a === 'seen') { SHOW_SEEN = !SHOW_SEEN; paint(); } else if (a === 'forget') forgetLearn();
-  });
-  box.addEventListener('change', e => { const t = e.target.closest && e.target.closest('#hs-opera input[data-op]'); if (!t) return; if (t.dataset.op === 'learn') setLearn(t.checked); else setCfg(t.dataset.op, t.checked); });
-  return true;
+    else if (a === 'open') openOpera(); else if (a === 'url') askOperaUrl();
+    else if (a === 'scopy') stuckCopy(t.dataset.h); else if (a === 'sdismiss') stuckDismiss(t.dataset.h); else if (a === 'sclear') stuckClear();
+    else if (a === 'page') openPage(); else if (a === 'clearday') clearDay();
+    else if (a === 'hedit') editHotelUrl(t.dataset.hid); else if (a === 'hopen') openHotelUrl(t.dataset.hid);
+    else if (a === 'undo' && LAST_UNDO && !LAST_UNDO.used) { LAST_UNDO.used = true; safe(() => LAST_UNDO.fn()); paint(); }
+  }
 }
 function css() {
   const s = doc.createElement('style'); s.id = 'opCss';
-  s.textContent = `#hs-opera .op-list{display:grid;gap:6px;margin-top:10px}
-#hs-opera .op-item{display:grid;grid-template-columns:minmax(0,150px) minmax(0,1fr);gap:4px 10px;font-size:12.5px;padding:6px 10px;border:1px solid var(--border,#333);border-radius:var(--r,6px)}
-#hs-opera .op-item span:first-child{font-weight:600;color:var(--text,#eee)}#hs-opera .op-item span+span{color:var(--text2,#bbb)}
-#hs-opera .op-item small{grid-column:1/-1;color:var(--text3,#999)}#hs-opera .op-ok{font-size:12.5px;color:var(--green,#16a34a);font-weight:600;align-self:center}
-@media (max-width:560px){#hs-opera .op-item{grid-template-columns:1fr}}
+  s.textContent = `:is(#hs-opera,#opRoot) .op-list{display:grid;gap:6px;margin-top:10px}
+:is(#hs-opera,#opRoot) .op-item{display:grid;grid-template-columns:minmax(0,150px) minmax(0,1fr);gap:4px 10px;font-size:12.5px;padding:6px 10px;border:1px solid var(--border,#333);border-radius:var(--r,6px)}
+:is(#hs-opera,#opRoot) .op-item span:first-child{font-weight:600;color:var(--text,#eee)}:is(#hs-opera,#opRoot) .op-item span+span{color:var(--text2,#bbb)}
+:is(#hs-opera,#opRoot) .op-item small{grid-column:1/-1;color:var(--text3,#999)}:is(#hs-opera,#opRoot) .op-ok{font-size:12.5px;color:var(--green,#16a34a);font-weight:600;align-self:center}
+@media (max-width:560px){:is(#hs-opera,#opRoot) .op-item{grid-template-columns:1fr}}
+#hs-opera .op-open,#opRoot .op-open{padding:12px 14px !important;border-radius:16px;background:linear-gradient(135deg,color-mix(in srgb,#c9a14a 16%,var(--card,#1a1a1a)),var(--card,#1a1a1a));border:1px solid color-mix(in srgb,#c9a14a 42%,transparent)}
+.op-open-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-width:0}
+.op-go{flex:0 0 auto;padding:11px 16px;border-radius:12px;border:0;background:linear-gradient(135deg,#22c55e,#15803d);color:#fff;font:700 14px var(--font,system-ui);cursor:pointer;box-shadow:0 8px 20px -10px #15803d;white-space:nowrap}
+.op-go:active{transform:scale(.97)}.op-go.sm{padding:7px 12px;border-radius:10px;font-size:13px;box-shadow:none}
+.op-open-st{display:flex;flex-direction:column;gap:2px;font-size:12.5px;color:var(--text2,#bbb);min-width:0;flex:1 1 220px}.op-open-st b{color:var(--text,#eee);font-size:13.5px}
+.op-open-st b.op-ok{color:var(--green,#16a34a)}.op-open-st b.op-warn{color:var(--amber,#d97706)}.op-url{color:var(--text3,#999);font-size:12px}
+.op-lnk{align-self:flex-start;padding:0;border:0;background:none;color:var(--accent,#c9a14a);font:600 12.5px var(--font,system-ui);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.op-url .op-lnk{display:inline;font-size:12px}
+:is(#hs-opera,#opRoot) .op-stuck .op-stuck-b{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap}
+#opRoot{max-width:980px;margin:0 auto;min-width:0}#opRoot .op-wrap{display:flex;flex-direction:column;gap:18px;min-width:0}
+#opRoot .op-card{padding:0;overflow:hidden;min-width:0}#opRoot .op-top .op-open{border-radius:0 !important;border:0;border-bottom:1px solid var(--border,#333)}
+#opRoot .op-sec-hd{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:0 2px 8px}#opRoot .op-sec-hd h2{margin:0;font-size:1rem;font-weight:700;color:var(--text,#eee)}#opRoot .op-sec-hd p{margin:0;font-size:12.5px;color:var(--text3,#999)}
+#opRoot .hs-row,#opRoot .hs-txt{min-width:0}#opRoot .hs-row.hs-col{flex-wrap:nowrap}#opRoot .hs-row.hs-col>*{max-width:100%}#opRoot .hs-txt small{overflow-wrap:anywhere;white-space:normal}
+#opRoot .op-check ol{margin:8px 0 2px;padding-left:20px;display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--text2,#bbb)}#opRoot .op-check code{background:var(--bg2,#222);padding:1px 5px;border-radius:5px}
+#opRoot .op-tbl-wrap{margin-top:10px;min-width:0}#opRoot .op-tbl{width:100%;min-width:0;table-layout:fixed;border-collapse:collapse;font-size:12.5px}
+#opRoot .op-tbl th{text-align:left;font-weight:600;color:var(--text3,#999);font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:4px 6px;border-bottom:1px solid var(--border,#333)}
+#opRoot .op-tbl td{padding:6px;border-bottom:1px solid color-mix(in srgb,var(--border,#333) 60%,transparent);color:var(--text,#eee);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#opRoot .op-tbl th:first-child,#opRoot .op-tbl td:first-child{width:62px;font-weight:600}#opRoot .op-tbl th:nth-child(3),#opRoot .op-tbl td:nth-child(3){width:96px}#opRoot .op-tbl .num{width:82px;text-align:right;font-variant-numeric:tabular-nums}
+#opRoot .op-more{display:block;margin-top:6px;color:var(--text3,#999)}
+@media (max-width:560px){#opRoot .op-tbl th:nth-child(3),#opRoot .op-tbl td:nth-child(3){width:74px}#opRoot .op-tbl .num{width:64px}#opRoot .hs-row:not(.hs-col){flex-wrap:wrap}#opRoot .hs-inline{flex-wrap:wrap}}
+.op-strip{display:flex;align-items:center;gap:10px;margin:-8px 0 14px;padding:7px 10px;border-radius:12px;border:1px solid var(--border,#333);background:var(--card,transparent);min-width:0;max-width:100%;box-sizing:border-box}
+.op-strip-st{font-size:12.5px;color:var(--text2,#bbb);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (hover:none),(pointer:coarse),(max-width:760px){.op-strip{display:none !important}}
 .op-chips{display:contents}.dp-chip.op-bal{color:var(--red,#dc2626);border-color:color-mix(in srgb,var(--red,#dc2626) 45%,transparent)}
 .dp-chip.op-hint{color:var(--text2,#bbb);font-weight:500}.dp-chip.op-rs-dirty,.dp-chip.op-rs-ooo,.dp-chip.op-rs-oos{color:var(--amber,#d97706)}.dp-chip.op-rs-inspected,.dp-chip.op-rs-clean{color:var(--green,#16a34a)}`;
   (doc.head || doc.documentElement).appendChild(s);
 }
 css();
+safe(paintOpen); setTimeout(() => { safe(dbStart); safe(paintOpen); }, 4000);
+if (!mountPage()) { const ivp = setInterval(() => { if (mountPage()) clearInterval(ivp); }, 1500); setTimeout(() => clearInterval(ivp), 120000); }
+doc.addEventListener('click', e => { const t = e.target.closest && e.target.closest('.op-strip [data-opx="open"]'); if (t) openOpera(); });
 if (!wire()) { const iv = setInterval(() => { if (wire()) clearInterval(iv); }, 2000); setTimeout(() => clearInterval(iv), 120000); }
 new MutationObserver(() => paint()).observe(doc.documentElement, { attributes: true, attributeFilter: ['data-ho-op-helper', 'data-ho-wa-helper'] });
 if (!wrapDepRender()) { const iv2 = setInterval(() => { if (wrapDepRender()) { clearInterval(iv2); paintDepChips(); } }, 2000); setTimeout(() => clearInterval(iv2), 120000); } else setTimeout(paintDepChips, 0);
@@ -1042,7 +1607,7 @@ if (!wrapDepRender()) { const iv2 = setInterval(() => { if (wrapDepRender()) { c
   out.push({ id: 'op:status', kind: '📡 Opera reader', title: kinds.length ? `Opera read ${age(kinds[0])} min ago — ${kinds.map(k => `${k.n} ${KIND_LABEL[k.kind] || k.kind}`).join(', ')}` : 'Opera reader: nothing read yet today',
     body: (kinds.length ? `<ul>${kinds.map(k => `<li><b>${esc(KIND_LABEL[k.kind] || k.kind)}</b>: ${k.n} line${k.n === 1 ? '' : 's'} at ${hhmm(k.at)} (${age(k)} min ago)${k.res ? ' · ' + esc(k.res) : ''}</li>`).join('')}</ul>` : '<div>Open Opera Cloud with the HotelOps helper and the lists fill themselves.</div>')
       + (LOG.length ? `<div>Changed today:</div><ul>${LOG.slice(0, 6).map(l => `<li>${hhmm(l.at)} · ${esc(l.text)}</li>`).join('')}</ul>` : '')
-      + `<div class="br-acts"><button class="btn" onclick="brClose();showPanel('settings');setTimeout(()=>{const e=document.getElementById('hs-opera');if(e)e.scrollIntoView({block:'start'})},300)">Opera reader settings</button></div>`,
+      + `<div class="br-acts"><button class="btn" onclick="brClose();hoOpera.openPage()">Open the Opera page</button></div>`,
     text: 'opera reader scraper scan live read fresh linked opera cloud auto arrivals departures in house what did opera change checked out', go: 'settings', boost: 1 });
   // each guest of the newest reads: "512", "room 512", a name or a confirmation finds what Opera showed
   const seen = new Set();
@@ -1093,6 +1658,13 @@ if (!wrapDepRender()) { const iv2 = setInterval(() => { if (wrapDepRender()) { c
   Object.values(LAST).forEach(k => (k.tables || []).forEach((tb, i) => out.push({ id: 'op:tb:' + k.kind + i, kind: `📡 Opera · ${KIND_LABEL[k.kind] || k.kind} at ${hhmm(k.at)}`, title: `${tb.title || KIND_LABEL[k.kind] || 'Opera table'} (${tb.rows.length} line${tb.rows.length === 1 ? '' : 's'})${k.audit && k.audit.state ? ' · night audit ' + k.audit.state : ''}`,
     body: `<div class="dim">${esc(tb.heads.join(' · '))}</div><ul>${tb.rows.slice(0, 20).map(r => `<li>${esc(r.filter(Boolean).join(' · '))}</li>`).join('')}</ul>${tb.rows.length > 20 ? `<div class="dim">… ${tb.rows.length - 20} more</div>` : ''}`,
     text: [k.kind, KIND_LABEL[k.kind], tb.title, tb.heads.join(' '), tb.rows.map(r => r.join(' ')).join(' ').slice(0, 3000), k.kind === 'audit' ? 'night audit end of day eod' : ''].join(' ') })));
+  // 🛟 the screens it couldn't read: "opera problems", "what couldn't the reader read"
+  const SK = stuckLoad();
+  out.push({ id: 'op:stuck', kind: '🛟 Opera reader', title: SK.length ? `Opera reader: ${pl(SK.length, 'screen')} it couldn't read — ${SK.slice(0, 3).map(e => (e.rep && (e.rep.title || KIND_LABEL[e.rep.kind])) || 'a screen').join(', ')}` : 'Opera reader: every screen it saw was read',
+    body: (SK.length ? `<ul>${SK.slice(0, 8).map(e => `<li><b>${esc((e.rep && (e.rep.title || KIND_LABEL[e.rep.kind])) || 'An Opera screen')}</b> · ${esc(hhmm(e.last))}${e.n > 1 ? ' · ' + e.n + '×' : ''}: ${esc(((e.rep && e.rep.why) || []).map(w => w.t).join(' · '))}</li>`).join('')}</ul><div>Press “📋 Copy for Claude” on it and paste it in the chat: the reader then learns that screen (layout only, never guest data).</div>`
+      : '<div>No problems: every Opera screen it saw was read. If one isn’t read right, press 🛟 in the HotelOps window in Opera.</div>')
+      + `<div class="br-acts"><button class="btn" onclick="brClose();hoOpera.openPage('stuck')">Open the Opera page</button></div>`,
+    text: 'opera problems problem issues errors reader stuck could not read couldn\'t read cannot read what couldn\'t the reader read not read right unread screens fix teach report claude copy for claude', go: 'opera', boost: SK.length ? 2 : 0 });
   // learned from you
   if (learnOn()) {
     const M = learnModelNow();
@@ -1127,5 +1699,24 @@ W.hoOpera = {
   learned: () => { const M = learnModelNow(); return Object.assign(learnSummary(M), { on: learnOn(), hint: LRN_HINT }); },
   seen: seenToday, setLearn, forgetLearn,
   cardHtml: roomCardHtml, chips: paintDepChips, alerts: balanceAlerts,
+  /** the newest read of every kind: {kind: {kind, date, title, total, n, at, h, rows, res, folio?, traces?, tables?, audit?}} */
+  reads: () => JSON.parse(JSON.stringify(LAST)),
+  /** what waits for an OK (review mode): [{kind, at, text, n}] */
+  pendingList: () => Object.values(PENDING).map(p => ({ kind: p.snap.kind, at: p.at, text: p.text, n: p.n })),
+  /** today's reads and changes, newest first: [{at, kind: 'read'|'change', screen, text}] */
+  timeline: () => Object.values(LAST).map(k => ({ at: k.at, kind: 'read', screen: k.kind, text: `${k.n}${k.total > k.n ? ' of ' + k.total : ''} on ${KIND_LABEL[k.kind] || k.kind}${k.res ? ' · ' + k.res : ''}` }))
+    .concat(readLog().map(l => ({ at: l.at, kind: 'change', screen: l.kind || '', text: l.text }))).sort((a, b) => b.at - a.at),
+  /** every folio read today [{room, name, conf, balance, zero, settled, windows, pays, at, src}] and the open ones (balance > 0, biggest first) */
+  folios: () => JSON.parse(JSON.stringify(Object.values(FOL.date === today() ? FOL.rooms : {}))),
+  openBalances: () => JSON.parse(JSON.stringify(Object.values(FOL.date === today() ? FOL.rooms : {}).filter(f => f.balance > 0).sort((a, b) => b.balance - a.balance))),
+  /** the newest change set's Undo: {at, text} or null; undoLast() runs it (false when the lists changed since) */
+  lastUndo: () => (LAST_UNDO && !LAST_UNDO.used ? { at: LAST_UNDO.at, text: LAST_UNDO.text } : null),
+  undoLast: () => { if (!LAST_UNDO || LAST_UNDO.used) return false; LAST_UNDO.used = true; const ok = safe(() => LAST_UNDO.fn(), false); paint(); return ok; },
+  /** 🛟 screens it couldn't read: [{h, first, last, n, src, app, rep}] newest first; the text for Claude; copy / dismiss / clear */
+  stuck: () => JSON.parse(JSON.stringify(stuckLoad())), stuckText: stuckCopyText, stuckCopy, stuckDismiss, stuckClear,
+  /** 🟢 Open Opera: opens Opera Cloud (asks for its address once); the card's state and HTML; the address */
+  openOpera, openState: openNow, openCardHtml, operaUrl, setOperaUrl: u => setOperaUrl(u, 'typed'), askOperaUrl,
+  /** the 📡 Opera page */
+  openPage, pageHtml,
 };
 })();

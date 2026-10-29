@@ -9,6 +9,14 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 436, items: [
+    "📡 Opera has its own page now (menu → Front Desk → 📡 Opera): a big 🟢 Open Opera button that opens Opera in its own window like WhatsApp Web, what Opera is showing right now, today's changes with Undo, open bills, what it learned from you, and its settings.",
+    "🪟 A new Opera reader window inside Opera: a proper HotelOps panel with Now / Today / 🛟 Help tabs and a status light. Drag it anywhere, or shrink it to a small round badge (it does that by itself after a minute so it never covers Opera's buttons).",
+    "🔗 Fixed “linking to HotelOps…” forever: the most likely cause (the self-updated reader couldn't talk to HotelOps and silenced the working one) is fixed, and when it still can't link, the window tells you why — “HotelOps tab not found”, “reload HotelOps” or “press ↻ on the helper” — with a 🔁 Retry button.",
+    "👉 Do this once: Settings → 📡 Opera reader → Get the helper again, unzip over the same folder, press ↻ in chrome://extensions. Then press 🟢 Open Opera and paste your Opera address once — it's saved for your hotel. Owners can set the Opera address for each hotel.",
+    "🧠 The Brain asks when Opera shows something it doesn't know (“is the column ‘Unit’ the room?”) — your answer teaches the reader. It also suggests quick fixes: a room checked out in Opera but still due here, bills open near check-out, Opera not read for a while. Always quiet, never pop-ups, silent on your day off.",
+    "🛟 Screens it can't read are saved with a 📋 Copy for Claude button — paste it to me and I'll teach the reader. The copy holds the screen's layout only, never guest details.",
+  ] },
   { v: 435, items: [
     "📡 The Opera reader now reads much more: bills (folio windows, balances, charges and payments — payment type only), room status (clean / dirty / OOO), guest profiles (VIP, membership), traces and alerts, rates, group rooming lists, night audit, and any other table it sees.",
     "💳 Departures shows each room's Opera balance live: a room due out with money still open gets “💳 balance open” (and one quiet phone reminder near check-out), a zero folio shows Settled, and the room's Opera status shows as a small chip. The room card gets an “📡 Opera” part with status and traces. VIP and membership fill only empty spots — nothing anyone typed is changed.",

@@ -84,20 +84,26 @@ ${reader}
   // It never reloads Opera (a form being filled must not be lost): a newer reader starts the next time Opera is opened.
   function opSide(reader, appOrigin, v, fresh) {
     return `// HotelOps helper · Opera reader ${v}${fresh ? ' (updated by itself)' : ''} · reads Opera Cloud, never changes it
-${fresh ? `try { document.documentElement.dataset.hoOpUs = ${JSON.stringify(v)}; } catch (_) {}` : `if (!document.documentElement.dataset.hoOpUs) {   // a newer reader (updated by itself) is running instead`}
+${fresh ? `// the self-updated copy runs as a user script: it takes over only where it can talk to the helper (Chrome's user-script messaging);
+// elsewhere the copy inside the helper runs instead (an older reader that links, rather than a newer one that never does)
+const hoOpMsg = (() => { try { return typeof chrome !== 'undefined' && !!chrome.runtime && typeof chrome.runtime.connect === 'function'; } catch (_) { return false; } })();
+try { document.documentElement.dataset.hoOpUsMsg = hoOpMsg ? '1' : '0'; if (hoOpMsg) document.documentElement.dataset.hoOpUs = ${JSON.stringify(v)}; } catch (_) {}
+if (hoOpMsg) {` : `if (!document.documentElement.dataset.hoOpUs) {   // a newer reader (updated by itself) is running instead`}
 (function () {
   if (window.__hoOpExt) return;
   let port = null;
   const L = [];
   const open = () => {
-    try { port = chrome.runtime.connect({ name: 'opera' }); } catch (_) { port = null; return; }
+    try { port = chrome.runtime.connect({ name: 'opera' }); } catch (e) { port = null; if (window.__hoOpExt) window.__hoOpExt.err = String(e && e.message || e).slice(0, 80); return; }
+    if (window.__hoOpExt) window.__hoOpExt.err = '';
     port.onMessage.addListener(m => {
       if (m && m.source === 'ho-op-ext-new') { window.__hoOpExt.newer = String(m.v); return; }
       L.forEach(f => { try { f(m); } catch (_) {} });
     });
     port.onDisconnect.addListener(() => { port = null; setTimeout(open, 1500); });   // the relay sleeps now and then: wake it
   };
-  window.__hoOpExt = { v: ${JSON.stringify(v)}, on: f => { L.push(f); if (!port) open(); }, post: o => { try { if (!port) open(); port.postMessage(o); } catch (_) {} } };
+  window.__hoOpExt = { v: ${JSON.stringify(v)}, us: ${fresh ? 'true' : 'false'}, err: '', on: f => { L.push(f); if (!port) open(); }, post: o => { try { if (!port) open(); port.postMessage(o); } catch (_) {} },
+    retry: () => { try { if (port) port.disconnect(); } catch (_) {} port = null; open(); } };
 })();
 // wait for the page to have a body, then start the reader once
 (function wait(n) {
@@ -106,7 +112,8 @@ ${fresh ? `try { document.documentElement.dataset.hoOpUs = ${JSON.stringify(v)};
   setTimeout(() => { if (!window.__hoOp) {
 ${reader}
   } }, 800);
-})(0);${fresh ? '' : '\n}'}`;
+})(0);
+}`;
   }
   function files(reader, appOrigin, opReader) {
     const v = ver();
@@ -166,6 +173,8 @@ function link(p) {
       if (ok && canRun()) ports[K.side].forEach(q => { try { q.postMessage({ source: K.fresh, v: m.v }); } catch (_) {} });
       return;
     }
+    // an Opera reader's ping: say at once whether a HotelOps tab is linked (its "linking…" checklist tells the user which it is)
+    if (side === 'opera' && m && m.ping) { try { p.postMessage({ source: 'ho-op-relay', apps: ports.app.size, v: BUILT }); } catch (_) {} }
     // WhatsApp and Opera talk to HotelOps; HotelOps' answers go to the reader they are for (Opera's start with "ho-op")
     const to = side !== 'app' ? 'app' : (m && typeof m.source === 'string' && m.source.indexOf('ho-op') === 0 ? 'opera' : 'wa');
     ports[to].forEach(q => { try { q.postMessage(m); } catch (_) {} });
@@ -174,6 +183,8 @@ function link(p) {
 }
 chrome.runtime.onConnect.addListener(link);
 if (chrome.runtime.onUserScriptConnect) chrome.runtime.onUserScriptConnect.addListener(link);
+// the self-updated readers talk through user-script messaging: switched on each time the relay starts, not only when a reader is registered
+try { if (canRun()) chrome.userScripts.configureWorld({ messaging: true }).catch(() => {}); } catch (_) {}
 ensure();`;
     const wa = waSide(reader, appOrigin, v, false);
     // HotelOps side: show that the helper is here, and carry the messages

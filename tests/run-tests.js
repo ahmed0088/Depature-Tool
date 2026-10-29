@@ -3338,7 +3338,7 @@ console.log('\nOpera reader');
   check('opera: the reader only reads (no clicks, no typing, no innerHTML) and is the same hash for the same rows', [/\.click\(\)|dispatchEvent\(new (?:Mouse|Keyboard)|\.innerHTML|\.value\s*=[^=]/.test(fs.readFileSync(path.join(ROOT, 'tools/hotelops-opera.console.js'), 'utf8')), R.hash([1, 'a']) === R.hash([1, 'a']), R.hash([1]) !== R.hash([2])], [false, true, true]);
 
   // ── the app's side: what Opera's screen changes in the lists (opera-bridge.js, pure) ──
-  const sb = { console: { log() {}, warn() {}, error() {} } }; sb.globalThis = sb;
+  const sb = { console: { log() {}, warn() {}, error() {} }, URL }; sb.globalThis = sb;
   vm.createContext(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'opera-bridge.js'), 'utf8'), sb, { filename: 'opera-bridge.js' });
   const O = sb.hoOperaPure, T = '2026-10-28';
@@ -3485,6 +3485,82 @@ console.log('\nOpera reader');
   const tk = O.sessionsOf(O.learnClean([{ t: t0, k: 'c', l: 'Billing' }, { t: t0 + 2000, k: 's', s: 'billing' }, { t: t0 + 9000, k: 'c', l: 'Check Out' }, { t: t0 + 20000, k: 's', s: 'arrivals' }], new Set())).map(T2 => T2.map(x => x.k));
   check('bridge learning: the menu click that opens a screen of the same name is one step; a check-out ends a task', tk, [['s:billing', 'c:check out'], ['s:arrivals']]);
   const LS0 = JSON.stringify(O.learnSummary(LM)) + JSON.stringify(ev);
+  // ── stuck reports: a screen it can't read → its layout only, never a value ──
+  check('stuck: value shapes (letters a/A, digits 9, long numbers capped, 24 characters; a shape stays a shape)',
+    [R.shapeOf('Testperson, Alpha'), R.shapeOf('28/10/2026'), R.shapeOf('7000123'), R.shapeOf('alpha.test@example.com'), R.shapeOf('A very long text that goes on and on'), R.shapeOf(R.shapeOf('Quixote, Romeo 7000123')), O.shapeOf('Zoë Ünal 12')],
+    ['Aaaaaaaaaa, Aaaaa', '99/99/9999', '999999+', 'aaaaa.aaaa＠aaaaaaa.aaa', 'A aaaa aaaa aaaa aaaa a…', 'Aaaaaaa, Aaaaa 999999+', 'Aaa Aaaa 99']);
+  check('stuck: titles, headings and the address keep no IDs or guest names', [R.structText('Billing - Testperson, Alpha'), R.structText('Arrivals (42)'), R.pathShape('/OPERA9/opera/operacloud/res/ab12cd34ef56gh78', '#res=123'), R.pathShape('/opera/frontdesk', '#departures'), R.headText('Name (Last, First)'), R.classShape('oj-table-9 x123 data-row oj-complete a b c d')],
+    ['Billing', 'Arrivals', '/OPERA#/opera/operacloud/res/:id', '/opera/frontdesk #departures', 'Name (Last / First)', ['oj-table', 'x', 'data-row', 'oj-complete', 'a']]);
+  check('stuck: guest data in a report is found (email, 7+ digits, "Lastname, Firstname"); shapes are not', [R.reportLeaks('mail a.b@example.com'), R.reportLeaks('conf 7000123'), R.reportLeaks('guest Quixote, Romeo'), R.reportLeaks('Aaaaaaa, Aaaaa · 999999+ · 99/99/9999'), O.stuckLeaks('room 0101 · 2026-10-29 10:42')],
+    ['an email', 'a long number', 'a name', '', '']);
+  // a made-up screen the reader can't map: Unit / Occupant / Leaving On
+  const stuckRows = [['0901', 'Quixote, Romeo', '29/10/2026', '7000123', 'romeo.q@example.com'], ['0902', 'Sierra, Tango', '30/10/2026', '7000124', ''], ['0903', 'Umbra, Victor', '31/10/2026', '7000125', ''], ['0904', 'Whiskey, Xray', '01/11/2026', '7000126', '']];
+  const srep = R.makeReport({ v: '436', at: new Date(2026, 9, 29, 10, 42).getTime(), kind: 'departures', hint: 'departures', date: '2026-10-29', title: 'OPERA Cloud', path: '/OPERA9/opera/operacloud/', hash: '#units',
+    heads: ['Departures', 'Billing - Quixote, Romeo', 'Sierra Tango'], why: [{ c: 'unread-grid', t: 'a grid with 4 rows on a "departures" screen: its headers could not be matched (Unit · Occupant · Leaving On · Ref · Contact)' }],
+    grids: [{ sel: 'div[role=grid] in oj-table', cells: 'role=columnheader', head: ['Unit', 'Occupant', 'Leaving On', 'Ref', 'Contact'], aria: ['Unit column', 'Occupant Quixote'], anc: [{ t: 'div', r: 'grid', c: ['oj-table-body'] }, { t: 'div', r: '', c: ['oj-table', 'oj-component'] }], n: 4, rows: stuckRows, stuck: true }],
+    pairs: [['Business Date', '29-Oct-2026'], ['Guest', 'Quixote, Romeo'], ['Card Number', '4111 1111 1111 1111']], concl: 'kind departures · 0 guest lines', err: '' });
+  const repTxt = R.reportText(srep, { n: 2, app: 'up to date' }), repAll = JSON.stringify(srep) + repTxt;
+  check('stuck: the report keeps the layout — headers, how each was mapped, row shapes, DOM hints — and a fake page to test on',
+    [srep.grids[0].head.map(h => h.join('→')), srep.grids[0].shapes[0], srep.heads, srep.grids[0].aria, srep.pairs, /^HotelOps Opera reader report — please teach the reader this screen:\n/.test(repTxt), /<div role="columnheader" aria-colindex="2">Occupant<\/div>/.test(repTxt), /seen 2 times/.test(repTxt), /HotelOps answered: up to date/.test(repTxt)],
+    [['Unit→?', 'Occupant→?', 'Leaving On→?', 'Ref→post.ref', 'Contact→?'], ['9999', 'Aaaaaaa, Aaaaa', '99/99/9999', '999999+', 'aaaaa.a＠aaaaaaa.aaa'], ['Departures', 'Billing'], ['Unit column'], [['Business Date', '99-Aaa-9999'], ['Guest', 'Aaaaaaa, Aaaaa'], ['Card Number', '•••• 9999']], true, true, true, true]);
+  check('stuck privacy: no row value survives (names, rooms, conf. numbers, emails, dates), not even in headings or aria-labels',
+    ['Quixote', 'Romeo', 'Sierra', 'Tango', 'Umbra', 'Victor', 'Whiskey', 'Xray', '7000123', '7000126', 'romeo.q', 'example.com', '0901', '29/10/2026', '4111'].filter(v => repAll.includes(v)), []);
+  check('stuck: the reader and the app write the same text (one format to paste)', [O.stuckText(O.stuckClean(J(srep)), { n: 2, app: 'up to date' }) === repTxt, O.reportText === undefined ? 'missing' : 'ok'], [true, 'ok']);
+  const evil = O.stuckClean({ why: [{ c: 'manual!', t: 'x' }], grids: [{ head: [['Room', 'room']], shapes: [['Testperson, Alpha', '7000123']], anc: [{ t: 'DIV<script>', c: ['a1b2'] }] }], pairs: [['Guest', 'Testperson, Alpha']], title: 'x'.repeat(300) });
+  check('stuck: what the app keeps is re-shaped and cut (a value sent as a "shape" is shaped again)', [evil.why[0].c, evil.grids[0].shapes[0], evil.grids[0].anc[0].t, evil.pairs[0][1], evil.title.length, O.stuckClean({ why: [] }), O.stuckClean(null)],
+    ['manual', ['Aaaaaaaaaa, Aaaaa', '999999+'], 'div', 'Aaaaaaaaaa, Aaaaa', 80, null, null]);
+  check('stuck: a report whose text still holds guest data is refused', [R.makeReport({ v: '1', at: 1.7e12, why: [{ c: 'manual', t: 'see Quixote, Romeo' }], grids: [], pairs: [] }), !!R.makeReport({ v: '1', at: 1.7e12, why: [{ c: 'manual', t: 'fine' }], grids: [], pairs: [] })], [null, true]);
+  // ── linking: what the Opera window says when it can't link ──
+  const LD = o => R.linkDiag(Object.assign({ ext: true, linked: false, since: 20000, relay: null, relayEver: false, anyIn: -1, extErr: '' }, o)).code;
+  check('link: the checklist tells the causes apart', [LD({ linked: true }), LD({ ext: false }), LD({ since: 3000 }), LD({ relay: { apps: 0, age: 1000 } }), LD({ relay: { apps: 1, age: 1000 } }), LD({ relay: { apps: 1, age: 90000 }, relayEver: true }), LD({}), LD({ extErr: 'Extension context invalidated' })],
+    ['linked', 'console', 'linking', 'no-app', 'app-silent', 'no-relay', 'no-answer', 'ext-error']);
+  // ── 🟢 Open Opera: the address and the card ──
+  const DEMO = 'https://demo123.oraclehospitality.eu-frankfurt-1.ocs.oraclecloud.com/DEMOEN/operacloud/faces/opera-cloud-index/OperaCloud';
+  check('open opera: a pasted address is kept as it is (the entry page), only its query and hash go; anything else is refused',
+    [O.operaHome(DEMO), O.operaHome(DEMO + '?token=abc&x=1#frag'), O.operaHome('demo123.oraclehospitality.eu-frankfurt-1.ocs.oraclecloud.com/DEMOEN/operacloud/faces/opera-cloud-index/OperaCloud'), O.operaHome('https://mtce1.oracleindustry.com/OPERA9/'),
+      O.operaHome('http://x.oraclecloud.com/OPERA9/'), O.operaHome('https://evil.com/x.oraclecloud.com/'), O.operaHome('https://oraclecloud.com.evil.io/'), O.operaHome('https://user:pw@x.oraclecloud.com/'), O.operaHome('https://x.oraclecloud.com:8443/'), O.operaHome('javascript:alert(1)'), O.operaHome('')],
+    [DEMO, DEMO, DEMO, 'https://mtce1.oracleindustry.com/OPERA9/', '', '', '', '', '', '', '']);
+  check('open opera: the address learned from the reader is its entry page, even from a deeper screen',
+    [O.operaEntry('https://demo123.oraclehospitality.eu-frankfurt-1.ocs.oraclecloud.com/DEMOEN/operacloud/faces/opera-cloud-index/OperaCloud/reservations/lookup?id=12345'), O.operaEntry('demo123.oraclehospitality.eu-frankfurt-1.ocs.oraclecloud.com/DEMOEN/operacloud/faces/fd/arrivals'),
+      O.operaEntry('https://demo123.oraclehospitality.eu-frankfurt-1.ocs.oraclecloud.com/DEMOEN/operacloud/'), O.operaEntry('https://x.oracleindustry.com/other/app'), O.operaEntry('https://example.com/DEMOEN/operacloud/')],
+    [DEMO, DEMO, DEMO, 'https://x.oracleindustry.com/other/app', '']);
+  // the helper's Opera content script covers that host (and every frame of it)
+  const OPM = ['https://*.oraclecloud.com/*', 'https://*.oracleindustry.com/*', 'https://*.oraclehospitality.com/*'];
+  const matchOf = (pat, url) => { const m = pat.match(/^https:\/\/\*\.([^/]+)\/\*$/); const u = new URL(url); return u.protocol === 'https:' && (u.hostname === m[1] || u.hostname.endsWith('.' + m[1])); };
+  check('open opera: the helper\'s Opera match covers the hotel\'s host, all frames', [OPM.some(m => matchOf(m, DEMO)), /OP_MATCHES = \['https:\/\/\*\.oraclecloud\.com\/\*'/.test(fs.readFileSync(path.join(ROOT, 'wa-helper.js'), 'utf8')), /js: \['opera\.js'\], run_at: 'document_idle', all_frames: true/.test(fs.readFileSync(path.join(ROOT, 'wa-helper.js'), 'utf8'))], [true, true, true]);
+  // ── the Brain asks, and the answers teach the reader ──
+  const stuckE = { h: 'x1', rep: O.stuckClean(J(srep)) }, stuckS = { h: 'x2', rep: { why: [{ c: 'unknown-screen', t: '' }], heads: ['Front Desk Workspace'], title: 'OPERA Cloud', grids: [] } };
+  const TH = (o) => O.operaThoughts(Object.assign({ stuck: [stuckE, stuckS], asked: {}, taught: { h: {}, s: {} }, dayOff: false, cfg: { auto: true, review: false }, board: { rooms: [], day: '' }, last: {}, folios: [], now: new Date(2026, 9, 29, 10, 0).getTime(), today: T, coMin: 720 }, o));
+  const q1 = TH({});
+  check('brain asks: one simple question per unknown column (two at a time), with choices from the shape of its values',
+    [q1.map(t => t.id), q1[0].text, q1[1].opts.map(x => x[0]), q1.every(t => t.opts.some(x => x[1] === 'ask:x'))],
+    [['opq:col:UNIT', 'opq:col:OCCUPANT'], 'In Opera\'s "Departures" list there\'s a column "Unit" — is it:', ['Guest name', 'Company', 'Something else', 'Ignore'], true]);
+  const q2 = TH({ asked: { 'col:UNIT': 1, 'col:OCCUPANT': 1 }, taught: { h: { 'LEAVING ON': 'departure' }, s: {} } });
+  check('brain asks: an answered (or taught) column is never asked again; then the next one and the unknown screen',
+    [q2.map(t => t.id), q2.find(t => t.id === 'opq:col:CONTACT') ? 1 : 0, (q2.find(t => /^opq:scr/.test(t.id)) || { opts: [] }).opts.map(x => x[0])],
+    [['opq:col:CONTACT', 'opq:scr:front desk workspace'], 1, ['Arrivals', 'Departures', 'In House', 'Billing', 'Room status', 'Profile', 'Other']]);
+  check('brain asks nothing on a day off', TH({ dayOff: true }).length, 0);
+  check('brain: the choices fit the column', [O.teachChoices('99/99/9999').slice(0, 2).map(x => x[1]), O.teachChoices('9999').slice(0, 2).map(x => x[1]), O.teachChoices('999999+')[0][1], O.teachChoices('Aaaaaaa, Aaaaa')[0][1]], [['departure', 'arrival'], ['room', 'conf'], 'conf', 'name']);
+  const dep2 = { departures: { at: 1, rows: [{ room: '0412', name: 'Testperson, Alpha', status: 'checked_out' }] } };
+  const sugg = o => TH(Object.assign({ stuck: [], board: { day: T, rooms: [{ roomStr: '0412', name: 'Alpha Testperson', status: 'due' }] }, last: dep2 }, o)).map(t => t.type);
+  check('brain suggests: "checked out in Opera but still due here" only when it did not adjust by itself',
+    [sugg({}), sugg({ cfg: { auto: false } }), sugg({ cfg: { auto: true, review: true } }), TH({ stuck: [], board: { day: T, rooms: [{ roomStr: '0412', name: 'Alpha Testperson', status: 'due' }] }, last: dep2, cfg: { auto: false } })[0].text],
+    [[], ['opCo'], ['opCo'], 'Room 0412 is checked out in Opera but still "due" here — mark it out?']);
+  const at = h => new Date(2026, 9, 29, h, 50).getTime();
+  check('brain suggests: open balances 30 min before check-out; Opera not read for 2 h; an old reader',
+    [TH({ stuck: [], board: { day: T, rooms: [{ roomStr: '0412', name: 'X', status: 'due' }] }, folios: [{ room: '0412', balance: 40 }], now: at(11) }).map(t => t.type), TH({ stuck: [], board: { day: T, rooms: [{ roomStr: '0412', name: 'X', status: 'due' }] }, folios: [{ room: '0412', balance: 40 }], now: at(9) }).length,
+      TH({ stuck: [], last: { arrivals: { at: at(8) } }, now: at(11) }).map(t => t.type), TH({ stuck: [], readerV: '434', appV: 'v436', linkAt: at(11) - 1000, now: at(11) }).map(t => t.type)],
+    [['opBal'], 0, ['opStale'], ['opOld']]);
+  R.setTaught({ h: { 'Leaving On': 'departure', Unit: 'room', Occupant: 'name', Contact: '-' }, s: { 'Front Desk Workspace': 'inhouse' } });
+  const tm2 = R.mapHeaders(['Unit', 'Occupant', 'Leaving On', 'Ref', 'Contact']);
+  check('taught: what the Brain learned changes how the reader reads the headers and the screen', [J(tm2.map), R.usable(tm2), R.pageKind(['OPERA Cloud', 'Front Desk Workspace']), R.fieldOf('Email')], [{ room: 0, name: 1, departure: 2 }, true, 'inhouse', 'email']);
+  R.setTaught(null);
+  check('taught: forgotten again → read as before', [R.fieldOf('Leaving On'), R.pageKind(['Front Desk Workspace'])], ['', '']);
+  const OS = o => { const x = O.openState(o); return [x.state, x.btn]; };
+  check('open opera: the card — no helper / user scripts off / on, linked or not',
+    [OS({ helper: false, us: false, linked: false }), OS({ helper: true, us: false, linked: false }), OS({ helper: true, us: true, linked: true }), OS({ helper: true, us: true, linked: false }), O.openState({ helper: true, us: true, linked: false }).b],
+    [['nohelper', '🟢 Open Opera'], ['noscripts', '🟢 Open Opera'], ['on', '✓ Linked · open Opera'], ['on', '🟢 Open Opera'], '⚡ Reader on · reads by itself · updates by itself']);
+  check('bridge departures: how many of Opera\'s departures matched the board (for the "matches nothing" report)', [P.dep.rows, P.dep.matched], [5, 4]);
   check('bridge learning: what it keeps carries no guest data (no name, room, amount or email)', [/testperson|alpha|0101|120|example\.com|4111/i.test(LS0), ev.every(e => ['s', 'c', 'r'].includes(e.k) && Object.keys(e).sort().join() === 'k,l,t,v')], [false, true]);
 }
 
