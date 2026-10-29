@@ -3562,6 +3562,58 @@ console.log('\nOpera reader');
     [['nohelper', '🟢 Open Opera'], ['noscripts', '🟢 Open Opera'], ['on', '✓ Linked · open Opera'], ['on', '🟢 Open Opera'], '⚡ Reader on · reads by itself · updates by itself']);
   check('bridge departures: how many of Opera\'s departures matched the board (for the "matches nothing" report)', [P.dep.rows, P.dep.matched], [5, 4]);
   check('bridge learning: what it keeps carries no guest data (no name, room, amount or email)', [/testperson|alpha|0101|120|example\.com|4111/i.test(LS0), ev.every(e => ['s', 'c', 'r'].includes(e.k) && Object.keys(e).sort().join() === 'k,l,t,v')], [false, true]);
+  // ── Opera Cloud is Oracle ADF: screens known by their headings, menus / layout never "stuck", forms read by their labels ──
+  check('adf: a screen is known by the headings it shows together (they win over single words)',
+    [R.pageKind(['OPERA Cloud', 'Membership', 'Stay Details', 'Notes', 'Packages and Items', 'Payment Instructions']), R.pageKind(['OPERA Cloud', 'Membership', 'Stay Details', 'Notes', 'Packages and Items', 'Payment Instructions', 'Select Guests']),
+      R.pageKind(['OPERA Cloud', 'Identification', 'Notes', 'Membership', 'Preferences']), R.pageKind(['OPERA Cloud', 'Rate Availability Analysis']), R.pageKind(['OPERA Cloud', 'Search', 'Minimum Stay Availability']),
+      R.pageKind(['OPERA Cloud', 'Verify Payment', 'Select Guests', 'Report Destination']), R.pageKind(['OPERA Cloud', 'Queue', 'Search', 'Search']), R.pageKind(['OPERA Cloud', 'In House', 'Search']), R.pageKind(['OPERA Cloud', 'Arrivals', 'Search']),
+      R.pageKind(['OPERA Cloud', 'Departures (15)']), R.pageKind(['OPERA Cloud', 'Notes']), R.pageKind(['OPERA Cloud', 'Notes', 'Alerts']), R.pageKind(['OPERA Cloud', 'Traces']), R.pageKind(['OPERA Cloud', 'Search'], [{ room: '0412' }])],
+    ['details', 'details', 'profile', 'rates', 'rates', 'checkin', 'queue', 'inhouse', 'arrivals', 'departures', '', '', 'traces', 'list']);
+  check('adf: a form label is a whole field name ("Loading Complete", "Assign Room", "Notes" are not); card / passport labels never',
+    ['Arrival', 'Departure:', 'Room Type', 'Rate Code', 'Confirmation Number', 'Nationality', 'VIP', 'Membership', 'Payment Method', 'ETA', 'Travel Agent', 'Loading Complete', 'Assign Room', 'Notes', 'Preferences', 'Credit Card Number', 'Passport No'].map(R.formLabel),
+    ['arrival', 'departure', 'roomType', 'rateCode', 'conf', 'nat', 'vip', 'member', 'payment', 'eta', 'agent', '', '', '', '', '', '']);
+  check('adf: only a list holding data can be "stuck": 2+ lines, 3+ columns, digits in 30% of them (a menu bar is not)',
+    [R.dataLook([['', 'Front Desk'], ['', 'Bookings']]), R.dataLook([['Front Desk', 'Bookings', 'Client Relations', 'Inventory', 'Financials', 'Exports', 'Miscellaneous']]), R.dataLook([['0412', 'Testperson, Alpha', '28-Oct-2026'], ['0413', 'Testperson, Bravo', '29-Oct-2026']]), R.dataLook([['a', 'b', 'c'], ['d', 'e', 'f'], ['g', 'h', '1']])],
+    [false, false, true, true]);
+  check('adf: a list\'s own count near it (ADF has no "pag" / "total" class names)', ['1-15 of 15', 'Results: 15', 'Total 15', '15 records', 'Window 1 of 3', '28-Oct-2026', 'Room 0412'].map(R.totalLine), [15, 15, 15, 15, 0, 0, 0]);
+  const frep = R.makeReport({ v: '438', at: 1.79e12, kind: 'details', hint: 'details', date: '', title: 'OPERA Cloud', path: '/ACCOREN/operacloud/faces/opera-cloud-index/OperaCloud', hash: '', heads: ['Stay Details'], why: [{ c: 'unread-form', t: 'a reservation screen, but its fields could not be read' }],
+    grids: [{ sel: 'div[role=grid]', cells: 'th', head: ['Room', 'Name'], aria: [], anc: [], n: 2, rows: [['0412', 'Testperson, Alpha'], ['0413', 'Testperson, Bravo']], stuck: false, hc: ['th[role=columnheader][aria-colindex=1]'], rc: 'tr[role=row] {_afrrk,class} in table[role=presentation] · cells: td[role=gridcell] {headers}' }],
+    pairs: [], form: [{ l: 'Arrival', f: 'arrival', how: 'parent-next', path: 'span < td < tr < table[role=presentation] · value span < td', v: '28-Oct-2026' }, { l: 'Testperson', f: '', how: 'next-sibling', path: 'label', v: 'Alpha Testperson' }] });
+  const frTxt = R.reportText(frep);
+  check('adf report: reader revision, header cells and the first line\'s attribute names, the form\'s label → value layout (a label that is a guest\'s word dropped)',
+    [frep.rr, /reader v438 r2/.test(frTxt), /header cells: th\[role=columnheader\]\[aria-colindex=1\]/.test(frTxt), /first data row: tr\[role=row\] \{_afrrk,class\}/.test(frTxt), /"Arrival" → arrival = 99-Aaa-9999 · parent-next · span < td < tr < table\[role=presentation\]/.test(frTxt), /Testperson|Alpha|0412/.test(frTxt.replace(/^.*headers → fields.*$/m, ''))],
+    [2, true, true, true, true, false]);
+  check('adf report: the app keeps the new parts and writes the same text', O.stuckText(O.stuckClean(J(frep))) === frTxt, true);
+  // ── the app side: Queue feeds Arrivals only, a check-in dialog changes nothing ──
+  const qSnap = { kind: 'queue', date: T, rows: [{ room: '0412', name: 'Testperson, Alpha', conf: '100001', arrival: T, departure: '2026-10-30', status: 'checked_out' }, { room: '0413', name: 'Testperson, Bravo', conf: '100002', arrival: T, departure: T, status: 'due_in' }] };
+  const PQ = O.plan({ snap: qSnap, today: T, board: { day: T, rooms: [mk('0413', 'Bravo Testperson')] }, arr: [], pur: [], ih: null });
+  const PC = O.plan({ snap: Object.assign({}, arrSnap, { kind: 'checkin' }), today: T, board, arr, pur, ih: null });
+  check('bridge queue / check-in: the Queue adds arrivals and never checks a room out or touches departures; a check-in dialog changes nothing',
+    [PQ.arr.add.map(g => g.room), PQ.dep.out.length + PQ.dep.add.length + PQ.dep.ext.length + PQ.dep.fill.length, PQ.ih.mode, PC.n, O.sanitize({ kind: 'queue', rows: [] }).kind, O.sanitize({ kind: 'checkin', rows: [] }).kind],
+    [['0413'], 0, '', 0, 'queue', 'checkin']);
+  // ── Opera's Departures vs the board ──
+  const b16 = { day: T, rooms: Array.from({ length: 16 }, (_, i) => mk('04' + String(i + 1).padStart(2, '0'), 'Guest' + 'ABCDEFGHIJKLMNOP'[i] + ' Testperson', { conf: String(100001 + i) })).concat([mk('9001', 'Pm Room')]) };
+  const op15 = { date: T, total: 15, rows: b16.rooms.filter(b => b.roomStr !== '0412' && b.roomStr !== '9001').map(b => ({ room: b.roomStr.replace(/^0/, ''), name: 'Testperson, ' + b.name.split(' ')[0], conf: b.conf, departure: T, status: 'due_out' })) };
+  const ihL = { inhouse: { date: T, rows: [{ room: '0412', name: 'Testperson, GuestL', conf: '100012', arrival: '2026-10-26', departure: '2026-10-31', status: 'in_house' }] } };
+  const RC = O.depRecon({ dep: op15, board: b16, today: T, reads: ihL });
+  const RC0 = O.depRecon({ dep: op15, board: b16, today: T, reads: {} });
+  check('departures vs Opera: 16 on the board, 15 in Opera (complete, room keys without leading zeros, PM rooms left out) → 1 difference: 0412 extended (from the in-house read)',
+    [RC.state, RC.opN, RC.boardN, O.reconHead(RC), RC.diffs.map(d => [d.type, d.room, d.why, d.nights, !!d.sure, d.acts.join(',')]), RC.diffs[0].reason],
+    ['ok', 15, 16, '📡 Opera: 15 departures · HotelOps: 16 — 1 difference', [['missing', '0412', 'extended', 3, true, 'ext,remove,keep']], 'in house in Opera until 31 Oct → extended']);
+  const AU = O.reconAuto(RC), AP = O.reconPlan(AU.map(d => ({ d, act: 'ext' })), T);
+  check('departures vs Opera: auto marks it extended only when it is clear; never removes; without the in-house read it only asks',
+    [AU.map(d => d.room), J(AP.dep.ext.map(e => [e.room, e.nights, e.to])), AP.dep.rm.length, O.reconAuto(RC0).length, RC0.diffs[0].acts.join(','), /extended, moved, checked out earlier or cancelled/.test(RC0.diffs[0].reason),
+      O.reconAuto({ state: 'ok', diffs: [{ type: 'missing', why: 'moved', sure: false }, { type: 'missing', why: '', sure: false }] }).length, O.summaryText(O.reconPlan([{ d: RC0.diffs[0], act: 'remove' }], T))],
+    [['0412'], [['0412', 3, '2026-10-31']], 0, 0, 'ext,remove,keep', true, 0, '1 room removed from today\'s departures']);
+  const RI = O.depRecon({ dep: Object.assign({}, op15, { rows: op15.rows.slice(0, 12) }), board: b16, today: T, reads: {} });
+  check('departures vs Opera: an incomplete read says how far it got instead of listing differences', [RI.state, RI.diffs.length, O.reconHead(RI)], ['incomplete', 0, '📡 Opera read 12 of 15 — scroll the Departures list in Opera to the end']);
+  const op17 = Object.assign({}, op15, { total: 17, rows: op15.rows.concat([{ room: '0412', name: 'Testperson, GuestL', conf: '100012', departure: T, status: 'due_out' }, { room: '0417', name: 'Newcomer, Quinn', conf: '100017', departure: T, status: 'checked_out' }]) });
+  const RA = O.depRecon({ dep: op17, board: b16, today: T, reads: {} }), PA = O.reconPlan(O.reconAuto(RA).map(d => ({ d, act: 'add' })), T);
+  check('departures vs Opera: a room only in Opera → "Add" (done by itself), already checked out there → added as out; a kept room is not listed again',
+    [RA.diffs.map(d => d.type + ' ' + d.room), PA.dep.add.map(a => a.row.room + (a.out ? ' out' : '')), O.depRecon({ dep: op17, board: b16, today: T, reads: {}, keep: { 417: 1 } }).diffs.length],
+    [['extra 0417'], ['0417 out'], 0]);
+  const RG = O.depRecon({ dep: { date: T, total: 0, rows: [{ room: '0401', name: 'Someone, Else', departure: T, status: 'due_out' }, { room: '0402', name: 'Testperson, GuestB', departure: T, status: 'checked_out' }] }, board: { day: T, rooms: [mk('0401', 'GuestA Testperson'), mk('0402', 'GuestB Testperson')] }, today: T, reads: {} });
+  check('departures vs Opera: another guest in the room → "room move?" with Fix name; left in Opera but due here → Mark out', RG.diffs.map(d => [d.type, d.room, d.acts[0]]), [['guest', '0401', 'fixname'], ['status', '0402', 'out']]);
 }
 
 // ── Opera everywhere (brief/home/search): morning-brief.js, handover.js, home.js, global-search.js read hoOpera (made-up data) ──

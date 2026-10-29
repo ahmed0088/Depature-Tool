@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 439, items: [
+    "📡 Opera Departures vs HotelOps: open Departures in Opera and a box at the top of HotelOps Departures says e.g. “Opera: 15 departures · HotelOps: 16 — 1 difference”, names the room and the likely reason (extended, moved, cancelled, left early) with one-tap Mark extended / Remove / Keep / Add / Fix name. It never removes a room by itself, and if it hasn't seen the whole Opera list it asks you to scroll to the end first.",
+    "🧭 The Opera reader now understands your real Opera Cloud screens: it ignores Opera's menus and page layout (no more false “couldn't read” reports), recognises a reservation, a guest profile, rates, Queue rooms and check-in by their headings, and reads the reservation and profile fields (arrival, departure, room, rate, nights, nationality, membership, VIP…). In House shown as cards is read one guest per card.",
+    "🛟 The old “couldn't read” reports are cleared. If a screen is still missed, the new report shows the real guest list or form (layout only, no guest details) — Copy for Claude and send it to me.",
+  ] },
   { v: 438, items: [
     "📡 Opera page redesigned: a clear “Linked to Opera” header with status chips (helper, auto-updates, address), four tiles (read today, changes, open bills, routines), a clean live table with coloured statuses, bills with amounts, and sections that fold away. It now looks right in every app style, including Notepad.",
     "🔗 Opera now fills the gaps everywhere: morning brief (rooms leaving with money owing, VIPs, traces, dirty/OOO rooms), shift handover, a 📡 Opera tile on Home, and search finds what Opera showed (with the balance).",

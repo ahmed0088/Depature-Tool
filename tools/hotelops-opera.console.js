@@ -57,6 +57,7 @@
   'use strict';
   var APP_URL = '__HO_APP_URL__';
   var VERSION = '1';
+  var READER_REV = 2;   // the reader's own revision: stuck reports from before r2 (Opera's menus and layout tables taken for grids) are cleared by HotelOps
 
   // ── pure helpers (tested in Node) ────────────────────────
   var sp = function (s) { return String(s == null ? '' : s).replace(/[   ]/g, ' ').replace(/[​-‏⁦-⁩﻿]/g, ''); };
@@ -143,7 +144,7 @@
     var o = { h: {}, s: {} };
     if (t && typeof t === 'object') {
       Object.keys(t.h || {}).slice(0, 300).forEach(function (k) { var f = String(t.h[k] || ''); if (f === '-' || GUEST_FIELDS[f]) o.h[normH(k)] = f; });
-      Object.keys(t.s || {}).slice(0, 100).forEach(function (k) { var v = String(t.s[k] || ''); if (/^(?:arrivals|departures|inhouse|billing|rooms|profile|traces|search|details|other)$/.test(v)) o.s[screenKey(k)] = v; });
+      Object.keys(t.s || {}).slice(0, 100).forEach(function (k) { var v = String(t.s[k] || ''); if (/^(?:arrivals|departures|inhouse|queue|checkin|billing|rooms|profile|traces|search|details|other)$/.test(v)) o.s[screenKey(k)] = v; });
     }
     TAUGHT = o; taughtGen++;
     return o;
@@ -173,6 +174,24 @@
   /** one header / label → the field it names, or '' */
   FIELDS.forEach(function (f) { GUEST_FIELDS[f[0]] = 1; });
   var fieldOf = mapper(FIELDS, true), postFieldOf = mapper(POST_FIELDS), traceFieldOf = mapper(TRACE_FIELDS);
+  // a form label (Oracle ADF lays a reservation / profile out as label → value, with no <label for>): its WHOLE text must be a field's name
+  var EXACT = {}; FIELDS.forEach(function (f) { f[1].forEach(function (w) { EXACT[w] = f[0]; }); });
+  var FORM_SKIP = { notes: 1, alerts: 1, prefs: 1, status: 0 };   // section titles on Opera's screens ("Notes", "Preferences"), not one value
+  /** the text of an element on its own → the field it labels ('' when it isn't a label: "Loading Complete", "Assign Room", "Notes") */
+  function formLabel(t) {
+    t = sp(t).replace(/\s+/g, ' ').replace(/\s*[:*]+\s*$/, '').trim(); if (t.length < 2 || t.length > 40) return '';
+    var n = normH(t); if (!n || secretLabel(t)) return '';
+    if (TAUGHT.h[n]) return TAUGHT.h[n] === '-' ? '' : TAUGHT.h[n];
+    var f = EXACT[n] || ''; return FORM_SKIP[f] ? '' : f;
+  }
+  /** a grid that holds data, not layout: 2+ lines, 3+ columns, digits in 30% of the lines (rooms, dates, conf. numbers) */
+  function dataLook(rows, w) {
+    rows = rows || []; if (rows.length < 2) return false;
+    if (w == null) w = rows.reduce(function (a, r) { return Math.max(a, (r || []).filter(function (c) { return c != null; }).length); }, 0);
+    if (w < 3) return false;
+    var d = 0; rows.forEach(function (r) { if (/\d/.test((r || []).join(' '))) d++; });
+    return d >= rows.length * 0.3;
+  }
   /** header cells → {map: {field: column}, n: fields found} (each field once, the first column that names it) */
   function mapHeaders(cells, of) {
     var map = {}, n = 0; of = of || fieldOf;
@@ -409,7 +428,7 @@
     ['inhouse', /\bin[\s\-]?house\b|\bstay\s*overs?\b/],
     ['departures', /\bdepartures?\b|\bdue\s*outs?\b|\bcheck[\s\-]?outs?\b/],
     ['arrivals', /\barrivals?\b|\bdue\s*ins?\b|\bcheck[\s\-]?ins?\b/],
-    ['traces', /\btraces?\b|\balerts?\b|\bmessages?\b|\blocators?\b/],
+    ['traces', /\btraces?\b/],   // only "Traces" (a reservation shows Notes / Alerts / Messages sections: not a traces screen)
     ['profile', /\bprofiles?\b|guest\s*(?:details|information|info)\b|\bclient\s*details\b/],
     ['rates', /rate\s*(?:query|info(?:rmation)?|availability|grid|calendar|codes?|plans?|overview)|look\s*to\s*book|\bavailability\b|\brates\b/],
     ['group', /rooming\s*lists?|\bblocks?\b|\bgroups?\b|\ballotments?\b|\bbusiness\s*blocks?\b/],
@@ -421,9 +440,29 @@
     for (var i = 0; i < KINDS.length; i++) if (KINDS[i][1].test(t)) return KINDS[i][0];
     return '';
   }
+  // Opera Cloud (Oracle ADF) never changes its address: a screen is known by the SET of its headings. These win over single words.
+  // t: every heading, lower case, joined with " | ".
+  var SIGS = [
+    ['details', function (t) { return /stay\s*details/.test(t) && /packages?\s*(?:and|&)\s*items|payment\s*instructions/.test(t); }],   // a reservation
+    ['profile', function (t) { return /\bidentification\b/.test(t) && /\bpreferences?\b/.test(t); }],
+    ['rates', function (t) { return /rate\s*availability|minimum\s*stay\s*availability|rate\s*query/.test(t); }],
+    ['checkin', function (t) { return /verify\s*payment|select\s*guests?|report\s*destination/.test(t); }],   // the check-in dialogs: read like a reservation, no list changes
+    ['queue', function (t) { return /(?:^|\|)\s*(?:manage\s+)?queue(?:\s*rooms?)?\s*(?:\(#\))?\s*(?:\||$)/.test(t); }],   // arrivals waiting for their room
+    ['inhouse', function (t) { return /(?:^|\|)\s*(?:manage\s+)?in[\s\-]?house(?:\s*guests?)?\s*(?:\(#\))?\s*(?:\||$)/.test(t); }],
+    ['arrivals', function (t) { return /(?:^|\|)\s*(?:manage\s+)?arrivals?\s*(?:\(#\))?\s*(?:\||$)/.test(t); }],
+    ['departures', function (t) { return /(?:^|\|)\s*(?:manage\s+)?departures?\s*(?:\(#\))?\s*(?:\||$)/.test(t); }],
+  ];
+  /** headings → the kind their combination names ('' when none does) */
+  function sigKind(parts) {
+    var t = (parts || []).map(function (p) { return sp(p).replace(/\s+/g, ' ').replace(/\d+/g, '#').trim().toLowerCase(); }).filter(Boolean).join(' | ');
+    if (!t) return '';
+    for (var i = 0; i < SIGS.length; i++) if (SIGS[i][1](t)) return SIGS[i][0];
+    return '';
+  }
   /** parts: [title, ...headings, url] (most trusted first) and the rows read → the kind of screen */
   function pageKind(parts, rows) {
     for (var j = 0; j < (parts || []).length; j++) { var tk = TAUGHT.s[screenKey(structText(parts[j], 80))] || TAUGHT.s[screenKey(parts[j])]; if (tk) return tk; }   // what the hotel taught first
+    var sk = sigKind(parts); if (sk) return sk;   // then the headings Opera shows together
     for (var i = 0; i < (parts || []).length; i++) { var k = kindOfText(String(parts[i] || '').replace(/[\/_#?=&]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')); if (k) return k; }
     var c = {}; (rows || []).forEach(function (r) { if (r.status) c[r.status] = (c[r.status] || 0) + 1; });
     var top = Object.keys(c).sort(function (a, b) { return c[b] - c[a]; })[0];
@@ -431,7 +470,7 @@
   }
   /** a short id of a value (snapshots are sent only when this changes) */
   function hash(v) { var s = typeof v === 'string' ? v : JSON.stringify(v); var h = 5381, g = 7; for (var i = 0; i < s.length; i++) { h = ((h << 5) + h + s.charCodeAt(i)) | 0; g = (g * 31 + s.charCodeAt(i)) | 0; } return (h >>> 0).toString(36) + (g >>> 0).toString(36); }
-  var KIND_WORD = { arrivals: 'arrivals', departures: 'departures', inhouse: 'in-house', search: 'reservations', details: 'reservation', list: 'reservations',
+  var KIND_WORD = { arrivals: 'arrivals', departures: 'departures', inhouse: 'in-house', search: 'reservations', details: 'reservation', list: 'reservations', queue: 'queued arrivals', checkin: 'check-in guests',
     billing: 'folio lines', rooms: 'rooms', profile: 'profile', traces: 'traces', rates: 'rate lines', group: 'rooming list lines', audit: 'night audit lines', other: 'table lines' };
   /** "read 42 departures" / "read 1 reservation" */
   function summary(kind, n, total) {
@@ -450,6 +489,14 @@
     return m ? +m[1] : 0;
   }
 
+  /** a short line that is only a list's count: "1-15 of 15", "Results: 15", "Total 15", "15 records", "Rows (15)" → 15 (0 when it isn't one) */
+  function totalLine(text) {
+    var t = sp(text).replace(/\s+/g, ' ').trim(); if (!t || t.length > 40) return 0;
+    var m = t.match(/^(?:\d{1,5}\s*[-–]\s*\d{1,5}|showing \d{1,5}\s*[-–]\s*\d{1,5}|page \d{1,4})\s+of\s+(\d{1,5})(?:\s+(?:records|results|rows|items|reservations))?$/i)
+      || t.match(/^(?:total|results|records|rows|count|total (?:records|results|rows|reservations))\s*[:=(]?\s*(\d{1,5})\)?$/i)
+      || t.match(/^(\d{1,5})\s+(?:records?|results?|rows?|items?|reservations?|departures?|arrivals?|guests?)(?:\s+found)?$/i);
+    return m ? +m[1] : 0;
+  }
   /** the lines of a postings grid → [{date, code, desc, amount, ref, window, pay}] (payments: the type only, no reference) */
   function postingsFrom(rows, map, order, win) {
     var out = [];
@@ -533,6 +580,7 @@
     var out = [], seen = {};
     (pairs || []).forEach(function (p) {
       var l = clip(p[0], 40), v = clip(maskCards(p[1]), 120);
+      if (fieldOf(l) === 'payment') v = payType(v) || (/\d|•/.test(v) ? '' : clip(v, 30));   // a payment method: its type only
       if (!l || !v || secretLabel(l) || seen[l] || out.length >= 60) return;
       seen[l] = 1; out.push([l, v]);
     });
@@ -597,25 +645,28 @@
     var words = function (set, v) { String(v == null ? '' : v).replace(/\p{L}{4,}/gu, function (w) { set[w.toLowerCase()] = 1; return w; }); };
     (I.grids || []).forEach(function (g) { (g.head || []).forEach(function (h) { words(ok, h); }); (g.rows || []).forEach(function (r) { (r || []).forEach(function (c) { words(rw, c); }); }); });
     (I.pairs || []).forEach(function (p) { words(ok, p[0]); words(rw, p[1]); });
+    (I.form || []).forEach(function (f) { words(rw, f.v); });
     Object.keys(ok).forEach(function (w) { delete rw[w]; });
     var leaky = function (s) { var bad = false; String(s || '').replace(/\p{L}{4,}/gu, function (w) { if (rw[w.toLowerCase()]) bad = true; return w; }); return bad; };
     var free = function (s) { return s && !leaky(s) && !reportLeaks(s) ? s : ''; };   // text from the page that could hold a guest's name: dropped when it does
-    var R = { v: String(I.v || ''), at: I.at || Date.now(), kind: I.kind || '', hint: I.hint || '', date: I.date ? 'found' : 'none',
+    var dom = function (v, n) { return String(v == null ? '' : v).replace(/[^A-Za-z0-9_\-\[\]=:{}<>,.·|() ]/g, '').replace(/\d{3,}/g, '#').slice(0, n || 80); };   // tags, roles, attribute NAMES only
+    var R = { v: String(I.v || ''), rr: READER_REV, at: I.at || Date.now(), kind: I.kind || '', hint: I.hint || '', date: I.date ? 'found' : 'none',
       title: free(structText(I.title, 80)), path: free(pathShape(I.path, I.hash)),
       heads: (I.heads || []).map(function (h) { return free(structText(h, 60)); }).filter(Boolean).slice(0, 6),
       why: (I.why || []).slice(0, 6).map(function (w) { return { c: String(w.c), t: clip(w.t, 200) }; }),
       grids: (I.grids || []).slice(0, 4).map(function (g) {
-        return { sel: g.sel || '', cells: g.cells || '', n: g.n || 0, stuck: !!g.stuck,
+        return { sel: g.sel || '', cells: g.cells || '', n: g.n || 0, stuck: !!g.stuck, hc: (g.hc || []).slice(0, 16).map(function (x) { return dom(x, 60); }).filter(Boolean), rc: dom(g.rc, 200),
           head: (g.head || []).slice(0, 30).map(function (h) { return [headText(h), mapName(h)]; }),
           aria: (g.aria || []).map(function (a) { return free(headText(a)); }).filter(Boolean).slice(0, 30),
           anc: (g.anc || []).slice(0, 4).map(function (a) { return { t: (String(a.t || '').toLowerCase().match(/^[a-z][a-z0-9\-]*/) || [''])[0], r: String(a.r || '').replace(/[^a-z\-]/g, ''), c: classShape((a.c || []).join(' ')) }; }),
           shapes: (g.rows || []).slice(0, 3).map(function (r) { return (r || []).slice(0, 16).map(shapeOf); }) };
       }),
       pairs: (I.pairs || []).map(function (p) { var l = free(cleanLabel(p[0])); return l ? [l, shapeOf(p[1])] : null; }).filter(Boolean).slice(0, 30),
+      form: (I.form || []).map(function (f) { var l = free(cleanLabel(f.l)); return l ? { l: l, f: String(f.f || '').replace(/[^a-zA-Z]/g, '').slice(0, 20) || '?', how: dom(f.how, 30), path: dom(f.path, 120), shape: shapeOf(f.v) } : null; }).filter(Boolean).slice(0, 25),
       concl: clip(I.concl || '', 240), err: free(clip(String(I.err || '').replace(/\d+/g, '#'), 160)) };
     R = scrub(R);   // the existing masking, over everything
     var txt = reportText(R);
-    if (reportLeaks(txt) || leaky(R.title + ' ' + R.path + ' ' + R.heads.join(' ') + ' ' + R.err + ' ' + R.pairs.map(function (p) { return p[0]; }).join(' ') + ' ' + R.grids.map(function (g) { return g.aria.join(' '); }).join(' '))) return null;
+    if (reportLeaks(txt) || leaky(R.title + ' ' + R.path + ' ' + R.heads.join(' ') + ' ' + R.err + ' ' + R.pairs.map(function (p) { return p[0]; }).join(' ') + ' ' + R.form.map(function (f) { return f.l; }).join(' ') + ' ' + R.grids.map(function (g) { return g.aria.join(' '); }).join(' '))) return null;
     return R;
   }
   /** the report as plain text for the developer, with a fake page made from the shapes to test the reader on.
@@ -625,7 +676,7 @@
     var esc = function (s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
     var two = function (n) { return (n < 10 ? '0' : '') + n; }, d = new Date(R.at || 0);
     var L = ['HotelOps Opera reader report — please teach the reader this screen:'];
-    L.push('reader v' + (R.v || '?') + ' · ' + d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate()) + ' ' + two(d.getHours()) + ':' + two(d.getMinutes()) + (x.n > 1 ? ' · seen ' + x.n + ' times' : ''));
+    L.push('reader v' + (R.v || '?') + (R.rr ? ' r' + R.rr : '') + ' · ' + d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate()) + ' ' + two(d.getHours()) + ':' + two(d.getMinutes()) + (x.n > 1 ? ' · seen ' + x.n + ' times' : ''));
     L.push('screen: kind guess "' + (R.kind || 'unknown') + '"' + (R.hint ? ' (its words say "' + R.hint + '")' : ' (its words name no screen it knows)') + ' · title "' + (R.title || '') + '" · path ' + (R.path || '—') + ' · screen date ' + R.date);
     if ((R.heads || []).length) L.push('headings: ' + R.heads.join(' | '));
     L.push('why:');
@@ -638,9 +689,15 @@
       L.push('  headers → fields: ' + (g.head.length ? g.head.map(function (h) { return '"' + h[0] + '" → ' + h[1]; }).join(' | ') : 'no header line'));
       if (g.aria.length) L.push('  header aria-labels: ' + g.aria.join(' | '));
       if (g.anc.length) L.push('  dom (grid, then up): ' + g.anc.map(function (a) { return a.t + (a.r ? '[role=' + a.r + ']' : '') + a.c.map(function (c) { return '.' + c; }).join(''); }).join(' < '));
+      if ((g.hc || []).length) L.push('  header cells: ' + g.hc.join(' '));
+      if (g.rc) L.push('  first data row: ' + g.rc);
       g.shapes.forEach(function (r, j) { L.push('  row ' + (j + 1) + ' shape: ' + r.join(' | ')); });
     });
     if ((R.pairs || []).length) L.push('label → value shape: ' + R.pairs.map(function (p) { return p[0] + ' = ' + p[1]; }).join(' | '));
+    if ((R.form || []).length) {
+      L.push('form labels (label → field = value shape · where the value was · dom of the label, then up):');
+      R.form.forEach(function (f) { L.push('  "' + f.l + '" → ' + f.f + ' = ' + (f.shape || '(none)') + ' · ' + (f.how || '—') + ' · ' + (f.path || '—')); });
+    }
     L.push('--- fake page (letters → a/A, digits → 9) ---');
     if ((R.heads || [])[0]) L.push('<h1>' + esc(R.heads[0]) + '</h1>');
     (R.grids || []).forEach(function (g) {
@@ -649,6 +706,7 @@
       else L.push(open + '<div role="grid">' + (g.head.length ? '<div role="row">' + g.head.map(function (h, k) { return '<div role="columnheader" aria-colindex="' + (k + 1) + '">' + esc(h[0]) + '</div>'; }).join('') + '</div>' : '') + g.shapes.map(function (r) { return '<div role="row">' + r.map(function (c, k) { return '<div role="gridcell" aria-colindex="' + (k + 1) + '">' + esc(c) + '</div>'; }).join('') + '</div>'; }).join('') + '</div></div>');
     });
     (R.pairs || []).forEach(function (p, i) { L.push('<label for="f' + i + '">' + esc(p[0]) + '</label><input id="f' + i + '" readonly value="' + esc(p[1]) + '">'); });
+    (R.form || []).forEach(function (f) { L.push('<div><span>' + esc(f.l) + '</span><span>' + esc(f.shape) + '</span></div>'); });
     L.push('--- end ---');
     return L.join('\n');
   }
@@ -669,7 +727,7 @@
     postingsFrom: postingsFrom, folioFrom: folioFrom, tracesFrom: tracesFrom, tableFrom: tableFrom, pairsExtra: pairsExtra, auditState: auditState, cleanLabel: cleanLabel, safeTitle: safeTitle,
     normH: normH, fieldOf: fieldOf, mapHeaders: mapHeaders, usable: usable, parseDate: parseDate, dateOrder: dateOrder, findDate: findDate, normStatus: normStatus, money: money,
     roomOf: roomOf, roomKey: roomKey, nameKey: nameKey, confOf: confOf, emailOf: emailOf, rowFrom: rowFrom, finishRows: finishRows, rowKey: rowKey, mergeRows: mergeRows, pairsToRow: pairsToRow,
-    kindOfText: kindOfText, pageKind: pageKind, hash: hash, summary: summary, totalOf: totalOf, FIELDS: FIELDS, VERSION: VERSION };
+    kindOfText: kindOfText, pageKind: pageKind, sigKind: sigKind, formLabel: formLabel, dataLook: dataLook, hash: hash, summary: summary, totalOf: totalOf, totalLine: totalLine, FIELDS: FIELDS, VERSION: VERSION, READER_REV: READER_REV };
   if (typeof module !== 'undefined' && module.exports) { module.exports = H; return; }
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
 
@@ -715,29 +773,94 @@
   function colOf(cell, i) { var n = parseInt(cell.getAttribute('aria-colindex'), 10); return n > 0 ? n - 1 : i; }
   function isHead(c) { return c.tagName === 'TH' || c.getAttribute('role') === 'columnheader'; }
   function gridOf(el) { var p = el.parentElement; return p ? p.closest(GRID_SEL) : null; }
-  /** one grid → {head: [texts by column], rows: [[texts by column]], el} */
+  // Opera Cloud is Oracle ADF: hundreds of layout tables (role=presentation), menus built of tables (role=menubar / menu,
+  // .odec-dropmenu-…), and the real lists split in two tables (the column headers in one, the lines in another, often inside
+  // an outer role=grid, lines marked _afrrk). Each table is sorted first, so only the lists are read.
+  var MENU_SEL = 'nav, [role="menubar"], [role="menu"], [role="navigation"], [role="toolbar"], [role="tablist"], [class*="dropmenu"]';
+  var DATA_CELL = 'th, tr[_afrrk] > td, [role="row"] > td, [role="gridcell"], [role="cell"], [role="columnheader"], [role="rowheader"]';
+  var CLS = null;   // what each table is, for one read
+  function roleOf(e) { return String(e.getAttribute('role') || '').toLowerCase(); }
+  function ownRows(t) { return t.rows || []; }   // a table's own lines (not those of a table inside it)
+  function headRow(t) {
+    if (t.tHead && t.tHead.rows.length && t.tHead.rows[0].cells.length >= 2) return true;
+    var rs = ownRows(t);
+    for (var i = 0; i < rs.length && i < 3; i++) { var h = 0, cs = rs[i].cells; for (var j = 0; j < cs.length; j++) if (isHead(cs[j]) && sp(cs[j].textContent).trim()) h++; if (h >= 2) return true; }
+    return false;
+  }
+  /** a table / grid on screen → 'grid' (read it) · 'part' (a table inside a role=grid: its lines belong to that grid) ·
+   *  'maybe' (looks like layout: read only as the lines under a header table next to it) · 'skip' (menus, layout, a table inside a cell) */
+  function cls0(e) {
+    if (mine(e)) return 'skip';
+    var r = roleOf(e);
+    if (/^(?:menu|menubar|navigation|toolbar|tablist)$/.test(r) || e.closest(MENU_SEL)) return 'skip';
+    if (r === 'grid' || r === 'treegrid' || r === 'table') return 'grid';
+    if (e.tagName !== 'TABLE') return 'skip';
+    var up = e.parentElement, a = up && up.closest('[role="grid"], [role="treegrid"]');
+    if (a) { var cell = up.closest(DATA_CELL); return cell && a.contains(cell) ? 'skip' : 'part'; }
+    if (up && up.closest('tr[_afrrk], [role="row"]')) return 'skip';   // a cell's own layout inside a list line
+    var rs = ownRows(e);
+    for (var i = 0; i < rs.length && i < 5; i++) if (rs[i].hasAttribute('_afrrk') || roleOf(rs[i]) === 'row') return 'grid';
+    if (headRow(e)) return 'grid';
+    if (r === 'presentation' || r === 'none' || e.querySelector('table')) return 'maybe';   // layout, or tables inside its cells
+    return 'grid';
+  }
+  function clsOf(e) { var c = CLS && CLS.get(e); if (c) return c; c = cls0(e); if (CLS) CLS.set(e, c); return c; }
+  /** the grid a line belongs to (a table that is only part of an outer role=grid hands its lines to that grid) */
+  function ownerOf(r) {
+    var e = r.parentElement ? r.parentElement.closest(GRID_SEL) : null;
+    while (e && clsOf(e) === 'part') e = e.parentElement ? e.parentElement.closest(GRID_SEL) : null;
+    return e;
+  }
+  /** inside a list that is read (not a layout table): a date there is a guest's, not the screen's */
+  function inData(e) {
+    if (e.closest('tr[_afrrk], [role="row"]')) return true;
+    for (var g = e.closest(GRID_SEL), n = 0; g && n < 6; g = g.parentElement ? g.parentElement.closest(GRID_SEL) : null, n++) { var c = clsOf(g); if (c === 'grid' || c === 'part') return true; }
+    return false;
+  }
+  /** one grid → {head: [texts by column], rows: [[texts by column]], el, r0: its first line} */
   function readGrid(g) {
-    var head = null, rows = [];
+    var head = null, hs = [], rows = [], byKey = null, joined = 0, first = null;
     g.querySelectorAll(ROW_SEL).forEach(function (r) {
-      if (r.closest(GRID_SEL) !== g || mine(r)) return;
+      if (ownerOf(r) !== g || mine(r)) return;
       var cs = cellsOf(r); if (!cs.length) return;
-      var h = cs.filter(isHead).length;
+      if (r.querySelector('tr, [role="row"]') && Array.prototype.some.call(r.querySelectorAll('tr, [role="row"]'), function (x) { return ownerOf(x) === g; })) return;   // a line holding this grid's lines: layout inside the grid
+      var h = 0; for (var i = 0; i < cs.length; i++) if (isHead(cs[i])) h++;
       if ((h && h >= cs.length / 2) || (!head && r.parentElement && r.parentElement.tagName === 'THEAD')) {   // a header line (the last one with the most columns wins: grouped headers)
         var line = []; cs.forEach(function (c, i) { line[colOf(c, i)] = txt(c) || c.getAttribute('aria-label') || ''; });
+        hs.push({ line: line, t: r.parentElement });
         if (!head || line.filter(Boolean).length >= head.filter(Boolean).length) head = line;
         return;
       }
-      var line2 = []; cs.forEach(function (c, i) { line2[colOf(c, i)] = txt(c); });
-      if (line2.some(Boolean)) rows.push(line2);
+      var line2 = [], ci = false; cs.forEach(function (c, i) { if (c.hasAttribute('aria-colindex')) ci = true; line2[colOf(c, i)] = txt(c); });
+      if (!line2.some(Boolean)) return;
+      // one line split over two tables (ADF frozen columns): the same row key → one line
+      var k = r.getAttribute('_afrrk');
+      if (k) {
+        byKey = byKey || {};
+        var prev = byKey[k];
+        if (prev && prev.t !== r.parentElement) {
+          if (ci) line2.forEach(function (v, i) { if (v != null && prev.line[i] == null) prev.line[i] = v; }); else Array.prototype.push.apply(prev.line, line2);
+          joined++; return;
+        }
+        byKey[k] = { line: line2, t: r.parentElement };
+      }
+      if (!first) first = r;
+      rows.push(line2);
     });
-    return { el: g, head: head, rows: rows };
+    // headers split the same way (one header table per part, side by side): joined in order
+    if (joined && hs.length >= 2 && hs.every(function (x, i) { return !i || x.t !== hs[i - 1].t; })) head = hs.reduce(function (a, x) { return a.concat(x.line); }, []);
+    return { el: g, head: head, rows: rows, r0: first };
   }
   function depthTo(a, b) { var n = 0; for (var e = a; e && n < 8; e = e.parentElement, n++) if (e.contains(b)) return n; return 99; }
   /** every grid on screen → guest lines (header-only grids are paired with the body grid next to them: split headers).
-   *  The grids that aren't guest lists come back too: a folio's postings, traces, and anything else as a plain table. */
+   *  The grids that aren't guest lists come back too: a folio's postings, traces, and anything else as a plain table.
+   *  Menus and layout tables are never read (skipped: how many). */
   function readGrids(doc, hint) {
-    var gs = [];
-    doc.querySelectorAll(GRID_SEL).forEach(function (g) { if (!mine(g)) gs.push(readGrid(g)); });
+    CLS = new Map();
+    var gs = [], maybe = [], skipped = 0;
+    doc.querySelectorAll(GRID_SEL).forEach(function (e) { var c = clsOf(e); if (c === 'grid') gs.push(readGrid(e)); else if (c === 'maybe') maybe.push(e); else if (c === 'skip' && !mine(e)) skipped++; });
+    // a one-line table without a header or a digit: layout too
+    gs = gs.filter(function (g) { if (g.head) return true; if (!g.rows.length) return false; if (g.rows.length === 1 && !/\d/.test(g.rows[0].join(''))) { skipped++; return false; } return true; });
     var kindOfHead = function (h) {
       if (!h) return '';
       var mg = mapHeaders(h), mt = mapHeaders(h, traceFieldOf);
@@ -748,6 +871,13 @@
       return h.filter(Boolean).length >= 2 ? 'other' : '';
     };
     var heads = gs.filter(function (g) { return g.head && !g.rows.length && (g.hk = kindOfHead(g.head)); });
+    // a layout-looking table right under a header table with as many columns: the lines of a split list (ADF)
+    maybe.forEach(function (e) {
+      var rs = ownRows(e), w = 0; for (var i = 0; i < rs.length && i < 8; i++) w = Math.max(w, rs[i].cells.length);
+      var ok = w >= 2 && heads.some(function (h) { return (h.el.compareDocumentPosition(e) & 4) && Math.abs(h.head.length - w) <= 1 && depthTo(h.el, e) <= 6; });
+      if (!ok) { skipped++; return; }
+      var g = readGrid(e); if (g.rows.length) gs.push(g);
+    });
     var out = [], total = 0, post = [], trace = [], other = [], seen = [];
     gs.forEach(function (g) {
       if (!g.rows.length) return;
@@ -760,7 +890,7 @@
         });
         if (best && bd <= 6) { head = best.head; k = best.hk; hel = best.el; }
       }
-      var s = { el: g.el, hel: hel, head: head, k: k, n: g.rows.length, w: w, out: 0, rows: g.rows };   // what was seen, for the stuck check (references only: no extra work)
+      var s = { el: g.el, hel: hel, head: head, k: k, n: g.rows.length, w: w, out: 0, rows: g.rows, r0: g.r0 };   // what was seen, for the stuck check (references only: no extra work)
       seen.push(s);
       if (!k) return;
       var hk = head.map(normH).join('|'), h0 = normH(head[0] || '');
@@ -775,17 +905,117 @@
       // "1–25 of 42" near the grid
       var box = g.el.parentElement; for (var i = 0; i < 3 && box && box.parentElement; i++) box = box.parentElement;
       if (box) box.querySelectorAll('[class*="pag" i], [class*="count" i], [class*="total" i], [role="status"]').forEach(function (e) { if (!mine(e) && !total) total = totalOf(txt(e).slice(0, 80)); });
+      // ADF names nothing "pag" or "total": a short text near the list that is only its count ("Results: 15", "1-15 of 15")
+      for (var up = g.el, j = 0; !total && up && j < 6; up = up.parentElement, j++) {
+        if (!up.parentElement || up.parentElement === doc.body) break;
+        var tw = doc.createTreeWalker(up.parentElement, 4), tn, c = 0;
+        while (!total && (tn = tw.nextNode()) && ++c < 400) { var v = tn.nodeValue; if (v && v.length < 40 && /\d/.test(v) && !g.el.contains(tn) && !inData(tn.parentElement || g.el)) total = totalLine(v); }
+      }
     });
-    return { raw: out, total: total, post: post, trace: trace, other: other, seen: seen };
+    return { raw: out, total: total, post: post, trace: trace, other: other, seen: seen, skipped: skipped };
   }
-  /** label → value pairs on screen (reservation details), outside the grids. Never a password, PIN or card field. */
+  // ── Oracle ADF forms (a reservation, a profile): a short text that names a field, and the value shown next to it ──
+  var LABEL_TAGS = { SPAN: 1, LABEL: 1, DIV: 1, TD: 1, TH: 1, DT: 1 };
+  var NOT_LABEL = 'button, a, select, option, textarea, h1, h2, h3, h4, [role="button"], [role="tab"], [role="menuitem"], [role="option"], [role="columnheader"], [role="heading"], [role="link"], tr[_afrrk], [role="row"], ' + MENU_SEL;
+  var INPUTS = 'input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]):not([type=image]), textarea, select';
+  /** a field's value (null: a password / PIN / card field, never read) */
+  function fieldVal(f) {
+    if (secretInput(f)) return null;
+    if (f.tagName === 'SELECT') { var o = f.options && f.options[f.selectedIndex]; return o ? o.text : ''; }
+    return f.value == null ? '' : String(f.value);
+  }
+  /** what an element shows as a value ('' when it holds a label, or is too big to be one value) */
+  function valFrom(e, lbls) {
+    if (!e || mine(e)) return '';
+    if (/^(?:INPUT|TEXTAREA|SELECT)$/.test(e.tagName)) return e.matches(INPUTS) ? fieldVal(e) : '';
+    if (e.childElementCount > 12) return '';
+    for (var i = 0; i < lbls.length; i++) if (e.contains(lbls[i])) return '';
+    var f = e.querySelector(INPUTS); if (f) return fieldVal(f);
+    return txt(e);
+  }
+  var tagRole = function (e) { var r = roleOf(e); return e.tagName.toLowerCase() + (r ? '[role=' + r + ']' : ''); };
+  /** the label, then up: "span < td < tr < table[role=presentation]" (tags and roles only) */
+  function pathOf(e) { var out = []; for (var i = 0; e && i < 4 && e !== document.body; e = e.parentElement, i++) out.push(tagRole(e)); return out.join(' < '); }
+  /** the value next to a label element: (a) its next sibling · (b) its parent's (or grandparent's) next sibling · (c) an input in its row ·
+   *  (d) an element aria-labelledby it. → [value, how, value element] · null (a secret field) · [] (none) */
+  function valueFor(el, lt, lbls, doc) {
+    var others = lbls.filter(function (x) { return x !== el; });
+    var ok = function (x) {
+      if (x == null) return null;
+      x = sp(x).replace(/\s+/g, ' ').trim();
+      return !x || x.length > 80 || x === lt || !/[\p{L}\p{N}]/u.test(x) || formLabel(x) || /^loading complete$/i.test(x) ? '' : x;
+    };
+    var only = function (box) { for (var i = 0; i < others.length; i++) if (box.contains(others[i])) return false; return true; };
+    var e = el.nextElementSibling, v;
+    if (e) { v = ok(valFrom(e, lbls)); if (v === null) return null; if (v) return [v, 'next-sibling', e]; }
+    for (var p = el.parentElement, k = 0; p && k < 2 && p !== doc.body && only(p); p = p.parentElement, k++) {
+      e = p.nextElementSibling; if (!e) continue;
+      v = ok(valFrom(e, lbls)); if (v === null) return null; if (v) return [v, k ? 'grandparent-next' : 'parent-next', e];
+    }
+    var row = el.closest('tr') || (el.parentElement && el.parentElement.parentElement);
+    if (row && row !== doc.body && only(row)) { var f = row.querySelector(INPUTS); if (f) { v = ok(fieldVal(f)); if (v === null) return null; if (v) return [v, 'row-input', f]; } }
+    var ids = [el].concat(Array.prototype.slice.call(el.querySelectorAll('[id]'), 0, 3));
+    for (var j = 0; j < ids.length; j++) {
+      if (!ids[j].id) continue;
+      try { e = doc.querySelector('[aria-labelledby~="' + (window.CSS && CSS.escape ? CSS.escape(ids[j].id) : ids[j].id) + '"]'); } catch (_) { e = null; }
+      if (e) { v = ok(valFrom(e, [])); if (v === null) return null; if (v) return [v, 'aria-labelledby', e]; }
+    }
+    return [];
+  }
+  /** the label elements on screen: [{l, f, el}] (f '' for a label-like text that names no field: reports only) */
+  function formLabels(doc, loose) {
+    var root = doc.body, out = []; if (!root || !doc.createTreeWalker) return out;
+    var tw = doc.createTreeWalker(root, 4), t, n = 0, seen = new Set();
+    while ((t = tw.nextNode()) && ++n < 60000) {
+      var s = t.nodeValue; if (!s || s.length < 2 || s.length > 60) continue;
+      var f = formLabel(s), lt = sp(s).replace(/\s+/g, ' ').replace(/\s*[:*]+\s*$/, '').trim();
+      if (!f && !(loose && lt.length <= 30 && /^\p{Lu}[\p{L} .\/&'\-]*$/u.test(lt) && lt.split(' ').length <= 4 && (/:\s*$/.test(s) || (t.parentElement && t.parentElement.tagName === 'LABEL')))) continue;
+      var el = t.parentElement; if (!el || mine(el) || /^loading complete$/i.test(lt)) continue;
+      for (var k = 0, up; k < 3 && (up = el.parentElement) && up !== root && LABEL_TAGS[up.tagName] && up.childElementCount <= 1 && sp(up.textContent).replace(/\s+/g, ' ').replace(/\s*[:*]+\s*$/, '').trim() === lt; k++) el = up;   // <td><label><span>Arrival</span></label></td> → the td
+      if (!LABEL_TAGS[el.tagName] || seen.has(el) || el.closest(NOT_LABEL)) continue;
+      if (el.tagName === 'TH' && el.parentElement && el.parentElement.querySelectorAll(':scope > th').length >= 2) continue;   // a column header
+      seen.add(el); out.push({ l: lt, f: f, el: el });
+      if (out.length >= (loose ? 400 : 200)) break;
+    }
+    return out;
+  }
+  /** the fields of an ADF form → [{l, v, f, el, how, vel}] (only labels that name a field; never a secret field) */
+  function readForm(doc) {
+    var L = formLabels(doc, false), els = L.map(function (x) { return x.el; }), out = [];
+    L.forEach(function (x) {
+      var r = valueFor(x.el, x.l, els, doc); if (!r || !r[0]) return;
+      out.push({ l: x.l, v: maskCards(r[0]), f: x.f, el: x.el, how: r[1], vel: r[2] });
+    });
+    return out;
+  }
+  /** a list shown as cards (each reservation a box of label → value): one guest line per box. [] when it isn't one. */
+  function recordsOf(hits, order) {
+    var cnt = {}; (hits || []).forEach(function (h) { cnt[h.f] = (cnt[h.f] || 0) + 1; });
+    var a = ['conf', 'room', 'name', 'last'].filter(function (f) { return cnt[f] >= 2; })[0]; if (!a) return [];
+    var an = hits.filter(function (h) { return h.f === a; }).slice(0, 150);
+    var roots = an.map(function (h) {
+      var r = h.el;
+      while (r.parentElement && r.parentElement !== document.body) {
+        var p = r.parentElement, c = 0;
+        for (var i = 0; i < an.length && c < 2; i++) if (p.contains(an[i].el)) c++;
+        if (c > 1) break; r = p;
+      }
+      return r;
+    });
+    var groups = roots.map(function () { return []; });
+    hits.forEach(function (h) { for (var i = 0; i < roots.length; i++) if (roots[i].contains(h.el)) { groups[i].push([h.l, h.v]); return; } });
+    var raw = []; groups.forEach(function (g) { var r = pairsToRow(g, order, true); if (r) raw.push(r); });
+    return raw.length >= 2 ? raw : [];
+  }
+  /** label → value pairs on screen (reservation details), outside the lists. Never a password, PIN or card field.
+   *  pairs.form: the ADF form fields found by their place (for the card lists and the reports). */
   function readPairs(doc) {
     var pairs = [], seen = new Set();
-    var add = function (l, v, el) { l = sp(l).replace(/[:*]\s*$/, '').trim(); v = sp(v).trim(); if (!l || !v || l.length > 40 || v.length > 200 || seen.has(l + '|' + v) || secretLabel(l)) return; if (el && (el.closest(GRID_SEL) || mine(el))) return; seen.add(l + '|' + v); pairs.push([l, maskCards(v)]); };
+    var add = function (l, v, el) { l = sp(l).replace(/[:*]\s*$/, '').trim(); v = sp(v).trim(); if (!l || !v || l.length > 40 || v.length > 200 || seen.has(l + '|' + v) || secretLabel(l) || /^loading complete$/i.test(l)) return; if (el && (mine(el) || inData(el))) return; seen.add(l + '|' + v); pairs.push([l, maskCards(v)]); };
     var field = function (n) { return n && n.querySelector ? n.querySelector('input,textarea,select') : null; };
     doc.querySelectorAll('label').forEach(function (l) {
       var id = l.getAttribute('for'), t = id ? doc.getElementById(id) : null, v = '';
-      if (t) { if (secretInput(t)) return; v = /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) ? valOf(t) : txt(t); }
+      if (t) { if (secretInput(t)) return; v = /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) ? (t.tagName === 'SELECT' ? fieldVal(t) || '' : valOf(t)) : txt(t); }
       else { var n = l.nextElementSibling; if (n) { var f = field(n); if (f && secretInput(f)) return; v = f ? valOf(f) : txt(n); } }
       add(txt(l), v, l);
     });
@@ -797,13 +1027,16 @@
       var f = field(n); if (f && secretInput(f)) return;
       add(txt(e), f ? valOf(f) : txt(n), e);
     });
-    return pairs.slice(0, 200);
+    var form = []; try { form = readForm(doc); } catch (_) {}
+    form.forEach(function (h) { add(h.l, h.v, null); });
+    pairs = pairs.slice(0, 200); pairs.form = form;
+    return pairs;
   }
   /** the folio windows shown (tabs "Window 1 · 120.00", "Window 2"…) → [{n, balance}] and the one open */
   function readWindows(doc) {
     var out = [], cur = 0;
     doc.querySelectorAll('[role="tab"], [class*="window" i], [id*="window" i], [class*="folio" i]').forEach(function (e) {
-      if (mine(e) || e.closest(GRID_SEL)) return;
+      if (mine(e) || inData(e)) return;
       var t = txt(e); if (!t || t.length > 120) return;
       var all = t.match(/\bwindow\b/gi); if (!all || all.length !== 1) return;   // a box holding all the windows: its tabs are read one by one
       var m = t.match(/\bwindow\s*#?\s*([1-8])\b/i); if (!m) return;
@@ -813,15 +1046,17 @@
     });
     return { wins: out, cur: cur };
   }
+  /** the screen's headings (and the open tab last): Opera Cloud's address never changes, so these say which screen it is */
   function headings(doc) {
     var out = [];
-    doc.querySelectorAll('h1, h2, [role="heading"][aria-level="1"], [role="heading"][aria-level="2"], [class*="page-title" i], [class*="pageTitle"], [class*="oj-flex-bar-middle"] h1, [aria-current="page"]').forEach(function (h) { if (!mine(h)) { var t = txt(h); if (t && t.length < 90) out.push(t); } });
-    return out.slice(0, 8);
+    doc.querySelectorAll('h1, h2, [role="heading"][aria-level="1"], [role="heading"][aria-level="2"], [class*="page-title" i], [class*="pageTitle"], [class*="oj-flex-bar-middle"] h1, [aria-current="page"]').forEach(function (h) { if (!mine(h) && !h.closest(MENU_SEL)) { var t = txt(h); if (t && t.length < 90 && out.indexOf(t) < 0) out.push(t); } });
+    doc.querySelectorAll('[role="tab"][aria-selected="true"]').forEach(function (h) { if (!mine(h)) { var t = txt(h); if (t && t.length < 40 && out.indexOf(t) < 0) out.push(t); } });
+    return out.slice(0, 16);
   }
   function screenDate(doc, order) {
     var cand = [];
     doc.querySelectorAll('h1, h2, h3, [role="heading"], [class*="date" i], [id*="date" i], [aria-label*="date" i]').forEach(function (e) {
-      if (mine(e) || e.closest(GRID_SEL)) return;
+      if (mine(e) || inData(e)) return;
       var t = (e.tagName === 'INPUT' ? e.value : txt(e)) || e.getAttribute('aria-label') || '';
       if (t && t.length < 80) cand.push((/business\s*date/i.test(t) ? '0' : '1') + t);
     });
@@ -834,8 +1069,9 @@
   // browser is idle, and a screen that takes long to read is read less often.
   var lastUse = 0, cost = 0;
   ['keydown', 'pointerdown', 'input', 'compositionupdate'].forEach(function (t) { window.addEventListener(t, function () { lastUse = Date.now(); }, { capture: true, passive: true }); });
-  var SPECIAL = { billing: 1, rooms: 1, audit: 1, traces: 1, profile: 1, rates: 1, group: 1 };
-  var REPLACE = { details: 1, billing: 1, profile: 1, traces: 1 };   // one thing on screen: the newest read replaces the last one
+  var SPECIAL = { billing: 1, rooms: 1, audit: 1, traces: 1, profile: 1, rates: 1, group: 1, checkin: 1, queue: 1 };
+  var REPLACE = { details: 1, billing: 1, profile: 1, traces: 1, checkin: 1 };   // one thing on screen: the newest read replaces the last one
+  var LOOSE = { billing: 1, profile: 1, traces: 1, checkin: 1, details: 1 };   // a name, a room or a conf. and one more thing is a guest there
   function scan() {
     if (stopped) return;
     var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
@@ -847,10 +1083,12 @@
       var g = readGrids(document, hint);
       var rows = finishRows(g.raw, order);
       // label → value pairs only where they matter (a long list with nothing else is read without them: fast)
-      var readP = !rows.length || hint === 'billing' || hint === 'profile' || hint === 'details' || hint === 'traces' || g.post.length;
+      var readP = !rows.length || REPLACE[hint] || g.post.length;
       var pairs = readP ? readPairs(document) : [];
       var det = null;
-      if (!rows.length && pairs.length) det = pairsToRow(pairs, order) || (hint === 'billing' || hint === 'profile' || hint === 'traces' || g.post.length ? pairsToRow(pairs, order, true) : null);
+      // a list shown as cards (In House / Queue in Opera's list view): one line per card
+      if (!rows.length && pairs.form && !REPLACE[hint]) { var recs = recordsOf(pairs.form, order); if (recs.length) rows = recs; }
+      if (!rows.length && pairs.length) det = pairsToRow(pairs, order) || (LOOSE[hint] || g.post.length ? pairsToRow(pairs, order, true) : null);
       if (det) rows = [det];
       var kind = pageKind(parts, rows);
       if (g.post.length) kind = 'billing';   // a folio's postings: Billing / Check Out / Cashiering, whatever the title says
@@ -871,7 +1109,7 @@
       }
       g.trace.forEach(function (t) { traces = traces.concat(tracesFrom(t.rows, t.map, order)); });
       if (det) traces.forEach(function (t) { ['room', 'name', 'conf'].forEach(function (f) { if (!t[f] && det[f]) t[f] = det[f]; }); });
-      if (det && (kind === 'details' || kind === 'profile' || kind === 'traces')) det.extra = pairsExtra(pairs);
+      if (det && (kind === 'details' || kind === 'profile' || kind === 'traces' || kind === 'checkin')) det.extra = pairsExtra(pairs);
       if (kind === 'rooms') rows.forEach(function (r) { if (!r.rs && r.statusText) { var x = normRoomStatus(r.statusText); if (x) { r.rs = x; r.roomStatus = r.statusText; delete r.status; } } });
       g.other.forEach(function (o) { var tb = tableFrom(o.head, o.rows, heads[0] || document.title); if (tb) tables.push(tb); });
       if (kind === 'audit') { var tx = heads.slice(); tables.forEach(function (tb) { tb.rows.forEach(function (r) { tx.push(r.join(' ')); }); }); pairs.forEach(function (p) { tx.push(p[0] + ' ' + p[1]); }); audit = { state: auditState(tx) }; }
@@ -881,12 +1119,14 @@
       view.rows = REPLACE[kind] ? rows : mergeRows(view.rows, rows);
       if (view.rows.length > 1500) view.rows = view.rows.slice(-1500);
       if (g.total) view.total = g.total;
+      else if (rows.length && !REPLACE[kind]) { var hn = (heads[0] || '').match(/\((\d{1,5})\)\s*$/); if (hn) view.total = +hn[1]; }   // "Departures (15)"
       view.folio = folio; view.traces = traces; view.tables = tables; view.audit = audit;
       lastCtx = { kind: kind, hint: hint, heads: heads, date: date, g: g, pairs: readP ? pairs : null, rowsN: rows.length, tables: tables.length };
       checkStuck(lastCtx);
       send();
       render();
     } catch (e) { lastErr = String(e && e.message || e).slice(0, 120); lastErrAt = Date.now(); stuckErr(lastErr); render(); }
+    CLS = null;
     var took = ((window.performance && performance.now) ? performance.now() : Date.now()) - t0;
     cost = cost ? cost * 0.7 + took * 0.3 : took;
   }
@@ -911,24 +1151,24 @@
   var dayNow = function () { var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
   var stuckDone = LS.get('ho_op_stuck', null);
   function doneToday() { if (!stuckDone || stuckDone.d !== dayNow() || !Array.isArray(stuckDone.h)) stuckDone = { d: dayNow(), h: [] }; return stuckDone.h; }
-  /** what is wrong on screen → [{c, t}] (the grids behind it get .bad) */
+  /** what is wrong on screen → [{c, t}] (the grids behind it get .bad). Only lists that hold data count (2+ lines, 3+ columns,
+   *  digits in 30% of the lines): Opera's menus and layout tables never make a report. */
   function stuckWhy(c) {
-    var why = [], g = c.g || { seen: [], raw: [] }, anyGuest = (g.raw || []).length > 0;
+    var why = [], g = c.g || { seen: [], raw: [] }, anyGuest = (g.raw || []).length > 0, dataN = 0;
     g.seen.forEach(function (s) {
-      s.bad = false;
+      s.bad = false; s.data = dataLook(s.rows, s.w);
+      if (s.data) dataN++;
       if (!s.k) {
-        var r = s.el.getAttribute('role');   // a table without headers: only a data grid, not a layout table
-        if (s.n >= 2 && s.w >= 2 && ((r && /^(?:grid|table|treegrid)$/.test(r)) || (s.n >= 3 && s.w >= 3 && !s.el.querySelector('table, input, select, textarea, button, [role="grid"]')))) {
-          s.bad = true; why.push({ c: 'unread-grid', t: 'a grid with ' + s.n + ' rows has no header line it could read' });
-        }
-      } else if (s.k === 'other' && !anyGuest && GUEST_K[c.hint]) {
+        if (s.data) { s.bad = true; why.push({ c: 'unread-grid', t: 'a list with ' + s.n + ' rows and ' + s.w + ' columns has no header line it could read' }); }
+      } else if (s.k === 'other' && !anyGuest && GUEST_K[c.hint] && s.data) {
         s.bad = true; why.push({ c: 'unread-grid', t: 'a grid with ' + s.n + ' rows on a "' + c.hint + '" screen: its headers could not be matched (' + (s.head || []).filter(Boolean).map(headText).join(' · ') + ')' });
       } else if (s.k === 'guest' && s.n > 0 && !s.out) { s.bad = true; why.push({ c: 'nothing-useful', t: s.n + ' rows read, but none has a room, a conf. number or a name' }); }
     });
-    var pn = c.pairs ? c.pairs.length : 0;
-    if (!c.hint && (!c.kind || c.kind === 'other' || c.kind === 'list') && (g.seen.length || pn >= 6)) {
-      why.push({ c: 'unknown-screen', t: 'the screen kind is ' + (c.kind ? 'only "' + c.kind + '"' : 'unknown') + ': its title and headings name no screen it knows, yet it shows ' + (g.seen.length ? g.seen.length + ' grid' + (g.seen.length === 1 ? '' : 's') : pn + ' label/value pairs') });
+    var pn = c.pairs ? c.pairs.length : 0, unread = g.seen.some(function (s) { return s.bad; });
+    if (!c.hint && ((!c.kind || c.kind === 'other') && (dataN || pn >= 6) || (c.kind === 'list' && unread))) {
+      why.push({ c: 'unknown-screen', t: 'the screen kind is ' + (c.kind ? 'only "' + c.kind + '"' : 'unknown') + ': its title and headings name no screen it knows, yet it shows ' + (dataN ? dataN + ' data list' + (dataN === 1 ? '' : 's') : pn + ' label/value pairs') });
     }
+    if ((c.kind === 'details' || c.kind === 'profile') && !c.rowsN && c.pairs) why.push({ c: 'unread-form', t: 'a ' + (c.kind === 'profile' ? 'profile' : 'reservation') + ' screen, but its fields could not be read (' + pn + ' label/value pair' + (pn === 1 ? '' : 's') + ' found)' });
     if ((c.kind === 'arrivals' || c.kind === 'departures') && !c.date && (c.rowsN || g.seen.length)) why.push({ c: 'no-date', t: 'a ' + c.kind + ' screen, but no date found on it (it needs one to know the day)' });
     return why.slice(0, 6);
   }
@@ -966,22 +1206,44 @@
     var rep = buildReport(c, [{ c: 'error', t: 'the reader failed twice on this screen' }]);
     if (rep) { stuckQ.push({ h: h, rep: rep }); flushStuck(); }
   }
-  /** the page's side of a report: each grid's kind, header cells, aria-labels, ancestors; then makeReport keeps only shapes */
+  /** an element's attribute NAMES ("_afrrk,class,role"): how ADF marks its lines and cells, never a value */
+  function attrNames(e) { var out = []; for (var i = 0; e && e.attributes && i < e.attributes.length && out.length < 8; i++) { var n = e.attributes[i].name; if (/^[a-z_:\-]{1,30}$/i.test(n)) out.push(n); } return out.join(','); }
+  /** the page's side of a report: the biggest data lists first (header cells, the first line's cells, ancestors), and the form's
+   *  labels with where each value sits; then makeReport keeps only shapes */
   function buildReport(c, why) {
     try {
       var g = c.g || { seen: [] }, pairs = c.pairs || readPairs(document);
-      var grids = g.seen.slice(0, 4).map(function (s) {
+      var size = function (s) { return (s.bad ? 1e7 : 0) + (s.data ? 1e6 : 0) + s.n * Math.max(1, s.w || 1); };
+      var grids = g.seen.slice().sort(function (a, b) { return size(b) - size(a); }).slice(0, 4).map(function (s, gi) {
         var el = s.el, hel = s.hel || el, t = el.tagName.toLowerCase(), r = el.getAttribute('role');
         var sel = t + (r ? '[role=' + r + ']' : '');
         var oj = el.closest('oj-table, oj-data-grid, [class*="oj-table"], [class*="oj-datagrid"], [class*="oj-data-grid"]');
         if (oj) sel += ' in ' + (oj.tagName.indexOf('-') > 0 ? oj.tagName.toLowerCase() : 'oj-table');
-        var hc = []; hel.querySelectorAll('th, [role="columnheader"]').forEach(function (x) { if (hc.length < 30 && x.closest(GRID_SEL) === hel) hc.push(x); });
+        var hc = []; hel.querySelectorAll('th, [role="columnheader"]').forEach(function (x) { var row = x.closest(ROW_SEL); if (hc.length < 30 && row && ownerOf(row) === hel) hc.push(x); });
         var cells = hc.length ? (hc[0].tagName === 'TH' ? 'th' : 'role=columnheader') + (hel !== el ? ' (in a separate header grid)' : '') : s.head ? 'first row in thead' : 'none';
         var anc = []; for (var e = el, i = 0; e && i < 4 && e !== document.body && e !== document.documentElement; e = e.parentElement, i++) anc.push({ t: e.tagName.toLowerCase(), r: e.getAttribute('role') || '', c: classShape(e.getAttribute('class')) });
-        return { sel: sel, cells: cells, head: s.head || [], aria: hc.map(function (x) { return x.getAttribute('aria-label') || x.getAttribute('title') || ''; }).filter(Boolean), anc: anc, n: s.n, rows: s.rows, stuck: !!s.bad };
+        var o = { sel: sel, cells: cells, head: s.head || [], aria: hc.map(function (x) { return x.getAttribute('aria-label') || x.getAttribute('title') || ''; }).filter(Boolean), anc: anc, n: s.n, rows: s.rows, stuck: !!s.bad };
+        if (gi < 2) {   // the two biggest: how ADF marks the header cells and a line
+          o.hc = hc.slice(0, 12).map(function (x) { var n = x.getAttribute('aria-colindex'); return tagRole(x) + (n ? '[aria-colindex=' + n + ']' : ''); });
+          var r0 = s.r0;
+          if (r0) o.rc = tagRole(r0) + ' {' + attrNames(r0) + '} in ' + tagRole(r0.parentElement && r0.parentElement.closest('table, [role="grid"], [role="treegrid"]') || r0) + ' · cells: ' + cellsOf(r0).slice(0, 6).map(function (x) { return tagRole(x) + ' {' + attrNames(x) + '}'; }).join(' ');
+        }
+        return o;
       });
-      var concl = 'kind ' + (c.kind || 'none') + ' · ' + (c.rowsN || 0) + ' guest line' + (c.rowsN === 1 ? '' : 's') + ' · ' + (c.tables || 0) + ' plain table' + (c.tables === 1 ? '' : 's') + ' · ' + g.seen.length + ' grid' + (g.seen.length === 1 ? '' : 's') + ' with rows · ' + pairs.length + ' label/value pairs · date ' + (c.date ? 'found' : 'not found');
-      return makeReport({ v: VERSION, at: Date.now(), kind: c.kind, hint: c.hint, date: c.date, title: document.title, path: location.pathname, hash: location.hash, heads: c.heads, why: why, grids: grids, pairs: pairs, concl: concl, err: c.err });
+      // the form: the labels found (fields first, then other label-like texts) and the shape of the value next to each
+      var form = [];
+      var wantForm = /^(?:details|profile|checkin)$/.test(c.kind || '') || /^(?:details|profile|checkin)$/.test(c.hint || '') || why.some(function (w) { return /^(?:unread-form|manual|layout|unknown-screen)$/.test(w.c); });
+      if (wantForm) {
+        var L = formLabels(document, true), els = L.map(function (x) { return x.el; });
+        L.sort(function (a, b) { return (b.f ? 1 : 0) - (a.f ? 1 : 0); });
+        for (var i = 0; i < L.length && form.length < 25; i++) {
+          var x = L[i], vr = valueFor(x.el, x.l, els, document); if (vr === null) continue;
+          form.push({ l: x.l, f: x.f || '', how: vr[1] || 'no value found', path: pathOf(x.el) + (vr[2] ? ' · value ' + pathOf(vr[2]).split(' < ').slice(0, 2).join(' < ') : ''), v: vr[0] || '' });
+        }
+      }
+      var ff = (pairs.form || []).length;
+      var concl = 'kind ' + (c.kind || 'none') + ' · ' + (c.rowsN || 0) + ' guest line' + (c.rowsN === 1 ? '' : 's') + ' · ' + (c.tables || 0) + ' plain table' + (c.tables === 1 ? '' : 's') + ' · ' + g.seen.length + ' grid' + (g.seen.length === 1 ? '' : 's') + ' with rows (' + g.seen.filter(function (s) { return s.data; }).length + ' look like data) · ' + (g.skipped || 0) + ' menu / layout tables skipped · ' + pairs.length + ' label/value pairs (' + ff + ' from the form layout) · date ' + (c.date ? 'found' : 'not found');
+      return makeReport({ v: VERSION, at: Date.now(), kind: c.kind, hint: c.hint, date: c.date, title: document.title, path: location.pathname, hash: location.hash, heads: c.heads, why: why, grids: grids, pairs: pairs, form: form, concl: concl, err: c.err });
     } catch (_) { return null; }
   }
   /** the 🛟 buttons: "Not read right?" sends a report of this screen to HotelOps; "Copy screen layout" copies it here */
@@ -1012,7 +1274,7 @@
     if (!LEARN || stopped) return;
     var t = e.target; if (t && t.nodeType !== 1) t = t.parentElement;
     var b = t && t.closest ? t.closest(CLICK_SEL) : null; if (!b || mine(b)) return;
-    if (b.closest(GRID_SEL)) steps.push({ t: Date.now(), k: 'r' });
+    if (b.closest('tr[_afrrk], [role="row"]') || (b.closest(GRID_SEL) && !b.closest(MENU_SEL) && inData(b))) steps.push({ t: Date.now(), k: 'r' });   // a line of a list (Opera's menus are tables too: those are labels)
     else { var l = b.getAttribute('aria-label') || b.getAttribute('title') || b.textContent || ''; if (l.length > 120) return; steps.push({ t: Date.now(), k: 'c', l: l }); }
     if (steps.length > 200) steps.splice(0, steps.length - 200);
     if (!flushT) flushT = setTimeout(flushLearn, 1500);

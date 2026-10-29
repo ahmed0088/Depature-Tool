@@ -5,7 +5,7 @@
 //  helper extension on Opera Cloud, or pasted in Opera's console) reads the
 //  screens you open in Opera Cloud and sends what it saw here:
 //      {source:'ho-op', h, snap:{kind, date, title, total, rows:[…]}}
-//  (kind: arrivals | departures | inhouse | search | details | list | billing |
+//  (kind: arrivals | departures | inhouse | queue | checkin | search | details | list | billing |
 //  rooms | profile | traces | rates | group | audit | other; billing brings
 //  snap.folio, traces snap.traces, other screens snap.tables).
 //  We answer {source:'ho-op-ack', h, text} so its pill shows what we did.
@@ -135,7 +135,7 @@ const BAD = new Set(['cancelled', 'no_show', 'waitlist']);
 const STR = ['room', 'name', 'conf', 'arrival', 'departure', 'status', 'statusText', 'roomType', 'roomStatus', 'hkStatus', 'foStatus', 'disc', 'rs', 'company', 'agent', 'source', 'group', 'rateCode', 'market', 'member', 'memberLevel',
   'payment', 'eta', 'etd', 'nat', 'email', 'vip', 'notes', 'prefs', 'alerts', 'language'];
 const NUM = ['nights', 'adults', 'children', 'balance', 'rate'];
-const KINDS = ['arrivals', 'departures', 'inhouse', 'search', 'details', 'list', 'billing', 'rooms', 'profile', 'traces', 'rates', 'group', 'audit', 'other'];
+const KINDS = ['arrivals', 'departures', 'inhouse', 'queue', 'checkin', 'search', 'details', 'list', 'billing', 'rooms', 'profile', 'traces', 'rates', 'group', 'audit', 'other'];
 const RS = ['clean', 'dirty', 'inspected', 'pickup', 'ooo', 'oos'];
 // ── privacy, the app's own net (the reader already did this): no card number, no card / password field ──
 /** any run of 12–19 digits (spaces / dashes allowed), or a half-hidden card, → "•••• 1234" */
@@ -211,7 +211,9 @@ function sanitize(snap) {
  *  inp: { snap, today, board: {rooms, day}, arr, pur, ih: {date, rows}|null } → the changes, with counts */
 function plan(inp) {
   const s = inp.snap, t = inp.today, kind = s.kind, date = s.date;
-  const rows = (s.rows || []).filter(r => !BAD.has(r.status));
+  // a check-in dialog is read like a reservation but changes no list; the Queue (arrivals waiting for a room) feeds Arrivals only
+  const rows = kind === 'checkin' ? [] : (s.rows || []).filter(r => !BAD.has(r.status));
+  const arrOnly = kind === 'queue';
   const P = { kind, date, read: (s.rows || []).length, dep: { create: null, out: [], ext: [], add: [], fill: [], rows: 0, matched: 0 }, arr: { add: [], fill: [] }, pur: { add: [], fill: [] }, ih: { mode: '', add: [], upd: [] }, notes: [], n: 0 };
   const cancelled = (s.rows || []).filter(r => BAD.has(r.status));
   if (cancelled.length) P.notes.push(`${cancelled.length} cancelled / no-show in Opera (left as they are here)`);
@@ -220,7 +222,7 @@ function plan(inp) {
   // ── Departures ──
   const board = inp.board || { rooms: [], day: '' }, B = board.rooms || [];
   const bday = board.day || '';
-  const depRows = rows.filter(r => realRoom(r.room) && (r.departure === t || (kind === 'departures' && !r.departure && screenToday)) && r.status !== 'due_in');
+  const depRows = arrOnly ? [] : rows.filter(r => realRoom(r.room) && (r.departure === t || (kind === 'departures' && !r.departure && screenToday)) && r.status !== 'due_in');
   const findB = r => B.find(b => roomKey(b.roomStr != null ? b.roomStr : b.room) === roomKey(r.room));
   P.dep.rows = depRows.length;
   if ((!B.length || (bday && bday < t)) && (kind === 'departures' || kind === 'inhouse') && depRows.length) {
@@ -243,7 +245,7 @@ function plan(inp) {
       if (Object.keys(set).length) P.dep.fill.push({ room: b.roomStr, set });
     });
     // the departure moved to a later day in Opera: the stay was extended there
-    rows.forEach(r => {
+    if (!arrOnly) rows.forEach(r => {
       if (!realRoom(r.room) || !r.departure || r.departure <= t || r.status === 'checked_out' || (r.arrival && r.arrival > t)) return;
       const b = findB(r);
       if (!b || !sameGuest(b.name, r.name) || !['due', 'late', 'na', 'dnd'].includes(b.status)) return;
@@ -253,7 +255,7 @@ function plan(inp) {
   } else if (B.length && bday > t && depRows.length) P.notes.push('the Departures board is for a later day — not changed');
 
   // ── Arrivals + Purpose of Stay ──
-  const arrRows = rows.filter(r => (r.arrival === t || (kind === 'arrivals' && !r.arrival && screenToday)) && r.status !== 'checked_out');
+  const arrRows = rows.filter(r => (r.arrival === t || ((kind === 'arrivals' || arrOnly) && !r.arrival && screenToday)) && r.status !== 'checked_out');
   if (kind === 'arrivals' && !arrRows.length && rows.length && date && date !== t) P.notes.push(`arrivals for ${date} — not today, nothing changed`);
   const noRoom = arrRows.filter(r => !realRoom(r.room)).length;
   const planList = (list, out, purpose) => {
@@ -287,10 +289,10 @@ function plan(inp) {
     });
   };
   if (arrRows.length) { planList(inp.arr, P.arr, false); planList(inp.pur, P.pur, true); }
-  if (noRoom && (P.arr.add.length || kind === 'arrivals')) P.notes.push(`${noRoom} arrival${noRoom === 1 ? '' : 's'} without a room yet — added once Opera gives a room`);
+  if (noRoom && (P.arr.add.length || kind === 'arrivals' || arrOnly)) P.notes.push(`${noRoom} arrival${noRoom === 1 ? '' : 's'} without a room yet — added once Opera gives a room`);
 
   // ── In-House Guests ──
-  const ihRows = rows.filter(r => realRoom(r.room) && (r.status === 'in_house' || r.status === 'due_out' || (kind === 'inhouse' && !r.status)));
+  const ihRows = arrOnly ? [] : rows.filter(r => realRoom(r.room) && (r.status === 'in_house' || r.status === 'due_out' || (kind === 'inhouse' && !r.status)));
   const ih = inp.ih && inp.ih.date === t ? inp.ih : null;
   const toIh = r => {
     const g = { room: r.room, rk: roomKey(r.room), name: firstLast(r.name) || '—', arrival: r.arrival || '', departure: r.departure || '', nights: r.nights || (r.arrival && r.departure ? Math.max(0, dayDiff(r.arrival, r.departure)) : 0),
@@ -367,6 +369,7 @@ function summaryText(P) {
   if (P.dep.out.length) L.push(`${pl(P.dep.out.length, 'room')} checked out`);
   if (P.dep.ext.length) L.push(`${pl(P.dep.ext.length, 'room')} extended`);
   if (P.dep.add.length) L.push(`${pl(P.dep.add.length, 'departure')} added`);
+  if (P.dep.rm && P.dep.rm.length) L.push(`${pl(P.dep.rm.length, 'room')} removed from today's departures`);
   const newArr = Math.max(P.arr.add.length, P.pur.add.length);
   if (newArr) L.push(`${pl(newArr, 'new arrival')} added`);
   const filled = P.arr.fill.length + P.pur.fill.length;
@@ -388,10 +391,87 @@ function depReport(rows) {
   return [H.join('\t')].concat(rows.map(r => [r.room, r.name || '', operaDay(r.arrival), operaDay(r.departure), r.nights || 0, r.balance || 0, r.agent || '', r.company || '', r.source || '', r.rateCode || '', r.vip || '',
     /^\d{1,2}:\d{2}/.test(r.etd || '') ? r.etd.slice(0, 5) : '', r.conf || '', r.nat || '', r.adults || '', r.children || ''].map(cl).join('\t'))).join('\n') + '\n';
 }
+// ══ Opera's Departures vs the board: what differs and why — pure ══
+// I: { dep: {rows, total, date} (the newest Departures read today), board: {rooms, day}, today, reads: {kind: {rows, date}} (other reads today), keep: {roomKey: 1} }
+// → { state: 'none' | 'otherday' | 'noboard' | 'incomplete' | 'ok', read, total, opN, boardN, extN, diffs: [{type, room, name, reason, why, nights, to, sure, acts, row}] }
+//   type: 'missing' (on the board, not in Opera) · 'extra' (in Opera, not on the board) · 'guest' (same room, another guest) · 'status' (left in Opera, due here)
+const DEP_ACTIVE = ['due', 'late', 'na', 'dnd'];
+function depRecon(I) {
+  const t = I.today, D = I.dep;
+  if (!D || !Array.isArray(D.rows)) return { state: 'none', diffs: [] };
+  if (D.date && D.date !== t) return { state: 'otherday', date: D.date, diffs: [] };
+  const B = (I.board && I.board.rooms) || [], bday = (I.board && I.board.day) || '';
+  if (!B.length || (bday && bday !== t)) return { state: 'noboard', diffs: [] };
+  const read = D.rows.length, total = Math.max(0, +D.total || 0);
+  if (total && read < total) return { state: 'incomplete', read, total, diffs: [] };
+  const bk = b => roomKey(b.roomStr != null ? b.roomStr : b.room), keep = I.keep || {};
+  const opBy = new Map();
+  D.rows.forEach(r => { if (realRoom(r.room) && !isPm(r.room) && !BAD.has(r.status) && (!r.departure || r.departure === t) && !opBy.has(roomKey(r.room))) opBy.set(roomKey(r.room), r); });
+  const bd = B.filter(b => !isPm(b.roomStr != null ? b.roomStr : b.room)), bdBy = new Map();
+  bd.forEach(b => bdBy.set(bk(b), b));
+  const others = [];
+  Object.keys(I.reads || {}).forEach(k => { const L = I.reads[k]; if (k !== 'departures' && L && Array.isArray(L.rows) && (!L.date || L.date === t || k === 'inhouse' || k === 'details' || k === 'search' || k === 'list')) L.rows.forEach(r => { if (r && typeof r === 'object') others.push(Object.assign({ _k: k }, r)); }); });
+  const fmt = d => { const x = new Date(d + 'T00:00:00Z'); return isNaN(x) ? d : x.getUTCDate() + ' ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][x.getUTCMonth()]; };
+  const SRC = { inhouse: 'in house', details: 'its reservation', search: 'a reservation search', list: 'a reservation list', arrivals: 'Arrivals', queue: 'the Queue' };
+  const diffs = [];
+  bdBy.forEach((b, k) => {
+    if (keep[k] || b.status === 'extended') return;
+    const r = opBy.get(k);
+    if (r) {
+      if (r.name && b.name && !sameGuest(b.name, r.name)) diffs.push({ type: 'guest', room: b.roomStr, name: b.name, opName: r.name, reason: `Opera has ${r.name} in this room — room move?`, why: 'move', acts: ['fixname', 'keep'] });
+      else if (r.status === 'checked_out' && DEP_ACTIVE.includes(b.status)) diffs.push({ type: 'status', room: b.roomStr, name: b.name, reason: 'checked out in Opera, still due here', why: 'out', sure: true, acts: ['out', 'keep'] });
+      return;
+    }
+    const conf = normConf(b.conf), mine = x => (conf && x.conf ? normConf(x.conf) === conf : !!x.name && !!b.name && sameGuest(b.name, x.name));
+    const same = others.filter(mine), here = same.filter(x => realRoom(x.room) && roomKey(x.room) === k);
+    const later = here.find(x => x.departure && x.departure > t && !BAD.has(x.status) && x.status !== 'checked_out');
+    const moved = same.find(x => realRoom(x.room) && roomKey(x.room) !== k && !BAD.has(x.status) && x.status !== 'checked_out' && (!x.departure || x.departure >= t));
+    const canc = here.find(x => BAD.has(x.status)), early = here.find(x => x.status === 'checked_out' && x.departure && x.departure < t);
+    const other = here.find(x => x.departure && x.departure !== t);
+    const d = { type: 'missing', room: b.roomStr, name: b.name, acts: ['ext', 'remove', 'keep'] };
+    if (later) Object.assign(d, { why: 'extended', nights: dayDiff(t, later.departure), to: later.departure, reason: `${SRC[later._k] || later._k} in Opera until ${fmt(later.departure)} → extended`,
+      sure: (later._k === 'inhouse' || later._k === 'details') && (!later.status || later.status === 'in_house' || later.status === 'due_out') });
+    else if (moved) Object.assign(d, { why: 'moved', reason: `in room ${moved.room} in Opera → moved to another room`, acts: ['remove', 'keep'] });
+    else if (canc) Object.assign(d, { why: 'cancelled', reason: 'cancelled / no-show in Opera', acts: ['remove', 'keep'] });
+    else if (early) Object.assign(d, { why: 'early', reason: `checked out on ${fmt(early.departure)} in Opera → left earlier`, acts: ['remove', 'keep'] });
+    else if (other) Object.assign(d, { why: 'date', reason: `its stay in Opera ends ${fmt(other.departure)} → stay date changed`, nights: other.departure > t ? dayDiff(t, other.departure) : 0, to: other.departure });
+    else Object.assign(d, { why: '', reason: 'not in Opera\'s departures today: extended, moved, checked out earlier or cancelled? Open it in Opera to see' });
+    diffs.push(d);
+  });
+  opBy.forEach((r, k) => { if (!bdBy.has(k) && !keep[k]) diffs.push({ type: 'extra', room: r.room, name: r.name || '', row: r, reason: r.status === 'checked_out' ? 'in Opera\'s departures (already checked out), not on the board' : 'in Opera\'s departures, not on the board', why: 'add', sure: true, acts: ['add', 'keep'] }); });
+  const ord = { missing: 0, extra: 1, guest: 2, status: 3 };
+  diffs.sort((a, b) => ord[a.type] - ord[b.type] || roomKey(a.room).localeCompare(roomKey(b.room), 'en', { numeric: true }));
+  const extN = bd.filter(b => b.status === 'extended').length;
+  return { state: 'ok', read, total, opN: opBy.size, boardN: bd.length - extN, extN, diffs };
+}
+/** the differences HotelOps may fix by itself (auto on, review off): add a missing room, mark one checked out, mark one extended when
+ *  Opera's in-house list or the reservation clearly shows a later departure. Never a removal. */
+const reconAuto = R => (R && R.state === 'ok' ? R.diffs.filter(d => d.sure && ((d.type === 'missing' && d.why === 'extended' && d.nights > 0) || d.type === 'extra' || d.type === 'status')) : []);
+/** "📡 Opera: 15 departures · HotelOps: 16 — 1 difference" */
+function reconHead(R) {
+  if (!R) return '';
+  if (R.state === 'incomplete') return `📡 Opera read ${R.read} of ${R.total} — scroll the Departures list in Opera to the end`;
+  if (R.state !== 'ok') return '';
+  const n = R.diffs.length;
+  return `📡 Opera: ${pl(R.opN, 'departure')} · HotelOps: ${R.boardN}${R.extN ? ` (+${R.extN} extended)` : ''} — ${n ? pl(n, 'difference') : 'all match ✓'}`;
+}
+/** the differences chosen → a plan apply() understands (removals in dep.rm) */
+function reconPlan(items, t) {
+  const P = { kind: 'departures', date: t, read: 0, dep: { create: null, out: [], ext: [], add: [], fill: [], rm: [], rows: 0, matched: 0 }, arr: { add: [], fill: [] }, pur: { add: [], fill: [] }, ih: { mode: '', add: [], upd: [] }, notes: [], n: 0 };
+  (items || []).forEach(({ d, act }) => {
+    if (act === 'ext') P.dep.ext.push({ room: d.room, nights: d.nights > 0 ? d.nights : 1, to: d.to || '', row: null });
+    else if (act === 'remove') P.dep.rm.push({ room: d.room, why: d.reason });
+    else if (act === 'add' && d.row) P.dep.add.push({ row: d.row, out: d.row.status === 'checked_out' });
+    else if (act === 'out') P.dep.out.push({ room: d.room, row: null });
+    else if (act === 'fixname' && d.opName) P.dep.fill.push({ room: d.room, set: { name: FX.parseName(d.opName) } });
+  });
+  P.n = P.dep.out.length + P.dep.ext.length + P.dep.add.length + P.dep.fill.length + P.dep.rm.length;
+  return P;
+}
 // ══ Learning from you in Opera ("watch me") — pure ══════════════
 // The reader sends the screens opened and the labels of what was clicked: [{t, k:'s', s:kind, l:title} | {t, k:'c', l:label} | {t, k:'r'}].
 // Kept: screen kinds and button labels only — never a guest name, a room, an amount or anything typed.
-const LEARN_KINDS = { arrivals: 'Arrivals', departures: 'Departures', inhouse: 'In House', search: 'Reservation search', details: 'Reservation', list: 'Reservation list', billing: 'Billing',
+const LEARN_KINDS = { arrivals: 'Arrivals', departures: 'Departures', inhouse: 'In House', queue: 'Queue rooms', checkin: 'Check-in', search: 'Reservation search', details: 'Reservation', list: 'Reservation list', billing: 'Billing',
   rooms: 'Room status', profile: 'Profile', traces: 'Traces', rates: 'Rates', group: 'Group / Block', audit: 'Night audit', other: 'Other screen' };
 /** a button label as it may be kept (the same rule as the reader): short words, no 3+ digit numbers, amounts, emails or commas */
 function cleanLabel(s) {
@@ -536,7 +616,7 @@ function shapeOf(v) {
   var esc = function (s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
   var two = function (n) { return (n < 10 ? '0' : '') + n; }, d = new Date(R.at || 0);
   var L = ['HotelOps Opera reader report — please teach the reader this screen:'];
-  L.push('reader v' + (R.v || '?') + ' · ' + d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate()) + ' ' + two(d.getHours()) + ':' + two(d.getMinutes()) + (x.n > 1 ? ' · seen ' + x.n + ' times' : ''));
+  L.push('reader v' + (R.v || '?') + (R.rr ? ' r' + R.rr : '') + ' · ' + d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate()) + ' ' + two(d.getHours()) + ':' + two(d.getMinutes()) + (x.n > 1 ? ' · seen ' + x.n + ' times' : ''));
   L.push('screen: kind guess "' + (R.kind || 'unknown') + '"' + (R.hint ? ' (its words say "' + R.hint + '")' : ' (its words name no screen it knows)') + ' · title "' + (R.title || '') + '" · path ' + (R.path || '—') + ' · screen date ' + R.date);
   if ((R.heads || []).length) L.push('headings: ' + R.heads.join(' | '));
   L.push('why:');
@@ -549,9 +629,15 @@ function shapeOf(v) {
     L.push('  headers → fields: ' + (g.head.length ? g.head.map(function (h) { return '"' + h[0] + '" → ' + h[1]; }).join(' | ') : 'no header line'));
     if (g.aria.length) L.push('  header aria-labels: ' + g.aria.join(' | '));
     if (g.anc.length) L.push('  dom (grid, then up): ' + g.anc.map(function (a) { return a.t + (a.r ? '[role=' + a.r + ']' : '') + a.c.map(function (c) { return '.' + c; }).join(''); }).join(' < '));
+    if ((g.hc || []).length) L.push('  header cells: ' + g.hc.join(' '));
+    if (g.rc) L.push('  first data row: ' + g.rc);
     g.shapes.forEach(function (r, j) { L.push('  row ' + (j + 1) + ' shape: ' + r.join(' | ')); });
   });
   if ((R.pairs || []).length) L.push('label → value shape: ' + R.pairs.map(function (p) { return p[0] + ' = ' + p[1]; }).join(' | '));
+  if ((R.form || []).length) {
+    L.push('form labels (label → field = value shape · where the value was · dom of the label, then up):');
+    R.form.forEach(function (f) { L.push('  "' + f.l + '" → ' + f.f + ' = ' + (f.shape || '(none)') + ' · ' + (f.how || '—') + ' · ' + (f.path || '—')); });
+  }
   L.push('--- fake page (letters → a/A, digits → 9) ---');
   if ((R.heads || [])[0]) L.push('<h1>' + esc(R.heads[0]) + '</h1>');
   (R.grids || []).forEach(function (g) {
@@ -560,6 +646,7 @@ function shapeOf(v) {
     else L.push(open + '<div role="grid">' + (g.head.length ? '<div role="row">' + g.head.map(function (h, k) { return '<div role="columnheader" aria-colindex="' + (k + 1) + '">' + esc(h[0]) + '</div>'; }).join('') + '</div>' : '') + g.shapes.map(function (r) { return '<div role="row">' + r.map(function (c, k) { return '<div role="gridcell" aria-colindex="' + (k + 1) + '">' + esc(c) + '</div>'; }).join('') + '</div>'; }).join('') + '</div></div>');
   });
   (R.pairs || []).forEach(function (p, i) { L.push('<label for="f' + i + '">' + esc(p[0]) + '</label><input id="f' + i + '" readonly value="' + esc(p[1]) + '">'); });
+  (R.form || []).forEach(function (f) { L.push('<div><span>' + esc(f.l) + '</span><span>' + esc(f.shape) + '</span></div>'); });
   L.push('--- end ---');
   return L.join('\n');
 }const stuckText = reportText, stuckLeaks = reportLeaks;
@@ -567,15 +654,18 @@ function shapeOf(v) {
 function stuckClean(r) {
   if (!r || typeof r !== 'object' || !Array.isArray(r.why)) return null;
   const arr = (a, n) => (Array.isArray(a) ? a.slice(0, n) : (a && typeof a === 'object' ? Object.values(a).slice(0, n) : []));
-  const o = { v: cut(r.v, 12), at: +r.at > 1e12 && +r.at < 4e12 ? Math.round(+r.at) : Date.now(), kind: cut(r.kind, 20).replace(/[^a-z]/g, ''), hint: cut(r.hint, 20).replace(/[^a-z]/g, ''), date: r.date === 'found' ? 'found' : 'none',
+  const dom = (v, n) => cut(v, n).replace(/[^A-Za-z0-9_\-\[\]=:{}<>,.·|() ]/g, '').replace(/\d{3,}/g, '#');
+  const o = { v: cut(r.v, 12), rr: Math.max(0, Math.min(99, Math.round(+r.rr || 0))), at: +r.at > 1e12 && +r.at < 4e12 ? Math.round(+r.at) : Date.now(), kind: cut(r.kind, 20).replace(/[^a-z]/g, ''), hint: cut(r.hint, 20).replace(/[^a-z]/g, ''), date: r.date === 'found' ? 'found' : 'none',
     title: cut(r.title, 80), path: cut(r.path, 120), heads: arr(r.heads, 6).map(x => cut(x, 60)).filter(Boolean),
     why: arr(r.why, 6).map(w => (w && typeof w === 'object' ? { c: cut(w.c, 20).replace(/[^a-z\-]/g, ''), t: cut(w.t, 200) } : null)).filter(w => w && w.c),
     grids: arr(r.grids, 4).map(g => (g && typeof g === 'object' ? { sel: cut(g.sel, 60), cells: cut(g.cells, 60), n: Math.max(0, Math.round(+g.n || 0)), stuck: !!g.stuck,
+      hc: arr(g.hc, 16).map(x => dom(x, 60)).filter(Boolean), rc: dom(g.rc, 200),
       head: arr(g.head, 30).map(h => (Array.isArray(h) ? [cut(h[0], 40), cut(h[1], 24)] : null)).filter(Boolean),
       aria: arr(g.aria, 30).map(x => cut(x, 40)).filter(Boolean),
       anc: arr(g.anc, 4).map(a => (a && typeof a === 'object' ? { t: (cut(a.t, 20).toLowerCase().match(/^[a-z][a-z0-9\-]*/) || [''])[0], r: cut(a.r, 20).replace(/[^a-z\-]/g, ''), c: arr(a.c, 5).map(x => cut(x, 40).replace(/[^A-Za-z_\-]/g, '')).filter(Boolean) } : null)).filter(Boolean),
       shapes: arr(g.shapes, 3).map(row => arr(row, 16).map(x => shapeOf(x))) } : null)).filter(Boolean),
     pairs: arr(r.pairs, 30).map(p => (Array.isArray(p) ? [cut(p[0], 40), shapeOf(p[1])] : null)).filter(p => p && p[0]),
+    form: arr(r.form, 25).map(f => (f && typeof f === 'object' && f.l ? { l: cut(f.l, 40), f: cut(f.f, 20).replace(/[^a-zA-Z?]/g, '') || '?', how: dom(f.how, 30), path: dom(f.path, 120), shape: shapeOf(f.shape) } : null)).filter(Boolean),
     concl: cut(r.concl, 240), err: cut(r.err, 160) };
   return o.why.length ? o : null;
 }
@@ -667,7 +757,7 @@ function operaThoughts(I) {
     why: 'The helper hands Opera the new reader; it starts the next time Opera loads.', opts: [['Open the Opera page', 'page']] });
   return T;
 }
-W.hoOperaPure = { teachKey, teachChoices, operaThoughts, operaEntry, shapeOf, reportText, reportLeaks, stuckText, stuckLeaks, stuckClean, operaHome, openState, maskCards, secretLabel, cleanFolio, cleanLabel, learnClean, learnModel, learnRecent, learnNext, learnSummary, sessionsOf, toIso, operaDay, roomKey, nameKey, sameGuest, isOtaEmail, goodEmail, natName, firstLast, sanitize, plan, summaryText, worthAlert, depReport, hashOf, isPm };
+W.hoOperaPure = { depRecon, reconAuto, reconHead, reconPlan, teachKey, teachChoices, operaThoughts, operaEntry, shapeOf, reportText, reportLeaks, stuckText, stuckLeaks, stuckClean, operaHome, openState, maskCards, secretLabel, cleanFolio, cleanLabel, learnClean, learnModel, learnRecent, learnNext, learnSummary, sessionsOf, toIso, operaDay, roomKey, nameKey, sameGuest, isOtaEmail, goodEmail, natName, firstLast, sanitize, plan, summaryText, worthAlert, depReport, hashOf, isPm };
 if (!doc) return;
 
 // ══ State ═══════════════════════════════════════════════════
@@ -726,8 +816,11 @@ W.addEventListener('storage', e => {
 
 // ══ 🛟 Screens the reader couldn't read: kept here (20, newest first) and under operaStuck/{hash} for the managers' PCs ══
 const LS_STUCK = 'ho_op_stuck_v1', LS_STUCK_X = 'ho_op_stuck_x_v1', LS_STUCK_T = 'ho_op_stuck_toast', LS_UNPL = 'ho_op_unplaced_v1';
-const stuckLoad = () => { const v = LS.get(LS_STUCK, []); return Array.isArray(v) ? v.filter(e => e && e.h && e.rep) : []; };
+/** a report from a reader before r2: it took Opera's menus and layout tables for lists it couldn't read (false reports) */
+const stuckStale = e => !!e && e.src !== 'app' && !!e.rep && !(+e.rep.rr >= 2);
+const stuckLoad = () => { const v = LS.get(LS_STUCK, []); return Array.isArray(v) ? v.filter(e => e && e.h && e.rep && !stuckStale(e)) : []; };
 let STUCK = stuckLoad();
+safe(() => { const v = LS.get(LS_STUCK, []); if (Array.isArray(v) && v.length !== STUCK.length) LS.set(LS_STUCK, STUCK); });   // the old ones cleared once, on update
 const stuckSave = () => { STUCK = STUCK.sort((a, b) => b.last - a.last).slice(0, 20); LS.set(LS_STUCK, STUCK); };
 const fbOk = () => typeof fbSet === 'function';
 /** ONE quiet toast for a new screen it couldn't read: at most once an hour, never on a day off or with the Brain's hints off, never on the phone */
@@ -805,6 +898,7 @@ function stuckMerge(v) {
   Object.values(v).forEach(r => {
     if (!r || typeof r !== 'object') return;
     const h = String(r.h || '').replace(/[^a-z0-9]/gi, '').slice(0, 24), last = +r.last || 0, rep = stuckClean(r.rep);
+    if (h && rep && stuckStale({ src: r.src, rep })) { if (canWrite() && fbOk()) safe(() => fbSet('operaStuck/' + h, null)); return; }   // an old false report: gone for every PC
     if (!h || !rep || (X[h] && X[h] >= last) || stuckLeaks(stuckText(rep, { app: cut(r.app, 140) }))) return;
     const e = L.find(x => x.h === h);
     if (e) { if (last > e.last || (+r.n || 0) > e.n) { e.last = Math.max(e.last, last); e.n = Math.max(e.n, +r.n || 0); ch = true; } return; }
@@ -961,8 +1055,8 @@ function planNow(snap) {
 // ══ Applying ════════════════════════════════════════════════
 const J = o => JSON.stringify(o === undefined ? null : o);
 function paintDeps() { safe(() => depRender()); safe(() => updateDepBadge()); }
-function apply(snap, how) {
-  const P = planNow(snap);
+function apply(snap, how, P0) {
+  const P = P0 || planNow(snap);
   if (!P.n) return { P, text: '' };
   const t = today(), at = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   const before = { dep: J(typeof depRooms !== 'undefined' ? depRooms : []), log: J(typeof depLog !== 'undefined' ? depLog : []), arr: J(typeof arrGuests !== 'undefined' ? arrGuests : []), pur: J(typeof purposeGuests !== 'undefined' ? purposeGuests : []), ih: J(ihNow()) };
@@ -1004,11 +1098,15 @@ function apply(snap, how) {
     const r = depRooms[i];
     safe(() => quiet(() => depAction(i, 'extended', nights)));
     r.extConfirmed = true;   // already done in Opera: nothing left to put in Opera
-    r.note = (r.note ? r.note + '\n' : '') + `[${at}] Extended in Opera to ${to} (${pl(nights, 'night')})`;
+    r.note = (r.note ? r.note + '\n' : '') + `[${at}] Extended in Opera${to ? ' to ' + to : ''} (${pl(nights, 'night')})`;
     safe(() => { if (typeof depSyncExtToLog === 'function') depSyncExtToLog(i); });
     depTouched = true;
   });
-  P.dep.fill.forEach(({ room, set }) => { const r = depRooms.find(x => roomKey(x.roomStr) === roomKey(room)); if (r) { Object.assign(r, set); depTouched = true; } });
+  P.dep.fill.forEach(({ room, set }) => { const r = depRooms.find(x => roomKey(x.roomStr) === roomKey(room)); if (r) { if (set.name && r.name !== set.name) r.note = (r.note ? r.note + '\n' : '') + `[${at}] Name from Opera (was ${r.name})`; Object.assign(r, set); depTouched = true; } });
+  (P.dep.rm || []).forEach(({ room }) => {   // only ever from a tap: a room Opera doesn't depart today
+    const i = depRooms.findIndex(x => roomKey(x.roomStr) === roomKey(room)); if (i < 0) return;
+    depRooms.splice(i, 1); depTouched = true;
+  });
   if (depTouched) { paintDeps(); safe(() => saveDeps()); }
   // Arrivals + Purpose of Stay (Vicas XML laid on again after: it always wins)
   const doList = (list, part, render, saveFn, logFn, label) => {
@@ -1057,7 +1155,7 @@ function apply(snap, how) {
     return ok;
   };
   const detail = []
-    .concat(P.dep.out.map(o => `🚪 ${o.room} checked out`), P.dep.ext.map(e => `↪ ${e.room} extended to ${e.to}`), P.dep.add.map(a => `➕ ${a.row.room} added to departures`),
+    .concat(P.dep.out.map(o => `🚪 ${o.room} checked out`), P.dep.ext.map(e => `↪ ${e.room} extended${e.to ? ' to ' + e.to : ''}`), P.dep.add.map(a => `➕ ${a.row.room} added to departures`), (P.dep.rm || []).map(r => `✖ ${r.room} removed from today`),
       P.arr.add.map(g => `🛎️ ${g.room} ${g.name}`), P.notes);
   LAST_UNDO = { at: Date.now(), text, fn: undo, used: false };
   addLog({ kind: P.kind, text, detail: detail.slice(0, 30), how: how || 'auto' });
@@ -1070,7 +1168,7 @@ function apply(snap, how) {
 }
 
 // ══ Receiving ═══════════════════════════════════════════════
-const KIND_LABEL = { arrivals: 'Arrivals', departures: 'Departures', inhouse: 'In House', search: 'Reservation search', details: 'Reservation details', list: 'a reservation list',
+const KIND_LABEL = { arrivals: 'Arrivals', departures: 'Departures', inhouse: 'In House', queue: 'Queue rooms', checkin: 'Check-in', search: 'Reservation search', details: 'Reservation details', list: 'a reservation list',
   billing: 'Billing / Folio', rooms: 'Room status', profile: 'Profile', traces: 'Traces / Alerts', rates: 'Rates', group: 'Group / Block', audit: 'Night audit', other: 'Other screen' };
 function receive(raw, h, reply) {
   const snap = sanitize(raw);
@@ -1086,9 +1184,54 @@ function receive(raw, h, reply) {
   safe(paintDepChips);
   const res = handle(snap, h, reply);
   SEEN.set(h, res); if (SEEN.size > 200) SEEN.delete(SEEN.keys().next().value);
-  LAST[snap.kind].res = res; saveLast(); paint();
+  LAST[snap.kind].res = res; saveLast();
+  safe(reconAutoRun);
+  paint();
   return res;
 }
+// ══ Opera's Departures vs the board (the box at the top of Departures and on the 📡 Opera page) ══
+const LS_KEEP = 'ho_op_keep_v1';
+const keepNow = () => { const v = LS.get(LS_KEEP, null); return v && v.date === today() && v.rooms && typeof v.rooms === 'object' ? v.rooms : {}; };
+function reconNow() {
+  const D = LAST.departures; if (!D) return { state: 'none', diffs: [] };
+  return depRecon({ dep: D, board: boardNow(), today: today(), reads: LAST, keep: keepNow() });
+}
+/** auto on, review off, this tab holds the lock: the safe differences fixed by themselves (with the usual Undo and log) */
+function reconAutoRun() {
+  if (!ready() || !canWrite() || !CFG.auto || CFG.review || !haveLock()) return;
+  const items = reconAuto(reconNow()).map(d => ({ d, act: d.type === 'missing' ? 'ext' : d.type === 'extra' ? 'add' : 'out' }));
+  if (!items.length) return;
+  const P = reconPlan(items, today());
+  safe(() => apply(null, 'auto · Opera vs board', P));
+}
+/** a tap on a difference's button */
+function reconAct(act, room) {
+  if (!canWrite()) { toast('Your role can\'t change lists', 'err'); return; }
+  const R = reconNow(), d = R.diffs && R.diffs.find(x => roomKey(x.room) === roomKey(room) && x.acts.includes(act));
+  if (!d) { toast('That difference is gone already', 'info'); paint(); return; }
+  if (act === 'keep') { const k = keepNow(); k[roomKey(room)] = 1; LS.set(LS_KEEP, { date: today(), rooms: k }); addLog({ kind: 'departures', text: `Room ${d.room}: kept as it is (Opera differs)`, how: 'tapped' }); paint(); return; }
+  if (act === 'remove' && typeof confirm === 'function' && !confirm(`Remove room ${d.room} from today's departures?`)) return;
+  safe(() => apply(null, 'tapped · Opera vs board', reconPlan([{ d, act }], today())));
+  paint();
+}
+const RC_LABEL = { ext: d => (d.nights > 0 ? `Mark extended (+${d.nights})` : 'Mark extended'), remove: () => 'Remove from today', keep: () => 'Keep', add: () => 'Add', fixname: () => 'Fix name', out: () => 'Mark out' };
+function reconHtml(R, page) {
+  const head = reconHead(R); if (!head) return '';
+  const D = LAST.departures, when = D ? ` · read ${hhmm(D.at)}` : '';
+  const tone = R.state === 'incomplete' ? 'warn' : R.diffs.length ? 'bad' : 'ok';
+  const IC = { missing: '➖', extra: '➕', guest: '🔁', status: '🚪' };
+  const items = R.state === 'ok' ? R.diffs.slice(0, 30).map(d => `<div class="op-rc-item"><div class="op-rc-txt"><b>${IC[d.type]} ${esc(d.room)}</b> <span>${esc(firstLast(d.name || '') || d.name || '')}</span><small>${esc(d.reason)}</small></div>
+      <div class="op-rc-acts">${d.acts.map((a, i) => `<button type="button" class="btn sm ${i ? 'ghost' : 'gold'}" data-rc="${a}" data-room="${esc(d.room)}">${esc(RC_LABEL[a](d))}</button>`).join('')}</div></div>`).join('') : '';
+  return `<div class="op-rc op-rc-${tone}${page ? ' op-card' : ''}" data-s="opera departures difference compare board"><div class="op-rc-hd"><b>${esc(head)}</b><small>${R.state === 'ok' && R.diffs.length ? 'Not in Opera\'s list ➖ · only in Opera ➕ · other guest 🔁 · left in Opera 🚪' : ''}${when}</small></div>${items ? `<div class="op-rc-list">${items}</div>` : ''}</div>`;
+}
+function paintRecon() {
+  const pnl = doc.getElementById('panel-departures'); if (!pnl) return;
+  let e = doc.getElementById('opRecon-departures');
+  if (!e) { const after = pnl.querySelector(':scope > .op-strip') || pnl.querySelector(':scope > .page-hd'); if (!after) return; e = doc.createElement('div'); e.id = 'opRecon-departures'; after.insertAdjacentElement('afterend', e); }
+  const h = reconHtml(reconNow(), false); if (e.__h !== h) { e.innerHTML = h; e.__h = h; e.style.display = h ? '' : 'none'; }
+}
+doc.addEventListener('click', e => { const t = e.target.closest && e.target.closest('[data-rc]'); if (t) reconAct(t.dataset.rc, t.dataset.room); });
+setInterval(() => safe(paintRecon), 4000);   // the board changes by hand too
 /** today's folio balances, room statuses, traces and profiles from a read (for the Departures chips, the room card, the Brain) */
 function remember(snap) {
   const at = Date.now(), t = today();
@@ -1454,6 +1597,7 @@ function pageHtml() {
     <div class="op-wrap">
       <div class="op-card op-top">${openCardHtml()}</div>
       ${check}
+      ${safe(() => reconHtml(reconNow(), true), '')}
       ${stats}
       ${opSec({ id: 'address', ic: '🏨', title: 'Opera address', sub: 'Each hotel\'s Opera Cloud', count: (HOTELS || [1]).length, body: hotelsHtml() })}
       ${opSec({ id: 'live', ic: '📡', title: 'Live now', sub: linked ? 'What Opera shows, as it is read' : 'The newest read', count: lr.length || '', body: live })}
@@ -1535,6 +1679,7 @@ function sectionHtml() {
 }
 function paint() {
   safe(paintOpen);
+  safe(paintRecon);
   safe(paintPage);
   const c = doc.querySelector('#hs-opera .hs-card'); if (!c) return;
   c.innerHTML = cardHtml();
@@ -1810,6 +1955,14 @@ function css() {
 @media (prefers-reduced-motion:reduce){:is(#hs-opera,#opRoot) *,:is(#hs-opera,#opRoot) *::before,:is(#hs-opera,#opRoot) *::after{animation:none !important;transition:none !important}#opRoot .op-tile:hover{transform:none}}
 .op-go{flex:0 0 auto;padding:11px 16px;border-radius:12px;border:0;background:linear-gradient(135deg,#22c55e,#15803d);color:#fff;font:700 14px var(--font,system-ui);cursor:pointer;box-shadow:0 8px 20px -10px #15803d;white-space:nowrap}
 .op-go:active{transform:scale(.97)}.op-go.sm{padding:7px 12px;border-radius:10px;font-size:13px;box-shadow:none}
+.op-rc{box-sizing:border-box;max-width:100%;min-width:0;margin:-4px 0 14px;padding:10px 12px;border-radius:12px;border:1px solid var(--border,#333);background:var(--card,transparent)}
+.op-rc.op-card{margin:0}
+.op-rc-bad{border-color:rgba(248,113,113,.45)}.op-rc-warn{border-color:rgba(251,191,36,.5)}.op-rc-ok{border-color:rgba(52,211,153,.4)}
+.op-rc-hd{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;min-width:0}.op-rc-hd b{font-size:14px;overflow-wrap:anywhere}.op-rc-hd small{font-size:12px;color:var(--text2,#bbb)}
+.op-rc-list{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.op-rc-item{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;padding:8px 10px;border-radius:10px;background:rgba(127,127,127,.08);min-width:0}
+.op-rc-txt{min-width:0;flex:1 1 220px}.op-rc-txt span{color:var(--text2,#bbb);overflow-wrap:anywhere}.op-rc-txt small{display:block;font-size:12.5px;color:var(--text2,#bbb);overflow-wrap:anywhere}
+.op-rc-acts{display:flex;flex-wrap:wrap;gap:6px}
 .op-strip{display:flex;align-items:center;gap:10px;margin:-8px 0 14px;padding:7px 10px;border-radius:12px;border:1px solid var(--border,#333);background:var(--card,transparent);min-width:0;max-width:100%;box-sizing:border-box}
 .op-strip-st{font-size:12.5px;color:var(--text2,#bbb);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (hover:none),(pointer:coarse),(max-width:760px){.op-strip{display:none !important}}
