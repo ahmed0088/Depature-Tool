@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 442, items: [
+    "✨ The Opera reader's badge and window now use the real HotelOps logo (the white H on the indigo tile) — no more dark circle with an emoji. A small dot shows if it's linked, a small number what it read.",
+  ] },
   { v: 441, items: [
     "📡 The Opera vs Departures box is now one small line at the top of Departures — e.g. “Opera 6 · HotelOps 8 · 8 out — 4 to check  Review ›”. Tap it to see the rooms; ✕ closes it again. The full list stays on the 📡 Opera page.",
   ] },

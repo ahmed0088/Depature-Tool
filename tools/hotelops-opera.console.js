@@ -1369,6 +1369,9 @@
   var TL = [];   // this tab's timeline today (kept in memory only: it can name rooms)
   function tl(icon, text) { TL.unshift({ at: Date.now(), i: icon, t: String(text).slice(0, 140) }); if (TL.length > 40) TL.length = 40; }
   var host, winEl, badge, bDot, bNum, hDot, hTxt, tabB = {}, panes = {}, E = {};
+  // the HotelOps logo (the same as in the app: a white H on a glowing indigo tile)
+  var logoN = 0;
+  function logo(px) { var id = 'hoopG' + (++logoN); return '<svg viewBox="0 0 64 64" width="' + px + '" height="' + px + '" aria-hidden="true" style="display:block"><defs><radialGradient id="' + id + '" cx=".3" cy=".25" r=".9"><stop offset="0" stop-color="#7c8cff"/><stop offset=".55" stop-color="#4f46e5"/><stop offset="1" stop-color="#1e1b4b"/></radialGradient><linearGradient id="' + id + 'h" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient></defs><rect width="64" height="64" rx="14.5" fill="url(#' + id + ')"/><rect width="64" height="64" rx="14.5" fill="url(#' + id + 'h)"/><g fill="#fff"><rect x="18" y="16" width="8.5" height="32" rx="4.25"/><rect x="37.5" y="16" width="8.5" height="32" rx="4.25"/><rect x="22" y="28.5" width="20" height="7" rx="3.5"/></g><circle cx="47" cy="14" r="3.2" fill="#c7d2fe"/></svg>'; }
   var curTab = /^(?:now|today|help)$/.test(UI.tab || '') ? UI.tab : 'now';
   function el(tag, css, text, parent) { var e = document.createElement(tag); if (css) e.style.cssText = css; if (text != null) e.textContent = text; if (parent) parent.appendChild(e); return e; }
   var BTN = 'all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:10px;font:600 13px/1.2 ' + SANS + ';padding:8px 12px;white-space:nowrap;transition:filter .15s,background .15s,transform .1s;';
@@ -1399,7 +1402,7 @@
     winEl.setAttribute('role', 'dialog'); winEl.setAttribute('aria-label', 'HotelOps Opera reader');
     var head = el('div', 'display:flex;align-items:center;gap:10px;padding:11px 8px 10px 12px;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;border-bottom:1px solid rgba(255,255,255,.07);background:linear-gradient(180deg,rgba(255,255,255,.04),transparent)', null, winEl);
     head.title = 'Drag to move · double-click to put it back';
-    el('div', 'flex:none;width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;font:800 17px/1 Georgia,"Times New Roman",serif;color:#1a1408;background:linear-gradient(135deg,#f3d48a,#c9a14a 55%,#9c7a2e);box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 4px 12px -4px rgba(201,161,74,.7)', 'H', head);
+    el('div', 'flex:none;width:32px;height:32px;border-radius:9px;overflow:hidden;box-shadow:0 4px 12px -4px rgba(79,70,229,.6)', null, head).innerHTML = logo(32);
     var tb = el('div', 'flex:1;min-width:0', null, head);
     el('div', 'font:700 14px/1.2 ' + SANS + ';color:#fff;letter-spacing:-.01em', 'Opera reader', tb);
     var st = el('div', 'display:flex;align-items:center;gap:6px;margin-top:3px;min-width:0', null, tb);
@@ -1454,11 +1457,11 @@
     E.diag = el('div', 'margin-top:6px;color:' + COL.txt3 + ';font:500 11.5px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace', '', how);
     btn('⤢ Put it back in the corner', BTN_2, Hp, 'reset', function () { UI.r = UI.b = null; saveUI(); place(16, 16); });
     // the badge when small
-    badge = btn('', 'all:unset;box-sizing:border-box;position:relative;display:none;align-items:center;justify-content:center;width:46px;height:46px;border-radius:50%;cursor:grab;touch-action:none;font:20px/1 ' + SANS + ';background:radial-gradient(circle at 30% 25%,rgba(52,62,84,.98),rgba(15,20,30,.97));border:1px solid rgba(255,255,255,.18);box-shadow:0 10px 26px -8px rgba(0,0,0,.6),0 0 0 3px rgba(201,161,74,.18)', wrap, 'badge');
+    badge = btn('', 'all:unset;box-sizing:border-box;position:relative;display:none;align-items:center;justify-content:center;width:38px;height:38px;border-radius:9px;cursor:grab;touch-action:none;background:transparent;box-shadow:0 6px 16px -6px rgba(30,27,75,.55)', wrap, 'badge');
     badge.setAttribute('aria-label', 'Open the HotelOps Opera reader');
-    el('span', 'pointer-events:none', '📡', badge);
-    bDot = el('span', 'position:absolute;right:1px;bottom:1px;width:12px;height:12px;border-radius:50%;box-sizing:border-box;border:2px solid #111827;background:' + COL.warn, null, badge);
-    bNum = el('span', 'position:absolute;top:-5px;right:-6px;display:none;min-width:20px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:99px;background:#c9a14a;color:#1a1408;font:700 10.5px/18px ' + SANS + ';text-align:center', '', badge);
+    el('span', 'pointer-events:none;display:block;width:38px;height:38px', null, badge).innerHTML = logo(38);
+    bDot = el('span', 'position:absolute;right:-3px;bottom:-3px;width:11px;height:11px;border-radius:50%;box-sizing:border-box;border:2px solid #fff;background:' + COL.warn, null, badge);
+    bNum = el('span', 'position:absolute;top:-6px;right:-8px;display:none;min-width:18px;height:17px;padding:0 5px;box-sizing:border-box;border-radius:99px;background:#1f2937;color:#fff;border:1.5px solid #fff;font:600 10px/14px ' + SANS + ';text-align:center', '', badge);
     badge.addEventListener('click', function () { if (badge.dragged) { badge.dragged = false; return; } touched = true; setMin(false); }, { passive: true });
     dragger(head); dragger(badge);
     head.addEventListener('dblclick', function (e) { if (e.target.closest && e.target.closest('button')) return; UI.r = UI.b = null; saveUI(); place(16, 16); }, { passive: true });
