@@ -3959,6 +3959,36 @@ console.log('\nOpera everywhere (dtcm/inhouse/xref/noshow)');
   check('no-show × opera: a guest already on the NA40 list (same conf) is not suggested', ns.N.sug(nrows, [{ nameRaw: 'TESTPERSON, ALPHA', confNo: '7001' }], T).map(g => g.confNo), ['7002']);
 }
 
+// ── Motion (motion.js): first appearance, levels, reduced motion ──
+{
+  console.log('\nMotion');
+  const mk = (ls, rm) => {
+    const store = ls ? { ho_motion: ls } : {};
+    const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } },
+      matchMedia: () => ({ matches: !!rm, addEventListener() {} }), document: { readyState: 'loading', addEventListener() {}, body: null, documentElement: { classList: { toggle() {}, add() {} } } }, setTimeout: () => 0 };
+    sb.window = sb; sb.globalThis = sb; vm.createContext(sb);
+    vm.runInContext(fs.readFileSync(path.join(ROOT, 'motion.js'), 'utf8'), sb, { filename: 'motion.js' });
+    return sb.hoMotion;
+  };
+  const M = mk(), P = M._pure;
+  const seen = P.createSeen();
+  const a = P.createSeen && seen.note('dep|panel-departures', ['101', '102', '103']);
+  check('motion: a list that never showed before is a first appearance (stagger), nothing "fresh"', [a.first, a.fresh], [true, []]);
+  const b = seen.note('dep|panel-departures', ['101', '102', '103']);
+  check('motion: the same rooms drawn again (live redraw every few seconds) → no animation', [b.first, b.fresh], [false, []]);
+  const c = seen.note('dep|panel-departures', ['102', '101', '104']);
+  check('motion: re-sorted + one new room → only the new room is fresh', [c.first, c.fresh], [false, ['104']]);
+  check('motion: another list (other shift) has its own first appearance', seen.note('st|panel-shifts|night', ['a']).first, true);
+  check('motion: empty keys are ignored', seen.note('dep|panel-departures', ['', null, '105']).fresh, ['105']);
+  check('motion: stagger = max 12 items, 20 ms apart, Full only', [P.staggerPlan(3, 'full'), P.staggerPlan(40, 'full').length, P.staggerPlan(40, 'full')[11], P.staggerPlan(5, 'subtle'), P.staggerPlan(5, 'off')], [[0, 20, 40], 12, 220, [], []]);
+  check('motion: Off is instant (0 ms), Subtle shorter, Full as asked', [P.durFor('off', 240), P.durFor('subtle', 240), P.durFor('full', 240)], [0, 180, 240]);
+  check('motion: only Full moves things; Subtle fades in place', [P.distFor('full', 7), P.distFor('subtle', 7), P.distFor('off', 7)], [7, 0, 0]);
+  check('motion: level — default Full; Subtle / Off from the switch; reduced motion or the app\'s "still" → Off',
+    [P.levelFrom({}), P.levelFrom({ ls: 'subtle' }), P.levelFrom({ ls: 'off' }), P.levelFrom({ rm: true, ls: 'subtle' }), P.levelFrom({ still: true })], ['full', 'subtle', 'off', 'off', 'off']);
+  check('motion: on a device that asks for reduced motion it is Off and not enabled', [mk(null, true).level(), mk(null, true).enabled()], ['off', false]);
+  check('motion: the saved "Subtle" choice is read back', mk('subtle').level(), 'subtle');
+}
+
 Promise.all([nhAsync, ogAsync]).then(() => {
   console.log(`\n${pass} passed · ${fail} failed`);
   process.exit(fail ? 1 : 0);

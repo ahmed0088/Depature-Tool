@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 447, items: [
+    "✨ Smooth animations everywhere: pages fade and rise in (on the phone they slide the way you tapped), lists and cards glide in when a page opens (not again on every live update), a checked-out room glows green, ticks draw themselves in, numbers count up, pop-ups and messages open and close softly, and buttons press gently. 🎉 Confetti when all departures are out (once a day).",
+    "⚙️ Settings → Appearance → Animations: Full / Subtle (soft fades only) / Off. They never slow a tap or a save, and they're off by themselves if your device asks for reduced motion.",
+  ] },
   { v: 446, items: [
     "🛡 Opera Away guard: when you're away (the same “I'm away” as the WhatsApp guard, or 📡 Opera → 🔒 Lock Opera now), a solid dark lock screen covers Opera — nothing behind it can be seen, and clicks and typing never reach Opera. Unlock with your PIN at the desk, or “I'm back” / Unlock in HotelOps.",
     "📲 Anyone at your desk is reported to your phone at once: touching the lock screen, typing a PIN, a wrong PIN (3 wrong = locked for 60 s), trying to remove the lock (it comes straight back), or the Opera tab being closed. Set your PIN once on the 📡 Opera page (only a secure hash is stored). Optional: lock Opera by itself after 5–30 minutes without use.",
