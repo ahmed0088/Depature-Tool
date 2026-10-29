@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 444, items: [
+    "✨ Updates ask first now: when a new version is ready, a small bar says “New version ready · Update now / Later”. Tap Update now and it reloads straight away (back on the same page). Ignore it or tap Later and it updates by itself at a quiet moment — when the app is in the background, or nobody has touched it for 3 minutes.",
+  ] },
   { v: 443, items: [
     "🔧 Opera reader: the new logo is now drawn without touching the page's HTML (keeps the reader strictly read-only).",
   ] },

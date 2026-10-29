@@ -5571,9 +5571,9 @@ async function appInit() {
         document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
         setInterval(check, 30 * 60000);
       }).catch(err => console.warn('[SW] registration failed:', err));
-      // a new version took over: it is put in quietly, never in your face. The app restarts into it only when
-      // you are not using it — it's in the background, or untouched for 3 minutes with nothing being typed and
-      // no window open — and comes back on the same page and scroll spot (Resume, below). No bar, no question.
+      // a new version took over: a small bar asks "Update now?". Not answered (or "Later"), the app restarts into it
+      // by itself when you are not using it — it's in the background, or untouched for 3 minutes with nothing being
+      // typed and no window open — and comes back on the same page and scroll spot (Resume, below).
       let reloading = false, pending = false, lastUse = Date.now();
       ['pointerdown', 'keydown', 'touchstart', 'wheel', 'input'].forEach(t => addEventListener(t, () => { lastUse = Date.now(); }, { capture: true, passive: true }));
       const busy = () => {
@@ -5590,10 +5590,27 @@ async function appInit() {
       };
       document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') tryApply(); });
       setInterval(tryApply, 30000);
+      const ask = () => {
+        if (document.getElementById('hoUpdAsk')) return;
+        const bar = document.createElement('div');
+        bar.id = 'hoUpdAsk'; bar.setAttribute('role', 'status');
+        bar.style.cssText = 'position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:10000;display:flex;align-items:center;gap:10px;max-width:calc(100% - 32px);box-sizing:border-box;padding:8px 8px 8px 14px;border-radius:99px;background:var(--card,#1b1d24);color:var(--text,#eee);border:1px solid var(--border,rgba(127,127,127,.3));box-shadow:0 10px 30px -10px rgba(0,0,0,.45);font:500 13px var(--font,system-ui)';
+        bar.innerHTML = '<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">✨ New version ready</span>'
+          + '<button type="button" data-u="now" style="flex:none;border:0;border-radius:99px;padding:7px 14px;background:var(--accent,#4f46e5);color:#fff;font:600 12.5px var(--font,system-ui);cursor:pointer">Update now</button>'
+          + '<button type="button" data-u="later" title="It updates by itself when you are not using the app" style="flex:none;border:0;background:none;padding:6px 8px;color:var(--text2,#aaa);font:500 12.5px var(--font,system-ui);cursor:pointer">Later</button>';
+        bar.addEventListener('click', e => {
+          const b = e.target.closest('button'); if (!b) return;
+          if (b.dataset.u === 'now') apply(); else bar.remove();   // Later: it still updates by itself at a quiet moment
+        });
+        document.body.appendChild(bar);
+      };
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (!hadCtl || reloading) return;
-        pending = true; tryApply();
+        pending = true;
+        if (document.visibilityState === 'visible') ask();
+        tryApply();
       });
+      document.addEventListener('visibilitychange', () => { if (pending && !reloading && document.visibilityState === 'visible') ask(); });
       window.hoUpdatePending = () => pending;
     });
   }
