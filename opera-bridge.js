@@ -1217,6 +1217,7 @@ function reconAutoRun() {
 /** a tap on a difference's button */
 function reconAct(act, room) {
   if (act === 'more') { RC_OPEN[room] = 1; safe(paintRecon); safe(paintPage); return; }
+  if (act === 'expand' || act === 'collapse') { RC_EXP = act === 'expand'; safe(paintRecon); return; }
   if (!canWrite()) { toast('Your role can\'t change lists', 'err'); return; }
   if (act === 'allout') {
     const L = (reconNow().diffs || []).filter(d => d.type === 'missing' && d.why === 'gone');
@@ -1242,7 +1243,7 @@ const RC_GROUP = {
   opdue: ['⏳', 'Still due out in Opera', 'Out here: check the guest out in Opera too'],
 };
 const rcGroup = d => d.type === 'missing' ? (d.why === 'gone' ? 'gone' : d.why === 'extended' || d.why === 'date' ? 'extended' : d.why === 'moved' ? 'moved' : 'other') : d.type;
-let RC_OPEN = {};
+let RC_OPEN = {}, RC_EXP = false;
 function reconHtml(R, page) {
   const head = reconHead(R); if (!head) return '';
   const D = LAST.departures, when = D ? 'read ' + hhmm(D.at) : '';
@@ -1258,7 +1259,13 @@ function reconHtml(R, page) {
   const grp = g => { const L = groups[g], open = RC_OPEN[g] || L.length <= 4, shown = open ? L : L.slice(0, 3);
     return `<div class="op-rc-grp"><div class="op-rc-ghd"><span>${RC_GROUP[g][0]}</span><b>${esc(RC_GROUP[g][1])}</b><small>${esc(RC_GROUP[g][2])}</small><em>${L.length}</em>${g === 'gone' && L.length > 1 ? `<button type="button" class="op-rc-btn sm" data-rc="allout" data-room="">Mark all ${L.length} out</button>` : ''}</div>
       ${shown.map(row).join('')}${open ? '' : `<button type="button" class="op-rc-more" data-rc="more" data-room="${g}">Show all ${L.length}</button>`}</div>`; };
-  return `<div class="op-rc op-rc-${tone}${page ? ' op-card' : ''}" data-s="opera departures difference compare board">
+  // on Departures it is one small line; the list opens only when tapped (the 📡 Opera page shows it open)
+  if (!page && !RC_EXP) {
+    const line = R.state === 'incomplete' ? `Opera read ${R.read} of ${R.total} · scroll Departures in Opera to the end`
+      : `Opera ${R.opN} · HotelOps ${R.boardN}${R.extN ? ' +' + R.extN + ' ext' : ''}${R.opAll === false && R.outN ? ' · ' + R.outN + ' out' : ''} — ${n ? n + ' to check' : 'matches ✓'}`;
+    return `<button type="button" class="op-rc-line op-rc-${tone}" data-rc="expand" data-room="" title="Opera's Departures vs this board${when ? ' · ' + esc(when) : ''}"><span class="op-rc-dot"></span><span class="op-rc-lt">📡 ${esc(line)}</span>${n ? '<span class="op-rc-go">Review ›</span>' : ''}</button>`;
+  }
+  return `<div class="op-rc op-rc-${tone}${page ? ' op-card' : ''}" data-s="opera departures difference compare board">${!page ? '<button type="button" class="op-rc-x" data-rc="collapse" data-room="" aria-label="Close">✕</button>' : ''}
     <div class="op-rc-hd"><span class="op-rc-dot"></span><div><b>📡 ${esc(title)}</b><small>${esc(sub)}${when ? ' · ' + esc(when) : ''}</small></div></div>
     ${chips ? `<div class="op-rc-chips">${chips}</div>` : ''}${order.map(grp).join('')}</div>`;
 }
@@ -1994,7 +2001,11 @@ function css() {
 .op-go{flex:0 0 auto;padding:11px 16px;border-radius:12px;border:0;background:linear-gradient(135deg,#22c55e,#15803d);color:#fff;font:700 14px var(--font,system-ui);cursor:pointer;box-shadow:0 8px 20px -10px #15803d;white-space:nowrap}
 .op-go:active{transform:scale(.97)}.op-go.sm{padding:7px 12px;border-radius:10px;font-size:13px;box-shadow:none}
 .op-rc{box-sizing:border-box;max-width:100%;min-width:0;margin:-4px 0 14px;padding:14px 16px;border-radius:16px;border:1px solid var(--border,#333);background:var(--card,transparent);font-family:var(--font,system-ui);box-shadow:0 1px 2px rgba(0,0,0,.04)}
-.op-rc.op-card{margin:0}
+.op-rc.op-card{margin:0}.op-rc{position:relative}
+.op-rc-x{position:absolute;top:10px;right:10px;border:0;background:none;color:var(--text3,#999);font-size:14px;cursor:pointer;padding:4px 6px;border-radius:8px}.op-rc-x:hover{background:var(--bg2,rgba(127,127,127,.1))}
+.op-rc-line{display:flex;align-items:center;gap:10px;width:100%;max-width:100%;box-sizing:border-box;margin:-4px 0 12px;padding:8px 14px;border-radius:99px;border:1px solid var(--border,#333);background:var(--card,transparent);font:500 13px var(--font,system-ui);color:var(--text2,#bbb);cursor:pointer;text-align:left;min-width:0}
+.op-rc-line:hover{border-color:var(--accent,#2563eb)}.op-rc-line .op-rc-dot,.op-rc-line.op-rc-bad .op-rc-dot{width:8px;height:8px;box-shadow:none}.op-rc-lt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.op-rc-go{flex:none;font-weight:700;color:var(--accent,#2563eb)}
 .op-rc-hd{display:flex;align-items:center;gap:12px;min-width:0}.op-rc-hd>div{display:flex;flex-direction:column;gap:2px;min-width:0}.op-rc-hd b{font-size:15px;font-weight:700;color:var(--text,#eee)}.op-rc-hd small{font-size:12.5px;color:var(--text2,#bbb)}
 .op-rc-dot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--green,#16a34a);box-shadow:0 0 0 4px color-mix(in srgb,var(--green,#16a34a) 18%,transparent)}
 .op-rc-bad .op-rc-dot{background:var(--amber,#d97706);box-shadow:0 0 0 4px color-mix(in srgb,var(--amber,#d97706) 18%,transparent)}.op-rc-warn .op-rc-dot{background:var(--amber,#d97706)}

@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 441, items: [
+    "📡 The Opera vs Departures box is now one small line at the top of Departures — e.g. “Opera 6 · HotelOps 8 · 8 out — 4 to check  Review ›”. Tap it to see the rooms; ✕ closes it again. The full list stays on the 📡 Opera page.",
+  ] },
   { v: 440, items: [
     "📡 Opera vs Departures is right now: Opera's Departures list only shows guests still to leave, so rooms already out on your board are no longer counted as differences (no more “14 vs 32”). A room still due here but missing in Opera is shown as “probably left already” with Mark out first — and “Mark all out” for the whole group (asks first, with Undo).",
     "🔁 “Moved to another room” only when it's really the same reservation (confirmation number, or the exact full name only one room has) — a common name like Mohamed no longer matches the wrong guest.",
