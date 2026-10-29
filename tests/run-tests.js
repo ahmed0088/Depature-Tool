@@ -3626,6 +3626,76 @@ console.log('\nOpera reader');
   check('departures vs Opera: another guest in the room → "room move?" with Fix name; left in Opera but due here → Mark out', RG.diffs.map(d => [d.type, d.room, d.acts[0]]), [['guest', '0401', 'fixname'], ['status', '0402', 'out']]);
 }
 
+// ── Opera guard: the Away lock screen over Opera (tools/hotelops-opera.console.js) + opera-bridge.js (PIN, arm, alerts) ──
+const ogAsync = (async () => {
+  const R = require(path.join(ROOT, 'tools/hotelops-opera.console.js'));
+  const sb = { console: { log() {}, warn() {}, error() {} }, URL, crypto: globalThis.crypto, TextEncoder }; sb.globalThis = sb;
+  vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'opera-bridge.js'), 'utf8'), sb, { filename: 'opera-bridge.js' });
+  const O = sb.hoOperaPure, res = [];
+  const ck = (label, a, e) => res.push([label, a, e]);
+  // PIN: a salted SHA-256, the same in the app and the reader; the PIN itself is never kept
+  const salt = '0f1e2d3c4b5a69788796a5b4c3d2e1f0', h = await O.pinHash('4826', salt);
+  ck('opera guard: the PIN is kept as a salted SHA-256 (64 hex), the app and the reader hash it the same', [/^[0-9a-f]{64}$/.test(h), h === await R.pinHash('4826', salt), h.includes('4826')], [true, true, false]);
+  ck('opera guard: another salt → another hash (the same PIN on two accounts doesn\'t match)', h !== await R.pinHash('4826', 'aaaaaaaabbbbbbbb'), true);
+  const p0 = { h, s: salt };
+  ck('opera guard: verify — the right PIN yes; a wrong one, letters, 3 or 7 digits, no PIN set: no',
+    [await R.pinVerify('4826', p0), await R.pinVerify(' 4826 ', p0), await R.pinVerify('4827', p0), await R.pinVerify('48a6', p0), await R.pinVerify('482', p0), await R.pinVerify('4826000', p0), await R.pinVerify('4826', null), await O.pinVerify('4826', p0)],
+    [true, true, false, false, false, false, false, true]);
+  // lockout: 3 wrong in a row → 60 s; during it nothing is checked; after it, tries again; the right PIN resets
+  const t = 1e12; let st = {};
+  const steps = [];
+  [[false, t], [false, t + 1000], [false, t + 2000], [true, t + 3000], [true, t + 63000], [false, t + 64000]].forEach(([ok, now]) => { st = R.pinStep(st, ok, now); steps.push([st.fails, st.wrong, st.until ? st.until - t : 0, !!st.lockout, !!st.blocked, !!st.ok]); });
+  ck('opera guard: 3 wrong PINs → a 60 s wait (even the right PIN waits), then it checks again', steps,
+    [[1, 1, 0, false, false, false], [2, 2, 0, false, false, false], [0, 3, 62000, true, false, false], [0, 3, 62000, false, true, false], [0, 3, 0, false, false, true], [1, 4, 0, false, false, false]]);
+  ck('opera guard: a right PIN resets the run of wrong ones', R.pinStep({ fails: 2, wrong: 2 }, true, t).fails, 0);
+  // arm / disarm messages from HotelOps
+  const pin = { h, s: salt }, cur0 = { armed: false, rev: 0 };
+  const a1 = R.guardTake(cur0, { armed: true, rev: 100, since: 90, by: 'away', pin, auto: 10 });
+  ck('opera guard: an arm message arms, with the hash and the auto-lock minutes', [a1.armed, a1.rev, a1.since, a1.by, a1.pin && a1.pin.h === h, a1.auto], [true, 100, 90, 'away', true, 10]);
+  const u1 = R.guardTake(Object.assign({}, a1, { armed: false, rev: 200 }), { armed: true, rev: 150, pin, auto: 10 });
+  ck('opera guard: unlocked here with the PIN (rev 200) → an older "armed" from HotelOps (rev 150) doesn\'t lock it again', [u1.armed, u1.rev], [false, 200]);
+  const d1 = R.guardTake(Object.assign({}, a1, { fails: 2, wrong: 2, until: 5 }), { armed: false, rev: 300, pin });
+  ck('opera guard: disarm ("I\'m back" / Unlock / the WhatsApp guard\'s) unlocks and clears the wrong-PIN count', [d1.armed, d1.wrong, d1.fails, d1.until, d1.since], [false, 0, 0, 0, 0]);
+  const bad = R.guardTake(cur0, { armed: false, pin: { h: 'nothex', s: 'x' }, auto: 9999 });
+  ck('opera guard: a bad hash is dropped (unlock only from HotelOps), minutes are capped, junk isn\'t a message', [bad.pin, bad.auto, R.guardTake(cur0, null), R.guardTake(cur0, 'arm')], [null, 240, null, null]);
+  const same = R.guardTake(a1, { armed: true, rev: 120, by: 'now', pin, auto: 5 });
+  ck('opera guard: armed again (Away → Lock now) keeps the lock and the count, takes the new config', [same.armed, same.since, same.by, same.auto], [true, 90, 'now', 5]);
+  // alerts: like the WhatsApp guard — the first at once, then "still going" at most every 20 s, a quiet 3 min = a new visit
+  const T0 = new Date(2026, 9, 29, 12, 31).getTime();
+  const r1 = O.guardThrottle(null, { kind: 'touch', at: T0 }, T0);
+  const r2 = O.guardThrottle(r1.T, { kind: 'fail', n: 1, at: T0 + 3000 }, T0 + 3000);
+  const r3 = O.guardThrottle(r2.T, { kind: 'fail', n: 2, at: T0 + 5000 }, T0 + 5000);
+  const f1 = O.guardFlush(r3.T, T0 + 20000);
+  ck('opera guard alerts: the first at once (prio 4, "someone is at your desk", the time)', r1.send.map(a => [a.title, a.body, a.prio]), [['🛡 Opera: someone is at your desk', 'touched the locked screen · 12:31', 4]]);
+  ck('opera guard alerts: then held for 20 s (wait = what is left)', [r2.send.length, r2.wait, r3.send.length, r3.wait], [0, 17000, 0, 15000]);
+  ck('opera guard alerts: "still going" after 20 s in one alert, loud for a wrong PIN, the newest count', f1.send.map(a => [a.title, a.body, a.prio]), [['🛡 Opera: still someone at your desk', 'tried to unlock (wrong PIN ×2) · 12:31', 5]]);
+  const r4 = O.guardThrottle(f1.T, { kind: 'tamper', detail: 'removed the lock screen (it came back)', at: T0 + 25000 }, T0 + 25000);
+  const f2 = O.guardFlush(r4.T, T0 + 80000);
+  ck('opera guard alerts: tampering is loud; minutes since the visit began', [r4.wait, f2.send[0].title, f2.send[0].body, f2.send[0].prio], [15000, '🛡 Opera: still someone at your desk · 1 min', 'removed the lock screen (it came back) · 12:31', 5]);
+  const r5 = O.guardThrottle(f2.T, { kind: 'touch', at: T0 + 5 * 60e3 }, T0 + 5 * 60e3);
+  ck('opera guard alerts: quiet for 3 min → a new visit (its own first alert, a new key)', [r5.send.length, r5.send[0].title, r5.send[0].key !== r1.send[0].key], [1, '🛡 Opera: someone is at your desk', true]);
+  const r6 = O.guardThrottle(r5.T, { kind: 'key', at: T0 + 5 * 60e3 + 2000 }, T0 + 5 * 60e3 + 2000);
+  const u = O.guardThrottle(r6.T, { kind: 'unlock', id: 'oabc123', at: T0 + 5 * 60e3 + 4000 }, T0 + 5 * 60e3 + 4000);
+  ck('opera guard alerts: the right PIN sends what was waiting, then "unlocked with your PIN" (prio 3), and ends the visit',
+    [u.send.map(a => [a.title, a.prio]), u.T], [[['🛡 Opera: still someone at your desk', 4], ['🔓 Opera unlocked with your PIN', 3]], null]);
+  ck('opera guard alerts: the same wording on the phone', ['touch', 'key', 'try', 'lockout'].map(k => O.ogLine({ kind: k, n: 3 })),
+    ['touched the locked screen', 'pressed keys on the locked screen', 'is typing a PIN', '3 wrong PINs: locked for 60 s']);
+  // a day off holds the guard's alerts unless "On a day off, still let the 🛡 Away guard through" — the same as the WhatsApp guard
+  const nb = { console: { log() {}, warn() {}, error() {} } }; nb.window = nb; nb.globalThis = nb; vm.createContext(nb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'notify-hub.js'), 'utf8'), nb, { filename: 'notify-hub.js' });
+  const N = nb.hoNotifyPure, now = new Date(2026, 9, 29, 2, 0), al = { cat: 'guard', prio: 4, instant: true, ignoreQuiet: true, claimed: true, title: '🛡 Opera: someone is at your desk' };
+  const cfg = o => Object.assign({}, N.DEF, o);
+  ck('opera guard alerts: quiet hours never hold them; a day off does, unless the guard is let through (as the WhatsApp guard)',
+    [N.gate(al, { cfg: cfg({ quiet: true }), now }).ok, N.gate(al, { cfg: cfg({ offUntil: +now + 864e5 }), now }).ok, N.gate(al, { cfg: cfg({ offUntil: +now + 864e5, offGuard: true }), now }).ok, N.shouldBatch(al, [], +now)],
+    [true, false, true, false]);
+  const src = fs.readFileSync(path.join(ROOT, 'tools/hotelops-opera.console.js'), 'utf8');
+  ck('opera guard: the reader is still read-only toward Opera (no click(), no synthetic mouse / keys, no innerHTML, no .value=) and builds the lock screen with DOM calls',
+    [/\.click\(\)|dispatchEvent\(new (?:Mouse|Keyboard)|\.innerHTML|\.value\s*=[^=]/.test(src), /attachShadow\(\{ mode: 'closed' \}\)/.test(src), /z-index:2147483647/.test(src)], [false, true, true]);
+  console.log('\nOpera guard');
+  res.forEach(([l, a, e]) => check(l, a, e));
+})().catch(e => { fail++; console.log('  ✗ opera guard threw: ' + (e && e.stack || e)); });
+
 // ── Opera everywhere (brief/home/search): morning-brief.js, handover.js, home.js, global-search.js read hoOpera (made-up data) ──
 console.log('\nOpera everywhere (brief/home/search)');
 {
@@ -3889,7 +3959,7 @@ console.log('\nOpera everywhere (dtcm/inhouse/xref/noshow)');
   check('no-show × opera: a guest already on the NA40 list (same conf) is not suggested', ns.N.sug(nrows, [{ nameRaw: 'TESTPERSON, ALPHA', confNo: '7001' }], T).map(g => g.confNo), ['7002']);
 }
 
-nhAsync.then(() => {
+Promise.all([nhAsync, ogAsync]).then(() => {
   console.log(`\n${pass} passed · ${fail} failed`);
   process.exit(fail ? 1 : 0);
 });

@@ -194,7 +194,7 @@ ensure();`;
   D.hoWaHelper = ${JSON.stringify(v)}; D.hoWaAuto = '1';${opReader ? ` D.hoOpHelper = ${JSON.stringify(v)};` : ''}
   let port = null;
   const BACK = d => d && typeof d === 'object' && (d.source === 'ho-wa-pong' || d.source === 'ho-wa-ack' || d.source === 'ho-wa-gack' || d.source === 'ho-wa-ext-code'
-    || d.source === 'ho-op-ack' || d.source === 'ho-op-ext-code'
+    || d.source === 'ho-op-ack' || d.source === 'ho-op-guard' || d.source === 'ho-op-ext-code'
     || (d.source === 'ho-wa' && (d.send || d.words || (d.guard && !d.guard.events && !d.guard.arm))));
   const open = () => {
     port = chrome.runtime.connect({ name: 'app' });

@@ -67,7 +67,14 @@
 //  for 2 h, an old reader.
 //  The 📡 Opera page (menu → Front Desk): Open Opera, live read, changes with
 //  Undo, bills, learned routines, 🛟 reports, settings.
-//  Pure helpers: window.hoOperaPure (tests/run-tests.js "Opera reader").
+//  🛡 Away guard (the 📡 Opera page): while you're away — the same Away as the
+//  WhatsApp guard, "🔒 Lock Opera now", or N idle minutes in the Opera tab — the
+//  reader covers Opera with an opaque lock screen and keeps every key and click
+//  from it. Unlock: your PIN at the desk (only a salted SHA-256 is kept, under
+//  opGuard/{uid}; 3 wrong → 1 min wait), Unlock here, or "I'm back". Touches, PIN
+//  tries and tampering go to your phone (hoNotify, category guard, throttled
+//  like the WhatsApp guard).
+//  Pure helpers: window.hoOperaPure (tests/run-tests.js "Opera reader" / "Opera guard").
 // ═══════════════════════════════════════════════════════════
 (function () {
 'use strict';
@@ -767,7 +774,58 @@ function operaThoughts(I) {
     why: 'The helper hands Opera the new reader; it starts the next time Opera loads.', opts: [['Open the Opera page', 'page']] });
   return T;
 }
-W.hoOperaPure = { depRecon, reconAuto, reconHead, reconPlan, teachKey, teachChoices, operaThoughts, operaEntry, shapeOf, reportText, reportLeaks, stuckText, stuckLeaks, stuckClean, operaHome, openState, maskCards, secretLabel, cleanFolio, cleanLabel, learnClean, learnModel, learnRecent, learnNext, learnSummary, sessionsOf, toIso, operaDay, roomKey, nameKey, sameGuest, isOtaEmail, goodEmail, natName, firstLast, sanitize, plan, summaryText, worthAlert, depReport, hashOf, isPm };
+// ── 🛡 the Away guard for Opera (pure parts) ──
+const OG_PIN = /^\d{4,6}$/;
+const hex = buf => Array.from(new Uint8Array(buf), b => (b < 16 ? '0' : '') + b.toString(16)).join('');
+/** sha-256(salt + ':' + pin) as hex — the same as the reader's, so it can check a PIN without ever having it */
+function pinHash(pin, salt) {
+  const C = typeof crypto !== 'undefined' && crypto && crypto.subtle ? crypto : null;
+  if (!C) return Promise.reject(new Error('no crypto.subtle'));
+  return C.subtle.digest('SHA-256', new TextEncoder().encode(String(salt) + ':' + String(pin))).then(hex);
+}
+function pinVerify(pin, p0) { pin = String(pin == null ? '' : pin).trim(); return !OG_PIN.test(pin) || !p0 || !p0.h || !p0.s ? Promise.resolve(false) : pinHash(pin, p0.s).then(h => h === p0.h, () => false); }
+const newSalt = () => { const r = new Uint8Array(16); crypto.getRandomValues(r); return hex(r.buffer); };
+const OG_GAP = 20e3, OG_VISIT = 3 * 60e3;
+const ogClock = t => new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+const OG_LOUD = { fail: 1, lockout: 1, tamper: 1, gone: 1 };
+const OG_KINDS = ['touch', 'key', 'try', 'fail', 'lockout', 'tamper', 'gone', 'unlock'];
+/** one thing at the locked Opera as a phrase for the phone */
+function ogLine(e) {
+  const d = String(e.detail || '').trim();
+  if (e.kind === 'fail') return `tried to unlock (wrong PIN ×${Math.max(1, +e.n || 1)})`;
+  if (e.kind === 'lockout') return `${+e.n || 3} wrong PINs: locked for 60 s`;
+  if (e.kind === 'touch') return 'touched the locked screen';
+  if (e.kind === 'key') return 'pressed keys on the locked screen';
+  if (e.kind === 'try') return 'is typing a PIN';
+  if (e.kind === 'unlock') return 'unlocked with your PIN';
+  return d.slice(0, 90) || (e.kind === 'gone' ? 'the Opera tab stopped answering' : 'tampered with the lock screen');
+}
+/** the alerts that go now for this visit's waiting things (lines once each; the wrong-PIN count is the newest) */
+function guardFlush(T, now) {
+  if (!T || !T.q.length) return { T, send: [], wait: 0 };
+  const q = T.q, seq = T.seq + 1; T = Object.assign({}, T, { q: [], sentAt: now, seq });
+  const fails = q.filter(e => e.kind === 'fail' || e.kind === 'lockout'), lines = [];
+  q.forEach(e => { if (e.kind === 'fail' && e !== fails.filter(x => x.kind === 'fail').pop()) return; const l = ogLine(e); if (!lines.includes(l)) lines.push(l); });
+  const at = q[q.length - 1].at || now, m = Math.round((now - T.start) / 60e3);
+  return { T, wait: 0, send: [{
+    title: seq === 1 ? '🛡 Opera: someone is at your desk' : `🛡 Opera: still someone at your desk${m >= 1 ? ' · ' + m + ' min' : ''}`,
+    body: lines.join(' · ') + ' · ' + ogClock(at), prio: q.some(e => OG_LOUD[e.kind]) ? 5 : 4, key: 'opg_' + T.start.toString(36) + '_' + seq, kinds: [...new Set(q.map(e => e.kind))] }] };
+}
+/** like the WhatsApp guard: the first thing of a visit goes at once, then "still going" at most every 20 s (what happened in between
+ *  in one alert; `wait` = flush again after that long); quiet 3 min = a new visit. An unlock ends the visit with its own alert. */
+function guardThrottle(T, e, now) {
+  const fresh = !T || now - T.last > OG_VISIT;
+  if (e.kind === 'unlock') {
+    const f = fresh ? { send: [] } : guardFlush(T, now);
+    return { T: null, wait: 0, send: f.send.concat([{ title: '🔓 Opera unlocked with your PIN', body: 'At the desk PC · ' + ogClock(e.at || now) + ' — if it wasn\'t you, change the PIN', prio: 3, key: 'opg_u' + (e.id || now.toString(36)), kinds: ['unlock'] }]) };
+  }
+  T = fresh ? { start: now, last: now, sentAt: 0, seq: 0, q: [] } : Object.assign({}, T, { q: T.q.slice() });
+  T.last = now; T.q.push(e);
+  if (fresh || now - T.sentAt >= OG_GAP) return guardFlush(T, now);
+  return { T, send: [], wait: OG_GAP - (now - T.sentAt) };
+}
+
+W.hoOperaPure = { pinHash, pinVerify, guardThrottle, guardFlush, ogLine, OG_GAP, OG_VISIT, depRecon, reconAuto, reconHead, reconPlan, teachKey, teachChoices, operaThoughts, operaEntry, shapeOf, reportText, reportLeaks, stuckText, stuckLeaks, stuckClean, operaHome, openState, maskCards, secretLabel, cleanFolio, cleanLabel, learnClean, learnModel, learnRecent, learnNext, learnSummary, sessionsOf, toIso, operaDay, roomKey, nameKey, sameGuest, isOtaEmail, goodEmail, natName, firstLast, sanitize, plan, summaryText, worthAlert, depReport, hashOf, isPm };
 if (!doc) return;
 
 // ══ State ═══════════════════════════════════════════════════
@@ -1372,12 +1430,15 @@ W.addEventListener('message', e => {
   const reply = o => { try { if (same) W.postMessage(o, location.origin); else if (e.source) e.source.postMessage(o, e.origin); } catch (_) {} };
   const was = LINK && Date.now() - LINK.at < 60000;
   LINK = { at: Date.now(), ext: same, v: String(d.v || '').slice(0, 12) };
+  if (!same && e.source) OG_SRC = { w: e.source, o: e.origin };   // a reader pasted in the console: the guard's state goes straight to it
+  OG_GONE = false;
   if (!was) safe(paintOpen);
+  if (d.guard && typeof d.guard === 'object') { safe(() => ogFromReader(d.guard, reply)); return; }
   if (d.stuck && typeof d.stuck === 'object') { const ok = safe(() => stuckAdd(d.stuck, d.h, 'reader'), false); reply({ source: 'ho-op-ack', stuck: String(d.h || '').slice(0, 24), ok: !!ok }); return; }
   if (Array.isArray(d.learn)) { const hint = safe(() => learnAdd(d.learn), ''); reply({ source: 'ho-op-ack', hint: hint || '', learn: learnOn() }); return; }
   if (d.ping) {
     // answered at once, signed in or not (only applying waits): the reader shows "linked" as soon as this tab has loaded
-    reply({ source: 'ho-op-ack', pong: 1, frame: String(d.frame || ''), again: !!(d.h && !SEEN.has(String(d.h))), auto: CFG.auto, learn: learnOn(), app: typeof APP_VERSION !== 'undefined' ? APP_VERSION : '', teach: teachNow() });
+    reply({ source: 'ho-op-ack', pong: 1, frame: String(d.frame || ''), again: !!(d.h && !SEEN.has(String(d.h))), auto: CFG.auto, learn: learnOn(), app: typeof APP_VERSION !== 'undefined' ? APP_VERSION : '', teach: teachNow(), guard: ogMsg() });
     if (d.home) safe(() => rememberHome(d.home));
     if (!was) paint();
     return;
@@ -1385,6 +1446,187 @@ W.addEventListener('message', e => {
   if (d.snap) { const res = receive(d.snap, d.h, reply); reply({ source: 'ho-op-ack', h: String(d.h || ''), text: res }); }
 });
 if (/opera-reader/.test(location.hash)) safe(() => history.replaceState(null, '', location.pathname + location.search));   // opened by the console reader
+
+// ══ 🛡 The Away guard for Opera ══════════════════════════════
+// One Away for both: the WhatsApp guard's "I'm away" (waGuard/{uid}/on, any of your devices) also locks Opera on this PC;
+// "🔒 Lock Opera now" and auto-lock (N idle minutes in the Opera tab, needs a PIN) lock Opera alone (opGuard/{uid}/lock).
+// "I'm back" (here or in the WhatsApp guard), Unlock, or the right PIN at the desk unlocks both. The reader gets
+// {source:'ho-op-guard', armed, rev, since, by, pin:{h, s}, auto} (and the same inside its acks and pongs). What someone does at
+// the lock screen comes back as {source:'ho-op', guard:{events}} and goes to your phone through hoNotify (category "guard":
+// instant, even in quiet hours; a day off holds it unless "On a day off, still let the 🛡 Away guard through" — as the WhatsApp guard).
+// Saved under your own account: opGuard/{uid} = { pin: {h, s, at, by}, cfg: {auto}, lock: {on, since, by}, log: {key: {at, title, body, prio}} }.
+// Never the PIN: only a salted SHA-256 of it.
+const OG = { pin: null, auto: 0, lock: { on: false, since: 0, by: '' }, log: {} };
+let OG_ON = false, OG_REV = 0, OG_WA = false, OG_SIG = '', OG_SRC = null, OG_T = null, OG_TT = 0, OG_GONE = false, OG_STARTED = false, OG_LINKED = 0;
+const OG_SEEN = new Set(), LS_GLOCK = 'ho_op_glock';
+const ogP = sub => 'opGuard/' + uidNow() + (sub ? '/' + sub : '');
+const waGuardOn = () => safe(() => !!(W.hoWaGuard && W.hoWaGuard.state && W.hoWaGuard.state().on), false);
+const ogWhy = () => (OG.lock.on ? (OG.lock.by === 'auto' ? 'auto' : 'now') : OG_WA ? 'away' : '');
+function ogMsg() {
+  return { armed: OG_ON, rev: OG_REV, since: OG_ON ? (OG.lock.on && OG.lock.since) || OG_REV : 0, by: ogWhy(), pin: OG.pin ? { h: OG.pin.h, s: OG.pin.s } : null, auto: OG.pin ? OG.auto : 0 };
+}
+/** only one HotelOps tab on this PC sends the alerts (every tab hears the reader) */
+function ogLead() {
+  const l = LS.get(LS_GLOCK, null), now = Date.now();
+  if (l && l.tab !== TAB && now - l.at < 30000) return false;
+  LS.set(LS_GLOCK, { tab: TAB, at: now });
+  return true;
+}
+/** armed = Away (the WhatsApp guard) or Opera's own lock; a change goes to the reader at once */
+function ogSync(force) {
+  const wa = waGuardOn();
+  if (OG_WA && !wa && OG.lock.on) ogSetLock(false, '', true);   // "I'm back" in the WhatsApp guard: Opera too
+  OG_WA = wa;
+  const on = wa || !!OG.lock.on;
+  if (on !== OG_ON) { OG_ON = on; OG_REV = Date.now(); OG_GONE = false; OG_LINKED = 0; if (!on) ogEnd(); force = true; safe(paint); }
+  const m = ogMsg(), sig = J([m.armed, m.rev, m.by, m.pin, m.auto]);
+  if (force || (sig !== OG_SIG && OG_SIG)) ogPush(m);   // the first look only notes it (the reader's next ping gets it anyway)
+  OG_SIG = sig;
+}
+function ogPush(m) {
+  m = m || ogMsg();
+  safe(() => W.postMessage(Object.assign({ source: 'ho-op-guard' }, m), location.origin));   // the helper carries it to Opera
+  safe(() => W.postMessage({ source: 'ho-op-ack', guard: m }, location.origin));            // an older helper carries only answers
+  if (OG_SRC && OG_SRC.w && !OG_SRC.w.closed) safe(() => OG_SRC.w.postMessage({ source: 'ho-op-ack', guard: m }, OG_SRC.o));   // a console reader
+}
+function ogSetLock(on, by, quiet, since) {
+  OG.lock = on ? { on: true, since: +since || Date.now(), by: by || 'now' } : { on: false, since: 0, by: '' };
+  if (uidNow() && fbOk()) safe(() => fbSet(ogP('lock'), OG.lock));
+  if (!quiet) ogSync();
+}
+function ogLockNow() {
+  if (!uidNow()) return toast('Sign in first', 'err');
+  ogSetLock(true, 'now');
+  toast(OG.pin ? '🔒 Opera is locked — your PIN or Unlock here opens it' : '🔒 Opera is locked — only Unlock here opens it (no PIN set)', 'ok');
+}
+/** Unlock / "I'm back": Opera and the WhatsApp guard both */
+function ogUnlock() {
+  ogSetLock(false, '', true);
+  if (waGuardOn()) safe(() => W.hoWaGuard.set(false));
+  ogSync(true);
+  toast('🔓 Opera unlocked — welcome back', 'ok');
+}
+function ogAway(on) {
+  if (!W.hoWaGuard || typeof W.hoWaGuard.set !== 'function') return toast('The Away guard isn\'t loaded yet — try again in a moment', 'err');
+  if (on) safe(() => W.hoWaGuard.set(true)); else ogUnlock();
+  ogSync(true);
+}
+function ogStart() {
+  if (OG_STARTED || !uidNow() || typeof fbListen !== 'function') return;
+  OG_STARTED = true;
+  fbListen(ogP(), v => {
+    v = v && typeof v === 'object' ? v : {};
+    const p = v.pin;
+    OG.pin = p && /^[0-9a-f]{64}$/.test(p.h || '') && /^[0-9a-f]{8,64}$/.test(p.s || '') ? { h: p.h, s: p.s, at: +p.at || 0 } : null;
+    OG.auto = [0, 5, 10, 15, 30, 60].includes(+(v.cfg && v.cfg.auto)) ? +v.cfg.auto : 0;
+    const l = v.lock; OG.lock = l && l.on ? { on: true, since: +l.since || Date.now(), by: String(l.by || 'now').slice(0, 8) } : { on: false, since: 0, by: '' };
+    OG.log = v.log && typeof v.log === 'object' ? v.log : {};
+    ogSync(); safe(paint);
+  });
+}
+/** what the reader saw at the lock screen → the phone (thanked, so it doesn't send them again); auto-lock; the PIN typed right */
+function ogFromReader(g, reply) {
+  const ids = [];
+  if (Array.isArray(g.events)) g.events.slice(0, 40).forEach(e => {
+    if (!e || typeof e !== 'object' || !/^o[a-z0-9]{4,20}$/.test(String(e.id || ''))) return;
+    ids.push(e.id);
+    if (OG_SEEN.has(e.id)) return;
+    OG_SEEN.add(e.id); if (OG_SEEN.size > 500) OG_SEEN.delete(OG_SEEN.values().next().value);
+    ogAlert({ id: e.id, at: Math.min(Date.now(), +e.at || Date.now()), kind: OG_KINDS.includes(e.kind) ? e.kind : 'touch', detail: cut(e.detail, 120), n: Math.max(0, Math.min(99, Math.round(+e.n || 0))) });
+  });
+  if (ids.length) reply({ source: 'ho-op-ack', gack: ids });
+  if (g.arm === 'auto' && OG.pin && OG.auto > 0 && !OG_ON) ogSetLock(true, 'auto', false, Math.min(Date.now(), +g.since || Date.now()));
+  else if (g.arm === 'auto' && !OG_ON) ogSync(true);   // no PIN / auto-lock off here: the reader unlocks again
+  if (g.unlocked && OG_ON) {
+    ogSetLock(false, '', true);
+    if (waGuardOn()) safe(() => W.hoWaGuard.set(false));
+    ogSync(true);
+    toast('🔓 Opera was unlocked with your PIN at the desk', 'ok');
+  }
+}
+function ogAlert(rec) {
+  if (!ogLead()) return;
+  const r = guardThrottle(OG_T, rec, Date.now()); OG_T = r.T;
+  r.send.forEach(ogSend);
+  if (r.wait) { clearTimeout(OG_TT); OG_TT = setTimeout(() => { const f = guardFlush(OG_T, Date.now()); OG_T = f.T; f.send.forEach(ogSend); }, r.wait); }
+}
+/** disarmed: what was still waiting goes now, and the visit is over */
+function ogEnd() { clearTimeout(OG_TT); const f = guardFlush(OG_T, Date.now()); OG_T = null; f.send.forEach(ogSend); }
+function ogSend(a) {
+  const o = { cat: 'guard', instant: true, ignoreQuiet: true, claimed: true, toast: false, prio: a.prio, key: a.key, title: a.title, body: a.body, url: '#opera-guard', tags: [a.prio >= 5 ? 'rotating_light' : 'lock'] };
+  const H = W.hoNotify;
+  if (H && typeof H.send === 'function') safe(() => H.send(o));
+  else if (W.hoWaGuard && typeof W.hoWaGuard.notify === 'function') safe(() => W.hoWaGuard.notify(a.title, a.body, a.prio, o.tags));
+  // the card's "last alerts" (your account only; 20 kept)
+  const rec = { at: Date.now(), title: a.title, body: a.body, prio: a.prio };
+  OG.log = Object.assign({}, OG.log, { [a.key]: rec });
+  const old = Object.keys(OG.log).sort((x, y) => (OG.log[y].at || 0) - (OG.log[x].at || 0)).slice(20);
+  old.forEach(k => { delete OG.log[k]; });
+  if (uidNow() && fbOk()) { safe(() => fbSet(ogP('log/' + a.key.replace(/[.#$\[\]\/]/g, '_')), rec)); old.forEach(k => safe(() => fbSet(ogP('log/' + k), null))); }
+  safe(paint);
+}
+// ── the PIN (yours: the signed-in person sets their own; changing one needs the old PIN, unless you're an owner / manager) ──
+function ogPinDialog() {
+  if (!uidNow()) return toast('Sign in first', 'err');
+  if (doc.getElementById('ogDlg')) return;
+  const change = !!OG.pin, skipOld = canAdmin();
+  const d = doc.createElement('div'); d.id = 'ogDlg'; d.className = 'og-dlg';
+  d.innerHTML = `<form class="og-sheet" role="dialog" aria-modal="true" aria-labelledby="ogDlgT" autocomplete="off">
+    <b id="ogDlgT">${change ? 'Change' : 'Set'} your Opera unlock PIN</b>
+    <small>4 to 6 digits. It unlocks Opera at the desk while you're away. HotelOps keeps only a salted hash of it, under your own account.</small>
+    ${change && !skipOld ? '<label>Current PIN<input class="input" type="password" inputmode="numeric" maxlength="6" data-og="old" autocomplete="off"></label>' : ''}
+    <label>New PIN<input class="input" type="password" inputmode="numeric" maxlength="6" data-og="new" autocomplete="new-password"></label>
+    <label>New PIN again<input class="input" type="password" inputmode="numeric" maxlength="6" data-og="rep" autocomplete="new-password"></label>
+    <div class="og-err" aria-live="polite"></div>
+    <div class="og-acts"><button type="button" class="btn ghost" data-og="cancel">Cancel</button><button type="submit" class="btn gold">Save PIN</button></div></form>`;
+  doc.body.appendChild(d);
+  const q = k => d.querySelector(`[data-og="${k}"]`), err = t => { d.querySelector('.og-err').textContent = t; };
+  const close = () => { d.remove(); };
+  d.addEventListener('click', e => { if (e.target === d || (e.target.dataset && e.target.dataset.og === 'cancel')) close(); });
+  d.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+  d.querySelector('form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const nw = String(q('new').value || '').trim(), rep = String(q('rep').value || '').trim();
+    if (change && !skipOld && !(await pinVerify(q('old').value, OG.pin))) return err('The current PIN isn\'t right.');
+    if (!OG_PIN.test(nw)) return err('The PIN is 4 to 6 digits.');
+    if (nw !== rep) return err('The two new PINs are not the same.');
+    if (/^(\d)\1+$/.test(nw) || '0123456789'.includes(nw) || '9876543210'.includes(nw)) return err('Too easy to guess — not 1111 or 1234.');
+    const s = newSalt(), h = await pinHash(nw, s);
+    OG.pin = { h, s, at: Date.now() };
+    if (fbOk()) safe(() => fbSet(ogP('pin'), { h, s, at: OG.pin.at, by: signedIn() ? String(currentProfile.name || '').slice(0, 40) : '' }));
+    close(); ogSync(true); paint();
+    toast('🔑 PIN saved — Opera\'s lock screen takes it from now on', 'ok');
+  });
+  setTimeout(() => { const f = q('old') || q('new'); if (f) f.focus(); }, 30);
+}
+async function ogPinOff() {
+  if (!OG.pin) return;
+  if (!canAdmin()) { const p = typeof prompt === 'function' ? prompt('Your current Opera PIN, to remove it') : ''; if (p == null) return; if (!(await pinVerify(p, OG.pin))) return toast('That PIN isn\'t right', 'err'); }
+  else if (typeof confirm === 'function' && !confirm('Remove the Opera unlock PIN? Then only HotelOps can unlock Opera (and auto-lock is off).')) return;
+  OG.pin = null; OG.auto = 0;
+  if (fbOk()) { safe(() => fbSet(ogP('pin'), null)); safe(() => fbSet(ogP('cfg/auto'), 0)); }
+  ogSync(true); paint();
+}
+function ogSetAuto(min) {
+  min = [0, 5, 10, 15, 30, 60].includes(+min) ? +min : 0;
+  if (min && !OG.pin) return toast('Set a PIN first: auto-lock needs one, so you can get back in at the desk', 'err');
+  OG.auto = min;
+  if (uidNow() && fbOk()) safe(() => fbSet(ogP('cfg/auto'), min));
+  ogSync(true); paint();
+}
+function ogClearLog() { OG.log = {}; if (uidNow() && fbOk()) safe(() => fbSet(ogP('log'), null)); paint(); }
+/** the reader was linked while armed and went quiet (the Opera tab closed / reloaded without the helper) → told once */
+function ogWatch() {
+  if (!OG_ON) return;
+  if (LINK && LINK.at > OG_REV) OG_LINKED = LINK.at;
+  if (OG_LINKED && !OG_GONE && Date.now() - OG_LINKED > 150000 && LINK && LINK.at <= OG_LINKED) {
+    OG_GONE = true;
+    ogAlert({ id: 'ogone' + Date.now().toString(36), at: Date.now(), kind: 'gone', detail: 'the Opera tab stopped answering (closed, reloaded or logged out) while you were away', n: 0 });
+  }
+}
+W.addEventListener('ho-away', () => safe(() => ogSync()));   // the WhatsApp guard switched (here or from your phone)
+setInterval(() => safe(() => { ogStart(); ogSync(); ogWatch(); if (OG_ON) ogLead(); }), 3000);
+if (/opera-guard/.test(location.hash)) setTimeout(() => { safe(() => openPage('guard')); safe(() => history.replaceState(null, '', location.pathname + location.search)); }, 1800);   // tapped a lock-screen alert
 setInterval(() => {
   if (LOG.length && LS.get(LS_LOG, {}).date !== today()) { LOG = []; LAST = {}; saveLog(); saveLast(); }   // a new day
   if (FOL.date !== today()) { FOL = { date: today(), rooms: {} }; RST = { date: today(), rooms: {} }; TRC = { date: today(), list: [] }; PRF = { date: today(), by: {} }; }
@@ -1644,6 +1886,7 @@ function pageHtml() {
       ${check}
       ${safe(() => reconHtml(reconNow(), true), '')}
       ${stats}
+      ${opSec({ id: 'guard', ic: '🛡', title: 'Away guard', sub: OG_ON ? 'Opera is locked at the desk' : 'Lock Opera while you\'re away', count: OG_ON ? 'ON' : '', hot: OG_ON, body: ogHtml() })}
       ${opSec({ id: 'address', ic: '🏨', title: 'Opera address', sub: 'Each hotel\'s Opera Cloud', count: (HOTELS || [1]).length, body: hotelsHtml() })}
       ${opSec({ id: 'live', ic: '📡', title: 'Live now', sub: linked ? 'What Opera shows, as it is read' : 'The newest read', count: lr.length || '', body: live })}
       ${opSec({ id: 'changes', ic: '✏️', title: 'What it changed today', count: LOG.length || '', hot: Object.keys(PENDING).length > 0, body: changes, fold: true })}
@@ -1652,6 +1895,25 @@ function pageHtml() {
       ${opSec({ id: 'stuck', ic: '🛟', title: 'Screens it couldn\'t read', count: stuckN || '', hot: stuckN > 0, body: stuckHtml(true), fold: true })}
       ${opSec({ id: 'settings', ic: '⚙️', title: 'Settings', sub: 'Switches and the helper', body: settings, fold: true })}
     </div>`;
+}
+/** the 🛡 Away guard card on the 📡 Opera page */
+function ogHtml() {
+  const on = OG_ON, why = ogWhy(), m = ogMsg(), linked = opLinked45();
+  const whyTxt = why === 'away' ? 'you\'re away (the same Away as the WhatsApp guard)' : why === 'auto' ? `nobody used Opera for ${OG.auto} min` : 'locked from HotelOps';
+  const head = `<div class="og-head${on ? ' is-on' : ''}"><span class="og-emb" aria-hidden="true">${on ? '🔒' : '🛡'}</span><div class="og-head-txt"><b>${on ? 'Opera is locked' : 'Opera is open'}</b>
+      <small>${on ? `Since ${esc(hhmm(m.since))} · ${esc(whyTxt)}${linked ? ' · the Opera tab has the lock screen' : ' · the Opera tab isn\'t linked right now: it locks as soon as it links'}` : 'When you\'re away, an opaque lock screen covers Opera at the desk and anyone trying it is reported to your phone.'}</small></div>
+      <div class="og-head-act">${on ? '<button class="btn gold" data-op="og-unlock">🔓 Unlock</button>' : '<button class="btn gold" data-op="og-lock">🔒 Lock Opera now</button>'}</div></div>`;
+  const away = `<label class="op-row op-sw" data-s="opera away guard whatsapp away lock"><div class="op-row-txt"><b>Away guard</b><small>The same Away as the WhatsApp 🛡 guard — one switch for both. On: Opera locks and WhatsApp is watched. “I'm back” there or Unlock here opens both.</small></div>
+    <span class="hs-switch op-switch"><input type="checkbox" data-op="og-away" ${OG_WA ? 'checked' : ''} aria-label="Away guard"><i></i></span></label>`;
+  const pin = orow('opera pin unlock code', 'Unlock PIN', OG.pin ? `Set${OG.pin.at ? ' ' + esc(new Date(OG.pin.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })) : ''} · type it on Opera's lock screen to get back in. 3 wrong tries → a 1-minute wait and an alert.` : 'Not set: only Unlock here (or “I\'m back”) opens Opera. Set one to unlock at the desk.',
+    OG.pin ? '<button class="btn sm" data-op="og-pin">Change PIN</button><button class="btn sm ghost" data-op="og-pinoff">Remove</button>' : '<button class="btn sm gold" data-op="og-pin">Set PIN</button>');
+  const seg = [[0, 'Off'], [5, '5 min'], [10, '10 min'], [15, '15 min'], [30, '30 min']].map(([v, l]) => `<button type="button" class="${OG.auto === v ? 'on' : ''}" data-op="og-auto" data-min="${v}"${v && !OG.pin ? ' disabled' : ''} aria-pressed="${OG.auto === v}">${l}</button>`).join('');
+  const auto = orow('opera auto lock idle minutes', 'Lock Opera when I\'m idle', OG.pin ? 'Nobody touches the Opera tab for this long → it locks by itself (Opera only, not WhatsApp).' : 'Needs a PIN first, so you can get back in at the desk.', `<div class="og-seg" role="group" aria-label="Auto-lock minutes">${seg}</div>`);
+  const L = Object.values(OG.log || {}).filter(x => x && x.at).sort((a, b) => b.at - a.at);
+  const alerts = `<div class="og-alerts"><div class="og-alerts-hd"><span class="op-label">Last alerts</span>${L.length ? '<button class="og-clear" data-op="og-clear">Clear</button>' : ''}</div>${L.length
+    ? `<ol class="op-feed og-feed">${L.slice(0, 5).map(x => `<li class="${x.prio >= 5 ? 'og-loud' : ''}"><time>${esc(hhmm(x.at))}</time><div><span>${esc(x.title)}</span><small>${esc(x.body)}</small></div></li>`).join('')}</ol>`
+    : '<small class="og-none">None yet. Touches, PIN tries and anyone removing the lock screen show here and on your phone (📲 the same phone setup as the WhatsApp guard).</small>'}</div>`;
+  return head + away + pin + auto + alerts + '<p class="op-note og-limit">It guards this Opera tab only: someone could still close the tab or open Opera in another browser. Closing it is reported (the tab stops answering), the rest it cannot see.</p>';
 }
 let LAST_UNDO = null;   // the newest change set's Undo (this tab, while the lists are as it left them)
 /** the big "🟢 Open Opera" button and the helper's state: a hero with a status emblem and 3 status chips (the page and Settings) */
@@ -1806,7 +2068,7 @@ function wire() {
   box.addEventListener('change', e => { const t = e.target.closest && e.target.closest('#hs-opera input[data-op]'); if (t) onSwitch(t); });
   return true;
 }
-function onSwitch(t) { if (t.dataset.op === 'learn') setLearn(t.checked); else setCfg(t.dataset.op, t.checked); }
+function onSwitch(t) { if (t.dataset.op === 'og-away') ogAway(t.checked); else if (t.dataset.op === 'learn') setLearn(t.checked); else setCfg(t.dataset.op, t.checked); }
 function onAct(t) {
   {
     const a = t.dataset.op;
@@ -1817,6 +2079,8 @@ function onAct(t) {
     else if (a === 'scopy') stuckCopy(t.dataset.h); else if (a === 'sdismiss') stuckDismiss(t.dataset.h); else if (a === 'sclear') stuckClear();
     else if (a === 'page') openPage(); else if (a === 'clearday') clearDay();
     else if (a === 'hedit') editHotelUrl(t.dataset.hid); else if (a === 'hopen') openHotelUrl(t.dataset.hid);
+    else if (a === 'og-lock') ogLockNow(); else if (a === 'og-unlock') ogUnlock(); else if (a === 'og-pin') ogPinDialog(); else if (a === 'og-pinoff') ogPinOff();
+    else if (a === 'og-auto') ogSetAuto(+t.dataset.min); else if (a === 'og-clear') ogClearLog();
     else if (a === 'undo' && LAST_UNDO && !LAST_UNDO.used) { LAST_UNDO.used = true; safe(() => LAST_UNDO.fn()); paint(); }
   }
 }
@@ -1997,6 +2261,24 @@ function css() {
   :is(#hs-opera,#opRoot) .op-row:not(.op-col):not(.op-sw){flex-wrap:wrap}:is(#hs-opera,#opRoot) .op-row:not(.op-sw) .op-row-act{justify-content:flex-start}
   :is(#hs-opera,#opRoot) .op-item{grid-template-columns:minmax(0,1fr)}
 }
+#opRoot .og-head{--tone:var(--text3,#8892a0);display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:18px var(--op-px);border-bottom:1px solid var(--op-line);background:color-mix(in srgb,var(--tone) 6%,transparent)}
+#opRoot .og-head.is-on{--tone:var(--op-ok)}
+#opRoot .og-emb{flex:none;width:48px;height:48px;border-radius:14px;display:grid;place-items:center;font-size:22px;background:color-mix(in srgb,var(--tone) 16%,transparent);box-shadow:0 0 0 1px color-mix(in srgb,var(--tone) 35%,transparent)}
+#opRoot .og-head.is-on .og-emb{box-shadow:0 0 0 3px color-mix(in srgb,var(--tone) 30%,transparent)}
+#opRoot .og-head-txt{flex:1 1 240px;min-width:0;display:flex;flex-direction:column;gap:3px}#opRoot .og-head-txt b{font-size:16px;font-weight:650;letter-spacing:-.01em;color:var(--text,#eee)}
+#opRoot .og-head-act{display:flex;gap:8px;flex-wrap:wrap}
+#opRoot .og-seg{display:flex;gap:3px;padding:3px;border-radius:12px;background:var(--op-sub);border:1px solid var(--op-line);flex-wrap:wrap}
+#opRoot .og-seg button{padding:6px 10px;border:0;border-radius:9px;background:transparent;color:var(--text2,#9aa5b5);font:600 12.5px var(--font,system-ui);cursor:pointer;white-space:nowrap}
+#opRoot .og-seg button.on{background:var(--card,#161d28);color:var(--accent,#e8b84b);box-shadow:0 1px 4px rgba(0,0,0,.15)}#opRoot .og-seg button:disabled{opacity:.45;cursor:not-allowed}
+#opRoot .og-alerts{padding:14px var(--op-px) 0}#opRoot .og-alerts-hd{display:flex;align-items:center;justify-content:space-between}
+#opRoot .og-clear{border:0;background:none;color:var(--accent,#e8b84b);font:600 12.5px var(--font,system-ui);cursor:pointer;padding:2px 0}
+#opRoot .og-feed{padding:4px 0 0}#opRoot .og-feed li.og-loud span{color:var(--op-err);font-weight:600}#opRoot .og-none{display:block;padding:6px 0 4px}
+#opRoot .og-limit{padding-bottom:18px;color:var(--text3,#8892a0)}
+.og-dlg{position:fixed;inset:0;z-index:9997;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.5);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.og-sheet{width:min(400px,100%);display:flex;flex-direction:column;gap:10px;padding:20px;border-radius:20px;background:var(--bg,#0f141c);border:1px solid var(--border2,var(--border,#2a3342));box-shadow:0 30px 80px rgba(0,0,0,.45);color:var(--text,#eee);font-family:var(--font,system-ui)}
+.og-sheet>b{font-size:17px}.og-sheet small{color:var(--text2,#9aa5b5);font-size:12.5px;line-height:1.5}
+.og-sheet label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600;color:var(--text2,#9aa5b5)}.og-sheet input{font:600 18px var(--mono,ui-monospace,monospace);letter-spacing:.3em;text-align:center}
+.og-err{min-height:18px;color:var(--rose,#e11d48);font-size:13px}.og-acts{display:flex;gap:8px;justify-content:flex-end}
 @media (prefers-reduced-motion:reduce){:is(#hs-opera,#opRoot) *,:is(#hs-opera,#opRoot) *::before,:is(#hs-opera,#opRoot) *::after{animation:none !important;transition:none !important}#opRoot .op-tile:hover{transform:none}}
 .op-go{flex:0 0 auto;padding:11px 16px;border-radius:12px;border:0;background:linear-gradient(135deg,#22c55e,#15803d);color:#fff;font:700 14px var(--font,system-ui);cursor:pointer;box-shadow:0 8px 20px -10px #15803d;white-space:nowrap}
 .op-go:active{transform:scale(.97)}.op-go.sm{padding:7px 12px;border-radius:10px;font-size:13px;box-shadow:none}
@@ -2156,5 +2438,10 @@ W.hoOpera = {
   openOpera, openState: openNow, openCardHtml, operaUrl, setOperaUrl: u => setOperaUrl(u, 'typed'), askOperaUrl,
   /** the 📡 Opera page */
   openPage, pageHtml,
+  /** 🛡 the Away guard for Opera: state, Lock now / Unlock (both: Opera and the WhatsApp guard), Away, PIN, auto-lock */
+  guard: {
+    state: () => ({ armed: OG_ON, by: ogWhy(), since: OG_ON ? ogMsg().since : 0, pin: !!OG.pin, auto: OG.auto, away: OG_WA, linked: opLinked45(), alerts: Object.values(OG.log || {}).sort((a, b) => b.at - a.at).slice(0, 20) }),
+    lock: ogLockNow, unlock: ogUnlock, away: ogAway, pinDialog: ogPinDialog, setAuto: ogSetAuto, sync: () => ogSync(true),
+  },
 };
 })();

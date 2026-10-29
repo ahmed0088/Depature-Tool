@@ -50,6 +50,11 @@
  * how each was mapped, value shapes ("Aaaa, Aaaa", "99/99/9999"), DOM hints. Never a value; refused when anything in it
  * still looks like guest data. Once per screen and day, built inside the idle read. HotelOps → Settings → Opera reader →
  * "📋 Copy for Claude". What the hotel taught it there (a column, a screen) is checked before its own words.
+ * 🛡 Away guard: while you're away (HotelOps: the same Away as the WhatsApp guard, "🔒 Lock Opera now", or N idle minutes here),
+ * an opaque lock screen covers Opera in every frame it runs in, and the mouse, touch and keys are kept from Opera (stopped in the
+ * capture phase; nothing in Opera is clicked, typed or changed). It unlocks with your PIN (checked against a salted SHA-256 HotelOps
+ * sends, never the PIN; 3 wrong → 1 minute wait) or from HotelOps. Touches, PIN tries and anyone removing the screen go to HotelOps,
+ * which alerts your phone. Kept per tab in sessionStorage (a reload stays locked).
  * Built with DOM calls and inline styles only (no innerHTML, no <style>), so Opera's page rules don't
  * block it. Pure helpers are exported for the Node tests (tests/run-tests.js).
  */
@@ -728,7 +733,51 @@
     return { code: 'no-answer', text: 'No answer yet: is HotelOps open in this same browser? Reload it; still nothing: press ↻ on the HotelOps helper in chrome://extensions' };
   }
 
-  var H = { setTaught: setTaught, screenKey: screenKey, shapeOf: shapeOf, headText: headText, structText: structText, pathShape: pathShape, classShape: classShape, mapName: mapName, reportLeaks: reportLeaks, makeReport: makeReport, reportText: reportText, linkDiag: linkDiag,
+  // ── 🛡 the Away guard (pure parts) ────────────────────────
+  // While you're away (HotelOps → the same Away as the WhatsApp guard, or "🔒 Lock Opera now"), a lock screen covers Opera.
+  // Your PIN is never here: only a salted SHA-256 of it (HotelOps keeps the same, under your own account).
+  var PIN_RE = /^\d{4,6}$/, LOCK_TRIES = 3, LOCK_MS = 60000;
+  function hexOf(buf) { var b = new Uint8Array(buf), s = ''; for (var i = 0; i < b.length; i++) s += (b[i] < 16 ? '0' : '') + b[i].toString(16); return s; }
+  /** sha-256(salt + ':' + pin) as hex (a Promise) */
+  function pinHash(pin, salt) {
+    var C = typeof crypto !== 'undefined' && crypto && crypto.subtle ? crypto : null;
+    if (!C) return Promise.reject(new Error('no crypto.subtle'));
+    return C.subtle.digest('SHA-256', new TextEncoder().encode(String(salt) + ':' + String(pin))).then(hexOf);
+  }
+  /** is this the PIN? pin0 = {h, s} (a Promise of true / false) */
+  function pinVerify(pin, pin0) {
+    pin = String(pin == null ? '' : pin).trim();
+    if (!PIN_RE.test(pin) || !pin0 || !pin0.h || !pin0.s) return Promise.resolve(false);
+    return pinHash(pin, pin0.s).then(function (h) { return h === pin0.h; }, function () { return false; });
+  }
+  /** one PIN try → the new counts: {fails (in a row), wrong (since locked), until (cool-down end), ok, lockout, blocked} */
+  function pinStep(st, ok, now) {
+    st = st || {};
+    var o = { fails: +st.fails || 0, wrong: +st.wrong || 0, until: +st.until || 0 };
+    if (now < o.until) { o.blocked = true; return o; }   // still cooling down: not even checked
+    if (ok) { o.fails = 0; o.until = 0; o.ok = true; return o; }
+    o.fails++; o.wrong++;
+    if (o.fails >= LOCK_TRIES) { o.fails = 0; o.until = now + LOCK_MS; o.lockout = true; }
+    return o;
+  }
+  /** a guard message from HotelOps → this tab's new guard state (the config is always taken; armed / disarmed only when it is
+   *  newer than what this tab did itself, e.g. unlocked with the PIN a moment before HotelOps heard of it). null = not a message */
+  function guardTake(cur, m) {
+    if (!m || typeof m !== 'object') return null;
+    cur = cur || {};
+    var n = {}; Object.keys(cur).forEach(function (k) { n[k] = cur[k]; });
+    n.pin = m.pin && /^[0-9a-f]{64}$/.test(String(m.pin.h || '')) && /^[0-9a-f]{8,64}$/.test(String(m.pin.s || '')) ? { h: String(m.pin.h), s: String(m.pin.s) } : null;
+    n.auto = Math.max(0, Math.min(240, Math.round(+m.auto || 0)));
+    var rev = +m.rev || 0, armed = !!m.armed;
+    if (rev && rev < (+cur.rev || 0)) return n;   // older than this tab's own lock / unlock
+    if (armed === !!cur.armed) { n.rev = Math.max(rev, +cur.rev || 0); if (armed && m.by) n.by = String(m.by).slice(0, 12); return n; }
+    n.armed = armed; n.rev = rev || Date.now(); n.since = armed ? (+m.since || Date.now()) : 0; n.by = armed ? String(m.by || '').slice(0, 12) : '';
+    n.fails = 0; n.wrong = 0; n.until = 0;
+    return n;
+  }
+
+  var H = { pinHash: pinHash, pinVerify: pinVerify, pinStep: pinStep, guardTake: guardTake, PIN_RE: PIN_RE, LOCK_TRIES: LOCK_TRIES, LOCK_MS: LOCK_MS,
+    setTaught: setTaught, screenKey: screenKey, shapeOf: shapeOf, headText: headText, structText: structText, pathShape: pathShape, classShape: classShape, mapName: mapName, reportLeaks: reportLeaks, makeReport: makeReport, reportText: reportText, linkDiag: linkDiag,
     maskCards: maskCards, secretLabel: secretLabel, scrub: scrub, payType: payType, normRoomStatus: normRoomStatus, postFieldOf: postFieldOf, traceFieldOf: traceFieldOf, usablePost: usablePost, usableTrace: usableTrace,
     postingsFrom: postingsFrom, folioFrom: folioFrom, tracesFrom: tracesFrom, tableFrom: tableFrom, pairsExtra: pairsExtra, auditState: auditState, cleanLabel: cleanLabel, safeTitle: safeTitle,
     normH: normH, fieldOf: fieldOf, mapHeaders: mapHeaders, usable: usable, parseDate: parseDate, dateOrder: dateOrder, findDate: findDate, normStatus: normStatus, money: money,
@@ -756,7 +805,7 @@
   var GRID_SEL = 'table, [role="grid"], [role="table"], [role="treegrid"]';
   var ROW_SEL = 'tr, [role="row"]';
   var CELL_SEL = 'th, td, [role="columnheader"], [role="gridcell"], [role="cell"], [role="rowheader"]';
-  var mine = function (el) { return pillHost && (el === pillHost || pillHost.contains(el)); };
+  var mine = function (el) { return !!el && ((pillHost && (el === pillHost || pillHost.contains(el))) || (gHost && el === gHost)); };
   function txt(el) {
     if (!el) return '';
     var t = sp(el.textContent).replace(/[ \t]+/g, ' ').replace(/\s*\n\s*/g, '\n').trim();   // textContent: reading it never makes Opera lay the page out again
@@ -1333,7 +1382,10 @@
     if (!d || typeof d !== 'object') return;
     extIn = Date.now();   // the helper's link is alive
     if (d.source === 'ho-op-relay') { relay = { apps: +d.apps || 0, v: String(d.v || '').slice(0, 12), at: Date.now() }; relayEver = true; render(); return; }   // the helper's relay (from v436): is a HotelOps tab there?
+    if (d.source === 'ho-op-guard') { guardMsg(d); return; }   // 🛡 armed / disarmed by HotelOps
     if (d.source !== 'ho-op-ack') return;
+    if (d.guard && typeof d.guard === 'object') guardMsg(d.guard);   // the same inside an answer (an older helper carries only these)
+    if (Array.isArray(d.gack)) { gQ = gQ.filter(function (q) { return d.gack.indexOf(q.id) < 0; }); if (!d.h && !d.pong && !d.text) return; }
     if (Date.now() - linked > 45000) tl('🔗', 'Linked to HotelOps');
     linked = Date.now();
     if (d.app) appV = String(d.app).slice(0, 12);
@@ -1346,6 +1398,7 @@
   }
   if (EXT && typeof EXT.on === 'function') EXT.on(onMsg);
   function onWinMsg(e) {
+    if (e.data && e.data.__hoOpGuardHuman && TOP) { gHuman = Date.now(); return; }   // someone is working in a frame of this tab (auto-lock waits)
     if (e.data && e.data.__hoOpFrame && TOP) { frames[e.data.id] = { kind: String(e.data.kind || ''), n: +e.data.n || 0, total: +e.data.total || 0, at: Date.now() }; render(); return; }
     if (!EXT && e.origin === APP_ORIGIN) onMsg(e.data);
   }
@@ -1602,7 +1655,230 @@
     badge.title = 'HotelOps · ' + (n ? summary(kind, n, total) : 'watching Opera') + ' · ' + hTxt.textContent;
   }
 
+  // ── 🔒 the Away guard: a lock screen over Opera while you're away ──
+  // HotelOps arms it ({source:'ho-op-guard', armed, rev, since, by, pin:{h, s}, auto}; also inside its acks, so an older helper carries
+  // it). While armed an opaque screen (a closed Shadow DOM on <html>, the highest z-index) covers this frame, and every mouse, touch and
+  // key outside it is stopped before Opera sees it. Nothing in Opera is changed: input is only kept away from it. Remembered per tab
+  // (sessionStorage), so a reload stays locked. What someone does at the lock screen goes to HotelOps, which tells your phone.
+  var GK = 'ho_op_guard', G_GRACE = 15000;
+  var SS = { get: function (k, d) { try { var v = sessionStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (_) { return d; } }, set: function (k, v) { try { sessionStorage.setItem(k, JSON.stringify(v)); } catch (_) {} } };
+  var G0 = SS.get(GK, null) || {};
+  var G = guardTake({}, { pin: G0.pin, auto: G0.auto, armed: !!G0.armed, rev: +G0.rev || 0, since: G0.since, by: G0.by }) || {};
+  G.fails = +G0.fails || 0; G.wrong = +G0.wrong || 0; G.until = +G0.until || 0;
+  var gCss = '', gHost = null, gRoot = null, gUi = {}, gMo = null, gIv = 0, gQ = [], gLast = {}, gHuman = Date.now(), gHumanSent = 0, gBusy = false, gMsg = '', gMsgAt = 0, gSig = '';
+  var gSave = function () { SS.set(GK, G); };
+  var HOST_CSS = ['all:initial', 'position:fixed', 'inset:0', 'top:0', 'left:0', 'width:100vw', 'height:100vh', 'z-index:2147483647', 'display:block', 'margin:0', 'padding:0', 'border:0',
+    'background:#070a12', 'opacity:1', 'visibility:visible', 'pointer-events:auto', 'transform:none', 'filter:none', 'clip-path:none', 'overflow:hidden'].map(function (d) { return d + ' !important'; }).join(';');
+  /** something happened at the lock screen → HotelOps (then your phone). A tap / a key once per 5 s, none in the first 15 s (you walking
+   *  away). Those soft ones wait 5 s: the owner coming back and typing the right PIN at once is not "someone at your desk". A wrong PIN,
+   *  the wait, tampering go at once (and take the waiting ones with them). */
+  var gSoft = [], gSoftT = 0, SOFT = { touch: 1, key: 1, try: 1 };
+  function gEvent(kind, detail, n) {
+    var t = Date.now();
+    if (SOFT[kind]) { if (t - (G.since || 0) < G_GRACE || (gLast[kind] && t - gLast[kind] < 5000)) return; gLast[kind] = t; }
+    var e = { id: 'o' + t.toString(36) + Math.random().toString(36).slice(2, 6), at: t, kind: kind, detail: String(detail || '').slice(0, 120), n: n || 0 };
+    tl(kind === 'unlock' ? '🔓' : '🛡', String(detail || kind).slice(0, 100));
+    if (SOFT[kind]) { gSoft.push(e); if (!gSoftT) gSoftT = setTimeout(gSoftGo, 5000); return; }
+    if (kind === 'unlock') { clearTimeout(gSoftT); gSoftT = 0; gSoft = []; } else gSoftGo(true);
+    gQ.push(e); if (gQ.length > 40) gQ = gQ.slice(-40);
+    gFlush();
+  }
+  function gSoftGo(noFlush) { clearTimeout(gSoftT); gSoftT = 0; if (!gSoft.length) return; gQ = gQ.concat(gSoft).slice(-40); gSoft = []; if (noFlush !== true) gFlush(); }
+  function gFlush() { if (gQ.length) post({ source: 'ho-op', v: VERSION, frame: FRAME, guard: { events: gQ.slice(0, 20) } }); }
+  function gSay(t) { gMsg = t; gMsgAt = Date.now(); gPaint(); }
+  function gInput() {   // a fresh, empty PIN box (the reader never sets a value, not even its own)
+    if (!gUi.row) return null;
+    var old = gUi.inp, inp = el('input', 'all:unset;box-sizing:border-box;flex:1;min-width:0;height:46px;padding:0 14px;border-radius:12px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18);color:#fff;font:600 20px/46px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.35em;text-align:center;caret-color:#f1d184');
+    inp.type = 'password'; inp.inputMode = 'numeric'; inp.maxLength = 6; inp.autocomplete = 'off'; inp.placeholder = '••••';
+    inp.setAttribute('aria-label', 'PIN'); inp.setAttribute('data-ho', 'pin'); inp.spellcheck = false;
+    if (old && old.parentNode) gUi.row.replaceChild(inp, old); else gUi.row.insertBefore(inp, gUi.row.firstChild);
+    gUi.inp = inp;
+    return inp;
+  }
+  function gFocus() { try { if (gUi.inp && !gUi.inp.disabled) gUi.inp.focus({ preventScroll: true }); else if (gUi.card) gUi.card.focus({ preventScroll: true }); } catch (_) {} }
+  function gBuild() {
+    if (gHost) return;
+    gHost = document.createElement('div');
+    gHost.setAttribute('data-hotelops', 'opera-guard');
+    gHost.style.cssText = HOST_CSS; gCss = gHost.getAttribute('style');   // as the browser writes it back
+    gRoot = gHost.attachShadow ? gHost.attachShadow({ mode: 'closed' }) : gHost;
+    var bg = el('div', 'all:initial;position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;overflow:auto;cursor:default;user-select:none;-webkit-user-select:none;'
+      + 'background:radial-gradient(900px 600px at 50% 30%,rgba(79,70,229,.22),transparent 70%),radial-gradient(700px 500px at 80% 90%,rgba(201,161,74,.10),transparent 70%),#070a12;'
+      + 'font:14px/1.5 ' + SANS + ';color:' + COL.txt + ';-webkit-font-smoothing:antialiased', null, gRoot);
+    var card = el('div', 'box-sizing:border-box;width:min(420px,100%);padding:28px 24px 22px;border-radius:22px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;outline:none;'
+      + 'background:linear-gradient(180deg,rgba(24,30,43,.96),rgba(14,18,27,.98));border:1px solid rgba(255,255,255,.12);box-shadow:0 40px 90px -30px rgba(0,0,0,.8),0 0 0 1px rgba(0,0,0,.4)', null, bg);
+    card.tabIndex = -1; card.setAttribute('role', 'dialog'); card.setAttribute('aria-modal', 'true'); card.setAttribute('aria-label', 'Opera is locked');
+    el('div', 'width:72px;height:72px;border-radius:19px;overflow:hidden;box-shadow:0 14px 36px -10px rgba(79,70,229,.75)', null, card).appendChild(logo(72));
+    el('div', 'margin-top:6px;font:700 20px/1.25 ' + SANS + ';color:#fff;letter-spacing:-.015em', '🔒 Opera is locked — the owner is away', card);
+    gUi.sub = el('div', 'color:' + COL.txt2 + ';font-size:13px', '', card);
+    gUi.row = el('div', 'display:flex;gap:8px;width:100%;margin-top:8px', null, card);
+    gUi.btn = btn('Unlock', BTN_GO + 'height:46px;padding:0 18px;font-size:14.5px;border-radius:12px', gUi.row, 'unlock');
+    gUi.btn.setAttribute('data-ho', 'unlock');
+    gInput();
+    gUi.msg = el('div', 'min-height:20px;font:600 13px/1.4 ' + SANS + ';color:' + COL.bad, '', card);
+    gUi.hint = el('div', 'box-sizing:border-box;width:100%;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:' + COL.txt2 + ';font-size:12.5px', '', card);
+    el('div', 'margin-top:4px;color:' + COL.txt3 + ';font-size:11.5px', 'What happens here is sent to the owner\'s phone.', card);
+    gUi.card = card;
+    if (!TOP) { gUi.row.style.display = 'none'; }   // a frame inside Opera: the top frame's screen has the PIN box
+    // inside the lock screen: nothing leaves it (Opera never sees a key or a click), and the PIN box / Unlock button work
+    ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click', 'dblclick', 'auxclick', 'contextmenu', 'wheel', 'touchstart', 'touchmove', 'touchend', 'keydown', 'keyup', 'keypress',
+      'beforeinput', 'input', 'paste', 'cut', 'copy', 'drop', 'dragstart', 'dragover', 'focusin', 'focusout', 'select', 'submit', 'pointermove', 'mousemove'].forEach(function (t) { gRoot.addEventListener(t, gInside, { capture: false, passive: false }); });
+    document.documentElement.appendChild(gHost);
+    gMo = new MutationObserver(function () { gKeep(true); });
+    gMo.observe(document.documentElement, { childList: true });
+    gMo.observe(gHost, { attributes: true });
+    gPaint(true);
+  }
+  /** keep the screen there, on top and untouched; someone took it away or hid it → back at once, and HotelOps is told */
+  function gKeep(fromObs) {
+    if (!G.armed || !gHost || stopped) return;
+    var de = document.documentElement, gone = !gHost.isConnected || gHost.parentNode !== de, hid = gHost.getAttribute('style') !== gCss;
+    if (gone || hid || gHost.attributes.length > 2 || (!fromObs && de.lastElementChild !== gHost)) {
+      if (hid) gHost.setAttribute('style', gCss);
+      if (gHost.attributes.length > 2) { for (var i = gHost.attributes.length - 1; i >= 0; i--) { var a = gHost.attributes[i].name; if (a !== 'style' && a !== 'data-hotelops') gHost.removeAttribute(a); } hid = true; }
+      de.appendChild(gHost);
+      if (gone || hid) gEvent('tamper', gone ? 'removed the lock screen (it came back)' : 'tried to hide the lock screen (it came back)');
+      gFocus();
+    }
+  }
+  var KEEP_KEYS = /^(?:[0-9]|Backspace|Delete|ArrowLeft|ArrowRight|Home|End|Enter|Tab|Shift)$/;
+  function gInside(e) {
+    if (!G.armed) return;
+    e.stopPropagation();   // never out to Opera
+    var t = e.target, onInp = t === gUi.inp, onBtn = t === gUi.btn || (gUi.btn && gUi.btn.contains && gUi.btn.contains(t));
+    var ty = e.type;
+    if (ty === 'pointerdown' || ty === 'mousedown' || ty === 'touchstart') {
+      if (!onInp && !onBtn && e.cancelable) e.preventDefault();   // the focus stays in the PIN box
+      if (ty === 'pointerdown' && e.isTrusted) gEvent('touch', 'touched the locked screen');
+      if (!onInp) setTimeout(gFocus, 0);
+      return;
+    }
+    if (ty === 'wheel' || ty === 'touchmove' || ty === 'contextmenu' || ty === 'dragstart' || ty === 'drop' || ty === 'dragover') { if (e.cancelable) e.preventDefault(); return; }
+    if (ty === 'click') { if (onBtn) gTry(); return; }
+    if (ty === 'keydown') {
+      if (e.key === 'Enter') { if (e.cancelable) e.preventDefault(); gTry(); return; }
+      if (e.key === 'Tab') { if (e.cancelable) e.preventDefault(); gFocus(); return; }
+      if (!onInp || e.ctrlKey || e.metaKey || e.altKey || !KEEP_KEYS.test(e.key)) { if (e.cancelable) e.preventDefault(); if (e.isTrusted) gEvent('key', 'pressed keys on the locked screen'); return; }
+      if (/^[0-9]$/.test(e.key) && e.isTrusted) gEvent('try', 'is typing a PIN');
+      return;
+    }
+    if ((ty === 'paste' || ty === 'drop' || ty === 'cut' || ty === 'copy') && e.cancelable) e.preventDefault();
+  }
+  /** outside the lock screen (a key with the focus somewhere in Opera, a click that got past it): stopped before Opera sees it */
+  var G_EVS = ['pointerdown', 'pointerup', 'pointermove', 'pointerover', 'mousedown', 'mouseup', 'mousemove', 'mouseover', 'click', 'dblclick', 'auxclick', 'contextmenu', 'wheel',
+    'touchstart', 'touchmove', 'touchend', 'keydown', 'keyup', 'keypress', 'beforeinput', 'input', 'paste', 'cut', 'copy', 'drop', 'dragstart', 'dragover', 'submit', 'focusin'];
+  function gOutside(e) {
+    if (!G.armed || !gHost) return;
+    var p = e.composedPath ? e.composedPath() : [];
+    if (p.indexOf(gHost) >= 0 || e.target === gHost) return;   // ours: handled inside
+    if (e.type === 'focusin') { setTimeout(gFocus, 0); return; }
+    e.stopImmediatePropagation();
+    if (e.cancelable) e.preventDefault();
+    if (e.isTrusted && e.type === 'keydown') { gEvent('key', 'pressed keys on the locked screen'); setTimeout(gFocus, 0); }
+    else if (e.isTrusted && e.type === 'pointerdown') gEvent('touch', 'touched the locked screen');
+  }
+  /** a real hand on this tab (auto-lock counts from the last one); a frame tells the top frame */
+  function gHumanNow() {
+    gHuman = Date.now();
+    if (!TOP && gHuman - gHumanSent > 10000) { gHumanSent = gHuman; try { window.top.postMessage({ __hoOpGuardHuman: 1 }, '*'); } catch (_) {} }
+  }
+  // the clicks and keys are watched all the time (they do nothing while not armed); wheel and touch only while locked, so Opera's
+  // scrolling never waits for this reader; a real hand on the page (passive) is what auto-lock counts from
+  var G_SCROLL = ['wheel', 'touchstart', 'touchmove', 'touchend'];
+  G_EVS = G_EVS.filter(function (t) { return G_SCROLL.indexOf(t) < 0; });
+  G_EVS.forEach(function (t) { window.addEventListener(t, gOutside, { capture: true, passive: false }); document.addEventListener(t, gOutside, { capture: true, passive: false }); });
+  function gScroll(on) { G_SCROLL.forEach(function (t) { [window, document].forEach(function (w) { if (on) w.addEventListener(t, gOutside, { capture: true, passive: false }); else w.removeEventListener(t, gOutside, { capture: true }); }); }); }
+  function gHand(e) { if (e.isTrusted && (e.type !== 'pointermove' || Date.now() - gHuman > 2000)) gHumanNow(); }
+  ['pointerdown', 'keydown', 'wheel', 'pointermove', 'touchstart'].forEach(function (t) { window.addEventListener(t, gHand, { capture: true, passive: true }); });
+  window.addEventListener('blur', function () { if (G.armed) setTimeout(gFocus, 0); });
+  function gTry() {
+    if (!TOP || !gUi.inp || gBusy || !G.armed) return;
+    var pin = String(gUi.inp.value || '').trim();
+    gInput(); gFocus();
+    if (Date.now() < (G.until || 0)) { gPaint(); return; }
+    if (!G.pin) { gSay('No PIN is set: unlock it from HotelOps.'); return; }
+    if (!PIN_RE.test(pin)) { gSay('The PIN is 4 to 6 digits.'); return; }
+    gBusy = true;
+    pinVerify(pin, G.pin).then(function (ok) {
+      gBusy = false;
+      if (!G.armed) return;
+      var st = pinStep(G, ok, Date.now());
+      G.fails = st.fails; G.wrong = st.wrong; G.until = st.until; gSave();
+      if (st.blocked) { gPaint(); return; }
+      if (ok) {
+        G.armed = false; G.rev = Date.now(); G.wrong = 0; G.fails = 0; G.until = 0; gSave();
+        post({ source: 'ho-op', v: VERSION, frame: FRAME, guard: { unlocked: true, at: G.rev } });
+        gEvent('unlock', 'unlocked with the PIN');
+        gUnlock();
+        return;
+      }
+      if (st.lockout) { gEvent('lockout', LOCK_TRIES + ' wrong PINs: locked for ' + Math.round(LOCK_MS / 1000) + ' s', st.wrong); gSay(''); }
+      else { gEvent('fail', 'tried to unlock (wrong PIN ×' + st.wrong + ')', st.wrong); gSay('Wrong PIN' + (LOCK_TRIES - st.fails > 0 ? ' · ' + (LOCK_TRIES - st.fails) + ' more tr' + (LOCK_TRIES - st.fails === 1 ? 'y' : 'ies') + ' before a 1-minute wait' : '')); }
+      anim(gUi.card, [{ transform: 'translateX(0)' }, { transform: 'translateX(-8px)' }, { transform: 'translateX(8px)' }, { transform: 'translateX(-4px)' }, { transform: 'translateX(0)' }], { duration: 320 });
+    });
+  }
+  function gPaint(force) {
+    if (!gHost) return;
+    var now = Date.now(), wait = Math.max(0, Math.ceil(((G.until || 0) - now) / 1000)), byTxt = G.by === 'auto' ? 'nobody used it for ' + (G.auto || '') + ' min' : G.by === 'now' ? 'locked from HotelOps' : 'the owner is away';
+    var msg = wait ? 'Too many wrong PINs — wait ' + wait + ' s' : gMsg && now - gMsgAt < 8000 ? gMsg : '';
+    var sig = [wait, msg, !!G.pin, G.since, G.by].join('|'); if (!force && sig === gSig) return; gSig = sig;
+    gUi.sub.textContent = 'Locked at ' + hhmm(G.since || now) + ' · ' + byTxt;
+    gUi.msg.textContent = msg;
+    if (TOP) {
+      gUi.row.style.display = G.pin ? 'flex' : 'none';
+      if (gUi.inp) gUi.inp.disabled = !!wait; gUi.btn.style.opacity = wait ? '.45' : '1';
+      gUi.hint.textContent = G.pin ? 'Type your PIN and press Enter. Or unlock from HotelOps: 📡 Opera → 🛡 Away guard → Unlock, or “I\'m back”.'
+        : 'No PIN set: unlock from HotelOps (📡 Opera → 🛡 Away guard → Unlock, or “I\'m back” in the WhatsApp Away guard).';
+      if (!wait && gUi.inp && document.activeElement !== gHost) gFocus();
+    } else gUi.hint.textContent = 'Unlock from HotelOps.';
+  }
+  function gLock() {
+    gBuild(); gScroll(true); gKeep(); gPaint(true); gFocus();
+    try { if (document.activeElement && document.activeElement !== gHost && document.activeElement.blur) document.activeElement.blur(); } catch (_) {}
+    gFocus();
+    tl('🔒', 'Opera locked: ' + (G.by === 'auto' ? 'nobody used it for ' + G.auto + ' min' : 'you are away'));
+    render();
+  }
+  function gUnlock() {
+    var h = gHost; gHost = null; gRoot = null; gUi = {}; gSig = ''; gScroll(false);
+    try { if (gMo) gMo.disconnect(); } catch (_) {} gMo = null;
+    try { if (h) h.remove(); } catch (_) {}
+    gHuman = Date.now();
+    tl('🔓', 'Opera unlocked');
+    render();
+  }
+  /** HotelOps says armed / disarmed (and the PIN's hash, the auto-lock minutes) */
+  function guardMsg(m) {
+    var n = guardTake(G, m); if (!n) return;
+    var was = !!G.armed; G = n; gSave();
+    if (G.armed && !was) gLock();
+    else if (!G.armed && was) gUnlock();
+    else if (G.armed) { gBuild(); gPaint(true); }
+  }
+  /** every second while armed: on top, the cool-down count; while not: lock by itself after N idle minutes (needs a PIN) */
+  gIv = setInterval(function () {
+    if (stopped) return;
+    if (G.armed) {
+      if (!gHost) gLock();
+      gKeep(); gPaint();
+      if (TOP && gUi.inp && !gUi.inp.disabled && document.activeElement !== gHost) { try { if (document.hasFocus()) gFocus(); } catch (_) {} }
+      if (gQ.length && Date.now() % 10000 < 1000) gFlush();   // HotelOps hasn't said it got them yet: again every 10 s
+      return;
+    }
+    if (TOP && G.auto > 0 && G.pin && Date.now() - gHuman > G.auto * 60e3) {
+      var now = Date.now();
+      G.armed = true; G.rev = now; G.since = now; G.by = 'auto'; G.fails = 0; G.wrong = 0; G.until = 0; gSave();
+      post({ source: 'ho-op', v: VERSION, frame: FRAME, guard: { arm: 'auto', since: now, idle: now - gHuman } });
+      gLock();
+    }
+  }, 1000);
+
   function stop(silent) {
+    if (G.armed && !silent) { try { gEvent('tamper', 'stopped the Opera reader (the lock screen went with it)'); } catch (_) {} }
+    clearTimeout(gSoftT);
+    try { clearInterval(gIv); if (gMo) gMo.disconnect(); if (gHost) gHost.remove(); } catch (_) {}
+    G_EVS.forEach(function (t) { window.removeEventListener(t, gOutside, { capture: true }); document.removeEventListener(t, gOutside, { capture: true }); });
+    gScroll(false); ['pointerdown', 'keydown', 'wheel', 'pointermove', 'touchstart'].forEach(function (t) { window.removeEventListener(t, gHand, { capture: true }); });
     stopped = true;
     try { if (obs) obs.disconnect(); } catch (_) {}
     clearInterval(iv); clearInterval(uiIv); clearTimeout(deb);
@@ -1616,6 +1892,7 @@
 
   // ── start ─────────────────────────────────────────────────
   build();
+  if (G.armed) gLock();   // reloaded while locked: locked again at once
   obs = new MutationObserver(function (recs) {
     if (deb) return;   // a read is already planned: nothing to do
     for (var i = 0; i < recs.length; i++) { var t = recs[i].target; if (t && !mine(t.nodeType === 1 ? t : t.parentElement)) { laterScan(800); return; } }
@@ -1625,7 +1902,8 @@
   window.addEventListener('hashchange', function () { laterScan(300); });
   iv = setInterval(tick, 15000);
   var uiIv = setInterval(function () { if (Date.now() - linked > 40000 || lastErr) render(); }, 2500);   // the linking checklist after 10 s (render returns at once when nothing changed)
-  window.__hoOp = { stop: stop, scan: scan, connect: connect, min: setMin, tab: function (k) { setTab(k); }, report: manualReport, v: VERSION,
+  window.__hoOp = { guard: { idle: function (ms) { gHuman -= Math.max(0, +ms || 0); }, state: function () { return { armed: !!G.armed, since: G.since || 0, by: G.by || '', pin: !!G.pin, auto: G.auto || 0, fails: G.fails || 0, wrong: G.wrong || 0, until: G.until || 0, queued: gQ.length, shown: !!gHost && gHost.isConnected, top: !!gHost && document.documentElement.lastElementChild === gHost }; } },
+    stop: stop, scan: scan, connect: connect, min: setMin, tab: function (k) { setTab(k); }, report: manualReport, v: VERSION,
     state: function () { return { kind: view.kind, date: view.date, title: view.title, total: view.total, rows: view.rows.slice(), folio: view.folio || null, traces: (view.traces || []).slice(), tables: (view.tables || []).slice(), audit: view.audit || null,
       sent: sentN, sentAt: sentAt, linked: Date.now() - linked < 45000, ack: lastAck, err: lastErr, ext: !!EXT, frame: FRAME, learn: LEARN, steps: steps.length, hint: hintNow, cost: Math.round(cost * 10) / 10,
       link: linkNow(), relay: relay, stuckSent: doneToday().slice(), stuckQ: stuckQ.length, timeline: TL.slice() }; } };

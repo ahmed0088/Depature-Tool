@@ -20,6 +20,8 @@
 //  • The 📲 phone setup here (ntfy / Telegram) is the one every HotelOps alert
 //    uses: notify-hub.js sends through it, and the guard's own alerts go
 //    through the hub too (instant, even in quiet hours) when it is loaded.
+//  • One Away for both: while you're away Opera at the desk is locked too (📡 Opera → 🛡 Away guard,
+//    opera-bridge.js listens for the 'ho-away' event), and "I'm back" here unlocks it.
 //  • Saved under your own account: waGuard/{your uid} = { on, since, by, auto,
 //    cfg: {level, auto}, beat: {at, linked}, ntfy: {topic},
 //    log: {id: {at, kind, chat, detail, lines, work}} }.
@@ -88,7 +90,7 @@
     const v = { on: !!on, since: auto ? Date.now() - 46000 : Date.now(), by: auto ? 'auto' : ((typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '') };
     ST = v;
     if (typeof fbSet === 'function') fbSet(P('on'), v.on), fbSet(P('since'), v.since), fbSet(P('by'), v.by);
-    pushToReader();
+    pushToReader(); told();
     if (auto) notify('🛡 Auto-away on', `Nobody touched the WhatsApp PC for ${CFG.auto} min, so the Away guard is now watching it. Tap "I'm back" in HotelOps when you return.`, 2, ['shield']);
     else toast(on ? '🛡 Away guard on — your phone will be told if someone uses your WhatsApp (starts in 45 s)' : '🛡 Away guard off — welcome back', on ? 'ok' : '');
     if (!on) endVisit(true);
@@ -101,6 +103,8 @@
     if (typeof fbSet === 'function' && uid()) fbSet(P('cfg'), CFG);
     pushToReader(); render(); cfgOpen = true;
   }
+  /** Away switched: other guards on this PC follow it (the Opera lock screen, opera-bridge.js) */
+  function told() { try { W.dispatchEvent(new CustomEvent('ho-away', { detail: state() })); } catch (_) {} }
   function pushToReader() { const b = bridge(); if (b && b.post) try { b.post({ source: 'ho-wa', guard: state() }); } catch (_) {} }
 
   // ── the PC with the reader: save what it saw ──
@@ -154,7 +158,7 @@
         if (fresh.length) alarm(fresh.sort((a, b) => a.at - b.at));
       }
       seenIds = new Set(ids);
-      if (wasOn !== ST.on) pushToReader();
+      if (wasOn !== ST.on) { pushToReader(); told(); }
       render(); badge();
     });
   }

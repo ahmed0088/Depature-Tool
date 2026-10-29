@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 446, items: [
+    "🛡 Opera Away guard: when you're away (the same “I'm away” as the WhatsApp guard, or 📡 Opera → 🔒 Lock Opera now), a solid dark lock screen covers Opera — nothing behind it can be seen, and clicks and typing never reach Opera. Unlock with your PIN at the desk, or “I'm back” / Unlock in HotelOps.",
+    "📲 Anyone at your desk is reported to your phone at once: touching the lock screen, typing a PIN, a wrong PIN (3 wrong = locked for 60 s), trying to remove the lock (it comes straight back), or the Opera tab being closed. Set your PIN once on the 📡 Opera page (only a secure hash is stored). Optional: lock Opera by itself after 5–30 minutes without use.",
+  ] },
   { v: 445, items: [
     "🧭 Opera reader, taught from your reports: the Assign-Room list next to Arrivals is read as a room list (no more “nothing useful” report), “Manage Reservation” is known as the search form (not a reservation it can't read), and columns like Last Room, Reservation Type, I Want To…, Queue Priority, Display Color and Property are no longer mistaken for other fields. Opera's “Hello, …” greeting is no longer read as a table.",
   ] },
