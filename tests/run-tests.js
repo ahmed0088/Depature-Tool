@@ -3564,6 +3564,269 @@ console.log('\nOpera reader');
   check('bridge learning: what it keeps carries no guest data (no name, room, amount or email)', [/testperson|alpha|0101|120|example\.com|4111/i.test(LS0), ev.every(e => ['s', 'c', 'r'].includes(e.k) && Object.keys(e).sort().join() === 'k,l,t,v')], [false, true]);
 }
 
+// ── Opera everywhere (brief/home/search): morning-brief.js, handover.js, home.js, global-search.js read hoOpera (made-up data) ──
+console.log('\nOpera everywhere (brief/home/search)');
+{
+  const T = '2026-10-11', AT = new Date(2026, 9, 11, 9, 5).getTime();
+  const rows = [
+    { room: '0512', name: 'Testperson, Alpha', conf: '900001', status: 'due_out', departure: T, vip: 'V1' },
+    { room: '0610', name: 'Sample, Bravo', conf: '900002', status: 'checked_out', departure: T },
+    { room: '0701', name: 'Demo, Charlie', conf: '900003', status: 'in_house', departure: '2026-10-13' },
+    { room: '0303', name: 'Known, Kilo', conf: '900004', status: 'due_in', arrival: T, vip: 'GLD' },
+    { room: '0201', name: 'Fake, Echo', conf: '900005', status: 'in_house', departure: '2026-10-14' },
+  ];
+  const fol = { '512': { room: '0512', balance: 1234.5, status: 'due_out' }, '701': { room: '0701', balance: 80, status: 'in_house' }, '610': { room: '0610', balance: 0, zero: true, status: 'checked_out' } };
+  const rs = { '701': 'dirty', '201': 'ooo', '512': 'clean' };
+  const rk = r => String(r).replace(/^0+/, '');
+  const fakeOpera = read => ({
+    fresh: () => read, linked: () => true, last: () => (read ? { kind: 'departures', at: AT } : null), rows: () => (read ? rows.slice() : []),
+    reads: () => (read ? { departures: { kind: 'departures', at: AT, rows: rows.slice(0, 2) }, inhouse: { kind: 'inhouse', at: AT - 1000, rows: rows.slice(1) } } : {}),
+    folio: r => fol[rk(r)] || null, folios: () => Object.values(fol), openBalances: () => Object.values(fol).filter(f => f.balance > 0).sort((a, b) => b.balance - a.balance),
+    roomStatus: r => (rs[rk(r)] ? { rs: rs[rk(r)] } : null), traces: () => [{ room: '0512', dept: 'FO', text: 'Return the key card', date: T }, { room: '0701', dept: 'HK', text: 'Extra towels', date: T, done: true }, { dept: 'FO', text: 'Call the bank', date: T }],
+    openPage: () => { opened.push('page'); },
+  });
+  const opened = [];
+  const mkSb = read => {
+    const el = () => ({ appendChild() {}, insertBefore() {}, addEventListener() {}, classList: { add() {}, remove() {}, toggle() {} }, style: {} });
+    const sb = { console: { log() {}, warn() {}, error() {}, info() {} }, setTimeout: () => 0, setInterval: () => 0, clearInterval() {}, escapeHtml: x => String(x),
+      localStorage: { getItem: () => null, setItem() {}, removeItem() {} }, hoLocalISO: () => T, navigator: {},
+      document: { readyState: 'complete', head: el(), body: el(), addEventListener() {}, getElementById: () => null, querySelector: () => null, querySelectorAll: () => [], createElement: el } };
+    if (read !== undefined) sb.hoOpera = fakeOpera(read);
+    sb.window = sb; sb.globalThis = sb;
+    vm.createContext(sb);
+    ['morning-brief.js', 'handover.js', 'home.js', 'global-search.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sb, { filename: f }));
+    return sb;
+  };
+  const sb = mkSb(true);
+  const op = sb.mbSections().find(x => x.id === 'opera');
+  check('brief: a 📡 From Opera block — due out owing (room + AED), VIPs (room + code), traces by department, dirty / OOO, last read',
+    op && op.rows.map(r => (r.k ? r.k + ': ' : '') + r.t),
+    ['💳 Due out, owing: 0512 AED 1,234.50', '⭐ VIPs: 0512 (V1), 0303 (GLD) arriving', '📌 Traces: FO 2 · HK 1 (2 open)', '🧹 Dirty: 1 room: 0701', '⛔ Out of order: 1 room: 0201', 'Opera last read 09:05']);
+  check('brief: the copied text has the block, no guest names from Opera', [/📡 \*From Opera\*/.test(sb.mbText()), /Testperson|Known/.test(sb.mbText())], [true, false]);
+  check('brief: no block when Opera was not read today, or without the reader', [!!mkSb(false).mbSections().find(x => x.id === 'opera'), !!mkSb(undefined).mbSections().find(x => x.id === 'opera')], [false, false]);
+  const ho = sb._hoTodo().find(g => g.icon === '📡');
+  check('handover: a short Opera line — open balance still due out, traces not done, out of order',
+    ho && ho.items, ['Open balance, still due out: 0512 AED 1,234.50', 'Traces not done: 2 (0512 FO, FO)', 'Out of order: 0201']);
+  check('handover: nothing from Opera when it was not read / no reader', [!!mkSb(false)._hoTodo().find(g => g.icon === '📡'), !!mkSb(undefined)._hoTodo().find(g => g.icon === '📡')], [false, false]);
+  const tile = sb.homeTiles().find(t => t.panel === 'opera');
+  check('home: the 📡 Opera tile — open bills (count + AED), checked out today, linked, last read; a tap opens the Opera page',
+    tile && [tile.big, tile.sub, tile.tone, tile.go], [2, 'open bills · AED 1,314.50 · 1 checked out · 🟢 linked · read 09:05', 'warn', 'hoOpera.openPage()']);
+  check('home: not read today → "—"; no reader → no tile', [mkSb(false).homeTiles().find(t => t.panel === 'opera').sub, !!mkSb(undefined).homeTiles().find(t => t.panel === 'opera')], ['🟢 linked · not read today', false]);
+  const hits = q => sb.gsBuildIndex(q).filter(r => r.panel === 'opera').map(r => [r.label, r.room, r.name, r.extra]);
+  check('search: Opera rows read today by room, name or conf. — "📡 Opera · <screen>", status and the folio balance',
+    [hits('512'), hits('kilo'), hits('900003')],
+    [[['📡 Opera · Departures', '0512', 'Testperson, Alpha', 'due out · conf. 900001 · AED 1,234.50 open']], [['📡 Opera · In House', '0303', 'Known, Kilo', 'arriving · conf. 900004']], [['📡 Opera · In House', '0701', 'Demo, Charlie', 'in house · conf. 900003 · AED 80.00 open']]]);
+  const r610 = sb.gsBuildIndex('610').find(r => r.panel === 'opera');
+  check('search: a settled folio reads "settled"; the same guest on two screens shows once (the newest)', [r610.extra, r610.label, sb.gsBuildIndex('sample').filter(r => r.panel === 'opera').length], ['checked out · conf. 900002 · settled', '📡 Opera · Departures', 1]);
+  const card = []; sb.hoRoom = { open: r => card.push(r), known: () => true }; r610.act(); delete sb.hoRoom;
+  sb.gsBuildIndex('610').find(r => r.panel === 'opera').act();
+  check('search: a tap opens the room card when the app has one, else the Opera page', [card, opened], [['0610'], ['page']]);
+  check('search: nothing from Opera when it was not read today / no reader', [mkSb(false).gsBuildIndex('512').filter(r => r.panel === 'opera').length, mkSb(undefined).gsBuildIndex('512').filter(r => r.panel === 'opera').length], [0, 0]);
+}
+
+// ── Opera everywhere: Guest Memory fills only empty fields, the night checklist suggests ticks,
+//    wake-up calls and the Handover Book suggest from Opera traces (made-up guests) ──
+console.log('\nOpera everywhere (memory/checklist/wakeups/handover)');
+{
+  const J = x => JSON.parse(JSON.stringify(x));
+  const store = {}, LSx = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } };
+  const docx = { addEventListener() {}, getElementById() { return null; }, querySelectorAll() { return []; }, querySelector() { return null; }, activeElement: null };
+  // ── Guest Memory ──
+  {
+    const timers = [], saved = [], acts = [];
+    const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: LSx, document: docx, setTimeout: f => { timers.push(f); return timers.length; }, clearTimeout() {}, setInterval() { return 0; },
+      showToast() {}, logActivity: (a, d) => acts.push([a, d]), currentProfile: { role: 'manager' }, hoOperaPure: { natName: v => ({ GB: 'United Kingdom', AE: 'UAE' }[v] || v) },
+      firebase: { database: () => ({ ref: p => ({ update: async patch => { saved.push([p, J(patch)]); }, once: async () => ({ val: () => null }), on() {}, set: async () => {} }) }) } };
+    sb.window = sb; sb.globalThis = sb; sb.window.addEventListener = () => {};
+    vm.createContext(sb);
+    vm.runInContext(fs.readFileSync(path.join(ROOT, 'guest-memory.js'), 'utf8') + '\nfunction hoLocalISO(d) { d = d || new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }', sb, { filename: 'guest-memory.js' });
+    const run = s => vm.runInContext(s, sb);
+    run(`_gmStore = { 'TEST DOE': { nat: '', email: 'test.doe@example.com', purpose: 'Business', hits: 0, lastSeen: '2026-10-01' }, 'ALPHA SAMPLE': { nat: 'India', vip: '', purpose: 'Leisure' }, 'BETA EXAMPLE': { nat: '', member: 'Silver' } }; _gmServer = JSON.parse(JSON.stringify(_gmStore)); _gmReady = true;`);
+    const rows = [{ name: 'Doe, Test Mr.', vip: 'VIP2', memberLevel: 'Gold', nat: 'GB' }, { name: 'Sample, Alpha', nat: 'AE', vip: '1' }, { name: 'Example, Beta', memberLevel: 'Platinum' }, { name: 'Unknown, Guest', vip: '1', nat: 'GB' }];
+    check('memory: the pure gap finder fills only empty fields', [J(sb.gmOperaGaps({ nat: '', vip: '' }, rows[0])), J(sb.gmOperaGaps({ nat: 'India' }, { nat: 'AE' })), J(sb.gmOperaGaps({ nat: 'X', vip: 'V', member: 'M' }, rows[0]))],
+      [{ nat: 'United Kingdom', vip: 'VIP2', member: 'Gold' }, null, null]);
+    sb.currentProfile = { role: 'frontdesk' };
+    check('memory: other roles save nothing (and the store stays as it was)', [run('gmOperaFill(' + JSON.stringify(rows) + ')'), run('JSON.stringify(_gmStore["TEST DOE"])')], [0, JSON.stringify({ nat: '', email: 'test.doe@example.com', purpose: 'Business', hits: 0, lastSeen: '2026-10-01' })]);
+    sb.currentProfile = { role: 'manager' };
+    const n = run('gmOperaFill(' + JSON.stringify(rows) + ')');
+    check('memory: a manager — known guests get ONLY their empty fields; an unknown guest is not added; nothing overwritten',
+      [n, J(run('_gmStore["TEST DOE"]')), J(run('_gmStore["ALPHA SAMPLE"]')), J(run('_gmStore["BETA EXAMPLE"]')), run('Object.keys(_gmStore).length')],
+      [2, { nat: 'United Kingdom', email: 'test.doe@example.com', purpose: 'Business', hits: 0, lastSeen: '2026-10-01', vip: 'VIP2', member: 'Gold' }, { nat: 'India', vip: '1', purpose: 'Leisure' }, { nat: '', member: 'Silver' }, 3]);
+    check('memory: reading the same again changes nothing', run('gmOperaFill(' + JSON.stringify(rows) + ')'), 0);
+    timers.forEach(f => { try { f(); } catch (_) {} });
+    check('memory: saved through its own save path (only the changed guests) · the lock stays locked', [saved.length ? Object.keys(saved[saved.length - 1][1]).sort() : [], saved.length ? saved[0][0] : '', run('_gmUnlocked')], [['ALPHA SAMPLE', 'TEST DOE'], 'guestMemoryShared', false]);
+    check('memory: the count of "filled from Opera" is kept and logged', [run('gmOperaCount()'), acts.filter(a => a[0] === 'guestmem_opera').length, /2 guests filled from Opera/.test((acts.find(a => a[0] === 'guestmem_opera') || [])[1])], [2, 1, true]);
+    // the tick: only reads from today, only once per read
+    const now = run('Date.now()');
+    sb.hoOpera = { last: k => (k === 'profile' ? { at: now, rows: [{ name: 'Example, Beta', nat: 'AE', vip: 'VIP1' }] } : k === 'details' ? { at: now - 3 * 864e5, rows: [{ name: 'Doe, Test', memberLevel: 'X' }] } : null),
+      timeline: () => [{ at: now, kind: 'read', screen: 'profile' }, { at: now - 3 * 864e5, kind: 'read', screen: 'details' }] };
+    run('gmOperaTick()');
+    check('memory: the tick fills from today\'s Opera read, not an older one', [J(run('_gmStore["BETA EXAMPLE"]')), run('_gmStore["TEST DOE"].member')], [{ nat: 'UAE', member: 'Silver', vip: 'VIP1' }, 'Gold']);
+    run('_gmStore["BETA EXAMPLE"].vip = ""'); run('gmOperaTick()');
+    check('memory: the same read is not used twice (cheap)', run('_gmStore["BETA EXAMPLE"].vip'), '');
+    delete sb.hoOpera;
+    check('memory: no Opera reader → nothing happens', (run('gmOperaTick()'), true), true);
+  }
+  // ── Night checklist ──
+  {
+    const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: LSx, document: docx, setTimeout() { return 0; }, clearTimeout() {}, setInterval() { return 0; }, showToast() {}, logActivity() {}, saveChecklist() {},
+      escapeHtml: s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])) };
+    sb.window = sb; sb.globalThis = sb;
+    vm.createContext(sb);
+    vm.runInContext('var CL_STEPS = []; var clState = { done: new Set(), skipped: new Set() }; var clEditMode = false;', sb);
+    vm.runInContext(fs.readFileSync(path.join(ROOT, 'checklist.js'), 'utf8'), sb, { filename: 'checklist.js' });
+    const run = s => vm.runInContext(s, sb);
+    const night = new Date(2026, 9, 10, 12, 0).getTime(), at = new Date(2026, 9, 11, 3, 58).getTime();
+    const S = o => J(run(`clOperaSugg(Object.assign({ steps: CL_STEPS, done: new Set(), skipped: new Set(), since: ${night} }, ${JSON.stringify(o)}))`));
+    check('checklist: Opera\'s night audit done → only "Run the night audit" is suggested',
+      [S({ audit: { state: 'done', at } }), S({ audit: { state: 'running', at } }), S({ audit: { state: 'failed', at } }), S({ audit: { state: 'done', at: night - 60e3 } }), S({ audit: { state: 'done', at }, no: [115] })],
+      [{ 115: 'Night audit done in Opera ✓ (read at 03:58)' }, {}, {}, {}, {}]);
+    check('checklist: a step ticked or skipped is not suggested', [J(run(`clOperaSugg({ steps: CL_STEPS, done: new Set([115]), skipped: new Set(), audit: { state: 'done', at: ${at} }, since: ${night} })`)), J(run(`clOperaSugg({ steps: CL_STEPS, done: new Set(), skipped: new Set([115]), audit: { state: 'done', at: ${at} }, since: ${night} })`))], [{}, {}]);
+    check('checklist: tonight began at noon (12:00 before midnight, the day before after midnight)', [run(`clNightStart(${new Date(2026, 9, 11, 3, 0).getTime()})`), run(`clNightStart(${new Date(2026, 9, 11, 22, 0).getTime()})`)], [new Date(2026, 9, 10, 12, 0).getTime(), new Date(2026, 9, 11, 12, 0).getTime()]);
+    const now = run('Date.now()');
+    sb.hoOpera = { last: k => (k === 'audit' ? { at: now, audit: { state: 'done' }, rows: [] } : null) };
+    run('clOperaTick()');
+    check('checklist: the tick suggests — and NEVER ticks by itself', [Object.keys(J(run('_clOpSugg'))), run('clState.done.size'), /✓ Tick it/.test(run('_clOpHtml(CL_STEPS.find(s => s.id === 115), false, false)')), run('_clOpHtml(CL_STEPS.find(s => s.id === 115), true, false)')], [['115'], 0, true, '']);
+    run('clOperaNo(115)'); run('clOperaTick()');
+    check('checklist: ✕ hides it for the rest of the night (remembered)', [J(run('_clOpSugg')), run('clState.done.size'), JSON.parse(store.cl_opera_no_v1).ids], [{}, 0, [115]]);
+    run('clToggle2(115)');
+    check('checklist: a real tap ticks it', run('clState.done.has(115)'), true);
+    delete sb.hoOpera;
+  }
+  // ── Wake-up calls ──
+  {
+    const toasts = [];
+    const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: LSx, document: docx, setTimeout() { return 0; }, setInterval() { return 0; }, showToast: m => toasts.push(m), logActivity() {}, confirm: () => true,
+      bxWakes: {}, fbSet() {}, escapeHtml: s => String(s == null ? '' : s) };
+    sb.window = sb; sb.globalThis = sb;
+    vm.createContext(sb);
+    vm.runInContext(fs.readFileSync(path.join(ROOT, 'wakeup.js'), 'utf8'), sb, { filename: 'wakeup.js' });
+    const run = s => vm.runInContext(s, sb);
+    check('wake-ups: the time a trace asks for', ['wake up 6:30', 'WUC 0630', 'Morning call at 7am', 'Wake-up call 6.45 am please', 'room 0412 WUC 0630', 'Room 0412 06:15 wake up', 'Extra towels at 3 pm', 'wake up call please'].map(t => J(sb.wkOperaTime(t, '0412'))),
+      [[6, 30], [6, 30], [7, 0], [6, 45], [6, 30], [6, 15], null, null]);
+    // the sandbox clock: Sun 11 Oct 2026, 12:00
+    const tr = [{ room: '0412', dept: 'FO', date: '2026-10-12', text: 'WUC 0630', name: 'Doe, Test' }, { room: '0305', dept: 'FO', date: '2026-10-11', text: 'wake up 6:30' }, { room: '0510', text: 'Morning call 18:15' },
+      { room: '0610', date: '2026-10-12', text: 'wake up 7:00', done: true }, { room: '0711', date: '2026-10-12', text: 'Extra pillows' }, { date: '2026-10-12', text: 'wake up 7:00 (no room)' }];
+    const L = J(sb.wkOperaSugg(tr, [], run('Date.now()'), []));
+    check('wake-ups: suggestions — a future day keeps its day; today\'s past time, done traces, no room or no wake-up are left out',
+      L.map(s => [s.room, s.time, s.day, s.name]), [['0510', '18:15', '2026-10-11', ''], ['0412', '06:30', '2026-10-12', 'Test Doe']]);
+    const at = new Date(2026, 9, 12, 6, 30).getTime();
+    check('wake-ups: a call already set for that room and time is not suggested again (leading zeros too); ✕ hides it',
+      [sb.wkOperaSugg(tr, [{ room: '412', time: '06:30', at }], run('Date.now()'), []).length, sb.wkOperaSugg(tr, [{ room: '412', time: '06:45', at: at + 15 * 60e3 }], run('Date.now()'), []).length, sb.wkOperaSugg(tr, [], run('Date.now()'), [L[1].key]).length],
+      [1, 2, 1]);
+    sb.hoOpera = { traces: () => tr };
+    run(`wkOperaAdd(${JSON.stringify(L[1].key)})`);
+    const W0 = Object.values(sb.bxWakes);
+    check('wake-ups: one tap adds it through the normal add — then it is no longer suggested', [W0.length, W0[0] && [W0[0].room, W0[0].time, W0[0].at === at, W0[0].name, /Opera trace/.test(W0[0].note), W0[0].done], J(run('_wkOpList()')).map(s => s.room)],
+      [1, ['0412', '06:30', true, 'Test Doe', true, false], ['0510']]);
+    run(`wkOperaNo(${JSON.stringify(L[0].key)})`);
+    check('wake-ups: ✕ is remembered for today · nothing is ever added by itself', [J(run('_wkOpList()')).length, Object.keys(sb.bxWakes).length], [0, 1]);
+    delete sb.hoOpera;
+    check('wake-ups: no Opera reader → no suggestions', J(run('_wkOpList()')), []);
+  }
+  // ── Handover Book ──
+  {
+    const sb = { console: { log() {}, warn() {}, error() {} } }; sb.window = sb; sb.globalThis = sb;
+    vm.createContext(sb);
+    for (const f of ['wa-bridge.js', 'wa-brain.js', 'handover-book.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sb, { filename: f });
+    const H = sb.hoHandoverPure, T = '2026-10-11';
+    const tr = [{ room: '0412', dept: 'FO', date: T, time: '14:00', text: 'Guest requests late check-out 2pm' }, { room: '0305', dept: 'HK', date: T, text: 'Extra towels at 3 pm' },
+      { room: '0210', dept: 'Front Office', date: T, text: 'Call guest about deposit', done: true }, { dept: 'FO', date: '2026-10-10', text: 'Yesterday\'s trace' }, { room: '0512', dept: 'Reception', date: T, text: 'Room 0512 airport taxi 5am' }, { dept: 'FO', text: 'Collect the passport copy' }];
+    const L = J(H.operaTraceSugg(tr, T));
+    check('handover: today\'s front office traces not done become suggestions (HK, done and old ones are not)', L.map(s => s.text), ['Room 0412: Guest requests late check-out 2pm', 'Room 0512 airport taxi 5am', 'Collect the passport copy']);
+    check('handover: dismissed / added keys and items already in the book are not suggested again',
+      [J(H.operaTraceSugg(tr, T, { no: [L[0].key] })).map(s => s.room), J(H.operaTraceSugg(tr, T, { have: new Set(['room 0512 airport taxi 5am']) })).length, L[0].key === J(H.operaTraceSugg(tr, T))[0].key],
+      [['0512', ''], 2, true]);
+    check('handover: front office department names', ['FO', 'F/O', 'Front Office', 'front desk', 'Reception', 'HK', 'ENG', ''].map(d => H.FO_DEPT_RX.test(d)), [true, true, true, true, true, false, false, false]);
+    check('handover: the WhatsApp rules are untouched (HO group / marked messages only)', [H.isHandoverGroup('HO - Ibis Styles'), H.isHandoverGroup('HK Ibis Styles'), H.hoPrefix('HO - Room 512 to twin'), H.hoPrefix('HOTEL guest in 512')], [true, false, 'Room 512 to twin', null]);
+  }
+}
+
+// ── Opera everywhere: DTCM / tourism tax, In-House gaps, Arr vs Dep, No-shows (made-up guests only) ──
+console.log('\nOpera everywhere (dtcm/inhouse/xref/noshow)');
+{
+  const T = '2026-10-11', J = x => JSON.parse(JSON.stringify(x));
+  // ── DTCM: Opera vs DTCM today (dtcm-recon.js operaXref) ──
+  const R = makeSandbox().Reconciler;
+  const stays = [{ room: '101', guest: 'Alpha Testperson', in: '2026-10-07', out: '' }, { room: '102', guest: 'Bravo Sample', in: '2026-10-08', out: '' },
+    { room: '103', guest: 'Charlie Old', in: '2026-10-05', out: '' }, { room: '104', guest: 'Delta Gone', in: '2026-10-08', out: '2026-10-10' },
+    { room: '105', guest: 'Echo Left', in: '2026-10-09', out: '' }, { room: '108', guest: 'Golf Ghost', in: '2026-10-09', out: '' }, { room: '109', guest: 'Hotel Cancel', in: '2026-10-09', out: '', st: 'Canceled' }];
+  const op = [{ room: '0101', name: 'Testperson, Alpha', arrival: '2026-10-07', status: 'in_house' }, { room: '0102', name: 'Sample, Bravo', arrival: '2026-10-09', status: 'due_out' },
+    { room: '0106', name: 'Newguest, Foxtrot', arrival: '2026-10-09', status: 'in_house' }, { room: '0107', name: 'Today, Late', arrival: T, status: 'in_house' },
+    { room: '0105', name: 'Left, Echo', departure: T, status: 'checked_out' }, { room: '0103', name: 'Old, Charlie', departure: T, status: 'checked_out' }, { room: '0103', name: 'Relet, India', arrival: T, status: 'in_house' },
+    { room: '0101', name: 'Testperson, Alpha', arrival: '2026-10-01', status: 'in_house' }];   // an older read of the same guest: the newest wins
+  const X = R.operaXref(stays, op, T, '2026-10-10', { inhouseRead: true });
+  check('dtcm × opera: in house in Opera but not in DTCM (arrivals after the DTCM file are not compared)', [X.missingInDtcm.map(r => r.room), X.later], [['106'], 2]);
+  check('dtcm × opera: in DTCM, not in house in Opera (cancelled stays left out)', X.missingInOpera.map(r => r.room + ' ' + r.name), ['108 Golf Ghost']);
+  check('dtcm × opera: nights differ (check-in 8 Oct in DTCM, 9 Oct in Opera)', J(X.nights), [{ room: '102', name: 'Sample, Bravo', dtcmIn: '2026-10-08', operaIn: '2026-10-09', dtcm: 3, opera: 2 }]);
+  check('dtcm × opera: checked out in Opera, still open in DTCM (also when the room was re-let today)', X.notOut.map(r => r.room), ['103', '105']);
+  check('dtcm × opera: without an In House read, "not in Opera" is not asked', [R.operaXref(stays, op, T, '2026-10-10', {}).missingInOpera.length, R.operaXref(stays, op, T, '2026-10-10', {}).asked], [0, false]);
+  check('dtcm × opera: nothing read → nothing to say', R.operaXref(stays, [], T, '2026-10-10', {}).n, 0);
+  const rc = recon('oct1-4');
+  check('dtcm × opera: the reconcile result carries the DTCM stays and the last night it covers (for the comparison)', [rc.stays.length > 10, Object.keys(rc.stays[0]).join(), /^\d{4}-\d\d-\d\d$/.test(rc.asOf)], [true, 'room,guest,in,out,n,st', true]);
+
+  // ── In-House: gaps filled from Opera, hand-typed / report values kept ──
+  const ib = { console: { log() {}, warn() {}, error() {} } }; ib.window = ib; ib.globalThis = ib; vm.createContext(ib);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'inhouse.js'), 'utf8'), ib, { filename: 'inhouse.js' });
+  const P = ib.hoInHousePure;
+  const rooms = P.groupRooms(P.parseReport('ROOM\tGUEST_NAME\tARRIVAL\tDEPARTURE\tRATE_CODE\tVIP\n0113\tTestperson, Alpha\t08-OCT-26\t12-OCT-26\tBAR\t\n0204\tExample, Beta\t07-OCT-26\t13-OCT-26\t\tV1\n0310\tSample, Zeta\t07-OCT-26\t13-OCT-26\t\t').rows);
+  const at = new Date(2026, 9, 11, 9, 5).getTime();
+  const src = { rows: [{ room: '113', name: 'Alpha Testperson', rateCode: 'CORP', roomType: 'KING', vip: 'V2', etd: '11:30', balance: 50, at }, { room: '0204', name: 'Example, Beta', rateCode: 'OTA', vip: 'V9', nat: 'IN', balance: 12, at },
+    { room: '0310', name: 'Other, Person', rateCode: 'X', at }, { room: '0310', name: 'Sample, Zeta', rateCode: 'NOPE', status: 'cancelled', at }], folio: () => null, profile: n => (/Alpha/.test(n) ? { member: 'ALL123' } : null) };
+  const F = P.operaFill(rooms, src, { balanceEmpty: true });
+  check('in-house × opera: empty room type, VIP, membership (profile), ETD, balance filled; the report\'s rate code BAR stays',
+    [F[0].rateCode, F[0].roomType, F[0].vip, F[0].member, F[0].depTime, F[0].balance, Object.keys(F[0].opf).join(), F[0].opf.vip, F[0].guests[0].depTime], ['BAR', 'KING', 'V2', 'ALL123', '11:30', 50, 'roomType,vip,member,depTime,balance', '09:05', '11:30']);
+  check('in-house × opera: VIP V1 from the report kept; rate code and nationality filled', [F[1].vip, F[1].rateCode, F[1].nat, Object.keys(F[1].opf).join()], ['V1', 'OTA', 'IN', 'rateCode,nat,balance']);
+  check('in-house × opera: another guest in the room, or a cancelled booking, fills nothing', [F[2] === rooms[2], F[2].rateCode], [true, '']);
+  check('in-house × opera: a balance column in the report → Opera\'s balance is not laid over', [P.operaFill(rooms, src, { balanceEmpty: false })[0].balance, 'balance' in P.operaFill(rooms, src, {})[0].opf], [0, false]);
+  check('in-house × opera: the saved rooms are not changed', [rooms[0].roomType, rooms[0].vip, 'opf' in rooms[0]], ['', '', false]);
+
+  // ── Arrivals vs Departures: Opera's reads when the reports are missing or older ──
+  const el = () => ({ style: {}, dataset: {}, classList: { add() {}, remove() {}, contains: () => false, toggle() {} }, appendChild() {}, querySelector: () => null, querySelectorAll: () => [], addEventListener() {}, innerHTML: '', textContent: '' });
+  const docStub = () => ({ readyState: 'complete', head: el(), body: el(), getElementById: () => null, createElement: el, addEventListener() {}, querySelector: () => null, querySelectorAll: () => [] });
+  const xs = { console: { log() {}, warn() {}, error() {} }, document: docStub(), addEventListener() {}, requestAnimationFrame: () => 0, setInterval: () => 0, setTimeout: () => 0 };
+  xs.window = xs; xs.globalThis = xs; vm.createContext(xs);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'arr-dep-xref.js'), 'utf8') + `;this.X = { sync: _adSyncArrivals, deps: _adDepList, html: _adSrcHtml, get src() { return _adSrc; }, get arrs() { return _xrefArrRooms.concat(_xrefArrNoRoom); } };`, xs, { filename: 'arr-dep-xref.js' });
+  vm.runInContext(`var depRooms = [], arrGuests = []; function hoLocalISO() { return '${T}'; } function escapeHtml(s) { return String(s); } function parseName(s) { return String(s); }`, xs);
+  const now = vm.runInContext('Date.now()', xs);   // the sandbox's clock (11 Oct)
+  xs.hoOpera = { last: k => J({ arrivals: { kind: 'arrivals', date: T, at: now, rows: [{ room: '0412', name: 'Testperson, Alpha, Mr', conf: '9001', arrival: T, nights: 2, status: 'due_in' }, { name: 'Sample, Bravo', conf: '9002', arrival: T, status: 'due_in' }, { room: '0414', name: 'Gone, Charlie', conf: '9003', arrival: T, status: 'no_show' }] },
+    departures: { kind: 'departures', date: T, at: now, rows: [{ room: '0412', name: 'Testperson, Alpha', conf: '8001', departure: T, status: 'due_out' }, { room: '0501', name: 'Example, Delta', departure: T, status: 'checked_out' }, { room: '0502', name: 'Later, Echo', departure: '2026-10-12', status: 'in_house' }] } }[k] || null) };
+  xs.X.sync();
+  const D = xs.X.deps();
+  check('xref × opera: no board, no Arrivals list → Opera\'s departures (checked out → out) and arrivals (no-show left out)',
+    [D.src, D.list.map(d => d.roomStr + ':' + d.status), xs.X.src, xs.X.arrs.map(a => (a.room || '-') + ' ' + a.name + ' ' + a.conf)], ['opera', ['0412:due', '0501:out'], 'opera', ['412 Alpha Testperson 9001', '- Bravo Sample 9002']]);
+  check('xref × opera: labelled "from Opera, HH:MM"', /📡 from Opera, \d\d:\d\d[\s\S]*📡 from Opera, \d\d:\d\d/.test(xs.X.html(2, 2)), true);
+  vm.runInContext(`depRooms.push({ room: 101, roomStr: '101', name: 'Board Guest', status: 'due' }); window._depDate = '${T}'; arrGuests.push({ room: '201', name: 'Typed Guest', conf: '1' }); window._arrDate = '${T}';`, xs);
+  xs.X.sync();
+  check('xref × opera: today\'s board and Arrivals list come first', [xs.X.deps().src, xs.X.src, xs.X.arrs.length], ['board', 'arrivals', 1]);
+  vm.runInContext(`window._depDate = '2026-10-10'; window._arrDate = '2026-10-10';`, xs);
+  xs.X.sync();
+  check('xref × opera: yesterday\'s board / Arrivals list is older than Opera\'s read → Opera\'s', [xs.X.deps().src, xs.X.src], ['opera', 'opera']);
+  xs.hoOpera = undefined; vm.runInContext('_adOpCache.t = 0;', xs);
+  xs.X.sync();
+  check('xref × opera: no Opera reader → the uploaded lists as before', [xs.X.deps().src, xs.X.src], ['board', 'arrivals']);
+
+  // ── No-shows: Opera's "no show" / "cancelled" arrivals offered, added only on a tap ──
+  const ns = { console: { log() {}, warn() {}, error() {} }, document: Object.assign(docStub(), { getElementById: () => el() }), addEventListener() {}, setInterval: () => 0, setTimeout: () => 0, clearTimeout() {} };
+  ns.window = ns; ns.globalThis = ns; vm.createContext(ns);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'noshow.js'), 'utf8') + ';this.N = { get guests() { return nsGuests; }, sug: nsOperaSuggestions, render: nsRenderOpera, add: nsAddFromOpera, get list() { return _nsOpList; } };', ns, { filename: 'noshow.js' });
+  vm.runInContext(`function hoLocalISO() { return '${T}'; } function escapeHtml(s) { return String(s); } function escapeJsAttr(s) { return String(s); } var saved = 0; function saveNoShow() { saved++; } function showToast() {} function cleanName(s) { return nsCleanName(s); } var arrGuests = [];`, ns);
+  const nrows = [{ room: '', name: 'Testperson, Alpha', conf: '7001', arrival: T, departure: '2026-10-13', nights: 2, rate: 400, agent: 'Test OTA', status: 'no_show' },
+    { name: 'Sample, Bravo', conf: '7002', arrival: T, status: 'cancelled', rate: 300 }, { name: 'Example, Charlie', conf: '7003', arrival: T, status: 'due_in' }, { name: 'Old, Delta', conf: '7004', arrival: '2026-10-10', status: 'no_show' }];
+  const nsNow = vm.runInContext('Date.now()', ns);
+  ns.hoOpera = { last: k => (k === 'arrivals' ? J({ kind: 'arrivals', at: nsNow, rows: nrows }) : null) };
+  const S = ns.N.sug(nrows, [], T);
+  check('no-show × opera: no show + cancelled of today become suggestions (as an NA40 line: DD-MM-YY, nights, rate × nights)',
+    J(S).map(g => [g.status, g.nameRaw, g.confNo, g.arrDate, g.nights, g.potRev, g._fromOpera]), [['No Show', 'Testperson, Alpha', '7001', '11-10-26', 2, 800, true], ['Cancelled', 'Sample, Bravo', '7002', '11-10-26', 1, 300, true]]);
+  ns.N.render();
+  check('no-show × opera: nothing is added by itself', [ns.N.guests.length, ns.N.list.length, vm.runInContext('saved', ns)], [0, 2, 0]);
+  ns.N.add(0);
+  check('no-show × opera: one tap adds it through the normal add (saved for the team), and it leaves the suggestions', [ns.N.guests.map(g => g.confNo + ' ' + g.status), ns.N.list.map(g => g.confNo), vm.runInContext('saved', ns) > 0], [['7001 No Show'], ['7002'], true]);
+  ns.N.add('*'); ns.N.add('*');
+  check('no-show × opera: "add all" once; a guest already on the list is not added twice', [ns.N.guests.map(g => g.confNo), ns.N.list.length], [['7001', '7002'], 0]);
+  check('no-show × opera: a guest already on the NA40 list (same conf) is not suggested', ns.N.sug(nrows, [{ nameRaw: 'TESTPERSON, ALPHA', confNo: '7001' }], T).map(g => g.confNo), ['7002']);
+}
+
 nhAsync.then(() => {
   console.log(`\n${pass} passed · ${fail} failed`);
   process.exit(fail ? 1 : 0);

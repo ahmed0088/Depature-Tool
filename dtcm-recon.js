@@ -1033,12 +1033,67 @@
         room: r.room, guest: r.guest, businessDate: r.businessDate,
         amount: r.amount, desc: r.desc
       })),
-      actions
+      actions,
+      // the DTCM stays as read (small), for "📡 Opera vs DTCM today" (operaXref)
+      asOf: reportDate || (isWindow ? winDates[winDates.length - 1] : '') || operaDates[operaDates.length - 1] || '',
+      stays: slimStays(dtcmSegments)
     };
   }
 
+  /* ---------- 📡 Opera vs DTCM today (suggestions only, nothing changed) ----------
+     stays: slimStays() of the DTCM file; opera: rows the Opera reader saw today
+     ({room, name, conf, arrival, departure, status: in_house | due_out | checked_out | …}, newest read first);
+     today / asOf (the last night the DTCM file covers) as YYYY-MM-DD; opt.inhouseRead: an In House screen was
+     read today (only then "in DTCM, not in house in Opera" is asked), opt.partial: that read was not the whole list. */
+  function slimStays(segs){
+    return (segs || []).map(s => ({ room: String(s.room || ''), guest: String(s.guest || '').trim(), in: s.checkInISO || '', out: s.checkOutISO || '',
+      n: s.storedNights || 0, st: s.status || '' })).filter(s => s.room);
+  }
+  const xKey = r => { const s = String(r == null ? '' : r).trim().toUpperCase(); const m = s.match(/^([A-Z]?)0*(\d+)([A-Z]?)$/); return m ? m[1] + m[2] + m[3] : s; };
+  const xRoom = r => /^[A-Za-z]?\d{1,5}[A-Za-z]?$/.test(String(r || '').trim());
+  const xDays = (a, b) => Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 864e5);
+  const xIso = s => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
+  function operaXref(stays, opera, today, asOf, opt){
+    opt = opt || {};
+    const open = new Map();   // still in house per DTCM (no check-out)
+    (stays || []).forEach(s => { if (!s || !s.room || s.out || /cancel/i.test(s.st || '')) return; const k = xKey(s.room); if (!open.has(k)) open.set(k, s); });
+    // one line per reservation, the newest read wins
+    const seen = new Set(), rows = [];
+    (opera || []).forEach(r => {
+      if (!r || !xRoom(r.room)) return;
+      const id = r.conf ? 'c:' + r.conf : 'r:' + xKey(r.room) + '|' + C.normName(r.name || '');
+      if (seen.has(id)) return; seen.add(id); rows.push(r);
+    });
+    const inh = rows.filter(r => r.status === 'in_house' || r.status === 'due_out');
+    const gone = rows.filter(r => r.status === 'checked_out' && (!r.departure || r.departure === today));
+    const inKeys = new Set(inh.map(r => xKey(r.room))), goneKeys = new Set(gone.map(r => xKey(r.room)));
+    const out = { missingInDtcm: [], missingInOpera: [], nights: [], notOut: [], later: 0, partial: !!opt.partial, asked: !!opt.inhouseRead };
+    const byRoom = (a, b) => (parseInt(xKey(a.room), 10) || 0) - (parseInt(xKey(b.room), 10) || 0) || String(a.room).localeCompare(String(b.room));
+    const done = new Set(), mine = new Set();
+    inh.forEach(r => {
+      const k = xKey(r.room); if (done.has(k)) return; done.add(k);
+      let s = open.get(k);
+      // the room was re-let today: the open DTCM stay is the guest who left, not this one
+      if (s && goneKeys.has(k) && xIso(r.arrival) && xIso(s.in) && r.arrival > s.in) s = null;
+      if (s) mine.add(k);
+      if (!s) {
+        if (asOf && xIso(r.arrival) && r.arrival > asOf) { out.later++; return; }   // arrived after the DTCM file: it cannot know yet
+        out.missingInDtcm.push({ room: k, name: r.name || '', arrival: r.arrival || '' });
+        return;
+      }
+      if (xIso(s.in) && xIso(r.arrival) && s.in !== r.arrival && xIso(today))
+        out.nights.push({ room: k, name: r.name || s.guest, dtcmIn: s.in, operaIn: r.arrival, dtcm: Math.max(0, xDays(s.in, today)), opera: Math.max(0, xDays(r.arrival, today)) });
+    });
+    if (opt.inhouseRead) open.forEach((s, k) => { if (!inKeys.has(k) && !goneKeys.has(k)) out.missingInOpera.push({ room: k, name: s.guest, in: s.in }); });
+    const told = new Set();
+    gone.forEach(r => { const k = xKey(r.room); if (told.has(k) || mine.has(k) || !open.has(k)) return; told.add(k); out.notOut.push({ room: k, name: r.name || open.get(k).guest, in: open.get(k).in }); });
+    ['missingInDtcm', 'missingInOpera', 'nights', 'notOut'].forEach(f => out[f].sort(byRoom));
+    out.n = out.missingInDtcm.length + out.missingInOpera.length + out.nights.length + out.notOut.length;
+    return out;
+  }
+
   global.Reconciler = {
-    parseDTCM, parseOpera, buildExpected, reconcile,
+    parseDTCM, parseOpera, buildExpected, reconcile, operaXref, slimStays,
     parseUKDate: C.parseUKDate,
     parseJournalDate: C.parseJournalDate,
     normName: C.normName,

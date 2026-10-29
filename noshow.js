@@ -400,6 +400,7 @@ function nsUpdateKpi() {
 // ── Render table ──────────────────────────────────────────
 function nsRender() {
   nsUpdateKpi();
+  try { nsRenderOpera(); } catch (e) {}
 
   const search = (nsSearch_ || '').toLowerCase();
   const rows = nsGuests.filter(g => {
@@ -436,7 +437,7 @@ function nsRender() {
 
     return `<tr>
       <td style="font-family:var(--mono);font-size:0.7rem;color:var(--text3);">${escapeHtml(g.arrDate)}</td>
-      <td><span class="ns-status-pill">No Show</span></td>
+      <td><span class="ns-status-pill"${g.status === 'Cancelled' ? ' style="opacity:.8"' : ''}>${escapeHtml(g.status || 'No Show')}</span>${g._fromOpera ? ' <span title="Added from Opera\'s Arrivals screen">📡</span>' : ''}</td>
       <td>
         <div style="font-weight:600;color:var(--text);">${escapeHtml(name)} ${natTag}</div>
         ${memBadge}
@@ -490,7 +491,7 @@ function nsCopyForExcel() {
 
   const lines = rows.map(g => [
       nsExcelDate(g.arrDate),
-      'No Show',
+      g.status || 'No Show',
       nsCleanName(g.nameRaw),
       g.confNo,
       nsCleanSource(g.company),
@@ -546,3 +547,99 @@ function nsSetSearch(val) {
   nsSearch_ = val || '';
   nsRender();
 }
+
+// ── Add one guest (the same steps a loaded report goes through) ──
+function nsAddGuest(g) {
+  if (!g || !g.nameRaw) return false;
+  const dup = nsGuests.some(x => (g.confNo && String(x.confNo || '') === String(g.confNo)) || (!g.confNo && x.nameRaw === g.nameRaw && x.arrDate === g.arrDate));
+  if (dup) return false;
+  if (!g.nat) g.nat = (typeof guessNat === 'function') ? guessNat(g.nameRaw) : '';
+  if (typeof gmAutoFill === 'function') { try { gmAutoFill([g], true); } catch (e) {} }
+  nsGuests.push(g);
+  if (!nsReportDate) nsReportDate = g.arrDate || '';
+  nsCheckArrivals();
+  nsShowResults();
+  nsRender();
+  nsUpdateBadge();
+  debounceSaveNoShow(true);
+  if (typeof logActivity === 'function') logActivity('noshow_added', `${nsCleanName(g.nameRaw)}${g.confNo ? ' · ' + g.confNo : ''}${g.status ? ' · ' + g.status : ''}`);
+  return true;
+}
+
+// ── 📡 Suggestions from Opera ─────────────────────────────
+// Opera's Arrivals screen, read today by the Opera reader (opera-bridge.js →
+// window.hoOpera), shows "no show" / "cancelled" reservations. They are offered
+// here; one tap adds one through nsAddGuest. Nothing is ever added by itself.
+let _nsOpHidden = new Set();   // "Not now" on this device, for today
+let _nsOpList = [];
+const _nsOpDay = iso => { const m = /^\d{2}(\d{2})-(\d{2})-(\d{2})$/.exec(iso || ''); return m ? `${m[3]}-${m[2]}-${m[1]}` : ''; };   // 2026-10-29 → 29-10-26 (the NA40's own form)
+/** one Opera row → a no-show record like the NA40 gives */
+function nsOperaGuest(r, today) {
+  const nights = r.nights || (r.arrival && r.departure ? Math.max(1, Math.round((Date.parse(r.departure) - Date.parse(r.arrival)) / 864e5)) : 1);
+  const rate = Number(r.rate) || 0;
+  return { arrDate: _nsOpDay(r.arrival || today), depDate: _nsOpDay(r.departure), nameRaw: String(r.name || '').trim(), company: r.agent || r.company || r.source || '',
+    nights, rateAmount: rate, potRev: Math.round(rate * nights * 100) / 100, confNo: String(r.conf || '').trim(), newConf: '', nat: '',
+    status: r.status === 'cancelled' ? 'Cancelled' : 'No Show', _fromOpera: true };
+}
+/** Opera's no-show / cancelled arrivals not on the list yet (rows: the arrivals read's rows) */
+function nsOperaSuggestions(rows, have, today, hidden) {
+  const out = [], seen = new Set();
+  (rows || []).forEach(r => {
+    if (!r || !r.name || (r.status !== 'no_show' && r.status !== 'cancelled')) return;
+    if (r.arrival && today && r.arrival !== today) return;
+    const g = nsOperaGuest(r, today), id = g.confNo || g.nameRaw.toUpperCase() + '|' + g.arrDate;
+    if (seen.has(id) || (hidden && hidden.has(id))) return; seen.add(id);
+    const on = (have || []).some(x => (g.confNo && String(x.confNo || '') === g.confNo) || (nsCleanName(x.nameRaw).toUpperCase() === nsCleanName(g.nameRaw).toUpperCase() && (!x.confNo || !g.confNo)));
+    if (!on) out.push(Object.assign(g, { _id: id }));
+  });
+  return out;
+}
+function _nsOpRead() {
+  if (typeof hoOpera === 'undefined' || !hoOpera || typeof hoOpera.last !== 'function') return null;
+  try {
+    const L = hoOpera.last('arrivals'), d = L && L.at ? new Date(L.at) : null;
+    const t = typeof hoLocalISO === 'function' ? hoLocalISO() : new Date().toISOString().slice(0, 10);
+    if (!d || `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` !== t) return null;
+    return { rows: L.rows || [], at: L.at, today: t };
+  } catch (e) { return null; }
+}
+function nsRenderOpera() {
+  const panel = document.getElementById('panel-noshow'); if (!panel) return;
+  const R = _nsOpRead();
+  _nsOpList = R ? nsOperaSuggestions(R.rows, nsGuests, R.today, _nsOpHidden) : [];
+  let box = document.getElementById('nsOperaSug');
+  if (!_nsOpList.length) { if (box) box.innerHTML = ''; return; }
+  if (!box) { box = document.createElement('div'); box.id = 'nsOperaSug'; const a = document.getElementById('nsUploadCard'); if (a) a.before(box); else panel.appendChild(box); }
+  const at = (() => { try { return new Date(R.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } })();
+  const ro = typeof currentProfile !== 'undefined' && currentProfile && currentProfile.role === 'readonly';
+  box.innerHTML = `<div class="card" style="padding:12px 14px;margin-bottom:12px;border:1px solid var(--border2);border-radius:var(--r2, 12px);min-width:0;">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+      <b style="font-size:.88rem;">📡 From Opera · ${_nsOpList.length} to add?</b>
+      <span style="font-size:.72rem;color:var(--text3);">Arrivals screen read ${escapeHtml(at)} · nothing is added until you tap</span>
+      ${!ro && _nsOpList.length > 1 ? `<button class="btn sm" style="margin-left:auto;" onclick="nsAddFromOpera('*')">+ Add all ${_nsOpList.length}</button>` : ''}
+    </div>
+    ${_nsOpList.map((g, i) => `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0;border-top:1px solid var(--border);font-size:.8rem;min-width:0;">
+      <span class="ns-status-pill">${escapeHtml(g.status)}</span>
+      <b style="flex:1;min-width:9em;overflow-wrap:anywhere;">${escapeHtml(nsCleanName(g.nameRaw))}</b>
+      <span style="font-family:var(--mono);font-size:.72rem;color:var(--text2);">${escapeHtml(g.confNo || '—')} · ${g.nights} n${g.company ? ' · ' + escapeHtml(nsCleanSource(g.company)) : ''}</span>
+      ${ro ? '' : `<span style="display:flex;gap:6px;"><button class="btn gold sm" onclick="nsAddFromOpera(${i})">+ Add</button><button class="btn sm" onclick="nsHideOpera(${i})" title="Not now (this device, today)">✕</button></span>`}
+    </div>`).join('')}</div>`;
+}
+function nsAddFromOpera(i) {
+  const L = i === '*' ? _nsOpList.slice() : [_nsOpList[i]].filter(Boolean);
+  let n = 0;
+  L.forEach(g => { const c = Object.assign({}, g); delete c._id; if (nsAddGuest(c)) n++; });
+  nsRenderOpera();
+  if (typeof showToast === 'function') showToast(n ? `${n} added from Opera ✓` : 'Already on the list', n ? 'ok' : 'info');
+}
+function nsHideOpera(i) { const g = _nsOpList[i]; if (g) _nsOpHidden.add(g._id); nsRenderOpera(); }
+(function nsOpBoot() {
+  const again = () => { const p = document.getElementById('panel-noshow'); if (p && p.classList.contains('active')) nsRenderOpera(); };
+  window.addEventListener('message', e => { if (e && e.data && e.data.source === 'ho-op') setTimeout(again, 700); });
+  const start = () => {
+    const p = document.getElementById('panel-noshow'); if (!p) return;
+    try { new MutationObserver(again).observe(p, { attributes: true, attributeFilter: ['class'] }); } catch (e) {}
+    setInterval(again, 20000);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+})();

@@ -2,7 +2,8 @@
 //  morning-brief.js — ☀️ Morning brief
 //  A manager's one-screen summary of the day: who is on, guests,
 //  wake-up calls, shift tasks, monthly reports and open items.
-//  It only reads data the other pages already hold; nothing is saved
+//  It only reads data the other pages already hold (and, when Opera was
+//  read today, a 📡 From Opera block from hoOpera); nothing is saved
 //  except "already shown today" on this device.
 //
 //  mbOpen()     open the brief (also the ☀️ Brief button on Home)
@@ -116,6 +117,56 @@ function _guests() {
   return rows.length ? { id: 'guests', icon: '🛏️', title: 'Guests', rows, stats } : null;
 }
 
+// 📡 From Opera: what the Opera reader saw today (opera-bridge.js). Read only; nothing here when Opera wasn't read today.
+const _rk = r => String(r == null ? '' : r).trim().toUpperCase().replace(/^0+(?=\d)/, '');
+const _aed = v => 'AED ' + Number(v).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const _few = (L, n) => L.slice(0, n || 8).join(', ') + (L.length > (n || 8) ? ` +${L.length - (n || 8)} more` : '');
+function mbOperaToday() {
+  if (typeof hoOpera === 'undefined' || !hoOpera || typeof hoOpera.fresh !== 'function') return false;
+  const d = new Date(); d.setHours(0, 0, 0, 0);
+  return !!safe(() => hoOpera.fresh(null, Math.max(1, (Date.now() - d.getTime()) / 60000)), false);
+}
+function _opera() {
+  if (!mbOperaToday()) return null;
+  const t = todayIso(), rows = safe(() => hoOpera.rows(), []) || [], out = [];
+  const BAD = ['checked_out', 'cancelled', 'no_show', 'waitlist'];
+  // due out today: Opera's own list, and the board's rooms still to go
+  const due = new Set();
+  rows.forEach(r => { if (r.room && !BAD.includes(r.status) && r.status !== 'due_in' && (r.status === 'due_out' || r.departure === t)) due.add(_rk(r.room)); });
+  safe(() => { if (typeof depRooms !== 'undefined') depRooms.forEach(r => { if (['due', 'late', 'na', 'dnd'].includes(r.status)) due.add(_rk(r.roomStr != null ? r.roomStr : r.room)); }); });
+  const bal = (safe(() => hoOpera.openBalances(), []) || []).filter(f => f.room && f.status !== 'checked_out' && (f.status === 'due_out' || due.has(_rk(f.room))));
+  if (bal.length) out.push({ k: '💳 Due out, owing', t: _few(bal.map(f => `${f.room} ${_aed(f.balance)}`), 6), tone: 'warn', panel: 'departures' });
+  // VIPs arriving or in house: the room and the code only
+  const vs = new Set(), vip = [];
+  rows.forEach(r => {
+    if (!r.vip || BAD.includes(r.status)) return;
+    const arriving = r.status === 'due_in' || (!r.status && r.arrival === t);
+    if (!arriving && !['in_house', 'due_out'].includes(r.status)) return;
+    const key = r.conf || _rk(r.room) || r.name; if (vs.has(key)) return; vs.add(key);
+    vip.push(`${r.room || 'no room yet'} (${r.vip})${arriving ? ' arriving' : ''}`);
+  });
+  if (vip.length) out.push({ k: '⭐ VIPs', t: _few(vip, 8) });
+  // today's traces by department
+  const tr = (safe(() => hoOpera.traces(), []) || []).filter(x => !x.date || x.date === t);
+  if (tr.length) {
+    const by = {}; tr.forEach(x => { const d = String(x.dept || 'Other').trim() || 'Other'; by[d] = (by[d] || 0) + 1; });
+    const open = tr.filter(x => !x.done).length;
+    out.push({ k: '📌 Traces', t: Object.keys(by).sort((a, b) => by[b] - by[a]).map(d => `${d} ${by[d]}`).join(' · ') + (open ? ` (${open} open)` : ' (all done)'), tone: open ? 'warn' : 'ok', panel: 'opera' });
+  }
+  // rooms dirty / out of order, from Opera's room status
+  const seen = new Set(), dirty = [], ooo = [];
+  rows.forEach(r => {
+    const k = _rk(r.room); if (!k || seen.has(k)) return; seen.add(k);
+    const s = safe(() => hoOpera.roomStatus(r.room), null); if (!s) return;
+    if (s.rs === 'dirty') dirty.push(r.room); else if (s.rs === 'ooo' || s.rs === 'oos') ooo.push(r.room);
+  });
+  if (dirty.length) out.push({ k: '🧹 Dirty', t: `${plural(dirty.length, 'room')}: ${_few(dirty, 10)}` });
+  if (ooo.length) out.push({ k: '⛔ Out of order', t: `${plural(ooo.length, 'room')}: ${_few(ooo, 10)}`, tone: 'warn' });
+  const L = safe(() => hoOpera.last(), null);
+  if (L && L.at) out.push({ t: `Opera last read ${new Date(L.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`, panel: 'opera' });
+  return out.length ? { id: 'opera', icon: '📡', title: 'From Opera', panel: 'opera', rows: out } : null;
+}
+
 function _wakes() {
   if (typeof bxWakes === 'undefined') return null;
   const day = new Date(); day.setHours(0, 0, 0, 0);
@@ -167,7 +218,7 @@ function _open() {
 }
 
 function mbSections() {
-  return [_team(), _dayNotes(), _guests(), _wakes(), _tasks(), _open()].filter(s => s && s.rows && s.rows.length);
+  return [_team(), _dayNotes(), _guests(), safe(_opera, null), _wakes(), _tasks(), _open()].filter(s => s && s.rows && s.rows.length);
 }
 function _dateLong() { return new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); }
 
@@ -350,5 +401,5 @@ function start() {
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.getElementById('mbOverlay')?.classList.contains('open')) mbClose(); });
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 
-Object.assign(window, { mbOpen, mbClose, mbCopy, mbWhatsApp, mbText, mbSections, mbSetAuto, mbAutoTick });
+Object.assign(window, { mbOpen, mbClose, mbCopy, mbWhatsApp, mbText, mbSections, mbSetAuto, mbAutoTick, mbOperaToday });
 })();

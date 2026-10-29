@@ -337,7 +337,9 @@ function publicRoom(r) {
     balance: r.balance, vip: r.vip || '', member: r.member || '', company: r.company || '', agent: r.agent || '', rateCode: r.rateCode || '', conf: r.conf || '', nat: r.nat || '', roomType: r.roomType || '',
     // laid over from Departures (liveRooms): '' when the room is not on the board
     status: r.ov ? r.ov.status : '', es: r.ov ? r.ov.es : '', checkedOutAt: r.ov ? r.ov.checkedOutAt || '' : '', extendedTo: r.ov ? r.ov.extendedTo || '' : '', extNights: r.ov ? r.ov.extNights || 0 : 0,
-    lateTime: r.ov ? r.ov.lateTime || '' : '', intent: r.ov ? r.ov.intent || '' : '', finWho: r.ov ? r.ov.finWho || '' : '', finAt: r.ov ? r.ov.finAt || '' : '', onDepartures: !!(r.ov && r.ov.onBoard), operaDeparture: r.operaDeparture || r.departure };
+    lateTime: r.ov ? r.ov.lateTime || '' : '', intent: r.ov ? r.ov.intent || '' : '', finWho: r.ov ? r.ov.finWho || '' : '', finAt: r.ov ? r.ov.finAt || '' : '', onDepartures: !!(r.ov && r.ov.onBoard), operaDeparture: r.operaDeparture || r.departure,
+    // filled from today's Opera reads (operaFill): which fields
+    fromOpera: r.opf ? Object.keys(r.opf) : [] };
 }
 /** "Departing tomorrow (22 Oct) · 3 rooms" + one line per room, for WhatsApp / email */
 function tomorrowText(rooms, today, hotel) {
@@ -483,11 +485,65 @@ function rememberBoard(mem, board, today) {
   });
   return { date: today, rooms };
 }
+// ── 📡 Opera fills the gaps ──
+// What the Opera reader saw today (opera-bridge.js → window.hoOpera) fills a room's EMPTY room type, rate code, VIP,
+// membership, nationality, ETD and balance — only for the same guest (confirmation or name), never over a value the
+// report (or a person) gave. Laid over at drawing time like Departures: the saved list is not changed. opera-bridge
+// already merges its In House reads into the saved list (with "adjust by itself" on); what it wrote is no longer
+// empty, so nothing is applied twice. r.opf = {field: 'HH:MM'} marks what came from Opera (the 📡 on the page).
+const OP_BAD = new Set(['cancelled', 'no_show', 'waitlist']);
+const OP_TITLES = new Set(['MR', 'MRS', 'MS', 'MISS', 'DR', 'MSTR', 'MASTER', 'PROF', 'SIR', 'MME', 'M']);
+const opTokens = n => String(n || '').toUpperCase().replace(/[^A-Z\u00C0-\u024F]+/g, ' ').split(' ').filter(w => w.length > 1 && !OP_TITLES.has(w));
+/** the same guest? "Testperson, Alpha, Mr" and "Alpha Testperson" are */
+function opSameGuest(a, b) {
+  const A = opTokens(a), B = new Set(opTokens(b)); if (!A.length || !B.size) return false;
+  const common = A.filter(w => B.has(w)).length;
+  return common >= 2 || (common >= 1 && Math.min(A.length, B.size) === 1);
+}
+const OP_FIELDS = [['roomType', r => r.roomType], ['rateCode', r => r.rateCode], ['vip', (r, p) => r.vip || (p && p.vip)], ['member', (r, p) => r.member || r.memberLevel || (p && (p.member || p.memberLevel))],
+  ['nat', (r, p) => r.nat || (p && p.nat)], ['depTime', r => (/^\d{1,2}:\d{2}/.test(String(r.etd || '')) ? String(r.etd).slice(0, 5) : '')]];
+/** grouped rooms + today's Opera → the same rooms, gaps filled ({rows: [{…row, at}] newest first, folio(room), profile(name)};
+ *  opt.balanceEmpty: the report had no balance column, so Opera's balance may fill it) */
+function operaFill(rooms, src, opt) {
+  opt = opt || {};
+  const rows = (src && src.rows) || [];
+  if (!rows.length && !(src && src.folio)) return rooms;
+  const hhmm = at => { const d = new Date(at); return isNaN(d) ? '' : pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+  const by = new Map();
+  rows.forEach(r => { if (!r || OP_BAD.has(r.status) || !isRoom(r.room)) return; const k = roomKey(r.room); if (!by.has(k)) by.set(k, []); by.get(k).push(r); });
+  return (rooms || []).map(r => {
+    const L = by.get(r.rk) || [];
+    const confs = new Set(r.guests.map(g => String(g.conf || '').trim()).filter(Boolean));
+    const mine = x => (x.conf && confs.has(String(x.conf).trim())) || r.guests.some(g => opSameGuest(x.name, g.name));
+    const hits = L.filter(mine), hit = hits[0];   // newest read first; each field from the newest that has it
+    const fol = opt.balanceEmpty && src.folio ? (() => { try { const f = src.folio(r.room); return f && f.balance != null && mine(f) ? f : null; } catch (_) { return null; } })() : null;
+    if (!hit && !fol) return r;
+    const prof = hit && src.profile ? (() => { try { return src.profile(hit.name); } catch (_) { return null; } })() : null;
+    const o = Object.assign({}, r), g0 = Object.assign({}, r.guests[0]), opf = {}, gf = {};
+    if (hit) OP_FIELDS.forEach(([k, get]) => {
+      let h = null, v = '';
+      for (const x of hits) { v = String(get(x, prof) || '').trim(); if (v) { h = x; break; } }
+      if (!v) return;
+      if (!String(o[k] || '').trim()) { o[k] = v; opf[k] = hhmm(h.at); }
+      const g0hit = (h.conf && String(g0.conf || '').trim() === String(h.conf).trim()) || opSameGuest(h.name, g0.name) || r.guests.length === 1;
+      if (!String(g0[k] || '').trim() && g0hit) { g0[k] = v; gf[k] = hhmm(h.at); }
+    });
+    if (opt.balanceEmpty && !r.guests.every(g => g.src === 'opera')) {
+      const hb = hits.find(x => x.balance != null);
+      const b = fol ? fol.balance : hb ? hb.balance : null;
+      if (b != null && !r.balance) { o.balance = Math.round(b * 100) / 100; opf.balance = hhmm(fol ? fol.at : hb.at); if (!g0.balance) { g0.balance = o.balance; gf.balance = opf.balance; } }
+    }
+    if (!Object.keys(opf).length && !Object.keys(gf).length) return r;
+    o.opf = opf; g0.opf = gf; o.guests = [g0].concat(r.guests.slice(1));
+    return o;
+  });
+}
+
 /** "Opera day" for depAddManualRoom's room: 2026-10-21 → 21-OCT-26 */
 const operaDay = s => (isIso(s) ? s.slice(8, 10) + '-' + MON[+s.slice(5, 7) - 1].toUpperCase() + '-' + s.slice(2, 4) : '');
 
 W.hoInHousePure = { parseDate, parseMoney, roomKey, normH, mapHeader, splitRows, detect, parseReport, groupRooms, matches, searchHit, sortRooms, summary, diff, publicRoom, tomorrowText, reportModel, reportHtml, fileName, guestName, addDays, FIELDS, FILTERS, LONG,
-  boardDay, depFacts, stayMatches, liveRooms, liveSummary, missingFromBoard, boardNotInHouse, rememberBoard, isOut, operaDay };
+  boardDay, depFacts, stayMatches, liveRooms, liveSummary, missingFromBoard, boardNotInHouse, rememberBoard, isOut, operaDay, operaFill, opSameGuest };
 
 // ══ State + public API (works without a page too: tests, other modules) ══
 const I = { snap: null, rooms: [], idx: new Map(), f: 'all', q: '', by: 'room', open: '', loaded: false, err: null, lastLoad: null, memory: null };
@@ -495,10 +551,32 @@ const I = { snap: null, rooms: [], idx: new Map(), f: 'all', q: '', by: 'room', 
 const boardNow = () => { try { return typeof depRooms !== 'undefined' && Array.isArray(depRooms) ? depRooms : []; } catch (_) { return []; } };
 const esNow = d => { try { return typeof effectiveStatus === 'function' ? effectiveStatus(d) : d.status; } catch (_) { return d.status; } };
 const todayNow = () => { try { if (typeof hoLocalISO === 'function') return hoLocalISO(); } catch (_) {} const d = new Date(); return isoOf(d.getFullYear(), d.getMonth() + 1, d.getDate()); };
-/** the in-house rooms with the board laid over (rooms: the grouped rooms, all of them by default) */
+/** today's Opera reads for operaFill (window.hoOpera, when the reader is loaded), kept 5 s so drawing stays fast */
+let opCache = { t: 0, src: null, stamp: '', n: -1 };
+function operaSrc() {
+  const now = Date.now();
+  if (typeof W.hoOpera === 'undefined' || !W.hoOpera || typeof W.hoOpera.reads !== 'function') return null;
+  const n = safe(() => (typeof W.hoOpera.rows === 'function' ? W.hoOpera.rows().length : -1), -1);   // a new read changes it: build again at once
+  if (now - opCache.t < 5000 && n === opCache.n) return opCache.src;
+  opCache = { t: now, src: null, stamp: '', n };
+  try {
+    const t = todayNow(), R = W.hoOpera.reads() || {};
+    const L = Object.values(R).filter(x => x && x.at && Array.isArray(x.rows) && x.rows.length && (() => { const d = new Date(x.at); return isoOf(d.getFullYear(), d.getMonth() + 1, d.getDate()) === t; })()).sort((a, b) => b.at - a.at);
+    const rows = []; L.forEach(x => x.rows.forEach(r => rows.push(Object.assign({ at: x.at }, r))));
+    const H = W.hoOpera;
+    opCache.src = { rows, folio: typeof H.folio === 'function' ? H.folio : null, profile: typeof H.profile === 'function' ? H.profile : null };
+    opCache.stamp = L.map(x => x.kind + x.at).join(',');
+  } catch (_) { opCache.src = null; }
+  return opCache.src;
+}
+/** the in-house rooms with the board laid over (rooms: the grouped rooms, all of them by default), gaps filled from Opera */
 function liveNow(rooms) {
   const mem = I.memory && I.memory.date === todayNow() ? I.memory.rooms : null;
-  return liveRooms(rooms || I.rooms, boardNow(), { es: esNow, memory: mem || {} });
+  const live = liveRooms(rooms || I.rooms, boardNow(), { es: esNow, memory: mem || {} });
+  const src = operaSrc();
+  if (!src) return live;
+  const cols = I.snap && Array.isArray(I.snap.cols) ? I.snap.cols : null;
+  return operaFill(live, src, { balanceEmpty: !!cols && !cols.some(c => c && c.f === 'balance') });
 }
 function setSnapshot(snap) {
   I.snap = snap && Array.isArray(snap.rows) ? snap : (snap && snap.rows && typeof snap.rows === 'object' ? Object.assign({}, snap, { rows: Object.values(snap.rows) }) : null);
@@ -667,6 +745,7 @@ const CSS = `
   .ih-drawer{top:auto;left:0;width:100vw;max-height:90vh;border-left:0;border-top:1px solid var(--ih-hair);border-radius:20px 20px 0 0;animation:ihUp .22s ease}
   #ihRoot .page-hd h1{font-size:22px}
 }
+.ih-op{font-size:.78em;margin-left:3px;opacity:.85;cursor:help}
 @keyframes ihUp{from{transform:translateY(30px);opacity:0}to{transform:none;opacity:1}}
 `;
 
@@ -693,6 +772,8 @@ function ovTags(r) {
   if (o.intent === 'checkout_soon') T.push('<span class="ih-tag">🚪 Checking out soon</span>');
   return T.join('');
 }
+/** the small 📡 on a value filled from Opera (operaFill) */
+const opMk = (o, k) => (o && o.opf && o.opf[k] != null ? `<span class="ih-op" title="From Opera${o.opf[k] ? ', read ' + esc(o.opf[k]) : ''} (the report had nothing here)" aria-label="from Opera">📡</span>` : '');
 /** rooms on today's Arrivals list (arrivals-purpose.js) */
 const arrKeys = () => safe(() => new Set((typeof arrGuests !== 'undefined' && Array.isArray(arrGuests) ? arrGuests : []).map(g => g && roomKey(g.room)).filter(Boolean)), new Set());
 function rowHtml(r, t, arrived) {
@@ -700,14 +781,14 @@ function rowHtml(r, t, arrived) {
   const cls = out ? ' is-out' : r.departures.includes(t) ? ' dep-today' : r.departures.includes(addDays(t, 1)) ? ' dep-tomorrow' : '';
   const left = r.departure ? diffDays(t, r.departure) : null;
   const leftTxt = out ? 'checked out' + (r.ov.checkedOutAt ? ' ' + r.ov.checkedOutAt : '') + ' · Departures' : left == null ? '' : left < 0 ? 'past departure' : left === 0 ? 'leaves today' : left === 1 ? '1 night left' : left + ' nights left';
-  const tags = [ovTags(r), r.vip ? `<span class="ih-tag vip">VIP ${esc(r.vip.length <= 4 ? r.vip : '')}</span>` : '', r.member ? '<span class="ih-tag all">ALL</span>' : '', r.nights >= LONG ? `<span class="ih-tag long">${r.nights} n</span>` : '', depTag(r, t),
+  const tags = [ovTags(r), r.vip ? `<span class="ih-tag vip">VIP ${esc(r.vip.length <= 4 ? r.vip : '')}${opMk(r, 'vip')}</span>` : '', r.member ? `<span class="ih-tag all">ALL${opMk(r, 'member')}</span>` : '', r.nights >= LONG ? `<span class="ih-tag long">${r.nights} n</span>` : '', depTag(r, t),
     !out && arrived && arrived.has(r.rk) && r.arrivals.includes(t) ? '<span class="ih-tag arr">🛎️ Arrived</span>' : '', r.guests.length > 1 ? `<span class="ih-tag">+${r.guests.length - 1} sharer${r.guests.length > 2 ? 's' : ''}</span>` : ''].join('');
   return `<div class="ih-row${cls}" role="button" tabindex="0" data-ih="open" data-rk="${esc(r.rk)}">
     <div class="ih-rmc"><button type="button" class="ih-rm${d ? ' dep' : ''}" data-ih="${d ? 'dep' : W.hoRoom ? 'card' : 'open'}" data-rk="${esc(r.rk)}" title="${d ? 'Open room ' + esc(r.room) + ' on Departures' : W.hoRoom ? 'Room card ' + esc(r.room) : 'Room ' + esc(r.room)}" aria-label="${d ? 'Open room ' + esc(r.room) + ' on Departures' : W.hoRoom ? 'Room card ' + esc(r.room) : 'Room ' + esc(r.room)}">${esc(r.room)}</button></div>
     <div class="ih-c c1"><div class="ih-nm">${esc(r.name)}</div>${tags ? `<div class="ih-tags">${tags}</div>` : ''}</div>
-    <div class="ih-c c2"><div class="ih-sub">${esc(fmtD(r.arrival, true) || r.guests[0].arrRaw || '—')} → <b>${esc(fmtD(r.departure, true) || r.guests[0].depRaw || '—')}</b>${r.nights ? ` · ${r.nights} n` : ''}</div><div class="ih-sub dim">${esc(leftTxt)}${pax ? ` · ${r.adults}${r.children ? '+' + r.children : ''} pax` : ''}${r.roomType ? ' · ' + esc(r.roomType) : ''}</div></div>
-    <div class="ih-c c3"><div class="ih-sub">${esc(r.company || r.agent || r.source || '—')}</div><div class="ih-sub dim">${esc([r.rateCode, r.market, r.conf ? '#' + r.conf : ''].filter(Boolean).join(' · '))}</div></div>
-    <div class="ih-bal${r.balance > 0 ? ' owe' : r.balance === 0 ? ' zero' : ''}">${r.balance ? 'AED ' + esc(money(r.balance)) : '—'}${r.balance < 0 ? '<small>credit</small>' : r.balance > 0 ? '<small>balance</small>' : ''}</div>
+    <div class="ih-c c2"><div class="ih-sub">${esc(fmtD(r.arrival, true) || r.guests[0].arrRaw || '—')} → <b>${esc(fmtD(r.departure, true) || r.guests[0].depRaw || '—')}</b>${r.nights ? ` · ${r.nights} n` : ''}</div><div class="ih-sub dim">${esc(leftTxt)}${pax ? ` · ${r.adults}${r.children ? '+' + r.children : ''} pax` : ''}${r.roomType ? ' · ' + esc(r.roomType) + opMk(r, 'roomType') : ''}</div></div>
+    <div class="ih-c c3"><div class="ih-sub">${esc(r.company || r.agent || r.source || '—')}</div><div class="ih-sub dim">${[r.rateCode ? esc(r.rateCode) + opMk(r, 'rateCode') : '', esc(r.market || ''), r.conf ? '#' + esc(r.conf) : ''].filter(Boolean).join(' · ')}</div></div>
+    <div class="ih-bal${r.balance > 0 ? ' owe' : r.balance === 0 ? ' zero' : ''}">${r.balance ? 'AED ' + esc(money(r.balance)) + opMk(r, 'balance') : '—'}${r.balance < 0 ? '<small>credit</small>' : r.balance > 0 ? '<small>balance</small>' : ''}</div>
   </div>`;
 }
 /** the list as shown: in-house rooms with Departures laid over */
@@ -825,12 +906,12 @@ function openRoom(rk) {
   const row = (k, v) => (v === '' || v == null ? '' : `<dt>${esc(k)}</dt><dd>${v}</dd>`);
   const guestDl = g => `<dl class="ih-dl">${[
     row('Guest', esc([g.title, g.name].filter(Boolean).join(' '))),
-    row('Arrival', esc(g.arrival ? fmtD(g.arrival) : g.arrRaw || '')), row('Departure', esc(g.departure ? fmtD(g.departure) : g.depRaw || '') + (g.depTime ? ' · ' + esc(g.depTime) : '')),
+    row('Arrival', esc(g.arrival ? fmtD(g.arrival) : g.arrRaw || '')), row('Departure', esc(g.departure ? fmtD(g.departure) : g.depRaw || '') + (g.depTime ? ' · ' + esc(g.depTime) + opMk(g, 'depTime') : '')),
     row('Nights', g.nights || ''), row('Adults / children', g.adults || g.children ? `${g.adults} / ${g.children}` : ''),
-    row('Room type', esc(g.roomType || '')), row('Rate code', esc(g.rateCode || '')), row('Rate', g.rate != null ? 'AED ' + esc(money(g.rate)) : ''),
+    row('Room type', g.roomType ? esc(g.roomType) + opMk(g, 'roomType') : ''), row('Rate code', g.rateCode ? esc(g.rateCode) + opMk(g, 'rateCode') : ''), row('Rate', g.rate != null ? 'AED ' + esc(money(g.rate)) : ''),
     row('Company', esc(g.company || '')), row('Travel agent', esc(g.agent || '')), row('Source', esc(g.source || '')), row('Market', esc(g.market || '')), row('Source code', esc(g.sourceCode || '')),
-    row('Balance', g.balance ? `<b style="color:${g.balance > 0 ? 'var(--ih-bad)' : 'inherit'}">AED ${esc(money(g.balance))}</b>` : ''),
-    row('VIP', esc(g.vip || '')), row('Membership (ALL)', esc(g.member || '')), row('Confirmation', esc(g.conf || '')), row('Nationality', esc(g.nat || '')),
+    row('Balance', g.balance ? `<b style="color:${g.balance > 0 ? 'var(--ih-bad)' : 'inherit'}">AED ${esc(money(g.balance))}</b>${opMk(g, 'balance')}` : ''),
+    row('VIP', g.vip ? esc(g.vip) + opMk(g, 'vip') : ''), row('Membership (ALL)', g.member ? esc(g.member) + opMk(g, 'member') : ''), row('Confirmation', esc(g.conf || '')), row('Nationality', g.nat ? esc(g.nat) + opMk(g, 'nat') : ''),
     row('Payment', esc(g.pay || '')), row('Status', esc(g.status || '')), row('Notes', esc(g.notes || '')),
   ].join('')}</dl>${g.extra ? `<div class="ih-sec">Other columns</div><dl class="ih-dl">${Object.keys(g.extra).map(k => row(k.replace(/_/g, ' '), esc(g.extra[k]))).join('')}</dl>` : ''}`;
   let dr = doc.getElementById('ih-drawer');
@@ -842,7 +923,7 @@ function openRoom(rk) {
     <div class="ih-dr-acts">${d ? `<button type="button" class="ih-btn sm pri" data-d="dep">🧳 Open on Departures</button>` : (canLoad() && typeof depAddManualRoom === 'function' ? '<button type="button" class="ih-btn sm" data-d="add">+ Add to today\'s departures</button>' : '')}${W.hoRoom ? '<button type="button" class="ih-btn sm" data-d="card">🛏️ Room card</button>' : ''}<button type="button" class="ih-btn sm" data-d="copy">Copy</button></div>
     ${r.ov ? `<div class="ih-ov">${r.ov.status === 'out' ? `Checked out on Departures${r.ov.checkedOutAt ? ' at <b>' + esc(r.ov.checkedOutAt) + '</b>' : ''}.` : r.ov.extendedTo ? `Extended on Departures: now leaves <b>${esc(fmtD(r.ov.extendedTo))}</b>${r.operaDeparture ? ' (report: ' + esc(fmtD(r.operaDeparture, true)) + ')' : ''}.` : `On today’s Departures: ${ovTags(r) || 'due out'}`}${r.ov.onBoard ? '' : ' <span class="ih-quiet">(seen earlier today on this device)</span>'}</div>` : ''}
     ${r.guests.map((g, i) => (r.guests.length > 1 ? `<div class="ih-sec">${i ? 'Sharer ' + i : 'Main guest'}</div>` : '') + guestDl(g)).join('')}
-    <div class="ih-note">From the in-house report of ${esc(fmtD(I.snap && I.snap.date))}.</div>
+    <div class="ih-note">From the in-house report of ${esc(fmtD(I.snap && I.snap.date))}.${r.opf && Object.keys(r.opf).length ? ' 📡 = filled from Opera today, where the report had nothing.' : ''}</div>
   </div>`;
 }
 function drawerClick(e) {
@@ -1141,7 +1222,7 @@ let depSigLast = '';
 function depSig() {
   const B = boardNow();
   const A = safe(() => (typeof arrGuests !== 'undefined' && Array.isArray(arrGuests) ? arrGuests.map(g => g && g.room).join(',') : ''), '');
-  return B.length + '#' + B.map(d => d ? [d.roomStr, d.status, esNow(d), d.checkoutAt, d.extensionNights, d.lateTime, d.intent, d.departure, d.finAt, d.finWho].join('|') : '').join(';') + '#' + A + '#' + today();
+  return B.length + '#' + B.map(d => d ? [d.roomStr, d.status, esNow(d), d.checkoutAt, d.extensionNights, d.lateTime, d.intent, d.departure, d.finAt, d.finWho].join('|') : '').join(';') + '#' + A + '#' + today() + '#' + (operaSrc() ? opCache.stamp : '');
 }
 function syncMemory() {
   const next = rememberBoard(I.memory || LS.get(MEMK, null), boardNow(), today());

@@ -19,6 +19,9 @@
 //     filters, a summary, "still open from yesterday", Done / note / edit,
 //     add by hand, and Export: a styled Excel report (ExcelJS, loaded only when
 //     exporting; a plain SheetJS file when it cannot load).
+//   • 📡 From Opera traces (hoOpera.traces()): today's front office traces not
+//     done show at the top as suggestions — one tap adds, ✕ is remembered;
+//     never added by themselves.
 //  Pure helpers: window.hoHandoverPure (tested in tests/run-tests.js).
 //  Load after wa-bridge.js and wa-brain.js.
 // ═══════════════════════════════════════════════════════════
@@ -837,7 +840,27 @@ function pdfHtml(m) {
   <div class="tw">${open}</div>`;
 }
 
-W.hoHandoverPure = { CAT_RULES, KW_TAGS, doneReply, doneTargets, sectionOf, hoBody, learnedField, wordSwaps, applySwaps, learnToks, simOf, learnedVerdict, hoursOf, sameName, rosterShiftOf, pdfHtml, cssOf, isUrgent, XL, XL_KPI, statusStyle, catStyle, argbOf, rowHeight, shiftsCovered, reportModel, writtenSummary, HO_GROUP_RX, isHandoverGroup, HO_PREFIX_RX, hoPrefix, hoMark, hoStrip, waToHandover, isChat, pasteItems, suggestFrom, HO_COPY_MIN, handoverScore, looksLikeHandover, MOVE_RX, HANDED_RX, SHIFT_BOUNDS, shiftOf, CATS, CAT, categorize, statusOf, roomsOf, tagsOf, splitItems, tidy, buildItems, filterItems, summaryOf,
+// ══ 📡 Opera traces (opera-bridge.js: hoOpera.traces()) — suggestions, nothing is added until tapped ══
+const FO_DEPT_RX = /^(?:fo|f\/o|fd|front\s*(?:office|desk)|frontdesk|frontoffice|reception|rec)$/i;
+/** today's front office traces that are not done → [{key, text, room, time, cat}]
+ *  opt: {no: [keys dismissed or added], have: Set of item texts already in the book (lower case)} */
+function operaTraceSugg(traces, day, opt) {
+  opt = opt || {};
+  const no = opt.no || [], have = opt.have || new Set(), out = [];
+  (traces || []).forEach(t => {
+    if (!t || t.done || !sp(t.text).trim() || !FO_DEPT_RX.test(sp(t.dept).trim())) return;
+    if (t.date && t.date !== day) return;
+    const room = sp(t.room).trim(), body = sp(t.text).trim();
+    const text = room && !roomsOf(body).some(r => String(parseInt(r, 10)) === String(parseInt(room, 10))) ? `Room ${room}: ${body}` : body;
+    const key = 'op' + hash([room, t.date || day, body].join('|'));
+    if (no.includes(key) || out.some(o => o.key === key)) return;
+    if (have.has(text.toLowerCase()) || have.has(tidy(text).toLowerCase())) return;
+    out.push({ key, text, room, time: /^\d{1,2}:\d{2}$/.test(t.time || '') ? t.time : '', cat: categorize(text) });
+  });
+  return out;
+}
+
+W.hoHandoverPure = { FO_DEPT_RX, operaTraceSugg, CAT_RULES, KW_TAGS, doneReply, doneTargets, sectionOf, hoBody, learnedField, wordSwaps, applySwaps, learnToks, simOf, learnedVerdict, hoursOf, sameName, rosterShiftOf, pdfHtml, cssOf, isUrgent, XL, XL_KPI, statusStyle, catStyle, argbOf, rowHeight, shiftsCovered, reportModel, writtenSummary, HO_GROUP_RX, isHandoverGroup, HO_PREFIX_RX, hoPrefix, hoMark, hoStrip, waToHandover, isChat, pasteItems, suggestFrom, HO_COPY_MIN, handoverScore, looksLikeHandover, MOVE_RX, HANDED_RX, SHIFT_BOUNDS, shiftOf, CATS, CAT, categorize, statusOf, roomsOf, tagsOf, splitItems, tidy, buildItems, filterItems, summaryOf,
   excelRows, summaryRows, fileName, polishStyles, polishSheet, dLong, t12, COL_W, byTime };
 if (!doc) return;
 
@@ -1339,6 +1362,7 @@ function shell() {
       <div class="hb-prev" id="hbNewPrev" aria-live="polite"></div>
       <div class="hb-newft"><button type="button" class="hb-q sm" data-hb="sugg">✨ From HotelOps today</button><span class="hb-hint">Type “512 early departure”, or paste a WhatsApp chat, an e-mail or a list.</span></div>
     </section>
+    <div id="hbOpera"></div>
     <div class="hb-strip" id="hbStrip"></div>
     <p class="hb-sum" id="hbSum"></p>
     <div class="hb-tb" id="hbTb">
@@ -1378,6 +1402,7 @@ function body() {
     const base = filterItems(all, Object.assign({}, f, { st: 'all' })), S = summaryOf(base), urg = base.filter(isUrgent).length;
     set('hbStrip', [['open', S.open, 'Pending', 'var(--hb-open)'], ['done', S.done, 'Done', 'var(--hb-done)'], ['urgent', urg, 'Urgent', 'var(--hb-red)'], ['rooms', S.rooms, 'Rooms', 'var(--hb-info)']]
       .map(([k, v, l, c]) => `<button type="button" class="hb-stat${HB.st === k ? ' on' : ''}" style="--c:${c}" data-hb="stat" data-v="${k}" aria-pressed="${HB.st === k}"><b>${v}</b><span>${l}</span></button>`).join(''));
+    set('hbOpera', d === today() ? operaHtml() : '');
     set('hbSum', esc(writtenSummary(base)).replace(/^([^.]+\.)/, '<b>$1</b>'));
     const act = [];
     if (HB.room) act.push(`<button type="button" class="hb-chip on x" data-hb="clr" data-v="room">Room ${esc(HB.room)}</button>`);
@@ -1469,6 +1494,32 @@ function suggestions() {
   const rooms = safe(() => (typeof depRooms !== 'undefined' && Array.isArray(depRooms) ? depRooms : []), []);
   const have = new Set(itemsOf(today()).concat(itemsOf(HB.date)).map(i => sp(i.text).toLowerCase()));
   return suggestFrom({ rooms, hk, mt: ls('opslogs/mt') || {}, lf: ls('opslogs/lf') || {}, now: new Date() }).filter(s => !have.has(tidy(s.text).toLowerCase()));
+}
+// ── 📡 From Opera traces: today's front office traces not done → "add to handover?" (one tap; ✕ is remembered) ──
+const LS_OPNO = 'hb_opera_no_v1';   // {date, keys}: dismissed or already added today
+function opNo() { const v = LS.get(LS_OPNO, null); return v && v.date === today() && Array.isArray(v.keys) ? v.keys : []; }
+function opRemember(key) { const keys = opNo(); if (!keys.includes(key)) keys.push(key); LS.set(LS_OPNO, { date: today(), keys: keys.slice(-300) }); }
+function operaList() {
+  if (typeof W.hoOpera === 'undefined' || !W.hoOpera || typeof W.hoOpera.traces !== 'function') return [];
+  const tr = safe(() => W.hoOpera.traces() || [], []);   // today's reads only
+  if (!tr.length) return [];
+  const have = new Set(itemsOf(today()).map(i => sp(i.text).toLowerCase()).concat(itemsOf(today()).map(i => sp(i.orig).toLowerCase())));
+  return operaTraceSugg(tr, today(), { no: opNo(), have });
+}
+function operaHtml() {
+  const L = operaList(); if (!L.length) return '';
+  return `<section class="hb-sec hb-op" aria-label="From Opera traces"><div class="hb-hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 6px"><b>📡 From Opera traces — add to handover?</b><span>${L.length} front office trace${L.length === 1 ? '' : 's'} not done · nothing is added until you tap</span></div>`
+    + L.map(s => { const C = catOf(s.cat); return `<div class="hb-pv" style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;min-width:0"><span class="tx" style="flex:1 1 200px;min-width:0;overflow-wrap:anywhere">${esc(s.text)} <span class="hb-pill" style="--ch:${C.hue ?? CAT_HUE[C.id] ?? 215}">${C.icon} ${esc(C.label)}</span>${s.time ? `<small>Opera trace · ${esc(t12(s.time))}</small>` : '<small>Opera trace</small>'}</span><span style="display:flex;gap:6px;flex:0 0 auto"><button type="button" class="hb-pri sm" data-hb="opadd" data-v="${esc(s.key)}">＋ Add</button><button type="button" class="hb-q sm" data-hb="opno" data-v="${esc(s.key)}" title="Not for the handover — don't suggest it again" aria-label="Dismiss">✕</button></span></div>`; }).join('')
+    + '</section>';
+}
+let opSig = '';
+function operaTick() {
+  if (typeof W.hoOpera === 'undefined' || !W.hoOpera || typeof W.hoOpera.traces !== 'function') return;
+  const tr = safe(() => W.hoOpera.traces() || [], []);
+  const sig = tr.length + ':' + tr.reduce((m, t) => Math.max(m, +t.at || 0), 0);
+  if (sig === opSig) return;
+  opSig = sig;
+  if (HB.date === today()) soon();
 }
 // ── Excel ──
 function xpCount() { const el = doc.getElementById('hbXpN'); if (!el) return; const n = exportList(SETTINGS().exp === 'all').length; el.textContent = n + ' item' + (n === 1 ? '' : 's'); }
@@ -1702,6 +1753,8 @@ function onClick(e) {
       case 'sugg': { const L = suggestions(); HB.rows = L.map(s => ({ text: s.text, head: '', cat: s.cat, from: s.src, on: false })); HB.rowsKind = 'sugg'; preview(); return; }
       case 'rowsall': { const on = !(HB.rows || []).every(r => r.on); (HB.rows || []).forEach(r => { r.on = on; }); preview(); return; }
       case 'rowsclose': HB.rows = null; HB.rowsKind = ''; preview(); return;
+      case 'opadd': { const s = operaList().find(x => x.key === b.dataset.v); if (s) { const n = addItems([{ text: s.text, cat: s.cat, from: 'Opera trace' }], today()); opRemember(s.key); toast(n ? '📡 Added from the Opera trace' : 'Nothing to add', 'ok'); } body(); return; }
+      case 'opno': opRemember(b.dataset.v); body(); return;
       case 'edit': if (item && !e.target.closest('a,button.hb-rm,mark')) { HB.edit = id; HB.menu = ''; body(); safe(() => { const t = doc.getElementById('hbEdit'); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } }); } return;
       case 'menu': HB.menu = HB.menu === id ? '' : id; body(); return;
       case 'note': HB.note = HB.note === id ? '' : id; HB.menu = ''; body(); return;
@@ -1831,6 +1884,7 @@ function start() {
   setTimeout(() => safe(drain), 1500);
   [700, 2500, 6000].forEach(t => setTimeout(() => safe(wrapHandover), t));
   setInterval(() => safe(() => { if (listenDay !== today()) listenToday(); }), 60e3);
+  setInterval(() => safe(operaTick), 20e3);
 }
 W.hoHandoverBook = { fromWa, noAsked, rememberNoAsk, addByHand, addItems, suggestions: () => suggestions(), items: day => itemsOf(day || today()), load, render: () => render(), excel: () => exportExcel(), proBytes: list => proWorkbook(list || exportList(true)), workbookBytes: list => workbookBytes(list || itemsOf(HB.date || today())), state: () => HB };
 if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start); else start();

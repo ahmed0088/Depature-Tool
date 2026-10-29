@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 438, items: [
+    "📡 Opera page redesigned: a clear “Linked to Opera” header with status chips (helper, auto-updates, address), four tiles (read today, changes, open bills, routines), a clean live table with coloured statuses, bills with amounts, and sections that fold away. It now looks right in every app style, including Notepad.",
+    "🔗 Opera now fills the gaps everywhere: morning brief (rooms leaving with money owing, VIPs, traces, dirty/OOO rooms), shift handover, a 📡 Opera tile on Home, and search finds what Opera showed (with the balance).",
+    "🧠 Guest Memory takes VIP, membership and nationality from Opera into empty fields (owners and managers). The night checklist suggests the tick when Opera shows the night audit done, wake-up traces become one-tap wake-up calls, and front office traces become Handover suggestions — nothing is ticked or added without your tap.",
+    "🧾 DTCM and Tourism Tax get an “Opera vs DTCM today” check (missing rooms, different nights, departures still open) with lists to copy. In-House fills empty room type, rate, VIP, membership, nationality, ETD and balance from Opera (marked 📡). Arrivals vs Departures uses Opera when your report is missing or older, and Opera's no-shows and cancellations become one-tap suggestions on the No-Show page.",
+  ] },
   { v: 437, items: [
     "⬇ The Opera page always shows the helper download now. If your helper is older than v436, a gold “Get the new helper (once)” button appears right under 🟢 Open Opera — you need it once for the new Opera window and the linking fix.",
   ] },

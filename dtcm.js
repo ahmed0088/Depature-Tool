@@ -227,6 +227,7 @@ function dtcSlimState() {
     checks: RC.checks, dayUse: RC.dayUse, missing: RC.missing, extra: RC.extra,
     duplicates: RC.duplicates, phantom: RC.phantom, adjustments: RC.adjustments,
     noShows: RC.noShows, upsells: RC.upsells, reversals: RC.reversals, actions: RC.actions,
+    stays: RC.stays || [], asOf: RC.asOf || '',
     longstay: dtcLS
   });
 }
@@ -288,7 +289,7 @@ function dtcApplyState(doc) {
     checks: A('checks'), dayUse: A('dayUse'), missing: A('missing'), extra: A('extra'),
     duplicates: A('duplicates'), phantom: A('phantom'), adjustments: A('adjustments'),
     noShows: A('noShows'), upsells: A('upsells'), reversals: A('reversals'), actions: A('actions'),
-    gap: doc.gap || null, fixPlan: A('fixPlan')
+    gap: doc.gap || null, fixPlan: A('fixPlan'), stays: A('stays'), asOf: doc.asOf || ''
   });
   const L = doc.longstay;
   dtcLS = L ? Object.assign({ longStays: [], segments: [], totals: [] }, L) : null;
@@ -331,6 +332,7 @@ function dtcRenderAll() {
   set('badge-dtcm', open);
   const mob = document.getElementById('mob-badge-dtcm'); if (mob) mob.textContent = open || '';
   dtcSwitch(dtcTab);
+  dtcRenderOperaX();
 }
 
 function dtcReset(askConfirm) {
@@ -1069,5 +1071,106 @@ function dtcExportLong() {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(totRows), 'Group Totals');
   XLSX.writeFile(wb, 'DTCM_Long_Stay.xlsx');
 }
+
+// ── 📡 Opera vs DTCM today ────────────────────────────────
+// What the Opera reader (opera-bridge.js → window.hoOpera) saw today laid next to the
+// DTCM stays of the last analysed file: rooms in house on one side only, nights that
+// differ, check-outs DTCM still has open. Suggestions with copyable room lists only —
+// the DTCM data is never changed. Shown only when Opera was read today. The Tourism
+// Tax page shows the same box (tourism-tax.js).
+let dtcOpX = null;
+const dtcToday = () => (typeof hoLocalISO === 'function' ? hoLocalISO() : new Date().toISOString().slice(0, 10));
+const dtcHHMM = at => { try { return new Date(at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } };
+const dtcDay = iso => { const m = /^(\d{4})-(\d\d)-(\d\d)$/.exec(iso || ''); return m ? `${+m[3]} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m[2] - 1]}` : (iso || ''); };
+/** today's Opera reads that matter here: {rows (newest read first), at, inhouseRead, partial} or null */
+function dtcOperaRows() {
+  if (typeof hoOpera === 'undefined' || !hoOpera || typeof hoOpera.reads !== 'function') return null;
+  let R; try { R = hoOpera.reads() || {}; } catch (e) { return null; }
+  const t = dtcToday(), isToday = at => { const d = new Date(at); return !isNaN(d) && `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` === t; };
+  const L = ['inhouse', 'departures', 'arrivals', 'details'].map(k => R[k]).filter(x => x && x.at && isToday(x.at) && Array.isArray(x.rows)).sort((a, b) => b.at - a.at);
+  if (!L.length) return null;
+  const rows = [];
+  L.forEach(x => x.rows.forEach(r => rows.push(x.kind === 'inhouse' && !r.status ? Object.assign({}, r, { status: 'in_house' }) : r)));
+  const ih = L.find(x => x.kind === 'inhouse');
+  return { rows, at: L[0].at, inhouseRead: !!ih, partial: !!(ih && ih.total > ih.n) };
+}
+/** the comparison for now (null: nothing to compare) */
+function dtcOperaXref() {
+  const RC = dtcRecon, O = dtcOperaRows();
+  if (!RC || !O || !window.Reconciler || typeof Reconciler.operaXref !== 'function') return null;
+  if (!(RC.stays || []).length) return { old: true, at: O.at };
+  const X = Reconciler.operaXref(RC.stays, O.rows, dtcToday(), RC.asOf || RC.reportDate || RC.windowEnd || '', { inhouseRead: O.inhouseRead, partial: O.partial });
+  return Object.assign(X, { at: O.at, asOf: RC.asOf || RC.reportDate || RC.windowEnd || '' });
+}
+const DTC_OPX = {
+  missingInDtcm: ['In house in Opera, not in DTCM', 'check in in the TD portal', r => `in Opera since ${dtcDay(r.arrival) || '?'}`, 'warn'],
+  missingInOpera: ['In DTCM, not in house in Opera', 'check out or cancel in the TD portal', r => `in DTCM since ${dtcDay(r.in) || '?'}`, 'warn'],
+  nights: ['Nights differ', 'the check-in date differs', r => `DTCM ${r.dtcm} night${r.dtcm === 1 ? '' : 's'} (in ${dtcDay(r.dtcmIn)}) · Opera ${r.opera} (in ${dtcDay(r.operaIn)})`, 'info'],
+  notOut: ['Checked out in Opera, still open in DTCM', 'check out in the TD portal', r => `in DTCM since ${dtcDay(r.in) || '?'}`, 'bad'],
+};
+/** the box's HTML ('' when Opera was not read today or there is no DTCM result) */
+function dtcOperaXrefHtml() {
+  const X = dtcOpX = dtcOperaXref();
+  if (!X) return '';
+  const head = `<div style="font-weight:700;font-size:.95rem;margin-bottom:2px;">📡 Opera vs DTCM today</div>
+    <div style="font-size:.72rem;color:var(--text2);margin-bottom:8px;overflow-wrap:anywhere;">Opera read ${escapeHtml(dtcHHMM(X.at))}${X.asOf ? ` · DTCM file up to ${escapeHtml(dtcDay(X.asOf))}` : ''} · suggestions only: nothing here changes the DTCM data.</div>`;
+  const wrap = body => `<div class="dtc-opx" id="dtcOpX" style="margin:14px 0;padding:14px;border:1px solid var(--border, rgba(128,128,128,.3));border-radius:10px;min-width:0;">${head}${body}</div>`;
+  if (X.old) return wrap(`<div style="font-size:.8rem;">This DTCM result was saved before the Opera comparison existed. Analyse the files again to compare it with Opera.</div>`);
+  const notes = [];
+  if (X.later) notes.push(`${X.later} room${X.later === 1 ? '' : 's'} arrived after the DTCM file: not compared.`);
+  if (!X.asked) notes.push('Open <b>In House</b> in Opera to also see rooms DTCM has that Opera does not.');
+  else if (X.partial) notes.push('Opera’s In House list was read only in part: scroll it to the end in Opera before trusting “In DTCM, not in house in Opera”.');
+  const groups = Object.keys(DTC_OPX).filter(f => X[f].length).map(f => {
+    const [title, sub, det, cls] = DTC_OPX[f], L = X[f];
+    const rows = L.map(r => `<div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;padding:5px 0;border-top:1px solid var(--border, rgba(128,128,128,.2));font-size:.78rem;min-width:0;">
+        <b style="font-family:var(--mono);min-width:3.2em;">${escapeHtml(r.room)}</b><span style="flex:1;min-width:8em;overflow-wrap:anywhere;">${escapeHtml(r.name || '—')}</span>
+        <span style="font-size:.72rem;color:var(--text2);">${escapeHtml(det(r))}</span></div>`).join('');
+    const card = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0 6px;"><span class="dtc-chip ${cls}" style="font-family:var(--mono);overflow-wrap:anywhere;">${escapeHtml(L.map(r => r.room).join(', '))}</span>
+        <button class="btn sm" onclick="dtcOpXCopy('${f}', this)" title="Copy the room list">📋 Copy rooms</button></div>${rows}`;
+    return dtcBucket('dtc-b-opx', title, sub, L.length, '', [card], true);
+  }).join('');
+  return wrap(`${X.n ? groups : '<div style="font-size:.8rem;">✓ Opera and DTCM agree on the rooms in house and their nights.</div>'}
+    ${notes.length ? `<div style="font-size:.72rem;color:var(--text3);margin-top:6px;">${notes.join(' ')}</div>` : ''}`);
+}
+function dtcOpXCopy(f, btn) {
+  const X = dtcOpX, D = DTC_OPX[f]; if (!X || !D || !X[f] || !X[f].length) return;
+  const L = X[f];
+  const text = [`📡 Opera vs DTCM · ${dtcDay(dtcToday())} · ${D[0]} (${L.length}) — ${D[1]}`, `Rooms: ${L.map(r => r.room).join(', ')}`,
+    ...L.map(r => `${r.room}  ${r.name || '—'}  ·  ${D[2](r)}`)].join('\n');
+  if (typeof copyToClipboard === 'function') copyToClipboard(text, null, '');
+  if (btn) { const t = btn.textContent; btn.textContent = '✓ Copied'; setTimeout(() => { btn.textContent = t; }, 1500); }
+  if (typeof showToast === 'function') showToast(`${L.length} room${L.length === 1 ? '' : 's'} copied`, 'ok');
+}
+let dtcOpXSig = '';
+/** draw the box under the fix plan on the Summary tab (only when something changed) */
+function dtcRenderOperaX(force) {
+  const view = document.getElementById('dtcView-summary'); if (!view) return;
+  let html = '';
+  try { html = dtcOperaXrefHtml(); } catch (e) { console.warn('[DTCM] Opera comparison:', e); }
+  let box = document.getElementById('dtcOperaX');
+  if (!box) {
+    if (!html) return;
+    box = document.createElement('div'); box.id = 'dtcOperaX';
+    const anchor = document.getElementById('dtcFixPlan') || document.getElementById('dtcStatus');
+    if (anchor) anchor.insertAdjacentElement('afterend', box); else view.prepend(box);
+  }
+  if (!force && html === dtcOpXSig) return;
+  dtcOpXSig = html;
+  const open = [...box.querySelectorAll('details')].map(d => d.open);
+  box.innerHTML = html;
+  box.querySelectorAll('details').forEach((d, i) => { if (open[i] === false) d.open = false; });   // keep what the user folded
+}
+// a new Opera read, or the page opened: draw again
+(function dtcOpXBoot() {
+  if (typeof window === 'undefined' || !window.addEventListener) return;
+  const again = () => { const p = document.getElementById('panel-dtcm'); if (dtcRecon && p && p.classList.contains('active')) dtcRenderOperaX(); };
+  window.addEventListener('message', e => { if (e && e.data && e.data.source === 'ho-op') setTimeout(again, 700); });
+  const start = () => {
+    const p = document.getElementById('panel-dtcm'); if (!p) return;
+    try { new MutationObserver(again).observe(p, { attributes: true, attributeFilter: ['class'] }); } catch (e) {}
+    setInterval(again, 30000);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+})();
 
 dtcInit();

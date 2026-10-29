@@ -296,7 +296,7 @@ function _xrefCheckExtension(arrRecord) { _xrefEnrichAll(); return arrRecord; }
 let _adPairs = [];   // [{arr, dep, score, sure, reason}]
 function _xrefEnrichAll() {
   const arrs = [..._xrefArrRooms, ..._xrefArrNoRoom];
-  const deps = (typeof depRooms !== 'undefined' && Array.isArray(depRooms)) ? depRooms : [];
+  const deps = _adDepList().list;
   arrs.forEach(a => { a.isExtension = false; a.matchType = null; a.depGuest = null; a.extReason = ''; a.adScore = 0; a.adSure = false; a.turnoverDep = null; });
   _adPairs = [];
   if (!deps.length) {
@@ -944,9 +944,22 @@ function _adAddDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); r
 // When nothing is pasted here, use today's list from the Arrivals page.
 function _adSyncArrivals() {
   if (_xrefLoaded) { _adSrc = 'paste'; return; }
-  const g = (typeof arrGuests !== 'undefined' && Array.isArray(arrGuests)) ? arrGuests : [];
+  let g = (typeof arrGuests !== 'undefined' && Array.isArray(arrGuests)) ? arrGuests : [];
+  const today = _adToday(), opA = _adOpRead('arrivals');
+  // the Arrivals page is empty, or its list is older than Opera's read of today: use what Opera showed
+  if (opA && (!g.length || (window._arrDate && window._arrDate < today))) {
+    const L = _adOpArrivals(opA, today);
+    if (L.length) {
+      _adSrc = 'opera';
+      const sig = 'op|' + opA.at + '|' + L.length;
+      if (sig === _adArrSig) return;
+      _adArrSig = sig;
+      _xrefArrRooms = L.filter(x => x.room); _xrefArrNoRoom = L.filter(x => !x.room);
+      return;
+    }
+  }
   if (!g.length) {
-    if (_adSrc === 'arrivals') { _xrefArrRooms = []; _xrefArrNoRoom = []; }
+    if (_adSrc === 'arrivals' || _adSrc === 'opera') { _xrefArrRooms = []; _xrefArrNoRoom = []; }
     _adSrc = ''; _adArrSig = ''; return;
   }
   _adSrc = 'arrivals';
@@ -966,6 +979,63 @@ function _adSyncArrivals() {
   });
   _xrefArrRooms = withRoom; _xrefArrNoRoom = withoutRoom;
 }
+
+// ── 📡 Opera's reads (opera-bridge.js → window.hoOpera) when the reports are missing or older ──
+// Departures: today's board (depRooms) unless it is empty or for an earlier day; then Opera's
+// Departures read of today. Arrivals: see _adSyncArrivals. Shown as "from Opera, HH:MM".
+let _adOpCache = { t: 0, v: {} };
+function _adOpRead(kind) {
+  if (typeof hoOpera === 'undefined' || !hoOpera || typeof hoOpera.last !== 'function') return null;
+  const now = Date.now();
+  if (now - _adOpCache.t > 2000) _adOpCache = { t: now, v: {} };
+  if (kind in _adOpCache.v) return _adOpCache.v[kind];
+  let L = null;
+  try {
+    L = hoOpera.last(kind);
+    const d = L && L.at ? new Date(L.at) : null, t = _adToday();
+    if (!d || isNaN(d) || `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` !== t || !Array.isArray(L.rows)) L = null;
+  } catch (e) { L = null; }
+  return (_adOpCache.v[kind] = L);
+}
+function _adOpStamp() { const a = _adOpRead('arrivals'), d = _adOpRead('departures'); return (a ? a.at : '') + '/' + (d ? d.at : ''); }
+const _AD_OP_BAD = ['cancelled', 'no_show', 'waitlist'];
+const _adOpRoom = r => /^[A-Za-z]?\d{1,5}[A-Za-z]?$/.test(String(r || '').trim());
+const _adOpDay = iso => { const m = /^(\d{4})-(\d\d)-(\d\d)$/.exec(iso || ''); return m ? `${m[3]}-${_AD_MON[+m[2] - 1].toUpperCase()}-${m[1].slice(2)}` : ''; };
+/** Opera's Departures read → board-like rooms leaving today (checked out → 'out') */
+function _adOpDepartures(read, today) {
+  if (!read || !Array.isArray(read.rows)) return [];
+  const sameDay = !read.date || read.date === today, seen = new Set();
+  return read.rows.filter(r => r && _adOpRoom(r.room) && !_AD_OP_BAD.includes(r.status) && r.status !== 'due_in' && (r.departure ? r.departure === today : sameDay))
+    .filter(r => { const k = _xrefNormRoom(r.room) + '|' + (r.conf || r.name); if (seen.has(k)) return false; seen.add(k); return true; })
+    .map(r => ({ room: parseInt(r.room, 10) || 0, roomStr: String(r.room).trim(), name: r.name || '', conf: r.conf || '', departure: _adOpDay(today),
+      arrival: _adOpDay(r.arrival), nights: r.nights || 0, source: r.agent || r.company || r.source || '', status: r.status === 'checked_out' ? 'out' : 'due', _fromOpera: true }));
+}
+/** Opera's Arrivals read → this page's arrival records (cancelled / no-show left out) */
+function _adOpArrivals(read, today) {
+  if (!read || !Array.isArray(read.rows)) return [];
+  const sameDay = !read.date || read.date === today;
+  return read.rows.filter(r => r && r.name && !_AD_OP_BAD.includes(r.status) && r.status !== 'checked_out' && (r.arrival ? r.arrival === today : sameDay)).map(r => {
+    const room = _adOpRoom(r.room) ? _xrefNormRoom(r.room) : '';
+    const clean = String(r.name).includes(',') ? String(r.name).split(',').map(x => x.trim()).filter(x => x && !/^(mr|mrs|ms|miss|dr)\.?$/i.test(x)).slice(0, 2).reverse().join(' ') : String(r.name).trim();
+    return { room, name: clean.toLowerCase().replace(/\b\w+/g, w => _adCap(w)), rawName: r.name, conf: String(r.conf || '').trim(), arrDate: _adOpDay(r.arrival || today),
+      depDate: _adOpDay(r.departure), nights: r.nights || 1, adults: r.adults || 1, source: r.agent || r.company || r.source || 'Direct', arrTime: '', isExtension: false, depGuest: null, _fromOpera: true };
+  });
+}
+/** the departures this page compares: {list, src: 'board' | 'opera' | '', at} */
+let _adDepMemo = { k: '', v: null };
+function _adDepList() {
+  const B = (typeof depRooms !== 'undefined' && Array.isArray(depRooms)) ? depRooms : [];
+  const today = _adToday(), old = !B.length || (window._depDate && window._depDate < today);
+  const R = old ? _adOpRead('departures') : null;
+  if (!R) return { list: B, src: B.length ? 'board' : '', at: 0 };
+  const k = R.at + '|' + B.length + '|' + today;
+  if (_adDepMemo.k === k) return _adDepMemo.v;
+  const L = _adOpDepartures(R, today);
+  const v = L.length ? { list: L, src: 'opera', at: R.at } : { list: B, src: B.length ? 'board' : '', at: 0 };
+  _adDepMemo = { k, v };
+  return v;
+}
+const _adHHMM = at => { try { return new Date(at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } };
 
 function _adKeyOf(c) {
   return (c.kind + '_' + (c.oldRoom || 'x') + '_' + (c.newConf || c.newRoom || _adNameKey(c.name).replace(/ /g, '-') || 'x'))
@@ -991,7 +1061,7 @@ function _adBuild() {
     cards.push(c);
   });
   const paired = new Set(_adPairs.map(p => p.dep));
-  const deps = (typeof depRooms !== 'undefined' && Array.isArray(depRooms)) ? depRooms : [];
+  const deps = _adDepList().list;
   deps.forEach(d => {
     if (d.status !== 'extended' || paired.has(d)) return;
     const base = _adParse(d.departure);
@@ -1060,12 +1130,14 @@ function _adSrcHtml(nDep, nArr) {
   const dDate = window._depDate || '';
   const aDate = window._arrDate || '';
   const today = _adToday();
-  const depTxt = nDep ? `🚪 Departures: <b>${nDep}</b> room${nDep > 1 ? 's' : ''}${dDate && dDate !== today ? ` <em class="ad-warn">for ${escapeHtml(_adIsoFmt(dDate))}, not today</em>` : ''}`
+  const DL = _adDepList(), opA = _adSrc === 'opera' ? _adOpRead('arrivals') : null;
+  const depTxt = nDep && DL.src === 'opera' ? `🚪 Departures: <b>${nDep}</b> room${nDep > 1 ? 's' : ''} <em class="ad-op">📡 from Opera, ${escapeHtml(_adHHMM(DL.at))}</em>`
+    : nDep ? `🚪 Departures: <b>${nDep}</b> room${nDep > 1 ? 's' : ''}${dDate && dDate !== today ? ` <em class="ad-warn">for ${escapeHtml(_adIsoFmt(dDate))}, not today</em>` : ''}`
                       : `🚪 Departures: <b class="ad-miss">not loaded</b>`;
-  const arrFrom = _adSrc === 'paste' ? 'pasted here' : _adSrc === 'arrivals' ? 'from the Arrivals page' : '';
+  const arrFrom = _adSrc === 'paste' ? 'pasted here' : _adSrc === 'arrivals' ? 'from the Arrivals page' : _adSrc === 'opera' ? `<em class="ad-op">📡 from Opera, ${escapeHtml(_adHHMM(opA && opA.at))}</em>` : '';
   const arrTxt = nArr ? `🛎 Arrivals: <b>${nArr}</b> ${arrFrom}${_adSrc === 'arrivals' && aDate && aDate !== today ? ` <em class="ad-warn">for ${escapeHtml(_adIsoFmt(aDate))}, not today</em>` : ''}`
                       : `🛎 Arrivals: <b class="ad-miss">not loaded</b>`;
-  const paste = _adSrc === 'arrivals'
+  const paste = _adSrc === 'arrivals' || _adSrc === 'opera'
     ? `<button class="ad-link" onclick="adTogglePaste()">${_adShowPaste ? 'Hide paste box' : 'Paste a different report'}</button>` : '';
   return `<span>${depTxt}</span><span>${arrTxt}</span>${paste}`;
 }
@@ -1135,7 +1207,7 @@ function adRender() {
     _adListen();
     _adSyncArrivals();
     _xrefEnrichAll();
-    const deps = (typeof depRooms !== 'undefined' && Array.isArray(depRooms)) ? depRooms : [];
+    const deps = _adDepList().list;
     const nArr = _xrefArrRooms.length + _xrefArrNoRoom.length;
     const cards = _adCards = _adBuild();
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.innerHTML = v; };
@@ -1158,7 +1230,7 @@ function adRender() {
 
     // Paste box: needed when there are no arrivals, optional when the Arrivals page has them.
     const paste = document.getElementById('xrefPasteCard');
-    if (paste) paste.style.display = (_adSrc === '' || (_adSrc === 'arrivals' && _adShowPaste)) ? 'block' : 'none';
+    if (paste) paste.style.display = (_adSrc === '' || ((_adSrc === 'arrivals' || _adSrc === 'opera') && _adShowPaste)) ? 'block' : 'none';
     const res = document.getElementById('xrefResultCard');
     if (res) res.style.display = nArr ? 'block' : 'none';
     const rel = document.getElementById('xrefReloadBtn');
@@ -1244,9 +1316,11 @@ function adOpenDep(room) {
       if (!panel.classList.contains('active')) return;
       const d = (typeof depRooms !== 'undefined' && Array.isArray(depRooms)) ? depRooms : [];
       const g = (typeof arrGuests !== 'undefined' && Array.isArray(arrGuests)) ? arrGuests : [];
-      const sig = d.length + ':' + d.map(r => r.roomStr + r.status + (r.extensionNights || '')).join(',') + '|' + g.length + ':' + g.map(x => x.room + x.name + x.conf).join(',') + ':' + _adToday();
+      const sig = d.length + ':' + d.map(r => r.roomStr + r.status + (r.extensionNights || '')).join(',') + '|' + g.length + ':' + g.map(x => x.room + x.name + x.conf).join(',') + ':' + _adToday() + ':' + _adOpStamp();
       if (sig !== last) { last = sig; adRender(); }
     }, 2500);
+    // a new Opera read: draw again soon (the 2.5 s check above sees it too, within the cache time)
+    window.addEventListener('message', e => { if (e && e.data && e.data.source === 'ho-op') setTimeout(() => { _adOpCache.t = 0; if (panel.classList.contains('active')) adRender(); }, 700); });
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();
@@ -1281,6 +1355,7 @@ function adOpenDep(room) {
   .ad-src { display:flex; gap:6px 16px; flex-wrap:wrap; align-items:center; margin-top:10px; font-size:.75rem; color:var(--text2); position:relative; z-index:1; }
   .ad-src b { color:var(--text); } .ad-src b.ad-miss { color:var(--red, #dc2626); }
   .ad-warn { font-style:normal; color:var(--ad-chk); font-weight:600; }
+  .ad-op { font-style:normal; color:var(--accent); font-weight:600; white-space:nowrap; }
   .ad-link { background:none; border:0; padding:0; font:inherit; color:var(--accent); font-weight:700; cursor:pointer; text-decoration:underline; text-underline-offset:2px; }
   .ad-search { position:relative; margin-top:12px; z-index:1; }
   .ad-search input { width:100%; box-sizing:border-box; padding:11px 12px 11px 36px; border-radius:var(--r, 10px); font-size:.9rem;

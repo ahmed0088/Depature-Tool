@@ -237,3 +237,37 @@ function ttClear() {
   if (ha) ha.style.display = 'none';
 }
 
+
+// ── 📡 Opera vs DTCM today ────────────────────────────────
+// The TD portal is fixed from this page, so the same box as on DTCM Recon
+// (dtcm.js dtcOperaXrefHtml: Opera's reads of today against the last DTCM file)
+// shows here too, above the report. Suggestions only; shown only when Opera
+// was read today and a DTCM result exists.
+function ttRenderOperaX() {
+  const panel = document.getElementById('panel-tourism');
+  if (!panel || typeof dtcOperaXrefHtml !== 'function') return;
+  let html = '';
+  try { html = dtcOperaXrefHtml(); } catch (e) { console.warn('[tourism] Opera comparison:', e); }
+  let box = document.getElementById('ttOperaX');
+  if (!box) {
+    if (!html) return;
+    box = document.createElement('div'); box.id = 'ttOperaX';
+    const anchor = document.getElementById('ttPasteCard');
+    if (anchor) anchor.before(box); else panel.appendChild(box);
+  }
+  if (box._html === html) return;
+  const open = [...box.querySelectorAll('details')].map(d => d.open);
+  box._html = html; box.innerHTML = html;
+  box.querySelectorAll('details').forEach((d, i) => { if (open[i] === false) d.open = false; });
+  const inner = box.querySelector('#dtcOpX'); if (inner) inner.id = 'ttOpX';   // one #dtcOpX on the page
+}
+(function ttOpXBoot() {
+  const again = () => { const p = document.getElementById('panel-tourism'); if (p && p.classList.contains('active')) ttRenderOperaX(); };
+  window.addEventListener('message', e => { if (e && e.data && e.data.source === 'ho-op') setTimeout(again, 800); });
+  const start = () => {
+    const p = document.getElementById('panel-tourism'); if (!p) return;
+    try { new MutationObserver(again).observe(p, { attributes: true, attributeFilter: ['class'] }); } catch (e) {}
+    setInterval(again, 30000);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+})();

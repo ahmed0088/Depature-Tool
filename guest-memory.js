@@ -11,6 +11,10 @@
 //                        Never re-renders the table.
 //  4. "Save to Memory" — gmScanAndSaveAll() saves everything
 //                        currently loaded into memory.
+//  5. 📡 Opera         — gmOperaTick(): a guest Memory knows, seen
+//                        today in Opera with VIP / membership /
+//                        nationality → only EMPTY fields filled
+//                        (owner / manager only, never overwrites).
 //
 //  PASSWORD PROTECTION:
 //  · A panel-level password is stored in Firebase under
@@ -435,6 +439,86 @@ function _gmMergeLoaded() {
 
 function gmLookup(name) { return _gmStore[gmKey(name)] || null; }
 
+// ── 📡 Opera fills the gaps (opera-bridge.js → window.hoOpera) ──
+// A guest Memory already knows, seen today on an Opera profile or reservation
+// with a VIP code, a membership level or a nationality: ONLY the empty fields
+// are filled (never one already there), through the normal debounced save
+// (_gmPersist). Same rule as "Save to Memory": owners / managers only
+// (_gmCanSave) — for other roles nothing is saved. The lock is not touched
+// (like gmAutoFill, it works behind it and shows nobody's data).
+const GM_OP_KINDS = ['profile', 'details', 'arrivals', 'inhouse', 'departures', 'search'];
+const GM_OP_KEY = 'gm_opera_v1';   // {date, n}: how many guests were filled from Opera today
+/** a name's words, sorted, without titles: "Doe, Test Mr." and "TEST DOE" → "DOE TEST" */
+function gmNameWords(s) {
+  return String(s || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toUpperCase()
+    .replace(/\b(MR|MRS|MS|MISS|DR|MSTR|MASTER|PROF|SIR|MME)\b\.?/g, ' ').replace(/[^A-Z ]/g, ' ')
+    .split(/\s+/).filter(w => w.length > 1).sort().join(' ');
+}
+/** Opera's nationality ("AE", "GB", "India") the way the lists write it */
+function gmOperaNat(v) {
+  if (typeof hoOperaPure !== 'undefined' && hoOperaPure && typeof hoOperaPure.natName === 'function') { try { return hoOperaPure.natName(v); } catch (_) {} }
+  return String(v || '').trim();
+}
+/** what an Opera row adds to a Memory profile: only the fields that are empty there → {nat?, vip?, member?} or null */
+function gmOperaGaps(p, row) {
+  if (!p || !row) return null;
+  const add = {}, empty = v => v == null || String(v).trim() === '';
+  const nat = gmOperaNat(row.nat), vip = String(row.vip || '').trim(), mem = String(row.memberLevel || row.member || '').trim();
+  if (nat && empty(p.nat)) add.nat = nat;
+  if (vip && empty(p.vip)) add.vip = vip;
+  if (mem && empty(p.member)) add.member = mem;
+  return Object.keys(add).length ? add : null;
+}
+/** fill Memory's empty fields from Opera rows [{name, vip, memberLevel, member, nat}] → how many guests got something */
+function gmOperaFill(rows) {
+  if (!_gmCanSave() || !_gmReady || !Array.isArray(rows) || !rows.length) return 0;
+  // Memory's names by their words (one name shared by two profiles: left alone)
+  const idx = {};
+  Object.keys(_gmStore).forEach(k => { const w = gmNameWords(k); if (w) idx[w] = idx[w] === undefined ? k : null; });
+  const done = new Set();
+  let n = 0;
+  rows.forEach(r => {
+    if (!r || !r.name || !(r.vip || r.memberLevel || r.member || r.nat)) return;
+    const key = _gmStore[gmKey(r.name)] ? gmKey(r.name) : idx[gmNameWords(r.name)];
+    if (!key || done.has(key) || !_gmStore[key]) return;   // only a guest Memory already knows
+    const add = gmOperaGaps(_gmStore[key], r); if (!add) return;
+    _gmStore[key] = Object.assign({}, _gmStore[key], add);
+    done.add(key); n++;
+  });
+  if (!n) return 0;
+  _gmPersist();
+  let c = { date: '', n: 0 }; try { c = JSON.parse(localStorage.getItem(GM_OP_KEY) || 'null') || c; } catch (_) {}
+  const day = typeof hoLocalISO === 'function' ? hoLocalISO() : new Date().toISOString().slice(0, 10);
+  c = { date: day, n: (c.date === day ? +c.n || 0 : 0) + n };
+  try { localStorage.setItem(GM_OP_KEY, JSON.stringify(c)); } catch (_) {}
+  if (typeof logActivity === 'function') try { logActivity('guestmem_opera', `${n} guest${n === 1 ? '' : 's'} filled from Opera (VIP / membership / nationality) · ${c.n} today`); } catch (_) {}
+  if (_gmUnlocked) _gmUpdateUI();
+  return n;
+}
+/** filled from Opera today (for the profile count) */
+function gmOperaCount() { try { const c = JSON.parse(localStorage.getItem(GM_OP_KEY) || 'null'); const day = typeof hoLocalISO === 'function' ? hoLocalISO() : ''; return c && (!day || c.date === day) ? +c.n || 0 : 0; } catch (_) { return 0; } }
+let _gmOpSig = '';
+/** a new Opera read today: fill from its rows (cheap when nothing new was read) */
+function gmOperaTick() {
+  if (typeof hoOpera === 'undefined' || !hoOpera || typeof hoOpera.last !== 'function') return;
+  if (!_gmCanSave() || !_gmReady) return;
+  const day = typeof hoLocalISO === 'function' ? hoLocalISO() : '';
+  const reads = typeof hoOpera.timeline === 'function'
+    ? hoOpera.timeline().filter(x => x.kind === 'read' && GM_OP_KINDS.includes(x.screen)).map(x => x.screen + ':' + x.at)
+    : GM_OP_KINDS.map(k => { const L = hoOpera.last(k); return L ? k + ':' + L.at : ''; }).filter(Boolean);
+  const sig = reads.sort().join('|');
+  if (!sig || sig === _gmOpSig) return;
+  _gmOpSig = sig;
+  const rows = [];
+  GM_OP_KINDS.forEach(k => {
+    const L = hoOpera.last(k); if (!L || !L.at) return;
+    if (day && typeof hoLocalISO === 'function' && hoLocalISO(new Date(L.at)) !== day) return;   // only what Opera showed today
+    (L.rows || []).forEach(r => rows.push(r));
+  });
+  gmOperaFill(rows);
+}
+setInterval(() => { try { gmOperaTick(); } catch (_) {} }, 20000);
+
 function gmDeleteProfile(name) {
   if (!_gmUnlocked) { showToast('Unlock Guest Memory first 🔒', 'err'); return; }
   const key = gmKey(name);
@@ -489,7 +573,7 @@ function _gmRenderTable() {
     .sort((a, b) => a[0].localeCompare(b[0]));
 
   const cnt = document.getElementById('gmProfileCount');
-  if (cnt) cnt.textContent = entries.length + ' profiles';
+  if (cnt) { const op = gmOperaCount(); cnt.textContent = entries.length + ' profiles' + (op ? ` · 📡 ${op} filled from Opera today` : ''); }
 
   if (!entries.length) {
     tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:36px;

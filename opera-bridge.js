@@ -939,9 +939,11 @@ function openHotelUrl(id) {
 function hotelsHtml() {
   const L = HOTELS || [{ id: 'this', name: ((doc.getElementById('hotelName') || {}).textContent || 'This hotel').trim(), url: operaUrl(), cur: true, edit: canAdmin() }];
   const short = u => { try { const x = new URL(u); return x.hostname.split('.')[0] + ' · ' + x.pathname.split('/').filter(Boolean)[0]; } catch (_) { return ''; } };
-  return `<div class="hs-row hs-col"><span class="hs-txt"><b>Each hotel's Opera Cloud</b><small>🟢 Open Opera opens this hotel's address. ${myRole() === 'owner' ? 'You can change it for every hotel you own.' : myRole() === 'manager' ? 'You can change this hotel\'s.' : 'An owner or manager can change it.'}</small></span>
-    <div class="op-list">${L.map(h => `<div class="op-item op-hotel"><span>${esc(h.name)}${h.cur ? ' · this hotel' : ''}</span><span title="${esc(h.url)}">${h.url ? esc(short(h.url)) : 'not set yet'}</span>
-      <span class="hs-inline op-stuck-b">${h.url ? `<button type="button" class="btn sm ghost" data-op="hopen" data-hid="${esc(h.id)}">Open</button>` : ''}${h.edit ? `<button type="button" class="btn sm ghost" data-op="hedit" data-hid="${esc(h.id)}">Edit</button>` : ''}</span></div>`).join('')}</div></div>`;
+  const who = myRole() === 'owner' ? 'You can change it for every hotel you own.' : myRole() === 'manager' ? 'You can change this hotel\'s.' : 'An owner or manager can change it.';
+  return `<p class="op-note">🟢 Open Opera opens this hotel's address. ${who}</p>
+    <div class="op-hotels" role="list">${L.map(h => `<div class="op-hotel" role="listitem"><div class="op-h-name"><b title="${esc(h.name)}">${esc(h.name)}</b>${h.cur ? '<span class="op-badge">this hotel</span>' : ''}</div>
+      <div class="op-h-host" title="${esc(h.url)}">${h.url ? esc(short(h.url)) : '<em>not set yet</em>'}</div>
+      <div class="op-h-act">${h.url ? `<button type="button" class="btn sm ghost" data-op="hopen" data-hid="${esc(h.id)}">Open</button>` : ''}${h.edit ? `<button type="button" class="btn sm ghost" data-op="hedit" data-hid="${esc(h.id)}">Edit</button>` : ''}</div></div>`).join('')}</div>`;
 }
 
 function boardNow() {
@@ -1346,26 +1348,37 @@ async function copyReader() {
   } catch (_) { toast('Could not copy the reader (offline?) — try again', 'err'); }
 }
 function row(s, label, desc, right) { return `<div class="hs-row" data-s="${esc(s)}"><span class="hs-txt"><b>${label}</b><small>${desc}</small></span>${right ? `<span class="hs-inline">${right}</span>` : ''}</div>`; }
+// the 📡 Opera page's own rows (scoped CSS under #opRoot / #hs-opera — not the Settings hs-* layout)
+function orow(s, label, desc, right, cls) { return `<div class="op-row${cls ? ' ' + cls : ''}"${s ? ` data-s="${esc(s)}"` : ''}><div class="op-row-txt">${label ? `<b>${label}</b>` : ''}${desc ? `<small>${desc}</small>` : ''}</div>${right ? `<div class="op-row-act">${right}</div>` : ''}</div>`; }
 function sw(k, label, desc, on) {
-  return `<label class="hs-row" data-s="${esc('opera reader ' + label + ' ' + desc).toLowerCase()}"><span class="hs-txt"><b>${label}</b><small>${desc}</small></span>
-    <span class="hs-switch"><input type="checkbox" data-op="${k}" ${on ? 'checked' : ''}><i></i></span></label>`;
+  return `<label class="op-row op-sw" data-s="${esc('opera reader ' + label + ' ' + desc).toLowerCase()}"><div class="op-row-txt"><b>${label}</b><small>${desc}</small></div>
+    <span class="hs-switch op-switch"><input type="checkbox" data-op="${k}" ${on ? 'checked' : ''} aria-label="${esc(label)}"><i></i></span></label>`;
+}
+// which sections of the page are folded (this PC only)
+const LS_FOLD = 'ho_op_page_open_v1';
+function foldGet() { try { const v = JSON.parse(localStorage.getItem(LS_FOLD) || '{}'); return v && typeof v === 'object' ? v : {}; } catch (_) { return {}; } }
+function foldOpen(id, def) { const v = foldGet(); return id in v ? !!v[id] : def; }
+function foldSet(id, on) { try { const v = foldGet(); v[id] = !!on; localStorage.setItem(LS_FOLD, JSON.stringify(v)); } catch (_) {} }
+/** the helper on this PC: { helper (has the Opera reader), any (some HotelOps helper), v, old, needNew } */
+function helperNow() {
+  const D = doc.documentElement.dataset, helper = !!D.hoOpHelper, any = !!D.hoWaHelper;
+  const v = parseFloat(D.hoWaHelper || '0') || 0;   // one from before v436 links badly (stuck on "linking…")
+  return { helper, any, v, vs: D.hoWaHelper || '', old: helper && v < 436, needNew: !helper || v < 436, us: D.hoWaUs === '1' };
 }
 // the parts the Settings card and the 📡 Opera page share
 function helperRows() {
-  const D = doc.documentElement.dataset, helper = !!D.hoOpHelper, anyHelper = !!D.hoWaHelper;
-  // the helper can always be downloaded again; one from before v436 links badly (stuck on "linking…") and must be
-  const hv = parseFloat(D.hoWaHelper || '0') || 0, old = anyHelper && hv < 436;
-  const get = helper && !old
+  const H = helperNow(), helper = H.helper, anyHelper = H.any;
+  const get = helper && !H.old
     ? '<span class="op-ok">✓ The helper has the Opera reader</span><button class="btn sm ghost" data-op="dl">⬇ Download again</button>'
     : `<button class="btn sm gold" data-op="dl">⬇ ${anyHelper ? 'Get the new helper (once)' : 'Get the helper'}</button>`;
-  return row('opera reader helper console reader', 'The helper', helper ? 'Starts the reader on Opera Cloud by itself and links it here. No helper on a PC? Copy the console reader and paste it in Opera\'s console (F12).' : 'Without it: copy the console reader, paste it in Opera\'s console (F12) and press Connect in its window.',
-      `${get}<button class="btn sm ghost" data-op="copy" title="For a PC without the helper: paste it in Opera's console">Copy console reader</button>`)
-    + (!helper ? row('opera reader how to add helper', 'How to turn it on', `${anyHelper ? 'Your helper is from before the Opera reader: download it once more, then in <code>chrome://extensions</code> press ↻ on the HotelOps helper (or remove it and <b>Load unpacked</b> the new folder).' : 'Download the helper, unzip it, open <code>chrome://extensions</code>, turn on Developer mode, <b>Load unpacked</b> the folder, and turn on <b>Allow User Scripts</b> in its Details.'} Then press 🟢 Open Opera: the HotelOps window shows bottom right in Opera. It only reads; it never clicks or types in Opera.`) : '');
+  return orow('opera reader helper console reader', 'The helper', helper ? 'Starts the reader on Opera Cloud by itself and links it here. No helper on a PC? Copy the console reader and paste it in Opera\'s console (F12).' : 'Without it: copy the console reader, paste it in Opera\'s console (F12) and press Connect in its window.',
+      `${get}<button class="btn sm ghost" data-op="copy" title="For a PC without the helper: paste it in Opera's console">Copy console reader</button>`, 'op-wrap-act')
+    + (!helper ? orow('opera reader how to add helper', 'How to turn it on', `${anyHelper ? 'Your helper is from before the Opera reader: download it once more, then in <code>chrome://extensions</code> press ↻ on the HotelOps helper (or remove it and <b>Load unpacked</b> the new folder).' : 'Download the helper, unzip it, open <code>chrome://extensions</code>, turn on Developer mode, <b>Load unpacked</b> the folder, and turn on <b>Allow User Scripts</b> in its Details.'} Then press 🟢 Open Opera: the HotelOps window shows bottom right in Opera. It only reads; it never clicks or types in Opera.`) : '');
 }
 function pendingHtml() {
   const pend = Object.values(PENDING);
-  return pend.length ? `<div class="hs-row hs-col op-pend" data-s="opera reader waiting review apply"><span class="hs-txt"><b>Waiting for your OK</b><small>${pend.map(p => `${esc(KIND_LABEL[p.snap.kind] || p.snap.kind)} (${hhmm(p.at)}): ${esc(p.text)}`).join('<br>')}</small></span>
-        <span class="hs-inline"><button class="btn sm gold" data-op="apply">Apply</button><button class="btn sm ghost" data-op="discard">Discard</button></span></div>` : '';
+  return pend.length ? `<div class="op-row op-pend" data-s="opera reader waiting review apply"><div class="op-row-txt"><b>⏸ Waiting for your OK</b><small>${pend.map(p => `${esc(KIND_LABEL[p.snap.kind] || p.snap.kind)} (${hhmm(p.at)}): ${esc(p.text)}`).join('<br>')}</small></div>
+        <div class="op-row-act"><button class="btn sm gold" data-op="apply">Apply</button><button class="btn sm ghost" data-op="discard">Discard</button></div></div>` : '';
 }
 function statusLine() {
   const kinds = Object.values(LAST).sort((a, b) => b.at - a.at), last = kinds[0];
@@ -1381,66 +1394,113 @@ function cardHtml() {
     + pendingHtml() + stuckHtml();
 }
 const ST_LABEL = { due_in: 'arriving', in_house: 'in house', due_out: 'due out', checked_out: 'checked out', cancelled: 'cancelled', no_show: 'no show', waitlist: 'waitlist' };
+/** a status as a coloured pill: due out amber, checked out green, in house blue, extended purple */
+function stPill(r) {
+  const t = String(ST_LABEL[r.status] || r.statusText || r.rs || (r.status ? String(r.status).replace(/_/g, ' ') : '')), k = (r.status || '') + ' ' + t;
+  const c = /extend/i.test(k) ? 'ext' : /due_out|due out/i.test(k) ? 'out' : /checked_out|checked out/i.test(k) ? 'done' : /in_house|in house/i.test(k) ? 'in' : /due_in|arriv/i.test(k) ? 'arr' : /cancel|no.?show/i.test(k) ? 'bad' : '';
+  return t ? `<span class="op-pill${c ? ' op-pill-' + c : ''}">${esc(t)}</span>` : '';
+}
+/** a section of the page: a card with an icon + title header, an optional count, folded with <details> when `fold` */
+function opSec(o) {
+  const hd = `<span class="op-sec-ic" aria-hidden="true">${o.ic}</span><span class="op-sec-tt"><b>${o.title}</b>${o.sub ? `<small>${o.sub}</small>` : ''}</span>${o.count != null && o.count !== '' ? `<span class="op-count${o.hot ? ' hot' : ''}">${o.count}</span>` : ''}`;
+  if (!o.fold) return `<section class="op-sec op-card" id="op-${o.id}"><header class="op-sec-hd">${hd}</header><div class="op-sec-bd">${o.body}</div></section>`;
+  return `<details class="op-sec op-card op-fold" id="op-${o.id}" data-opk="${o.id}"${foldOpen(o.id, true) ? ' open' : ''}><summary class="op-sec-hd">${hd}<span class="op-chev" aria-hidden="true"></span></summary><div class="op-sec-bd">${o.body}</div></details>`;
+}
 /** the 📡 Opera page */
 function pageHtml() {
   const linked = opLinked45(), kinds = Object.values(LAST).sort((a, b) => b.at - a.at), last = kinds[0];
-  const sec = (id, title, sub, body) => `<section class="op-sec" id="op-${id}"><div class="op-sec-hd"><h2>${title}</h2>${sub ? `<p>${sub}</p>` : ''}</div><div class="hs-card op-card">${body}</div></section>`;
-  const S = openNow();
-  const check = linked ? '' : `<div class="hs-row hs-col op-check"><span class="hs-txt"><b>Not linked to Opera right now</b><small>Opera links by itself when it is open with the helper. If it doesn't:</small></span><ol>
-      <li>Press <b>🟢 Open Opera</b> above: it opens Opera Cloud in this same browser.</li>
-      <li>In Opera, the HotelOps window (bottom right) says what is missing: it checks this tab, the helper and its link.</li>
-      <li>Still “linking…”? Reload this HotelOps tab, then in <code>chrome://extensions</code> press ↻ on the HotelOps helper.</li>
-      ${S.state === 'nohelper' ? '<li>No helper on this PC: <b>Copy console reader</b> (Settings below), paste it in Opera\'s console (F12) and press <b>Connect</b> in its window.</li>' : ''}</ol></div>`;
+  const S = openNow(), H = helperNow(), M = learnModelNow();
+  // not linked: what to do, as steps
+  const steps = [];
+  if (H.needNew) steps.push([H.any ? 'Get the new helper' : 'Get the helper', H.any ? 'Yours is older than v436. Download it, unzip it over the same folder, then press ↻ on it in <code>chrome://extensions</code>.' : 'Download it, unzip it, <b>Load unpacked</b> in <code>chrome://extensions</code> (Developer mode) and turn on <b>Allow User Scripts</b>.']);
+  steps.push(['Open Opera', 'Press <b>🟢 Open Opera</b> above: it opens Opera Cloud in this same browser.']);
+  steps.push(['Check the HotelOps window', 'In Opera, the window bottom right says what is missing: it checks this tab, the helper and its link.']);
+  steps.push(['Still “linking…”?', 'Reload this HotelOps tab, then in <code>chrome://extensions</code> press ↻ on the HotelOps helper.']);
+  if (S.state === 'nohelper') steps.push(['No helper on this PC?', '<b>Copy console reader</b> (Settings below), paste it in Opera\'s console (F12) and press <b>Connect</b> in its window.']);
+  const check = linked ? '' : `<div class="op-card op-check" data-s="opera reader not linked steps"><div class="op-check-hd"><b>Not linked to Opera right now</b><small>Opera links by itself when it is open with the helper. If it doesn't:</small></div>
+    <ol class="op-steps" style="--n:${steps.length}">${steps.map((s, i) => `<li class="op-step"><span class="op-num">${i + 1}</span><div><b>${s[0]}</b><small>${s[1]}</small></div></li>`).join('')}</ol></div>`;
+  // live now
   const lr = last ? (last.rows || []) : [];
-  const live = last ? `<div class="hs-row hs-col"><span class="hs-txt"><b>${esc(KIND_LABEL[last.kind] || last.kind)}${last.title && String(last.title).toLowerCase().indexOf(String(KIND_LABEL[last.kind] || last.kind).toLowerCase()) < 0 ? ' · ' + esc(last.title) : ''}</b><small>${pl(last.n, 'line')}${last.total > last.n ? ' of ' + last.total : ''} read at ${hhmm(last.at)}${linked ? ' · live' : ''}${last.res ? ' · HotelOps: ' + esc(last.res) : ''}</small></span>
-      ${lr.length ? `<div class="op-tbl-wrap"><table class="op-tbl"><thead><tr><th>Room</th><th>Name</th><th>Status</th><th class="num">Balance</th></tr></thead><tbody>${lr.slice(0, 8).map(r => `<tr><td>${esc(r.room || '—')}</td><td>${esc(r.name || '')}</td><td>${esc(ST_LABEL[r.status] || r.statusText || r.rs || '')}</td><td class="num">${r.balance == null ? '' : esc(money2(r.balance))}</td></tr>`).join('')}</tbody></table>${lr.length > 8 ? `<small class="op-more">… ${lr.length - 8} more</small>` : ''}</div>` : ''}</div>`
-      + (kinds.length > 1 ? `<div class="hs-row hs-col"><span class="hs-txt"><b>Also read today</b></span><div class="op-list">${kinds.slice(1).map(k => `<div class="op-item"><span>${esc(KIND_LABEL[k.kind] || k.kind)}</span><span>${k.n}${k.total > k.n ? ' of ' + k.total : ''} · ${hhmm(k.at)}</span>${k.res ? `<small>${esc(k.res)}</small>` : ''}</div>`).join('')}</div></div>` : '')
-    : '<div class="hs-row"><span class="hs-txt"><b>Nothing read yet today</b><small>Open Opera with the button above: what it shows appears here.</small></span></div>';
-  const undo = LAST_UNDO && !LAST_UNDO.used && Date.now() - LAST_UNDO.at < 3 * 3600e3 ? `<div class="hs-row"><span class="hs-txt"><b>Last change · ${hhmm(LAST_UNDO.at)}</b><small>${esc(LAST_UNDO.text)}</small></span><span class="hs-inline"><button class="btn sm ghost" data-op="undo">↩ Undo</button></span></div>` : '';
-  const changes = pendingHtml() + undo + `<div class="hs-row hs-col"><span class="hs-txt"><b>${LOG.length ? pl(LOG.length, 'change') + ' today' : 'Nothing changed yet today'}</b><small>${LOG.length ? 'Newest first. Each change set had an Undo in its toast; the newest one also above.' : 'When Opera shows a check-out, an extension or a new arrival, the lists change by themselves and it shows here.'}</small></span>${LOG.length ? `<div class="op-list">${LOG.slice(0, 15).map(l =>
-      `<div class="op-item"><span>${hhmm(l.at)}</span><span>${esc(l.text)}</span>${l.detail && l.detail.length ? `<small>${esc(l.detail.slice(0, 6).join(' · '))}${l.detail.length > 6 ? ' …' : ''}</small>` : ''}</div>`).join('')}</div>` : ''}</div>`;
+  const live = last ? `<div class="op-live-hd"><b>${esc(KIND_LABEL[last.kind] || last.kind)}${last.title && String(last.title).toLowerCase().indexOf(String(KIND_LABEL[last.kind] || last.kind).toLowerCase()) < 0 ? ' · ' + esc(last.title) : ''}</b>${linked ? '<span class="op-live-dot">live</span>' : ''}<small>${pl(last.n, 'line')}${last.total > last.n ? ' of ' + last.total : ''} read at ${hhmm(last.at)}${last.res ? ' · HotelOps: ' + esc(last.res) : ''}</small></div>
+      ${lr.length ? `<div class="op-tbl-wrap"><table class="op-tbl"><thead><tr><th>Room</th><th>Name</th><th>Status</th><th class="num">Balance</th></tr></thead><tbody>${lr.slice(0, 8).map(r => `<tr><td>${esc(r.room || '—')}</td><td title="${esc(r.name || '')}">${esc(r.name || '')}</td><td>${stPill(r)}</td><td class="num">${r.balance == null ? '' : esc(money2(r.balance))}</td></tr>`).join('')}</tbody></table></div>${lr.length > 8 ? `<small class="op-more">… ${lr.length - 8} more</small>` : ''}` : ''}`
+      + (kinds.length > 1 ? `<div class="op-also"><span class="op-label">Also read today</span><div class="op-list">${kinds.slice(1).map(k => `<div class="op-item"><span>${esc(KIND_LABEL[k.kind] || k.kind)}</span><span>${k.n}${k.total > k.n ? ' of ' + k.total : ''} · ${hhmm(k.at)}</span>${k.res ? `<small>${esc(k.res)}</small>` : ''}</div>`).join('')}</div></div>` : '')
+    : `<div class="op-empty"><b>Nothing read yet today</b><small>Open Opera with the button above: what it shows appears here.</small></div>`;
+  // changes
+  const undo = LAST_UNDO && !LAST_UNDO.used && Date.now() - LAST_UNDO.at < 3 * 3600e3 ? orow('', `Last change · ${hhmm(LAST_UNDO.at)}`, esc(LAST_UNDO.text), '<button class="btn sm ghost" data-op="undo">↩ Undo</button>', 'op-undo') : '';
+  const changes = pendingHtml() + undo + (LOG.length
+    ? `<p class="op-note">Newest first. Each change set had an Undo in its toast; the newest one also above.</p><ol class="op-feed">${LOG.slice(0, 15).map(l =>
+      `<li><time>${hhmm(l.at)}</time><div><span>${esc(l.text)}</span>${l.detail && l.detail.length ? `<small>${esc(l.detail.slice(0, 6).join(' · '))}${l.detail.length > 6 ? ' …' : ''}</small>` : ''}</div></li>`).join('')}</ol>`
+    : `<div class="op-empty"><b>Nothing changed yet today</b><small>When Opera shows a check-out, an extension or a new arrival, the lists change by themselves and it shows here.</small></div>`);
+  // bills
   const fol = Object.values(FOL.date === today() ? FOL.rooms : {}), owe = fol.filter(f => f.balance > 0).sort((a, b) => b.balance - a.balance);
-  const bills = owe.length ? `<div class="hs-row hs-col"><div class="op-list" style="margin-top:0">${owe.slice(0, 40).map(f => `<div class="op-item"><span>${esc(f.room || f.conf || '—')}</span><span>AED ${esc(money2(f.balance))} open${(f.pays || []).length ? ' · ' + esc(f.pays.join(', ')) : ''}</span><small>${esc(firstLast(f.name || ''))} · read ${esc(hhmm(f.at))}${f.src === 'folio' ? ' on its bill' : ' on ' + esc(KIND_LABEL[f.src] || f.src || '')}</small></div>`).join('')}</div></div>`
-    : `<div class="hs-row"><span class="hs-txt"><b>${fol.length ? 'Every bill read today is settled' : 'No bill read yet today'}</b><small>Open a bill (Billing / Folio) or Departures in Opera: open balances show here and on the Departures cards.</small></span></div>`;
+  const oweSum = owe.reduce((a, f) => a + (+f.balance || 0), 0);
+  const bills = owe.length ? `<div class="op-bills">${owe.slice(0, 40).map(f => `<div class="op-bill"><div class="op-bill-who"><b>${esc(f.room || f.conf || '—')}</b><small>${esc(firstLast(f.name || ''))}${f.name ? ' · ' : ''}read ${esc(hhmm(f.at))}${f.src === 'folio' ? ' on its bill' : ' on ' + esc(KIND_LABEL[f.src] || f.src || '')}</small></div>
+      <div class="op-bill-pay">${(f.pays || []).map(p => `<span class="op-tag">${esc(p)}</span>`).join('')}</div><b class="op-amt"><small>AED</small> ${esc(money2(f.balance))}</b></div>`).join('')}</div>`
+    : `<div class="op-empty"><b>${fol.length ? 'Every bill read today is settled' : 'No bill read yet today'}</b><small>Open a bill (Billing / Folio) or Departures in Opera: open balances show here and on the Departures cards.</small></div>`;
   const ro = !canWrite() && signedIn();
   const settings = sw('auto', 'Adjust by itself', 'Check out rooms Opera shows checked out, mark extensions, add new arrivals and fill empty details. Never changes what someone typed.', CFG.auto)
     + sw('review', 'Review before applying', 'Hold the changes here until you press Apply', CFG.review)
     + helperRows()
-    + row('opera reader clear today', 'Clear today', 'Forget today\'s reads, bills and room statuses on this PC (the lists keep what was changed).', '<button class="btn sm ghost" data-op="clearday">Clear</button>');
+    + orow('opera reader clear today', 'Clear today', 'Forget today\'s reads, bills and room statuses on this PC (the lists keep what was changed).', '<button class="btn sm ghost" data-op="clearday">Clear</button>');
+  const rowsToday = kinds.filter(k => !k.date || k.date === today()).reduce((a, k) => a + (+k.n || 0), 0), stuckN = stuckLoad().length;
+  const tile = (go, ic, n, label, sub, tone) => `<button type="button" class="op-tile${tone ? ' ' + tone : ''}" data-opgo="${go}"><span class="op-tile-ic" aria-hidden="true">${ic}</span><span class="op-tile-n">${n}</span><span class="op-tile-l">${label}</span><small>${sub}</small></button>`;
+  const stats = `<div class="op-stats">
+      ${tile('live', '📥', rowsToday, 'Read today', rowsToday ? pl(kinds.length, 'screen') + (last ? ' · ' + hhmm(last.at) : '') : 'no rows yet')}
+      ${tile('changes', '✏️', LOG.length, 'Changes today', LOG.length ? 'last ' + hhmm(LOG[0].at) : 'none yet')}
+      ${tile('bills', '💳', owe.length, 'Open bills', owe.length ? 'AED ' + esc(money2(oweSum)) : 'all settled', owe.length ? 'warn' : '')}
+      ${tile('learn', '🧠', M.routines.length, 'Routines learned', learnOn() ? (M.events ? 'from ' + pl(M.events, 'step') : 'learning quietly') : 'learning off')}
+    </div>`;
   return `<div class="page-hd"><div class="page-hd-left"><h1>📡 Opera</h1><p>Reads Opera Cloud while you work and keeps Departures, Arrivals and In-House up to date${ro ? ' · your role sees what Opera shows; colleagues who can edit apply it' : ''}</p></div></div>
     <div class="op-wrap">
-      <div class="hs-card op-card op-top">${openCardHtml()}${check}</div>
-      ${sec('address', 'Opera address', 'Per hotel', hotelsHtml())}
-      ${sec('live', 'Live now', linked ? 'What Opera shows, as it is read' : 'The newest read', live)}
-      ${sec('changes', 'What it changed today', '', changes)}
-      ${sec('bills', 'Bills', 'Rooms with an open balance in Opera today', bills)}
-      ${sec('learn', '🧠 Learned from you', '', learnCardHtml())}
-      ${sec('stuck', '🛟 Screens it couldn\'t read', '', stuckHtml())}
-      ${sec('settings', 'Settings', '', settings)}
+      <div class="op-card op-top">${openCardHtml()}</div>
+      ${check}
+      ${stats}
+      ${opSec({ id: 'address', ic: '🏨', title: 'Opera address', sub: 'Each hotel\'s Opera Cloud', count: (HOTELS || [1]).length, body: hotelsHtml() })}
+      ${opSec({ id: 'live', ic: '📡', title: 'Live now', sub: linked ? 'What Opera shows, as it is read' : 'The newest read', count: lr.length || '', body: live })}
+      ${opSec({ id: 'changes', ic: '✏️', title: 'What it changed today', count: LOG.length || '', hot: Object.keys(PENDING).length > 0, body: changes, fold: true })}
+      ${opSec({ id: 'bills', ic: '💳', title: 'Bills', sub: 'Rooms with an open balance in Opera today', count: owe.length || '', hot: owe.length > 0, body: bills })}
+      ${opSec({ id: 'learn', ic: '🧠', title: 'Learned from you', sub: 'Your routines in Opera, on this PC', count: M.routines.length || '', body: learnCardHtml(), fold: true })}
+      ${opSec({ id: 'stuck', ic: '🛟', title: 'Screens it couldn\'t read', count: stuckN || '', hot: stuckN > 0, body: stuckHtml(true), fold: true })}
+      ${opSec({ id: 'settings', ic: '⚙️', title: 'Settings', sub: 'Switches and the helper', body: settings, fold: true })}
     </div>`;
 }
 let LAST_UNDO = null;   // the newest change set's Undo (this tab, while the lists are as it left them)
-/** the big "🟢 Open Opera" button and the helper's state (like WhatsApp's card) */
+/** the big "🟢 Open Opera" button and the helper's state: a hero with a status emblem and 3 status chips (the page and Settings) */
 function openCardHtml() {
-  const S = openNow(), url = operaUrl();
+  const S = openNow(), url = operaUrl(), H = helperNow(), linked = opLinked45();
   let host = ''; try { host = url ? new URL(url).hostname : ''; } catch (_) {}
-  return `<div class="hs-row hs-col op-open" data-s="opera reader open opera cloud linked helper address"><div class="op-open-row">
-      <button type="button" class="op-go" data-op="open">${esc(S.btn)}</button>
-      <div class="op-open-st"><b class="${S.state === 'on' ? 'op-ok' : S.state === 'noscripts' ? 'op-warn' : ''}">${esc(S.b)}</b>${S.state === 'nohelper' ? '<button type="button" class="op-lnk" data-op="dl">⬇ Get the helper</button>' : `<span>${esc(S.s)}</span>`}
-        ${S.state !== 'nohelper' && (parseFloat(doc.documentElement.dataset.hoWaHelper || '0') || 0) < 436 ? '<span class="op-old">Your helper is older than v436 (old window, can get stuck on “linking…”): <button type="button" class="op-lnk" data-op="dl">⬇ Get the new helper (once)</button> → unzip over the same folder → ↻ in chrome://extensions</span>' : ''}
-        <span class="op-url">${url ? `Opera: ${esc(host)} · <button type="button" class="op-lnk" data-op="url">change</button>` : 'Opera address: not known yet · <button type="button" class="op-lnk" data-op="url">set it</button> (or open Opera once: it is remembered)'}</span></div></div></div>`;
+  const last = Object.values(LAST).sort((a, b) => b.at - a.at)[0];
+  const tone = linked ? 'ok' : H.needNew ? 'err' : 'warn';
+  const how = linked ? (LINK && LINK.ext ? 'Through the helper' : 'Through the console reader')
+    : H.old || (!H.helper && H.any) ? 'Your helper is older than v436 and can get stuck on “linking…”' : !H.helper ? 'Get the helper to link with one click' : S.s && S.state === 'on' ? S.s : 'Links by itself when Opera opens';
+  const lastTxt = last ? `Last read ${hhmm(last.at)} · ${pl(last.n, 'line')} on ${esc(KIND_LABEL[last.kind] || last.kind)}${last.date && last.date !== today() ? ' (' + esc(last.date) + ')' : ''}` : 'Nothing read yet today';
+  const chip = (t, label, val, act, extra) => `<div class="op-hc is-${t}"><i class="op-dot" aria-hidden="true"></i><span class="op-hc-l">${label}</span><span class="op-hc-v">${val}</span>${act || ''}${extra || ''}</div>`;
+  const hChip = !H.helper && !H.any ? chip('err', 'Helper', 'Not installed', '<button type="button" class="op-hc-a" data-op="dl">get it</button>')
+    : H.needNew ? chip('warn', 'Helper', `${H.vs ? 'v' + esc(H.vs) : 'Old'} · old`, '<button type="button" class="op-hc-a" data-op="dl">update</button>')
+    : chip('ok', 'Helper', H.vs ? 'v' + esc(H.vs) : 'Installed', '');
+  const uChip = !H.helper ? chip('off', 'Auto-updates', 'Needs the helper', '')
+    : H.us ? chip('ok', 'Auto-updates', 'On', '')
+    : chip('warn', 'Auto-updates', 'Off', '', `<details class="op-how" data-opk="how"${foldOpen('how', false) ? ' open' : ''}><summary class="op-hc-a">How?</summary><p>In <code>chrome://extensions</code> click <b>Details</b> on the HotelOps helper, turn on <b>Allow User Scripts</b>, then reload this page.</p></details>`);
+  const aChip = url ? chip('ok', 'Opera address', `<span class="op-mono" title="${esc(host)}">${esc(host.split('.')[0] || host)}</span>`, '<button type="button" class="op-hc-a" data-op="url">change</button>')
+    : chip('warn', 'Opera address', 'Not known yet', '<button type="button" class="op-hc-a" data-op="url" title="Or open Opera once: it is remembered">set it</button>');
+  return `<div class="op-hero is-${tone}" data-s="opera reader open opera cloud linked helper address"><div class="op-hero-row">
+      <div class="op-emb" aria-hidden="true"><span>📡</span></div>
+      <div class="op-hero-txt"><b>${linked ? 'Linked to Opera' : 'Not linked to Opera'}</b><small>${esc(how)} · ${lastTxt}</small></div>
+      <div class="op-hero-act"><button type="button" class="op-go" data-op="open">${esc(S.btn)}</button>${H.needNew ? `<button type="button" class="btn gold op-get" data-op="dl">⬇ ${H.any ? 'Get the new helper' : 'Get the helper'}</button>` : ''}</div>
+    </div><div class="op-health">${hChip}${uChip}${aChip}</div></div>`;
 }
-/** 🛟 Screens it couldn't read */
-function stuckHtml() {
+/** 🛟 Screens it couldn't read (pg: on the page, under its own header) */
+function stuckHtml(pg) {
   const L = stuckLoad(), t0 = today();
   const when = t => { const d = new Date(t), iso = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; return (iso === t0 ? '' : iso.slice(5) + ' ') + hhmm(t); };
-  return `<div class="hs-row hs-col" data-s="opera reader screens it couldn't read stuck problems report copy for claude teach not read right"><span class="hs-txt"><b>🛟 Screens it couldn't read (${L.length})</b><small>${L.length
-      ? 'Press “📋 Copy for Claude” and paste it in the chat: the reader then learns that screen. It holds the screen’s layout only (headers and shapes like “Aaaa 99”), never guest data.'
-      : 'None — every screen it saw was read. If one isn’t read right, press 🛟 in the Opera window.'}</small></span>${L.length ? `<div class="op-list">${L.map(e => {
+  const desc = L.length
+    ? 'Press “📋 Copy for Claude” and paste it in the chat: the reader then learns that screen. It holds the screen’s layout only (headers and shapes like “Aaaa 99”), never guest data.'
+    : 'None — every screen it saw was read. If one isn’t read right, press 🛟 in the Opera window.';
+  return `<div class="op-row op-col" data-s="opera reader screens it couldn't read stuck problems report copy for claude teach not read right"><div class="op-row-txt">${pg ? '' : `<b>🛟 Screens it couldn't read (${L.length})</b>`}<small>${desc}</small></div>${L.length ? `<div class="op-list">${L.map(e => {
         const r = e.rep || {}, why = (r.why || []).map(w => w.t).join(' · ');
         return `<div class="op-item op-stuck"><span>${esc(when(e.last))}</span><span>${esc(r.title || KIND_LABEL[r.kind] || 'An Opera screen')}${r.kind ? ' · ' + esc(KIND_LABEL[r.kind] || r.kind) : ''}${e.n > 1 ? ` · seen ${e.n}×` : ''}${e.src === 'app' ? ' · HotelOps side' : ''}</span><small>${esc(why)}</small>
-          <span class="hs-inline op-stuck-b"><button type="button" class="btn sm gold" data-op="scopy" data-h="${esc(e.h)}">📋 Copy for Claude</button><button type="button" class="btn sm ghost" data-op="sdismiss" data-h="${esc(e.h)}">Dismiss</button></span></div>`;
-      }).join('')}</div><span class="hs-inline" style="margin-top:8px"><button type="button" class="btn sm ghost" data-op="sclear">Clear all</button></span>` : ''}</div>`;
+          <span class="op-stuck-b"><button type="button" class="btn sm gold" data-op="scopy" data-h="${esc(e.h)}">📋 Copy for Claude</button><button type="button" class="btn sm ghost" data-op="sdismiss" data-h="${esc(e.h)}">Dismiss</button></span></div>`;
+      }).join('')}</div><div class="op-btns"><button type="button" class="btn sm ghost" data-op="sclear">Clear all</button></div>` : ''}</div>`;
 }
 /** the small strip at the top of Departures and Arrivals (desk PC only: hidden on phones and touch screens) */
 function stripHtml() {
@@ -1464,9 +1524,9 @@ function learnCardHtml() {
   if (M.dwell.length) lines.push(`<div class="op-item"><span>Time per screen</span><span>${esc(M.dwell.slice(0, 4).map(d => `${d.l} ~${secTxt(d.avgSec)}`).join(' · '))}</span>${M.busy ? `<small>Busiest in Opera: ${esc(M.busy)}</small>` : ''}</div>`);
   const seen = SHOW_SEEN ? seenToday() : [];
   return sw('learn', 'Learn from me in Opera', 'Notes which Opera screens you open and the buttons you press — never what you type and never guest data — to learn your routines. Only on this PC (and a short summary under your own user).', on)
-    + `<div class="hs-row hs-col" data-s="opera reader learned from you routine habits watch me what it saw today clear"><span class="hs-txt"><b>🧠 Learned from you in Opera</b><small>${!on ? 'Off.' : M.events ? `From ${M.events} step${M.events === 1 ? '' : 's'} in ${M.tasks} task${M.tasks === 1 ? '' : 's'}${M.routines.length ? '' : ' — no routine seen 3 times yet'}` : 'Nothing yet: use Opera as usual, it learns quietly.'}${LRN_HINT ? ' · now: ' + esc(LRN_HINT) : ''}</small></span>
+    + `<div class="op-row op-col" data-s="opera reader learned from you routine habits watch me what it saw today clear"><div class="op-row-txt"><b>🧠 Learned from you in Opera</b><small>${!on ? 'Off.' : M.events ? `From ${M.events} step${M.events === 1 ? '' : 's'} in ${M.tasks} task${M.tasks === 1 ? '' : 's'}${M.routines.length ? '' : ' — no routine seen 3 times yet'}` : 'Nothing yet: use Opera as usual, it learns quietly.'}${LRN_HINT ? ' · now: ' + esc(LRN_HINT) : ''}</small></div>
       ${lines.length ? `<div class="op-list">${lines.join('')}</div>` : ''}
-      <span class="hs-inline" style="margin-top:8px"><button class="btn sm ghost" data-op="seen">${SHOW_SEEN ? 'Hide' : 'What it saw today'}</button><button class="btn sm ghost" data-op="forget">Clear what it learned</button></span>
+      <div class="op-btns"><button class="btn sm ghost" data-op="seen">${SHOW_SEEN ? 'Hide' : 'What it saw today'}</button><button class="btn sm ghost" data-op="forget">Clear what it learned</button></div>
       ${SHOW_SEEN ? `<div class="op-list">${seen.length ? seen.map(e => `<div class="op-item"><span>${hhmm(e.t)}</span><span>${e.k === 's' ? '📺 ' + esc(e.l) : e.k === 'r' ? '👆 a line of a list' : '👆 “' + esc(e.l) + '”'}</span></div>`).join('') : '<div class="op-item"><span>—</span><span>Nothing seen today</span></div>'}</div>` : ''}</div>`;
 }
 function sectionHtml() {
@@ -1504,6 +1564,9 @@ function mountPage() {
   const root = doc.createElement('div'); root.id = 'opRoot'; panel.appendChild(root); main.appendChild(panel);
   panel.addEventListener('click', e => { const t = e.target.closest && e.target.closest('#opRoot [data-op]'); if (t && t.tagName !== 'INPUT') onAct(t); });
   panel.addEventListener('change', e => { const t = e.target.closest && e.target.closest('#opRoot input[data-op]'); if (t) onSwitch(t); });
+  // the stat tiles jump to their section (unfolding it); folded sections are remembered on this PC
+  panel.addEventListener('click', e => { const t = e.target.closest && e.target.closest('#opRoot [data-opgo]'); if (t) goSec(t.dataset.opgo); });
+  root.addEventListener('toggle', e => { const d = e.target; if (d && d.dataset && d.dataset.opk) foldSet(d.dataset.opk, d.open); }, true);
   const item = doc.createElement('div'); item.className = 'nav-item'; item.id = 'nav-' + PANEL; item.dataset.panel = PANEL;
   item.setAttribute('onclick', "showPanel('" + PANEL + "')");
   item.innerHTML = '<div class="nav-icon" data-ho-ic="1" data-emoji="📡">' + NAV_IC + '</div>Opera';
@@ -1526,7 +1589,13 @@ function mountPage() {
 function openPage(sec) {
   if (typeof showPanel === 'function') showPanel(PANEL);
   paintPage();
-  if (sec) setTimeout(() => { const e = doc.getElementById('op-' + sec); if (e && e.scrollIntoView) e.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 80);
+  if (sec) { const e = doc.getElementById('op-' + sec); if (e && e.tagName === 'DETAILS') e.open = true; setTimeout(() => goSec(sec), 80); }
+}
+function goSec(sec) {
+  const e = doc.getElementById('op-' + sec); if (!e) return;
+  if (e.tagName === 'DETAILS' && !e.open) e.open = true;
+  const still = safe(() => W.matchMedia('(prefers-reduced-motion: reduce)').matches, false);
+  if (e.scrollIntoView) e.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'start' });
 }
 function inject() {
   const box = doc.getElementById('hsBody');
@@ -1563,32 +1632,184 @@ function onAct(t) {
 }
 function css() {
   const s = doc.createElement('style'); s.id = 'opCss';
-  s.textContent = `:is(#hs-opera,#opRoot) .op-list{display:grid;gap:6px;margin-top:10px}
-:is(#hs-opera,#opRoot) .op-item{display:grid;grid-template-columns:minmax(0,150px) minmax(0,1fr);gap:4px 10px;font-size:12.5px;padding:6px 10px;border:1px solid var(--border,#333);border-radius:var(--r,6px)}
-:is(#hs-opera,#opRoot) .op-item span:first-child{font-weight:600;color:var(--text,#eee)}:is(#hs-opera,#opRoot) .op-item span+span{color:var(--text2,#bbb)}
-:is(#hs-opera,#opRoot) .op-item small{grid-column:1/-1;color:var(--text3,#999)}:is(#hs-opera,#opRoot) .op-ok{font-size:12.5px;color:var(--green,#16a34a);font-weight:600;align-self:center}
-@media (max-width:560px){:is(#hs-opera,#opRoot) .op-item{grid-template-columns:1fr}}
-#hs-opera .op-open,#opRoot .op-open{padding:12px 14px !important;border-radius:16px;background:linear-gradient(135deg,color-mix(in srgb,#c9a14a 16%,var(--card,#1a1a1a)),var(--card,#1a1a1a));border:1px solid color-mix(in srgb,#c9a14a 42%,transparent)}
-.op-open-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-width:0}
+  s.textContent = `:is(#hs-opera,#opRoot){--op-r:16px;--op-r2:12px;--op-ok:var(--green,var(--mint,#16a34a));--op-warn:var(--amber,#d97706);--op-err:var(--rose,var(--red,#dc2626));--op-line:var(--border,#2a3342);--op-sub:var(--bg2,rgba(127,127,127,.08));--op-px:20px;--op-ease:cubic-bezier(.2,.7,.2,1);
+  --op-shadow:0 1px 2px color-mix(in srgb,#000 6%,transparent),0 10px 28px -18px color-mix(in srgb,#000 45%,transparent)}
+#opRoot,#hs-opera .op-hero,#hs-opera .op-row{font-family:var(--font,system-ui);-webkit-font-smoothing:antialiased}
+#opRoot{max-width:1000px;margin:0 auto;min-width:0;color:var(--text,#e5e7eb)}
+#opRoot .op-wrap{display:flex;flex-direction:column;gap:16px;min-width:0;padding-bottom:32px}
+#opRoot .op-card{background:var(--card,#161d28);border:1px solid var(--op-line);border-radius:var(--op-r);box-shadow:var(--op-shadow);min-width:0}
+:is(#hs-opera,#opRoot) code{font-family:var(--mono,ui-monospace,monospace);font-size:.92em;background:var(--op-sub);border:1px solid var(--op-line);padding:1px 6px;border-radius:6px;white-space:nowrap}
+:is(#hs-opera,#opRoot) small{font-size:12.5px;line-height:1.5;color:var(--text2,#9aa5b5)}
+:is(#hs-opera,#opRoot) :is(button,summary,.op-tile):focus-visible{outline:2px solid var(--accent,#e8b84b);outline-offset:2px}
+:is(#hs-opera,#opRoot) .op-mono{font-family:var(--mono,ui-monospace,monospace);font-size:.94em;letter-spacing:-.01em}
+/* hero: the status emblem, the title, Open Opera and the 3 status chips */
+:is(#hs-opera,#opRoot) .op-hero{--tone:var(--op-warn);position:relative;padding:20px var(--op-px);border-radius:inherit;
+  background:radial-gradient(120% 140% at 0% 0%,color-mix(in srgb,var(--tone) 10%,transparent),transparent 55%),var(--card,#161d28)}
+:is(#hs-opera,#opRoot) .op-hero.is-ok{--tone:var(--op-ok)}:is(#hs-opera,#opRoot) .op-hero.is-err{--tone:var(--op-err)}
+#hs-opera .op-hero{border:1px solid var(--op-line);border-radius:14px;margin:4px 0 8px;padding:18px}
+#hs-opera .hs-card{font-family:var(--font,system-ui)}
+:is(#hs-opera,#opRoot) .op-hero{container-type:inline-size}
+@container (max-width:620px){.op-health{grid-template-columns:minmax(0,1fr) !important}.op-hero-act{flex:1 1 100%}}
+:is(#hs-opera,#opRoot) .op-hero-row{display:flex;align-items:center;gap:16px;min-width:0;flex-wrap:wrap}
+:is(#hs-opera,#opRoot) .op-emb{flex:none;position:relative;width:56px;height:56px;border-radius:50%;display:grid;place-items:center;font-size:26px;line-height:1;
+  background:radial-gradient(circle at 35% 30%,color-mix(in srgb,var(--tone) 22%,var(--card,#161d28)),color-mix(in srgb,var(--tone) 10%,var(--card,#161d28)));
+  border:1px solid color-mix(in srgb,var(--tone) 35%,transparent);box-shadow:0 0 0 6px color-mix(in srgb,var(--tone) 8%,transparent),0 8px 26px -6px color-mix(in srgb,var(--tone) 55%,transparent)}
+:is(#hs-opera,#opRoot) .op-hero.is-ok .op-emb::after{content:'';position:absolute;inset:-6px;border-radius:50%;border:2px solid color-mix(in srgb,var(--tone) 45%,transparent);animation:opPulse 2.6s var(--op-ease) infinite}
+@keyframes opPulse{0%{transform:scale(.92);opacity:.9}70%,100%{transform:scale(1.18);opacity:0}}
+:is(#hs-opera,#opRoot) .op-hero-txt{flex:1 1 260px;min-width:0;display:flex;flex-direction:column;gap:4px}
+:is(#hs-opera,#opRoot) .op-hero-txt b{font-size:21px;font-weight:700;letter-spacing:-.015em;line-height:1.2;color:var(--text,#eee)}
+:is(#hs-opera,#opRoot) .op-hero-txt small{font-size:13px;color:var(--text2,#9aa5b5)}
+:is(#hs-opera,#opRoot) .op-hero-act{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+:is(#hs-opera,#opRoot) .op-hero .op-go{height:44px;padding:0 20px;border-radius:12px;font:650 14.5px var(--font,system-ui);letter-spacing:-.005em;color:#fff;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--op-ok) 82%,#fff),var(--op-ok));box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 8px 20px -10px var(--op-ok);transition:transform .15s var(--op-ease),filter .15s,box-shadow .15s}
+:is(#hs-opera,#opRoot) .op-hero .op-go:hover{filter:brightness(1.06);box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 12px 24px -10px var(--op-ok)}
+:is(#hs-opera,#opRoot) .op-hero .op-go:active{transform:scale(.98)}
+:is(#hs-opera,#opRoot) .op-hero .op-get{height:44px;padding:0 16px;border-radius:12px;font-size:13.5px}
+:is(#hs-opera,#opRoot) .op-health{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:16px}
+:is(#hs-opera,#opRoot) .op-hc{--c:var(--text3,#8892a0);position:relative;display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"d l a" "d v a";align-items:center;column-gap:10px;row-gap:1px;
+  min-width:0;padding:10px 12px;border-radius:var(--op-r2);background:color-mix(in srgb,var(--card,#161d28) 55%,var(--op-sub));border:1px solid var(--op-line)}
+:is(#hs-opera,#opRoot) .op-hc.is-ok{--c:var(--op-ok)}:is(#hs-opera,#opRoot) .op-hc.is-warn{--c:var(--op-warn)}:is(#hs-opera,#opRoot) .op-hc.is-err{--c:var(--op-err)}
+:is(#hs-opera,#opRoot) .op-dot{grid-area:d;width:8px;height:8px;border-radius:50%;background:var(--c);box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 20%,transparent)}
+:is(#hs-opera,#opRoot) .op-hc-l{grid-area:l;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text3,#8892a0);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+:is(#hs-opera,#opRoot) .op-hc-v{grid-area:v;font-size:13.5px;font-weight:600;color:var(--text,#eee);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+:is(#hs-opera,#opRoot) .op-hc > .op-hc-a,:is(#hs-opera,#opRoot) .op-how{grid-area:a}
+:is(#hs-opera,#opRoot) .op-hc-a{display:inline-flex;align-items:center;height:26px;padding:0 10px;border:0;border-radius:999px;cursor:pointer;list-style:none;white-space:nowrap;
+  background:color-mix(in srgb,var(--accent,#e8b84b) 13%,transparent);color:var(--accent,#e8b84b);font:600 12px var(--font,system-ui);transition:background .15s}
+:is(#hs-opera,#opRoot) .op-hc-a::-webkit-details-marker{display:none}
+:is(#hs-opera,#opRoot) .op-hc-a:hover{background:color-mix(in srgb,var(--accent,#e8b84b) 22%,transparent)}
+:is(#hs-opera,#opRoot) .op-how > p{position:absolute;z-index:5;left:0;right:0;top:calc(100% + 6px);margin:0;padding:12px 14px;border-radius:var(--op-r2);font-size:12.5px;line-height:1.5;color:var(--text2,#9aa5b5);
+  background:var(--card,#161d28);border:1px solid var(--op-line);box-shadow:0 12px 32px -12px color-mix(in srgb,#000 50%,transparent)}
+:is(#hs-opera,#opRoot) .op-how[open] > summary{background:color-mix(in srgb,var(--accent,#e8b84b) 22%,transparent)}
+/* not linked: the steps */
+#opRoot .op-check{padding:20px var(--op-px)}
+#opRoot .op-check-hd{display:flex;flex-direction:column;gap:2px}#opRoot .op-check-hd b{font-size:15px;font-weight:650}
+#opRoot .op-steps{list-style:none;margin:16px 0 0;padding:0;display:grid;grid-template-columns:repeat(var(--n,3),minmax(0,1fr));gap:8px}
+@media (max-width:1180px){#opRoot .op-steps{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:600px){#opRoot .op-steps{grid-template-columns:minmax(0,1fr)}}
+#opRoot .op-step{display:flex;gap:12px;align-items:flex-start;padding:14px;border-radius:var(--op-r2);background:color-mix(in srgb,var(--card,#161d28) 55%,var(--op-sub));border:1px solid var(--op-line);min-width:0}
+#opRoot .op-step > div{display:flex;flex-direction:column;gap:3px;min-width:0}#opRoot .op-step b{font-size:13.5px;font-weight:650;color:var(--text,#eee)}
+#opRoot .op-step small{overflow-wrap:anywhere}
+#opRoot .op-num{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font:700 13px var(--font,system-ui);font-variant-numeric:tabular-nums;
+  color:var(--accent,#e8b84b);background:color-mix(in srgb,var(--accent,#e8b84b) 14%,transparent);border:1px solid color-mix(in srgb,var(--accent,#e8b84b) 35%,transparent)}
+/* stats */
+#opRoot .op-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+#opRoot .op-tile{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"n ic" "l l" "s s";align-items:start;gap:2px 8px;text-align:left;cursor:pointer;min-width:0;padding:16px;
+  font-family:inherit;color:var(--text,#eee);background:var(--card,#161d28);border:1px solid var(--op-line);border-radius:var(--op-r);box-shadow:var(--op-shadow);transition:transform .18s var(--op-ease),border-color .18s,box-shadow .18s}
+#opRoot .op-tile:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--accent,#e8b84b) 45%,var(--op-line))}
+#opRoot .op-tile-ic{grid-area:ic;width:32px;height:32px;border-radius:10px;display:grid;place-items:center;font-size:15px;background:var(--op-sub)}
+#opRoot .op-tile-n{grid-area:n;font-size:26px;font-weight:700;letter-spacing:-.02em;line-height:1.1;font-variant-numeric:tabular-nums}
+#opRoot .op-tile-l{grid-area:l;font-size:13px;font-weight:600;color:var(--text,#eee);margin-top:4px}
+#opRoot .op-tile small{grid-area:s;font-size:12px;color:var(--text3,#8892a0);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+#opRoot .op-tile.warn .op-tile-n{color:var(--op-warn)}
+/* sections */
+#opRoot .op-sec{overflow:hidden;scroll-margin-top:16px}
+#opRoot .op-sec-hd{display:flex;align-items:center;gap:12px;padding:16px var(--op-px);min-width:0;list-style:none}
+#opRoot summary.op-sec-hd{cursor:pointer;transition:background .15s}#opRoot summary.op-sec-hd:hover{background:color-mix(in srgb,var(--op-sub) 60%,transparent)}
+#opRoot summary.op-sec-hd::-webkit-details-marker{display:none}
+#opRoot .op-sec-ic{flex:none;width:36px;height:36px;border-radius:11px;display:grid;place-items:center;font-size:17px;background:var(--op-sub);border:1px solid var(--op-line)}
+#opRoot .op-sec-tt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+#opRoot .op-sec-tt b{font-size:15px;font-weight:650;letter-spacing:-.01em;color:var(--text,#eee)}#opRoot .op-sec-tt small{color:var(--text3,#8892a0)}
+#opRoot .op-count{flex:none;min-width:26px;height:24px;padding:0 8px;border-radius:999px;display:grid;place-items:center;font:600 12px var(--font,system-ui);font-variant-numeric:tabular-nums;color:var(--text2,#9aa5b5);background:var(--op-sub);border:1px solid var(--op-line)}
+#opRoot .op-count.hot{color:var(--op-warn);background:color-mix(in srgb,var(--op-warn) 13%,transparent);border-color:color-mix(in srgb,var(--op-warn) 30%,transparent)}
+#opRoot .op-chev{flex:none;width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:var(--text3,#8892a0)}
+#opRoot .op-chev::before{content:'';width:7px;height:7px;border:solid currentColor;border-width:0 2px 2px 0;transform:translateY(-2px) rotate(45deg);transition:transform .2s var(--op-ease)}
+#opRoot details[open] > summary .op-chev::before{transform:translateY(2px) rotate(-135deg)}
+#opRoot .op-sec-bd{border-top:1px solid var(--op-line);min-width:0}
+#opRoot .op-note{margin:0;padding:12px var(--op-px) 0;font-size:12.5px;line-height:1.5;color:var(--text2,#9aa5b5)}
+#opRoot .op-empty{display:flex;flex-direction:column;gap:2px;padding:20px var(--op-px)}#opRoot .op-empty b{font-size:14px;font-weight:600}
+#opRoot .op-label{display:block;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text3,#8892a0)}
+/* rows (the page and the Settings card) */
+:is(#hs-opera,#opRoot) .op-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px var(--op-px);border-bottom:1px solid var(--op-line);min-width:0}
+#hs-opera .op-row{padding:14px 18px}
+:is(#hs-opera,#opRoot) .op-row:last-child{border-bottom:0}
+:is(#hs-opera,#opRoot) .op-row.op-col{flex-direction:column;align-items:stretch;gap:0}
+:is(#hs-opera,#opRoot) .op-row-txt{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1 1 auto}
+:is(#hs-opera,#opRoot) .op-row-txt b{font-size:14px;font-weight:600;color:var(--text,#eee)}
+:is(#hs-opera,#opRoot) .op-row-txt small{overflow-wrap:anywhere}
+:is(#hs-opera,#opRoot) .op-row-act{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;flex:0 0 auto;max-width:100%}
+:is(#hs-opera,#opRoot) .op-wrap-act .op-row-act{flex:0 1 auto}
+#opRoot label.op-sw{cursor:pointer;transition:background .15s}#opRoot label.op-sw:hover{background:color-mix(in srgb,var(--op-sub) 60%,transparent)}
+:is(#hs-opera,#opRoot) .op-pend{background:color-mix(in srgb,var(--op-warn) 8%,transparent)}
+:is(#hs-opera,#opRoot) .op-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+:is(#hs-opera,#opRoot) .op-ok{font-size:12.5px;color:var(--op-ok);font-weight:600;align-self:center}
+/* lists: stuck screens, routines, also read today */
+:is(#hs-opera,#opRoot) .op-list{display:grid;gap:8px;margin-top:12px}
+:is(#hs-opera,#opRoot) .op-item{display:grid;grid-template-columns:minmax(0,140px) minmax(0,1fr);gap:4px 12px;font-size:13px;padding:10px 12px;border-radius:var(--op-r2);background:color-mix(in srgb,var(--card,#161d28) 55%,var(--op-sub));border:1px solid var(--op-line)}
+:is(#hs-opera,#opRoot) .op-item span:first-child{font-weight:600;color:var(--text,#eee);font-variant-numeric:tabular-nums}:is(#hs-opera,#opRoot) .op-item span+span{color:var(--text2,#9aa5b5);min-width:0;overflow-wrap:anywhere}
+:is(#hs-opera,#opRoot) .op-item small{grid-column:1/-1;color:var(--text3,#8892a0)}
+:is(#hs-opera,#opRoot) .op-stuck .op-stuck-b{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+#opRoot .op-also{padding:4px var(--op-px) 20px}
+/* hotel addresses: a table-like grid */
+#opRoot .op-hotels{display:flex;flex-direction:column;padding:8px 12px 12px}
+#opRoot .op-hotel{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto;align-items:center;gap:16px;padding:10px 8px;border-radius:var(--op-r2);transition:background .15s}
+#opRoot .op-hotel + .op-hotel{border-top:1px solid var(--op-line);border-radius:0}
+#opRoot .op-hotel:hover{background:color-mix(in srgb,var(--op-sub) 60%,transparent)}
+#opRoot .op-h-name{display:flex;align-items:center;gap:8px;min-width:0}
+#opRoot .op-h-name b{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+#opRoot .op-badge{flex:none;padding:2px 8px;border-radius:999px;font:600 11px var(--font,system-ui);white-space:nowrap;color:var(--accent,#e8b84b);background:color-mix(in srgb,var(--accent,#e8b84b) 13%,transparent)}
+#opRoot .op-h-host{font-family:var(--mono,ui-monospace,monospace);font-size:12.5px;color:var(--text3,#8892a0);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+#opRoot .op-h-host em{font-family:var(--font,system-ui)}
+#opRoot .op-h-act{display:flex;gap:8px;justify-content:flex-end}
+/* live now */
+#opRoot .op-live-hd{display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px;padding:16px var(--op-px) 12px}
+#opRoot .op-live-hd b{font-size:14px;font-weight:650}#opRoot .op-live-hd small{flex:1 1 100%}
+#opRoot .op-live-dot{display:inline-flex;align-items:center;gap:6px;font:600 11px var(--font,system-ui);letter-spacing:.06em;text-transform:uppercase;color:var(--op-ok)}
+#opRoot .op-live-dot::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 22%,transparent);animation:opBlink 2s ease-in-out infinite}
+@keyframes opBlink{50%{opacity:.35}}
+#opRoot .op-tbl-wrap{margin:0 var(--op-px) 20px;max-height:400px;overflow:auto;border:1px solid var(--op-line);border-radius:var(--op-r2);min-width:0}
+#opRoot .op-tbl{width:100%;min-width:0;margin:0;table-layout:fixed;border-collapse:separate;border-spacing:0;font-size:13px}
+#opRoot .op-tbl th{position:sticky;top:0;z-index:1;text-align:left;font-weight:600;color:var(--text3,#8892a0);font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding:10px 12px;
+  background:color-mix(in srgb,var(--card,#161d28) 70%,var(--op-sub));border-bottom:1px solid var(--op-line)}
+#opRoot .op-tbl td{padding:10px 12px;color:var(--text,#eee);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#opRoot .op-tbl tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--text,#888) 3.5%,transparent)}
+#opRoot .op-tbl tbody tr:hover td{background:color-mix(in srgb,var(--accent,#e8b84b) 7%,transparent)}
+#opRoot .op-tbl th:first-child,#opRoot .op-tbl td:first-child{width:72px;font-weight:650;font-variant-numeric:tabular-nums}
+#opRoot .op-tbl th:nth-child(3),#opRoot .op-tbl td:nth-child(3){width:124px}#opRoot .op-tbl .num{width:104px;text-align:right;font-variant-numeric:tabular-nums}
+#opRoot .op-more{display:block;margin:-12px var(--op-px) 16px;color:var(--text3,#8892a0)}
+#opRoot .op-pill{--c:var(--text3,#8892a0);display:inline-flex;align-items:center;max-width:100%;padding:2px 9px;border-radius:999px;font:600 11.5px var(--font,system-ui);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  color:var(--c);background:color-mix(in srgb,var(--c) 13%,transparent);border:1px solid color-mix(in srgb,var(--c) 26%,transparent)}
+#opRoot .op-pill-out{--c:var(--op-warn)}#opRoot .op-pill-done{--c:var(--op-ok)}#opRoot .op-pill-in{--c:var(--blue,#3b82f6)}#opRoot .op-pill-ext{--c:var(--purple,#8b5cf6)}#opRoot .op-pill-arr{--c:var(--teal,#0d9488)}#opRoot .op-pill-bad{--c:var(--op-err)}
+/* changes: a time line */
+#opRoot .op-feed{list-style:none;margin:0;padding:8px var(--op-px) 16px}
+#opRoot .op-feed li{position:relative;display:grid;grid-template-columns:52px minmax(0,1fr);gap:12px;padding:10px 0}
+#opRoot .op-feed li + li{border-top:1px solid color-mix(in srgb,var(--op-line) 70%,transparent)}
+#opRoot .op-feed time{font-size:12.5px;font-weight:600;color:var(--text3,#8892a0);font-variant-numeric:tabular-nums;padding-top:1px}
+#opRoot .op-feed li > div{display:flex;flex-direction:column;gap:2px;min-width:0}#opRoot .op-feed span{font-size:13.5px;color:var(--text,#eee);overflow-wrap:anywhere}
+#opRoot .op-feed small{color:var(--text3,#8892a0);overflow-wrap:anywhere}
+/* bills */
+#opRoot .op-bills{display:flex;flex-direction:column;padding:4px 12px 8px}
+#opRoot .op-bill{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:12px;padding:12px 8px}
+#opRoot .op-bill + .op-bill{border-top:1px solid var(--op-line)}
+#opRoot .op-bill-who{display:flex;flex-direction:column;gap:1px;min-width:0}#opRoot .op-bill-who b{font-size:14px;font-weight:650;font-variant-numeric:tabular-nums}
+#opRoot .op-bill-who small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text3,#8892a0)}
+#opRoot .op-bill-pay{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+#opRoot .op-tag{padding:2px 8px;border-radius:999px;font:600 11.5px var(--font,system-ui);white-space:nowrap;color:var(--text2,#9aa5b5);background:var(--op-sub);border:1px solid var(--op-line)}
+#opRoot .op-amt{font-size:15px;font-weight:700;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;min-width:96px}
+#opRoot .op-amt small{font-size:11px;font-weight:600;color:var(--text3,#8892a0)}
+/* the 3 Settings-card buttons stay usable in Settings too */
+#hs-opera .op-hero .op-hero-act .btn{flex:none}
+@media (max-width:760px){#opRoot .op-stats{grid-template-columns:repeat(2,minmax(0,1fr))}:is(#hs-opera,#opRoot) .op-health{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:600px){
+  :is(#hs-opera,#opRoot){--op-px:16px}#opRoot .op-wrap{gap:12px}
+  :is(#hs-opera,#opRoot) .op-hero{padding:16px var(--op-px)}
+  :is(#hs-opera,#opRoot) .op-hero-row{gap:12px}
+  :is(#hs-opera,#opRoot) .op-emb{width:48px;height:48px;font-size:22px}
+  :is(#hs-opera,#opRoot) .op-hero-txt{flex:1 1 0}:is(#hs-opera,#opRoot) .op-hero-txt b{font-size:18px}
+  :is(#hs-opera,#opRoot) .op-hero-act{flex:1 1 100%;align-items:stretch}:is(#hs-opera,#opRoot) .op-hero-act > *{flex:1 1 0;min-width:0;justify-content:center;text-align:center}
+  :is(#hs-opera,#opRoot) .op-hero .op-hero-act > :is(.op-go,.op-get){height:auto;min-height:44px;padding:8px 10px;white-space:normal;line-height:1.2;font-size:13.5px}
+  #opRoot .op-tile{padding:12px}#opRoot .op-tile-n{font-size:22px}
+  #opRoot .op-hotel{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"n a" "h a";gap:2px 12px}
+  #opRoot .op-h-name{grid-area:n}#opRoot .op-h-host{grid-area:h}#opRoot .op-h-act{grid-area:a}
+  #opRoot .op-tbl th,#opRoot .op-tbl td{padding:9px 8px}
+  #opRoot .op-tbl th:first-child,#opRoot .op-tbl td:first-child{width:52px}#opRoot .op-tbl th:nth-child(3),#opRoot .op-tbl td:nth-child(3){width:106px}#opRoot .op-tbl .num{width:74px}
+  #opRoot .op-bill{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"w a" "p a";gap:4px 12px}
+  #opRoot .op-bill-who{grid-area:w}#opRoot .op-bill-pay{grid-area:p;justify-content:flex-start}#opRoot .op-amt{grid-area:a;min-width:0}
+  :is(#hs-opera,#opRoot) .op-row:not(.op-col):not(.op-sw){flex-wrap:wrap}:is(#hs-opera,#opRoot) .op-row:not(.op-sw) .op-row-act{justify-content:flex-start}
+  :is(#hs-opera,#opRoot) .op-item{grid-template-columns:minmax(0,1fr)}
+}
+@media (prefers-reduced-motion:reduce){:is(#hs-opera,#opRoot) *,:is(#hs-opera,#opRoot) *::before,:is(#hs-opera,#opRoot) *::after{animation:none !important;transition:none !important}#opRoot .op-tile:hover{transform:none}}
 .op-go{flex:0 0 auto;padding:11px 16px;border-radius:12px;border:0;background:linear-gradient(135deg,#22c55e,#15803d);color:#fff;font:700 14px var(--font,system-ui);cursor:pointer;box-shadow:0 8px 20px -10px #15803d;white-space:nowrap}
 .op-go:active{transform:scale(.97)}.op-go.sm{padding:7px 12px;border-radius:10px;font-size:13px;box-shadow:none}
-.op-open-st{display:flex;flex-direction:column;gap:2px;font-size:12.5px;color:var(--text2,#bbb);min-width:0;flex:1 1 220px}.op-open-st b{color:var(--text,#eee);font-size:13.5px}
-.op-old{color:var(--amber,#d97706);font-size:12.5px}.op-old .op-lnk{font-weight:700}
-.op-open-st b.op-ok{color:var(--green,#16a34a)}.op-open-st b.op-warn{color:var(--amber,#d97706)}.op-url{color:var(--text3,#999);font-size:12px}
-.op-lnk{align-self:flex-start;padding:0;border:0;background:none;color:var(--accent,#c9a14a);font:600 12.5px var(--font,system-ui);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
-.op-url .op-lnk{display:inline;font-size:12px}
-:is(#hs-opera,#opRoot) .op-stuck .op-stuck-b{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap}
-#opRoot{max-width:980px;margin:0 auto;min-width:0}#opRoot .op-wrap{display:flex;flex-direction:column;gap:18px;min-width:0}
-#opRoot .op-card{padding:0;overflow:hidden;min-width:0}#opRoot .op-top .op-open{border-radius:0 !important;border:0;border-bottom:1px solid var(--border,#333)}
-#opRoot .op-sec-hd{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:0 2px 8px}#opRoot .op-sec-hd h2{margin:0;font-size:1rem;font-weight:700;color:var(--text,#eee)}#opRoot .op-sec-hd p{margin:0;font-size:12.5px;color:var(--text3,#999)}
-#opRoot .hs-row,#opRoot .hs-txt{min-width:0}#opRoot .hs-row.hs-col{flex-wrap:nowrap}#opRoot .hs-row.hs-col>*{max-width:100%}#opRoot .hs-txt small{overflow-wrap:anywhere;white-space:normal}
-#opRoot .op-check ol{margin:8px 0 2px;padding-left:20px;display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--text2,#bbb)}#opRoot .op-check code{background:var(--bg2,#222);padding:1px 5px;border-radius:5px}
-#opRoot .op-tbl-wrap{margin-top:10px;min-width:0}#opRoot .op-tbl{width:100%;min-width:0;table-layout:fixed;border-collapse:collapse;font-size:12.5px}
-#opRoot .op-tbl th{text-align:left;font-weight:600;color:var(--text3,#999);font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:4px 6px;border-bottom:1px solid var(--border,#333)}
-#opRoot .op-tbl td{padding:6px;border-bottom:1px solid color-mix(in srgb,var(--border,#333) 60%,transparent);color:var(--text,#eee);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#opRoot .op-tbl th:first-child,#opRoot .op-tbl td:first-child{width:62px;font-weight:600}#opRoot .op-tbl th:nth-child(3),#opRoot .op-tbl td:nth-child(3){width:96px}#opRoot .op-tbl .num{width:82px;text-align:right;font-variant-numeric:tabular-nums}
-#opRoot .op-more{display:block;margin-top:6px;color:var(--text3,#999)}
-@media (max-width:560px){#opRoot .op-tbl th:nth-child(3),#opRoot .op-tbl td:nth-child(3){width:74px}#opRoot .op-tbl .num{width:64px}#opRoot .hs-row:not(.hs-col){flex-wrap:wrap}#opRoot .hs-inline{flex-wrap:wrap}}
 .op-strip{display:flex;align-items:center;gap:10px;margin:-8px 0 14px;padding:7px 10px;border-radius:12px;border:1px solid var(--border,#333);background:var(--card,transparent);min-width:0;max-width:100%;box-sizing:border-box}
 .op-strip-st{font-size:12.5px;color:var(--text2,#bbb);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (hover:none),(pointer:coarse),(max-width:760px){.op-strip{display:none !important}}

@@ -18,6 +18,8 @@
 //            result, doneBy, doneAt, tries, alerts, lastAlert, backup,
 //            confirmed, backupOf }
 //  (the same list Ops Brain's "wake up 512 at 6:30" uses)
+//  📡 Opera (hoOpera.traces()): a trace asking for a wake-up call shows as a
+//  suggestion on the page ("add it?"); one tap adds it with wkAdd, never by itself.
 // ═══════════════════════════════════════════════════════════
 
 const _wkMe = () => (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || 'Someone';
@@ -159,6 +161,75 @@ function wkPrint() {
 }
 function wkSetFilter(v) { _wkFilter = String(v || '').trim(); const r = document.getElementById('wkRoot'); if (r) _wkLists(r); }
 
+// ── 📡 Opera traces that ask for a wake-up call → a suggestion ──
+// (opera-bridge.js: hoOpera.traces() — today's traces read in Opera.) "wake up 6:30",
+// "WUC 0630", "morning call 7am" on a room → "📡 Opera trace: room 0412 wake-up 06:30 — add it?".
+// One tap adds it with wkAdd (the normal add); nothing is added by itself. A call already set for
+// that room at that time is not suggested; ✕ hides it for today.
+const WK_OP_RX = /\bwake[\s-]*up\b|\bwakeup\b|\bW\.?U\.?C\b|\bmorning\s+call\b/i;
+const WK_OP_NO = 'wk_op_no_v1';   // {date, keys}
+const _wkRoomKey = r => String(r == null ? '' : r).trim().toUpperCase().replace(/^0+(?=\d)/, '');
+/** the time a trace's text asks for: "wake up 6:30", "WUC 0630", "morning call at 7am" → [h, mi] (null: no wake-up or no time) */
+function wkOperaTime(text, room) {
+  const s = String(text || ''), m = s.match(WK_OP_RX); if (!m) return null;
+  const rk = _wkRoomKey(room);
+  const RX = /(?:^|[^\d:.])(\d{1,2}[:.h]\d{2}\s*(?:am|pm)?|\d{1,2}\s*(?:am|pm)|\d{4}|(?<=\bat\s)\d{1,2})(?![\d:]|\.\d)/gi;
+  const pick = part => { for (const x of part.matchAll(RX)) { const v = x[1].replace(/\s+/g, ''); if (/^\d{3,4}$/.test(v) && _wkRoomKey(v) === rk) continue; const t = _wkTime(v); if (t) return t; } return null; };
+  return pick(s.slice(m.index + m[0].length)) || pick(s.slice(0, m.index).replace(/\b(?:room|rm)\s*#?\s*\d{1,5}[A-Za-z]?\b/gi, ' '));
+}
+/** the suggestions: (traces, wakes [{room, at, time, done, result}], now, no [keys]) → [{key, room, h, mi, time, day, at, name, text}] */
+function wkOperaSugg(traces, wakes, now, no) {
+  now = now || Date.now(); no = no || [];
+  const out = [], todayIso = _wkISO(now);
+  (traces || []).forEach(t => {
+    if (!t || t.done || !t.text || !WK_OP_RX.test(t.text)) return;
+    const room = String(t.room || (String(t.text).match(/\b(?:room|rm)\s*#?\s*(\d{1,5}[A-Za-z]?)\b/i) || [])[1] || '').trim();
+    if (!/^\d{1,5}[A-Za-z]?$/.test(room)) return;
+    const hm = wkOperaTime(t.text, room); if (!hm) return;
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(t.date || '') && t.date >= todayIso ? t.date : '';
+    if (t.date && t.date < todayIso) return;   // an old trace
+    const d = day ? new Date(day + 'T00:00:00') : new Date(now);
+    d.setHours(hm[0], hm[1], 0, 0);
+    if (!day && d.getTime() < now - 60e3) d.setDate(d.getDate() + 1);
+    if (d.getTime() < now - 60e3) return;      // its time has passed
+    const time = _wkHM(d), key = [_wkRoomKey(room), _wkISO(d.getTime()), time].join('|');
+    if (no.includes(key) || out.some(o => o.key === key)) return;
+    // already set: the same room at the same time that day (cancelled ones count too — the guest said no)
+    if ((wakes || []).some(w => w && _wkRoomKey(w.room) === _wkRoomKey(room) && (w.time || _wkHM(new Date(w.at))) === time && _wkISO(w.at) === _wkISO(d.getTime()))) return;
+    const nm = String(t.name || '').trim(), name = nm.includes(',') ? nm.split(',').map(x => x.trim()).filter(x => x && !/^(mr|mrs|ms|miss|dr)\.?$/i.test(x)).slice(0, 2).reverse().join(' ') : nm;
+    out.push({ key, room, h: hm[0], mi: hm[1], time, day: day || _wkISO(d.getTime()), at: d.getTime(), name, text: String(t.text) });
+  });
+  return out.sort((a, b) => a.at - b.at);
+}
+function _wkOpNo() { try { const v = JSON.parse(localStorage.getItem(WK_OP_NO) || 'null'); return v && v.date === _wkISO(Date.now()) && Array.isArray(v.keys) ? v.keys : []; } catch (_) { return []; } }
+function _wkOpList() {
+  if (typeof hoOpera === 'undefined' || !hoOpera || typeof hoOpera.traces !== 'function') return [];
+  let tr = []; try { tr = hoOpera.traces() || []; } catch (_) { return []; }   // today's reads only
+  return tr.length ? wkOperaSugg(tr, _wkAll(), Date.now(), _wkOpNo()) : [];
+}
+/** ＋ on a suggestion: added through the normal add (wkAdd) */
+function wkOperaAdd(key) {
+  const s = _wkOpList().find(x => x.key === key); if (!s) { wkRender(); return; }
+  const n = wkAdd(s.room, s.h, s.mi, { day: s.day, name: s.name, note: '📡 Opera trace: ' + s.text.slice(0, 120), quiet: true });
+  if (n) { showToast(`⏰ Room ${s.room} at ${s.time} — from the Opera trace · read it back to the guest`, 'ok'); _wkLog('wakeup_opera', `Room ${s.room} at ${s.time} from an Opera trace`); }
+  wkRender();
+}
+/** ✕ on a suggestion: not suggested again today */
+function wkOperaNo(key) {
+  const keys = _wkOpNo(); if (!keys.includes(key)) keys.push(key);
+  try { localStorage.setItem(WK_OP_NO, JSON.stringify({ date: _wkISO(Date.now()), keys })); } catch (_) {}
+  wkRender();
+}
+function _wkOperaPaint(root) {
+  let box = root.querySelector('#wkOpera');
+  const L = _wkOpList();
+  if (!L.length) { if (box) box.remove(); return; }
+  if (!box) { box = document.createElement('div'); box.id = 'wkOpera'; const at = root.querySelector('#wkLists'); root.insertBefore(box, at); }
+  const h = `<div class="card wk-card wk-op"><div class="wk-card-hd"><div class="wk-card-t">📡 From Opera traces</div><span class="wk-card-s">${L.length} to check · nothing is added until you tap</span></div>
+    <div style="display:flex;flex-direction:column;gap:6px;min-width:0">${L.map(s => `<div class="st-auto" style="max-width:100%">📡 Opera trace: room ${escapeHtml(s.room)} wake-up ${escapeHtml(s.time)}${s.day !== _wkISO(Date.now()) ? ' (' + escapeHtml(new Date(s.at).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })) + ')' : ''} — add it? <button type="button" class="st-auto-yes" onclick="wkOperaAdd('${escapeHtml(s.key)}')">＋ Add it</button><button type="button" class="st-auto-no" onclick="wkOperaNo('${escapeHtml(s.key)}')" title="Not a wake-up call — don't suggest it again today" aria-label="Dismiss">✕</button></div>`).join('')}</div></div>`;
+  if (box.innerHTML !== h) box.innerHTML = h;
+}
+
 // ── Page ──────────────────────────────────────────────────
 function _wkLeft(t) {
   const m = Math.max(0, Math.round((t - Date.now()) / 60e3));
@@ -211,6 +282,7 @@ function wkRender() {
   const nx = open.filter(w => w.at > now).sort((a, b) => a.at - b.at)[0];
   document.getElementById('wkNext').innerHTML = nx ? `<div class="wk-next"><span class="wk-next-l">Next call</span><b>${escapeHtml(nx.time)}</b><span>Room ${escapeHtml(nx.room)}${nx.name ? ' · ' + escapeHtml(nx.name) : ''}</span><span class="wk-next-in">in ${_wkLeft(nx.at)}</span></div>` : '';
   _wkLists(root);
+  try { _wkOperaPaint(root); } catch (_) {}
 }
 function _wkLists(root) {
   const box = root.querySelector('#wkLists'); if (!box) return;

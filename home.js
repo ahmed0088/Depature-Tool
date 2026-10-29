@@ -132,10 +132,30 @@ function homeTiles() {
     add({ panel: 'rates', icon: '💲', title: 'Rates vs market', big: pct(avg), sub: rows.map(x => `${x.h.name.split(' ')[0]} ${pct(x.M.diff)}`).join(' · '), tone: Math.abs(avg) <= 0.05 ? 'ok' : 'warn' });
   });
 
+  // 📡 Opera reader (opera-bridge.js): linked or not, last read, open bills, rooms checked out today. Hidden without the reader.
+  _homeSafe(() => { const t = homeOperaTile(); if (t) add(t); });
+
   // Roster: your next shift
   _homeSafe(() => { if (typeof roHomeTile === 'function') { const t = roHomeTile(); if (t) add(t); } });
 
   return tiles;
+}
+
+/** the 📡 Opera tile: read only, and no work beyond "linked?" when Opera wasn't read today; null without the reader */
+function homeOperaTile() {
+  if (typeof hoOpera === 'undefined' || !hoOpera || typeof hoOpera.fresh !== 'function') return null;
+  const link = _homeSafe(() => hoOpera.linked(), false) ? '🟢 linked' : '⚪ not linked';
+  const day = new Date(); day.setHours(0, 0, 0, 0);
+  const tile = { panel: 'opera', go: 'hoOpera.openPage()', icon: '📡', title: 'Opera' };
+  if (!hoOpera.fresh(null, Math.max(1, (Date.now() - day.getTime()) / 60000))) return Object.assign(tile, { big: '—', sub: `${link} · not read today`, tone: 'idle' });
+  const L = hoOpera.last(), at = L && L.at ? new Date(L.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '—';
+  const bills = hoOpera.openBalances() || [], sum = bills.reduce((a, f) => a + (+f.balance || 0), 0);
+  const t = typeof hoLocalISO === 'function' ? hoLocalISO() : new Date().toISOString().slice(0, 10), rk = r => String(r == null ? '' : r).trim().toUpperCase().replace(/^0+(?=\d)/, '');
+  const out = new Set();
+  (hoOpera.rows() || []).forEach(r => { if (r.room && r.status === 'checked_out' && (!r.departure || r.departure === t)) out.add(rk(r.room)); });
+  (hoOpera.folios() || []).forEach(f => { if (f.room && f.status === 'checked_out') out.add(rk(f.room)); });
+  const aed = 'AED ' + sum.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return Object.assign(tile, { big: bills.length, sub: `${bills.length === 1 ? 'open bill' : 'open bills'}${bills.length ? ' · ' + aed : ''} · ${out.size} checked out · ${link} · read ${at}`, tone: bills.length ? 'warn' : 'ok' });
 }
 
 /** tiles in the order you chose; the ones you never placed keep their own order, after them */
@@ -167,7 +187,7 @@ function homeRender() {
   const order = typeof hoPref === 'function' ? (hoPref('tileOrder') || []) : [];   // your own order (Settings → Home, drag the tiles)
   const tiles = homeTileSort(homeTiles().filter(t => !hiddenT.has(t.panel)), order);
   box.innerHTML = tiles.map(t => `
-    <button class="home-tile ${t.tone}" onclick="showPanel('${t.panel}')">
+    <button class="home-tile ${t.tone}" onclick="${t.go || `showPanel('${t.panel}')`}">
       <div class="home-tile-top"><span class="home-ico">${(typeof hoIcon === 'function' && hoIcon(t.panel)) || t.icon}</span><span class="home-t">${escapeHtml(t.title)}</span></div>
       <div class="home-big">${escapeHtml(String(t.big))}</div>
       <div class="home-sub">${escapeHtml(t.sub)}</div>

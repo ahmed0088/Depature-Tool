@@ -36,6 +36,7 @@ const GS_PANEL_LABEL = {
   wakeups:    'Wake-up Calls',
   rates:      'Rate Shop',
   gym:        'Gym & Pool',
+  opera:      '📡 Opera',
   page:       'Page',
 };
 
@@ -77,6 +78,8 @@ function gsBuildIndex(q) {
   if (window.hoInHouse && typeof hoInHouse.rooms === 'function' && (typeof hoPanelAllowed !== 'function' || hoPanelAllowed('inhouse'))) hoInHouse.rooms().forEach(r => {
     if (hit(r.room, r.rk, ...r.names, r.company, r.conf)) out.push({ panel: 'inhouse', room: r.room, name: r.name, extra: 'in-house' + (r.departure ? ' · until ' + new Date(r.departure + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '') + (r.company ? ' · ' + r.company : ''), icon: '🛏️', act: () => hoInHouse.open(r.room) });
   });
+  // 📡 what Opera showed today (opera-bridge.js): a room, a name or a conf. number; a tap opens the room card, else the Opera page
+  out.push(...gsOperaHits(hit));
   (typeof arrGuests !== 'undefined' ? arrGuests : []).forEach(g => {
     if (hit(g.room, g.name)) add('arrivals', g.room, g.name, g.purpose, '🛎️', g.room || g.name);
   });
@@ -137,6 +140,35 @@ function gsBuildIndex(q) {
   return out.map((r, i) => [r, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(x => x[0]).slice(0, 30);
 }
 
+/** today's Opera reads, one line per guest (the newest screen wins); kept 4 s so typing doesn't copy them on every key */
+let _gsOpC = null;
+const GS_OP_SCREEN = { arrivals: 'Arrivals', departures: 'Departures', inhouse: 'In House', search: 'Search', details: 'Reservation', list: 'List', billing: 'Billing', rooms: 'Room status', profile: 'Profile', traces: 'Traces', rates: 'Rates', group: 'Group', audit: 'Night audit', other: 'Other' };
+const GS_OP_STATUS = { due_in: 'arriving', in_house: 'in house', due_out: 'due out', checked_out: 'checked out', cancelled: 'cancelled', no_show: 'no show', waitlist: 'waitlist' };
+function gsOperaRows() {
+  if (typeof hoOpera === 'undefined' || !hoOpera || typeof hoOpera.reads !== 'function' || typeof hoOpera.fresh !== 'function') return [];
+  const day = new Date(); day.setHours(0, 0, 0, 0);
+  if (!hoOpera.fresh(null, Math.max(1, (Date.now() - day.getTime()) / 60000))) return [];
+  if (_gsOpC && Date.now() - _gsOpC.at < 4000) return _gsOpC.v;
+  const seen = new Set(), v = [];
+  Object.values(hoOpera.reads() || {}).filter(k => k && k.at >= day.getTime()).sort((a, b) => b.at - a.at).forEach(k => (k.rows || []).forEach(r => {
+    const key = r.conf || ((r.room || '') + '|' + (r.name || '')); if (seen.has(key)) return; seen.add(key);
+    v.push(Object.assign({ _kind: k.kind }, r));
+  }));
+  _gsOpC = { at: Date.now(), v };
+  return v;
+}
+function gsOperaHits(hit) {
+  try {
+    return gsOperaRows().filter(r => hit(r.room, r.name, r.conf)).slice(0, 8).map(r => {
+      const f = r.room ? hoOpera.folio(r.room) : null, b = f && f.balance != null ? f.balance : r.balance;
+      const money = b == null ? '' : Math.abs(b) < 0.005 ? ' · settled' : ` · AED ${Number(b).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${b > 0 ? ' open' : ' credit'}`;
+      return { panel: 'opera', label: '📡 Opera · ' + (GS_OP_SCREEN[r._kind] || r._kind), room: r.room || '', name: r.name || '', icon: '📡',
+        extra: (GS_OP_STATUS[r.status] || r.statusText || '') + (r.conf ? ' · conf. ' + r.conf : '') + money,
+        act: () => { if (r.room && window.hoRoom && typeof hoRoom.open === 'function') hoRoom.open(r.room); else hoOpera.openPage(); } };
+    });
+  } catch (_) { return []; }
+}
+
 function gsSearch(val) {
   const q = (val || '').trim().toLowerCase();
   _gsResults = gsBuildIndex(q);
@@ -164,7 +196,7 @@ function gsRenderResults(q) {
         <span class="gs-result-name">${r.room ? `<span class="gs-result-room">${escapeHtml(r.room)}</span> ` : ''}${escapeHtml(r.name || '—')}</span>
         <span class="gs-result-extra">${escapeHtml(r.extra || '')}</span>
       </div>
-      <span class="gs-result-panel">${GS_PANEL_LABEL[r.panel] || r.panel}</span>
+      <span class="gs-result-panel">${escapeHtml(r.label || GS_PANEL_LABEL[r.panel] || r.panel)}</span>
     </div>`).join('');
 }
 

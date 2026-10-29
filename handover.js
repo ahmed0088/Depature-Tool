@@ -75,6 +75,28 @@ function _hoSnapshot() {
   return lines;
 }
 
+/** 📡 What Opera showed today that the next shift should check: open balances still due out, traces not done,
+ *  out-of-order rooms. Suggestions in the handover text only (the Handover Book is not changed); [] when Opera wasn't read today. */
+function _hoOperaItems() {
+  if (typeof hoOpera === 'undefined' || !hoOpera || typeof hoOpera.fresh !== 'function') return [];
+  const day = new Date(); day.setHours(0, 0, 0, 0);
+  if (!hoOpera.fresh(null, Math.max(1, (Date.now() - day.getTime()) / 60000))) return [];
+  const rk = r => String(r == null ? '' : r).trim().toUpperCase().replace(/^0+(?=\d)/, '');
+  const few = (L, n) => L.slice(0, n).join(', ') + (L.length > n ? ` +${L.length - n} more` : '');
+  const t = typeof hoLocalISO === 'function' ? hoLocalISO() : new Date().toISOString().slice(0, 10);
+  const rows = hoOpera.rows() || [], due = new Set(), items = [];
+  rows.forEach(r => { if (r.room && (r.status === 'due_out' || (r.departure === t && !['checked_out', 'cancelled', 'no_show', 'waitlist', 'due_in'].includes(r.status)))) due.add(rk(r.room)); });
+  if (typeof depRooms !== 'undefined') depRooms.forEach(r => { if (['due', 'late', 'na', 'dnd'].includes(r.status)) due.add(rk(r.roomStr != null ? r.roomStr : r.room)); });
+  const bal = (hoOpera.openBalances() || []).filter(f => f.room && f.status !== 'checked_out' && (f.status === 'due_out' || due.has(rk(f.room))));
+  if (bal.length) items.push(`Open balance, still due out: ${few(bal.map(f => `${f.room} AED ${Number(f.balance).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`), 6)}`);
+  const tr = (hoOpera.traces() || []).filter(x => !x.done && (!x.date || x.date === t));
+  if (tr.length) items.push(`Traces not done: ${tr.length} (${few(tr.map(x => [x.room, x.dept].filter(Boolean).join(' ') || 'no room'), 6)})`);
+  const seen = new Set(), ooo = [];
+  rows.forEach(r => { const k = rk(r.room); if (!k || seen.has(k)) return; seen.add(k); const s = hoOpera.roomStatus(r.room); if (s && (s.rs === 'ooo' || s.rs === 'oos')) ooo.push(r.room); });
+  if (ooo.length) items.push(`Out of order: ${few(ooo, 10)}`);
+  return items;
+}
+
 /** What the next shift has to do: rooms, times and tasks by name, not only counts. */
 function _hoTodo() {
   const L = [], add = (icon, head, items) => { if (items && items.length) L.push({ icon, head, items }); };
@@ -129,6 +151,7 @@ function _hoTodo() {
       if (o.length && (p.late || p.left < 4)) add('📆', `Monthly reports ${p.late ? 'late' : 'due by the ' + p.by + 'th'}`, o.map(r => r.name));
     }
   } catch (_) {}
+  try { add('📡', 'From Opera (to check)', _hoOperaItems()); } catch (_) {}
   try {
     if (typeof bxNotesList === 'function') add('📝', 'Notes from the shift', bxNotesList().slice(0, 8).map(n => `${n.text} (${n.by}, ${n.time})`));
   } catch (_) {}

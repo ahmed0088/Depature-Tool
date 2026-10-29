@@ -4,6 +4,7 @@
 //  + 📷 photo attachments per step (base64, synced to Firebase)
 //  + 📝 per-step notes
 //  + ⏱ completion timestamps
+//  + 📡 Opera: the night audit read as done suggests "tick it?" (never ticks by itself)
 // ═══════════════════════════════════════════════════════════
 
 // ── Photo store: { stepId: [ { data: base64, name: string, ts: iso } ] }
@@ -342,6 +343,60 @@ function clNotifyTick() {
 }
 setInterval(() => { try { clNotifyTick(); } catch (_) {} }, 60000);
 
+// ── 📡 Opera: the night audit read as done in Opera SUGGESTS ticking its step ──
+// (opera-bridge.js keeps the read: hoOpera.last('audit') → {at, audit:{state}}).
+// Like shifts.js "🤖 Looks done … ✓ Tick it ✕": nothing is ever ticked by itself —
+// only a tap on "✓ Tick it" (clToggle2) ticks. ✕ hides it for the rest of the night.
+const CL_OP_RX = /night\s*audit|end\s*of\s*(?:the\s*)?day|\beod\b/i;
+const CL_OP_NO = 'cl_opera_no_v1';   // {night, ids}
+/** when tonight began: 12:00 today (afternoon / evening) or 12:00 yesterday (after midnight) */
+function clNightStart(now) {
+  const d = new Date(now || Date.now());
+  if (d.getHours() < 12) d.setDate(d.getDate() - 1);
+  d.setHours(12, 0, 0, 0);
+  return d.getTime();
+}
+/** which steps the audit read suggests: {steps, done:Set, skipped:Set, audit:{state, at}, since, no:[ids]} → {id: why} */
+function clOperaSugg(o) {
+  const out = {}, a = o && o.audit;
+  if (!a || a.state !== 'done' || !a.at || a.at < (o.since || 0)) return out;
+  const t = new Date(a.at), hm = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
+  (o.steps || []).forEach(s => {
+    if (!s || !CL_OP_RX.test(s.name || '') || (o.done && o.done.has(s.id)) || (o.skipped && o.skipped.has(s.id)) || (o.no || []).includes(s.id)) return;
+    out[s.id] = `Night audit done in Opera ✓ (read at ${hm})`;
+  });
+  return out;
+}
+function _clOpNo() { try { const v = JSON.parse(localStorage.getItem(CL_OP_NO) || 'null'); return v && v.night === clNightStart() && Array.isArray(v.ids) ? v.ids : []; } catch (_) { return []; } }
+let _clOpSugg = {};
+/** the night audit's state from Opera (read since tonight began) → the suggestions; redraws only when they change */
+function clOperaTick() {
+  const was = JSON.stringify(_clOpSugg);
+  _clOpSugg = {};
+  if (typeof hoOpera !== 'undefined' && hoOpera && typeof hoOpera.last === 'function' && typeof CL_STEPS !== 'undefined' && typeof clState !== 'undefined') {
+    let L = null; try { L = hoOpera.last('audit'); } catch (_) {}
+    if (L && L.audit) _clOpSugg = clOperaSugg({ steps: CL_STEPS, done: clState.done, skipped: clState.skipped, audit: { state: L.audit.state, at: L.at }, since: clNightStart(), no: _clOpNo() });
+  }
+  if (JSON.stringify(_clOpSugg) === was) return;
+  try {
+    const p = document.getElementById('panel-checklist');
+    const a = document.activeElement;
+    if (p && p.classList.contains('active') && !clEditMode && !(a && a.closest && a.closest('#panel-checklist') && /TEXTAREA|INPUT/.test(a.tagName))) clRender2();
+  } catch (_) {}
+}
+/** ✕ on the suggestion: not suggested again tonight */
+function clOperaNo(id) {
+  const ids = _clOpNo(); if (!ids.includes(id)) ids.push(id);
+  try { localStorage.setItem(CL_OP_NO, JSON.stringify({ night: clNightStart(), ids })); } catch (_) {}
+  delete _clOpSugg[id]; clRender2();
+}
+function _clOpHtml(s, done, skip) {
+  const why = !done && !skip && !clEditMode ? _clOpSugg[s.id] : '';
+  return why ? `<div class="st-auto cl-op" onclick="event.stopPropagation()">📡 ${escapeHtml(why)} — tick it? <button type="button" class="st-auto-yes" onclick="clToggle2(${s.id})">✓ Tick it</button><button type="button" class="st-auto-no" onclick="clOperaNo(${s.id})" title="Not done — don't suggest it again tonight" aria-label="Not done">✕</button></div>` : '';
+}
+setInterval(() => { try { clOperaTick(); } catch (_) {} }, 20000);
+document.addEventListener('DOMContentLoaded', () => setTimeout(() => { try { clOperaTick(); } catch (_) {} }, 6000));
+
 // ── Unified save ─────────────────────────────────────────
 function clSaveAll() {
   saveChecklist(CL_STEPS, clState.done, clState.skipped, clPhotos, clNotes, clDoneTimes);
@@ -595,6 +650,7 @@ function clRender2() {
             ${s.warn ? `<div class="cl-warn">⚠ ${escapeHtml(s.warn)}</div>` : ''}
             ${(s.due && !done) || s.report ? `<div class="cl-chips">${clDueChip(s, done)}${s.report ? `<span class="cl-rep${done ? ' ok' : ''}">📁 ${escapeHtml(s.report)}</span>` : ''}</div>` : ''}
             ${!clEditMode && ((s.how && s.how.length) || (s.look && s.look.length)) ? `<details class="cl-how" onclick="event.stopPropagation()"><summary>${s.how && s.how.length ? 'How in Opera' : 'What to check'}</summary>${s.how && s.how.length ? `<ol>${s.how.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ol>` : ''}${s.look && s.look.length ? `<div class="cl-look"><b>Check</b><ul>${s.look.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul></div>` : ''}</details>` : ''}
+            ${_clOpHtml(s, done, skip)}
             ${tsHtml}
             ${photoStrip}
             ${noteArea}
