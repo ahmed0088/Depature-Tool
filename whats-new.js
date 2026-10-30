@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 450, items: [
+    "🎨 Choose how phone alerts look: Settings → 📲 Phone notifications → Alert style — Detailed (title, details and a small footer with the type and time), Compact (one line) or Minimal (plain words, no emojis). A live preview shows exactly how it will look; 🧪 Send a test to see it on your phone.",
+  ] },
   { v: 449, items: [
     "🧭 Opera reader, taught from today's reports: inside a reservation it no longer reports the side tables (Payment Instructions, memberships, daily rate details, packages, the assign-room list) — card and membership-card tables are skipped completely. “Available Room Search” is known as a room screen and its room statuses are read (a room cell like “0412KING…” still gives 0412). Opera's Reports screen no longer counts as an unknown screen.",
   ] },

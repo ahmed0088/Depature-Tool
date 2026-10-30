@@ -57,7 +57,7 @@ const CATS = {
   notes:      { i: '📝', l: 'Room notes', d: 'A colleague adds a guest request, VIP, follow-up, maintenance or call note', shift: true, def: false, tag: 'memo' },
   system:     { i: '⚙️', l: 'HotelOps', d: '', shift: false, def: true, hidden: true, tag: 'gear' },
 };
-const DEF = { cats: {}, quiet: false, qFrom: '23:00', qTo: '07:00', offShift: false, offUntil: 0, offGuard: false, autoOff: true, workDay: '' };
+const DEF = { cats: {}, quiet: false, qFrom: '23:00', qTo: '07:00', offShift: false, offUntil: 0, offGuard: false, autoOff: true, workDay: '', style: 'detailed' };
 Object.keys(CATS).forEach(k => { DEF.cats[k] = CATS[k].def; });
 
 // ══ Pure rules (tested) ═════════════════════════════════════
@@ -123,6 +123,22 @@ function mergeBatch(items) {
     tags: [(one || CATS.system).tag], merged: items.map(o => o.key),
   };
 }
+/** how an alert looks on the phone, by the style chosen in Settings:
+ *  detailed — title, the details, and a small footer (type · time) · compact — one line · minimal — plain words, no emojis */
+const STYLES = { detailed: 'Detailed', compact: 'Compact', minimal: 'Minimal' };
+const noEmoji = t => String(t || '').replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}\u{203C}\u{2049}]/gu, '').replace(/[ \t]{2,}/g, ' ').replace(/^[ \t]+/gm, '').trim();
+function styleMsg(m, style, now) {
+  const c = CATS[m.cat] || CATS.system, t = new Date(now || Date.now()), hm = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0');
+  const title = String(m.title || '').trim(), body = String(m.body || '').trim();
+  if (style === 'compact') {
+    const first = body.split('\n')[0].trim();
+    return { title, body: first + (body.includes('\n') ? ' …' : ''), tags: m.tags || [c.tag], footer: '' };
+  }
+  if (style === 'minimal') {
+    return { title: noEmoji(title), body: noEmoji(body), tags: [], footer: '' };
+  }
+  return { title, body, tags: m.tags || [c.tag], footer: (c.l ? c.l + ' · ' : '') + hm + (m.n > 1 ? ' · ' + m.n + ' together' : '') };
+}
 /** your roster before / now ({date: code}) → what changed for you; a day that wasn't posted before is "added" */
 function rosterDiff(prev, cur) {
   const changed = [], added = [];
@@ -137,7 +153,7 @@ function rosterDiff(prev, cur) {
 /** a short, stable id for a list of things (a roster change set) */
 function hash(s) { let h = 5381; s = String(s); for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
 
-W.hoNotifyPure = { dayOffEnd, isOff, inQuiet, catOn, gate, claimNext, storm, shouldBatch, mergeBatch, rosterDiff, hash, fbKey, CATS, DEF };
+W.hoNotifyPure = { styleMsg, STYLES, dayOffEnd, isOff, inQuiet, catOn, gate, claimNext, storm, shouldBatch, mergeBatch, rosterDiff, hash, fbKey, CATS, DEF };
 if (!D || typeof D.createElement !== 'function') return;
 
 // ══ App helpers ═════════════════════════════════════════════
@@ -179,7 +195,8 @@ const link = url => location.origin + location.pathname + (url ? (String(url).ch
 function ntfyPost(ch, m) {
   if (!ch) return Promise.resolve(false);
   const url = link(m.url);
-  const body = { topic: ch.topic, title: m.title, message: m.body || ' ', priority: Math.min(5, Math.max(1, m.prio || 3)), tags: m.tags || [(CATS[m.cat] || CATS.system).tag] };
+  const S = styleMsg(m, CFG.style);
+  const body = { topic: ch.topic, title: S.title, message: (S.body || ' ') + (S.footer ? '\n— ' + S.footer : ''), priority: Math.min(5, Math.max(1, m.prio || 3)), tags: S.tags };
   if (/^https:/.test(url)) Object.assign(body, { click: url, actions: [{ action: 'view', label: 'Open HotelOps', url }] });
   // a plain-text body: no pre-flight check
   return fetch('https://ntfy.sh/', { method: 'POST', body: JSON.stringify(body) }).then(r => r.ok).catch(() => false);
@@ -187,7 +204,10 @@ function ntfyPost(ch, m) {
 function tgPost(ch, m) {
   if (!ch) return Promise.resolve(false);
   const url = link(m.url), loud = (m.prio || 3) >= 5;
-  const p = { chat_id: ch.chat, parse_mode: 'HTML', text: `<b>${esc((loud ? '‼️ ' : '') + m.title)}</b>${m.body ? '\n' + esc(m.body) : ''}`, disable_notification: (m.prio || 3) <= 2 ? 'true' : 'false' };
+  const S = styleMsg(m, CFG.style), min = CFG.style === 'minimal';
+  const text = CFG.style === 'compact' ? `<b>${esc((loud ? '‼️ ' : '') + S.title)}</b>${S.body ? ' — ' + esc(S.body) : ''}`
+    : `<b>${esc((loud && !min ? '‼️ ' : loud ? 'URGENT: ' : '') + S.title)}</b>${S.body ? '\n' + esc(S.body) : ''}${S.footer ? '\n<i>' + esc(S.footer) + '</i>' : ''}`;
+  const p = { chat_id: ch.chat, parse_mode: 'HTML', text, disable_notification: (m.prio || 3) <= 2 ? 'true' : 'false' };
   if (/^https:/.test(url)) p.reply_markup = JSON.stringify({ inline_keyboard: [[{ text: '📲 Open HotelOps', url }]] });
   // a form body: no pre-flight check
   return fetch('https://api.telegram.org/bot' + ch.token + '/sendMessage', { method: 'POST', body: new URLSearchParams(p) })
@@ -376,6 +396,10 @@ function sectionHtml() {
   const log = LOG.slice(0, 20).map(e => `<div class="nh-log-r${e.ok ? '' : ' bad'}"><span class="nh-log-t">${esc(hhmm(e.at))}</span><span class="nh-log-x"><b>${esc(e.title)}</b>${e.n > 1 ? `<em>${e.n} merged</em>` : ''}<small>${e.ok ? '✓ ' + esc(e.via) : '✕ ' + esc(e.via || 'not sent')}${e.prio >= 5 ? ' · urgent' : ''}</small></span></div>`).join('');
   return `<div class="hs-sec-hd"><span class="hs-sec-ic">${ic}</span><div><h2>📲 Phone notifications</h2><p>Everything HotelOps tells your phone, in one place — smart, not spammy</p></div></div>
     <div class="hs-card">${head}
+      <div class="hs-row nh-style-row" data-s="phone notifications style look compact detailed minimal format">
+        <span class="hs-txt"><b>🎨 Alert style</b><small>How alerts look on your phone</small></span>
+        <span class="nh-seg" role="radiogroup" aria-label="Alert style">${Object.keys(STYLES).map(k => `<button type="button" role="radio" aria-checked="${(CFG.style || 'detailed') === k}" class="${(CFG.style || 'detailed') === k ? 'on' : ''}" onclick="hoNotify.setCfg('style','${k}')">${STYLES[k]}</button>`).join('')}</span>
+        <div class="nh-prev">${(() => { const S = styleMsg({ cat: 'departures', title: '🚪 3 rooms still not out', body: '0412 · 0515 · 0608\nLate check-out: 0210 at 14:00', prio: 4 }, CFG.style || 'detailed'); return `<b>${esc(S.title)}</b>${S.body ? `<span>${esc(S.body).replace(/\n/g, '<br>')}</span>` : ''}${S.footer ? `<em>${esc(S.footer)}</em>` : ''}`; })()}</div></div>
       <div class="hs-row hs-mini" data-s="phone notifications status shift quiet"><span class="hs-txt"><small>${esc(stateLine())}. The same alert never comes twice, and only one of your devices sends it. Small things wait up to a minute and come together.</small></span></div>
       ${cats}
       <div class="hs-row${offOn() ? ' nh-offrow' : ''}" data-s="day off holiday vacation leave mute silence pause phone notifications"><span class="hs-txt"><b>🌴 Day off</b><small>${offOn() ? `On — nothing is sent to your phone until ${esc(offLabel())}` : 'Silence every phone alert while you\'re off. It switches itself back on the morning after.'}</small></span>
@@ -499,6 +523,10 @@ css.textContent = `
 .nh-ch i{font-style:normal;width:26px;height:26px;flex:none;display:grid;place-items:center;font-size:19px}.nh-ch:not(.on) i{opacity:.55;filter:grayscale(1)}.nh-tg svg{width:24px;height:24px}
 .nh-off{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 0 12px;padding:9px 14px;border-radius:12px;font-size:13px;background:color-mix(in srgb,var(--mint,#22c55e) 12%,var(--card));border:1px solid color-mix(in srgb,var(--mint,#22c55e) 35%,transparent)}
 .nh-off button{border:0;background:none;color:var(--accent);font:600 13px var(--font);cursor:pointer;padding:2px 0}.nh-offrow{background:color-mix(in srgb,var(--mint,#22c55e) 9%,transparent)}
+.nh-style-row{flex-wrap:wrap}.nh-seg{display:inline-flex;padding:3px;border-radius:12px;background:var(--bg2,rgba(127,127,127,.12));border:1px solid var(--border,#333);gap:2px}
+.nh-seg button{border:0;background:none;padding:6px 12px;border-radius:9px;font:600 12.5px var(--font,system-ui);color:var(--text2,#aaa);cursor:pointer}.nh-seg button.on{background:var(--card,#222);color:var(--text,#eee);box-shadow:0 1px 3px rgba(0,0,0,.18)}
+.nh-prev{flex:1 1 100%;display:flex;flex-direction:column;gap:3px;margin-top:6px;padding:10px 12px;border-radius:14px;background:var(--bg2,rgba(127,127,127,.08));border:1px solid var(--border,#333);font-size:13px;max-width:420px}
+.nh-prev b{color:var(--text,#eee)}.nh-prev span{color:var(--text2,#bbb)}.nh-prev em{font-style:italic;font-size:11.5px;color:var(--text3,#999)}
 .nh-need{background:color-mix(in srgb,var(--amber,#d97706) 9%,transparent)}
 .nh-q input[type=time]{min-width:0;width:132px}
 .hs-txt.nh-log-hd{display:flex;flex-direction:row;align-items:center;justify-content:space-between;width:100%;text-align:left}.nh-clear{border:0;background:none;color:var(--accent);font:600 12.5px var(--font);cursor:pointer}
