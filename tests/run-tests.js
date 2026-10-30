@@ -2348,6 +2348,11 @@ console.log('\nWhatsApp bridge · acting on the board');
   check('manual room: ISO departure read as that day', [sb.parseOperaDate('2026-10-11').toDateString(), sb.parseOperaDate('11-OCT-26').toDateString()], ['Sun Oct 11 2026', 'Sun Oct 11 2026']);
   board([]); sb.depAddManualRoom('705', 'X');
   check('manual room only on the board: WhatsApp acts at once (not "waiting for today\'s list")', [H('a1', '705 ext till 13'), res(), st(705)], ['done', 'ext 705', 'extended  2']);
+  // Opera decides: with today's Opera Departures read, "extended" on WhatsApp only marks the room ⏳ extending (the guest may pay later)
+  sb.hoOpera = { fresh: k => k === 'departures' };
+  board([mk(706)]);
+  check('Opera decides: WhatsApp "706 ext 2n" while the Opera reader is in use → ⏳ extending, not extended', [H('od1', '706 ext 2n'), res(), room(706).status, room(706).intent], ['done', 'extending 706', 'due', 'extending']);
+  delete sb.hoOpera;
 
   // "LCO 12am" / "midnight": the end of the day, not overdue at once
   board([201, 202]); H('a2', '201 LCO 12am'); H('a3', '202 LCO midnight');
@@ -3623,6 +3628,15 @@ console.log('\nOpera reader');
   check('departures vs Opera: only guests still to leave in Opera → rooms out here are left out; a due room missing there → "probably left" + Mark out; "Mohamed" alone is no room move; out here but due in Opera → check out in Opera',
     [RD.boardN, RD.outN, O.reconHead(RD), RD.diffs.map(d => [d.type, d.room, d.why, d.acts[0]])],
     [2, 2, '📡 Opera: 2 departures still to leave · HotelOps: 2 still to leave — 2 differences', [['missing', '0403', 'gone', 'out'], ['opdue', '0405', 'opdue', 'keep']]]);
+  const bExt = { day: T, rooms: b16.rooms.map(b => b.roomStr === '0405' ? Object.assign({}, b, { status: 'extended', extensionNights: 1 }) : b) };
+  const RX = O.depRecon({ dep: op15, board: bExt, today: T, reads: ihL }), XN = RX.diffs.find(d => d.type === 'notext');
+  check('Opera decides: extended here (from WhatsApp) but Opera still has it leaving today → back to ⏳ extending, by itself',
+    [XN && XN.room, XN && XN.acts.join(','), O.reconAuto(RX).some(d => d.type === 'notext'), O.reconPlan([{ d: XN, act: 'unext' }], T).dep.unext.map(u => u.room), O.summaryText(O.reconPlan([{ d: XN, act: 'unext' }], T))],
+    ['0405', 'unext,keep', true, ['0405'], '1 room back to ⏳ extending (not extended in Opera yet)']);
+  const bIng = { day: T, rooms: b16.rooms.map(b => b.roomStr === '0412' ? Object.assign({}, b, { intent: 'extending' }) : b) };
+  const RG2 = O.depRecon({ dep: op15, board: bIng, today: T, reads: {} }), G2 = RG2.diffs.find(d => d.room === '0412');
+  check('Opera decides: a room ⏳ extending that Opera no longer has leaving today → extended by itself (cleared in Opera = confirmed)',
+    [G2 && G2.why, G2 && G2.nights, O.reconAuto(RG2).some(d => d.room === '0412')], ['extended', 1, true]);
   const RI = O.depRecon({ dep: Object.assign({}, op15, { rows: op15.rows.slice(0, 12) }), board: b16, today: T, reads: {} });
   check('departures vs Opera: an incomplete read says how far it got instead of listing differences', [RI.state, RI.diffs.length, O.reconHead(RI)], ['incomplete', 0, '📡 Opera read 12 of 15 — scroll the Departures list in Opera to the end']);
   const op17 = Object.assign({}, op15, { total: 17, rows: op15.rows.concat([{ room: '0412', name: 'Testperson, GuestL', conf: '100012', departure: T, status: 'due_out' }, { room: '0417', name: 'Newcomer, Quinn', conf: '100017', departure: T, status: 'checked_out' }]) });

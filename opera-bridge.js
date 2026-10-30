@@ -377,6 +377,7 @@ function summaryText(P) {
   if (P.dep.ext.length) L.push(`${pl(P.dep.ext.length, 'room')} extended`);
   if (P.dep.add.length) L.push(`${pl(P.dep.add.length, 'departure')} added`);
   if (P.dep.rm && P.dep.rm.length) L.push(`${pl(P.dep.rm.length, 'room')} removed from today's departures`);
+  if (P.dep.unext && P.dep.unext.length) L.push(`${pl(P.dep.unext.length, 'room')} back to ⏳ extending (not extended in Opera yet)`);
   const newArr = Math.max(P.arr.add.length, P.pur.add.length);
   if (newArr) L.push(`${pl(newArr, 'new arrival')} added`);
   const filled = P.arr.fill.length + P.pur.fill.length;
@@ -426,6 +427,11 @@ function depRecon(I) {
   const SRC = { inhouse: 'in house', details: 'its reservation', search: 'a reservation search', list: 'a reservation list', arrivals: 'Arrivals', queue: 'the Queue' };
   const diffs = [];
   bdBy.forEach((b, k) => {
+    if (b.status === 'extended' && !keep[k]) {
+      const r0 = opBy.get(k);
+      // Opera decides: still leaving today in Opera → not extended yet (the guest may pay later); back to ⏳ extending until Opera shows it
+      if (r0 && r0.status !== 'checked_out') { diffs.push({ type: 'notext', room: b.roomStr, name: b.name, reason: 'Opera still has it leaving today — not extended in Opera yet → ⏳ extending until Opera shows it', why: 'notext', sure: true, acts: ['unext', 'keep'] }); return; }
+    }
     if (keep[k] || b.status === 'extended') return;
     const r = opBy.get(k);
     if (r) {
@@ -448,6 +454,8 @@ function depRecon(I) {
     else if (canc) Object.assign(d, { why: 'cancelled', reason: 'cancelled / no-show in Opera', acts: ['remove', 'keep'] });
     else if (early) Object.assign(d, { why: 'early', reason: `checked out on ${fmt(early.departure)} in Opera → left earlier`, acts: ['remove', 'keep'] });
     else if (other) Object.assign(d, { why: 'date', reason: `its stay in Opera ends ${fmt(other.departure)} → stay date changed`, nights: other.departure > t ? dayDiff(t, other.departure) : 0, to: other.departure });
+    else if (b.intent === 'extending' && b.status !== 'out') Object.assign(d, { why: 'extended', nights: b.extensionNights > 0 ? b.extensionNights : 1, sure: true,
+      reason: 'was ⏳ extending and Opera no longer has it leaving today → extension confirmed in Opera' + (b.extensionNights > 0 ? '' : ' (1 night — check the nights)') });   // cleared from Opera = confirmed
     else if (!opAll) Object.assign(d, { why: 'gone', reason: 'not in Opera\'s list of guests still to leave → probably checked out in Opera already', acts: ['out', 'ext', 'remove', 'keep'] });
     else Object.assign(d, { why: '', reason: 'not in Opera\'s departures today: extended, moved, checked out earlier or cancelled? Open it in Opera to see' });
     diffs.push(d);
@@ -462,7 +470,7 @@ function depRecon(I) {
 }
 /** the differences HotelOps may fix by itself (auto on, review off): add a missing room, mark one checked out, mark one extended when
  *  Opera's in-house list or the reservation clearly shows a later departure. Never a removal. */
-const reconAuto = R => (R && R.state === 'ok' ? R.diffs.filter(d => d.sure && ((d.type === 'missing' && d.why === 'extended' && d.nights > 0) || d.type === 'extra' || d.type === 'status')) : []);
+const reconAuto = R => (R && R.state === 'ok' ? R.diffs.filter(d => d.sure && ((d.type === 'missing' && d.why === 'extended' && d.nights > 0) || d.type === 'extra' || d.type === 'status' || d.type === 'notext')) : []);
 /** "📡 Opera: 15 departures · HotelOps: 16 — 1 difference" */
 function reconHead(R) {
   if (!R) return '';
@@ -474,15 +482,16 @@ function reconHead(R) {
 }
 /** the differences chosen → a plan apply() understands (removals in dep.rm) */
 function reconPlan(items, t) {
-  const P = { kind: 'departures', date: t, read: 0, dep: { create: null, out: [], ext: [], add: [], fill: [], rm: [], rows: 0, matched: 0 }, arr: { add: [], fill: [] }, pur: { add: [], fill: [] }, ih: { mode: '', add: [], upd: [] }, notes: [], n: 0 };
+  const P = { kind: 'departures', date: t, read: 0, dep: { create: null, out: [], ext: [], add: [], fill: [], rm: [], unext: [], rows: 0, matched: 0 }, arr: { add: [], fill: [] }, pur: { add: [], fill: [] }, ih: { mode: '', add: [], upd: [] }, notes: [], n: 0 };
   (items || []).forEach(({ d, act }) => {
     if (act === 'ext') P.dep.ext.push({ room: d.room, nights: d.nights > 0 ? d.nights : 1, to: d.to || '', row: null });
     else if (act === 'remove') P.dep.rm.push({ room: d.room, why: d.reason });
+    else if (act === 'unext') P.dep.unext.push({ room: d.room });
     else if (act === 'add' && d.row) P.dep.add.push({ row: d.row, out: d.row.status === 'checked_out' });
     else if (act === 'out') P.dep.out.push({ room: d.room, row: null });
     else if (act === 'fixname' && d.opName) P.dep.fill.push({ room: d.room, set: { name: FX.parseName(d.opName) } });
   });
-  P.n = P.dep.out.length + P.dep.ext.length + P.dep.add.length + P.dep.fill.length + P.dep.rm.length;
+  P.n = P.dep.out.length + P.dep.ext.length + P.dep.add.length + P.dep.fill.length + P.dep.rm.length + P.dep.unext.length;
   return P;
 }
 // ══ Learning from you in Opera ("watch me") — pure ══════════════
@@ -1172,6 +1181,14 @@ function apply(snap, how, P0) {
     depTouched = true;
   });
   P.dep.fill.forEach(({ room, set }) => { const r = depRooms.find(x => roomKey(x.roomStr) === roomKey(room)); if (r) { if (set.name && r.name !== set.name) r.note = (r.note ? r.note + '\n' : '') + `[${at}] Name from Opera (was ${r.name})`; Object.assign(r, set); depTouched = true; } });
+  (P.dep.unext || []).forEach(({ room }) => {   // marked extended here, Opera still has it leaving today: waits as ⏳ extending
+    const i = depRooms.findIndex(x => roomKey(x.roomStr) === roomKey(room)); if (i < 0) return;
+    const r = depRooms[i]; if (r.status !== 'extended') return;
+    safe(() => quiet(() => depAction(i, 'due')));
+    r.intent = 'extending'; r.intentMinutes = null;
+    r.note = (r.note ? r.note + '\n' : '') + `[${at}] Not extended in Opera yet (still leaving today there) → ⏳ extending until Opera shows it`;
+    depTouched = true;
+  });
   (P.dep.rm || []).forEach(({ room }) => {   // only ever from a tap: a room Opera doesn't depart today
     const i = depRooms.findIndex(x => roomKey(x.roomStr) === roomKey(room)); if (i < 0) return;
     depRooms.splice(i, 1); depTouched = true;
@@ -1268,7 +1285,7 @@ function reconNow() {
 /** auto on, review off, this tab holds the lock: the safe differences fixed by themselves (with the usual Undo and log) */
 function reconAutoRun() {
   if (!ready() || !canWrite() || !CFG.auto || CFG.review || !haveLock()) return;
-  const items = reconAuto(reconNow()).map(d => ({ d, act: d.type === 'missing' ? 'ext' : d.type === 'extra' ? 'add' : 'out' }));
+  const items = reconAuto(reconNow()).map(d => ({ d, act: d.type === 'missing' ? 'ext' : d.type === 'extra' ? 'add' : d.type === 'notext' ? 'unext' : 'out' }));
   if (!items.length) return;
   const P = reconPlan(items, today());
   safe(() => apply(null, 'auto · Opera vs board', P));
@@ -1290,7 +1307,7 @@ function reconAct(act, room) {
   safe(() => apply(null, 'tapped · Opera vs board', reconPlan([{ d, act }], today())));
   paint();
 }
-const RC_LABEL = { ext: d => (d.nights > 0 ? `Mark extended (+${d.nights})` : 'Mark extended'), remove: () => 'Remove from today', keep: () => 'Keep', add: () => 'Add', fixname: () => 'Fix name', out: () => 'Mark out' };
+const RC_LABEL = { unext: () => 'Back to ⏳ extending', ext: d => (d.nights > 0 ? `Mark extended (+${d.nights})` : 'Mark extended'), remove: () => 'Remove from today', keep: () => 'Keep', add: () => 'Add', fixname: () => 'Fix name', out: () => 'Mark out' };
 const RC_GROUP = {
   gone: ['🚪', 'Probably left already', 'Not in Opera\'s list of guests still to leave'],
   extended: ['🌙', 'Stayed on', 'Opera shows a later departure'],
@@ -1300,6 +1317,7 @@ const RC_GROUP = {
   guest: ['👤', 'Another guest in the room', 'Opera has a different name'],
   status: ['✅', 'Checked out in Opera', 'Still due here'],
   opdue: ['⏳', 'Still due out in Opera', 'Out here: check the guest out in Opera too'],
+  notext: ['⏳', 'Extended here, not in Opera', 'Opera still has them leaving today'],
 };
 const rcGroup = d => d.type === 'missing' ? (d.why === 'gone' ? 'gone' : d.why === 'extended' || d.why === 'date' ? 'extended' : d.why === 'moved' ? 'moved' : 'other') : d.type;
 let RC_OPEN = {}, RC_EXP = false;
@@ -1311,7 +1329,7 @@ function reconHtml(R, page) {
   const sub = R.state === 'incomplete' ? 'Scroll the Departures list in Opera to the end, then it compares'
     : `Opera ${R.opN}${R.opAll === false && R.outN ? ' still to leave' : ''} · HotelOps ${R.boardN}${R.extN ? ' · +' + R.extN + ' extended' : ''}${R.opAll === false && R.outN ? ' · ' + R.outN + ' already out' : ''}`;
   const groups = {}; if (R.state === 'ok') R.diffs.forEach(d => { (groups[rcGroup(d)] = groups[rcGroup(d)] || []).push(d); });
-  const order = ['status', 'gone', 'extended', 'moved', 'guest', 'extra', 'other', 'opdue'].filter(g => groups[g]);
+  const order = ['status', 'notext', 'gone', 'extended', 'moved', 'guest', 'extra', 'other', 'opdue'].filter(g => groups[g]);
   const chips = order.map(g => `<span class="op-rc-chip">${RC_GROUP[g][0]} ${groups[g].length} ${esc(RC_GROUP[g][1].toLowerCase())}</span>`).join('');
   const row = d => `<div class="op-rc-row"><span class="op-rc-room">${esc(d.room)}</span><span class="op-rc-who"><b>${esc(firstLast(d.name || '') || d.name || '—')}</b><small>${esc(d.reason)}</small></span>
       <span class="op-rc-acts">${d.acts.map((a, i) => `<button type="button" class="${i ? 'op-rc-lnk' : 'op-rc-btn'}" data-rc="${a}" data-room="${esc(d.room)}">${esc(RC_LABEL[a](d))}</button>`).join('')}</span></div>`;

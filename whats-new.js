@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 451, items: [
+    "📡 Opera decides extensions now. When Opera is read that day, “extended” on WhatsApp only marks the room ⏳ Extending (the guest may pay later). It becomes Extended when the room is cleared from Opera's Departures — that's the confirmation. A room marked extended here but still leaving today in Opera goes back to ⏳ Extending by itself.",
+    "💬 Without the Opera reader that day, WhatsApp works as before (it's the only source).",
+  ] },
   { v: 450, items: [
     "🎨 Choose how phone alerts look: Settings → 📲 Phone notifications → Alert style — Detailed (title, details and a small footer with the type and time), Compact (one line) or Minimal (plain words, no emojis). A live preview shows exactly how it will look; 🧪 Send a test to see it on your phone.",
   ] },

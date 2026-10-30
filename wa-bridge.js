@@ -1077,6 +1077,8 @@ function flushPending() {
 }
 
 /** one action → {room, act, time, st, text, undo?} */
+/** the Opera reader read Departures today: Opera, not WhatsApp, says whether a room is extended */
+function operaDecides() { try { return !!(W.hoOpera && typeof W.hoOpera.fresh === 'function' && W.hoOpera.fresh('departures', 18 * 60)); } catch (_) { return false; } }
 function applyOne(a, who, board) {
   if (a.act === 'lco' && a.time === '00:00') a = Object.assign({}, a, { time: '23:59' });   // "LCO 12am / midnight": the end of today, not overdue at once
   const res = { room: a.room, act: a.act, time: a.time || '', note: a.note || '' };
@@ -1205,6 +1207,13 @@ function applyOne(a, who, board) {
     res.st = 'maybe'; res.text = was === 'extending' || was === 'finance_hold' ? `${room} note: ${a.note}` : `🤔 ${room} might extend (${a.note})`;
   } else if (a.act === 'ext') {
     if (st === 'out') return Object.assign(res, { st: 'skip', text: `${room}: already checked out — not extended` });
+    // Opera decides: while the Opera reader is in use today, "extended" on WhatsApp is only news (the guest may pay later). The room
+    // waits as ⏳ extending; it becomes extended when Opera no longer has it leaving today (opera-bridge.js).
+    if (st !== 'extended' && operaDecides()) {
+      const w = applyOne(Object.assign({}, a, { act: 'extending', note: (a.note ? a.note + ' · ' : '') + 'said extended on WhatsApp — waiting for Opera' }), who, board);
+      if (w && w.st === 'extending') w.text = `⏳ ${room} extending — WhatsApp says extended, it is marked extended when Opera shows it (Opera decides)`;
+      return w;
+    }
     let base = null; try { base = typeof parseOperaDate === 'function' ? parseOperaDate(r.departure) : null; } catch (_) {}
     if (!base || isNaN(base)) { base = new Date(); }
     const x = HP.extNights(a, base);
