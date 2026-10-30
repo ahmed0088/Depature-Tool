@@ -259,10 +259,12 @@ function groupRooms(rows) {
 }
 
 const LONG = 7;
-const FILTERS = [['all', 'All'], ['today', 'Departing today'], ['tomorrow', 'Tomorrow'], ['arriving', 'Arrived today'], ['long', 'Long stay'], ['vip', 'VIP'], ['balance', 'Balance owing'], ['company', 'Company'], ['out', 'Checked out today']];
+const FILTERS = [['all', 'All'], ['today', 'Departing today'], ['tomorrow', 'Tomorrow'], ['arriving', 'Arrived today'], ['long', 'Long stay'], ['vip', 'VIP'], ['balance', 'Balance owing'], ['company', 'Company'], ['pm', 'PM rooms'], ['out', 'Checked out today']];
 /** does a room pass a filter (today = "YYYY-MM-DD") */
 function matches(r, f, today) {
   const tm = addDays(today, 1);
+  if (f === 'pm') return isPmRoom(r.room);
+  if (isPmRoom(r.room)) return false;   // PM rooms only under their own chip
   switch (f) {
     case 'today': return r.departures.includes(today);
     case 'tomorrow': return r.departures.includes(tm);
@@ -292,8 +294,11 @@ function sortRooms(L, by) {
   return L.slice().sort(c);
 }
 /** the numbers on top of the page */
-function summary(rooms, today) {
-  const S = { rooms: rooms.length, guests: 0, adults: 0, children: 0, depToday: 0, depTomorrow: 0, arrToday: 0, long: 0, vip: 0, balance: 0, balanceRooms: 0, company: 0, members: 0, firstArr: '', lastDep: '' };
+// PM rooms (9000 and up) are Opera's pseudo rooms (posting accounts), not real rooms or guests: kept in the list, never in the numbers.
+const isPmRoom = room => parseInt(String(room || '').replace(/\D/g, ''), 10) >= 9000;
+function summary(all, today) {
+  const rooms = (all || []).filter(r => !isPmRoom(r.room)), pmL = (all || []).filter(r => isPmRoom(r.room));
+  const S = { pm: pmL.length, pmBalance: Math.round(pmL.reduce((s, r) => s + (r.balance > 0 ? r.balance : 0), 0) * 100) / 100, rooms: rooms.length, guests: 0, adults: 0, children: 0, depToday: 0, depTomorrow: 0, arrToday: 0, long: 0, vip: 0, balance: 0, balanceRooms: 0, company: 0, members: 0, firstArr: '', lastDep: '' };
   rooms.forEach(r => {
     const pax = r.adults + r.children;
     S.adults += r.adults; S.children += r.children; S.guests += pax || r.guests.length;
@@ -846,19 +851,19 @@ function render() {
   ${snap ? linkHtml(V) : ''}
   ${stale ? `<div class="ih-stale" role="status"><span aria-hidden="true">⏳</span><div>This list is from <b>${esc(fmtD(snap.date))}</b>. Load today's in-house report so departures and balances are up to date.</div></div>` : ''}
   ${snap ? `<div class="ih-kpis" id="ihKpis">
-    ${kpi('all', '', 'Rooms occupied', S.rooms, S.out ? `${S.out} checked out today` : `${S.inHotel} guest${S.inHotel === 1 ? '' : 's'}`)}
+    ${kpi('all', '', 'Rooms occupied', S.rooms, [S.out ? `${S.out} checked out today` : `${S.inHotel} guest${S.inHotel === 1 ? '' : 's'}`, S.pm ? `+ ${S.pm} PM apart` : ''].filter(Boolean).join(' · '))}
     ${kpi('all', '', 'Guests', S.inHotel, S.leftPax ? `${S.leftPax} left · waiting Finance` : S.adults || S.children ? `${S.adults} adult${S.adults === 1 ? '' : 's'} · ${S.children} child${S.children === 1 ? '' : 'ren'}` : 'from the rows')}
     ${kpi('today', S.depToday ? 'warn' : '', 'Departing today', S.depToday, S.out ? `${S.out} out · ${fmtD(t, true)}` : fmtD(t, true))}
     ${kpi('tomorrow', S.depTomorrow ? 'blue' : '', 'Departing tomorrow', S.depTomorrow, fmtD(addDays(t, 1), true))}
     ${kpi('long', S.long ? 'ok' : '', 'Long stays', S.long, `${LONG}+ nights`)}
     ${kpi('vip', '', 'VIP', S.vip, S.members ? `${S.members} ALL member${S.members === 1 ? '' : 's'}` : 'rooms')}
-    ${kpi('balance', S.balance > 0 ? 'bad' : '', 'Open balances', esc(Math.round(S.balance).toLocaleString('en-US')), `AED · ${S.balanceRooms} room${S.balanceRooms === 1 ? '' : 's'}`)}
+    ${kpi('balance', S.balance > 0 ? 'bad' : '', 'Open balances', esc(Math.round(S.balance).toLocaleString('en-US')), `AED · ${S.balanceRooms} room${S.balanceRooms === 1 ? '' : 's'}${S.pmBalance ? ` · PM ${esc(Math.round(S.pmBalance).toLocaleString('en-US'))}` : ''}`)}
   </div>
   <div class="ih-tb">
     <div class="ih-search"><input id="ihQ" class="ih-in" type="search" placeholder="Search room, name, company, confirmation…" value="${esc(I.q)}" autocomplete="off" aria-label="Search in-house guests"></div>
     <select id="ihBy" class="ih-sel" aria-label="Sort">${[['room', 'Sort: room'], ['departure', 'Sort: departure'], ['name', 'Sort: name'], ['balance', 'Sort: balance']].map(([k, l]) => `<option value="${k}"${I.by === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
   </div>
-  <div class="ih-seg" role="tablist" aria-label="Show">${FILTERS.filter(([k]) => k !== 'out' || V.gone.length || I.f === 'out').map(([k, l]) => `<button type="button" role="tab" class="ih-chip${I.f === k ? ' on' : ''}" aria-selected="${I.f === k}" data-ih="f" data-f="${k}">${l}<i>${cnt(k)}</i></button>`).join('')}</div>
+  <div class="ih-seg" role="tablist" aria-label="Show">${FILTERS.filter(([k]) => (k !== 'out' || V.gone.length || I.f === 'out') && (k !== 'pm' || cnt('pm') || I.f === 'pm')).map(([k, l]) => `<button type="button" role="tab" class="ih-chip${I.f === k ? ' on' : ''}" aria-selected="${I.f === k}" data-ih="f" data-f="${k}">${l}<i>${cnt(k)}</i></button>`).join('')}</div>
   ${I.f === 'tomorrow' && cnt('tomorrow') ? `<div class="ih-tmr"><span>🧳 <b>${cnt('tomorrow')}</b> room${cnt('tomorrow') === 1 ? '' : 's'} depart tomorrow, ${esc(fmtD(addDays(t, 1)))}.</span><span class="ih-acts"><button type="button" class="ih-btn sm" data-ih="copyTmr">Copy list</button>${can('canExport') ? '<button type="button" class="ih-btn sm" data-ih="xlTmr">⬇ Excel</button>' : ''}</span></div>` : ''}
   <div class="ih-table" id="ihList">${shown.length ? `<div class="ih-th" aria-hidden="true"><span>Room</span><span>Guest</span><span>Stay</span><span>Company · rate</span><span class="r">Balance</span></div>${shown.map(r => rowHtml(r, t, arrived)).join('')}`
     : `<div class="ih-empty"><b>No room matches</b>${I.f === 'out' ? 'No room checked out on Departures today.' : 'Change the search or the filter.'}</div>`}</div>

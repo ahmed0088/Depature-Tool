@@ -484,7 +484,7 @@ function lvOpsRead(now) {
   O.arr = _lvTry(() => typeof arrGuests !== 'undefined' && arrGuests.length ? { n: arrGuests.length } : null);
   O.inh = _lvTry(() => {
     if (!W.hoInHouse || typeof W.hoInHouse.rooms !== 'function') return null;
-    if (now - _lvInh.at > 30000) _lvInh = { at: now, n: W.hoInHouse.rooms().filter(r => r && r.name && r.status !== 'out').length };   // the biggest list: every 30 s is plenty
+    if (now - _lvInh.at > 30000) _lvInh = { at: now, n: W.hoInHouse.rooms().filter(r => r && r.name && r.status !== 'out' && !(parseInt(String(r.room || '').replace(/\D/g, ''), 10) >= 9000)).length };   // the biggest list: every 30 s is plenty
     return _lvInh.n ? { n: _lvInh.n } : null;
   });
   O.wa = _lvTry(() => {

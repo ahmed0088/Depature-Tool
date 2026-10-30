@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 453, items: [
+    "🛏️ In-House Guests: Opera's PM rooms (9000 and up, posting accounts) are no longer counted as occupied rooms or guests, so Rooms occupied can't go above the hotel's rooms any more. They're kept apart: a “PM rooms” chip lists them, and their balance shows separately under Open balances.",
+  ] },
   { v: 452, items: [
     "📊 The Opera reader knows the Report Parameters screen now (From / To Date, Sort Order…). It's report settings, not guests, so it no longer sends a “stuck” report for it.",
   ] },

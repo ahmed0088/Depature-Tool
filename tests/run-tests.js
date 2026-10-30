@@ -2682,6 +2682,8 @@ console.log('\nIn-House Guests');
   check('in-house counts: rooms (sharers in one room), guests, departing today / tomorrow, arrived today, long stays, VIP, open balances',
     [S.rooms, S.guests, S.adults, S.children, S.depToday, S.depTomorrow, S.arrToday, S.long, S.vip, S.balance, S.balanceRooms, S.members],
     [5, 11, 9, 2, 2, 1, 1, 3, 1, 1120.5, 1, 1]);
+  { const pm = P.groupRooms(R.rows.concat(C.rows, P.parseReport('Room\tName\tArrival\tDeparture\tBalance\n9001\tGroup Master\t20-OCT-26\t25-OCT-26\t5000\nPM2\tHouse\t20-OCT-26\t25-OCT-26\t0').rows)), S2 = P.summary(pm, T);
+    check('in-house: PM rooms (9000+) are kept apart — not in rooms, guests or balances, only under their own chip', [S2.rooms, S2.guests, S2.balance, S2.pm, S2.pmBalance, pm.filter(r => P.matches(r, 'pm', T)).map(r => r.room), pm.filter(r => P.matches(r, 'all', T)).length], [5, 11, 1120.5, 1, 5000, ['9001'], 5]); }
   check('in-house filters and sort: departing today, tomorrow, long stay, balance owing, search by company / confirmation / name, sort by departure',
     [rooms.filter(r => P.matches(r, 'today', T)).map(r => r.room), rooms.filter(r => P.matches(r, 'tomorrow', T)).map(r => r.room), rooms.filter(r => P.matches(r, 'long', T)).map(r => r.room),
       rooms.filter(r => P.matches(r, 'balance', T)).map(r => r.room), rooms.filter(r => P.searchHit(r, 'test corp')).map(r => r.room), rooms.filter(r => P.searchHit(r, '9988')).map(r => r.room),
