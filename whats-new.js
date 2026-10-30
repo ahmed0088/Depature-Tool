@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 454, items: [
+    "✍️ Upsells added by hand are fine. In Package Audit, pick ✍️ Manual sale on that row (keep the IN-Gauge seller, or pick a name). It's never flagged again, and My Upsells now counts it too instead of saying “nobody can be credited”.",
+  ] },
   { v: 453, items: [
     "🛏️ In-House Guests: Opera's PM rooms (9000 and up, posting accounts) are no longer counted as occupied rooms or guests, so Rooms occupied can't go above the hotel's rooms any more. They're kept apart: a “PM rooms” chip lists them, and their balance shows separately under Open balances.",
   ] },

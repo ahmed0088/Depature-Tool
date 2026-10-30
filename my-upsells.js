@@ -245,7 +245,7 @@
       else code = String(u.product || '').replace(/\s+/g, '').toUpperCase();
       const g = (guests || {})[u.conf] || {};
       return { date: dayNum(u.daily), room: roomKey(u.room || g.room), conf: u.conf, guest: g.name || '', code,
-        kind: code ? kindOf(code) : fam, amount: r2(u.charge), src: 'ingauge', srcLine: `IN-Gauge: ${u.product}` };
+        kind: code ? kindOf(code) : fam, amount: r2(u.charge), employee: u.employee && u.employee !== '-' ? u.employee : '', src: 'ingauge', srcLine: `IN-Gauge: ${u.product}` };
     }).filter(c => c.date);
   }
 
@@ -315,7 +315,7 @@
     const arrOf = c => dayNum((guests[c] || {}).arr) || 0;
 
     charges.forEach(ch => {
-      Object.assign(ch, { status: '', owner: null, decider: null, matched: null, evidence: [], extendedFrom: '', newKindOnExt: '', stayFromSystem: '', pinned: false, dupOf: 0 });
+      Object.assign(ch, { status: '', owner: null, decider: null, matched: null, evidence: [], extendedFrom: '', newKindOnExt: '', stayFromSystem: '', pinned: false, manual: false, dupOf: 0 });
       if (!ch.conf) { ch.status = 'nolink'; return; }
       const cands = events[ch.conf] || [];
       const sameKind = ch.kind ? cands.filter(e => kindOf(e.code) === ch.kind) : [];
@@ -387,7 +387,15 @@
     if (typeof _pkgPinKey === 'function') charges.forEach(ch => {
       if (!ch.conf || ch.status === 'dup') return;
       const pin = pins[_pkgPinKey({ conf: ch.conf, product: '', code: ch.code || ch.kind })];
-      if (pin && pin.seller && !pin.skip) { ch.owner = pin.seller; ch.status = 'owned'; ch.pinned = true; }
+      if (!pin || pin.skip) return;
+      if (pin.manual) {
+        // ✍️ a manual sale (added by hand, e.g. a 6 pm late check-out Opera can't hold): nothing in Opera to match, the person's word stands
+        ch.manual = true;
+        const who = pin.seller || ch.employee;
+        if (who) { ch.owner = who; ch.status = 'owned'; ch.pinned = true; }
+        return;
+      }
+      if (pin.seller) { ch.owner = pin.seller; ch.status = 'owned'; ch.pinned = true; }
     });
     return charges;
   }
@@ -439,7 +447,8 @@
   function whyMine(ch, person) {
     const kl = kindLabel(ch.kind, ch.code).toLowerCase(), d = ch.decider;
     let s;
-    if (ch.pinned) s = `Pinned to you in Package Audit (a decision a person made, it beats the log).`;
+    if (ch.manual && ch.pinned) s = `✍️ Manual sale: added by hand, marked in Package Audit. Nothing in Opera has to match it, so it counts as it is.`;
+    else if (ch.pinned) s = `Pinned to you in Package Audit (a decision a person made, it beats the log).`;
     else if (ch.extendedFrom) s = `Extension of conf ${ch.extendedFrom}: same stay, and you started this ${kl}${d ? ` (${d.code} on ${tsShort(d.ts)})` : ''}.`;
     else s = `You ${d && d.action !== 'ADDED' ? 'attached' : 'added'} ${d ? d.code : ch.code} on ${d ? tsShort(d.ts) : '?'} (Opera log), the first person to put ${kl} on this booking.`;
     const others = [...new Set(ch.evidence.filter(e => !isPerson(e.user, person) && !isSys(e.user) && d && e.ts > d.ts).map(e => label(e.user)))];
@@ -452,6 +461,7 @@
   /** The reason for the manager, as plain facts in the first person (no app, no rules). */
   function factWhy(ch, person) {
     const d = ch.decider;
+    if (ch.manual) return 'Manual sale (added by hand)';
     if (ch.pinned && !(d && isPerson(d.user, person))) return 'My sale';
     if (ch.extendedFrom) {
       // who put it again on the new booking (they don't get it: the stay was already sold)
@@ -467,6 +477,8 @@
     const kl = kindLabel(ch.kind, ch.code).toLowerCase(), d = ch.decider;
     const mineEv = ch.evidence.find(e => isPerson(e.user, person));
     const yours = mineEv ? ` Your entry: ${mineEv.action} ${mineEv.code} on ${tsShort(mineEv.ts)}.` : '';
+    if (ch.manual && !ch.owner) return `✍️ Marked as a manual sale in Package Audit: that's fine. Pick who sold it there (✍️ Manual sale: name) and it counts for them.${yours}`;
+    if (ch.manual && ch.pinned) return `✍️ Manual sale, marked for ${label(ch.owner)} in Package Audit.${yours}`;
     if (ch.status === 'dup') return `${kindLabel(ch.kind, ch.code)} counts once per stay; it is already counted on ${dnShort(ch.dupOf)}.${yours}`;
     if (ch.status === 'system') return `This ${kl} came with ${d ? who(d.user) : 'a system booking'} (${d ? d.code + ' ' + tsShort(d.ts) : ''}): online / TARS bookings have no desk seller.${yours}`;
     if (ch.status === 'noOpera') return `The Opera log shows no ${kl} on this booking, so nobody can be credited.${yours}`;

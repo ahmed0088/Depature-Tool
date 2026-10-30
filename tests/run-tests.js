@@ -1563,6 +1563,14 @@ console.log('\nQuiet when off · shift task times');
   vm.runInContext(`pkgPins = { 'C1|Breakfast': { seller: 'Lina STAFF', by: 'Sam' } }`, sb);
   check('my upsells: a seller pinned in Package Audit wins', sum(ownAll('').filter(c => c.conf === 'C1' && c.kind === 'BB')), '11:C1:BB:owned:Lina STAFF');
   vm.runInContext(`pkgPins = {}`, sb);
+  { const row = [{ conf: 'Z9', room: '601', charge: 100, daily: '12-Oct-2026', product: 'Late Check Out', employee: 'Maya TEST', status: '' }];
+    const man = () => M.own(M.chargesFromIngauge(row, E(), G()), E(), G())[0];
+    const before = man(), key = vm.runInContext(`_pkgPinKey({ conf: 'Z9', product: '', code: ${JSON.stringify(before.code || before.kind)} })`, sb);
+    vm.runInContext(`pkgPins = { ${JSON.stringify(key)}: { manual: true, by: 'Sam' } }`, sb); const kept = man();
+    vm.runInContext(`pkgPins = { ${JSON.stringify(key)}: { manual: true, seller: 'Lina STAFF', by: 'Sam' } }`, sb); const named = man();
+    vm.runInContext(`pkgPins = {}`, sb);
+    check('my upsells: a sale added by hand (nothing in Opera) — marked ✍️ Manual sale in Package Audit it counts: the IN-Gauge seller, or the name picked',
+      [before.status, kept.status, kept.owner, kept.manual, named.owner], ['noOpera', 'owned', 'Maya TEST', true, 'Lina STAFF']); }
   const big = { name: 'Sam', login: 'ACCOREN-SSELLER', from: 20261001, to: 20261031, madeAt: 'x', madeBy: 'Sam', source: '', files: [],
     rows: Array.from({ length: 650 }, (_, i) => ({ date: 20261001 + (i % 28), conf: 'C' + i, room: '1', guest: 'Test Guest', code: 'UPS30BB', kind: 'BB', kindLabel: 'Breakfast', amount: 10, soldOn: '', soldBy: '', why: 'w', evidence: 'e', src: '' })) };
   big.totals = M.totals(big.rows);
