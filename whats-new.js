@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 455, items: [
+    "🎨 New look for every menu, text box and label in the app. Menus open as a clean rounded list with a ✓ on the chosen option (Chrome / Edge). Text boxes have soft edges and a gold glow when you type. Labels are clearer, and checkboxes and date pickers match the dark or light theme.",
+  ] },
   { v: 454, items: [
     "✍️ Upsells added by hand are fine. In Package Audit, pick ✍️ Manual sale on that row (keep the IN-Gauge seller, or pick a name). It's never flagged again, and My Upsells now counts it too instead of saying “nobody can be credited”.",
   ] },

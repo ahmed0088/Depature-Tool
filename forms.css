@@ -1,0 +1,96 @@
+/* ── Forms, everywhere: dropdown menus, text fields, labels (every page on the platform) ─────────────
+   One look for all of them: a soft field with a clean chevron, a gold focus ring, and — on browsers
+   that allow it (Chrome / Edge 135+) — a styled open list: rounded card, shadow, hover row, ✓ on
+   the chosen one. Other browsers keep their own list, with the same field. Loaded last on purpose:
+   the few !important lines win over each page's own select styles, sizes stay as each page set them. */
+select:not([multiple]):not([size]) {
+  -webkit-appearance: none !important; appearance: none !important;
+  padding-right: 32px !important;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text2, #9aa7b9) 50%), linear-gradient(135deg, var(--text2, #9aa7b9) 50%, transparent 50%) !important;
+  background-position: calc(100% - 17px) 52%, calc(100% - 12px) 52% !important;
+  background-size: 5px 5px, 5px 5px !important;
+  background-repeat: no-repeat !important;
+  cursor: pointer; text-overflow: ellipsis;
+  transition: border-color .15s, box-shadow .15s, background-color .15s;
+}
+/* the base look for a menu no page styled (zero weight: a page's own size / place / hiding wins) */
+:where(select:not([multiple]):not([size])) {
+  position: relative; background-color: var(--bg2, #0b0e14); color: var(--text, #e8edf4);
+  border: 1px solid var(--border2, rgba(255,255,255,.10)); border-radius: 10px;
+  padding: 8px 11px; font: 500 14px/1.35 var(--font, inherit); min-height: 36px;
+}
+select:not([multiple]):not([size]):hover:not(:disabled) { border-color: var(--border3, rgba(255,255,255,.16)) !important; }
+select:not([multiple]):not([size]):focus-visible { outline: none; border-color: var(--accent, #eab94a) !important; box-shadow: var(--ho-ring, 0 0 0 3px rgba(234,185,74,.22)); }
+select:disabled { cursor: not-allowed; opacity: .55; }
+select option, select optgroup { background-color: var(--card, #11161f); color: var(--text, #e8edf4); }
+select optgroup { font-weight: 700; color: var(--text3, #66748a); }
+
+/* the open list, styled where the browser lets us */
+@supports (appearance: base-select) {
+  select:not([multiple]):not([size]), ::picker(select) { appearance: base-select !important; }
+  select:not([multiple]):not([size])::picker-icon { display: none; }   /* the field's own chevron stays (it works in every layout) */
+  ::picker(select) {
+    border: 1px solid var(--border2, rgba(255,255,255,.10)); border-radius: 12px;
+    background: var(--card, #11161f); color: var(--text, #e8edf4);
+    padding: 5px; margin-top: 6px; min-width: anchor-size(width); max-height: min(60vh, 420px);
+    box-shadow: 0 18px 44px rgba(0,0,0,.34), 0 3px 10px rgba(0,0,0,.18);
+    opacity: 0; transform: translateY(-4px) scale(.985); transform-origin: top center;
+    transition: opacity .14s ease, transform .16s ease, overlay .16s allow-discrete, display .16s allow-discrete;
+  }
+  ::picker(select):popover-open { opacity: 1; transform: none; }
+  @starting-style { ::picker(select):popover-open { opacity: 0; transform: translateY(-4px) scale(.985); } }
+  select option {
+    display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 7px 10px; border-radius: 8px;
+    font: 500 13.5px var(--font, inherit); color: var(--text, #e8edf4); background: transparent; cursor: pointer;
+  }
+  select option:hover, select option:focus-visible { background: color-mix(in srgb, var(--accent, #eab94a) 13%, transparent); outline: none; }
+  select option:checked { font-weight: 650; color: var(--text, #e8edf4); background: color-mix(in srgb, var(--accent, #eab94a) 9%, transparent); }
+  select option::checkmark { content: '✓'; order: 1; margin-left: auto; color: var(--accent, #eab94a); font-weight: 700; }
+  select option:disabled { opacity: .45; cursor: default; }
+  select optgroup { background: transparent; }
+  select optgroup legend { padding: 8px 10px 4px; font: 700 11px var(--font, inherit); letter-spacing: .04em; text-transform: uppercase; color: var(--text3, #66748a); }
+  select hr { border: 0; border-top: 1px solid var(--border, rgba(255,255,255,.065)); margin: 4px 6px; }
+}
+@media (prefers-reduced-motion: reduce) { ::picker(select) { transition: none; } }
+
+/* ── Text fields and labels, everywhere ──────────────────────────────────────────────────────
+   :where() keeps these at zero weight: a page that styled its own field keeps its size and place;
+   unstyled fields get the pro look. Focus, placeholder and autofill are the same everywhere. */
+:where(input[type=text], input[type=search], input[type=email], input[type=number], input[type=password], input[type=tel], input[type=url],
+  input[type=date], input[type=time], input[type=datetime-local], input[type=month], input:not([type]), textarea) {
+  background-color: var(--bg2, #0b0e14); color: var(--text, #e8edf4);
+  border: 1px solid var(--border2, rgba(255,255,255,.10)); border-radius: 10px;
+  padding: 8px 11px; font: 500 14px/1.35 var(--font, inherit);
+  box-shadow: inset 0 1px 1.5px rgba(0,0,0,.12);
+  transition: border-color .15s, box-shadow .15s, background-color .15s;
+}
+:where(textarea) { line-height: 1.5; resize: vertical; }
+input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]):hover:not(:disabled):not(:focus),
+textarea:hover:not(:disabled):not(:focus) { border-color: var(--border3, rgba(255,255,255,.16)); }
+input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]):focus-visible, textarea:focus-visible {
+  outline: none; border-color: var(--accent, #eab94a) !important;
+  box-shadow: var(--ho-ring, 0 0 0 3px rgba(234,185,74,.22));
+}
+input::placeholder, textarea::placeholder { color: var(--text3, #66748a); opacity: 1; font-weight: 400; }
+input:disabled, textarea:disabled { opacity: .55; cursor: not-allowed; }
+input[readonly]:not([type=checkbox]):not([type=radio]), textarea[readonly] { background-color: color-mix(in srgb, var(--bg2, #0b0e14) 70%, transparent); }
+input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text, #e8edf4); caret-color: var(--text, #e8edf4);
+  -webkit-box-shadow: 0 0 0 40px var(--bg2, #0b0e14) inset !important; transition: background-color 9999s;
+}
+input[type=date]::-webkit-calendar-picker-indicator, input[type=time]::-webkit-calendar-picker-indicator,
+input[type=datetime-local]::-webkit-calendar-picker-indicator, input[type=month]::-webkit-calendar-picker-indicator { cursor: pointer; opacity: .65; border-radius: 6px; padding: 2px; transition: opacity .15s, background-color .15s; }
+input[type=date]::-webkit-calendar-picker-indicator:hover, input[type=time]::-webkit-calendar-picker-indicator:hover { opacity: 1; background-color: color-mix(in srgb, var(--accent, #eab94a) 15%, transparent); }
+html[data-theme="opera"] input[type=date]::-webkit-calendar-picker-indicator { filter: none; }
+input[type=search]::-webkit-search-cancel-button { cursor: pointer; }
+/* checkboxes, radios, sliders: the app's gold */
+input[type=checkbox], input[type=radio], input[type=range], progress { accent-color: var(--accent, #eab94a); }
+input[type=checkbox], input[type=radio] { cursor: pointer; }
+/* field labels (a label that names a field): small, clear, a touch of spacing */
+:where(label[for]) { font: 600 12.5px/1.3 var(--font, inherit); color: var(--text2, #9aa7b9); letter-spacing: .01em; }
+:where(label):has(> input[type=checkbox], > input[type=radio]) { cursor: pointer; }
+fieldset { border: 1px solid var(--border, rgba(255,255,255,.065)); border-radius: 12px; }
+legend { font: 700 12px var(--font, inherit); color: var(--text2, #9aa7b9); padding: 0 6px; }
+/* the browser's own bits (unchecked boxes, date / time pickers, scrollbars) follow the theme: dark, or light on Opera */
+html { color-scheme: dark; }
+html[data-theme="opera"] { color-scheme: light; }
