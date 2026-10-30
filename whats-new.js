@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 452, items: [
+    "📊 The Opera reader knows the Report Parameters screen now (From / To Date, Sort Order…). It's report settings, not guests, so it no longer sends a “stuck” report for it.",
+  ] },
   { v: 451, items: [
     "📡 Opera decides extensions now. When Opera is read that day, “extended” on WhatsApp only marks the room ⏳ Extending (the guest may pay later). It becomes Extended when the room is cleared from Opera's Departures — that's the confirmation. A room marked extended here but still leaving today in Opera goes back to ⏳ Extending by itself.",
     "💬 Without the Opera reader that day, WhatsApp works as before (it's the only source).",

@@ -1063,13 +1063,18 @@
   }
   // ══ </ho-lock> ═══════════════════════════════════════════════
 
+  /** Opera's report screens (Report Parameters, report list): settings for a report, not guests → never "unknown". */
+  function isReportForm(c) {
+    return (c.pairs || []).some(function (p) { return /^(?:report name|report group|file format|sort order|from date|to date|include internal notes|primary only)$/i.test(String(p[0] || '').replace(/\s+/g, ' ').trim()); })
+      || (c.heads || []).some(function (h) { return /report\s+parameters|^\s*reports?\s*$/i.test(h); });
+  }
   var H = { pinHash: pinHash, pinVerify: pinVerify, pinStep: pinStep, guardTake: guardTake, PIN_RE: PIN_RE, LOCK_TRIES: LOCK_TRIES, LOCK_MS: LOCK_MS,
     setTaught: setTaught, screenKey: screenKey, shapeOf: shapeOf, headText: headText, structText: structText, pathShape: pathShape, classShape: classShape, mapName: mapName, reportLeaks: reportLeaks, makeReport: makeReport, reportText: reportText, linkDiag: linkDiag,
     maskCards: maskCards, secretLabel: secretLabel, scrub: scrub, payType: payType, normRoomStatus: normRoomStatus, postFieldOf: postFieldOf, traceFieldOf: traceFieldOf, usablePost: usablePost, usableTrace: usableTrace,
     postingsFrom: postingsFrom, folioFrom: folioFrom, tracesFrom: tracesFrom, tableFrom: tableFrom, pairsExtra: pairsExtra, auditState: auditState, cleanLabel: cleanLabel, safeTitle: safeTitle,
     normH: normH, fieldOf: fieldOf, mapHeaders: mapHeaders, usable: usable, parseDate: parseDate, dateOrder: dateOrder, findDate: findDate, normStatus: normStatus, money: money,
     roomOf: roomOf, roomKey: roomKey, nameKey: nameKey, confOf: confOf, emailOf: emailOf, rowFrom: rowFrom, finishRows: finishRows, rowKey: rowKey, mergeRows: mergeRows, pairsToRow: pairsToRow,
-    kindOfText: kindOfText, pageKind: pageKind, sigKind: sigKind, formLabel: formLabel, dataLook: dataLook, hash: hash, summary: summary, totalOf: totalOf, totalLine: totalLine, FIELDS: FIELDS, VERSION: VERSION, READER_REV: READER_REV };
+    kindOfText: kindOfText, pageKind: pageKind, sigKind: sigKind, formLabel: formLabel, dataLook: dataLook, isReportForm: isReportForm, hash: hash, summary: summary, totalOf: totalOf, totalLine: totalLine, FIELDS: FIELDS, VERSION: VERSION, READER_REV: READER_REV };
   if (typeof module !== 'undefined' && module.exports) { module.exports = H; return; }
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
 
@@ -1519,7 +1524,7 @@
       } else if (s.k === 'guest' && s.n > 0 && !s.out) { s.bad = true; why.push({ c: 'nothing-useful', t: s.n + ' rows read, but none has a room, a conf. number or a name' }); }
     });
     var pn = c.pairs ? c.pairs.length : 0, unread = g.seen.some(function (s) { return s.bad; });
-    var reportsForm = (c.pairs || []).some(function (p) { return /^(?:report name|report group|file format)$/i.test(sp(p[0]).trim()); });
+    var reportsForm = isReportForm(c);
     if (!c.hint && !reportsForm && ((!c.kind || c.kind === 'other') && (dataN || pn >= 6) || (c.kind === 'list' && unread))) {
       why.push({ c: 'unknown-screen', t: 'the screen kind is ' + (c.kind ? 'only "' + c.kind + '"' : 'unknown') + ': its title and headings name no screen it knows, yet it shows ' + (dataN ? dataN + ' data list' + (dataN === 1 ? '' : 's') : pn + ' label/value pairs') });
     }
