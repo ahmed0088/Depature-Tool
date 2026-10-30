@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 449, items: [
+    "🧭 Opera reader, taught from today's reports: inside a reservation it no longer reports the side tables (Payment Instructions, memberships, daily rate details, packages, the assign-room list) — card and membership-card tables are skipped completely. “Available Room Search” is known as a room screen and its room statuses are read (a room cell like “0412KING…” still gives 0412). Opera's Reports screen no longer counts as an unknown screen.",
+  ] },
   { v: 448, items: [
     "🛡 One tap for everything: the new “🛡 I'm away” button in the top bar (on the phone too, and first in More) locks Opera, locks WhatsApp Web and turns on the WhatsApp alerts at once. It shows “🔒 Away · tap when back” while on — one tap again and everything unlocks. Shortcut: Ctrl+Alt+L, or say “I'm away”.",
     "🔒 WhatsApp Web now locks too, with the same dark lock screen and the same PIN as Opera (a PIN unlocks both).",

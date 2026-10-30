@@ -3556,6 +3556,9 @@ console.log('\nOpera reader');
   check('taught: what the Brain learned changes how the reader reads the headers and the screen', [J(tm2.map), R.usable(tm2), R.pageKind(['OPERA Cloud', 'Front Desk Workspace']), R.fieldOf('Email')], [{ room: 0, name: 1, departure: 2 }, true, 'inhouse', 'email']);
   R.setTaught(null);
   check('taught: forgotten again → read as before', [R.fieldOf('Leaving On'), R.pageKind(['Front Desk Workspace'])], ['', '']);
+  check('real Opera Cloud (reports 30 Oct): Available Room Search is a room screen; a room cell with its features run on still gives the room; report / rate-detail / package columns are no fields',
+    [R.sigKind(['Available Room Search', 'Search']), R.roomOf('0412KINGBed,NS View'), R.roomOf('0412'), R.roomOf('Assign Room'), R.fieldOf('Internal Name'), R.fieldOf('Report Group'), R.fieldOf('Effective Rate'), R.fieldOf('Calculation Rule'), R.fieldOf('Room Type to Charge')],
+    ['rooms', '0412', '0412', '', '', '', '', '', '']);
   check('real Opera Cloud: "Last Room", "Reservation Type", "I Want To…", "Queue Priority" are no fields; "Room" still is; Manage Reservation is the search form',
     [R.fieldOf('Last Room'), R.fieldOf('Reservation Type'), R.fieldOf('I Want To...'), R.fieldOf('Queue Priority'), R.fieldOf('Display Color'), R.fieldOf('Room'), R.fieldOf('Confirmation Number'), R.sigKind(['Manage Reservation', 'Search']), R.sigKind(['Arrivals', 'Search'])],
     ['', '', '', '', '', 'room', 'conf', 'search', 'arrivals']);
