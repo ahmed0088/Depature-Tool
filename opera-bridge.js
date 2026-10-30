@@ -798,7 +798,7 @@ function ogLine(e) {
   if (e.kind === 'key') return 'pressed keys on the locked screen';
   if (e.kind === 'try') return 'is typing a PIN';
   if (e.kind === 'unlock') return 'unlocked with your PIN';
-  return d.slice(0, 90) || (e.kind === 'gone' ? 'the Opera tab stopped answering' : 'tampered with the lock screen');
+  return d.slice(0, 90) || (e.kind === 'gone' ? 'the ' + (e.what || 'Opera') + ' tab stopped answering' : 'tampered with the lock screen');
 }
 /** the alerts that go now for this visit's waiting things (lines once each; the wrong-PIN count is the newest) */
 function guardFlush(T, now) {
@@ -806,20 +806,21 @@ function guardFlush(T, now) {
   const q = T.q, seq = T.seq + 1; T = Object.assign({}, T, { q: [], sentAt: now, seq });
   const fails = q.filter(e => e.kind === 'fail' || e.kind === 'lockout'), lines = [];
   q.forEach(e => { if (e.kind === 'fail' && e !== fails.filter(x => x.kind === 'fail').pop()) return; const l = ogLine(e); if (!lines.includes(l)) lines.push(l); });
-  const at = q[q.length - 1].at || now, m = Math.round((now - T.start) / 60e3);
+  const at = q[q.length - 1].at || now, m = Math.round((now - T.start) / 60e3), what = T.what || 'Opera', k = what === 'Opera' ? 'opg_' : 'wag_';
   return { T, wait: 0, send: [{
-    title: seq === 1 ? '🛡 Opera: someone is at your desk' : `🛡 Opera: still someone at your desk${m >= 1 ? ' · ' + m + ' min' : ''}`,
-    body: lines.join(' · ') + ' · ' + ogClock(at), prio: q.some(e => OG_LOUD[e.kind]) ? 5 : 4, key: 'opg_' + T.start.toString(36) + '_' + seq, kinds: [...new Set(q.map(e => e.kind))] }] };
+    title: seq === 1 ? `🛡 ${what}: someone is at your desk` : `🛡 ${what}: still someone at your desk${m >= 1 ? ' · ' + m + ' min' : ''}`,
+    body: lines.join(' · ') + ' · ' + ogClock(at), prio: q.some(e => OG_LOUD[e.kind]) ? 5 : 4, key: k + T.start.toString(36) + '_' + seq, kinds: [...new Set(q.map(e => e.kind))] }] };
 }
 /** like the WhatsApp guard: the first thing of a visit goes at once, then "still going" at most every 20 s (what happened in between
  *  in one alert; `wait` = flush again after that long); quiet 3 min = a new visit. An unlock ends the visit with its own alert. */
-function guardThrottle(T, e, now) {
+function guardThrottle(T, e, now, what) {
+  what = what || 'Opera';   // 'Opera' or 'WhatsApp': the same lock screen, a visit (and its alerts) each
   const fresh = !T || now - T.last > OG_VISIT;
   if (e.kind === 'unlock') {
     const f = fresh ? { send: [] } : guardFlush(T, now);
-    return { T: null, wait: 0, send: f.send.concat([{ title: '🔓 Opera unlocked with your PIN', body: 'At the desk PC · ' + ogClock(e.at || now) + ' — if it wasn\'t you, change the PIN', prio: 3, key: 'opg_u' + (e.id || now.toString(36)), kinds: ['unlock'] }]) };
+    return { T: null, wait: 0, send: f.send.concat([{ title: `🔓 ${what} unlocked with your PIN`, body: 'At the desk PC · ' + ogClock(e.at || now) + ' — if it wasn\'t you, change the PIN', prio: 3, key: (what === 'Opera' ? 'opg_u' : 'wag_u') + (e.id || now.toString(36)), kinds: ['unlock'] }]) };
   }
-  T = fresh ? { start: now, last: now, sentAt: 0, seq: 0, q: [] } : Object.assign({}, T, { q: T.q.slice() });
+  T = fresh ? { start: now, last: now, sentAt: 0, seq: 0, q: [], what } : Object.assign({}, T, { q: T.q.slice() });
   T.last = now; T.q.push(e);
   if (fresh || now - T.sentAt >= OG_GAP) return guardFlush(T, now);
   return { T, send: [], wait: OG_GAP - (now - T.sentAt) };
@@ -1438,7 +1439,7 @@ W.addEventListener('message', e => {
   if (Array.isArray(d.learn)) { const hint = safe(() => learnAdd(d.learn), ''); reply({ source: 'ho-op-ack', hint: hint || '', learn: learnOn() }); return; }
   if (d.ping) {
     // answered at once, signed in or not (only applying waits): the reader shows "linked" as soon as this tab has loaded
-    reply({ source: 'ho-op-ack', pong: 1, frame: String(d.frame || ''), again: !!(d.h && !SEEN.has(String(d.h))), auto: CFG.auto, learn: learnOn(), app: typeof APP_VERSION !== 'undefined' ? APP_VERSION : '', teach: teachNow(), guard: ogMsg() });
+    reply({ source: 'ho-op-ack', pong: 1, frame: String(d.frame || ''), again: !!(d.h && !SEEN.has(String(d.h))), auto: CFG.auto, learn: learnOn(), app: typeof APP_VERSION !== 'undefined' ? APP_VERSION : '', teach: teachNow(), guard: ogKnown() ? ogMsg() : null });
     if (d.home) safe(() => rememberHome(d.home));
     if (!was) paint();
     return;
@@ -1458,12 +1459,48 @@ if (/opera-reader/.test(location.hash)) safe(() => history.replaceState(null, ''
 // Never the PIN: only a salted SHA-256 of it.
 const OG = { pin: null, auto: 0, lock: { on: false, since: 0, by: '' }, log: {} };
 let OG_ON = false, OG_REV = 0, OG_WA = false, OG_SIG = '', OG_SRC = null, OG_T = null, OG_TT = 0, OG_GONE = false, OG_STARTED = false, OG_LINKED = 0;
+// the WhatsApp lock screen (the same one, in the WhatsApp reader): its own visit of alerts; the helper's relay remembers Away
+let OG_LOADED = false, OW_T = null, OW_TT = 0, RELAY_SIG = '', RELAY_PIN = null, RELAY_ASK = false;
+const waBasic = () => safe(() => (W.hoWaGuard && typeof W.hoWaGuard.basic === 'function' ? W.hoWaGuard.basic() : W.hoWaGuard && W.hoWaGuard.state ? W.hoWaGuard.state() : null), null);
+const waSince = () => { const b = waBasic(); return b ? +b.since || 0 : 0; };
+/** HotelOps knows your Away and lock (signed in, both read from the database): only then does it tell the tabs and the relay anything */
+const ogKnown = () => !!uidNow() && OG_LOADED && (() => { const b = waBasic(); return !b || b.loaded !== false; })();
 const OG_SEEN = new Set(), LS_GLOCK = 'ho_op_glock';
 const ogP = sub => 'opGuard/' + uidNow() + (sub ? '/' + sub : '');
 const waGuardOn = () => safe(() => !!(W.hoWaGuard && W.hoWaGuard.state && W.hoWaGuard.state().on), false);
 const ogWhy = () => (OG.lock.on ? (OG.lock.by === 'auto' ? 'auto' : 'now') : OG_WA ? 'away' : '');
 function ogMsg() {
-  return { armed: OG_ON, rev: OG_REV, since: OG_ON ? (OG.lock.on && OG.lock.since) || OG_REV : 0, by: ogWhy(), pin: OG.pin ? { h: OG.pin.h, s: OG.pin.s } : null, auto: OG.pin ? OG.auto : 0 };
+  return { armed: OG_ON, rev: OG_REV, since: OG_ON ? (OG.lock.on && OG.lock.since) || (OG_WA && waSince()) || OG_REV : 0, by: ogWhy(), pin: OG.pin ? { h: OG.pin.h, s: OG.pin.s } : null, auto: OG.pin ? OG.auto : 0 };
+}
+/** the WhatsApp lock screen follows Away only (not "Lock Opera now" / Opera's auto-lock); the same PIN. rev = when Away last
+ *  switched (the same on every device), so a tab unlocked with the PIN later is not locked again by an older "away" */
+function waLock() {
+  if (!ogKnown()) return null;
+  const since = waSince();
+  return { armed: OG_WA, rev: since || OG_REV, since: OG_WA ? since : 0, by: OG_WA ? 'away' : '', pin: OG.pin ? { h: OG.pin.h, s: OG.pin.s } : null, auto: 0 };
+}
+/** what the helper's relay keeps (chrome.storage.local), so a WhatsApp / Opera tab opened while HotelOps is closed locks at once */
+function relayMsg() { const m = ogMsg(); return { armed: OG_ON, wa: OG_WA, since: m.since, by: m.by, pin: m.pin }; }
+function relaySync(force) {
+  if (!ogKnown()) return;
+  const m = relayMsg(), sig = J([m.armed, m.wa, m.since, m.by, m.pin]);
+  if (!force && sig === RELAY_SIG) return;
+  RELAY_SIG = sig;
+  safe(() => W.postMessage({ source: 'ho-away-set', away: m }, location.origin));   // the helper's HotelOps side carries it to the relay
+}
+/** the relay says a tab was unlocked with the PIN (perhaps while HotelOps was closed): Away ends here too, and your phone hears it */
+function ogRelayPin() {
+  const p = RELAY_PIN; RELAY_PIN = null;
+  if (!p || !(+p.at)) return;
+  const at = +p.at, since = ogMsg().since;
+  if (OG_ON && since && since <= at) {
+    ogSetLock(false, '', true);
+    if (waGuardOn()) safe(() => W.hoWaGuard.set(false));
+    ogSync(true);
+    ogSend({ title: '🔓 Away ended: unlocked with the PIN at the desk', body: (p.from === 'wa' ? 'WhatsApp Web' : 'Opera') + ' at the desk PC · ' + ogClock(at) + ' — if it wasn\'t you, change the PIN', prio: 4, key: 'awaypin_' + at.toString(36) });
+    toast('🔓 Away ended — someone unlocked with the PIN at the desk (' + ogClock(at) + ')', 'info');
+  }
+  safe(() => W.postMessage({ source: 'ho-away-pinack', at }, location.origin));
 }
 /** only one HotelOps tab on this PC sends the alerts (every tab hears the reader) */
 function ogLead() {
@@ -1474,17 +1511,26 @@ function ogLead() {
 }
 /** armed = Away (the WhatsApp guard) or Opera's own lock; a change goes to the reader at once */
 function ogSync(force) {
+  if (RELAY_PIN && ogKnown()) ogRelayPin();
   const wa = waGuardOn();
   if (OG_WA && !wa && OG.lock.on) ogSetLock(false, '', true);   // "I'm back" in the WhatsApp guard: Opera too
   OG_WA = wa;
   const on = wa || !!OG.lock.on;
-  if (on !== OG_ON) { OG_ON = on; OG_REV = Date.now(); OG_GONE = false; OG_LINKED = 0; if (!on) ogEnd(); force = true; safe(paint); }
+  if (on !== OG_ON) {
+    OG_ON = on; OG_GONE = false; OG_LINKED = 0; if (!on) ogEnd(); force = true; safe(paint);
+    // armed: from when it began (the same on every device, so HotelOps reopening doesn't lock a tab unlocked with the PIN since); off: now
+    OG_REV = on ? (Math.max(+(OG.lock.on && OG.lock.since) || 0, wa ? waSince() : 0) || Date.now()) : Date.now();
+  }
   const m = ogMsg(), sig = J([m.armed, m.rev, m.by, m.pin, m.auto]);
   if (force || (sig !== OG_SIG && OG_SIG)) ogPush(m);   // the first look only notes it (the reader's next ping gets it anyway)
   OG_SIG = sig;
+  relaySync(RELAY_ASK); RELAY_ASK = false;
 }
 function ogPush(m) {
+  if (!ogKnown()) return;   // not yet read from the database: a locked tab must not hear "not armed"
   m = m || ogMsg();
+  // the WhatsApp tab's lock screen: inside the WhatsApp guard's message (an older helper carries those too)
+  safe(() => { const b = W.hoWaBridge, g = W.hoWaGuard; if (b && typeof b.post === 'function' && g && typeof g.state === 'function') b.post({ source: 'ho-wa', guard: g.state() }); });
   safe(() => W.postMessage(Object.assign({ source: 'ho-op-guard' }, m), location.origin));   // the helper carries it to Opera
   safe(() => W.postMessage({ source: 'ho-op-ack', guard: m }, location.origin));            // an older helper carries only answers
   if (OG_SRC && OG_SRC.w && !OG_SRC.w.closed) safe(() => OG_SRC.w.postMessage({ source: 'ho-op-ack', guard: m }, OG_SRC.o));   // a console reader
@@ -1521,6 +1567,7 @@ function ogStart() {
     OG.auto = [0, 5, 10, 15, 30, 60].includes(+(v.cfg && v.cfg.auto)) ? +v.cfg.auto : 0;
     const l = v.lock; OG.lock = l && l.on ? { on: true, since: +l.since || Date.now(), by: String(l.by || 'now').slice(0, 8) } : { on: false, since: 0, by: '' };
     OG.log = v.log && typeof v.log === 'object' ? v.log : {};
+    OG_LOADED = true;
     ogSync(); safe(paint);
   });
 }
@@ -1546,12 +1593,42 @@ function ogFromReader(g, reply) {
 }
 function ogAlert(rec) {
   if (!ogLead()) return;
-  const r = guardThrottle(OG_T, rec, Date.now()); OG_T = r.T;
+  const r = guardThrottle(OG_T, rec, Date.now(), 'Opera'); OG_T = r.T;
   r.send.forEach(ogSend);
   if (r.wait) { clearTimeout(OG_TT); OG_TT = setTimeout(() => { const f = guardFlush(OG_T, Date.now()); OG_T = f.T; f.send.forEach(ogSend); }, r.wait); }
 }
+/** the WhatsApp lock screen's events: the same alerts, as "WhatsApp" (its own visit) */
+function owAlert(rec) {
+  if (!ogLead()) return;
+  const r = guardThrottle(OW_T, rec, Date.now(), 'WhatsApp'); OW_T = r.T;
+  r.send.forEach(ogSend);
+  if (r.wait) { clearTimeout(OW_TT); OW_TT = setTimeout(() => { const f = guardFlush(OW_T, Date.now()); OW_T = f.T; f.send.forEach(ogSend); }, r.wait); }
+}
+/** from the WhatsApp reader ({source:'ho-wa', lock:{events | unlocked}}, through wa-bridge.js): alerts, and a PIN unlock ends Away
+ *  everywhere. → the ids it got (thanked with ho-wa-gack) */
+function fromLock(g) {
+  const ids = [];
+  if (!g || typeof g !== 'object') return ids;
+  if (Array.isArray(g.events)) g.events.slice(0, 40).forEach(e => {
+    if (!e || typeof e !== 'object' || !/^o[a-z0-9]{4,20}$/.test(String(e.id || ''))) return;
+    ids.push(e.id);
+    if (OG_SEEN.has(e.id)) return;
+    OG_SEEN.add(e.id); if (OG_SEEN.size > 500) OG_SEEN.delete(OG_SEEN.values().next().value);
+    owAlert({ id: e.id, at: Math.min(Date.now(), +e.at || Date.now()), kind: OG_KINDS.includes(e.kind) ? e.kind : 'touch', detail: cut(e.detail, 120), n: Math.max(0, Math.min(99, Math.round(+e.n || 0))), what: 'WhatsApp' });
+  });
+  if (g.unlocked && (OG_ON || waGuardOn())) {
+    ogSetLock(false, '', true);
+    if (waGuardOn()) safe(() => W.hoWaGuard.set(false));
+    ogSync(true);
+    toast('🔓 WhatsApp was unlocked with your PIN at the desk — Away is off', 'ok');
+  }
+  return ids;
+}
 /** disarmed: what was still waiting goes now, and the visit is over */
-function ogEnd() { clearTimeout(OG_TT); const f = guardFlush(OG_T, Date.now()); OG_T = null; f.send.forEach(ogSend); }
+function ogEnd() {
+  clearTimeout(OG_TT); const f = guardFlush(OG_T, Date.now()); OG_T = null; f.send.forEach(ogSend);
+  clearTimeout(OW_TT); const w = guardFlush(OW_T, Date.now()); OW_T = null; w.send.forEach(ogSend);
+}
 function ogSend(a) {
   const o = { cat: 'guard', instant: true, ignoreQuiet: true, claimed: true, toast: false, prio: a.prio, key: a.key, title: a.title, body: a.body, url: '#opera-guard', tags: [a.prio >= 5 ? 'rotating_light' : 'lock'] };
   const H = W.hoNotify;
@@ -1566,7 +1643,7 @@ function ogSend(a) {
   safe(paint);
 }
 // ── the PIN (yours: the signed-in person sets their own; changing one needs the old PIN, unless you're an owner / manager) ──
-function ogPinDialog() {
+function ogPinDialog(then) {
   if (!uidNow()) return toast('Sign in first', 'err');
   if (doc.getElementById('ogDlg')) return;
   const change = !!OG.pin, skipOld = canAdmin();
@@ -1595,7 +1672,8 @@ function ogPinDialog() {
     OG.pin = { h, s, at: Date.now() };
     if (fbOk()) safe(() => fbSet(ogP('pin'), { h, s, at: OG.pin.at, by: signedIn() ? String(currentProfile.name || '').slice(0, 40) : '' }));
     close(); ogSync(true); paint();
-    toast('🔑 PIN saved — Opera\'s lock screen takes it from now on', 'ok');
+    toast('🔑 PIN saved — the Opera and WhatsApp lock screens take it from now on', 'ok');
+    if (typeof then === 'function') safe(then);
   });
   setTimeout(() => { const f = q('old') || q('new'); if (f) f.focus(); }, 30);
 }
@@ -1619,12 +1697,19 @@ function ogClearLog() { OG.log = {}; if (uidNow() && fbOk()) safe(() => fbSet(og
 function ogWatch() {
   if (!OG_ON) return;
   if (LINK && LINK.at > OG_REV) OG_LINKED = LINK.at;
-  if (OG_LINKED && !OG_GONE && Date.now() - OG_LINKED > 150000 && LINK && LINK.at <= OG_LINKED) {
+  if (OG_LINKED && !OG_GONE && Date.now() - OG_LINKED > 60000 && LINK && LINK.at <= OG_LINKED) {   // the reader pings every 15 s: 4 missed
     OG_GONE = true;
     ogAlert({ id: 'ogone' + Date.now().toString(36), at: Date.now(), kind: 'gone', detail: 'the Opera tab stopped answering (closed, reloaded or logged out) while you were away', n: 0 });
   }
 }
 W.addEventListener('ho-away', () => safe(() => ogSync()));   // the WhatsApp guard switched (here or from your phone)
+// the helper's relay (through its HotelOps side): what it remembers, and a PIN unlock it saw (maybe while HotelOps was closed)
+W.addEventListener('message', e => {
+  const d = e.data;
+  if (e.source !== W || !d || typeof d !== 'object') return;
+  if (d.source === 'ho-away-state') { if (d.pin && typeof d.pin === 'object') RELAY_PIN = { at: +d.pin.at || 0, from: String(d.pin.from || '').slice(0, 8) }; RELAY_ASK = true; safe(() => ogSync()); }
+  else if (d.source === 'ho-wa-ext-info') RELAY_ASK = true;   // the relay (re)connected: it hears the state again
+});
 setInterval(() => safe(() => { ogStart(); ogSync(); ogWatch(); if (OG_ON) ogLead(); }), 3000);
 if (/opera-guard/.test(location.hash)) setTimeout(() => { safe(() => openPage('guard')); safe(() => history.replaceState(null, '', location.pathname + location.search)); }, 1800);   // tapped a lock-screen alert
 setInterval(() => {
@@ -1913,8 +1998,20 @@ function ogHtml() {
   const alerts = `<div class="og-alerts"><div class="og-alerts-hd"><span class="op-label">Last alerts</span>${L.length ? '<button class="og-clear" data-op="og-clear">Clear</button>' : ''}</div>${L.length
     ? `<ol class="op-feed og-feed">${L.slice(0, 5).map(x => `<li class="${x.prio >= 5 ? 'og-loud' : ''}"><time>${esc(hhmm(x.at))}</time><div><span>${esc(x.title)}</span><small>${esc(x.body)}</small></div></li>`).join('')}</ol>`
     : '<small class="og-none">None yet. Touches, PIN tries and anyone removing the lock screen show here and on your phone (📲 the same phone setup as the WhatsApp guard).</small>'}</div>`;
-  return head + away + pin + auto + alerts + '<p class="op-note og-limit">It guards this Opera tab only: someone could still close the tab or open Opera in another browser. Closing it is reported (the tab stops answering), the rest it cannot see.</p>';
+  const hs = helperState();
+  const helper = orow('helper on off switched removed extension heartbeat', 'Helper: ' + (hs === 'on' ? 'on ✓' : hs === 'off' ? 'switched off ⚠' : 'not added'),
+    hs === 'on' ? 'The helper on this PC is answering. It locks Opera and WhatsApp Web while you\'re away, even in a tab opened after HotelOps was closed.'
+      : hs === 'off' ? 'No answer from the helper for more than 30 s: it was switched off or removed in chrome://extensions. While you\'re away your phone is told.'
+      : 'Without the helper (Chrome / Edge on the desk PC) Opera and WhatsApp Web can\'t lock themselves. Get it once: Settings → Opera reader or the WhatsApp window.',
+    hs === 'on' ? '' : '<button class="btn sm gold" data-op="og-helper">⬇ Get the helper</button>', 'og-helper is-' + hs);
+  const stronger = `<details class="og-more"><summary>💪 Make it stronger</summary><ul>
+    <li><b>Allow in Incognito</b><span>In <code>chrome://extensions</code> → <b>Details</b> on the HotelOps helper → turn on <b>Allow in Incognito</b>. Then an Incognito window gets the lock screens too.</span></li>
+    <li><b>Windows + L when you step away</b><span>Locks the whole PC with your Windows password: the strongest lock there is. The Away guard is for when you forget, or leave the screen on for others.</span></li>
+    </ul><small>The lock screens cover Opera and WhatsApp Web in this browser. Someone at the PC could still switch the helper off, use another browser, or sign in to Opera / WhatsApp elsewhere: switching it off or removing it is reported to your phone; the rest it cannot see.</small></details>`;
+  return head + away + pin + auto + helper + alerts + stronger + '<p class="op-note og-limit">It guards the Opera and WhatsApp Web tabs in this browser: someone could still close a tab or open them in another browser. Closing one is reported (the tab stops answering), the rest it cannot see.</p>';
 }
+/** the helper on this PC: 'on' · 'off' (switched off / removed: no heartbeat) · 'none' (not added) — wa-helper.js */
+const helperState = () => safe(() => (W.hoWaHelper && typeof W.hoWaHelper.status === 'function' ? W.hoWaHelper.status() : 'none'), 'none');
 let LAST_UNDO = null;   // the newest change set's Undo (this tab, while the lists are as it left them)
 /** the big "🟢 Open Opera" button and the helper's state: a hero with a status emblem and 3 status chips (the page and Settings) */
 function openCardHtml() {
@@ -2079,7 +2176,7 @@ function onAct(t) {
     else if (a === 'scopy') stuckCopy(t.dataset.h); else if (a === 'sdismiss') stuckDismiss(t.dataset.h); else if (a === 'sclear') stuckClear();
     else if (a === 'page') openPage(); else if (a === 'clearday') clearDay();
     else if (a === 'hedit') editHotelUrl(t.dataset.hid); else if (a === 'hopen') openHotelUrl(t.dataset.hid);
-    else if (a === 'og-lock') ogLockNow(); else if (a === 'og-unlock') ogUnlock(); else if (a === 'og-pin') ogPinDialog(); else if (a === 'og-pinoff') ogPinOff();
+    else if (a === 'og-lock') ogLockNow(); else if (a === 'og-unlock') ogUnlock(); else if (a === 'og-pin') ogPinDialog(); else if (a === 'og-pinoff') ogPinOff(); else if (a === 'og-helper') safe(() => W.hoWaHelper.download());
     else if (a === 'og-auto') ogSetAuto(+t.dataset.min); else if (a === 'og-clear') ogClearLog();
     else if (a === 'undo' && LAST_UNDO && !LAST_UNDO.used) { LAST_UNDO.used = true; safe(() => LAST_UNDO.fn()); paint(); }
   }
@@ -2270,6 +2367,12 @@ function css() {
 #opRoot .og-seg{display:flex;gap:3px;padding:3px;border-radius:12px;background:var(--op-sub);border:1px solid var(--op-line);flex-wrap:wrap}
 #opRoot .og-seg button{padding:6px 10px;border:0;border-radius:9px;background:transparent;color:var(--text2,#9aa5b5);font:600 12.5px var(--font,system-ui);cursor:pointer;white-space:nowrap}
 #opRoot .og-seg button.on{background:var(--card,#161d28);color:var(--accent,#e8b84b);box-shadow:0 1px 4px rgba(0,0,0,.15)}#opRoot .og-seg button:disabled{opacity:.45;cursor:not-allowed}
+#opRoot .og-helper.is-on .op-row-txt b{color:var(--op-ok)}#opRoot .og-helper.is-off .op-row-txt b{color:var(--op-err)}
+#opRoot .og-more{margin:14px var(--op-px) 0;padding:12px 14px;border-radius:14px;background:var(--op-sub);border:1px solid var(--op-line)}
+#opRoot .og-more summary{cursor:pointer;font-weight:650;color:var(--text,#eee)}
+#opRoot .og-more ul{margin:10px 0 8px;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+#opRoot .og-more li{display:flex;flex-direction:column;gap:2px;font-size:13px;line-height:1.45;min-width:0}#opRoot .og-more li span{color:var(--text2,#9aa5b5);overflow-wrap:anywhere}
+#opRoot .og-more code{background:var(--card,#161d28);padding:1px 5px;border-radius:6px;font-size:12px}#opRoot .og-more small{display:block;color:var(--text3,#8892a0);font-size:12px;line-height:1.45}
 #opRoot .og-alerts{padding:14px var(--op-px) 0}#opRoot .og-alerts-hd{display:flex;align-items:center;justify-content:space-between}
 #opRoot .og-clear{border:0;background:none;color:var(--accent,#e8b84b);font:600 12.5px var(--font,system-ui);cursor:pointer;padding:2px 0}
 #opRoot .og-feed{padding:4px 0 0}#opRoot .og-feed li.og-loud span{color:var(--op-err);font-weight:600}#opRoot .og-none{display:block;padding:6px 0 4px}
@@ -2442,6 +2545,8 @@ W.hoOpera = {
   guard: {
     state: () => ({ armed: OG_ON, by: ogWhy(), since: OG_ON ? ogMsg().since : 0, pin: !!OG.pin, auto: OG.auto, away: OG_WA, linked: opLinked45(), alerts: Object.values(OG.log || {}).sort((a, b) => b.at - a.at).slice(0, 20) }),
     lock: ogLockNow, unlock: ogUnlock, away: ogAway, pinDialog: ogPinDialog, setAuto: ogSetAuto, sync: () => ogSync(true),
+    /** the WhatsApp lock screen: its message (null until HotelOps knows), its events; what the helper's relay keeps */
+    waLock, fromLock, relayMsg, known: ogKnown,
   },
 };
 })();

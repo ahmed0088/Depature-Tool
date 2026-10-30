@@ -9,6 +9,13 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 448, items: [
+    "🛡 One tap for everything: the new “🛡 I'm away” button in the top bar (on the phone too, and first in More) locks Opera, locks WhatsApp Web and turns on the WhatsApp alerts at once. It shows “🔒 Away · tap when back” while on — one tap again and everything unlocks. Shortcut: Ctrl+Alt+L, or say “I'm away”.",
+    "🔒 WhatsApp Web now locks too, with the same dark lock screen and the same PIN as Opera (a PIN unlocks both).",
+    "🧩 The lock no longer needs HotelOps open: the helper remembers you're away, so any new Opera or WhatsApp tab locks at once.",
+    "🚨 Phone alerts if the helper is removed from the PC, or switched off while you're away. The guard cards show “Helper: on ✓ / switched off ⚠”. A locked tab that goes silent is reported in about a minute.",
+    "👉 Get the helper once more (📡 Opera → Get the helper, unzip over the same folder, ↻ in chrome://extensions) — the new lock-without-HotelOps and removal alerts need it. Tip: turn on “Allow in Incognito” for the helper, and press Windows + L when you step away.",
+  ] },
   { v: 447, items: [
     "✨ Smooth animations everywhere: pages fade and rise in (on the phone they slide the way you tapped), lists and cards glide in when a page opens (not again on every live update), a checked-out room glows green, ticks draw themselves in, numbers count up, pop-ups and messages open and close softly, and buttons press gently. 🎉 Confetti when all departures are out (once a day).",
     "⚙️ Settings → Appearance → Animations: Full / Subtle (soft fades only) / Off. They never slow a tap or a save, and they're off by themselves if your device asks for reduced motion.",

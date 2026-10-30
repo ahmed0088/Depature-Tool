@@ -3989,7 +3989,140 @@ console.log('\nOpera everywhere (dtcm/inhouse/xref/noshow)');
   check('motion: the saved "Subtle" choice is read back', mk('subtle').level(), 'subtle');
 }
 
-Promise.all([nhAsync, ogAsync]).then(() => {
+// ── Helper away: the helper remembers Away (relay, chrome.storage.local), locks new tabs without HotelOps, a PIN in one tab
+// unlocks the others; removed / switched off is noticed; the one-click "🛡 I'm away" (wa-helper.js, wa-guard.js, the shared lock block) ──
+const haAsync = (async () => {
+  const res = [], ck = (label, a, e) => res.push([label, a, e]);
+  const waRaw = fs.readFileSync(path.join(ROOT, 'tools/hotelops-whatsapp.console.js'), 'utf8');
+  const opRaw = fs.readFileSync(path.join(ROOT, 'tools/hotelops-opera.console.js'), 'utf8');
+  const hs = { console: { log() {}, warn() {}, error() {} }, URL, URLSearchParams, APP_VERSION: 'v448', TextEncoder, crypto: globalThis.crypto, addEventListener() {} }; hs.window = hs; hs.globalThis = hs;
+  vm.createContext(hs); vm.runInContext(fs.readFileSync(path.join(ROOT, 'wa-helper.js'), 'utf8'), hs, { filename: 'wa-helper.js' });
+  const HP = hs.hoHelperPure, HW = hs.hoWaHelper;
+  // the shared lock screen: one block, the same in both readers, read-only toward the sites, DOM calls only
+  const lkW = HP.lockOf(waRaw), lkO = HP.lockOf(opRaw);
+  ck('lock block: the WhatsApp and Opera readers carry the same <ho-lock> block (and the helper bakes the Opera copy in)', [lkW.length > 5000, lkW === lkO, HP.lockOf(HP.bakeLock(waRaw.replace(lkW, () => lkW.replace("'Unlock'", "'Unlck'")), opRaw)) === lkO], [true, true, true]);
+  ck('lock block: no click(), no synthetic keys / mouse, no innerHTML, no .value=; a closed Shadow DOM on top of everything',
+    [/\.click\(\)|dispatchEvent\(new (?:Mouse|Keyboard)|\.innerHTML|insertAdjacentHTML|outerHTML|\.value\s*=[^=]/.test(lkO), /attachShadow\(\{ mode: 'closed' \}\)/.test(lkO), /z-index:2147483647/.test(lkO), /\.innerHTML|insertAdjacentHTML|outerHTML/.test(waRaw)], [false, true, true, false]);
+  // the helper's files
+  const waReader = HP.bakeLock(waRaw, opRaw).replace("'__HO_APP_URL__'", '"https://app.test/index.html"');
+  const F = Object.fromEntries(HW.files(waReader, 'https://app.test', opRaw.replace("'__HO_APP_URL__'", '"https://app.test/index.html"')));
+  const parses = ['relay.js', 'whatsapp.js', 'hotelops.js', 'opera.js'].map(k => { try { new vm.Script(F[k]); return true; } catch (e) { return k + ': ' + e.message; } });
+  ck('helper files: relay, WhatsApp, HotelOps and Opera sides parse', parses, [true, true, true, true]);
+  const wjs = F['whatsapp.js'];
+  ck('WhatsApp side: the lock screen starts before WhatsApp has loaded and asks the relay at once (the reader adopts it)',
+    [/window\.__hoWaLock = L;[\s\S]*L\.ask\(\);[\s\S]*\/\/ wait for WhatsApp to finish loading/.test(wjs), /var LOCK_OWN = !\(window\.__hoWaLock/.test(wjs)], [true, true]);
+  ck('HotelOps side: passes Away to the relay, gives it the app address, beats every 10 s, says when Chrome refuses it',
+    [/'ho-away-set'/.test(F['hotelops.js']), /source: 'ho-app-url', url: location\.origin \+ location\.pathname/.test(F['hotelops.js']), /setInterval\(beat, 10000\)/.test(F['hotelops.js']), /D\.hoHelperOff = /.test(F['hotelops.js'])], [true, true, true, true]);
+  // the relay with a pretend Chrome
+  const store = {}, posted = { app: [], wa: [], opera: [], wa2: [], app2: [] }, L = { c: null, u: null }; let gone = '';
+  const port = (name, key) => { const ls = [], ds = []; return { name, onMessage: { addListener: f => ls.push(f) }, onDisconnect: { addListener: f => ds.push(f) }, postMessage: m => posted[key || name].push(JSON.parse(JSON.stringify(m))), _send: m => Promise.all(ls.map(f => f(m))), _bye: () => ds.forEach(f => f()) }; };
+  const keys = k => (Array.isArray(k) ? k : [k]);
+  const chrome = { runtime: { getManifest: () => ({ version: '448' }), onConnect: { addListener: f => { L.c = f; } }, onUserScriptConnect: { addListener: f => { L.u = f; } }, setUninstallURL: u => { gone = u; return Promise.resolve(); } },
+    storage: { local: { get: async k => Object.fromEntries(keys(k).filter(x => x in store).map(x => [x, JSON.parse(JSON.stringify(store[x]))])), set: async o => { Object.assign(store, JSON.parse(JSON.stringify(o))); }, remove: async k => { keys(k).forEach(x => delete store[x]); } } } };
+  const rs = { chrome, console: hs.console, setTimeout, Promise, URL }; vm.createContext(rs); vm.runInContext(F['relay.js'], rs, { filename: 'relay.js' });
+  const tick = () => new Promise(r => setTimeout(r, 15));
+  const app = port('app'), wa = port('wa'), op = port('opera'); L.c(app); L.u(wa); L.c(op); await tick();
+  ck('relay: a HotelOps tab hears what it keeps when it connects (nothing yet)', posted.app.filter(m => m.source === 'ho-away-state').map(m => [m.away, m.pin]), [[null, null]]);
+  await app._send({ source: 'ho-app-url', url: 'https://app.test/index.html' }); await tick();
+  ck('uninstall: the relay keeps the app address and sets Chrome\'s uninstall page to it with ?helperRemoved=1&t= (nothing secret)',
+    [store.appUrl, /^https:\/\/app\.test\/index\.html\?helperRemoved=1&t=\d+$/.test(gone)], ['https://app.test/index.html', true]);
+  await app._send({ source: 'ho-app-url', url: 'https://app.test/index.html?token=abc' }); await tick();
+  ck('uninstall: an address with a query (could carry something) is refused', /token/.test(gone) || /token/.test(store.appUrl), false);
+  await app._send({ source: 'ho-helper-ping' }); await tick();
+  ck('heartbeat: the relay answers a ping itself (not passed on to the readers)', [posted.app.at(-1).source, posted.wa.some(m => m.source === 'ho-helper-ping')], ['ho-helper-beat', false]);
+  const pin = { h: 'a'.repeat(64), s: '0f1e2d3c4b5a6978' }, S = 1760000000000;
+  await app._send({ source: 'ho-away-set', away: { armed: true, wa: true, since: S, by: 'away', pin } }); await tick();
+  ck('relay away store: armed (with since and the PIN\'s hash, never a PIN), and both readers told',
+    [store.away && [store.away.armed, store.away.wa, store.away.since, store.away.pin.h === pin.h, typeof store.away.at], posted.wa.at(-1).away.armed, posted.opera.at(-1).away.armed, posted.app.some(m => m.source === 'ho-away-set')],
+    [[true, true, S, true, 'number'], true, true, false]);
+  await app._send({ source: 'ho-away-set', away: { armed: false } }); await tick();
+  ck('relay away store: cleared on disarm, the readers told (newer)', [store.away, posted.wa.at(-1).away.armed, posted.opera.at(-1).away.armed], [undefined, false, false]);
+  await app._send({ source: 'ho-away-set', away: { armed: true, wa: false, since: S + 5, by: 'now', pin } }); await tick();
+  ck('relay away store: "Lock Opera now" locks Opera, not WhatsApp', [posted.opera.at(-1).away.armed, posted.wa.at(-1).away.armed], [true, false]);
+  await app._send({ source: 'ho-away-set', away: { armed: true, wa: true, since: S + 10, by: 'away', pin } }); await tick();
+  // HotelOps closes; a NEW WhatsApp tab and a new Opera tab start: they ask the relay and lock at once
+  app._bye(); const wa2 = port('wa', 'wa2'); L.u(wa2); await tick();
+  await wa2._send({ source: 'ho-away-ask', from: 'wa' }); await tick();
+  const ans = posted.wa2.find(m => m.source === 'ho-away');
+  const R = require(path.join(ROOT, 'tools/hotelops-opera.console.js')), WR = require(path.join(ROOT, 'tools/hotelops-whatsapp.console.js'));
+  const g2 = WR.guardTake({}, ans && ans.away);
+  ck('new tab without HotelOps: it asks, the relay answers armed with the PIN hash → the tab locks', [!!ans, g2 && g2.armed, g2 && g2.by, g2 && g2.pin && g2.pin.h === pin.h, posted.app.some(m => m.source === 'ho-away-ask')], [true, true, 'away', true, false]);
+  // a PIN at the desk (the new WhatsApp tab) → the relay disarms and tells the Opera tab and the other WhatsApp tab
+  const opState = R.guardTake({}, posted.opera.at(-1).away);
+  await wa2._send({ source: 'ho-away-off', rev: S + 60000, at: S + 60000, from: 'wa' }); await tick();
+  const offOp = posted.opera.at(-1), offWa = posted.wa.at(-1), opAfter = R.guardTake(opState, offOp.away);
+  ck('PIN unlock: the relay clears Away, keeps when (for HotelOps), and unlocks the other tabs', [store.away, store.awayPin, offOp.away.armed, offWa.away.armed, opState.armed, opAfter.armed], [undefined, { at: S + 60000, from: 'wa' }, false, false, true, false]);
+  // HotelOps reopens: it hears the PIN unlock; its older "away" (since before the PIN) doesn't arm the relay again; then it thanks
+  const app2 = port('app', 'app2'); L.c(app2); await tick();
+  const st2 = posted.app2.find(m => m.source === 'ho-away-state');
+  ck('PIN unlock: HotelOps hears it when it reconnects ("unlocked with the PIN at the desk")', st2 && st2.pin, { at: S + 60000, from: 'wa' });
+  await app2._send({ source: 'ho-away-set', away: { armed: true, wa: true, since: S + 10, by: 'away', pin } }); await tick();
+  ck('PIN unlock: a stale "away" from before it doesn\'t lock the tabs again', store.away, undefined);
+  await app2._send({ source: 'ho-away-pinack', at: S + 60000 }); await tick();
+  await app2._send({ source: 'ho-away-set', away: { armed: true, wa: true, since: S + 90000, by: 'away', pin } }); await tick();
+  ck('PIN unlock: thanked → forgotten; a new Away arms again', [store.awayPin, store.away && store.away.since], [undefined, S + 90000]);
+  await wa._send({ source: 'ho-away-set', away: { armed: false } }); await tick();
+  ck('relay: only HotelOps can set Away (a reader can\'t)', store.away && store.away.armed, true);
+  // removed from Chrome: ?helperRemoved=1 → exactly one alert; signed out → queued until sign-in
+  const mkLs = () => { const d = {}; return { d, get: (k, def) => (k in d ? JSON.parse(d[k]) : def), set: (k, v) => { d[k] = JSON.stringify(v); } }; };
+  const r1 = HP.removedParam('?helperRemoved=1&t=1760000000123&x=2');
+  ck('removed: the parameter is read; the address is cleaned (the rest kept)', [r1, HP.removedParam('?x=1'), HP.removedClean('?helperRemoved=1&t=5&x=2'), HP.removedClean('?helperRemoved=1&t=5')], [{ t: 1760000000123 }, null, '?x=2', '']);
+  const ls1 = mkLs(), sent1 = [];
+  HP.removedNote(ls1, r1, S); HP.removedFlush(ls1, 'u1', o => sent1.push(o));
+  HP.removedNote(ls1, r1, S + 1000); HP.removedFlush(ls1, 'u1', o => sent1.push(o));   // the same page opened again
+  ck('removed, signed in: exactly one alert — guard, loud, instant, the time', [sent1.length, sent1[0].cat, sent1[0].prio, sent1[0].instant, /^🛡 The HotelOps helper was REMOVED from this PC \(\d\d:\d\d\)$/.test(sent1[0].title)], [1, 'guard', 5, true, true]);
+  const ls2 = mkLs(), sent2 = [];
+  HP.removedNote(ls2, { t: 99 }, S); const n0 = HP.removedFlush(ls2, '', o => sent2.push(o));
+  ck('removed, nobody signed in: nothing sent, the alert waits in localStorage', [n0, sent2.length, ls2.get('ho_helper_removed_q', []).length], [0, 0, 1]);
+  HP.removedFlush(ls2, 'u2', o => sent2.push(o)); HP.removedFlush(ls2, 'u2', o => sent2.push(o));
+  ck('removed: sent once after sign-in, then the queue is empty', [sent2.length, ls2.get('ho_helper_removed_q', []).length], [1, 0]);
+  // switched off / stopped: the heartbeat
+  const stt = o => HP.helperStatus(Object.assign({ installed: true, capable: true, beat: S, start: S - 5000, now: S + 10000, timersOk: true }, o));
+  ck('heartbeat: on · quiet > 30 s = off · Chrome refused = off · an older helper (no heartbeat) or late timers = on · none',
+    [stt({}), stt({ now: S + 31000 }), stt({ gone: true }), stt({ capable: false, now: S + 99000 }), stt({ now: S + 99000, timersOk: false }), stt({ installed: false })], ['on', 'off', 'off', 'on', 'on', 'none']);
+  let b = HP.beatCheck({}, { armed: false, status: 'off', beat: S });
+  ck('heartbeat lost while NOT away: no alert', b.alert, false);
+  b = HP.beatCheck(b.st, { armed: true, status: 'off', beat: S }); const b2 = HP.beatCheck(b.st, { armed: true, status: 'off', beat: S });
+  const b3 = HP.beatCheck(HP.beatCheck(b2.st, { armed: true, status: 'on', beat: S + 50000 }).st, { armed: true, status: 'off', beat: S + 50000 });
+  ck('heartbeat lost while away: one alert, not again for the same quiet spell; back and lost again → again', [b.alert, b2.alert, b3.alert], [true, false, true]);
+  const ba = HP.beatAlert(S, S - 60000, S + 40000);
+  ck('heartbeat alert: the words, guard, loud', [ba.title, ba.cat, ba.prio], ['🛡 The HotelOps helper stopped while you\'re away — check the desk PC', 'guard', 5]);
+  // "I'm away": one click for all (wa-guard.js with a pretend page)
+  const mkEl = () => { const e = { dataset: {}, style: {}, attrs: {}, kids: [], classList: { set: new Set(), toggle(c, on) { on ? this.set.add(c) : this.set.delete(c); }, add(c) { this.set.add(c); }, remove(c) { this.set.delete(c); }, contains(c) { return this.set.has(c); } },
+    setAttribute(k, v) { this.attrs[k] = String(v); }, addEventListener(t, f) { this['on' + t] = f; }, appendChild(c) { this.kids.push(c); return c; }, insertBefore(c) { this.kids.unshift(c); return c; }, querySelector: () => null, querySelectorAll: () => [], innerHTML: '', textContent: '' }; return e; };
+  const bar = mkEl(), ids = {}, fbw = {}, calls = [], toasts = [];
+  const doc = { createElement: () => mkEl(), head: mkEl(), body: mkEl(), documentElement: mkEl(), addEventListener() {}, querySelectorAll: () => [],
+    querySelector: s => (s === '.topbar .topbar-right' ? bar : null), getElementById: id => ids[id] || null };
+  bar.insertBefore = c => { ids[c.id] = c; bar.kids.unshift(c); return c; };
+  let pinSet = false;
+  const gs = { console: hs.console, document: doc, location: { hash: '', origin: 'https://app.test', pathname: '/' }, setTimeout: (f, ms) => { if (ms <= 100) f(); return 0; }, setInterval: () => 0, clearInterval() {}, clearTimeout() {},
+    currentUser: { uid: 'u1' }, currentProfile: { name: 'Test User' }, fbSet: (p, v) => { fbw[p] = v; }, showToast: (m, t) => toasts.push([m, t]), CustomEvent: class { constructor(t, o) { this.type = t; this.detail = o && o.detail; } },
+    dispatchEvent: e => { calls.push('event:' + e.type); }, matchMedia: () => ({ matches: false }) };
+  gs.window = gs; gs.globalThis = gs;
+  gs.hoOpera = { guard: { state: () => ({ pin: pinSet, armed: false }), pinDialog: then => { calls.push('pinDialog'); pinSet = true; then(); }, unlock: () => { calls.push('unlock'); gs.hoWaGuard.set(false); }, sync: () => calls.push('sync'), waLock: () => null } };
+  gs.hoWaHelper = { status: () => 'off' };
+  vm.createContext(gs); vm.runInContext(fs.readFileSync(path.join(ROOT, 'wa-guard.js'), 'utf8'), gs, { filename: 'wa-guard.js' });
+  const G = gs.hoWaGuard;
+  ck('away button: the two states', [G.awayView(false).label, G.awayView(false).icon, G.awayView(true).label, G.awayView(true).icon], ['I\'m away', '🛡', 'Away · tap when back', '🔒']);
+  G.renderAway(); const btn = ids.tbAway;
+  ck('away button: in the top bar, off', [!!btn, btn && btn.classList.contains('on'), btn && /I(?:'|&#39;)m away/.test(btn.innerHTML), btn && btn.attrs['aria-pressed']], [true, false, true, 'false']);
+  btn.onclick();
+  ck('away button: no PIN yet → it asks for one first, then arms everything (the shared Away: the guard, the Opera and WhatsApp locks)',
+    [calls.slice(0, 3), fbw['waGuard/u1/on'], G.basic().on, calls.includes('event:ho-away'), calls.includes('sync')], [['pinDialog', 'event:ho-away', 'sync'], true, true, true, true]);
+  ck('away button: on → "🔒 Away · tap when back", a pulsing dot; the helper is off → the one-line toast',
+    [btn.classList.contains('on'), /tba-dot/.test(btn.innerHTML), /Away · tap when back/.test(btn.innerHTML), btn.attrs['aria-pressed'], toasts.some(t => t[0] === 'Opera/WhatsApp tabs can\'t lock without the helper — get it on the 📡 Opera page')], [true, true, true, 'true', true]);
+  calls.length = 0; btn.onclick();
+  ck('away button: one more tap = "I\'m back": all off (Opera\'s Unlock ends Away too)', [calls[0], fbw['waGuard/u1/on'], G.basic().on, btn.classList.contains('on')], ['unlock', false, false, false]);
+  calls.length = 0; G.awayAll(true, 'key');
+  ck('away button: with a PIN already set it arms at once (no PIN question)', [calls.includes('pinDialog'), G.basic().on], [false, true]);
+  const wgSrc = fs.readFileSync(path.join(ROOT, 'wa-guard.js'), 'utf8');
+  ck('away button on phones: a real button (no un-tappable ::after shield on the logo), ≥ 44×44, touch-action: manipulation',
+    [/logo::after/.test(wgSrc), /@media \(max-width:768px\)\{\.tb-away\{width:44px;height:44px;min-width:44px/.test(wgSrc), /\.tb-away\{touch-action:manipulation/.test(wgSrc)], [false, true, true]);
+  console.log('\nHelper away');
+  res.forEach(([l, a, e]) => check(l, a, e));
+})().catch(e => { fail++; console.log('  ✗ helper away threw: ' + (e && e.stack || e)); });
+
+Promise.all([nhAsync, ogAsync, haAsync]).then(() => {
   console.log(`\n${pass} passed · ${fail} failed`);
   process.exit(fail ? 1 : 0);
 });

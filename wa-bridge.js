@@ -1669,6 +1669,11 @@ W.addEventListener('message', e => {
     if (ids.length) reply({ source: 'ho-wa-gack', ids });
     return;
   }
+  if (d.lock && typeof d.lock === 'object') {   // 🔒 the WhatsApp lock screen (the same as Opera's): someone at it, or the PIN typed right
+    const ids = W.hoOpera && W.hoOpera.guard && typeof W.hoOpera.guard.fromLock === 'function' ? W.hoOpera.guard.fromLock(d.lock) : [];
+    if (ids.length) reply({ source: 'ho-wa-gack', ids });
+    return;
+  }
   if (d.answer && typeof d.answer === 'object') { answerAsk(d.answer.word, d.answer.meaning, d.answer.note, d.answer.by || 'WhatsApp window'); return; }
   if (d.ping) {
     if (Array.isArray(d.groups)) LINK.groups = d.groups.filter(g => g && g.name).slice(0, 12).map(g => ({ name: String(g.name).slice(0, 80), act: g.act !== false }));

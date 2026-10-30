@@ -21,7 +21,8 @@
 //    uses: notify-hub.js sends through it, and the guard's own alerts go
 //    through the hub too (instant, even in quiet hours) when it is loaded.
 //  • One Away for both: while you're away Opera at the desk is locked too (📡 Opera → 🛡 Away guard,
-//    opera-bridge.js listens for the 'ho-away' event), and "I'm back" here unlocks it.
+//    opera-bridge.js listens for the 'ho-away' event), and "I'm back" here unlocks it. WhatsApp Web
+//    gets the same lock screen (the same PIN); this guard's reporting goes on as before under it.
 //  • Saved under your own account: waGuard/{your uid} = { on, since, by, auto,
 //    cfg: {level, auto}, beat: {at, linked}, ntfy: {topic},
 //    log: {id: {at, kind, chat, detail, lines, work}} }.
@@ -76,9 +77,16 @@
     if (v.stopped) bits.push('⛔ closed the reader / WhatsApp');
     return bits;
   }
-  let ST = { on: false, since: 0 }, LOG = {}, BEAT = null, started = false, seenIds = null, lastLinked = 0, lostSaid = false;
+  let ST = { on: false, since: 0 }, LOG = {}, BEAT = null, started = false, seenIds = null, lastLinked = 0, lostSaid = false, loaded = false;
 
-  function state() { return { on: !!ST.on, since: +ST.since || 0, auto: +CFG.auto || 0 }; }
+  /** on / since / auto, and whether it has been read from the database yet (loaded) */
+  function basic() { return { on: !!ST.on, since: +ST.since || 0, auto: +CFG.auto || 0, loaded }; }
+  /** what the WhatsApp reader gets: the guard, and the lock screen (opera-bridge.js: the same PIN, armed while you're away) */
+  function state() {
+    const s = { on: !!ST.on, since: +ST.since || 0, auto: +CFG.auto || 0 };
+    try { const l = W.hoOpera && W.hoOpera.guard && typeof W.hoOpera.guard.waLock === 'function' ? W.hoOpera.guard.waLock() : null; if (l) s.lock = l; } catch (_) {}
+    return s;
+  }
   function bridge() { return W.hoWaBridge || null; }
   function linkedHere() { const b = bridge(); try { return !!(b && b.linked && b.linked()); } catch (_) { return false; } }
 
@@ -94,7 +102,7 @@
     if (auto) notify('🛡 Auto-away on', `Nobody touched the WhatsApp PC for ${CFG.auto} min, so the Away guard is now watching it. Tap "I'm back" in HotelOps when you return.`, 2, ['shield']);
     else toast(on ? '🛡 Away guard on — your phone will be told if someone uses your WhatsApp (starts in 45 s)' : '🛡 Away guard off — welcome back', on ? 'ok' : '');
     if (!on) endVisit(true);
-    render();
+    render(); try { renderAway(); } catch (_) {}
   }
   let cfgOpen = false;
   function setCfg(k, v) {
@@ -158,6 +166,7 @@
         if (fresh.length) alarm(fresh.sort((a, b) => a.at - b.at));
       }
       seenIds = new Set(ids);
+      loaded = true;
       if (wasOn !== ST.on) { pushToReader(); told(); }
       render(); badge();
     });
@@ -373,6 +382,13 @@
     if (old) return `<span class="wg-bad">● The desk PC stopped checking in ${ago(BEAT.at)} — HotelOps or WhatsApp may have been closed</span>`;
     return BEAT.linked ? `<span class="wg-ok">● Desk PC watching · checked in ${ago(BEAT.at)}</span>` : `<span class="wg-warn">● Desk PC online but the WhatsApp reader isn't linked</span>`;
   }
+  /** the helper on this PC (wa-helper.js): it locks WhatsApp Web and Opera while you're away */
+  function helperLine() {
+    let st = 'none'; try { if (W.hoWaHelper && typeof W.hoWaHelper.status === 'function') st = W.hoWaHelper.status(); } catch (_) {}
+    if (st === 'on') return '<div class="wg-ok">● Helper: on ✓ — WhatsApp Web and Opera lock while you\'re away</div>';
+    if (st === 'off') return '<div class="wg-bad">● Helper: switched off ⚠ — no lock screens on this PC; your phone is told while you\'re away</div>';
+    return '<div class="wg-warn">● Helper: not added on this browser — WhatsApp is still watched, but it can\'t be locked (📡 Opera → Get the helper)</div>';
+  }
   function render() {
     const ov = document.getElementById('wgOv'); if (!ov || ov.hidden) return;
     cfgOpen = !!ov.querySelector('details.wg-cfg[open]') || cfgOpen === 'force';
@@ -389,7 +405,7 @@
     ov.innerHTML = `<div class="wg-sheet" role="dialog" aria-label="WhatsApp Away guard">
       <div class="wg-hd"><span class="wg-shield ${ST.on ? 'on' : ''}">🛡</span><div><b>WhatsApp Away guard</b><small>Tells you if someone uses your WhatsApp while you're away</small></div><button class="wg-x" onclick="hoWaGuard.close()" aria-label="Close">✕</button></div>
       <button class="wg-big ${ST.on ? 'on' : ''}" onclick="hoWaGuard.set(${!ST.on})">${ST.on ? `<b>I'm back</b><small>Watching since ${esc(clock(since))} · tap to stop</small>` : `<b>I'm away</b><small>Going on a break / DND? Tap and walk away (starts in 45 s)</small>`}</button>
-      <div class="wg-pc">${pcLine()}</div>
+      <div class="wg-pc">${pcLine()}${helperLine()}</div>
       ${live()}
       ${pushHtml()}
       ${cfgHtml()}
@@ -402,8 +418,89 @@
     const n = ST.on ? Object.values(LOG).filter(e => e && e.at >= ST.since).length : 0;
     document.querySelectorAll('[data-wg-badge]').forEach(el => { el.textContent = n || ''; el.hidden = !n; });
     document.documentElement.classList.toggle('wg-away', !!ST.on);
+    try { renderAway(); } catch (_) {}
   }
   function toast(m, t) { if (typeof showToast === 'function') showToast(m, t); }
+
+
+  // ── 🛡 "I'm away" for everything, one click: a button in the top bar (on phones a shield there, and the first thing in
+  // More), Ctrl+Alt+L, and the voice command. Away = this guard + Opera's lock screen + WhatsApp's lock screen (the shared
+  // 'ho-away'); "I'm back" ends all three. No PIN yet → it asks for one first (it unlocks both lock screens at the desk).
+  /** what the button shows: off "🛡 I'm away" · on "🔒 Away · tap when back" (a pulsing dot) */
+  function awayView(on) {
+    return on ? { on: true, icon: '🔒', label: 'Away · tap when back', title: 'You\'re away: WhatsApp is watched, Opera and WhatsApp Web are locked at the desk. Tap when you\'re back (Ctrl+Alt+L)' }
+      : { on: false, icon: '🛡', label: 'I\'m away', title: 'I\'m away: watch WhatsApp and lock Opera + WhatsApp Web at the desk, one tap (Ctrl+Alt+L)' };
+  }
+  const isPhone = () => { try { return W.matchMedia && W.matchMedia('(pointer: coarse)').matches; } catch (_) { return false; } };
+  /** one tap: on (or off) for all. on == null → the other way round */
+  function awayAll(on, how) {
+    if (!uid()) { toast('Sign in first', 'err'); return false; }
+    on = on == null ? !ST.on : !!on;
+    const O = W.hoOpera && W.hoOpera.guard;
+    if (!on) {
+      if (O && typeof O.unlock === 'function') O.unlock(); else set(false);   // Opera's Unlock ends Away too: all three
+      renderAway(); return true;
+    }
+    if (ST.on) { renderAway(); return true; }
+    const st = O && typeof O.state === 'function' ? O.state() : null;
+    if (st && !st.pin && typeof O.pinDialog === 'function') {   // the first time: a PIN, then Away
+      toast('Set your PIN first (4–6 digits): it unlocks Opera and WhatsApp Web at the desk', 'info');
+      O.pinDialog(() => awayAll(true, how));
+      return false;
+    }
+    set(true);
+    if (O && typeof O.sync === 'function') O.sync();
+    const hs = W.hoWaHelper && typeof W.hoWaHelper.status === 'function' ? W.hoWaHelper.status() : 'none';
+    if (hs !== 'on' && !isPhone()) setTimeout(() => toast('Opera/WhatsApp tabs can\'t lock without the helper — get it on the 📡 Opera page', 'warn'), 60);
+    renderAway(); return true;
+  }
+  function renderAway() {
+    const v = awayView(!!ST.on), bar = document.querySelector('.topbar .topbar-right');
+    let b = document.getElementById('tbAway');
+    if (!b && bar) {
+      b = document.createElement('button'); b.type = 'button'; b.id = 'tbAway'; b.className = 'tb-away';
+      b.addEventListener('click', () => awayAll(null, 'bar'));
+      bar.insertBefore(b, document.getElementById('tbWhatsApp') || bar.firstChild);
+    }
+    if (b) fitAway(b, bar);
+    if (b) {
+      const sig = v.on ? 'on' : 'off';
+      if (b.dataset.st !== sig) {
+        b.dataset.st = sig; b.classList.toggle('on', v.on); b.title = v.title; b.setAttribute('aria-pressed', String(v.on));
+        b.setAttribute('aria-label', v.on ? 'Away is on — tap when you are back' : 'I\'m away');
+        b.innerHTML = `${v.on ? '<i class="tba-dot" aria-hidden="true"></i>' : ''}<span class="tba-ic" aria-hidden="true">${v.icon}</span><span class="tba-l">${esc(v.label)}</span>`;
+      }
+    }
+    // phones: the first thing in More, too
+    const drawer = document.getElementById('mobMoreDrawer'), grid = drawer && drawer.querySelector('.mob-more-grid');
+    let m = document.getElementById('mobAway');
+    if (!m && grid) {
+      m = document.createElement('button'); m.type = 'button'; m.id = 'mobAway'; m.className = 'mob-away';
+      m.addEventListener('click', () => { awayAll(null, 'more'); try { if (typeof closeMobMore === 'function') closeMobMore(); } catch (_) {} });
+      grid.parentNode.insertBefore(m, grid.parentNode.querySelector('.mob-more-search') || grid);
+    }
+    if (m && m.dataset.st !== (v.on ? 'on' : 'off')) {
+      m.dataset.st = v.on ? 'on' : 'off'; m.classList.toggle('on', v.on);
+      m.innerHTML = `${v.on ? '<i class="tba-dot" aria-hidden="true"></i>' : ''}<span class="tba-ic" aria-hidden="true">${v.icon}</span><span><b>${esc(v.on ? 'Away · tap when you\'re back' : 'I\'m away')}</b><small>${v.on ? 'WhatsApp watched · Opera and WhatsApp Web locked' : 'One tap: watch WhatsApp, lock Opera + WhatsApp Web'}</small></span>`;
+    }
+  }
+  /** a narrow desktop: the bar's icons would be pushed off the edge → just the shield (and the dot when on), as on phones */
+  function fitAway(b, bar) {
+    try {
+      if (!bar || !b.isConnected || !bar.lastElementChild || !b.getBoundingClientRect) return;
+      const tb = bar.closest ? bar.closest('.topbar') : null;
+      b.classList.remove('compact'); if (tb) tb.classList.remove('tb-crowded');
+      const vw = W.innerWidth || document.documentElement.clientWidth;
+      const over = () => { const last = [...bar.children].filter(c => c.offsetWidth).pop(); return !!last && last.getBoundingClientRect().right > vw + 1; };
+      if (over()) b.classList.add('compact');
+      if (over() && tb) tb.classList.add('tb-crowded');   // still too full: the database pill shows only its dot (its words are in its title)
+    } catch (_) {}
+  }
+  W.addEventListener && W.addEventListener('resize', () => { const b = document.getElementById('tbAway'); if (b) fitAway(b, document.querySelector('.topbar .topbar-right')); });
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.altKey && !e.metaKey && !e.shiftKey && !e.repeat && (e.code === 'KeyL' || /^[lL¬]$/.test(e.key || ''))) { e.preventDefault(); awayAll(null, 'key'); }
+  });
+  setTimeout(renderAway, 600); setInterval(renderAway, 5000);
 
   // start once someone is signed in; the PC tab checks in every 30 s while you're away
   const boot = setInterval(() => { if (uid()) { clearInterval(boot); start(); } }, 1500);
@@ -464,12 +561,28 @@
 .wg-done{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;padding:8px 0}.wg-done span{width:56px;height:56px;border-radius:50%;display:grid;place-items:center;font-size:28px;color:#fff;background:linear-gradient(135deg,#22c55e,#16a34a);animation:wgPop .5s cubic-bezier(.34,1.56,.64,1)}@keyframes wgPop{from{transform:scale(.3)}}
 .wg-empty{padding:14px;text-align:center;color:var(--mint,#16a34a);font-weight:600;font-size:13.5px}
 .wg-how{margin-top:6px;font-size:12px;line-height:1.5;color:var(--text3)}.wg-how b{display:block;color:var(--text2);margin-bottom:2px}
-html.wg-away .topbar .logo::after{content:'🛡';margin-left:4px;font-size:13px}`;
+
+.tb-away{touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px 0 9px;border-radius:99px;border:1px solid color-mix(in srgb,var(--accent,#6366f1) 45%,var(--border2));background:color-mix(in srgb,var(--accent,#6366f1) 10%,var(--surface,transparent));color:var(--text);font:700 12px var(--font,system-ui);white-space:nowrap;flex-shrink:0;cursor:pointer;position:relative;transition:background .15s,border-color .15s,transform .1s}
+.tb-away:hover{background:color-mix(in srgb,var(--accent,#6366f1) 18%,var(--surface,transparent))}.tb-away:active{transform:scale(.96)}
+.tb-away:focus-visible{outline:2px solid var(--accent,#6366f1);outline-offset:2px}
+.tb-away .tba-ic{font-size:13px;line-height:1}
+.tb-away.on{color:#fff;border-color:transparent;background:linear-gradient(135deg,#e11d48,#f59e0b);box-shadow:0 6px 16px -8px #e11d48}
+.tba-dot{width:8px;height:8px;flex:none;border-radius:50%;background:#fff;box-shadow:0 0 0 0 rgba(255,255,255,.8);animation:tbaPulse 1.6s infinite}
+@keyframes tbaPulse{70%{box-shadow:0 0 0 7px rgba(255,255,255,0)}100%{box-shadow:0 0 0 0 rgba(255,255,255,0)}}
+[data-theme="opera"] .tb-away:not(.on){color:#fff;border-color:rgba(255,255,255,.3);background:rgba(255,255,255,.12)}
+.mob-away{display:flex;align-items:center;gap:12px;width:calc(100% - 24px);margin:4px 12px 10px;padding:12px 14px;border-radius:16px;border:1px solid color-mix(in srgb,var(--accent,#6366f1) 40%,var(--border2));background:color-mix(in srgb,var(--accent,#6366f1) 10%,var(--card));color:var(--text);text-align:left;font:inherit;cursor:pointer;box-sizing:border-box}
+.mob-away .tba-ic{font-size:22px}.mob-away>span:last-child{display:flex;flex-direction:column;min-width:0}.mob-away b{font-size:14.5px}.mob-away small{font-size:12px;color:var(--text3)}
+.mob-away.on{color:#fff;border-color:transparent;background:linear-gradient(135deg,#e11d48,#f59e0b)}.mob-away.on small{color:rgba(255,255,255,.88)}
+.topbar.tb-crowded #fbLabel{display:none}.topbar.tb-crowded .fb-status{padding:3px 6px}
+@media (max-width:768px){.topbar.tb-crowded #topbarTime{display:none !important}}
+.tb-away.compact{width:30px;padding:0;justify-content:center;gap:0}.tb-away.compact .tba-l{display:none}.tb-away.compact.on .tba-dot{position:absolute;top:-2px;right:-2px;width:9px;height:9px;background:#fff;border:2px solid #e11d48;box-sizing:border-box}
+@media (max-width:768px){.tb-away{width:44px;height:44px;min-width:44px;padding:0;justify-content:center;gap:0;font-size:17px;border-radius:14px;z-index:5}.tb-away .tba-ic{font-size:18px}.tb-away .tba-l{display:none}.tb-away.on .tba-dot{position:absolute;top:2px;right:2px;width:10px;height:10px;background:#fff;border:2px solid #e11d48;box-sizing:border-box}}
+@media (prefers-reduced-motion:reduce){.tba-dot{animation:none}}`;
   document.head.appendChild(css);
 
   if (/wa-guard/.test(location.hash)) setTimeout(() => { open(); try { history.replaceState(null, '', location.pathname + location.search); } catch (_) {} }, 1800);   // tapped a lock-screen alert
 
-  W.hoWaGuard = { tgStart, tgToken, tgPaste, tgCancel, tgOff, tgStep: n => { if (tgWiz) { tgWiz.step = n; tgWiz.err = ''; render(); setTimeout(() => document.getElementById('wgTok')?.focus(), 50); } }, notify, open, close, set, setCfg, state, fromReader, clearLog, render, sev, visits, pushSetup, pushOff, pushCopy, pushTest, _st: () => ({ ST, LOG, BEAT }),
+  W.hoWaGuard = { basic, awayAll, awayView, renderAway, tgStart, tgToken, tgPaste, tgCancel, tgOff, tgStep: n => { if (tgWiz) { tgWiz.step = n; tgWiz.err = ''; render(); setTimeout(() => document.getElementById('wgTok')?.focus(), 50); } }, notify, open, close, set, setCfg, state, fromReader, clearLog, render, sev, visits, pushSetup, pushOff, pushCopy, pushTest, _st: () => ({ ST, LOG, BEAT }),
     /** the ways to the phone you set up here (the notification hub sends through the same ones) */
     channels: () => ({ tg: TG && TG.chat ? Object.assign({}, TG) : null, ntfy: NTFY ? Object.assign({}, NTFY) : null }) };
 })(window);

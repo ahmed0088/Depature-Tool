@@ -44,11 +44,23 @@
     return new Blob(parts, { type: 'application/zip' });
   }
 
+  // ── the shared lock screen: one block (<ho-lock>) in both readers; the Opera reader's copy is baked into the WhatsApp one ──
+  const LOCK_A = '  // ══ <ho-lock>', LOCK_Z = '// ══ </ho-lock>';
+  /** the <ho-lock> block of a reader's source ('' when it has none) */
+  function lockOf(src) {
+    src = String(src || ''); const a = src.indexOf(LOCK_A), z = a < 0 ? -1 : src.indexOf(LOCK_Z, a);
+    if (z < 0) return '';
+    const e = src.indexOf('\n', z); return src.slice(a, e < 0 ? src.length : e);
+  }
+  /** the WhatsApp reader with the Opera reader's lock block (so the two can never drift apart) */
+  function bakeLock(wa, op) { const from = lockOf(op), to = lockOf(wa); return from && to ? String(wa).replace(to, () => from) : String(wa); }
+
   // ── the extension's files ──
   // The WhatsApp side: the link to the relay, then the reader. The helper keeps a copy of this inside it, and
   // (from v425) HotelOps hands it a fresh one whenever HotelOps itself updates — so the helper never needs
   // downloading again. The fresh copy runs as a "user script"; the copy in the zip is only the fallback.
   function waSide(reader, appOrigin, v, fresh) {
+    const lock = lockOf(reader);
     return `// HotelOps WhatsApp helper · reader ${v}${fresh ? ' (updated by itself)' : ''} · starts the reader on WhatsApp Web
 ${fresh ? `try { document.documentElement.dataset.hoWaUs = ${JSON.stringify(v)}; } catch (_) {}` : `if (!document.documentElement.dataset.hoWaUs) {   // a newer reader (updated by itself) is running instead`}
 (function () {
@@ -68,7 +80,26 @@ ${fresh ? `try { document.documentElement.dataset.hoWaUs = ${JSON.stringify(v)};
   };
   open();
   window.__hoWaExt = { v: ${JSON.stringify(v)}, post: o => { try { (port || (open(), port)).postMessage(o); } catch (_) {} } };
-})();
+})();${lock ? `
+// 🔒 the Away lock screen starts at once, before WhatsApp has loaded (the reader adopts it): the helper's relay says whether you're
+// away, even with HotelOps closed. The same lock screen and PIN as Opera's.
+(function () {
+  if (window.__hoWaLock) return;
+${lock}
+  try {
+    var ORIGIN = ${JSON.stringify(appOrigin)};
+    var L = hoLock({ what: 'WhatsApp', from: 'wa', attr: 'wa-guard', ss: 'ho_wa_lock', top: window.top === window, auto: false,
+      send: function (g) { window.__hoWaExt.post({ source: 'ho-wa', lock: g }); }, relay: function (m) { window.__hoWaExt.post(m); } });
+    window.__hoWaLock = L;
+    addEventListener('message', function (e) {
+      var d = e.data; if (e.origin !== ORIGIN || !d || typeof d !== 'object') return;
+      if (d.source === 'ho-away' && d.away) L.take(d.away);
+      else if ((d.source === 'ho-wa' || d.source === 'ho-wa-pong') && d.guard && d.guard.lock) L.take(d.guard.lock);
+      else if (d.source === 'ho-wa-gack' && Array.isArray(d.ids)) L.ack(d.ids);
+    });
+    L.ask();
+  } catch (_) {}
+})();` : ''}
 // wait for WhatsApp to finish loading, then start the reader once
 (function wait(n) {
   if (window.__hoWa || n > 240) return;
@@ -159,10 +190,56 @@ function ensure() {
   }).catch(() => false);
 }
 const tell = async () => { const i = await info(); ports.app.forEach(q => { try { q.postMessage(i); } catch (_) {} }); };
+// 🛡 Away, remembered by the helper itself (chrome.storage.local "away"): HotelOps sets it whenever Away or the Opera lock changes
+// (on, since, the PIN's salted hash — never the PIN) and clears it on "I'm back". A WhatsApp or Opera tab asks on start, so one opened
+// while HotelOps is closed locks at once. A PIN typed in a tab disarms here, the other tabs are told, and HotelOps hears it ("awayPin")
+// when it (re)connects. WhatsApp locks for Away only; Opera for Away or its own lock.
+const okPin = p => (p && /^[0-9a-f]{64}$/.test(String(p.h || '')) && /^[0-9a-f]{8,64}$/.test(String(p.s || '')) ? { h: String(p.h), s: String(p.s) } : null);
+const toSide = (side, m) => ports[side].forEach(q => { try { q.postMessage(m); } catch (_) {} });
+function awayFor(side, a) {
+  if (!a) return null;
+  return { armed: !!a.armed && (side !== 'wa' || !!a.wa), rev: +a.rev || 0, since: +a.since || 0, by: side === 'wa' ? 'away' : String(a.by || 'away'), pin: a.pin || null };
+}
+const awayTell = a => { toSide('wa', { source: 'ho-away', away: awayFor('wa', a) }); toSide('opera', { source: 'ho-away', away: awayFor('opera', a) }); };
+async function awayGet() { const s = await chrome.storage.local.get(['away', 'awayPin']); return { away: s.away || null, pin: s.awayPin || null }; }
+let awayQ = Promise.resolve();
+const awayDo = f => (awayQ = awayQ.then(f).catch(() => {}));
+function awaySet(a) {
+  return awayDo(async () => {
+    if (!a || typeof a !== 'object') return;
+    const { away, pin } = await awayGet();
+    if (a.armed) {
+      const since = +a.since || Date.now();
+      if (pin && since <= +pin.at) return;   // older than a PIN typed at the desk: HotelOps hasn't heard of it yet
+      const v = { armed: true, wa: !!a.wa, since, rev: since, by: String(a.by || 'away').slice(0, 8), pin: okPin(a.pin), at: away && away.armed ? +away.at || Date.now() : Date.now() };
+      if (away && JSON.stringify([away.wa, away.since, away.by, away.pin]) === JSON.stringify([v.wa, v.since, v.by, v.pin])) return;
+      await chrome.storage.local.set({ away: v }); awayTell(v);
+    } else if (away) { await chrome.storage.local.remove('away'); awayTell({ armed: false, rev: Date.now() }); }
+  });
+}
+function awayOff(side, m) {
+  return awayDo(async () => {
+    const at = Math.min(Date.now(), +(m && m.at) || Date.now()), rev = Math.max(+(m && m.rev) || 0, at), p = { at, from: side === 'wa' ? 'wa' : 'opera' };
+    await chrome.storage.local.remove('away'); await chrome.storage.local.set({ awayPin: p });
+    awayTell({ armed: false, rev });
+    toSide('app', { source: 'ho-away-state', away: null, pin: p });
+  });
+}
+const awayHello = q => awayDo(async () => { const s = await awayGet(); try { q.postMessage({ source: 'ho-away-state', away: s.away, pin: s.pin }); } catch (_) {} });
+// removed from Chrome → Chrome opens HotelOps with ?helperRemoved=1 (no secret in it), so HotelOps can tell your phone
+const goneUrl = u => u + (u.indexOf('?') < 0 ? '?' : '&') + 'helperRemoved=1&t=' + Date.now();
+function uninstallAt(u) { try { const r = chrome.runtime.setUninstallURL(goneUrl(u)); if (r && r.catch) r.catch(() => {}); } catch (_) {} }
+async function setApp(u) {
+  u = String(u || '');
+  try { const x = new URL(u); if (!/^https?:$/.test(x.protocol) || x.search || x.hash || u.length > 900) return; } catch (_) { return; }
+  await chrome.storage.local.set({ appUrl: u });
+  uninstallAt(u);
+}
+chrome.storage.local.get('appUrl').then(s => { if (s && s.appUrl) uninstallAt(s.appUrl); }).catch(() => {});
 function link(p) {
   const side = p.name === 'wa' ? 'wa' : p.name === 'opera' ? 'opera' : 'app';
   ports[side].add(p);
-  if (side === 'app') ensure().then(tell);
+  if (side === 'app') ensure().then(tell).then(() => awayHello(p));   // the helper's info first, then what it keeps about Away
   p.onMessage.addListener(async m => {
     const k = m && (m.source === 'ho-wa-ext-code' ? 'wa' : m.source === 'ho-op-ext-code' ? 'op' : '');
     if (k) {   // HotelOps updated: keep its reader and run it from now on (only HotelOps can hand one over)
@@ -173,6 +250,15 @@ function link(p) {
       if (ok && canRun()) ports[K.side].forEach(q => { try { q.postMessage({ source: K.fresh, v: m.v }); } catch (_) {} });
       return;
     }
+    // 🛡 Away (kept here) and the helper's heartbeat: answered by the relay itself, never passed on
+    const src = m && typeof m.source === 'string' ? m.source : '';
+    if (src === 'ho-helper-ping') { try { p.postMessage({ source: 'ho-helper-beat', at: Date.now(), v: BUILT }); } catch (_) {} return; }
+    if (side === 'app' && src === 'ho-away-set') { awaySet(m.away); return; }
+    if (side === 'app' && src === 'ho-away-pinack') { awayDo(async () => { const s = await awayGet(); if (s.pin && +s.pin.at === +m.at) await chrome.storage.local.remove('awayPin'); }); return; }
+    if (side === 'app' && src === 'ho-app-url') { await setApp(m.url); return; }
+    if (side !== 'app' && src === 'ho-away-ask') { const s = await awayGet(); try { p.postMessage({ source: 'ho-away', away: awayFor(side, s.away) }); } catch (_) {} return; }
+    if (side !== 'app' && src === 'ho-away-off') { awayOff(side, m); return; }
+    if (/^ho-away/.test(src) || src === 'ho-app-url') return;
     // an Opera reader's ping: say at once whether a HotelOps tab is linked (its "linking…" checklist tells the user which it is)
     if (side === 'opera' && m && m.ping) { try { p.postMessage({ source: 'ho-op-relay', apps: ports.app.size, v: BUILT }); } catch (_) {} }
     // WhatsApp and Opera talk to HotelOps; HotelOps' answers go to the reader they are for (Opera's start with "ho-op")
@@ -191,20 +277,28 @@ ensure();`;
     const app = `// HotelOps WhatsApp helper ${v} · links HotelOps to WhatsApp Web${opReader ? ' and Opera Cloud' : ''}
 (function () {
   const D = document.documentElement.dataset;
-  D.hoWaHelper = ${JSON.stringify(v)}; D.hoWaAuto = '1';${opReader ? ` D.hoOpHelper = ${JSON.stringify(v)};` : ''}
+  D.hoWaHelper = ${JSON.stringify(v)}; D.hoWaAuto = '1'; D.hoAwayRelay = '1';${opReader ? ` D.hoOpHelper = ${JSON.stringify(v)};` : ''}
   let port = null;
   const BACK = d => d && typeof d === 'object' && (d.source === 'ho-wa-pong' || d.source === 'ho-wa-ack' || d.source === 'ho-wa-gack' || d.source === 'ho-wa-ext-code'
-    || d.source === 'ho-op-ack' || d.source === 'ho-op-guard' || d.source === 'ho-op-ext-code'
+    || d.source === 'ho-op-ack' || d.source === 'ho-op-guard' || d.source === 'ho-op-ext-code' || d.source === 'ho-away-set' || d.source === 'ho-away-pinack'
     || (d.source === 'ho-wa' && (d.send || d.words || (d.guard && !d.guard.events && !d.guard.arm))));
   const open = () => {
-    port = chrome.runtime.connect({ name: 'app' });
+    // switched off / removed: Chrome won't connect any more → HotelOps is told at once (and the heartbeat stops)
+    try { port = chrome.runtime.connect({ name: 'app' }); } catch (_) { port = null; if (!D.hoHelperOff) { D.hoHelperOff = String(Date.now()); window.postMessage({ source: 'ho-helper-off' }, location.origin); } return; }
+    delete D.hoHelperOff;
     port.onMessage.addListener(m => {
       if (m && m.source === 'ho-wa-ext-info') { D.hoWaUs = m.us ? '1' : '0'; D.hoWaCode = String(m.v); if (m.op) D.hoOpCode = String(m.op); }
+      if (m && m.source === 'ho-helper-beat') D.hoHelperBeat = String(Date.now());
       window.postMessage(m, location.origin);
     });
     port.onDisconnect.addListener(() => { port = null; setTimeout(open, 1000); });
+    // where HotelOps is (no query, no hash): if the helper is removed, Chrome opens it with ?helperRemoved=1
+    try { port.postMessage({ source: 'ho-app-url', url: location.origin + location.pathname }); } catch (_) {}
   };
   open();
+  // the heartbeat: HotelOps sees the helper is on (and notices within 30 s when it is switched off or removed)
+  const beat = () => { try { (port || (open(), port)).postMessage({ source: 'ho-helper-ping' }); } catch (_) {} };
+  beat(); setInterval(beat, 10000);
   // what HotelOps answers or sends to WhatsApp goes back through the relay
   window.addEventListener('message', e => { if (e.source === window && BACK(e.data)) { try { (port || (open(), port)).postMessage(e.data); } catch (_) {} } });
 })();`;
@@ -216,6 +310,7 @@ Add it once (Chrome or Edge on the desk PC):
 3. Turn on "Developer mode" (top right in Chrome, left in Edge).
 4. Click "Load unpacked" and pick the folder.
 5. For automatic updates: click "Details" on HotelOps WhatsApp helper and turn on "Allow User Scripts".
+6. Optional, stronger: on the same Details page turn on "Allow in Incognito" (the lock screens work there too).
 That's it. Open WhatsApp Web: the HotelOps window starts by itself and links to HotelOps.${opReader ? `
 Open Opera Cloud: a small "HotelOps" pill shows bottom right. It reads the screens you open
 (Arrivals, Departures, In House, a reservation) and HotelOps updates its lists by itself.
@@ -231,7 +326,8 @@ It only runs on web.whatsapp.com${opReader ? ', Opera Cloud (Oracle hosts)' : ''
 
   // the reader as it is in this version of HotelOps (the WhatsApp side of the helper)
   async function reader() {
-    const raw = await fetch('tools/hotelops-whatsapp.console.js', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.text(); });
+    let raw = await fetch('tools/hotelops-whatsapp.console.js', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.text(); });
+    try { raw = bakeLock(raw, await fetch('tools/hotelops-opera.console.js', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })); } catch (_) {}
     return W.hoWaPure.snippet(raw, location.origin + location.pathname);
   }
   // the Opera reader as it is in this version of HotelOps, with this app's address filled in (the console copy too)
@@ -240,6 +336,68 @@ It only runs on web.whatsapp.com${opReader ? ', Opera Cloud (Oracle hosts)' : ''
     return opSnippet(raw, location.origin + location.pathname);
   }
   function opSnippet(raw, appUrl) { return String(raw).replace("'__HO_APP_URL__'", () => JSON.stringify(appUrl)).replace("var VERSION = '1';", () => 'var VERSION = ' + JSON.stringify(ver()) + ';'); }
+
+  // ── 🛡 knowing when the helper is removed or switched off (pure parts: tests/run-tests.js "Helper away") ──
+  const HR_Q = 'ho_helper_removed_q', HR_SEEN = 'ho_helper_removed_seen', HELPER_QUIET = 30000;
+  const clock = t => { const d = new Date(t); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+  /** "?helperRemoved=1&t=…" (what Chrome opens when the helper is removed) → {t} (when the helper last set it), else null */
+  function removedParam(search) {
+    let p; try { p = new URLSearchParams(String(search || '')); } catch (_) { return null; }
+    return p.get('helperRemoved') === '1' ? { t: Math.max(0, Math.round(+p.get('t') || 0)) } : null;
+  }
+  /** the address without those two (the rest of the query and the hash stay) */
+  function removedClean(search) {
+    const p = new URLSearchParams(String(search || '')); p.delete('helperRemoved'); p.delete('t');
+    const q = p.toString(); return q ? '?' + q : '';
+  }
+  /** the phone alert for it */
+  function removedAlert(at, id) {
+    return { cat: 'guard', title: '🛡 The HotelOps helper was REMOVED from this PC (' + clock(at) + ')', prio: 5, key: 'helperRemoved_' + String(id || at).replace(/[^\w]/g, '').slice(0, 30),
+      body: 'Chrome / Edge on the desk PC no longer has the HotelOps helper: the WhatsApp and Opera lock screens and readers stop there. Get it again: HotelOps → 📡 Opera → Get the helper.',
+      instant: true, ignoreQuiet: true, claimed: true, toast: false, url: '#opera-guard', tags: ['rotating_light'] };
+  }
+  /** the page was opened with the parameter: kept in localStorage (once per t), so it is sent once someone is signed in. → queued? */
+  function removedNote(ls, r, now) {
+    if (!r) return false;
+    const id = String(r.t || now), seen = ls.get(HR_SEEN, []) || [];
+    if (seen.indexOf(id) >= 0) return false;
+    ls.set(HR_SEEN, seen.concat(id).slice(-20));
+    ls.set(HR_Q, (ls.get(HR_Q, []) || []).concat({ id, at: now }).slice(-5));
+    return true;
+  }
+  /** signed in: what is queued goes to the phone, once → how many were sent */
+  function removedFlush(ls, uid, send) {
+    if (!uid) return 0;
+    const q = ls.get(HR_Q, []) || []; if (!q.length) return 0;
+    ls.set(HR_Q, []);
+    q.forEach(x => { try { send(removedAlert(x.at, x.id)); } catch (_) {} });
+    return q.length;
+  }
+  /** the helper's state on this page: 'none' (not added) · 'on' · 'off' (it beat before and has been quiet for 30 s).
+   *  o: {installed, gone (it can't connect), capable (a helper with the heartbeat), beat (last heard), start (this page), now,
+   *  timersOk (this page's own timer ran on time: a hidden tab's run late, and so do the beats)} */
+  function helperStatus(o) {
+    if (!o.installed) return 'none';
+    if (o.gone) return 'off';   // Chrome refused to connect to it: switched off or removed
+    if (!o.capable || o.timersOk === false) return 'on';   // an older helper has no heartbeat; a hidden tab's timers run late: no guessing
+    return o.now - Math.max(+o.beat || 0, +o.start || 0) > HELPER_QUIET ? 'off' : 'on';
+  }
+  /** the helper went quiet while you're away → one alert per quiet spell. st: what was said; → {alert, st} */
+  function beatCheck(st, o) {
+    st = st || {};
+    if (o.status === 'on') return { alert: false, st: {} };
+    if (!o.armed || o.status !== 'off') return { alert: false, st };
+    if (st.said && st.beat === o.beat) return { alert: false, st };
+    return { alert: true, st: { said: true, beat: o.beat } };
+  }
+  function beatAlert(beat, since, now) {
+    return { cat: 'guard', title: '🛡 The HotelOps helper stopped while you\'re away — check the desk PC', prio: 5, key: 'helperOff_' + Math.round((+since || 0) / 1000).toString(36) + '_' + Math.round((+beat || now) / 60000).toString(36),
+      body: 'Last heard ' + clock(beat || now) + '. It was switched off or removed in chrome://extensions: the WhatsApp and Opera lock screens may be gone.',
+      instant: true, ignoreQuiet: true, claimed: true, toast: false, url: '#opera-guard', tags: ['rotating_light'] };
+  }
+  W.hoHelperPure = { removedParam, removedClean, removedAlert, removedNote, removedFlush, helperStatus, beatCheck, beatAlert, lockOf, bakeLock, HELPER_QUIET };
+  if (!doc || typeof doc.createElement !== 'function') { W.hoWaHelper = { files, zip, waSide, opSide, opSnippet, lockOf, bakeLock, OP_MATCHES }; return; }
+
   // HotelOps updated and the helper still runs an older reader: hand it this one (once per open)
   let handed = '', opHanded = '';
   async function autoUpdate() {
@@ -309,7 +467,13 @@ It only runs on web.whatsapp.com${opReader ? ', Opera Cloud (Oracle hosts)' : ''
 #waCard .wa-hp-ok{color:#128c7e !important}#waCard .wa-hp-warn{color:var(--amber) !important}
 #waCard .wa-hp-lnk{align-self:flex-start;padding:0;border:0;background:none;color:var(--accent);font:600 13px var(--font);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 #waCard .wa-hp-steps{margin-top:10px;font-size:13px;color:var(--text2)}#waCard .wa-hp-steps summary{cursor:pointer;font-weight:600;color:var(--text)}
-#waCard .wa-hp-steps ol{margin:8px 0 6px;padding-left:20px;display:flex;flex-direction:column;gap:5px}#waCard .wa-hp-steps code{background:var(--bg2);padding:1px 5px;border-radius:5px}`;
+#waCard .wa-hp-steps ol{margin:8px 0 6px;padding-left:20px;display:flex;flex-direction:column;gap:5px}#waCard .wa-hp-steps code{background:var(--bg2);padding:1px 5px;border-radius:5px}
+.hg-ov{position:fixed;inset:0;z-index:9997;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.hg-sheet{width:min(520px,100%);max-height:calc(100vh - 32px);overflow:auto;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border2);border-radius:20px;padding:20px;display:flex;flex-direction:column;gap:10px;box-shadow:0 30px 80px rgba(0,0,0,.45);font-size:14px;line-height:1.5}
+.hg-ic{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;font-size:24px;background:color-mix(in srgb,var(--rose,#e11d48) 18%,transparent)}
+.hg-sheet>b{font-size:17px;color:var(--rose,#e11d48)}.hg-sheet p{margin:0;color:var(--text2)}.hg-sheet ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:5px;color:var(--text2)}
+.hg-sheet code{background:var(--bg2);padding:1px 5px;border-radius:5px}.hg-sheet small{color:var(--text3)}.hg-acts{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.hg-lnk{padding:0;border:0;background:none;color:var(--accent);font:600 14px var(--font);cursor:pointer;text-decoration:underline}`;
   doc.head.appendChild(css);
 
   // draw it when the WhatsApp window is there, and again when the helper or the link changes
@@ -317,5 +481,81 @@ It only runs on web.whatsapp.com${opReader ? ', Opera Cloud (Oracle hosts)' : ''
   setTimeout(tick, 1500); setInterval(() => { if (doc.getElementById('waCard')) tick(); }, 5000);
   new MutationObserver(tick).observe(doc.documentElement, { attributes: true, attributeFilter: ['data-ho-wa-helper', 'data-ho-wa-code', 'data-ho-wa-us'] });
 
-  W.hoWaHelper = { download, openWa, installed, files, zip, card, waSide, opSide, opReader, opSnippet, autoUpdate, OP_MATCHES };
+
+  // ── 🛡 the helper's heartbeat and removal, on this HotelOps page ──
+  const LSX = { get: (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (_) { return d; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} } };
+  const uidNow = () => { try { return (typeof currentUser !== 'undefined' && currentUser && currentUser.uid) || ''; } catch (_) { return ''; } };
+  const T0 = Date.now();
+  let beatMsg = 0, beatSt = LSX.get('ho_helper_off_st', {}) || {};
+  W.addEventListener('message', e => { if (e.source === W && e.data && (e.data.source === 'ho-helper-beat' || e.data.source === 'ho-wa-ext-info' || e.data.source === 'ho-away-state')) beatMsg = Date.now(); });
+  /** 'none' · 'on' · 'off' (switched off / removed / stopped: no heartbeat for 30 s) */
+  let lastRun = Date.now(), runGap = 0;
+  function status() {
+    const d = doc.documentElement.dataset;
+    return helperStatus({ installed: !!installed(), gone: !!d.hoHelperOff, capable: d.hoAwayRelay === '1', beat: Math.max(+d.hoHelperBeat || 0, beatMsg), start: T0, now: Date.now(), timersOk: runGap < 12000 });
+  }
+  const lastBeat = () => Math.max(+doc.documentElement.dataset.hoHelperBeat || 0, beatMsg) || T0;
+  const awayNow = () => {
+    try { const g = W.hoWaGuard && W.hoWaGuard.basic ? W.hoWaGuard.basic() : null; if (g && g.on) return { on: true, since: g.since }; } catch (_) {}
+    try { const o = W.hoOpera && W.hoOpera.guard ? W.hoOpera.guard.state() : null; if (o && o.armed) return { on: true, since: o.since }; } catch (_) {}
+    return { on: false, since: 0 };
+  };
+  function guardSend(o) {
+    const H = W.hoNotify;
+    if (H && typeof H.send === 'function') return Promise.resolve(H.send(o)).catch(() => false);
+    if (W.hoWaGuard && typeof W.hoWaGuard.notify === 'function') return W.hoWaGuard.notify(o.title, o.body, o.prio, o.tags);
+    return Promise.resolve(false);
+  }
+  function beatWatch() {
+    const t = Date.now(); runGap = t - lastRun; lastRun = t;
+    const a = awayNow(), st = status(), b = lastBeat();
+    const r = beatCheck(beatSt, { armed: a.on, status: st, beat: b });
+    beatSt = r.st;
+    if (r.alert) {
+      // another HotelOps tab on this PC may have said it already (the same quiet spell)
+      const o = LSX.get('ho_helper_off_said', null);
+      if (!(o && o.since === a.since && Date.now() - o.at < 5 * 60e3)) {
+        LSX.set('ho_helper_off_said', { since: a.since, at: Date.now() });
+        guardSend(beatAlert(b, a.since, Date.now()));
+        if (typeof showToast === 'function') showToast('🛡 The HotelOps helper stopped while you\'re away — the lock screens may be gone', 'err');
+      }
+    }
+    LSX.set('ho_helper_off_st', beatSt);
+  }
+  setInterval(beatWatch, 5000);
+  // removed: Chrome opened HotelOps with ?helperRemoved=1 → one alert (now, or once someone signs in), a notice, a clean address
+  (function removedStart() {
+    const r = removedParam(location.search);
+    if (!r) return;
+    const fresh = removedNote(LSX, r, Date.now());   // the same address opened again: no second alert, no second notice
+    try { history.replaceState(null, '', location.pathname + removedClean(location.search) + location.hash); } catch (_) {}
+    if (fresh) setTimeout(removedNotice, 1200);
+  })();
+  let readyAt = 0;
+  setInterval(() => {
+    const q = LSX.get(HR_Q, []) || []; if (!q.length || !uidNow()) return;
+    const H = W.hoNotify, ready = H && typeof H.ready === 'function' ? H.ready() : !!W.hoWaGuard;
+    if (!ready) return;
+    if (!readyAt) readyAt = Date.now();
+    const conn = H && typeof H.connected === 'function' ? H.connected() : true;
+    if (!conn && Date.now() - readyAt < 15000) return;   // the phone setup is still loading
+    removedFlush(LSX, uidNow(), guardSend);
+  }, 2000);
+  function removedNotice() {
+    if (doc.getElementById('hoHelperGone')) return;
+    const d = doc.createElement('div'); d.id = 'hoHelperGone'; d.className = 'hg-ov'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-modal', 'true'); d.setAttribute('aria-labelledby', 'hgT');
+    d.innerHTML = `<div class="hg-sheet"><span class="hg-ic" aria-hidden="true">🛡</span><b id="hgT">The HotelOps helper was removed from this browser</b>
+      <p>Until it is back, WhatsApp Web and Opera on this PC are <b>not locked</b> while you're away, and the readers stop. ${uidNow() ? 'Your phone has been told.' : 'Your phone will be told when you sign in.'}</p>
+      <ol><li><button type="button" class="hg-lnk" data-hg="get">⬇ Get the helper</button> and unzip it into a folder you keep.</li>
+        <li>Open <code>chrome://extensions</code> (Edge: <code>edge://extensions</code>) and turn on <b>Developer mode</b>.</li>
+        <li>Click <b>Load unpacked</b> and pick the folder.</li>
+        <li>Click <b>Details</b> on the helper: turn on <b>Allow User Scripts</b> (and <b>Allow in Incognito</b>).</li>
+        <li>Reload WhatsApp Web, Opera and this page.</li></ol>
+      <small>If you didn't remove it, someone at the desk PC did.</small>
+      <div class="hg-acts"><button type="button" class="btn gold" data-hg="get">⬇ Get the helper</button><button type="button" class="btn ghost" data-hg="x">Close</button></div></div>`;
+    d.addEventListener('click', e => { const k = e.target && e.target.dataset && e.target.dataset.hg; if (k === 'get') download(); if (k === 'x' || e.target === d) d.remove(); });
+    doc.body.appendChild(d);
+  }
+
+  W.hoWaHelper = { download, openWa, installed, files, zip, card, waSide, opSide, opReader, opSnippet, autoUpdate, OP_MATCHES, status, lockOf, bakeLock, removedNotice };
 })(window);

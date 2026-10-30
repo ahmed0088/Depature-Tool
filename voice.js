@@ -472,7 +472,8 @@ function handleText(text, opt) {
 function guard(on) {
   const G = W.hoWaGuard;
   if (!G || typeof G.set !== 'function') { toast('The Away guard is not available here', 'err'); say('Away guard not available'); return; }
-  try { G.set(on); buzz(on ? [15, 40, 15] : 15); say(on ? 'Away guard on' : 'Welcome back. Away guard off'); }
+  // the same one tap as the top bar's 🛡 I'm away: the WhatsApp guard + the Opera and WhatsApp lock screens (asks for a PIN first if none)
+  try { if (typeof G.awayAll === 'function') { if (G.awayAll(on, 'voice') === false) return; } else G.set(on); buzz(on ? [15, 40, 15] : 15); say(on ? 'Away guard on' : 'Welcome back. Away guard off'); }
   catch (e) { toast('Away guard: ' + (e && e.message || 'failed'), 'err'); }
 }
 
