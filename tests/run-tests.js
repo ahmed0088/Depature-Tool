@@ -3656,6 +3656,10 @@ console.log('\nOpera reader');
     const RM = O.depRecon({ dep: op15, board: bMay, today: T, reads: {} }), M2 = RM.diffs.find(d => d.room === '0412');
     check('Opera decides: a room 🤔 may extend that Opera no longer has leaving today → extended by itself too (the board matches Opera\'s count)',
       [M2 && M2.why, O.reconAuto(RM).some(d => d.room === '0412'), /may extend/.test(M2 && M2.reason)], ['extended', true, true]); }
+  { const bX = { day: T, rooms: b16.rooms.concat([{ room: 208, roomStr: '0208', name: 'TEST WALKER', status: 'due', intent: 'extending', manual: true, departure: '' }]) };
+    const RS = O.depRecon({ dep: op15, board: bX, today: T, reads: { search: { date: T, rows: [{ room: '0208', name: 'Walker, Test', departure: '2026-10-31', status: 'in_house' }] } } }), S8 = RS.diffs.find(d => d.room === '0208');
+    check('Opera decides: a room added by hand as ⏳ extending (WhatsApp), not in Opera\'s departures, a later stay seen on any Opera screen → extended by itself',
+      [S8 && S8.why, S8 && S8.nights > 0, O.reconAuto(RS).some(d => d.room === '0208')], ['extended', true, true]); }
   const RI = O.depRecon({ dep: Object.assign({}, op15, { rows: op15.rows.slice(0, 12) }), board: b16, today: T, reads: {} });
   check('departures vs Opera: an incomplete read says how far it got instead of listing differences', [RI.state, RI.diffs.length, O.reconHead(RI)], ['incomplete', 0, '📡 Opera read 12 of 15 — scroll the Departures list in Opera to the end']);
   const op17 = Object.assign({}, op15, { total: 17, rows: op15.rows.concat([{ room: '0412', name: 'Testperson, GuestL', conf: '100012', departure: T, status: 'due_out' }, { room: '0417', name: 'Newcomer, Quinn', conf: '100017', departure: T, status: 'checked_out' }]) });

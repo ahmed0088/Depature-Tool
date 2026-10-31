@@ -449,7 +449,7 @@ function depRecon(I) {
     const other = here.find(x => x.departure && x.departure !== t);
     const d = { type: 'missing', room: b.roomStr, name: b.name, acts: ['ext', 'remove', 'keep'] };
     if (later) Object.assign(d, { why: 'extended', nights: dayDiff(t, later.departure), to: later.departure, reason: `${SRC[later._k] || later._k} in Opera until ${fmt(later.departure)} → extended`,
-      sure: (later._k === 'inhouse' || later._k === 'details') && (!later.status || later.status === 'in_house' || later.status === 'due_out') });
+      sure: ((later._k === 'inhouse' || later._k === 'details') && (!later.status || later.status === 'in_house' || later.status === 'due_out')) || b.intent === 'extending' || b.intent === 'maybe_extend' });   // said extending here + a later stay in Opera = confirmed
     else if (moved) Object.assign(d, { why: 'moved', reason: `in room ${moved.room} in Opera → moved to another room`, acts: ['remove', 'keep'] });
     else if (canc) Object.assign(d, { why: 'cancelled', reason: 'cancelled / no-show in Opera', acts: ['remove', 'keep'] });
     else if (early) Object.assign(d, { why: 'early', reason: `checked out on ${fmt(early.departure)} in Opera → left earlier`, acts: ['remove', 'keep'] });
@@ -1261,7 +1261,11 @@ function receive(raw, h, reply) {
   if (!snap) { safe(() => stuckApp(raw && typeof raw === 'object' ? raw : {}, 'not-applied', 'HotelOps answered "nothing readable": the snapshot had no list of rows it could use')); return 'nothing readable'; }
   if (raw && raw.url) safe(() => rememberHome(raw.url));
   h = String(h || hashOf([snap.kind, snap.date, snap.rows]));
-  if (SEEN.has(h) && SEEN.get(h) !== WAITING && LAST[snap.kind] && LAST[snap.kind].h === h) return SEEN.get(h);   // the same screen again: done (a folio back to an earlier state is read again)
+  if (SEEN.has(h) && SEEN.get(h) !== WAITING && LAST[snap.kind] && LAST[snap.kind].h === h) {   // the same screen again: nothing new to read (a folio back to an earlier state is read again)
+    LAST[snap.kind].at = Date.now(); saveLast();   // …but Opera still shows it: the read is still fresh
+    if (snap.kind === 'departures') safe(reconAutoRun);   // the board may have changed since (WhatsApp, a tap): compare again
+    return SEEN.get(h);
+  }
   const n = snap.rows.length || (snap.folio ? snap.folio.postings.length : 0) || (snap.traces || []).length || (snap.tables || []).reduce((a, tb) => a + tb.rows.length, 0);
   LAST[snap.kind] = { kind: snap.kind, date: snap.date, title: snap.title, total: snap.total, n, at: Date.now(), h, rows: snap.rows.slice(0, 600) };
   ['folio', 'traces', 'tables', 'audit'].forEach(k => { if (snap[k]) LAST[snap.kind][k] = snap[k]; });
@@ -1290,6 +1294,9 @@ function reconAutoRun() {
   const P = reconPlan(items, today());
   safe(() => apply(null, 'auto · Opera vs board', P));
 }
+/** the board changes between Opera reads (a WhatsApp message, a tap): while Opera's Departures read is fresh, compare again every 1½ minutes */
+const RECON_FRESH = 30 * 60 * 1000;
+if (doc && typeof setInterval === 'function') setInterval(() => { const D = LAST.departures; if (D && D.at && Date.now() - D.at < RECON_FRESH) safe(reconAutoRun); }, 90 * 1000);
 /** a tap on a difference's button */
 function reconAct(act, room) {
   if (act === 'more') { RC_OPEN[room] = 1; safe(paintRecon); safe(paintPage); return; }

@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 458, items: [
+    "📡 A room extended on WhatsApp after Opera was read is now picked up. While Opera's Departures read is fresh (30 min), the board is compared with it again every 1½ minutes and every time the reader sees the screen again. So a ⏳ Extending room that Opera doesn't have leaving today becomes Extended by itself, like 208.",
+  ] },
   { v: 457, items: [
     "📡 Departures follows Opera's Departures screen more closely. A room marked 🤔 May extend that Opera no longer lists as leaving today is now marked Extended by itself, the same as ⏳ Extending. It used to stay in To do, so the board showed more rooms than Opera (18 instead of 13).",
   ] },
