@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 456, items: [
+    "🚫 PM rooms (9000 and up) are off Departures. They're Opera's posting accounts, not guests leaving, so they're skipped when you load the departure report, can't be added by hand, and any already on today's board are removed. In-House no longer suggests adding them either.",
+  ] },
   { v: 455, items: [
     "🎨 New look for every menu, text box and label in the app. Menus open as a clean rounded list with a ✓ on the chosen option (Chrome / Edge). Text boxes have soft edges and a gold glow when you type. Labels are clearer, and checkboxes and date pickers match the dark or light theme.",
   ] },

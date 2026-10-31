@@ -2047,6 +2047,8 @@ console.log('\nWhatsApp × Ops Brain');
   check('dep: a date like 2026-10-20 (a room added by hand) reads as that day', sb._depIsoOf(sb.parseOperaDate('2026-10-20')), '2026-10-20');
   sb.DB.rooms = [mk(301, { departure: '21-OCT-26' })]; sb.depAddManualRoom('350', 'test');
   check('dep: a room added by hand takes the board\'s day', sb.DB.rooms.find(r => r.manual).departure, '21-OCT-26');
+  check('dep: PM rooms (9000+) never go on the board — not from the report, not by hand, and an old board drops them',
+    [sb.depAddManualRoom('9001', 'x'), sb.DB.rooms.some(r => r.roomStr === '9001'), sb.depDropPm([mk(9002), mk(412), mk(9999)]).map(r => r.roomStr), sb.depIsPm('0412'), sb.depIsPm('9000')], [false, false, ['412'], false, true]);
   // counters = the cards each filter shows
   sb.DB.rooms = [mk(101), mk(102, { status: 'dnd' }), mk(103, { status: 'na' }), mk(104, { intent: 'extending' }), mk(105, { intent: 'finance_hold' }),
     mk(106, { status: 'extended', extensionNights: 2, intent: 'extending' }), mk(107, { status: 'out', intent: 'maybe_extend' }), mk(108, { intent: 'maybe_extend' })];
@@ -2277,7 +2279,7 @@ console.log('\nHandover from WhatsApp');
   vm.createContext(sb);
   const dep = fs.readFileSync(path.join(ROOT, 'departures.js'), 'utf8'), ut = fs.readFileSync(path.join(ROOT, 'utils.js'), 'utf8');
   const fnSrc = (src, name) => { const i = src.indexOf('function ' + name + '('); return src.slice(i, src.indexOf('\n}\n', i) + 3); };
-  vm.runInContext(fnSrc(dep, 'depAction') + fnSrc(dep, 'depAddManualRoom') + fnSrc(dep, '_depBoardDate') + fnSrc(ut, 'parseOperaDate') + 'function hoLocalISO() { return DAY; }', sb);
+  vm.runInContext(fnSrc(dep, 'depAction') + fnSrc(dep, 'depAddManualRoom') + fnSrc(dep, 'depIsPm') + fnSrc(dep, '_depBoardDate') + fnSrc(ut, 'parseOperaDate') + 'function hoLocalISO() { return DAY; }', sb);
   for (const f of ['wa-bridge.js', 'handover-book.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sb, { filename: f });
   const H = sb.hoHandoverPure, B = sb.hoHandoverBook;
   sb.hoHandoverBook = { fromWa: p => { got.push(p); return 0; } };            // what the bridge hands to the book
@@ -2336,7 +2338,7 @@ console.log('\nWhatsApp bridge · acting on the board');
   vm.createContext(sb);
   const dep = fs.readFileSync(path.join(ROOT, 'departures.js'), 'utf8'), ut = fs.readFileSync(path.join(ROOT, 'utils.js'), 'utf8');
   const fnSrc = (src, name) => { const i = src.indexOf('function ' + name + '('); return src.slice(i, src.indexOf('\n}\n', i) + 3); };
-  vm.runInContext(fnSrc(dep, 'depAction') + fnSrc(dep, 'depAddManualRoom') + fnSrc(dep, '_depBoardDate') + fnSrc(ut, 'parseOperaDate') + 'function hoLocalISO() { return DAY; }', sb);
+  vm.runInContext(fnSrc(dep, 'depAction') + fnSrc(dep, 'depAddManualRoom') + fnSrc(dep, 'depIsPm') + fnSrc(dep, '_depBoardDate') + fnSrc(ut, 'parseOperaDate') + 'function hoLocalISO() { return DAY; }', sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'wa-bridge.js'), 'utf8'), sb, { filename: 'wa-bridge.js' });
   const mk = (n, x) => Object.assign({ room: parseInt(n, 10), roomStr: String(n), name: 'TEST GUEST', arrival: '', departure: '11-OCT-26', nights: 1, balance: 0, depTime: '', status: 'due', lateTime: '', extensionNights: 0, intent: '', note: '', checkoutAt: '' }, x || {});
   const board = list => { sb.depRooms.length = 0; sb.depLog.length = 0; list.forEach(r => sb.depRooms.push(typeof r === 'object' ? r : mk(r))); };
@@ -2734,7 +2736,7 @@ console.log('\nIn-House Guests');
   vm.createContext(sb);
   const dep = fs.readFileSync(path.join(ROOT, 'departures.js'), 'utf8'), ut = fs.readFileSync(path.join(ROOT, 'utils.js'), 'utf8');
   const fnSrc = (src, name) => { const i = src.indexOf('function ' + name + '('); return src.slice(i, src.indexOf('\n}\n', i) + 3); };
-  vm.runInContext(fnSrc(dep, 'depAction') + fnSrc(dep, 'depAddManualRoom') + fnSrc(dep, '_depBoardDate') + fnSrc(ut, 'parseOperaDate') + 'function hoLocalISO() { return DAY; }', sb);
+  vm.runInContext(fnSrc(dep, 'depAction') + fnSrc(dep, 'depAddManualRoom') + fnSrc(dep, 'depIsPm') + fnSrc(dep, '_depBoardDate') + fnSrc(ut, 'parseOperaDate') + 'function hoLocalISO() { return DAY; }', sb);
   // inhouse.js without a page (its panel needs a real document): only its data part
   const ih = fs.readFileSync(path.join(ROOT, 'inhouse.js'), 'utf8').replace("const doc = typeof document", 'const doc = null && typeof document');
   vm.runInContext(ih, sb, { filename: 'inhouse.js' });

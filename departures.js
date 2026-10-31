@@ -319,6 +319,9 @@ async function depShowTrends() {
 }
 
 // ── Parse raw Opera text ───────────────────────────────────
+// PM rooms (9000 and up) are Opera's pseudo rooms (posting accounts): no guest leaves from them, never on the board.
+function depIsPm(room) { return parseInt(String(room == null ? '' : room).replace(/\D/g, ''), 10) >= 9000; }
+function depDropPm(list) { return Array.isArray(list) ? list.filter(r => !depIsPm(r && (r.roomStr != null ? r.roomStr : r.room))) : list; }
 function parseDepReport(raw) {
   const lines = raw.split('\n').filter(l => l.trim());
   if (lines.length < 2) return null;
@@ -329,7 +332,7 @@ function parseDepReport(raw) {
   const rooms = [];
   for (let i = 1; i < lines.length; i++) {
     const p    = lines[i].split('\t'); if (p.length < 15) continue;
-    const room = (p[idx['ROOM']] || '').trim(); if (!room || isNaN(parseInt(room))) continue;
+    const room = (p[idx['ROOM']] || '').trim(); if (!room || isNaN(parseInt(room)) || depIsPm(room)) continue;
     const bal  = parseFloat((p[idx['BALANCE']] || '0').replace(/,/g, '')) || 0;
     const agent = (p[idx['TRAVEL_AGENT_NAME']] || '').trim();
     const src   = cleanSource(agent, (p[idx['COMPANY_NAME']] || '').trim(), (p[idx['SOURCE_NAME']] || '').trim());
@@ -397,6 +400,7 @@ function processDep() {
 function depAddManualRoom(room, name) {
   room = String(room || '').trim();
   if (!/^\d{1,5}[A-Za-z]?$/.test(room)) { showToast('Write the room number', 'warn'); return false; }
+  if (depIsPm(room)) { showToast(`${room} is a PM room (Opera posting account), not a departure`, 'warn'); return false; }
   if (depRooms.some(r => String(r.roomStr).trim() === room)) { showToast(`Room ${room} is already on the board`, 'warn'); return false; }
   // the board's day ("17-OCT-26" like the report; today when nothing is loaded): a hand-added room on tomorrow's list departs tomorrow
   const n = new Date(), M = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
@@ -522,7 +526,7 @@ function processDepReload() {
     }
   });
 
-  depRooms = merged;
+  depRooms = depDropPm(merged);
   document.getElementById('depReloadInput').value = '';
   closeReloadModal();
   const sc2 = depCounts();

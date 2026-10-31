@@ -4787,7 +4787,7 @@ async function appInit() {
 
   // 5 — Apply departures
   if (data.departures && data.departures.rooms && data.departures.rooms.length) {
-    depRooms = data.departures.rooms; window._depDate = data.departures.date || '';
+    depRooms = typeof depDropPm === 'function' ? depDropPm(data.departures.rooms) : data.departures.rooms; window._depDate = data.departures.date || '';
     depLog   = data.departures.log || [];
     if (typeof depSetBase === 'function') depSetBase(depRooms, depLog);
     const uploadCard = document.getElementById('depUploadCard');
@@ -4871,7 +4871,7 @@ async function appInit() {
       return;
     }
     window._depPendingSnap = null;
-    depRooms = snap.rooms; window._depDate = snap.date || '';
+    depRooms = typeof depDropPm === 'function' ? depDropPm(snap.rooms) : snap.rooms; window._depDate = snap.date || '';
     depLog = snap.log || [];
     if (typeof depSetBase === 'function') depSetBase(depRooms, depLog);
     if (depRooms.length) {

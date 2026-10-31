@@ -470,7 +470,7 @@ function missingFromBoard(live, board, today) {
   const B = Array.isArray(board) ? board : [];
   if (!B.length || boardDay(B) !== today) return [];
   const on = new Set(B.map(brk));
-  return (live || []).filter(r => !on.has(r.rk) && !isOut(r) && r.departures.includes(today))
+  return (live || []).filter(r => !on.has(r.rk) && !isOut(r) && !isPmRoom(r.room) && r.departures.includes(today))
     .sort(roomCmp).map(r => ({ room: r.room, rk: r.rk, name: r.name, departure: today }));
 }
 /** board rooms not in the in-house list (gone already per Opera), still open on the board */
