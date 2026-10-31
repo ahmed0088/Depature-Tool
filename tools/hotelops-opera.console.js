@@ -1063,6 +1063,8 @@
   }
   // ══ </ho-lock> ═══════════════════════════════════════════════
 
+  /** headers of Opera tables that are known and hold no departures / guests to read: the report list, Folio History (past invoices) */
+  var KNOWN_HEAD = / REPORT GROUP | INTERNAL NAME | MULTI PROPERTY REPORT | INVOICE NO(?:UMBER)? | ASSOC FOLIOS | POST IT NO(?:UMBER)? /;
   /** Opera's report screens (Report Parameters, report list): settings for a report, not guests → never "unknown". */
   function isReportForm(c) {
     return (c.pairs || []).some(function (p) { return /^(?:report name|report group|file format|sort order|from date|to date|include internal notes|primary only)$/i.test(String(p[0] || '').replace(/\s+/g, ' ').trim()); })
@@ -1074,7 +1076,7 @@
     postingsFrom: postingsFrom, folioFrom: folioFrom, tracesFrom: tracesFrom, tableFrom: tableFrom, pairsExtra: pairsExtra, auditState: auditState, cleanLabel: cleanLabel, safeTitle: safeTitle,
     normH: normH, fieldOf: fieldOf, mapHeaders: mapHeaders, usable: usable, parseDate: parseDate, dateOrder: dateOrder, findDate: findDate, normStatus: normStatus, money: money,
     roomOf: roomOf, roomKey: roomKey, nameKey: nameKey, confOf: confOf, emailOf: emailOf, rowFrom: rowFrom, finishRows: finishRows, rowKey: rowKey, mergeRows: mergeRows, pairsToRow: pairsToRow,
-    kindOfText: kindOfText, pageKind: pageKind, sigKind: sigKind, formLabel: formLabel, dataLook: dataLook, isReportForm: isReportForm, hash: hash, summary: summary, totalOf: totalOf, totalLine: totalLine, FIELDS: FIELDS, VERSION: VERSION, READER_REV: READER_REV };
+    kindOfText: kindOfText, pageKind: pageKind, sigKind: sigKind, formLabel: formLabel, dataLook: dataLook, isReportForm: isReportForm, KNOWN_HEAD: KNOWN_HEAD, hash: hash, summary: summary, totalOf: totalOf, totalLine: totalLine, FIELDS: FIELDS, VERSION: VERSION, READER_REV: READER_REV };
   if (typeof module !== 'undefined' && module.exports) { module.exports = H; return; }
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
 
@@ -1215,7 +1217,7 @@
       var hs = ' ' + h.map(normH).join(' | ') + ' ';
       if (/ CARD NUMBER | CARD HOLDER | EXPIRATION /.test(hs)) return 'card';   // payment instructions / memberships: a card column — never read, never kept
       if (/ CALCULATION RULE | RHYTHM | ALLOWANCE /.test(hs) || (/ DATE /.test(hs) && / EFFECTIVE RATE | LOYALTY QUALIFIED | ROOM TYPE TO CHARGE /.test(hs))
-        || / REPORT GROUP | INTERNAL NAME | MULTI PROPERTY REPORT /.test(hs)) return 'known';   // packages, daily rate details, the report list: a known table, not guests
+        || KNOWN_HEAD.test(hs)) return 'known';   // packages, daily rate details, the report list, folio history: a known table, not guests
       // a room list (Opera's assign-room panel, room status): a room and its statuses, no guest → kept as a plain table, never "nothing useful"
       if (mg.map.room !== undefined && mg.map.name === undefined && mg.map.conf === undefined && mg.map.last === undefined && mg.map.first === undefined
         && (mg.map.foStatus !== undefined || mg.map.roomStatus !== undefined || mg.map.hkStatus !== undefined)) return hint === 'rooms' ? 'guest' : 'known';

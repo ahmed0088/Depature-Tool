@@ -3603,6 +3603,9 @@ console.log('\nOpera reader');
   check('real Opera Cloud (report 30 Oct): the Report Parameters screen is report settings, never an unknown screen; a guest form is not',
     [R.isReportForm({ heads: ['Report Parameters'], pairs: [] }), R.isReportForm({ heads: [], pairs: [['Sort Order', 'Room'], ['Include Internal Notes', 'N']] }), R.isReportForm({ heads: ['Reports'] }), R.isReportForm({ heads: ['Stay Details', 'Departures Report Card'], pairs: [['Room', '0412'], ['Name', 'X']] })],
     [true, true, true, false]);
+  { const kh = h => R.KNOWN_HEAD.test(' ' + h.map(R.normH).join(' | ') + ' ');
+    check('real Opera Cloud (report 31 Oct): Folio History (past invoices) is a known table — never "nothing useful"; a departures grid is not',
+      [kh(['Select All', 'Date', 'Invoice Number', 'Folio Number', 'Payee Name', 'Folio Amount', 'Type', 'Alternate Name', 'Window Number', 'Room', 'Assoc Folios', 'Post It Number', 'Addressee']), kh(['Report Name', 'Report Group']), kh(['Room', 'Name', 'Arrival', 'Departure', 'Balance'])], [true, true, false]); }
   const OS = o => { const x = O.openState(o); return [x.state, x.btn]; };
   check('open opera: the card — no helper / user scripts off / on, linked or not',
     [OS({ helper: false, us: false, linked: false }), OS({ helper: true, us: false, linked: false }), OS({ helper: true, us: true, linked: true }), OS({ helper: true, us: true, linked: false }), O.openState({ helper: true, us: true, linked: false }).b],

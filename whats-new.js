@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 460, items: [
+    "📊 The Opera reader knows Folio History (past invoices) now. It's a known list, not guests to read, so it no longer sends a “stuck” report for it.",
+  ] },
   { v: 459, items: [
     "📊 Skip The Clean → 📊 Track sheet: a professional sheet for your manager of every guest you credited, in Excel (colours, filters, totals) or PDF. Pick the period (this month, last month, all time or your own dates), one line per credit or per guest, the sort and the columns.",
     "🧾 Each guest says why they were credited: the days they asked to skip housekeeping, the housekeeping sheet and days × points. There's also a day-by-day sheet to check, a summary (totals, by staff, by day), sign-off lines and an optional cost in AED. 📋 Email text writes the message for you. Works without loading any file; your settings are remembered.",
