@@ -454,8 +454,8 @@ function depRecon(I) {
     else if (canc) Object.assign(d, { why: 'cancelled', reason: 'cancelled / no-show in Opera', acts: ['remove', 'keep'] });
     else if (early) Object.assign(d, { why: 'early', reason: `checked out on ${fmt(early.departure)} in Opera → left earlier`, acts: ['remove', 'keep'] });
     else if (other) Object.assign(d, { why: 'date', reason: `its stay in Opera ends ${fmt(other.departure)} → stay date changed`, nights: other.departure > t ? dayDiff(t, other.departure) : 0, to: other.departure });
-    else if (b.intent === 'extending' && b.status !== 'out') Object.assign(d, { why: 'extended', nights: b.extensionNights > 0 ? b.extensionNights : 1, sure: true,
-      reason: 'was ⏳ extending and Opera no longer has it leaving today → extension confirmed in Opera' + (b.extensionNights > 0 ? '' : ' (1 night — check the nights)') });   // cleared from Opera = confirmed
+    else if ((b.intent === 'extending' || b.intent === 'maybe_extend') && b.status !== 'out') Object.assign(d, { why: 'extended', nights: b.extensionNights > 0 ? b.extensionNights : 1, sure: true,
+      reason: 'was ' + (b.intent === 'extending' ? '⏳ extending' : '🤔 may extend') + ' and Opera no longer has it leaving today → extension confirmed in Opera' + (b.extensionNights > 0 ? '' : ' (1 night — check the nights)') });   // cleared from Opera = confirmed
     else if (!opAll) Object.assign(d, { why: 'gone', reason: 'not in Opera\'s list of guests still to leave → probably checked out in Opera already', acts: ['out', 'ext', 'remove', 'keep'] });
     else Object.assign(d, { why: '', reason: 'not in Opera\'s departures today: extended, moved, checked out earlier or cancelled? Open it in Opera to see' });
     diffs.push(d);

@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 457, items: [
+    "📡 Departures follows Opera's Departures screen more closely. A room marked 🤔 May extend that Opera no longer lists as leaving today is now marked Extended by itself, the same as ⏳ Extending. It used to stay in To do, so the board showed more rooms than Opera (18 instead of 13).",
+  ] },
   { v: 456, items: [
     "🚫 PM rooms (9000 and up) are off Departures. They're Opera's posting accounts, not guests leaving, so they're skipped when you load the departure report, can't be added by hand, and any already on today's board are removed. In-House no longer suggests adding them either.",
   ] },
