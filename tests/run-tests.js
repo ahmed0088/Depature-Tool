@@ -1571,6 +1571,22 @@ console.log('\nQuiet when off · shift task times');
     vm.runInContext(`pkgPins = {}`, sb);
     check('my upsells: a sale added by hand (nothing in Opera) — marked ✍️ Manual sale in Package Audit it counts: the IN-Gauge seller, or the name picked',
       [before.status, kept.status, kept.owner, kept.manual, named.owner], ['noOpera', 'owned', 'Maya TEST', true, 'Lina STAFF']); }
+  { const ctx = vm.createContext({ window: {}, document: { readyState: 'loading', addEventListener() {} }, console });
+    vm.runInContext(require('fs').readFileSync(require('path').join(__dirname, '..', 'skip-clean.js'), 'utf8'), ctx);
+    const K = ctx.window.hoStcTrack, NOW = new Date(2026, 9, 20, 12, 0);
+    const cred = { 'C1': { name: 'Test Alpha', room: '0412', conf: '111', pmid: 'PM000001', history: [{ at: new Date(2026, 9, 3, 10).toISOString(), by: 'Sam', dates: ['2026-10-01', '2026-10-02'], pts: 200 }, { at: new Date(2026, 9, 15, 10).toISOString(), by: 'Lina', dates: ['2026-10-12'], pts: 100 }] },
+      'C2': { name: 'Test Beta', room: '0101', conf: '222', pmid: 'PM000002', history: [{ at: new Date(2026, 8, 28, 10).toISOString(), by: 'Sam', dates: ['2026-09-26'], pts: 100 }] } };
+    const o = Object.assign({}, K.TK_DEF, { cols: Object.assign({}, K.TK_DEF.cols) });
+    const D = K.tkData(cred, o, NOW), DG = K.tkData(cred, Object.assign({}, o, { mode: 'guest' }), NOW), DL = K.tkData(cred, Object.assign({}, o, { period: 'last' }), NOW), DA = K.tkData(cred, Object.assign({}, o, { period: 'all', sort: 'room', costPer: 0.05 }), NOW);
+    check('skip the clean track sheet: this month / per guest / last month / all time (by room, with cost); period from the day it was credited',
+      [D.rows.length, D.totals.pts, D.totals.guests, D.staff.map(s => s.by + ':' + s.pts).join(), DG.rows.length, DG.rows[0].days, DG.rows[0].by, DL.rows.map(r => r.name), DA.rows.map(r => r.room), DA.totals.cost, K.tkPeriod(D), K.tkFile(o, D)],
+      [2, 300, 1, 'Sam:200,Lina:100', 1, 3, 'Sam, Lina', ['Test Beta'], ['0101', '0412', '0412'], 20, 'October 2026', 'Skip_The_Clean_Track_October_2026.xlsx']);
+    const A = K.tkAoa(D, o, { hotel: 'Test Hotel', who: 'Sam', made: 'now' }), hdr = A[4];
+    check('skip the clean track sheet: columns follow the options (no cost column without a cost per point), a totals line and sign-off lines',
+      [hdr.length, hdr.includes('Cost (AED)'), A[5][0], A[7][hdr.indexOf('Points')], A[A.length - 1][0], K.tkCols(Object.assign({}, o, { costPer: 1, cols: Object.assign({}, o.cols, { cost: 1 }) })).length], [10, false, '3 Oct 2026', 300, 'Checked / approved by', 11]);
+    check('skip the clean track sheet: why each guest was credited (dates, housekeeping sheet, days × points) and a day-by-day list to check',
+      [K.tkWhy(['2026-10-01', '2026-10-02'], 100, 200, ['SKIP THE CLEAN OCT']), D.rows[0].why, D.detail.map(x => x.day + ':' + x.pts)],
+      ['Asked to skip housekeeping on 1, 2 Oct (on the housekeeping sheet: SKIP THE CLEAN OCT) → 2 days × 100 = 200 points', 'Asked to skip housekeeping on 1, 2 Oct (on the housekeeping sheet) → 2 days × 100 = 200 points', ['2026-10-01:100', '2026-10-02:100', '2026-10-12:100']]); }
   const big = { name: 'Sam', login: 'ACCOREN-SSELLER', from: 20261001, to: 20261031, madeAt: 'x', madeBy: 'Sam', source: '', files: [],
     rows: Array.from({ length: 650 }, (_, i) => ({ date: 20261001 + (i % 28), conf: 'C' + i, room: '1', guest: 'Test Guest', code: 'UPS30BB', kind: 'BB', kindLabel: 'Breakfast', amount: 10, soldOn: '', soldBy: '', why: 'w', evidence: 'e', src: '' })) };
   big.totals = M.totals(big.rows);

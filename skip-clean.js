@@ -318,7 +318,8 @@ function draw(){const all=lines(),q=$('q').value.toLowerCase().trim(),rd=all.fil
           const rec=credited[k]||{key:k,conf:s.o.conf||'',name:s.o.name,room:s.o.room,pmid:s.pm,dates:[],pts:0,history:[]};
           rec.dates=[...new Set([...(rec.dates||[]),...s.fresh])].sort();
           rec.pts=(rec.pts||0)+s.pt;rec.pmid=s.pm||rec.pmid;rec.name=s.o.name;rec.room=s.o.room;
-          rec.history=[...(rec.history||[]),{at:new Date().toISOString(),by:who(),dates:s.fresh,pts:s.pt}];
+          const fr=new Set(s.fresh),src=[...new Set(s.o.detail.filter(d=>fr.has(d.date)&&d.counts==='Yes').map(d=>d.sheet).filter(Boolean))];
+          rec.history=[...(rec.history||[]),{at:new Date().toISOString(),by:who(),dates:s.fresh,pts:s.pt,rate:+$('pts').value||0,src}];
           credited[k]=rec;persist(k)});
         toast('Saved: '+r.o.name+' credited '+r.pt.toLocaleString()+' points'+(multi?' ('+r.stays.length+' stays)':''));
       }else{
@@ -423,10 +424,272 @@ function summaryPdf(){
   mePrintPage('Skip The Clean ' + month, body, { sign: ['Prepared by', 'Checked by'], signName: who() });
 }
 
+// ── Track sheet for the manager (Excel) ────────────────────────────────
+// Built from the SAVED credit history (every guest ticked Done, shared with the team), so it works
+// without loading any file. One line per credit (each tick) or per guest; the period is the day it
+// was credited. Options are remembered on this device.
+const TK_KEY = 'ho_stc_track_v1';
+const TK_COLS = [['at', 'Date credited'], ['by', 'Credited by'], ['name', 'Guest'], ['room', 'Room'], ['conf', 'Confirmation #'], ['pmid', 'PMID'], ['days', 'Days'], ['dates', 'Skipped dates'], ['pts', 'Points'], ['why', 'Why credited'], ['cost', 'Cost (AED)']];
+const TK_DEF = { period: 'month', from: '', to: '', mode: 'credit', sort: 'date', cols: { at: 1, by: 1, name: 1, room: 1, conf: 1, pmid: 1, days: 1, dates: 1, pts: 1, why: 1, cost: 0 },
+  summary: true, detail: true, sign: true, colours: true, title: 'Skip The Clean · track sheet', manager: '', preparedBy: '', file: 'Skip_The_Clean_Track', costPer: 0 };
+function tkLoad() { try { const v = JSON.parse(localStorage.getItem(TK_KEY) || 'null'); return Object.assign({}, TK_DEF, v || {}, { cols: Object.assign({}, TK_DEF.cols, (v && v.cols) || {}) }); } catch (_) { return Object.assign({}, TK_DEF, { cols: Object.assign({}, TK_DEF.cols) }); } }
+function tkSave(o) { try { localStorage.setItem(TK_KEY, JSON.stringify(o)); } catch (_) {} }
+const tkDay = at => { const d = new Date(at); return isNaN(d) ? '' : d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+/** the period as [from, to] (YYYY-MM-DD, inclusive; '' = open) */
+function tkRange(o, now) {
+  now = now || new Date();
+  const y = now.getFullYear(), m = now.getMonth(), f = (a, b) => tkDay(new Date(a, b, 1)), l = (a, b) => tkDay(new Date(a, b + 1, 0));
+  if (o.period === 'month') return [f(y, m), l(y, m)];
+  if (o.period === 'last') return [f(y, m - 1), l(y, m - 1)];
+  if (o.period === 'custom') return [o.from || '', o.to || ''];
+  return ['', ''];
+}
+/** the reason, in one plain sentence a manager can check against the housekeeping sheet */
+function tkWhy(dates, rate, pts, src) {
+  if (!dates.length) return pts ? pts.toLocaleString('en-GB') + ' points credited' : '';
+  const n = dates.length;
+  return 'Asked to skip housekeeping on ' + fmtDates(dates) + ' (on the housekeeping sheet' + (src && src.length ? ': ' + src.join(', ') : '') + ') → '
+    + n + ' day' + (n === 1 ? '' : 's') + (rate ? ' × ' + rate.toLocaleString('en-GB') : '') + ' = ' + pts.toLocaleString('en-GB') + ' points';
+}
+/** credited records → the lines of the sheet + totals (pure) */
+function tkData(cred, o, now) {
+  const [from, to] = tkRange(o, now), per = +o.costPer || 0;
+  let rows = [];
+  Object.entries(cred || {}).forEach(([k, r]) => (r && Array.isArray(r.history) ? r.history : []).forEach(h => {
+    const day = tkDay(h.at); if (!day || (from && day < from) || (to && day > to)) return;
+    const dates = (Array.isArray(h.dates) ? h.dates : []).slice().sort();
+    const pts = +h.pts || 0, rate = +h.rate || (dates.length ? Math.round(pts / dates.length) : 0), src = (Array.isArray(h.src) ? h.src : []).filter(Boolean);
+    rows.push({ at: day, by: h.by || '', name: r.name || '', room: r.room || '', conf: r.conf || '', pmid: r.pmid || '', g: r.pmid || k, dates, days: dates.length, pts, rate, src,
+      why: tkWhy(dates, rate, pts, src) });
+  }));
+  if (o.mode === 'guest') {
+    const by = new Map();
+    rows.forEach(x => { const g = by.get(x.g); if (!g) { by.set(x.g, Object.assign({}, x, { dates: x.dates.slice(), byL: [x.by] })); return; }
+      g.dates = g.dates.concat(x.dates).sort(); g.days += x.days; g.pts += x.pts; if (x.at > g.at) g.at = x.at; g.byL.push(x.by); g.src = [...new Set(g.src.concat(x.src))];
+      g.why = tkWhy(g.dates, g.rate === x.rate ? g.rate : 0, g.pts, g.src);
+      [['room', x.room], ['conf', x.conf]].forEach(([f, v]) => { if (v && !String(g[f]).split(' / ').includes(v)) g[f] = g[f] ? g[f] + ' / ' + v : v; }); });
+    rows = [...by.values()].map(g => Object.assign(g, { by: [...new Set(g.byL.filter(Boolean))].join(', ') }));
+  }
+  rows.forEach(x => { x.cost = per ? Math.round(x.pts * per * 100) / 100 : 0; });
+  const rn = s => parseInt(String(s).replace(/\D/g, ''), 10) || 0;
+  rows.sort(o.sort === 'room' ? (a, b) => rn(a.room) - rn(b.room) || (a.at < b.at ? -1 : 1) : o.sort === 'guest' ? (a, b) => a.name.localeCompare(b.name) || (a.at < b.at ? -1 : 1) : (a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : rn(a.room) - rn(b.room)));
+  const sum = f => rows.reduce((a, x) => a + (+x[f] || 0), 0);
+  const staff = {}, days = {};
+  rows.forEach(x => { (x.by || '—').split(', ').forEach(p => { const s = staff[p] = staff[p] || { n: 0, pts: 0 }; s.n++; s.pts += x.pts / ((x.by || '—').split(', ').length); });
+    const d = days[x.at] = days[x.at] || { n: 0, pts: 0 }; d.n++; d.pts += x.pts; });
+  const detail = [];
+  rows.forEach(x => x.dates.forEach(d => detail.push({ day: d, name: x.name, room: x.room, conf: x.conf, pmid: x.pmid, pts: x.rate || (x.days ? Math.round(x.pts / x.days) : 0), at: x.at, by: x.by, src: (x.src || []).join(', ') })));
+  detail.sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : (parseInt(a.room, 10) || 0) - (parseInt(b.room, 10) || 0)));
+  return { from, to, rows, detail, totals: { lines: rows.length, guests: new Set(rows.map(x => x.g)).size, days: sum('days'), pts: sum('pts'), cost: Math.round(sum('cost') * 100) / 100 },
+    staff: Object.entries(staff).map(([k, v]) => ({ by: k, n: v.n, pts: Math.round(v.pts) })).sort((a, b) => b.pts - a.pts),
+    byDay: Object.entries(days).map(([k, v]) => ({ day: k, n: v.n, pts: v.pts })).sort((a, b) => (a.day < b.day ? -1 : 1)) };
+}
+const tkCols = o => TK_COLS.filter(([k]) => o.cols[k] && (k !== 'cost' || +o.costPer > 0));
+const tkFmtDay = s => { if (!s) return ''; const [y, m, d] = s.split('-'); return +d + ' ' + MON[+m - 1] + ' ' + y; };
+const tkPeriod = D => D.from && D.to ? (D.from.slice(0, 7) === D.to.slice(0, 7) && D.from.endsWith('-01') && +D.to.slice(8) >= 28 ? MONTHS[+D.from.slice(5, 7) - 1] + ' ' + D.from.slice(0, 4) : tkFmtDay(D.from) + ' – ' + tkFmtDay(D.to)) : D.from ? 'From ' + tkFmtDay(D.from) : D.to ? 'Until ' + tkFmtDay(D.to) : 'All time';
+const tkCell = (x, k) => k === 'at' ? tkFmtDay(x.at) : k === 'dates' ? fmtDates(x.dates) : x[k];
+/** the sheet as rows of values (SheetJS / copy) */
+function tkAoa(D, o, meta) {
+  const C = tkCols(o), a = [[o.title || TK_DEF.title], [meta.hotel + ' · ' + tkPeriod(D)], ['Made ' + meta.made + (o.preparedBy || meta.who ? ' by ' + (o.preparedBy || meta.who) : '') + (o.manager ? ' · for ' + o.manager : '')], [],
+    C.map(c => c[1])];
+  D.rows.forEach(x => a.push(C.map(([k]) => tkCell(x, k))));
+  a.push(C.map(([k], i) => k === 'pts' ? D.totals.pts : k === 'days' ? D.totals.days : k === 'cost' ? D.totals.cost : i === 0 ? 'Total (' + D.totals.guests + ' guest' + (D.totals.guests === 1 ? '' : 's') + ')' : ''));
+  if (o.sign) a.push([], ['Prepared by', o.preparedBy || meta.who || '', '', 'Signature', ''], ['Checked / approved by', o.manager || '', '', 'Signature', '']);
+  return a;
+}
+let _tkEj = null;
+function tkExcelJS() {
+  if (window.ExcelJS) return Promise.resolve(window.ExcelJS);
+  if (_tkEj) return _tkEj;
+  _tkEj = new Promise((ok, no) => { const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js'; s.async = true;
+    const t = setTimeout(() => no(new Error('timed out')), 15000);
+    s.onload = () => { clearTimeout(t); window.ExcelJS ? ok(window.ExcelJS) : no(new Error('not loaded')); }; s.onerror = () => { clearTimeout(t); no(new Error('could not load')); };
+    document.head.appendChild(s); }).catch(e => { _tkEj = null; throw e; });
+  return _tkEj;
+}
+async function tkStyled(EJ, D, o, meta) {
+  const wb = new EJ.Workbook(), C = tkCols(o), TEAL = 'FF0F766E', LIGHT = 'FFF0FDFA', LINE = 'FFD1D5DB';
+  wb.creator = o.preparedBy || meta.who || ''; wb.created = new Date();
+  const ws = wb.addWorksheet('Track sheet', { views: [{ state: 'frozen', ySplit: 5 }], pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
+  const W = { at: 13, by: 18, name: 30, room: 8, conf: 16, pmid: 13, days: 7, dates: 30, pts: 10, why: 60, cost: 12 };
+  ws.columns = C.map(([k]) => ({ key: k, width: W[k] || 14 }));
+  const last = Math.max(1, C.length);
+  const title = (r, v, sz, bold, col) => { ws.mergeCells(r, 1, r, last); const c = ws.getCell(r, 1); c.value = v; c.font = { size: sz, bold, color: { argb: col || 'FF111827' } }; };
+  title(1, o.title || TK_DEF.title, 15, true, TEAL);
+  title(2, meta.hotel + ' · ' + tkPeriod(D), 11, true);
+  title(3, 'Made ' + meta.made + (o.preparedBy || meta.who ? ' by ' + (o.preparedBy || meta.who) : '') + (o.manager ? ' · for ' + o.manager : ''), 9, false, 'FF6B7280');
+  const hr = ws.getRow(5); C.forEach(([, l], i) => { const c = hr.getCell(i + 1); c.value = l; c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TEAL } }; c.alignment = { vertical: 'middle', horizontal: ['days', 'pts', 'cost'].includes(C[i][0]) ? 'right' : 'left' }; });
+  hr.height = 20;
+  D.rows.forEach((x, n) => { const r = ws.getRow(6 + n); C.forEach(([k], i) => { const c = r.getCell(i + 1); c.value = tkCell(x, k);
+      if (n % 2) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT } };
+      c.border = { bottom: { style: 'hair', color: { argb: LINE } } };
+      if (k === 'pts' || k === 'days') c.numFmt = '#,##0'; if (k === 'cost') c.numFmt = '#,##0.00'; if (k === 'pmid' || k === 'conf') c.font = { name: 'Consolas' };
+      if (k === 'dates' || k === 'name' || k === 'why') c.alignment = { wrapText: true, vertical: 'top' }; }); });
+  const tr = ws.getRow(6 + D.rows.length);
+  C.forEach(([k], i) => { const c = tr.getCell(i + 1); c.value = k === 'pts' ? D.totals.pts : k === 'days' ? D.totals.days : k === 'cost' ? D.totals.cost : i === 0 ? 'Total · ' + D.totals.guests + ' guest' + (D.totals.guests === 1 ? '' : 's') : null;
+    c.font = { bold: true }; c.border = { top: { style: 'medium', color: { argb: TEAL } } }; if (k === 'pts' || k === 'days') c.numFmt = '#,##0'; if (k === 'cost') c.numFmt = '#,##0.00'; });
+  if (D.rows.length) ws.autoFilter = { from: { row: 5, column: 1 }, to: { row: 5 + D.rows.length, column: last } };
+  if (o.sign) { const s = 8 + D.rows.length;
+    [['Prepared by', o.preparedBy || meta.who || ''], ['Checked / approved by', o.manager || '']].forEach(([l, v], i) => { const r = ws.getRow(s + i * 2);
+      r.getCell(1).value = l; r.getCell(1).font = { bold: true }; r.getCell(2).value = v; r.getCell(Math.min(last, 4)).value = 'Signature: ____________________'; r.getCell(Math.min(last, 4)).font = { color: { argb: 'FF6B7280' } }; }); }
+  if (o.summary) {
+    const S = wb.addWorksheet('Summary'); S.columns = [{ width: 26 }, { width: 14 }, { width: 14 }];
+    S.getCell('A1').value = 'Summary · ' + tkPeriod(D); S.getCell('A1').font = { size: 14, bold: true, color: { argb: TEAL } };
+    const kv = [['Guests credited', D.totals.guests], ['Credits (ticks)', D.rows.length && o.mode === 'guest' ? null : D.totals.lines], ['Skipped days credited', D.totals.days], ['Points credited', D.totals.pts]].filter(x => x[1] != null);
+    if (+o.costPer > 0) kv.push(['Cost (AED)', D.totals.cost]);
+    kv.forEach(([l, v], i) => { const r = S.getRow(3 + i); r.getCell(1).value = l; r.getCell(2).value = v; r.getCell(2).numFmt = l.startsWith('Cost') ? '#,##0.00' : '#,##0'; r.getCell(2).font = { bold: true }; });
+    const tbl = (row, head, list) => { const h = S.getRow(row); head.forEach((t, i) => { const c = h.getCell(i + 1); c.value = t; c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TEAL } }; });
+      list.forEach((v, n) => v.forEach((x, i) => { const c = S.getRow(row + 1 + n).getCell(i + 1); c.value = x; if (i) c.numFmt = '#,##0'; })); return row + list.length + 2; };
+    let r = 4 + kv.length;
+    r = tbl(r, ['Credited by', 'Lines', 'Points'], D.staff.map(s => [s.by, s.n, s.pts]));
+    tbl(r, ['Day credited', 'Lines', 'Points'], D.byDay.map(d => [tkFmtDay(d.day), d.n, d.pts]));
+  }
+  if (o.detail && D.detail.length) {
+    const V = wb.addWorksheet('Day by day', { views: [{ state: 'frozen', ySplit: 1 }] });
+    const H = [['Skipped day', 14], ['Guest', 30], ['Room', 8], ['Confirmation #', 16], ['PMID', 13], ['Points', 9], ['Housekeeping sheet', 30], ['Credited on', 13], ['Credited by', 18]];
+    V.columns = H.map(([, w]) => ({ width: w }));
+    H.forEach(([t], i) => { const c = V.getRow(1).getCell(i + 1); c.value = t; c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TEAL } }; });
+    D.detail.forEach((x, n) => { const r = V.getRow(2 + n); [tkFmtDay(x.day), x.name, x.room, x.conf, x.pmid, x.pts, x.src, tkFmtDay(x.at), x.by].forEach((v, i) => { const c = r.getCell(i + 1); c.value = v; if (n % 2) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT } }; if (i === 5) c.numFmt = '#,##0'; }); });
+    V.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1 + D.detail.length, column: H.length } };
+  }
+  return wb.xlsx.writeBuffer();
+}
+function tkPlain(D, o, meta) {
+  const wb = XLSX.utils.book_new(), C = tkCols(o), s = XLSX.utils.aoa_to_sheet(tkAoa(D, o, meta));
+  const W = { at: 13, by: 18, name: 30, room: 8, conf: 16, pmid: 13, days: 7, dates: 30, pts: 10, why: 60, cost: 12 }; s['!cols'] = C.map(([k]) => ({ wch: W[k] || 14 }));
+  XLSX.utils.book_append_sheet(wb, s, 'Track sheet');
+  if (o.summary) { const a = [['Summary · ' + tkPeriod(D)], [], ['Guests credited', D.totals.guests], ['Skipped days credited', D.totals.days], ['Points credited', D.totals.pts]];
+    if (+o.costPer > 0) a.push(['Cost (AED)', D.totals.cost]);
+    a.push([], ['Credited by', 'Lines', 'Points'], ...D.staff.map(x => [x.by, x.n, x.pts]), [], ['Day credited', 'Lines', 'Points'], ...D.byDay.map(x => [tkFmtDay(x.day), x.n, x.pts]));
+    const S = XLSX.utils.aoa_to_sheet(a); S['!cols'] = [{ wch: 26 }, { wch: 12 }, { wch: 12 }]; XLSX.utils.book_append_sheet(wb, S, 'Summary'); }
+  if (o.detail && D.detail.length) { const V = XLSX.utils.aoa_to_sheet([['Skipped day', 'Guest', 'Room', 'Confirmation #', 'PMID', 'Points', 'Housekeeping sheet', 'Credited on', 'Credited by'], ...D.detail.map(x => [tkFmtDay(x.day), x.name, x.room, x.conf, x.pmid, x.pts, x.src, tkFmtDay(x.at), x.by])]);
+    V['!cols'] = [14, 30, 8, 16, 13, 9, 30, 13, 18].map(w => ({ wch: w })); XLSX.utils.book_append_sheet(wb, V, 'Day by day'); }
+  return wb;
+}
+const tkMeta = () => ({ hotel: hotelName(), who: who(), made: new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) });
+const tkFile = (o, D) => (String(o.file || TK_DEF.file).replace(/[\\/:*?"<>|]+/g, '_').trim() || TK_DEF.file) + '_' + tkPeriod(D).replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '') + '.xlsx';
+async function tkDownload(o) {
+  const D = tkData(credited, o), meta = tkMeta();
+  if (!D.rows.length) { toast('Nothing credited in this period'); return false; }
+  const name = tkFile(o, D);
+  if (o.colours) {
+    try { const EJ = await tkExcelJS(), buf = await tkStyled(EJ, D, o, meta);
+      const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })), a = document.createElement('a');
+      a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+      tkDone(D, name); return true;
+    } catch (e) { toast('Colours could not load: a plain Excel instead'); }
+  }
+  if (typeof XLSX === 'undefined') { toast('The Excel library did not load. Reload the page.'); return false; }
+  XLSX.writeFile(tkPlain(D, o, meta), name); tkDone(D, name); return true;
+}
+function tkDone(D, name) { toast('✓ ' + name + ' · ' + D.totals.guests + ' guests · ' + D.totals.pts.toLocaleString('en-GB') + ' points'); if (typeof logActivity === 'function') logActivity('stc_track_sheet', tkPeriod(D) + ' · ' + D.totals.guests + ' guests · ' + D.totals.pts + ' pts'); }
+function tkEmail(o) {
+  const D = tkData(credited, o), m = tkMeta();
+  return [(o.manager ? 'Hi ' + o.manager + ',' : 'Hi,'), '', 'Skip The Clean points credited for ' + tkPeriod(D) + ' (' + m.hotel + '):', '',
+    '• Guests credited: ' + D.totals.guests, '• Skipped days credited: ' + D.totals.days, '• Points credited: ' + D.totals.pts.toLocaleString('en-GB') + (+o.costPer > 0 ? ' (AED ' + D.totals.cost.toLocaleString('en-GB', { minimumFractionDigits: 2 }) + ')' : ''),
+    '', 'The track sheet is attached.', '', 'Thank you,', o.preparedBy || m.who].join('\n');
+}
+/** the same track sheet as a page to print / save as PDF (landscape, sign-off at the end) */
+function tkPdf(o) {
+  const D = tkData(credited, o), m = tkMeta(), C = tkCols(o), t = D.totals;
+  if (!t.lines) { toast('Nothing credited in this period'); return false; }
+  if (typeof mePrintPage !== 'function') { toast('The print helper did not load. Reload the page.'); return false; }
+  const num = { days: 1, pts: 1, cost: 1 }, nf = (k, v) => k === 'cost' ? (+v || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 }) : (+v || 0).toLocaleString('en-GB');
+  const kpi = (l, v, sub) => `<div class="kpi"><small>${l}</small><b>${v}</b>${sub ? `<i>${sub}</i>` : ''}</div>`;
+  const head = `<tr><th class="r">#</th>${C.map(([k, l]) => `<th${num[k] ? ' class="r"' : ''}>${esc(l)}</th>`).join('')}</tr>`;
+  const body = D.rows.map((x, i) => `<tr><td class="r">${i + 1}</td>${C.map(([k]) => `<td class="${num[k] ? 'r' : k === 'pmid' || k === 'conf' ? 'mono nw' : k === 'at' || k === 'room' ? 'nw' : ''}">${num[k] ? nf(k, x[k]) : esc(tkCell(x, k) || '–')}</td>`).join('')}</tr>`).join('');
+  const tot = `<tr class="tot"><td></td>${C.map(([k], i) => `<td class="${num[k] ? 'r' : ''}">${num[k] ? nf(k, t[k]) : i === 0 ? 'Total · ' + t.guests + ' guest' + (t.guests === 1 ? '' : 's') : ''}</td>`).join('')}</tr>`;
+  const sumHtml = o.summary ? `<h2>Summary</h2><div class="kpis">${kpi('Guests credited', t.guests)}${kpi('Skipped days', t.days)}${kpi('Points credited', t.pts.toLocaleString('en-GB'))}${+o.costPer > 0 ? kpi('Cost', 'AED ' + nf('cost', t.cost), (+o.costPer) + ' per point') : ''}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
+      <table><thead><tr><th>Credited by</th><th class="r">Lines</th><th class="r">Points</th></tr></thead><tbody>${D.staff.map(x => `<tr><td>${esc(x.by)}</td><td class="r">${x.n}</td><td class="r">${nf('pts', x.pts)}</td></tr>`).join('')}</tbody></table>
+      <table><thead><tr><th>Day credited</th><th class="r">Lines</th><th class="r">Points</th></tr></thead><tbody>${D.byDay.map(x => `<tr><td class="nw">${esc(tkFmtDay(x.day))}</td><td class="r">${x.n}</td><td class="r">${nf('pts', x.pts)}</td></tr>`).join('')}</tbody></table></div>` : '';
+  const detHtml = o.detail && D.detail.length ? `<h2 style="break-before:page">Day by day (${D.detail.length} skipped day${D.detail.length === 1 ? '' : 's'})</h2><div class="tw"><table><thead><tr><th>Skipped day</th><th>Guest</th><th>Room</th><th>Confirmation #</th><th>PMID</th><th class="r">Points</th><th>Housekeeping sheet</th><th>Credited</th></tr></thead><tbody>
+    ${D.detail.map(x => `<tr><td class="nw">${esc(tkFmtDay(x.day))}</td><td>${esc(x.name)}</td><td class="nw">${esc(x.room)}</td><td class="mono nw">${esc(x.conf)}</td><td class="mono nw">${esc(x.pmid)}</td><td class="r">${nf('pts', x.pts)}</td><td>${esc(x.src || '–')}</td><td class="nw">${esc(tkFmtDay(x.at))}${x.by ? ' · ' + esc(x.by) : ''}</td></tr>`).join('')}</tbody></table></div>` : '';
+  const html = `<div class="hd"><div><div class="hotel">${esc(m.hotel)}</div><h1>${esc(o.title || TK_DEF.title)}</h1><div class="sub"><b>${esc(tkPeriod(D))}</b> · loyalty points credited to guests who skipped housekeeping${o.manager ? ' · for ' + esc(o.manager) : ''}</div></div>
+      <div class="meta">Made ${esc(m.made)}<br>by ${esc(o.preparedBy || m.who)}</div></div>
+    ${sumHtml}<h2>Guests credited (${t.lines} line${t.lines === 1 ? '' : 's'})</h2><div class="tw"><table><thead>${head}</thead><tbody>${body}${tot}</tbody></table></div>
+    <div class="note">Each line is a guest ticked as credited in the app. A day counts only when the guest asked to skip housekeeping (on the housekeeping sheet); arrival and departure days never count, every 3rd day is a mandatory clean, and a day is never credited twice.</div>
+    ${detHtml}`;
+  mePrintPage((o.title || TK_DEF.title) + ' · ' + tkPeriod(D), html, { landscape: true, sign: o.sign ? ['Prepared by', 'Checked / approved by'] : [], signName: o.preparedBy || m.who });
+  if (typeof logActivity === 'function') logActivity('stc_track_pdf', tkPeriod(D) + ' · ' + t.guests + ' guests · ' + t.pts + ' pts');
+  return true;
+}
+/** the export window */
+function tkOpen() {
+  let o = tkLoad(); document.getElementById('stc-tk')?.remove();
+  const w = document.createElement('div'); w.id = 'stc-tk'; w.className = 'stc-tk'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-modal', 'true'); w.setAttribute('aria-label', 'Track sheet');
+  const seg = (name, list) => `<div class="stc-tk-seg" data-k="${name}">${list.map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${o[name] === v}">${l}</button>`).join('')}</div>`;
+  const chk = (k, l, on, sub) => `<label class="stc-tk-chk"><input type="checkbox" data-o="${k}"${on ? ' checked' : ''}><span><b>${l}</b>${sub ? `<i>${sub}</i>` : ''}</span></label>`;
+  w.innerHTML = `<div class="stc-tk-box"><div class="stc-tk-hd"><div><b>📊 Track sheet for your manager</b><small>Every guest you ticked as credited, and why · Excel or PDF</small></div><button type="button" class="stc-tk-x" data-a="close" aria-label="Close">✕</button></div>
+    <div class="stc-tk-body">
+      <section><h4>Period <small>(the day it was credited)</small></h4>${seg('period', [['month', 'This month'], ['last', 'Last month'], ['all', 'All time'], ['custom', 'Custom']])}
+        <div class="stc-tk-dates"${o.period === 'custom' ? '' : ' hidden'}><label for="stc-tk-from">From</label><input type="date" id="stc-tk-from" data-f="from" value="${esc(o.from)}"><label for="stc-tk-to">To</label><input type="date" id="stc-tk-to" data-f="to" value="${esc(o.to)}"></div></section>
+      <section><h4>Lines</h4>${seg('mode', [['credit', 'One per credit'], ['guest', 'One per guest']])}<h4 style="margin-top:12px">Sort by</h4>${seg('sort', [['date', 'Date'], ['room', 'Room'], ['guest', 'Guest']])}</section>
+      <section><h4>Columns</h4><div class="stc-tk-cols">${TK_COLS.map(([k, l]) => `<label class="stc-tk-chip"><input type="checkbox" data-c="${k}"${o.cols[k] ? ' checked' : ''}><span>${l}</span></label>`).join('')}</div></section>
+      <section><h4>Extras</h4>${chk('summary', 'Summary sheet', o.summary, 'totals, by staff and by day')}${chk('detail', 'Day-by-day sheet', o.detail, 'every skipped day credited, with its housekeeping sheet: easy to check')}${chk('sign', 'Sign-off lines', o.sign, 'prepared by · approved by')}${chk('colours', 'Colours and filters', o.colours, 'styled header, stripes, totals row')}</section>
+      <section><h4>Settings <small>(remembered on this device)</small></h4><div class="stc-tk-grid">
+        <label for="stc-tk-title">Report title</label><input id="stc-tk-title" data-f="title" value="${esc(o.title)}">
+        <label for="stc-tk-man">Manager's name</label><input id="stc-tk-man" data-f="manager" value="${esc(o.manager)}" placeholder="e.g. the Front Office Manager">
+        <label for="stc-tk-prep">Prepared by</label><input id="stc-tk-prep" data-f="preparedBy" value="${esc(o.preparedBy)}" placeholder="${esc(who())}">
+        <label for="stc-tk-file">File name</label><input id="stc-tk-file" data-f="file" value="${esc(o.file)}">
+        <label for="stc-tk-cost">Cost per point (AED)</label><input id="stc-tk-cost" data-f="costPer" type="number" min="0" step="0.001" value="${+o.costPer || ''}" placeholder="optional: adds a Cost column"></div></section>
+    </div>
+    <div class="stc-tk-ft"><div class="stc-tk-pv" id="stc-tk-pv" aria-live="polite"></div><div class="stc-tk-btns"><button type="button" class="btn" data-a="email">📋 Email text</button><button type="button" class="btn" data-a="pdf">🖨 PDF</button><button type="button" class="btn gold" data-a="go">⬇ Excel</button></div></div></div>`;
+  document.body.appendChild(w);
+  const pv = () => { const D = tkData(credited, o), t = D.totals;
+    w.querySelector('#stc-tk-pv').innerHTML = t.lines ? `<b>${tkPeriod(D)}</b> · ${t.guests} guest${t.guests === 1 ? '' : 's'} · ${t.days} day${t.days === 1 ? '' : 's'} · <b>${t.pts.toLocaleString('en-GB')} points</b>${+o.costPer > 0 ? ' · AED ' + t.cost.toLocaleString('en-GB', { minimumFractionDigits: 2 }) : ''}` : `<span class="muted">Nothing credited in ${tkPeriod(D)}</span>`;
+    w.querySelectorAll('[data-a="go"],[data-a="pdf"]').forEach(x => { x.disabled = !t.lines; }); };
+  const set = (k, v) => { o[k] = v; tkSave(o); pv(); };
+  w.addEventListener('click', e => {
+    if (e.target === w) { w.remove(); return; }
+    const b = e.target.closest('button'); if (!b) return;
+    const sg = b.closest('.stc-tk-seg');
+    if (sg) { sg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); set(sg.dataset.k, b.dataset.v); if (sg.dataset.k === 'period') w.querySelector('.stc-tk-dates').hidden = b.dataset.v !== 'custom'; return; }
+    if (b.dataset.a === 'close') w.remove();
+    else if (b.dataset.a === 'email') copy(tkEmail(o), 'email text', b);
+    else if (b.dataset.a === 'pdf') tkPdf(o);
+    else if (b.dataset.a === 'go') { b.disabled = true; tkDownload(o).then(ok => { b.disabled = false; if (ok) w.remove(); }); }
+  });
+  w.addEventListener('input', e => { const t = e.target;
+    if (t.dataset.f === 'costPer') { const v = +t.value || 0; if (v > 0 && !o.cols.cost) { o.cols = Object.assign({}, o.cols, { cost: 1 }); const c = w.querySelector('[data-c="cost"]'); if (c) c.checked = true; } set('costPer', v); }   // a cost per point turns the Cost column on
+    else if (t.dataset.f) set(t.dataset.f, t.value);
+    else if (t.dataset.c) { o.cols = Object.assign({}, o.cols, { [t.dataset.c]: t.checked ? 1 : 0 }); if (!tkCols(o).length) { t.checked = true; o.cols[t.dataset.c] = 1; toast('Keep at least one column'); } tkSave(o); pv(); }
+    else if (t.dataset.o) set(t.dataset.o, t.checked); });
+  w.addEventListener('keydown', e => { if (e.key === 'Escape') w.remove(); });
+  pv(); setTimeout(() => w.querySelector('.stc-tk-seg button[aria-pressed="true"]')?.focus(), 30);
+}
+window.hoStcTrack = { _load: v => loadSaved(v), tkWhy, tkData, tkRange, tkAoa, tkCols, tkPeriod, tkFile, TK_DEF };
+
 function clearAll(){X=[];T=[];R=null;tab='Ready';$('err').textContent='';list();$('out').hidden=true;badge('—')}
 
 // ───────────────────────── mounting into the app ─────────────────────────
 const CSS = `
+.stc-tk{position:fixed;inset:0;z-index:10050;background:rgba(5,8,14,.55);backdrop-filter:blur(3px);display:grid;place-items:center;padding:16px;animation:stcTkIn .16s ease}
+@keyframes stcTkIn{from{opacity:0}to{opacity:1}}
+.stc-tk-box{width:min(680px,100%);max-height:min(92vh,860px);display:flex;flex-direction:column;background:var(--card);color:var(--text);border:1px solid var(--border2);border-radius:18px;box-shadow:0 30px 80px rgba(0,0,0,.45);overflow:hidden;animation:stcTkUp .2s cubic-bezier(.2,.8,.2,1)}
+@keyframes stcTkUp{from{transform:translateY(10px) scale(.985);opacity:0}to{transform:none;opacity:1}}
+.stc-tk-hd{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-bottom:1px solid var(--border);background:linear-gradient(135deg,rgba(45,212,191,.12),rgba(129,140,248,.10))}
+.stc-tk-hd b{display:block;font-size:1.05rem}.stc-tk-hd small{color:var(--text2);font-size:.8rem}
+.stc-tk-x{margin-left:auto;border:0;background:transparent;color:var(--text2);font-size:18px;cursor:pointer;border-radius:8px;width:32px;height:32px}.stc-tk-x:hover{background:var(--border)}
+.stc-tk-body{overflow:auto;padding:6px 18px 12px}
+.stc-tk-body section{padding:12px 0;border-bottom:1px dashed var(--border)}.stc-tk-body section:last-child{border-bottom:0}
+.stc-tk-body h4{margin:0 0 8px;font-size:.78rem;letter-spacing:.05em;text-transform:uppercase;color:var(--text2)}.stc-tk-body h4 small{text-transform:none;letter-spacing:0;font-weight:500;color:var(--text3)}
+.stc-tk-seg{display:inline-flex;flex-wrap:wrap;gap:4px;padding:4px;border-radius:12px;background:var(--bg2);border:1px solid var(--border)}
+.stc-tk-seg button{border:0;background:transparent;color:var(--text2);font:600 13px var(--font);padding:7px 12px;border-radius:9px;cursor:pointer}
+.stc-tk-seg button[aria-pressed="true"]{background:var(--card);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.18);outline:1px solid var(--border2)}
+.stc-tk-dates[hidden]{display:none}
+.stc-tk-dates{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px}.stc-tk-dates input{width:auto}
+.stc-tk-cols{display:flex;flex-wrap:wrap;gap:6px}
+.stc-tk-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--border2);border-radius:999px;font-size:.82rem;cursor:pointer;user-select:none}
+.stc-tk-chip:has(input:checked){border-color:#2dd4bf;background:rgba(45,212,191,.12)}
+.stc-tk-chk{display:flex;gap:10px;align-items:flex-start;padding:6px 0;cursor:pointer}.stc-tk-chk span{display:flex;flex-direction:column}.stc-tk-chk i{font-style:normal;color:var(--text3);font-size:.78rem}
+.stc-tk-grid{display:grid;grid-template-columns:minmax(120px,170px) 1fr;gap:8px 12px;align-items:center}
+.stc-tk-grid input{width:100%;box-sizing:border-box}
+.stc-tk-ft{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 18px;border-top:1px solid var(--border);background:var(--bg2)}
+.stc-tk-pv{flex:1 1 220px;font-size:.84rem;color:var(--text2)}.stc-tk-pv b{color:var(--text)}.stc-tk-pv .muted{color:var(--text3)}
+.stc-tk-btns{display:flex;gap:8px;margin-left:auto}
+@media (max-width:560px){.stc-tk{padding:0;place-items:end stretch}.stc-tk-box{border-radius:18px 18px 0 0;max-height:94vh}.stc-tk-grid{grid-template-columns:1fr}.stc-tk-btns{width:100%}.stc-tk-btns .btn{flex:1}}
+
 #panel-skip-clean{--stc-ok:var(--green,#3ecf8e);--stc-okbg:var(--green-bg,rgba(62,207,142,.14));--stc-warn:var(--amber,#d97706);--stc-warnbg:var(--amber-bg,rgba(217,119,6,.14));--stc-bad:var(--red,#f06b7a);--stc-badbg:var(--red-bg,rgba(240,107,122,.14));--stc-idle:var(--text2,#8b949e);--stc-idlebg:rgba(128,128,128,.14);--stc-acc:var(--blue,#2563eb);--stc-accbg:var(--blue-bg,rgba(37,99,235,.12));--stc-line:var(--border,#30363d)}
 #panel-skip-clean .stc-wrapper{max-width:1400px}
 #panel-skip-clean .stc-setup{display:grid;grid-template-columns:1fr 1fr 270px;gap:12px}
@@ -559,7 +822,7 @@ const PANEL_HTML = `
       <h1>Skip The Clean</h1>
       <p>Guests who skip housekeeping earn ALL points. Give it the housekeeping sheets and the Opera Membership Stays report: it finds each member, works out which days count, and gives you the PMID and points to enter. Your files stay in this browser; only what you tick as credited is saved for the team.</p>
     </div>
-    <div class="stc-hero-act"><button class="btn rose" type="button" id="stc-clear">✕ Start over</button></div>
+    <div class="stc-hero-act"><button class="btn gold" type="button" id="stc-track" title="Excel of every guest credited, for your manager">📊 Track sheet</button><button class="btn rose" type="button" id="stc-clear">✕ Start over</button></div>
   </div>
 
   <section class="stc-steps">
@@ -692,6 +955,7 @@ function mount() {
   $('xl').onclick = exportXlsx;
   $('pdf').onclick = summaryPdf;
   $('clear').onclick = clearAll;
+  $('track').onclick = tkOpen;
   histNote(); startSync();
 }
 

@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 459, items: [
+    "📊 Skip The Clean → 📊 Track sheet: a professional sheet for your manager of every guest you credited, in Excel (colours, filters, totals) or PDF. Pick the period (this month, last month, all time or your own dates), one line per credit or per guest, the sort and the columns.",
+    "🧾 Each guest says why they were credited: the days they asked to skip housekeeping, the housekeeping sheet and days × points. There's also a day-by-day sheet to check, a summary (totals, by staff, by day), sign-off lines and an optional cost in AED. 📋 Email text writes the message for you. Works without loading any file; your settings are remembered.",
+  ] },
   { v: 458, items: [
     "📡 A room extended on WhatsApp after Opera was read is now picked up. While Opera's Departures read is fresh (30 min), the board is compared with it again every 1½ minutes and every time the reader sees the screen again. So a ⏳ Extending room that Opera doesn't have leaving today becomes Extended by itself, like 208.",
   ] },
