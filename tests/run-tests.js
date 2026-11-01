@@ -3667,6 +3667,9 @@ console.log('\nOpera reader');
   check('Opera decides: extended here (from WhatsApp) but Opera still has it leaving today → back to ⏳ extending, by itself',
     [XN && XN.room, XN && XN.acts.join(','), O.reconAuto(RX).some(d => d.type === 'notext'), O.reconPlan([{ d: XN, act: 'unext' }], T).dep.unext.map(u => u.room), O.summaryText(O.reconPlan([{ d: XN, act: 'unext' }], T))],
     ['0405', 'unext,keep', true, ['0405'], '1 room back to ⏳ extending (not extended in Opera yet)']);
+  { const hand = (via) => { const bx = { day: T, rooms: bExt.rooms.map(b => b.roomStr === '0405' ? Object.assign({}, b, { extVia: via }) : b) }; const R0 = O.depRecon({ dep: op15, board: bx, today: T, reads: ihL }); return [R0.diffs.some(d => d.type === 'notext' && d.room === '0405'), O.reconAuto(R0).some(d => d.type === 'notext')]; };
+    check('Opera decides, no tug-of-war: an extension a person tapped is listed for review, never undone by itself; one from WhatsApp is',
+      [hand('hand'), hand('WhatsApp chat'), hand(undefined)], [[true, false], [true, true], [true, true]]); }
   const bIng = { day: T, rooms: b16.rooms.map(b => b.roomStr === '0412' ? Object.assign({}, b, { intent: 'extending' }) : b) };
   const RG2 = O.depRecon({ dep: op15, board: bIng, today: T, reads: {} }), G2 = RG2.diffs.find(d => d.room === '0412');
   check('Opera decides: a room ⏳ extending that Opera no longer has leaving today → extended by itself (cleared in Opera = confirmed)',

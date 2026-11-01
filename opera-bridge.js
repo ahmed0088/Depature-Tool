@@ -430,7 +430,8 @@ function depRecon(I) {
     if (b.status === 'extended' && !keep[k]) {
       const r0 = opBy.get(k);
       // Opera decides: still leaving today in Opera → not extended yet (the guest may pay later); back to ⏳ extending until Opera shows it
-      if (r0 && r0.status !== 'checked_out') { diffs.push({ type: 'notext', room: b.roomStr, name: b.name, reason: 'Opera still has it leaving today — not extended in Opera yet → ⏳ extending until Opera shows it', why: 'notext', sure: true, acts: ['unext', 'keep'] }); return; }
+      // by itself only when WhatsApp / the reader extended it; a person who tapped Extend decides — it waits in the list for a tap
+      if (r0 && r0.status !== 'checked_out') { diffs.push({ type: 'notext', room: b.roomStr, name: b.name, reason: 'Opera still has it leaving today — not extended in Opera yet → ⏳ extending until Opera shows it' + (b.extVia === 'hand' ? ' (marked by hand here: your call)' : ''), why: 'notext', sure: b.extVia !== 'hand', acts: ['unext', 'keep'] }); return; }
     }
     if (keep[k] || b.status === 'extended') return;
     const r = opBy.get(k);
@@ -1190,7 +1191,7 @@ function apply0(snap, how, P0) {
     const i = depRooms.findIndex(x => roomKey(x.roomStr) === roomKey(room)); if (i < 0) return;
     const r = depRooms[i]; if (r.status !== 'extended') return;
     safe(() => quiet(() => depAction(i, 'due')));
-    r.intent = 'extending'; r.intentMinutes = null;
+    r.intent = 'extending'; r.intentMinutes = null; r.opHeld = new Date().toDateString();   // Opera held it back today: WhatsApp alone won't extend it again
     r.note = (r.note ? r.note + '\n' : '') + `[${at}] Not extended in Opera yet (still leaving today there) → ⏳ extending until Opera shows it`;
     depTouched = true;
   });
@@ -1300,7 +1301,7 @@ function reconAutoRun() {
   safe(() => apply(null, 'auto · Opera vs board', P));
 }
 /** the board changes between Opera reads (a WhatsApp message, a tap): while Opera's Departures read is fresh, compare again every 1½ minutes */
-const RECON_FRESH = 30 * 60 * 1000;
+const RECON_FRESH = 18 * 60 * 1000;   // the same 18 minutes WhatsApp counts Opera as fresh (wa-bridge operaDecides): both or neither
 if (doc && typeof setInterval === 'function') setInterval(() => { const D = LAST.departures; if (D && D.at && Date.now() - D.at < RECON_FRESH) safe(reconAutoRun); }, 90 * 1000);
 /** a tap on a difference's button */
 function reconAct(act, room) {

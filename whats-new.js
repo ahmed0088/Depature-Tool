@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 462, items: [
+    "🗂️ Room notes are tidier: back-to-back automatic entries (status changes, undos, “Extension marked…”) fold into one line, like “6 changes · Extended ×2 · Undone ×2”. Tap Show to open them; 🕘 Activity still lists each one.",
+    "🤝 No more tug-of-war on extensions: WhatsApp and the Opera check now use the same 18 minutes. Once Opera has held a room back as “not extended yet” today, WhatsApp keeps it at ⏳ Extending. An extension you tap by hand is never undone automatically; it waits in the Opera box for you to decide.",
+  ] },
   { v: 461, items: [
     "🗒️ Departures → a room's Notes now shows everything about the room in one timeline: your notes plus the WhatsApp chat, Handover Book, HK requests, maintenance, lost & found, wake-up calls and gym. New filters: 🕘 Activity, 💬 WhatsApp, 📎 Around the app. ↗ opens the item where it lives.",
     "🧾 Every change says where it came from and who made it: “✓ Checked out · via WhatsApp chat · Sam”, “via Opera · auto”, or by hand with your name. A room added to the board gets a first note saying how it was added.",

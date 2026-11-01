@@ -1213,7 +1213,7 @@ function applyOne0(a, who, board) {
     if (st === 'out') return Object.assign(res, { st: 'skip', text: `${room}: already checked out — not extended` });
     // Opera decides: while the Opera reader is in use today, "extended" on WhatsApp is only news (the guest may pay later). The room
     // waits as ⏳ extending; it becomes extended when Opera no longer has it leaving today (opera-bridge.js).
-    if (st !== 'extended' && operaDecides()) {
+    if (st !== 'extended' && (operaDecides() || r.opHeld === new Date().toDateString())) {   // Opera read now, or Opera held this room back earlier today
       const w = applyOne(Object.assign({}, a, { act: 'extending', note: (a.note ? a.note + ' · ' : '') + 'said extended on WhatsApp — waiting for Opera' }), who, board);
       if (w && w.st === 'extending') w.text = `⏳ ${room} extending — WhatsApp says extended, it is marked extended when Opera shows it (Opera decides)`;
       return w;

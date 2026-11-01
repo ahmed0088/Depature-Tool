@@ -1926,9 +1926,19 @@ function _dpnPaint() {
   const noteMs = e => { if (!e.time) return -1; const [h, m] = e.time.split(':'); return t0.getTime() + (+h * 60 + +m) * 6e4; };
   const all = V.map(e => ({ e, ms: noteMs(e) })).concat(XV.map(x => ({ x, ms: x.at })));
   all.sort((a, b) => b.ms - a.ms);
-  all.forEach(({ e, x }) => {
-    const p = x ? _dpnPartAt(x.at) : dpnPart(e.time);
+  // In "All", runs of automatic entries (status changes, undos, "Extension marked…") fold into one line; 🕘 Activity shows each
+  const seq = [];
+  if (f === 'all' && !q) {
+    let run = [];
+    const flush = () => { if (run.length >= 2) seq.push({ g: run }); else run.forEach(it => seq.push(it)); run = []; };
+    all.forEach(it => { if (_dpnIsAuto(it)) run.push(it); else { flush(); seq.push(it); } });
+    flush();
+  } else all.forEach(it => seq.push(it));
+  seq.forEach(({ e, x, g }) => {
+    const h0 = g ? g[0] : null;
+    const p = g ? (h0.x ? _dpnPartAt(h0.x.at) : dpnPart(h0.e.time)) : x ? _dpnPartAt(x.at) : dpnPart(e.time);
     if (p !== part) { part = p; html += `<div class="dpn-part">${p}</div>`; }
+    if (g) { html += _dpnGrpHtml(g); return; }
     if (x) { html += _dpnExtHtml(x); return; }
     const c = DPN_CAT[e.cat] || DPN_CAT.gen, pinned = pinKey && (e.key === pinKey || e.key.split('\n')[0] === pinKey);
     const via = e.via ? `<span class="dpn-via">via ${_dpnEsc(e.via.src)} · ${_dpnEsc(e.via.who)}${e.via.at ? ' · ' + _dpnEsc(e.via.at) : ''}${e.via.edited ? ' · ' + _dpnEsc(e.via.edited) : ''}</span>` : '';
@@ -2001,6 +2011,27 @@ function _dpnExtHtml(x) {
       ${x.sub ? `<div class="dpn-xsub">${_dpnEsc(x.sub)}</div>` : ''}${x.who ? `<div class="dpn-xwho">${_dpnEsc(x.who)}</div>` : ''}
     </div></article>`;
 }
+// an entry the app wrote by itself (no one typed it): the activity log, and the notes a status change adds
+const DPN_AUTO_NOTE = /^(?:Extension marked\b|Checked out in Opera\b|Added from Opera\b|➕ Added to the board\b|Late check-?out marked\b|Marked (?:N\/A|DND)\b)/i;
+function _dpnIsAuto(it) { return it.x ? it.x.src === 'dep' : !!(it.e && !it.e.via && DPN_AUTO_NOTE.test(it.e.body || it.e.text)); }
+function _dpnGrpHtml(g) {
+  const key = g.map(it => it.x ? 'x' + it.x.at + it.x.text : 'n' + it.e.key).join('|').slice(0, 300);
+  _dpn.grps = _dpn.grps || {};
+  const lab = it => it.x ? String(it.x.text || '').replace(/^[^A-Za-z]+/, '').trim() : String(it.e.body || it.e.text).replace(/\s+—.*$|[.:].*$/, '').trim();
+  const cnt = {}; g.forEach(it => { const l = lab(it) || 'Change'; cnt[l] = (cnt[l] || 0) + 1; });
+  const tm = it => it.x ? _dpnHm(it.x.at) : it.e.time || '';
+  const t1 = tm(g[g.length - 1]), t2 = tm(g[0]);
+  const id = Object.keys(_dpn.grps).indexOf(key) >= 0 ? Object.keys(_dpn.grps).indexOf(key) : (_dpn.grps[key] = _dpn.grps[key] || false, Object.keys(_dpn.grps).indexOf(key));
+  const open = !!_dpn.grps[key];
+  const head = `<article class="dpn-e dpn-ext dpn-grp${open ? ' open' : ''}" style="--k:var(--text3)">
+    <div class="dpn-e-time">${_dpnEsc(t2)}</div><div class="dpn-e-dot" aria-hidden="true">🕘</div>
+    <div class="dpn-e-main"><button type="button" class="dpn-grp-b" onclick="_dpnGrp(${id})" aria-expanded="${open}">
+      <b>${g.length} changes</b><span>${_dpnEsc(t1 && t1 !== t2 ? t1 + ' – ' + t2 : t2)}</span>
+      <i>${_dpnEsc(Object.entries(cnt).map(([l, n]) => n > 1 ? l + ' ×' + n : l).join(' · '))}</i><em>${open ? 'Hide ▴' : 'Show ▾'}</em></button></div></article>`;
+  if (!open) return head;
+  return head + g.map(it => it.x ? _dpnExtHtml(it.x) : `<article class="dpn-e dpn-ext dpn-sub" style="--k:var(--text3)"><div class="dpn-e-time">${_dpnEsc(it.e.time || '—')}</div><div class="dpn-e-dot" aria-hidden="true">${(DPN_CAT[it.e.cat] || DPN_CAT.gen).i}</div><div class="dpn-e-main"><div class="dpn-text">${_dpnEsc(it.e.body || it.e.text)}</div></div></article>`).join('');
+}
+function _dpnGrp(i) { const k = Object.keys(_dpn.grps || {})[i]; if (k == null) return; _dpn.grps[k] = !_dpn.grps[k]; _dpnPaint(); }
 function _dpnGo(i) { const x = (_dpn.ext || [])[i]; if (!x || typeof x.go !== 'function') return; const go = x.go; _dpn.room && depCloseNotes(); setTimeout(() => { try { go(); } catch (_) {} }, 60); }
 // ⇪ a Departures note kept as a room note (room-card.js): it then stays with the guest after today's board
 function _dpnToRoom(n) {
@@ -2296,6 +2327,7 @@ function depAction(i, status, extraNights) {
     r.extConfirmed    = false;
   }
   if (status === 'extended' && prev !== 'extended') {
+    r.extVia = (typeof _depVia !== 'undefined' && _depVia && _depVia.src) || 'hand';   // a person's tap is never undone by the Opera check (opera-bridge.js)
     // Use nights from prompt, or default 1
     if (extraNights && extraNights >= 1) r.extensionNights = extraNights;
     else if (!r.extensionNights) r.extensionNights = 1;
