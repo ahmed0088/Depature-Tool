@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 473, items: [
+    "🌍 Nationality Report: a new Nationality check box, like Beds per room. 🔴 New names the sheet doesn't know come with the best guess already picked: tap ✓, or choose the row (or Unknown). 🟡 Names matched by spelling are confirmed once. 🔵 The team's saved choices can be changed or ✕ forgotten, so a wrong old choice (like “DO NOT USE → UAE”) is found and fixed fast. Every choice is saved for the team and the report updates at once.",
+  ] },
   { v: 472, items: [
     "🔧 DTCM Revenue Fill reads every day of the PDF: days with a negative figure (4 and 30 Dec, written “- 35,810”) were skipped before. A lone “-” counts as 0.",
     "0️⃣ Negative figures → 0 (on by default): a negative month-end figure goes into the portal as 0. The page lists each one (4 Dec TD −35,810 → 0) and the table shows the sheet's number next to the 0. Untick it to fill them as they are.",

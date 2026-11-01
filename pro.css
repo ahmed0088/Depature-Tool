@@ -3696,7 +3696,7 @@ html, body { background: var(--bg); }
 #panel-rent .card, #panel-nationality .card { padding: 14px 16px; }
 
 /* the version of this stylesheet: the page checks it matches (index.html "Page and scripts from the same version") */
-:root { --ho-css: "v472"; }
+:root { --ho-css: "v473"; }
 .rent-bp-card:empty { display: none; }
 .rent-bp-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 10px; } .rent-bp-h span { color: var(--text3); font-size: .78rem; }
 .rent-bp { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
@@ -3707,3 +3707,17 @@ html, body { background: var(--bg); }
 .rent-bp-ask { margin: 0 0 10px; padding: 9px 12px; border-radius: 10px; font-size: .82rem; background: color-mix(in srgb, var(--amber, #d97706) 10%, transparent); border: 1px solid color-mix(in srgb, var(--amber, #d97706) 35%, transparent); }
 .rent-bp-t.new { border-color: color-mix(in srgb, var(--amber, #d97706) 55%, var(--border)); }
 .rent-bp-t em { font-style: normal; font: 700 10px var(--font); text-transform: uppercase; letter-spacing: .05em; color: var(--amber, #d97706); margin-left: 4px; }
+
+/* ── Nationality check (nat-extra.js) ─────────────────────── */
+.nc-card { margin-top: 16px; padding: 16px 18px !important; }
+.nc-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-bottom: 4px; } .nc-h b { font-size: 1rem; } .nc-h span { color: var(--text2); font-size: .84rem; }
+.nc-sec { margin-top: 14px; } .nc-sec h6 { margin: 0; font: 700 12px var(--font); letter-spacing: .04em; text-transform: uppercase; color: var(--text2); } .nc-sec h6 span { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 6px; border-radius: 99px; background: var(--bg2); border: 1px solid var(--border2); font-size: 11px; }
+.nc-sec p { margin: 3px 0 8px; font-size: .78rem; color: var(--text3); }
+.nc-row { display: grid; grid-template-columns: minmax(150px, 1fr) auto minmax(180px, 1.3fr) auto; align-items: center; gap: 10px; padding: 9px 12px; margin-bottom: 6px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg2); }
+.nc-row.new { border-color: color-mix(in srgb, var(--rose, #e11d48) 40%, var(--border)); background: color-mix(in srgb, var(--rose, #e11d48) 5%, var(--bg2)); }
+.nc-row.loose { border-color: color-mix(in srgb, var(--amber, #d97706) 40%, var(--border)); }
+.nc-row.saved { border-color: color-mix(in srgb, var(--sky, #0ea5e9) 35%, var(--border)); }
+.nc-n { min-width: 0; display: flex; flex-direction: column; } .nc-n b { font-size: .9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .nc-n i { font-style: normal; font-size: .74rem; color: var(--text3); }
+.nc-n em { font-style: normal; font: 700 10px var(--font); text-transform: uppercase; letter-spacing: .05em; color: var(--rose, #e11d48); margin-left: 4px; }
+.nc-ar { color: var(--text3); } .nc-row select { width: 100%; min-width: 0; height: 36px; }
+@media (max-width: 640px) { .nc-row { grid-template-columns: 1fr auto; } .nc-ar { display: none; } .nc-row select { grid-column: 1 / 2; } }

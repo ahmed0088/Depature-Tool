@@ -182,6 +182,7 @@ function processNat() {
       operaRaw[name][code] = parseInt(p[idx['SUMVALUEPERCOUNTRY_CODE']])||0;
     }
   }
+  window._natRaw = Object.entries(operaRaw).map(([name, v]) => Object.assign({ name }, v));   // every Opera name of the file (nat-extra.js: the check box)
   const excelData={}, unknowns=[], unmatched=[];
   window._natUnmatched = unmatched;   // Ops Brain reads this to map new spellings
   for (const [opName, vals] of Object.entries(operaRaw)) {
