@@ -174,7 +174,13 @@ function COLLECTOR(O) {
   async function waitFor(fn, ms) { for (var i = 0; i < (ms || 15000) / 150; i++) { if (fn()) return true; await sleep(150); } return false; }
   async function search() {
     var f = document.querySelector('[ng-model="searchFromArrivalDate"]'), t2 = document.querySelector('[ng-model="searchToArrivalDate"]');
-    if (!f || !t2) { L('date boxes not found — using the dates on the page'); } else { fire(f, fmt(from, f.value || f.placeholder)); fire(t2, fmt(to, t2.value || t2.placeholder)); L('dates set: ' + f.value + ' → ' + t2.value); }
+    // Neorcha's boxes are calendar boxes (type="date"): they take 2026-11-01 only — anything else is dropped silently and Neorcha searches without dates
+    var put = function (el, iso) { fire(el, el.type === 'date' ? iso : fmt(iso, el.value || el.placeholder)); if (el.type === 'date' && el.value !== iso) { try { el.valueAsDate = new Date(iso + 'T00:00:00Z'); } catch (_) {} fire(el, el.value || iso); } return el.value; };
+    if (!f || !t2) { L('date boxes not found — using the dates on the page'); }
+    else {
+      var a1 = put(f, from), a2 = put(t2, to); L('dates typed: ' + a1 + ' → ' + a2 + ' (asked ' + from + ' → ' + to + ', boxes: ' + f.type + ')');
+      if (!a1 || !a2) return 'the arrival dates could not be typed into Neorcha (' + (a1 || 'empty') + ' → ' + (a2 || 'empty') + ')';
+    }
     var pp = document.querySelector('[ng-model="paginationDoc"]');   // 100 per page: fewer pages to turn
     if (pp && +pp.value < 100) { fire(pp, '100'); L('100 per page'); await sleep(900); }
     all('select').forEach(function (sel) { if (sel.closest('#hoNxBox')) return; var op = Array.prototype.slice.call(sel.options).map(function (o) { return parseInt(o.value || o.textContent, 10); }).filter(function (n) { return !isNaN(n); });
@@ -225,7 +231,7 @@ function COLLECTOR(O) {
   function key(tr) { var m = tr.textContent.match(/\d{6,}/); return m ? m[0] : tr.textContent.replace(/\s+/g, ' ').trim().slice(0, 80); }
   async function collect() {
     busy = true; stop = false; got = []; seen = {}; log = []; fails = 0; how = -1; prog = 3; say('Searching…');
-    var err = await search();
+    window.__hoNxLog = log; var err = await search();
     if (err) { busy = false; return say('⛔ ' + err + ' on this page. Open Guest Documents, then press ▶ Collect again — or 📋 Report.', 'err'); }
     if (!listRows().length) { busy = false; return say('⚠️ No guests for those dates (or the hotel is not chosen). Pick the hotel at the top, then ▶ Collect.', 'err'); }
     for (var page = 1; page < 200 && !stop; page++) {
@@ -255,7 +261,7 @@ function COLLECTOR(O) {
       var before = key(listRows()[0] || document.body); nx.click(); L('next page');
       if (!(await waitFor(function () { var r = listRows()[0]; return r && key(r) !== before; }, 15000))) { L('the list did not change: last page'); break; }
     }
-    busy = false; prog = 100;
+    busy = false; prog = 100; window.__hoNxLog = log;
     if (got.length && O.send) { try { O.send(got, from, to); } catch (_) {} say('✅ ' + got.length + ' guests collected and sent to HotelOps — you can close this tab.', 'ok'); return; }
     say(got.length ? '✅ ' + got.length + ' guests collected. Press 💾 Save file and drop it on HotelOps → Neorcha Registrations.' : '⚠️ Nothing could be read from the cards. Press 📋 Report and send it to HotelOps support.', got.length ? 'ok' : 'err');
     if (got.length) save();

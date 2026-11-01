@@ -112,6 +112,16 @@ async function login(page, user, pass) {
   await fail('Neorcha did not log in and showed no message (it may block logins from outside the hotel).' + H);
 }
 
+// what the collector did on Neorcha (its own notes: dates typed, rows per page, cards that did not open) — no guest detail:
+// the per-guest lines are left out, long numbers and e-mails are masked
+async function steps(page) {
+  try {
+    const log = await page.evaluate(() => (window.__hoNxLog || []).slice(-60));
+    const out = log.filter(l => !/^✓/.test(l)).map(l => String(l).replace(/\S+@\S+/g, '•@•').replace(/\d{6,}/g, '#'));
+    if (out.length) { console.log('── What happened on Neorcha ──'); out.forEach(l => console.log('   ' + l)); }
+  } catch (_) {}
+}
+
 // ── the run ──
 async function main() {
   const need = ['NEORCHA_USER', 'NEORCHA_PASS'].concat(E.DRY ? [] : ['HOTELOPS_EMAIL', 'HOTELOPS_PASS']);
@@ -120,7 +130,8 @@ async function main() {
   const { from, to } = datesOf(E.FROM, E.TO);
   const url = String(E.NEORCHA_URL || '').trim() || 'https://ibis.myneorcha.com/neorchaWEBPlatform/#/login';
   const runUrl = E.GITHUB_RUN_ID ? (E.GITHUB_SERVER_URL || 'https://github.com') + '/' + E.GITHUB_REPOSITORY + '/actions/runs/' + E.GITHUB_RUN_ID : '';
-  say('Neorcha cloud · arrivals ' + from + ' → ' + to);
+  const nice = d => new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  say('Neorcha cloud · searching arrivals from ' + nice(from) + ' to ' + nice(to) + ' (' + from + ' → ' + to + ')');
   const FB = E.DRY && !E.FB_DB_URL ? null : await fbOpen();
   if (FB) { LIVE = FB.live; await FB.start({ state: 'run', step: 'open', from, to, n: 0, prog: 0, run: runUrl, tag: String(E.TAG || '').slice(0, 40), note: 'Opening Neorcha…' }); }
   const live = p => (LIVE ? LIVE(p) : Promise.resolve());
@@ -145,9 +156,10 @@ async function main() {
       const note = String(s.p.note || '').replace(/\d{6,}/g, '#');
       if (note && note !== last && (i % 15 === 0 || /✅|⚠️|⛔/.test(note))) { say(note); last = note; }
       if (note && Date.now() - lastLive > 3000) { lastLive = Date.now(); await live({ step: /Reading/.test(note) ? 'read' : 'search', note, n: s.p.n || 0, prog: s.p.prog || 0 }); }
-      if (/^\s*(⚠️|⛔)/.test(note) && !s.done) await fail('The collector stopped: ' + note);
+      if (/^\s*(⚠️|⛔)/.test(note) && !s.done) { await steps(page); await fail('The collector stopped: ' + note); }
       if (s.done) done = await page.evaluate(() => window.__nxDone);
     }
+    await steps(page);
     if (!done) await fail('Timed out after 55 minutes');
     const rows = (done.rows || []).slice(0, 5000);
     say('Collected ' + rows.length + ' registration cards'); await live({ step: 'save', note: 'Saving ' + rows.length + ' cards in HotelOps…', n: rows.length, prog: 98 });

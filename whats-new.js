@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 488, items: [
+    "🛠 Neorcha only found 1 guest: its date boxes are calendar boxes that take dates as 2026-11-01 only — the collector typed 01-11-2026, Neorcha dropped it silently and searched without dates. Fixed: now it types them the way the boxes want, checks they took, and stops with a clear message if they did not.",
+    "📋 The cloud run's log now says the dates it searches (\"searching arrivals from 1 Nov 2026 to 30 Nov 2026\") and ends with what happened on Neorcha: the dates as typed, the rows on each page, the pages turned — never a guest's name, email or phone.",
+  ] },
   { v: 487, items: [
     "📧 Neorcha now also collects each guest's email and phone (for ALL enrolment) — in the cloud and with the helper. Passport, ID number and birth date are still never read, and the cloud log never shows any guest detail.",
     "🧲 New Send to Guest Pipeline button on Neorcha Registrations: the guests go straight into Guest Pipeline (clean the list, tick consent, ALL Enroll) — no copying.",
