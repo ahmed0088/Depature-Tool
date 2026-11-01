@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 480, items: [
+    "🛠 Neorcha: \"its card did not open\" — the collector now tries every way a row can open its card (a click, a double-click, the link, the confirmation number) and remembers the one that works, so the next rows go fast.",
+    "📋 If no way works, it stops after 2 rows (instead of trying every row) and asks for the 📋 Report. The report now shows how a row is built, with every letter turned to x and every digit to 9 — no guest data.",
+    "🔄 One more download, then Neorcha collector fixes reach the helper by themselves (like the Opera reader). Download the helper once more, unzip over the old one, press ↻ in chrome://extensions — and keep \"Allow User Scripts\" on for it.",
+  ] },
   { v: 479, items: [
     "🛠 Fixed: ▶ Start on Neorcha Registrations did nothing — the helper read the dates wrong and dropped the job. Download the helper once more, unzip it over the old one, and press ↻ on it in chrome://extensions.",
     "🔗 New box: your hotel's Neorcha link. It starts as the ibis one; each hotel can put its own (it must be a myneorcha.com link) and HotelOps remembers it per hotel. Start opens that link.",

@@ -225,7 +225,11 @@ const nxAsync = (async () => { const ctx = vm.createContext({ window: {}, docume
   await pn.send({ source: 'ho-nx-rows', rows: [{ 'Room Number': '0305' }], from: '2026-10-01', to: '2026-10-31' });
   check('Neorcha automatic, the relay running: Start opens the hotel\'s own Neorcha link (only a myneorcha.com one), the Neorcha tab gets the dates, the cards reach HotelOps and the job is cleared',
     [opened, toNx.filter(m => m.source === 'ho-nx-job').map(m => m.from + '→' + m.to), toApp.some(m => m.source === 'ho-nx-progress'), toApp.filter(m => m.source === 'ho-nx-rows').length, 'nxJob' in st],
-    [['https://ibis.myneorcha.com/neorchaWEBPlatform/#/guestdocuments', 'https://mercure.myneorcha.com/neorchaWEBPlatform/#/login'], ['2026-10-01→2026-10-31'], true, 1, false]); })().catch(e => { fail++; console.log('  ✗ neorcha threw: ' + (e && e.stack || e)); });
+    [['https://ibis.myneorcha.com/neorchaWEBPlatform/#/guestdocuments', 'https://mercure.myneorcha.com/neorchaWEBPlatform/#/login'], ['2026-10-01→2026-10-31'], true, 1, false]);
+  await pa.send({ source: 'ho-nx-ext-code', v: '999', code: '// newer collector' }); await pn.send({ source: 'ho-nx-ext-code', v: '1000', code: '// from a Neorcha tab' });
+  const info = toApp.filter(m => m.source === 'ho-wa-ext-info').pop() || {};
+  check('Neorcha collector updates itself: a newer one handed over by HotelOps is kept (never one from a Neorcha tab), and the helper tells HotelOps which it runs',
+    [st.nxReader && st.nxReader.v, st.nxReader && st.nxReader.code, info.nx], ['999', '// newer collector', '999']); })().catch(e => { fail++; console.log('  ✗ neorcha threw: ' + (e && e.stack || e)); });
 console.log('\nRoster builder');
 {
   const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} },

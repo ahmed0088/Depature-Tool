@@ -180,6 +180,29 @@ function COLLECTOR(O) {
     await sleep(800); await waitFor(function () { return listRows().length || /no record|no result/i.test(document.body.textContent); }, 20000);
     return '';
   }
+  // a row opens its card in different ways (a click, a double-click, a link, the number's cell): try them one by one
+  var fails = 0, how = -1;
+  async function openCard(tr) {
+    var cells = Array.prototype.slice.call(tr.querySelectorAll('td,.ui-grid-cell,[role=gridcell]'));
+    var els = Array.prototype.slice.call(tr.querySelectorAll('[ng-click],[ng-dblclick],a,button')).concat(cells.filter(function (c) { return /\d{6,}/.test(c.textContent); }), [tr], cells);
+    els = els.filter(function (e, i) { return els.indexOf(e) === i; }).slice(0, 10);
+    var ways = [];
+    els.forEach(function (e) { ways.push([e, 'click'], [e, 'dblclick']); });
+    if (how >= 0 && how < ways.length) ways.unshift(ways[how]);   // the way that worked on the last row first
+    for (var i = 0; i < ways.length && !stop; i++) {
+      var e = ways[i][0], t = ways[i][1];
+      try { if (t === 'click') e.click(); else e.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: window })); } catch (_) {}
+      if (await waitFor(detailOpen, i === 0 ? 5000 : 2200)) { if (how < 0 || i > 0) { how = i; L('card opens by ' + t + ' on ' + e.tagName.toLowerCase() + (e.getAttribute('ng-click') ? ' [' + e.getAttribute('ng-click') + ']' : '')); } return true; }
+    }
+    return false;
+  }
+  function masked(el) {   // the row's layout only: every letter becomes x, every digit 9
+    if (!el) return '(none)';
+    var c = el.cloneNode(true), w = document.createTreeWalker(c, NodeFilter.SHOW_TEXT), n;
+    while ((n = w.nextNode())) n.nodeValue = n.nodeValue.replace(/[^\s\d]/g, 'x').replace(/\d/g, '9');
+    Array.prototype.forEach.call(c.querySelectorAll('*'), function (e) { ['value', 'title', 'href', 'src', 'alt', 'aria-label'].forEach(function (a) { if (e.hasAttribute(a)) e.setAttribute(a, '…'); }); });
+    return c.outerHTML.replace(/\s+/g, ' ').slice(0, 3500);
+  }
   function nextPage() {
     var ok = function (a) { var li = a.closest('li'); return vis(a) && !(li && /disabled/.test(li.className)) && !a.hasAttribute('disabled'); };
     var c = all('[ng-click*="selectPage(page + 1"],[ng-click*="selectPage(page+1"],[ng-click*="nextPage"],.pagination-next a').filter(ok);
@@ -188,7 +211,7 @@ function COLLECTOR(O) {
   }
   function key(tr) { var m = tr.textContent.match(/\d{6,}/); return m ? m[0] : tr.textContent.replace(/\s+/g, ' ').trim().slice(0, 80); }
   async function collect() {
-    busy = true; stop = false; got = []; seen = {}; log = []; prog = 3; say('Searching…');
+    busy = true; stop = false; got = []; seen = {}; log = []; fails = 0; how = -1; prog = 3; say('Searching…');
     var err = await search();
     if (err) { busy = false; return say('⛔ ' + err + ' on this page. Open Guest Documents, then press ▶ Collect again — or 📋 Report.', 'err'); }
     if (!listRows().length) { busy = false; return say('⚠️ No guests for those dates (or the hotel is not chosen). Pick the hotel at the top, then ▶ Collect.', 'err'); }
@@ -199,8 +222,12 @@ function COLLECTOR(O) {
         prog = Math.min(97, 5 + Math.round(((page - 1) * rows.length + i) / Math.max(1, page * rows.length) * 90)); say('Reading guest ' + (got.length + 1) + ' (page ' + page + ')…');
         var o = rowData(tr);
         if (!o) {
-          var c = tr.querySelector('[ng-click]') || tr.querySelector('a') || tr.cells[1] || tr; c.click();
-          if (!(await waitFor(detailOpen, 8000))) { L('row ' + k + ': its card did not open'); continue; }
+          if (!(await openCard(tr))) {
+            L('row ' + k + ': its card did not open'); fails++;
+            if (!got.length && fails >= 2) { busy = false; prog = 0; return say('⚠️ I can\'t open the guest cards on this page. Press 📋 Report below and send it to me — it shows how the rows are built (names and numbers are masked).', 'err'); }
+            continue;
+          }
+          fails = 0;
           await sleep(400); o = readDetail();
           var back = byClick(/backToPreviousPage|changeListGuestDocumentsModeTo\(true\)/)[0]; if (back) back.click(); else history.back();
           await waitFor(function () { return !detailOpen() && listRows().length; }, 8000); await sleep(250);
@@ -224,6 +251,10 @@ function COLLECTOR(O) {
   function report() {   // the page's shape only — no guest data
     var r = ['Neorcha collector report', location.hash, 'rows found: ' + listRows().length, 'detail fields: ' + detailInputs().map(function (e) { return e.getAttribute('ng-model').replace('selectedGuestDoc.', ''); }).join(','),
       'ng-repeat: ' + all('[ng-repeat]').map(function (e) { return e.getAttribute('ng-repeat'); }).filter(function (v, i, a) { return a.indexOf(v) === i; }).slice(0, 12).join(' | '),
+      'first row (masked): ' + masked(listRows()[0]),
+      'row holder: ' + (function (r) { var a = []; for (var e = r && r.parentElement, i = 0; e && i < 6; e = e.parentElement, i++) a.push(e.tagName.toLowerCase() + (e.className && typeof e.className === 'string' ? '.' + e.className.trim().split(/\s+/).slice(0, 3).join('.') : '') + (e.getAttribute('ng-repeat') ? '[' + e.getAttribute('ng-repeat') + ']' : '')); return a.join(' < '); })(listRows()[0]),
+      'dblclicks: ' + all('[ng-dblclick]').map(function (e) { return e.getAttribute('ng-dblclick'); }).filter(function (v, i, a) { return a.indexOf(v) === i; }).slice(0, 10).join(' | '),
+      'log: ' + log.filter(function (x) { return !/^✓/.test(x); }).slice(-15).join(' / ').replace(/\d{6,}/g, '#'),
       'clicks: ' + all('[ng-click]').map(function (e) { return e.getAttribute('ng-click'); }).filter(function (v, i, a) { return a.indexOf(v) === i; }).slice(0, 40).join(' | '),
       'date boxes: ' + all('[ng-model*="ArrivalDate"]').map(function (e) { return e.getAttribute('ng-model') + '=' + (e.value || e.placeholder || '').replace(/\d/g, '9'); }).join(', '), 'angular: ' + !!window.angular, 'log: ' + log.slice(-15).join(' / ')].join('\n');
     try { navigator.clipboard.writeText(r).then(function () { say('📋 Report copied — paste it to HotelOps support (no guest data in it).'); }); } catch (_) { prompt('Copy this report:', r); }
