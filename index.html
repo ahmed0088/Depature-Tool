@@ -34,7 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
-<meta name="ho-version" content="v466"/>
+<meta name="ho-version" content="v467"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="themes.css"/>
@@ -1221,12 +1221,12 @@
     <div class="card">
       <div class="rent-drops">
         <div class="rent-drop" id="rentDrop1" data-n="1">
-          <div class="rent-drop-top"><span class="rent-num">1</span><div class="rent-drop-t"><b>History Forecast</b><span>history_forecast_….txt · rooms sold each day</span><i class="rent-fn" id="rentFileName1"></i></div>
+          <div class="rent-drop-top"><span class="rent-num">1</span><div class="rent-drop-t"><b>History Forecast</b><span>history_forecast_….txt · rooms sold each day (optional with a full room-type file)</span><i class="rent-fn" id="rentFileName1"></i></div>
             <button type="button" class="btn gold sm" onclick="rentPick(1)">📂 Browse…</button><input type="file" id="rentFile1" accept=".txt,.csv,.tsv,text/plain" hidden onchange="rentLoadFile(1,this.files[0])"></div>
           <details class="rent-paste"><summary>or paste the text</summary><textarea id="rentInput1" placeholder="Contains: NO_ROOMS, CONSIDERED_DATE …"></textarea></details>
         </div>
         <div class="rent-drop" id="rentDrop2" data-n="2">
-          <div class="rent-drop-top"><span class="rent-num">2</span><div class="rent-drop-t"><b>Room Type Statistics</b><span>statroomtype_….txt (or its PDF) · twin rooms each day</span><i class="rent-fn" id="rentFileName2"></i></div>
+          <div class="rent-drop-top"><span class="rent-num">2</span><div class="rent-drop-t"><b>Room Type Statistics</b><span>statroomtype_….txt (or its PDF) · with every room type it is enough alone</span><i class="rent-fn" id="rentFileName2"></i></div>
             <button type="button" class="btn gold sm" onclick="rentPick(2)">📂 Browse…</button><input type="file" id="rentFile2" accept=".txt,.csv,.tsv,.pdf,text/plain,application/pdf" hidden onchange="rentLoadFile(2,this.files[0])"></div>
           <details class="rent-paste"><summary>or paste the text</summary><textarea id="rentInput2" placeholder="Contains: STAY_ROOMS, BUSINESS_DATE, LABEL (TWC)"></textarea></details>
         </div>
@@ -1243,6 +1243,7 @@
         <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);"><span style="color:var(--text3);">Days found</span><span id="daysFound" style="color:var(--sky);">—</span></div>
         <div style="display:flex;justify-content:space-between;padding:5px 0;"><span style="color:var(--text3);">Twin file</span><span id="twinStatus" style="color:var(--mint);">—</span></div>
       </div>
+      <div class="card rent-bp-card" id="rentBedsBox"></div>
       <div style="display:grid;grid-template-columns:1fr 210px;gap:12px;margin-top:14px;">
         <div class="card" style="padding:0;overflow:hidden;">
           <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--card2);"><div style="font-size:0.8rem;font-weight:600;">Daily Preview</div><span id="rentRowCount" style="font-family:var(--mono);font-size:0.6rem;color:var(--gold);">31 ROWS</span></div>

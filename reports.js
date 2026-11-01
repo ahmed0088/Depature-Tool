@@ -384,17 +384,41 @@ function parseSRT(raw) {
   const out = twinRows ? tw : all;
   return Object.keys(out).length>0?out:null;
 }
+/** statroomtype (Delimited Data) → { byDay: {day: {TYPE: rooms}}, types: {TYPE: description} } — every room type in the file */
+function parseRoomTypes(raw) {
+  const lines = String(raw || '').trim().split('\n'); if (lines.length < 2) return null;
+  const idx = {}; lines[0].split('\t').forEach((h, i) => { idx[h.trim()] = i; });
+  if (idx.STAY_ROOMS === undefined || idx.BUSINESS_DATE === undefined) return null;
+  const tc = ['LABEL', 'ROOM_TYPE', 'ROOM_CATEGORY_LABEL', 'ROOM_CLASS', 'ROOM_CATEGORY'].map(k => idx[k]).find(v => v !== undefined);
+  const dc = ['SHORT_DESCRIPTION', 'DESCRIPTION', 'ROOM_CATEGORY_DESC', 'ROOM_TYPE_DESC', 'ROOM_DESCRIPTION', 'LONG_DESCRIPTION'].map(k => idx[k]).find(v => v !== undefined);
+  const byDay = {}, types = {};
+  for (let i = 1; i < lines.length; i++) {
+    const p = lines[i].split('\t'); if (p.length < 4) continue;
+    const ds = (p[idx.BUSINESS_DATE] || '').trim(); if (!ds || !/^\d/.test(ds)) continue;
+    const day = parseInt(ds.split(/[-./]/)[0], 10); if (!(day >= 1 && day <= 31)) continue;
+    const t = String(tc !== undefined ? p[tc] : 'ALL').trim() || 'ALL', n = parseInt(p[idx.STAY_ROOMS], 10) || 0;
+    if (!types[t]) types[t] = String(dc !== undefined ? p[dc] : '').trim();
+    const o = byDay[day] = byDay[day] || {}; o[t] = (o[t] || 0) + n;
+  }
+  return Object.keys(byDay).length ? { byDay, types } : null;
+}
+// ── Beds per room, per room type, per hotel (twin 2, others 1 until changed) ──
+function rentBedsKey() { let h = ''; try { h = typeof _meHotel === 'function' ? _meHotel() : ''; } catch (_) {} return 'ho_rent_beds_v1:' + String(h || 'hotel').toLowerCase(); }
+function rentBedsSaved() { try { return JSON.parse(localStorage.getItem(rentBedsKey()) || '{}') || {}; } catch (_) { return {}; } }
+function rentBedsPer(types) { const sv = rentBedsSaved(), out = {}; Object.keys(types || {}).forEach(t => { out[t] = sv[t] > 0 ? +sv[t] : (rentIsTwin(t, types[t]) ? 2 : 1); }); return out; }
+function rentSetBeds(t, v) { const sv = rentBedsSaved(), n = Math.max(1, Math.min(9, parseInt(v, 10) || 1)); sv[t] = n; try { localStorage.setItem(rentBedsKey(), JSON.stringify(sv)); } catch (_) {} processRent(); }
 /** Opera "Statistics - Room Type" (statroomtype) as PDF text lines → { rooms: {day: n}, twin: {day: n}, days, total } */
 function parseRoomTypeLines(lines) {
-  const rooms = {}, twin = {}; let n = 0;
+  const rooms = {}, twin = {}, byDay = {}, types = {}; let n = 0;
   (lines || []).forEach(l => {
     const m = String(l).replace(/\s+/g, ' ').trim().match(/^(\d{1,2})[-./](\d{1,2})[-./](\d{2,4}) (\S+) (.*?) (\d+) (\d+) (\d+) (-?[\d,]+\.\d{2})$/);
     if (!m) return;
     const day = +m[1], occ = +m[7]; if (!(day >= 1 && day <= 31)) return;
     rooms[day] = (rooms[day] || 0) + occ; n++;
+    if (!types[m[4]]) types[m[4]] = m[5]; const o = byDay[day] = byDay[day] || {}; o[m[4]] = (o[m[4]] || 0) + occ;
     if (rentIsTwin(m[4], m[5])) twin[day] = (twin[day] || 0) + occ;
   });
-  return n ? { rooms, twin, days: Object.keys(rooms).length, total: Object.values(rooms).reduce((a, b) => a + b, 0) } : null;
+  return n ? { rooms, twin, rt: { byDay, types }, days: Object.keys(rooms).length, total: Object.values(rooms).reduce((a, b) => a + b, 0) } : null;
 }
 async function rentReadPdf(file) {
   for (let i = 0; i < 50 && typeof pdfjsLib === 'undefined'; i++) await new Promise(r => setTimeout(r, 100));
@@ -448,10 +472,18 @@ function processRent() {
   const isSRT=t=>t.includes('STAY_ROOMS')&&t.includes('BUSINESS_DATE');
   let hfRaw=null,stRaw=null;
   if(isHF(r1)&&isSRT(r2)){hfRaw=r1;stRaw=r2;}else if(isHF(r2)&&isSRT(r1)){hfRaw=r2;stRaw=r1;}else if(isHF(r1)){hfRaw=r1;}else if(isHF(r2)){hfRaw=r2;}else if(isSRT(r1)||isSRT(r2)){stRaw=isSRT(r1)?r1:r2;}else if(!PDF)return showErr('Could not detect files.');
-  // rooms: History Forecast; without it, the room-type PDF's own totals. Twin rooms: the PDF, else the statroomtype text
-  const hfData=hfRaw?parseHF(hfRaw):(PDF?PDF.rooms:null); if(!hfData)return showErr(hfRaw?'Could not read History Forecast.':'Add the History Forecast file (or the Room Type PDF).');
-  const stData=PDF?PDF.twin:(stRaw?parseSRT(stRaw):{});
-  const diff=PDF&&hfRaw?Object.keys(PDF.rooms).map(Number).filter(d=>(hfData[d]||0)!==PDF.rooms[d]):[];
+  // Room types (statroomtype text or PDF). With every room type in it, it is enough on its own: rooms = all types added up,
+  // beds = each type × its beds per room. History Forecast, when given, sets the rooms and is cross-checked.
+  const RT = PDF ? PDF.rt : (stRaw ? parseRoomTypes(stRaw) : null);
+  const full = !!RT && Object.keys(RT.types).some(t => !rentIsTwin(t, RT.types[t]));   // more than the twin rows
+  const rtRooms = RT ? Object.fromEntries(Object.entries(RT.byDay).map(([d, o]) => [d, Object.values(o).reduce((a, b) => a + b, 0)])) : null;
+  const hfData = hfRaw ? parseHF(hfRaw) : (full ? rtRooms : null);
+  if (!hfData) return showErr(hfRaw ? 'Could not read History Forecast.' : 'Add History Forecast — or the Room Type file exported with every room type (not only TWC); then it is enough on its own.');
+  const per = RT ? rentBedsPer(RT.types) : {};
+  const stData = {};   // extra beds each day (a twin room = 1 extra bed, a triple = 2 …)
+  if (RT) Object.entries(RT.byDay).forEach(([d, o]) => { stData[d] = Object.entries(o).reduce((a, [t, n]) => a + n * ((per[t] || 1) - 1), 0); });
+  const diff = full && hfRaw ? Object.keys(rtRooms).map(Number).filter(d => (hfData[d] || 0) !== rtRooms[d]) : [];
+  window._rentRT = RT; window._rentPer = per;
   const days=Math.max(...Object.keys(hfData).map(Number));
   let totalRooms=0,totalBeds=0; const rows=[];
   for(let d=1;d<=days;d++){const rm=hfData[d]||0;const twin=stData?(stData[d]||0):0;const beds=rm+twin;rows.push({day:d,rooms:rm,beds,twin});totalRooms+=rm;totalBeds+=beds;}
@@ -462,12 +494,14 @@ function processRent() {
   document.getElementById('kpi-rooms').textContent=totalRooms.toLocaleString();
   document.getElementById('kpi-beds').textContent=totalBeds.toLocaleString();
   document.getElementById('daysFound').textContent=days+' days';
-  document.getElementById('twinStatus').textContent=PDF?`✓ ${PDF.name} (PDF)${diff.length?` · ⚠ rooms differ from History Forecast on day ${diff.slice(0,6).join(', ')}`:hfRaw?' · rooms match History Forecast ✓':''}`:stRaw?'✓ Connected':'⚠ Not provided';
+  document.getElementById('twinStatus').textContent = (PDF ? `✓ ${PDF.name} (PDF)` : stRaw ? '✓ Connected' : '⚠ Not provided') + (full && !hfRaw ? ' · rooms from the room-type report (every type)' : '') + (diff.length ? ` · ⚠ rooms differ from History Forecast on day ${diff.slice(0, 6).join(', ')}` : full && hfRaw ? ' · rooms match History Forecast ✓' : '');
+  const bp = document.getElementById('rentBedsBox');
+  if (bp) bp.innerHTML = RT ? `<div class="rent-bp-h"><b>🛏 Beds per room</b><span>for ${escapeHtml((typeof _meHotel === 'function' && _meHotel()) || 'this hotel')} · remembered</span></div><div class="rent-bp">${Object.keys(RT.types).map(t => `<label class="rent-bp-t"><span><b>${escapeHtml(t)}</b><i>${escapeHtml(RT.types[t] || '')}</i></span><input type="number" min="1" max="9" value="${per[t]}" aria-label="Beds in a ${escapeHtml(t)} room" onchange="rentSetBeds(${escapeHtml(JSON.stringify(t))},this.value)"></label>`).join('')}</div>${full ? '' : '<p class="rent-bp-n">This file has only some room types: the others count as 1 bed per room. Export it with every room type and it works without History Forecast.</p>'}` : '';
   document.getElementById('rs-rooms').textContent=totalRooms.toLocaleString();
   document.getElementById('rs-beds').textContent=totalBeds.toLocaleString();
   document.getElementById('rs-days').textContent=days;
   document.getElementById('rentRowCount').textContent=days+' ROWS';
-  document.getElementById('rentPreview').innerHTML=rows.map(r=>{const has=r.rooms>0;return`<div style="display:grid;grid-template-columns:96px 1fr 66px 66px;padding:5px 14px;border-bottom:1px solid rgba(255,255,255,0.02);${has?'background:rgba(62,207,142,0.02)':''}"><span style="font-family:var(--mono);font-size:0.66rem;color:${has?'var(--text)':'var(--text3)'};white-space:nowrap;">${dayLbl(r.day)}</span><span style="font-size:0.66rem;color:var(--text3);">${r.twin?r.twin+' twin → +'+r.twin+' beds':''}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--sky)':'var(--border2)'};">${r.rooms}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--mint)':'var(--border2)'};">${r.beds}</span></div>`;}).join('');
+  document.getElementById('rentPreview').innerHTML=rows.map(r=>{const has=r.rooms>0;return`<div style="display:grid;grid-template-columns:96px 1fr 66px 66px;padding:5px 14px;border-bottom:1px solid rgba(255,255,255,0.02);${has?'background:rgba(62,207,142,0.02)':''}"><span style="font-family:var(--mono);font-size:0.66rem;color:${has?'var(--text)':'var(--text3)'};white-space:nowrap;">${dayLbl(r.day)}</span><span style="font-size:0.66rem;color:var(--text3);">${r.twin?'+'+r.twin+' extra bed'+(r.twin===1?'':'s'):''}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--sky)':'var(--border2)'};">${r.rooms}</span><span style="font-family:var(--mono);font-size:0.7rem;text-align:right;color:${has?'var(--mint)':'var(--border2)'};">${r.beds}</span></div>`;}).join('');
   document.getElementById('rentResults').style.display='block';
 }
 function copyRent()  { if(!rentCopyText)return; copyToClipboard(rentCopyText,document.getElementById('rentCopyBtn'),'Copy All Rows'); }

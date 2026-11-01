@@ -3696,4 +3696,11 @@ html, body { background: var(--bg); }
 #panel-rent .card, #panel-nationality .card { padding: 14px 16px; }
 
 /* the version of this stylesheet: the page checks it matches (index.html "Page and scripts from the same version") */
-:root { --ho-css: "v466"; }
+:root { --ho-css: "v467"; }
+.rent-bp-card:empty { display: none; }
+.rent-bp-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 10px; } .rent-bp-h span { color: var(--text3); font-size: .78rem; }
+.rent-bp { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.rent-bp-t { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg2); }
+.rent-bp-t span { flex: 1; min-width: 0; display: flex; flex-direction: column; } .rent-bp-t b { font-family: var(--mono); font-size: .85rem; } .rent-bp-t i { font-style: normal; font-size: .74rem; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rent-bp-t input { width: 64px; text-align: center; }
+.rent-bp-n { margin: 10px 0 0; font-size: .78rem; color: var(--text3); }

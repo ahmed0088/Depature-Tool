@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 467, items: [
+    "🛏️ Rented Rooms & Beds works for any hotel: the Room Type Statistics report alone is enough when it's exported with every room type. Rooms = all types added up; beds = each type × its beds per room (e.g. 108 King + 25 Twin × 2 = 158). History Forecast is optional; when you give both, the rooms are cross-checked.",
+    "🔢 New “Beds per room” box: every room type in the file, with its number of beds (Twin 2, others 1 to start). Change it for your hotel (a triple = 3) and it's remembered for that hotel.",
+  ] },
   { v: 466, items: [
     "🛠️ No more half-updated pages: a missing file is always fetched fresh from the server, and the app also checks that the stylesheet matches the version, not just the scripts. If it doesn't, it clears its cache and reloads once (this was why Rented Rooms & Beds looked broken).",
   ] },
