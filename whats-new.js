@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 481, items: [
+    "✏️ DTCM Revenue Fill: new \"Change before filling\" box. Put 0 in any column (e.g. all TD Fee) or a whole day, for all days or just some (type all, 5, or 1-5, 9). Add as many changes as you need; each shows as a chip you can ✕ to undo. The rest stays exactly as on the sheet.",
+    "👀 The table shows each changed figure as 0 next to the sheet's crossed-out number (amber), and the totals follow. Copy the filler again after a change — it fills, checks and saves those zeros like any other figure.",
+  ] },
   { v: 480, items: [
     "🛠 Neorcha: \"its card did not open\" — the collector now tries every way a row can open its card (a click, a double-click, the link, the confirmation number) and remembers the one that works, so the next rows go fast.",
     "📋 If no way works, it stops after 2 rows (instead of trying every row) and asks for the 📋 Report. The report now shows how a row is built, with every letter turned to x and every digit to 9 — no guest data.",

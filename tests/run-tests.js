@@ -189,6 +189,10 @@ console.log('\nNationality report');
   const FZ = K.filled(RP, true), FK = K.filled(RP, false);
   check('DTCM fill, real PDF (Dec): a negative written "- 35,810" is read (days 4 and 30 were skipped), a lone "-" is 0; negatives go in as 0 when that is on (default)',
     [RP.rows.map(r => r.d), RP.rows[0].v[6], RP.rows[2].v[5], RP.rows[1].v[2], FZ.rows[0].v[6], FZ.rows[2].v[5], FK.rows[0].v[6]], [[4, 5, 30], -35810, -165178, 0, 0, 0, -35810]);
+  const ZF = K.filled(RP, true, [{ f: 6, days: 'all' }, { f: -1, days: '30' }, { f: 1, days: '4-5' }]);
+  check('DTCM fill, put 0 before filling: a column for all days, a whole day, a column on some days — the rest as on the sheet; days typed as all / 5 / 1-5, 9',
+    [ZF.rows.map(r => r.v[6]), ZF.rows[2].v, ZF.rows[0].v[1], ZF.rows[1].v[1], ZF.rows[0].v[0], K.daysOf('1-3, 9, 31, 40, x', 30), K.daysOf('all', 30).length, K.daysOf('', 30), K.filled(RP, true).rows[0].v[0]],
+    [[0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0], 0, 0, 41432, [1, 2, 3, 9], 30, [], 41432]);
   const one = K.parseAoa([['Revenue Date', 'Rooms Revenue (AED)', 'F&B Revenue (AED)', 'Other Revenue (AED)', 'Municipality (AED)', 'Service Charge (AED)', 'VAT (AED)', 'TD Fee (AED)', 'Rooms Occupied', 'Total Available Rooms'], [45992, 36859.12, 6209.5, 1242.33, 3025, 4322, 2432, 1080, 115, 143], [45993, 33952, 5697, 1229, 2785, 3978, 2243, 960, 103, 143], ['Total', 70811.12, 11906.5, 2471.33, 5810, 8300, 4675, 2040, 218, 286]]);
   check('DTCM fill accuracy: a one-line header never takes the first day\'s figures; Excel day numbers are exact days (45992 = 1 Dec 2025); the days add up to the Total row',
     [one.heads[0], one.heads[8], one.rows.map(r => r.d), one.rows[0].v, K.check(one).vsTotal.length], ['Rooms Revenue (AED)', 'Total Available Rooms', [1, 2], [36859.12, 6209.5, 1242.33, 3025, 4322, 2432, 1080, 115, 143], 0]); }

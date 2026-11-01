@@ -309,12 +309,30 @@ async function load(file) {
 // a negative figure (a month-end adjustment, "- 35,810") goes to the portal as 0 — on unless switched off (remembered)
 const neg0On = () => { try { return localStorage.getItem('ho_dtcm_neg0') !== '0'; } catch (_) { return true; } };
 /** the figures that are filled in: the sheet's, with negatives as 0 when that is on (pure) */
-function filled(S0, neg0) { return Object.assign({}, S0, { rows: S0.rows.map(r => ({ d: r.d, v: r.v.map(x => (neg0 && x < 0 ? 0 : x)) })) }); }
+/** "all", "5", "1-5, 9, 12-14" → the days (1…max); "" or nonsense → [] (pure) */
+function daysOf(txt, max) {
+  const t = String(txt == null ? '' : txt).trim().toLowerCase(), out = new Set();
+  if (t === 'all' || t === '*') { for (let d = 1; d <= max; d++) out.add(d); return [...out]; }
+  t.split(/[,;\s]+/).forEach(p => { const m = p.match(/^(\d{1,2})(?:-(\d{1,2}))?$/); if (!m) return; const a = +m[1], b = m[2] ? +m[2] : a; for (let d = Math.min(a, b); d <= Math.max(a, b); d++) if (d >= 1 && d <= max) out.add(d); });
+  return [...out].sort((a, b) => a - b);
+}
+/** the changes typed on the page ("put 0"): [{ f: field index or -1 for the whole day, days: "1-5" }] → day → set of fields (pure) */
+function zeroMap(adj, max) {
+  const z = {};
+  (adj || []).forEach(a => daysOf(a.days, max).forEach(d => { const s = z[d] || (z[d] = new Set()); if (a.f < 0) FIELDS.forEach((_, i) => s.add(i)); else s.add(+a.f); }));
+  return z;
+}
+/** the figures that are filled in: the sheet's, with negatives as 0 when that is on, and the "put 0" changes (pure) */
+function filled(S0, neg0, adj) {
+  const z = zeroMap(adj, 31);
+  return Object.assign({}, S0, { rows: S0.rows.map(r => ({ d: r.d, v: r.v.map((x, i) => (z[r.d] && z[r.d].has(i) && x != null ? 0 : neg0 && x < 0 ? 0 : x)) })) });
+}
 function draw() {
   const out = $('out'); if (!out) return;
   const stp = $('steps'); if (stp) stp.querySelectorAll('li').forEach(li => { const k = +li.dataset.s; li.className = !S ? (k === 1 ? 'now' : '') : k === 1 ? 'done' : 'now'; });
   if (!S) { out.innerHTML = ''; return; }
-  const n0 = neg0On(), F = filled(S, n0), C = check(S), CF = check(F), mm = MONTHS[S.m] + ' ' + S.y;
+  const adj = S.adj || [], n0 = neg0On(), F = filled(S, n0, adj), C = check(S), CF = check(F), mm = MONTHS[S.m] + ' ' + S.y, ZM = zeroMap(adj, 31);
+  const dim = new Date(S.y, S.m + 1, 0).getDate();
   const warn = [];
   if (S.from === 'pdf') warn.push('Read from the PDF: each day there is rounded to whole dirhams. Use the Excel file for the exact numbers.');
   if (C.missing.length) warn.push(`Days missing from the sheet: ${C.missing.join(', ')}.`);
@@ -327,6 +345,11 @@ function draw() {
       <div class="k7"><small>Rooms occupied</small><b>${fmt(C.sums[7])}</b><i>of ${fmt(C.sums[8])}</i></div></div>
     ${S.heads ? `<div class="dtf-map"><b>Columns read</b> ${FIELDS.map((f, i) => `<span>${esc(f)} ← <i>${esc(S.heads[i] || '— not in the sheet')}</i></span>`).join('')}</div>` : ''}
     ${C.neg.length ? `<label class="dtf-neg"><input type="checkbox" id="dtf-neg0"${n0 ? ' checked' : ''}> <span><b>Negative figures → 0</b> ${n0 ? `· ${C.neg.map(x => `${x.d} ${MON[S.m]} ${esc(x.f)} ${fmt(x.v)} → 0`).join(' · ')}` : `· off: ${C.neg.length} negative figure${C.neg.length === 1 ? '' : 's'} will be filled as they are`}</span></label>` : ''}
+    <div class="dtf-adj"><div class="dtf-adj-h"><b>✏️ Change before filling</b><small>Put 0 in a column (e.g. all TD Fee) or a whole day, for all days or just some — the rest stays as on the sheet. Only what is filled changes; your file doesn't.</small></div>
+      <div class="dtf-adj-r"><label>What<select id="dtf-af"><option value="-1">Whole day (every column)</option>${FIELDS.map((f, i) => `<option value="${i}"${i === 6 ? ' selected' : ''}>${esc(f)}</option>`).join('')}</select></label>
+        <label>Days<input id="dtf-ad" placeholder="all  ·  5  ·  1-5, 9" value="all"></label>
+        <button type="button" class="btn gold" id="dtf-aadd">0️⃣ Put 0</button></div>
+      ${adj.length ? `<div class="dtf-adj-l">${adj.map((a, k) => { const ds = daysOf(a.days, dim); return `<span>${a.f < 0 ? 'Whole day' : esc(FIELDS[a.f])} → 0 · ${String(a.days).trim().toLowerCase() === 'all' ? 'all days' : ds.length === 1 ? 'day ' + ds[0] : 'days ' + esc(a.days)}<button type="button" data-adel="${k}" title="Undo this change">✕</button></span>`; }).join('')}<button type="button" class="dtf-adj-x" id="dtf-aclr">Undo all</button></div>` : ''}</div>
     ${warn.length ? `<div class="dtf-warn">${warn.map(w => `<div>⚠️ ${esc(w)}</div>`).join('')}</div>` : '<div class="dtf-ok">✅ Every day is there and the days add up to the sheet\'s totals.</div>'}
     <div class="dtf-go">
       <div class="dtf-go-h"><span>3</span><div><h3>Fill the DTCM portal</h3><p>About a minute for a month · it skips days that already match</p></div></div>
@@ -341,8 +364,18 @@ function draw() {
       <p class="dtf-note">The filler only types into the portal's own boxes and presses its Update button, one day at a time. It stops at the first day the portal refuses.</p>
     </div>
     <div class="dtf-tw"><table><thead><tr><th>Day</th>${SHORT.map(s => `<th>${esc(s)}</th>`).join('')}</tr></thead><tbody>
-      ${S.rows.map(r => `<tr><td>${new Date(S.y, S.m, r.d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</td>${r.v.map(v => v == null ? '<td>–</td>' : v < 0 && n0 ? `<td class="z" title="On the sheet: ${fmt(v)}">0 <s>${fmt(v)}</s></td>` : `<td class="${v < 0 ? 'neg' : ''}">${fmt(v)}</td>`).join('')}</tr>`).join('')}
+      ${S.rows.map(r => `<tr><td>${new Date(S.y, S.m, r.d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</td>${r.v.map((v, i) => v == null ? '<td>–</td>' : ZM[r.d] && ZM[r.d].has(i) ? (v ? `<td class="z zz" title="Put 0 by you · on the sheet: ${fmt(v)}">0 <s>${fmt(v)}</s></td>` : '<td class="zz">0</td>') : v < 0 && n0 ? `<td class="z" title="On the sheet: ${fmt(v)}">0 <s>${fmt(v)}</s></td>` : `<td class="${v < 0 ? 'neg' : ''}">${fmt(v)}</td>`).join('')}</tr>`).join('')}
       <tr class="tot"><td>Total filled</td>${CF.sums.map(v => `<td>${fmt(v)}</td>`).join('')}</tr></tbody></table></div>`;
+  const keep = a => { S.adj = a; try { localStorage.setItem(LS, JSON.stringify(S)); } catch (_) {} draw(); };
+  $('aadd').onclick = () => {
+    const f = +$('af').value, days = $('ad').value.trim() || 'all', ds = daysOf(days, dim);
+    if (!ds.length) { toast('Type the days: all, 5, or 1-5, 9', 'err'); return; }
+    keep(adj.concat([{ f, days }]));
+    toast(`${f < 0 ? 'Whole day' : FIELDS[f]} → 0 on ${ds.length === dim ? 'all days' : ds.length + ' day' + (ds.length === 1 ? '' : 's')} — copy the filler again`, 'ok');
+  };
+  $('ad').onkeydown = e => { if (e.key === 'Enter') $('aadd').click(); };
+  out.querySelectorAll('[data-adel]').forEach(b => { b.onclick = () => keep(adj.filter((_, k) => k !== +b.dataset.adel)); });
+  const ac = $('aclr'); if (ac) ac.onclick = () => keep([]);
   const ng = $('neg0'); if (ng) ng.onchange = () => { try { localStorage.setItem('ho_dtcm_neg0', ng.checked ? '1' : '0'); } catch (_) {} draw(); };
   const code = fillerCode(F);
   $('copy').onclick = () => { if (typeof copyToClipboard === 'function') copyToClipboard(code, $('copy'), '📋 Copy the filler'); else navigator.clipboard.writeText(code).then(() => toast('Copied — paste it in the portal\'s console', 'ok')); };
@@ -358,6 +391,12 @@ const CSS = `
 #panel-${PANEL} .dtf-sum small{font:700 10.5px var(--font);letter-spacing:.06em;text-transform:uppercase;color:var(--text3)}#panel-${PANEL} .dtf-sum b{font-size:1.25rem;margin-top:2px}#panel-${PANEL} .dtf-sum i{font-style:normal;color:var(--text3);font-size:.78rem}
 #panel-${PANEL} .dtf-warn{padding:10px 14px;border-radius:12px;background:color-mix(in srgb,var(--amber,#d97706) 9%,transparent);border:1px solid color-mix(in srgb,var(--amber,#d97706) 35%,transparent);font-size:.84rem;line-height:1.6}
 #panel-${PANEL} .dtf-map{display:flex;flex-wrap:wrap;gap:6px 14px;margin:0 0 12px;font-size:.78rem;color:var(--text3)}#panel-${PANEL} .dtf-map b{color:var(--text2)}#panel-${PANEL} .dtf-map i{font-style:normal;color:var(--text)}
+#panel-${PANEL} .dtf-adj{margin:0 0 10px;padding:12px 14px;border-radius:12px;background:var(--bg2);border:1px solid var(--border)}#panel-${PANEL} .dtf-adj-h small{display:block;color:var(--text3);font-size:.8rem;margin-top:2px}
+#panel-${PANEL} .dtf-adj-r{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-top:10px}#panel-${PANEL} .dtf-adj-r label{display:flex;flex-direction:column;gap:4px;font-size:.72rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em}
+#panel-${PANEL} .dtf-adj-r select,#panel-${PANEL} .dtf-adj-r input{padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font:inherit;font-size:.88rem;min-width:170px}
+#panel-${PANEL} .dtf-adj-l{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;align-items:center}#panel-${PANEL} .dtf-adj-l span{display:inline-flex;gap:6px;align-items:center;padding:4px 6px 4px 10px;border-radius:99px;background:color-mix(in srgb,#f59e0b 16%,var(--card));border:1px solid color-mix(in srgb,#f59e0b 40%,var(--border));font-size:.8rem}
+#panel-${PANEL} .dtf-adj-l span button{border:0;background:transparent;color:var(--text2);cursor:pointer;font-size:.8rem;padding:0 4px}#panel-${PANEL} .dtf-adj-x{border:0;background:transparent;color:var(--text3);text-decoration:underline;cursor:pointer;font-size:.8rem}
+#panel-${PANEL} .dtf-tw td.zz{background:color-mix(in srgb,#f59e0b 12%,transparent)!important}
 #panel-${PANEL} .dtf-neg{display:flex;gap:8px;align-items:flex-start;margin:0 0 10px;padding:10px 14px;border-radius:12px;background:var(--bg2);border:1px solid var(--border);font-size:.84rem;cursor:pointer}#panel-${PANEL} .dtf-tw td.z s{color:var(--text3);font-size:.72rem;margin-left:4px}
 #panel-${PANEL} .dtf-ok{padding:10px 14px;border-radius:12px;background:color-mix(in srgb,var(--green,#16a34a) 9%,transparent);border:1px solid color-mix(in srgb,var(--green,#16a34a) 30%,transparent);font-size:.85rem}
 #panel-${PANEL} .dtf-go{margin:16px 0;padding:16px 18px;border-radius:14px;background:var(--card);border:1px solid var(--border)}
@@ -411,6 +450,6 @@ function mount() {
   z.addEventListener('drop', e => { const f = e.dataTransfer && e.dataTransfer.files[0]; if (f) load(f); });
   draw();
 }
-W.hoDtcmFill = { filled, parseAoa, parseLines, check, fillerCode, dateOf, FILLER, FIELDS };
+W.hoDtcmFill = { daysOf, zeroMap, filled, parseAoa, parseLines, check, fillerCode, dateOf, FILLER, FIELDS };
 if (typeof document !== 'undefined' && document.addEventListener) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount(); }
 })();
