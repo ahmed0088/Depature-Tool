@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 465, items: [
+    "🌍 Nationality Report fixed: when two Opera names go into the same row of your sheet (for example “DO NOT USE” you once put on UAE), their numbers now add up. Before, the second replaced the first, so the UAE lost its own 18 arrivals. The copy now matches Opera exactly: 2,027 · 4,123 · 6,125.",
+  ] },
   { v: 464, items: [
     "🛠️ Fixed “natPickFile is not defined”: GitHub can hand out an old copy of a file for a few minutes after an update, and the app kept it. Each version is now fetched fresh, and if the page and its scripts are ever from different versions, the app clears its cache and reloads once by itself.",
     "🛏️ Rented Rooms & Beds: 📂 Browse or drop both files (History Forecast + Room Type Statistics; the Room Type PDF works too). Only the twin rows count as extra beds, added up per day. Each line shows its real date (e.g. Fri 31 Oct: 133 rooms, 25 twin → 158 beds), so you can see which row of your sheet it is.",

@@ -188,7 +188,9 @@ function processNat() {
     const { excel, isUnknown } = resolveCountry(opName);
     if (isUnknown) { unknowns.push({name:opName,...vals}); continue; }
     if (excel === null) { if (vals.APR||vals.RMS||vals.PRS) unmatched.push({name:opName,...vals}); continue; }
-    excelData[excel] = vals;
+    // two Opera names on the same sheet row (a spelling you picked a row for, "DO NOT USE" → UAE …) add up — never replace
+    if (excelData[excel]) { const e = excelData[excel]; ['APR','RMS','PRS','APRLY','RMSLY','PRSLY'].forEach(k => { e[k] = (e[k] || 0) + (vals[k] || 0); }); }
+    else excelData[excel] = Object.assign({}, vals);
   }
   let mappedAPR=0,mappedRMS=0,mappedPRS=0,active=0;
   const rows = [];
