@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 468, items: [
+    "❓ Rented Rooms & Beds asks you: a room type it hasn't seen for this hotel is marked NEW, with “how many beds in each?”. Type the number, or tap ✓ if the guess is right, and it's remembered. The preview shows real dates even without History Forecast.",
+    "🏨 Smarter guess: it reads the number of beds from the room's description (“2 Single Beds” → 2) and already knows our Ibis Styles and Mercure codes (SGC, TWC, KGD, TWD, KGB, KGBCI). The Mercure Room Type report works on its own too.",
+  ] },
   { v: 467, items: [
     "🛏️ Rented Rooms & Beds works for any hotel: the Room Type Statistics report alone is enough when it's exported with every room type. Rooms = all types added up; beds = each type × its beds per room (e.g. 108 King + 25 Twin × 2 = 158). History Forecast is optional; when you give both, the rooms are cross-checked.",
     "🔢 New “Beds per room” box: every room type in the file, with its number of beds (Twin 2, others 1 to start). Change it for your hotel (a triple = 3) and it's remembered for that hotel.",

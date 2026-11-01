@@ -3696,7 +3696,7 @@ html, body { background: var(--bg); }
 #panel-rent .card, #panel-nationality .card { padding: 14px 16px; }
 
 /* the version of this stylesheet: the page checks it matches (index.html "Page and scripts from the same version") */
-:root { --ho-css: "v467"; }
+:root { --ho-css: "v468"; }
 .rent-bp-card:empty { display: none; }
 .rent-bp-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 10px; } .rent-bp-h span { color: var(--text3); font-size: .78rem; }
 .rent-bp { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
@@ -3704,3 +3704,6 @@ html, body { background: var(--bg); }
 .rent-bp-t span { flex: 1; min-width: 0; display: flex; flex-direction: column; } .rent-bp-t b { font-family: var(--mono); font-size: .85rem; } .rent-bp-t i { font-style: normal; font-size: .74rem; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rent-bp-t input { width: 64px; text-align: center; }
 .rent-bp-n { margin: 10px 0 0; font-size: .78rem; color: var(--text3); }
+.rent-bp-ask { margin: 0 0 10px; padding: 9px 12px; border-radius: 10px; font-size: .82rem; background: color-mix(in srgb, var(--amber, #d97706) 10%, transparent); border: 1px solid color-mix(in srgb, var(--amber, #d97706) 35%, transparent); }
+.rent-bp-t.new { border-color: color-mix(in srgb, var(--amber, #d97706) 55%, var(--border)); }
+.rent-bp-t em { font-style: normal; font: 700 10px var(--font); text-transform: uppercase; letter-spacing: .05em; color: var(--amber, #d97706); margin-left: 4px; }

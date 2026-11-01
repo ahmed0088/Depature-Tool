@@ -405,7 +405,16 @@ function parseRoomTypes(raw) {
 // ── Beds per room, per room type, per hotel (twin 2, others 1 until changed) ──
 function rentBedsKey() { let h = ''; try { h = typeof _meHotel === 'function' ? _meHotel() : ''; } catch (_) {} return 'ho_rent_beds_v1:' + String(h || 'hotel').toLowerCase(); }
 function rentBedsSaved() { try { return JSON.parse(localStorage.getItem(rentBedsKey()) || '{}') || {}; } catch (_) { return {}; } }
-function rentBedsPer(types) { const sv = rentBedsSaved(), out = {}; Object.keys(types || {}).forEach(t => { out[t] = sv[t] > 0 ? +sv[t] : (rentIsTwin(t, types[t]) ? 2 : 1); }); return out; }
+// room types already known (Opera codes of our hotels): Ibis Styles SGC / TWC, Mercure KGD / TWD / KGB / KGBCI
+const RENT_KNOWN_BEDS = { SGC: 1, TWC: 2, KGD: 1, TWD: 2, KGB: 1, KGBCI: 1 };
+/** a first guess: a known code, else the number of beds its description says ("2 Single Beds" → 2), else a twin 2, else 1 */
+function rentGuessBeds(t, desc) {
+  const k = String(t || '').trim().toUpperCase(); if (RENT_KNOWN_BEDS[k]) return RENT_KNOWN_BEDS[k];
+  const m = String(desc || '').match(/\b(\d)\s*(?:x\s*)?(?:single|double|king(?:\s*size)?|queen|twin|sofa)?\s*beds?\b/i);
+  if (m && +m[1] >= 1) return +m[1];
+  return rentIsTwin(t, desc) ? 2 : 1;
+}
+function rentBedsPer(types) { const sv = rentBedsSaved(), out = {}; Object.keys(types || {}).forEach(t => { out[t] = sv[t] > 0 ? +sv[t] : rentGuessBeds(t, types[t]); }); return out; }
 function rentSetBeds(t, v) { const sv = rentBedsSaved(), n = Math.max(1, Math.min(9, parseInt(v, 10) || 1)); sv[t] = n; try { localStorage.setItem(rentBedsKey(), JSON.stringify(sv)); } catch (_) {} processRent(); }
 /** Opera "Statistics - Room Type" (statroomtype) as PDF text lines → { rooms: {day: n}, twin: {day: n}, days, total } */
 function parseRoomTypeLines(lines) {
@@ -489,14 +498,18 @@ function processRent() {
   for(let d=1;d<=days;d++){const rm=hfData[d]||0;const twin=stData?(stData[d]||0):0;const beds=rm+twin;rows.push({day:d,rooms:rm,beds,twin});totalRooms+=rm;totalBeds+=beds;}
   rentCopyText=rows.map(r=>r.rooms+'\t'+r.beds).join('\n');
   // the real date of each line (from the History Forecast), so the right row of the sheet is easy to check
-  const MO={JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11}, dm=String(hfRaw||'').match(/\b\d{1,2}-(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)-(\d{2})\b/i);
+  const MO={JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11}, dm=String(hfRaw||stRaw||'').match(/\b\d{1,2}-(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)-(\d{2})\b/i);
   const dayLbl=d=>{ if(!dm) return 'Day '+d; const t=new Date(2000+ +dm[2], MO[dm[1].toUpperCase()], d); return t.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}); };
   document.getElementById('kpi-rooms').textContent=totalRooms.toLocaleString();
   document.getElementById('kpi-beds').textContent=totalBeds.toLocaleString();
   document.getElementById('daysFound').textContent=days+' days';
   document.getElementById('twinStatus').textContent = (PDF ? `✓ ${PDF.name} (PDF)` : stRaw ? '✓ Connected' : '⚠ Not provided') + (full && !hfRaw ? ' · rooms from the room-type report (every type)' : '') + (diff.length ? ` · ⚠ rooms differ from History Forecast on day ${diff.slice(0, 6).join(', ')}` : full && hfRaw ? ' · rooms match History Forecast ✓' : '');
   const bp = document.getElementById('rentBedsBox');
-  if (bp) bp.innerHTML = RT ? `<div class="rent-bp-h"><b>🛏 Beds per room</b><span>for ${escapeHtml((typeof _meHotel === 'function' && _meHotel()) || 'this hotel')} · remembered</span></div><div class="rent-bp">${Object.keys(RT.types).map(t => `<label class="rent-bp-t"><span><b>${escapeHtml(t)}</b><i>${escapeHtml(RT.types[t] || '')}</i></span><input type="number" min="1" max="9" value="${per[t]}" aria-label="Beds in a ${escapeHtml(t)} room" onchange="rentSetBeds(${escapeHtml(JSON.stringify(t))},this.value)"></label>`).join('')}</div>${full ? '' : '<p class="rent-bp-n">This file has only some room types: the others count as 1 bed per room. Export it with every room type and it works without History Forecast.</p>'}` : '';
+  const sv = rentBedsSaved(), fresh = RT ? Object.keys(RT.types).filter(t => !(sv[t] > 0) && !RENT_KNOWN_BEDS[String(t).trim().toUpperCase()]) : [];   // room types this hotel never told it: it asks
+  if (bp) bp.innerHTML = RT ? `<div class="rent-bp-h"><b>🛏 Beds per room</b><span>for ${escapeHtml((typeof _meHotel === 'function' && _meHotel()) || 'this hotel')} · remembered</span></div>
+    ${fresh.length ? `<div class="rent-bp-ask">❓ ${fresh.length === 1 ? 'A room type is' : fresh.length + ' room types are'} new here — how many beds in each? Type the number, or tap ✓ if the guess is right.</div>` : ''}
+    <div class="rent-bp">${Object.keys(RT.types).map(t => { const q = escapeHtml(JSON.stringify(t)), isNew = fresh.includes(t);
+      return `<label class="rent-bp-t${isNew ? ' new' : ''}"><span><b>${escapeHtml(t)}${isNew ? ' <em>new</em>' : ''}</b><i>${escapeHtml(RT.types[t] || '')}</i></span><input type="number" min="1" max="9" value="${per[t]}" aria-label="Beds in a ${escapeHtml(t)} room" onchange="rentSetBeds(${q},this.value)">${isNew ? `<button type="button" class="btn sm" onclick="event.preventDefault();rentSetBeds(${q},${per[t]})" title="${per[t]} bed${per[t] === 1 ? '' : 's'} is right">✓</button>` : ''}</label>`; }).join('')}</div>${full ? '' : '<p class="rent-bp-n">This file has only some room types: the others count as 1 bed per room. Export it with every room type and it works without History Forecast.</p>'}` : '';
   document.getElementById('rs-rooms').textContent=totalRooms.toLocaleString();
   document.getElementById('rs-beds').textContent=totalBeds.toLocaleString();
   document.getElementById('rs-days').textContent=days;
