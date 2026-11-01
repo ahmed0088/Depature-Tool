@@ -21,9 +21,13 @@
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const ROOT = path.join(__dirname, '..');
 const E = process.env;
-const say = m => console.log(new Date().toISOString().slice(11, 19) + '  ' + m);
+// the console in HotelOps' live window (saved with the live note in HotelOps' own database, never in GitHub's public log):
+// what the robot does, step by step — confirmation numbers as ••••1234, never a name, e-mail or phone
+const CON = [];
+const tlog = (g, m) => { CON.push({ t: Date.now(), g, m: String(m).replace(/\S+@\S+/g, '•@•').replace(/\d{6,}/g, d => '••••' + d.slice(-4)).slice(0, 180) }); if (CON.length > 80) CON.splice(0, CON.length - 80); };
+const say = m => { console.log(new Date().toISOString().slice(11, 19) + '  ' + m); tlog('SYS', m); };
 let LIVE = null;   // set once signed in to HotelOps: the live window there follows each step
-const fail = async (m, code) => { console.log('::error::' + m); try { if (LIVE) await LIVE({ state: 'error', note: m }); } catch (_) {} process.exit(code == null ? 1 : code); };
+const fail = async (m, code) => { console.log('::error::' + m); try { tlog('ERR', m); } catch (_) {} try { if (LIVE) await LIVE({ state: 'error', note: m }); } catch (_) {} process.exit(code == null ? 1 : code); };
 
 // ── the dates (Dubai) ──
 function dubaiToday() { return new Date(Date.now() + 4 * 3600e3).toISOString().slice(0, 10); }
@@ -63,7 +67,7 @@ async function fbOpen() {
   if (!/^[\w-]{1,80}$/.test(hid)) await fail('No hotel found for that HotelOps account — add the HOTELOPS_HOTEL secret');
   const at = p => db + '/hotels/' + hid + '/' + p + '.json?auth=' + a.idToken;
   return {
-    live: async patch => { try { await fetch(at('neorchaLive'), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ at: Date.now() }, patch)) }); } catch (_) {} },
+    live: async patch => { patch = Object.assign({ con: CON.slice(-60) }, patch); try { await fetch(at('neorchaLive'), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ at: Date.now() }, patch)) }); } catch (_) {} },
     start: async o => { try { await fetch(at('neorchaLive'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ at: Date.now(), started: Date.now() }, o)) }); } catch (_) {} },
     save: async card => { const w = await fetch(at('neorcha'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(card) });
       if (!w.ok) await fail('HotelOps did not accept the cards (' + w.status + ') — is that HotelOps account active at the hotel?'); },
@@ -137,35 +141,47 @@ async function main() {
   const live = p => (LIVE ? LIVE(p) : Promise.resolve());
   let chromium; try { ({ chromium } = require('playwright')); } catch (_) { await fail('Playwright is not installed'); }
   const browser = await chromium.launch(E.CHROME_PATH ? { executablePath: E.CHROME_PATH } : {});
+  tlog('SYS', 'Chromium ' + browser.version() + ' headless · ' + (E.RUNNER_OS ? 'GitHub runner (' + E.RUNNER_OS + ')' : 'local') + ' · Dubai time');
   const page = await (await browser.newContext({ viewport: { width: 1400, height: 900 }, locale: 'en-GB', timezoneId: 'Asia/Dubai' })).newPage();
+  // the network, as the console shows it: the page and Neorcha's own data calls (no query strings, long numbers masked)
+  let netN = 0;
+  page.on('response', r => { try { const q = r.request(), ty = q.resourceType(); if (!/document|xhr|fetch/.test(ty)) return; const u = new URL(r.url());
+    if (!/myneorcha\.com$|localhost/.test(u.hostname)) return; netN++; tlog('NET', r.status() + ' ' + q.method() + ' ' + u.hostname + u.pathname.replace(/\/neorchaWEBPlatform/, '').slice(0, 70) + (ty === 'document' ? '' : ' · ' + ty)); } catch (_) {} });
   page.setDefaultTimeout(30000);
   try {
     say('Opening Neorcha…');
     await page.goto(url.replace(/#.*$/, '') + '#/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForSelector(U + ', ' + P, { timeout: 60000 }).catch(() => fail('Neorcha\'s login page did not open (is NEORCHA_URL right?)'));
-    say('Logging in…'); await live({ step: 'login', note: 'Logging in to Neorcha…' });
+    say('Logging in…'); tlog('AUTH', 'Login form found · typing username (' + String(E.NEORCHA_USER).trim().length + ' chars) · password ●●●●●●●● → Login'); await live({ step: 'login', note: 'Logging in to Neorcha…' });
     await login(page, String(E.NEORCHA_USER), String(E.NEORCHA_PASS));
-    say('Logged in. Collecting…'); await live({ step: 'search', note: 'Logged in — searching the dates…' });
+    tlog('AUTH', '✓ Session open · ' + (await page.evaluate(() => location.hash)).slice(0, 40));
+    say('Logged in. Collecting…'); tlog('BOT', 'Collector injected (HotelOps ' + (fs.readFileSync(path.join(ROOT, 'utils.js'), 'utf8').match(/APP_VERSION = '([^']+)'/) || [, '?'])[1] + ') · arrivals ' + from + ' → ' + to);
+    await live({ step: 'search', note: 'Logged in — searching the dates…' });
     await page.evaluate(`window.__nxDone = null; window.__nxP = {}; (${collectorSrc()})({ from: ${JSON.stringify(from)}, to: ${JSON.stringify(to)}, auto: true,
       progress: function (p) { window.__nxP = { note: String(p && p.note || ''), n: +(p && p.n) || 0, prog: +(p && p.prog) || 0 }; },
       send: function (rows, f, t) { window.__nxDone = { rows: rows, from: f, to: t }; } });`);
-    let last = '', lastLive = 0, done = null;
+    let last = '', lastLive = 0, done = null, seenLog = 0;
+    const tagOf = l => /^✓/.test(l) ? 'CARD' : /dates|Search|page size|per page|hotel/i.test(l) ? 'SCAN' : /page|next|last page/i.test(l) ? 'PAGE' : /did not|could not|not found|⚠|⛔/.test(l) ? 'WARN' : 'BOT';
     for (let i = 0; i < 3300 && !done; i++) {   // up to 55 minutes
       await page.waitForTimeout(1000);
-      const s = await page.evaluate(() => ({ p: window.__nxP || {}, done: !!window.__nxDone }));
+      const s = await page.evaluate(() => ({ p: window.__nxP || {}, done: !!window.__nxDone, log: (window.__hoNxLog || []).slice(-80), ln: (window.__hoNxLog || []).length }));
+      if (s.ln < seenLog) seenLog = 0;
+      s.log.slice(Math.max(0, s.log.length - (s.ln - seenLog))).forEach(l => tlog(tagOf(l), l.replace(/^✓ /, ''))); seenLog = s.ln;
       const note = String(s.p.note || '').replace(/\d{6,}/g, '#');
       if (note && note !== last && (i % 15 === 0 || /✅|⚠️|⛔/.test(note))) { say(note); last = note; }
-      if (note && Date.now() - lastLive > 3000) { lastLive = Date.now(); await live({ step: /Reading/.test(note) ? 'read' : 'search', note, n: s.p.n || 0, prog: s.p.prog || 0 }); }
+      if (note && Date.now() - lastLive > 2500) { lastLive = Date.now(); await live({ step: /Reading/.test(note) ? 'read' : 'search', note, n: s.p.n || 0, prog: s.p.prog || 0 }); }
       if (/^\s*(⚠️|⛔)/.test(note) && !s.done) { await steps(page); await fail('The collector stopped: ' + note); }
       if (s.done) done = await page.evaluate(() => window.__nxDone);
     }
     await steps(page);
     if (!done) await fail('Timed out after 55 minutes');
     const rows = (done.rows || []).slice(0, 5000);
+    tlog('SAVE', rows.length + ' cards · ' + rows.filter(r => r.Email).length + ' emails · ' + rows.filter(r => r.Phone).length + ' phones · ' + netN + ' network calls');
     say('Collected ' + rows.length + ' registration cards'); await live({ step: 'save', note: 'Saving ' + rows.length + ' cards in HotelOps…', n: rows.length, prog: 98 });
     const card = { at: Date.now(), from, to, by: 'cloud', n: rows.length, rows };
     if (E.DRY) { fs.writeFileSync(E.DRY_OUT || 'neorcha-cloud.json', JSON.stringify(card)); say('DRY run: saved to ' + (E.DRY_OUT || 'neorcha-cloud.json')); }
     if (FB) { await FB.save(card); say('✅ Saved in HotelOps — open Neorcha Registrations on any device.'); }
+    tlog('SAVE', '✓ Written to HotelOps · hotels/…/neorcha'); tlog('SYS', 'Done · browser closed');
     await live({ state: 'done', step: 'done', note: rows.length + ' registration cards saved in HotelOps', n: rows.length, prog: 100 });
   } finally { await browser.close().catch(() => {}); }
 }

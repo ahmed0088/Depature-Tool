@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 490, items: [
+    "🖥️ Live console in the cloud-run window: a terminal that shows what the robot does as it happens — GitHub starting its computer, Chromium opening Neorcha, the network calls, the login, the dates typed, each page and each card (room · purpose · nationality · email ✓ · phone ✓ · time), saving, done. Hide / Show it any time.",
+    "🔒 The console never shows a guest's name, email or phone — confirmation numbers appear as ••••1234 — and it is kept in HotelOps only, never in GitHub's public log.",
+    "✅ Checked on the real Neorcha: 1–2 Nov → 27 of 27 guests in about 30 seconds.",
+  ] },
   { v: 489, items: [
     "🛠 Neorcha read only the first guest: when a card opens, Neorcha hides the list, and the collector looked only for rows it could see. Now it clicks each guest's confirmation number even while the list is hidden (as the older Neorcha Extractor does), waits until the card shows that exact number, and turns the pages the same way — every guest of your dates is read.",
   ] },

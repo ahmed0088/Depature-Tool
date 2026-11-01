@@ -245,7 +245,7 @@ function COLLECTOR(O) {
       for (var i = 0; i < rows.length && !stop; i++) {
         var tr = listRows()[i]; if (!tr) break; var k = key(tr); if (seen[k]) continue; seen[k] = 1;
         prog = Math.min(97, 5 + Math.round(((page - 1) * rows.length + i) / Math.max(1, page * rows.length) * 90)); say('Reading guest ' + (got.length + 1) + ' (page ' + page + ')…');
-        var o = rowData(tr);   // the list's own data (only when Neorcha's page lets us see it): without the purpose, the card is still opened
+        var t0c = Date.now(), o = rowData(tr);   // the list's own data (only when Neorcha's page lets us see it): without the purpose, the card is still opened
         if (!o || !o['Purpose Of Visit']) {
           var o0 = o || {};
           if (!(await openCard(tr))) {
@@ -261,7 +261,9 @@ function COLLECTOR(O) {
             await waitFor(function () { return listRows().length; }, 8000); await sleep(250);
           }
         }
-        if (o && Object.keys(o).length) { got.push(o); L('✓ ' + (o['Room Number'] || '') + ' ' + (o['Purpose Of Visit'] || '') + ' ' + (o['Nationality'] || '')); }
+        if (o && Object.keys(o).length) { got.push(o);
+          var cf = String(o['Confirmation Number'] || k || ''), c4 = cf.length > 4 ? '••••' + cf.slice(-4) : cf;   // the console line: no name, e-mail or phone — only whether there is one
+          L('✓ #' + got.length + ' ' + c4 + ' · room ' + (o['Room Number'] || '—') + ' · ' + (o['Purpose Of Visit'] || '—') + ' · ' + (o['Nationality'] || '—') + ' · email ' + (o['Email'] ? '✓' : '—') + ' · phone ' + (o['Phone'] ? '✓' : '—') + ' · ' + (Date.now() - t0c) + ' ms'); }
       }
       var nx = nextPage(); if (!nx) break;
       var before = key(listRows()[0] || document.body); nx.click(); L('next page');
@@ -454,7 +456,7 @@ const CSS = `
 // The robot (scripts/neorcha-cloud.js) writes each step to hotels/<hotel>/neorchaLive; GitHub tells whether its computer started.
 const GH = { api: 'https://api.github.com/repos/ahmed0088/depature-tool/actions/workflows/neorcha.yml', page: 'https://github.com/ahmed0088/depature-tool/actions/workflows/neorcha.yml', key: 'ho_gh_start_key_v1' };
 const STEPS = [['gh', '🖥️', 'Start a GitHub computer'], ['open', '🌐', 'Open Neorcha'], ['login', '🔑', 'Log in'], ['search', '🔎', 'Search your dates'], ['read', '🪪', 'Read every card'], ['save', '💾', 'Save in HotelOps']];
-const RUN = { at: 0, tag: '', gh: null, live: null, timer: 0, poll: 0, view: 'run' };
+const RUN = { at: 0, tag: '', gh: null, live: null, timer: 0, poll: 0, view: 'run', local: [], conOff: false, ghSt: '' };
 const ghKey = () => { try { return localStorage.getItem(GH.key) || ''; } catch (_) { return ''; } };
 const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago'; };
 async function gh(path, opt) {
@@ -482,13 +484,16 @@ function runWin() {
     w = document.createElement('div'); w.id = 'nxRun'; w.className = 'nxr';
     w.innerHTML = '<div class="nxr-bg" data-x="1"></div><div class="nxr-card" role="dialog" aria-label="Neorcha cloud run"><div class="nxr-h"><div class="nxr-ic">☁️</div><div class="nxr-t"><b>Neorcha · cloud run</b><small id="nxr-sub"></small></div><button type="button" class="nxr-x" data-x="1" aria-label="Close">✕</button></div><div class="nxr-b" id="nxr-b"></div></div>';
     document.body.appendChild(w);
-    w.addEventListener('click', e => { if (e.target.closest('[data-x]')) { w.classList.remove('on'); clearInterval(RUN.timer); } });
+    w.addEventListener('click', e => { if (e.target.closest('[data-x]')) { w.classList.remove('on'); clearInterval(RUN.timer); }
+      if (e.target.id === 'nxr-con-t') { RUN.conOff = !RUN.conOff; e.target.closest('.nxr-con').classList.toggle('off', RUN.conOff); e.target.textContent = RUN.conOff ? 'Show' : 'Hide'; } });
   }
   w.classList.add('on'); clearInterval(RUN.timer); RUN.timer = setInterval(paintRun, 1000); paintRun();
 }
 function paintRun() {
-  const b = document.getElementById('nxr-b'); if (!b) return;
+  const b0 = document.getElementById('nxr-b'); if (!b0) return;
   if (RUN.view === 'key') return;
+  if (!document.getElementById('nxr-main')) b0.innerHTML = '<div id="nxr-main"></div><div class="nxr-con' + (RUN.conOff ? ' off' : '') + '"><div class="nxr-con-h"><i></i><i></i><i></i><span>neorcha-cloud · live console</span><button type="button" id="nxr-con-t">' + (RUN.conOff ? 'Show' : 'Hide') + '</button></div><div class="nxr-term" id="nxr-term"></div></div>';
+  const b = document.getElementById('nxr-main');
   const st = runState(RUN.live, RUN.gh, RUN.at, RUN.tag), t0 = RUN.at || (RUN.live && +RUN.live.started) || Date.now(), sec = Math.max(0, Math.round(((st.state === 'run' ? Date.now() : (RUN.live && +RUN.live.at) || Date.now()) - t0) / 1000));
   const sub = document.getElementById('nxr-sub'); if (sub) sub.textContent = (RUN.live && RUN.live.from ? dLbl(RUN.live.from) + ' – ' + dLbl(RUN.live.to) + ' · ' : '') + Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
   const pct = st.state === 'done' ? 100 : Math.round(Math.min(97, st.k / 6 * 100 * (st.k === 4 ? 1 : 1) + (st.k === 4 ? st.prog / 100 * 16 : 0)));
@@ -498,6 +503,22 @@ function paintRun() {
     <div class="nxr-note ${st.state}">${st.state === 'done' ? '✅ ' : st.state === 'error' ? '⛔ ' : ''}${esc(st.note || '…')}</div>
     <div class="nxr-act">${st.state === 'done' ? '<button type="button" class="btn gold" data-x="1" id="nxr-see">See the cards</button>' : ''}${st.run ? `<a class="btn" href="${esc(st.run)}" target="_blank" rel="noopener">Open on GitHub ↗</a>` : ''}${st.state === 'run' ? '<span class="nxr-hint">You can close this — it keeps running and the cards land here.</span>' : ''}</div>`;
   if (st.state !== 'run') { clearInterval(RUN.poll); RUN.poll = 0; }
+  paintCon(st);
+}
+// the console: what this device did (asking GitHub) + what the robot reports, line by line
+function conNote(g, m) { RUN.local.push({ t: Date.now(), g, m }); if (RUN.local.length > 30) RUN.local.shift(); }
+function paintCon(st) {
+  const box = document.getElementById('nxr-term'); if (!box) return;
+  const mine = RUN.live && (RUN.tag ? RUN.live.tag === RUN.tag : true) ? RUN.live : null;
+  const rob = mine && Array.isArray(mine.con) ? mine.con : [], first = rob.length ? +rob[0].t : Infinity;
+  const lines = RUN.local.filter(l => l.t < first || !rob.length).concat(rob);
+  const key = lines.length + ':' + (lines.length ? lines[lines.length - 1].t + lines[lines.length - 1].m : '') + st.state;
+  if (box.dataset.k === key) return; box.dataset.k = key;
+  const down = box.scrollTop + box.clientHeight >= box.scrollHeight - 40;
+  const hh = t => { const d = new Date(+t); return [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2, '0')).join(':'); };
+  box.innerHTML = (lines.length ? lines : [{ t: Date.now(), g: 'SYS', m: 'Waiting for the run…' }]).map(l => `<div class="nxl"><span class="nxts">${hh(l.t)}</span><span class="nxtg t-${esc(String(l.g || 'BOT').toLowerCase())}">${esc(l.g || 'BOT')}</span><span class="nxm">${esc(l.m)}</span></div>`).join('')
+    + (st.state === 'run' ? '<div class="nxl"><span class="nxts"></span><span class="nxcur">▌</span></div>' : `<div class="nxl"><span class="nxts">${hh(Date.now())}</span><span class="nxtg t-${st.state === 'done' ? 'save' : 'err'}">${st.state === 'done' ? 'EXIT' : 'EXIT'}</span><span class="nxm">${st.state === 'done' ? 'process finished · code 0' : 'process stopped · code 1'}</span></div>`);
+  if (down) box.scrollTop = box.scrollHeight;
 }
 function keyWin(then) {
   RUN.view = 'key'; runWin();
@@ -518,12 +539,15 @@ function keyWin(then) {
 }
 async function cloudStart(from, to) {
   if (!ghKey()) return keyWin(() => cloudStart(from, to));
-  RUN.view = 'run'; RUN.at = Date.now(); RUN.tag = 'ho' + RUN.at.toString(36) + Math.random().toString(36).slice(2, 6); RUN.gh = null; runWin();
-  try { await gh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { from, to, tag: RUN.tag } }) }); }
+  RUN.view = 'run'; RUN.at = Date.now(); RUN.tag = 'ho' + RUN.at.toString(36) + Math.random().toString(36).slice(2, 6); RUN.gh = null; RUN.ghSt = '';
+  RUN.local = []; conNote('SYS', 'HotelOps ' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '') + ' · run ' + RUN.tag + ' · arrivals ' + from + ' → ' + to);
+  conNote('NET', 'POST api.github.com/…/actions/workflows/neorcha.yml/dispatches · ref main');
+  const bx = document.getElementById('nxr-b'); if (bx && !document.getElementById('nxr-main')) bx.innerHTML = ''; runWin();
+  try { await gh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { from, to, tag: RUN.tag } }) }); conNote('NET', '204 · GitHub accepted the run'); }
   catch (e) { RUN.gh = { status: 'completed', conclusion: 'not started' }; paintRun(); toast(e.message, 'err'); if (/refused/.test(e.message)) { try { localStorage.removeItem(GH.key); } catch (_) {} } return; }
   clearInterval(RUN.poll);
   RUN.poll = setInterval(async () => {
-    try { const j = await gh('/runs?per_page=5&event=workflow_dispatch'); const r = (j.workflow_runs || []).filter(x => Date.parse(x.created_at) >= RUN.at - 15000).pop(); if (r) RUN.gh = r; paintRun(); } catch (_) {}
+    try { const j = await gh('/runs?per_page=5&event=workflow_dispatch'); const r = (j.workflow_runs || []).filter(x => Date.parse(x.created_at) >= RUN.at - 15000).pop(); if (r) { RUN.gh = r; const k = r.status + (r.conclusion || ''); if (k !== RUN.ghSt) { RUN.ghSt = k; conNote('GH', 'run #' + r.run_number + ' · ' + r.status.replace('_', ' ') + (r.conclusion ? ' · ' + r.conclusion : r.status === 'queued' ? ' · waiting for a free computer' : ' · booting Ubuntu, installing Chromium')); } } paintRun(); } catch (_) {}
   }, 5000);
 }
 function cloudUI() {
@@ -559,6 +583,18 @@ const RUN_CSS = `.nxr{position:fixed;inset:0;z-index:9000;display:none;align-ite
 .nxr-p{font-size:.88rem;line-height:1.6;color:var(--text2,#cbd5e1);margin:4px 0 10px}.nxr-p.small{font-size:.78rem;color:var(--text3,#94a3b8)}.nxr-how{margin:0 0 12px;padding-left:20px;line-height:1.8;font-size:.86rem}.nxr-how a{color:#7dd3fc}
 .nxr-key{display:flex;gap:8px}.nxr-key input{flex:1;min-width:0;padding:10px 12px;border-radius:11px;border:1px solid var(--border,#334155);background:var(--bg2,#1e293b);color:inherit;font:inherit}
 .nx-cl-st b.run{color:#38bdf8}
+.nxr-con{margin-top:14px;border-radius:14px;overflow:hidden;border:1px solid #1e293b;background:#05080f;box-shadow:inset 0 0 0 1px rgba(56,189,248,.06),0 10px 30px rgba(0,0,0,.35)}
+.nxr-con-h{display:flex;align-items:center;gap:6px;padding:8px 10px;background:linear-gradient(180deg,#111827,#0b1220);border-bottom:1px solid #1e293b;font:600 .72rem/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#64748b}
+.nxr-con-h i{width:10px;height:10px;border-radius:50%;background:#ef4444}.nxr-con-h i:nth-child(2){background:#f59e0b}.nxr-con-h i:nth-child(3){background:#22c55e}.nxr-con-h span{flex:1;margin-left:6px;letter-spacing:.02em}
+.nxr-con-h button{border:1px solid #1e293b;background:#0f172a;color:#94a3b8;border-radius:7px;padding:3px 8px;font:inherit;cursor:pointer}
+.nxr-term{height:220px;overflow:auto;padding:8px 10px 10px;font:.72rem/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#cbd5e1;background:radial-gradient(120% 80% at 0 0,rgba(56,189,248,.06),transparent 60%)}
+.nxr-con.off .nxr-term{display:none}
+.nxr-term .nxl{display:flex;gap:8px;white-space:pre-wrap;word-break:break-word;animation:nxrLn .25s ease}@keyframes nxrLn{from{opacity:0;transform:translateX(-4px)}to{opacity:1;transform:none}}
+.nxr-term .nxts{color:#475569;flex:none}.nxr-term .nxtg{flex:none;width:38px;font-weight:700;letter-spacing:.04em;display:inline;padding:0;border:0;background:none;border-radius:0;writing-mode:horizontal-tb;white-space:nowrap}.nxr-term .nxm{flex:1;min-width:0}
+.nxr-term .nxtg.t-sys{color:#94a3b8}.nxr-term .nxtg.t-net{color:#38bdf8}.nxr-term .nxtg.t-gh{color:#a78bfa}.nxr-term .nxtg.t-auth{color:#f59e0b}.nxr-term .nxtg.t-scan{color:#22d3ee}.nxr-term .nxtg.t-page{color:#818cf8}
+.nxr-term .nxtg.t-card{color:#4ade80}.nxr-term .nxtg.t-save{color:#34d399}.nxr-term .nxtg.t-warn{color:#fbbf24}.nxr-term .nxtg.t-err{color:#f87171}.nxr-term .nxtg.t-bot{color:#e2e8f0}
+.nxr-term .nxcur{color:#4ade80;animation:nxrBl 1s steps(1) infinite}@keyframes nxrBl{50%{opacity:0}}
+@media (max-width:600px){.nxr-term{height:180px;font-size:.68rem}.nxr-term .nxtg{width:34px}}
 @media (max-width:600px){.nxr{align-items:flex-end}.nxr-card{width:100vw;max-height:92vh;border-radius:22px 22px 0 0;animation:nxrUp .25s ease}@keyframes nxrUp{from{transform:translateY(40px)}to{transform:none}}.nxr-key{flex-direction:column}}`;
 function mount() {
   if (document.getElementById('panel-' + PANEL)) return;
