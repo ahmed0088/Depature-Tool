@@ -103,9 +103,24 @@ function FILLER(D) {
   function head() { return '<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#0f766e;color:#fff"><b style="flex:1">HotelOps · DTCM fill · ' + MON[D.m] + ' ' + D.y + '</b><button data-a="x" style="border:0;background:transparent;color:#fff;font-size:16px;cursor:pointer">✕</button></div>'; }
   function btn(a, t, main) { return '<button data-a="' + a + '" style="flex:1;padding:8px 10px;border-radius:9px;border:1px solid ' + (main ? '#0f766e' : '#d1d5db') + ';background:' + (main ? '#0f766e' : '#fff') + ';color:' + (main ? '#fff' : '#111') + ';font-weight:600;cursor:pointer">' + t + '</button>'; }
   var lines = [];
+  // which days: "all", "1", "1-5", "1, 3, 8-10" (kept while the box is open)
+  var daysTxt = 'all';
+  function pickDays(t) {
+    t = String(t || '').trim().toLowerCase(); if (!t || t === 'all') return D.rows;
+    var want = {}; t.split(/[,\s]+/).forEach(function (p) { var m = p.match(/^(\d{1,2})(?:-(\d{1,2}))?$/); if (!m) return; for (var d = +m[1]; d <= +(m[2] || m[1]); d++) want[d] = 1; });
+    return D.rows.filter(function (r) { return want[r.d]; });
+  }
   function paint(msg) {
-    box.innerHTML = head() + '<div style="padding:10px 14px;border-bottom:1px solid #eee">' + (msg || 'Pick <b>' + MON[D.m] + ' ' + D.y + '</b> on this page and press Filter, then 🔍 Check or ▶ Fill all.') + '</div>'
-      + '<div style="display:flex;gap:8px;padding:10px 14px">' + (busy ? btn('stop', '■ Stop') : btn('check', '🔍 Check') + btn('fill', '▶ Fill all', true)) + '</div>'
+    var sel = pickDays(daysTxt), all = sel.length === D.rows.length;
+    box.innerHTML = head() + '<div style="padding:10px 14px;border-bottom:1px solid #eee">' + (msg || 'Pick <b>' + MON[D.m] + ' ' + D.y + '</b> on this page and press Filter, then 🔍 Check or ▶ Fill.') + '</div>'
+      + '<div style="display:flex;align-items:center;gap:8px;padding:10px 14px 0"><label for="hoDtcmDays" style="font-weight:600">Days</label>'
+      + '<input id="hoDtcmDays" value="' + String(daysTxt).replace(/"/g, '') + '" placeholder="all · 1 · 1-5 · 1, 3, 8-10" style="flex:1;min-width:0;padding:7px 9px;border:1px solid #d1d5db;border-radius:8px;font:inherit"' + (busy ? ' disabled' : '') + '>'
+      + '<span style="color:#6b7280;font-size:12px;white-space:nowrap">' + (all ? 'all ' + D.rows.length : sel.length + ' of ' + D.rows.length) + '</span></div>'
+      // or tap the days: a grid of the month's days (tap one to choose only it, tap more to add; All = the whole month)
+      + '<div style="display:grid;grid-template-columns:repeat(8,1fr);gap:4px;padding:8px 14px 0">' + D.rows.map(function (r) { var on = !all && sel.indexOf(r) >= 0;
+          return '<button data-day="' + r.d + '"' + (busy ? ' disabled' : '') + ' style="padding:5px 0;border-radius:7px;border:1px solid ' + (on ? '#0f766e' : '#e5e7eb') + ';background:' + (on ? '#0f766e' : all ? '#f0fdfa' : '#fff') + ';color:' + (on ? '#fff' : '#111') + ';font:600 12px system-ui;cursor:pointer">' + r.d + '</button>'; }).join('')
+      + '<button data-day="all"' + (busy ? ' disabled' : '') + ' style="grid-column:span 2;padding:5px 0;border-radius:7px;border:1px solid ' + (all ? '#0f766e' : '#e5e7eb') + ';background:' + (all ? '#0f766e' : '#fff') + ';color:' + (all ? '#fff' : '#111') + ';font:600 12px system-ui;cursor:pointer">All</button></div>'
+      + '<div style="display:flex;gap:8px;padding:10px 14px">' + (busy ? btn('stop', '■ Stop') : btn('check', '🔍 Check') + btn('fill', all ? '▶ Fill all' : '▶ Fill ' + sel.length + ' day' + (sel.length === 1 ? '' : 's'), true)) + '</div>'
       + '<div style="overflow:auto;padding:0 14px 12px;font-family:Consolas,monospace;font-size:12px">' + lines.join('') + '</div>';
   }
   function line(d, icon, text, color) { lines.unshift('<div style="padding:3px 0;border-bottom:1px solid #f3f4f6;color:' + (color || '#111') + '">' + icon + ' ' + d + ' ' + MON[D.m] + ' · ' + text + '</div>'); if (lines.length > 80) lines.pop(); }
@@ -127,14 +142,19 @@ function FILLER(D) {
     var R = ready(); if (R.err) { paint('⚠️ ' + R.err); return; }
     var C = R.C; busy = true; stop = false; lines = []; paint(write ? 'Filling… keep this tab open.' : 'Checking…');
     var done = 0, same0 = 0, diffs = 0, fail = '';
-    for (var k = 0; k < D.rows.length && !stop; k++) {
-      var r = D.rows[k], tr = rowFor(r.d);
+    var todo = pickDays(daysTxt);
+    if (!todo.length) { busy = false; paint('⚠️ No day of ' + MON[D.m] + ' in "' + daysTxt + '". Type e.g. 1 or 1-5, or all.'); return; }
+    for (var k = 0; k < todo.length && !stop; k++) {
+      var r = todo[k], tr = rowFor(r.d);
       if (!tr) { line(r.d, '⚠️', 'not on the page', '#b45309'); diffs++; continue; }
       var got = vals(tr, C), off = C.map(function (c, i) { return c >= 0 && r.v[i] != null && !same(got[i], r.v[i]) ? i : -1; }).filter(function (i) { return i >= 0; });
       if (!off.length) { same0++; line(r.d, '✓', 'already right', '#15803d'); continue; }
       if (!write) { diffs++; line(r.d, '≠', off.map(function (i) { return FIELDS[i] + ' ' + got[i] + ' → ' + r.v[i]; }).join(' · '), '#b45309'); continue; }
-      var eb = tr.querySelector('.jsgrid-edit-button'); if (!eb) { fail = r.d + ' ' + MON[D.m] + ': no Edit button'; break; }
-      eb.click(); await sleep(300);
+      // open the line for editing: its ✎ Edit button, or a click on the line itself (how the portal opens a row)
+      var eb = tr.querySelector('.jsgrid-edit-button');
+      if (eb) eb.click(); else (tr.cells[2] || tr.cells[1] || tr).click();
+      await sleep(300);
+      if (!document.querySelector('.jsgrid-edit-row') && eb) { (tr.cells[2] || tr.cells[1] || tr).click(); await sleep(300); }
       var er = document.querySelector('.jsgrid-edit-row'); if (!er) { fail = r.d + ' ' + MON[D.m] + ': the row did not open for editing'; break; }
       C.forEach(function (c, i) {
         var inp = c >= 0 && er.cells[c] ? er.cells[c].querySelector('input') : null; if (!inp || r.v[i] == null) return;
@@ -156,16 +176,28 @@ function FILLER(D) {
     }
     busy = false;
     var msg = fail ? '⛔ Stopped at ' + fail + '. Nothing after it was changed.' : stop ? '■ Stopped. ' + done + ' saved so far.' : write ? '✅ Done: ' + done + ' day' + (done === 1 ? '' : 's') + ' saved, ' + same0 + ' already right.' : (diffs ? '🔍 ' + diffs + ' day' + (diffs === 1 ? '' : 's') + ' differ from the finance sheet, ' + same0 + ' already right. ▶ Fill all fixes them.' : '✅ Every day already matches the finance sheet.');
-    if (!fail && write) { var C2 = cols(), tot = C2.map(function (c, i) { return D.rows.reduce(function (a, r) { var tr = rowFor(r.d); return a + (tr ? n(tr.cells[c] && tr.cells[c].textContent) : 0); }, 0); }); msg += '<br><small>On the page now: Rooms ' + tot[0].toLocaleString() + ' · F&B ' + tot[1].toLocaleString() + ' · TD ' + tot[6].toLocaleString() + ' (finance: ' + D.sums[0].toLocaleString() + ' · ' + D.sums[1].toLocaleString() + ' · ' + D.sums[6].toLocaleString() + ')</small>'; }
+    if (!fail && write) { var C2 = cols(), tot = C2.map(function (c) { return todo.reduce(function (a, r) { var tr = rowFor(r.d); return a + (tr ? n(tr.cells[c] && tr.cells[c].textContent) : 0); }, 0); }), fin = [0, 1, 6].map(function (i) { return Math.round(todo.reduce(function (a, r) { return a + (+r.v[i] || 0); }, 0) * 100) / 100; });
+      msg += '<br><small>' + (todo.length === D.rows.length ? 'The month' : todo.length === 1 ? 'That day' : 'Those ' + todo.length + ' days') + ' on the page now: Rooms ' + tot[0].toLocaleString() + ' · F&B ' + tot[1].toLocaleString() + ' · TD ' + tot[6].toLocaleString() + ' (finance: ' + fin[0].toLocaleString() + ' · ' + fin[1].toLocaleString() + ' · ' + fin[2].toLocaleString() + ')</small>'; }
     paint(msg);
   }
   function safe(w) { run(w).catch(function (e) { busy = false; paint('⛔ Stopped: ' + (e && e.message || e) + '. Nothing after it was changed.'); }); }
+  box.addEventListener('input', function (e) { if (e.target.id !== 'hoDtcmDays') return; daysTxt = e.target.value; var pos = e.target.selectionStart; paint(); var i = document.getElementById('hoDtcmDays'); if (i) { i.focus(); i.setSelectionRange(pos, pos); } });
   box.addEventListener('click', function (e) {
     var b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.day && !busy) {
+      if (b.dataset.day === 'all') daysTxt = 'all';
+      else { var cur = pickDays(daysTxt), set = {}, d = +b.dataset.day; if (cur.length !== D.rows.length) cur.forEach(function (r) { set[r.d] = 1; });
+        if (set[d]) delete set[d]; else set[d] = 1;
+        var ds = Object.keys(set).map(Number).sort(function (a, c) { return a - c; }), parts = [];
+        ds.forEach(function (x) { var last = parts[parts.length - 1]; if (last && last[1] === x - 1) last[1] = x; else parts.push([x, x]); });
+        daysTxt = parts.length ? parts.map(function (p) { return p[0] === p[1] ? String(p[0]) : p[0] + '-' + p[1]; }).join(', ') : 'all'; }
+      paint(); return;
+    }
     if (b.dataset.a === 'x') { if (busy) stop = true; box.remove(); window.__hoDtcm = null; }
     else if (b.dataset.a === 'stop') stop = true;
     else if (b.dataset.a === 'check' && !busy) safe(false);
-    else if (b.dataset.a === 'fill' && !busy) { if (confirm('Fill and save ' + D.rows.length + ' days of ' + MON[D.m] + ' ' + D.y + ' from the finance sheet? Days that already match are skipped.')) safe(true); }
+    else if (b.dataset.a === 'fill' && !busy) { var sel = pickDays(daysTxt); if (!sel.length) { paint('⚠️ No day of ' + MON[D.m] + ' in "' + daysTxt + '". Type e.g. 1 or 1-5, or all.'); return; }
+      if (confirm('Fill and save ' + (sel.length === D.rows.length ? 'all ' + sel.length + ' days' : sel.length === 1 ? 'only ' + sel[0].d + ' ' + MON[D.m] : sel.length + ' days (' + daysTxt + ')') + ' of ' + MON[D.m] + ' ' + D.y + ' from the finance sheet? Days that already match are skipped.')) safe(true); }
   });
   window.__hoDtcm = { show: function (D2) { D = D2; lines = []; paint(); } };
   paint();
@@ -232,7 +264,7 @@ function draw() {
         <li>Open the portal: <a href="${PORTAL}" target="_blank" rel="noopener">dhss.det.gov.ae → Revenue ↗</a>, pick <b>${esc(mm)}</b> and press <b>Filter</b>.</li>
         <li>Press <b>📋 Copy the filler</b> below.</li>
         <li>On the portal press <b>F12</b> → <b>Console</b>, paste (Ctrl+V) and press <b>Enter</b>. <small>(The first time Chrome asks you to type <code>allow pasting</code> first.)</small></li>
-        <li>A HotelOps box appears: <b>🔍 Check</b> compares, <b>▶ Fill all</b> fills each day and presses <b>Update</b>, then checks it saved.</li>
+        <li>A HotelOps box appears: choose the <b>days</b> (tap them, or type e.g. <code>1</code> or <code>1-5</code>; <b>All</b> = the month), <b>🔍 Check</b> compares, <b>▶ Fill</b> fills each chosen day and presses <b>Update</b>, then checks it saved. <small>First time? Try day 1 only.</small></li>
       </ol>
       <div class="dtf-btns"><button type="button" class="btn gold" id="dtf-copy">📋 Copy the filler</button>
         <a class="btn" id="dtf-bm" title="Or drag this to your bookmarks bar, then click it on the portal page" href="#">⭐ Drag to bookmarks</a></div>
