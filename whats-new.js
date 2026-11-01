@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 491, items: [
+    "🏨 More than one hotel: give each hotel its own Neorcha login on GitHub with its name at the end (NEORCHA_USER_MERCURE, NEORCHA_PASS_MERCURE), then type MERCURE in the new Neorcha account box on that hotel's Neorcha Registrations. The cloud run logs in with that account at that hotel's Neorcha link and saves the cards into that hotel — it never falls back to another hotel's login.",
+    "⚡ The Neorcha cloud run is much faster: it uses the Google Chrome already on GitHub's computer (no browser download), checks each card as soon as it shows instead of waiting, and knows the last page without waiting for a next page that never comes.",
+  ] },
   { v: 490, items: [
     "🖥️ Live console in the cloud-run window: a terminal that shows what the robot does as it happens — GitHub starting its computer, Chromium opening Neorcha, the network calls, the login, the dates typed, each page and each card (room · purpose · nationality · email ✓ · phone ✓ · time), saving, done. Hide / Show it any time.",
     "🔒 The console never shows a guest's name, email or phone — confirmation numbers appear as ••••1234 — and it is kept in HotelOps only, never in GitHub's public log.",

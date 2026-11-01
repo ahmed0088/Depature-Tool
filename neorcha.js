@@ -173,7 +173,7 @@ function COLLECTOR(O) {
       if (o['Membership Number']) o['Membership Number'] = 'yes';
       return o['Purpose Of Visit'] || o['Nationality'] ? o : null; } catch (_) { return null; }
   }
-  async function waitFor(fn, ms) { for (var i = 0; i < (ms || 15000) / 150; i++) { if (fn()) return true; await sleep(150); } return false; }
+  async function waitFor(fn, ms) { var end = Date.now() + (ms || 15000); while (Date.now() < end) { if (fn()) return true; await sleep(60); } return !!fn(); }
   async function search() {
     var f = document.querySelector('[ng-model="searchFromArrivalDate"]'), t2 = document.querySelector('[ng-model="searchToArrivalDate"]');
     // Neorcha's boxes are calendar boxes (type="date"): they take 2026-11-01 only — anything else is dropped silently and Neorcha searches without dates
@@ -184,7 +184,7 @@ function COLLECTOR(O) {
       if (!a1 || !a2) return 'the arrival dates could not be typed into Neorcha (' + (a1 || 'empty') + ' → ' + (a2 || 'empty') + ')';
     }
     var pp = document.querySelector('[ng-model="paginationDoc"]');   // 100 per page: fewer pages to turn
-    if (pp && +pp.value < 100) { fire(pp, '100'); L('100 per page'); await sleep(900); }
+    if (pp && +pp.value < 100) { fire(pp, '100'); L('100 per page'); await sleep(400); }
     all('select').forEach(function (sel) { if (sel.closest('#hoNxBox')) return; var op = Array.prototype.slice.call(sel.options).map(function (o) { return parseInt(o.value || o.textContent, 10); }).filter(function (n) { return !isNaN(n); });
       var cur = parseInt(sel.value, 10), mx = Math.max.apply(null, op.concat([0])); if (op.length >= 2 && !isNaN(cur) && cur < mx && mx <= 500) { sel.value = String(mx); sel.dispatchEvent(new Event('change', { bubbles: true })); L('page size ' + mx); } });
     var hs = document.querySelector('[ng-model="selectedHotel"]');   // no hotel picked yet: pick the first (your own) one
@@ -192,7 +192,7 @@ function COLLECTOR(O) {
     var b = byClick(/searchGuestDocuments/)[0]; if (!b) { b = all('button,input[type=submit]').filter(function (x) { return /^\s*search\s*$/i.test(x.textContent || x.value) && vis(x); })[0]; }
     if (!b) return 'no Search button';
     b.click(); L('Search pressed');
-    await sleep(800); await waitFor(function () { return listRows().length || /no record|no result/i.test(document.body.textContent); }, 20000);
+    await sleep(300); await waitFor(function () { return listRows().length || /no record|no result/i.test(document.body.textContent); }, 20000);
     return '';
   }
   // a row opens its card in different ways (a click, a double-click, a link, the number's cell): try them one by one
@@ -254,7 +254,7 @@ function COLLECTOR(O) {
             continue;
           }
           fails = 0;
-          await sleep(300); o = Object.assign({}, o0, readDetail());
+          await sleep(80); o = Object.assign({}, o0, readDetail());
           if (!o['Confirmation Number'] && /^\d{5,}$/.test(k)) o['Confirmation Number'] = k;
           if (!viewCells().length && !listRows().length) {   // the card took the whole page and the list is gone: back to it
             var back = byClick(/backToPreviousPage|changeListGuestDocumentsModeTo\(true\)/)[0]; if (back) back.click(); else history.back();
@@ -265,9 +265,12 @@ function COLLECTOR(O) {
           var cf = String(o['Confirmation Number'] || k || ''), c4 = cf.length > 4 ? '••••' + cf.slice(-4) : cf;   // the console line: no name, e-mail or phone — only whether there is one
           L('✓ #' + got.length + ' ' + c4 + ' · room ' + (o['Room Number'] || '—') + ' · ' + (o['Purpose Of Visit'] || '—') + ' · ' + (o['Nationality'] || '—') + ' · email ' + (o['Email'] ? '✓' : '—') + ' · phone ' + (o['Phone'] ? '✓' : '—') + ' · ' + (Date.now() - t0c) + ' ms'); }
       }
+      // a page with fewer rows than the default 10, or a bigger page (the size we asked took) that is not full, is the last one
+      var pp2 = document.querySelector('[ng-model="paginationDoc"]'), per = pp2 ? +pp2.value || 0 : 0;
+      if (rows.length < 10 || (rows.length > 10 && per && rows.length < per)) { L('last page (' + rows.length + ' rows)'); break; }
       var nx = nextPage(); if (!nx) break;
       var before = key(listRows()[0] || document.body); nx.click(); L('next page');
-      if (!(await waitFor(function () { var r = listRows()[0]; return r && key(r) !== before; }, 15000))) { L('the list did not change: last page'); break; }
+      if (!(await waitFor(function () { var r = listRows()[0]; return r && key(r) !== before; }, 7000))) { L('the list did not change: last page'); break; }
     }
     busy = false; prog = 100; window.__hoNxLog = log;
     if (got.length && O.send) { try { O.send(got, from, to); } catch (_) {} say('✅ ' + got.length + ' guests collected and sent to HotelOps — you can close this tab.', 'ok'); return; }
@@ -300,7 +303,7 @@ function COLLECTOR(O) {
     for (var i = 0; i < 1200 && !stop; i++) {   // up to 20 minutes for the login
       if (/login/i.test(location.hash) || document.querySelector('#userPassword')) { if (i % 10 === 0) say('🔑 Log in to Neorcha — I start by myself right after.'); await sleep(1000); continue; }
       if (!/guestdocuments/i.test(location.hash)) { location.hash = '#/guestdocuments'; await sleep(1500); continue; }
-      if (document.querySelector('[ng-model="searchFromArrivalDate"]') || byClick(/searchGuestDocuments/).length) { await sleep(1200); return collect(); }
+      if (document.querySelector('[ng-model="searchFromArrivalDate"]') || byClick(/searchGuestDocuments/).length) { await sleep(500); return collect(); }
       await sleep(1000);
     }
   }
@@ -441,7 +444,7 @@ const CSS = `
 #panel-${PANEL} .nx-run{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin:12px 0 4px}#panel-${PANEL} .nx-run label{display:flex;flex-direction:column;gap:4px;font-size:.74rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em}
 #panel-${PANEL} .nx-run input{padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font:inherit;font-size:.9rem}
 #panel-${PANEL} .nx-live{margin:10px 0 0;padding:10px 12px;border-radius:10px;font-size:.86rem;background:color-mix(in srgb,#6366f1 10%,var(--card));color:var(--text)}#panel-${PANEL} .nx-live.ok{background:color-mix(in srgb,#10b981 14%,var(--card))}#panel-${PANEL} .nx-live.err{background:color-mix(in srgb,#f43f5e 12%,var(--card))}
-#panel-${PANEL} .nx-run .nx-url{flex:1 1 320px}#panel-${PANEL} .nx-run .nx-url input{width:100%}
+#panel-${PANEL} .nx-run .nx-url{flex:1 1 320px}#panel-${PANEL} .nx-run .nx-acct{flex:0 1 150px}#panel-${PANEL} .nx-run .nx-acct input{width:100%;text-transform:uppercase}#panel-${PANEL} .nx-run .nx-acct small{text-transform:none;font-weight:500}#panel-${PANEL} .nx-run .nx-url input{width:100%}
 #panel-${PANEL} .nx-man .nx-drop{margin-top:12px}
 #panel-${PANEL} .nx-live-b{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 #panel-${PANEL} .nx-gp{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:0 0 12px;padding:12px 14px;border-radius:12px;border:1px solid color-mix(in srgb,#f59e0b 40%,var(--border));background:color-mix(in srgb,#f59e0b 8%,var(--card))}#panel-${PANEL} .nx-gp small{display:block;color:var(--text3);font-size:.8rem;margin-top:2px}
@@ -540,10 +543,12 @@ function keyWin(then) {
 async function cloudStart(from, to) {
   if (!ghKey()) return keyWin(() => cloudStart(from, to));
   RUN.view = 'run'; RUN.at = Date.now(); RUN.tag = 'ho' + RUN.at.toString(36) + Math.random().toString(36).slice(2, 6); RUN.gh = null; RUN.ghSt = '';
-  RUN.local = []; conNote('SYS', 'HotelOps ' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '') + ' · run ' + RUN.tag + ' · arrivals ' + from + ' → ' + to);
+  RUN.local = []; const cc = W.__hoNxCloud ? W.__hoNxCloud() : {};
+  conNote('SYS', 'HotelOps ' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '') + ' · run ' + RUN.tag + ' · arrivals ' + from + ' → ' + to);
+  conNote('SYS', 'Neorcha account: ' + (cc.account || 'main') + (cc.url ? ' · ' + cc.url.replace(/^https:\/\//, '').split('/')[0] : '') + (cc.hid ? ' · saves to this hotel' : ''));
   conNote('NET', 'POST api.github.com/…/actions/workflows/neorcha.yml/dispatches · ref main');
   const bx = document.getElementById('nxr-b'); if (bx && !document.getElementById('nxr-main')) bx.innerHTML = ''; runWin();
-  try { await gh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { from, to, tag: RUN.tag } }) }); conNote('NET', '204 · GitHub accepted the run'); }
+  try { await gh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: Object.assign({ from, to, tag: RUN.tag }, W.__hoNxCloud ? W.__hoNxCloud() : {}) }) }); conNote('NET', '204 · GitHub accepted the run'); }
   catch (e) { RUN.gh = { status: 'completed', conclusion: 'not started' }; paintRun(); toast(e.message, 'err'); if (/refused/.test(e.message)) { try { localStorage.removeItem(GH.key); } catch (_) {} } return; }
   clearInterval(RUN.poll);
   RUN.poll = setInterval(async () => {
@@ -607,13 +612,14 @@ function mount() {
       <button type="button" class="btn rose" id="nx-clear">✕ Clear</button></div>
     <ol class="nx-steps" id="nx-steps"><li data-s="1"><b>1</b><span>Collect from Neorcha</span></li><li data-s="2"><b>2</b><span>See the month</span></li><li data-s="3"><b>3</b><span>Link to Purpose of Stay</span></li></ol>
     <div class="nx-col"><div class="nx-col-h"><span>🤖</span><div><b>Collect from Neorcha — automatic</b><small>Pick the dates and press Start. Neorcha opens, you log in, it reads every confirmation by itself and the cards land here.</small></div></div>
-      <div class="nx-run"><label class="nx-url">Your hotel's Neorcha link<input type="url" id="nx-url" spellcheck="false"></label><label>Arrivals from<input type="date" id="nx-from"></label><label>to<input type="date" id="nx-to"></label>
+      <div class="nx-run"><label class="nx-url">Your hotel's Neorcha link<input type="url" id="nx-url" spellcheck="false"></label><label class="nx-acct">Neorcha account <small>(cloud)</small><input id="nx-acct" spellcheck="false" autocapitalize="characters" placeholder="main" maxlength="30"></label><label>Arrivals from<input type="date" id="nx-from"></label><label>to<input type="date" id="nx-to"></label>
         <button type="button" class="btn gold" id="nx-start">▶ Start</button></div>
       <div class="nx-live" id="nx-live" hidden></div>
       <div class="nx-cl"><div class="nx-cl-h"><span>☁️</span><div><b>Cloud — no PC needed</b><small>A GitHub computer logs in to Neorcha and collects for you — every night at 3:17 by itself, or now, with the dates above. Works from your phone.</small></div></div>
         <div class="nx-cl-b"><button type="button" class="btn gold" id="nx-cloud">☁️ Run in the cloud</button><button type="button" class="btn" id="nx-cl-show">📡 Show progress</button><span class="nx-cl-st" id="nx-cl-st"></span></div>
         <details class="nx-man nx-cloud"><summary>⚙️ Set up the cloud (once)</summary>
-          <p><b>1 · The logins</b> — on github.com open the HotelOps repository → <b>Settings → Secrets and variables → Actions → New repository secret</b>: <code>NEORCHA_USER</code>, <code>NEORCHA_PASS</code>, <code>HOTELOPS_EMAIL</code>, <code>HOTELOPS_PASS</code> (other hotel: <code>NEORCHA_URL</code>). Typed there, they stay encrypted — never in HotelOps.</p>
+          <p><b>1 · The logins</b> — on github.com open the HotelOps repository → <b>Settings → Secrets and variables → Actions → New repository secret</b>: <code>NEORCHA_USER</code>, <code>NEORCHA_PASS</code>, <code>HOTELOPS_EMAIL</code>, <code>HOTELOPS_PASS</code>. Typed there, they stay encrypted — never in HotelOps.</p>
+          <p><b>Another hotel</b> (for example Mercure) — add its own secrets with its name at the end: <code>NEORCHA_USER_MERCURE</code>, <code>NEORCHA_PASS_MERCURE</code> (and <code>HOTELOPS_EMAIL_MERCURE</code> / <code>HOTELOPS_PASS_MERCURE</code> if that hotel uses another HotelOps login). Then, in that hotel's HotelOps, type <b>MERCURE</b> in <b>Neorcha account</b> and its Neorcha link above — the run logs in there and the cards go to that hotel.</p>
           <p><b>2 · The start key</b> (so this button can start it) — press ☁️ Run in the cloud and follow the steps. It is kept on this device only.</p>
           <p><a href="https://github.com/ahmed0088/depature-tool/actions/workflows/neorcha.yml" target="_blank" rel="noopener">All cloud runs on GitHub ↗</a> · <a href="#" id="nx-cl-forget">Forget the start key on this device</a></p></details></div>
       <details class="nx-man"><summary>No helper on this PC? Run it by hand</summary>
@@ -656,6 +662,11 @@ function mount() {
   const urlKey = () => { let h = ''; try { h = typeof _meHotel === 'function' ? _meHotel() : ''; } catch (_) {} return 'ho_neorcha_url_v1:' + String(h || 'hotel').toLowerCase(); };
   const okUrl = u => { try { const x = new URL(u); return x.protocol === 'https:' && /(^|[.])myneorcha[.]com$/i.test(x.hostname); } catch (_) { return false; } };
   const NX = () => { const v = $('url').value.trim(); return okUrl(v) ? v : NX_DEF; };
+  // the cloud's Neorcha account for this hotel: empty = the main one (NEORCHA_USER / NEORCHA_PASS), MERCURE = NEORCHA_USER_MERCURE / NEORCHA_PASS_MERCURE
+  const acctKey = () => urlKey().replace('ho_neorcha_url_v1', 'ho_neorcha_acct_v1');
+  try { $('acct').value = localStorage.getItem(acctKey()) || ''; } catch (_) {}
+  $('acct').onchange = () => { const v = $('acct').value.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_').slice(0, 30); $('acct').value = v; try { localStorage.setItem(acctKey(), v); } catch (_) {} toast(v ? 'Cloud uses the ' + v + ' Neorcha account for this hotel' : 'Cloud uses the main Neorcha account for this hotel', 'ok'); };
+  W.__hoNxCloud = () => ({ account: ($('acct').value || '').trim().toUpperCase(), url: NX(), hid: typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '' });
   try { $('url').value = localStorage.getItem(urlKey()) || NX_DEF; } catch (_) { $('url').value = NX_DEF; }
   $('url').placeholder = NX_DEF;
   $('url').onchange = () => { const v = $('url').value.trim(); if (v && !okUrl(v)) { toast('That is not a Neorcha link (it must be https://….myneorcha.com/…)', 'err'); return; } try { localStorage.setItem(urlKey(), v || NX_DEF); } catch (_) {} toast('Neorcha link saved for this hotel', 'ok'); };

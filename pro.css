@@ -3696,7 +3696,7 @@ html, body { background: var(--bg); }
 #panel-rent .card, #panel-nationality .card { padding: 14px 16px; }
 
 /* the version of this stylesheet: the page checks it matches (index.html "Page and scripts from the same version") */
-:root { --ho-css: "v490"; }
+:root { --ho-css: "v491"; }
 .rent-bp-card:empty { display: none; }
 .rent-bp-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 10px; } .rent-bp-h span { color: var(--text3); font-size: .78rem; }
 .rent-bp { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }

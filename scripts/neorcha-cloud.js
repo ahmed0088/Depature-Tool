@@ -129,17 +129,24 @@ async function steps(page) {
 // ── the run ──
 async function main() {
   const need = ['NEORCHA_USER', 'NEORCHA_PASS'].concat(E.DRY ? [] : ['HOTELOPS_EMAIL', 'HOTELOPS_PASS']);
+  const acct = String(E.ACCOUNT || '').trim();
+  if (acct && !/^[A-Z0-9_]{1,30}$/.test(acct)) await fail('The Neorcha account name "' + acct.slice(0, 30) + '" can only use capital letters, digits and _ (for example MERCURE).');
+  const sfx = k => (acct && /^NEORCHA_/.test(k) ? k + '_' + acct : k);
   const miss = need.filter(k => !String(E[k] || '').trim());
+  if (miss.length && acct) await fail('The ' + acct + ' account is not set up on GitHub yet — add the secrets ' + miss.map(sfx).join(', ') + ' (Settings → Secrets and variables → Actions).');
   if (miss.length) { console.log('::notice::Neorcha cloud is not set up yet (missing secrets: ' + miss.join(', ') + '). Nothing to do.'); return; }
   const { from, to } = datesOf(E.FROM, E.TO);
-  const url = String(E.NEORCHA_URL || '').trim() || 'https://ibis.myneorcha.com/neorchaWEBPlatform/#/login';
+  const url0 = String(E.NEORCHA_URL || '').trim(), okUrl = u => { try { const x = new URL(u); return x.protocol === 'https:' && /(^|\.)myneorcha\.com$/i.test(x.hostname) || (!!E.FB_DB_URL && x.hostname === 'localhost'); } catch (_) { return false; } };
+  if (url0 && !okUrl(url0)) await fail('That Neorcha link is not a myneorcha.com address.');
+  const url = url0 || 'https://ibis.myneorcha.com/neorchaWEBPlatform/#/login';
+  if (acct) say('Neorcha account: ' + acct + ' · ' + new URL(url).hostname);
   const runUrl = E.GITHUB_RUN_ID ? (E.GITHUB_SERVER_URL || 'https://github.com') + '/' + E.GITHUB_REPOSITORY + '/actions/runs/' + E.GITHUB_RUN_ID : '';
   const nice = d => new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
   say('Neorcha cloud · searching arrivals from ' + nice(from) + ' to ' + nice(to) + ' (' + from + ' → ' + to + ')');
   const FB = E.DRY && !E.FB_DB_URL ? null : await fbOpen();
   if (FB) { LIVE = FB.live; await FB.start({ state: 'run', step: 'open', from, to, n: 0, prog: 0, run: runUrl, tag: String(E.TAG || '').slice(0, 40), note: 'Opening Neorcha…' }); }
   const live = p => (LIVE ? LIVE(p) : Promise.resolve());
-  let chromium; try { ({ chromium } = require('playwright')); } catch (_) { await fail('Playwright is not installed'); }
+  let chromium; try { ({ chromium } = require('playwright')); } catch (_) { try { ({ chromium } = require('playwright-core')); } catch (_e) { await fail('Playwright is not installed'); } }
   const browser = await chromium.launch(E.CHROME_PATH ? { executablePath: E.CHROME_PATH } : {});
   tlog('SYS', 'Chromium ' + browser.version() + ' headless · ' + (E.RUNNER_OS ? 'GitHub runner (' + E.RUNNER_OS + ')' : 'local') + ' · Dubai time');
   const page = await (await browser.newContext({ viewport: { width: 1400, height: 900 }, locale: 'en-GB', timezoneId: 'Asia/Dubai' })).newPage();
@@ -162,13 +169,13 @@ async function main() {
       send: function (rows, f, t) { window.__nxDone = { rows: rows, from: f, to: t }; } });`);
     let last = '', lastLive = 0, done = null, seenLog = 0;
     const tagOf = l => /^✓/.test(l) ? 'CARD' : /dates|Search|page size|per page|hotel/i.test(l) ? 'SCAN' : /page|next|last page/i.test(l) ? 'PAGE' : /did not|could not|not found|⚠|⛔/.test(l) ? 'WARN' : 'BOT';
-    for (let i = 0; i < 3300 && !done; i++) {   // up to 55 minutes
-      await page.waitForTimeout(1000);
+    for (let i = 0; i < 6600 && !done; i++) {   // up to 55 minutes, checked twice a second
+      await page.waitForTimeout(500);
       const s = await page.evaluate(() => ({ p: window.__nxP || {}, done: !!window.__nxDone, log: (window.__hoNxLog || []).slice(-80), ln: (window.__hoNxLog || []).length }));
       if (s.ln < seenLog) seenLog = 0;
       s.log.slice(Math.max(0, s.log.length - (s.ln - seenLog))).forEach(l => tlog(tagOf(l), l.replace(/^✓ /, ''))); seenLog = s.ln;
       const note = String(s.p.note || '').replace(/\d{6,}/g, '#');
-      if (note && note !== last && (i % 15 === 0 || /✅|⚠️|⛔/.test(note))) { say(note); last = note; }
+      if (note && note !== last && (i % 30 === 0 || /✅|⚠️|⛔/.test(note))) { say(note); last = note; }
       if (note && Date.now() - lastLive > 2500) { lastLive = Date.now(); await live({ step: /Reading/.test(note) ? 'read' : 'search', note, n: s.p.n || 0, prog: s.p.prog || 0 }); }
       if (/^\s*(⚠️|⛔)/.test(note) && !s.done) { await steps(page); await fail('The collector stopped: ' + note); }
       if (s.done) done = await page.evaluate(() => window.__nxDone);

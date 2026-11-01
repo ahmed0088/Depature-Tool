@@ -17,6 +17,18 @@ on:
         description: 'Leave empty (HotelOps fills it, to follow its own run)'
         required: false
         default: ''
+      account:
+        description: 'Neorcha account — empty = the main one; MERCURE = the NEORCHA_USER_MERCURE / NEORCHA_PASS_MERCURE secrets'
+        required: false
+        default: ''
+      url:
+        description: 'Leave empty (HotelOps fills it: the hotel''s Neorcha link)'
+        required: false
+        default: ''
+      hid:
+        description: 'Leave empty (HotelOps fills it: the hotel the cards go to)'
+        required: false
+        default: ''
   schedule:
     - cron: '17 23 * * *'   # 03:17 in Dubai
 permissions:
@@ -34,17 +46,23 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
+      # GitHub's computers already have Google Chrome: use it (no 160 MB browser download); download one only if it is missing
       - name: Browser
-        run: npm install --no-save --no-audit --no-fund playwright@1.49.1 && npx playwright install --with-deps chromium
+        run: |
+          npm install --no-save --no-audit --no-fund playwright-core@1.49.1
+          if [ -x /usr/bin/google-chrome ]; then echo "CHROME_PATH=/usr/bin/google-chrome" >> "$GITHUB_ENV"; google-chrome --version; else npx playwright-core install --with-deps chromium; fi
       - name: Collect
         run: node scripts/neorcha-cloud.js
         env:
           FROM: ${{ inputs.from }}
           TO: ${{ inputs.to }}
           TAG: ${{ inputs.tag }}
-          NEORCHA_URL: ${{ secrets.NEORCHA_URL }}
-          NEORCHA_USER: ${{ secrets.NEORCHA_USER }}
-          NEORCHA_PASS: ${{ secrets.NEORCHA_PASS }}
-          HOTELOPS_EMAIL: ${{ secrets.HOTELOPS_EMAIL }}
-          HOTELOPS_PASS: ${{ secrets.HOTELOPS_PASS }}
-          HOTELOPS_HOTEL: ${{ secrets.HOTELOPS_HOTEL }}
+          # another hotel's account (account: MERCURE) uses its own secrets, NEORCHA_USER_MERCURE …, never the main login;
+          # the HotelOps login falls back to the main one when that hotel has none of its own
+          ACCOUNT: ${{ inputs.account }}
+          NEORCHA_URL: ${{ inputs.url || (inputs.account != '' && secrets[format('NEORCHA_URL_{0}', inputs.account)]) || (inputs.account == '' && secrets.NEORCHA_URL) || '' }}
+          NEORCHA_USER: ${{ inputs.account != '' && secrets[format('NEORCHA_USER_{0}', inputs.account)] || inputs.account == '' && secrets.NEORCHA_USER || '' }}
+          NEORCHA_PASS: ${{ inputs.account != '' && secrets[format('NEORCHA_PASS_{0}', inputs.account)] || inputs.account == '' && secrets.NEORCHA_PASS || '' }}
+          HOTELOPS_EMAIL: ${{ inputs.account != '' && secrets[format('HOTELOPS_EMAIL_{0}', inputs.account)] || secrets.HOTELOPS_EMAIL }}
+          HOTELOPS_PASS: ${{ inputs.account != '' && secrets[format('HOTELOPS_PASS_{0}', inputs.account)] || secrets.HOTELOPS_PASS }}
+          HOTELOPS_HOTEL: ${{ inputs.hid || (inputs.account != '' && secrets[format('HOTELOPS_HOTEL_{0}', inputs.account)]) || secrets.HOTELOPS_HOTEL }}
