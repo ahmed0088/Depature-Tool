@@ -850,7 +850,11 @@ function start() {
   const nav = document.querySelector('.sidenav');
   if (nav) {
     let q = false;
-    new MutationObserver(recs => { if (recs.every(r => r.target === ind)) return; if (!q) { q = true; requestAnimationFrame(() => { q = false; moveInd(); }); } })
+    // only what can move the indicator: the active page (a nav item's class / display) or items added / removed —
+    // not a badge's number changing every few seconds (each time it measured the whole sidebar)
+    const counts = r => r.target !== ind && (r.type === 'childList' ? r.target === nav || (r.target.classList && r.target.classList.contains('nav-section'))
+      : r.target.classList && r.target.classList.contains('nav-item'));
+    new MutationObserver(recs => { if (!recs.some(counts)) return; if (!q) { q = true; requestAnimationFrame(() => { q = false; moveInd(); }); } })
       .observe(nav, { attributes: true, attributeFilter: ['class', 'style'], subtree: true, childList: true });
     addEventListener('resize', () => requestAnimationFrame(moveInd), { passive: true });
     moveInd();

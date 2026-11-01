@@ -1133,7 +1133,12 @@ function planNow(snap) {
 // ══ Applying ════════════════════════════════════════════════
 const J = o => JSON.stringify(o === undefined ? null : o);
 function paintDeps() { safe(() => depRender()); safe(() => updateDepBadge()); }
+/** every change the Opera reader makes on the board is logged "from Opera" (auto, or tapped by someone) */
 function apply(snap, how, P0) {
+  const by = /^tapped/.test(String(how || '')) ? safe(() => (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '', '') : 'auto';
+  return typeof depVia === 'function' ? depVia({ src: 'Opera', who: by }, () => apply0(snap, how, P0)) : apply0(snap, how, P0);
+}
+function apply0(snap, how, P0) {
   const P = P0 || planNow(snap);
   if (!P.n) return { P, text: '' };
   const t = today(), at = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });

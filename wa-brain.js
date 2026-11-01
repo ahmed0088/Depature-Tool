@@ -844,7 +844,7 @@ function compute(force) {
       else if (r && r.status !== 'extended' && r.status !== 'out') ext.push({ room: r.roomStr, key: rk(a.room), kind: 'notmarked', t: e.time, s: e.sender, why: res.text || '' });
     })); });
     // a WhatsApp check-out that still owes
-    const owe = []; logEntries().forEach(e => { if (e.undone) return; (e.res || []).filter(x => x.st === 'co').forEach(x => { const r = depRoom(x.room); if (r && r.status === 'out' && +r.balance > 0 && !owe.some(o => o.key === rk(x.room))) owe.push({ room: r.roomStr, key: rk(x.room), bal: r.balance, t: e.time, s: e.sender }); }); });
+    const owe = []; logEntries().forEach(e => { if (e.undone) return; (e.res || []).filter(x => x.st === 'co').forEach(x => { const r = depRoom(x.room); if (r && r.status === 'out' && +r.balance > 0 && (typeof depOwes === 'function' ? depOwes(r) : +r.balance > 1) && !owe.some(o => o.key === rk(x.room))) owe.push({ room: r.roomStr, key: rk(x.room), bal: r.balance, t: e.time, s: e.sender }); }); });
     // the reader went quiet
     let quiet = null;
     const linked = logEntries().filter(e => e.via === 'link');

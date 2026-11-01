@@ -14,7 +14,7 @@
 //  clients pick up the new version instead of a stale cache.
 // ═══════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'ibis-ops-shell-v460';
+const CACHE_NAME = 'ibis-ops-shell-v461';
 
 const SHELL_FILES = [
   './',
@@ -142,6 +142,8 @@ const SHELL_FILES = [
   './skip-clean.js',
 ];
 
+const SHELL_URLS = new Set(SHELL_FILES.map(u => new URL(u, self.location.href).href));
+
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
@@ -179,6 +181,16 @@ self.addEventListener('fetch', event => {
 
   // "?panel=roster", "?v=…" open the app page itself; "sw.js?x=…" checks are never kept
   const nav = req.mode === 'navigate', keep = !url.search;
+  // A file of this version's app (precached at install): it only changes with a new version, which installs
+  // fresh copies of all of them. So it comes from the cache with no download at all — before, each open fetched
+  // ~115 files again in the background (slow hotel wifi, phone data).
+  if (!nav && keep && SHELL_URLS.has(url.href)) {
+    event.respondWith(caches.match(req).then(hit => hit || fetch(req).then(res => {
+      if (res && res.ok) { const c = res.clone(); caches.open(CACHE_NAME).then(x => x.put(req, c)); }
+      return res;
+    })));
+    return;
+  }
   event.respondWith(
     caches.match(req, { ignoreSearch: nav }).then(cached => {
       const network = fetch(req)

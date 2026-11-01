@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 461, items: [
+    "🗒️ Departures → a room's Notes now shows everything about the room in one timeline: your notes plus the WhatsApp chat, Handover Book, HK requests, maintenance, lost & found, wake-up calls and gym. New filters: 🕘 Activity, 💬 WhatsApp, 📎 Around the app. ↗ opens the item where it lives.",
+    "🧾 Every change says where it came from and who made it: “✓ Checked out · via WhatsApp chat · Sam”, “via Opera · auto”, or by hand with your name. A room added to the board gets a first note saying how it was added.",
+    "💳 A tiny balance left after check-out (AED 1 or less, a rounding or manual adjustment) counts as settled: no more “checked out but owes AED 0.26” alerts.",
+    "⚡ Lighter and faster: when you open the app it no longer downloads all its ~115 files again in the background (about 3 requests instead of ~120 — easier on hotel wifi and phone data). The sidebar and top bar also re-measure the page less often.",
+  ] },
   { v: 460, items: [
     "📊 The Opera reader knows Folio History (past invoices) now. It's a known list, not guests to read, so it no longer sends a “stuck” report for it.",
   ] },

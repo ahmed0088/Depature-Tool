@@ -394,6 +394,14 @@ function processDep() {
   if (typeof logActivity === 'function') logActivity('dep_loaded', `${n} departures loaded for ${when}`);
 }
 
+// ── Where a change came from ───────────────────────────────
+// The WhatsApp chat, the Opera reader or the Brain set this while they change the board, so the log
+// and the room's notes say "via WhatsApp chat · Sam" instead of nothing. A tap at the desk leaves it empty.
+let _depVia = null;
+function depVia(via, fn) { const p = _depVia; _depVia = via; try { return fn(); } finally { _depVia = p; } }
+function _depMe() { return (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || ''; }
+function _depViaText() { return _depVia ? 'from ' + _depVia.src + (_depVia.who ? ' · ' + _depVia.who : '') : 'by hand' + (_depMe() ? ' · ' + _depMe() : ''); }
+
 // ── A room added by hand ───────────────────────────────────
 // The report wasn't loaded today, or a room isn't on it (in-house, early
 // departure): add it to the board so it can be checked out, made late, etc.
@@ -408,7 +416,7 @@ function depAddManualRoom(room, name) {
   depRooms.push({
     room: parseInt(room), roomStr: room, name: String(name || '').trim().toUpperCase() || '—',
     arrival: '', departure: today, nights: 0, balance: 0, source: '', company: '', rateCode: '', isVip: false, depTime: '',
-    status: 'due', lateTime: '', extensionNights: 0, intent: '', note: '', checkoutAt: '', manual: true,
+    status: 'due', lateTime: '', extensionNights: 0, intent: '', note: `[${n.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}] ➕ Added to the board ${typeof _depViaText === "function" ? _depViaText() : "by hand"}`, checkoutAt: '', manual: true,
   });
   depRooms.sort((a, b) => a.room - b.room);
   ['depBoard'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'block'; });
@@ -892,9 +900,11 @@ function depKpiTap(key) { depFilter(depFilter_ === key ? 'all' : key); }
 // Per room: r.balOk = 'Expedia'. For a whole source: settings/depBalanceOk = ['expedia', …] (shared).
 let depBalOkSources = [];
 function _depSrcKey(r) { return String((r && (r.source || r.company)) || '').trim().toLowerCase(); }
+// A few fils / a dirham left after check-out is a rounding or manual adjustment: settled, nothing to chase.
+const DEP_TINY_BAL = 1;
 function depBalOk(r) {
   if (!r || !(r.balance > 0)) return false;
-  if (r.balOk) return true;
+  if (r.balOk || r.balance <= DEP_TINY_BAL) return true;
   const k = _depSrcKey(r);
   return !!k && depBalOkSources.some(s => s && k.includes(s));
 }
@@ -1885,29 +1895,41 @@ function _dpnPaint() {
       <textarea id="dpnRaw" class="dc-note" spellcheck="false" oninput="depNoteInput(${depRooms.indexOf(r)},this.value)">${_dpnEsc(r.note)}</textarea></div>`;
     return;
   }
-  const E = dpnParse(r.note);
+  const E = dpnParse(r.note), X = _dpnAround(r, E);
+  _dpn.ext = X;
   // the room's shared stay notes (room-card.js), read-only on top
   const rn = window.hoRoom && typeof hoRoom.depNotesHtml === 'function' ? hoRoom.depNotesHtml(r.roomStr) : '';
   // filter chips: All, WhatsApp (where it came from), then each type that is used
   const counts = {}; E.forEach(e => { counts[e.cat] = (counts[e.cat] || 0) + 1; });
-  const waN = E.filter(e => e.via).length;
-  const chips = [['all', 'All', '', E.length, 'var(--accent)']];
+  const waN = E.filter(e => e.via).length + X.filter(x => x.src === 'wa').length, actN = X.filter(x => x.src === 'dep').length, appN = X.filter(x => x.src !== 'dep' && x.src !== 'wa').length;
+  const chips = [['all', 'All', '', E.length + X.length, 'var(--accent)']];
+  if (actN) chips.push(['src:act', 'Activity', '🕘', actN, 'var(--accent)']);
   if (waN) chips.push(['src:wa', 'WhatsApp', '💬', waN, 'var(--green)']);
+  if (appN) chips.push(['src:app', 'Around the app', '📎', appN, 'var(--sky,#0ea5e9)']);
   DPN_CATS.forEach(c => { if (counts[c.k] && !(c.k === 'wa' && waN)) chips.push([c.k, c.l, c.i, counts[c.k], c.c]); });
   if (!chips.some(c => c[0] === _dpn.filter)) _dpn.filter = 'all';
   if (fl) fl.innerHTML = chips.map(([k, l, i, n, col]) => `<button type="button" role="tab" aria-selected="${_dpn.filter === k}" class="dpn-f${_dpn.filter === k ? ' on' : ''}" style="--k:${col}" onclick="_dpn.filter='${k}';_dpnPaint()">${i ? `<i aria-hidden="true">${i}</i>` : ''}${_dpnEsc(l)}<b>${n}</b></button>`).join('');
   const q = _dpn.q.trim().toLowerCase();
-  let V = E.filter(e => _dpn.filter === 'all' || (_dpn.filter === 'src:wa' ? !!e.via : e.cat === _dpn.filter));
+  const f = _dpn.filter;
+  let V = E.filter(e => f === 'all' || (f === 'src:wa' ? !!e.via : f === 'src:act' || f === 'src:app' ? false : e.cat === f));
   if (q) V = V.filter(e => (e.text + ' ' + (DPN_CAT[e.cat] || {}).l + ' ' + e.time).toLowerCase().includes(q));
+  let XV = X.filter(x => f === 'all' || (f === 'src:wa' && x.src === 'wa') || (f === 'src:act' && x.src === 'dep') || (f === 'src:app' && x.src !== 'dep' && x.src !== 'wa'));
+  if (q) XV = XV.filter(x => [x.text, x.sub, x.src2, x.who].join(' ').toLowerCase().includes(q));
   // newest first: timed entries by time (later line wins a tie), untimed at the end
   V.sort((a, b) => (b.time ? 1 : 0) - (a.time ? 1 : 0) || b.time.localeCompare(a.time) || b.start - a.start);
-  if (!E.length) { body.innerHTML = rn + `<div class="dpn-empty"><div class="dpn-empty-ico">🗒️</div><b>No notes yet</b><span>Pick a type below and write the first note. The time is added for you.</span></div>`; return; }
-  if (!V.length) { body.innerHTML = rn + `<div class="dpn-empty"><div class="dpn-empty-ico">🔎</div><b>Nothing matches</b><span>Try another word or type.</span><button type="button" class="dpn-hbtn" onclick="_dpn.filter='all';_dpn.q='';document.getElementById('dpnQ').value='';_dpnPaint()">Show all notes</button></div>`; return; }
+  if (!E.length && !X.length) { body.innerHTML = rn + `<div class="dpn-empty"><div class="dpn-empty-ico">🗒️</div><b>No notes yet</b><span>Pick a type below and write the first note. The time is added for you.</span></div>`; return; }
+  if (!V.length && !XV.length) { body.innerHTML = rn + `<div class="dpn-empty"><div class="dpn-empty-ico">🔎</div><b>Nothing matches</b><span>Try another word or type.</span><button type="button" class="dpn-hbtn" onclick="_dpn.filter='all';_dpn.q='';document.getElementById('dpnQ').value='';_dpnPaint()">Show all notes</button></div>`; return; }
   const pinKey = r.notePin || '';
   let html = '', part = null;
-  V.forEach(e => {
-    const p = dpnPart(e.time);
+  // the notes and everything else about the room in one line of time (today's notes by their time)
+  const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+  const noteMs = e => { if (!e.time) return -1; const [h, m] = e.time.split(':'); return t0.getTime() + (+h * 60 + +m) * 6e4; };
+  const all = V.map(e => ({ e, ms: noteMs(e) })).concat(XV.map(x => ({ x, ms: x.at })));
+  all.sort((a, b) => b.ms - a.ms);
+  all.forEach(({ e, x }) => {
+    const p = x ? _dpnPartAt(x.at) : dpnPart(e.time);
     if (p !== part) { part = p; html += `<div class="dpn-part">${p}</div>`; }
+    if (x) { html += _dpnExtHtml(x); return; }
     const c = DPN_CAT[e.cat] || DPN_CAT.gen, pinned = pinKey && (e.key === pinKey || e.key.split('\n')[0] === pinKey);
     const via = e.via ? `<span class="dpn-via">via ${_dpnEsc(e.via.src)} · ${_dpnEsc(e.via.who)}${e.via.at ? ' · ' + _dpnEsc(e.via.at) : ''}${e.via.edited ? ' · ' + _dpnEsc(e.via.edited) : ''}</span>` : '';
     let main;
@@ -1950,6 +1972,36 @@ function _dpnAdd() {
   const b = document.getElementById('dpnBody'); if (b) b.scrollTop = 0;
   if (typeof showToast === 'function') showToast(`Note added to room ${r.roomStr}`, 'ok');
 }
+// ── Everything else about the room (room-card.js timeline): the activity log with who and where from,
+// the WhatsApp chat, Handover Book, HK requests, Front Office Log, wake-ups, gym. Read-only; ↗ opens it.
+function _dpn24(s) { const m = String(s || '').match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i); if (!m) return ''; let h = +m[1]; if (m[3]) { const pm = /pm/i.test(m[3]); if (h === 12) h = pm ? 12 : 0; else if (pm) h += 12; } return String(h).padStart(2, '0') + ':' + m[2]; }
+function _dpnHm(ms) { const d = new Date(ms); return isNaN(d) ? '' : String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+function _dpnAround(r, E) {
+  if (!window.hoRoom || typeof hoRoom.timeline !== 'function') return [];
+  let L = []; try { L = hoRoom.timeline(r.roomStr) || []; } catch (_) { return []; }
+  // a WhatsApp message that already became a note here is not shown twice
+  const seen = new Set((E || []).filter(e => e.via).map(e => String(e.via.who || '').toLowerCase() + '|' + _dpn24(e.via.at)));
+  return L.filter(it => it && !(it.src === 'wa' && seen.has(String(it.who || '').toLowerCase() + '|' + _dpnHm(it.at))));
+}
+function _dpnPartAt(ms) {
+  const d = new Date(ms), t = new Date(); if (isNaN(d)) return 'No time';
+  if (d.toDateString() === t.toDateString()) return dpnPart(_dpnHm(ms));
+  const y = new Date(t); y.setDate(t.getDate() - 1);
+  return d.toDateString() === y.toDateString() ? 'Yesterday' : d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+function _dpnExtHtml(x) {
+  const i = (_dpn.ext || []).indexOf(x);
+  return `<article class="dpn-e dpn-ext${x.done ? ' done' : ''}" style="--k:var(--text3)">
+    <div class="dpn-e-time">${_dpnEsc(_dpnHm(x.at))}</div>
+    <div class="dpn-e-dot" aria-hidden="true">${x.icon || '•'}</div>
+    <div class="dpn-e-main">
+      <div class="dpn-e-top"><span class="dpn-chip dpn-src">${_dpnEsc(x.src2 || '')}</span>${x.done ? '<span class="dpn-xok">✓ Done</span>' : ''}
+        ${typeof x.go === 'function' && i >= 0 ? `<span class="dpn-e-acts"><button type="button" class="dpn-ib" onclick="_dpnGo(${i})" title="Open in ${_dpnEsc(x.src2 || 'its page')}" aria-label="Open in ${_dpnEsc(x.src2 || 'its page')}">↗</button></span>` : ''}</div>
+      <div class="dpn-text">${_dpnEsc(x.text || '')}</div>
+      ${x.sub ? `<div class="dpn-xsub">${_dpnEsc(x.sub)}</div>` : ''}${x.who ? `<div class="dpn-xwho">${_dpnEsc(x.who)}</div>` : ''}
+    </div></article>`;
+}
+function _dpnGo(i) { const x = (_dpn.ext || [])[i]; if (!x || typeof x.go !== 'function') return; const go = x.go; _dpn.room && depCloseNotes(); setTimeout(() => { try { go(); } catch (_) {} }, 60); }
 // ⇪ a Departures note kept as a room note (room-card.js): it then stays with the guest after today's board
 function _dpnToRoom(n) {
   const r = _dpnRoom(), e = _dpnFind(n);
@@ -2270,6 +2322,8 @@ function depAction(i, status, extraNights) {
       extensionNights: status === 'extended' ? (r.extensionNights || 1) : 0,
       lateTime:        status === 'late'     ? (r.lateTime || '')        : '',
       prevTimes,
+      by:              (typeof _depVia !== 'undefined' && _depVia && _depVia.who) || (typeof _depMe === 'function' ? _depMe() : ''),
+      via:             typeof _depVia !== 'undefined' && _depVia ? _depVia.src : '',
     });
   } else {
     // Undo — find what we're undoing and write an undo log entry
@@ -2284,6 +2338,8 @@ function depAction(i, status, extraNights) {
       time:       t,
       roomIdx:    depRooms.indexOf(r),
       prevStatus: prev,
+      by:         (typeof _depVia !== 'undefined' && _depVia && _depVia.who) || (typeof _depMe === 'function' ? _depMe() : ''),
+      via:        typeof _depVia !== 'undefined' && _depVia ? _depVia.src : '',
     });
   }
 

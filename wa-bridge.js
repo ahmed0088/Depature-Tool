@@ -1079,7 +1079,11 @@ function flushPending() {
 /** one action → {room, act, time, st, text, undo?} */
 /** the Opera reader read Departures today: Opera, not WhatsApp, says whether a room is extended */
 function operaDecides() { try { return !!(W.hoOpera && typeof W.hoOpera.fresh === 'function' && W.hoOpera.fresh('departures', 18 * 60)); } catch (_) { return false; } }
+/** every change a WhatsApp message makes on Departures is logged "from WhatsApp chat · <sender>" */
 function applyOne(a, who, board) {
+  return typeof depVia === 'function' ? depVia({ src: 'WhatsApp chat', who: String(who || '').trim() }, () => applyOne0(a, who, board)) : applyOne0(a, who, board);
+}
+function applyOne0(a, who, board) {
   if (a.act === 'lco' && a.time === '00:00') a = Object.assign({}, a, { time: '23:59' });   // "LCO 12am / midnight": the end of today, not overdue at once
   const res = { room: a.room, act: a.act, time: a.time || '', note: a.note || '' };
   const tag = HP.wordTag(a); if (tag) res.w = tag;

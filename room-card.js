@@ -325,7 +325,7 @@ function timeline(room) {
   if (allowed('departures')) safe(() => {
     const L = safe(() => (typeof depLog !== 'undefined' && Array.isArray(depLog) ? depLog : []), []);
     const d = depOf(room), bday = d ? isoDate(d.departure) : '';
-    lists.push(L.filter(l => l && sameRoom(l.room, room) && l.action !== 'due').map((l, i) => ({ src: 'dep', id: 'dep' + i + l.time + l.action, at: atOf(t, l.time), who: depWho(d, l.time), icon: icon('departures', '🧳'),
+    lists.push(L.filter(l => l && sameRoom(l.room, room) && l.action !== 'due').map((l, i) => ({ src: 'dep', id: 'dep' + i + l.time + l.action, at: atOf(t, l.time), who: l.via ? 'via ' + l.via + (l.by && l.by !== 'auto' ? ' · ' + l.by : '') : (depWho(d, l.time) || l.by || ''), icon: icon('departures', '🧳'),
       text: (DEP_ACT[l.action] || l.action) + (l.action === 'late' && l.lateTime ? ' until ' + l.lateTime : '') + (l.action === 'extended' && l.extensionNights ? ' +' + l.extensionNights + 'N' + (bday ? ' → ' + fmtD(addDays(bday, +l.extensionNights)) : '') : '') + (l.action === 'undo' && l.undone ? ' ' + (DEP_ACT[l.undone] || l.undone).replace(/^\S+\s/, '') : ''),
       sub: l.action === 'out' ? 'Checked out on Departures' : '', src2: 'Departures', go: () => goDeparture(room) })));
     // "left · waiting for Finance" is not in the log: from the room itself

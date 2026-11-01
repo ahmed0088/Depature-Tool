@@ -485,9 +485,14 @@
     }
   }
   /** a narrow desktop: the bar's icons would be pushed off the edge → just the shield (and the dot when on), as on phones */
-  function fitAway(b, bar) {
+  let _fitSig = '';
+  function fitAway(b, bar, force) {
     try {
       if (!bar || !b.isConnected || !bar.lastElementChild || !b.getBoundingClientRect) return;
+      // measuring the top bar is a full layout: only when something that changes its width changed
+      const sig = (W.innerWidth || 0) + '|' + bar.childElementCount + '|' + (b.textContent || '') + '|' + b.className.replace(/\s*compact/, '');
+      if (!force && sig === _fitSig) return;
+      _fitSig = sig;
       const tb = bar.closest ? bar.closest('.topbar') : null;
       b.classList.remove('compact'); if (tb) tb.classList.remove('tb-crowded');
       const vw = W.innerWidth || document.documentElement.clientWidth;
@@ -496,7 +501,7 @@
       if (over() && tb) tb.classList.add('tb-crowded');   // still too full: the database pill shows only its dot (its words are in its title)
     } catch (_) {}
   }
-  W.addEventListener && W.addEventListener('resize', () => { const b = document.getElementById('tbAway'); if (b) fitAway(b, document.querySelector('.topbar .topbar-right')); });
+  W.addEventListener && W.addEventListener('resize', () => { const b = document.getElementById('tbAway'); if (b) fitAway(b, document.querySelector('.topbar .topbar-right'), true); });
   document.addEventListener('keydown', e => {
     if (e.ctrlKey && e.altKey && !e.metaKey && !e.shiftKey && !e.repeat && (e.code === 'KeyL' || /^[lL¬]$/.test(e.key || ''))) { e.preventDefault(); awayAll(null, 'key'); }
   });
