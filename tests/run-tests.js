@@ -193,6 +193,9 @@ console.log('\nNationality report');
   check('DTCM fill, put 0 before filling: a column for all days, a whole day, a column on some days — the rest as on the sheet; days typed as all / 5 / 1-5, 9',
     [ZF.rows.map(r => r.v[6]), ZF.rows[2].v, ZF.rows[0].v[1], ZF.rows[1].v[1], ZF.rows[0].v[0], K.daysOf('1-3, 9, 31, 40, x', 30), K.daysOf('all', 30).length, K.daysOf('', 30), K.filled(RP, true).rows[0].v[0]],
     [[0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0], 0, 0, 41432, [1, 2, 3, 9], 30, [], 41432]);
+  const XF = K.filled(RP, true, [{ f: 6, days: 'all', set: 0 }, { f: 6, days: '5', sheet: true }, { f: 0, days: '4', set: 12345.5 }]);
+  check('DTCM fill, flexible changes: set any figure, and "back to the sheet" for one day after a change for all days (a later change wins)',
+    [XF.rows.map(r => r.v[6]), XF.rows[0].v[0], XF.rows[1].v[0], /data-a="clear"/.test(K.fillerCode(RP)) && /data-a="refill"/.test(K.fillerCode(RP))], [[0, 1300, 0], 12345.5, 42942, true]);
   const one = K.parseAoa([['Revenue Date', 'Rooms Revenue (AED)', 'F&B Revenue (AED)', 'Other Revenue (AED)', 'Municipality (AED)', 'Service Charge (AED)', 'VAT (AED)', 'TD Fee (AED)', 'Rooms Occupied', 'Total Available Rooms'], [45992, 36859.12, 6209.5, 1242.33, 3025, 4322, 2432, 1080, 115, 143], [45993, 33952, 5697, 1229, 2785, 3978, 2243, 960, 103, 143], ['Total', 70811.12, 11906.5, 2471.33, 5810, 8300, 4675, 2040, 218, 286]]);
   check('DTCM fill accuracy: a one-line header never takes the first day\'s figures; Excel day numbers are exact days (45992 = 1 Dec 2025); the days add up to the Total row',
     [one.heads[0], one.heads[8], one.rows.map(r => r.d), one.rows[0].v, K.check(one).vsTotal.length], ['Rooms Revenue (AED)', 'Total Available Rooms', [1, 2], [36859.12, 6209.5, 1242.33, 3025, 4322, 2432, 1080, 115, 143], 0]); }

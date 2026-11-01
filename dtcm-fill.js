@@ -129,7 +129,7 @@ function FILLER(D) {
     + '.hoLeg{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:7px;font-size:10.5px;color:#64748b}.hoLeg i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:4px;vertical-align:-1px;border:1px solid}'
     + '.hoSw{display:flex;gap:10px;align-items:flex-start;margin:12px 14px 0;padding:9px 11px;border-radius:12px;border:1px solid #e2e8f0;cursor:pointer;font-size:12px}.hoSw.on{background:#fffbeb;border-color:#fcd34d}'
     + '.hoSw input{appearance:none;-webkit-appearance:none;width:32px;height:18px;border-radius:99px;background:#cbd5e1;position:relative;flex:none;margin-top:1px;cursor:pointer;transition:background .15s}.hoSw input:checked{background:#d97706}.hoSw input::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .15s}.hoSw input:checked::after{left:16px}'
-    + '.hoA{display:flex;gap:8px;padding:12px 14px}.hoA button{flex:1;padding:9px 10px;border-radius:11px;border:1px solid #cbd5e1;background:#fff;color:#0f172a;font-weight:650}.hoA button.p{background:linear-gradient(135deg,#14b8a6,#0f766e);border-color:#0f766e;color:#fff;box-shadow:0 6px 16px -6px rgba(15,118,110,.6)}.hoA button.d{background:#dc2626;border-color:#dc2626;color:#fff}'
+    + '.hoA2{padding-top:0!important}.hoA button.c{color:#b91c1c;border-color:#fca5a5;background:#fff5f5}.hoA{display:flex;gap:8px;padding:12px 14px}.hoA button{flex:1;padding:9px 10px;border-radius:11px;border:1px solid #cbd5e1;background:#fff;color:#0f172a;font-weight:650}.hoA button.p{background:linear-gradient(135deg,#14b8a6,#0f766e);border-color:#0f766e;color:#fff;box-shadow:0 6px 16px -6px rgba(15,118,110,.6)}.hoA button.d{background:#dc2626;border-color:#dc2626;color:#fff}'
     + '.hoL{border-top:1px solid #f1f5f9}.hoL>button{width:100%;padding:8px 14px;border:0;background:#f8fafc;text-align:left;font-size:11.5px;font-weight:650;color:#475569}.hoL div{max-height:170px;overflow:auto;padding:4px 14px 10px;font:11.5px/1.5 ui-monospace,Consolas,monospace}.hoL p{margin:0;padding:3px 0;border-bottom:1px solid #f1f5f9}'
     + '#hoDtcmBox.mini{width:auto;min-width:240px}#hoDtcmBox.mini .hoB{display:none}';
   document.head.appendChild(css);
@@ -173,7 +173,8 @@ function FILLER(D) {
       + '<div class="hoLeg"><span><i style="background:#dcfce7;border-color:#86efac"></i>saved</span><span><i style="background:#ecfeff;border-color:#a5f3fc"></i>already right</span><span><i style="background:#fef3c7;border-color:#fcd34d"></i>differs</span><span><i style="background:#fee2e2;border-color:#fca5a5"></i>problem</span></div></div>';
     h += '<label class="hoSw' + (anyMonth ? ' on' : '') + '"><input type="checkbox" id="hoDtcmAny"' + (anyMonth ? ' checked' : '') + (busy ? ' disabled' : '') + '><span><b>Test mode</b> — fill into the month shown on this page' + (anyMonth ? ': <b>' + E(target()) + '</b> (the sheet\'s day 1 → this page\'s day 1)' : '') + '</span></label>';
     h += '<label class="hoSw' + (force ? ' on' : '') + '"><input type="checkbox" id="hoDtcmForce"' + (force ? ' checked' : '') + (busy ? ' disabled' : '') + '><span><b>Re-save every chosen day</b> — even the days that already match' + (force ? ' (each is opened, filled and saved again)' : '') + '</span></label>';
-    h += '<div class="hoA">' + (busy ? '<button data-a="stop" class="d">■ Stop</button>' : '<button data-a="check">🔍 Check</button><button data-a="fill" class="p">' + fillLbl + '</button>') + '</div>';
+    h += '<div class="hoA">' + (busy ? '<button data-a="stop" class="d">■ Stop</button>' : '<button data-a="check">🔍 Check</button><button data-a="fill" class="p">' + fillLbl + '</button>') + '</div>'
+      + (busy ? '' : '<div class="hoA hoA2"><button data-a="refill" title="Open the chosen days, type the finance figures and save again — even when they already match">↻ Refill</button><button data-a="clear" class="c" title="Put 0 in every box of the chosen days and save (the finance sheet is not changed)">🧹 Clear</button></div>');
     if (lines.length) h += '<div class="hoL"><button data-a="log">' + (logOpen ? '▾' : '▸') + ' Activity (' + lines.length + ')</button>' + (logOpen ? '<div>' + lines.join('') + '</div>' : '') + '</div>';
     box.innerHTML = h + '</div>';
     box.classList.toggle('mini', mini);
@@ -194,21 +195,23 @@ function FILLER(D) {
     else if (!rows().some(function (tr) { return tr.textContent.indexOf('-' + MON[D.m] + '-' + D.y) >= 0; })) return { err: 'This page shows another month. Pick <b>' + MON[D.m] + ' ' + D.y + '</b> and press Filter — or, for a test, tick “Fill into the month shown on this page”.' };
     return { C: C };
   }
-  async function run(write) {
+  // mode: '' fill · 'refill' save again even when they match · 'clear' every box of the chosen days becomes 0 (the sheet itself stays)
+  async function run(write, mode) {
     var R = ready(); if (R.err) { paint('⚠️ ' + R.err); return; }
     var C = R.C; busy = true; stop = false; lines = [];
     var done = 0, same0 = 0, diffs = 0, fail = '';
     var todo = pickDays(daysTxt);
     if (!todo.length) { busy = false; paint('⚠️ No day of ' + MON[D.m] + ' in "' + daysTxt + '". Type e.g. 1 or 1-5, or all.'); return; }
     todo.forEach(function (r) { delete st[r.d]; });
-    paint(write ? 'Filling… keep this tab open. Each day: open → fill → Update → check.' : 'Checking every chosen day against the finance sheet…', 'info');
+    var frc = force || mode === 'refill' || mode === 'clear', clr = mode === 'clear';
+    paint(clr ? 'Clearing… keep this tab open. Each day: open → every box 0 → Update → check.' : write ? 'Filling… keep this tab open. Each day: open → fill → Update → check.' : 'Checking every chosen day against the finance sheet…', 'info');
     for (var k = 0; k < todo.length && !stop; k++) {
-      var r = todo[k], tr = rowFor(r.d);
+      var r = todo[k], tr = rowFor(r.d), vv = clr ? r.v.map(function (x) { return x == null ? null : 0; }) : r.v;
       prog = { k: k, n: todo.length, d: r.d, w: write }; st[r.d] = 'run'; paint();
       if (!tr) { st[r.d] = 'miss'; line(r.d, '⚠️', 'not on the page', '#b45309'); diffs++; continue; }
-      var got = vals(tr, C), off = C.map(function (c, i) { return c >= 0 && r.v[i] != null && !same(got[i], r.v[i]) ? i : -1; }).filter(function (i) { return i >= 0; });
-      if (!off.length && !(write && force)) { same0++; st[r.d] = 'same'; line(r.d, '✓', 'already right', '#0e7490'); continue; }
-      if (!write) { diffs++; st[r.d] = 'diff'; line(r.d, '≠', off.map(function (i) { return FIELDS[i] + ' ' + got[i] + ' → ' + r.v[i]; }).join(' · '), '#b45309'); continue; }
+      var got = vals(tr, C), off = C.map(function (c, i) { return c >= 0 && vv[i] != null && !same(got[i], vv[i]) ? i : -1; }).filter(function (i) { return i >= 0; });
+      if (!off.length && !(write && frc)) { same0++; st[r.d] = 'same'; line(r.d, '✓', 'already right', '#0e7490'); continue; }
+      if (!write) { diffs++; st[r.d] = 'diff'; line(r.d, '≠', off.map(function (i) { return FIELDS[i] + ' ' + got[i] + ' → ' + vv[i]; }).join(' · '), '#b45309'); continue; }
       // open the line for editing: its ✎ Edit button, or a click on the line itself (how the portal opens a row)
       var eb = tr.querySelector('.jsgrid-edit-button');
       if (eb) eb.click(); else (tr.cells[2] || tr.cells[1] || tr).click();
@@ -216,10 +219,10 @@ function FILLER(D) {
       if (!document.querySelector('.jsgrid-edit-row') && eb) { (tr.cells[2] || tr.cells[1] || tr).click(); await sleep(300); }
       var er = document.querySelector('.jsgrid-edit-row'); if (!er) { st[r.d] = 'fail'; fail = r.d + ' ' + MON[D.m] + ': the row did not open for editing'; break; }
       C.forEach(function (c, i) {
-        var inp = c >= 0 && er.cells[c] ? er.cells[c].querySelector('input') : null; if (!inp || r.v[i] == null) return;
-        inp.focus(); inp.value = String(r.v[i]);
+        var inp = c >= 0 && er.cells[c] ? er.cells[c].querySelector('input') : null; if (!inp || vv[i] == null) return;
+        inp.focus(); inp.value = String(vv[i]);
         inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new Event('change', { bubbles: true }));
-        if (typeof window.jQuery === 'function') window.jQuery(inp).val(String(r.v[i])).trigger('change');
+        if (typeof window.jQuery === 'function') window.jQuery(inp).val(String(vv[i])).trigger('change');
       });
       var ub = er.querySelector('.jsgrid-update-button'); if (!ub) { st[r.d] = 'fail'; fail = r.d + ' ' + MON[D.m] + ': no Update button'; break; }
       ub.click();
@@ -228,20 +231,20 @@ function FILLER(D) {
         st[r.d] = 'fail'; fail = r.d + ' ' + MON[D.m] + ': the portal did not save it (a message on the page may say why — e.g. a negative number)'; break;
       }
       tr = rowFor(r.d); got = tr ? vals(tr, C) : [];
-      var bad = C.map(function (c, i) { return c >= 0 && r.v[i] != null && !same(got[i], r.v[i]) ? FIELDS[i] : ''; }).filter(Boolean);
+      var bad = C.map(function (c, i) { return c >= 0 && vv[i] != null && !same(got[i], vv[i]) ? FIELDS[i] : ''; }).filter(Boolean);
       if (bad.length) { st[r.d] = 'fail'; fail = r.d + ' ' + MON[D.m] + ': saved, but ' + bad.join(', ') + ' shows another number'; break; }
-      done++; st[r.d] = 'ok'; line(r.d, '💾', 'filled and saved', '#15803d');
+      done++; st[r.d] = 'ok'; line(r.d, clr ? '🧹' : '💾', clr ? 'cleared (all 0) and saved' : mode === 'refill' ? 'filled and saved again' : 'filled and saved', '#15803d');
       await sleep(250);
     }
     busy = false; prog = null; todo.forEach(function (r) { if (st[r.d] === 'run') delete st[r.d]; });
     if (!write && !stop) { var ch = todo.filter(function (r) { return st[r.d] === 'diff'; }).map(function (r) { return r.d; }); fixSet = ch.length && ch.length < D.rows.length ? ranges(ch) : ''; if (fixSet) daysTxt = fixSet; }
     if (write) fixSet = '';
-    var msg = fail ? '⛔ Stopped at ' + fail + '. Nothing after it was changed.' : stop ? '■ Stopped. ' + done + ' saved so far.' : write ? '✅ Done: ' + done + ' day' + (done === 1 ? '' : 's') + ' saved, ' + same0 + ' already right.' : (diffs ? '🔍 ' + diffs + ' day' + (diffs === 1 ? '' : 's') + ' differ from the finance sheet, ' + same0 + ' already right.' + (fixSet ? ' They are chosen below: ▶ Fix fills only those.' : ' ▶ Fill fixes them.') : '✅ Every day already matches the finance sheet.');
-    if (!fail && write) { var C2 = cols(), tot = C2.map(function (c) { return todo.reduce(function (a, r) { var tr = rowFor(r.d); return a + (tr ? n(tr.cells[c] && tr.cells[c].textContent) : 0); }, 0); }), fin = [0, 1, 6].map(function (i) { return Math.round(todo.reduce(function (a, r) { return a + (+r.v[i] || 0); }, 0) * 100) / 100; });
+    var msg = fail ? '⛔ Stopped at ' + fail + '. Nothing after it was changed.' : stop ? '■ Stopped. ' + done + ' saved so far.' : clr ? '✅ Cleared ' + done + ' day' + (done === 1 ? '' : 's') + ': every box is 0 now. ▶ Fill puts the finance figures back.' : write ? '✅ Done: ' + done + ' day' + (done === 1 ? '' : 's') + ' saved, ' + same0 + ' already right.' : (diffs ? '🔍 ' + diffs + ' day' + (diffs === 1 ? '' : 's') + ' differ from the finance sheet, ' + same0 + ' already right.' + (fixSet ? ' They are chosen below: ▶ Fix fills only those.' : ' ▶ Fill fixes them.') : '✅ Every day already matches the finance sheet.');
+    if (!fail && write && !clr) { var C2 = cols(), tot = C2.map(function (c) { return todo.reduce(function (a, r) { var tr = rowFor(r.d); return a + (tr ? n(tr.cells[c] && tr.cells[c].textContent) : 0); }, 0); }), fin = [0, 1, 6].map(function (i) { return Math.round(todo.reduce(function (a, r) { return a + (+r.v[i] || 0); }, 0) * 100) / 100; });
       msg += '<br><small>' + (todo.length === D.rows.length ? 'The month' : todo.length === 1 ? 'That day' : 'Those ' + todo.length + ' days') + ' on the page now: Rooms ' + tot[0].toLocaleString() + ' · F&B ' + tot[1].toLocaleString() + ' · TD ' + tot[6].toLocaleString() + ' (finance: ' + fin[0].toLocaleString() + ' · ' + fin[1].toLocaleString() + ' · ' + fin[2].toLocaleString() + ')</small>'; }
     paint(msg);
   }
-  function safe(w) { run(w).catch(function (e) { busy = false; prog = null; paint('⛔ Stopped: ' + (e && e.message || e) + '. Nothing after it was changed.'); }); }
+  function safe(w, mode) { run(w, mode).catch(function (e) { busy = false; prog = null; paint('⛔ Stopped: ' + (e && e.message || e) + '. Nothing after it was changed.'); }); }
   box.addEventListener('change', function (e) { if (e.target.id === 'hoDtcmForce') { force = e.target.checked; paint(); return; } if (e.target.id === 'hoDtcmAny') { anyMonth = e.target.checked; lines = []; st = {}; paint(null); } });
   box.addEventListener('input', function (e) { if (e.target.id !== 'hoDtcmDays') return; daysTxt = e.target.value; var pos = e.target.selectionStart; paint(); var i = document.getElementById('hoDtcmDays'); if (i) { i.focus(); i.setSelectionRange(pos, pos); } });
   box.addEventListener('click', function (e) {
@@ -260,6 +263,10 @@ function FILLER(D) {
     else if (b.dataset.a === 'log') { logOpen = !logOpen; paint(); }
     else if (b.dataset.a === 'stop') stop = true;
     else if (b.dataset.a === 'check' && !busy) safe(false);
+    else if ((b.dataset.a === 'refill' || b.dataset.a === 'clear') && !busy) { var sl = pickDays(daysTxt); if (!sl.length) { paint('⚠️ No day of ' + MON[D.m] + ' in "' + daysTxt + '". Type e.g. 1 or 1-5, or all.'); return; }
+      var which = sl.length === D.rows.length ? 'ALL ' + sl.length + ' days' : sl.length === 1 ? 'only ' + sl[0].d + ' ' + MON[D.m] : sl.length + ' days (' + daysTxt + ')';
+      if (b.dataset.a === 'clear' ? confirm('🧹 Clear ' + which + (anyMonth ? ' on ' + target() : '') + ' on the portal?\n\nEvery box of those days becomes 0 and is saved. The finance sheet is not changed — ▶ Fill or ↻ Refill puts its figures back.')
+        : confirm('↻ Refill ' + which + (anyMonth ? ' INTO ' + target() : '') + '?\n\nEach day is opened, the finance figures are typed again and saved — even the days that already match.')) safe(true, b.dataset.a); }
     else if (b.dataset.a === 'fill' && !busy) { var sel = pickDays(daysTxt); if (!sel.length) { paint('⚠️ No day of ' + MON[D.m] + ' in "' + daysTxt + '". Type e.g. 1 or 1-5, or all.'); return; }
       if (confirm((force ? 'Re-save (open, fill and save again, even if they match) ' : 'Fill and save ') + (sel.length === D.rows.length ? 'all ' + sel.length + ' days' : sel.length === 1 ? 'only ' + sel[0].d + ' ' + MON[D.m] : sel.length + ' days (' + daysTxt + ')') + ' of the finance sheet (' + MON[D.m] + ' ' + D.y + ')' + (anyMonth ? ' INTO ' + target() + ' on this page (test mode: by day number)' : '') + '? Days that already match are skipped.')) safe(true); }
   });
@@ -316,22 +323,27 @@ function daysOf(txt, max) {
   t.split(/[,;\s]+/).forEach(p => { const m = p.match(/^(\d{1,2})(?:-(\d{1,2}))?$/); if (!m) return; const a = +m[1], b = m[2] ? +m[2] : a; for (let d = Math.min(a, b); d <= Math.max(a, b); d++) if (d >= 1 && d <= max) out.add(d); });
   return [...out].sort((a, b) => a - b);
 }
-/** the changes typed on the page ("put 0"): [{ f: field index or -1 for the whole day, days: "1-5" }] → day → set of fields (pure) */
-function zeroMap(adj, max) {
+/** the changes made on the page, in order (a later one wins): [{ f: field index or -1 for the whole day, days: "1-5", set: number | sheet: true }]
+ *  ("put 0" = set 0; sheet = back to the sheet's figure) → day → Map(field → the figure, or 'sheet') (pure) */
+function changeMap(adj, max) {
   const z = {};
-  (adj || []).forEach(a => daysOf(a.days, max).forEach(d => { const s = z[d] || (z[d] = new Set()); if (a.f < 0) FIELDS.forEach((_, i) => s.add(i)); else s.add(+a.f); }));
+  (adj || []).forEach(a => daysOf(a.days, max).forEach(d => {
+    const m = z[d] || (z[d] = new Map()), v = a.sheet ? 'sheet' : Number.isFinite(+a.set) ? +a.set : 0;
+    (a.f < 0 ? FIELDS.map((_, i) => i) : [+a.f]).forEach(i => m.set(i, v));
+  }));
   return z;
 }
-/** the figures that are filled in: the sheet's, with negatives as 0 when that is on, and the "put 0" changes (pure) */
+/** the figures that are filled in: the sheet's, with negatives as 0 when that is on, then the changes made on the page (pure) */
 function filled(S0, neg0, adj) {
-  const z = zeroMap(adj, 31);
-  return Object.assign({}, S0, { rows: S0.rows.map(r => ({ d: r.d, v: r.v.map((x, i) => (z[r.d] && z[r.d].has(i) && x != null ? 0 : neg0 && x < 0 ? 0 : x)) })) });
+  const z = changeMap(adj, 31);
+  return Object.assign({}, S0, { rows: S0.rows.map(r => ({ d: r.d, v: r.v.map((x, i) => { const c = z[r.d] && z[r.d].get(i);
+    return c === undefined || c === 'sheet' ? (neg0 && x < 0 ? 0 : x) : x == null && c === 0 ? null : c; }) })) });
 }
 function draw() {
   const out = $('out'); if (!out) return;
   const stp = $('steps'); if (stp) stp.querySelectorAll('li').forEach(li => { const k = +li.dataset.s; li.className = !S ? (k === 1 ? 'now' : '') : k === 1 ? 'done' : 'now'; });
   if (!S) { out.innerHTML = ''; return; }
-  const adj = S.adj || [], n0 = neg0On(), F = filled(S, n0, adj), C = check(S), CF = check(F), mm = MONTHS[S.m] + ' ' + S.y, ZM = zeroMap(adj, 31);
+  const adj = S.adj || [], n0 = neg0On(), F = filled(S, n0, adj), C = check(S), CF = check(F), mm = MONTHS[S.m] + ' ' + S.y, ZM = changeMap(adj, 31);
   const dim = new Date(S.y, S.m + 1, 0).getDate();
   const warn = [];
   if (S.from === 'pdf') warn.push('Read from the PDF: each day there is rounded to whole dirhams. Use the Excel file for the exact numbers.');
@@ -345,11 +357,13 @@ function draw() {
       <div class="k7"><small>Rooms occupied</small><b>${fmt(C.sums[7])}</b><i>of ${fmt(C.sums[8])}</i></div></div>
     ${S.heads ? `<div class="dtf-map"><b>Columns read</b> ${FIELDS.map((f, i) => `<span>${esc(f)} ← <i>${esc(S.heads[i] || '— not in the sheet')}</i></span>`).join('')}</div>` : ''}
     ${C.neg.length ? `<label class="dtf-neg"><input type="checkbox" id="dtf-neg0"${n0 ? ' checked' : ''}> <span><b>Negative figures → 0</b> ${n0 ? `· ${C.neg.map(x => `${x.d} ${MON[S.m]} ${esc(x.f)} ${fmt(x.v)} → 0`).join(' · ')}` : `· off: ${C.neg.length} negative figure${C.neg.length === 1 ? '' : 's'} will be filled as they are`}</span></label>` : ''}
-    <div class="dtf-adj"><div class="dtf-adj-h"><b>✏️ Change before filling</b><small>Put 0 in a column (e.g. all TD Fee) or a whole day, for all days or just some — the rest stays as on the sheet. Only what is filled changes; your file doesn't.</small></div>
-      <div class="dtf-adj-r"><label>What<select id="dtf-af"><option value="-1">Whole day (every column)</option>${FIELDS.map((f, i) => `<option value="${i}"${i === 6 ? ' selected' : ''}>${esc(f)}</option>`).join('')}</select></label>
+    <div class="dtf-adj"><div class="dtf-adj-h"><b>✏️ Change before filling</b><small>Put 0 or any figure in a column (e.g. all TD Fee) or a whole day, for all days or just some — or click any figure in the table below. The rest stays as on the sheet; your file never changes.</small></div>
+      <div class="dtf-adj-r"><label>Do<select id="dtf-aact"><option value="zero">Put 0</option><option value="set">Set to a number</option><option value="sheet">Back to the sheet's figure</option></select></label>
+        <label>What<select id="dtf-af"><option value="-1">Whole day (every column)</option>${FIELDS.map((f, i) => `<option value="${i}"${i === 6 ? ' selected' : ''}>${esc(f)}</option>`).join('')}</select></label>
         <label>Days<input id="dtf-ad" placeholder="all  ·  5  ·  1-5, 9" value="all"></label>
-        <button type="button" class="btn gold" id="dtf-aadd">0️⃣ Put 0</button></div>
-      ${adj.length ? `<div class="dtf-adj-l">${adj.map((a, k) => { const ds = daysOf(a.days, dim); return `<span>${a.f < 0 ? 'Whole day' : esc(FIELDS[a.f])} → 0 · ${String(a.days).trim().toLowerCase() === 'all' ? 'all days' : ds.length === 1 ? 'day ' + ds[0] : 'days ' + esc(a.days)}<button type="button" data-adel="${k}" title="Undo this change">✕</button></span>`; }).join('')}<button type="button" class="dtf-adj-x" id="dtf-aclr">Undo all</button></div>` : ''}</div>
+        <label id="dtf-avl" hidden>Number<input id="dtf-aval" inputmode="decimal" placeholder="e.g. 1250.50"></label>
+        <button type="button" class="btn gold" id="dtf-aadd">✓ Apply</button></div>
+      ${adj.length ? `<div class="dtf-adj-l">${adj.map((a, k) => { const ds = daysOf(a.days, dim); return `<span>${a.f < 0 ? 'Whole day' : esc(FIELDS[a.f])} → ${a.sheet ? 'the sheet' : fmt(+a.set || 0)} · ${String(a.days).trim().toLowerCase() === 'all' ? 'all days' : ds.length === 1 ? 'day ' + ds[0] : 'days ' + esc(a.days)}<button type="button" data-adel="${k}" title="Undo this change">✕</button></span>`; }).join('')}<button type="button" class="dtf-adj-x" id="dtf-aclr">Undo all</button></div>` : ''}</div>
     ${warn.length ? `<div class="dtf-warn">${warn.map(w => `<div>⚠️ ${esc(w)}</div>`).join('')}</div>` : '<div class="dtf-ok">✅ Every day is there and the days add up to the sheet\'s totals.</div>'}
     <div class="dtf-go">
       <div class="dtf-go-h"><span>3</span><div><h3>Fill the DTCM portal</h3><p>About a minute for a month · it skips days that already match</p></div></div>
@@ -358,22 +372,39 @@ function draw() {
         <li>Press <b>📋 Copy the filler</b> below.</li>
         <li>On the portal press <b>F12</b> → <b>Console</b>, paste (Ctrl+V) and press <b>Enter</b>. <small>(The first time Chrome asks you to type <code>allow pasting</code> first.)</small></li>
         <li>A HotelOps box appears: choose the <b>days</b> (tap them, or type e.g. <code>1</code> or <code>1-5</code>; <b>All</b> = the month), <b>🔍 Check</b> compares, <b>▶ Fill</b> fills each chosen day and presses <b>Update</b>, then checks it saved. <small>First time? Try day 1 only.</small></li>
+        <li>Need to redo days? <b>↻ Refill</b> types the figures again and saves, even if they match. <b>🧹 Clear</b> puts 0 in every box of the chosen days and saves. Both ask first.</li>
       </ol>
       <div class="dtf-btns"><button type="button" class="btn gold" id="dtf-copy">📋 Copy the filler</button>
         <a class="btn" id="dtf-bm" title="Or drag this to your bookmarks bar, then click it on the portal page" href="#">⭐ Drag to bookmarks</a></div>
       <p class="dtf-note">The filler only types into the portal's own boxes and presses its Update button, one day at a time. It stops at the first day the portal refuses.</p>
     </div>
     <div class="dtf-tw"><table><thead><tr><th>Day</th>${SHORT.map(s => `<th>${esc(s)}</th>`).join('')}</tr></thead><tbody>
-      ${S.rows.map(r => `<tr><td>${new Date(S.y, S.m, r.d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</td>${r.v.map((v, i) => v == null ? '<td>–</td>' : ZM[r.d] && ZM[r.d].has(i) ? (v ? `<td class="z zz" title="Put 0 by you · on the sheet: ${fmt(v)}">0 <s>${fmt(v)}</s></td>` : '<td class="zz">0</td>') : v < 0 && n0 ? `<td class="z" title="On the sheet: ${fmt(v)}">0 <s>${fmt(v)}</s></td>` : `<td class="${v < 0 ? 'neg' : ''}">${fmt(v)}</td>`).join('')}</tr>`).join('')}
+      ${S.rows.map(r => `<tr><td>${new Date(S.y, S.m, r.d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</td>${r.v.map((v, i) => v == null ? '<td>–</td>' : ZM[r.d] && ZM[r.d].has(i) && ZM[r.d].get(i) !== 'sheet' ? (ZM[r.d].get(i) !== v ? `<td class="z zz" data-cd="${r.d}" data-ci="${i}" title="Changed by you · on the sheet: ${fmt(v)} · click to change">${fmt(ZM[r.d].get(i))} <s>${fmt(v)}</s></td>` : `<td class="zz" data-cd="${r.d}" data-ci="${i}">${fmt(v)}</td>`) : v < 0 && n0 ? `<td class="z" data-cd="${r.d}" data-ci="${i}" title="On the sheet: ${fmt(v)}">0 <s>${fmt(v)}</s></td>` : `<td class="${v < 0 ? 'neg' : ''}" data-cd="${r.d}" data-ci="${i}">${fmt(v)}</td>`).join('')}</tr>`).join('')}
       <tr class="tot"><td>Total filled</td>${CF.sums.map(v => `<td>${fmt(v)}</td>`).join('')}</tr></tbody></table></div>`;
   const keep = a => { S.adj = a; try { localStorage.setItem(LS, JSON.stringify(S)); } catch (_) {} draw(); };
+  const act = () => $('aact').value;
+  $('aact').onchange = () => { $('avl').hidden = act() !== 'set'; if (act() === 'set') $('aval').focus(); };
   $('aadd').onclick = () => {
-    const f = +$('af').value, days = $('ad').value.trim() || 'all', ds = daysOf(days, dim);
+    const f = +$('af').value, days = $('ad').value.trim() || 'all', ds = daysOf(days, dim), a = act();
     if (!ds.length) { toast('Type the days: all, 5, or 1-5, 9', 'err'); return; }
-    keep(adj.concat([{ f, days }]));
-    toast(`${f < 0 ? 'Whole day' : FIELDS[f]} → 0 on ${ds.length === dim ? 'all days' : ds.length + ' day' + (ds.length === 1 ? '' : 's')} — copy the filler again`, 'ok');
+    let c = { f, days };
+    if (a === 'sheet') c.sheet = true;
+    else if (a === 'set') { const t = $('aval').value.replace(/[,\s]/g, ''); if (!/^-?\d+(\.\d+)?$/.test(t)) { toast('Type the number to put (e.g. 1250.50)', 'err'); $('aval').focus(); return; } c.set = +t; }
+    else c.set = 0;
+    keep(adj.concat([c]));
+    toast(`${f < 0 ? 'Whole day' : FIELDS[f]} → ${c.sheet ? 'the sheet' : fmt(c.set)} on ${ds.length === dim ? 'all days' : ds.length + ' day' + (ds.length === 1 ? '' : 's')} — copy the filler again`, 'ok');
   };
-  $('ad').onkeydown = e => { if (e.key === 'Enter') $('aadd').click(); };
+  ['ad', 'aval'].forEach(id => { $(id).onkeydown = e => { if (e.key === 'Enter') $('aadd').click(); }; });
+  // click any figure: change just that one (empty = back to the sheet)
+  out.querySelectorAll('td[data-cd]').forEach(td => { td.style.cursor = 'pointer'; td.onclick = () => {
+    const d = +td.dataset.cd, i = +td.dataset.ci, row = S.rows.find(r => r.d === d), was = F.rows.find(r => r.d === d).v[i];
+    const t = prompt(`${FIELDS[i]} on ${d} ${MON[S.m]} — the figure to fill (now ${fmt(was)}, sheet ${fmt(row && row.v[i])}).\nLeave empty for the sheet's figure.`, String(was == null ? '' : was));
+    if (t === null) return;
+    const v = t.replace(/[,\s]/g, '');
+    if (v === '') { keep(adj.concat([{ f: i, days: String(d), sheet: true }])); return; }
+    if (!/^-?\d+(\.\d+)?$/.test(v)) { toast('That is not a number', 'err'); return; }
+    keep(adj.concat([{ f: i, days: String(d), set: +v }]));
+  }; });
   out.querySelectorAll('[data-adel]').forEach(b => { b.onclick = () => keep(adj.filter((_, k) => k !== +b.dataset.adel)); });
   const ac = $('aclr'); if (ac) ac.onclick = () => keep([]);
   const ng = $('neg0'); if (ng) ng.onchange = () => { try { localStorage.setItem('ho_dtcm_neg0', ng.checked ? '1' : '0'); } catch (_) {} draw(); };
@@ -396,6 +427,7 @@ const CSS = `
 #panel-${PANEL} .dtf-adj-r select,#panel-${PANEL} .dtf-adj-r input{padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font:inherit;font-size:.88rem;min-width:170px}
 #panel-${PANEL} .dtf-adj-l{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;align-items:center}#panel-${PANEL} .dtf-adj-l span{display:inline-flex;gap:6px;align-items:center;padding:4px 6px 4px 10px;border-radius:99px;background:color-mix(in srgb,#f59e0b 16%,var(--card));border:1px solid color-mix(in srgb,#f59e0b 40%,var(--border));font-size:.8rem}
 #panel-${PANEL} .dtf-adj-l span button{border:0;background:transparent;color:var(--text2);cursor:pointer;font-size:.8rem;padding:0 4px}#panel-${PANEL} .dtf-adj-x{border:0;background:transparent;color:var(--text3);text-decoration:underline;cursor:pointer;font-size:.8rem}
+#panel-${PANEL} .dtf-tw td[data-cd]:hover{outline:1px dashed color-mix(in srgb,#f59e0b 70%,transparent);outline-offset:-3px}
 #panel-${PANEL} .dtf-tw td.zz{background:color-mix(in srgb,#f59e0b 12%,transparent)!important}
 #panel-${PANEL} .dtf-neg{display:flex;gap:8px;align-items:flex-start;margin:0 0 10px;padding:10px 14px;border-radius:12px;background:var(--bg2);border:1px solid var(--border);font-size:.84rem;cursor:pointer}#panel-${PANEL} .dtf-tw td.z s{color:var(--text3);font-size:.72rem;margin-left:4px}
 #panel-${PANEL} .dtf-ok{padding:10px 14px;border-radius:12px;background:color-mix(in srgb,var(--green,#16a34a) 9%,transparent);border:1px solid color-mix(in srgb,var(--green,#16a34a) 30%,transparent);font-size:.85rem}
@@ -450,6 +482,6 @@ function mount() {
   z.addEventListener('drop', e => { const f = e.dataTransfer && e.dataTransfer.files[0]; if (f) load(f); });
   draw();
 }
-W.hoDtcmFill = { daysOf, zeroMap, filled, parseAoa, parseLines, check, fillerCode, dateOf, FILLER, FIELDS };
+W.hoDtcmFill = { daysOf, changeMap, filled, parseAoa, parseLines, check, fillerCode, dateOf, FILLER, FIELDS };
 if (typeof document !== 'undefined' && document.addEventListener) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount(); }
 })();

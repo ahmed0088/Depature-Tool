@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 482, items: [
+    "🧹 DTCM filler on the portal: new 🧹 Clear and ↻ Refill buttons for the chosen days. Clear puts 0 in every box of those days and saves; Refill types the finance figures again and saves, even if they already match. Both ask first.",
+    "✏️ Change before filling is fully flexible now: Put 0, Set to any number, or Back to the sheet's figure — for a column or a whole day, all days or just some. A later change wins, so \"TD Fee 0 on all days, but the sheet on day 5\" works.",
+    "👆 Click any figure in the table to change just that one (leave it empty for the sheet's figure).",
+  ] },
   { v: 481, items: [
     "✏️ DTCM Revenue Fill: new \"Change before filling\" box. Put 0 in any column (e.g. all TD Fee) or a whole day, for all days or just some (type all, 5, or 1-5, 9). Add as many changes as you need; each shows as a chip you can ✕ to undo. The rest stays exactly as on the sheet.",
     "👀 The table shows each changed figure as 0 next to the sheet's crossed-out number (amber), and the totals follow. Copy the filler again after a change — it fills, checks and saves those zeros like any other figure.",
