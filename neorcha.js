@@ -262,7 +262,7 @@ async function load(file) {
     const wb = /\.(csv|txt)$/i.test(file.name) ? XLSX.read(await file.text(), { type: 'string', raw: true }) : XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: false });
     let R = null;
     for (const n of wb.SheetNames) { R = parseAoa(XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' })); if (R) break; }
-    if (!R || !R.rows.length) { toast('No guests found in that file — export Guest Documents → Export Excel → CSV (All) from Neorcha', 'err'); return; }
+    if (!R || !R.rows.length) { toast('No guests found in that file — use the file the collector saved', 'err'); return; }
     S = Object.assign(R, { file: file.name, at: Date.now() });
     try { localStorage.setItem(LS, JSON.stringify(S)); } catch (_) {}
     if (typeof logActivity === 'function') try { logActivity('neorcha_loaded', R.rows.length + ' registrations'); } catch (_) {}
@@ -334,8 +334,6 @@ const CSS = `
 #panel-${PANEL} .nx-steps li.done b{background:var(--green,#16a34a);color:#fff;border-color:transparent;font-size:0}#panel-${PANEL} .nx-steps li.done b::after{content:'✓';font-size:.85rem}
 #panel-${PANEL} .nx-drop{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:18px;border:2px dashed var(--border2);border-radius:14px;background:var(--bg2)}#panel-${PANEL} .nx-drop.over{border-color:var(--accent)}
 #panel-${PANEL} .nx-drop-t{flex:1 1 220px;display:flex;flex-direction:column;gap:2px}#panel-${PANEL} .nx-drop-t span{color:var(--text3);font-size:.8rem}
-#panel-${PANEL} .nx-how{margin:10px 0 0;border:1px solid var(--border);border-radius:12px;background:var(--card)}#panel-${PANEL} .nx-how summary{cursor:pointer;padding:9px 14px;font-weight:600;color:var(--text2);font-size:.84rem}
-#panel-${PANEL} .nx-how ol{margin:0;padding:4px 16px 12px 34px;line-height:1.8;font-size:.85rem;color:var(--text2)}
 #panel-${PANEL} .nx-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:16px 0 8px}
 #panel-${PANEL} .nx-sum>div{position:relative;overflow:hidden;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column}
 #panel-${PANEL} .nx-sum>div::before{content:'';position:absolute;left:0;top:0;right:0;height:3px;background:var(--k)}#panel-${PANEL} .k0{--k:#6366f1}#panel-${PANEL} .k1{--k:#0ea5e9}#panel-${PANEL} .k2{--k:#d97706}#panel-${PANEL} .k3{--k:#16a34a}
@@ -362,6 +360,9 @@ const CSS = `
 #panel-${PANEL} .nx-run{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin:12px 0 4px}#panel-${PANEL} .nx-run label{display:flex;flex-direction:column;gap:4px;font-size:.74rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em}
 #panel-${PANEL} .nx-run input{padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font:inherit;font-size:.9rem}
 #panel-${PANEL} .nx-live{margin:10px 0 0;padding:10px 12px;border-radius:10px;font-size:.86rem;background:color-mix(in srgb,#6366f1 10%,var(--card));color:var(--text)}#panel-${PANEL} .nx-live.ok{background:color-mix(in srgb,#10b981 14%,var(--card))}#panel-${PANEL} .nx-live.err{background:color-mix(in srgb,#f43f5e 12%,var(--card))}
+#panel-${PANEL} .nx-run .nx-url{flex:1 1 320px}#panel-${PANEL} .nx-run .nx-url input{width:100%}
+#panel-${PANEL} .nx-man .nx-drop{margin-top:12px}
+#panel-${PANEL} .nx-live-b{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 #panel-${PANEL} .nx-man{margin-top:12px;font-size:.84rem;color:var(--text3)}#panel-${PANEL} .nx-man summary{cursor:pointer}
 #panel-${PANEL} .nx-col ol{margin:10px 0;padding-left:22px;line-height:1.8;font-size:.86rem;color:var(--text2)}#panel-${PANEL} .nx-col b{color:var(--text)}#panel-${PANEL} .nx-col-b{display:flex;gap:8px;flex-wrap:wrap}
 @media (max-width:640px){#panel-${PANEL} .nx-steps{grid-template-columns:1fr}}`;
@@ -376,19 +377,17 @@ function mount() {
       <button type="button" class="btn rose" id="nx-clear">✕ Clear</button></div>
     <ol class="nx-steps" id="nx-steps"><li data-s="1"><b>1</b><span>Collect from Neorcha</span></li><li data-s="2"><b>2</b><span>See the month</span></li><li data-s="3"><b>3</b><span>Link to Purpose of Stay</span></li></ol>
     <div class="nx-col"><div class="nx-col-h"><span>🤖</span><div><b>Collect from Neorcha — automatic</b><small>Pick the dates and press Start. Neorcha opens, you log in, it reads every confirmation by itself and the cards land here.</small></div></div>
-      <div class="nx-run"><label>Arrivals from<input type="date" id="nx-from"></label><label>to<input type="date" id="nx-to"></label>
+      <div class="nx-run"><label class="nx-url">Your hotel's Neorcha link<input type="url" id="nx-url" spellcheck="false"></label><label>Arrivals from<input type="date" id="nx-from"></label><label>to<input type="date" id="nx-to"></label>
         <button type="button" class="btn gold" id="nx-start">▶ Start</button></div>
       <div class="nx-live" id="nx-live" hidden></div>
       <details class="nx-man"><summary>No helper on this PC? Run it by hand</summary>
         <ol><li>Open <b>ibis.myneorcha.com</b>, log in, go to <b>Guest Documents</b> and pick your <b>hotel</b>.</li>
           <li>Press <b>📋 Copy the collector</b>, then on Neorcha press <b>F12 → Console</b>, paste and press <b>Enter</b> <small>(first time: type <code>allow pasting</code>)</small> — or click the bookmark.</li>
           <li>Choose the dates and press <b>▶ Collect</b>. It saves a file at the end: drop it here.</li></ol>
-        <div class="nx-col-b"><button type="button" class="btn" id="nx-copycol">📋 Copy the collector</button><a class="btn" id="nx-bm" href="#">⭐ Drag to bookmarks</a></div></details></div>
-    <div class="nx-drop" id="nx-drop"><div style="font-size:26px">🪪</div><div class="nx-drop-t"><b>Or drop a Neorcha export here</b><span>Guest Documents → Export Excel → CSV (All) · .csv or .xlsx</span></div>
+        <div class="nx-col-b"><button type="button" class="btn" id="nx-copycol">📋 Copy the collector</button><a class="btn" id="nx-bm" href="#">⭐ Drag to bookmarks</a></div>
+    <div class="nx-drop" id="nx-drop"><div style="font-size:26px">🪪</div><div class="nx-drop-t"><b>Drop the collector's file here</b><span>the file it saved at the end (.csv)</span></div>
       <button type="button" class="btn gold" id="nx-browse">📂 Browse…</button><input type="file" id="nx-file" accept=".csv,.txt,.xlsx,.xls" hidden></div>
-    <details class="nx-how"><summary>❔ How to get the file from Neorcha</summary><ol>
-      <li>Open <b>ibis.myneorcha.com</b> and log in.</li><li>Go to <b>Guest Documents</b>, pick the <b>Hotel</b> and the <b>Arrival Date From / To</b> (e.g. 1–31 Oct), press <b>Search</b>.</li>
-      <li>Press <b>Export Excel → CSV (All)</b>, then drop that file above.</li></ol></details>
+      </details></div>
     <div id="nx-out"></div></div>`;
   main.appendChild(panel);
   const item = document.createElement('div'); item.className = 'nav-item'; item.id = 'nav-' + PANEL; item.dataset.panel = PANEL;
@@ -405,20 +404,35 @@ function mount() {
   // ▶ Start: dates → the helper (it opens Neorcha); its progress and the cards come back here
   const t = new Date(), iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   $('from').value = iso(new Date(t.getFullYear(), t.getMonth(), 1)); $('to').value = iso(t);
-  const live = (h, tone) => { const L = $('live'); L.hidden = false; L.className = 'nx-live ' + (tone || ''); L.textContent = h; };
+  const live = (h, tone, html) => { const L = $('live'); L.hidden = false; L.className = 'nx-live ' + (tone || ''); if (html) L.innerHTML = esc(h) + html; else L.textContent = h; };
+  const NX_DEF = 'https://ibis.myneorcha.com/neorchaWEBPlatform/#/login';
+  const urlKey = () => { let h = ''; try { h = typeof _meHotel === 'function' ? _meHotel() : ''; } catch (_) {} return 'ho_neorcha_url_v1:' + String(h || 'hotel').toLowerCase(); };
+  const okUrl = u => { try { const x = new URL(u); return x.protocol === 'https:' && /(^|[.])myneorcha[.]com$/i.test(x.hostname); } catch (_) { return false; } };
+  const NX = () => { const v = $('url').value.trim(); return okUrl(v) ? v : NX_DEF; };
+  try { $('url').value = localStorage.getItem(urlKey()) || NX_DEF; } catch (_) { $('url').value = NX_DEF; }
+  $('url').placeholder = NX_DEF;
+  $('url').onchange = () => { const v = $('url').value.trim(); if (v && !okUrl(v)) { toast('That is not a Neorcha link (it must be https://….myneorcha.com/…)', 'err'); return; } try { localStorage.setItem(urlKey(), v || NX_DEF); } catch (_) {} toast('Neorcha link saved for this hotel', 'ok'); };
+  const openBtn = () => '<a class="btn" href="' + esc(NX()) + '" target="_blank" rel="noopener">🌐 Open Neorcha myself</a>';
+  const dlBtn = '<button type="button" class="btn gold" data-nxdl="1">⬇️ Download the helper</button>';
+  let heard = 0, waitT = 0;
+  $('live').addEventListener('click', e => { if (e.target.closest('[data-nxdl]') && W.hoWaHelper && W.hoWaHelper.download) W.hoWaHelper.download(); });
   $('start').onclick = () => {
     const f = $('from').value, to = $('to').value;
     if (!f || !to || f > to) { toast('Pick the arrival dates (from ≤ to)', 'err'); return; }
     const D = document.documentElement.dataset;
     if (!D.hoNxHelper) {
-      live(D.hoWaHelper ? '⬇️ Your helper is older than this feature: download it once more (Settings → WhatsApp helper), reload it in chrome://extensions, then press Start again.' : '⬇️ This needs the HotelOps helper on this PC (Settings → WhatsApp helper → Download). Or use "Run it by hand" below.', 'err');
+      live(D.hoWaHelper ? '⬇️ Your helper on this PC is the old one — it can\'t open Neorcha yet. Download it, unzip it over the old helper folder (replace the files), press ↻ on it in chrome://extensions, reload this page and press Start again.'
+        : '⬇️ This PC has no HotelOps helper yet. Download it and add it once (the README in the zip shows how), or use "Run it by hand" below.', 'err', '<div class="nx-live-b">' + dlBtn + '</div>');
       return;
     }
-    window.postMessage({ source: 'ho-nx-job', from: f, to }, location.origin);
+    heard = 0; clearTimeout(waitT);
+    window.postMessage({ source: 'ho-nx-job', from: f, to, url: NX() }, location.origin);
     live('⏳ Opening Neorcha… log in there — everything else is automatic.');
+    waitT = setTimeout(() => { if (!heard) live('⚠️ The helper did not answer. In chrome://extensions press ↻ on HotelOps WhatsApp helper, reload this page and press Start again — or open Neorcha yourself: after you log in it starts by itself.', 'err', '<div class="nx-live-b">' + openBtn() + '</div>'); }, 6000);
   };
   window.addEventListener('message', e => {
     const m = e.data; if (e.source !== window || !m || typeof m !== 'object') return;
+    if (/^ho-nx-(progress|rows)$/.test(m.source)) heard = 1;
     if (m.source === 'ho-nx-progress' && m.note) live('🤖 ' + String(m.note).slice(0, 300) + (m.n ? '' : ''), /⛔|⚠️/.test(m.note) ? 'err' : '');
     if (m.source === 'ho-nx-rows' && Array.isArray(m.rows) && fromCollector(m.rows.slice(0, 5000), m.from, m.to)) { live('✅ ' + S.rows.length + ' cards collected — see below, then link them to Purpose of Stay.', 'ok'); draw(); }
   });

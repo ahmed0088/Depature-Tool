@@ -192,7 +192,7 @@ console.log('\nNationality report');
   const one = K.parseAoa([['Revenue Date', 'Rooms Revenue (AED)', 'F&B Revenue (AED)', 'Other Revenue (AED)', 'Municipality (AED)', 'Service Charge (AED)', 'VAT (AED)', 'TD Fee (AED)', 'Rooms Occupied', 'Total Available Rooms'], [45992, 36859.12, 6209.5, 1242.33, 3025, 4322, 2432, 1080, 115, 143], [45993, 33952, 5697, 1229, 2785, 3978, 2243, 960, 103, 143], ['Total', 70811.12, 11906.5, 2471.33, 5810, 8300, 4675, 2040, 218, 286]]);
   check('DTCM fill accuracy: a one-line header never takes the first day\'s figures; Excel day numbers are exact days (45992 = 1 Dec 2025); the days add up to the Total row',
     [one.heads[0], one.heads[8], one.rows.map(r => r.d), one.rows[0].v, K.check(one).vsTotal.length], ['Rooms Revenue (AED)', 'Total Available Rooms', [1, 2], [36859.12, 6209.5, 1242.33, 3025, 4322, 2432, 1080, 115, 143], 0]); }
-{ const ctx = vm.createContext({ window: {}, document: { readyState: 'loading', addEventListener() {} }, localStorage: { getItem() { return null; }, setItem() {} }, console, Intl });
+const nxAsync = (async () => { const ctx = vm.createContext({ window: {}, document: { readyState: 'loading', addEventListener() {} }, localStorage: { getItem() { return null; }, setItem() {} }, console, Intl });
   ctx.window = ctx; vm.runInContext(fs.readFileSync(path.join(ROOT, 'neorcha.js'), 'utf8'), ctx); const N = ctx.hoNeorcha;
   const R = N.parseAoa([['Confirmation Number', 'First Name', 'Last Name', 'Date of Birth', 'Passport Number', 'Email', 'Mobile Number', 'Nationality', 'Purpose Of Visit', 'Arrival Date', 'Room Number', 'Number of Adults', 'Membership Number', 'Membership Type', 'Checked In By'],
     ['617001234', 'Test', 'Alpha', '01-01-1980', 'X1234567', 'a@b.c', '+971000', 'IN', 'Leisure', '01-10-2026', '0412', '2', '3081', 'ALL Classic', 'Sam'],
@@ -207,9 +207,25 @@ console.log('\nNationality report');
   const parses = ['relay.js', 'hotelops.js', 'neorcha.js'].every(k => { try { new Function(F[k]); return true; } catch (_) { return false; } });
   const back = N.parseAoa(N.rowsToAoa([{ 'Confirmation Number': '617001236', 'First Name': 'Test', 'Last Name': 'Gamma', 'Passport Number': 'Z999', 'Purpose Of Visit': 'Leisure', 'Membership Number': 'yes', 'Room Number': '0305' }]));
   check('Neorcha automatic: the helper runs the collector on myneorcha.com only; HotelOps hands it the dates and the relay opens Neorcha; the cards sent back read like a file, passport dropped',
-    [M.content_scripts.filter(c => c.js[0] === 'neorcha.js').map(c => c.matches.join()), parses, /ho-nx-job/.test(F['hotelops.js']), /chrome\.tabs\.create\(\{ url: NX_URL \}\)/.test(F['relay.js']), /auto: true/.test(F['neorcha.js']),
+    [M.content_scripts.filter(c => c.js[0] === 'neorcha.js').map(c => c.matches.join()), parses, /ho-nx-job/.test(F['hotelops.js']), /chrome\.tabs\.create\(\{ url: go \}\)/.test(F['relay.js']), /auto: true/.test(F['neorcha.js']), (F['relay.js'].match(/\/\^\[0-9\]\{4\}[^/]*\//g) || []).every(r => eval(r).test('2026-10-01')) && /\[0-9\]\{4\}/.test(F['relay.js']),
       /password/i.test(F['neorcha.js'].replace(/userPassword/g, '')), back.rows.map(r => [r.conf, r.purpose, r.member]), /Z999/.test(JSON.stringify(back))],
-    [['https://*.myneorcha.com/*'], true, true, true, true, false, [['617001236', 'Leisure', true]], false]); }
+    [['https://*.myneorcha.com/*'], true, true, true, true, true, false, [['617001236', 'Leisure', true]], false]);
+  // the relay itself, in a fake Chrome: HotelOps' job opens Neorcha; the Neorcha tab asks and gets the job; its cards go to HotelOps
+  const st = {}, opened = [], toApp = [], toNx = []; let onConn = null;
+  const chromeF = { runtime: { getManifest: () => ({ version: '478' }), onConnect: { addListener: f => { onConn = f; } }, setUninstallURL() {} },
+    userScripts: { getScripts() { throw new Error('off'); } },
+    storage: { local: { get: async k => { const o = {}; [].concat(k).forEach(x => { if (x in st) o[x] = st[x]; }); return o; }, set: async o => { Object.assign(st, o); }, remove: async k => { [].concat(k).forEach(x => delete st[x]); } } },
+    tabs: { create: async o => { opened.push(o.url); } } };
+  const rc = vm.createContext({ chrome: chromeF, console, setTimeout, Date, Promise, URL, JSON }); vm.runInContext(F['relay.js'], rc);
+  const mk = (name, out) => { const L = []; const p = { name, postMessage: m => out.push(m), onMessage: { addListener: f => L.push(f) }, onDisconnect: { addListener() {} }, send: m => Promise.all(L.map(f => f(m))) }; onConn(p); return p; };
+  const pa = mk('app', toApp); await new Promise(r => setTimeout(r, 20));
+  await pa.send({ source: 'ho-nx-job', from: '2026-10-01', to: '2026-10-31', url: 'https://evil.test/#/login' });   // not Neorcha: the default link
+  await pa.send({ source: 'ho-nx-job', from: '2026-10-01', to: '2026-10-31', url: 'https://mercure.myneorcha.com/neorchaWEBPlatform/#/login' });   // a hotel's own link
+  const pn = mk('neorcha', toNx); await pn.send({ source: 'ho-nx-ask' });
+  await pn.send({ source: 'ho-nx-rows', rows: [{ 'Room Number': '0305' }], from: '2026-10-01', to: '2026-10-31' });
+  check('Neorcha automatic, the relay running: Start opens the hotel\'s own Neorcha link (only a myneorcha.com one), the Neorcha tab gets the dates, the cards reach HotelOps and the job is cleared',
+    [opened, toNx.filter(m => m.source === 'ho-nx-job').map(m => m.from + '→' + m.to), toApp.some(m => m.source === 'ho-nx-progress'), toApp.filter(m => m.source === 'ho-nx-rows').length, 'nxJob' in st],
+    [['https://ibis.myneorcha.com/neorchaWEBPlatform/#/guestdocuments', 'https://mercure.myneorcha.com/neorchaWEBPlatform/#/login'], ['2026-10-01→2026-10-31'], true, 1, false]); })().catch(e => { fail++; console.log('  ✗ neorcha threw: ' + (e && e.stack || e)); });
 console.log('\nRoster builder');
 {
   const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} },
@@ -4228,7 +4244,7 @@ const haAsync = (async () => {
   res.forEach(([l, a, e]) => check(l, a, e));
 })().catch(e => { fail++; console.log('  ✗ helper away threw: ' + (e && e.stack || e)); });
 
-Promise.all([nhAsync, ogAsync, haAsync]).then(() => {
+Promise.all([nhAsync, ogAsync, haAsync, nxAsync]).then(() => {
   console.log(`\n${pass} passed · ${fail} failed`);
   process.exit(fail ? 1 : 0);
 });

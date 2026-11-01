@@ -285,9 +285,10 @@ function link(p) {
     // 🪪 Neorcha: HotelOps hands a job (dates only) → kept here, Neorcha opens; its tab asks for the job and sends the cards back
     if (side === 'app' && src === 'ho-nx-job') {
       const j = { source: 'ho-nx-job', from: String(m.from || '').slice(0, 10), to: String(m.to || '').slice(0, 10), at: Date.now() };
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(j.from) || !/^\d{4}-\d{2}-\d{2}$/.test(j.to)) return;
+      if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(j.from) || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(j.to)) return;
+      let go = NX_URL; try { const x = new URL(String(m.url || '')); if (x.protocol === 'https:' && /(^|[.])myneorcha[.]com$/i.test(x.hostname)) go = x.href; } catch (_) {}   // each hotel's own Neorcha link
       await chrome.storage.local.set({ nxJob: j });
-      if (ports.neorcha.size) toSide('neorcha', j); else { try { await chrome.tabs.create({ url: NX_URL }); } catch (_) {} }
+      if (ports.neorcha.size) toSide('neorcha', j); else { try { await chrome.tabs.create({ url: go }); } catch (_) {} }
       toSide('app', { source: 'ho-nx-progress', note: 'Neorcha is opening — log in there, the rest is automatic.', n: 0 });
       return;
     }

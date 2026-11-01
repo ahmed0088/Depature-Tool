@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 479, items: [
+    "🛠 Fixed: ▶ Start on Neorcha Registrations did nothing — the helper read the dates wrong and dropped the job. Download the helper once more, unzip it over the old one, and press ↻ on it in chrome://extensions.",
+    "🔗 New box: your hotel's Neorcha link. It starts as the ibis one; each hotel can put its own (it must be a myneorcha.com link) and HotelOps remembers it per hotel. Start opens that link.",
+    "🧹 The CSV export steps are gone: the collector opens each confirmation one by one itself. The file drop now lives only under \"Run it by hand\".",
+    "💬 If the helper ever doesn't answer within a few seconds, the page now says so and gives you an \"Open Neorcha myself\" button — after you log in there, it starts by itself. With an old helper you get a Download button right there.",
+  ] },
   { v: 478, items: [
     "🤖 Neorcha now collects by itself. On Neorcha Registrations pick the arrival dates and press ▶ Start: Neorcha opens, you log in, and the helper does the rest — it opens Guest Documents, searches your dates, opens every confirmation, reads its card, turns the pages, and sends the cards straight here. No file, no console, no pasting.",
     "🔒 It reads purpose of visit, nationality, room, dates, adults/children and whether the guest is an ALL member. Passport and ID numbers, birth dates, emails and phones are never read. Your Neorcha password is never seen or kept — you type it yourself.",
