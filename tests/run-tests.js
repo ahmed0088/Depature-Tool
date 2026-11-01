@@ -208,6 +208,12 @@ const nxAsync = (async () => { const ctx = vm.createContext({ window: {}, docume
   check('Neorcha registrations: columns by name; passport, birth date, email and phone never read; purpose to Business / Leisure / Flight; linked to Purpose of Stay by conf, else room + name (nationality only where empty)',
     [/X1234567|a@b|1980|\+971/.test(JSON.stringify(R)), R.rows[0].nat, R.rows[1].purpose, N.purposeOf('Transit'), R.rows[0].arr, R.rows[0].member, L.matched, L.purpose.map(x => x.room + ' ' + x.to), L.nat.map(x => x.room + ' ' + x.to)],
     [false, 'India', 'Business', 'Flight', '2026-10-01', true, 2, ['412 Leisure'], ['412 India']]);
+  const T0 = 1e12, rs = (l, g, at) => { const r = N.runState(l, g, at); return [r.k, r.state, r.n]; };
+  check('Neorcha cloud window: the step it is on, from the robot\'s live note and GitHub\'s run (a note from an older run is not taken for this one)',
+    [rs(null, null, T0), rs(null, { status: 'queued' }, T0), rs({ started: T0 + 5e3, step: 'read', state: 'run', n: 12 }, null, T0), rs({ started: T0 - 3600e3, step: 'done', state: 'done' }, { status: 'in_progress' }, T0),
+      rs({ started: T0, step: 'login', state: 'error' }, null, T0), rs(null, { status: 'completed', conclusion: 'success' }, T0)[1], rs({ started: T0, step: 'done', state: 'done', n: 87 }, null, 0),
+      /connect-src 'self' https:\/\/api\.github\.com /.test(fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'))],
+    [[0, 'run', 0], [0, 'run', 0], [4, 'run', 12], [0, 'run', 0], [2, 'error', 0], 'error', [6, 'done', 87], true]);
   const hx = { console: { log() {}, warn() {}, error() {} }, URL, URLSearchParams, APP_VERSION: 'v478', TextEncoder, crypto: globalThis.crypto, addEventListener() {}, hoNeorcha: N }; hx.window = hx; hx.globalThis = hx;
   vm.createContext(hx); vm.runInContext(fs.readFileSync(path.join(ROOT, 'wa-helper.js'), 'utf8'), hx, { filename: 'wa-helper.js' });
   const F = Object.fromEntries(hx.hoWaHelper.files('/*r*/', 'https://app.test', null)), M = JSON.parse(F['manifest.json']);

@@ -414,15 +414,128 @@ const CSS = `
 #panel-${PANEL} .nx-run .nx-url{flex:1 1 320px}#panel-${PANEL} .nx-run .nx-url input{width:100%}
 #panel-${PANEL} .nx-man .nx-drop{margin-top:12px}
 #panel-${PANEL} .nx-live-b{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+#panel-${PANEL} .nx-cl{margin-top:14px;padding:14px;border-radius:14px;border:1px solid color-mix(in srgb,#0ea5e9 40%,var(--border));background:linear-gradient(180deg,color-mix(in srgb,#0ea5e9 9%,var(--card)),var(--card))}
+#panel-${PANEL} .nx-cl-h{display:flex;gap:12px;align-items:center}#panel-${PANEL} .nx-cl-h>span{font-size:24px}#panel-${PANEL} .nx-cl-h small{display:block;color:var(--text3);font-size:.8rem;line-height:1.5}
+#panel-${PANEL} .nx-cl-b{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}#panel-${PANEL} .nx-cl-st{font-size:.82rem;color:var(--text2)}
 #panel-${PANEL} .nx-cloud p{margin:8px 0;line-height:1.6;color:var(--text2)}#panel-${PANEL} .nx-cloud code{font-size:.78rem}
 #panel-${PANEL} .nx-man{margin-top:12px;font-size:.84rem;color:var(--text3)}#panel-${PANEL} .nx-man summary{cursor:pointer}
 #panel-${PANEL} .nx-col ol{margin:10px 0;padding-left:22px;line-height:1.8;font-size:.86rem;color:var(--text2)}#panel-${PANEL} .nx-col b{color:var(--text)}#panel-${PANEL} .nx-col-b{display:flex;gap:8px;flex-wrap:wrap}
 @media (max-width:640px){#panel-${PANEL} .nx-steps{grid-template-columns:1fr}}`;
+// ── ☁️ The cloud run: started from here (GitHub's "Run workflow" through a start key kept on this device), followed live ──
+// The robot (scripts/neorcha-cloud.js) writes each step to hotels/<hotel>/neorchaLive; GitHub tells whether its computer started.
+const GH = { api: 'https://api.github.com/repos/ahmed0088/depature-tool/actions/workflows/neorcha.yml', page: 'https://github.com/ahmed0088/depature-tool/actions/workflows/neorcha.yml', key: 'ho_gh_start_key_v1' };
+const STEPS = [['gh', '🖥️', 'Start a GitHub computer'], ['open', '🌐', 'Open Neorcha'], ['login', '🔑', 'Log in'], ['search', '🔎', 'Search your dates'], ['read', '🪪', 'Read every card'], ['save', '💾', 'Save in HotelOps']];
+const RUN = { at: 0, gh: null, live: null, timer: 0, poll: 0, view: 'run' };
+const ghKey = () => { try { return localStorage.getItem(GH.key) || ''; } catch (_) { return ''; } };
+const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago'; };
+async function gh(path, opt) {
+  const r = await fetch(GH.api + (path || ''), Object.assign({ headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + ghKey(), 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' } }, opt || {}));
+  if (r.status === 401) throw new Error('The start key was refused (expired or mistyped). Make a new one.');
+  if (r.status === 403 || r.status === 404) throw new Error('The start key can\'t start this run — it needs the depature-tool repository and Actions: Read and write.');
+  if (!r.ok) throw new Error('GitHub answered ' + r.status);
+  return r.status === 204 ? null : r.json();
+}
+/** where a run is (pure): the step it is on, done / error, and the message */
+function runState(live, gh, at) {
+  const mine = live && (!at || +live.started >= at - 90000) ? live : null, idx = { open: 1, login: 2, search: 3, read: 4, save: 5, done: 6 };
+  let k = mine ? (idx[mine.step] || 1) : 0, state = mine ? (mine.state === 'done' ? 'done' : mine.state === 'error' ? 'error' : 'run') : 'run', note = mine ? mine.note || '' : '';
+  if (!mine && gh) {
+    if (gh.status === 'completed' && gh.conclusion !== 'success') { state = 'error'; note = 'The GitHub run stopped (' + gh.conclusion + ') before it reached Neorcha — open it on GitHub to see why.'; }
+    else if (gh.status === 'completed') { state = 'error'; note = 'The run finished but sent nothing — are the four Secrets added on GitHub (Settings → Secrets → Actions)?'; }
+    else note = gh.status === 'queued' ? 'Waiting for a free GitHub computer…' : 'The GitHub computer is getting ready (about a minute)…';
+  }
+  if (!mine && !gh && at) note = 'Asking GitHub to start…';
+  return { k, state, note, n: mine ? +mine.n || 0 : 0, prog: mine ? +mine.prog || 0 : 0, run: (mine && mine.run) || (gh && gh.html_url) || '' };
+}
+function runWin() {
+  let w = document.getElementById('nxRun');
+  if (!w) {
+    w = document.createElement('div'); w.id = 'nxRun'; w.className = 'nxr';
+    w.innerHTML = '<div class="nxr-bg" data-x="1"></div><div class="nxr-card" role="dialog" aria-label="Neorcha cloud run"><div class="nxr-h"><div class="nxr-ic">☁️</div><div class="nxr-t"><b>Neorcha · cloud run</b><small id="nxr-sub"></small></div><button type="button" class="nxr-x" data-x="1" aria-label="Close">✕</button></div><div class="nxr-b" id="nxr-b"></div></div>';
+    document.body.appendChild(w);
+    w.addEventListener('click', e => { if (e.target.closest('[data-x]')) { w.classList.remove('on'); clearInterval(RUN.timer); } });
+  }
+  w.classList.add('on'); clearInterval(RUN.timer); RUN.timer = setInterval(paintRun, 1000); paintRun();
+}
+function paintRun() {
+  const b = document.getElementById('nxr-b'); if (!b) return;
+  if (RUN.view === 'key') return;
+  const st = runState(RUN.live, RUN.gh, RUN.at), t0 = RUN.at || (RUN.live && +RUN.live.started) || Date.now(), sec = Math.max(0, Math.round(((st.state === 'run' ? Date.now() : (RUN.live && +RUN.live.at) || Date.now()) - t0) / 1000));
+  const sub = document.getElementById('nxr-sub'); if (sub) sub.textContent = (RUN.live && RUN.live.from ? dLbl(RUN.live.from) + ' – ' + dLbl(RUN.live.to) + ' · ' : '') + Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+  const pct = st.state === 'done' ? 100 : Math.round(Math.min(97, st.k / 6 * 100 * (st.k === 4 ? 1 : 1) + (st.k === 4 ? st.prog / 100 * 16 : 0)));
+  b.innerHTML = `<div class="nxr-bar ${st.state}"><i style="width:${pct}%"></i></div>
+    <ol class="nxr-steps">${STEPS.map(([id, ic, lb], i) => { const s2 = st.state === 'done' || i < st.k ? 'ok' : i === st.k ? (st.state === 'error' ? 'bad' : 'now') : '';
+      return `<li class="${s2}"><span class="d">${s2 === 'ok' ? '✓' : s2 === 'bad' ? '!' : ic}</span><span class="l">${esc(lb)}${id === 'read' && (st.k === 4 || st.n) ? ` <em>${st.n} card${st.n === 1 ? '' : 's'}</em>` : ''}</span>${s2 === 'now' ? '<span class="sp"></span>' : ''}</li>`; }).join('')}</ol>
+    <div class="nxr-note ${st.state}">${st.state === 'done' ? '✅ ' : st.state === 'error' ? '⛔ ' : ''}${esc(st.note || '…')}</div>
+    <div class="nxr-act">${st.state === 'done' ? '<button type="button" class="btn gold" data-x="1" id="nxr-see">See the cards</button>' : ''}${st.run ? `<a class="btn" href="${esc(st.run)}" target="_blank" rel="noopener">Open on GitHub ↗</a>` : ''}${st.state === 'run' ? '<span class="nxr-hint">You can close this — it keeps running and the cards land here.</span>' : ''}</div>`;
+  if (st.state !== 'run') { clearInterval(RUN.poll); RUN.poll = 0; }
+}
+function keyWin(then) {
+  RUN.view = 'key'; runWin();
+  const sub = document.getElementById('nxr-sub'); if (sub) sub.textContent = 'One-time set-up on this device';
+  document.getElementById('nxr-b').innerHTML = `<p class="nxr-p">This button starts the cloud run through GitHub. GitHub needs a <b>start key</b> once — it can only start and watch this run, nothing else, and it stays on this device.</p>
+    <ol class="nxr-how"><li>Open <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHub → new fine-grained token ↗</a> (signed in as the repository owner).</li>
+      <li>Name: <b>HotelOps cloud</b> · Expiration: the longest offered.</li><li>Repository access: <b>Only select repositories → depature-tool</b>.</li>
+      <li>Permissions → Repository → <b>Actions: Read and write</b>. Nothing else.</li><li><b>Generate token</b>, copy it and paste it here.</li></ol>
+    <div class="nxr-key"><input id="nxr-k" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…"><button type="button" class="btn gold" id="nxr-ks">Save & run</button></div>
+    <p class="nxr-p small">The Neorcha and HotelOps passwords never go here — they are GitHub Secrets (⚙️ Set up the cloud).</p>`;
+  document.getElementById('nxr-ks').onclick = async () => {
+    const k = document.getElementById('nxr-k').value.trim();
+    if (!/^(github_pat_|ghp_)[A-Za-z0-9_]{20,}$/.test(k)) { toast('That does not look like a GitHub token (github_pat_…)', 'err'); return; }
+    try { localStorage.setItem(GH.key, k); } catch (_) {}
+    try { await gh(''); } catch (e) { try { localStorage.removeItem(GH.key); } catch (_) {} toast(e.message, 'err'); return; }
+    RUN.view = 'run'; toast('Start key saved on this device', 'ok'); then();
+  };
+}
+async function cloudStart(from, to) {
+  if (!ghKey()) return keyWin(() => cloudStart(from, to));
+  RUN.view = 'run'; RUN.at = Date.now(); RUN.gh = null; runWin();
+  try { await gh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { from, to } }) }); }
+  catch (e) { RUN.gh = { status: 'completed', conclusion: 'not started' }; paintRun(); toast(e.message, 'err'); if (/refused/.test(e.message)) { try { localStorage.removeItem(GH.key); } catch (_) {} } return; }
+  clearInterval(RUN.poll);
+  RUN.poll = setInterval(async () => {
+    try { const j = await gh('/runs?per_page=5&event=workflow_dispatch'); const r = (j.workflow_runs || []).find(x => Date.parse(x.created_at) >= RUN.at - 15000); if (r) RUN.gh = r; paintRun(); } catch (_) {}
+  }, 5000);
+}
+function cloudUI() {
+  const st = $('cl-st'), paintChip = () => {
+    const v = RUN.live; if (!st) return;
+    st.innerHTML = !v ? '' : v.state === 'run' && Date.now() - +v.at < 15 * 60000 ? `<b class="run">● running</b> · ${esc(String(v.note || '').slice(0, 60))}` : v.state === 'done' ? `✅ Last run ${ago(+v.at)} · ${+v.n || 0} cards` : v.state === 'error' ? `⛔ Last run ${ago(+v.at)} stopped — Show progress` : '';
+  };
+  const listen = () => { if (typeof fbListen !== 'function') return setTimeout(listen, 1500); fbListen('neorchaLive', v => { RUN.live = v || null; paintChip(); paintRun(); }); };
+  listen();
+  $('cloud').onclick = () => { const f = $('from').value, t = $('to').value; if (!f || !t || f > t) { toast('Pick the arrival dates (from ≤ to)', 'err'); return; } cloudStart(f, t); };
+  $('cl-show').onclick = () => { RUN.view = 'run'; if (!RUN.poll) RUN.at = RUN.at || 0; runWin(); };
+  $('cl-forget').onclick = e => { e.preventDefault(); try { localStorage.removeItem(GH.key); } catch (_) {} toast('Start key removed from this device', 'ok'); };
+  document.addEventListener('click', e => { if (e.target.id === 'nxr-see') { const o = $('out'); if (o) o.scrollIntoView({ behavior: 'smooth' }); } });
+}
+const RUN_CSS = `.nxr{position:fixed;inset:0;z-index:9000;display:none;align-items:center;justify-content:center}.nxr.on{display:flex}
+.nxr-bg{position:absolute;inset:0;background:rgba(2,6,23,.55);backdrop-filter:blur(4px)}
+.nxr-card{position:relative;width:min(480px,calc(100vw - 32px));max-height:calc(100vh - 40px);overflow:auto;border-radius:20px;background:var(--card,#0f172a);color:var(--text,#e2e8f0);border:1px solid var(--border,#334155);box-shadow:0 30px 80px rgba(0,0,0,.45);animation:nxrIn .22s ease}
+@keyframes nxrIn{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}}
+.nxr-h{display:flex;gap:12px;align-items:center;padding:18px 18px 10px}.nxr-ic{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;font-size:22px;background:linear-gradient(135deg,#38bdf8,#6366f1)}
+.nxr-t{flex:1;min-width:0}.nxr-t b{display:block;font-size:1.02rem}.nxr-t small{color:var(--text3,#94a3b8);font-size:.8rem;font-variant-numeric:tabular-nums}
+.nxr-x{border:0;background:transparent;color:var(--text3,#94a3b8);font-size:18px;cursor:pointer;padding:6px 8px;border-radius:10px}.nxr-x:hover{background:var(--bg2,#1e293b)}
+.nxr-b{padding:6px 18px 18px}.nxr-bar{height:8px;border-radius:99px;background:var(--bg2,#1e293b);overflow:hidden;margin:4px 0 16px}.nxr-bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#38bdf8,#6366f1);transition:width .6s ease}
+.nxr-bar.done i{background:linear-gradient(90deg,#10b981,#22c55e)}.nxr-bar.error i{background:linear-gradient(90deg,#f43f5e,#ef4444)}
+.nxr-steps{list-style:none;margin:0;padding:0;display:grid;gap:4px}.nxr-steps li{display:flex;align-items:center;gap:12px;padding:9px 10px;border-radius:12px;color:var(--text3,#94a3b8);font-size:.92rem}
+.nxr-steps .d{width:28px;height:28px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:.85rem;background:var(--bg2,#1e293b);border:1px solid var(--border,#334155)}
+.nxr-steps li.ok{color:var(--text,#e2e8f0)}.nxr-steps li.ok .d{background:#10b981;border-color:#10b981;color:#fff;font-weight:700}
+.nxr-steps li.now{color:var(--text,#e2e8f0);background:color-mix(in srgb,#6366f1 12%,transparent);font-weight:600}.nxr-steps li.now .d{border-color:#6366f1;box-shadow:0 0 0 4px color-mix(in srgb,#6366f1 25%,transparent)}
+.nxr-steps li.bad{color:#fda4af;background:color-mix(in srgb,#f43f5e 12%,transparent)}.nxr-steps li.bad .d{background:#f43f5e;border-color:#f43f5e;color:#fff;font-weight:700}
+.nxr-steps .l{flex:1}.nxr-steps em{font-style:normal;margin-left:6px;padding:1px 8px;border-radius:99px;background:color-mix(in srgb,#6366f1 20%,transparent);font-size:.78rem}
+.nxr-steps .sp{width:16px;height:16px;border-radius:50%;border:2px solid color-mix(in srgb,#6366f1 30%,transparent);border-top-color:#6366f1;animation:nxrSp .8s linear infinite}@keyframes nxrSp{to{transform:rotate(360deg)}}
+.nxr-note{margin:14px 0 0;padding:11px 13px;border-radius:12px;font-size:.88rem;line-height:1.5;background:var(--bg2,#1e293b)}.nxr-note.done{background:color-mix(in srgb,#10b981 16%,transparent)}.nxr-note.error{background:color-mix(in srgb,#f43f5e 14%,transparent)}
+.nxr-act{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px}.nxr-hint{font-size:.78rem;color:var(--text3,#94a3b8)}
+.nxr-p{font-size:.88rem;line-height:1.6;color:var(--text2,#cbd5e1);margin:4px 0 10px}.nxr-p.small{font-size:.78rem;color:var(--text3,#94a3b8)}.nxr-how{margin:0 0 12px;padding-left:20px;line-height:1.8;font-size:.86rem}.nxr-how a{color:#7dd3fc}
+.nxr-key{display:flex;gap:8px}.nxr-key input{flex:1;min-width:0;padding:10px 12px;border-radius:11px;border:1px solid var(--border,#334155);background:var(--bg2,#1e293b);color:inherit;font:inherit}
+.nx-cl-st b.run{color:#38bdf8}
+@media (max-width:600px){.nxr{align-items:flex-end}.nxr-card{width:100vw;max-height:92vh;border-radius:22px 22px 0 0;animation:nxrUp .25s ease}@keyframes nxrUp{from{transform:translateY(40px)}to{transform:none}}.nxr-key{flex-direction:column}}`;
 function mount() {
   if (document.getElementById('panel-' + PANEL)) return;
   const main = document.querySelector('main.main') || document.querySelector('main'), nav = document.querySelector('nav.sidenav') || document.querySelector('nav');
   if (!main || !nav) return;
-  const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
+  const st = document.createElement('style'); st.textContent = CSS + RUN_CSS; document.head.appendChild(st);
   const panel = document.createElement('div'); panel.className = 'panel'; panel.id = 'panel-' + PANEL;
   panel.innerHTML = `<div style="max-width:1200px">
     <div class="nx-hero"><div class="nx-hero-ic">🪪</div><div class="nx-hero-t"><h1>Neorcha Registrations</h1><p>The registration cards from Neorcha: purpose of visit, nationality and ALL members — linked to Purpose of Stay</p></div>
@@ -432,13 +545,12 @@ function mount() {
       <div class="nx-run"><label class="nx-url">Your hotel's Neorcha link<input type="url" id="nx-url" spellcheck="false"></label><label>Arrivals from<input type="date" id="nx-from"></label><label>to<input type="date" id="nx-to"></label>
         <button type="button" class="btn gold" id="nx-start">▶ Start</button></div>
       <div class="nx-live" id="nx-live" hidden></div>
-      <details class="nx-man nx-cloud"><summary>☁️ No PC? Run it in the cloud — every night by itself, or from your phone</summary>
-        <p>GitHub runs the collector on its own computer: it logs in to Neorcha, reads every card and saves them here. Every night at 3:17 by itself, or press <b>Run workflow</b> on GitHub (the GitHub app works on your phone). Passwords are kept in GitHub's encrypted <b>Secrets</b> — never in HotelOps.</p>
-        <ol><li>On github.com open the HotelOps repository → <b>Settings → Secrets and variables → Actions → New repository secret</b>, and add:
-            <code>NEORCHA_USER</code>, <code>NEORCHA_PASS</code> (Neorcha's login — 2-step verification must be off), <code>HOTELOPS_EMAIL</code>, <code>HOTELOPS_PASS</code> (a HotelOps account of this hotel — best a separate one just for this). Other hotel? Add <code>NEORCHA_URL</code> with its Neorcha link.</li>
-          <li>Open <a href="https://github.com/ahmed0088/depature-tool/actions/workflows/neorcha.yml" target="_blank" rel="noopener">Actions → Neorcha (cloud) ↗</a> → <b>Run workflow</b> (dates optional). About 5–15 minutes.</li>
-          <li>The cards appear on this page by themselves, on every device.</li></ol>
-        <div class="nx-col-b"><a class="btn gold" href="https://github.com/ahmed0088/depature-tool/actions/workflows/neorcha.yml" target="_blank" rel="noopener">▶ Run in the cloud now ↗</a></div></details>
+      <div class="nx-cl"><div class="nx-cl-h"><span>☁️</span><div><b>Cloud — no PC needed</b><small>A GitHub computer logs in to Neorcha and collects for you — every night at 3:17 by itself, or now, with the dates above. Works from your phone.</small></div></div>
+        <div class="nx-cl-b"><button type="button" class="btn gold" id="nx-cloud">☁️ Run in the cloud</button><button type="button" class="btn" id="nx-cl-show">📡 Show progress</button><span class="nx-cl-st" id="nx-cl-st"></span></div>
+        <details class="nx-man nx-cloud"><summary>⚙️ Set up the cloud (once)</summary>
+          <p><b>1 · The logins</b> — on github.com open the HotelOps repository → <b>Settings → Secrets and variables → Actions → New repository secret</b>: <code>NEORCHA_USER</code>, <code>NEORCHA_PASS</code>, <code>HOTELOPS_EMAIL</code>, <code>HOTELOPS_PASS</code> (other hotel: <code>NEORCHA_URL</code>). Typed there, they stay encrypted — never in HotelOps.</p>
+          <p><b>2 · The start key</b> (so this button can start it) — press ☁️ Run in the cloud and follow the steps. It is kept on this device only.</p>
+          <p><a href="https://github.com/ahmed0088/depature-tool/actions/workflows/neorcha.yml" target="_blank" rel="noopener">All cloud runs on GitHub ↗</a> · <a href="#" id="nx-cl-forget">Forget the start key on this device</a></p></details></div>
       <details class="nx-man"><summary>No helper on this PC? Run it by hand</summary>
         <ol><li>Open <b>ibis.myneorcha.com</b>, log in, go to <b>Guest Documents</b> and pick your <b>hotel</b>.</li>
           <li>Press <b>📋 Copy the collector</b>, then on Neorcha press <b>F12 → Console</b>, paste and press <b>Enter</b> <small>(first time: type <code>allow pasting</code>)</small> — or click the bookmark.</li>
@@ -470,8 +582,7 @@ function mount() {
   $('copycol').onclick = () => { if (typeof copyToClipboard === 'function') copyToClipboard(code, $('copycol'), '📋 Copy the collector'); else navigator.clipboard.writeText(code).then(() => toast('Copied — paste it in Neorcha\'s console', 'ok')); };
   $('bm').href = 'javascript:' + encodeURIComponent(code); $('bm').onclick = e => { e.preventDefault(); toast('Drag this button to your bookmarks bar, then click the bookmark on Neorcha', 'info'); };
   $('file').onchange = e => load(e.target.files[0]);
-  // a phone can't run the helper: the cloud way is the one to show there
-  try { if (W.matchMedia && W.matchMedia('(max-width: 768px)').matches) { const c = panel.querySelector('.nx-cloud'); if (c) c.open = true; } } catch (_) {}
+  cloudUI();
   // ▶ Start: dates → the helper (it opens Neorcha); its progress and the cards come back here
   const t = new Date(), iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   $('from').value = iso(new Date(t.getFullYear(), t.getMonth(), 1)); $('to').value = iso(t);
@@ -521,6 +632,6 @@ function mount() {
   document.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-panel="' + PANEL + '"]')) setTimeout(draw, 50); }, true);
   draw();
 }
-W.hoNeorcha = { rowsToAoa, collectorSrc, collectorCode, parseAoa, summary, linkPlan, purposeOf, isoOf, natName, NEVER };
+W.hoNeorcha = { runState, _run: { RUN, paintRun }, rowsToAoa, collectorSrc, collectorCode, parseAoa, summary, linkPlan, purposeOf, isoOf, natName, NEVER };
 if (typeof document !== 'undefined' && document.addEventListener) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount(); }
 })();

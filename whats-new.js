@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 486, items: [
+    "☁️ Run in the cloud straight from HotelOps: on Neorcha Registrations pick the dates and press ☁️ Run in the cloud — no GitHub app needed. The first time it asks for a start key (a GitHub token that can only start this run), kept on that device only.",
+    "📡 A live window follows the run step by step — GitHub computer, Neorcha, log in, search, every card (with the count), saved — with a timer, on phone and PC. Close it any time; 📡 Show progress opens it again, and the page shows the last run.",
+    "🔑 Neorcha login in the cloud is typed like a person and tried twice; a space the phone keyboard added is removed. When it can't log in it now says what Neorcha showed (its message, a verification-code box, or a new-password box) — never the password.",
+  ] },
   { v: 485, items: [
     "📱 Neorcha Registrations and DTCM Revenue Fill are now in the phone's More menu (they were only in the computer's side menu). On a phone, Neorcha opens straight to the ☁️ cloud way.",
     "🧭 On the computer, Neorcha Registrations now sits under Front Desk (after Purpose of Stay) and DTCM Revenue Fill under Money & Tax (after DTCM) — not at the bottom under Tools.",
