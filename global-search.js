@@ -36,6 +36,13 @@ const GS_PANEL_LABEL = {
   wakeups:    'Wake-up Calls',
   rates:      'Rate Shop',
   gym:        'Gym & Pool',
+  'handover-book': 'Handover Book',
+  'hk-requests': 'HK Requests',
+  whatsapp:   'WhatsApp',
+  'ops-logs': 'Front Office Log',
+  'room-health': 'Room Health',
+  'skip-clean': 'Skip The Clean',
+  'dtcm-fill': 'DTCM Fill',
   opera:      '📡 Opera',
   page:       'Page',
 };
@@ -113,6 +120,43 @@ function gsBuildIndex(q) {
     }
   });
 
+  // ── what the team wrote: notes, the Handover Book, HK requests, WhatsApp, the Front Office Log, Gym, Room Health ──
+  const ok = p => typeof hoPanelAllowed !== 'function' || hoPanelAllowed(p);
+  const snip = t => { t = String(t || '').replace(/\s+/g, ' ').trim(); const i = t.toLowerCase().indexOf(q); if (i < 0) return t.slice(0, 90); const a = Math.max(0, i - 30); return (a ? '…' : '') + t.slice(a, i + q.length + 50) + (i + q.length + 50 < t.length ? '…' : ''); };
+  const safe = f => { try { f(); } catch (_) {} };
+  const wait = (f, ms) => setTimeout(() => safe(f), ms || 150);
+  // the notes written on a Departures card (its name / room matched above already)
+  if (ok('departures')) safe(() => (typeof depRooms !== 'undefined' ? depRooms : []).forEach(r => {
+    if (r.note && !hit(r.roomStr, r.name) && hit(r.note)) out.push({ panel: 'departures', room: r.roomStr, name: r.name || 'Departure', extra: '📝 ' + snip(r.note), icon: '🚪', act: () => { if (typeof depOpenNotes === 'function') { showPanel('departures'); wait(() => depOpenNotes(r.roomStr), 120); } else showPanel('departures'); } });
+  }));
+  // room notes (room-card.js): kept for the whole stay
+  safe(() => { const N = window.hoRoom && typeof hoRoom.store === 'function' ? hoRoom.store().all || {} : {};
+    Object.keys(N).forEach(rk => Object.keys(N[rk] || {}).forEach(id => { const n = N[rk][id]; if (!n || typeof n !== 'object' || !hit(n.text, n.room)) return;
+      out.push({ panel: 'room', room: n.room || rk, name: 'Room note', extra: snip(n.text) + (n.by ? ' — ' + String(n.by).split(' ')[0] : ''), icon: '📝', act: () => hoRoom.open(n.room || rk) }); })); });
+  // the Handover Book (today)
+  if (ok('handover-book')) safe(() => { const H = window.hoHandoverBook; if (!H || typeof H.items !== 'function') return;
+    (H.items() || []).filter(i => i && !i.chat && hit(i.text, i.orig, i.sender, (i.rooms || []).join(' '))).forEach(i => out.push({ panel: 'handover-book', room: (i.rooms || [])[0] || '', name: 'Handover', extra: snip(i.text || i.orig) + (i.status === 'done' ? ' · ✓ done' : ''), icon: '📒',
+      act: () => { const S = H.state && H.state(); if (S && (i.rooms || [])[0]) S.room = String(i.rooms[0]); showPanel('handover-book'); wait(() => H.render(), 60); } })); });
+  // HK requests (today)
+  if (ok('hk-requests')) safe(() => { const B = window.hoWaBrain; if (!B || typeof B.requests !== 'function') return;
+    (B.requests() || []).filter(i => i && hit(i.room, i.what, i.x, i.s)).forEach(i => out.push({ panel: 'hk-requests', room: i.room || '', name: i.what || 'HK request', extra: snip(i.x || i.what) + (i.st === 'done' ? ' · ✓ done' : ' · open'), icon: '🧺', act: () => { showPanel('hk-requests'); wait(() => { const t = document.querySelector('[data-wab-tab="log"]'); if (t) t.click(); wait(() => { const x = document.getElementById('wabLRoom'); if (x) { x.value = String(i.room || ''); x.dispatchEvent(new Event('input', { bubbles: true })); } }, 250); }); } })); });
+  // WhatsApp (today's messages)
+  if (ok('departures')) safe(() => { const W2 = window.hoWaBridge; if (!W2 || typeof W2.log !== 'function') return;
+    (W2.log() || []).filter(l => l && !l.deleted && hit(l.text, l.sender)).slice(0, 8).forEach(l => out.push({ panel: 'whatsapp', room: '', name: (l.sender || 'WhatsApp') + (l.time ? ' · ' + l.time : ''), extra: '💬 ' + snip(l.text), icon: '💬',
+      act: () => { if (typeof waSearchOpen === 'function') waSearchOpen(q, 'today'); else if (typeof waOpenFromTop === 'function') waOpenFromTop(); } })); });
+  // the Front Office Log: lost & found, maintenance
+  if (ok('ops-logs')) safe(() => { const O = window.hoOpsLogs; if (!O) return;
+    const go = tab => () => { if (typeof olTab === 'function') olTab(tab); else showPanel('ops-logs'); };
+    Object.values(O.lf() || {}).filter(r => r && hit(r.what, r.room, r.foundBy, r.where, r.storage)).forEach(r => out.push({ panel: 'ops-logs', room: r.room || '', name: 'Lost & found: ' + (r.what || ''), extra: (r.status || '') + (r.storage ? ' · ' + r.storage : ''), icon: '🧳', act: go('lf') }));
+    Object.values(O.mt() || {}).filter(r => r && hit(r.problem, r.area, r.by)).forEach(r => out.push({ panel: 'ops-logs', room: r.area || '', name: 'Maintenance: ' + (r.problem || ''), extra: r.status === 'fixed' ? '✅ fixed' : '🟠 ' + (r.status || 'open'), icon: '🔧', act: go('mt') })); });
+  // Gym & Pool members
+  if (ok('gym')) safe(() => { const G = window.hoGym && typeof hoGym.state === 'function' ? hoGym.state() : null; if (!G) return;
+    Object.keys(G.members || {}).forEach(id => { const m = G.members[id]; if (!m || !m.name || !hit(m.name, m.room, m.company, m.phone)) return;
+      out.push({ panel: 'gym', room: m.room || '', name: m.name, extra: 'Gym & Pool' + (m.end ? ' · until ' + m.end : ''), icon: '🏋️', act: () => { showPanel('gym'); wait(() => hoGym.open(id)); } }); }); });
+  // Room Health: open issues
+  if (ok('room-health')) safe(() => { const H = window.hoRoomHealth; if (!H || typeof H.recs !== 'function') return;
+    (H.recs() || []).filter(r => r && hit(r.room, r.say, r.dept)).slice(0, 10).forEach(r => out.push({ panel: 'room-health', room: r.room || '', name: 'Room health', extra: snip(r.say), icon: '🩺' })); });
+
   // team members, meetings, wake-up calls, our hotels, and every page by its name
   const edit = typeof roCanEdit === 'function' && roCanEdit();
   Object.entries(typeof roStaff !== 'undefined' ? roStaff : {}).forEach(([k, st]) => {
@@ -137,7 +181,7 @@ function gsBuildIndex(q) {
   // a word that starts with what was typed beats a match inside a word ("Ali" before "invalid"); people and pages first
   const starts = r => new RegExp('(^|[^a-z0-9])' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(`${r.room} ${r.name}`);
   const rank = r => (starts(r) ? 0 : 10) + (r.act ? 0 : 1);
-  return out.map((r, i) => [r, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(x => x[0]).slice(0, 30);
+  return out.map((r, i) => [r, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(x => x[0]).slice(0, 40);
 }
 
 /** today's Opera reads, one line per guest (the newest screen wins); kept 4 s so typing doesn't copy them on every key */

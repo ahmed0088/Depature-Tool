@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 475, items: [
+    "🔎 Global search finds much more: words inside room notes and Departures notes (“umbrella” finds the room), today's Handover Book, HK requests and WhatsApp messages, Lost & found and maintenance from the Front Office Log, Gym & Pool members and Room Health issues. Each result shows the matching words and opens where it lives.",
+  ] },
   { v: 474, items: [
     "↻ DTCM Revenue Fill, refill made easy: when finance sends a corrected sheet, load it, paste the new filler and press Check. The days that changed are chosen for you and the button becomes “▶ Fix 2 changed days”; only those are updated.",
     "💾 New switch “Re-save every chosen day”: opens, fills and saves the chosen days again even when they already match.",
