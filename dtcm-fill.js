@@ -103,6 +103,7 @@ function FILLER(D) {
   var n = function (s) { var x = parseFloat(String(s == null ? '' : s).replace(/[,\s]/g, '')); return isNaN(x) ? 0 : x; };
   var same = function (a, b) { return Math.abs((+a || 0) - (+b || 0)) < 0.005; };
   var stop = false, busy = false, mini = false, logOpen = false;
+  var force = false, fixSet = '';   // force: save the chosen days again even when they match · fixSet: the days a Check found changed
   var st = {}, prog = null, note = null;   // st: day → ok | same | diff | fail | miss | run · prog: { k, n, d } while running · note: { t: info|ok|warn|err, h }
   var css = document.createElement('style');
   css.textContent = '#hoDtcmBox{position:fixed;right:18px;bottom:18px;z-index:2147483000;width:400px;max-width:calc(100vw - 36px);max-height:86vh;display:flex;flex-direction:column;background:#fff;color:#0f172a;border:1px solid #e2e8f0;border-radius:18px;box-shadow:0 24px 60px -12px rgba(15,23,42,.35),0 4px 14px rgba(15,23,42,.08);font:13px/1.45 Inter,system-ui,Segoe UI,sans-serif;overflow:hidden;animation:hoIn .22s cubic-bezier(.2,.8,.2,1)}'
@@ -152,12 +153,14 @@ function FILLER(D) {
     var want = {}; t.split(/[,\s]+/).forEach(function (p) { var m = p.match(/^(\d{1,2})(?:-(\d{1,2}))?$/); if (!m) return; for (var d = +m[1]; d <= +(m[2] || m[1]); d++) want[d] = 1; });
     return D.rows.filter(function (r) { return want[r.d]; });
   }
+  function ranges(ds) { var parts = []; ds.slice().sort(function (a, c) { return a - c; }).forEach(function (x) { var last = parts[parts.length - 1]; if (last && last[1] === x - 1) last[1] = x; else parts.push([x, x]); });
+    return parts.map(function (p) { return p[0] === p[1] ? String(p[0]) : p[0] + '-' + p[1]; }).join(', '); }
   function count(k) { return Object.keys(st).filter(function (d) { return st[d] === k; }).length; }
   function paint(msg, tone) {
     if (msg !== undefined) note = msg ? { h: msg, t: tone || (/^✅/.test(msg) ? 'ok' : /^⛔/.test(msg) ? 'err' : /^⚠️|^🔍 \d/.test(msg) ? 'warn' : 'info') } : null;
     var sel = pickDays(daysTxt), all = sel.length === D.rows.length, selSet = {}; sel.forEach(function (r) { selSet[r.d] = 1; });
     var sub = 'Finance ' + MON[D.m] + ' ' + D.y + (anyMonth ? ' → this page: ' + target() : '');
-    var fillLbl = all ? '▶ Fill all ' + D.rows.length + ' days' : '▶ Fill ' + sel.length + ' day' + (sel.length === 1 ? '' : 's');
+    var fillLbl = (force ? '↻ Re-save ' : fixSet && daysTxt === fixSet ? '▶ Fix ' : '▶ Fill ') + (all ? (force ? 'all ' : 'all ') + D.rows.length + ' days' : sel.length + (fixSet && daysTxt === fixSet && !force ? ' changed' : '') + ' day' + (sel.length === 1 ? '' : 's'));
     var h = '<div class="hoH"><div class="hoLogo">H</div><div class="hoT"><b>DTCM fill · HotelOps</b><i>' + E(sub) + (mini && prog ? ' · ' + prog.k + '/' + prog.n : '') + '</i></div>'
       + '<button class="hoIc" data-a="min" title="' + (mini ? 'Open' : 'Make small') + '">' + (mini ? '▢' : '–') + '</button><button class="hoIc" data-a="x" title="Close">✕</button></div><div class="hoB">';
     h += '<div class="hoN ' + (note ? note.t : 'info') + '"><span>' + (note ? '' : 'ℹ️') + '</span><div>' + (note ? note.h : 'Pick <b>' + MON[D.m] + ' ' + D.y + '</b> on this page and press <b>Filter</b>. Then <b>Check</b> to compare, or choose days and <b>Fill</b>.') + '</div></div>';
@@ -169,6 +172,7 @@ function FILLER(D) {
       + '<button data-day="all" class="all' + (all ? ' on' : '') + '"' + (busy ? ' disabled' : '') + '>All</button></div>'
       + '<div class="hoLeg"><span><i style="background:#dcfce7;border-color:#86efac"></i>saved</span><span><i style="background:#ecfeff;border-color:#a5f3fc"></i>already right</span><span><i style="background:#fef3c7;border-color:#fcd34d"></i>differs</span><span><i style="background:#fee2e2;border-color:#fca5a5"></i>problem</span></div></div>';
     h += '<label class="hoSw' + (anyMonth ? ' on' : '') + '"><input type="checkbox" id="hoDtcmAny"' + (anyMonth ? ' checked' : '') + (busy ? ' disabled' : '') + '><span><b>Test mode</b> — fill into the month shown on this page' + (anyMonth ? ': <b>' + E(target()) + '</b> (the sheet\'s day 1 → this page\'s day 1)' : '') + '</span></label>';
+    h += '<label class="hoSw' + (force ? ' on' : '') + '"><input type="checkbox" id="hoDtcmForce"' + (force ? ' checked' : '') + (busy ? ' disabled' : '') + '><span><b>Re-save every chosen day</b> — even the days that already match' + (force ? ' (each is opened, filled and saved again)' : '') + '</span></label>';
     h += '<div class="hoA">' + (busy ? '<button data-a="stop" class="d">■ Stop</button>' : '<button data-a="check">🔍 Check</button><button data-a="fill" class="p">' + fillLbl + '</button>') + '</div>';
     if (lines.length) h += '<div class="hoL"><button data-a="log">' + (logOpen ? '▾' : '▸') + ' Activity (' + lines.length + ')</button>' + (logOpen ? '<div>' + lines.join('') + '</div>' : '') + '</div>';
     box.innerHTML = h + '</div>';
@@ -203,7 +207,7 @@ function FILLER(D) {
       prog = { k: k, n: todo.length, d: r.d, w: write }; st[r.d] = 'run'; paint();
       if (!tr) { st[r.d] = 'miss'; line(r.d, '⚠️', 'not on the page', '#b45309'); diffs++; continue; }
       var got = vals(tr, C), off = C.map(function (c, i) { return c >= 0 && r.v[i] != null && !same(got[i], r.v[i]) ? i : -1; }).filter(function (i) { return i >= 0; });
-      if (!off.length) { same0++; st[r.d] = 'same'; line(r.d, '✓', 'already right', '#0e7490'); continue; }
+      if (!off.length && !(write && force)) { same0++; st[r.d] = 'same'; line(r.d, '✓', 'already right', '#0e7490'); continue; }
       if (!write) { diffs++; st[r.d] = 'diff'; line(r.d, '≠', off.map(function (i) { return FIELDS[i] + ' ' + got[i] + ' → ' + r.v[i]; }).join(' · '), '#b45309'); continue; }
       // open the line for editing: its ✎ Edit button, or a click on the line itself (how the portal opens a row)
       var eb = tr.querySelector('.jsgrid-edit-button');
@@ -230,13 +234,15 @@ function FILLER(D) {
       await sleep(250);
     }
     busy = false; prog = null; todo.forEach(function (r) { if (st[r.d] === 'run') delete st[r.d]; });
-    var msg = fail ? '⛔ Stopped at ' + fail + '. Nothing after it was changed.' : stop ? '■ Stopped. ' + done + ' saved so far.' : write ? '✅ Done: ' + done + ' day' + (done === 1 ? '' : 's') + ' saved, ' + same0 + ' already right.' : (diffs ? '🔍 ' + diffs + ' day' + (diffs === 1 ? '' : 's') + ' differ from the finance sheet, ' + same0 + ' already right. ▶ Fill all fixes them.' : '✅ Every day already matches the finance sheet.');
+    if (!write && !stop) { var ch = todo.filter(function (r) { return st[r.d] === 'diff'; }).map(function (r) { return r.d; }); fixSet = ch.length && ch.length < D.rows.length ? ranges(ch) : ''; if (fixSet) daysTxt = fixSet; }
+    if (write) fixSet = '';
+    var msg = fail ? '⛔ Stopped at ' + fail + '. Nothing after it was changed.' : stop ? '■ Stopped. ' + done + ' saved so far.' : write ? '✅ Done: ' + done + ' day' + (done === 1 ? '' : 's') + ' saved, ' + same0 + ' already right.' : (diffs ? '🔍 ' + diffs + ' day' + (diffs === 1 ? '' : 's') + ' differ from the finance sheet, ' + same0 + ' already right.' + (fixSet ? ' They are chosen below: ▶ Fix fills only those.' : ' ▶ Fill fixes them.') : '✅ Every day already matches the finance sheet.');
     if (!fail && write) { var C2 = cols(), tot = C2.map(function (c) { return todo.reduce(function (a, r) { var tr = rowFor(r.d); return a + (tr ? n(tr.cells[c] && tr.cells[c].textContent) : 0); }, 0); }), fin = [0, 1, 6].map(function (i) { return Math.round(todo.reduce(function (a, r) { return a + (+r.v[i] || 0); }, 0) * 100) / 100; });
       msg += '<br><small>' + (todo.length === D.rows.length ? 'The month' : todo.length === 1 ? 'That day' : 'Those ' + todo.length + ' days') + ' on the page now: Rooms ' + tot[0].toLocaleString() + ' · F&B ' + tot[1].toLocaleString() + ' · TD ' + tot[6].toLocaleString() + ' (finance: ' + fin[0].toLocaleString() + ' · ' + fin[1].toLocaleString() + ' · ' + fin[2].toLocaleString() + ')</small>'; }
     paint(msg);
   }
   function safe(w) { run(w).catch(function (e) { busy = false; prog = null; paint('⛔ Stopped: ' + (e && e.message || e) + '. Nothing after it was changed.'); }); }
-  box.addEventListener('change', function (e) { if (e.target.id === 'hoDtcmAny') { anyMonth = e.target.checked; lines = []; st = {}; paint(null); } });
+  box.addEventListener('change', function (e) { if (e.target.id === 'hoDtcmForce') { force = e.target.checked; paint(); return; } if (e.target.id === 'hoDtcmAny') { anyMonth = e.target.checked; lines = []; st = {}; paint(null); } });
   box.addEventListener('input', function (e) { if (e.target.id !== 'hoDtcmDays') return; daysTxt = e.target.value; var pos = e.target.selectionStart; paint(); var i = document.getElementById('hoDtcmDays'); if (i) { i.focus(); i.setSelectionRange(pos, pos); } });
   box.addEventListener('click', function (e) {
     var b = e.target.closest('button'); if (!b) return;
@@ -255,7 +261,7 @@ function FILLER(D) {
     else if (b.dataset.a === 'stop') stop = true;
     else if (b.dataset.a === 'check' && !busy) safe(false);
     else if (b.dataset.a === 'fill' && !busy) { var sel = pickDays(daysTxt); if (!sel.length) { paint('⚠️ No day of ' + MON[D.m] + ' in "' + daysTxt + '". Type e.g. 1 or 1-5, or all.'); return; }
-      if (confirm('Fill and save ' + (sel.length === D.rows.length ? 'all ' + sel.length + ' days' : sel.length === 1 ? 'only ' + sel[0].d + ' ' + MON[D.m] : sel.length + ' days (' + daysTxt + ')') + ' of the finance sheet (' + MON[D.m] + ' ' + D.y + ')' + (anyMonth ? ' INTO ' + target() + ' on this page (test mode: by day number)' : '') + '? Days that already match are skipped.')) safe(true); }
+      if (confirm((force ? 'Re-save (open, fill and save again, even if they match) ' : 'Fill and save ') + (sel.length === D.rows.length ? 'all ' + sel.length + ' days' : sel.length === 1 ? 'only ' + sel[0].d + ' ' + MON[D.m] : sel.length + ' days (' + daysTxt + ')') + ' of the finance sheet (' + MON[D.m] + ' ' + D.y + ')' + (anyMonth ? ' INTO ' + target() + ' on this page (test mode: by day number)' : '') + '? Days that already match are skipped.')) safe(true); }
   });
   window.__hoDtcm = { show: function (D2) { D = D2; lines = []; st = {}; paint(null); } };
   paint();

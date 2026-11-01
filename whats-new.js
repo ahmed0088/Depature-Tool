@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 474, items: [
+    "↻ DTCM Revenue Fill, refill made easy: when finance sends a corrected sheet, load it, paste the new filler and press Check. The days that changed are chosen for you and the button becomes “▶ Fix 2 changed days”; only those are updated.",
+    "💾 New switch “Re-save every chosen day”: opens, fills and saves the chosen days again even when they already match.",
+  ] },
   { v: 473, items: [
     "🌍 Nationality Report: a new Nationality check box, like Beds per room. 🔴 New names the sheet doesn't know come with the best guess already picked: tap ✓, or choose the row (or Unknown). 🟡 Names matched by spelling are confirmed once. 🔵 The team's saved choices can be changed or ✕ forgotten, so a wrong old choice (like “DO NOT USE → UAE”) is found and fixed fast. Every choice is saved for the team and the report updates at once.",
   ] },
