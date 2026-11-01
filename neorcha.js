@@ -113,7 +113,7 @@ function COLLECTOR(O) {
   O = O || {};
   if (window.__hoNx) { window.__hoNx.show(O); return; }
   var NEVER = /passport|birth|e-?mail|phone|mobile|documentnumber|docnumber|noUae|address|city|zip|postal|carreg|signature|iban|card/i;
-  var KEEP = [['Confirmation Number', /confirmation/i], ['First Name', /firstname/i], ['Last Name', /lastname/i], ['Nationality', /nationality/i], ['Purpose Of Visit', /purpose/i],
+  var KEEP = [['Confirmation Number', /confirmation/i], ['First Name', /firstname/i], ['Last Name', /lastname/i], ['Nationality', /nationality|^country$/i], ['Purpose Of Visit', /purpose/i],
     ['Arrival Date', /^arrivaldate$/i], ['Departure Date', /^departuredate$/i], ['Room Number', /roomnumber/i], ['Number of Adults', /adults/i], ['Number of Children', /children/i],
     ['Membership Number', /membershipnumber/i], ['Membership Type', /membershiptype/i], ['Checked In By', /checkedinby|operator/i], ['Company Name', /companyname/i], ['Room Type', /roomtype/i], ['Insertion Date', /insertdate|insertiondate/i]];
   var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
@@ -147,7 +147,12 @@ function COLLECTOR(O) {
   function byClick(re) { return all('[ng-click]').filter(function (e) { return re.test(e.getAttribute('ng-click')) && vis(e); }); }
   function fire(el, v) { el.focus && el.focus(); el.value = v; ['input', 'change', 'blur', 'keyup'].forEach(function (t2) { el.dispatchEvent(new Event(t2, { bubbles: true })); }); }
   function fmt(iso, like) { var p = iso.split('-'); if (/^\d{4}-/.test(like || '')) return iso; if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(like || '')) return p[2] + '/' + p[1] + '/' + p[0]; if (/^\d{1,2}-[A-Za-z]{3}/.test(like || '')) return +p[2] + '-' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1] - 1] + '-' + p[0]; return p[2] + '-' + p[1] + '-' + p[0]; }
-  function listRows() { return all('tr[ng-repeat],[ng-repeat] > td').map(function (e) { return e.tagName === 'TD' ? e.parentElement : e; }).filter(function (tr, i, a) { return a.indexOf(tr) === i && vis(tr) && !/menu|submenu|item in/.test(tr.getAttribute('ng-repeat') || '') && /\d{5,}/.test(tr.textContent); }); }
+  function viewCells() { return all('td[ng-click*="viewGuestDocument"]').filter(vis); }
+  function listRows() {
+    var vc = viewCells().map(function (td) { return td.parentElement; }).filter(function (tr, i, a) { return tr && a.indexOf(tr) === i; });
+    if (vc.length) return vc;
+    return all('tr[ng-repeat],[ng-repeat] > td').map(function (e) { return e.tagName === 'TD' ? e.parentElement : e; }).filter(function (tr, i, a) { return a.indexOf(tr) === i && vis(tr) && !/menu|submenu|item in/.test(tr.getAttribute('ng-repeat') || '') && /\d{5,}/.test(tr.textContent); });
+  }
   function detailInputs() { return all('[ng-model^="selectedGuestDoc."]'); }
   function detailOpen() { return detailInputs().some(vis); }
   function readDetail() {
@@ -172,6 +177,8 @@ function COLLECTOR(O) {
     if (!f || !t2) { L('date boxes not found — using the dates on the page'); } else { fire(f, fmt(from, f.value || f.placeholder)); fire(t2, fmt(to, t2.value || t2.placeholder)); L('dates set: ' + f.value + ' → ' + t2.value); }
     var pp = document.querySelector('[ng-model="paginationDoc"]');   // 100 per page: fewer pages to turn
     if (pp && +pp.value < 100) { fire(pp, '100'); L('100 per page'); await sleep(900); }
+    all('select').forEach(function (sel) { if (sel.closest('#hoNxBox')) return; var op = Array.prototype.slice.call(sel.options).map(function (o) { return parseInt(o.value || o.textContent, 10); }).filter(function (n) { return !isNaN(n); });
+      var cur = parseInt(sel.value, 10), mx = Math.max.apply(null, op.concat([0])); if (op.length >= 2 && !isNaN(cur) && cur < mx && mx <= 500) { sel.value = String(mx); sel.dispatchEvent(new Event('change', { bubbles: true })); L('page size ' + mx); } });
     var hs = document.querySelector('[ng-model="selectedHotel"]');   // no hotel picked yet: pick the first (your own) one
     if (hs && /ng-empty/.test(hs.className)) { var tg = hs.querySelector('.ui-select-toggle,.ui-select-match'); if (tg) { tg.click(); await sleep(600); var ch = hs.querySelector('.ui-select-choices-row'); if (ch) { (ch.querySelector('a,span,div') || ch).click(); L('hotel picked'); await sleep(600); } } }
     var b = byClick(/searchGuestDocuments/)[0]; if (!b) { b = all('button,input[type=submit]').filter(function (x) { return /^\s*search\s*$/i.test(x.textContent || x.value) && vis(x); })[0]; }
@@ -182,7 +189,13 @@ function COLLECTOR(O) {
   }
   // a row opens its card in different ways (a click, a double-click, a link, the number's cell): try them one by one
   var fails = 0, how = -1;
+  function detailSig() { return ['confirmationNumber', 'firstName', 'lastName', 'country', 'roomNumber', 'arrivalDate'].map(function (f) { var e = document.querySelector('[ng-model="selectedGuestDoc.' + f + '"]'); return e ? e.value || '' : ''; }).join('|'); }
+  function detailConf() { var e = document.querySelector('[ng-model="selectedGuestDoc.confirmationNumber"]'); return e ? String(e.value || '').trim() : ''; }
   async function openCard(tr) {
+    var k0 = key(tr), sig0 = detailSig(), open0 = detailOpen();
+    var landed = function () { var c = detailConf(); if (c && /^\d{5,}$/.test(k0)) return c.replace(/\D/g, '') === k0; return detailSig() !== sig0 || (!open0 && detailOpen()); };
+    var own = tr.querySelector('td[ng-click*="viewGuestDocument"]');   // how Neorcha opens a card (the old extractor's way, proven on the real site)
+    if (own) { own.click(); if (await waitFor(landed, 15000)) return true; L('viewGuestDocument cell clicked, the card did not change'); }
     var cells = Array.prototype.slice.call(tr.querySelectorAll('td,.ui-grid-cell,[role=gridcell]'));
     var els = Array.prototype.slice.call(tr.querySelectorAll('[ng-click],[ng-dblclick],a,button')).concat(cells.filter(function (c) { return /\d{6,}/.test(c.textContent); }), [tr], cells);
     els = els.filter(function (e, i) { return els.indexOf(e) === i; }).slice(0, 10);
@@ -192,7 +205,7 @@ function COLLECTOR(O) {
     for (var i = 0; i < ways.length && !stop; i++) {
       var e = ways[i][0], t = ways[i][1];
       try { if (t === 'click') e.click(); else e.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: window })); } catch (_) {}
-      if (await waitFor(detailOpen, i === 0 ? 5000 : 2200)) { if (how < 0 || i > 0) { how = i; L('card opens by ' + t + ' on ' + e.tagName.toLowerCase() + (e.getAttribute('ng-click') ? ' [' + e.getAttribute('ng-click') + ']' : '')); } return true; }
+      if (await waitFor(landed, i === 0 ? 5000 : 2200)) { if (how < 0 || i > 0) { how = i; L('card opens by ' + t + ' on ' + e.tagName.toLowerCase() + (e.getAttribute('ng-click') ? ' [' + e.getAttribute('ng-click') + ']' : '')); } return true; }
     }
     return false;
   }
@@ -205,7 +218,7 @@ function COLLECTOR(O) {
   }
   function nextPage() {
     var ok = function (a) { var li = a.closest('li'); return vis(a) && !(li && /disabled/.test(li.className)) && !a.hasAttribute('disabled'); };
-    var c = all('[ng-click*="selectPage(page + 1"],[ng-click*="selectPage(page+1"],[ng-click*="nextPage"],.pagination-next a').filter(ok);
+    var c = all('[ng-click*="setCurrent(pagination.current + 1"],[ng-click*="setCurrent(pagination.current+1"],[ng-click*="selectPage(page + 1"],[ng-click*="selectPage(page+1"],[ng-click*="nextPage"],.pagination-next a').filter(ok);
     if (!c.length) c = all('.pagination li a, a[ng-click*="selectPage"]').filter(function (a) { return /next|›|»|^\s*>\s*$/i.test(a.textContent) && ok(a); });
     return c[0] || null;
   }
@@ -228,15 +241,18 @@ function COLLECTOR(O) {
             continue;
           }
           fails = 0;
-          await sleep(400); o = readDetail();
-          var back = byClick(/backToPreviousPage|changeListGuestDocumentsModeTo\(true\)/)[0]; if (back) back.click(); else history.back();
-          await waitFor(function () { return !detailOpen() && listRows().length; }, 8000); await sleep(250);
+          await sleep(300); o = readDetail();
+          if (!o['Confirmation Number'] && /^\d{5,}$/.test(k)) o['Confirmation Number'] = k;
+          if (!listRows().length) {   // the card took the whole page: back to the list
+            var back = byClick(/backToPreviousPage|changeListGuestDocumentsModeTo\(true\)/)[0]; if (back) back.click(); else history.back();
+            await waitFor(function () { return listRows().length; }, 8000); await sleep(250);
+          }
         }
         if (o && Object.keys(o).length) { got.push(o); L('✓ ' + (o['Room Number'] || '') + ' ' + (o['Purpose Of Visit'] || '') + ' ' + (o['Nationality'] || '')); }
       }
       var nx = nextPage(); if (!nx) break;
       var before = key(listRows()[0] || document.body); nx.click(); L('next page');
-      await waitFor(function () { var r = listRows()[0]; return r && key(r) !== before; }, 15000);
+      if (!(await waitFor(function () { var r = listRows()[0]; return r && key(r) !== before; }, 15000))) { L('the list did not change: last page'); break; }
     }
     busy = false; prog = 100;
     if (got.length && O.send) { try { O.send(got, from, to); } catch (_) {} say('✅ ' + got.length + ' guests collected and sent to HotelOps — you can close this tab.', 'ok'); return; }

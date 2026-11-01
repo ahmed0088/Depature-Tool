@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 483, items: [
+    "🛠 Neorcha \"its card did not open\" fixed: the collector now clicks the confirmation-number cell (Neorcha's own viewGuestDocument) and waits for the card to show that confirmation number — the way HotelOps' older Neorcha Extractor does on the real site. It used to click the row's first box instead.",
+    "🌍 Nationality is now read from Neorcha's Country field too, the page size goes to the biggest choice, and it stops by itself on the last page.",
+    "🔄 Helper downloaded on v480 or later? Nothing to do — it picks this up by itself (with \"Allow User Scripts\" on). Older helper: download it once more. Then reload HotelOps and press ▶ Start again.",
+  ] },
   { v: 482, items: [
     "🧹 DTCM filler on the portal: new 🧹 Clear and ↻ Refill buttons for the chosen days. Clear puts 0 in every box of those days and saves; Refill types the finance figures again and saves, even if they already match. Both ask first.",
     "✏️ Change before filling is fully flexible now: Put 0, Set to any number, or Back to the sheet's figure — for a column or a whole day, all days or just some. A later change wins, so \"TD Fee 0 on all days, but the sheet on day 5\" works.",
