@@ -78,7 +78,7 @@ function resolveCountry(name) {
   const match = EXCEL_LOWER[t.toLowerCase()];
   if (match) return { excel: match, isUnknown: false };
   // Placeholder codes Opera uses when no nationality was entered (zzz, xx, ---)
-  if (/^(z+|x+|-+|\?+|n\/?a)$/i.test(t)) return { excel: null, isUnknown: true };
+  if (/^(z+|x+|-+|\?+|n\/?a|do\s*not\s*use|unknown)$/i.test(t)) return { excel: null, isUnknown: true };   // "DO NOT USE": Opera's retired codes (AN …) — no real nationality
   // Loose match: "and" = "&", "Islands" = "Island", "St" = "Saint", punctuation ignored
   const loose = EXCEL_LOOSE[_natLoose(t)];
   return loose ? { excel: loose, isUnknown: false } : { excel: null, isUnknown: false };
@@ -204,14 +204,16 @@ function processNat() {
   // Store rows + unknown totals for optional UAE merge (toggled by checkbox)
   const unkTotals = unknowns.reduce((a,u)=>({APR:a.APR+u.APR,RMS:a.RMS+u.RMS,PRS:a.PRS+u.PRS}),{APR:0,RMS:0,PRS:0});
   window._natRows = rows; window._natUnkTotals = unkTotals;
-  const uaeIdx = EXCEL_COUNTRIES.indexOf('United Arab Emirates');
+  const uaeIdx = Math.max(0, EXCEL_COUNTRIES.indexOf(natMergeTo()));
+  // the rows exactly as they are copied: Unknown merged into the chosen country (when ticked), only the chosen columns
+  function natFinalRows() {
+    const mergeUnk = natMergeOn() && (window._natUnkTotals.APR || window._natUnkTotals.RMS || window._natUnkTotals.PRS), mi = Math.max(0, EXCEL_COUNTRIES.indexOf(natMergeTo()));
+    return window._natRows.map((v, i) => (mergeUnk && i === mi) ? Object.assign({}, v, { APR: v.APR + window._natUnkTotals.APR, RMS: v.RMS + window._natUnkTotals.RMS, PRS: v.PRS + window._natUnkTotals.PRS }) : v);
+  }
+  window._natFinalRows = natFinalRows;
   function buildNatCopy() {
-    const mergeUnk = document.getElementById('mergeUnkChk') && document.getElementById('mergeUnkChk').checked;
-    return window._natRows.map((v,i) => {
-      let apr=v.APR, rms=v.RMS, prs=v.PRS;
-      if (mergeUnk && i === uaeIdx) { apr+=window._natUnkTotals.APR; rms+=window._natUnkTotals.RMS; prs+=window._natUnkTotals.PRS; }
-      return z(apr)+'\t'+z(rms)+'\t'+z(prs);
-    }).join('\n');
+    const C = natCols();
+    return natFinalRows().map(v => C.map(k => z(v[k])).join('\t')).join('\n');
   }
   window._buildNatCopy = buildNatCopy;
   natCopyText = buildNatCopy();
@@ -236,13 +238,16 @@ function processNat() {
 
   const aS = (type,ico,title,sub) => `<div style="display:flex;gap:9px;padding:9px 12px;border-radius:var(--r);margin-bottom:5px;background:${type==='ok'?'rgba(62,207,142,0.04)':type==='warn'?'rgba(240,164,58,0.05)':'rgba(240,107,122,0.05)'};border:1px solid ${type==='ok'?'rgba(62,207,142,0.12)':type==='warn'?'rgba(240,164,58,0.18)':'rgba(240,107,122,0.18)'};border-left:3px solid ${type==='ok'?'var(--mint)':type==='warn'?'var(--amber)':'var(--rose)'}"><span>${ico}</span><div><strong style="font-size:0.76rem;color:var(--text);display:block;">${escapeHtml(title)}</strong><span style="font-family:var(--mono);font-size:0.62rem;color:var(--text3);">${escapeHtml(sub)}</span></div></div>`;
 
+  window._natGrand = { APR: grandAPR, RMS: grandRMS, PRS: grandPRS };
   document.getElementById('natTotalsGrid').innerHTML = ['apr','rms','prs'].map((_,ki) => {
     const op=[grandAPR,grandRMS,grandPRS][ki]; const mp=[mappedAPR,mappedRMS,mappedPRS][ki]; const gp=[gapAPR,gapRMS,gapPRS][ki];
     const lbl=['New Arrivals','Room Nights','Guest Nights'][ki];
     return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:11px 13px;"><div style="font-family:var(--mono);font-size:0.56rem;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid var(--border);">${lbl}</div><div style="display:flex;justify-content:space-between;padding:3px 0;font-size:0.72rem;"><span style="color:var(--text3);">Opera</span><span style="font-family:var(--mono);">${op.toLocaleString()}</span></div><div style="display:flex;justify-content:space-between;padding:3px 0;font-size:0.72rem;"><span style="color:var(--text3);">Placed</span><span style="font-family:var(--mono);color:var(--text2);">${mp.toLocaleString()}</span></div><div style="display:flex;justify-content:space-between;padding:3px 0;font-size:0.72rem;"><span style="color:var(--text3);">Gap</span><span style="font-family:var(--mono);color:${gp>0?'var(--amber)':'var(--mint)'};">${gp>0?'−'+gp:'✓ 0'}</span></div></div>`;
   }).join('');
   const unkListHTML = unknowns.length===0 ? aS('ok','✅','No unknown guests','Perfect.') : unknowns.map(u=>aS('warn','⚠️',`"${escapeHtml(u.name)}" — ${u.APR} arrivals`,'No nationality code.')).join('');
-  const mergeChkHTML = unknowns.length > 0 ? `<label style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:9px 12px;border-radius:var(--r);background:rgba(90,180,232,0.05);border:1px solid rgba(90,180,232,0.15);cursor:pointer;font-size:0.72rem;color:var(--text2);user-select:none;"><input type="checkbox" id="mergeUnkChk" style="accent-color:var(--sky);width:14px;height:14px;cursor:pointer;" onchange="natCopyText=window._buildNatCopy&&window._buildNatCopy();window._renderNatPreview&&window._renderNatPreview();"> Merge unknown nationality into <strong style="color:var(--sky);margin-left:3px;">United Arab Emirates</strong></label>` : '';
+  const mergeChkHTML = unknowns.length > 0 ? `<div class="nat-merge"><label><input type="checkbox" id="mergeUnkChk"${natMergeOn() ? ' checked' : ''} onchange="natSetMerge(this.checked)"> Merge Unknown into</label>
+    <select id="natMergeTo" aria-label="Country that gets the Unknown guests" onchange="natSetMergeTo(this.value)">${EXCEL_COUNTRIES.map(c => `<option${c === natMergeTo() ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}</select>
+    <span class="nat-merge-n">+${unkTotals.APR} arrivals · +${unkTotals.RMS} room nights · +${unkTotals.PRS} guest nights</span></div>` : '';
   document.getElementById('natUnknownList').innerHTML = unkListHTML + mergeChkHTML;
   document.getElementById('natUnmatchedList').innerHTML = unmatched.length===0 ? aS('ok','✅','All countries matched','No data lost.') : unmatched.map(u=>aS('error','🔴',`"${escapeHtml(u.name)}" — NOT PLACED`,'Country has no Excel row.')).join('');
   const badge = document.getElementById('natDiagBadge'); const hasIssues = unknowns.length>0||unmatched.length>0;
@@ -263,7 +268,7 @@ function processNat() {
   window._natUnkTotals = unkTotals;
 
   function renderNatPreview() {
-    const merge = document.getElementById('mergeUnkChk') && document.getElementById('mergeUnkChk').checked;
+    const merge = natMergeOn() && document.getElementById('mergeUnkChk'), uaeIdx = Math.max(0, EXCEL_COUNTRIES.indexOf(natMergeTo()));
     const q = (window._natSearchQ || '').toLowerCase().trim();
     const uaeRow = merge ? {
       APR:   rows[uaeIdx].APR   + window._natUnkTotals.APR,
@@ -289,6 +294,7 @@ function processNat() {
   }
   window._renderNatPreview = renderNatPreview;
   renderNatPreview();
+  natRefreshTotals();
   // The Opera how-to for this report is written directly into index.html,
   // so the copy that used to be injected here was dead — it targeted an
   // element that has never existed and would only have duplicated it.
@@ -301,8 +307,53 @@ function natFilterPreview(q) {
   window._renderNatPreview();
 }
 
-function copyNat()  { if (window._buildNatCopy) natCopyText = window._buildNatCopy(); if (!natCopyText) return; copyToClipboard(natCopyText, document.getElementById('natCopyBtn'), `Copy All ${EXCEL_COUNTRIES.length} Rows`); }
-function clearNat() { document.getElementById('natInput').value=''; document.getElementById('natResults').style.display='none'; document.getElementById('natError').classList.remove('show'); natCopyText=''; try { localStorage.removeItem('ibis_nat_paste'); } catch(e){} }
+// ── Options (remembered on this device): merge Unknown into a country, which columns to copy ──
+const NAT_COLS = [['APR', 'Arrivals'], ['RMS', 'Room nights'], ['PRS', 'Guest nights']];
+function _natLS(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (_) { return d; } }
+function _natLSset(k, v) { try { localStorage.setItem(k, v); } catch (_) {} }
+function natMergeOn() { return _natLS('ibis_nat_merge', '1') === '1'; }
+function natMergeTo() { const c = _natLS('ibis_nat_merge_to', 'United Arab Emirates'); return EXCEL_COUNTRIES.includes(c) ? c : 'United Arab Emirates'; }
+function natCols() { const v = _natLS('ibis_nat_cols', 'APR,RMS,PRS').split(',').filter(k => NAT_COLS.some(c => c[0] === k)); return v.length ? NAT_COLS.map(c => c[0]).filter(k => v.includes(k)) : ['APR', 'RMS', 'PRS']; }
+function natSetMerge(on) { _natLSset('ibis_nat_merge', on ? '1' : '0'); natAfterOption(); }
+function natSetMergeTo(c) { _natLSset('ibis_nat_merge_to', c); natAfterOption(); }
+function natSetCol(k, on) { let v = natCols(); v = on ? [...new Set(v.concat(k))] : v.filter(x => x !== k); if (!v.length) { showToast('Keep at least one column', 'warn'); natRefreshTotals(); return; } _natLSset('ibis_nat_cols', NAT_COLS.map(c => c[0]).filter(x => v.includes(x)).join(',')); natAfterOption(); }
+function natAfterOption() { if (window._buildNatCopy) natCopyText = window._buildNatCopy(); if (window._renderNatPreview) window._renderNatPreview(); natRefreshTotals(); }
+/** the totals of what is copied (Unknown merged or not), the gap to Opera and the copy panel */
+function natRefreshTotals() {
+  if (!window._natFinalRows || !window._natGrand) return;
+  const F = window._natFinalRows(), G = window._natGrand, sum = k => F.reduce((a, v) => a + (v[k] || 0), 0);
+  const P = { APR: sum('APR'), RMS: sum('RMS'), PRS: sum('PRS') };
+  const grid = document.getElementById('natTotalsGrid');
+  if (grid) grid.innerHTML = NAT_COLS.map(([k, l]) => { const gp = G[k] - P[k];
+    return `<div class="nat-tot${gp > 0 ? ' gap' : ''}"><small>${l}</small><div><span>Opera</span><b>${G[k].toLocaleString()}</b></div><div><span>In the copy</span><b>${P[k].toLocaleString()}</b></div><div><span>Gap</span><b class="${gp > 0 ? 'warn' : 'ok'}">${gp > 0 ? '−' + gp : '✓ 0'}</b></div></div>`; }).join('');
+  [['gap-apr', 'APR'], ['gap-rms', 'RMS'], ['gap-prs', 'PRS']].forEach(([id, k]) => { const el = document.getElementById(id); if (el) { const gp = G[k] - P[k]; el.textContent = gp > 0 ? '−' + gp : '✓ 0'; el.style.color = gp > 0 ? 'var(--amber)' : 'var(--mint)'; } });
+  const C = natCols(), cp = document.getElementById('natCopyOpts');
+  if (cp) cp.innerHTML = `<div class="nat-cols">${NAT_COLS.map(([k, l]) => `<label class="nat-col${C.includes(k) ? ' on' : ''}"><input type="checkbox"${C.includes(k) ? ' checked' : ''} onchange="natSetCol('${k}',this.checked)"><span>${l}</span></label>`).join('')}</div>
+    <div class="nat-sum">The copy adds up to ${C.map(k => `<b>${P[k].toLocaleString()}</b> ${NAT_COLS.find(c => c[0] === k)[1].toLowerCase()}`).join(' · ')} — your sheet's <b>Total</b> row should show the same.</div>`;
+  const btn = document.getElementById('natCopyBtn'); if (btn && !btn.dataset.busy) btn.textContent = `📋 Copy ${EXCEL_COUNTRIES.length} rows · ${C.length} column${C.length === 1 ? '' : 's'}`;
+  const st = document.getElementById('natCopyStart'); if (st) st.textContent = 'B8';
+}
+// ── Browse / drop the Opera file ──
+function natPickFile() { const f = document.getElementById('natFile'); if (f) { f.value = ''; f.click(); } }
+async function natLoadFile(file) {
+  if (!file) return;
+  try {
+    const txt = await file.text();
+    document.getElementById('natInput').value = txt;
+    const nm = document.getElementById('natFileName'); if (nm) nm.textContent = '✓ ' + file.name;
+    processNat();
+    const res = document.getElementById('natResults'); if (res && res.style.display !== 'none') res.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) { showToast('Could not read that file', 'err'); }
+}
+function natDropSetup() {
+  const z = document.getElementById('natDrop'); if (!z || z.dataset.on) return; z.dataset.on = '1';
+  ['dragenter', 'dragover'].forEach(ev => z.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); z.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev => z.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); z.classList.remove('over'); }));
+  z.addEventListener('drop', e => { const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (f) natLoadFile(f); });
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', natDropSetup); else setTimeout(natDropSetup, 0);
+function copyNat()  { if (window._buildNatCopy) natCopyText = window._buildNatCopy(); if (!natCopyText) return; const C = natCols(); copyToClipboard(natCopyText, document.getElementById('natCopyBtn'), `📋 Copy ${EXCEL_COUNTRIES.length} rows · ${C.length} column${C.length === 1 ? '' : 's'}`); }
+function clearNat() { const nm = document.getElementById('natFileName'); if (nm) nm.textContent = ''; document.getElementById('natInput').value=''; document.getElementById('natResults').style.display='none'; document.getElementById('natError').classList.remove('show'); natCopyText=''; try { localStorage.removeItem('ibis_nat_paste'); } catch(e){} }
 
 // ── RENTED ROOMS & BEDS ───────────────────────────────────
 function parseHF(raw) {

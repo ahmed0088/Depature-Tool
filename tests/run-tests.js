@@ -168,6 +168,7 @@ console.log('\nNationality report');
   check('zzz = no nationality', R('zzz'), 'UNKNOWN');
   check('St. Lucia', R('St. Lucia'), 'Saint Lucia');
   check('a real unknown country stays unplaced', R('Madeupland'), null);
+  check('real Opera file (Nov): "DO NOT USE" (retired code AN) and "Unknown" are no nationality — merged with Unknown, never left out', [R('DO NOT USE'), R('Unknown')], ['UNKNOWN', 'UNKNOWN']);
 }
 
 // ── Roster builder ────────────────────────────────────────

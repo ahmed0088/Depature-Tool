@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 463, items: [
+    "🌍 Nationality Report: 📂 Browse or drop the Opera file (stat_countrybymon) and it's read at once; pasting still works.",
+    "🧮 The numbers match Opera: “DO NOT USE” (Opera's retired codes) counts as Unknown, and Unknown is merged into the country you choose (UAE by default, remembered). The gap boxes now show what is really in the copy: ✓ 0 when everything is placed.",
+    "📋 Copy: choose the columns (Arrivals, Room nights, Guest nights). It shows what the copy adds up to, so you can check your sheet's Total row. The layout is cleaner and works on a phone.",
+  ] },
   { v: 462, items: [
     "🗂️ Room notes are tidier: back-to-back automatic entries (status changes, undos, “Extension marked…”) fold into one line, like “6 changes · Extended ×2 · Undone ×2”. Tap Show to open them; 🕘 Activity still lists each one.",
     "🤝 No more tug-of-war on extensions: WhatsApp and the Opera check now use the same 18 minutes. Once Opera has held a room back as “not extended yet” today, WhatsApp keeps it at ⏳ Extending. An extension you tap by hand is never undone automatically; it waits in the Opera box for you to decide.",

@@ -3643,3 +3643,39 @@ html, body { background: var(--bg); }
   .rb-table th.rb-tot { width: 32px; padding: 6px 0; font-size: 8px !important; letter-spacing: -.02em; overflow: hidden; }
 }
 .ro-tl-bar { overflow: hidden; } .ro-tl-bar em { white-space: nowrap; overflow: hidden; text-overflow: clip; max-width: 100%; }
+
+/* ── Nationality Report ───────────────────────────────────── */
+.nat-drop { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 18px; margin-bottom: 10px; border: 2px dashed var(--border2); border-radius: 14px; background: var(--bg2); transition: border-color .15s, background .15s; }
+.nat-drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--bg2)); }
+.nat-drop-ic { width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center; font-size: 22px; background: color-mix(in srgb, var(--accent) 14%, transparent); flex: none; }
+.nat-drop-t { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.nat-drop-t b { font-size: .95rem; } .nat-drop-t span { color: var(--text3); font-size: .8rem; } .nat-drop-t i { font-style: normal; color: var(--green, #16a34a); font-weight: 700; font-size: .82rem; }
+.nat-paste summary { cursor: pointer; color: var(--text3); font-size: .8rem; margin: 2px 0 6px; }
+.nat-paste textarea { min-height: 90px; }
+.nat-tots { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.nat-tot { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 11px 13px; }
+.nat-tot.gap { border-color: color-mix(in srgb, var(--amber, #d97706) 45%, var(--border)); }
+.nat-tot small { display: block; font: 700 10.5px var(--font); letter-spacing: .06em; text-transform: uppercase; color: var(--text3); margin-bottom: 6px; padding-bottom: 5px; border-bottom: 1px solid var(--border); }
+.nat-tot div { display: flex; justify-content: space-between; padding: 3px 0; font-size: .8rem; } .nat-tot span { color: var(--text3); } .nat-tot b { font-family: var(--mono); font-weight: 600; }
+.nat-tot b.ok { color: var(--mint, #10b981); } .nat-tot b.warn { color: var(--amber, #d97706); }
+.nat-merge { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 8px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--sky, #0ea5e9) 6%, transparent); border: 1px solid color-mix(in srgb, var(--sky, #0ea5e9) 22%, transparent); font-size: .82rem; }
+.nat-merge label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; }
+.nat-merge select { min-width: 0; max-width: 100%; height: 34px; }
+.nat-merge-n { color: var(--text3); font-size: .76rem; }
+.nat-main { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 14px; margin-top: 14px; align-items: start; }
+.nat-copy-h { font-size: .9rem; font-weight: 700; margin-bottom: 10px; }
+.nat-cols { display: flex; flex-wrap: wrap; gap: 6px; }
+.nat-col { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--border2); border-radius: 999px; font-size: .8rem; cursor: pointer; user-select: none; }
+.nat-col.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); font-weight: 600; }
+.nat-sum { margin-top: 10px; font-size: .78rem; line-height: 1.5; color: var(--text2); } .nat-sum b { font-family: var(--mono); color: var(--text); }
+.nat-steps { margin: 0; padding-left: 18px; font-size: .78rem; color: var(--text3); line-height: 1.7; } .nat-steps b { color: var(--text); font-family: var(--mono); }
+@media (max-width: 860px) { .nat-main { grid-template-columns: minmax(0, 1fr); } .nat-main > div:last-child { order: -1; } }
+.nat-how { margin-bottom: 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg2); }
+.nat-how summary { cursor: pointer; padding: 10px 14px; font: 600 13px var(--font); color: var(--text2); list-style: none; }
+.nat-how summary::-webkit-details-marker { display: none; }
+.nat-how summary::before { content: '❔ '; }
+.nat-how[open] summary { border-bottom: 1px solid var(--border); }
+.nat-how ol { margin: 10px 0 4px; padding: 0 14px 0 34px; font-size: 13px; line-height: 1.75; color: var(--text2); }
+.nat-how b { color: var(--text); }
+.nat-how-warn { margin: 4px 14px 12px; font-size: 12px; color: var(--amber, #b45309); }
+.nat-paste textarea { font-family: var(--mono); font-size: 11px; white-space: pre; overflow-x: auto; }

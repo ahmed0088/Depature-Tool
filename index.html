@@ -1123,23 +1123,28 @@
       <div class="page-hd-left"><h1>Nationality Report</h1><p>How many guests came from each country this month · needs the Opera report <b>stat_countrybymon</b> (Delimited Data)</p></div>
       <div class="page-hd-actions"><button class="btn rose" onclick="clearNat()">✕ Clear</button></div>
     </div>
-    <details class="howto"><summary>❔ How to use this</summary><ol><li>In Opera, run <code>stat_countrybymon</code> and export as <b>Delimited Data</b></li><li>Upload or paste the file</li><li>Press <b>⚡ Process</b>, then <b>Copy All Rows</b> to paste into your sheet</li></ol></details>
+    <details class="howto"><summary>❔ How to use this</summary><ol><li>In Opera, run <code>stat_countrybymon</code> and export as <b>Delimited Data</b></li><li>Drop the file or press <b>📂 Browse</b> (or paste it and press <b>⚡ Process</b>)</li><li>Choose the columns, press <b>📋 Copy</b>, click <b>B8</b> in your sheet and paste</li></ol></details>
     <div class="card">
       <div class="upload-zone">
         <div class="upload-label-bar"><div class="upload-dot gold"></div><span class="upload-lbl">Nationality Report</span><span class="upload-sub">stat_countrybymon_….txt</span></div>
-        <div style="margin-bottom:8px;padding:10px 13px;background:rgba(90,180,232,0.05);border:1px solid rgba(90,180,232,0.15);border-left:3px solid var(--sky);border-radius:var(--r);font-size:0.7rem;color:var(--text2);line-height:1.8;">
-          <div style="font-family:var(--mono);font-size:0.58rem;letter-spacing:1px;color:var(--sky);margin-bottom:5px;">HOW TO GET THIS REPORT FROM OPERA</div>
-          <ol style="margin:0;padding-left:16px;color:var(--text3);">
-            <li>In Opera go to <strong style="color:var(--text2);">Reports</strong> and search <strong style="color:var(--mint);">Nationality by Month</strong></li>
-            <li>Set your <strong style="color:var(--text2);">date range</strong> to the full month</li>
-            <li>Select the <strong style="color:var(--sky);">Nationality</strong> radio button <em style="color:var(--text3);">(not Country)</em></li>
-            <li>Tick <strong style="color:var(--sky);">Room Nights</strong> and <strong style="color:var(--sky);">Person Nights</strong></li>
-            <li>Download → <strong style="color:var(--mint);">Delimited</strong> with <strong style="color:var(--mint);">Tab</strong> separator</li>
-            <li>Open file <strong style="color:var(--text2);">(stat_countrybymon...)</strong> → Select All → Copy → Paste below</li>
+        <details class="nat-how"><summary>How to get this report from Opera</summary>
+          <ol>
+            <li>In Opera go to <b>Reports</b> and search <b>Nationality by Month</b></li>
+            <li>Set the <b>date range</b> to the full month</li>
+            <li>Select the <b>Nationality</b> radio button (not Country)</li>
+            <li>Tick <b>Room Nights</b> and <b>Person Nights</b></li>
+            <li>Download → <b>Delimited</b> with a <b>Tab</b> separator</li>
+            <li>Drop the file below or press <b>📂 Browse</b></li>
           </ol>
-          <div style="margin-top:6px;font-family:var(--mono);font-size:0.57rem;color:var(--amber);">⚠ Select <strong>Nationality</strong> radio — not Country — or data will not match</div>
+          <p class="nat-how-warn">⚠ Pick <b>Nationality</b>, not Country, or the numbers won't match.</p>
+        </details>
+        <div class="nat-drop" id="natDrop">
+          <div class="nat-drop-ic" aria-hidden="true">📄</div>
+          <div class="nat-drop-t"><b>Drop the Opera file here</b><span>stat_countrybymon_….txt · it is read at once</span><i id="natFileName"></i></div>
+          <button type="button" class="btn gold" onclick="natPickFile()">📂 Browse…</button>
+          <input type="file" id="natFile" accept=".txt,.csv,.tsv,text/plain" hidden onchange="natLoadFile(this.files[0])">
         </div>
-        <textarea id="natInput" placeholder="Paste stat_countrybymon_….txt here…"></textarea>
+        <details class="nat-paste"><summary>or paste the text</summary><textarea id="natInput" placeholder="Paste stat_countrybymon_….txt here…"></textarea></details>
       </div>
       <div class="error-box" id="natError"><span>⚠</span><span id="natErrorMsg"></span></div>
       <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn gold" onclick="processNat()">⚡ Process</button><button class="btn" onclick="clearNat()">✕ Clear</button></div>
@@ -1156,13 +1161,13 @@
           <span>🔍</span><div><div style="font-size:0.86rem;font-weight:600;">Data Quality</div></div>
           <span class="tb-pill" id="natDiagBadge" style="margin-left:auto;">…</span>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:14px;" id="natTotalsGrid"></div>
+        <div class="nat-tots" id="natTotalsGrid"></div>
         <div style="font-family:var(--mono);font-size:0.58rem;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:7px;">Unknown</div>
         <div id="natUnknownList"></div>
         <div style="font-family:var(--mono);font-size:0.58rem;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin:10px 0 7px;">Not in Excel</div>
         <div id="natUnmatchedList"></div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 250px;gap:14px;margin-top:14px;">
+      <div class="nat-main">
         <div class="card" style="padding:0;overflow:hidden;">
           <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--card2);gap:10px;">
             <div style="font-size:0.8rem;font-weight:600;white-space:nowrap;" id="natPrevTitle">Preview · 240 rows</div>
@@ -1180,9 +1185,10 @@
         </div>
         <div style="display:flex;flex-direction:column;gap:11px;">
           <div class="card">
-            <div style="font-size:0.76rem;font-weight:600;margin-bottom:9px;">📋 Copy to Excel</div>
-            <button class="btn gold" id="natCopyBtn" onclick="copyNat()" style="width:100%;justify-content:center;margin-bottom:9px;">Copy All 240 Rows</button>
-            <div style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);line-height:2.1;">1. Open Excel<br>2. Click cell <strong style="color:var(--text2);">B8</strong><br>3. Ctrl+V ✓</div>
+            <div class="nat-copy-h">📋 Copy to Excel</div>
+            <div id="natCopyOpts"></div>
+            <button class="btn gold" id="natCopyBtn" onclick="copyNat()" style="width:100%;justify-content:center;margin:10px 0 8px;">📋 Copy 240 rows</button>
+            <ol class="nat-steps"><li>Open your nationality sheet</li><li>Click cell <b id="natCopyStart">B8</b> (the first country's first number)</li><li>Press <b>Ctrl+V</b> — then check the Total row matches the numbers above</li></ol>
           </div>
           <div class="card" style="background:rgba(240,164,58,0.04);border-color:rgba(240,164,58,0.2);">
             <div style="font-size:0.76rem;font-weight:600;margin-bottom:9px;color:var(--amber);">⚠ Gap</div>
