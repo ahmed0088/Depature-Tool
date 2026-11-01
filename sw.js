@@ -14,7 +14,7 @@
 //  clients pick up the new version instead of a stale cache.
 // ═══════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'ibis-ops-shell-v471';
+const CACHE_NAME = 'ibis-ops-shell-v472';
 
 const SHELL_FILES = [
   './',

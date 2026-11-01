@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 472, items: [
+    "🔧 DTCM Revenue Fill reads every day of the PDF: days with a negative figure (4 and 30 Dec, written “- 35,810”) were skipped before. A lone “-” counts as 0.",
+    "0️⃣ Negative figures → 0 (on by default): a negative month-end figure goes into the portal as 0. The page lists each one (4 Dec TD −35,810 → 0) and the table shows the sheet's number next to the 0. Untick it to fill them as they are.",
+    "✨ DTCM Revenue Fill looks pro: a 3-step guide (Load → Review → Fill) and colour-coded cards. On the portal, the box has live counters (saved, already right, differs, left), a progress bar, a day grid coloured by each day's state, a test-mode switch, a minimise button and an activity log.",
+  ] },
   { v: 471, items: [
     "🧪 DTCM Revenue Fill, test mode: tick “Fill into the month shown on this page” and the sheet's days go into the month on the portal by day number (the sheet's day 1 → the page's day 1). The confirm message says which month it writes into. For real, leave it off.",
   ] },

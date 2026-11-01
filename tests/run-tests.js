@@ -185,6 +185,10 @@ console.log('\nNationality report');
   check('DTCM fill: finance\'s sheet read from the PDF (rounded) and the Excel (exact, header over two lines); negative month-end lines flagged; the filler is valid code',
     [P.rows.length, P.rows[1].v[6], P.total[5], X.rows[0].v.slice(0, 3), X.y + '-' + X.m, C.neg.map(n => n.d + ' ' + n.f), C.missing.length, ok],
     [2, -35810, -73980.6, [36859.12, 6209.5, 1242.33], '2025-11', ['4 TD Fee'], 29, true]);
+  const RP = K.parseLines(['Thursday, December 4, 2025 41,432 6,291 1,472 3,367 4,810 2,701 - 35,810 119 143', 'Tuesday, December 30, 2025 81,449 7,412 4,750 6,344 8,903 - 165,178 1,280 134 143', 'Friday, December 5, 2025 42,942 8,297 - 3,601 5,144 2,960 1,300 134 143']);
+  const FZ = K.filled(RP, true), FK = K.filled(RP, false);
+  check('DTCM fill, real PDF (Dec): a negative written "- 35,810" is read (days 4 and 30 were skipped), a lone "-" is 0; negatives go in as 0 when that is on (default)',
+    [RP.rows.map(r => r.d), RP.rows[0].v[6], RP.rows[2].v[5], RP.rows[1].v[2], FZ.rows[0].v[6], FZ.rows[2].v[5], FK.rows[0].v[6]], [[4, 5, 30], -35810, -165178, 0, 0, 0, -35810]);
   const one = K.parseAoa([['Revenue Date', 'Rooms Revenue (AED)', 'F&B Revenue (AED)', 'Other Revenue (AED)', 'Municipality (AED)', 'Service Charge (AED)', 'VAT (AED)', 'TD Fee (AED)', 'Rooms Occupied', 'Total Available Rooms'], [45992, 36859.12, 6209.5, 1242.33, 3025, 4322, 2432, 1080, 115, 143], [45993, 33952, 5697, 1229, 2785, 3978, 2243, 960, 103, 143], ['Total', 70811.12, 11906.5, 2471.33, 5810, 8300, 4675, 2040, 218, 286]]);
   check('DTCM fill accuracy: a one-line header never takes the first day\'s figures; Excel day numbers are exact days (45992 = 1 Dec 2025); the days add up to the Total row',
     [one.heads[0], one.heads[8], one.rows.map(r => r.d), one.rows[0].v, K.check(one).vsTotal.length], ['Rooms Revenue (AED)', 'Total Available Rooms', [1, 2], [36859.12, 6209.5, 1242.33, 3025, 4322, 2432, 1080, 115, 143], 0]); }
