@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 469, items: [
+    "🏛️ New: DTCM Revenue Fill (Night Audit, under DTCM). Drop finance's “Daily data for DTCM” sheet (Excel, or its PDF): it shows the month, the totals and anything odd (missing days, negative month-end lines).",
+    "⚡ Then it fills the DTCM portal for you: copy the filler, paste it in the portal's console (or use the bookmark). 🔍 Check compares every day; ▶ Fill all fills each day, presses Update and checks it saved. Days that already match are skipped, and it stops at the first day the portal refuses.",
+  ] },
   { v: 468, items: [
     "❓ Rented Rooms & Beds asks you: a room type it hasn't seen for this hotel is marked NEW, with “how many beds in each?”. Type the number, or tap ✓ if the guess is right, and it's remembered. The preview shows real dates even without History Forecast.",
     "🏨 Smarter guess: it reads the number of beds from the room's description (“2 Single Beds” → 2) and already knows our Ibis Styles and Mercure codes (SGC, TWC, KGD, TWD, KGB, KGBCI). The Mercure Room Type report works on its own too.",

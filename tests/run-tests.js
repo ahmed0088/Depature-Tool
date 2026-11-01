@@ -176,6 +176,18 @@ console.log('\nNationality report');
   const css = (fs.readFileSync(path.join(ROOT, 'pro.css'), 'utf8').match(/--ho-css: "(v\d+)"/) || [])[1];
   const page = (html.match(/<meta name="ho-version" content="(v\d+)"/) || [])[1], js = (ut.match(/APP_VERSION = '(v\d+)'/) || [])[1], cache = (sw.match(/ibis-ops-shell-(v\d+)/) || [])[1];
   check('one version everywhere: the page (meta ho-version), the scripts (APP_VERSION), the stylesheet (pro.css --ho-css) and the offline cache (sw.js) — a mismatch heals itself, but it must not ship', [page === js, js === cache, css === page, !!page], [true, true, true, true]); }
+{ const ctx = vm.createContext({ window: {}, document: { readyState: 'loading', addEventListener() {} }, localStorage: { getItem() { return null; }, setItem() {} }, console });
+  ctx.window = ctx; vm.runInContext(fs.readFileSync(path.join(ROOT, 'dtcm-fill.js'), 'utf8'), ctx); const K = ctx.hoDtcmFill;
+  const P = K.parseLines(['Monday, December 1, 2025 36,859 6,209 1,242 3,025 4,322 2,432 1,080 115 143', 'Thursday, December 4, 2025 41,432 6,291 1,472 3,367 4,810 2,701 -35,810 119 143', 'Total 1,483,529 215,500 45,706.77 119,668.19 170,498 - 73,980.60 1,600.00 4,003 4,433']);
+  const X = K.parseAoa([['Ibis DD'], ['Revenue Date', 'Rooms Revenue', 'F&B Revenue', 'Other', 'Municipality', 'Service Charge', 'VAT (AED)', 'TD Fee (AED)', 'Rooms', 'Total Available'], ['', '(AED)', '(AED)', 'Revenue (AED)', '(AED)', '(AED)', '', '', 'Occupied', 'Rooms'], ['Monday, December 1, 2025', 36859.12, 6209.5, 1242.33, 3025, 4322, 2432, 1080, 115, 143], ['Total']]);
+  const C = K.check(P), code = K.fillerCode(X);
+  let ok = true; try { new Function(code); } catch (_) { ok = false; }
+  check('DTCM fill: finance\'s sheet read from the PDF (rounded) and the Excel (exact, header over two lines); negative month-end lines flagged; the filler is valid code',
+    [P.rows.length, P.rows[1].v[6], P.total[5], X.rows[0].v.slice(0, 3), X.y + '-' + X.m, C.neg.map(n => n.d + ' ' + n.f), C.missing.length, ok],
+    [2, -35810, -73980.6, [36859.12, 6209.5, 1242.33], '2025-11', ['4 TD Fee'], 29, true]);
+  const one = K.parseAoa([['Revenue Date', 'Rooms Revenue (AED)', 'F&B Revenue (AED)', 'Other Revenue (AED)', 'Municipality (AED)', 'Service Charge (AED)', 'VAT (AED)', 'TD Fee (AED)', 'Rooms Occupied', 'Total Available Rooms'], [45992, 36859.12, 6209.5, 1242.33, 3025, 4322, 2432, 1080, 115, 143], [45993, 33952, 5697, 1229, 2785, 3978, 2243, 960, 103, 143], ['Total', 70811.12, 11906.5, 2471.33, 5810, 8300, 4675, 2040, 218, 286]]);
+  check('DTCM fill accuracy: a one-line header never takes the first day\'s figures; Excel day numbers are exact days (45992 = 1 Dec 2025); the days add up to the Total row',
+    [one.heads[0], one.heads[8], one.rows.map(r => r.d), one.rows[0].v, K.check(one).vsTotal.length], ['Rooms Revenue (AED)', 'Total Available Rooms', [1, 2], [36859.12, 6209.5, 1242.33, 3025, 4322, 2432, 1080, 115, 143], 0]); }
 console.log('\nRoster builder');
 {
   const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} },

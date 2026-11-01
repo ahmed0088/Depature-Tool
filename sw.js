@@ -14,7 +14,7 @@
 //  clients pick up the new version instead of a stale cache.
 // ═══════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'ibis-ops-shell-v468';
+const CACHE_NAME = 'ibis-ops-shell-v469';
 
 const SHELL_FILES = [
   './',
@@ -140,6 +140,7 @@ const SHELL_FILES = [
   './scripts/neorcha-extractor.js',
   './scripts/all-enroll.js',
   './skip-clean.js',
+  './dtcm-fill.js',
 ];
 
 const SHELL_URLS = new Set(SHELL_FILES.map(u => new URL(u, self.location.href).href));
