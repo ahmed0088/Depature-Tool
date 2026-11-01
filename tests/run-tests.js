@@ -237,6 +237,10 @@ const nxAsync = (async () => { const ctx = vm.createContext({ window: {}, docume
   const info = toApp.filter(m => m.source === 'ho-wa-ext-info').pop() || {};
   check('Neorcha collector updates itself: a newer one handed over by HotelOps is kept (never one from a Neorcha tab), and the helper tells HotelOps which it runs',
     [st.nxReader && st.nxReader.v, st.nxReader && st.nxReader.code, info.nx], ['999', '// newer collector', '999']); })().catch(e => { fail++; console.log('  ✗ neorcha threw: ' + (e && e.stack || e)); });
+{ const NC = require(path.join(ROOT, 'scripts/neorcha-cloud.js')), wf = fs.readFileSync(path.join(ROOT, '.github/workflows/neorcha.yml'), 'utf8'), src = fs.readFileSync(path.join(ROOT, 'scripts/neorcha-cloud.js'), 'utf8');
+  check('Neorcha cloud: dates (empty = 1st of yesterday\'s month → today; swapped dates fixed); passwords only from Secrets; never prints guest rows',
+    [NC.datesOf('', '', '2026-11-01'), NC.datesOf('', '', '2026-11-15'), NC.datesOf('2026-10-05', '2026-10-01', '2026-11-15'), /secrets\.NEORCHA_PASS/.test(wf) && /secrets\.HOTELOPS_PASS/.test(wf), /console\.log\([^)]*rows/.test(src), /permissions:\s*\n\s*contents: read/.test(wf), !!NC.fbConfig().databaseURL],
+    [{ from: '2026-10-01', to: '2026-11-01' }, { from: '2026-11-01', to: '2026-11-15' }, { from: '2026-10-01', to: '2026-10-05' }, true, false, true, true]); }
 console.log('\nRoster builder');
 {
   const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} },

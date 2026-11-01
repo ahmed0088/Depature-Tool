@@ -233,15 +233,16 @@ function COLLECTOR(O) {
       for (var i = 0; i < rows.length && !stop; i++) {
         var tr = listRows()[i]; if (!tr) break; var k = key(tr); if (seen[k]) continue; seen[k] = 1;
         prog = Math.min(97, 5 + Math.round(((page - 1) * rows.length + i) / Math.max(1, page * rows.length) * 90)); say('Reading guest ' + (got.length + 1) + ' (page ' + page + ')…');
-        var o = rowData(tr);
-        if (!o) {
+        var o = rowData(tr);   // the list's own data (only when Neorcha's page lets us see it): without the purpose, the card is still opened
+        if (!o || !o['Purpose Of Visit']) {
+          var o0 = o || {};
           if (!(await openCard(tr))) {
             L('row ' + k + ': its card did not open'); fails++;
             if (!got.length && fails >= 2) { busy = false; prog = 0; return say('⚠️ I can\'t open the guest cards on this page. Press 📋 Report below and send it to me — it shows how the rows are built (names and numbers are masked).', 'err'); }
             continue;
           }
           fails = 0;
-          await sleep(300); o = readDetail();
+          await sleep(300); o = Object.assign({}, o0, readDetail());
           if (!o['Confirmation Number'] && /^\d{5,}$/.test(k)) o['Confirmation Number'] = k;
           if (!listRows().length) {   // the card took the whole page: back to the list
             var back = byClick(/backToPreviousPage|changeListGuestDocumentsModeTo\(true\)/)[0]; if (back) back.click(); else history.back();
@@ -322,13 +323,16 @@ function rowsToAoa(list) {
   (list || []).forEach(o => Object.keys(o || {}).forEach(k => { if (!NEVER.test(k) && H.indexOf(k) < 0 && H.length < 40) H.push(k); }));
   return [H].concat((list || []).map(o => H.map(h => (o[h] == null || typeof o[h] === 'object' ? '' : String(o[h]).slice(0, 200)))));
 }
-function fromCollector(list, from, to) {
+function fromCollector(list, from, to, at, by) {
   const R = parseAoa(rowsToAoa(list));
-  if (!R || !R.rows.length) { toast('Neorcha sent nothing that could be read', 'err'); return false; }
-  S = Object.assign(R, { file: 'Neorcha · ' + (from && to ? dLbl(from) + ' – ' + dLbl(to) : 'collected'), at: Date.now(), auto: true });
+  if (!R || !R.rows.length) { if (!at) toast('Neorcha sent nothing that could be read', 'err'); return false; }
+  S = Object.assign(R, { file: 'Neorcha · ' + (from && to ? dLbl(from) + ' – ' + dLbl(to) : 'collected') + (by === 'cloud' ? ' · ☁️ cloud' : ''), at: at || Date.now(), auto: true, by: by || 'helper' });
   try { localStorage.setItem(LS, JSON.stringify(S)); } catch (_) {}
-  if (typeof logActivity === 'function') try { logActivity('neorcha_collected', R.rows.length + ' registrations'); } catch (_) {}
-  toast('🪪 ' + R.rows.length + ' registration cards from Neorcha are in', 'ok');
+  if (!at) {   // collected here: shared with the team's other devices (the cards as Neorcha's collector sent them — no passport, ID, e-mail or phone)
+    if (typeof fbSet === 'function') try { fbSet('neorcha', { at: S.at, from: from || '', to: to || '', by: 'helper', n: list.length, rows: list }); } catch (_) {}
+    if (typeof logActivity === 'function') try { logActivity('neorcha_collected', R.rows.length + ' registrations'); } catch (_) {}
+  }
+  toast('🪪 ' + R.rows.length + ' registration cards from Neorcha are in' + (by === 'cloud' ? ' (collected in the cloud)' : ''), 'ok');
   return true;
 }
 function applyLink(kind) {
@@ -410,6 +414,7 @@ const CSS = `
 #panel-${PANEL} .nx-run .nx-url{flex:1 1 320px}#panel-${PANEL} .nx-run .nx-url input{width:100%}
 #panel-${PANEL} .nx-man .nx-drop{margin-top:12px}
 #panel-${PANEL} .nx-live-b{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+#panel-${PANEL} .nx-cloud p{margin:8px 0;line-height:1.6;color:var(--text2)}#panel-${PANEL} .nx-cloud code{font-size:.78rem}
 #panel-${PANEL} .nx-man{margin-top:12px;font-size:.84rem;color:var(--text3)}#panel-${PANEL} .nx-man summary{cursor:pointer}
 #panel-${PANEL} .nx-col ol{margin:10px 0;padding-left:22px;line-height:1.8;font-size:.86rem;color:var(--text2)}#panel-${PANEL} .nx-col b{color:var(--text)}#panel-${PANEL} .nx-col-b{display:flex;gap:8px;flex-wrap:wrap}
 @media (max-width:640px){#panel-${PANEL} .nx-steps{grid-template-columns:1fr}}`;
@@ -427,6 +432,13 @@ function mount() {
       <div class="nx-run"><label class="nx-url">Your hotel's Neorcha link<input type="url" id="nx-url" spellcheck="false"></label><label>Arrivals from<input type="date" id="nx-from"></label><label>to<input type="date" id="nx-to"></label>
         <button type="button" class="btn gold" id="nx-start">▶ Start</button></div>
       <div class="nx-live" id="nx-live" hidden></div>
+      <details class="nx-man nx-cloud"><summary>☁️ No PC? Run it in the cloud — every night by itself, or from your phone</summary>
+        <p>GitHub runs the collector on its own computer: it logs in to Neorcha, reads every card and saves them here. Every night at 3:17 by itself, or press <b>Run workflow</b> on GitHub (the GitHub app works on your phone). Passwords are kept in GitHub's encrypted <b>Secrets</b> — never in HotelOps.</p>
+        <ol><li>On github.com open the HotelOps repository → <b>Settings → Secrets and variables → Actions → New repository secret</b>, and add:
+            <code>NEORCHA_USER</code>, <code>NEORCHA_PASS</code> (Neorcha's login — 2-step verification must be off), <code>HOTELOPS_EMAIL</code>, <code>HOTELOPS_PASS</code> (a HotelOps account of this hotel — best a separate one just for this). Other hotel? Add <code>NEORCHA_URL</code> with its Neorcha link.</li>
+          <li>Open <a href="https://github.com/ahmed0088/depature-tool/actions/workflows/neorcha.yml" target="_blank" rel="noopener">Actions → Neorcha (cloud) ↗</a> → <b>Run workflow</b> (dates optional). About 5–15 minutes.</li>
+          <li>The cards appear on this page by themselves, on every device.</li></ol>
+        <div class="nx-col-b"><a class="btn gold" href="https://github.com/ahmed0088/depature-tool/actions/workflows/neorcha.yml" target="_blank" rel="noopener">▶ Run in the cloud now ↗</a></div></details>
       <details class="nx-man"><summary>No helper on this PC? Run it by hand</summary>
         <ol><li>Open <b>ibis.myneorcha.com</b>, log in, go to <b>Guest Documents</b> and pick your <b>hotel</b>.</li>
           <li>Press <b>📋 Copy the collector</b>, then on Neorcha press <b>F12 → Console</b>, paste and press <b>Enter</b> <small>(first time: type <code>allow pasting</code>)</small> — or click the bookmark.</li>
@@ -488,6 +500,11 @@ function mount() {
   ['dragenter', 'dragover'].forEach(ev => z.addEventListener(ev, e => { e.preventDefault(); z.classList.add('over'); }));
   ['dragleave', 'drop'].forEach(ev => z.addEventListener(ev, e => { e.preventDefault(); z.classList.remove('over'); }));
   z.addEventListener('drop', e => { const f = e.dataTransfer && e.dataTransfer.files[0]; if (f) load(f); });
+  // ☁️ the cards saved by another device or by the cloud run: newer than what this device has → shown here
+  const listen = () => { if (typeof fbListen !== 'function') return setTimeout(listen, 1500);
+    fbListen('neorcha', v => { if (!v || !Array.isArray(v.rows) || !(+v.at > ((S && +S.at) || 0))) return;
+      if (fromCollector(v.rows.slice(0, 5000), v.from, v.to, +v.at, v.by)) draw(); }); };
+  listen();
   // Purpose of Stay changes (loaded later, edited): the link numbers follow
   document.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-panel="' + PANEL + '"]')) setTimeout(draw, 50); }, true);
   draw();

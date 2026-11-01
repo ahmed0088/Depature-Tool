@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 484, items: [
+    "☁️ Neorcha with no PC: a robot on GitHub logs in to Neorcha, reads every registration card and saves them in HotelOps — every night at 3:17 by itself, or press Run workflow on GitHub (the GitHub app works on your phone). Set it up once: Neorcha Registrations → ☁️ No PC? Run it in the cloud.",
+    "🔐 The Neorcha and HotelOps passwords live only in GitHub's encrypted Secrets — never in HotelOps, never in the code, never in the run's log. It still never reads passport, ID, birth date, e-mail or phone.",
+    "📱 The cards now sync: collected on the desk PC or in the cloud, they show on every device (your phone too), ready for Link to Purpose of Stay.",
+  ] },
   { v: 483, items: [
     "🛠 Neorcha \"its card did not open\" fixed: the collector now clicks the confirmation-number cell (Neorcha's own viewGuestDocument) and waits for the card to show that confirmation number — the way HotelOps' older Neorcha Extractor does on the real site. It used to click the row's first box instead.",
     "🌍 Nationality is now read from Neorcha's Country field too, the page size goes to the biggest choice, and it stops by itself on the last page.",

@@ -1,0 +1,45 @@
+name: Neorcha (cloud)
+# Collects the Neorcha registration cards on GitHub's machine and saves them in HotelOps
+# (scripts/neorcha-cloud.js). Every night by itself, or press "Run workflow" (github.com or the
+# GitHub app). Needs the Secrets listed in that script; without them it does nothing.
+on:
+  workflow_dispatch:
+    inputs:
+      from:
+        description: 'Arrivals from (YYYY-MM-DD) — empty = the 1st of this month'
+        required: false
+        default: ''
+      to:
+        description: 'Arrivals to (YYYY-MM-DD) — empty = today'
+        required: false
+        default: ''
+  schedule:
+    - cron: '17 23 * * *'   # 03:17 in Dubai
+permissions:
+  contents: read
+concurrency:
+  group: neorcha-cloud
+  cancel-in-progress: false
+jobs:
+  collect:
+    if: github.repository == 'ahmed0088/depature-tool'
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Browser
+        run: npm install --no-save --no-audit --no-fund playwright@1.49.1 && npx playwright install --with-deps chromium
+      - name: Collect
+        run: node scripts/neorcha-cloud.js
+        env:
+          FROM: ${{ inputs.from }}
+          TO: ${{ inputs.to }}
+          NEORCHA_URL: ${{ secrets.NEORCHA_URL }}
+          NEORCHA_USER: ${{ secrets.NEORCHA_USER }}
+          NEORCHA_PASS: ${{ secrets.NEORCHA_PASS }}
+          HOTELOPS_EMAIL: ${{ secrets.HOTELOPS_EMAIL }}
+          HOTELOPS_PASS: ${{ secrets.HOTELOPS_PASS }}
+          HOTELOPS_HOTEL: ${{ secrets.HOTELOPS_HOTEL }}
