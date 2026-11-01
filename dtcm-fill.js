@@ -105,6 +105,14 @@ function FILLER(D) {
   var lines = [];
   // which days: "all", "1", "1-5", "1, 3, 8-10" (kept while the box is open)
   var daysTxt = 'all';
+  // "Fill into the month shown on this page": for a test, the sheet's day 1 goes into the page's day 1, whatever its month
+  var anyMonth = false;
+  function pageMonth() {   // the month of the days on the page, read cell by cell ("1-Oct-2026")
+    var rs = rows();
+    for (var i = 0; i < rs.length; i++) for (var j = 0; j < rs[i].cells.length; j++) { var m = rs[i].cells[j].textContent.trim().match(/^\d{1,2}-([A-Z][a-z]{2})-(\d{4})$/); if (m) return { mon: m[1], y: m[2] }; }
+    return null;
+  }
+  function target() { var p = anyMonth && pageMonth(); return p ? p.mon + ' ' + p.y : MON[D.m] + ' ' + D.y; }
   function pickDays(t) {
     t = String(t || '').trim().toLowerCase(); if (!t || t === 'all') return D.rows;
     var want = {}; t.split(/[,\s]+/).forEach(function (p) { var m = p.match(/^(\d{1,2})(?:-(\d{1,2}))?$/); if (!m) return; for (var d = +m[1]; d <= +(m[2] || m[1]); d++) want[d] = 1; });
@@ -120,13 +128,14 @@ function FILLER(D) {
       + '<div style="display:grid;grid-template-columns:repeat(8,1fr);gap:4px;padding:8px 14px 0">' + D.rows.map(function (r) { var on = !all && sel.indexOf(r) >= 0;
           return '<button data-day="' + r.d + '"' + (busy ? ' disabled' : '') + ' style="padding:5px 0;border-radius:7px;border:1px solid ' + (on ? '#0f766e' : '#e5e7eb') + ';background:' + (on ? '#0f766e' : all ? '#f0fdfa' : '#fff') + ';color:' + (on ? '#fff' : '#111') + ';font:600 12px system-ui;cursor:pointer">' + r.d + '</button>'; }).join('')
       + '<button data-day="all"' + (busy ? ' disabled' : '') + ' style="grid-column:span 2;padding:5px 0;border-radius:7px;border:1px solid ' + (all ? '#0f766e' : '#e5e7eb') + ';background:' + (all ? '#0f766e' : '#fff') + ';color:' + (all ? '#fff' : '#111') + ';font:600 12px system-ui;cursor:pointer">All</button></div>'
+      + '<label style="display:flex;align-items:flex-start;gap:8px;padding:8px 14px 0;font-size:12px;color:' + (anyMonth ? '#b45309' : '#374151') + ';cursor:pointer"><input type="checkbox" id="hoDtcmAny"' + (anyMonth ? ' checked' : '') + (busy ? ' disabled' : '') + ' style="margin-top:2px"> <span>Fill into the month shown on this page' + (anyMonth ? ' — <b>' + target() + '</b> (a test: day 1 of the sheet → day 1 of this page)' : ' (for a test)') + '</span></label>'
       + '<div style="display:flex;gap:8px;padding:10px 14px">' + (busy ? btn('stop', '■ Stop') : btn('check', '🔍 Check') + btn('fill', all ? '▶ Fill all' : '▶ Fill ' + sel.length + ' day' + (sel.length === 1 ? '' : 's'), true)) + '</div>'
       + '<div style="overflow:auto;padding:0 14px 12px;font-family:Consolas,monospace;font-size:12px">' + lines.join('') + '</div>';
   }
-  function line(d, icon, text, color) { lines.unshift('<div style="padding:3px 0;border-bottom:1px solid #f3f4f6;color:' + (color || '#111') + '">' + icon + ' ' + d + ' ' + MON[D.m] + ' · ' + text + '</div>'); if (lines.length > 80) lines.pop(); }
+  function line(d, icon, text, color) { lines.unshift('<div style="padding:3px 0;border-bottom:1px solid #f3f4f6;color:' + (color || '#111') + '">' + icon + ' ' + d + ' ' + ((anyMonth && pageMonth()) || { mon: MON[D.m] }).mon + ' · ' + text + '</div>'); if (lines.length > 80) lines.pop(); }
   function headers() { return Array.prototype.map.call(document.querySelectorAll('.jsgrid-header-row th'), function (th) { return th.textContent.replace(/\s+/g, ' ').trim(); }); }
   function cols() { var H = headers(); return KEYS.map(function (k) { return H.findIndex(function (h) { return k.test(h); }); }); }
-  function dateText(d) { return d + '-' + MON[D.m] + '-' + D.y; }
+  function dateText(d) { var p = anyMonth && pageMonth(); return p ? d + '-' + p.mon + '-' + p.y : d + '-' + MON[D.m] + '-' + D.y; }
   function rows() { return Array.prototype.slice.call(document.querySelectorAll('.jsgrid-grid-body tr')).filter(function (tr) { return /jsgrid-(row|alt-row)/.test(tr.className); }); }
   function rowFor(d) { var t = dateText(d); return rows().find(function (tr) { return Array.prototype.some.call(tr.cells, function (c) { return c.textContent.trim() === t; }); }); }
   function vals(tr, C) { return C.map(function (c) { return c >= 0 && tr.cells[c] ? n(tr.cells[c].textContent) : null; }); }
@@ -135,7 +144,8 @@ function FILLER(D) {
   function ready() {
     var C = cols();
     if (C.slice(0, 7).some(function (c) { return c < 0; })) return { err: 'The revenue table is not on this page. Open Revenue on the DTCM portal.' };
-    if (!rows().some(function (tr) { return tr.textContent.indexOf('-' + MON[D.m] + '-' + D.y) >= 0; })) return { err: 'This page shows another month. Pick <b>' + MON[D.m] + ' ' + D.y + '</b> and press Filter.' };
+    if (anyMonth) { if (!pageMonth()) return { err: 'No days on this page yet. Pick a month and press Filter.' }; }
+    else if (!rows().some(function (tr) { return tr.textContent.indexOf('-' + MON[D.m] + '-' + D.y) >= 0; })) return { err: 'This page shows another month. Pick <b>' + MON[D.m] + ' ' + D.y + '</b> and press Filter — or, for a test, tick “Fill into the month shown on this page”.' };
     return { C: C };
   }
   async function run(write) {
@@ -181,6 +191,7 @@ function FILLER(D) {
     paint(msg);
   }
   function safe(w) { run(w).catch(function (e) { busy = false; paint('⛔ Stopped: ' + (e && e.message || e) + '. Nothing after it was changed.'); }); }
+  box.addEventListener('change', function (e) { if (e.target.id === 'hoDtcmAny') { anyMonth = e.target.checked; lines = []; paint(); } });
   box.addEventListener('input', function (e) { if (e.target.id !== 'hoDtcmDays') return; daysTxt = e.target.value; var pos = e.target.selectionStart; paint(); var i = document.getElementById('hoDtcmDays'); if (i) { i.focus(); i.setSelectionRange(pos, pos); } });
   box.addEventListener('click', function (e) {
     var b = e.target.closest('button'); if (!b) return;
@@ -197,7 +208,7 @@ function FILLER(D) {
     else if (b.dataset.a === 'stop') stop = true;
     else if (b.dataset.a === 'check' && !busy) safe(false);
     else if (b.dataset.a === 'fill' && !busy) { var sel = pickDays(daysTxt); if (!sel.length) { paint('⚠️ No day of ' + MON[D.m] + ' in "' + daysTxt + '". Type e.g. 1 or 1-5, or all.'); return; }
-      if (confirm('Fill and save ' + (sel.length === D.rows.length ? 'all ' + sel.length + ' days' : sel.length === 1 ? 'only ' + sel[0].d + ' ' + MON[D.m] : sel.length + ' days (' + daysTxt + ')') + ' of ' + MON[D.m] + ' ' + D.y + ' from the finance sheet? Days that already match are skipped.')) safe(true); }
+      if (confirm('Fill and save ' + (sel.length === D.rows.length ? 'all ' + sel.length + ' days' : sel.length === 1 ? 'only ' + sel[0].d + ' ' + MON[D.m] : sel.length + ' days (' + daysTxt + ')') + ' of the finance sheet (' + MON[D.m] + ' ' + D.y + ')' + (anyMonth ? ' INTO ' + target() + ' on this page (test mode: by day number)' : '') + '? Days that already match are skipped.')) safe(true); }
   });
   window.__hoDtcm = { show: function (D2) { D = D2; lines = []; paint(); } };
   paint();

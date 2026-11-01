@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 471, items: [
+    "🧪 DTCM Revenue Fill, test mode: tick “Fill into the month shown on this page” and the sheet's days go into the month on the portal by day number (the sheet's day 1 → the page's day 1). The confirm message says which month it writes into. For real, leave it off.",
+  ] },
   { v: 470, items: [
     "📅 DTCM Revenue Fill: choose the days. In the portal box, tap the days (or type 1, 1-5, 1, 3, 8-10); All is the whole month. Check and Fill touch only those days. A good first try: fill day 1 only, look at it on the portal, then fill the rest.",
   ] },
