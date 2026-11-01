@@ -34,6 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
+<meta name="ho-version" content="v464"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="themes.css"/>
@@ -1218,9 +1219,17 @@
     </div>
     <details class="howto"><summary>❔ How to use this</summary><ol><li>In Opera, export <code>history_forecast</code> and <code>statroomtype</code> as <b>Delimited Data</b></li><li>Put one file in each box</li><li>Press <b>⚡ Process</b> to see rooms and beds sold per day</li></ol></details>
     <div class="card">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <div class="upload-zone"><div class="upload-label-bar"><div class="upload-dot sky"></div><span class="upload-lbl">File 1 — History Forecast</span><span class="upload-sub">history_forecast_….txt</span></div><textarea id="rentInput1" placeholder="Contains: NO_ROOMS, CONSIDERED_DATE …"></textarea></div>
-        <div class="upload-zone"><div class="upload-label-bar"><div class="upload-dot mint"></div><span class="upload-lbl">File 2 — Room Type Stats</span><span class="upload-sub">statroomtype_….txt</span></div><textarea id="rentInput2" placeholder="Contains: STAY_ROOMS, BUSINESS_DATE, ROOM_CATEGORY (TWC)"></textarea></div>
+      <div class="rent-drops">
+        <div class="rent-drop" id="rentDrop1" data-n="1">
+          <div class="rent-drop-top"><span class="rent-num">1</span><div class="rent-drop-t"><b>History Forecast</b><span>history_forecast_….txt · rooms sold each day</span><i class="rent-fn" id="rentFileName1"></i></div>
+            <button type="button" class="btn gold sm" onclick="rentPick(1)">📂 Browse…</button><input type="file" id="rentFile1" accept=".txt,.csv,.tsv,text/plain" hidden onchange="rentLoadFile(1,this.files[0])"></div>
+          <details class="rent-paste"><summary>or paste the text</summary><textarea id="rentInput1" placeholder="Contains: NO_ROOMS, CONSIDERED_DATE …"></textarea></details>
+        </div>
+        <div class="rent-drop" id="rentDrop2" data-n="2">
+          <div class="rent-drop-top"><span class="rent-num">2</span><div class="rent-drop-t"><b>Room Type Statistics</b><span>statroomtype_….txt (or its PDF) · twin rooms each day</span><i class="rent-fn" id="rentFileName2"></i></div>
+            <button type="button" class="btn gold sm" onclick="rentPick(2)">📂 Browse…</button><input type="file" id="rentFile2" accept=".txt,.csv,.tsv,.pdf,text/plain,application/pdf" hidden onchange="rentLoadFile(2,this.files[0])"></div>
+          <details class="rent-paste"><summary>or paste the text</summary><textarea id="rentInput2" placeholder="Contains: STAY_ROOMS, BUSINESS_DATE, LABEL (TWC)"></textarea></details>
+        </div>
       </div>
       <div class="error-box" id="rentError"><span>⚠</span><span id="rentErrorMsg"></span></div>
       <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn gold" onclick="processRent()">⚡ Process</button><button class="btn" onclick="clearRent()">✕ Clear</button></div>
@@ -4545,7 +4554,7 @@ function toggleLog() {
 
 // ── Nationality / Rent / Audit / Immigration clear ───────
 function clearNat()   { document.getElementById('natInput').value=''; document.getElementById('natResults').style.display='none'; document.getElementById('natError').classList.remove('show'); }
-function clearRent()  { ['rentInput1','rentInput2'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';}); const r=document.getElementById('rentResults');if(r)r.style.display='none'; }
+function clearRent()  { window._rentPdf = null; ['rentFileName1','rentFileName2'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent='';}); ['rentInput1','rentInput2'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';}); const r=document.getElementById('rentResults');if(r)r.style.display='none'; }
 function clearAudit() { ['naOperaInput','naExcelInput'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';}); const s=document.getElementById('naCompareSection');if(s)s.style.display='none'; }
 function clearImmig() {
   const p = document.getElementById('immigPasteInput2'); if (p) p.value = '';
@@ -5621,6 +5630,24 @@ async function appInit() {
       window.hoUpdatePending = () => pending;
     });
   }
+</script>
+<script>
+// ── Page and scripts from the same version ──────────────────
+// The page says which version it is (meta ho-version); utils.js says the same (APP_VERSION). If they differ, a stale copy
+// got into the cache: clear it and reload once (never in a loop).
+(function () {
+  try {
+    const m = document.querySelector('meta[name="ho-version"]'), page = m && m.content, js = typeof APP_VERSION !== 'undefined' ? APP_VERSION : '';
+    if (!page || !js || page === js) { sessionStorage.removeItem('ho_vfix'); return; }
+    if (sessionStorage.getItem('ho_vfix') === page + '|' + js) return;
+    sessionStorage.setItem('ho_vfix', page + '|' + js);
+    console.warn('[HotelOps] page', page, 'but scripts', js, '— clearing the cache and reloading once');
+    const done = () => location.reload();
+    (window.caches ? caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k)))) : Promise.resolve())
+      .then(() => navigator.serviceWorker && navigator.serviceWorker.getRegistration ? navigator.serviceWorker.getRegistration().then(r => r && r.update()) : null)
+      .catch(() => {}).then(done, done);
+  } catch (_) {}
+})();
 </script>
 <script>
 // ── Resume where you were ──────────────────────────────────

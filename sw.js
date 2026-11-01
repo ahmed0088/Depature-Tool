@@ -14,7 +14,7 @@
 //  clients pick up the new version instead of a stale cache.
 // ═══════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'ibis-ops-shell-v463';
+const CACHE_NAME = 'ibis-ops-shell-v464';
 
 const SHELL_FILES = [
   './',
@@ -147,7 +147,12 @@ const SHELL_URLS = new Set(SHELL_FILES.map(u => new URL(u, self.location.href).h
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(SHELL_FILES.map(u => new Request(u, { cache: 'reload' }))))   // fresh from the server, never the browser's old copy
+      // fresh from the server, never an old copy: "?sw=<version>" also gets past GitHub Pages' own cache (it can hand out a
+      // file from before the update for ~10 minutes — the new page with an old script then broke a button). Kept under the plain name.
+      .then(cache => Promise.all(SHELL_FILES.map(u => {
+        const bust = u + (u.includes('?') ? '&' : '?') + 'sw=' + CACHE_NAME;
+        return fetch(new Request(bust, { cache: 'reload' })).then(res => { if (!res || !res.ok) throw new Error('could not fetch ' + u); return cache.put(u, res); });
+      })))
       // no catch: if a file can't be fetched the update waits for next time, and the old version keeps working offline
   );
   self.skipWaiting();

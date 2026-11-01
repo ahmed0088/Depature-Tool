@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 464, items: [
+    "🛠️ Fixed “natPickFile is not defined”: GitHub can hand out an old copy of a file for a few minutes after an update, and the app kept it. Each version is now fetched fresh, and if the page and its scripts are ever from different versions, the app clears its cache and reloads once by itself.",
+    "🛏️ Rented Rooms & Beds: 📂 Browse or drop both files (History Forecast + Room Type Statistics; the Room Type PDF works too). Only the twin rows count as extra beds, added up per day. Each line shows its real date (e.g. Fri 31 Oct: 133 rooms, 25 twin → 158 beds), so you can see which row of your sheet it is.",
+  ] },
   { v: 463, items: [
     "🌍 Nationality Report: 📂 Browse or drop the Opera file (stat_countrybymon) and it's read at once; pasting still works.",
     "🧮 The numbers match Opera: “DO NOT USE” (Opera's retired codes) counts as Unknown, and Unknown is merged into the country you choose (UAE by default, remembered). The gap boxes now show what is really in the copy: ✓ 0 when everything is placed.",
