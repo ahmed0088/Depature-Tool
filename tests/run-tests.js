@@ -192,6 +192,15 @@ console.log('\nNationality report');
   const one = K.parseAoa([['Revenue Date', 'Rooms Revenue (AED)', 'F&B Revenue (AED)', 'Other Revenue (AED)', 'Municipality (AED)', 'Service Charge (AED)', 'VAT (AED)', 'TD Fee (AED)', 'Rooms Occupied', 'Total Available Rooms'], [45992, 36859.12, 6209.5, 1242.33, 3025, 4322, 2432, 1080, 115, 143], [45993, 33952, 5697, 1229, 2785, 3978, 2243, 960, 103, 143], ['Total', 70811.12, 11906.5, 2471.33, 5810, 8300, 4675, 2040, 218, 286]]);
   check('DTCM fill accuracy: a one-line header never takes the first day\'s figures; Excel day numbers are exact days (45992 = 1 Dec 2025); the days add up to the Total row',
     [one.heads[0], one.heads[8], one.rows.map(r => r.d), one.rows[0].v, K.check(one).vsTotal.length], ['Rooms Revenue (AED)', 'Total Available Rooms', [1, 2], [36859.12, 6209.5, 1242.33, 3025, 4322, 2432, 1080, 115, 143], 0]); }
+{ const ctx = vm.createContext({ window: {}, document: { readyState: 'loading', addEventListener() {} }, localStorage: { getItem() { return null; }, setItem() {} }, console, Intl });
+  ctx.window = ctx; vm.runInContext(fs.readFileSync(path.join(ROOT, 'neorcha.js'), 'utf8'), ctx); const N = ctx.hoNeorcha;
+  const R = N.parseAoa([['Confirmation Number', 'First Name', 'Last Name', 'Date of Birth', 'Passport Number', 'Email', 'Mobile Number', 'Nationality', 'Purpose Of Visit', 'Arrival Date', 'Room Number', 'Number of Adults', 'Membership Number', 'Membership Type', 'Checked In By'],
+    ['617001234', 'Test', 'Alpha', '01-01-1980', 'X1234567', 'a@b.c', '+971000', 'IN', 'Leisure', '01-10-2026', '0412', '2', '3081', 'ALL Classic', 'Sam'],
+    ['617001235', 'Test', 'Beta', '', 'Y7654321', '', '', 'United Kingdom', 'Business trip', '01-10-2026', '0101', '1', '', '', 'Lina']]);
+  const L = N.linkPlan(R.rows, [{ room: '412', conf: '617001234', name: 'ALPHA TEST', purpose: 'Business', nat: '' }, { room: '0101', conf: '', name: 'Beta Test', purpose: 'Business', nat: 'British' }]);
+  check('Neorcha registrations: columns by name; passport, birth date, email and phone never read; purpose to Business / Leisure / Flight; linked to Purpose of Stay by conf, else room + name (nationality only where empty)',
+    [/X1234567|a@b|1980|\+971/.test(JSON.stringify(R)), R.rows[0].nat, R.rows[1].purpose, N.purposeOf('Transit'), R.rows[0].arr, R.rows[0].member, L.matched, L.purpose.map(x => x.room + ' ' + x.to), L.nat.map(x => x.room + ' ' + x.to)],
+    [false, 'India', 'Business', 'Flight', '2026-10-01', true, 2, ['412 Leisure'], ['412 India']]); }
 console.log('\nRoster builder');
 {
   const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} },

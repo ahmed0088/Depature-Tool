@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 477, items: [
+    "🪪 New page: Neorcha Registrations (Front Desk, after Purpose of Stay). In Neorcha → Guest Documents, search your dates and press Export Excel → CSV (All), then drop the file here. You see the month: cards, guests, ALL members, purpose of visit, top nationalities, and who checked guests in.",
+    "🔗 One tap links it to Purpose of Stay: each guest's own purpose (Business / Leisure / Flight), and their nationality where it's still empty, matched by confirmation number, else room and name. Passport and ID numbers, birth dates, emails and phones are never read.",
+  ] },
   { v: 476, items: [
     "🎨 Fixed the staff card in the Roster builder: the Health tiles were squeezed into thin strips because Room Health's styles (same names) reached them. Now it's a clean card: the score ring, 8 readable tiles in rows of 4, and What would help underneath.",
   ] },
