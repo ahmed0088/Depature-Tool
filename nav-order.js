@@ -11,9 +11,9 @@
 'use strict';
 
 const GROUPS = [
-  ['Front Desk',     ['home', 'departures', 'arrivals', 'opera', 'inhouse', 'xref', 'purpose', 'wakeups', 'shifts', 'ops-logs', 'handover-book', 'hk-requests', 'room-health']],
+  ['Front Desk',     ['home', 'departures', 'arrivals', 'opera', 'inhouse', 'xref', 'purpose', 'neorcha', 'wakeups', 'shifts', 'ops-logs', 'handover-book', 'hk-requests', 'room-health']],
   ['Night Audit',    ['checklist', 'audit', 'inhouse-tally', 'rent', 'immig', 'nationality']],
-  ['Money & Tax',    ['tourism', 'td-audit', 'dtcm', 'package-audit', 'skip-clean', 'noshow']],
+  ['Money & Tax',    ['tourism', 'td-audit', 'dtcm', 'dtcm-fill', 'package-audit', 'skip-clean', 'noshow']],
   ['Guests & Sales', ['rates', 'pipeline', 'gym', 'guestmem', 'guest-messages', 'arrivals-proc', 'reports', 'trends', 'history']],
   ['Team',           ['roster', 'standards', 'learn']],
   ['Tools',          ['qr', 'adagio', 'vocab']],

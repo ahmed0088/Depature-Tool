@@ -471,6 +471,16 @@ function mount() {
   item.setAttribute('onclick', "showPanel('" + PANEL + "')");
   item.innerHTML = '<div class="nav-icon">🏛️</div>DTCM Revenue Fill';
   const anchor = document.getElementById('nav-dtcm'); if (anchor && anchor.parentNode === nav) anchor.after(item); else nav.appendChild(item);
+  // the phone's "More" menu is its own list: add this page there too (next to dtcm)
+  const grid = document.querySelector('.mob-more-grid');
+  if (grid && !grid.querySelector('.mob-more-item[data-panel="' + PANEL + '"]')) {
+    const b = document.createElement('button');
+    b.className = 'mob-more-item'; b.dataset.panel = PANEL; b.type = 'button';
+    b.setAttribute('onclick', "showPanel('" + PANEL + "');(typeof closeMobMore==='function'?closeMobMore:typeof toggleMobMore==='function'?toggleMobMore:function(){})()");
+    b.innerHTML = '<span class="mob-item-icon">🏛️</span>DTCM Revenue Fill';
+    const at = grid.querySelector('.mob-more-item[data-panel="dtcm"]');
+    if (at) at.after(b); else grid.appendChild(b);
+  }
   try { ['owner', 'manager', 'supervisor'].forEach(r => { if (typeof ROLES !== 'undefined' && ROLES[r] && !ROLES[r].panels.includes(PANEL)) ROLES[r].panels.push(PANEL); });
     if (typeof currentProfile !== 'undefined' && currentProfile && typeof applyRole === 'function') applyRole(currentProfile.role); } catch (_) {}
   $('browse').onclick = () => { $('file').value = ''; $('file').click(); };

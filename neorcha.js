@@ -453,6 +453,16 @@ function mount() {
   item.setAttribute('onclick', "showPanel('" + PANEL + "')");
   item.innerHTML = '<div class="nav-icon">🪪</div>Neorcha Registrations';
   const anchor = document.getElementById('nav-purpose'); if (anchor && nav.contains(anchor)) anchor.after(item); else nav.appendChild(item);
+  // the phone's "More" menu is its own list: add this page there too (next to purpose)
+  const grid = document.querySelector('.mob-more-grid');
+  if (grid && !grid.querySelector('.mob-more-item[data-panel="' + PANEL + '"]')) {
+    const b = document.createElement('button');
+    b.className = 'mob-more-item'; b.dataset.panel = PANEL; b.type = 'button';
+    b.setAttribute('onclick', "showPanel('" + PANEL + "');(typeof closeMobMore==='function'?closeMobMore:typeof toggleMobMore==='function'?toggleMobMore:function(){})()");
+    b.innerHTML = '<span class="mob-item-icon">🪪</span>Neorcha Registrations';
+    const at = grid.querySelector('.mob-more-item[data-panel="purpose"]');
+    if (at) at.after(b); else grid.appendChild(b);
+  }
   try { ['owner', 'manager', 'supervisor', 'agent'].forEach(r => { if (typeof ROLES !== 'undefined' && ROLES[r] && !ROLES[r].panels.includes(PANEL)) ROLES[r].panels.push(PANEL); });
     if (typeof currentProfile !== 'undefined' && currentProfile && typeof applyRole === 'function') applyRole(currentProfile.role); } catch (_) {}
   $('browse').onclick = () => { $('file').value = ''; $('file').click(); };
@@ -460,6 +470,8 @@ function mount() {
   $('copycol').onclick = () => { if (typeof copyToClipboard === 'function') copyToClipboard(code, $('copycol'), '📋 Copy the collector'); else navigator.clipboard.writeText(code).then(() => toast('Copied — paste it in Neorcha\'s console', 'ok')); };
   $('bm').href = 'javascript:' + encodeURIComponent(code); $('bm').onclick = e => { e.preventDefault(); toast('Drag this button to your bookmarks bar, then click the bookmark on Neorcha', 'info'); };
   $('file').onchange = e => load(e.target.files[0]);
+  // a phone can't run the helper: the cloud way is the one to show there
+  try { if (W.matchMedia && W.matchMedia('(max-width: 768px)').matches) { const c = panel.querySelector('.nx-cloud'); if (c) c.open = true; } } catch (_) {}
   // ▶ Start: dates → the helper (it opens Neorcha); its progress and the cards come back here
   const t = new Date(), iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   $('from').value = iso(new Date(t.getFullYear(), t.getMonth(), 1)); $('to').value = iso(t);

@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 485, items: [
+    "📱 Neorcha Registrations and DTCM Revenue Fill are now in the phone's More menu (they were only in the computer's side menu). On a phone, Neorcha opens straight to the ☁️ cloud way.",
+    "🧭 On the computer, Neorcha Registrations now sits under Front Desk (after Purpose of Stay) and DTCM Revenue Fill under Money & Tax (after DTCM) — not at the bottom under Tools.",
+  ] },
   { v: 484, items: [
     "☁️ Neorcha with no PC: a robot on GitHub logs in to Neorcha, reads every registration card and saves them in HotelOps — every night at 3:17 by itself, or press Run workflow on GitHub (the GitHub app works on your phone). Set it up once: Neorcha Registrations → ☁️ No PC? Run it in the cloud.",
     "🔐 The Neorcha and HotelOps passwords live only in GitHub's encrypted Secrets — never in HotelOps, never in the code, never in the run's log. It still never reads passport, ID, birth date, e-mail or phone.",
