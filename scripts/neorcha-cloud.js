@@ -104,7 +104,7 @@ async function login(page, user, pass) {
   if (r.ok) return;
   const hints = [];
   if (user !== user.trim() || pass !== pass.trim()) hints.push('the saved username or password has a space at the start or end');
-  if (/^[A-Z][a-z0-9._-]+$/.test(user.trim())) hints.push('the username starts with a capital letter — phone keyboards do that by themselves');
+  if (!/@/.test(user) && /^[A-Z][a-z0-9._-]+$/.test(user.trim())) hints.push('the username starts with a capital letter — phone keyboards do that by themselves');
   const H = hints.length ? ' Check: ' + hints.join('; ') + '.' : '';
   if (r.why === 'code') await fail('Neorcha asks GitHub\'s computer for a verification code (it does that for a new device). The cloud run can\'t type it.' + H);
   if (r.why === 'newpw') await fail('Neorcha asks to set a new password for this account. Log in once on your PC, set it, then update NEORCHA_PASS on GitHub.');
