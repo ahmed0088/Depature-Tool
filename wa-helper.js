@@ -146,8 +146,29 @@ ${reader}
 })(0);
 }`;
   }
+  // 🪪 Neorcha: HotelOps asks (from/to dates), the helper opens Guest Documents, you log in, the collector does the rest
+  const NX_URL = 'https://ibis.myneorcha.com/neorchaWEBPlatform/#/guestdocuments', NX_MATCHES = ['https://*.myneorcha.com/*'];
+  const nxSrc = () => { try { return W.hoNeorcha && typeof W.hoNeorcha.collectorSrc === 'function' ? W.hoNeorcha.collectorSrc() : ''; } catch (_) { return ''; } };
+  function nxSide(src, v) {
+    return `// HotelOps helper ${v} · Neorcha collector (Guest Documents): reads the registration cards for HotelOps. Never passport, ID, birth date, e-mail or phone.
+(function () {
+  if (window.__hoNxSide) return; window.__hoNxSide = 1;
+  let port = null;
+  const COLLECTOR = ${src};
+  const post = o => { try { if (!port) open(); port.postMessage(o); } catch (_) {} };
+  const start = j => COLLECTOR({ from: j.from, to: j.to, auto: true,
+    progress: p => post(Object.assign({ source: 'ho-nx-progress' }, p)),
+    send: (rows, f, t) => post({ source: 'ho-nx-rows', rows, from: f, to: t }) });
+  function open() {
+    try { port = chrome.runtime.connect({ name: 'neorcha' }); } catch (_) { port = null; return; }
+    port.onMessage.addListener(m => { if (m && m.source === 'ho-nx-job' && m.from) start(m); });
+    port.onDisconnect.addListener(() => { port = null; setTimeout(open, 1500); });
+  }
+  open(); post({ source: 'ho-nx-ask' });
+})();`;
+  }
   function files(reader, appOrigin, opReader) {
-    const v = ver();
+    const v = ver(), nx = nxSrc();
     const manifest = {
       manifest_version: 3, name: 'HotelOps WhatsApp helper', version: String(v).replace(/[^\d.]/g, '') || '1',
       description: 'Starts the HotelOps WhatsApp reader on WhatsApp Web and the Opera reader on Opera Cloud (read only), and links them to HotelOps. Updates itself from HotelOps. Nothing else.',
@@ -156,11 +177,13 @@ ${reader}
       content_scripts: [
         { matches: ['https://web.whatsapp.com/*'], js: ['whatsapp.js'], run_at: 'document_idle' },
         { matches: [appOrigin + '/*'], js: ['hotelops.js'], run_at: 'document_start' },
-      ].concat(opReader ? [{ matches: OP_MATCHES, js: ['opera.js'], run_at: 'document_idle', all_frames: true }] : []),
+      ].concat(opReader ? [{ matches: OP_MATCHES, js: ['opera.js'], run_at: 'document_idle', all_frames: true }] : [])
+        .concat(nx ? [{ matches: NX_MATCHES, js: ['neorcha.js'], run_at: 'document_idle' }] : []),
     };
     // the relay: every WhatsApp tab ↔ every HotelOps tab, and it keeps the newest reader HotelOps hands it
     const relay = `// HotelOps WhatsApp helper · relay between the WhatsApp Web tab, the Opera Cloud tab and the HotelOps tab
-const ports = { wa: new Set(), app: new Set(), opera: new Set() };
+const ports = { wa: new Set(), app: new Set(), opera: new Set(), neorcha: new Set() };
+const NX_URL = ${JSON.stringify(NX_URL)};
 const BUILT = chrome.runtime.getManifest().version, ID = 'hotelops-wa';
 // the two readers HotelOps can hand over: WhatsApp (as before) and Opera (a second user script, every frame of Opera Cloud)
 const KIND = { wa: { id: ID, key: 'reader', on: 'on', matches: ['https://web.whatsapp.com/*'], side: 'wa', fresh: 'ho-wa-ext-new' },
@@ -237,7 +260,7 @@ async function setApp(u) {
 }
 chrome.storage.local.get('appUrl').then(s => { if (s && s.appUrl) uninstallAt(s.appUrl); }).catch(() => {});
 function link(p) {
-  const side = p.name === 'wa' ? 'wa' : p.name === 'opera' ? 'opera' : 'app';
+  const side = p.name === 'wa' ? 'wa' : p.name === 'opera' ? 'opera' : p.name === 'neorcha' ? 'neorcha' : 'app';
   ports[side].add(p);
   if (side === 'app') ensure().then(tell).then(() => awayHello(p));   // the helper's info first, then what it keeps about Away
   p.onMessage.addListener(async m => {
@@ -259,6 +282,22 @@ function link(p) {
     if (side !== 'app' && src === 'ho-away-ask') { const s = await awayGet(); try { p.postMessage({ source: 'ho-away', away: awayFor(side, s.away) }); } catch (_) {} return; }
     if (side !== 'app' && src === 'ho-away-off') { awayOff(side, m); return; }
     if (/^ho-away/.test(src) || src === 'ho-app-url') return;
+    // 🪪 Neorcha: HotelOps hands a job (dates only) → kept here, Neorcha opens; its tab asks for the job and sends the cards back
+    if (side === 'app' && src === 'ho-nx-job') {
+      const j = { source: 'ho-nx-job', from: String(m.from || '').slice(0, 10), to: String(m.to || '').slice(0, 10), at: Date.now() };
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(j.from) || !/^\d{4}-\d{2}-\d{2}$/.test(j.to)) return;
+      await chrome.storage.local.set({ nxJob: j });
+      if (ports.neorcha.size) toSide('neorcha', j); else { try { await chrome.tabs.create({ url: NX_URL }); } catch (_) {} }
+      toSide('app', { source: 'ho-nx-progress', note: 'Neorcha is opening — log in there, the rest is automatic.', n: 0 });
+      return;
+    }
+    if (side === 'neorcha') {
+      if (src === 'ho-nx-ask') { const s = await chrome.storage.local.get('nxJob'), j = s.nxJob; if (j && Date.now() - j.at < 3 * 3600e3) { try { p.postMessage(j); } catch (_) {} } return; }
+      if (src === 'ho-nx-rows') { await chrome.storage.local.remove('nxJob'); toSide('app', m); return; }
+      if (src === 'ho-nx-progress') toSide('app', m);
+      return;
+    }
+    if (side === 'app' && /^ho-nx/.test(src)) return;
     // an Opera reader's ping: say at once whether a HotelOps tab is linked (its "linking…" checklist tells the user which it is)
     if (side === 'opera' && m && m.ping) { try { p.postMessage({ source: 'ho-op-relay', apps: ports.app.size, v: BUILT }); } catch (_) {} }
     // WhatsApp and Opera talk to HotelOps; HotelOps' answers go to the reader they are for (Opera's start with "ho-op")
@@ -277,10 +316,10 @@ ensure();`;
     const app = `// HotelOps WhatsApp helper ${v} · links HotelOps to WhatsApp Web${opReader ? ' and Opera Cloud' : ''}
 (function () {
   const D = document.documentElement.dataset;
-  D.hoWaHelper = ${JSON.stringify(v)}; D.hoWaAuto = '1'; D.hoAwayRelay = '1';${opReader ? ` D.hoOpHelper = ${JSON.stringify(v)};` : ''}
+  D.hoWaHelper = ${JSON.stringify(v)}; D.hoWaAuto = '1'; D.hoAwayRelay = '1';${opReader ? ` D.hoOpHelper = ${JSON.stringify(v)};` : ''}${nx ? ` D.hoNxHelper = ${JSON.stringify(v)};` : ''}
   let port = null;
   const BACK = d => d && typeof d === 'object' && (d.source === 'ho-wa-pong' || d.source === 'ho-wa-ack' || d.source === 'ho-wa-gack' || d.source === 'ho-wa-ext-code'
-    || d.source === 'ho-op-ack' || d.source === 'ho-op-guard' || d.source === 'ho-op-ext-code' || d.source === 'ho-away-set' || d.source === 'ho-away-pinack'
+    || d.source === 'ho-op-ack' || d.source === 'ho-op-guard' || d.source === 'ho-op-ext-code' || d.source === 'ho-away-set' || d.source === 'ho-away-pinack' || d.source === 'ho-nx-job'
     || (d.source === 'ho-wa' && (d.send || d.words || (d.guard && !d.guard.events && !d.guard.arm))));
   const open = () => {
     // switched off / removed: Chrome won't connect any more → HotelOps is told at once (and the heartbeat stops)
@@ -314,14 +353,17 @@ Add it once (Chrome or Edge on the desk PC):
 That's it. Open WhatsApp Web: the HotelOps window starts by itself and links to HotelOps.${opReader ? `
 Open Opera Cloud: a small "HotelOps" pill shows bottom right. It reads the screens you open
 (Arrivals, Departures, In House, a reservation) and HotelOps updates its lists by itself.
-It only reads Opera; it never clicks, types or changes anything there.` : ''}
+It only reads Opera; it never clicks, types or changes anything there.` : ''}${nx ? `
+Neorcha: press "Collect from Neorcha" on HotelOps → Neorcha Registrations. Neorcha opens; you log in;
+it opens Guest Documents, searches your dates, reads each registration card and sends them to HotelOps.
+It never reads passport, ID number, birth date, e-mail or phone.` : ''}
 
 Updates: nothing to do. When HotelOps updates, it hands the helper the new reader, and WhatsApp Web
 restarts into it the next time nobody is using that window. (Only if step 5 is off you would need to
 download again.)
-It only runs on web.whatsapp.com${opReader ? ', Opera Cloud (Oracle hosts)' : ''} and ${appOrigin}.`;
+It only runs on web.whatsapp.com${opReader ? ', Opera Cloud (Oracle hosts)' : ''}${nx ? ', myneorcha.com' : ''} and ${appOrigin}.`;
     return [['manifest.json', JSON.stringify(manifest, null, 2)], ['relay.js', relay], ['whatsapp.js', wa], ['hotelops.js', app]]
-      .concat(opReader ? [['opera.js', opSide(opReader, appOrigin, v, false)]] : []).concat([['README.txt', readme]]);
+      .concat(opReader ? [['opera.js', opSide(opReader, appOrigin, v, false)]] : []).concat(nx ? [['neorcha.js', nxSide(nx, v)]] : []).concat([['README.txt', readme]]);
   }
 
   // the reader as it is in this version of HotelOps (the WhatsApp side of the helper)
@@ -396,7 +438,7 @@ It only runs on web.whatsapp.com${opReader ? ', Opera Cloud (Oracle hosts)' : ''
       instant: true, ignoreQuiet: true, claimed: true, toast: false, url: '#opera-guard', tags: ['rotating_light'] };
   }
   W.hoHelperPure = { removedParam, removedClean, removedAlert, removedNote, removedFlush, helperStatus, beatCheck, beatAlert, lockOf, bakeLock, HELPER_QUIET };
-  if (!doc || typeof doc.createElement !== 'function') { W.hoWaHelper = { files, zip, waSide, opSide, opSnippet, lockOf, bakeLock, OP_MATCHES }; return; }
+  if (!doc || typeof doc.createElement !== 'function') { W.hoWaHelper = { files, zip, waSide, opSide, nxSide, opSnippet, lockOf, bakeLock, OP_MATCHES }; return; }
 
   // HotelOps updated and the helper still runs an older reader: hand it this one (once per open)
   let handed = '', opHanded = '';

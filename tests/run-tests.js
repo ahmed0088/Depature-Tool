@@ -200,7 +200,16 @@ console.log('\nNationality report');
   const L = N.linkPlan(R.rows, [{ room: '412', conf: '617001234', name: 'ALPHA TEST', purpose: 'Business', nat: '' }, { room: '0101', conf: '', name: 'Beta Test', purpose: 'Business', nat: 'British' }]);
   check('Neorcha registrations: columns by name; passport, birth date, email and phone never read; purpose to Business / Leisure / Flight; linked to Purpose of Stay by conf, else room + name (nationality only where empty)',
     [/X1234567|a@b|1980|\+971/.test(JSON.stringify(R)), R.rows[0].nat, R.rows[1].purpose, N.purposeOf('Transit'), R.rows[0].arr, R.rows[0].member, L.matched, L.purpose.map(x => x.room + ' ' + x.to), L.nat.map(x => x.room + ' ' + x.to)],
-    [false, 'India', 'Business', 'Flight', '2026-10-01', true, 2, ['412 Leisure'], ['412 India']]); }
+    [false, 'India', 'Business', 'Flight', '2026-10-01', true, 2, ['412 Leisure'], ['412 India']]);
+  const hx = { console: { log() {}, warn() {}, error() {} }, URL, URLSearchParams, APP_VERSION: 'v478', TextEncoder, crypto: globalThis.crypto, addEventListener() {}, hoNeorcha: N }; hx.window = hx; hx.globalThis = hx;
+  vm.createContext(hx); vm.runInContext(fs.readFileSync(path.join(ROOT, 'wa-helper.js'), 'utf8'), hx, { filename: 'wa-helper.js' });
+  const F = Object.fromEntries(hx.hoWaHelper.files('/*r*/', 'https://app.test', null)), M = JSON.parse(F['manifest.json']);
+  const parses = ['relay.js', 'hotelops.js', 'neorcha.js'].every(k => { try { new Function(F[k]); return true; } catch (_) { return false; } });
+  const back = N.parseAoa(N.rowsToAoa([{ 'Confirmation Number': '617001236', 'First Name': 'Test', 'Last Name': 'Gamma', 'Passport Number': 'Z999', 'Purpose Of Visit': 'Leisure', 'Membership Number': 'yes', 'Room Number': '0305' }]));
+  check('Neorcha automatic: the helper runs the collector on myneorcha.com only; HotelOps hands it the dates and the relay opens Neorcha; the cards sent back read like a file, passport dropped',
+    [M.content_scripts.filter(c => c.js[0] === 'neorcha.js').map(c => c.matches.join()), parses, /ho-nx-job/.test(F['hotelops.js']), /chrome\.tabs\.create\(\{ url: NX_URL \}\)/.test(F['relay.js']), /auto: true/.test(F['neorcha.js']),
+      /password/i.test(F['neorcha.js'].replace(/userPassword/g, '')), back.rows.map(r => [r.conf, r.purpose, r.member]), /Z999/.test(JSON.stringify(back))],
+    [['https://*.myneorcha.com/*'], true, true, true, true, false, [['617001236', 'Leisure', true]], false]); }
 console.log('\nRoster builder');
 {
   const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} },

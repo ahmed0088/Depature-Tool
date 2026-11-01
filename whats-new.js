@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 478, items: [
+    "🤖 Neorcha now collects by itself. On Neorcha Registrations pick the arrival dates and press ▶ Start: Neorcha opens, you log in, and the helper does the rest — it opens Guest Documents, searches your dates, opens every confirmation, reads its card, turns the pages, and sends the cards straight here. No file, no console, no pasting.",
+    "🔒 It reads purpose of visit, nationality, room, dates, adults/children and whether the guest is an ALL member. Passport and ID numbers, birth dates, emails and phones are never read. Your Neorcha password is never seen or kept — you type it yourself.",
+    "⬇️ One time only: download the helper again (Settings → WhatsApp helper → Download) and reload it in chrome://extensions, so it is allowed on Neorcha. No helper on a PC? \"Run it by hand\" still works.",
+  ] },
   { v: 477, items: [
     "🪪 New page: Neorcha Registrations (Front Desk, after Purpose of Stay). In Neorcha → Guest Documents, search your dates and press Export Excel → CSV (All), then drop the file here. You see the month: cards, guests, ALL members, purpose of visit, top nationalities, and who checked guests in.",
     "🔗 One tap links it to Purpose of Stay: each guest's own purpose (Business / Leisure / Flight), and their nationality where it's still empty, matched by confirmation number, else room and name. Passport and ID numbers, birth dates, emails and phones are never read.",

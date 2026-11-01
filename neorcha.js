@@ -104,6 +104,152 @@ function linkPlan(rows, guests) {
   return out;
 }
 
+// ── The collector: runs on Neorcha (Guest Documents), pasted in its console or a bookmark ──
+// It sets the arrival dates, presses Search, opens every confirmation, reads its card, goes back, then the next one and the
+// next page — and saves one CSV for the Neorcha Registrations page. It never reads passport / ID / birth / email / phone.
+// Neorcha's page is learned while it runs (the fields by their ng-model "selectedGuestDoc.*"); what it can't find, it reports.
+/* eslint-disable */
+function COLLECTOR(O) {
+  O = O || {};
+  if (window.__hoNx) { window.__hoNx.show(O); return; }
+  var NEVER = /passport|birth|e-?mail|phone|mobile|documentnumber|docnumber|noUae|address|city|zip|postal|carreg|signature|iban|card/i;
+  var KEEP = [['Confirmation Number', /confirmation/i], ['First Name', /firstname/i], ['Last Name', /lastname/i], ['Nationality', /nationality/i], ['Purpose Of Visit', /purpose/i],
+    ['Arrival Date', /^arrivaldate$/i], ['Departure Date', /^departuredate$/i], ['Room Number', /roomnumber/i], ['Number of Adults', /adults/i], ['Number of Children', /children/i],
+    ['Membership Number', /membershipnumber/i], ['Membership Type', /membershiptype/i], ['Checked In By', /checkedinby|operator/i], ['Company Name', /companyname/i], ['Room Type', /roomtype/i], ['Insertion Date', /insertdate|insertiondate/i]];
+  var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+  var stop = false, busy = false, got = [], seen = {}, log = [];
+  var pad = function (n) { return String(n).padStart(2, '0'); }, t = new Date();
+  var from = O.from || t.getFullYear() + '-' + pad(t.getMonth() + 1) + '-01', to = O.to || t.getFullYear() + '-' + pad(t.getMonth() + 1) + '-' + pad(t.getDate());
+  var tell = function (m) { try { if (O.progress) O.progress(m); } catch (_) {} };
+  var css = document.createElement('style');
+  css.textContent = '#hoNxBox{position:fixed;right:18px;bottom:18px;z-index:2147483000;width:380px;max-width:calc(100vw - 36px);background:#fff;color:#0f172a;border:1px solid #e2e8f0;border-radius:18px;box-shadow:0 24px 60px -12px rgba(15,23,42,.35);font:13px/1.45 Inter,system-ui,Segoe UI,sans-serif;overflow:hidden}'
+    + '#hoNxBox *{box-sizing:border-box}#hoNxBox .h{display:flex;align-items:center;gap:10px;padding:12px 14px;background:linear-gradient(135deg,#6366f1,#4338ca);color:#fff}#hoNxBox .h b{flex:1}#hoNxBox .h button{border:0;background:rgba(255,255,255,.15);color:#fff;border-radius:8px;width:28px;height:28px;cursor:pointer}'
+    + '#hoNxBox .n{margin:12px 14px 0;padding:10px 12px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;font-size:12.5px}#hoNxBox .n.ok{background:#f0fdf4;border-color:#bbf7d0}#hoNxBox .n.err{background:#fef2f2;border-color:#fecaca}'
+    + '#hoNxBox .d{display:flex;gap:8px;margin:12px 14px 0}#hoNxBox .d label{flex:1;font-size:11px;color:#64748b;font-weight:600}#hoNxBox .d input{width:100%;margin-top:3px;padding:7px 9px;border:1px solid #cbd5e1;border-radius:9px;font:inherit}'
+    + '#hoNxBox .p{margin:12px 14px 0;height:8px;border-radius:99px;background:#e2e8f0;overflow:hidden}#hoNxBox .p i{display:block;height:100%;background:linear-gradient(90deg,#818cf8,#4f46e5);transition:width .3s}'
+    + '#hoNxBox .a{display:flex;gap:8px;padding:12px 14px}#hoNxBox .a button{flex:1;padding:9px;border-radius:11px;border:1px solid #cbd5e1;background:#fff;font-weight:650;cursor:pointer}#hoNxBox .a button.p1{background:linear-gradient(135deg,#818cf8,#4338ca);border-color:#4338ca;color:#fff}#hoNxBox .a button.st{background:#dc2626;border-color:#dc2626;color:#fff}'
+    + '#hoNxBox .l{max-height:120px;overflow:auto;padding:0 14px 10px;font:11.5px/1.5 ui-monospace,Consolas,monospace;color:#475569}';
+  document.head.appendChild(css);
+  var box = document.createElement('div'); box.id = 'hoNxBox'; document.body.appendChild(box);
+  var note = 'Log in, open <b>Guest Documents</b>, pick your <b>hotel</b>. Then choose the arrival dates and press ▶ Collect.', tone = '', prog = 0;
+  function paint() {
+    box.innerHTML = '<div class="h"><span>🪪</span><b>Neorcha collector · HotelOps</b><button data-a="x" title="Close">✕</button></div>'
+      + '<div class="n ' + tone + '">' + note + (got.length ? '<br><small>' + got.length + ' guest' + (got.length === 1 ? '' : 's') + ' collected</small>' : '') + '</div>'
+      + '<div class="d"><label>Arrival from<input type="date" id="hoNxFrom" value="' + from + '"' + (busy ? ' disabled' : '') + '></label><label>to<input type="date" id="hoNxTo" value="' + to + '"' + (busy ? ' disabled' : '') + '></label></div>'
+      + (busy ? '<div class="p"><i style="width:' + prog + '%"></i></div>' : '')
+      + '<div class="a">' + (busy ? '<button data-a="stop" class="st">■ Stop</button>' : '<button data-a="go" class="p1">▶ Collect</button>' + (got.length ? '<button data-a="save">💾 Save file</button>' : '') + '<button data-a="rep">📋 Report</button>') + '</div>'
+      + (log.length ? '<div class="l">' + log.slice(-40).reverse().join('<br>') + '</div>' : '');
+  }
+  function say(h, t2) { note = h; tone = t2 || ''; paint(); tell({ note: String(h).replace(/<[^>]+>/g, ''), n: got.length, prog: prog }); }
+  function L(s) { log.push(s); if (log.length > 200) log.shift(); }
+  function vis(e) { return !!(e && (e.offsetParent || e.getClientRects().length)); }
+  function all(sel) { return Array.prototype.slice.call(document.querySelectorAll(sel)); }
+  function byClick(re) { return all('[ng-click]').filter(function (e) { return re.test(e.getAttribute('ng-click')) && vis(e); }); }
+  function fire(el, v) { el.focus && el.focus(); el.value = v; ['input', 'change', 'blur', 'keyup'].forEach(function (t2) { el.dispatchEvent(new Event(t2, { bubbles: true })); }); }
+  function fmt(iso, like) { var p = iso.split('-'); if (/^\d{4}-/.test(like || '')) return iso; if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(like || '')) return p[2] + '/' + p[1] + '/' + p[0]; if (/^\d{1,2}-[A-Za-z]{3}/.test(like || '')) return +p[2] + '-' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1] - 1] + '-' + p[0]; return p[2] + '-' + p[1] + '-' + p[0]; }
+  function listRows() { return all('tr[ng-repeat],[ng-repeat] > td').map(function (e) { return e.tagName === 'TD' ? e.parentElement : e; }).filter(function (tr, i, a) { return a.indexOf(tr) === i && vis(tr) && !/menu|submenu|item in/.test(tr.getAttribute('ng-repeat') || '') && /\d{5,}/.test(tr.textContent); }); }
+  function detailInputs() { return all('[ng-model^="selectedGuestDoc."]'); }
+  function detailOpen() { return detailInputs().some(vis); }
+  function readDetail() {
+    var o = {};
+    detailInputs().forEach(function (el) { var k = el.getAttribute('ng-model').replace('selectedGuestDoc.', ''); if (NEVER.test(k)) return;
+      var v = el.tagName === 'SELECT' ? (el.selectedOptions[0] ? el.selectedOptions[0].textContent : '') : el.type === 'checkbox' ? (el.checked ? 'yes' : '') : (el.value != null && el.value !== '' ? el.value : el.textContent);
+      KEEP.forEach(function (c) { if (c[1].test(k) && !o[c[0]] && String(v || '').trim()) o[c[0]] = String(v).trim(); }); });
+    if (o['Membership Number']) o['Membership Number'] = 'yes';   // only that there is one, never the number
+    return o;
+  }
+  // the row's own data straight from the page's memory (AngularJS), when it shows it: no opening needed
+  function rowData(tr) {
+    try { if (!window.angular) return null; var sc = angular.element(tr).scope(); if (!sc) return null; var rep = (tr.getAttribute('ng-repeat') || '').match(/^\s*(\w+)\s+in/); var it = rep && sc[rep[1]];
+      if (!it || typeof it !== 'object') return null; var o = {};
+      Object.keys(it).forEach(function (k) { if (NEVER.test(k)) return; var v = it[k]; if (v == null || typeof v === 'object') return; KEEP.forEach(function (c) { if (c[1].test(k) && !o[c[0]] && String(v).trim()) o[c[0]] = String(v).trim(); }); });
+      if (o['Membership Number']) o['Membership Number'] = 'yes';
+      return o['Purpose Of Visit'] || o['Nationality'] ? o : null; } catch (_) { return null; }
+  }
+  async function waitFor(fn, ms) { for (var i = 0; i < (ms || 15000) / 150; i++) { if (fn()) return true; await sleep(150); } return false; }
+  async function search() {
+    var f = document.querySelector('[ng-model="searchFromArrivalDate"]'), t2 = document.querySelector('[ng-model="searchToArrivalDate"]');
+    if (!f || !t2) { L('date boxes not found — using the dates on the page'); } else { fire(f, fmt(from, f.value || f.placeholder)); fire(t2, fmt(to, t2.value || t2.placeholder)); L('dates set: ' + f.value + ' → ' + t2.value); }
+    var pp = document.querySelector('[ng-model="paginationDoc"]');   // 100 per page: fewer pages to turn
+    if (pp && +pp.value < 100) { fire(pp, '100'); L('100 per page'); await sleep(900); }
+    var hs = document.querySelector('[ng-model="selectedHotel"]');   // no hotel picked yet: pick the first (your own) one
+    if (hs && /ng-empty/.test(hs.className)) { var tg = hs.querySelector('.ui-select-toggle,.ui-select-match'); if (tg) { tg.click(); await sleep(600); var ch = hs.querySelector('.ui-select-choices-row'); if (ch) { (ch.querySelector('a,span,div') || ch).click(); L('hotel picked'); await sleep(600); } } }
+    var b = byClick(/searchGuestDocuments/)[0]; if (!b) { b = all('button,input[type=submit]').filter(function (x) { return /^\s*search\s*$/i.test(x.textContent || x.value) && vis(x); })[0]; }
+    if (!b) return 'no Search button';
+    b.click(); L('Search pressed');
+    await sleep(800); await waitFor(function () { return listRows().length || /no record|no result/i.test(document.body.textContent); }, 20000);
+    return '';
+  }
+  function nextPage() {
+    var ok = function (a) { var li = a.closest('li'); return vis(a) && !(li && /disabled/.test(li.className)) && !a.hasAttribute('disabled'); };
+    var c = all('[ng-click*="selectPage(page + 1"],[ng-click*="selectPage(page+1"],[ng-click*="nextPage"],.pagination-next a').filter(ok);
+    if (!c.length) c = all('.pagination li a, a[ng-click*="selectPage"]').filter(function (a) { return /next|›|»|^\s*>\s*$/i.test(a.textContent) && ok(a); });
+    return c[0] || null;
+  }
+  function key(tr) { var m = tr.textContent.match(/\d{6,}/); return m ? m[0] : tr.textContent.replace(/\s+/g, ' ').trim().slice(0, 80); }
+  async function collect() {
+    busy = true; stop = false; got = []; seen = {}; log = []; prog = 3; say('Searching…');
+    var err = await search();
+    if (err) { busy = false; return say('⛔ ' + err + ' on this page. Open Guest Documents, then press ▶ Collect again — or 📋 Report.', 'err'); }
+    if (!listRows().length) { busy = false; return say('⚠️ No guests for those dates (or the hotel is not chosen). Pick the hotel at the top, then ▶ Collect.', 'err'); }
+    for (var page = 1; page < 200 && !stop; page++) {
+      var rows = listRows(); L('page ' + page + ': ' + rows.length + ' rows');
+      for (var i = 0; i < rows.length && !stop; i++) {
+        var tr = listRows()[i]; if (!tr) break; var k = key(tr); if (seen[k]) continue; seen[k] = 1;
+        prog = Math.min(97, 5 + Math.round(((page - 1) * rows.length + i) / Math.max(1, page * rows.length) * 90)); say('Reading guest ' + (got.length + 1) + ' (page ' + page + ')…');
+        var o = rowData(tr);
+        if (!o) {
+          var c = tr.querySelector('[ng-click]') || tr.querySelector('a') || tr.cells[1] || tr; c.click();
+          if (!(await waitFor(detailOpen, 8000))) { L('row ' + k + ': its card did not open'); continue; }
+          await sleep(400); o = readDetail();
+          var back = byClick(/backToPreviousPage|changeListGuestDocumentsModeTo\(true\)/)[0]; if (back) back.click(); else history.back();
+          await waitFor(function () { return !detailOpen() && listRows().length; }, 8000); await sleep(250);
+        }
+        if (o && Object.keys(o).length) { got.push(o); L('✓ ' + (o['Room Number'] || '') + ' ' + (o['Purpose Of Visit'] || '') + ' ' + (o['Nationality'] || '')); }
+      }
+      var nx = nextPage(); if (!nx) break;
+      var before = key(listRows()[0] || document.body); nx.click(); L('next page');
+      await waitFor(function () { var r = listRows()[0]; return r && key(r) !== before; }, 15000);
+    }
+    busy = false; prog = 100;
+    if (got.length && O.send) { try { O.send(got, from, to); } catch (_) {} say('✅ ' + got.length + ' guests collected and sent to HotelOps — you can close this tab.', 'ok'); return; }
+    say(got.length ? '✅ ' + got.length + ' guests collected. Press 💾 Save file and drop it on HotelOps → Neorcha Registrations.' : '⚠️ Nothing could be read from the cards. Press 📋 Report and send it to HotelOps support.', got.length ? 'ok' : 'err');
+    if (got.length) save();
+  }
+  function save() {
+    var H = KEEP.map(function (c) { return c[0]; }), q = function (v) { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+    var csv = [H.join(',')].concat(got.map(function (o) { return H.map(function (h) { return q(o[h]); }).join(','); })).join('\r\n');
+    var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'neorcha-' + from + '-to-' + to + '.csv'; document.body.appendChild(a); a.click(); a.remove();
+  }
+  function report() {   // the page's shape only — no guest data
+    var r = ['Neorcha collector report', location.hash, 'rows found: ' + listRows().length, 'detail fields: ' + detailInputs().map(function (e) { return e.getAttribute('ng-model').replace('selectedGuestDoc.', ''); }).join(','),
+      'ng-repeat: ' + all('[ng-repeat]').map(function (e) { return e.getAttribute('ng-repeat'); }).filter(function (v, i, a) { return a.indexOf(v) === i; }).slice(0, 12).join(' | '),
+      'clicks: ' + all('[ng-click]').map(function (e) { return e.getAttribute('ng-click'); }).filter(function (v, i, a) { return a.indexOf(v) === i; }).slice(0, 40).join(' | '),
+      'date boxes: ' + all('[ng-model*="ArrivalDate"]').map(function (e) { return e.getAttribute('ng-model') + '=' + (e.value || e.placeholder || '').replace(/\d/g, '9'); }).join(', '), 'angular: ' + !!window.angular, 'log: ' + log.slice(-15).join(' / ')].join('\n');
+    try { navigator.clipboard.writeText(r).then(function () { say('📋 Report copied — paste it to HotelOps support (no guest data in it).'); }); } catch (_) { prompt('Copy this report:', r); }
+  }
+  box.addEventListener('change', function (e) { if (e.target.id === 'hoNxFrom') from = e.target.value; if (e.target.id === 'hoNxTo') to = e.target.value; });
+  box.addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; var a = b.dataset.a;
+    if (a === 'x') { stop = true; box.remove(); css.remove(); window.__hoNx = null; } else if (a === 'stop') stop = true;
+    else if (a === 'go' && !busy) collect().catch(function (er) { busy = false; say('⛔ Stopped: ' + (er && er.message || er), 'err'); });
+    else if (a === 'save') save(); else if (a === 'rep') report(); });
+  // sent by HotelOps through the helper: wait for the login, open Guest Documents, then collect by itself
+  async function auto() {
+    for (var i = 0; i < 1200 && !stop; i++) {   // up to 20 minutes for the login
+      if (/login/i.test(location.hash) || document.querySelector('#userPassword')) { if (i % 10 === 0) say('🔑 Log in to Neorcha — I start by myself right after.'); await sleep(1000); continue; }
+      if (!/guestdocuments/i.test(location.hash)) { location.hash = '#/guestdocuments'; await sleep(1500); continue; }
+      if (document.querySelector('[ng-model="searchFromArrivalDate"]') || byClick(/searchGuestDocuments/).length) { await sleep(1200); return collect(); }
+      await sleep(1000);
+    }
+  }
+  window.__hoNx = { show: function (O2) { if (O2 && O2.from) { O = O2; from = O2.from; to = O2.to || to; if (O2.auto && !busy) auto().catch(function () {}); } paint(); } };
+  paint();
+  if (O.auto) auto().catch(function (er) { busy = false; say('⛔ Stopped: ' + (er && er.message || er), 'err'); });
+}
+/* eslint-enable */
+const collectorCode = () => '(' + COLLECTOR.toString() + ')();';
+const collectorSrc = () => COLLECTOR.toString();
+
 // ── the page ────────────────────────────────────────────────
 let S = null;
 try { S = JSON.parse(localStorage.getItem(LS) || 'null'); } catch (_) { S = null; }
@@ -122,6 +268,21 @@ async function load(file) {
     if (typeof logActivity === 'function') try { logActivity('neorcha_loaded', R.rows.length + ' registrations'); } catch (_) {}
     draw();
   } catch (e) { toast(e.message || 'Could not read that file', 'err'); }
+}
+// 🤖 the cards sent by the helper's collector (objects with Neorcha's labels) → the same reading as a file
+function rowsToAoa(list) {
+  const H = [];
+  (list || []).forEach(o => Object.keys(o || {}).forEach(k => { if (!NEVER.test(k) && H.indexOf(k) < 0 && H.length < 40) H.push(k); }));
+  return [H].concat((list || []).map(o => H.map(h => (o[h] == null || typeof o[h] === 'object' ? '' : String(o[h]).slice(0, 200)))));
+}
+function fromCollector(list, from, to) {
+  const R = parseAoa(rowsToAoa(list));
+  if (!R || !R.rows.length) { toast('Neorcha sent nothing that could be read', 'err'); return false; }
+  S = Object.assign(R, { file: 'Neorcha · ' + (from && to ? dLbl(from) + ' – ' + dLbl(to) : 'collected'), at: Date.now(), auto: true });
+  try { localStorage.setItem(LS, JSON.stringify(S)); } catch (_) {}
+  if (typeof logActivity === 'function') try { logActivity('neorcha_collected', R.rows.length + ' registrations'); } catch (_) {}
+  toast('🪪 ' + R.rows.length + ' registration cards from Neorcha are in', 'ok');
+  return true;
 }
 function applyLink(kind) {
   if (!S) return;
@@ -196,6 +357,13 @@ const CSS = `
 #panel-${PANEL} .nx-days{display:flex;align-items:flex-end;gap:3px;height:110px}#panel-${PANEL} .nx-days>div{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;gap:3px;min-width:0}
 #panel-${PANEL} .nx-days i{display:block;width:100%;border-radius:4px 4px 2px 2px;background:linear-gradient(180deg,#818cf8,#4f46e5)}#panel-${PANEL} .nx-days span{font-size:9px;color:var(--text3)}
 #panel-${PANEL} .nx-list{margin-top:12px;border:1px solid var(--border);border-radius:12px;background:var(--card)}#panel-${PANEL} .nx-list summary{cursor:pointer;padding:10px 14px;font-weight:600;color:var(--text2)}#panel-${PANEL} .nx-tw{max-height:420px;overflow:auto;padding:0 10px 10px}
+#panel-${PANEL} .nx-col{margin:12px 0 0;padding:14px 16px;border-radius:14px;border:1px solid color-mix(in srgb,#6366f1 40%,var(--border));background:linear-gradient(180deg,color-mix(in srgb,#6366f1 8%,var(--card)),var(--card))}
+#panel-${PANEL} .nx-col-h{display:flex;gap:12px;align-items:center}#panel-${PANEL} .nx-col-h>span{font-size:24px}#panel-${PANEL} .nx-col-h small{display:block;color:var(--text3);font-size:.8rem}
+#panel-${PANEL} .nx-run{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin:12px 0 4px}#panel-${PANEL} .nx-run label{display:flex;flex-direction:column;gap:4px;font-size:.74rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em}
+#panel-${PANEL} .nx-run input{padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font:inherit;font-size:.9rem}
+#panel-${PANEL} .nx-live{margin:10px 0 0;padding:10px 12px;border-radius:10px;font-size:.86rem;background:color-mix(in srgb,#6366f1 10%,var(--card));color:var(--text)}#panel-${PANEL} .nx-live.ok{background:color-mix(in srgb,#10b981 14%,var(--card))}#panel-${PANEL} .nx-live.err{background:color-mix(in srgb,#f43f5e 12%,var(--card))}
+#panel-${PANEL} .nx-man{margin-top:12px;font-size:.84rem;color:var(--text3)}#panel-${PANEL} .nx-man summary{cursor:pointer}
+#panel-${PANEL} .nx-col ol{margin:10px 0;padding-left:22px;line-height:1.8;font-size:.86rem;color:var(--text2)}#panel-${PANEL} .nx-col b{color:var(--text)}#panel-${PANEL} .nx-col-b{display:flex;gap:8px;flex-wrap:wrap}
 @media (max-width:640px){#panel-${PANEL} .nx-steps{grid-template-columns:1fr}}`;
 function mount() {
   if (document.getElementById('panel-' + PANEL)) return;
@@ -206,8 +374,17 @@ function mount() {
   panel.innerHTML = `<div style="max-width:1200px">
     <div class="nx-hero"><div class="nx-hero-ic">🪪</div><div class="nx-hero-t"><h1>Neorcha Registrations</h1><p>The registration cards from Neorcha: purpose of visit, nationality and ALL members — linked to Purpose of Stay</p></div>
       <button type="button" class="btn rose" id="nx-clear">✕ Clear</button></div>
-    <ol class="nx-steps" id="nx-steps"><li data-s="1"><b>1</b><span>Export from Neorcha</span></li><li data-s="2"><b>2</b><span>See the month</span></li><li data-s="3"><b>3</b><span>Link to Purpose of Stay</span></li></ol>
-    <div class="nx-drop" id="nx-drop"><div style="font-size:26px">🪪</div><div class="nx-drop-t"><b>Drop the Neorcha export here</b><span>Guest Documents → Export Excel → CSV (All) · .csv or .xlsx</span></div>
+    <ol class="nx-steps" id="nx-steps"><li data-s="1"><b>1</b><span>Collect from Neorcha</span></li><li data-s="2"><b>2</b><span>See the month</span></li><li data-s="3"><b>3</b><span>Link to Purpose of Stay</span></li></ol>
+    <div class="nx-col"><div class="nx-col-h"><span>🤖</span><div><b>Collect from Neorcha — automatic</b><small>Pick the dates and press Start. Neorcha opens, you log in, it reads every confirmation by itself and the cards land here.</small></div></div>
+      <div class="nx-run"><label>Arrivals from<input type="date" id="nx-from"></label><label>to<input type="date" id="nx-to"></label>
+        <button type="button" class="btn gold" id="nx-start">▶ Start</button></div>
+      <div class="nx-live" id="nx-live" hidden></div>
+      <details class="nx-man"><summary>No helper on this PC? Run it by hand</summary>
+        <ol><li>Open <b>ibis.myneorcha.com</b>, log in, go to <b>Guest Documents</b> and pick your <b>hotel</b>.</li>
+          <li>Press <b>📋 Copy the collector</b>, then on Neorcha press <b>F12 → Console</b>, paste and press <b>Enter</b> <small>(first time: type <code>allow pasting</code>)</small> — or click the bookmark.</li>
+          <li>Choose the dates and press <b>▶ Collect</b>. It saves a file at the end: drop it here.</li></ol>
+        <div class="nx-col-b"><button type="button" class="btn" id="nx-copycol">📋 Copy the collector</button><a class="btn" id="nx-bm" href="#">⭐ Drag to bookmarks</a></div></details></div>
+    <div class="nx-drop" id="nx-drop"><div style="font-size:26px">🪪</div><div class="nx-drop-t"><b>Or drop a Neorcha export here</b><span>Guest Documents → Export Excel → CSV (All) · .csv or .xlsx</span></div>
       <button type="button" class="btn gold" id="nx-browse">📂 Browse…</button><input type="file" id="nx-file" accept=".csv,.txt,.xlsx,.xls" hidden></div>
     <details class="nx-how"><summary>❔ How to get the file from Neorcha</summary><ol>
       <li>Open <b>ibis.myneorcha.com</b> and log in.</li><li>Go to <b>Guest Documents</b>, pick the <b>Hotel</b> and the <b>Arrival Date From / To</b> (e.g. 1–31 Oct), press <b>Search</b>.</li>
@@ -221,7 +398,30 @@ function mount() {
   try { ['owner', 'manager', 'supervisor', 'agent'].forEach(r => { if (typeof ROLES !== 'undefined' && ROLES[r] && !ROLES[r].panels.includes(PANEL)) ROLES[r].panels.push(PANEL); });
     if (typeof currentProfile !== 'undefined' && currentProfile && typeof applyRole === 'function') applyRole(currentProfile.role); } catch (_) {}
   $('browse').onclick = () => { $('file').value = ''; $('file').click(); };
+  const code = collectorCode();
+  $('copycol').onclick = () => { if (typeof copyToClipboard === 'function') copyToClipboard(code, $('copycol'), '📋 Copy the collector'); else navigator.clipboard.writeText(code).then(() => toast('Copied — paste it in Neorcha\'s console', 'ok')); };
+  $('bm').href = 'javascript:' + encodeURIComponent(code); $('bm').onclick = e => { e.preventDefault(); toast('Drag this button to your bookmarks bar, then click the bookmark on Neorcha', 'info'); };
   $('file').onchange = e => load(e.target.files[0]);
+  // ▶ Start: dates → the helper (it opens Neorcha); its progress and the cards come back here
+  const t = new Date(), iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  $('from').value = iso(new Date(t.getFullYear(), t.getMonth(), 1)); $('to').value = iso(t);
+  const live = (h, tone) => { const L = $('live'); L.hidden = false; L.className = 'nx-live ' + (tone || ''); L.textContent = h; };
+  $('start').onclick = () => {
+    const f = $('from').value, to = $('to').value;
+    if (!f || !to || f > to) { toast('Pick the arrival dates (from ≤ to)', 'err'); return; }
+    const D = document.documentElement.dataset;
+    if (!D.hoNxHelper) {
+      live(D.hoWaHelper ? '⬇️ Your helper is older than this feature: download it once more (Settings → WhatsApp helper), reload it in chrome://extensions, then press Start again.' : '⬇️ This needs the HotelOps helper on this PC (Settings → WhatsApp helper → Download). Or use "Run it by hand" below.', 'err');
+      return;
+    }
+    window.postMessage({ source: 'ho-nx-job', from: f, to }, location.origin);
+    live('⏳ Opening Neorcha… log in there — everything else is automatic.');
+  };
+  window.addEventListener('message', e => {
+    const m = e.data; if (e.source !== window || !m || typeof m !== 'object') return;
+    if (m.source === 'ho-nx-progress' && m.note) live('🤖 ' + String(m.note).slice(0, 300) + (m.n ? '' : ''), /⛔|⚠️/.test(m.note) ? 'err' : '');
+    if (m.source === 'ho-nx-rows' && Array.isArray(m.rows) && fromCollector(m.rows.slice(0, 5000), m.from, m.to)) { live('✅ ' + S.rows.length + ' cards collected — see below, then link them to Purpose of Stay.', 'ok'); draw(); }
+  });
   $('clear').onclick = () => { S = null; try { localStorage.removeItem(LS); } catch (_) {} draw(); };
   const z = $('drop');
   ['dragenter', 'dragover'].forEach(ev => z.addEventListener(ev, e => { e.preventDefault(); z.classList.add('over'); }));
@@ -231,6 +431,6 @@ function mount() {
   document.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-panel="' + PANEL + '"]')) setTimeout(draw, 50); }, true);
   draw();
 }
-W.hoNeorcha = { parseAoa, summary, linkPlan, purposeOf, isoOf, natName, NEVER };
+W.hoNeorcha = { rowsToAoa, collectorSrc, collectorCode, parseAoa, summary, linkPlan, purposeOf, isoOf, natName, NEVER };
 if (typeof document !== 'undefined' && document.addEventListener) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount(); }
 })();
