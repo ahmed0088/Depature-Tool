@@ -147,7 +147,9 @@ function COLLECTOR(O) {
   function byClick(re) { return all('[ng-click]').filter(function (e) { return re.test(e.getAttribute('ng-click')) && vis(e); }); }
   function fire(el, v) { el.focus && el.focus(); el.value = v; ['input', 'change', 'blur', 'keyup'].forEach(function (t2) { el.dispatchEvent(new Event(t2, { bubbles: true })); }); }
   function fmt(iso, like) { var p = iso.split('-'); if (/^\d{4}-/.test(like || '')) return iso; if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(like || '')) return p[2] + '/' + p[1] + '/' + p[0]; if (/^\d{1,2}-[A-Za-z]{3}/.test(like || '')) return +p[2] + '-' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1] - 1] + '-' + p[0]; return p[2] + '-' + p[1] + '-' + p[0]; }
-  function viewCells() { return all('td[ng-click*="viewGuestDocument"]').filter(vis); }
+  // Neorcha's own row cells (the confirmation number): the card replaces the list on screen but the list stays in the page,
+  // so they are clicked even while hidden — the way HotelOps' older Neorcha Extractor does on the real site
+  function viewCells() { return all('td[ng-click*="viewGuestDocument"]').filter(function (td) { return /\d{5,}/.test(td.textContent); }); }
   function listRows() {
     var vc = viewCells().map(function (td) { return td.parentElement; }).filter(function (tr, i, a) { return tr && a.indexOf(tr) === i; });
     if (vc.length) return vc;
@@ -224,6 +226,10 @@ function COLLECTOR(O) {
   }
   function nextPage() {
     var ok = function (a) { var li = a.closest('li'); return vis(a) && !(li && /disabled/.test(li.className)) && !a.hasAttribute('disabled'); };
+    if (viewCells().length) {   // Neorcha's pager (dir-pagination): clicked even while the card hides it
+      var sc = all('a[ng-click*="setCurrent(pagination.current + 1"],a[ng-click*="setCurrent(pagination.current+1"]').filter(function (a) { var li = a.closest('li'); return !(li && /disabled/.test(li.className)); });
+      if (sc.length) return sc[0];
+    }
     var c = all('[ng-click*="setCurrent(pagination.current + 1"],[ng-click*="setCurrent(pagination.current+1"],[ng-click*="selectPage(page + 1"],[ng-click*="selectPage(page+1"],[ng-click*="nextPage"],.pagination-next a').filter(ok);
     if (!c.length) c = all('.pagination li a, a[ng-click*="selectPage"]').filter(function (a) { return /next|›|»|^\s*>\s*$/i.test(a.textContent) && ok(a); });
     return c[0] || null;
@@ -250,7 +256,7 @@ function COLLECTOR(O) {
           fails = 0;
           await sleep(300); o = Object.assign({}, o0, readDetail());
           if (!o['Confirmation Number'] && /^\d{5,}$/.test(k)) o['Confirmation Number'] = k;
-          if (!listRows().length) {   // the card took the whole page: back to the list
+          if (!viewCells().length && !listRows().length) {   // the card took the whole page and the list is gone: back to it
             var back = byClick(/backToPreviousPage|changeListGuestDocumentsModeTo\(true\)/)[0]; if (back) back.click(); else history.back();
             await waitFor(function () { return listRows().length; }, 8000); await sleep(250);
           }

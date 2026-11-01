@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 489, items: [
+    "🛠 Neorcha read only the first guest: when a card opens, Neorcha hides the list, and the collector looked only for rows it could see. Now it clicks each guest's confirmation number even while the list is hidden (as the older Neorcha Extractor does), waits until the card shows that exact number, and turns the pages the same way — every guest of your dates is read.",
+  ] },
   { v: 488, items: [
     "🛠 Neorcha only found 1 guest: its date boxes are calendar boxes that take dates as 2026-11-01 only — the collector typed 01-11-2026, Neorcha dropped it silently and searched without dates. Fixed: now it types them the way the boxes want, checks they took, and stops with a clear message if they did not.",
     "📋 The cloud run's log now says the dates it searches (\"searching arrivals from 1 Nov 2026 to 30 Nov 2026\") and ends with what happened on Neorcha: the dates as typed, the rows on each page, the pages turned — never a guest's name, email or phone.",
