@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 476, items: [
+    "🎨 Fixed the staff card in the Roster builder: the Health tiles were squeezed into thin strips because Room Health's styles (same names) reached them. Now it's a clean card: the score ring, 8 readable tiles in rows of 4, and What would help underneath.",
+  ] },
   { v: 475, items: [
     "🔎 Global search finds much more: words inside room notes and Departures notes (“umbrella” finds the room), today's Handover Book, HK requests and WhatsApp messages, Lost & found and maintenance from the Front Office Log, Gym & Pool members and Room Health issues. Each result shows the matching words and opens where it lives.",
   ] },

@@ -135,9 +135,9 @@ function rhTeamHtml(shown) {
 function rhPersonHtml(k) {
   const H = rhAll()[k];
   if (!H) return '';
-  if (H.none) return `<div class="rh-card rh-empty-card"><span class="rh-ring rh-none" style="--p:0;--sz:46px"><b>·</b></span><div><b>Health</b><small>Shows once they have a week or so on posted rosters.</small></div></div>`;
+  if (H.none) return `<div class="rh-card rhp rh-empty-card"><span class="rh-ring rh-none" style="--p:0;--sz:46px"><b>·</b></span><div><b>Health</b><small>Shows once they have a week or so on posted rosters.</small></div></div>`;
   const tips = H.worst.slice(0, 3);
-  return `<div class="rh-card">
+  return `<div class="rh-card rhp">
     <div class="rh-card-hd">${rhRing(H.score, 64, 'big')}<div><b>Health · <span class="rh-txt-${H.grade[2]}">${H.grade[1]}</span></b><small>From the last 4 weeks of rosters${H.M.find(m => m.id === 'nights').d.includes('by choice') ? '' : ', compared with their hotel'}</small></div></div>
     <div class="rh-tiles">${H.M.map(m => { const g = rhGrade(m.s); return `<div class="rh-tile rh-${g[2]}" title="${escapeHtml(m.d)}"><div class="rh-tile-t"><span>${m.ico}</span>${escapeHtml(m.name)}</div><div class="rh-tile-v">${escapeHtml(m.v)}</div><div class="rh-meter"><i style="width:${Math.max(6, m.s)}%"></i></div></div>`; }).join('')}</div>
     ${tips.length ? `<div class="rh-tips"><b>What would help</b>${tips.map(m => `<div class="rh-tip rh-${rhGrade(m.s)[2]}"><span>${m.ico}</span><div>${escapeHtml(m.tip)}<small>${escapeHtml(m.d)}</small></div></div>`).join('')}</div>` : '<div class="rh-tips ok">💚 Nothing to worry about: good rest, fair nights and weekends.</div>'}
