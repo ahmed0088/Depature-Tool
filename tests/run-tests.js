@@ -205,9 +205,13 @@ const nxAsync = (async () => { const ctx = vm.createContext({ window: {}, docume
     ['617001234', 'Test', 'Alpha', '01-01-1980', 'X1234567', 'a@b.c', '+971000', 'IN', 'Leisure', '01-10-2026', '0412', '2', '3081', 'ALL Classic', 'Sam'],
     ['617001235', 'Test', 'Beta', '', 'Y7654321', '', '', 'United Kingdom', 'Business trip', '01-10-2026', '0101', '1', '', '', 'Lina']]);
   const L = N.linkPlan(R.rows, [{ room: '412', conf: '617001234', name: 'ALPHA TEST', purpose: 'Business', nat: '' }, { room: '0101', conf: '', name: 'Beta Test', purpose: 'Business', nat: 'British' }]);
-  check('Neorcha registrations: columns by name; passport, birth date, email and phone never read; purpose to Business / Leisure / Flight; linked to Purpose of Stay by conf, else room + name (nationality only where empty)',
-    [/X1234567|a@b|1980|\+971/.test(JSON.stringify(R)), R.rows[0].nat, R.rows[1].purpose, N.purposeOf('Transit'), R.rows[0].arr, R.rows[0].member, L.matched, L.purpose.map(x => x.room + ' ' + x.to), L.nat.map(x => x.room + ' ' + x.to)],
+  check('Neorcha registrations: columns by name; passport and birth date never read (email and phone are, for ALL enrolment); purpose to Business / Leisure / Flight; linked to Purpose of Stay by conf, else room + name (nationality only where empty)',
+    [/X1234567|1980/.test(JSON.stringify(R)), R.rows[0].nat, R.rows[1].purpose, N.purposeOf('Transit'), R.rows[0].arr, R.rows[0].member, L.matched, L.purpose.map(x => x.room + ' ' + x.to), L.nat.map(x => x.room + ' ' + x.to)],
     [false, 'India', 'Business', 'Flight', '2026-10-01', true, 2, ['412 Leisure'], ['412 India']]);
+  check('Neorcha → Guest Pipeline: the old extractor\'s columns (Confirmation_Number, Name, Email, Phone, Nationality); "No email" / "No phone" when missing; Guest Pipeline reads it back',
+    [R.rows[0].email, R.rows[0].phone, R.rows[1].email, N.pipelineTsv(R.rows).split('\n')], ['a@b.c', '+971000', '', ['Confirmation_Number\tName\tEmail\tPhone\tNationality', '617001234\tTest Alpha\ta@b.c\t+971000\tIndia', '617001235\tTest Beta\tNo email\tNo phone\tUnited Kingdom']]);
+  check('Neorcha cloud window: with its own run label, a run that just finished is never taken for the new one',
+    [N.runState({ started: 1e12, tag: 'old', step: 'done', state: 'done' }, null, 1e12 + 20e3, 'new').k, N.runState({ started: 1e12, tag: 'new', step: 'login', state: 'run' }, null, 1e12 - 5e3, 'new').k], [0, 2]);
   const T0 = 1e12, rs = (l, g, at) => { const r = N.runState(l, g, at); return [r.k, r.state, r.n]; };
   check('Neorcha cloud window: the step it is on, from the robot\'s live note and GitHub\'s run (a note from an older run is not taken for this one)',
     [rs(null, null, T0), rs(null, { status: 'queued' }, T0), rs({ started: T0 + 5e3, step: 'read', state: 'run', n: 12 }, null, T0), rs({ started: T0 - 3600e3, step: 'done', state: 'done' }, { status: 'in_progress' }, T0),

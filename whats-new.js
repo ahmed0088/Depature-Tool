@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 487, items: [
+    "📧 Neorcha now also collects each guest's email and phone (for ALL enrolment) — in the cloud and with the helper. Passport, ID number and birth date are still never read, and the cloud log never shows any guest detail.",
+    "🧲 New Send to Guest Pipeline button on Neorcha Registrations: the guests go straight into Guest Pipeline (clean the list, tick consent, ALL Enroll) — no copying.",
+    "🔁 Run in the cloud as often as you like: each run now carries its own label, so the live window follows the run you just started (it used to show the one that had just finished).",
+  ] },
   { v: 486, items: [
     "☁️ Run in the cloud straight from HotelOps: on Neorcha Registrations pick the dates and press ☁️ Run in the cloud — no GitHub app needed. The first time it asks for a start key (a GitHub token that can only start this run), kept on that device only.",
     "📡 A live window follows the run step by step — GitHub computer, Neorcha, log in, search, every card (with the count), saved — with a timer, on phone and PC. Close it any time; 📡 Show progress opens it again, and the page shows the last run.",

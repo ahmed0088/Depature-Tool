@@ -16,12 +16,12 @@ const W = window, PANEL = 'neorcha', LS = 'ho_neorcha_v1';
 const COLS = [
   ['conf', /confirmation/i], ['first', /first\s*name/i], ['last', /last\s*name/i], ['name', /^(guest\s*)?name$|full\s*name/i],
   ['nat', /nationality/i], ['purpose', /purpose/i], ['arr', /^arrival(\s*date)?$|arrival\s*date(?!.*hijri)/i], ['dep', /^departure(\s*date)?$|departure\s*date(?!.*hijri)/i],
-  ['room', /room\s*(number|no\.?|#)?$/i], ['adults', /adult/i], ['children', /child/i], ['member', /membership\s*(number|no|#)|loyalty\s*(number|no)|card\s*number/i],
+  ['room', /room\s*(number|no\.?|#)?$/i], ['adults', /adult/i], ['children', /child/i], ['member', /membership\s*(number|no|#)|loyalty\s*(number|no)|card\s*number/i], ['email', /^e-?mail(\s*address)?$/i], ['phone', /^(phone|mobile)(\s*(number|no\.?))?$/i],
   ['mtype', /membership\s*type|loyalty\s*(type|program)/i], ['by', /checked\s*in\s*by|operator|^agent$|^user$/i], ['doc', /^document\s*type|^type$/i],
   ['company', /company/i], ['at', /insertion|insert\s*date|created|creation/i], ['source', /^source$|platform/i],
 ];
 // never read (sensitive): checked first, a column like this is skipped even if a kept name also matches
-const NEVER = /passport|birth|e-?mail|phone|mobile|document\s*number|id\s*number|\bno\s*uae\b|address|city|zip|postal|car\s*reg|signature|card\s*(holder|expir)|iban/i;
+const NEVER = /passport|birth|document\s*number|id\s*number|\bno\s*uae\b|address|city|zip|postal|car\s*reg|signature|card\s*(holder|expir)|iban/i;
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const toast = (m, t) => { if (typeof showToast === 'function') showToast(m, t); };
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -68,7 +68,7 @@ function parseAoa(aoa) {
     const name = [cell(r, 'first'), cell(r, 'last')].filter(Boolean).join(' ') || cell(r, 'name');
     if (!conf && !room && !name) { skipped++; return; }
     const pv = cell(r, 'purpose');
-    rows.push({ conf, room, name, nat: natName(cell(r, 'nat')), purposeRaw: pv, purpose: purposeOf(pv), arr: isoOf(map.arr === undefined ? '' : r[map.arr]), dep: isoOf(map.dep === undefined ? '' : r[map.dep]),
+    rows.push({ conf, room, name, email: cell(r, 'email').replace(/^no\s*e?-?mail.*$/i, ''), phone: cell(r, 'phone').replace(/^no\s*phone.*$/i, ''), nat: natName(cell(r, 'nat')), purposeRaw: pv, purpose: purposeOf(pv), arr: isoOf(map.arr === undefined ? '' : r[map.arr]), dep: isoOf(map.dep === undefined ? '' : r[map.dep]),
       adults: parseInt(cell(r, 'adults'), 10) || 0, children: parseInt(cell(r, 'children'), 10) || 0,
       member: !!cell(r, 'member').replace(/^[-0\s]+$/, ''), mtype: cell(r, 'mtype'), by: cell(r, 'by'), doc: cell(r, 'doc'), company: cell(r, 'company'), at: isoOf(map.at === undefined ? '' : r[map.at]) });
   });
@@ -112,10 +112,10 @@ function linkPlan(rows, guests) {
 function COLLECTOR(O) {
   O = O || {};
   if (window.__hoNx) { window.__hoNx.show(O); return; }
-  var NEVER = /passport|birth|e-?mail|phone|mobile|documentnumber|docnumber|noUae|address|city|zip|postal|carreg|signature|iban|card/i;
+  var NEVER = /passport|birth|documentnumber|docnumber|noUae|address|city|zip|postal|carreg|signature|iban|card/i;
   var KEEP = [['Confirmation Number', /confirmation/i], ['First Name', /firstname/i], ['Last Name', /lastname/i], ['Nationality', /nationality|^country$/i], ['Purpose Of Visit', /purpose/i],
     ['Arrival Date', /^arrivaldate$/i], ['Departure Date', /^departuredate$/i], ['Room Number', /roomnumber/i], ['Number of Adults', /adults/i], ['Number of Children', /children/i],
-    ['Membership Number', /membershipnumber/i], ['Membership Type', /membershiptype/i], ['Checked In By', /checkedinby|operator/i], ['Company Name', /companyname/i], ['Room Type', /roomtype/i], ['Insertion Date', /insertdate|insertiondate/i]];
+    ['Membership Number', /membershipnumber/i], ['Email', /^e-?mail$/i], ['Phone', /^(phone|mobile|mobilenumber|phonenumber)$/i], ['Membership Type', /membershiptype/i], ['Checked In By', /checkedinby|operator/i], ['Company Name', /companyname/i], ['Room Type', /roomtype/i], ['Insertion Date', /insertdate|insertiondate/i]];
   var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
   var stop = false, busy = false, got = [], seen = {}, log = [];
   var pad = function (n) { return String(n).padStart(2, '0'); }, t = new Date();
@@ -350,6 +350,20 @@ function applyLink(kind) {
 }
 const bar = (n, max) => `<i style="width:${Math.max(3, Math.round(n / Math.max(1, max) * 100))}%"></i>`;
 const dLbl = s => { const [y, m, d] = String(s).split('-'); return +d + ' ' + MON[+m - 1]; };
+/** the cards as Guest Pipeline reads them (the old Neorcha Extractor's columns) (pure) */
+function pipelineTsv(rows) {
+  const c = v => String(v == null ? '' : v).replace(/[\t\r\n]+/g, ' ').trim();
+  return 'Confirmation_Number\tName\tEmail\tPhone\tNationality\n' + (rows || []).filter(r => r.conf).map(r => [r.conf, r.name, r.email || 'No email', r.phone || 'No phone', r.nat].map(c).join('\t')).join('\n');
+}
+function sendPipeline() {
+  if (!S) return;
+  const t = pipelineTsv(S.rows);
+  if (typeof gpLoadText !== 'function') { if (typeof copyToClipboard === 'function') copyToClipboard(t); toast('Copied — paste it in Guest Pipeline', 'ok'); return; }
+  try { const box = document.getElementById('gpInput'); if (box) box.value = t; } catch (_) {}
+  if (typeof showPanel === 'function') showPanel('pipeline');
+  gpLoadText(t);
+  toast('🧲 ' + S.rows.length + ' guests sent to Guest Pipeline', 'ok');
+}
 function draw() {
   const out = $('out'); if (!out) return;
   const stp = $('steps'); if (stp) stp.querySelectorAll('li').forEach(li => { const k = +li.dataset.s; li.className = !S ? (k === 1 ? 'now' : '') : k === 1 ? 'done' : 'now'; });
@@ -358,11 +372,12 @@ function draw() {
   const kpi = (cls, l, v, sub) => `<div class="${cls}"><small>${l}</small><b>${v}</b><i>${sub}</i></div>`;
   out.innerHTML = `
     <div class="nx-sum">${kpi('k0', 'Registration cards', Y.n, Y.from ? dLbl(Y.from) + ' – ' + dLbl(Y.to) : esc(S.file || ''))}${kpi('k1', 'Guests', Y.guests, 'adults + children')}${kpi('k2', 'ALL members', Y.members, Y.n ? Math.round(Y.members / Y.n * 100) + '% of cards' : '')}${kpi('k3', 'Nationalities', Y.nats.length, Y.nats[0] ? 'most: ' + esc(Y.nats[0][0]) : '')}</div>
-    <div class="nx-cols">Columns read: ${S.cols.map(c => `<span>${esc(c.h)}</span>`).join('')} <em>· passport, ID, birth date, email and phone are never read</em></div>
+    <div class="nx-cols">Columns read: ${S.cols.map(c => `<span>${esc(c.h)}</span>`).join('')} <em>· passport, ID number and birth date are never read</em></div>
     <div class="nx-link"><div class="nx-link-h"><span>🔗</span><div><b>Link to Purpose of Stay</b><small>${pg().length ? `${P.matched} of ${pg().length} guests on Purpose of Stay found on a registration card (by confirmation no., else room + name)` : 'Load Purpose of Stay first (Front Desk → Purpose of Stay), then come back.'}</small></div></div>
       ${pg().length ? `<div class="nx-link-a">
         <div><b>${P.purpose.length}</b> purpose${P.purpose.length === 1 ? '' : 's'} to set from the guest's own card${P.purpose.length ? `<small>${P.purpose.slice(0, 4).map(x => `${esc(x.room)} ${esc(x.from || '—')} → ${esc(x.to)}`).join(' · ')}${P.purpose.length > 4 ? ' …' : ''}</small>` : ''}<button type="button" class="btn gold sm" data-nx="purpose"${P.purpose.length ? '' : ' disabled'}>Apply</button></div>
         <div><b>${P.nat.length}</b> empty nationalit${P.nat.length === 1 ? 'y' : 'ies'} to fill${P.nat.length ? `<small>${P.nat.slice(0, 4).map(x => `${esc(x.room)} → ${esc(x.to)}`).join(' · ')}${P.nat.length > 4 ? ' …' : ''}</small>` : ''}<button type="button" class="btn gold sm" data-nx="nat"${P.nat.length ? '' : ' disabled'}>Apply</button></div></div>` : ''}</div>
+    ${(() => { const ne = S.rows.filter(r => r.email).length, np = S.rows.filter(r => r.phone).length; return `<div class="nx-gp"><div><b>🧲 ALL enrolment</b><small>${ne} email${ne === 1 ? '' : 's'} · ${np} phone${np === 1 ? '' : 's'} on ${S.rows.length} cards — send them to Guest Pipeline to clean the list, tick consent and prepare ALL Enroll.</small></div><button type="button" class="btn gold" id="nx-gp"${ne || np ? '' : ' disabled'}>🧲 Send to Guest Pipeline</button></div>`; })()}
     <div class="nx-grid">
       <div class="nx-box"><h4>🎯 Purpose of visit</h4>${Y.purposes.map(([k, n]) => `<div class="nx-bar"><span>${esc(k)}</span>${bar(n, maxP)}<b>${n}</b></div>`).join('') || '<p class="nx-m">Not in the file</p>'}</div>
       <div class="nx-box"><h4>🌍 Top nationalities</h4>${Y.nats.slice(0, 8).map(([k, n]) => `<div class="nx-bar"><span>${esc(k)}</span>${bar(n, maxN)}<b>${n}</b></div>`).join('') || '<p class="nx-m">Not in the file</p>'}</div>
@@ -370,9 +385,10 @@ function draw() {
         ${Y.mtypes.length ? `<p class="nx-m">${Y.mtypes.slice(0, 5).map(([k, n]) => `${esc(k)} ${n}`).join(' · ')}</p>` : ''}</div>
       <div class="nx-box"><h4>📅 Cards by arrival day</h4><div class="nx-days">${Y.days.map(([d, n]) => `<div title="${dLbl(d)}: ${n}"><i style="height:${Math.max(6, Math.round(n / maxD * 100))}%"></i><span>${+d.slice(8)}</span></div>`).join('') || '<p class="nx-m">No arrival dates in the file</p>'}</div></div>
     </div>
-    <details class="nx-list"><summary>All ${Y.n} registration cards</summary><div class="nx-tw"><table class="nx-t"><thead><tr><th>Room</th><th>Guest</th><th>Arrival</th><th>Nationality</th><th>Purpose</th><th>Member</th><th>By</th></tr></thead><tbody>
-      ${S.rows.slice(0, 600).map(r => `<tr><td>${esc(r.room)}</td><td>${esc(r.name)}</td><td>${r.arr ? dLbl(r.arr) : ''}</td><td>${esc(r.nat)}</td><td>${esc(r.purpose || r.purposeRaw)}</td><td>${r.member ? '💎' : ''}</td><td>${esc(r.by)}</td></tr>`).join('')}</tbody></table></div></details>`;
+    <details class="nx-list"><summary>All ${Y.n} registration cards</summary><div class="nx-tw"><table class="nx-t"><thead><tr><th>Room</th><th>Guest</th><th>Arrival</th><th>Nationality</th><th>Purpose</th><th>Member</th><th>Email</th><th>Phone</th><th>By</th></tr></thead><tbody>
+      ${S.rows.slice(0, 600).map(r => `<tr><td>${esc(r.room)}</td><td>${esc(r.name)}</td><td>${r.arr ? dLbl(r.arr) : ''}</td><td>${esc(r.nat)}</td><td>${esc(r.purpose || r.purposeRaw)}</td><td>${r.member ? '💎' : ''}</td><td>${esc(r.email || '')}</td><td>${esc(r.phone || '')}</td><td>${esc(r.by)}</td></tr>`).join('')}</tbody></table></div></details>`;
   out.querySelectorAll('[data-nx]').forEach(b => { b.onclick = () => applyLink(b.dataset.nx); });
+  const gpb = $('gp'); if (gpb) gpb.onclick = sendPipeline;
 }
 const CSS = `
 #panel-${PANEL} .nx-hero{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:20px 22px;margin-bottom:14px;border-radius:18px;border:1px solid var(--border);background:radial-gradient(120% 140% at 0% 0%,rgba(99,102,241,.18),transparent 55%),radial-gradient(120% 140% at 100% 0%,rgba(20,184,166,.14),transparent 55%),var(--card)}
@@ -414,6 +430,7 @@ const CSS = `
 #panel-${PANEL} .nx-run .nx-url{flex:1 1 320px}#panel-${PANEL} .nx-run .nx-url input{width:100%}
 #panel-${PANEL} .nx-man .nx-drop{margin-top:12px}
 #panel-${PANEL} .nx-live-b{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+#panel-${PANEL} .nx-gp{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:0 0 12px;padding:12px 14px;border-radius:12px;border:1px solid color-mix(in srgb,#f59e0b 40%,var(--border));background:color-mix(in srgb,#f59e0b 8%,var(--card))}#panel-${PANEL} .nx-gp small{display:block;color:var(--text3);font-size:.8rem;margin-top:2px}
 #panel-${PANEL} .nx-cl{margin-top:14px;padding:14px;border-radius:14px;border:1px solid color-mix(in srgb,#0ea5e9 40%,var(--border));background:linear-gradient(180deg,color-mix(in srgb,#0ea5e9 9%,var(--card)),var(--card))}
 #panel-${PANEL} .nx-cl-h{display:flex;gap:12px;align-items:center}#panel-${PANEL} .nx-cl-h>span{font-size:24px}#panel-${PANEL} .nx-cl-h small{display:block;color:var(--text3);font-size:.8rem;line-height:1.5}
 #panel-${PANEL} .nx-cl-b{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}#panel-${PANEL} .nx-cl-st{font-size:.82rem;color:var(--text2)}
@@ -425,7 +442,7 @@ const CSS = `
 // The robot (scripts/neorcha-cloud.js) writes each step to hotels/<hotel>/neorchaLive; GitHub tells whether its computer started.
 const GH = { api: 'https://api.github.com/repos/ahmed0088/depature-tool/actions/workflows/neorcha.yml', page: 'https://github.com/ahmed0088/depature-tool/actions/workflows/neorcha.yml', key: 'ho_gh_start_key_v1' };
 const STEPS = [['gh', '🖥️', 'Start a GitHub computer'], ['open', '🌐', 'Open Neorcha'], ['login', '🔑', 'Log in'], ['search', '🔎', 'Search your dates'], ['read', '🪪', 'Read every card'], ['save', '💾', 'Save in HotelOps']];
-const RUN = { at: 0, gh: null, live: null, timer: 0, poll: 0, view: 'run' };
+const RUN = { at: 0, tag: '', gh: null, live: null, timer: 0, poll: 0, view: 'run' };
 const ghKey = () => { try { return localStorage.getItem(GH.key) || ''; } catch (_) { return ''; } };
 const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago'; };
 async function gh(path, opt) {
@@ -436,8 +453,8 @@ async function gh(path, opt) {
   return r.status === 204 ? null : r.json();
 }
 /** where a run is (pure): the step it is on, done / error, and the message */
-function runState(live, gh, at) {
-  const mine = live && (!at || +live.started >= at - 90000) ? live : null, idx = { open: 1, login: 2, search: 3, read: 4, save: 5, done: 6 };
+function runState(live, gh, at, tag) {
+  const mine = live && (tag ? live.tag === tag : (!at || +live.started >= at - 90000)) ? live : null, idx = { open: 1, login: 2, search: 3, read: 4, save: 5, done: 6 };
   let k = mine ? (idx[mine.step] || 1) : 0, state = mine ? (mine.state === 'done' ? 'done' : mine.state === 'error' ? 'error' : 'run') : 'run', note = mine ? mine.note || '' : '';
   if (!mine && gh) {
     if (gh.status === 'completed' && gh.conclusion !== 'success') { state = 'error'; note = 'The GitHub run stopped (' + gh.conclusion + ') before it reached Neorcha — open it on GitHub to see why.'; }
@@ -460,7 +477,7 @@ function runWin() {
 function paintRun() {
   const b = document.getElementById('nxr-b'); if (!b) return;
   if (RUN.view === 'key') return;
-  const st = runState(RUN.live, RUN.gh, RUN.at), t0 = RUN.at || (RUN.live && +RUN.live.started) || Date.now(), sec = Math.max(0, Math.round(((st.state === 'run' ? Date.now() : (RUN.live && +RUN.live.at) || Date.now()) - t0) / 1000));
+  const st = runState(RUN.live, RUN.gh, RUN.at, RUN.tag), t0 = RUN.at || (RUN.live && +RUN.live.started) || Date.now(), sec = Math.max(0, Math.round(((st.state === 'run' ? Date.now() : (RUN.live && +RUN.live.at) || Date.now()) - t0) / 1000));
   const sub = document.getElementById('nxr-sub'); if (sub) sub.textContent = (RUN.live && RUN.live.from ? dLbl(RUN.live.from) + ' – ' + dLbl(RUN.live.to) + ' · ' : '') + Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
   const pct = st.state === 'done' ? 100 : Math.round(Math.min(97, st.k / 6 * 100 * (st.k === 4 ? 1 : 1) + (st.k === 4 ? st.prog / 100 * 16 : 0)));
   b.innerHTML = `<div class="nxr-bar ${st.state}"><i style="width:${pct}%"></i></div>
@@ -489,12 +506,12 @@ function keyWin(then) {
 }
 async function cloudStart(from, to) {
   if (!ghKey()) return keyWin(() => cloudStart(from, to));
-  RUN.view = 'run'; RUN.at = Date.now(); RUN.gh = null; runWin();
-  try { await gh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { from, to } }) }); }
+  RUN.view = 'run'; RUN.at = Date.now(); RUN.tag = 'ho' + RUN.at.toString(36) + Math.random().toString(36).slice(2, 6); RUN.gh = null; runWin();
+  try { await gh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { from, to, tag: RUN.tag } }) }); }
   catch (e) { RUN.gh = { status: 'completed', conclusion: 'not started' }; paintRun(); toast(e.message, 'err'); if (/refused/.test(e.message)) { try { localStorage.removeItem(GH.key); } catch (_) {} } return; }
   clearInterval(RUN.poll);
   RUN.poll = setInterval(async () => {
-    try { const j = await gh('/runs?per_page=5&event=workflow_dispatch'); const r = (j.workflow_runs || []).find(x => Date.parse(x.created_at) >= RUN.at - 15000); if (r) RUN.gh = r; paintRun(); } catch (_) {}
+    try { const j = await gh('/runs?per_page=5&event=workflow_dispatch'); const r = (j.workflow_runs || []).filter(x => Date.parse(x.created_at) >= RUN.at - 15000).pop(); if (r) RUN.gh = r; paintRun(); } catch (_) {}
   }, 5000);
 }
 function cloudUI() {
@@ -632,6 +649,6 @@ function mount() {
   document.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-panel="' + PANEL + '"]')) setTimeout(draw, 50); }, true);
   draw();
 }
-W.hoNeorcha = { runState, _run: { RUN, paintRun }, rowsToAoa, collectorSrc, collectorCode, parseAoa, summary, linkPlan, purposeOf, isoOf, natName, NEVER };
+W.hoNeorcha = { pipelineTsv, runState, _run: { RUN, paintRun }, rowsToAoa, collectorSrc, collectorCode, parseAoa, summary, linkPlan, purposeOf, isoOf, natName, NEVER };
 if (typeof document !== 'undefined' && document.addEventListener) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount(); }
 })();

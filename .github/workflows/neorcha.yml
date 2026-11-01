@@ -13,6 +13,10 @@ on:
         description: 'Arrivals to (YYYY-MM-DD) — empty = today'
         required: false
         default: ''
+      tag:
+        description: 'Leave empty (HotelOps fills it, to follow its own run)'
+        required: false
+        default: ''
   schedule:
     - cron: '17 23 * * *'   # 03:17 in Dubai
 permissions:
@@ -37,6 +41,7 @@ jobs:
         env:
           FROM: ${{ inputs.from }}
           TO: ${{ inputs.to }}
+          TAG: ${{ inputs.tag }}
           NEORCHA_URL: ${{ secrets.NEORCHA_URL }}
           NEORCHA_USER: ${{ secrets.NEORCHA_USER }}
           NEORCHA_PASS: ${{ secrets.NEORCHA_PASS }}

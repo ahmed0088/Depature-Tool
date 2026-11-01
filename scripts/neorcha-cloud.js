@@ -122,7 +122,7 @@ async function main() {
   const runUrl = E.GITHUB_RUN_ID ? (E.GITHUB_SERVER_URL || 'https://github.com') + '/' + E.GITHUB_REPOSITORY + '/actions/runs/' + E.GITHUB_RUN_ID : '';
   say('Neorcha cloud · arrivals ' + from + ' → ' + to);
   const FB = E.DRY && !E.FB_DB_URL ? null : await fbOpen();
-  if (FB) { LIVE = FB.live; await FB.start({ state: 'run', step: 'open', from, to, n: 0, prog: 0, run: runUrl, note: 'Opening Neorcha…' }); }
+  if (FB) { LIVE = FB.live; await FB.start({ state: 'run', step: 'open', from, to, n: 0, prog: 0, run: runUrl, tag: String(E.TAG || '').slice(0, 40), note: 'Opening Neorcha…' }); }
   const live = p => (LIVE ? LIVE(p) : Promise.resolve());
   let chromium; try { ({ chromium } = require('playwright')); } catch (_) { await fail('Playwright is not installed'); }
   const browser = await chromium.launch(E.CHROME_PATH ? { executablePath: E.CHROME_PATH } : {});
