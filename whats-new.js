@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 466, items: [
+    "🛠️ No more half-updated pages: a missing file is always fetched fresh from the server, and the app also checks that the stylesheet matches the version, not just the scripts. If it doesn't, it clears its cache and reloads once (this was why Rented Rooms & Beds looked broken).",
+  ] },
   { v: 465, items: [
     "🌍 Nationality Report fixed: when two Opera names go into the same row of your sheet (for example “DO NOT USE” you once put on UAE), their numbers now add up. Before, the second replaced the first, so the UAE lost its own 18 arrivals. The copy now matches Opera exactly: 2,027 · 4,123 · 6,125.",
   ] },

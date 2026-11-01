@@ -173,8 +173,9 @@ console.log('\nNationality report');
 
 // ── Roster builder ────────────────────────────────────────
 { const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'), ut = fs.readFileSync(path.join(ROOT, 'utils.js'), 'utf8'), sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
+  const css = (fs.readFileSync(path.join(ROOT, 'pro.css'), 'utf8').match(/--ho-css: "(v\d+)"/) || [])[1];
   const page = (html.match(/<meta name="ho-version" content="(v\d+)"/) || [])[1], js = (ut.match(/APP_VERSION = '(v\d+)'/) || [])[1], cache = (sw.match(/ibis-ops-shell-(v\d+)/) || [])[1];
-  check('one version everywhere: the page (meta ho-version), the scripts (APP_VERSION) and the offline cache (sw.js) — a mismatch heals itself, but it must not ship', [page === js, js === cache, !!page], [true, true, true]); }
+  check('one version everywhere: the page (meta ho-version), the scripts (APP_VERSION), the stylesheet (pro.css --ho-css) and the offline cache (sw.js) — a mismatch heals itself, but it must not ship', [page === js, js === cache, css === page, !!page], [true, true, true, true]); }
 console.log('\nRoster builder');
 {
   const sb = { console: { log() {}, warn() {}, error() {} }, localStorage: { getItem() { return null; }, setItem() {} },

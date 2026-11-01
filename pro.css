@@ -3694,3 +3694,6 @@ html, body { background: var(--bg); }
 .rent-paste summary { cursor: pointer; color: var(--text3); font-size: .78rem; margin-top: 10px; }
 .rent-paste textarea { min-height: 80px; margin-top: 6px; font-family: var(--mono); font-size: 11px; white-space: pre; }
 #panel-rent .card, #panel-nationality .card { padding: 14px 16px; }
+
+/* the version of this stylesheet: the page checks it matches (index.html "Page and scripts from the same version") */
+:root { --ho-css: "v466"; }

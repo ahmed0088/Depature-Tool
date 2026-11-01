@@ -34,7 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
-<meta name="ho-version" content="v465"/>
+<meta name="ho-version" content="v466"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="themes.css"/>
@@ -5637,7 +5637,10 @@ async function appInit() {
 // got into the cache: clear it and reload once (never in a loop).
 (function () {
   try {
-    const m = document.querySelector('meta[name="ho-version"]'), page = m && m.content, js = typeof APP_VERSION !== 'undefined' ? APP_VERSION : '';
+    const m = document.querySelector('meta[name="ho-version"]'), page = m && m.content;
+    // the scripts (APP_VERSION) and the main stylesheet (pro.css: --ho-css) must be from the page's version
+    const css = String(getComputedStyle(document.documentElement).getPropertyValue('--ho-css') || '').replace(/["'\s]/g, '');
+    const js = (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '') + (css !== page ? '+css' + (css || 'none') : '');
     if (!page || !js || page === js) { sessionStorage.removeItem('ho_vfix'); return; }
     if (sessionStorage.getItem('ho_vfix') === page + '|' + js) return;
     sessionStorage.setItem('ho_vfix', page + '|' + js);

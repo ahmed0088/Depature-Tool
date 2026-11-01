@@ -14,7 +14,7 @@
 //  clients pick up the new version instead of a stale cache.
 // ═══════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'ibis-ops-shell-v465';
+const CACHE_NAME = 'ibis-ops-shell-v466';
 
 const SHELL_FILES = [
   './',
@@ -190,7 +190,8 @@ self.addEventListener('fetch', event => {
   // fresh copies of all of them. So it comes from the cache with no download at all — before, each open fetched
   // ~115 files again in the background (slow hotel wifi, phone data).
   if (!nav && keep && SHELL_URLS.has(url.href)) {
-    event.respondWith(caches.match(req).then(hit => hit || fetch(req).then(res => {
+    // not in the cache (cleared): ask the server, never the browser's own copy (GitHub lets it keep files 10 minutes — an old stylesheet came back)
+    event.respondWith(caches.match(req).then(hit => hit || fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' }).then(res => {
       if (res && res.ok) { const c = res.clone(); caches.open(CACHE_NAME).then(x => x.put(req, c)); }
       return res;
     })));
@@ -198,7 +199,7 @@ self.addEventListener('fetch', event => {
   }
   event.respondWith(
     caches.match(req, { ignoreSearch: nav }).then(cached => {
-      const network = fetch(req)
+      const network = (nav ? fetch(req) : fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' }))
         .then(res => {
           if (res && res.ok && keep) {
             const clone = res.clone();
