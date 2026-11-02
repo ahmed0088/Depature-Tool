@@ -224,48 +224,94 @@ async function gpCopyEnroll() {
   catch (_) { showToast('Copy blocked', 'err'); }
 }
 
-// ── ☁️ Enroll in the cloud: the list of guests who agreed goes to HotelOps' database (enrollJob), GitHub's ALL Enroll
-// workflow (scripts/enroll-cloud.js) runs ALL Enroll v19 on fc.accor.net for them, and writes the results to the tracker ──
-const GP_GH = 'https://api.github.com/repos/ahmed0088/depature-tool/actions/workflows/enroll.yml/dispatches';
-let gpCloudTag = '';
+// ── ☁️ Enroll from anywhere, done by the duty PC: fc.accor.net only opens inside Accor's network, so the PC that switched on
+// "This PC runs the enrollments" (Chrome + HotelOps + the helper) picks the job up from HotelOps' database (enrollJob), the helper runs
+// ALL Enroll v19 on fc.accor.net in a background tab for the guests who AGREED, and the results go to the tracker (enrollLog).
+// enrollLive = what the phone sees; enrollAgent = the duty PC saying it is there (every minute).
+let gpCloudTag = '', gpAgentBusy = '';
+const GP_AGENT_KEY = 'ho_en_agent_v1';
+const gpIsAgent = () => { try { return localStorage.getItem(GP_AGENT_KEY) === '1'; } catch (_) { return false; } };
+const gpHasHelper = () => !!document.documentElement.dataset.hoEnHelper;
+const gpMask = t => String(t || '').replace(/\S+@\S+/g, '•@•').slice(0, 180);
 async function gpCloudEnroll(test) {
   const rows = gpEnrollRows();
   if (!rows.length) { showToast('Tick "Agreed" and pick Mr/Ms for the guests who said yes first', 'err'); return; }
-  if (!test && !confirm(`Enroll ${rows.length} guest(s) in ALL from the cloud?\n\nYou confirm each of them agreed at the desk — the form records that you presented ALL and the guest asked for the invitation. Only these ${rows.length} are sent.`)) return;
-  let key = ''; try { key = localStorage.getItem('ho_gh_start_key_v1') || ''; } catch (_) {}
-  if (!key) {
-    key = (prompt('The cloud needs the GitHub start key once on this device (the same as Neorcha Registrations → ☁️ Run in the cloud). Paste it here (github_pat_…):') || '').trim();
-    if (!/^(github_pat_|ghp_)[A-Za-z0-9_]{20,}$/.test(key)) { if (key) showToast('That is not a GitHub start key', 'err'); return; }
-    try { localStorage.setItem('ho_gh_start_key_v1', key); } catch (_) {}
-  }
-  const by = (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '';
-  try { if (typeof fbSet === 'function') await fbSet('enrollJob', { tsv: gpEnrollTsv(rows), n: rows.length, at: Date.now(), by, test: !!test }); } catch (_) { showToast('Could not save the list for the cloud', 'err'); return; }
+  if (!test && !confirm(`Enroll ${rows.length} guest(s) in ALL?\n\nYou confirm each of them agreed at the desk — the form records that you presented ALL and the guest asked for the invitation. Only these ${rows.length} are sent. The duty PC does it.`)) return;
   gpCloudTag = 'en' + Date.now().toString(36);
-  gpCloudPaint({ state: 'run', step: 'gh', n: rows.length, note: 'Asking GitHub to start…', tag: gpCloudTag, test });
+  const by = (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '';
   try {
-    const r = await fetch(GP_GH, { method: 'POST', headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + key, 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ref: 'main', inputs: { test: test ? '1' : '', tag: gpCloudTag, hid: typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '' } }) });
-    if (r.status === 401) { try { localStorage.removeItem('ho_gh_start_key_v1'); } catch (_) {} throw new Error('The start key was refused — make a new one'); }
-    if (!r.ok) throw new Error('GitHub answered ' + r.status);
-    gpCloudPaint({ state: 'run', step: 'gh', n: rows.length, note: 'GitHub is starting its computer (about a minute)…', tag: gpCloudTag, test });
-    showToast(test ? '🧪 Test run started — nothing will be sent' : '☁️ Enrollment started for ' + rows.length + ' guest(s)', 'ok');
-  } catch (e) { gpCloudPaint({ state: 'error', note: e.message, tag: gpCloudTag }); showToast(e.message, 'err'); }
+    await fbSet('enrollJob', { tsv: gpEnrollTsv(rows), n: rows.length, at: Date.now(), by, test: !!test, tag: gpCloudTag, state: 'queued' });
+    await fbSet('enrollLive', { at: Date.now(), started: Date.now(), state: 'run', step: 'queued', tag: gpCloudTag, test: !!test, n: rows.length, done: 0, note: 'Waiting for the duty PC to pick it up…', con: [] });
+  } catch (_) { showToast('Could not save the list', 'err'); return; }
+  showToast(test ? '🧪 Test run queued for the duty PC — nothing will be sent' : '☁️ ' + rows.length + ' guest(s) queued — the duty PC enrolls them', 'ok');
+}
+function gpAgentPaint(a) {
+  const el = document.getElementById('gpAgentSt'); if (!el) return;
+  const on = a && Date.now() - (+a.at || 0) < 3 * 60000;
+  el.innerHTML = on ? `🟢 Duty PC ready${a.name ? ' · ' + escapeHtml(a.name) : ''}` : a ? `⚪ Duty PC offline — last seen ${new Date(+a.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : '⚪ No duty PC yet — switch it on there (below)';
+  el.className = 'gp-agent-st ' + (on ? 'on' : 'off');
 }
 function gpCloudPaint(v) {
   const box = document.getElementById('gpCloudLive'); if (!box || !v) return;
-  if (gpCloudTag && v.tag && v.tag !== gpCloudTag) return;
   box.hidden = false;
   const hh = t => { const d = new Date(+t); return [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2, '0')).join(':'); };
-  const pct = v.state === 'done' ? 100 : v.n ? Math.round(((+v.done || 0) / v.n) * 85) + ({ gh: 3, list: 6, login: 10, page: 14, enroll: 15 }[v.step] || 0) : 5;
+  const pct = v.state === 'done' ? 100 : v.n ? Math.round(((+v.done || 0) / v.n) * 85) + ({ queued: 2, open: 6, login: 8, page: 12, enroll: 15 }[v.step] || 4) : 4;
   box.className = 'gp-cloud-live ' + (v.state || '');
-  box.innerHTML = `<div class="gp-cl-top"><b>${v.state === 'done' ? '✅' : v.state === 'error' ? '⛔' : '⏳'} ${v.test ? '🧪 Test run · ' : ''}${escapeHtml(v.note || '')}</b>${v.run ? `<a href="${escapeHtml(v.run)}" target="_blank" rel="noopener">GitHub ↗</a>` : ''}</div>
+  box.innerHTML = `<div class="gp-cl-top"><b>${v.state === 'done' ? '✅' : v.state === 'error' ? '⛔' : '⏳'} ${v.test ? '🧪 Test run · ' : ''}${escapeHtml(v.note || '')}</b></div>
     <div class="gp-cl-bar"><i style="width:${Math.min(100, pct)}%"></i></div>
-    ${Array.isArray(v.con) && v.con.length ? `<div class="gp-cl-con">${v.con.slice(-8).map(l => `<div><span>${hh(l.t)}</span><em>${escapeHtml(l.g)}</em>${escapeHtml(l.m)}</div>`).join('')}</div>` : ''}`;
-  if (v.state === 'done' && !v.test) setTimeout(gpLoadLog, 600);
+    ${Array.isArray(v.con) && v.con.length ? `<div class="gp-cl-con">${v.con.slice(-10).map(l => `<div><span>${hh(l.t)}</span><em>${escapeHtml(l.g)}</em>${escapeHtml(l.m)}</div>`).join('')}</div>` : ''}`;
+  if (v.state === 'done' && !v.test) setTimeout(gpLoadLog, 800);
+}
+// ── the duty PC side ──
+let gpCon = [];
+const gpLive = (p, line) => { if (line) { gpCon.push({ t: Date.now(), g: line[0], m: gpMask(line[1]) }); gpCon = gpCon.slice(-60); } try { return fbUpdate('enrollLive', Object.assign({ at: Date.now(), con: gpCon }, p)); } catch (_) {} };
+async function gpAgentTake(job) {
+  if (!job || job.state !== 'queued' || gpAgentBusy || !gpIsAgent() || !gpHasHelper()) return;
+  gpAgentBusy = job.tag || 'job'; gpCon = [];
+  try { await fbUpdate('enrollJob', { state: 'running', takenAt: Date.now() }); } catch (_) {}
+  gpLive({ state: 'run', step: 'open', tag: job.tag, test: !!job.test, n: job.n, note: 'The duty PC is opening fc.accor.net (background tab)…' }, ['SYS', 'Duty PC took the job · ' + job.n + ' guest(s) who agreed' + (job.test ? ' · TEST (nothing is sent)' : '')]);
+  window.postMessage({ source: 'ho-en-job', tsv: job.tsv, test: !!job.test, tag: job.tag }, location.origin);
+  clearTimeout(gpAgentTake.t); gpAgentTake.t = setTimeout(() => { if (gpAgentBusy) { gpLive({ state: 'error', note: 'No answer from fc.accor.net on the duty PC for 60 minutes' }, ['ERR', 'timed out']); gpAgentBusy = ''; fbUpdate('enrollJob', { state: 'error' }); } }, 3600e3);
+}
+window.addEventListener('message', async e => {
+  const m = e.data; if (e.source !== window || !m || typeof m !== 'object' || !gpAgentBusy) return;
+  if (m.source === 'ho-en-progress') {
+    const login = /log in/i.test(m.note || '');
+    if (m.note) gpLive({ step: login ? 'login' : m.n ? 'enroll' : 'page', note: m.note, n: m.n || undefined }, [login ? 'AUTH' : 'BOT', m.note]);
+    if (Array.isArray(m.lines)) { m.lines.forEach(l => { const t = String(l).replace(/^\[[^\]]*\]\s*/, ''); if (t.trim()) gpCon.push({ t: Date.now(), g: /SUBMITTED|✅/.test(t) ? 'CARD' : /SKIPPED|ERROR|✗/.test(t) ? 'WARN' : 'BOT', m: gpMask(t) }); });
+      gpLive({ step: 'enroll', done: Math.max(0, (+m.k || 1) - 1), note: 'Enrolling guest ' + (m.k || 1) + ' of ' + (m.n || '?') + '…' }); }
+    return;
+  }
+  if (m.source === 'ho-en-done') {
+    clearTimeout(gpAgentTake.t); gpAgentBusy = '';
+    if (m.error) { gpLive({ state: 'error', note: 'Stopped: ' + m.error }, ['ERR', m.error]); try { await fbUpdate('enrollJob', { state: 'error' }); } catch (_) {} return; }
+    if (m.test) { gpLive({ state: 'done', step: 'done', note: 'Test run OK — logged in, enroll page open, ' + m.n + ' guest(s) would be enrolled. Nothing was sent.' }, ['SAVE', 'test OK · nothing sent']); try { await fbUpdate('enrollJob', { state: 'done' }); } catch (_) {} return; }
+    const res = Array.isArray(m.results) ? m.results : [], today = hoLocalISO(), patch = {};
+    res.forEach(r => { if (r && /@/.test(r.email || '')) { const g = gpRows.find(x => x.email === String(r.email).toLowerCase()); patch[gpLogKey(r.email)] = { email: String(r.email).toLowerCase(), status: String(r.status || 'unknown'), date: today, name: g ? g.name : '', by: 'duty PC' }; } });
+    try { if (Object.keys(patch).length) await fbUpdate('enrollLog', patch); } catch (_) {}
+    const c = st => res.filter(r => r.status === st).length;
+    gpLive({ state: 'done', step: 'done', done: res.length, note: c('submitted') + ' enrolled, ' + c('already-member') + ' already members, ' + c('pending-account') + ' pending — saved in the tracker' }, ['SAVE', res.length + ' results saved']);
+    try { await fbUpdate('enrollJob', { state: 'done', doneAt: Date.now() }); } catch (_) {}
+  }
+});
+function gpAgentToggle(on) {
+  try { localStorage.setItem(GP_AGENT_KEY, on ? '1' : '0'); } catch (_) {}
+  if (on && !gpHasHelper()) showToast('This PC needs the HotelOps helper downloaded again (Settings → WhatsApp helper) so it may open fc.accor.net', 'err');
+  else showToast(on ? '🖥️ This PC now runs the enrollments — keep Chrome with HotelOps open, and stay logged in to fc.accor.net' : 'This PC no longer runs the enrollments', 'ok');
+  gpAgentBeat();
+}
+function gpAgentBeat() {
+  if (!gpIsAgent() || !gpHasHelper() || typeof fbSet !== 'function') return;
+  const name = (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name ? currentProfile.name + "'s " : '') + (navigator.userAgentData && navigator.userAgentData.platform || 'PC');
+  try { fbSet('enrollAgent', { at: Date.now(), name }); } catch (_) {}
 }
 (function gpCloudListen() {
   if (typeof fbListen !== 'function') return setTimeout(gpCloudListen, 1500);
-  fbListen('enrollLive', v => { if (v && (!gpCloudTag || v.tag === gpCloudTag || Date.now() - (+v.at || 0) < 20 * 60000)) gpCloudPaint(v); });
+  const t = document.getElementById('gpAgentOn'); if (t) t.checked = gpIsAgent();
+  fbListen('enrollLive', v => { if (v && (Date.now() - (+v.at || 0) < 24 * 3600e3)) gpCloudPaint(v); });
+  fbListen('enrollAgent', gpAgentPaint);
+  fbListen('enrollJob', job => { if (job && job.state === 'queued') gpAgentTake(job); });
+  gpAgentBeat(); setInterval(gpAgentBeat, 60000);
 })();
 
 // ── Enrollment tracker (shared via Firebase) ──────────────

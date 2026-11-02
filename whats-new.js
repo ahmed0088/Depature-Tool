@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 499, items: [
+    "💎 ALL enrollment from anywhere, done by the duty PC: in Guest Pipeline tick Agreed and Mr/Ms, press ☁️ Enroll (even on your phone). The duty PC opens fc.accor.net in a background tab, runs ALL Enroll v19 for those guests only, closes the tab, and the results land in the tracker — no admin rights, nothing new to install.",
+    "🖥️ On the duty PC, once: download the helper again (Settings → WhatsApp helper), tick 🖥️ This PC runs the enrollments in Guest Pipeline, keep Chrome with HotelOps open and stay logged in to fc.accor.net. Your phone shows whether the duty PC is ready, and a live box with each step.",
+    "🧪 Test run (sends nothing) checks the login, the enroll page and the list first.",
+  ] },
   { v: 498, items: [
     "🏨 ALL enrollment now runs on the hotel's duty PC: fc.accor.net only opens inside Accor's network, so GitHub's own computers can't reach it. A GitHub runner on the duty PC does the work — invisibly, in the background — and you still start it from Guest Pipeline, even on your phone.",
     "⚙️ Set up once on the duty PC: GitHub → Settings → Actions → Runners → New self-hosted runner → Windows, label hotel, run as a service. It uses the Chrome or Edge already on that PC.",

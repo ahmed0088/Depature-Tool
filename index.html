@@ -34,7 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
-<meta name="ho-version" content="v498"/>
+<meta name="ho-version" content="v499"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="themes.css"/>
@@ -1560,11 +1560,13 @@
             <button class="btn gold" id="gpCopyEnroll" onclick="gpCopyEnroll()" disabled>📋 Copy enrollment list</button>
             <button class="btn" onclick="gpCopyScript('enroll', this)">📋 Copy ALL Enroll script</button>
           </div>
-          <div class="gp-cloud"><div class="gp-cloud-h"><span>☁️</span><div><b>Or enroll in the cloud — no PC, no console</b><small>The duty PC (inside the hotel network) logs in to fc.accor.net with your TARS login and runs ALL Enroll for the guests ticked <b>Agreed</b> above — only those — started from here, even from your phone. The results land in the tracker below by themselves.</small></div></div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn gold" id="gpCloudGo" onclick="gpCloudEnroll(false)" disabled>☁️ Enroll in the cloud</button><button class="btn" id="gpCloudTest" onclick="gpCloudEnroll(true)" disabled>🧪 Test run (sends nothing)</button></div>
+          <div class="gp-cloud"><div class="gp-cloud-h"><span>☁️</span><div><b>Or enroll from anywhere — the duty PC does it</b><small>Press Enroll here (even on your phone): the duty PC opens fc.accor.net in a background tab and runs ALL Enroll for the guests ticked <b>Agreed</b> above — only those. The results land in the tracker below by themselves.</small></div></div>
+            <div class="gp-agent-st off" id="gpAgentSt">⚪ …</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn gold" id="gpCloudGo" onclick="gpCloudEnroll(false)" disabled>☁️ Enroll</button><button class="btn" id="gpCloudTest" onclick="gpCloudEnroll(true)" disabled>🧪 Test run (sends nothing)</button></div>
             <div class="gp-cloud-live" id="gpCloudLive" hidden></div>
-            <details class="gp-cloud-set"><summary>⚙️ Set up (once)</summary><p><b>1 · The logins</b> — GitHub → the HotelOps repository → <b>Settings → Secrets and variables → Actions</b>: <code>ACDC_USER</code> (your TARS login) and <code>ACDC_PASS</code> (its password). The HotelOps login and the start key are the same as for the Neorcha cloud.</p>
-              <p><b>2 · The duty PC</b> — fc.accor.net only opens inside the hotel's network, so the robot runs on the duty PC: GitHub → <b>Settings → Actions → Runners → New self-hosted runner</b> → Windows, follow GitHub's steps on that PC, add the label <code>hotel</code> and say <b>Y</b> to run it as a service. The PC must stay on. Then do a 🧪 Test run.</p></details></div>
+            <details class="gp-cloud-set"><summary>🖥️ On the duty PC (once)</summary>
+              <label class="gp-agent-on"><input type="checkbox" id="gpAgentOn" onchange="gpAgentToggle(this.checked)"> <b>This PC runs the enrollments</b></label>
+              <p>Tick it on the duty PC only. That PC then needs: <b>Chrome</b> open with a <b>HotelOps tab</b> (minimised is fine), the <b>HotelOps helper</b> downloaded again once (Settings → WhatsApp helper → Download, unzip over the old one, ↻ in chrome://extensions), and you <b>logged in to fc.accor.net</b> in that Chrome — if it asks to log in again, the box above tells you. No password is stored anywhere.</p></details></div>
           <ol class="gp-howlist" style="margin-top:8px;">
             <li>Open <b>fc.accor.net</b> → <b>Enroll ALL</b> (the page with the e-mail box).</li>
             <li><b>F12</b> → <b>Console</b> → paste the ALL Enroll script → <b>Enter</b>. A blue panel opens.</li>

@@ -169,8 +169,58 @@ ${reader}
   open(); post({ source: 'ho-nx-ask' });
 })();`;
   }
-  function files(reader, appOrigin, opReader) {
-    const v = ver(), nx = nxSrc();
+  // 💎 ALL enrollment on fc.accor.net (inside Accor's network — so on this PC): HotelOps hands the list of guests who AGREED,
+  // the relay opens fc.accor.net in a background tab, this runs ALL Enroll v19 there (the same script staff paste) and sends back the results
+  const EN_URL = 'https://fc.accor.net/index.html#/enroll', EN_MATCHES = ['https://fc.accor.net/*'];
+  function enSide(script, v) {
+    return `// HotelOps helper ${v} · ALL enrollment on fc.accor.net — runs ALL Enroll v19 for the guests who agreed (Guest Pipeline), in a background tab
+(function () {
+  if (window.__hoEnSide) return; window.__hoEnSide = 1;
+  let port = null, busy = false;
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const vis = e => !!(e && (e.offsetParent || e.getClientRects().length));
+  const mask = t => String(t).replace(/\\S+@\\S+/g, '•@•');
+  const post = o => { try { if (!port) open(); port.postMessage(o); } catch (_) {} };
+  const note = (n, x) => post(Object.assign({ source: 'ho-en-progress', note: n }, x || {}));
+  async function run(j) {
+    if (busy) return; busy = true;
+    try {
+      for (let i = 0; i < 900 && vis(document.querySelector('input[type="password"]')); i++) { if (i % 15 === 0) note('Log in to fc.accor.net on the duty PC (TARS) — it carries on by itself'); await sleep(1000); }
+      const EMAIL = 'input[name="customerEmail"], input[type="email"]';
+      for (let i = 0; i < 40 && !vis(document.querySelector(EMAIL)); i++) { if (!/\\/enroll/.test(location.hash)) location.hash = '#/enroll'; await sleep(1000); }
+      if (!vis(document.querySelector(EMAIL))) { post({ source: 'ho-en-done', error: 'the enroll page (the guest e-mail box) did not open' }); return; }
+      note('Enroll page open — ALL Enroll v19 is checking the list…');
+${script}
+      await sleep(400);
+      const inp = document.getElementById('__acdc_input'), pb = document.getElementById('__acdc_parse');
+      if (!inp || !pb) { post({ source: 'ho-en-done', error: 'ALL Enroll did not start on the page' }); return; }
+      inp.value = String(j.tsv || ''); pb.click(); await sleep(400);
+      const pv = (document.getElementById('__acdc_preview') || {}).innerText || '', n = +((pv.match(/(\\d+)\\s+guest\\(s\\) who agreed/) || [])[1] || 0);
+      if (!n) { post({ source: 'ho-en-done', error: 'ALL Enroll found no guest who agreed in the list' }); return; }
+      if (j.test) { post({ source: 'ho-en-done', test: true, n }); return; }
+      note('Enrolling ' + n + ' guest(s)…', { n });
+      window.__enrollmentResults = undefined; document.getElementById('__acdc_start').click();
+      let seen = 0;
+      for (let i = 0; i < 3600; i++) {
+        await sleep(1000);
+        const L = Array.from(document.querySelectorAll('#__acdc_log > div')).map(d => d.textContent), fresh = L.slice(seen); seen = L.length;
+        if (fresh.length) post({ source: 'ho-en-progress', lines: fresh.map(mask), n, k: L.filter(l => /\\[\\d+\\/\\d+\\]/.test(l)).length });
+        if (window.__enrollmentResults) break;
+      }
+      post({ source: 'ho-en-done', n, results: window.__enrollmentResults || [] });
+    } catch (e) { post({ source: 'ho-en-done', error: String(e && e.message || e).slice(0, 160) }); }
+    finally { busy = false; }
+  }
+  function open() {
+    try { port = chrome.runtime.connect({ name: 'acdc' }); } catch (_) { port = null; return; }
+    port.onMessage.addListener(m => { if (m && m.source === 'ho-en-job' && typeof m.tsv === 'string') run(m); });
+    port.onDisconnect.addListener(() => { port = null; setTimeout(open, 1500); });
+  }
+  open(); post({ source: 'ho-en-ask' });
+})();`;
+  }
+  function files(reader, appOrigin, opReader, enScript) {
+    const v = ver(), nx = nxSrc(), en = typeof enScript === 'string' && /__acdc_input/.test(enScript) ? enScript : '';
     const manifest = {
       manifest_version: 3, name: 'HotelOps WhatsApp helper', version: String(v).replace(/[^\d.]/g, '') || '1',
       description: 'Starts the HotelOps WhatsApp reader on WhatsApp Web and the Opera reader on Opera Cloud (read only), and links them to HotelOps. Updates itself from HotelOps. Nothing else.',
@@ -180,11 +230,13 @@ ${reader}
         { matches: ['https://web.whatsapp.com/*'], js: ['whatsapp.js'], run_at: 'document_idle' },
         { matches: [appOrigin + '/*'], js: ['hotelops.js'], run_at: 'document_start' },
       ].concat(opReader ? [{ matches: OP_MATCHES, js: ['opera.js'], run_at: 'document_idle', all_frames: true }] : [])
-        .concat(nx ? [{ matches: NX_MATCHES, js: ['neorcha.js'], run_at: 'document_idle' }] : []),
+        .concat(nx ? [{ matches: NX_MATCHES, js: ['neorcha.js'], run_at: 'document_idle' }] : [])
+        .concat(en ? [{ matches: EN_MATCHES, js: ['acdc.js'], run_at: 'document_idle' }] : []),
     };
     // the relay: every WhatsApp tab ↔ every HotelOps tab, and it keeps the newest reader HotelOps hands it
     const relay = `// HotelOps WhatsApp helper · relay between the WhatsApp Web tab, the Opera Cloud tab and the HotelOps tab
-const ports = { wa: new Set(), app: new Set(), opera: new Set(), neorcha: new Set() };
+const ports = { wa: new Set(), app: new Set(), opera: new Set(), neorcha: new Set(), acdc: new Set() };
+const EN_URL = ${JSON.stringify(EN_URL)};
 const NX_URL = ${JSON.stringify(NX_URL)};
 const BUILT = chrome.runtime.getManifest().version, ID = 'hotelops-wa';
 // the two readers HotelOps can hand over: WhatsApp (as before) and Opera (a second user script, every frame of Opera Cloud)
@@ -264,7 +316,7 @@ async function setApp(u) {
 }
 chrome.storage.local.get('appUrl').then(s => { if (s && s.appUrl) uninstallAt(s.appUrl); }).catch(() => {});
 function link(p) {
-  const side = p.name === 'wa' ? 'wa' : p.name === 'opera' ? 'opera' : p.name === 'neorcha' ? 'neorcha' : 'app';
+  const side = p.name === 'wa' ? 'wa' : p.name === 'opera' ? 'opera' : p.name === 'neorcha' ? 'neorcha' : p.name === 'acdc' ? 'acdc' : 'app';
   ports[side].add(p);
   if (side === 'app') ensure().then(tell).then(() => awayHello(p));   // the helper's info first, then what it keeps about Away
   p.onMessage.addListener(async m => {
@@ -303,6 +355,28 @@ function link(p) {
       return;
     }
     if (side === 'app' && /^ho-nx/.test(src)) return;
+    // 💎 ALL enrollment: HotelOps hands the list of guests who agreed → fc.accor.net opens in a background tab, its page asks for the
+    // job, runs ALL Enroll v19 and sends the results back; the tab this opened is closed again
+    if (side === 'app' && src === 'ho-en-job') {
+      if (typeof m.tsv !== 'string' || m.tsv.length > 400000 || !/consent/i.test(m.tsv.slice(0, 400))) return;
+      const j = { source: 'ho-en-job', tsv: m.tsv, test: !!m.test, tag: String(m.tag || '').slice(0, 40), at: Date.now() };
+      await chrome.storage.local.set({ enJob: j });
+      if (ports.acdc.size) toSide('acdc', j);
+      else { try { const t = await chrome.tabs.create({ url: EN_URL, active: false }); await chrome.storage.local.set({ enTab: t.id }); } catch (_) {} }
+      toSide('app', { source: 'ho-en-progress', note: 'fc.accor.net is opening in a background tab…', tag: j.tag });
+      return;
+    }
+    if (side === 'acdc') {
+      if (src === 'ho-en-ask') { const s = await chrome.storage.local.get('enJob'), j = s.enJob; if (j && Date.now() - j.at < 3600e3) { try { p.postMessage(j); } catch (_) {} } return; }
+      if (src === 'ho-en-progress') { const s = await chrome.storage.local.get('enJob'); toSide('app', Object.assign({}, m, { tag: s.enJob && s.enJob.tag })); return; }
+      if (src === 'ho-en-done') {
+        const s = await chrome.storage.local.get(['enJob', 'enTab']); await chrome.storage.local.remove(['enJob', 'enTab']);
+        toSide('app', Object.assign({}, m, { tag: s.enJob && s.enJob.tag }));
+        const tab = p.sender && p.sender.tab && p.sender.tab.id; if (tab && tab === s.enTab) setTimeout(() => { try { chrome.tabs.remove(tab); } catch (_) {} }, 1500);
+      }
+      return;
+    }
+    if (side === 'app' && /^ho-en/.test(src)) return;
     // an Opera reader's ping: say at once whether a HotelOps tab is linked (its "linking…" checklist tells the user which it is)
     if (side === 'opera' && m && m.ping) { try { p.postMessage({ source: 'ho-op-relay', apps: ports.app.size, v: BUILT }); } catch (_) {} }
     // WhatsApp and Opera talk to HotelOps; HotelOps' answers go to the reader they are for (Opera's start with "ho-op")
@@ -321,10 +395,10 @@ ensure();`;
     const app = `// HotelOps WhatsApp helper ${v} · links HotelOps to WhatsApp Web${opReader ? ' and Opera Cloud' : ''}
 (function () {
   const D = document.documentElement.dataset;
-  D.hoWaHelper = ${JSON.stringify(v)}; D.hoWaAuto = '1'; D.hoAwayRelay = '1';${opReader ? ` D.hoOpHelper = ${JSON.stringify(v)};` : ''}${nx ? ` D.hoNxHelper = ${JSON.stringify(v)};` : ''}
+  D.hoWaHelper = ${JSON.stringify(v)}; D.hoWaAuto = '1'; D.hoAwayRelay = '1';${opReader ? ` D.hoOpHelper = ${JSON.stringify(v)};` : ''}${nx ? ` D.hoNxHelper = ${JSON.stringify(v)};` : ''}${en ? ` D.hoEnHelper = ${JSON.stringify(v)};` : ''}
   let port = null;
   const BACK = d => d && typeof d === 'object' && (d.source === 'ho-wa-pong' || d.source === 'ho-wa-ack' || d.source === 'ho-wa-gack' || d.source === 'ho-wa-ext-code'
-    || d.source === 'ho-op-ack' || d.source === 'ho-op-guard' || d.source === 'ho-op-ext-code' || d.source === 'ho-away-set' || d.source === 'ho-away-pinack' || d.source === 'ho-nx-job' || d.source === 'ho-nx-ext-code'
+    || d.source === 'ho-op-ack' || d.source === 'ho-op-guard' || d.source === 'ho-op-ext-code' || d.source === 'ho-away-set' || d.source === 'ho-away-pinack' || d.source === 'ho-nx-job' || d.source === 'ho-nx-ext-code' || d.source === 'ho-en-job'
     || (d.source === 'ho-wa' && (d.send || d.words || (d.guard && !d.guard.events && !d.guard.arm))));
   const open = () => {
     // switched off / removed: Chrome won't connect any more → HotelOps is told at once (and the heartbeat stops)
@@ -361,14 +435,16 @@ Open Opera Cloud: a small "HotelOps" pill shows bottom right. It reads the scree
 It only reads Opera; it never clicks, types or changes anything there.` : ''}${nx ? `
 Neorcha: press "Collect from Neorcha" on HotelOps → Neorcha Registrations. Neorcha opens; you log in;
 it opens Guest Documents, searches your dates, reads each registration card and sends them to HotelOps.
-It never reads passport, ID number, birth date, e-mail or phone.` : ''}
+It never reads passport, ID number, birth date, e-mail or phone.` : ''}${en ? `
+ALL enrollment: HotelOps → Guest Pipeline → switch on "This PC runs the enrollments" on the duty PC. A list of guests
+who agreed is then enrolled on fc.accor.net in a background tab (ALL Enroll v19), and the results go to the tracker.` : ''}
 
 Updates: nothing to do. When HotelOps updates, it hands the helper the new reader, and WhatsApp Web
 restarts into it the next time nobody is using that window. (Only if step 5 is off you would need to
 download again.)
-It only runs on web.whatsapp.com${opReader ? ', Opera Cloud (Oracle hosts)' : ''}${nx ? ', myneorcha.com' : ''} and ${appOrigin}.`;
+It only runs on web.whatsapp.com${opReader ? ', Opera Cloud (Oracle hosts)' : ''}${nx ? ', myneorcha.com' : ''}${en ? ', fc.accor.net' : ''} and ${appOrigin}.`;
     return [['manifest.json', JSON.stringify(manifest, null, 2)], ['relay.js', relay], ['whatsapp.js', wa], ['hotelops.js', app]]
-      .concat(opReader ? [['opera.js', opSide(opReader, appOrigin, v, false)]] : []).concat(nx ? [['neorcha.js', nxSide(nx, v, false)]] : []).concat([['README.txt', readme]]);
+      .concat(opReader ? [['opera.js', opSide(opReader, appOrigin, v, false)]] : []).concat(nx ? [['neorcha.js', nxSide(nx, v, false)]] : []).concat(en ? [['acdc.js', enSide(en, v)]] : []).concat([['README.txt', readme]]);
   }
 
   // the reader as it is in this version of HotelOps (the WhatsApp side of the helper)
@@ -443,7 +519,7 @@ It only runs on web.whatsapp.com${opReader ? ', Opera Cloud (Oracle hosts)' : ''
       instant: true, ignoreQuiet: true, claimed: true, toast: false, url: '#opera-guard', tags: ['rotating_light'] };
   }
   W.hoHelperPure = { removedParam, removedClean, removedAlert, removedNote, removedFlush, helperStatus, beatCheck, beatAlert, lockOf, bakeLock, HELPER_QUIET };
-  if (!doc || typeof doc.createElement !== 'function') { W.hoWaHelper = { files, zip, waSide, opSide, nxSide, opSnippet, lockOf, bakeLock, OP_MATCHES }; return; }
+  if (!doc || typeof doc.createElement !== 'function') { W.hoWaHelper = { files, zip, waSide, opSide, nxSide, enSide, opSnippet, lockOf, bakeLock, OP_MATCHES }; return; }
 
   // HotelOps updated and the helper still runs an older reader: hand it this one (once per open)
   let handed = '', opHanded = '', nxHanded = '';
@@ -473,7 +549,8 @@ It only runs on web.whatsapp.com${opReader ? ', Opera Cloud (Oracle hosts)' : ''
   async function download() {
     try {
       let op = ''; try { op = await opReader(); } catch (_) {}   // the Opera reader is a bonus: the helper is still built without it
-      const blob = zip(files(await reader(), location.origin, op));
+      let en = ''; try { en = await fetch('scripts/all-enroll.js', { cache: 'no-cache' }).then(r => (r.ok ? r.text() : '')); } catch (_) {}   // ALL enrollment on fc.accor.net
+      const blob = zip(files(await reader(), location.origin, op, en));
       const a = doc.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'HotelOps-WhatsApp-helper.zip';
       doc.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       try { localStorage.setItem('ho_wa_helper_dl', ver()); } catch (_) {}
