@@ -61,8 +61,8 @@ async function main() {
   await FB.put('enrollLive', { at: Date.now(), started: Date.now(), state: 'run', step: 'list', tag: String(E.TAG || '').slice(0, 40), test, run: runUrl, n: 0, done: 0, note: 'Reading the list…', con: [] }).catch(() => {});
   const job = await FB.get('enrollJob').catch(() => null);
   const L = consenting(job && job.tsv);
-  if (!L.rows.length) await fail('No guest to enroll: tick "Agreed" and Mr/Ms in Guest Pipeline for the guests who said yes, then press ☁️ Enroll in the cloud again.');
-  say((test ? 'TEST RUN (nothing is sent) · ' : '') + L.rows.length + ' guest(s) who agreed at the desk');
+  if (!L.rows.length && !test) await fail('No guest to enroll: tick "Agreed" and Mr/Ms in Guest Pipeline for the guests who said yes, then press ☁️ Enroll in the cloud again.');
+  say((test ? 'TEST RUN (nothing is sent) · ' : '') + (L.rows.length ? L.rows.length + ' guest(s) who agreed at the desk' : 'no list — checking the login and the enroll page only'));
   await live({ n: L.rows.length, step: 'login', note: 'Logging in to A.C.D.C…' });
 
   let chromium; try { ({ chromium } = require('playwright')); } catch (_) { try { ({ chromium } = require('playwright-core')); } catch (_e) { await fail('Playwright is not installed'); } }
@@ -97,6 +97,11 @@ async function main() {
     if (!ok) await fail('Logged in, but the enroll page (the guest e-mail box) was not found — page: ' + (await page.evaluate(() => location.hash || location.pathname)));
     tlog('NAV', 'Enroll page ' + (await page.evaluate(() => location.hash)));
     // the same script staff paste by hand; the list goes into its panel; it checks consent again
+    if (!L.rows.length) {   // a test run with no list: the login and the enroll page are what was checked
+      say('✅ Test run: the TARS login works and the enroll page opens. Nothing was sent.');
+      await live({ state: 'done', step: 'done', done: 0, n: 0, note: 'Test run OK — the TARS login works and the enroll page opens. Nothing was sent.' });
+      return;
+    }
     await page.evaluate(fs.readFileSync(path.join(ROOT, 'scripts/all-enroll.js'), 'utf8'));
     await page.locator('#__acdc_input').fill(L.head + '\n' + L.rows.join('\n'));
     await page.click('#__acdc_parse');
