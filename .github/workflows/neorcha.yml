@@ -57,12 +57,16 @@ jobs:
           FROM: ${{ inputs.from }}
           TO: ${{ inputs.to }}
           TAG: ${{ inputs.tag }}
-          # another hotel's account (account: MERCURE) uses its own secrets, NEORCHA_USER_MERCURE …, never the main login;
-          # the HotelOps login falls back to the main one when that hotel has none of its own
+          # a hotel's account (account: MERCURE) uses its own secrets NEORCHA_USER_MERCURE / NEORCHA_PASS_MERCURE; the main login is used
+          # only for the main hotel's brand (scripts/neorcha-cloud.js decides). The HotelOps login falls back to the main one.
           ACCOUNT: ${{ inputs.account }}
-          NEORCHA_URL: ${{ inputs.url || (inputs.account != '' && secrets[format('NEORCHA_URL_{0}', inputs.account)]) || (inputs.account == '' && secrets.NEORCHA_URL) || '' }}
-          NEORCHA_USER: ${{ inputs.account != '' && secrets[format('NEORCHA_USER_{0}', inputs.account)] || inputs.account == '' && secrets.NEORCHA_USER || '' }}
-          NEORCHA_PASS: ${{ inputs.account != '' && secrets[format('NEORCHA_PASS_{0}', inputs.account)] || inputs.account == '' && secrets.NEORCHA_PASS || '' }}
+          URL_IN: ${{ inputs.url }}
+          NEORCHA_URL: ${{ secrets.NEORCHA_URL }}
+          NEORCHA_USER: ${{ secrets.NEORCHA_USER }}
+          NEORCHA_PASS: ${{ secrets.NEORCHA_PASS }}
+          NEORCHA_URL_ACC: ${{ inputs.account != '' && secrets[format('NEORCHA_URL_{0}', inputs.account)] || '' }}
+          NEORCHA_USER_ACC: ${{ inputs.account != '' && secrets[format('NEORCHA_USER_{0}', inputs.account)] || '' }}
+          NEORCHA_PASS_ACC: ${{ inputs.account != '' && secrets[format('NEORCHA_PASS_{0}', inputs.account)] || '' }}
           HOTELOPS_EMAIL: ${{ inputs.account != '' && secrets[format('HOTELOPS_EMAIL_{0}', inputs.account)] || secrets.HOTELOPS_EMAIL }}
           HOTELOPS_PASS: ${{ inputs.account != '' && secrets[format('HOTELOPS_PASS_{0}', inputs.account)] || secrets.HOTELOPS_PASS }}
           HOTELOPS_HOTEL: ${{ inputs.hid || (inputs.account != '' && secrets[format('HOTELOPS_HOTEL_{0}', inputs.account)]) || secrets.HOTELOPS_HOTEL }}

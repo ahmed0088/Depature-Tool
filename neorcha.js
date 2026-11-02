@@ -444,7 +444,12 @@ const CSS = `
 #panel-${PANEL} .nx-run{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin:12px 0 4px}#panel-${PANEL} .nx-run label{display:flex;flex-direction:column;gap:4px;font-size:.74rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em}
 #panel-${PANEL} .nx-run input{padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font:inherit;font-size:.9rem}
 #panel-${PANEL} .nx-live{margin:10px 0 0;padding:10px 12px;border-radius:10px;font-size:.86rem;background:color-mix(in srgb,#6366f1 10%,var(--card));color:var(--text)}#panel-${PANEL} .nx-live.ok{background:color-mix(in srgb,#10b981 14%,var(--card))}#panel-${PANEL} .nx-live.err{background:color-mix(in srgb,#f43f5e 12%,var(--card))}
-#panel-${PANEL} .nx-run .nx-url{flex:1 1 320px}#panel-${PANEL} .nx-run .nx-acct{flex:0 1 150px}#panel-${PANEL} .nx-run .nx-acct input{width:100%;text-transform:uppercase}#panel-${PANEL} .nx-run .nx-acct small{text-transform:none;font-weight:500}#panel-${PANEL} .nx-run .nx-url input{width:100%}
+#panel-${PANEL} .nx-hotel{display:flex;gap:10px;align-items:center;margin:12px 0 0;padding:10px 12px;border-radius:12px;background:var(--bg2);border:1px solid var(--border)}#panel-${PANEL} .nx-h-ic{font-size:20px}
+#panel-${PANEL} .nx-h-t{flex:1;min-width:0}#panel-${PANEL} .nx-h-t b{display:block;font-size:.92rem}#panel-${PANEL} .nx-h-t small{color:var(--text3);font-size:.78rem}#panel-${PANEL} .nx-h-t code{font-size:.76rem}
+#panel-${PANEL} .nx-hedit{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin:8px 0 0}#panel-${PANEL} .nx-hedit label{display:flex;flex-direction:column;gap:4px;font-size:.72rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em}
+#panel-${PANEL} .nx-hedit input{padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font:inherit;font-size:.88rem}#panel-${PANEL} .nx-hedit .nx-url{flex:1 1 300px}#panel-${PANEL} .nx-hedit .nx-url input{width:100%}#panel-${PANEL} .nx-hedit .nx-acct input{width:150px;text-transform:uppercase}
+#panel-${PANEL} .nx-sec{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0}#panel-${PANEL} .nx-sec span{font-size:.8rem;color:var(--text3)}#panel-${PANEL} .nx-sec em{font-style:normal;padding:0 6px;border-radius:99px;background:var(--bg2);border:1px solid var(--border);font-size:.7rem}
+#panel-${PANEL} .nx-cp{font:600 .78rem ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:6px 10px;border-radius:9px;border:1px solid color-mix(in srgb,#0ea5e9 45%,var(--border));background:color-mix(in srgb,#0ea5e9 10%,var(--card));color:var(--text);cursor:pointer}#panel-${PANEL} .nx-cp.ok{border-color:#10b981;background:color-mix(in srgb,#10b981 16%,var(--card))}#panel-${PANEL} .nx-run .nx-url input{width:100%}
 #panel-${PANEL} .nx-man .nx-drop{margin-top:12px}
 #panel-${PANEL} .nx-live-b{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 #panel-${PANEL} .nx-gp{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:0 0 12px;padding:12px 14px;border-radius:12px;border:1px solid color-mix(in srgb,#f59e0b 40%,var(--border));background:color-mix(in srgb,#f59e0b 8%,var(--card))}#panel-${PANEL} .nx-gp small{display:block;color:var(--text3);font-size:.8rem;margin-top:2px}
@@ -455,6 +460,23 @@ const CSS = `
 #panel-${PANEL} .nx-man{margin-top:12px;font-size:.84rem;color:var(--text3)}#panel-${PANEL} .nx-man summary{cursor:pointer}
 #panel-${PANEL} .nx-col ol{margin:10px 0;padding-left:22px;line-height:1.8;font-size:.86rem;color:var(--text2)}#panel-${PANEL} .nx-col b{color:var(--text)}#panel-${PANEL} .nx-col-b{display:flex;gap:8px;flex-wrap:wrap}
 @media (max-width:640px){#panel-${PANEL} .nx-steps{grid-template-columns:1fr}}`;
+// ── 🏨 hotels: Neorcha's address is the brand (ibis.myneorcha.com, mercure.myneorcha.com …), so a hotel's name gives it ──
+const BRANDS = [['mercure', /\bmercure\b/i], ['novotel', /\bnovotel\b/i], ['pullman', /\bpullman\b/i], ['sofitel', /\bsofitel\b/i], ['swissotel', /swiss[oô]tel/i],
+  ['movenpick', /m[oö]venpick/i], ['adagio', /\badagio\b/i], ['mgallery', /\bmgallery\b/i], ['fairmont', /\bfairmont\b/i], ['raffles', /\braffles\b/i], ['ibis', /\bibis\b/i]];
+/** the hotel's Neorcha link from its name ('' when the brand is not known) (pure) */
+function linkFor(name) { const b = BRANDS.find(([, re]) => re.test(String(name || ''))); return b ? 'https://' + b[0] + '.myneorcha.com/neorchaWEBPlatform/#/login' : ''; }
+/** the cloud account for a Neorcha link: its first part in capitals (mercure.myneorcha.com → MERCURE) (pure) */
+function acctOf(url) { const m = String(url || '').match(/^https?:\/\/([a-z0-9-]+)\.myneorcha\.com(\/|$)/i); return m ? m[1].toUpperCase().replace(/[^A-Z0-9_]/g, '_').slice(0, 30) : ''; }
+/** the one-time GitHub set-up for that account: the exact secret names, each with a copy button */
+function setupHtml(acct) {
+  const row = (n, what, opt) => `<div class="nx-sec"><button type="button" class="nx-cp" data-copy="${esc(n)}" title="Copy the name">📋 ${esc(n)}</button><span>${what}${opt ? ' <em>optional</em>' : ''}</span></div>`;
+  return `<p>On GitHub, add these <b>secrets</b> for <b>${esc(acct)}</b> — copy a name, paste it as the secret's <b>Name</b>, type the value, <b>Add secret</b>. They stay encrypted; HotelOps never sees them.</p>
+    ${row('NEORCHA_USER_' + acct, 'the Neorcha username for this hotel (paste it from your Passwords app)')}${row('NEORCHA_PASS_' + acct, 'its Neorcha password')}
+    ${row('HOTELOPS_EMAIL_' + acct, 'a HotelOps login of this hotel — only if it is not the main one', 1)}${row('HOTELOPS_PASS_' + acct, 'its HotelOps password', 1)}
+    <div class="nx-col-b"><a class="btn gold" href="https://github.com/ahmed0088/depature-tool/settings/secrets/actions/new" target="_blank" rel="noopener">➕ Open GitHub → New secret ↗</a><a class="btn" href="https://github.com/ahmed0088/depature-tool/settings/secrets/actions" target="_blank" rel="noopener">See the secrets ↗</a></div>
+    <p class="nx-m">Your first hotel can keep the main <code>NEORCHA_USER</code> / <code>NEORCHA_PASS</code> — for its own brand nothing more is needed. Missing secrets? The run stops and says which.</p>`;
+}
+
 // ── ☁️ The cloud run: started from here (GitHub's "Run workflow" through a start key kept on this device), followed live ──
 // The robot (scripts/neorcha-cloud.js) writes each step to hotels/<hotel>/neorchaLive; GitHub tells whether its computer started.
 const GH = { api: 'https://api.github.com/repos/ahmed0088/depature-tool/actions/workflows/neorcha.yml', page: 'https://github.com/ahmed0088/depature-tool/actions/workflows/neorcha.yml', key: 'ho_gh_start_key_v1' };
@@ -612,15 +634,16 @@ function mount() {
       <button type="button" class="btn rose" id="nx-clear">✕ Clear</button></div>
     <ol class="nx-steps" id="nx-steps"><li data-s="1"><b>1</b><span>Collect from Neorcha</span></li><li data-s="2"><b>2</b><span>See the month</span></li><li data-s="3"><b>3</b><span>Link to Purpose of Stay</span></li></ol>
     <div class="nx-col"><div class="nx-col-h"><span>🤖</span><div><b>Collect from Neorcha — automatic</b><small>Pick the dates and press Start. Neorcha opens, you log in, it reads every confirmation by itself and the cards land here.</small></div></div>
-      <div class="nx-run"><label class="nx-url">Your hotel's Neorcha link<input type="url" id="nx-url" spellcheck="false"></label><label class="nx-acct">Neorcha account <small>(cloud)</small><input id="nx-acct" spellcheck="false" autocapitalize="characters" placeholder="main" maxlength="30"></label><label>Arrivals from<input type="date" id="nx-from"></label><label>to<input type="date" id="nx-to"></label>
+      <div class="nx-hotel"><span class="nx-h-ic">🏨</span><div class="nx-h-t" id="nx-h-t"></div><button type="button" class="btn" id="nx-h-ed">✏️ Change</button></div>
+      <div class="nx-hedit" id="nx-hedit" hidden><label class="nx-url">Neorcha link<input type="url" id="nx-url" spellcheck="false"></label><label class="nx-acct">Account on GitHub<input id="nx-acct" spellcheck="false" autocapitalize="characters" maxlength="30"></label><button type="button" class="btn" id="nx-h-auto">↺ Automatic</button></div>
+      <div class="nx-run"><label>Arrivals from<input type="date" id="nx-from"></label><label>to<input type="date" id="nx-to"></label>
         <button type="button" class="btn gold" id="nx-start">▶ Start</button></div>
       <div class="nx-live" id="nx-live" hidden></div>
       <div class="nx-cl"><div class="nx-cl-h"><span>☁️</span><div><b>Cloud — no PC needed</b><small>A GitHub computer logs in to Neorcha and collects for you — every night at 3:17 by itself, or now, with the dates above. Works from your phone.</small></div></div>
         <div class="nx-cl-b"><button type="button" class="btn gold" id="nx-cloud">☁️ Run in the cloud</button><button type="button" class="btn" id="nx-cl-show">📡 Show progress</button><span class="nx-cl-st" id="nx-cl-st"></span></div>
-        <details class="nx-man nx-cloud"><summary>⚙️ Set up the cloud (once)</summary>
-          <p><b>1 · The logins</b> — on github.com open the HotelOps repository → <b>Settings → Secrets and variables → Actions → New repository secret</b>: <code>NEORCHA_USER</code>, <code>NEORCHA_PASS</code>, <code>HOTELOPS_EMAIL</code>, <code>HOTELOPS_PASS</code>. Typed there, they stay encrypted — never in HotelOps.</p>
-          <p><b>Another hotel</b> (for example Mercure) — add its own secrets with its name at the end: <code>NEORCHA_USER_MERCURE</code>, <code>NEORCHA_PASS_MERCURE</code> (and <code>HOTELOPS_EMAIL_MERCURE</code> / <code>HOTELOPS_PASS_MERCURE</code> if that hotel uses another HotelOps login). Then, in that hotel's HotelOps, type <b>MERCURE</b> in <b>Neorcha account</b> and its Neorcha link above — the run logs in there and the cards go to that hotel.</p>
-          <p><b>2 · The start key</b> (so this button can start it) — press ☁️ Run in the cloud and follow the steps. It is kept on this device only.</p>
+        <details class="nx-man nx-cloud" id="nx-setup"><summary>⚙️ Set up this hotel for the cloud (once)</summary>
+          <div id="nx-setup-b"></div>
+          <p><b>The start key</b> (so ☁️ Run in the cloud can start it from this device) — press the button and follow the steps; it is kept on this device only.</p>
           <p><a href="https://github.com/ahmed0088/depature-tool/actions/workflows/neorcha.yml" target="_blank" rel="noopener">All cloud runs on GitHub ↗</a> · <a href="#" id="nx-cl-forget">Forget the start key on this device</a></p></details></div>
       <details class="nx-man"><summary>No helper on this PC? Run it by hand</summary>
         <ol><li>Open <b>ibis.myneorcha.com</b>, log in, go to <b>Guest Documents</b> and pick your <b>hotel</b>.</li>
@@ -662,14 +685,28 @@ function mount() {
   const urlKey = () => { let h = ''; try { h = typeof _meHotel === 'function' ? _meHotel() : ''; } catch (_) {} return 'ho_neorcha_url_v1:' + String(h || 'hotel').toLowerCase(); };
   const okUrl = u => { try { const x = new URL(u); return x.protocol === 'https:' && /(^|[.])myneorcha[.]com$/i.test(x.hostname); } catch (_) { return false; } };
   const NX = () => { const v = $('url').value.trim(); return okUrl(v) ? v : NX_DEF; };
-  // the cloud's Neorcha account for this hotel: empty = the main one (NEORCHA_USER / NEORCHA_PASS), MERCURE = NEORCHA_USER_MERCURE / NEORCHA_PASS_MERCURE
+  // 🏨 each hotel on its own: the Neorcha link and the GitHub account come from the hotel's name (Mercure … → mercure.myneorcha.com,
+  // account MERCURE) unless changed here; both are remembered per hotel
+  const hotelName = () => { try { return typeof _meHotel === 'function' ? _meHotel() : ''; } catch (_) { return ''; } };
   const acctKey = () => urlKey().replace('ho_neorcha_url_v1', 'ho_neorcha_acct_v1');
-  try { $('acct').value = localStorage.getItem(acctKey()) || ''; } catch (_) {}
-  $('acct').onchange = () => { const v = $('acct').value.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_').slice(0, 30); $('acct').value = v; try { localStorage.setItem(acctKey(), v); } catch (_) {} toast(v ? 'Cloud uses the ' + v + ' Neorcha account for this hotel' : 'Cloud uses the main Neorcha account for this hotel', 'ok'); };
-  W.__hoNxCloud = () => ({ account: ($('acct').value || '').trim().toUpperCase(), url: NX(), hid: typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '' });
-  try { $('url').value = localStorage.getItem(urlKey()) || NX_DEF; } catch (_) { $('url').value = NX_DEF; }
-  $('url').placeholder = NX_DEF;
-  $('url').onchange = () => { const v = $('url').value.trim(); if (v && !okUrl(v)) { toast('That is not a Neorcha link (it must be https://….myneorcha.com/…)', 'err'); return; } try { localStorage.setItem(urlKey(), v || NX_DEF); } catch (_) {} toast('Neorcha link saved for this hotel', 'ok'); };
+  const get = k => { try { return localStorage.getItem(k) || ''; } catch (_) { return ''; } }, put = (k, v) => { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (_) {} };
+  const autoUrl = () => linkFor(hotelName()) || NX_DEF, autoAcct = () => acctOf(NX());
+  const paintHotel = () => {
+    const u = NX(), a = ($('acct').value || '').trim() || autoAcct(), host = u.replace(/^https:\/\//, '').split('/')[0], own = !!(get(urlKey()) || get(acctKey()));
+    $('h-t').innerHTML = `<b>${esc(hotelName())}</b><small>Neorcha <code>${esc(host)}</code> · cloud account <code>${esc(a)}</code>${own ? ' · set by you' : ' · automatic'}</small>`;
+    const sb = $('setup-b'); if (sb) sb.innerHTML = setupHtml(a);
+  };
+  $('url').value = get(urlKey()) || autoUrl(); $('url').placeholder = autoUrl();
+  $('acct').value = get(acctKey()); $('acct').placeholder = autoAcct();
+  $('url').onchange = () => { const v = $('url').value.trim(); if (v && !okUrl(v)) { toast('That is not a Neorcha link (it must be https://….myneorcha.com/…)', 'err'); return; } put(urlKey(), v && v !== autoUrl() ? v : ''); if (!v) $('url').value = autoUrl(); $('acct').placeholder = autoAcct(); paintHotel(); toast('Neorcha link saved for this hotel', 'ok'); };
+  $('acct').onchange = () => { const v = $('acct').value.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_').slice(0, 30); $('acct').value = v; put(acctKey(), v && v !== autoAcct() ? v : ''); paintHotel(); };
+  $('h-ed').onclick = () => { const e = $('hedit'); e.hidden = !e.hidden; $('h-ed').textContent = e.hidden ? '✏️ Change' : '✓ Done'; };
+  $('h-auto').onclick = () => { put(urlKey(), ''); put(acctKey(), ''); $('url').value = autoUrl(); $('acct').value = ''; $('acct').placeholder = autoAcct(); paintHotel(); toast('Back to automatic for this hotel', 'ok'); };
+  W.__hoNxCloud = () => ({ account: ($('acct').value || '').trim().toUpperCase() || autoAcct(), url: NX(), hid: typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '' });
+  panel.addEventListener('click', e => { const c = e.target.closest('[data-copy]'); if (!c) return; const t = c.dataset.copy;
+    if (typeof copyToClipboard === 'function') copyToClipboard(t, c, c.textContent); else { try { navigator.clipboard.writeText(t); } catch (_) {} }
+    c.classList.add('ok'); setTimeout(() => c.classList.remove('ok'), 1500); toast('Copied ' + t + ' — paste it as the secret\'s name on GitHub', 'ok'); });
+  paintHotel();
   const openBtn = () => '<a class="btn" href="' + esc(NX()) + '" target="_blank" rel="noopener">🌐 Open Neorcha myself</a>';
   const dlBtn = '<button type="button" class="btn gold" data-nxdl="1">⬇️ Download the helper</button>';
   let heard = 0, waitT = 0;
@@ -708,6 +745,6 @@ function mount() {
   document.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-panel="' + PANEL + '"]')) setTimeout(draw, 50); }, true);
   draw();
 }
-W.hoNeorcha = { pipelineTsv, runState, _run: { RUN, paintRun }, rowsToAoa, collectorSrc, collectorCode, parseAoa, summary, linkPlan, purposeOf, isoOf, natName, NEVER };
+W.hoNeorcha = { linkFor, acctOf, pipelineTsv, runState, _run: { RUN, paintRun }, rowsToAoa, collectorSrc, collectorCode, parseAoa, summary, linkPlan, purposeOf, isoOf, natName, NEVER };
 if (typeof document !== 'undefined' && document.addEventListener) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount(); }
 })();

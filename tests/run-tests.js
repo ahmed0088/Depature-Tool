@@ -210,6 +210,9 @@ const nxAsync = (async () => { const ctx = vm.createContext({ window: {}, docume
     [false, 'India', 'Business', 'Flight', '2026-10-01', true, 2, ['412 Leisure'], ['412 India']]);
   check('Neorcha → Guest Pipeline: the old extractor\'s columns (Confirmation_Number, Name, Email, Phone, Nationality); "No email" / "No phone" when missing; Guest Pipeline reads it back',
     [R.rows[0].email, R.rows[0].phone, R.rows[1].email, N.pipelineTsv(R.rows).split('\n')], ['a@b.c', '+971000', '', ['Confirmation_Number\tName\tEmail\tPhone\tNationality', '617001234\tTest Alpha\ta@b.c\t+971000\tIndia', '617001235\tTest Beta\tNo email\tNo phone\tUnited Kingdom']]);
+  check('Neorcha for several hotels: the hotel\'s name gives its Neorcha link and cloud account (Mercure → mercure.myneorcha.com, MERCURE; unknown brand → none)',
+    [N.linkFor('Mercure Dubai Barsha Heights'), N.linkFor('Ibis Styles Dubai Deira'), N.linkFor('Grand Mercure Hotel'), N.linkFor('Some Hotel'), N.acctOf('https://mercure.myneorcha.com/neorchaWEBPlatform/#/login'), N.acctOf('nonsense')],
+    ['https://mercure.myneorcha.com/neorchaWEBPlatform/#/login', 'https://ibis.myneorcha.com/neorchaWEBPlatform/#/login', 'https://mercure.myneorcha.com/neorchaWEBPlatform/#/login', '', 'MERCURE', '']);
   check('Neorcha cloud window: with its own run label, a run that just finished is never taken for the new one',
     [N.runState({ started: 1e12, tag: 'old', step: 'done', state: 'done' }, null, 1e12 + 20e3, 'new').k, N.runState({ started: 1e12, tag: 'new', step: 'login', state: 'run' }, null, 1e12 - 5e3, 'new').k], [0, 2]);
   const T0 = 1e12, rs = (l, g, at) => { const r = N.runState(l, g, at); return [r.k, r.state, r.n]; };
@@ -247,6 +250,10 @@ const nxAsync = (async () => { const ctx = vm.createContext({ window: {}, docume
   const info = toApp.filter(m => m.source === 'ho-wa-ext-info').pop() || {};
   check('Neorcha collector updates itself: a newer one handed over by HotelOps is kept (never one from a Neorcha tab), and the helper tells HotelOps which it runs',
     [st.nxReader && st.nxReader.v, st.nxReader && st.nxReader.code, info.nx], ['999', '// newer collector', '999']); })().catch(e => { fail++; console.log('  ✗ neorcha threw: ' + (e && e.stack || e)); });
+{ const { resolveLogin: RL } = require(path.join(ROOT, 'scripts/neorcha-cloud.js')), M = { NEORCHA_USER: 'mu', NEORCHA_PASS: 'mp' }, w = x => (x.err ? 'ERR' : x.who + ' ' + x.user + ' ' + x.url.split('/')[2]);
+  check('Neorcha cloud logins per hotel: a hotel\'s own secrets; the main login only for no account or the main hotel\'s brand; another hotel without its secrets stops (never the main login)',
+    [w(RL('', M)), w(RL('IBIS', M)), w(RL('MERCURE', M)), w(RL('MERCURE', Object.assign({ NEORCHA_USER_ACC: 'xu', NEORCHA_PASS_ACC: 'xp' }, M))), w(RL('MERCURE', Object.assign({}, M, { NEORCHA_URL: 'https://mercure.myneorcha.com/x' }))), /NEORCHA_USER_MERCURE/.test(RL('MERCURE', M).err)],
+    ['main mu ibis.myneorcha.com', 'main mu ibis.myneorcha.com', 'ERR', 'MERCURE xu mercure.myneorcha.com', 'main mu mercure.myneorcha.com', true]); }
 { const NC = require(path.join(ROOT, 'scripts/neorcha-cloud.js')), wf = fs.readFileSync(path.join(ROOT, '.github/workflows/neorcha.yml'), 'utf8'), src = fs.readFileSync(path.join(ROOT, 'scripts/neorcha-cloud.js'), 'utf8');
   check('Neorcha cloud: dates (empty = 1st of yesterday\'s month → today; swapped dates fixed); passwords only from Secrets; never prints guest rows',
     [NC.datesOf('', '', '2026-11-01'), NC.datesOf('', '', '2026-11-15'), NC.datesOf('2026-10-05', '2026-10-01', '2026-11-15'), /secrets\.NEORCHA_PASS/.test(wf) && /secrets\.HOTELOPS_PASS/.test(wf), /console\.log\([^)]*rows/.test(src), /permissions:\s*\n\s*contents: read/.test(wf), !!NC.fbConfig().databaseURL],

@@ -126,20 +126,34 @@ async function steps(page) {
   } catch (_) {}
 }
 
+/** whose Neorcha login and link (pure): the account's own secrets; the main ones for no account or the main hotel's brand
+ *  (the brand = the first part of the main link, ibis when there is none); anything else must have its own */
+function resolveLogin(acct, env) {
+  const DEF = 'https://ibis.myneorcha.com/neorchaWEBPlatform/#/login', t = v => String(v || '').trim();
+  const sub = u => { try { return new URL(u).hostname.split('.')[0].toUpperCase(); } catch (_) { return ''; } };
+  const mainUrl = t(env.NEORCHA_URL) || DEF, mainBrand = sub(mainUrl), urlIn = t(env.URL_IN);
+  if (acct && t(env.NEORCHA_USER_ACC) && t(env.NEORCHA_PASS_ACC))
+    return { user: env.NEORCHA_USER_ACC, pass: env.NEORCHA_PASS_ACC, url: urlIn || t(env.NEORCHA_URL_ACC) || 'https://' + acct.toLowerCase().replace(/_.*$/, '') + '.myneorcha.com/neorchaWEBPlatform/#/login', who: acct };
+  if (!acct || acct === mainBrand) return { user: env.NEORCHA_USER || '', pass: env.NEORCHA_PASS || '', url: urlIn || mainUrl, who: 'main' };
+  return { err: 'The ' + acct + ' hotel is not set up on GitHub yet — add the secrets NEORCHA_USER_' + acct + ' and NEORCHA_PASS_' + acct + ' (Settings → Secrets and variables → Actions → New repository secret).' };
+}
+
 // ── the run ──
 async function main() {
-  const need = ['NEORCHA_USER', 'NEORCHA_PASS'].concat(E.DRY ? [] : ['HOTELOPS_EMAIL', 'HOTELOPS_PASS']);
   const acct = String(E.ACCOUNT || '').trim();
   if (acct && !/^[A-Z0-9_]{1,30}$/.test(acct)) await fail('The Neorcha account name "' + acct.slice(0, 30) + '" can only use capital letters, digits and _ (for example MERCURE).');
-  const sfx = k => (acct && /^NEORCHA_/.test(k) ? k + '_' + acct : k);
+  // whose Neorcha login: the hotel's own secrets (NEORCHA_USER_MERCURE …); the main login only for the main hotel's brand
+  const R = resolveLogin(acct, E);
+  if (R.err) await fail(R.err);
+  E.NEORCHA_USER = R.user; E.NEORCHA_PASS = R.pass; E.NEORCHA_URL = R.url;
+  const need = ['NEORCHA_USER', 'NEORCHA_PASS'].concat(E.DRY ? [] : ['HOTELOPS_EMAIL', 'HOTELOPS_PASS']);
   const miss = need.filter(k => !String(E[k] || '').trim());
-  if (miss.length && acct) await fail('The ' + acct + ' account is not set up on GitHub yet — add the secrets ' + miss.map(sfx).join(', ') + ' (Settings → Secrets and variables → Actions).');
   if (miss.length) { console.log('::notice::Neorcha cloud is not set up yet (missing secrets: ' + miss.join(', ') + '). Nothing to do.'); return; }
   const { from, to } = datesOf(E.FROM, E.TO);
   const url0 = String(E.NEORCHA_URL || '').trim(), okUrl = u => { try { const x = new URL(u); return x.protocol === 'https:' && /(^|\.)myneorcha\.com$/i.test(x.hostname) || (!!E.FB_DB_URL && x.hostname === 'localhost'); } catch (_) { return false; } };
   if (url0 && !okUrl(url0)) await fail('That Neorcha link is not a myneorcha.com address.');
   const url = url0 || 'https://ibis.myneorcha.com/neorchaWEBPlatform/#/login';
-  if (acct) say('Neorcha account: ' + acct + ' · ' + new URL(url).hostname);
+  say('Neorcha account: ' + (R.who === 'main' ? 'main' + (acct ? ' (' + acct + ')' : '') : acct) + ' · ' + new URL(url).hostname);
   const runUrl = E.GITHUB_RUN_ID ? (E.GITHUB_SERVER_URL || 'https://github.com') + '/' + E.GITHUB_REPOSITORY + '/actions/runs/' + E.GITHUB_RUN_ID : '';
   const nice = d => new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
   say('Neorcha cloud · searching arrivals from ' + nice(from) + ' to ' + nice(to) + ' (' + from + ' → ' + to + ')');
@@ -193,4 +207,4 @@ async function main() {
   } finally { await browser.close().catch(() => {}); }
 }
 if (require.main === module) main().catch(e => fail('Stopped: ' + String(e && e.message || e).split('\n')[0].replace(/\d{6,}/g, '#')));
-module.exports = { datesOf, fbConfig };
+module.exports = { datesOf, fbConfig, resolveLogin };

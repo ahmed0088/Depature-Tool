@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 492, items: [
+    "🏨 Neorcha for several hotels, made easy: each hotel's Neorcha link and cloud account now come from its name by themselves — a Mercure hotel gets mercure.myneorcha.com and account MERCURE with no typing. ✏️ Change if a hotel is different, ↺ Automatic to go back.",
+    "📋 ⚙️ Set up this hotel for the cloud shows the exact secret names for that hotel with a copy button each, and opens GitHub's New secret page — copy, paste, type the password, done.",
+    "🔐 Your first hotel keeps working with the main login; another hotel uses only its own secrets and, if they are missing, the run says which ones to add.",
+  ] },
   { v: 491, items: [
     "🏨 More than one hotel: give each hotel its own Neorcha login on GitHub with its name at the end (NEORCHA_USER_MERCURE, NEORCHA_PASS_MERCURE), then type MERCURE in the new Neorcha account box on that hotel's Neorcha Registrations. The cloud run logs in with that account at that hotel's Neorcha link and saves the cards into that hotel — it never falls back to another hotel's login.",
     "⚡ The Neorcha cloud run is much faster: it uses the Google Chrome already on GitHub's computer (no browser download), checks each card as soon as it shows instead of waiting, and knows the last page without waiting for a next page that never comes.",
