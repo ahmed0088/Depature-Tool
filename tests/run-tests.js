@@ -268,6 +268,11 @@ const nxAsync = (async () => { const ctx = vm.createContext({ window: {}, docume
   const info = toApp.filter(m => m.source === 'ho-wa-ext-info').pop() || {};
   check('Neorcha collector updates itself: a newer one handed over by HotelOps is kept (never one from a Neorcha tab), and the helper tells HotelOps which it runs',
     [st.nxReader && st.nxReader.v, st.nxReader && st.nxReader.code, info.nx], ['999', '// newer collector', '999']); })().catch(e => { fail++; console.log('  ✗ neorcha threw: ' + (e && e.stack || e)); });
+{ const EC = require(path.join(ROOT, 'scripts/enroll-cloud.js')), wf = fs.readFileSync(path.join(ROOT, '.github/workflows/enroll.yml'), 'utf8'), src = fs.readFileSync(path.join(ROOT, 'scripts/enroll-cloud.js'), 'utf8'), gp = fs.readFileSync(path.join(ROOT, 'guest-pipeline.js'), 'utf8');
+  const L = EC.consenting('Confirmation_Number\tName\tEmail\tNationality\tCivility\tConsent\n1\tA\ta@x.test\tIN\tMr\tY\n2\tB\tb@x.test\tUK\tMs\tN\n3\tC\tc@x.test\tUK\t\tY\n4\tD\tnone\tUK\tMr\tY');
+  check('ALL enrollment in the cloud: only guests who agreed (Consent Y) with a civility and an e-mail are sent; never on a schedule; TARS login from Secrets; the tracker key matches Guest Pipeline; no e-mail in the public log',
+    [L.rows.map(r => r.split('\t')[0]), /^\s*schedule:/m.test(wf), /secrets\.ACDC_PASS/.test(wf), EC.logKey('A.b@X.test'), /gpLogKey\(email\) \{ return String\(email \|\| ''\)\.toLowerCase\(\)\.replace\(\/\[\.#\$\\\[\\\]\\\/@\]\/g, '_'\)/.test(gp), /console\.log\([^)]*email/i.test(src), /gpEnrollRows\(\)/.test(gp) && /r\.consent && r\.civility/.test(gp)],
+    [['1'], false, true, 'a_b_x_test', true, false, true]); }
 { const { resolveLogin: RL } = require(path.join(ROOT, 'scripts/neorcha-cloud.js')), M = { NEORCHA_USER: 'mu', NEORCHA_PASS: 'mp' }, w = x => (x.err ? 'ERR' : x.who + ' ' + x.user + ' ' + x.url.split('/')[2]);
   check('Neorcha cloud logins per hotel: a hotel\'s own secrets; the main login only for no account or the main hotel\'s brand; another hotel without its secrets stops (never the main login)',
     [w(RL('', M)), w(RL('IBIS', M)), w(RL('MERCURE', M)), w(RL('MERCURE', Object.assign({ NEORCHA_USER_ACC: 'xu', NEORCHA_PASS_ACC: 'xp' }, M))), w(RL('MERCURE', Object.assign({}, M, { NEORCHA_URL: 'https://mercure.myneorcha.com/x' }))), /NEORCHA_USER_MERCURE/.test(RL('MERCURE', M).err)],

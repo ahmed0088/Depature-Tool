@@ -160,6 +160,7 @@ function gpRenderSummary() {
   if (all) { const can = gpRows.filter(gpCanEnroll); all.checked = can.length > 0 && can.every(r => r.consent); }
   const btn = document.getElementById('gpCopyEnroll');
   if (btn) btn.disabled = !ready;
+  ['gpCloudGo', 'gpCloudTest'].forEach(id => { const b = document.getElementById(id); if (b) b.disabled = !ready; });
 }
 
 function gpRender() {
@@ -212,15 +213,60 @@ async function gpCopyClean() {
   catch (_) { showToast('Copy blocked', 'err'); }
 }
 
+// the guests to enroll: agreed (Consent ticked), a civility, an e-mail, not already submitted / a member
+function gpEnrollRows() { return gpRows.filter(r => gpEligible(r) && r.consent && r.civility && !(gpTracked(r) && /submitted|already/.test(gpTracked(r).status))); }
+function gpEnrollTsv(rows) { return 'Confirmation_Number\tName\tEmail\tNationality\tCivility\tConsent\n' + rows.map(r => `${r.conf}\t${r.name}\t${r.email}\t${r.nat}\t${r.civility}\tY`).join('\n'); }
 async function gpCopyEnroll() {
-  const rows = gpRows.filter(r => gpEligible(r) && r.consent && r.civility &&
-    !(gpTracked(r) && /submitted|already/.test(gpTracked(r).status)));
+  const rows = gpEnrollRows();
   if (!rows.length) { showToast('Tick "Agreed" and pick Mr/Ms for the guests who said yes first', 'err'); return; }
-  const tsv = 'Confirmation_Number\tName\tEmail\tNationality\tCivility\tConsent\n' +
-    rows.map(r => `${r.conf}\t${r.name}\t${r.email}\t${r.nat}\t${r.civility}\tY`).join('\n');
+  const tsv = gpEnrollTsv(rows);
   try { await navigator.clipboard.writeText(tsv); showToast(`${rows.length} guest(s) copied — paste into the ALL Enroll panel on fc.accor.net`, 'ok'); }
   catch (_) { showToast('Copy blocked', 'err'); }
 }
+
+// ── ☁️ Enroll in the cloud: the list of guests who agreed goes to HotelOps' database (enrollJob), GitHub's ALL Enroll
+// workflow (scripts/enroll-cloud.js) runs ALL Enroll v19 on fc.accor.net for them, and writes the results to the tracker ──
+const GP_GH = 'https://api.github.com/repos/ahmed0088/depature-tool/actions/workflows/enroll.yml/dispatches';
+let gpCloudTag = '';
+async function gpCloudEnroll(test) {
+  const rows = gpEnrollRows();
+  if (!rows.length) { showToast('Tick "Agreed" and pick Mr/Ms for the guests who said yes first', 'err'); return; }
+  if (!test && !confirm(`Enroll ${rows.length} guest(s) in ALL from the cloud?\n\nYou confirm each of them agreed at the desk — the form records that you presented ALL and the guest asked for the invitation. Only these ${rows.length} are sent.`)) return;
+  let key = ''; try { key = localStorage.getItem('ho_gh_start_key_v1') || ''; } catch (_) {}
+  if (!key) {
+    key = (prompt('The cloud needs the GitHub start key once on this device (the same as Neorcha Registrations → ☁️ Run in the cloud). Paste it here (github_pat_…):') || '').trim();
+    if (!/^(github_pat_|ghp_)[A-Za-z0-9_]{20,}$/.test(key)) { if (key) showToast('That is not a GitHub start key', 'err'); return; }
+    try { localStorage.setItem('ho_gh_start_key_v1', key); } catch (_) {}
+  }
+  const by = (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '';
+  try { if (typeof fbSet === 'function') await fbSet('enrollJob', { tsv: gpEnrollTsv(rows), n: rows.length, at: Date.now(), by, test: !!test }); } catch (_) { showToast('Could not save the list for the cloud', 'err'); return; }
+  gpCloudTag = 'en' + Date.now().toString(36);
+  gpCloudPaint({ state: 'run', step: 'gh', n: rows.length, note: 'Asking GitHub to start…', tag: gpCloudTag, test });
+  try {
+    const r = await fetch(GP_GH, { method: 'POST', headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + key, 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ref: 'main', inputs: { test: test ? '1' : '', tag: gpCloudTag, hid: typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '' } }) });
+    if (r.status === 401) { try { localStorage.removeItem('ho_gh_start_key_v1'); } catch (_) {} throw new Error('The start key was refused — make a new one'); }
+    if (!r.ok) throw new Error('GitHub answered ' + r.status);
+    gpCloudPaint({ state: 'run', step: 'gh', n: rows.length, note: 'GitHub is starting its computer (about a minute)…', tag: gpCloudTag, test });
+    showToast(test ? '🧪 Test run started — nothing will be sent' : '☁️ Enrollment started for ' + rows.length + ' guest(s)', 'ok');
+  } catch (e) { gpCloudPaint({ state: 'error', note: e.message, tag: gpCloudTag }); showToast(e.message, 'err'); }
+}
+function gpCloudPaint(v) {
+  const box = document.getElementById('gpCloudLive'); if (!box || !v) return;
+  if (gpCloudTag && v.tag && v.tag !== gpCloudTag) return;
+  box.hidden = false;
+  const hh = t => { const d = new Date(+t); return [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2, '0')).join(':'); };
+  const pct = v.state === 'done' ? 100 : v.n ? Math.round(((+v.done || 0) / v.n) * 85) + ({ gh: 3, list: 6, login: 10, page: 14, enroll: 15 }[v.step] || 0) : 5;
+  box.className = 'gp-cloud-live ' + (v.state || '');
+  box.innerHTML = `<div class="gp-cl-top"><b>${v.state === 'done' ? '✅' : v.state === 'error' ? '⛔' : '⏳'} ${v.test ? '🧪 Test run · ' : ''}${escapeHtml(v.note || '')}</b>${v.run ? `<a href="${escapeHtml(v.run)}" target="_blank" rel="noopener">GitHub ↗</a>` : ''}</div>
+    <div class="gp-cl-bar"><i style="width:${Math.min(100, pct)}%"></i></div>
+    ${Array.isArray(v.con) && v.con.length ? `<div class="gp-cl-con">${v.con.slice(-8).map(l => `<div><span>${hh(l.t)}</span><em>${escapeHtml(l.g)}</em>${escapeHtml(l.m)}</div>`).join('')}</div>` : ''}`;
+  if (v.state === 'done' && !v.test) setTimeout(gpLoadLog, 600);
+}
+(function gpCloudListen() {
+  if (typeof fbListen !== 'function') return setTimeout(gpCloudListen, 1500);
+  fbListen('enrollLive', v => { if (v && (!gpCloudTag || v.tag === gpCloudTag || Date.now() - (+v.at || 0) < 20 * 60000)) gpCloudPaint(v); });
+})();
 
 // ── Enrollment tracker (shared via Firebase) ──────────────
 async function gpLoadLog() {

@@ -3696,7 +3696,18 @@ html, body { background: var(--bg); }
 #panel-rent .card, #panel-nationality .card { padding: 14px 16px; }
 
 /* the version of this stylesheet: the page checks it matches (index.html "Page and scripts from the same version") */
-:root { --ho-css: "v496"; }
+/* Guest Pipeline · ☁️ enroll in the cloud */
+.gp-cloud{margin-top:14px;padding:14px;border-radius:14px;border:1px solid color-mix(in srgb,#0ea5e9 40%,var(--border));background:linear-gradient(180deg,color-mix(in srgb,#0ea5e9 9%,var(--card)),var(--card))}
+.gp-cloud-h{display:flex;gap:12px;align-items:center}.gp-cloud-h>span{font-size:22px}.gp-cloud-h small{display:block;color:var(--text3);font-size:.8rem;line-height:1.5}
+.gp-cloud-live{margin-top:12px;padding:10px 12px;border-radius:12px;background:var(--bg2);border:1px solid var(--border)}.gp-cloud-live[hidden]{display:none}
+.gp-cloud-live.done{border-color:color-mix(in srgb,#10b981 50%,var(--border))}.gp-cloud-live.error{border-color:color-mix(in srgb,#f43f5e 50%,var(--border))}
+.gp-cl-top{display:flex;gap:10px;justify-content:space-between;align-items:center;font-size:.86rem}.gp-cl-top a{font-size:.78rem}
+.gp-cl-bar{height:6px;border-radius:99px;background:var(--card);overflow:hidden;margin:8px 0}.gp-cl-bar i{display:block;height:100%;background:linear-gradient(90deg,#38bdf8,#6366f1);transition:width .6s}
+.gp-cloud-live.done .gp-cl-bar i{background:linear-gradient(90deg,#10b981,#22c55e)}.gp-cloud-live.error .gp-cl-bar i{background:#f43f5e}
+.gp-cl-con{font:.7rem/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#05080f;color:#cbd5e1;border-radius:9px;padding:8px 10px;max-height:150px;overflow:auto}
+.gp-cl-con span{color:#475569;margin-right:8px}.gp-cl-con em{font-style:normal;font-weight:700;color:#38bdf8;margin-right:8px;display:inline-block;min-width:34px}
+.gp-cloud-set{margin-top:10px;font-size:.82rem;color:var(--text3)}.gp-cloud-set summary{cursor:pointer}
+:root { --ho-css: "v497"; }
 .rent-bp-card:empty { display: none; }
 .rent-bp-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 10px; } .rent-bp-h span { color: var(--text3); font-size: .78rem; }
 .rent-bp { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }

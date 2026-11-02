@@ -34,7 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
-<meta name="ho-version" content="v496"/>
+<meta name="ho-version" content="v497"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="themes.css"/>
@@ -1560,6 +1560,10 @@
             <button class="btn gold" id="gpCopyEnroll" onclick="gpCopyEnroll()" disabled>📋 Copy enrollment list</button>
             <button class="btn" onclick="gpCopyScript('enroll', this)">📋 Copy ALL Enroll script</button>
           </div>
+          <div class="gp-cloud"><div class="gp-cloud-h"><span>☁️</span><div><b>Or enroll in the cloud — no PC, no console</b><small>A GitHub computer logs in to fc.accor.net with your TARS login and runs ALL Enroll for the guests ticked <b>Agreed</b> above — only those. The results land in the tracker below by themselves.</small></div></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn gold" id="gpCloudGo" onclick="gpCloudEnroll(false)" disabled>☁️ Enroll in the cloud</button><button class="btn" id="gpCloudTest" onclick="gpCloudEnroll(true)" disabled>🧪 Test run (sends nothing)</button></div>
+            <div class="gp-cloud-live" id="gpCloudLive" hidden></div>
+            <details class="gp-cloud-set"><summary>⚙️ Set up (once)</summary><p>On GitHub → the HotelOps repository → <b>Settings → Secrets and variables → Actions</b>, add <code>ACDC_USER</code> (your TARS login) and <code>ACDC_PASS</code> (its password). The HotelOps login (<code>HOTELOPS_EMAIL</code> / <code>HOTELOPS_PASS</code>) and the start key are the same as for the Neorcha cloud. Do a 🧪 Test run first.</p></details></div>
           <ol class="gp-howlist" style="margin-top:8px;">
             <li>Open <b>fc.accor.net</b> → <b>Enroll ALL</b> (the page with the e-mail box).</li>
             <li><b>F12</b> → <b>Console</b> → paste the ALL Enroll script → <b>Enter</b>. A blue panel opens.</li>

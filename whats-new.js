@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 497, items: [
+    "☁️ ALL enrollment in the cloud: in Guest Pipeline tick Agreed and Mr/Ms for the guests who said yes, then press ☁️ Enroll in the cloud. A GitHub computer logs in to fc.accor.net with your TARS login, runs ALL Enroll v19 for those guests only, and the results land in the Enrollment tracker by themselves — no PC, no console.",
+    "🧪 Test run (sends nothing): logs in, opens the enroll page and checks the list, then stops — do it first. A live box shows each step and a console.",
+    "✋ Only guests ticked Agreed are ever sent — the enrollment form records that you presented ALL and the guest asked for it. It never runs by itself on a schedule. Set up once: GitHub secrets ACDC_USER and ACDC_PASS (your TARS login).",
+  ] },
   { v: 496, items: [
     "✏️ DTCM Revenue Fill without a file: ✏️ Start a blank month, pick the month, then set what you want — e.g. TD Fee → 0 for all days — or tap any day's box to type a figure. ▶ Fill types only what you set; every other box on the portal stays as it is.",
     "🔧 A change you make (Put 0, Set to a number) is now filled even into a box the file didn't have.",
