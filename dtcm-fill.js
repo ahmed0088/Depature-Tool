@@ -308,8 +308,12 @@ function FILLER(D) {
         st[r.d] = 'fail'; fail = r.d + ' ' + MON[D.m] + ': the portal did not save it (a message on the page may say why — e.g. a negative number)'; break;
       }
       tr = rowFor(r.d); got = tr ? vals(tr, C) : [];
-      var bad = C.map(function (c, i) { return c >= 0 && vv[i] != null && !same(got[i], vv[i]) ? FIELDS[i] : ''; }).filter(Boolean);
-      if (bad.length) { st[r.d] = 'fail'; fail = r.d + ' ' + MON[D.m] + ': saved, but ' + bad.join(', ') + ' shows another number'; break; }
+      // what the page shows now against what was typed, and any message the portal put up (a pop-up, a red box) — so the reason is plain
+      var bad = C.map(function (c, i) { return c >= 0 && vv[i] != null && !same(got[i], vv[i]) ? FIELDS[i] + ' ' + (got[i] == null ? '–' : got[i].toLocaleString()) + ' (wanted ' + vv[i].toLocaleString() + ')' : ''; }).filter(Boolean);
+      if (bad.length) {
+        var said = Array.prototype.slice.call(document.querySelectorAll('.swal-text, .swal-title, .swal2-title, .swal2-html-container, .sweet-alert p, .sweet-alert h2, .jsgrid-invalid, .field-validation-error, .alert-danger, .toast-message'))
+          .filter(function (e) { return e.offsetParent || e.getClientRects().length; }).map(function (e) { return e.textContent.replace(/\s+/g, ' ').trim(); }).filter(Boolean).slice(0, 3).join(' · ');
+        st[r.d] = 'fail'; fail = r.d + ' ' + MON[D.m] + ': the portal did not keep the new figures — it shows ' + bad.join(' · ') + (said ? '. The portal said: "' + said.slice(0, 200) + '"' : '. Look at that day on the portal: was there a message?') + (bad.length >= 4 ? ' (it looks like that day was not saved at all — a figure the portal refuses, e.g. a negative or empty one)' : ''); break; }
       done++; st[r.d] = 'ok'; line(r.d, clr ? '🧹' : '💾', clr ? 'cleared (all 0) and saved' : mode === 'refill' ? 'filled and saved again' : 'filled and saved', '#15803d');
       await sleep(250);
     }

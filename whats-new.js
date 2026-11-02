@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 500, items: [
+    "🔎 DTCM filler: when the portal does not keep a day's figures, the message now shows what the page has against what was typed for each box (e.g. Room Revenue 41,432 (wanted 42,942)), and any message the portal put up — so the reason is plain at once.",
+  ] },
   { v: 499, items: [
     "💎 ALL enrollment from anywhere, done by the duty PC: in Guest Pipeline tick Agreed and Mr/Ms, press ☁️ Enroll (even on your phone). The duty PC opens fc.accor.net in a background tab, runs ALL Enroll v19 for those guests only, closes the tab, and the results land in the tracker — no admin rights, nothing new to install.",
     "🖥️ On the duty PC, once: download the helper again (Settings → WhatsApp helper), tick 🖥️ This PC runs the enrollments in Guest Pipeline, keep Chrome with HotelOps open and stay logged in to fc.accor.net. Your phone shows whether the duty PC is ready, and a live box with each step.",
