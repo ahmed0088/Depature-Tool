@@ -3707,7 +3707,7 @@ html, body { background: var(--bg); }
 .gp-cl-con{font:.7rem/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#05080f;color:#cbd5e1;border-radius:9px;padding:8px 10px;max-height:150px;overflow:auto}
 .gp-cl-con span{color:#475569;margin-right:8px}.gp-cl-con em{font-style:normal;font-weight:700;color:#38bdf8;margin-right:8px;display:inline-block;min-width:34px}
 .gp-cloud-set{margin-top:10px;font-size:.82rem;color:var(--text3)}.gp-cloud-set summary{cursor:pointer}
-:root { --ho-css: "v497"; }
+:root { --ho-css: "v498"; }
 .rent-bp-card:empty { display: none; }
 .rent-bp-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 10px; } .rent-bp-h span { color: var(--text3); font-size: .78rem; }
 .rent-bp { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }

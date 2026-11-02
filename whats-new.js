@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 498, items: [
+    "🏨 ALL enrollment now runs on the hotel's duty PC: fc.accor.net only opens inside Accor's network, so GitHub's own computers can't reach it. A GitHub runner on the duty PC does the work — invisibly, in the background — and you still start it from Guest Pipeline, even on your phone.",
+    "⚙️ Set up once on the duty PC: GitHub → Settings → Actions → Runners → New self-hosted runner → Windows, label hotel, run as a service. It uses the Chrome or Edge already on that PC.",
+  ] },
   { v: 497, items: [
     "☁️ ALL enrollment in the cloud: in Guest Pipeline tick Agreed and Mr/Ms for the guests who said yes, then press ☁️ Enroll in the cloud. A GitHub computer logs in to fc.accor.net with your TARS login, runs ALL Enroll v19 for those guests only, and the results land in the Enrollment tracker by themselves — no PC, no console.",
     "🧪 Test run (sends nothing): logs in, opens the enroll page and checks the list, then stops — do it first. A live box shows each step and a console.",

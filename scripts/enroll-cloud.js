@@ -66,7 +66,12 @@ async function main() {
   await live({ n: L.rows.length, step: 'login', note: 'Logging in to A.C.D.C…' });
 
   let chromium; try { ({ chromium } = require('playwright')); } catch (_) { try { ({ chromium } = require('playwright-core')); } catch (_e) { await fail('Playwright is not installed'); } }
-  const browser = await chromium.launch(E.CHROME_PATH ? { executablePath: E.CHROME_PATH } : {});
+  // the browser already on the computer: Chrome, else Edge (every Windows PC has it) — no download on the duty PC
+  const exe = [E.CHROME_PATH, 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', 'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    (E.LOCALAPPDATA || '') + '\\Google\\Chrome\\Application\\chrome.exe', 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', 'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+    '/usr/bin/google-chrome', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].find(p => p && fs.existsSync(p));
+  const browser = await chromium.launch(Object.assign({ headless: true }, exe ? { executablePath: exe } : {}));
+  tlog('SYS', 'Browser: ' + (exe ? path.basename(exe) : 'Playwright Chromium') + ' · ' + process.platform + (E.RUNNER_NAME ? ' · runner ' + E.RUNNER_NAME : ''));
   tlog('SYS', 'Chromium ' + browser.version() + ' headless');
   const page = await (await browser.newContext({ viewport: { width: 1400, height: 900 }, locale: 'en-GB', timezoneId: 'Asia/Dubai' })).newPage();
   page.setDefaultTimeout(30000);
