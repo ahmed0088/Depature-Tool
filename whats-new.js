@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 496, items: [
+    "✏️ DTCM Revenue Fill without a file: ✏️ Start a blank month, pick the month, then set what you want — e.g. TD Fee → 0 for all days — or tap any day's box to type a figure. ▶ Fill types only what you set; every other box on the portal stays as it is.",
+    "🔧 A change you make (Put 0, Set to a number) is now filled even into a box the file didn't have.",
+  ] },
   { v: 495, items: [
     "🔗 DTCM Revenue Fill reads links: paste a Google Sheets, Google Drive, OneDrive or Dropbox link (shared as \"anyone with the link\"), or a link to a photo or file, and press 🔗 Get it. A link that needs a sign-in can't be read by any app — it says so; then download or screenshot it and drop it in.",
     "📄 More kinds: Word files (.docx tables), saved emails (.eml — an attached Excel, PDF or photo, else the table in the message), web pages (.html), Numbers / ODS, and several files or photos at once — put together into one month.",

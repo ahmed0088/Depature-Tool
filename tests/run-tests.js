@@ -207,6 +207,10 @@ console.log('\nNationality report');
     [lt('https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKl/edit#gid=123')[0], lt('https://drive.google.com/file/d/1XyZabcdefghij/view?usp=sharing')[0], lt('https://www.dropbox.com/s/abc/nov.xlsx?dl=0')[0], lt('https://1drv.ms/x/s!AbCd')[0].slice(0, 45), lt('https://github.com/a/b/blob/main/n.csv')[0], lt('https://x.test/p.png')[0], lt('not a link').length,
       /connect-src[^;]*https:\/\/docs\.google\.com[^;]*https:\/\/api\.onedrive\.com[^;]*https:\/\/dl\.dropboxusercontent\.com/.test(fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'))],
     ['https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKl/gviz/tq?tqx=out:csv&gid=123', 'https://drive.usercontent.google.com/download?id=1XyZabcdefghij&export=download&confirm=t', 'https://dl.dropboxusercontent.com/s/abc/nov.xlsx', 'https://api.onedrive.com/v1.0/shares/u!aHR0cH', 'https://raw.githubusercontent.com/a/b/main/n.csv', 'https://x.test/p.png', 0, true]);
+  const BM = K.blankMonth(2026, 10), BF = K.filled(BM, true, [{ f: 6, days: 'all', set: 0 }, { f: 0, days: '5', set: 12345 }]);
+  check('DTCM fill with no file: a blank month (every day, every figure empty); TD Fee → 0 for all days and one typed figure are filled, everything else stays empty (not touched on the portal)',
+    [BM.rows.length, BM.rows[0].v.every(v => v == null), BF.rows.every(r => r.v[6] === 0), BF.rows[4].v[0], BF.rows[0].v.filter(v => v != null).length, BF.rows[4].v.filter(v => v != null).length],
+    [30, true, true, 12345, 1, 2]);
   const MS = K.mergeInto({ y: 2026, m: 10, rows: [{ d: 1, v: [1, 2, 3, 4, 5, 6, 7, 8, 9] }] }, K.parseText(['Date TD Fee', '01/11/2026 1,080', '02/11/2026 960']));
   check('DTCM fill: a TD-only screenshot is added into the month already loaded — only TD changes, a new day gets TD only',
     MS.rows.map(r => r.v.map(x => (x == null ? '·' : x)).join(' ')), ['1 2 3 4 5 6 1080 8 9', '· · · · · · 960 · ·']);

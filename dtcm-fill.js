@@ -153,6 +153,12 @@ function mergeInto(S0, R) {
 }
 
 /** the checks shown before filling */
+/** a blank month: every day there, every figure empty — only what you set is filled (pure) */
+function blankMonth(y, m) {
+  const n = new Date(y, m + 1, 0).getDate(), rows = [];
+  for (let d = 1; d <= n; d++) rows.push({ d, v: FIELDS.map(() => null) });
+  return { y, m, rows, total: null, from: 'blank', fields: [], heads: null };
+}
 function check(S) {
   const sums = FIELDS.map((_, i) => r2(S.rows.reduce((a, r) => a + (+r.v[i] || 0), 0)));
   const days = new Date(S.y, S.m + 1, 0).getDate(), have = new Set(S.rows.map(r => r.d));
@@ -589,7 +595,7 @@ function changeMap(adj, max) {
 function filled(S0, neg0, adj) {
   const z = changeMap(adj, 31);
   return Object.assign({}, S0, { rows: S0.rows.map(r => ({ d: r.d, v: r.v.map((x, i) => { const c = z[r.d] && z[r.d].get(i);
-    return c === undefined || c === 'sheet' ? (neg0 && x < 0 ? 0 : x) : x == null && c === 0 ? null : c; }) })) });
+    return c === undefined || c === 'sheet' ? (neg0 && x < 0 ? 0 : x) : c; }) })) });
 }
 function draw() {
   const out = $('out'); if (!out) return;
@@ -601,7 +607,8 @@ function draw() {
   if (S.from === 'pdf') warn.push('Read from the PDF: each day there is rounded to whole dirhams. Use the Excel file for the exact numbers.');
   if (S.from === 'picture' || S.from === 'scan') warn.push('Read from a picture: check a few figures against it before you fill (the reader can mistake a digit).');
   const have = FIELDS.map((_, i) => S.rows.some(r => r.v[i] != null)), miss = FIELDS.filter((_, i) => !have[i]);
-  if (miss.length && miss.length < 9) warn.push('Not in what was read: ' + miss.join(', ') + ' — ▶ Fill leaves those boxes on the portal as they are. Drop another file or screenshot with them to add them.');
+  if (S.from === 'blank') warn.push(adj.length ? 'Blank month: only what you set (' + adj.length + ' change' + (adj.length === 1 ? '' : 's') + ') is filled — every other box on the portal stays as it is.' : 'Blank month: nothing is set yet — use Change before filling (e.g. TD Fee → 0, all days) or tap a box in the table.');
+  else if (miss.length && miss.length < 9) warn.push('Not in what was read: ' + miss.join(', ') + ' — ▶ Fill leaves those boxes on the portal as they are. Drop another file or screenshot with them to add them.');
   if (C.missing.length) warn.push(`Days missing from the sheet: ${C.missing.join(', ')}.`);
   if (C.vsTotal.length) warn.push('The days do not add up to the sheet\'s Total row: ' + C.vsTotal.map(x => `${x.f} ${fmt(x.sum)} vs ${fmt(x.total)}`).join(' · ') + '.');
   if (!n0) C.neg.forEach(x => warn.push(`${x.d} ${MON[S.m]}: ${x.f} is negative (${fmt(x.v)}) — a month-end adjustment? The portal may refuse it.`));
@@ -634,7 +641,7 @@ function draw() {
       <p class="dtf-note">The filler only types into the portal's own boxes and presses its Update button, one day at a time. It stops at the first day the portal refuses.</p>
     </div>
     <div class="dtf-tw"><table><thead><tr><th>Day</th>${SHORT.map(s => `<th>${esc(s)}</th>`).join('')}</tr></thead><tbody>
-      ${S.rows.map(r => `<tr><td>${new Date(S.y, S.m, r.d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</td>${r.v.map((v, i) => v == null ? '<td>–</td>' : ZM[r.d] && ZM[r.d].has(i) && ZM[r.d].get(i) !== 'sheet' ? (ZM[r.d].get(i) !== v ? `<td class="z zz" data-cd="${r.d}" data-ci="${i}" title="Changed by you · on the sheet: ${fmt(v)} · click to change">${fmt(ZM[r.d].get(i))} <s>${fmt(v)}</s></td>` : `<td class="zz" data-cd="${r.d}" data-ci="${i}">${fmt(v)}</td>`) : v < 0 && n0 ? `<td class="z" data-cd="${r.d}" data-ci="${i}" title="On the sheet: ${fmt(v)}">0 <s>${fmt(v)}</s></td>` : `<td class="${v < 0 ? 'neg' : ''}" data-cd="${r.d}" data-ci="${i}">${fmt(v)}</td>`).join('')}</tr>`).join('')}
+      ${S.rows.map(r => `<tr><td>${new Date(S.y, S.m, r.d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</td>${r.v.map((v, i) => v == null ? (ZM[r.d] && ZM[r.d].has(i) && ZM[r.d].get(i) !== 'sheet' ? `<td class="zz" data-cd="${r.d}" data-ci="${i}" title="Set by you · click to change">${fmt(ZM[r.d].get(i))}</td>` : `<td data-cd="${r.d}" data-ci="${i}" title="Empty — click to set">–</td>`) : ZM[r.d] && ZM[r.d].has(i) && ZM[r.d].get(i) !== 'sheet' ? (ZM[r.d].get(i) !== v ? `<td class="z zz" data-cd="${r.d}" data-ci="${i}" title="Changed by you · on the sheet: ${fmt(v)} · click to change">${fmt(ZM[r.d].get(i))} <s>${fmt(v)}</s></td>` : `<td class="zz" data-cd="${r.d}" data-ci="${i}">${fmt(v)}</td>`) : v < 0 && n0 ? `<td class="z" data-cd="${r.d}" data-ci="${i}" title="On the sheet: ${fmt(v)}">0 <s>${fmt(v)}</s></td>` : `<td class="${v < 0 ? 'neg' : ''}" data-cd="${r.d}" data-ci="${i}">${fmt(v)}</td>`).join('')}</tr>`).join('')}
       <tr class="tot"><td>Total filled</td>${CF.sums.map(v => `<td>${fmt(v)}</td>`).join('')}</tr></tbody></table></div>`;
   const keep = a => { S.adj = a; try { localStorage.setItem(LS, JSON.stringify(S)); } catch (_) {} draw(); };
   const act = () => $('aact').value;
@@ -672,6 +679,8 @@ const CSS = `
 #panel-${PANEL} .dtf-drop{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:18px;border:2px dashed var(--border2);border-radius:14px;background:var(--bg2)}
 #panel-${PANEL} .dtf-link{flex:1 1 100%;display:flex;gap:8px}#panel-${PANEL} .dtf-link input{flex:1;min-width:0;padding:9px 12px;border-radius:11px;border:1px solid var(--border2);background:var(--card);color:var(--text);font:inherit;font-size:.86rem}
 #panel-${PANEL} #dtf-paste{flex:1 1 100%;resize:vertical;min-height:38px;padding:9px 12px;border-radius:11px;border:1px dashed var(--border2);background:var(--card);color:var(--text);font:inherit;font-size:.86rem}
+#panel-${PANEL} .dtf-blank{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0 0;padding:12px 14px;border-radius:12px;border:1px dashed var(--border2);background:var(--bg2)}#panel-${PANEL} .dtf-blank>span{font-size:20px}#panel-${PANEL} .dtf-blank>div{flex:1 1 240px}
+#panel-${PANEL} .dtf-blank small{display:block;color:var(--text3);font-size:.8rem;line-height:1.5}#panel-${PANEL} .dtf-blank input{padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font:inherit}
 #panel-${PANEL} .dtf-ask{margin:12px 0;padding:14px;border-radius:14px;border:1px solid color-mix(in srgb,#f59e0b 45%,var(--border));background:color-mix(in srgb,#f59e0b 8%,var(--card))}#panel-${PANEL} .dtf-ask[hidden]{display:none}
 #panel-${PANEL} .dtf-ask-h small{display:block;color:var(--text3);font-size:.8rem;margin:2px 0 10px}#panel-${PANEL} .dtf-ask-t{overflow-x:auto}#panel-${PANEL} .dtf-ask-t table{border-collapse:collapse;font-size:.84rem}
 #panel-${PANEL} .dtf-ask-t th,#panel-${PANEL} .dtf-ask-t td{padding:6px 8px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap}#panel-${PANEL} .dtf-ask-t td:first-child,#panel-${PANEL} .dtf-ask-t th:first-child{text-align:left}
@@ -729,6 +738,8 @@ function mount() {
       <input type="file" id="dtf-file" multiple accept=".xlsx,.xls,.xlsm,.xlsb,.csv,.ods,.numbers,.pdf,.txt,.tsv,.docx,.html,.htm,.eml,image/*" hidden><input type="file" id="dtf-camf" accept="image/*" capture="environment" hidden>
       <div class="dtf-link"><input id="dtf-url" type="url" inputmode="url" placeholder="…or a link: Google Sheets / Drive, OneDrive, Dropbox, a photo or file link" spellcheck="false"><button type="button" class="btn" id="dtf-urlgo">🔗 Get it</button></div>
       <textarea id="dtf-paste" rows="1" placeholder="…or paste here: a screenshot, or a table copied from Excel / an email (Ctrl+V)"></textarea></div>
+    <div class="dtf-blank"><span>✏️</span><div><b>No file? Start a blank month</b><small>Then set what you want — e.g. TD Fee → 0 for all days — or tap a day's box to type a figure. Only what you set is filled; every other box on the portal stays as it is.</small></div>
+      <input type="month" id="dtf-bm-m"><button type="button" class="btn" id="dtf-bm-go">✏️ Start</button></div>
     <div class="dtf-ask" id="dtf-ask" hidden></div>
     <div id="dtf-out"></div></div>`;
   main.appendChild(panel);
@@ -750,6 +761,17 @@ function mount() {
     if (typeof currentProfile !== 'undefined' && currentProfile && typeof applyRole === 'function') applyRole(currentProfile.role); } catch (_) {}
   $('browse').onclick = () => { $('file').value = ''; $('file').click(); };
   $('file').onchange = e => { loadMany(e.target.files); e.target.value = ''; };
+  // ✏️ a blank month: no file needed
+  { const t = new Date(); $('bm-m').value = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0'); }
+  $('bm-go').onclick = () => {
+    const v = $('bm-m').value; if (!/^\d{4}-\d{2}$/.test(v)) { toast('Pick the month', 'err'); return; }
+    const y = +v.slice(0, 4), m = +v.slice(5) - 1;
+    if (S && !confirm('Replace the figures loaded now (' + MONTHS[S.m] + ' ' + S.y + ') with a blank ' + MONTHS[m] + ' ' + y + '?')) return;
+    S = Object.assign(blankMonth(y, m), { file: 'Blank month', at: Date.now(), adj: [] });
+    try { localStorage.setItem(LS, JSON.stringify(S)); } catch (_) {}
+    draw(); toast('✏️ Blank ' + MONTHS[m] + ' ' + y + ' — now set the figures (e.g. TD Fee → 0, all days)', 'ok');
+    setTimeout(() => { const a = document.querySelector('#panel-' + PANEL + ' .dtf-adj'); if (a) a.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 100);
+  };
   $('cam').onclick = () => $('camf').click(); $('camf').onchange = e => { loadMany(e.target.files); e.target.value = ''; };
   const goLink = async () => { const u = $('url').value.trim(); if (!u) { $('url').focus(); return; } const b = $('urlgo'); b.disabled = true; b.textContent = '⏳ Getting…';
     try { const f = await fromLink(u); await load(f, f.name); $('url').value = ''; } catch (e) { toast(e.message, 'err'); } finally { b.disabled = false; b.textContent = '🔗 Get it'; } };
@@ -775,6 +797,6 @@ function mount() {
     const u = (dt.getData('text/uri-list') || dt.getData('text/plain') || '').trim(); if (/^https?:\/\//.test(u)) { $('url').value = u.split(/\s/)[0]; goLink(); } else if (/\d/.test(u)) load({ text: u }, 'dropped text'); });
   draw();
 }
-W.hoDtcmFill = { linkTargets, cleanPic, ocrLines, headOrder, lineDate, lineNums, parseText, aoaLines, mergeInto, daysOf, changeMap, filled, parseAoa, parseLines, check, fillerCode, dateOf, FILLER, FIELDS };
+W.hoDtcmFill = { blankMonth, linkTargets, cleanPic, ocrLines, headOrder, lineDate, lineNums, parseText, aoaLines, mergeInto, daysOf, changeMap, filled, parseAoa, parseLines, check, fillerCode, dateOf, FILLER, FIELDS };
 if (typeof document !== 'undefined' && document.addEventListener) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount(); }
 })();
