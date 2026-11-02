@@ -196,6 +196,15 @@ console.log('\nNationality report');
   const XF = K.filled(RP, true, [{ f: 6, days: 'all', set: 0 }, { f: 6, days: '5', sheet: true }, { f: 0, days: '4', set: 12345.5 }]);
   check('DTCM fill, flexible changes: set any figure, and "back to the sheet" for one day after a change for all days (a later change wins)',
     [XF.rows.map(r => r.v[6]), XF.rows[0].v[0], XF.rows[1].v[0], /data-a="clear"/.test(K.fillerCode(RP)) && /data-a="refill"/.test(K.fillerCode(RP))], [[0, 1300, 0], 12345.5, 42942, true]);
+  const fl = R => (R && !R.need ? R.fields.map(f => K.FIELDS[f].split(' ')[0] + '=' + R.rows[0].v[f]).join(' ') : R && R.need ? 'ask ' + R.width : 'none');
+  check('DTCM fill reads any layout: TD only, columns in another order (Rooms Occupied before Room Revenue), finance\'s header line, OCR slips (1,O80 · 5.697 · (243) · AED), no titles → asks, a sheet in another layout',
+    [fl(K.parseText(['Date TD Fee', '01/11/2026 1,080', '02/11/2026 960'])), fl(K.parseText(['Day Rooms Occupied TD Fee Room Revenue', '1-Nov-2026 115 1080 36,859.12'])),
+      fl(K.parseText(['Date | TD Fee (AED) | F&B', '01.11.2026 | AED 1,O80 | 5.697', '02.11.2026 | 960 | (243)'])), fl(K.parseText(['2026-11-01 1080 115', '2026-11-02 960 103'])), fl(K.parseText(['2026-11-01 1080 115'], [6, 7])),
+      fl(K.parseText(K.aoaLines([['Hotel'], ['Date', 'Room Revenue', 'TD'], [46327, 36859.12, 1080]]))), K.parseText(['33-Nov-2026 1,040', '03-Nov-2026 1,040'], [6]).rows.map(r => r.d), K.lineNums('- 35,810 1,O80 (12) -')],
+    ['TD=1080', 'Room=36859.12 TD=1080 Rooms=115', 'Food=5697 TD=1080', 'ask 2', 'TD=1080 Rooms=115', 'Room=36859.12 TD=1080', [3], [-35810, 1080, -12, 0]]);
+  const MS = K.mergeInto({ y: 2026, m: 10, rows: [{ d: 1, v: [1, 2, 3, 4, 5, 6, 7, 8, 9] }] }, K.parseText(['Date TD Fee', '01/11/2026 1,080', '02/11/2026 960']));
+  check('DTCM fill: a TD-only screenshot is added into the month already loaded — only TD changes, a new day gets TD only',
+    MS.rows.map(r => r.v.map(x => (x == null ? '·' : x)).join(' ')), ['1 2 3 4 5 6 1080 8 9', '· · · · · · 960 · ·']);
   const one = K.parseAoa([['Revenue Date', 'Rooms Revenue (AED)', 'F&B Revenue (AED)', 'Other Revenue (AED)', 'Municipality (AED)', 'Service Charge (AED)', 'VAT (AED)', 'TD Fee (AED)', 'Rooms Occupied', 'Total Available Rooms'], [45992, 36859.12, 6209.5, 1242.33, 3025, 4322, 2432, 1080, 115, 143], [45993, 33952, 5697, 1229, 2785, 3978, 2243, 960, 103, 143], ['Total', 70811.12, 11906.5, 2471.33, 5810, 8300, 4675, 2040, 218, 286]]);
   check('DTCM fill accuracy: a one-line header never takes the first day\'s figures; Excel day numbers are exact days (45992 = 1 Dec 2025); the days add up to the Total row',
     [one.heads[0], one.heads[8], one.rows.map(r => r.d), one.rows[0].v, K.check(one).vsTotal.length], ['Rooms Revenue (AED)', 'Total Available Rooms', [1, 2], [36859.12, 6209.5, 1242.33, 3025, 4322, 2432, 1080, 115, 143], 0]); }

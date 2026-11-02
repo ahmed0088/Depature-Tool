@@ -29,6 +29,8 @@ function dateOf(v) {
   if (m) { const mi = MONTHS.findIndex(x => x.toLowerCase().startsWith(m[1].slice(0, 3).toLowerCase())); if (mi >= 0) return { y: +m[3], m: mi, d: +m[2] }; }
   m = s.match(/^(\d{1,2})[-\s]([A-Za-z]{3,9})[-\s,]+(\d{2,4})/);   // 1-Dec-2025
   if (m) { const mi = MONTHS.findIndex(x => x.toLowerCase().startsWith(m[2].slice(0, 3).toLowerCase())); if (mi >= 0) return { y: +m[3] < 100 ? 2000 + +m[3] : +m[3], m: mi, d: +m[1] }; }
+  m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);   // 2025-12-01
+  if (m) return { y: +m[1], m: +m[2] - 1, d: +m[3] };
   m = s.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{2,4})$/);   // 01/12/2025 (day first)
   if (m) return { y: +m[3] < 100 ? 2000 + +m[3] : +m[3], m: +m[2] - 1, d: +m[1] };
   return null;
@@ -81,6 +83,75 @@ function parseLines(lines) {
   rows.sort((a, b) => a.d - b.d);
   return { y, m, rows, total, from: 'pdf' };
 }
+// ── Any layout: a sheet in another order, a few columns only, text pasted from anywhere, a picture read by OCR ──
+// The figures are found by their column titles (Room Revenue, F&B, TD Fee …) in whatever order; a column without a
+// title is asked once ("which figure is this?") and remembered. Fields that are not there stay empty, and the filler
+// leaves those boxes on the portal as they are.
+/** the fields named in a header line, in the order they appear (pure) */
+// in a header LINE the titles sit side by side: each pattern must stay inside its own title ("Rooms Occupied … Room Revenue")
+const HEAD_TXT = [/rooms?\s*rev/i, /f\s*&\s*b|food/i, /\bother\b/i, /municip/i, /service/i, /\bvat\b/i, /\btd\b|tourism/i, /occupied|\bocc\.?(?=\s|$)/i, /available|\bavail\.?(?=\s|$)/i];
+function headOrder(text) {
+  const t = ' ' + String(text || '') + ' ', hits = [];
+  HEAD_TXT.forEach((re, i) => { const m = t.match(re); if (m) hits.push([m.index, i]); });
+  return hits.sort((a, b) => a[0] - b[0]).map(h => h[1]);
+}
+const DATE_RES = [
+  /^(?:[A-Za-z]+,?\s+)?([A-Za-z]{3,9}\.?\s+\d{1,2},?\s+\d{4})(?:\s+|$)(.*)$/,             // (Monday,) November 1, 2026
+  /^(?:[A-Za-z]+,?\s+)?(\d{1,2}[-\s/.][A-Za-z]{3,9}\.?[-\s/.,]+\d{2,4})(?:\s+|$)(.*)$/,     // 1-Nov-2026 · 1 Nov 2026
+  /^(?:[A-Za-z]+,?\s+)?(\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4})(?:\s+|$)(.*)$/,                     // 01/11/2026
+  /^(\d{4}-\d{1,2}-\d{1,2})(?:T[\d:.]+Z?)?(?:\s+|$)(.*)$/,                                    // 2026-11-01
+];
+/** a line's date and what follows it ({ dt, rest } or null) (pure) */
+function lineDate(line) {
+  const s = String(line || '').replace(/[|¦]/g, ' ').replace(/\s+/g, ' ').trim();
+  for (const re of DATE_RES) { const m = s.match(re); if (m) { const dt = dateOf(m[1].replace(/\.(?=\s)/, '').replace(/[-/.]([A-Za-z]{3,9})[-/.]/, ' $1 ').replace(/\s+/g, ' ').trim()) || dateOf(m[1]);
+    if (dt && dt.m >= 0 && dt.m < 12 && dt.d >= 1 && dt.d <= new Date(dt.y, dt.m + 1, 0).getDate() && dt.y > 2000 && dt.y < 2100) return { dt, rest: m[2] || '' }; } }
+  return null;
+}
+/** the numbers after the date: "1,234.50" · "(1,234)" = negative · "- 35,810" = negative · a lone "-" = 0 · "AED", "%" ignored (pure) */
+function lineNums(rest) {
+  const t = String(rest || '').replace(/[\u2212\u2013\u2014\u2012]/g, '-').replace(/AED|Dhs?\.?|%/gi, ' ').replace(/\((\d[\d,]*(?:\.\d+)?)\)/g, '-$1').trim().split(/\s+/).filter(Boolean)
+    .map(x => x.replace(/^[Oo](?=[\d,])|(?<=[\d,])[Oo]/g, '0').replace(/(?<=\d)[lI](?=[\d,])/g, '1')).map(x => (/^-?\d{1,3}(\.\d{3})+$/.test(x) ? x.replace(/\./g, '') : x)).filter(x => /^-?[\d,]+(?:\.\d+)?$|^-$/.test(x));
+  for (let i = 0; i < t.length; i++) if (t[i] === '-' && i + 1 < t.length && /^[\d,]/.test(t[i + 1])) { t.splice(i, 2, '-' + t[i + 1]); }
+  return t.map(x => (x === '-' ? 0 : num(x)));
+}
+/** text lines (a pasted table, a PDF, a picture's OCR, a sheet in another layout) → the month, or { need: 'map' } when the
+ *  columns have no titles it knows (map = the field of each number column, -1 = ignore) (pure) */
+function parseText(lines, map) {
+  lines = (lines || []).map(l => String(l || '').replace(/\s+/g, ' ').trim()).filter(Boolean);
+  let head = [], headLine = '';
+  lines.forEach(l => { if (lineDate(l)) return; const o = headOrder(l); if (o.length > head.length) { head = o; headLine = l; } });
+  const data = []; let total = null;
+  lines.forEach(l => { const x = lineDate(l); if (x) { const n = lineNums(x.rest); if (n.length) data.push({ dt: x.dt, n }); return; }
+    const t = l.match(/^(?:grand\s+)?total\b[:\s]*(.*)$/i); if (t && !total) { const n = lineNums(t[1]); if (n.length) total = n; } });
+  if (!data.length) return null;
+  const width = Math.max(...data.map(r => r.n.length)), common = (() => { const c = {}; data.forEach(r => { c[r.n.length] = (c[r.n.length] || 0) + 1; }); return +Object.keys(c).sort((a, b) => c[b] - c[a])[0]; })();
+  let order = map && map.length ? map : head.length && head.length === common ? head : !head.length && common === 9 ? [0, 1, 2, 3, 4, 5, 6, 7, 8] : head.length && common > head.length && head.length >= 1 ? null : null;
+  if (!order) return { need: 'map', width: common || width, head: head.map(i => FIELDS[i]), sample: data.slice(0, 4).map(r => ({ d: r.dt.d + ' ' + MON[r.dt.m], n: r.n })) };
+  const y = data[0].dt.y, m = data[0].dt.m, rows = [], seen = {};
+  data.forEach(r => { if (r.dt.y !== y || r.dt.m !== m || seen[r.dt.d]) return; seen[r.dt.d] = 1;
+    const v = FIELDS.map(() => null); order.forEach((f, k) => { if (f >= 0 && f < 9 && r.n[k] != null) v[f] = r2(r.n[k]); }); rows.push({ d: r.dt.d, v }); });
+  rows.sort((a, b) => a.d - b.d);
+  const fields = [...new Set(order.filter(f => f >= 0 && f < 9))].sort((a, b) => a - b);
+  const tot = total && total.length === order.length ? FIELDS.map((_, i) => { const k = order.indexOf(i); return k >= 0 ? total[k] : 0; }) : null;
+  return { y, m, rows, total: fields.length === 9 ? tot : null, from: 'text', fields, heads: FIELDS.map((_, i) => (order.indexOf(i) >= 0 ? (head.length ? FIELDS[i] : 'column ' + (order.indexOf(i) + 1)) : '')), sig: (headLine || 'cols' + common).slice(0, 80) };
+}
+/** a sheet (rows of cells) in any layout → text lines for parseText (dates as YYYY-MM-DD) (pure) */
+function aoaLines(aoa) {
+  return (aoa || []).map(r => (r || []).map((c, i) => {
+    if (c instanceof Date && !isNaN(c)) return c.getFullYear() + '-' + (c.getMonth() + 1) + '-' + c.getDate();
+    if (typeof c === 'number' && c > 20000 && c < 80000 && i === (r || []).findIndex(x => x !== '' && x != null)) { const d = dateOf(c); return d.y + '-' + (d.m + 1) + '-' + d.d; }
+    return String(c == null ? '' : c).replace(/\s+/g, ' ');
+  }).filter(x => x !== '').join('  '));
+}
+/** a partial read (some fields only, e.g. a TD screenshot) added to the month already here: only those fields change (pure) */
+function mergeInto(S0, R) {
+  const rows = S0.rows.map(r => ({ d: r.d, v: r.v.slice() }));
+  R.rows.forEach(n => { let r = rows.find(x => x.d === n.d); if (!r) { r = { d: n.d, v: FIELDS.map(() => null) }; rows.push(r); } R.fields.forEach(f => { if (n.v[f] != null) r.v[f] = n.v[f]; }); });
+  rows.sort((a, b) => a.d - b.d);
+  return Object.assign({}, S0, { rows, heads: S0.heads ? S0.heads.map((h, i) => (R.fields.includes(i) ? (R.heads && R.heads[i]) || FIELDS[i] : h)) : S0.heads });
+}
+
 /** the checks shown before filling */
 function check(S) {
   const sums = FIELDS.map((_, i) => r2(S.rows.reduce((a, r) => a + (+r.v[i] || 0), 0)));
@@ -284,7 +355,62 @@ function fillerCode(S) {
 let S = null;
 try { S = JSON.parse(localStorage.getItem(LS) || 'null'); } catch (_) { S = null; }
 const $ = id => document.getElementById('dtf-' + id);
+// ── reading anything: Excel / CSV (finance's layout or any other), PDF (text or scanned), a picture (PNG / JPG / screenshot),
+// text or a screenshot pasted — pictures are read by Tesseract (free, in the browser; the same reader as Roster's photo import)
+const OCR_CDN = (typeof W.__hoOcrBase === 'string' && /^http:\/\/localhost(:\d+)?\//.test(W.__hoOcrBase) ? W.__hoOcrBase : 'https://cdn.jsdelivr.net/npm/'), OCR_VER = '5.1.1', MAPS = 'ho_dtcm_map_v1';   // __hoOcrBase: tests only (localhost)
+const isPic = f => /^image\//.test(f.type || '') || /\.(png|jpe?g|webp|gif|bmp)$/i.test(f.name || '');
+function ocrLib() {
+  if (W.Tesseract) return Promise.resolve(W.Tesseract);
+  return new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = OCR_CDN + 'tesseract.js@' + OCR_VER + '/dist/tesseract.min.js'; sc.onload = () => ok(W.Tesseract); sc.onerror = () => no(new Error('Couldn\'t download the picture reader — connect to the internet and try again.')); document.head.appendChild(sc); });
+}
+/** a picture (File / Blob / canvas) → its text lines; small screenshots are enlarged first so the digits read well */
+async function ocrLines(src, what) {
+  toast('🔎 Reading ' + (what || 'the picture') + '… (the first time it downloads the reader, ~10 s)', 'info');
+  const T = await ocrLib();
+  const img = cleanPic(src instanceof HTMLCanvasElement ? src : await createImageBitmap(src));
+  const opt = { workerPath: OCR_CDN + 'tesseract.js@' + OCR_VER + '/dist/worker.min.js', corePath: OCR_CDN + 'tesseract.js-core@' + OCR_VER, langPath: OCR_CDN + '@tesseract.js-data/eng/4.0.0' };
+  if (typeof W.__hoOcrLog === 'function') opt.logger = W.__hoOcrLog;   // tests only
+  const w = await T.createWorker('eng', 1, opt);
+  try { await w.setParameters({ tessedit_pageseg_mode: '4', preserve_interword_spaces: '1' }); return String((await w.recognize(img)).data.text || '').split(/\r?\n/); }
+  finally { try { await w.terminate(); } catch (_) {} }
+}
+/** a picture made easy to read: enlarged to ~3200 px wide, black on white by its own light (Otsu), table lines wiped out
+ *  (long straight runs of dark pixels are borders, not digits) — that is what turns a grid screenshot from noise into text */
+function cleanPic(bmp) {
+  const k = Math.max(1, Math.min(3, 3200 / bmp.width)), c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.imageSmoothingQuality = 'high'; g.drawImage(bmp, 0, 0, c.width, c.height);
+  const W2 = c.width, H = c.height, im = g.getImageData(0, 0, W2, H), d = im.data, lum = new Uint8Array(W2 * H), hist = new Array(256).fill(0);
+  for (let i = 0; i < W2 * H; i++) { const y = (0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]) | 0; lum[i] = y; hist[y]++; }
+  let sum = 0, sB = 0, wB = 0, best = 0, th = 150; for (let t = 0; t < 256; t++) sum += t * hist[t];
+  for (let t = 0; t < 256; t++) { wB += hist[t]; if (!wB) continue; const wF = W2 * H - wB; if (!wF) break; sB += t * hist[t]; const mB = sB / wB, mF = (sum - sB) / wF, v = wB * wF * (mB - mF) * (mB - mF); if (v > best) { best = v; th = t; } }
+  const dark = new Uint8Array(W2 * H); for (let i = 0; i < W2 * H; i++) dark[i] = lum[i] < Math.min(th, 200) ? 1 : 0;
+  // the letters' height, from the picture itself: the usual length of an up-down stroke ("1", "4", "l") — a border is much longer
+  const strokes = [];
+  for (let x = 0; x < W2; x += 3) { let run = 0; for (let y = 0; y <= H; y++) { if (y < H && dark[y * W2 + x]) run++; else { if (run >= 4 && run < H / 2) strokes.push(run); run = 0; } } }
+  strokes.sort((a, b) => a - b);
+  const tall = strokes.length ? strokes[Math.floor(strokes.length * 0.9)] : 40;   // the tall strokes of the digits
+  const Lv = Math.max(24, Math.round(tall * 1.35)), Lh = Math.max(50, Math.round(W2 / 30), Math.round(tall * 4));
+  for (let y = 0; y < H; y++) { let run = 0; for (let x = 0; x <= W2; x++) { if (x < W2 && dark[y * W2 + x]) run++; else { if (run > Lh) for (let q = x - run; q < x; q++) dark[y * W2 + q] = 2; run = 0; } } }
+  for (let x = 0; x < W2; x++) { let run = 0; for (let y = 0; y <= H; y++) { if (y < H && dark[y * W2 + x]) run++; else { if (run > Lv) for (let q = y - run; q < y; q++) dark[q * W2 + x] = 2; run = 0; } } }
+  // specks left where borders crossed (a dot before "3,025" reads as a 1): a little blot with no ink around it is not part of a digit
+  const R2 = Math.max(2, Math.round(tall / 6)), BOX = R2 * 3;
+  for (let pass = 0; pass < 2; pass++) for (let y = 1; y < H - 1; y++) for (let x = 1; x < W2 - 1; x++) { const i = y * W2 + x; if (dark[i] !== 1) continue;
+    let n = 0; for (let yy = Math.max(0, y - BOX); yy <= Math.min(H - 1, y + BOX) && n <= R2 * R2 * 2; yy += 1) for (let xx = Math.max(0, x - BOX); xx <= Math.min(W2 - 1, x + BOX); xx += 1) if (dark[yy * W2 + xx] === 1) n++;
+    if (n <= R2 * R2 * 2) dark[i] = 0; }
+  for (let i = 0; i < W2 * H; i++) { const v = dark[i] === 1 ? 0 : 255; d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = v; d[i * 4 + 3] = 255; }
+  g.putImageData(im, 0, 0); return c;
+}
+const savedMaps = () => { try { return JSON.parse(localStorage.getItem(MAPS) || '{}') || {}; } catch (_) { return {}; } };
+/** text lines → the month (a column map remembered for this shape is used when the columns have no titles) */
+function fromLines(lines, from) {
+  let R = parseText(lines);
+  if (R && R.need) { const mp = savedMaps()[R.width]; if (mp && mp.length === R.width) { const R2 = parseText(lines, mp); if (R2 && !R2.need) R = Object.assign(R2, { mapped: 1 }); } }
+  if (R && R.need) R.lines = lines;
+  if (R && !R.need) R.from = from;
+  return R;
+}
 async function readFile(file) {
+  if (isPic(file)) return fromLines(await ocrLines(file), 'picture');
   if (/\.pdf$/i.test(file.name) || file.type === 'application/pdf') {
     for (let i = 0; i < 50 && typeof pdfjsLib === 'undefined'; i++) await new Promise(r => setTimeout(r, 100));
     if (typeof pdfjsLib === 'undefined') throw new Error('The PDF reader is still loading — try again in a moment');
@@ -295,22 +421,62 @@ async function readFile(file) {
       items.forEach(it => { const y = it.transform[5]; let r = rows.find(q => Math.abs(q.y - y) < 2.5); if (!r) { r = { y, parts: [] }; rows.push(r); } r.parts.push({ x: it.transform[4], s: it.str }); });
       rows.sort((a, b) => b.y - a.y).forEach(r => lines.push(r.parts.sort((a, b) => a.x - b.x).map(q => q.s.trim()).join(' ')));
     }
-    return parseLines(lines);
+    const strict = parseLines(lines); if (strict) return strict;
+    if (lines.filter(l => /\d/.test(l)).length >= 2) { const R = fromLines(lines, 'pdf'); if (R) return R; }
+    // a scanned PDF (a picture inside): read each page as a picture (5 pages at most)
+    const ocr = [];
+    for (let p = 1; p <= Math.min(5, pdf.numPages); p++) { const pg = await pdf.getPage(p), vp = pg.getViewport({ scale: 2.2 }), c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height;
+      await pg.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise; (await ocrLines(c, 'page ' + p + ' of the scan')).forEach(l => ocr.push(l)); }
+    return fromLines(ocr, 'scan');
   }
+  if (/\.(txt|tsv)$/i.test(file.name) || /^text\/plain/.test(file.type || '')) return fromLines(String(await file.text()).split(/\r?\n/), 'text');
   if (typeof XLSX === 'undefined') throw new Error('The Excel reader did not load. Reload the page.');
   // dates as the sheet's own day numbers (cellDates off): a time zone can never move a day's figures to the day before
   const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: false });
   for (const n of wb.SheetNames) { const R = parseAoa(XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' })); if (R) return R; }
+  for (const n of wb.SheetNames) { const R = fromLines(aoaLines(XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' })), 'sheet'); if (R) return R; }
   return null;
 }
-async function load(file) {
+/** what was read becomes the month — or, when it holds only some figures of the same month (a TD screenshot), it is added in */
+function accept(R, name) {
+  const part = R.fields && R.fields.length < 9, label = part ? R.fields.map(i => FIELDS[i]).join(', ') : '';
+  if (part && S && S.y === R.y && S.m === R.m) {
+    S = Object.assign(mergeInto(S, R), { file: String(S.file || '') + ' + ' + name, at: Date.now() });
+    toast('✓ ' + label + ' from ' + name + ' added to ' + MONTHS[S.m] + ' (' + R.rows.length + ' days) — the other figures stay', 'ok');
+  } else {
+    S = Object.assign(R, { file: name, at: Date.now(), adj: [] });
+    if (part) toast('✓ ' + label + ' read for ' + R.rows.length + ' days — ▶ Fill changes only those boxes on the portal; the others stay as they are', 'ok');
+  }
+  try { localStorage.setItem(LS, JSON.stringify(S)); } catch (_) {}
+  draw();
+}
+/** the columns had no titles: ask once which figure each one is (remembered for files of the same shape) */
+function askMap(R, name) {
+  const box = $('ask'); if (!box) return;
+  const guess = k => (R.head && R.head.length === R.width ? FIELDS.indexOf(R.head[k]) : -1);
+  box.hidden = false;
+  box.innerHTML = `<div class="dtf-ask-h"><b>🧩 Which figure is each column?</b><small>${esc(name)} has ${R.width} column${R.width === 1 ? '' : 's'} of figures without titles I know. Pick each one (or Ignore) — remembered for files like this.</small></div>
+    <div class="dtf-ask-t"><table><thead><tr><th>Day</th>${Array.from({ length: R.width }, (_, k) => `<th><select data-k="${k}"><option value="-1">Ignore</option>${FIELDS.map((f, i) => `<option value="${i}"${guess(k) === i ? ' selected' : ''}>${esc(f)}</option>`).join('')}</select></th>`).join('')}</tr></thead>
+    <tbody>${R.sample.map(r => `<tr><td>${esc(r.d)}</td>${Array.from({ length: R.width }, (_, k) => `<td>${r.n[k] == null ? '–' : fmt(r.n[k])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+    <div class="dtf-btns"><button type="button" class="btn gold" id="dtf-ask-ok">✓ Use these columns</button><button type="button" class="btn" id="dtf-ask-no">Cancel</button></div>`;
+  $('ask-no').onclick = () => { box.hidden = true; box.innerHTML = ''; };
+  $('ask-ok').onclick = () => {
+    const mp = Array.from(box.querySelectorAll('select[data-k]')).map(x => +x.value);
+    if (!mp.some(f => f >= 0)) { toast('Pick at least one column', 'err'); return; }
+    const R2 = parseText(R.lines, mp); if (!R2 || R2.need) { toast('Those columns could not be read', 'err'); return; }
+    try { const all = savedMaps(); all[R.width] = mp; localStorage.setItem(MAPS, JSON.stringify(all)); } catch (_) {}
+    box.hidden = true; box.innerHTML = ''; accept(Object.assign(R2, { from: R.from || 'text' }), name);
+  };
+  box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+async function load(file, name) {
   if (!file) return;
+  name = name || file.name || 'pasted';
   try {
-    const R = await readFile(file);
-    if (!R) { toast('No daily DTCM data found in that file (it needs a "Revenue Date" column)', 'err'); return; }
-    S = Object.assign(R, { file: file.name, at: Date.now() });
-    try { localStorage.setItem(LS, JSON.stringify(S)); } catch (_) {}
-    draw();
+    const R = file.text && !file.size && typeof file.text === 'string' ? fromLines(file.text.split(/\r?\n/), 'text') : await readFile(file);
+    if (!R) { toast('No daily figures found in ' + name + ' — it needs a date on each day\'s line (e.g. 01/11/2026, 1 Nov 2026) and its figures', 'err'); return; }
+    if (R.need) { askMap(R, name); return; }
+    accept(R, name);
   } catch (e) { toast(e.message || 'Could not read that file', 'err'); }
 }
 // a negative figure (a month-end adjustment, "- 35,810") goes to the portal as 0 — on unless switched off (remembered)
@@ -347,6 +513,9 @@ function draw() {
   const dim = new Date(S.y, S.m + 1, 0).getDate();
   const warn = [];
   if (S.from === 'pdf') warn.push('Read from the PDF: each day there is rounded to whole dirhams. Use the Excel file for the exact numbers.');
+  if (S.from === 'picture' || S.from === 'scan') warn.push('Read from a picture: check a few figures against it before you fill (the reader can mistake a digit).');
+  const have = FIELDS.map((_, i) => S.rows.some(r => r.v[i] != null)), miss = FIELDS.filter((_, i) => !have[i]);
+  if (miss.length && miss.length < 9) warn.push('Not in what was read: ' + miss.join(', ') + ' — ▶ Fill leaves those boxes on the portal as they are. Drop another file or screenshot with them to add them.');
   if (C.missing.length) warn.push(`Days missing from the sheet: ${C.missing.join(', ')}.`);
   if (C.vsTotal.length) warn.push('The days do not add up to the sheet\'s Total row: ' + C.vsTotal.map(x => `${x.f} ${fmt(x.sum)} vs ${fmt(x.total)}`).join(' · ') + '.');
   if (!n0) C.neg.forEach(x => warn.push(`${x.d} ${MON[S.m]}: ${x.f} is negative (${fmt(x.v)}) — a month-end adjustment? The portal may refuse it.`));
@@ -415,6 +584,11 @@ function draw() {
 }
 const CSS = `
 #panel-${PANEL} .dtf-drop{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:18px;border:2px dashed var(--border2);border-radius:14px;background:var(--bg2)}
+#panel-${PANEL} #dtf-paste{flex:1 1 100%;resize:vertical;min-height:38px;padding:9px 12px;border-radius:11px;border:1px dashed var(--border2);background:var(--card);color:var(--text);font:inherit;font-size:.86rem}
+#panel-${PANEL} .dtf-ask{margin:12px 0;padding:14px;border-radius:14px;border:1px solid color-mix(in srgb,#f59e0b 45%,var(--border));background:color-mix(in srgb,#f59e0b 8%,var(--card))}#panel-${PANEL} .dtf-ask[hidden]{display:none}
+#panel-${PANEL} .dtf-ask-h small{display:block;color:var(--text3);font-size:.8rem;margin:2px 0 10px}#panel-${PANEL} .dtf-ask-t{overflow-x:auto}#panel-${PANEL} .dtf-ask-t table{border-collapse:collapse;font-size:.84rem}
+#panel-${PANEL} .dtf-ask-t th,#panel-${PANEL} .dtf-ask-t td{padding:6px 8px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap}#panel-${PANEL} .dtf-ask-t td:first-child,#panel-${PANEL} .dtf-ask-t th:first-child{text-align:left}
+#panel-${PANEL} .dtf-ask-t select{padding:6px 8px;border-radius:9px;border:1px solid var(--border);background:var(--card);color:var(--text);font:inherit;font-size:.8rem}
 #panel-${PANEL} .dtf-drop.over{border-color:var(--accent)}
 #panel-${PANEL} .dtf-drop-t{flex:1 1 220px;display:flex;flex-direction:column;gap:2px}#panel-${PANEL} .dtf-drop-t span{color:var(--text3);font-size:.8rem}
 #panel-${PANEL} .dtf-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:16px 0}
@@ -463,8 +637,10 @@ function mount() {
     <div class="dtf-hero"><div class="dtf-hero-ic">🏛️</div><div class="dtf-hero-t"><h1>DTCM Revenue Fill</h1><p>Finance's daily figures → the DTCM portal, filled and saved day by day, then checked</p></div>
       <button type="button" class="btn rose" id="dtf-clear">✕ Clear</button></div>
     <ol class="dtf-steps" id="dtf-steps"><li data-s="1"><b>1</b><span>Load finance's sheet</span></li><li data-s="2"><b>2</b><span>Review the month</span></li><li data-s="3"><b>3</b><span>Fill on the portal</span></li></ol>
-    <div class="dtf-drop" id="dtf-drop"><div style="font-size:26px">📊</div><div class="dtf-drop-t"><b>Drop finance's sheet here</b><span>“Daily data for DTCM” · Excel (exact numbers) or its PDF</span></div>
-      <button type="button" class="btn gold" id="dtf-browse">📂 Browse…</button><input type="file" id="dtf-file" accept=".xlsx,.xls,.csv,.pdf" hidden></div>
+    <div class="dtf-drop" id="dtf-drop"><div style="font-size:26px">📊</div><div class="dtf-drop-t"><b>Drop the figures here — any kind</b><span>Finance's “Daily data for DTCM” · any Excel / CSV · PDF (also scanned) · a photo or screenshot (PNG, JPG) · even one column, e.g. only the TD Fee</span></div>
+      <button type="button" class="btn gold" id="dtf-browse">📂 Browse…</button><input type="file" id="dtf-file" accept=".xlsx,.xls,.csv,.pdf,.txt,.tsv,image/*" hidden>
+      <textarea id="dtf-paste" rows="1" placeholder="…or paste here: a screenshot, or a table copied from Excel / an email (Ctrl+V)"></textarea></div>
+    <div class="dtf-ask" id="dtf-ask" hidden></div>
     <div id="dtf-out"></div></div>`;
   main.appendChild(panel);
   const item = document.createElement('div'); item.className = 'nav-item'; item.id = 'nav-' + PANEL; item.dataset.panel = PANEL;
@@ -485,6 +661,15 @@ function mount() {
     if (typeof currentProfile !== 'undefined' && currentProfile && typeof applyRole === 'function') applyRole(currentProfile.role); } catch (_) {}
   $('browse').onclick = () => { $('file').value = ''; $('file').click(); };
   $('file').onchange = e => load(e.target.files[0]);
+  // paste: a screenshot (picture) or a copied table (text) — in the paste box, or anywhere on this page
+  const onPaste = e => {
+    const cd = e.clipboardData; if (!cd) return;
+    const img = Array.from(cd.items || []).find(it => /^image\//.test(it.type));
+    if (img) { e.preventDefault(); const f = img.getAsFile(); if (f) load(f, 'pasted screenshot'); return; }
+    const t = cd.getData('text/plain'); if (t && /\d/.test(t)) { e.preventDefault(); load({ text: t }, 'pasted table'); $('paste').value = ''; }
+  };
+  $('paste').addEventListener('paste', onPaste);
+  document.addEventListener('paste', e => { const pn = document.getElementById('panel-' + PANEL); if (pn && pn.classList.contains('active') && !e.target.closest('input,textarea,[contenteditable]')) onPaste(e); });
   $('clear').onclick = () => { S = null; try { localStorage.removeItem(LS); } catch (_) {} draw(); };
   const z = $('drop');
   ['dragenter', 'dragover'].forEach(ev => z.addEventListener(ev, e => { e.preventDefault(); z.classList.add('over'); }));
@@ -492,6 +677,6 @@ function mount() {
   z.addEventListener('drop', e => { const f = e.dataTransfer && e.dataTransfer.files[0]; if (f) load(f); });
   draw();
 }
-W.hoDtcmFill = { daysOf, changeMap, filled, parseAoa, parseLines, check, fillerCode, dateOf, FILLER, FIELDS };
+W.hoDtcmFill = { cleanPic, ocrLines, headOrder, lineDate, lineNums, parseText, aoaLines, mergeInto, daysOf, changeMap, filled, parseAoa, parseLines, check, fillerCode, dateOf, FILLER, FIELDS };
 if (typeof document !== 'undefined' && document.addEventListener) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount(); }
 })();

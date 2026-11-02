@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 494, items: [
+    "📸 DTCM Revenue Fill reads any kind now: finance's Excel or PDF as before, any other Excel / CSV layout, a scanned PDF, a photo or screenshot (PNG, JPG), or a table pasted with Ctrl+V — even a screenshot with only the TD Fee. Pictures are read in your browser (the first time it downloads the reader, ~10 s).",
+    "➕ A partial read is added to the month you already have: drop a TD-only screenshot and only the TD Fee changes; the boxes not in it stay as they are on the portal.",
+    "🧩 Columns without titles? It asks once which figure each column is, and remembers it for files like that. Read from a picture? It reminds you to check a few figures before filling.",
+  ] },
   { v: 493, items: [
     "🏨 Neorcha hotels as a list: on Neorcha Registrations your hotels show as chips — this hotel first, then the others. Tap one, then ▶ Start or ☁️ Run in the cloud: it uses that hotel's Neorcha link and login.",
     "＋ Add hotel: pick the brand (Mercure, Novotel, Pullman …) — the link and the cloud account fill in by themselves — give it a name, ＋ Add. Its one-time GitHub set-up opens right below with copy buttons. × removes a hotel from the list.",
