@@ -364,10 +364,12 @@ function ocrLib() {
   return new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = OCR_CDN + 'tesseract.js@' + OCR_VER + '/dist/tesseract.min.js'; sc.onload = () => ok(W.Tesseract); sc.onerror = () => no(new Error('Couldn\'t download the picture reader — connect to the internet and try again.')); document.head.appendChild(sc); });
 }
 /** a picture (File / Blob / canvas) → its text lines; small screenshots are enlarged first so the digits read well */
-async function ocrLines(src, what) {
+async function ocrLines(src, what, deg) {
   toast('🔎 Reading ' + (what || 'the picture') + '… (the first time it downloads the reader, ~10 s)', 'info');
   const T = await ocrLib();
-  const img = cleanPic(src instanceof HTMLCanvasElement ? src : await createImageBitmap(src));
+  let pic = src instanceof HTMLCanvasElement ? src : await createImageBitmap(src);
+  if (deg) { const c = document.createElement('canvas'), sw = deg % 180 !== 0; c.width = sw ? pic.height : pic.width; c.height = sw ? pic.width : pic.height; const g = c.getContext('2d'); g.translate(c.width / 2, c.height / 2); g.rotate(deg * Math.PI / 180); g.drawImage(pic, -pic.width / 2, -pic.height / 2); pic = c; }
+  const img = cleanPic(pic);
   const opt = { workerPath: OCR_CDN + 'tesseract.js@' + OCR_VER + '/dist/worker.min.js', corePath: OCR_CDN + 'tesseract.js-core@' + OCR_VER, langPath: OCR_CDN + '@tesseract.js-data/eng/4.0.0' };
   if (typeof W.__hoOcrLog === 'function') opt.logger = W.__hoOcrLog;   // tests only
   const w = await T.createWorker('eng', 1, opt);
@@ -409,8 +411,78 @@ function fromLines(lines, from) {
   if (R && !R.need) R.from = from;
   return R;
 }
+// ── links: a shared link is turned into the file's own address (Google Sheets / Docs / Drive, OneDrive, Dropbox, GitHub) (pure) ──
+function linkTargets(url) {
+  let u; try { u = new URL(String(url || '').trim()); } catch (_) { return []; }
+  const h = u.hostname.toLowerCase(), p = u.pathname, id = (p.match(/\/d\/([\w-]{10,})/) || [])[1] || u.searchParams.get('id') || '';
+  const gid = (u.hash.match(/gid=(\d+)/) || [])[1] || u.searchParams.get('gid') || '0';
+  if (h === 'docs.google.com' && /\/spreadsheets\//.test(p) && id) return [{ url: 'https://docs.google.com/spreadsheets/d/' + id + '/gviz/tq?tqx=out:csv&gid=' + gid, name: 'Google Sheet.csv' }, { url: 'https://docs.google.com/spreadsheets/d/' + id + '/export?format=csv&gid=' + gid, name: 'Google Sheet.csv' }];
+  if (h === 'docs.google.com' && /\/document\//.test(p) && id) return [{ url: 'https://docs.google.com/document/d/' + id + '/export?format=txt', name: 'Google Doc.txt' }];
+  if ((h === 'drive.google.com' || h === 'drive.usercontent.google.com') && id) return [{ url: 'https://drive.usercontent.google.com/download?id=' + id + '&export=download&confirm=t', name: '' }, { url: 'https://drive.google.com/uc?export=download&id=' + id, name: '' }];
+  if (/(^|\.)dropbox\.com$/.test(h)) { const x = new URL(u.href); x.hostname = 'dl.dropboxusercontent.com'; x.searchParams.delete('dl'); return [{ url: x.href, name: decodeURIComponent(p.split('/').pop() || '') }]; }
+  if (h === '1drv.ms' || /(^|\.)onedrive\.live\.com$/.test(h)) { const b = btoa(unescape(encodeURIComponent(u.href))).replace(/=+$/, '').replace(/\//g, '_').replace(/\+/g, '-'); return [{ url: 'https://api.onedrive.com/v1.0/shares/u!' + b + '/root/content', name: '' }]; }
+  if (h === 'github.com' && /\/blob\//.test(p)) return [{ url: 'https://raw.githubusercontent.com' + p.replace('/blob/', '/'), name: decodeURIComponent(p.split('/').pop()) }];
+  return [{ url: u.href, name: decodeURIComponent(p.split('/').pop() || '') }];
+}
+const EXT = { 'text/csv': 'csv', 'text/plain': 'txt', 'text/html': 'html', 'application/pdf': 'pdf', 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx', 'application/vnd.ms-excel': 'xls', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx', 'message/rfc822': 'eml' };
+/** a link → the file it points to (when that site lets apps read it) */
+async function fromLink(url) {
+  const T = linkTargets(url); if (!T.length) throw new Error('That is not a link (it starts with https://)');
+  let last = '';
+  for (const t of T) {
+    try {
+      const r = await fetch(t.url, { credentials: 'omit', redirect: 'follow' }); if (!r.ok) { last = 'the site answered ' + r.status; continue; }
+      const type = (r.headers.get('content-type') || '').split(';')[0].trim(), cd = r.headers.get('content-disposition') || '', b = await r.blob();
+      let name = (cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)/i) || [])[1] || t.name || 'link';
+      if (type === 'text/html' && /google|onedrive|dropbox/.test(new URL(t.url).hostname) && !/\.html?$/i.test(name)) { last = 'it asks to sign in — share it as "Anyone with the link"'; continue; }
+      if (!/\.\w{2,5}$/.test(name) && EXT[type]) name += '.' + EXT[type];
+      return new File([b], decodeURIComponent(name), { type });
+    } catch (e) { last = /Content Security|CSP|Refused/i.test(String(e)) ? 'HotelOps may not read from that site' : 'that site does not let apps read its files'; }
+  }
+  throw new Error('Could not get it from the link (' + last + '). Open the link, download or screenshot it, then drop it here.');
+}
+/** a Word file (.docx): its tables (and paragraphs) as text lines */
+async function docxLines(file) {
+  const z = XLSX.CFB.read(new Uint8Array(await file.arrayBuffer()), { type: 'array' }), f = XLSX.CFB.find(z, 'word/document.xml') || XLSX.CFB.find(z, '/word/document.xml');
+  if (!f) throw new Error('That Word file could not be opened');
+  const xml = new TextDecoder().decode(f.content), cell = c => (c.match(/<w:t[^>]*>([^<]*)<\/w:t>/g) || []).map(t => t.replace(/<[^>]+>/g, '')).join('');
+  const out = [];
+  (xml.match(/<w:tr[\s>][\s\S]*?<\/w:tr>/g) || []).forEach(tr => out.push((tr.match(/<w:tc[\s>][\s\S]*?<\/w:tc>/g) || []).map(cell).join('  ')));
+  (xml.replace(/<w:tbl[\s>][\s\S]*?<\/w:tbl>/g, '').match(/<w:p[\s>][\s\S]*?<\/w:p>/g) || []).forEach(p => { const t = cell(p); if (t.trim()) out.push(t); });
+  return out.map(l => l.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
+}
+/** an HTML table (a web page, an email body) → text lines */
+function htmlLines(html) {
+  // raw: the cells as written — the library would read 01/11/2026 the American way (11 January); dates here are day first
+  const wb = XLSX.read(String(html || ''), { type: 'string', raw: true }), out = [];
+  wb.SheetNames.forEach(n => aoaLines(XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' })).forEach(l => out.push(l)));
+  if (!out.some(l => /\d/.test(l))) String(html).replace(/<(br|\/p|\/div|\/tr)[^>]*>/gi, '\n').replace(/<[^>]+>/g, ' ').split('\n').forEach(l => out.push(l.replace(/&nbsp;/g, ' ')));
+  return out;
+}
+/** a saved email (.eml): an attachment it carries first (Excel, PDF, a photo), else the table in the message */
+async function emlRead(file) {
+  const raw = await file.text(), bd = (raw.match(/boundary="?([^";\r\n]+)"?/i) || [])[1];
+  const parts = bd ? raw.split('--' + bd) : [raw], dec = (body, enc) => /base64/i.test(enc || '') ? Uint8Array.from(atob(body.replace(/\s+/g, '')), c => c.charCodeAt(0)) : /quoted-printable/i.test(enc || '') ? new TextEncoder().encode(body.replace(/=\r?\n/g, '').replace(/=([0-9A-F]{2})/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))) : new TextEncoder().encode(body);
+  let html = '', text = '';
+  for (const pt of parts) {
+    const i = pt.search(/\r?\n\r?\n/); if (i < 0) continue; const hd = pt.slice(0, i), body = pt.slice(i).trim(), enc = (hd.match(/content-transfer-encoding:\s*([\w-]+)/i) || [])[1];
+    const nm = (hd.match(/filename\*?=(?:UTF-8'')?"?([^";\r\n]+)/i) || hd.match(/name="?([^";\r\n]+)/i) || [])[1];
+    if (nm && /\.(xlsx?|csv|pdf|png|jpe?g|docx|ods)$/i.test(nm)) { try { const R = await readFile(new File([dec(body, enc)], nm, { type: (hd.match(/content-type:\s*([\w/.+-]+)/i) || [])[1] || '' })); if (R) return Object.assign(R, { via: nm }); } catch (_) {} }
+    if (/content-type:\s*text\/html/i.test(hd)) html = new TextDecoder().decode(dec(body, enc));
+    else if (/content-type:\s*text\/plain/i.test(hd)) text = new TextDecoder().decode(dec(body, enc));
+  }
+  return (html && fromLines(htmlLines(html), 'email')) || fromLines((text || raw).split(/\r?\n/), 'email');
+}
 async function readFile(file) {
-  if (isPic(file)) return fromLines(await ocrLines(file), 'picture');
+  if (isPic(file)) {   // a photo: read; if nothing makes sense, it may be sideways or upside down — turn it and read again
+    let R = fromLines(await ocrLines(file), 'picture');
+    for (const deg of [90, 270, 180]) { if (R) break; R = fromLines(await ocrLines(file, 'the picture turned ' + deg + '°', deg), 'picture'); }
+    return R;
+  }
+  if (/\.docx$/i.test(file.name) || /wordprocessingml/.test(file.type || '')) return fromLines(await docxLines(file), 'word');
+  if (/\.(html?|mht)$/i.test(file.name) || /^text\/html/.test(file.type || '')) return fromLines(htmlLines(await file.text()), 'web page');
+  if (/\.eml$/i.test(file.name) || /^message\/rfc822/.test(file.type || '')) return emlRead(file);
   if (/\.pdf$/i.test(file.name) || file.type === 'application/pdf') {
     for (let i = 0; i < 50 && typeof pdfjsLib === 'undefined'; i++) await new Promise(r => setTimeout(r, 100));
     if (typeof pdfjsLib === 'undefined') throw new Error('The PDF reader is still loading — try again in a moment');
@@ -431,6 +503,11 @@ async function readFile(file) {
   }
   if (/\.(txt|tsv)$/i.test(file.name) || /^text\/plain/.test(file.type || '')) return fromLines(String(await file.text()).split(/\r?\n/), 'text');
   if (typeof XLSX === 'undefined') throw new Error('The Excel reader did not load. Reload the page.');
+  if (/\.(csv)$/i.test(file.name) || /^text\/csv/.test(file.type || '')) {   // a CSV is text: its dates stay as written (day first), never the library's month-first guess
+    const wb = XLSX.read(await file.text(), { type: 'string', raw: true });
+    for (const n of wb.SheetNames) { const aoa = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' }), R = parseAoa(aoa) || fromLines(aoaLines(aoa), 'sheet'); if (R) return R; }
+    return null;
+  }
   // dates as the sheet's own day numbers (cellDates off): a time zone can never move a day's figures to the day before
   const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: false });
   for (const n of wb.SheetNames) { const R = parseAoa(XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' })); if (R) return R; }
@@ -438,9 +515,10 @@ async function readFile(file) {
   return null;
 }
 /** what was read becomes the month — or, when it holds only some figures of the same month (a TD screenshot), it is added in */
-function accept(R, name) {
+function accept(R, name, batch) {
+  if (!R.fields) R.fields = FIELDS.map((_, i) => i).filter(i => R.rows.some(r => r.v[i] != null));
   const part = R.fields && R.fields.length < 9, label = part ? R.fields.map(i => FIELDS[i]).join(', ') : '';
-  if (part && S && S.y === R.y && S.m === R.m) {
+  if ((part || batch) && S && S.y === R.y && S.m === R.m) {
     S = Object.assign(mergeInto(S, R), { file: String(S.file || '') + ' + ' + name, at: Date.now() });
     toast('✓ ' + label + ' from ' + name + ' added to ' + MONTHS[S.m] + ' (' + R.rows.length + ' days) — the other figures stay', 'ok');
   } else {
@@ -469,15 +547,23 @@ function askMap(R, name) {
   };
   box.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
-async function load(file, name) {
+async function load(file, name, batch) {
   if (!file) return;
   name = name || file.name || 'pasted';
   try {
-    const R = file.text && !file.size && typeof file.text === 'string' ? fromLines(file.text.split(/\r?\n/), 'text') : await readFile(file);
-    if (!R) { toast('No daily figures found in ' + name + ' — it needs a date on each day\'s line (e.g. 01/11/2026, 1 Nov 2026) and its figures', 'err'); return; }
-    if (R.need) { askMap(R, name); return; }
-    accept(R, name);
-  } catch (e) { toast(e.message || 'Could not read that file', 'err'); }
+    const R = typeof file.text === 'string' ? fromLines(file.text.split(/\r?\n/), 'text') : await readFile(file);
+    if (!R) { toast('No daily figures found in ' + name + ' — it needs a date on each day\'s line (e.g. 01/11/2026, 1 Nov 2026) and its figures', 'err'); return false; }
+    if (R.need) { askMap(R, name); return false; }
+    accept(R, name + (R.via ? ' (' + R.via + ')' : ''), batch);
+    return true;
+  } catch (e) { toast(e.message || 'Could not read that file', 'err'); return false; }
+}
+/** several files or photos at once (the month in two screenshots, TD and the rest …): read one by one and put together */
+async function loadMany(list) {
+  list = Array.from(list || []).filter(Boolean); if (!list.length) return;
+  if (list.length === 1) return load(list[0]);
+  let ok = 0; for (let i = 0; i < list.length; i++) { toast('📚 ' + (i + 1) + ' of ' + list.length + ': ' + list[i].name, 'info'); if (await load(list[i], list[i].name, i > 0)) ok++; }
+  toast('✓ ' + ok + ' of ' + list.length + ' files read and put together', ok ? 'ok' : 'err');
 }
 // a negative figure (a month-end adjustment, "- 35,810") goes to the portal as 0 — on unless switched off (remembered)
 const neg0On = () => { try { return localStorage.getItem('ho_dtcm_neg0') !== '0'; } catch (_) { return true; } };
@@ -584,6 +670,7 @@ function draw() {
 }
 const CSS = `
 #panel-${PANEL} .dtf-drop{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:18px;border:2px dashed var(--border2);border-radius:14px;background:var(--bg2)}
+#panel-${PANEL} .dtf-link{flex:1 1 100%;display:flex;gap:8px}#panel-${PANEL} .dtf-link input{flex:1;min-width:0;padding:9px 12px;border-radius:11px;border:1px solid var(--border2);background:var(--card);color:var(--text);font:inherit;font-size:.86rem}
 #panel-${PANEL} #dtf-paste{flex:1 1 100%;resize:vertical;min-height:38px;padding:9px 12px;border-radius:11px;border:1px dashed var(--border2);background:var(--card);color:var(--text);font:inherit;font-size:.86rem}
 #panel-${PANEL} .dtf-ask{margin:12px 0;padding:14px;border-radius:14px;border:1px solid color-mix(in srgb,#f59e0b 45%,var(--border));background:color-mix(in srgb,#f59e0b 8%,var(--card))}#panel-${PANEL} .dtf-ask[hidden]{display:none}
 #panel-${PANEL} .dtf-ask-h small{display:block;color:var(--text3);font-size:.8rem;margin:2px 0 10px}#panel-${PANEL} .dtf-ask-t{overflow-x:auto}#panel-${PANEL} .dtf-ask-t table{border-collapse:collapse;font-size:.84rem}
@@ -637,8 +724,10 @@ function mount() {
     <div class="dtf-hero"><div class="dtf-hero-ic">🏛️</div><div class="dtf-hero-t"><h1>DTCM Revenue Fill</h1><p>Finance's daily figures → the DTCM portal, filled and saved day by day, then checked</p></div>
       <button type="button" class="btn rose" id="dtf-clear">✕ Clear</button></div>
     <ol class="dtf-steps" id="dtf-steps"><li data-s="1"><b>1</b><span>Load finance's sheet</span></li><li data-s="2"><b>2</b><span>Review the month</span></li><li data-s="3"><b>3</b><span>Fill on the portal</span></li></ol>
-    <div class="dtf-drop" id="dtf-drop"><div style="font-size:26px">📊</div><div class="dtf-drop-t"><b>Drop the figures here — any kind</b><span>Finance's “Daily data for DTCM” · any Excel / CSV · PDF (also scanned) · a photo or screenshot (PNG, JPG) · even one column, e.g. only the TD Fee</span></div>
-      <button type="button" class="btn gold" id="dtf-browse">📂 Browse…</button><input type="file" id="dtf-file" accept=".xlsx,.xls,.csv,.pdf,.txt,.tsv,image/*" hidden>
+    <div class="dtf-drop" id="dtf-drop"><div style="font-size:26px">📊</div><div class="dtf-drop-t"><b>Drop the figures here — any kind</b><span>Finance's “Daily data for DTCM” · any Excel, CSV, Numbers, ODS · Word · PDF (also scanned) · photos and screenshots · a saved email · a web page · several at once · even one column, e.g. only the TD Fee</span></div>
+      <button type="button" class="btn gold" id="dtf-browse">📂 Browse…</button><button type="button" class="btn" id="dtf-cam">📷 Photo</button>
+      <input type="file" id="dtf-file" multiple accept=".xlsx,.xls,.xlsm,.xlsb,.csv,.ods,.numbers,.pdf,.txt,.tsv,.docx,.html,.htm,.eml,image/*" hidden><input type="file" id="dtf-camf" accept="image/*" capture="environment" hidden>
+      <div class="dtf-link"><input id="dtf-url" type="url" inputmode="url" placeholder="…or a link: Google Sheets / Drive, OneDrive, Dropbox, a photo or file link" spellcheck="false"><button type="button" class="btn" id="dtf-urlgo">🔗 Get it</button></div>
       <textarea id="dtf-paste" rows="1" placeholder="…or paste here: a screenshot, or a table copied from Excel / an email (Ctrl+V)"></textarea></div>
     <div class="dtf-ask" id="dtf-ask" hidden></div>
     <div id="dtf-out"></div></div>`;
@@ -660,13 +749,20 @@ function mount() {
   try { ['owner', 'manager', 'supervisor'].forEach(r => { if (typeof ROLES !== 'undefined' && ROLES[r] && !ROLES[r].panels.includes(PANEL)) ROLES[r].panels.push(PANEL); });
     if (typeof currentProfile !== 'undefined' && currentProfile && typeof applyRole === 'function') applyRole(currentProfile.role); } catch (_) {}
   $('browse').onclick = () => { $('file').value = ''; $('file').click(); };
-  $('file').onchange = e => load(e.target.files[0]);
+  $('file').onchange = e => { loadMany(e.target.files); e.target.value = ''; };
+  $('cam').onclick = () => $('camf').click(); $('camf').onchange = e => { loadMany(e.target.files); e.target.value = ''; };
+  const goLink = async () => { const u = $('url').value.trim(); if (!u) { $('url').focus(); return; } const b = $('urlgo'); b.disabled = true; b.textContent = '⏳ Getting…';
+    try { const f = await fromLink(u); await load(f, f.name); $('url').value = ''; } catch (e) { toast(e.message, 'err'); } finally { b.disabled = false; b.textContent = '🔗 Get it'; } };
+  $('urlgo').onclick = goLink; $('url').onkeydown = e => { if (e.key === 'Enter') goLink(); };
   // paste: a screenshot (picture) or a copied table (text) — in the paste box, or anywhere on this page
   const onPaste = e => {
     const cd = e.clipboardData; if (!cd) return;
     const img = Array.from(cd.items || []).find(it => /^image\//.test(it.type));
     if (img) { e.preventDefault(); const f = img.getAsFile(); if (f) load(f, 'pasted screenshot'); return; }
-    const t = cd.getData('text/plain'); if (t && /\d/.test(t)) { e.preventDefault(); load({ text: t }, 'pasted table'); $('paste').value = ''; }
+    const t = cd.getData('text/plain');
+    if (t && /^https?:\/\/\S+$/.test(t.trim())) { e.preventDefault(); $('url').value = t.trim(); goLink(); $('paste').value = ''; return; }
+    const ht = cd.getData('text/html'); if (ht && /<t[dr][\s>]/i.test(ht)) { e.preventDefault(); const R = fromLines(htmlLines(ht), 'text'); if (R && R.need) askMap(R, 'pasted table'); else if (R) accept(R, 'pasted table'); else toast('No daily figures in what was pasted', 'err'); $('paste').value = ''; return; }
+    if (t && /\d/.test(t)) { e.preventDefault(); load({ text: t }, 'pasted table'); $('paste').value = ''; }
   };
   $('paste').addEventListener('paste', onPaste);
   document.addEventListener('paste', e => { const pn = document.getElementById('panel-' + PANEL); if (pn && pn.classList.contains('active') && !e.target.closest('input,textarea,[contenteditable]')) onPaste(e); });
@@ -674,9 +770,11 @@ function mount() {
   const z = $('drop');
   ['dragenter', 'dragover'].forEach(ev => z.addEventListener(ev, e => { e.preventDefault(); z.classList.add('over'); }));
   ['dragleave', 'drop'].forEach(ev => z.addEventListener(ev, e => { e.preventDefault(); z.classList.remove('over'); }));
-  z.addEventListener('drop', e => { const f = e.dataTransfer && e.dataTransfer.files[0]; if (f) load(f); });
+  z.addEventListener('drop', e => { const dt = e.dataTransfer; if (!dt) return;
+    if (dt.files && dt.files.length) { loadMany(dt.files); return; }
+    const u = (dt.getData('text/uri-list') || dt.getData('text/plain') || '').trim(); if (/^https?:\/\//.test(u)) { $('url').value = u.split(/\s/)[0]; goLink(); } else if (/\d/.test(u)) load({ text: u }, 'dropped text'); });
   draw();
 }
-W.hoDtcmFill = { cleanPic, ocrLines, headOrder, lineDate, lineNums, parseText, aoaLines, mergeInto, daysOf, changeMap, filled, parseAoa, parseLines, check, fillerCode, dateOf, FILLER, FIELDS };
+W.hoDtcmFill = { linkTargets, cleanPic, ocrLines, headOrder, lineDate, lineNums, parseText, aoaLines, mergeInto, daysOf, changeMap, filled, parseAoa, parseLines, check, fillerCode, dateOf, FILLER, FIELDS };
 if (typeof document !== 'undefined' && document.addEventListener) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount(); }
 })();

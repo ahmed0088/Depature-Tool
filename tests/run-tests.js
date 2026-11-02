@@ -176,7 +176,7 @@ console.log('\nNationality report');
   const css = (fs.readFileSync(path.join(ROOT, 'pro.css'), 'utf8').match(/--ho-css: "(v\d+)"/) || [])[1];
   const page = (html.match(/<meta name="ho-version" content="(v\d+)"/) || [])[1], js = (ut.match(/APP_VERSION = '(v\d+)'/) || [])[1], cache = (sw.match(/ibis-ops-shell-(v\d+)/) || [])[1];
   check('one version everywhere: the page (meta ho-version), the scripts (APP_VERSION), the stylesheet (pro.css --ho-css) and the offline cache (sw.js) — a mismatch heals itself, but it must not ship', [page === js, js === cache, css === page, !!page], [true, true, true, true]); }
-{ const ctx = vm.createContext({ window: {}, document: { readyState: 'loading', addEventListener() {} }, localStorage: { getItem() { return null; }, setItem() {} }, console });
+{ const ctx = vm.createContext({ window: {}, document: { readyState: 'loading', addEventListener() {} }, localStorage: { getItem() { return null; }, setItem() {} }, console, URL, btoa: s => Buffer.from(s, 'binary').toString('base64'), unescape, encodeURIComponent });
   ctx.window = ctx; vm.runInContext(fs.readFileSync(path.join(ROOT, 'dtcm-fill.js'), 'utf8'), ctx); const K = ctx.hoDtcmFill;
   const P = K.parseLines(['Monday, December 1, 2025 36,859 6,209 1,242 3,025 4,322 2,432 1,080 115 143', 'Thursday, December 4, 2025 41,432 6,291 1,472 3,367 4,810 2,701 -35,810 119 143', 'Total 1,483,529 215,500 45,706.77 119,668.19 170,498 - 73,980.60 1,600.00 4,003 4,433']);
   const X = K.parseAoa([['Ibis DD'], ['Revenue Date', 'Rooms Revenue', 'F&B Revenue', 'Other', 'Municipality', 'Service Charge', 'VAT (AED)', 'TD Fee (AED)', 'Rooms', 'Total Available'], ['', '(AED)', '(AED)', 'Revenue (AED)', '(AED)', '(AED)', '', '', 'Occupied', 'Rooms'], ['Monday, December 1, 2025', 36859.12, 6209.5, 1242.33, 3025, 4322, 2432, 1080, 115, 143], ['Total']]);
@@ -202,6 +202,11 @@ console.log('\nNationality report');
       fl(K.parseText(['Date | TD Fee (AED) | F&B', '01.11.2026 | AED 1,O80 | 5.697', '02.11.2026 | 960 | (243)'])), fl(K.parseText(['2026-11-01 1080 115', '2026-11-02 960 103'])), fl(K.parseText(['2026-11-01 1080 115'], [6, 7])),
       fl(K.parseText(K.aoaLines([['Hotel'], ['Date', 'Room Revenue', 'TD'], [46327, 36859.12, 1080]]))), K.parseText(['33-Nov-2026 1,040', '03-Nov-2026 1,040'], [6]).rows.map(r => r.d), K.lineNums('- 35,810 1,O80 (12) -')],
     ['TD=1080', 'Room=36859.12 TD=1080 Rooms=115', 'Food=5697 TD=1080', 'ask 2', 'TD=1080 Rooms=115', 'Room=36859.12 TD=1080', [3], [-35810, 1080, -12, 0]]);
+  const lt = u => K.linkTargets(u).map(t => t.url);
+  check('DTCM fill links: Google Sheets → CSV (its tab), Drive → the file, Dropbox → direct, OneDrive → its share API, GitHub → raw, anything else as it is; HotelOps may read from those sites only',
+    [lt('https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKl/edit#gid=123')[0], lt('https://drive.google.com/file/d/1XyZabcdefghij/view?usp=sharing')[0], lt('https://www.dropbox.com/s/abc/nov.xlsx?dl=0')[0], lt('https://1drv.ms/x/s!AbCd')[0].slice(0, 45), lt('https://github.com/a/b/blob/main/n.csv')[0], lt('https://x.test/p.png')[0], lt('not a link').length,
+      /connect-src[^;]*https:\/\/docs\.google\.com[^;]*https:\/\/api\.onedrive\.com[^;]*https:\/\/dl\.dropboxusercontent\.com/.test(fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'))],
+    ['https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKl/gviz/tq?tqx=out:csv&gid=123', 'https://drive.usercontent.google.com/download?id=1XyZabcdefghij&export=download&confirm=t', 'https://dl.dropboxusercontent.com/s/abc/nov.xlsx', 'https://api.onedrive.com/v1.0/shares/u!aHR0cH', 'https://raw.githubusercontent.com/a/b/main/n.csv', 'https://x.test/p.png', 0, true]);
   const MS = K.mergeInto({ y: 2026, m: 10, rows: [{ d: 1, v: [1, 2, 3, 4, 5, 6, 7, 8, 9] }] }, K.parseText(['Date TD Fee', '01/11/2026 1,080', '02/11/2026 960']));
   check('DTCM fill: a TD-only screenshot is added into the month already loaded — only TD changes, a new day gets TD only',
     MS.rows.map(r => r.v.map(x => (x == null ? '·' : x)).join(' ')), ['1 2 3 4 5 6 1080 8 9', '· · · · · · 960 · ·']);

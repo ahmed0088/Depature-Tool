@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 495, items: [
+    "🔗 DTCM Revenue Fill reads links: paste a Google Sheets, Google Drive, OneDrive or Dropbox link (shared as \"anyone with the link\"), or a link to a photo or file, and press 🔗 Get it. A link that needs a sign-in can't be read by any app — it says so; then download or screenshot it and drop it in.",
+    "📄 More kinds: Word files (.docx tables), saved emails (.eml — an attached Excel, PDF or photo, else the table in the message), web pages (.html), Numbers / ODS, and several files or photos at once — put together into one month.",
+    "📷 On a phone, 📷 Photo opens the camera. A photo taken sideways or upside down is turned and read again by itself.",
+  ] },
   { v: 494, items: [
     "📸 DTCM Revenue Fill reads any kind now: finance's Excel or PDF as before, any other Excel / CSV layout, a scanned PDF, a photo or screenshot (PNG, JPG), or a table pasted with Ctrl+V — even a screenshot with only the TD Fee. Pictures are read in your browser (the first time it downloads the reader, ~10 s).",
     "➕ A partial read is added to the month you already have: drop a TD-only screenshot and only the TD Fee changes; the boxes not in it stay as they are on the portal.",
