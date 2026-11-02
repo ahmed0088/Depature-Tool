@@ -199,7 +199,7 @@ async function main() {
     const rows = (done.rows || []).slice(0, 5000);
     tlog('SAVE', rows.length + ' cards · ' + rows.filter(r => r.Email).length + ' emails · ' + rows.filter(r => r.Phone).length + ' phones · ' + netN + ' network calls');
     say('Collected ' + rows.length + ' registration cards'); await live({ step: 'save', note: 'Saving ' + rows.length + ' cards in HotelOps…', n: rows.length, prog: 98 });
-    const card = { at: Date.now(), from, to, by: 'cloud', n: rows.length, rows };
+    const card = { at: Date.now(), from, to, by: 'cloud', n: rows.length, rows, account: R.who === 'main' ? '' : acct };
     if (E.DRY) { fs.writeFileSync(E.DRY_OUT || 'neorcha-cloud.json', JSON.stringify(card)); say('DRY run: saved to ' + (E.DRY_OUT || 'neorcha-cloud.json')); }
     if (FB) { await FB.save(card); say('✅ Saved in HotelOps — open Neorcha Registrations on any device.'); }
     tlog('SAVE', '✓ Written to HotelOps · hotels/…/neorcha'); tlog('SYS', 'Done · browser closed');

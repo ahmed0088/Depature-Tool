@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 493, items: [
+    "🏨 Neorcha hotels as a list: on Neorcha Registrations your hotels show as chips — this hotel first, then the others. Tap one, then ▶ Start or ☁️ Run in the cloud: it uses that hotel's Neorcha link and login.",
+    "＋ Add hotel: pick the brand (Mercure, Novotel, Pullman …) — the link and the cloud account fill in by themselves — give it a name, ＋ Add. Its one-time GitHub set-up opens right below with copy buttons. × removes a hotel from the list.",
+    "ℹ️ A registration card exists in Neorcha only once the guest has checked in: early in the day, today's arrivals show only the guests already in (9:28 → 1, 10:22 → 3 on 2 Nov). The nightly run collects the full day.",
+  ] },
   { v: 492, items: [
     "🏨 Neorcha for several hotels, made easy: each hotel's Neorcha link and cloud account now come from its name by themselves — a Mercure hotel gets mercure.myneorcha.com and account MERCURE with no typing. ✏️ Change if a hotel is different, ↺ Automatic to go back.",
     "📋 ⚙️ Set up this hotel for the cloud shows the exact secret names for that hotel with a copy button each, and opens GitHub's New secret page — copy, paste, type the password, done.",

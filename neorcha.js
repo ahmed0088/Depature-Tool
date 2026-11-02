@@ -340,10 +340,10 @@ function rowsToAoa(list) {
   (list || []).forEach(o => Object.keys(o || {}).forEach(k => { if (!NEVER.test(k) && H.indexOf(k) < 0 && H.length < 40) H.push(k); }));
   return [H].concat((list || []).map(o => H.map(h => (o[h] == null || typeof o[h] === 'object' ? '' : String(o[h]).slice(0, 200)))));
 }
-function fromCollector(list, from, to, at, by) {
+function fromCollector(list, from, to, at, by, acct) {
   const R = parseAoa(rowsToAoa(list));
   if (!R || !R.rows.length) { if (!at) toast('Neorcha sent nothing that could be read', 'err'); return false; }
-  S = Object.assign(R, { file: 'Neorcha · ' + (from && to ? dLbl(from) + ' – ' + dLbl(to) : 'collected') + (by === 'cloud' ? ' · ☁️ cloud' : ''), at: at || Date.now(), auto: true, by: by || 'helper' });
+  S = Object.assign(R, { file: 'Neorcha · ' + (from && to ? dLbl(from) + ' – ' + dLbl(to) : 'collected') + (by === 'cloud' ? ' · ☁️ cloud' : '') + (acct ? ' · ' + acct : ''), at: at || Date.now(), auto: true, by: by || 'helper' });
   try { localStorage.setItem(LS, JSON.stringify(S)); } catch (_) {}
   if (!at) {   // collected here: shared with the team's other devices (the cards as Neorcha's collector sent them — no passport, ID, e-mail or phone)
     if (typeof fbSet === 'function') try { fbSet('neorcha', { at: S.at, from: from || '', to: to || '', by: 'helper', n: list.length, rows: list }); } catch (_) {}
@@ -444,6 +444,16 @@ const CSS = `
 #panel-${PANEL} .nx-run{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin:12px 0 4px}#panel-${PANEL} .nx-run label{display:flex;flex-direction:column;gap:4px;font-size:.74rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em}
 #panel-${PANEL} .nx-run input{padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font:inherit;font-size:.9rem}
 #panel-${PANEL} .nx-live{margin:10px 0 0;padding:10px 12px;border-radius:10px;font-size:.86rem;background:color-mix(in srgb,#6366f1 10%,var(--card));color:var(--text)}#panel-${PANEL} .nx-live.ok{background:color-mix(in srgb,#10b981 14%,var(--card))}#panel-${PANEL} .nx-live.err{background:color-mix(in srgb,#f43f5e 12%,var(--card))}
+#panel-${PANEL} .nx-hadd[hidden],#panel-${PANEL} .nx-hedit[hidden],#panel-${PANEL} .nx-live[hidden]{display:none!important}
+#panel-${PANEL} .nx-hl{display:flex;gap:8px;overflow-x:auto;padding:2px 0 4px;margin-top:12px;scrollbar-width:thin}
+#panel-${PANEL} .nx-hl button{flex:none;display:flex;flex-direction:column;align-items:flex-start;gap:1px;position:relative;padding:8px 26px 8px 12px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--text2);cursor:pointer;font:inherit;text-align:left}
+#panel-${PANEL} .nx-hl button b{font-size:.84rem;color:var(--text)}#panel-${PANEL} .nx-hl button small{font-size:.7rem;color:var(--text3);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+#panel-${PANEL} .nx-hl button.on{border-color:#0ea5e9;background:color-mix(in srgb,#0ea5e9 14%,var(--card));box-shadow:0 0 0 3px color-mix(in srgb,#0ea5e9 18%,transparent)}
+#panel-${PANEL} .nx-hl button[data-hs=""]{padding-right:12px}#panel-${PANEL} .nx-hl .x{position:absolute;top:4px;right:6px;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:.85rem;color:var(--text3)}#panel-${PANEL} .nx-hl .x:hover{background:color-mix(in srgb,#f43f5e 20%,transparent);color:#f43f5e}
+#panel-${PANEL} .nx-hl .add{border-style:dashed;justify-content:center;padding:8px 14px;color:#0ea5e9;font-weight:600;font-size:.84rem}
+#panel-${PANEL} .nx-hadd{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin:8px 0 0;padding:12px;border-radius:12px;border:1px dashed color-mix(in srgb,#0ea5e9 50%,var(--border));background:color-mix(in srgb,#0ea5e9 6%,var(--card))}
+#panel-${PANEL} .nx-hadd label{display:flex;flex-direction:column;gap:4px;font-size:.72rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em}#panel-${PANEL} .nx-hadd .nx-url{flex:1 1 260px}
+#panel-${PANEL} .nx-hadd input,#panel-${PANEL} .nx-hadd select{padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font:inherit;font-size:.88rem;width:100%}
 #panel-${PANEL} .nx-hotel{display:flex;gap:10px;align-items:center;margin:12px 0 0;padding:10px 12px;border-radius:12px;background:var(--bg2);border:1px solid var(--border)}#panel-${PANEL} .nx-h-ic{font-size:20px}
 #panel-${PANEL} .nx-h-t{flex:1;min-width:0}#panel-${PANEL} .nx-h-t b{display:block;font-size:.92rem}#panel-${PANEL} .nx-h-t small{color:var(--text3);font-size:.78rem}#panel-${PANEL} .nx-h-t code{font-size:.76rem}
 #panel-${PANEL} .nx-hedit{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin:8px 0 0}#panel-${PANEL} .nx-hedit label{display:flex;flex-direction:column;gap:4px;font-size:.72rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em}
@@ -634,6 +644,9 @@ function mount() {
       <button type="button" class="btn rose" id="nx-clear">✕ Clear</button></div>
     <ol class="nx-steps" id="nx-steps"><li data-s="1"><b>1</b><span>Collect from Neorcha</span></li><li data-s="2"><b>2</b><span>See the month</span></li><li data-s="3"><b>3</b><span>Link to Purpose of Stay</span></li></ol>
     <div class="nx-col"><div class="nx-col-h"><span>🤖</span><div><b>Collect from Neorcha — automatic</b><small>Pick the dates and press Start. Neorcha opens, you log in, it reads every confirmation by itself and the cards land here.</small></div></div>
+      <div class="nx-hl" id="nx-hl" role="tablist" aria-label="Neorcha hotels"></div>
+      <div class="nx-hadd" id="nx-hadd" hidden><label>Brand<select id="nx-hb"></select></label><label class="nx-hn">Name<input id="nx-hname" maxlength="40" placeholder="e.g. Mercure Barsha"></label><label class="nx-url">Neorcha link<input type="url" id="nx-hurl" spellcheck="false"></label>
+        <button type="button" class="btn gold" id="nx-hok">＋ Add</button><button type="button" class="btn" id="nx-hno">Cancel</button></div>
       <div class="nx-hotel"><span class="nx-h-ic">🏨</span><div class="nx-h-t" id="nx-h-t"></div><button type="button" class="btn" id="nx-h-ed">✏️ Change</button></div>
       <div class="nx-hedit" id="nx-hedit" hidden><label class="nx-url">Neorcha link<input type="url" id="nx-url" spellcheck="false"></label><label class="nx-acct">Account on GitHub<input id="nx-acct" spellcheck="false" autocapitalize="characters" maxlength="30"></label><button type="button" class="btn" id="nx-h-auto">↺ Automatic</button></div>
       <div class="nx-run"><label>Arrivals from<input type="date" id="nx-from"></label><label>to<input type="date" id="nx-to"></label>
@@ -691,18 +704,61 @@ function mount() {
   const acctKey = () => urlKey().replace('ho_neorcha_url_v1', 'ho_neorcha_acct_v1');
   const get = k => { try { return localStorage.getItem(k) || ''; } catch (_) { return ''; } }, put = (k, v) => { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (_) {} };
   const autoUrl = () => linkFor(hotelName()) || NX_DEF, autoAcct = () => acctOf(NX());
-  const paintHotel = () => {
-    const u = NX(), a = ($('acct').value || '').trim() || autoAcct(), host = u.replace(/^https:\/\//, '').split('/')[0], own = !!(get(urlKey()) || get(acctKey()));
-    $('h-t').innerHTML = `<b>${esc(hotelName())}</b><small>Neorcha <code>${esc(host)}</code> · cloud account <code>${esc(a)}</code>${own ? ' · set by you' : ' · automatic'}</small>`;
-    const sb = $('setup-b'); if (sb) sb.innerHTML = setupHtml(a);
+  // 🏨 the list: this hotel (automatic) + the other hotels you collect for (kept on this device) — tap one, then Start or Run in the cloud
+  const LK = 'ho_neorcha_hotels_v1', SK = () => 'ho_neorcha_sel_v1:' + String(hotelName() || 'hotel').toLowerCase();
+  let LIST = []; try { LIST = (JSON.parse(get(LK) || '[]') || []).filter(h => h && okUrl(h.url) && h.name).slice(0, 20); } catch (_) { LIST = []; }
+  let SEL = get(SK()); if (SEL !== '' && !LIST[+SEL]) SEL = '';
+  const cur = () => (SEL === '' ? null : LIST[+SEL] || null);
+  const saveList = () => put(LK, LIST.length ? JSON.stringify(LIST) : '');
+  const loadInputs = () => {
+    const h = cur();
+    if (!h) { $('url').value = get(urlKey()) || autoUrl(); $('url').placeholder = autoUrl(); $('acct').value = get(acctKey()); }
+    else { $('url').value = h.url; $('url').placeholder = h.url; $('acct').value = h.acct && h.acct !== acctOf(h.url) ? h.acct : ''; }
+    $('acct').placeholder = autoAcct();
   };
-  $('url').value = get(urlKey()) || autoUrl(); $('url').placeholder = autoUrl();
-  $('acct').value = get(acctKey()); $('acct').placeholder = autoAcct();
-  $('url').onchange = () => { const v = $('url').value.trim(); if (v && !okUrl(v)) { toast('That is not a Neorcha link (it must be https://….myneorcha.com/…)', 'err'); return; } put(urlKey(), v && v !== autoUrl() ? v : ''); if (!v) $('url').value = autoUrl(); $('acct').placeholder = autoAcct(); paintHotel(); toast('Neorcha link saved for this hotel', 'ok'); };
-  $('acct').onchange = () => { const v = $('acct').value.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_').slice(0, 30); $('acct').value = v; put(acctKey(), v && v !== autoAcct() ? v : ''); paintHotel(); };
+  const paintList = () => {
+    const short = n => String(n || '').replace(/\s+(hotel|dubai|resort)\b.*$/i, '').slice(0, 26) || n;
+    $('hl').innerHTML = [`<button type="button" role="tab" data-hs="" class="${SEL === '' ? 'on' : ''}" aria-selected="${SEL === ''}"><b>${esc(short(hotelName()))}</b><small>this hotel</small></button>`]
+      .concat(LIST.map((h, i) => `<button type="button" role="tab" data-hs="${i}" class="${SEL === String(i) ? 'on' : ''}" aria-selected="${SEL === String(i)}"><b>${esc(h.name)}</b><small>${esc(h.acct || acctOf(h.url))}</small><span class="x" data-hdel="${i}" title="Remove ${esc(h.name)}">×</span></button>`))
+      .join('') + '<button type="button" class="add" data-hadd="1">＋ Add hotel</button>';
+  };
+  const paintHotel = () => {
+    const h = cur(), u = NX(), a = ($('acct').value || '').trim() || autoAcct(), host = u.replace(/^https:\/\//, '').split('/')[0], own = !h && !!(get(urlKey()) || get(acctKey()));
+    $('h-t').innerHTML = `<b>${esc(h ? h.name : hotelName())}</b><small>Neorcha <code>${esc(host)}</code> · cloud account <code>${esc(a)}</code>${h ? ' · the cards land in this HotelOps' : own ? ' · set by you' : ' · automatic'}</small>`;
+    const sb = $('setup-b'); if (sb) sb.innerHTML = setupHtml(a);
+    paintList();
+  };
+  const select = v => { SEL = v; put(SK(), SEL); loadInputs(); paintHotel(); };
+  loadInputs();
+  $('url').onchange = () => { const v = $('url').value.trim(); if (v && !okUrl(v)) { toast('That is not a Neorcha link (it must be https://….myneorcha.com/…)', 'err'); return; }
+    const h = cur(); if (h) { if (v) { if (!h.acct || h.acct === acctOf(h.url)) h.acct = acctOf(v); h.url = v; saveList(); } else $('url').value = h.url; }
+    else { put(urlKey(), v && v !== autoUrl() ? v : ''); if (!v) $('url').value = autoUrl(); }
+    $('acct').placeholder = autoAcct(); paintHotel(); toast('Neorcha link saved', 'ok'); };
+  $('acct').onchange = () => { const v = $('acct').value.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_').slice(0, 30); $('acct').value = v;
+    const h = cur(); if (h) { h.acct = v || acctOf(h.url); saveList(); } else put(acctKey(), v && v !== autoAcct() ? v : ''); paintHotel(); };
   $('h-ed').onclick = () => { const e = $('hedit'); e.hidden = !e.hidden; $('h-ed').textContent = e.hidden ? '✏️ Change' : '✓ Done'; };
-  $('h-auto').onclick = () => { put(urlKey(), ''); put(acctKey(), ''); $('url').value = autoUrl(); $('acct').value = ''; $('acct').placeholder = autoAcct(); paintHotel(); toast('Back to automatic for this hotel', 'ok'); };
+  $('h-auto').onclick = () => { const h = cur(); if (h) { h.acct = acctOf(h.url); saveList(); } else { put(urlKey(), ''); put(acctKey(), ''); } loadInputs(); paintHotel(); toast('Back to automatic', 'ok'); };
+  // ＋ Add hotel: pick the brand (the link and account follow), give it a name
+  $('hb').innerHTML = BRANDS.map(([b]) => `<option value="${b}">${b === 'movenpick' ? 'Mövenpick' : b === 'swissotel' ? 'Swissôtel' : b === 'mgallery' ? 'MGallery' : b[0].toUpperCase() + b.slice(1)}</option>`).join('') + '<option value="">Other — paste its link</option>';
+  const addFill = () => { const b = $('hb').value; if (b) { $('hurl').value = 'https://' + b + '.myneorcha.com/neorchaWEBPlatform/#/login'; if (!$('hname').value.trim() || $('hname').dataset.auto) { $('hname').value = $('hb').selectedOptions[0].textContent; $('hname').dataset.auto = '1'; } } else { $('hurl').value = ''; $('hurl').focus(); } };
+  $('hb').onchange = addFill; $('hname').oninput = () => { delete $('hname').dataset.auto; };
+  $('hno').onclick = () => { $('hadd').hidden = true; };
+  $('hok').onclick = () => {
+    const url = $('hurl').value.trim(), name = $('hname').value.trim().slice(0, 40);
+    if (!okUrl(url)) { toast('Pick a brand, or paste the hotel\'s Neorcha link (https://….myneorcha.com/…)', 'err'); return; }
+    if (!name) { toast('Give the hotel a name', 'err'); $('hname').focus(); return; }
+    if (LIST.length >= 20) { toast('20 hotels at most', 'err'); return; }
+    LIST.push({ name, url, acct: acctOf(url) }); saveList(); $('hadd').hidden = true; select(String(LIST.length - 1));
+    const st = $('setup'); if (st) st.open = true;
+    toast('🏨 ' + name + ' added — set up its secrets once (below), then Run in the cloud', 'ok');
+  };
   W.__hoNxCloud = () => ({ account: ($('acct').value || '').trim().toUpperCase() || autoAcct(), url: NX(), hid: typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '' });
+  panel.addEventListener('click', e => {
+    const del = e.target.closest('[data-hdel]');
+    if (del) { e.stopPropagation(); const i = +del.dataset.hdel, h = LIST[i]; if (h && confirm('Remove ' + h.name + ' from the list? (its secrets on GitHub stay)')) { LIST.splice(i, 1); saveList(); select(SEL === String(i) || +SEL > i ? (SEL === String(i) ? '' : String(+SEL - 1)) : SEL); } return; }
+    const hs = e.target.closest('[data-hs]'); if (hs) { select(hs.dataset.hs); return; }
+    if (e.target.closest('[data-hadd]')) { const a = $('hadd'); a.hidden = !a.hidden; if (!a.hidden) { $('hname').value = ''; delete $('hname').dataset.auto; $('hb').value = 'mercure'; addFill(); } return; }
+  });
   panel.addEventListener('click', e => { const c = e.target.closest('[data-copy]'); if (!c) return; const t = c.dataset.copy;
     if (typeof copyToClipboard === 'function') copyToClipboard(t, c, c.textContent); else { try { navigator.clipboard.writeText(t); } catch (_) {} }
     c.classList.add('ok'); setTimeout(() => c.classList.remove('ok'), 1500); toast('Copied ' + t + ' — paste it as the secret\'s name on GitHub', 'ok'); });
@@ -739,7 +795,7 @@ function mount() {
   // ☁️ the cards saved by another device or by the cloud run: newer than what this device has → shown here
   const listen = () => { if (typeof fbListen !== 'function') return setTimeout(listen, 1500);
     fbListen('neorcha', v => { if (!v || !Array.isArray(v.rows) || !(+v.at > ((S && +S.at) || 0))) return;
-      if (fromCollector(v.rows.slice(0, 5000), v.from, v.to, +v.at, v.by)) draw(); }); };
+      if (fromCollector(v.rows.slice(0, 5000), v.from, v.to, +v.at, v.by, v.account)) draw(); }); };
   listen();
   // Purpose of Stay changes (loaded later, edited): the link numbers follow
   document.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-panel="' + PANEL + '"]')) setTimeout(draw, 50); }, true);
