@@ -264,6 +264,7 @@ async function gpAccCloudRestart() {
     await fbUpdate('enrollLive', { at: Date.now(), control: 'run', stopRequested: false, state: 'run', step: 'queued', tag: gpCloudTag, test: false, n: gpEnrollRows().length, done: 0, note: 'Restart requested — waiting for GitHub…', con: [{ t: Date.now(), g: 'SYS', m: 'Run again requested' }] });
     await fbSet('enrollJob', { tsv: gpEnrollTsv(gpEnrollRows()), n: gpEnrollRows().length, at: Date.now(), test: false, tag: gpCloudTag, state: 'queued', accorLoop: true, portalUrl: url });
     await gpAccGh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { test: '', tag: gpCloudTag, hid, portal_url: url } }) });
+    gpAccorRunWin(true);
     gpAccPoll(gpCloudTag);
     showToast('☁️ Accor Loop started again', 'ok');
   } catch (e) { showToast(e.message, 'err'); }
@@ -280,6 +281,7 @@ async function gpAccCloudEnroll(test) {
     await fbSet('enrollLive', { at: Date.now(), started: Date.now(), state: 'run', step: 'queued', tag: gpCloudTag, test: !!test, n: rows.length, done: 0, note: 'Starting Accor Loop cloud computer…', con: [] });
     await gpAccGh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { test: test ? '1' : '', tag: gpCloudTag, hid, portal_url: url } }) });
     gpCloudPaint({ at: Date.now(), started: Date.now(), state: 'run', step: 'queued', tag: gpCloudTag, test: !!test, n: rows.length, done: 0, note: 'GitHub accepted the run · waiting for the cloud browser…', con: [{ t: Date.now(), g: 'SYS', m: 'Run dispatched · waiting for GitHub Actions' }] });
+    gpAccorRunWin(true);
     gpAccPoll(gpCloudTag);
     showToast(test ? '🧪 Accor Loop test started — nothing will be submitted' : '☁️ Accor Loop enrollment started', 'ok');
   } catch (e) { showToast(e.message, 'err'); gpCloudPaint({ at: Date.now(), state: 'error', note: e.message, con: [{ t: Date.now(), g: 'ERR', m: e.message }] }); }
@@ -318,6 +320,16 @@ function gpAgentPaint(a) {
   el.innerHTML = on ? `🟢 Duty PC ready${a.name ? ' · ' + escapeHtml(a.name) : ''}` : a ? `⚪ Duty PC offline — last seen ${new Date(+a.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : '⚪ No duty PC yet — switch it on there (below)';
   el.className = 'gp-agent-st ' + (on ? 'on' : 'off');
 }
+function gpAccorRunWin(open) {
+  let w = document.getElementById('gpAccorRunModal');
+  if (!w) {
+    w = document.createElement('div'); w.id = 'gpAccorRunModal'; w.className = 'gp-accor-modal';
+    w.innerHTML = '<div class="gp-accor-modal-bg" data-gp-close="1"></div><section class="gp-accor-modal-card" role="dialog" aria-modal="true" aria-label="Accor Loop cloud computer"><header class="gp-accor-modal-h"><span class="gp-accor-modal-ic">☁️</span><div><b>Accor Loop · cloud computer</b><small id="gpAccorModalSub">Live runner</small></div><button type="button" class="gp-accor-modal-x" data-gp-close="1" aria-label="Close">✕</button></header><div class="gp-accor-modal-b" id="gpAccorModalBody"></div></section>';
+    document.body.appendChild(w);
+    w.addEventListener('click', e => { if (e.target.closest('[data-gp-close]')) gpAccorRunWin(false); });
+  }
+  w.classList.toggle('on', open !== false);
+}
 function gpCloudPaint(v) {
   const box = document.getElementById('gpCloudLive'); if (!box || !v) return;
   box.hidden = false;
@@ -332,6 +344,9 @@ function gpCloudPaint(v) {
     <div class="gp-cl-bar"><i style="width:${Math.min(100, pct)}%"></i></div>
     <div class="gp-cl-meta"><span>${Math.min(+v.done || 0, +v.n || 0)} / ${+v.n || 0} guests</span><span class="gp-cl-action">${escapeHtml(v.action || (v.step === 'queued' ? 'Waiting for GitHub' : v.step === 'open' ? 'Opening browser' : v.step === 'enroll' ? 'Worker active' : v.step || '—'))}</span>${runLink}<span>${logs.length} log entries</span></div>
     <div class="gp-cl-details">${logs.length ? `<div class="gp-cl-con">${logs.slice(-18).map(l => `<div><span>${hh(l.t)}</span><em>${escapeHtml(l.g)}</em>${escapeHtml(l.m)}</div>`).join('')}</div>` : '<div class="gp-cl-empty">Waiting for the cloud runner to report its first step…</div>'}</div>`;
+  const modalBody = document.getElementById('gpAccorModalBody');
+  if (modalBody) modalBody.innerHTML = box.innerHTML;
+  const modalSub = document.getElementById('gpAccorModalSub'); if (modalSub) modalSub.textContent = v.state === 'run' ? 'Running in a temporary GitHub computer' : (v.state === 'done' ? 'Finished · results saved' : v.state === 'error' ? 'Runner stopped with an error' : 'Stopped safely');
   if (v.state === 'done' && !v.test) setTimeout(gpLoadLog, 800);
 }
 function gpCloudToggleMin() {

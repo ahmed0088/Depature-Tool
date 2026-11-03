@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 508, items: [
+    "🖥️ Accor Loop now opens a large Neorcha-style cloud-run modal with step status, progress, live console, hide/show console, stop, run again, GitHub link, and close-without-stopping behavior.",
+  ] },
   { v: 507, items: [
     "☁️ Accor Loop now uses the same hosted-cloud flow as Neorcha: start from HotelOps, provide the Accor Loop URL, and the temporary cloud browser uses only the selected guest data. No duty PC, helper, console, Accor ID, or Accor password is needed.",
   ] },
