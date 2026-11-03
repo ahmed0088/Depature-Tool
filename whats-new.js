@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 502, items: [
+    "📱 Fixed phone navigation: the bottom menu and More drawer now stay above the page and respond reliably to taps, including on iPhone and Android browsers.",
+  ] },
   { v: 501, items: [
     "☁️ Accor Loop cloud enrollment: after Neorcha data arrives in Guest Pipeline, provide the secure.guestinternet.com enrollment URL once, review the list, tick Agreed and choose a civility, then run only those guests in a GitHub browser. Test Accor Loop checks the flow without submitting anything; results return to the shared enrollment tracker.",
   ] },

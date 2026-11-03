@@ -2343,8 +2343,11 @@ kbd {
     height: 60px;
     background: var(--bg2);
     border-top: 1px solid var(--border);
-    z-index: 300;
+    z-index: 10000;
     align-items: stretch;
+    isolation: isolate;
+    pointer-events: auto;
+    touch-action: manipulation;
   }
   .mob-nav-btn {
     flex: 1;
@@ -2356,6 +2359,8 @@ kbd {
     cursor: pointer;
     padding: 6px 0 8px;
     position: relative;
+    pointer-events: auto;
+    touch-action: manipulation;
     transition: color 0.15s;
     -webkit-tap-highlight-color: transparent;
   }
@@ -2382,7 +2387,9 @@ kbd {
   .mob-more-overlay {
     position: fixed; inset: 0;
     background: rgba(0,0,0,0.5);
-    z-index: 290;
+    z-index: 9998;
+    pointer-events: auto;
+    touch-action: manipulation;
   }
   .mob-more-drawer {
     position: fixed;
@@ -2390,8 +2397,10 @@ kbd {
     background: var(--card);
     border-top: 1px solid var(--border);
     border-radius: 16px 16px 0 0;
-    z-index: 295;
+    z-index: 9999;
     padding: 16px 12px 12px;
+    pointer-events: auto;
+    touch-action: manipulation;
     max-height: 80vh;
     overflow-y: auto;
   }

@@ -34,7 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
-<meta name="ho-version" content="v501"/>
+<meta name="ho-version" content="v502"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="themes.css"/>
@@ -5206,7 +5206,7 @@ async function appInit() {
 </div>
 
 <!-- ── MOBILE BOTTOM NAV ── -->
-<nav class="mob-nav" id="mobNav">
+<nav class="mob-nav" id="mobNav" aria-label="Mobile navigation">
   <button class="mob-nav-btn active" onclick="showPanel('home');mobNavSwitch(this)" data-panel="home">
     <span class="mob-nav-icon">🏠</span>
     <span class="mob-nav-lbl">Home</span>
@@ -5234,8 +5234,8 @@ async function appInit() {
 </nav>
 
 <!-- Mobile "More" drawer -->
-<div class="mob-more-overlay" id="mobMoreOverlay" onclick="toggleMobMore()" style="display:none;"></div>
-<div class="mob-more-drawer" id="mobMoreDrawer" style="display:none;">
+<div class="mob-more-overlay" id="mobMoreOverlay" onclick="toggleMobMore()" style="display:none;" aria-hidden="true"></div>
+<div class="mob-more-drawer" id="mobMoreDrawer" style="display:none;" role="dialog" aria-label="All HotelOps features">
 
   <!-- Header: title + Firebase dot + theme switcher -->
   <div class="mob-drawer-header">
