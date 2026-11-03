@@ -23,7 +23,7 @@ function tlog(group, message) {
   return entry.m;
 }
 const say = message => console.log(new Date().toISOString().slice(11, 19) + '  ' + tlog('SYS', message));
-const key = email => String(email || '').toLowerCase().replace(/[.#$\[\]/@]/g, '_');
+const key = email => String(email || '').toLowerCase().replace(/[.#$\[\]\\/@]/g, '_');
 const fail = (message, code = 1) => {
   const safe = tlog('ERR', message);
   console.error('::error::' + safe);
