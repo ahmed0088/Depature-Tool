@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 509, items: [
+    "🔗 Accor Loop URL field enlarged for phones: larger text, a taller tap target, clearer focus state, and guidance to paste the complete link.",
+  ] },
   { v: 508, items: [
     "🖥️ Accor Loop now opens a large Neorcha-style cloud-run modal with step status, progress, live console, hide/show console, stop, run again, GitHub link, and close-without-stopping behavior.",
   ] },
