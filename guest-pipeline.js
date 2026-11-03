@@ -329,7 +329,7 @@ function gpCloudPaint(v) {
   const controls = active ? `<button type="button" class="gp-cl-stop" onclick="gpAccControl('stop')">■ Stop</button>` : `<button type="button" class="gp-cl-start" onclick="gpAccCloudRestart()">▶ Run again</button>`;
   box.innerHTML = `<div class="gp-cl-top"><b>${v.state === 'done' ? '✅' : v.state === 'stopped' ? '⏹' : v.state === 'error' ? '⛔' : '⏳'} ${v.test ? '🧪 Test run · ' : ''}${escapeHtml(v.note || '')}</b><span class="gp-cl-actions">${controls}<button type="button" class="gp-cl-min" onclick="gpCloudToggleMin()" aria-label="Minimize log">⌃</button></span></div>
     <div class="gp-cl-bar"><i style="width:${Math.min(100, pct)}%"></i></div>
-    <div class="gp-cl-meta"><span>${Math.min(+v.done || 0, +v.n || 0)} / ${+v.n || 0} guests</span>${runLink}<span>${logs.length} log entries</span></div>
+    <div class="gp-cl-meta"><span>${Math.min(+v.done || 0, +v.n || 0)} / ${+v.n || 0} guests</span><span class="gp-cl-action">${escapeHtml(v.action || (v.step === 'queued' ? 'Waiting for GitHub' : v.step === 'open' ? 'Opening browser' : v.step === 'enroll' ? 'Worker active' : v.step || '—'))}</span>${runLink}<span>${logs.length} log entries</span></div>
     <div class="gp-cl-details">${logs.length ? `<div class="gp-cl-con">${logs.slice(-18).map(l => `<div><span>${hh(l.t)}</span><em>${escapeHtml(l.g)}</em>${escapeHtml(l.m)}</div>`).join('')}</div>` : '<div class="gp-cl-empty">Waiting for the cloud runner to report its first step…</div>'}</div>`;
   if (v.state === 'done' && !v.test) setTimeout(gpLoadLog, 800);
 }

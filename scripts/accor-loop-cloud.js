@@ -66,9 +66,9 @@ async function main() {
   const page = await context.newPage();
   page.on('console', m => {
     const t = m.text();
-    if (/SUCCESS|result:|SUMMARY|error|warn|parsed|starting|processed|All records|loaded|portal|guest/i.test(t)) {
+    if (/SUCCESS|result:|SUMMARY|error|warn|parsed|starting|processed|All records|loaded|portal|guest|Title|Country|submit|form|fresh/i.test(t)) {
       const level = m.type() === 'error' ? 'ERR' : /warn/i.test(m.type()) ? 'WARN' : 'BOT';
-      tlog(level, t); live({ step: 'enroll', note: mask(t) });
+      tlog(level, t); live({ step: 'enroll', action: mask(t), note: mask(t) });
     }
   });
   const state = { ["__accor_portal_url"]: String(E.PORTAL_URL || 'https://secure.guestinternet.com/portal-system/portal/'), ["__accor_records"]: pipeRows(rows), ["__accor_enabled"]: true, ["__accor_stop_signal"]: false, ["__accor_diagnostic_only"]: test, ["__accor_loop_state"]: null, ["__accor_logs"]: [] };
@@ -77,7 +77,7 @@ async function main() {
     Object.keys(seed).forEach(k => localStorage.setItem('__accor_cloud_' + k, JSON.stringify(seed[k])));
     const read = k => { try { const v = localStorage.getItem('__accor_cloud_' + k); return v == null ? null : JSON.parse(v); } catch (_) { return null; } };
     const write = obj => { Object.keys(obj || {}).forEach(k => localStorage.setItem('__accor_cloud_' + k, JSON.stringify(obj[k]))); };
-    window.chrome = { storage: { local: { get(keys, cb) { const names = Array.isArray(keys) ? keys : Object.keys(keys || {}); const out = {}; names.forEach(k => out[k] = read(k)); if (cb) cb(out); return Promise.resolve(out); }, set(obj, cb) { write(obj); if (cb) cb(); return Promise.resolve(); } } }, runtime: { sendMessage(msg) { if (msg && msg.type === 'log') console.log('[accor-loop]', msg.entry && msg.entry.msg || 'log'); if (msg && msg.type === 'freshTab') location.reload(); return Promise.resolve({ ok: true }); } } };
+    window.chrome = { storage: { local: { get(keys, cb) { const names = Array.isArray(keys) ? keys : Object.keys(keys || {}); const out = {}; names.forEach(k => out[k] = read(k)); if (cb) cb(out); return Promise.resolve(out); }, set(obj, cb) { write(obj); if (cb) cb(); return Promise.resolve(); } } }, runtime: { sendMessage(msg) { if (msg && msg.type === 'log') { const entry = Object.assign({ t: Date.now(), g: 'BOT' }, msg.entry || {}); const old = read('__accor_logs') || []; old.push(entry); if (old.length > 100) old.splice(0, old.length - 100); write({ __accor_logs: old }); console.log('[accor-loop]', entry.msg || 'log'); } if (msg && msg.type === 'freshTab') location.reload(); return Promise.resolve({ ok: true }); } } };
   }, state);
   try {
     say('Opening Accor Loop portal…');
@@ -88,9 +88,15 @@ async function main() {
     await page.addScriptTag({ path: path.join(ROOT, 'scripts', 'accor-loop-content.js') });
     say(test ? 'Test mode: checking the form — nothing will be submitted…' : 'Enrollment worker is running…');
     await live({ step: 'enroll', note: test ? 'Test mode: checking the form, nothing will be submitted…' : 'Enrollment worker is running…' });
-    let done = false;
+    let done = false, seenWorkerLogs = 0;
     for (let i = 0; i < 3600 && !done; i++) {
       await new Promise(r => setTimeout(r, 1000));
+      const workerLogs = await page.evaluate(() => { try { return JSON.parse(localStorage.getItem('__accor_cloud___accor_logs') || '[]'); } catch (_) { return []; } });
+      if (workerLogs.length > seenWorkerLogs) {
+        workerLogs.slice(seenWorkerLogs).forEach(x => tlog(x.level === 'error' ? 'ERR' : x.level === 'warn' ? 'WARN' : 'BOT', x.msg));
+        seenWorkerLogs = workerLogs.length;
+        await live({ step: 'enroll', action: mask(workerLogs[workerLogs.length - 1].msg || 'Worker activity'), note: mask(workerLogs[workerLogs.length - 1].msg || 'Worker activity') });
+      }
       if (i % 3 === 0 && await stopRequested()) {
         await page.evaluate(() => { try { localStorage.setItem('__accor_cloud___accor_stop_signal', JSON.stringify(true)); } catch (_) {} });
         await markStopped('Stopped from HotelOps — no more guests will be submitted.');
@@ -98,7 +104,7 @@ async function main() {
       }
       const s = await page.evaluate(() => { const read = k => { try { return JSON.parse(localStorage.getItem('__accor_cloud_' + k)); } catch (_) { return null; } }; return { state: read('__accor_loop_state'), enabled: read('__accor_enabled') }; });
       done = s.enabled === false;
-      if (i % 3 === 0) await live({ step: 'enroll', done: Math.max(0, Math.min(rows.length, Number(s.state && s.state.nextIndex || 0))), note: test ? 'Test mode running — nothing will be submitted' : 'Accor Loop is processing the guest list…' });
+      if (i % 3 === 0) await live({ step: 'enroll', done: Math.max(0, Math.min(rows.length, Number(s.state && s.state.nextIndex || 0))), action: 'Worker heartbeat · browser is active', note: test ? 'Test mode running — nothing will be submitted' : 'Accor Loop is processing the guest list…' });
     }
     const result = await page.evaluate(() => { try { return JSON.parse(window.localStorage.getItem('__accor_cloud___accor_loop_state') || '{}'); } catch (_) { return {}; } });
     const results = Array.isArray(result.results) ? result.results : [];

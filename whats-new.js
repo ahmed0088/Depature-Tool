@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 505, items: [
+    "🔎 Accor Loop now shows the exact background action in the live panel, including portal loading, form preparation, title/country selection, submit attempts, result detection, fresh-page resets, and safe stop checks.",
+  ] },
   { v: 504, items: [
     "⏹ Accor Loop now has GUI controls: stop a running cloud job safely, see when it stopped, and run the selected guests again without leaving Guest Pipeline.",
   ] },

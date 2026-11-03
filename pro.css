@@ -3706,11 +3706,11 @@ html, body { background: var(--bg); }
 .gp-cl-bar{height:6px;border-radius:99px;background:var(--card);overflow:hidden;margin:8px 0}.gp-cl-bar i{display:block;height:100%;background:linear-gradient(90deg,#38bdf8,#6366f1);transition:width .6s}
 .gp-cloud-live.done .gp-cl-bar i{background:linear-gradient(90deg,#10b981,#22c55e)}.gp-cloud-live.error .gp-cl-bar i{background:#f43f5e}
 .gp-cl-con{font:.7rem/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#05080f;color:#cbd5e1;border-radius:9px;padding:8px 10px;max-height:150px;overflow:auto}
-.gp-cl-con span{color:#475569;margin-right:8px}.gp-cl-con em{font-style:normal;font-weight:700;color:#38bdf8;margin-right:8px;display:inline-block;min-width:34px}.gp-cl-meta{display:flex;gap:10px;align-items:center;justify-content:space-between;color:var(--text3);font-size:.68rem;font-family:var(--mono)}.gp-cl-run{color:var(--accent);text-decoration:none}.gp-cl-run:hover{text-decoration:underline}.gp-cl-empty{padding:10px;color:#64748b;font: .7rem ui-monospace,SFMono-Regular,Menlo,monospace}.gp-cl-minimized .gp-cl-bar,.gp-cl-minimized .gp-cl-meta,.gp-cl-minimized .gp-cl-details{display:none}
+.gp-cl-con span{color:#475569;margin-right:8px}.gp-cl-con em{font-style:normal;font-weight:700;color:#38bdf8;margin-right:8px;display:inline-block;min-width:34px}.gp-cl-meta{display:flex;gap:10px;align-items:center;justify-content:space-between;color:var(--text3);font-size:.68rem;font-family:var(--mono);flex-wrap:wrap}.gp-cl-action{color:var(--accent);font-weight:700}.gp-cl-run{color:var(--accent);text-decoration:none}.gp-cl-run:hover{text-decoration:underline}.gp-cl-empty{padding:10px;color:#64748b;font: .7rem ui-monospace,SFMono-Regular,Menlo,monospace}.gp-cl-minimized .gp-cl-bar,.gp-cl-minimized .gp-cl-meta,.gp-cl-minimized .gp-cl-details{display:none}
 .gp-cloud-set{margin-top:10px;font-size:.82rem;color:var(--text3)}.gp-cloud-set summary{cursor:pointer}
 .gp-agent-st{margin-top:10px;display:inline-block;padding:4px 10px;border-radius:99px;font-size:.78rem;border:1px solid var(--border);background:var(--card)}.gp-agent-st.on{border-color:color-mix(in srgb,#10b981 55%,var(--border));color:var(--text)}
 .gp-agent-on{display:flex;gap:8px;align-items:center;margin:10px 0 6px;font-size:.88rem;color:var(--text);cursor:pointer}
-:root { --ho-css: "v504"; }
+:root { --ho-css: "v505"; }
 .rent-bp-card:empty { display: none; }
 .rent-bp-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 10px; } .rent-bp-h span { color: var(--text3); font-size: .78rem; }
 .rent-bp { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
