@@ -1,49 +1,18 @@
-name: ALL Enroll (cloud)
-# Enrolls in ALL the guests who AGREED at the desk (Guest Pipeline: Consent ticked + Mr/Ms), on fc.accor.net,
-# with the same ALL Enroll v19 script staff paste by hand (scripts/enroll-cloud.js). Started from HotelOps →
-# Guest Pipeline → "☁️ Enroll in the cloud" (or Run workflow). Never runs on a schedule: a person starts it.
-# fc.accor.net is inside Accor's network, so this runs on the hotel's own computer — a GitHub self-hosted runner
-# on the duty PC labelled "hotel" (it calls out to GitHub; nothing is opened in the hotel's network).
+name: Legacy ACDC enrollment (disabled)
+# Retired: use the Accor Loop cloud workflow instead. This placeholder keeps old links
+# from silently starting the legacy fc.accor.net / A.C.D.C automation.
 on:
   workflow_dispatch:
     inputs:
-      test:
-        description: 'Test run: log in, open the enroll page, check the list — send nothing (1 = yes)'
+      retired:
+        description: 'This workflow is retired. Use Accor Loop (cloud).'
         required: false
-        default: ''
-      tag:
-        description: 'Leave empty (HotelOps fills it, to follow its own run)'
-        required: false
-        default: ''
-      hid:
-        description: 'Leave empty (HotelOps fills it: the hotel whose list and tracker are used)'
-        required: false
-        default: ''
+        default: 'retired'
 permissions:
   contents: read
-concurrency:
-  group: enroll-cloud
-  cancel-in-progress: false
 jobs:
-  enroll:
-    if: github.repository == 'ahmed0088/depature-tool' && github.event_name == 'workflow_dispatch'
-    runs-on: [self-hosted, hotel]
-    timeout-minutes: 60
+  retired:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '22'
-      - name: Browser driver
-        run: npm install --no-save --no-audit --no-fund playwright-core@1.49.1
-      - name: Enroll
-        run: node scripts/enroll-cloud.js
-        env:
-          TEST: ${{ inputs.test }}
-          TAG: ${{ inputs.tag }}
-          HID: ${{ inputs.hid }}
-          ACDC_USER: ${{ secrets.ACDC_USER }}
-          ACDC_PASS: ${{ secrets.ACDC_PASS }}
-          HOTELOPS_EMAIL: ${{ secrets.HOTELOPS_EMAIL }}
-          HOTELOPS_PASS: ${{ secrets.HOTELOPS_PASS }}
-          HOTELOPS_HOTEL: ${{ secrets.HOTELOPS_HOTEL }}
+      - run: echo "This legacy ACDC enrollment workflow is retired. Use Accor Loop (cloud)."
