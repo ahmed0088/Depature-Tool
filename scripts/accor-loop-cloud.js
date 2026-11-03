@@ -95,6 +95,7 @@ async function main() {
     let done = false, seenWorkerLogs = 0;
     for (let i = 0; i < 3600 && !done; i++) {
       await new Promise(r => setTimeout(r, 1000));
+      const currentGuest = await page.evaluate(() => { try { return JSON.parse(localStorage.getItem('__accor_cloud___accor_current_guest') || 'null'); } catch (_) { return null; } });
       const workerLogs = await page.evaluate(() => { try { return JSON.parse(localStorage.getItem('__accor_cloud___accor_logs') || '[]'); } catch (_) { return []; } });
       if (workerLogs.length > seenWorkerLogs) {
         workerLogs.slice(seenWorkerLogs).forEach(x => tlog(x.level === 'error' ? 'ERR' : x.level === 'warn' ? 'WARN' : 'BOT', x.msg));
@@ -108,7 +109,7 @@ async function main() {
       }
       const s = await page.evaluate(() => { const read = k => { try { return JSON.parse(localStorage.getItem('__accor_cloud_' + k)); } catch (_) { return null; } }; return { state: read('__accor_loop_state'), enabled: read('__accor_enabled') }; });
       done = s.enabled === false;
-      if (i % 3 === 0) await live({ step: 'enroll', done: Math.max(0, Math.min(rows.length, Number(s.state && s.state.nextIndex || 0))), action: 'Worker heartbeat · browser is active', note: test ? 'Test mode running — nothing will be submitted' : 'Accor Loop is processing the guest list…' });
+      if (i % 3 === 0) await live({ step: 'enroll', done: Math.max(0, Math.min(rows.length, Number(s.state && s.state.nextIndex || 0))), current: currentGuest || null, action: currentGuest ? 'Enrolling guest ' + currentGuest.index + ' of ' + currentGuest.total : 'Worker heartbeat · browser is active', note: currentGuest ? 'Enrolling ' + currentGuest.name + ' · confirmation ' + currentGuest.conf : (test ? 'Test mode running — nothing will be submitted' : 'Accor Loop is processing the guest list…') });
     }
     const result = await page.evaluate(() => { try { return JSON.parse(window.localStorage.getItem('__accor_cloud___accor_loop_state') || '{}'); } catch (_) { return {}; } });
     const results = Array.isArray(result.results) ? result.results : [];

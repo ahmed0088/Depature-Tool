@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 511, items: [
+    "👤 Accor Loop live modal now shows exactly which guest is being enrolled, guest number, confirmation number, country, and whether phone/email data is present.",
+  ] },
   { v: 510, items: [
     "🛠️ Fixed Accor Loop cloud startup: Firebase configuration parsing and HotelOps hotel lookup now work like the Neorcha runner, including fallback to the signed-in account's assigned hotel.",
   ] },

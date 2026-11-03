@@ -7,6 +7,7 @@
   const RECORDS_KEY    = "__accor_records";
   const STOP_SIGNAL    = "__accor_stop_signal";
   const DIAGNOSTIC_KEY = "__accor_diagnostic_only";
+  const CURRENT_KEY    = "__accor_current_guest";
 
   const DEFAULT_TITLE    = "Mr.";
   // Portal options are exactly: Ms. | Prof. | Mr. | Mrs | Dr.
@@ -778,7 +779,8 @@
   }
 
   async function processOne(rec, idx, total) {
-    log("═════ [" + (idx + 1) + "/" + total + "] " + rec.email + " ═════");
+    await cset({ [CURRENT_KEY]: { index: idx + 1, total, conf: rec.conf, name: rec.first_name + " " + rec.last_name, title: rec.title, country: rec.country, phone: rec.phone ? "provided" : "not provided", email: "provided" } });
+    log("═════ [" + (idx + 1) + "/" + total + "] " + rec.first_name + " " + rec.last_name + " · " + rec.conf + " ═════");
     window.__lastEnrollResult = null;
     window.__lastAuthError    = null;
     window.__lastModalText    = null;
@@ -887,6 +889,7 @@
     if (i < records.length - 1) await sleep(BETWEEN_GUESTS);
   }
 
+  await cset({ [CURRENT_KEY]: null });
   log("══════ SUMMARY ══════");
   const counts = {};
   results.forEach(r => {

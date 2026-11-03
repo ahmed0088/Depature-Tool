@@ -339,9 +339,11 @@ function gpCloudPaint(v) {
   const runLink = v.run ? `<a class="gp-cl-run" href="${escapeHtml(v.run)}" target="_blank" rel="noopener">Open GitHub run ↗</a>` : '';
   const logs = Array.isArray(v.con) ? v.con : [];
   const active = v.state === 'run' && v.step !== 'stopped' && v.step !== 'done';
+  const cg = v.current || null;
+  const guestCard = cg ? `<div class="gp-cl-guest"><span class="gp-cl-guest-ic">👤</span><div><b>Now enrolling: ${escapeHtml(cg.title || '')} ${escapeHtml(cg.name || 'Guest')}</b><small>Guest ${escapeHtml(String(cg.index || '?'))} of ${escapeHtml(String(cg.total || v.n || '?'))} · Confirmation ${escapeHtml(String(cg.conf || '—'))}</small><small>Country: ${escapeHtml(String(cg.country || '—'))} · Phone: ${escapeHtml(String(cg.phone || '—'))} · Email: ${escapeHtml(String(cg.email || '—'))}</small></div></div>` : '';
   const controls = active ? `<button type="button" class="gp-cl-stop" onclick="gpAccControl('stop')">■ Stop</button>` : `<button type="button" class="gp-cl-start" onclick="gpAccCloudRestart()">▶ Run again</button>`;
   box.innerHTML = `<div class="gp-cl-top"><b>${v.state === 'done' ? '✅' : v.state === 'stopped' ? '⏹' : v.state === 'error' ? '⛔' : '⏳'} ${v.test ? '🧪 Test run · ' : ''}${escapeHtml(v.note || '')}</b><span class="gp-cl-actions">${controls}<button type="button" class="gp-cl-min" onclick="gpCloudToggleMin()" aria-label="Minimize log">⌃</button></span></div>
-    <div class="gp-cl-bar"><i style="width:${Math.min(100, pct)}%"></i></div>
+    <div class="gp-cl-bar"><i style="width:${Math.min(100, pct)}%"></i></div>${guestCard}
     <div class="gp-cl-meta"><span>${Math.min(+v.done || 0, +v.n || 0)} / ${+v.n || 0} guests</span><span class="gp-cl-action">${escapeHtml(v.action || (v.step === 'queued' ? 'Waiting for GitHub' : v.step === 'open' ? 'Opening browser' : v.step === 'enroll' ? 'Worker active' : v.step || '—'))}</span>${runLink}<span>${logs.length} log entries</span></div>
     <div class="gp-cl-details">${logs.length ? `<div class="gp-cl-con">${logs.slice(-18).map(l => `<div><span>${hh(l.t)}</span><em>${escapeHtml(l.g)}</em>${escapeHtml(l.m)}</div>`).join('')}</div>` : '<div class="gp-cl-empty">Waiting for the cloud runner to report its first step…</div>'}</div>`;
   const modalBody = document.getElementById('gpAccorModalBody');
