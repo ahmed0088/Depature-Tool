@@ -54,7 +54,9 @@ async function main() {
   if (!rows.length) fail('No consenting guests with civility and email were found in enrollJob');
   const tag = String(E.TAG || (job && job.tag) || ('accor' + Date.now().toString(36))).slice(0, 40);
   const live = p => FB.patch('enrollLive', Object.assign({ at: Date.now(), tag, con: CON.slice(-60) }, p)).catch(() => {});
-  await FB.put('enrollLive', { at: Date.now(), started: Date.now(), state: 'run', step: 'open', tag, test, n: rows.length, done: 0, note: 'Opening Accor Loop portal…', con: CON.slice(-60) });
+  const stopRequested = async () => { try { const v = await FB.get('enrollLive'); return v && v.tag === tag && (v.control === 'stop' || v.stopRequested === true); } catch (_) { return false; } };
+  const markStopped = async note => { tlog('STOP', note); await FB.patch('enrollJob', { state: 'stopped', stoppedAt: Date.now() }); await live({ state: 'stopped', step: 'stopped', note, con: CON.slice(-60) }); };
+  await FB.put('enrollLive', { at: Date.now(), started: Date.now(), state: 'run', step: 'open', tag, test, n: rows.length, done: 0, control: 'run', note: 'Opening Accor Loop portal…', con: CON.slice(-60) });
   say((test ? 'TEST RUN — nothing will be submitted · ' : '') + 'Starting ' + rows.length + ' consenting guest(s)');
   await live({ step: 'open', note: test ? 'Test run started — opening Accor Loop…' : 'Accor Loop cloud run started — opening portal…' });
   let chromium; try { ({ chromium } = require('playwright')); } catch (_) { try { ({ chromium } = require('playwright-core')); } catch (_) { fail('Playwright is not installed'); } }
@@ -89,6 +91,11 @@ async function main() {
     let done = false;
     for (let i = 0; i < 3600 && !done; i++) {
       await new Promise(r => setTimeout(r, 1000));
+      if (i % 3 === 0 && await stopRequested()) {
+        await page.evaluate(() => { try { localStorage.setItem('__accor_cloud___accor_stop_signal', JSON.stringify(true)); } catch (_) {} });
+        await markStopped('Stopped from HotelOps — no more guests will be submitted.');
+        return;
+      }
       const s = await page.evaluate(() => { const read = k => { try { return JSON.parse(localStorage.getItem('__accor_cloud_' + k)); } catch (_) { return null; } }; return { state: read('__accor_loop_state'), enabled: read('__accor_enabled') }; });
       done = s.enabled === false;
       if (i % 3 === 0) await live({ step: 'enroll', done: Math.max(0, Math.min(rows.length, Number(s.state && s.state.nextIndex || 0))), note: test ? 'Test mode running — nothing will be submitted' : 'Accor Loop is processing the guest list…' });

@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 504, items: [
+    "⏹ Accor Loop now has GUI controls: stop a running cloud job safely, see when it stopped, and run the selected guests again without leaving Guest Pipeline.",
+  ] },
   { v: 503, items: [
     "☁️ Accor Loop now has a live runner console with privacy-safe steps, progress, GitHub run link, and a minimize button. The panel stays visible while the cloud browser works.",
   ] },

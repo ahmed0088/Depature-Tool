@@ -240,6 +240,33 @@ async function gpAccGh(path, opt) {
   if (!r.ok) throw new Error('GitHub answered ' + r.status);
   return r.status === 204 ? null : r.json();
 }
+async function gpAccControl(action) {
+  const live = { at: Date.now(), control: action === 'stop' ? 'stop' : 'run', stopRequested: action === 'stop' };
+  try {
+    if (action === 'stop' && !confirm('Stop the Accor Loop cloud run? It will finish the current browser action, then stop before the next guest.')) return;
+    await fbUpdate('enrollLive', live);
+    if (action === 'stop') {
+      gpCloudPaint({ at: Date.now(), state: 'run', step: 'stopping', note: 'Stop requested — finishing the current action…', con: [{ t: Date.now(), g: 'STOP', m: 'Stop requested from HotelOps' }] });
+      showToast('Stop requested — the cloud runner will stop safely', 'ok');
+    } else {
+      showToast('Start requested', 'ok');
+    }
+  } catch (e) { showToast('Could not send control command: ' + e.message, 'err'); }
+}
+async function gpAccCloudRestart() {
+  const url = (document.getElementById('gpAccorUrl')?.value || '').trim();
+  const hid = typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '';
+  if (!url || !gpEnrollRows().length) { showToast('Review the selected guests and Accor Loop URL first', 'err'); return; }
+  if (!confirm('Start Accor Loop again for the selected guests?')) return;
+  gpCloudTag = 'acc' + Date.now().toString(36);
+  try {
+    await fbUpdate('enrollLive', { at: Date.now(), control: 'run', stopRequested: false, state: 'run', step: 'queued', tag: gpCloudTag, test: false, n: gpEnrollRows().length, done: 0, note: 'Restart requested — waiting for GitHub…', con: [{ t: Date.now(), g: 'SYS', m: 'Run again requested' }] });
+    await fbSet('enrollJob', { tsv: gpEnrollTsv(gpEnrollRows()), n: gpEnrollRows().length, at: Date.now(), test: false, tag: gpCloudTag, state: 'queued', accorLoop: true, portalUrl: url });
+    await gpAccGh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { test: '', tag: gpCloudTag, hid, portal_url: url } }) });
+    gpAccPoll(gpCloudTag);
+    showToast('☁️ Accor Loop started again', 'ok');
+  } catch (e) { showToast(e.message, 'err'); }
+}
 async function gpAccCloudEnroll(test) {
   const rows = gpEnrollRows(); if (!rows.length) { showToast('Tick Agreed and choose a civility first', 'err'); return; }
   const url = (document.getElementById('gpAccorUrl')?.value || '').trim();
@@ -298,7 +325,9 @@ function gpCloudPaint(v) {
   box.className = 'gp-cloud-live ' + (v.state || '');
   const runLink = v.run ? `<a class="gp-cl-run" href="${escapeHtml(v.run)}" target="_blank" rel="noopener">Open GitHub run ↗</a>` : '';
   const logs = Array.isArray(v.con) ? v.con : [];
-  box.innerHTML = `<div class="gp-cl-top"><b>${v.state === 'done' ? '✅' : v.state === 'error' ? '⛔' : '⏳'} ${v.test ? '🧪 Test run · ' : ''}${escapeHtml(v.note || '')}</b><button type="button" class="gp-cl-min" onclick="gpCloudToggleMin()" aria-label="Minimize log">⌃</button></div>
+  const active = v.state === 'run' && v.step !== 'stopped' && v.step !== 'done';
+  const controls = active ? `<button type="button" class="gp-cl-stop" onclick="gpAccControl('stop')">■ Stop</button>` : `<button type="button" class="gp-cl-start" onclick="gpAccCloudRestart()">▶ Run again</button>`;
+  box.innerHTML = `<div class="gp-cl-top"><b>${v.state === 'done' ? '✅' : v.state === 'stopped' ? '⏹' : v.state === 'error' ? '⛔' : '⏳'} ${v.test ? '🧪 Test run · ' : ''}${escapeHtml(v.note || '')}</b><span class="gp-cl-actions">${controls}<button type="button" class="gp-cl-min" onclick="gpCloudToggleMin()" aria-label="Minimize log">⌃</button></span></div>
     <div class="gp-cl-bar"><i style="width:${Math.min(100, pct)}%"></i></div>
     <div class="gp-cl-meta"><span>${Math.min(+v.done || 0, +v.n || 0)} / ${+v.n || 0} guests</span>${runLink}<span>${logs.length} log entries</span></div>
     <div class="gp-cl-details">${logs.length ? `<div class="gp-cl-con">${logs.slice(-18).map(l => `<div><span>${hh(l.t)}</span><em>${escapeHtml(l.g)}</em>${escapeHtml(l.m)}</div>`).join('')}</div>` : '<div class="gp-cl-empty">Waiting for the cloud runner to report its first step…</div>'}</div>`;
