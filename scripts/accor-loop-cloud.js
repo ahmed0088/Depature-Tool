@@ -102,10 +102,18 @@ async function main() {
     await page.goto(state.__accor_portal_url, { waitUntil: 'domcontentloaded', timeout: 60000 });
     say('Portal loaded · starting the enrollment worker…');
     await page.waitForTimeout(1200);
-    await page.addScriptTag({ path: path.join(ROOT, 'scripts', 'accor-loop-content.js') });
+    // Inject as inline source rather than a file URL. Some portal CSP/browser combinations
+    // report addScriptTag(path) as loaded while never executing the async content worker.
+    const workerSource = fs.readFileSync(path.join(ROOT, 'scripts', 'accor-loop-content.js'), 'utf8');
+    await page.evaluate(src => {
+      const s = document.createElement('script');
+      s.type = 'text/javascript';
+      s.textContent = src;
+      (document.head || document.documentElement).appendChild(s);
+    }, workerSource);
     say(test ? 'Test mode: checking the form — nothing will be submitted…' : 'Enrollment worker is running…');
     await live({ step: 'enroll', note: test ? 'Test mode: checking the form, nothing will be submitted…' : 'Enrollment worker is running…' });
-    let done = false, seenWorkerLogs = 0;
+    let done = false, seenWorkerLogs = 0, workerStartedAt = Date.now(), lastWorkerEvidence = Date.now();
     for (let i = 0; i < 3600 && !done; i++) {
       await new Promise(r => setTimeout(r, 1000));
       const currentGuest = await page.evaluate(() => { try { return JSON.parse(localStorage.getItem('__accor_cloud___accor_current_guest') || 'null'); } catch (_) { return null; } });
@@ -113,14 +121,20 @@ async function main() {
       if (workerLogs.length > seenWorkerLogs) {
         workerLogs.slice(seenWorkerLogs).forEach(x => tlog(x.level === 'error' ? 'ERR' : x.level === 'warn' ? 'WARN' : 'BOT', x.msg));
         seenWorkerLogs = workerLogs.length;
+        lastWorkerEvidence = Date.now();
         await live({ step: 'enroll', action: mask(workerLogs[workerLogs.length - 1].msg || 'Worker activity'), note: mask(workerLogs[workerLogs.length - 1].msg || 'Worker activity') });
       }
+      if (workerLogs.length) lastWorkerEvidence = Date.now();
       if (i % 3 === 0 && await stopRequested()) {
         await page.evaluate(() => { try { localStorage.setItem('__accor_cloud___accor_stop_signal', JSON.stringify(true)); } catch (_) {} });
         await markStopped('Stopped from HotelOps — no more guests will be submitted.');
         return;
       }
       const s = await page.evaluate(() => { const read = k => { try { return JSON.parse(localStorage.getItem('__accor_cloud_' + k)); } catch (_) { return null; } }; return { state: read('__accor_loop_state'), enabled: read('__accor_enabled') }; });
+      if (currentGuest || (s && s.state)) lastWorkerEvidence = Date.now();
+      if (Date.now() - workerStartedAt > 45000 && Date.now() - lastWorkerEvidence > 45000) {
+        throw new Error('Enrollment worker produced no activity after portal load. The cloud browser could not start the shared extension worker.');
+      }
       done = s.enabled === false;
       if (i % 3 === 0) await live({ step: 'enroll', done: Math.max(0, Math.min(rows.length, Number(s.state && s.state.nextIndex || 0))), current: currentGuest || null, action: currentGuest ? 'Enrolling guest ' + currentGuest.index + ' of ' + currentGuest.total : 'Worker heartbeat · browser is active', note: currentGuest ? 'Enrolling ' + currentGuest.name + ' · confirmation ' + currentGuest.conf : (test ? 'Test mode running — nothing will be submitted' : 'Accor Loop is processing the guest list…') });
     }
