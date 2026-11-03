@@ -34,7 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
-<meta name="ho-version" content="v506"/>
+<meta name="ho-version" content="v507"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="themes.css"/>
@@ -1560,20 +1560,10 @@
             <button class="btn gold" id="gpCopyEnroll" onclick="gpCopyEnroll()" disabled>📋 Copy enrollment list</button>
             <button class="btn" onclick="gpCopyScript('enroll', this)">📋 Copy ALL Enroll script</button>
           </div>
-          <div class="gp-cloud"><div class="gp-cloud-h"><span>☁️</span><div><b>Or enroll from anywhere — the duty PC does it</b><small>Press Enroll here (even on your phone): the duty PC opens fc.accor.net in a background tab and runs ALL Enroll for the guests ticked <b>Agreed</b> above — only those. The results land in the tracker below by themselves.</small></div></div>
-            <div class="gp-agent-st off" id="gpAgentSt">⚪ …</div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn gold" id="gpCloudGo" onclick="gpCloudEnroll(false)" disabled>☁️ Enroll</button><button class="btn" id="gpCloudTest" onclick="gpCloudEnroll(true)" disabled>🧪 Test run (sends nothing)</button></div>
-            <div class="gp-cloud gp-accor-cloud" style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px"><div class="gp-sub">🌐 Accor Loop · web cloud computer</div><p class="gp-p">This does <b>not</b> use the duty PC. HotelOps starts a temporary GitHub-hosted computer from the web, opens the Accor Loop portal in a headless browser, and runs only the guests selected below. You can close your phone or minimize the console; the cloud computer keeps working.</p><div class="gp-accor-flow"><span>1 · Save list</span><i>→</i><span>2 · Start cloud PC</span><i>→</i><span>3 · Open portal</span><i>→</i><span>4 · Enroll + save results</span></div><label class="gp-accor-url">Accor Loop URL<input id="gpAccorUrl" type="url" placeholder="https://secure.guestinternet.com/..." autocomplete="url"></label><div class="gp-accor-actions"><button class="btn gold" id="gpAccCloudGo" onclick="gpAccCloudEnroll(false)" disabled>☁️ Start cloud computer</button><button class="btn" id="gpAccCloudTest" onclick="gpAccCloudEnroll(true)" disabled>🧪 Test cloud computer</button></div><small class="gp-accor-note">The cloud computer exists only for this run. It is created by GitHub Actions, runs the browser, writes safe progress to HotelOps, then shuts down.</small></div>
+          <div class="gp-cloud gp-accor-cloud" style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px"><div class="gp-sub">🌐 Accor Loop · web cloud computer</div><p class="gp-p">This does <b>not</b> use the duty PC. HotelOps starts a temporary GitHub-hosted computer from the web, opens the Accor Loop portal in a headless browser, and runs only the guests selected below. You can close your phone or minimize the console; the cloud computer keeps working.</p><div class="gp-accor-flow"><span>1 · Save list</span><i>→</i><span>2 · Start cloud PC</span><i>→</i><span>3 · Open portal</span><i>→</i><span>4 · Enroll + save results</span></div><label class="gp-accor-url">Accor Loop URL<input id="gpAccorUrl" type="url" placeholder="https://secure.guestinternet.com/..." autocomplete="url"></label><div class="gp-accor-actions"><button class="btn gold" id="gpAccCloudGo" onclick="gpAccCloudEnroll(false)" disabled>☁️ Start cloud computer</button><button class="btn" id="gpAccCloudTest" onclick="gpAccCloudEnroll(true)" disabled>🧪 Test cloud computer</button></div><small class="gp-accor-note">The cloud computer exists only for this run. It is created by GitHub Actions, runs the browser, writes safe progress to HotelOps, then shuts down.</small></div>
             <div class="gp-cloud-live" id="gpCloudLive" hidden></div>
-            <details class="gp-cloud-set"><summary>🖥️ On the duty PC (once)</summary>
-              <label class="gp-agent-on"><input type="checkbox" id="gpAgentOn" onchange="gpAgentToggle(this.checked)"> <b>This PC runs the enrollments</b></label>
-              <p>Tick it on the duty PC only. That PC then needs: <b>Chrome</b> open with a <b>HotelOps tab</b> (minimised is fine), the <b>HotelOps helper</b> downloaded again once (Settings → WhatsApp helper → Download, unzip over the old one, ↻ in chrome://extensions), and you <b>logged in to fc.accor.net</b> in that Chrome — if it asks to log in again, the box above tells you. No password is stored anywhere.</p></details></div>
-          <ol class="gp-howlist" style="margin-top:8px;">
-            <li>Open <b>fc.accor.net</b> → <b>Enroll ALL</b> (the page with the e-mail box).</li>
-            <li><b>F12</b> → <b>Console</b> → paste the ALL Enroll script → <b>Enter</b>. A blue panel opens.</li>
-            <li>Paste the enrollment list into the panel → <b>Parse</b> → <b>Start Enrollment</b>.</li>
-            <li>When it says <b>done</b>, click <b>Copy results for HotelOps</b> and go to step 4.</li>
-          </ol>
+          </div>
+          <div class="gp-cloud-set gp-cloud-web-only">✅ Web cloud only · no duty PC, browser helper, console, Accor login, ID, or password is required. HotelOps sends only the selected guest data and the provided Accor Loop URL to the temporary cloud browser.</div>
         </div>
       </div>
     </div>

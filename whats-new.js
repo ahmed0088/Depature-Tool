@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 507, items: [
+    "☁️ Accor Loop now uses the same hosted-cloud flow as Neorcha: start from HotelOps, provide the Accor Loop URL, and the temporary cloud browser uses only the selected guest data. No duty PC, helper, console, Accor ID, or Accor password is needed.",
+  ] },
   { v: 506, items: [
     "🖥️ Accor Loop is now clearly a normal web cloud run: HotelOps creates a temporary GitHub-hosted computer, runs the browser there, streams progress back, and shuts it down when finished. It no longer depends on the duty PC.",
   ] },
