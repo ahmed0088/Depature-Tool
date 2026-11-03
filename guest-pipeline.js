@@ -160,7 +160,7 @@ function gpRenderSummary() {
   if (all) { const can = gpRows.filter(gpCanEnroll); all.checked = can.length > 0 && can.every(r => r.consent); }
   const btn = document.getElementById('gpCopyEnroll');
   if (btn) btn.disabled = !ready;
-  ['gpCloudGo', 'gpCloudTest'].forEach(id => { const b = document.getElementById(id); if (b) b.disabled = !ready; });
+  ['gpCloudGo', 'gpCloudTest', 'gpAccCloudGo', 'gpAccCloudTest'].forEach(id => { const b = document.getElementById(id); if (b) b.disabled = !ready; });
 }
 
 function gpRender() {
@@ -229,6 +229,38 @@ async function gpCopyEnroll() {
 // ALL Enroll v19 on fc.accor.net in a background tab for the guests who AGREED, and the results go to the tracker (enrollLog).
 // enrollLive = what the phone sees; enrollAgent = the duty PC saying it is there (every minute).
 let gpCloudTag = '', gpAgentBusy = '';
+// GitHub-hosted Accor Loop runner. The same least-privilege start key used by the Neorcha cloud run is kept only in this browser.
+const GP_ACC_GH = { api: 'https://api.github.com/repos/ahmed0088/Depature-Tool/actions/workflows/accor-loop.yml', key: 'ho_gh_start_key_v1' };
+const gpAccKey = () => { try { return localStorage.getItem(GP_ACC_GH.key) || ''; } catch (_) { return ''; } };
+async function gpAccGh(path, opt) {
+  const token = gpAccKey(); if (!token) throw new Error('Set up the GitHub start key first in Neorcha → Run in the cloud.');
+  const r = await fetch(GP_ACC_GH.api + (path || ''), Object.assign({ headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + token, 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' } }, opt || {}));
+  if (r.status === 401) throw new Error('The GitHub start key was refused. Create a new one.');
+  if (r.status === 403 || r.status === 404) throw new Error('The start key needs Actions: Read and write for Depature-Tool.');
+  if (!r.ok) throw new Error('GitHub answered ' + r.status);
+  return r.status === 204 ? null : r.json();
+}
+async function gpAccCloudEnroll(test) {
+  const rows = gpEnrollRows(); if (!rows.length) { showToast('Tick Agreed and choose a civility first', 'err'); return; }
+  const url = (document.getElementById('gpAccorUrl')?.value || '').trim();
+  if (!/^https:\/\/secure\.guestinternet\.com\//i.test(url)) { showToast('Enter the Accor Loop enrollment URL first', 'err'); return; }
+  if (!test && !confirm(`Run Accor Loop enrollment for ${rows.length} selected guest(s)? Only guests marked Agreed will be sent.`)) return;
+  gpCloudTag = 'acc' + Date.now().toString(36); const hid = typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '';
+  try { localStorage.setItem('gp_accor_url_v1', url); } catch (_) {}
+  try {
+    await fbSet('enrollJob', { tsv: gpEnrollTsv(rows), n: rows.length, at: Date.now(), by: (currentProfile && currentProfile.name) || '', test: !!test, tag: gpCloudTag, state: 'queued', accorLoop: true, portalUrl: url });
+    await fbSet('enrollLive', { at: Date.now(), started: Date.now(), state: 'run', step: 'queued', tag: gpCloudTag, test: !!test, n: rows.length, done: 0, note: 'Starting Accor Loop cloud computer…', con: [] });
+    await gpAccGh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { test: test ? '1' : '', tag: gpCloudTag, hid, portal_url: url } }) });
+    showToast(test ? '🧪 Accor Loop test started — nothing will be submitted' : '☁️ Accor Loop enrollment started', 'ok');
+    gpAccPoll(gpCloudTag);
+  } catch (e) { showToast(e.message, 'err'); }
+}
+let gpAccPollTimer = 0;
+function gpAccPoll(tag) {
+  clearInterval(gpAccPollTimer); gpAccPollTimer = setInterval(async () => {
+    try { const j = await gpAccGh('/runs?per_page=5&event=workflow_dispatch'); const r = (j.workflow_runs || []).filter(x => Date.parse(x.created_at) >= Date.now() - 15 * 60000).pop(); if (r && r.status === 'completed') clearInterval(gpAccPollTimer); } catch (_) {}
+  }, 5000);
+}
 const GP_AGENT_KEY = 'ho_en_agent_v1';
 const gpIsAgent = () => { try { return localStorage.getItem(GP_AGENT_KEY) === '1'; } catch (_) { return false; } };
 const gpHasHelper = () => !!document.documentElement.dataset.hoEnHelper;
@@ -308,9 +340,10 @@ function gpAgentBeat() {
 (function gpCloudListen() {
   if (typeof fbListen !== 'function') return setTimeout(gpCloudListen, 1500);
   const t = document.getElementById('gpAgentOn'); if (t) t.checked = gpIsAgent();
+  const au = document.getElementById('gpAccorUrl'); if (au) { try { au.value = localStorage.getItem('gp_accor_url_v1') || ''; } catch (_) {} }
   fbListen('enrollLive', v => { if (v && (Date.now() - (+v.at || 0) < 24 * 3600e3)) gpCloudPaint(v); });
   fbListen('enrollAgent', gpAgentPaint);
-  fbListen('enrollJob', job => { if (job && job.state === 'queued') gpAgentTake(job); });
+  fbListen('enrollJob', job => { if (job && job.state === 'queued' && !job.accorLoop) gpAgentTake(job); });
   gpAgentBeat(); setInterval(gpAgentBeat, 60000);
 })();
 

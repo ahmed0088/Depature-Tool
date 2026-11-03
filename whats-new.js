@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 501, items: [
+    "☁️ Accor Loop cloud enrollment: after Neorcha data arrives in Guest Pipeline, provide the secure.guestinternet.com enrollment URL once, review the list, tick Agreed and choose a civility, then run only those guests in a GitHub browser. Test Accor Loop checks the flow without submitting anything; results return to the shared enrollment tracker.",
+  ] },
   { v: 500, items: [
     "🔎 DTCM filler: when the portal does not keep a day's figures, the message now shows what the page has against what was typed for each box (e.g. Room Revenue 41,432 (wanted 42,942)), and any message the portal put up — so the reason is plain at once.",
   ] },
