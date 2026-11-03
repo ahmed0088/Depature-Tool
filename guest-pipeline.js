@@ -229,7 +229,8 @@ async function gpCopyEnroll() {
 // ALL Enroll v19 on fc.accor.net in a background tab for the guests who AGREED, and the results go to the tracker (enrollLog).
 // enrollLive = what the phone sees; enrollAgent = the duty PC saying it is there (every minute).
 let gpCloudTag = '', gpAgentBusy = '';
-// GitHub-hosted Accor Loop runner. The same least-privilege start key used by the Neorcha cloud run is kept only in this browser.
+// GitHub-hosted Accor Loop runner. This is the normal web cloud path: GitHub creates a temporary
+// hosted computer, runs the browser there, reports progress through Firebase, then destroys it.
 const GP_ACC_GH = { api: 'https://api.github.com/repos/ahmed0088/Depature-Tool/actions/workflows/accor-loop.yml', key: 'ho_gh_start_key_v1' };
 const gpAccKey = () => { try { return localStorage.getItem(GP_ACC_GH.key) || ''; } catch (_) { return ''; } };
 async function gpAccGh(path, opt) {

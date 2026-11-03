@@ -34,7 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
-<meta name="ho-version" content="v505"/>
+<meta name="ho-version" content="v506"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="themes.css"/>
@@ -1563,7 +1563,7 @@
           <div class="gp-cloud"><div class="gp-cloud-h"><span>☁️</span><div><b>Or enroll from anywhere — the duty PC does it</b><small>Press Enroll here (even on your phone): the duty PC opens fc.accor.net in a background tab and runs ALL Enroll for the guests ticked <b>Agreed</b> above — only those. The results land in the tracker below by themselves.</small></div></div>
             <div class="gp-agent-st off" id="gpAgentSt">⚪ …</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn gold" id="gpCloudGo" onclick="gpCloudEnroll(false)" disabled>☁️ Enroll</button><button class="btn" id="gpCloudTest" onclick="gpCloudEnroll(true)" disabled>🧪 Test run (sends nothing)</button></div>
-            <div class="gp-cloud" style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px"><div class="gp-sub">🌐 Accor Loop cloud enrollment</div><p class="gp-p">Provide the Accor Loop URL once. After reviewing Neorcha data, tick Agreed and choose a civility, then run only the selected guests in a GitHub browser.</p><input id="gpAccorUrl" type="url" placeholder="https://secure.guestinternet.com/..." style="width:100%;box-sizing:border-box;margin:6px 0;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--input,#fff);color:var(--text)"><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn gold" id="gpAccCloudGo" onclick="gpAccCloudEnroll(false)" disabled>☁️ Run Accor Loop</button><button class="btn" id="gpAccCloudTest" onclick="gpAccCloudEnroll(true)" disabled>🧪 Test Accor Loop</button></div></div>
+            <div class="gp-cloud gp-accor-cloud" style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px"><div class="gp-sub">🌐 Accor Loop · web cloud computer</div><p class="gp-p">This does <b>not</b> use the duty PC. HotelOps starts a temporary GitHub-hosted computer from the web, opens the Accor Loop portal in a headless browser, and runs only the guests selected below. You can close your phone or minimize the console; the cloud computer keeps working.</p><div class="gp-accor-flow"><span>1 · Save list</span><i>→</i><span>2 · Start cloud PC</span><i>→</i><span>3 · Open portal</span><i>→</i><span>4 · Enroll + save results</span></div><label class="gp-accor-url">Accor Loop URL<input id="gpAccorUrl" type="url" placeholder="https://secure.guestinternet.com/..." autocomplete="url"></label><div class="gp-accor-actions"><button class="btn gold" id="gpAccCloudGo" onclick="gpAccCloudEnroll(false)" disabled>☁️ Start cloud computer</button><button class="btn" id="gpAccCloudTest" onclick="gpAccCloudEnroll(true)" disabled>🧪 Test cloud computer</button></div><small class="gp-accor-note">The cloud computer exists only for this run. It is created by GitHub Actions, runs the browser, writes safe progress to HotelOps, then shuts down.</small></div>
             <div class="gp-cloud-live" id="gpCloudLive" hidden></div>
             <details class="gp-cloud-set"><summary>🖥️ On the duty PC (once)</summary>
               <label class="gp-agent-on"><input type="checkbox" id="gpAgentOn" onchange="gpAgentToggle(this.checked)"> <b>This PC runs the enrollments</b></label>

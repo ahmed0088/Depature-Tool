@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 506, items: [
+    "🖥️ Accor Loop is now clearly a normal web cloud run: HotelOps creates a temporary GitHub-hosted computer, runs the browser there, streams progress back, and shuts it down when finished. It no longer depends on the duty PC.",
+  ] },
   { v: 505, items: [
     "🔎 Accor Loop now shows the exact background action in the live panel, including portal loading, form preparation, title/country selection, submit attempts, result detection, fresh-page resets, and safe stop checks.",
   ] },
