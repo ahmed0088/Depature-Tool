@@ -13,9 +13,13 @@ on:
         description: 'HotelOps run label'
         required: false
         default: ''
+      account:
+        description: 'HotelOps account suffix, e.g. MERCURE; empty = the main account'
+        required: false
+        default: ''
       hid:
-        description: 'HotelOps hotel id'
-        required: true
+        description: 'HotelOps hotel id (leave empty to use the account hotel or find it automatically)'
+        required: false
         default: ''
       portal_url:
         description: 'Accor Loop portal URL'
@@ -50,7 +54,7 @@ jobs:
         env:
           TEST: ${{ inputs.test }}
           TAG: ${{ inputs.tag }}
-          HOTELOPS_HOTEL: ${{ inputs.hid || secrets.HOTELOPS_HOTEL }}
+          HOTELOPS_HOTEL: ${{ inputs.hid || (inputs.account != '' && secrets[format('HOTELOPS_HOTEL_{0}', inputs.account)]) || secrets.HOTELOPS_HOTEL }}
           PORTAL_URL: ${{ inputs.portal_url }}
-          HOTELOPS_EMAIL: ${{ secrets.HOTELOPS_EMAIL }}
-          HOTELOPS_PASS: ${{ secrets.HOTELOPS_PASS }}
+          HOTELOPS_EMAIL: ${{ inputs.account != '' && secrets[format('HOTELOPS_EMAIL_{0}', inputs.account)] || secrets.HOTELOPS_EMAIL }}
+          HOTELOPS_PASS: ${{ inputs.account != '' && secrets[format('HOTELOPS_PASS_{0}', inputs.account)] || secrets.HOTELOPS_PASS }}
