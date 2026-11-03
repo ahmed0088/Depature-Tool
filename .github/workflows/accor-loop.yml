@@ -1,0 +1,56 @@
+name: Accor Loop (cloud)
+# Runs the same consent-filtered Accor Loop collector as the Chrome extension,
+# using a GitHub-hosted browser and the enrollment list saved by HotelOps.
+# It is manually started from HotelOps or GitHub. TEST=1 checks the page without submitting.
+on:
+  workflow_dispatch:
+    inputs:
+      test:
+        description: 'Test run: open the portal and validate the list without submitting (1 = yes)'
+        required: false
+        default: ''
+      tag:
+        description: 'HotelOps run label'
+        required: false
+        default: ''
+      hid:
+        description: 'HotelOps hotel id'
+        required: true
+        default: ''
+      portal_url:
+        description: 'Accor Loop portal URL'
+        required: false
+        default: 'https://secure.guestinternet.com/portal-system/portal/'
+permissions:
+  contents: read
+concurrency:
+  group: accor-loop-cloud
+  cancel-in-progress: false
+jobs:
+  enroll:
+    if: github.repository == 'ahmed0088/Depature-Tool'
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Browser driver
+        run: |
+          npm install --no-save --no-audit --no-fund playwright-core@1.49.1
+          if [ -x /usr/bin/google-chrome ]; then
+            echo "CHROME_PATH=/usr/bin/google-chrome" >> "$GITHUB_ENV"
+            google-chrome --version
+          else
+            npx playwright-core install --with-deps chromium
+          fi
+      - name: Accor Loop enrollment
+        run: node scripts/accor-loop-cloud.js
+        env:
+          TEST: ${{ inputs.test }}
+          TAG: ${{ inputs.tag }}
+          HOTELOPS_HOTEL: ${{ inputs.hid }}
+          PORTAL_URL: ${{ inputs.portal_url }}
+          HOTELOPS_EMAIL: ${{ secrets.HOTELOPS_EMAIL }}
+          HOTELOPS_PASS: ${{ secrets.HOTELOPS_PASS }}
