@@ -50,7 +50,7 @@ jobs:
         env:
           TEST: ${{ inputs.test }}
           TAG: ${{ inputs.tag }}
-          HOTELOPS_HOTEL: ${{ inputs.hid }}
+          HOTELOPS_HOTEL: ${{ inputs.hid || secrets.HOTELOPS_HOTEL }}
           PORTAL_URL: ${{ inputs.portal_url }}
           HOTELOPS_EMAIL: ${{ secrets.HOTELOPS_EMAIL }}
           HOTELOPS_PASS: ${{ secrets.HOTELOPS_PASS }}

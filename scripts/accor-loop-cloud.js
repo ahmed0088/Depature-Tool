@@ -17,7 +17,7 @@ const key = e => String(e || '').toLowerCase().replace(/[.#$\[\]/@]/g, '_');
 
 function firebaseConfig() {
   const src = fs.readFileSync(path.join(ROOT, 'firebase-config.js'), 'utf8');
-  const get = k => (src.match(new RegExp(k + "\\\\s*:\\\\s*[\\\"']([^\\\"']+)[\\\"']")) || [, ''])[1];
+  const get = k => (src.match(new RegExp(k + '\\s*:\\s*["\\\']([^"\\\']+)["\\\']')) || [, ''])[1];
   return { apiKey: get('apiKey'), databaseURL: get('databaseURL') };
 }
 async function hotelDb() {
@@ -28,8 +28,12 @@ async function hotelDb() {
   const r = await fetch(authUrl + '?key=' + encodeURIComponent(c.apiKey), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: String(E.HOTELOPS_EMAIL).trim(), password: E.HOTELOPS_PASS, returnSecureToken: true }) });
   const a = await r.json().catch(() => ({}));
   if (!r.ok || !a.idToken) fail('HotelOps sign-in refused — check HOTELOPS_EMAIL / HOTELOPS_PASS');
-  const hid = String(E.HOTELOPS_HOTEL || '').trim();
-  if (!/^[\w-]{1,80}$/.test(hid)) fail('HOTELOPS_HOTEL is required for the Accor Loop cloud run');
+  let hid = String(E.HOTELOPS_HOTEL || '').trim();
+  if (!hid) {
+    const u = await (await fetch(base + '/userHotels/' + encodeURIComponent(a.localId) + '.json?auth=' + encodeURIComponent(a.idToken))).json().catch(() => null);
+    hid = typeof u === 'string' ? u : u && typeof u === 'object' ? String(u.hotelId || u.id || Object.keys(u)[0] || '') : '';
+  }
+  if (!/^[\w-]{1,80}$/.test(hid)) fail('No HotelOps hotel was found for this account');
   const at = p => base + '/hotels/' + encodeURIComponent(hid) + '/' + p + '.json?auth=' + encodeURIComponent(a.idToken);
   const request = async (p, method, body) => { const x = await fetch(at(p), { method, headers: { 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) }); if (!x.ok) throw new Error('Firebase ' + method + ' ' + p + ' ' + x.status); return x.json().catch(() => null); };
   return { get: p => request(p, 'GET'), patch: (p, v) => request(p, 'PATCH', v), put: (p, v) => request(p, 'PUT', v) };

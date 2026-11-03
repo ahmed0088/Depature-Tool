@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 510, items: [
+    "🛠️ Fixed Accor Loop cloud startup: Firebase configuration parsing and HotelOps hotel lookup now work like the Neorcha runner, including fallback to the signed-in account's assigned hotel.",
+  ] },
   { v: 509, items: [
     "🔗 Accor Loop URL field enlarged for phones: larger text, a taller tap target, clearer focus state, and guidance to paste the complete link.",
   ] },
