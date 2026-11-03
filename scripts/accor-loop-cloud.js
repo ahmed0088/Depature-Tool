@@ -10,6 +10,16 @@ const mask = s => String(s || '').replace(/\S+@\S+/g, '•@•').replace(/\d{6,}
 // Keep a privacy-safe copy of the runner console in HotelOps so the phone has the same
 // useful step-by-step view as the Neorcha cloud run. Never write guest names, e-mails or passwords.
 const CON = [];
+let ACTIVE_FB = null;
+const publishError = async message => {
+  const m = mask(message);
+  tlog('ERR', m);
+  if (!ACTIVE_FB) return;
+  try {
+    await ACTIVE_FB.patch('enrollJob', { state: 'error', error: m, errorAt: Date.now() });
+    await ACTIVE_FB.patch('enrollLive', { at: Date.now(), state: 'error', step: 'error', note: m, action: m, con: CON.slice(-80) });
+  } catch (_) {}
+};
 const tlog = (g, s) => { const m = mask(s); CON.push({ t: Date.now(), g, m }); if (CON.length > 80) CON.splice(0, CON.length - 80); return m; };
 const say = s => { const m = tlog('SYS', s); console.log(new Date().toISOString().slice(11, 19) + '  ' + m); };
 const fail = (s, code = 1) => { const m = tlog('ERR', s); console.error('::error::' + m); process.exit(code); };
@@ -52,6 +62,7 @@ async function main() {
   const miss = ['HOTELOPS_EMAIL', 'HOTELOPS_PASS', 'HOTELOPS_HOTEL'].filter(k => !String(E[k] || '').trim());
   if (miss.length) fail('Missing secrets: ' + miss.join(', '));
   const FB = await hotelDb();
+  ACTIVE_FB = FB;
   const job = await FB.get('enrollJob');
   const rows = consenting(job && job.tsv);
   const test = /^(1|true|yes)$/i.test(String(E.TEST || '')) || !!(job && job.test);
@@ -70,18 +81,20 @@ async function main() {
   const page = await context.newPage();
   page.on('console', m => {
     const t = m.text();
-    if (/SUCCESS|result:|SUMMARY|error|warn|parsed|starting|processed|All records|loaded|portal|guest|Title|Country|submit|form|fresh/i.test(t)) {
+    if (/SUCCESS|result:|SUMMARY|error|warn|parsed|starting|processed|All records|loaded|portal|guest|Title|Country|submit|form|fresh|skipped|enrolled|member|diagnostic/i.test(t)) {
       const level = m.type() === 'error' ? 'ERR' : /warn/i.test(m.type()) ? 'WARN' : 'BOT';
       tlog(level, t); live({ step: 'enroll', action: mask(t), note: mask(t) });
     }
   });
+  page.on('pageerror', e => { const m = 'Browser page error: ' + (e && e.message || e); tlog('ERR', m); live({ step: 'browser-error', action: mask(m), note: mask(m) }); });
+  page.on('requestfailed', r => { const m = 'Network request failed: ' + r.url() + ' · ' + ((r.failure() || {}).errorText || 'unknown'); tlog('WARN', m); live({ step: 'network', action: mask(m), note: mask(m) }); });
   const state = { ["__accor_portal_url"]: String(E.PORTAL_URL || 'https://secure.guestinternet.com/portal-system/portal/'), ["__accor_records"]: pipeRows(rows), ["__accor_enabled"]: true, ["__accor_stop_signal"]: false, ["__accor_diagnostic_only"]: test, ["__accor_loop_state"]: null, ["__accor_logs"]: [] };
   await page.addInitScript(s => {
     const seed = s;
     Object.keys(seed).forEach(k => localStorage.setItem('__accor_cloud_' + k, JSON.stringify(seed[k])));
     const read = k => { try { const v = localStorage.getItem('__accor_cloud_' + k); return v == null ? null : JSON.parse(v); } catch (_) { return null; } };
     const write = obj => { Object.keys(obj || {}).forEach(k => localStorage.setItem('__accor_cloud_' + k, JSON.stringify(obj[k]))); };
-    window.chrome = { storage: { local: { get(keys, cb) { const names = Array.isArray(keys) ? keys : Object.keys(keys || {}); const out = {}; names.forEach(k => out[k] = read(k)); if (cb) cb(out); return Promise.resolve(out); }, set(obj, cb) { write(obj); if (cb) cb(); return Promise.resolve(); } } }, runtime: { sendMessage(msg) { if (msg && msg.type === 'log') { const entry = Object.assign({ t: Date.now(), g: 'BOT' }, msg.entry || {}); const old = read('__accor_logs') || []; old.push(entry); if (old.length > 100) old.splice(0, old.length - 100); write({ __accor_logs: old }); console.log('[accor-loop]', entry.msg || 'log'); } if (msg && msg.type === 'freshTab') location.reload(); return Promise.resolve({ ok: true }); } } };
+    window.chrome = { storage: { local: { get(keys, cb) { const names = Array.isArray(keys) ? keys : Object.keys(keys || {}); const out = {}; names.forEach(k => out[k] = read(k)); if (cb) cb(out); return Promise.resolve(out); }, set(obj, cb) { write(obj); if (cb) cb(); return Promise.resolve(); } } }, runtime: { sendMessage(msg) { if (msg && msg.type === 'log') { const entry = Object.assign({ t: Date.now(), g: 'BOT' }, msg.entry || {}); const old = read('__accor_logs') || []; old.push(entry); if (old.length > 100) old.splice(0, old.length - 100); write({ __accor_logs: old }); console.log('[accor-loop]', entry.msg || 'log'); } if (msg && msg.type === 'freshTab') { console.log('[accor-loop] fresh portal state requested'); return Promise.resolve({ ok: true, cloud: true }); } return Promise.resolve({ ok: true }); } } };
   }, state);
   try {
     say('Opening Accor Loop portal…');
@@ -122,5 +135,9 @@ async function main() {
     await live({ state: 'done', step: 'done', done: results.length, n: rows.length, note: test ? 'Test run complete — nothing was submitted.' : results.length + ' results saved in the Enrollment tracker.', con: CON.slice(-60) });
   } finally { await browser.close().catch(() => {}); }
 }
-if (require.main === module) main().catch(e => fail('Stopped: ' + (e && e.message || e)));
+if (require.main === module) main().catch(async e => {
+  const message = 'Stopped: ' + (e && e.stack || e && e.message || e);
+  await publishError(message);
+  fail(message);
+});
 module.exports = { consenting, pipeRows };
