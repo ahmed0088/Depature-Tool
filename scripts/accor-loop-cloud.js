@@ -114,7 +114,7 @@ async function main() {
     const result = await page.evaluate(() => { try { return JSON.parse(window.localStorage.getItem('__accor_cloud___accor_loop_state') || '{}'); } catch (_) { return {}; } });
     const results = Array.isArray(result.results) ? result.results : [];
     const patch = {}; const today = new Date(Date.now() + 4 * 3600e3).toISOString().slice(0, 10);
-    results.forEach(r => { if (r && /@/.test(r.email || '')) patch[key(r.email)] = { email: String(r.email).toLowerCase(), status: String(r.status || 'unknown'), date: today, name: '', by: 'accor cloud' }; });
+    results.forEach(r => { if (r && /@/.test(r.email || '')) patch[key(r.email)] = { email: String(r.email).toLowerCase(), status: String(r.status || 'unknown'), date: today, name: String(r.name || ''), confirmation: String(r.conf || ''), by: 'accor cloud' }; });
     if (!test && Object.keys(patch).length) await FB.patch('enrollLog', patch);
     await FB.patch('enrollJob', { state: 'done', doneAt: Date.now() });
     say('Finished: ' + results.length + ' result(s)' + (test ? ' (test only)' : ' saved to Enrollment tracker'));

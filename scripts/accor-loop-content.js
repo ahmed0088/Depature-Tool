@@ -809,13 +809,15 @@
     }
     if (!titleOk) {
       log("  Title selection failed — skipping this record", "warn");
-      results.push({ email: rec.email, conf: rec.conf, status: "title_not_committed" });
+      results.push({ email: rec.email, conf: rec.conf, name: rec.first_name + " " + rec.last_name, status: "skipped: title_not_committed" });
+      log("  GUEST RESULT · SKIPPED · " + rec.first_name + " " + rec.last_name + " · " + (rec.conf || "no confirmation") + " · title was not committed");
       await persist(idx + 1);
       return { status: "title_not_committed" };
     }
     if (diagnosticOnly) {
       log("DIAGNOSTIC: title selection committed; stopping before any submission", "info");
-      results.push({ email: rec.email, conf: rec.conf, status: "diagnostic_title_ok" });
+      results.push({ email: rec.email, conf: rec.conf, name: rec.first_name + " " + rec.last_name, status: "test: title_ok" });
+      log("  GUEST RESULT · TEST ONLY · " + rec.first_name + " " + rec.last_name + " · " + (rec.conf || "no confirmation") + " · no submission made");
       await persist(idx + 1);
       return { status: "diagnostic_title_ok" };
     }
@@ -825,7 +827,13 @@
     if (phEl) await humanType(phEl, rec.phone);
     const cOk = await pickReactSelectByLabel("Country", rec.country);
 
-    if (cOk === false) return { status: "country_not_found: " + rec.country };
+    if (cOk === false) {
+      const status = "skipped: country_not_found: " + rec.country;
+      results.push({ email: rec.email, conf: rec.conf, name: rec.first_name + " " + rec.last_name, status: status });
+      log("  GUEST RESULT · SKIPPED · " + rec.first_name + " " + rec.last_name + " · " + (rec.conf || "no confirmation") + " · country not found: " + rec.country);
+      await persist(idx + 1);
+      return { status: status };
+    }
 
     const submit = await waitFor(() => {
       return document.querySelector("button[type=submit]") ||
@@ -848,7 +856,9 @@
     const status = detectResult();
     log("  ✅ result: " + status);
 
-    results.push({ email: rec.email, conf: rec.conf, status: status });
+    results.push({ email: rec.email, conf: rec.conf, name: rec.first_name + " " + rec.last_name, status: status });
+    const enrolled = status === "success" || status === "success_stuck";
+    log("  GUEST RESULT · " + (enrolled ? "ENROLLED" : status === "already_member" ? "ALREADY ENROLLED" : "NOT ENROLLED") + " · " + rec.first_name + " " + rec.last_name + " · " + (rec.conf || "no confirmation") + " · " + status);
     await persist(idx + 1);
 
     if (status === "success" || status === "success_stuck" ||
@@ -882,21 +892,37 @@
     } catch (e) {
       log("  ❌ " + records[i].email + ": " + e.message, "error");
       status = "error: " + e.message;
-      results.push({ email: records[i].email, conf: records[i].conf, status: status });
+      results.push({ email: records[i].email, conf: records[i].conf, name: records[i].first_name + " " + records[i].last_name, status: "skipped: " + status });
       await persist(i + 1);   // advance past the failed record
+      log("  GUEST RESULT · SKIPPED · " + records[i].first_name + " " + records[i].last_name + " · " + (records[i].conf || "no confirmation") + " · " + status);
       log("  ⏭ skipping failed record, continuing to next...");
     }
     if (i < records.length - 1) await sleep(BETWEEN_GUESTS);
   }
 
   await cset({ [CURRENT_KEY]: null });
-  log("══════ SUMMARY ══════");
+  log("════════ ACCOR ENROLLMENT REPORT ════════");
   const counts = {};
+  const enrolledList = [], alreadyList = [], notEnrolledList = [], skippedList = [], testList = [];
   results.forEach(r => {
     counts[r.status] = (counts[r.status] || 0) + 1;
-    log("  " + r.status + "  " + r.email);
+    const who = (r.name || "Unknown guest") + " · " + (r.conf || "no confirmation");
+    const s = String(r.status || "unknown");
+    if (s === "success" || s === "success_stuck") enrolledList.push(who);
+    else if (s === "already_member") alreadyList.push(who);
+    else if (s.indexOf("test:") === 0) testList.push(who + " · " + s);
+    else if (s.indexOf("skipped:") === 0) skippedList.push(who + " · " + s.slice(9));
+    else notEnrolledList.push(who + " · " + s);
   });
-  Object.keys(counts).forEach(k => log("    " + k + ": " + counts[k]));
+  const report = (label, list) => { log(label + " (" + list.length + ")"); list.forEach(x => log("  • " + x)); };
+  report("ENROLLED", enrolledList);
+  report("ALREADY ENROLLED", alreadyList);
+  report("NOT ENROLLED", notEnrolledList);
+  report("SKIPPED", skippedList);
+  if (testList.length) report("TEST ONLY — NOT SUBMITTED", testList);
+  log("TOTAL PROCESSED: " + results.length + "/" + records.length);
+  Object.keys(counts).forEach(k => log("  STATUS " + k + ": " + counts[k]));
+  log("════════ END ENROLLMENT REPORT ════════");
 
   if (results.length >= records.length) {
     log("🎉 All records processed");
