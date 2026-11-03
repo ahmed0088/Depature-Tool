@@ -251,15 +251,22 @@ async function gpAccCloudEnroll(test) {
     await fbSet('enrollJob', { tsv: gpEnrollTsv(rows), n: rows.length, at: Date.now(), by: (currentProfile && currentProfile.name) || '', test: !!test, tag: gpCloudTag, state: 'queued', accorLoop: true, portalUrl: url });
     await fbSet('enrollLive', { at: Date.now(), started: Date.now(), state: 'run', step: 'queued', tag: gpCloudTag, test: !!test, n: rows.length, done: 0, note: 'Starting Accor Loop cloud computer…', con: [] });
     await gpAccGh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { test: test ? '1' : '', tag: gpCloudTag, hid, portal_url: url } }) });
-    showToast(test ? '🧪 Accor Loop test started — nothing will be submitted' : '☁️ Accor Loop enrollment started', 'ok');
+    gpCloudPaint({ at: Date.now(), started: Date.now(), state: 'run', step: 'queued', tag: gpCloudTag, test: !!test, n: rows.length, done: 0, note: 'GitHub accepted the run · waiting for the cloud browser…', con: [{ t: Date.now(), g: 'SYS', m: 'Run dispatched · waiting for GitHub Actions' }] });
     gpAccPoll(gpCloudTag);
-  } catch (e) { showToast(e.message, 'err'); }
+    showToast(test ? '🧪 Accor Loop test started — nothing will be submitted' : '☁️ Accor Loop enrollment started', 'ok');
+  } catch (e) { showToast(e.message, 'err'); gpCloudPaint({ at: Date.now(), state: 'error', note: e.message, con: [{ t: Date.now(), g: 'ERR', m: e.message }] }); }
 }
 let gpAccPollTimer = 0;
 function gpAccPoll(tag) {
   clearInterval(gpAccPollTimer); gpAccPollTimer = setInterval(async () => {
-    try { const j = await gpAccGh('/runs?per_page=5&event=workflow_dispatch'); const r = (j.workflow_runs || []).filter(x => Date.parse(x.created_at) >= Date.now() - 15 * 60000).pop(); if (r && r.status === 'completed') clearInterval(gpAccPollTimer); } catch (_) {}
+    try {
+      const j = await gpAccGh('/runs?per_page=10&event=workflow_dispatch');
+      const r = (j.workflow_runs || []).filter(x => Date.parse(x.created_at) >= Date.now() - 15 * 60000 && x.head_branch === 'main')[0];
+      if (r && r.status !== 'completed') gpCloudPaint({ at: Date.now(), state: 'run', step: r.status === 'queued' ? 'queued' : 'open', note: r.status === 'queued' ? 'Queued on GitHub Actions…' : 'GitHub browser is running…', run: r.html_url, con: [{ t: Date.now(), g: 'SYS', m: 'GitHub Actions: ' + r.status }] });
+      if (r && r.status === 'completed') { clearInterval(gpAccPollTimer); if (r.conclusion && r.conclusion !== 'success') gpCloudPaint({ at: Date.now(), state: 'error', note: 'GitHub run ' + r.conclusion + ' — open the run for details', run: r.html_url, con: [{ t: Date.now(), g: 'ERR', m: 'GitHub Actions: ' + r.conclusion }] }); }
+    } catch (_) {}
   }, 5000);
+  setTimeout(() => clearInterval(gpAccPollTimer), 60 * 60000);
 }
 const GP_AGENT_KEY = 'ho_en_agent_v1';
 const gpIsAgent = () => { try { return localStorage.getItem(GP_AGENT_KEY) === '1'; } catch (_) { return false; } };
@@ -289,10 +296,18 @@ function gpCloudPaint(v) {
   const hh = t => { const d = new Date(+t); return [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2, '0')).join(':'); };
   const pct = v.state === 'done' ? 100 : v.n ? Math.round(((+v.done || 0) / v.n) * 85) + ({ queued: 2, open: 6, login: 8, page: 12, enroll: 15 }[v.step] || 4) : 4;
   box.className = 'gp-cloud-live ' + (v.state || '');
-  box.innerHTML = `<div class="gp-cl-top"><b>${v.state === 'done' ? '✅' : v.state === 'error' ? '⛔' : '⏳'} ${v.test ? '🧪 Test run · ' : ''}${escapeHtml(v.note || '')}</b></div>
+  const runLink = v.run ? `<a class="gp-cl-run" href="${escapeHtml(v.run)}" target="_blank" rel="noopener">Open GitHub run ↗</a>` : '';
+  const logs = Array.isArray(v.con) ? v.con : [];
+  box.innerHTML = `<div class="gp-cl-top"><b>${v.state === 'done' ? '✅' : v.state === 'error' ? '⛔' : '⏳'} ${v.test ? '🧪 Test run · ' : ''}${escapeHtml(v.note || '')}</b><button type="button" class="gp-cl-min" onclick="gpCloudToggleMin()" aria-label="Minimize log">⌃</button></div>
     <div class="gp-cl-bar"><i style="width:${Math.min(100, pct)}%"></i></div>
-    ${Array.isArray(v.con) && v.con.length ? `<div class="gp-cl-con">${v.con.slice(-10).map(l => `<div><span>${hh(l.t)}</span><em>${escapeHtml(l.g)}</em>${escapeHtml(l.m)}</div>`).join('')}</div>` : ''}`;
+    <div class="gp-cl-meta"><span>${Math.min(+v.done || 0, +v.n || 0)} / ${+v.n || 0} guests</span>${runLink}<span>${logs.length} log entries</span></div>
+    <div class="gp-cl-details">${logs.length ? `<div class="gp-cl-con">${logs.slice(-18).map(l => `<div><span>${hh(l.t)}</span><em>${escapeHtml(l.g)}</em>${escapeHtml(l.m)}</div>`).join('')}</div>` : '<div class="gp-cl-empty">Waiting for the cloud runner to report its first step…</div>'}</div>`;
   if (v.state === 'done' && !v.test) setTimeout(gpLoadLog, 800);
+}
+function gpCloudToggleMin() {
+  const box = document.getElementById('gpCloudLive'); if (!box) return;
+  box.classList.toggle('gp-cl-minimized');
+  const b = box.querySelector('.gp-cl-min'); if (b) b.textContent = box.classList.contains('gp-cl-minimized') ? '⌄' : '⌃';
 }
 // ── the duty PC side ──
 let gpCon = [];

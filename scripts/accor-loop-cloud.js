@@ -7,8 +7,12 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const E = process.env;
 const mask = s => String(s || '').replace(/\S+@\S+/g, '•@•').replace(/\d{6,}/g, d => '••••' + d.slice(-4)).slice(0, 180);
-const say = s => console.log(new Date().toISOString().slice(11, 19) + '  ' + mask(s));
-const fail = (s, code = 1) => { console.error('::error::' + mask(s)); process.exit(code); };
+// Keep a privacy-safe copy of the runner console in HotelOps so the phone has the same
+// useful step-by-step view as the Neorcha cloud run. Never write guest names, e-mails or passwords.
+const CON = [];
+const tlog = (g, s) => { const m = mask(s); CON.push({ t: Date.now(), g, m }); if (CON.length > 80) CON.splice(0, CON.length - 80); return m; };
+const say = s => { const m = tlog('SYS', s); console.log(new Date().toISOString().slice(11, 19) + '  ' + m); };
+const fail = (s, code = 1) => { const m = tlog('ERR', s); console.error('::error::' + m); process.exit(code); };
 const key = e => String(e || '').toLowerCase().replace(/[.#$\[\]/@]/g, '_');
 
 function firebaseConfig() {
@@ -49,15 +53,22 @@ async function main() {
   const test = /^(1|true|yes)$/i.test(String(E.TEST || '')) || !!(job && job.test);
   if (!rows.length) fail('No consenting guests with civility and email were found in enrollJob');
   const tag = String(E.TAG || (job && job.tag) || ('accor' + Date.now().toString(36))).slice(0, 40);
-  const live = p => FB.patch('enrollLive', Object.assign({ at: Date.now(), tag, con: [] }, p)).catch(() => {});
-  await FB.put('enrollLive', { at: Date.now(), started: Date.now(), state: 'run', step: 'open', tag, test, n: rows.length, done: 0, note: 'Opening Accor Loop portal…', con: [] });
+  const live = p => FB.patch('enrollLive', Object.assign({ at: Date.now(), tag, con: CON.slice(-60) }, p)).catch(() => {});
+  await FB.put('enrollLive', { at: Date.now(), started: Date.now(), state: 'run', step: 'open', tag, test, n: rows.length, done: 0, note: 'Opening Accor Loop portal…', con: CON.slice(-60) });
   say((test ? 'TEST RUN — nothing will be submitted · ' : '') + 'Starting ' + rows.length + ' consenting guest(s)');
+  await live({ step: 'open', note: test ? 'Test run started — opening Accor Loop…' : 'Accor Loop cloud run started — opening portal…' });
   let chromium; try { ({ chromium } = require('playwright')); } catch (_) { try { ({ chromium } = require('playwright-core')); } catch (_) { fail('Playwright is not installed'); } }
   const executablePath = [E.CHROME_PATH, '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(p => p && fs.existsSync(p));
   const browser = await chromium.launch(executablePath ? { executablePath, headless: true } : { headless: true });
   const context = await browser.newContext({ viewport: { width: 1400, height: 900 }, locale: 'en-GB', timezoneId: 'Asia/Dubai' });
   const page = await context.newPage();
-  page.on('console', m => { const t = m.text(); if (/SUCCESS|result:|SUMMARY|error|warn|parsed|starting|processed|All records/i.test(t)) say(t); });
+  page.on('console', m => {
+    const t = m.text();
+    if (/SUCCESS|result:|SUMMARY|error|warn|parsed|starting|processed|All records|loaded|portal|guest/i.test(t)) {
+      const level = m.type() === 'error' ? 'ERR' : /warn/i.test(m.type()) ? 'WARN' : 'BOT';
+      tlog(level, t); live({ step: 'enroll', note: mask(t) });
+    }
+  });
   const state = { ["__accor_portal_url"]: String(E.PORTAL_URL || 'https://secure.guestinternet.com/portal-system/portal/'), ["__accor_records"]: pipeRows(rows), ["__accor_enabled"]: true, ["__accor_stop_signal"]: false, ["__accor_diagnostic_only"]: test, ["__accor_loop_state"]: null, ["__accor_logs"]: [] };
   await page.addInitScript(s => {
     const seed = s;
@@ -67,16 +78,20 @@ async function main() {
     window.chrome = { storage: { local: { get(keys, cb) { const names = Array.isArray(keys) ? keys : Object.keys(keys || {}); const out = {}; names.forEach(k => out[k] = read(k)); if (cb) cb(out); return Promise.resolve(out); }, set(obj, cb) { write(obj); if (cb) cb(); return Promise.resolve(); } } }, runtime: { sendMessage(msg) { if (msg && msg.type === 'log') console.log('[accor-loop]', msg.entry && msg.entry.msg || 'log'); if (msg && msg.type === 'freshTab') location.reload(); return Promise.resolve({ ok: true }); } } };
   }, state);
   try {
+    say('Opening Accor Loop portal…');
+    await live({ step: 'open', note: 'Opening Accor Loop portal…' });
     await page.goto(state.__accor_portal_url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    say('Portal loaded · starting the enrollment worker…');
     await page.waitForTimeout(1200);
     await page.addScriptTag({ path: path.join(ROOT, 'scripts', 'accor-loop-content.js') });
-    await live({ step: 'enroll', note: test ? 'Test mode: checking the form, nothing will be submitted…' : 'Enrolling guests…' });
+    say(test ? 'Test mode: checking the form — nothing will be submitted…' : 'Enrollment worker is running…');
+    await live({ step: 'enroll', note: test ? 'Test mode: checking the form, nothing will be submitted…' : 'Enrollment worker is running…' });
     let done = false;
     for (let i = 0; i < 3600 && !done; i++) {
       await new Promise(r => setTimeout(r, 1000));
       const s = await page.evaluate(() => { const read = k => { try { return JSON.parse(localStorage.getItem('__accor_cloud_' + k)); } catch (_) { return null; } }; return { state: read('__accor_loop_state'), enabled: read('__accor_enabled') }; });
       done = s.enabled === false;
-      if (i % 3 === 0) await live({ step: 'enroll', note: test ? 'Test mode running — nothing will be submitted' : 'Accor Loop is processing the guest list…' });
+      if (i % 3 === 0) await live({ step: 'enroll', done: Math.max(0, Math.min(rows.length, Number(s.state && s.state.nextIndex || 0))), note: test ? 'Test mode running — nothing will be submitted' : 'Accor Loop is processing the guest list…' });
     }
     const result = await page.evaluate(() => { try { return JSON.parse(window.localStorage.getItem('__accor_cloud___accor_loop_state') || '{}'); } catch (_) { return {}; } });
     const results = Array.isArray(result.results) ? result.results : [];
@@ -85,7 +100,8 @@ async function main() {
     if (!test && Object.keys(patch).length) await FB.patch('enrollLog', patch);
     await FB.patch('enrollJob', { state: 'done', doneAt: Date.now() });
     say('Finished: ' + results.length + ' result(s)' + (test ? ' (test only)' : ' saved to Enrollment tracker'));
-    await live({ state: 'done', step: 'done', done: results.length, n: rows.length, note: test ? 'Test run complete — nothing was submitted.' : results.length + ' results saved in the Enrollment tracker.' });
+    tlog('SAVE', test ? 'Test complete · nothing submitted' : 'Results written to Enrollment tracker');
+    await live({ state: 'done', step: 'done', done: results.length, n: rows.length, note: test ? 'Test run complete — nothing was submitted.' : results.length + ' results saved in the Enrollment tracker.', con: CON.slice(-60) });
   } finally { await browser.close().catch(() => {}); }
 }
 if (require.main === module) main().catch(e => fail('Stopped: ' + (e && e.message || e)));

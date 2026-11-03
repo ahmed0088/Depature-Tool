@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 503, items: [
+    "☁️ Accor Loop now has a live runner console with privacy-safe steps, progress, GitHub run link, and a minimize button. The panel stays visible while the cloud browser works.",
+  ] },
   { v: 502, items: [
     "📱 Fixed phone navigation: the bottom menu and More drawer now stay above the page and respond reliably to taps, including on iPhone and Android browsers.",
   ] },
