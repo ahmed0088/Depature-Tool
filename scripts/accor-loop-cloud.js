@@ -61,7 +61,7 @@ const safePageEvaluate = async (page, label, fn, fallback = null) => {
 
 function firebaseConfig() {
   const src = fs.readFileSync(path.join(ROOT, 'firebase-config.js'), 'utf8');
-  const get = name => (src.match(new RegExp(name + '\\s*:\\s*["\\']([^"\\']+)["\\']')) || [, ''])[1];
+  const get = name => (src.match(new RegExp(name + '\\s*:\\s*["\']([^"\']+)["\']')) || [, ''])[1];
   return { apiKey: get('apiKey'), databaseURL: get('databaseURL') };
 }
 
@@ -149,7 +149,9 @@ async function main() {
   const rows = consenting(job && job.tsv);
   const test = /^(1|true|yes)$/i.test(String(E.TEST || '')) || !!(job && job.test);
   if (!rows.length) fail('No consenting guests with civility and email were found in the enrollment list');
-  sensitiveValues = rows.flatMap(r => [r.name, r.email, r.conf]).filter(Boolean);
+  // never let a guest's name, e-mail or confirmation reach the public GitHub log (whole name AND each part of it)
+  sensitiveValues = rows.flatMap(r => [r.name, r.email, r.conf, ...String(r.name || '').split(/\s+/).filter(x => x.length >= 3)])
+    .filter(Boolean).sort((a, b) => String(b).length - String(a).length);
 
   const tag = String(E.TAG || (job && job.tag) || ('accor' + Date.now().toString(36))).slice(0, 40);
   const live = p => FB.patch('enrollLive', Object.assign({ at: Date.now(), tag, con: CON.slice(-60) }, p)).catch(() => {});
@@ -175,15 +177,13 @@ async function main() {
   catch (_) { try { ({ chromium } = require('playwright-core')); } catch (_) { fail('Playwright is not installed'); } }
   const executablePath = [E.CHROME_PATH, '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(p => p && fs.existsSync(p));
   const browser = await chromium.launch(executablePath ? { executablePath, headless: true } : { headless: true });
-  const context = await browser.newContext({ viewport: { width: 1400, height: 900 }, locale: 'en-GB', timezoneId: 'Asia/Dubai' });
+  // bypassCSP: the portal's security policy must not stop our own worker from starting
+  const context = await browser.newContext({ viewport: { width: 1400, height: 900 }, locale: 'en-GB', timezoneId: 'Asia/Dubai', bypassCSP: true });
   const page = await context.newPage();
   page.on('console', message => {
     const text = message.text();
-    if (/SUCCESS|result:|SUMMARY|error|warn|parsed|starting|processed|All records|loaded|portal|guest|Title|Country|submit|form|fresh|skipped|enrolled|member|diagnostic/i.test(text)) {
-      const group = message.type() === 'error' ? 'ERR' : /warn/i.test(message.type()) ? 'WARN' : 'BOT';
-      const safe = tlog(group, text);
-      void live({ step: 'enroll', action: safe, note: safe });
-    }
+    // the worker's own lines arrive through its log store (below); here only the page's real errors
+    if (message.type() === 'error' && !/^\[\d/.test(text)) tlog('WARN', 'Portal console: ' + text);
   });
   page.on('pageerror', error => {
     const safe = tlog('ERR', 'Browser page error: ' + (error && error.message || error));
@@ -210,17 +210,71 @@ async function main() {
     __accor_records: pipeRows(rows),
     __accor_enabled: true,
     __accor_test: !!test,
+    // the worker's own "test" switch: it picks the title and stops before typing or submitting anything
+    __accor_diagnostic_only: !!test,
     __accor_cloud_run: true,
     __accor_stop_signal: false
   };
+  // Runs before the portal's own code on EVERY page load (the portal reloads itself, and the worker reloads it
+  // after each guest). It stands in for the Chrome extension the worker was written for:
+  //  · chrome.storage.local → this page's localStorage (survives the reloads)
+  //  · chrome.runtime.sendMessage → 'log' lines go to a log store HotelOps reads; 'freshTab' = open the portal again
+  // The job data is seeded only ONCE, so a reload never undoes a Stop or the worker's progress.
   await page.addInitScript(seed => {
-    Object.keys(seed).forEach(k => localStorage.setItem('__accor_cloud_' + k, JSON.stringify(seed[k])));
-    const read = k => { try { const value = localStorage.getItem('__accor_cloud_' + k); return value == null ? null : JSON.parse(value); } catch (_) { return null; } };
-    window.chrome = { storage: { local: {
-      get(keys, cb) { const names = Array.isArray(keys) ? keys : Object.keys(keys || {}); const out = {}; names.forEach(k => { out[k] = read(k); }); if (cb) cb(out); return out; },
-      set(values, cb) { Object.keys(values || {}).forEach(k => localStorage.setItem('__accor_cloud_' + k, JSON.stringify(values[k]))); if (cb) cb(); }
-    } } };
+    try {
+      const P = '__accor_cloud_';
+      const read = k => { try { const v = localStorage.getItem(P + k); return v == null ? undefined : JSON.parse(v); } catch (_) { return undefined; } };
+      const write = (k, v) => { try { localStorage.setItem(P + k, JSON.stringify(v)); } catch (_) {} };
+      if (!location.hostname) return;
+      if (read('__seeded') !== seed.__accor_records) {
+        Object.keys(seed).forEach(k => write(k, seed[k]));
+        write('__accor_loop_state', null); write('__accor_logs', { seq: 0, list: [] }); write('__seeded', seed.__accor_records);
+      }
+      const pick = keys => { const names = typeof keys === 'string' ? [keys] : Array.isArray(keys) ? keys : Object.keys(keys || {}); const out = {}; names.forEach(k => { const v = read(k); if (v !== undefined && v !== null) out[k] = v; }); return out; };
+      const local = {
+        get(keys, cb) { const out = pick(keys); if (typeof cb === 'function') { setTimeout(() => cb(out), 0); return; } return Promise.resolve(out); },
+        set(values, cb) { Object.keys(values || {}).forEach(k => write(k, values[k])); if (typeof cb === 'function') { setTimeout(cb, 0); return; } return Promise.resolve(); }
+      };
+      const runtime = {
+        sendMessage(msg) {
+          if (!msg) return;
+          if (msg.type === 'log' && msg.entry) {
+            const box = read('__accor_logs') || { seq: 0, list: [] };
+            box.seq = (box.seq || 0) + 1;
+            box.list = (box.list || []).concat([{ n: box.seq, level: msg.entry.level, msg: String(msg.entry.msg || '') }]).slice(-200);
+            write('__accor_logs', box);
+          } else if (msg.type === 'freshTab') {
+            setTimeout(() => { location.href = msg.portalUrl || seed.__accor_portal_url; }, 50);
+          }
+        }
+      };
+      const prev = window.chrome && typeof window.chrome === 'object' ? window.chrome : {};
+      window.chrome = Object.assign({}, prev, { storage: { local }, runtime });
+    } catch (_) {}
   }, state);
+
+  // Start the worker in the page. Called after every page load: the worker is written to pick up where it stopped.
+  const workerSource = fs.readFileSync(path.join(ROOT, 'scripts', 'accor-loop-content.js'), 'utf8');
+  let workerStarts = 0;
+  const startWorker = async why => {
+    const started = await safePageEvaluate(page, 'worker start', `(() => {
+      if (window.__accorWorkerOn) return false;
+      if (!/guestinternet\\.com$/.test(location.hostname)) return false;
+      window.__accorWorkerOn = true;
+      ${workerSource}
+      return true;
+    })()`, false);
+    if (started) {
+      workerStarts++;
+      tlog('SYS', workerStarts === 1 ? 'Enrollment worker started on the portal.' : `Portal reloaded (${why}); enrollment worker resumed.`);
+    }
+    return started;
+  };
+  let pendingStart = null;
+  page.on('load', () => {
+    clearTimeout(pendingStart);
+    pendingStart = setTimeout(() => { startWorker('page reload').catch(() => {}); }, 1500);
+  });
 
   try {
     say('Opening the Accor Loop portal…');
@@ -228,19 +282,14 @@ async function main() {
     await page.goto(portalUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
     tlog('SYS', 'Portal opened; launching the enrollment worker.');
     await live({ step: 'enroll', note: 'Portal open. Starting the enrollment worker…' });
-    await page.waitForTimeout(1200);
-    const workerSource = fs.readFileSync(path.join(ROOT, 'scripts', 'accor-loop-content.js'), 'utf8');
-    await page.evaluate(src => {
-      const script = document.createElement('script');
-      script.type = 'text/javascript';
-      script.textContent = src;
-      (document.head || document.documentElement).appendChild(script);
-    }, workerSource);
+    await page.waitForTimeout(1500);
+    await startWorker('first load');
     say(test ? 'TEST ONLY · checking the portal; nothing will be submitted.' : 'Enrollment worker started; monitoring progress.');
     await live({ step: 'enroll', note: test ? 'Test run: checking portal and selected list. No invitations will be sent.' : 'Worker started. Monitoring each enrollment result…' });
 
     let done = false;
     let seenWorkerLogs = 0;
+    let lastFingerprint = '';
     let workerStartedAt = Date.now();
     let lastWorkerEvidence = workerStartedAt;
     let lastProgressAt = 0;
@@ -249,18 +298,25 @@ async function main() {
       const currentGuest = await safePageEvaluate(page, 'current guest poll', () => {
         try { return JSON.parse(localStorage.getItem('__accor_cloud___accor_current_guest') || 'null'); } catch (_) { return null; }
       }, null);
-      const workerLogs = await safePageEvaluate(page, 'worker log poll', () => {
-        try { return JSON.parse(localStorage.getItem('__accor_cloud___accor_logs') || '[]'); } catch (_) { return []; }
-      }, []);
-      if (Array.isArray(workerLogs) && workerLogs.length > seenWorkerLogs) {
-        for (const entry of workerLogs.slice(seenWorkerLogs)) {
-          const safe = tlog(entry.level === 'error' ? 'ERR' : entry.level === 'warn' ? 'WARN' : 'BOT', entry.msg || 'Worker activity');
-          await live({ step: 'enroll', action: safe, note: safe });
+      const box = await safePageEvaluate(page, 'worker log poll', () => {
+        try { return JSON.parse(localStorage.getItem('__accor_cloud___accor_logs') || 'null'); } catch (_) { return null; }
+      }, null);
+      const fresh = box && Array.isArray(box.list) ? box.list.filter(e => e && e.n > seenWorkerLogs) : [];
+      if (fresh.length) {
+        let last = '';
+        for (const entry of fresh) {
+          const msg = String(entry.msg || 'Worker activity');
+          const group = entry.level === 'error' ? 'ERR' : entry.level === 'warn' ? 'WARN'
+            : /GUEST RESULT/.test(msg) ? 'DONE' : /═════ \[/.test(msg) ? 'GUEST' : /^ {2}-> |^ {5}\S/.test(msg) ? 'FORM'
+            : /clicked submit|SUCCESS URL|result:|enroll (fetch )?response|^ {2}reason:/i.test(msg) ? 'SEND' : 'BOT';
+          last = tlog(group, msg);
         }
-        seenWorkerLogs = workerLogs.length;
+        seenWorkerLogs = fresh[fresh.length - 1].n;
         lastWorkerEvidence = Date.now();
+        await live({ step: 'enroll', action: last, note: last });
       }
-      if (Array.isArray(workerLogs) && workerLogs.length) lastWorkerEvidence = Date.now();
+      // the worker can sit on a page (e.g. reloading); if nothing has started it yet, start it now
+      if (workerStarts === 0 && Date.now() - workerStartedAt > 8000) await startWorker('retry');
 
       if (i % 3 === 0 && await stopRequested()) {
         await safePageEvaluate(page, 'stop signal poll', () => {
@@ -274,18 +330,24 @@ async function main() {
         const read = k => { try { return JSON.parse(localStorage.getItem('__accor_cloud_' + k)); } catch (_) { return null; } };
         return { enabled: read('__accor_enabled'), state: read('__accor_state'), loop: read('__accor_loop_state') };
       }, { enabled: true, state: null, loop: null });
-      if (currentGuest || (snapshot && snapshot.state)) lastWorkerEvidence = Date.now();
-      if (Date.now() - workerStartedAt > 45000 && Date.now() - lastWorkerEvidence > 45000) {
-        throw new Error('The portal opened, but the enrollment worker produced no activity. Check the portal page and runner logs.');
+      const fingerprint = JSON.stringify([currentGuest && currentGuest.index, snapshot && snapshot.loop && snapshot.loop.nextIndex, snapshot && snapshot.enabled]);
+      if (fingerprint !== lastFingerprint) { lastFingerprint = fingerprint; lastWorkerEvidence = Date.now(); }
+      if (Date.now() - lastWorkerEvidence > 120000) {
+        throw new Error(workerStarts
+          ? 'The enrollment worker stopped moving for 2 minutes (no new step on the portal). The last steps are in the console above.'
+          : 'The portal opened, but the enrollment worker could not start on it. The portal page may have changed.');
       }
       done = !!(snapshot && snapshot.enabled === false);
       if (Date.now() - lastProgressAt > 2500) {
         lastProgressAt = Date.now();
-        const processed = Math.min(rows.length, Math.max(0, Number(snapshot && snapshot.state && snapshot.state.nextIndex || 0)));
+        const loop = snapshot && (snapshot.loop || snapshot.state);
+        const processed = Math.min(rows.length, Math.max(0, Number(loop && (Array.isArray(loop.results) ? loop.results.length : loop.nextIndex) || 0)));
         const note = currentGuest
           ? `Working on guest ${currentGuest.index || '?'} of ${currentGuest.total || rows.length}. Results are recorded as each guest finishes.`
           : `Enrollment worker running · ${processed} of ${rows.length} processed.`;
-        await live({ step: 'enroll', done: processed, current: currentGuest || null, action: note, note });
+        const sofar = loop && Array.isArray(loop.results) ? resultReport(loop.results, rows.length) : null;
+        const tally = sofar ? { enrolled: sofar.submitted, already: sofar.alreadyMember, skipped: sofar.skipped + sofar.pending + sofar.other, errors: sofar.errors } : null;
+        await live({ step: workerStarts ? 'enroll' : 'worker', done: processed, current: currentGuest || null, tally, worker: workerStarts > 0, action: note, note });
       }
     }
 
@@ -315,7 +377,8 @@ async function main() {
     say(note);
     await live({
       state: report.complete ? 'done' : 'error', step: report.complete ? 'done' : 'partial',
-      done: report.processed, n: rows.length, note, action: note, report,
+      done: report.processed, n: rows.length, note, action: note, report, current: null,
+      tally: { enrolled: report.submitted, already: report.alreadyMember, skipped: report.skipped + report.pending + report.other, errors: report.errors },
       con: CON.slice(-60)
     });
   } finally {

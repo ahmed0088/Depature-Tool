@@ -247,7 +247,7 @@ async function gpAccControl(action) {
     if (action === 'stop' && !confirm('Stop the Accor Loop cloud run? It will finish the current browser action, then stop before the next guest.')) return;
     await fbUpdate('enrollLive', live);
     if (action === 'stop') {
-      gpCloudPaint({ at: Date.now(), state: 'run', step: 'stopping', note: 'Stop requested — finishing the current action…', con: [{ t: Date.now(), g: 'STOP', m: 'Stop requested from HotelOps' }] });
+      if (GP_ACC.live) gpCloudPaint(Object.assign({}, GP_ACC.live, { note: 'Stop requested — finishing the current guest, then stopping…' }));
       showToast('Stop requested — the cloud runner will stop safely', 'ok');
     } else {
       showToast('Start requested', 'ok');
@@ -264,6 +264,7 @@ async function gpAccCloudRestart() {
     await fbUpdate('enrollLive', { at: Date.now(), control: 'run', stopRequested: false, state: 'run', step: 'queued', tag: gpCloudTag, test: false, n: gpEnrollRows().length, done: 0, note: 'Restart requested — waiting for GitHub…', con: [{ t: Date.now(), g: 'SYS', m: 'Run again requested' }] });
     await fbSet('enrollJob', { tsv: gpEnrollTsv(gpEnrollRows()), n: gpEnrollRows().length, at: Date.now(), test: false, tag: gpCloudTag, state: 'queued', accorLoop: true, portalUrl: url });
     await gpAccGh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { test: '', tag: gpCloudTag, hid, portal_url: url } }) });
+    GP_ACC.at = Date.now();
     gpAccorRunWin(true);
     gpAccPoll(gpCloudTag);
     showToast('☁️ Accor Loop started again', 'ok');
@@ -280,23 +281,31 @@ async function gpAccCloudEnroll(test) {
     await fbSet('enrollJob', { tsv: gpEnrollTsv(rows), n: rows.length, at: Date.now(), by: (currentProfile && currentProfile.name) || '', test: !!test, tag: gpCloudTag, state: 'queued', accorLoop: true, portalUrl: url });
     await fbSet('enrollLive', { at: Date.now(), started: Date.now(), state: 'run', step: 'queued', tag: gpCloudTag, test: !!test, n: rows.length, done: 0, note: 'Starting Accor Loop cloud computer…', con: [] });
     await gpAccGh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { test: test ? '1' : '', tag: gpCloudTag, hid, portal_url: url } }) });
-    gpCloudPaint({ at: Date.now(), started: Date.now(), state: 'run', step: 'queued', tag: gpCloudTag, test: !!test, n: rows.length, done: 0, note: 'GitHub accepted the run · waiting for the cloud browser…', con: [{ t: Date.now(), g: 'SYS', m: 'Run dispatched · waiting for GitHub Actions' }] });
+    GP_ACC.at = Date.now();
+    gpCloudPaint({ at: Date.now(), started: Date.now(), state: 'run', step: 'queued', tag: gpCloudTag, test: !!test, n: rows.length, done: 0, note: 'GitHub accepted the run · waiting for a cloud computer…', con: [{ t: Date.now(), g: 'GH', m: 'Run requested from HotelOps · ' + rows.length + ' guest(s) who agreed' }] });
     gpAccorRunWin(true);
     gpAccPoll(gpCloudTag);
     showToast(test ? '🧪 Accor Loop test started — nothing will be submitted' : '☁️ Accor Loop enrollment started', 'ok');
-  } catch (e) { showToast(e.message, 'err'); gpCloudPaint({ at: Date.now(), state: 'error', note: e.message, con: [{ t: Date.now(), g: 'ERR', m: e.message }] }); }
+  } catch (e) { showToast(e.message, 'err'); gpCloudPaint({ at: Date.now(), started: Date.now(), state: 'error', step: 'error', note: e.message, con: [{ t: Date.now(), g: 'ERR', m: e.message }] }); }
 }
+// GitHub's side of the run (queued / running / failed): kept apart from the robot's own report (enrollLive),
+// so a GitHub status never wipes the robot's console. Both are merged by gpCloudPaint.
+const GP_ACC = { gh: null, at: 0, tag: '', live: null, timer: 0 };
 let gpAccPollTimer = 0;
 function gpAccPoll(tag) {
-  clearInterval(gpAccPollTimer); gpAccPollTimer = setInterval(async () => {
+  GP_ACC.tag = tag || GP_ACC.tag; GP_ACC.at = GP_ACC.at || Date.now(); GP_ACC.gh = null;
+  clearInterval(gpAccPollTimer);
+  const tick = async () => {
     try {
       const j = await gpAccGh('/runs?per_page=10&event=workflow_dispatch');
-      const r = (j.workflow_runs || []).filter(x => Date.parse(x.created_at) >= Date.now() - 15 * 60000 && x.head_branch === 'main')[0];
-      if (r && r.status !== 'completed') gpCloudPaint({ at: Date.now(), state: 'run', step: r.status === 'queued' ? 'queued' : 'open', note: r.status === 'queued' ? 'Queued on GitHub Actions…' : 'GitHub browser is running…', run: r.html_url, con: [{ t: Date.now(), g: 'SYS', m: 'GitHub Actions: ' + r.status }] });
-      if (r && r.status === 'completed') { clearInterval(gpAccPollTimer); if (r.conclusion && r.conclusion !== 'success') gpCloudPaint({ at: Date.now(), state: 'error', note: 'GitHub run ' + r.conclusion + ' — open the run for details', run: r.html_url, con: [{ t: Date.now(), g: 'ERR', m: 'GitHub Actions: ' + r.conclusion }] }); }
+      const r = (j.workflow_runs || []).filter(x => Date.parse(x.created_at) >= GP_ACC.at - 60000)
+        .sort((x, y) => Date.parse(x.created_at) - Date.parse(y.created_at))[0];
+      if (r) { GP_ACC.gh = { status: r.status, conclusion: r.conclusion, url: r.html_url }; gpCloudPaint(); }
+      if (r && r.status === 'completed') clearInterval(gpAccPollTimer);
     } catch (_) {}
-  }, 5000);
-  setTimeout(() => clearInterval(gpAccPollTimer), 60 * 60000);
+  };
+  tick(); gpAccPollTimer = setInterval(tick, 5000);
+  setTimeout(() => clearInterval(gpAccPollTimer), 90 * 60000);
 }
 const GP_AGENT_KEY = 'ho_en_agent_v1';
 const gpIsAgent = () => { try { return localStorage.getItem(GP_AGENT_KEY) === '1'; } catch (_) { return false; } };
@@ -320,42 +329,89 @@ function gpAgentPaint(a) {
   el.innerHTML = on ? `🟢 Duty PC ready${a.name ? ' · ' + escapeHtml(a.name) : ''}` : a ? `⚪ Duty PC offline — last seen ${new Date(+a.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : '⚪ No duty PC yet — switch it on there (below)';
   el.className = 'gp-agent-st ' + (on ? 'on' : 'off');
 }
+// ── 📡 the live window (same look and feel as the Neorcha cloud run) ──
+const GP_ACC_STEPS = [['gh', '🖥️', 'Start a GitHub computer'], ['open', '🌐', 'Open the Accor Loop portal'], ['worker', '🤖', 'Start the enrollment robot'], ['enroll', '✍️', 'Enroll the guests who agreed'], ['save', '💾', 'Save the results in HotelOps']];
+/** where an Accor Loop run is (pure): step index, state, message, GitHub link */
+function gpAccState(live, gh) {
+  let k = 0, state = 'run', note = '';
+  if (live) {
+    const con = Array.isArray(live.con) ? live.con : [];
+    const worker = live.worker || con.some(l => /worker started|worker resumed|content loaded/i.test(l.m || ''));
+    k = live.state === 'done' ? 5 : live.step === 'queued' ? 0 : (live.current || +live.done > 0) ? 3 : worker ? 2 : 1;
+    if (live.step === 'partial') k = 4;
+    state = live.state === 'done' ? 'done' : live.state === 'error' ? 'error' : live.state === 'stopped' || live.step === 'stopped' ? 'stopped' : 'run';
+    note = live.note || '';
+  }
+  if (gh && (!live || live.step === 'queued')) {
+    if (gh.status === 'completed' && gh.conclusion !== 'success') { state = 'error'; note = 'The GitHub computer stopped (' + gh.conclusion + ') before it reached the portal. Open the run on GitHub to see why.'; }
+    else if (gh.status === 'completed') { state = 'error'; note = 'The GitHub run finished without reporting back. Check the HotelOps secrets on GitHub (Settings → Secrets → Actions).'; }
+    else note = gh.status === 'queued' ? 'Waiting for a free GitHub computer…' : 'The GitHub computer is getting ready (about a minute)…';
+  }
+  if (live && gh && gh.status === 'completed' && gh.conclusion !== 'success' && state === 'run') { state = 'error'; note = 'The GitHub run stopped (' + gh.conclusion + '). The last steps are in the console.'; }
+  return { k, state, note, url: (gh && gh.url) || (live && live.run) || '' };
+}
 function gpAccorRunWin(open) {
   let w = document.getElementById('gpAccorRunModal');
   if (!w) {
     w = document.createElement('div'); w.id = 'gpAccorRunModal'; w.className = 'gp-accor-modal';
-    w.innerHTML = '<div class="gp-accor-modal-bg" data-gp-close="1"></div><section class="gp-accor-modal-card" role="dialog" aria-modal="true" aria-label="Accor Loop cloud computer"><header class="gp-accor-modal-h"><span class="gp-accor-modal-ic">☁️</span><div><b>Accor Loop · cloud computer</b><small id="gpAccorModalSub">Live runner</small></div><button type="button" class="gp-accor-modal-x" data-gp-close="1" aria-label="Close">✕</button></header><div class="gp-accor-modal-b" id="gpAccorModalBody"></div></section>';
+    w.innerHTML = '<div class="gp-accor-modal-bg" data-gp-close="1"></div><section class="gp-accor-modal-card" role="dialog" aria-modal="true" aria-label="Accor Loop cloud enrollment"><header class="gp-accor-modal-h"><span class="gp-accor-modal-ic">☁️</span><div><b>Accor Loop · cloud enrollment</b><small id="gpAccorModalSub">Live run</small></div><button type="button" class="gp-accor-modal-x" data-gp-close="1" aria-label="Close">✕</button></header><div class="gp-accor-modal-b"><div id="gpAccorModalBody"></div><div class="acr-con" id="gpAccCon"><div class="acr-con-h"><i></i><i></i><i></i><span>accor-loop-cloud · live console</span><button type="button" data-acr-con="1">Hide</button></div><div class="acr-term" id="gpAccTerm"></div></div></div></section>';
     document.body.appendChild(w);
-    w.addEventListener('click', e => { if (e.target.closest('[data-gp-close]')) gpAccorRunWin(false); });
+    w.addEventListener('click', e => {
+      if (e.target.closest('[data-gp-close]')) gpAccorRunWin(false);
+      const t = e.target.closest('[data-acr-con]'); if (t) { const c = document.getElementById('gpAccCon'); c.classList.toggle('off'); t.textContent = c.classList.contains('off') ? 'Show' : 'Hide'; }
+    });
   }
-  w.classList.toggle('on', open !== false);
+  const on = open !== false; w.classList.toggle('on', on);
+  clearInterval(GP_ACC.timer); if (on) { GP_ACC.timer = setInterval(() => gpCloudPaint(), 1000); gpCloudPaint(); }
 }
 function gpCloudPaint(v) {
-  const box = document.getElementById('gpCloudLive'); if (!box || !v) return;
-  box.hidden = false;
+  if (v) GP_ACC.live = v;
+  const live = GP_ACC.live, st = gpAccState(live, GP_ACC.gh);
   const hh = t => { const d = new Date(+t); return [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2, '0')).join(':'); };
-  const pct = v.state === 'done' ? 100 : v.n ? Math.round(((+v.done || 0) / v.n) * 85) + ({ queued: 2, open: 6, login: 8, page: 12, enroll: 15 }[v.step] || 4) : 4;
-  box.className = 'gp-cloud-live ' + (v.state || '');
-  const runLink = v.run ? `<a class="gp-cl-run" href="${escapeHtml(v.run)}" target="_blank" rel="noopener">Open GitHub run ↗</a>` : '';
-  const logs = Array.isArray(v.con) ? v.con : [];
-  const active = v.state === 'run' && v.step !== 'stopped' && v.step !== 'done';
-  const cg = v.current || null;
-  const guestCard = cg ? `<div class="gp-cl-guest"><span class="gp-cl-guest-ic">👤</span><div><b>Now enrolling: ${escapeHtml(cg.title || '')} ${escapeHtml(cg.name || 'Guest')}</b><small>Guest ${escapeHtml(String(cg.index || '?'))} of ${escapeHtml(String(cg.total || v.n || '?'))} · Confirmation ${escapeHtml(String(cg.conf || '—'))}</small><small>Country: ${escapeHtml(String(cg.country || '—'))} · Phone: ${escapeHtml(String(cg.phone || '—'))} · Email: ${escapeHtml(String(cg.email || '—'))}</small></div></div>` : '';
-  const controls = active ? `<button type="button" class="gp-cl-stop" onclick="gpAccControl('stop')">■ Stop</button>` : `<button type="button" class="gp-cl-start" onclick="gpAccCloudRestart()">▶ Run again</button>`;
-  box.innerHTML = `<div class="gp-cl-top"><b>${v.state === 'done' ? '✅' : v.state === 'stopped' ? '⏹' : v.state === 'error' ? '⛔' : '⏳'} ${v.test ? '🧪 Test run · ' : ''}${escapeHtml(v.note || '')}</b><span class="gp-cl-actions">${controls}<button type="button" class="gp-cl-min" onclick="gpCloudToggleMin()" aria-label="Minimize log">⌃</button></span></div>
-    <div class="gp-cl-bar"><i style="width:${Math.min(100, pct)}%"></i></div>${guestCard}
-    <div class="gp-cl-meta"><span>${Math.min(+v.done || 0, +v.n || 0)} / ${+v.n || 0} guests</span><span class="gp-cl-action">${escapeHtml(v.action || (v.step === 'queued' ? 'Waiting for GitHub' : v.step === 'open' ? 'Opening browser' : v.step === 'enroll' ? 'Worker active' : v.step || '—'))}</span>${runLink}<span>${logs.length} log entries</span></div>
-    <div class="gp-cl-details">${logs.length ? `<div class="gp-cl-con">${logs.slice(-40).map(l => `<div><span>${hh(l.t)}</span><em>${escapeHtml(l.g)}</em>${escapeHtml(l.m)}</div>`).join('')}</div>` : '<div class="gp-cl-empty">Waiting for the cloud runner to report its first step…</div>'}</div>${v.state === 'error' ? `<div class="gp-cl-error"><b>Cloud runner error</b><span>${escapeHtml(v.error || v.note || v.action || 'The runner stopped without an error message.')}</span><small>Open the GitHub run above for the full command output.</small></div>` : ''}`;
-  const modalBody = document.getElementById('gpAccorModalBody');
-  if (modalBody) modalBody.innerHTML = box.innerHTML;
-  const modalSub = document.getElementById('gpAccorModalSub'); if (modalSub) modalSub.textContent = v.state === 'run' ? 'Running in a temporary GitHub computer' : (v.state === 'done' ? 'Finished · results saved' : v.state === 'error' ? 'Runner stopped with an error' : 'Stopped safely');
-  if (v.state === 'done' && !v.test) setTimeout(gpLoadLog, 800);
+  const n = +(live && live.n) || 0, done = Math.min(+(live && live.done) || 0, n || Infinity);
+  const pct = st.state === 'done' ? 100 : Math.round(Math.min(97, st.k / 5 * 100 * (st.k === 3 ? 1 : 1) + (st.k === 3 && n ? done / n * 20 : 0)));
+  const ty = live && live.tally || null, test = !!(live && live.test);
+  const icon = { done: '✅', error: '⛔', stopped: '⏹' }[st.state] || '⏳';
+  const active = st.state === 'run' && !!live && live.step !== 'queued';
+  // 1) the compact card under the buttons
+  const box = document.getElementById('gpCloudLive');
+  if (box && live) {
+    box.hidden = false; box.className = 'gp-cloud-live ' + st.state;
+    box.innerHTML = `<div class="gp-cl-top"><b>${icon} ${test ? '🧪 Test · ' : ''}${escapeHtml(st.note || '…')}</b><span class="gp-cl-actions">${active ? `<button type="button" class="gp-cl-stop" onclick="gpAccControl('stop')">■ Stop</button>` : ''}<button type="button" class="gp-cl-start" onclick="gpAccorRunWin(true)">📡 Live window</button></span></div>
+      <div class="gp-cl-bar"><i style="width:${pct}%"></i></div><div class="gp-cl-meta"><span>${done} / ${n} guests</span>${ty ? `<span>✅ ${+ty.enrolled || 0} · 👤 ${+ty.already || 0} · ⏭ ${+ty.skipped || 0} · ⚠️ ${+ty.errors || 0}</span>` : ''}${st.url ? `<a class="gp-cl-run" href="${escapeHtml(st.url)}" target="_blank" rel="noopener">GitHub ↗</a>` : ''}</div>`;
+  }
+  // 2) the live window
+  const body = document.getElementById('gpAccorModalBody'); if (!body) return;
+  const sub = document.getElementById('gpAccorModalSub');
+  const t0 = (live && +live.started) || GP_ACC.at || Date.now(), sec = Math.max(0, Math.round(((st.state === 'run' ? Date.now() : (live && +live.at) || Date.now()) - t0) / 1000));
+  if (sub) sub.textContent = (test ? '🧪 Test run · nothing is submitted · ' : '') + (live ? Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0') : 'No run yet');
+  if (!live && !GP_ACC.gh) { body.innerHTML = '<div class="acr-empty">No Accor Loop run yet. Tick <b>Agreed</b> for the guests who said yes, paste the Accor Loop link, then press <b>☁️ Start cloud computer</b> (or 🧪 Test first).</div>'; gpAccPaintCon([], st); return; }
+  const cg = live && live.current;
+  const tile = (ic, lb, val, cls) => `<div class="acr-tile ${cls}"><b>${val}</b><span>${ic} ${lb}</span></div>`;
+  body.innerHTML = `<div class="acr-bar ${st.state}"><i style="width:${pct}%"></i></div>
+    <ol class="acr-steps">${GP_ACC_STEPS.map(([id, ic, lb], i) => { const s2 = st.state === 'done' || i < st.k ? 'ok' : i === st.k ? (st.state === 'error' ? 'bad' : st.state === 'stopped' ? 'stop' : 'now') : '';
+      return `<li class="${s2}"><span class="d">${s2 === 'ok' ? '✓' : s2 === 'bad' ? '!' : s2 === 'stop' ? '■' : ic}</span><span class="l">${escapeHtml(lb)}${id === 'enroll' && n ? ` <em>${done} / ${n}</em>` : ''}</span>${s2 === 'now' ? '<span class="sp"></span>' : ''}</li>`; }).join('')}</ol>
+    ${cg && st.state === 'run' ? `<div class="acr-guest"><span>👤</span><div><b>Guest ${escapeHtml(String(cg.index || '?'))} of ${escapeHtml(String(cg.total || n || '?'))}: ${escapeHtml(cg.title || '')} ${escapeHtml(cg.name || '')}</b><small>Confirmation ${escapeHtml(String(cg.conf || '—'))} · ${escapeHtml(String(cg.country || '—'))} · phone ${escapeHtml(String(cg.phone || '—'))}</small></div></div>` : ''}
+    ${ty ? `<div class="acr-tiles">${tile('✅', test ? 'Checked' : 'Enrolled', test ? done : +ty.enrolled || 0, 'ok')}${tile('👤', 'Already members', +ty.already || 0, 'info')}${tile('⏭', 'Skipped', +ty.skipped || 0, 'warn')}${tile('⚠️', 'Errors', +ty.errors || 0, 'bad')}</div>` : ''}
+    <div class="acr-note ${st.state}">${icon} ${escapeHtml(st.note || '…')}</div>
+    <div class="acr-act">${active ? `<button type="button" class="btn" onclick="gpAccControl('stop')">■ Stop after this guest</button>` : ''}${!active && live && live.step !== 'queued' ? `<button type="button" class="btn" onclick="gpAccCloudRestart()">▶ Run again</button>` : ''}${st.url ? `<a class="btn" href="${escapeHtml(st.url)}" target="_blank" rel="noopener">Open on GitHub ↗</a>` : ''}${st.state === 'run' ? '<span class="acr-hint">You can close this — the cloud computer keeps going and the results land in the tracker.</span>' : ''}</div>`;
+  const lines = (live && Array.isArray(live.con) ? live.con : []).slice();
+  if (GP_ACC.gh && (!live || live.step === 'queued')) lines.push({ t: Date.now(), g: 'GH', m: 'GitHub Actions: ' + GP_ACC.gh.status + (GP_ACC.gh.conclusion ? ' · ' + GP_ACC.gh.conclusion : '') });
+  gpAccPaintCon(lines, st);
+  if (st.state === 'done' && !test && !GP_ACC.logged) { GP_ACC.logged = true; setTimeout(gpLoadLog, 800); }
+  if (st.state === 'run') GP_ACC.logged = false;
 }
-function gpCloudToggleMin() {
-  const box = document.getElementById('gpCloudLive'); if (!box) return;
-  box.classList.toggle('gp-cl-minimized');
-  const b = box.querySelector('.gp-cl-min'); if (b) b.textContent = box.classList.contains('gp-cl-minimized') ? '⌄' : '⌃';
+function gpAccPaintCon(lines, st) {
+  const box = document.getElementById('gpAccTerm'); if (!box) return;
+  const hh = t => { const d = new Date(+t); return [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2, '0')).join(':'); };
+  const key = lines.length + ':' + (lines.length ? lines[lines.length - 1].t + lines[lines.length - 1].m : '') + st.state;
+  if (box.dataset.k === key) return; box.dataset.k = key;
+  const down = box.scrollTop + box.clientHeight >= box.scrollHeight - 40;
+  box.innerHTML = (lines.length ? lines : [{ t: Date.now(), g: 'SYS', m: 'Waiting for the run…' }]).map(l => `<div class="acl"><span class="ats">${hh(l.t)}</span><span class="atg a-${escapeHtml(String(l.g || 'BOT').toLowerCase())}">${escapeHtml(l.g || 'BOT')}</span><span class="am">${escapeHtml(l.m)}</span></div>`).join('')
+    + (st.state === 'run' ? '<div class="acl"><span class="ats"></span><span class="acur">▌</span></div>' : `<div class="acl"><span class="ats">${hh(Date.now())}</span><span class="atg a-${st.state === 'done' ? 'save' : 'err'}">EXIT</span><span class="am">${st.state === 'done' ? 'process finished · code 0' : st.state === 'stopped' ? 'stopped by you · code 0' : 'process stopped · code 1'}</span></div>`);
+  if (down || !box.dataset.seen) { box.scrollTop = box.scrollHeight; box.dataset.seen = '1'; }
 }
+function gpCloudToggleMin() { gpAccorRunWin(true); }
 // ── the duty PC side ──
 let gpCon = [];
 const gpLive = (p, line) => { if (line) { gpCon.push({ t: Date.now(), g: line[0], m: gpMask(line[1]) }); gpCon = gpCon.slice(-60); } try { return fbUpdate('enrollLive', Object.assign({ at: Date.now(), con: gpCon }, p)); } catch (_) {} };

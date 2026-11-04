@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 512, items: [
+    "🧭 Fixed the broken page layout: on the PC most pages (DTCM Reconciliation and others) had dropped under the side menu, and the layout looked broken everywhere. Every page is back in its place, on PC and phone.",
+    "☁️ Accor Loop cloud enrollment works again: the GitHub run no longer crashes at start, and the enrollment robot keeps going when the portal reloads (it used to vanish after the first reload — \"no activity\").",
+    "🧪 Accor Loop Test run is now really a test: it opens the form and picks the title, then stops — nothing is typed or submitted. (Before, a Test run could submit real enrollments.)",
+    "📡 New Accor Loop live window, same style as the Neorcha cloud run: steps, the guest being enrolled, live counts (enrolled · already members · skipped · errors), Stop, and a live console. Guest names and e-mails never appear in the public GitHub log.",
+  ] },
   { v: 511, items: [
     "👤 Accor Loop live modal now shows exactly which guest is being enrolled, guest number, confirmation number, country, and whether phone/email data is present.",
   ] },

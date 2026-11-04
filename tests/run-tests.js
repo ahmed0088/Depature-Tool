@@ -270,9 +270,9 @@ const nxAsync = (async () => { const ctx = vm.createContext({ window: {}, docume
     [st.nxReader && st.nxReader.v, st.nxReader && st.nxReader.code, info.nx], ['999', '// newer collector', '999']); })().catch(e => { fail++; console.log('  ✗ neorcha threw: ' + (e && e.stack || e)); });
 { const EC = require(path.join(ROOT, 'scripts/enroll-cloud.js')), wf = fs.readFileSync(path.join(ROOT, '.github/workflows/enroll.yml'), 'utf8'), src = fs.readFileSync(path.join(ROOT, 'scripts/enroll-cloud.js'), 'utf8'), gp = fs.readFileSync(path.join(ROOT, 'guest-pipeline.js'), 'utf8');
   const L = EC.consenting('Confirmation_Number\tName\tEmail\tNationality\tCivility\tConsent\n1\tA\ta@x.test\tIN\tMr\tY\n2\tB\tb@x.test\tUK\tMs\tN\n3\tC\tc@x.test\tUK\t\tY\n4\tD\tnone\tUK\tMr\tY');
-  check('ALL enrollment in the cloud: only guests who agreed (Consent Y) with a civility and an e-mail are sent; never on a schedule; TARS login from Secrets; the tracker key matches Guest Pipeline; no e-mail in the public log',
-    [L.rows.map(r => r.split('\t')[0]), /^\s*schedule:/m.test(wf), /secrets\.ACDC_PASS/.test(wf), EC.logKey('A.b@X.test'), /gpLogKey\(email\) \{ return String\(email \|\| ''\)\.toLowerCase\(\)\.replace\(\/\[\.#\$\\\[\\\]\\\/@\]\/g, '_'\)/.test(gp), /console\.log\([^)]*email/i.test(src), /gpEnrollRows\(\)/.test(gp) && /r\.consent && r\.civility/.test(gp)],
-    [['1'], false, true, 'a_b_x_test', true, false, true]); }
+  check('ALL enrollment (old ACDC robot): only guests who agreed (Consent Y) with a civility and an e-mail; never on a schedule; its workflow is retired (switched off, no ACDC password — Accor Loop replaced it); the tracker key matches Guest Pipeline; no e-mail in the public log',
+    [L.rows.map(r => r.split('\t')[0]), /^\s*schedule:/m.test(wf), /secrets\.ACDC_PASS/.test(wf) || !/if: \$\{\{ false \}\}/.test(wf), EC.logKey('A.b@X.test'), /gpLogKey\(email\) \{ return String\(email \|\| ''\)\.toLowerCase\(\)\.replace\(\/\[\.#\$\\\[\\\]\\\/@\]\/g, '_'\)/.test(gp), /console\.log\([^)]*email/i.test(src), /gpEnrollRows\(\)/.test(gp) && /r\.consent && r\.civility/.test(gp)],
+    [['1'], false, false, 'a_b_x_test', true, false, true]); }
 { const { resolveLogin: RL } = require(path.join(ROOT, 'scripts/neorcha-cloud.js')), M = { NEORCHA_USER: 'mu', NEORCHA_PASS: 'mp' }, w = x => (x.err ? 'ERR' : x.who + ' ' + x.user + ' ' + x.url.split('/')[2]);
   check('Neorcha cloud logins per hotel: a hotel\'s own secrets; the main login only for no account or the main hotel\'s brand; another hotel without its secrets stops (never the main login)',
     [w(RL('', M)), w(RL('IBIS', M)), w(RL('MERCURE', M)), w(RL('MERCURE', Object.assign({ NEORCHA_USER_ACC: 'xu', NEORCHA_PASS_ACC: 'xp' }, M))), w(RL('MERCURE', Object.assign({}, M, { NEORCHA_URL: 'https://mercure.myneorcha.com/x' }))), /NEORCHA_USER_MERCURE/.test(RL('MERCURE', M).err)],
@@ -4298,6 +4298,34 @@ const haAsync = (async () => {
   console.log('\nHelper away');
   res.forEach(([l, a, e]) => check(l, a, e));
 })().catch(e => { fail++; console.log('  ✗ helper away threw: ' + (e && e.stack || e)); });
+
+// ── Page layout + ☁️ Accor Loop cloud enrollment ──
+(() => {
+  console.log('\nPage layout · Accor Loop cloud');
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8').replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<!--[\s\S]*?-->/g, '');
+  // one stray </div> closes <main> early: every page after it falls out of the layout (under the sidebar on PC)
+  check('page markup: every <div> is closed exactly once (a stray </div> pushes pages under the sidebar)', (html.match(/<div\b/gi) || []).length - (html.match(/<\/div>/gi) || []).length, 0);
+  const { execFileSync } = require('child_process');
+  const bad = fs.readdirSync(path.join(ROOT, 'scripts')).filter(f => f.endsWith('.js')).filter(f => { try { execFileSync(process.execPath, ['--check', path.join(ROOT, 'scripts', f)], { stdio: 'pipe' }); return false; } catch (_) { return true; } });
+  check('cloud robots (scripts/*.js): all of them parse — a syntax error stops the GitHub run before it starts', bad, []);
+  const run = fs.readFileSync(path.join(ROOT, 'scripts', 'accor-loop-cloud.js'), 'utf8'), worker = fs.readFileSync(path.join(ROOT, 'scripts', 'accor-loop-content.js'), 'utf8');
+  check('Accor Loop test run: the robot is told "test only" (it picks the title and stops before typing or submitting)',
+    [/__accor_diagnostic_only: !!test/.test(run), /cget\(\[[^\]]*DIAGNOSTIC_KEY\]\)/.test(worker)], [true, true]);
+  check('Accor Loop: the robot survives the portal reloading (started again on every page load, not one <script> tag)',
+    [/page\.on\('load'/.test(run), /script\.textContent = src/.test(run), /bypassCSP: true/.test(run), /runtime = \{[\s\S]*?freshTab/.test(run)], [true, false, true, true]);
+  check('Accor Loop: the job is seeded once — a reload never undoes a Stop', /read\('__seeded'\) !== seed\.__accor_records/.test(run), true);
+  // the runner instruments Playwright when loaded, so its pure helpers are tried in a separate process
+  const tsv = 'Consent\tCivility\tName\tEmail\tPhone\tCountry\tConfirmation\nY\tMr\tTest One\tone@x.test\t050\tUAE\t1\nN\tMr\tNo Consent\tno@x.test\t\tUK\t2\nY\t\tNo Title\tnt@x.test\t\tUK\t3\nY\tMrs\tNo Mail\t\t\tUK\t4';
+  let out = null;
+  try {
+    out = JSON.parse(execFileSync(process.execPath, ['-e', `const A = require(${JSON.stringify(path.join(ROOT, 'scripts', 'accor-loop-cloud.js'))}); const rows = A.consenting(${JSON.stringify(tsv)});
+      const rep = A.resultReport([{ status: 'success' }, { status: 'already_member' }, { status: 'skipped: country_not_found: X' }, { status: 'bad_email' }], 5);
+      process.stdout.write(JSON.stringify({ names: rows.map(r => r.name), pipe: A.pipeRows(rows), rep: [rep.submitted, rep.alreadyMember, rep.skipped, rep.errors, rep.complete] }));`], { stdio: 'pipe' }).toString());
+  } catch (e) { out = { err: String(e.stderr || e.message).slice(0, 300) }; }
+  check('Accor Loop: only guests who AGREED, with a civility and an e-mail, are sent', out.names, ['Test One']);
+  check('Accor Loop: the robot\'s list format (conf|title|name|email|phone|country)', out.pipe, '1|Mr|Test One|one@x.test|050|UAE\n');
+  check('Accor Loop: the report counts', out.rep, [1, 1, 1, 1, false]);
+})();
 
 Promise.all([nhAsync, ogAsync, haAsync, nxAsync]).then(() => {
   console.log(`\n${pass} passed · ${fail} failed`);

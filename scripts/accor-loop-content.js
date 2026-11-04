@@ -112,14 +112,14 @@
     } catch (e) {}
   }
 
-  const boot = await cget([PORTAL_URL_KEY, LOOP_STATE_KEY, ENABLED_KEY, RECORDS_KEY]);
+  const boot = await cget([PORTAL_URL_KEY, LOOP_STATE_KEY, ENABLED_KEY, RECORDS_KEY, DIAGNOSTIC_KEY]);
   const enabled    = boot[ENABLED_KEY] === true;
   const diagnosticOnly = boot[DIAGNOSTIC_KEY] === true;
   const portalUrl  = boot[PORTAL_URL_KEY] || "";
   const recordsRaw = boot[RECORDS_KEY] || "";
   let   loopState  = boot[LOOP_STATE_KEY] || null;
 
-  log("content loaded on " + location.hostname + " | enabled=" + enabled);
+  log("content loaded on " + location.hostname + " | enabled=" + enabled + (diagnosticOnly ? " | TEST ONLY: nothing will be submitted" : ""));
 
   if (!enabled) { log("disabled, exiting"); return; }
 
