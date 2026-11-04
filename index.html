@@ -34,7 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
-<meta name="ho-version" content="v515"/>
+<meta name="ho-version" content="v516"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="themes.css"/>
@@ -55,8 +55,8 @@
         if (s && s.theme) {
           // a skin sits on a base theme: iPhone on Opera, iPhone Dark and Titanium on Night Ops, Ocean on Midnight
           var skins = { 'ios': 'opera', 'ios-dark': 'night-ops', 'titanium': 'night-ops', 'ocean': 'midnight', 'catppuccin': 'midnight', 'latte': 'opera', 'nord': 'midnight', 'dracula': 'midnight', 'tokyo': 'midnight', 'rosepine': 'midnight', 'paper': 'opera', 'sky': 'opera', 'mint': 'opera', 'sakura': 'opera', 'sand': 'opera',
-            'notes': 'opera', 'whatsapp': 'opera', 'telegram': 'opera', 'discord': 'night-ops', 'gaming': 'night-ops', 'classic': 'opera', 'pro': 'night-ops', 'study': 'opera', 'notepad': 'opera', 'redline': 'night-ops' };
-          var styles = { notes: 1, whatsapp: 1, telegram: 1, discord: 1, gaming: 1, classic: 1, pro: 1, study: 1, notepad: 1, redline: 1 };   // App styles (themes-pro.css)
+            'notes': 'opera', 'whatsapp': 'opera', 'telegram': 'opera', 'discord': 'night-ops', 'gaming': 'night-ops', 'classic': 'opera', 'pro': 'night-ops', 'study': 'opera', 'notepad': 'opera', 'redline': 'night-ops', 'found': 'night-ops' };
+          var styles = { notes: 1, whatsapp: 1, telegram: 1, discord: 1, gaming: 1, classic: 1, pro: 1, study: 1, notepad: 1, redline: 1, found: 1 };   // App styles (themes-pro.css)
           document.documentElement.setAttribute('data-theme', skins[s.theme] || s.theme);
           if (skins[s.theme]) document.documentElement.setAttribute('data-skin', s.theme);
           if (styles[s.theme]) document.documentElement.setAttribute('data-skin-group', 'style');
@@ -5528,6 +5528,7 @@ async function appInit() {
 <script src="standards-quiz.js"></script>
 <script src="accor-standards.js"></script>
 <script src="guest-pipeline.js"></script>
+<script src="found-web.js"></script>
 <script src="home.js"></script>
 <script src="month-end.js"></script>
 <script src="file-router.js"></script>

@@ -64,6 +64,8 @@
     "burma": "Myanmar",
     "cape verde": "Cabo Verde",
     "holland": "Netherlands",
+    "marocco": "Morocco", "maroc": "Morocco", "morroco": "Morocco", "marokko": "Morocco",
+    "saudi": "Saudi Arabia", "kingdom of saudi arabia": "Saudi Arabia", "russian federation": "Russia", "korea": "South Korea", "republic of korea": "South Korea",
     "the netherlands": "Netherlands"
   };
 
@@ -85,7 +87,13 @@
     return plus + digits.slice(0, 15);
   }
 
+  // é → e, invisible marks (right-to-left marks, zero-width, no-break spaces) and any non-Latin letter removed
+  function latinOnly(v) {
+    return String(v || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^A-Za-z' -]+/g, " ").replace(/\s+/g, " ").replace(/^[\s'-]+|[\s'-]+$/g, "").trim();
+  }
   function splitName(fullName) {
+    fullName = latinOnly(fullName);
     if (!fullName) return { first: "Test", last: "User" };
     const parts = String(fullName).trim().split(/\s+/).filter(Boolean);
     if (parts.length === 0) return { first: "Test", last: "User" };
@@ -140,10 +148,10 @@
     const conf = p[0], titleRaw = p[1], name = p[2], email = p[3], phone = p[4], countryRaw = p[5];
     const title = normalizeTitle(titleRaw);
     if (!email || email.indexOf("@") < 0) return null;
-    const nm = splitName(name);
+    const nm = splitName(name), nameOk = latinOnly(name).split(" ").filter(Boolean).length >= 2;
     const cleanPhone = sanitizePhone(phone);
     return { conf: conf, title: title || DEFAULT_TITLE,
-             first_name: nm.first, last_name: nm.last,
+             first_name: nm.first, last_name: nm.last, nameOk: nameOk,
              email: email, phone: cleanPhone, phoneRaw: phone,
              country: mapCountry(countryRaw), countryRaw: countryRaw };
   }
@@ -517,6 +525,10 @@
     }
     log("     best match: \"" + (best ? best.txt : "none") + "\" (score " + bestScore.toFixed(1) + ")");
 
+    if (best && bestScore < 30 && similarity(best.txt, text) >= 0.8) {
+      log("     close spelling: \"" + text + "\" → \"" + best.txt + "\"");
+      bestScore = 30;
+    }
     if (best && bestScore >= 30) {
       best.el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, view: window }));
       best.el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true, view: window }));
@@ -787,6 +799,13 @@
     window.__lastModalText    = null;
     window.__lastSuccessUrl   = null;
 
+    if (!rec.nameOk) {
+      log("  name has no first AND last name in Latin letters — skipped (the portal accepts only A–Z)", "warn");
+      results.push({ email: rec.email, conf: rec.conf, name: rec.first_name + " " + rec.last_name, status: "skipped: name_not_latin" });
+      log("  GUEST RESULT · SKIPPED · " + rec.first_name + " " + rec.last_name + " · " + (rec.conf || "no confirmation") + " · name not in Latin letters");
+      await persist(idx + 1);
+      return { status: "skipped: name_not_latin" };
+    }
     await goHome();
     await openSignupForm();
 
@@ -854,7 +873,18 @@
     await waitForOutcome(POST_SUBMIT_MAX);
     await dismissModalIfPresent(800);
 
-    const status = detectResult();
+    let status = detectResult();
+    // the portal refused the family name ("must be in latin characters"): nothing was created, so try once more with
+    // only the last word of the family name (long multi-word family names are refused too)
+    const refusedName = status === "bad_data" && /latin/i.test(String((window.__lastEnrollResult || {}).body || ""));
+    if (refusedName && !rec.retriedName && /\s/.test(rec.last_name)) {
+      rec.retriedName = true;
+      rec.last_name = rec.last_name.split(/\s+/).pop();
+      log("  ↻ portal refused the family name — trying once more with \"" + rec.last_name + "\"");
+      await goHome();
+      return processOne(rec, idx, total);
+    }
+    if (refusedName) status = "bad_name";
     log("  ✅ result: " + status);
 
     results.push({ email: rec.email, conf: rec.conf, name: rec.first_name + " " + rec.last_name, status: status });

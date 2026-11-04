@@ -148,7 +148,16 @@ function gpSet(i, field, val) {
 }
 
 // Bulk: tick / untick every usable guest, or set one civility for every usable guest without one.
-function gpCanEnroll(r) { const t = gpTracked(r); return gpEligible(r) && !(t && /submitted|already/.test(t.status)); }
+// enrolled already (by hand: "submitted"; by the cloud robot: "success" / "success_stuck"; or an ALL member) → never offered again
+const GP_DONE_RE = /submitted|already|^success/;
+/** the robot's last answer for a guest, in plain words (pure) */
+function gpTryWords(st) {
+  const s = String(st || '');
+  return /^success/.test(s) ? 'enrolled' : /already/.test(s) ? 'already an ALL member' : /bad_email/.test(s) ? 'Accor says this e-mail cannot receive mail — check the address'
+    : /bad_name|name_not_latin/.test(s) ? 'name refused (Latin letters A–Z only)' : /country_not_found/.test(s) ? 'country not found in the portal list'
+    : /bad_data/.test(s) ? 'the portal refused the data' : /title/.test(s) ? 'title could not be set' : s.replace(/^skipped:\s*/, '').replace(/_/g, ' ');
+}
+function gpCanEnroll(r) { const t = gpTracked(r); return gpEligible(r) && !(t && GP_DONE_RE.test(t.status)); }
 function gpSelectAll(on) {
   gpRows.forEach(r => { if (gpCanEnroll(r)) r.consent = on; });
   gpSaveDraft(); gpRender();
@@ -176,7 +185,7 @@ function gpRenderSummary() {
   if (!box) return;
   if (!gpRows.length) { box.innerHTML = ''; return; }
   const n = f => gpRows.filter(f).length;
-  const ready = n(r => gpEligible(r) && r.consent && r.civility && !(gpTracked(r) && /submitted|already/.test(gpTracked(r).status)));
+  const ready = n(r => gpEligible(r) && r.consent && r.civility && !(gpTracked(r) && GP_DONE_RE.test(gpTracked(r).status)));
   box.innerHTML = `
     <span class="gp-stat"><b>${gpRows.length}</b> guests</span>
     <span class="gp-stat ok"><b>${n(r => gpEligible(r))}</b> usable emails</span>
@@ -199,8 +208,8 @@ function gpRender() {
   body.innerHTML = gpRows.map((r, i) => {
     const f = GP_FLAG[r.flag];
     const t = gpTracked(r);
-    const tracked = t ? `<span class="gp-flag ${/submitted|already/.test(t.status) ? 'ok' : 'info'}" title="Logged ${escapeHtml(t.date || '')}">${escapeHtml(t.status)}</span>` : '';
-    const can = gpEligible(r) && !(t && /submitted|already/.test(t.status));
+    const tracked = t ? `<span class="gp-flag ${GP_DONE_RE.test(t.status) ? 'ok' : 'info'}" title="Logged ${escapeHtml(t.date || '')}">${escapeHtml(t.status)}</span>` : '';
+    const can = gpEligible(r) && !(t && GP_DONE_RE.test(t.status));
     return `<tr class="${can ? '' : 'gp-dim'}">
       <td style="font-family:var(--mono);font-size:.7rem;">${escapeHtml(r.conf)}</td>
       <td>${escapeHtml(r.name)}</td>
@@ -241,7 +250,7 @@ async function gpCopyClean() {
 }
 
 // the guests to enroll: agreed (Consent ticked), a civility, an e-mail, not already submitted / a member
-function gpEnrollRows() { return gpRows.filter(r => gpEligible(r) && r.consent && r.civility && !(gpTracked(r) && /submitted|already/.test(gpTracked(r).status))); }
+function gpEnrollRows() { return gpRows.filter(r => gpEligible(r) && r.consent && r.civility && !(gpTracked(r) && GP_DONE_RE.test(gpTracked(r).status))); }
 // withPhone: the cloud robot's list also carries the phone (the Accor Loop form has a phone box); the copied ALL Enroll list stays as it was
 function gpEnrollTsv(rows, withPhone) {
   const c = v => String(v == null ? '' : v).replace(/[\t\r\n]+/g, ' ').trim();
@@ -391,14 +400,14 @@ function gpQuickCan(r) { return gpCanEnroll(r) && !r.member; }
 function gpQuickPaint() {
   const body = document.getElementById('gqBody'), foot = document.getElementById('gqFoot'); if (!body) return;
   const can = gpRows.map((r, i) => [r, i]).filter(([r]) => gpQuickCan(r)), off = gpRows.filter(r => !gpQuickCan(r));
-  const why = r => r.member ? '💎 already an ALL member' : !r.email ? 'no e-mail' : r.flag === 'dup' ? 'listed twice' : r.flag === 'invalid' ? 'e-mail looks wrong' : gpTracked(r) ? 'already enrolled (' + gpTracked(r).status + ')' : 'can\'t be enrolled';
+  const why = r => r.member ? '💎 already an ALL member' : !r.email ? 'no e-mail' : r.flag === 'dup' ? 'listed twice' : r.flag === 'invalid' ? 'e-mail looks wrong' : gpTracked(r) ? gpTryWords(gpTracked(r).status) : 'can\'t be enrolled';
   let url = ''; try { url = (document.getElementById('gpAccorUrl') || {}).value || localStorage.getItem('gp_accor_url_v1') || ''; } catch (_) {}
   gpAutoTitles();
   const sub = document.getElementById('gqSub'); if (sub) sub.textContent = can.length + ' guest' + (can.length === 1 ? '' : 's') + ' can be enrolled · tick only the ones who said YES · titles fill themselves';
   body.innerHTML = `<label class="gq-url"><span>🔗 Accor Loop link</span><input id="gqUrl" type="url" value="${escapeHtml(url)}" placeholder="https://secure.guestinternet.com/…" autocomplete="url"></label>
     ${can.length ? `<div class="gq-bar"><span>Tap a guest to tick them</span><button type="button" class="btn sm" onclick="gpQuickAll(${can.every(([r]) => r.consent) ? 'false' : 'true'})">${can.every(([r]) => r.consent) ? '✕ Untick all' : '✓ Tick all'}</button></div><div class="gq-list">${can.map(([r, i]) => `<div class="gq-row${r.consent ? ' on' : ''}" onclick="if(!event.target.closest('.gq-title,input,label'))gpQuickTick(${i})">
       <label class="gq-yes"><input type="checkbox" ${r.consent ? 'checked' : ''} onchange="gpSet(${i},'consent',this.checked);gpQuickPaint()"><span>Agreed</span></label>
-      <div class="gq-who"><b>${escapeHtml(r.name || '—')}</b><small>${r.room ? 'Room ' + escapeHtml(r.room) + ' · ' : ''}${escapeHtml(r.email)}${r.phone ? ' · 📞' : ''}${r.nat ? ' · ' + escapeHtml(r.nat) : ''}</small></div>
+      <div class="gq-who"><b>${escapeHtml(r.name || '—')}</b><small>${r.room ? 'Room ' + escapeHtml(r.room) + ' · ' : ''}${escapeHtml(r.email)}${r.phone ? ' · 📞' : ''}${r.nat ? ' · ' + escapeHtml(r.nat) : ''}</small>${gpTracked(r) ? `<small class="gq-last">Last try ${escapeHtml(gpTracked(r).date || '')}: ${escapeHtml(gpTryWords(gpTracked(r).status))}</small>` : ''}</div>
       <button type="button" class="gq-title ${escapeHtml(r.civSrc || 'guess')}" onclick="gpCycleTitle(${i})" title="Filled by itself — tap to change">${escapeHtml(r.civility || 'Mr')}<small>${{ card: 'from card', name: 'from name', you: 'set by you' }[r.civSrc] || 'guessed · tap'}</small></button></div>`).join('')}</div>`
       : '<div class="acr-empty">None of these guests can be enrolled (no e-mail, already members or already enrolled).</div>'}
     ${off.length ? `<details class="gq-off"><summary>${off.length} guest${off.length === 1 ? '' : 's'} left out</summary>${off.map(r => `<div><b>${escapeHtml(r.name || r.conf)}</b> · ${escapeHtml(why(r))}</div>`).join('')}</details>` : ''}`;
@@ -490,7 +499,8 @@ function gpCloudPaint(v) {
   const lines = (live && Array.isArray(live.con) ? live.con : []).slice();
   if (GP_ACC.gh && (!live || live.step === 'queued')) lines.push({ t: Date.now(), g: 'GH', m: 'GitHub Actions: ' + GP_ACC.gh.status + (GP_ACC.gh.conclusion ? ' · ' + GP_ACC.gh.conclusion : '') });
   gpAccPaintCon(lines, st);
-  if (st.state === 'done' && !test && !GP_ACC.logged) { GP_ACC.logged = true; setTimeout(gpLoadLog, 800); }
+  if (st.state === 'done' && !test && !GP_ACC.logged) { GP_ACC.logged = true; setTimeout(async () => { await gpLoadLog();
+    gpRows.forEach(r => { if (gpTracked(r)) r.consent = false; }); gpSaveDraft(); gpRenderSummary(); if (document.getElementById('gqBody')) gpQuickPaint(); }, 800); }
   if (st.state === 'run') GP_ACC.logged = false;
 }
 function gpAccPaintCon(lines, st) {

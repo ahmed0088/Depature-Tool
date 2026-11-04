@@ -516,7 +516,7 @@ function dtcRenderFixPlan(RC) {
     const sure = plan.map((p, i) => (p.action === 'Add' || p.action === 'Reverse') ? i + 1 : 0).filter(Boolean).join(', ');
     after = `<div style="font-size:.8rem;line-height:1.55;">
       ${sure ? `After step${sure.includes(',') ? 's' : ''} ${sure}: Opera is <b>${n(G.operaAfterKeep)}</b> AED.` : `Opera is <b>${n(G.rawOpera)}</b> AED.`}
-      ${G.verT ? `The “check the reservation” item(s) then close in one of two ways: reverse in Opera (Opera becomes <b>${n(G.operaAfter)}</b>, DTCM stays <b>${n(G.adjDtcm)}</b>), or fix it in the TD portal (DTCM becomes <b>${n(G.dtcmAfterKeep)}</b>, Opera stays <b>${n(G.operaAfterKeep)}</b>). Either way the two sides end equal.` : `DTCM is <b>${n(G.adjDtcm)}</b> AED, so both sides agree.`}
+      ${G.verT ? `Then each <b>Verify</b> item is closed on ONE side (its card says which): reverse it in Opera (Opera ends at <b>${n(G.operaAfter)}</b>) or fix it in the TD portal (DTCM ends at <b>${n(G.dtcmAfterKeep)}</b>). Either way both sides end equal.` : `DTCM is <b>${n(G.adjDtcm)}</b> AED, so both sides agree.`}
       ${G.monthEnd ? `<div style="margin-top:10px;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);">
         <b>Month-end tally.</b> Close each item the recommended way (${G.monthEnd.operaChanges} in Opera, ${G.monthEnd.dtcmChanges} in the TD portal — each card says which) and both sides end at
         DTCM XML <b>${n(G.monthEnd.dtcm)}</b> AED · Opera <b>${n(G.monthEnd.opera)}</b> AED${G.monthEnd.equal ? ' — <b>equal</b>.' : '. ⚠️ Still not equal: something is not explained yet.'}
@@ -527,11 +527,24 @@ function dtcRenderFixPlan(RC) {
     after = `<div class="dtc-warn" style="font-size:.8rem;">⚠️ Even after every step above, Opera and DTCM still differ by <b>${sg(G.leftover)}</b> AED. Look at the Checks and Phantom lists below: something is not explained yet.</div>`;
   }
 
+  // the totals agree but there is work: say in one line which errors cancel which (it looks contradictory otherwise)
+  let why = '';
+  if (G.adjGap === 0 && plan.length) {
+    const num = (f) => plan.map((p, i) => f(p) ? i + 1 : 0).filter(Boolean), sum = (f) => plan.reduce((a, p) => a + (f(p) ? (+p.amount || 0) : 0), 0);
+    const isAdd = p => p.action === 'Add', isOther = p => p.action !== 'Add' && !/^DTCM −/.test(p.effect || '');
+    const addN = num(isAdd), othN = num(isOther), addS = sum(isAdd), othS = sum(isOther);
+    const rng = a => a.length > 2 && a[a.length - 1] - a[0] === a.length - 1 ? a[0] + '–' + a[a.length - 1] : a.join(', ');
+    if (addN.length && othN.length) why = `<div style="margin:10px 0 0;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);font-size:.8rem;line-height:1.55;">
+      <b>Why the totals agree but there is still work:</b> two kinds of mistakes happen to be the same size.<br>
+      • DTCM has <b>${n(addS)}</b> AED that Opera did not post — items ${rng(addN)} (post them in Opera).<br>
+      • Opera has <b>${n(othS)}</b> AED that DTCM does not have — items ${rng(othN)} (reverse in Opera, or fix the stay in DTCM).<br>
+      They cancel out in the totals, but each of those rooms is still wrong for the guest and for the month-end check.</div>`;
+  }
   box.innerHTML = `
     <div style="margin:14px 0;padding:14px;border:1px solid var(--border, rgba(128,128,128,.3));border-radius:10px;">
       <div style="font-weight:700;font-size:.95rem;margin-bottom:4px;">🧭 How to close the gap between DTCM and Opera</div>
       <div style="font-size:.72rem;color:var(--text2);margin-bottom:8px;">Step A: what explains the difference between the two totals</div>
-      ${bridge}
+      ${bridge}${why}
       <div style="font-size:.72rem;color:var(--text2);margin:14px 0 2px;">Step B: what to do, in this order${allPlan.length ? '' : ' (nothing)'}. Copy the DTCM ID as often as you need; press ✓ Fixed when it is done, and it stays done on the next days' files.</div>
       ${cards}${!plan.length && fixedPlan.length ? '<div style="font-size:.8rem;">All corrections are marked fixed ✓</div>' : ''}
       ${fixedHtml}

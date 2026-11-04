@@ -126,7 +126,7 @@ function resultReport(results, total) {
   const already = count('already_member');
   const pending = count('pending-account');
   const skipped = results.filter(r => /^skipped:|^title_not_committed|^country_not_found/.test(String(r.status || ''))).length;
-  const errors = results.filter(r => /error|timeout|unclear|bad_data|bad_email|auth_hang|modal_other/i.test(String(r.status || ''))).length;
+  const errors = results.filter(r => /error|timeout|unclear|bad_data|bad_email|bad_name|auth_hang|modal_other/i.test(String(r.status || ''))).length;
   const other = Math.max(0, results.length - submitted - already - pending - skipped - errors);
   return {
     processed: results.length, total, submitted, alreadyMember: already, pending,

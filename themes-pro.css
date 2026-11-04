@@ -402,3 +402,48 @@ html[data-skin="redline"] .gp-accor-modal-card, html[data-skin="redline"] .nxr-c
 html[data-skin="redline"] .gp-accor-modal-ic { background: linear-gradient(135deg, #ff9a4d, #e8283c) !important; }
 @media (prefers-reduced-motion: reduce) { html[data-skin="redline"] .home-tile:hover { transform: none; } }
 @media (max-width: 760px) { html[data-skin="redline"] body::before { width: 110vmin; height: 110vmin; right: -40vmin; bottom: -60vmin; opacity: .55; } }
+
+/* ═════════ 🕷 Found — flat electric blue, white Inter, glass, a jumping spider that spins silk (found-web.js) ═════════
+   From "found — the curiosity cabinet": one flat blue, white type with tight tracking, lowercase headings,
+   frosted-glass cards with a white hairline, the current page struck through in the menu. */
+html[data-skin="found"] {
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --bg: #1129e2 !important; --bg2: #1a33e6 !important; --surface: #1d36e8 !important; --card: rgba(255,255,255,.1) !important; --card2: rgba(255,255,255,.14) !important; --input-bg: rgba(255,255,255,.12);
+  --border: rgba(255,255,255,.22) !important; --border2: rgba(255,255,255,.32) !important; --border3: rgba(255,255,255,.5) !important;
+  --text: #ffffff !important; --text2: rgba(255,255,255,.82) !important; --text3: rgba(255,255,255,.7) !important;
+  --accent: #ffffff !important; --accent2: #c7cffb !important; --accent-bg: rgba(255,255,255,.14) !important; --accent-border: rgba(255,255,255,.5) !important; --on-accent: #1129e2;
+  --green: #7dffb0; --red: #ff8a8a; --rose: #ff8a8a; --amber: #ffd27a; --blue: #c7d2ff; --mint: #7dffb0; --purple: #e0c3ff;
+  --topbar-bg: rgba(17,41,226,.72) !important; --topbar-border: rgba(255,255,255,.18) !important;
+  --r: 12px !important; --r2: 16px !important; --r3: 24px !important;
+  --ho-a1: #ffffff; --ho-a2: #c7cffb; --ho-ink: #1129e2;
+  color-scheme: dark;
+}
+html[data-skin="found"] body { background: #1129e2 !important; }
+html[data-skin="found"] main, html[data-skin="found"] #main, html[data-skin="found"] .main { background: transparent !important; }
+html[data-skin="found"] .topbar { background: rgba(17,41,226,.72) !important; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid rgba(255,255,255,.16) !important; }
+html[data-skin="found"] .page-hd h1, html[data-skin="found"] .panel h1, html[data-skin="found"] .home-big {
+  font-family: var(--font) !important; font-weight: 400 !important; letter-spacing: -0.08em !important; text-transform: lowercase; color: #fff !important; }
+html[data-skin="found"] .kpi-val { font-weight: 500 !important; letter-spacing: -0.06em !important; color: #fff !important; }
+html[data-skin="found"] .sidenav { background: rgba(17,41,226,.6) !important; border-right: 1px solid rgba(255,255,255,.14); }
+html[data-skin="found"] .nav-item { letter-spacing: -0.03em; color: rgba(255,255,255,.86) !important; border-radius: 10px !important; }
+html[data-skin="found"] .nav-item.active { background: transparent !important; color: #fff !important; font-weight: 500 !important; text-decoration: line-through; text-decoration-thickness: 2px; }
+html[data-skin="found"] .nav-item.active::before { display: none !important; }
+html[data-skin="found"] .nav-item.active .nav-badge { background: #fff !important; color: #1129e2 !important; text-decoration: none; }
+html[data-skin="found"] .nav-section-label { color: rgba(255,255,255,.7) !important; font-size: 12px !important; }
+html[data-skin="found"] .card, html[data-skin="found"] .home-tile, html[data-skin="found"] .kpi {
+  background: rgba(255,255,255,.1) !important; border: 0 !important; box-shadow: inset 0 0 0 1px rgba(255,255,255,.25) !important; border-radius: var(--r3) !important;
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+html[data-skin="found"] .btn { border-radius: 99px !important; letter-spacing: -0.02em; background: rgba(255,255,255,.1) !important; border: 1px solid rgba(255,255,255,.3) !important; color: #fff !important; }
+html[data-skin="found"] .btn.gold, html[data-skin="found"] .btn.primary { background: #fff !important; color: #1129e2 !important; border-color: #fff !important; font-weight: 600 !important; box-shadow: none !important; }
+html[data-skin="found"] .btn.gold:hover, html[data-skin="found"] .btn.primary:hover { background: #e8ecff !important; }
+html[data-skin="found"] input[type=text], html[data-skin="found"] input[type=search], html[data-skin="found"] input[type=email], html[data-skin="found"] input[type=url], html[data-skin="found"] input[type=number],
+html[data-skin="found"] input[type=date], html[data-skin="found"] input[type=time], html[data-skin="found"] input[type=tel], html[data-skin="found"] input:not([type]), html[data-skin="found"] select, html[data-skin="found"] textarea {
+  background: rgba(255,255,255,.12) !important; color: #fff !important; border: 1px solid rgba(255,255,255,.3) !important; border-radius: 12px !important; }
+html[data-skin="found"] input::placeholder, html[data-skin="found"] textarea::placeholder { color: rgba(255,255,255,.6) !important; }
+html[data-skin="found"] select option { background: #1129e2; color: #fff; }
+html[data-skin="found"] :focus-visible { outline: 2px solid #fff !important; outline-offset: 3px !important; }
+html[data-skin="found"] table th, html[data-skin="found"] thead th { background: rgba(255,255,255,.08) !important; color: rgba(255,255,255,.8) !important; }
+html[data-skin="found"] .fchip.on, html[data-skin="found"] .hs-seg button.on { background: #fff !important; color: #1129e2 !important; }
+html[data-skin="found"] #mobNav.mob-nav { background: rgba(17,41,226,.72) !important; border: 1px solid rgba(255,255,255,.25) !important; }
+html[data-skin="found"] .mob-nav-btn.active .mob-nav-lbl { text-decoration: line-through; }
+html[data-skin="found"] .gp-accor-modal-card, html[data-skin="found"] .nxr-card, html[data-skin="found"] .ho-theme-pop { background: #1129e2 !important; border-color: rgba(255,255,255,.3) !important; }

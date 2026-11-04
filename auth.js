@@ -399,6 +399,7 @@ function _applyLoginTheme(name) {
     'pro': { accent:'#ededed', accentDark:'#a1a1a1', btnColor:'#000000' },
     'study': { accent:'#5b5bd6', accentDark:'#3e63dd', btnColor:'#ffffff' },
     'notepad': { accent:'#005fb8', accentDark:'#003d92', btnColor:'#ffffff' },
+    'found': { accent:'#ffffff', accentDark:'#c7cffb', btnColor:'#1129e2' },
     'redline': { accent:'#e8283c', accentDark:'#c41426', btnColor:'#ffffff' },
   };
   const t = accents[name] || accents['night-ops'];

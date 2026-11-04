@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 516, items: [
+    "🕷 New look: Found — flat electric blue, white type, frosted-glass cards, and a little jumping spider that drops in, follows your mouse and spins silk with dew drops between the cards (on a computer; your normal pointer stays, it never blocks a click, and Delete clears its web). Pick it in the theme menu.",
+    "🧭 DTCM Reconciliation: when the two totals agree but there are still corrections, it now says why in one line — which items Opera is missing and which DTCM is missing, and that they happen to cancel out. Step C is shorter too.",
+    "🔧 Full check of the app: every page (44) and every safe button (527) pressed on PC and phone — no errors found. The Accor Loop GitHub run no longer shows the old \"Node.js 20 is deprecated\" warning.",
+  ] },
   { v: 515, items: [
     "🐞 Fixed: the Accor Loop window stayed on \"queued\" and then said \"finished without reporting back\" although the run worked — Guest Pipeline started listening before HotelOps was connected to the database, so the robot's reports never reached the screen.",
     "📱 Enroll guests on the phone: the sheet no longer slides sideways or drags the page behind it (a long e-mail made the list wider than the screen).",
