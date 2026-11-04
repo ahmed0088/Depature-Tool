@@ -95,7 +95,7 @@ function homeTiles() {
     if (typeof gpLog === 'undefined') return;
     const m = (typeof hoLocalISO === 'function' ? hoLocalISO() : new Date().toISOString()).slice(0, 7);
     const sent = Object.values(gpLog).filter(x => x.status === 'submitted' && String(x.date || '').startsWith(m)).length;
-    add({ panel: 'pipeline', icon: '💎', title: 'ALL enrollment', big: sent, sub: 'invitations sent this month', tone: 'idle' });
+    add({ panel: 'pipeline', icon: '💎', title: 'Guest enrolment', big: sent, sub: 'invitations sent this month', tone: 'idle' });
   });
 
   // Wake-up calls today

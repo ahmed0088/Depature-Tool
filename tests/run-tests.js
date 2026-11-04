@@ -4332,6 +4332,8 @@ const haAsync = (async () => {
   check('Enroll sheet: a tap ticks one guest; "Tick all" asks first; the title is never a manual pick',
     [/function gpQuickTick/.test(gpS), /confirm\(`Tick all \$\{can\.length\} guests\?/.test(gpS), /gq-civ/.test(gpS)], [true, true, false]);
   const thS = fs.readFileSync(path.join(ROOT, 'utils.js'), 'utf8'), ixS = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'), tpS = fs.readFileSync(path.join(ROOT, 'themes-pro.css'), 'utf8');
+  check('Enrolment portal link is saved per hotel + shared, written only when changed, and no brand name is shown in the UI',
+    [/const GP_URL_KEY = \(\) =>.*HOTEL_ID/.test(gpS), /if \(url === gpLoadAccorUrl\(\)\) return;/.test(gpS), /fbSet\('enrollPortalUrl'/.test(gpS) && /fbListen\('enrollPortalUrl'/.test(gpS), !/Accor Loop/.test(ixS)], [true, true, true, true]);
   check('Enroll from an uploaded sheet (Purpose): reads the sheet guests, excludes OTA/blank, labels it, keeps consent manual; the uploader reads Nationality',
     [/function gpEnrollFromPurpose/.test(gpS) && /purposeGuests/.test(gpS), /onclick="gpEnrollFromPurpose\(\)"/.test(ixS), /GP_SOURCE === 'sheet'/.test(gpS), /natI=ci\('NATIONALITY','COUNTRY'/.test(fs.readFileSync(path.join(ROOT, 'arrivals-purpose.js'), 'utf8'))], [true, true, true, true]);
   check('Enroll from Opera: Arrivals builds the sheet from guests with a real e-mail (OTA/blank excluded), labelled from the reader; consent stays manual',

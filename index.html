@@ -34,7 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
-<meta name="ho-version" content="v524"/>
+<meta name="ho-version" content="v525"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="themes.css"/>
@@ -1033,7 +1033,7 @@
       <button class="btn mint" onclick="syncFromArrivals()">↑ Sync Arrivals</button>
       <button class="btn sky"  onclick="openImportEmailsModal()" title="Paste the TSV output from the Neorcha email-scraper script to auto-fill emails by Confirmation Number">📧 Import Emails</button>
       <button class="btn sky" onclick="copyNeorchaScraper()" title="Copies the Neorcha console script straight to your clipboard">📋 Copy Scraper</button>
-      <button class="btn" onclick="showPanel('pipeline')" title="Opens Guest Pipeline: run the Neorcha script, clean the list, fill emails and prepare ALL enrollment">🧲 Guest Pipeline</button>
+      <button class="btn" onclick="showPanel('pipeline')" title="Opens Guest Pipeline: run the Neorcha script, clean the list, fill emails and prepare guest enrolment">🧲 Guest Pipeline</button>
       <button class="btn mint" onclick="openAddGuest('purpose')">+ Add</button>
       <button class="btn" onclick="gpEnrollFromPurpose()" title="Enroll the guests in this sheet that have an e-mail (you tick who agreed). For hotels with no Neorcha — the sheet is the e-mail source.">✍️ Enroll these guests</button>
       <button class="btn sky"  onclick="gmScanAndSaveAll()" title="Save all loaded guests to Guest Memory">🧠 Save to Memory</button>
@@ -1499,7 +1499,7 @@
     <div class="page-hd">
       <div class="page-hd-left">
         <h1>Guest Pipeline</h1>
-        <p>Neorcha guest emails → clean list → Purpose of Stay and ALL enrollment · everything in one place</p>
+        <p>Neorcha guest emails → clean list → Purpose of Stay and guest enrolment · everything in one place</p>
       </div>
     </div>
 
@@ -1545,7 +1545,7 @@
 
     <!-- STEP 3 -->
     <div class="card gp-step" id="gpActions" style="display:none;">
-      <div class="gp-step-hd"><span class="gp-num">3</span><div><div class="gp-step-t">Use the list</div><div class="gp-step-s">Fill Purpose of Stay, and/or prepare the ALL enrollment</div></div></div>
+      <div class="gp-step-hd"><span class="gp-num">3</span><div><div class="gp-step-t">Use the list</div><div class="gp-step-s">Fill Purpose of Stay, and/or prepare guest enrolment</div></div></div>
       <div class="gp-two">
         <div>
           <div class="gp-sub">📧 Purpose of Stay</div>
@@ -1556,12 +1556,12 @@
           </div>
         </div>
         <div>
-          <div class="gp-sub">💎 ALL enrollment</div>
+          <div class="gp-sub">💎 Guest enrolment</div>
           <p class="gp-p">Press <b>Enroll guests</b>, tick the guests who said <b>yes</b> and send — titles fill themselves, the cloud does the rest.</p>
           <div class="gp-accor-actions"><button class="btn gold" type="button" onclick="gpQuickShow()">✍️ Enroll guests</button><button class="btn" type="button" onclick="gpAccorRunWin(true)">📡 Progress</button></div>
           <div class="gp-cloud-live" id="gpCloudLive" hidden></div>
           <details class="gp-more"><summary>More options</summary>
-            <label class="gp-accor-url">Accor Loop link<input id="gpAccorUrl" type="url" placeholder="https://secure.guestinternet.com/..." autocomplete="url"></label>
+            <label class="gp-accor-url">Enrolment portal link<input id="gpAccorUrl" type="url" placeholder="https://secure.guestinternet.com/..." autocomplete="url"></label>
             <div class="gp-accor-actions"><button class="btn" id="gpAccCloudGo" onclick="gpAccCloudEnroll(false)" disabled>☁️ Enroll the ticked list</button><button class="btn" id="gpAccCloudTest" onclick="gpAccCloudEnroll(true)" disabled>🧪 Test run</button><button class="btn" id="gpCopyEnroll" onclick="gpCopyEnroll()" disabled>📋 Copy enrollment list</button><button class="btn" onclick="gpCopyScript('enroll', this)">📋 Copy ALL Enroll script</button></div>
           </details>
         </div>

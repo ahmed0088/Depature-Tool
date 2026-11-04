@@ -284,6 +284,17 @@ let gpCloudTag = '', gpAgentBusy = '';
 // GitHub-hosted Accor Loop runner. This is the normal web cloud path: GitHub creates a temporary
 // hosted computer, runs the browser there, reports progress through Firebase, then destroys it.
 const GP_ACC_GH = { api: 'https://api.github.com/repos/ahmed0088/Depature-Tool/actions/workflows/accor-loop.yml', key: 'ho_gh_start_key_v1' };
+// The Accor Loop link is remembered PER HOTEL (so you don't paste it each run) and shared with the team
+// for that hotel through the database, so any device for the hotel gets it filled by itself.
+const GP_URL_KEY = () => 'gp_accor_url_v1:' + (typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '');
+function gpLoadAccorUrl() { try { return localStorage.getItem(GP_URL_KEY()) || localStorage.getItem('gp_accor_url_v1') || ''; } catch (_) { return ''; } }
+function gpSaveAccorUrl(url) {
+  url = String(url || '').trim(); if (!url) return;
+  if (!/^https:\/\/secure\.guestinternet\.com\//i.test(url)) return;   // only a real enrolment portal link is saved
+  if (url === gpLoadAccorUrl()) return;                                     // unchanged → no DB write at all
+  try { localStorage.setItem(GP_URL_KEY(), url); localStorage.setItem('gp_accor_url_v1', url); } catch (_) {}
+  try { if (typeof fbSet === 'function') fbSet('enrollPortalUrl', { url, at: Date.now(), by: (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name) || '' }); } catch (_) {}
+}
 const gpAccKey = () => { try { return localStorage.getItem(GP_ACC_GH.key) || ''; } catch (_) { return ''; } };
 async function gpAccGh(path, opt) {
   const token = gpAccKey(); if (!token) throw new Error('Set up the GitHub start key first in Neorcha → Run in the cloud.');
@@ -296,7 +307,7 @@ async function gpAccGh(path, opt) {
 async function gpAccControl(action) {
   const live = { at: Date.now(), control: action === 'stop' ? 'stop' : 'run', stopRequested: action === 'stop' };
   try {
-    if (action === 'stop' && !confirm('Stop the Accor Loop cloud run? It will finish the current browser action, then stop before the next guest.')) return;
+    if (action === 'stop' && !confirm('Stop the cloud enrollment run? It will finish the current browser action, then stop before the next guest.')) return;
     await fbUpdate('enrollLive', live);
     if (action === 'stop') {
       if (GP_ACC.live) gpCloudPaint(Object.assign({}, GP_ACC.live, { note: 'Stop requested — finishing the current guest, then stopping…' }));
@@ -309,8 +320,8 @@ async function gpAccControl(action) {
 async function gpAccCloudRestart() {
   const url = (document.getElementById('gpAccorUrl')?.value || '').trim();
   const hid = typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '';
-  if (!url || !gpEnrollRows().length) { showToast('Review the selected guests and Accor Loop URL first', 'err'); return; }
-  if (!confirm('Start Accor Loop again for the selected guests?')) return;
+  if (!url || !gpEnrollRows().length) { showToast('Review the selected guests and the enrolment portal link first', 'err'); return; }
+  if (!confirm('Start the enrolment again for the selected guests?')) return;
   gpCloudTag = 'acc' + Date.now().toString(36);
   try {
     await fbUpdate('enrollLive', { at: Date.now(), control: 'run', stopRequested: false, state: 'run', step: 'queued', tag: gpCloudTag, test: false, n: gpEnrollRows().length, done: 0, note: 'Restart requested — waiting for GitHub…', con: [{ t: Date.now(), g: 'SYS', m: 'Run again requested' }] });
@@ -319,25 +330,25 @@ async function gpAccCloudRestart() {
     GP_ACC.at = Date.now();
     gpAccorRunWin(true);
     gpAccPoll(gpCloudTag);
-    showToast('☁️ Accor Loop started again', 'ok');
+    showToast('☁️ Enrolment started again', 'ok');
   } catch (e) { showToast(e.message, 'err'); }
 }
 async function gpAccCloudEnroll(test) {
   const rows = gpEnrollRows(); if (!rows.length) { showToast('Tick Agreed and choose a civility first', 'err'); return; }
   const url = (document.getElementById('gpAccorUrl')?.value || '').trim();
-  if (!/^https:\/\/secure\.guestinternet\.com\//i.test(url)) { showToast('Enter the Accor Loop enrollment URL first', 'err'); return; }
-  if (!test && !confirm(`Run Accor Loop enrollment for ${rows.length} selected guest(s)? Only guests marked Agreed will be sent.`)) return;
+  if (!/^https:\/\/secure\.guestinternet\.com\//i.test(url)) { showToast('Enter the enrolment portal link first', 'err'); return; }
+  if (!test && !confirm(`Run the cloud enrolment for ${rows.length} selected guest(s)? Only guests marked Agreed will be sent.`)) return;
   gpCloudTag = 'acc' + Date.now().toString(36); const hid = typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '';
-  try { localStorage.setItem('gp_accor_url_v1', url); } catch (_) {}
+  gpSaveAccorUrl(url);
   try {
     await fbSet('enrollJob', { tsv: gpEnrollTsv(rows, true), n: rows.length, at: Date.now(), by: (currentProfile && currentProfile.name) || '', test: !!test, tag: gpCloudTag, state: 'queued', accorLoop: true, portalUrl: url });
-    await fbSet('enrollLive', { at: Date.now(), started: Date.now(), state: 'run', step: 'queued', tag: gpCloudTag, test: !!test, n: rows.length, done: 0, note: 'Starting Accor Loop cloud computer…', con: [] });
+    await fbSet('enrollLive', { at: Date.now(), started: Date.now(), state: 'run', step: 'queued', tag: gpCloudTag, test: !!test, n: rows.length, done: 0, note: 'Starting the cloud enrolment…', con: [] });
     await gpAccGh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { test: test ? '1' : '', tag: gpCloudTag, hid, portal_url: url } }) });
     GP_ACC.at = Date.now();
     gpCloudPaint({ at: Date.now(), started: Date.now(), state: 'run', step: 'queued', tag: gpCloudTag, test: !!test, n: rows.length, done: 0, note: 'GitHub accepted the run · waiting for a cloud computer…', con: [{ t: Date.now(), g: 'GH', m: 'Run requested from HotelOps · ' + rows.length + ' guest(s) who agreed' }] });
     gpAccorRunWin(true);
     gpAccPoll(gpCloudTag);
-    showToast(test ? '🧪 Accor Loop test started — nothing will be submitted' : '☁️ Accor Loop enrollment started', 'ok');
+    showToast(test ? '🧪 Test started — nothing will be submitted' : '☁️ Enrolment started', 'ok');
   } catch (e) { showToast(e.message, 'err'); gpCloudPaint({ at: Date.now(), started: Date.now(), state: 'error', step: 'error', note: e.message, con: [{ t: Date.now(), g: 'ERR', m: e.message }] }); }
 }
 // GitHub's side of the run (queued / running / failed): kept apart from the robot's own report (enrollLive),
@@ -423,7 +434,7 @@ function gpQuickShow() {
   let w = document.getElementById('gpQuick');
   if (!w) {
     w = document.createElement('div'); w.id = 'gpQuick'; w.className = 'gp-accor-modal';
-    w.innerHTML = '<div class="gp-accor-modal-bg" data-gq-close="1"></div><section class="gp-accor-modal-card gq-card" role="dialog" aria-modal="true" aria-label="Enroll guests in ALL"><header class="gp-accor-modal-h"><span class="gp-accor-modal-ic">✍️</span><div><b>Enroll guests in ALL</b><small id="gqSub"></small></div><button type="button" class="gp-accor-modal-x" data-gq-close="1" aria-label="Close">✕</button></header><div class="gp-accor-modal-b" id="gqBody"></div><footer class="gq-foot" id="gqFoot"></footer></section>';
+    w.innerHTML = '<div class="gp-accor-modal-bg" data-gq-close="1"></div><section class="gp-accor-modal-card gq-card" role="dialog" aria-modal="true" aria-label="Enrol guests"><header class="gp-accor-modal-h"><span class="gp-accor-modal-ic">✍️</span><div><b>Enrol guests</b><small id="gqSub"></small></div><button type="button" class="gp-accor-modal-x" data-gq-close="1" aria-label="Close">✕</button></header><div class="gp-accor-modal-b" id="gqBody"></div><footer class="gq-foot" id="gqFoot"></footer></section>';
     document.body.appendChild(w);
     w.addEventListener('click', e => { if (e.target.closest('[data-gq-close]')) w.classList.remove('on'); });
   }
@@ -434,13 +445,13 @@ function gpQuickPaint() {
   const body = document.getElementById('gqBody'), foot = document.getElementById('gqFoot'); if (!body) return;
   const can = gpRows.map((r, i) => [r, i]).filter(([r]) => gpQuickCan(r)), off = gpRows.filter(r => !gpQuickCan(r));
   const why = r => r.member ? '💎 already an ALL member' : !r.email ? 'no e-mail' : r.flag === 'dup' ? 'listed twice' : r.flag === 'invalid' ? 'e-mail looks wrong' : gpTracked(r) ? gpTryWords(gpTracked(r).status) : 'can\'t be enrolled';
-  let url = ''; try { url = (document.getElementById('gpAccorUrl') || {}).value || localStorage.getItem('gp_accor_url_v1') || ''; } catch (_) {}
+  let url = ''; try { url = (document.getElementById('gpAccorUrl') || {}).value || gpLoadAccorUrl(); } catch (_) {}
   gpAutoTitles();
   const sub = document.getElementById('gqSub'); if (sub) sub.textContent = can.length + ' guest' + (can.length === 1 ? '' : 's') + ' can be enrolled · tick only the ones who said YES · titles fill themselves';
   const srcNote = GP_SOURCE === 'opera' ? `<div class="gq-src">📡 These came from the <b>Opera reader</b> (guests you opened with a real e-mail). Opera does not know who agreed to join ALL — tick only the guests who actually said yes.</div>`
     : GP_SOURCE === 'sheet' ? `<div class="gq-src">📄 From the <b>uploaded sheet</b> (guests with an e-mail). Check the country is filled and tick only the guests who agreed to join ALL.</div>`
     : GP_SOURCE === 'neorcha' ? `<div class="gq-src">🪪 From the <b>Neorcha cards</b>. Tick only the guests who agreed to join ALL.</div>` : '';
-  body.innerHTML = `${srcNote}<label class="gq-url"><span>🔗 Accor Loop link</span><input id="gqUrl" type="url" value="${escapeHtml(url)}" placeholder="https://secure.guestinternet.com/…" autocomplete="url"></label>
+  body.innerHTML = `${srcNote}<label class="gq-url"><span>🔗 Enrolment portal link</span><input id="gqUrl" type="url" value="${escapeHtml(url)}" placeholder="https://secure.guestinternet.com/…" autocomplete="url"></label>
     ${can.length ? `<div class="gq-bar"><span>Tap a guest to tick them</span><button type="button" class="btn sm" onclick="gpQuickAll(${can.every(([r]) => r.consent) ? 'false' : 'true'})">${can.every(([r]) => r.consent) ? '✕ Untick all' : '✓ Tick all'}</button></div><div class="gq-list">${can.map(([r, i]) => `<div class="gq-row${r.consent ? ' on' : ''}" onclick="if(!event.target.closest('.gq-title,input,label'))gpQuickTick(${i})">
       <label class="gq-yes"><input type="checkbox" ${r.consent ? 'checked' : ''} onchange="gpSet(${i},'consent',this.checked);gpQuickPaint()"><span>Agreed</span></label>
       <div class="gq-who"><b>${escapeHtml(r.name || '—')}</b><small>${r.room ? 'Room ' + escapeHtml(r.room) + ' · ' : ''}${escapeHtml(r.email)}${r.phone ? ' · 📞' : ''}${r.nat ? ' · ' + escapeHtml(r.nat) : ''}</small>${gpTracked(r) ? `<small class="gq-last">Last try ${escapeHtml(gpTracked(r).date || '')}: ${escapeHtml(gpTryWords(gpTracked(r).status))}</small>` : ''}</div>
@@ -460,14 +471,14 @@ function gpQuickAll(on) {
 }
 async function gpQuickGo(test) {
   const u = document.getElementById('gqUrl'), main = document.getElementById('gpAccorUrl');
-  if (u && main) main.value = u.value.trim();
+  if (u && main) { main.value = u.value.trim(); gpSaveAccorUrl(main.value); }
   if (gpRows.some(r => r.member && r.consent)) gpRows.forEach(r => { if (r.member) r.consent = false; });
   const w = document.getElementById('gpQuick');
   const before = GP_ACC.at; await gpAccCloudEnroll(test);
   if (GP_ACC.at !== before && w) w.classList.remove('on');
 }
 // ── 📡 the live window (same look and feel as the Neorcha cloud run) ──
-const GP_ACC_STEPS = [['gh', '🖥️', 'Start a GitHub computer'], ['open', '🌐', 'Open the Accor Loop portal'], ['worker', '🤖', 'Start the enrollment robot'], ['enroll', '✍️', 'Enroll the guests who agreed'], ['save', '💾', 'Save the results in HotelOps']];
+const GP_ACC_STEPS = [['gh', '🖥️', 'Start a GitHub computer'], ['open', '🌐', 'Open the enrolment portal'], ['worker', '🤖', 'Start the enrollment robot'], ['enroll', '✍️', 'Enroll the guests who agreed'], ['save', '💾', 'Save the results in HotelOps']];
 /** where an Accor Loop run is (pure): step index, state, message, GitHub link */
 function gpAccState(live, gh) {
   let k = 0, state = 'run', note = '';
@@ -491,7 +502,7 @@ function gpAccorRunWin(open) {
   let w = document.getElementById('gpAccorRunModal');
   if (!w) {
     w = document.createElement('div'); w.id = 'gpAccorRunModal'; w.className = 'gp-accor-modal';
-    w.innerHTML = '<div class="gp-accor-modal-bg" data-gp-close="1"></div><section class="gp-accor-modal-card" role="dialog" aria-modal="true" aria-label="Accor Loop cloud enrollment"><header class="gp-accor-modal-h"><span class="gp-accor-modal-ic">☁️</span><div><b>Accor Loop · cloud enrollment</b><small id="gpAccorModalSub">Live run</small></div><button type="button" class="gp-accor-modal-x" data-gp-close="1" aria-label="Close">✕</button></header><div class="gp-accor-modal-b"><div id="gpAccorModalBody"></div><div class="acr-con" id="gpAccCon"><div class="acr-con-h"><i></i><i></i><i></i><span>accor-loop-cloud · live console</span><button type="button" data-acr-con="1">Hide</button></div><div class="acr-term" id="gpAccTerm"></div></div></div></section>';
+    w.innerHTML = '<div class="gp-accor-modal-bg" data-gp-close="1"></div><section class="gp-accor-modal-card" role="dialog" aria-modal="true" aria-label="Guest enrolment (cloud)"><header class="gp-accor-modal-h"><span class="gp-accor-modal-ic">☁️</span><div><b>Guest Enrolment · cloud</b><small id="gpAccorModalSub">Live run</small></div><button type="button" class="gp-accor-modal-x" data-gp-close="1" aria-label="Close">✕</button></header><div class="gp-accor-modal-b"><div id="gpAccorModalBody"></div><div class="acr-con" id="gpAccCon"><div class="acr-con-h"><i></i><i></i><i></i><span>accor-loop-cloud · live console</span><button type="button" data-acr-con="1">Hide</button></div><div class="acr-term" id="gpAccTerm"></div></div></div></section>';
     document.body.appendChild(w);
     w.addEventListener('click', e => {
       if (e.target.closest('[data-gp-close]')) gpAccorRunWin(false);
@@ -522,7 +533,7 @@ function gpCloudPaint(v) {
   const sub = document.getElementById('gpAccorModalSub');
   const t0 = (live && +live.started) || GP_ACC.at || Date.now(), sec = Math.max(0, Math.round(((st.state === 'run' ? Date.now() : (live && +live.at) || Date.now()) - t0) / 1000));
   if (sub) sub.textContent = (test ? '🧪 Test run · nothing is submitted · ' : '') + (live ? Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0') : 'No run yet');
-  if (!live && !GP_ACC.gh) { body.innerHTML = '<div class="acr-empty">No Accor Loop run yet. Tick <b>Agreed</b> for the guests who said yes, paste the Accor Loop link, then press <b>☁️ Start cloud computer</b> (or 🧪 Test first).</div>'; gpAccPaintCon([], st); return; }
+  if (!live && !GP_ACC.gh) { body.innerHTML = '<div class="acr-empty">No enrolment run yet. Tick <b>Agreed</b> for the guests who said yes, paste the enrolment portal link, then press <b>☁️ Start cloud computer</b> (or 🧪 Test first).</div>'; gpAccPaintCon([], st); return; }
   const cg = live && live.current;
   const tile = (ic, lb, val, cls) => `<div class="acr-tile ${cls}"><b>${val}</b><span>${ic} ${lb}</span></div>`;
   body.innerHTML = `<div class="acr-bar ${st.state}"><i style="width:${pct}%"></i></div>
@@ -599,7 +610,9 @@ function gpAgentBeat() {
   tries = +tries || 0;
   if ((typeof fbListen !== 'function' || typeof _ref === 'undefined' || !_ref) && tries < 400) return setTimeout(() => gpCloudListen(tries + 1), 1500);
   const t = document.getElementById('gpAgentOn'); if (t) t.checked = gpIsAgent();
-  const au = document.getElementById('gpAccorUrl'); if (au) { try { au.value = localStorage.getItem('gp_accor_url_v1') || ''; } catch (_) {} }
+  const au = document.getElementById('gpAccorUrl'); if (au) { au.value = gpLoadAccorUrl(); if (!au.dataset.wired) { au.dataset.wired = '1'; au.addEventListener('change', () => gpSaveAccorUrl(au.value)); au.addEventListener('blur', () => gpSaveAccorUrl(au.value)); } }
+  // the hotel's saved link (shared by the team): fill it unless you are typing in the field right now
+  fbListen('enrollPortalUrl', v => { const a = document.getElementById('gpAccorUrl'); if (a && v && v.url && document.activeElement !== a && !a.value) a.value = v.url; });
   fbListen('enrollLive', v => { if (v && (Date.now() - (+v.at || 0) < 24 * 3600e3)) gpCloudPaint(v); });
   fbListen('enrollAgent', gpAgentPaint);
   fbListen('enrollJob', job => { if (job && job.state === 'queued' && !job.accorLoop) gpAgentTake(job); });

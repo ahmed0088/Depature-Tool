@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 525, items: [
+    "🔗 The enrolment portal link is now remembered per hotel and shared with your team, so you don't paste it every run. Type it once; any device for that hotel fills it in by itself. (It only saves a real guestinternet.com link, and only writes to the database when it actually changes.)",
+    "🏷️ Renamed the tool to neutral names — \"Guest enrolment\", \"Enrol guests\", \"Enrolment portal link\" — so it reads the same for any hotel or programme, not a brand.",
+  ] },
   { v: 524, items: [
     "✉️ Enroll now fixes obvious e-mail typos by itself, so more guests go through: gmail.con → gmail.com, gmial/gamil/gnail → gmail, hotmai/hotmial → hotmail, yahoo.co → yahoo.com, a missing dot (gmailcom → gmail.com), extra spaces, and clear slips like .con/.cmo/.ocm → .com. It only fixes sure cases — a real address like name@company.co is left alone. The fix is shown in the console and on the sheet.",
   ] },
