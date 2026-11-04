@@ -3718,6 +3718,7 @@ html, body { background: var(--bg); }
 .gq-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 20px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border);background:var(--card)}.gq-count{flex:1;min-width:120px;font-size:.85rem;color:var(--text2)}.gq-count b{font-size:1.1rem;color:var(--text)}.gq-warn{color:#f59e0b}
 @media(max-width:600px){.gq-card{width:100vw}.gq-row{flex-wrap:wrap}.gq-who{flex-basis:calc(100% - 60px)}.gq-civ{margin-left:56px}.gq-foot{padding:10px 14px calc(10px + env(safe-area-inset-bottom))}.gq-foot .btn{flex:1}}
 .gp-more{margin-top:10px;font-size:.82rem;color:var(--text3)}.gp-more summary{cursor:pointer;padding:4px 0}.gp-more[open] summary{margin-bottom:6px}
+.gq-src{margin:0 0 12px;padding:10px 12px;border-radius:10px;font-size:.8rem;line-height:1.5;color:var(--text2);background:color-mix(in srgb,var(--accent) 9%,var(--card));border:1px solid var(--border)}.gq-src b{color:var(--text)}
 .gq-list{grid-template-columns:minmax(0,1fr)}.gq-row{min-width:0;max-width:100%}.gq-card .gp-accor-modal-b{overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}.gq-card{overflow:hidden;max-width:100vw}#gpQuick{overscroll-behavior:contain;touch-action:pan-y}#gpQuick .gp-accor-modal-bg{touch-action:none}.gq-url input{min-width:0;text-overflow:ellipsis}
 .gq-who small.gq-last{color:#f59e0b;white-space:normal}
 .gq-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 8px;font-size:.78rem;color:var(--text3)}.gq-row{cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:manipulation}
@@ -3752,7 +3753,7 @@ html, body { background: var(--bg); }
 .gp-cloud-set{margin-top:10px;font-size:.82rem;color:var(--text3)}.gp-cloud-set summary{cursor:pointer}
 .gp-agent-st{margin-top:10px;display:inline-block;padding:4px 10px;border-radius:99px;font-size:.78rem;border:1px solid var(--border);background:var(--card)}.gp-agent-st.on{border-color:color-mix(in srgb,#10b981 55%,var(--border));color:var(--text)}
 .gp-agent-on{display:flex;gap:8px;align-items:center;margin:10px 0 6px;font-size:.88rem;color:var(--text);cursor:pointer}
-:root { --ho-css: "v518"; }
+:root { --ho-css: "v519"; }
 .rent-bp-card:empty { display: none; }
 .rent-bp-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 10px; } .rent-bp-h span { color: var(--text3); font-size: .78rem; }
 .rent-bp { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }

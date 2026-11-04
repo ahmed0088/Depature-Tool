@@ -374,7 +374,17 @@ function gpAgentPaint(a) {
 // The cards come straight from Neorcha. You tick only the guests who said YES and pick Mr/Ms; the Accor Loop
 // link is remembered; one button starts the cloud robot and the live window follows. Same rules as the full
 // Guest Pipeline page (it is the same list): no e-mail / duplicate / already enrolled / ALL member → can't be ticked.
-function gpQuickEnroll(cards) {
+let GP_SOURCE = '';
+/** ✍️ Enroll from the Opera reader: the guests on the Arrivals page who have a real (non-OTA) e-mail */
+function gpEnrollFromOpera() {
+  const list = (typeof arrGuests !== 'undefined' && Array.isArray(arrGuests) ? arrGuests : [])
+    .filter(g => g && g.name && gpNormEmail(g.email).email)
+    .map(g => ({ conf: g.conf || ('op-' + String(g.room || g.name).replace(/[^\w]/g, '')), room: g.room || '', name: g.name, email: g.email, phone: g.phone || '', nat: g.nat || '' }));
+  if (!list.length) { showToast('No arrivals with a usable e-mail yet. Open the rooms in the Opera reader first (OTA relay e-mails can\'t be used).', 'err'); return; }
+  gpQuickEnroll(list, 'opera');
+}
+function gpQuickEnroll(cards, source) {
+  GP_SOURCE = source || '';
   const c = v => String(v == null ? '' : v).replace(/[\t\r\n]+/g, ' ').trim();
   const list = (cards || []).filter(r => r && r.conf);
   const text = 'Confirmation_Number\tName\tEmail\tPhone\tNationality\tTitle\n' + list.map(r => [r.conf, r.name, r.email || 'No email', r.phone || 'No phone', r.nat, r.title || ''].map(c).join('\t')).join('\n');
@@ -404,7 +414,9 @@ function gpQuickPaint() {
   let url = ''; try { url = (document.getElementById('gpAccorUrl') || {}).value || localStorage.getItem('gp_accor_url_v1') || ''; } catch (_) {}
   gpAutoTitles();
   const sub = document.getElementById('gqSub'); if (sub) sub.textContent = can.length + ' guest' + (can.length === 1 ? '' : 's') + ' can be enrolled · tick only the ones who said YES · titles fill themselves';
-  body.innerHTML = `<label class="gq-url"><span>🔗 Accor Loop link</span><input id="gqUrl" type="url" value="${escapeHtml(url)}" placeholder="https://secure.guestinternet.com/…" autocomplete="url"></label>
+  const srcNote = GP_SOURCE === 'opera' ? `<div class="gq-src">📡 These came from the <b>Opera reader</b> (guests you opened with a real e-mail). Opera does not know who agreed to join ALL — tick only the guests who actually said yes.</div>`
+    : GP_SOURCE === 'neorcha' ? `<div class="gq-src">🪪 From the <b>Neorcha cards</b>. Tick only the guests who agreed to join ALL.</div>` : '';
+  body.innerHTML = `${srcNote}<label class="gq-url"><span>🔗 Accor Loop link</span><input id="gqUrl" type="url" value="${escapeHtml(url)}" placeholder="https://secure.guestinternet.com/…" autocomplete="url"></label>
     ${can.length ? `<div class="gq-bar"><span>Tap a guest to tick them</span><button type="button" class="btn sm" onclick="gpQuickAll(${can.every(([r]) => r.consent) ? 'false' : 'true'})">${can.every(([r]) => r.consent) ? '✕ Untick all' : '✓ Tick all'}</button></div><div class="gq-list">${can.map(([r, i]) => `<div class="gq-row${r.consent ? ' on' : ''}" onclick="if(!event.target.closest('.gq-title,input,label'))gpQuickTick(${i})">
       <label class="gq-yes"><input type="checkbox" ${r.consent ? 'checked' : ''} onchange="gpSet(${i},'consent',this.checked);gpQuickPaint()"><span>Agreed</span></label>
       <div class="gq-who"><b>${escapeHtml(r.name || '—')}</b><small>${r.room ? 'Room ' + escapeHtml(r.room) + ' · ' : ''}${escapeHtml(r.email)}${r.phone ? ' · 📞' : ''}${r.nat ? ' · ' + escapeHtml(r.nat) : ''}</small>${gpTracked(r) ? `<small class="gq-last">Last try ${escapeHtml(gpTracked(r).date || '')}: ${escapeHtml(gpTryWords(gpTracked(r).status))}</small>` : ''}</div>

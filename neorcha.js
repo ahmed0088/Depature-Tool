@@ -412,8 +412,8 @@ function draw() {
       ${S.rows.slice(0, 600).map(r => `<tr><td>${esc(r.room)}</td><td>${esc(r.name)}</td><td>${r.arr ? dLbl(r.arr) : ''}</td><td>${esc(r.nat)}</td><td>${esc(r.purpose || r.purposeRaw)}</td><td>${r.member ? '💎' : ''}</td><td>${esc(r.email || '')}</td><td>${esc(r.phone || '')}</td><td>${esc(r.by)}</td></tr>`).join('')}</tbody></table></div></details>`;
   out.querySelectorAll('[data-nx]').forEach(b => { b.onclick = () => applyLink(b.dataset.nx); });
   const gpb = $('gp'); if (gpb) gpb.onclick = sendPipeline;
-  const enb = $('en'); if (enb) enb.onclick = () => { if (typeof gpQuickEnroll === 'function') gpQuickEnroll(S.rows); else sendPipeline(); };
-  const ay = $('ask-yes'); if (ay) ay.onclick = () => { ASK_ENROLL = false; draw(); if (typeof gpQuickEnroll === 'function') gpQuickEnroll(S.rows); else sendPipeline(); };
+  const enb = $('en'); if (enb) enb.onclick = () => { if (typeof gpQuickEnroll === 'function') gpQuickEnroll(S.rows, 'neorcha'); else sendPipeline(); };
+  const ay = $('ask-yes'); if (ay) ay.onclick = () => { ASK_ENROLL = false; draw(); if (typeof gpQuickEnroll === 'function') gpQuickEnroll(S.rows, 'neorcha'); else sendPipeline(); };
   const an = $('ask-no'); if (an) an.onclick = () => { ASK_ENROLL = false; draw(); };
 }
 const CSS = `

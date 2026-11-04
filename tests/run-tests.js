@@ -4316,7 +4316,7 @@ const haAsync = (async () => {
   check('Accor Loop: the job is seeded once — a reload never undoes a Stop', /read\('__seeded'\) !== seed\.__accor_records/.test(run), true);
   const gpS = fs.readFileSync(path.join(ROOT, 'guest-pipeline.js'), 'utf8'), nxS = fs.readFileSync(path.join(ROOT, 'neorcha.js'), 'utf8');
   check('Enroll in one place: Neorcha\'s ✍️ button opens the enroll sheet; ALL members can\'t be ticked; the cloud list carries the phone; nothing is pre-ticked',
-    [/id="nx-en"/.test(nxS) && /gpQuickEnroll\(S\.rows\)/.test(nxS), /function gpQuickCan\(r\) \{ return gpCanEnroll\(r\) && !r\.member; \}/.test(gpS), /tsv: gpEnrollTsv\(rows, true\)/.test(gpS) && /'Confirmation_Number\\tName\\tEmail\\tPhone\\tNationality\\tCivility\\tConsent\\n'/.test(gpS), /consent = true/.test(gpS.slice(gpS.indexOf('function gpQuickEnroll'), gpS.indexOf('async function gpQuickGo')))],
+    [/id="nx-en"/.test(nxS) && /gpQuickEnroll\(S\.rows/.test(nxS), /function gpQuickCan\(r\) \{ return gpCanEnroll\(r\) && !r\.member; \}/.test(gpS), /tsv: gpEnrollTsv\(rows, true\)/.test(gpS) && /'Confirmation_Number\\tName\\tEmail\\tPhone\\tNationality\\tCivility\\tConsent\\n'/.test(gpS), /consent = true/.test(gpS.slice(gpS.indexOf('function gpQuickEnroll'), gpS.indexOf('async function gpQuickGo')))],
     [true, true, true, false]);
   { const a0 = gpS.indexOf('const GP_NAMES_M'), a1 = gpS.indexOf('/** fill every empty title');
     const box = {}; vm.createContext(box); vm.runInContext(gpS.slice(a0, a1) + '\nthis.R = gpResolveTitle;', box);
@@ -4332,8 +4332,10 @@ const haAsync = (async () => {
   check('Enroll sheet: a tap ticks one guest; "Tick all" asks first; the title is never a manual pick',
     [/function gpQuickTick/.test(gpS), /confirm\(`Tick all \$\{can\.length\} guests\?/.test(gpS), /gq-civ/.test(gpS)], [true, true, false]);
   const thS = fs.readFileSync(path.join(ROOT, 'utils.js'), 'utf8'), ixS = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'), tpS = fs.readFileSync(path.join(ROOT, 'themes-pro.css'), 'utf8');
+  check('Enroll from Opera: Arrivals builds the sheet from guests with a real e-mail (OTA/blank excluded), labelled from the reader; consent stays manual',
+    [/function gpEnrollFromOpera/.test(gpS) && /arrGuests/.test(gpS) && /gpNormEmail\(g\.email\)\.email/.test(gpS), /gpQuickEnroll\(list, 'opera'\)/.test(gpS), /GP_SOURCE === 'opera'/.test(gpS), /onclick="gpEnrollFromOpera\(\)"/.test(ixS)], [true, true, true, true]);
   check('Neorcha: after a local collection it asks to enroll (Yes opens the sheet); a cloud/background collection (with at) never asks',
-    [/ASK_ENROLL = !at && R\.rows\.some\(r => r\.email\)/.test(nxS), /id="nx-ask-yes"/.test(nxS) && /gpQuickEnroll\(S\.rows\)/.test(nxS)], [true, true]);
+    [/ASK_ENROLL = !at && R\.rows\.some\(r => r\.email\)/.test(nxS), /id="nx-ask-yes"/.test(nxS) && /gpQuickEnroll\(S\.rows/.test(nxS)], [true, true]);
   check('Found/Redline: the phone More drawer is solid (a see-through drawer let the home page bleed through)',
     [/html\[data-skin="found"\] \.mob-more-drawer \{ background: #0e22b8/.test(tpS), /html\[data-skin="redline"\] \.mob-more-drawer \{ background: #2e0f05/.test(tpS)], [true, true]);
   { const fw = fs.readFileSync(path.join(ROOT, 'found-web.js'), 'utf8');

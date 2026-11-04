@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 519, items: [
+    "📡 Enroll from Opera too: on the Arrivals page press ✍️ Enroll these guests. It takes the arrivals you opened in the Opera reader that have a real e-mail (OTA / Booking relay addresses and \"No email\" are left out), fills the titles, and opens the same simple sheet — labelled \"from the Opera reader\". You still tick who agreed; Opera does not know that.",
+  ] },
   { v: 518, items: [
     "✍️ After you collect the cards from Neorcha on this device, it now asks \"Enroll these guests in ALL?\" with Yes / Not now, right at the top. Yes opens the simple enroll sheet (tick who said yes, the cloud does the rest). A nightly cloud collection never pops this up.",
   ] },

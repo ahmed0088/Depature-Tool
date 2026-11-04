@@ -34,7 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
-<meta name="ho-version" content="v518"/>
+<meta name="ho-version" content="v519"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="themes.css"/>
@@ -882,6 +882,7 @@
     <div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;">
       <button class="btn gold" onclick="loadArrivals()">⚡ Load Pasted</button>
       <label class="btn mint" style="cursor:pointer;">📂 Upload File<input type="file" accept=".xlsx,.xls,.csv" onchange="loadOperaFile(this,'arr')" style="display:none"/></label>
+      <button class="btn" onclick="gpEnrollFromOpera()" title="Enroll the arrivals that have a real e-mail in ALL (you tick who agreed)">✍️ Enroll these guests</button>
     </div>
   </div>
   <div class="kpi-row c4">
