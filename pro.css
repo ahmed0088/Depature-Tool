@@ -3707,6 +3707,16 @@ html, body { background: var(--bg); }
 .gp-cloud-live.done .gp-cl-bar i{background:linear-gradient(90deg,#10b981,#22c55e)}.gp-cloud-live.error .gp-cl-bar i{background:#f43f5e}
 .gp-cl-con{font:.7rem/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#05080f;color:#cbd5e1;border-radius:9px;padding:8px 10px;max-height:150px;overflow:auto}
 .gp-cl-con span{color:#475569;margin-right:8px}.gp-cl-con em{font-style:normal;font-weight:700;color:#38bdf8;margin-right:8px;display:inline-block;min-width:34px}.gp-cl-meta{display:flex;gap:10px;align-items:center;justify-content:space-between;color:var(--text3);font-size:.68rem;font-family:var(--mono);flex-wrap:wrap}.gp-cl-action{color:var(--accent);font-weight:700}.gp-cl-run{color:var(--accent);text-decoration:none}.gp-cl-run:hover{text-decoration:underline}.gp-cl-empty{padding:10px;color:#64748b;font: .7rem ui-monospace,SFMono-Regular,Menlo,monospace}.gp-cl-minimized .gp-cl-bar,.gp-cl-minimized .gp-cl-meta,.gp-cl-minimized .gp-cl-details{display:none}
+/* ✍️ Enroll in one place (opened from Neorcha or Guest Pipeline) */
+.gq-card{display:flex;flex-direction:column;width:min(620px,calc(100vw - 32px))}.gq-card .gp-accor-modal-b{flex:1;overflow:auto}
+.gq-url{display:flex;flex-direction:column;gap:5px;font-size:.78rem;font-weight:700;color:var(--text2);margin-bottom:12px}.gq-url input{width:100%;box-sizing:border-box;min-height:44px;padding:10px 12px;border-radius:11px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font:500 .9rem var(--font)}
+.gq-list{display:grid;gap:6px}.gq-row{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;border:1px solid var(--border);background:var(--card)}.gq-row.on{border-color:color-mix(in srgb,#10b981 55%,var(--border));background:color-mix(in srgb,#10b981 8%,var(--card))}
+.gq-yes{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:.62rem;color:var(--text3);cursor:pointer;flex:none;width:46px}.gq-yes input{width:22px;height:22px;accent-color:#10b981;cursor:pointer}
+.gq-who{flex:1;min-width:0}.gq-who b{display:block;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gq-who small{display:block;color:var(--text3);font-size:.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gq-civ{display:flex;flex:none;border:1px solid var(--border);border-radius:10px;overflow:hidden}.gq-civ button{border:0;background:var(--bg2);color:var(--text2);font:600 .76rem var(--font);padding:8px 10px;min-width:40px;min-height:36px;cursor:pointer;touch-action:manipulation}.gq-civ button+button{border-left:1px solid var(--border)}.gq-civ button.on{background:#6366f1;color:#fff}
+.gq-off{margin-top:12px;font-size:.8rem;color:var(--text3)}.gq-off summary{cursor:pointer}.gq-off div{padding:3px 0}
+.gq-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 20px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border);background:var(--card)}.gq-count{flex:1;min-width:120px;font-size:.85rem;color:var(--text2)}.gq-count b{font-size:1.1rem;color:var(--text)}.gq-warn{color:#f59e0b}
+@media(max-width:600px){.gq-card{width:100vw}.gq-row{flex-wrap:wrap}.gq-who{flex-basis:calc(100% - 60px)}.gq-civ{margin-left:56px}.gq-foot{padding:10px 14px calc(10px + env(safe-area-inset-bottom))}.gq-foot .btn{flex:1}}
 /* Accor Loop · live window (steps, tiles, console) — the Neorcha cloud-run look */
 .gp-accor-modal-card{width:min(560px,calc(100vw - 32px))}
 .acr-bar{height:8px;border-radius:99px;background:var(--bg2);overflow:hidden;margin:2px 0 14px}.acr-bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#38bdf8,#6366f1);transition:width .6s ease}.acr-bar.done i{background:linear-gradient(90deg,#10b981,#22c55e)}.acr-bar.error i{background:linear-gradient(90deg,#f43f5e,#ef4444)}.acr-bar.stopped i{background:#94a3b8}
@@ -3736,7 +3746,7 @@ html, body { background: var(--bg); }
 .gp-cloud-set{margin-top:10px;font-size:.82rem;color:var(--text3)}.gp-cloud-set summary{cursor:pointer}
 .gp-agent-st{margin-top:10px;display:inline-block;padding:4px 10px;border-radius:99px;font-size:.78rem;border:1px solid var(--border);background:var(--card)}.gp-agent-st.on{border-color:color-mix(in srgb,#10b981 55%,var(--border));color:var(--text)}
 .gp-agent-on{display:flex;gap:8px;align-items:center;margin:10px 0 6px;font-size:.88rem;color:var(--text);cursor:pointer}
-:root { --ho-css: "v512"; }
+:root { --ho-css: "v513"; }
 .rent-bp-card:empty { display: none; }
 .rent-bp-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 10px; } .rent-bp-h span { color: var(--text3); font-size: .78rem; }
 .rent-bp { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }

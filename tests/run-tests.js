@@ -4314,6 +4314,10 @@ const haAsync = (async () => {
   check('Accor Loop: the robot survives the portal reloading (started again on every page load, not one <script> tag)',
     [/page\.on\('load'/.test(run), /script\.textContent = src/.test(run), /bypassCSP: true/.test(run), /runtime = \{[\s\S]*?freshTab/.test(run)], [true, false, true, true]);
   check('Accor Loop: the job is seeded once — a reload never undoes a Stop', /read\('__seeded'\) !== seed\.__accor_records/.test(run), true);
+  const gpS = fs.readFileSync(path.join(ROOT, 'guest-pipeline.js'), 'utf8'), nxS = fs.readFileSync(path.join(ROOT, 'neorcha.js'), 'utf8');
+  check('Enroll in one place: Neorcha\'s ✍️ button opens the enroll sheet; ALL members can\'t be ticked; the cloud list carries the phone; nothing is pre-ticked',
+    [/id="nx-en"/.test(nxS) && /gpQuickEnroll\(S\.rows\)/.test(nxS), /function gpQuickCan\(r\) \{ return gpCanEnroll\(r\) && !r\.member; \}/.test(gpS), /tsv: gpEnrollTsv\(rows, true\)/.test(gpS) && /'Confirmation_Number\\tName\\tEmail\\tPhone\\tNationality\\tCivility\\tConsent\\n'/.test(gpS), /consent = true/.test(gpS.slice(gpS.indexOf('function gpQuickEnroll'), gpS.indexOf('async function gpQuickGo')))],
+    [true, true, true, false]);
   // the runner instruments Playwright when loaded, so its pure helpers are tried in a separate process
   const tsv = 'Consent\tCivility\tName\tEmail\tPhone\tCountry\tConfirmation\nY\tMr\tTest One\tone@x.test\t050\tUAE\t1\nN\tMr\tNo Consent\tno@x.test\t\tUK\t2\nY\t\tNo Title\tnt@x.test\t\tUK\t3\nY\tMrs\tNo Mail\t\t\tUK\t4';
   let out = null;

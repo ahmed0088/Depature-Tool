@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 513, items: [
+    "✍️ Enroll in one place: in Neorcha Registrations press ✍️ Enroll these guests. A simple sheet opens with the guests who can join ALL — tick the ones who said yes, tap Mr / Ms / Mrs, press ☁️ Enroll. The live window follows. (Also on the Guest Pipeline page: ✍️ Enroll guests (simple).)",
+    "💎 ALL members and guests without an e-mail are left out by themselves; the guest's phone now goes to the Accor Loop form too.",
+  ] },
   { v: 512, items: [
     "🧭 Fixed the broken page layout: on the PC most pages (DTCM Reconciliation and others) had dropped under the side menu, and the layout looked broken everywhere. Every page is back in its place, on PC and phone.",
     "☁️ Accor Loop cloud enrollment works again: the GitHub run no longer crashes at start, and the enrollment robot keeps going when the portal reloads (it used to vanish after the first reload — \"no activity\").",

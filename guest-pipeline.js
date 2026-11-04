@@ -215,7 +215,12 @@ async function gpCopyClean() {
 
 // the guests to enroll: agreed (Consent ticked), a civility, an e-mail, not already submitted / a member
 function gpEnrollRows() { return gpRows.filter(r => gpEligible(r) && r.consent && r.civility && !(gpTracked(r) && /submitted|already/.test(gpTracked(r).status))); }
-function gpEnrollTsv(rows) { return 'Confirmation_Number\tName\tEmail\tNationality\tCivility\tConsent\n' + rows.map(r => `${r.conf}\t${r.name}\t${r.email}\t${r.nat}\t${r.civility}\tY`).join('\n'); }
+// withPhone: the cloud robot's list also carries the phone (the Accor Loop form has a phone box); the copied ALL Enroll list stays as it was
+function gpEnrollTsv(rows, withPhone) {
+  const c = v => String(v == null ? '' : v).replace(/[\t\r\n]+/g, ' ').trim();
+  if (withPhone) return 'Confirmation_Number\tName\tEmail\tPhone\tNationality\tCivility\tConsent\n' + rows.map(r => [r.conf, r.name, r.email, r.phone, r.nat, r.civility, 'Y'].map(c).join('\t')).join('\n');
+  return 'Confirmation_Number\tName\tEmail\tNationality\tCivility\tConsent\n' + rows.map(r => `${r.conf}\t${r.name}\t${r.email}\t${r.nat}\t${r.civility}\tY`).join('\n');
+}
 async function gpCopyEnroll() {
   const rows = gpEnrollRows();
   if (!rows.length) { showToast('Tick "Agreed" and pick Mr/Ms for the guests who said yes first', 'err'); return; }
@@ -262,7 +267,7 @@ async function gpAccCloudRestart() {
   gpCloudTag = 'acc' + Date.now().toString(36);
   try {
     await fbUpdate('enrollLive', { at: Date.now(), control: 'run', stopRequested: false, state: 'run', step: 'queued', tag: gpCloudTag, test: false, n: gpEnrollRows().length, done: 0, note: 'Restart requested — waiting for GitHub…', con: [{ t: Date.now(), g: 'SYS', m: 'Run again requested' }] });
-    await fbSet('enrollJob', { tsv: gpEnrollTsv(gpEnrollRows()), n: gpEnrollRows().length, at: Date.now(), test: false, tag: gpCloudTag, state: 'queued', accorLoop: true, portalUrl: url });
+    await fbSet('enrollJob', { tsv: gpEnrollTsv(gpEnrollRows(), true), n: gpEnrollRows().length, at: Date.now(), test: false, tag: gpCloudTag, state: 'queued', accorLoop: true, portalUrl: url });
     await gpAccGh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { test: '', tag: gpCloudTag, hid, portal_url: url } }) });
     GP_ACC.at = Date.now();
     gpAccorRunWin(true);
@@ -278,7 +283,7 @@ async function gpAccCloudEnroll(test) {
   gpCloudTag = 'acc' + Date.now().toString(36); const hid = typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '';
   try { localStorage.setItem('gp_accor_url_v1', url); } catch (_) {}
   try {
-    await fbSet('enrollJob', { tsv: gpEnrollTsv(rows), n: rows.length, at: Date.now(), by: (currentProfile && currentProfile.name) || '', test: !!test, tag: gpCloudTag, state: 'queued', accorLoop: true, portalUrl: url });
+    await fbSet('enrollJob', { tsv: gpEnrollTsv(rows, true), n: rows.length, at: Date.now(), by: (currentProfile && currentProfile.name) || '', test: !!test, tag: gpCloudTag, state: 'queued', accorLoop: true, portalUrl: url });
     await fbSet('enrollLive', { at: Date.now(), started: Date.now(), state: 'run', step: 'queued', tag: gpCloudTag, test: !!test, n: rows.length, done: 0, note: 'Starting Accor Loop cloud computer…', con: [] });
     await gpAccGh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { test: test ? '1' : '', tag: gpCloudTag, hid, portal_url: url } }) });
     GP_ACC.at = Date.now();
@@ -328,6 +333,58 @@ function gpAgentPaint(a) {
   const on = a && Date.now() - (+a.at || 0) < 3 * 60000;
   el.innerHTML = on ? `🟢 Duty PC ready${a.name ? ' · ' + escapeHtml(a.name) : ''}` : a ? `⚪ Duty PC offline — last seen ${new Date(+a.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : '⚪ No duty PC yet — switch it on there (below)';
   el.className = 'gp-agent-st ' + (on ? 'on' : 'off');
+}
+// ── ✍️ Enroll in one place: Neorcha's "Enroll these guests" opens this sheet ──
+// The cards come straight from Neorcha. You tick only the guests who said YES and pick Mr/Ms; the Accor Loop
+// link is remembered; one button starts the cloud robot and the live window follows. Same rules as the full
+// Guest Pipeline page (it is the same list): no e-mail / duplicate / already enrolled / ALL member → can't be ticked.
+function gpQuickEnroll(cards) {
+  const c = v => String(v == null ? '' : v).replace(/[\t\r\n]+/g, ' ').trim();
+  const list = (cards || []).filter(r => r && r.conf);
+  const text = 'Confirmation_Number\tName\tEmail\tPhone\tNationality\n' + list.map(r => [r.conf, r.name, r.email || 'No email', r.phone || 'No phone', r.nat].map(c).join('\t')).join('\n');
+  try { const box = document.getElementById('gpInput'); if (box) box.value = text; } catch (_) {}
+  gpLoadText(text);
+  const info = {}; list.forEach(r => { info[c(r.conf)] = { member: !!r.member, room: c(r.room) }; });
+  gpRows.forEach(r => { const x = info[r.conf]; if (x) { r.member = x.member; r.room = x.room; if (r.member) r.consent = false; } });
+  gpQuickShow();
+}
+/** the same sheet for the list already loaded here (the ✍️ button on this page) */
+function gpQuickShow() {
+  if (!gpRows.length) { showToast('Load the guests first (Neorcha → ✍️ Enroll these guests, or paste the list above)', 'err'); return; }
+  let w = document.getElementById('gpQuick');
+  if (!w) {
+    w = document.createElement('div'); w.id = 'gpQuick'; w.className = 'gp-accor-modal';
+    w.innerHTML = '<div class="gp-accor-modal-bg" data-gq-close="1"></div><section class="gp-accor-modal-card gq-card" role="dialog" aria-modal="true" aria-label="Enroll guests in ALL"><header class="gp-accor-modal-h"><span class="gp-accor-modal-ic">✍️</span><div><b>Enroll guests in ALL</b><small id="gqSub"></small></div><button type="button" class="gp-accor-modal-x" data-gq-close="1" aria-label="Close">✕</button></header><div class="gp-accor-modal-b" id="gqBody"></div><footer class="gq-foot" id="gqFoot"></footer></section>';
+    document.body.appendChild(w);
+    w.addEventListener('click', e => { if (e.target.closest('[data-gq-close]')) w.classList.remove('on'); });
+  }
+  w.classList.add('on'); gpQuickPaint();
+}
+function gpQuickCan(r) { return gpCanEnroll(r) && !r.member; }
+function gpQuickPaint() {
+  const body = document.getElementById('gqBody'), foot = document.getElementById('gqFoot'); if (!body) return;
+  const can = gpRows.map((r, i) => [r, i]).filter(([r]) => gpQuickCan(r)), off = gpRows.filter(r => !gpQuickCan(r));
+  const why = r => r.member ? '💎 already an ALL member' : !r.email ? 'no e-mail' : r.flag === 'dup' ? 'listed twice' : r.flag === 'invalid' ? 'e-mail looks wrong' : gpTracked(r) ? 'already enrolled (' + gpTracked(r).status + ')' : 'can\'t be enrolled';
+  let url = ''; try { url = (document.getElementById('gpAccorUrl') || {}).value || localStorage.getItem('gp_accor_url_v1') || ''; } catch (_) {}
+  const sub = document.getElementById('gqSub'); if (sub) sub.textContent = can.length + ' guest' + (can.length === 1 ? '' : 's') + ' can be enrolled · tick only the ones who said YES';
+  body.innerHTML = `<label class="gq-url"><span>🔗 Accor Loop link</span><input id="gqUrl" type="url" value="${escapeHtml(url)}" placeholder="https://secure.guestinternet.com/…" autocomplete="url"></label>
+    ${can.length ? `<div class="gq-list">${can.map(([r, i]) => `<div class="gq-row${r.consent ? ' on' : ''}">
+      <label class="gq-yes"><input type="checkbox" ${r.consent ? 'checked' : ''} onchange="gpSet(${i},'consent',this.checked);gpQuickPaint()"><span>Agreed</span></label>
+      <div class="gq-who"><b>${escapeHtml(r.name || '—')}</b><small>${r.room ? 'Room ' + escapeHtml(r.room) + ' · ' : ''}${escapeHtml(r.email)}${r.phone ? ' · 📞' : ''}${r.nat ? ' · ' + escapeHtml(r.nat) : ''}</small></div>
+      <div class="gq-civ">${['Mr', 'Ms', 'Mrs'].map(v => `<button type="button" class="${r.civility === v ? 'on' : ''}" onclick="gpSet(${i},'civility','${v}');gpQuickPaint()">${v}</button>`).join('')}</div></div>`).join('')}</div>`
+      : '<div class="acr-empty">None of these guests can be enrolled (no e-mail, already members or already enrolled).</div>'}
+    ${off.length ? `<details class="gq-off"><summary>${off.length} guest${off.length === 1 ? '' : 's'} left out</summary>${off.map(r => `<div><b>${escapeHtml(r.name || r.conf)}</b> · ${escapeHtml(why(r))}</div>`).join('')}</details>` : ''}`;
+  const ready = gpEnrollRows().filter(r => !r.member), ticked = can.filter(([r]) => r.consent).length, noCiv = can.filter(([r]) => r.consent && !r.civility).length;
+  if (foot) foot.innerHTML = `<div class="gq-count"><b>${ready.length}</b> ready${noCiv ? ` · <span class="gq-warn">${noCiv} ticked without Mr/Ms</span>` : ''}${!ticked ? ' · tick who said yes' : ''}</div>
+    <button type="button" class="btn" onclick="gpQuickGo(true)"${ready.length ? '' : ' disabled'}>🧪 Test</button><button type="button" class="btn gold" onclick="gpQuickGo(false)"${ready.length ? '' : ' disabled'}>☁️ Enroll ${ready.length || ''} guest${ready.length === 1 ? '' : 's'}</button>`;
+}
+async function gpQuickGo(test) {
+  const u = document.getElementById('gqUrl'), main = document.getElementById('gpAccorUrl');
+  if (u && main) main.value = u.value.trim();
+  if (gpRows.some(r => r.member && r.consent)) gpRows.forEach(r => { if (r.member) r.consent = false; });
+  const w = document.getElementById('gpQuick');
+  const before = GP_ACC.at; await gpAccCloudEnroll(test);
+  if (GP_ACC.at !== before && w) w.classList.remove('on');
 }
 // ── 📡 the live window (same look and feel as the Neorcha cloud run) ──
 const GP_ACC_STEPS = [['gh', '🖥️', 'Start a GitHub computer'], ['open', '🌐', 'Open the Accor Loop portal'], ['worker', '🤖', 'Start the enrollment robot'], ['enroll', '✍️', 'Enroll the guests who agreed'], ['save', '💾', 'Save the results in HotelOps']];

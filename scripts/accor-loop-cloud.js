@@ -141,7 +141,8 @@ function reportNote(report, test) {
 }
 
 async function main() {
-  const missing = ['HOTELOPS_EMAIL', 'HOTELOPS_PASS', 'HOTELOPS_HOTEL'].filter(k => !String(E[k] || '').trim());
+  // the hotel is optional: without it the HotelOps account's own hotel is used (hotelDb)
+  const missing = ['HOTELOPS_EMAIL', 'HOTELOPS_PASS'].filter(k => !String(E[k] || '').trim());
   if (missing.length) fail('Missing secrets: ' + missing.join(', '));
   const FB = await hotelDb();
   ACTIVE_FB = FB;
