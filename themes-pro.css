@@ -447,3 +447,12 @@ html[data-skin="found"] .fchip.on, html[data-skin="found"] .hs-seg button.on { b
 html[data-skin="found"] #mobNav.mob-nav { background: rgba(17,41,226,.72) !important; border: 1px solid rgba(255,255,255,.25) !important; }
 html[data-skin="found"] .mob-nav-btn.active .mob-nav-lbl { text-decoration: line-through; }
 html[data-skin="found"] .gp-accor-modal-card, html[data-skin="found"] .nxr-card, html[data-skin="found"] .ho-theme-pop { background: #1129e2 !important; border-color: rgba(255,255,255,.3) !important; }
+
+/* Found + Redline: the glass cards are see-through, but the mobile "More" drawer must be solid, or the home page
+   behind it bleeds through (it looked like two pages on top of each other). Give the drawer and its tiles a solid fill. */
+html[data-skin="found"] .mob-more-overlay { background: rgba(6,12,90,.66) !important; backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+html[data-skin="found"] .mob-more-drawer { background: #0e22b8 !important; backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%); }
+html[data-skin="found"] .mob-more-item, html[data-skin="found"] .mob-util-btn { background: rgba(255,255,255,.12) !important; box-shadow: inset 0 0 0 1px rgba(255,255,255,.22) !important; }
+html[data-skin="redline"] .mob-more-overlay { background: rgba(20,4,0,.66) !important; backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+html[data-skin="redline"] .mob-more-drawer { background: #2e0f05 !important; backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%); }
+html[data-skin="redline"] .mob-more-item, html[data-skin="redline"] .mob-util-btn { background: rgba(255,255,255,.08) !important; border-color: rgba(255,214,170,.18) !important; }

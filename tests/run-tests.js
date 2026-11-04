@@ -4332,6 +4332,8 @@ const haAsync = (async () => {
   check('Enroll sheet: a tap ticks one guest; "Tick all" asks first; the title is never a manual pick',
     [/function gpQuickTick/.test(gpS), /confirm\(`Tick all \$\{can\.length\} guests\?/.test(gpS), /gq-civ/.test(gpS)], [true, true, false]);
   const thS = fs.readFileSync(path.join(ROOT, 'utils.js'), 'utf8'), ixS = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'), tpS = fs.readFileSync(path.join(ROOT, 'themes-pro.css'), 'utf8');
+  check('Found/Redline: the phone More drawer is solid (a see-through drawer let the home page bleed through)',
+    [/html\[data-skin="found"\] \.mob-more-drawer \{ background: #0e22b8/.test(tpS), /html\[data-skin="redline"\] \.mob-more-drawer \{ background: #2e0f05/.test(tpS)], [true, true]);
   { const fw = fs.readFileSync(path.join(ROOT, 'found-web.js'), 'utf8');
     check('Found theme: registered, its spider only runs in that theme with a mouse and without reduced motion, never takes clicks, and is in the offline cache',
       [/'found':\s*\{[^}]*skin: 'found'/.test(thS), /'found': 'night-ops'/.test(ixS) && /<script src="found-web\.js"><\/script>/.test(ixS), /prefers-reduced-motion: reduce/.test(fw) && /pointer: fine/.test(fw) && /pointer-events:none/.test(fw), /'\.\/found-web\.js'/.test(fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8'))],

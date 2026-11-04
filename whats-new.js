@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 517, items: [
+    "🩹 Found & Redline themes: the phone \"More\" menu was see-through, so the home page showed through it. It is solid now.",
+  ] },
   { v: 516, items: [
     "🕷 New look: Found — flat electric blue, white type, frosted-glass cards, and a little jumping spider that drops in, follows your mouse and spins silk with dew drops between the cards (on a computer; your normal pointer stays, it never blocks a click, and Delete clears its web). Pick it in the theme menu.",
     "🧭 DTCM Reconciliation: when the two totals agree but there are still corrections, it now says why in one line — which items Opera is missing and which DTCM is missing, and that they happen to cancel out. Step C is shorter too.",
