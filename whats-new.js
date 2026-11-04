@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 524, items: [
+    "✉️ Enroll now fixes obvious e-mail typos by itself, so more guests go through: gmail.con → gmail.com, gmial/gamil/gnail → gmail, hotmai/hotmial → hotmail, yahoo.co → yahoo.com, a missing dot (gmailcom → gmail.com), extra spaces, and clear slips like .con/.cmo/.ocm → .com. It only fixes sure cases — a real address like name@company.co is left alone. The fix is shown in the console and on the sheet.",
+  ] },
   { v: 523, items: [
     "📄 Enroll from an uploaded sheet: for a hotel with no Neorcha (e.g. Adagio), upload the Purpose of Stay Excel (with an Email column), then press ✍️ Enroll these guests on the Purpose of Stay page. It reads name, e-mail and nationality, opens the simple enroll sheet labelled \"from the uploaded sheet\", and the cloud enrolls the ones you tick.",
     "🌍 The uploaded sheet now also reads a Nationality / Country column (needed for enrollment).",

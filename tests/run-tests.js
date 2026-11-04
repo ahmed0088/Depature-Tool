@@ -4364,7 +4364,12 @@ const haAsync = (async () => {
     const seg = wc.slice(wc.indexOf('var AR_NAMES'), wc.indexOf('const sleep'));
     const nm = new Function(seg + '; return splitName;')();
     const j = r => JSON.stringify(nm(r));
-    check('Accor Loop: Arabic names become English so they can be enrolled (dictionary + letter fallback, never blank)',
+    { const seg2 = wc.slice(wc.indexOf('var EMAIL_DOM'), wc.indexOf('function parseLine'));
+    const fx = new Function(seg2 + '; return fixEmail;')();
+    check('Accor Loop: fix clear e-mail typos (known domains, .con->.com, missing dot) but never a real address',
+      [fx('a@gmail.con'), fx('b@gmial.com'), fx('c@gmailcom'), fx('d@yahoo.co'), fx('e@company.co')],
+      ['a@gmail.com', 'b@gmail.com', 'c@gmail.com', 'd@yahoo.com', 'e@company.co']); }
+  check('Accor Loop: Arabic names become English so they can be enrolled (dictionary + letter fallback, never blank)',
       [j('محمد علي'), j('عبدالله الكتبي'), j('فاطمة أحمد'), j('سعيد ناصر'), /[^\x00-\x7F]/.test(nm('خالدسعد').first + nm('خالدسعد').last)],
       ['{"first":"Mohammed","last":"Ali"}', '{"first":"Abdullah","last":"Al Ktby"}', '{"first":"Fatima","last":"Ahmed"}', '{"first":"Saeed","last":"Nasser"}', false]); }
   check('Accor Loop: the robot\'s list format (conf|title|name|email|phone|country)', out.pipe, '1|Mr|Test One|one@x.test|050|UAE\n');

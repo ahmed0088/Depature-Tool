@@ -15,10 +15,21 @@ const GP_SCRIPTS = {
 const GP_OTA_RE = /(^|@|\.)(guest\.)?(trip\.com|booking\.com|expedia(partnercentral)?\.com|airbnb\.com|hotels\.com|agoda\.com)$/i;
 const GP_EMAIL_FIXES = {
   'gmai.com': 'gmail.com', 'gmial.com': 'gmail.com', 'gamil.com': 'gmail.com', 'gnail.com': 'gmail.com', 'gmail.co': 'gmail.com',
-  'hotmai.com': 'hotmail.com', 'hotmal.com': 'hotmail.com', 'homail.com': 'hotmail.com',
-  'yaho.com': 'yahoo.com', 'yahho.com': 'yahoo.com', 'outlok.com': 'outlook.com',
-  'iclould.com': 'icloud.com', 'iclod.com': 'icloud.com'
+  'gmil.com': 'gmail.com', 'gmaill.com': 'gmail.com', 'gmall.com': 'gmail.com', 'gmaii.com': 'gmail.com',
+  'hotmai.com': 'hotmail.com', 'hotmal.com': 'hotmail.com', 'homail.com': 'hotmail.com', 'hotmial.com': 'hotmail.com',
+  'hotnail.com': 'hotmail.com', 'hotmil.com': 'hotmail.com', 'hotmali.com': 'hotmail.com',
+  'yaho.com': 'yahoo.com', 'yahho.com': 'yahoo.com', 'yahooo.com': 'yahoo.com', 'yhaoo.com': 'yahoo.com', 'yaoo.com': 'yahoo.com', 'yahoo.co': 'yahoo.com',
+  'outlok.com': 'outlook.com', 'outloo.com': 'outlook.com', 'outook.com': 'outlook.com', 'outlook.co': 'outlook.com',
+  'iclould.com': 'icloud.com', 'iclod.com': 'icloud.com', 'icoud.com': 'icloud.com', 'icloud.co': 'icloud.com'
 };
+/** fix clear e-mail typos (domain map + obvious TLD slips + a known provider missing its dot) — never a risky guess */
+function gpFixEmail(email) {
+  const at = String(email || '').lastIndexOf('@'); if (at < 1) return email;
+  let local = email.slice(0, at), dom = email.slice(at + 1).toLowerCase().replace(/^\.+|\.+$/g, '').replace(/\.{2,}/g, '.');
+  if (GP_EMAIL_FIXES[dom]) dom = GP_EMAIL_FIXES[dom];
+  dom = dom.replace(/\.(con|cmo|ocm|comm|vom|xom|cim|om|c0m)$/, '.com').replace(/^(gmail|hotmail|yahoo|outlook|icloud|live|aol)com$/, '$1.com');
+  return local + '@' + dom;
+}
 
 let gpRows = [];          // parsed guests in the workbench
 let gpLog = {};           // enrollment tracker: key → { email, status, date, name }
@@ -42,11 +53,11 @@ async function gpCopyScript(id, btn) {
 function gpNormEmail(raw) {
   let e = String(raw || '').trim().toLowerCase();
   if (!e || /^no\s*email/.test(e) || e === 'no@email.com') return { email: '', flag: 'no-email' };
-  const p = e.split('@');
-  if (p.length !== 2 || !p[0] || !/\.\w{2,}$/.test(p[1])) return { email: e, flag: 'invalid' };
+  if (GP_OTA_RE.test('@' + e.split('@').pop())) return { email: '', flag: 'ota' };
+  const fixed = gpFixEmail(e), p = fixed.split('@');
+  if (p.length !== 2 || !p[0] || !/\.\w{2,}$/.test(p[1])) return { email: fixed, flag: 'invalid' };
   if (GP_OTA_RE.test('@' + p[1])) return { email: '', flag: 'ota' };
-  const fix = GP_EMAIL_FIXES[p[1]];
-  if (fix) return { email: p[0] + '@' + fix, flag: 'fixed', was: e };
+  if (fixed !== e) return { email: fixed, flag: 'fixed', was: e };
   return { email: e, flag: '' };
 }
 

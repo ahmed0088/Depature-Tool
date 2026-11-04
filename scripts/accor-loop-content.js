@@ -175,19 +175,41 @@
   log("waiting for portal SPA...");
   await sleep(250);
 
+  // Fix only obvious, safe e-mail typos so more guests can enroll. Never a risky guess — known
+  // provider misspellings and clear TLD slips (.con → .com) only; anything unsure is left as-is.
+  var EMAIL_DOM = {
+    "gmail.com": ["gmai.com","gmial.com","gmil.com","gmaill.com","gmall.com","gnail.com","gamil.com","gmaii.com","gmial.co","gmailc.om","gmail.co","gmail.con","gmail.cm","gmail.comm","gmail.om","gmail.ocm","gmailcom","gmail.cim","gmail.vom","gmail.xom","gmil.co"],
+    "hotmail.com": ["hotmial.com","hotmai.com","hotmal.com","hotnail.com","hotmil.com","homail.com","hotmali.com","hotmaill.com","hotmail.co","hotmail.con","hotmail.cm","hotmail.comm","hotmailcom","hotmail.om"],
+    "yahoo.com": ["yaho.com","yahooo.com","yhaoo.com","yaoo.com","yhoo.com","yahoo.co","yahoo.con","yahoo.cm","yahoocom","yahoo.om","yaho.co"],
+    "outlook.com": ["outlok.com","outloo.com","outook.com","outlookcom","outlook.co","outlook.con","outlook.cm","outlok.co","outlook.om"],
+    "icloud.com": ["iclod.com","iclould.com","icoud.com","icloudcom","icloud.co","icloud.con","icloud.cm","icloud.om"],
+    "live.com": ["live.co","live.con","livecom"],
+    "aol.com": ["aol.co","aol.con","aolcom"]
+  };
+  function fixEmail(raw) {
+    var e = String(raw || "").trim().replace(/\s+/g, "");
+    var at = e.lastIndexOf("@"); if (at < 1) return e;
+    var local = e.slice(0, at), dom = e.slice(at + 1).toLowerCase().replace(/^\.+|\.+$/g, "").replace(/\.{2,}/g, ".");
+    for (var good in EMAIL_DOM) { if (dom === good) { break; } if (EMAIL_DOM[good].indexOf(dom) >= 0) { dom = good; break; } }
+    dom = dom.replace(/\.(con|cmo|ocm|comm|vom|xom|cim|om|co m|c0m)$/, ".com").replace(/\.ne$/, ".net").replace(/\.ogr$/, ".org");
+    // a known provider with a missing dot before the TLD (gmailcom → gmail.com)
+    dom = dom.replace(/^(gmail|hotmail|yahoo|outlook|icloud|live|aol)com$/, "$1.com");
+    return local + "@" + dom;
+  }
   function parseLine(line) {
     const raw = (line || "").trim();
     if (!raw) return null;
     const p = raw.split("|").map(s => s.trim());
     if (p.length < 6) return null;
-    const conf = p[0], titleRaw = p[1], name = p[2], email = p[3], phone = p[4], countryRaw = p[5];
+    const conf = p[0], titleRaw = p[1], name = p[2], emailRaw = p[3], phone = p[4], countryRaw = p[5];
     const title = normalizeTitle(titleRaw);
-    if (!email || email.indexOf("@") < 0) return null;
+    if (!emailRaw || emailRaw.indexOf("@") < 0) return null;
+    const email = fixEmail(emailRaw);
     const nm = splitName(name), nameOk = latinOnly(name).split(" ").filter(Boolean).length >= 2;
     const cleanPhone = sanitizePhone(phone);
     return { conf: conf, title: title || DEFAULT_TITLE,
              first_name: nm.first, last_name: nm.last, nameOk: nameOk,
-             email: email, phone: cleanPhone, phoneRaw: phone,
+             email: email, emailFixedFrom: (email !== String(emailRaw).trim() ? emailRaw : ""), phone: cleanPhone, phoneRaw: phone,
              country: mapCountry(countryRaw), countryRaw: countryRaw };
   }
 
@@ -830,6 +852,7 @@
     await cset({ [CURRENT_KEY]: { index: idx + 1, total, conf: rec.conf, name: rec.first_name + " " + rec.last_name, title: rec.title, country: rec.country, phone: rec.phone ? "provided" : "not provided", email: "provided" } });
     log("═════ [" + (idx + 1) + "/" + total + "] " + rec.first_name + " " + rec.last_name + " · " + rec.conf + " ═════");
     log("  guest: " + rec.title + " " + rec.first_name + " " + rec.last_name + " · " + rec.email + " · " + (rec.phone || "no phone") + " · " + rec.country);
+    if (rec.emailFixedFrom) log("  fixed a typo in the e-mail: " + rec.emailFixedFrom + " -> " + rec.email);
     window.__lastEnrollResult = null;
     window.__lastAuthError    = null;
     window.__lastModalText    = null;
