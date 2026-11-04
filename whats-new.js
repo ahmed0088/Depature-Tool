@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 518, items: [
+    "✍️ After you collect the cards from Neorcha on this device, it now asks \"Enroll these guests in ALL?\" with Yes / Not now, right at the top. Yes opens the simple enroll sheet (tick who said yes, the cloud does the rest). A nightly cloud collection never pops this up.",
+  ] },
   { v: 517, items: [
     "🩹 Found & Redline themes: the phone \"More\" menu was see-through, so the home page showed through it. It is solid now.",
   ] },

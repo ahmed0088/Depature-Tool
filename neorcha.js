@@ -350,6 +350,8 @@ function fromCollector(list, from, to, at, by, acct) {
     if (typeof fbSet === 'function') try { fbSet('neorcha', { at: S.at, from: from || '', to: to || '', by: 'helper', n: list.length, rows: list }); } catch (_) {}
     if (typeof logActivity === 'function') try { logActivity('neorcha_collected', R.rows.length + ' registrations'); } catch (_) {}
   }
+  // collected here (not a cloud/background run) and there are guests with an e-mail → ask about ALL enrolment
+  ASK_ENROLL = !at && R.rows.some(r => r.email);
   toast('🪪 ' + R.rows.length + ' registration cards from Neorcha are in' + (by === 'cloud' ? ' (collected in the cloud)' : ''), 'ok');
   return true;
 }
@@ -388,7 +390,10 @@ function draw() {
   if (!S) { out.innerHTML = ''; return; }
   const Y = summary(S.rows), P = linkPlan(S.rows, pg()), maxP = Math.max(1, ...Y.purposes.map(x => x[1])), maxN = Math.max(1, ...Y.nats.slice(0, 8).map(x => x[1])), maxD = Math.max(1, ...Y.days.map(x => x[1]));
   const kpi = (cls, l, v, sub) => `<div class="${cls}"><small>${l}</small><b>${v}</b><i>${sub}</i></div>`;
+  const enrollable = S.rows.filter(r => r.email).length;
+  const ask = ASK_ENROLL && enrollable ? `<div class="nx-ask"><div class="nx-ask-t"><b>✍️ Enroll these guests in ALL?</b><small>${enrollable} guest${enrollable === 1 ? '' : 's'} ${enrollable === 1 ? 'has' : 'have'} an e-mail. You will tick who said yes and pick nothing else — the cloud does the rest.</small></div><div class="nx-ask-b"><button type="button" class="btn gold" id="nx-ask-yes">✍️ Yes, enroll</button><button type="button" class="btn" id="nx-ask-no">Not now</button></div></div>` : '';
   out.innerHTML = `
+    ${ask}
     <div class="nx-sum">${kpi('k0', 'Registration cards', Y.n, Y.from ? dLbl(Y.from) + ' – ' + dLbl(Y.to) : esc(S.file || ''))}${kpi('k1', 'Guests', Y.guests, 'adults + children')}${kpi('k2', 'ALL members', Y.members, Y.n ? Math.round(Y.members / Y.n * 100) + '% of cards' : '')}${kpi('k3', 'Nationalities', Y.nats.length, Y.nats[0] ? 'most: ' + esc(Y.nats[0][0]) : '')}</div>
     <div class="nx-cols">Columns read: ${S.cols.map(c => `<span>${esc(c.h)}</span>`).join('')} <em>· passport, ID number and birth date are never read</em></div>
     <div class="nx-link"><div class="nx-link-h"><span>🔗</span><div><b>Link to Purpose of Stay</b><small>${pg().length ? `${P.matched} of ${pg().length} guests on Purpose of Stay found on a registration card (by confirmation no., else room + name)` : 'Load Purpose of Stay first (Front Desk → Purpose of Stay), then come back.'}</small></div></div>
@@ -408,6 +413,8 @@ function draw() {
   out.querySelectorAll('[data-nx]').forEach(b => { b.onclick = () => applyLink(b.dataset.nx); });
   const gpb = $('gp'); if (gpb) gpb.onclick = sendPipeline;
   const enb = $('en'); if (enb) enb.onclick = () => { if (typeof gpQuickEnroll === 'function') gpQuickEnroll(S.rows); else sendPipeline(); };
+  const ay = $('ask-yes'); if (ay) ay.onclick = () => { ASK_ENROLL = false; draw(); if (typeof gpQuickEnroll === 'function') gpQuickEnroll(S.rows); else sendPipeline(); };
+  const an = $('ask-no'); if (an) an.onclick = () => { ASK_ENROLL = false; draw(); };
 }
 const CSS = `
 #panel-${PANEL} .nx-hero{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:20px 22px;margin-bottom:14px;border-radius:18px;border:1px solid var(--border);background:radial-gradient(120% 140% at 0% 0%,rgba(99,102,241,.18),transparent 55%),radial-gradient(120% 140% at 100% 0%,rgba(20,184,166,.14),transparent 55%),var(--card)}
@@ -464,6 +471,7 @@ const CSS = `
 #panel-${PANEL} .nx-cp{font:600 .78rem ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:6px 10px;border-radius:9px;border:1px solid color-mix(in srgb,#0ea5e9 45%,var(--border));background:color-mix(in srgb,#0ea5e9 10%,var(--card));color:var(--text);cursor:pointer}#panel-${PANEL} .nx-cp.ok{border-color:#10b981;background:color-mix(in srgb,#10b981 16%,var(--card))}#panel-${PANEL} .nx-run .nx-url input{width:100%}
 #panel-${PANEL} .nx-man .nx-drop{margin-top:12px}
 #panel-${PANEL} .nx-live-b{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+#panel-${PANEL} .nx-ask{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:0 0 14px;padding:14px 16px;border-radius:14px;border:1px solid color-mix(in srgb,var(--accent) 50%,var(--border));background:color-mix(in srgb,var(--accent) 12%,var(--card));animation:nxAskIn .25s ease}@keyframes nxAskIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}#panel-${PANEL} .nx-ask-t b{display:block;font-size:1rem}#panel-${PANEL} .nx-ask-t small{display:block;color:var(--text2);font-size:.82rem;margin-top:3px;max-width:60ch}#panel-${PANEL} .nx-ask-b{display:flex;gap:8px;flex-wrap:wrap}
 #panel-${PANEL} .nx-gp{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:0 0 12px;padding:12px 14px;border-radius:12px;border:1px solid color-mix(in srgb,#f59e0b 40%,var(--border));background:color-mix(in srgb,#f59e0b 8%,var(--card))}#panel-${PANEL} .nx-gp small{display:block;color:var(--text3);font-size:.8rem;margin-top:2px}#panel-${PANEL} .nx-gp-b{display:flex;gap:8px;flex-wrap:wrap}
 #panel-${PANEL} .nx-cl{margin-top:14px;padding:14px;border-radius:14px;border:1px solid color-mix(in srgb,#0ea5e9 40%,var(--border));background:linear-gradient(180deg,color-mix(in srgb,#0ea5e9 9%,var(--card)),var(--card))}
 #panel-${PANEL} .nx-cl-h{display:flex;gap:12px;align-items:center}#panel-${PANEL} .nx-cl-h>span{font-size:24px}#panel-${PANEL} .nx-cl-h small{display:block;color:var(--text3);font-size:.8rem;line-height:1.5}
@@ -493,6 +501,7 @@ function setupHtml(acct) {
 // The robot (scripts/neorcha-cloud.js) writes each step to hotels/<hotel>/neorchaLive; GitHub tells whether its computer started.
 const GH = { api: 'https://api.github.com/repos/ahmed0088/depature-tool/actions/workflows/neorcha.yml', page: 'https://github.com/ahmed0088/depature-tool/actions/workflows/neorcha.yml', key: 'ho_gh_start_key_v1' };
 const STEPS = [['gh', '🖥️', 'Start a GitHub computer'], ['open', '🌐', 'Open Neorcha'], ['login', '🔑', 'Log in'], ['search', '🔎', 'Search your dates'], ['read', '🪪', 'Read every card'], ['save', '💾', 'Save in HotelOps']];
+let ASK_ENROLL = false;
 const RUN = { at: 0, tag: '', gh: null, live: null, timer: 0, poll: 0, view: 'run', local: [], conOff: false, ghSt: '' };
 const ghKey = () => { try { return localStorage.getItem(GH.key) || ''; } catch (_) { return ''; } };
 const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago'; };
