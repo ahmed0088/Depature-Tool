@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 523, items: [
+    "📄 Enroll from an uploaded sheet: for a hotel with no Neorcha (e.g. Adagio), upload the Purpose of Stay Excel (with an Email column), then press ✍️ Enroll these guests on the Purpose of Stay page. It reads name, e-mail and nationality, opens the simple enroll sheet labelled \"from the uploaded sheet\", and the cloud enrolls the ones you tick.",
+    "🌍 The uploaded sheet now also reads a Nationality / Country column (needed for enrollment).",
+    "🇨🇮 Fixed a country mismatch: Côte d'Ivoire now matches the portal's \"Ivory Coast\".",
+    "ℹ️ \"Already a member\" is not an error — it means that guest already has an ALL account, so there is nothing to enroll. A run that finds only already-members and bad e-mails is working correctly.",
+  ] },
   { v: 522, items: [
     "✅ Monthly reports: fixed — none of the reports had a tick box, so you could never mark one done (it stayed 0/4 forever). Now each report has a clear box on the left: tap it to mark the report done, tap again to undo. The box is easy to see in every theme.",
     "🪐 New look: Orbit — deep-space black with frosted-glass cards, white Inter and a soft violet glow.",

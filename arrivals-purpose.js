@@ -804,7 +804,7 @@ function loadArrivals() {
         eI=ci('EMAIL','E-MAIL');
   if (rI < 0 || nI < 0) { alert('Could not find Room/Name columns.'); return; }
   _showColumnMap(hdrs, { Room:rI, Name:nI, 'Conf.':cI, Nights:niI, Email:eI,
-                         'Travel Agent':taI, Company:coI, 'Booking Source':srcI });
+                         'Travel Agent':taI, Company:coI, 'Booking Source':srcI, Nationality:natI });
   const guests = [];
   for (let i = 1; i < lines.length; i++) {
     const p    = splitLine(lines[i]);
@@ -1327,7 +1327,7 @@ function loadPurpose() {
         eI=ci('EMAIL','E-MAIL');
   if (rI < 0 || nI < 0) { alert('Could not find Room/Name.'); return; }
   _showColumnMap(hdrs, { Room:rI, Name:nI, 'Conf.':cI, Nights:niI, Email:eI,
-                         'Travel Agent':taI, Company:coI, 'Booking Source':srcI });
+                         'Travel Agent':taI, Company:coI, 'Booking Source':srcI, Nationality:natI });
   const guests = [];
   for (let i = 1; i < lines.length; i++) {
     const p    = splitLine(lines[i]);
@@ -1489,10 +1489,10 @@ function loadOperaFile(input, target) {
       const ci   = (...n) => _colIndex(hdrs, ...n);
       const rI=ci('ROOM'), nI=ci('NAME'), cI=ci('CONFIRMATION NUMBER','CONFIRMATION_NO','CONFIRM'), niI=ci('NIGHT'),
             taI=ci('TRAVEL AGENT','TRAVEL'), coI=ci('COMPANY'), srcI=ci('SOURCE'),
-            eI=ci('EMAIL','E-MAIL');
+            eI=ci('EMAIL','E-MAIL'), natI=ci('NATIONALITY','COUNTRY','NATION','NAT');
       if (rI < 0 || nI < 0) { alert('Cannot find Room/Name.\nHeaders: ' + hdrs.slice(0,10).join(', ')); return; }
       _showColumnMap(hdrs, { Room:rI, Name:nI, 'Conf.':cI, Nights:niI, Email:eI,
-                             'Travel Agent':taI, Company:coI, 'Booking Source':srcI });
+                             'Travel Agent':taI, Company:coI, 'Booking Source':srcI, Nationality:natI });
       const guests = [];
       for (let i = hdrRow + 1; i < rows.length; i++) {
         const r    = rows[i];
@@ -1504,7 +1504,7 @@ function loadOperaFile(input, target) {
           name:   cleanName(rn),
           purpose:'Business',
           nights: niI>=0?parseInt(r[niI])||1:1,
-          nat:    '', email: (eI>=0 && String(r[eI]||'').trim()) ? String(r[eI]).replace(/"/g,'').trim() : 'No@email.com',
+          nat:    natI>=0 ? String(r[natI]||'').replace(/"/g,'').trim() : '', email: (eI>=0 && String(r[eI]||'').trim()) ? String(r[eI]).replace(/"/g,'').trim() : 'No@email.com',
           source: cleanSource(taI>=0?String(r[taI]||'').trim():'', coI>=0?String(r[coI]||'').trim():'', srcI>=0?String(r[srcI]||'').trim():''),
           originOfTravel: '',
           remarks:'',

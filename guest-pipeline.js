@@ -375,13 +375,25 @@ function gpAgentPaint(a) {
 // link is remembered; one button starts the cloud robot and the live window follows. Same rules as the full
 // Guest Pipeline page (it is the same list): no e-mail / duplicate / already enrolled / ALL member → can't be ticked.
 let GP_SOURCE = '';
-/** ✍️ Enroll from the Opera reader: the guests on the Arrivals page who have a real (non-OTA) e-mail */
-function gpEnrollFromOpera() {
-  const list = (typeof arrGuests !== 'undefined' && Array.isArray(arrGuests) ? arrGuests : [])
+/** Build the enroll sheet from any guest list (Opera reader, an uploaded Purpose/Excel sheet…) — only real, non-OTA e-mails. */
+function gpEnrollFromList(list, source, emptyMsg) {
+  const cards = (Array.isArray(list) ? list : [])
     .filter(g => g && g.name && gpNormEmail(g.email).email)
-    .map(g => ({ conf: g.conf || ('op-' + String(g.room || g.name).replace(/[^\w]/g, '')), room: g.room || '', name: g.name, email: g.email, phone: g.phone || '', nat: g.nat || '' }));
-  if (!list.length) { showToast('No arrivals with a usable e-mail yet. Open the rooms in the Opera reader first (OTA relay e-mails can\'t be used).', 'err'); return; }
-  gpQuickEnroll(list, 'opera');
+    .map(g => ({ conf: g.conf || ('g-' + String(g.room || g.name).replace(/[^\w]/g, '')), room: g.room || '', name: g.name, email: g.email, phone: g.phone || '', nat: g.nat || g.country || '' }));
+  if (!cards.length) { showToast(emptyMsg || 'No guests with a usable e-mail here yet (OTA / Booking relay e-mails can\'t be used).', 'err'); return; }
+  gpQuickEnroll(cards, source);
+}
+/** ✍️ Enroll the Arrivals (Opera reader) guests who have a real e-mail. */
+function gpEnrollFromOpera() {
+  gpEnrollFromList(typeof arrGuests !== 'undefined' ? arrGuests : [], 'opera',
+    'No arrivals with a usable e-mail yet. Open the rooms in the Opera reader or upload the arrivals sheet first.');
+}
+/** ✍️ Enroll from an uploaded Purpose of Stay sheet (for hotels with no Neorcha — the sheet is the e-mail source). */
+function gpEnrollFromPurpose() {
+  var list = (typeof purposeGuests !== 'undefined' && purposeGuests && purposeGuests.length) ? purposeGuests
+           : (typeof arrGuests !== 'undefined' ? arrGuests : []);
+  gpEnrollFromList(list, 'sheet',
+    'No guests with a usable e-mail yet. Upload the Purpose of Stay sheet (it needs an Email column) first.');
 }
 function gpQuickEnroll(cards, source) {
   GP_SOURCE = source || '';
@@ -415,6 +427,7 @@ function gpQuickPaint() {
   gpAutoTitles();
   const sub = document.getElementById('gqSub'); if (sub) sub.textContent = can.length + ' guest' + (can.length === 1 ? '' : 's') + ' can be enrolled · tick only the ones who said YES · titles fill themselves';
   const srcNote = GP_SOURCE === 'opera' ? `<div class="gq-src">📡 These came from the <b>Opera reader</b> (guests you opened with a real e-mail). Opera does not know who agreed to join ALL — tick only the guests who actually said yes.</div>`
+    : GP_SOURCE === 'sheet' ? `<div class="gq-src">📄 From the <b>uploaded sheet</b> (guests with an e-mail). Check the country is filled and tick only the guests who agreed to join ALL.</div>`
     : GP_SOURCE === 'neorcha' ? `<div class="gq-src">🪪 From the <b>Neorcha cards</b>. Tick only the guests who agreed to join ALL.</div>` : '';
   body.innerHTML = `${srcNote}<label class="gq-url"><span>🔗 Accor Loop link</span><input id="gqUrl" type="url" value="${escapeHtml(url)}" placeholder="https://secure.guestinternet.com/…" autocomplete="url"></label>
     ${can.length ? `<div class="gq-bar"><span>Tap a guest to tick them</span><button type="button" class="btn sm" onclick="gpQuickAll(${can.every(([r]) => r.consent) ? 'false' : 'true'})">${can.every(([r]) => r.consent) ? '✕ Untick all' : '✓ Tick all'}</button></div><div class="gq-list">${can.map(([r, i]) => `<div class="gq-row${r.consent ? ' on' : ''}" onclick="if(!event.target.closest('.gq-title,input,label'))gpQuickTick(${i})">
