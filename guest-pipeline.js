@@ -64,6 +64,7 @@ function gpParse(text) {
     const iName = header ? at(/^name/) : 1, iEmail = header ? at(/mail/) : 2;
     const iPhone = header ? at(/phone/) : (c.length >= 5 ? 3 : -1);
     const iNat = header ? at(/national|country/) : (c.length >= 5 ? 4 : 3);
+    const iTitle = header ? at(/^(title|salutation|civility|gender|sex)$/) : -1;
     const conf = c[0];
     if (!conf) continue;
     const dup = seen.has(conf); seen.add(conf);
@@ -72,19 +73,45 @@ function gpParse(text) {
     out.push({
       conf, name: c[iName] || '', email: e.email, emailWas: e.was || '', flag: dup ? 'dup' : e.flag,
       phone: /^no\s*phone/i.test(phone) ? '' : phone, nat: iNat >= 0 ? (c[iNat] || '') : '',
-      civility: '', consent: false
+      civility: '', consent: false, given: iTitle >= 0 ? (c[iTitle] || '') : ''
     });
   }
   return out;
 }
+
+// ── 🪪 The title (Mr / Ms / Mrs) fills itself — nobody has to pick it ──
+// 1) the card's own title or gender field  2) the first name, only when it is clearly a man's or a woman's name
+// 3) otherwise a pick seeded by the confirmation number (the same guest always gets the same one), marked "guessed"
+//    so the desk can tap it once to correct it. The "Agreed" tick is NEVER filled by itself: it is the guest's consent.
+const GP_NAMES_M = 'mohammed mohamed muhammad mohammad ahmed ahmad ali omar umar khalid khaled hassan hasan hussein husain ibrahim youssef yousef yusuf abdullah abdallah abdul abdulla abdulrahman abdelrahman mahmoud mustafa mostafa tariq tarek karim kareem faisal fahad fahd saeed said sultan salem saleh nasser rashid rashed hamad hamdan majid walid waleed yasser yasir ziad zaid zayed amr hazem hisham sami samir sameer adel adil ayman imran irfan rizwan bilal hamza usman osman zubair junaid raju rahul rohit amit sumit ankit vikas vikram vijay ajay sanjay rajesh ramesh suresh mahesh ganesh dinesh manoj arjun aditya karan krishna sachin pradeep deepak naveen praveen anil sunil kiran rakesh harish srinivas venkat john james robert michael william david richard joseph thomas charles christopher daniel matthew anthony mark donald steven paul andrew joshua kevin brian george edward ronald timothy jason jeffrey ryan jacob gary nicholas eric jonathan stephen larry justin scott brandon benjamin samuel gregory frank raymond patrick jack dennis jerry tyler aaron henry peter adam nathan douglas zachary kyle walter harold jeremy ethan carl keith roger gerald christian terry arthur sean austin noah lawrence jesse dylan bryan joe bruce albert willie gabriel logan oliver harry charlie liam lucas luke max leo hans klaus jurgen stefan sebastian tobias florian lukas jan pierre francois jacques philippe nicolas olivier antoine julien marco giuseppe giovanni francesco luca matteo alessandro paolo carlos juan jose luis miguel javier pablo diego sergio pedro ivan dmitry dmitri sergey sergei alexey alexei andrey andrei mikhail nikolai vladimir igor oleg yuri pavel artem maxim boris ahmet mehmet mustafa emre burak murat kemal cem saud saoud moosa musa nadeem naeem hatim hatem jasper jasim jassim mansour mansoor marwan anas amjad ammar badr bader fawaz ghassan haitham jamal jaber mazen mohannad munir nabil nizar osama qasim radwan rami raed shadi taha waleed wael zakaria zakariya abbas aziz habib idris ismail ishaq jafar kamal latif malik nasir rafiq salim shakeel shahid tahir wasim yaqub arif asif faisal farhan feroz javed kashif nadir sajid shoaib tanveer zeeshan dieter wolfgang uwe jens jorg ralf rainer thomas markus matthias andreas christoph frank gunter horst manfred werner helmut bernd dirk holger kai oliver patrick sven torsten volker'.split(' ');
+const GP_NAMES_F = 'fatima fatma aisha ayesha aysha maryam mariam mariya khadija zainab zeinab noura nora nour hanan hana huda layla leila laila salma sara sarah reem rim amal amira ameera yasmin yasmine jasmine dina dana rana rania lina lana hiba heba mona muna nadia samira sana shaima shaimaa asma alia aliya latifa mai maha manal najla nawal rasha ruba suha wafa iman eman abeer priya pooja puja anjali neha sneha divya kavya shreya swati deepa deepika sunita anita kavita lakshmi meena meera radha rekha seema shilpa sonia sonal nisha asha usha geeta gita sita rani jyoti ritu preeti mary patricia jennifer linda elizabeth barbara susan jessica karen nancy lisa betty margaret sandra ashley kimberly emily donna michelle carol amanda melissa deborah stephanie rebecca laura sharon cynthia kathleen amy angela shirley anna brenda pamela emma nicole helen samantha katherine christine debra rachel catherine carolyn janet ruth maria heather diane virginia julie joyce victoria olivia kelly christina lauren joan evelyn judith megan cheryl martha andrea hannah jacqueline frances gloria ann teresa kathryn sara janice jean alice madison doris abigail julia judy grace denise amber marilyn beverly danielle theresa sophia sophie marie diana brittany natalie isabella charlotte rose alexis kayla chloe mia ella lily zoe emilia anja katja petra sabine claudia monika ursula ingrid birgit nathalie camille chloe manon giulia francesca chiara elena valentina alessia martina carmen lucia isabel ana paula natalia olga tatiana tatyana svetlana irina ekaterina yekaterina anastasia elena oksana yulia julia ksenia daria marina ayse elif zeynep merve tanja tanya anke antje bettina britta carola daniela doris elke gabriele heike ines jana jutta karin katrin kerstin manuela martina melanie nadine nina regina sabrina silke simone stefanie steffi susanne ulrike verena yvonne hessa mouza mozah moza shamsa maitha mahra alya afra hind sheikha ghada lubna mariam marwa nada nesrin rawan reham samar sawsan wafaa yara zahra zahraa farah fatemeh nazia saba sadia shazia uzma rabia ayesha bushra'.split(' ');
+const GP_AMBIG = new Set('andrea jean nicola alex sam kim jordan noor nur sasha dana'.split(' '));
+const GP_NAME_G = (() => { const m = {}; GP_NAMES_M.forEach(n => { m[n] = 'm'; }); GP_NAMES_F.forEach(n => { m[n] = m[n] === 'm' ? '?' : 'f'; }); return m; })();
+/** the title for one guest (pure): { title: 'Mr'|'Ms'|'Mrs', src: 'card'|'name'|'guess' } */
+function gpResolveTitle(r) {
+  const t = String(r.given || r.title || '').trim().toLowerCase().replace(/\./g, '');
+  const T = { mr: 'Mr', mister: 'Mr', m: 'Mr', male: 'Mr', ms: 'Ms', miss: 'Ms', mrs: 'Mrs', f: 'Ms', female: 'Ms', madam: 'Mrs', mme: 'Mrs', mlle: 'Ms' };
+  if (T[t]) return { title: T[t], src: 'card' };
+  // every part of the name: cards often have the family name first ("Wagner Tanja"); one clear answer wins, mixed = unknown
+  const parts = String(r.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[\s,\-]+/).map(w => w.replace(/[^a-z]/g, '')).filter(w => w.length > 1);
+  const gs = new Set(parts.map(w => !GP_AMBIG.has(w) && GP_NAME_G[w]).filter(x => x === 'm' || x === 'f'));
+  if (gs.size === 1) return gs.has('m') ? { title: 'Mr', src: 'name' } : { title: 'Ms', src: 'name' };
+  let h = 2166136261; for (const ch of String(r.conf || r.email || r.name || '')) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  return { title: (h >>> 0) % 2 ? 'Ms' : 'Mr', src: 'guess' };
+}
+/** fill every empty title (a title someone set by hand is kept) */
+function gpAutoTitles() { gpRows.forEach(r => { if (!r.civility) { const x = gpResolveTitle(r); r.civility = x.title; r.civSrc = x.src; } }); }
+/** one tap on the title chip: Mr → Ms → Mrs → Mr (for the rare wrong guess) */
+function gpCycleTitle(i) { const r = gpRows[i]; if (!r) return; const o = ['Mr', 'Ms', 'Mrs']; r.civility = o[(o.indexOf(r.civility) + 1) % 3]; r.civSrc = 'you'; gpSaveDraft(); gpRenderSummary(); if (document.getElementById('gqBody')) gpQuickPaint(); }
 
 function gpLoadText(text) {
   gpRows = gpParse(text);
   // keep ticks / civility from an earlier draft of the same guests
   try {
     const d = JSON.parse(localStorage.getItem(GP_DRAFT_KEY) || '{}');
-    gpRows.forEach(r => { const o = d[r.conf]; if (o) { r.civility = o.civility || ''; r.consent = !!o.consent; } });
+    gpRows.forEach(r => { const o = d[r.conf]; if (o) { r.civility = o.civility || ''; r.consent = !!o.consent; if (o.civility) r.civSrc = o.civSrc || 'you'; } });
   } catch (_) {}
+  gpAutoTitles();
   gpRender();
   if (!gpRows.length) showToast('No guests found — paste the Neorcha output (with its header line)', 'err');
 }
@@ -108,7 +135,7 @@ function gpClear() {
 function gpSaveDraft() {
   try {
     const d = {};
-    gpRows.forEach(r => { if (r.civility || r.consent) d[r.conf] = { civility: r.civility, consent: r.consent }; });
+    gpRows.forEach(r => { if (r.civility || r.consent) d[r.conf] = { civility: r.civility, consent: r.consent, civSrc: r.civSrc || '' }; });
     localStorage.setItem(GP_DRAFT_KEY, JSON.stringify(d));
   } catch (_) {}
 }
@@ -181,7 +208,7 @@ function gpRender() {
       <td style="font-size:.72rem;">${escapeHtml(r.phone || '—')}</td>
       <td style="font-size:.72rem;">${escapeHtml(r.nat || '—')}</td>
       <td>${f ? `<span class="gp-flag ${f[1]}" title="${escapeHtml(f[2])}">${f[0]}</span>` : ''} ${tracked}</td>
-      <td><select class="gp-civ" onchange="gpSet(${i},'civility',this.value)" ${can ? '' : 'disabled'}>
+      <td><select class="gp-civ" onchange="gpRows[${i}].civSrc='you';gpSet(${i},'civility',this.value)" ${can ? '' : 'disabled'}>
         ${['', 'Mr', 'Ms', 'Mrs', 'Miss'].map(c => `<option value="${c}"${r.civility === c ? ' selected' : ''}>${c || '—'}</option>`).join('')}
       </select></td>
       <td style="text-align:center;"><input type="checkbox" class="gp-consent" ${r.consent ? 'checked' : ''} ${can ? '' : 'disabled'} onchange="gpSet(${i},'consent',this.checked)" title="Tick only if the guest agreed to join ALL"></td>
@@ -341,7 +368,7 @@ function gpAgentPaint(a) {
 function gpQuickEnroll(cards) {
   const c = v => String(v == null ? '' : v).replace(/[\t\r\n]+/g, ' ').trim();
   const list = (cards || []).filter(r => r && r.conf);
-  const text = 'Confirmation_Number\tName\tEmail\tPhone\tNationality\n' + list.map(r => [r.conf, r.name, r.email || 'No email', r.phone || 'No phone', r.nat].map(c).join('\t')).join('\n');
+  const text = 'Confirmation_Number\tName\tEmail\tPhone\tNationality\tTitle\n' + list.map(r => [r.conf, r.name, r.email || 'No email', r.phone || 'No phone', r.nat, r.title || ''].map(c).join('\t')).join('\n');
   try { const box = document.getElementById('gpInput'); if (box) box.value = text; } catch (_) {}
   gpLoadText(text);
   const info = {}; list.forEach(r => { info[c(r.conf)] = { member: !!r.member, room: c(r.room) }; });
@@ -366,17 +393,25 @@ function gpQuickPaint() {
   const can = gpRows.map((r, i) => [r, i]).filter(([r]) => gpQuickCan(r)), off = gpRows.filter(r => !gpQuickCan(r));
   const why = r => r.member ? '💎 already an ALL member' : !r.email ? 'no e-mail' : r.flag === 'dup' ? 'listed twice' : r.flag === 'invalid' ? 'e-mail looks wrong' : gpTracked(r) ? 'already enrolled (' + gpTracked(r).status + ')' : 'can\'t be enrolled';
   let url = ''; try { url = (document.getElementById('gpAccorUrl') || {}).value || localStorage.getItem('gp_accor_url_v1') || ''; } catch (_) {}
-  const sub = document.getElementById('gqSub'); if (sub) sub.textContent = can.length + ' guest' + (can.length === 1 ? '' : 's') + ' can be enrolled · tick only the ones who said YES';
+  gpAutoTitles();
+  const sub = document.getElementById('gqSub'); if (sub) sub.textContent = can.length + ' guest' + (can.length === 1 ? '' : 's') + ' can be enrolled · tick only the ones who said YES · titles fill themselves';
   body.innerHTML = `<label class="gq-url"><span>🔗 Accor Loop link</span><input id="gqUrl" type="url" value="${escapeHtml(url)}" placeholder="https://secure.guestinternet.com/…" autocomplete="url"></label>
-    ${can.length ? `<div class="gq-list">${can.map(([r, i]) => `<div class="gq-row${r.consent ? ' on' : ''}">
+    ${can.length ? `<div class="gq-bar"><span>Tap a guest to tick them</span><button type="button" class="btn sm" onclick="gpQuickAll(${can.every(([r]) => r.consent) ? 'false' : 'true'})">${can.every(([r]) => r.consent) ? '✕ Untick all' : '✓ Tick all'}</button></div><div class="gq-list">${can.map(([r, i]) => `<div class="gq-row${r.consent ? ' on' : ''}" onclick="if(!event.target.closest('.gq-title,input,label'))gpQuickTick(${i})">
       <label class="gq-yes"><input type="checkbox" ${r.consent ? 'checked' : ''} onchange="gpSet(${i},'consent',this.checked);gpQuickPaint()"><span>Agreed</span></label>
       <div class="gq-who"><b>${escapeHtml(r.name || '—')}</b><small>${r.room ? 'Room ' + escapeHtml(r.room) + ' · ' : ''}${escapeHtml(r.email)}${r.phone ? ' · 📞' : ''}${r.nat ? ' · ' + escapeHtml(r.nat) : ''}</small></div>
-      <div class="gq-civ">${['Mr', 'Ms', 'Mrs'].map(v => `<button type="button" class="${r.civility === v ? 'on' : ''}" onclick="gpSet(${i},'civility','${v}');gpQuickPaint()">${v}</button>`).join('')}</div></div>`).join('')}</div>`
+      <button type="button" class="gq-title ${escapeHtml(r.civSrc || 'guess')}" onclick="gpCycleTitle(${i})" title="Filled by itself — tap to change">${escapeHtml(r.civility || 'Mr')}<small>${{ card: 'from card', name: 'from name', you: 'set by you' }[r.civSrc] || 'guessed · tap'}</small></button></div>`).join('')}</div>`
       : '<div class="acr-empty">None of these guests can be enrolled (no e-mail, already members or already enrolled).</div>'}
     ${off.length ? `<details class="gq-off"><summary>${off.length} guest${off.length === 1 ? '' : 's'} left out</summary>${off.map(r => `<div><b>${escapeHtml(r.name || r.conf)}</b> · ${escapeHtml(why(r))}</div>`).join('')}</details>` : ''}`;
   const ready = gpEnrollRows().filter(r => !r.member), ticked = can.filter(([r]) => r.consent).length, noCiv = can.filter(([r]) => r.consent && !r.civility).length;
   if (foot) foot.innerHTML = `<div class="gq-count"><b>${ready.length}</b> ready${noCiv ? ` · <span class="gq-warn">${noCiv} ticked without Mr/Ms</span>` : ''}${!ticked ? ' · tick who said yes' : ''}</div>
     <button type="button" class="btn" onclick="gpQuickGo(true)"${ready.length ? '' : ' disabled'}>🧪 Test</button><button type="button" class="btn gold" onclick="gpQuickGo(false)"${ready.length ? '' : ' disabled'}>☁️ Enroll ${ready.length || ''} guest${ready.length === 1 ? '' : 's'}</button>`;
+}
+function gpQuickTick(i) { const r = gpRows[i]; if (!r || !gpQuickCan(r)) return; gpSet(i, 'consent', !r.consent); gpQuickPaint(); }
+/** tick / untick every guest in the sheet — ticking all asks first: each tick means that guest said yes */
+function gpQuickAll(on) {
+  const can = gpRows.filter(gpQuickCan);
+  if (on && !confirm(`Tick all ${can.length} guests?\n\nOnly do this if every one of them agreed to join ALL. Untick anyone who did not.`)) return;
+  can.forEach(r => { r.consent = !!on; }); gpSaveDraft(); gpRenderSummary(); gpQuickPaint();
 }
 async function gpQuickGo(test) {
   const u = document.getElementById('gqUrl'), main = document.getElementById('gpAccorUrl');

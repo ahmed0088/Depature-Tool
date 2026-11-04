@@ -9,6 +9,13 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 514, items: [
+    "🪐 New look: Redline — a burnt-orange Mars sky with a planet on the horizon, heavy white headings, crimson buttons and clear white focus rings. Pick it in the theme menu (top bar, or More on the phone).",
+    "🪪 Enroll guests: Mr / Ms / Mrs now fills itself — from the card when Neorcha has a title, otherwise from the guest's name (any part of it, so \"Wagner Tanja\" works too). When the name doesn't tell, it is marked \"guessed\" — tap it once to change.",
+    "👆 Enroll guests: tap anywhere on a guest to tick them, or ✓ Tick all (it asks you to confirm everyone agreed first).",
+    "🔗 Neorcha: the button to change a hotel's Neorcha link is now clearly called \"🔗 Change link\" (the cloud run uses it too).",
+    "☁️ Neorcha cloud: when Neorcha doesn't open, it tries once more and says what it saw (site down, error page…) instead of only \"is NEORCHA_URL right?\".",
+  ] },
   { v: 513, items: [
     "✍️ Enroll in one place: in Neorcha Registrations press ✍️ Enroll these guests. A simple sheet opens with the guests who can join ALL — tick the ones who said yes, tap Mr / Ms / Mrs, press ☁️ Enroll. The live window follows. (Also on the Guest Pipeline page: ✍️ Enroll guests (simple).)",
     "💎 ALL members and guests without an e-mail are left out by themselves; the guest's phone now goes to the Accor Loop form too.",

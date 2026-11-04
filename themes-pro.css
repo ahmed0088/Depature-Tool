@@ -332,3 +332,73 @@ html[data-skin-group="style"] #hbRoot .hb-mini { background: color-mix(in srgb, 
 #hbRoot .hb-new:focus-within { border-color: color-mix(in srgb, var(--hb-acc) 55%, var(--hb-hair)); }
 #hbRoot .hb-newact { align-self: center; padding-top: 0; }
 #hbRoot .hb-plus { align-self: center; margin-top: 0; }
+
+/* ═════════ 🪐 Redline — burnt-orange Mars sky, heavy white Montserrat, crimson actions, a planet on the horizon ═════════
+   From the Redline Mars landing design: the warm rust gradient, white type that carries the page, one crimson call to action,
+   white "booking bar" cards with dark ink. Plus the review fixes: 12px minimum labels, readable label contrast, a clear
+   white focus ring, one corner radius and three letter-spacings. */
+html[data-skin="redline"] {
+  --font: 'Montserrat', 'Inter', system-ui, sans-serif;
+  --bg: #3b1405 !important; --bg2: #4a1a07 !important; --surface: #521d08 !important; --card: rgba(42,13,4,.78) !important; --card2: rgba(62,20,6,.86) !important; --input-bg: rgba(255,244,230,.08);
+  --border: rgba(255,214,170,.16) !important; --border2: rgba(255,214,170,.26) !important; --border3: rgba(255,214,170,.4) !important;
+  --text: #fff4e6 !important; --text2: #f6d9c0 !important; --text3: #e2b493 !important;
+  --accent: #ff4d5e !important; --accent2: #ffb060 !important; --accent-bg: rgba(232,40,60,.16) !important; --accent-border: rgba(232,40,60,.55) !important; --on-accent: #ffffff;
+  --green: #4ade80; --red: #ff4d5e; --rose: #ff4d5e; --amber: #ffc46b; --blue: #7cc4ff; --mint: #4ade80; --purple: #d8a6ff;
+  --topbar-bg: rgba(44,14,3,.62) !important; --topbar-border: rgba(255,214,170,.14) !important;
+  --r: 4px !important; --r2: 6px !important; --r3: 10px !important;
+  --ho-a1: #e8283c; --ho-a2: #ffb060; --ho-ink: #2a0d04;
+  --rl-track-s: .04em; --rl-track-m: .08em; --rl-track-l: .14em;
+}
+html[data-skin="redline"] body {
+  background: radial-gradient(58% 72% at 50% 38%, #d0591f 0%, #a23f12 32%, #6b2409 62%, #3b1405 100%) fixed, #3b1405 !important;
+  -webkit-font-smoothing: antialiased; }
+html[data-skin="redline"] main, html[data-skin="redline"] #main, html[data-skin="redline"] .main { background: transparent !important; }
+/* the planet rising on the horizon (behind everything, no clicks) */
+html[data-skin="redline"] body::before { content: ''; position: fixed; z-index: -1; pointer-events: none; width: 78vmin; height: 78vmin; right: -22vmin; bottom: -30vmin; border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #f2a36a 0%, #c9632a 22%, #8e3514 52%, #4a1606 78%, #2a0b03 100%);
+  box-shadow: 0 0 0 1px rgba(255,176,96,.12), 0 0 120px 30px rgba(255,140,60,.22), inset -40px -50px 90px rgba(20,4,0,.55); opacity: .7; }
+html[data-skin="redline"] body::after { content: ''; position: fixed; z-index: -1; pointer-events: none; width: 40vmin; height: 40vmin; right: 18vmin; bottom: 18vmin; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255,236,205,.35), rgba(255,176,96,.12) 40%, transparent); }
+html[data-skin="redline"] .topbar { background: linear-gradient(rgba(44,14,3,.78), rgba(44,14,3,.5)) !important; backdrop-filter: blur(14px) saturate(130%); -webkit-backdrop-filter: blur(14px) saturate(130%); border-bottom: 1px solid rgba(255,214,170,.14) !important; }
+/* heavy white type */
+html[data-skin="redline"] .page-hd h1, html[data-skin="redline"] .panel h1, html[data-skin="redline"] .home-big, html[data-skin="redline"] .kpi-val {
+  font-family: var(--font) !important; font-weight: 900 !important; letter-spacing: -.03em !important; color: #fff !important; }
+html[data-skin="redline"] .page-hd p, html[data-skin="redline"] .page-hd-left p { color: #f6d9c0 !important; }
+html[data-skin="redline"] .nav-section-label, html[data-skin="redline"] th { font-size: 12px !important; letter-spacing: var(--rl-track-l) !important; text-transform: uppercase; color: #f0c39f !important; }
+html[data-skin="redline"] label, html[data-skin="redline"] small { letter-spacing: var(--rl-track-s); }
+/* the side menu: dark rust glass, crimson marker */
+html[data-skin="redline"] .sidenav { background: rgba(36,11,3,.72) !important; border-right: 1px solid rgba(255,214,170,.12); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+html[data-skin="redline"] .nav-item { border-radius: var(--r) !important; font-weight: 500; }
+html[data-skin="redline"] .nav-item.active { background: rgba(255,244,230,.1) !important; color: #fff !important; font-weight: 700 !important; }
+html[data-skin="redline"] .nav-item.active::before { background: #e8283c !important; box-shadow: 0 0 0 4px rgba(232,40,60,.25) !important; }
+html[data-skin="redline"] .nav-item.active .nav-badge { background: #e8283c !important; color: #fff !important; border-color: transparent !important; }
+/* cards: dark rust glass with a warm hairline */
+html[data-skin="redline"] .card, html[data-skin="redline"] .home-tile, html[data-skin="redline"] .kpi {
+  background: rgba(42,13,4,.72) !important; border: 1px solid rgba(255,214,170,.16) !important; border-radius: var(--r3) !important;
+  box-shadow: 0 22px 44px -18px rgba(20,4,0,.6) !important; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+html[data-skin="redline"] .home-tile:hover { border-color: rgba(255,214,170,.34) !important; transform: translateY(-1px); }
+/* one crimson call to action */
+html[data-skin="redline"] .btn { border-radius: var(--r) !important; font-family: var(--font) !important; font-weight: 600 !important; letter-spacing: var(--rl-track-s); }
+html[data-skin="redline"] .btn.gold, html[data-skin="redline"] .btn.primary { background: #e8283c !important; color: #fff !important; border-color: transparent !important; box-shadow: 0 8px 18px rgba(120,10,20,.45) !important; text-shadow: none !important; }
+html[data-skin="redline"] .btn.gold:hover, html[data-skin="redline"] .btn.primary:hover { background: #c41426 !important; filter: none; }
+/* inputs: the white booking bar look — dark ink on white, readable labels */
+html[data-skin="redline"] input[type=text], html[data-skin="redline"] input[type=search], html[data-skin="redline"] input[type=email], html[data-skin="redline"] input[type=url], html[data-skin="redline"] input[type=number],
+html[data-skin="redline"] input[type=date], html[data-skin="redline"] input[type=time], html[data-skin="redline"] input[type=tel], html[data-skin="redline"] input:not([type]), html[data-skin="redline"] select, html[data-skin="redline"] textarea {
+  background: #fff8f1 !important; color: #2b1a12 !important; border: 1px solid #eadfd6 !important; border-radius: var(--r) !important; }
+html[data-skin="redline"] input::placeholder, html[data-skin="redline"] textarea::placeholder { color: #8a766a !important; }
+html[data-skin="redline"] select option { background: #fff8f1; color: #2b1a12; }
+/* a clear focus ring everywhere (the review: no outline:0 without a replacement) */
+html[data-skin="redline"] :focus-visible { outline: 2px solid #fff !important; outline-offset: 3px !important; }
+html[data-skin="redline"] input:focus-visible, html[data-skin="redline"] select:focus-visible, html[data-skin="redline"] textarea:focus-visible { outline: 2px solid #e8283c !important; outline-offset: 1px !important; }
+/* tables, chips, segmented controls */
+html[data-skin="redline"] table th, html[data-skin="redline"] thead th { background: rgba(36,11,3,.6) !important; }
+html[data-skin="redline"] .fchip { border-radius: 99px !important; }
+html[data-skin="redline"] .fchip.on, html[data-skin="redline"] .hs-seg button.on { background: #e8283c !important; color: #fff !important; border-color: transparent !important; }
+/* the phone bar and pop-up windows */
+html[data-skin="redline"] #mobNav.mob-nav { background: rgba(42,13,4,.72) !important; border: 1px solid rgba(255,214,170,.18) !important; }
+html[data-skin="redline"] .mob-nav-btn.active .mob-nav-icon, html[data-skin="redline"] .mob-nav-btn.active .mob-nav-lbl { color: #fff !important; }
+html[data-skin="redline"] .mob-nav-btn.active::before { background: #e8283c !important; }
+html[data-skin="redline"] .gp-accor-modal-card, html[data-skin="redline"] .nxr-card, html[data-skin="redline"] .ho-theme-pop { background: #2e0f05 !important; border-color: rgba(255,214,170,.2) !important; }
+html[data-skin="redline"] .gp-accor-modal-ic { background: linear-gradient(135deg, #ff9a4d, #e8283c) !important; }
+@media (prefers-reduced-motion: reduce) { html[data-skin="redline"] .home-tile:hover { transform: none; } }
+@media (max-width: 760px) { html[data-skin="redline"] body::before { width: 110vmin; height: 110vmin; right: -40vmin; bottom: -60vmin; opacity: .55; } }

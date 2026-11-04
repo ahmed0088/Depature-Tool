@@ -326,6 +326,7 @@ const HO_THEMES = {
   'pro':      { label: 'Pro', emoji: '⚡', group: 'style', base: 'night-ops', skin: 'pro', bg: '#000000', a: '#ededed', btn: '#000000' },
   'study':    { label: 'Study', emoji: '📚', group: 'style', base: 'opera', skin: 'study', bg: '#f7f8fc', a: '#5b5bd6', btn: '#ffffff', font: 'Nunito:wght@500;600;700;800' },
   'notepad':  { label: 'Notepad', emoji: '🗒', group: 'style', base: 'opera', skin: 'notepad', bg: '#f3f3f3', a: '#005fb8', btn: '#ffffff' },
+  'redline':  { label: 'Redline', emoji: '🪐', group: 'style', base: 'night-ops', skin: 'redline', bg: '#2a0d04', a: '#e8283c', btn: '#ffffff', font: 'Montserrat:wght@300;400;500;600;800;900' },
 };
 /** a style's own font, loaded only when someone picks it */
 function hoThemeFont(T) {
@@ -555,7 +556,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v513';
+const APP_VERSION = 'v514';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;

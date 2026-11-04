@@ -4318,6 +4318,17 @@ const haAsync = (async () => {
   check('Enroll in one place: Neorcha\'s ✍️ button opens the enroll sheet; ALL members can\'t be ticked; the cloud list carries the phone; nothing is pre-ticked',
     [/id="nx-en"/.test(nxS) && /gpQuickEnroll\(S\.rows\)/.test(nxS), /function gpQuickCan\(r\) \{ return gpCanEnroll\(r\) && !r\.member; \}/.test(gpS), /tsv: gpEnrollTsv\(rows, true\)/.test(gpS) && /'Confirmation_Number\\tName\\tEmail\\tPhone\\tNationality\\tCivility\\tConsent\\n'/.test(gpS), /consent = true/.test(gpS.slice(gpS.indexOf('function gpQuickEnroll'), gpS.indexOf('async function gpQuickGo')))],
     [true, true, true, false]);
+  { const a0 = gpS.indexOf('const GP_NAMES_M'), a1 = gpS.indexOf('/** fill every empty title');
+    const box = {}; vm.createContext(box); vm.runInContext(gpS.slice(a0, a1) + '\nthis.R = gpResolveTitle;', box);
+    const R = r => { const x = box.R(r); return x.title + '/' + x.src; };
+    check('Enroll titles fill themselves: the card first, then any part of the name (family name first too), else a stable "guessed" pick',
+      [R({ name: 'Sarah Jones', given: 'Mr' }), R({ name: 'Ahmed Hassan' }), R({ name: 'Jones Sarah' }), R({ name: 'Tanja Wagner' }), R({ name: 'Alex Morgan', given: 'female' }), R({ name: 'Wei Zhang', conf: '1' }) === R({ name: 'Wei Zhang', conf: '1' }), /\/guess$/.test(R({ name: 'Wei Zhang', conf: '1' })), /\/guess$/.test(R({ name: 'Mohammed Fatima' }))],
+      ['Mr/card', 'Mr/name', 'Ms/name', 'Ms/name', 'Ms/card', true, true, true]); }
+  check('Enroll sheet: a tap ticks one guest; "Tick all" asks first; the title is never a manual pick',
+    [/function gpQuickTick/.test(gpS), /confirm\(`Tick all \$\{can\.length\} guests\?/.test(gpS), /gq-civ/.test(gpS)], [true, true, false]);
+  const thS = fs.readFileSync(path.join(ROOT, 'utils.js'), 'utf8'), ixS = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'), tpS = fs.readFileSync(path.join(ROOT, 'themes-pro.css'), 'utf8');
+  check('Redline theme: in the theme list, applied before the page draws, has its own look and focus ring',
+    [/'redline':\s*\{[^}]*skin: 'redline'/.test(thS), /'redline': 'night-ops'/.test(ixS) && /redline: 1/.test(ixS), /html\[data-skin="redline"\] :focus-visible/.test(tpS)], [true, true, true]);
   // the runner instruments Playwright when loaded, so its pure helpers are tried in a separate process
   const tsv = 'Consent\tCivility\tName\tEmail\tPhone\tCountry\tConfirmation\nY\tMr\tTest One\tone@x.test\t050\tUAE\t1\nN\tMr\tNo Consent\tno@x.test\t\tUK\t2\nY\t\tNo Title\tnt@x.test\t\tUK\t3\nY\tMrs\tNo Mail\t\t\tUK\t4';
   let out = null;

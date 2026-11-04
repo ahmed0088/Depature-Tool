@@ -171,8 +171,22 @@ async function main() {
   page.setDefaultTimeout(30000);
   try {
     say('Opening Neorcha…');
-    await page.goto(url.replace(/#.*$/, '') + '#/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.waitForSelector(U + ', ' + P, { timeout: 60000 }).catch(() => fail('Neorcha\'s login page did not open (is NEORCHA_URL right?)'));
+    // the login box can be slow or Neorcha can be down: try twice, and say what the page showed (no guessing)
+    const openLogin = async n => {
+      let st = 0; const resp = await (n ? page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 }) : page.goto(url.replace(/#.*$/, '') + '#/login', { waitUntil: 'domcontentloaded', timeout: 60000 })).catch(e => { tlog('NET', 'Opening Neorcha failed: ' + String(e && e.message || e).split('\n')[0].slice(0, 140)); return null; });
+      if (resp) st = resp.status();
+      const ok = await page.waitForSelector(U + ', ' + P, { timeout: n ? 45000 : 60000 }).then(() => true, () => false);
+      if (ok) return { ok };
+      const seen = await page.evaluate(() => ({ title: document.title, text: (document.body ? document.body.innerText : '').replace(/\s+/g, ' ').trim().slice(0, 220) })).catch(() => ({ title: '', text: '' }));
+      let where = ''; try { const u = new URL(page.url()); where = u.hostname + u.pathname; } catch (_) {}
+      const why = (st ? 'HTTP ' + st : 'no answer') + ' · ' + (where || 'no page') + ' · title "' + (seen.title || '') + '" · page says: "' + (seen.text || '(empty page)').replace(/\S+@\S+/g, '•@•') + '"';
+      tlog('WARN', 'Login box not found (try ' + (n + 1) + '/2): ' + why); console.log('::warning::Neorcha login page, try ' + (n + 1) + '/2: ' + why);
+      return { ok, st, why };
+    };
+    let lg = await openLogin(0);
+    if (!lg.ok) { const first = lg; say('Neorcha did not show its login page — trying once more…'); await page.waitForTimeout(5000); lg = await openLogin(1); if (!lg.ok && !lg.st) lg.st = first.st; }
+    if (!lg.ok) await fail(lg.st >= 500 || !lg.st ? 'Neorcha is not answering right now (' + (lg.st ? 'HTTP ' + lg.st : 'no answer') + ') — the site looks down or busy. Try again in a few minutes.'
+      : 'Neorcha\'s login page did not open. What it showed: ' + lg.why);
     say('Logging in…'); tlog('AUTH', 'Login form found · typing username (' + String(E.NEORCHA_USER).trim().length + ' chars) · password ●●●●●●●● → Login'); await live({ step: 'login', note: 'Logging in to Neorcha…' });
     await login(page, String(E.NEORCHA_USER), String(E.NEORCHA_PASS));
     tlog('AUTH', '✓ Session open · ' + (await page.evaluate(() => location.hash)).slice(0, 40));

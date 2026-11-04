@@ -19,6 +19,7 @@ const COLS = [
   ['room', /room\s*(number|no\.?|#)?$/i], ['adults', /adult/i], ['children', /child/i], ['member', /membership\s*(number|no|#)|loyalty\s*(number|no)|card\s*number/i], ['email', /^e-?mail(\s*address)?$/i], ['phone', /^(phone|mobile)(\s*(number|no\.?))?$/i],
   ['mtype', /membership\s*type|loyalty\s*(type|program)/i], ['by', /checked\s*in\s*by|operator|^agent$|^user$/i], ['doc', /^document\s*type|^type$/i],
   ['company', /company/i], ['at', /insertion|insert\s*date|created|creation/i], ['source', /^source$|platform/i],
+  ['title', /^(title|salutation|civility|gender|sex)$/i],
 ];
 // never read (sensitive): checked first, a column like this is skipped even if a kept name also matches
 const NEVER = /passport|birth|document\s*number|id\s*number|\bno\s*uae\b|address|city|zip|postal|car\s*reg|signature|card\s*(holder|expir)|iban/i;
@@ -70,7 +71,7 @@ function parseAoa(aoa) {
     const pv = cell(r, 'purpose');
     rows.push({ conf, room, name, email: cell(r, 'email').replace(/^no\s*e?-?mail.*$/i, ''), phone: cell(r, 'phone').replace(/^no\s*phone.*$/i, ''), nat: natName(cell(r, 'nat')), purposeRaw: pv, purpose: purposeOf(pv), arr: isoOf(map.arr === undefined ? '' : r[map.arr]), dep: isoOf(map.dep === undefined ? '' : r[map.dep]),
       adults: parseInt(cell(r, 'adults'), 10) || 0, children: parseInt(cell(r, 'children'), 10) || 0,
-      member: !!cell(r, 'member').replace(/^[-0\s]+$/, ''), mtype: cell(r, 'mtype'), by: cell(r, 'by'), doc: cell(r, 'doc'), company: cell(r, 'company'), at: isoOf(map.at === undefined ? '' : r[map.at]) });
+      member: !!cell(r, 'member').replace(/^[-0\s]+$/, ''), mtype: cell(r, 'mtype'), by: cell(r, 'by'), doc: cell(r, 'doc'), company: cell(r, 'company'), title: cell(r, 'title'), at: isoOf(map.at === undefined ? '' : r[map.at]) });
   });
   return { rows, cols: Object.keys(map).map(f => ({ f, h: head[map[f]] })), skipped };
 }
@@ -115,7 +116,7 @@ function COLLECTOR(O) {
   var NEVER = /passport|birth|documentnumber|docnumber|noUae|address|city|zip|postal|carreg|signature|iban|card/i;
   var KEEP = [['Confirmation Number', /confirmation/i], ['First Name', /firstname/i], ['Last Name', /lastname/i], ['Nationality', /nationality|^country$/i], ['Purpose Of Visit', /purpose/i],
     ['Arrival Date', /^arrivaldate$/i], ['Departure Date', /^departuredate$/i], ['Room Number', /roomnumber/i], ['Number of Adults', /adults/i], ['Number of Children', /children/i],
-    ['Membership Number', /membershipnumber/i], ['Email', /^e-?mail$/i], ['Phone', /^(phone|mobile|mobilenumber|phonenumber)$/i], ['Membership Type', /membershiptype/i], ['Checked In By', /checkedinby|operator/i], ['Company Name', /companyname/i], ['Room Type', /roomtype/i], ['Insertion Date', /insertdate|insertiondate/i]];
+    ['Membership Number', /membershipnumber/i], ['Email', /^e-?mail$/i], ['Phone', /^(phone|mobile|mobilenumber|phonenumber)$/i], ['Membership Type', /membershiptype/i], ['Checked In By', /checkedinby|operator/i], ['Company Name', /companyname/i], ['Title', /^(title|salutation|civility|gender|sex)$/i], ['Room Type', /roomtype/i], ['Insertion Date', /insertdate|insertiondate/i]];
   var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
   var stop = false, busy = false, got = [], seen = {}, log = [];
   var pad = function (n) { return String(n).padStart(2, '0'); }, t = new Date();
@@ -648,7 +649,7 @@ function mount() {
       <div class="nx-hl" id="nx-hl" role="tablist" aria-label="Neorcha hotels"></div>
       <div class="nx-hadd" id="nx-hadd" hidden><label>Brand<select id="nx-hb"></select></label><label class="nx-hn">Name<input id="nx-hname" maxlength="40" placeholder="e.g. Mercure Barsha"></label><label class="nx-url">Neorcha link<input type="url" id="nx-hurl" spellcheck="false"></label>
         <button type="button" class="btn gold" id="nx-hok">＋ Add</button><button type="button" class="btn" id="nx-hno">Cancel</button></div>
-      <div class="nx-hotel"><span class="nx-h-ic">🏨</span><div class="nx-h-t" id="nx-h-t"></div><button type="button" class="btn" id="nx-h-ed">✏️ Change</button></div>
+      <div class="nx-hotel"><span class="nx-h-ic">🏨</span><div class="nx-h-t" id="nx-h-t"></div><button type="button" class="btn" id="nx-h-ed" title="Change this hotel's Neorcha link (the cloud run uses it too)">🔗 Change link</button></div>
       <div class="nx-hedit" id="nx-hedit" hidden><label class="nx-url">Neorcha link<input type="url" id="nx-url" spellcheck="false"></label><label class="nx-acct">Account on GitHub<input id="nx-acct" spellcheck="false" autocapitalize="characters" maxlength="30"></label><button type="button" class="btn" id="nx-h-auto">↺ Automatic</button></div>
       <div class="nx-run"><label>Arrivals from<input type="date" id="nx-from"></label><label>to<input type="date" id="nx-to"></label>
         <button type="button" class="btn gold" id="nx-start">▶ Start</button></div>
@@ -737,7 +738,7 @@ function mount() {
     $('acct').placeholder = autoAcct(); paintHotel(); toast('Neorcha link saved', 'ok'); };
   $('acct').onchange = () => { const v = $('acct').value.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_').slice(0, 30); $('acct').value = v;
     const h = cur(); if (h) { h.acct = v || acctOf(h.url); saveList(); } else put(acctKey(), v && v !== autoAcct() ? v : ''); paintHotel(); };
-  $('h-ed').onclick = () => { const e = $('hedit'); e.hidden = !e.hidden; $('h-ed').textContent = e.hidden ? '✏️ Change' : '✓ Done'; };
+  $('h-ed').onclick = () => { const e = $('hedit'); e.hidden = !e.hidden; $('h-ed').textContent = e.hidden ? '🔗 Change link' : '✓ Done'; if (!e.hidden) { try { $('url').focus(); $('url').select(); } catch (_) {} } };
   $('h-auto').onclick = () => { const h = cur(); if (h) { h.acct = acctOf(h.url); saveList(); } else { put(urlKey(), ''); put(acctKey(), ''); } loadInputs(); paintHotel(); toast('Back to automatic', 'ok'); };
   // ＋ Add hotel: pick the brand (the link and account follow), give it a name
   $('hb').innerHTML = BRANDS.map(([b]) => `<option value="${b}">${b === 'movenpick' ? 'Mövenpick' : b === 'swissotel' ? 'Swissôtel' : b === 'mgallery' ? 'MGallery' : b[0].toUpperCase() + b.slice(1)}</option>`).join('') + '<option value="">Other — paste its link</option>';
