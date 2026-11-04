@@ -547,8 +547,11 @@ function gpAgentBeat() {
   const name = (typeof currentProfile !== 'undefined' && currentProfile && currentProfile.name ? currentProfile.name + "'s " : '') + (navigator.userAgentData && navigator.userAgentData.platform || 'PC');
   try { fbSet('enrollAgent', { at: Date.now(), name }); } catch (_) {}
 }
-(function gpCloudListen() {
-  if (typeof fbListen !== 'function') return setTimeout(gpCloudListen, 1500);
+(function gpCloudListen(tries) {
+  // wait for the database itself (signed in, hotel chosen): asked earlier, fbListen only reads this device's copy once and
+  // never subscribes — then the robot's reports never reached this screen ("finished without reporting back")
+  tries = +tries || 0;
+  if ((typeof fbListen !== 'function' || typeof _ref === 'undefined' || !_ref) && tries < 400) return setTimeout(() => gpCloudListen(tries + 1), 1500);
   const t = document.getElementById('gpAgentOn'); if (t) t.checked = gpIsAgent();
   const au = document.getElementById('gpAccorUrl'); if (au) { try { au.value = localStorage.getItem('gp_accor_url_v1') || ''; } catch (_) {} }
   fbListen('enrollLive', v => { if (v && (Date.now() - (+v.at || 0) < 24 * 3600e3)) gpCloudPaint(v); });

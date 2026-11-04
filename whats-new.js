@@ -9,6 +9,14 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 515, items: [
+    "🐞 Fixed: the Accor Loop window stayed on \"queued\" and then said \"finished without reporting back\" although the run worked — Guest Pipeline started listening before HotelOps was connected to the database, so the robot's reports never reached the screen.",
+    "📱 Enroll guests on the phone: the sheet no longer slides sideways or drags the page behind it (a long e-mail made the list wider than the screen).",
+    "🧹 Guest Pipeline → ALL enrollment is compact now: ✍️ Enroll guests and 📡 Progress; the link, test run and the old copy buttons are under More options.",
+    "⚡ Accor Loop is faster: shorter waits between steps and guests, and the cloud browser skips the portal's pictures and fonts (about 40% quicker in our test).",
+    "🖥️ Accor Loop live console (HotelOps) shows exactly what runs and every guest's data: title, name, e-mail, phone, country, then the result.",
+    "☁️ Accor Loop: the GitHub run page now reports every guest — started, the portal's answer, the result (enrolled · already a member · skipped · error) and why — not just the final total. Names and e-mails stay hidden there.",
+  ] },
   { v: 514, items: [
     "🪐 New look: Redline — a burnt-orange Mars sky with a planet on the horizon, heavy white headings, crimson buttons and clear white focus rings. Pick it in the theme menu (top bar, or More on the phone).",
     "🪪 Enroll guests: Mr / Ms / Mrs now fills itself — from the card when Neorcha has a title, otherwise from the guest's name (any part of it, so \"Wagner Tanja\" works too). When the name doesn't tell, it is marked \"guessed\" — tap it once to change.",

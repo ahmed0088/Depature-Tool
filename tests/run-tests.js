@@ -4324,6 +4324,11 @@ const haAsync = (async () => {
     check('Enroll titles fill themselves: the card first, then any part of the name (family name first too), else a stable "guessed" pick',
       [R({ name: 'Sarah Jones', given: 'Mr' }), R({ name: 'Ahmed Hassan' }), R({ name: 'Jones Sarah' }), R({ name: 'Tanja Wagner' }), R({ name: 'Alex Morgan', given: 'female' }), R({ name: 'Wei Zhang', conf: '1' }) === R({ name: 'Wei Zhang', conf: '1' }), /\/guess$/.test(R({ name: 'Wei Zhang', conf: '1' })), /\/guess$/.test(R({ name: 'Mohammed Fatima' }))],
       ['Mr/card', 'Mr/name', 'Ms/name', 'Ms/name', 'Ms/card', true, true, true]); }
+  check('Accor Loop window hears the robot: Guest Pipeline listens only once the database is connected (earlier, it never subscribed)',
+    /\(function gpCloudListen\(tries\) \{[\s\S]{0,400}typeof _ref === 'undefined' \|\| !_ref\) && tries < 400\) return setTimeout/.test(gpS), true);
+  { const pc = fs.readFileSync(path.join(ROOT, 'pro.css'), 'utf8');
+    check('Enroll sheet on phones: the list never gets wider than the sheet, and the sheet does not drag the page',
+      [/\.gq-list\{grid-template-columns:minmax\(0,1fr\)\}/.test(pc), /\.gq-card \.gp-accor-modal-b\{overflow-x:hidden;overscroll-behavior:contain/.test(pc)], [true, true]); }
   check('Enroll sheet: a tap ticks one guest; "Tick all" asks first; the title is never a manual pick',
     [/function gpQuickTick/.test(gpS), /confirm\(`Tick all \$\{can\.length\} guests\?/.test(gpS), /gq-civ/.test(gpS)], [true, true, false]);
   const thS = fs.readFileSync(path.join(ROOT, 'utils.js'), 'utf8'), ixS = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'), tpS = fs.readFileSync(path.join(ROOT, 'themes-pro.css'), 'utf8');

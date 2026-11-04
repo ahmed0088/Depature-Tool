@@ -34,7 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
-<meta name="ho-version" content="v514"/>
+<meta name="ho-version" content="v515"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="themes.css"/>
@@ -1555,14 +1555,13 @@
         </div>
         <div>
           <div class="gp-sub">💎 ALL enrollment</div>
-          <p class="gp-p">Tick <b>Agreed</b> for guests who said <b>yes</b> to joining ALL (the box in the column header ticks them all), and pick <b>Mr/Ms</b> (the "all…" menu in the header sets it for everyone without one; change single guests after). Only those are copied — the enrollment form records that the guest asked for the invitation, so it must be true.</p>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn gold" id="gpCopyEnroll" onclick="gpCopyEnroll()" disabled>📋 Copy enrollment list</button>
-            <button class="btn" onclick="gpCopyScript('enroll', this)">📋 Copy ALL Enroll script</button>
-          </div>
-          <div class="gp-cloud gp-accor-cloud" style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px"><div class="gp-sub">🌐 Accor Loop · web cloud computer</div><p class="gp-p">This does <b>not</b> use the duty PC. HotelOps starts a temporary GitHub-hosted computer from the web, opens the Accor Loop portal in a headless browser, and runs only the guests selected below. You can close your phone or minimize the console; the cloud computer keeps working.</p><div class="gp-accor-flow"><span>1 · Save list</span><i>→</i><span>2 · Start cloud PC</span><i>→</i><span>3 · Open portal</span><i>→</i><span>4 · Enroll + save results</span></div><label class="gp-accor-url">Accor Loop URL<input id="gpAccorUrl" type="url" placeholder="https://secure.guestinternet.com/..." autocomplete="url"></label><div class="gp-accor-actions"><button class="btn gold" type="button" onclick="gpQuickShow()">✍️ Enroll guests (simple)</button><button class="btn" id="gpAccCloudGo" onclick="gpAccCloudEnroll(false)" disabled>☁️ Start cloud computer</button><button class="btn" id="gpAccCloudTest" onclick="gpAccCloudEnroll(true)" disabled>🧪 Test cloud computer</button><button class="btn" type="button" onclick="gpAccorRunWin(true)">📡 Show progress</button></div><small class="gp-accor-note">The cloud computer exists only for this run. It is created by GitHub Actions, runs the browser, writes safe progress to HotelOps, then shuts down.</small></div>
-            <div class="gp-cloud-live" id="gpCloudLive" hidden></div>
-          <div class="gp-cloud-set gp-cloud-web-only">✅ Web cloud only · no duty PC, browser helper, console, Accor login, ID, or password is required. HotelOps sends only the selected guest data and the provided Accor Loop URL to the temporary cloud browser.</div>
+          <p class="gp-p">Press <b>Enroll guests</b>, tick the guests who said <b>yes</b> and send — titles fill themselves, the cloud does the rest.</p>
+          <div class="gp-accor-actions"><button class="btn gold" type="button" onclick="gpQuickShow()">✍️ Enroll guests</button><button class="btn" type="button" onclick="gpAccorRunWin(true)">📡 Progress</button></div>
+          <div class="gp-cloud-live" id="gpCloudLive" hidden></div>
+          <details class="gp-more"><summary>More options</summary>
+            <label class="gp-accor-url">Accor Loop link<input id="gpAccorUrl" type="url" placeholder="https://secure.guestinternet.com/..." autocomplete="url"></label>
+            <div class="gp-accor-actions"><button class="btn" id="gpAccCloudGo" onclick="gpAccCloudEnroll(false)" disabled>☁️ Enroll the ticked list</button><button class="btn" id="gpAccCloudTest" onclick="gpAccCloudEnroll(true)" disabled>🧪 Test run</button><button class="btn" id="gpCopyEnroll" onclick="gpCopyEnroll()" disabled>📋 Copy enrollment list</button><button class="btn" onclick="gpCopyScript('enroll', this)">📋 Copy ALL Enroll script</button></div>
+          </details>
         </div>
       </div>
     </div>

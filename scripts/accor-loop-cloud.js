@@ -16,17 +16,20 @@ function scrub(message) {
   }
   return value;
 }
+// Two consoles: HotelOps (private — the hotel's own database, which already holds this guest list) shows every detail;
+// the GitHub log is PUBLIC (open repository), so whatever is printed there goes through scrub() first.
 function tlog(group, message) {
-  const entry = { t: Date.now(), g: group, m: scrub(message) };
+  const entry = { t: Date.now(), g: group, m: String(message == null ? '' : message).slice(0, 300) };
   CON.push(entry);
-  if (CON.length > 80) CON.splice(0, CON.length - 80);
+  if (CON.length > 160) CON.splice(0, CON.length - 160);
   return entry.m;
 }
-const say = message => console.log(new Date().toISOString().slice(11, 19) + '  ' + tlog('SYS', message));
+const pub = (group, message) => console.log(new Date().toISOString().slice(11, 19) + '  ' + String(group).padEnd(6) + scrub(message));
+const say = message => pub('', tlog('SYS', message));
 const key = email => String(email || '').toLowerCase().replace(/[.#$\[\]\\/@]/g, '_');
 const fail = (message, code = 1) => {
   const safe = tlog('ERR', message);
-  console.error('::error::' + safe);
+  console.error('::error::' + scrub(safe));
   process.exit(code);
 };
 
@@ -37,7 +40,7 @@ async function publishError(message) {
     await ACTIVE_FB.patch('enrollJob', { state: 'error', error: safe, errorAt: Date.now() });
     await ACTIVE_FB.patch('enrollLive', {
       at: Date.now(), state: 'error', step: 'error', note: safe, action: safe,
-      con: CON.slice(-60), report: null
+      con: CON.slice(-120), report: null
     });
   } catch (_) {}
 }
@@ -155,7 +158,7 @@ async function main() {
     .filter(Boolean).sort((a, b) => String(b).length - String(a).length);
 
   const tag = String(E.TAG || (job && job.tag) || ('accor' + Date.now().toString(36))).slice(0, 40);
-  const live = p => FB.patch('enrollLive', Object.assign({ at: Date.now(), tag, con: CON.slice(-60) }, p)).catch(() => {});
+  const live = p => FB.patch('enrollLive', Object.assign({ at: Date.now(), tag, con: CON.slice(-120) }, p)).catch(() => {});
   const stopRequested = async () => {
     try { const state = await FB.get('enrollLive'); return state && state.tag === tag && (state.control === 'stop' || state.stopRequested === true); }
     catch (_) { return false; }
@@ -163,12 +166,12 @@ async function main() {
   const markStopped = async note => {
     tlog('STOP', note);
     await FB.patch('enrollJob', { state: 'stopped', stoppedAt: Date.now() });
-    await live({ state: 'stopped', step: 'stopped', note, con: CON.slice(-60) });
+    await live({ state: 'stopped', step: 'stopped', note, con: CON.slice(-120) });
   };
 
   await FB.put('enrollLive', {
     at: Date.now(), started: Date.now(), state: 'run', step: 'open', tag, test,
-    n: rows.length, done: 0, control: 'run', note: 'Preparing the cloud browser…', con: CON.slice(-60)
+    n: rows.length, done: 0, control: 'run', note: 'Preparing the cloud browser…', con: CON.slice(-120)
   });
   say(`${test ? 'TEST ONLY · ' : ''}Enrollment queued for ${rows.length} consenting guest(s).`);
   await live({ step: 'open', note: 'Preparing the cloud browser and opening Accor Loop…' });
@@ -181,6 +184,8 @@ async function main() {
   // bypassCSP: the portal's security policy must not stop our own worker from starting
   const context = await browser.newContext({ viewport: { width: 1400, height: 900 }, locale: 'en-GB', timezoneId: 'Asia/Dubai', bypassCSP: true });
   const page = await context.newPage();
+  // speed: the robot needs the form, not the portal's pictures, fonts or videos
+  await context.route('**/*', route => (/^(image|media|font)$/.test(route.request().resourceType()) ? route.abort() : route.continue())).catch(() => {});
   page.on('console', message => {
     const text = message.text();
     // the worker's own lines arrive through its log store (below); here only the page's real errors
@@ -274,7 +279,7 @@ async function main() {
   let pendingStart = null;
   page.on('load', () => {
     clearTimeout(pendingStart);
-    pendingStart = setTimeout(() => { startWorker('page reload').catch(() => {}); }, 1500);
+    pendingStart = setTimeout(() => { startWorker('page reload').catch(() => {}); }, 600);
   });
 
   try {
@@ -283,7 +288,7 @@ async function main() {
     await page.goto(portalUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
     tlog('SYS', 'Portal opened; launching the enrollment worker.');
     await live({ step: 'enroll', note: 'Portal open. Starting the enrollment worker…' });
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(700);
     await startWorker('first load');
     say(test ? 'TEST ONLY · checking the portal; nothing will be submitted.' : 'Enrollment worker started; monitoring progress.');
     await live({ step: 'enroll', note: test ? 'Test run: checking portal and selected list. No invitations will be sent.' : 'Worker started. Monitoring each enrollment result…' });
@@ -295,7 +300,7 @@ async function main() {
     let lastWorkerEvidence = workerStartedAt;
     let lastProgressAt = 0;
     for (let i = 0; i < 3600 && !done; i++) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 500));
       const currentGuest = await safePageEvaluate(page, 'current guest poll', () => {
         try { return JSON.parse(localStorage.getItem('__accor_cloud___accor_current_guest') || 'null'); } catch (_) { return null; }
       }, null);
@@ -308,9 +313,11 @@ async function main() {
         for (const entry of fresh) {
           const msg = String(entry.msg || 'Worker activity');
           const group = entry.level === 'error' ? 'ERR' : entry.level === 'warn' ? 'WARN'
-            : /GUEST RESULT/.test(msg) ? 'DONE' : /═════ \[/.test(msg) ? 'GUEST' : /^ {2}-> |^ {5}\S/.test(msg) ? 'FORM'
+            : /GUEST RESULT/.test(msg) ? 'DONE' : /═════ \[/.test(msg) ? 'GUEST' : /^ {2}guest: /.test(msg) ? 'DATA' : /^ {2}-> |^ {5}\S/.test(msg) ? 'FORM'
             : /clicked submit|SUCCESS URL|result:|enroll (fetch )?response|^ {2}reason:/i.test(msg) ? 'SEND' : 'BOT';
           last = tlog(group, msg);
+          // the public GitHub log gets every step too, masked (names / e-mails / long numbers hidden)
+          pub(group, msg);
         }
         seenWorkerLogs = fresh[fresh.length - 1].n;
         lastWorkerEvidence = Date.now();
@@ -372,7 +379,7 @@ async function main() {
     const note = reportNote(report, test);
     tlog('SAVE', `${report.submitted} enrolled · ${report.alreadyMember} already members · ${report.pending} pending · ${report.skipped} skipped · ${report.errors} errors.`);
     if (report.statuses && Object.keys(report.statuses).length) {
-      for (const [status, count] of Object.entries(report.statuses)) tlog('REPORT', `${count} · ${status}`);
+      for (const [status, count] of Object.entries(report.statuses)) pub('REPORT', tlog('REPORT', `${count} · ${status}`));
     }
     await FB.patch('enrollJob', { state: report.complete ? 'done' : 'partial', doneAt: Date.now(), resultSummary: report });
     say(note);
@@ -380,7 +387,7 @@ async function main() {
       state: report.complete ? 'done' : 'error', step: report.complete ? 'done' : 'partial',
       done: report.processed, n: rows.length, note, action: note, report, current: null,
       tally: { enrolled: report.submitted, already: report.alreadyMember, skipped: report.skipped + report.pending + report.other, errors: report.errors },
-      con: CON.slice(-60)
+      con: CON.slice(-120)
     });
   } finally {
     await browser.close().catch(() => {});

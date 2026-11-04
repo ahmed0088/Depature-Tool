@@ -20,8 +20,8 @@
   };
   function normalizeTitle(raw) { return TITLE_ALIASES[String(raw || "").trim().toLowerCase()] || DEFAULT_TITLE; }
   const POST_SUBMIT_MAX  = 12000;
-  const POST_SUBMIT_POLL = 400;
-  const BETWEEN_GUESTS   = 2000;
+  const POST_SUBMIT_POLL = 200;
+  const BETWEEN_GUESTS   = 500;
 
   const SUCCESS_URL_MARKERS = [
     "connected_type=enrollment",
@@ -130,7 +130,7 @@
   }
 
   log("waiting for portal SPA...");
-  await sleep(800);
+  await sleep(250);
 
   function parseLine(line) {
     const raw = (line || "").trim();
@@ -728,7 +728,7 @@
   })();
 
   async function goHome() {
-    await dismissModalIfPresent(1500);
+    await dismissModalIfPresent(400);
     if (isLandingPage()) return;
     for (let i = 0; i < 6; i++) {
       if (isLandingPage()) break;
@@ -741,7 +741,7 @@
   }
 
   async function openSignupForm() {
-    await dismissModalIfPresent(1000);
+    await dismissModalIfPresent(300);
     let btn = findByText("button", "Sign up to ALL for free")
            || findByTextContains("button", "sign up to all for free");
     if (!btn) {
@@ -781,6 +781,7 @@
   async function processOne(rec, idx, total) {
     await cset({ [CURRENT_KEY]: { index: idx + 1, total, conf: rec.conf, name: rec.first_name + " " + rec.last_name, title: rec.title, country: rec.country, phone: rec.phone ? "provided" : "not provided", email: "provided" } });
     log("═════ [" + (idx + 1) + "/" + total + "] " + rec.first_name + " " + rec.last_name + " · " + rec.conf + " ═════");
+    log("  guest: " + rec.title + " " + rec.first_name + " " + rec.last_name + " · " + rec.email + " · " + (rec.phone || "no phone") + " · " + rec.country);
     window.__lastEnrollResult = null;
     window.__lastAuthError    = null;
     window.__lastModalText    = null;
@@ -842,16 +843,16 @@
 
     if (submit.disabled) return { status: "disabled" };
 
-    await sleep(300 + Math.random() * 400);
+    await sleep(120 + Math.random() * 120);
     await persist(idx);
 
     submit.scrollIntoView({ block: "center" });
-    await sleep(150 + Math.random() * 150);
+    await sleep(60 + Math.random() * 60);
     submit.click();
     log("  clicked submit");
 
     await waitForOutcome(POST_SUBMIT_MAX);
-    await dismissModalIfPresent(1500);
+    await dismissModalIfPresent(800);
 
     const status = detectResult();
     log("  ✅ result: " + status);
