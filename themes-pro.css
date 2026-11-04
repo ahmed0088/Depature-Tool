@@ -456,3 +456,93 @@ html[data-skin="found"] .mob-more-item, html[data-skin="found"] .mob-util-btn { 
 html[data-skin="redline"] .mob-more-overlay { background: rgba(20,4,0,.66) !important; backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
 html[data-skin="redline"] .mob-more-drawer { background: #2e0f05 !important; backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%); }
 html[data-skin="redline"] .mob-more-item, html[data-skin="redline"] .mob-util-btn { background: rgba(255,255,255,.08) !important; border-color: rgba(255,214,170,.18) !important; }
+
+/* ═════════ 🪐 Orbit — deep-space black, white Inter, frosted glass, a soft violet glow (from the "Orbit" hero) ═════════ */
+html[data-skin="orbit"] {
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --bg: #05060a !important; --bg2: #0a0c14 !important; --surface: #0d1018 !important; --card: rgba(255,255,255,.055) !important; --card2: rgba(255,255,255,.09) !important; --input-bg: rgba(255,255,255,.08);
+  --border: rgba(255,255,255,.12) !important; --border2: rgba(255,255,255,.2) !important; --border3: rgba(255,255,255,.32) !important;
+  --text: #ffffff !important; --text2: rgba(255,255,255,.72) !important; --text3: rgba(255,255,255,.5) !important;
+  --accent: #9b8cff !important; --accent2: #6ee7c7 !important; --accent-bg: rgba(155,140,255,.16) !important; --accent-border: rgba(155,140,255,.55) !important; --on-accent: #05060a;
+  --green: #6ee7c7; --red: #ff7a90; --rose: #ff7a90; --amber: #ffd27a; --blue: #8ab4ff; --mint: #6ee7c7; --purple: #9b8cff;
+  --topbar-bg: rgba(5,6,10,.7) !important; --topbar-border: rgba(255,255,255,.12) !important;
+  --r: 10px !important; --r2: 14px !important; --r3: 18px !important;
+  --ho-a1: #9b8cff; --ho-a2: #6ee7c7; --ho-ink: #05060a;
+  color-scheme: dark;
+}
+html[data-skin="orbit"] body { background: radial-gradient(120% 80% at 50% -10%, #1a1140 0%, #0a0a18 42%, #05060a 100%) fixed, #05060a !important; letter-spacing: -0.01em; }
+html[data-skin="orbit"] main, html[data-skin="orbit"] #main, html[data-skin="orbit"] .main { background: transparent !important; }
+html[data-skin="orbit"] .topbar { background: rgba(5,6,10,.7) !important; backdrop-filter: blur(16px) saturate(140%); -webkit-backdrop-filter: blur(16px) saturate(140%); border-bottom: 1px solid rgba(255,255,255,.1) !important; }
+html[data-skin="orbit"] .page-hd h1, html[data-skin="orbit"] .panel h1, html[data-skin="orbit"] .home-big, html[data-skin="orbit"] .kpi-val {
+  font-family: var(--font) !important; font-weight: 550 !important; letter-spacing: -0.03em !important; color: #fff !important; }
+html[data-skin="orbit"] .nav-section-label { color: rgba(255,255,255,.5) !important; font-size: 12px !important; letter-spacing: .06em; }
+html[data-skin="orbit"] .sidenav { background: rgba(8,8,16,.6) !important; border-right: 1px solid rgba(255,255,255,.1); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+html[data-skin="orbit"] .nav-item { border-radius: 10px !important; letter-spacing: -0.01em; }
+html[data-skin="orbit"] .nav-item.active { background: rgba(155,140,255,.14) !important; color: #fff !important; }
+html[data-skin="orbit"] .nav-item.active::before { background: #9b8cff !important; box-shadow: 0 0 10px rgba(155,140,255,.6) !important; }
+html[data-skin="orbit"] .nav-item.active .nav-badge { background: #9b8cff !important; color: #05060a !important; border-color: transparent !important; }
+html[data-skin="orbit"] .card, html[data-skin="orbit"] .home-tile, html[data-skin="orbit"] .kpi {
+  background: rgba(255,255,255,.055) !important; border: 1px solid rgba(255,255,255,.12) !important; border-radius: var(--r3) !important;
+  box-shadow: 0 18px 44px -20px rgba(0,0,0,.7) !important; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+html[data-skin="orbit"] .home-tile:hover { border-color: rgba(155,140,255,.5) !important; box-shadow: 0 0 24px -6px rgba(155,140,255,.4) !important; transform: translateY(-1px); }
+html[data-skin="orbit"] .btn { border-radius: 999px !important; letter-spacing: -0.01em; background: rgba(255,255,255,.08) !important; border: 1px solid rgba(255,255,255,.3) !important; color: #fff !important; }
+html[data-skin="orbit"] .btn.gold, html[data-skin="orbit"] .btn.primary { background: #fff !important; color: #05060a !important; border-color: #fff !important; font-weight: 600 !important; box-shadow: 0 6px 20px -6px rgba(155,140,255,.5) !important; }
+html[data-skin="orbit"] .btn.gold:hover, html[data-skin="orbit"] .btn.primary:hover { background: #e9e9ea !important; }
+html[data-skin="orbit"] input[type=text], html[data-skin="orbit"] input[type=search], html[data-skin="orbit"] input[type=email], html[data-skin="orbit"] input[type=url], html[data-skin="orbit"] input[type=number],
+html[data-skin="orbit"] input[type=date], html[data-skin="orbit"] input[type=time], html[data-skin="orbit"] input[type=tel], html[data-skin="orbit"] input:not([type]), html[data-skin="orbit"] select, html[data-skin="orbit"] textarea {
+  background: rgba(255,255,255,.08) !important; color: #fff !important; border: 1px solid rgba(255,255,255,.22) !important; border-radius: 10px !important; }
+html[data-skin="orbit"] input::placeholder, html[data-skin="orbit"] textarea::placeholder { color: rgba(255,255,255,.45) !important; }
+html[data-skin="orbit"] select option { background: #0a0c14; color: #fff; }
+html[data-skin="orbit"] :focus-visible { outline: 2px solid #9b8cff !important; outline-offset: 3px !important; }
+html[data-skin="orbit"] table th, html[data-skin="orbit"] thead th { background: rgba(255,255,255,.05) !important; color: rgba(255,255,255,.72) !important; }
+html[data-skin="orbit"] .fchip.on, html[data-skin="orbit"] .hs-seg button.on { background: #9b8cff !important; color: #05060a !important; }
+html[data-skin="orbit"] #mobNav.mob-nav { background: rgba(10,10,20,.78) !important; border: 1px solid rgba(255,255,255,.2) !important; }
+html[data-skin="orbit"] .mob-more-overlay { background: rgba(2,2,8,.7) !important; backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+html[data-skin="orbit"] .mob-more-drawer { background: #0a0c16 !important; backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+html[data-skin="orbit"] .mob-more-item, html[data-skin="orbit"] .mob-util-btn { background: rgba(255,255,255,.07) !important; box-shadow: inset 0 0 0 1px rgba(255,255,255,.14) !important; }
+html[data-skin="orbit"] .gp-accor-modal-card, html[data-skin="orbit"] .nxr-card, html[data-skin="orbit"] .ho-theme-pop { background: #0a0c16 !important; border-color: rgba(255,255,255,.2) !important; }
+
+/* ═════════ ◼️ Orvante — monochrome editorial: grey paper, black ink, white cards, hairlines, Archivo headings ═════════ */
+html[data-skin="orvante"] {
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --bg: #dadada !important; --bg2: #d0d0d0 !important; --surface: #e6e6e6 !important; --card: #f4f4f4 !important; --card2: #eaeaea !important; --input-bg: #ffffff;
+  --border: rgba(17,17,17,.14) !important; --border2: rgba(17,17,17,.24) !important; --border3: rgba(17,17,17,.4) !important;
+  --text: #111111 !important; --text2: #3a3a3a !important; --text3: #6f6f6f !important;
+  --accent: #111111 !important; --accent2: #444444 !important; --accent-bg: rgba(17,17,17,.08) !important; --accent-border: rgba(17,17,17,.4) !important; --on-accent: #ffffff;
+  --green: #1f7a44; --red: #b5241f; --rose: #b5241f; --amber: #8a6d00; --blue: #1f3a5f; --mint: #1f7a44;
+  --topbar-bg: #111111 !important; --topbar-border: rgba(255,255,255,.14) !important;
+  --r: 4px !important; --r2: 8px !important; --r3: 14px !important;
+  --ho-a1: #111111; --ho-a2: #6f6f6f; --ho-ink: #ffffff;
+}
+html[data-skin="orvante"] body { background: #dadada !important; }
+html[data-skin="orvante"] .topbar { background: #111111 !important; border-bottom: 1px solid #000 !important; }
+html[data-skin="orvante"] .topbar, html[data-skin="orvante"] .topbar .logo-name, html[data-skin="orvante"] .topbar b, html[data-skin="orvante"] #topbarTime { color: #fff !important; }
+html[data-skin="orvante"] .topbar .icon-round, html[data-skin="orvante"] .topbar .tb-pill, html[data-skin="orvante"] .topbar .auth-user-pill, html[data-skin="orvante"] .topbar #appVersionPill { background: rgba(255,255,255,.1) !important; border-color: rgba(255,255,255,.22) !important; color: #fff !important; }
+html[data-skin="orvante"] .page-hd h1, html[data-skin="orvante"] .panel h1, html[data-skin="orvante"] .home-big, html[data-skin="orvante"] .kpi-val {
+  font-family: 'Archivo', var(--font) !important; font-weight: 800 !important; letter-spacing: -0.04em !important; text-transform: uppercase; color: #111 !important; }
+html[data-skin="orvante"] .page-hd h1::after { content: ''; display: block; width: 56px; height: 3px; margin-top: 8px; background: #111; }
+html[data-skin="orvante"] .nav-section-label { color: #6f6f6f !important; font-size: 12px !important; letter-spacing: .1em; font-weight: 700; }
+html[data-skin="orvante"] .sidenav { background: #e6e6e6 !important; border-right: 1px solid rgba(17,17,17,.16); }
+html[data-skin="orvante"] .nav-item { border-radius: 4px !important; border-left: 0 !important; color: #111 !important; }
+html[data-skin="orvante"] .nav-item.active { background: #111 !important; color: #fff !important; font-weight: 600 !important; }
+html[data-skin="orvante"] .nav-item.active::before { display: none !important; }
+html[data-skin="orvante"] .nav-item.active .nav-icon { color: #fff !important; }
+html[data-skin="orvante"] .nav-item.active .nav-badge { background: #fff !important; color: #111 !important; }
+html[data-skin="orvante"] .card, html[data-skin="orvante"] .home-tile, html[data-skin="orvante"] .kpi {
+  background: #f4f4f4 !important; border: 1px solid rgba(17,17,17,.16) !important; border-radius: var(--r3) !important; box-shadow: none !important; }
+html[data-skin="orvante"] .home-tile:hover { border-color: #111 !important; transform: translateY(-2px); }
+html[data-skin="orvante"] .btn { border-radius: 4px !important; font-weight: 600 !important; }
+html[data-skin="orvante"] .btn.gold, html[data-skin="orvante"] .btn.primary { background: #111 !important; color: #fff !important; border-color: #111 !important; box-shadow: none !important; }
+html[data-skin="orvante"] .btn.gold:hover, html[data-skin="orvante"] .btn.primary:hover { background: #000 !important; }
+html[data-skin="orvante"] input[type=text], html[data-skin="orvante"] input[type=search], html[data-skin="orvante"] input[type=email], html[data-skin="orvante"] input[type=url], html[data-skin="orvante"] input[type=number],
+html[data-skin="orvante"] input[type=date], html[data-skin="orvante"] input[type=time], html[data-skin="orvante"] input[type=tel], html[data-skin="orvante"] input:not([type]), html[data-skin="orvante"] select, html[data-skin="orvante"] textarea {
+  background: #fff !important; color: #111 !important; border: 1px solid rgba(17,17,17,.24) !important; border-radius: 4px !important; }
+html[data-skin="orvante"] input::placeholder, html[data-skin="orvante"] textarea::placeholder { color: #8a8a8a !important; }
+html[data-skin="orvante"] :focus-visible { outline: 2px solid #111 !important; outline-offset: 2px !important; }
+html[data-skin="orvante"] table th, html[data-skin="orvante"] thead th { background: #e6e6e6 !important; color: #3a3a3a !important; font-variant: small-caps; letter-spacing: .04em; border-bottom: 2px solid #111 !important; }
+html[data-skin="orvante"] .fchip.on, html[data-skin="orvante"] .hs-seg button.on { background: #111 !important; color: #fff !important; border-color: #111 !important; }
+html[data-skin="orvante"] #mobNav.mob-nav { background: #f4f4f4 !important; border: 1px solid rgba(17,17,17,.2) !important; }
+html[data-skin="orvante"] .mob-nav-btn.active .mob-nav-icon, html[data-skin="orvante"] .mob-nav-btn.active .mob-nav-lbl { color: #111 !important; }
+html[data-skin="orvante"] .mob-more-drawer { background: #e6e6e6 !important; }
+html[data-skin="orvante"] .mob-more-item, html[data-skin="orvante"] .mob-util-btn { background: #f4f4f4 !important; border-color: rgba(17,17,17,.16) !important; color: #111 !important; }
+html[data-skin="orvante"] .gp-accor-modal-card, html[data-skin="orvante"] .nxr-card, html[data-skin="orvante"] .ho-theme-pop { background: #f4f4f4 !important; color: #111 !important; border-color: rgba(17,17,17,.24) !important; }

@@ -123,11 +123,11 @@ function mrHtml() {
   const prevKey = ym(new Date(new Date(p.key + '-15').getFullYear(), new Date(p.key + '-15').getMonth() - 1, 15));
   const pdn = mrDoneOf(prevKey), pItems = mrItems(prevKey), pN = pItems.filter(r => pdn[r.id]).length;
   const rows = items.map(r => {
-    const d = dn[r.id], counts = cnt.includes(r);
+    const d = dn[r.id], counts = cnt.some(c => c.id === r.id);   // by id: cnt and items are separate mrItems() calls, so === on the object is always false
     if (!counts) return `<div class="mr-row new"><div class="mr-txt"><div class="mr-name">${esc(r.name)}</div>${r.hint ? `<div class="mr-hint">${esc(r.hint)}</div>` : ''}<div class="mr-by">Starts with ${esc(mName(r.since, { month: 'long' }))}'s report</div></div>
       <button class="cl-step-btn edit-btn" onclick="mrEdit('${r.id}')" title="Edit">✏️</button><button class="cl-step-btn del" onclick="mrDelete('${r.id}')" title="Remove">✕</button></div>`;
     return `<div class="mr-row${d ? ' done' : ''}${!d && p.late ? ' late' : ''}">
-      <div class="st-check" role="checkbox" aria-checked="${d ? 'true' : 'false'}" tabindex="0" onclick="mrToggle('${r.id}')" onkeydown="if(event.key===' '||event.key==='Enter'){event.preventDefault();mrToggle('${r.id}')}" title="${d ? 'Done: tap to undo' : 'Tap when it is finished'}"></div>
+      <div class="st-check" role="checkbox" aria-label="Mark ${esc(r.name)} done" title="${d ? 'Done — tap to undo' : 'Tap to mark done'}" aria-checked="${d ? 'true' : 'false'}" tabindex="0" onclick="mrToggle('${r.id}')" onkeydown="if(event.key===' '||event.key==='Enter'){event.preventDefault();mrToggle('${r.id}')}" title="${d ? 'Done: tap to undo' : 'Tap when it is finished'}"></div>
       <div class="mr-txt"><div class="mr-name">${esc(r.name)}</div>
         ${r.hint ? `<div class="mr-hint">${esc(r.hint)}</div>` : ''}
         ${d ? `<div class="mr-by">✓ ${esc(d.by || 'Someone')} · ${esc(_fmtAt(d.at))}</div>` : (p.late ? '<div class="mr-by late">Not done yet: late</div>' : '')}</div>

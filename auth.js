@@ -400,6 +400,8 @@ function _applyLoginTheme(name) {
     'study': { accent:'#5b5bd6', accentDark:'#3e63dd', btnColor:'#ffffff' },
     'notepad': { accent:'#005fb8', accentDark:'#003d92', btnColor:'#ffffff' },
     'found': { accent:'#ffffff', accentDark:'#c7cffb', btnColor:'#1129e2' },
+    'orbit': { accent:'#9b8cff', accentDark:'#6f5cff', btnColor:'#05060a' },
+    'orvante': { accent:'#111111', accentDark:'#000000', btnColor:'#ffffff' },
     'redline': { accent:'#e8283c', accentDark:'#c41426', btnColor:'#ffffff' },
   };
   const t = accents[name] || accents['night-ops'];

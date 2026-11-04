@@ -4336,6 +4336,11 @@ const haAsync = (async () => {
     [/function gpEnrollFromOpera/.test(gpS) && /arrGuests/.test(gpS) && /gpNormEmail\(g\.email\)\.email/.test(gpS), /gpQuickEnroll\(list, 'opera'\)/.test(gpS), /GP_SOURCE === 'opera'/.test(gpS), /onclick="gpEnrollFromOpera\(\)"/.test(ixS)], [true, true, true, true]);
   check('Neorcha: after a local collection it asks to enroll (Yes opens the sheet); a cloud/background collection (with at) never asks',
     [/ASK_ENROLL = !at && R\.rows\.some\(r => r\.email\)/.test(nxS), /id="nx-ask-yes"/.test(nxS) && /gpQuickEnroll\(S\.rows/.test(nxS)], [true, true]);
+  { const mr = fs.readFileSync(path.join(ROOT, 'monthly-reports.js'), 'utf8');
+    check('Monthly reports: a counting report gets its tick box (compare by id, not object identity, so it is not always "new"); the box has a tooltip',
+      [/counts = cnt\.some\(c => c\.id === r\.id\)/.test(mr), !/counts = cnt\.includes\(r\)/.test(mr), /title="\$\{d \? 'Done/.test(mr)], [true, true, true]); }
+  check('Orbit + Orvante themes: registered, applied before paint, with their own look and focus ring',
+    [/'orbit':\s*\{[^}]*skin: 'orbit'/.test(thS) && /'orvante':\s*\{[^}]*skin: 'orvante'/.test(thS), /'orbit': 'night-ops', 'orvante': 'opera'/.test(ixS) && /orbit: 1, orvante: 1/.test(ixS), /html\[data-skin="orbit"\] :focus-visible/.test(tpS) && /html\[data-skin="orvante"\] :focus-visible/.test(tpS)], [true, true, true]);
   check('Found/Redline: the phone More drawer is solid (a see-through drawer let the home page bleed through)',
     [/html\[data-skin="found"\] \.mob-more-drawer \{ background: #0e22b8/.test(tpS), /html\[data-skin="redline"\] \.mob-more-drawer \{ background: #2e0f05/.test(tpS)], [true, true]);
   { const fw = fs.readFileSync(path.join(ROOT, 'found-web.js'), 'utf8');

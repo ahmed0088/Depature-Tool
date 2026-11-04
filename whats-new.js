@@ -9,6 +9,12 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 522, items: [
+    "✅ Monthly reports: fixed — none of the reports had a tick box, so you could never mark one done (it stayed 0/4 forever). Now each report has a clear box on the left: tap it to mark the report done, tap again to undo. The box is easy to see in every theme.",
+    "🪐 New look: Orbit — deep-space black with frosted-glass cards, white Inter and a soft violet glow.",
+    "◼️ New look: Orvante — clean monochrome editorial: grey paper, a black top bar, bold uppercase Archivo headings and crisp hairline cards.",
+    "Pick either in the theme menu (top bar, or More on the phone).",
+  ] },
   { v: 521, items: [
     "🔤 Accor Loop now turns Arabic names into English so they can be enrolled (the portal only accepts A–Z). Common names come out properly spelled (محمد → Mohammed, عبدالله → Abdullah, فاطمة → Fatima); anything else is written letter-by-letter in English. No more \"name must be in latin characters\" for Arabic guests.",
   ] },
