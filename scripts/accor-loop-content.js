@@ -678,6 +678,7 @@
       try {
         const j = JSON.parse(r.body);
         const m = ((j.Message || j.message || "") + "").toLowerCase();
+        log("  Accor said (" + r.status + "): " + String(j.Message || j.message || r.body || "").slice(0, 200));
         log("  reason: XHR " + r.status + " body: \"" + m.slice(0, 150) + "\"");
         if (m.indexOf("undeliverable") >= 0) return "bad_email";
         if (m.indexOf("already") >= 0)       return "already_member";
@@ -865,6 +866,10 @@
     await sleep(120 + Math.random() * 120);
     await persist(idx);
 
+    // read the form back right before sending, so the console proves what the portal actually received
+    const vOf = lbl => { const e = inputByLabel(lbl); return e ? String(e.value || "") : "(field not found)"; };
+    const svVal = () => { const sv = document.querySelector("[aria-labelledby='title-label']"); const c = sv && sv.closest("[class*='-control']"); const t = c && c.querySelector("[class*='singleValue']"); return t ? t.textContent.trim() : ""; };
+    log("  form has · first=" + vOf("First name") + " · family=" + vOf("Family name") + " · email=" + vOf("Email address") + " · country=" + (function(){ const c = reactSelectInputByLabel("Country"); const ctl = c && c.closest("[class*='-control']"); const t = ctl && ctl.querySelector("[class*='singleValue']"); return t ? t.textContent.trim() : "(empty)"; })());
     submit.scrollIntoView({ block: "center" });
     await sleep(60 + Math.random() * 60);
     submit.click();

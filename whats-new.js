@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 520, items: [
+    "🔎 Accor Loop now proves what happened for each guest: just before sending it logs the exact values in the form (first, family, e-mail, country) and it prints Accor's full reply. In the HotelOps console you see the real values; on the public GitHub log names and e-mails stay hidden. This shows whether a \"bad e-mail\" is a real bad address or something not filled in.",
+  ] },
   { v: 519, items: [
     "📡 Enroll from Opera too: on the Arrivals page press ✍️ Enroll these guests. It takes the arrivals you opened in the Opera reader that have a real e-mail (OTA / Booking relay addresses and \"No email\" are left out), fills the titles, and opens the same simple sheet — labelled \"from the Opera reader\". You still tick who agreed; Opera does not know that.",
   ] },

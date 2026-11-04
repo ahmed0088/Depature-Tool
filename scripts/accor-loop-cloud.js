@@ -313,7 +313,7 @@ async function main() {
         for (const entry of fresh) {
           const msg = String(entry.msg || 'Worker activity');
           const group = entry.level === 'error' ? 'ERR' : entry.level === 'warn' ? 'WARN'
-            : /GUEST RESULT/.test(msg) ? 'DONE' : /═════ \[/.test(msg) ? 'GUEST' : /^ {2}guest: /.test(msg) ? 'DATA' : /^ {2}-> |^ {5}\S/.test(msg) ? 'FORM'
+            : /GUEST RESULT/.test(msg) ? 'DONE' : /═════ \[/.test(msg) ? 'GUEST' : /^ {2}(guest: |form has ·|Accor said)/.test(msg) ? 'DATA' : /^ {2}-> |^ {5}\S/.test(msg) ? 'FORM'
             : /clicked submit|SUCCESS URL|result:|enroll (fetch )?response|^ {2}reason:/i.test(msg) ? 'SEND' : 'BOT';
           last = tlog(group, msg);
           // the public GitHub log gets every step too, masked (names / e-mails / long numbers hidden)
