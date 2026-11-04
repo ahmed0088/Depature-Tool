@@ -612,7 +612,7 @@ function cloudUI() {
 }
 const RUN_CSS = `.nxr{position:fixed;inset:0;z-index:9000;display:none;align-items:center;justify-content:center}.nxr.on{display:flex}
 .nxr-bg{position:absolute;inset:0;background:rgba(2,6,23,.55);backdrop-filter:blur(4px)}
-.nxr-card{position:relative;width:min(480px,calc(100vw - 32px));max-height:calc(100vh - 40px);overflow:auto;border-radius:20px;background:var(--card,#0f172a);color:var(--text,#e2e8f0);border:1px solid var(--border,#334155);box-shadow:0 30px 80px rgba(0,0,0,.45);animation:nxrIn .22s ease}
+.nxr-card{position:relative;width:min(480px,calc(100vw - 32px));max-height:calc(100dvh - 40px);overflow:auto;border-radius:20px;background:var(--card,#0f172a);color:var(--text,#e2e8f0);border:1px solid var(--border,#334155);box-shadow:0 30px 80px rgba(0,0,0,.45);animation:nxrIn .22s ease}
 @keyframes nxrIn{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}}
 .nxr-h{display:flex;gap:12px;align-items:center;padding:18px 18px 10px}.nxr-ic{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;font-size:22px;background:linear-gradient(135deg,#38bdf8,#6366f1)}
 .nxr-t{flex:1;min-width:0}.nxr-t b{display:block;font-size:1.02rem}.nxr-t small{color:var(--text3,#94a3b8);font-size:.8rem;font-variant-numeric:tabular-nums}
@@ -715,12 +715,26 @@ function mount() {
   const acctKey = () => urlKey().replace('ho_neorcha_url_v1', 'ho_neorcha_acct_v1');
   const get = k => { try { return localStorage.getItem(k) || ''; } catch (_) { return ''; } }, put = (k, v) => { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (_) {} };
   const autoUrl = () => linkFor(hotelName()) || NX_DEF, autoAcct = () => acctOf(NX());
-  // 🏨 the list: this hotel (automatic) + the other hotels you collect for (kept on this device) — tap one, then Start or Run in the cloud
+  // 🏨 the list: this hotel (automatic) + the other hotels you collect for (shared with your team) — tap one, then Start or Run in the cloud
   const LK = 'ho_neorcha_hotels_v1', SK = () => 'ho_neorcha_sel_v1:' + String(hotelName() || 'hotel').toLowerCase();
   let LIST = []; try { LIST = (JSON.parse(get(LK) || '[]') || []).filter(h => h && okUrl(h.url) && h.name).slice(0, 20); } catch (_) { LIST = []; }
   let SEL = get(SK()); if (SEL !== '' && !LIST[+SEL]) SEL = '';
   const cur = () => (SEL === '' ? null : LIST[+SEL] || null);
-  const saveList = () => put(LK, LIST.length ? JSON.stringify(LIST) : '');
+  const saveList = () => { put(LK, LIST.length ? JSON.stringify(LIST) : ''); try { if (typeof fbSet === 'function') fbSet('neorchaHotels', LIST); } catch (_) {} };
+  // the hotel list is shared with the team: added on one device, it shows on all of them (and after you come back).
+  // Merge by link so no device loses its own hotels; seed the shared list from this device if it is empty.
+  if (typeof fbListen === 'function') fbListen('neorchaHotels', v => {
+    if ($('hadd') && !$('hadd').hidden) return;                 // don't disrupt while you're adding one
+    const remote = Array.isArray(v) ? v.filter(h => h && okUrl(h.url) && h.name) : [];
+    if (!remote.length && LIST.length) { try { fbSet('neorchaHotels', LIST); } catch (_) {} return; }   // seed the team list
+    const byUrl = {}; remote.concat(LIST).forEach(h => { if (!byUrl[h.url]) byUrl[h.url] = h; });
+    const merged = Object.keys(byUrl).map(k => byUrl[k]).slice(0, 20);
+    if (JSON.stringify(merged) === JSON.stringify(LIST)) return;
+    LIST = merged; try { put(LK, LIST.length ? JSON.stringify(LIST) : ''); } catch (_) {}
+    if (merged.length > remote.length) { try { fbSet('neorchaHotels', LIST); } catch (_) {} }           // push back any local-only ones
+    if (SEL !== '' && !LIST[+SEL]) { SEL = ''; try { put(SK(), ''); } catch (_) {} }
+    loadInputs(); paintHotel();
+  });
   const loadInputs = () => {
     const h = cur();
     if (!h) { $('url').value = get(urlKey()) || autoUrl(); $('url').placeholder = autoUrl(); $('acct').value = get(acctKey()); }

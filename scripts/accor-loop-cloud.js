@@ -128,9 +128,14 @@ function resultReport(results, total) {
   const skipped = results.filter(r => /^skipped:|^title_not_committed|^country_not_found/.test(String(r.status || ''))).length;
   const errors = results.filter(r => /error|timeout|unclear|bad_data|bad_email|bad_name|auth_hang|modal_other/i.test(String(r.status || ''))).length;
   const other = Math.max(0, results.length - submitted - already - pending - skipped - errors);
+  const cat = st => /^(success|success_stuck)$/.test(st) ? 'enrolled' : st === 'already_member' ? 'already'
+    : st === 'pending-account' ? 'pending' : /^skipped:|^title_not_committed|^country_not_found|name_not_latin/.test(st) ? 'skipped'
+    : /error|timeout|unclear|bad_data|bad_email|bad_name|auth_hang|modal_other/i.test(st) ? 'error' : 'other';
   return {
     processed: results.length, total, submitted, alreadyMember: already, pending,
     skipped, errors, other, complete: results.length >= total,
+    // the per-guest list, so HotelOps can show who is in each tile and why (name + confirmation only — no e-mail)
+    guests: results.map(r => ({ name: String(r && r.name || '').slice(0, 60), conf: String(r && r.conf || ''), status: String(r && r.status || 'unknown'), cat: cat(String(r && r.status || '')) })),
     statuses: results.reduce((out, r) => {
       const status = String(r && r.status || 'unknown');
       out[status] = (out[status] || 0) + 1;

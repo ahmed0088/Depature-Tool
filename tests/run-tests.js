@@ -4362,6 +4362,10 @@ const haAsync = (async () => {
       process.stdout.write(JSON.stringify({ names: rows.map(r => r.name), pipe: A.pipeRows(rows), rep: [rep.submitted, rep.alreadyMember, rep.skipped, rep.errors, rep.complete] }));`], { stdio: 'pipe' }).toString());
   } catch (e) { out = { err: String(e.stderr || e.message).slice(0, 300) }; }
   check('Accor Loop: only guests who AGREED, with a civility and an e-mail, are sent', out.names, ['Test One']);
+  check('Enrol run report lists each guest with a category (so the tiles can be opened to show who + why)',
+    [/guests: results\.map\(r => \(\{ name:/.test(fs.readFileSync(path.join(ROOT, 'scripts', 'accor-loop-cloud.js'), 'utf8')), /function gpAccShowCat/.test(gpS) && /live\.report\.guests/.test(gpS), /onclick="gpAccShowCat/.test(gpS)], [true, true, true]);
+  check('Neorcha hotels are shared with the team (not device-only) and the phone enrol modal header is sticky',
+    [/fbSet\('neorchaHotels'/.test(nxS) && /fbListen\('neorchaHotels'/.test(nxS), /\.gp-accor-modal-h\{[^}]*position:sticky/.test(fs.readFileSync(path.join(ROOT, 'pro.css'), 'utf8')), /max-height:calc\(100dvh - 40px\)/.test(fs.readFileSync(path.join(ROOT, 'pro.css'), 'utf8'))], [true, true, true]);
   { const wc = fs.readFileSync(path.join(ROOT, 'scripts', 'accor-loop-content.js'), 'utf8');
     const seg = wc.slice(wc.indexOf('var AR_NAMES'), wc.indexOf('const sleep'));
     const nm = new Function(seg + '; return splitName;')();

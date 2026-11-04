@@ -162,6 +162,18 @@ function gpSet(i, field, val) {
 // enrolled already (by hand: "submitted"; by the cloud robot: "success" / "success_stuck"; or an ALL member) → never offered again
 const GP_DONE_RE = /submitted|already|^success/;
 /** the robot's last answer for a guest, in plain words (pure) */
+/** show the guests in one result tile (enrolled / already / skipped / error) with the reason each one did/didn't go through */
+function gpAccShowCat(cat) {
+  const box = document.getElementById('acrCat'); if (!box) return;
+  const live = GP_ACC.live, guests = (live && live.report && Array.isArray(live.report.guests)) ? live.report.guests : [];
+  const list = guests.filter(g => g.cat === cat);
+  if (box.dataset.cat === cat && !box.hidden) { box.hidden = true; box.dataset.cat = ''; return; }   // tap again to close
+  box.dataset.cat = cat; box.hidden = false;
+  const head = { enrolled: '✅ Enrolled', already: '👤 Already members', skipped: '⏭ Skipped', error: '⚠️ Not enrolled' }[cat] || cat;
+  box.innerHTML = `<div class="acr-cat-h">${head} (${list.length})</div>` + (list.length
+    ? list.map(g => `<div class="acr-cat-row"><b>${escapeHtml(g.name || 'Guest')}</b><small>${g.conf ? 'Conf. ' + escapeHtml(g.conf) + ' · ' : ''}${escapeHtml(gpTryWords(g.status))}</small></div>`).join('')
+    : '<div class="acr-cat-row"><small>None in this group.</small></div>');
+}
 function gpTryWords(st) {
   const s = String(st || '');
   return /^success/.test(s) ? 'enrolled' : /already/.test(s) ? 'already an ALL member' : /bad_email/.test(s) ? 'Accor says this e-mail cannot receive mail — check the address'
@@ -535,12 +547,13 @@ function gpCloudPaint(v) {
   if (sub) sub.textContent = (test ? '🧪 Test run · nothing is submitted · ' : '') + (live ? Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0') : 'No run yet');
   if (!live && !GP_ACC.gh) { body.innerHTML = '<div class="acr-empty">No enrolment run yet. Tick <b>Agreed</b> for the guests who said yes, paste the enrolment portal link, then press <b>☁️ Start cloud computer</b> (or 🧪 Test first).</div>'; gpAccPaintCon([], st); return; }
   const cg = live && live.current;
-  const tile = (ic, lb, val, cls) => `<div class="acr-tile ${cls}"><b>${val}</b><span>${ic} ${lb}</span></div>`;
+  const guests = (live && live.report && Array.isArray(live.report.guests)) ? live.report.guests : [];
+  const tile = (ic, lb, val, cls, cat) => { const has = guests.some(g => g.cat === cat); return `<button type="button" class="acr-tile ${cls}${has ? ' tap' : ''}" ${has ? `onclick="gpAccShowCat('${cat}')"` : 'disabled'}><b>${val}</b><span>${ic} ${lb}${has ? ' ›' : ''}</span></button>`; };
   body.innerHTML = `<div class="acr-bar ${st.state}"><i style="width:${pct}%"></i></div>
     <ol class="acr-steps">${GP_ACC_STEPS.map(([id, ic, lb], i) => { const s2 = st.state === 'done' || i < st.k ? 'ok' : i === st.k ? (st.state === 'error' ? 'bad' : st.state === 'stopped' ? 'stop' : 'now') : '';
       return `<li class="${s2}"><span class="d">${s2 === 'ok' ? '✓' : s2 === 'bad' ? '!' : s2 === 'stop' ? '■' : ic}</span><span class="l">${escapeHtml(lb)}${id === 'enroll' && n ? ` <em>${done} / ${n}</em>` : ''}</span>${s2 === 'now' ? '<span class="sp"></span>' : ''}</li>`; }).join('')}</ol>
     ${cg && st.state === 'run' ? `<div class="acr-guest"><span>👤</span><div><b>Guest ${escapeHtml(String(cg.index || '?'))} of ${escapeHtml(String(cg.total || n || '?'))}: ${escapeHtml(cg.title || '')} ${escapeHtml(cg.name || '')}</b><small>Confirmation ${escapeHtml(String(cg.conf || '—'))} · ${escapeHtml(String(cg.country || '—'))} · phone ${escapeHtml(String(cg.phone || '—'))}</small></div></div>` : ''}
-    ${ty ? `<div class="acr-tiles">${tile('✅', test ? 'Checked' : 'Enrolled', test ? done : +ty.enrolled || 0, 'ok')}${tile('👤', 'Already members', +ty.already || 0, 'info')}${tile('⏭', 'Skipped', +ty.skipped || 0, 'warn')}${tile('⚠️', 'Errors', +ty.errors || 0, 'bad')}</div>` : ''}
+    ${ty ? `<div class="acr-tiles">${tile('✅', test ? 'Checked' : 'Enrolled', test ? done : +ty.enrolled || 0, 'ok', 'enrolled')}${tile('👤', 'Already members', +ty.already || 0, 'info', 'already')}${tile('⏭', 'Skipped', +ty.skipped || 0, 'warn', 'skipped')}${tile('⚠️', 'Errors', +ty.errors || 0, 'bad', 'error')}</div><div class="acr-cat" id="acrCat" hidden></div>` : ''}
     <div class="acr-note ${st.state}">${icon} ${escapeHtml(st.note || '…')}</div>
     <div class="acr-act">${active ? `<button type="button" class="btn" onclick="gpAccControl('stop')">■ Stop after this guest</button>` : ''}${!active && live && live.step !== 'queued' ? `<button type="button" class="btn" onclick="gpAccCloudRestart()">▶ Run again</button>` : ''}${st.url ? `<a class="btn" href="${escapeHtml(st.url)}" target="_blank" rel="noopener">Open on GitHub ↗</a>` : ''}${st.state === 'run' ? '<span class="acr-hint">You can close this — the cloud computer keeps going and the results land in the tracker.</span>' : ''}</div>`;
   const lines = (live && Array.isArray(live.con) ? live.con : []).slice();

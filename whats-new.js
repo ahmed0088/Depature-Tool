@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 526, items: [
+    "👆 In the live enrolment window, tap a result tile — Enrolled, Already members, Skipped or Errors — to see the list of those guests and the exact reason each one did or did not go through.",
+    "📱 Fixed the enrolment window on phones: the top bar and the ✕ close are always visible now (it used to slip above the screen), and the close button is bigger and easier to tap.",
+    "🏨 Neorcha: the hotels you add are now saved for the whole team (and kept when you come back), not just on the device where you added them.",
+  ] },
   { v: 525, items: [
     "🔗 The enrolment portal link is now remembered per hotel and shared with your team, so you don't paste it every run. Type it once; any device for that hotel fills it in by itself. (It only saves a real guestinternet.com link, and only writes to the database when it actually changes.)",
     "🏷️ Renamed the tool to neutral names — \"Guest enrolment\", \"Enrol guests\", \"Enrolment portal link\" — so it reads the same for any hotel or programme, not a brand.",
