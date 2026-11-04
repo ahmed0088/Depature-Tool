@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 527, items: [
+    "🔁 Roster — change the people, any time: in ✏️ Edit, tap a person's name to Rename, Replace with someone else (their whole week moves over — handy for a sick-leave cover), or Remove from this week. As always, you can also edit any day's shift directly in Edit mode and it saves for the team instantly. (A reminder: you already have Swap shifts, Sick / leave, Copy last week and Change this week too.)",
+  ] },
   { v: 526, items: [
     "👆 In the live enrolment window, tap a result tile — Enrolled, Already members, Skipped or Errors — to see the list of those guests and the exact reason each one did or did not go through.",
     "📱 Fixed the enrolment window on phones: the top bar and the ✕ close are always visible now (it used to slip above the screen), and the close button is bigger and easier to tap.",

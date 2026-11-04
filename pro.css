@@ -682,6 +682,18 @@ textarea::placeholder { font-size: 13px; line-height: 1.55; }
 .ro-table tbody tr:last-child td { border-bottom: 0; }
 .ro-table .ro-name { position: sticky; left: 0; z-index: 1; text-align: left; font-weight: 550; color: var(--text); white-space: nowrap; min-width: 120px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; background: var(--card); border-right: 1px solid var(--border); }
 .ro-table th.ro-name { background: var(--card2); z-index: 2; }
+.ro-table .ro-name .ro-tap { background: none; border: 0; color: inherit; font: inherit; cursor: pointer; padding: 2px 4px; border-radius: 6px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ro-table.ro-editing .ro-name .ro-tap:hover { background: var(--accent-bg); color: var(--accent); }
+.ro-name-menu { position: fixed; z-index: 10050; width: 232px; max-width: calc(100vw - 16px); padding: 8px; border-radius: 14px; background: var(--card); border: 1px solid var(--border2); box-shadow: 0 20px 50px -12px rgba(0,0,0,.5); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); animation: hoPop .14s ease; }
+.ro-nm-h { font: 700 .86rem var(--font); padding: 4px 8px 8px; color: var(--text); border-bottom: 1px solid var(--border); margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ro-nm-sec { font: 700 .68rem var(--font); letter-spacing: .04em; text-transform: uppercase; color: var(--text3); padding: 8px 8px 4px; }
+.ro-nm-list { max-height: 180px; overflow: auto; display: grid; gap: 2px; }
+.ro-nm-b { display: block; width: 100%; text-align: left; padding: 9px 10px; border: 0; border-radius: 9px; background: none; color: var(--text); font: 500 .84rem var(--font); cursor: pointer; }
+.ro-nm-b:hover { background: var(--accent-bg); }
+.ro-nm-b.danger { color: #e11d48; margin-top: 4px; border-top: 1px solid var(--border); border-radius: 0 0 9px 9px; }
+.ro-nm-row { display: flex; gap: 6px; padding: 8px 4px 2px; }
+.ro-nm-row input { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--border); background: var(--input-bg, var(--bg2)); color: var(--text); font: inherit; font-size: .82rem; }
+
 .ro-table tr.ro-me td { background: color-mix(in srgb, var(--accent) 7%, var(--card)); }
 .ro-you { font-size: 10px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .05em; margin-left: 4px; }
 .ro-cell { font: 650 12.5px var(--mono); color: var(--rc, var(--text3)); min-width: 50px; }
@@ -3756,7 +3768,7 @@ html, body { background: var(--bg); }
 .gp-cloud-set{margin-top:10px;font-size:.82rem;color:var(--text3)}.gp-cloud-set summary{cursor:pointer}
 .gp-agent-st{margin-top:10px;display:inline-block;padding:4px 10px;border-radius:99px;font-size:.78rem;border:1px solid var(--border);background:var(--card)}.gp-agent-st.on{border-color:color-mix(in srgb,#10b981 55%,var(--border));color:var(--text)}
 .gp-agent-on{display:flex;gap:8px;align-items:center;margin:10px 0 6px;font-size:.88rem;color:var(--text);cursor:pointer}
-:root { --ho-css: "v526"; }
+:root { --ho-css: "v527"; }
 .rent-bp-card:empty { display: none; }
 .rent-bp-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 10px; } .rent-bp-h span { color: var(--text3); font-size: .78rem; }
 .rent-bp { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }

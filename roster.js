@@ -419,6 +419,50 @@ function roClearPerson(key) {
   if (roWeekAdd[roWeek]) roWeekAdd[roWeek] = roWeekAdd[roWeek].filter(k => k !== key);
   roRender();
 }
+// ── Change WHO is on the roster this week (tap a name in Edit mode) ──
+function roNameMenu(btn, key) {
+  if (!roCanEdit()) { showToast('Only supervisors, managers and owners can change the roster', 'err'); return; }
+  document.getElementById('roNameMenu')?.remove();
+  const q = s => JSON.stringify(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  const nm = (roStaff[key] || {}).name || key;
+  const others = roWeekRows().filter(r => r.key && r.key !== key);
+  const m = document.createElement('div'); m.id = 'roNameMenu'; m.className = 'ro-name-menu';
+  m.innerHTML = `<div class="ro-nm-h">${escapeHtml(nm)}</div>
+    <button class="ro-nm-b" onclick="roRenamePerson(${q(key)})">✏️ Rename</button>
+    <div class="ro-nm-sec">🔁 Replace this week with…</div>
+    <div class="ro-nm-list">${others.length ? others.map(r => `<button class="ro-nm-b" onclick="roReplacePerson(${q(key)},${q(r.key)})">${escapeHtml((roStaff[r.key] || {}).name || r.key)}</button>`).join('') : '<small>No one else on this week</small>'}</div>
+    <div class="ro-nm-row"><input id="roReplNew" placeholder="…or type a new name"><button class="btn sm gold" onclick="roReplacePerson(${q(key)}, document.getElementById('roReplNew').value)">Replace</button></div>
+    <button class="ro-nm-b danger" onclick="roClearPerson(${q(key)});document.getElementById('roNameMenu')?.remove()">✕ Remove from this week</button>`;
+  document.body.appendChild(m);
+  const r = btn.getBoundingClientRect(); m.style.left = Math.max(8, Math.min(r.left, innerWidth - 248)) + 'px'; m.style.top = Math.min(innerHeight - 20, r.bottom + 4) + 'px';
+  setTimeout(() => document.addEventListener('click', function h(e) { if (!m.contains(e.target) && e.target !== btn) { m.remove(); document.removeEventListener('click', h); } }), 0);
+}
+function roRenamePerson(key) {
+  const cur = (roStaff[key] || {}).name || key; const nv = prompt('New name for ' + cur, cur);
+  document.getElementById('roNameMenu')?.remove();
+  if (nv == null) return; const name = nv.replace(/\s+/g, ' ').trim(); if (!name || name === cur) return;
+  const nk = roKey(name);
+  if (nk === key) { roStaff[key] = Object.assign({}, roStaff[key], { name }); fbSet('roster/staff/' + key, roStaff[key]); roRender(); return; }
+  roReplacePerson(key, name);   // a real new name → move their week over and retire the old key
+}
+/** Move everyone's shifts THIS WEEK from one person to another (sickness cover, a swap of the whole week, a fixed name). */
+function roReplacePerson(oldKey, who) {
+  if (!roCanEdit()) return;
+  document.getElementById('roNameMenu')?.remove();
+  who = String(who || '').trim(); if (!who || who === oldKey) return;
+  const newKey = roStaff[who] ? who : roKey(who);
+  const newName = (roStaff[newKey] || {}).name || who;
+  if (newKey === oldKey) return;
+  if (!roStaff[newKey]) { roStaff[newKey] = { name: newName, order: Object.keys(roStaff).length }; fbSet('roster/staff/' + newKey, roStaff[newKey]); }
+  let moved = 0;
+  for (let i = 0; i < 7; i++) { const d = roAdd(roWeek, i); const v = (roDays[d] || {})[oldKey]; if (v) { roSetCell(newKey, d, v); roSetCell(oldKey, d, ''); moved++; } }
+  roWeekAdd = roWeekAdd || {}; roWeekAdd[roWeek] = roWeekAdd[roWeek] || [];
+  if (!roWeekAdd[roWeek].includes(newKey)) roWeekAdd[roWeek].push(newKey);
+  roWeekAdd[roWeek] = roWeekAdd[roWeek].filter(k => k !== oldKey);
+  if (typeof logActivity === 'function') try { logActivity('roster_replace', `${(roStaff[oldKey] || {}).name || oldKey} → ${newName} (${moved} day${moved === 1 ? '' : 's'})`); } catch (_) {}
+  if (typeof showToast === 'function') showToast(`${newName} takes over ${(roStaff[oldKey] || {}).name || oldKey}'s ${moved} shift${moved === 1 ? '' : 's'} this week`, 'ok');
+  roRender();
+}
 function roCopyLastWeek() {
   if (!roCanEdit()) return;
   const prev = roAdd(roWeek, -7);
@@ -594,7 +638,7 @@ function _roTable(rows, dates, get, editable) {
   const span = dates.length + 1 + (editable === true ? 1 : 0);
   return `<div class="ro-scroll"><table class="ro-table${editable ? ' ro-editing' : ''}">
     <thead><tr><th class="ro-name">Name</th>${dates.map(d => `<th class="${d === today ? 'ro-today' : ''}">${escapeHtml(roDayLbl(d))}</th>`).join('')}${editable === true ? '<th></th>' : ''}</tr></thead>
-    <tbody>${rows.map(r => r.section ? `<tr class="ro-sec"><td colspan="${span}"><span>${escapeHtml(r.section)}</span></td></tr>` : `<tr class="${r.key === roMeKey ? 'ro-me' : ''}"><td class="ro-name${/\?$/.test(r.name) ? ' ro-unsure' : ''}" title="${escapeHtml(r.name)}">${editable === 'preview' ? `<button class="ro-tap" onclick="roPrevEditName(this,${q(r.key)})" title="Tap to correct">${escapeHtml(r.name)}</button>` : escapeHtml(r.name)}${r.key === roMeKey ? ' <span class="ro-you">you</span>' : ''}</td>${dates.map(d => {
+    <tbody>${rows.map(r => r.section ? `<tr class="ro-sec"><td colspan="${span}"><span>${escapeHtml(r.section)}</span></td></tr>` : `<tr class="${r.key === roMeKey ? 'ro-me' : ''}"><td class="ro-name${/\?$/.test(r.name) ? ' ro-unsure' : ''}" title="${escapeHtml(r.name)}">${editable === 'preview' ? `<button class="ro-tap" onclick="roPrevEditName(this,${q(r.key)})" title="Tap to correct">${escapeHtml(r.name)}</button>` : editable === true ? `<button class="ro-tap" onclick="roNameMenu(this,${q(r.key)})" title="Tap to rename, replace or remove">${escapeHtml(r.name)} ▾</button>` : escapeHtml(r.name)}${r.key === roMeKey ? ' <span class="ro-you">you</span>' : ''}</td>${dates.map(d => {
       const v = get(r, d) || '', i = roInfo(v);
       if (editable === 'preview') return `<td class="ro-cell ${i ? 'ro-t-' + i.type : ''}${/\?/.test(v) ? ' ro-unsure' : ''}" data-k="${escapeHtml(r.key)}" data-d="${d}" title="${escapeHtml(v || 'empty')}: tap to correct" onclick="roPrevEdit(this)">${escapeHtml(v === '?' ? '?' : roCellTxt(i))}${i && i.note ? `<i class="ro-note">${escapeHtml(i.note.replace(/\s*\?$/, ''))}</i>` : ''}</td>`;
       return `<td class="ro-cell ${i ? 'ro-t-' + i.type : ''}${d === today ? ' ro-today' : ''}${/\?/.test(v) ? ' ro-unsure' : ''}" data-k="${escapeHtml(r.key)}" data-d="${d}" title="${escapeHtml(i ? i.label + (i.from && !i.label.startsWith(i.from) ? ' ' + roTime(i) : '') : '')}">${editable

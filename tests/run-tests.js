@@ -4341,7 +4341,13 @@ const haAsync = (async () => {
   check('Neorcha: after a local collection it asks to enroll (Yes opens the sheet); a cloud/background collection (with at) never asks',
     [/ASK_ENROLL = !at && R\.rows\.some\(r => r\.email\)/.test(nxS), /id="nx-ask-yes"/.test(nxS) && /gpQuickEnroll\(S\.rows/.test(nxS)], [true, true]);
   { const mr = fs.readFileSync(path.join(ROOT, 'monthly-reports.js'), 'utf8');
-    check('Monthly reports: a counting report gets its tick box (compare by id, not object identity, so it is not always "new"); the box has a tooltip',
+    { const ro = fs.readFileSync(path.join(ROOT, 'roster.js'), 'utf8');
+    check('Roster: in Edit the name opens a menu to rename/replace/remove; replace moves the whole week and clears the old person; it saves live',
+      [/function roNameMenu/.test(ro) && /function roReplacePerson/.test(ro) && /function roRenamePerson/.test(ro),
+       /editable === true \? `<button class="ro-tap" onclick="roNameMenu/.test(ro),
+       /roSetCell\(newKey, d, v\); roSetCell\(oldKey, d, ''\)/.test(ro),
+       /roReplacePerson\b/.test(ro) && /roCanEdit\(\)/.test(ro.slice(ro.indexOf('function roReplacePerson'), ro.indexOf('function roReplacePerson') + 400))], [true, true, true, true]); }
+  check('Monthly reports: a counting report gets its tick box (compare by id, not object identity, so it is not always "new"); the box has a tooltip',
       [/counts = cnt\.some\(c => c\.id === r\.id\)/.test(mr), !/counts = cnt\.includes\(r\)/.test(mr), /title="\$\{d \? 'Done/.test(mr)], [true, true, true]); }
   check('Orbit + Orvante themes: registered, applied before paint, with their own look and focus ring',
     [/'orbit':\s*\{[^}]*skin: 'orbit'/.test(thS) && /'orvante':\s*\{[^}]*skin: 'orvante'/.test(thS), /'orbit': 'night-ops', 'orvante': 'opera'/.test(ixS) && /orbit: 1, orvante: 1/.test(ixS), /html\[data-skin="orbit"\] :focus-visible/.test(tpS) && /html\[data-skin="orvante"\] :focus-visible/.test(tpS)], [true, true, true]);
