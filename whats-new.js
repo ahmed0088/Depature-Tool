@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 521, items: [
+    "🔤 Accor Loop now turns Arabic names into English so they can be enrolled (the portal only accepts A–Z). Common names come out properly spelled (محمد → Mohammed, عبدالله → Abdullah, فاطمة → Fatima); anything else is written letter-by-letter in English. No more \"name must be in latin characters\" for Arabic guests.",
+  ] },
   { v: 520, items: [
     "🔎 Accor Loop now proves what happened for each guest: just before sending it logs the exact values in the form (first, family, e-mail, country) and it prints Accor's full reply. In the HotelOps console you see the real values; on the public GitHub log names and e-mails stay hidden. This shows whether a \"bad e-mail\" is a real bad address or something not filled in.",
   ] },

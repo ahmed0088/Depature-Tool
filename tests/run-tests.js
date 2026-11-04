@@ -4353,6 +4353,13 @@ const haAsync = (async () => {
       process.stdout.write(JSON.stringify({ names: rows.map(r => r.name), pipe: A.pipeRows(rows), rep: [rep.submitted, rep.alreadyMember, rep.skipped, rep.errors, rep.complete] }));`], { stdio: 'pipe' }).toString());
   } catch (e) { out = { err: String(e.stderr || e.message).slice(0, 300) }; }
   check('Accor Loop: only guests who AGREED, with a civility and an e-mail, are sent', out.names, ['Test One']);
+  { const wc = fs.readFileSync(path.join(ROOT, 'scripts', 'accor-loop-content.js'), 'utf8');
+    const seg = wc.slice(wc.indexOf('var AR_NAMES'), wc.indexOf('const sleep'));
+    const nm = new Function(seg + '; return splitName;')();
+    const j = r => JSON.stringify(nm(r));
+    check('Accor Loop: Arabic names become English so they can be enrolled (dictionary + letter fallback, never blank)',
+      [j('محمد علي'), j('عبدالله الكتبي'), j('فاطمة أحمد'), j('سعيد ناصر'), /[^\x00-\x7F]/.test(nm('خالدسعد').first + nm('خالدسعد').last)],
+      ['{"first":"Mohammed","last":"Ali"}', '{"first":"Abdullah","last":"Al Ktby"}', '{"first":"Fatima","last":"Ahmed"}', '{"first":"Saeed","last":"Nasser"}', false]); }
   check('Accor Loop: the robot\'s list format (conf|title|name|email|phone|country)', out.pipe, '1|Mr|Test One|one@x.test|050|UAE\n');
   check('Accor Loop: the report counts', out.rep, [1, 1, 1, 1, false]);
 })();

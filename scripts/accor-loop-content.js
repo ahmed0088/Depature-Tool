@@ -88,8 +88,40 @@
   }
 
   // é → e, invisible marks (right-to-left marks, zero-width, no-break spaces) and any non-Latin letter removed
+  // Arabic → English so an Arabic-script name can still be enrolled (the portal accepts only A–Z).
+  // A dictionary of common names first (proper spelling), then letter-by-letter for anything else.
+  var AR_NAMES = {
+    "محمد":"Mohammed","محمّد":"Mohammed","أحمد":"Ahmed","احمد":"Ahmed","محمود":"Mahmoud","مصطفى":"Mostafa","علي":"Ali","عمر":"Omar","عثمان":"Othman",
+    "خالد":"Khalid","سعد":"Saad","سعيد":"Saeed","سالم":"Salem","صالح":"Saleh","سلطان":"Sultan","فهد":"Fahad","فيصل":"Faisal","ناصر":"Nasser","راشد":"Rashid",
+    "حمد":"Hamad","حمدان":"Hamdan","ماجد":"Majid","وليد":"Waleed","ياسر":"Yasser","زايد":"Zayed","عبدالله":"Abdullah","عبدالرحمن":"Abdulrahman","عبدالعزيز":"Abdulaziz",
+    "عبدالرحيم":"Abdulrahim","عبدالكريم":"Abdulkarim","عبدالقادر":"Abdulqader","عبدالمجيد":"Abdulmajid","عبدالحميد":"Abdulhamid","عبدالسلام":"Abdulsalam","عبدالوهاب":"Abdulwahab",
+    "ابراهيم":"Ibrahim","إبراهيم":"Ibrahim","يوسف":"Yousef","يعقوب":"Yaqub","اسماعيل":"Ismail","إسماعيل":"Ismail","اسحاق":"Ishaq","موسى":"Musa","عيسى":"Issa","ادريس":"Idris",
+    "حسن":"Hassan","حسين":"Hussein","طارق":"Tariq","كريم":"Karim","أمير":"Amir","امير":"Amir","بدر":"Badr","جمال":"Jamal","كمال":"Kamal","نبيل":"Nabil","سامي":"Sami",
+    "رامي":"Rami","زياد":"Ziad","وسام":"Wissam","هشام":"Hisham","عادل":"Adel","أنس":"Anas","انس":"Anas","حمزة":"Hamza","مازن":"Mazen","معاذ":"Muadh","عمار":"Ammar",
+    "فاطمة":"Fatima","عائشة":"Aisha","مريم":"Mariam","خديجة":"Khadija","زينب":"Zainab","نورة":"Noura","نور":"Nour","هدى":"Huda","هند":"Hind","ليلى":"Laila","سلمى":"Salma",
+    "سارة":"Sara","ساره":"Sara","ريم":"Reem","دانة":"Dana","رنا":"Rana","منى":"Mona"," منال":"Manal","أمل":"Amal","امل":"Amal","أميرة":"Amira","ياسمين":"Yasmin",
+    "شيماء":"Shaima","أسماء":"Asma","اسماء":"Asma","عبير":"Abeer","لطيفة":"Latifa","موزة":"Moza","شمسة":"Shamsa","مهرة":"Mahra","عليا":"Alya","روان":"Rawan","شهد":"Shahad",
+    "جاسم":"Jasim","جابر":"Jaber","مبارك":"Mubarak","مطر":"Matar","راكان":"Rakan","تركي":"Turki","نواف":"Nawaf","مشعل":"Mishal","بندر":"Bandar","عبدالمحسن":"Abdulmohsen",
+    "الله":"Allah","ابو":"Abu","أبو":"Abu","بن":"Bin","بنت":"Bint","آل":"Al"
+  };
+  var AR_LET = { "ا":"a","أ":"a","إ":"i","آ":"aa","ٱ":"a","ب":"b","ت":"t","ث":"th","ج":"j","ح":"h","خ":"kh","د":"d","ذ":"dh","ر":"r","ز":"z","س":"s","ش":"sh","ص":"s","ض":"d","ط":"t","ظ":"z","ع":"a","غ":"gh","ف":"f","ق":"q","ك":"k","ل":"l","م":"m","ن":"n","ه":"h","و":"w","ي":"y","ى":"a","ة":"a","ء":"","ئ":"y","ؤ":"w","پ":"p","چ":"ch","گ":"g","ڤ":"v" };
+  var cap = w => w ? w.charAt(0).toUpperCase() + w.slice(1) : w;
+  function arToLatin(v) {
+    var s = String(v || "");
+    if (!/[\u0600-\u06FF]/.test(s)) return s;              // no Arabic letters → leave it
+    s = s.replace(/[\u064B-\u065F\u0670\u0640]/g, "");     // drop harakat (short-vowel marks) and tatweel
+    return s.split(/(\s+)/).map(function (w) {
+      if (!/[\u0600-\u06FF]/.test(w)) return w;
+      if (AR_NAMES[w]) return AR_NAMES[w];
+      var lead = ""; var x = w;
+      if (/^ال./.test(x)) { lead = "Al "; x = x.slice(2); }   // "ال" = "the/Al"
+      if (AR_NAMES[x]) return lead + AR_NAMES[x];
+      var out = ""; for (var i = 0; i < x.length; i++) { var ch = x[i]; out += (AR_LET[ch] !== undefined ? AR_LET[ch] : (/[\u0600-\u06FF]/.test(ch) ? "" : ch)); }
+      return lead + cap(out);
+    }).join("");
+  }
   function latinOnly(v) {
-    return String(v || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+    return arToLatin(String(v || "")).normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
       .replace(/[^A-Za-z' -]+/g, " ").replace(/\s+/g, " ").replace(/^[\s'-]+|[\s'-]+$/g, "").trim();
   }
   function splitName(fullName) {
