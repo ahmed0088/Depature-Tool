@@ -4463,8 +4463,8 @@ const haAsync = (async () => {
        /<script src="page-settings\.js"><\/script>/.test(ixS) && /'\.\/page-settings\.js'/.test(fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8'))], [true, true, true, true]); }
   { const tcS = fs.readFileSync(path.join(ROOT, 'team-chat.js'), 'utf8'), sbx5 = { document: { readyState: 'complete', addEventListener() {}, querySelector: () => null, querySelectorAll: () => [], getElementById: () => null, head: { appendChild() {} }, createElement: () => ({ style: {} }) }, setTimeout: () => 0 };
     sbx5.window = sbx5; vm.createContext(sbx5); vm.runInContext(tcS, sbx5); const TC = sbx5.hoTeamChat._pure;
-    check('Team chat: unread counts only colleagues\' messages after the last read; text is escaped and room numbers become links; stored per hotel (teamChat), loaded and cached',
-      [TC.unreadOf([{ uid: 'a', at: 5 }, { uid: 'me', at: 6 }, { uid: 'b', at: 9 }, { uid: 'b', at: 2 }], 'me', 4), TC.richText('<b>Room 412</b>'), /fbSet\('teamChat\/' \+ k, msg\)/.test(tcS),
+    check('Team chat: unread counts only colleagues\' messages after the last read; text is escaped and room numbers become links; stored per hotel (chat/msgs), loaded and cached',
+      [TC.unreadOf([{ uid: 'a', at: 5 }, { uid: 'me', at: 6 }, { uid: 'b', at: 9 }, { uid: 'b', at: 2 }], 'me', 4), TC.richText('<b>Room 412</b>'), /fbSet\(P\(`msgs\/\$\{c\.id\}\/\$\{k\}`\), msg\)/.test(tcS),
        /<script src="team-chat\.js"><\/script>/.test(ixS) && /'\.\/team-chat\.js'/.test(fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8'))],
       [2, '&lt;b&gt;Room <button type="button" class="tc-room" data-room="412">412</button>&lt;/b&gt;', true, true]); }
   { const nfS2 = fs.readFileSync(path.join(ROOT, 'nav-finder.js'), 'utf8'), noS = fs.readFileSync(path.join(ROOT, 'nav-order.js'), 'utf8');
@@ -4489,6 +4489,15 @@ const haAsync = (async () => {
        OP.shouldReopen(I({})), OP.shouldReopen(I({ on: false })), OP.shouldReopen(I({ reopenAt: 1e12 + 60e3 })), OP.shouldReopen(I({ locked: true })), OP.shouldReopen(I({ everLinked: 0 })), OP.shouldReopen(I({ now: 1e12 + 30e3 })),
        /prop: readProp\(\)/.test(rdS) && /post\(\{ source: 'ho-op', gone: \{ why: why \}/.test(rdS) && /d\.source === 'ho-op-reload'/.test(rdS), /src === 'ho-op-open'/.test(whS) && /d\.source === 'ho-op-open' \|\| d\.source === 'ho-op-reload'/.test(whS)],
       ['', true, '', '', true, false, false, false, false, false, true, true]); }
+  { const tc2 = fs.readFileSync(path.join(ROOT, 'team-chat.js'), 'utf8'), sbx7 = { document: { readyState: 'complete', addEventListener() {}, querySelector: () => null, querySelectorAll: () => [], getElementById: () => null, head: { appendChild() {} }, createElement: () => ({ style: {} }) }, setTimeout: () => 0, setInterval: () => 0 };
+    sbx7.window = sbx7; vm.createContext(sbx7); vm.runInContext(tc2, sbx7); const T7 = sbx7.hoTeamChat._pure, users = { me: { active: true }, sam: { active: true }, old: { active: false } };
+    const m = { at: 100 }, NOW = new Date(2026, 10, 5, 12, 0).getTime();
+    check('Team chat like WhatsApp: sent / delivered / seen by everyone; the whole-team group is every active user, a group its members; one direct chat id for both people; typing shows for 6 s (never yourself); online / last seen',
+      [T7.ticks(m, ['sam', 'lea'], {}, {}), T7.ticks(m, ['sam', 'lea'], {}, { sam: 100, lea: 150 }), T7.ticks(m, ['sam', 'lea'], { sam: 120 }, { lea: 150 }), T7.ticks(m, ['sam', 'lea'], { sam: 120, lea: 101 }, {}),
+       JSON.stringify(T7.membersOf({ all: true }, users)), JSON.stringify(T7.membersOf({ members: { me: true, sam: true, x: false } }, users)), T7.dmId('sam', 'me') === T7.dmId('me', 'sam'),
+       JSON.stringify(T7.typers({ sam: NOW - 2000, lea: NOW - 9000, me: NOW }, 'me', { sam: { name: 'Sam Rivera' } }, NOW)), T7.lastSeen(NOW - 20000, NOW), /^last seen today at \d\d:\d\d$/.test(T7.lastSeen(NOW - 3600e3, NOW)),
+       /fbListen\(P\('typing'\)/.test(tc2) && /fbListen\(P\('reads'\)/.test(tc2) && /fbListen\(P\('dlv'\)/.test(tc2)],
+      ['sent', 'dlv', 'dlv', 'read', '["me","sam"]', '["me","sam"]', true, '["Sam"]', 'online', true, true]); }
   check('Found/Redline: the phone More drawer is solid (a see-through drawer let the home page bleed through)',
     [/html\[data-skin="found"\] \.mob-more-drawer \{ background: #0e22b8/.test(tpS), /html\[data-skin="redline"\] \.mob-more-drawer \{ background: #2e0f05/.test(tpS)], [true, true]);
   { const fw = fs.readFileSync(path.join(ROOT, 'found-web.js'), 'utf8');

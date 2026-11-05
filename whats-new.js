@@ -9,6 +9,20 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 543, items: [
+    { ico: '💬', title: 'Team chat is now like WhatsApp',
+      what: 'Chats list with search and All · Unread · Groups · Direct, unread counts and last messages; the Whole team group, your own groups and direct chats. Two panes on PC like WhatsApp Web, one screen at a time on the phone, in WhatsApp\'s colours (light and dark).',
+      does: 'Tap 💬 in the top bar (More on the phone). ✏️ starts a direct chat, 👥＋ makes a group.' },
+    { ico: '✓✓', title: 'Ticks, seen, typing and online',
+      what: '✓ sent · ✓✓ delivered · blue ✓✓ seen by everyone; Message info lists who read it and who has it. "Sam is typing…" in the chat and in the list; "online" / "last seen today at 10:42" in direct chats.',
+      does: 'You know your message reached the team — and who still hasn\'t seen it.' },
+    { ico: '👥', title: 'Groups in two taps',
+      what: 'Pick the people → give it a name and an emoji (Night team 🌙, HK 🧹…) → ✓. Group info: rename, description, add and remove people, make admins, exit group.',
+      does: 'Admins manage the group; everyone sees who is in it.' },
+    { ico: '↩', title: 'Everything you do to a message',
+      what: 'Right-click / long-press (or the ⌄ on a message): reply (swipe right on the phone), react 👍❤️😂😮😢🙏, copy, forward, star, pin to the top, edit (15 min), delete for everyone or for me, message info.',
+      does: 'Plus search in the chat, starred messages, mute, pin a chat, @mentions (with a pop-up even in muted chats), emoji, photos (made small) and voice notes up to 90 s. Room numbers are links to the room card.' },
+  ] },
   { v: 542, items: [
     { ico: '💬', title: 'Team chat',
       what: 'A chat for your hotel\'s team, live on every PC and phone: 💬 in the top bar (More on the phone). A number shows what you haven\'t read, and a colleague\'s new message pops up for a few seconds.',
