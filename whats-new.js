@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 534, items: [
+    { ico: '☀️', title: 'Start of the day: it asks you to load the important reports',
+      what: 'The first time you open HotelOps each day, if the In-house report or today\'s Departures is not loaded yet, a "Good morning — start of the day" window asks for them, with what is missing and "0 of 2 loaded".',
+      does: 'Tap 📂 Load the file (it opens the right page and steps aside as a small bar) or 📡 Read from Opera (open In House, then Departures in Opera). Each line ticks ✓ by itself the moment its report is in, and the window closes when both are. Busy? ⏰ Remind me in 30 min, or Skip today.' },
+  ] },
   { v: 533, items: [
     { ico: '❓', title: 'The Opera reader asks you too — right inside Opera',
       what: 'When HotelOps is not sure if a guest checked out or extended, the question now also appears in the reader\'s box in the Opera tab: "❓ HotelOps asks — Room 412: checked out or extended?" The box opens by itself for a new question, and its corner badge shows "?" while one waits.',

@@ -4396,6 +4396,14 @@ const haAsync = (async () => {
     check('Reader asks: HotelOps sends its open "checked out or extended?" questions with every answer to the reader; the reader shows them with the buttons and sends the tap back; HotelOps only accepts an answer that is one of that question\'s own buttons',
       [(obr.match(/ask: readerAsks\(\)/g) || []).length >= 3 && /if \(d\.answer && typeof d\.answer === 'object'\)/.test(obr), /if \(!q \|\| !q\.opts\.some\(o => o\[1\] === act\)\) return/.test(obr),
        /Array\.isArray\(d\.ask\)/.test(rdr) && /answer: \{ id: q\.id, act: o\[1\] \}/.test(rdr) && /❓ HotelOps asks/.test(rdr)], [true, true, true]); }
+  { const sdS = fs.readFileSync(path.join(ROOT, 'start-day.js'), 'utf8'); const sbx = { window: {}, document: { readyState: 'complete', getElementById: () => null, addEventListener() {} }, setTimeout: () => 0, setInterval: () => 0, localStorage: { getItem: () => null, setItem() {} } };
+    sbx.window = sbx; vm.createContext(sbx); vm.runInContext(sdS, sbx); const SDp = sbx.hoStartDay._pure, T0 = '2026-11-05';
+    const st = (ih, dn, dd) => SDp.statusOf({ ihDate: ih, depN: dn, depDay: dd }, T0);
+    check('Start of the day: asks while the In-house report or today\'s Departures is missing; not when both are in, after Skip / done today, or while snoozed; asks again the next day; loaded and cached',
+      [st(T0, 5, T0).all, SDp.shouldAsk(st('', 0, ''), {}, T0, 0), SDp.shouldAsk(st(T0, 0, ''), {}, T0, 0), SDp.shouldAsk(st('2026-11-04', 5, T0), {}, T0, 0), SDp.shouldAsk(st(T0, 5, T0), {}, T0, 0),
+       SDp.shouldAsk(st('', 0, ''), { date: T0, skip: true }, T0, 0), SDp.shouldAsk(st('', 0, ''), { date: T0, until: 100 }, T0, 50), SDp.shouldAsk(st('', 0, ''), { date: '2026-11-04', skip: true }, T0, 0),
+       /<script src="start-day\.js"><\/script>/.test(ixS) && /'\.\/start-day\.js'/.test(fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8'))],
+      [true, true, true, true, false, false, false, true, true]); }
   check('Found/Redline: the phone More drawer is solid (a see-through drawer let the home page bleed through)',
     [/html\[data-skin="found"\] \.mob-more-drawer \{ background: #0e22b8/.test(tpS), /html\[data-skin="redline"\] \.mob-more-drawer \{ background: #2e0f05/.test(tpS)], [true, true]);
   { const fw = fs.readFileSync(path.join(ROOT, 'found-web.js'), 'utf8');
