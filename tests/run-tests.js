@@ -4351,6 +4351,12 @@ const haAsync = (async () => {
       [/counts = cnt\.some\(c => c\.id === r\.id\)/.test(mr), !/counts = cnt\.includes\(r\)/.test(mr), /title="\$\{d \? 'Done/.test(mr)], [true, true, true]); }
   check('Orbit + Orvante themes: registered, applied before paint, with their own look and focus ring',
     [/'orbit':\s*\{[^}]*skin: 'orbit'/.test(thS) && /'orvante':\s*\{[^}]*skin: 'orvante'/.test(thS), /'orbit': 'night-ops', 'orvante': 'opera'/.test(ixS) && /orbit: 1, orvante: 1/.test(ixS), /html\[data-skin="orbit"\] :focus-visible/.test(tpS) && /html\[data-skin="orvante"\] :focus-visible/.test(tpS)], [true, true, true]);
+  { const sfx = fs.readFileSync(path.join(ROOT, 'stratum-fx.js'), 'utf8');
+    check('Stratum theme: registered, applied before paint, own focus ring; label decode only with a mouse, no reduced motion, always restores the text, and is cached offline',
+      [/'stratum':\s*\{[^}]*skin: 'stratum'/.test(thS), /'stratum': 'night-ops'/.test(ixS) && /stratum: 1/.test(ixS) && /<script src="stratum-fx\.js"><\/script>/.test(ixS),
+       /html\[data-skin="stratum"\] :focus-visible/.test(tpS) && /html\[data-skin="stratum"\] body::after \{[^}]*pointer-events: none/.test(tpS),
+       /prefers-reduced-motion: reduce/.test(sfx) && /pointerType === 'touch'/.test(sfx) && /node\.nodeValue = b\.text/.test(sfx) && /setTimeout\(\(\) => settle\(el\), DUR \+ 500\)/.test(sfx),
+       /'\.\/stratum-fx\.js'/.test(fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8'))], [true, true, true, true, true]); }
   check('Found/Redline: the phone More drawer is solid (a see-through drawer let the home page bleed through)',
     [/html\[data-skin="found"\] \.mob-more-drawer \{ background: #0e22b8/.test(tpS), /html\[data-skin="redline"\] \.mob-more-drawer \{ background: #2e0f05/.test(tpS)], [true, true]);
   { const fw = fs.readFileSync(path.join(ROOT, 'found-web.js'), 'utf8');

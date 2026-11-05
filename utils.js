@@ -327,6 +327,7 @@ const HO_THEMES = {
   'study':    { label: 'Study', emoji: '📚', group: 'style', base: 'opera', skin: 'study', bg: '#f7f8fc', a: '#5b5bd6', btn: '#ffffff', font: 'Nunito:wght@500;600;700;800' },
   'notepad':  { label: 'Notepad', emoji: '🗒', group: 'style', base: 'opera', skin: 'notepad', bg: '#f3f3f3', a: '#005fb8', btn: '#ffffff' },
   'found':    { label: 'Found', emoji: '🕷', group: 'style', base: 'night-ops', skin: 'found', bg: '#1129e2', a: '#ffffff', btn: '#1129e2' },
+  'stratum':  { label: 'Stratum', emoji: '🏛', group: 'style', base: 'night-ops', skin: 'stratum', bg: '#04070d', a: '#e8d1cb', btn: '#15131b', font: 'Chakra+Petch:wght@600;700&family=Inter:wght@400;500;700' },
   'orbit':    { label: 'Orbit', emoji: '🪐', group: 'style', base: 'night-ops', skin: 'orbit', bg: '#05060a', a: '#9b8cff', btn: '#ffffff' },
   'orvante':  { label: 'Orvante', emoji: '◼️', group: 'style', base: 'opera', skin: 'orvante', bg: '#dadada', a: '#111111', btn: '#111111', font: 'Archivo:wght@400;500;600;700;800;900' },
   'redline':  { label: 'Redline', emoji: '🪐', group: 'style', base: 'night-ops', skin: 'redline', bg: '#2a0d04', a: '#e8283c', btn: '#ffffff', font: 'Montserrat:wght@300;400;500;600;800;900' },
@@ -559,7 +560,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v529';
+const APP_VERSION = 'v530';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;

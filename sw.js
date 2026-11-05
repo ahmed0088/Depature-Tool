@@ -14,7 +14,7 @@
 //  clients pick up the new version instead of a stale cache.
 // ═══════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'ibis-ops-shell-v529';
+const CACHE_NAME = 'ibis-ops-shell-v530';
 
 const SHELL_FILES = [
   './',
@@ -93,6 +93,7 @@ const SHELL_FILES = [
   './accor-standards.js',
   './guest-pipeline.js',
   './found-web.js',
+  './stratum-fx.js',
   './home.js',
   './month-end.js',
   './file-router.js',

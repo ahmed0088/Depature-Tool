@@ -546,3 +546,91 @@ html[data-skin="orvante"] .mob-nav-btn.active .mob-nav-icon, html[data-skin="orv
 html[data-skin="orvante"] .mob-more-drawer { background: #e6e6e6 !important; }
 html[data-skin="orvante"] .mob-more-item, html[data-skin="orvante"] .mob-util-btn { background: #f4f4f4 !important; border-color: rgba(17,17,17,.16) !important; color: #111 !important; }
 html[data-skin="orvante"] .gp-accor-modal-card, html[data-skin="orvante"] .nxr-card, html[data-skin="orvante"] .ho-theme-pop { background: #f4f4f4 !important; color: #111 !important; border-color: rgba(17,17,17,.24) !important; }
+
+/* ═════════ 🏛 Stratum — night-navy stage, a hairline frame with cut corners, Chakra Petch labels that decode,
+   bold uppercase Inter headings, chamfered glass buttons, one cream call to action (stratum-fx.js for the decode) ═════════ */
+html[data-skin="stratum"] {
+  --font: 'Inter', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  --rl-label: 'Chakra Petch', 'Inter', sans-serif;
+  --bg: #04070d !important; --bg2: #0a0f19 !important; --surface: #0b111c !important; --card: rgba(255,255,255,.035) !important; --card2: rgba(255,255,255,.06) !important; --input-bg: rgba(255,255,255,.04);
+  --border: rgba(255,255,255,.13) !important; --border2: rgba(255,255,255,.21) !important; --border3: rgba(255,255,255,.32) !important;
+  --text: #ffffff !important; --text2: rgba(224,232,245,.72) !important; --text3: rgba(232,238,250,.5) !important;
+  --accent: #e8d1cb !important; --accent2: #e6eaf5 !important; --accent-bg: rgba(232,209,203,.1) !important; --accent-border: rgba(232,209,203,.45) !important; --on-accent: #15131b;
+  --green: #8fe3b4; --red: #ff8f8f; --rose: #ff8f8f; --amber: #f1c98b; --blue: #9fb8e6; --mint: #8fe3b4; --purple: #c7b6ef;
+  --topbar-bg: rgba(4,7,13,.72) !important; --topbar-border: rgba(255,255,255,.13) !important;
+  --r: 0px !important; --r2: 2px !important; --r3: 4px !important;
+  --ho-a1: #e8d1cb; --ho-a2: #e6eaf5; --ho-ink: #15131b;
+  --st-line: rgba(255,255,255,.13);
+  color-scheme: dark;
+}
+/* the stage: a night sky, the dark mass of the hills, and the warm light of the arch on the water */
+html[data-skin="stratum"] body {
+  background:
+    radial-gradient(18% 22% at 50% 78%, rgba(255,196,128,.16), transparent 70%),
+    radial-gradient(60% 28% at 50% 100%, rgba(255,170,96,.07), transparent 70%),
+    linear-gradient(180deg, #0a1428 0%, #070c18 42%, #04070d 70%, #03050a 100%) fixed, #04070d !important;
+  -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision; }
+html[data-skin="stratum"] main, html[data-skin="stratum"] #main, html[data-skin="stratum"] .main { background: transparent !important; }
+/* the frame: 1px hairlines, 26px chamfer at every corner, never in the way of a click */
+html[data-skin="stratum"] body::after { content: ''; position: fixed; inset: 10px; pointer-events: none; z-index: 2147483000;
+  background:
+    linear-gradient(var(--st-line), var(--st-line)) 26px 0 / calc(100% - 52px) 1px no-repeat,
+    linear-gradient(var(--st-line), var(--st-line)) 26px 100% / calc(100% - 52px) 1px no-repeat,
+    linear-gradient(var(--st-line), var(--st-line)) 0 26px / 1px calc(100% - 52px) no-repeat,
+    linear-gradient(var(--st-line), var(--st-line)) 100% 26px / 1px calc(100% - 52px) no-repeat,
+    linear-gradient(to bottom right, transparent calc(50% - .65px), var(--st-line) calc(50% - .65px), var(--st-line) calc(50% + .65px), transparent calc(50% + .65px)) 0 0 / 26px 26px no-repeat,
+    linear-gradient(to bottom left, transparent calc(50% - .65px), var(--st-line) calc(50% - .65px), var(--st-line) calc(50% + .65px), transparent calc(50% + .65px)) 100% 0 / 26px 26px no-repeat,
+    linear-gradient(to bottom left, transparent calc(50% - .65px), var(--st-line) calc(50% - .65px), var(--st-line) calc(50% + .65px), transparent calc(50% + .65px)) 0 100% / 26px 26px no-repeat,
+    linear-gradient(to bottom right, transparent calc(50% - .65px), var(--st-line) calc(50% - .65px), var(--st-line) calc(50% + .65px), transparent calc(50% + .65px)) 100% 100% / 26px 26px no-repeat; }
+html[data-skin="stratum"] .topbar { background: rgba(4,7,13,.72) !important; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--st-line) !important; }
+/* headings: Inter bold, uppercase, tracked */
+html[data-skin="stratum"] .page-hd h1, html[data-skin="stratum"] .panel h1, html[data-skin="stratum"] .home-big {
+  font-family: var(--font) !important; font-weight: 700 !important; text-transform: uppercase; letter-spacing: .05em !important; color: #fff !important; }
+html[data-skin="stratum"] .kpi-val { font-weight: 700 !important; letter-spacing: .02em !important; color: #fff !important; }
+html[data-skin="stratum"] .page-hd p, html[data-skin="stratum"] .page-hd-left p { color: rgba(224,232,245,.72) !important; }
+/* every label: Chakra Petch bold, uppercase, small and tracked */
+html[data-skin="stratum"] .nav-item, html[data-skin="stratum"] .nav-section-label, html[data-skin="stratum"] .btn, html[data-skin="stratum"] th,
+html[data-skin="stratum"] .fchip, html[data-skin="stratum"] .mob-nav-lbl, html[data-skin="stratum"] .mob-more-item, html[data-skin="stratum"] .nav-badge {
+  font-family: var(--rl-label) !important; font-weight: 700 !important; text-transform: uppercase; letter-spacing: .08em; }
+html[data-skin="stratum"] .nav-item { font-size: 11.5px !important; letter-spacing: .045em !important; color: rgba(232,238,250,.55) !important; border-radius: 0 !important; transition: color .3s ease; }
+html[data-skin="stratum"] .nav-item:hover { color: #e6eaf5 !important; background: transparent !important; }
+html[data-skin="stratum"] .nav-section-label { font-size: 11px !important; letter-spacing: .14em !important; color: rgba(232,238,250,.4) !important; }
+/* the active item: white type and the small white marker beside it */
+html[data-skin="stratum"] .nav-item.active { background: transparent !important; color: #e6eaf5 !important; }
+html[data-skin="stratum"] .nav-item.active::before { width: 6px !important; height: 7px !important; left: 4px !important; top: 50% !important; transform: translateY(-50%); background: #fff !important; box-shadow: none !important; border-radius: 0 !important; }
+html[data-skin="stratum"] .nav-item.active .nav-badge { background: #e8d1cb !important; color: #15131b !important; border-color: transparent !important; }
+html[data-skin="stratum"] .sidenav { background: rgba(4,7,13,.55) !important; border-right: 1px solid var(--st-line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+/* cards: dark glass with a hairline, square corners */
+html[data-skin="stratum"] .card, html[data-skin="stratum"] .home-tile, html[data-skin="stratum"] .kpi {
+  background: rgba(255,255,255,.035) !important; border: 1px solid var(--st-line) !important; border-radius: 0 !important; box-shadow: none !important;
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+html[data-skin="stratum"] .home-tile:hover { border-color: rgba(255,255,255,.28) !important; background: rgba(255,255,255,.06) !important; }
+/* buttons: chamfered glass (the CTA's octagon); the main action is the cream pill with its corner cut */
+html[data-skin="stratum"] .btn { border-radius: 0 !important; font-size: 11px !important; background: rgba(255,255,255,.05) !important; color: #e9eef7 !important; border: 0 !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.14) !important;
+  clip-path: polygon(3px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 3px), calc(100% - 3px) 100%, 10px 100%, 0 calc(100% - 10px), 0 3px);
+  transition: background .3s ease, color .3s ease; }
+html[data-skin="stratum"] .btn:hover { background: rgba(255,255,255,.09) !important; color: #fff !important; }
+html[data-skin="stratum"] .btn.gold, html[data-skin="stratum"] .btn.primary { background: #e8d1cb !important; color: #15131b !important; box-shadow: none !important;
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%); }
+html[data-skin="stratum"] .btn.gold:hover, html[data-skin="stratum"] .btn.primary:hover { background: #f0ddd8 !important; }
+html[data-skin="stratum"] .btn[disabled] { opacity: .45; }
+/* fields: hairline, square */
+html[data-skin="stratum"] input[type=text], html[data-skin="stratum"] input[type=search], html[data-skin="stratum"] input[type=email], html[data-skin="stratum"] input[type=url], html[data-skin="stratum"] input[type=number],
+html[data-skin="stratum"] input[type=date], html[data-skin="stratum"] input[type=time], html[data-skin="stratum"] input[type=tel], html[data-skin="stratum"] input:not([type]), html[data-skin="stratum"] select, html[data-skin="stratum"] textarea {
+  background: rgba(255,255,255,.04) !important; color: #fff !important; border: 1px solid rgba(255,255,255,.16) !important; border-radius: 0 !important; }
+html[data-skin="stratum"] input::placeholder, html[data-skin="stratum"] textarea::placeholder { color: rgba(232,238,250,.4) !important; }
+html[data-skin="stratum"] select option { background: #0a0f19; color: #fff; }
+html[data-skin="stratum"] :focus-visible { outline: 1.5px solid #e8d1cb !important; outline-offset: 3px !important; }
+html[data-skin="stratum"] table th, html[data-skin="stratum"] thead th { background: rgba(255,255,255,.04) !important; color: rgba(232,238,250,.6) !important; font-size: 10.5px !important; }
+html[data-skin="stratum"] .fchip { border-radius: 0 !important; }
+html[data-skin="stratum"] .fchip.on, html[data-skin="stratum"] .hs-seg button.on { background: #e8d1cb !important; color: #15131b !important; border-color: transparent !important; }
+/* phone: bar, drawer and pop-up windows solid enough to read */
+html[data-skin="stratum"] #mobNav.mob-nav { background: rgba(6,10,18,.82) !important; border: 1px solid rgba(255,255,255,.16) !important; border-radius: 0 !important; }
+html[data-skin="stratum"] .mob-nav-btn.active .mob-nav-icon, html[data-skin="stratum"] .mob-nav-btn.active .mob-nav-lbl { color: #e8d1cb !important; }
+html[data-skin="stratum"] .mob-more-overlay { background: rgba(2,4,8,.72) !important; }
+html[data-skin="stratum"] .mob-more-drawer { background: #070b14 !important; border-radius: 0 !important; }
+html[data-skin="stratum"] .mob-more-item, html[data-skin="stratum"] .mob-util-btn { background: rgba(255,255,255,.04) !important; border-radius: 0 !important; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12) !important; }
+html[data-skin="stratum"] .gp-accor-modal-card, html[data-skin="stratum"] .nxr-card, html[data-skin="stratum"] .ho-theme-pop, html[data-skin="stratum"] .ro-name-menu { background: #070b14 !important; border-color: rgba(255,255,255,.18) !important; border-radius: 0 !important; }
+@media (max-width: 760px) { html[data-skin="stratum"] body::after { inset: 6px; } }
+@media (prefers-reduced-motion: reduce) { html[data-skin="stratum"] * { transition: none !important; } }

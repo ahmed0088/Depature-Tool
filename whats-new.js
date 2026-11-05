@@ -9,6 +9,10 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 530, items: [
+    "🏛 New theme — Stratum: a calm night-navy look with a thin architectural frame around the screen, bold uppercase titles, square glass buttons with cut corners and one cream button for the main action. Pick it from the theme menu.",
+    "✨ In Stratum, on a computer, hovering a menu item or button makes its label \"decode\" from random letters into the real word in under half a second. It never runs on phones or if your device asks for less motion, and the text always ends on the real label.",
+  ] },
   { v: 529, items: [
     "🩹 Enrolment window: tapping Skipped / Errors / Enrolled / Already members no longer flickers open and shut. The list stays open until you tap the tile again, and the open tile is highlighted.",
   ] },
