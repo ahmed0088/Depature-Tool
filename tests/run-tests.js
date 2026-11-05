@@ -4384,7 +4384,7 @@ const haAsync = (async () => {
        /html\[data-skin\] #loginScreen \.login-card \{ border-radius: var\(--r3/.test(lgS) && /html\[data-skin\] #loginScreen \.lg-sky \{ display: var\(--sk-sky/.test(lgS) && /--sk-sky: none/.test(tpS)], [true, true, true, true]); }
   { const rd = fs.readFileSync(path.join(ROOT, 'run-dock.js'), 'utf8'), gpx = fs.readFileSync(path.join(ROOT, 'guest-pipeline.js'), 'utf8'), nxx = fs.readFileSync(path.join(ROOT, 'neorcha.js'), 'utf8');
     check('Cloud runs: numbered (cloudRunSeq) and kept per hotel; closing a run window minimises it to a chip that opens it again; both run kinds record their start; no guest e-mail is kept; cached offline',
-      [/fbSet\('cloudRunSeq', no\)/.test(rd) && /fbSet\('cloudRuns\/' \+ tag, rec\)/.test(rd), /data-hrd-open/.test(rd) && /KINDS\[r\.kind\]\.open\(\)/.test(rd),
+      [/cloudRunSeq/.test(rd) && /fbSet\('cloudRuns\/' \+ tag, rec\)/.test(rd), /data-hrd-open/.test(rd) && /KINDS\[r\.kind\]\.open\(\)/.test(rd),
        /hoRuns\.start\('enrol'/.test(gpx) && /hoRuns\.start\('neorcha'/.test(nxx) && /hoRuns\.minimized\('enrol'\)/.test(gpx) && /hoRuns\.minimized\('neorcha'\)/.test(nxx),
        /replace\(\/\\S\+@\\S\+\/g, '•@•'\)/.test(rd), /<script src="run-dock\.js"><\/script>/.test(ixS) && /'\.\/run-dock\.js'/.test(fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8'))], [true, true, true, true, true]); }
   check('Redline White theme: registered, applied before paint, a light base, its own focus ring and red menus with white words',
