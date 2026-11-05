@@ -4456,6 +4456,11 @@ const haAsync = (async () => {
   { const ut3 = fs.readFileSync(path.join(ROOT, 'utils.js'), 'utf8'), sd3 = fs.readFileSync(path.join(ROOT, 'start-day.js'), 'utf8');
     check('Shift Tasks opens on the shift you are working (not always Morning); Start of the day never opens on top of another window',
       [/hoShiftNow\(\)\.key : ''; if \(cur && typeof SHIFTS !== 'undefined' && SHIFTS\[cur\] && cur !== window\._stAutoKey\)/.test(ut3), /#mbOverlay\.open, #wnModal, \.fr-overlay/.test(sd3)], [true, true]); }
+  { const pg = fs.readFileSync(path.join(ROOT, 'page-settings.js'), 'utf8'), sd4 = fs.readFileSync(path.join(ROOT, 'start-day.js'), 'utf8'), sr4 = fs.readFileSync(path.join(ROOT, 'shift-report.js'), 'utf8'), ob4 = fs.readFileSync(path.join(ROOT, 'opera-bridge.js'), 'utf8'), rd4 = fs.readFileSync(path.join(ROOT, 'run-dock.js'), 'utf8');
+    check('Settings on every page: a ⚙️ in each page header; every page can be pinned, opened at start, its Home tile shown or hidden, hidden from the menu, bigger or more compact; the new switches really switch (start of day, shift-report reminder, Opera questions, run chips); loaded and cached',
+      [/dataset\.pgsOpen = id/.test(pg) && /querySelectorAll\('\.panel\[id\^="panel-"\]'\)/.test(pg), ['pin', 'start', 'tile', 'hide', 'big', 'compact'].every(k => pg.includes("tog('" + k + "'")),
+       /ho_startday_off/.test(sd4) && /ho_srp_remind_off/.test(sr4) && /const asksOff = /.test(ob4) && /ho_rundock_off/.test(rd4),
+       /<script src="page-settings\.js"><\/script>/.test(ixS) && /'\.\/page-settings\.js'/.test(fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8'))], [true, true, true, true]); }
   check('Found/Redline: the phone More drawer is solid (a see-through drawer let the home page bleed through)',
     [/html\[data-skin="found"\] \.mob-more-drawer \{ background: #0e22b8/.test(tpS), /html\[data-skin="redline"\] \.mob-more-drawer \{ background: #2e0f05/.test(tpS)], [true, true]);
   { const fw = fs.readFileSync(path.join(ROOT, 'found-web.js'), 'utf8');

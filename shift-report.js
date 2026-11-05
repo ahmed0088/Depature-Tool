@@ -130,6 +130,7 @@
   }
   // the Brain offers it in the last 30 minutes of the shift (quietly: it waits in 🧠)
   (W.BL_THINKERS = W.BL_THINKERS || []).push(add => {
+    try { if (localStorage.getItem('ho_srp_remind_off') === '1') return; } catch (_) {}   // switched off (⚙️ on Home)
     const w = shiftWindow(), left = (w.end - Date.now()) / 60000;
     if (left > 0 && left <= 30) add({ id: 'srp:' + w.key + ':' + w.start.toISOString().slice(0, 10), type: 'shiftReport', icon: '📝', tone: 'idle', silent: true,
       text: `Your ${LABEL[w.key] || w.key} shift ends at ${hm(w.end)} — your shift report is ready to send`, why: 'Made from Departures, balances, your shift tasks' + (w.key === 'night' ? ' and the night checklist' : '') + '.', acts: [['📝 Open the report', open]] });

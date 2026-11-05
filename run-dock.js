@@ -137,7 +137,8 @@
         const c = e.target.closest('[data-hrd-open]'); if (c) { const r = RUNS[c.dataset.hrdOpen]; if (r) openRun(r); return; }
         if (e.target.closest('[data-hrd-list]')) list();
       }); }
-    const L = chips(), recent = Object.keys(RUNS).length > 0;   // the 🗂 Runs history stays one tap away
+    let L = chips(); try { if (localStorage.getItem('ho_rundock_off') === '1') L = []; } catch (_) {}   // chips switched off (⚙️): 🗂 Runs stays
+    const recent = Object.keys(RUNS).length > 0;   // the 🗂 Runs history stays one tap away
     if (!L.length && !recent) { dock.innerHTML = ''; dock.hidden = true; return; }
     dock.hidden = false;
     dock.innerHTML = L.map(r => {

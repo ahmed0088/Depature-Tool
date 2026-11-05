@@ -1127,8 +1127,9 @@ function thoughtsNow() {
 // ── the reader asks too: the open "checked out or extended?" questions ride on every answer to the reader, its box in the Opera tab
 //    shows them with the same buttons, and a tap there comes back here as {answer:{id, act}} ──
 const LOOKING = {};   // question id → when "let Opera show me" was tapped in the reader (it waits 15 min for the screens)
+const asksOff = () => { try { return localStorage.getItem('ho_op_ask_off') === '1'; } catch (_) { return false; } };   // ⚙️ on the Opera page
 function readerAsks() {
-  if (!signedIn()) return [];
+  if (!signedIn() || asksOff()) return [];
   return safe(() => thoughtsNow().filter(t => t.type === 'opAsk' && !(LOOKING[t.id] > Date.now() - 15 * 60e3)).slice(0, 3)
     .map(t => ({ id: t.id, text: t.text, opts: t.opts.map(([l, a]) => [String(l).slice(0, 30), a]) })), []);
 }
@@ -1144,7 +1145,7 @@ function readerAnswer(a) {
   return `Room ${room} marked ${ext ? 'extended' : 'checked out'} ✓`;
 }
 (W.BL_THINKERS = W.BL_THINKERS || []).push(add => {
-  const T = thoughtsNow();
+  const T = thoughtsNow().filter(t => t.type !== 'opAsk' || !asksOff());
   // quiet ones wait in the Brain's Now list (the 🧠 number); "not sure: checked out or extended?" and a habit it learned ask out loud
   T.forEach(t => add({ id: t.id, type: t.type, icon: t.icon, tone: t.tone, text: t.text, why: t.why, silent: !t.loud,
     acts: t.opts.map(([l, a]) => [l, () => (t.type === 'opQ' ? opAnswer(t.id, a) : opAct(a, t))]) }));

@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 541, items: [
+    { ico: '⚙️', title: 'Settings on every page',
+      what: 'Every page now has a ⚙️ in its header with the options for that page. Every page can: pin it to the top of the menu, open it when HotelOps starts, show or hide its tile on Home, hide it from your menu, show it with larger text, or fit more on the screen.',
+      does: 'Page options where they matter — Departures: card size, the sort it opens in, ask before checking out, the high-balance amount. Home: greet by name, tips, Brain, Morning brief, Start-of-day and shift-report reminders. Shift Tasks: start each shift fresh, reminders, auto-tick. Opera: adjust by itself, hold for my OK, ask me when unsure, learn my routine. Guest enrolment / Neorcha: show the running-job chips. "All settings ›" opens the full Settings.' },
+  ] },
   { v: 540, items: [
     { ico: '📝', title: 'New: End-of-shift report — made for you',
       what: 'Home → 📝 Shift report (or search "shift report"): a ready-to-send summary of YOUR shift, built from what HotelOps already knows — the check-outs done in your shift, extensions, late check-outs, rooms still to leave / past check-out / no answer / DND, open balances with the high and OTA ones named, your shift tasks still open, and on the night shift the night checklist.',
