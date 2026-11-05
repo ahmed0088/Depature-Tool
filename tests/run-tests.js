@@ -4342,10 +4342,10 @@ const haAsync = (async () => {
     [/ASK_ENROLL = !at && R\.rows\.some\(r => r\.email\)/.test(nxS), /id="nx-ask-yes"/.test(nxS) && /gpQuickEnroll\(S\.rows/.test(nxS)], [true, true]);
   { const mr = fs.readFileSync(path.join(ROOT, 'monthly-reports.js'), 'utf8');
     { const ro = fs.readFileSync(path.join(ROOT, 'roster.js'), 'utf8');
-    check('Roster: in Edit the name opens a menu to rename/replace/remove; replace moves the whole week and clears the old person; it saves live',
+    check('Roster: in Edit the name opens a menu to rename/replace/remove; replace moves the whole week (a swap if the replacement already works, so no shifts are lost); it saves live',
       [/function roNameMenu/.test(ro) && /function roReplacePerson/.test(ro) && /function roRenamePerson/.test(ro),
        /editable === true \? `<button class="ro-tap" onclick="roNameMenu/.test(ro),
-       /roSetCell\(newKey, d, v\); roSetCell\(oldKey, d, ''\)/.test(ro),
+       /roSetCell\(newKey, d, a\); roSetCell\(oldKey, d, b\)/.test(ro),
        /roReplacePerson\b/.test(ro) && /roCanEdit\(\)/.test(ro.slice(ro.indexOf('function roReplacePerson'), ro.indexOf('function roReplacePerson') + 400))], [true, true, true, true]); }
   check('Monthly reports: a counting report gets its tick box (compare by id, not object identity, so it is not always "new"); the box has a tooltip',
       [/counts = cnt\.some\(c => c\.id === r\.id\)/.test(mr), !/counts = cnt\.includes\(r\)/.test(mr), /title="\$\{d \? 'Done/.test(mr)], [true, true, true]); }

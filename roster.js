@@ -429,7 +429,7 @@ function roNameMenu(btn, key) {
   const m = document.createElement('div'); m.id = 'roNameMenu'; m.className = 'ro-name-menu';
   m.innerHTML = `<div class="ro-nm-h">${escapeHtml(nm)}</div>
     <button class="ro-nm-b" onclick="roRenamePerson(${q(key)})">✏️ Rename</button>
-    <div class="ro-nm-sec">🔁 Replace this week with…</div>
+    <div class="ro-nm-sec">🔁 Replace / swap this week with…</div>
     <div class="ro-nm-list">${others.length ? others.map(r => `<button class="ro-nm-b" onclick="roReplacePerson(${q(key)},${q(r.key)})">${escapeHtml((roStaff[r.key] || {}).name || r.key)}</button>`).join('') : '<small>No one else on this week</small>'}</div>
     <div class="ro-nm-row"><input id="roReplNew" placeholder="…or type a new name"><button class="btn sm gold" onclick="roReplacePerson(${q(key)}, document.getElementById('roReplNew').value)">Replace</button></div>
     <button class="ro-nm-b danger" onclick="roClearPerson(${q(key)});document.getElementById('roNameMenu')?.remove()">✕ Remove from this week</button>`;
@@ -454,13 +454,21 @@ function roReplacePerson(oldKey, who) {
   const newName = (roStaff[newKey] || {}).name || who;
   if (newKey === oldKey) return;
   if (!roStaff[newKey]) { roStaff[newKey] = { name: newName, order: Object.keys(roStaff).length }; fbSet('roster/staff/' + newKey, roStaff[newKey]); }
-  let moved = 0;
-  for (let i = 0; i < 7; i++) { const d = roAdd(roWeek, i); const v = (roDays[d] || {})[oldKey]; if (v) { roSetCell(newKey, d, v); roSetCell(oldKey, d, ''); moved++; } }
+  // exchange day by day: the replacement gets this person's shifts, and if the replacement already
+  // worked that day, this person gets theirs (a swap) — nobody's own shifts are ever overwritten
+  let moved = 0, swapped = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = roAdd(roWeek, i), a = (roDays[d] || {})[oldKey] || '', b = (roDays[d] || {})[newKey] || '';
+    if (!a && !b) continue;
+    roSetCell(newKey, d, a); roSetCell(oldKey, d, b);
+    if (a) moved++; if (b) swapped++;
+  }
   roWeekAdd = roWeekAdd || {}; roWeekAdd[roWeek] = roWeekAdd[roWeek] || [];
   if (!roWeekAdd[roWeek].includes(newKey)) roWeekAdd[roWeek].push(newKey);
-  roWeekAdd[roWeek] = roWeekAdd[roWeek].filter(k => k !== oldKey);
-  if (typeof logActivity === 'function') try { logActivity('roster_replace', `${(roStaff[oldKey] || {}).name || oldKey} → ${newName} (${moved} day${moved === 1 ? '' : 's'})`); } catch (_) {}
-  if (typeof showToast === 'function') showToast(`${newName} takes over ${(roStaff[oldKey] || {}).name || oldKey}'s ${moved} shift${moved === 1 ? '' : 's'} this week`, 'ok');
+  if (!swapped) roWeekAdd[roWeek] = roWeekAdd[roWeek].filter(k => k !== oldKey);   // a swap keeps both on the week
+  const oldName = (roStaff[oldKey] || {}).name || oldKey;
+  if (typeof logActivity === 'function') try { logActivity('roster_replace', swapped ? `${oldName} ⇄ ${newName} (week swapped)` : `${oldName} → ${newName} (${moved} day${moved === 1 ? '' : 's'})`); } catch (_) {}
+  if (typeof showToast === 'function') showToast(swapped ? `${oldName} and ${newName} swapped their weeks` : `${newName} takes over ${oldName}'s ${moved} shift${moved === 1 ? '' : 's'} this week`, 'ok');
   roRender();
 }
 function roCopyLastWeek() {

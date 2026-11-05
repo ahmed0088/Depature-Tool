@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 528, items: [
+    "🔁 Roster: \"Replace / swap this week with…\" now swaps when the other person already works that week — both keep a full week and nobody's shifts are lost (before, their own shifts were overwritten). With a new name, it simply moves the week over.",
+  ] },
   { v: 527, items: [
     "🔁 Roster — change the people, any time: in ✏️ Edit, tap a person's name to Rename, Replace with someone else (their whole week moves over — handy for a sick-leave cover), or Remove from this week. As always, you can also edit any day's shift directly in Edit mode and it saves for the team instantly. (A reminder: you already have Swap shifts, Sick / leave, Copy last week and Change this week too.)",
   ] },
