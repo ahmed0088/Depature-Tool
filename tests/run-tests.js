@@ -4498,6 +4498,9 @@ const haAsync = (async () => {
        JSON.stringify(T7.typers({ sam: NOW - 2000, lea: NOW - 9000, me: NOW }, 'me', { sam: { name: 'Sam Rivera' } }, NOW)), T7.lastSeen(NOW - 20000, NOW), /^last seen today at \d\d:\d\d$/.test(T7.lastSeen(NOW - 3600e3, NOW)),
        /fbListen\(P\('typing'\)/.test(tc2) && /fbListen\(P\('reads'\)/.test(tc2) && /fbListen\(P\('dlv'\)/.test(tc2)],
       ['sent', 'dlv', 'dlv', 'read', '["me","sam"]', '["me","sam"]', true, '["Sam"]', 'online', true, true]); }
+  { const tc3 = fs.readFileSync(path.join(ROOT, 'team-chat.js'), 'utf8');
+    check('Team chat on phones: no <main> / <aside> (the styles make every <main> see-through), the window follows the visible screen when the iPhone keyboard opens and closes, the page behind is locked, and the chat\'s own boxes win over any style',
+      [!/<main|<aside/.test(tc3), /visualViewport\.addEventListener\('resize'/.test(tc3) && /top:var\(--vvt,0px\);width:100vw;height:var\(--vvh,100dvh\)/.test(tc3), /classList\.add\('wc-lock'\)/.test(tc3) && /classList\.remove\('wc-lock'\)/.test(tc3), /#tcPanel \.wc-comp textarea#wcIn\{border:0!important/.test(tc3)], [true, true, true, true]); }
   check('Found/Redline: the phone More drawer is solid (a see-through drawer let the home page bleed through)',
     [/html\[data-skin="found"\] \.mob-more-drawer \{ background: #0e22b8/.test(tpS), /html\[data-skin="redline"\] \.mob-more-drawer \{ background: #2e0f05/.test(tpS)], [true, true]);
   { const fw = fs.readFileSync(path.join(ROOT, 'found-web.js'), 'utf8');

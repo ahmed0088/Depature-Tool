@@ -112,11 +112,11 @@
     let w = D.getElementById('tcPanel'); if (w) return w;
     css(); w = D.createElement('div'); w.id = 'tcPanel'; w.className = 'tc wc';
     w.innerHTML = `<div class="tc-bg" data-wc="close"></div><section class="wc-win" role="dialog" aria-label="Team chat">
-      <aside class="wc-side"><header class="wc-sh"><b>Chats</b><span><button type="button" class="wc-ib" data-wc="newgroup" title="New group" aria-label="New group">👥＋</button><button type="button" class="wc-ib" data-wc="newchat" title="New chat" aria-label="New chat">✏️</button><button type="button" class="wc-ib wc-x" data-wc="close" title="Close" aria-label="Close">✕</button></span></header>
+      <div class="wc-side"><header class="wc-sh"><b>Chats</b><span><button type="button" class="wc-ib" data-wc="newgroup" title="New group" aria-label="New group">👥＋</button><button type="button" class="wc-ib" data-wc="newchat" title="New chat" aria-label="New chat">✏️</button><button type="button" class="wc-ib wc-x" data-wc="close" title="Close" aria-label="Close">✕</button></span></header>
         <label class="wc-search"><span>🔎</span><input type="search" id="wcQ" placeholder="Search or start a new chat" autocomplete="off"></label>
         <div class="wc-filters">${[['all', 'All'], ['unread', 'Unread'], ['groups', 'Groups'], ['dm', 'Direct']].map(([k, l]) => `<button type="button" data-wcf="${k}">${l}</button>`).join('')}</div>
-        <div class="wc-list" id="wcList"></div></aside>
-      <main class="wc-main" id="wcMain"><div class="wc-empty"><div>💬</div><b>HotelOps Team chat</b><span>Messages for your hotel's team — groups, direct chats, ticks, replies and reactions, live on every PC and phone.</span></div></main>
+        <div class="wc-list" id="wcList"></div></div>
+      <div class="wc-main" id="wcMain"><div class="wc-empty"><div>💬</div><b>HotelOps Team chat</b><span>Messages for your hotel's team — groups, direct chats, ticks, replies and reactions, live on every PC and phone.</span></div></div>
     </section><div class="wc-pop-layer" id="wcLayer"></div>`;
     D.body.appendChild(w);
     w.addEventListener('click', onClick);
@@ -132,10 +132,18 @@
   }
   function open(id) {
     const w = shell(); D.getElementById('tcPop')?.remove();
-    w.classList.add('on'); S.open = true; w.classList.toggle('wc-dark', isDark());
+    w.classList.add('on'); S.open = true; w.classList.toggle('wc-dark', isDark()); D.documentElement.classList.add('wc-lock'); fitViewport();
     if (id) openChat(id); else if (!S.cur && matchMedia('(min-width: 769px)').matches) openChat('team'); else render();
   }
-  function close() { const w = D.getElementById('tcPanel'); if (w) w.classList.remove('on'); S.open = false; badge(); }
+  // iPhone Safari: when the keyboard opens it scrolls the page and a full-screen window slides up (its top goes under the notch, the
+  // page shows below it). The window is sized to the part of the screen you can see, and the page is put back when the keyboard closes.
+  function fitViewport() {
+    const w = D.getElementById('tcPanel'), vv = W.visualViewport; if (!w) return;
+    if (vv) { w.style.setProperty('--vvh', Math.round(vv.height) + 'px'); w.style.setProperty('--vvt', Math.round(vv.offsetTop) + 'px'); }
+  }
+  if (W.visualViewport) { W.visualViewport.addEventListener('resize', () => S.open && fitViewport()); W.visualViewport.addEventListener('scroll', () => S.open && fitViewport()); }
+  D.addEventListener('focusout', e => { if (S.open && e.target && e.target.closest && e.target.closest('#tcPanel')) setTimeout(() => { if (!D.activeElement || !D.activeElement.closest || !D.activeElement.closest('#tcPanel textarea, #tcPanel input')) { W.scrollTo(0, 0); fitViewport(); } }, 60); });
+  function close() { const w = D.getElementById('tcPanel'); D.documentElement.classList.remove('wc-lock'); W.scrollTo(0, 0); if (w) w.classList.remove('on'); S.open = false; badge(); }
   const isDark = () => { const t = D.documentElement.dataset.theme; return t && t !== 'opera'; };
   function openChat(id) {
     S.cur = id; S.reply = S.edit = null; S.search = '';
@@ -519,7 +527,8 @@
 .wc-atb{font-style:normal;width:20px;height:20px;border-radius:50%;background:var(--wa-acc);color:#fff;font:700 12px/20px var(--font);text-align:center}.wc-ic{font-style:normal;font-size:12px;opacity:.75}
 .wc-typing{color:var(--wa-acc)!important;font-style:normal}.wc-lhd{padding:14px 16px 6px;font:600 13px var(--font);color:var(--wa-green)}.wc-none{display:block;padding:24px;text-align:center;color:var(--wa-tx2)}
 .wc-av{width:var(--s);height:var(--s);border-radius:50%;flex:none;display:inline-grid;place-items:center;color:#fff;font:600 calc(var(--s)*.38) var(--font);user-select:none}.wc-av-g{background:var(--wa-hd);color:var(--wa-tx);font-size:calc(var(--s)*.5)}
-.wc-main{position:relative;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--wa-bg)}
+.wc-main{position:relative;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--wa-bg)!important}
+#tcPanel .wc-side{background:var(--wa-side)!important}
 .wc-main::before{content:'';position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(var(--wa-dot) 1.2px,transparent 1.4px),radial-gradient(var(--wa-dot) 1.2px,transparent 1.4px);background-size:28px 28px;background-position:0 0,14px 14px}
 .wc-empty{margin:auto;max-width:420px;text-align:center;color:var(--wa-tx2);display:flex;flex-direction:column;gap:10px;align-items:center;position:relative}.wc-empty div{font-size:64px;opacity:.6}.wc-empty b{font-size:1.6rem;font-weight:300;color:var(--wa-tx)}
 .wc-ch{position:relative;z-index:1;display:flex;align-items:center;gap:6px;padding:8px 10px;background:var(--wa-hd);min-height:60px}
@@ -583,12 +592,22 @@
 .wc-lb{position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.88);cursor:zoom-out}.wc-lb img{max-width:94vw;max-height:90vh;border-radius:6px}
 .tc-pop{position:fixed;right:16px;bottom:92px;z-index:10025;display:flex;gap:10px;align-items:center;max-width:min(360px,calc(100vw - 32px));padding:10px 14px;border-radius:14px;border:1px solid var(--border2);background:var(--card2,#111827);color:var(--text);box-shadow:0 18px 40px -16px rgba(0,0,0,.6);cursor:pointer;text-align:left;font:13px/1.4 var(--font);animation:wcIn .3s ease}
 .tc-pop span:last-child{min-width:0}.tc-pop b{display:block;font-size:13px}@keyframes wcIn{from{opacity:0;transform:translateY(10px)}}
-@media (max-width:768px){.wc-win{inset:0;left:0;top:0;width:100vw;height:100dvh;border-radius:0;transform:none;grid-template-columns:100% 100%;transition:none;opacity:1}.wc.on .wc-win{transform:none}
+@media (max-width:768px){.wc-win{inset:auto;left:0;top:var(--vvt,0px);width:100vw;height:var(--vvh,100dvh);border-radius:0;transform:none;grid-template-columns:100% 100%;transition:none;opacity:1}.wc.on .wc-win{transform:none}
   .wc-win{grid-template-columns:1fr}.wc-main{position:absolute;inset:0;transform:translateX(100%);transition:transform .22s cubic-bezier(.2,.8,.2,1)}.wc.wc-in .wc-main{transform:none}
   .wc-back{display:inline-grid}.wc-msgs{padding:10px 10px 14px}.wc-comp textarea{font-size:16px!important}.wc-bub{max-width:86%}.tc-pop{bottom:calc(150px + env(safe-area-inset-bottom))}
   .wc-menu,.wc-dlg{left:0;right:0;top:auto;bottom:0;transform:none;width:100%;max-width:none;border-radius:16px 16px 0 0;animation:wcUp .2s ease}.wc-dlg.wc-big{height:94dvh}@keyframes wcUp{from{transform:translateY(30px);opacity:0}}
   .wc-at-list{left:10px}}
 @media (prefers-reduced-motion:reduce){.wc-win,.wc-main,.wc .tc-bg,.wc-msg{transition:none}.wc-menu,.wc-dlg,.tc-pop{animation:none}}`;
+    // the chat's own text boxes: no theme's input style (white "booking bar" boxes, borders, square corners) inside them
+    s.textContent += `#tcPanel .wc-search input[type=search],#tcPanel .wc-find input[type=search]{border:0!important;background:transparent!important;color:var(--wa-tx)!important;box-shadow:none!important;border-radius:0!important;height:100%!important;padding:0!important;clip-path:none!important;outline:0}
+#tcPanel .wc-find input[type=search]{background:var(--wa-panel)!important;border-radius:8px!important;height:34px!important;padding:0 10px!important}
+#tcPanel .wc-comp textarea#wcIn{border:0!important;border-radius:9px!important;background:var(--wa-panel)!important;color:var(--wa-tx)!important;box-shadow:none!important;clip-path:none!important;padding:11px 12px!important;font:15px/1.35 var(--font)!important;height:42px;min-height:42px!important}
+#tcPanel input::placeholder,#tcPanel textarea::placeholder{color:var(--wa-tx2)!important;opacity:1}
+#tcPanel .wc-gnew input,#tcPanel .wc-prof input{background:transparent!important;color:var(--wa-tx)!important;border:0!important;border-bottom:2px solid var(--wa-green)!important;border-radius:0!important;box-shadow:none!important;clip-path:none!important}
+#tcPanel .wc-search{background:var(--wa-hd)!important}
+#tcPanel textarea:focus-visible,#tcPanel input:focus-visible{outline:0!important;box-shadow:none!important}
+html.wc-lock,html.wc-lock body{overflow:hidden!important;overscroll-behavior:none}
+@media (max-width:768px){#tcPanel .wc-comp textarea#wcIn{font-size:16px!important}}`;
     D.head.appendChild(s);
   }
   function start() { css(); mountButtons(); setTimeout(mountButtons, 2500); }

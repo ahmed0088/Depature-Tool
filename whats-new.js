@@ -9,6 +9,11 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 544, items: [
+    { ico: '🩹', title: 'Fixed: Team chat broken on the iPhone',
+      what: 'On a phone the open chat was see-through (the chats list showed behind your messages in Redline and other styles), its header slid up under the notch after typing, and the search and message boxes turned white.',
+      does: 'The chat now always covers the screen, the header stays at the top (the window follows the part of the screen you can see when the keyboard opens and closes), the page behind it no longer scrolls, and the boxes keep WhatsApp\'s colours in every style.' },
+  ] },
   { v: 543, items: [
     { ico: '💬', title: 'Team chat is now like WhatsApp',
       what: 'Chats list with search and All · Unread · Groups · Direct, unread counts and last messages; the Whole team group, your own groups and direct chats. Two panes on PC like WhatsApp Web, one screen at a time on the phone, in WhatsApp\'s colours (light and dark).',
