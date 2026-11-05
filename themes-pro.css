@@ -814,3 +814,80 @@ html[data-skin="notes"] #loginScreen .lg-word b { color: #a37a00 !important; }
 html[data-skin="notes"] #loginScreen .lg-setup b { color: #8a6800 !important; }
 html[data-skin^="atlas"] .topbar .tb-away:not(.on), html[data-skin^="atlas"] .topbar .tb-away:not(.on) .tba-l, html[data-skin="grove"] .topbar .tb-away:not(.on), html[data-skin="grove"] .topbar .tb-away:not(.on) .tba-l { color: var(--text) !important; border-color: var(--border) !important; }
 html[data-skin="notes"] #mobNav .mob-nav-btn.active .mob-nav-lbl, html[data-skin="notes"] #mobNav .mob-nav-btn.active .mob-nav-icon { color: #8a6800 !important; }
+
+/* ═════════ 🔴 Redline White — the Redline design with white where Redline is burnt orange: a white sky with a pearl planet on
+   the horizon, a deep-red top bar and side menu with white words, white cards with a red hairline, heavy Montserrat, crimson actions ═════════ */
+html[data-skin="redwhite"] {
+  --font: 'Montserrat', 'Inter', system-ui, sans-serif;
+  --bg: #fbf6f6 !important; --bg2: #f6eded !important; --surface: #ffffff !important; --card: rgba(255,255,255,.86) !important; --card2: #ffffff !important; --input-bg: #ffffff;
+  --border: rgba(178,18,32,.16) !important; --border2: rgba(178,18,32,.26) !important; --border3: rgba(178,18,32,.42) !important;
+  --text: #1c0b0d !important; --text2: #5e3b3f !important; --text3: #8a6266 !important;
+  --accent: #d0182c !important; --accent2: #a50f1f !important; --accent-bg: rgba(208,24,44,.08) !important; --accent-border: rgba(208,24,44,.45) !important; --on-accent: #ffffff;
+  --green: #138a4a; --red: #c8102e; --rose: #c8102e; --amber: #a35f00; --blue: #1d5fa8; --mint: #138a4a; --purple: #7a3fb0; --sky: #1f6a99;
+  --topbar-bg: #a80f1e !important; --topbar-border: rgba(255,255,255,.18) !important;
+  --r: 4px !important; --r2: 6px !important; --r3: 10px !important;
+  --ho-a1: #d0182c; --ho-a2: #a50f1f; --ho-ink: #ffffff;
+  --rl-track-s: .04em; --rl-track-m: .08em; --rl-track-l: .14em;
+  --sk-title-case: uppercase; --sk-title-w: 800;
+  color-scheme: light; }
+html[data-skin="redwhite"] body {
+  background: radial-gradient(58% 72% at 50% 38%, #ffffff 0%, #fdf8f8 34%, #f6eaea 66%, #efdddd 100%) fixed, #fbf6f6 !important; -webkit-font-smoothing: antialiased; }
+html[data-skin="redwhite"] main, html[data-skin="redwhite"] #main, html[data-skin="redwhite"] .main { background: transparent !important; }
+/* the pearl planet rising on the horizon, a soft red rim (behind everything, no clicks) */
+html[data-skin="redwhite"] body::before { content: ''; position: fixed; z-index: -1; pointer-events: none; width: 78vmin; height: 78vmin; right: -22vmin; bottom: -30vmin; border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #ffffff 0%, #fbf1f1 26%, #efd9d9 56%, #dcbcbc 82%, #c99b9b 100%);
+  box-shadow: 0 0 0 1px rgba(208,24,44,.12), 0 0 120px 30px rgba(208,24,44,.10), inset -40px -50px 90px rgba(120,20,30,.16); opacity: .8; }
+html[data-skin="redwhite"] body::after { content: ''; position: fixed; z-index: -1; pointer-events: none; width: 40vmin; height: 40vmin; right: 18vmin; bottom: 18vmin; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255,255,255,.9), rgba(255,235,235,.35) 40%, transparent); }
+/* the deep-red bars with white words */
+html[data-skin="redwhite"] .topbar { background: linear-gradient(#b8101f, #a00d1b) !important; border-bottom: 1px solid rgba(255,255,255,.14) !important; box-shadow: 0 8px 24px -16px rgba(120,10,20,.6) !important; }
+html[data-skin="redwhite"] .topbar, html[data-skin="redwhite"] .topbar .ho-name, html[data-skin="redwhite"] .topbar .logo-name, html[data-skin="redwhite"] .topbar .logo-sub, html[data-skin="redwhite"] #topbarTime { color: #fff !important; }
+html[data-skin="redwhite"] .topbar .ho-name b { color: #ffd6da !important; }
+html[data-skin="redwhite"] .ho-search, html[data-skin="redwhite"] .topbar .icon-round, html[data-skin="redwhite"] .topbar .tb-pill, html[data-skin="redwhite"] .topbar .auth-user-pill, html[data-skin="redwhite"] .topbar #appVersionPill, html[data-skin="redwhite"] .topbar .tb-away:not(.on) {
+  background: rgba(255,255,255,.12) !important; border-color: rgba(255,255,255,.24) !important; color: #fff !important; }
+html[data-skin="redwhite"] .topbar .auth-user-pill span, html[data-skin="redwhite"] .topbar .auth-user-pill button, html[data-skin="redwhite"] .topbar .tba-l, html[data-skin="redwhite"] .topbar #fbLabel { color: rgba(255,255,255,.9) !important; }
+html[data-skin="redwhite"] .sidenav { background: linear-gradient(180deg, #a80f1e, #8a0b17) !important; border-right: 0 !important; }
+html[data-skin="redwhite"] .sidenav, html[data-skin="redwhite"] .nav-item { color: rgba(255,255,255,.88) !important; }
+html[data-skin="redwhite"] .nav-section-label { color: #ffc9cf !important; }
+html[data-skin="redwhite"] .nav-item { border-radius: var(--r) !important; font-weight: 500; }
+html[data-skin="redwhite"] .nav-item:hover { background: rgba(255,255,255,.1) !important; color: #fff !important; }
+html[data-skin="redwhite"] .nav-item.active { background: #ffffff !important; color: #a80f1e !important; font-weight: 700 !important; }
+html[data-skin="redwhite"] .nav-item.active::before { background: #ffffff !important; box-shadow: 0 0 0 4px rgba(255,255,255,.25) !important; }
+html[data-skin="redwhite"] .nav-item .nav-badge { background: rgba(255,255,255,.16) !important; color: #fff !important; border-color: rgba(255,255,255,.3) !important; }
+html[data-skin="redwhite"] .nav-item.active .nav-badge { background: #d0182c !important; color: #fff !important; border-color: transparent !important; }
+/* heavy type */
+html[data-skin="redwhite"] .page-hd h1, html[data-skin="redwhite"] .panel h1, html[data-skin="redwhite"] .home-big, html[data-skin="redwhite"] .kpi-val, html[data-skin="redwhite"] #homeHi {
+  font-family: var(--font) !important; font-weight: 900 !important; letter-spacing: -.03em !important; color: #1c0b0d !important; }
+html[data-skin="redwhite"] .page-hd p, html[data-skin="redwhite"] .page-hd-left p { color: #5e3b3f !important; }
+html[data-skin="redwhite"] th { font-size: 12px !important; letter-spacing: var(--rl-track-l) !important; text-transform: uppercase; color: #8a0b17 !important; }
+html[data-skin="redwhite"] label, html[data-skin="redwhite"] small { letter-spacing: var(--rl-track-s); }
+/* white cards with a red hairline */
+html[data-skin="redwhite"] .card, html[data-skin="redwhite"] .home-tile, html[data-skin="redwhite"] .kpi {
+  background: rgba(255,255,255,.86) !important; border: 1px solid rgba(178,18,32,.16) !important; border-radius: var(--r3) !important;
+  box-shadow: 0 22px 44px -26px rgba(120,10,20,.28) !important; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+html[data-skin="redwhite"] .home-tile:hover { border-color: rgba(208,24,44,.45) !important; transform: translateY(-1px); }
+/* one crimson call to action */
+html[data-skin="redwhite"] .btn { border-radius: var(--r) !important; font-family: var(--font) !important; font-weight: 600 !important; letter-spacing: var(--rl-track-s); }
+html[data-skin="redwhite"] .btn.gold, html[data-skin="redwhite"] .btn.primary { background: #d0182c !important; color: #fff !important; border-color: transparent !important; box-shadow: 0 8px 18px rgba(160,12,28,.28) !important; text-shadow: none !important; }
+html[data-skin="redwhite"] .btn.gold:hover, html[data-skin="redwhite"] .btn.primary:hover { background: #a50f1f !important; filter: none; }
+html[data-skin="redwhite"] input[type=text], html[data-skin="redwhite"] input[type=search], html[data-skin="redwhite"] input[type=email], html[data-skin="redwhite"] input[type=url], html[data-skin="redwhite"] input[type=number],
+html[data-skin="redwhite"] input[type=date], html[data-skin="redwhite"] input[type=time], html[data-skin="redwhite"] input[type=tel], html[data-skin="redwhite"] input:not([type]), html[data-skin="redwhite"] select, html[data-skin="redwhite"] textarea {
+  background: #fff !important; color: #1c0b0d !important; border: 1px solid rgba(178,18,32,.26) !important; border-radius: var(--r) !important; }
+html[data-skin="redwhite"] :focus-visible { outline: 2px solid #d0182c !important; outline-offset: 3px !important; }
+html[data-skin="redwhite"] .sidenav :focus-visible, html[data-skin="redwhite"] .topbar :focus-visible { outline-color: #fff !important; }
+html[data-skin="redwhite"] table th, html[data-skin="redwhite"] thead th { background: #fbeeee !important; }
+html[data-skin="redwhite"] .fchip { border-radius: 99px !important; }
+html[data-skin="redwhite"] .fchip.on, html[data-skin="redwhite"] .hs-seg button.on { background: #d0182c !important; color: #fff !important; border-color: transparent !important; }
+html[data-skin="redwhite"] #mobNav.mob-nav { background: rgba(168,15,30,.94) !important; border: 1px solid rgba(255,255,255,.18) !important; }
+html[data-skin="redwhite"] .mob-nav-btn .mob-nav-icon, html[data-skin="redwhite"] .mob-nav-btn .mob-nav-lbl { color: rgba(255,255,255,.82) !important; }
+html[data-skin="redwhite"] .mob-nav-btn.active .mob-nav-icon, html[data-skin="redwhite"] .mob-nav-btn.active .mob-nav-lbl { color: #fff !important; }
+html[data-skin="redwhite"] .mob-nav-btn.active { background: rgba(255,255,255,.16) !important; }
+html[data-skin="redwhite"] .mob-more-overlay { background: rgba(60,4,10,.45) !important; }
+html[data-skin="redwhite"] .mob-more-drawer, html[data-skin="redwhite"] .gp-accor-modal-card, html[data-skin="redwhite"] .nxr-card, html[data-skin="redwhite"] .ho-theme-pop, html[data-skin="redwhite"] .ro-name-menu { background: #ffffff !important; color: #1c0b0d !important; border-color: rgba(178,18,32,.2) !important; }
+html[data-skin="redwhite"] .mob-more-item, html[data-skin="redwhite"] .mob-util-btn { background: #fbf1f1 !important; border-color: rgba(178,18,32,.18) !important; }
+html[data-skin="redwhite"] .gp-accor-modal-ic { background: linear-gradient(135deg, #ffffff, #d0182c) !important; }
+html[data-skin="redwhite"] #loginScreen { --lg-glow: .25; }
+html[data-skin="redwhite"] #loginScreen .lg-word b { color: #d0182c !important; }
+@media (prefers-reduced-motion: reduce) { html[data-skin="redwhite"] .home-tile:hover { transform: none; } }
+@media (max-width: 760px) { html[data-skin="redwhite"] body::before { width: 110vmin; height: 110vmin; right: -40vmin; bottom: -60vmin; opacity: .6; } }
+html[data-skin="redwhite"] #mobNav .mob-nav-btn.active, html[data-skin="redwhite"] #mobNav .mob-nav-btn.active .mob-nav-icon, html[data-skin="redwhite"] #mobNav .mob-nav-btn.active .mob-nav-lbl { color: #fff !important; }

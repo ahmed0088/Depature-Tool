@@ -802,6 +802,29 @@ function operaThoughts(I) {
   const hr = new Date(I.now).getHours();
   if (newest && I.now - newest > 2 * 3600e3 && hr >= 7 && hr < 23 && new Date(newest).toDateString() === new Date(I.now).toDateString()) T.push({ id: 'ops:stale:' + day + ':' + Math.floor(I.now / (2 * 3600e3)), type: 'opStale', icon: '📡', tone: 'idle',
     text: `Opera hasn't been read for ${Math.floor((I.now - newest) / 3600e3)} h — open Opera?`, why: 'The lists follow Opera only while it is open with the reader.', opts: [['Open Opera', 'open']] });
+  // 3) not sure if a guest checked out or stayed on: ask (a pop-up), and offer to let Opera settle it — open Departures, then Arrivals / In House
+  if (I.recon && I.recon.state === 'ok') {
+    const unsure = (I.recon.diffs || []).filter(d => (d.type === 'missing' && !d.sure && ['', 'gone', 'date', 'extended'].includes(d.why || '')) || d.type === 'notext').slice(0, 3);
+    unsure.forEach(d => {
+      const who = d.name ? ` (${d.name})` : '';
+      T.push({ id: 'ops:ask:' + day + ':' + roomKey(d.room) + ':' + (d.type === 'notext' ? 'notext' : d.why || 'none'), type: 'opAsk', icon: '❓', tone: 'warn', loud: true, room: d.room,
+        text: d.type === 'notext' ? `Room ${d.room}${who} is extended here, but Opera still has them leaving today — extended or leaving?` : `Room ${d.room}${who}: checked out or extended? I'm not sure — ${d.reason || 'Opera does not show it clearly'}.`,
+        why: 'Tap the answer — or open Departures, then Arrivals and In House in Opera: the reader looks again and settles it by itself.',
+        opts: [[d.nights > 0 ? `↪ Extended (+${d.nights})` : '↪ Extended', 'rc:ext:' + d.room], ['🚪 Checked out', 'rc:out:' + d.room], ['🔎 Let Opera show me', 'look']] });
+    });
+  }
+  // 4) what it learned from you: a routine you usually do about now that hasn't happened today → it offers to start it
+  const nowH = new Date(I.now).getHours();
+  (I.routines || []).forEach(r => {
+    const m = /^(\d{2}):00–(\d{2}):00$/.exec(r.hours || ''); if (!m || r.n < 4 || !r.toks || !r.toks.length) return;
+    const a = +m[1], b = +m[2], inWin = a <= b ? nowH >= a && nowH < b : nowH >= a || nowH < b; if (!inWin) return;
+    const k0 = String(r.toks[0]).replace(/^s:/, ''), seen = I.seen && I.seen[k0];
+    if (seen && new Date(seen).toDateString() === new Date(I.now).toDateString()) return;   // already done today
+    T.push({ id: 'ops:habit:' + day + ':' + r.toks.join('>'), type: 'opHabit', icon: '🧠', tone: 'idle', loud: true,
+      text: `You usually do ${r.steps.join(' → ')} around ${r.hours} — not yet today. Open ${r.steps[0]} in Opera now?`,
+      why: `Learned from your own Opera use (${r.n} times${r.avgSec ? ', about ' + secTxt(r.avgSec) : ''}). Turn learning off on the 📡 Opera page.`,
+      opts: [['Open Opera', 'open'], ['Show Departures', 'deps']] });
+  });
   const rv = parseFloat(String(I.readerV || '').replace(/[^\d.]/g, '')), av = parseFloat(String(I.appV || '').replace(/[^\d.]/g, ''));
   if (rv >= 100 && av >= 100 && rv < av && I.linkAt && I.now - I.linkAt < 120000) T.push({ id: 'ops:old:' + rv + ':' + av, type: 'opOld', icon: '✨', tone: 'warn', text: `The Opera reader is v${rv}, HotelOps is v${av}: reload the Opera tab (and HotelOps if it was just updated)`,
     why: 'The helper hands Opera the new reader; it starts the next time Opera loads.', opts: [['Open the Opera page', 'page']] });
@@ -1083,13 +1106,24 @@ function opAct(act, t) {
     if (n) { paintDeps(); safe(() => saveDeps()); addLog({ kind: 'departures', text: `${pl(n, 'room')} checked out (asked by the Brain)` }); }
   } else if (act === 'deps') { if (typeof showPanel === 'function') showPanel('departures'); }
   else if (act === 'open') openOpera();
+  else if (act === 'look') { toast('🔎 In Opera, open Departures, then Arrivals and In House — the reader will check this room again and settle it', 'info'); openOpera(); }
+  else if (/^rc:(ext|out):/.test(act)) {
+    const [, a, room] = act.match(/^rc:(ext|out):(.+)$/);
+    const R = reconNow(), d = R.diffs && R.diffs.find(x => roomKey(x.room) === roomKey(room));
+    if (!d) { toast('Already settled', 'info'); return; }
+    if (!canWrite()) { toast('Your role can\'t change lists', 'err'); return; }
+    safe(() => apply(null, 'answered · Opera vs board', reconPlan([{ d, act: d.type === 'notext' && a === 'out' ? 'unext' : a }], today()))); paint();
+  }
   else if (act === 'page') openPage();
 }
 (W.BL_THINKERS = W.BL_THINKERS || []).push(add => {
   const T = operaThoughts({ stuck: stuckLoad(), asked: Object.fromEntries(Object.keys(LS.get(LS_ASKED, {}) || {}).map(k => [k, 1])), taught: TEACH, dayOff: !!(W.hoNotify && W.hoNotify.dayOffOn), cfg: CFG,
     board: boardNow(), last: LAST, folios: Object.values(FOL.date === today() ? FOL.rooms : {}), now: Date.now(), today: today(), coMin: safe(() => (typeof _depCoMin === 'function' ? _depCoMin() : null), null),
-    readerV: LINK ? LINK.v : '', appV: typeof APP_VERSION !== 'undefined' ? APP_VERSION : '', linkAt: LINK ? LINK.at : 0 });
-  T.forEach(t => add({ id: t.id, type: t.type, icon: t.icon, tone: t.tone, text: t.text, why: t.why, silent: true,   // quiet: it waits in the Brain's Now list (the 🧠 number), never a pop-up
+    readerV: LINK ? LINK.v : '', appV: typeof APP_VERSION !== 'undefined' ? APP_VERSION : '', linkAt: LINK ? LINK.at : 0,
+    recon: safe(() => (LAST.departures ? reconNow() : null), null), routines: safe(() => (learnOn() ? learnModelNow().routines : []), []),
+    seen: Object.fromEntries(Object.keys(LAST || {}).map(k => [k, (LAST[k] && LAST[k].at) || 0])) });
+  // quiet ones wait in the Brain's Now list (the 🧠 number); "not sure: checked out or extended?" and a habit it learned ask out loud
+  T.forEach(t => add({ id: t.id, type: t.type, icon: t.icon, tone: t.tone, text: t.text, why: t.why, silent: !t.loud,
     acts: t.opts.map(([l, a]) => [l, () => (t.type === 'opQ' ? opAnswer(t.id, a) : opAct(a, t))]) }));
 });
 

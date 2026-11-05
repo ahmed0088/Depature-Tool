@@ -3518,6 +3518,14 @@ console.log('\nOpera reader');
     check('bridge: checked out then checked in again today (same room, same guest) is an extension, not a departure; one shared word is not the same guest; already-out flips to extended',
       [A.dep.ext.map(e => e.room + ' +' + e.nights + (e.again ? ' again' : '')), A.dep.out.map(o => o.room), C.dep.ext.map(e => e.room + ' +' + e.nights + ' → ' + e.to), B2.dep.ext.map(e => e.room + ' +' + e.nights)],
       [['0102 +3 again'], ['0101'], ['0102 +3 → 2026-10-31', '0101 +2 → 2026-10-30'], ['0105 +2']]); }
+  { const TT = O.operaThoughts({ stuck: [], asked: {}, taught: { h: {}, s: {} }, cfg: { auto: true }, board: { rooms: [] }, last: {}, now: new Date(2026, 9, 28, 10, 30).getTime(), today: T,
+      recon: { state: 'ok', diffs: [{ type: 'missing', room: '0412', name: 'X Y', why: '', sure: false, reason: 'not in Opera', acts: ['ext', 'remove', 'keep'] }, { type: 'missing', room: '0413', why: 'extended', sure: true, acts: [] }] },
+      routines: [{ steps: ['Departures', 'Billing'], toks: ['s:departures', 's:billing'], n: 6, hours: '10:00–12:00' }], seen: {} });
+    const T2 = O.operaThoughts({ stuck: [], asked: {}, taught: { h: {}, s: {} }, cfg: { auto: true }, board: { rooms: [] }, last: {}, now: new Date(2026, 9, 28, 10, 30).getTime(), today: T,
+      routines: [{ steps: ['Departures', 'Billing'], toks: ['s:departures', 's:billing'], n: 6, hours: '10:00–12:00' }], seen: { departures: new Date(2026, 9, 28, 9, 0).getTime() } });
+    check('Brain: an unsure check-out / extension is asked out loud with Extended / Checked out / let Opera show me; a sure one is not; a learned routine due now (not done today) is offered once',
+      [TT.filter(t => t.type === 'opAsk').map(t => t.room + ' ' + t.loud + ' ' + t.opts.map(o => o[1]).join(',')), TT.filter(t => t.type === 'opHabit').length, T2.filter(t => t.type === 'opHabit').length],
+      [['0412 true rc:ext:0412,rc:out:0412,look'], 1, 0]); }
   check('reader: "Rooms" (how many rooms) is never the room number; a stay with no nights is read the way that gives a sane stay (03-11 → 07-11 is 4 nights, not 122)',
     [R.fieldOf('Rooms'), R.fieldOf('Room'), R.dateOrder(['03-11-2026', '07-11-2026'], [['03-11-2026', '07-11-2026', '']]), R.dateOrder(['11-03-2026', '11-07-2026'], [['11-03-2026', '11-07-2026', '']])], ['', 'room', 'dmy', 'mdy']);
   check('bridge departures: checked out in Opera → out; already out not again; another guest in the room not touched; cancelled ignored',
@@ -4374,6 +4382,16 @@ const haAsync = (async () => {
       [['atlas', 'atlas-dusk', 'grove'].every(t => new RegExp("'" + t + "':\\s*\\{[^}]*skin: '" + t + "'").test(thS)), /'atlas': 'opera', 'atlas-dusk': 'night-ops', 'grove': 'opera'/.test(ixS) && /atlas: 1, 'atlas-dusk': 1, grove: 1/.test(ixS),
        /html\[data-skin\^="atlas"\] :focus-visible/.test(tpS) && /html\[data-skin="grove"\] :focus-visible/.test(tpS),
        /html\[data-skin\] #loginScreen \.login-card \{ border-radius: var\(--r3/.test(lgS) && /html\[data-skin\] #loginScreen \.lg-sky \{ display: var\(--sk-sky/.test(lgS) && /--sk-sky: none/.test(tpS)], [true, true, true, true]); }
+  { const rd = fs.readFileSync(path.join(ROOT, 'run-dock.js'), 'utf8'), gpx = fs.readFileSync(path.join(ROOT, 'guest-pipeline.js'), 'utf8'), nxx = fs.readFileSync(path.join(ROOT, 'neorcha.js'), 'utf8');
+    check('Cloud runs: numbered (cloudRunSeq) and kept per hotel; closing a run window minimises it to a chip that opens it again; both run kinds record their start; no guest e-mail is kept; cached offline',
+      [/fbSet\('cloudRunSeq', no\)/.test(rd) && /fbSet\('cloudRuns\/' \+ tag, rec\)/.test(rd), /data-hrd-open/.test(rd) && /KINDS\[r\.kind\]\.open\(\)/.test(rd),
+       /hoRuns\.start\('enrol'/.test(gpx) && /hoRuns\.start\('neorcha'/.test(nxx) && /hoRuns\.minimized\('enrol'\)/.test(gpx) && /hoRuns\.minimized\('neorcha'\)/.test(nxx),
+       /replace\(\/\\S\+@\\S\+\/g, '•@•'\)/.test(rd), /<script src="run-dock\.js"><\/script>/.test(ixS) && /'\.\/run-dock\.js'/.test(fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8'))], [true, true, true, true, true]); }
+  check('Redline White theme: registered, applied before paint, a light base, its own focus ring and red menus with white words',
+    [/'redwhite':\s*\{[^}]*skin: 'redwhite'/.test(thS), /'redwhite': 'opera'/.test(ixS) && /redwhite: 1/.test(ixS), /html\[data-skin="redwhite"\] :focus-visible/.test(tpS) && /html\[data-skin="redwhite"\] \.sidenav \{ background: linear-gradient\(180deg, #a80f1e/.test(tpS)], [true, true, true]);
+  { const wnS = fs.readFileSync(path.join(ROOT, 'whats-new.js'), 'utf8');
+    check("What's new: one update at a time, each with what changed and what it does for you",
+      [/function wnSlides/.test(wnS) && /What it does for you/.test(wnS) && /wn-next/.test(wnS), /\{ v: 532, items: \[\s*\{ ico:/.test(wnS)], [true, true]); }
   check('Found/Redline: the phone More drawer is solid (a see-through drawer let the home page bleed through)',
     [/html\[data-skin="found"\] \.mob-more-drawer \{ background: #0e22b8/.test(tpS), /html\[data-skin="redline"\] \.mob-more-drawer \{ background: #2e0f05/.test(tpS)], [true, true]);
   { const fw = fs.readFileSync(path.join(ROOT, 'found-web.js'), 'utf8');

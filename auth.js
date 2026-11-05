@@ -400,6 +400,7 @@ function _applyLoginTheme(name) {
     'study': { accent:'#5b5bd6', accentDark:'#3e63dd', btnColor:'#ffffff' },
     'notepad': { accent:'#005fb8', accentDark:'#003d92', btnColor:'#ffffff' },
     'found': { accent:'#ffffff', accentDark:'#c7cffb', btnColor:'#1129e2' },
+    'redwhite': { accent:'#d0182c', accentDark:'#a50f1f', btnColor:'#ffffff' },
     'atlas': { accent:'#b4532a', accentDark:'#97431f', btnColor:'#ffffff' },
     'atlas-dusk': { accent:'#e08a4f', accentDark:'#c4733c', btnColor:'#17120d' },
     'grove': { accent:'#175A67', accentDark:'#0F454F', btnColor:'#EAE3DE' },

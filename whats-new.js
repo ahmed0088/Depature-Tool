@@ -9,6 +9,23 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 532, items: [
+    { ico: '🗂', title: 'Cloud runs are never lost — minimise, numbered, with their hotel',
+      what: 'Closing a cloud run window (Guest enrolment or Neorcha) now minimises it. A chip stays at the bottom-left: "#12 ✍️ Guest enrolment · Ibis Styles · 5/12 · 3:20" with a progress line. Every run gets a number, and 🗂 Runs lists them all.',
+      does: 'Tap the chip and the live window opens again where the run is. 🗂 Runs shows each run with its number, hotel, Neorcha account, who started it, when, how long it took, the result (enrolled / already members / skipped / errors, or cards read) and its GitHub link.' },
+    { ico: '❓', title: 'Not sure if a guest checked out or extended? It asks you',
+      what: 'When Opera does not show clearly whether a departure left or stayed on, HotelOps now asks out loud, room by room: "Room 412: checked out or extended?" with the reason.',
+      does: 'Tap ↪ Extended or 🚪 Checked out and the board is updated. Or tap 🔎 Let Opera show me: open Departures, then Arrivals and In House in Opera, and the reader looks again and settles it by itself. The question goes away once it is clear.' },
+    { ico: '🧠', title: 'It learns your Opera routine and offers to start it',
+      what: 'From the Opera screens you open every day (screen names only, never guest data), HotelOps learns your routines and the hours you do them.',
+      does: 'When a routine you usually do about now has not happened today, it asks: "You usually do Departures → Billing around 10:00–12:00 — open Departures in Opera now?" One tap opens Opera. Turn learning off on the 📡 Opera page.' },
+    { ico: '🔴', title: 'New theme: Redline White',
+      what: 'The Redline design with white where Redline is orange: a white sky with a pearl planet, a deep-red top bar and side menu with white words, white cards with a red line, and crimson buttons.',
+      does: 'Pick 🔴 Redline White in the theme menu. The sign-in page matches it too.' },
+    { ico: '✨', title: 'What\'s new, one update at a time',
+      what: 'This window now shows each update on its own card, with a progress line, Back / Next (or swipe on the phone, arrow keys on the PC), and "See them all as a list".',
+      does: 'Each card says what changed and what it does for you, so you know exactly how to use it.' },
+  ] },
   { v: 531, items: [
     "📜 New themes — Myth Atlas (warm museum paper, hairline rules, a terracotta accent, cards framed like a specimen plate), Atlas Dusk (the same at night) and 🌿 Heritage Grove (cream paper, one teal ink, a hand-drawn ink landscape of hills, a lake, pines and two cranes along the bottom). Pick them in the theme menu.",
     "🔐 The sign-in page now matches every style: its corners, title font and labels follow the theme you chose, and the flat styles drop the glow.",
@@ -714,9 +731,30 @@ function wnSplit(t) {
   if (dot > 0 && dot <= 90 && dot < rest.length - 1) return { ico, title: rest.slice(0, dot + 1), body: rest.slice(dot + 1).trim() };
   return { ico, title: '', body: rest };
 }
+/** an item → {ico, title, body, does}: a plain line is split as above; a written-out one is { ico, title, what, does } */
+function wnItem(i) {
+  if (i && typeof i === 'object') return { ico: i.ico || '✨', title: i.title || '', body: i.what || '', does: i.does || '' };
+  return Object.assign(wnSplit(i), { does: '' });
+}
 function wnCard(e, latest) {
   return `<section class="wn-card${latest ? ' latest' : ''}"><div class="wn-chd"><span class="wn-v">v${e.v}</span>${latest ? '<span class="wn-new">Latest</span>' : ''}</div>
-    ${e.items.map(i => { const x = wnSplit(i); return `<div class="wn-item"><span class="wn-ico" aria-hidden="true">${escapeHtml(x.ico)}</span><div class="wn-txt">${x.title ? `<b>${escapeHtml(x.title)}</b>` : ''}${x.body ? `<span>${escapeHtml(x.body)}</span>` : ''}</div></div>`; }).join('')}</section>`;
+    ${e.items.map(i => { const x = wnItem(i); return `<div class="wn-item"><span class="wn-ico" aria-hidden="true">${escapeHtml(x.ico)}</span><div class="wn-txt">${x.title ? `<b>${escapeHtml(x.title)}</b>` : ''}${x.body ? `<span>${escapeHtml(x.body)}</span>` : ''}${x.does ? `<em class="wn-does">✅ ${escapeHtml(x.does)}</em>` : ''}</div></div>`; }).join('')}</section>`;
+}
+/** the new updates one at a time: a big card each — what changed, and what it does for you — with Back / Next (pure: the slides) */
+function wnSlides(list) { const S = []; (list || []).forEach(e => e.items.forEach(i => S.push(Object.assign({ v: e.v }, wnItem(i))))); return S; }
+function wnSlideHtml(S, k) {
+  const x = S[k];
+  return `<div class="wn-prog" aria-hidden="true">${S.map((_, j) => `<i class="${j < k ? 'past' : j === k ? 'now' : ''}"></i>`).join('')}</div>
+    <article class="wn-slide" aria-live="polite">
+      <div class="wn-sv"><span>v${x.v}</span><span>${k + 1} of ${S.length}</span></div>
+      <div class="wn-big" aria-hidden="true">${escapeHtml(x.ico)}</div>
+      ${x.title ? `<h3 class="wn-st">${escapeHtml(x.title)}</h3>` : ''}
+      ${x.body ? `<div class="wn-sec"><span class="wn-lbl">What changed</span><p>${escapeHtml(x.body)}</p></div>` : ''}
+      ${x.does ? `<div class="wn-sec does"><span class="wn-lbl">What it does for you</span><p>${escapeHtml(x.does)}</p></div>` : ''}
+    </article>
+    <div class="wn-nav"><button class="btn ghost wn-back" type="button"${k ? '' : ' disabled'}>← Back</button>
+      <button class="btn gold wn-next" type="button">${k < S.length - 1 ? 'Next →' : 'Got it ✓'}</button></div>
+    <button class="wn-aslist" type="button">See them all as a list</button>`;
 }
 
 /** older notes (before v360) live in whats-new-archive.js and load only when someone asks for them */
@@ -736,6 +774,31 @@ function wnOpen(all) {
   const m = document.createElement('div');
   m.id = 'wnModal';
   m.className = 'fr-overlay';
+  const S = all ? [] : wnSlides(list);
+  if (S.length && !wnOpen.asList) {
+    let k = 0;
+    m.innerHTML = `<div class="fr-sheet wn-sheet wn-story" role="dialog" aria-modal="true" aria-label="What's new">
+      <div class="wn-top"><div class="fr-h">✨ What's new <small class="wn-cnt">${S.length} update${S.length === 1 ? '' : 's'} · you are on ${escapeHtml(APP_VERSION)}</small></div><button class="wn-x" type="button" aria-label="Close" title="Close">✕</button></div>
+      <div class="wn-stage"></div></div>`;
+    const stage = m.querySelector('.wn-stage'), go = j => { k = Math.max(0, Math.min(S.length - 1, j)); stage.innerHTML = wnSlideHtml(S, k); };
+    go(0);
+    m.addEventListener('click', e => {
+      if (e.target.closest('.wn-back')) return go(k - 1);
+      if (e.target.closest('.wn-next')) { if (k < S.length - 1) go(k + 1); else m.remove(); return; }
+      if (e.target.closest('.wn-aslist')) { wnOpen.asList = true; m.remove(); wnOpen(false); wnOpen.asList = false; return; }
+      if (e.target === m || e.target.closest('.wn-x')) m.remove();
+    });
+    let x0 = null;
+    stage.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; }, { passive: true });
+    stage.addEventListener('touchend', e => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 50) go(k + (dx < 0 ? 1 : -1)); }, { passive: true });
+    const key = e => { if (document.getElementById('wnModal') !== m) return; if (e.key === 'Escape') m.remove(); else if (e.key === 'ArrowRight') go(k + 1); else if (e.key === 'ArrowLeft') go(k - 1); };
+    document.addEventListener('keydown', key);
+    new MutationObserver((_, o) => { if (!m.isConnected) { document.removeEventListener('keydown', key); o.disconnect(); } }).observe(document.body, { childList: true });
+    document.body.appendChild(m);
+    try { m.querySelector('.wn-next')?.focus({ preventScroll: true }); } catch (_) {}
+    try { localStorage.setItem(WN_KEY, APP_VERSION); } catch (_) {}
+    return true;
+  }
   m.innerHTML = `
     <div class="fr-sheet wn-sheet" role="dialog" aria-modal="true" aria-label="What's new">
       <div class="wn-top"><div class="fr-h">✨ What's new</div><button class="wn-x" type="button" aria-label="Close" title="Close">✕</button></div>

@@ -528,9 +528,9 @@ function runWin() {
   let w = document.getElementById('nxRun');
   if (!w) {
     w = document.createElement('div'); w.id = 'nxRun'; w.className = 'nxr';
-    w.innerHTML = '<div class="nxr-bg" data-x="1"></div><div class="nxr-card" role="dialog" aria-label="Neorcha cloud run"><div class="nxr-h"><div class="nxr-ic">☁️</div><div class="nxr-t"><b>Neorcha · cloud run</b><small id="nxr-sub"></small></div><button type="button" class="nxr-x" data-x="1" aria-label="Close">✕</button></div><div class="nxr-b" id="nxr-b"></div></div>';
+    w.innerHTML = '<div class="nxr-bg" data-x="1"></div><div class="nxr-card" role="dialog" aria-label="Neorcha cloud run"><div class="nxr-h"><div class="nxr-ic">☁️</div><div class="nxr-t"><b>Neorcha · cloud run</b><small id="nxr-sub"></small></div><button type="button" class="nxr-x" data-x="1" aria-label="Minimise" title="Minimise — it keeps running; tap its chip at the bottom to open it again">–</button></div><div class="nxr-b" id="nxr-b"></div></div>';
     document.body.appendChild(w);
-    w.addEventListener('click', e => { if (e.target.closest('[data-x]')) { w.classList.remove('on'); clearInterval(RUN.timer); }
+    w.addEventListener('click', e => { if (e.target.closest('[data-x]')) { w.classList.remove('on'); clearInterval(RUN.timer); try { if (W.hoRuns) W.hoRuns.minimized('neorcha'); } catch (_) {} }
       if (e.target.id === 'nxr-con-t') { RUN.conOff = !RUN.conOff; e.target.closest('.nxr-con').classList.toggle('off', RUN.conOff); e.target.textContent = RUN.conOff ? 'Show' : 'Hide'; } });
   }
   w.classList.add('on'); clearInterval(RUN.timer); RUN.timer = setInterval(paintRun, 1000); paintRun();
@@ -541,7 +541,7 @@ function paintRun() {
   if (!document.getElementById('nxr-main')) b0.innerHTML = '<div id="nxr-main"></div><div class="nxr-con' + (RUN.conOff ? ' off' : '') + '"><div class="nxr-con-h"><i></i><i></i><i></i><span>neorcha-cloud · live console</span><button type="button" id="nxr-con-t">' + (RUN.conOff ? 'Show' : 'Hide') + '</button></div><div class="nxr-term" id="nxr-term"></div></div>';
   const b = document.getElementById('nxr-main');
   const st = runState(RUN.live, RUN.gh, RUN.at, RUN.tag), t0 = RUN.at || (RUN.live && +RUN.live.started) || Date.now(), sec = Math.max(0, Math.round(((st.state === 'run' ? Date.now() : (RUN.live && +RUN.live.at) || Date.now()) - t0) / 1000));
-  const sub = document.getElementById('nxr-sub'); if (sub) sub.textContent = (RUN.live && RUN.live.from ? dLbl(RUN.live.from) + ' – ' + dLbl(RUN.live.to) + ' · ' : '') + Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+  const sub = document.getElementById('nxr-sub'); if (sub) sub.textContent = (W.hoRuns && W.hoRuns.label('neorcha') ? W.hoRuns.label('neorcha') + ' · ' : '') + (RUN.live && RUN.live.from ? dLbl(RUN.live.from) + ' – ' + dLbl(RUN.live.to) + ' · ' : '') + Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
   const pct = st.state === 'done' ? 100 : Math.round(Math.min(97, st.k / 6 * 100 * (st.k === 4 ? 1 : 1) + (st.k === 4 ? st.prog / 100 * 16 : 0)));
   b.innerHTML = `<div class="nxr-bar ${st.state}"><i style="width:${pct}%"></i></div>
     <ol class="nxr-steps">${STEPS.map(([id, ic, lb], i) => { const s2 = st.state === 'done' || i < st.k ? 'ok' : i === st.k ? (st.state === 'error' ? 'bad' : 'now') : '';
@@ -590,6 +590,7 @@ async function cloudStart(from, to) {
   conNote('SYS', 'HotelOps ' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '') + ' · run ' + RUN.tag + ' · arrivals ' + from + ' → ' + to);
   conNote('SYS', 'Neorcha account: ' + (cc.account || 'main') + (cc.url ? ' · ' + cc.url.replace(/^https:\/\//, '').split('/')[0] : '') + (cc.hid ? ' · saves to this hotel' : ''));
   conNote('NET', 'POST api.github.com/…/actions/workflows/neorcha.yml/dispatches · ref main');
+  try { if (W.hoRuns) W.hoRuns.start('neorcha', RUN.tag, { hotel: W.__hoNxHotel ? W.__hoNxHotel() : '', account: cc.account || 'main', from, to }); } catch (_) {}
   const bx = document.getElementById('nxr-b'); if (bx && !document.getElementById('nxr-main')) bx.innerHTML = ''; runWin();
   try { await gh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: Object.assign({ from, to, tag: RUN.tag }, W.__hoNxCloud ? W.__hoNxCloud() : {}) }) }); conNote('NET', '204 · GitHub accepted the run'); }
   catch (e) { RUN.gh = { status: 'completed', conclusion: 'not started' }; paintRun(); toast(e.message, 'err'); if (/refused/.test(e.message)) { try { localStorage.removeItem(GH.key); } catch (_) {} } return; }
@@ -598,6 +599,7 @@ async function cloudStart(from, to) {
     try { const j = await gh('/runs?per_page=5&event=workflow_dispatch'); const r = (j.workflow_runs || []).filter(x => Date.parse(x.created_at) >= RUN.at - 15000).pop(); if (r) { RUN.gh = r; const k = r.status + (r.conclusion || ''); if (k !== RUN.ghSt) { RUN.ghSt = k; conNote('GH', 'run #' + r.run_number + ' · ' + r.status.replace('_', ' ') + (r.conclusion ? ' · ' + r.conclusion : r.status === 'queued' ? ' · waiting for a free computer' : ' · booting Ubuntu, installing Chromium')); } } paintRun(); } catch (_) {}
   }, 5000);
 }
+W.hoNxRunOpen = () => { RUN.view = 'run'; runWin(); };   // the run dock (run-dock.js) opens it again
 function cloudUI() {
   const st = $('cl-st'), paintChip = () => {
     const v = RUN.live; if (!st) return;
@@ -778,6 +780,7 @@ function mount() {
     toast('🏨 ' + name + ' added — set up its secrets once (below), then Run in the cloud', 'ok');
   };
   W.__hoNxCloud = () => ({ account: ($('acct').value || '').trim().toUpperCase() || autoAcct(), url: NX(), hid: typeof HOTEL_ID !== 'undefined' ? String(HOTEL_ID || '') : '' });
+  W.__hoNxHotel = () => (cur() ? cur().name : hotelName());   // the hotel the cloud run reads (run-dock.js shows it)
   panel.addEventListener('click', e => {
     const del = e.target.closest('[data-hdel]');
     if (del) { e.stopPropagation(); const i = +del.dataset.hdel, h = LIST[i]; if (h && confirm('Remove ' + h.name + ' from the list? (its secrets on GitHub stay)')) { LIST.splice(i, 1); saveList(); select(SEL === String(i) || +SEL > i ? (SEL === String(i) ? '' : String(+SEL - 1)) : SEL); } return; }

@@ -344,6 +344,7 @@ async function gpAccCloudRestart() {
   try {
     await fbUpdate('enrollLive', { at: Date.now(), control: 'run', stopRequested: false, state: 'run', step: 'queued', tag: gpCloudTag, test: false, n: gpEnrollRows().length, done: 0, note: 'Restart requested — waiting for GitHub…', con: [{ t: Date.now(), g: 'SYS', m: 'Run again requested' }] });
     await fbSet('enrollJob', { tsv: gpEnrollTsv(gpEnrollRows(), true), n: gpEnrollRows().length, at: Date.now(), test: false, tag: gpCloudTag, state: 'queued', accorLoop: true, portalUrl: url });
+    try { if (window.hoRuns) window.hoRuns.start('enrol', gpCloudTag, { hotel: (document.getElementById('hotelName') || {}).textContent || '', n: rows.length, test: !!test }); } catch (_) {}
     await gpAccGh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { test: '', tag: gpCloudTag, hid, portal_url: url } }) });
     GP_ACC.at = Date.now();
     gpAccorRunWin(true);
@@ -520,10 +521,10 @@ function gpAccorRunWin(open) {
   let w = document.getElementById('gpAccorRunModal');
   if (!w) {
     w = document.createElement('div'); w.id = 'gpAccorRunModal'; w.className = 'gp-accor-modal';
-    w.innerHTML = '<div class="gp-accor-modal-bg" data-gp-close="1"></div><section class="gp-accor-modal-card" role="dialog" aria-modal="true" aria-label="Guest enrolment (cloud)"><header class="gp-accor-modal-h"><span class="gp-accor-modal-ic">☁️</span><div><b>Guest Enrolment · cloud</b><small id="gpAccorModalSub">Live run</small></div><button type="button" class="gp-accor-modal-x" data-gp-close="1" aria-label="Close">✕</button></header><div class="gp-accor-modal-b"><div id="gpAccorModalBody"></div><div class="acr-con" id="gpAccCon"><div class="acr-con-h"><i></i><i></i><i></i><span>accor-loop-cloud · live console</span><button type="button" data-acr-con="1">Hide</button></div><div class="acr-term" id="gpAccTerm"></div></div></div></section>';
+    w.innerHTML = '<div class="gp-accor-modal-bg" data-gp-close="1"></div><section class="gp-accor-modal-card" role="dialog" aria-modal="true" aria-label="Guest enrolment (cloud)"><header class="gp-accor-modal-h"><span class="gp-accor-modal-ic">☁️</span><div><b>Guest Enrolment · cloud</b><small id="gpAccorModalSub">Live run</small></div><button type="button" class="gp-accor-modal-x" data-gp-close="1" aria-label="Minimise" title="Minimise — it keeps running; tap its chip at the bottom to open it again">–</button></header><div class="gp-accor-modal-b"><div id="gpAccorModalBody"></div><div class="acr-con" id="gpAccCon"><div class="acr-con-h"><i></i><i></i><i></i><span>accor-loop-cloud · live console</span><button type="button" data-acr-con="1">Hide</button></div><div class="acr-term" id="gpAccTerm"></div></div></div></section>';
     document.body.appendChild(w);
     w.addEventListener('click', e => {
-      if (e.target.closest('[data-gp-close]')) gpAccorRunWin(false);
+      if (e.target.closest('[data-gp-close]')) { gpAccorRunWin(false); try { if (window.hoRuns) window.hoRuns.minimized('enrol'); } catch (_) {} }
       const t = e.target.closest('[data-acr-con]'); if (t) { const c = document.getElementById('gpAccCon'); c.classList.toggle('off'); t.textContent = c.classList.contains('off') ? 'Show' : 'Hide'; }
     });
   }
@@ -550,7 +551,7 @@ function gpCloudPaint(v) {
   const body = document.getElementById('gpAccorModalBody'); if (!body) return;
   const sub = document.getElementById('gpAccorModalSub');
   const t0 = (live && +live.started) || GP_ACC.at || Date.now(), sec = Math.max(0, Math.round(((st.state === 'run' ? Date.now() : (live && +live.at) || Date.now()) - t0) / 1000));
-  if (sub) sub.textContent = (test ? '🧪 Test run · nothing is submitted · ' : '') + (live ? Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0') : 'No run yet');
+  if (sub) sub.textContent = (window.hoRuns && window.hoRuns.label('enrol') ? window.hoRuns.label('enrol') + ' · ' : '') + (test ? '🧪 Test run · nothing is submitted · ' : '') + (live ? Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0') : 'No run yet');
   if (!live && !GP_ACC.gh) { body.innerHTML = '<div class="acr-empty">No enrolment run yet. Tick <b>Agreed</b> for the guests who said yes, paste the enrolment portal link, then press <b>☁️ Start cloud computer</b> (or 🧪 Test first).</div>'; gpAccPaintCon([], st); return; }
   const cg = live && live.current;
   const guests = (live && live.report && Array.isArray(live.report.guests)) ? live.report.guests : [];
