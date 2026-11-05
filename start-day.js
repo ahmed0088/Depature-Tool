@@ -103,7 +103,7 @@
 .sd-card{position:relative;width:min(520px,calc(100vw - 24px));max-height:calc(100dvh - 32px);overflow:auto;background:var(--card2,#111827);color:var(--text);border:1px solid var(--border2);border-radius:var(--r3,18px);box-shadow:0 30px 70px -20px rgba(0,0,0,.6);animation:sdIn .35s cubic-bezier(.2,.8,.2,1)}
 @keyframes sdIn{from{opacity:0;transform:translateY(14px) scale(.98)}}
 .sd-h{display:flex;gap:12px;align-items:flex-start;padding:16px 16px 12px;border-bottom:1px solid var(--border)}.sd-h div{flex:1;display:flex;flex-direction:column;gap:3px}.sd-h b{font-size:1.05rem}.sd-h small{color:var(--text2);font-size:.8rem;line-height:1.45}
-.sd-prog{display:inline-block;margin-left:4px;padding:1px 8px;border-radius:99px;background:var(--accent-bg);color:var(--accent);font-weight:700}
+.sd-prog{display:inline-block;margin-left:4px;padding:1px 8px;border-radius:99px;background:var(--accent-bg);color:var(--text);font-weight:700;box-shadow:inset 0 0 0 1px var(--accent-border)}
 .sd-tap{display:none;font-style:normal;font-size:.72rem;color:var(--text2)}.sd.mini .sd-tap{display:block}
 .sd-sun{font-size:28px;line-height:1}.sd-x{flex:none;width:36px;height:36px;border-radius:50%;border:1px solid var(--border2);background:transparent;color:var(--text);cursor:pointer}
 .sd-b{padding:12px 16px;display:grid;gap:10px}

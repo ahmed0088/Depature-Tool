@@ -9,6 +9,17 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 539, items: [
+    { ico: '🔎', title: 'Find any page in a second',
+      what: 'On top of the side menu: "Find a page…". Type and the menu narrows as you type — it knows what people call things, so "balance" finds Departures and In-House, "tax" the Tourism Dirham and DTCM pages, "passport" Neorcha and Immigration. Press / anywhere to jump to it; Enter opens the first page.',
+      does: 'Below it: ⭐ Pinned (the ☆ on any menu line pins it to the top) and 🕘 Recent (the last pages you opened). Tap a group title — Front Desk, Night Audit, Money & Tax… — to fold its pages away; it remembers. On the phone, More shows Pinned and Recent, and its search knows the same words.' },
+    { ico: '💰', title: 'High balances and OTA balances, one tap',
+      what: 'Two new filters on Departures and on In-House Guests: 💰 High balance (open balances of AED 500 or more) and 🌐 OTA balance (Booking.com, Agoda, Expedia and other online agencies with money still open — they are usually prepaid, so a balance there needs a look).',
+      does: 'Both list the biggest balance first. Tap High balance again to change the amount (each device remembers its own).' },
+    { ico: '🌙', title: 'Dark mode for every theme',
+      what: 'In the theme menu (🎨 at the top, or Theme in the phone\'s More): a 🌙 Dark mode switch. A light theme keeps its style — fonts, corners, its own accent colour — and turns dark; themes that are dark already stay as they are. It stays on when you change theme, and the sign-in page follows.',
+      does: 'Easier on the eyes at night. Accent colours too dark to read on black are lightened by themselves, and every page was checked for readable text in dark mode.' },
+  ] },
   { v: 538, items: [
     { ico: '🚪', title: 'Departure cards: a calmer, clearer design on PC and phone',
       what: 'Each room card now has a status colour rail down its left edge, a softer room number, one strong green Check out with a quiet Left · waiting beside it, and the five small actions (Extend, Extending, Late CO, No answer, DND) in one even row with only their icon in colour. The notes row is slimmer, and finished rooms (out or extended) step back.',

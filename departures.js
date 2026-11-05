@@ -913,6 +913,10 @@ function depBalOk(r) {
 }
 /** Still owes money that someone at the desk has to collect */
 function depOwes(r) { return !!r && r.balance > 0 && !depBalOk(r); }
+/** a balance at or above the "high balance" amount, still open (out rooms too: money left after check-out is the one to chase) */
+function _depHiBal(r) { return !!r && r.balance >= (typeof hoHighBal === 'function' ? hoHighBal() : 500) && !depBalOk(r) && effectiveStatus(r) !== 'extended'; }
+/** an OTA booking (Booking.com, Agoda, Expedia …) with an open balance: usually prepaid, so it needs a look */
+function _depOtaBal(r) { return depOwes(r) && typeof hoIsOta === 'function' && hoIsOta(r.source, r.company) && effectiveStatus(r) !== 'extended'; }
 function _depBalWho(r) { return r.balOk && r.balOk !== true ? r.balOk : (r.source || r.company || 'Billed'); }
 function depBalListen() {
   if (typeof fbListen !== 'function') return;
@@ -975,6 +979,9 @@ function depRender() {
   const dueOut = sc.due - sc.held;   // the Due tile / chip / filter: rooms whose card says DUE OUT
   { const el = document.getElementById('dfc-due'); if (el) el.textContent = dueOut; }
   const ovChip = document.getElementById('dfc-overdue'); if (ovChip) ovChip.textContent = overdueCount;
+  { const h = document.getElementById('dfc-hibal'); if (h) h.textContent = depRooms.filter(_depHiBal).length;
+    const o = document.getElementById('dfc-ota'); if (o) o.textContent = depRooms.filter(_depOtaBal).length;
+    const a = document.getElementById('dfh-amt'); if (a && typeof hoHighBal === 'function') a.textContent = '≥' + hoHighBal(); }
   // 'To do' chip shows active rooms (due + late + na + dnd — the cards the To do list shows)
   const activeCount = sc.due + sc.late + sc.na + sc.dnd;
   const allChipCount = document.getElementById('dfc-all');
@@ -1081,6 +1088,8 @@ function depRender() {
     switch (depFilter_) {
       case 'all':          mf = es === 'due' || es === 'late' || es === 'na' || es === 'dnd'; break; // extended excluded — done
       case 'balance':      mf = depOwes(r) && es !== 'out' && es !== 'extended'; break;
+      case 'hibal':        mf = _depHiBal(r); break;
+      case 'ota':          mf = _depOtaBal(r); break;
       case 'pending':      mf = !!r.intent && es !== 'out' && es !== 'extended'; break;
       case 'maybe_extend': mf = _depMayExt(r); break;
       case 'overdue':      mf = _depIsOverdue(r); break;
@@ -1103,6 +1112,8 @@ function depRender() {
   // (unless user has explicitly chosen a different sort key)
   if (depFilter_ === 'out' && depSort.key === 'smart') {
     filtered.sort((a, b) => _coTimeSort(b, a)); // newest first
+  } else if ((depFilter_ === 'hibal' || depFilter_ === 'ota') && depSort.key === 'smart') {
+    filtered.sort((a, b) => (b.balance || 0) - (a.balance || 0) || parseInt(a.room) - parseInt(b.room));   // the biggest balance first
   } else
   filtered.sort((a, b) => {
     const es_a = effectiveStatus(a), es_b = effectiveStatus(b);
@@ -2269,6 +2280,8 @@ function depEditName(i) {
     switch (depFilter_) {
       case 'all':          return es === 'due' || es === 'late' || es === 'na' || es === 'dnd';
       case 'balance':      return depOwes(r) && es !== 'out' && es !== 'extended';
+      case 'hibal':        return _depHiBal(r);
+      case 'ota':          return _depOtaBal(r);
       case 'pending':      return !!r.intent && es !== 'out' && es !== 'extended';
       case 'maybe_extend': return _depMayExt(r);
       case 'due':          return es === 'due' && !_depHeld(r);
@@ -3076,12 +3089,13 @@ function depCopyHKRemaining() {
 }
 
 function depFilter(f, el) {
+  if (f === 'hibal' && depFilter_ === 'hibal' && typeof hoAskHighBal === 'function') { hoAskHighBal(); depRender(); return; }   // tapped again: change the amount
   depFilter_ = f;
   document.querySelectorAll('[data-f]').forEach(c => c.classList.remove('on','due','ext','late','bal','out','pending','na'));
   const btn = el || document.querySelector(`[data-f="${f}"]`);
   if (btn) {
     btn.classList.add('on');
-    const map = { due:'due', extended:'ext', late:'late', balance:'bal', out:'out', pending:'pending', na:'na', maybe_extend:'ext' };
+    const map = { due:'due', extended:'ext', late:'late', balance:'bal', hibal:'bal', ota:'bal', out:'out', pending:'pending', na:'na', maybe_extend:'ext' };
     if (map[f]) btn.classList.add(map[f]);
   }
   // When switching to 'out' view, reset to smart sort (which auto-sorts newest-first)
@@ -3096,7 +3110,7 @@ function depFilter(f, el) {
   }
   // Update sort label hint for checked-out view
   const sortLbl = document.getElementById('depSortLbl');
-  if (sortLbl) sortLbl.textContent = f === 'out' ? '↓ Latest checkout first' : '';
+  if (sortLbl) sortLbl.textContent = f === 'out' ? '↓ Latest checkout first' : f === 'hibal' ? '↓ Biggest balance first · tap High balance again to change the amount' : f === 'ota' ? '↓ Biggest balance first · OTA bookings are usually prepaid' : '';
   depRender();
 }
 

@@ -34,7 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
-<meta name="ho-version" content="v538"/>
+<meta name="ho-version" content="v539"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="themes.css"/>
@@ -60,6 +60,8 @@
           document.documentElement.setAttribute('data-theme', skins[s.theme] || s.theme);
           if (skins[s.theme]) document.documentElement.setAttribute('data-skin', s.theme);
           if (styles[s.theme]) document.documentElement.setAttribute('data-skin-group', 'style');
+          // 🌙 dark mode (utils.js hoApplyDark): a light theme draws dark from the first paint
+          if (localStorage.getItem('ho_dark_v1') === '1' && (skins[s.theme] || s.theme) === 'opera') { document.documentElement.setAttribute('data-theme', 'night-ops'); document.documentElement.setAttribute('data-dark', '1'); }
         }
       }
     } catch(e) {}
@@ -707,6 +709,8 @@
         <button class="fchip"    data-f="dnd"          onclick="depFilter('dnd',this)">DND <span id="dfc-dnd">0</span></button>
         <button class="fchip"    data-f="maybe_extend" onclick="depFilter('maybe_extend',this)">May extend <span id="dfc-maybe_extend">0</span></button>
         <button class="fchip"    data-f="balance"      onclick="depFilter('balance',this)">Balance <span id="dfc-balance">0</span></button>
+        <button class="fchip"    data-f="hibal"        onclick="depFilter('hibal',this)" title="Open balances at or above the amount — tap again to change it">💰 High balance <small id="dfh-amt" class="dp-chip-amt">≥500</small> <span id="dfc-hibal">0</span></button>
+        <button class="fchip"    data-f="ota"          onclick="depFilter('ota',this)" title="Booking.com, Agoda, Expedia… with money still open — OTA bookings are usually prepaid">🌐 OTA balance <span id="dfc-ota">0</span></button>
         <button class="fchip"    data-f="extended"     onclick="depFilter('extended',this)">Extended <span id="dfc-extended">0</span></button>
         <button class="fchip"    data-f="out"          onclick="depFilter('out',this)">Out <span id="dfc-out">0</span></button>
         <span id="depSortLbl" class="dp-sort-hint"></span>
@@ -5534,6 +5538,7 @@ async function appInit() {
 <script src="stratum-fx.js"></script>
 <script src="run-dock.js"></script>
 <script src="start-day.js"></script>
+<script src="nav-finder.js"></script>
 <script src="home.js"></script>
 <script src="month-end.js"></script>
 <script src="file-router.js"></script>

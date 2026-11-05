@@ -119,6 +119,16 @@ function cleanName(raw) {
   if (parts.length >= 2) return (parts[1] + ' ' + parts[0]).trim().toUpperCase();
   return raw.toUpperCase();
 }
+// ── Balances to look at: OTA bookings with money still open, and high balances ──
+/** a booking from an online travel agency (Booking.com, Agoda, Expedia …): usually prepaid, so an open balance there needs a look */
+const HO_OTA_RE = /booking\.?com|\bagoda|expedia|hotels\.com|\btrip\.?com|\bctrip|hotelbeds|webbeds|\bdotw\b|\bhrs\b|airbnb|traveloka|makemytrip|goibibo|cleartrip|\byatra|almosafer|tajawal|\bwego\b|musafir|despegar|\btiket|hostelworld|lastminute|\bopodo|edreams|priceline|\borbitz|travelocity|\btbo\b|rakuten|hotelopia|\bota\b/i;
+function hoIsOta(...parts) { return parts.some(p => HO_OTA_RE.test(String(p || ''))); }
+/** "high balance" starts at this many AED (each device remembers its own; 500 until changed) */
+function hoHighBal() { try { const v = +localStorage.getItem('ho_hibal_v1'); return v > 0 ? v : 500; } catch (_) { return 500; } }
+function hoSetHighBal(v) { v = Math.round(+String(v).replace(/[^\d.]/g, '')); if (!(v > 0)) return false; try { localStorage.setItem('ho_hibal_v1', String(v)); } catch (_) {} return true; }
+/** ask for a new "high balance" amount; true when it changed */
+function hoAskHighBal() { const v = typeof prompt === 'function' ? prompt('Show balances of at least how many AED?', String(hoHighBal())) : null; return v != null && hoSetHighBal(v); }
+
 function cleanSource(agent, company, source) {
   let src = agent || company || source || '';
   src = src
@@ -367,9 +377,48 @@ function setTheme(name, btn, noSave) {
     try { localStorage.setItem('ho_theme_v1', name); } catch (_) {}
     if (typeof saveThemeToProfile === 'function') saveThemeToProfile(name);
   }
+  hoApplyDark();   // 🌙 dark mode stays on across theme changes (a light theme turns dark, a dark one stays as it is)
   // sync login screen colors if visible
   if (typeof _applyLoginTheme === 'function') _applyLoginTheme(name);
 }
+
+// ── 🌙 Dark mode for every theme ──────────────────────────
+// A light theme keeps its style (fonts, corners, shapes, its own accent colour) and swaps its colours for dark ones: the base becomes
+// Night Ops underneath (html[data-dark="1"] + themes-pro.css "Dark mode for every theme"). Themes that are dark already stay as they are.
+const HO_DARK_KEY = 'ho_dark_v1';
+function hoDarkOn() { try { return localStorage.getItem(HO_DARK_KEY) === '1'; } catch (_) { return false; } }
+/** an accent made readable on a dark page (pure): '#175A67' → a lighter teal; light accents stay */
+function hoDarkAccent(hex) {
+  const m = String(hex || '').trim().match(/^#?([0-9a-f]{6})$/i); if (!m) return null;
+  let [r, g, b] = [0, 2, 4].map(i => parseInt(m[1].slice(i, i + 2), 16));
+  const lum = (r, g, b) => { const f = v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); }; return .2126 * f(r) + .7152 * f(g) + .0722 * f(b); };
+  for (let k = 0; k < 20 && (lum(r, g, b) + .05) / (lum(14, 17, 22) + .05) < 4.5; k++) { r += (255 - r) * .15; g += (255 - g) * .15; b += (255 - b) * .15; }   // lighter until it reads on the dark page
+  r = Math.round(r); g = Math.round(g); b = Math.round(b);
+  const L = lum(r, g, b), cWhite = 1.05 / (L + .05), cDark = (L + .05) / (lum(17, 19, 24) + .05);   // the text on it: whichever reads better
+  return { a: `rgb(${r}, ${g}, ${b})`, bg: `rgba(${r}, ${g}, ${b}, .14)`, border: `rgba(${r}, ${g}, ${b}, .45)`, on: cDark >= cWhite ? '#111318' : '#ffffff' };
+}
+function hoApplyDark() {
+  const H = document.documentElement, name = hoThemeName(), T = HO_THEMES[name] || HO_THEMES['night-ops'], light = T.base === 'opera';
+  const on = hoDarkOn() && light;
+  ['--accent', '--accent2', '--accent-bg', '--accent-border', '--on-accent', '--gold', '--ho-a1', '--ho-a2'].forEach(k => H.style.removeProperty(k));
+  if (on) {
+    H.setAttribute('data-dark', '1'); H.setAttribute('data-theme', 'night-ops');
+    const A = hoDarkAccent(T.a);
+    if (A) { H.style.setProperty('--accent', A.a, 'important'); H.style.setProperty('--accent2', A.a, 'important'); H.style.setProperty('--gold', A.a, 'important'); H.style.setProperty('--ho-a1', A.a); H.style.setProperty('--ho-a2', A.a);
+      H.style.setProperty('--accent-bg', A.bg, 'important'); H.style.setProperty('--accent-border', A.border, 'important'); H.style.setProperty('--on-accent', A.on, 'important'); }
+  } else {
+    H.removeAttribute('data-dark');
+    if (light) H.setAttribute('data-theme', T.base);
+  }
+  const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.setAttribute('content', on ? '#0e1116' : T.bg);
+}
+function hoSetDark(on) {
+  try { localStorage.setItem(HO_DARK_KEY, on ? '1' : '0'); } catch (_) {}
+  hoApplyDark(); hoThemeMenuSync();
+  const pop = document.getElementById('hoThemePop'); if (pop) { const b = pop.querySelector('.ho-tp-dark'); if (b) { b.classList.toggle('on', !!on); b.setAttribute('aria-checked', String(!!on)); } }
+  if (typeof _applyLoginTheme === 'function') _applyLoginTheme(hoThemeName());
+}
+document.addEventListener('DOMContentLoaded', () => hoApplyDark());
 
 /** The top bar's one theme button, and its menu of every theme. */
 function hoThemeMenuSync() {
@@ -383,7 +432,9 @@ function hoThemeMenu(btn) {
   const cur = hoThemeName(), pop = document.createElement('div'); pop.id = 'hoThemePop'; pop.className = 'ho-theme-pop'; pop.setAttribute('role', 'menu');
   const item = ([k, t]) => `<button role="menuitemradio" aria-checked="${k === cur}" class="${k === cur ? 'on' : ''}" onclick="setTheme('${k}');document.getElementById('hoThemePop')?.remove()"><span class="ho-tp-sw" style="background:${t.bg}"><i style="background:${t.a}"></i></span>${t.label}${k === cur ? '<b>✓</b>' : ''}</button>`;
   const all = Object.entries(HO_THEMES);
-  pop.innerHTML = '<div class="ho-tp-hd">App styles</div>' + all.filter(x => x[1].group === 'style').map(item).join('')
+  const dk = hoDarkOn(), curT = HO_THEMES[cur] || {}, already = curT.base && curT.base !== 'opera';
+  pop.innerHTML = `<button type="button" role="menuitemcheckbox" aria-checked="${dk}" class="ho-tp-dark${dk ? ' on' : ''}" onclick="event.stopPropagation();hoSetDark(!hoDarkOn())"><span>🌙</span><b>Dark mode</b><small>${already ? 'this theme is dark already' : 'works with every theme'}</small><i class="ho-tp-tog" aria-hidden="true"></i></button>`
+    + '<div class="ho-tp-hd">App styles</div>' + all.filter(x => x[1].group === 'style').map(item).join('')
     + '<div class="ho-tp-hd">Colours</div>' + all.filter(x => x[1].group !== 'style').map(item).join('');
   document.body.appendChild(pop);
   const r = btn.getBoundingClientRect(), w = 220; pop.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w)) + 'px'; pop.style.top = (r.bottom + 8) + 'px';
@@ -564,7 +615,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v538';
+const APP_VERSION = 'v539';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;

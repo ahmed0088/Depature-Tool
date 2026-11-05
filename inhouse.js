@@ -259,7 +259,7 @@ function groupRooms(rows) {
 }
 
 const LONG = 7;
-const FILTERS = [['all', 'All'], ['today', 'Departing today'], ['tomorrow', 'Tomorrow'], ['arriving', 'Arrived today'], ['long', 'Long stay'], ['vip', 'VIP'], ['balance', 'Balance owing'], ['company', 'Company'], ['pm', 'PM rooms'], ['out', 'Checked out today']];
+const FILTERS = [['all', 'All'], ['today', 'Departing today'], ['tomorrow', 'Tomorrow'], ['arriving', 'Arrived today'], ['long', 'Long stay'], ['vip', 'VIP'], ['balance', 'Balance owing'], ['hibal', '💰 High balance'], ['ota', '🌐 OTA balance'], ['company', 'Company'], ['pm', 'PM rooms'], ['out', 'Checked out today']];
 /** does a room pass a filter (today = "YYYY-MM-DD") */
 function matches(r, f, today) {
   const tm = addDays(today, 1);
@@ -272,6 +272,8 @@ function matches(r, f, today) {
     case 'long': return r.nights >= LONG;
     case 'vip': return !!r.vip;
     case 'balance': return r.balance > 0;
+    case 'hibal': return r.balance >= (typeof hoHighBal === 'function' ? hoHighBal() : 500);
+    case 'ota': return r.balance > 0 && typeof hoIsOta === 'function' && hoIsOta(r.agent, r.source, r.company);
     case 'company': return !!r.company;
     case 'out': return !!(r.ov && r.ov.status === 'out');
     default: return true;
@@ -800,7 +802,7 @@ function rowHtml(r, t, arrived) {
 function view() {
   const t = today(), L = liveNow(), act = L.filter(r => !isOut(r)), gone = L.filter(isOut);
   const base = I.f === 'out' ? gone : act;
-  const shown = sortRooms(base.filter(r => (I.f === 'out' || matches(r, I.f, t)) && searchHit(r, I.q)), I.by);
+  const shown = sortRooms(base.filter(r => (I.f === 'out' || matches(r, I.f, t)) && searchHit(r, I.q)), I.f === 'hibal' || I.f === 'ota' ? 'balance' : I.by);   // balance filters: the biggest first
   return { t, L, act, gone, shown, S: liveSummary(L, t) };
 }
 /** one line on what Departures changed + rooms missing on either side */
@@ -863,7 +865,7 @@ function render() {
     <div class="ih-search"><input id="ihQ" class="ih-in" type="search" placeholder="Search room, name, company, confirmation…" value="${esc(I.q)}" autocomplete="off" aria-label="Search in-house guests"></div>
     <select id="ihBy" class="ih-sel" aria-label="Sort">${[['room', 'Sort: room'], ['departure', 'Sort: departure'], ['name', 'Sort: name'], ['balance', 'Sort: balance']].map(([k, l]) => `<option value="${k}"${I.by === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
   </div>
-  <div class="ih-seg" role="tablist" aria-label="Show">${FILTERS.filter(([k]) => (k !== 'out' || V.gone.length || I.f === 'out') && (k !== 'pm' || cnt('pm') || I.f === 'pm')).map(([k, l]) => `<button type="button" role="tab" class="ih-chip${I.f === k ? ' on' : ''}" aria-selected="${I.f === k}" data-ih="f" data-f="${k}">${l}<i>${cnt(k)}</i></button>`).join('')}</div>
+  <div class="ih-seg" role="tablist" aria-label="Show">${FILTERS.filter(([k]) => (k !== 'out' || V.gone.length || I.f === 'out') && (k !== 'pm' || cnt('pm') || I.f === 'pm')).map(([k, l]) => `<button type="button" role="tab" class="ih-chip${I.f === k ? ' on' : ''}" aria-selected="${I.f === k}" data-ih="f" data-f="${k}"${k === 'hibal' ? ' title="Tap again to change the amount"' : ''}>${l}${k === 'hibal' && typeof hoHighBal === 'function' ? ' ≥' + hoHighBal() : ''}<i>${cnt(k)}</i></button>`).join('')}</div>
   ${I.f === 'tomorrow' && cnt('tomorrow') ? `<div class="ih-tmr"><span>🧳 <b>${cnt('tomorrow')}</b> room${cnt('tomorrow') === 1 ? '' : 's'} depart tomorrow, ${esc(fmtD(addDays(t, 1)))}.</span><span class="ih-acts"><button type="button" class="ih-btn sm" data-ih="copyTmr">Copy list</button>${can('canExport') ? '<button type="button" class="ih-btn sm" data-ih="xlTmr">⬇ Excel</button>' : ''}</span></div>` : ''}
   <div class="ih-table" id="ihList">${shown.length ? `<div class="ih-th" aria-hidden="true"><span>Room</span><span>Guest</span><span>Stay</span><span>Company · rate</span><span class="r">Balance</span></div>${shown.map(r => rowHtml(r, t, arrived)).join('')}`
     : `<div class="ih-empty"><b>No room matches</b>${I.f === 'out' ? 'No room checked out on Departures today.' : 'Change the search or the filter.'}</div>`}</div>
@@ -1209,7 +1211,7 @@ function onClick(e) {
     else if (a === 'paste') pasteDialog();
     else if (a === 'export') exportDialog();
     else if (a === 'errx') { I.err = null; render(); }
-    else if (a === 'f') { I.f = b.dataset.f || 'all'; saveView(); render(); }
+    else if (a === 'f') { const nf = b.dataset.f || 'all'; if (nf === 'hibal' && I.f === 'hibal' && typeof hoAskHighBal === 'function') { hoAskHighBal(); render(); return; } I.f = nf; saveView(); render(); }   // High balance tapped again: change the amount
     else if (a === 'copyTmr') copyText(tomorrowText(view().act, today(), hotel()));
     else if (a === 'addMissing') addMissing();
     else if (a === 'xlTmr') exportExcel('tomorrow');

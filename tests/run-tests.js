@@ -4427,6 +4427,22 @@ const haAsync = (async () => {
     check('Departure cards (v538): status rail on the left, the five small actions forced into one even row (the old phone rule made DND a lonely line), Check out + Left · waiting share the first line, list and compact views untouched; the chosen filter chip is readable in see-through themes',
       [has(' > .dp-card::before { top: 14px; bottom: 14px; left: 0; right: auto; width: 4px;'), has(' .dp-acts.g5 > .dca:is(.dca-ext, .dca-extg, .dca-late, .dca-na, .dca-dnd) { grid-column: auto !important; }') && has(' .dp-acts.g5 { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; }'),
        has(' .dp-acts.g5 > .dca-co:has(+ .dca-fin) { grid-column: 1 / 4 !important; }') && has(' .dp-acts.g5 > .dca-fin { grid-column: 4 / -1 !important; }'), /#panel-departures \.dp-chips \.fchip\.on \{[^}]*color: var\(--bg\) !important/.test(proS)], [true, true, true, true]); }
+  { const nfS = fs.readFileSync(path.join(ROOT, 'nav-finder.js'), 'utf8'), sbx3 = { document: { readyState: 'complete', addEventListener() {}, querySelector: () => null, querySelectorAll: () => [], getElementById: () => null }, setTimeout: () => 0, localStorage: { getItem: () => null, setItem() {} }, getComputedStyle: () => ({}) };
+    sbx3.window = sbx3; vm.createContext(sbx3); vm.runInContext(nfS, sbx3); const PH = sbx3.hoNavFinder._pure.pageHit;
+    check('Find a page: words people use find the right pages ("balance" → Departures and In-House, "passport" → Neorcha, "tax" → Tourism Dirham), the plain name works, a wrong word does not; loaded and cached',
+      [PH('departures', 'Departures', 'balance'), PH('inhouse', 'In-House Guests', 'balance'), PH('neorcha', 'Neorcha Registrations', 'passport'), PH('tourism', 'Tourism Dirham', 'tax'), PH('roster', 'Roster', 'ros'), PH('roster', 'Roster', 'balance'),
+       /<script src="nav-finder\.js"><\/script>/.test(ixS) && /'\.\/nav-finder\.js'/.test(fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8'))], [true, true, true, true, true, false, true]); }
+  { const utS = fs.readFileSync(path.join(ROOT, 'utils.js'), 'utf8'), depS2 = fs.readFileSync(path.join(ROOT, 'departures.js'), 'utf8'), ihS2 = fs.readFileSync(path.join(ROOT, 'inhouse.js'), 'utf8');
+    const ota = new Function(utS.slice(utS.indexOf('const HO_OTA_RE'), utS.indexOf('/** "high balance" starts')) + '; return hoIsOta;')();
+    check('Balances: OTA bookings are recognised (Booking.com, Agoda, Expedia, Trip.com…), direct ones are not; Departures and In-House both have High balance and OTA balance filters, the biggest first',
+      [ota('Booking.com'), ota('AGODA COMPANY PTE LTD'), ota('', 'EXPEDIA.COM'), ota('Trip.com'), ota('ALL App'), ota('ACME TRADING'), ota('Bookingham Ltd'),
+       /case 'hibal':        mf = _depHiBal\(r\)/.test(depS2) && /case 'ota':          mf = _depOtaBal\(r\)/.test(depS2) && /data-f="hibal"/.test(ixS) && /data-f="ota"/.test(ixS),
+       /\['hibal', '💰 High balance'\], \['ota', '🌐 OTA balance'\]/.test(ihS2) && /I\.f === 'hibal' \|\| I\.f === 'ota' \? 'balance'/.test(ihS2)], [true, true, true, true, false, false, false, true, true]); }
+  { const utS2 = fs.readFileSync(path.join(ROOT, 'utils.js'), 'utf8'); const DA = new Function(utS2.slice(utS2.indexOf('function hoDarkAccent'), utS2.indexOf('\nfunction hoApplyDark')) + '; return hoDarkAccent;')();
+    const lumOf = c => { const [r, g, b] = c.match(/\d+/g).map(Number); const f = v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); }; return .2126 * f(r) + .7152 * f(g) + .0722 * f(b); };
+    const okOnDark = h => (lumOf(DA(h).a) + .05) / (.0055 + .05) >= 4.5;
+    check('Dark mode: every theme can turn dark (switch in the theme menu, applied before the first paint, kept across theme changes); a dark accent is lightened until it reads on the dark page',
+      [['#111111', '#175A67', '#1f3a5f', '#c74634'].every(okOnDark), DA('#e0a800').a === 'rgb(224, 168, 0)', /localStorage\.getItem\('ho_dark_v1'\) === '1'/.test(ixS), /hoApplyDark\(\);   \/\/ 🌙/.test(utS2) && /class="ho-tp-dark/.test(utS2), /html\[data-dark="1"\]:not\(\[data-skin\^="atlas"\]\) \{/.test(tpS)], [true, true, true, true, true]); }
   check('Found/Redline: the phone More drawer is solid (a see-through drawer let the home page bleed through)',
     [/html\[data-skin="found"\] \.mob-more-drawer \{ background: #0e22b8/.test(tpS), /html\[data-skin="redline"\] \.mob-more-drawer \{ background: #2e0f05/.test(tpS)], [true, true]);
   { const fw = fs.readFileSync(path.join(ROOT, 'found-web.js'), 'utf8');

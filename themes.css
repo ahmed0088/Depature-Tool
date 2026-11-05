@@ -413,3 +413,12 @@ html[data-skin="sand"] .btn.gold, html[data-skin="sand"] .btn.primary { backgrou
 html[data-skin="sand"] .nav-item.active::before { background: #b45309 !important; box-shadow: 0 0 10px rgba(180,83,9,0.45) !important; }
 html[data-skin="sand"] .nav-item.active .nav-badge { background: #b45309 !important; color: #ffffff !important; }
 html[data-skin="sand"] .mob-nav-btn.active .mob-nav-icon, html[data-skin="sand"] .mob-nav-btn.active .mob-nav-lbl { color: #b45309 !important; }
+/* 🌙 the Dark mode switch on top of the theme menu */
+.ho-theme-pop button.ho-tp-dark { display: grid; grid-template-columns: 22px 1fr auto; grid-template-rows: auto auto; column-gap: 10px; align-items: center; margin-bottom: 4px; padding: 10px; border: 1px solid var(--border); background: var(--bg2); }
+.ho-theme-pop button.ho-tp-dark > span { grid-row: 1 / 3; font-size: 17px; text-align: center; }
+.ho-theme-pop button.ho-tp-dark b { margin: 0; color: var(--text); font-weight: 650; }
+.ho-theme-pop button.ho-tp-dark small { grid-column: 2; color: var(--text3); font-size: 11px; }
+.ho-tp-tog { grid-column: 3; grid-row: 1 / 3; position: relative; width: 38px; height: 22px; border-radius: 99px; background: color-mix(in srgb, var(--text) 22%, transparent); transition: background .2s; }
+.ho-tp-tog::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .2s; }
+.ho-tp-dark.on .ho-tp-tog { background: var(--accent); }
+.ho-tp-dark.on .ho-tp-tog::after { transform: translateX(16px); }
