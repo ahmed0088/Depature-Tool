@@ -164,11 +164,17 @@ const GP_DONE_RE = /submitted|already|^success/;
 /** the robot's last answer for a guest, in plain words (pure) */
 /** show the guests in one result tile (enrolled / already / skipped / error) with the reason each one did/didn't go through */
 function gpAccShowCat(cat) {
+  GP_ACC.cat = GP_ACC.cat === cat ? '' : cat;   // tap again to close; remembered so the 1-second redraw keeps it open
+  gpAccRenderCat();
+}
+function gpAccRenderCat() {
   const box = document.getElementById('acrCat'); if (!box) return;
+  const cat = GP_ACC.cat || '';
+  document.querySelectorAll('.acr-tile.tap').forEach(t => t.classList.toggle('on', !!cat && (t.getAttribute('onclick') || '').indexOf("'" + cat + "'") >= 0));
+  if (!cat) { box.hidden = true; box.innerHTML = ''; return; }
   const live = GP_ACC.live, guests = (live && live.report && Array.isArray(live.report.guests)) ? live.report.guests : [];
   const list = guests.filter(g => g.cat === cat);
-  if (box.dataset.cat === cat && !box.hidden) { box.hidden = true; box.dataset.cat = ''; return; }   // tap again to close
-  box.dataset.cat = cat; box.hidden = false;
+  box.hidden = false;
   const head = { enrolled: '✅ Enrolled', already: '👤 Already members', skipped: '⏭ Skipped', error: '⚠️ Not enrolled' }[cat] || cat;
   box.innerHTML = `<div class="acr-cat-h">${head} (${list.length})</div>` + (list.length
     ? list.map(g => `<div class="acr-cat-row"><b>${escapeHtml(g.name || 'Guest')}</b><small>${g.conf ? 'Conf. ' + escapeHtml(g.conf) + ' · ' : ''}${escapeHtml(gpTryWords(g.status))}</small></div>`).join('')
@@ -356,7 +362,7 @@ async function gpAccCloudEnroll(test) {
     await fbSet('enrollJob', { tsv: gpEnrollTsv(rows, true), n: rows.length, at: Date.now(), by: (currentProfile && currentProfile.name) || '', test: !!test, tag: gpCloudTag, state: 'queued', accorLoop: true, portalUrl: url });
     await fbSet('enrollLive', { at: Date.now(), started: Date.now(), state: 'run', step: 'queued', tag: gpCloudTag, test: !!test, n: rows.length, done: 0, note: 'Starting the cloud enrolment…', con: [] });
     await gpAccGh('/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { test: test ? '1' : '', tag: gpCloudTag, hid, portal_url: url } }) });
-    GP_ACC.at = Date.now();
+    GP_ACC.at = Date.now(); GP_ACC.cat = '';
     gpCloudPaint({ at: Date.now(), started: Date.now(), state: 'run', step: 'queued', tag: gpCloudTag, test: !!test, n: rows.length, done: 0, note: 'GitHub accepted the run · waiting for a cloud computer…', con: [{ t: Date.now(), g: 'GH', m: 'Run requested from HotelOps · ' + rows.length + ' guest(s) who agreed' }] });
     gpAccorRunWin(true);
     gpAccPoll(gpCloudTag);
@@ -556,6 +562,7 @@ function gpCloudPaint(v) {
     ${ty ? `<div class="acr-tiles">${tile('✅', test ? 'Checked' : 'Enrolled', test ? done : +ty.enrolled || 0, 'ok', 'enrolled')}${tile('👤', 'Already members', +ty.already || 0, 'info', 'already')}${tile('⏭', 'Skipped', +ty.skipped || 0, 'warn', 'skipped')}${tile('⚠️', 'Errors', +ty.errors || 0, 'bad', 'error')}</div><div class="acr-cat" id="acrCat" hidden></div>` : ''}
     <div class="acr-note ${st.state}">${icon} ${escapeHtml(st.note || '…')}</div>
     <div class="acr-act">${active ? `<button type="button" class="btn" onclick="gpAccControl('stop')">■ Stop after this guest</button>` : ''}${!active && live && live.step !== 'queued' ? `<button type="button" class="btn" onclick="gpAccCloudRestart()">▶ Run again</button>` : ''}${st.url ? `<a class="btn" href="${escapeHtml(st.url)}" target="_blank" rel="noopener">Open on GitHub ↗</a>` : ''}${st.state === 'run' ? '<span class="acr-hint">You can close this — the cloud computer keeps going and the results land in the tracker.</span>' : ''}</div>`;
+  gpAccRenderCat();
   const lines = (live && Array.isArray(live.con) ? live.con : []).slice();
   if (GP_ACC.gh && (!live || live.step === 'queued')) lines.push({ t: Date.now(), g: 'GH', m: 'GitHub Actions: ' + GP_ACC.gh.status + (GP_ACC.gh.conclusion ? ' · ' + GP_ACC.gh.conclusion : '') });
   gpAccPaintCon(lines, st);

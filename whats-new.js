@@ -9,6 +9,9 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 529, items: [
+    "🩹 Enrolment window: tapping Skipped / Errors / Enrolled / Already members no longer flickers open and shut. The list stays open until you tap the tile again, and the open tile is highlighted.",
+  ] },
   { v: 528, items: [
     "🔁 Roster: \"Replace / swap this week with…\" now swaps when the other person already works that week — both keep a full week and nobody's shifts are lost (before, their own shifts were overwritten). With a new name, it simply moves the week over.",
   ] },

@@ -4370,6 +4370,8 @@ const haAsync = (async () => {
   check('Accor Loop: only guests who AGREED, with a civility and an e-mail, are sent', out.names, ['Test One']);
   check('Enrol run report lists each guest with a category (so the tiles can be opened to show who + why)',
     [/guests: results\.map\(r => \(\{ name:/.test(fs.readFileSync(path.join(ROOT, 'scripts', 'accor-loop-cloud.js'), 'utf8')), /function gpAccShowCat/.test(gpS) && /live\.report\.guests/.test(gpS), /onclick="gpAccShowCat/.test(gpS)], [true, true, true]);
+  check('Enrol tiles: the open list is remembered across the 1-second redraw (no flicker) and a second tap closes it',
+    [/GP_ACC\.cat = GP_ACC\.cat === cat \? '' : cat/.test(gpS), /gpAccRenderCat\(\);\n  const lines = /.test(gpS)], [true, true]);
   check('Neorcha hotels are shared with the team (not device-only) and the phone enrol modal header is sticky',
     [/fbSet\('neorchaHotels'/.test(nxS) && /fbListen\('neorchaHotels'/.test(nxS), /\.gp-accor-modal-h\{[^}]*position:sticky/.test(fs.readFileSync(path.join(ROOT, 'pro.css'), 'utf8')), /max-height:calc\(100dvh - 40px\)/.test(fs.readFileSync(path.join(ROOT, 'pro.css'), 'utf8'))], [true, true, true]);
   { const wc = fs.readFileSync(path.join(ROOT, 'scripts', 'accor-loop-content.js'), 'utf8');
