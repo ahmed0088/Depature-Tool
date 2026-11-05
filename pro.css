@@ -3768,7 +3768,7 @@ html, body { background: var(--bg); }
 .gp-cloud-set{margin-top:10px;font-size:.82rem;color:var(--text3)}.gp-cloud-set summary{cursor:pointer}
 .gp-agent-st{margin-top:10px;display:inline-block;padding:4px 10px;border-radius:99px;font-size:.78rem;border:1px solid var(--border);background:var(--card)}.gp-agent-st.on{border-color:color-mix(in srgb,#10b981 55%,var(--border));color:var(--text)}
 .gp-agent-on{display:flex;gap:8px;align-items:center;margin:10px 0 6px;font-size:.88rem;color:var(--text);cursor:pointer}
-:root { --ho-css: "v541"; }
+:root { --ho-css: "v542"; }
 .rent-bp-card:empty { display: none; }
 .rent-bp-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 10px; } .rent-bp-h span { color: var(--text3); font-size: .78rem; }
 .rent-bp { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
@@ -3946,3 +3946,19 @@ html[data-theme="opera"] #depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) 
 .sidenav .nav-item.active { font-weight: 700; }
 /* the finder's field is drawn by its label: no theme's input frame inside it */
 nav.sidenav .nvf .nvf-find input#nvfQ { border: 0 !important; background: transparent !important; box-shadow: none !important; outline: 0 !important; padding: 0 !important; height: 100% !important; border-radius: 0 !important; clip-path: none !important; }
+/* ✏️ arranging the menu */
+.nvf-top { display: flex; gap: 6px; align-items: center; } .nvf-top .nvf-find { flex: 1; min-width: 0; }
+.nvf-arr { flex: none; width: 38px; height: 38px; border-radius: 11px; border: 1px solid var(--border); background: var(--bg2); cursor: pointer; font-size: 15px; }
+.nvf-arr:hover, .sidenav.nvf-arrange .nvf-arr { border-color: var(--accent); background: var(--accent-bg); }
+.nvf-arrbar { margin-top: 8px; padding: 10px; border-radius: 11px; border: 1px solid var(--accent-border); background: var(--accent-bg); display: grid; gap: 6px; }
+.nvf-arrbar[hidden] { display: none; } .nvf-arrbar b { font-size: 13px; } .nvf-arrbar small { font-size: 11.5px; color: var(--text2); line-height: 1.4; }
+.nvf-arrbar span { display: flex; gap: 6px; flex-wrap: wrap; }
+.sidenav.nvf-arrange .nav-item { cursor: grab; outline: 1px dashed var(--border2); outline-offset: -2px; }
+.sidenav.nvf-arrange .nav-item .nvf-star, .sidenav.nvf-arrange .nav-item .nav-badge { display: none !important; }
+.nvf-mv { margin-left: auto; display: inline-flex; gap: 3px; }
+.nvf-mv button { width: 26px; height: 26px; border-radius: 7px; border: 1px solid var(--border2); background: var(--card); color: var(--text); cursor: pointer; font-size: 13px; line-height: 1; }
+.nvf-mv button:hover { border-color: var(--accent); color: var(--accent); }
+.sidenav .nav-item.nvf-dragging { opacity: .4; }
+.sidenav .nvf-over { box-shadow: inset 0 3px 0 var(--accent) !important; }
+.sidenav.nvf-arrange .nav-item { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 4px !important; }
+.sidenav.nvf-arrange .nvf-mv { flex: none; }

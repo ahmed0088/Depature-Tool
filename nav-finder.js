@@ -47,7 +47,8 @@
     let b = n.querySelector(':scope > .nvf');
     if (!b) {
       b = D.createElement('div'); b.className = 'nvf';
-      b.innerHTML = `<label class="nvf-find"><span aria-hidden="true">🔎</span><input type="search" id="nvfQ" placeholder="Find a page…" autocomplete="off" aria-label="Find a page"><kbd title="Press / to jump here">/</kbd></label>
+      b.innerHTML = `<div class="nvf-top"><label class="nvf-find"><span aria-hidden="true">🔎</span><input type="search" id="nvfQ" placeholder="Find a page…" autocomplete="off" aria-label="Find a page"><kbd title="Press / to jump here">/</kbd></label><button type="button" class="nvf-arr" id="nvfArr" title="Arrange the menu your way" aria-label="Arrange the menu">✏️</button></div>
+        <div class="nvf-arrbar" id="nvfArrBar" hidden><b>✏️ Arrange your menu</b><small>Drag a page, or use ↑ ↓. Pages can move to another group; ↑ ↓ on a group title moves the whole group.</small><span><button type="button" class="btn sm gold" id="nvfArrDone">✓ Done</button><button type="button" class="btn sm" id="nvfArrReset">↺ Hotel's order</button></span></div>
         <div class="nvf-quick" id="nvfQuick"></div><div class="nvf-none" id="nvfNone" hidden>No page found — <button type="button" id="nvfAll">search everything</button></div>`;
       n.insertBefore(b, n.firstChild);
       const q = b.querySelector('#nvfQ');
@@ -58,6 +59,9 @@
       });
       b.querySelector('#nvfAll').onclick = () => { const v = q.value; if (typeof gsOpen === 'function') { gsOpen(); setTimeout(() => { const g = D.querySelector('#gsInput, .gs-input input, #globalSearchInput'); if (g) { g.value = v; g.dispatchEvent(new Event('input', { bubbles: true })); } }, 60); } };
       b.addEventListener('click', e => { const c = e.target.closest('[data-nvf-go]'); if (c) go(c.dataset.nvfGo); });
+      b.querySelector('#nvfArr').onclick = () => arrange(!ARR);
+      b.querySelector('#nvfArrDone').onclick = () => arrange(false);
+      b.querySelector('#nvfArrReset').onclick = () => { if (!confirm('Put the menu back in the hotel\'s order?')) return; try { localStorage.removeItem(MINE_KEY()); } catch (_) {} rebuild(); if (typeof showToast === 'function') showToast('Menu back in the hotel\'s order', 'ok'); };
     } else if (n.firstChild !== b) n.insertBefore(b, n.firstChild);   // the menu was rebuilt (nav-order.js): the finder stays on top
     return b;
   }
@@ -138,6 +142,53 @@
     const f = function (name) { const r = o.apply(this, arguments); try { if (D.getElementById('panel-' + name) && D.getElementById('panel-' + name).classList.contains('active')) { remember(name); setTimeout(() => { quick(); folds(); }, 0); } } catch (_) {} return r; };
     f.__nvf = true; W.showPanel = f;
   }
+  // ── ✏️ Arrange the menu: your own order of pages and groups (nav-order.js lays it over the hotel's) ──
+  let ARR = false, DRAG = '';
+  const MINE_KEY = () => (W.hoNavOrder && W.hoNavOrder.MINE_KEY) || 'ho_nav_mine_v1';
+  const layout = () => JSON.parse(JSON.stringify(((W.hoNavOrder && W.hoNavOrder.plan()) || []).map(g => ({ id: g.id, pages: g.pages.slice() }))));
+  const saveLayout = L => { try { localStorage.setItem(MINE_KEY(), JSON.stringify({ groups: L })); } catch (_) {} rebuild(); };
+  function rebuild() { if (W.hoNavOrder) W.hoNavOrder.rebuild(); setTimeout(() => { box(); quick(); folds(); if (ARR) decorate(); }, 30); }
+  /** move a page (pure over a layout): up / down inside its group, over the edge into the next group; or before another page / to a group's top */
+  function movePage(L, id, how, target) {
+    const gi = L.findIndex(g => g.pages.includes(id)); if (gi < 0) return L;
+    const g = L[gi], i = g.pages.indexOf(id);
+    if (how === 'up') { if (i > 0) [g.pages[i - 1], g.pages[i]] = [g.pages[i], g.pages[i - 1]]; else if (gi > 0) { g.pages.splice(i, 1); L[gi - 1].pages.push(id); } }
+    else if (how === 'down') { if (i < g.pages.length - 1) [g.pages[i + 1], g.pages[i]] = [g.pages[i], g.pages[i + 1]]; else if (gi < L.length - 1) { g.pages.splice(i, 1); L[gi + 1].pages.unshift(id); } }
+    else if (how === 'before' && target && target !== id) { g.pages.splice(i, 1); const tg = L.find(x => x.pages.includes(target)); if (tg) tg.pages.splice(tg.pages.indexOf(target), 0, id); else g.pages.splice(i, 0, id); }
+    else if (how === 'top' && target) { const tg = L.find(x => x.id === target); if (tg) { g.pages.splice(i, 1); tg.pages.unshift(id); } }
+    return L;
+  }
+  function moveGroup(L, gid, how) { const i = L.findIndex(g => g.id === gid), j = how === 'up' ? i - 1 : i + 1; if (i < 0 || j < 0 || j >= L.length) return L; [L[i], L[j]] = [L[j], L[i]]; return L; }
+  function decorate() {
+    const n = nav(); if (!n) return;
+    items().forEach(el => {
+      el.draggable = true;
+      if (!el.querySelector(':scope > .nvf-mv')) { const m = D.createElement('span'); m.className = 'nvf-mv'; m.innerHTML = '<button type="button" data-mv="up" aria-label="Move up">↑</button><button type="button" data-mv="down" aria-label="Move down">↓</button>'; el.appendChild(m); }
+    });
+    n.querySelectorAll(':scope > .nvo-lbl').forEach(l => { if (!l.querySelector('.nvf-mv')) { const m = D.createElement('span'); m.className = 'nvf-mv'; m.innerHTML = '<button type="button" data-gmv="up" aria-label="Move the group up">↑</button><button type="button" data-gmv="down" aria-label="Move the group down">↓</button>'; l.appendChild(m); } });
+  }
+  function undecorate() { const n = nav(); if (!n) return; n.querySelectorAll('.nvf-mv').forEach(x => x.remove()); items().forEach(el => { el.draggable = false; }); }
+  function arrange(on) {
+    ARR = !!on; const n = nav(); if (!n) return;
+    n.classList.toggle('nvf-arrange', ARR); const bar = D.getElementById('nvfArrBar'); if (bar) bar.hidden = !ARR;
+    const q = D.getElementById('nvfQ'); if (q) { q.value = ''; filter(''); }
+    if (ARR) { const F = LS.get(FOLD_KEY, {}); if (Object.keys(F).some(k => F[k])) { LS.set(FOLD_KEY, {}); folds(); } decorate(); } else undecorate();
+    if (!n.dataset.nvfArr) {
+      n.dataset.nvfArr = '1';
+      n.addEventListener('click', e => {
+        if (!ARR) return;
+        const mv = e.target.closest('[data-mv]'), gmv = e.target.closest('[data-gmv]');
+        if (mv) { e.stopPropagation(); e.preventDefault(); const it = mv.closest('.nav-item'); saveLayout(movePage(layout(), idOf(it), mv.dataset.mv)); return; }
+        if (gmv) { e.stopPropagation(); e.preventDefault(); const l = gmv.closest('.nvo-lbl'); saveLayout(moveGroup(layout(), l.dataset.gid, gmv.dataset.gmv)); return; }
+        if (e.target.closest('.nav-item, .nvo-lbl')) { e.stopPropagation(); e.preventDefault(); }   // arranging: a tap does not open the page or fold the group
+      }, true);
+      n.addEventListener('dragstart', e => { if (!ARR) return; const it = e.target.closest && e.target.closest('.nav-item'); if (!it) return; DRAG = idOf(it); it.classList.add('nvf-dragging'); try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', DRAG); } catch (_) {} });
+      n.addEventListener('dragend', () => { DRAG = ''; n.querySelectorAll('.nvf-dragging, .nvf-over').forEach(x => x.classList.remove('nvf-dragging', 'nvf-over')); });
+      n.addEventListener('dragover', e => { if (!ARR || !DRAG) return; const t = e.target.closest && e.target.closest('.nav-item, .nvo-lbl'); if (!t) return; e.preventDefault(); n.querySelectorAll('.nvf-over').forEach(x => x !== t && x.classList.remove('nvf-over')); t.classList.add('nvf-over'); });
+      n.addEventListener('drop', e => { if (!ARR || !DRAG) return; const t = e.target.closest && e.target.closest('.nav-item, .nvo-lbl'); if (!t) return; e.preventDefault();
+        const L = layout(); saveLayout(t.classList.contains('nvo-lbl') ? movePage(L, DRAG, 'top', t.dataset.gid) : movePage(L, DRAG, 'before', idOf(t))); DRAG = ''; });
+    }
+  }
   function all() { box(); quick(); folds(); wrapShow(); wrapMobFilter(); }
   function start() {
     all();
@@ -151,5 +202,5 @@
     }
   }
   if (D.readyState === 'loading') D.addEventListener('DOMContentLoaded', () => setTimeout(start, 300)); else setTimeout(start, 300);
-  W.hoNavFinder = { refresh: all, _pure: { pageHit } };
+  W.hoNavFinder = { refresh: all, arrange, _pure: { pageHit, movePage, moveGroup } };
 })();

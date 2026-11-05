@@ -24,12 +24,27 @@ const TOOLS = 'tools';
 const IDS = ['desk', 'night', 'money', 'guests', 'team', 'tools', 'system'];
 const DEFS = GROUPS.map(([title, pages], i) => ({ id: IDS[i], title, pages: pages.slice() }));
 /** the groups as this hotel set them up (the defaults above when it did not) */
-function plan() {
+function hotelPlan() {
   try {
     const P = window.hoSetupPure, C = window.hoCfg;
     if (P && C) return P.navPlan(DEFS, C.get('menu'));
   } catch (_) {}
   return DEFS;
+}
+/** your own arrangement (✏️ Arrange in the menu, nav-finder.js) laid over the hotel's (pure): groups in your order, pages in your
+ *  order and in the group you moved them to; a page or group you never placed keeps the hotel's place */
+function personal(G, mine) {
+  if (!mine || !Array.isArray(mine.groups) || !mine.groups.length) return G;
+  const known = new Set([].concat(...G.map(g => g.pages))), placed = new Set();
+  const out = mine.groups.map(m => { const h = G.find(g => g.id === m.id); return h ? { id: h.id, title: h.title, pages: (m.pages || []).filter(p => known.has(p) && !placed.has(p) && placed.add(p)) } : null; }).filter(Boolean);
+  G.forEach(g => { let o = out.find(x => x.id === g.id); if (!o) { o = { id: g.id, title: g.title, pages: [] }; out.push(o); } g.pages.forEach(p => { if (!placed.has(p)) { placed.add(p); o.pages.push(p); } }); });
+  return out;
+}
+const MINE_KEY = 'ho_nav_mine_v1';
+function plan() {
+  const G = hotelPlan();
+  let mine = null; try { mine = JSON.parse(localStorage.getItem(MINE_KEY) || 'null'); } catch (_) {}
+  return personal(G, mine);
 }
 
 let busy = false;
@@ -55,7 +70,7 @@ function order() {
       if (id === TOOLS) items.forEach(el => { if (!placed.has(el) && !G.some(g => g.pages.includes(el.dataset.panel))) list.push(el); });
       if (!list.length) return;
       if (gi) { const d = document.createElement('div'); d.className = 'nav-divider nvo-div'; frag.appendChild(d); }
-      const l = document.createElement('div'); l.className = 'nav-section-label nvo-lbl'; l.textContent = name; frag.appendChild(l);
+      const l = document.createElement('div'); l.className = 'nav-section-label nvo-lbl'; l.dataset.gid = id; l.textContent = name; frag.appendChild(l);
       list.forEach(el => { placed.add(el); frag.appendChild(el); });
     });
     nav.insertBefore(frag, nav.firstChild);
@@ -67,7 +82,8 @@ function order() {
 // the phone's "More" pages follow the hotel's menu order once it set one up
 function mobile(G) {
   const C = window.hoCfg, m = C && C.get('menu');
-  if (!m || !Array.isArray(m.groups) || !m.groups.length) return;
+  let mine = null; try { mine = localStorage.getItem(MINE_KEY); } catch (_) {}
+  if (!mine && (!m || !Array.isArray(m.groups) || !m.groups.length)) return;
   const grid = document.querySelector('#mobMoreDrawer .mob-more-grid, .mob-more-grid');
   if (!grid) return;
   const order = [].concat(...G.map(g => g.pages));
@@ -112,7 +128,7 @@ function start() {
   setTimeout(run, 1500); setTimeout(run, 4500);
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
-window.hoNavOrder = order;
+window.hoNavOrder = Object.assign(order, { plan, hotelPlan, rebuild: () => run(), MINE_KEY, _pure: { personal } });   // still callable as before (hoNavOrder()); ✏️ Arrange uses the rest
 window.hoNavDefaults = DEFS;   // Settings → Hotel setup → Menu starts from these
 window.hoNavGroups = GROUPS;   // Team → Roles & access lists pages in these groups (the hotel's own groups once the menu is built)
 })();

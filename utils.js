@@ -393,6 +393,13 @@ function setTheme(name, btn, noSave) {
 // Night Ops underneath (html[data-dark="1"] + themes-pro.css "Dark mode for every theme"). Themes that are dark already stay as they are.
 const HO_DARK_KEY = 'ho_dark_v1';
 function hoDarkOn() { try { return localStorage.getItem(HO_DARK_KEY) === '1'; } catch (_) { return false; } }
+// 🌆 dark by itself in the evening (19:00–07:00), only if you switch it on
+const HO_DARK_AUTO_KEY = 'ho_dark_auto_v1';
+function hoDarkAuto() { try { return localStorage.getItem(HO_DARK_AUTO_KEY) === '1'; } catch (_) { return false; } }
+/** the evening and night hours (pure) */
+function hoIsEvening(d) { const h = (d || new Date()).getHours(); return h >= 19 || h < 7; }
+/** dark right now? your switch, or the evening when "dark in the evening" is on (pure) */
+function hoDarkNow(manual, auto, d) { return !!manual || (!!auto && hoIsEvening(d)); }
 /** an accent made readable on a dark page (pure): '#175A67' → a lighter teal; light accents stay */
 function hoDarkAccent(hex) {
   const m = String(hex || '').trim().match(/^#?([0-9a-f]{6})$/i); if (!m) return null;
@@ -405,7 +412,7 @@ function hoDarkAccent(hex) {
 }
 function hoApplyDark() {
   const H = document.documentElement, name = hoThemeName(), T = HO_THEMES[name] || HO_THEMES['night-ops'], light = T.base === 'opera';
-  const on = hoDarkOn() && light;
+  const on = hoDarkNow(hoDarkOn(), hoDarkAuto()) && light;
   ['--accent', '--accent2', '--accent-bg', '--accent-border', '--on-accent', '--gold', '--ho-a1', '--ho-a2'].forEach(k => H.style.removeProperty(k));
   if (on) {
     H.setAttribute('data-dark', '1'); H.setAttribute('data-theme', 'night-ops');
@@ -424,7 +431,39 @@ function hoSetDark(on) {
   const pop = document.getElementById('hoThemePop'); if (pop) { const b = pop.querySelector('.ho-tp-dark'); if (b) { b.classList.toggle('on', !!on); b.setAttribute('aria-checked', String(!!on)); } }
   if (typeof _applyLoginTheme === 'function') _applyLoginTheme(hoThemeName());
 }
-document.addEventListener('DOMContentLoaded', () => hoApplyDark());
+function hoSetDarkAuto(on) {
+  try { localStorage.setItem(HO_DARK_AUTO_KEY, on ? '1' : '0'); } catch (_) {}
+  hoApplyDark(); hoApplyEye();
+  const pop = document.getElementById('hoThemePop'); if (pop) { const b = pop.querySelector('.ho-tp-darkauto'); if (b) { b.classList.toggle('on', !!on); b.setAttribute('aria-checked', String(!!on)); } }
+}
+// ── 👁 Eye saver: a warm filter that takes the blue out of the screen (Off · Low · Medium · Strong), always or only in the evening ──
+const HO_EYE_KEY = 'ho_eye_v1', HO_EYE_AUTO_KEY = 'ho_eye_auto_v1', HO_EYE_LEVELS = { off: 0, low: .08, med: .14, high: .22 };
+function hoEyeLevel() { try { const v = localStorage.getItem(HO_EYE_KEY); return HO_EYE_LEVELS[v] != null ? v : 'off'; } catch (_) { return 'off'; } }
+function hoEyeAuto() { try { return localStorage.getItem(HO_EYE_AUTO_KEY) === '1'; } catch (_) { return false; } }
+function hoApplyEye() {
+  const lv = hoEyeLevel(), a = HO_EYE_LEVELS[lv], on = a > 0 && (!hoEyeAuto() || hoIsEvening());
+  let o = document.getElementById('hoEye');
+  if (!on) { if (o) o.remove(); document.documentElement.removeAttribute('data-eye'); return; }
+  if (!o) { o = document.createElement('div'); o.id = 'hoEye'; o.setAttribute('aria-hidden', 'true'); document.body.appendChild(o); }
+  o.style.cssText = `position:fixed;inset:0;pointer-events:none;z-index:2147483600;background:rgba(255,140,40,${a});mix-blend-mode:multiply`;
+  document.documentElement.setAttribute('data-eye', lv);
+}
+function hoSetEye(lv, auto) {
+  try { if (lv != null) localStorage.setItem(HO_EYE_KEY, lv); if (auto != null) localStorage.setItem(HO_EYE_AUTO_KEY, auto ? '1' : '0'); } catch (_) {}
+  hoApplyEye();
+  const pop = document.getElementById('hoThemePop');
+  if (pop) { pop.querySelectorAll('[data-eye]').forEach(b => b.classList.toggle('on', b.dataset.eye === hoEyeLevel())); const e = pop.querySelector('.ho-tp-eyeauto'); if (e) e.classList.toggle('on', hoEyeAuto()); }
+}
+document.addEventListener('DOMContentLoaded', () => { hoApplyDark(); hoApplyEye(); });
+// the evening comes and goes by itself: check every minute
+setInterval(() => { if (hoDarkAuto()) hoApplyDark(); if (hoEyeAuto() && hoEyeLevel() !== 'off') hoApplyEye(); }, 60000);
+// 🕐 tap the clock in the top bar: AM/PM ↔ 24-hour (the same setting as Settings, the roster follows)
+document.addEventListener('click', e => {
+  const t = e.target.closest && e.target.closest('#topbarTime'); if (!t || typeof hoSetPref !== 'function') return;
+  hoSetPref('clock12', !hoPref('clock12'));
+  if (typeof showToast === 'function') showToast(hoPref('clock12') ? '🕐 12-hour clock (AM/PM)' : '🕐 24-hour clock', 'ok');
+  if (typeof roRender === 'function') try { roRender(); } catch (_) {}
+});
 
 /** The top bar's one theme button, and its menu of every theme. */
 function hoThemeMenuSync() {
@@ -440,6 +479,9 @@ function hoThemeMenu(btn) {
   const all = Object.entries(HO_THEMES);
   const dk = hoDarkOn(), curT = HO_THEMES[cur] || {}, already = curT.base && curT.base !== 'opera';
   pop.innerHTML = `<button type="button" role="menuitemcheckbox" aria-checked="${dk}" class="ho-tp-dark${dk ? ' on' : ''}" onclick="event.stopPropagation();hoSetDark(!hoDarkOn())"><span>🌙</span><b>Dark mode</b><small>${already ? 'this theme is dark already' : 'works with every theme'}</small><i class="ho-tp-tog" aria-hidden="true"></i></button>`
+    + `<button type="button" role="menuitemcheckbox" aria-checked="${hoDarkAuto()}" class="ho-tp-dark ho-tp-darkauto${hoDarkAuto() ? ' on' : ''}" onclick="event.stopPropagation();hoSetDarkAuto(!hoDarkAuto())"><span>🌆</span><b>Dark in the evening</b><small>by itself 19:00–07:00</small><i class="ho-tp-tog" aria-hidden="true"></i></button>`
+    + `<div class="ho-tp-eye"><div class="ho-tp-eyehd"><span>👁</span><b>Eye saver</b><small>a warm screen, less blue light</small></div><div class="ho-tp-seg">${[['off', 'Off'], ['low', 'Low'], ['med', 'Medium'], ['high', 'Strong']].map(([k, l]) => `<button type="button" data-eye="${k}" class="${hoEyeLevel() === k ? 'on' : ''}" onclick="event.stopPropagation();hoSetEye('${k}')">${l}</button>`).join('')}</div>
+      <button type="button" class="ho-tp-eyeauto${hoEyeAuto() ? ' on' : ''}" onclick="event.stopPropagation();hoSetEye(null, !hoEyeAuto())"><i class="ho-tp-box" aria-hidden="true"></i>Only in the evening (19:00–07:00)</button></div>`
     + '<div class="ho-tp-hd">App styles</div>' + all.filter(x => x[1].group === 'style').map(item).join('')
     + '<div class="ho-tp-hd">Colours</div>' + all.filter(x => x[1].group !== 'style').map(item).join('');
   document.body.appendChild(pop);
@@ -621,7 +663,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v541';
+const APP_VERSION = 'v542';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;

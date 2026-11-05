@@ -1677,7 +1677,7 @@
   function send(force) {
     var more = view.folio || (view.traces && view.traces.length) || (view.tables && view.tables.length);
     if ((!view.rows.length && !more) || !view.kind) return;
-    var snap = { id: view.key, kind: view.kind, date: view.date, title: view.title, total: view.total || 0, rows: view.rows, frame: FRAME, url: location.hostname + location.pathname };
+    var snap = { id: view.key, kind: view.kind, date: view.date, title: view.title, total: view.total || 0, rows: view.rows, frame: FRAME, url: location.hostname + location.pathname, prop: readProp() };
     if (view.folio) snap.folio = view.folio;
     if (view.traces && view.traces.length) snap.traces = view.traces;
     if (view.tables && view.tables.length) snap.tables = view.tables;
@@ -1696,6 +1696,7 @@
     extIn = Date.now();   // the helper's link is alive
     if (d.source === 'ho-op-relay') { relay = { apps: +d.apps || 0, v: String(d.v || '').slice(0, 12), at: Date.now() }; relayEver = true; render(); return; }   // the helper's relay (from v436): is a HotelOps tab there?
     if (d.source === 'ho-op-guard') { guardMsg(d); return; }   // 🛡 armed / disarmed by HotelOps
+    if (d.source === 'ho-op-reload') { if (TOP && !goneSent) setTimeout(function () { try { location.reload(); } catch (_) {} }, 300); return; }   // HotelOps asked: Opera stopped answering — refresh it
     if (d.source === 'ho-away') { if (d.away && typeof d.away === 'object') guardMsg(d.away); return; }   // 🛡 the helper's relay: you're away (or a PIN unlocked another tab)
     if (d.source !== 'ho-op-ack') return;
     if (d.guard && typeof d.guard === 'object') guardMsg(d.guard);   // the same inside an answer (an older helper carries only these)
@@ -1734,11 +1735,45 @@
     if (!win || win.closed) win = window.open(APP_URL + '#opera-reader', 'hotelops-op');
     sentHash = ''; setTimeout(function () { tick(); send(true); }, 1500);
   }
+  // ── 🏨 which hotel this Opera tab is (clusters: one HotelOps login, several hotels, each its own Opera) ──
+  // Opera shows the property code on its screens ("Property  AB1C2", "AB1C2 - Hotel name"). Read at most every 30 s, kept for
+  // this tab; it rides on every read and ping, so HotelOps never writes one hotel's Opera into another hotel's lists.
+  var PROP = '', propAt = 0;
+  try { PROP = sessionStorage.getItem('ho_op_prop') || ''; } catch (_) {}
+  function propCode(t) { var m = sp(t).trim().match(/^([A-Z0-9]{3,8})(?:\s|$|\s*[-–])/); return m && /\d/.test(m[1]) && /[A-Z]/.test(m[1]) ? m[1] : ''; }
+  function readProp() {
+    if (Date.now() - propAt < 30000) return PROP; propAt = Date.now();
+    try {
+      var w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null), n, k = 0;
+      while ((n = w.nextNode()) && k < 40000) { k++;
+        if (!/^\s*property\s*:?\s*$/i.test(n.nodeValue)) continue;
+        var el = n.parentElement, tries = [el && el.nextElementSibling, el && el.parentElement && el.parentElement.nextElementSibling, el && el.parentElement && el.parentElement.parentElement && el.parentElement.parentElement.nextElementSibling];
+        for (var i = 0; i < tries.length; i++) { var c = tries[i]; if (!c) continue; var inp = c.querySelector && c.querySelector('input'); var v = propCode(inp && inp.value ? inp.value : c.textContent); if (v) { PROP = v; try { sessionStorage.setItem('ho_op_prop', v); } catch (_) {} return PROP; } }
+      }
+    } catch (_) {}
+    return PROP;
+  }
+  // ── 🔌 Opera went out: signed out, or "your session has expired" — HotelOps is told; an error screen is refreshed once ──
+  var goneSent = '';
+  function wentOut() {
+    var t = '', title = String(document.title || '');
+    try { t = (document.body && document.body.innerText || '').slice(0, 4000); } catch (_) {}
+    var signin = /sign\s*in|log\s*in|login/i.test(title) || /\/(?:oauth2|sso|signin|login)\b/i.test(location.pathname) || /\bsign in to (?:your|oracle)|\busername\b[\s\S]{0,80}\bpassword\b/i.test(t);
+    var expired = /session (?:has )?(?:expired|timed out)|you have been (?:logged|signed) out|your session is no longer valid/i.test(t);
+    var why = expired ? 'expired' : signin ? 'signin' : '';
+    if (!why) { goneSent = ''; return; }
+    if (goneSent !== why) { goneSent = why; post({ source: 'ho-op', gone: { why: why }, frame: FRAME }); tl('🔌', why === 'expired' ? 'Opera says the session expired' : 'Opera is asking you to sign in'); }
+    if (why === 'expired' && TOP) {   // an expired screen shows nothing: reload once (every 10 min at most) to get the sign-in page back
+      var last = 0; try { last = +sessionStorage.getItem('ho_op_reload') || 0; } catch (_) {}
+      if (Date.now() - last > 600000) { try { sessionStorage.setItem('ho_op_reload', String(Date.now())); } catch (_) {} setTimeout(function () { try { location.reload(); } catch (_) {} }, 4000); }
+    }
+  }
   function tick() {
+    try { readProp(); wentOut(); } catch (_) {}
     if (steps.length) flushLearn();
     if (stuckQ.length) flushStuck();
     // the Opera Cloud address (origin + path, no query or hash): HotelOps' "Open Opera" button opens it
-    post({ source: 'ho-op', ping: 1, t: Date.now(), v: VERSION, frame: FRAME, h: view.rows.length ? sentHash : '', home: TOP ? location.origin + location.pathname : '' });
+    post({ source: 'ho-op', ping: 1, t: Date.now(), v: VERSION, frame: FRAME, h: view.rows.length ? sentHash : '', home: TOP ? location.origin + location.pathname : '', prop: PROP });
     Object.keys(frames).forEach(function (k) { if (Date.now() - frames[k].at > 120000) delete frames[k]; });
     render();
   }

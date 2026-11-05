@@ -9,6 +9,29 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 542, items: [
+    { ico: '💬', title: 'Team chat',
+      what: 'A chat for your hotel\'s team, live on every PC and phone: 💬 in the top bar (More on the phone). A number shows what you haven\'t read, and a colleague\'s new message pops up for a few seconds.',
+      does: 'Room numbers in a message are links (tap 412 → room 412\'s card). Enter sends, Shift+Enter is a new line; you can delete your own messages. The last 300 messages are kept.' },
+    { ico: '✏️', title: 'Arrange the menu your way',
+      what: 'The ✏️ next to "Find a page" puts the menu in arrange mode: drag a page (or use ↑ ↓) — also into another group — and move whole groups with the ↑ ↓ on their title.',
+      does: 'It is your own menu (the phone\'s More follows it); "↺ Hotel\'s order" puts it back.' },
+    { ico: '🌆', title: 'Dark in the evening — if you want it',
+      what: 'In the theme menu (and Home ⚙️): 🌆 Dark in the evening — the app turns dark by itself 19:00–07:00 and light again in the morning.',
+      does: 'Off unless you switch it on. 🌙 Dark mode still keeps it dark all day.' },
+    { ico: '👁', title: 'Eye saver',
+      what: 'A warm screen with less blue light: Off · Low · Medium · Strong, always or only in the evening (theme menu, or Home ⚙️).',
+      does: 'Easier on the eyes on long and night shifts — it works with every theme and with dark mode.' },
+    { ico: '🕐', title: 'AM/PM in one tap · PM rooms switch',
+      what: 'Tap the clock in the top bar to switch between 9:00 PM and 21:00 (the roster follows). In In-House ⚙️: "Show PM rooms in the list" puts Opera\'s 9000+ PM rooms in All too.',
+      does: 'PM rooms never count as guests either way.' },
+    { ico: '🔌', title: 'Opera reopens by itself when it goes out',
+      what: 'When Opera stops answering — the tab closed, crashed or hung — HotelOps brings it back: the Opera tab refreshes, or Opera opens again. When Opera says the session expired, the reader refreshes it to the sign-in page and tells you; signing in is still yours.',
+      does: 'Switch it in Opera ⚙️ (Keep Opera open, on by default). To reopen Opera in a background tab by itself, download the helper once more (Settings → Opera reader); without it HotelOps opens Opera in a pop-up — allow pop-ups for HotelOps.' },
+    { ico: '🏨', title: 'Clusters: each hotel with its own Opera — safely',
+      what: 'Every Opera screen now tells HotelOps which property it is (the code Opera shows, like AB1C2). Each hotel learns its own code from its first read, and an Opera tab of another hotel never changes this hotel\'s lists — you get a short note instead.',
+      does: 'Reopening always uses the current hotel\'s own Opera link. Opera ⚙️ → "Only this hotel\'s Opera" shows the code and can forget it.' },
+  ] },
   { v: 541, items: [
     { ico: '⚙️', title: 'Settings on every page',
       what: 'Every page now has a ⚙️ in its header with the options for that page. Every page can: pin it to the top of the menu, open it when HotelOps starts, show or hide its tile on Home, hide it from your menu, show it with larger text, or fit more on the screen.',

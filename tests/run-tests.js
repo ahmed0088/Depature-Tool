@@ -4461,6 +4461,34 @@ const haAsync = (async () => {
       [/dataset\.pgsOpen = id/.test(pg) && /querySelectorAll\('\.panel\[id\^="panel-"\]'\)/.test(pg), ['pin', 'start', 'tile', 'hide', 'big', 'compact'].every(k => pg.includes("tog('" + k + "'")),
        /ho_startday_off/.test(sd4) && /ho_srp_remind_off/.test(sr4) && /const asksOff = /.test(ob4) && /ho_rundock_off/.test(rd4),
        /<script src="page-settings\.js"><\/script>/.test(ixS) && /'\.\/page-settings\.js'/.test(fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8'))], [true, true, true, true]); }
+  { const tcS = fs.readFileSync(path.join(ROOT, 'team-chat.js'), 'utf8'), sbx5 = { document: { readyState: 'complete', addEventListener() {}, querySelector: () => null, querySelectorAll: () => [], getElementById: () => null, head: { appendChild() {} }, createElement: () => ({ style: {} }) }, setTimeout: () => 0 };
+    sbx5.window = sbx5; vm.createContext(sbx5); vm.runInContext(tcS, sbx5); const TC = sbx5.hoTeamChat._pure;
+    check('Team chat: unread counts only colleagues\' messages after the last read; text is escaped and room numbers become links; stored per hotel (teamChat), loaded and cached',
+      [TC.unreadOf([{ uid: 'a', at: 5 }, { uid: 'me', at: 6 }, { uid: 'b', at: 9 }, { uid: 'b', at: 2 }], 'me', 4), TC.richText('<b>Room 412</b>'), /fbSet\('teamChat\/' \+ k, msg\)/.test(tcS),
+       /<script src="team-chat\.js"><\/script>/.test(ixS) && /'\.\/team-chat\.js'/.test(fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8'))],
+      [2, '&lt;b&gt;Room <button type="button" class="tc-room" data-room="412">412</button>&lt;/b&gt;', true, true]); }
+  { const nfS2 = fs.readFileSync(path.join(ROOT, 'nav-finder.js'), 'utf8'), noS = fs.readFileSync(path.join(ROOT, 'nav-order.js'), 'utf8');
+    const sbx6 = { document: { readyState: 'complete', addEventListener() {}, querySelector: () => null, querySelectorAll: () => [], getElementById: () => null }, setTimeout: () => 0, localStorage: { getItem: () => null, setItem() {} }, getComputedStyle: () => ({}) };
+    sbx6.window = sbx6; vm.createContext(sbx6); vm.runInContext(nfS2, sbx6); const NF = sbx6.hoNavFinder._pure, L0 = () => [{ id: 'desk', pages: ['home', 'departures', 'arrivals'] }, { id: 'night', pages: ['checklist', 'audit'] }];
+    const per = new Function('const DEFS = [];' + noS.slice(noS.indexOf('function personal'), noS.indexOf("const MINE_KEY")) + '; return personal;')();
+    check('Arrange the menu: a page moves up / down and over the edge into the next group, before another page, to a group top; groups swap; your layout is laid over the hotel\'s (pages you never placed keep their place); hoNavOrder() still callable',
+      [JSON.stringify(NF.movePage(L0(), 'arrivals', 'up')[0].pages), JSON.stringify(NF.movePage(L0(), 'arrivals', 'down').map(g => g.pages)), JSON.stringify(NF.movePage(L0(), 'audit', 'before', 'home')[0].pages), JSON.stringify(NF.moveGroup(L0(), 'night', 'up').map(g => g.id)),
+       JSON.stringify(per([{ id: 'desk', title: 'Desk', pages: ['home', 'departures', 'arrivals', 'wakeups'] }, { id: 'night', title: 'Night', pages: ['checklist'] }], { groups: [{ id: 'night', pages: ['checklist', 'arrivals'] }, { id: 'desk', pages: ['departures', 'home'] }] }).map(g => g.id + ':' + g.pages.join(','))),
+       /window\.hoNavOrder = Object\.assign\(order,/.test(noS)],
+      ['["home","arrivals","departures"]', '[["home","departures"],["arrivals","checklist","audit"]]', '["audit","home","departures","arrivals"]', '["night","desk"]', '["night:checklist,arrivals","desk:departures,home,wakeups"]', true]); }
+  { const ut4 = fs.readFileSync(path.join(ROOT, 'utils.js'), 'utf8'); const f = new Function(ut4.slice(ut4.indexOf('function hoIsEvening'), ut4.indexOf('function hoApplyDark')).replace(/function hoDarkAccent[\s\S]*$/, '') + '; return [hoIsEvening, hoDarkNow];')();
+    const at = h => new Date(2026, 10, 5, h, 0);
+    check('Dark in the evening (only when switched on, 19:00–07:00), the eye saver (warm filter, levels, evening-only) and tapping the clock for AM/PM',
+      [f[1](false, true, at(20)), f[1](false, true, at(3)), f[1](false, true, at(10)), f[1](false, false, at(20)), f[1](true, false, at(10)), /HO_EYE_LEVELS = \{ off: 0, low: \.08, med: \.14, high: \.22 \}/.test(ut4) && /mix-blend-mode:multiply/.test(ut4), /closest\('#topbarTime'\)/.test(ut4) && /hoSetPref\('clock12', !hoPref\('clock12'\)\)/.test(ut4)],
+      [true, true, false, false, true, true, true]); }
+  { const osb = { console: { log() {}, warn() {}, error() {} }, URL }; osb.globalThis = osb; vm.createContext(osb); vm.runInContext(fs.readFileSync(path.join(ROOT, 'opera-bridge.js'), 'utf8'), osb, { filename: 'opera-bridge.js' });
+    const OP = osb.hoOperaPure, rdS = fs.readFileSync(path.join(ROOT, 'tools/hotelops-opera.console.js'), 'utf8'), whS = fs.readFileSync(path.join(ROOT, 'wa-helper.js'), 'utf8');
+    const I = o => Object.assign({ on: true, signedIn: true, url: 'https://x.oraclecloud.com/', everLinked: 1, lastPing: 1e12, now: 1e12 + 120e3, reopenAt: 0, locked: false }, o);
+    check('Opera: another hotel\'s Opera never changes this hotel (property code); Opera that stopped answering (90 s+) is reopened — not when off, not twice in 10 min, not while locked, not when never linked; the reader sends its property and "went out"; the helper reopens / refreshes the hotel\'s own link',
+      [OP.propBlock('AB1C2', 'AB1C2'), OP.propBlock('ZZ9Z9', 'AB1C2') !== '', OP.propBlock('', 'AB1C2'), OP.propBlock('AB1C2', ''),
+       OP.shouldReopen(I({})), OP.shouldReopen(I({ on: false })), OP.shouldReopen(I({ reopenAt: 1e12 + 60e3 })), OP.shouldReopen(I({ locked: true })), OP.shouldReopen(I({ everLinked: 0 })), OP.shouldReopen(I({ now: 1e12 + 30e3 })),
+       /prop: readProp\(\)/.test(rdS) && /post\(\{ source: 'ho-op', gone: \{ why: why \}/.test(rdS) && /d\.source === 'ho-op-reload'/.test(rdS), /src === 'ho-op-open'/.test(whS) && /d\.source === 'ho-op-open' \|\| d\.source === 'ho-op-reload'/.test(whS)],
+      ['', true, '', '', true, false, false, false, false, false, true, true]); }
   check('Found/Redline: the phone More drawer is solid (a see-through drawer let the home page bleed through)',
     [/html\[data-skin="found"\] \.mob-more-drawer \{ background: #0e22b8/.test(tpS), /html\[data-skin="redline"\] \.mob-more-drawer \{ background: #2e0f05/.test(tpS)], [true, true]);
   { const fw = fs.readFileSync(path.join(ROOT, 'found-web.js'), 'utf8');

@@ -347,6 +347,7 @@ const GS_FEATURES = [
   // shift tasks
   ['⏰ Shift task with a time (reminder)', 'task time reminder alarm ring shift task', 'Shift Tasks', () => gsGo('shifts', { sel: '[id^="stAt-"]' })],
   ['☀️ Morning brief', 'morning brief summary day today manager whatsapp who is on', 'Home', () => mbOpen()],
+  ['💬 Team chat', 'team chat message colleagues talk staff group', 'Home', () => { if (window.hoTeamChat) hoTeamChat.open(); }],
   ['📝 Shift report', 'shift report end of shift summary handover what i did send manager whatsapp', 'Home', () => { if (window.hoShiftReport) hoShiftReport.open(); }],
   ['🙋 Ask for a day off', 'day off request leave annual leave holiday vacation time off ask manager approve shift wish', 'Roster', () => gsGo('roster', { sel: '#askMine' })],
   ['🙋 Day-off requests to approve', 'approve decline day off requests leave waiting staff requests', 'Roster', () => gsGo('roster', { sel: '#askMgrRo' })],

@@ -264,7 +264,7 @@ const FILTERS = [['all', 'All'], ['today', 'Departing today'], ['tomorrow', 'Tom
 function matches(r, f, today) {
   const tm = addDays(today, 1);
   if (f === 'pm') return isPmRoom(r.room);
-  if (isPmRoom(r.room)) return false;   // PM rooms only under their own chip
+  if (isPmRoom(r.room)) { try { return f === 'all' && localStorage.getItem('ho_ih_pm_v1') === '1'; } catch (_) { return false; } }   // PM rooms only under their own chip — or in All too when switched on (⚙️)
   switch (f) {
     case 'today': return r.departures.includes(today);
     case 'tomorrow': return r.departures.includes(tm);
@@ -601,6 +601,8 @@ W.hoInHouse = {
   get loadedAt() { return I.snap ? I.snap.at || '' : ''; },
   get by() { return I.snap ? I.snap.by || '' : ''; },
   setSnapshot,
+  /** draw the page again (a setting changed: PM rooms, the high-balance amount) */
+  refresh: () => { try { if (typeof render === 'function') render(); } catch (_) {} },
   /** today's remembered check-outs / extensions ({date, rooms}; the page keeps it per device) */
   setMemory: m => { I.memory = m && typeof m === 'object' ? m : null; },
 };

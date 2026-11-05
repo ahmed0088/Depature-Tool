@@ -355,6 +355,13 @@ function link(p) {
       return;
     }
     if (side === 'app' && /^ho-nx/.test(src)) return;
+    // 📡 Opera went out (closed, crashed, stopped answering): HotelOps asks to bring it back — the open tab reloads, or the hotel's own Opera link opens in a tab
+    if (side === 'app' && src === 'ho-op-open') {
+      let go = ''; try { const x = new URL(String(m.url || '')); if (x.protocol === 'https:' && /(^|[.])(oraclecloud|oracleindustry|oraclehospitality)[.]com$/i.test(x.hostname)) go = x.href; } catch (_) {}
+      if (ports.opera.size && !m.fresh) { toSide('opera', { source: 'ho-op-reload' }); return; }
+      if (go) { try { await chrome.tabs.create({ url: go, active: !!m.focus }); } catch (_) {} }
+      return;
+    }
     // 💎 ALL enrollment: HotelOps hands the list of guests who agreed → fc.accor.net opens in a background tab, its page asks for the
     // job, runs ALL Enroll v19 and sends the results back; the tab this opened is closed again
     if (side === 'app' && src === 'ho-en-job') {
@@ -398,7 +405,7 @@ ensure();`;
   D.hoWaHelper = ${JSON.stringify(v)}; D.hoWaAuto = '1'; D.hoAwayRelay = '1';${opReader ? ` D.hoOpHelper = ${JSON.stringify(v)};` : ''}${nx ? ` D.hoNxHelper = ${JSON.stringify(v)};` : ''}${en ? ` D.hoEnHelper = ${JSON.stringify(v)};` : ''}
   let port = null;
   const BACK = d => d && typeof d === 'object' && (d.source === 'ho-wa-pong' || d.source === 'ho-wa-ack' || d.source === 'ho-wa-gack' || d.source === 'ho-wa-ext-code'
-    || d.source === 'ho-op-ack' || d.source === 'ho-op-guard' || d.source === 'ho-op-ext-code' || d.source === 'ho-away-set' || d.source === 'ho-away-pinack' || d.source === 'ho-nx-job' || d.source === 'ho-nx-ext-code' || d.source === 'ho-en-job'
+    || d.source === 'ho-op-ack' || d.source === 'ho-op-guard' || d.source === 'ho-op-ext-code' || d.source === 'ho-op-open' || d.source === 'ho-op-reload' || d.source === 'ho-away-set' || d.source === 'ho-away-pinack' || d.source === 'ho-nx-job' || d.source === 'ho-nx-ext-code' || d.source === 'ho-en-job'
     || (d.source === 'ho-wa' && (d.send || d.words || (d.guard && !d.guard.events && !d.guard.arm))));
   const open = () => {
     // switched off / removed: Chrome won't connect any more → HotelOps is told at once (and the heartbeat stops)

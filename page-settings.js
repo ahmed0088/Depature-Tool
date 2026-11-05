@@ -21,7 +21,7 @@
 
   // ── what each page can set ──
   const HIBAL = num('hibal', 'High balance starts at', 'The 💰 High balance filter (Departures, In-House) and the shift report list balances of at least this much.', 'AED',
-    () => safe(() => hoHighBal(), 500), v => { if (safe(() => hoSetHighBal(v), false)) { safe(() => depRender()); return true; } return false; });
+    () => safe(() => hoHighBal(), 500), v => { if (safe(() => hoSetHighBal(v), false)) { safe(() => depRender()); safe(() => hoInHouse.refresh()); return true; } return false; });
   const PAGES = {
     home: [
       pref('greetName', 'Greet me by name', '"Good morning, Sam" on top of Home.'),
@@ -29,6 +29,10 @@
       pref('brainHome', 'Ops Brain on Home', 'What needs you now, under the tiles.'),
       pref('mbAuto', 'Open the Morning brief by itself', 'Managers, once a day between 06:00 and 11:59.'),
       tog('startDay', 'Ask me to load the day\'s reports', 'The ☀️ Start-of-day window (In-house and Departures), 05:00–15:59, once a day.', () => !LSb('ho_startday_off', false), v => LSs('ho_startday_off', !v)),
+      tog('clock12', 'AM/PM clock', '9:00 PM instead of 21:00 — the top bar clock and roster times (tap the clock to switch too).', () => !!P('clock12'), v => { SP('clock12', !!v); safe(() => roRender()); }),
+      tog('darkAuto', 'Dark in the evening', 'Turns dark by itself 19:00–07:00 (🌙 Dark mode in the theme menu keeps it dark all day).', () => safe(() => hoDarkAuto(), false), v => safe(() => hoSetDarkAuto(v))),
+      sel('eye', 'Eye saver', 'A warm screen with less blue light — easier on the eyes on long shifts.', [['off', 'Off'], ['low', 'Low'], ['med', 'Medium'], ['high', 'Strong']], () => safe(() => hoEyeLevel(), 'off'), v => safe(() => hoSetEye(v))),
+      tog('eyeAuto', 'Eye saver only in the evening', '19:00–07:00; off during the day.', () => safe(() => hoEyeAuto(), false), v => safe(() => hoSetEye(null, v))),
       tog('srpRemind', 'Remind me of the shift report', 'In the last 30 minutes of a shift, the Brain says your 📝 shift report is ready.', () => !LSb('ho_srp_remind_off', false), v => LSs('ho_srp_remind_off', !v)),
     ],
     departures: [
@@ -38,7 +42,7 @@
       pref('confirmCheckout', 'Ask before checking out', '"Check out room 412?" before a check-out is saved.'),
       HIBAL,
     ],
-    inhouse: [HIBAL],
+    inhouse: [HIBAL, tog('ihPm', 'Show PM rooms in the list', 'Opera\'s PM (pseudo) rooms — 9000 and up — in All too, not only under their own chip. They never count as guests.', () => LSb('ho_ih_pm_v1', false), v => { LSs('ho_ih_pm_v1', v); safe(() => hoInHouse.refresh()); })],
     shifts: [
       pref('autoResetShifts', 'Start each shift with nothing ticked', 'The first time the app opens in a new shift, that shift\'s ticks are cleared (once, for the team).'),
       pref('taskReminders', 'Remind me of tasks', 'A reminder when a timed task is due.'),
@@ -48,6 +52,8 @@
       tog('opAuto', 'Adjust the lists by itself', 'What Opera shows changes Departures, Arrivals and In-House by itself (with Undo).', () => safe(() => hoOpera.cfg().auto, true), v => safe(() => hoOpera.setCfg('auto', v))),
       tog('opReview', 'Hold changes for my OK', 'Changes from Opera wait in a list until you tap OK.', () => safe(() => hoOpera.cfg().review, false), v => safe(() => hoOpera.setCfg('review', v))),
       tog('opAsk', 'Ask me when it is not sure', '"Room 412: checked out or extended?" — here and in the reader inside Opera.', () => !LSb('ho_op_ask_off', false), v => LSs('ho_op_ask_off', !v)),
+      tog('opWatch', 'Keep Opera open', 'When Opera goes out (closed, crashed, stopped answering) HotelOps brings it back with this hotel\'s own Opera link — the open tab refreshes, or Opera opens again. Signed out: it tells you.', () => safe(() => hoOpera.watch(), true), v => safe(() => hoOpera.setWatch(v))),
+      tog('opProp', 'Only this hotel\'s Opera', () => { const p = safe(() => hoOpera.prop(), ''); return p ? `This hotel is Opera property ${p} — another hotel's Opera tab never changes these lists. Switch off to forget it (the next read learns it again).` : 'Learned from the first Opera read: another hotel\'s Opera tab never changes these lists.'; }, () => !!safe(() => hoOpera.prop(), ''), v => { if (!v) safe(() => hoOpera.forgetProp()); return !!v || undefined; }),
       tog('opLearn', 'Learn from my Opera use', 'Learns your routines (screen names only) and offers to start one at its usual time.', () => safe(() => hoOpera.learned().on, true), v => safe(() => hoOpera.setLearn(v))),
     ],
     pipeline: [tog('runDock', 'Show running cloud jobs at the bottom', 'The #12 chips of runs still going (🗂 Runs is always there).', () => !LSb('ho_rundock_off', false), v => { LSs('ho_rundock_off', !v); safe(() => hoRuns.paint()); })],
@@ -85,7 +91,7 @@
     const ctl = o.t === 'tog' ? `<button type="button" class="pgs-sw${v ? ' on' : ''}" role="switch" aria-checked="${!!v}" data-pgs="${esc(o.key)}" aria-label="${esc(o.label)}"><i></i></button>`
       : o.t === 'sel' ? `<select class="pgs-sel" data-pgs="${esc(o.key)}" aria-label="${esc(o.label)}">${o.opts.map(([k, l]) => `<option value="${esc(k)}"${k === v ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`
       : `<span class="pgs-num"><input type="number" min="1" step="50" inputmode="numeric" value="${esc(v)}" data-pgs="${esc(o.key)}" aria-label="${esc(o.label)}">${o.unit ? `<small>${esc(o.unit)}</small>` : ''}</span>`;
-    return `<div class="pgs-row"><div class="pgs-t"><b>${esc(o.label)}</b><small>${esc(o.desc)}</small></div>${ctl}</div>`;
+    return `<div class="pgs-row"><div class="pgs-t"><b>${esc(o.label)}</b><small>${esc(typeof o.desc === 'function' ? o.desc() : o.desc)}</small></div>${ctl}</div>`;
   }
   function open(id) {
     id = id || safe(() => D.querySelector('.panel.active').id.replace(/^panel-/, ''), 'home');

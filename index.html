@@ -34,7 +34,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 
 <!-- App styles -->
-<meta name="ho-version" content="v541"/>
+<meta name="ho-version" content="v542"/>
 <link rel="stylesheet" href="styles.css"/>
 <link rel="stylesheet" href="pro.css"/>
 <link rel="stylesheet" href="themes.css"/>
@@ -61,7 +61,7 @@
           if (skins[s.theme]) document.documentElement.setAttribute('data-skin', s.theme);
           if (styles[s.theme]) document.documentElement.setAttribute('data-skin-group', 'style');
           // 🌙 dark mode (utils.js hoApplyDark): a light theme draws dark from the first paint
-          if (localStorage.getItem('ho_dark_v1') === '1' && (skins[s.theme] || s.theme) === 'opera') { document.documentElement.setAttribute('data-theme', 'night-ops'); document.documentElement.setAttribute('data-dark', '1'); }
+          var hh = new Date().getHours(); if ((localStorage.getItem('ho_dark_v1') === '1' || (localStorage.getItem('ho_dark_auto_v1') === '1' && (hh >= 19 || hh < 7))) && (skins[s.theme] || s.theme) === 'opera') { document.documentElement.setAttribute('data-theme', 'night-ops'); document.documentElement.setAttribute('data-dark', '1'); }
         }
       }
     } catch(e) {}
@@ -5541,6 +5541,7 @@ async function appInit() {
 <script src="nav-finder.js"></script>
 <script src="shift-report.js"></script>
 <script src="page-settings.js"></script>
+<script src="team-chat.js"></script>
 <script src="home.js"></script>
 <script src="month-end.js"></script>
 <script src="file-router.js"></script>

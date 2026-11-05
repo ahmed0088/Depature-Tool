@@ -194,7 +194,9 @@ function sanitize(snap) {
     if (Array.isArray(r.extra)) { const ex = r.extra.slice(0, 60).filter(p => Array.isArray(p) && !secretLabel(p[0])).map(p => [cut(p[0], 40), cut(p[1], 120)]).filter(p => p[0] && p[1]); if (ex.length) o.extra = ex; }
     return o.room || o.conf || o.name ? o : null;
   }).filter(Boolean);
+  const prop = String(snap.prop || '').toUpperCase(); 
   const out = { kind, date: isIso(snap.date) ? snap.date : '', title: cut(snap.title, 90), total: Math.max(0, +snap.total || 0), frame: String(snap.frame || '').slice(0, 12), rows };
+  if (/^[A-Z0-9]{3,8}$/.test(prop)) out.prop = prop;   // which hotel this Opera tab is (clusters)
   const F = cleanFolio(snap.folio); if (F) out.folio = F;
   if (Array.isArray(snap.traces)) out.traces = snap.traces.slice(0, 150).map(t => {
     if (!t || typeof t !== 'object' || !t.text) return null;
@@ -882,7 +884,7 @@ function guardThrottle(T, e, now, what) {
   return { T, send: [], wait: OG_GAP - (now - T.sentAt) };
 }
 
-W.hoOperaPure = { pinHash, pinVerify, guardThrottle, guardFlush, ogLine, OG_GAP, OG_VISIT, depRecon, reconAuto, reconHead, reconPlan, teachKey, teachChoices, operaThoughts, operaEntry, shapeOf, reportText, reportLeaks, stuckText, stuckLeaks, stuckClean, operaHome, openState, maskCards, secretLabel, cleanFolio, cleanLabel, learnClean, learnModel, learnRecent, learnNext, learnSummary, sessionsOf, toIso, operaDay, roomKey, nameKey, sameGuest, isOtaEmail, goodEmail, natName, firstLast, sanitize, plan, summaryText, worthAlert, depReport, hashOf, isPm };
+W.hoOperaPure = { propBlock, shouldReopen, pinHash, pinVerify, guardThrottle, guardFlush, ogLine, OG_GAP, OG_VISIT, depRecon, reconAuto, reconHead, reconPlan, teachKey, teachChoices, operaThoughts, operaEntry, shapeOf, reportText, reportLeaks, stuckText, stuckLeaks, stuckClean, operaHome, openState, maskCards, secretLabel, cleanFolio, cleanLabel, learnClean, learnModel, learnRecent, learnNext, learnSummary, sessionsOf, toIso, operaDay, roomKey, nameKey, sameGuest, isOtaEmail, goodEmail, natName, firstLast, sanitize, plan, summaryText, worthAlert, depReport, hashOf, isPm };
 if (!doc) return;
 
 // ══ State ═══════════════════════════════════════════════════
@@ -1069,6 +1071,7 @@ function dbStart() {
   DB_ON = true;
   safe(() => fbListen('operaUrl', v => { if (v && v.url) setOperaUrl(v.url, v.src || 'hotel', true); }));
   safe(() => fbListen('operaStuck', v => safe(() => stuckMerge(v))));
+  safe(() => fbListen('operaProp', v => { OPPROP = v && /^[A-Z0-9]{3,8}$/.test(v.code || '') ? v.code : ''; }));
   const taughtFrom = kind => v => safe(() => { const box = {}; Object.values(v || {}).forEach(x => { if (x && x.k && x.v) box[String(x.k).slice(0, 60)] = String(x.v).slice(0, 20); }); if (kind === 's') TEACH.s = Object.assign({}, box); else TEACH.h = Object.assign({}, box); LS.set(LS_TEACH, TEACH); });
   safe(() => fbListen('operaTeach', taughtFrom('h')));
   safe(() => fbListen('operaScreens', taughtFrom('s')));
@@ -1343,8 +1346,48 @@ function apply0(snap, how, P0) {
 // ══ Receiving ═══════════════════════════════════════════════
 const KIND_LABEL = { arrivals: 'Arrivals', departures: 'Departures', inhouse: 'In House', queue: 'Queue rooms', checkin: 'Check-in', search: 'Reservation search', details: 'Reservation details', list: 'a reservation list',
   billing: 'Billing / Folio', rooms: 'Room status', profile: 'Profile', traces: 'Traces / Alerts', rates: 'Rates', group: 'Group / Block', audit: 'Night audit', other: 'Other screen' };
+// ══ 🔌 Keep Opera open: when it goes out (closed, crashed, stopped answering) HotelOps brings it back — the open tab is refreshed
+//    through the helper, or the hotel's own Opera link opens again. Signed out: you are told (only you can sign in). ══
+const WATCH_KEY = 'ho_op_watch_v1';
+const watchOn = () => LS.get(WATCH_KEY, true) !== false;
+let REOPEN_AT = 0, EVER_LINKED = 0, GONE_TOLD = '';
+const helperCanOpen = () => { const v = parseInt(String(doc && doc.documentElement.dataset.hoOpHelper || '').replace(/\D/g, ''), 10); return v >= 542; };
+/** should HotelOps bring Opera back now? (pure) */
+function shouldReopen(I) { return !!(I.on && I.signedIn && I.url && I.everLinked && I.lastPing && I.now - I.lastPing > 90e3 && I.now - I.lastPing < 6 * 3600e3 && I.now - I.reopenAt > 10 * 60e3 && !I.locked); }
+function reopenOpera(why, focus) {
+  const url = operaUrl(); if (!url) return false;
+  REOPEN_AT = Date.now();
+  if (helperCanOpen()) W.postMessage({ source: 'ho-op-open', url, focus: !!focus }, location.origin);
+  else if (!W.open(url, 'hotelops-opera')) { toast('📡 Opera is closed — tap Open Opera (allow pop-ups for HotelOps so it can reopen by itself)', 'warn'); return false; }
+  addLog({ kind: 'opera', text: `Opera ${why || 'went out'} — opened again`, how: 'auto' });
+  return true;
+}
+function operaGone(why) {
+  if (GONE_TOLD === why) return; GONE_TOLD = why;
+  toast(why === 'expired' ? '📡 Opera\'s session expired — it refreshes by itself; sign in again when it asks' : '📡 Opera is asking you to sign in again — the lists follow Opera again once you are in', 'warn');
+  addLog({ kind: 'opera', text: why === 'expired' ? 'Opera session expired' : 'Opera signed out', how: 'reader' });
+}
+if (doc && typeof setInterval === 'function') setInterval(() => safe(() => {
+  if (LINK && Date.now() - LINK.at < 45000) { EVER_LINKED = Date.now(); GONE_TOLD = GONE_TOLD && Date.now() - LINK.at < 20000 ? GONE_TOLD : ''; }
+  if (shouldReopen({ on: watchOn(), signedIn: signedIn(), url: operaUrl(), everLinked: EVER_LINKED, lastPing: LINK ? LINK.at : 0, now: Date.now(), reopenAt: REOPEN_AT, locked: !!(OG && OG.lock && OG.lock.on) }))
+    reopenOpera('stopped answering');
+}), 30000);
+
+// ══ 🏨 Clusters: each hotel has its own Opera (its own link and property code). An Opera tab of another hotel never changes this
+//    hotel's lists. The code is learned from the first read (Settings → Opera ⚙️ shows it and can forget it). ══
+let OPPROP = '', PROP_TOLD = 0;
+/** may a read from Opera property `prop` change this hotel's lists? (pure) → '' yes, or why not */
+function propBlock(prop, known) { return !prop || !known || prop === known ? '' : `another hotel's Opera (${prop}) — this hotel is ${known}`; }
+function propCheck(prop) {
+  if (!prop) return '';
+  if (!OPPROP) { OPPROP = prop; safe(() => { if (fbOk() && canWrite()) fbSet('operaProp', { code: prop, at: Date.now() }); }); return ''; }
+  const why = propBlock(prop, OPPROP);
+  if (why && Date.now() - PROP_TOLD > 10 * 60e3) { PROP_TOLD = Date.now(); toast(`📡 Not changed: this Opera tab is ${prop}, HotelOps is on ${OPPROP}. Switch hotel in HotelOps, or use that hotel's Opera.`, 'warn'); }
+  return why;
+}
 function receive(raw, h, reply) {
   const snap = sanitize(raw);
+  { const pb = snap ? propCheck(snap.prop) : ''; if (pb) return 'not changed: ' + pb; }
   if (!snap) { safe(() => stuckApp(raw && typeof raw === 'object' ? raw : {}, 'not-applied', 'HotelOps answered "nothing readable": the snapshot had no list of rows it could use')); return 'nothing readable'; }
   if (raw && raw.url) safe(() => rememberHome(raw.url));
   h = String(h || hashOf([snap.kind, snap.date, snap.rows]));
@@ -1549,6 +1592,8 @@ W.addEventListener('message', e => {
   if (d.guard && typeof d.guard === 'object') { safe(() => ogFromReader(d.guard, reply)); return; }
   if (d.stuck && typeof d.stuck === 'object') { const ok = safe(() => stuckAdd(d.stuck, d.h, 'reader'), false); reply({ source: 'ho-op-ack', stuck: String(d.h || '').slice(0, 24), ok: !!ok }); return; }
   if (Array.isArray(d.learn)) { const hint = safe(() => learnAdd(d.learn), ''); reply({ source: 'ho-op-ack', hint: hint || '', learn: learnOn() }); return; }
+  if (d.gone && typeof d.gone === 'object') { safe(() => operaGone(String(d.gone.why || ''))); return; }
+  if (d.prop && /^[A-Z0-9]{3,8}$/.test(String(d.prop))) LINK.prop = String(d.prop);
   if (d.answer && typeof d.answer === 'object') { const text = safe(() => readerAnswer(d.answer), 'Not changed'); toast('📡 ' + text, 'ok'); reply({ source: 'ho-op-ack', answered: String(d.answer.id || '').slice(0, 80), text, ask: readerAsks() }); safe(paint); return; }
   if (d.ping) {
     // answered at once, signed in or not (only applying waits): the reader shows "linked" as soon as this tab has loaded
@@ -2617,6 +2662,10 @@ if (!wrapDepRender()) { const iv2 = setInterval(() => { if (wrapDepRender()) { c
 
 // ══ For other modules ═══════════════════════════════════════
 W.hoOpera = {
+  /** 🔌 keep Opera open (reopen it when it goes out) */
+  watch: () => watchOn(), setWatch: on => { LS.set(WATCH_KEY, !!on); }, reopen: (focus) => reopenOpera('opened by you', focus),
+  /** 🏨 this hotel's Opera property code ('' until learned) and forgetting it (the next read teaches it again) */
+  prop: () => OPPROP, tabProp: () => (LINK && LINK.prop) || '', forgetProp: () => { OPPROP = ''; safe(() => { if (fbOk() && canWrite()) fbSet('operaProp', null); }); },
   /** the newest read of a screen kind (arrivals | departures | inhouse | search | details | list), or of any */
   last: kind => { const L = kind ? LAST[kind] : Object.values(LAST).sort((a, b) => b.at - a.at)[0]; return L ? JSON.parse(JSON.stringify(L)) : null; },
   /** read from Opera less than `min` minutes ago? */
