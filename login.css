@@ -280,3 +280,14 @@ html[data-theme="opera"] #loginScreen .login-btn:not(.is-done) { background: lin
 #loginScreen .fl-or::before, #loginScreen .fl-or::after { content: ''; flex: 1; height: 1px; background: color-mix(in srgb, var(--lg-text) 14%, transparent); }
 /* with Face ID ready, the password sign-in steps back to a quiet second choice */
 #loginScreen .fl-box ~ #loginForm .login-btn { background: color-mix(in srgb, var(--lg-text) 9%, transparent) !important; color: var(--lg-text) !important; box-shadow: none !important; }
+
+/* ── every App style (data-skin) gets its own sign-in: the card, fields and button take the style's corners, its title font,
+   its label font, and the flat styles drop the glow. Each style sets --r / --r2 / --r3 / --font (themes-pro.css); the few extras:
+   --sk-title-font, --sk-title-case, --sk-title-w, --sk-sky (none = no aurora / grid / sparks). ── */
+html[data-skin] #loginScreen .login-card { border-radius: var(--r3, 24px) !important; }
+html[data-skin] #loginScreen .login-card::before { left: var(--r3, 24px); right: var(--r3, 24px); }
+html[data-skin] #loginScreen .login-input, html[data-skin] #loginScreen .lg-input-wrap, html[data-skin] #loginScreen .login-btn,
+html[data-skin] #loginScreen .fl-btn, html[data-skin] #loginScreen .login-error { border-radius: var(--r2, 14px) !important; }
+html[data-skin] #loginScreen .lg-title, html[data-skin] #loginScreen .lg-word { font-family: var(--sk-title-font, var(--font)) !important; text-transform: var(--sk-title-case, none) !important; font-weight: var(--sk-title-w, 700) !important; }
+html[data-skin] #loginScreen .login-label { font-family: var(--rl-label, var(--font)) !important; }
+html[data-skin] #loginScreen .lg-sky { display: var(--sk-sky, block); }

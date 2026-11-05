@@ -82,7 +82,7 @@
   }
   // field → header words (after normH). Exact names first; then the longest phrase found inside a longer header.
   var FIELDS = [
-    ['room', ['ROOM', 'RM', 'ROOM NO', 'RM NO', 'ROOM NUMBER', 'ROOMS']],
+    ['room', ['ROOM', 'RM', 'ROOM NO', 'RM NO', 'ROOM NUMBER']],   // not "Rooms": on a reservation that is how many rooms (1), never the room number
     ['roomType', ['ROOM TYPE', 'RM TYPE', 'RTC', 'ROOM CLASS', 'ROOM CATEGORY']],
     ['roomStatus', ['ROOM STATUS', 'RM STATUS', 'ROOM CONDITION', 'CONDITION', 'HOUSEKEEPING ROOM STATUS', 'CURRENT ROOM STATUS']],
     ['hkStatus', ['HK STATUS', 'HOUSEKEEPING STATUS', 'HSK STATUS', 'HK']],
@@ -299,6 +299,14 @@
       var dd = dayDiff(parseDate(s[0], 'dmy'), parseDate(s[1], 'dmy')), uu = dayDiff(parseDate(s[0], 'mdy'), parseDate(s[1], 'mdy'));
       if (dd === n && uu !== n) d++; else if (uu === n && dd !== n) u++;
     });
+    // no nights to check against: a stay that reads as 0–60 nights one way and backwards or months long the other way decides it
+    // ("03-11-2026 → 07-11-2026" is 4 nights day-first, 122 nights month-first)
+    if (d === u) (stays || []).forEach(function (s) {
+      if (parseInt(s[2], 10) > 0 || !numParts(s[0]) || !numParts(s[1])) return;
+      var a1 = parseDate(s[0], 'dmy'), b1 = parseDate(s[1], 'dmy'), a2 = parseDate(s[0], 'mdy'), b2 = parseDate(s[1], 'mdy');
+      var dd = a1 && b1 ? dayDiff(a1, b1) : null, uu = a2 && b2 ? dayDiff(a2, b2) : null, ok = function (x) { return x != null && x >= 0 && x <= 60; };
+      if (ok(dd) && !ok(uu)) d++; else if (ok(uu) && !ok(dd)) u++;
+    });
     return d > u ? 'dmy' : u > d ? 'mdy' : '';
   }
   /** the first date found in a line of text ("Business Date 28-Oct-2026", "Arrivals for Wed, 28 Oct 2026") → ISO or '' */
@@ -394,7 +402,7 @@
   /** grid lines → finished guest lines: dates read the same way round for the whole list, nights from the dates */
   function finishRows(raw, order) {
     var vals = [], stays = [];
-    raw.forEach(function (r) { if (r._arr) vals.push(r._arr); if (r._dep) vals.push(r._dep); if (r._arr && r._dep && r.nights != null) stays.push([r._arr, r._dep, r.nights]); });
+    raw.forEach(function (r) { if (r._arr) vals.push(r._arr); if (r._dep) vals.push(r._dep); if (r._arr && r._dep) stays.push([r._arr, r._dep, r.nights != null ? r.nights : '']); });
     var o = dateOrder(vals, stays) || order || 'dmy';
     return raw.map(function (r) {
       var x = {}; Object.keys(r).forEach(function (k) { if (k.charAt(0) !== '_') x[k] = r[k]; });

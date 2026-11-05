@@ -327,6 +327,9 @@ const HO_THEMES = {
   'study':    { label: 'Study', emoji: '📚', group: 'style', base: 'opera', skin: 'study', bg: '#f7f8fc', a: '#5b5bd6', btn: '#ffffff', font: 'Nunito:wght@500;600;700;800' },
   'notepad':  { label: 'Notepad', emoji: '🗒', group: 'style', base: 'opera', skin: 'notepad', bg: '#f3f3f3', a: '#005fb8', btn: '#ffffff' },
   'found':    { label: 'Found', emoji: '🕷', group: 'style', base: 'night-ops', skin: 'found', bg: '#1129e2', a: '#ffffff', btn: '#1129e2' },
+  'atlas':    { label: 'Myth Atlas', emoji: '📜', group: 'style', base: 'opera', skin: 'atlas', bg: '#ebe1cd', a: '#b4532a', btn: '#ffffff', font: 'Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500' },
+  'atlas-dusk': { label: 'Atlas Dusk', emoji: '🌘', group: 'style', base: 'night-ops', skin: 'atlas-dusk', bg: '#17120d', a: '#e08a4f', btn: '#17120d', font: 'Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500' },
+  'grove':    { label: 'Heritage Grove', emoji: '🌿', group: 'style', base: 'opera', skin: 'grove', bg: '#EAE3DE', a: '#175A67', btn: '#EAE3DE', font: 'Cormorant+Garamond:wght@400;500;600&family=Poppins:wght@300;400;500;600' },
   'stratum':  { label: 'Stratum', emoji: '🏛', group: 'style', base: 'night-ops', skin: 'stratum', bg: '#04070d', a: '#e8d1cb', btn: '#15131b', font: 'Chakra+Petch:wght@600;700&family=Inter:wght@400;500;700' },
   'orbit':    { label: 'Orbit', emoji: '🪐', group: 'style', base: 'night-ops', skin: 'orbit', bg: '#05060a', a: '#9b8cff', btn: '#ffffff' },
   'orvante':  { label: 'Orvante', emoji: '◼️', group: 'style', base: 'opera', skin: 'orvante', bg: '#dadada', a: '#111111', btn: '#111111', font: 'Archivo:wght@400;500;600;700;800;900' },
@@ -560,7 +563,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //  a one-tap way to drop the cache and reload.
 //
 //  Keep in step with CACHE_NAME in sw.js.
-const APP_VERSION = 'v530';
+const APP_VERSION = 'v531';
 
 async function appForceUpdate() {
   if (!confirm('Reload the app and fetch the newest version?')) return;

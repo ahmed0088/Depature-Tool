@@ -232,6 +232,19 @@ function plan(inp) {
   const depRows = arrOnly ? [] : rows.filter(r => realRoom(r.room) && (r.departure === t || (kind === 'departures' && !r.departure && screenToday)) && r.status !== 'due_in');
   const findB = r => B.find(b => roomKey(b.roomStr != null ? b.roomStr : b.room) === roomKey(r.room));
   P.dep.rows = depRows.length;
+  // checked out, then checked in again (a new reservation from today, same guest): staff extend that way too — it is an extension, not a departure.
+  // Same room + same guest, or the exact full name in another room. Looks in this screen's rows and in today's Arrivals list.
+  const plusDays = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+  const againOf = (name, room) => {
+    const full = nameKey(name).split(' ').length >= 2;
+    // stricter than sameGuest: one shared first name (a family member, a common name) is not the same guest
+    const twoWords = (a, b) => { const B = new Set(nameKey(b).split(' ').filter(w => w.length >= 3)); return nameKey(a) === nameKey(b) || nameKey(a).split(' ').filter(w => w.length >= 3 && B.has(w)).length >= 2; };
+    const hit = x => x && x.name && (realRoom(x.room) && roomKey(x.room) === roomKey(room) ? twoWords(x.name, name) : full && nameKey(x.name) === nameKey(name));
+    const o = rows.find(x => x.arrival === t && x.departure > t && x.status !== 'checked_out' && hit(x));
+    if (o) return { nights: dayDiff(t, o.departure), to: o.departure };
+    const a = (inp.arr || []).find(x => !x._noShow && hit(x));
+    return a ? { nights: +a.nights > 0 ? +a.nights : 1, to: plusDays(t, +a.nights > 0 ? +a.nights : 1) } : null;
+  };
   if ((!B.length || (bday && bday < t)) && (kind === 'departures' || kind === 'inhouse') && depRows.length) {
     P.dep.create = depRows.slice();
   } else if (B.length && (!bday || bday === t)) {
@@ -240,7 +253,11 @@ function plan(inp) {
       if (!b) { P.dep.add.push({ row: r, out: r.status === 'checked_out' }); return; }
       P.dep.matched++;
       if (!sameGuest(b.name, r.name)) { P.notes.push(`Room ${b.roomStr}: Opera shows ${r.name || 'another guest'}, the board ${b.name} — not changed`); return; }
-      if (r.status === 'checked_out' && b.status !== 'out' && b.status !== 'extended') P.dep.out.push({ room: b.roomStr, row: r });
+      if (r.status === 'checked_out' && b.status !== 'out' && b.status !== 'extended') {
+        const again = againOf(r.name || b.name, b.roomStr);
+        if (again) P.dep.ext.push({ room: b.roomStr, nights: again.nights, to: again.to, row: r, again: true });
+        else P.dep.out.push({ room: b.roomStr, row: r });
+      }
       const set = {};
       if (r.balance != null && r.balance !== b.balance) set.balance = r.balance;
       if (r.nights && r.nights !== b.nights) set.nights = r.nights;
@@ -258,6 +275,12 @@ function plan(inp) {
       if (!b || !sameGuest(b.name, r.name) || !['due', 'late', 'na', 'dnd'].includes(b.status)) return;
       if (P.dep.ext.some(e => e.room === b.roomStr)) return;
       P.dep.ext.push({ room: b.roomStr, nights: dayDiff(t, r.departure), to: r.departure, row: r });
+    });
+    // already marked checked out here, and now Opera (or Arrivals) shows the same guest checked in again from today → extended
+    if (!arrOnly) B.forEach(b => {
+      if (b.status !== 'out' || !b.name || P.dep.ext.some(e => e.room === b.roomStr)) return;
+      const again = againOf(b.name, b.roomStr);
+      if (again) P.dep.ext.push({ room: b.roomStr, nights: again.nights, to: again.to, again: true });
     });
   } else if (B.length && bday > t && depRows.length) P.notes.push('the Departures board is for a later day — not changed');
 
@@ -1177,12 +1200,12 @@ function apply0(snap, how, P0) {
     safe(() => quiet(() => depAction(i, 'out')));
     depTouched = true;
   });
-  P.dep.ext.forEach(({ room, nights, to }) => {
+  P.dep.ext.forEach(({ room, nights, to, again }) => {
     const i = depRooms.findIndex(x => roomKey(x.roomStr) === roomKey(room)); if (i < 0) return;
     const r = depRooms[i];
     safe(() => quiet(() => depAction(i, 'extended', nights)));
     r.extConfirmed = true;   // already done in Opera: nothing left to put in Opera
-    r.note = (r.note ? r.note + '\n' : '') + `[${at}] Extended in Opera${to ? ' to ' + to : ''} (${pl(nights, 'night')})`;
+    r.note = (r.note ? r.note + '\n' : '') + `[${at}] ${again ? 'Checked out and checked in again in Opera → extended' : 'Extended in Opera'}${to ? ' to ' + to : ''} (${pl(nights, 'night')})`;
     safe(() => { if (typeof depSyncExtToLog === 'function') depSyncExtToLog(i); });
     depTouched = true;
   });

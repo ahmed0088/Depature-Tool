@@ -423,7 +423,7 @@ const CSS = `
 #panel-${PANEL} .nx-steps{list-style:none;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 14px;padding:0}
 #panel-${PANEL} .nx-steps li{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--text3);font-size:.84rem;font-weight:600}
 #panel-${PANEL} .nx-steps b{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--bg2);border:1px solid var(--border2);font-size:.8rem;flex:none}
-#panel-${PANEL} .nx-steps li.now{color:var(--text);border-color:color-mix(in srgb,var(--accent) 55%,var(--border))}#panel-${PANEL} .nx-steps li.now b{background:var(--accent);color:#111;border-color:var(--accent)}
+#panel-${PANEL} .nx-steps li.now{color:var(--text);border-color:color-mix(in srgb,var(--accent) 55%,var(--border))}#panel-${PANEL} .nx-steps li.now b{background:var(--accent);color:var(--on-accent,#111);border-color:var(--accent)}
 #panel-${PANEL} .nx-steps li.done b{background:var(--green,#16a34a);color:#fff;border-color:transparent;font-size:0}#panel-${PANEL} .nx-steps li.done b::after{content:'✓';font-size:.85rem}
 #panel-${PANEL} .nx-drop{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:18px;border:2px dashed var(--border2);border-radius:14px;background:var(--bg2)}#panel-${PANEL} .nx-drop.over{border-color:var(--accent)}
 #panel-${PANEL} .nx-drop-t{flex:1 1 220px;display:flex;flex-direction:column;gap:2px}#panel-${PANEL} .nx-drop-t span{color:var(--text3);font-size:.8rem}

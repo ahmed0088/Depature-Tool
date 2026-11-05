@@ -3508,6 +3508,18 @@ console.log('\nOpera reader');
     { room: '0107', name: 'Somebody, Else', departure: T, status: 'checked_out' },
   ] };
   const P = O.plan({ snap: dep, today: T, board, arr: [], pur: [], ih: null });
+  { const re = { kind: 'departures', date: T, rows: [
+      { room: '0102', name: 'Sample, Bravo', departure: T, status: 'checked_out' },
+      { room: '0102', name: 'Sample, Bravo', arrival: T, departure: '2026-10-31', status: 'in_house' },
+      { room: '0101', name: 'Testperson, Alpha', departure: T, status: 'checked_out' } ] };
+    const A = O.plan({ snap: re, today: T, board, arr: [{ room: '0101', name: 'Zed Testperson', nights: 2 }], pur: [], ih: null });
+    const B2 = O.plan({ snap: { kind: 'arrivals', date: T, rows: [{ room: '0105', name: 'Echo Fake', arrival: T, departure: '2026-10-30', status: 'due_in' }] }, today: T, board, arr: [], pur: [], ih: null });
+    const C = O.plan({ snap: re, today: T, board, arr: [{ room: '0101', name: 'Alpha Testperson', nights: 2 }], pur: [], ih: null });
+    check('bridge: checked out then checked in again today (same room, same guest) is an extension, not a departure; one shared word is not the same guest; already-out flips to extended',
+      [A.dep.ext.map(e => e.room + ' +' + e.nights + (e.again ? ' again' : '')), A.dep.out.map(o => o.room), C.dep.ext.map(e => e.room + ' +' + e.nights + ' → ' + e.to), B2.dep.ext.map(e => e.room + ' +' + e.nights)],
+      [['0102 +3 again'], ['0101'], ['0102 +3 → 2026-10-31', '0101 +2 → 2026-10-30'], ['0105 +2']]); }
+  check('reader: "Rooms" (how many rooms) is never the room number; a stay with no nights is read the way that gives a sane stay (03-11 → 07-11 is 4 nights, not 122)',
+    [R.fieldOf('Rooms'), R.fieldOf('Room'), R.dateOrder(['03-11-2026', '07-11-2026'], [['03-11-2026', '07-11-2026', '']]), R.dateOrder(['11-03-2026', '11-07-2026'], [['11-03-2026', '11-07-2026', '']])], ['', 'room', 'dmy', 'mdy']);
   check('bridge departures: checked out in Opera → out; already out not again; another guest in the room not touched; cancelled ignored',
     [P.dep.out.map(o => o.room), P.dep.add.map(a => a.row.room + (a.out ? ' out' : '')), P.dep.ext.map(e => e.room + ' +' + e.nights + ' → ' + e.to), J(P.dep.fill), P.notes.length, P.dep.create],
     [['0102'], ['0103 out'], ['0104 +2 → 2026-10-30'], [{ room: '0101', set: { balance: 120, rateCode: 'BAR', isVip: true } }], 2, null]);
@@ -4357,6 +4369,11 @@ const haAsync = (async () => {
        /html\[data-skin="stratum"\] :focus-visible/.test(tpS) && /html\[data-skin="stratum"\] body::after \{[^}]*pointer-events: none/.test(tpS),
        /prefers-reduced-motion: reduce/.test(sfx) && /pointerType === 'touch'/.test(sfx) && /node\.nodeValue = b\.text/.test(sfx) && /setTimeout\(\(\) => settle\(el\), DUR \+ 500\)/.test(sfx),
        /'\.\/stratum-fx\.js'/.test(fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8'))], [true, true, true, true, true]); }
+  { const lgS = fs.readFileSync(path.join(ROOT, 'login.css'), 'utf8');
+    check('Myth Atlas, Atlas Dusk, Heritage Grove: registered, applied before paint, own focus ring; the sign-in page follows every style (corners, title font, no glow on flat ones)',
+      [['atlas', 'atlas-dusk', 'grove'].every(t => new RegExp("'" + t + "':\\s*\\{[^}]*skin: '" + t + "'").test(thS)), /'atlas': 'opera', 'atlas-dusk': 'night-ops', 'grove': 'opera'/.test(ixS) && /atlas: 1, 'atlas-dusk': 1, grove: 1/.test(ixS),
+       /html\[data-skin\^="atlas"\] :focus-visible/.test(tpS) && /html\[data-skin="grove"\] :focus-visible/.test(tpS),
+       /html\[data-skin\] #loginScreen \.login-card \{ border-radius: var\(--r3/.test(lgS) && /html\[data-skin\] #loginScreen \.lg-sky \{ display: var\(--sk-sky/.test(lgS) && /--sk-sky: none/.test(tpS)], [true, true, true, true]); }
   check('Found/Redline: the phone More drawer is solid (a see-through drawer let the home page bleed through)',
     [/html\[data-skin="found"\] \.mob-more-drawer \{ background: #0e22b8/.test(tpS), /html\[data-skin="redline"\] \.mob-more-drawer \{ background: #2e0f05/.test(tpS)], [true, true]);
   { const fw = fs.readFileSync(path.join(ROOT, 'found-web.js'), 'utf8');

@@ -9,6 +9,13 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 531, items: [
+    "📜 New themes — Myth Atlas (warm museum paper, hairline rules, a terracotta accent, cards framed like a specimen plate), Atlas Dusk (the same at night) and 🌿 Heritage Grove (cream paper, one teal ink, a hand-drawn ink landscape of hills, a lake, pines and two cranes along the bottom). Pick them in the theme menu.",
+    "🔐 The sign-in page now matches every style: its corners, title font and labels follow the theme you chose, and the flat styles drop the glow.",
+    "🎨 Checked every page on PC and phone in every style: no page runs off the side, and words that were too faint (top bar on light styles, checklist chips, step numbers, a few buttons) are readable now.",
+    "↪ Extensions: when a guest is checked out and checked in again (a new booking from today, same guest, same room), HotelOps marks it extended — not checked out. It also catches it after the room was already marked out.",
+    "📡 Opera reader: a reservation like 03-11 → 07-11 is read as 4 nights (it was read the American way as March → July), and \"Rooms: 1\" on a reservation is no longer taken as room 1.",
+  ] },
   { v: 530, items: [
     "🏛 New theme — Stratum: a calm night-navy look with a thin architectural frame around the screen, bold uppercase titles, square glass buttons with cut corners and one cream button for the main action. Pick it from the theme menu.",
     "✨ In Stratum, on a computer, hovering a menu item or button makes its label \"decode\" from random letters into the real word in under half a second. It never runs on phones or if your device asks for less motion, and the text always ends on the real label.",

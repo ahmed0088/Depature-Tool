@@ -634,3 +634,183 @@ html[data-skin="stratum"] .mob-more-item, html[data-skin="stratum"] .mob-util-bt
 html[data-skin="stratum"] .gp-accor-modal-card, html[data-skin="stratum"] .nxr-card, html[data-skin="stratum"] .ho-theme-pop, html[data-skin="stratum"] .ro-name-menu { background: #070b14 !important; border-color: rgba(255,255,255,.18) !important; border-radius: 0 !important; }
 @media (max-width: 760px) { html[data-skin="stratum"] body::after { inset: 6px; } }
 @media (prefers-reduced-motion: reduce) { html[data-skin="stratum"] * { transition: none !important; } }
+
+/* ═════════ 📜 Myth Atlas — a natural-history museum plate on warm sandstone paper: hairline rules, 3px corners,
+   Fraunces headings, Instrument Sans text, JetBrains Mono labels, one terracotta accent. "Atlas Dusk" is the sun button's dusk. ═════════ */
+html[data-skin="atlas"] {
+  --ma-bg: #ebe1cd; --ma-panel: #f8f2e6; --ma-line: #d6c9ae; --ma-ink: #241c14; --ma-muted: #7a6b58; --ma-accent: #b4532a; --ma-on: #ffffff; --ma-tint: #f3dfcd; --ma-chip: #e4d8c2; --ma-shadow: 70,48,24;
+  color-scheme: light; }
+html[data-skin="atlas-dusk"] {
+  --ma-bg: #17120d; --ma-panel: #211a13; --ma-line: #3d3225; --ma-ink: #f1e7d6; --ma-muted: #a89880; --ma-accent: #e08a4f; --ma-on: #17120d; --ma-tint: #3b2415; --ma-chip: #2d251b; --ma-shadow: 0,0,0;
+  color-scheme: dark; }
+html[data-skin="atlas"], html[data-skin="atlas-dusk"] {
+  --font: 'Instrument Sans', 'Segoe UI', system-ui, sans-serif;
+  --rl-label: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  --ma-serif: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  --bg: var(--ma-bg) !important; --bg2: var(--ma-panel) !important; --surface: var(--ma-panel) !important; --card: var(--ma-panel) !important; --card2: var(--ma-chip) !important; --input-bg: var(--ma-panel);
+  --border: var(--ma-line) !important; --border2: var(--ma-line) !important; --border3: var(--ma-muted) !important;
+  --text: var(--ma-ink) !important; --text2: var(--ma-muted) !important; --text3: var(--ma-muted) !important;
+  --accent: var(--ma-accent) !important; --accent2: var(--ma-accent) !important; --accent-bg: var(--ma-tint) !important; --accent-border: var(--ma-accent) !important; --on-accent: var(--ma-on);
+  --topbar-bg: var(--ma-bg) !important; --topbar-border: var(--ma-line) !important;
+  --r: 3px !important; --r2: 3px !important; --r3: 3px !important;
+  --ho-a1: var(--ma-accent); --ho-a2: var(--ma-accent); --ho-ink: var(--ma-on); }
+html[data-skin="atlas"] body, html[data-skin="atlas-dusk"] body { background: var(--ma-bg) !important; color: var(--ma-ink); -webkit-font-smoothing: antialiased; transition: background-color .6s cubic-bezier(.22,.8,.24,1); }
+html[data-skin^="atlas"] main, html[data-skin^="atlas"] #main, html[data-skin^="atlas"] .main { background: transparent !important; }
+html[data-skin^="atlas"] .topbar { background: var(--ma-bg) !important; border-bottom: 1px solid var(--ma-line) !important; box-shadow: none !important; }
+html[data-skin^="atlas"] .sidenav { background: var(--ma-bg) !important; border-right: 1px solid var(--ma-line) !important; }
+/* headings: a light serif, tight, like a plate's title */
+html[data-skin^="atlas"] .page-hd h1, html[data-skin^="atlas"] .panel h1, html[data-skin^="atlas"] .home-big, html[data-skin^="atlas"] h2.card-title, html[data-skin^="atlas"] .modal h2, html[data-skin^="atlas"] .home-tile-title {
+  font-family: var(--ma-serif) !important; font-weight: 300 !important; letter-spacing: -.025em !important; font-variation-settings: "opsz" 96; text-transform: none !important; }
+html[data-skin^="atlas"] .kpi-val { font-family: var(--ma-serif) !important; font-weight: 400 !important; letter-spacing: -.02em !important; }
+html[data-skin^="atlas"] .page-hd p, html[data-skin^="atlas"] .page-hd-left p { color: var(--ma-muted) !important; }
+/* labels: small mono capitals, like a specimen number */
+html[data-skin^="atlas"] .nav-section-label, html[data-skin^="atlas"] th, html[data-skin^="atlas"] .eyebrow, html[data-skin^="atlas"] .kpi-label {
+  font-family: var(--rl-label) !important; font-size: 10px !important; letter-spacing: .18em !important; text-transform: uppercase; color: var(--ma-muted) !important; font-weight: 500 !important; }
+html[data-skin^="atlas"] .nav-item { border-radius: 3px !important; color: var(--ma-ink) !important; box-shadow: inset 2px 0 0 transparent; font-size: 14px; }
+html[data-skin^="atlas"] .nav-item:hover { background: var(--ma-chip) !important; }
+html[data-skin^="atlas"] .nav-item.active { background: var(--ma-tint) !important; box-shadow: inset 2px 0 0 var(--ma-accent) !important; color: var(--ma-ink) !important; }
+html[data-skin^="atlas"] .nav-item.active::before { display: none !important; }
+html[data-skin^="atlas"] .nav-badge { font-family: var(--rl-label) !important; font-size: 10px !important; background: var(--ma-chip) !important; color: var(--ma-muted) !important; border: 0 !important; border-radius: 2px !important; }
+html[data-skin^="atlas"] .nav-item.active .nav-badge { background: var(--ma-accent) !important; color: var(--ma-on) !important; }
+/* cards: a plate with a double rule (the museum mount) */
+html[data-skin^="atlas"] .card, html[data-skin^="atlas"] .home-tile, html[data-skin^="atlas"] .kpi {
+  background: var(--ma-panel) !important; border: 1px solid var(--ma-line) !important; border-radius: 3px !important;
+  box-shadow: inset 0 0 0 4px var(--ma-panel), inset 0 0 0 5px var(--ma-line) !important; }
+html[data-skin^="atlas"] .home-tile { transition: transform .35s cubic-bezier(.22,.8,.24,1), border-color .25s; }
+html[data-skin^="atlas"] .home-tile:hover { transform: translateY(-2px); border-color: var(--ma-muted) !important; }
+/* buttons: paper with a hairline; the main action is the terracotta one */
+html[data-skin^="atlas"] .btn { border-radius: 3px !important; background: var(--ma-panel) !important; color: var(--ma-ink) !important; border: 1px solid var(--ma-line) !important; box-shadow: none !important; font-weight: 500; transition: border-color .2s, transform .15s; }
+html[data-skin^="atlas"] .btn:hover { border-color: var(--ma-accent) !important; }
+html[data-skin^="atlas"] .btn:active { transform: scale(.97); }
+html[data-skin^="atlas"] .btn.gold, html[data-skin^="atlas"] .btn.primary { background: var(--ma-accent) !important; color: var(--ma-on) !important; border-color: var(--ma-accent) !important; }
+html[data-skin^="atlas"] .btn[disabled] { opacity: .5; }
+html[data-skin^="atlas"] input[type=text], html[data-skin^="atlas"] input[type=search], html[data-skin^="atlas"] input[type=email], html[data-skin^="atlas"] input[type=url], html[data-skin^="atlas"] input[type=number],
+html[data-skin^="atlas"] input[type=date], html[data-skin^="atlas"] input[type=time], html[data-skin^="atlas"] input[type=tel], html[data-skin^="atlas"] input:not([type]), html[data-skin^="atlas"] select, html[data-skin^="atlas"] textarea {
+  background: var(--ma-panel) !important; color: var(--ma-ink) !important; border: 1px solid var(--ma-line) !important; border-radius: 3px !important; box-shadow: none !important; }
+html[data-skin^="atlas"] input:focus, html[data-skin^="atlas"] select:focus, html[data-skin^="atlas"] textarea:focus { border-color: var(--ma-accent) !important; }
+html[data-skin^="atlas"] :focus-visible { outline: 2px solid var(--ma-accent) !important; outline-offset: 2px !important; border-radius: 3px; }
+html[data-skin^="atlas"] table th, html[data-skin^="atlas"] thead th { background: var(--ma-bg) !important; border-bottom: 1px solid var(--ma-line) !important; }
+html[data-skin^="atlas"] td { border-color: var(--ma-line) !important; }
+/* chips: specimen tabs — a bar slides in along the bottom of the chosen one */
+html[data-skin^="atlas"] .fchip { border-radius: 3px !important; background: var(--ma-panel) !important; border: 1px solid var(--ma-line) !important; color: var(--ma-ink) !important; position: relative; }
+html[data-skin^="atlas"] .fchip.on, html[data-skin^="atlas"] .hs-seg button.on { background: var(--ma-panel) !important; color: var(--ma-ink) !important; border-color: var(--ma-ink) !important; box-shadow: inset 0 -2px 0 var(--ma-accent) !important; }
+html[data-skin^="atlas"] #mobNav.mob-nav { background: var(--ma-panel) !important; border: 1px solid var(--ma-line) !important; border-radius: 3px !important; box-shadow: 0 10px 30px -14px rgba(var(--ma-shadow),.4) !important; }
+html[data-skin^="atlas"] .mob-nav-btn.active .mob-nav-icon, html[data-skin^="atlas"] .mob-nav-btn.active .mob-nav-lbl { color: var(--ma-accent) !important; }
+html[data-skin^="atlas"] .mob-more-overlay { background: rgba(var(--ma-shadow),.35) !important; }
+html[data-skin^="atlas"] .mob-more-drawer, html[data-skin^="atlas"] .gp-accor-modal-card, html[data-skin^="atlas"] .nxr-card, html[data-skin^="atlas"] .ho-theme-pop, html[data-skin^="atlas"] .ro-name-menu {
+  background: var(--ma-panel) !important; color: var(--ma-ink) !important; border-color: var(--ma-line) !important; border-radius: 3px !important; }
+html[data-skin^="atlas"] .mob-more-item, html[data-skin^="atlas"] .mob-util-btn { background: var(--ma-bg) !important; border-radius: 3px !important; box-shadow: inset 0 0 0 1px var(--ma-line) !important; }
+html[data-skin^="atlas"] ::selection { background: var(--ma-tint); color: var(--ma-ink); }
+/* sign-in: the same plate */
+html[data-skin^="atlas"] #loginScreen { --lg-card: var(--ma-panel); --lg-card-edge: var(--ma-line); --lg-field: var(--ma-panel); --lg-field-edge: var(--ma-line); --lg-glow: 0; --lg-grid: transparent; --lg-grid-hi: transparent; --lg-page: var(--ma-bg); }
+html[data-skin^="atlas"] #loginScreen .login-card { border-radius: 3px !important; box-shadow: inset 0 0 0 4px var(--ma-panel), inset 0 0 0 5px var(--ma-line), 0 30px 60px -40px rgba(var(--ma-shadow),.5) !important; backdrop-filter: none; -webkit-backdrop-filter: none; }
+html[data-skin^="atlas"] #loginScreen .lg-title, html[data-skin^="atlas"] #loginScreen .lg-hero h1 { font-family: var(--ma-serif) !important; font-weight: 300 !important; letter-spacing: -.03em !important; }
+html[data-skin^="atlas"] #loginScreen .login-label { font-family: var(--rl-label) !important; font-size: 10px !important; letter-spacing: .18em !important; text-transform: uppercase !important; color: var(--ma-muted) !important; }
+html[data-skin^="atlas"] #loginScreen .login-input, html[data-skin^="atlas"] #loginScreen .lg-input-wrap { border-radius: 3px !important; }
+html[data-skin^="atlas"] #loginScreen .login-btn { border-radius: 3px !important; background: var(--ma-accent) !important; color: var(--ma-on) !important; box-shadow: none !important; }
+@media (prefers-reduced-motion: reduce) { html[data-skin^="atlas"] * { transition: none !important; } }
+
+/* ═════════ 🌿 Heritage Grove — cream paper, one teal ink for every word, line and button, a hand-drawn ink landscape
+   (misty hills, a still lake, pines on both edges, two cranes) along the bottom of the screen, Cormorant Garamond titles. ═════════ */
+html[data-skin="grove"] {
+  --font: 'Poppins', 'Helvetica Neue', Arial, sans-serif;
+  --rl-label: 'Poppins', 'Helvetica Neue', Arial, sans-serif;
+  --hg-ink: #175A67; --hg-ink2: #0F454F; --hg-soft: #2A707C; --hg-cream: #EAE3DE; --hg-serif: 'Cormorant Garamond', Georgia, serif;
+  --bg: #EAE3DE !important; --bg2: #f1ece8 !important; --surface: #f1ece8 !important; --card: rgba(255,255,255,.42) !important; --card2: rgba(255,255,255,.6) !important; --input-bg: rgba(255,255,255,.4);
+  --border: rgba(23,90,103,.22) !important; --border2: rgba(23,90,103,.34) !important; --border3: rgba(23,90,103,.5) !important;
+  --text: #175A67 !important; --text2: rgba(23,90,103,.78) !important; --text3: rgba(42,112,124,.7) !important;
+  --accent: #175A67 !important; --accent2: #2A707C !important; --accent-bg: rgba(23,90,103,.08) !important; --accent-border: rgba(23,90,103,.45) !important; --on-accent: #EAE3DE;
+  --topbar-bg: rgba(234,227,222,.86) !important; --topbar-border: rgba(23,90,103,.2) !important;
+  --r: 0px !important; --r2: 2px !important; --r3: 4px !important;
+  --ho-a1: #175A67; --ho-a2: #2A707C; --ho-ink: #EAE3DE;
+  color-scheme: light; }
+html[data-skin="grove"] body { color: #175A67; -webkit-font-smoothing: antialiased;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 420' preserveAspectRatio='xMidYMax slice'%3E%3Cg fill='%23175A67'%3E%3Cpath opacity='.09' d='M0 250 120 190 230 230 360 150 470 205 590 120 720 200 840 140 980 215 1100 130 1230 210 1350 160 1470 220 1600 175V420H0z'/%3E%3Cpath opacity='.14' d='M0 300 140 245 260 280 400 215 520 268 660 225 800 285 930 240 1060 290 1200 230 1340 280 1480 245 1600 275V420H0z'/%3E%3Cpath opacity='.05' d='M0 330h1600v90H0z'/%3E%3Cpath opacity='.42' d='M0 420V250l30-6 22 18 26-30 30 22 34-8 30 30 26 10 40 50 50 34 40 50z'/%3E%3Cpath opacity='.42' d='M1600 420V240l-34-4-24 20-30-26-30 24-36-6-28 34-30 12-36 48-46 30-40 48z'/%3E%3Cpath opacity='.5' d='M38 262 52 214 66 262zM70 248 88 186 106 248zM112 270 128 222 144 270zM1494 256 1512 196 1530 256zM1540 246 1556 200 1572 246zM1456 280 1470 236 1484 280z'/%3E%3C/g%3E%3Cg fill='none' stroke='%23175A67' stroke-linecap='round' opacity='.55'%3E%3Cpath stroke-width='2.2' d='M700 92q22-14 40 2 18-16 42-6'/%3E%3Cpath stroke-width='1.8' d='M800 128q16-10 30 2 13-12 32-4'/%3E%3Cpath stroke-width='1' opacity='.5' d='M380 352h220M900 362h300M560 378h160M1080 384h120'/%3E%3C/g%3E%3C/svg%3E") center bottom / 100% auto no-repeat fixed, #EAE3DE !important; }
+@media (max-width: 760px) { html[data-skin="grove"] body { background-size: 180% auto, auto !important; } }
+html[data-skin="grove"] main, html[data-skin="grove"] #main, html[data-skin="grove"] .main { background: transparent !important; }
+html[data-skin="grove"] .topbar { background: rgba(234,227,222,.86) !important; border-bottom: 1px solid rgba(23,90,103,.2) !important; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); box-shadow: none !important; }
+html[data-skin="grove"] .sidenav { background: rgba(234,227,222,.7) !important; border-right: 1px solid rgba(23,90,103,.18) !important; }
+html[data-skin="grove"] .page-hd h1, html[data-skin="grove"] .panel h1, html[data-skin="grove"] .home-big, html[data-skin="grove"] .modal h2, html[data-skin="grove"] .home-tile-title {
+  font-family: var(--hg-serif) !important; font-weight: 500 !important; letter-spacing: 0 !important; text-transform: none !important; }
+html[data-skin="grove"] .page-hd h1, html[data-skin="grove"] .home-big { font-size: clamp(1.9rem, 2.6vw, 2.9rem) !important; line-height: 1.05 !important; }
+html[data-skin="grove"] .kpi-val { font-family: var(--hg-serif) !important; font-weight: 600 !important; }
+/* titles of lists: Poppins 600 capitals with a little air, like the footer's column titles */
+html[data-skin="grove"] .nav-section-label, html[data-skin="grove"] th, html[data-skin="grove"] .kpi-label { font-weight: 600 !important; letter-spacing: .055em !important; text-transform: uppercase; color: #175A67 !important; }
+html[data-skin="grove"] .nav-item { border-radius: 0 !important; color: #175A67 !important; transition: opacity .2s ease, transform .2s ease; }
+html[data-skin="grove"] .nav-item:hover { background: transparent !important; opacity: .62; transform: translateX(2px); }
+html[data-skin="grove"] .nav-item.active { background: rgba(23,90,103,.08) !important; color: #175A67 !important; font-weight: 600; }
+html[data-skin="grove"] .nav-item.active::before { background: #175A67 !important; box-shadow: none !important; }
+html[data-skin="grove"] .nav-badge { background: transparent !important; color: #175A67 !important; border: 1px solid rgba(23,90,103,.4) !important; border-radius: 0 !important; }
+html[data-skin="grove"] .nav-item.active .nav-badge { background: #175A67 !important; color: #EAE3DE !important; }
+html[data-skin="grove"] .card, html[data-skin="grove"] .home-tile, html[data-skin="grove"] .kpi {
+  background: rgba(255,255,255,.42) !important; border: 1px solid rgba(23,90,103,.22) !important; border-radius: 0 !important; box-shadow: none !important; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+html[data-skin="grove"] .home-tile:hover { border-color: #175A67 !important; }
+html[data-skin="grove"] .btn { border-radius: 0 !important; background: rgba(255,255,255,.4) !important; color: #175A67 !important; border: 1px solid #175A67 !important; box-shadow: none !important; transition: background .2s ease, color .2s ease; }
+html[data-skin="grove"] .btn:hover { background: rgba(23,90,103,.08) !important; }
+html[data-skin="grove"] .btn.gold, html[data-skin="grove"] .btn.primary { background: #175A67 !important; color: #EAE3DE !important; }
+html[data-skin="grove"] .btn.gold:hover, html[data-skin="grove"] .btn.primary:hover { background: #0F454F !important; }
+html[data-skin="grove"] .btn[disabled] { opacity: .5; }
+html[data-skin="grove"] input[type=text], html[data-skin="grove"] input[type=search], html[data-skin="grove"] input[type=email], html[data-skin="grove"] input[type=url], html[data-skin="grove"] input[type=number],
+html[data-skin="grove"] input[type=date], html[data-skin="grove"] input[type=time], html[data-skin="grove"] input[type=tel], html[data-skin="grove"] input:not([type]), html[data-skin="grove"] select, html[data-skin="grove"] textarea {
+  background: rgba(255,255,255,.4) !important; color: #175A67 !important; border: 1px solid #175A67 !important; border-radius: 0 !important; box-shadow: none !important; }
+html[data-skin="grove"] input::placeholder, html[data-skin="grove"] textarea::placeholder { color: #2A707C !important; opacity: .85; }
+html[data-skin="grove"] input:focus-visible, html[data-skin="grove"] textarea:focus-visible, html[data-skin="grove"] select:focus-visible { box-shadow: inset 0 0 0 2px rgba(23,90,103,.25) !important; }
+html[data-skin="grove"] :focus-visible { outline: 2px solid #175A67 !important; outline-offset: 2px !important; }
+html[data-skin="grove"] table th, html[data-skin="grove"] thead th { background: rgba(234,227,222,.9) !important; border-bottom: 1px solid rgba(23,90,103,.3) !important; }
+html[data-skin="grove"] .fchip { border-radius: 0 !important; background: rgba(255,255,255,.4) !important; border: 1px solid rgba(23,90,103,.35) !important; color: #175A67 !important; }
+html[data-skin="grove"] .fchip.on, html[data-skin="grove"] .hs-seg button.on { background: #175A67 !important; color: #EAE3DE !important; border-color: #175A67 !important; }
+html[data-skin="grove"] #mobNav.mob-nav { background: rgba(234,227,222,.94) !important; border: 1px solid rgba(23,90,103,.3) !important; border-radius: 0 !important; }
+html[data-skin="grove"] .mob-nav-btn.active .mob-nav-icon, html[data-skin="grove"] .mob-nav-btn.active .mob-nav-lbl { color: #175A67 !important; font-weight: 600; }
+html[data-skin="grove"] .mob-more-overlay { background: rgba(15,69,79,.3) !important; }
+html[data-skin="grove"] .mob-more-drawer, html[data-skin="grove"] .gp-accor-modal-card, html[data-skin="grove"] .nxr-card, html[data-skin="grove"] .ho-theme-pop, html[data-skin="grove"] .ro-name-menu {
+  background: #EAE3DE !important; color: #175A67 !important; border-color: rgba(23,90,103,.3) !important; border-radius: 0 !important; }
+html[data-skin="grove"] .mob-more-item, html[data-skin="grove"] .mob-util-btn { background: rgba(255,255,255,.4) !important; border-radius: 0 !important; box-shadow: inset 0 0 0 1px rgba(23,90,103,.25) !important; }
+/* sign-in: the landscape under a cream card, teal ink everywhere */
+html[data-skin="grove"] #loginScreen { --lg-card: rgba(234,227,222,.78); --lg-card-edge: rgba(23,90,103,.3); --lg-field: rgba(255,255,255,.45); --lg-field-edge: #175A67; --lg-glow: 0; --lg-grid: transparent; --lg-grid-hi: transparent;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 420' preserveAspectRatio='xMidYMax slice'%3E%3Cg fill='%23175A67'%3E%3Cpath opacity='.09' d='M0 250 120 190 230 230 360 150 470 205 590 120 720 200 840 140 980 215 1100 130 1230 210 1350 160 1470 220 1600 175V420H0z'/%3E%3Cpath opacity='.14' d='M0 300 140 245 260 280 400 215 520 268 660 225 800 285 930 240 1060 290 1200 230 1340 280 1480 245 1600 275V420H0z'/%3E%3Cpath opacity='.05' d='M0 330h1600v90H0z'/%3E%3Cpath opacity='.42' d='M0 420V250l30-6 22 18 26-30 30 22 34-8 30 30 26 10 40 50 50 34 40 50z'/%3E%3Cpath opacity='.42' d='M1600 420V240l-34-4-24 20-30-26-30 24-36-6-28 34-30 12-36 48-46 30-40 48z'/%3E%3Cpath opacity='.5' d='M38 262 52 214 66 262zM70 248 88 186 106 248zM112 270 128 222 144 270zM1494 256 1512 196 1530 256zM1540 246 1556 200 1572 246zM1456 280 1470 236 1484 280z'/%3E%3C/g%3E%3Cg fill='none' stroke='%23175A67' stroke-linecap='round' opacity='.55'%3E%3Cpath stroke-width='2.2' d='M700 92q22-14 40 2 18-16 42-6'/%3E%3Cpath stroke-width='1.8' d='M800 128q16-10 30 2 13-12 32-4'/%3E%3Cpath stroke-width='1' opacity='.5' d='M380 352h220M900 362h300M560 378h160M1080 384h120'/%3E%3C/g%3E%3C/svg%3E") center bottom / 100% auto no-repeat, #EAE3DE !important; }
+@media (max-width: 760px) { html[data-skin="grove"] #loginScreen { background-size: 200% auto, auto !important; } }
+html[data-skin="grove"] #loginScreen .login-card { border-radius: 0 !important; box-shadow: none !important; }
+html[data-skin="grove"] #loginScreen .lg-title, html[data-skin="grove"] #loginScreen .lg-hero h1 { font-family: var(--hg-serif) !important; font-weight: 500 !important; letter-spacing: 0 !important; }
+html[data-skin="grove"] #loginScreen .login-label { font-weight: 600 !important; letter-spacing: .055em !important; text-transform: uppercase !important; font-size: 11px !important; }
+html[data-skin="grove"] #loginScreen .login-input, html[data-skin="grove"] #loginScreen .lg-input-wrap { border-radius: 0 !important; }
+html[data-skin="grove"] #loginScreen .login-btn { border-radius: 0 !important; background: #175A67 !important; color: #EAE3DE !important; box-shadow: none !important; }
+html[data-skin="grove"] #loginScreen .login-btn:hover { background: #0F454F !important; }
+@media (prefers-reduced-motion: reduce) { html[data-skin="grove"] * { transition: none !important; } }
+
+/* sign-in per style (login.css reads these): title font / case / weight, and the flat styles have no glow behind the card */
+html[data-skin="gaming"] { --sk-title-font: 'Orbitron', 'Rajdhani', sans-serif; --sk-title-case: uppercase; }
+html[data-skin="classic"] { --sk-sky: none; --sk-title-w: 600; }
+html[data-skin="notepad"] { --sk-sky: none; --sk-title-font: 'Segoe UI Variable Display', 'Segoe UI', sans-serif; --sk-title-w: 600; }
+html[data-skin="orvante"] { --sk-sky: none; --sk-title-font: 'Archivo', var(--font); --sk-title-case: uppercase; --sk-title-w: 800; }
+html[data-skin="stratum"] { --sk-sky: none; --sk-title-case: uppercase; }
+html[data-skin="notes"], html[data-skin="pro"] { --sk-sky: none; }
+html[data-skin="redline"], html[data-skin="found"] { --sk-title-case: uppercase; --sk-title-w: 800; }
+html[data-skin^="atlas"] { --sk-sky: none; --sk-title-font: var(--ma-serif); --sk-title-w: 300; }
+html[data-skin="grove"] { --sk-sky: none; --sk-title-font: var(--hg-serif); --sk-title-w: 500; }
+
+/* Myth Atlas / Heritage Grove sit on the Opera base, whose top bar is red with white words: theirs is paper, so the words are ink */
+html[data-skin^="atlas"] .topbar, html[data-skin="grove"] .topbar { color: var(--text) !important; }
+html[data-skin^="atlas"] .topbar .logo-name, html[data-skin^="atlas"] .topbar .logo-sub, html[data-skin^="atlas"] .topbar .logo-name span, html[data-skin^="atlas"] .ho-search, html[data-skin^="atlas"] .topbar .tb-pill, html[data-skin^="atlas"] .topbar #appVersionPill, html[data-skin^="atlas"] .topbar #fbLabel,
+html[data-skin^="atlas"] .topbar .icon-round, html[data-skin^="atlas"] .topbar .auth-user-pill, html[data-skin^="atlas"] .topbar .auth-user-pill span, html[data-skin^="atlas"] .topbar .auth-user-pill button, html[data-skin^="atlas"] #topbarTime, html[data-skin^="atlas"] .topbar-center,
+html[data-skin="grove"] .topbar .logo-name, html[data-skin="grove"] .topbar .logo-sub, html[data-skin="grove"] .topbar .logo-name span, html[data-skin="grove"] .ho-search, html[data-skin="grove"] .topbar .tb-pill, html[data-skin="grove"] .topbar #appVersionPill, html[data-skin="grove"] .topbar #fbLabel,
+html[data-skin="grove"] .topbar .icon-round, html[data-skin="grove"] .topbar .auth-user-pill, html[data-skin="grove"] .topbar .auth-user-pill span, html[data-skin="grove"] .topbar .auth-user-pill button, html[data-skin="grove"] #topbarTime, html[data-skin="grove"] .topbar-center {
+  color: var(--text) !important; border-color: var(--border) !important; }
+html[data-skin^="atlas"] .ho-search, html[data-skin^="atlas"] .topbar .icon-round, html[data-skin^="atlas"] .topbar .tb-pill, html[data-skin^="atlas"] .topbar .auth-user-pill { background: var(--ma-panel) !important; }
+html[data-skin="grove"] .ho-search, html[data-skin="grove"] .topbar .icon-round, html[data-skin="grove"] .topbar .tb-pill, html[data-skin="grove"] .topbar .auth-user-pill { background: rgba(255,255,255,.4) !important; }
+html[data-skin^="atlas"] #homeHi { font-family: var(--ma-serif) !important; font-weight: 300 !important; letter-spacing: -.03em !important; font-variation-settings: "opsz" 144; }
+html[data-skin="grove"] #homeHi { font-family: var(--hg-serif) !important; font-weight: 500 !important; font-size: clamp(2rem, 2.8vw, 3rem) !important; }
+/* faint words the scan found (contrast under 2.2 : 1) */
+html[data-skin="discord"] .dp-step-n { color: #aab1f9 !important; }
+html[data-skin="classic"] .gp-num, html[data-skin="orvante"] .gp-num { color: #fff !important; }
+html[data-skin="found"] .cl-step-btn { color: #fff !important; background: rgba(255,255,255,.14) !important; }
+html[data-skin="whatsapp"] .topbar .auth-user-pill .pill-role, html[data-skin="whatsapp"] .topbar .auth-user-pill button,
+html[data-skin="classic"] .topbar .auth-user-pill .pill-role, html[data-skin="classic"] .topbar .auth-user-pill button { color: rgba(255,255,255,.8) !important; }
+html[data-skin="notes"] .dp-step-n, html[data-skin="notes"] .ho-langs button.on, html[data-skin="notes"] .shift-prog, html[data-skin="notes"] .mob-nav-btn.active .mob-nav-lbl, html[data-skin="notes"] .hs-sec-ic { color: #8a6800 !important; }
+html[data-skin="notes"] .dp-browse, html[data-skin="notes"] .stl-sug-yes { color: #1c1c1e !important; }
+html[data-skin^="atlas"] .topbar .ho-name, html[data-skin="grove"] .topbar .ho-name { color: var(--text) !important; }
+html[data-skin^="atlas"] .topbar .ho-name b, html[data-skin="grove"] .topbar .ho-name b { color: var(--accent) !important; }
+html[data-skin="classic"] .nx-steps li.now b, html[data-skin="orvante"] .nx-steps li.now b { color: #fff !important; }
+html[data-skin="notes"] #loginScreen .lg-word b { color: #a37a00 !important; }
+html[data-skin="notes"] #loginScreen .lg-setup b { color: #8a6800 !important; }
+html[data-skin^="atlas"] .topbar .tb-away:not(.on), html[data-skin^="atlas"] .topbar .tb-away:not(.on) .tba-l, html[data-skin="grove"] .topbar .tb-away:not(.on), html[data-skin="grove"] .topbar .tb-away:not(.on) .tba-l { color: var(--text) !important; border-color: var(--border) !important; }
+html[data-skin="notes"] #mobNav .mob-nav-btn.active .mob-nav-lbl, html[data-skin="notes"] #mobNav .mob-nav-btn.active .mob-nav-icon { color: #8a6800 !important; }

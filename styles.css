@@ -5893,3 +5893,10 @@ select.adm-input { cursor: pointer; }
 .st-auto-yes, .st-auto-no { border: 0; cursor: pointer; border-radius: 99px; font: 700 0.68rem inherit; padding: 3px 9px; }
 .st-auto-yes { background: var(--green, #30d158); color: #fff; }
 .st-auto-no { background: color-mix(in srgb, var(--text3) 18%, transparent); color: var(--text2); padding: 3px 7px; }
+/* light themes: the checklist's sky-blue "due" chip and green percentage were too faint on white (contrast under 2:1) */
+[data-theme="opera"] .cl-due { color: #1f6a99; }
+[data-theme="opera"] #clProgPct { color: #11804f !important; }
+[data-theme="opera"] #panel-checklist .cl-look b { color: #a35400; }
+[data-theme="opera"] .prog-info span[style*="f0a43a"] { color: #a35f00 !important; }
+/* a checklist step's group word ("SCAN", "SEND"…): its coloured dot carries the colour, the word stays readable on every theme */
+.cl-num > span[style*="font-size:0.54rem"] { color: inherit !important; }
