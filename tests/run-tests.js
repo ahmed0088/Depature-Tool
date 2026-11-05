@@ -4422,6 +4422,11 @@ const haAsync = (async () => {
     sb2.window = sb2; vm.createContext(sb2); vm.runInContext(sdS2, sb2); const P2 = sb2.hoStartDay._pure, T1 = '2026-11-05', miss = P2.statusOf({}, T1);
     check('Start of the day asks only at the start of the day (05:00–15:59) and only people who can load reports',
       [P2.shouldAsk(miss, {}, T1, 0, 9, 'agent'), P2.shouldAsk(miss, {}, T1, 0, 1, 'agent'), P2.shouldAsk(miss, {}, T1, 0, 23, 'agent'), P2.shouldAsk(miss, {}, T1, 0, 15, 'manager'), P2.shouldAsk(miss, {}, T1, 0, 9, 'readonly')], [true, false, false, true, false]); }
+  { const proS = fs.readFileSync(path.join(ROOT, 'pro.css'), 'utf8'), G = '#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list)';
+    const has = t => proS.includes(G + t);
+    check('Departure cards (v538): status rail on the left, the five small actions forced into one even row (the old phone rule made DND a lonely line), Check out + Left · waiting share the first line, list and compact views untouched; the chosen filter chip is readable in see-through themes',
+      [has(' > .dp-card::before { top: 14px; bottom: 14px; left: 0; right: auto; width: 4px;'), has(' .dp-acts.g5 > .dca:is(.dca-ext, .dca-extg, .dca-late, .dca-na, .dca-dnd) { grid-column: auto !important; }') && has(' .dp-acts.g5 { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; }'),
+       has(' .dp-acts.g5 > .dca-co:has(+ .dca-fin) { grid-column: 1 / 4 !important; }') && has(' .dp-acts.g5 > .dca-fin { grid-column: 4 / -1 !important; }'), /#panel-departures \.dp-chips \.fchip\.on \{[^}]*color: var\(--bg\) !important/.test(proS)], [true, true, true, true]); }
   check('Found/Redline: the phone More drawer is solid (a see-through drawer let the home page bleed through)',
     [/html\[data-skin="found"\] \.mob-more-drawer \{ background: #0e22b8/.test(tpS), /html\[data-skin="redline"\] \.mob-more-drawer \{ background: #2e0f05/.test(tpS)], [true, true]);
   { const fw = fs.readFileSync(path.join(ROOT, 'found-web.js'), 'utf8');

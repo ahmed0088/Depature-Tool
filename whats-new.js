@@ -9,6 +9,14 @@
 // ═══════════════════════════════════════════════════════════
 
 const WHATS_NEW = [
+  { v: 538, items: [
+    { ico: '🚪', title: 'Departure cards: a calmer, clearer design on PC and phone',
+      what: 'Each room card now has a status colour rail down its left edge, a softer room number, one strong green Check out with a quiet Left · waiting beside it, and the five small actions (Extend, Extending, Late CO, No answer, DND) in one even row with only their icon in colour. The notes row is slimmer, and finished rooms (out or extended) step back.',
+      does: 'Your eye goes straight to what matters: the colour says the state, the green button is the next step. On the phone the five small actions no longer break into 4 + a lonely DND line, and "Guest said…" sits in the middle of its box. Works in every theme.' },
+    { ico: '🎨', title: 'Small look fixes',
+      what: 'In Stratum (and other see-through themes) the chosen Departures filter chip was white on white; in Apple Notes "Firebase · Offline" and "I\'m away" in the top bar were too faint.',
+      does: 'Both are readable now.' },
+  ] },
   { v: 537, items: [
     { ico: '🐞', title: 'Fixed: pasting Arrivals or Purpose of Stay crashed',
       what: '⚡ Load Pasted on Arrivals and ⚡ Load on Purpose of Stay stopped with an error before loading anything (a name used there was never set — it came in with the Nationality column in an earlier update).',

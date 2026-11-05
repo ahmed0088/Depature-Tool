@@ -2310,7 +2310,7 @@ html.ho-lang-ar body { font-family: var(--font), 'Segoe UI', 'Noto Sans Arabic',
   background: var(--card); color: var(--text2); border: 1px solid var(--border); transition: background .14s, color .14s, border-color .14s, opacity .14s; }
 #panel-departures .dp-chips .fchip span { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 99px; display: inline-grid; place-items: center;
   font: 700 11px var(--mono); background: var(--bg2); color: var(--text2); }
-#panel-departures .dp-chips .fchip.on { background: var(--text) !important; color: var(--card) !important; border-color: var(--text) !important; }
+#panel-departures .dp-chips .fchip.on { background: var(--text) !important; color: var(--bg) !important; border-color: var(--text) !important; }
 #panel-departures .dp-chips .fchip.on span { background: color-mix(in srgb, var(--card) 22%, transparent) !important; color: var(--card) !important; }
 #panel-departures .dp-chips .dp-sort-select { width: auto; max-width: 112px; padding: 0 8px; font-size: 12.5px; border-radius: 999px; }
 #panel-departures .dp-chips .fchip.dp-zero { opacity: .55; }
@@ -3768,7 +3768,7 @@ html, body { background: var(--bg); }
 .gp-cloud-set{margin-top:10px;font-size:.82rem;color:var(--text3)}.gp-cloud-set summary{cursor:pointer}
 .gp-agent-st{margin-top:10px;display:inline-block;padding:4px 10px;border-radius:99px;font-size:.78rem;border:1px solid var(--border);background:var(--card)}.gp-agent-st.on{border-color:color-mix(in srgb,#10b981 55%,var(--border));color:var(--text)}
 .gp-agent-on{display:flex;gap:8px;align-items:center;margin:10px 0 6px;font-size:.88rem;color:var(--text);cursor:pointer}
-:root { --ho-css: "v537"; }
+:root { --ho-css: "v538"; }
 .rent-bp-card:empty { display: none; }
 .rent-bp-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 10px; } .rent-bp-h span { color: var(--text3); font-size: .78rem; }
 .rent-bp { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
@@ -3831,3 +3831,74 @@ html, body { background: var(--bg); }
 .wn-aslist { display: block; margin: 10px auto 2px; background: none; border: 0; color: var(--text2); font: 600 .8rem var(--font); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .wn-does { display: block; margin-top: 4px; font-style: normal; font-size: .88rem; color: var(--text); }
 @media (prefers-reduced-motion: reduce) { .wn-slide { animation: none; } }
+
+/* ══════════ Departures room cards — calm design (v538) ══════════
+   One look for the eye on PC and phone: a status rail down the left edge (the colour says the state at a glance), one strong
+   action (Check out), a quiet "Left · waiting" beside it, five even small actions with only their icon in colour, a slim notes
+   row, and finished rooms that step back. Grid cards only — the list and compact views keep their own layout. */
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) > .dp-card {
+  border-radius: 16px; background: var(--card) !important;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, var(--c) 18%) !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,.18), 0 10px 26px -20px rgba(0,0,0,.7) !important; }
+html[data-theme="opera"] #depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) > .dp-card { box-shadow: 0 1px 2px rgba(16,24,40,.05), 0 12px 26px -20px rgba(16,24,40,.28) !important; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) > .dp-card::before { top: 14px; bottom: 14px; left: 0; right: auto; width: 4px; height: auto; border-radius: 0 4px 4px 0; background: var(--c) !important; opacity: 1; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) > .dp-card.dp-overdue { background: color-mix(in srgb, var(--dp-over) 5%, var(--card)) !important; }
+@media (hover: hover) {
+  #depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) > .dp-card:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--c) 45%, var(--border)) !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,.18), 0 16px 32px -20px rgba(0,0,0,.75) !important; }
+  html[data-theme="opera"] #depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) > .dp-card:hover { box-shadow: 0 2px 4px rgba(16,24,40,.06), 0 18px 34px -20px rgba(16,24,40,.32) !important; }
+}
+/* header: status + time on top, then the room number and the guest */
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) > .dp-card .dp-top { padding: 14px 16px 8px 18px; column-gap: 14px; row-gap: 10px; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) > .dp-card .dp-room { min-width: 66px; height: 56px; border-radius: 13px; border: 0 !important; box-shadow: none !important;
+  font: 800 25px/1 var(--font) !important; letter-spacing: -.03em; background: color-mix(in srgb, var(--c) 11%, var(--card2, var(--card))) !important; }
+html[data-theme="opera"] #depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) > .dp-card .dp-room { background: color-mix(in srgb, var(--c) 9%, #fff) !important; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) > .dp-card .dp-room::before { font-size: 8.5px; letter-spacing: .18em; color: color-mix(in srgb, var(--c) 80%, var(--text)); }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) > .dp-card .dp-name { font-size: 16.5px; font-weight: 700; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) > .dp-card .dp-meta { margin-top: 6px; gap: 3px 12px; font-size: 12.5px; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) > .dp-card .dp-tags { padding: 2px 16px 10px 18px; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) > .dp-card .dp-body { padding: 0 16px 14px 18px; }
+/* actions: Check out (+ Left · waiting) on the first line, the five small ones in one even row under it */
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-acts { gap: 8px; margin: 0 0 12px !important; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-acts.g5 { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-acts.g5 > .dca-co { grid-column: 1 / -1 !important; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-acts.g5 > .dca-co:has(+ .dca-fin) { grid-column: 1 / 4 !important; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-acts.g5 > .dca-fin { grid-column: 4 / -1 !important; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-acts.g5 > .dca:is(.dca-ext, .dca-extg, .dca-late, .dca-na, .dca-dnd) { grid-column: auto !important; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-card .dca-co { min-height: 46px !important; border-radius: 12px; font: 700 14.5px var(--font) !important; text-shadow: none;
+  background: var(--dp-out) !important; background: oklch(from var(--dp-out) min(l, .58) c h) !important; border: 0 !important;
+  box-shadow: 0 1px 0 rgba(255,255,255,.14) inset, 0 6px 16px -10px var(--dp-out) !important; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-card .dca-co::after { display: none; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-card .dca-co:hover { background: oklch(from var(--dp-out) min(calc(l + .04), .62) c h) !important; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-card .dp-acts .dca.dca-fin { min-height: 46px !important; border-radius: 12px; font: 600 12.5px var(--font) !important;
+  color: var(--text) !important; background: transparent !important; border: 1px solid var(--dp-line) !important; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-card .dp-acts .dca.dca-fin .dca-i { color: var(--amber); }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-card .dp-acts .dca.dca-fin:hover { border-color: color-mix(in srgb, var(--amber) 50%, transparent) !important; background: color-mix(in srgb, var(--amber) 8%, transparent) !important; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-acts.g5 > .dca:is(.dca-ext, .dca-extg, .dca-late, .dca-na, .dca-dnd) {
+  min-height: 58px !important; padding: 7px 2px 6px !important; gap: 4px; border-radius: 12px; font: 600 11px/1.1 var(--font) !important;
+  color: var(--text2) !important; background: transparent !important; border: 1px solid var(--dp-line) !important; box-shadow: none !important; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-acts.g5 > .dca:is(.dca-ext, .dca-extg, .dca-late, .dca-na, .dca-dnd) .dca-i { width: 24px; height: 22px; background: transparent !important; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-acts.g5 > .dca:is(.dca-ext, .dca-extg, .dca-late, .dca-na, .dca-dnd) .dca-i::before { width: 18px; height: 18px; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-acts.g5 > .dca:is(.dca-ext, .dca-extg, .dca-late, .dca-na, .dca-dnd):hover,
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-acts.g5 > .dca-extg.on { color: var(--b) !important; background: color-mix(in srgb, var(--b) 9%, transparent) !important; border-color: color-mix(in srgb, var(--b) 45%, transparent) !important; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-acts.g2 > .dca, #depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-acts.g1 > .dca { min-height: 44px; border-radius: 12px; }
+/* notes row: slim and quiet */
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-card .dp-foot { gap: 8px; padding-top: 12px; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-card :is(.dp-said, .dp-note-btn, .dp-icon-btn) { height: 38px; border-radius: 10px; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-card :is(.dp-note-btn, .dp-icon-btn) { background: transparent !important; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-card .dp-said { background: var(--dpi-chev) right 10px center / 13px no-repeat, transparent !important; }
+/* finished rooms step back: no "guest said" needed any more, the card is quieter */
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) > .dp-card:is(.dp-s-out, .dp-s-extended) { box-shadow: none !important; background: color-mix(in srgb, var(--c) 3%, var(--card)) !important; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) > .dp-card:is(.dp-s-out, .dp-s-extended) .dp-said { display: none; }
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) > .dp-card:is(.dp-s-out, .dp-s-extended) .dp-acts { margin-bottom: 10px !important; }
+@media (max-width: 768px) {
+  #depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) > .dp-card .dp-top { padding: 13px 14px 8px 16px; column-gap: 12px; }
+  #depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) > .dp-card .dp-room { min-width: 60px; height: 52px; font-size: 23px !important; }
+  #depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) > .dp-card .dp-tags { padding: 2px 14px 10px 16px; }
+  #depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) > .dp-card .dp-body { padding: 0 14px 14px 16px; }
+  #depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-acts { gap: 6px; }
+  #depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-card .dca-co, #depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-card .dp-acts .dca.dca-fin { min-height: 48px !important; }
+  #depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-acts.g5 > .dca:is(.dca-ext, .dca-extg, .dca-late, .dca-na, .dca-dnd) { min-height: 56px !important; font-size: 10.5px !important; }
+  #depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-card :is(.dp-said, .dp-note-btn, .dp-icon-btn) { height: 42px; }
+}
+#depBoard:not(.dp-compact) .dp-grid:not(.dp-size-list) .dp-card .dp-said { padding-top: 0 !important; padding-bottom: 0 !important; line-height: normal; display: flex; align-items: center; }

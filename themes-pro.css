@@ -891,3 +891,4 @@ html[data-skin="redwhite"] #loginScreen .lg-word b { color: #d0182c !important; 
 @media (prefers-reduced-motion: reduce) { html[data-skin="redwhite"] .home-tile:hover { transform: none; } }
 @media (max-width: 760px) { html[data-skin="redwhite"] body::before { width: 110vmin; height: 110vmin; right: -40vmin; bottom: -60vmin; opacity: .6; } }
 html[data-skin="redwhite"] #mobNav .mob-nav-btn.active, html[data-skin="redwhite"] #mobNav .mob-nav-btn.active .mob-nav-icon, html[data-skin="redwhite"] #mobNav .mob-nav-btn.active .mob-nav-lbl { color: #fff !important; }
+html[data-skin="notes"] .topbar #fbLabel, html[data-skin="notes"] .topbar .tb-pill, html[data-skin="notes"] .topbar .tb-away:not(.on), html[data-skin="notes"] .topbar .tb-away:not(.on) .tba-l { color: #3a3a3c !important; border-color: rgba(60,60,67,.18) !important; }
